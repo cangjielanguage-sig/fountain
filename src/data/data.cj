@@ -13,9 +13,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package fountain.data
+package fountain::fountain.data
 
-public import f_data.*
-public import f_data.validation.*
-public import f_data.json.*
-public import f_data.path.*
+public import fountain::f_data.*

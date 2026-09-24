@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_mvc
+package fountain::f_mvc
 
 /**
  * 枚举的Any类型实际只能处理String ToString InputStream Array<Byte> f_data.ToData这几种类型，

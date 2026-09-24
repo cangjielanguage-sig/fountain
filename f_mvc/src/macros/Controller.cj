@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-macro package f_mvc.macros
+macro package fountain::f_mvc.macros
 
 /**
  * http mvc控制器的宏。请确保作为控制器的类型一定是class，且只有作为请求处理的函数是公共的。
@@ -55,14 +55,20 @@ public macro WeavedController(attr: Tokens, input: Tokens): Tokens {
 }
 
 private func generate(input: Tokens): Tokens {
-    let decl = match(parseDecl(input)){
+    let (decl, remainder) = extractFirstDecl(input)
+    quote(
+        $(generate(decl))
+        $remainder
+    )
+}
+private func generate(input: Decl): Tokens {
+    let decl = match(input){
         case x: ClassDecl => x
         case x: MacroExpandDecl => 
-            let d = extract(x)
-            return generate(d.toTokens())
+            return x |> extract |> generate
         case _ => 
-            diagReport(ERROR, input, 'illegal decl', '')
-            return input
+            diagReport(ERROR, input.toTokens(), 'only class decl is allowed', '')
+            return input.toTokens()
     }
     var tokens = quote()
     let klass = decl.identifier

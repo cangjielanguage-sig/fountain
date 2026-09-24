@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_base
+package fountain::f_base
 
 import std.io.{OutputStream, StringWriter, ByteBuffer}
 import std.collection.ArrayList
@@ -42,7 +42,6 @@ private func printStackTrace(output: OutputStream, callee: (ByteBuffer) -> Unit)
 }
 
 public open class BaseException <: Exception {
-    private var caused_ = None<Exception>
     private var suppressed_ = ArrayList<Exception>()
 
     public init() {}
@@ -51,21 +50,16 @@ public open class BaseException <: Exception {
         super(message)
     }
     public init(caused: Exception) {
-        caused_ = caused
+        super(caused)
     }
     public init(message: String, caused: Exception) {
-        this(message)
-        caused_ = caused
+        super(message, caused)
     }
 
     public func addSuppressed(suppressed: Exception): Unit {
         this.suppressed_.add(suppressed)
     }
-    public prop caused: Option<Exception> {
-        get() {
-            caused_
-        }
-    }
+    
     public prop suppressed: ArrayList<Exception> {
         get() {
             suppressed_
@@ -78,7 +72,7 @@ public open class BaseException <: Exception {
         printStackTrace(output) {
             w =>
             printStackTrace(this, w)
-            if (let Some(c) <- caused) {
+            if (let Some(c) <- causedBy) {
                 w.write("Caused by: ".unsafeBytes())
                 printStackTrace(c, w)
             }

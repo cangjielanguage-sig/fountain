@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_mockdb
+package fountain::f_mockdb
 
 public class MockStatement <: Statement {
     private let args = ArrayList<Any>()
@@ -41,6 +41,9 @@ public class MockStatement <: Statement {
     public func setNull(index: Int): Unit {
         for(_ in args.size ..= index) {
             args.add(None<Any>)
+        }
+        if(index < args.size) {
+            args[index] = None<Any>
         }
     }
     public func update(): UpdateResult {

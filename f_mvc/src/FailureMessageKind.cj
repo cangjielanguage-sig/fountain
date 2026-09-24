@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_mvc
+package fountain::f_mvc
 
 /**
  * Base64Binary：把配置的文本当作BASE64转成字节数组

@@ -12,8 +12,8 @@ fountain提供了一个子项目fboot，开发者可以借助fboot初始化应�
     -   在当前目录用`project_name`创建新的文件夹，并用它创建一个`workspace`项目。
     -   如果没有指定`project_name`则在当前目录创建`workspace`项目
     -   为新建项目添加fountain的git依赖、stdx二进制依赖、在`[workspace]`下面添加`version="1.0.0"`节点。
-        -   为新项目的`compile-option`、`override-compile-option`节点添加`-O2 --dy-std`的参数。
-        -   为`[target]`以及`[target.x86-64-unknown-linux-gnu]`等各操作系统和指令集的`[target.*]`节点下面的`compile-option`、`override-compile-option`添加`-O2 --dy-std`参数。
+        -   为新项目的`compile-option`、`override-compile-option`节点添加`--dy-std`的参数。
+        -   为`[target]`以及`[target.x86-64-unknown-linux-gnu]`等各操作系统和指令集的`[target.*]`节点下面的`compile-option`、`override-compile-option`添加`--dy-std`参数。
             -   为`[target.x86-64-unknown-linux-gnu]`额外添加`--lto=ful`编译参数。
 2.  `fboot module [module_name]`
     -   在当前目录用`module_name`创建新的文件夹，并用它创建一个动态链接库子项目作为`workspace`的模块。

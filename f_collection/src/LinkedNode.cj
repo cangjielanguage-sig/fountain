@@ -13,9 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_collection
+package fountain::f_collection
 
-import f_exception.UnreachableException
+import fountain::f_exception.UnreachableException
 
 public class LinkedNodeIterator<T> <: Iterator<T> {
     private let reversed: Bool
@@ -83,11 +83,8 @@ public interface Node<T> {
     }
 }
 
-public class NoneNode<T> <: Node<T> {
-    static const func instance() {
-        NoneNode<T>()
-    }
-    private const init() {}
+public struct NoneNode<T> <: Node<T> {
+    init() {}
 }
 
 public class HeadNode<T> <: Node<T> & Iterable<T> {
@@ -117,7 +114,7 @@ public class HeadNode<T> <: Node<T> & Iterable<T> {
 }
 
 public class TailNode<T> <: Node<T> & Iterable<T> {
-    TailNode(var prev!: Node<T> = NoneNode<T>.instance()) {}
+    TailNode(var prev!: Node<T> = NoneNode<T>()) {}
     public func insertPrev(value: T): ValueNode<T> {
         ValueNode<T>(value, this)
     }

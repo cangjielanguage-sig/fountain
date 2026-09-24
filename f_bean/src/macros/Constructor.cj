@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-macro package f_bean.macros
+macro package fountain::f_bean.macros
 
 public macro Constructor(input: Tokens): Tokens {
     assertParentContext('Bean')
@@ -25,7 +25,14 @@ public macro Constructor(input: Tokens): Tokens {
     for(msg in getChildMessages('Value')){
         valueCond[msg.getString('name')] = msg.getTokens('cond')
     }
-    constructor(parseDecl(input), beanCond, valueCond)
+    let decl = try{
+        parseDecl(input)
+    }catch(_: ParseASTException){
+        parseDecl(input, astKind: 'PrimaryCtorDecl')
+    }catch(e: Exception){
+        throw e
+    }
+    constructor(decl, beanCond, valueCond)
     input
 }
 private func constructor(decl: Decl, beanCond: HashMap<String, Tokens>, valueCond: HashMap<String, Tokens>): Unit {

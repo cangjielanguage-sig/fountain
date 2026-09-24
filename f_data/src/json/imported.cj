@@ -13,8 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_data.json
+package fountain::f_data.json
 
-public import stdx.encoding.json.*
-public import f_data.*
-internal import f_exception.UnreadableException
+internal import std.reflect.*
+internal import stdx.encoding.json.stream.*
+internal import fountain::f_exception.UnreadableException
+
+public import fountain::f_data.base.*
+public import fountain::f_data.exception.JsonException

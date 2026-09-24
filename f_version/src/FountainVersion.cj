@@ -13,9 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_version
+package fountain::f_version
 
 import std.time.MonoTime
 
-public let AppStarts = MonoTime.now()
-public const FountainVersion = "fountain(1.0.48)"
+public let AppStarts: MonoTime = MonoTime.now()
+public const FountainVersion: String = "fountain(1.2.2)"

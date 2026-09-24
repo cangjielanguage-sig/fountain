@@ -13,11 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_data.test
+package fountain::f_data.test
 
 import std.collection.*
-import f_data.*
-import f_data.macros.DataAssist
+import fountain::f_data.*
+import fountain::f_data.macros.DataAssist
 import std.unittest.*
 import std.unittest.testmacro.*
 

@@ -13,16 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_cmd
+package fountain::f_cmd
 
 import std.collection.{HashMap, ArrayList}
 import std.convert.Parsable
-import std.fs.Path
+import std.fs.{Path, canonicalize}
 import std.env
-import std.process.Process
-import f_base.*
-import f_regex.*
-import f_cmd.exception.CmdException
+import fountain::f_base.*
 
 public class CmdArgs {
     private var args = HashMap<String, ArrayList<String>>()
@@ -83,15 +80,21 @@ public class CmdArgs {
     public func getAppName(): String {
         return appName
     }
+    public prop commandPath: Path {
+        get(){
+            canonicalize(env.getCommand()).parent
+        }
+    }
     public prop currentWorkingDirectory: Path {
         get() {
             _currentWorkingDir
         }
     }
-    public func getInt64Arg(name: String): Option<Int64> {
+    public func getArgValue<T>(name: String): Option<T> where T <: Parsable<T> {
         if (let Some(v) <- getArg(name)) {
-            Int64.parse(v)
+            T.tryParse(v)
+        }else{
+            None<T>
         }
-        None<Int64>
     }
 }

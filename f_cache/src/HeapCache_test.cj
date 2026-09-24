@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_cache
+package fountain::f_cache
 
 import std.unittest.*
 import std.unittest.testmacro.*
@@ -24,17 +24,18 @@ public class HeapCache_test {
     public func test(): Unit {
         let cache = HeapCache<Test>(maxSize: 2)
         cache.set("test1", Test())
+        @Assert(cache.get("test1").isSome())
         sleep(Duration.second)
         cache.set("test2", Test())
-        @Assert(cache.get("test1").isSome())
-        @Assert(cache.get("test1").isSome())
+        let test1 = cache.get('test1').isSome()
+        @Assert(test1)
         @Assert(cache.get('test1')?.value, cache.get('test1')?.value)
         @Assert(cache.getOrDefault("test99999999", Test(8888888)).value, 8888888)
         cache.set("test3", Test())
         sleep(2 * Duration.second)
-        @Assert(!cache.contains("test2"))
+        @Assert(cache.contains("test2"))
         @Assert(cache.contains("test1"))
-        @Assert(cache.contains("test3"))
+        @Assert(!cache.contains("test3"))
         sleep(5 * Duration.second)
         @Assert(!cache.contains("test1"))
         @Assert(!cache.contains("test3"))

@@ -13,13 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-macro package f_data.macros
+macro package fountain::f_data.macros
 
 import std.ast
 import std.ast.*
 import std.collection.{HashSet, ArrayList}
-import f_data.*
-import f_macros.*
+import fountain::f_data.*
+import fountain::f_macros.*
 
 /**
  * 支持以下特性，不分大小写
@@ -38,10 +38,20 @@ import f_macros.*
  * 现在的编译器不允许泛型形参出现在静态成员变量的声明当中，所以会编译错误。
  */
 public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
-    assist(attr, input)
+    let (decl, index) = parseDeclFragment(input)
+    let remainder = if(index < input.size){
+        input[index..]
+    }else{
+        `empty_tokens`
+    }
+    let tokens = quote(
+        $(assist(attr, decl))
+        $(remainder)
+    )
+    tokens
 }
-private func assist(attr: Tokens, input: Tokens): Tokens {
-    match (parseDecl(input)) {
+private func assist(attr: Tokens, input: Decl): Tokens {
+    match (input) {
         case d: ClassDecl =>
             let set = HashSet<String>()
             for (t in attr) {
@@ -87,11 +97,11 @@ private func assist(attr: Tokens, input: Tokens): Tokens {
             while(let md: MacroExpandDecl <- ind.macroInputDecl) {
                 ind = md
             }
-            let tokens = assist(attr, ind.macroInputs)
+            let tokens = assist(attr, ind.macroInputDecl)
             ind.macroInputDecl = parseDecl(tokens)
             d.toTokens()
         case _ =>
-            diagReport(ERROR, input, 'input must be class decl', '')
+            diagReport(ERROR, input.toTokens(), 'input must be class decl', '')
             throw IllegalArgumentException("input must be a class decl")
     }
 }
@@ -109,7 +119,8 @@ func generateProps(decl: ClassDecl, exclusion: HashSet<String>) {
         }
         let t = v.declType
         let mutable = v.keyword.value == 'var'
-        v.identifier = Token(IDENTIFIER, v.identifier.value + '_')
+        let nameVal = name.value
+        v.identifier = Token(IDENTIFIER, if(nameVal.startsWith('`')){nameVal[1 .. nameVal.size - 1]}else{nameVal} + '_')
         let (mutToken, setter) = if (mutable) {
             (quote(mut), quote(
                 set(value){
@@ -167,12 +178,6 @@ func generateProps(decl: ClassDecl, exclusion: HashSet<String>) {
                         member.identifier = p.identifier
                         member.colon = p.colon
                         member.declType = p.paramType
-                        try{
-                            if (p.assign.kind == ASSIGN) {
-                                member.assign = p.assign
-                                member.expr = p.expr
-                            }
-                        }catch(_){}
                         vars.add(member)
                         p.modifiers = ArrayList<Modifier>()
                         p.keyword = Token(ILLEGAL)
@@ -235,10 +240,10 @@ func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
     }
     let typeName = quote($(d.identifier)$(d.genericParamTokens))
     d.superTypes.add(RefType(quote(Equatable<$typeName>)))
-    var eq = quote((!(this is Hashable) || this.hashCode() == other.hashCode())$(`nl`))
+    var eq = quote(f_data_hash_eq(this, other)$(`nl`))
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        eq += `and` +quote(f_data_eq(this.$(d.identifier), other.$(d.identifier))) + `nl`
+        eq += `and` + quote(f_data_eq(this.$(d.identifier), other.$(d.identifier))) + `nl`
     }
     d.body.decls.add(
             all: [FuncDecl(
@@ -341,17 +346,17 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
             appendExpr(d, dt, isVar)
         }
         match (d) {
-            case x: VarDecl => appendExpr(quote($(x.declType)), x.isVar())
-            case x: PropDecl => appendExpr(quote($(x.declType)), x.isMut())
+            case x: VarDecl => appendExpr(x.declType.toTokens(), x.isVar())
+            case x: PropDecl => appendExpr(x.declType.toTokens(), x.isMut())
             case x: PrimaryCtorDecl =>
                 for (p in x.funcParams where p.isMemberParam() && isPublic(p)) {
-                    appendExpr(p.paramType.toTokens(), isVar(p))
+                    appendExpr(p, p.paramType.toTokens(), isVar(p))
                 }
                 continue
             case x: MacroExpandDecl => 
                 match (extract(x)) {
-                    case x: VarDecl where !isStatic(x) && isPublic(x) => appendExpr(x, quote($(x.declType)), x.isVar())
-                    case x: PropDecl where !isStatic(x) && isPublic(x) => appendExpr(x, quote($(x.declType)), x.isMut())
+                    case x: VarDecl where !isStatic(x) && isPublic(x) => appendExpr(x, x.declType.toTokens(), x.isVar())
+                    case x: PropDecl where !isStatic(x) && isPublic(x) => appendExpr(x, x.declType.toTokens(), x.isMut())
                     case x: PrimaryCtorDecl where isPublic(d) =>
                         for (p in x.funcParams) {
                             match(p){
@@ -361,9 +366,9 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                                         m = d.macroInputDecl
                                     }
                                     if(let x: FuncParam <- m && x.isMemberParam() && isPublic(x)){
-                                        appendExpr(x, quote($(x.paramType)), isVar(x))
+                                        appendExpr(x, x.paramType.toTokens(), isVar(x))
                                     }
-                                case x: FuncParam where x.isMemberParam() && isPublic(p) => appendExpr(x, quote($(x.paramType)), isVar(x))
+                                case x: FuncParam where x.isMemberParam() && isPublic(p) => appendExpr(x, x.paramType.toTokens(), isVar(x))
                                 case _ => continue
                             }
                             appendExpr(p.paramType.toTokens(), isVar(p))

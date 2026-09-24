@@ -13,8 +13,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_macros
+package fountain::f_macros
 
 public import std.ast.*
 
-internal import f_macros.exception.MacroFragmentException
+internal import fountain::f_macros.exception.MacroFragmentException

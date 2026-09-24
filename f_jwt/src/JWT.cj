@@ -13,20 +13,20 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_jwt
+package fountain::f_jwt
 
 import std.collection.{HashMap, Map}
 import std.convert.Parsable
 import std.time.DateTime
 import stdx.crypto.digest.*
 import stdx.crypto.keys.PadOption
-import stdx.encoding.json.*
 import stdx.encoding.hex.*
 import stdx.encoding.base64.*
+import stdx.crypto.common.*
 import stdx.crypto.keys.*
-import f_data.{ObjectData, DataObject}
-import f_exception.UnreadableException
-import f_jwt.exception.JWTException
+import fountain::f_data.*
+import fountain::f_exception.UnreadableException
+import fountain::f_jwt.exception.JWTException
 
 sealed abstract class JWT {
     let headers = HashMap<String, String>()
@@ -323,29 +323,30 @@ public class JWTEncoder <: JWT {
     public func sign(): String {
         var json = JsonObject()
         for ((k, v) in headers) {
-            json.put(k, JsonString(v))
+            json.add(k, JsonString(v))
         }
         let headerJson = json.toString()
         let headerBase64 = toBase64(headerJson)
         json = JsonObject()
         for ((k, v) in payload) {
             match (v) {
-                case x: Bool => json.put(k, JsonBool(x))
-                case x: Int64 => json.put(k, JsonInt(x))
-                case x: UInt64 => json.put(k, JsonInt(Int64(x)))
-                case x: Int32 => json.put(k, JsonInt(Int64(x)))
-                case x: UInt32 => json.put(k, JsonInt(Int64(x)))
-                case x: Int16 => json.put(k, JsonInt(Int64(x)))
-                case x: UInt16 => json.put(k, JsonInt(Int64(x)))
-                case x: Int8 => json.put(k, JsonInt(Int64(x)))
-                case x: UInt8 => json.put(k, JsonInt(Int64(x)))
-                case x: Float64 => json.put(k, JsonFloat(x))
-                case x: Float32 => json.put(k, JsonFloat(Float64(x)))
-                case x: Float16 => json.put(k, JsonFloat(Float64(x)))
-                case x: String => json.put(k, JsonString(x))
-                case x: Rune => json.put(k, JsonString(x.toString()))
-                case x: JsonValue => json.put(k, x)
-                case x: ToString => json.put(k, JsonString(x.toString()))
+                case x: Bool => json.add(k, JsonBool(x))
+                case x: Int64 => json.add(k, JsonInt(x))
+                case x: UInt64 => json.add(k, JsonInt(Int64(x)))
+                case x: Int32 => json.add(k, JsonInt(Int64(x)))
+                case x: UInt32 => json.add(k, JsonInt(Int64(x)))
+                case x: Int16 => json.add(k, JsonInt(Int64(x)))
+                case x: UInt16 => json.add(k, JsonInt(Int64(x)))
+                case x: Int8 => json.add(k, JsonInt(Int64(x)))
+                case x: UInt8 => json.add(k, JsonInt(Int64(x)))
+                case x: Float64 => json.add(k, JsonDecimal(x))
+                case x: Float32 => json.add(k, JsonDecimal(Float64(x)))
+                case x: Float16 => json.add(k, JsonDecimal(Float64(x)))
+                case x: Decimal => json.add(k, JsonDecimal(x))
+                case x: String => json.add(k, JsonString(x))
+                case x: Rune => json.add(k, JsonString(x.toString()))
+                case x: JsonValue => json.add(k, x)
+                case x: ToString => json.add(k, JsonString(x.toString()))
                 case _ => throw JWTException("current value of key as ${k} does not support for payload")
             }
         }
@@ -365,8 +366,8 @@ public class JWTVerifier <: JWT {
         headerBytes = fromBase64(data[0 .. firstDot])
         payloadBytes = fromBase64(data[firstDot + 1 .. lastDot])
         signBytes = fromBase64(data[lastDot + 1 ..])
-        let headerJson = JsonValue.fromStr(String.fromUtf8(headerBytes))
-        let payloadJson = JsonValue.fromStr(String.fromUtf8(payloadBytes))
+        let headerJson = JsonValue.fromStr(String.unsafeUtf8(headerBytes))
+        let payloadJson = JsonValue.fromStr(String.unsafeUtf8(payloadBytes))
         populate<String>(headerJson, headers)
         populate<Any>(payloadJson, payload)
     }
@@ -380,16 +381,12 @@ public class JWTVerifier <: JWT {
     }
     private static func getJsonValue<T>(v: JsonValue): T {
         let r: Any = match (v) {
-            case x: JsonBool => x.getValue()
-            case x: JsonInt => x.getValue()
-            case x: JsonString => x.getValue()
-            case x: JsonFloat => x.getValue()
-            case x: JsonArray => Array<Any>(x.size()) {
-                i => if (let Some(jv) <- x.get(i)) {
-                    getJsonValue<T>(jv)
-                } else {
-                    None<Any>
-                }
+            case x: JsonBool => x.value
+            case x: JsonInt => x.value
+            case x: JsonString => x.value
+            case x: JsonDecimal => x.value
+            case x: JsonArray => Array<Any>(x.size) {
+                i => getJsonValue<T>(x.getItem(i))
             }
             case x: JsonObject =>
                 let vm = HashMap<String, T>()
@@ -442,7 +439,7 @@ public class JWTVerifier <: JWT {
     public func getNotBeforeSeconds(): ?Int64 {
         getPayloadValue<Int64>("nbf")
     }
-    public func getPayloadValue<T>(name: String): ?T where T <: Parsable<T> {
+    public func getPayloadValue<T>(name: String): ?T where T <: DataParsable<T> {
         if (let Some(x) <- getPayload(name)) {
             match (x) {
                 case v: T => v
@@ -454,10 +451,10 @@ public class JWTVerifier <: JWT {
             None<T>
         }
     }
-    public func getHeaderValue<T>(name: String): ?T where T <: Parsable<T> {
+    public func getHeaderValue<T>(name: String): ?T where T <: DataParsable<T> {
         tryParse<T>(getHeader(name))
     }
-    private func tryParse<T>(value: ?String): ?T where T <: Parsable<T> {
+    private func tryParse<T>(value: ?String): ?T where T <: DataParsable<T> {
         if (let Some(x) <- value) {
             T.tryParse(x)
         } else {
@@ -485,7 +482,7 @@ public class JWTVerifier <: JWT {
         !isExpired(time: now) && isNotBefore(time: now) && verifySign()
     }
     public func verifyPayload<V>(name: String, value: V): Bool where V <: Equatable<V> {
-        if (let Some(o) <- getPayload(name) && let v: Equatable<V> <- o) {
+        if (let Some(v: Equatable<V>) <- getPayload(name)) {
             v == value
         } else {
             false

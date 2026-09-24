@@ -33,9 +33,14 @@ post_data.json
 console.log
 .codeartsdoer/
 .codemate/
-CODEBUDDY.md
-.atomcode/
+
 *.cjo
 *.so
+*.dll
+.pub_latency
+CODEBUDDY.md
+.atomcode
+datalog/
+
 .codegraph/
 common_virtual_env/

@@ -13,10 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_cache
+package fountain::f_cache
 
 import std.sync.{ReadWriteLock, Lock}
-import f_collection.LinkedHashMap
+import fountain::f_collection.LinkedHashMap
 
 class SyncLinkedHashMap<V> <: Collection<(String, V)> {
     private let rwl = ReadWriteLock()

@@ -13,10 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_orm.orm_test
+package fountain::f_orm.orm_test
 
-import f_orm.macros.*
-import f_orm.*
+import fountain::f_orm.macros.*
+import fountain::f_orm.*
 
 public class CharaterParam{
     public var id = 0

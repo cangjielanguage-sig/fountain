@@ -13,13 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_regex
+package fountain::f_regex
 
 import std.collection.HashSet
 import std.collection.concurrent.ConcurrentHashMap
-import f_base.StringGenerator
-import f_cache.HeapCache
-import f_collection.*
+import fountain::f_base.StringGenerator
+import fountain::f_cache.HeapCache
+import fountain::f_collection.*
 
 public interface RegexFromString {
     func regex(flags!: Array<RegexFlag>, solid!: Bool): Regex

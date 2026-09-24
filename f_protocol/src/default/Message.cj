@@ -1,0 +1,177 @@
+/*
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ */
+package fountain::f_protocol.default
+
+public struct Message <: Protocol<EncodedMessage, Message> {
+    public Message(
+        public let command: Command,
+        public let id: MessageID,
+        public let data: Data
+    ) {}
+    public init(command: Command, data: Data) {
+        this(command, MessageID(), data)
+    }
+    public init(command: Command){
+        this(command, DataNone.INSTANCE)
+    }
+    public init(command: Command, id: MessageID){
+        this(command, id, DataNone.INSTANCE)
+    }
+    public func tryFromData<T>(): ?T where T <: FromData {
+        match(T.tryFromData(data)){
+            case x: ?T => x
+            case x: T => x
+            case _ => throw DataException('data ${data} cannot be converted to ${TypeInfo.of<T>()}')
+        }
+    }
+/*
+| **  Control Packet   ** | **Bit 3** | **Bit 2** | **Bit 1** | **Bit 0** |
+| ----------------------- | --------- | --------- | --------- | --------- |
+| AUTH                    | HASDATA   | 0         | 0         | ACK       |
+| SLAVEOF                 | REG       | 0         | 0         | ACK       |
+| REGISTER                | 0         | 0         | 0         | ACK       |
+| PUBLISH                 | DUP       | QoS1      | Qos0      | RETAIN    |
+| SUBSCRIBE               | 0         | 0         | 0         | ACK       |
+| UNSUBSCRIBE             | 0         | 0         | 0         | ACK       |
+| CONSUME                 | ONCE      | QoS1      | QoS0      | 0         |
+| RESP                    | 0         | QoS1      | QoS0      | ACK       |
+| PING                    | 0         | 0         | 0         | ACK       |
+| ELECT                   | VOTE      | APPROVE   | ASSUME    | ACK       |
+| ACK                     | 0         | 0         | 0         | 0         |
+| ERROR                   | 0         | 0         | 0         | 0         |
+| DEREGISTER              | 0         | 0         | 0         | ACK       |
+*/
+    private static func toData<T>(data: ?T): Data where T <: ToData {
+        match(data){
+            case Some(x) => x.toData()
+            case _ => DataNone.INSTANCE
+        }
+    }
+    private static func build<T>(command: Command, data: ?T): Message where T <: ToData {
+        Message(command, toData<T>(data))
+    }
+    private static func build(command: Command): Message {
+        Message(command)
+    }
+    private static func build(command: Command, id: MessageID): Message {
+        Message(command, id)
+    }
+    public static func build<T>(command: Command, id: MessageID, data: ?T): Message where T <: ToData {
+        Message(command, id, toData<T>(data))
+    }
+    public static func auth<T>(hasData!: Bool, ack!: Bool, authData!: T): Message  where T <: ToData {
+        if (hasData) {
+            build<T>(AUTH(HASDATA | to(ack, ACK)), authData)
+        } else {
+            build(AUTH(to(ack, ACK)))
+        }
+    }
+    public static func slaveof(reg!: Bool, ack!: Bool): Message {
+        build(SLAVEOF(to(reg, REG) | to(ack, ACK)))
+    }
+    public static func slaveof(reg!: Bool, ack!: Bool, masterHost!: String, masterPort!: UInt16): Message {
+        build<String>(SLAVEOF(to(reg, REG) | to(ack, ACK)), '${masterHost}:${masterPort}')
+    }
+    public static func slaveof(reg!: Bool, ack!: Bool, masterHost!: IPAddress, masterPort!: UInt16): Message {
+        slaveof(reg: reg, ack: ack, masterHost: masterHost.toString(), masterPort: masterPort)
+    }
+    public static func slaveof(reg!: Bool, ack!: Bool, masterAddress!: IPSocketAddress): Message {
+        slaveof(reg: reg, ack: ack, masterHost: masterAddress.address, masterPort: masterAddress.port)
+    }
+    public static func slaveof(reg!: Bool, ack!: Bool, masterSocket!: TcpSocket): Message {
+        slaveof(reg: reg, ack: ack, masterAddress: (masterSocket.remoteAddress as IPSocketAddress).getOrThrow())
+    }
+    public static func register<T>(data!: T): Message  where T <: ToData {
+        build<T>(REGISTER, data)
+    }
+    public static func publish<T>(dup!: Bool, qos!: QoS, retain!: Bool, data!: T): Message where T <: ToData {
+        build<T>(PUBLISH(to(dup, DUP) | qos.value | to(retain, RETAIN)), data)
+    }
+    public static func subscribe<T>(data!: T): Message where T <: ToData {
+        build<T>(SUBSCRIBE, data)
+    }
+    public static func unsubscribe<T>(id: MessageID, data!: T): Message where T <: ToData {
+        build<T>(UNSUBSCRIBE, id, data)
+    }
+    public static func unsubscribe(id: MessageID): Message {
+        build(UNSUBSCRIBE, id)
+    }
+    
+    public static func consume<T>(once!: Bool, qos!: QoS, data!: T): Message where T <: ToData {
+        build<T>(CONSUME(to(once, ONCE) | qos.value), data)
+    }
+    public static func resp<T>(id: MessageID, qos!: QoS, ack!: Bool, data!: T): Message where T <: ToData {
+        build<T>(RESP(qos.value | to(ack, ACK)), id, data)
+    }
+    public static func ping(): Message {
+        build(PING(1))
+    }
+    public static func elect<T>(vote!: Bool, approve!: Bool, assume!: Bool, ack!: Bool, data!: T): Message where T <: ToData {
+        build<T>(ELECT(to(vote, VOTE) | to(approve, APPROVE) | to(assume, ASSUME) | to(ack, ACK)), data)
+    }
+    public static func ack(id: MessageID): Message {
+        build(Command.ACK, id)
+    }
+    public static func ack<T>(id: MessageID, data!: T): Message where T <: ToData {
+        build<T>(Command.ACK, id, data)
+    }
+    public static func error<T>(id: MessageID, data!: T): Message where T <: ToData {
+        build<T>(Command.ERROR, id, data)
+    }
+    public static func error(id: MessageID): Message {
+        build(Command.ERROR, id)
+    }
+    public static func deregister<T>(data!: T): Message where T <: ToData {
+        build<T>(DEREGISTER, data)
+    }
+    private static func to(bool: Bool, byte: Byte): Byte {
+        if(bool) { byte } else { 0u8 }
+    }
+    public func encode(): EncodedMessage {
+        let bytes = DefaultCodec().encode(id.time).encode(id.pid).encode(id.tid).encode(id.hostId).encode(data).finish()
+        EncodedMessage(command.value, bytes)
+    }
+    public static func decode<T>(input: InputStream): Message where T <: FromToData {
+        let b = [0u8]
+        let l = input.read(b)
+        if (l == 0) {
+            throw IllegalArgumentException('no readable byte in InputStream')
+        }
+        let command = Command.parse(b[0])
+        let decoder = DefaultCodec()
+        let time = decoder.decode<DateTime>(input).getOrThrow {IllegalArgumentException()}
+        let pid = decoder.decode<Int64>(input).getOrThrow {IllegalArgumentException()}
+        let tid = decoder.decode<Int64>(input).getOrThrow {IllegalArgumentException()}
+        let hostId = decoder.decode<Int64>(input).getOrThrow {IllegalArgumentException()}
+        let data = decoder.decode<T>(input)
+        build<T>(command, MessageID(time: time, pid: pid, tid: tid, hostId: hostId), data)
+    }
+}
+
+public struct EncodedMessage <: MessageCopier {
+    EncodedMessage(
+        private let command: Byte,
+        private let bytes: BytesCopyTo
+    ) {}
+    public func copy(to!: OutputStream, closeToOnEnd!: Bool = false): Unit {
+        to.write([command])
+        bytes.copy(to: to, closeToOnEnd: false, closeFromOnEnd: false)
+        to.flush()
+        if (closeToOnEnd && let r: Resource <- to && !r.isClosed()) {
+            r.close()
+        }
+    }
+}

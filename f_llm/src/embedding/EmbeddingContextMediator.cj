@@ -1,0 +1,60 @@
+/*
+Copyright (c) 2026 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package fountain::f_llm.embedding
+
+public class EmbeddingContextMediator {
+    private static let contextCreators = HashMap<String, (LLMConf) -> AbstractEmbeddingContext>()
+    
+    static init(){
+        register('embedding-3'){conf: LLMConf => GLMEmbeddingContext(conf)}
+    }
+
+    public static func register(model: String, creator: (LLMConf) -> AbstractEmbeddingContext){
+        contextCreators['${model}+${LLM_TYPE_EMBEDDING}'] = creator
+    }
+    private let contexts = ConcurrentHashMap<String, AbstractEmbeddingContext>()
+    private init(){}
+
+    private static let instance_ = EmbeddingContextMediator()
+    public static prop instance: EmbeddingContextMediator {
+        get(){
+            instance_
+        }
+    }
+
+    private let mutex = Mutex()
+    private func load(key: String){
+        if(let Some(x) <- contexts.get(key)){
+            return x
+        }
+        synchronized(mutex){
+            if(let Some(x) <- contexts.get(key)){
+                return x
+            }
+            for(conf in lookup<LLMFinder>().listConfs([LLM_TYPE_EMBEDDING])){
+                let key = '${conf.name}+${conf.llmType}'
+                if(let Some(newer) <- contextCreators.get(key)){
+                    contexts[key] = newer(conf)
+                }
+            }
+            return contexts[key]
+        }
+    }
+    public func access(model: String, param: EmbeddingParam): EmbeddingResp {
+        let key = '${model}+${LLM_TYPE_EMBEDDING}'
+        load(key).access(param)
+    }
+}

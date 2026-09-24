@@ -13,14 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package user.util
+package fountain::user.util
 
 import std.convert.*
-import fountain.base.*
-import fountain.jwt.JWT
-import fountain.mvc.CurrentHttpContext
-import fountain.security.*
-import fountain.util.UUID
+import fountain::f_base.*
+import fountain::f_jwt.JWT
+import fountain::f_mvc.CurrentHttpContext
+import fountain::f_security.*
+import fountain::f_security.exception.*
+import fountain::f_util.UUID
 
 public class UserSessionCache {
     private static let context = JWTSecurityContext<String>(JWTHeapCacheStore(Duration.hour),{id => 

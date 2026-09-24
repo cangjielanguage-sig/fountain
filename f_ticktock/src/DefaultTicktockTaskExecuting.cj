@@ -13,18 +13,18 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_ticktock
+package fountain::f_ticktock
 
 import std.collection.concurrent.ConcurrentHashMap
-import f_collection.*
+import fountain::f_collection.*
 
 class DefaultTicktockTaskExecuting {
     private static var executingMap = ConcurrentHashMap<String, Int64>()
-
+    @Frozen
     static func executing(name: String, stamp: Int64): Bool {
         executingMap.addIfAbsent(name, stamp).isSome()
     }
-
+    @Frozen
     static func reset(name: String, stamp: Int64): Unit {
         executingMap.removeIf(name) {v => v == stamp}
     }

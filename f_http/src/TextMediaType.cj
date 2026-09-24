@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_http
+package fountain::f_http
 
 public abstract class TextMediaType <: MediaType {
     protected TextMediaType(
@@ -87,11 +87,32 @@ public class JsonMediaType <: TextMediaType {
     public func make(mediaType: String): MediaType {
         super.doMake(mediaType){cs => JsonMediaType(charset: cs)}
     }
+    private func data2json(data: Data){
+        (JsonValue.tryFromData(data) as JsonValue).getOrThrow()
+    }
     public func fromData(data: Data): Array<Byte> {
-        fromData((JsonValue.tryFromData(data) as JsonValue).getOrThrow())
+        if(charset == Charsets.UTF8){
+            data2json(data).toString().unsafeBytes()
+        }else{
+            fromData(data2json(data))
+        }
+    }
+    public func fromData(data: Data, output: OutputStream): Unit {
+        if(charset == Charsets.UTF8){
+            data2json(data).write(output)
+        }else{
+            super.fromData(data, output)
+        }
     }
     public func fromData(data: JsonValue): Array<Byte> {
         charset.newEncoder().encode(data.toString())
+    }
+    public func toData(input: InputStream): Data {
+        if(charset == Charsets.UTF8){
+            JsonValue.fromInput(input).toData()
+        }else{
+            super.toData(input)
+        }
     }
     public func toData(data: Array<Byte>): Data {
         toData(charset.newDecoder().decode(data))

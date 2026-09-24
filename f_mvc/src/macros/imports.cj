@@ -13,9 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-macro package f_mvc.macros
+macro package fountain::f_mvc.macros
 
 internal import std.ast.*
-internal import f_macros.*
-public import f_bean.macros.*
-public import f_aspect.macros.*
+internal import fountain::f_macros.*
+public import fountain::f_bean.macros.*
+public import fountain::f_aspect.macros.*

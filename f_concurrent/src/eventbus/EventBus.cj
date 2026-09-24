@@ -13,15 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_concurrent.eventbus
+package fountain::f_concurrent.eventbus
 
 import std.collection.concurrent.{LinkedBlockingQueue, ConcurrentHashMap}
 import std.runtime.getProcessorCount
 import std.sync.{Mutex, AtomicBool}
 import std.time.DateTime
 import stdx.crypto.crypto.SecureRandom
-import f_base.WorkerStrategy
-import f_concurrent.eventbus.exception.EventBusException
+import fountain::f_base.WorkerStrategy
+import fountain::f_concurrent.eventbus.exception.EventBusException
 
 /**
  * 工作线程集合

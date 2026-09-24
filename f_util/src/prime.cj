@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_util
+package fountain::f_util
 
 /**
  * 快速幂取模
@@ -56,7 +56,7 @@ public func millerRabin(x: UInt64, p: UInt64) {
  * @param p
  * @return
  */
-public func isPrime(p: UInt64) {
+public func isPrime(p: UInt64): Bool {
     if (p < 2) {
         return false
     }

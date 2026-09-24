@@ -13,25 +13,30 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_ticktock
+package fountain::f_ticktock
 
 internal import std.unittest.*
-internal import std.unittest.testmacro.*
+import std.unittest.testmacro.*
 
 @Test
 public class CronCompiler_test {
     @TestCase
     public func test(): Unit {
         let cron = "0/5-30 0-5 1/2 L * 1,3/2-5,7";
+        let unitValues = cron.split(' ');
         let cdc = CronCompiler.compile(cron);
         for (c in cdc) {
-            for (unit in TicktockUnit.values) {
+            for(i in 0 .. TicktockUnit.values.size){
+                let unit = TicktockUnit.values[i]
                 match (c.get(unit)) {
                     case Some(crons) => for (cron in crons) {
                         println(cron)
                     }
-                    case _ => throw Exception()
+                    case _ where i >= unitValues.size || unitValues[i] == '*' => println('unit: ${unit}, *')
+                    case _ => throw Exception('TimeUnit: ${unit}')
                 }
+            }
+            for (unit in TicktockUnit.values) {
             }
         }
     }

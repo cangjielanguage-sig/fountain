@@ -13,11 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_base
+package fountain::f_base
 
 import std.collection.ArrayList
-internal import charset4cj.charset.encoding.Charset
-internal import charset4cj.charset.Charsets
+internal import cangjie_tpc::charset4cj.charset.encoding.Charset
+internal import cangjie_tpc::charset4cj.charset.Charsets
 
 public class StringGenerator <: ToString {
     private let utf8 = ArrayList<Byte>()
@@ -96,17 +96,20 @@ public class StringGenerator <: ToString {
     public func contains<T>(content: T): Bool where T <: ToString {
         indexOf<T>(content).isSome()
     }
-    public func startsWith(content: String){
+    public func startsWith(content: String): Bool {
         (indexOf(content) ?? -1) == 0
     }
-    public func endsWith(content: String){
+    public func endsWith(content: String): Bool {
         (utf8.size >= content.size && utf8.unsafeData()[size - content.size..] == content.unsafeBytes())
     }
     public func substring(start: Int64, end: Int64): String {
-        String.fromUtf8(utf8[start .. end].unsafeData())
+        unsafe{
+            String.fromUtf8Unchecked(utf8.unsafeData()[start .. end])
+        }
     }
-    public func clear(){
+    public func clear(): This {
         utf8.clear()
+        this
     }
     public func removeFirst<T>(content: T, fromIndex!: Int64 = 0): This where T <: ToString {
         let bytes = content.toString().unsafeBytes()
@@ -231,8 +234,10 @@ public class StringGenerator <: ToString {
         }
         this
     }
-    public func toString() {
-        String.fromUtf8(unsafeBytes())
+    public func toString(): String {
+        unsafe{
+            String.fromUtf8Unchecked(unsafeBytes())
+        }
     }
     public func unsafeBytes(): Array<Byte> {
         utf8.unsafeData()

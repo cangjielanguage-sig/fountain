@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_ticktock
+package fountain::f_ticktock
 
 import std.reflect.ClassTypeInfo
 import std.sync.AtomicInt64
@@ -24,6 +24,7 @@ public abstract class TicktockTask <: TicktockTaskDef & Hashable & Equatable<Tic
      * 不需要覆盖本方法，任务逻辑都在void execute()方法实现，
      * 控制逻辑都在concurrentable: Bool executing(boolean): Bool 和  once(): Bool
      */
+    @Frozen
     protected open func run(): Unit {
         let currentStamp = stamped.fetchAdd(1) + 1
         if (!executing(currentStamp) || (concurrentable && !this.once)) {

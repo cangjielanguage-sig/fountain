@@ -13,11 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_cache
+package fountain::f_cache
 
 import std.collection.{Map, EquatableCollection}
 import std.sync.AtomicInt64
-import f_base.{EmptyIterator, nextPowerOf2}
+import fountain::f_base.{EmptyIterator, nextPowerOf2}
 
 class ConcHashMapKeysIterator<V> <: Iterator<String> {
     ConcHashMapKeysIterator(private let itr: Iterator<(String, V)>) {}
@@ -134,7 +134,7 @@ class ConcHashMapValues<V> <: Collection<V> {
 
 class ConcHashMapIterator<V> <: Iterator<(String, V)> {
     private var cur = 0
-    private var itr: Iterator<(String, V)> = EmptyIterator<(String, V)>.INSTANCE()
+    private var itr: Iterator<(String, V)> = EmptyIterator<(String, V)>.instance()
     ConcHashMapIterator(private let m: ConcHashMap<V>) {
         (cur, itr) = doNextSegment(cur)
     }
@@ -157,7 +157,7 @@ class ConcHashMapIterator<V> <: Iterator<(String, V)> {
         if (cur >= 0 && cur < m.segments.size) {
             (cur + 1, segmentIterator(cur))
         } else {
-            (cur + 1, EmptyIterator<(String, V)>.INSTANCE())
+            (cur + 1, EmptyIterator<(String, V)>.instance())
         }
     }
     func segmentIterators(): Array<Iterator<(String, V)>> {
@@ -270,8 +270,7 @@ class ConcHashMap<V> <: Collection<(String, V)> {
      */
     func add(all!: Collection<(String, V)>): Unit {
         for ((key, val) in all) {
-            segment(key).add(key, val)
-            incrSize()
+            add(key, val)
         }
     }
     func computeIfAbsent(key: String, callable: () -> V): V {
@@ -307,7 +306,9 @@ class ConcHashMap<V> <: Collection<(String, V)> {
         for(segment in segments){
             segment.removeIf{k, v => 
                 let r = predicate(k, v)
-                decrSize()
+                if(r){
+                    decrSize()
+                }
                 r
             }
         }

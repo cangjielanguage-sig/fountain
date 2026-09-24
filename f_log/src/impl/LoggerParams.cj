@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_log.impl
+package fountain::f_log.impl
 
 public abstract class BaseLoggerParams<T> <: Hashable & Equatable<T> where T <: BaseLoggerParams<T> {
     protected var h: Int64 = 0

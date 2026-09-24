@@ -13,14 +13,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package user.util.auth
+package fountain::user.util.auth
 
 import std.convert.*
-import stdx.encoding.json.*
-import fountain.bean.*
-import fountain.bean.macros.*
-import fountain.mvc.*
-import user.util.*
+import fountain::f_bean.*
+import fountain::f_bean.macros.*
+import fountain::f_data.*
+import fountain::f_mvc.*
+import fountain::user.util.*
 
 @Bean
 public class AuthCheckerImpl <: AuthHandler {

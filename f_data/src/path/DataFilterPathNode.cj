@@ -13,11 +13,18 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_data.path
+package fountain::f_data.path
 
 internal class DataFilterPathNode <: DataPathNode {
     DataFilterPathNode(private let filter: DataFilter) {}
     public func get(data: Data): Iterator<Data> {
-        SingleIterator<Data>(data).filter {d => filter.check(d)}
+        match (data) {
+            case x: Iterable<Data> =>
+                x.iterator().filter {d => filter.check(d)}
+            case x: Iterable<(String, Data)> =>
+                x.iterator().map {tpl => tpl[1]}.filter {d => filter.check(d)}
+            case _ =>
+                SingleIterator<Data>(data).filter {d => filter.check(d)}
+        }
     }
 }

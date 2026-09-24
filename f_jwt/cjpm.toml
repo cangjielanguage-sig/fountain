@@ -1,23 +1,26 @@
 [dependencies]
-  f_cache  = {path = "../f_cache"}
-  f_data  = {path = "../f_data"}
-  f_time  = {path = "../f_time"}
-  f_exception  = {path = "../f_exception"}
+  "fountain::f_base" = {path = "../f_base"}
+  "fountain::f_cache" = {path = "../f_cache"}
+  "fountain::f_data" = {path = "../f_data"}
+  "fountain::f_time" = {path = "../f_time"}
+  "fountain::f_exception" = {path = "../f_exception"}
 [package]
-  cjc-version = "1.0.4"
+  cjc-version = "1.2.0"
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"
   description = "JWT"
   link-option = ""
   name = "f_jwt"
+  organization="fountain"
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.0.45"
+  version = "1.3.2"
   package-configuration = {}
-  category = ["Utility"]
+  category = ["Utility", "Security", "Developer Tools"]
   license = ["Apache-2.0"]
-  include = ["src"]
+  include = ["src", "doc"]
+  exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
   authors = ["吴京润"]
 
 [target]

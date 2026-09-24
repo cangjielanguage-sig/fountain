@@ -1,0 +1,171 @@
+/*
+Copyright (c) 2026 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package fountain::f_rpc.server
+
+import fountain::f_net.SocketBuffer
+import fountain::f_net.client.Client
+import fountain::f_net.server.Server
+
+private let serviceHosts = ConcurrentHashMap<String, Float64>()
+
+private func error(id: MessageID, cmd: Command, msg: ErrorMessage): Message {
+    errorLog(id, cmd, msg)
+    Message.error(id, data: msg.error)
+}
+
+class RPCServer {
+    internal static func start(): Unit {
+        let qsize = ServerConfig.bufferQueueSize
+        let port = ServerConfig.port
+        let checkDuration = ServerConfig.connectionCheckDuration
+        let unavailableChecked = ServerConfig.unavailableChecked
+        let executors = ServerConfig.executors
+        let server = Server<RPCMessage>(bufferQueueSize: qsize, bindAt: port, checkDuration: checkDuration, 
+            executors: executors, checker: checker, unavailableChecked: unavailableChecked,
+            defaultResp: {id => error(id, Command.ERROR, ErrorMessage(EXCEEDING))}, limiter: ServerConfig.rateLimiter()
+        )
+        let addresses = ServerConfig.baseAddresses
+        rpclog.debug{'[FOUNTAIN_RPC.register] base addresses: ${addresses}'}
+        let zeroClients = unsafeZeroValue<Array<Client>>()
+        let clients = Box<Array<Client>>(zeroClients)
+        spawn{
+            let weight = ServerConfig.weight
+            let registerMessage = Message.register(data: '${port},${weight}'.toData())
+            clients.value = Array<Client>(addresses.size){i =>
+                let address = addresses[i]
+                rpclog.debug{'[FOUNTAIN_RPC.register] host: ${address} - ${port},${weight}'}
+                let clientBuilder = Client.builder(address: address, checkDuration: Duration.second, checker: checker)
+                var client = unsafeZeroValue<Client>()
+                while(true){
+                    try{
+                        client = clientBuilder.build()
+                        break
+                    }catch(e: Exception){
+                        rpclog.error('[FOUNTAIN_RPC.register.newClient] ${address}', e)
+                    }
+                }
+                while(true){
+                    try{
+                        rpclog.debug{'[FOUNTAIN_RPC.register] host to register: ${address} - ${port},${weight}'}
+                        client.transfer(registerMessage)
+                        rpclog.debug{'[FOUNTAIN_RPC.register] host registered: ${address} - ${port},${weight}'}
+                        break
+                    }catch(e: Exception){
+                        rpclog.error('[FOUNTAIN_RPC.register] ${address}', e)
+                    }
+                }
+                client
+            }
+        }
+        ExitCallbacks.atExit(0){
+            let deregisterMessage = Message.deregister(data: port.toData())
+            for(client in clients.value where !client.isClosed()){
+                try{
+                    client.transfer(deregisterMessage)
+                }catch(e: Exception){
+                    rpclog.error('[FOUNTAIN_RPC.deregister] ${client.address}', e)
+                }finally{
+                    client.close()
+                }
+            }
+            if(!server.isClosed()){
+                server.close()
+            }
+        }
+        server.start(execute)
+    }
+    /**
+     * REGISTER 向其它服务节点注册自身
+     * DEREGISTER 向其它服务节点注销自身
+     * ACK
+     * SUBSCRIBE 获取服务节点能够提供的服务
+     * CONSUME 向服务节点发起RPC调用
+     * RESP 服务节点返回调用结果或当前服务节点能够提供的服务
+     */
+    private static func execute(buffer: SocketBuffer, message: Message): ?Message {
+        try{
+            let cmd = message.command
+            match(message.command){
+                case Command.REGISTER => RegisterExecutor(buffer, message.id, message.tryFromData<String>() ?? '').exec()
+                case Command.DEREGISTER => DeregisterExecutor(buffer, message.id, message.tryFromData<UInt16>() ?? 0).exec()
+                case Command.SUBSCRIBE => SubscribeExecutor(message.id, message.tryFromData<Bool>() ?? false).exec()
+                case Command.CONSUME(b) => ConsumeExecutor(buffer, b, message.id, message.tryFromData<RPCMessage>().getOrThrow()).exec()
+                case Command.ACK => None<Message>
+                case x => error(message.id, x, ErrorMessage.new(message.data, UNSUPPORTED_COMMAND))
+            }
+        }catch(e: Exception){
+            error(message.id, message.command, ErrorMessage.new(message.data, e))
+        }finally{
+            RPCMessage.clearCurrentTrace()
+        }
+    }
+}
+private struct RegisterExecutor{
+    RegisterExecutor(private let buffer: SocketBuffer, private let id: MessageID, private let server: String){}
+    func exec(): Message {
+        let addr = buffer.remoteAddress.toString()
+        let address = addr[0 .. addr.indexOf(":").getOrThrow()]
+        debugLog(id, Command.REGISTER){'${address}:${server}'}
+        let idx = server.indexOf(',').getOrThrow()
+        let port = UInt16.parse(server[0 .. idx])
+        let weight = Float64.parse(server[idx + 1 ..])
+        serviceHosts.add('${address}:${port}', weight)
+        Message.ack(id, data: DataNone.INSTANCE)
+    }
+}
+private struct DeregisterExecutor{
+    DeregisterExecutor(private let buffer: SocketBuffer, private let id: MessageID, private let port: UInt16){}
+    func exec(): Message {
+        debugLog(id, Command.DEREGISTER){port}
+        let addr = buffer.remoteAddress.toString()
+        serviceHosts.remove('${addr[0 .. addr.indexOf(":").getOrThrow()]}:${port}')
+        Message.ack(id, data: DataNone.INSTANCE)
+    }
+}
+private struct SubscribeExecutor{
+    SubscribeExecutor(private let id: MessageID, private let hosts: Bool){}
+    func exec(): Message {
+        let start = MonoTime.now()
+        let data = if(hosts){
+            let hosts = serviceHosts.iterator()
+            Array<String>(serviceHosts.size){_ => 
+                let (host, weight) = hosts.next().getOrThrow()
+                '${host},${weight}'
+            }.toData()
+        }else{
+            ServiceHub.metas.toData()
+        }
+        debugLog(id, Command.SUBSCRIBE){LogMessage.new(hosts, data, MonoTime.now() - start)}
+        Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: data)
+    }
+}
+private struct ConsumeExecutor{
+    ConsumeExecutor(private let buffer: SocketBuffer, private let b: Byte, private let id: MessageID, private let message: RPCMessage){}
+    func exec(): Message {
+        let start = MonoTime.now()
+        func innerInfo(result: Data, end: MonoTime): Message {
+            infoLog(id, Command.CONSUME(b)){LogMessage.new(message, result, end - start)}
+            Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: result)
+        }
+        try {
+            innerInfo(ServiceHub.call(message), MonoTime.now())
+        } handle (cmd: BreakingCommand) {
+            innerInfo(cmd.data, MonoTime.now())
+        } catch (e: Exception) {
+            error(id, Command.CONSUME(b), ErrorMessage.new(message, e))
+        }
+    }
+}

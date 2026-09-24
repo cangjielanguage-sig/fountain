@@ -13,16 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package user.controller
+package fountain::user.controller
 
 import std.reflect.*
-import stdx.encoding.json.*
-import fountain.data.*
-import fountain.mvc.*
-import fountain.mvc.macros.*
-import user.service.UserService
-import user.model.po.*
-import user.model.mvc.*
+import fountain::f_data.*
+import fountain::f_mvc.*
+import fountain::f_mvc.macros.*
+import fountain::user.service.UserService
+import fountain::user.model.po.*
+import fountain::user.model.mvc.*
 
 @Controller
 public class UserController {

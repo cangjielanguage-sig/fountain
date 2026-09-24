@@ -13,13 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_bean.test
+package fountain::f_bean.test
 
 import std.unittest.*
 import std.unittest.testmacro.*
 
-import f_bean.*
-import f_bean.macros.*
+import fountain::f_bean.*
+import fountain::f_bean.macros.*
 
 @Bean[String|Int64]
 public class TestGenericBean<T> {}

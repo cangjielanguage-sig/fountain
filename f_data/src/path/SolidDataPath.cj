@@ -13,11 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_data.path
+package fountain::f_data.path
 
 import std.collection.concurrent.ConcurrentHashMap
 import std.sync.Mutex
-import f_collection.*
+import fountain::f_collection.*
 
 internal class SolidDataPath <: DataPath {
     private static let SOLID = ConcurrentHashMap<String, DataPath>()

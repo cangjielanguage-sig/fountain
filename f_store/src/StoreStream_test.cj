@@ -1,0 +1,56 @@
+/*
+Copyright (c) 2026 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package fountain::f_store
+
+import std.unittest.*
+import std.unittest.testmacro.*
+import std.fs.*
+import std.collection.ArrayList
+
+@Test
+public class StoreStreamTest {
+
+    let testDir = "/tmp/f_store_step2_test"
+
+    @TestCase
+    public func createStoreStreamWriteReadFlushClose(): Unit {
+        let dir = testDir
+        if (exists(dir)) {
+            remove(dir, recursive: true)
+        }
+        Directory.create(dir, recursive: true)
+        let path = "${dir}/test_io.sst"
+
+        // 通过 File 写入
+        let file = File(path, OpenMode.ReadWrite)
+        file.write([0x01, 0x02, 0x03])
+        file.flush()
+        file.close()
+
+        // 通过 File 读取验证
+        let readFile = File(path, OpenMode.Read)
+        let buf = Array<Byte>(3, repeat: 0u8)
+        let n = readFile.read(buf)
+        readFile.close()
+
+        @Expect(n == 3)
+        @Expect(buf[0] == 0x01)
+        @Expect(buf[1] == 0x02)
+        @Expect(buf[2] == 0x03)
+
+        remove(dir, recursive: true)
+    }
+}

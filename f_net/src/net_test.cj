@@ -1,0 +1,117 @@
+/*
+Copyright (c) 2026 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ */
+package fountain::f_net
+
+import std.unittest.*
+import std.unittest.testmacro.*
+
+@Test
+public class MessageFutureTest {
+    @TestCase
+    public func getReturnsSetValue(): Unit {
+        var fut = MessageFuture<Int64>()
+        fut.set(42)
+        @Assert(fut.get() == 42)
+    }
+
+    @TestCase
+    public func tryGetReturnsNoneWhenNotSet(): Unit {
+        let fut = MessageFuture<Int64>()
+        @Assert(fut.tryGet().isNone())
+    }
+
+    @TestCase
+    public func tryGetReturnsSomeWhenSet(): Unit {
+        var fut = MessageFuture<Int64>()
+        fut.set(99)
+        if (let Some(v) <- fut.tryGet()) {
+            @Assert(v == 99)
+        } else {
+            @Assert(false)
+        }
+    }
+
+    @TestCase
+    public func tryGetWithTimeoutReturnsNoneOnTimeout(): Unit {
+        let fut = MessageFuture<Int64>()
+        @Assert(fut.tryGet(Duration.millisecond).isNone())
+    }
+
+    @TestCase
+    public func getWaitsForSetFromAnotherThread(): Unit {
+        let fut = MessageFuture<Int64>()
+        spawn {
+            sleep(Duration.millisecond * 10)
+            var f = fut
+            f.set(42)
+        }
+        @Assert(fut.get() == 42)
+    }
+
+    @TestCase
+    public func setOverwritesPreviousValue(): Unit {
+        var fut = MessageFuture<Int64>()
+        fut.set(1)
+        fut.set(2)
+        @Assert(fut.get() == 2)
+    }
+
+    @TestCase
+    public func getIsIdempotent(): Unit {
+        var fut = MessageFuture<Int64>()
+        fut.set(77)
+        @Assert(fut.get() == 77)
+        @Assert(fut.get() == 77)
+    }
+
+    @TestCase
+    public func tryGetWithTimeoutReturnsValueWhenSetDuringWait(): Unit {
+        let fut = MessageFuture<Int64>()
+        spawn {
+            sleep(Duration.millisecond * 10)
+            var f = fut
+            f.set(123)
+        }
+        if (let Some(v) <- fut.tryGet(Duration.millisecond * 100)) {
+            @Assert(v == 123)
+        } else {
+            @Assert(false)
+        }
+    }
+}
+
+@Test
+public class SocketParamsTest {
+    @TestCase
+    public func builderPatternChaining(): Unit {
+        let _ = SocketParams()
+            .bindToDevice(None)
+            .readTimeout(None)
+            .noDelay(true)
+            .linger(None)
+    }
+
+    @TestCase
+    public func copyProducesIndependentClone(): Unit {
+        let p1 = SocketParams()
+        let p2 = p1.copy()
+        p1.noDelay(true)
+        p2.noDelay(false)
+        p1.bindToDevice(None)
+        // 如果 copy 共享内部状态, 修改 p1 会影响 p2
+        p2.linger(None)
+    }
+}

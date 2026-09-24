@@ -13,12 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_mvc
+package fountain::f_mvc
 
 public class MVCStarter {
     private static let log = LoggerFactory.getLogger<MVCStarter>()
     private MVCStarter(private let server: Server, private let host: String, private let port: UInt16) {
-        atExit(closeGracefully)
+        ExitCallbacks.atExit(0, closeGracefully)
     }
     private static var starter = None<MVCStarter>
     public static func initialize(): Unit {

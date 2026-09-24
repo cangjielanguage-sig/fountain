@@ -13,28 +13,36 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_data.path
+package fountain::f_data.path
 
 internal class RecursiveDescentIterator <: Iterator<Data> {
     private let list = LinkedList<Iterator<Data>>()
-    private var itr: Iterator<Data> = EmptyIterator<Data>.INSTANCE()
+    private var itr: Iterator<Data> = EmptyIterator<Data>.instance()
+    private let rootData: Data
     init(data: Data) {
+        rootData = data
         append(data)
     }
     private func append(data: Data) {
-        list.addLast(AnySubPathNode.instance.get(data))
+        list.addFirst(AnySubPathNode.instance.get(data))
     }
     public func next(): ?Data {
-        if (let Some(x) <- itr.next()) {
-            if (!(itr is SingleIterable<Data>)) {
-                append(x)
+        while (true) {
+            if (let Some(x) <- itr.next()) {
+                // Only descend into containers (lists, objects), not scalars
+                match (x) {
+                    case _: Iterable<Data> => append(x)
+                    case _: Iterable<(String, Data)> => append(x)
+                    case _: Iterable<(Data, Data)> => append(x)
+                    case _ => ()
+                }
+                return x
+            } else if (let Some(i) <- list.removeFirst()) {
+                itr = i.iterator()
+            } else {
+                return None<Data>
             }
-            x
-        } else if (let Some(i) <- list.removeFirst()) {
-            itr = i.iterator()
-            next()
-        } else {
-            None<Data>
         }
+        None<Data>
     }
 }

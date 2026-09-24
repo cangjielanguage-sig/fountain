@@ -1,8 +1,9 @@
 [package]
-  cjc-version = "1.0.4"
+  cjc-version = "1.2.0"
   name = "boot"
+  organization = "fountain"
   description = "nothing here"
-  version = "1.0.45"
+  version = "1.1.0"
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"
@@ -12,3 +13,4 @@
   #override-compile-option = "-g -O0 --dy-std"
   link-option = ""
   package-configuration = {}
+  

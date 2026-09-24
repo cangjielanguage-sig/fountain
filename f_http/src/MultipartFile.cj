@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_http
+package fountain::f_http
 
 public class MultipartFile <: Multipart & InputStream & Resource & DataFields<MultipartFile> & Data {
     MultipartFile(
@@ -43,6 +43,7 @@ public class MultipartFile <: Multipart & InputStream & Resource & DataFields<Mu
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match(data){
+            case x: DataAny => tryFromData(x.data, flag)
             case x: MultipartFile => x
             case _ => throw MediaTypeException('Not Supported')
         }

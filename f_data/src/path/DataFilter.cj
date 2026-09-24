@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_data.path
+package fountain::f_data.path
 
 import std.ast.{cangjieLex, TokenKind}
 
@@ -30,7 +30,7 @@ internal interface DataFilter {
         NotFilter(this)
     }
     static func compilePath(path: String, solid: String) {
-        if (Bool.parse(solid)) {
+        if (solid == "true") {
             DataPath.solid(path)
         } else {
             DataPath.cache(path)
@@ -56,7 +56,10 @@ internal interface DataFilter {
         for (t in cangjieLex(value, true)) {
             match (t.kind) {
                 case COMMA => continue
-                case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL | INT64 | FLOAT64 | BOOL_LITERAL => list.add(parse<T>(t.value))
+                case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL | INTEGER_LITERAL | FLOAT_LITERAL | BOOL_LITERAL => list.add(parse<T>(t.value))
+                case IDENTIFIER where t.value == 'null' =>
+                    // null is handled specially in InFilter.check() via DataNone
+                    ()
                 case _ => throw DataException('illegal token for set filter ${value}')
             }
         }
@@ -67,10 +70,14 @@ internal interface DataFilter {
         for (t in cangjieLex(value, true)) {
             match (t.kind) {
                 case COMMA => continue
-                case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL | INT64 | FLOAT64 | BOOL_LITERAL => set.add(parse<T>(t.value))
+                case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL | INTEGER_LITERAL | FLOAT_LITERAL | BOOL_LITERAL => set.add(parse<T>(t.value))
+                case IDENTIFIER where t.value == 'null' => ()  // null is tracked via hasNullCheck
                 case _ => throw DataException('illegal token for set filter ${value}')
             }
         }
         set
+    }
+    static func containsNull(setStr: String): Bool {
+        setStr.contains("null")
     }
 }

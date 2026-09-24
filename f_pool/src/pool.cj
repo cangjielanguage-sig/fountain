@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2025 WuJingrun（吴京润）
+Copyright (c) 2026 WuJingrun（吴京润）
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -12,197 +12,209 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
- */
-package f_pool
+*/
+package fountain::f_pool
 
-import std.collection.concurrent.ArrayBlockingQueue
-import std.env
-import std.sync.{AtomicInt64, AtomicBool}
-import std.time.MonoTime
-import f_log.impl.LoggerFactory
+import fountain::f_pool.exception.PoolException
 
-public interface PooledManager<T> {
-    func create(): T
-    func check(object: T): Bool
-    func destroy(object: T): Unit
-    func clear(object: T): Unit
+public interface ObjectManager<V> {
+    func create(): V
+    func check(value: V): Bool
+    func destroy(value: V): Unit
+    func clear(value: V): Unit {}
 }
-/**
- * 本类型无法分辨返还的实例是不是从Pool借出去的，也无法分辨借出实例的Pool跟返回实例的Pool是不是同一个，因此调用giveBack返还实例的时候，如果返回时检查失败了一定会销毁返还的实例，池维护的实例数随之减1。
- */
-public class Pool<T> <: Resource {
-    private static let log = LoggerFactory.getLogger('fountain.pool.Pool')
-    private let queue: ArrayBlockingQueue<(T, MonoTime)>
-    private let tasks: ArrayBlockingQueue<Unit>
-    private let size = AtomicInt64(0)
-    private let running = AtomicBool(true)
-    public Pool(
-        private let initSize!: Int64 = 0,
-        private let minSize!: Int64 = 0,
-        private let maxSize!: Int64 = Int64.Max,
-        private let idleTimeout!: Duration = Duration.hour,
-        private let checkOnCreation!: Bool = false,
-        private let checkOnBorrowing!: Bool = true,
-        private let checkOnReturning!: Bool = true,
-        private let clearOnReturning!: Bool = false,
-        private let checkInterval!: Duration = Duration.minute,
-        private let creator!: () -> T,
-        private let checker!: (T) -> Bool,
-        private let destroier!: (T) -> Unit,
-        private let clear!: (T) -> Unit = {_ =>}
-    ) {
-        queue = ArrayBlockingQueue<(T, MonoTime)>(maxSize)
-        tasks = ArrayBlockingQueue<Unit>(maxSize)
-        startCheckingSchedule()
-        startCreationSchedule()
-        for (_ in 0..initSize) {
-            tasks.add(())
-        }
-        env.atExit(close)
+public class PoolBuilder<V> {
+    private var mode: Mode = Mode.Fifo
+    private var initSize: Int64 = 0
+    private var minSize: Int64 = 0
+    private var maxSize: Int64 = 10
+    private var idleTimeout: Duration = Duration.hour
+    private var checkOnCreation: Bool = false
+    private var checkOnBorrowing: Bool = true
+    private var checkOnReturning: Bool = true
+    private var clearOnReturning: Bool = false
+    private var checkInterval: Duration = Duration.minute
+    private var creator: ?() -> V = None
+    private var checker: ?(V) -> Bool = None
+    private var destroier: ?(V) -> Unit = None
+    private var clear: (V) -> Unit = {_ =>}
+
+    init(){}
+    public func setMode(mode: Mode): This {
+        this.mode = mode
+        this
     }
+    public func setInitSize(initSize: Int64): This {
+        this.initSize = initSize
+        this
+    }
+    public func setMinSize(minSize: Int64): This {
+        this.minSize = minSize
+        this
+    }
+    public func setMaxSize(maxSize: Int64): This {
+        this.maxSize = maxSize
+        this
+    }
+    public func setIdleTimeout(idleTimeout: Duration): This {
+        this.idleTimeout = idleTimeout
+        this
+    }
+    public func setCheckOnCreation(checkOnCreation: Bool): This {
+        this.checkOnCreation = checkOnCreation
+        this
+    }
+    public func setCheckOnBorrowing(checkOnBorrowing: Bool): This {
+        this.checkOnBorrowing = checkOnBorrowing
+        this
+    }
+    public func setCheckOnReturning(checkOnReturning: Bool): This {
+        this.checkOnReturning = checkOnReturning
+        this
+    }
+    public func setClearOnReturning(clearOnReturning: Bool): This {
+        this.clearOnReturning = clearOnReturning
+        this
+    }
+    public func setCheckInterval(checkInterval: Duration): This {
+        this.checkInterval = checkInterval
+        this
+    }
+    public func setCreator(creator: () -> V): This {
+        this.creator = creator
+        this
+    }
+    public func setChecker(checker: (V) -> Bool): This {
+        this.checker = checker
+        this
+    }
+    public func setDestroier(destroier: (V) -> Unit): This {
+        this.destroier = destroier
+        this
+    }
+    public func setClear(clear: (V) -> Unit): This {
+        this.clear = clear
+        this
+    }
+    public func setManager(manager: ObjectManager<V>): This {
+        setCreator(manager.create)
+        setChecker(manager.check)
+        setDestroier(manager.destroy)
+        setClear(manager.clear)
+        this
+    }
+    public func build(): Pool<V> {
+        func toThrow(){
+            throw PoolException('creator, checker and destroier must be set.')
+        }
+        Pool<V>(
+            mode: mode,
+            initSize: initSize,
+            minSize: minSize,
+            maxSize: maxSize,
+            idleTimeout: idleTimeout,
+            checkOnCreation: checkOnCreation,
+            checkOnBorrowing: checkOnBorrowing,
+            checkOnReturning: checkOnReturning,
+            clearOnReturning: clearOnReturning,
+            checkInterval: checkInterval,
+            creator: creator ?? toThrow(),
+            checker: checker ?? toThrow(),
+            destroier: destroier ?? toThrow(),
+            clear: clear)
+    }
+}
+public struct Pool<V> <: Resource {
+    private let pool: KeyPool<Unit, V>
+
     public init(
-        initSize!: Int64 = 0,
+        mode!: Mode = Mode.Fifo,
+        initSize!: Int64,
         minSize!: Int64 = 0,
-        maxSize!: Int64 = Int64.Max,
+        maxSize!: Int64 = 10,
         idleTimeout!: Duration = Duration.hour,
         checkOnCreation!: Bool = false,
         checkOnBorrowing!: Bool = true,
         checkOnReturning!: Bool = true,
+        clearOnReturning!: Bool = false,
         checkInterval!: Duration = Duration.minute,
-        manager!: PooledManager<T>
+        creator!: () -> V,
+        checker!: (V) -> Bool,
+        destroier!: (V) -> Unit,
+        clear!: (V) -> Unit = {_ =>}
     ) {
-        this(initSize: initSize, minSize: minSize, maxSize: maxSize, idleTimeout: idleTimeout,
-            checkOnCreation: checkOnCreation, checkOnBorrowing: checkOnBorrowing, checkOnReturning: checkOnReturning,
-            checkInterval: checkInterval, creator: manager.create, checker: manager.check, destroier: manager.destroy,
-            clear: manager.clear)
+        pool = KeyPool<Unit, V>(
+            mode: mode,
+            initKeys: InitKeyIterator(initSize).next,
+            minSize: minSize,
+            maxSize: maxSize,
+            totalSize: maxSize,
+            idleTimeout: idleTimeout,
+            checkOnCreation: checkOnCreation,
+            checkOnBorrowing: checkOnBorrowing,
+            checkOnReturning: checkOnReturning,
+            clearOnReturning: clearOnReturning,
+            checkInterval: checkInterval,
+            creator: {_ => creator()},
+            checker: {_, v => checker(v)},
+            destroier: {_, v => destroier(v)}
+        )
     }
-    private func startCheckingSchedule() {
-        if (checkInterval <= Duration.Zero) {
-            return
-        }
-        spawn {
-            while (running.load()) {
-                var i = 0
-                while (running.load() && i < this.size.load() && let (o, t) <- queue.remove()) {
-                    i++
-                    try {
-                        if ((idleTimeout > Duration.Zero && MonoTime.now() - t >= idleTimeout) || !checker(o)) {
-                            destroy(o, true)
-                            if (this.size.load() < minSize) {
-                                tasks.tryAdd(())
-                            }
-                        } else {
-                            queue.add((o, t))
-                        }
-                    } catch (e: Exception) {
-                        log.warn('Pool checking schedule', e)
-                    }
-                    sleep(Duration.Zero)
-                }
-                sleep(checkInterval)
-            }
-        }
+    public init(
+        mode!: Mode = Mode.Fifo,
+        initSize!: Int64,
+        minSize!: Int64 = 0,
+        maxSize!: Int64 = 10,
+        idleTimeout!: Duration = Duration.hour,
+        checkOnCreation!: Bool = false,
+        checkOnBorrowing!: Bool = true,
+        checkOnReturning!: Bool = true,
+        clearOnReturning!: Bool = false,
+        checkInterval!: Duration = Duration.minute,
+        manager!: ObjectManager<V>
+    ){
+        this(
+            mode: mode,
+            initSize: initSize,
+            minSize: minSize,
+            maxSize: maxSize,
+            idleTimeout: idleTimeout,
+            checkOnCreation: checkOnCreation,
+            checkOnBorrowing: checkOnBorrowing,
+            checkOnReturning: checkOnReturning,
+            clearOnReturning: clearOnReturning,
+            checkInterval: checkInterval,
+            creator: manager.create,
+            checker: manager.check,
+            destroier: manager.destroy,
+            clear: manager.clear
+        )
     }
-    private func startCreationSchedule() {
-        spawn {
-            while (running.load() && let _ <- tasks.remove()) {
-                if (running.load() && size.load() < maxSize) {
-                    let object = creator()
-                    if (checkOnCreation && !checker(object)) {
-                        destroy(object, true, decr: false)
-                    } else if (add(object, decrIfOverload: false)) {
-                        size.fetchAdd(1)
-                    }
-                }
-            }
-        }
-    }
-    private func destroy(o: T, logOnEx: Bool, decr!: Bool = true) {
-        try {
-            destroier(o)
-        } catch (e: Exception) {
-            if (logOnEx) {
-                log.warn('error occurred on destring object in pool', e)
-            } else {
-                throw e
-            }
-        } finally {
-            if (decr) {
-                size.fetchSub(1)
-            }
-        }
-        if (size.load() < 0) {
-            let ex = PoolException(
-                'current size of pool is less than zero, may be some instances which were not be created by current pool were destroied by current pool on giving back.')
-            if (logOnEx) {
-                log.warn(ex)
-            } else {
-                throw ex
-            }
-        }
-    }
-    private func add(object: T, decrIfOverload!: Bool = true): Bool {
-        if (!queue.tryAdd((object, MonoTime.now()))) {
-            log.warn {
-                "current size of pool is larger than maxSize(${maxSize}), may be some instances which were not be created by current pool were given back to current pool."
-            }
-            destroy(object, false, decr: decrIfOverload)
-            false
-        } else {
-            true
-        }
+    public static func builder(): PoolBuilder<V> {
+        PoolBuilder<V>()
     }
     public func isClosed(): Bool {
-        !running.load()
+        pool.isClosed()
     }
     public func close(): Unit {
-        running.store(false)
-        while (let Some(c) <- tasks.tryRemove()) {}
-        while (let Some((o, _)) <- queue.tryRemove()) {
-            destroy(o, true)
-        }
+        pool.close()
     }
-    public func borrow(timeout!: Duration = Duration.Max): ?T {
-        func doCheck(o: T): ?T {
-            if (checkOnBorrowing && !checker(o)) {
-                destroy(o, true)
-                return None<T>
-            }
-            o
-        }
-        let start = MonoTime.now()
-        while (running.load() && MonoTime.now() - start < timeout) {
-            if (let Some((o, _)) <- queue.tryRemove()) {
-                if (let Some(x) <- doCheck(o)) {
-                    return x
-                }
-            } else {
-                tasks.tryAdd(())
-                if (let consumed <- MonoTime.now() - start && consumed < timeout && let Some((o, _)) <- queue.remove(
-                    timeout - consumed) && let Some(x) <- doCheck(o)) {
-                    return x
-                }
-            }
-        }
-        None<T>
+    public func get(timeout!: Duration = Duration.Max): ?V {
+        pool.get((), timeout: timeout)
     }
-    public func giveBack(object: T): Unit {
-        func doAdd() {
-            if (clearOnReturning) {
-                clear(object)
-            }
-            add(object)
-        }
-        if (!running.load()) {
-            destroy(object, true)
-        } else if (checkOnReturning) {
-            if (checker(object)) {
-                doAdd()
-            } else {
-                destroy(object, true)
-            }
-        } else {
-            doAdd()
+    public func giveBack(value: V): Unit {
+        pool.giveBack((), value)
+    }
+}
+private class InitKeyIterator <: Iterator<Unit> {
+    private var i = 0
+    InitKeyIterator(private let initSize: Int64){}
+    public func next(): ?Unit {
+        if(i < initSize){
+            i++
+            ()
+        }else{
+            None
         }
     }
 }

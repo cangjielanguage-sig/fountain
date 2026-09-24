@@ -13,14 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_ticktock
+package fountain::f_ticktock
 
 import std.sync.Timer
-import f_base.ZERO_TIMER
+import fountain::f_base.ZERO_TIMER
 
 class Chrono {
     private var timer: Timer = ZERO_TIMER
     init() {}
+    @Frozen
     func start(emitter: Emitter) {
         func next(now: DateTime, n: Int64) {
             DateTime.of(
@@ -41,6 +42,7 @@ class Chrono {
             next(now, 1)
         }
     }
+    @Frozen
     func shutdown() {
         timer.cancel()
     }

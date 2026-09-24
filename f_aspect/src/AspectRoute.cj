@@ -13,25 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_aspect
+package fountain::f_aspect
 
 public import std.reflect.*
-import f_base.*
-import f_regex.*
+import fountain::f_base.*
+import fountain::f_regex.*
 
-/**
- * 用来修饰切面也就是Aspect的实现类
- */
-@Annotation[target: [Type]]
-public class AspectRoute <: RouteRule {
-    public const AspectRoute(public let route: RouteRule) {}
-    public func isAspect<T>(): Bool {
-        TypeInfo.of<T>().isSubtypeOf(TypeInfo.of<Aspect>())
-    }
-    public func matches(funcInfo: InvocationFuncInfo): Bool {
-        route.matches(funcInfo)
-    }
-}
 /**
  * 以下所有规则除非特别说明都适用本注释的说明。
  * 任意参数都可以用通配符*表示任意大于等于0个字符，?表示0或1个字符
@@ -46,16 +33,30 @@ public class AspectRoute <: RouteRule {
 public abstract class RouteRule {
     public const init() {}
     public func matches(funcInfo: InvocationFuncInfo): Bool
-    public operator const func &(right: RouteRule) {
+    public operator const func &(right: RouteRule): RouteRule {
         AndRouteRule(this, right)
     }
-    public operator const func |(right: RouteRule) {
+    public operator const func |(right: RouteRule): RouteRule {
         OrRouteRule(this, right)
     }
-    public operator const func !() {
+    public operator const func !(): RouteRule {
         NotRouteRule(this)
     }
 }
+/**
+ * 用来修饰切面也就是Aspect的实现类
+ */
+@Annotation[target: [Type]]
+public class AspectRoute <: RouteRule {
+    public const AspectRoute(public let route: RouteRule) {}
+    public func isAspect<T>(): Bool {
+        TypeInfo.of<T>().isSubtypeOf(TypeInfo.of<Aspect>())
+    }
+    public func matches(funcInfo: InvocationFuncInfo): Bool {
+        route.matches(funcInfo)
+    }
+}
+
 /**
  * 匹配的公共实例函数将被织入
  */
@@ -76,6 +77,11 @@ public class ExecutionRouteRule <: AndRouteRule {
 public class WithinRouteRule <: RouteRule {
     public const WithinRouteRule(public let qualifiedName: String) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
+        let qualifiedName = if(Regex('^.+::').matches(this.qualifiedName)){
+            this.qualifiedName
+        }else{
+            '*::${this.qualifiedName}'
+        }
         Regex.wildcard(qualifiedName).matches(funcInfo.typeInfo.qualifiedName)
     }
 }
@@ -128,10 +134,11 @@ public class ArgsRouteRule <: RouteRule {
 public class ReturnTypeRouteRule <: RouteRule {
     public const ReturnTypeRouteRule(public let returnType: String) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        returnType == '*' || 
+        let matched = returnType == '*' || 
         ((returnType.contains('*') || returnType.contains('?')) && 
           Regex.wildcard(returnType).matches(funcInfo.funcInfo.returnType.qualifiedName)) || 
         TypeInfos.get(returnType).isSubtypeOf(funcInfo.funcInfo.returnType)
+        matched
     }
 }
 /**
@@ -185,7 +192,7 @@ private func contains(annotations: Collection<Annotation>, annotationNames: Arra
             list.add(ClassTypeInfo.of(annotation))
         }
         for (name in annotationNames) {
-            supers.add(TypeInfos.get(name.trimAscii()))
+            supers.add(TypeInfo.get(name.trimAscii()))
         }
         for (superType in supers) {
             var matched = false

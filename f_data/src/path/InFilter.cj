@@ -13,12 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_data.path
+package fountain::f_data.path
 
-internal class InFilter<T> <: DataFilter where T <: Hashable & Equatable<T> {
-    InFilter(private let left: DataPath, private let right: HashSet<T>) {}
+internal class InFilter<T> <: DataFilter where T <: Hashable & Equatable<T> & ToString {
+    InFilter(private let left: DataPath, private let right: HashSet<T>, private let hasNull: Bool) {}
     init(left: String, right: String, solid: String) {
-        this(compilePath(left, solid), parseHashSet<T>(right))
+        this(compilePath(left, solid), parseHashSet<T>(right), DataFilter.containsNull(right))
     }
     public func check(data: Data): Bool {
         let d = match (left.get(data).next()) {
@@ -26,6 +26,9 @@ internal class InFilter<T> <: DataFilter where T <: Hashable & Equatable<T> {
             case _ => return false
         }
         match (d) {
+            case _: DataNone =>
+                // null match depends on whether null was in the set
+                hasNull
             case x: DataDateTime => match (x.data) {
                 case x: T => right.contains(x)
                 case _ => false
@@ -34,10 +37,13 @@ internal class InFilter<T> <: DataFilter where T <: Hashable & Equatable<T> {
                 case x: T => right.contains(x)
                 case _ => false
             }
-            case x: DataReal => match (x.data) {
-                case x: T => right.contains(x)
-                case _ => false
-            }
+            case x: DataReal =>
+                for (v in right) {
+                    if (x.data == Decimal.parse(v.toString())) {
+                        return true
+                    }
+                }
+                false
             case x: DataString => match (x.data) {
                 case x: T => right.contains(x)
                 case _ => false

@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_base
+package fountain::f_base
 
 public interface ExtendOption<T> {
     func iterator(): Iterator<T>
@@ -115,7 +115,7 @@ public class OptionCaller<T, R> {
         private let someCallee: (T) -> R,
         private var noneCallee!: ?() -> R = None<() -> R>
     ) {}
-    public func none(callee: () -> R) {
+    public func none(callee: () -> R): OptionCaller<T, R> {
         noneCallee = callee
         this
     }

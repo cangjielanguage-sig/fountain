@@ -31,3 +31,31 @@
     文本模板
     时间扩展类型
     crc16 CaseFormat 密钥交换算法 常用设计模式 murmur-hash PathPattern uuid
+
+2026-09-15
+release-1.3.0.alpha
+    feat(orm): 支持SQL拼装API化，可以使用各种函数和宏生成的类静态属性构造SQL
+    feat(orm): 支持序列化JSON时添加类型名，反序列化时如果映射的成员属性是一个父类，可以从JSON获取子类型名完成反序列化
+    fix(loadbalance): treemap是空时抛出NoneValueException，此时判断treemap是否为空，避免抛出异常
+    fix(orm|f_data): 宏展开生成多个声明时，外部宏只保留了第一个声明
+    doc(aspect): 完善切面编程文档
+    feat(f_io): 添加Path复制扩展
+    feat(f_app): 添加toExitGracefully()，发送信号SIGTERM SIGINT时会可以执行注册的atexit函数
+    feat(f_health): 添加模块可以获取进程运行时的CPU/内在数据
+    feat(pool)：丰富池特性，增加先进先出、后进先出、强引用、弱引用、键值对池
+    feat(f_io): 增加SegmentationLog 
+    feat(f_base): 增加FutureTask和InteritedTaskLocal
+    feat(f_concurrent): 增加DelayQueue
+    feat(f_net): 增加MultiClient，支持负载均衡
+    feat(f_protocol): 完善通讯协议
+    feat(f_io): 增加ByteBuffer，比标准库同名类有更丰富的特性
+    fix(orm): 分页查询，count是0时不清空SQL和参数
+
+2026-09-16
+release-1.3.1.alpha
+    feat(f_orm): 更新判定默认驱动的逻辑
+    chaos(f_orm): 更新README
+---
+
+2026-09-17
+    增加枚举`fountain::f_base.Arch`，有x86_64 和aarch64两个构造器

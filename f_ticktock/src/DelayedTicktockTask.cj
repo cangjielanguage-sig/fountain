@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_ticktock
+package fountain::f_ticktock
 
 import std.time.Month
 import std.time.DateTime
@@ -22,14 +22,14 @@ public abstract class DelayedTicktockTask <: CronTicktockTask {
     public prop delayedPeriodic: DelayedPeriodic 
     public prop immediate: Bool 
     public prop delay: Duration 
-    
+    @Frozen
     public prop cron: String {
         get() {
             let t = DateTime.now() + delay
             "${t.second} ${t.minute} ${t.hour} ${t.dayOfMonth} ${t.month.toInteger()} ${t.dayOfWeek.toInteger()} ${t.year}"
         }
     }
-    
+    @Frozen
     protected func run(): Unit {
         func nextCall(): Unit {
             if(!once){

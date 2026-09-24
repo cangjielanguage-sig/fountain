@@ -13,15 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_cache
+package fountain::f_cache
 
 import std.collection.HashMap
 import std.collection.concurrent.LinkedBlockingQueue
 import std.env.atExit
 import std.time.DateTime
 import std.sync.{Timer, AtomicBool}
-import f_base.*
-import f_collection.PriorityQueue
+import fountain::f_base.*
+import fountain::f_collection.PriorityQueue
 
 public class HeapCache<V> where V <: Object {
     private let store: ConcHashMap<Priority<V>>
@@ -40,7 +40,7 @@ public class HeapCache<V> where V <: Object {
         }
         this.store = ConcHashMap<Priority<V>>.create(concurrencyLevel: concurrencyLevel)
         startTimer()
-        atExit(destroy)
+        ExitCallbacks.atExit(254, destroy)
     }
 
     public static func builder(): HeapCacheBuilder<V> {
@@ -227,7 +227,7 @@ public class HeapCache<V> where V <: Object {
             store.size
         }
     }
-    public func clear() {
+    public func clear(): Unit {
         store.clear()
     }
     public func destroy(): Unit {

@@ -13,11 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_concurrent.eventbus
+package fountain::f_concurrent.eventbus
 
 import std.collection.concurrent.ConcurrentHashMap
 import std.sync.AtomicBool
-import f_concurrent.eventbus.exception.EventBusException
+import fountain::f_concurrent.eventbus.exception.EventBusException
 
 /**
  * 任务线程

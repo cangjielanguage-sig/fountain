@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_macros
+package fountain::f_macros
 
 public func extractFirstTokenToStringLiteral(tokens: Tokens, default!: Token = `empty_string`[0]): Token {
     if (tokens.size == 0) {

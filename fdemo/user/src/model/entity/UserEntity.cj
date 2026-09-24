@@ -13,11 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package user.model.entity
+package fountain::user.model.entity
 
-import fountain.jwt.*
+import fountain::f_jwt.*
 
-import user.util.*
+import fountain::user.util.*
 
 public class UserEntity {
     public UserEntity(private let username: String, private let password: String) {}

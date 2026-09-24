@@ -13,23 +13,24 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_ticktock
+package fountain::f_ticktock
 
 import std.collection.ArrayList
+import std.unittest.testmacro.*
 
 @Test
 public class TicktockUnitTest {
     @TestCase
     public func testSecond(): Unit {
         var result = TicktockUnit.SECONDLY.convertDuration(0, 59, 1)
-        @Assert(0,result[0])
-        @Assert(59,result[1])
-        @Assert(1,result[2])
+        @Assert(0,result[0].start)
+        @Assert(59,result[0].end)
+        @Assert(1,result[0].step)
 
         result = TicktockUnit.SECONDLY.convertDuration(1, 30, 4)
-        @Assert(1,result[0])
-        @Assert(30,result[1])
-        @Assert(4,result[2])
+        @Assert(1,result[0].start)
+        @Assert(30,result[0].end)
+        @Assert(4,result[0].step)
 
         try {
             result = TicktockUnit.SECONDLY.convertDuration(1, 30, 0)

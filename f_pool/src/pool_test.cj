@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_pool
+package fountain::f_pool
 
 import std.unittest.*
 import std.unittest.testmacro.*
@@ -33,21 +33,21 @@ public class PoolTest {
             checkInterval: Duration.second, creator: {=> Test()}, checker: {x: Test => x.valid},
             destroier: {x => x.destroy()})
         sleep(Duration.millisecond)
-        let o1 = pool.borrow(timeout: Duration.Zero)
-        let o2 = pool.borrow(timeout: Duration.second)
-        @Assert(o1.isSome(),true)
+        let o1 = pool.get(timeout: Duration.Zero)
+        let o2 = pool.get(timeout: Duration.second)
+        let o3 = pool.get(timeout: Duration.second)
+        @Assert(o1.isSome(),false)
         @Assert(o2.isSome(),true)
-        let o3 = pool.borrow(timeout: Duration.millisecond)
-        @Assert(o3.isNone(),true)
+        @Assert(o3.isSome(),true)
+        let o4 = pool.get(timeout: Duration.millisecond)
+        @Assert(o4.isNone(),true)
         pool.giveBack(o2.getOrThrow())
-        let o4 = pool.borrow(timeout: Duration.second)
-        @Assert(o4.isSome(),true)
-        pool.giveBack(o1.getOrThrow())
-        sleep(Duration.second * 10)
-        let o5 = pool.borrow(timeout: Duration.Zero)
+        let o5 = pool.get(timeout: Duration.second)
         @Assert(o5.isSome(),true)
-        pool.giveBack(o5.getOrThrow())
-        o5.getOrThrow().valid = false
-        sleep(Duration.millisecond)
+        pool.giveBack(o3.getOrThrow())
+        sleep(Duration.second * 10)
+        let o6 = pool.get(timeout: Duration.second)
+        @Assert(o6.isSome(),true)
+        pool.giveBack(o6.getOrThrow())
     }
 }

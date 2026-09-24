@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_mvc
+package fountain::f_mvc
 
 abstract class ControllerFuncParam {
     protected const init() {}
@@ -45,7 +45,7 @@ abstract sealed class AbstractRequestParam <: ControllerFuncParam {
     protected func extractValue(name: String, ctx: HttpContext, default: ?String): ?String {
         let request = ctx.request
         let form = request.form
-        var list: List<String> = EmptyList<String>.INSTANCE()
+        var list: List<String> = EmptyList<String>.instance()
         if (let l <- form.getAll(name) && l.size > 0) {
             list = l
         } else {

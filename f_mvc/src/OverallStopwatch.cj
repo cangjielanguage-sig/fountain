@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_mvc
+package fountain::f_mvc
 
 struct OverallStopwatch{
     private static let switch = MVCConfig.mvcOverallElapsedSwitch
@@ -23,9 +23,7 @@ struct OverallStopwatch{
         (log, start) = if(switch){
             (LoggerFactory.getLogger('MVC.overall'), ThreadLocal<(MonoTime, String)>())
         } else {
-            unsafe{
-                (zeroValue<AbstractLogger>(), zeroValue<ThreadLocal<(MonoTime, String)>>())
-            }
+            (unsafeZeroValue<AbstractLogger>(), unsafeZeroValue<ThreadLocal<(MonoTime, String)>>())
         }
     }
     static func doStart(path: String) {

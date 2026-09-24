@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_aspect
+package fountain::f_aspect
 
 /**
  * 拥有已经实现过的全部RouteRule，只是初始化参数是配置项
@@ -45,7 +45,7 @@ public class ConfigExecutionRouteRule <: ConfigRouteRule {
                 let lparen = qualified
                     .indexOf('(')
                     .getOrThrow {AspectException('${qualified} does not contain argTypes')}
-                let rparen = colon - 1
+                let rparen = qualified[0 .. colon].lastIndexOf(')').getOrThrow {AspectException("'${qualified}' does not contain rparen")}
                 let lastDot = qualified[0 .. lparen]
                     .lastIndexOf('.')
                     .getOrThrow {AspectException('${qualified} does not contain qualifiedName or funcName')}

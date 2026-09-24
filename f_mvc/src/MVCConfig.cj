@@ -13,11 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_mvc
+package fountain::f_mvc
 
 public class MVCConfig {
     private static const confPrefix = "mvc"
-    public static let DOWNLOAD_BUFFER_SIZE = "${confPrefix}_downloadHalfBufferSize"
+    public static let DOWNLOAD_BUFFER_SIZE = "${confPrefix}_downloadBufferSize"
     public static const DEFAULT_DOWNLOAD_BUFFER_SIZE = 4096
 
     public static let MVC_DEBUGGING = "${confPrefix}_debugging"
@@ -54,22 +54,34 @@ public class MVCConfig {
 
     public static let TLS_PATH = "${confPrefix}_tlsPath"
     public static let TLS_VERIFY_MODE = "${confPrefix}_tlsVerifyMode"
+    public static let TLS_VERIFY_PEM = "${confPrefix}_tlsVerifyPem"
+    public static let TLS_VERIFY_BEAN = "${confPrefix}_tlsVerifyBean"
     public static let TLS_SUPPORTED_ALPN_PROTOCOLS = "${confPrefix}_tlsSupportedAlpnProtocols"
 
     public static let INTERNAL_SERVER_ERROR_MESSAGE_KIND = "${confPrefix}_internalServerErrorMessageKind"
     public static let INTERNAL_SERVER_ERROR_MESSAGE = "${confPrefix}_internalServerErrorMessage"
 
     public static let MVC_OVERALL_ELAPSED_SWITCH = "${confPrefix}_overallElapsedSwitch"
+
     public static let MVC_STATIC_RESOURCE_ROOT = "${confPrefix}_staticResourceRoot"
+
+    static init(){
+        lookupOption<GlobalCryptoKit>()
+    }
+    private static prop cryptoKit: CryptoKit {
+        get(){
+            lookupOption<CryptoKit>() ?? getGlobalCryptoKit()
+        }
+    }
 
     public static prop tlsConfig: ?TlsServerConfig {
         get() {
             if (let Some(path) <- Config.getString(TLS_PATH) && path.size > 0 && let paths <- path.split('|') &&
                 paths.size == 2) {
-                let x509Pem = String.fromUtf8(File.readFrom(paths[0]))
-                let privateKeyPem = String.fromUtf8(File.readFrom(paths[1]))
-                let x509 = X509Certificate.decodeFromPem(x509Pem)
-                let privateKey = PrivateKey.decodeFromPem(privateKeyPem)
+                let pem = String.unsafeUtf8(File.readFrom(paths[0]))
+                let privateKeyPem = String.unsafeUtf8(File.readFrom(paths[1]))
+                let x509 = X509Certificate.decodeFromPem(pem)
+                let privateKey = GeneralPrivateKey.decodeFromPem(privateKeyPem)
                 var tls = TlsServerConfig(x509, privateKey)
                 if (let Some(alpn) <- Config.getString(TLS_SUPPORTED_ALPN_PROTOCOLS) && alpn.size > 0 && let alpns <- alpn
                     .split('|') && alpns.size > 0) {
@@ -79,10 +91,23 @@ public class MVCConfig {
                     tls.verifyMode = match (mode.toAsciiLower()) {
                         case "trustall" | 'trust_all' | 'trust-all' => TrustAll
                         case "default" => Default
-                        case _ =>
-                            let modePem = String.fromUtf8(File.readFrom(mode))
-                            let custom = X509Certificate.decodeFromPem(modePem)
+                        case "customca" | 'custom-ca' | 'custom_ca' =>
+                            let pem = Config.getString(TLS_VERIFY_PEM) ?? ''
+                            if(pem.isEmpty()){
+                                throw MVCException('tls verify mode is CustomCA, but pem for certification is not specified.')
+                            }
+                            let custom = cryptoKit.certificateFromPem(pem)
                             CustomCA(custom)
+                        case 'customverify' | 'custom_verify' | 'custom-verify' =>
+                            let beanName = Config.getString(TLS_VERIFY_BEAN) ?? ''
+                            if(beanName.isEmpty()){
+                                throw MVCException('tls verify mode is CustomVerify, but verifier bean name is not specified.')
+                            } else if (let Some(verifier) <- lookupOption<CertificateVerifier>(beanName)){
+                                CustomVerify(verifier.verify)
+                            } else {
+                                throw MVCException('bean name for tls verify mode CustomVerify is ${beanName}, but the bean is not found')
+                            }
+                        case _ => throw MVCException('config for tls verify mode is illegal ${mode}')
                     }
                 }
                 tls
@@ -134,8 +159,7 @@ public class MVCConfig {
     }
     public static prop port: UInt16 {
         get() {
-            let port = Config.getValue<Int>(PORT) ?? 8080
-            UInt16(port)
+            Config.getValue<UInt16>(PORT) ?? 8080
         }
     }
     private static func duration(key: String) {

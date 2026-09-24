@@ -13,10 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_data.json
+package fountain::f_data.json
 
 public func toJson<T>(d: T, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): String where T <: ToData {
-    JsonValue.tryFromData(d.toData(), flag: flag).toString()
+    JsonValue.from(d.toData(), flag).toString()
 }
 public func fromJson<T>(s: String, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?T where T <: FromData {
     match(T.tryFromData(JsonValue.fromStr(s).toData(), flag)){

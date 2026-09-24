@@ -13,8 +13,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-macro package f_orm.macros
+macro package fountain::f_orm.macros
 
 import std.ast.*
-public import f_aspect.macros.Pointcut
-public import f_aspect.macros.WeavedBean as TransactionalService
+public import fountain::f_aspect.macros.Pointcut
+public import fountain::f_aspect.macros.WeavedBean as TransactionalService

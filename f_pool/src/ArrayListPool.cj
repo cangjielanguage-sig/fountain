@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_pool
+package fountain::f_pool
 
 public import std.collection.ArrayList
 
@@ -42,8 +42,8 @@ public struct ArrayListPool<T> {
             destroier: {_ =>}
         )
     }
-    public func borrow(timeout!: Duration = Duration.Max): ?ArrayList<T> {
-        pool.borrow(timeout: timeout)
+    public func get(timeout!: Duration = Duration.Max): ?ArrayList<T> {
+        pool.get(timeout: timeout)
     }
     public func giveBack(list: ArrayList<T>): Unit {
         pool.giveBack(list)

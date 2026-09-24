@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_log.output
+package fountain::f_log.output
 
 import std.convert.Parsable
 import std.collection.concurrent.ArrayBlockingQueue
@@ -23,16 +23,15 @@ import std.io.{SeekPosition, OutputStream}
 import std.sync.{Timer, Mutex, AtomicOptionReference}
 import std.time.DateTime
 import stdx.compress.zlib.{WrapType, CompressLevel, CompressOutputStream}
-import f_base.*
-import f_io.*// 必须导入这个包mmap才生效
-import f_time.TimeUnit
+import fountain::f_base.*
+import fountain::f_time
 
-internal import f_log.exception.LogException
+internal import fountain::f_log.exception.LogException
 
 public class RotatableFileParams <: Hashable & Equatable<RotatableFileParams> {
     public var path = "${env.getWorkingDirectory()}/logs/${env.getCommand()}.log"
     public var fileSize = Int64.Max
-    public var timeunit = TimeUnit.DAY
+    public var timeunit = f_time.TimeUnit.DAY
     public var compress = LogFileCompressFormat.NonCompression
 
     public operator func ==(that: RotatableFileParams): Bool {
@@ -52,7 +51,7 @@ protected class RotatableFile <: OutputStream & Resource {
     private let queue = ArrayBlockingQueue<() -> Unit>(1)
     private var rotateTimer = ZERO_TIMER
     private let fileSize: Int64
-    private let timeunit: TimeUnit
+    private let timeunit: f_time.TimeUnit
     private let compress: LogFileCompressFormat
     private let directory: String
     private let file = AtomicOptionReference<File>()
@@ -76,7 +75,7 @@ protected class RotatableFile <: OutputStream & Resource {
             if (idx > 0) {
                 let end = fileInfo.indexOf("&", idx) ?? fileInfo.size
                 let duration = fileInfo[idx + "rotateDuration=".size..end]
-                timeunit = TimeUnit.tryParse(duration).getOrThrow {LogException("rotateDuration=${duration}")}
+                timeunit = f_time.TimeUnit.tryParse(duration).getOrThrow {LogException("rotateDuration=${duration}")}
             } else {
                 timeunit = params.timeunit
             }
@@ -107,30 +106,8 @@ protected class RotatableFile <: OutputStream & Resource {
     public func isClosed(): Bool {
         file.load()?.isClosed() ?? true
     }
-    @When[os != "Linux"]
     public func close(): Unit {
         file.load()?.close()
-    }
-    @When[os == "Linux"]
-    public func close(): Unit {
-        if(let Some(mm) <- this.mmapf){
-            mm.setLength()
-            mm.close()
-        }else{
-            file.load()?.close()
-        }
-    }
-    @When[os == "Linux"]
-    private var mmapf = None<RotatableMMapFile>
-    @When[os == "Linux"]
-    protected func mmap() {
-        let file = this.file.load().getOrThrow()
-        let len = file.length
-        let mm = file.mmap(0, fileSize)
-        mm.writeOffset = len
-        let rmmf = RotatableMMapFile(this, mm)
-        this.mmapf = rmmf
-        rmmf
     }
     protected prop path: String {
         get() {
@@ -147,7 +124,7 @@ protected class RotatableFile <: OutputStream & Resource {
             rotateFileIfNeed(0)
             this.timeunit.since(datetime: timeunit.trim(DateTime.now()))
         }
-        env.atExit {timer.cancel()}
+        env.atExit(timer.cancel)// 这里不需要关闭文件，LoggerWrapper调用atExit关闭所有流
         timer
     }
     private static func createDirIfNeed(path: String) {
@@ -215,7 +192,7 @@ protected class RotatableFile <: OutputStream & Resource {
         }
     }
 
-    private static func genTime(timeunit: TimeUnit, current: DateTime): String {
+    private static func genTime(timeunit: f_time.TimeUnit, current: DateTime): String {
         match (timeunit) {
             case DAY => current.addDays(-1).format("yyyyMMdd")
             case HOUR => current.addHours(-1).format("yyyyMMddHH")
@@ -253,11 +230,6 @@ protected class RotatableFile <: OutputStream & Resource {
                 }
                 if (!exists(originPath)) {
                     this.file.store(File(originPath, Append))
-                    @When[os == "Linux"]
-                    let _ = if(let Some(mm) <- this.mmapf){
-                        mm.mmap = this.file.load().getOrThrow().mmap(0, this.fileSize)
-                        mm.mmap.writeOffset = 0
-                    }
                 }
             }
         }

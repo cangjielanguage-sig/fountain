@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_collection
+package fountain::f_collection
 
 import std.collection.{Set, ArrayList, MapEntryView, EquatableCollection}
 import std.collection.concurrent.ConcurrentHashMap
@@ -123,7 +123,7 @@ extend<K, V> LinkedHashMap<K, V> <: ExtendNonConcurrentMap<K, V> where K <: Hash
 extend<K, V> ConcurrentHashMap<K, V> <: ExtendMap<K, V> where K <: Hashable & Equatable<K> {
     public func entryView(key: K, fn: (K, ?V) -> ?V): ?V {
         this.entryView(key) {
-            entry => entry.value = fn(key, entry.value)//entry.key会导致栈溢出
+            entry => entry.value = fn(key, entry.value)
         }
     }
     public func removeIf(key: K, predicate: (V) -> Bool): ?V {

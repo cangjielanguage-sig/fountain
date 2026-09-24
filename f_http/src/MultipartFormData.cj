@@ -13,13 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_http
+package fountain::f_http
 
 import std.collection.ArrayList
 import std.fs.File
 import std.time.DateTime
-import f_base.*
-import f_random.RandomString
+import fountain::f_base.*
+import fountain::f_random.RandomString
 
 public class MultipartFormData {
     public let boundary = 'FountainBoundary${RandomString().randomLettersNumbers(32)}'
@@ -27,7 +27,7 @@ public class MultipartFormData {
     public func newPart(): MultipartFileBuilder {
         MultipartFileBuilder(this)
     }
-    public func encode(output: OutputStream){
+    public func encode(output: OutputStream): Unit {
         for(part in parts){
             output.write('--${boundary}\r\n'.unsafeBytes())
             let cd = part.contentDisposition.toString().unsafeBytes()
@@ -44,7 +44,7 @@ public class MultipartFormData {
 }
 public class MultipartFileBuilder {
     private let builder = ContentDispositionBuilder(ContentDisposition()).formData
-    private var content = unsafe{zeroValue<InputStream>()}
+    private var content = unsafeZeroValue<InputStream>()
     MultipartFileBuilder(private let data: MultipartFormData){}
     public func name(name: String): This {
         builder.name(name)

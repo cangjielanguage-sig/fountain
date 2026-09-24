@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_mockdb
+package fountain::f_mockdb
 
 public class MockQueryResult <: QueryResult {
     private var rowIndex = -1
@@ -38,10 +38,16 @@ public class MockQueryResult <: QueryResult {
         getOrNull<T>(index).getOrThrow()
     }
     public func getOrNull<T>(index: Int): ?T {
-        match(rowData[index]){
+        if(rowIndex < 0 || rowIndex >= rowData.size){
+            return None
+        }
+        let row = rowData[rowIndex]
+        if(index < 0 || index >= row.size){
+            return None
+        }
+        match(row[index]){
             case x: T => x
-            case x: ?T => x
-            case x => throw MockDbException('target: ${TypeInfo.of<T>()}')
+            case _ => None
         }
     }
     public func isClosed(): Bool {

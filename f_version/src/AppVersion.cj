@@ -13,14 +13,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_version
+package fountain::f_version
 
 public struct AppVersion {
     private static var banner_ = ''
     private static var name_ = ''
     private static var version_ = ''
     private init(){}
-    public static func set(banner: String, name: String, version: String){
+    public static func set(banner: String, name: String, version: String): Unit {
         banner_ = banner
         name_ = name
         version_ = version

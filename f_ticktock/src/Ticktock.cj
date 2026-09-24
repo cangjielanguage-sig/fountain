@@ -14,20 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
  */
 
-package f_ticktock
+package fountain::f_ticktock
 
 import std.collection.ArrayList
 import std.collection.concurrent.ConcurrentHashMap
 import std.env
 import std.sync.{AtomicOptionReference, Mutex}
 public import std.time.DateTime
-import f_bean.BeanFactory
-import f_log.impl.LoggerFactory
+import fountain::f_bean.BeanFactory
+import fountain::f_log.impl.LoggerFactory
 
 /**
  * 本类对象能接收的cron表达式，简单说明如下：
  * 多个表达式可以用|分隔
- * 包含用空格分隔的六部分，从左至右依次是秒 分 时 日 月 星期
+ * 包含用空格分隔的七部分，从左至右依次是秒 分 时 日 月 星期 年份
  * 每一部分可以用*表示每时间单位
  * 每一部分可以用m/n表示在上级时间单位的一个周期内，从当前时间单位的第m单位开始每n个单位触发一次，n是0的，抛出异常
  * 每一部分可以用英文逗号分隔表示当前时间单位可以有多个值
@@ -73,6 +73,7 @@ public class Ticktock <: Emitter {
      * 如果只是想从IOC获得定时任务初始化，如果IOC内没有注册定时任务就不初始化，此时anyway应该是false，
      * anyway是false且IOC没有注册过定时任务将返回None<Ticktock>。
      */
+    @Frozen
     public static func getInstance(anyway!: Bool = true): ?Ticktock {
         if(let Some(x) <- instance_.load()){
             return x
@@ -185,7 +186,7 @@ public class Ticktock <: Emitter {
     public func addOrReplaceTask(task: TicktockTask, cronExpr: String) {
         tasks.add(task.name, (task, CronCompiler.compile(cronExpr)))
     }
-
+    @Frozen
     public func emit(now: DateTime): Unit {
         for ((name, (task, crons)) in tasks) {
             spawn {

@@ -13,14 +13,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_orm.wrap
+package fountain::f_orm.wrap
 
 import std.unittest.*
 import std.unittest.testmacro.*
 import std.database.sql.*
 import std.reflect.*
 import std.time.MonoTime
-import f_mockdb.*
+import fountain::f_mockdb.*
 
 @Test
 public class DatabasePoolTest {

@@ -13,12 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package boot
+package fountain::boot
 
-import fountain.bean.*
-import fountain.bean.macros.*
-import fountain.log.*
-import fountain.orm.*
+import fountain::f_bean.*
+import fountain::f_bean.macros.*
+import fountain::f_log.*
+import fountain::f_orm.*
 
 @Bean
 public class TransactionHookImpl <: TransactionHook {

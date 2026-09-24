@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_base
+package fountain::f_base
 
 public struct Equaler<T> {
     public Equaler(private let eq: (T, T) -> Bool) {}
@@ -21,7 +21,7 @@ public struct Equaler<T> {
     public static func equals<T>(left: T, right: T): Bool where T <: Equal<T> {
         left == right
     }
-    public static func create<T>() where T <: Equal<T> {
+    public static func create<T>(): Equaler<T> where T <: Equal<T> {
         Equaler<T>(equals<T>)
     }
     public operator func ()(left: T, right: T): Bool {

@@ -13,9 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_mvc
+package fountain::f_mvc
 
-import f_data
+import fountain::f_data
 
 public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMeta> {
     private static let log = LoggerFactory.getLogger<RequestMeta>()
@@ -69,7 +69,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                 return
             }
             log.warn('RequestMeta.handle.Not Found:${path} ${ctx.request.headers.getFirst('Accept')}')
-            NOT_FOUND.handle(ctx)
+            NOT_FOUND.`handle`(ctx)
         }
     }
 
@@ -125,7 +125,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
     }
     private var handle_: (HttpContext) -> Unit
 
-    public func handle(ctx: HttpContext): Unit {
+    public func `handle`(ctx: HttpContext): Unit {
         handle_(ctx)
     }
 
@@ -199,9 +199,13 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                         case x: FileDownloadMeta => respond(x, ctx)
                         case _ =>
                             let request = ctx.request
-                            log.warn {'f_mvc.handle ${request.method}:${request.url};${TypeInfo.of(result)}'}
-                            MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
+                            log.warn {'fountain::f_mvc.`handle` ${request.method}:${request.url};${TypeInfo.of(result)}'}
+                            MultiRequestMethodHandler.NOT_ACCEPTABLE.`handle`(ctx)
                     }
+                } handle (cmd: MVCBreakingCommand) {
+                    respond(cmd, ctx)
+                } handle (cmd: BreakingCommand) {
+                    respond(MVCBreakingCommand(cmd.data), ctx)
                 } finally {
                     CurrentHttpContext.clear()
                 }
@@ -242,7 +246,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             })
         }
         log.warn {
-            'f_mvc.check ${this}; accept: ${accept}; status: ${status.value}; CheckHandler returns ${TypeInfo.of(resp)}; checked: ${check}'
+            'fountain::f_mvc.check ${this}; accept: ${accept}; status: ${status.value}; CheckHandler returns ${TypeInfo.of(resp)}; checked: ${check}'
         }
         match (resp) {
             case x: String => builder.body(x)
@@ -259,7 +263,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
     }
     func setHandle<T>(wsmeta: WSMeta<T>) where T <: Object {
         this.handle_ = {
-            ctx => wsmeta.handle(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern.getOrThrow())
+            ctx => wsmeta.`handle`(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern.getOrThrow())
         }
         produces.add('*')
         consumes.add('*')
@@ -304,16 +308,19 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                     }
                 }
                 if(!accepted){
-                    MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
+                    MultiRequestMethodHandler.NOT_ACCEPTABLE.`handle`(ctx)
                 }
             } else if (emptyResult && let Some(accept) <- accept && accept.contains('*/*')) {
                 ctx.responseBuilder.status(status.value).header('Content-Type', accept).body('')
             } else if (emptyResult && accept.isNone()) {
                 ctx.responseBuilder.status(status.value).body('')
             } else {
-                MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
+                MultiRequestMethodHandler.NOT_ACCEPTABLE.`handle`(ctx)
             }
         }
+    }
+    private func respond(cmd: MVCBreakingCommand, ctx: HttpContext): Unit {
+        respond<Data>(cmd.status, cmd.data, ctx)
     }
     private func respond<R>(result: R, ctx: HttpContext): Unit where R <: ToData {
         respond<R>(HttpStatus.OK, result, ctx)
@@ -332,7 +339,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                 } else if (firstAccept == '*/*') {
                     ctx.responseBuilder.header('Content-Type', 'application/json').body(response.toString())
                 } else {
-                    MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
+                    MultiRequestMethodHandler.NOT_ACCEPTABLE.`handle`(ctx)
                 }
             } else {
                 ctx.responseBuilder.header('Content-Type', 'application/json').body(response.toString())
@@ -520,8 +527,8 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                 case x: ToString => return x.toString()
                 case x: Array<Byte> => return toBase64String(x)
                 case x: MultipartFile => return JsonString(x.toString()).toString()
-                case x: ToData => return JsonValue.tryFromData(x.toData()).toString()
-                case x: Data => return JsonValue.tryFromData(x).toString()
+                case x: ToData => return f_data.convert<JsonValue>(x.toData()).getOrThrow().toString()
+                case x: Data => return f_data.convert<JsonValue>(x).getOrThrow().toString()
                 case x => x
             }
             TypeInfo.of(arg).toString()
@@ -546,7 +553,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         }
         if (let Some(ex) <- e) {
             let exce = try {
-                MultiRequestMethodHandler.INTERNAL_SERVER_ERROR.handle(ctx, ex)
+                MultiRequestMethodHandler.INTERNAL_SERVER_ERROR.`handle`(ctx, ex)
                 ex
             } catch (e: Exception) {
                 let status = HttpStatus.INTERNAL_SERVER_ERROR

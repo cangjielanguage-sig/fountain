@@ -13,13 +13,18 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_concurrent
+package fountain::f_concurrent
 
 /**
  * 令牌桶限流器
  */
 public class TokenBucketRateLimiter<T> <: RateLimiter<T> {
     private let tokens: LinkedBlockingQueue<Unit>
+    /**
+     * @param tokens 令牌总数
+     * @param timeout 阻塞时长
+     * @param populationPeriod 填充令牌的周期
+     */
     public init(tokens!: Int64, timeout!: Duration, populationPeriod!: Duration) {
         super(timeout)
         if (tokens <= 0 || timeout <= Duration.Zero || populationPeriod <= Duration.Zero) {

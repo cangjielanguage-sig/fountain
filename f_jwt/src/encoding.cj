@@ -13,18 +13,19 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_jwt
+package fountain::f_jwt
 
 import stdx.encoding.base64.*
 import stdx.encoding.hex.*
-import f_jwt.exception.*
+import fountain::f_base.*
+import fountain::f_jwt.exception.*
 
 func fromBase64(src: String): Array<Byte> {
     fromBase64String(src).getOrThrow {JWTException('${src} is not base64')}
 }
 
 func fromBase64ToString(src: String) {
-    String.fromUtf8(fromBase64(src))
+    String.unsafeUtf8(fromBase64(src))
 }
 
 func fromHex(src: String): Array<Byte> {
@@ -36,11 +37,11 @@ func toBase64(src: Array<Byte>): String {
 }
 
 func toBase64(src: String): String {
-    toBase64(unsafe { src.rawData() })
+    toBase64(src.unsafeBytes())
 }
 
 func bytesForSign(header: String, payload: String): Array<Byte> {
-    bytesForSign(unsafe { header.rawData() }, unsafe { payload.rawData() })
+    bytesForSign(header.unsafeBytes(), payload.unsafeBytes())
 }
 
 func bytesForSign(header: Array<Byte>, payload: Array<Byte>): Array<Byte> {

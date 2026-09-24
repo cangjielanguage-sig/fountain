@@ -13,11 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_util
+package fountain::f_util
 
 import std.math.numeric.Decimal
-import f_base.*
-import f_random.ThreadLocalRandom
+import fountain::f_base.*
+import fountain::f_random.ThreadLocalRandom
 
 /**
  * 1.      Alice和Bob先对p 和g达成一致，而且公开出来。Eve也就知道它们的值了。

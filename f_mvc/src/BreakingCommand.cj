@@ -1,0 +1,37 @@
+/*
+Copyright (c) 2026 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package fountain::f_mvc
+
+public class MVCBreakingCommand <: BreakingCommand {
+    public MVCBreakingCommand(data: Data, public let status: HttpStatus){
+        super(data)
+    }
+    public init(status: HttpStatus){
+        this(DataUnit.UNIT, status)
+    }
+    public init(data: Data){
+        this(data, HttpStatus.OK)
+    }
+    public init(){
+        this(HttpStatus.OK)
+    }
+    public static func new<T>(data: T): MVCBreakingCommand where T <: ToData {
+        MVCBreakingCommand(data.toData(), HttpStatus.OK)
+    }
+    public static func new<T>(data: T, status: HttpStatus): MVCBreakingCommand where T <: ToData {
+        MVCBreakingCommand(data.toData(), status)
+    }
+}

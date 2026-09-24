@@ -13,12 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package user.model.mvc
+package fountain::user.model.mvc
 
-import fountain.data.*
-import fountain.data.macros.*
-import fountain.orm.Pagination
-import user.model.po.UserPO
+import fountain::f_data.*
+import fountain::f_data.macros.*
+import fountain::f_orm.Pagination
+import fountain::user.model.po.UserPO
 
 @DataAssist[props fields]
 public class UserRequest {

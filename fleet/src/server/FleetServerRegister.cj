@@ -1,0 +1,30 @@
+/*
+Copyright (c) 2026 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package fountain::fleet.server
+
+internal struct FleetServerRegister {
+    FleetServerRegister(private let buffer: SocketBuffer, private let id: MessageID, private let data: Data){}
+    
+    func exec(): Message {
+        let msg = DataObject<FleetDataMessage>.populate(data).getOrThrow()
+        let path = msg.path
+        if(!FleetStore.checkHost(buffer, path)){
+            return Message.error(id, data: ERROR_HOST_FOR_PATH)
+        }
+        FleetStore.add(path, msg.data, msg.expireAt)
+        Message.ack(id, data: DataNone.INSTANCE)
+    }
+}

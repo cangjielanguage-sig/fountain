@@ -1,0 +1,16 @@
+[package]
+  cjc-version = "1.2.0"
+  name = "rpcserver"
+  organization = "fountain"
+  description = "nothing here"
+  version = "1.1.0"
+  target-dir = ""
+  src-dir = ""
+  output-type = "dynamic"
+  compile-option = "--dy-std"
+  override-compile-option = "--dy-std"
+  #compile-option = "-g -O0 --dy-std"
+  #override-compile-option = "-g -O0 --dy-std"
+  link-option = ""
+  package-configuration = {}
+  

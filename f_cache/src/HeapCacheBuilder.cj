@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_cache
+package fountain::f_cache
 
 public let DEFAULT_HEAP_CACHE_MAX_LIFE = Duration.second * 5
 public let DEFAULT_HEAP_CACHE_MAX_SIZE = Int64.Max

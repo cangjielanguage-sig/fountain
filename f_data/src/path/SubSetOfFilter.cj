@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_data.path
+package fountain::f_data.path
 
 internal class SubSetOfFilter<T> <: Subset<T> & DataFilter where T <: ToString & DataFields<T> {
     init(left: DataPath, right: ArrayList<T>) {
@@ -31,7 +31,7 @@ internal class SubSetOfFilter<T> <: Subset<T> & DataFilter where T <: ToString &
             case x: Collection<Data> => x.size
             case x: Collection<(String, Data)> => x.size
             case x: Collection<(Data, Data)> => x.size
-            case _ => 0
+            case _ => 1  // scalar value counts as single-element set
         }
         subset(data) == size
     }

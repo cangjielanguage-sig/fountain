@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_pool
+package fountain::f_pool
 
 import std.collection.ArrayList
 import std.io.OutputStream
@@ -61,7 +61,7 @@ public class BytesListOutputStreamBuilder {
             clearOnReturning: clearOnReturning)
     }
     public func build(timeout!: Duration = Duration.Max): ?BytesListOutputStream {
-        if(let Some(l) <- pool.borrow(timeout: timeout)){
+        if(let Some(l) <- pool.get(timeout: timeout)){
             BytesListOutputStream(l, pool)
         }else{
             None<BytesListOutputStream>

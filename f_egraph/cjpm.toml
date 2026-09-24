@@ -1,0 +1,31 @@
+[package]
+  cjc-version = "1.2.0"
+  name = "f_egraph"
+  organization = "fountain"
+  description = "一个事件驱动的业务流程执行器"
+  compile-option = "--dy-std"
+  override-compile-option = "--dy-std"
+  version = "1.3.2"
+  target-dir = ""
+  script-dir = ""
+  output-type = "dynamic"
+  link-option = ""
+  package-configuration = {}
+  category = ["Utility", "Programming Framework", "Developer Tools"]
+  license = ["Apache-2.0"]
+  include = ["src", "doc"]
+  exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
+  authors = ["吴京润"]
+
+[dependencies]
+  "fountain::f_app" = {path = "../f_app"}
+  "fountain::f_base" = {path = "../f_base"}
+  "fountain::f_bean" = {path = "../f_bean"}
+  "fountain::f_collection" = {path = "../f_collection"}
+  "fountain::f_concurrent" = {path = "../f_concurrent"}
+  "fountain::f_data" = {path = "../f_data"}
+  "fountain::f_log" = {path = "../f_log"}
+  "fountain::f_util" = {path = "../f_util"}
+
+[profile.build]
+  incremental = true

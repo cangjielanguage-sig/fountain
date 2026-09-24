@@ -13,7 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_util
+package fountain::f_util
+
+import fountain::f_base.*
 
 let CRC16_LOOKUP_TABLE: Array<UInt16> = [
     0x0000,
@@ -273,7 +275,7 @@ let CRC16_LOOKUP_TABLE: Array<UInt16> = [
     0x0ED1,
     0x1EF0
 ]
-
+@Frozen
 func crc16(bytes: Array<Byte>, s: Int64, e: Int64) {
     var crc: UInt16 = 0x0000
     for (i in s..e) {
@@ -281,7 +283,15 @@ func crc16(bytes: Array<Byte>, s: Int64, e: Int64) {
     }
     return crc & 0xFFFF;
 }
-
-public func crc16(bytes: Array<Byte>) {
+@Frozen
+public func crc16(bytes: Array<Byte>): UInt16 {
     return crc16(bytes, 0, bytes.size)
+}
+@Frozen
+public func crc16(s: String): UInt16 {
+    crc16(s.unsafeBytes())
+}
+@Frozen
+public func crc16<T>(s: T): UInt16 where T <: ToString {
+    crc16(s.toString().unsafeBytes())
 }

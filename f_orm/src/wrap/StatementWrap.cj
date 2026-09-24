@@ -13,10 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_orm.wrap
+package fountain::f_orm.wrap
 
 public class StatementWrap <: Statement {
-    public StatementWrap(let driverName: String, private let statement: Statement) {}
+    private let indexStartsWith: Int64
+    public StatementWrap(let driverName: String, private let statement: Statement) {
+        indexStartsWith = ORMConfig.getIndexStartsWith(driverName: driverName)
+    }
 
     public prop parameterColumnInfos: Array<ColumnInfo> {
         get() {
@@ -27,10 +30,10 @@ public class StatementWrap <: Statement {
         statement.setOption(key, value)
     }
     public func set<T>(index: Int64, value: T): Unit {
-        statement.set<T>(index, value)
+        statement.set<T>(index + indexStartsWith, value)
     }
     public func setNull(index: Int64): Unit {
-        statement.setNull(index)
+        statement.setNull(index + indexStartsWith)
     }
     public func update(params: Array<SqlDbType>): UpdateResult {
         throw ORMException('current access is deprecated')

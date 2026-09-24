@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_pool
+package fountain::f_pool
 
 import std.io.{InputStream, OutputStream}
 
@@ -44,7 +44,7 @@ public struct PooledBufferBytesCopyTo <: BytesCopyTo {
                 }
             }
         }
-        if(let Some(buf) <- pool.borrow()){
+        if(let Some(buf) <- pool.get()){
             try{
                 copyTo(buf)
             }finally{
@@ -75,7 +75,7 @@ public struct PooledBufferedBytesCopyFrom <: BytesCopyFrom {
                 }
             }
         }
-        if(let Some(buf) <- pool.borrow()){
+        if(let Some(buf) <- pool.get()){
             try{
                 copyTo(buf)
             }finally{

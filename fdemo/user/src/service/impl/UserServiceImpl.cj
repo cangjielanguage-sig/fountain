@@ -13,23 +13,23 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package user.service.impl
+package fountain::user.service.impl
 
 import std.collection.Map
 import std.reflect.*
 
-import fountain.aspect.macros.*
-import fountain.bean.*
-import fountain.bean.macros.*
-import fountain.orm.macros.*
-import fountain.orm.*
-import fountain.log.*
+import fountain::f_aspect.macros.*
+import fountain::f_bean.*
+import fountain::f_bean.macros.*
+import fountain::f_orm.macros.*
+import fountain::f_orm.*
+import fountain::f_log.*
 
-import user.service.UserService
-import user.dao.UserDAO
-import user.model.entity.*
-import user.model.po.*
-import user.model.mvc.*
+import fountain::user.service.UserService
+import fountain::user.dao.UserDAO
+import fountain::user.model.entity.*
+import fountain::user.model.po.*
+import fountain::user.model.mvc.*
 
 // @Bean
 // @BeanMeta
@@ -66,9 +66,12 @@ public class UserServiceImpl <: UserService {
         executor().deleteUser(id)
     }
 
-    // @Transactional//仅做演示，此函数只有查询，不需要事务控制，如果事务生效，控制台会输出日志
+    @Transactional//仅做演示，此函数只有查询，不需要事务控制，如果事务生效，控制台会输出日志
     public func userSession(username: String, password: String): ?(Int64, String, Bool) {
-        UserEntity(username, password).makeSession(executor().findUserId)
+        let exe = executor()
+        let page = exe.listUsers(username)
+        println('AAAAAAAAAAAAAAAAA ${page.list.size} ${page.list[0].username}')
+        UserEntity(username, password).makeSession(exe.findUserId)
     }
     public func userSessionLog(username: String, password: String): ?(Int64, String, Bool){
         try{

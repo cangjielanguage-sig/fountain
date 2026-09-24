@@ -13,15 +13,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package boot
+package fountain::boot
 
-import stdx.encoding.json.*
-import fountain.mvc.MediaType
-import fountain.base.*
-import fountain.bean.*
-import fountain.bean.macros.*
-import fountain.data.*
-import fountain.log.*
+import fountain::f_mvc.MediaType
+import fountain::f_base.*
+import fountain::f_bean.*
+import fountain::f_bean.macros.*
+import fountain::f_data.*
+import fountain::f_log.*
 
 @Bean
 public class LogTextMediaType <: MediaType {
@@ -51,7 +50,7 @@ public class LogTextMediaType <: MediaType {
         hash
     }
     public func fromData(data: Data): Array<Byte> {
-        fromData((JsonValue.tryFromData(data) as JsonValue).getOrThrow())
+        fromData(JsonValue.from(data))
     }
     public func fromData(data: JsonValue): Array<Byte> {
         let json = data.toString()

@@ -13,9 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_bean
-
-import f_log.*
+package fountain::f_bean
 
 public func lookup<T>(): T {
     lookup<T>(StringCond.IgnoreCond)
@@ -85,6 +83,29 @@ public func lookupLabels<L, T>(cond: StringCond): HashMap<L, T> where L <: Hasha
         map[bean.label] = bean
     }
     map
+}
+public func lookupLabel<L, T>(label: L): T where L <: Hashable & Equatable<L>, T <: BeanLabel<L> {
+    lookupLabel<L, T>(StringCond.IgnoreCond, label)
+}
+public func lookupLabel<L, T>(name: String, label: L): T where L <: Hashable & Equatable<L>, T <: BeanLabel<L> {
+    lookupLabel<L, T>(Exactly(name), label)
+}
+public func lookupLabel<L, T>(cond: StringCond, label: L): T where L <: Hashable & Equatable<L>, T <: BeanLabel<L> {
+    lookupLabelOption<L, T>(cond, label).getOrThrow {
+        BeanException('bean type ${TypeInfo.of<T>()} with bean name condition ${cond} does not exist.')
+    }
+}
+public func lookupLabelOption<L, T>(label: L): ?T where L <: Hashable & Equatable<L>, T <: BeanLabel<L> {
+    lookupLabelOption<L, T>(StringCond.IgnoreCond, label)
+}
+public func lookupOptionLable<L, T>(name: String, label: L): ?T where L <: Hashable & Equatable<L>, T <: BeanLabel<L> {
+    lookupLabelOption<L, T>(Exactly(name), label)
+}
+public func lookupLabelOption<L, T>(cond: StringCond, label: L): ?T where L <: Hashable & Equatable<L>, T <: BeanLabel<L> {
+    for(bean in lookupList<T>(cond) where bean.label == label){
+        return bean
+    }
+    None<T>
 }
 
 public func lookupWeights<W, T>(): TreeMap<W, T> where W <: Comparable<W> & Addable<W>, T <: BeanWeight<W> {

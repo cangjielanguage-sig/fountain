@@ -13,10 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_http
+package fountain::f_http
 
 import std.sync.{AtomicInt8, Mutex}
-import f_log.*
+import fountain::f_log.*
 
 public class MediaTypes {
     private static let log = LoggerFactory.getLogger<MediaTypes>()
@@ -31,11 +31,11 @@ public class MediaTypes {
         register(MultipartMediaType.mixed)
         register(PlainTextMediaType.instance)
     }
-    public static func register(mediaType: MediaType) {
+    public static func register(mediaType: MediaType): Unit {
         log.debug{'MediaTypes.register: ${mediaType} ${ClassTypeInfo.of(mediaType)}'}
         mediaTypes[mediaType.mediaType] = mediaType
     }
-    public static func parse(mediaType: String) {
+    public static func parse(mediaType: String): MediaType {
         tryParse(mediaType).getOrThrow {MediaTypeException("${mediaType} is an illegal MediaType string")}
     }
     private static func registerFromBeanFactory() {

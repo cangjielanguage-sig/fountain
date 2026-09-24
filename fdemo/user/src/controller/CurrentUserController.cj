@@ -13,24 +13,20 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package user.controller
+package fountain::user.controller
 
 import std.reflect.*
-import stdx.encoding.json.*
-// import fountain.aspect.*
-// import fountain.aspect.macros.*
-// import fountain.bean.*
-// import fountain.bean.macros.*
-import fountain.mvc.*
-import fountain.mvc.macros.*
-import user.service.UserService
-import user.model.po.*
-import user.model.mvc.*
+// import fountain::f_aspect.*
+// import fountain::f_aspect.macros.*
+// import fountain::f_bean.*
+// import fountain::f_bean.macros.*
+import fountain::f_data.*
+import fountain::f_mvc.*
+import fountain::f_mvc.macros.*
+import fountain::user.service.UserService
+import fountain::user.model.po.*
+import fountain::user.model.mvc.*
 
-/**
- * 把UserController CurrentUserController合并成一个，加载时会抛出异常。
- * 分开两个类就能正常加载
- */
 @WeavedController
 @BeanMeta[scope: BeanScope.prototype]//此类不需要prototype，仅做演示，BeanMeta必须在@WeavedController下面，或者不用这个注解
 public class CurrentUserController { 
@@ -107,6 +103,13 @@ public class CurrentUserController {
         let user = UserRequest()
         user.username = username
         user.password = password
+        user
+    }
+    @PostMapping[path:'/api/user/echo3', 
+                consumes:'application/json', 
+                produces:'application/json',
+                ignoreAuth: true]
+    public func echo3(@RequestBody user: UserRequest): UserRequest {
         user
     }
     

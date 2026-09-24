@@ -1,0 +1,116 @@
+/*
+Copyright (c) 2026 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+macro package fountain::f_rpc.macros
+
+public macro RPCSkeleton(input: Tokens): Tokens {
+    return expand(`empty_tokens`, input)
+}
+/**
+ * attr 作为fountain::f_bean.macros.Bean宏的属性，可以没有
+ */
+public macro RPCSkeleton(attr: Tokens, input: Tokens): Tokens {
+    expand(attr, input)
+}
+private func expand(attr: Tokens, input: Tokens): Tokens {
+    expand(attr, parseDecl(input))
+}
+private func expand(attr: Tokens, input: Decl): Tokens {
+    var beanAttr = `empty_tokens`
+    var weight = 1.0
+    var i = 0
+    while(i < attr.size){
+        let a = attr[i]
+        if(a.kind == TokenKind.IDENTIFIER && a.value == 'weight'){
+            i += 2
+            let w = attr[i].value
+            weight = if(identifierRegex.matches(w)){
+                Config.getValue<Float64>(w) ?? 1.0
+            }else{
+                Float64.parse(w)
+            }
+        }else{
+            beanAttr += a
+        }
+        i++
+    }
+    match(input){
+        case x: ClassDecl => 
+            quote(
+                @Bean[$beanAttr]
+                $input
+                private let _ = {=>
+                    $(extractFuncs(weight, x))
+                }()
+            )
+        case x: MacroExpandDecl => expand(attr, extract(x))
+        case x => 
+            diagReport(DiagReportLevel.ERROR, input.toTokens(), '${x.identifier.value} must be a class decl', '')
+            throw RPCException()
+    }
+}
+
+private func extractFuncs(weight: Float64, decl: ClassDecl): Tokens {
+    let klass = decl.identifier + if(decl.isGenericDecl){
+        decl.genericParam.toTokens()
+    }else{
+        `empty_tokens`
+    }
+    var funcs = `empty_tokens`
+    for(d in decl.body.decls){
+        if(let f: FuncDecl <- d && isPublic(f) && !isStatic(f)){
+            if(funcs.size > 0){
+                funcs += `nl`
+            }
+            let fname = f.identifier
+            let (argTypes, argValues, argNames) = extractParams(f.funcParams)
+            funcs += quote(ServiceHub.register<$klass>($(fname.value), $argTypes, $weight){beanName: String, args: Array<DataAny> => 
+                $argValues
+                if(beanName.isEmpty()){
+                    lookup<$klass>()
+                }else{
+                    lookup<$klass>(beanName)
+                }.$(fname)($argNames)
+            })
+        }
+    }
+    funcs
+}
+private func extractParams(params: ArrayList<FuncParam>): (Tokens, Tokens, Tokens) {
+    var argTypes = `lsquare`
+    var argValues = `empty_tokens`
+    var argNames = `empty_tokens`
+    for(i in 0 .. params.size){
+        let p = params[i]
+        if(argTypes.size > 1){
+            argTypes += `comma`
+            argValues += `nl`
+            argNames += `comma`
+        }
+        argTypes += quote(TypeInfo.of<$(p.paramType)>())
+        argValues += quote(let $(p.identifier) = FountainDataConvert<$(p.paramType)>(args[$i].data).getOrThrow())
+        argNames += try{
+            if(p.not.kind == TokenKind.ILLEGAL){
+                quote($(p.identifier))
+            }else{
+                quote($(p.identifier): $(p.identifier))
+            }
+        }catch(_){
+            quote($(p.identifier))
+        }
+    }
+    argTypes += `rsquare`
+    (argTypes, argValues, argNames)
+}

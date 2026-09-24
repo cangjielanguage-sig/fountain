@@ -13,7 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_pool
+package fountain::f_pool
+
+import fountain::f_base.*
 
 public struct ArrayPool<T> {
     private let pool: Pool<Array<T>>
@@ -25,7 +27,7 @@ public struct ArrayPool<T> {
         checkInterval!: Duration = Duration.Zero,
         clearOnReturning!: Bool = false,
         private let arraySize!: Int64 = 128, 
-        private let creator!: () -> T = {=> unsafe { zeroValue<T>() }}) {
+        private let creator!: () -> T = {=> unsafeZeroValue<T>()}) {
         let initValue = creator()
         pool = Pool<Array<T>>(
             initSize: initSize,
@@ -49,8 +51,8 @@ public struct ArrayPool<T> {
             }
         )
     }
-    public func borrow(timeout!: Duration = Duration.Max): ?Array<T> {
-        pool.borrow(timeout: timeout)
+    public func get(timeout!: Duration = Duration.Max): ?Array<T> {
+        pool.get(timeout: timeout)
     }
     public func giveBack(array: Array<T>): Bool {
         if (array.size == arraySize) {

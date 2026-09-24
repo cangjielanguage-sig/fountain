@@ -13,11 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_io
+package fountain::f_io
 
 import std.io.{IOStream, SeekPosition, IOException}
 import std.sync.{Mutex, Condition, AtomicBool}
-import f_io.exception.SeekException
+import fountain::f_io.exception.SeekException
 
 public class ByteBuffer <: IOStream {
     private var buffer: Array<Byte>
@@ -77,8 +77,7 @@ public class ByteBuffer <: IOStream {
         }
         if(addition <= 0){
             return
-        }
-        if(addition + woffset - roffset <= buffer.size){
+        }else if(addition + woffset - roffset <= buffer.size){
             copy(buffer, buffer, roffset, 0, woffset - roffset)
         }else{
             let tmp = Array<Byte>(buffer.size + addition, repeat: 0)

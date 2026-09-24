@@ -13,13 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_http
+package fountain::f_http
 
 import std.io.SeekPosition
-import f_collection.*
-import f_data.*
-import f_io.RotatableBuffer
-import f_util.UUID
+import fountain::f_collection.*
+import fountain::f_data.*
+import fountain::f_io.RotatableBuffer
+import fountain::f_util.UUID
 /**
 https://www.rfc-editor.org/rfc/rfc1867
 multipart/form-data
@@ -79,7 +79,7 @@ public class MultipartFormDataParser {
     }
     public func parse(): Data {
         let boundaryBytes = seperatorBoundaryBytes[2 ..]
-        let path = Path('/tmp/${UUID.random()}')
+        let path = Path(HttpConfig.uploadDir).join(UUID.random().toString())
         let crlf = Array<Byte>(2, repeat: 0)
         let parts = if(mediaType.startsWith('multipart/form-data')){
             DataMultipartTuples()
@@ -102,7 +102,7 @@ public class MultipartFormDataParser {
                     var end = stream.indexOf(DOUBLE_CRLF, from: start)
                     var buf = Array<Byte>(end - start + DOUBLE_CRLF.size, repeat: 0)
                     stream.read(buf)
-                    let partHeader = String.fromUtf8(buf).split('\r\n')
+                    let partHeader = String.unsafeUtf8(buf).split('\r\n')
                     let contentDisposition = ContentDisposition.parse(partHeader[0]['Content-Disposition: '.size ..])
                     let filename = contentDisposition.getFilename()
                     end = stream.indexOf(seperatorBoundaryBytes)
@@ -113,7 +113,7 @@ public class MultipartFormDataParser {
                             let value = if(let Some(charset) <- contentDisposition.getCharset()){
                                 charset.newDecoder().decode(buf)
                             }else{
-                                String.fromUtf8(buf)
+                                String.unsafeUtf8(buf)
                             }
                             let name = contentDisposition.getName()
                             if(let mediaType <- partHeader[1].replace('Content-Type:', '').trimAscii() && mediaType.size > 0){
@@ -150,7 +150,7 @@ public class MultipartFormDataParser {
                         let value = if(let Some(charset) <- contentDisposition.getCharset()){
                             charset.newDecoder().decode(bytes)
                         }else{
-                            String.fromUtf8(bytes)
+                            String.unsafeUtf8(bytes)
                         }
                         let name = contentDisposition.getName()
                         if(let mediaType <- partHeader[1].replace('Content-Type:', '').trimAscii() && mediaType.size > 0){
@@ -188,7 +188,7 @@ public class MultipartFormDataParser {
                             p.add(part)
                         }
                     }
-                case (b'-', b'-') => 
+                case (b'-', b'-') =>
                     break
                 case _ => throw MultipartException()
             }
@@ -280,9 +280,6 @@ public class DataMultipartListIterator <: Iterator<Data> {
     DataMultipartListIterator(private let itr: Iterator<Data>){}
 
     public func next(): ?Data {
-        while(let Some(d) <- itr.next()){
-            d
-        }
-        None<Data>
+        itr.next()
     }
 }

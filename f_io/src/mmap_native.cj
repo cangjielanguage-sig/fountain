@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_io
+package fountain::f_io
 
 /**
  * 本包仅支持linux
@@ -71,6 +71,10 @@ foreign {
     func munmap(start: CPointer<Unit>, length: UIntNative): IntNative
 
     func msync(addr: CPointer<Unit>, length: UIntNative, flags: IntNative): IntNative
+
+    func ftruncate(fd: Int32, length: Int64): Int32
+
+    func fallocate(fd: Int32, mode: Int32, offset: Int64, length: Int64): Int32
 }
 @When[os == "Linux"]
 public enum MMapProt {

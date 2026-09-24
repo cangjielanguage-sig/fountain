@@ -13,12 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_log.output
+package fountain::f_log.output
 
 import std.unittest.*
 import std.unittest.testmacro.*
 import stdx.compress.zlib.*
-import f_time.TimeUnit as TU
+import fountain::f_time
 
 @Test
 public class RotatableFileTest {
@@ -27,7 +27,7 @@ public class RotatableFileTest {
         let param = RotatableFileParams()
         param.compress = LogFileCompressFormat.GZip(CompressLevel.DefaultCompression)
         param.fileSize = 0
-        param.timeunit = TU.SECOND
+        param.timeunit = f_time.TimeUnit.SECOND
         param.path = '/tmp/test.log'
         let file = RotatableFile(param)
         spawn {

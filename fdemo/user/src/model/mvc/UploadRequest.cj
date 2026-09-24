@@ -13,11 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package user.model.mvc
+package fountain::user.model.mvc
 
-import fountain.data.*
-import fountain.data.macros.*
-import fountain.mvc.MultipartFile
+import fountain::f_data.*
+import fountain::f_data.macros.*
+import fountain::f_mvc.MultipartFile
 
 @DataAssist[props fields]
 public class UploadRequest {

@@ -13,9 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_data.path
+package fountain::f_data.path
 
-internal class EqFilter<T> <: DataFilter where T <: Equatable<T> {
+internal class EqFilter<T> <: DataFilter where T <: Equatable<T> & ToString {
     EqFilter(private let left: DataPath, private let right: T) {}
     init(left: String, right: String, solid: String) {
         this(compilePath(left, solid), parse<T>(right))
@@ -34,10 +34,7 @@ internal class EqFilter<T> <: DataFilter where T <: Equatable<T> {
                 case x: T => x == right
                 case _ => false
             }
-            case x: DataReal => match (x.data) {
-                case x: T => x == right
-                case _ => false
-            }
+            case x: DataReal => x.data == Decimal.parse(right.toString())
             case x: DataString => match (x.data) {
                 case x: T => x == right
                 case _ => false

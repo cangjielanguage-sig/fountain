@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_log.impl
+package fountain::f_log.impl
 
 class TcpLoggerAppender <: AsyncLogger {
     private static const LOGGER_NAME = 'tcp'

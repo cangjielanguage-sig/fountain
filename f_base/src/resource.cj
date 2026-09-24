@@ -13,12 +13,27 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_base
+package fountain::f_base
 
 public func resource<R, T>(res: R, fn: (R) -> T): T where R <: Resource {
     try{
         fn(res)
     }finally{
         res.close()
+    }
+}
+public struct ResourceManager<R> where R <: Resource {
+    private var resource = None<R>
+
+    public init(new: () -> R){
+        resource = new()
+    }
+    public func call<T>(fn: (R) -> T): T {
+        let res = resource.getOrThrow()
+        try{
+            fn(res)
+        }finally{
+            res.close()
+        }
     }
 }

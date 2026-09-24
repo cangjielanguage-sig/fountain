@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_util
+package fountain::f_util
 
 import std.collection.{ArrayList, TreeMap, HashMap, Map}
 import std.collection.concurrent.ConcurrentHashMap
@@ -23,13 +23,13 @@ import std.math.numeric.Decimal
 import std.reflect.TypeInfo
 import std.sync.Mutex
 import std.time.DateTime
-import f_base.*
-import f_collection.*
-import f_data.*
-import f_exception.UnreachableException
-import f_regex.*
-import f_time.*
-import f_util.exception.TextTemplateException
+import fountain::f_base.*
+import fountain::f_collection.*
+import fountain::f_data.*
+import fountain::f_exception.UnreachableException
+import fountain::f_regex.*
+import fountain::f_time.*
+import fountain::f_util.exception.TextTemplateException
 /**
  * 简单文本模板
  * 本类依赖ThreadLocalStringBuilder，如果使用本类的方法也使用了ThreadLocalStringBuilder请不要在那个方法内构造字符串时调用本类方法。
@@ -50,7 +50,7 @@ import f_util.exception.TextTemplateException
  * a.0.b.c，表示参数的a属性是一个数组或list，它的索引0有一个属性b（如果是map就是key）,属性b有一个属性c，属性c的值是用来格式化的内容
  * 由于在number: regex: time:等模式中`有特殊意义
  */
-public class TextTemplate {
+public class TextTemplate <: ToString {
     private static let templates = ConcurrentHashMap<String, TextTemplate>()
     private static let mutex = Mutex()
     private static const TIME_FORMAT_PREFIX = "time:"
@@ -59,13 +59,13 @@ public class TextTemplate {
     private let compiled = ArrayList<Value2String>()
     private TextTemplate(private let template: String) {}
 
-    public func toString() {
+    public func toString(): String {
         template
     }
-    public static func compile(template: String, placeholder!: String = "#") {
+    public static func compile(template: String, placeholder!: String = "#"): TextTemplate {
         compile(template, prefix: placeholder, suffix: placeholder)
     }
-    public static func compile(template: String, prefix!: String = #"${"#, suffix!: String = "}") {
+    public static func compile(template: String, prefix!: String = #"${"#, suffix!: String = "}"): TextTemplate {
         templates.computeIfAbsent(template){
             let instance = TextTemplate(template)
             instance.doCompile(template, prefix, suffix)
@@ -206,6 +206,9 @@ public class TextTemplate {
     }
     public func format<T>(data: T, noneConverter!: ?String = None<String>): String where T <: Object & ObjectData<T> {
         format<String, ToString, ObjectTextTemplateArgs<T>>(ObjectTextTemplateArgs<T>(data), noneConverter)
+    }
+    public func format(data: SimpleDataObject, noneConverter!: ?String = None<String>): String {
+        format<String, ToString, SimpleDataObjectTextTemplateArgs>(SimpleDataObjectTextTemplateArgs(data), noneConverter)
     }
 }
 
@@ -466,7 +469,7 @@ extend<K, V> TreeMap<K, V> <: TextTemplateObject<K, V, TreeMap<K, V>> where K <:
 extend<K, V> LinkedHashMap<K, V> <: TextTemplateObject<K, V, LinkedHashMap<K, V>> where K <: Equatable<K> & TextTemplateKey<K>,
     V <: ToString {}
 
-public class ObjectTextTemplateArgs<T> <: TextTemplateObject<String, ToString, ObjectTextTemplateArgs<T>> where T <: Object & ObjectData<T> {
+public struct ObjectTextTemplateArgs<T> <: TextTemplateObject<String, ToString, ObjectTextTemplateArgs<T>> where T <: Object & ObjectData<T> {
     public ObjectTextTemplateArgs(private let arg: T) {}
     public operator func [](key: String): ToString {
         T
@@ -475,5 +478,11 @@ public class ObjectTextTemplateArgs<T> <: TextTemplateObject<String, ToString, O
             .getOrThrow {TextTemplateException("type ${TypeInfo.of<T>()} is without field ${key}")}
             .get(arg)
             .toString()
+    }
+}
+public struct SimpleDataObjectTextTemplateArgs <: TextTemplateObject<String, ToString, SimpleDataObjectTextTemplateArgs> {
+    public SimpleDataObjectTextTemplateArgs(private let arg: SimpleDataObject) {}
+    public operator func [](key: String): ToString {
+        arg.get(key).getOrThrow {TextTemplateException("type ${TypeInfo.of(arg)} is without field ${key}")}.toString()
     }
 }

@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_regex
+package fountain::f_regex
 
 import std.unittest.*
 import std.unittest.testmacro.*
@@ -35,13 +35,13 @@ public class Regex_test {
     public func test2(): Unit {
         var current = DateTime.now()
         let reg1 = #"^\d+$"#.regex(solid: true)
-        println(Duration.since(current))
+        println(DateTime.now() - current)
         current = DateTime.now()
         let reg2 = #"^\d+$"#.regex(solid: true)
-        println(Duration.since(current))
+        println(DateTime.now() - current)
         current = DateTime.now()
         let reg3 = Regex(#"^\d+$"#)
-        println(Duration.since(current))
+        println(DateTime.now() - current)
     }
     @TestCase
     public func test3(): Unit {
@@ -55,7 +55,7 @@ public class Regex_test {
                 while (j < 1000) {
                     var current = DateTime.now()
                     reg1 = #"^\d+$"#.regex()
-                    consumed.fetchAdd(Duration.since(current).toNanoseconds())
+                    consumed.fetchAdd((DateTime.now() - current).toNanoseconds())
                     j++
                 }
                 println(reg1.string())
@@ -75,7 +75,7 @@ public class Regex_test {
                 while (j < 1000) {
                     var current = DateTime.now()
                     reg1 = Regex(#"^\d+$"#)
-                    consumed.fetchAdd(Duration.since(current).toNanoseconds())
+                    consumed.fetchAdd((DateTime.now() - current).toNanoseconds())
                     j++
                 }
                 println(reg1.string())

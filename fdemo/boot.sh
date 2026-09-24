@@ -25,19 +25,21 @@ exports(){
     export logger_appender_FDemoFile_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%tid;%m'
     export logger_appender_FDemoFile_path=./log/fdemo.log
     export logger_appender_FDemoFile_rotateDuration=DAY
-    export controllerPointcut='*..*Controller.*(**): *'
+    export logger_asyncWaitTimeout=5ms # 异步日志缓冲区等待时间，默认是5毫秒，超过这个时间，本次日志被忽略
+    export controllerPointcut='*::*..*Controller.*(**): *' # 这个不是mvc的配置，这是声明切面时指定的配置项，开发者可以任意起名
     export mvc_port=8080 # 这一行可以没有，默认就是8080
     export mvc_maxRequestBodySize=67108864
     export mvc_overallElapsedSwitch=true # 生产环境建议改为false，默认是false
     export mvc_internalServerErrorMessageKind=BEAN
     export mvc_internalServerErrorMessage=NameOf500Handler
     # 如果不使用fountain连接池，也不使用标准库连接池，就不要配置以下orm_*Pool*变量，只配置orm_noPool，只能用代码初始化第三方连接池
-    export orm_useThirdPartyPool=true # 使用第三方连接池，不使用fountain.orm的连接池，也不使用标准库的连接池。
+    export orm_useThirdPartyPool=false # 使用第三方连接池，不使用fountain.orm的连接池，也不使用标准库的连接池。
     # export opengauss_orm_useThirdPartyPool=flase # 可以为指定的数据库驱动配置是否使用第三方池
     # 此时使用ORM.register(datasource, default: false) # 开发者自己用代码初始化Driver和连接池、调用这个函数注册连接池
-    export orm_noPool=true # 默认是false，true表示不用连接池
-    # export orm_useStdPool=false # 默认是true，表示使用标准库连接池，false是使用fountain连接池
-    export orm_drivers=mockdb,opengauss # 逗号分隔的驱动名称
+    export orm_noPool=false # 默认是false，true表示不用连接池
+    export orm_useStdPool=false # 默认是true，表示使用标准库连接池，false是使用fountain连接池
+    # export orm_drivers=mockdb,opengauss # 逗号分隔的驱动名称
+    export orm_drivers=postgres
     # orm_databasePool开头的是fountain.orm.DatabasePool的配置项
     export orm_databasePoolInitSize=1 # 初始连接数
     export orm_databasePoolMinSize=1 # 最小连接数
@@ -58,18 +60,20 @@ exports(){
     export orm_stdPoolConnectionTimeout=86400 # 连接获取超时时间，默认30分钟
     export orm_stdPoolKeepaliveTime=86400 # 连接保活检查周期，默认1分钟
     # orm_transactionalFuncExecution 和@Transactional注解只要有一个生效就会将事务切面织入到函数
-    export orm_transactionalFuncExecution='*..*ServiceImpl.delete*(**): *'
-    export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*ServiceImpl.remove*(**): *"
-    export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*ServiceImpl.save*(**): *"
-    export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*ServiceImpl.add*(**): *"
-    export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*ServiceImpl.new*(**): *"
-    export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*ServiceImpl.create*(**): *"
-    export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*ServiceImpl.update*(**): *"
-    export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*ServiceImpl.change*(**): *"
-    export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*ServiceImpl.register*(**): *"
-    export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*.userSession(**): *"
-    export opengauss_orm_connectionUrl=$POSTGRES
-    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`find ./fdemo/release/* -type d|grep -a -v -P 'f_.+|\.build-logs|fountain|bin|_stAtIc__|charset4cj|boot'|tr '\n' ':'`
+    export orm_transactionalFuncExecution='*::*..*ServiceImpl.del*(**): *'
+    export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*ServiceImpl.remove*(**): *"
+    export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*ServiceImpl.insert*(**): *"
+    export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*ServiceImpl.save*(**): *"
+    export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*ServiceImpl.add*(**): *"
+    export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*ServiceImpl.new*(**): *"
+    export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*ServiceImpl.create*(**): *"
+    export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*ServiceImpl.update*(**): *"
+    export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*ServiceImpl.change*(**): *"
+    export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*ServiceImpl.register*(**): *"
+    export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*.userSession(**): *"
+    # export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*.sayHello(**): *"
+    export postgres_orm_connectionUrl=$POSTGRES
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`find ./fdemo/release/* -type d|grep -a -v -P '\.build-logs|bin|_stAtIc__|boot'|tr '\n' ':'`
     echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
 }
 run(){

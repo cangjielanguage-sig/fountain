@@ -13,9 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_random
+package fountain::f_random
 
-import f_base.ExtendThreadLocal
+import fountain::f_base.ExtendThreadLocal
 
 /**
  * 使用默认的priv创建SecureRandom
@@ -23,6 +23,7 @@ import f_base.ExtendThreadLocal
 public class ThreadLocalRandom {
     private static let rand = ThreadLocal<SecureRandom>()
     private init() {}
+    @Frozen
     public static prop current: SecureRandom {
         get() {
             rand.getOrCompute {SecureRandom()}

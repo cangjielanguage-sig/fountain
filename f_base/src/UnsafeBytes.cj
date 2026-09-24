@@ -13,16 +13,22 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_base
+package fountain::f_base
 
 public interface UnsafeBytes {
     func unsafeBytes(): Array<Byte>
+    static func unsafeUtf8(utf8: Array<Byte>): String
 }
 
 extend String <: UnsafeBytes {
     public func unsafeBytes(): Array<Byte> {
         unsafe {
             this.rawData()
+        }
+    }
+    public static func unsafeUtf8(utf8: Array<Byte>): String {
+        unsafe{
+            String.withRawData(utf8)
         }
     }
 }

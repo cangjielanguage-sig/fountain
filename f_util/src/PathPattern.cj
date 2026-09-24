@@ -13,15 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_util
+package fountain::f_util
 
 import std.sync.Mutex
 import std.collection.{ArrayList, Map, HashMap}
 import std.convert.Parsable
 import std.time.DateTime
-import f_base.*
-import f_data.DataParsable
-import f_regex.*
+import fountain::f_base.*
+import fountain::f_data.DataParsable
+import fountain::f_regex.*
 
 /**
  * 路径匹配工具，可以匹配各种绝对路径，这个工具从一个java版本的实现复制过来，java版本已经在生产环境使用。
@@ -248,7 +248,7 @@ public class PathPattern {
         let variables: Map<Int64, Any> = if (let EXTRACTION <- mode) {
             HashMap<Int64, Any>()
         } else {
-            EmptyMap<Int64, Any>.INSTANCE()
+            EmptyMap<Int64, Any>.instance()
         }
         var i = 0
         while (i < parts.size) {
@@ -323,6 +323,31 @@ public class PathPattern {
             }
             tmp = node.getDoubleStarNode()
             if (let Some(n) <- tmp) {
+                // ** matches zero segments first: try n's children at current part
+                var res: Option<PathNode> = n.getSub(part)
+                if (res.isNone()) { res = n.getRegexPlaceholderNode(part, NonePathNode.INSTANCE) }
+                if (res.isNone()) { res = n.getPlaceholderNode(NonePathNode.INSTANCE) }
+                if (res.isNone()) { res = n.getRegexNode(part) }
+                if (res.isNone()) { res = n.getComplexNode(part, NonePathNode.INSTANCE) }
+                if (res.isNone()) { res = n.getStarNode() }
+                if (let Some(child) <- res) {
+                    node = child
+                    prevDoubleStar = n
+                    prevPlaceholder = NonePathNode.INSTANCE
+                    prevComplex = NonePathNode.INSTANCE
+                    prevRegexPlaceholder = NonePathNode.INSTANCE
+                    if (mode.extraction()) {
+                        match (child) {
+                            case cpn: ComplexPathNode => variables.add(i, cpn)
+                            case pn: PlaceholderPathNode => variables.add(i, pn.name)
+                            case prn: PlaceholderRegexPathNode => variables.add(i, prn.name)
+                            case _ => ()
+                        }
+                    }
+                    i++
+                    continue
+                }
+                // ** matches 1+ segments (consume current part, stay at **)
                 node = n
                 prevDoubleStar = node
                 prevPlaceholder = NonePathNode.INSTANCE
@@ -412,7 +437,7 @@ public class PathPattern {
      * @return
      */
     public func matches(path: String): Bool {
-        return matches(path, false)
+        return matches(path, true)
     }
     public func matches(path: String, withExtName: Bool): Bool {
         let node = get(path, Mode.MATCHING, withExtName)
@@ -781,7 +806,7 @@ class DoubleStarPathNode <: PathNode {
     public init(prev: PathNode) {
         super("**", prev)
     }
-    protected operator func ==(o: Any) {
+    protected operator func ==(o: Any): Bool {
         match (o) {
             case x: Object => refEq(this, x)
             case _ => false
@@ -813,6 +838,18 @@ open class RegexPathNode <: PathNode {
                 match (c) {
                     case r'?' => reg.append(r'.')
                     case r'*' => reg.append(".*")
+                    case r'.' => reg.append("\\.")
+                    case r'\\' => reg.append("\\\\")
+                    case r'^' => reg.append("\\^")
+                    case r'$' => reg.append("\\$")
+                    case r'|' => reg.append("\\|")
+                    case r'+' => reg.append("\\+")
+                    case r'(' => reg.append("\\(")
+                    case r')' => reg.append("\\)")
+                    case r'[' => reg.append("\\[")
+                    case r']' => reg.append("\\]")
+                    case r'{' => reg.append("\\{")
+                    case r'}' => reg.append("\\}")
                     case c => reg.append(c)
                 }
             }
@@ -860,12 +897,25 @@ class ComplexPathNode <: PathNode {
     }
 
     protected func matches(value: String): Bool {
-        reg.matches(value)
+        if (parts.size < 2) { return false }
+        var pos = 0i64
+        for (i in 0..parts.size : 2) {
+            let staticPart = parts[i]
+            if (i == 0) {
+                if (!value.startsWith(staticPart)) { return false }
+                pos = staticPart.size
+            } else if (let Some(idx) <- value.indexOf(staticPart, pos)) {
+                pos = idx + staticPart.size
+            } else {
+                return false
+            }
+        }
+        true
     }
 
     func extract(value: String): Map<String, String> {
         let datas = HashMap<String, String>()
-        var start = 0
+        var start = 0i64
         for (i in 0..parts.size : 2) {
             let p = parts[i]
             if (start == 0) {
@@ -887,7 +937,9 @@ class ComplexPathNode <: PathNode {
                 value.size
             }
             datas[parts[i + 1]] = value[start..end]
-            start = end + parts[i + 2].size
+            if (i + 2 < parts.size) {
+                start = end + parts[i + 2].size
+            }
         }
         return datas
     }
@@ -898,7 +950,7 @@ enum Mode {
     | EXTRACTION
     | PREFIX
 
-    private operator func ==(mode: Mode) {
+    private operator func ==(mode: Mode): Bool {
         match ((this, mode)) {
             case (MATCHING, MATCHING) | (EXTRACTION, EXTRACTION) | (PREFIX, PREFIX) => true
             case _ => false

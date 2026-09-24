@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-macro package f_bean.macros
+macro package fountain::f_bean.macros
 
 /**
  * 将@Configuration修饰的类里被@Constructor修饰的函数作为bean初始化函数。被@Configuration修饰的类不会注册到BeanFactory.

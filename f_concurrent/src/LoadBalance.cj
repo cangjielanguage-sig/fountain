@@ -13,28 +13,37 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_concurrent
+package fountain::f_concurrent
 
 import std.collection.TreeMap
 import std.math.Number as StdNumber
-import std.sync.*
+import std.sync.Mutex
 import stdx.crypto.crypto.SecureRandom
-import f_base.Addable
-import f_random.*
+import fountain::f_base.{Addable, EmptyIterator}
+import fountain::f_random.*
+import fountain::f_concurrent.exception.LoadBalanceException
 
 public interface LoadBalanceAlgo<W> where W <: Addable<W> & Comparable<W> {
     mut func next(): W
 }
 public struct RoundRobin<W> <: LoadBalanceAlgo<W> where W <: Addable<W> & Comparable<W> {
+    private let mutex = Mutex()
     private var current: W
     public RoundRobin(private let step: W, private let min: W, private let max: W){
         current = min
     }
     public mut func next(): W{
-        let v = current
-        current += step
+        let v: W
+        synchronized(mutex){
+            v = current
+            current += step
+        }
         if(current > max){
-            current = min
+            synchronized(mutex){
+                if(current > max){
+                    current = min
+                }
+            }
         }
         v
     }
@@ -60,26 +69,69 @@ public class Float64Weight <: RandomWeight<Float64>{
     }
 }
 public class LoadBalance<W, D, R> where W <: Addable<W> & Comparable<W> {
-    private let mutex = Mutex()
     private let tree = TreeMap<W, (D) -> R>()
     public LoadBalance(private let min: W, private let algo: LoadBalanceAlgo<W>){}
-    public func add(weight: W, fn: (D) -> R){
+    public func add(weight: W, fn: (D) -> R): Unit {
         let max = tree.last?[0] ?? min
         let new = max + weight
         tree[new] = fn
     }
-    public func add(all!: Collection<(W, (D) -> R)>){
+    public func add(all!: Iterable<(W, (D) -> R)>): Unit {
         for((w, fn) in all){
             add(w, fn)
         }
     }
-    public func add(all!: Array<(W, (D) -> R)>){
-        let c: Collection<(W, (D) -> R)> = all
-        add(all: c)
-    }
     public func call(data: D): R {
-        synchronized(mutex){
-            tree.forward(algo.next(), inclusive: true).next()
-        }.getOrThrow()[1](data)
+        tree.forward(algo.next(), inclusive: true).next().getOrThrow()[1](data)
+    }
+    public func call(data: D, maxRetrying: Int64): (?R, ?LoadBalanceException) {
+        var tried = 0
+        var ex = None<LoadBalanceException>
+        for(f in iterator()){
+            try{
+                return (f(data), ex)
+            }catch(e: Exception){
+                if(let Some(e) <- ex){
+                    e
+                }else{
+                    let e = LoadBalanceException()
+                    ex = e
+                    e
+                }.addSuppressed(e)
+                if(tried < maxRetrying){
+                    tried++
+                    continue
+                }
+                throw ex.getOrThrow()
+            }
+        }
+        (None<R>, ex)
+    }
+    public func iterator(): Iterator<(D) -> R> {
+        func mapper(tpl: (W, (D) -> R)){
+            tpl[1]
+        }
+        let forward = if(tree.isEmpty()){
+            EmptyIterator<(D) -> R>.instance()
+        }else{
+            tree.forward(algo.next(), inclusive: true).map(mapper)
+        }
+        LoadBalanceIterator<D, R>(tree.iterator().map(mapper), forward)
+    }
+}
+class LoadBalanceIterator<D, R> <: Iterator<(D) -> R> {
+    LoadBalanceIterator(
+        private let itr: Iterator<(D) -> R>,
+        private let sub: Iterator<(D) -> R>
+    ){}
+    private var endsub = false
+    public func next(): ?(D) -> R {
+        if(endsub){
+            return itr.next()
+        }else if(let Some(f) <- itr.next()){
+            return f
+        }
+        endsub = true
+        next()
     }
 }

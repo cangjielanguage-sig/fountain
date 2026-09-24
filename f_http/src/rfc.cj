@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_http
+package fountain::f_http
 
 public func rfc1123(t: DateTime) {
     //Wed, 16 Nov 2022 14:57:48 +0800

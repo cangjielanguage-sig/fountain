@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_data.path
+package fountain::f_data.path
 
 internal class MaxPathNode <: DataPathNode {
     static let instance = MaxPathNode()
@@ -32,7 +32,7 @@ internal class MaxPathNode <: DataPathNode {
                         case (x: DataDuration, y: DataDuration) where x > y => x
                         case (x: DataReal, y: DataReal) where x > y => x
                         case (x: DataString, y: DataString) where x > y => x
-                        case _ => return OptionIterator<Data>()
+                        case _ => continue
                     }
                 }
                 OptionIterator<Data>(r)

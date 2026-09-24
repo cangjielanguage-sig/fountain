@@ -13,28 +13,32 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-macro package f_aspect.macros
+macro package fountain::f_aspect.macros
 
 import std.ast.*
-import f_macros.*
-import f_aspect.exception.*
-public import f_bean.macros.*
+import fountain::f_macros.*
+import fountain::f_aspect.exception.*
+public import fountain::f_bean.macros.*
 
 public macro WeavedBean(input: Tokens): Tokens {
+    let (decl, remainder) = extractFirstDecl(input)
     let tokens = quote(
         @Bean
-        $(weave(input))
+        $(weave(decl))
+        $remainder
     )
     tokens
 }
 public macro WeavedBean(attr: Tokens, input: Tokens): Tokens {
+    let (decl, remainder) = extractFirstDecl(input)
     quote(
         @Bean[$attr]
-        $(weave(input))
+        $(weave(decl))
+        $remainder
     )
 }
-private func weave(input: Tokens): Tokens{
-    match(parseDecl(input)){
+private func weave(input: Decl): Tokens{
+    match(input){
         case x: ClassDecl => 
             let decls = x.body.decls
             for(i in 0 .. decls.size){
@@ -59,11 +63,11 @@ private func weave(input: Tokens): Tokens{
             while(let x: MacroExpandDecl <- md.macroInputDecl){
                 md = x
             }
-            let tokens = weave(md.macroInputs)
+            let tokens = weave(md.macroInputDecl)
             md.macroInputDecl = parseDecl(tokens)
             x.toTokens()
         case _ => 
-            diagReport(ERROR, input, 'input must be a class decl', '')
+            diagReport(ERROR, input.toTokens(), 'input must be a class decl', '')
             throw AspectException()
     }
 }

@@ -13,14 +13,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-macro package f_orm.macros
+macro package fountain::f_orm.macros
 
 import std.ast.*
 import std.collection.HashMap
-import f_macros.*
-import f_orm.exception.ORMException
-import f_regex.*
-import f_util.CaseFormat
+import fountain::f_macros.*
+import fountain::f_orm.exception.ORMException
+import fountain::f_regex.*
+import fountain::f_util.CaseFormat
 
 /**
  * 必须跟@ORMField配合使用
@@ -33,7 +33,7 @@ import f_util.CaseFormat
  * 没有使用@ORMField注解的按照映射的不是主键，且按照列名是LowerUnderScore处理。
  *
  * 宏的属性格式：
- *   dirty 指定这个属性的表示被此宏修饰的类的属性发生变化时会向ORM标记修改历史，可以调用executor.updateDirty<T>()更新修改过的属性，
+ *   dirty 指定这个属性的表示被此宏修饰的类的属性发生变化时会向ORM标记修改历史，可以调用executor.update<T>(dirty: true)更新修改过的属性，
  *         本属性没有值只有属性名。
  *         只有被@ORMField修饰的成员变量才对dirty生效。
  *   table: 是一个字符串或标识符，表示列名转换的格式，
@@ -52,28 +52,38 @@ import f_util.CaseFormat
  * 3. 如果没有2. 这种需求，则二者顺序没有要求，但是1. 还需要满足。
  */
 public macro QueryMappersGenerator(input: Tokens): Tokens {
-    expandQueryMappers(quote(), input)
+    let tokens = expandQueryMappers(quote(), input)
+    tokens
 }
 public macro QueryMappersGenerator(attr: Tokens, input: Tokens): Tokens {
-    expandQueryMappers(attr, input)
+    let tokens = expandQueryMappers(attr, input)
+    tokens
 }
 private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
-    let decl = match(parseDecl(input)){
+    let (decl, remainder) = extractFirstDecl(input)
+    let tokens = expandQueryMappers(attr, decl)
+    quote(
+        $tokens
+        $remainder
+    )
+}
+private func expandQueryMappers(attr: Tokens, declParam: Decl): Tokens {
+    let decl = match(declParam){
         case d: ClassDecl => d
         case d: MacroExpandDecl => 
             var decl = extract(d)
-            let tokens = expandQueryMappers(attr, decl.toTokens())
+            let tokens = expandQueryMappers(attr, decl)
             decl = parseDecl(tokens)
             decl = replaceMacroInputDecl(d, decl)
             return decl.toTokens()
-        case _ => 
-            diagReport(ERROR, input, 'QueryMappersGenerator supports a class', '')
+        case x => 
+            diagReport(ERROR, x.toTokens(), 'QueryMappersGenerator supports a class', '')
             throw ORMException("QueryMappersGenerator supports a class") 
     }
     let name = quote($(decl.identifier))
     let body = decl.body.decls
     let props = extractMutProps(body)
-    let map = HashMap<String, (Bool, String, Token)>()
+    let map = HashMap<String, (Bool, String, String)>()
     for (m in getChildMessages("ORMField")) {
         let name = m.getString("field")
         let id = if (m.hasItem("id")) {
@@ -86,18 +96,18 @@ private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
         } else {
             ""
         }
-        let dataType = if (m.hasItem("dataType")) {
-            m.getString("dataType")
+        let converter = if (m.hasItem("converter")) {
+            m.getString("converter")
         } else {
             ""
         }
-        map[name] = (id, column, Token(IDENTIFIER, dataType))
+        map[name] = (id, column, converter)
     }
     let mapperMetaFn = {
         n: String => if (let Some(m) <- map.get(n)) {
             m
         } else {
-            (false, CaseFormat.Camel.convert(n, to: CaseFormat.LowerUnderScore), Token(IDENTIFIER, ""))
+            (false, CaseFormat.Camel.convert(n, to: CaseFormat.LowerUnderScore), '')
         }
     }
     var dirty = false
@@ -127,7 +137,8 @@ private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
     if (superTypes.isEmpty()) {
         decl.upperBound = `upperbound`[0]
     }
-    decl.superTypes.add(RefType(quote(QueryMappersInit<$name>)))
+    let (tableColumns, tableColumnsClass) = generateColumns(name, extractMutProps(body), extractVars(body), mapperMetaFn)
+    decl.superTypes.add(RefType(quote(QueryMappersObject<$name, $tableColumns>)))
     let tableName = transformTableName(attr, decl)
     body.add(parseDecl(
             quote(
@@ -140,27 +151,39 @@ private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
         }()
     )))
     body.add(parseDecl(
-            quote(
+        quote(
         public static func tableName(): String {
             $tableName
         }
     )))
     body.add(parseDecl(
-            quote(
+        quote(
         public static func isSimpleData(): Bool {
             false
         }
     )))
     body.add(parseDecl(
-            quote(
+        quote(
         public static func queryMappers(): QueryMappers<$name>{
             $queryMappersName
         }
     )))
-    decl.toTokens()
+    
+    body.add(parseDecl(
+        quote(
+        public static func tableColumns(): $tableColumns {
+            $(tableColumns).instance
+        }
+    )))
+    let tokens = quote(
+        $decl
+        $tableColumnsClass
+        private let _ = TableMetas.register<$(decl.identifier)>()
+    )
+    tokens
 }
 
-func generateMappers(name: Tokens, props: ArrayList<PropDecl>, dirty: Bool, mapperMetaFn: (String) -> (Bool, String, Token)): Tokens {
+func generateMappers(name: Tokens, props: ArrayList<PropDecl>, dirty: Bool, mapperMetaFn: (String) -> (Bool, String, String)): Tokens {
     var tokens = quote()
     for (i in 0..props.size) {
         if (i > 0) {
@@ -181,7 +204,7 @@ func generateMappers(name: Tokens, props: ArrayList<PropDecl>, dirty: Bool, mapp
     tokens
 }
 
-func generateMappers(name: Tokens, vars: ArrayList<VarDecl>, mapperMetaFn: (String) -> (Bool, String, Token)): Tokens {
+func generateMappers(name: Tokens, vars: ArrayList<VarDecl>, mapperMetaFn: (String) -> (Bool, String, String)): Tokens {
     var tokens = quote()
     for (i in 0..vars.size) {
         if (i > 0) {
@@ -196,7 +219,7 @@ func generateMappers(name: Tokens, vars: ArrayList<VarDecl>, mapperMetaFn: (Stri
     tokens
 }
 
-func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, String, Token)): Tokens {
+func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, String, String)): Tokens {
     var dataType = quote()
     var nullable = false
     for (j in 0..dts.size) {
@@ -217,7 +240,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
     let dataTypeToken = Token(IDENTIFIER, '${dataType[0].value}DataType')
     let fieldNameStr = Token(STRING_LITERAL, fieldName.value)
     let columnName = Token(STRING_LITERAL, meta[1])
-    let columnType = meta[2]
+    let converter = meta[2]
     if (meta[0]) {
         quote(
                 IdQueryMapper<$dataType, $name>(
@@ -242,47 +265,27 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
         if (nullable) {
             listGeneric += `gt`
         }
-        if (nullable && columnType.value.isEmpty()) {
+        if (nullable) {
             quote(
                     if (TypeInfo.of<$(listGeneric[2])>().isSubtypeOf(TypeInfo.of<InputStream>()) || $(listGeneric[2]).isSimpleData()) {
                         GroupedSingleQueryMapper<$(listGeneric[2]), $name>(
                             name: $columnName,
                             groupedGetter: {o => o.$fieldName}
                         )
-                    } else {
-                        NullableGroupedQueryMapper<$(listGeneric[2]), $name>(
-                            ignoreNone: false,
-                            grouped: $(listGeneric[2]).queryMappers(),
-                            groupedGetter: {o => o.$fieldName}
-                        )
-                    }
-                )
-        } else if (nullable) {
-            quote(
-                    if (TypeInfo.of<$(listGeneric[2])>().isSubtypeOf(TypeInfo.of<InputStream>()) || $(listGeneric[2]).isSimpleData()) {
-                        GroupedSingleQueryMapper<$(listGeneric[2]), $name>(
-                            name: $columnName,
-                            groupedGetter: {o => o.$fieldName}
+                    } else if (($converter).size > 0) {
+                        QueryMapper<$name> (
+                            dataType: $(dataTypeToken)($nullable, $columnName, $fieldNameStr),
+                            putter: {o, v => o.$fieldName = match(v){
+                                    case x: Option<$dataType> => x.getOrThrow{ORMException("current value for " + $fieldNameStr + " must not be None")}
+                                    case x: $dataType =>  x
+                                    case _ => QueryMapperConverter.lookup($(converter)).convert<$(dataType)>(v)
+                                }
+                            }
                         )
                     } else {
                         NullableGroupedQueryMapper<$(listGeneric[2]), $name>(
                             ignoreNone: false,
                             grouped: $(listGeneric[2]).queryMappers(),
-                            groupedGetter: {o => o.$fieldName}
-                        )
-                    }
-                )
-        } else if (columnType.value == "") {
-            quote(
-                    if (TypeInfo.of<$(listGeneric)>().isSubtypeOf(TypeInfo.of<InputStream>()) || $(listGeneric).isSimpleData()) {
-                        GroupedSingleQueryMapper<$listGeneric, $name>(
-                            name: $columnName,
-                            groupedGetter: {o => o.$fieldName}
-                        )
-                    } else {
-                        GroupedQueryMapper<$listGeneric, $name>(
-                            name: $columnName,
-                            grouped: $(listGeneric).queryMappers(),
                             groupedGetter: {o => o.$fieldName}
                         )
                     }
@@ -294,6 +297,16 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                             name: $columnName,
                             groupedGetter: {o => o.$fieldName}
                         )
+                    } else if (($converter).size > 0) {
+                        QueryMapper<$name> (
+                            dataType: $(dataTypeToken)($nullable, $columnName, $fieldNameStr),
+                            putter: {o, v => o.$fieldName = match(v){
+                                    case x: Option<$dataType> => x.getOrThrow{ORMException("current value for " + $fieldNameStr + " must not be None")}
+                                    case x: $dataType =>  x
+                                    case _ => QueryMapperConverter.lookup($(converter)).convert<$(dataType)>(v)
+                                }
+                            }
+                        )
                     } else {
                         GroupedQueryMapper<$listGeneric, $name>(
                             name: $columnName,
@@ -303,73 +316,32 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                     }
                 )
         }
-    } else if (nullable && columnType.value == "") {
-        quote(
-                if(TypeInfo.of<$(dataType)>().isSubtypeOf(TypeInfo.of<InputStream>())){
-                    FieldQueryMapper<$dataType, $name> (
-                        dataType: InputStreamDataType($nullable, $columnName, $fieldNameStr),
-                        putter: {o, v => o.$fieldName = v}
-                    )
-                }else if ($(dataType).isSimpleData()) {
-                    FieldQueryMapper<$dataType, $name> (
-                        dataType: $(dataTypeToken)($nullable, $columnName, $fieldNameStr),
-                        putter: {o, v => o.$fieldName = v}
-                    )
-                } else {
-                    NullableNestQueryMapper<$dataType, $name> (
-                        nested: $(dataType).queryMappers(),
-                        nestGetter: {o => o.$fieldName},
-                        nestPutter: {o, v => o.$fieldName = v}
-                    )
-                }
-            )
     } else if (nullable) {
         quote(
-                if(TypeInfo.of<$(dataType)>().isSubtypeOf(TypeInfo.of<InputStream>())){
+                if(TypeInfo.of<$(dataType)>().isSubtypeOf(TypeInfo.of<InputStream>())) {
                     FieldQueryMapper<$dataType, $name> (
                         dataType: InputStreamDataType($nullable, $columnName, $fieldNameStr),
                         putter: {o, v => o.$fieldName = v}
                     )
-                }else if ($(dataType).isSimpleData()) {
+                } else if ($(dataType).isSimpleData()) {
                     FieldQueryMapper<$dataType, $name> (
                         dataType: $(dataTypeToken)($nullable, $columnName, $fieldNameStr),
                         putter: {o, v => o.$fieldName = v}
+                    )
+                } else if (($converter).size > 0) {
+                    QueryMapper<$name> (
+                        dataType: $(dataTypeToken)($nullable, $columnName, $fieldNameStr),
+                        putter: {o, v => o.$fieldName = match(v){
+                                case x: Option<$dataType> => x.getOrThrow{ORMException("current value for " + $fieldNameStr + " must not be None")}
+                                case x: $dataType =>  x
+                                case _ => QueryMapperConverter.lookup($(converter)).convert<$(dataType)>(v)
+                            }
+                        }
                     )
                 } else {
                     NullableNestQueryMapper<$dataType, $name> (
                         nested: $(dataType).queryMappers(),
                         nestGetter: {o => o.$fieldName},
-                        nestPutter: {o, v => o.$fieldName = v}
-                    )
-                }
-            )
-    } else if (columnType.value == "") {
-        quote(
-                if(TypeInfo.of<$(dataType)>().isSubtypeOf(TypeInfo.of<InputStream>())){
-                    QueryMapper<$name> (
-                        dataType: InputStreamDataType($nullable, $columnName, $fieldNameStr),
-                        putter: {o, v =>
-                            o.$fieldName =
-                            match(v){
-                                case x: Option<$dataType> => x.getOrThrow{ORMException("current value for " + $fieldNameStr + " must not be None")}
-                                case x: $dataType =>  x
-                                case _ => throw ORMException("current value must be type of " + $(dataTypeStr))
-                            }
-                    })
-                }else if ($(dataType).isSimpleData()) {
-                    QueryMapper<$name> (
-                        dataType: $(dataTypeToken)($nullable, $columnName, $fieldNameStr),
-                        putter: {o, v =>
-                            o.$fieldName =
-                            match(v){
-                                case x: Option<$dataType> => x.getOrThrow{ORMException("current value for " + $fieldNameStr + " must not be None")}
-                                case x: $dataType =>  x
-                                case _ => throw ORMException("current value must be type of " + $(dataTypeStr))
-                            }
-                    })
-                } else {
-                    NestQueryMapper<$dataType, $name> (
-                        nested: $(dataType).queryMappers(),
                         nestPutter: {o, v => o.$fieldName = v}
                     )
                 }
@@ -390,14 +362,22 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                 }else if ($(dataType).isSimpleData()) {
                     QueryMapper<$name> (
                         dataType: $(dataTypeToken)($nullable, $columnName, $fieldNameStr),
-                        putter: {o, v =>
-                            o.$fieldName =
-                            match(v){
+                        putter: {o, v => o.$fieldName = match(v){
                                 case x: Option<$dataType> => x.getOrThrow{ORMException("current value for " + $fieldNameStr + " must not be None")}
                                 case x: $dataType =>  x
                                 case _ => throw ORMException("current value must be type of " + $(dataTypeStr))
                             }
                     })
+                } else if (($converter).size > 0) {
+                    QueryMapper<$name> (
+                        dataType: $(dataTypeToken)($nullable, $columnName, $fieldNameStr),
+                        putter: {o, v => o.$fieldName = match(v){
+                                case x: Option<$dataType> => x.getOrThrow{ORMException("current value for " + $fieldNameStr + " must not be None")}
+                                case x: $dataType =>  x
+                                case _ => QueryMapperConverter.lookup($(converter)).convert<$(dataType)>(v)
+                            }
+                        }
+                    )
                 } else {
                     NestQueryMapper<$dataType, $name> (
                         nested: $(dataType).queryMappers(),
@@ -458,4 +438,51 @@ private func transformTableName(attrs: Tokens, decl: Decl): String {
         case (_, x) => x
     }
     '${tablePrefix}${tableName}${tableSuffix}'
+}
+
+private func generateColumns(name: Tokens, props: ArrayList<PropDecl>, vars: ArrayList<VarDecl>, mapperMetaFn: (String) -> (Bool, String, String)): (Token, Tokens) {
+    let columnsName = Token(IDENTIFIER, name[0].value + "__cOlUmns___")
+    var columns = quote()
+    var toString = quote(
+        public func toString(): String {
+            let builder = StringGenerator()$(`nl`)
+    )
+    var iterator = quote(
+        public func iterator(): Iterator<Column> {
+            [
+    )
+    func genTokens(identifier: Token){
+        let columnName = Token(IDENTIFIER, mapperMetaFn(identifier.value)[1])
+        columns += quote(
+            public prop $columnName: Column {
+                get(){
+                    Column($(columnName.value))
+                }
+            }$(`nl`)
+        )
+        toString += quote(builder.append($(columnName).tableAlias(super.tableAlias_)).append(',')$(`nl`))
+        iterator += quote($(columnName),)
+    }
+    for(p in props){
+        genTokens(p.identifier)
+    }
+    for(v in vars){
+        genTokens(v.identifier)
+    }
+    toString += quote(
+        return builder.substring(0, builder.size - 1)
+    })
+    iterator = quote(
+        $(iterator[0..iterator.size - 1])].iterator()
+    })
+    let klass = quote(
+        public class $columnsName <: Columns {
+            static let instance = $columnsName()
+            private init(){}
+            $toString
+            $iterator
+            $columns
+        }
+    )
+    (columnsName, klass)
 }

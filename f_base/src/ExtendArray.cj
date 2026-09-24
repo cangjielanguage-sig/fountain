@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_base
+package fountain::f_base
 
 public enum GrownArrayNewValue<T>{
     | First
@@ -63,7 +63,7 @@ extend<T> Array<T> <: ExtendArray<T> {
         let newval = match(new){
             case First => this[0]
             case Last => this[this.size - 1]
-            case ZeroValue => unsafe{zeroValue<T>()}
+            case ZeroValue => unsafeZeroValue<T>()
             case Other(v) => v
             case Repeat => return if(s == 1){
                 let v = this[0]

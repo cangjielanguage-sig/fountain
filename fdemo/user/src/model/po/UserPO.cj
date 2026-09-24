@@ -13,15 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package user.model.po
+package fountain::user.model.po
 
 import std.time.DateTime
 
-import fountain.base.unsafeZeroValue
-import fountain.data.*
-import fountain.data.macros.*
-import fountain.orm.*
-import fountain.orm.macros.*
+import fountain::f_base.unsafeZeroValue
+import fountain::f_data.*
+import fountain::f_data.macros.*
+import fountain::f_orm.*
+import fountain::f_orm.macros.*
 
 @DataAssist[fields tostring]
 @QueryMappersGenerator[table: user_info dirty]

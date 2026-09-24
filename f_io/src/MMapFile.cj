@@ -13,13 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_io
+package fountain::f_io
 
 import std.io.*
 import std.fs.*
 import std.sync.AtomicInt64
-import f_base.*
-import f_io.exception.MMapException
+import fountain::f_base.*
+import fountain::f_io.exception.MMapException
 
 /**
  * 内存映射文件，本类没有做并发安全处理
@@ -30,7 +30,7 @@ import f_io.exception.MMapException
  */
 @When[os == "Linux"]
 public class MMapFile <: Resource & IOStream {
-    private static let zeroFile = unsafe { zeroValue<File>() }
+    private static let zeroFile = unsafeZeroValue<File>()
     private static let ANONYMOUS_FD = IntNative(-1)
     private let fd: IntNative
     private var dirtyStart = 0i64 // 脏数据起始位置，相对于文件开头是offset + dirtyStart
@@ -288,7 +288,7 @@ public interface ToMMap {
 
 @When[os == "Linux"]
 extend File <: ToMMap {
-    public func mmap(offset: Int64, mapLength: Int64, flag!: MMapFlag = MMapFlag.Private): MMapFile {
+    public func mmap(offset: Int64, mapLength: Int64, flag!: MMapFlag = MMapFlag.Shared): MMapFile {
         let prots = if (this.canRead() && this.canWrite()) {
             [MMapProt.Read, MMapProt.Write]
         } else if (this.canRead()) {

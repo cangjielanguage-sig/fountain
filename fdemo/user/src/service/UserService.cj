@@ -13,12 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package user.service
+package fountain::user.service
 
-import fountain.orm.RootService
-internal import user.model.po.*
-internal import user.model.mvc.*
 internal import std.collection.*
+import fountain::f_orm.RootService
+internal import fountain::user.model.po.*
+internal import fountain::user.model.mvc.*
 
 public interface UserService <: RootService {
     func register(username: String, password: String): Int64

@@ -13,7 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_ticktock
+package fountain::f_ticktock
+
+import std.unittest.testmacro.*
 
 @Test
 public class TicktockLauncher_test {
@@ -21,7 +23,7 @@ public class TicktockLauncher_test {
     public func test(): Unit {
         let launcher = Ticktock.instance
         launcher.addOrReplaceTask(CronTicktockTaskTest())
-        sleep(15 * Duration.minute)
+        sleep(Duration.minute * 3)
         launcher.shutdown()
     }
 }

@@ -13,51 +13,40 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_aspect
+package fountain::f_aspect
 
 import std.collection.concurrent.ConcurrentHashMap
-import std.sync.Mutex
-import f_base.*
-import f_bean.{BeanFactory, BeanManager}
-import f_collection.*
-import f_macros.*
+import fountain::f_base.*
+import fountain::f_bean.{BeanFactory, BeanManager}
+import fountain::f_collection.*
+import fountain::f_macros.*
 
 public class Aspects {
     private static let aspects = ConcurrentHashMap<QualifiedFuncInfo, (Array<Any>) -> Any>()
-    private static let mutex = Mutex()
     private static func doProceed<T>(funcInfo: InvocationFuncInfo, fn: (Array<Any>) -> T): T {
-        let r = if (let Some(f) <- aspects.get(funcInfo.qualifiedFuncInfo)) {
-            f
-        } else {
-            synchronized(mutex) {
-                if (let Some(f) <- aspects.get(funcInfo.qualifiedFuncInfo)) {
-                    f
-                } else {
-                    let list = ArrayList<String>()
-                    for (m in BeanFactory.instance.iterator<Aspect>() where m
-                        .beanType
-                        .findAnnotation<AspectRoute>()?
-                        .matches(funcInfo) ?? false) {
-                        list.add(m.name)
-                    }
-                    var f: (Array<Any>) -> Any = {args => fn(args)}
-                    for (i in list.size - 1..=0 : -1) {
-                        let aspected = f
-                        let aspectName = list[i]
-                        f = {
-                            args =>
-                            funcInfo.setArgs(args)
-                            BeanFactory.instance.get<Aspect>(aspectName).getOrThrow().proceed(funcInfo, aspected)
-                        }
-                    }
-                    aspects[funcInfo.qualifiedFuncInfo] = f
-                    f
+        let f = aspects.computeIfAbsent(funcInfo.qualifiedFuncInfo){
+                let list = ArrayList<String>()
+                for (m in BeanFactory.instance.iterator<Aspect>() where m
+                    .beanType
+                    .findAnnotation<AspectRoute>()?
+                    .matches(funcInfo) ?? false) {
+                    list.add(m.name)
                 }
-            }
-        }(funcInfo.args)
-        match (r) {
+                var f: (Array<Any>) -> Any = {args => fn(args)}
+                for (i in list.size - 1..=0 : -1) {
+                    let aspected = f
+                    let aspectName = list[i]
+                    f = {
+                        args =>
+                        funcInfo.setArgs(args)
+                        BeanFactory.instance.get<Aspect>(aspectName).getOrThrow().proceed(funcInfo, aspected)
+                    }
+                }
+                f
+        }
+        match (f(funcInfo.args)) {
             case x: T => x
-            case _ => throw TypeCastException('Type of ${TypeInfo.of(r)} does not match ${TypeInfo.of<T>()}')
+            case r => throw TypeCastException('Type of ${TypeInfo.of(r)} does not match ${TypeInfo.of<T>()}')
         }
     }
     private static let recursiveInvocationFlag = ThreadLocal<Bool>()

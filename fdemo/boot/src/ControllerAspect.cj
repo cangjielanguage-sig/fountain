@@ -13,13 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package boot
+package fountain::boot
 
-import fountain.bean.*
-import fountain.bean.macros.*
-import fountain.aspect.*
-import fountain.aspect.macros.*
-import fountain.log.*
+import fountain::f_bean.*
+import fountain::f_bean.macros.*
+import fountain::f_aspect.*
+import fountain::f_aspect.macros.*
+import fountain::f_log.*
 
 @AspectRoute[ConfigExecutionRouteRule('controllerPointcut')]
 @Bean

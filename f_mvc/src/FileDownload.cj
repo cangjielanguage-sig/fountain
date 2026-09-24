@@ -13,7 +13,20 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_mvc
+package fountain::f_mvc
+
+import fountain::f_io.SyncByteBuffer
+
+public struct FileDownloadMeta {
+    public FileDownloadMeta(
+        let multi!: Bool = false,
+        let contentType!: String = "application/octet-stream",
+        let exec!: (FileDownload) -> Unit
+    ){}
+    func execute(): Unit {
+        FileDownload(multi: multi, contentType: contentType).exec(exec)
+    }
+}
 
 import f_io.SyncByteBuffer
 

@@ -13,15 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_data.path
+package fountain::f_data.path
 
-internal class NinFilter<T> <: DataFilter where T <: Hashable & Equatable<T> {
+internal class NinFilter<T> <: DataFilter where T <: Hashable & Equatable<T> & ToString {
     private let filter: InFilter<T>
-    init(left: DataPath, right: HashSet<T>) {
-        filter = InFilter<T>(left, right)
+    init(left: DataPath, right: HashSet<T>, hasNull: Bool) {
+        filter = InFilter<T>(left, right, hasNull)
     }
     init(left: String, right: String, solid: String) {
-        this(compilePath(left, solid), parseHashSet<T>(right))
+        this(compilePath(left, solid), parseHashSet<T>(right), DataFilter.containsNull(right))
     }
     public func check(data: Data): Bool {
         !filter.check(data)

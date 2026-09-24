@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_http
+package fountain::f_http
 
 public class ContentDisposition <: Equatable<ContentDisposition> & Equatable<Any> & Hashable & ToString {
     private static const US_ASCII = "US-ASCII"
@@ -315,7 +315,7 @@ public class ContentDisposition <: Equatable<ContentDisposition> & Equatable<Any
                             case Some(m) =>
                                 let _ = m.matchString(1) //charset
                                 let matched = m.matchString(2)
-                                filename = String.fromUtf8(fromBase64String(matched) ?? [])
+                                filename = String.unsafeUtf8(fromBase64String(matched) ?? [])
                             case _ => filename = value
                         }
                     } else {

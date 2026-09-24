@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_orm.wrap
+package fountain::f_orm.wrap
 
 public class NamedDatasource <: Datasource & Resource {
     public NamedDatasource(
@@ -22,8 +22,8 @@ public class NamedDatasource <: Datasource & Resource {
         private let datasource: Datasource
     ) {
         if (!optionSpecified) {
-            for ((k, v) in ORMConfig.getAllConfigs(driverName: driverName) where k.contains('_option_')) {
-                setOption(k[k.indexOf('_option_').getOrThrow() + '_option_'.size .. ], v)
+            for ((k, v) in ORMConfig.getAllConfigTuples(driverName: driverName)) {
+                setOption(k, v)
             }
         }
     }

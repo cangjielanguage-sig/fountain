@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_util
+package fountain::f_util
 
 import std.convert.Parsable
 import std.fs.{File, Directory, OpenMode}
@@ -23,12 +23,12 @@ import std.sync.{AtomicUInt16, AtomicInt64, Mutex}
 import std.time.{TimeZone, DateTime}
 import stdx.crypto.crypto.*
 import stdx.crypto.digest.{MD5, SHA1}
-import f_base.{HashBuilder, StringGenerator}
-import f_data.*
-import f_data.exception.DataException
-import f_exception.UnreachableException
-import f_random.*
-import f_util.exception.UUIDException
+import fountain::f_base.{HashBuilder, StringGenerator}
+import fountain::f_data.*
+import fountain::f_data.exception.DataException
+import fountain::f_exception.UnreachableException
+import fountain::f_random.*
+import fountain::f_util.exception.UUIDException
 
 /**
  * reference https://www.ietf.org/archive/id/draft-ietf-uuidrev-rfc4122bis-00.html
@@ -39,11 +39,12 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & 
         h = HashBuilder().append<Byte, Array<Byte>>(values).build()
     }
 
-    public func toData(): Data{
+    public func toData(): Data {
         toString().toData()
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match(data){
+            case x: DataAny => tryFromData(x.data, flag)
             case x: DataString => 
                 match(UUID.tryParse(x.data)){
                     case Some(x) => x
@@ -104,7 +105,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & 
         }
         BigInt(true, values).toString(radix: radix)
     }
-    public func toHexString() {
+    public func toHexString(): String {
         toString(false)
     }
     public prop version: Int64 {

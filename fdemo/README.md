@@ -1,3 +1,18 @@
+# 开始前的额外说明
+使用fountain开发不需要main函数，把使用fountain开发的项目初始化为workspace，每个模块都编译为动态链接库，即可启动。
+启动前：
+- 首先执行`cjpm install "fountain::fboot"=<a.b.c> --root </path/to/install>`
+- 然后在应用项目的workspace目录下执行`fboot build`
+- 最后执行`fboot run --dylibPattern=<匹配要加载的项目动态链接库文件名的正则表达式>`
+  - 只有文件名匹配这个正则表达式的动态链接库文件才会被加载
+  - 一般需要加载的动态链接库包含：
+    - controller包
+	- service.impl包
+	- 初始化包
+	  - 如果所有初始化都依赖脚本和环境变量，可以没有初始化包
+	  - 如果有额外初始化功能，而环境变量配置无法满足，就需要这样的初始化包（具体可以参考fdemo的boot包）
+    - 如果cron定时任务在单独的包，正则表达式也要包含这些定时任务的动态链接库
+	- `fdemo/boot.sh` 有相应的例子
 
 # 编译前的准备工作
 1. 把stdx的动态链接库路径指定为环境变量`CANGJIE_STDX_DYNAMIC_PATH`

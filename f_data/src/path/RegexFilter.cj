@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_data.path
+package fountain::f_data.path
 
 internal class RegexFilter <: DataFilter {
     private let regex: Regex
@@ -25,19 +25,19 @@ internal class RegexFilter <: DataFilter {
     init(left: String, regex: String, solid: String) {
         this(compilePath(left, solid), regex)
     }
-    private static func parseRegex(regex: String) {
+    private static func parseRegex(regex: String): Regex {
         if (!regex.startsWith('/')) {
             throw DataException('illegal regex ${regex}, regex must be format as /<REGEX>/ or /<REGEX>/i')
         }
-        if (regex.endsWith('/')) {
+        if (regex.endsWith('/i')) {
+            regex[1..regex.size - 2].regex(flags: [IgnoreCase])
+        } else if (regex.endsWith('/')) {
             regex[1..regex.size - 1].regex()
-        } else if (regex.endsWith('/i')) {
-            regex[1..regex.size - 1].regex(flags: [IgnoreCase])
         } else {
             throw DataException('illegal regex ${regex}, regex must be format as /<REGEX>/ or /<REGEX>/i')
         }
     }
-    public func check(data: Data) {
+    public func check(data: Data): Bool {
         let d = match (left.get(data).next()) {
             case Some(x) => x
             case _ => return false
