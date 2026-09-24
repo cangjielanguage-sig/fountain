@@ -40,7 +40,7 @@ exports(){
     export orm_useStdPool=false # 默认是true，表示使用标准库连接池，false是使用fountain连接池
     # export orm_drivers=mockdb,opengauss # 逗号分隔的驱动名称
     export orm_drivers=postgres
-    # orm_databasePool开头的是fountain.orm.DatabasePool的配置项
+    # orm_databasePool开头的是fountain::f_orm.DatabasePool的配置项
     export orm_databasePoolInitSize=1 # 初始连接数
     export orm_databasePoolMinSize=1 # 最小连接数
     export orm_databasePoolMaxSize=1 # 最大连接数
