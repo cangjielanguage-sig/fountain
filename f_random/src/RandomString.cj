@@ -51,6 +51,9 @@ public class RandomString {
     private static let ALL_LETTERS_AND_NUMBERS = concat(ALL_LETTERS, NUMBERS)
     private static let ALL_PRINTABLE_ASCIIS = concat(ALL_LETTERS_AND_NUMBERS,
         "`~!@#$%^&*()-_=+[{]}\\|'\";:/?.>,<".toRuneArray())
+    private static let LOWER_HEX = '0123456789abcdef'
+    private static let UPPER_HEX = '0123456789ABCDEF'
+
     //utf32规范认为0~10ffff足够表示所有字符；d800~dfff不在utf32范围内，这部分是utf16特殊字符，需要前面一半数做高位，后面一半数做低位组合成一个字符，utf32没有使用这一段。
     //已经试过Rune(0xd800u32) Rune(0xdc00u32) Rune((0xd800u32 << 16) | 0xdc00u32)，都会出编译错误
     private static let ALL_CHARS = [(UInt32(0x0000), UInt32(0xD7FF)), (UInt32(0xE000), UInt32(0x10FFFF))]
@@ -109,6 +112,19 @@ public class RandomString {
     }
     public func randomNumbers(min: Int64, max: Int64): String {
         randomNumbers(rand.nextInt64(min, max))
+    }
+
+    public func randomLowerHex(count: Int64): String {
+        random(count, LOWER_HEX)
+    }
+    public func randomLowerHex(min: Int64, max: Int64): String {
+        randomLowerHex(rand.nextInt64(min, max))
+    }
+    public func randomUpperHex(count: Int64): String {
+        random(count, UPPER_HEX)
+    }
+    public func randomUpperHex(min: Int64, max: Int64): String {
+        randomUpperHex(rand.nextInt64(min, max))
     }
 
     public func randomLowerLettersNumbers(count: Int64): String {

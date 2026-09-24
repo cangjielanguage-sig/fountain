@@ -2005,6 +2005,8 @@ public abstract class SqlDialect {
 
 编译环境和运行环境的敏感信息配置项完全一致。
 
+以下需要16进制串的情形可以使用命令：`fboot randhex 16`
+
 ### 加密配置项
 ```bash
 export orm_sm4Operation='CBC' # CBC CFB CTR GCM OFB，默认CBC。ECB被文档标记为不安全，没有给予支持

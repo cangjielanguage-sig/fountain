@@ -571,16 +571,17 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
 10. fboot build 编译使用fountain开发的应用项目
 11. fboot count 数当前目录的仓颉代码模块数、包数、文件数、行数、计数耗时
 12. fboot pub <version> 发布当前路径下的仓颉模块
+13. fboot randhex n 生成n位随机16进制数，eg. fboot randhex 16
 ==============下面的命令用来管理fountain本身===================
-13. fboot version x.y.z 用指定版本号替换cjpm.toml和App.cj的版本号，并提交且推送当前全部修改
+14. fboot version x.y.z 用指定版本号替换cjpm.toml和App.cj的版本号，并提交且推送当前全部修改
     - fboot version x.y.z
     - fboot version x.y.z '提交的内容'，以指定内容执行git commit
     - fboot version x.y.z tag，除了替换版本号，还会用指定的版本号创建tag：release-x.y.z
     - fboot version x.y.z tag '版本消息'，除了替换版本号，还会以'版本消息'创建附注tag
     - fboot version x.y.z '提交的内容' tag
     - fboot version x.y.z '提交的内容' tag '版本消息'
-14. fboot version 显示当前fountain版本号
-15. fboot help 显示命令列表
+15. fboot version 显示当前fountain版本号
+16. fboot help 显示命令列表
 '''
         stdOut.writeln(content)
         0
