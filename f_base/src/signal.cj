@@ -110,6 +110,10 @@ public func resetAndRegisterSignalHandler(_: Array<Signal>, _: (Int32) -> Bool):
 @When[os == "Windows"]
 public func resetAndRegisterSignalHandler(_: Signal, _: () -> Bool): Unit {}
 @When[os == "Windows"]
+public func registerSignalHandler(_: Signal, _: SignalHandlerFunc): Unit{}
+@When[os == "Windows"]
+public func resetSignalHandler(_: Array<Signal>): Unit{}
+@When[os == "Windows"]
 public class Signal {
     public static const SIGHUP = Signal(0x1, "hangup")
     public static const SIGINT = Signal(0x2, "interrupt")
@@ -119,3 +123,5 @@ public class Signal {
     public static const SIGTERM = Signal(0xf, "terminated")
     public const Signal(public let value: Int32, public let comment: String){}
 }
+@When[os == "Windows"]
+public type SignalHandlerFunc = (Int32) -> Bool
