@@ -19,8 +19,7 @@ import std.collection.{TreeMap, ArrayList}
 import std.env.exit
 import std.sync.Mutex
 
-@When[os != "Windows"]
-public import std.runtime.{registerSignalHandler, resetSignalHandler, Signal}
+public import std.runtime.*
 
 @When[os != "Windows"]
 public struct ExitCallbacks {
