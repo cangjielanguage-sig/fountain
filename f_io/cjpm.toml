@@ -8,7 +8,7 @@
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"
   description = "IO模块"
-  link-option = "-latomic"
+#  link-option = "-latomic"
   name = "f_io"
   organization="fountain"
   output-type = "dynamic"

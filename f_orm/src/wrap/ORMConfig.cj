@@ -93,6 +93,13 @@ public class ORMConfig {
     public static func getConverter<D, T>(name: String): (D) -> T {
         (converterMap[name] as (D) -> T).getOrThrow()
     }
+    private static func sensitive2Str(bytes: Array<Byte>){
+        if(let Some(sm4) <- getSM4()){
+            bytes |> sm4.decrypt
+        }else{
+            bytes
+        } |> String.fromUtf8
+    }
     private static func getSensitive(driverName: String, key: String): String {
         let bytes = if(let Some(bytes) <- sensitiveMap.remove(key)){
             bytes
@@ -103,11 +110,8 @@ public class ORMConfig {
         }
         if(bytes.size == 0){
             return ''
-        }else if(let Some(sm4) <- getSM4()){
-            bytes |> sm4.decrypt
-        }else{
-            bytes
-        } |> String.fromUtf8
+        }
+        sensitive2Str(bytes)
     }
     public static func genKey(driverName: String, suffix: String): String {
         '${driverName}_${suffix}'
@@ -120,6 +124,19 @@ public class ORMConfig {
                 confMap[k.replace(genKey(driverName, ''), '')] = v
             }
         }
+        for((k, v) in sensitiveMap){
+            let kk = if(let p <- genKey(driverName, '') && k.startsWith(p)){
+                 k.replace(p, '')
+            }else if(k.startsWith(genKey(confPrefix, ''))){
+                k
+            }else{
+                continue
+            }
+            let view = confMap.entryView(kk)
+            if(view.value.isNone()){
+                view.value = sensitive2Str(v)
+            }
+        }
         confMap
     }
     private static func getAllConfigTupleIterator(driverName: String): Iterator<(String, String)>{
@@ -127,21 +144,13 @@ public class ORMConfig {
             var key = tpl[0]
             key = key[key.indexOf(ormOption).getOrThrow() + ormOption.size ..]
             (key, tpl[1])
-        }.concat(sensitiveMap.iterator().filter{tpl => tpl[0].endsWith(genKey(ormOption, SqlOption.Password).replace('__', '_')) || tpl[0].endsWith(genKey(ormOption, SqlOption.Username).replace('__', '_'))}.map{tpl => 
-            var key = tpl[0]
-            key = key[key.indexOf(ormOption).getOrThrow() + ormOption.size ..]
-            var value = tpl[1]
-            if(let Some(sm4) <- getSM4()){
-                value = sm4.decrypt(value)
-            }
-            (key, String.fromUtf8(value))
-        })
+        }
     }
     public static func getAllConfigTuples(driverName!: String = String.empty): Array<(String, String)> {
         getAllConfigTupleIterator(driverName).toArray()
     }
     public static func getOption(option: String, driverName!: String = String.empty): ?String {
-        getAllConfigTupleIterator(driverName).filter{tpl => tpl[0] == option}.map{tpl => tpl[1]}.first()
+        getAllConfigs(driverName: driverName).get('${ormOption}${option}')
     }
     public static func getUsername(driverName!: String = String.empty): ?String {
         getOption(SqlOption.Username, driverName: driverName)

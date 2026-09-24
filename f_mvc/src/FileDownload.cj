@@ -28,19 +28,6 @@ public struct FileDownloadMeta {
     }
 }
 
-import f_io.SyncByteBuffer
-
-public struct FileDownloadMeta {
-    public FileDownloadMeta(
-        let multi!: Bool = false,
-        let contentType!: String = "application/octet-stream",
-        let exec!: (FileDownload) -> Unit
-    ){}
-    func execute(): Unit {
-        FileDownload(multi: multi, contentType: contentType).exec(exec)
-    }
-}
-
 public class FileDownload {
     private static let random = RandomString()
     private let responseBuilder: HttpResponseBuilder
