@@ -32,13 +32,13 @@ public macro EmbedSensitive(_: Tokens): Tokens {
             ''
         }
         if(url.size > 0){
-            tokens += `nl` + str2bytesTokens(d, ORMConfig.connectionUrl, url)
+            tokens += str2bytesTokens(d, ORMConfig.connectionUrl, url)
         }
-        if(let Some(u) <- ORMConfig.getUsername()){
-            tokens += `nl` + str2bytesTokens(d, ORMConfig.genKey(ORMConfig.ormOption, SqlOption.Username).replace("__", '_'), u)
+        if(let Some(u) <- ORMConfig.getUsername(driverName: d) && u.size > 0){
+            tokens += str2bytesTokens(d, ORMConfig.genKey(ORMConfig.ormOption, SqlOption.Username).replace("__", '_'), u)
         }
-        if(let Some(p) <- ORMConfig.getPassword()){
-            tokens += `nl` + str2bytesTokens(d, ORMConfig.genKey(ORMConfig.ormOption, SqlOption.Password).replace("__", '_'), p)
+        if(let Some(p) <- ORMConfig.getPassword(driverName: d) && p.size > 0){
+            tokens += str2bytesTokens(d, ORMConfig.genKey(ORMConfig.ormOption, SqlOption.Password).replace("__", '_'), p)
         }
     }
     let sm4conf = ORMConfig.sm4conf

@@ -152,7 +152,9 @@ public class ORMConfig {
         getAllConfigTupleIterator(driverName).toArray()
     }
     public static func getOption(option: String, driverName!: String = String.empty): ?String {
-        getAllConfigs(driverName: driverName).get('${ormOption}${option}')
+        let key = '${ormOption}${option}'
+        let val = getAllConfigs(driverName: driverName).get(key)
+        val
     }
     public static func getUsername(driverName!: String = String.empty): ?String {
         getOption(SqlOption.Username, driverName: driverName)
@@ -203,15 +205,21 @@ public class ORMConfig {
         getDriverNames().map{d => getDriver(d)}
     }
     public static func getUrl(driverName!: String = String.empty): String {
-        if(let url <- getSensitive(driverName, connectionUrl) && url.size > 0){
-            return url
+        if(driverName.size > 0){
+            match (getConf(driverName: driverName, key: connectionUrl)) {
+                case Some(x) where x.size > 0 => return x
+                case _ => if(let Some(bytes) <- sensitiveMap.get(genKey(driverName, connectionUrl))){
+                    return sensitive2Str(bytes)
+                }
+            }
         }
-        match (getConf(driverName: driverName, key: connectionUrl)) {
-            case Some(x) => x
-            case _ where !driverName.isEmpty() => getUrl()
-            case _ => throw ORMException(
-                "connection url for ${driverName} is not be configed, config which key is ${genKey(driverName, connectionUrl)} or ${connectionUrl} must be specified")
+        match (getConf(driverName: '', key: connectionUrl)) {
+            case Some(x) where x.size > 0 => return x
+            case _ => if(let Some(bytes) <- sensitiveMap.get(connectionUrl)){
+                return sensitive2Str(bytes)
+            }
         }
+        throw ORMException("connection url for ${driverName} is not be configed, config which key is ${genKey(driverName, connectionUrl)} or ${connectionUrl} must be specified")
     }
     private static func get<T>(driverName!: String = String.empty, key!: String, default!: T): T where T <: Parsable<T> {
         match (getConf(driverName: driverName, key: key)) {

@@ -19,7 +19,7 @@
   version = "1.1.0"
   organization = "fountain"
   description = "demo for how to develop by fountain "
-  members=["./boot", "./user"]
+  members=["./boot", "./user", "./fdemo_stAtIc__"]
   compile-option = "-O2 --dy-std -Woff unused --debug-macro"
   override-compile-option = "-O2 --dy-std -Woff unused --debug-macro"
 
