@@ -41,7 +41,7 @@ public macro EmbedSensitive(_: Tokens): Tokens {
             tokens += `nl` + str2bytesTokens(d, ORMConfig.genKey(ORMConfig.ormOption, SqlOption.Password).replace("__", '_'), p)
         }
     }
-    let sm4conf = SM4Conf()
+    let sm4conf = ORMConfig.sm4conf
     quote(
         $tokens
             ORMConfig.registerSensitive(ORMConfig.sm4Operation, $(sm4conf.operation.toArray()))
