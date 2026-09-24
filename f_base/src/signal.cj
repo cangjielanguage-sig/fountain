@@ -19,6 +19,7 @@ import std.collection.{TreeMap, ArrayList}
 import std.env.exit
 import std.sync.Mutex
 
+@When[os != "Windows"]
 public import std.runtime.{registerSignalHandler, resetSignalHandler, Signal}
 
 @When[os != "Windows"]
