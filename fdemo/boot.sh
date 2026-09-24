@@ -92,9 +92,11 @@ perfReport(){
 build(){
     export CANGJIE_STDX_PATH=$CANGJIE_STDX_DYNAMIC_PATH
 
+    export orm_drivers=postgres
     # 以下是数据库敏感信息，此处仅做演示，实际使用时最好不要暴露在项目代码中
     # connectionUrl username password 这些配置如果在编译环境配置就会作为被嵌入编译产物。如果在运行环境配置就会在进程启动时加载
     # 如果配置了密钥就会把敏感信息加密后的字节数组嵌入编译产物，否则会把这些字符串的UTF8字节数组嵌入编译产物
+    # 运行期的配置优先级高于编译期的
     export postgres_orm_connectionUrl=$POSTGRES
     # export postgres_orm_username= # 用户名密码可以放到connectionUrl中，POSTGRES是环境变量，已包含用户名和密码
     # export postgres_orm_password=

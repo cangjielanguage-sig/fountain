@@ -84,7 +84,7 @@ public class SegmentedLog <: Resource {
     private var file: File
     private var curPath: String
     @When[os == "Linux"]
-    private var mmapPtr: CPointer<Byte>
+    private var mmapPtr: CPointer<Byte> = CPointer<Byte>()
 
     // 状态
     private let seq: AtomicInt64
@@ -114,7 +114,7 @@ public class SegmentedLog <: Resource {
         this.oldFilesLock = Mutex()
         this.appendLock = Mutex()
         // Linux: ftruncate + fallocate + mmap，非 Linux 返回 null
-        this.mmapPtr = initFileMapping(this.file, config.maxFileSize)
+        initFileMapping(this, config.maxFileSize)
     }
     /** 从指定路径创建。rotate() 仍使用 config 生成新文件路径 */
     public init(config: LogConfig, initPath: String) {
@@ -133,7 +133,7 @@ public class SegmentedLog <: Resource {
         this.oldFiles = ArrayList<String>()
         this.oldFilesLock = Mutex()
         this.appendLock = Mutex()
-        this.mmapPtr = initFileMapping(this.file, config.maxFileSize)
+        initFileMapping(this, config.maxFileSize)
     }
 
     /** 追加数据到当前 segment。返回 (segment 序号, 段内偏移) */
@@ -246,7 +246,7 @@ public class SegmentedLog <: Resource {
         let newPath = "${config.dir}/${config.filePrefix}_${newSeq}${config.fileExt}"
         this.file = File(newPath, OpenMode.ReadWrite)
         this.curPath = newPath
-        this.mmapPtr = initFileMapping(this.file, config.maxFileSize)
+        initFileMapping(this, config.maxFileSize)
         this.currentSize.store(0)
         this.appendCount.store(0)
     }
@@ -279,19 +279,17 @@ public class SegmentedLog <: Resource {
 
     /** Linux: ftruncate + fallocate + mmap。非 Linux: 返回 null */
     @When[os == "Linux"]
-    private static func initFileMapping(file: File, size: Int64): CPointer<Byte> {
-        let fd = file.fileDescriptor.fileHandle
+    private static func initFileMapping(segmlog: SegmentedLog, size: Int64): Unit {
+        let fd = segmlog.file.fileDescriptor.fileHandle
         unsafe { ftruncate(Int32(fd), size) }
         unsafe { fallocate(Int32(fd), 0, 0, size) }
         let protBits = [MMapProt.Read, MMapProt.Write].combine()
         unsafe {
-            CPointer<Byte>(mmap(nullptr, UIntNative(size), protBits, MMapFlag.Shared.value, fd, IntNative(0)))
+            segmlog.mmapPtr = CPointer<Byte>(mmap(nullptr, UIntNative(size), protBits, MMapFlag.Shared.value, fd, IntNative(0)))
         }
     }
     @When[os != "Linux"]
-    private static func initFileMapping(_: File, _: Int64): CPointer<Byte> {
-        CPointer<Byte>()
-    }
+    private static func initFileMapping(_: SegmentedLog, _: Int64): Unit {}
 
     /** Linux: munmap。非 Linux: 空操作 */
     @When[os == "Linux"]

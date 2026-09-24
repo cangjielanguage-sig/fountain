@@ -125,7 +125,7 @@ public class ORMConfig {
             }
         }
         for((k, v) in sensitiveMap){
-            let kk = if(let p <- genKey(driverName, '') && k.startsWith(p)){
+            let kk = if(driverName.size > 0 && let p <- genKey(driverName, '') && k.startsWith(p)){
                  k.replace(p, '')
             }else if(k.startsWith(genKey(confPrefix, ''))){
                 k
@@ -391,19 +391,16 @@ public class ORMConfig {
     }
 
     public static func getSM4(): ?SM4 {
-        let operation = Config.getString(sm4Operation) ?? 'CBC'
-        let padding = Config.getString(sm4Padding) ?? 'PKCS7Padding'
-        let key = if(let Some(k) <- ((Config.getString(sm4Key) ?? '') |> fromHexString)){
-            k
-        }else{
-            throw IllegalArgumentException("orm config item ${sm4Key} is not a legal hex string")
-        }
+        let sm4conf = SM4Conf()
+        let key = sm4conf.key
         if(key.isEmpty()){
             return None<SM4>
         }
-        let iv = ((Config.getString(sm4Iv) ?? '') |> fromHexString).getOrThrow{IllegalArgumentException("orm config item ${sm4Iv} is not a legal hex string")}
-        let aad = ((Config.getString(sm4Aad) ?? '') |> fromHexString).getOrThrow{IllegalArgumentException("orm config item ${sm4Aad} is not a legal hex string")}
-        let tagSize = Config.getValue<Int64>(sm4TagSize) ?? 16
+        let iv = sm4conf.iv
+        let aad = sm4conf.aad
+        let operation = sm4conf.operation
+        let padding = sm4conf.padding
+        let tagSize = sm4conf.tagSize
         SM4(match(operation){
             case 'CBC' => OperationMode.CBC
             case 'CFB' => OperationMode.CFB
@@ -419,5 +416,43 @@ public class ORMConfig {
     }
     public static func registerSensitive(key: String, value: Array<Byte>): Unit {
         sensitiveMap[key] = value
+    }
+}
+protected class SM4Conf{
+    protected init(){}
+    private let configs = ORMConfig.getAllConfigs()
+    protected prop operation: String {
+        get(){
+            return configs.get(ORMConfig.sm4Operation) ?? 'CBC'
+        }
+    }
+    protected prop padding: String {
+        get(){
+            return configs.get(ORMConfig.sm4Padding) ?? 'PKCS7Padding'
+        }
+    }
+    protected prop key: Array<Byte> {
+        get(){
+            if(let Some(k) <- ((configs.get(ORMConfig.sm4Key) ?? '') |> fromHexString)){
+                k
+            }else{
+                throw IllegalArgumentException("orm config item ${ORMConfig.sm4Key} is not a legal hex string")
+            }
+        }
+    }
+    protected prop iv: Array<Byte> {
+        get(){
+            ((configs.get(ORMConfig.sm4Iv) ?? '') |> fromHexString).getOrThrow{IllegalArgumentException("orm config item ${ORMConfig.sm4Iv} is not a legal hex string")}
+        }
+    }
+    protected prop aad: Array<Byte> {
+        get(){
+            ((configs.get(ORMConfig.sm4Aad) ?? '') |> fromHexString).getOrThrow{IllegalArgumentException("orm config item ${ORMConfig.sm4Aad} is not a legal hex string")}
+        }
+    }
+    protected prop tagSize: Int64 {
+        get(){
+            (configs.get(ORMConfig.sm4TagSize) ?? '16') |> Int64.parse
+        }
     }
 }
