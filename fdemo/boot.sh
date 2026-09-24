@@ -72,7 +72,7 @@ exports(){
     export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*ServiceImpl.register*(**): *"
     export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*.userSession(**): *"
     # export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*.sayHello(**): *"
-    export postgres_orm_connectionUrl=$POSTGRES
+    
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`find ./fdemo/release/* -type d|grep -a -v -P '\.build-logs|bin|_stAtIc__|boot'|tr '\n' ':'`
     echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
 }
@@ -91,6 +91,17 @@ perfReport(){
 }
 build(){
     export CANGJIE_STDX_PATH=$CANGJIE_STDX_DYNAMIC_PATH
+
+    # 以下是数据库敏感信息，此处仅做演示，实际使用时最好不要暴露在项目代码中
+    # connectionUrl username password 这些配置如果在编译环境配置就会作为被嵌入编译产物。如果在运行环境配置就会在进程启动时加载
+    # 如果配置了密钥就会把敏感信息加密后的字节数组嵌入编译产物，否则会把这些字符串的UTF8字节数组嵌入编译产物
+    export postgres_orm_connectionUrl=$POSTGRES
+    # export postgres_orm_username= # 用户名密码可以放到connectionUrl中，POSTGRES是环境变量，已包含用户名和密码
+    # export postgres_orm_password=
+    export orm_sm4Key=a95470d1edcbacfa051ee45497e285a7
+    export orm_sm4Iv=4ed405ff709bee56191b5fd8587b1e3a
+    # 以上是敏感信息
+
     fboot build $path $args
     echo -e '\a'
 }
