@@ -19,7 +19,8 @@ import std.collection.{TreeMap, ArrayList}
 import std.env.exit
 import std.sync.Mutex
 
-public import std.runtime.*
+@When[os != "Windows"]
+public import std.runtime.{registerSignalHandler, resetSignalHandler, Signal}
 
 @When[os != "Windows"]
 public struct ExitCallbacks {
@@ -108,3 +109,13 @@ public func resetAndRegisterSignalHandler(_: Array<Signal>, _: () -> Bool): Unit
 public func resetAndRegisterSignalHandler(_: Array<Signal>, _: (Int32) -> Bool): Unit {}
 @When[os == "Windows"]
 public func resetAndRegisterSignalHandler(_: Signal, _: () -> Bool): Unit {}
+@When[os == "Windows"]
+public class Signal {
+    public static const SIGHUP = Signal(0x1, "hangup")
+    public static const SIGINT = Signal(0x2, "interrupt")
+    public static const SIGQUIT = Signal(0x3, "quit")
+    public static const SIGTRAP = Signal(0x5, "trace/breakpoint trap")
+    public static const SIGALRM = Signal(0xe, "alarm clock")
+    public static const SIGTERM = Signal(0xf, "terminated")
+    public const Signal(public let value: Int32, public let comment: String){}
+}
