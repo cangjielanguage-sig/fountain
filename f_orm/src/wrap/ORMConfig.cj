@@ -382,9 +382,9 @@ public class ORMConfig {
     }
 
     public static func getSM4(): ?SM4 {
-        let operation = Config.getString(sm4Operation) ?? return None<SM4>
+        let operation = Config.getString(sm4Operation) ?? 'CBC'
         let padding = Config.getString(sm4Padding) ?? 'PKCS7Padding'
-        let key = if( let Some(k) <- ((Config.getString(sm4Key) ?? '') |> fromHexString)){
+        let key = if(let Some(k) <- ((Config.getString(sm4Key) ?? '') |> fromHexString)){
             k
         }else{
             throw IllegalArgumentException("orm config item ${sm4Key} is not a legal hex string")
