@@ -518,6 +518,12 @@ public interface RootDAO {
     public AVG(column: Column): Column {
         Column('avg(${column.name})')
     }
+    public MAX(column: Column): Column {
+        Column('max(${column.name})')
+    }
+    public MIN(column: Column): Column {
+        Column('min(${column.name})')
+    }
 
     func SET(partial: () -> String): String {
         Condition.SET(partial)
