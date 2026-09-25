@@ -28,7 +28,7 @@ public import fountain::f_data.*
 public import fountain::f_orm.wrap.ORMConfig
 
 import fountain::f_orm.macros.EmbedSensitive
-@EmbedSensitive(_)
+@EmbedSensitive()
 
 func emptyLogicalExpr(cond: String): Bool {
     #'^[\s()]*$'#.regex(solid: true).matches(cond)
