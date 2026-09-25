@@ -506,22 +506,22 @@ public interface RootDAO {
         ParenExpr(RelationExpr(RelationOp.NOT, [exprs()]))
     }
 
-    public COUNT(): Column {
+    func COUNT(): Column {
         Column('count(*)')
     }
-    public COUNT(column: Column): Column {
+    func COUNT(column: Column): Column {
         Column('count(${column.name})')
     }
-    public SUM(column: Column): Column {
+    func SUM(column: Column): Column {
         Column('sum(${column.name})')
     }
-    public AVG(column: Column): Column {
+    func AVG(column: Column): Column {
         Column('avg(${column.name})')
     }
-    public MAX(column: Column): Column {
+    func MAX(column: Column): Column {
         Column('max(${column.name})')
     }
-    public MIN(column: Column): Column {
+    func MIN(column: Column): Column {
         Column('min(${column.name})')
     }
 

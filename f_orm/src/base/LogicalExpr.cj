@@ -167,10 +167,13 @@ public class RelationExpr <: LogicalExpr & ToString {
             }
         }else{
             for(expr in exprs){
-                if(builder.size > 0){
+                let exprstr = expr.toString()
+                if(emptyLogicalExpr(exprstr)){
+                    continue
+                }else if(builder.size > 0){
                     builder.append(op)
                 }
-                builder.append(' ').append(expr).append(' ')
+                builder.append(' ').append(exprstr).append(' ')
             }
         }
         return builder.toString()

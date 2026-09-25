@@ -42,7 +42,7 @@ abstract sealed class TableClause<T> <: ToString where T <: QueryMappersInit<T> 
         }else{
             '^(\\s*${trim}\\s*)|(\\s*${trim}\\s*)$'.regex(flags: [IgnoreCase], solid: true).replaceAll(partial, '')
         }
-        if(sql.size > 0){
+        if(emptyLogicalExpr(sql)){
             sqlgen.append(' ').append(keyword).append(' ').append(sql).append(' ')
         }
         this
@@ -141,9 +141,6 @@ public abstract class ExceptInsertClause<T> <: TableClause<T> where T <: QueryMa
     }
     public func WHERE(condition: LogicalExpr): This {
         let cond = condition.toString().trimAscii()
-        if(cond.isEmpty() || cond == '()' || cond == '( )'){
-            return this
-        }
         WHERE(cond)
     }
     public func WHERE(condition: () -> LogicalExpr): This {
