@@ -1087,6 +1087,17 @@ executor.FROM<UserPO>().WHERE(
     .page<UserPO>(100, page: 1)
 ```
 
+### 10.5 常用函数
+现在支持COUNT、SUM、AVG、MAX、MIN，它们都是RootDAO的实例成员，可以直接在继承了RootDAO的DAO接口中调用。
+```cj
+func COUNT(): Column // COUNT(*)
+func COUNT(column: Column): Column
+func SUM(column: Column): Column
+func AVG(column: Column): Column
+func MAX(column: Column): Column
+func MIN(column: Column): Column
+```
+
 ---
 
 ## 11. 条件构造器
