@@ -505,6 +505,20 @@ public interface RootDAO {
     func NOT(exprs: () -> LogicalExpr): LogicalExpr {
         ParenExpr(RelationExpr(RelationOp.NOT, [exprs()]))
     }
+
+    public COUNT(): Column {
+        Column('count(*)')
+    }
+    public COUNT(column: Column): Column {
+        Column('count(${column.name})')
+    }
+    public SUM(column: Column): Column {
+        Column('sum(${column.name})')
+    }
+    public AVG(column: Column): Column {
+        Column('avg(${column.name})')
+    }
+
     func SET(partial: () -> String): String {
         Condition.SET(partial)
     }
