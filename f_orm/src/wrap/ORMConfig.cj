@@ -477,17 +477,14 @@ protected struct SM4Conf{
     protected prop iv: Array<Byte> {
         get(){
             if(let Some(bytes) <- getBytes(ORMConfig.sm4Iv) && bytes.size > 0){
-                if(bytes.size == 16){
-                    bytes
-                }else{
-                    throw IllegalArgumentException("orm config item ${ORMConfig.sm4Iv} is not a legal hex string or is not be specified or its size is not 16")
+                match(operation){
+                    case 'CBC' | 'OFB' | 'CFB' where bytes.size != 16 => throw IllegalArgumentException("size 16 of orm config item ${ORMConfig.sm4Iv} is suggested for OperationMode.CBC, OperationMode.OFB and OperationMode.CFB.")
+                    case 'GCM' where bytes.size != 12 => throw IllegalArgumentException("size 12 of orm config item ${ORMConfig.sm4Iv} is suggested for OperationMode.GCM")
+                    case _ => throw IllegalArgumentException("${operation} is not a legal sm4 OperationMode, and ECB is not safe to use, so it is not supported.")
                 }
+                bytes
             }else{
-                let k = this.key
-                let s = k.size
-                Array<Byte>(s){i => 
-                    !k[s - i - 1]
-                }
+                throw IllegalArgumentException("orm config item ${ORMConfig.sm4Iv} is not a legal hex string or is not be specified or its size is zero.")
             }
         }
     }
