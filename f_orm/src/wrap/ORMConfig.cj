@@ -467,19 +467,27 @@ protected struct SM4Conf{
     }
     protected prop key: Array<Byte> {
         get(){
-            if(let Some(bytes) <- getBytes(ORMConfig.sm4Key) && bytes.size > 0){
+            if(let Some(bytes) <- getBytes(ORMConfig.sm4Key) && bytes.size == 16){
                 bytes
             }else{
-                throw IllegalArgumentException("orm config item ${ORMConfig.sm4Key} is not a legal hex string or is not be specified")
+                throw IllegalArgumentException("orm config item ${ORMConfig.sm4Key} is not a legal hex string or is not be specified or its size is not 16")
             }
         }
     }
     protected prop iv: Array<Byte> {
         get(){
             if(let Some(bytes) <- getBytes(ORMConfig.sm4Iv) && bytes.size > 0){
-                bytes
+                if(bytes.size == 16){
+                    bytes
+                }else{
+                    throw IllegalArgumentException("orm config item ${ORMConfig.sm4Iv} is not a legal hex string or is not be specified or its size is not 16")
+                }
             }else{
-                throw IllegalArgumentException("orm config item ${ORMConfig.sm4Iv} is not a legal hex string or is not be specified")
+                let k = this.key
+                let s = k.size
+                Array<Byte>(s){i => 
+                    !k[s - i - 1]
+                }
             }
         }
     }
