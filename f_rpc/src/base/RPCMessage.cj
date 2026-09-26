@@ -54,6 +54,20 @@ public class RPCMessage {
     public static func clearCurrentTrace(): Unit {
         currentTrace_.set(None)
     }
+    private static func build<T>(fn: String, data: T): RPCMessage where T <: ToData {
+        let meta = ServiceMeta('0.0.0', '', '', fn, [TypeInfo.of<T>().qualifiedName], exactlyVersion: true)
+        let args: Array<DataAny> = [DataAny(data.toData())]
+        RPCMessage(meta, args)
+    }
+    protected static func registerMessage(msg: String): RPCMessage {
+        build<String>('register', msg)
+    }
+    protected static func deregisterMessage(msg: UInt16): RPCMessage {
+        build<UInt16>('deregister', msg)
+    }
+    protected static func subscribe(msg: Bool): RPCMessage {
+        build<Bool>('subscribe', msg)
+    }
 }
 @DataAssist[fields props hash equal]
 public class ServiceMeta {

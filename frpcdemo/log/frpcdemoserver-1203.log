@@ -1,0 +1,233 @@
+[ERROR-fountain::f_net.client.Client]2026/09/26,12:08:04.928054658|232;Client reader error; None
+An exception has occured:
+IllegalArgumentException: no readable byte in InputStream
+        at ._CN27fountain:f_protocol.default7Message6decodeIG_HCNah11InputStreamE.exception_outlined_func(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_net.client.Client::init::lambda.0::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/client/client.cj: 46)
+[WARN-fountain::f_net.server.Server]2026/09/26,12:08:05.890785508|240;TcpSocket.check
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.TcpSocket::remoteAddress::get()(std/net/tcp.cj: 0)
+        at fountain::f_net.SocketBuffer::remoteAddress::get()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 97)
+        at fountain::f_net.server.Server<...>::init::lambda.1::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/server/server.cj: 56)
+[ERROR-fountain::f_net.client.Client]2026/09/26,12:08:06.912422073|242;Client reader error None:None
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.DopraTcpSocketImpl::read(std.core::Array<...>, std.core::Option<...>)(std/net/socket_ffi_cjnative_impl.cj: 435)
+        at std.net.TcpSocket::read(std.core::Array<...>)(std/net/tcp.cj: 305)
+        at fountain::f_net.SocketBuffer::read(std.core::Array<...>)(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 67)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 149)
+        at fountain::f_net.client.Client::init::lambda.1::new::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/client/client.cj: 82)
+[WARN-fountain::f_net.server.Server]2026/09/26,12:08:06.912569564|244;error occurred on reading or executing
+An exception has occured:
+IllegalArgumentException: no readable byte in InputStream
+        at ._CN27fountain:f_protocol.default7Message6decodeIG_HCNah11InputStreamE.exception_outlined_func(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_net.server.Server<...>::start::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/server/server.cj: 125)
+[WARN-fountain::f_net.server.Server]2026/09/26,12:08:07.885688613|259;TcpSocket.check
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.TcpSocket::remoteAddress::get()(std/net/tcp.cj: 0)
+        at fountain::f_net.SocketBuffer::remoteAddress::get()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 97)
+        at fountain::f_net.server.Server<...>::init::lambda.1::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/server/server.cj: 56)
+[WARN-fountain::f_net.server.Server]2026/09/26,12:08:07.905849932|254;error occurred on reading or executing
+An exception has occured:
+IllegalArgumentException: no readable byte in InputStream
+        at ._CN27fountain:f_protocol.default7Message6decodeIG_HCNah11InputStreamE.exception_outlined_func(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_net.server.Server<...>::start::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/server/server.cj: 125)
+[ERROR-fountain::f_net.client.Client]2026/09/26,12:08:07.905749047|252;Client reader error None:None
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.DopraTcpSocketImpl::read(std.core::Array<...>, std.core::Option<...>)(std/net/socket_ffi_cjnative_impl.cj: 435)
+        at std.net.TcpSocket::read(std.core::Array<...>)(std/net/tcp.cj: 305)
+        at fountain::f_net.SocketBuffer::read(std.core::Array<...>)(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 67)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 149)
+        at fountain::f_net.client.Client::init::lambda.1::new::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/client/client.cj: 82)
+[WARN-fountain::f_net.server.Server]2026/09/26,12:08:08.889068328|269;TcpSocket.check
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.TcpSocket::remoteAddress::get()(std/net/tcp.cj: 0)
+        at fountain::f_net.SocketBuffer::remoteAddress::get()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 97)
+        at fountain::f_net.server.Server<...>::init::lambda.1::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/server/server.cj: 56)
+[ERROR-fountain::f_net.client.Client]2026/09/26,12:08:08.899703742|262;Client reader error None:None
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.DopraTcpSocketImpl::read(std.core::Array<...>, std.core::Option<...>)(std/net/socket_ffi_cjnative_impl.cj: 435)
+        at std.net.TcpSocket::read(std.core::Array<...>)(std/net/tcp.cj: 305)
+        at fountain::f_net.SocketBuffer::read(std.core::Array<...>)(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 67)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 149)
+        at fountain::f_net.client.Client::init::lambda.1::new::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/client/client.cj: 82)
+[WARN-fountain::f_net.server.Server]2026/09/26,12:08:08.899898372|264;error occurred on reading or executing
+An exception has occured:
+IllegalArgumentException: no readable byte in InputStream
+        at ._CN27fountain:f_protocol.default7Message6decodeIG_HCNah11InputStreamE.exception_outlined_func(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_net.server.Server<...>::start::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/server/server.cj: 125)
+[WARN-fountain::f_net.server.Server]2026/09/26,12:08:09.883828706|279;TcpSocket.check
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.TcpSocket::remoteAddress::get()(std/net/tcp.cj: 0)
+        at fountain::f_net.SocketBuffer::remoteAddress::get()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 97)
+        at fountain::f_net.server.Server<...>::init::lambda.1::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/server/server.cj: 56)
+[WARN-fountain::f_net.server.Server]2026/09/26,12:08:09.903971108|274;error occurred on reading or executing
+An exception has occured:
+IllegalArgumentException: no readable byte in InputStream
+        at ._CN27fountain:f_protocol.default7Message6decodeIG_HCNah11InputStreamE.exception_outlined_func(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_net.server.Server<...>::start::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/server/server.cj: 125)
+[ERROR-fountain::f_net.client.Client]2026/09/26,12:08:09.903894437|272;Client reader error None:None
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.DopraTcpSocketImpl::read(std.core::Array<...>, std.core::Option<...>)(std/net/socket_ffi_cjnative_impl.cj: 435)
+        at std.net.TcpSocket::read(std.core::Array<...>)(std/net/tcp.cj: 305)
+        at fountain::f_net.SocketBuffer::read(std.core::Array<...>)(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 67)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 149)
+        at fountain::f_net.client.Client::init::lambda.1::new::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/client/client.cj: 82)
+[WARN-fountain::f_net.server.Server]2026/09/26,12:08:10.887035719|289;TcpSocket.check
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.TcpSocket::remoteAddress::get()(std/net/tcp.cj: 0)
+        at fountain::f_net.SocketBuffer::remoteAddress::get()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 97)
+        at fountain::f_net.server.Server<...>::init::lambda.1::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/server/server.cj: 56)
+[WARN-fountain::f_net.server.Server]2026/09/26,12:08:10.897592965|284;error occurred on reading or executing
+An exception has occured:
+IllegalArgumentException: no readable byte in InputStream
+        at ._CN27fountain:f_protocol.default7Message6decodeIG_HCNah11InputStreamE.exception_outlined_func(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_net.server.Server<...>::start::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/server/server.cj: 125)
+[ERROR-fountain::f_net.client.Client]2026/09/26,12:08:10.897493824|282;Client reader error None:None
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.DopraTcpSocketImpl::read(std.core::Array<...>, std.core::Option<...>)(std/net/socket_ffi_cjnative_impl.cj: 435)
+        at std.net.TcpSocket::read(std.core::Array<...>)(std/net/tcp.cj: 305)
+        at fountain::f_net.SocketBuffer::read(std.core::Array<...>)(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 67)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 149)
+        at fountain::f_net.client.Client::init::lambda.1::new::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/client/client.cj: 82)
+[WARN-fountain::f_net.server.Server]2026/09/26,12:08:11.891027166|299;TcpSocket.check
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.TcpSocket::remoteAddress::get()(std/net/tcp.cj: 0)
+        at fountain::f_net.SocketBuffer::remoteAddress::get()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 97)
+        at fountain::f_net.server.Server<...>::init::lambda.1::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/server/server.cj: 56)
+[ERROR-fountain::f_net.client.Client]2026/09/26,12:08:11.901312069|292;Client reader error None:None
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.DopraTcpSocketImpl::read(std.core::Array<...>, std.core::Option<...>)(std/net/socket_ffi_cjnative_impl.cj: 435)
+        at std.net.TcpSocket::read(std.core::Array<...>)(std/net/tcp.cj: 305)
+        at fountain::f_net.SocketBuffer::read(std.core::Array<...>)(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 67)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 149)
+        at fountain::f_net.client.Client::init::lambda.1::new::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/client/client.cj: 82)
+[WARN-fountain::f_net.server.Server]2026/09/26,12:08:11.901394846|294;error occurred on reading or executing
+An exception has occured:
+IllegalArgumentException: no readable byte in InputStream
+        at ._CN27fountain:f_protocol.default7Message6decodeIG_HCNah11InputStreamE.exception_outlined_func(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_net.server.Server<...>::start::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/server/server.cj: 125)
+[WARN-fountain::f_net.server.Server]2026/09/26,12:08:12.886022524|308;TcpSocket.check
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.TcpSocket::remoteAddress::get()(std/net/tcp.cj: 0)
+        at fountain::f_net.SocketBuffer::remoteAddress::get()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 97)
+        at fountain::f_net.server.Server<...>::init::lambda.1::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/server/server.cj: 56)
+[ERROR-fountain::f_net.client.Client]2026/09/26,12:08:12.906031026|302;Client reader error None:None
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.DopraTcpSocketImpl::read(std.core::Array<...>, std.core::Option<...>)(std/net/socket_ffi_cjnative_impl.cj: 435)
+        at std.net.TcpSocket::read(std.core::Array<...>)(std/net/tcp.cj: 305)
+        at fountain::f_net.SocketBuffer::read(std.core::Array<...>)(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 67)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 149)
+        at fountain::f_net.client.Client::init::lambda.1::new::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/client/client.cj: 82)
+[WARN-fountain::f_net.server.Server]2026/09/26,12:08:12.906126604|304;error occurred on reading or executing
+An exception has occured:
+IllegalArgumentException: no readable byte in InputStream
+        at ._CN27fountain:f_protocol.default7Message6decodeIG_HCNah11InputStreamE.exception_outlined_func(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_net.server.Server<...>::start::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/server/server.cj: 125)
+[WARN-fountain::f_net.server.Server]2026/09/26,12:08:13.888998154|318;TcpSocket.check
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.TcpSocket::remoteAddress::get()(std/net/tcp.cj: 0)
+        at fountain::f_net.SocketBuffer::remoteAddress::get()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 97)
+        at fountain::f_net.server.Server<...>::init::lambda.1::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/server/server.cj: 56)
+[ERROR-fountain::f_net.client.Client]2026/09/26,12:08:13.909195003|312;Client reader error None:None
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.DopraTcpSocketImpl::read(std.core::Array<...>, std.core::Option<...>)(std/net/socket_ffi_cjnative_impl.cj: 435)
+        at std.net.TcpSocket::read(std.core::Array<...>)(std/net/tcp.cj: 305)
+        at fountain::f_net.SocketBuffer::read(std.core::Array<...>)(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 67)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 149)
+        at fountain::f_net.client.Client::init::lambda.1::new::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/client/client.cj: 82)
+[WARN-fountain::f_net.server.Server]2026/09/26,12:08:13.909285223|314;error occurred on reading or executing
+An exception has occured:
+IllegalArgumentException: no readable byte in InputStream
+        at ._CN27fountain:f_protocol.default7Message6decodeIG_HCNah11InputStreamE.exception_outlined_func(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_net.server.Server<...>::start::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/server/server.cj: 125)
+[WARN-fountain::f_net.server.Server]2026/09/26,12:08:14.882789029|328;TcpSocket.check
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.TcpSocket::remoteAddress::get()(std/net/tcp.cj: 0)
+        at fountain::f_net.SocketBuffer::remoteAddress::get()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 97)
+        at fountain::f_net.server.Server<...>::init::lambda.1::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/server/server.cj: 56)
+[WARN-fountain::f_net.server.Server]2026/09/26,12:08:14.903065112|324;error occurred on reading or executing
+An exception has occured:
+IllegalArgumentException: no readable byte in InputStream
+        at ._CN27fountain:f_protocol.default7Message6decodeIG_HCNah11InputStreamE.exception_outlined_func(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_net.server.Server<...>::start::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/server/server.cj: 125)
+[ERROR-fountain::f_net.client.Client]2026/09/26,12:08:14.902970867|322;Client reader error None:None
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.DopraTcpSocketImpl::read(std.core::Array<...>, std.core::Option<...>)(std/net/socket_ffi_cjnative_impl.cj: 435)
+        at std.net.TcpSocket::read(std.core::Array<...>)(std/net/tcp.cj: 305)
+        at fountain::f_net.SocketBuffer::read(std.core::Array<...>)(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 67)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 149)
+        at fountain::f_net.client.Client::init::lambda.1::new::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/client/client.cj: 82)
+[WARN-fountain::f_net.server.Server]2026/09/26,12:08:15.886615038|339;TcpSocket.check
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.TcpSocket::remoteAddress::get()(std/net/tcp.cj: 0)
+        at fountain::f_net.SocketBuffer::remoteAddress::get()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 97)
+        at fountain::f_net.server.Server<...>::init::lambda.1::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/server/server.cj: 56)
+[WARN-fountain::f_net.server.Server]2026/09/26,12:08:15.897745784|334;error occurred on reading or executing
+An exception has occured:
+IllegalArgumentException: no readable byte in InputStream
+        at ._CN27fountain:f_protocol.default7Message6decodeIG_HCNah11InputStreamE.exception_outlined_func(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_net.server.Server<...>::start::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/server/server.cj: 125)
+[ERROR-fountain::f_net.client.Client]2026/09/26,12:08:15.897685883|332;Client reader error None:None
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.DopraTcpSocketImpl::read(std.core::Array<...>, std.core::Option<...>)(std/net/socket_ffi_cjnative_impl.cj: 435)
+        at std.net.TcpSocket::read(std.core::Array<...>)(std/net/tcp.cj: 305)
+        at fountain::f_net.SocketBuffer::read(std.core::Array<...>)(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 67)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 149)
+        at fountain::f_net.client.Client::init::lambda.1::new::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/client/client.cj: 82)
+[WARN-fountain::f_net.server.Server]2026/09/26,12:08:16.890490699|349;TcpSocket.check
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.TcpSocket::remoteAddress::get()(std/net/tcp.cj: 0)
+        at fountain::f_net.SocketBuffer::remoteAddress::get()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 97)
+        at fountain::f_net.server.Server<...>::init::lambda.1::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/server/server.cj: 56)
+[WARN-fountain::f_net.server.Server]2026/09/26,12:08:16.910785224|344;error occurred on reading or executing
+An exception has occured:
+IllegalArgumentException: no readable byte in InputStream
+        at ._CN27fountain:f_protocol.default7Message6decodeIG_HCNah11InputStreamE.exception_outlined_func(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_net.server.Server<...>::start::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/server/server.cj: 125)
+[ERROR-fountain::f_net.client.Client]2026/09/26,12:08:16.910681808|342;Client reader error None:None
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.DopraTcpSocketImpl::read(std.core::Array<...>, std.core::Option<...>)(std/net/socket_ffi_cjnative_impl.cj: 435)
+        at std.net.TcpSocket::read(std.core::Array<...>)(std/net/tcp.cj: 305)
+        at fountain::f_net.SocketBuffer::read(std.core::Array<...>)(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 67)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 149)
+        at fountain::f_net.client.Client::init::lambda.1::new::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/client/client.cj: 82)
+[WARN-fountain::f_net.server.Server]2026/09/26,12:08:17.306377180|354;error occurred on reading or executing
+An exception has occured:
+IllegalArgumentException: no readable byte in InputStream
+        at ._CN27fountain:f_protocol.default7Message6decodeIG_HCNah11InputStreamE.exception_outlined_func(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 151)
+        at fountain::f_net.server.Server<...>::start::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/server/server.cj: 125)
+[ERROR-fountain::f_net.client.Client

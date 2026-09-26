@@ -36,7 +36,7 @@ public class RPCClient {
                     let metas = HashMap<ServiceMeta, TreeSet<String>>()
                     func subscribe(client: Client, closingOnEnd: Bool){
                         try{
-                            let message = Message.subscribe(data: false)
+                            let message = Message.subscribe(data: RPCMessage.subscribe(false))
                             let data = client.transfer(message).get().data
                             let any = Array<ServiceMeta>.tryFromData(data)
                             let array: Array<ServiceMeta> = match(any){

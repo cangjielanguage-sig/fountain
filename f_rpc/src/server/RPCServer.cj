@@ -43,7 +43,7 @@ class RPCServer {
         let clients = Box<Array<Client>>(zeroClients)
         spawn{
             let weight = ServerConfig.weight
-            let registerMessage = Message.register(data: '${port},${weight}')
+            let registerMessage = Message.register(data: RPCMessage.registerMessage('${port},${weight}'))
             clients.value = Array<Client>(addresses.size){i =>
                 let address = addresses[i]
                 rpclog.debug{'[FOUNTAIN_RPC.register] host: ${address} - ${port},${weight}'}
@@ -71,7 +71,7 @@ class RPCServer {
             }
         }
         ExitCallbacks.atExit(0){
-            let deregisterMessage = Message.deregister(data: port.toData())
+            let deregisterMessage = Message.deregister(data: RPCMessage.deregisterMessage(port))
             for(client in clients.value where !client.isClosed()){
                 try{
                     client.transfer(deregisterMessage)
@@ -98,11 +98,19 @@ class RPCServer {
     private static func execute(buffer: SocketBuffer, message: Message): ?Message {
         try{
             let cmd = message.command
+            let rpcmsg = message.tryFromData<RPCMessage>().getOrThrow()
+            func fromData<T>(default: T): T where T <: FromData {
+                match(T.tryFromData(rpcmsg.params[0].data)){
+                    case x: T => x
+                    case x: ?T => x ?? default
+                    case _ => throw Exception('unreachable')
+                }
+            }
             match(message.command){
-                case Command.REGISTER => RegisterExecutor(buffer, message.id, message.tryFromData<String>() ?? '').exec()
-                case Command.DEREGISTER => DeregisterExecutor(buffer, message.id, message.tryFromData<UInt16>() ?? 0).exec()
-                case Command.SUBSCRIBE => SubscribeExecutor(message.id, message.tryFromData<Bool>() ?? false).exec()
-                case Command.CONSUME(b) => ConsumeExecutor(buffer, b, message.id, message.tryFromData<RPCMessage>().getOrThrow()).exec()
+                case Command.REGISTER => RegisterExecutor(buffer, message.id, fromData<String>('')).exec()
+                case Command.DEREGISTER => DeregisterExecutor(buffer, message.id, fromData<UInt16>(0)).exec()
+                case Command.SUBSCRIBE => SubscribeExecutor(message.id, fromData<Bool>(false)).exec()
+                case Command.CONSUME(b) => ConsumeExecutor(buffer, b, message.id, rpcmsg).exec()
                 case Command.ACK => None<Message>
                 case x => error(message.id, x, ErrorMessage.new(message.data, UNSUPPORTED_COMMAND))
             }
