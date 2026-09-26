@@ -487,7 +487,6 @@ protected struct SM4Conf{
                     case 'CBC' | 'OFB' | 'CFB' | 'GCM' => bytes
                     case _ => throw IllegalArgumentException("${operation} is not a legal sm4 OperationMode, and ECB is not safe to use, so it is not supported.")
                 }
-                bytes
             }else{
                 throw IllegalArgumentException("orm config item ${ORMConfig.sm4Iv} is not a legal hex string or is not be specified.")
             }
