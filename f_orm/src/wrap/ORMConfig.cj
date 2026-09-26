@@ -476,7 +476,7 @@ protected struct SM4Conf{
     }
     protected prop iv: Array<Byte> {
         get(){
-            if(let Some(bytes) <- getBytes(ORMConfig.sm4Iv) && bytes.size > 0){
+            if(let Some(bytes) <- getBytes(ORMConfig.sm4Iv)){
                 match(operation){
                     case 'CBC' | 'OFB' | 'CFB' where bytes.size != 16 => throw IllegalArgumentException("size 16 of orm config item ${ORMConfig.sm4Iv} is suggested for OperationMode.CBC, OperationMode.OFB and OperationMode.CFB.")
                     case 'GCM' where bytes.size != 12 => throw IllegalArgumentException("size 12 of orm config item ${ORMConfig.sm4Iv} is suggested for OperationMode.GCM")
@@ -484,7 +484,7 @@ protected struct SM4Conf{
                 }
                 bytes
             }else{
-                throw IllegalArgumentException("orm config item ${ORMConfig.sm4Iv} is not a legal hex string or is not be specified or its size is zero.")
+                throw IllegalArgumentException("orm config item ${ORMConfig.sm4Iv} is not a legal hex string or is not be specified.")
             }
         }
     }
