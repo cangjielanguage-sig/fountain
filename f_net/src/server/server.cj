@@ -144,8 +144,6 @@ public class Server<T> <: Resource where T <: DataFields<T> {
                         buffer.transfer(m)
                     }catch(e: Exception){
                         log.warn('error occurred on responding', e)
-                    }finally{
-                        socket.close()
                     }
                 }
             }

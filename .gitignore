@@ -44,3 +44,5 @@ datalog/
 
 .codegraph/
 common_virtual_env/
+
+./frpcdemo/log/
