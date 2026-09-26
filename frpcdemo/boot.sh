@@ -53,7 +53,7 @@ runClient)
     runClient
     ;;
 runServer)
-    runServer $2 $3
+    runServer $2 $3 # $2 是端口号 $3 是种子服务节点进程
     ;;
 build)
     build 

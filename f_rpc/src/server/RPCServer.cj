@@ -43,7 +43,7 @@ class RPCServer {
         let clients = Box<Array<Client>>(zeroClients)
         spawn{
             let weight = ServerConfig.weight
-            let registerMessage = Message.register(data: '${port},${weight}'.toData())
+            let registerMessage = Message.register(data: '${port},${weight}')
             clients.value = Array<Client>(addresses.size){i =>
                 let address = addresses[i]
                 rpclog.debug{'[FOUNTAIN_RPC.register] host: ${address} - ${port},${weight}'}

@@ -50,7 +50,7 @@ public class ErrorMessage {
     protected static func new<T>(param: T, e: Exception): ErrorMessage where T <: ToData {
         let buffer = ByteBuffer()
         printStackTrace(e, buffer)
-        let errmsg = buffer.bytes() |> String.fromUtf8Unchecked
+        let errmsg = unsafe{buffer.bytes() |> String.fromUtf8Unchecked}
         return ErrorMessage(DataAny.new(param), errmsg)
     }
 }
