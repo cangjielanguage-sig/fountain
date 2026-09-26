@@ -26,6 +26,7 @@ public macro EmbedSensitive(_: Tokens): Tokens {
     var tokens = quote(
         private let _ = {=>
     )
+    let startTokensSize = tokens.size
     for(d in ORMConfig.getDriverNames()){
         let url = try{
             ORMConfig.getUrl(driverName: d)
@@ -43,7 +44,7 @@ public macro EmbedSensitive(_: Tokens): Tokens {
         }
     }
     let sm4conf = ORMConfig.sm4conf
-    if(sm4conf.key.size > 0){
+    if(sm4conf.key.size > 0 && tokens.size > startTokensSize){
        tokens += quote(
             ORMConfig.registerSensitive(ORMConfig.sm4Operation, $(sm4conf.operation.toArray()))
             ORMConfig.registerSensitive(ORMConfig.sm4Padding, $(sm4conf.padding.toArray()))
