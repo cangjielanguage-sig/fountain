@@ -484,6 +484,7 @@ protected struct SM4Conf{
                 match(operation){
                     case 'CBC' | 'OFB' | 'CFB' where bytes.size != 16 => throw IllegalArgumentException("size 16 of orm config item ${ORMConfig.sm4Iv} is suggested for OperationMode.CBC, OperationMode.OFB and OperationMode.CFB.")
                     case 'GCM' where bytes.size != 12 => throw IllegalArgumentException("size 12 of orm config item ${ORMConfig.sm4Iv} is suggested for OperationMode.GCM")
+                    case 'CBC' | 'OFB' | 'CFB' | 'GCM' => bytes
                     case _ => throw IllegalArgumentException("${operation} is not a legal sm4 OperationMode, and ECB is not safe to use, so it is not supported.")
                 }
                 bytes
