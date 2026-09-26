@@ -17,6 +17,7 @@ macro package fountain::f_orm.macros
 
 import std.ast.*
 import std.database.sql.SqlOption
+import stdx.crypto.crypto.*
 import fountain::f_macros.*
 import fountain::f_orm.wrap.{ORMConfig, SM4Conf}
 import fountain::f_base.UnsafeBytes
@@ -42,14 +43,18 @@ public macro EmbedSensitive(_: Tokens): Tokens {
         }
     }
     let sm4conf = ORMConfig.sm4conf
-    quote(
-        $tokens
+    if(sm4conf.key.size > 0){
+       tokens += quote(
             ORMConfig.registerSensitive(ORMConfig.sm4Operation, $(sm4conf.operation.toArray()))
             ORMConfig.registerSensitive(ORMConfig.sm4Padding, $(sm4conf.padding.toArray()))
             ORMConfig.registerSensitive(ORMConfig.sm4Key, $(sm4conf.key))
             ORMConfig.registerSensitive(ORMConfig.sm4Iv, $(sm4conf.iv))
             ORMConfig.registerSensitive(ORMConfig.sm4Aad, $(sm4conf.aad))
             ORMConfig.registerSensitive(ORMConfig.sm4TagSize, $(sm4conf.tagSize.toString().toArray()))
+       )
+    }
+    quote(
+        $tokens
         }()
     )
 }

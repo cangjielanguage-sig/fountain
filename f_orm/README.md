@@ -1946,7 +1946,7 @@ init(message: String, caused: Exception)
 
 编译环境和运行环境的敏感信息配置项完全一致。
 
-以下需要16进制串的情形可以使用命令：`fboot randhex 32`
+以下需要16进制串的情形可以使用命令：`fboot randhex 32`，32是16进制串的长度
 
 ### 18.1 加密配置项
 ```bash
@@ -1954,7 +1954,7 @@ init(message: String, caused: Exception)
 export orm_sm4Operation='CBC' # CBC CFB CTR GCM OFB，默认CBC。ECB被文档标记为不安全，没有给予支持
 export orm_sm4Padding='PKCS7Padding' # PKCS7Padding NoPadding，默认是PKCS7Padding
 export orm_sm4Key='1234567812345678' # 16字节，没有默认值，以长度为32的16进制字符串表示
-export orm_sm4Iv='1234567812345678' # 16字节，默认是key翻转再取反，以长度为32的16进制字符串表示
+export orm_sm4Iv='1234567812345678' # 16字节，没有默认值，以长度为32的16进制字符串表示
 export orm_sm4Aad='1234567812345678' # 附加认证数据，默认是空字节数组，以长度为32的16进制字符串表示
 export orm_sm4TagSize=16 # Int64，默认16
 ```

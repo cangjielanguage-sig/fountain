@@ -452,7 +452,7 @@ protected struct SM4Conf{
         }else if (let Some(v) <- Config.getString(key)){
             fromHexString(v)
         }else{
-            Array<Byte>()
+            []
         }
     }
     protected prop operation: String {
@@ -467,8 +467,12 @@ protected struct SM4Conf{
     }
     protected prop key: Array<Byte> {
         get(){
-            if(let Some(bytes) <- getBytes(ORMConfig.sm4Key) && bytes.size == 16){
-                bytes
+            if(let Some(bytes) <- getBytes(ORMConfig.sm4Key)){
+                if(bytes.size == 16 || bytes.size == 0){
+                    bytes
+                }else{
+                    throw IllegalArgumentException("size of orm config item ${ORMConfig.sm4Key} is not 16")
+                }
             }else{
                 throw IllegalArgumentException("orm config item ${ORMConfig.sm4Key} is not a legal hex string or is not be specified or its size is not 16")
             }
