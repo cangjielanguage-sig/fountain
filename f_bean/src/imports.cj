@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain::f_bean
 
-internal import std.collection.{TreeMap, LinkedList, ArrayList, TreeSet, HashSet}
+internal import std.collection.{TreeMap, LinkedList, TreeSet, HashSet}
 internal import std.collection.concurrent.ConcurrentHashMap
 internal import std.convert.*
 internal import std.env.*

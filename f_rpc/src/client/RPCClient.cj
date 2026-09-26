@@ -24,7 +24,7 @@ import fountain::f_log.*
 
 public class RPCClient {
     private static let retryCount = ClientConfig.retryCount
-    private static let services = ConcurrentHashMap<ServiceMeta, MultiClient<Float64>>()
+    private static let services = ConcurrentHashMap<ServiceMeta, MultiClient<Float64, RPCMessage>>()
     private static let started = AtomicInt8(0)
     static func start(): Unit {
         if (started.load() == 2) {
@@ -34,7 +34,7 @@ public class RPCClient {
             spawn{
                 while(true){
                     let metas = HashMap<ServiceMeta, TreeSet<String>>()
-                    func subscribe(client: Client, closingOnEnd: Bool){
+                    func subscribe(client: Client<RPCMessage>, closingOnEnd: Bool){
                         try{
                             let message = Message.subscribe(data: RPCMessage.subscribe(false))
                             let data = client.transfer(message).get().data
@@ -86,10 +86,10 @@ public class RPCClient {
                         clients.close()
                         for((host, weight) in hostMap){
                             while(true){
-                                var client: Client = unsafeZeroValue<Client>()
+                                var client: Client<RPCMessage> = unsafeZeroValue<Client<RPCMessage>>()
                                 while(true){
                                     try{
-                                        client = Client.builder(address: host, checkDuration: Duration.second, checker: checker).build()
+                                        client = Client<RPCMessage>.builder(address: host, checkDuration: Duration.second, checker: checker).build()
                                         break
                                     }catch(e: Exception){
                                         rpclog.error("[FOUNTAIN_RPC.subscribe.hosts] ${host}", e)

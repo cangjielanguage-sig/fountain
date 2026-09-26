@@ -170,18 +170,18 @@ public class ClientConfig {
             Duration.second * (Config.getValue<Int64>(RPC_CLIENT_REFRESH_INTERVAL_SECONDS) ?? 1)
         }
     }
-    internal static func createClient(addresses: Array<(Float64, String)>): MultiClient<Float64>{
+    internal static func createClient(addresses: Array<(Float64, String)>): MultiClient<Float64, RPCMessage>{
         func checker(): ?Message {
             Message.ping()
         }
         let builder = if(let (Some(qs), Some(sc)) <- (queueSize, socketCount)){
-            MultiClient<Float64>.builder(queueSize: qs, socketCount: sc, checkDuration: checkDuration, checker: checker)
+            MultiClient<Float64, RPCMessage>.builder(queueSize: qs, socketCount: sc, checkDuration: checkDuration, checker: checker)
         }else if(let (Some(qs), _) <- (queueSize, socketCount)){
-            MultiClient<Float64>.builder(queueSize: qs, checkDuration: checkDuration, checker: checker)
+            MultiClient<Float64, RPCMessage>.builder(queueSize: qs, checkDuration: checkDuration, checker: checker)
         }else if(let (_, Some(sc)) <- (queueSize, socketCount)){
-            MultiClient<Float64>.builder(socketCount: sc, checkDuration: checkDuration, checker: checker)
+            MultiClient<Float64, RPCMessage>.builder(socketCount: sc, checkDuration: checkDuration, checker: checker)
         }else{
-            MultiClient<Float64>.builder(checkDuration: checkDuration, checker: checker)
+            MultiClient<Float64, RPCMessage>.builder(checkDuration: checkDuration, checker: checker)
         }
         builder.bindToDevice(bindToDevice)
         builder.keepAlive(socketKeepaliveConfig)
@@ -227,10 +227,10 @@ public class ClientConfig {
         builder.add(addresses)
         builder.build()
     }
-    internal static func createClient(hosts: Array<String>): MultiClient<Float64> {
+    internal static func createClient(hosts: Array<String>): MultiClient<Float64, RPCMessage> {
         createClient(Array<(Float64, String)>(hosts.size){i => (1.0f64, hosts[i])})
     }
-    internal static func createClient(): MultiClient<Float64> {
+    internal static func createClient(): MultiClient<Float64, RPCMessage> {
         createClient(serverAddresses)
     }
 }

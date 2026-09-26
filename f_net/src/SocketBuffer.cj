@@ -64,7 +64,8 @@ public class SocketBuffer <: IOStream & Resource {
         })
     }
     public func read(bytes: Array<Byte>): Int64 {
-        return socket.read(bytes)
+        let s = socket.read(bytes)
+        s
     }
     public func write(bytes: Array<Byte>): Unit {
         socket.write(bytes)

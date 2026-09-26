@@ -19,7 +19,7 @@ import std.collection.ArrayList
 import fountain::f_concurrent.*
 import fountain::f_concurrent.exception.LoadBalanceException
 
-public class MultiClientBuilder<W> where W <: Addable<W> & Comparable<W>{
+public class MultiClientBuilder<W, T> where W <: Addable<W> & Comparable<W>, T <: DataFields<T> {
     MultiClientBuilder(private let queueSize!: Int64 = 1024, 
                        private let socketCount!: Int64 = 1, 
                        private let checkDuration!: Duration, 
@@ -89,10 +89,10 @@ public class MultiClientBuilder<W> where W <: Addable<W> & Comparable<W>{
         pingTimeout_ = timeout
         this
     }
-    private var balance = None<LoadBalance<W, Unit, Client>>
+    private var balance = None<LoadBalance<W, Unit, Client<T>>>
     public func roundRobin(step: W, min: W, max: W): This {
         let algo = RoundRobin<W>(step, min, max)
-        balance = LoadBalance<W, Unit, Client>(min, algo)
+        balance = LoadBalance<W, Unit, Client<T>>(min, algo)
         this
     }
     public func random(min: W, max: W): This {
@@ -101,7 +101,7 @@ public class MultiClientBuilder<W> where W <: Addable<W> & Comparable<W>{
             case (a: Float64, b: Float64) => Float64Weight(a, b)
             case _ => throw LoadBalanceException('generic type W must be Int64 or Float64')
         } as LoadBalanceAlgo<W>).getOrThrow()
-        balance = LoadBalance<W, Unit, Client>(min, algo)
+        balance = LoadBalance<W, Unit, Client<T>>(min, algo)
         this
     }
     /**
@@ -120,7 +120,7 @@ public class MultiClientBuilder<W> where W <: Addable<W> & Comparable<W>{
      * 先调用roundRobin(step, min, max)或random(min, max)再调用add函数
      */
     public func add(weight: W, address: IPSocketAddress): This {
-        let builder = Client.builder(queueSize: queueSize, socketCount: socketCount, address: address, checkDuration: checkDuration, checker: checker)
+        let builder = Client<T>.builder(queueSize: queueSize, socketCount: socketCount, address: address, checkDuration: checkDuration, checker: checker)
         builder.bindToDevice(bindToDevice_)
         builder.keepAlive(keepAlive_)
         builder.linger(linger_)
@@ -167,7 +167,7 @@ public class MultiClientBuilder<W> where W <: Addable<W> & Comparable<W>{
         balance?.add(weight){_ => client}
         this
     }
-    private let clients = ArrayList<Client>()
+    private let clients = ArrayList<Client<T>>()
     /**
      * 先调用roundRobin(step, min, max)或random(min, max)再调用add函数
      */
@@ -196,12 +196,12 @@ public class MultiClientBuilder<W> where W <: Addable<W> & Comparable<W>{
         this
     }
     
-    public func build(): MultiClient<W> {
-        return MultiClient<W>(balance.getOrThrow(), clients)
+    public func build(): MultiClient<W, T> {
+        return MultiClient<W, T>(balance.getOrThrow(), clients)
     }
 }
-public class MultiClient<W> <: Resource & Iterable<Client> where W <: Addable<W> & Comparable<W> {
-    MultiClient(private let loadbalance: LoadBalance<W, Unit, Client>, private let clients: ArrayList<Client>){}
+public class MultiClient<W, T> <: Resource & Iterable<Client<T>> where W <: Addable<W> & Comparable<W>, T <: DataFields<T> {
+    MultiClient(private let loadbalance: LoadBalance<W, Unit, Client<T>>, private let clients: ArrayList<Client<T>>){}
     /**
      * @param queueSize 写数据任务队列大小
      * @param socketCount 连接数
@@ -210,11 +210,11 @@ public class MultiClient<W> <: Resource & Iterable<Client> where W <: Addable<W>
      * @param checker   连接有效性检查函数，务必使用client.transfer(socketBuffer, id, message, timeout)传检查包
      */
     public static func builder(queueSize!: Int64 = 1024, socketCount!: Int64 = 1, 
-        checkDuration!: Duration, checker!: () -> ?Message): MultiClientBuilder<W> {
-        MultiClientBuilder<W>(queueSize: queueSize, socketCount: socketCount, 
+        checkDuration!: Duration, checker!: () -> ?Message): MultiClientBuilder<W, T> {
+        MultiClientBuilder<W, T>(queueSize: queueSize, socketCount: socketCount, 
             checkDuration: checkDuration, checker: checker)
     }
-    public func iterator(): Iterator<Client> {
+    public func iterator(): Iterator<Client<T>> {
         loadbalance.iterator().map{f => f(())}
     }
     private var closed = false

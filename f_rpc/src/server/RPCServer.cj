@@ -39,16 +39,16 @@ class RPCServer {
         )
         let addresses = ServerConfig.baseAddresses
         rpclog.debug{'[FOUNTAIN_RPC.register] base addresses: ${addresses}'}
-        let zeroClients = unsafeZeroValue<Array<Client>>()
-        let clients = Box<Array<Client>>(zeroClients)
+        let zeroClients = unsafeZeroValue<Array<Client<RPCMessage>>>()
+        let clients = Box<Array<Client<RPCMessage>>>(zeroClients)
         spawn{
             let weight = ServerConfig.weight
             let registerMessage = Message.register(data: RPCMessage.registerMessage('${port},${weight}'))
-            clients.value = Array<Client>(addresses.size){i =>
+            clients.value = Array<Client<RPCMessage>>(addresses.size){i =>
                 let address = addresses[i]
                 rpclog.debug{'[FOUNTAIN_RPC.register] host: ${address} - ${port},${weight}'}
-                let clientBuilder = Client.builder(address: address, checkDuration: Duration.second, checker: checker)
-                var client = unsafeZeroValue<Client>()
+                let clientBuilder = Client<RPCMessage>.builder(address: address, checkDuration: Duration.second, checker: checker)
+                var client = unsafeZeroValue<Client<RPCMessage>>()
                 while(true){
                     try{
                         client = clientBuilder.build()

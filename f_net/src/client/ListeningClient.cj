@@ -24,7 +24,7 @@ public class ListeningClient<T> <: Resource where T <: DataFields<T> {
     private let future: Future<Unit> 
     ListeningClient(
         private let buffer: AtomicReference<SocketBuffer>,
-        private var client: Client,
+        private var client: Client<T>,
         private let message: Message,
         private let executor: (Message) -> Unit
     ){
@@ -35,7 +35,7 @@ public class ListeningClient<T> <: Resource where T <: DataFields<T> {
             }
         }
     }
-    init(buffer: SocketBuffer, client: Client, message: Message, executor: (Message) -> Unit){
+    init(buffer: SocketBuffer, client: Client<T>, message: Message, executor: (Message) -> Unit){
         this(AtomicReference(buffer), client, message, executor)
     }
     public func isClosed(): Bool {
