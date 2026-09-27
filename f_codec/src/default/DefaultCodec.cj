@@ -36,7 +36,7 @@ package fountain::f_codec.default
 | inputstream(is)     | 15\|1111     |
 ```
  */
-public class DefaultCodec <: Codec {
+public class DefaultCodec <: Codec & Releasable {
     private static let ZERO_DECIMAL = Decimal(0)
     private static let ZERO_BIGINT = BigInt(0)
     private static let MIN_INT = BigInt(Int64.Min)
@@ -618,6 +618,17 @@ public class DefaultCodec <: Codec {
     }
     public func finish(): BytesCopyTo {
         ChainedBytesCopyTo(inputs.unsafeData())
+    }
+    /**
+     * 释放本 codec 占用的全部池项（幂等）。释放后不可再用于 encode。
+     * 调用方若只做 decode，或不打算把编码结果写出，也必须调用本方法。
+     */
+    public func release(): Unit {
+        for (x in inputs) {
+            if (let r: Releasable <- x) {
+                r.release()
+            }
+        }
     }
 
     private func parseInt64(head: Byte, sign: Bool, bytes: Array<Byte>): Int64 {

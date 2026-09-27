@@ -121,36 +121,44 @@ public class Server<T> <: Resource where T <: DataFields<T> {
             this.buffers.add(buffer)
             spawn{
                 while (!buffer.isClosed()) {
+                    let req = try {
+                        Message.decode<T>(buffer)
+                    } catch(e: InputClosedException){
+                        log.warn('tcp closed', e)
+                        try{
+                            buffer.close()
+                        }catch(_){}
+                        break
+                    } catch (e: Exception) {
+                        // 解码失败（含消息中途 EOF / CodecException）= 字节流已错位，必须断链，不能 continue
+                        log.warn('error occurred on decoding', e)
+                        try{
+                            buffer.close()
+                        }catch(_){}
+                        break
+                    }
                     try{
-                        let m = try {
-                            let req = Message.decode<T>(buffer)
-                            let remoteAddress = socket.remoteAddress
-                            if(let Some(c) <- checkerId.get(remoteAddress) && c.id == req.id && req.command == Command.ACK){
-                                checkerId.remove(remoteAddress)
-                                continue
-                            }else if (let Command.PING(_) <- req.command){
-                                buffer.transfer(Message.ack(req.id))
-                                continue
-                            }
-                            let msg = executors.call(limiter){executor(buffer, req)}.get{defaultResp(req.id)}
-                            if(let Some(m) <- msg){
-                                m
-                            }else{
-                                continue
-                            }
-                        } catch(e: InputClosedException){
-                            log.warn('tcp closed', e)
-                            try{
-                                buffer.close()
-                            }catch(_){}
-                            break
-                        } catch (e: Exception) {
-                            log.warn('error occurred on reading or executing', e)
+                        let remoteAddress = socket.remoteAddress
+                        if(let Some(c) <- checkerId.get(remoteAddress) && c.id == req.id && req.command == Command.ACK){
+                            checkerId.remove(remoteAddress)
+                            continue
+                        }else if (let Command.PING(_) <- req.command){
+                            buffer.transfer(Message.ack(req.id))
                             continue
                         }
-                        buffer.transfer(m)
-                    }catch(e: Exception){
-                        log.warn('error occurred on responding', e)
+                        let msg = executors.call(limiter){executor(buffer, req)}.get{defaultResp(req.id)}
+                        if(let Some(m) <- msg){
+                            buffer.transfer(m)
+                        }
+                    }catch(e: InputClosedException){
+                        log.warn('tcp closed', e)
+                        try{
+                            buffer.close()
+                        }catch(_){}
+                        break
+                    } catch (e: Exception) {
+                        log.warn('error occurred on executing or responding', e)
+                        continue
                     }
                 }
             }

@@ -161,15 +161,32 @@ public struct Message <: Protocol<EncodedMessage, Message> {
     }
 }
 
-public struct EncodedMessage <: MessageCopier {
+public struct EncodedMessage <: MessageCopier & Releasable {
     EncodedMessage(
         private let command: Byte,
         private let bytes: BytesCopyTo
     ) {}
+    /** 释放编码期间占用的池项（幂等）。写出失败时也必须释放，否则池会泄漏。 */
+    public func release(): Unit {
+        if (let r: Releasable <- bytes) {
+            r.release()
+        }
+    }
     public func copy(to!: OutputStream, closeToOnEnd!: Bool = false): Unit {
-        to.write([command])
-        bytes.copy(to: to, closeToOnEnd: false, closeFromOnEnd: false)
-        to.flush()
+        var ok = false
+        try {
+            to.write([command])
+            bytes.copy(to: to, closeToOnEnd: false, closeFromOnEnd: false)
+            to.flush()
+            ok = true
+        } finally {
+            // 无论成败都归还池项（原实现只在 bytes.copy 走完时才归还）
+            release()
+            if (!ok && let r: Resource <- to && !r.isClosed()) {
+                // 写失败：消息只剩半条留在流上，必须断链，让对端看到 EOF 而不是半条消息
+                r.close()
+            }
+        }
         if (closeToOnEnd && let r: Resource <- to && !r.isClosed()) {
             r.close()
         }

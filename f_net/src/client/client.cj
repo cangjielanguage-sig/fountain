@@ -72,9 +72,13 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                     let mid = mid
                     let cmd = cmd
                     log.error(e){'Client reader error ${cmd}:${mid} ${buffer.isClosed()}'}
-                    if(buffer.isClosed()){
-                        break
+                    // 解码失败 = 字节流已错位，必须断链（不能继续在错位的流上解析）
+                    if(!buffer.isClosed()){
+                        try{
+                            buffer.close()
+                        }catch(_){}
                     }
+                    break
                 }
             }
         }
