@@ -24,6 +24,7 @@ import fountain::f_concurrent.*
 import fountain::f_data.*
 import fountain::f_log.*
 import fountain::f_protocol.default.*
+import fountain::f_protocol.exception.InputClosedException
 internal import fountain::f_net.*
 public import fountain::f_net.*
 
@@ -119,7 +120,7 @@ public class Server<T> <: Resource where T <: DataFields<T> {
             let buffer = SocketBuffer(bufferQueueSize, socket)
             this.buffers.add(buffer)
             spawn{
-                while (!socket.isClosed()) {
+                while (!buffer.isClosed()) {
                     try{
                         let m = try {
                             let req = Message.decode<T>(buffer)
@@ -137,6 +138,12 @@ public class Server<T> <: Resource where T <: DataFields<T> {
                             }else{
                                 continue
                             }
+                        } catch(e: InputClosedException){
+                            log.warn('tcp closed', e)
+                            try{
+                                buffer.close()
+                            }catch(_){}
+                            break
                         } catch (e: Exception) {
                             log.warn('error occurred on reading or executing', e)
                             continue

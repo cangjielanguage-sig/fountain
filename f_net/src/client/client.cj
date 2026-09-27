@@ -18,6 +18,7 @@ package fountain::f_net.client
 import std.env
 import std.collection.concurrent.ConcurrentHashMap
 import fountain::f_protocol.*
+import fountain::f_protocol.exception.InputClosedException
 import fountain::f_random.*
 internal import std.net.IPSocketAddress
 internal import std.sync.{Timer, CatchupStyle, AtomicInt64, Mutex, AtomicReference}
@@ -59,10 +60,18 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                         var f = fut
                         f.set(message)
                     }
+                } catch(e: InputClosedException){
+                    log.warn('Client reader closed', e)
+                    if(!buffer.isClosed()){
+                        try{
+                            buffer.close()
+                        }catch(_){}
+                    }
+                    break
                 } catch (e: Exception) {
                     let mid = mid
                     let cmd = cmd
-                    log.error(e){'Client reader error ${cmd}:${mid}'}
+                    log.error(e){'Client reader error ${cmd}:${mid} ${buffer.isClosed()}'}
                     if(buffer.isClosed()){
                         break
                     }
@@ -95,10 +104,14 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                 }
                 let buffer = buffers[i]
                 try {
-                    if (let Some(m) <- checker() && let Some(res) <- transfer(buffer, m).tryGet(pingTimeout) && res.id == m.id && res.command == Command.ACK) {
+                    if(buffer.isClosed()){
+                        continue
+                    }else if (let Some(m) <- checker() && let Some(res) <- transfer(buffer, m).tryGet(pingTimeout) && res.id == m.id && res.command == Command.ACK) {
                         //do nothing
                     }else{
-                        buffer.close()
+                        if(!buffer.isClosed()){
+                            buffer.close()
+                        }
                         new()
                     }
                 } catch (e: Exception) {
@@ -115,6 +128,17 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                     }catch(e: Exception){
                         log.error('SocketBuffer.new', e)
                     }
+                }
+            }
+            var closed = 0
+            for(b in buffers where b.isClosed()){
+                closed++
+            }
+            if(closed == buffers.size){
+                try{
+                    close()
+                }catch(e: Exception){
+                    log.warn('Client.close', e)
                 }
             }
         }, style: Burst)
