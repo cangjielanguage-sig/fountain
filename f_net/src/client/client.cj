@@ -109,6 +109,8 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                 let buffer = buffers[i]
                 try {
                     if(buffer.isClosed()){
+                        // 连接已被 reader（解码异常）或本 timer 关闭 → 必须重建，否则永久失去该连接
+                        new()
                         continue
                     }else if (let Some(m) <- checker() && let Some(res) <- transfer(buffer, m).tryGet(pingTimeout) && res.id == m.id && res.command == Command.ACK) {
                         //do nothing

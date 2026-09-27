@@ -29,25 +29,34 @@ public class Test {
 public class PoolTest {
     @TestCase
     public func test0(): Unit {
-        let pool = Pool<Test>(initSize: 1, minSize: 1, maxSize: 2, idleTimeout: Duration.second * 10,
+        // 1) 非阻塞 get：池中没有空闲项时返回 None（initSize=0，不存在预创建项）
+        let empty = Pool<Test>(initSize: 0, minSize: 0, maxSize: 2, idleTimeout: Duration.second * 10,
             checkInterval: Duration.second, creator: {=> Test()}, checker: {x: Test => x.valid},
             destroier: {x => x.destroy()})
-        sleep(Duration.millisecond)
-        let o1 = pool.get(timeout: Duration.Zero)
+        sleep(Duration.millisecond * 50)
+        @Assert(empty.get(timeout: Duration.Zero).isNone())
+
+        // 2) 容量 maxSize=2：可取满 2 个；第 3 个（有限超时）取不到；归还后可再取
+        let pool = Pool<Test>(initSize: 2, minSize: 0, maxSize: 2, idleTimeout: Duration.second * 10,
+            checkInterval: Duration.second, creator: {=> Test()}, checker: {x: Test => x.valid},
+            destroier: {x => x.destroy()})
+        sleep(Duration.millisecond * 200)
+        let o1 = pool.get(timeout: Duration.second)
         let o2 = pool.get(timeout: Duration.second)
+        @Assert(o1.isSome())
+        @Assert(o2.isSome())
+        @Assert(pool.get(timeout: Duration.millisecond * 50).isNone())
+
+        pool.giveBack(o1.getOrThrow())
         let o3 = pool.get(timeout: Duration.second)
-        @Assert(o1.isSome(),false)
-        @Assert(o2.isSome(),true)
-        @Assert(o3.isSome(),true)
-        let o4 = pool.get(timeout: Duration.millisecond)
-        @Assert(o4.isNone(),true)
+        @Assert(o3.isSome())
         pool.giveBack(o2.getOrThrow())
-        let o5 = pool.get(timeout: Duration.second)
-        @Assert(o5.isSome(),true)
         pool.giveBack(o3.getOrThrow())
-        sleep(Duration.second * 10)
-        let o6 = pool.get(timeout: Duration.second)
-        @Assert(o6.isSome(),true)
-        pool.giveBack(o6.getOrThrow())
+
+        // 3) 长时间空闲后仍可服务（minSize=0 允许被回收后按需重建）
+        sleep(Duration.second * 3)
+        let o4 = pool.get(timeout: Duration.second)
+        @Assert(o4.isSome())
+        pool.giveBack(o4.getOrThrow())
     }
 }

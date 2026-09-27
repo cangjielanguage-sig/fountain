@@ -26,6 +26,11 @@ public interface BytesCopyFrom {
 
 public interface BytesCopier <: BytesCopyTo & BytesCopyFrom {}
 
+/** 可显式释放（归还其内部池项）的资源。实现必须**幂等**。 */
+public interface Releasable {
+    func release(): Unit
+}
+
 public struct PooledBufferBytesCopyTo <: BytesCopyTo { 
     public PooledBufferBytesCopyTo(private let input: InputStream,
                                     private let pool: ArrayPool<Byte>){}
@@ -86,7 +91,7 @@ public struct PooledBufferedBytesCopyFrom <: BytesCopyFrom {
         }
     }
 }
-public struct ChainedBytesCopyTo <: BytesCopyTo {
+public struct ChainedBytesCopyTo <: BytesCopyTo & Releasable {
     public ChainedBytesCopyTo(private let bytes: Array<BytesCopyTo>){}
     public func copy(to!: OutputStream, closeFromOnEnd!: Bool = true, closeToOnEnd!: Bool = false): Unit {
         for(b in bytes){
@@ -94,6 +99,14 @@ public struct ChainedBytesCopyTo <: BytesCopyTo {
         }
         if(closeToOnEnd && let r: Resource <- to && !r.isClosed()){
             r.close()
+        }
+    }
+    /** 释放所有子项占用的池项（幂等）。 */
+    public func release(): Unit {
+        for(b in bytes){
+            if(let r: Releasable <- b){
+                r.release()
+            }
         }
     }
 }
