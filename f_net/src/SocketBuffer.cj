@@ -38,7 +38,7 @@ public class SocketBuffer <: IOStream & Resource {
         this.queue = queue
         let stop = this.stop
         spawn {
-            while (stop.stopped.load() == 0 && let Some(fn) <- queue.remove(Duration.millisecond * 50)) {
+            while (stop.stopped.load() == 0 && let fn <- queue.remove()) {
                 try {
                     fn()
                 } catch (e: Exception) {
