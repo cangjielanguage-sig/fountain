@@ -48,11 +48,7 @@ public class DefaultCodec <: Codec {
     private static var fileThreshold = 4096
     private static var bytesPool = ArrayPool<Byte>(initSize: 0, minSize: 1, maxSize: 1024, arraySize: 4096)
     private var size = 0
-    private let inputs = {=> 
-        let list = ArrayList<BytesCopyTo>()
-        list.add(byteListOutputBuilder.build().getOrThrow())
-        list
-    }()
+    private let inputs = ArrayList<BytesCopyTo>()
 
     public static func setBytesPool(output: BytesListOutputStreamBuilder): Unit {
         byteListOutputBuilder = output
@@ -75,12 +71,17 @@ public class DefaultCodec <: Codec {
     }
 
     private func lastBuffer(): BytesListOutputStream {
+        func getBuf(){
+            let buf = byteListOutputBuilder.build().getOrThrow()
+            inputs.add(buf)
+            buf
+        }
+        if(inputs.size == 0){
+            return getBuf()
+        }
         match (inputs[inputs.size - 1]) {
             case x: BytesListOutputStream => x
-            case _ =>
-                let buf = byteListOutputBuilder.build().getOrThrow()
-                inputs.add(buf)
-                buf
+            case _ => getBuf()
         }
     }
     public func encode(data: Data): Encoder {
