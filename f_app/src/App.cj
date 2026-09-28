@@ -296,10 +296,17 @@ public struct App {
                 sub = arg
                 break
             }
+            func pathReplace(){
+                if(OS.current.isWindows){
+                    sub.replace('/', '\\')
+                }else{
+                    sub
+                }
+            }
             let dir = if (sub.startsWith('/')){
-                Path(sub)
+                Path(pathReplace())
             }else if(sub.size > 0){
-                getWorkingDirectory().join(sub)
+                getWorkingDirectory().join(pathReplace())
             }else{
                 getWorkingDirectory()
             }
