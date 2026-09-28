@@ -54,6 +54,10 @@ public struct Console {
         input.readToEnd()
     }
     public static func readlnValue<T>(): ?T where T <: Parsable {
-        T.tryParse(input.readln())
+        if(let Some(l) <- input.readln()){
+            T.tryParse(l)
+        }else{
+            None<T>
+        }
     }
 }
