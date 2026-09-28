@@ -100,8 +100,8 @@ build(){
     export postgres_orm_connectionUrl=$POSTGRES
     export postgres_orm_option_username=$POSTGRES_USERNAME # 用户名密码可以放到connectionUrl中，POSTGRES是环境变量，已包含用户名和密码
     export postgres_orm_option_password=$POSTGRES_PASSWORD
-    export orm_sm4Key=a95470d1edcbacfa051ee45497e285a7
-    export orm_sm4Iv=4ed405ff709bee56191b5fd8587b1e3a
+    export orm_sm4Key=$(fboot randhex 32) # 每次加密用不同的KEY，嵌入不同的加密产物
+    export orm_sm4Iv=$(fboot randhex 32)
     # 以上是敏感信息
 
     fboot build $path $args
