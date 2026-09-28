@@ -38,11 +38,13 @@ public class SocketBuffer <: IOStream & Resource {
         this.queue = queue
         let stop = this.stop
         spawn {
-            while (stop.stopped.load() == 0 && let fn <- queue.remove()) {
-                try {
-                    fn()
-                } catch (e: Exception) {
-                    log.warn('SocketBuffer write error', e)
+            while (stop.stopped.load() == 0) {
+                if(let Some(fn) <- queue.remove(Duration.millisecond * 50)){
+                    try {
+                        fn()
+                    } catch (e: Exception) {
+                        log.warn('SocketBuffer write error', e)
+                    }
                 }
             }
         }
