@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_base
 
 import std.env.{getStdOut, getStdIn, ConsoleWriter, ConsoleReader}
+import std.convert.*
 public import std.env.ConsoleWriter
 
 public struct Console {
@@ -48,5 +49,11 @@ public struct Console {
     }
     public static func readln(): ?String {
         input.readln()
+    }
+    public static func readToEnd(): ?String {
+        input.readToEnd()
+    }
+    public static func readlnValue<T>(): ?T where T <: Parsable {
+        T.tryParse(input.readln())
     }
 }
