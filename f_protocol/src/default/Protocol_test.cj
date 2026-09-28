@@ -16,8 +16,10 @@ limitations under the License.
 package fountain::f_protocol.default
 
 import std.io.{BufferedInputStream, ByteBuffer, SeekPosition}
+import std.collection.ArrayList
 import std.unittest.*
 import std.unittest.testmacro.*
+import fountain::f_pool.{BytesListOutputStream, BytesListOutputStreamBuilder}
 
 @Test
 public class ProtocolTest {
@@ -52,14 +54,14 @@ public class ProtocolTest {
     }
 
     @TestCase
-    public func commandUnknownThrows(): Unit {
-        var threw = false
-        try {
-            Command.parse(0x40u8)  // 高 4 位 = 4（保留编号）
-        } catch (_: CommandException) {
-            threw = true
+    public func commandAllHighNibblesParse(): Unit {
+        // Byte 的高 4 位只有 0..15，且这 16 个编号都被 Command 占满 → parse 永不抛
+        // （原用例假设 0x40 是“保留编号”，但高 4 位 = 4 实际是 DLQ_LIST）
+        for (n in 0..16) {
+            let hi = UInt8(n)
+            let parsed = Command.parse(hi << 4)
+            @Assert((parsed.value >> 4) == hi)
         }
-        @Assert(threw)
     }
 
     @TestCase
@@ -134,19 +136,19 @@ public class ProtocolTest {
     @TestCase
     public func messageFactoryAuth(): Unit {
         let encoded = Message.auth(hasData: true, ack: true, authData: DataAny(DataReal(42.0)))
-        @Assert(encoded is EncodedMessage)
+        @Assert(encoded.command.value == Command.AUTH(HASDATA | ACK).value)
     }
 
     @TestCase
     public func messageFactoryPublish(): Unit {
         let encoded = Message.publish(dup: true, qos: QoS.AtLeastOnce, retain: false, data: DataAny(DataString("hello")))
-        @Assert(encoded is EncodedMessage)
+        @Assert(encoded.command.value == Command.PUBLISH(DUP | AT_LEAST_ONCE).value)
     }
 
     @TestCase
     public func messageFactoryPing(): Unit {
         let encoded = Message.ping()
-        @Assert(encoded is EncodedMessage)
+        @Assert(encoded.command.value == Command.PING(1).value)
     }
 
     // ========== Message 编码/解码往返 ==========
@@ -157,7 +159,7 @@ public class ProtocolTest {
         let buf = ByteBuffer()
         msg.encode().copy(to: buf, closeToOnEnd: false)
         buf.seek(SeekPosition.Begin(0))
-        let decoded = Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
+        let decoded = Message.decode<DataAny>(BufferedInputStream(buf))
         @Assert(decoded.command.value == msg.command.value)
         @Assert(decoded.id == msg.id)
     }
@@ -169,10 +171,10 @@ public class ProtocolTest {
         let buf = ByteBuffer()
         msg.encode().copy(to: buf, closeToOnEnd: false)
         buf.seek(SeekPosition.Begin(0))
-        let decoded = Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
+        let decoded = Message.decode<DataAny>(BufferedInputStream(buf))
         @Assert(decoded.command.value == msg.command.value)
         let decodedData = decoded.tryFromData<DataAny>()
-        if (let Some(d: DataAny) <- decodedData) {
+        if (let d: DataAny <- decodedData) {
             @Assert(d.data.toString() == data.toString())
         }
     }
@@ -184,7 +186,7 @@ public class ProtocolTest {
         let buf = ByteBuffer()
         msg.encode().copy(to: buf, closeToOnEnd: false)
         buf.seek(SeekPosition.Begin(0))
-        let decoded = Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
+        let decoded = Message.decode<DataAny>(BufferedInputStream(buf))
         @Assert(decoded.command.value == msg.command.value)
         let decodedData = decoded.tryFromData<DataAny>()
         if (let d: DataAny <- decodedData) {
@@ -212,7 +214,7 @@ public class ProtocolTest {
             let buf = ByteBuffer()
             msg.encode().copy(to: buf, closeToOnEnd: false)
             buf.seek(SeekPosition.Begin(0))
-            let decoded = Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
+            let decoded = Message.decode<DataAny>(BufferedInputStream(buf))
             @Assert(decoded.command.value == msg.command.value)
         }
     }
@@ -248,9 +250,9 @@ public class ProtocolTest {
         let encoded = Message.elect(vote: true, approve: true, assume: true, ack: true,
             data: DataAny(DataString("elect-data")))
         let buf = ByteBuffer()
-        encoded.copy(to: buf, closeToOnEnd: false)
+        encoded.encode().copy(to: buf, closeToOnEnd: false)
         buf.seek(SeekPosition.Begin(0))
-        let decoded = Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
+        let decoded = Message.decode<DataAny>(BufferedInputStream(buf))
         @Assert(decoded.command.value == Command.ELECT(VOTE | APPROVE | ASSUME | ACK).value)
     }
 
@@ -260,7 +262,7 @@ public class ProtocolTest {
         let buf = ByteBuffer()
         msg.encode().copy(to: buf, closeToOnEnd: false)
         buf.seek(SeekPosition.Begin(0))
-        let decoded = Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
+        let decoded = Message.decode<DataAny>(BufferedInputStream(buf))
         @Assert(decoded.command.value == msg.command.value)
         @Assert(decoded.id == msg.id)
     }
@@ -287,19 +289,19 @@ public class ProtocolTest {
     public func messageFactorySubscribe(): Unit {
         let encoded = Message.subscribe(data: DataAny(DataReal(99.9)))
         let buf = ByteBuffer()
-        encoded.copy(to: buf, closeToOnEnd: false)
+        encoded.encode().copy(to: buf, closeToOnEnd: false)
         buf.seek(SeekPosition.Begin(0))
-        let decoded = Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
+        let decoded = Message.decode<DataAny>(BufferedInputStream(buf))
         @Assert(decoded.command.value == Command.SUBSCRIBE.value)
     }
 
     @TestCase
     public func messageFactoryUnsubscribe(): Unit {
-        let encoded = Message.unsubscribe(data: DataAny(DataString("topic1")))
+        let encoded = Message.unsubscribe(MessageID(), data: DataAny(DataString("topic1")))
         let buf = ByteBuffer()
-        encoded.copy(to: buf, closeToOnEnd: false)
+        encoded.encode().copy(to: buf, closeToOnEnd: false)
         buf.seek(SeekPosition.Begin(0))
-        let decoded = Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
+        let decoded = Message.decode<DataAny>(BufferedInputStream(buf))
         @Assert(decoded.command.value == Command.UNSUBSCRIBE.value)
     }
 
@@ -307,9 +309,9 @@ public class ProtocolTest {
     public func messageFactoryConsume(): Unit {
         let encoded = Message.consume(once: true, qos: QoS.AtMostOnce, data: DataAny(DataString("test")))
         let buf = ByteBuffer()
-        encoded.copy(to: buf, closeToOnEnd: false)
+        encoded.encode().copy(to: buf, closeToOnEnd: false)
         buf.seek(SeekPosition.Begin(0))
-        let decoded = Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
+        let decoded = Message.decode<DataAny>(BufferedInputStream(buf))
         @Assert(decoded.command.value == Command.CONSUME(ONCE | AT_MOST_ONCE).value)
         @Assert((decoded.command.value & 8u8) == ONCE)
         @Assert((decoded.command.value & 6u8) == AT_MOST_ONCE)
@@ -317,11 +319,11 @@ public class ProtocolTest {
 
     @TestCase
     public func messageFactoryResp(): Unit {
-        let encoded = Message.resp(qos: QoS.AtLeastOnce, ack: true, data: DataAny(DataReal(1.0)))
+        let encoded = Message.resp(MessageID(), qos: QoS.AtLeastOnce, ack: true, data: DataAny(DataReal(1.0)))
         let buf = ByteBuffer()
-        encoded.copy(to: buf, closeToOnEnd: false)
+        encoded.encode().copy(to: buf, closeToOnEnd: false)
         buf.seek(SeekPosition.Begin(0))
-        let decoded = Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
+        let decoded = Message.decode<DataAny>(BufferedInputStream(buf))
         @Assert(decoded.command.value == Command.RESP(AT_LEAST_ONCE | ACK).value)
         @Assert((decoded.command.value & 6u8) == AT_LEAST_ONCE)
         @Assert((decoded.command.value & 1u8) == ACK)
@@ -329,11 +331,11 @@ public class ProtocolTest {
 
     @TestCase
     public func messageFactoryAck(): Unit {
-        let encoded = Message.ack(data: DataAny(DataString("ack-data")))
+        let encoded = Message.ack(MessageID(), data: DataAny(DataString("ack-data")))
         let buf = ByteBuffer()
-        encoded.copy(to: buf, closeToOnEnd: false)
+        encoded.encode().copy(to: buf, closeToOnEnd: false)
         buf.seek(SeekPosition.Begin(0))
-        let decoded = Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
+        let decoded = Message.decode<DataAny>(BufferedInputStream(buf))
         @Assert(decoded.command.value == Command.ACK.value)
     }
 
@@ -341,9 +343,9 @@ public class ProtocolTest {
     public func messageFactoryDeregister(): Unit {
         let encoded = Message.deregister(data: DataAny(DataString("topic1")))
         let buf = ByteBuffer()
-        encoded.copy(to: buf, closeToOnEnd: false)
+        encoded.encode().copy(to: buf, closeToOnEnd: false)
         buf.seek(SeekPosition.Begin(0))
-        let decoded = Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
+        let decoded = Message.decode<DataAny>(BufferedInputStream(buf))
         @Assert(decoded.command.value == Command.DEREGISTER.value)
     }
 
@@ -351,9 +353,9 @@ public class ProtocolTest {
     public func messageFactorySlaveofWithHost(): Unit {
         let encoded = Message.slaveof(reg: true, ack: true, masterHost: "192.168.1.1", masterPort: 8080u16)
         let buf = ByteBuffer()
-        encoded.copy(to: buf, closeToOnEnd: false)
+        encoded.encode().copy(to: buf, closeToOnEnd: false)
         buf.seek(SeekPosition.Begin(0))
-        let decoded = Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
+        let decoded = Message.decode<DataAny>(BufferedInputStream(buf))
         @Assert(decoded.command.value == Command.SLAVEOF(REG | ACK).value)
         @Assert((decoded.command.value & 8u8) == REG)
         @Assert((decoded.command.value & 1u8) == ACK)
@@ -363,9 +365,9 @@ public class ProtocolTest {
     public func messageFactorySlaveofBare(): Unit {
         let encoded = Message.slaveof(reg: false, ack: false)
         let buf = ByteBuffer()
-        encoded.copy(to: buf, closeToOnEnd: false)
+        encoded.encode().copy(to: buf, closeToOnEnd: false)
         buf.seek(SeekPosition.Begin(0))
-        let decoded = Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
+        let decoded = Message.decode<DataAny>(BufferedInputStream(buf))
         @Assert(decoded.command.value == Command.SLAVEOF(0u8).value)
         @Assert((decoded.command.value & 8u8) == 0u8)
         @Assert((decoded.command.value & 1u8) == 0u8)
@@ -423,8 +425,8 @@ public class ProtocolTest {
         let buf = ByteBuffer()
         var threw = false
         try {
-            Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
-        } catch (e: IllegalArgumentException) {
+            Message.decode<DataAny>(BufferedInputStream(buf))
+        } catch (e: InputClosedException) {
             threw = true
         }
         @Assert(threw)
@@ -468,5 +470,109 @@ public class ProtocolTest {
                 }
             }
         }
+    }
+
+    // ========== P0-1 / P0-2 回归：EncodedMessage 释放与写失败断链 ==========
+
+    private func availOf(b: BytesListOutputStreamBuilder): Int64 {
+        let held = ArrayList<BytesListOutputStream>()
+        while (let Some(x) <- b.build(timeout: Duration.Zero)) {
+            held.add(x)
+        }
+        let n = held.size
+        for (x in held) {
+            x.release()
+        }
+        n
+    }
+
+    // release 幂等，且归还 encode 期间借出的全部池项
+    @TestCase
+    public func encodedMessageReleaseIsIdempotent(): Unit {
+        let b = BytesListOutputStream.builder(initSize: 4, minSize: 4, maxSize: 4)
+        DefaultCodec.setBytesPool(b)
+        try {
+            sleep(Duration.millisecond * 200)
+            @Assert(availOf(b) == 4)
+            let em = Message.ping().encode()
+            @Assert(availOf(b) == 3)                 // encode 借了一个缓冲
+            em.release()
+            @Assert(availOf(b) == 4)                 // 已归还
+            em.release()                             // 幂等
+            @Assert(availOf(b) == 4)
+        } finally {
+            DefaultCodec.setBytesPool(BytesListOutputStream.builder(initSize: 1024, minSize: 1024, maxSize: 1024))
+        }
+    }
+
+    // 正常写出后也必须归还池项（不得泄漏）
+    @TestCase
+    public func encodedMessageCopySuccessReleasesPool(): Unit {
+        let b = BytesListOutputStream.builder(initSize: 4, minSize: 4, maxSize: 4)
+        DefaultCodec.setBytesPool(b)
+        try {
+            sleep(Duration.millisecond * 200)
+            let before = availOf(b)
+            let em = Message.ping().encode()
+            em.copy(to: ByteBuffer(), closeToOnEnd: false)
+            @Assert(availOf(b) == before)
+        } finally {
+            DefaultCodec.setBytesPool(BytesListOutputStream.builder(initSize: 1024, minSize: 1024, maxSize: 1024))
+        }
+    }
+
+    // P0-1 + P0-2：写失败也必须归还池项，并关闭目标（避免对端看到半条消息）
+    @TestCase
+    public func encodedMessageCopyFailureReleasesAndClosesTarget(): Unit {
+        let b = BytesListOutputStream.builder(initSize: 4, minSize: 4, maxSize: 4)
+        DefaultCodec.setBytesPool(b)
+        try {
+            sleep(Duration.millisecond * 200)
+            let before = availOf(b)
+            let em = Message.ping().encode()
+            @Assert(availOf(b) < before)              // 借出了缓冲
+
+            let sink = ProtocolTestFailingSink()
+            var threw = false
+            try {
+                em.copy(to: sink)                     // 目标 write 必抛
+            } catch (_: Exception) {
+                threw = true
+            }
+            @Assert(threw)
+            @Assert(sink.isClosed())                  // P0-1：写失败即断链
+            @Assert(availOf(b) == before)             // P0-2：池项已归还
+        } finally {
+            DefaultCodec.setBytesPool(BytesListOutputStream.builder(initSize: 1024, minSize: 1024, maxSize: 1024))
+        }
+    }
+
+    // 截断流（只有命令字节，无 id/data）：必须抛异常，而不是返回垃圾消息
+    @TestCase
+    public func messageDecodeTruncatedBodyThrows(): Unit {
+        let buf = ByteBuffer()
+        buf.write([Command.ACK.value])
+        buf.seek(SeekPosition.Begin(0))
+        var threw = false
+        try {
+            let _ = Message.decode<DataAny>(BufferedInputStream(buf))
+        } catch (_: Exception) {
+            threw = true
+        }
+        @Assert(threw)
+    }
+}
+
+class ProtocolTestFailingSink <: OutputStream & Resource {
+    private var closed = false
+    public func write(bytes: Array<Byte>): Unit {
+        throw Exception('simulated write failure')
+    }
+    public func flush(): Unit {}
+    public func isClosed(): Bool {
+        closed
+    }
+    public func close(): Unit {
+        closed = true
     }
 }

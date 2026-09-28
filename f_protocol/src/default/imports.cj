@@ -24,6 +24,6 @@ internal import fountain::f_base.*
 internal import fountain::f_codec.*
 internal import fountain::f_codec.default.*
 internal import fountain::f_data.*
-internal import fountain::f_pool.BytesCopyTo
+internal import fountain::f_pool.{BytesCopyTo, Releasable}
 internal import fountain::f_protocol.exception.*
 internal import fountain::f_protocol.*

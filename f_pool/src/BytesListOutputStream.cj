@@ -18,10 +18,22 @@ package fountain::f_pool
 import std.collection.ArrayList
 import std.io.OutputStream
 
-public class BytesListOutputStream <: OutputStream & BytesCopyTo {
+public class BytesListOutputStream <: OutputStream & BytesCopyTo & Releasable {
+    private var released = false
     BytesListOutputStream(private let list: ArrayList<Array<Byte>>, private let pool: ArrayListPool<Array<Byte>>){}
     public func write(bytes: Array<Byte>): Unit {
         list.add(bytes)
+    }
+    /**
+     * 归还从池中借出的 list。**幂等**：重复调用无副作用。
+     * 注意：无论是否写出，都必须调用（或调用 copy），否则池项泄漏。
+     */
+    public func release(): Unit {
+        if(released){
+            return
+        }
+        released = true
+        pool.giveBack(list)
     }
     public func copy(to!: OutputStream, closeFromOnEnd!: Bool = true, closeToOnEnd!: Bool = false): Unit {
         try{
@@ -29,7 +41,7 @@ public class BytesListOutputStream <: OutputStream & BytesCopyTo {
                 to.write(bytes)
             }
         }finally{
-            pool.giveBack(list)
+            release()
             if(closeToOnEnd && let r: Resource <- to && !r.isClosed()){
                 r.close()
             }

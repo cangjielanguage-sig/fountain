@@ -83,7 +83,7 @@ public class SegmentedLog <: Resource {
     // 当前文件
     private var file: File
     private var curPath: String
-    @When[os == "Linux"]
+    
     private var mmapPtr: CPointer<Byte> = CPointer<Byte>()
 
     // 状态
