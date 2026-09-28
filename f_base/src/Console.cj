@@ -53,7 +53,7 @@ public struct Console {
     public static func readToEnd(): ?String {
         input.readToEnd()
     }
-    public static func readlnValue<T>(): ?T where T <: Parsable {
+    public static func readlnValue<T>(): ?T where T <: Parsable<T> {
         if(let Some(l) <- input.readln()){
             T.tryParse(l)
         }else{
