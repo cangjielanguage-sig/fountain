@@ -98,8 +98,12 @@ public struct Console {
     public static func readUntil(r: Rune): ?String
     //从标准输入流读到的每个字符作为参数，调用参数，直到返回true时结束，返回读到的每个字符，不包含返回true的字符
     public static func readUntil(predicate: (Rune) -> Bool): ?String
-    //从标准输入流读一个空行
-    public static func readln(): ?String
+    //同ConsoleReader.readln()
+    public static func readln(): ?String 
+    //同ConsoleReader.readToEnd()
+    public static func readToEnd(): ?String 
+    //从标准输入流读一行字符串，直到遇到换行符才返回，返回不包含换行符的字符串转换成的T
+    public static func readlnValue<T>(): ?T where T <: Parsable 
 }
 ```
 
