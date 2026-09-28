@@ -59,7 +59,7 @@ public struct ExitCallbacks {
 }
 @When[os == "Windows"]
 public struct ExitCallbacks {
-    public static func exitGracefully(): Unit {}
+    public static func toExitGracefully(): Unit {}
     public static func atExit(_: UInt16, _: () -> Unit): Unit {}
 }
 
