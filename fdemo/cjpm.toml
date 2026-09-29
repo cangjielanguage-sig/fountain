@@ -11,7 +11,8 @@
   "fountain::f_ticktock" = {path = "../f_ticktock"}
   "fountain::f_version" = {path = "../f_version"}
   "fountain::f_util" = {path = "../f_util"}
-  pgsql = { git = "https://gitcode.com/aibrary/pgsql-driver.git", branch = "main", output-type = "dynamic"}
+#  pgsql = { git = "https://gitcode.com/aibrary/pgsql-driver.git", branch = "main", output-type = "dynamic"}
+  "postgres_driver" = {version = "0.0.3", output-type="dynamic"}
 
 [workspace]
   version = "1.1.0"
