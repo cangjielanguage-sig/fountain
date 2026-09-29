@@ -249,37 +249,37 @@ public struct App {
   compile-option = "--dy-std -Woff all -ldl"
   override-compile-option = "--dy-std -Woff all -ldl"
 [target.x86_64-unknown-linux-gnu.bin-dependencies]
-  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
+  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}", "\${CANGJIE_STDX_PATH}"]
 [target.aarch64-unknown-linux-gnu]
   compile-option = "--dy-std -Woff all -ldl"
   override-compile-option = "--dy-std -Woff all -ldl"
 [target.aarch64-unknown-linux-gnu.bin-dependencies]
-  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
+  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}", "\${CANGJIE_STDX_PATH}"]
 [target.x86_64-w64-mingw32]
   compile-option = "--dy-std -Woff all -lcrypt32"
   override-compile-option = "--dy-std -Woff all -lcrypt32"
 [target.x86_64-w64-mingw32.bin-dependencies]
-  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
+  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}", "\${CANGJIE_STDX_PATH}"]
 [target.x86_64-apple-darwin]
   compile-option = "--dy-std -Woff all"
   override-compile-option = "--dy-std -Woff all"
 [target.x86_64-apple-darwin.bin-dependencies]
-  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
+  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}", "\${CANGJIE_STDX_PATH}"]
 [target.aarch64-apple-darwin]
   compile-option = "--dy-std -Woff all"
   override-compile-option = "--dy-std -Woff all"
 [target.aarch64-apple-darwin.bin-dependencies]
-  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
+  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}", "\${CANGJIE_STDX_PATH}"]
 [target.aarch64-linux-ohos]
   compile-option = "--dy-std -ldl"
   override-compile-option = "--dy-std -ldl"
 [target.aarch64-linux-ohos.bin-dependencies]
-  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}, "\${CANGJIE_FOUNTAIN_LIBS}"]
+  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}", "\${CANGJIE_STDX_PATH}"]
 [target.x86_64-linux-ohos]
   compile-option = "--dy-std -ldl"
   override-compile-option = "--dy-std -ldl"
 [target.x86_64-linux-ohos.bin-dependencies]
-  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}, "\${CANGJIE_FOUNTAIN_LIBS}"]
+  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}", "\${CANGJIE_STDX_PATH}"]
 '''
         File.writeTo(tomlPath, content.unsafeBytes())
         // var path = dir.join('run')
