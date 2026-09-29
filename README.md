@@ -29,7 +29,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
 
 #### 安装
 ```bash
-cjpm install "fountain::fboot"="a.b.c" --root /path/to/install # 把a.b.c换成具体的版本号
+cjpm install fountain::fboot-a.b.c --root /path/to/install # 把a.b.c换成具体的版本号
 export PATH=$PATH:/path/to/install/bin
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/path/to/install/libs/fboot
 ```

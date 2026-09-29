@@ -106,11 +106,13 @@ private let _ = {=>
         map['1'] = 1
         map['2'] = 2
         let data4 = map.toData()
+        data2 = DataObject<TestData2>.populate(data4)
         println('FFFFFFFFFFFFFFFFFFFFFFFFFFFFF ${JsonValue.from(data4)}')
         let s = toJson(data2)//把仓颉对象转成JSON串
         let d = fromJson<TestData2>(s)//把JSON串转成仓颉类对象
         println('GGGGGGGGGGGGGGGGGGGGGGGGGGGGG ${s}')
         println('HHHHHHHHHHHHHHHHHHHHHHHHHHHHH ${d.toData()}')
+        data2 = DataObject<TestData2>.populate(json)
     }catch(e: Exception){
         e.printStackTrace()
         throw e

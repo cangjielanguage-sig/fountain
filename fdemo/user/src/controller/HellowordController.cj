@@ -27,7 +27,7 @@ public class HellowordController {
     private let helloworldService = lookup<HelloworldService>()
     
     @GetMapping[path:"/helloworld", produces:'text/plain', consumes:'application/x-www-form-urlencoded']
-    @IgnoreSecurity
+    @IgnoreSecurity //@IgnoreSecurity @IgnorePrivilege @IgnoreAuth
     public func helloworld(): String {
         helloworldService.sayHello('haha')
         return "helloworld"
