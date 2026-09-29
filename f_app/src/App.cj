@@ -300,7 +300,7 @@ public struct App {
                 if(OS.current.isWindows){
                     sub.replace('/', '\\')
                 }else{
-                    sub
+                    sub.replace('\\', '/')
                 }
             }
             let dir = if (sub.startsWith('/')){
@@ -313,6 +313,9 @@ public struct App {
             dir
         }else{
             getWorkingDirectory()
+        }
+        if(!exists(workingDir)){
+            Directory.create(workingDir, recursive: true)
         }
         let code = execute('cjpm', ['init', arg], workingDirectory: workingDir)
         (code, workingDir)

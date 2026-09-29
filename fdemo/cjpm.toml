@@ -11,8 +11,6 @@
   "fountain::f_ticktock" = {path = "../f_ticktock"}
   "fountain::f_version" = {path = "../f_version"}
   "fountain::f_util" = {path = "../f_util"}
-  # opengauss = {git = "https://gitcode.com/runningW/opengauss-driver.git", branch="master"}
-#  opengauss = {path = "../../opengauss-driver"}
   pgsql = { git = "https://gitcode.com/aibrary/pgsql-driver.git", branch = "main", output-type = "dynamic"}
 
 [workspace]
