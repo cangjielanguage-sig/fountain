@@ -69,3 +69,4 @@ release-1.3.1.alpha
     fountain:f_base.Console 增加新的read*函数
     修改fboot help 输出
     修改几个f_protocol f_net f_codec的bug
+    fix fboot workspace
