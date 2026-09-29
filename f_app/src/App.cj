@@ -274,12 +274,12 @@ public struct App {
   compile-option = "--dy-std -ldl"
   override-compile-option = "--dy-std -ldl"
 [target.aarch64-linux-ohos.bin-dependencies]
-  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}, "\${CANGJIE_FOUNTAIN_LIBS}""]
+  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}, "\${CANGJIE_FOUNTAIN_LIBS}"]
 [target.x86_64-linux-ohos]
   compile-option = "--dy-std -ldl"
   override-compile-option = "--dy-std -ldl"
 [target.x86_64-linux-ohos.bin-dependencies]
-  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}, "\${CANGJIE_FOUNTAIN_LIBS}""]
+  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}, "\${CANGJIE_FOUNTAIN_LIBS}"]
 '''
         File.writeTo(tomlPath, content.unsafeBytes())
         // var path = dir.join('run')
