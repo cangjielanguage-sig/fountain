@@ -17,7 +17,7 @@ package fountain::boot
 
 import std.collection.*
 import std.env
-import pgsql.*
+// import pgsql.*
 import fountain::f_bean.*
 import fountain::f_bean.macros.*
 import fountain::f_data.*
@@ -107,13 +107,13 @@ private let _ = {=>
         map['1'] = 1
         map['2'] = 2
         let data4 = map.toData()
-        data2 = DataObject<TestData2>.populate(data4)
+        data2 = DataObject<TestData2>.populate(data4).getOrThrow()
         println('FFFFFFFFFFFFFFFFFFFFFFFFFFFFF ${JsonValue.from(data4)}')
         let s = toJson(data2)//把仓颉对象转成JSON串
         let d = fromJson<TestData2>(s)//把JSON串转成仓颉类对象
         println('GGGGGGGGGGGGGGGGGGGGGGGGGGGGG ${s}')
         println('HHHHHHHHHHHHHHHHHHHHHHHHHHHHH ${d.toData()}')
-        data2 = DataObject<TestData2>.populate(json)
+        data2 = DataObject<TestData2>.populate(json.toData()).getOrThrow()
     }catch(e: Exception){
         e.printStackTrace()
         throw e
