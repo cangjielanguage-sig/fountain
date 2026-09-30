@@ -39,7 +39,6 @@ f_bloom
 f_store
 f_uring
 fboot
-fleet
 .
 
 [exclude]
@@ -47,3 +46,4 @@ fleet
 [detention]
 f_rpc
 f_llm
+fleet

@@ -290,6 +290,7 @@ public class PublishCommand <: SubCommand {
                 let msg = (json.get('msg')?.asString().value) ?? ''
                 println('check url response - code: ${code}, msg: ${msg}')
                 if(code == 200 && msg == 'success'){
+                    launch('cjpm', ['install', '${organization}::${module}-${version}'])
                     return true
                 }else if(once){
                     return false
