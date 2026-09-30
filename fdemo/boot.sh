@@ -1,9 +1,7 @@
 #!/bin/bash
 
 path=$2
-# if [[ "$path" == "" ]]; then
-#     path='./target' # 默认在当前路径下，以当前文件夹名命名新的文件夹作为编译产物保存路径
-# fi
+target_path=${target_path:-"./target"}
 echo "target-dir=$path"
 args=${@:3}
 
@@ -73,7 +71,7 @@ exports(){
     export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*.userSession(**): *"
     # export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*.sayHello(**): *"
     # export postgres_orm_connectionUrl=$POSTGRES # 如果在build函数配置，就会把URL嵌入编译产物，在此配置则不会，详细见build函数
-    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`find ${path:-"./fdemo"}/release/* -type d|grep -a -v -P '\.build-logs|bin|_stAtIc__|boot'|tr '\n' ':'`
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`find $path/release/* -type d|grep -a -v -P '\.build-logs|bin|_stAtIc__|boot'|tr '\n' ':'`
     echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
 }
 run(){

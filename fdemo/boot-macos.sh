@@ -1,9 +1,7 @@
 #!/bin/bash
 
 target_path=$2
-# if [[ "$target_path" == "" ]]; then
-#     target_path='./target' # 默认在当前路径下，以当前文件夹名命名新的文件夹作为编译产物保存路径
-# fi
+target_path=${target_path:-"./target"}
 echo "target-dir=$target_path"
 args=${@:3}
 
