@@ -1,8 +1,5 @@
 # f_app
 
-**注意⚠️**：本模块为kill 15和CTRL+C注册了信号处理函数。如果不注册信号处理函数也不导入本模块，atExit注册的进程退出函数不会生效。
-
-
 ## 导入
 
 ```cj
@@ -120,22 +117,6 @@ public struct InitializerCollection {
      */
     public static func register(initializer: Initializer): Unit
 }
-```
-
-
-## 注册信号处理函数
-只有linux有效，其它操作系统是空函数体。
-与std.runtime.registerSignalHandler(signal: Signal, handler: (Int32) -> Bool)拥有相同的意义
-```cj
-//注册新的信号处理函数，不清空相同信号的其它处理函数
-public func registerSignalHandler(signals: Array<Signal>, handler: () -> Bool): Unit{}
-public func registerSignalHandler(signals: Array<Signal>, handler: (Int32) -> Bool): Unit {}
-public func registerSignalHandler(signal: Signal, handler: () -> Bool): Unit {}
-
-// 注册前先清空相同信号的其它处理函数
-public func resetAndRegisterSignalHandler(signals: Array<Signal>, handler: () -> Bool): Unit{}
-public func resetAndRegisterSignalHandler(signals: Array<Signal>, handler: (Int32) -> Bool): Unit {}
-public func resetAndRegisterSignalHandler(signal: Signal, handler: () -> Bool): Unit {}
 ```
 
 ## 使用main函数启动应用的简便方法
