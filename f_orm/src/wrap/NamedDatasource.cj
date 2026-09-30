@@ -22,13 +22,42 @@ public class NamedDatasource <: Datasource & Resource {
         private let datasource: Datasource
     ) {
         if (!optionSpecified) {
-            for ((k, v) in ORMConfig.getAllConfigTuples(driverName: driverName)) {
-                setOption(k, v)
-            }
+            setOptions(datasource, ORMConfig.getAllConfigTuples(driverName: driverName))
         }
     }
     public init(driver: Driver, url: String, options: Array<(String, String)>){
-        this(options.size > 0, driver.name, match (driver.open(url, options)) {
+        this(options.size > 0, driver.name, newDatasource(driver, url, options))
+    }
+    public init(driver: Driver, options: Array<(String ,String)>) {
+        this(driver, getUrl(driver), options)
+    }
+    public init(driver: Driver, url: String){
+        this(driver, url, getOptions(driver))
+    }
+    public init(driver: Driver){
+        this(driver, getUrl(driver), getOptions(driver))
+    }
+    private static func getUrl(driver: Driver){
+        ORMConfig.getUrl(driverName: driver.name)
+    }
+    private static func getOptions(driver: Driver){
+        ORMConfig.getAllConfigTuples(driverName: driver.name)
+    }
+    
+    public func connect(): Connection {
+        ConnectionWrap(driverName, datasource.connect())
+    }
+    public func isClosed(): Bool {
+        datasource.isClosed()
+    }
+    public func close(): Unit {
+        datasource.close()
+    }
+    public func setOption(key: String, value: String): Unit {
+        datasource.setOption(key, value)
+    }
+    private static func newDatasource(driver: Driver, url: String, options: Array<(String, String)>){
+        let ds: Datasource = match (driver.open(url, options)) {
             case x: PooledDatasource => x
             case x where driver.preferredPooling =>
                 if (ORMConfig.getNoPool(driverName: driver.name)) {
@@ -58,34 +87,15 @@ public class NamedDatasource <: Datasource & Resource {
                     DatabasePool(driver)
                 }
             case x => x
-        })
+        }
+        println('AAAAAAAAAAAAAAAAAAAAAAAA')
+        setOptions(ds, options)
+        ds
     }
-    public init(driver: Driver, options: Array<(String ,String)>) {
-        this(driver, getUrl(driver), options)
-    }
-    public init(driver: Driver, url: String){
-        this(driver, url, getOptions(driver))
-    }
-    public init(driver: Driver){
-        this(driver, getUrl(driver), getOptions(driver))
-    }
-    private static func getUrl(driver: Driver){
-        ORMConfig.getUrl(driverName: driver.name)
-    }
-    private static func getOptions(driver: Driver){
-        ORMConfig.getAllConfigTuples(driverName: driver.name)
-    }
-    
-    public func connect(): Connection {
-        ConnectionWrap(driverName, datasource.connect())
-    }
-    public func isClosed(): Bool {
-        datasource.isClosed()
-    }
-    public func close(): Unit {
-        datasource.close()
-    }
-    public func setOption(key: String, value: String): Unit {
-        datasource.setOption(key, value)
+    private static func setOptions(ds: Datasource, options: Array<(String, String)>){
+        for((k, v) in options){
+            println('BBBBBBBBBBBBBBBBBBB ${k}: ${v}')
+            ds.setOption(k, v)
+        }
     }
 }
