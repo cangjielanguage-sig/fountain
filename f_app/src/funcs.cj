@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_app
 
 internal func confirmTargetPath(args: Array<String>){
-    let path = if(args.size > 1){
+    let path = if(args.size > 1 && !this.args[1].startsWith('-')){
         Path(args[1])
     }else{
         getWorkingDirectory()
