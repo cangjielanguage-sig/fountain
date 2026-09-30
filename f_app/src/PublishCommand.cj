@@ -309,6 +309,7 @@ public class PublishCommand <: SubCommand {
         while(let Some(m) <- q.remove()){
             if(let Some(info) <- moduleInfos.get(m)) {
                 let path = all[m]
+                let lastFail = Box<MonoTime>(MonoTime.now())
                 func pub(dry: Bool){
                     for(d in info.dependencing where moduleInfos.contains(d)){
                         println('to publish ${info.organization}::${m} after ${d}')
@@ -331,7 +332,8 @@ public class PublishCommand <: SubCommand {
                         if(success){
                             success = cjpm(path, 'cjpm publish success', ['publish'], dry){_=>}
                         }
-                        if(nodep.value != ''){
+                        if(nodep.value != '' && let now <- MonoTime.now() && now - lastFail.value >= Duratoin.minute){
+                            lastFail.value = now
                             cjpm(path, '', ['install', nodep.value], dry){_=>}
                         }
                         if(!success){
