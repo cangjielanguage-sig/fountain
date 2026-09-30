@@ -1,9 +1,9 @@
 #!/bin/bash
 
 path=$2
-if [[ "$path" == "" ]]; then
-    path='./fdemo'
-fi
+# if [[ "$path" == "" ]]; then
+#     path='./target' # 默认在当前路径下，以当前文件夹名命名新的文件夹作为编译产物保存路径
+# fi
 echo "target-dir=$path"
 args=${@:3}
 
