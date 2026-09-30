@@ -454,15 +454,24 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
         }
         let appVersionPath = versionModuleDir.join('src/${n}_AppVersion.cj')
         File.writeTo(appVersionPath, genCode(n, version).unsafeBytes())
-        let argArray = Array<String>(2 + args.size){i => 
+        let buildArgs = ArrayList<String>()
+        let envvars = HashMap<String, String>(getVariables())
+        for(arg in args){
+            if(arg.startsWith('--') && let Some(idx) <- arg.indexOf('=')){
+                envvars[arg[2 .. idx]] = arg[idx + 1 ..]
+            }else{
+                buildArgs.add(arg)
+            }
+        }
+        let argArray = Array<String>(2 + buildArgs.size){i => 
             match(i){
                 case 0 => 'build'
                 case 1 => '--target-dir=${targetDir}'
-                case _ => args[i - 2]
+                case _ => buildArgs[i - 2]
             }
         }
         stdOut.writeln('BUILD ARGS: ${argArray}')
-        execute('cjpm', argArray, workingDirectory: workingDir)
+        execute('cjpm', argArray, workingDirectory: workingDir, environment: envvars)
     }
     private func copyToml(source: String, path: Path){
         copy(path.join('${source}/cjpm.toml'), to: path.join('cjpm.toml'), overwrite: true)

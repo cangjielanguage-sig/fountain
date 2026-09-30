@@ -19,7 +19,7 @@ internal import fountain::f_version.*
 internal import std.collection.*
 internal import std.collection.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue}
 internal import std.convert.*
-internal import std.env.{getWorkingDirectory, getCommand, atExit, getStdOut}
+internal import std.env.{getWorkingDirectory, getCommand, atExit, getStdOut, getVariables}
 internal import std.fs.*
 internal import std.io.{StringReader, ByteBuffer, InputStream}
 internal import std.process.*
