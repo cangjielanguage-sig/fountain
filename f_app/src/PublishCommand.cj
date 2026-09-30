@@ -318,11 +318,21 @@ public class PublishCommand <: SubCommand {
                     println('publishing ${info.organization}::${m} ...')
                     replaceDependencies(path, info.organization, all, dry)
                     try{
-                        cjpm(path, 'cjpm clean success', ['clean'], dry)
+                        cjpm(path, 'cjpm clean success', ['clean'], dry){_=>}
                         removeIfExists(path.join('cjpm.lock'))
-                        var success = cjpm(path, 'cjpm bundle success', bundleArgs, dry)
+                        let nodep = Box<String>('')
+                        var success = cjpm(path, 'cjpm bundle success', bundleArgs, dry){line => 
+                            let start = "Error: wrong format with dependency '"
+                            var l = line
+                            if(line.startsWith(start)){
+                               nodep.value = line[start.size .. line.lastIndexOf('"').getOrThrow()].replace(' = "', '-')
+                            }
+                        }
                         if(success){
-                            success = cjpm(path, 'cjpm publish success', ['publish'], dry)
+                            success = cjpm(path, 'cjpm publish success', ['publish'], dry){_=>}
+                        }
+                        if(nodep.value != ''){
+                            cjpm(path, '', ['install', nodep.value], dry){_=>}
                         }
                         if(!success){
                             throw Exception('to publish ${m} failed')
@@ -355,7 +365,7 @@ public class PublishCommand <: SubCommand {
             }
         }
     }
-    private func cjpm(path: Path, successLine: String, args: Array<String>, dry: Bool): Bool {
+    private func cjpm(path: Path, successLine: String, args: Array<String>, dry: Bool, lineChecker: (String) -> Unit): Bool {
         println('running "cjpm ${String.join(args, delimiter: ' ')}" in ${path} ...')
         println('')
         if(dry){
@@ -366,6 +376,7 @@ public class PublishCommand <: SubCommand {
         var success = false
         for(line in cmdout.lines()){
             println(line)
+            lineChecker(line)
             if(line == successLine){
                 success = true
             }
