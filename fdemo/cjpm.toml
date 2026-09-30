@@ -12,7 +12,7 @@
   "fountain::f_version" = {path = "../f_version"}
   "fountain::f_util" = {path = "../f_util"}
 #  pgsql = { git = "https://gitcode.com/aibrary/pgsql-driver.git", branch = "main", output-type = "dynamic"}
-  "postgres_driver" = {version = "0.0.3", output-type="dynamic"}
+  "postgres_driver" = {version = "0.0.3", output-type="dynamic"} # 这个驱动支持从option传入用户名密码，orm配置为orm_option_username/orm_option_password/postgres_orm_option_username/postgres_orm_option_password
 
 [workspace]
   version = "1.1.0"
