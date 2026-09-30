@@ -91,6 +91,23 @@ perfReport(){
 build(){
     export CANGJIE_STDX_DYNAMIC_PATH="$(cygpath -w "$CANGJIE_STDX_DYNAMIC_PATH")"
     export CANGJIE_STDX_PATH="$CANGJIE_STDX_DYNAMIC_PATH"
+    mkdir -p "$target_path/release/libs/"
+    export LIB_WIN="$(cygpath -wa "$target_path/release/libs")"
+    powershell.exe -NoProfile -Command '
+    $map = @{
+        "CANGJIE_STDX_DYNAMIC_PATH"    = $env:CANGJIE_STDX_DYNAMIC_PATH
+        "CANGJIE_STDX_PATH"            = $env:CANGJIE_STDX_PATH
+    }
+    foreach ($k in $map.Keys) {
+        [Environment]::SetEnvironmentVariable($k, $map[$k], "User")
+    }
+    $lib = $env:LIB_WIN
+    $p = [Environment]::GetEnvironmentVariable('Path','User')
+    if ([string]::IsNullOrEmpty($p)) { $p = '' }
+    if (-not $p.Contains($lib)) {
+        [Environment]::SetEnvironmentVariable('Path', ($p.TrimEnd(";") + ";" + $lib), "User")
+    }
+    '
     # 以下是数据库敏感信息，此处仅做演示，实际使用时最好不要暴露在项目代码中
     # connectionUrl username password 这些配置如果在编译环境配置就会作为被嵌入编译产物。如果在运行环境配置就会在进程启动时加载
     # 如果配置了密钥就会把敏感信息加密后的字节数组嵌入编译产物，否则会把这些字符串的UTF8字节数组嵌入编译产物
@@ -101,29 +118,10 @@ build(){
     args="$args --postgres_orm_connectionUrl=$POSTGRES"
     args="$args --postgres_orm_option_username=$POSTGRES_USERNAME"
     args="$args --postgres_orm_option_password=$POSTGRES_PASSWORD"
-    powershell.exe -NoProfile -Command '
-    $map = @{
-        "CANGJIE_STDX_DYNAMIC_PATH"    = $env:CANGJIE_STDX_DYNAMIC_PATH
-        "CANGJIE_STDX_PATH"            = $env:CANGJIE_STDX_PATH
-    }
-    foreach ($k in $map.Keys) {
-        [Environment]::SetEnvironmentVariable($k, $map[$k], "User")
-    }
-    '
     # 以上是敏感信息
 
     fboot build $target_path $args
-    mkdir -p "$target_path/release/libs/"
     cp "$target_path"/release/*/*.dll "$target_path/release/libs/"
-    LIB_WIN="$(cygpath -wa "$target_path/release/libs")"
-    powershell.exe -NoProfile -Command "
-    \$lib = '$LIB_WIN'
-    \$p = [Environment]::GetEnvironmentVariable('Path','User')
-    if ([string]::IsNullOrEmpty(\$p)) { \$p = '' }
-    if (-not \$p.Contains(\$lib)) {
-        [Environment]::SetEnvironmentVariable('Path', (\$p.TrimEnd(';') + ';' + \$lib), 'User')
-    }
-    "
     echo -e '\a'
 }
 
