@@ -319,22 +319,16 @@ public class PublishCommand <: SubCommand {
                     println('publishing ${info.organization}::${m} ...')
                     replaceDependencies(path, info.organization, all, dry)
                     try{
-                        cjpm(path, 'cjpm clean success', ['clean'], dry){_=>}
+                        cjpm(path, 'cjpm clean success', ['clean'], dry)
                         removeIfExists(path.join('cjpm.lock'))
                         let nodep = Box<String>('')
-                        var success = cjpm(path, 'cjpm bundle success', bundleArgs, dry){line => 
-                            let start = "Error: wrong format with dependency '"
-                            var l = line
-                            if(line.startsWith(start)){
-                               nodep.value = line[start.size .. line.lastIndexOf('"').getOrThrow()].replace(' = "', '-')
-                            }
-                        }
+                        var success = cjpm(path, 'cjpm bundle success', bundleArgs, dry)
                         if(success){
-                            success = cjpm(path, 'cjpm publish success', ['publish'], dry){_=>}
+                            success = cjpm(path, 'cjpm publish success', ['publish'], dry)
                         }
                         if(nodep.value != '' && let now <- MonoTime.now() && now - lastFail.value >= Duration.minute){
                             lastFail.value = now
-                            cjpm(path, '', ['install', nodep.value], dry){_=>}
+                            cjpm(path, '', ['install', nodep.value], dry)
                         }
                         if(!success){
                             throw Exception('to publish ${m} failed')
@@ -367,7 +361,7 @@ public class PublishCommand <: SubCommand {
             }
         }
     }
-    private func cjpm(path: Path, successLine: String, args: Array<String>, dry: Bool, lineChecker: (String) -> Unit): Bool {
+    private func cjpm(path: Path, successLine: String, args: Array<String>, dry: Bool): Bool {
         println('running "cjpm ${String.join(args, delimiter: ' ')}" in ${path} ...')
         println('')
         if(dry){
@@ -378,7 +372,6 @@ public class PublishCommand <: SubCommand {
         var success = false
         for(line in cmdout.lines()){
             println(line)
-            lineChecker(line)
             if(line == successLine){
                 success = true
             }
