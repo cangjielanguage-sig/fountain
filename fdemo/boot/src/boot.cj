@@ -17,7 +17,7 @@ package fountain::boot
 
 import std.collection.*
 import std.env
-import pgsql.*
+// import pgsql.*
 import fountain::f_bean.*
 import fountain::f_bean.macros.*
 import fountain::f_data.*
@@ -25,7 +25,7 @@ import fountain::f_data.macros.*
 import fountain::f_log.LoggerFactory
 // import fountain::f_mockdb.*
 import fountain::f_orm.* // orm初始化不要再导入这个包，会在首个DAO初始化时自动初始化orm
-// import postgres_driver.*
+import postgres_driver.*
 
 private let _ = {=>
     try{

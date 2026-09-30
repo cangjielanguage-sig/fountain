@@ -1,8 +1,8 @@
 #!/bin/bash
 
-path=$2
-target_path=${target_path:-"./target"}
-echo "target-dir=$path"
+target_path=$2
+target_path=${target_path:-"./fdemo"}
+echo "target-dir=$target_path"
 args=${@:3}
 
 exports(){
@@ -71,16 +71,16 @@ exports(){
     export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*.userSession(**): *"
     # export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*.sayHello(**): *"
     # export postgres_orm_connectionUrl=$POSTGRES # 如果在build函数配置，就会把URL嵌入编译产物，在此配置则不会，详细见build函数
-    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`find $path/release/* -type d|grep -a -v -P '\.build-logs|bin|_stAtIc__|boot'|tr '\n' ':'`
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`find $target_path/release/* -type d|grep -a -v -P '\.build-logs|bin|_stAtIc__|boot'|tr '\n' ':'`
     echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
 }
 run(){
     exports
-    fboot run $path --dylibPattern='(boot|user\.util\.(auth|cron)|\.(controller|service\.impl))'
+    fboot run $target_path --dylibPattern='(boot|user\.util\.(auth|cron)|\.(controller|service\.impl))'
 }
 perfRecord(){
     exports
-    cjprof record -f max -- $CJPM_INSTALL/bin/fboot run $path --dylibPattern='(boot|user\.util\.(auth|cron)|\.(controller|service\.impl))'
+    cjprof record -f max -- $CJPM_INSTALL/bin/fboot run $target_path --dylibPattern='(boot|user\.util\.(auth|cron)|\.(controller|service\.impl))'
 
 }
 perfReport(){
@@ -102,12 +102,12 @@ build(){
     export orm_sm4Iv=$(fboot randhex 32)
     # 以上是敏感信息
 
-    fboot build $path $args
+    fboot build $target_path $args
     echo -e '\a'
 }
 
 cleanUpdate(){
-    fboot cleanUpdate $path
+    fboot cleanUpdate $target_path
     echo -e '\a'
 }
 
