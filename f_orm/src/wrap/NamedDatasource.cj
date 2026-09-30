@@ -88,13 +88,11 @@ public class NamedDatasource <: Datasource & Resource {
                 }
             case x => x
         }
-        println('AAAAAAAAAAAAAAAAAAAAAAAA')
         setOptions(ds, options)
         ds
     }
     private static func setOptions(ds: Datasource, options: Array<(String, String)>){
         for((k, v) in options){
-            println('BBBBBBBBBBBBBBBBBBB ${k}: ${v}')
             ds.setOption(k, v)
         }
     }
