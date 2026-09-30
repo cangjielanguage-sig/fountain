@@ -332,7 +332,7 @@ public class PublishCommand <: SubCommand {
                         if(success){
                             success = cjpm(path, 'cjpm publish success', ['publish'], dry){_=>}
                         }
-                        if(nodep.value != '' && let now <- MonoTime.now() && now - lastFail.value >= Duratoin.minute){
+                        if(nodep.value != '' && let now <- MonoTime.now() && now - lastFail.value >= Duration.minute){
                             lastFail.value = now
                             cjpm(path, '', ['install', nodep.value], dry){_=>}
                         }
