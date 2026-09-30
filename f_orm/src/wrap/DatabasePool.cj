@@ -25,12 +25,12 @@ import fountain::f_pool.Pool
 public class DatabasePool <: Resource & Datasource {
     private static let logger = LoggerFactory.getLogger<DatabasePool>()
 
-    private let driver: Driver
+    private let ds: Datasource
     private let pool: Pool<PooledConnection>
     private var connectTimeout: Duration
 
     public init(
-        driver!: Driver,
+        ds!: Datasource,
         initSize!: Int64 = 0,
         minSize!: Int64 = 0,
         maxSize!: Int64 = 10,
@@ -41,10 +41,9 @@ public class DatabasePool <: Resource & Datasource {
         idleTimeout!: Duration = Duration.Zero,
         checkInterval!: Duration = Duration.minute * 5,
         connectTimeout!: Duration = Duration.Max,
-        creator!: () -> Connection,
         checker!: (Connection) -> Bool
     ) {
-        this.driver = driver
+        this.ds = ds
         this.connectTimeout = connectTimeout
         this.pool = Pool<PooledConnection>(
             initSize: initSize,
@@ -55,7 +54,7 @@ public class DatabasePool <: Resource & Datasource {
             checkOnReturning: checkOnReturning,
             idleTimeout: idleTimeout,
             checkInterval: checkInterval,
-            creator: {=> PooledConnection(creator())},
+            creator:  {=> PooledConnection(ds.connect())},
             checker: {
                 c => try {
                     if(connectionLife > Duration.Zero && let conn: PooledConnection <- c && MonoTime.now() - conn.birth >= connectionLife) {
@@ -80,7 +79,7 @@ public class DatabasePool <: Resource & Datasource {
         )
     }
     public init(
-        driver!: Driver,
+        ds!: Datasource,
         initSize!: Int64 = 0,
         minSize!: Int64 = 0,
         maxSize!: Int64 = 10,
@@ -91,11 +90,10 @@ public class DatabasePool <: Resource & Datasource {
         idleTimeout!: Duration = Duration.Zero,
         checkInterval!: Duration = Duration.minute * 5,
         connectTimeout!: Duration = Duration.Max,
-        creator!: () -> Connection,
         checkSql!: String = "select 1"
     ) {
         this(
-            driver: driver,
+            ds: ds,
             initSize: initSize,
             minSize: minSize,
             maxSize: maxSize,
@@ -106,7 +104,6 @@ public class DatabasePool <: Resource & Datasource {
             idleTimeout: idleTimeout,
             checkInterval: checkInterval,
             connectTimeout: connectTimeout,
-            creator: creator,
             checker: {
                 c => if (checkSql[0..6].toLower() == "select") {
                     try (stmt = c.prepareStatement(checkSql)) {
@@ -124,9 +121,12 @@ public class DatabasePool <: Resource & Datasource {
             }
         )
     }
-    public init(driver: Driver, creator: () -> Connection) {
+    public init(driver: Driver, options: Array<(String, String)>) {
+        this(driver, driver.open(ORMConfig.getUrl(driverName: driver.name), options))
+    }
+    public init(driver: Driver, ds: Datasource){
         this(
-            driver: driver,
+            ds: ds,
             initSize: ORMConfig.getPoolInitSize(driverName: driver.name),
             minSize: ORMConfig.getPoolMinSize(driverName: driver.name),
             maxSize: ORMConfig.getPoolMaxSize(driverName: driver.name),
@@ -137,18 +137,8 @@ public class DatabasePool <: Resource & Datasource {
             idleTimeout: ORMConfig.getIdleTimeout(driverName: driver.name),
             checkInterval: ORMConfig.getPoolCheckInterval(driverName: driver.name),
             connectTimeout: ORMConfig.getConnectTimeout(driverName: driver.name),
-            creator: creator,
             checkSql: ORMConfig.getPoolCheckSql(driverName: driver.name)
         )
-    }
-    public init(driver: Driver, options: Array<(String, String)>) {
-        this(driver, {
-            =>
-                let ds = driver.open(ORMConfig.getUrl(driverName: driver.name), options)
-                {
-                    => ds.connect()
-                }
-        }())
     }
 
     public func isClosed(): Bool {
@@ -156,6 +146,7 @@ public class DatabasePool <: Resource & Datasource {
     }
     public func close(): Unit {
         if (!isClosed()) {
+            this.ds.close()
             pool.close()
         }
     }
@@ -166,7 +157,9 @@ public class DatabasePool <: Resource & Datasource {
         }
         pool.get(timeout: timeout)?.activate(pool.giveBack)
     }
-    public func setOption(key: String, value: String): Unit {}
+    public func setOption(key: String, value: String): Unit {
+        this.ds.setOption(key, value)
+    }
     public func connect(): Connection {
         getConnection().getOrThrow{ConnectionException()}
     }

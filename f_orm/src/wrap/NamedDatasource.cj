@@ -84,7 +84,7 @@ public class NamedDatasource <: Datasource & Resource {
                     }
                     p
                 } else {
-                    DatabasePool(driver)
+                    DatabasePool(driver, x)
                 }
             case x => x
         }
