@@ -102,7 +102,7 @@ build(){
     export orm_sm4Iv=$(fboot randhex 32)
     # 以上是敏感信息
 
-    fboot build $target_path $args
+    fboot build $target_path
     echo -e '\a'
 }
 
