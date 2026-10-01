@@ -22,7 +22,7 @@ public class NamedDatasource <: Datasource & Resource {
         private let datasource: Datasource
     ) {
         if (!optionSpecified) {
-            setOptions(datasource, ORMConfig.getAllConfigTuples(driverName: driverName))
+            setOptions(datasource, ORMConfig.getAllOptions(driverName: driverName))
         }
     }
     public init(driver: Driver, url: String, options: Array<(String, String)>){
@@ -41,7 +41,7 @@ public class NamedDatasource <: Datasource & Resource {
         ORMConfig.getUrl(driverName: driver.name)
     }
     private static func getOptions(driver: Driver){
-        ORMConfig.getAllConfigTuples(driverName: driver.name)
+        ORMConfig.getAllOptions(driverName: driver.name)
     }
     
     public func connect(): Connection {

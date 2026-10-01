@@ -30,7 +30,7 @@ public class DatabasePool <: Resource & Datasource {
     private var connectTimeout: Duration
 
     public init(
-        ds!: Datasource,
+        ds: Datasource,
         initSize!: Int64 = 0,
         minSize!: Int64 = 0,
         maxSize!: Int64 = 10,
@@ -79,7 +79,7 @@ public class DatabasePool <: Resource & Datasource {
         )
     }
     public init(
-        ds!: Datasource,
+        ds: Datasource,
         initSize!: Int64 = 0,
         minSize!: Int64 = 0,
         maxSize!: Int64 = 10,
@@ -92,8 +92,7 @@ public class DatabasePool <: Resource & Datasource {
         connectTimeout!: Duration = Duration.Max,
         checkSql!: String = "select 1"
     ) {
-        this(
-            ds: ds,
+        this(ds,
             initSize: initSize,
             minSize: minSize,
             maxSize: maxSize,
@@ -121,9 +120,35 @@ public class DatabasePool <: Resource & Datasource {
             }
         )
     }
-    public init(driver: Driver, options: Array<(String, String)>) {
-        this(driver, driver.open(ORMConfig.getUrl(driverName: driver.name), options))
+    public init(
+        driver: Driver,
+        options!: Array<(String, String)> = [],
+        initSize!: Int64 = 0,
+        minSize!: Int64 = 0,
+        maxSize!: Int64 = 10,
+        checkOnCreation!: Bool = false,
+        checkOnBorrowing!: Bool = true,
+        checkOnReturning!: Bool = true,
+        connectionLife!: Duration = Duration.hour,
+        idleTimeout!: Duration = Duration.Zero,
+        checkInterval!: Duration = Duration.minute * 5,
+        connectTimeout!: Duration = Duration.Max,
+        checkSql!: String = "select 1"
+    ) {
+        this(open(driver, options), 
+             initSize: initSize,
+             minSize: minSize,
+             maxSize: maxSize,
+             checkOnCreation: checkOnCreation,
+             checkOnBorrowing: checkOnBorrowing,
+             checkOnReturning: checkOnReturning,
+             connectionLife: connectionLife,
+             idleTimeout: idleTimeout,
+             checkInterval: checkInterval,
+             connectTimeout: connectTimeout,
+             checkSql: checkSql)
     }
+    
     public init(driver: Driver, ds: Datasource){
         this(
             ds: ds,
@@ -140,7 +165,9 @@ public class DatabasePool <: Resource & Datasource {
             checkSql: ORMConfig.getPoolCheckSql(driverName: driver.name)
         )
     }
-
+    private static func open(driver: Driver, options: Array<(String, String)>){
+        return driver.open(ORMConfig.getUrl(driverName: driver.name), options)
+    }
     public func isClosed(): Bool {
         pool.isClosed()
     }

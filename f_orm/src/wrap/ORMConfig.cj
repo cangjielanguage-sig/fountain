@@ -141,15 +141,15 @@ public class ORMConfig {
         }
         confMap
     }
-    private static func getAllConfigTupleIterator(driverName: String): Iterator<(String, String)>{
+    private static func getAllOptionIterator(driverName: String): Iterator<(String, String)>{
         getAllConfigs(driverName: driverName).iterator().filter{tpl => tpl[0].contains(ormOption)}.map{tpl =>
             var key = tpl[0]
             key = key[key.indexOf(ormOption).getOrThrow() + ormOption.size ..]
             (key, tpl[1])
         }
     }
-    public static func getAllConfigTuples(driverName!: String = String.empty): Array<(String, String)> {
-        getAllConfigTupleIterator(driverName).toArray()
+    public static func getAllOptions(driverName!: String = String.empty): Array<(String, String)> {
+        getAllOptionIterator(driverName).toArray()
     }
     public static func getOption(option: String, driverName!: String = String.empty): ?String {
         let key = '${ormOption}${option}'

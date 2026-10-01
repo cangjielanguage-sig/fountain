@@ -167,7 +167,7 @@ let user = dao.findUser(1)
 
 * 全局配置：`orm_<key>`；
 * **按驱动覆盖**：`<driverName>_orm_<key>`，优先级高于全局配置（`getConf` 先查 `<driverName>_<key>`，查不到再回退全局 `key`）；
-* `orm_options_<key>=<value>`：会被收集为驱动初始化 options（`getAllConfigTuples()`）。
+* `orm_options_<key>=<value>`：会被收集为驱动初始化 options（`getAllOptions()`）。
 
 ### 3.1 驱动与连接
 
@@ -251,7 +251,7 @@ public class ORMConfig {
     // 原始配置读取
     public static func getConf(driverName!: String = String.empty, key!: String): ?String
     public static func getAllConfigs(driverName!: String = String.empty): Map<String, String>
-    public static func getAllConfigTuples(driverName!: String = String.empty): Array<(String, String)>
+    public static func getAllOptions(driverName!: String = String.empty): Array<(String, String)>
 
     // 驱动
     public static func getDefaultDriver(): String        // orm_defaultDriver ?? orm_drivers 的首个驱动 ?? ''
