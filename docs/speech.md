@@ -110,8 +110,9 @@ fboot version
 
 > fountain 没有自己的配置文件格式。端口、连接池、事务规则、日志格式、数据库连接串——全部是环境变量。
 >
-> 好处是容器化/Docker/K8s 天然适配；更妙的是 `fboot build` 支持把 `--key=value` 形式参数**在编译期注入到产物里**，而运行期同名环境变量会**覆盖**它。所以你可以：
-> - 编译期把连接 URL、用户名、密码嵌入产物（配合 SM4 加密，见 `fboot randhex` 那节）；
+> 好处是容器化/Docker/K8s 天然适配；更妙的是 `fboot build` 支持把SM4 加密KEY/IV、数据库连接URL、数据库的用户名密码以`--key=value` 命令行参数的形式或者环境变量的形式**在编译期注入到产物里**，而运行期同名环境变量会**覆盖**它。
+所以你可以：
+> - 做到运行环境敏感信息安全性
 > - 运行期用环境变量覆盖，做到「一份产物、多环境部署」。
 
 ## 1.4 什么时候不该用 fountain
@@ -195,14 +196,21 @@ fboot help
     - <dir_path>是要创建workspace的路径，可以是绝对路径或相对路径，缺省是当前工作路径
 6.  fboot module 将当前目录初始化为仓颉dynamic项目
 7.  fboot module <module_name> 在当前目录创建名为<module_name>的子目录，并初始化为仓颉dynamic模块，并把模块加入当前目录的cjpm.toml
-8. fboot build 编译使用fountain开发的应用项目
-   - 如果要指定编译产物保存路径，必须是build后的第一个参数，这个参数只有路径本身
-   - 其他参数将分为两类，--开头且包含=的参数作为cjpm build子进程的环境变量传入子进程，其他参数作为cjpm build的命令行参数
-9. fboot count 数当前目录的仓颉代码模块数、包数、文件数、行数、计数耗时
+8.  fboot cleanUpdate 其实是为当前仓颉项目执行了cjpm clean && rm ./cjpm.lock && cjpm update
+9.  fboot build 编译使用fountain开发的应用项目
+    - 如果要指定编译产物保存路径，必须是build后的第一个参数，这个参数只有路径本身
+    - 其他参数将分为两类，--开头且包含=的参数作为cjpm build子进程的环境变量传入子进程，其他参数作为cjpm build的命令行参数
+10. fboot count 数当前目录的仓颉代码模块数、包数、文件数、行数、计数耗时
 11. fboot pub <version> 发布当前路径下的仓颉模块
 12. fboot randhex n 生成n位随机16进制数，eg. fboot randhex 16
 ==============下面的命令用来管理fountain本身===================
 13. fboot version x.y.z 用指定版本号替换cjpm.toml和App.cj的版本号，并提交且推送当前全部修改
+    - fboot version x.y.z
+    - fboot version x.y.z '提交的内容'，以指定内容执行git commit
+    - fboot version x.y.z tag，除了替换版本号，还会用指定的版本号创建tag：release-x.y.z
+    - fboot version x.y.z tag '版本消息'，除了替换版本号，还会以'版本消息'创建附注tag
+    - fboot version x.y.z '提交的内容' tag
+    - fboot version x.y.z '提交的内容' tag '版本消息'
 14. fboot version 显示当前fountain版本号
 15. fboot help 显示命令列表
 ```
@@ -322,7 +330,7 @@ fboot build [PATH] [args...]
 
 - `PATH` **必须是第一个参数，且只能是路径**；缺省当前目录；
 - 其余参数分两类：
-  - `--key=value`：作为**环境变量**传给 `cjpm build` 子进程（这就是「编译期注入配置」的实现方式）；
+  - `--key=value`：作为**配置项**传给 `cjpm build` 子进程（这就是「编译期注入配置」的实现方式）；
   - 其它：原样作为 `cjpm build` 的命令行参数。
 
 ### 两个隐藏动作
