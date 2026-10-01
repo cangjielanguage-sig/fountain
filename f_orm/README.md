@@ -1044,7 +1044,8 @@ public abstract class Columns <: ToString & Iterable<Column> {
     public func tableAlias(alias: String): This       // 给该列集合下所有列设置表别名
 }
 
-// 所有「可出现在 select 列表 / 比较表达式左侧」的表达式（列、聚合函数）的基类
+// SQL 表达式基类：列（Column）、聚合函数（SqlFunc）与逻辑表达式（LogicalExpr）都继承它，
+// 因此 AS / ASC / DESC 与 eq / IN / LIKE 等比较方法对三者统一可用
 public abstract class SqlExpr <: ToString {
     public func AS(alias: String): This               // 别名（与 ASC/DESC 互斥）
     public func ASC(): This                           // 升序
@@ -1109,20 +1110,24 @@ public enum CondRelOp <: ToString { | AND | OR | NOT }    // toString() → "and
 ### 10.3 `LogicalExpr` 家族
 
 ```cangjie
-public interface LogicalExpr <: ToString {}
+public abstract class LogicalExpr <: SqlExpr & ToString {}   // 抽象类，且继承 SqlExpr
 
-public struct EmptyExpr <: LogicalExpr                     // toString() → ''
-public open class CmpExpr <: RootDAO & LogicalExpr          // 单列比较，如 `id = ?`
+public class EmptyExpr <: LogicalExpr                       // 空表达式：toString() → ''；AS/ASC/DESC 与所有比较方法都返回自身
+private struct ExprSqlExec <: RootDAO {}                    // 包内辅助类型：借 RootDAO.arg 渲染字面量
+public open class CmpExpr <: LogicalExpr                    // 单列比较，如 `id = ?`；支持 AS / ASC / DESC 后缀
 public class BetweenExpr <: CmpExpr                         // `col BETWEEN ? AND ?`
-public class InExpr<T> <: RootDAO & LogicalExpr             // `col IN (?, ...)`
-public class In2Expr<I, T> <: RootDAO & LogicalExpr where I <: Collection<T>   // 二维 IN
+public class InExpr<T> <: LogicalExpr                       // `col IN (?, ...)`
+public class In2Expr<I, T> <: LogicalExpr where I <: Collection<T>   // 二维 IN
 public class NullExpr <: CmpExpr                            // `col IS NULL` / `IS NOT NULL`
 public class RelationExpr <: LogicalExpr & ToString         // AND / OR / NOT 组合
 public class ParenExpr <: LogicalExpr & ToString            // 括号
 public class CommaExpr <: LogicalExpr & ToString            // 逗号分隔（用于 SET 多列赋值）
 ```
 
-> 以上表达式类的构造函数均为 internal，业务侧只通过 `Column` 的比较方法、`RootDAO.AND/OR/NOT`、`meet(...)` 以及子句的 `SET` / `WHERE` / `HAVING` 构造它们；`CmpExpr` / `InExpr` / `In2Expr` 额外公开 `executor` 属性。
+> `LogicalExpr` 现在是抽象类并继承 `SqlExpr`，因此别名（`AS`）、排序（`ASC` / `DESC`）和 `eq` / `IN` / `LIKE` 等比较方法对逻辑表达式同样可用；`CmpExpr.toString()` 会按 `AS` / `ASC|DESC` 追加后缀。
+> 以上表达式类的构造函数均为 internal，业务侧只通过 `Column` / `SqlFunc` 的比较方法、`RootDAO.AND/OR/NOT`、`meet(...)` 以及子句的 `SET` / `WHERE` / `HAVING` 构造它们。
+> `InExpr` / `In2Expr` 渲染时对 `Column` 特殊处理——直接使用未加引用符的列名（`case x: Column => ' ${x.name} ...'`），其它 `SqlExpr` 走 `toString()`。
+> `RelationExpr` 拼接时会跳过空表达式；`NOT` 只接受一个操作数，否则抛 `SqlArgException('NOT only support one expr')`；`ParenExpr` 对空表达式直接返回 `''`。
 
 ### 10.4 `RootDAO` 的 `LogicalExpr` 版本逻辑运算
 
@@ -1445,7 +1450,7 @@ public class SingleColumnIterator<T> <: Iterator<T> & Resource {
 
 两者的构造函数均为 internal，只能由框架创建；`next()` 在结果集耗尽时返回 `Option<T>.None`。`executor.iterator<T>(mappers)` 返回的 `QueryResultIterator<T>`（同时是 `Resource`）可用 `try (it = executor.iterator<UserPO>()) { ... }` 自动关闭，也可显式 `close()`；而 `executor.iterator<T>()` / `executor.singleIterator<T>()` 的**静态返回类型是 `Iterator<T>`**，`Resource` 语义不可用（只用 `try` 无法自动关闭），需要显式关闭时请用带 `mappers` 的重载。
 
-> `SingleColumnIterator` 的 `column` 形参目前不参与取值——无论是否指定 `column`，都由 `index`（默认 0）决定读取哪一列，见 [19.6](#196-已知问题源码现状)。
+> `SingleColumnIterator` 的 `column` 形参目前不参与取值——无论是否指定 `column`，都由 `index`（默认 0）决定读取哪一列，见 [19.6](#196-已知问题与复核记录)。
 
 ### 13.5 自定义类型转换：`QueryMapperConverter`
 
@@ -2032,7 +2037,7 @@ init(message: String, caused: Exception)
 
 编译环境和运行环境的敏感信息配置项完全一致。
 
-> 当前实现的实际读取链路：`ORMConfig.getConf` / `getUrl` / `getUsername` / `getPassword` 只读取 `Config`（即环境变量），**并不会读取 `sensitiveMap`**；`ORMConfig.getSensitive`（按内嵌键取值）目前没有任何调用方。也就是说内嵌到产物中的连接 URL / 用户名 / 密码暂时不会在运行时被自动使用，SM4 参数（`sensitiveMap`）则会被 `getSM4()` 使用。详见 [19.6 已知问题](#196-已知问题源码现状)。
+> 当前实现的实际读取链路：`ORMConfig.getConf` / `getUrl` / `getUsername` / `getPassword` 只读取 `Config`（即环境变量），**不读取 `sensitiveMap`**；原本用于按内嵌键取值的 `getSensitive` 已在提交 `3c43de8f` 中删除。也就是说内嵌到产物中的连接 URL / 用户名 / 密码不会在运行时被自动使用，SM4 参数（`sensitiveMap`）则会被 `getSM4()` 使用。
 
 以下需要16进制串的情形可以使用命令：`fboot randhex 32`，32是16进制串的长度
 
@@ -2064,7 +2069,7 @@ export <driverName>_orm_option_password='...' # 如果有多个数据源，配�
 * 逐个遍历 `orm_drivers` 中的驱动，只有**编译期能取到非空值**的连接 URL / 用户名 / 密码才会被内嵌；
 * 内嵌时的注册键是**驱动名前缀形式**：`<driver>_orm_connectionUrl`、`<driver>_orm_option_username`、`<driver>_orm_option_password`（由 `ORMConfig.genKey` 生成），全局名不会被原样内嵌；
 * 只有确实内嵌了至少一项敏感信息时，SM4 的 operation / padding / key / iv / aad / tagSize 才会一起写入 `sensitiveMap`；
-* 运行时 `getConf` / `getUrl` / `getUsername` / `getPassword` 目前只读 `Config`（环境变量），不查 `sensitiveMap`（见本章开头的说明与 [19.6](#196-已知问题源码现状)）。
+* 运行时 `getConf` / `getUrl` / `getUsername` / `getPassword` 目前只读 `Config`（环境变量），不查 `sensitiveMap`（见本章开头的说明与 [19.6](#196-已知问题与复核记录)）。
 
 ## 19. 附录
 
@@ -2109,7 +2114,7 @@ public abstract class SqlDialect {
 | `ORMConfig` | 配置读取入口——第 3 节所有环境变量的解析实现。 | `getDrivers()`、`getDriverNames()`、`getDefaultDriver()`（`orm_defaultDriver` ?? `orm_drivers` 首个 ?? `''`）、`isDefaultDriver(driver: String / Driver)`、`getUrl(driverName)`、`getConf(driverName, key)`、连接池各参数 getter（`getPoolMaxSize`、`getPoolCheckSql` 等）、`registerConverter` / `getConverter`（见 [13. 结果映射](#13-结果映射)）、`transactionable(funcName)`、`getTransactionPropagation()`、`mockdb` |
 | `NamedDatasource` | 具名数据源（`<: Datasource & Resource`）：将 `Datasource` 与驱动名绑定，供 `ORM.register` 使用。 | `init(driver)` / `init(driver, url)` / `init(driver, options)` / `init(driver, url, options)`、主构造函数 `NamedDatasource(optionSpecified, driverName, datasource)`、`driverName`、`connect()`、`setOption(key, value)`、`isClosed()`、`close()` |
 | `DatasourceCreator` | 数据源工厂接口：`ORM.register(creator)` 在注册时调用它创建 `NamedDatasource`。 | `create(): NamedDatasource`、`driverName: String`（供 `default` 默认值判定） |
-| `DatabasePool` | 内置连接池（`<: Resource & Datasource`），由 `orm_databasePool*` 系列环境变量驱动。 | `init(driver: Driver, ds: Datasource)`（各参数取自 `ORMConfig`；**当前该构造函数无法通过编译**，见 [19.6](#196-已知问题源码现状)）、`init(ds: Datasource, ..., checker!: (Connection) -> Bool)`、`init(ds: Datasource, ..., checkSql!: String = "select 1")`、`init(driver: Driver, options!: Array<(String, String)> = [], ..., checkSql!: String)`（直接 `driver.open`）、`getConnection(timeout!: Duration = connectTimeout): Option<Connection>`（池已关闭时抛 `ConnectionException('database pool is closed')`）、`isClosed()`、`close()` |
+| `DatabasePool` | 内置连接池（`<: Resource & Datasource`），由 `orm_databasePool*` 系列环境变量驱动。 | `init(driver: Driver, ds: Datasource)`（各参数取自 `ORMConfig`）、`init(ds: Datasource, ..., checker!: (Connection) -> Bool)`、`init(ds: Datasource, ..., checkSql!: String = "select 1")`、`init(driver: Driver, options!: Array<(String, String)> = [], ..., checkSql!: String)`（直接 `driver.open`）、`getConnection(timeout!: Duration = connectTimeout): Option<Connection>`（池已关闭时抛 `ConnectionException('database pool is closed')`）、`isClosed()`、`close()` |
 | `SqlArg`（抽象） | 单个绑定参数（`index` + `set(statement)`）。 | 工厂 `SqlArg.new<T>(index, value)`；每种支持类型对应一个实现子类；`hashCode` / `==` / `toString` |
 | `SqlArgs` | 参数集合（`<: Hashable & Equatable<SqlArgs> & ToString`）：占位符索引自增。 | public：`init()`、`add(...)` 全类型重载、`addNull()`、`toString()`、`hashCode` / `==`；protected：`clone()`、`set(statement)`、`clear()`、`add(all!: SqlArgs)` |
 | `QueryResultWrap` | `std.database.sql.QueryResult` 的包装：按列读取并安全转型，是结果映射的底层。 | `columnInfos`、`get<T>(...)` / `get<T>(columnName)` / `getOrNull<T>(...)` / `getOrNull<T>(columnName)`、`next()` / `next(values)`、`toMap()`、`close()` 等 |
@@ -2140,41 +2145,3 @@ public abstract class SqlDialect {
 * `f_orm/doc/*.md`：按主题拆分的补充文档——`配置.md`、`数据映射.md`、`声明DAO接口.md`、`事务.md`、`动态SQL的高级API.md`、`数据库表变更.md`、`ChooseCondition.md`、`LoopCondition.md`、`RootDAO.md`、`RootService.md`、`SqlExcutor.md`、`优化方案.md`、`导入.md`、`STDX依赖.md`。
 * `f_orm/src/**/*.cj`：源码即最权威的参考；本文档未覆盖的行为以源码为准。
 * 示例工程 `fdemo`：`fdemo/boot.sh`（配置）、`fdemo/user/src/dao/*DAO.cj`（DAO 定义）、`fdemo/user/src/service/impl/UserServiceImpl.cj`（事务服务）。
-
-### 19.6 已知问题（源码现状）
-
-2026-10-01 依据当时的 HEAD（提交 `1ee1e0ec`）复核：原清单中 5 项已修复（见 C），但该提交同时引入 **10 处编译错误**（见 A），`cjpm build` 目前会失败；其余逻辑问题仍在（B）。
-
-#### A. 编译错误（阻塞构建，共 10 处）
-
-复核方式：把工作区源码复制到镜像目录、逐条打上下面这些修法后 `cjpm build` 可以通过（工作区源码未被改动）。
-
-| 位置 | 现象与修法 |
-| --- | --- |
-| `wrap/DatabasePool.cj:153-154` | `init(driver: Driver, ds: Datasource)` 内以命名实参调用 12 个实参的 `this(ds: ds, ...)` → `extra arguments given for parameter list '(Interface-Driver, Interface-Datasource)'`。改为位置传参 `this(ds, ...)`（同文件 `:95` 即此写法） |
-| `base/TableClause.cj:453` | `column = Column(mapper.dataType.columnName)` 缺少声明 → `undeclared identifier 'column'`；同处 460 行同样报错。应为 `let column = ...` |
-| `base/TableClause.cj:454` | `HashSet<Column>.contains(mapper.dataType.columnName)` 传入 `String` → `mismatched types, expected 'Class-Column', found 'Struct-String'`。应传入上面的 `Column` |
-| `base/RootDAO.cj:543` | `SqlFunc(private fnname: String, private let column: Column)` 参数修饰符非法（`expected no modifier before non-member variable parameter`）→ 写 `private let fnname` |
-| `base/RootDAO.cj:563` | `HashBuilder().append(...).append(column).hashCode()`：`HashBuilder` 没有 `hashCode`，取哈希值应改用 `.build()` |
-| `base/LogicalExpr.cj:114`、`:130` | `InExpr` / `In2Expr` 的 `toString()` 仍写 `${column.name}`，但字段类型已改为 `SqlExpr`（无 `name` 成员） |
-| `base/TableClause.cj:309`、`:327` | `first<T>(columns: Array<SqlExpr>)` / `list<T>(columns: Array<SqlExpr>)` 仍调用 `columns2string(columns: Array<Column>)`，需把该方法形参同步为 `Array<SqlExpr>` |
-
-#### B. 逻辑/语义问题（不影响编译）
-
-| 位置 | 现象 |
-| --- | --- |
-| `base/GroupedQueryMapper.cj:90-104` | `NullableGroupedQueryMapper.ignoreNone` 的判断恒为假（`list.add` 之后 `prevSize == list.size` 不可能成立），补 `None` 的分支不会执行 |
-| `base/NestQueryMapper.cj:39-57` | `NullableNestQueryMapper` 的 `nestGetter` 被保存但从未使用 |
-| `base/QueryResultIterator.cj:34-50` | `SingleColumnIterator` 的 `column` 形参不参与取值——无论是否指定 `column`，都按 `index`（默认 0）取列 |
-| `base/Condition.cj:23` | `Condition.delimiter` 为 internal 的 `mut static prop`（`ThreadLocal` 存储），包外无法读取或重设 |
-| `wrap/ORMConfig.cj:105-117` | `getSensitive`（读取内嵌敏感信息）仍无调用方，`getConf` / `getUrl` / `getUsername` / `getPassword` 只走 `Config`，因此 `@EmbedSensitive` 内嵌的连接 URL / 用户名 / 密码不会在运行时生效（SM4 参数仍由 `getSM4()` 使用） |
-
-#### C. 本次复核确认已修复（原清单项）
-
-| 原问题 | 现状 |
-| --- | --- |
-| `TableClause.appendPartial` 条件取反导致子句不拼接 | 已修为 `if(!emptyLogicalExpr(sql))`，`WHERE` / `SET` / `ORDER_BY` 等恢复正常 |
-| `@ORMField[false]` 被当作主键 | 已修为 `attr.value.toAsciiLower() == 'true'`，`false` 表示非主键 |
-| `SqlExecutor.isReadOnly` 恒为 `false` | 已修为 SQL 以 `select` 开头时置 `true` |
-| `COUNT`/`SUM`/… 返回 `Column` 且被整体加引用符 | 已改为返回新的 `SqlFunc`（`SqlExpr` 子类），`toString()` 输出 `count(*)` 形式，可直接作为查询列（见 [10.5](#105-常用函数)） |
-| `SingleColumnIterator.next()` 耗尽时抛异常 | 已改为返回 `None` |
