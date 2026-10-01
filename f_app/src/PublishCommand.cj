@@ -56,7 +56,7 @@ public class PublishCommand <: SubCommand {
     private func replaceVersion(){
         let dir = getWorkingDirectory()
         if(dir.toString().endsWith('fountain') && let ver <- dir.join('f_version/src/FountainVersion.cj') && exists(ver)){
-            let code = Regex(#'fountain\(\d+\.\d+\.\d+\)'#).replaceAll(ver |> File.readFrom |> String.fromUtf8, 'fountain(${this.version})')
+            let code = Regex(#'\d+\.\d+\.\d+'#).replaceAll(ver |> File.readFrom |> String.fromUtf8, this.version)
             File.writeTo(ver, code.unsafeBytes())
         }
     }

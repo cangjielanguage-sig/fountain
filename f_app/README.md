@@ -69,7 +69,7 @@ main(args: Array<String>): Int64 {
 | `shutdown` | `fboot shutdown <PID>` | `findProcess(pid).terminate()` 并轮询等待进程退出；被终止进程的 `atExit` 回调（各模块注册的收尾逻辑）随进程退出执行 |
 | `restart` | `fboot restart <PID> [PATH] --dylibPattern=<正则>` | 先 `shutdown` 再 `run` |
 | `module` | `fboot module [name]` | 在 `name` 目录（缺省当前目录）执行 `cjpm init --type=dynamic`；若目标目录是当前目录或当前目录的一层子目录，会把模块名加入**上一层目录**的 `cjpm.toml` `members`（该 `cjpm.toml` 必须已存在）；随后写入 `src/<模块名>.cj`（内容 `package <模块名>`） |
-| `workspace` | `fboot workspace [dir] [x.y.z]` | 在 `dir`（缺省当前目录）执行 `cjpm init --workspace`，并重写其 `cjpm.toml`：`[workspace] version = "1.0.0"`（固定值）、`f_base` / `f_version` 依赖取 `x.y.z`（缺省 `1.0.0`）、把空的 `compile-option` 换成 `--dy-std -Woff all`，并补齐各平台 target 与 `path-option` 配置 |
+| `workspace` | `fboot workspace [dir] [x.y.z]` | 在 `dir`（缺省当前目录）执行 `cjpm init --workspace`，并重写其 `cjpm.toml`：`[workspace] version = "1.0.0"`（固定值）、`f_base` / `f_version` 依赖取 `x.y.z`、把空的 `compile-option` 换成 `--dy-std -Woff all`，并补齐各平台 target 与 `path-option` 配置 |
 | `cleanUpdate` | `fboot cleanUpdate [PATH]` | 打印命令后依次执行 `cjpm clean --target-dir=<...>`、删除 `cjpm.lock`、`cjpm update` |
 | `build` | `fboot build [PATH] [args...]` | 见 3.6 |
 | `test` | `fboot test [PATH] [args...] --dylibPattern=<正则>` | 用 `PATH/test/cjpm.toml` 覆盖 `PATH/cjpm.toml`，先 `build` 再用 `run` 启动；缺少 `--dylibPattern` 时抛 `BootException("arg --dylibPattern='...' in command line is required")` |

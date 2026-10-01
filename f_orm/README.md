@@ -544,7 +544,7 @@ public func close(): Unit                              // Resource 实现；仅�
 ---
 
 ## 6. `RootDAO`：DAO 通用能力
-
+**务必**一个DAO函数仅执行一个SQL，或者一次分页查询（包含一次计数查询，一次列表查询），否则会出异常
 ```cangjie
 public interface RootDAO {
     public prop executor: SqlExecutor
@@ -1599,7 +1599,7 @@ public class TransactionAspect <: Aspect {
 切面在 `proceed` 中解析注解与配置，取 `ORM.executor(driverName)` 后调用 `execute<Any>(...)` 包裹原方法调用。该类还通过 `private init()` + `static init()` 把自身注册进 `BeanFactory`，并 `public import fountain::f_aspect.*`（连同重导出切面相关的类型）。
 
 ### 14.6 `RootService`（Service 层基接口）
-
+每次调用DAO函数时**务必**都从executor()开始，否则会出异常。
 ```cangjie
 public interface RootService {
     func executor(name: String): SqlExecutor         // name 为空时取默认数据源

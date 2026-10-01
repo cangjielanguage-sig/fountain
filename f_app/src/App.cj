@@ -226,7 +226,7 @@ public struct App {
             }
             sub
         }else{
-            '1.0.0'
+            throw IllegalArgumentException('fountain version must be specified')
         }
         let tomlPath = dir.join('cjpm.toml')
         let content = entireFileText(tomlPath).replace('[workspace]', '''
@@ -237,8 +237,8 @@ public struct App {
 .replace('override-compile-option = ""', 'override-compile-option = "--dy-std -Woff all"')
 .replace('[dependencies]', '''
 [dependencies]
-  "fountain::f_base" = "${version}"
-  "fountain::f_version" = "${version}"'''
+  "fountain::f_base" = "${FVersion}"
+  "fountain::f_version" = "${FVersion}"'''
 ) + '''
 
 [profile.build]
@@ -582,9 +582,8 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
 2.  fboot run [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>
 3.  fboot shutdown <PID>
 4.  fboot restart <PID> [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>
-5.  fboot workspace <dir_path> <x.y.z> 将当前目录初始化为仓颉workspace，
+5.  fboot workspace <dir_path> 将当前目录初始化为仓颉workspace，
     - <dir_path>是要创建workspace的路径，可以是绝对路径或相对路径，缺省是当前工作路径
-    - <x.y.z>是项目版本，省略<x.y.z>则使用1.0.0，
 6.  fboot module 将当前目录初始化为仓颉dynamic项目
 7.  fboot module <module_name> 在当前目录创建名为<module_name>的子目录，并初始化为仓颉dynamic模块，并把模块加入当前目录的cjpm.toml
 8. fboot build 编译使用fountain开发的应用项目

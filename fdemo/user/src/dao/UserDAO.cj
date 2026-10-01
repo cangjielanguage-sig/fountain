@@ -95,12 +95,6 @@ public interface UserDAO <: RootDAO {
         //     select id, is_valid from rec_task_info limit 1 offset 0
         // ''').first<RecTaskInfo>()
         // println('TTTTTTTTTTTTTTT ${task?.isValid}')
-        let med = executor.setSql('''
-        select create_time, pre_amount
-          from med_allocation
-         limit 1 offset 0 
-        ''').first<MedAllocationPO>()
-        println('MMMMMMMMMMMMMMM ${med?.preAmount}')
         // let page = executor.FROM<UserPO>()
         //                 .WHERE{'''
         //                         ${meet(username.size > 0, ' username like '){
@@ -111,10 +105,10 @@ public interface UserDAO <: RootDAO {
         //                         }} order by id'''
         //                 }.page<UserPO>(100, page: 1)
 
-        let page = executor.FROM<UserPO>().WHERE(
-            AND([meet(username.size > 0){UserPO.tableColumns().username.LIKE('%${username}%')}, 
-                 meet(password.size > 0){UserPO.tableColumns().password.LIKE('%${password}%')}]))
-            .ORDER_BY([UserPO.tableColumns().id.ASC()]).page<UserPO>(100, page: 1)
+        // let page = executor.FROM<UserPO>().WHERE(
+        //     AND([meet(username.size > 0){UserPO.tableColumns().username.LIKE('%${username}%')}, 
+        //          meet(password.size > 0){UserPO.tableColumns().password.LIKE('%${password}%')}]))
+        //     .ORDER_BY([UserPO.tableColumns().id.ASC()]).page<UserPO>(100, page: 1)
 
         // println('QQQQQQQQQQQQQQQQQ ${page.list.size}')
         // let page2 = executor.FROM<UserPO>()
@@ -134,11 +128,15 @@ public interface UserDAO <: RootDAO {
         //             }
         //         }.first<UserPO>()
         // executor.INTO<UserPO>(ignoreColumns:['id']).VALUES(user.getOrThrow()).execute()
-        executor.setSql('''
-            select id 
-            from user_info
-            where username = ${arg(username)} 
-              and password = ${arg(password)}'''
-        ).singleFirst<Int64>()
+        executor.FROM<UserPO>()
+                .WHERE(AND(UserPO.tableColumns().username.eq(username), 
+                           UserPO.tableColumns().password.eq(password)))
+                .singleFirst<Int64>(UserPO.tableColumns().id)
+        // executor.setSql('''
+        //     select id 
+        //     from user_info
+        //     where username = ${arg(username)} 
+        //       and password = ${arg(password)}'''
+        // ).singleFirst<Int64>()
     }
 }
