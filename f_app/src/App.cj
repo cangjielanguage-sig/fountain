@@ -218,16 +218,6 @@ public struct App {
         String.fromUtf8(File.readFrom(path))
     }
     private func appendToml(dir: Path): Unit {
-        let version = if(this.args.size > 1){
-            var sub = ''
-            for(arg in this.args[1 .. ] where versionRegex.matches(arg)){
-                sub = arg
-                break
-            }
-            sub
-        }else{
-            throw IllegalArgumentException('fountain version must be specified')
-        }
         let tomlPath = dir.join('cjpm.toml')
         let content = entireFileText(tomlPath).replace('[workspace]', '''
 [workspace]
