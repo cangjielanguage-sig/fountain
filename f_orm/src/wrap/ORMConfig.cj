@@ -102,19 +102,6 @@ public class ORMConfig {
             bytes
         } |> String.fromUtf8
     }
-    private static func getSensitive(driverName: String, key: String): String {
-        let bytes = if (let Some(bytes) <- sensitiveMap.get(genKey(driverName, key))){
-            bytes
-        } else if (let Some(bytes) <- sensitiveMap.get(key)){
-            bytes
-        } else {
-            return ''
-        }
-        if(bytes.size == 0){
-            return ''
-        }
-        sensitive2Str(bytes)
-    }
     public static func genKey(driverName: String, suffix: String): String {
         '${driverName}_${suffix}'
     }
