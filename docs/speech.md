@@ -4,7 +4,7 @@
 
 > 配套项目：`fdemo`（仓库内的示例工程，本讲稿所有命令都以它为蓝本）
 > 目标：讲清楚「为什么用 fountain」「怎么用 fboot」「IOC / MVC / AOP / ORM 怎么用」，并且全程可以一边讲一边敲命令、一边看输出。
-> 建议录制时长：约 75～90 分钟（可按章节裁剪）
+> 建议录制时长：约 95～115 分钟（可按章节裁剪；核心链路是 第一、三、四、五、六、八、九、十、十三章）
 
 ---
 
@@ -67,14 +67,16 @@ fboot version
 > | --- | --- | --- |
 > | IOC 容器 | `f_bean` | `@Bean` + `lookup<T>()`，宏在编译期完成注册 |
 > | AOP | `f_aspect` | `Aspect` 接口 + 织入规则，横切逻辑集中一处 |
+> | 数据 | `f_data` | `@DataAssist` 一把宏搞定对象复制、JSON 互转、校验、JSONPath |
 > | MVC | `f_mvc` | `@Controller` + `@GetMapping`，HTTP 服务开箱即用 |
 > | ORM | `f_orm` | DAO 就是接口，`@DAO` 以后 `SqlExecutor` 就是实现 |
 > | 安全 | `f_security` | 登录状态、鉴权、权限检查的统一抽象 |
 > | JWT | `f_jwt` | 完整的 JWT 编码 / 验签 API |
 > | CRON | `f_ticktock` | `@Bean` + cron 表达式即可定时执行 |
+> | 随机 | `f_random` | 区间随机数、随机数流、随机字符串、蓄水池抽样 |
 > | 启动器 | `fboot` / `f_app` | 没有 `main` 也能启动应用 |
 >
-> 外围还有 `f_base` `f_util` `f_collection` `f_concurrent` `f_log` `f_data` `f_http` `f_net` `f_pool` `f_crypto` `f_store` `f_rpc` `f_llm`……它们既能被框架使用，也能单独当作工具库引入。
+> 外围还有 `f_base` `f_util` `f_collection` `f_concurrent` `f_log` `f_http` `f_net` `f_pool` `f_crypto` `f_store` `f_rpc` `f_llm`……它们既能被框架使用，也能单独当作工具库引入。
 >
 > 引用方式有两种，等价：
 > ```toml
@@ -899,16 +901,356 @@ export controllerPointcut='*::*..*Controller.*(**): *'
 
 ## 6.5 AOP 在 fountain 里的两个"杀手级"用法
 
-1. **事务**：`f_orm` 的 `TransactionAspect` 就是 `@AspectRoute[FuncAnnotationRouteRule("fountain::f_orm.base.Transactional") | ConfigExecutionRouteRule(ORMConfig.transactionalFuncExecution)]` 的切面（见第八章）；
+1. **事务**：`f_orm` 的 `TransactionAspect` 就是 `@AspectRoute[FuncAnnotationRouteRule("fountain::f_orm.base.Transactional") | ConfigExecutionRouteRule(ORMConfig.transactionalFuncExecution)]` 的切面（见第九章）；
 2. **统一日志/耗时/审计**：就像 `ControllerAspect`，一处改动覆盖全部 controller。
 
 ---
 
-# 第七章 MVC：`fountain::f_mvc`
+# 第七章 数据：`fountain::f_data`
+
+**【镜头】** `f_data/README.md` + `fdemo/boot/src/boot.cj` 里那段 `TestData1/2/3` 演示 + `fdemo/user/src/model/mvc/UserReqResp.cj`
+
+## 7.1 为什么先讲 `f_data`
+
+**【口播】**
+
+> 前面讲的 IOC、AOP 解决的是「对象怎么来、横切逻辑放哪」。这一章解决的是「**数据怎么流动**」。
+>
+> 一个服务端应用的绝大部分代码，本质上都在做三件事：
+> 1. 把 HTTP 请求 / 数据库行 / 配置 → 变成**对象**；
+> 2. 在**对象与对象之间**搬运数据（PO → DTO、DTO → Entity）；
+> 3. 把**对象 → 变成响应**（JSON / 其它格式）。
+>
+> 这三件事，`f_data` 全部用「一个宏 + 一个统一数据模型」解决掉了。它是 MVC 的参数绑定、ORM 的结果映射、以及 JWT 负载填充的**共同底座**——所以 `f_mvc`、`f_orm`、`f_jwt` 都依赖它。
+
+`f_data` 的五个基本特性：
+
+- 数据对象的公共成员变量和公共成员属性的**复制**
+- 随时**获取**指定名称的公共成员的值
+- 随时为指定名称的公共成员**赋值**
+- 在**不同的类实例之间**互相复制
+- 任意类实例与 **JSON** 之间互相复制
+
+## 7.2 一把钥匙：`@DataAssist`
+
+```cangjie
+@DataAssist[equal hash tostring props fields]
+public open class TestData1 {
+    private var a: Int64 = 1
+    private var b: String = 'asfd'
+    private var c: Bool = true
+    private var d: Float64 = 3.1415926
+}
+```
+
+| 属性 | 生成什么 |
+| --- | --- |
+| `equal` | 实现 `Equatable` |
+| `hash` | 实现 `Hashable` |
+| `tostring` | 实现 `ToString` |
+| `props` | 把非公共实例成员变量**改写成公共成员属性**（`private var a` → `private var a_` + `public mut prop a`） |
+| `fields` | 实现实例间复制、实例与 JSON 互转的能力（`dataFields()` / `toData()` / `tryFromData()`） |
+
+**【口播】**（把 `props` 的展开结果打在屏幕上，这是最有说服力的一屏）
+
+```cangjie
+// 你写的
+@DataAssist[props]
+public class A {
+    private var a: String = ''
+    private let b: Int64 = 0
+}
+
+// 宏展开后（等价）
+public class A {
+    private var a_: String = ''
+    private let b_: Int64 = 0
+    public mut prop a: String {
+        get() { a_ }
+        value(value) { a_ = value }
+    }
+    public prop b: Int64 {
+        get() { b_ }
+        value(value) { b_ = value }
+    }
+}
+```
+
+> **顺序约束**：在 PO 上，`@DataAssist` 必须写在 `@QueryMappersGenerator` **之前**（先展开）。
+> 只写 `props` 保护了封装（字段还是私有的），同时又能被框架读写——这是「不破坏封装的反射」。
+
+## 7.3 统一数据模型：`Data`
+
+**【口播】**
+
+> `f_data` 定义了一棵统一的「数据树」，一切转换都先落到这棵树上，再从树上长出来。
+> 这就是为什么任意两个类之间都能互相复制：**它们都先变成 `Data`，再从 `Data` 变回去**。
+
+| 类型 | 说明 |
+| --- | --- |
+| `Data` | 所有数据值的根接口 |
+| `DataReal(Decimal)` | 数值 |
+| `DataString(String)` | 字符串 |
+| `DataBool` | 布尔（`DataBool.TRUE` / `DataBool.FALSE`） |
+| `DataNone` | 空值（`DataNone.INSTANCE`） |
+| `DataList` | 有序列表 |
+| `DataDict` | 键值映射 |
+| `DataDateTime` / `DataDuration` | 时间 / 时间间隔 |
+| `DataAny` | 任意值的包装 |
+
+核心接口：
+
+```cangjie
+public interface ToData   { func toData(): Data }
+public interface FromData {
+    static func fromData(data: Data, flag: DataConversionFlag): Any
+    static func tryFromData(data: Data, flag: DataConversionFlag): Any
+}
+public interface FromToData <: FromData & ToData {}
+
+public interface ObjectData<T> <: ToDataFields & DataFields<T> where T <: ObjectData<T> & DataFields<T> {
+    static func isSimple(): Bool { false }
+    static func tryFromData(data: Data, flag: DataConversionFlag): Any
+}
+```
+
+`DataObject<T>` 是操作入口——它把任意对象包成「可读写字段的容器」：
+
+```cangjie
+let dobj = DataObject<TestData2>(data2)
+dobj['b']                              // 按名字读（返回 Data）
+dobj['b'] = 'x'.toData()               // 按名字写
+dobj.get<Int64>('a', DEFAULT_DATA_FLAG) // 按名字读并转成指定类型
+for ((k, v) in dobj) { ... }            // 遍历 (字段名, Data)
+dobj.annotations('b')                   // 取字段上的全部注解（校验就靠它）
+dobj.annotation<IsNotBlank>('b')        // 取字段上的指定注解
+```
+
+## 7.4 实例复制：`DataObject.populate`
+
+**【镜头】** `fdemo/boot/src/boot.cj`（这是仓库里现成的可运行演示，直接跑给观众看）
+
+```cangjie
+@DataAssist[equal hash tostring props fields]
+public open class TestData1 { private var a: Int64 = 1; private var b: String = 'asfd'; ... }
+
+@DataAssist[equal hash tostring props fields]
+public class TestData2 <: TestData1 { ... }   // 有 DateTime / Array / ArrayList / HashMap
+
+@DataAssist[equal hash tostring props fields]
+public class TestData3 { ... }                 // 字段与 TestData2 部分同名
+
+// ① 不同类之间复制（只复制同名字段）
+var data3 = DataObject<TestData3>.populate(data2).getOrThrow()
+
+// ② 忽略验证 / 忽略验证失败
+data3 = DataObject<TestData3>.populate(data2, flag: DEFAULT_DATA_FLAG | IGNORE_VALIDATION).getOrThrow()
+data3 = DataObject<TestData3>.populate(data2, flag: DEFAULT_DATA_FLAG | IGNORE_NOT_MATCHED_VALIDATION).getOrThrow()
+
+// ③ 对象 ↔ JSON
+let json = JsonValue.from(DataObject<TestData2>(data2))   // 或 JsonValue.tryFromData(dobj)
+let back = json.toData()                                   // JSON → Data
+let s = toJson(data2)                                      // 对象 → JSON 串
+let d = fromJson<TestData2>(s)                             // JSON 串 → 对象
+
+// ④ Map 也能当数据源（先转成 Data 再复制）
+let map = HashMap<String, Int64>([('0', 0), ('1', 1), ('2', 2)])
+let data4 = map.toData()
+data2 = DataObject<TestData2>.populate(data4).getOrThrow()
+```
+
+### `DataConversionFlag`：复制行为的开关
+
+`DataConversionFlag` 是 `UInt64`，用 `|` 组合：
+
+| 常量 | 含义 |
+| --- | --- |
+| `DEFAULT_DATA_FLAG` | `WRAPPING_ON_INT_OVERFLOW \| SILENCE` |
+| `SILENCE` | `IGNORE_FIELD_NOT_FOUND \| IGNORE_FIELD_TYPE_NOT_MATCH \| IGNORE_FIELD_NOT_CONVERTABLE \| IGNORE_NONE` |
+| `IGNORE_FIELD_NOT_FOUND` | 目标没有这个字段时忽略 |
+| `IGNORE_FIELD_TYPE_NOT_MATCH` | 类型不匹配时忽略 |
+| `IGNORE_FIELD_NOT_CONVERTABLE` | 无法转换时忽略 |
+| `DEEP` | 深拷贝 |
+| `IGNORE_VALIDATION` | **跳过校验** |
+| `IGNORE_NOT_MATCHED_VALIDATION` | **校验不通过也继续** |
+| `WRAPPING_ON_INT_OVERFLOW` / `THROWING_ON_INT_OVERFLOW` / `SATURATING_ON_INT_OVERFLOW` | 整数溢出的三种策略（优先级 `WRAPPING > THROWING > SATURATING`） |
+
+**【口播】**
+
+> 这一组 flag 是 `f_data` 的「容错旋钮」。默认 `SILENCE` 意味着**同名字段就复制，尽量完成数据类型转换，包括字符串跟其他类型之间的转换，对不上的静默跳过**——所以 DTO 少几个字段、多几个字段都不会炸。
+> 需要严格模式时，把 `SILENCE` 去掉即可（不传 `DEFAULT_DATA_FLAG`，自己组合）。
+
+## 7.5 数据校验
+
+**【镜头】** `fdemo/user/src/model/mvc/UserReqResp.cj`（MVC 章节会再用到它）
+
+```cangjie
+@DataAssist[props fields]
+public class UserRequest {
+    @CombinedValidator[IsNotBlank(messageIfNotMatch: '请输入用户名') & StringSize(min: 6, max: 50)]
+    private var username: String = ''
+    @IsNotBlank[messageIfNotMatch: '请输入密码']
+    private var password: String = ''
+}
+```
+
+所有校验器都是 `fountain::f_data.validation.Validator` 的子类，并且可以用 `& | !` 组合：
+
+```cangjie
+public abstract class Validator {
+    public const Validator(public let messageIfNotMatch!: String = '')
+    public func validate(value: ?String): Bool
+    public const operator func &(right: Validator): Validator
+    public const operator func |(right: Validator): Validator
+    public const operator func !(): Validator
+    public prop description: String
+}
+
+@Annotation[target: [MemberVariable, MemberProperty, Parameter]]
+public class CombinedValidator <: Validator {
+    public const CombinedValidator(messageIfNotMatch: String, public let validator: Validator)
+}
+```
+
+内置校验器一览：
+
+| 注解 | 规则 |
+| --- | --- |
+| `@IsNotEmpty` | 必须非空 |
+| `@IsNotBlank` | 非空且不能是空白字符 |
+| `@StringSize[min max]` | 字符串长度区间 |
+| `@IsInteger` | 必须是整数 |
+| `@IsDecimal` | 必须是实数 |
+| `@IsEmail` | 邮箱格式 |
+| `@IsChineseCellPhone` | 中国手机号 |
+| `@IsIntegerRange[min max minInclusive maxInclusive]` | 整数区间（可配开闭） |
+| `@IsBool` | `true` / `false` |
+| `@IsDateTime[format]` | 必须符合指定时间格式 |
+| `@IsDuration` | 必须是 Duration 字符串 |
+| `@IsIntegers[separator]` | 按分隔符切开后每部分都是整数 |
+| `@DoesMatchRegex[regex]` | 必须匹配正则 |
+| `@IsUUID` | 必须匹配UUID，此注解在fountain::f_util定义 |
+
+> 校验注解可以修饰**成员变量、成员属性、函数参数**三处。`f_mvc` 在绑定 controller 实参时会触发参数上的校验，`DataObject.set` 在复制时会触发成员上的校验。
+> 校验失败抛 `ValidationException`，`fdemo` 里由 `Http500Handler` 统一转成响应体（见 8.6）。
+
+## 7.6 数据转换扩展
+
+默认转换搞不定时（最典型：字符串 → `DateTime`），实现 `DataConverter`：
+
+```cangjie
+public abstract class DataConverter<T> {
+    public func convert(data: Data, flag!: DataConversionFlag): ?T
+}
+public open class AbstractDateTimeConverter <: DataConverter<DateTime> {
+    protected func doConvert(data: Data, flag: DataConversionFlag, format: String)
+}
+public class DateTimeConverter <: AbstractDateTimeConverter {
+    public const DateTimeConverter(private let format: String){}   // 'yyyy-MM-dd HH:mm:ss'
+    public func convert(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?DateTime
+}
+```
+
+**【口播】** 这也是 `f_mvc` 的 `@RequestParam` 能把 `?createTime=2026-10-01 12:00:00` 直接绑成 `DateTime` 的原因——转换器在链路里被自动调用。
+
+## 7.7 JSON Schema
+
+```cangjie
+package fountain::f_data.json
+public interface ToJsonSchema {
+    static func toJsonSchema<T>(): String where T <: ObjectData<T>
+}
+extend JsonObject <: ToJsonSchema
+```
+
+给字段打上 `@JsonStringSchema` / `@JsonIntSchema` / `@JsonFloatSchema` / `@JsonBoolSchema` / `@JsonArraySchema` / `@JsonObjectSchema` 注解，就能直接产出 JSON Schema——做前后端契约、做低代码表单都很好用。
+
+```cangjie
+@JsonStringSchema[minLength: 6, maxLength: 50, title: '用户名']
+private var username: String = ''
+@JsonIntSchema[minimum: 0, maximum: 150]
+private var age: Int64 = 0
+```
+
+## 7.8 JSONPath 查询（`fountain::f_data.path`）
+
+**【口播】**（这一段是 `f_data` 的"彩蛋"，讲 1 分钟就够，但很能体现库的深度）
+
+> `f_data` 实现了 **RFC 9535（JSONPath）** 查询。任何 `Data` 树都能用路径表达式选取节点：
+> 日志过滤、配置抽取、响应裁剪、规则引擎的取数——一行解决。
+
+```cangjie
+import fountain::f_data.base.*
+import fountain::f_data.path.*
+
+let path = DataPath.cache("$.store.books[?(@.price > 9)].title")
+for (title in path.get(data)) {
+    println(title)
+}
+```
+
+| API | 说明 |
+| --- | --- |
+| `DataPath.cache(path)` | 编译路径，缓存在 `HeapCache`（`maxLife: 1 天`, `maxSize: 10000`）——适合用户输入的动态路径 |
+| `DataPath.solid(path)` | 永久缓存（进程内固定路径用这个） |
+| `DataPath.get(data)` | 求值，返回匹配节点的 `Iterator<Data>` |
+
+语法速览（RFC 9535 兼容）：
+
+| 类别 | 语法 |
+| --- | --- |
+| 标识符 | `$` 根节点、`@` 当前节点（filter 内） |
+| 子段 | `.name` `.*` `['name']` `[*]` `[0]` `[0,2]` `['a','b']` `[start:end:step]` `[-1:]` |
+| 递归段 | `..name` `..*` `..['name']` `..[0]` `..[?(...)]` |
+| 路径函数 | `min()` `max()` `avg()` `length()` `count()` `value()` |
+| 比较 | `==` `!=` `<` `<=` `>` `>=`，支持 `@.x == @.y` 路径间比较 |
+| 逻辑 | `&&` `\|\|` `!` `(...)` |
+| 存在性 | `?(@.name)`、`?(!(@.name))` |
+| 函数扩展 | `match(p, re)` `search(p, re)` `count(p)` `value(p)` `length(p)`，可任意层嵌套 |
+| 自定义扩展 | `=~ /regex/`、`in` `nin` `anyof` `subsetof` `nooneof` `[...]`、`size N` |
+| 结构相等 | `@.* == [1,2,3]`、`@ == {"k": v}` |
+
+> 边界：`[-1]` 作为索引已被禁用（用切片 `[-1:]`）；裸的 `$..` 后面必须跟选择器；异常统一是 `DataException`。
+
+## 7.9 快速失败 `BreakingCommand`
+
+```cangjie
+import fountain::f_data.BreakingCommand
+// 业务执行过程中执行 perform BreakingCommand(data) 立即结束当前业务，data 是返回给客户端的数据
+perform BreakingCommand(someValue.toData())
+perform BreakingCommand.new(someValue)   // T <: ToData 的便捷入口
+```
+
+**【口播】** 当你在很深的调用栈里需要「立刻返回，别再往下走」时，用它比一层层 `return` 干净得多——MVC 会把它携带的 `Data` 直接作为响应体。
+
+## 7.10 现场演示
+
+**【命令】** 直接跑 `fdemo`，启动日志里会打出这一组输出（`boot.cj` 的 `static init` 里写的）：
+
+```
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAA {TestData2 的 toString}
+BBBBBBBBBBBBBBBBBBBBBBBBBBBBB {TestData3：从 TestData2 复制而来}
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCC {TestData2 转成的 JSON}
+DDDDDDDDDDDDDDDDDDDDDDDDDDDDD {JSON → Data → TestData3}
+EEEEEEEEEEEEEEEEEEEEEEEEEEEEE {反向复制回来，b 字段被改空}
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFF {HashMap 转成的 JSON}
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG {toJson(TestData2)}
+HHHHHHHHHHHHHHHHHHHHHHHHHHHHH {fromJson 回来后的 Data}
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@ user_info          ← UserPO.tableName()
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@ t_user_info        ← UserInfoPO.tableName()（前缀演示）
+```
+
+**【口播】**
+
+> 这一屏就是 `f_data` 的全部能力：8 行字母标号，走完了「对象→对象」「对象→JSON」「JSON→对象」「Map→对象」四条路。**这些代码不需要你写，全部是宏生成的。**
+
+---
+
+# 第八章 MVC：`fountain::f_mvc`
 
 **【镜头】** `fdemo/user/src/controller/` 全部文件
 
-## 7.1 声明 Controller
+## 8.1 声明 Controller
 
 ```cangjie
 import fountain::f_mvc.*
@@ -954,7 +1296,7 @@ subset('a','b')    参数/请求头名是这些的子集
 
 示例：`a.contains('1','2') & (b.subset('s','d') | 'orderTime' | goodsId)`
 
-## 7.2 参数绑定注解
+## 8.2 参数绑定注解
 
 | 注解 | 来源 | 备注 |
 | --- | --- | --- |
@@ -993,7 +1335,7 @@ public func echo2(@RequestParam[default: ''] username: String,
                   @RequestParam[default: ''] password: String): UserRequest { ... }
 ```
 
-## 7.3 参数校验（顺带讲 `f_data`）
+## 8.3 参数校验（`f_data` 的校验注解，详见第七章）
 
 **【镜头】** `user/src/model/mvc/UserReqResp.cj`
 
@@ -1009,9 +1351,9 @@ public class UserRequest {
 
 **【口播】**
 
-> 校验注解既可以修饰类的成员（MVC 传参对象时生效），也可以修饰函数参数。不满足会抛 `ValidationException`，由我们注册的 500 处理器统一转成响应体（见 7.6）。
+> 校验注解既可以修饰类的成员（MVC 传参对象时生效），也可以修饰函数参数。不满足会抛 `ValidationException`，由我们注册的 500 处理器统一转成响应体（见 8.6）。
 
-## 7.4 安全注解
+## 8.4 安全注解
 
 ```cangjie
 @IgnoreAuth        // 忽略登录状态检查
@@ -1021,7 +1363,7 @@ public class UserRequest {
 
 只能修饰 controller 的公共实例函数。也可以在 Mapping 注解里直接写 `ignoreAuth: true`。
 
-## 7.5 配置（全部环境变量）
+## 8.5 配置（全部环境变量）
 
 ```bash
 export mvc_port=8080
@@ -1040,7 +1382,7 @@ export mvc_accessControlAllowHeaders='*'
 export mvc_accessControlMaxAge=0
 ```
 
-## 7.6 统一异常响应
+## 8.6 统一异常响应
 
 **【镜头】** `fdemo/boot/src/error/ErrorHandler.cj`
 
@@ -1066,7 +1408,7 @@ public class Http500Handler <: ErrorHttpRequestHandler {
 >
 > 演示方式：访问 `/api/error`（`ErrorController` 里直接 `throw Exception()`），看响应是不是 `BaseResponse.error('error')`。
 
-## 7.7 重定向
+## 8.7 重定向
 
 ```cangjie
 Redirect.found('/helloworld')                 // 302
@@ -1074,16 +1416,16 @@ Redirect.permanently('/x', retain: true)      // retain=false → 301；true →
 Redirect.temporarily('/x', retain: true)      // retain=false → 302；true → 307
 ```
 
-## 7.8 拿到当前请求上下文
+## 8.8 拿到当前请求上下文
 
 ```cangjie
 import fountain::f_mvc.CurrentHttpContext
 let ctx = CurrentHttpContext.instance   // 当前线程正在处理的 HttpContext
 ```
 
-**【口播】** 这是 `f_security` 能在 Service/Util 层做鉴权的关键——鉴权逻辑不必写在 controller 里（见第九章 `UserSessionCache.verify()`）。
+**【口播】** 这是 `f_security` 能在 Service/Util 层做鉴权的关键——鉴权逻辑不必写在 controller 里（见第十章 `UserSessionCache.verify()`）。
 
-## 7.9 自定义数据格式（`MediaType`）
+## 8.9 自定义数据格式（`MediaType`）
 
 **【镜头】** `fdemo/boot/src/LogMediaType.cj`
 
@@ -1106,11 +1448,11 @@ public class LogTextMediaType <: MediaType {
 
 ---
 
-# 第八章 ORM：`fountain::f_orm`
+# 第九章 ORM：`fountain::f_orm`
 
 **【镜头】** `fdemo/user/src/model/po/UserPO.cj` → `dao/UserDAO.cj` → `service/impl/UserServiceImpl.cj`
 
-## 8.1 三个角色：PO、DAO、Service
+## 9.1 三个角色：PO、DAO、Service
 
 ### PO：用宏生成列映射
 
@@ -1213,7 +1555,7 @@ public class UserServiceImpl <: UserService {
 > 1. **每次调用 DAO 函数都必须从 `executor()` 开始**——不要缓存 DAO 实例；
 > 2. **一个 DAO 函数只执行一个 SQL**（或一次分页查询：一次 count + 一次列表）。
 
-## 8.2 配置（环境变量）
+## 9.2 配置（环境变量）
 
 ```bash
 export orm_drivers=postgres                  # 逗号分隔
@@ -1236,7 +1578,7 @@ export orm_sm4Iv=$(fboot randhex 32)
 
 > 约定：全局 `orm_<key>`；按驱动覆盖 `<driverName>_orm_<key>`，**后者优先级更高**。
 
-## 8.3 构造 SQL 的三种方式（重点章节）
+## 9.3 构造 SQL 的三种方式（重点章节）
 
 ### 方式一：模板 SQL —— `setSql` + `arg()`
 
@@ -1316,7 +1658,7 @@ executor.setSql('select * from user_info where id = ${arg(id)} ${AND {'status = 
 >
 > `WHERE{}` / `SET{}` 的好处是：**内容为空时自动省略关键字**，不会拼出 `where` 后面什么都没有的非法 SQL。
 
-## 8.4 查询结果
+## 9.4 查询结果
 
 ```cangjie
 // 单列
@@ -1344,7 +1686,7 @@ p.list    // 当前页数据
 > **limit/offset 由方言（Dialect）生成**，所以换数据库不用改代码。
 > `Pagination<T>` 本身实现了 `ObjectData`，**可以直接作为 PO 的字段被序列化**（`fdemo` 的 `UserList.fields` 就是 `Pagination<UserPO>`）。
 
-## 8.5 事务控制（本章重点，建议留 8 分钟）
+## 9.5 事务控制（本章重点，建议留 8 分钟）
 
 ### 三种开启方式
 
@@ -1462,7 +1804,7 @@ public class TransactionHookImpl <: TransactionHook {
 > 所以**同一线程内一次事务的多次数据库访问，用的是同一个连接**——这是事务能成立的根本。
 > 事务未开启时，执行完就 `close()` 释放连接；事务中则由 `commit()` / `rollback()` 收尾统一处理。
 
-## 8.6 ORM 常见坑（念一遍能省观众两天）
+## 9.6 ORM 常见坑（念一遍能省观众两天）
 
 1. 一个 DAO 函数只执行一个 SQL（或一次分页查询）；
 2. 每次调用 DAO 都必须从 `executor()` 开始；
@@ -1475,11 +1817,11 @@ public class TransactionHookImpl <: TransactionHook {
 
 ---
 
-# 第九章 安全：`f_security` + `f_jwt`
+# 第十章 安全：`f_security` + `f_jwt`
 
 **【镜头】** `fdemo/user/src/util/UserSessionCache.cj`、`util/auth/AuthCheckerImpl.cj`、`f_mvc/src/AuthHandler.cj`
 
-## 9.1 登录状态检查怎么做（重点）
+## 10.1 登录状态检查怎么做（重点）
 
 ### 第一步：实现 `AuthHandler` 并注册为 bean
 
@@ -1539,7 +1881,7 @@ NoPrivilege(status,any)     没有权限
 @PostMapping[..., ignoreAuth: true, ignorePrivilege: true]   // Mapping 属性方式
 ```
 
-## 9.2 用 JWT 维持登录状态
+## 10.2 用 JWT 维持登录状态
 
 **【镜头】** `fdemo/user/src/util/UserSessionCache.cj`（完整代码建议整屏展示）
 
@@ -1600,7 +1942,7 @@ public interface Principal<ID, P> {
 
 **【口播】** 想把登录状态放 Redis？实现 `PrincipalStore` 做成 `@Bean` 就行，其他代码一行不用改。
 
-## 9.3 `f_jwt` API 速览
+## 10.3 `f_jwt` API 速览
 
 ### 编码（签名）
 
@@ -1659,7 +2001,7 @@ v.verifyId(cache)            // jti 是否有效
 > `verify()` 已经把 `exp`、`nbf`、签名都检查了；没有指定 `exp`/`nbf` 的字段就认为该维度当前有效。
 > `jti` 配合 `JwtIdCache`（内置 `HeapJwtIdCache` / `NoneJwtIdCache`）可以做**防重放**。
 
-## 9.4 端到端演示（登录 → 拿 JWT → 访问）
+## 10.4 端到端演示（登录 → 拿 JWT → 访问）
 
 **【命令】**
 
@@ -1701,11 +2043,11 @@ HTTP 请求
 
 ---
 
-# 第十章 CRON 定时任务：`fountain::f_ticktock`
+# 第十一章 CRON 定时任务：`fountain::f_ticktock`
 
 **【镜头】** `fdemo/user/src/util/cron/TickTockTest.cj`
 
-## 10.1 最小可用
+## 11.1 最小可用
 
 ```cangjie
 import fountain::f_ticktock.*
@@ -1730,7 +2072,7 @@ public class TickTockTaskImpl <: CronTicktockTask {
 > `fdemo` 里它放在 `user/src/util/cron/`，所以 `boot.sh` 的正则里专门有 `user\.util\.(auth|cron)` 这一段。
 > **忘了这一段，定时任务不会报错，只是永远不执行**——这是个非常适合在视频里演示的「静默失效」坑。
 
-## 10.2 可选属性
+## 11.2 可选属性
 
 ```cangjie
 public prop once: Bool { get() { false } }           // true = 只执行一次
@@ -1740,7 +2082,7 @@ public func reset(stamp: Int64): Unit { ... }        // 自定义重置执行状
 public open prop name: String { get() { ... } }      // 默认取类型全限定名
 ```
 
-## 10.3 CRON 表达式语法
+## 11.3 CRON 表达式语法
 
 时间单位从左到右：**秒 / 分 / 时 / 日 / 月 / 周 / 年**。
 
@@ -1757,7 +2099,7 @@ public open prop name: String { get() { ... } }      // 默认取类型全限定
 
 **【口播】** `'1/3-45'` 这个例子读作：从第 1 秒开始、每 3 秒一次、直到第 45 秒。完整写法是 `1/3-45 * * * * * *`。
 
-## 10.4 延迟任务
+## 11.4 延迟任务
 
 ```cangjie
 public abstract class DelayedTicktockTask <: CronTicktockTask {
@@ -1772,7 +2114,166 @@ public abstract class DelayedTicktockTask <: CronTicktockTask {
 
 ---
 
-# 第十一章 串讲：一次请求穿过整个框架
+# 第十二章 随机数：`fountain::f_random`
+
+**【镜头】** `f_random/README.md` + `fdemo/user/src/util/UserSessionCache.cj`（那行 `UUID.random().toHexString()`）
+
+## 12.1 它补了标准库什么
+
+**【口播】**
+
+> 仓颉标准库有 `std.random.Random`，stdx 有 `stdx.crypto.crypto.SecureRandom`。但它们缺三样常用的东西：
+> 1. **区间随机数**——`nextInt64(1, 100, closed: true)` 这种；
+> 2. **随机数流**——一次性要一万个随机数时，不想写循环；
+> 3. **随机字符串**——做 token / 验证码 / 盐值时每次都手搓。
+>
+> `f_random` 就干这三件事，外加**蓄水池抽样**和**线程本地随机源**。
+> 它不自己实现随机算法，而是用 `extend Random <: ExtendRandom<Random>` 和 `extend SecureRandom <: ExtendRandom<SecureRandom>` 把能力**扩展到标准库类型上**——所以 API 是「加在原类上」的，不用换类型。
+
+```toml
+[dependencies]
+  "fountain::f_random" = {path = "../f_random"}
+```
+
+```cangjie
+import fountain::f_random.*
+// 或聚合包：import fountain::fountain.random.*
+```
+
+> 注意：扩展方法（如 `nextInt64(min, max, closed:)`）**只有导入本模块后才可见**。
+
+## 12.2 区间随机数：`ExtendRandom`
+
+```cangjie
+public interface ExtendRandom<R> where R <: ExtendRandom<R> {
+    func nextFloat64(min: Float64, max: Float64, closed!: Bool): Float64
+    func nextFloat32(min: Float32, max: Float32, closed!: Bool): Float32
+    func nextInt64  (min: Int64,  max: Int64,  closed!: Bool): Int64
+    func nextUInt64 (min: UInt64, max: UInt64, closed!: Bool): UInt64
+    func nextInt32  (min: Int32,  max: Int32,  closed!: Bool): Int32
+    func nextUInt32 (min: UInt32, max: UInt32, closed!: Bool): UInt32
+}
+```
+
+`closed` 在实现中默认 `false`，所以 `rand.nextInt64(1, 100)` 也是合法的。
+
+`BaseRandom` 则把标准库自带的方法统一到一个接口上（大部分是转发，本模块不重复实现）：
+
+```cangjie
+nextBool() / nextInt8/16/32/64() / nextUInt8/16/32/64()
+nextInt64(max) / nextUInt32(max) ...          // [0, max)
+nextFloat16/32/64()                            // [0.0, 1.0)
+nextGaussianFloat16/32/64(mean!, sigma!)       // 高斯分布
+nextBytes(length) / nextUInt8s(array)          // 字节数组 / 原地填充
+```
+
+**【口播】** `Random` 和 `SecureRandom` 用法**完全相同**：需要密码学强度时把 `Random()` 换成 `SecureRandom()` 或 `ThreadLocalRandom.current` 即可，业务代码一行不用改。
+
+## 12.3 随机数流（无限迭代器）
+
+```cangjie
+let stream = rand.randomInt64(0, 10)          // Iterator<Int64>，(0,10) 或 [0,10]
+let next   = stream.next() ?? 0
+
+// 也有 UInt64 / Int32 / UInt32 版本，以及高斯分布流：
+rand.randomGaussianFloat64Stream(mean: 0.0, sigma: 1.0)
+rand.randomGaussianFloat32Stream()
+rand.randomGaussianFloat16Stream()
+```
+
+**【口播】** 这些迭代器的 `next()` **永远返回 `Some`**，是无限流——要多少自己控制（`take(n)` 或循环 break）。具体迭代器类是包内可见的，用工厂方法拿就行。
+
+## 12.4 随机字符串：`RandomString`
+
+```cangjie
+let rs = RandomString()
+println(rs.randomLettersNumbers(16))   // 16 位字母+数字
+println(rs.randomLowerHex(8))          // 8 位小写 16 进制
+```
+
+| 方法 | 字符集 |
+| --- | --- |
+| `randomAscii` | `U+0000`–`U+007F`（**含控制字符**，慎用） |
+| `randomLowerLetters` | `a`–`z` |
+| `randomUpperLetters` | `A`–`Z` |
+| `randomAllLetters` | `A`–`Z` + `a`–`z` |
+| `randomNumbers` | `0`–`9` |
+| `randomLowerHex` | `0`–`9` + `a`–`f` |
+| `randomUpperHex` | `0`–`9` + `A`–`F` |
+| `randomLowerLettersNumbers` | `a`–`z` + `0`–`9` |
+| `randomUpperLettersNumbers` | `A`–`Z` + `0`–`9` |
+| `randomLettersNumbers` | `A`–`Z` + `a`–`z` + `0`–`9` |
+| `randomPrintableAsciis` | 字母数字 + `` `~!@#$%^&*()-_=+[{]}\|'";:/?.>,< `` |
+| `randomAllChars` | 全部 Unicode scalar（自动避开代理区 `0xD800`–`0xDFFF`） |
+| `random(count, source)` | 调用方给定的 `String` 或 `Array<Rune>` |
+
+每个方法都有两个重载：`(count)` 生成固定长度，`(min, max)` 先随机出长度再生成。
+
+## 12.5 `ThreadLocalRandom`
+
+```cangjie
+public class ThreadLocalRandom {
+    private init()
+    @Frozen
+    public static prop current: SecureRandom
+}
+```
+
+**【口播】**
+
+> 每个线程首次访问 `current` 时创建一个 `SecureRandom`（默认 `priv`），之后一直复用——**不用自己处理加锁和复用**。
+> 而且 `RandomString()` 的无参构造器默认就把它作为随机源，所以**默认的 `RandomString` 实例天然线程安全**。
+> 高并发下生成 token、验证码、盐值，用 `RandomString()` 默认构造就对了。
+
+## 12.6 蓄水池抽样
+
+```cangjie
+public func randomReservoir<T>(count: Int64, source: Iterable<T>, priv!: Bool = false): ArrayList<T>
+
+let sample = randomReservoir<Int64>(3, [1, 2, 3, 4, 5, 6, 7, 8])
+```
+
+**【口播】** 只需**遍历一次**数据源就能随机取 `count` 个元素，**不需要事先知道总数**——适合流式数据或超大集合抽样（比如从日志流里随机采样做监控）。`priv` 是内部 `SecureRandom` 的初始化参数，每次调用新建一个 `SecureRandom`。
+
+## 12.7 它在 fountain 里的三个位置
+
+**【口播】**（把工具库和前面讲过的内容串起来）
+
+1. **`fboot randhex`** —— 实现就是 `RandomString().randomLowerHex(n)`（第三章讲过，给 SM4 生成密钥/IV）；
+2. **JWT 会话密钥** —— `fdemo` 的 `UserSessionCache` 里 `UUID.random().toHexString()` 给每个登录生成独立 HMAC 密钥；
+3. **业务侧** —— 验证码、邀请码、临时 token、幂等号、抽样的盐值。
+
+**【演示】**
+
+```bash
+fboot randhex 32        # ← 就是 f_random 的 randomLowerHex(32)
+```
+
+## 12.8 注意事项与已知行为（照着 README 念，别踩）
+
+> 这几条是 `f_random` 当前实现与直觉不一致的地方，README 按代码实际行为记录。讲出来比让观众自己撞墙好。
+
+1. **浮点版的 `closed` 不是「包含上界」**：实现是 `nextFloat64() * (max - min + (closed ? 1 : 0)) + min`。`closed: true` 时落在 `[min, max + 1.0)`，**有可能超过 `max`**；`closed: false` 落在 `[min, max)`。需要严格不超过上界请自己裁剪。
+2. **整数版先转浮点再取整**：`nextInt64/nextUInt64` 走 `Float64`，`nextInt32/nextUInt32` 走 `Float32`，最后 `floor` 取整。区间接近 `Int64.Max` 时会有精度损失甚至溢出。
+3. **区间参数不校验**：不检查 `min <= max`，传反了不报错，只会得到反转区间的结果。
+4. **`RandomString` 的三个 `(min, max)` 重载调错了方法**：
+   - `randomAllLetters(min, max)` 实际产出**只有小写字母**；
+   - `randomUpperLettersNumbers(min, max)` 实际产出**小写字母+数字**；
+   - `randomLettersNumbers(min, max)` 实际产出**小写字母+数字**。
+
+   需要对应字符集时请自己先算长度再调 `(count)` 重载：
+
+   ```cangjie
+   let rs = RandomString()
+   let len = ThreadLocalRandom.current.nextInt64(8, 16, closed: true)
+   let s = rs.randomLettersNumbers(len)
+   ```
+5. **长度区间不统一**：只有 `randomAscii(min, max)` 和 `random(min, max, source)` 用了 `closed: true`（长度落在 `[min, max]`），其余 `(min, max)` 重载的长度是 `[min, max)`。
+6. **`randomReservoir` 的边界**：`count <= 0` 且数据源非空时会抛参数非法异常；返回值大小是 `min(count, 元素个数)`，不总是等于 `count`；替换下标取自 `[0, i)` 而非经典算法的 `[0, i]`，**抽样结果并非严格均匀**——对均匀性有硬要求的场景请自己实现。
+
+---
+
+# 第十三章 串讲：一次请求穿过整个框架
 
 **【镜头】** 画一张纵向调用链 + 终端实时日志。用一个 `POST /api/user/register` 走完全流程。
 
@@ -1784,7 +2285,7 @@ public abstract class DelayedTicktockTask <: CronTicktockTask {
 
 ② curl -XPOST /api/user/register
    └─ MVC 路由匹配（@PostMapping + consumes/produces/params/headers）
-   └─ 参数绑定（@RequestParam）→ 数据校验（@CombinedValidator）
+   └─ 参数绑定（@RequestParam）→ f_data 转成 Data → 数据校验（@CombinedValidator）
    └─ AuthHandlerProxy.check：ignoreAuth=true → 直接 OK
    └─ 【AOP】ControllerAspect.around（controllerPointcut 命中）
         └─ 原函数体 register()
@@ -1801,19 +2302,21 @@ public abstract class DelayedTicktockTask <: CronTicktockTask {
    └─ 返回值按 produces 序列化
 
 ③ 定时线程：TickTockTaskImpl 按 cron 触发（独立线程，与请求互不干扰）
+
+④ 旁路：f_random 给会话发密钥（UserSessionCache 里的 UUID.random()），f_data 给响应做序列化
 ```
 
 **【口播】**
 
 > 这一屏就是 fountain 的全部：
-> **f_bean 负责装配、f_aspect 负责横切、f_mvc 负责协议、f_orm 负责数据库、f_security + f_jwt 负责身份、f_ticktock 负责CRON定时器。**
+> **f_bean 负责装配、f_aspect 负责横切、f_data 负责流动、f_mvc 负责协议、f_orm 负责数据库、f_security + f_jwt 负责身份、f_ticktock 负责CRON定时器、f_random 负责随机性。**
 > 业务代码里你只写了 `UserController`、`UserService`、`UserDAO`、`UserPO` 四个东西，加起来不到 200 行。
 
 ---
 
-# 第十二章 收尾：常见坑与 Q&A
+# 第十四章 收尾：常见坑与 Q&A
 
-## 12.1 十个高频坑
+## 14.1 十二个高频坑
 
 | # | 现象 | 原因 / 解法 |
 | --- | --- | --- |
@@ -1827,8 +2330,10 @@ public abstract class DelayedTicktockTask <: CronTicktockTask {
 | 8 | `tableColumns().xxx` 找不到 | 属性名是**列名**（`save_time`），不是成员名（`saveTime`） |
 | 9 | 宏报「must be modified by public var or public mut prop」 | `@ORMField` 的约束 |
 | 10 | `fboot run` 卡住不动 | 这是**预期行为**，它永久阻塞；另开终端发请求 |
+| 11 | `populate` 之后目标对象字段是空的 | 目标类没加 `@DataAssist[fields]`；或默认 `SILENCE` 把「字段不存在 / 类型不匹配 / 无法转换」静默跳过了（见第七章） |
+| 12 | 随机字符串里只有小写字母 | `randomLettersNumbers(min,max)` 等三个 `(min,max)` 重载的实现与命名不符；自己先算长度再调 `(count)` 重载（见第十二章） |
 
-## 12.2 预设 Q&A
+## 14.2 预设 Q&A
 
 **Q：能不用动态链接库吗？**
 A：IOC/AOP/ORM 这些能力本身不依赖动态链接库，但 `fboot run` 的「扫描加载」机制依赖它。用 `App(..., dynamic: false)` 可以不扫描，此时只有内置命令和静态链接进来的子命令可用，业务 bean 需要你自己保证已被加载。
@@ -1837,7 +2342,13 @@ A：IOC/AOP/ORM 这些能力本身不依赖动态链接库，但 `fboot run` 的
 A：`fboot build` 默认带 `-O2 --lto=full`；ORM 有结果缓存（可按驱动关）、连接池可选 fountain 池 / 标准库池 / 第三方池；`boot.sh` 里还有 `perfRecord` / `perfReport`（`cjprof`）和 `loop` / `ab` 可以直接做基线测量。**不要凭感觉谈性能，先跑 `./boot.sh ab 16 10000`。**
 
 **Q：能只用一个模块吗？**
-A：可以。`f_base`、`f_util`、`f_collection`、`f_crypto` 等都是独立可用的工具库，在 `cjpm.toml` 里只加你需要的那一个即可。
+A：可以。`f_base`、`f_util`、`f_collection`、`f_crypto`、`f_random` 等都是独立可用的工具库，在 `cjpm.toml` 里只加你需要的那一个即可。比如只想要随机字符串和区间随机数，就只引 `f_random`（它只依赖 `f_base`）。
+
+**Q：`f_data` 的复制能替代手写 DTO 转换吗？**
+A：绝大多数场景可以。`DataObject<Target>.populate(src)` 按**同名字段**复制，`DateTime`/集合/Map 都支持，还能用 `DataConversionFlag` 控制严格程度。只有字段名不一致或需要计算逻辑时，才需要手写几行。
+
+**Q：随机数够安全吗？要用哪个？**
+A：默认优先 `SecureRandom` / `ThreadLocalRandom.current`（`RandomString()` 的无参构造就是它）。只有对性能极度敏感、且不涉及安全语义的场景（比如模拟数据、抽样）才用 `Random`。另外记住第十二章那几条已知行为——尤其是浮点 `closed` 的含义。
 
 **Q：数据库不支持怎么办？**
 A：`f_orm` 基于 `std.database.sql`，只要有驱动就能用；配置项 `orm_drivers` 是逗号分隔的，可同时注册多个数据源，`ORM.executor(driverName)` 按驱动名取。还可以用 `f_mockdb` 做无数据库的集成测试。
@@ -1881,8 +2392,9 @@ fboot help
 | f_orm | `@DAO` | DAO 接口（`<: RootDAO`） |
 | f_orm | `@TransactionalService` | Service 织入（等价于 `@WeavedBean`） |
 | f_orm | `@Transactional[propagation rollbackFor noRollbackFor ...]` | 声明式事务 |
-| f_data | `@DataAssist[equal hash tostring props fields]` | 生成通用方法 |
-| f_data | `@CombinedValidator[...]` `@IsNotBlank[...]` `@StringSize[min max]` | 数据校验 |
+| f_data | `@DataAssist[equal hash tostring props fields]` | 生成属性/Equals/Hash/ToString/复制能力 |
+| f_data | `@CombinedValidator[...]` `@IsNotBlank[...]` `@StringSize[min max]` `@DoesMatchRegex[regex]` … | 数据校验（`& \| !` 可组合） |
+| f_data | `@JsonStringSchema` `@JsonIntSchema` `@JsonArraySchema` `@JsonObjectSchema` … | 生成 JSON Schema |
 | f_ticktock | `@Bean` + `CronTicktockTask` | 定时任务 |
 
 ## 关键 API
@@ -1896,6 +2408,20 @@ executor.INSERT_INTO<T>(po) / executor.UPDATE<T>(map|po, dirty:)
 executor.execute<T>(propagation:, rollbackFor:) { exec => (result, true) }
 CurrentHttpContext.instance
 JWT.encoder()....sign()  /  JWT.verifier(token).verify()
+
+// f_data：对象 / JSON / Map 互转
+DataObject<T>.populate(src, flag: DEFAULT_DATA_FLAG)      // 类实例 → 类实例
+DataObject<T>(obj)['field'] / .get<V>('field')            // 按名读写
+toJson(obj) / fromJson<T>(jsonString)                     // 对象 ↔ JSON 串
+JsonValue.from(DataObject<T>(obj)) / JsonValue.fromStr(s) // 对象/串 → JsonValue
+DataPath.cache("$.a[?(@.b > 1)].c").get(data)             // JSONPath 查询
+
+// f_random：随机数与随机字符串
+rand.nextInt64(1, 100, closed: true) / rand.nextFloat64(0.0, 1.0)
+rand.randomInt64(0, 10)                                   // 无限随机数流
+RandomString().randomLowerHex(32) / .randomLettersNumbers(16)
+ThreadLocalRandom.current                                 // 线程本地 SecureRandom
+randomReservoir<T>(3, source)                             // 蓄水池抽样
 ```
 
 ---
@@ -1918,15 +2444,17 @@ JWT.encoder()....sign()  /  JWT.verifier(token).verify()
 | 12 | 6' | 接口验证清单（12 条 curl，重点 401 那条） | 终端 + 浏览器 |
 | 13 | 8' | IOC：f_bean | IDE + 幻灯片 |
 | 14 | 7' | AOP：f_aspect + `ControllerAspect` 现场演示 | IDE + 终端 |
-| 15 | 10' | MVC：f_mvc（路由/参数/校验/异常/MediaType） | IDE + 终端 |
-| 16 | 15' | ORM：f_orm（PO/DAO/Service/SQL 三方式/分页） | IDE |
-| 17 | 8' | 事务：三种开启方式 + 钩子顺序 + 现场日志 | IDE + 终端 |
-| 18 | 8' | 安全：f_security + f_jwt 端到端 | IDE + 终端（401 vs 200） |
-| 19 | 4' | CRON：f_ticktock（含"忘了 dylibPattern"的坑） | IDE + 终端 |
-| 20 | 4' | 串讲：一次请求的完整穿越 | 架构图 |
-| 21 | 4' | 坑 & Q&A + 性能压测 | 终端 |
+| 15 | 8' | 数据：f_data（`@DataAssist` / `populate` / JSON / 校验 / JSONPath） | IDE + 终端（`boot.cj` 的 A~H 输出） |
+| 16 | 10' | MVC：f_mvc（路由/参数/校验/异常/MediaType） | IDE + 终端 |
+| 17 | 15' | ORM：f_orm（PO/DAO/Service/SQL 三方式/分页） | IDE |
+| 18 | 8' | 事务：三种开启方式 + 钩子顺序 + 现场日志 | IDE + 终端 |
+| 19 | 8' | 安全：f_security + f_jwt 端到端 | IDE + 终端（401 vs 200） |
+| 20 | 4' | CRON：f_ticktock（含"忘了 dylibPattern"的坑） | IDE + 终端 |
+| 21 | 5' | 随机：f_random（区间/流/字符串/ThreadLocalRandom/已知行为） | IDE + 终端（`fboot randhex 32`） |
+| 22 | 4' | 串讲：一次请求的完整穿越 | 架构图 |
+| 23 | 5' | 坑 & Q&A + 性能压测 | 终端 |
 
 ---
 
-> 讲稿中所有的路径、包名、注解名均取自本仓库当前源码（`fboot`、`f_app`、`f_bean`、`f_aspect`、`f_mvc`、`f_orm`、`f_security`、`f_ticktock`、`f_jwt`、`fdemo`）。
+> 讲稿中所有的路径、包名、注解名均取自本仓库当前源码（`fboot`、`f_app`、`f_bean`、`f_aspect`、`f_data`、`f_mvc`、`f_orm`、`f_security`、`f_ticktock`、`f_jwt`、`f_random`、`fdemo`）。
 > 若后续版本有变更，以各模块 `README.md` 与源码为准。
