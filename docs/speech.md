@@ -4,7 +4,7 @@
 
 > 配套项目：`fdemo`（仓库内的示例工程，本讲稿所有命令都以它为蓝本）
 > 目标：讲清楚「为什么用 fountain」「怎么用 fboot」「IOC / MVC / AOP / ORM 怎么用」，并且全程可以一边讲一边敲命令、一边看输出。
-> 建议录制时长：约 95～115 分钟（可按章节裁剪；核心链路是 第一、三、四、五、六、八、九、十、十三章）
+> 建议录制时长：约 105～125 分钟（可按章节裁剪；核心链路是 第一、三、四、五、六、七、八、九、十、十四章）
 
 ---
 
@@ -69,11 +69,13 @@ fboot version
 > | AOP | `f_aspect` | `Aspect` 接口 + 织入规则，横切逻辑集中一处 |
 > | 数据 | `f_data` | `@DataAssist` 一把宏搞定对象复制、JSON 互转、校验、JSONPath |
 > | MVC | `f_mvc` | `@Controller` + `@GetMapping`，HTTP 服务开箱即用 |
+> | HTTP 数据格式 | `f_http` | `MediaType` 抽象（json / text / multipart）+ 文件上传，可扩展私有协议 |
 > | ORM | `f_orm` | DAO 就是接口，`@DAO` 以后 `SqlExecutor` 就是实现 |
 > | 安全 | `f_security` | 登录状态、鉴权、权限检查的统一抽象 |
 > | JWT | `f_jwt` | 完整的 JWT 编码 / 验签 API |
 > | CRON | `f_ticktock` | `@Bean` + cron 表达式即可定时执行 |
 > | 随机 | `f_random` | 区间随机数、随机数流、随机字符串、蓄水池抽样 |
+> | ID 生成 | `f_util.UUID` | v1/v3/v4/v5/v6/v7/v8 全覆盖，可直接进出 `f_data` |
 > | 启动器 | `fboot` / `f_app` | 没有 `main` 也能启动应用 |
 >
 > 外围还有 `f_base` `f_util` `f_collection` `f_concurrent` `f_log` `f_http` `f_net` `f_pool` `f_crypto` `f_store` `f_rpc` `f_llm`……它们既能被框架使用，也能单独当作工具库引入。
@@ -901,7 +903,7 @@ export controllerPointcut='*::*..*Controller.*(**): *'
 
 ## 6.5 AOP 在 fountain 里的两个"杀手级"用法
 
-1. **事务**：`f_orm` 的 `TransactionAspect` 就是 `@AspectRoute[FuncAnnotationRouteRule("fountain::f_orm.base.Transactional") | ConfigExecutionRouteRule(ORMConfig.transactionalFuncExecution)]` 的切面（见第九章）；
+1. **事务**：`f_orm` 的 `TransactionAspect` 就是 `@AspectRoute[FuncAnnotationRouteRule("fountain::f_orm.base.Transactional") | ConfigExecutionRouteRule(ORMConfig.transactionalFuncExecution)]` 的切面（见第十章）；
 2. **统一日志/耗时/审计**：就像 `ControllerAspect`，一处改动覆盖全部 controller。
 
 ---
@@ -1244,6 +1246,83 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHH {fromJson 回来后的 Data}
 
 > 这一屏就是 `f_data` 的全部能力：8 行字母标号，走完了「对象→对象」「对象→JSON」「JSON→对象」「Map→对象」四条路。**这些代码不需要你写，全部是宏生成的。**
 
+## 7.11 顺带一提：`fountain::f_util.UUID`
+
+**【口播】**
+
+> 讲完 `Data`，顺手解决一个高频需求：**全局唯一 ID**。
+> `f_util` 里有一个完整的 `UUID` 实现，参照 RFC 4122bis 草案，**v1 / v3 / v4 / v5 / v6 / v7 / v8 全支持**——这是很多语言标准库都做不到的。
+> 它最妙的一点是：`UUID` 实现了 `DataFields<UUID>` 和 `DataParsable<UUID>`，**所以它天然能进 `f_data` 的体系**——可以直接作为 PO 字段、可以直接被 `DataObject.populate` 复制、可以直接和 JSON 互转，不需要任何胶水代码。
+
+```cangjie
+public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & DataParsable<UUID> & DataFields<UUID>
+```
+
+### 生成
+
+| 工厂函数 | 版本 | 说明 |
+| --- | --- | --- |
+| `UUID.random()` | v4 | 随机（内部用 `ThreadLocalRandom.current.nextBytes(16)`） |
+| `UUID.unixTimeBased()` | v7 | **Unix 毫秒时间戳 + 随机**，时间有序，**适合做数据库主键** |
+| `UUID.timeBased(timeLowFirst:)` | v1/v6 | 返回 `TimeBasedUUIDBuilder`，可再配 node / UID / GID / 序列号 |
+| `UUID.md5(value)` / `md5(bytes)` | v3 | 基于 MD5 的命名空间 UUID（同名输入恒等） |
+| `UUID.randomMd5(bytes:)` | v3 | 随机字节的 MD5 UUID |
+| `UUID.sha1(value)` / `sha1(bytes)` | v5 | 基于 SHA-1 的命名空间 UUID |
+| `UUID.randomSha1(bytes:)` | v5 | 随机字节的 SHA-1 UUID |
+| `UUID.custom(values)` | v8 | 自定义，只取前 16 字节 |
+| `UUID.Nil` / `UUID.Max` | — | 全 0 / 全 `0xff` |
+
+### 常用成员
+
+```cangjie
+let id = UUID.random()
+
+id.toString()          // 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'（带连字符）
+id.toHexString()       // 32 位无连字符的 16 进制
+id.toString(radix: 36) // 按指定进制输出（radix == 16 等价于 toHexString）
+id.version             // 版本号（1/3/4/5/6/7/8）
+id.variant             // 变体
+id.timestampNanos      // v1/v6 的时间戳（纳秒）
+id.timestamp           // v1/v6 的时间戳（DateTime）
+
+UUID.parse(s)          // 解析，失败抛异常
+UUID.tryParse(s)       // 解析，失败返回 None<UUID>
+
+id.toData()            // 转成 Data（字符串形式），因此可以进出 f_data 的一切转换
+```
+
+### 基于时间的 UUID 构造器
+
+```cangjie
+UUID.timeBased()                       // TimeBasedUUIDBuilder
+    .registerSequenceGenerator()       // 注册序列号生成器（防同一纳秒冲突）
+    .registerFileSequenceGenerator()   // 或用文件持久化的序列号生成器
+    .randomSeq                         // 随机序列号 / .serialSeq 递增序列号
+    .UID(uid)                          // 设置 UID
+    .GID(gid)                          // 设置 GID
+    .eth0()                            // 用 eth0 网卡的 MAC 作 node
+    .etherName('eth0')                 // 指定网卡名
+    .ether('xx:xx:xx:xx:xx:xx')        // 直接给 MAC
+    .randomNode()                      // 随机 node
+    .node(0x...)
+```
+
+> `TimeBasedUUIDBuilder` 是 `Resource`，用完记得 `close()`。
+
+### 在 `fdemo` 里怎么用
+
+**【镜头】** `fdemo/user/src/util/UserSessionCache.cj`
+
+```cangjie
+JWTPrincipal<String>(id, '', UUID.random().toHexString())
+```
+
+**【口播】**
+
+> 这里用 `UUID.random().toHexString()` 给**每一次登录生成一把独立的 HMAC 签名密钥**。
+> 换成 `UUID.unixTimeBased()` 还能顺带获得「时间有序」的性质——做数据库主键时索引局部性更好。
+> 另外注意：它用的是 `ThreadLocalRandom`，所以高并发下没有锁竞争。
+
 ---
 
 # 第八章 MVC：`fountain::f_mvc`
@@ -1423,7 +1502,7 @@ import fountain::f_mvc.CurrentHttpContext
 let ctx = CurrentHttpContext.instance   // 当前线程正在处理的 HttpContext
 ```
 
-**【口播】** 这是 `f_security` 能在 Service/Util 层做鉴权的关键——鉴权逻辑不必写在 controller 里（见第十章 `UserSessionCache.verify()`）。
+**【口播】** 这是 `f_security` 能在 Service/Util 层做鉴权的关键——鉴权逻辑不必写在 controller 里（见第十一章 `UserSessionCache.verify()`）。
 
 ## 8.9 自定义数据格式（`MediaType`）
 
@@ -1445,14 +1524,243 @@ public class LogTextMediaType <: MediaType {
 
 > 只要把 `MediaType` 的实现注册成 `@Bean`，`consumes / produces` 就可以直接写你的自定义类型，比如 `application/json+log`——所有走这个 Content-Type 的请求都会先落一条日志。
 > 这就是「协议扩展点」：不用改框架，加个 bean 就多一种数据格式。
+> **下一章（第九章）会把 `MediaType` 这套机制完整展开**——它是 `f_http` 提供的，只是被 `f_mvc` 直接 `public import` 了出来。
 
 ---
 
-# 第九章 ORM：`fountain::f_orm`
+# 第九章 HTTP 数据格式：`fountain::f_http`
+
+**【镜头】** `f_http/README.md` + `f_http/src/MediaTypes.cj` + `fdemo/boot/src/LogMediaType.cj`
+
+## 9.1 `f_http` 是什么
+
+**【口播】**
+
+> `f_mvc` 能同时处理 `text/plain`、`application/json`、`multipart/form-data`，靠的不是 MVC 自己，而是 **`f_http`**。
+> `f_http` 目前实现了两件事：
+> 1. **HTTP 数据格式（`MediaType`）的定义**——text/plain、application/json、multipart/form-data；
+> 2. **multipart/form-data 的编解码**——也就是文件上传。
+>
+> 而 `f_mvc/src/MediaType.cj` 只有一行：`public import fountain::f_http.*`。
+> 所以你在 MVC 里 `import fountain::f_mvc.MediaType`，拿到的其实**就是 `f_http` 的类型**——它们不是两套东西。
+
+## 9.2 `MediaType`：所有数据格式的父类型
+
+```cangjie
+public abstract class MediaType <: ToString & Hashable & Equatable<MediaType> {
+    public MediaType(public let mediaType: String)
+    public open func toString(): String
+    public open func hashCode(): Int64
+    public open operator func ==(other: MediaType): Bool
+
+    /** 用格式名称得到一个新的 MediaType 实例：
+     *  文本格式可能有不同的 charset，multipart 可能有不同的 boundary，
+     *  所以要用本函数基于当前实例创建新的 MediaType */
+    public func make(mediaType: String): MediaType
+
+    /** 对象 → 字节数组（内部先 toData() 再 fromData(data: Data)） */
+    public func fromDataFields<T>(data: T): Array<Byte> where T <: DataFields<T>
+    public open func fromData(data: Data): Array<Byte>
+    /** 字节数组 / 输入流 / 字符串 → Data */
+    public open func toData(data: Array<Byte>): Data
+    public open func toData(input: InputStream): Data
+    public open func toData(data: String): Data
+    /** Data / 字节数组 / 输入流 / 字符串 → 指定类型（内部调 T.fromData） */
+    public func toDataFields<T>(data: Data): T where T <: DataFields<T>
+    public func toDataFields<T>(data: Array<Byte>): T
+    public func toDataFields<T>(input: InputStream): T
+    public func toDataFields<T>(data: String): T
+}
+```
+
+**【口播】**（把数据流向讲清楚——这一屏是理解 MVC 参数绑定的关键）
+
+```
+请求方向：字节 / InputStream / String --toData--> Data --toDataFields--> 对象（controller 实参）
+响应方向：controller 返回值（对象）--fromDataFields--> 字节数组 --> 写回客户端
+```
+
+> 这就是为什么 `@RequestBody` 能直接把请求体变成controller函数实参，返回值能直接变成 JSON——**中间那一层就是 `MediaType`**。
+> 而 `Data` 是 `f_data` 的类型，所以 `f_http` 和 `f_data` 是咬合在一起的：`MediaType` 负责「字节 ↔ Data」，`f_data` 负责「Data ↔ 对象」。
+
+## 9.3 内置的三种实现
+
+```cangjie
+public class PlainTextMediaType <: TextMediaType   // text/plain
+public class JsonMediaType      <: TextMediaType   // application/json
+public class MultipartMediaType <: MediaType       // multipart/form-data、multipart/mixed
+```
+
+`TextMediaType` 是带字符集的文本格式父类，它处理 `; charset=` 后缀：
+
+```cangjie
+public abstract class TextMediaType <: MediaType {
+    protected TextMediaType(mediaType: String, public let charset!: Charset = Charsets.UTF8)
+    protected func doMake(mediaType: String, creator: (Charset) -> MediaType): MediaType
+    public func toString() { "${mediaType}; charset=${charset}" }
+}
+```
+
+- `JsonMediaType.toData(String)` = `JsonValue.fromStr(data).toData()`
+- `JsonMediaType.fromData(Data)` = `JsonValue.tryFromData(data).toString()` 再按 charset 编码
+- `MultipartMediaType` 带 `boundary`，`toString()` 形如 `multipart/form-data; boundary=xxx`；它的 `fromData(Data)` / `toData(Array<Byte>)` **直接抛异常**，只支持 `toData(input: InputStream)`（解析上传流）
+
+## 9.4 `MediaTypes`：格式注册表
+
+```cangjie
+public class MediaTypes {
+    public static func register(mediaType: MediaType): Unit
+    public static func parse(mediaType: String): MediaType      // 找不到抛 MediaTypeException
+    public static func tryParse(mediaType: String): ?MediaType  // 找不到返回 None
+}
+```
+
+**【口播】**（这一段是重点，解释「为什么加个 `@Bean` 就多了一种数据格式」）
+
+> `MediaTypes` 内部是一张 `ConcurrentHashMap<String, MediaType>`。它有两个注册来源：
+>
+> 1. **`static init()` 里内置注册**：`JsonMediaType.instance`、`MultipartMediaType.formData`、`MultipartMediaType.mixed`、`PlainTextMediaType.instance`；
+> 2. **首次 `tryParse` 时从 IOC 拉取**：`registerFromBeanFactory()` 会 `BeanFactory.instance.getList<MediaType>()`，把所有 `@Bean` 修饰的 `MediaType` 一并注册（用 `AtomicInt8` + 条件变量保证只做一次、且并发安全）。
+>
+> 所以 `fdemo` 的 `LogTextMediaType` 只要加个 `@Bean`，`application/json+log` 就自动可用了——**不需要任何注册代码**。
+>
+> 解析时还有一个宽容处理：`tryParse` 先按完整字符串找，找不到就**截掉 `;` 之后的参数**再找一次（比如 `application/json; charset=utf-8` → `application/json`），找到后再用 `make()` 把参数带回去。
+
+## 9.5 自定义数据格式：完整清单
+
+**【镜头】** `fdemo/boot/src/LogMediaType.cj`（整屏展示）
+
+```cangjie
+@Bean
+public class LogTextMediaType <: MediaType {
+    private static let log = LoggerFactory.getLogger<LogTextMediaType>()
+    public init() {
+        super('application/json+log')
+    }
+    public func make(mediaType: String): MediaType { this }
+    public func toString() { mediaType }
+    public operator func ==(other: MediaType) { ... }   // 必须实现
+    public func hashCode(): Int64 { ... }               // 必须实现
+    public func fromData(data: Data): Array<Byte> { fromData(JsonValue.from(data)) }
+    public func fromData(data: JsonValue): Array<Byte> {
+        let json = data.toString()
+        log.info{'fromData:${json}'}
+        json.unsafeBytes()
+    }
+    public func toData(data: Array<Byte>): Data { toData(String.fromUtf8(data)) }
+    public func toData(data: String): Data { JsonValue.fromStr(data).toData() }
+}
+```
+
+**必须做的事**（漏一件就会编译不过或匹配不上）：
+
+1. 构造器里 `super('<你的格式名>')`；
+2. 实现 `make`（同一种格式可能带不同参数，用它创建新实例；不需要参数就返回 `this`）；
+3. 实现 `toString()`；
+4. 实现 `==` 与 `hashCode()`（它是 `Hashable & Equatable<MediaType>`，而且 `MediaTypes` 会拿它做比较）；
+5. 实现 `fromData`（响应方向：对象 → 字节）与 `toData`（请求方向：字节 → `Data`）；
+6. **加 `@Bean`**——这是它被 `MediaTypes` 发现的唯一途径。
+
+**【演示】** 用起来就是 `consumes / produces` 里写你自己的格式名：
+
+```cangjie
+@PostMapping[path:'/api/user/sessionLog',
+             consumes:'application/json+log',
+             produces:'application/json+log',
+             ignoreAuth: true]
+public func loginLog(@RequestBody user: UserRequest): UserRequest { ... }
+```
+
+```bash
+curl -XPOST http://localhost:8080/api/user/sessionLog \
+  -H 'Content-Type:application/json+log' -H 'Accept:application/json+log' \
+  -d '{"username":"abcdef","password":"bcbcbcbc"}'
+```
+
+**【预期】** 控制台出现 `fromData:` 与 `toData:` 两条日志——证明请求体和响应体都走了自定义格式。
+
+**【口播】** 这就是「协议扩展点」的用法：**私有协议、加密报文、带签名的请求体**，都可以用这种方式接入，业务代码完全不用关心编解码。
+
+## 9.6 文件上传：`multipart/form-data`
+
+### 接收
+
+**【镜头】** `fdemo/user/src/controller/UploadController.cj`
+
+```cangjie
+@DataAssist[props fields]
+public class UploadRequest {
+    private var name: String = ''
+    private var file: ?MultipartFile = None
+}
+
+@Controller
+public class UploadController {
+    @PostMapping[path: '/upload', produces: 'text/plain', consumes: 'multipart/form-data']
+    @IgnoreSecurity
+    public func upload(@RequestBody multipart: UploadRequest): String {
+        println('${multipart.file?.size} ${multipart.name}')
+        'ok'
+    }
+}
+```
+
+**【口播】**
+
+> 注意 `file` 的类型是 `?MultipartFile`——它是 `f_http` 的类型，同时实现了 `Multipart & InputStream & Resource & DataFields<MultipartFile> & Data`。
+> 也就是说**它既是数据（能进 `f_data` 体系），又是一个 `InputStream`**（能直接读）。
+>
+> `MultipartFile` 常用成员：
+> - `filename` / `size` / `empty`
+> - `isAttachment` / `isInline` / `isFormData`（来自 `ContentDisposition`）
+> - `read(buffer)` / `bytes()` / `copyTo(output)` / `reader`
+> - 它是 `Resource`，**用完要 `close()`**——`close()` 会连临时文件一起删掉，不会在磁盘上留垃圾。
+
+### 发送
+
+```cangjie
+let form = MultipartFormData()
+form.newPart().name('name').value('abc')
+form.newPart().file(fileName: 'a.txt', content: inputStream, size: 1234)
+form.encode(output)          // 写到输出流
+let in = form.input()        // 或拿到 MultipartFileInputStream 自己读
+```
+
+`MultipartFileBuilder` 的 API：`name()` / `value(content)` / `file(file)` / `file(fileName, content, size!, creationDate!, modificationDate!)` / `build()`。
+`MultipartFormData` 的 `boundary` 是自动生成的：`FountainBoundary${RandomString().randomLettersNumbers(32)}`（又见 `f_random`）。
+
+### 配置
+
+```bash
+export http_halfBufferSize=2048              # multipart 缓冲区的一半大小，默认 2048 字节
+export http_uploadDir=/tmp/fountain/upload   # 上传文件的临时保存路径
+```
+
+**【演示】**
+
+```bash
+curl -XPOST http://localhost:8080/upload -F 'name=abc' -F 'file=@./banner.txt'
+```
+
+**【预期】** 控制台打印出文件大小与 `name`，响应 `ok`。
+
+## 9.7 异常与排错
+
+| 异常 | 场景 |
+| --- | --- |
+| `MediaTypeException('<x> is an illegal MediaType string')` | `MediaTypes.parse()` 遇到没注册的格式 |
+| `MediaTypeException('charset in <x> is not be supported')` | 文本格式的 charset 不支持 |
+| `MediaTypeException('<x> does not support current access')` | 对 `multipart` 调用了 `fromData(Data)` / `toData(Array<Byte>)` |
+
+**【口播】** 遇到 `is an illegal MediaType string`，99% 是自定义 `MediaType` 的 **`@Bean` 没生效**——回到第三章那条：**它所在的动态库必须被 `--dylibPattern` 匹配到**。`fdemo` 的 `LogTextMediaType` 在 `boot` 包里，所以正则里有 `boot`。
+
+---
+
+# 第十章 ORM：`fountain::f_orm`
 
 **【镜头】** `fdemo/user/src/model/po/UserPO.cj` → `dao/UserDAO.cj` → `service/impl/UserServiceImpl.cj`
 
-## 9.1 三个角色：PO、DAO、Service
+## 10.1 三个角色：PO、DAO、Service
 
 ### PO：用宏生成列映射
 
@@ -1555,7 +1863,7 @@ public class UserServiceImpl <: UserService {
 > 1. **每次调用 DAO 函数都必须从 `executor()` 开始**——不要缓存 DAO 实例；
 > 2. **一个 DAO 函数只执行一个 SQL**（或一次分页查询：一次 count + 一次列表）。
 
-## 9.2 配置（环境变量）
+## 10.2 配置（环境变量）
 
 ```bash
 export orm_drivers=postgres                  # 逗号分隔
@@ -1578,7 +1886,7 @@ export orm_sm4Iv=$(fboot randhex 32)
 
 > 约定：全局 `orm_<key>`；按驱动覆盖 `<driverName>_orm_<key>`，**后者优先级更高**。
 
-## 9.3 构造 SQL 的三种方式（重点章节）
+## 10.3 构造 SQL 的三种方式（重点章节）
 
 ### 方式一：模板 SQL —— `setSql` + `arg()`
 
@@ -1658,7 +1966,7 @@ executor.setSql('select * from user_info where id = ${arg(id)} ${AND {'status = 
 >
 > `WHERE{}` / `SET{}` 的好处是：**内容为空时自动省略关键字**，不会拼出 `where` 后面什么都没有的非法 SQL。
 
-## 9.4 查询结果
+## 10.4 查询结果
 
 ```cangjie
 // 单列
@@ -1686,7 +1994,7 @@ p.list    // 当前页数据
 > **limit/offset 由方言（Dialect）生成**，所以换数据库不用改代码。
 > `Pagination<T>` 本身实现了 `ObjectData`，**可以直接作为 PO 的字段被序列化**（`fdemo` 的 `UserList.fields` 就是 `Pagination<UserPO>`）。
 
-## 9.5 事务控制（本章重点，建议留 8 分钟）
+## 10.5 事务控制（本章重点，建议留 8 分钟）
 
 ### 三种开启方式
 
@@ -1804,7 +2112,7 @@ public class TransactionHookImpl <: TransactionHook {
 > 所以**同一线程内一次事务的多次数据库访问，用的是同一个连接**——这是事务能成立的根本。
 > 事务未开启时，执行完就 `close()` 释放连接；事务中则由 `commit()` / `rollback()` 收尾统一处理。
 
-## 9.6 ORM 常见坑（念一遍能省观众两天）
+## 10.6 ORM 常见坑（念一遍能省观众两天）
 
 1. 一个 DAO 函数只执行一个 SQL（或一次分页查询）；
 2. 每次调用 DAO 都必须从 `executor()` 开始；
@@ -1817,11 +2125,11 @@ public class TransactionHookImpl <: TransactionHook {
 
 ---
 
-# 第十章 安全：`f_security` + `f_jwt`
+# 第十一章 安全：`f_security` + `f_jwt`
 
 **【镜头】** `fdemo/user/src/util/UserSessionCache.cj`、`util/auth/AuthCheckerImpl.cj`、`f_mvc/src/AuthHandler.cj`
 
-## 10.1 登录状态检查怎么做（重点）
+## 11.1 登录状态检查怎么做（重点）
 
 ### 第一步：实现 `AuthHandler` 并注册为 bean
 
@@ -1881,7 +2189,7 @@ NoPrivilege(status,any)     没有权限
 @PostMapping[..., ignoreAuth: true, ignorePrivilege: true]   // Mapping 属性方式
 ```
 
-## 10.2 用 JWT 维持登录状态
+## 11.2 用 JWT 维持登录状态
 
 **【镜头】** `fdemo/user/src/util/UserSessionCache.cj`（完整代码建议整屏展示）
 
@@ -1942,7 +2250,7 @@ public interface Principal<ID, P> {
 
 **【口播】** 想把登录状态放 Redis？实现 `PrincipalStore` 做成 `@Bean` 就行，其他代码一行不用改。
 
-## 10.3 `f_jwt` API 速览
+## 11.3 `f_jwt` API 速览
 
 ### 编码（签名）
 
@@ -2001,7 +2309,7 @@ v.verifyId(cache)            // jti 是否有效
 > `verify()` 已经把 `exp`、`nbf`、签名都检查了；没有指定 `exp`/`nbf` 的字段就认为该维度当前有效。
 > `jti` 配合 `JwtIdCache`（内置 `HeapJwtIdCache` / `NoneJwtIdCache`）可以做**防重放**。
 
-## 10.4 端到端演示（登录 → 拿 JWT → 访问）
+## 11.4 端到端演示（登录 → 拿 JWT → 访问）
 
 **【命令】**
 
@@ -2043,11 +2351,11 @@ HTTP 请求
 
 ---
 
-# 第十一章 CRON 定时任务：`fountain::f_ticktock`
+# 第十二章 CRON 定时任务：`fountain::f_ticktock`
 
 **【镜头】** `fdemo/user/src/util/cron/TickTockTest.cj`
 
-## 11.1 最小可用
+## 12.1 最小可用
 
 ```cangjie
 import fountain::f_ticktock.*
@@ -2072,7 +2380,7 @@ public class TickTockTaskImpl <: CronTicktockTask {
 > `fdemo` 里它放在 `user/src/util/cron/`，所以 `boot.sh` 的正则里专门有 `user\.util\.(auth|cron)` 这一段。
 > **忘了这一段，定时任务不会报错，只是永远不执行**——这是个非常适合在视频里演示的「静默失效」坑。
 
-## 11.2 可选属性
+## 12.2 可选属性
 
 ```cangjie
 public prop once: Bool { get() { false } }           // true = 只执行一次
@@ -2082,7 +2390,7 @@ public func reset(stamp: Int64): Unit { ... }        // 自定义重置执行状
 public open prop name: String { get() { ... } }      // 默认取类型全限定名
 ```
 
-## 11.3 CRON 表达式语法
+## 12.3 CRON 表达式语法
 
 时间单位从左到右：**秒 / 分 / 时 / 日 / 月 / 周 / 年**。
 
@@ -2099,7 +2407,7 @@ public open prop name: String { get() { ... } }      // 默认取类型全限定
 
 **【口播】** `'1/3-45'` 这个例子读作：从第 1 秒开始、每 3 秒一次、直到第 45 秒。完整写法是 `1/3-45 * * * * * *`。
 
-## 11.4 延迟任务
+## 12.4 延迟任务
 
 ```cangjie
 public abstract class DelayedTicktockTask <: CronTicktockTask {
@@ -2114,11 +2422,11 @@ public abstract class DelayedTicktockTask <: CronTicktockTask {
 
 ---
 
-# 第十二章 随机数：`fountain::f_random`
+# 第十三章 随机数：`fountain::f_random`
 
 **【镜头】** `f_random/README.md` + `fdemo/user/src/util/UserSessionCache.cj`（那行 `UUID.random().toHexString()`）
 
-## 12.1 它补了标准库什么
+## 13.1 它补了标准库什么
 
 **【口播】**
 
@@ -2142,7 +2450,7 @@ import fountain::f_random.*
 
 > 注意：扩展方法（如 `nextInt64(min, max, closed:)`）**只有导入本模块后才可见**。
 
-## 12.2 区间随机数：`ExtendRandom`
+## 13.2 区间随机数：`ExtendRandom`
 
 ```cangjie
 public interface ExtendRandom<R> where R <: ExtendRandom<R> {
@@ -2169,7 +2477,7 @@ nextBytes(length) / nextUInt8s(array)          // 字节数组 / 原地填充
 
 **【口播】** `Random` 和 `SecureRandom` 用法**完全相同**：需要密码学强度时把 `Random()` 换成 `SecureRandom()` 或 `ThreadLocalRandom.current` 即可，业务代码一行不用改。
 
-## 12.3 随机数流（无限迭代器）
+## 13.3 随机数流（无限迭代器）
 
 ```cangjie
 let stream = rand.randomInt64(0, 10)          // Iterator<Int64>，(0,10) 或 [0,10]
@@ -2183,7 +2491,7 @@ rand.randomGaussianFloat16Stream()
 
 **【口播】** 这些迭代器的 `next()` **永远返回 `Some`**，是无限流——要多少自己控制（`take(n)` 或循环 break）。具体迭代器类是包内可见的，用工厂方法拿就行。
 
-## 12.4 随机字符串：`RandomString`
+## 13.4 随机字符串：`RandomString`
 
 ```cangjie
 let rs = RandomString()
@@ -2209,7 +2517,7 @@ println(rs.randomLowerHex(8))          // 8 位小写 16 进制
 
 每个方法都有两个重载：`(count)` 生成固定长度，`(min, max)` 先随机出长度再生成。
 
-## 12.5 `ThreadLocalRandom`
+## 13.5 `ThreadLocalRandom`
 
 ```cangjie
 public class ThreadLocalRandom {
@@ -2225,7 +2533,7 @@ public class ThreadLocalRandom {
 > 而且 `RandomString()` 的无参构造器默认就把它作为随机源，所以**默认的 `RandomString` 实例天然线程安全**。
 > 高并发下生成 token、验证码、盐值，用 `RandomString()` 默认构造就对了。
 
-## 12.6 蓄水池抽样
+## 13.6 蓄水池抽样
 
 ```cangjie
 public func randomReservoir<T>(count: Int64, source: Iterable<T>, priv!: Bool = false): ArrayList<T>
@@ -2235,7 +2543,7 @@ let sample = randomReservoir<Int64>(3, [1, 2, 3, 4, 5, 6, 7, 8])
 
 **【口播】** 只需**遍历一次**数据源就能随机取 `count` 个元素，**不需要事先知道总数**——适合流式数据或超大集合抽样（比如从日志流里随机采样做监控）。`priv` 是内部 `SecureRandom` 的初始化参数，每次调用新建一个 `SecureRandom`。
 
-## 12.7 它在 fountain 里的三个位置
+## 13.7 它在 fountain 里的三个位置
 
 **【口播】**（把工具库和前面讲过的内容串起来）
 
@@ -2249,7 +2557,7 @@ let sample = randomReservoir<Int64>(3, [1, 2, 3, 4, 5, 6, 7, 8])
 fboot randhex 32        # ← 就是 f_random 的 randomLowerHex(32)
 ```
 
-## 12.8 注意事项与已知行为（照着 README 念，别踩）
+## 13.8 注意事项与已知行为（照着 README 念，别踩）
 
 > 这几条是 `f_random` 当前实现与直觉不一致的地方，README 按代码实际行为记录。讲出来比让观众自己撞墙好。
 
@@ -2273,7 +2581,7 @@ fboot randhex 32        # ← 就是 f_random 的 randomLowerHex(32)
 
 ---
 
-# 第十三章 串讲：一次请求穿过整个框架
+# 第十四章 串讲：一次请求穿过整个框架
 
 **【镜头】** 画一张纵向调用链 + 终端实时日志。用一个 `POST /api/user/register` 走完全流程。
 
@@ -2285,7 +2593,9 @@ fboot randhex 32        # ← 就是 f_random 的 randomLowerHex(32)
 
 ② curl -XPOST /api/user/register
    └─ MVC 路由匹配（@PostMapping + consumes/produces/params/headers）
-   └─ 参数绑定（@RequestParam）→ f_data 转成 Data → 数据校验（@CombinedValidator）
+   └─ 参数绑定（@RequestParam）
+        └─ f_http 的 MediaType 把请求体字节转成 Data
+        └─ f_data 把 Data 转成对象并触发校验（@CombinedValidator）
    └─ AuthHandlerProxy.check：ignoreAuth=true → 直接 OK
    └─ 【AOP】ControllerAspect.around（controllerPointcut 命中）
         └─ 原函数体 register()
@@ -2303,20 +2613,21 @@ fboot randhex 32        # ← 就是 f_random 的 randomLowerHex(32)
 
 ③ 定时线程：TickTockTaskImpl 按 cron 触发（独立线程，与请求互不干扰）
 
-④ 旁路：f_random 给会话发密钥（UserSessionCache 里的 UUID.random()），f_data 给响应做序列化
+④ 旁路：f_util.UUID + f_random 给会话发密钥（UserSessionCache 里的 UUID.random()），
+   f_http 的 MediaType 配合 f_data 给响应做序列化
 ```
 
 **【口播】**
 
 > 这一屏就是 fountain 的全部：
-> **f_bean 负责装配、f_aspect 负责横切、f_data 负责流动、f_mvc 负责协议、f_orm 负责数据库、f_security + f_jwt 负责身份、f_ticktock 负责CRON定时器、f_random 负责随机性。**
+> **f_bean 负责装配、f_aspect 负责横切、f_data 负责流动、f_http 负责格式、f_mvc 负责协议、f_orm 负责数据库、f_security + f_jwt 负责身份、f_ticktock 负责CRON定时器、f_random 负责随机性、f_util.UUID 负责唯一 ID。**
 > 业务代码里你只写了 `UserController`、`UserService`、`UserDAO`、`UserPO` 四个东西，加起来不到 200 行。
 
 ---
 
-# 第十四章 收尾：常见坑与 Q&A
+# 第十五章 收尾：常见坑与 Q&A
 
-## 14.1 十二个高频坑
+## 15.1 十四个高频坑
 
 | # | 现象 | 原因 / 解法 |
 | --- | --- | --- |
@@ -2331,9 +2642,11 @@ fboot randhex 32        # ← 就是 f_random 的 randomLowerHex(32)
 | 9 | 宏报「must be modified by public var or public mut prop」 | `@ORMField` 的约束 |
 | 10 | `fboot run` 卡住不动 | 这是**预期行为**，它永久阻塞；另开终端发请求 |
 | 11 | `populate` 之后目标对象字段是空的 | 目标类没加 `@DataAssist[fields]`；或默认 `SILENCE` 把「字段不存在 / 类型不匹配 / 无法转换」静默跳过了（见第七章） |
-| 12 | 随机字符串里只有小写字母 | `randomLettersNumbers(min,max)` 等三个 `(min,max)` 重载的实现与命名不符；自己先算长度再调 `(count)` 重载（见第十二章） |
+| 12 | 随机字符串里只有小写字母 | `randomLettersNumbers(min,max)` 等三个 `(min,max)` 重载的实现与命名不符；自己先算长度再调 `(count)` 重载（见第十三章） |
+| 13 | 自定义格式报 `<x> is an illegal MediaType string` | 自定义 `MediaType` 漏了 `@Bean`，或它所在的动态库没被 `--dylibPattern` 匹配到（见第九章） |
+| 14 | 上传的文件在磁盘上堆积 | `MultipartFile` 是 `Resource`，用完必须 `close()`——`close()` 才会删掉临时文件 |
 
-## 14.2 预设 Q&A
+## 15.2 预设 Q&A
 
 **Q：能不用动态链接库吗？**
 A：IOC/AOP/ORM 这些能力本身不依赖动态链接库，但 `fboot run` 的「扫描加载」机制依赖它。用 `App(..., dynamic: false)` 可以不扫描，此时只有内置命令和静态链接进来的子命令可用，业务 bean 需要你自己保证已被加载。
@@ -2346,6 +2659,12 @@ A：可以。`f_base`、`f_util`、`f_collection`、`f_crypto`、`f_random` 等�
 
 **Q：`f_data` 的复制能替代手写 DTO 转换吗？**
 A：绝大多数场景可以。`DataObject<Target>.populate(src)` 按**同名字段**复制，`DateTime`/集合/Map 都支持，还能用 `DataConversionFlag` 控制严格程度。只有字段名不一致或需要计算逻辑时，才需要手写几行。
+
+**Q：想支持私有二进制协议 / 加密报文，要改 MVC 吗？**
+A：不用。写一个 `MediaType` 子类实现 `fromData` / `toData`，加 `@Bean`，然后 controller 的 `consumes` / `produces` 里写你的格式名即可——`MediaTypes` 首次 `tryParse` 时会把 IOC 里所有 `MediaType` bean 自动注册进来（见第九章）。
+
+**Q：主键该用自增 ID 还是 UUID？**
+A：`f_orm` 的 `INSERT_INTO` 直接返回自增主键；需要分布式生成就用 `UUID.unixTimeBased()`（v7，时间有序，索引局部性好于 v4）。`UUID` 实现了 `DataFields<UUID>`，可以**直接作为 PO 字段**参与 ORM 映射和 JSON 序列化，不用自己写转换器。
 
 **Q：随机数够安全吗？要用哪个？**
 A：默认优先 `SecureRandom` / `ThreadLocalRandom.current`（`RandomString()` 的无参构造就是它）。只有对性能极度敏感、且不涉及安全语义的场景（比如模拟数据、抽样）才用 `Random`。另外记住第十二章那几条已知行为——尤其是浮点 `closed` 的含义。
@@ -2396,6 +2715,7 @@ fboot help
 | f_data | `@CombinedValidator[...]` `@IsNotBlank[...]` `@StringSize[min max]` `@DoesMatchRegex[regex]` … | 数据校验（`& \| !` 可组合） |
 | f_data | `@JsonStringSchema` `@JsonIntSchema` `@JsonArraySchema` `@JsonObjectSchema` … | 生成 JSON Schema |
 | f_ticktock | `@Bean` + `CronTicktockTask` | 定时任务 |
+| f_http | `@Bean` + 继承 `MediaType` | 自定义数据格式（须实现 `make` / `toString` / `==` / `hashCode` / `fromData` / `toData`） |
 
 ## 关键 API
 
@@ -2422,6 +2742,18 @@ rand.randomInt64(0, 10)                                   // 无限随机数流
 RandomString().randomLowerHex(32) / .randomLettersNumbers(16)
 ThreadLocalRandom.current                                 // 线程本地 SecureRandom
 randomReservoir<T>(3, source)                             // 蓄水池抽样
+
+// f_util.UUID：v1/v3/v4/v5/v6/v7/v8
+UUID.random() / UUID.unixTimeBased() / UUID.timeBased()...node(...)
+UUID.md5(s) / UUID.sha1(s)                                // v3 / v5 命名空间 UUID
+UUID.parse(s) / UUID.tryParse(s) / id.toHexString() / id.version
+
+// f_http：数据格式
+MediaTypes.parse('application/json') / .tryParse(s) / .register(mt)
+mediaType.fromData(data)                                  // Data → 字节（响应）
+mediaType.toData(input)  / .toDataFields<T>(bytes)        // 字节/流 → Data → 对象（请求）
+MultipartFormData().newPart().name('n').value('v').build() // 构造 multipart 请求
+MultipartFile.filename / .size / .bytes() / .copyTo(out) / .close()
 ```
 
 ---
@@ -2445,16 +2777,18 @@ randomReservoir<T>(3, source)                             // 蓄水池抽样
 | 13 | 8' | IOC：f_bean | IDE + 幻灯片 |
 | 14 | 7' | AOP：f_aspect + `ControllerAspect` 现场演示 | IDE + 终端 |
 | 15 | 8' | 数据：f_data（`@DataAssist` / `populate` / JSON / 校验 / JSONPath） | IDE + 终端（`boot.cj` 的 A~H 输出） |
-| 16 | 10' | MVC：f_mvc（路由/参数/校验/异常/MediaType） | IDE + 终端 |
-| 17 | 15' | ORM：f_orm（PO/DAO/Service/SQL 三方式/分页） | IDE |
-| 18 | 8' | 事务：三种开启方式 + 钩子顺序 + 现场日志 | IDE + 终端 |
-| 19 | 8' | 安全：f_security + f_jwt 端到端 | IDE + 终端（401 vs 200） |
-| 20 | 4' | CRON：f_ticktock（含"忘了 dylibPattern"的坑） | IDE + 终端 |
-| 21 | 5' | 随机：f_random（区间/流/字符串/ThreadLocalRandom/已知行为） | IDE + 终端（`fboot randhex 32`） |
-| 22 | 4' | 串讲：一次请求的完整穿越 | 架构图 |
-| 23 | 5' | 坑 & Q&A + 性能压测 | 终端 |
+| 16 | 3' | UUID：f_util.UUID（v4 / v7 / 时间有序 / 直接当 PO 字段） | IDE + `UserSessionCache.cj` |
+| 17 | 10' | MVC：f_mvc（路由/参数/校验/异常） | IDE + 终端 |
+| 18 | 8' | HTTP 格式：f_http（`MediaType` / `MediaTypes` 注册表 / 自定义格式 / 文件上传） | IDE + 终端（`curl -F`） |
+| 19 | 15' | ORM：f_orm（PO/DAO/Service/SQL 三方式/分页） | IDE |
+| 20 | 8' | 事务：三种开启方式 + 钩子顺序 + 现场日志 | IDE + 终端 |
+| 21 | 8' | 安全：f_security + f_jwt 端到端 | IDE + 终端（401 vs 200） |
+| 22 | 4' | CRON：f_ticktock（含"忘了 dylibPattern"的坑） | IDE + 终端 |
+| 23 | 5' | 随机：f_random（区间/流/字符串/ThreadLocalRandom/已知行为） | IDE + 终端（`fboot randhex 32`） |
+| 24 | 4' | 串讲：一次请求的完整穿越 | 架构图 |
+| 25 | 5' | 坑 & Q&A + 性能压测 | 终端 |
 
 ---
 
-> 讲稿中所有的路径、包名、注解名均取自本仓库当前源码（`fboot`、`f_app`、`f_bean`、`f_aspect`、`f_data`、`f_mvc`、`f_orm`、`f_security`、`f_ticktock`、`f_jwt`、`f_random`、`fdemo`）。
+> 讲稿中所有的路径、包名、注解名均取自本仓库当前源码（`fboot`、`f_app`、`f_bean`、`f_aspect`、`f_data`、`f_util`、`f_mvc`、`f_http`、`f_orm`、`f_security`、`f_ticktock`、`f_jwt`、`f_random`、`fdemo`）。
 > 若后续版本有变更，以各模块 `README.md` 与源码为准。
