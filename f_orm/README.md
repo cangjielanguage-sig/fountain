@@ -1,7 +1,7 @@
 # fountain::f_orm API 参考
 
-> 本文档基于 `f_orm` 模块当前源码整理，描述对外暴露的类型、函数签名与用法。
-> 依赖包：`f_base`、`f_bean`、`f_collection`、`f_data`、`f_exception`、`f_log`、`f_cache`、`std.database.sql`、`std.reflect`。
+> 本文档基于 `f_orm` 模块当前源码整理（`f_orm/cjpm.toml`：包名 `f_orm`，版本 `1.3.6`，输出类型 `dynamic`），描述对外暴露的类型、函数签名与用法。
+> 依赖包：`f_app`、`f_aspect`、`f_base`、`f_bean`、`f_cache`、`f_collection`、`f_config`、`f_data`、`f_exception`、`f_log`、`f_macros`、`f_pool`、`f_regex`、`f_util`、`cangjie_tpc::charset4cj`、`std.database.sql`、`std.reflect`、`std.convert`。
 
 ## 目录
 
@@ -23,7 +23,7 @@
 16. [表结构元数据与 migro](#16-表结构元数据与-migro)
 17. [异常体系](#17-异常体系)
 18. [敏感信息](#18-敏感信息)
-19. [附录](#18-附录)
+19. [附录](#19-附录)
 
 ---
 
@@ -40,10 +40,10 @@
 
 | 包 | 内容 |
 | --- | --- |
-| `fountain::f_orm` | 模块入口，`public import fountain::f_orm.base.*`；并重导出 `std.convert`、`std.database.sql`、`std.reflect`、`f_bean`、`f_orm.wrap`、`f_orm.exception` |
+| `fountain::f_orm` | 模块入口，`public import fountain::f_orm.base.*`；`base` 包再重导出 `std.convert`、`std.database.sql`、`std.reflect`、`f_base.ExitCallbacks`、`f_bean`、`f_exception.{BaseException, UnreachableException}`、`f_orm.wrap`、`f_orm.exception` |
 | `fountain::f_orm.base` | 核心：`ORM`、`SqlExecutor`、`RootDAO`、`SqlPartial`、`SqlDSL`、DSL 子句、逻辑表达式、条件构造器、`QueryMappers`、`Pagination`、`DirtyTag`、事务钩子等 |
 | `fountain::f_orm.wrap` | 包装层：`ORMConfig`、`NamedDatasource`、`DatabasePool`、`SqlArg`/`SqlArgs`、`QueryResultWrap`、`StatementWrap`、`TransactionWrap`、`Propagation`、`DataType` 等 |
-| `fountain::f_orm.macros` | 宏：`@DAO`、`@ORMField`、`@QueryMappersGenerator`、`@TransactionalService` |
+| `fountain::f_orm.macros` | 宏：`@DAO`、`@ORMField`、`@QueryMappersGenerator`、`@TransactionalService`、`@EmbedSensitive` |
 | `fountain::f_orm.exception` | `ORMException`、`SqlArgException`、`NoIdException`、`TransactionException`、`MandatoryTransactionException`、`NeverTransactionException` 等 |
 | `fountain::f_orm.migro` | 表结构比对与 DDL 生成（`SchemaFinder`、`SchemaFinderMediator`、`MysqlSchema`、`PostgresSchema`、`SubCommand`） |
 
@@ -72,7 +72,7 @@ ORM.initialize()   // 等价于 register() + registerTransactionHooks<Transactio
 //最好有专门的初始化模块
 ```
 
-> 使用 `f_app` 应用框架时无需手工调用：`f_orm` 内置的 `ORMInitializer`（见 [19.4](#184-其他实用类型)）已注册到 `InitializerCollection`，应用启动时会自动执行 `ORM.initialize()`。
+> 使用 `f_app` 应用框架时无需手工调用：`f_orm` 内置的 `ORMInitializer`（见 [19.4](#194-其他实用类型)）已注册到 `InitializerCollection`，应用启动时会自动执行 `ORM.initialize()`。
 
 ### 2.3 定义 PO
 
@@ -135,6 +135,8 @@ public interface UserDAO <: RootDAO {
 }
 ```
 
+> 上面的示例用到了 `FROM<T>().WHERE(...).page(...)` 等子句能力；这类调用目前受 [9. DSL 子句](#9-dsl-子句intoclause--updateclause--fromclause) 中记录的回归影响（条件片段不会拼进 SQL），请先确认该问题状态。
+
 ### 2.5 调用
 
 `@DAO` 展开后会生成 `extend SqlExecutor <: UserDAO {}`，即**线程内的 `SqlExecutor` 本身就是 DAO 实现**（接口里的函数体就是 DAO 方法实现）。因此有两种取得 DAO 的方式：
@@ -167,7 +169,7 @@ let user = dao.findUser(1)
 
 * 全局配置：`orm_<key>`；
 * **按驱动覆盖**：`<driverName>_orm_<key>`，优先级高于全局配置（`getConf` 先查 `<driverName>_<key>`，查不到再回退全局 `key`）；
-* `orm_options_<key>=<value>`：会被收集为驱动初始化 options（`getAllOptions()`）。
+* `orm_option_<key>=<value>`（**单数** `option`）：会被收集为驱动初始化 options（`getAllOptions()` / `getOption(key)`），典型如 `orm_option_username`、`orm_option_password`。
 
 ### 3.1 驱动与连接
 
@@ -176,8 +178,8 @@ let user = dao.findUser(1)
 | `orm_drivers` | 逗号分隔列表 | 需要初始化的驱动名列表，`ORM.register()` 依据它批量注册 `NamedDatasource` |
 | `orm_defaultDriver` | `String`，默认 `''` | 默认驱动名；`ORM.connection()` / `ORM.executor()` 无参时使用。未配置时回退为 `orm_drivers` 列表的**第一个**驱动，仍为空则 `''`。`ORMConfig.isDefaultDriver(...)` 也以此判定 |
 | `orm_connectionUrl` / `<driver>_orm_connectionUrl` | `String` | 连接串；缺失时抛 `ORMException` |
-| `orm_options_*` | `key=value` | 驱动初始化参数 |
-| `orm_useCache` | `Bool`，默认 `true` | 是否缓存 SQL 执行结果（按 SQL + 参数缓存）。驱动级未配置时回退全局，仍未配置则取 `true` |
+| `orm_option_<key>` | `key=value` | 驱动初始化参数（**单数** `option`；`getOption` / `getUsername` / `getPassword` 读取） |
+| `orm_useCache` | `Bool`，默认 `true` | 是否缓存 SQL 执行结果（按 SQL + 参数缓存）。驱动级未配置时回退全局，仍未配置则取 `true`；注意 `ORMConfig.getUseCache()` 本身在未配置时返回 `None`，`true` 兜底发生在 `SqlExecutor`（`useCache = getUseCache(...) ?? true`） |
 | `orm_noPool` | `Bool`，默认 `false` | `true` 表示不使用连接池 |
 | `orm_useStdPool` | `Bool`，默认 `true` | `true` 使用标准库 `PooledDatasource`；`false` 使用 `DatabasePool` |
 | `orm_useThirdPartyPool` | `Bool`，默认 `false` | `true` 表示使用第三方连接池：`f_orm` 不创建连接池，需自行 `ORM.register(datasource, default: false)` 注册 |
@@ -242,6 +244,9 @@ package fountain::f_orm.wrap
 
 public class ORMConfig {
     public static const mockdb = 'mockdb'
+    // 与各环境变量同名的 public static const：defaultDriver = 'orm_defaultDriver'、drivers = 'orm_drivers'、
+    // connectionUrl、useCache、noPool、useStdPool、useThirdPartyPool、databasePool*、stdPool*、
+    // transaction*、transactionalFuncExecution、indexStartsWithZero、sm4*、ormOption = 'orm_option_'
 
     // 刷新与转换器
     public static func refresh(fn: () -> Unit): Unit
@@ -260,6 +265,14 @@ public class ORMConfig {
     public static func getDriverNames(): Iterator<String>
     public static func getDrivers(): Iterator<Driver>
     public static func getUrl(driverName!: String = String.empty): String
+
+    // 敏感信息（编译期由 @EmbedSensitive 写入 sensitiveMap，运行时读取；见第 18 节）
+    public static func genKey(driverName: String, suffix: String): String          // '<driverName>_<suffix>'
+    public static func registerSensitive(key: String, value: Array<Byte>): Unit
+    public static func getSM4(): ?SM4                                              // 未配置 orm_sm4Key 时返回 None
+    public static func getOption(option: String, driverName!: String = String.empty): ?String
+    public static func getUsername(driverName!: String = String.empty): ?String
+    public static func getPassword(driverName!: String = String.empty): ?String
 
     // 连接池开关
     public static func getUseCache(driverName!: String = String.empty): ?Bool
@@ -323,6 +336,7 @@ public class ORM {
     public static func register(driver: String, opts: Array<(String, String)>, default!: Bool = ORMConfig.isDefaultDriver(driver))
     public static func register(driver: String, url: String, default!: Bool = ORMConfig.isDefaultDriver(driver))
     public static func register(driver: String, url: String, opts: Array<(String, String)>, default!: Bool = ORMConfig.isDefaultDriver(driver))
+    public static func getDriver(driver: String): Driver                     // 等价于 ORMConfig.getDriver，未注册时抛 ORMException
     public static func deregister(name: String): Unit
     public static func deregisterAndReplaceDefault(newDefault: String): Unit
     public static func close()                                               // 已注册为进程退出回调（ExitCallbacks）
@@ -343,11 +357,15 @@ public class ORM {
 
 行为说明：
 
-* `register(driver, ...)` 对**已注册的同名驱动**会跳过并打印 `warn` 日志；重复注册 `NamedDatasource` 会直接 `close()` 新的数据源。
+* `register(driver, ...)` 对**已注册的同名驱动**直接跳过：`register(driver, opts)` 是**静默**返回；`register(driver)`、`register(driver, url)`、`register(driver, url, opts)` 会打印 `warn` 日志（`driver <name> has been registered`）。重复注册已存在的 `NamedDatasource` 会直接 `close()` 新的数据源。
+* `register()`（无参批量注册）的细节：`orm_drivers` 中含 `mockdb` 时**只注册 `mockdb` 并直接返回**；`orm_useThirdPartyPool=true` 的驱动被跳过（由业务自行注册）；`default` 判定为 `default.isEmpty() || driver.name == default`。
 * `default` 参数的默认值是一个**表达式** `ORMConfig.isDefaultDriver(<驱动名>)`，即只有所注册的驱动恰为默认驱动时，它才会成为默认数据源（`ORM.default`）；显式传 `default: true` / `default: false` 可覆盖此行为。默认数据源供 `ORM.connection()` / `ORM.executor()` 无参重载使用；未指定时抛 `ORMException("default datasource is not specified")`。
-* `deregister(name)` 会同时 `DriverManager.deregister(name)` 并关闭数据源；若注销的是默认数据源，默认值被清空。
-* `register(driver: String, ...)` 内部通过 `DriverManager.getDriver(driverName)` 取驱动，未注册时抛 `ORMException('database driver ${driverName} does not initialize')`。
-* `register(creator: DatasourceCreator, ...)` 先调用 `creator.create()` 得到 `NamedDatasource` 再注册；用于计算 `default` 默认值的 `creator.driverName` 由实现方提供（见 [19.2](#182-wrap-层进阶类型)）。
+* `deregister(name)`：仅当该名字在内部数据源表中时，才同时 `DriverManager.deregister(name)` 并关闭数据源；清空默认数据源（`name == default` 时）是无条件执行的。
+* `deregisterAndReplaceDefault(newDefault)` 的实际行为是 **注销当前默认数据源**（`deregister(default)`，与 `newDefault` 无关），随后把默认驱动名设为 `newDefault`。
+* `connection(name)` / `executor(driverName)` 传入**空串**时等价于取默认数据源（内部走默认驱动分支）。
+* `register(driver: String, ...)` 内部调用 `ORM.getDriver` → `ORMConfig.getDriver` → `DriverManager.getDriver(...)`，未注册时抛 `ORMException('database driver ${driverName} does not initialize')`。
+* `register(creator: DatasourceCreator, ...)` 先调用 `creator.create()` 得到 `NamedDatasource` 再注册；用于计算 `default` 默认值的 `creator.driverName` 由实现方提供（见 [19.2](#192-wrap-层进阶类型)）。
+* `databasesNames` 取自 `DriverManager.drivers()`（进程内已注册的驱动数组），并非 `ORM` 内部数据源表的键集合。
 
 ---
 
@@ -356,7 +374,7 @@ public class ORM {
 ```cangjie
 public class SqlExecutor <: Resource & RootDAO {
     public prop executor: SqlExecutor       // 返回 this，便于在 DAO 内链式书写
-    public prop isReadOnly: Bool            // 当前 SQL 是否以 select 开头
+    public prop isReadOnly: Bool            // 当前 SQL 是否以 select 开头；当前实现只在非 select 时置 false，无置 true 的分支，故恒为 false
     public prop update: Int64               // 执行 UPDATE，返回影响行数
     public prop delete: Int64               // 执行 DELETE，返回影响行数
     public prop insert: Int64               // 执行 INSERT，返回 lastInsertId
@@ -365,10 +383,13 @@ public class SqlExecutor <: Resource & RootDAO {
 
 **线程内单例**：`SqlExecutor` 缓存在 `ThreadLocal<HashMap<String, SqlExecutor>>` 中，按驱动名区分，通过 `ORM.executor()` 获取。获取时会检查连接状态：`Closed` 直接重置为 `NoneConnection`，`Broken` 关闭后重置。
 
+结果缓存的键是 `public class SqlCacheKey <: Hashable & Equatable<SqlCacheKey> & ToString`（`init(sql: String, args: SqlArgs)`，`hashCode` / `==` / `toString` 基于 SQL 与参数）。
+
 **执行模型**：
 
-* `execute` 的两个关键行为：① 不在事务中时执行完即 `close()` 并释放连接；在事务中则由事务收尾统一处理。② 开启 `orm_useCache` 时，读操作结果会按 `SqlCacheKey(sql, args)` 缓存；写操作会清空缓存。
-* 每次执行后会记录一条 `debug` 日志（驱动名、SQL、参数、耗时），随后清空 SQL 与参数。
+* 不在事务中时执行完即 `close()` 并释放连接；在事务中则由事务收尾统一处理。
+* 结果缓存**默认开启**（`useCache = ORMConfig.getUseCache(driverName) ?? true`），读操作结果按 `SqlCacheKey(sql, args)` 缓存；写操作（update / insert / delete 路径）会先置 `clearCache`，执行完成后整体清空缓存。命中缓存但类型与本次调用不符时抛 `ORMException("type of cached data with key '<sql> | <args>' does not match")`。
+* 每次执行后会记录一条 `debug` 日志（驱动名、SQL、参数、耗时），随后清空 SQL；参数是否清空取决于 `clearArgsAfterExec`（`setSql` 默认 `true`，`page` / `singlePage` 用 `false` 复用参数）。SQL 为空时不记这条日志。
 * 同一 `SqlExecutor` 上**不允许并发**：上一次查询结果未关闭时再次执行会抛 `ORMException("cannot execute SQL while a previous query result is still active")`。
 
 ### 5.1 设置 SQL 与绑定参数
@@ -408,8 +429,9 @@ protected func add(all!: SqlExecutor)  // 合并另一个 executor 的参数
 说明：
 
 * 各类型的 `?T` 重载在值为 `None` 时等价于 `addNull()`，即绑定 SQL `NULL`。
-* 泛型 `add<T>(arg: T) where T <: ToString` 会先做类型匹配（覆盖上表全部类型），未命中则退化为 `add(arg.toString())`。
+* 泛型 `add<T>(arg: T) where T <: ToString` 会先做类型匹配（覆盖上表除 `InputStream` / `?InputStream` 以外的类型），未命中则退化为 `add(arg.toString())`；因此 `InputStream` 只能走显式重载 `add(arg: InputStream)`。
 * 参数通过 `SqlArgs` 写入 `PreparedStatement`；`clearArgsAfterExec: false` 可在多次执行间复用同一批参数（`page` / `singlePage` 内部即如此）。
+* 参数索引基数由 `orm_indexStartsWithZero` 决定（默认从 0 开始，否则从 1 开始）：`StatementWrap.set(index)` 内部会统一加上该基数。
 
 ### 5.2 查询
 
@@ -449,7 +471,8 @@ public func firstToMap(): Map<String, Any>              // 第一行 → Map（�
 public func mapList(): ArrayList<HashMap<String, Any>>  // 全部行 → Map 列表
 ```
 
-> `T.isSimpleData()` 为 `true` 时（基础类型等），`first<T>()` / `list<T>()` / `iterator<T>()` 自动退化为对应的 `singleXxx` 版本。
+> `T.isSimpleData()` 为 `true` 时（基础类型等），`first<T>()` / `list<T>()` / `iterator<T>()` / `one<T>()` 自动退化为对应的 `singleXxx` 版本。
+> `singleIterator<T>()`（含 `index` / `column` 重载）的**静态返回类型是 `Iterator<T>`**，拿不到 `Resource` 接口；需要 `close()` 语义时用 `iterator<T>(mappers)`（返回 `QueryResultIterator<T>`）。
 
 ### 5.3 更新 / 删除 / 插入
 
@@ -462,7 +485,8 @@ executor.setSql('insert into user_info(username) values(${arg(name)})').insert  
 ### 5.4 通用执行入口
 
 ```cangjie
-// 在一个 SqlExecutor 作用域内执行（不自动开启事务）
+// 简化入口：把闭包包成 (executor(exec), true) 后委托给下面的事务模板，
+// 因此会按默认传播行为开启事务（即“不返回是否提交”的版本同样走事务）
 public func execute<T>(executor: (SqlExecutor) -> T): T
 
 // 事务模板：自动开启事务、按返回值决定提交/回滚
@@ -477,8 +501,18 @@ public func execute<T>(
 ): T
 ```
 
-事务钩子调用顺序：`beforeTx` → `beforeCommit` → `commit` → `afterCommit` → `afterComplete`；
-异常路径：`afterThrowing` → `beforeRollback` → `rollback` → `afterRollback` → `afterComplete`。
+事务钩子调用顺序：
+
+| 场景 | 顺序 |
+| --- | --- |
+| 正常提交（闭包返回 `true`） | `beforeTx` → `beforeCommit` → `commit` → `afterCommit` → `afterComplete(Committed)` |
+| 一般异常 | `afterThrowing` → `beforeRollback` → `rollback` → `afterRollback` → `afterComplete(Rollback)` |
+| 异常命中 `noRollbackFor` | `afterThrowing` → `beforeCommit` → `noRollbackFor()`（内部提交） → `afterCommit` → `afterComplete(Committed)` → 重抛 |
+| 异常命中 `rollbackFor` | `afterThrowing` → `beforeRollback` → `rollbackFor()`（内部回滚） → `afterRollback` → `afterComplete(Rollback)` → 重抛 |
+| 配置了 `rollbackFor` 但异常**不匹配** | 同“异常命中 `noRollbackFor`”：提交后重抛（不会回滚） |
+
+> 闭包返回 `false` 时抛的是无消息的 `ORMException()`，走“一般异常”路径并回滚。
+> `beforeCommit(readOnly)` 的入参来自 `SqlExecutor.isReadOnly`，当前实现恒为 `false`（见第 5 节）。
 
 ### 5.5 事务控制
 
@@ -495,18 +529,18 @@ public func commit(): Unit
 public func rollback(): Unit
 public func rollback(savepoint: String): Unit
 
-public func noRollbackFor(e: Exception): Exception     // 登记「不回滚」异常，返回入参 e 便于 `throw executor.noRollbackFor(e)`
-public func rollbackFor(e: Exception): Exception       // 登记「需回滚」异常
+public func noRollbackFor(e: Exception): Exception     // 立即提交（不登记）；提交失败时返回包装异常并尝试回滚，成功则返回入参 e
+public func rollbackFor(e: Exception): Exception       // 立即回滚；失败时返回包装异常，成功则返回入参 e
 
-public func callAndCommit<T>(callee: () -> T): T       // 执行 callee，成功则提交；异常则回滚并重抛
-public func save(savepoint: String): Unit              // 创建保存点
-public func release(savepoint: String): Unit           // 释放保存点
+public func callAndCommit<T>(callee: () -> T): T       // 先要求已开启事务（否则抛 TransactionException("no transaction started")），执行 callee 后 commit；本函数不回滚，callee 异常时直接外抛
+public func save(savepoint: String): Unit              // 创建保存点；无事务时静默不做
+public func release(savepoint: String): Unit           // 释放保存点；无事务时静默不做
 
 public func isClosed(): Bool
-public func close(): Unit                              // Resource 实现；关闭连接并清理本线程缓存
+public func close(): Unit                              // Resource 实现；仅在“无事务且连接未关闭”时真正收尾（见下）
 ```
 
-`close()` 语义：若当前在嵌套/内层事务（`txDepth > 1`）则只递减深度；否则提交并关闭连接，同时把 `ThreadLocal` 中该驱动的执行器重置为 `NoneConnection`。
+`close()` 语义：**只有当前不在事务中（`tx.isNone()`）且连接未关闭时**才真正收尾——清空 `ThreadLocal` 中的 `current`、从 `currents` 移除该驱动、清空结果缓存、关闭语句与连接、把连接替换为 `NoneConnection`，并调用 `DirtyTag.clearAll()`。处于事务中时 `close()` 什么都不做；提交/回滚后的收尾由 `commit()` / `rollback()` 内部的 `finishTransaction` 在最后调用 `close()` 完成（挂起连接除外）。
 
 ---
 
@@ -528,7 +562,7 @@ public interface RootDAO {
 executor.setSql('delete from user_info where id = ${arg(id)}')
 ```
 
-支持的类型与 `SqlExecutor.add` 完全一致：
+支持的类型与 `SqlExecutor.add` 基本一致，另有 `InputStream` 与 `Data` 两种 `arg` 独有（`add` 无）的重载：
 
 ```cangjie
 func arg(value: Bool): String      func arg(value: Int8): String     func arg(value: UInt8): String
@@ -538,16 +572,18 @@ func arg(value: Float16): String   func arg(value: Float32): String  func arg(va
 func arg(value: BigInt): String    func arg(value: Decimal): String  func arg(value: Rune): String
 func arg(value: String): String    func arg(value: Duration): String func arg(value: DateTime): String
 func arg(value: Array<Byte>): String
+func arg(value: InputStream): String
 func arg(value: ?T): String        // 各类型 Option 重载；None → argNull()
-func arg(value: Any): String       // 运行期分派
+func arg(value: Data): String      // 运行期按 DataBool / DataReal（toString 绑定）/ DataString / DataNone 等分派；其它 Data 抛 SqlArgException
+func arg(value: Any): String       // 运行期分派，覆盖以上类型
 func argNull(): String             // 绑定 NULL，返回 '?'
 ```
 
-**集合展开**（生成 `(?, ?, ...)` 形式的占位符列表，适合 `IN` 使用）：
+**集合展开**（生成占位符列表，适合 `IN` 使用；空集合返回空串 `''`）：
 
 ```cangjie
-func arg<I, T>(values: I): String where I <: Iterable<T>                    // 一维集合
-func arg<I1, I2, T>(values: I1): String where I1 <: Iterable<I2>, I2 <: Iterable<T>   // 二维集合
+func arg<I, T>(values: I): String where I <: Iterable<T>                    // 一维集合 → ' (?,?,?)'
+func arg<I1, I2, T>(values: I1): String where I1 <: Iterable<I2>, I2 <: Iterable<T>   // 二维集合 → ' ((?,?),(?,?))'
 ```
 
 ### 6.2 条件片段：`meet`
@@ -577,7 +613,9 @@ let expr = meet(name.size > 0) { 'username = ${arg(name)}' }
 // name 为空 → ''；否则 → 'username = ?'，可直接插值进 SQL
 ```
 
-`MeetCondition` 见 [11.4](#114-meetcondition)。
+> `meet(condition, partial: () -> String)` 除返回片段外还有**副作用**：命中时会把该片段追加到当前执行器的 `partials`，这也是 `WHERE{}` / `SET{}` 闭包内能累积片段的原因。
+
+`MeetCondition` 见 [11.2](#112-meetcondition)。
 
 ### 6.3 条件构造器入口
 
@@ -642,10 +680,10 @@ executor.setSql('select * from user_info where id = ${arg(id)} ${AND {'status = 
 ### 7.1 插入
 
 ```cangjie
-// 链式构造 INSERT 语句
+// 链式构造 INSERT 语句（ignore/include 内部按「列名」与 mapper.dataType.columnName 比较）
 func INTO<T>(
-    ignoreColumns!: Array<String> = [],        // 忽略的「成员名或列名」
-    includingColumns!: Array<String> = []      // 只插入的「成员名或列名」（与 ignoreColumns 互斥）
+    ignoreColumns!: Array<String> = [],        // 忽略的列名
+    includingColumns!: Array<String> = []      // 只插入的列名（与 ignoreColumns 互斥）
 ): IntoClause<T> where T <: QueryMappersInit<T>
 
 // 一步插入对象，返回自增主键（lastInsertId）
@@ -681,7 +719,7 @@ func UPDATE<T, ID>(values: Map<Column, Any>, id: ID): Int64
 func UPDATE<T, ID>(values: Array<(Column, Any)>, id: ID): Int64
 ```
 
-未匹配到任何列时抛 `NoIdException`（PO 无主键）或 `SqlArgException('no column to update')` / `SqlArgException('no column to udpate')`。
+异常消息（按源码）：`values` 为空 → `SqlArgException('no column to udpate')`；PO 无主键 → `NoIdException(<PO 全限定名>)`；有主键但没有任何非主键列命中 → `SqlArgException('no column to update')`。
 
 ```cangjie
 let map = HashMap<Column, Any>()
@@ -709,9 +747,9 @@ func UPDATE<T>(values: T, ignoredColumns!: HashSet<Column>, includingColumns!: H
     where T <: QueryMappersInit<T> & ObjectData<T>
 ```
 
-* `ignoredColumns` 与 `includingColumns` **不能同时指定**；与 `dirty: true` 也不能同时指定，否则抛 `IllegalArgumentException`。
-* `dirty: true` 时只更新 `DirtyTag` 记录的脏字段（PO 通过 `@ORMField` 生成的 setter 自动打标）；无脏字段则直接返回 `0`，不执行 SQL。
-* 全部列都被排除时返回 `0`。
+* `ignoredColumns` 与 `includingColumns` **不能同时指定**；与 `dirty: true` 也不能同时指定，否则抛 `IllegalArgumentException`（消息分别为 `'ignoredColumns and includingColumns must not be specified both.'`、`'ignoreColumns includingColumns and true value for dirty must not be specified at the same time for update.'`）。
+* `dirty: true` 时只更新 `DirtyTag` 记录的脏字段（PO 通过 `@ORMField` 生成的 setter 自动打标）；无脏字段则直接返回 `0`，不执行 SQL；本次用到的脏字段集合在 `finally` 中被清空。
+* 全部列都被排除（`SET` 部分为空）时返回 `0`，不执行 SQL。
 
 **（3）链式构造**：
 
@@ -748,7 +786,7 @@ func first<T>(sql: String): Option<T> where T <: QueryMappersInit<T>
 func firstToMap(sql: String): Map<String, Any>       // 第一行 → Map
 ```
 
-`count` 查询的 SQL 形如 `select count(*) from (<原始SQL>) as __tmp___`；分页查询形如 `select * from (<原始SQL>) as __tmp___ <limit/offset>`。`limit/offset` 由方言（`Dialect`）生成，因此不同数据库的分页语法差异被屏蔽；`orm_indexStartsWithZero` 决定偏移量索引基数。
+`count` 查询的 SQL 形如 `select count(*) from (<原始SQL>) as __tmp___`；分页查询形如 `select * from (<原始SQL>) as __tmp___ <limit/offset>`。`limit/offset` 由方言（`Dialect`）生成，因此不同数据库的分页语法差异被屏蔽；偏移量固定为 `(page - 1) * size`，与 `orm_indexStartsWithZero` 无关（该配置只影响列 / 参数索引基数，见 [3.1](#31-驱动与连接)）。
 
 ```cangjie
 let p = executor.page<UserPO>('select * from user_info where age > ${arg(18)}', 20, page: 1)
@@ -765,13 +803,14 @@ p.list    // 当前页数据 ArrayList<UserPO>
 
 ```cangjie
 public interface SqlDSL {
-    func setSqlFromMap(dsl: String, arg: Map<String, Any>, clearArgsAfterExec!: Bool = true): SqlExecutor
-    func setSqlFromObject<T>(dsl: String, arg: T, clearArgsAfterExec!: Bool = true): SqlExecutor
+    // 接口声明中不带默认值；clearArgsAfterExec 的默认值 true 在下面的扩展实现里
+    func setSqlFromMap(dsl: String, arg: Map<String, Any>, clearArgsAfterExec!: Bool): SqlExecutor
+    func setSqlFromObject<T>(dsl: String, arg: T, clearArgsAfterExec!: Bool): SqlExecutor
         where T <: ObjectData<T>
 }
 ```
 
-`SqlExecutor` 实现了该接口。
+`SqlExecutor` 实现了该接口（`extend SqlExecutor <: SqlDSL`，两个方法的 `clearArgsAfterExec` 默认值均为 `true`）。
 
 ### 8.1 语法
 
@@ -782,9 +821,9 @@ public interface SqlDSL {
 | `:{name}` | 等价于 `:name` |
 | `?` | **禁止**与模板 DSL 混用，出现会抛 `IllegalArgumentException` |
 
-* 对 `Map<String, Any>`：`:{...}` 路径写法不支持（抛 `IllegalArgumentException`）；
+* 对 `Map<String, Any>`：`:{...}` 路径写法不支持（抛 `IllegalArgumentException`）；值只接受 `ToData`（`Data`）、`InputStream`、`None` 三类，其它类型抛 `IllegalArgumentException('... which key is ... in current Map<String, Any> is not supported yet.')`。
 * 对 PO（`ObjectData<T>`）：允许路径写法，`:{user.name}`、`:{$.user.name}` 均可。
-* 值转换规则：`None` → `NULL`；`Bool`/`DateTime`/`Duration`/`String`/`Array<Byte>` → 普通参数；数值 → 以字符串形式绑定；集合 → 展开为逗号分隔的多个 `?`（便于 `IN` 使用）；其它类型抛 `IllegalArgumentException`。
+* 值转换规则：`None` → `NULL`；`Bool`/`DateTime`/`Duration`/`String`/`Array<Byte>` → 普通参数；数值 → 以字符串形式绑定；`Iterable<Data>` → 展开为逗号分隔的多个 `?`（便于 `IN` 使用）；其它类型抛 `IllegalArgumentException`。
 * 编译结果按 DSL 文本缓存（`HeapCache`，上限 10000 条，1 天过期）。
 
 ### 8.2 示例
@@ -814,15 +853,19 @@ executor.UPDATE<UserPO>()
 三个子句类共同继承 `TableClause<T>` / `ExceptInsertClause<T>`，基于 `StringGenerator` 累积 SQL 片段，最终由具体方法执行。
 
 ```cangjie
+// 注意：TableClause 未加 public，且为 sealed，包外无法引用，只作为 FromClause / UpdateClause / IntoClause 的基类
 abstract sealed class TableClause<T> <: ToString where T <: QueryMappersInit<T> {
     public prop executor: SqlExecutor          // 关联的执行器
     public func toString(): String             // 当前累积的 SQL 片段
     prop tableName: String                     // T.tableName()
-    prop idType: ?DataType                     // PO 主键列的数据类型
+    prop idType: ?DataType                     // PO 主键列的数据类型（取第一个 isId 的 mapper）
+    prop dialect: SqlDialect                   // 按 driverName 解析的方言
 }
 
 public abstract class ExceptInsertClause<T> <: TableClause<T> where T <: QueryMappersInit<T> { /* 见 9.1 */ }
 ```
+
+> **已知回归（2026-09-25 起）**：`TableClause.appendPartial`（`base/TableClause.cj:39-49`）的把关条件在提交 `b4e9d086` 中被改成了 `if(emptyLogicalExpr(sql))`——只有**裁剪后为空**的片段才会写入 SQL，而调用方只会传非空片段。因此 `WHERE(String)` / `AND` / `OR` / `NOT` / `HAVING(String)` / `ORDER_BY` / `GROUP_BY` / `SET` / `byId` 以及各闭包版本目前**不会把条件拼进最终 SQL**。使用这些能力前请先确认该处是否已修复（正确条件应为 `sql.size > 0`）。
 
 ### 9.1 公共能力（`ExceptInsertClause`）
 
@@ -836,7 +879,7 @@ public func FULL_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: Qu
 // 以上四个均有 ON!: LogicalExpr 与 ON!: () -> LogicalExpr 重载
 ```
 
-`ON` 为空（或 `()`）时不生成 `ON` 子句。
+`ON` 为空（或 `()`、`( )`）时不生成 `ON` 子句；生成的关键字分别是 `' inner join '`、`' left outer join '`、`' right outer join '`、`' full outer join '`，`LogicalExpr` / 闭包版本的 `ON` 会被 `ParenExpr` 包一层括号。
 
 **条件**：
 
@@ -860,7 +903,8 @@ public func ORDER_BY(orderBy: () -> String): This
 public func LIMIT(size: Int64, offset!: Int64 = 0): This       // 由方言生成 limit/offset
 ```
 
-> `WHERE` / `AND` / `OR` / `NOT` 会自动裁剪首尾残留的 `and` / `or` 关键字；闭包版本（`() -> Unit`）内部一般配合 `executor.AND{...}` / `executor.OR{...}` 等累积片段。
+> 设计上 `WHERE` / `AND` / `OR` / `NOT` 会先按正则 `^(\s*and|or\s*)|(\s*and|or\s*)$`（忽略大小写）裁剪片段首尾残留的 `and` / `or` 关键字，再拼入 SQL；闭包版本（`() -> Unit`）内部一般配合 `executor.AND{...}` / `executor.OR{...}` 等累积片段，`PAREN` 不走裁剪逻辑。注意该裁剪受上文「已知回归」影响，当前版本实际不会拼入非空片段。
+> `LIMIT(size, offset)` 除追加 `limit ? offset ?` 外，还会把两个参数按方言返回的顺序 `add` 进当前执行器。
 
 示例：
 
@@ -1002,8 +1046,10 @@ public abstract class Columns <: ToString & Iterable<Column> {
 }
 
 public class Column <: ToString & Hashable & Equatable<Column> {
-    public Column(let name: String)
-    public prop name: String                          // 列名（构造参数公开）
+    public Column(let name: String)                   // 列名由主构造函数传入
+    // 注意：name 未声明为 public（默认 internal），包外请改用 toString()
+    public func hashCode(): Int64
+    public operator func ==(other: Column): Bool
 
     public func AS(alias: String): This               // 列别名（与 ASC/DESC 互斥）
     public func tableAlias(alias: String): This       // 表别名
@@ -1033,6 +1079,7 @@ public class Column <: ToString & Hashable & Equatable<Column> {
 
 > `Column.toString()` 会通过 `SqlExecutor.involve(...)` 给标识符加引用符（反引号/双引号，随方言），因此 `'select * from t where ${col} = 1'` 这类拼接是安全的。
 > 若同时设置了 `AS(...)` 与 `ASC()/DESC()`，`toString()` 会抛 `ORMException('column alias and column alias cannot be set at the same time')`。
+> `Columns.tableAlias(alias)` 只是把别名记在列集合对象上，真正生效发生在生成类的 `toString()` 中：它会对每个 `Column` 调用一次 `.tableAlias(super.tableAlias_)`，因此别名设置必须在取用列之前完成。
 
 ### 10.2 `CmpOp` / `RelationOp` 枚举
 
@@ -1045,6 +1092,9 @@ public enum CmpOp <: ToString {
     //                " LIKE "、" NOT LIKE "、" IS NULL "、" IS NOT NULL "、" BETWEEN "、" NOT BETWEEN "
 
 public enum RelationOp <: ToString { | AND | OR | NOT }   // toString() → " AND "、" OR "、" NOT "
+
+// 供子句 PAREN(op, ...) 使用的连接词枚举，toString() 为小写：
+public enum CondRelOp <: ToString { | AND | OR | NOT }    // toString() → "and"、"or"、"not"
 ```
 
 ### 10.3 `LogicalExpr` 家族
@@ -1062,6 +1112,8 @@ public class RelationExpr <: LogicalExpr & ToString         // AND / OR / NOT �
 public class ParenExpr <: LogicalExpr & ToString            // 括号
 public class CommaExpr <: LogicalExpr & ToString            // 逗号分隔（用于 SET 多列赋值）
 ```
+
+> 以上表达式类的构造函数均为 internal，业务侧只通过 `Column` 的比较方法、`RootDAO.AND/OR/NOT`、`meet(...)` 以及子句的 `SET` / `WHERE` / `HAVING` 构造它们；`CmpExpr` / `InExpr` / `In2Expr` 额外公开 `executor` 属性。
 
 ### 10.4 `RootDAO` 的 `LogicalExpr` 版本逻辑运算
 
@@ -1089,6 +1141,7 @@ executor.FROM<UserPO>().WHERE(
 
 ### 10.5 常用函数
 现在支持COUNT、SUM、AVG、MAX、MIN，它们都是RootDAO的实例成员，可以直接在继承了RootDAO的DAO接口中调用。
+返回的 `Column` 内部保存的是**聚合表达式串**（如 `'count(*)'`、`'count(<列名>)'`），而 `Column.toString()` 会把整串当作一个标识符加引用符（如 `"count(*)"`），因此当前实现下不能直接把这些 `Column` 当作 select 列表使用（见 [19.6 已知问题](#196-已知问题源码现状)）。
 ```cj
 func COUNT(): Column // COUNT(*)
 func COUNT(column: Column): Column
@@ -1103,6 +1156,8 @@ func MIN(column: Column): Column
 ## 11. 条件构造器
 
 `SET{}` / `WHERE{}` 闭包内的「按需拼接」能力由三个构造器与 `Condition` 静态类提供。它们都会在 `done()` / `frag()` 时把片段追加到当前 `SqlExecutor` 的 partials 中；直接取返回值也能得到片段字符串。
+
+> 获取实例的入口：`MeetCondition` / `ChooseCondition` 的构造函数是 `public`（也可分别用 `meet(condition, partial)` 与 `executor.choose`）；`Condition` 构造函数为 `private`（静态使用），`LoopCondition` 构造函数为 internal（经 `executor.loop(values)` 获取）。`Condition.delimiter` 为 internal 可变字段。
 
 ### 11.1 `Condition` 静态工具
 
@@ -1278,7 +1333,8 @@ public interface QueryMappersObject<T, C> <: QueryMappersInit<T>
 }
 ```
 
-模块已为下列类型实现了 `SimpleDataQueryMappersInit`：`Int8`、`UInt8`、`Int16`、`UInt16`、`Int32`、`UInt32`、`Int64`、`UInt64`、`Float16`、`Float32`、`Float64`、`Rune`、`String`、`Bool`、`Duration`、`DateTime`、`Decimal`、`BigInt`、`Array<T>`（`T` 亦为 `QueryMappersInit`）、以及 `Option<T>`。
+模块已为下列类型实现了 `SimpleDataQueryMappersInit`：`Int8`、`UInt8`、`Int16`、`UInt16`、`Int32`、`UInt32`、`Int64`、`UInt64`、`Float16`、`Float32`、`Float64`、`Rune`、`String`、`Bool`、`Duration`、`DateTime`、`Decimal`、`BigInt`、`Array<T>`（`T` 亦为 `QueryMappersInit`）。
+另外 `Option<T>` 实现的是 `QueryMappersInit<T>`（把 `tableName` / `isSimpleData` / `queryMappers` 委托给 `T`），并不在上面这份 `SimpleDataQueryMappersInit` 实现列表中。
 
 ### 13.2 `QueryMappers<O>`
 
@@ -1303,7 +1359,7 @@ public class QueryMappers<O> {
 
 * 构造时会统计 `hasGroup`（是否存在 grouped mapper）与 `idMapper`（主键 mapper）。
 * `groupedList` 在存在 grouped mapper 时按主键去重合并，主键相同的行会追加进集合字段（一对多关联）。
-* `list` / `one` 通过 `protected func map(result)` 逐列 `populate` 生成对象。
+* `list` / `one` 通过 `func map(result)` 逐列 `populate` 生成对象（`map` 与迭代器用的 `doMap` 均为 internal 成员，包外不可调用）。
 
 ### 13.3 `QueryMapper` 家族
 
@@ -1373,7 +1429,7 @@ public class SingleColumnIterator<T> <: Iterator<T> & Resource {
 }
 ```
 
-使用 `executor.iterator<T>()` / `executor.singleIterator<T>()` 得到的迭代器需要显式 `close()`，或在 `try (it = executor.iterator<UserPO>()) { ... }` 中由 `Resource` 自动关闭。
+两者的构造函数均为 internal，只能由框架创建。`executor.iterator<T>(mappers)` 返回的 `QueryResultIterator<T>`（同时是 `Resource`）可用 `try (it = executor.iterator<UserPO>()) { ... }` 自动关闭，也可显式 `close()`；而 `executor.iterator<T>()` / `executor.singleIterator<T>()` 的**静态返回类型是 `Iterator<T>`**，`Resource` 语义不可用（只用 `try` 无法自动关闭），需要显式关闭时请用带 `mappers` 的重载。
 
 ### 13.5 自定义类型转换：`QueryMapperConverter`
 
@@ -1391,8 +1447,16 @@ public class QueryMapperWithTypeNameJsonConverter <: QueryMapperConverter {
 }
 ```
 
-* 通过 `ORMConfig.registerConverter<D, T>(name, converter)` 注册**具名转换器**（`f_data` 的 `@DataConverter` 机制），`@ORMField` 里用 `converter: '<name>'` 引用；
-* 也可以直接给出类名（如 `converter: 'fountain::f_orm.base.QueryMapperJsonConverter'`），`lookup` 会先按 bean 名查找，再按全名匹配已注册的 bean，最后尝试反射 `construct([])`。
+* `@ORMField` 里的 `converter: '<name>'` 由宏生成代码交给 `QueryMapperConverter.lookup(name)` 解析（`lookup` 结果按名字缓存）。查找顺序：① f_bean 的 `lookupOption<QueryMapperConverter>(name)`（**按 bean 名**，即转换器需是一个具名 `@Bean`）；② 遍历 `lookupList<QueryMapperConverter>()` 匹配全限定类型名；③ `ClassTypeInfo.get(name).construct([])` 反射构造。三者都不成则抛 `ORMException('QueryMapperJsonConverter: <name> not found')`。
+* 也可以直接给出类名（如 `converter: 'fountain::f_orm.base.QueryMapperJsonConverter'`）。
+* `ORMConfig.registerConverter` / `getConverter` 维护的是**另一套** `converterMap`（供业务自行取用），当前源码中 `lookup` 并不查它——两者不要混用。
+
+底层类型转换由 `public struct ORMConverter`（`base/converter.cj`）提供：
+
+```cangjie
+public static func convert<T>(value: Any): T
+public static func convertNullable<T>(value: Any): ?T
+```
 
 ---
 
@@ -1487,6 +1551,9 @@ public interface TransactionHook {
 | --- | --- |
 | 提交 | `beforeTx` → `beforeCommit` → `commit` → `afterCommit` → `afterComplete(Committed)` |
 | 异常 | `afterThrowing` → `beforeRollback` → `rollback` → `afterRollback` → `afterComplete(Rollback)` |
+| 异常命中 `noRollbackFor` / 配置了 `rollbackFor` 但类型不匹配 | `afterThrowing` → `beforeCommit` → 提交 → `afterCommit` → `afterComplete(Committed)` → 重抛 |
+
+> 完整分支（含 `rollbackFor` 命中）见 [5.4](#54-通用执行入口)。
 
 ```cangjie
 public enum TransactionStatus <: Equatable<TransactionStatus> & ToString {
@@ -1508,7 +1575,7 @@ public class TransactionAspect <: Aspect {
 }
 ```
 
-切面在 `proceed` 中解析注解与配置，取 `ORM.executor(driverName)` 后调用 `execute<Any>(...)` 包裹原方法调用。
+切面在 `proceed` 中解析注解与配置，取 `ORM.executor(driverName)` 后调用 `execute<Any>(...)` 包裹原方法调用。该类还通过 `private init()` + `static init()` 把自身注册进 `BeanFactory`，并 `public import fountain::f_aspect.*`（连同重导出切面相关的类型）。
 
 ### 14.6 `RootService`（Service 层基接口）
 
@@ -1543,8 +1610,8 @@ public interface UserDAO <: RootDAO {
 要点：
 
 * **接口本身承载实现**：DAO 函数必须在接口里给出函数体（由 `SqlExecutor` 的扩展继承）。因此没有「DAO 实现类」，`SqlExecutor` 就是实现。
-* 约束（宏会断言/告警）：
-  * 接口必须是 `public`、**不能有泛型形参**，且必须继承 `RootDAO`；
+* 宏的**实际校验只有一条**：输入必须是接口声明，否则报错（`DAO.cj:92-113`）。以下均为使用约定，宏不做断言或告警：
+  * 接口建议 `public`、**不要有泛型形参**，且继承 `RootDAO`；
   * 所有 DAO 函数必须有默认实现；
   * **一个持久化对象对应一个 DAO 接口**；
   * 同一模块内所有 DAO 的函数名不能重名（因为都挂在 `SqlExecutor` 上）。
@@ -1577,7 +1644,8 @@ public class UserPO {
 | `static func tableName(): String` | 表名 |
 | `static func isSimpleData(): Bool` | PO 返回 `false` |
 | `static func tableColumns(): C` | 列集合对象（见下），并让 PO 继承 `QueryMappersObject<T, C>` |
-| 列集合类 | 生成在 PO 所在包内，包含 `toString()`（列名逗号连接）、`iterator(): Iterator<Column>`，以及每个列一个 `Column` 属性 |
+| 列集合类 | 名为 `<PO 类名>__cOlUmns___`（`private init()` + 静态单例），生成在 PO 所在包内，包含 `toString()`（列名逗号连接）、`iterator(): Iterator<Column>`，以及每个列一个 `Column` 属性 |
+| 表元数据注册 | 生成 `private let _ = TableMetas.register<T>()`，供 migro 发现该表（见第 16 节） |
 
 > **列集合属性名是「列名」而非「成员名」**：`@ORMField['user_name'] private var userName` 对应 `tableColumns().user_name`。
 > 未使用 `@ORMField` 的 public 实例成员，默认「非主键 + 成员名按 `LowerUnderScore` 转列名」。
@@ -1590,11 +1658,12 @@ public class UserPO {
 | 表名 | `[table: 'user_info']` / `[table: user_info]` | 表名（字符串/标识符均可） |
 | 命名策略 | `[table: LowerUnderScore]` | 类名 → 表名按策略转换 |
 | 表名前缀/后缀 | `[tablePrefix: 't_' tableSuffix: '_tab']` | 拼接到表名 |
-| 类名前后缀 | `[classPrefix: 'F_' classSuffix: 'PO']` | 生成列集合类名时剥离 |
+| 类名前后缀 | `[classPrefix: 'F_' classSuffix: 'PO']` | 在按命名策略把**类名**转成表名之前，先剥离类名的前后缀（如 `F_UserPO` → `User`）；与列集合类名无关（后者固定为 `<类名>__cOlUmns___`） |
 | 脏字段追踪 | `[dirty]` | 为 setter 注入 `DirtyTag.setDirtyField<T>(...)`（仅简单类型 / `?T` / `Option<T>`），配合 `UPDATE(values, dirty: true)` |
 | 兼容写法 | `[table: xxx dirty]` | 表名 + dirty 同时给出 |
 
-未写任何属性时，表名/列名按类名/成员名的 `LowerUnderScore` 转换。
+未写任何属性（或只写 `dirty`）时，表名按类名的 `LowerUnderScore` 转换；未用 `@ORMField` 的成员名默认按 `LowerUnderScore` 转列名。
+无法识别的属性只报 **WARNING**（`${attr.value} is illegal attr for @QueryMappersGenerator...`），不中断编译。
 
 ### 15.3 `@ORMField`
 
@@ -1609,7 +1678,7 @@ public macro ORMField(attrs: Tokens, input: Tokens): Tokens
 | 写法 | 含义 |
 | --- | --- |
 | `true` / `id` | 标记为主键 |
-| `false` | 非主键（与省略等价） |
+| `false` | 主键（**当前实现把任意布尔字面量都视为主键**：`case (BOOL_LITERAL, x) => id = true`，`ORMField.cj:114`；不要用 `false` 表达“非主键”，省略该属性即可） |
 | `'column_name'` / `"column_name"` | 固定列名 |
 | `LowerUnderScore` | 成员名（驼峰）转下划线小写列名 |
 | `UpperUnderScore` | 转大写下划线列名 |
@@ -1622,17 +1691,19 @@ public macro ORMField(attrs: Tokens, input: Tokens): Tokens
 
 **宏的改写行为**：被标注的 `var` 会改写成 `private var _name_` + `public mut prop name`（setter 中按需插入脏标记），因此业务代码访问方式不变。约束：
 
-* 只能标注**成员变量或 `mut` 属性**（`immutable` 属性无法映射）；
+* 只能标注 **`public var` 成员变量或 `public mut` 属性**（其它形式宏会报错 `member of current type must be modified by `public var` or `public mut prop` which is annotated by ORMField`）；
 * 成员必须是非静态实例成员；
-* 属性名建议使用驼峰命名法（配合 `LowerUnderScore` 等策略）。
+* 属性名建议使用驼峰命名法（配合 `LowerUnderScore` 等策略）；
+* 非法属性 token 会抛 `ORMException('unsupported TokenKind in attrs of @ORMField ...')`，而不是告警。
 
 > 另有注解类 `ORMColumn`（`@Annotation[target: [MemberProperty, MemberVariable]]`，字段 `name!: String`、`id!: Bool`）提供与列名/主键有关的等价声明能力。
 
 ### 15.4 `@TransactionalService`
 
 ```cangjie
-// macros/TransactionalService.cj 实际只是再导出：
+// macros/TransactionalService.cj 实际只是再导出（同时再导出 Pointcut）：
 public import fountain::f_aspect.macros.WeavedBean as TransactionalService
+public import fountain::f_aspect.macros.Pointcut
 ```
 
 **作用**：等价于 `@WeavedBean`，把被标注的 Service 类织入切面链（配合 `TransactionAspect` 与 `orm_transactionalFuncExecution` 配置实现事务织入，无需逐方法写 `@Transactional`）。见 `fdemo`：
@@ -1851,20 +1922,20 @@ public struct SchemaFinderMediator {
 
 1. `TableMetas.tableMetas()` 按 `driver` 分组；
 2. 对每个已注册表：查库中列 → 无表则 `generateCreateSql`，有表则 `generateAlterSql`；随后查库中索引 → `generateIndexSql`；
-3. 每个数据库的首条 SQL 前插入 `use <database>;`；
-4. 为「库中存在、但定义中没有」的表生成 `drop table`（孤儿表清理）；
+3. 按 **driver 分组**，在每组首条 SQL 前插入 `use <该组首个表所在 database>;`（同一分组内跨库时不会为第二个库再插 `use`）；
+4. 为「库中存在、但定义中没有」的表生成 `drop table`（孤儿表清理），这些语句与前面的 DDL 一起追加进同一个列表；
 5. 所有 SQL 首先打印到标准输出；
-6. 解析 `-m` / `--mode` 参数决定后续动作。
+6. 解析 `-m` / `--mode` 参数决定后续动作（**只识别第一个命中的 `-m` / `--mode`**，处理完即结束）。
 
 | `-m` / `--mode` | 行为 |
 | --- | --- |
 | 省略 | 仅打印 SQL，不写文件不执行 |
 | `file` | 把 SQL 写入当前目录 `./migro.sql` |
-| `auto` | 通过 `ORM.executor(driver)` 逐条执行 |
+| `auto` | 通过 `ORM.executor(driver)` 逐条 `setSql(sql).update` 执行 |
 | `dry` | 仅打印（与省略相同） |
-| `interactive` | 打印后询问 `> 是否立即执行生成的SQL? [y/N]：`，输入 `y`/`Y` 执行 |
+| `interactive` | 打印后询问 `> 是否立即执行生成的SQL? [y/N]：`，输入 `y`/`Y` 执行，`n`/`N` 结束，其它输入继续等待 |
 
-> 非上述取值会抛 `Exception("Invalid migration mode ...")`。执行模式下每条 SQL 失败只打印堆栈、不中断后续语句。
+> 非上述取值会抛 `Exception("Invalid migration mode ...")`。执行模式下每条 SQL 失败只打印堆栈、不中断后续语句。注意第 4 步生成的 `drop table` 也在同一列表中，因此同样会被 `file` / `auto` / `interactive` 写入或执行。
 
 命令行入口（`f_app` 子命令框架）：
 
@@ -1942,9 +2013,10 @@ init(message: String, caused: Exception)
 编译期，按照以下配置即可将敏感信息嵌入到编译产物中。
 如果没有加密配置项，会将敏感信息的UTF8字节数组嵌入到编译产物。
 如果编译环境没有配置敏感信息，就必须在运行环境配置它们，否则访问数据库时将出错。
-启动进程时首先从加密配置集合获取敏感信息，如果获取不到，则从运行环境获取敏感信息配置项。
 
 编译环境和运行环境的敏感信息配置项完全一致。
+
+> 当前实现的实际读取链路：`ORMConfig.getConf` / `getUrl` / `getUsername` / `getPassword` 只读取 `Config`（即环境变量），**并不会读取 `sensitiveMap`**；`ORMConfig.getSensitive`（按内嵌键取值）目前没有任何调用方。也就是说内嵌到产物中的连接 URL / 用户名 / 密码暂时不会在运行时被自动使用，SM4 参数（`sensitiveMap`）则会被 `getSM4()` 使用。详见 [19.6 已知问题](#196-已知问题源码现状)。
 
 以下需要16进制串的情形可以使用命令：`fboot randhex 32`，32是16进制串的长度
 
@@ -1953,8 +2025,8 @@ init(message: String, caused: Exception)
 # 这些加密配置项也会作为敏感信息嵌入编译产物
 export orm_sm4Operation='CBC' # CBC CFB CTR GCM OFB，默认CBC。ECB被文档标记为不安全，没有给予支持
 export orm_sm4Padding='PKCS7Padding' # PKCS7Padding NoPadding，默认是PKCS7Padding
-export orm_sm4Key='1234567812345678' # 16字节，没有默认值，以长度为32的16进制字符串表示
-export orm_sm4Iv='1234567812345678' # 16字节，没有默认值，以长度为32的16进制字符串表示
+export orm_sm4Key='1234567812345678' # 16字节，没有默认值，以长度为32的16进制字符串表示；缺失或长度不符抛 IllegalArgumentException
+export orm_sm4Iv='1234567812345678' # 没有默认值，以 16 进制字符串表示；CBC/OFB/CFB 要求 16 字节，GCM 要求 12 字节，缺失或长度不符抛 IllegalArgumentException
 export orm_sm4Aad='1234567812345678' # 附加认证数据，默认是空字节数组，以长度为32的16进制字符串表示
 export orm_sm4TagSize=16 # Int64，默认16
 ```
@@ -1971,6 +2043,13 @@ export orm_option_password='...' # 密码
 export <driverName>_orm_option_password='...' # 如果有多个数据源，配置项可以驱动名称开头
 ```
 
+内嵌规则（`macros/EmbedSensitive.cj`）：
+
+* 逐个遍历 `orm_drivers` 中的驱动，只有**编译期能取到非空值**的连接 URL / 用户名 / 密码才会被内嵌；
+* 内嵌时的注册键是**驱动名前缀形式**：`<driver>_orm_connectionUrl`、`<driver>_orm_option_username`、`<driver>_orm_option_password`（由 `ORMConfig.genKey` 生成），全局名不会被原样内嵌；
+* 只有确实内嵌了至少一项敏感信息时，SM4 的 operation / padding / key / iv / aad / tagSize 才会一起写入 `sensitiveMap`；
+* 运行时 `getConf` / `getUrl` / `getUsername` / `getPassword` 目前只读 `Config`（环境变量），不查 `sensitiveMap`（见本章开头的说明与 [19.6](#196-已知问题源码现状)）。
+
 ## 19. 附录
 
 ### 19.1 SQL 方言 `SqlDialect`
@@ -1986,9 +2065,11 @@ public abstract class SqlDialect {
     public open func limit(size: Int64, offset: Int64): (Int64, Int64, String)  // 默认 (size, offset, ' limit ? offset ?')
     public open prop startInvolver: String                                       // 默认 '"'
     public open prop endInvolver: String                                         // 默认 '"'
-    public func involvedIdentifier(identifier: String): String                   // 包裹标识符；a.b 形式按段分别包裹
+    public func involvedIdentifier(identifier: String): String                   // 包裹标识符；以 startInvolver 开头的原样返回
 }
 ```
+
+`involvedIdentifier` 的分段规则：只在**第一个** `.` 处切分（`a.b.c` → `"a"."b.c"`），首段与其余部分各自加引用符。
 
 `limit(size, offset)` 返回三元组 `(参数1, 参数2, SQL 片段)`——各数据库的参数顺序不同（MySQL 是 size、offset；Oracle 是 offset、size），调用方按返回顺序 `add` 参数即可。
 
@@ -2003,23 +2084,25 @@ public abstract class SqlDialect {
 | `OpenGaussDialect` | `opengauss` | 继承 `PostgresDialect` |
 | `OracleDialect` | `oracle` | `limit` → ` OFFSET ? ROWS FETCH NEXT ? ROWS ONLY` |
 | `DB2Dialect` | `db2` | `limit` → ` OFFSET ? ROWS FETCH FIRST ? ROWS ONLY` |
-| `MockdbDialect` | `mockdb` | 代理方言：`mock` 属性指定被代理的方言（默认 `opengauss`）；设置为自身时抛 `MockDBException` |
+| `MockdbDialect` | `mockdb` | 代理方言：`mock` 属性指定被代理的方言（默认 `opengauss`），`limit` / `startInvolver` / `endInvolver` 均转发给它；设置为自身时抛 `MockDBException` |
 
 ### 19.2 `wrap` 层进阶类型
 
 | 类型 | 说明 | 关键成员 |
 | --- | --- | --- |
 | `ORMConfig` | 配置读取入口——第 3 节所有环境变量的解析实现。 | `getDrivers()`、`getDriverNames()`、`getDefaultDriver()`（`orm_defaultDriver` ?? `orm_drivers` 首个 ?? `''`）、`isDefaultDriver(driver: String / Driver)`、`getUrl(driverName)`、`getConf(driverName, key)`、连接池各参数 getter（`getPoolMaxSize`、`getPoolCheckSql` 等）、`registerConverter` / `getConverter`（见 [13. 结果映射](#13-结果映射)）、`transactionable(funcName)`、`getTransactionPropagation()`、`mockdb` |
-| `NamedDatasource` | 具名数据源：将 `Datasource` 与驱动名绑定，供 `ORM.register` 使用。 | `init(driver)` / `init(driver, url)` / `init(driver, options)`、`driverName`、`connect()` |
+| `NamedDatasource` | 具名数据源（`<: Datasource & Resource`）：将 `Datasource` 与驱动名绑定，供 `ORM.register` 使用。 | `init(driver)` / `init(driver, url)` / `init(driver, options)` / `init(driver, url, options)`、主构造函数 `NamedDatasource(optionSpecified, driverName, datasource)`、`driverName`、`connect()`、`setOption(key, value)`、`isClosed()`、`close()` |
 | `DatasourceCreator` | 数据源工厂接口：`ORM.register(creator)` 在注册时调用它创建 `NamedDatasource`。 | `create(): NamedDatasource`、`driverName: String`（供 `default` 默认值判定） |
-| `DatabasePool` | 内置连接池（`<: Resource & Datasource`），由 `orm_databasePool*` 系列环境变量驱动。 | `init(driver: Driver, creator: () -> Connection)`（参数取自 `ORMConfig`）、完整参数版 `init`（`maxSize`、`checkOnBorrowing`、`connectionLife`、`connectTimeout` 等）、`getConnection(timeout!)`、`isClosed()`、`close()` |
+| `DatabasePool` | 内置连接池（`<: Resource & Datasource`），由 `orm_databasePool*` 系列环境变量驱动。 | `init(driver: Driver, ds: Datasource)`（各参数取自 `ORMConfig`）、`init(ds: Datasource, ..., checker!: (Connection) -> Bool)`、`init(ds: Datasource, ..., checkSql!: String = "select 1")`、`init(driver: Driver, options!: Array<(String, String)> = [], ..., checkSql!: String)`（直接 `driver.open`）、`getConnection(timeout!: Duration = connectTimeout): Option<Connection>`（池已关闭时抛 `ConnectionException('database pool is closed')`）、`isClosed()`、`close()` |
 | `SqlArg`（抽象） | 单个绑定参数（`index` + `set(statement)`）。 | 工厂 `SqlArg.new<T>(index, value)`；每种支持类型对应一个实现子类；`hashCode` / `==` / `toString` |
-| `SqlArgs` | 参数集合：占位符索引自增。 | `add(...)` 全类型重载、`addNull()`、`toString()` |
-| `QueryResultWrap` | `std.database.sql.QueryResult` 的包装：按列读取并安全转型，是结果映射的底层。 | `get<T>(...)` / `getOrNull<T>(...)`、`next()`、`toMap()`、`close()` 等 |
-| `StatementWrap` | `Statement` 包装：统一 `?` 占位符参数绑定与执行。 | `update()` / `query()`、`getConnection()`；参数版 `update(params)` / `query(params)` 已废弃 |
+| `SqlArgs` | 参数集合（`<: Hashable & Equatable<SqlArgs> & ToString`）：占位符索引自增。 | public：`init()`、`add(...)` 全类型重载、`addNull()`、`toString()`、`hashCode` / `==`；protected：`clone()`、`set(statement)`、`clear()`、`add(all!: SqlArgs)` |
+| `QueryResultWrap` | `std.database.sql.QueryResult` 的包装：按列读取并安全转型，是结果映射的底层。 | `columnInfos`、`get<T>(...)` / `get<T>(columnName)` / `getOrNull<T>(...)` / `getOrNull<T>(columnName)`、`next()` / `next(values)`、`toMap()`、`close()` 等 |
+| `StatementWrap` | `Statement` 包装：统一 `?` 占位符参数绑定与执行。 | `update()` / `query()`（均无参）、`set` / `setNull`（内部按 `orm_indexStartsWithZero` 补索引基数）、`parameterColumnInfos`、`setOption`、`isClosed()`、`close()`；**没有 `getConnection()`**，参数版 `update(params)` / `query(params)` 直接抛 `ORMException('current access is deprecated')` |
+| `ConnectionWrap` | `Connection` 包装：给连接附加驱动名，`prepareStatement` 返回 `StatementWrap`、`createTransaction` 返回 `TransactionWrap`。 | 主构造函数 `ConnectionWrap(driverName, connection)`、`driverName`、`state`、`getMetaData()`、`prepareStatement`、`createTransaction`、`isClosed()`、`close()` |
+| `DummyTransaction` | 「无真实事务」的占位事务，用于在未开启事务时执行传播规则检查（`TransactionWrap.isDummy` 即判断是否持有它）。 | 枚举 `DummyTransactionMode { Common, Mandatory, Never, StartFailure }`；`init(mode, ex)`；`begin()` 按模式抛 `MandatoryTransactionException` / `NeverTransactionException` / `StartFailureTransactionException`（`Common` + 有异常时抛 `TransactionException`）；`isoLevel` / `accessMode` / `deferrableMode` 为 mut prop；`commit` / `rollback` / `save` / `release` 均为空实现 |
 | `TransactionWrap` | 事务包装：事务内绑定独立连接，支持挂起与保存点。 | `connection`、`suspend`、`wrapping`、`isDummy`、`begin()`、`commit()`、`rollback()`、`save(name)`、`rollback(savePointName)`、`release(name)`、`setIsoLevel(level)`、`setAccessMode(mode)`、`setDeferrableMode(mode)` |
 | `Propagation` | 事务传播级别枚举（`@Transactional` 传播参数）。 | `Required`、`Supports`、`Mandatory`、`RequiresNew`、`NotSupported`、`Never`、`Nested` |
-| `DataType`（抽象） | 列类型描述（`nullable` / `columnName` / `fieldName`），与 `QueryMapper` 一一对应：定类型读取结果列，也决定 insert/update 时的参数绑定重载。 | `get(result): Any`；子类：`BoolDataType`、`Int8DataType`、`UInt8DataType`、`Int16DataType`、`UInt16DataType`、`Int32DataType`、`UInt32DataType`、`Int64DataType`、`UInt64DataType`、`Float16DataType`、`Float32DataType`、`Float64DataType`、`DecimalDataType`、`BigIntDataType`、`RuneDataType`、`StringDataType`、`ByteArrayDataType`、`DateTimeDataType`、`DurationDataType`、`InputStreamDataType`、`UnknownDataType` |
+| `DataType`（抽象） | 列类型描述（构造参数 `nullable` / `columnName` / `fieldName`），与 `QueryMapper` 一一对应：定类型读取结果列，也决定 insert/update 时的参数绑定重载。 | `get(result): Any`；子类：`BoolDataType`、`Int8DataType`、`UInt8DataType`、`Int16DataType`、`UInt16DataType`、`Int32DataType`、`UInt32DataType`、`Int64DataType`、`UInt64DataType`、`Float16DataType`、`Float32DataType`、`Float64DataType`、`DecimalDataType`、`BigIntDataType`、`RuneDataType`、`StringDataType`、`ByteArrayDataType`、`DateTimeDataType`、`DurationDataType`、`InputStreamDataType`、`UnknownDataType` |
 
 ### 19.3 SQL 参数支持的类型
 
@@ -2031,13 +2114,30 @@ public abstract class SqlDialect {
 
 | 类型 | 说明 |
 | --- | --- |
-| `ExtendString`（`String` 扩展） | 在 SQL 片段拼接上下文中向当前执行器的 partials 追加内容：字符串的 `AND` / `OR` / `NOT` 属性追加对应关键字；`'prefix'('and x = #{x}')` 形式的 `operator ()` 调用直接追加片段 |
-| `DirtyTag` | 脏字段追踪（`dirty: true` 的 `UPDATE` 依赖它）：`setDirtyField<T>(field: String)` 由 `@ORMField` 生成的 setter 调用；其余（`setBeforeDirty` / `getDirtyFields` / `clear`）为 `protected`，供框架内部使用 |
+| `ExtendString`（`String` 扩展） | 在 SQL 片段拼接上下文中向当前执行器的 partials 追加内容：字符串的 `AND` / `OR` / `NOT` 属性追加对应关键字；`operator ()(sql: String)` 与 `operator ()(sql: () -> Unit)` 直接追加片段（内部走 `Partials.PAREN`） |
+| `DirtyTag` | 脏字段追踪（`dirty: true` 的 `UPDATE` 依赖它）：`setDirtyField<T>(field: String)` 由 `@ORMField` 生成的 setter 调用；`setBeforeDirty<T>` / `getDirtyFields<T>` / `clear<T>` / `clearAll` 为 `protected`，`clear(typeInfo)` 为 private，均供框架内部使用 |
 | `ORMInitializer` | `f_app` 集成：注册 `initializer`（名称 `fountain::f_orm`，依赖 `fountain::f_bean`），应用启动时自动执行 `ORM.initialize()` |
 | `ORMColumn` | 成员上的列名/主键注解（`name!: String = ''`、`id!: Bool = false`），与 `@ORMField` 提供等价的声明能力（见 [15. 宏](#15-宏)） |
 
 ### 19.5 相关文档
 
-* `f_orm/README.md`：模块历史介绍（部分内容已滞后于当前 API）。
+* `f_orm/doc/*.md`：按主题拆分的补充文档——`配置.md`、`数据映射.md`、`声明DAO接口.md`、`事务.md`、`动态SQL的高级API.md`、`数据库表变更.md`、`ChooseCondition.md`、`LoopCondition.md`、`RootDAO.md`、`RootService.md`、`SqlExcutor.md`、`优化方案.md`、`导入.md`、`STDX依赖.md`。
 * `f_orm/src/**/*.cj`：源码即最权威的参考；本文档未覆盖的行为以源码为准。
 * 示例工程 `fdemo`：`fdemo/boot.sh`（配置）、`fdemo/user/src/dao/*DAO.cj`（DAO 定义）、`fdemo/user/src/service/impl/UserServiceImpl.cj`（事务服务）。
+
+### 19.6 已知问题（源码现状）
+
+下表是「代码当前行为与设计意图不一致」的清单，正文相应位置也有标注；使用这些能力前建议先确认是否已修复：
+
+| 位置 | 现象 |
+| --- | --- |
+| `base/TableClause.cj:45` | 片段拼接条件写成 `emptyLogicalExpr(sql)`（提交 `b4e9d086`），导致 `WHERE` / `AND` / `OR` / `NOT` / `HAVING(String)` / `ORDER_BY` / `GROUP_BY` / `SET` / `byId` 及闭包版本不会把条件写入 SQL（见 [9](#9-dsl-子句intoclause--updateclause--fromclause)） |
+| `base/TableClause.cj:438-460` | `INSERT_INTO<T>(ignoreColumns: Array<Column>)` 用带引用符的 `Column.toString()` 与 `columnName` 比较，忽略列通常不生效（`INTO(ignoreColumns: Array<String>)` 正常） |
+| `macros/ORMField.cj:114` | 任意布尔字面量（含 `false`）都被视为主键，无法用 `false` 表达「非主键」 |
+| `base/QueryResultIterator.cj:40-54` | `SingleColumnIterator.next()` 在结果集耗尽时抛 `ORMException("the first column does not match specified data type")` 而非返回 `None`；`column` 形参未参与取值（两个分支都按 `index` 取列） |
+| `base/GroupedQueryMapper.cj:90-104` | `NullableGroupedQueryMapper.ignoreNone` 的判断恒为假，补 `None` 的分支不会执行 |
+| `base/NestQueryMapper.cj:39-57` | `NullableNestQueryMapper` 的 `nestGetter` 被保存但从未使用 |
+| `base/SqlExecutor.cj:76-80` | `readOnly` 没有置 `true` 的分支，`isReadOnly` 恒为 `false` |
+| `base/RootDAO.cj:509-526` | `COUNT` / `SUM` / `AVG` / `MAX` / `MIN` 返回的 `Column` 在 `toString()` 中会被整体加引用符（如 `"count(*)"`），不能直接作为 select 列表使用 |
+| `base/Condition.cj:23` | `Condition.delimiter` 为 internal 可变字段，包外无法读取或重设 |
+| `wrap/ORMConfig.cj:105-117` | `getSensitive`（读取内嵌敏感信息）无调用方，`getConf` / `getUrl` 等只走 `Config`，因此 `@EmbedSensitive` 内嵌的连接 URL / 用户名 / 密码目前不会在运行时生效（SM4 参数仍由 `getSM4()` 使用） |

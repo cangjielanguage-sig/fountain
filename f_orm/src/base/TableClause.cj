@@ -42,7 +42,7 @@ abstract sealed class TableClause<T> <: ToString where T <: QueryMappersInit<T> 
         }else{
             '^(\\s*${trim}\\s*)|(\\s*${trim}\\s*)$'.regex(flags: [IgnoreCase], solid: true).replaceAll(partial, '')
         }
-        if(emptyLogicalExpr(sql)){
+        if(!emptyLogicalExpr(sql)){
             sqlgen.append(' ').append(keyword).append(' ').append(sql).append(' ')
         }
         this
@@ -305,13 +305,13 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
         }
         return builder.toString()
     }
-    public func first<T>(columns: Array<Column>): ?T where T <: QueryMappersInit<T> {
+    public func first<T>(columns: Array<SqlExpr>): ?T where T <: QueryMappersInit<T> {
         first<T>(columns2string(columns))
     }
     public func singleFirst<T>(column: String): ?T {
         executor.setSql('select ${column} ${LIMIT(1)}').singleFirst<T>()
     }
-    public func singleFirst<T>(column: Column): ?T {
+    public func singleFirst<T>(column: SqlExpr): ?T {
         singleFirst<T>(column.toString())
     }
     public func list<T>(): ArrayList<T> where T <: QueryMappersInit<T> {
@@ -323,7 +323,7 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
     public func list<T>(columns: Columns): ArrayList<T> where T <: QueryMappersInit<T> {
         list<T>(columns.toString())
     }
-    public func list<T>(columns: Array<Column>): ArrayList<T> where T <: QueryMappersInit<T> {
+    public func list<T>(columns: Array<SqlExpr>): ArrayList<T> where T <: QueryMappersInit<T> {
         list<T>(columns2string(columns))
     }
     public func singleList<T>(): ArrayList<T> {
@@ -332,7 +332,7 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
     public func singleList<T>(column: String): ArrayList<T> {
         executor.setSql('select ${column} ${sqlgen}').singleList<T>()
     }
-    public func singleList<T>(column: Column): ArrayList<T> {
+    public func singleList<T>(column: SqlExpr): ArrayList<T> {
         singleList<T>(column.toString())
     }
     public func firstToMap(): Map<String, Any> {
@@ -440,20 +440,24 @@ public class IntoClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
         if(ignores.size > 0 && includes.size > 0){
             throw ORMException("ignores and includes can't be used together")
         }
-        let ignoresSet = HashSet<String>()
+        let ignoresSet = HashSet<Column>()
         for(ignore in ignores){
-            ignoresSet.add(ignore.toString())
+            ignoresSet.add(ignore)
         }
-        let includesSet = HashSet<String>()
+        let includesSet = HashSet<Column>()
         for(include in includes){
-            includesSet.add(include.toString())
+            includesSet.add(include)
         }
         var i = 0
-        for (mapper in T.queryMappers().mappers where !ignoresSet.contains(mapper.dataType.columnName) && (includesSet.isEmpty() || includesSet.contains(mapper.dataType.columnName))) {
+        for (mapper in T.queryMappers().mappers) {
+            column = Column(mapper.dataType.columnName)
+            if(ignoresSet.contains(mapper.dataType.columnName) || !(includesSet.isEmpty() || includesSet.contains(mapper.dataType.columnName))){
+                continue
+            }
             if (i > 0) {
                 sqlgen.append(',')
             }
-            sqlgen.append(mapper.dataType.columnName)
+            sqlgen.append(column)
             fields.add(mapper.dataType)
             i++
         }

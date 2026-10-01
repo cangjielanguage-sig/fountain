@@ -38,18 +38,10 @@ public class SingleColumnIterator<T> <: Iterator<T> & Resource {
         private let column!: String = String.empty
     ) {}
     public func next(): ?T {
-        if (column == String.empty) {
-            if (result.next()) {
-                result.getOrNull<T>(index)
-            } else {
-                throw ORMException("the first column does not match specified data type")
-            }
+        if (result.next()) {
+            result.getOrNull<T>(index)
         } else {
-            if (result.next()) {
-                result.getOrNull<T>(index)
-            } else {
-                throw ORMException("the first column does not match specified data type")
-            }
+            None<T>
         }
     }
     public func isClosed(): Bool {

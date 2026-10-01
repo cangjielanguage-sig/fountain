@@ -58,7 +58,7 @@ public struct EmptyExpr <: LogicalExpr {
 }
 public open class CmpExpr <: RootDAO & LogicalExpr {
     CmpExpr(
-        private let column: Column,
+        private let column: SqlExpr,
         private let op: CmpOp,
         private let value: Any
     ){}
@@ -73,19 +73,22 @@ public open class CmpExpr <: RootDAO & LogicalExpr {
                 match(value){
                     case x: Array<Any> => 
                         match((x[0], x[1])){
-                            case (x: Column, y: Column) => ' ${column.name} ${op} ${x} AND ${y} '
-                            case _ => ' ${column.name} ${op} ${arg(x[0])} AND ${arg(x[1])} '
+                            case (x: Column, y: Column) => ' ${column} ${op} ${x} AND ${y} '
+                            case _ => ' ${column} ${op} ${arg(x[0])} AND ${arg(x[1])} '
                         }
                     case _ => throw SqlArgException('value must be Array<Any> for BETWEEN or NOT_BETWEEN')
                 }
-            case IS_NULL | IS_NOT_NULL => ' ${column.name} ${op} '
-            case x: Column => ' ${column.name} ${op} ${x} '
-            case _ => '${column.name} ${op} ${arg(value)}'
+            case IS_NULL | IS_NOT_NULL => ' ${column} ${op} '
+            case _ => 
+                match(value){
+                    case x: SqlExpr => ' ${column} ${op} ${x} '
+                    case _ => ' ${column} ${op} ${arg(value)} '
+                }
         }
     }
 }
 public class BetweenExpr <: CmpExpr {
-    init(column: Column, op: CmpOp, value: Array<Any>){
+    init(column: SqlExpr, op: CmpOp, value: Array<Any>){
         super(column, op, value)
         match(op){
             case BETWEEN | NOT_BETWEEN => ()
@@ -96,7 +99,7 @@ public class BetweenExpr <: CmpExpr {
 }
 
 public class InExpr<T> <: RootDAO & LogicalExpr {
-    InExpr(private let column: Column, private let op: CmpOp, private let value: Collection<T>){
+    InExpr(private let column: SqlExpr, private let op: CmpOp, private let value: Collection<T>){
         match(op){
             case IN | NOT_IN => ()
             case _ => throw SqlArgException('op must be IN or NOT_IN')
@@ -112,7 +115,7 @@ public class InExpr<T> <: RootDAO & LogicalExpr {
     }
 }
 public class In2Expr<I, T> <: RootDAO & LogicalExpr where I <: Collection<T> {
-    In2Expr(private let column: Column, private let op: CmpOp, private let value: Collection<I>){
+    In2Expr(private let column: SqlExpr, private let op: CmpOp, private let value: Collection<I>){
         match(op){
             case IN | NOT_IN => ()
             case _ => throw SqlArgException('op must be IN or NOT_IN')
@@ -129,7 +132,7 @@ public class In2Expr<I, T> <: RootDAO & LogicalExpr where I <: Collection<T> {
 }
 
 public class NullExpr <: CmpExpr {
-    init(column: Column, op: CmpOp){
+    init(column: SqlExpr, op: CmpOp){
         super(column, op, Option<Any>.None)
         match(op){
             case IS_NULL | IS_NOT_NULL => ()

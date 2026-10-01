@@ -506,23 +506,23 @@ public interface RootDAO {
         ParenExpr(RelationExpr(RelationOp.NOT, [exprs()]))
     }
 
-    func COUNT(): Column {
-        Column('count(*)')
+    func COUNT(): SqlFunc {
+        SqlFunc('count', Column('*'))
     }
-    func COUNT(column: Column): Column {
-        Column('count(${column.name})')
+    func COUNT(column: Column): SqlFunc {
+        SqlFunc('count', column)
     }
-    func SUM(column: Column): Column {
-        Column('sum(${column.name})')
+    func SUM(column: Column): SqlFunc {
+        SqlFunc('sum', column)
     }
-    func AVG(column: Column): Column {
-        Column('avg(${column.name})')
+    func AVG(column: Column): SqlFunc {
+        SqlFunc('avg', column)
     }
-    func MAX(column: Column): Column {
-        Column('max(${column.name})')
+    func MAX(column: Column): SqlFunc {
+        SqlFunc('max', column)
     }
-    func MIN(column: Column): Column {
-        Column('min(${column.name})')
+    func MIN(column: Column): SqlFunc {
+        SqlFunc('min', column)
     }
 
     func SET(partial: () -> String): String {
@@ -536,5 +536,36 @@ public interface RootDAO {
     }
     func trim(prefix!: String, suffix!: String, partial!: () -> String): String {
         Condition.trim(prefix: prefix, suffix: suffix, partial: partial)
+    }
+}
+
+public class SqlFunc <: SqlExpr & ToString & Hashable & Equatable<SqlFunc>{
+    SqlFunc(private fnname: String, private let column: Column){}
+    init(fnname: String, column: String){
+        this(fnname, Column(column))
+    }
+    public func toString(): String {
+        if(alias_.size > 0 && sort.size > 0){
+            throw ORMException('column alias and column alias cannot be set at the same time')
+        }
+        let exe = SqlExecutor.getCurrent()
+        if(alias_.size > 0){
+            ' ${fnname}(${column}) AS ${exe.involve(alias_)} '
+        }else if(sort.size > 0){
+            ' ${fnname}(${column}) ${sort} '
+        }else{
+            ' ${fnname}(${column}) '
+        }
+    }
+    private var h = 0
+    public func hashCode(): Int64 {
+        if(h == 0){
+            h = HashBuilder().append(fnname).append(column).hashCode()
+        }
+        h
+    }
+    public operator func ==(other: SqlFunc): Bool {
+        hashCode() == other.hashCode() && 
+        fnname == other.fnname && column == other.column
     }
 }

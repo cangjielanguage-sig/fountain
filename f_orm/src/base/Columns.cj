@@ -31,31 +31,14 @@ public abstract class Columns <: ToString & Iterable<Column> {
         return this
     }
 }
-
-public class Column <: ToString & Hashable & Equatable<Column> {
-    public Column(let name: String){}
-    private prop executor: SqlExecutor {
-        get(){
-            SqlExecutor.getCurrent()
-        }
-    }
-    public func hashCode(): Int64 {
-        name.hashCode()
-    }
-    public operator func ==(other: Column): Bool {
-        name == other.name
-    }
-    private var alias_: String = ''
+public abstract class SqlExpr <: ToString{
+    protected var alias_: String = ''
     public func AS(alias: String): This {
         alias_ = alias
         return this
     }
-    private var tableAlias_: String = ''
-    public func tableAlias(alias: String): This {
-        tableAlias_ = alias
-        return this
-    }
-    private var sort: String = ''
+
+    protected var sort: String = ''
     public func ASC(): This {
         sort = ' ASC '
         return this
@@ -63,24 +46,6 @@ public class Column <: ToString & Hashable & Equatable<Column> {
     public func DESC(): This {
         sort = ' DESC '
         return this
-    }
-    public func toString(): String {
-        if(alias_.size > 0 && sort.size > 0){
-            throw ORMException('column alias and column alias cannot be set at the same time')
-        }
-        let exe = executor
-        if(alias_.size > 0 && tableAlias_.size > 0){
-            return ' ${exe.involve(tableAlias_)}.${exe.involve(name)} AS ${exe.involve(alias_)} '
-        }else if(alias_.size > 0){
-            return ' ${exe.involve(name)} AS ${exe.involve(alias_)} '
-        }else if(tableAlias_.size > 0 && sort.size > 0){
-            return ' ${exe.involve(tableAlias_)}.${exe.involve(name)} ${sort} '
-        }else if(sort.size > 0){
-            return ' ${exe.involve(name)} ${sort} '
-        }else if(tableAlias_.size > 0){
-            return ' ${exe.involve(tableAlias_)}.${exe.involve(name)} '
-        }
-        return ' ${exe.involve(name)} '
     }
 
     public func eq(arg: Any): LogicalExpr {
@@ -131,4 +96,50 @@ public class Column <: ToString & Hashable & Equatable<Column> {
     public func IS_NOT_NULL(): LogicalExpr {
         NullExpr(this, CmpOp.IS_NOT_NULL)
     }
+}
+public class Column <: SqlExpr & ToString & Hashable & Equatable<Column> {
+    public Column(let name: String){}
+    private prop executor: SqlExecutor {
+        get(){
+            SqlExecutor.getCurrent()
+        }
+    }
+    public func hashCode(): Int64 {
+        name.hashCode()
+    }
+    public operator func ==(other: Column): Bool {
+        name == other.name
+    }
+    
+    private var tableAlias_: String = ''
+    public func tableAlias(alias: String): This {
+        tableAlias_ = alias
+        return this
+    }
+    
+    public func toString(): String {
+        if(alias_.size > 0 && sort.size > 0){
+            throw ORMException('column alias and column alias cannot be set at the same time')
+        }
+        let exe = executor
+        if(name == '*'){
+            if(tableAlias_.size > 0){
+                ' ${exe.involve(tableAlias_)}.* '
+            }else{
+                ' * '
+            }
+        }else if(alias_.size > 0 && tableAlias_.size > 0){
+            return ' ${exe.involve(tableAlias_)}.${exe.involve(name)} AS ${exe.involve(alias_)} '
+        }else if(alias_.size > 0){
+            return ' ${exe.involve(name)} AS ${exe.involve(alias_)} '
+        }else if(tableAlias_.size > 0 && sort.size > 0){
+            return ' ${exe.involve(tableAlias_)}.${exe.involve(name)} ${sort} '
+        }else if(sort.size > 0){
+            return ' ${exe.involve(name)} ${sort} '
+        }else if(tableAlias_.size > 0){
+            return ' ${exe.involve(tableAlias_)}.${exe.involve(name)} '
+        }
+        return ' ${exe.involve(name)} '
+    }
+
 }

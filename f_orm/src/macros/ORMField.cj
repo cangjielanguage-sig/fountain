@@ -111,7 +111,7 @@ private func expandORMField(attrs: Tokens, input: Tokens): Tokens {
     while(i < attrs.size) {
         var attr = attrs[i]
         match ((attr.kind, attr.value)) {
-            case (BOOL_LITERAL, x) => id = true
+            case (BOOL_LITERAL, x) => id = x.toAsciiLower() == 'true'
             case (STRING_LITERAL, x) => column = x
             case (SINGLE_QUOTED_STRING_LITERAL, x) => column = x
             case (IDENTIFIER, x) => match (x) {
