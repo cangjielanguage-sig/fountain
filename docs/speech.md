@@ -227,8 +227,6 @@ fboot workspace fdemo
 # ③ 指定（绝对/相对）路径，初始化为 workspace
 fboot workspace /path/to/project
 
-# 还可以在版本号后面指定 fountain 依赖版本
-fboot workspace fdemo 1.3.0
 ```
 
 ### 它到底做了什么
