@@ -53,6 +53,13 @@ public class PublishCommand <: SubCommand {
     private func lines(path: String): Iterator<String> {
         path |> canonicalize |> lines
     }
+    private func replaceVersion(){
+        let dir = getWorkingDirectory()
+        if(dir.toString().endsWith('fountain') && let ver <- dir.join('f_version/src/FountainVersion.cj') && exists(ver)){
+            let code = Regex(#'fountain\(\d+\.\d+\.\d+\)'#).replaceAll(ver |> File.readFrom |> String.fromUtf8, 'fountain(${this.version})')
+            File.writeTo(ver, code.unsafeBytes())
+        }
+    }
     /**
      * 执行
      */
@@ -79,6 +86,7 @@ public class PublishCommand <: SubCommand {
         }else{
             throw Exception('version must be specified and command line must be like fboot pub <x.y.z> [--skip-lint] [--skip-test]')
         }
+        replaceVersion()
         let lines = this.lines('./.modules')
         let includes = HashSet<String>()
         let excludes = HashSet<String>()
