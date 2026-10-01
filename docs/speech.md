@@ -26,7 +26,7 @@
 cjc -v
 echo $CANGJIE_STDX_DYNAMIC_PATH
 
-# 2. 装好 fboot，并把 bin 与动态库路径加入环境
+# 2. 装好 fboot，并把 bin 与动态链接库路径加入环境
 cjpm install "fountain::fboot"="<版本号>" --root ~/.cjpm
 export PATH=$PATH:~/.cjpm/bin
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/.cjpm/libs/fboot
@@ -35,7 +35,7 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/.cjpm/libs/fboot
 fboot version
 ```
 
-> 如果 `fboot` 报找不到动态库，99% 是 `LD_LIBRARY_PATH` 没带上 `~/.cjpm/libs/fboot`。这个坑适合在视频里故意演一次再修，观众印象最深。
+> 如果 `fboot` 报找不到动态链接库，99% 是 `LD_LIBRARY_PATH` 没带上 `~/.cjpm/libs/fboot`。这个坑适合在视频里故意演一次再修，观众印象最深。
 
 ---
 
@@ -89,10 +89,10 @@ fboot version
 
 **【口播】**
 
-> 用 fountain 开发，你的代码里**不需要写 `main`**。项目初始化成 workspace，每个模块编译成**动态链接库**，然后由 `fboot` 加载这些动态库完成启动。
+> 用 fountain 开发，你的代码里**不需要写 `main`**。项目初始化成 workspace，每个模块编译成**动态链接库**，然后由 `fboot` 加载这些动态链接库完成启动。
 >
 > 带来的好处是：
-> - **装配发生在运行期**——加一个功能，就是把一个动态库放进目录；不要它，就从加载名单里去掉。这是真正的插件化；
+> - **装配发生在运行期**——加一个功能，就是把一个动态链接库放进目录；不要它，就从加载名单里去掉。这是真正的插件化；
 > - **启动由框架统一负责**——初始化顺序、依赖拓扑、退出回调，都由 `f_app` 的 `Initializer` 机制统一处理；
 > - **业务代码只剩业务**——没有启动样板，没有手写容器初始化。
 
@@ -260,7 +260,7 @@ cat cjpm.toml
 
 > 台上一句话总结：**workspace 是「装模块的盒子」，每个模块都必须编译为动态链接库。**
 
-## 3.3 `fboot module` —— 在 workspace 里加一个动态库模块
+## 3.3 `fboot module` —— 在 workspace 里加一个动态链接库模块
 
 ```bash
 # 在 workspace 根目录执行：创建 hello 子模块并挂进 workspace
@@ -438,7 +438,7 @@ fboot cleanUpdate /abs/path --target-dir=...
 ### 语法
 
 ```bash
-fboot run [PATH] --dylibPattern=<动态库文件名正则（不含扩展名）>
+fboot run [PATH] --dylibPattern=<动态链接库文件名正则（不含扩展名）>
 ```
 
 **【口播】**
@@ -446,7 +446,7 @@ fboot run [PATH] --dylibPattern=<动态库文件名正则（不含扩展名）>
 > 这是整个框架最有意思的一条命令。它的执行流程是：
 >
 > 1. 确定目标路径（第一个不以 `-` 开头的参数，缺省当前目录，不存在就创建）；
-> 2. 按平台选择动态库扩展名和搜索路径变量：Windows `.dll` / `Path`，macOS `.dylib` / `DYLD_FALLBACK_LIBRARY_PATH`，其它 `.so` / `LD_LIBRARY_PATH`；
+> 2. 按平台选择动态链接库扩展名和搜索路径变量：Windows `.dll` / `Path`，macOS `.dylib` / `DYLD_FALLBACK_LIBRARY_PATH`，其它 `.so` / `LD_LIBRARY_PATH`；
 > 3. **递归扫描目录**，加载文件名匹配 `^lib.*(<--dylibPattern> | .+_stAtIc__).*$` 的库
 >    —— 即文件名要以 `lib` 开头，并且匹配你给的正则，或者是前面介绍过的fboot build自动创建的那个`static`版本模块；
 > 4. 加载即执行各模块的动态链接库，加载时即执行fountain宏展开时生成的顶级匿名闭包，把 `@Bean` 注册进 IOC、把fountain的各个`Initializer` 实现注册进 `InitializerCollection`、把controller函数注册到mvc；
@@ -467,18 +467,18 @@ fboot run ./fdemo --dylibPattern='(boot|user\.util\.(auth|cron)|\.(controller|se
 
 **【口播】**
 
-> 这个正则看起来很绕，其实逻辑很清楚——**它枚举了「必须被加载的动态库」**：
+> 这个正则看起来很绕，其实逻辑很清楚——**它枚举了「必须在运行期主动加载的动态链接库」**：
 >
 > | 片段 | 加载什么 | 为什么必须加载 |
 > | --- | --- | --- |
 > | `boot` | 初始化包 `fountain::boot` | `ControllerAspect`（切面）、`TransactionHookImpl`（事务钩子）、`LogTextMediaType`（自定义 MediaType）、`Http500Handler`（500 处理器）都在这里，它们都是 `@Bean`，不加载就静默失效 |
 > | `\.(controller` | 所有 controller 包 | MVC 路由注册 |
-> | `service\.impl` | 所有 service 实现包 | `@TransactionalService` 的织入 |
+> | `service\.impl` | 所有 service 实现包 | `@TransactionalService` 的织入和业务实现 |
 > | `user\.util\.auth` | `AuthCheckerImpl`（登录/权限检查器） | 它是 `@Bean`，不加载 → 所有接口都不做鉴权（危险！） |
 > | `user\.util\.cron` | `TickTockTaskImpl`（定时任务） | 它是 `@Bean`，不加载 → 定时任务不执行 |
 >
-> 一句话：**凡是靠 `@Bean` 生效的东西，所在的动态库都必须被 `--dylibPattern` 匹配到。**
-> 不给 `--dylibPattern` 也可以，等价于加载目录下全部 `lib*` 动态库——开发期方便，生产期建议写清楚。
+> 一句话：**凡是靠 `@Bean` 生效的东西，所在的动态链接库都必须被 `--dylibPattern` 匹配到。**
+> 不给 `--dylibPattern` 会自动加载目录下全部 `lib*` 动态链接库——这么做可能导致重复加载动态链接库，也就是有些被主动加载的动态链接库依赖的动态链接库也会被重复加载，从而导致应用启动失败。
 
 **【命令】**（现场跑 `hello_app`）
 
@@ -509,23 +509,21 @@ curl http://localhost:8080/
 
 | 命令 | 作用 | 演示 |
 | --- | --- | --- |
-| `fboot count [PATH] [--ext=cj] [--ignoreBrackets] [--ignoreComments]` | 统计模块的模块数/包数/文件数/行数与耗时 | `fboot count ./fdemo` |
+| `fboot count [PATH] [--ext=cj] [--ignoreBrackets] [--ignoreComments]` | 统计项目的模块数/包数/文件数/行数与耗时 | `fboot count ./fdemo` |
 | `fboot test [PATH] [args...] --dylibPattern=<正则>` | 用 `PATH/test/cjpm.toml` 覆盖 `PATH/cjpm.toml`，先 build 再 run | 缺 `--dylibPattern` 会抛 `BootException` |
-| `fboot shutdown <PID>` | 终止进程，执行 `atExit` 收尾回调 | 配合 `run` 打印的 PID |
-| `fboot restart <PID> [PATH] --dylibPattern=...` | 先 shutdown 再 run | |
 | `fboot pub <x.y.z> [--skip-lint] [--skip-test]` | 批量发布模块，自动按依赖排序、改版本号、探测制品仓库 | 用 `.modules` 文件的 `[include]`/`[exclude]`/`[detention]` 控制范围 |
 | `fboot version` | 打印 fountain 版本（不带参数）/ 管理 fountain 自身版本（带 `x.y.z`，会 git 提交推送打 tag） | **谨慎演示**，它会动 git |
 | `fboot <自定义子命令>` | 执行实现了 `fountain::f_app.SubCommand` 的类 | 见下 |
 
 **【口播】**（自定义子命令，30 秒带过）
 
-> `pub` 和 `randhex` 本身就是最好的例子。你只要写一个实现 `SubCommand` 的类，在 `static init()` 里 `SubCommandMediator.register(...)`，把它编译成动态库，就可以：
+> `pub` 和 `randhex` 本身就是最好的例子。你只要写一个实现 `SubCommand` 的类，在 `static init()` 里 `SubCommandMediator.register(...)`，把它编译成动态链接库，就可以：
 >
 > ```bash
 > fboot <子命令名> [PATH] --dylibPattern='<库名正则>'
 > ```
 >
-> 未命中时框架会扫描并加载动态库、让 `static init()` 完成注册，然后**重试一次**；仍然没有才抛异常并列出可用命令。
+> 未命中时框架会扫描并加载动态链接库、让 `static init()` 完成注册，然后**重试一次**；仍然没有才抛异常并列出可用命令。
 
 ---
 
@@ -565,7 +563,7 @@ fdemo/
 
 **【口播】**
 
-> 注意这个分包不是随意的：**分包决定了动态库的粒度，而动态库粒度决定了 `--dylibPattern`**。所以「切面放哪个包」「鉴权器放哪个包」是需要在设计阶段就想的。
+> 注意这个分包不是随意的：**分包决定了动态链接库的粒度，而动态链接库粒度决定了 `--dylibPattern`**。所以「切面放哪个包」「鉴权器放哪个包」是需要在设计阶段就想的。
 
 ## 4.2 建表
 
@@ -673,7 +671,7 @@ public class GenericClass<T, E>{
 >
 > 所以**你可以用名字、用类型（含父类型和接口）、用注解三种方式取 bean**。
 >
-> 另外一个重要取舍：**IOC 只管理 class，不管理 struct**。因为 struct 是值类型，取出来就会复制，作者认为得不偿失。
+> 另外一个重要取舍：**IOC 只管理 class，不管理 struct**。因为 struct 是值类型，取出来就会复制，我认为得不偿失。
 
 ## 5.2 取 bean：`lookup` 家族
 
@@ -1778,7 +1776,7 @@ public abstract class DelayedTicktockTask <: CronTicktockTask {
 **【镜头】** 画一张纵向调用链 + 终端实时日志。用一个 `POST /api/user/register` 走完全流程。
 
 ```
-① fboot run 加载动态库
+① fboot run 加载动态链接库
    └─ static init(): @Bean 注册进 BeanFactory；Initializer 注册进 InitializerCollection
    └─ 拓扑排序 initialize()：BeanInitializer → ORMInitializer → MVCInitializer → TickTockInitializer ...
    └─ 各 start() spawn 到新线程：MVC 启动 HTTP 服务（阻塞）、TickTock 启动定时器
@@ -1818,8 +1816,8 @@ public abstract class DelayedTicktockTask <: CronTicktockTask {
 
 | # | 现象 | 原因 / 解法 |
 | --- | --- | --- |
-| 1 | `fboot` 起不来，报找不到动态库 | `LD_LIBRARY_PATH` 没带 `~/.cjpm/libs/fboot` 和 stdx 动态库路径 |
-| 2 | bean 明明写了却不生效 | 它所在的动态库没被 `--dylibPattern` 匹配到（鉴权器、切面、定时任务尤其致命） |
+| 1 | `fboot` 起不来，报找不到动态链接库 | `LD_LIBRARY_PATH` 没带 `~/.cjpm/libs/fboot` 和 stdx 动态链接库路径 |
+| 2 | bean 明明写了却不生效 | 它所在的动态链接库没被 `--dylibPattern` 匹配到（鉴权器、切面、定时任务尤其致命） |
 | 3 | 改了依赖后各种诡异错误 | `fboot cleanUpdate` 一把梭 |
 | 4 | 定时任务不执行 | 同上第 2 条 |
 | 5 | 事务没生效 | Service 用了 `@Bean` 而不是 `@TransactionalService`；或方法名没被 `orm_transactionalFuncExecution` 命中；也没加 `@Transactional` |
@@ -1831,8 +1829,8 @@ public abstract class DelayedTicktockTask <: CronTicktockTask {
 
 ## 12.2 预设 Q&A
 
-**Q：能不用动态库吗？**
-A：IOC/AOP/ORM 这些能力本身不依赖动态库，但 `fboot run` 的「扫描加载」机制依赖它。用 `App(..., dynamic: false)` 可以不扫描，此时只有内置命令和静态链接进来的子命令可用，业务 bean 需要你自己保证已被加载。
+**Q：能不用动态链接库吗？**
+A：IOC/AOP/ORM 这些能力本身不依赖动态链接库，但 `fboot run` 的「扫描加载」机制依赖它。用 `App(..., dynamic: false)` 可以不扫描，此时只有内置命令和静态链接进来的子命令可用，业务 bean 需要你自己保证已被加载。
 
 **Q：性能如何？**
 A：`fboot build` 默认带 `-O2 --lto=full`；ORM 有结果缓存（可按驱动关）、连接池可选 fountain 池 / 标准库池 / 第三方池；`boot.sh` 里还有 `perfRecord` / `perfReport`（`cjprof`）和 `loop` / `ab` 可以直接做基线测量。**不要凭感觉谈性能，先跑 `./boot.sh ab 16 10000`。**
