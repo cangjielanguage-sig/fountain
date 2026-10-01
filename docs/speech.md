@@ -330,7 +330,7 @@ fboot build [PATH] [args...]
 
 - `PATH` **必须是第一个参数，且只能是路径**；缺省当前目录；
 - 其余参数分两类：
-  - `--key=value`：作为**配置项**传给 `cjpm build` 子进程（这就是「编译期注入配置」的实现方式）；
+  - `--key=value`：作为**配置项**（这就是「编译期注入配置」的实现方式）；
   - 其它：原样作为 `cjpm build` 的命令行参数。
 
 ### 两个隐藏动作
@@ -379,11 +379,13 @@ fboot build ./fdemo \
 
 **【口播】**
 
-> 这些 `--xxx=yyy` 会变成 `cjpm build` 的环境变量。于是：
-> - 数据库驱动、连接串、用户名密码在**编译期**就被写进产物；
+> 这些 `--xxx=yyy` 会变成 `fboot build` 执行时的配置项。
+> 也可以把`--`去掉，改成环境变量，也是一样的效果。
+> 于是：
+> - 数据库连接串、用户名密码在**编译期**就被写进产物；
 > - 因为同时给了 `orm_sm4Key` / `orm_sm4Iv`，这些敏感信息是 **SM4 加密后的字节数组**嵌入的，不是明文；
-> - **运行期同名环境变量优先级更高**——所以生产环境用环境变量覆盖即可，一份产物跑多套环境。
->
+> - **运行期同名环境变量优先级更高**——运行环境如果同名配置项有其他值，可以用新值覆盖即可，一份产物跑多套环境。
+> 覆盖方法也很简单，同样是`--`开头的命令行参数或同名的环境变量。
 > 顺带提醒：真实项目不要把密码写进 `boot.sh`，这里只是演示。
 
 ## 3.5 `fboot randhex` —— 生成随机 16 进制串
@@ -399,7 +401,7 @@ fboot randhex 32
 
 **【口播】**
 
-> 它的实现是 `RandomString().randomLowerHex(n)`，由 `f_app` 的 `RandHexCommand` 注册到 `SubCommandMediator`。
+> 它的实现是 `fountain::f_random.RandomString().randomLowerHex(n)`，由 `f_app` 的 `RandHexCommand` 注册到 `SubCommandMediator`。
 >
 > 在 fountain 里它最常见的用途就是上一节那个：给 SM4 生成密钥和 IV。**SM4 密钥是 16 字节 = 32 个 16 进制字符**，所以写 `fboot randhex 32`。
 >
@@ -446,11 +448,12 @@ fboot run [PATH] --dylibPattern=<动态库文件名正则（不含扩展名）>
 > 1. 确定目标路径（第一个不以 `-` 开头的参数，缺省当前目录，不存在就创建）；
 > 2. 按平台选择动态库扩展名和搜索路径变量：Windows `.dll` / `Path`，macOS `.dylib` / `DYLD_FALLBACK_LIBRARY_PATH`，其它 `.so` / `LD_LIBRARY_PATH`；
 > 3. **递归扫描目录**，加载文件名匹配 `^lib.*(<--dylibPattern> | .+_stAtIc__).*$` 的库
->    —— 即文件名要以 `lib` 开头，并且匹配你给的正则，或者是那个版本模块；
-> 4. 加载即执行各模块的 `static init()`，把 `@Bean` 注册进 IOC、把 `Initializer` 注册进 `InitializerCollection`；
+>    —— 即文件名要以 `lib` 开头，并且匹配你给的正则，或者是前面介绍过的fboot build自动创建的那个`static`版本模块；
+> 4. 加载即执行各模块的动态链接库，加载时即执行fountain宏展开时生成的顶级匿名闭包，把 `@Bean` 注册进 IOC、把fountain的各个`Initializer` 实现注册进 `InitializerCollection`、把controller函数注册到mvc；
 > 5. 按 `dependencies` 做**拓扑排序**后依次 `initialize()`，收集所有 `start()`；
-> 6. 每个 `start()` `spawn` 到新线程执行（MVC 的 `start()` 会启动 HTTP 服务并阻塞）；
+> 6. 每个 `Initializer.start()`会在新线程执行，其中（MVC 的 `start()` 会启动 HTTP 服务并阻塞）；
 > 7. 主线程 `while(true){ sleep(Duration.Max) }` **永久阻塞**。
+> 8. **`fboot run` 不会返回**
 >
 > 最后一条要在视频里强调：**`fboot run` 不会返回，录屏时请另开一个终端敲 curl。**
 
