@@ -852,7 +852,8 @@ public interface Aspect {
 ```cangjie
 @Pointcut       // 修饰函数：只有这个函数织入；修饰类：全部公共函数织入
 @WeavedBean     // 注册进 IOC + 全部公共成员函数织入
-@WeavedController // MVC 专用：@Controller 的全部功能 + 织入
+@WeavedController // mvc模块声明的专用宏：包含@Controller 的全部功能 + 织入
+@TransactionalService // orm模块声明的专用宏，包含@Bean的全部功能 + 事务切面织入
 ```
 
 **【口播】** 织入逻辑在**这些函数首次调用时**执行，不是启动期——所以启动很快。
@@ -1179,13 +1180,13 @@ public interface UserDAO <: RootDAO {
 
 **【口播】**（这是 ORM 最反直觉也最爽的一点）
 
-> `@DAO` 宏展开的结果是「原接口 + `extend SqlExecutor <: UserDAO {}`」。
+> `@DAO` 宏展开的结果是「原接口后面跟着`extend SqlExecutor <: UserDAO {}`」。
 > 也就是说——**没有 DAO 实现类，`SqlExecutor` 本身就是实现**，接口里写的函数体就是方法实现。
 > 所以约束是：
 > - DAO **必须声明为接口**，且所有函数都要有默认实现；
 > - 建议 `public`、**不要泛型形参**、继承 `RootDAO`；
 > - **一个持久化对象对应一个 DAO 接口**；
-> - **同一模块内所有 DAO 的函数名不能重名**（都挂在 `SqlExecutor` 上）。
+> - **同一模块内所有 DAO 的函数名最好不要重名**（因为它们都挂在 `SqlExecutor` 上）。
 
 ### Service：`RootService` + `executor()`
 
@@ -1469,7 +1470,7 @@ public class TransactionHookImpl <: TransactionHook {
 4. 同一个 `SqlExecutor` 上**不允许并发**：上一次查询结果未关闭时再执行会抛 `ORMException("cannot execute SQL while a previous query result is still active")`；
 5. 结果缓存默认开启（`orm_useCache`），写操作后会清空缓存；
 6. `@DataAssist` 必须在 `@QueryMappersGenerator` 之前；
-7. `tableColumns()` 的属性名是**列名**不是成员名（`save_time` 不是 `saveTime`）；
+7. `tableColumns()` 的属性名是**列名**不是映射类的成员名（`save_time` 不是 `saveTime`）；
 8. `page` 系列要求 SQL 以 `select` 开头，否则抛 `ORMException('<sql> is not a select.')`。
 
 ---
@@ -1805,7 +1806,7 @@ public abstract class DelayedTicktockTask <: CronTicktockTask {
 **【口播】**
 
 > 这一屏就是 fountain 的全部：
-> **IOC 负责装配、AOP 负责横切、MVC 负责协议、ORM 负责持久化、f_security + f_jwt 负责身份、f_ticktock 负责时间。**
+> **f_bean 负责装配、f_aspect 负责横切、f_mvc 负责协议、f_orm 负责数据库、f_security + f_jwt 负责身份、f_ticktock 负责CRON定时器。**
 > 业务代码里你只写了 `UserController`、`UserService`、`UserDAO`、`UserPO` 四个东西，加起来不到 200 行。
 
 ---
