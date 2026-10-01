@@ -27,7 +27,7 @@ public import fountain::f_bean.*
 public import fountain::f_data.*
 public import fountain::f_orm.wrap.ORMConfig
 
-import fountain::f_orm.macros.EmbedSensitive
+import fountain::f_orm.ProtectedMacros.EmbedSensitive
 @EmbedSensitive()
 
 func emptyLogicalExpr(cond: String): Bool {
