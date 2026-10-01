@@ -295,7 +295,7 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
     public func first<T>(columns: Columns): ?T where T <: QueryMappersInit<T> {
         first<T>(columns.toString())
     }
-    private func columns2string(columns: Array<Column>): String {
+    private func columns2string(columns: Array<SqlExpr>): String {
         let builder = StringGenerator()
         for(c in columns){
             if(builder.size > 0){
@@ -450,8 +450,8 @@ public class IntoClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
         }
         var i = 0
         for (mapper in T.queryMappers().mappers) {
-            column = Column(mapper.dataType.columnName)
-            if(ignoresSet.contains(mapper.dataType.columnName) || !(includesSet.isEmpty() || includesSet.contains(mapper.dataType.columnName))){
+            let column = Column(mapper.dataType.columnName)
+            if(ignoresSet.contains(column) || !(includesSet.isEmpty() || includesSet.contains(column))){
                 continue
             }
             if (i > 0) {

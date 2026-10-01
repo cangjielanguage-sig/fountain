@@ -30,7 +30,11 @@ public interface RootDAO {
      * 本接口函数不必实现，所有DAO都是SqlExecutor的扩展，SqlExecutor已经提供了相同声明的属性，
      * 且SqlExecutor已经实现本接口，故任意DAO接口可以直接调用本属性
      */
-    prop executor: SqlExecutor
+    prop executor: SqlExecutor {
+        get(){
+            SqlExecutor.getCurrent()
+        }
+    }
 
     func arg(value: Bool): String {
         executor.add(value)
@@ -540,13 +544,13 @@ public interface RootDAO {
 }
 
 public class SqlFunc <: SqlExpr & ToString & Hashable & Equatable<SqlFunc>{
-    SqlFunc(private fnname: String, private let column: Column){}
+    SqlFunc(private let fnname: String, private let column: Column){}
     init(fnname: String, column: String){
         this(fnname, Column(column))
     }
     public func toString(): String {
         if(alias_.size > 0 && sort.size > 0){
-            throw ORMException('column alias and column alias cannot be set at the same time')
+            throw ORMException('SqlFunc alias and SqlFunc alias cannot be set at the same time')
         }
         let exe = SqlExecutor.getCurrent()
         if(alias_.size > 0){
@@ -560,7 +564,7 @@ public class SqlFunc <: SqlExpr & ToString & Hashable & Equatable<SqlFunc>{
     private var h = 0
     public func hashCode(): Int64 {
         if(h == 0){
-            h = HashBuilder().append(fnname).append(column).hashCode()
+            h = HashBuilder().append(fnname).append(column).build()
         }
         h
     }

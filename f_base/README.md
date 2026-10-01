@@ -290,12 +290,17 @@ func remove(): Unit
    按照HashBuilder_test的简单性能测试。
    每个append函数参数会尽量参与哈希计算，参数实现了Hashable的会调用参数的hashCode()再用这个哈希值执行哈希公式
  */
-public class HashBuilder
+public class HashBuilder <: Hashable 
 
 /**
  * 调用一次，本类的实例回到初始状态
  */
 public func build(): Int64
+/**
+ * 简单调用build()
+ */
+public func hashCode(): Int64
+
 @OverflowWrapping
 public func append(arg: Int64): This
 public func append<T>(arg: T): This where T <: Hashable

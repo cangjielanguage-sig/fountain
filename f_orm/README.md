@@ -135,7 +135,6 @@ public interface UserDAO <: RootDAO {
 }
 ```
 
-> 上面的示例用到了 `FROM<T>().WHERE(...).page(...)` 等子句能力；这类调用目前受 [9. DSL 子句](#9-dsl-子句intoclause--updateclause--fromclause) 中记录的回归影响（条件片段不会拼进 SQL），请先确认该问题状态。
 
 ### 2.5 调用
 
@@ -865,7 +864,7 @@ abstract sealed class TableClause<T> <: ToString where T <: QueryMappersInit<T> 
 public abstract class ExceptInsertClause<T> <: TableClause<T> where T <: QueryMappersInit<T> { /* 见 9.1 */ }
 ```
 
-> **已知回归（2026-09-25 起）**：`TableClause.appendPartial`（`base/TableClause.cj:39-49`）的把关条件在提交 `b4e9d086` 中被改成了 `if(emptyLogicalExpr(sql))`——只有**裁剪后为空**的片段才会写入 SQL，而调用方只会传非空片段。因此 `WHERE(String)` / `AND` / `OR` / `NOT` / `HAVING(String)` / `ORDER_BY` / `GROUP_BY` / `SET` / `byId` 以及各闭包版本目前**不会把条件拼进最终 SQL**。使用这些能力前请先确认该处是否已修复（正确条件应为 `sql.size > 0`）。
+`appendPartial(keyword, trim, partial)` 会用 `emptyLogicalExpr`（正则 `^[\s()]*$`）判断片段是否为空：**为空则整段不拼接**，非空才追加 ` keyword fragment `，因此可以先累积片段再统一写入。
 
 ### 9.1 公共能力（`ExceptInsertClause`）
 
@@ -903,7 +902,7 @@ public func ORDER_BY(orderBy: () -> String): This
 public func LIMIT(size: Int64, offset!: Int64 = 0): This       // 由方言生成 limit/offset
 ```
 
-> 设计上 `WHERE` / `AND` / `OR` / `NOT` 会先按正则 `^(\s*and|or\s*)|(\s*and|or\s*)$`（忽略大小写）裁剪片段首尾残留的 `and` / `or` 关键字，再拼入 SQL；闭包版本（`() -> Unit`）内部一般配合 `executor.AND{...}` / `executor.OR{...}` 等累积片段，`PAREN` 不走裁剪逻辑。注意该裁剪受上文「已知回归」影响，当前版本实际不会拼入非空片段。
+> `WHERE` / `AND` / `OR` / `NOT` 会先按正则 `^(\s*and|or\s*)|(\s*and|or\s*)$`（忽略大小写）裁剪片段首尾残留的 `and` / `or` 关键字，再交 `appendPartial` 判空后拼入 SQL；闭包版本（`() -> Unit`）内部一般配合 `executor.AND{...}` / `executor.OR{...}` 等累积片段，`PAREN` 不走裁剪逻辑。
 > `LIMIT(size, offset)` 除追加 `limit ? offset ?` 外，还会把两个参数按方言返回的顺序 `add` 进当前执行器。
 
 示例：
@@ -923,16 +922,16 @@ executor.FROM<UserPO>()
 public func first<T>(): ?T                                       // limit 1
 public func first<T>(columns: String): ?T
 public func first<T>(columns: Columns): ?T
-public func first<T>(columns: Array<Column>): ?T
+public func first<T>(columns: Array<SqlExpr>): ?T                // 列可传 Column、COUNT()/SUM() 等 SqlFunc
 public func singleFirst<T>(column: String): ?T
-public func singleFirst<T>(column: Column): ?T
+public func singleFirst<T>(column: SqlExpr): ?T
 public func list<T>(): ArrayList<T>
 public func list<T>(columns: String): ArrayList<T>
 public func list<T>(columns: Columns): ArrayList<T>
-public func list<T>(columns: Array<Column>): ArrayList<T>
+public func list<T>(columns: Array<SqlExpr>): ArrayList<T>
 public func singleList<T>(): ArrayList<T>                        // 默认取 id 列
 public func singleList<T>(column: String): ArrayList<T>
-public func singleList<T>(column: Column): ArrayList<T>
+public func singleList<T>(column: SqlExpr): ArrayList<T>
 public func firstToMap(): Map<String, Any>
 public func count(): Int64
 
@@ -1045,19 +1044,13 @@ public abstract class Columns <: ToString & Iterable<Column> {
     public func tableAlias(alias: String): This       // 给该列集合下所有列设置表别名
 }
 
-public class Column <: ToString & Hashable & Equatable<Column> {
-    public Column(let name: String)                   // 列名由主构造函数传入
-    // 注意：name 未声明为 public（默认 internal），包外请改用 toString()
-    public func hashCode(): Int64
-    public operator func ==(other: Column): Bool
-
-    public func AS(alias: String): This               // 列别名（与 ASC/DESC 互斥）
-    public func tableAlias(alias: String): This       // 表别名
+// 所有「可出现在 select 列表 / 比较表达式左侧」的表达式（列、聚合函数）的基类
+public abstract class SqlExpr <: ToString {
+    public func AS(alias: String): This               // 别名（与 ASC/DESC 互斥）
     public func ASC(): This                           // 升序
     public func DESC(): This                          // 降序
-    public func toString(): String
 
-    // 比较运算 → LogicalExpr
+    // 比较运算 → LogicalExpr，子类（Column / SqlFunc）直接继承
     public func eq(arg: Any): LogicalExpr
     public func neq(arg: Any): LogicalExpr
     public func lt(arg: Any): LogicalExpr
@@ -1075,11 +1068,27 @@ public class Column <: ToString & Hashable & Equatable<Column> {
     public func IS_NULL(): LogicalExpr
     public func IS_NOT_NULL(): LogicalExpr
 }
+
+public class Column <: SqlExpr & Hashable & Equatable<Column> {
+    public Column(let name: String)                   // 列名由主构造函数传入
+    // 注意：name 未声明为 public（默认 internal），包外请改用 toString()
+    public func hashCode(): Int64
+    public operator func ==(other: Column): Bool
+    public func tableAlias(alias: String): This       // 表别名（另有继承自 SqlExpr 的 AS / ASC / DESC）
+    public func toString(): String
+}
+
+// 聚合函数表达式，由 RootDAO 的 COUNT / SUM / AVG / MAX / MIN 返回（见 10.5）
+public class SqlFunc <: SqlExpr & Hashable & Equatable<SqlFunc> {
+    // 构造函数为 internal，业务侧通过 COUNT() 等获取实例
+    public func toString(): String                    // → ' fn(col) '（别名 / 排序时附在其后）
+}
 ```
 
-> `Column.toString()` 会通过 `SqlExecutor.involve(...)` 给标识符加引用符（反引号/双引号，随方言），因此 `'select * from t where ${col} = 1'` 这类拼接是安全的。
+> `Column.toString()` 会通过 `SqlExecutor.involve(...)` 给标识符加引用符（反引号/双引号，随方言），因此 `'select * from t where ${col} = 1'` 这类拼接是安全的；`Column('*')` 是特例，输出不带引用符的 ` * ` 或 ` <表别名>.* `。
 > 若同时设置了 `AS(...)` 与 `ASC()/DESC()`，`toString()` 会抛 `ORMException('column alias and column alias cannot be set at the same time')`。
 > `Columns.tableAlias(alias)` 只是把别名记在列集合对象上，真正生效发生在生成类的 `toString()` 中：它会对每个 `Column` 调用一次 `.tableAlias(super.tableAlias_)`，因此别名设置必须在取用列之前完成。
+> `first<T>(columns)` / `list<T>(columns)` / `singleFirst<T>(column)` / `singleList<T>(column)` 的形参类型是 `Array<SqlExpr>` / `SqlExpr`，因此 `Column` 与 `SqlFunc`（`COUNT()` 等）都可以直接传。
 
 ### 10.2 `CmpOp` / `RelationOp` 枚举
 
@@ -1141,14 +1150,19 @@ executor.FROM<UserPO>().WHERE(
 
 ### 10.5 常用函数
 现在支持COUNT、SUM、AVG、MAX、MIN，它们都是RootDAO的实例成员，可以直接在继承了RootDAO的DAO接口中调用。
-返回的 `Column` 内部保存的是**聚合表达式串**（如 `'count(*)'`、`'count(<列名>)'`），而 `Column.toString()` 会把整串当作一个标识符加引用符（如 `"count(*)"`），因此当前实现下不能直接把这些 `Column` 当作 select 列表使用（见 [19.6 已知问题](#196-已知问题源码现状)）。
+返回值类型是 `SqlFunc`（`SqlExpr` 的子类），`toString()` 生成标准的函数调用形式：`COUNT()` → `' count(*) '`，`COUNT(column)` → `' count(<列名>) '`，因此可直接作为查询列参数传入 `first` / `list` / `singleFirst` / `singleList`：
 ```cj
-func COUNT(): Column // COUNT(*)
-func COUNT(column: Column): Column
-func SUM(column: Column): Column
-func AVG(column: Column): Column
-func MAX(column: Column): Column
-func MIN(column: Column): Column
+func COUNT(): SqlFunc              // count(*)
+func COUNT(column: Column): SqlFunc
+func SUM(column: Column): SqlFunc
+func AVG(column: Column): SqlFunc
+func MAX(column: Column): SqlFunc
+func MIN(column: Column): SqlFunc
+```
+```cangjie
+// 例：统计 + 求和
+let total = executor.FROM<UserPO>().singleFirst<Int64>(COUNT())
+let sumAge = executor.FROM<UserPO>().singleList<Int64>(SUM(UserPO.tableColumns().age))
 ```
 
 ---
@@ -1157,7 +1171,7 @@ func MIN(column: Column): Column
 
 `SET{}` / `WHERE{}` 闭包内的「按需拼接」能力由三个构造器与 `Condition` 静态类提供。它们都会在 `done()` / `frag()` 时把片段追加到当前 `SqlExecutor` 的 partials 中；直接取返回值也能得到片段字符串。
 
-> 获取实例的入口：`MeetCondition` / `ChooseCondition` 的构造函数是 `public`（也可分别用 `meet(condition, partial)` 与 `executor.choose`）；`Condition` 构造函数为 `private`（静态使用），`LoopCondition` 构造函数为 internal（经 `executor.loop(values)` 获取）。`Condition.delimiter` 为 internal 可变字段。
+> 获取实例的入口：`MeetCondition` / `ChooseCondition` 的构造函数是 `public`（也可分别用 `meet(condition, partial)` 与 `executor.choose`）；`Condition` 构造函数为 `private`（静态使用），`LoopCondition` 构造函数为 internal（经 `executor.loop(values)` 获取）。`Condition.delimiter` 是 internal 的 `mut static prop`（底层 `ThreadLocal<String>`）。
 
 ### 11.1 `Condition` 静态工具
 
@@ -1429,7 +1443,9 @@ public class SingleColumnIterator<T> <: Iterator<T> & Resource {
 }
 ```
 
-两者的构造函数均为 internal，只能由框架创建。`executor.iterator<T>(mappers)` 返回的 `QueryResultIterator<T>`（同时是 `Resource`）可用 `try (it = executor.iterator<UserPO>()) { ... }` 自动关闭，也可显式 `close()`；而 `executor.iterator<T>()` / `executor.singleIterator<T>()` 的**静态返回类型是 `Iterator<T>`**，`Resource` 语义不可用（只用 `try` 无法自动关闭），需要显式关闭时请用带 `mappers` 的重载。
+两者的构造函数均为 internal，只能由框架创建；`next()` 在结果集耗尽时返回 `Option<T>.None`。`executor.iterator<T>(mappers)` 返回的 `QueryResultIterator<T>`（同时是 `Resource`）可用 `try (it = executor.iterator<UserPO>()) { ... }` 自动关闭，也可显式 `close()`；而 `executor.iterator<T>()` / `executor.singleIterator<T>()` 的**静态返回类型是 `Iterator<T>`**，`Resource` 语义不可用（只用 `try` 无法自动关闭），需要显式关闭时请用带 `mappers` 的重载。
+
+> `SingleColumnIterator` 的 `column` 形参目前不参与取值——无论是否指定 `column`，都由 `index`（默认 0）决定读取哪一列，见 [19.6](#196-已知问题源码现状)。
 
 ### 13.5 自定义类型转换：`QueryMapperConverter`
 
@@ -1678,7 +1694,7 @@ public macro ORMField(attrs: Tokens, input: Tokens): Tokens
 | 写法 | 含义 |
 | --- | --- |
 | `true` / `id` | 标记为主键 |
-| `false` | 主键（**当前实现把任意布尔字面量都视为主键**：`case (BOOL_LITERAL, x) => id = true`，`ORMField.cj:114`；不要用 `false` 表达“非主键”，省略该属性即可） |
+| `false` | 非主键（与省略等价；源码按 `attr.value.toAsciiLower() == 'true'` 判定） |
 | `'column_name'` / `"column_name"` | 固定列名 |
 | `LowerUnderScore` | 成员名（驼峰）转下划线小写列名 |
 | `UpperUnderScore` | 转大写下划线列名 |
@@ -2093,7 +2109,7 @@ public abstract class SqlDialect {
 | `ORMConfig` | 配置读取入口——第 3 节所有环境变量的解析实现。 | `getDrivers()`、`getDriverNames()`、`getDefaultDriver()`（`orm_defaultDriver` ?? `orm_drivers` 首个 ?? `''`）、`isDefaultDriver(driver: String / Driver)`、`getUrl(driverName)`、`getConf(driverName, key)`、连接池各参数 getter（`getPoolMaxSize`、`getPoolCheckSql` 等）、`registerConverter` / `getConverter`（见 [13. 结果映射](#13-结果映射)）、`transactionable(funcName)`、`getTransactionPropagation()`、`mockdb` |
 | `NamedDatasource` | 具名数据源（`<: Datasource & Resource`）：将 `Datasource` 与驱动名绑定，供 `ORM.register` 使用。 | `init(driver)` / `init(driver, url)` / `init(driver, options)` / `init(driver, url, options)`、主构造函数 `NamedDatasource(optionSpecified, driverName, datasource)`、`driverName`、`connect()`、`setOption(key, value)`、`isClosed()`、`close()` |
 | `DatasourceCreator` | 数据源工厂接口：`ORM.register(creator)` 在注册时调用它创建 `NamedDatasource`。 | `create(): NamedDatasource`、`driverName: String`（供 `default` 默认值判定） |
-| `DatabasePool` | 内置连接池（`<: Resource & Datasource`），由 `orm_databasePool*` 系列环境变量驱动。 | `init(driver: Driver, ds: Datasource)`（各参数取自 `ORMConfig`）、`init(ds: Datasource, ..., checker!: (Connection) -> Bool)`、`init(ds: Datasource, ..., checkSql!: String = "select 1")`、`init(driver: Driver, options!: Array<(String, String)> = [], ..., checkSql!: String)`（直接 `driver.open`）、`getConnection(timeout!: Duration = connectTimeout): Option<Connection>`（池已关闭时抛 `ConnectionException('database pool is closed')`）、`isClosed()`、`close()` |
+| `DatabasePool` | 内置连接池（`<: Resource & Datasource`），由 `orm_databasePool*` 系列环境变量驱动。 | `init(driver: Driver, ds: Datasource)`（各参数取自 `ORMConfig`；**当前该构造函数无法通过编译**，见 [19.6](#196-已知问题源码现状)）、`init(ds: Datasource, ..., checker!: (Connection) -> Bool)`、`init(ds: Datasource, ..., checkSql!: String = "select 1")`、`init(driver: Driver, options!: Array<(String, String)> = [], ..., checkSql!: String)`（直接 `driver.open`）、`getConnection(timeout!: Duration = connectTimeout): Option<Connection>`（池已关闭时抛 `ConnectionException('database pool is closed')`）、`isClosed()`、`close()` |
 | `SqlArg`（抽象） | 单个绑定参数（`index` + `set(statement)`）。 | 工厂 `SqlArg.new<T>(index, value)`；每种支持类型对应一个实现子类；`hashCode` / `==` / `toString` |
 | `SqlArgs` | 参数集合（`<: Hashable & Equatable<SqlArgs> & ToString`）：占位符索引自增。 | public：`init()`、`add(...)` 全类型重载、`addNull()`、`toString()`、`hashCode` / `==`；protected：`clone()`、`set(statement)`、`clear()`、`add(all!: SqlArgs)` |
 | `QueryResultWrap` | `std.database.sql.QueryResult` 的包装：按列读取并安全转型，是结果映射的底层。 | `columnInfos`、`get<T>(...)` / `get<T>(columnName)` / `getOrNull<T>(...)` / `getOrNull<T>(columnName)`、`next()` / `next(values)`、`toMap()`、`close()` 等 |
@@ -2127,17 +2143,38 @@ public abstract class SqlDialect {
 
 ### 19.6 已知问题（源码现状）
 
-下表是「代码当前行为与设计意图不一致」的清单，正文相应位置也有标注；使用这些能力前建议先确认是否已修复：
+2026-10-01 依据当时的 HEAD（提交 `1ee1e0ec`）复核：原清单中 5 项已修复（见 C），但该提交同时引入 **10 处编译错误**（见 A），`cjpm build` 目前会失败；其余逻辑问题仍在（B）。
+
+#### A. 编译错误（阻塞构建，共 10 处）
+
+复核方式：把工作区源码复制到镜像目录、逐条打上下面这些修法后 `cjpm build` 可以通过（工作区源码未被改动）。
+
+| 位置 | 现象与修法 |
+| --- | --- |
+| `wrap/DatabasePool.cj:153-154` | `init(driver: Driver, ds: Datasource)` 内以命名实参调用 12 个实参的 `this(ds: ds, ...)` → `extra arguments given for parameter list '(Interface-Driver, Interface-Datasource)'`。改为位置传参 `this(ds, ...)`（同文件 `:95` 即此写法） |
+| `base/TableClause.cj:453` | `column = Column(mapper.dataType.columnName)` 缺少声明 → `undeclared identifier 'column'`；同处 460 行同样报错。应为 `let column = ...` |
+| `base/TableClause.cj:454` | `HashSet<Column>.contains(mapper.dataType.columnName)` 传入 `String` → `mismatched types, expected 'Class-Column', found 'Struct-String'`。应传入上面的 `Column` |
+| `base/RootDAO.cj:543` | `SqlFunc(private fnname: String, private let column: Column)` 参数修饰符非法（`expected no modifier before non-member variable parameter`）→ 写 `private let fnname` |
+| `base/RootDAO.cj:563` | `HashBuilder().append(...).append(column).hashCode()`：`HashBuilder` 没有 `hashCode`，取哈希值应改用 `.build()` |
+| `base/LogicalExpr.cj:114`、`:130` | `InExpr` / `In2Expr` 的 `toString()` 仍写 `${column.name}`，但字段类型已改为 `SqlExpr`（无 `name` 成员） |
+| `base/TableClause.cj:309`、`:327` | `first<T>(columns: Array<SqlExpr>)` / `list<T>(columns: Array<SqlExpr>)` 仍调用 `columns2string(columns: Array<Column>)`，需把该方法形参同步为 `Array<SqlExpr>` |
+
+#### B. 逻辑/语义问题（不影响编译）
 
 | 位置 | 现象 |
 | --- | --- |
-| `base/TableClause.cj:45` | 片段拼接条件写成 `emptyLogicalExpr(sql)`（提交 `b4e9d086`），导致 `WHERE` / `AND` / `OR` / `NOT` / `HAVING(String)` / `ORDER_BY` / `GROUP_BY` / `SET` / `byId` 及闭包版本不会把条件写入 SQL（见 [9](#9-dsl-子句intoclause--updateclause--fromclause)） |
-| `base/TableClause.cj:438-460` | `INSERT_INTO<T>(ignoreColumns: Array<Column>)` 用带引用符的 `Column.toString()` 与 `columnName` 比较，忽略列通常不生效（`INTO(ignoreColumns: Array<String>)` 正常） |
-| `macros/ORMField.cj:114` | 任意布尔字面量（含 `false`）都被视为主键，无法用 `false` 表达「非主键」 |
-| `base/QueryResultIterator.cj:40-54` | `SingleColumnIterator.next()` 在结果集耗尽时抛 `ORMException("the first column does not match specified data type")` 而非返回 `None`；`column` 形参未参与取值（两个分支都按 `index` 取列） |
-| `base/GroupedQueryMapper.cj:90-104` | `NullableGroupedQueryMapper.ignoreNone` 的判断恒为假，补 `None` 的分支不会执行 |
+| `base/GroupedQueryMapper.cj:90-104` | `NullableGroupedQueryMapper.ignoreNone` 的判断恒为假（`list.add` 之后 `prevSize == list.size` 不可能成立），补 `None` 的分支不会执行 |
 | `base/NestQueryMapper.cj:39-57` | `NullableNestQueryMapper` 的 `nestGetter` 被保存但从未使用 |
-| `base/SqlExecutor.cj:76-80` | `readOnly` 没有置 `true` 的分支，`isReadOnly` 恒为 `false` |
-| `base/RootDAO.cj:509-526` | `COUNT` / `SUM` / `AVG` / `MAX` / `MIN` 返回的 `Column` 在 `toString()` 中会被整体加引用符（如 `"count(*)"`），不能直接作为 select 列表使用 |
-| `base/Condition.cj:23` | `Condition.delimiter` 为 internal 可变字段，包外无法读取或重设 |
-| `wrap/ORMConfig.cj:105-117` | `getSensitive`（读取内嵌敏感信息）无调用方，`getConf` / `getUrl` 等只走 `Config`，因此 `@EmbedSensitive` 内嵌的连接 URL / 用户名 / 密码目前不会在运行时生效（SM4 参数仍由 `getSM4()` 使用） |
+| `base/QueryResultIterator.cj:34-50` | `SingleColumnIterator` 的 `column` 形参不参与取值——无论是否指定 `column`，都按 `index`（默认 0）取列 |
+| `base/Condition.cj:23` | `Condition.delimiter` 为 internal 的 `mut static prop`（`ThreadLocal` 存储），包外无法读取或重设 |
+| `wrap/ORMConfig.cj:105-117` | `getSensitive`（读取内嵌敏感信息）仍无调用方，`getConf` / `getUrl` / `getUsername` / `getPassword` 只走 `Config`，因此 `@EmbedSensitive` 内嵌的连接 URL / 用户名 / 密码不会在运行时生效（SM4 参数仍由 `getSM4()` 使用） |
+
+#### C. 本次复核确认已修复（原清单项）
+
+| 原问题 | 现状 |
+| --- | --- |
+| `TableClause.appendPartial` 条件取反导致子句不拼接 | 已修为 `if(!emptyLogicalExpr(sql))`，`WHERE` / `SET` / `ORDER_BY` 等恢复正常 |
+| `@ORMField[false]` 被当作主键 | 已修为 `attr.value.toAsciiLower() == 'true'`，`false` 表示非主键 |
+| `SqlExecutor.isReadOnly` 恒为 `false` | 已修为 SQL 以 `select` 开头时置 `true` |
+| `COUNT`/`SUM`/… 返回 `Column` 且被整体加引用符 | 已改为返回新的 `SqlFunc`（`SqlExpr` 子类），`toString()` 输出 `count(*)` 形式，可直接作为查询列（见 [10.5](#105-常用函数)） |
+| `SingleColumnIterator.next()` 耗尽时抛异常 | 已改为返回 `None` |

@@ -49,32 +49,91 @@ public enum CmpOp <: ToString{
         }
     }
 }
-public interface LogicalExpr <: ToString {}
-public struct EmptyExpr <: LogicalExpr {
+public abstract class LogicalExpr <: SqlExpr & ToString {}
+public class EmptyExpr <: LogicalExpr {
     init(){}
     public func toString(): String {
         ''
     }
+    public func AS(alias: String): This {
+        this
+    }
+
+    public func ASC(): This {
+        this
+    }
+    public func DESC(): This {
+        this
+    }
+
+    public func eq(arg: Any): LogicalExpr {
+        this
+    }
+    public func neq(arg: Any): LogicalExpr {
+        this
+    }
+    public func lt(arg: Any): LogicalExpr {
+        this
+    }
+    public func gt(arg: Any): LogicalExpr {
+        this
+    }
+    public func lte(arg: Any): LogicalExpr {
+        this
+    }
+    public func gte(arg: Any): LogicalExpr {
+        this
+    }
+    public func IN<T>(arg: Collection<T>): LogicalExpr {
+        this
+    }
+    public func NOT_IN<T>(arg: Collection<T>): LogicalExpr {
+        this
+    }
+    public func IN<T, I>(arg: Collection<I>): LogicalExpr where I <: Collection<T> {
+        this
+    }
+    public func NOT_IN<T, I>(arg: Collection<I>): LogicalExpr where I <: Collection<T> {
+        this
+    }
+    public func LIKE(arg: Any): LogicalExpr {
+        this
+    }
+    public func NOT_LIKE(arg: Any): LogicalExpr {
+        this
+    }
+    public func BETWEEN(one: Any, two: Any): LogicalExpr {
+        this
+    }
+    public func NOT_BETWEEN(one: Any, two: Any): LogicalExpr {
+        this
+    }
+    public func IS_NULL(): LogicalExpr {
+        this
+    }
+    public func IS_NOT_NULL(): LogicalExpr {
+        this
+    }
 }
-public open class CmpExpr <: RootDAO & LogicalExpr {
+private struct ExprSqlExec <: RootDAO {}
+public open class CmpExpr <: LogicalExpr {
     CmpExpr(
         private let column: SqlExpr,
         private let op: CmpOp,
         private let value: Any
     ){}
-    public prop executor: SqlExecutor {
-        get(){
-            SqlExecutor.getCurrent()
-        }
-    }
     public func toString(): String {
-        match(op){
+        if(alias_.size > 0 && sort.size > 0){
+            throw ORMException('SqlFunc alias and SqlFunc alias cannot be set at the same time')
+        }
+        let exec = ExprSqlExec()
+        let expr = match(op){
             case BETWEEN | NOT_BETWEEN => 
                 match(value){
                     case x: Array<Any> => 
                         match((x[0], x[1])){
                             case (x: Column, y: Column) => ' ${column} ${op} ${x} AND ${y} '
-                            case _ => ' ${column} ${op} ${arg(x[0])} AND ${arg(x[1])} '
+                            case _ => ' ${column} ${op} ${exec.arg(x[0])} AND ${exec.arg(x[1])} '
                         }
                     case _ => throw SqlArgException('value must be Array<Any> for BETWEEN or NOT_BETWEEN')
                 }
@@ -82,8 +141,16 @@ public open class CmpExpr <: RootDAO & LogicalExpr {
             case _ => 
                 match(value){
                     case x: SqlExpr => ' ${column} ${op} ${x} '
-                    case _ => ' ${column} ${op} ${arg(value)} '
+                    case _ => ' ${column} ${op} ${exec.arg(value)} '
                 }
+        }
+        if(alias_.size > 0){
+            let exe = SqlExecutor.getCurrent()
+            ' ${expr} AS ${exe.involve(alias_)} '
+        }else if(sort.size > 0){
+            ' ${expr} ${sort} '
+        }else{
+            expr
         }
     }
 }
@@ -98,36 +165,34 @@ public class BetweenExpr <: CmpExpr {
     }
 }
 
-public class InExpr<T> <: RootDAO & LogicalExpr {
+public class InExpr<T> <: LogicalExpr {
     InExpr(private let column: SqlExpr, private let op: CmpOp, private let value: Collection<T>){
         match(op){
             case IN | NOT_IN => ()
             case _ => throw SqlArgException('op must be IN or NOT_IN')
         }
     }
-    public prop executor: SqlExecutor {
-        get(){
-            SqlExecutor.getCurrent()
+    public func toString(): String {
+        let exec = ExprSqlExec()
+        match(column){
+            case x: Column => ' ${x.name} ${op} ${exec.arg<Collection<T>, T>(value)} '
+            case x => ' ${x} ${op} ${exec.arg<Collection<T>, T>(value)} '
         }
     }
-    public func toString(): String {
-        ' ${column.name} ${op} ${arg<Collection<T>, T>(value)} '
-    }
 }
-public class In2Expr<I, T> <: RootDAO & LogicalExpr where I <: Collection<T> {
+public class In2Expr<I, T> <: LogicalExpr where I <: Collection<T> {
     In2Expr(private let column: SqlExpr, private let op: CmpOp, private let value: Collection<I>){
         match(op){
             case IN | NOT_IN => ()
             case _ => throw SqlArgException('op must be IN or NOT_IN')
         }
     }
-    public prop executor: SqlExecutor {
-        get(){
-            SqlExecutor.getCurrent()
-        }
-    }
     public func toString(): String {
-        ' ${column.name} ${op} ${arg<Collection<I>, I, T>(value)} '
+        let exec = ExprSqlExec()
+        match(column){
+            case x: Column => ' ${x.name} ${op} ${exec.arg<Collection<I>, I, T>(value)} '
+            case x => ' ${x} ${op} ${exec.arg<Collection<I>, I, T>(value)} '
+        }
     }
 }
 

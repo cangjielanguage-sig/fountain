@@ -22,7 +22,7 @@ import std.collection.concurrent.ConcurrentHashMap
    仓颉已支持类实例的逃逸分析和栈上分配
    按照HashBuilder_test的简单性能测试。
  */
-public class HashBuilder {
+public class HashBuilder <: Hashable {
     private static const a: Int64 = -7046029254386353131 // 0x9e3779b97f4a7c15
     private var hashed = 0
 
@@ -33,6 +33,9 @@ public class HashBuilder {
         let h = hashed
         hashed = 0
         h
+    }
+    public func hashCode(): Int64 {
+        build()
     }
 
     @OverflowWrapping

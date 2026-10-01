@@ -151,7 +151,7 @@ public class DatabasePool <: Resource & Datasource {
     
     public init(driver: Driver, ds: Datasource){
         this(
-            ds: ds,
+            ds,
             initSize: ORMConfig.getPoolInitSize(driverName: driver.name),
             minSize: ORMConfig.getPoolMinSize(driverName: driver.name),
             maxSize: ORMConfig.getPoolMaxSize(driverName: driver.name),

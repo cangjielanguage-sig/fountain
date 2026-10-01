@@ -33,67 +33,67 @@ public abstract class Columns <: ToString & Iterable<Column> {
 }
 public abstract class SqlExpr <: ToString{
     protected var alias_: String = ''
-    public func AS(alias: String): This {
+    public open func AS(alias: String): This {
         alias_ = alias
         return this
     }
 
     protected var sort: String = ''
-    public func ASC(): This {
+    public open func ASC(): This {
         sort = ' ASC '
         return this
     }
-    public func DESC(): This {
+    public open func DESC(): This {
         sort = ' DESC '
         return this
     }
 
-    public func eq(arg: Any): LogicalExpr {
+    public open func eq(arg: Any): LogicalExpr {
         CmpExpr(this, EQ, arg)
     }
-    public func neq(arg: Any): LogicalExpr {
+    public open func neq(arg: Any): LogicalExpr {
         CmpExpr(this, NEQ, arg)
     }
-    public func lt(arg: Any): LogicalExpr {
+    public open func lt(arg: Any): LogicalExpr {
         CmpExpr(this, LT, arg)
     }
-    public func gt(arg: Any): LogicalExpr {
+    public open func gt(arg: Any): LogicalExpr {
         CmpExpr(this, GT, arg)
     }
-    public func lte(arg: Any): LogicalExpr {
+    public open func lte(arg: Any): LogicalExpr {
         CmpExpr(this, LTE, arg)
     }
-    public func gte(arg: Any): LogicalExpr {
+    public open func gte(arg: Any): LogicalExpr {
         CmpExpr(this, GTE, arg)
     }
-    public func IN<T>(arg: Collection<T>): LogicalExpr {
+    public open func IN<T>(arg: Collection<T>): LogicalExpr {
         InExpr<T>(this, CmpOp.IN, arg)
     }
-    public func NOT_IN<T>(arg: Collection<T>): LogicalExpr {
+    public open func NOT_IN<T>(arg: Collection<T>): LogicalExpr {
         InExpr<T>(this, CmpOp.NOT_IN, arg)
     }
-    public func IN<T, I>(arg: Collection<I>): LogicalExpr where I <: Collection<T> {
+    public open func IN<T, I>(arg: Collection<I>): LogicalExpr where I <: Collection<T> {
         In2Expr<I, T>(this, CmpOp.IN, arg)
     }
-    public func NOT_IN<T, I>(arg: Collection<I>): LogicalExpr where I <: Collection<T> {
+    public open func NOT_IN<T, I>(arg: Collection<I>): LogicalExpr where I <: Collection<T> {
         In2Expr<I, T>(this, CmpOp.NOT_IN, arg)
     }
-    public func LIKE(arg: Any): LogicalExpr {
+    public open func LIKE(arg: Any): LogicalExpr {
         CmpExpr(this, CmpOp.LIKE, arg)
     }
-    public func NOT_LIKE(arg: Any): LogicalExpr {
+    public open func NOT_LIKE(arg: Any): LogicalExpr {
         CmpExpr(this, CmpOp.NOT_LIKE, arg)
     }
-    public func BETWEEN(one: Any, two: Any): LogicalExpr {
+    public open func BETWEEN(one: Any, two: Any): LogicalExpr {
         BetweenExpr(this, CmpOp.BETWEEN, [one, two])
     }
-    public func NOT_BETWEEN(one: Any, two: Any): LogicalExpr {
+    public open func NOT_BETWEEN(one: Any, two: Any): LogicalExpr {
         BetweenExpr(this, CmpOp.NOT_BETWEEN, [one, two])
     }
-    public func IS_NULL(): LogicalExpr {
+    public open func IS_NULL(): LogicalExpr {
         NullExpr(this, CmpOp.IS_NULL)
     }
-    public func IS_NOT_NULL(): LogicalExpr {
+    public open func IS_NOT_NULL(): LogicalExpr {
         NullExpr(this, CmpOp.IS_NOT_NULL)
     }
 }
