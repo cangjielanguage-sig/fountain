@@ -4,7 +4,7 @@
 
 > 配套项目：`fdemo`（仓库内的示例工程，本讲稿所有命令都以它为蓝本）
 > 目标：讲清楚「为什么用 fountain」「怎么用 fboot」「IOC / MVC / AOP / ORM 怎么用」，并且全程可以一边讲一边敲命令、一边看输出。
-> 建议录制时长：约 105～125 分钟（可按章节裁剪；核心链路是 第一、三、四、五、六、七、八、九、十、十四章）
+> 建议录制时长：约 125～150 分钟（可按章节裁剪；核心链路是 第一、三、四、六、八、九、十、十一、十六章）
 
 ---
 
@@ -65,6 +65,7 @@ fboot version
 >
 > | 能力 | 模块 | 一句话 |
 > | --- | --- | --- |
+> | 配置 | `f_config` | **没有配置文件**：环境变量 / 命令行 / `Config.set` / 编译期 SM4 内嵌，四级优先级 |
 > | IOC 容器 | `f_bean` | `@Bean` + `lookup<T>()`，宏在编译期完成注册 |
 > | AOP | `f_aspect` | `Aspect` 接口 + 织入规则，横切逻辑集中一处 |
 > | 数据 | `f_data` | `@DataAssist` 一把宏搞定对象复制、JSON 互转、校验、JSONPath |
@@ -75,7 +76,7 @@ fboot version
 > | JWT | `f_jwt` | 完整的 JWT 编码 / 验签 API |
 > | CRON | `f_ticktock` | `@Bean` + cron 表达式即可定时执行 |
 > | 随机 | `f_random` | 区间随机数、随机数流、随机字符串、蓄水池抽样 |
-> | ID 生成 | `f_util.UUID` | v1/v3/v4/v5/v6/v7/v8 全覆盖，可直接进出 `f_data` |
+> | 工具箱 | `f_util` | UUID(v1~v8) / IdMaker / TextTemplate / PathPattern / TreeTransformer / CaseFormat / 设计模式骨架 |
 > | 启动器 | `fboot` / `f_app` | 没有 `main` 也能启动应用 |
 >
 > 外围还有 `f_base` `f_util` `f_collection` `f_concurrent` `f_log` `f_http` `f_net` `f_pool` `f_crypto` `f_store` `f_rpc` `f_llm`……它们既能被框架使用，也能单独当作工具库引入。
@@ -118,6 +119,8 @@ fboot version
 所以你可以：
 > - 做到运行环境敏感信息安全性
 > - 运行期用环境变量覆盖，做到「一份产物、多环境部署」。
+>
+> 这套机制由 `fountain::f_config` 提供，**第三章会完整展开**：命令行参数的四种写法、四级读取优先级、SM4 加密内嵌敏感配置、以及 `@EmbedSensitive` 宏。
 
 ## 1.4 什么时候不该用 fountain
 
@@ -162,7 +165,257 @@ fboot version
 
 ---
 
-# 第三章 fboot 命令行
+# 第三章 配置：`fountain::f_config`
+
+**【镜头】** `f_config/README.md` + `fdemo/boot.sh`（那一整屏 `export`）+ `fdemo/boot-win-gitbash.sh`
+
+## 3.1 开场：fountain 没有配置文件
+
+**【口播】**
+
+> 在讲 fboot 之前，必须先讲配置——因为**后面你会看到满屏的环境变量**：`mvc_port`、`orm_drivers`、`logger_*`、`controllerPointcut`……
+> 它们全都由 `f_config` 统一读取。而 `f_config` 最重要的一句话是：
+>
+> **「不依赖任何配置文件。」**
+>
+> 配置项只有四个来源：环境变量、命令行参数、进程内 `Config.set`、以及编译期内嵌的敏感配置。没有 `application.yml`，没有 properties，没有 JSON。
+
+| 来源 | 何时生效 |
+| --- | --- |
+| 环境变量 / 命令行参数 | 进程启动时由 `static init` 装载（**命令行覆盖同名环境变量**） |
+| 进程内 `Config.set(...)` | 运行期写入/覆盖 |
+| 编译期内嵌的敏感值（`@EmbedSensitive`） | `fboot build` 时嵌入产物，运行期解密/还原 |
+
+**【口播】** 这一条直接决定了部署形态：**一份编译产物，靠环境变量跑遍开发/测试/生产**。这也是 `fboot build --k=v` 那套编译期注入能成立的前提。
+
+## 3.2 命令行参数的四种合法写法
+
+```
+--argName=argValue     # key = '=' 左侧，value = '=' 右侧，两侧都 trimAscii
+--argName              # 等价于 --argName=true
+-argName argVal        # 下一个参数若以 '-' 开头则不当作值，该配置项值为 true
+-argName               # 等价于 -argName true
+```
+
+- 单横线形式**不支持 `=` 赋值**，`-argName=argValue` 会被整体当成配置项名；
+- 不以 `-` 开头的参数被忽略；`env.getCommandLine()[0]`（程序自身路径）不参与解析；
+- **命名风格不被改写**——仓颉运行时自身的环境变量是驼峰命名，业务配置建议同样用驼峰。
+
+## 3.3 读取优先级（重点，建议做成动画）
+
+一次 `Config.getString(key)` 的查找顺序，**先命中者生效**：
+
+| 顺序 | 来源 |
+| --- | --- |
+| 1 | 环境变量 / 命令行参数（`ARGS[key]`） |
+| 2 | 带全局前缀的同名项（`ARGS[fountain_key]`） |
+| 3 | 编译期内嵌的敏感值（`sensitiveMap[key]`） |
+| 4 | 带全局前缀的敏感值（`sensitiveMap[fountain_key]`） |
+
+> **结论：运行期配置（环境变量/命令行）优先级高于编译期内嵌值。**
+> 这就是为什么你可以编译期把数据库密码嵌进产物、生产环境再用环境变量覆盖掉。
+
+### 全局前缀 `fountain`
+
+`Config` 内置全局前缀 `fountain`：原名未命中时会再试 `fountain_${key}`；`getAll` 的结果里则会把 `fountain_` 去掉。
+
+```bash
+export myAppSecret='xxx'           # Config.getString('myAppSecret') 命中
+export fountain_myAppSecret='xxx'  # 等价写法
+```
+
+`getAll(prefix)`：prefix 为空返回全部，否则 key 需以 `${prefix}_` 或 `fountain_${prefix}_` 开头。
+
+## 3.4 `Config` API
+
+```cangjie
+package fountain::f_config
+public import std.convert.Parsable
+public import fountain::f_data.DataParsable
+
+public class Config {
+    public static const sm4Operation = 'sm4Operation'
+    public static const sm4Padding    = 'sm4Padding'
+    public static const sm4Key        = 'sm4Key'
+    public static const sm4Iv         = 'sm4Iv'
+    public static const sm4Aad        = 'sm4Aad'
+    public static const sm4TagSize    = 'sm4TagSize'
+
+    public static func refresher(prefix: String, fn: () -> Unit): Unit
+    public static func set<T>(tuples: Array<(String, T)>, ifAbsent!: Bool = false): Unit where T <: ToString
+    public static func getAll(prefix: String): Map<String, String>
+    public static func getAll(): Map<String, String>
+    public static func getString(key: String): ?String
+    public static func getValue<T>(key: String, parser: (String) -> ?T): ?T
+    public static func getValue<T>(key: String): ?T where T <: Parsable<T>
+    public static func getStringArray(key: String, delim!: String = ','): Array<String>
+    public static func getValues<T>(key: String, delim!: String = ',', parser!: (String) -> T): Array<T>
+    public static func getValues<T>(key: String, delim!: String = ','): Array<T> where T <: Parsable<T>
+    public static func getDateTime(key: String, format!: String = ''): ?DateTime
+    public static func getDateTimes(key: String, format!: String = '', delim!: String = ','): Array<DateTime>
+    public static func getData<T>(key: String): ?T where T <: DataParsable<T>
+    public static func getDatas<T>(key: String, delim!: String = ','): Array<T> where T <: DataParsable<T>
+    public static func getDuration(key: String): ?Duration
+    public static func getDurations(key: String, delim!: String = ','): Array<Duration>
+    public static func bufferSize(bufferKey: String, default: Int64, debugging: Bool): Int64
+    public static func getSM4(): ?SM4
+    public static func registerSensitive(key: String, value: Array<Byte>): Unit
+}
+```
+
+**【口播】**（挑几个最有辨识度的讲）
+
+> `getValue` / `getData` 是**单例读取**，解析失败返回 `None`，不抛异常；
+> `getValues` / `getDatas` 是**数组读取**，解析失败**抛异常**，配置项不存在返回空数组——**这个「单数不抛、复数抛」的不对称一定要记住**。
+> `bufferSize` 更贴心：配置项不存在或 `<= 0` 就用默认值；非调试模式下还会**向上取整到 2 的幂**，且恒不小于默认值——环形缓冲区直接拿它。
+
+`bufferSize(bufferKey, default, debugging)` 的返回值：
+
+| 条件 | 返回值 |
+| --- | --- |
+| 配置项不存在 / 解析失败 / `x <= 0` | `default` |
+| `debugging == true` 且 `x > 0` | `x` 原样返回 |
+| `x` 是 2 的幂 | `x` |
+| 其它 | 向上取整到 2 的幂 `s`；`s >= default` 返回 `s`，否则 `default` |
+
+```cangjie
+Config.getValue<Int64>('threadCount')                 // None 或 Int64
+Config.getValues<Int64>('ports')                      // ports=8080,9090 -> [8080, 9090]
+Config.getDateTime('deadline', format: 'yyyy-MM-dd')
+Config.bufferSize('ringBufferSize', 1024, false)      // >= 1024 且向上取到 2 的幂
+Config.set<Bool>([('mySwitch', true)], ifAbsent: true) // 不存在才写入
+Config.getAll('orm')                                  // 所有 orm_ / fountain_orm_ 开头的配置项
+```
+
+## 3.5 敏感配置与 SM4 加密
+
+**【口播】**（这是本章的高潮，也是 `fboot randhex` 的用武之地）
+
+> 数据库密码、第三方密钥这类东西，不适合出现在运行环境的环境变量里。
+> `f_config` 的做法是：**编译期**在编译机上读取环境变量，用 **SM4** 加密后作为字节数组嵌入编译产物；进程启动时注册到独立的 `sensitiveMap`，再用常规 `getString` 读取。
+>
+> - 未配置 SM4 → 嵌入的是 **UTF8 明文**字节数组；
+> - 配置了 SM4 → 嵌入的是**密文**，同时把 SM4 参数一并嵌入供运行期解密；
+> - 运行期同名配置优先级更高，可以被覆盖。
+
+### SM4 配置项
+
+| 配置项 | 含义 | 默认值 | 取值 / 格式 |
+| --- | --- | --- | --- |
+| `sm4Operation` | 工作模式 | `CBC` | `CBC` `CFB` `CTR` `GCM` `OFB`（`ECB` 不安全，明确不支持） |
+| `sm4Padding` | 填充模式 | `PKCS7Padding` | `NoPadding` `PKCS7Padding` |
+| `sm4Key` | 密钥 | **必须配置** | 16 字节 = 长度 32 的 16 进制串 |
+| `sm4Iv` | 初始向量 | 配了 key 就必须配 | `CBC`/`OFB`/`CFB` 要 16 字节，`GCM` 要 12 字节 |
+| `sm4Aad` | 附加认证数据 | 空字节数组 | 16 进制串 |
+| `sm4TagSize` | GCM tag 长度 | `16` | `Int64` 字符串 |
+
+```bash
+export paySecretKey='......'
+export sm4Key=$(fboot randhex 32)   # 16 字节密钥
+export sm4Iv=$(fboot randhex 32)    # CBC 的 IV；GCM 用 fboot randhex 24
+```
+
+**【口播】**
+
+> 注意这两点，讲出来比藏着好：
+> 1. **SM4 参数本身（含密钥）也会以字节数组形式出现在编译产物里**。这个机制抬高的是「直接从二进制里 grep 出配置」的门槛，**不能替代密钥管理服务**；
+> 2. 每次解密都会**重新构造一次 `SM4` 实例**，敏感配置多或读取频繁时建议自己缓存结果。
+>
+> 另外还有一个跨模块的不一致：`f_orm` 的文档里写的是 `orm_sm4Key`，但 `f_config` 实际读的是**不带模块前缀的 `sm4Key`**——看 `fdemo/boot.sh` 里的 `--orm_sm4Key=` 是 `f_orm` 自己的封装。以 `f_config` 的说法为准。
+
+## 3.6 `@EmbedSensitive` 宏
+
+```cangjie
+import fountain::f_config.macros.*
+
+@EmbedSensitive(paySecretKey pushToken)   // 源文件顶层调用，逗号分隔亦可
+```
+
+展开后是一个立即执行的匿名闭包：
+
+```cangjie
+private let _ = {=>
+    Config.registerSensitive('paySecretKey', [...密文或明文字节...])
+    Config.registerSensitive('pushToken', [...])
+    Config.registerSensitive('sm4Operation', ...)
+    Config.registerSensitive('sm4Padding', ...)
+    Config.registerSensitive('sm4Key', ...)
+    Config.registerSensitive('sm4Iv', ...)
+    Config.registerSensitive('sm4Aad', ...)
+    Config.registerSensitive('sm4TagSize', ...)
+}()
+```
+
+嵌入规则：
+
+1. **编译期取不到值的名字会被忽略**（编译机上没有对应环境变量就不注册）；
+2. 编译期配了 `sm4Key` 写密文，否则写 UTF8 明文；
+3. 只有「至少注册了一项敏感值」且「`sm4Key` 非空」时才把 SM4 的六个参数一并写入（它们本身按明文字节写入）；
+4. 同名重复注册以最后一次为准；
+5. 运行期读取仍遵循 3.3 的优先级。
+
+**【口播】** `f_orm` 就是基于这个宏的封装：`f_orm/src/ProtectedMacros/EmbedSensitive.cj` 生成 ORM 的连接串/用户名/口令键，再转调 `@EmbedSensitive`，最终在 `f_orm/src/base/imports.cj` 里以 `@ORMEmbedSensitive()` 触发。所以你在 `boot.sh` 里写的 `--postgres_orm_connectionUrl=...` 才能被嵌进产物。
+
+## 3.7 可配置的时间格式：`DateTimeConfConverter`
+
+**【镜头】** 这是 `f_config` 与 `f_data` 咬合的地方（第八章会再讲 `DataConverter`）
+
+```cangjie
+package fountain::f_config
+
+@Annotation[target: [MemberProperty, MemberVariable, Parameter]]
+public class DateTimeConfConverter <: AbstractDateTimeConverter {
+    public const DateTimeConfConverter(private let conf: String,
+                                       private let default!: String = 'yyyy-MM-dd HH:mm:ss'){}
+    public func convert(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?DateTime
+}
+```
+
+```cangjie
+@DateTimeConfConverter[myDateFormat]
+private var createdAt: DateTime = DateTime.now()
+
+// export myDateFormat='yyyy/MM/dd'  —— 时间格式本身也变成可配置的
+```
+
+**【口播】** `conf` 是**保存时间格式的配置项名**（不是格式本身），按 3.3 的优先级读取，没配就用 `default`。做多租户、多地区系统时，各家日期格式不一样——一个注解解决。
+
+## 3.8 已知问题（讲出来省得观众踩）
+
+1. **`refresher` 匹配失效**：`refresher` 以 `${prefix}_`（带尾随下划线）为键登记，而 `set` 收集的前缀是配置项名第一个 `_` **之前**的片段（仓颉 `a..b` 左闭右开），所以 `'logger'.startsWith('logger_')` 恒为 `false`——**`Config.set` 写入不会触发任何刷新回调**。影响：`f_log` 的 `LoggerFactory.refresh` 登记后再也不会被调用；`f_orm` 的 `ORMConfig.refresh` 只在 `static init` 里被执行一次。
+2. **SM4 异常文案残留其它模块名**：`sm4Key`/`sm4Iv` 不合法时抛出的是 `"orm config item ${Config.sm4Key} ..."`，源自 `f_orm` 的实现，属措辞遗留。
+3. **`getAll` 去前缀用的是 `String.replace`**：会替换 key 中**全部** `fountain_` 片段，key 中间再出现该子串会被一并去掉。
+4. **`getValues` / `getDateTimes` 解析失败会抛异常**，而单数版本 `getValue` / `getDateTime`（配置不存在时）返回 `None` / 空数组——写容错代码时别搞混。
+
+## 3.9 现场演示
+
+**【命令】**
+
+```bash
+# 1) 看一眼 fdemo 到底有多少配置（boot.sh 的 exports 函数）
+grep -c 'export' fdemo/boot.sh
+
+# 2) 用 fboot build 把敏感配置在编译期注入（--k=v 会变成 cjpm build 子进程的环境变量）
+cd fdemo
+export POSTGRES='postgres://user:pass@host:5432/dbname'
+./boot.sh build
+# 内部：--orm_sm4Key=$(fboot randhex 32) --orm_sm4Iv=$(fboot randhex 32)
+
+# 3) 运行期覆盖：启动前改环境变量即可，产物不用重新编译
+export mvc_port=9090
+./boot.sh run
+```
+
+**【预期】**
+
+- 第 2 步：编译成功，连接串与口令被加密嵌入产物；
+- 第 3 步：日志里出现 `9090` 端口，`Config.getString('mvc_port')` 拿到的是运行期的值，**覆盖了编译期内嵌值**。
+
+**【口播】** 这一组三步就是 `f_config` 的全部价值：**编译期可内嵌、运行期可覆盖、全程无配置文件**。
+
+---
+
+# 第四章 fboot 命令行
 
 **【镜头】** 终端 + `fboot/src/main.cj`（就 20 行）
 
@@ -181,7 +434,7 @@ fboot version
 >
 > 也就是说，**fboot 只是 `f_app` 的一个壳**。所有子命令的实现都在 `fountain::f_app.App` 里。理解这一点很重要：你自己的应用也可以用同样的方式启动，甚至可以用 `SubCommandMediator` 注册自己的子命令。
 
-## 3.1 `fboot help`
+## 4.1 `fboot help`
 
 **【命令】**
 
@@ -225,7 +478,7 @@ fboot help
 >
 > 另外 `help` 里没列全的内置命令还有 `cleanUpdate`、`test`；`pub` 和 `randhex` 不是内置命令，而是 `f_app` 自己注册进 `SubCommandMediator` 的子命令实现——这个机制我们等下会展开。
 
-## 3.2 `fboot workspace` —— 把目录变成仓颉 workspace
+## 4.2 `fboot workspace` —— 把目录变成仓颉 workspace
 
 ### 三种用法
 
@@ -264,7 +517,7 @@ cat cjpm.toml
 
 > 台上一句话总结：**workspace 是「装模块的盒子」，每个模块都必须编译为动态链接库。**
 
-## 3.3 `fboot module` —— 在 workspace 里加一个动态链接库模块
+## 4.3 `fboot module` —— 在 workspace 里加一个动态链接库模块
 
 ```bash
 # 在 workspace 根目录执行：创建 hello 子模块并挂进 workspace
@@ -320,7 +573,7 @@ hello_app/
 
 > 这一段建议**完整录下来**：不到 20 行代码，一个 HTTP 服务就写完了。这是最有说服力的一镜。
 
-## 3.4 `fboot build` —— 编译使用 fountain 的项目
+## 4.4 `fboot build` —— 编译使用 fountain 的项目
 
 **【口播】**
 
@@ -391,8 +644,10 @@ fboot build ./fdemo \
 > - **运行期同名环境变量优先级更高**——运行环境如果同名配置项有其他值，可以用新值覆盖即可，一份产物跑多套环境。
 > 覆盖方法也很简单，同样是`--`开头的命令行参数或同名的环境变量。
 > 顺带提醒：真实项目不要把密码写进 `boot.sh`，这里只是演示。
+>
+> 这套「编译期内嵌 + 运行期覆盖」的完整机制，见**第三章 `f_config`**。
 
-## 3.5 `fboot randhex` —— 生成随机 16 进制串
+## 4.5 `fboot randhex` —— 生成随机 16 进制串
 
 **【命令】**
 
@@ -411,7 +666,7 @@ fboot randhex 32
 >
 > 每次编译换一对 KEY/IV，嵌入的密文就不一样——这是一个很轻量的「产物级」防护。
 
-## 3.6 `fboot cleanUpdate` —— 依赖变了之后的必修课
+## 4.6 `fboot cleanUpdate` —— 依赖变了之后的必修课
 
 **【命令】**
 
@@ -437,7 +692,7 @@ fboot cleanUpdate /abs/path --target-dir=...
 >
 > `fdemo/boot.sh` 里也封装了它：`./boot.sh cleanUpdate`。
 
-## 3.7 `fboot run` —— 启动应用
+## 4.7 `fboot run` —— 启动应用
 
 ### 语法
 
@@ -509,7 +764,7 @@ curl http://localhost:8080/
 
 > 到此，从空目录到可服务的 HTTP 应用，**一共只敲了 4 条命令、写了一个类**。这是本章最好的收尾。
 
-## 3.8 其余命令（快速过一遍）
+## 4.8 其余命令（快速过一遍）
 
 | 命令 | 作用 | 演示 |
 | --- | --- | --- |
@@ -531,11 +786,11 @@ curl http://localhost:8080/
 
 ---
 
-# 第四章 现场跑通 `fdemo`
+# 第五章 现场跑通 `fdemo`
 
 **【镜头】** IDE 打开 `fdemo/`，终端执行脚本
 
-## 4.1 目录结构
+## 5.1 目录结构
 
 ```
 fdemo/
@@ -570,7 +825,7 @@ fdemo/
 
 > 注意这个分包不是随意的：**分包决定了动态链接库的粒度，而动态链接库粒度决定了 `--dylibPattern`**。所以「切面放哪个包」「鉴权器放哪个包」是需要在设计阶段就想的。
 
-## 4.2 建表
+## 5.2 建表
 
 **【命令】**（PostgreSQL）
 
@@ -585,7 +840,7 @@ CREATE TABLE public.user_info (
 );
 ```
 
-## 4.3 编译 + 启动
+## 5.3 编译 + 启动
 
 **【命令】**
 
@@ -612,7 +867,7 @@ _/ ____\__| _/____   _____   ____
 fdemo(1.1.0) started by 1.3.x in xxxms
 ```
 
-## 4.4 接口验证清单（这一段建议做成一张对照表放在画面上）
+## 5.4 接口验证清单（这一段建议做成一张对照表放在画面上）
 
 | # | 目的 | 命令 | 预期 |
 | --- | --- | --- | --- |
@@ -640,11 +895,11 @@ fdemo(1.1.0) started by 1.3.x in xxxms
 
 ---
 
-# 第五章 IOC：`fountain::f_bean`
+# 第六章 IOC：`fountain::f_bean`
 
 **【镜头】** `f_bean/README.md` + `fdemo` 中的 `UserController.cj`
 
-## 5.1 最小可用
+## 6.1 最小可用
 
 ```cangjie
 import fountain::f_bean.*
@@ -678,7 +933,7 @@ public class GenericClass<T, E>{
 >
 > 另外一个重要取舍：**IOC 只管理 class，不管理 struct**。因为 struct 是值类型，取出来就会复制，我认为得不偿失。
 
-## 5.2 取 bean：`lookup` 家族
+## 6.2 取 bean：`lookup` 家族
 
 | 函数 | 返回 | 说明 |
 | --- | --- | --- |
@@ -699,7 +954,7 @@ public class GenericClass<T, E>{
 
 > `lookupList<T>()` 是「策略模式」的免费实现：同一个接口 N 个实现，一行代码全拿到。配合 `BeanLabel` / `BeanWeight` 还能直接做成路由表或加权负载均衡。
 
-## 5.3 生命周期与工厂
+## 6.3 生命周期与工厂
 
 ```cangjie
 // 自定义构造：@Constructor 修饰构造函数或静态函数
@@ -728,7 +983,7 @@ public interface Destroy { func destroy(): Unit }
 > `@BeanParam` 按 `StringCond` 匹配 bean 名，把另一个 bean 注入进来。
 > 这两者**只能修饰被 `@Constructor` 修饰的函数形参**，否则编译期就报错。
 
-## 5.4 条件装配：`BeanCondition`
+## 6.4 条件装配：`BeanCondition`
 
 ```cangjie
 public interface BeanCondition <: ToString {
@@ -760,7 +1015,7 @@ public class PostgresOnlyBean {}
 > 这是「按环境装配」的官方方案：配置里有 postgres 且有某个 Dialect 实现，这个 bean 才存在；否则在 `afterRegistered()` 阶段被从 `BeanFactory` 删除。
 > 比 Spring 的 `@Conditional` 更灵活的地方是 `& | !` 可以直接用操作符组合。
 
-## 5.5 在 `fdemo` 里看 IOC
+## 6.5 在 `fdemo` 里看 IOC
 
 **【镜头】** `user/src/controller/UserController.cj`
 
@@ -784,7 +1039,7 @@ public class UserController {
 > ```
 > `prototype` 意味着每次访问都 new 一个——它的 `init()` 里有一行 `println`，**每访问一次就会打印一次**，这就是视频里证明 prototype 生效的最简单方式。
 
-## 5.6 `@Configuration` + `@BeanInit`
+## 6.6 `@Configuration` + `@BeanInit`
 
 ```cangjie
 @Configuration        // 这个类本身不被 IOC 管理
@@ -798,11 +1053,11 @@ public class AppConfig {
 
 ---
 
-# 第六章 AOP：`fountain::f_aspect`
+# 第七章 AOP：`fountain::f_aspect`
 
 **【镜头】** `fdemo/boot/src/ControllerAspect.cj` + `f_aspect/README.md`
 
-## 6.1 切面 = 实现了 `Aspect` 的 `@Bean`
+## 7.1 切面 = 实现了 `Aspect` 的 `@Bean`
 
 ```cangjie
 public interface Aspect {
@@ -832,7 +1087,7 @@ public interface Aspect {
 > `before / around / 原函数体 / after` 任意一步抛异常都会进 `throwing`；`final` 一定会执行。
 > 如果你有更特别的编排需求，直接覆盖 `proceed` 自己排。
 
-## 6.2 织入规则：`RouteRule`
+## 7.2 织入规则：`RouteRule`
 
 规则全部支持 `*` `?` 通配符，包名支持 `..`（任意层级）、`.*` `*.` `.*.`（任意包名），组织名用 `::` 分隔。规则之间可以用 `& | !` 组合。
 
@@ -852,7 +1107,7 @@ public interface Aspect {
 | `ConfigExecutionRouteRule(<配置项名>)` | **从环境变量读规则** |
 | `AndRouteRule` / `OrRouteRule` / `NotRouteRule` | 组合 |
 
-## 6.3 三个织入宏
+## 7.3 三个织入宏
 
 ```cangjie
 @Pointcut       // 修饰函数：只有这个函数织入；修饰类：全部公共函数织入
@@ -863,7 +1118,7 @@ public interface Aspect {
 
 **【口播】** 织入逻辑在**这些函数首次调用时**执行，不是启动期——所以启动很快。
 
-## 6.4 现场：`ControllerAspect`
+## 7.4 现场：`ControllerAspect`
 
 **【镜头】** `fdemo/boot/src/ControllerAspect.cj`
 
@@ -902,18 +1157,18 @@ export controllerPointcut='*::*..*Controller.*(**): *'
 
 **【演示】** 改一下 `controllerPointcut` 再启动（比如改成 `*::*..*UserController.*(**): *`），只有 User 开头的 controller 会打日志。
 
-## 6.5 AOP 在 fountain 里的两个"杀手级"用法
+## 7.5 AOP 在 fountain 里的两个"杀手级"用法
 
-1. **事务**：`f_orm` 的 `TransactionAspect` 就是 `@AspectRoute[FuncAnnotationRouteRule("fountain::f_orm.base.Transactional") | ConfigExecutionRouteRule(ORMConfig.transactionalFuncExecution)]` 的切面（见第十章）；
+1. **事务**：`f_orm` 的 `TransactionAspect` 就是 `@AspectRoute[FuncAnnotationRouteRule("fountain::f_orm.base.Transactional") | ConfigExecutionRouteRule(ORMConfig.transactionalFuncExecution)]` 的切面（见第十二章）；
 2. **统一日志/耗时/审计**：就像 `ControllerAspect`，一处改动覆盖全部 controller。
 
 ---
 
-# 第七章 数据：`fountain::f_data`
+# 第八章 数据：`fountain::f_data`
 
 **【镜头】** `f_data/README.md` + `fdemo/boot/src/boot.cj` 里那段 `TestData1/2/3` 演示 + `fdemo/user/src/model/mvc/UserReqResp.cj`
 
-## 7.1 为什么先讲 `f_data`
+## 8.1 为什么先讲 `f_data`
 
 **【口播】**
 
@@ -934,7 +1189,7 @@ export controllerPointcut='*::*..*Controller.*(**): *'
 - 在**不同的类实例之间**互相复制
 - 任意类实例与 **JSON** 之间互相复制
 
-## 7.2 一把钥匙：`@DataAssist`
+## 8.2 一把钥匙：`@DataAssist`
 
 ```cangjie
 @DataAssist[equal hash tostring props fields]
@@ -982,7 +1237,7 @@ public class A {
 > **顺序约束**：在 PO 上，`@DataAssist` 必须写在 `@QueryMappersGenerator` **之前**（先展开）。
 > 只写 `props` 保护了封装（字段还是私有的），同时又能被框架读写——这是「不破坏封装的反射」。
 
-## 7.3 统一数据模型：`Data`
+## 8.3 统一数据模型：`Data`
 
 **【口播】**
 
@@ -1029,7 +1284,7 @@ dobj.annotations('b')                   // 取字段上的全部注解（校验�
 dobj.annotation<IsNotBlank>('b')        // 取字段上的指定注解
 ```
 
-## 7.4 实例复制：`DataObject.populate`
+## 8.4 实例复制：`DataObject.populate`
 
 **【镜头】** `fdemo/boot/src/boot.cj`（这是仓库里现成的可运行演示，直接跑给观众看）
 
@@ -1083,7 +1338,7 @@ data2 = DataObject<TestData2>.populate(data4).getOrThrow()
 > 这一组 flag 是 `f_data` 的「容错旋钮」。默认 `SILENCE` 意味着**同名字段就复制，尽量完成数据类型转换，包括字符串跟其他类型之间的转换，对不上的静默跳过**——所以 DTO 少几个字段、多几个字段都不会炸。
 > 需要严格模式时，把 `SILENCE` 去掉即可（不传 `DEFAULT_DATA_FLAG`，自己组合）。
 
-## 7.5 数据校验
+## 8.5 数据校验
 
 **【镜头】** `fdemo/user/src/model/mvc/UserReqResp.cj`（MVC 章节会再用到它）
 
@@ -1135,9 +1390,9 @@ public class CombinedValidator <: Validator {
 | `@IsUUID` | 必须匹配UUID，此注解在fountain::f_util定义 |
 
 > 校验注解可以修饰**成员变量、成员属性、函数参数**三处。`f_mvc` 在绑定 controller 实参时会触发参数上的校验，`DataObject.set` 在复制时会触发成员上的校验。
-> 校验失败抛 `ValidationException`，`fdemo` 里由 `Http500Handler` 统一转成响应体（见 8.6）。
+> 校验失败抛 `ValidationException`，`fdemo` 里由 `Http500Handler` 统一转成响应体（见 10.6）。
 
-## 7.6 数据转换扩展
+## 8.6 数据转换扩展
 
 默认转换搞不定时（最典型：字符串 → `DateTime`），实现 `DataConverter`：
 
@@ -1156,7 +1411,7 @@ public class DateTimeConverter <: AbstractDateTimeConverter {
 
 **【口播】** 这也是 `f_mvc` 的 `@RequestParam` 能把 `?createTime=2026-10-01 12:00:00` 直接绑成 `DateTime` 的原因——转换器在链路里被自动调用。
 
-## 7.7 JSON Schema
+## 8.7 JSON Schema
 
 ```cangjie
 package fountain::f_data.json
@@ -1175,7 +1430,7 @@ private var username: String = ''
 private var age: Int64 = 0
 ```
 
-## 7.8 JSONPath 查询（`fountain::f_data.path`）
+## 8.8 JSONPath 查询（`fountain::f_data.path`）
 
 **【口播】**（这一段是 `f_data` 的"彩蛋"，讲 1 分钟就够，但很能体现库的深度）
 
@@ -1215,7 +1470,7 @@ for (title in path.get(data)) {
 
 > 边界：`[-1]` 作为索引已被禁用（用切片 `[-1:]`）；裸的 `$..` 后面必须跟选择器；异常统一是 `DataException`。
 
-## 7.9 快速失败 `BreakingCommand`
+## 8.9 快速失败 `BreakingCommand`
 
 ```cangjie
 import fountain::f_data.BreakingCommand
@@ -1226,7 +1481,7 @@ perform BreakingCommand.new(someValue)   // T <: ToData 的便捷入口
 
 **【口播】** 当你在很深的调用栈里需要「立刻返回，别再往下走」时，用它比一层层 `return` 干净得多——MVC 会把它携带的 `Data` 直接作为响应体。
 
-## 7.10 现场演示
+## 8.10 现场演示
 
 **【命令】** 直接跑 `fdemo`，启动日志里会打出这一组输出（`boot.cj` 的 `static init` 里写的）：
 
@@ -1247,12 +1502,43 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHH {fromJson 回来后的 Data}
 
 > 这一屏就是 `f_data` 的全部能力：8 行字母标号，走完了「对象→对象」「对象→JSON」「JSON→对象」「Map→对象」四条路。**这些代码不需要你写，全部是宏生成的。**
 
-## 7.11 顺带一提：`fountain::f_util.UUID`
+**【口播】**
+
+> 这一屏就是 `f_data` 的全部能力：8 行字母标号，走完了「对象→对象」「对象→JSON」「JSON→对象」「Map→对象」四条路。**这些代码不需要你写，全部是宏生成的。**
+>
+> 下一章我们接着讲 `f_util` 工具箱——`UUID`、`IsUUID`、`IdMaker`、`TextTemplate`、`PathPattern`、`TreeTransformer` 以及几个设计模式的现成骨架，它们大多也是**站在 `f_data` 肩膀上**的。
+
+---
+
+# 第九章 工具箱：`fountain::f_util`
+
+**【镜头】** `f_util/doc/` 下的文档 + `f_util/src/` 的文件列表（先给一个全景）
+
+## 9.1 开场：fountain 的「瑞士军刀」
 
 **【口播】**
 
-> 讲完 `Data`，顺手解决一个高频需求：**全局唯一 ID**。
-> `f_util` 里有一个完整的 `UUID` 实现，参照 RFC 4122bis 草案，**v1 / v3 / v4 / v5 / v6 / v7 / v8 全支持**——这是很多语言标准库都做不到的。
+> 前面几章讲的都是「框架能力」——IOC、AOP、数据、MVC、ORM。
+> 这一章换个节奏，讲 `f_util`：一个**不依赖框架、可以单独引入**的工具箱。
+>
+> 它的定位是：**把中大型服务端项目里那些「每次都要重写一遍」的小东西，一次性做掉。**
+
+| 类别 | 成员 |
+| --- | --- |
+| ID | `UUID`、`@IsUUID`、`IdMaker` |
+| 文本 | `TextTemplate`、`CaseFormat` |
+| 结构 | `PathPattern`、`TreeTransformer` |
+| 设计模式骨架 | `Factory`、`Strategy`/`Strategies`、`ResposibilityChain`、`Mediator`、`StatePattern` |
+| 哈希/摘要 | `crc16` `crc32` `crc64`、`CityHash`、`MurmurHash3X128`、`wyhash`、`UInt128` |
+| 其它 | `geohash`、`DiffieHellmanKeyExchanger`（密钥交换）、`prime`（素数） |
+
+> 这一章挑其中 **9 个最常用**的讲，剩下的（哈希家族、geohash、密钥交换）一句话带过——它们在 `f_util/doc/` 下都有独立文档，需要时查即可。
+
+## 9.2 `UUID`：全版本覆盖的唯一 ID
+
+**【口播】**
+
+> 参照 RFC 4122bis 草案实现，**v1 / v3 / v4 / v5 / v6 / v7 / v8 全支持**——这是很多语言标准库都做不到的。
 > 它最妙的一点是：`UUID` 实现了 `DataFields<UUID>` 和 `DataParsable<UUID>`，**所以它天然能进 `f_data` 的体系**——可以直接作为 PO 字段、可以直接被 `DataObject.populate` 复制、可以直接和 JSON 互转，不需要任何胶水代码。
 
 ```cangjie
@@ -1296,7 +1582,7 @@ id.toData()            // 转成 Data（字符串形式），因此可以进出 
 
 ```cangjie
 UUID.timeBased()                       // TimeBasedUUIDBuilder
-    .registerSequenceGenerator()       // 注册序列号生成器（防同一纳秒冲突）
+    .registerSequenceGenerator()       // 注册序列号生成器（防同一时刻冲突）
     .registerFileSequenceGenerator()   // 或用文件持久化的序列号生成器
     .randomSeq                         // 随机序列号 / .serialSeq 递增序列号
     .UID(uid)                          // 设置 UID
@@ -1310,27 +1596,354 @@ UUID.timeBased()                       // TimeBasedUUIDBuilder
 
 > `TimeBasedUUIDBuilder` 是 `Resource`，用完记得 `close()`。
 
-### 在 `fdemo` 里怎么用
+## 9.3 `@IsUUID`：一个注解搞定 UUID 校验
 
-**【镜头】** `fdemo/user/src/util/UserSessionCache.cj`
+**【镜头】** `f_util/src/IsUUID.cj`（只有 35 行）
 
 ```cangjie
-JWTPrincipal<String>(id, '', UUID.random().toHexString())
+@Annotation[target: [MemberVariable, MemberProperty, Parameter]]
+public class IsUUID <: Validator {
+    public const init(){}
+    public func validate(value: ?String): Bool {
+        if(let Some(x) <- value){ UUID.tryParse(x).isSome() } else { false }
+    }
+    public prop description: String { get(){ '必须是UUID格式的字符串' } }
+}
 ```
 
 **【口播】**
 
-> 这里用 `UUID.random().toHexString()` 给**每一次登录生成一把独立的 HMAC 签名密钥**。
-> 换成 `UUID.unixTimeBased()` 还能顺带获得「时间有序」的性质——做数据库主键时索引局部性更好。
-> 另外注意：它用的是 `ThreadLocalRandom`，所以高并发下没有锁竞争。
+> 注意它的父类——`fountain::f_data.validation.Validator`。
+> 也就是说，`f_util` 的校验注解和 `f_data` 那十几个内置校验器**是同一套体系**，可以一起用 `& | !` 组合：
+
+```cangjie
+@DataAssist[props fields]
+public class OrderRequest {
+    @IsUUID                                        // 必须是 UUID
+    private var orderId: String = ''
+    @CombinedValidator[IsNotBlank(messageIfNotMatch: '请输入用户名') & StringSize(min: 6, max: 50)]
+    private var username: String = ''
+}
+```
+
+> 而且因为它是 `@Annotation[target: [MemberVariable, MemberProperty, Parameter]]`，**函数参数上也能用**——`f_mvc` 绑定 controller 实参时会自动触发。
+
+## 9.4 `IdMaker`：趋势递增的分布式 ID
+
+```cangjie
+public class IdMaker {
+    public static const HOST_SERIAL = "idMakerHostSerial"
+    public IdMaker(private let hostSerial!: Int64)   // 必须 0..1023，否则抛 IdException
+    public init()                                    // 从配置项 idMakerHostSerial 读主机序列号
+    public func nextInt64(): Int64                   // 获取下一个 ID
+}
+```
+
+**【口播】**（这是 snowflake 思路，讲的时候画一下位图）
+
+> `IdMaker` 是一个**雪花算法**风格的实现：ID 是一个 `Int64`，位布局是
+> **10 bit 主机序列号 + 41 bit 毫秒时间戳 + 12 bit 毫秒内自增序号**。
+>
+> - 主机序列号 0～1023，来自配置项 `idMakerHostSerial`（走 `Config.getValue`，也就是第三章那套优先级）；
+> - 时间戳取**构造时的毫秒数**作为起点；
+> - `nextInt64()` 就是一个 `AtomicInt64.fetchAdd(1)`，**无锁、线程安全**。
+
+```cangjie
+let maker = IdMaker()          // export idMakerHostSerial=7
+let id = maker.nextInt64()
+```
+
+> 三个必须讲的注意点：
+> 1. 主机序列号**必须全局唯一**，重复会产生重复 ID；
+> 2. 12 bit 序号意味着**每毫秒 4096 个**，超出自增位宽会向时间戳位进位——ID 仍然唯一且递增，但时间戳含义会漂移；
+> 3. 起点是**构造时刻**，进程重启后时间戳基准改变，但因为有主机号兜底，跨进程仍然不冲突。
+
+**【口播】** 和 `UUID` 怎么选？**要时间有序、要索引局部性好 → `IdMaker` 或 `UUID.unixTimeBased()`；要无中心、随便哪台机器都能生成 → `UUID.random()`。**
+
+## 9.5 `CaseFormat`：命名风格互转
+
+```cangjie
+CaseFormat.Pascal.convert("CaseFormat",          to: CaseFormat.Camel)           // "caseFormat"
+CaseFormat.Pascal.convert("CaseFormat",          to: CaseFormat.LowerUnderScore) // "case_format"
+CaseFormat.Pascal.convert("CaseFormat",          to: CaseFormat.UpperUnderScore) // "CASE_FORMAT"
+CaseFormat.Pascal.convert("CaseFormat",          to: CaseFormat.LowerHyphen)     // "case-format"
+CaseFormat.Pascal.convert("CaseFormat",          to: CaseFormat.UpperHyphen)     // "CASE-FORMAT"
+```
+
+六种风格两两互转：`Pascal`、`Camel`、`LowerUnderScore`、`UpperUnderScore`、`LowerHyphen`、`UpperHyphen`。
+
+**【口播】**（把工具和前面 ORM 的内容连起来——这是很好的「原来如此」时刻）
+
+> 还记得第十二章 ORM 里的 `@ORMField[LowerUnderScore]` 和 `@QueryMappersGenerator[table: LowerUnderScore]` 吗？
+> **它们底层用的就是这个 `CaseFormat`**。
+> 所以当你自己写命名策略、写代码生成器、写导入导出工具时，直接用同一个枚举，命名风格就和框架生成的一致了。
+
+## 9.6 `TextTemplate`：文本模板
+
+**【口播】** 短信、邮件、推送文案、固定格式报文——别再拼字符串了。
+
+```cangjie
+public class TextTemplate {
+    // 由一对 # 包含的是模板变量
+    public static func compile(template: String, placeholder!: String = "#"): TextTemplate
+    // 由 prefix / suffix 包含的是模板变量（默认 ${ }）
+    public static func compile(template: String, prefix!: String = #"${"#, suffix!: String = "}"): TextTemplate
+
+    public func format<T>(data: Array<T>,     noneConverter!: ?String = None<String>): String where T <: ToString
+    public func format<T>(data: ArrayList<T>, noneConverter!: ?String = None<String>): String where T <: ToString
+    public func format<V>(data: HashMap<String, V>,  noneConverter!: ?String = None<String>): String where V <: ToString
+    public func format<V>(data: TreeMap<String, V>,  noneConverter!: ?String = None<String>): String where V <: ToString
+    // ...还有 ConcurrentHashMap / LinkedHashMap
+    public func format<T>(data: T, noneConverter!: ?String = None<String>): String where T <: Object & ObjectData<T>
+}
+```
+
+```cangjie
+let tpl = TextTemplate.compile('亲爱的 ${name}，您于 ${time:yyyy/MM/dd} 消费 ${number:##.##} 元')
+tpl.format(user)     // user 是 @DataAssist[fields] 的 PO 或任意 Map
+```
+
+占位符的三种高级形态：
+
+| 形态 | 写法 | 作用 |
+| --- | --- | --- |
+| 时间 | `${time:`yyyy/MM/dd`}` | 按指定格式格式化日期 |
+| 数字 | `${number:`##.##,HALF_UP`}` | 数字格式化；`#` 数量=位数，`.`=小数点；支持 `o/O`(八进制) `x/X`(十六进制) `e/E`(科学计数) `+`(正数前置+) `(`(负数用括号) |
+| 正则 | `${regex:`.*_name`}` | 用正则匹配 Map 的 key，**只接受 Map 作为数据源** |
+
+还有两个很好用的细节：
+
+- **`.` 分隔的路径占位符**：`a.0.b.c` 表示取参数 `a` 属性（数组/List）索引 0 的 `b` 属性的 `c` 属性，参数可以是数组、List、PO、Map；
+- **`noneConverter`**：占位符在数据源里找不到时用这个兜底字符串。
+
+> ⚠️ 实现上依赖 `ThreadLocalStringBuilder`。如果你的方法本身也在用 `ThreadLocalStringBuilder` 拼字符串，**不要**在那个方法内嵌套调用 `TextTemplate`；要么先调用 `TextTemplate` 再拿 `StringBuilder`。
+
+## 9.7 `PathPattern`：路径匹配（MVC 路由的引擎）
+
+**【镜头】** `f_util/src/PathPattern.cj`
+
+**【口播】**
+
+> 你在 MVC 里写的 `/api/user/{id}`，能匹配到 `/api/user/1` 并抽出 `id=1`——**干这件事的就是 `PathPattern`**。
+> 它按作者的说法「从生产环境用过的 Java 实现移植而来」，不只 MVC 能用，任何「按路径找数据」的场景都能用：静态资源路由、网关转发规则、日志文件路径归集。
+
+```cangjie
+let patterns = PathPattern()
+patterns.compileIfAbsent('/api/user/{id}'){ handler }   // 注册路径 + 关联数据
+patterns.data<Handler>('/api/user/1')                   // 用路径反查数据
+patterns.extractVariableInPath('/api/user/1', 'id')     // Some("1")
+patterns.matches('/api/user/1')                         // true
+```
+
+核心 API：
+
+| 函数 | 作用 |
+| --- | --- |
+| `compile(pattern)` / `compile(pattern, data)` | 注册路径（可挂任意数据：handler、配置、元数据） |
+| `compileIfAbsent(pattern, supplier)` | 不存在才注册，返回已存在/新建的数据 |
+| `data<T>(path)` / `dataByPrefix<T>(path)` | 按路径取出挂的数据 |
+| `matches(path)` / `matchesPrefix(path)` | 是否匹配 / 是否前缀匹配 |
+| `extractVariableInPath(path, name)` | 取单个路径变量 |
+| `extractVariablesInPath(path)` | 取全部路径变量（`Map<String,String>`） |
+| `extractTimeVariableInPath(path, name, format)` | 直接把路径变量解析成 `DateTime` |
+| `extractParsableVariableInPath<T>` / `extractDataParsableVariableInPath<T>` | 解析成 `Parsable` / `DataParsable` 类型 |
+| 各函数的 `withExtName` 重载 | 是否把扩展名（最后一个 `.` 之后）当作路径的一部分 |
+
+支持的模式与**匹配优先级**（优先级高的先试）：
+
+| 优先级 | 模式 | 例子 |
+| --- | --- | --- |
+| a（最高） | 字符串相等 | `/api/user/list` |
+| b = c = d | `*`（单级多字符）、`?`（单级单字符）、`{#regex:...}`（单级正则） | `/api/*.json`、`/api/user/?`、`/api/{#regex:\d+}` |
+| e | 单 `*`（独占一整级） | `/api/*/detail` |
+| f = g | `{name}`（占位符）、`{*name}` | `/api/user/{id}` |
+| h（最低） | `**`（跨多级） | `/static/**` |
+
+> 规则补充：只能匹配绝对路径（不以 `/` 开头也按 `/` 开头处理）；连续多个 `/` 会合并成一个；`{name:regex}` 形式的占位符自带正则约束；`#regex:` 形式的那一节**不作为路径变量**。
+
+## 9.8 `TreeTransformer`：平铺列表 → 树
+
+**【镜头】** `f_util/src/TreeTransformer.cj`
+
+```cangjie
+public interface TreeNode<ID, T> where ID <: Hashable & Equatable<ID>, T <: Object & TreeNode<ID, T> {
+    prop children: ArrayList<T>
+    prop id: ID
+    prop parentId: ID
+    func addChild(child: T): Unit { children.add(child) }
+    func addChildren(children: Iterable<T>): Unit
+    func addChildren(children: Array<T>): Unit
+
+    static func transform<S>(iterable: Iterable<S>, emptyId: ID,
+                             ignoreDuplicate: Bool, transferFn: (S) -> ?T): ArrayList<T>
+    static func transform<S>(iterable: Iterable<S>, emptyId: ID, transferFn: (S) -> ?T): ArrayList<T>
+    static func transform<S>(iterable: Iterable<S>, emptyId: ID): ArrayList<T>
+    static func transform<S>(iterable: Iterable<S>, emptyId: ID, ignoreDuplicate: Bool): ArrayList<T>
+}
+```
+
+**【口播】**
+
+> 菜单树、组织树、分类树、评论楼层——数据库查出来永远是**平铺的 List**，前端永远要**树**。
+> 这段代码你大概写过十遍，`TreeTransformer` 把它变成一个静态函数调用：
+
+```cangjie
+// ① 让你的树节点类实现 TreeNode<ID, T>
+public class MenuNode <: TreeNode<Int64, MenuNode> {
+    public let id: Int64
+    public let parentId: Int64
+    public let children = ArrayList<MenuNode>()
+    ...
+}
+
+// ② 一行把 DAO 查出来的平铺列表变成森林
+let roots = MenuNode.transform<MenuPO>(poList, emptyId: 0){ po => MenuNode(po) }
+```
+
+> 参数含义：`emptyId` 是「根节点的 parentId 值」（通常是 0 或 -1）；`ignoreDuplicate: true` 时遇到重复 id 会跳过而不是抛异常；`transferFn` 负责把源元素转成树节点，返回 `None` 会抛 `IllegalArgumentException`。
+> 不带 `transferFn` 的重载等价于 `{s => s as T}`，即**源元素本身就是树节点**。
+
+## 9.9 三个现成的设计模式骨架
+
+**【口播】**
+
+> 设计模式这种东西，道理大家都懂，但每次都要写一遍接口 + 注册表。`f_util` 直接给了骨架。
+
+### 工厂模式 `Factory`
+
+```cangjie
+public interface Producer<A, O> {
+    func produce(): O            // 默认抛 IllegalAccessException
+    func produce(arg: A): O      // 默认抛 IllegalAccessException
+}
+
+public class Factory<A, O> {
+    public func assemble<T>(producer: Producer<A, O>): Unit
+    public func assemble<T>(producers: Iterable<Producer<A, O>>): Unit
+    public func produce<T>(): T
+    public func produce<T>(arg: A): T
+}
+```
+
+`assemble<T>` 用 `TypeInfo.of<T>()` 当 KEY 注册生产者，`produce<T>()` 按目标类型取——**按类型分派的工厂**，取不到会抛 `TypeNotMatchException`。
+
+### 策略模式 `Strategy` / `Strategies`
+
+```cangjie
+public interface Strategy<N, A, R> where N <: Hashable & Equatable<N> {
+    prop name: N                 // 策略标识
+    func execute(arg: A): R
+}
+
+public class Strategies<N, A, R> where N <: Hashable & Equatable<N> {
+    public func register(strategy: Strategy<N, A, R>): Strategies<N, A, R>
+    public func register<S>(strategies: Iterable<S>): Unit where S <: Strategy<N, A, R>
+    public func execute(name: N, arg: A): R    // 找不到抛 IllegalAccessException
+}
+```
+
+**【口播】** 这和 IOC 的 `lookupLables<L, T>()`（第六章）是互补的两种做法：**要 bean 的完整生命周期管理用 IOC；只是想按 key 分派一段逻辑，用 `Strategies` 更轻。**
+
+### 责任链模式 `ResposibilityChain`
+
+```cangjie
+public interface Resposibility<C, A, R> {
+    func check(condition: C): Bool   // 是否由本策略处理
+    func execute(arg: A): R
+}
+/** 只做校验、不返回结果的策略 */
+public interface ValidationResposibility<C, A> <: Resposibility<C, A, Unit> {
+    func execute(arg: A): Unit {}
+}
+
+public class ResposibilityChain<C, A, R> {
+    public init()
+    public init(resposibilities: Iterable<Resposibility<C, A, R>>)
+    public func register(resposibility: Resposibility<C, A, R>): ResposibilityChain<C, A, R>
+    public func register<S>(resposibilities: Iterable<S>): Unit where S <: Resposibility<C, A, R>
+    public func execute(condition: C, arg: A): R      // 第一个 check 通过的；全不通过抛 IllegalAccessException
+    public func executeAll(condition: C, arg: A): Unit // 执行**所有**满足条件的
+}
+```
+
+**【口播】**
+
+> `execute` 是「找到第一个能处理的就执行」，`executeAll` 是「所有符合条件的都执行一遍」——后者特别适合**多级校验、多环节加工**。
+>
+> ⚠️ **拼写提醒**：源码里的类型名是 `Resposibility`（少一个 `n`），文件名也是 `ResposibilityChain.cj`。**照着 `Resposibility` 写才编译得过**，不要凭语感写成 `Responsibility`。
+
+### 顺带一提：还有两个
+
+```cangjie
+// 中介者模式：Colleague（有 name）+ ColleagueArgument（用 name 找 Colleague）+ Mediator
+public class Mediator<N, C, A, R> {
+    public func register(colleague: Colleague<N, A, R>): Unit
+    public func execute(arg: A): R        // 用参数里的 name 找策略并执行
+}
+
+// 状态模式
+public interface State<D> {
+    prop continues: Bool { get() { true } }   // 是否还有后继状态
+    prop data: D                              // 当前状态的数据
+    func exec<S>(): S where S <: State<D>
+    func startup<D>(): D
+}
+```
+
+## 9.10 一句话带过的其余工具
+
+| 工具 | 一句话 |
+| --- | --- |
+| `crc16` / `crc32` / `crc64` | 循环冗余校验，做数据完整性校验、短摘要 |
+| `CityHash` / `MurmurHash3X128` / `wyhash` | 高性能非加密哈希，做分库分表路由、布隆过滤器 |
+| `UInt128` | 128 位无符号整数（`MurmurHash3X128` 的返回值类型） |
+| `geohash` | 经纬度编码，做「附近的人」、网格聚合 |
+| `DiffieHellmanKeyExchanger` | 密钥交换协议（详见 `f_util/doc/密钥交换协议.md`） |
+| `prime` | 素数判定与生成 |
+
+## 9.11 现场演示
+
+**【镜头】** 建议临时建一个小模块现场跑，或者直接用仓库里的测试（`CaseFormat_test.cj`、`PathPattern_test.cj` 都是可运行的）
+
+```bash
+# 跑 f_util 自带的测试，看 CaseFormat / PathPattern 的断言全过
+cd f_util && cjpm test
+```
+
+**【命令】**（如果现场写代码，建议演示这段——一条链路串起 4 个工具）
+
+```cangjie
+import fountain::f_util.*
+
+// ① ID：给订单发号
+let orderId = UUID.unixTimeBased().toHexString()          // 时间有序
+let seqId   = IdMaker().nextInt64()                        // 趋势递增
+
+// ② 命名风格：PO 成员名 <-> 列名
+let column = CaseFormat.Camel.convert('userName', to: CaseFormat.LowerUnderScore)  // user_name
+
+// ③ 路径匹配：网关规则
+let rules = PathPattern()
+rules.compileIfAbsent('/api/{version}/user/{id}'){'user-service'}
+let svc = rules.data<String>('/api/v1/user/1001')          // Some('user-service')
+let id  = rules.extractVariableInPath('/api/v1/user/1001', 'id')  // Some('1001')
+
+// ④ 文本模板：通知文案
+TextTemplate.compile('订单 ${orderId} 已创建').format(['orderId': orderId])
+```
+
+**【口播】**
+
+> 这四个东西看起来零碎，但**每一个都对应一类你迟早会写的需求**。
+> 它们的共同点是：**零依赖、零配置、拿来即用**——这也是 `f_util` 的设计原则：不绑架你的架构，只消灭重复劳动。
 
 ---
 
-# 第八章 MVC：`fountain::f_mvc`
+# 第十章 MVC：`fountain::f_mvc`
 
 **【镜头】** `fdemo/user/src/controller/` 全部文件
 
-## 8.1 声明 Controller
+## 10.1 声明 Controller
 
 ```cangjie
 import fountain::f_mvc.*
@@ -1376,7 +1989,7 @@ subset('a','b')    参数/请求头名是这些的子集
 
 示例：`a.contains('1','2') & (b.subset('s','d') | 'orderTime' | goodsId)`
 
-## 8.2 参数绑定注解
+## 10.2 参数绑定注解
 
 | 注解 | 来源 | 备注 |
 | --- | --- | --- |
@@ -1415,7 +2028,7 @@ public func echo2(@RequestParam[default: ''] username: String,
                   @RequestParam[default: ''] password: String): UserRequest { ... }
 ```
 
-## 8.3 参数校验（`f_data` 的校验注解，详见第七章）
+## 10.3 参数校验（`f_data` 的校验注解，详见第八章）
 
 **【镜头】** `user/src/model/mvc/UserReqResp.cj`
 
@@ -1431,9 +2044,9 @@ public class UserRequest {
 
 **【口播】**
 
-> 校验注解既可以修饰类的成员（MVC 传参对象时生效），也可以修饰函数参数。不满足会抛 `ValidationException`，由我们注册的 500 处理器统一转成响应体（见 8.6）。
+> 校验注解既可以修饰类的成员（MVC 传参对象时生效），也可以修饰函数参数。不满足会抛 `ValidationException`，由我们注册的 500 处理器统一转成响应体（见 10.6）。
 
-## 8.4 安全注解
+## 10.4 安全注解
 
 ```cangjie
 @IgnoreAuth        // 忽略登录状态检查
@@ -1443,7 +2056,7 @@ public class UserRequest {
 
 只能修饰 controller 的公共实例函数。也可以在 Mapping 注解里直接写 `ignoreAuth: true`。
 
-## 8.5 配置（全部环境变量）
+## 10.5 配置（全部环境变量）
 
 ```bash
 export mvc_port=8080
@@ -1462,7 +2075,7 @@ export mvc_accessControlAllowHeaders='*'
 export mvc_accessControlMaxAge=0
 ```
 
-## 8.6 统一异常响应
+## 10.6 统一异常响应
 
 **【镜头】** `fdemo/boot/src/error/ErrorHandler.cj`
 
@@ -1488,7 +2101,7 @@ public class Http500Handler <: ErrorHttpRequestHandler {
 >
 > 演示方式：访问 `/api/error`（`ErrorController` 里直接 `throw Exception()`），看响应是不是 `BaseResponse.error('error')`。
 
-## 8.7 重定向
+## 10.7 重定向
 
 ```cangjie
 Redirect.found('/helloworld')                 // 302
@@ -1496,16 +2109,16 @@ Redirect.permanently('/x', retain: true)      // retain=false → 301；true →
 Redirect.temporarily('/x', retain: true)      // retain=false → 302；true → 307
 ```
 
-## 8.8 拿到当前请求上下文
+## 10.8 拿到当前请求上下文
 
 ```cangjie
 import fountain::f_mvc.CurrentHttpContext
 let ctx = CurrentHttpContext.instance   // 当前线程正在处理的 HttpContext
 ```
 
-**【口播】** 这是 `f_security` 能在 Service/Util 层做鉴权的关键——鉴权逻辑不必写在 controller 里（见第十一章 `UserSessionCache.verify()`）。
+**【口播】** 这是 `f_security` 能在 Service/Util 层做鉴权的关键——鉴权逻辑不必写在 controller 里（见第十三章 `UserSessionCache.verify()`）。
 
-## 8.9 自定义数据格式（`MediaType`）
+## 10.9 自定义数据格式（`MediaType`）
 
 **【镜头】** `fdemo/boot/src/LogMediaType.cj`
 
@@ -1525,15 +2138,15 @@ public class LogTextMediaType <: MediaType {
 
 > 只要把 `MediaType` 的实现注册成 `@Bean`，`consumes / produces` 就可以直接写你的自定义类型，比如 `application/json+log`——所有走这个 Content-Type 的请求都会先落一条日志。
 > 这就是「协议扩展点」：不用改框架，加个 bean 就多一种数据格式。
-> **下一章（第九章）会把 `MediaType` 这套机制完整展开**——它是 `f_http` 提供的，只是被 `f_mvc` 直接 `public import` 了出来。
+> **下一章（第十一章）会把 `MediaType` 这套机制完整展开**——它是 `f_http` 提供的，只是被 `f_mvc` 直接 `public import` 了出来。
 
 ---
 
-# 第九章 HTTP 数据格式：`fountain::f_http`
+# 第十一章 HTTP 数据格式：`fountain::f_http`
 
 **【镜头】** `f_http/README.md` + `f_http/src/MediaTypes.cj` + `fdemo/boot/src/LogMediaType.cj`
 
-## 9.1 `f_http` 是什么
+## 11.1 `f_http` 是什么
 
 **【口播】**
 
@@ -1545,7 +2158,7 @@ public class LogTextMediaType <: MediaType {
 > 而 `f_mvc/src/MediaType.cj` 只有一行：`public import fountain::f_http.*`。
 > 所以你在 MVC 里 `import fountain::f_mvc.MediaType`，拿到的其实**就是 `f_http` 的类型**——它们不是两套东西。
 
-## 9.2 `MediaType`：所有数据格式的父类型
+## 11.2 `MediaType`：所有数据格式的父类型
 
 ```cangjie
 public abstract class MediaType <: ToString & Hashable & Equatable<MediaType> {
@@ -1584,7 +2197,7 @@ public abstract class MediaType <: ToString & Hashable & Equatable<MediaType> {
 > 这就是为什么 `@RequestBody` 能直接把请求体变成controller函数实参，返回值能直接变成 JSON——**中间那一层就是 `MediaType`**。
 > 而 `Data` 是 `f_data` 的类型，所以 `f_http` 和 `f_data` 是咬合在一起的：`MediaType` 负责「字节 ↔ Data」，`f_data` 负责「Data ↔ 对象」。
 
-## 9.3 内置的三种实现
+## 11.3 内置的三种实现
 
 ```cangjie
 public class PlainTextMediaType <: TextMediaType   // text/plain
@@ -1606,7 +2219,7 @@ public abstract class TextMediaType <: MediaType {
 - `JsonMediaType.fromData(Data)` = `JsonValue.tryFromData(data).toString()` 再按 charset 编码
 - `MultipartMediaType` 带 `boundary`，`toString()` 形如 `multipart/form-data; boundary=xxx`；它的 `fromData(Data)` / `toData(Array<Byte>)` **直接抛异常**，只支持 `toData(input: InputStream)`（解析上传流）
 
-## 9.4 `MediaTypes`：格式注册表
+## 11.4 `MediaTypes`：格式注册表
 
 ```cangjie
 public class MediaTypes {
@@ -1627,7 +2240,7 @@ public class MediaTypes {
 >
 > 解析时还有一个宽容处理：`tryParse` 先按完整字符串找，找不到就**截掉 `;` 之后的参数**再找一次（比如 `application/json; charset=utf-8` → `application/json`），找到后再用 `make()` 把参数带回去。
 
-## 9.5 自定义数据格式：完整清单
+## 11.5 自定义数据格式：完整清单
 
 **【镜头】** `fdemo/boot/src/LogMediaType.cj`（整屏展示）
 
@@ -1682,7 +2295,7 @@ curl -XPOST http://localhost:8080/api/user/sessionLog \
 
 **【口播】** 这就是「协议扩展点」的用法：**私有协议、加密报文、带签名的请求体**，都可以用这种方式接入，业务代码完全不用关心编解码。
 
-## 9.6 文件上传：`multipart/form-data`
+## 11.6 文件上传：`multipart/form-data`
 
 ### 接收
 
@@ -1745,7 +2358,7 @@ curl -XPOST http://localhost:8080/upload -F 'name=abc' -F 'file=@./banner.txt'
 
 **【预期】** 控制台打印出文件大小与 `name`，响应 `ok`。
 
-## 9.7 异常与排错
+## 11.7 异常与排错
 
 | 异常 | 场景 |
 | --- | --- |
@@ -1757,11 +2370,11 @@ curl -XPOST http://localhost:8080/upload -F 'name=abc' -F 'file=@./banner.txt'
 
 ---
 
-# 第十章 ORM：`fountain::f_orm`
+# 第十二章 ORM：`fountain::f_orm`
 
 **【镜头】** `fdemo/user/src/model/po/UserPO.cj` → `dao/UserDAO.cj` → `service/impl/UserServiceImpl.cj`
 
-## 10.1 三个角色：PO、DAO、Service
+## 12.1 三个角色：PO、DAO、Service
 
 ### PO：用宏生成列映射
 
@@ -1864,7 +2477,7 @@ public class UserServiceImpl <: UserService {
 > 1. **每次调用 DAO 函数都必须从 `executor()` 开始**——不要缓存 DAO 实例；
 > 2. **一个 DAO 函数只执行一个 SQL**（或一次分页查询：一次 count + 一次列表）。
 
-## 10.2 配置（环境变量）
+## 12.2 配置（环境变量）
 
 ```bash
 export orm_drivers=postgres                  # 逗号分隔
@@ -1887,7 +2500,7 @@ export orm_sm4Iv=$(fboot randhex 32)
 
 > 约定：全局 `orm_<key>`；按驱动覆盖 `<driverName>_orm_<key>`，**后者优先级更高**。
 
-## 10.3 构造 SQL 的三种方式（重点章节）
+## 12.3 构造 SQL 的三种方式（重点章节）
 
 ### 方式一：模板 SQL —— `setSql` + `arg()`
 
@@ -1967,7 +2580,7 @@ executor.setSql('select * from user_info where id = ${arg(id)} ${AND {'status = 
 >
 > `WHERE{}` / `SET{}` 的好处是：**内容为空时自动省略关键字**，不会拼出 `where` 后面什么都没有的非法 SQL。
 
-## 10.4 查询结果
+## 12.4 查询结果
 
 ```cangjie
 // 单列
@@ -1995,7 +2608,7 @@ p.list    // 当前页数据
 > **limit/offset 由方言（Dialect）生成**，所以换数据库不用改代码。
 > `Pagination<T>` 本身实现了 `ObjectData`，**可以直接作为 PO 的字段被序列化**（`fdemo` 的 `UserList.fields` 就是 `Pagination<UserPO>`）。
 
-## 10.5 事务控制（本章重点，建议留 8 分钟）
+## 12.5 事务控制（本章重点，建议留 8 分钟）
 
 ### 三种开启方式
 
@@ -2113,7 +2726,7 @@ public class TransactionHookImpl <: TransactionHook {
 > 所以**同一线程内一次事务的多次数据库访问，用的是同一个连接**——这是事务能成立的根本。
 > 事务未开启时，执行完就 `close()` 释放连接；事务中则由 `commit()` / `rollback()` 收尾统一处理。
 
-## 10.6 ORM 常见坑（念一遍能省观众两天）
+## 12.6 ORM 常见坑（念一遍能省观众两天）
 
 1. 一个 DAO 函数只执行一个 SQL（或一次分页查询）；
 2. 每次调用 DAO 都必须从 `executor()` 开始；
@@ -2126,11 +2739,11 @@ public class TransactionHookImpl <: TransactionHook {
 
 ---
 
-# 第十一章 安全：`f_security` + `f_jwt`
+# 第十三章 安全：`f_security` + `f_jwt`
 
 **【镜头】** `fdemo/user/src/util/UserSessionCache.cj`、`util/auth/AuthCheckerImpl.cj`、`f_mvc/src/AuthHandler.cj`
 
-## 11.1 登录状态检查怎么做（重点）
+## 13.1 登录状态检查怎么做（重点）
 
 ### 第一步：实现 `AuthHandler` 并注册为 bean
 
@@ -2190,7 +2803,7 @@ NoPrivilege(status,any)     没有权限
 @PostMapping[..., ignoreAuth: true, ignorePrivilege: true]   // Mapping 属性方式
 ```
 
-## 11.2 用 JWT 维持登录状态
+## 13.2 用 JWT 维持登录状态
 
 **【镜头】** `fdemo/user/src/util/UserSessionCache.cj`（完整代码建议整屏展示）
 
@@ -2251,7 +2864,7 @@ public interface Principal<ID, P> {
 
 **【口播】** 想把登录状态放 Redis？实现 `PrincipalStore` 做成 `@Bean` 就行，其他代码一行不用改。
 
-## 11.3 `f_jwt` API 速览
+## 13.3 `f_jwt` API 速览
 
 ### 编码（签名）
 
@@ -2310,7 +2923,7 @@ v.verifyId(cache)            // jti 是否有效
 > `verify()` 已经把 `exp`、`nbf`、签名都检查了；没有指定 `exp`/`nbf` 的字段就认为该维度当前有效。
 > `jti` 配合 `JwtIdCache`（内置 `HeapJwtIdCache` / `NoneJwtIdCache`）可以做**防重放**。
 
-## 11.4 端到端演示（登录 → 拿 JWT → 访问）
+## 13.4 端到端演示（登录 → 拿 JWT → 访问）
 
 **【命令】**
 
@@ -2352,11 +2965,11 @@ HTTP 请求
 
 ---
 
-# 第十二章 CRON 定时任务：`fountain::f_ticktock`
+# 第十四章 CRON 定时任务：`fountain::f_ticktock`
 
 **【镜头】** `fdemo/user/src/util/cron/TickTockTest.cj`
 
-## 12.1 最小可用
+## 14.1 最小可用
 
 ```cangjie
 import fountain::f_ticktock.*
@@ -2381,7 +2994,7 @@ public class TickTockTaskImpl <: CronTicktockTask {
 > `fdemo` 里它放在 `user/src/util/cron/`，所以 `boot.sh` 的正则里专门有 `user\.util\.(auth|cron)` 这一段。
 > **忘了这一段，定时任务不会报错，只是永远不执行**——这是个非常适合在视频里演示的「静默失效」坑。
 
-## 12.2 可选属性
+## 14.2 可选属性
 
 ```cangjie
 public prop once: Bool { get() { false } }           // true = 只执行一次
@@ -2391,7 +3004,7 @@ public func reset(stamp: Int64): Unit { ... }        // 自定义重置执行状
 public open prop name: String { get() { ... } }      // 默认取类型全限定名
 ```
 
-## 12.3 CRON 表达式语法
+## 14.3 CRON 表达式语法
 
 时间单位从左到右：**秒 / 分 / 时 / 日 / 月 / 周 / 年**。
 
@@ -2408,7 +3021,7 @@ public open prop name: String { get() { ... } }      // 默认取类型全限定
 
 **【口播】** `'1/3-45'` 这个例子读作：从第 1 秒开始、每 3 秒一次、直到第 45 秒。完整写法是 `1/3-45 * * * * * *`。
 
-## 12.4 延迟任务
+## 14.4 延迟任务
 
 ```cangjie
 public abstract class DelayedTicktockTask <: CronTicktockTask {
@@ -2423,11 +3036,11 @@ public abstract class DelayedTicktockTask <: CronTicktockTask {
 
 ---
 
-# 第十三章 随机数：`fountain::f_random`
+# 第十五章 随机数：`fountain::f_random`
 
 **【镜头】** `f_random/README.md` + `fdemo/user/src/util/UserSessionCache.cj`（那行 `UUID.random().toHexString()`）
 
-## 13.1 它补了标准库什么
+## 15.1 它补了标准库什么
 
 **【口播】**
 
@@ -2451,7 +3064,7 @@ import fountain::f_random.*
 
 > 注意：扩展方法（如 `nextInt64(min, max, closed:)`）**只有导入本模块后才可见**。
 
-## 13.2 区间随机数：`ExtendRandom`
+## 15.2 区间随机数：`ExtendRandom`
 
 ```cangjie
 public interface ExtendRandom<R> where R <: ExtendRandom<R> {
@@ -2478,7 +3091,7 @@ nextBytes(length) / nextUInt8s(array)          // 字节数组 / 原地填充
 
 **【口播】** `Random` 和 `SecureRandom` 用法**完全相同**：需要密码学强度时把 `Random()` 换成 `SecureRandom()` 或 `ThreadLocalRandom.current` 即可，业务代码一行不用改。
 
-## 13.3 随机数流（无限迭代器）
+## 15.3 随机数流（无限迭代器）
 
 ```cangjie
 let stream = rand.randomInt64(0, 10)          // Iterator<Int64>，(0,10) 或 [0,10]
@@ -2492,7 +3105,7 @@ rand.randomGaussianFloat16Stream()
 
 **【口播】** 这些迭代器的 `next()` **永远返回 `Some`**，是无限流——要多少自己控制（`take(n)` 或循环 break）。具体迭代器类是包内可见的，用工厂方法拿就行。
 
-## 13.4 随机字符串：`RandomString`
+## 15.4 随机字符串：`RandomString`
 
 ```cangjie
 let rs = RandomString()
@@ -2518,7 +3131,7 @@ println(rs.randomLowerHex(8))          // 8 位小写 16 进制
 
 每个方法都有两个重载：`(count)` 生成固定长度，`(min, max)` 先随机出长度再生成。
 
-## 13.5 `ThreadLocalRandom`
+## 15.5 `ThreadLocalRandom`
 
 ```cangjie
 public class ThreadLocalRandom {
@@ -2534,7 +3147,7 @@ public class ThreadLocalRandom {
 > 而且 `RandomString()` 的无参构造器默认就把它作为随机源，所以**默认的 `RandomString` 实例天然线程安全**。
 > 高并发下生成 token、验证码、盐值，用 `RandomString()` 默认构造就对了。
 
-## 13.6 蓄水池抽样
+## 15.6 蓄水池抽样
 
 ```cangjie
 public func randomReservoir<T>(count: Int64, source: Iterable<T>, priv!: Bool = false): ArrayList<T>
@@ -2544,11 +3157,11 @@ let sample = randomReservoir<Int64>(3, [1, 2, 3, 4, 5, 6, 7, 8])
 
 **【口播】** 只需**遍历一次**数据源就能随机取 `count` 个元素，**不需要事先知道总数**——适合流式数据或超大集合抽样（比如从日志流里随机采样做监控）。`priv` 是内部 `SecureRandom` 的初始化参数，每次调用新建一个 `SecureRandom`。
 
-## 13.7 它在 fountain 里的三个位置
+## 15.7 它在 fountain 里的三个位置
 
 **【口播】**（把工具库和前面讲过的内容串起来）
 
-1. **`fboot randhex`** —— 实现就是 `RandomString().randomLowerHex(n)`（第三章讲过，给 SM4 生成密钥/IV）；
+1. **`fboot randhex`** —— 实现就是 `RandomString().randomLowerHex(n)`（第四章讲过，给 SM4 生成密钥/IV，机制见第三章）；
 2. **JWT 会话密钥** —— `fdemo` 的 `UserSessionCache` 里 `UUID.random().toHexString()` 给每个登录生成独立 HMAC 密钥；
 3. **业务侧** —— 验证码、邀请码、临时 token、幂等号、抽样的盐值。
 
@@ -2558,7 +3171,7 @@ let sample = randomReservoir<Int64>(3, [1, 2, 3, 4, 5, 6, 7, 8])
 fboot randhex 32        # ← 就是 f_random 的 randomLowerHex(32)
 ```
 
-## 13.8 注意事项与已知行为（照着 README 念，别踩）
+## 15.8 注意事项与已知行为（照着 README 念，别踩）
 
 > 这几条是 `f_random` 当前实现与直觉不一致的地方，README 按代码实际行为记录。讲出来比让观众自己撞墙好。
 
@@ -2582,11 +3195,13 @@ fboot randhex 32        # ← 就是 f_random 的 randomLowerHex(32)
 
 ---
 
-# 第十四章 串讲：一次请求穿过整个框架
+# 第十六章 串讲：一次请求穿过整个框架
 
 **【镜头】** 画一张纵向调用链 + 终端实时日志。用一个 `POST /api/user/register` 走完全流程。
 
 ```
+⓪ 进程启动：f_config 的 static init 装载环境变量 + 命令行参数（命令行覆盖环境变量），
+   并准备 sensitiveMap（编译期内嵌的敏感配置，配了 SM4 则运行期解密）
 ① fboot run 加载动态链接库
    └─ static init(): @Bean 注册进 BeanFactory；Initializer 注册进 InitializerCollection
    └─ 拓扑排序 initialize()：BeanInitializer → ORMInitializer → MVCInitializer → TickTockInitializer ...
@@ -2615,20 +3230,22 @@ fboot randhex 32        # ← 就是 f_random 的 randomLowerHex(32)
 ③ 定时线程：TickTockTaskImpl 按 cron 触发（独立线程，与请求互不干扰）
 
 ④ 旁路：f_util.UUID + f_random 给会话发密钥（UserSessionCache 里的 UUID.random()），
-   f_http 的 MediaType 配合 f_data 给响应做序列化
+   f_http 的 MediaType 配合 f_data 给响应做序列化；
+   f_util 的 PathPattern 是 ② 里「路由匹配 + 抽路径变量」的引擎
 ```
 
 **【口播】**
 
 > 这一屏就是 fountain 的全部：
-> **f_bean 负责装配、f_aspect 负责横切、f_data 负责流动、f_http 负责格式、f_mvc 负责协议、f_orm 负责数据库、f_security + f_jwt 负责身份、f_ticktock 负责CRON定时器、f_random 负责随机性、f_util.UUID 负责唯一 ID。**
+> **f_config 负责配置、f_bean 负责装配、f_aspect 负责横切、f_data 负责流动、f_util 提供工具箱、f_http 负责格式、f_mvc 负责协议、f_orm 负责数据库、f_security + f_jwt 负责身份、f_ticktock 负责CRON定时器、f_random 负责随机性。**
+> 而且从头到尾你没写过一个配置文件、没写过一行 `main`。
 > 业务代码里你只写了 `UserController`、`UserService`、`UserDAO`、`UserPO` 四个东西，加起来不到 200 行。
 
 ---
 
-# 第十五章 收尾：常见坑与 Q&A
+# 第十七章 收尾：常见坑与 Q&A
 
-## 15.1 十四个高频坑
+## 17.1 十八个高频坑
 
 | # | 现象 | 原因 / 解法 |
 | --- | --- | --- |
@@ -2642,12 +3259,16 @@ fboot randhex 32        # ← 就是 f_random 的 randomLowerHex(32)
 | 8 | `tableColumns().xxx` 找不到 | 属性名是**列名**（`save_time`），不是成员名（`saveTime`） |
 | 9 | 宏报「must be modified by public var or public mut prop」 | `@ORMField` 的约束 |
 | 10 | `fboot run` 卡住不动 | 这是**预期行为**，它永久阻塞；另开终端发请求 |
-| 11 | `populate` 之后目标对象字段是空的 | 目标类没加 `@DataAssist[fields]`；或默认 `SILENCE` 把「字段不存在 / 类型不匹配 / 无法转换」静默跳过了（见第七章） |
-| 12 | 随机字符串里只有小写字母 | `randomLettersNumbers(min,max)` 等三个 `(min,max)` 重载的实现与命名不符；自己先算长度再调 `(count)` 重载（见第十三章） |
-| 13 | 自定义格式报 `<x> is an illegal MediaType string` | 自定义 `MediaType` 漏了 `@Bean`，或它所在的动态库没被 `--dylibPattern` 匹配到（见第九章） |
+| 11 | `populate` 之后目标对象字段是空的 | 目标类没加 `@DataAssist[fields]`；或默认 `SILENCE` 把「字段不存在 / 类型不匹配 / 无法转换」静默跳过了（见第八章） |
+| 12 | 随机字符串里只有小写字母 | `randomLettersNumbers(min,max)` 等三个 `(min,max)` 重载的实现与命名不符；自己先算长度再调 `(count)` 重载（见第十五章） |
+| 13 | 自定义格式报 `<x> is an illegal MediaType string` | 自定义 `MediaType` 漏了 `@Bean`，或它所在的动态库没被 `--dylibPattern` 匹配到（见第十一章） |
 | 14 | 上传的文件在磁盘上堆积 | `MultipartFile` 是 `Resource`，用完必须 `close()`——`close()` 才会删掉临时文件 |
+| 15 | 改了配置却不生效 | 有编译期内嵌值被运行期覆盖了（或反过来）；或用了 `fountain_` 前缀却写成了原名。按第三章的四级优先级逐层排查 |
+| 16 | `Config.set` 之后相关模块没刷新 | 已知问题：`refresher` 的前缀匹配恒不成立，`set` **不会**触发任何刷新回调（见第三章 3.8） |
+| 17 | `TreeTransformer.transform` 抛 `IllegalArgumentException` | 源数据里有重复 id（`ignoreDuplicate` 默认 `false`），或 `transferFn` 返回了 `None`（见第九章） |
+| 18 | 找不到 `Responsibility` / `ResponsibilityChain` 类型 | 源码拼写是 **`Resposibility`**（少一个 n），文件名也是 `ResposibilityChain.cj` |
 
-## 15.2 预设 Q&A
+## 17.2 预设 Q&A
 
 **Q：能不用动态链接库吗？**
 A：IOC/AOP/ORM 这些能力本身不依赖动态链接库，但 `fboot run` 的「扫描加载」机制依赖它。用 `App(..., dynamic: false)` 可以不扫描，此时只有内置命令和静态链接进来的子命令可用，业务 bean 需要你自己保证已被加载。
@@ -2661,11 +3282,23 @@ A：可以。`f_base`、`f_util`、`f_collection`、`f_crypto`、`f_random` 等�
 **Q：`f_data` 的复制能替代手写 DTO 转换吗？**
 A：绝大多数场景可以。`DataObject<Target>.populate(src)` 按**同名字段**复制，`DateTime`/集合/Map 都支持，还能用 `DataConversionFlag` 控制严格程度。只有字段名不一致或需要计算逻辑时，才需要手写几行。
 
+**Q：没有配置文件，本地开发怎么管理几十个配置项？**
+A：写进启动脚本。`fdemo/boot.sh` 的 `exports()` 函数就是标准答案——所有 `export` 集中在一个地方，`fboot run` 之前 source 一下。容器化时这些 `export` 换成 ConfigMap / Secret 即可，`f_config` 的读取逻辑一行不用改。
+
+**Q：把密码编进产物安全吗？**
+A：它解决的是「不让密码出现在运行环境里」，**不是**「密码不可破解」——SM4 密钥本身也在产物里。真要保护密钥请用 KMS。另外记得运行期同名环境变量可以覆盖内嵌值。
+
 **Q：想支持私有二进制协议 / 加密报文，要改 MVC 吗？**
-A：不用。写一个 `MediaType` 子类实现 `fromData` / `toData`，加 `@Bean`，然后 controller 的 `consumes` / `produces` 里写你的格式名即可——`MediaTypes` 首次 `tryParse` 时会把 IOC 里所有 `MediaType` bean 自动注册进来（见第九章）。
+A：不用。写一个 `MediaType` 子类实现 `fromData` / `toData`，加 `@Bean`，然后 controller 的 `consumes` / `produces` 里写你的格式名即可——`MediaTypes` 首次 `tryParse` 时会把 IOC 里所有 `MediaType` bean 自动注册进来（见第十一章）。
 
 **Q：主键该用自增 ID 还是 UUID？**
 A：`f_orm` 的 `INSERT_INTO` 直接返回自增主键；需要分布式生成就用 `UUID.unixTimeBased()`（v7，时间有序，索引局部性好于 v4）。`UUID` 实现了 `DataFields<UUID>`，可以**直接作为 PO 字段**参与 ORM 映射和 JSON 序列化，不用自己写转换器。
+
+**Q：主键该用 `IdMaker` 还是 `UUID`？**
+A：要**时间有序、索引局部性好** → `IdMaker`（需保证 `idMakerHostSerial` 全局唯一）或 `UUID.unixTimeBased()`；要**去中心、任何机器随时可生成** → `UUID.random()`。`UUID` 实现了 `DataFields<UUID>`，可以**直接作为 PO 字段**参与 ORM 映射和 JSON 序列化，不用自己写转换器。
+
+**Q：`Strategies` 和 IOC 的 `lookupList<T>()` 该怎么选？**
+A：**要 bean 的完整生命周期（懒加载、条件装配、`@Value` 注入、销毁回调）→ 用 IOC**；只是想把「一段按 key 分派的逻辑」集中管理 → `Strategies` 更轻。两者不冲突，很多项目是混着用的。
 
 **Q：随机数够安全吗？要用哪个？**
 A：默认优先 `SecureRandom` / `ThreadLocalRandom.current`（`RandomString()` 的无参构造就是它）。只有对性能极度敏感、且不涉及安全语义的场景（比如模拟数据、抽样）才用 `Random`。另外记住第十二章那几条已知行为——尤其是浮点 `closed` 的含义。
@@ -2718,6 +3351,28 @@ fboot help
 | f_ticktock | `@Bean` + `CronTicktockTask` | 定时任务 |
 | f_http | `@Bean` + 继承 `MediaType` | 自定义数据格式（须实现 `make` / `toString` / `==` / `hashCode` / `fromData` / `toData`） |
 
+## 配置（`f_config`）
+
+```bash
+# 优先级：命令行参数 > 环境变量 > 编译期内嵌（fountain_ 前缀为等价回退）
+--argName=argValue | --argName | -argName argVal | -argName
+export sm4Key=$(fboot randhex 32)   # 16 字节；GCM 的 IV 用 fboot randhex 24
+export sm4Iv=$(fboot randhex 32)
+export sm4Operation=CBC             # CBC CFB CTR GCM OFB
+export sm4Padding=PKCS7Padding      # NoPadding PKCS7Padding
+```
+
+```cangjie
+Config.getString(key) / getValue<T>(key) / getData<T>(key)      // 单数：失败返回 None
+Config.getValues<T>(key, delim:) / getDatas<T>(key, delim:)     // 复数：失败抛异常
+Config.getStringArray(key, delim:) / getDuration(key) / getDateTime(key, format:)
+Config.bufferSize(key, default:, debugging:)                    // 向上取到 2 的幂
+Config.getAll(prefix) / getAll() / set<T>(tuples, ifAbsent:) / refresher(prefix, fn)
+Config.getSM4() / Config.registerSensitive(key, value)
+@EmbedSensitive(paySecretKey pushToken)          // 编译期把敏感值嵌入产物
+@DateTimeConfConverter[myDateFormat]             // 时间格式本身也可配置
+```
+
 ## 关键 API
 
 ```cangjie
@@ -2749,6 +3404,17 @@ UUID.random() / UUID.unixTimeBased() / UUID.timeBased()...node(...)
 UUID.md5(s) / UUID.sha1(s)                                // v3 / v5 命名空间 UUID
 UUID.parse(s) / UUID.tryParse(s) / id.toHexString() / id.version
 
+// f_util 工具箱
+@IsUUID                                                   // 校验注解（Validator 子类，可 & | ! 组合）
+IdMaker().nextInt64()                                     // 10bit主机号+41bit毫秒+12bit序号
+CaseFormat.Camel.convert('userName', to: CaseFormat.LowerUnderScore)
+TextTemplate.compile('订单 ${id} 已创建').format(map)      // 支持 time: number: regex:
+PathPattern().compileIfAbsent('/api/{id}'){data}.data<T>(path)  // + extractVariableInPath
+MenuNode.transform<MenuPO>(list, emptyId: 0){po => MenuNode(po)}
+Factory<A,O>.assemble<T>(producer) / .produce<T>(arg)     // 按类型分派的工厂
+Strategies<N,A,R>.register(strategy) / .execute(name, arg)
+ResposibilityChain<C,A,R>.register(...) / execute / executeAll  // 注意拼写 Resposibility
+
 // f_http：数据格式
 MediaTypes.parse('application/json') / .tryParse(s) / .register(mt)
 mediaType.fromData(data)                                  // Data → 字节（响应）
@@ -2766,30 +3432,31 @@ MultipartFile.filename / .size / .bytes() / .copyTo(out) / .close()
 | 1 | 3' | 开场：为什么用 fountain（痛点清单） | 幻灯片 |
 | 2 | 5' | 三个设计决策：无 main / 宏 / 环境变量 | 幻灯片 + `fboot/src/main.cj` |
 | 3 | 3' | 环境准备 | 终端 |
-| 4 | 2' | `fboot help` | 终端 |
-| 5 | 4' | `fboot workspace` + `fboot module`（从零建项目） | 终端 + IDE |
-| 6 | 3' | 写一个 Controller（20 行） | IDE |
-| 7 | 4' | `fboot build`（讲版本模块 + banner + 编译期注入） | 终端 + `boot.sh` |
-| 8 | 2' | `fboot randhex` + SM4 密钥 | 终端 |
-| 9 | 3' | `fboot run` + curl 验证（第一个 hello world） | 终端 |
-| 10 | 2' | `fboot cleanUpdate` | 终端 |
-| 11 | 5' | 切到 `fdemo`：结构 + 建表 + build + run | IDE + 终端 |
-| 12 | 6' | 接口验证清单（12 条 curl，重点 401 那条） | 终端 + 浏览器 |
-| 13 | 8' | IOC：f_bean | IDE + 幻灯片 |
-| 14 | 7' | AOP：f_aspect + `ControllerAspect` 现场演示 | IDE + 终端 |
-| 15 | 8' | 数据：f_data（`@DataAssist` / `populate` / JSON / 校验 / JSONPath） | IDE + 终端（`boot.cj` 的 A~H 输出） |
-| 16 | 3' | UUID：f_util.UUID（v4 / v7 / 时间有序 / 直接当 PO 字段） | IDE + `UserSessionCache.cj` |
-| 17 | 10' | MVC：f_mvc（路由/参数/校验/异常） | IDE + 终端 |
-| 18 | 8' | HTTP 格式：f_http（`MediaType` / `MediaTypes` 注册表 / 自定义格式 / 文件上传） | IDE + 终端（`curl -F`） |
-| 19 | 15' | ORM：f_orm（PO/DAO/Service/SQL 三方式/分页） | IDE |
-| 20 | 8' | 事务：三种开启方式 + 钩子顺序 + 现场日志 | IDE + 终端 |
-| 21 | 8' | 安全：f_security + f_jwt 端到端 | IDE + 终端（401 vs 200） |
-| 22 | 4' | CRON：f_ticktock（含"忘了 dylibPattern"的坑） | IDE + 终端 |
-| 23 | 5' | 随机：f_random（区间/流/字符串/ThreadLocalRandom/已知行为） | IDE + 终端（`fboot randhex 32`） |
-| 24 | 4' | 串讲：一次请求的完整穿越 | 架构图 |
-| 25 | 5' | 坑 & Q&A + 性能压测 | 终端 |
+| 4 | 8' | 配置：f_config（无配置文件 / 四级优先级 / SM4 内嵌 / `@EmbedSensitive`） | IDE + `boot.sh` |
+| 5 | 2' | `fboot help` | 终端 |
+| 6 | 4' | `fboot workspace` + `fboot module`（从零建项目） | 终端 + IDE |
+| 7 | 3' | 写一个 Controller（20 行） | IDE |
+| 8 | 4' | `fboot build`（讲版本模块 + banner + 编译期注入） | 终端 + `boot.sh` |
+| 9 | 2' | `fboot randhex` + SM4 密钥 | 终端 |
+| 10 | 3' | `fboot run` + curl 验证（第一个 hello world） | 终端 |
+| 11 | 2' | `fboot cleanUpdate` | 终端 |
+| 12 | 5' | 切到 `fdemo`：结构 + 建表 + build + run | IDE + 终端 |
+| 13 | 6' | 接口验证清单（12 条 curl，重点 401 那条） | 终端 + 浏览器 |
+| 14 | 8' | IOC：f_bean | IDE + 幻灯片 |
+| 15 | 7' | AOP：f_aspect + `ControllerAspect` 现场演示 | IDE + 终端 |
+| 16 | 8' | 数据：f_data（`@DataAssist` / `populate` / JSON / 校验 / JSONPath） | IDE + 终端（`boot.cj` 的 A~H 输出） |
+| 17 | 12' | 工具箱：f_util（UUID / @IsUUID / IdMaker / CaseFormat / TextTemplate / PathPattern / TreeTransformer / 三个设计模式骨架） | IDE + 终端（`cjpm test`） |
+| 18 | 10' | MVC：f_mvc（路由/参数/校验/异常） | IDE + 终端 |
+| 19 | 8' | HTTP 格式：f_http（`MediaType` / `MediaTypes` 注册表 / 自定义格式 / 文件上传） | IDE + 终端（`curl -F`） |
+| 20 | 15' | ORM：f_orm（PO/DAO/Service/SQL 三方式/分页） | IDE |
+| 21 | 8' | 事务：三种开启方式 + 钩子顺序 + 现场日志 | IDE + 终端 |
+| 22 | 8' | 安全：f_security + f_jwt 端到端 | IDE + 终端（401 vs 200） |
+| 23 | 4' | CRON：f_ticktock（含"忘了 dylibPattern"的坑） | IDE + 终端 |
+| 24 | 5' | 随机：f_random（区间/流/字符串/ThreadLocalRandom/已知行为） | IDE + 终端（`fboot randhex 32`） |
+| 25 | 4' | 串讲：一次请求的完整穿越 | 架构图 |
+| 26 | 5' | 坑 & Q&A + 性能压测 | 终端 |
 
 ---
 
-> 讲稿中所有的路径、包名、注解名均取自本仓库当前源码（`fboot`、`f_app`、`f_bean`、`f_aspect`、`f_data`、`f_util`、`f_mvc`、`f_http`、`f_orm`、`f_security`、`f_ticktock`、`f_jwt`、`f_random`、`fdemo`）。
+> 讲稿中所有的路径、包名、注解名均取自本仓库当前源码（`fboot`、`f_app`、`f_config`、`f_bean`、`f_aspect`、`f_data`、`f_util`、`f_mvc`、`f_http`、`f_orm`、`f_security`、`f_ticktock`、`f_jwt`、`f_random`、`fdemo`）。
 > 若后续版本有变更，以各模块 `README.md` 与源码为准。
