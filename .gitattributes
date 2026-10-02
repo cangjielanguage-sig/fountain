@@ -1,1 +1,4 @@
-*=lf
+# 统一换行符：文本文件在仓库与工作区都使用 LF。
+# 说明：原内容 `*=lf` 会被 git 解析为“名为 lf 的自定义属性”，并非 eol 属性，等于没生效；
+# 正确写法是 `text=auto` + `eol=lf`（text=auto 会自动排除二进制文件）。
+* text=auto eol=lf
