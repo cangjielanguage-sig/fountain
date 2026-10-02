@@ -1628,7 +1628,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHH {fromJson 回来后的 Data}
 | ID | `UUID`、`@IsUUID`、`IdMaker` |
 | 文本 | `TextTemplate`、`CaseFormat` |
 | 结构 | `PathPattern`、`TreeTransformer` |
-| 设计模式骨架 | `Factory`、`Strategy`/`Strategies`、`ResposibilityChain`、`Mediator`、`StatePattern` |
+| 设计模式骨架 | `Factory`、`Strategy`/`Strategies`、`ResponsibilityChain`、`Mediator`、`StatePattern` |
 | 哈希/摘要 | `crc16` `crc32` `crc64`、`CityHash`、`MurmurHash3X128`、`wyhash`、`UInt128` |
 | 其它 | `geohash`、`DiffieHellmanKeyExchanger`（密钥交换）、`prime`（素数） |
 
@@ -1944,23 +1944,23 @@ public class Strategies<N, A, R> where N <: Hashable & Equatable<N> {
 
 **【口播】** 这和 IOC 的 `lookupLables<L, T>()`（第六章）是互补的两种做法：**要 bean 的完整生命周期管理用 IOC；只是想按 key 分派一段逻辑，用 `Strategies` 更轻。**
 
-### 责任链模式 `ResposibilityChain`
+### 责任链模式 `ResponsibilityChain`
 
 ```cangjie
-public interface Resposibility<C, A, R> {
+public interface Responsibility<C, A, R> {
     func check(condition: C): Bool   // 是否由本策略处理
     func execute(arg: A): R
 }
 /** 只做校验、不返回结果的策略 */
-public interface ValidationResposibility<C, A> <: Resposibility<C, A, Unit> {
+public interface ValidationResponsibility<C, A> <: Responsibility<C, A, Unit> {
     func execute(arg: A): Unit {}
 }
 
-public class ResposibilityChain<C, A, R> {
+public class ResponsibilityChain<C, A, R> {
     public init()
-    public init(resposibilities: Iterable<Resposibility<C, A, R>>)
-    public func register(resposibility: Resposibility<C, A, R>): ResposibilityChain<C, A, R>
-    public func register<S>(resposibilities: Iterable<S>): Unit where S <: Resposibility<C, A, R>
+    public init(resposibilities: Iterable<Responsibility<C, A, R>>)
+    public func register(resposibility: Responsibility<C, A, R>): ResponsibilityChain<C, A, R>
+    public func register<S>(resposibilities: Iterable<S>): Unit where S <: Responsibility<C, A, R>
     public func execute(condition: C, arg: A): R      // 第一个 check 通过的；全不通过抛 IllegalAccessException
     public func executeAll(condition: C, arg: A): Unit // 执行**所有**满足条件的
 }
@@ -1969,8 +1969,6 @@ public class ResposibilityChain<C, A, R> {
 **【口播】**
 
 > `execute` 是「找到第一个能处理的就执行」，`executeAll` 是「所有符合条件的都执行一遍」——后者特别适合**多级校验、多环节加工**。
->
-> ⚠️ **拼写提醒**：源码里的类型名是 `Resposibility`（少一个 `n`），文件名也是 `ResposibilityChain.cj`。**照着 `Resposibility` 写才编译得过**，不要凭语感写成 `Responsibility`。
 
 ### 顺带一提：还有两个
 
@@ -4359,7 +4357,7 @@ RandomString().randomLowerHex(16)
 | 15 | 改了配置却不生效 | 有编译期内嵌值被运行期覆盖了（或反过来）；或用了 `fountain_` 前缀却写成了原名。按第四章的四级优先级逐层排查 |
 | 16 | `Config.set` 之后相关模块没刷新 | 已知问题：`refresher` 的前缀匹配恒不成立，`set` **不会**触发任何刷新回调（见第四章 4.8） |
 | 17 | `TreeTransformer.transform` 抛 `IllegalArgumentException` | 源数据里有重复 id（`ignoreDuplicate` 默认 `false`），或 `transferFn` 返回了 `None`（见第九章） |
-| 18 | 找不到 `Responsibility` / `ResponsibilityChain` 类型 | 源码拼写是 **`Resposibility`**（少一个 n），文件名也是 `ResposibilityChain.cj` |
+| 18 | 找不到 `Responsibility` / `ResponsibilityChain` 类型 | 源码拼写是 **`Responsibility`**（少一个 n），文件名也是 `ResponsibilityChain.cj` |
 | 19 | 缓存对象「取了就续期」，永远不过期 | `HeapCache` 默认是**非一次性**对象（滑动窗口）。要绝对过期请 `set(..., once: true)` 或用 `prolong(key, deathTime)` |
 | 20 | 热路径上反复 `str.regex()` 导致 CPU 高 | 正则编译没走缓存。用 `regex(solid: true)`（进程内常驻）或 `solid: false`（`HeapCache`，1 万条 / 1 天） |
 | 21 | 日志一条都不输出 | `f_log` **默认静默**：不配 appender 就没有输出通道。至少 `logger_appender_console=<你起的名字>`（见第十五章 15.2） |
@@ -4563,7 +4561,7 @@ PathPattern().compileIfAbsent('/api/{id}'){data}.data<T>(path)  // + extractVari
 MenuNode.transform<MenuPO>(list, emptyId: 0){po => MenuNode(po)}
 Factory<A,O>.assemble<T>(producer) / .produce<T>(arg)     // 按类型分派的工厂
 Strategies<N,A,R>.register(strategy) / .execute(name, arg)
-ResposibilityChain<C,A,R>.register(...) / execute / executeAll  // 注意拼写 Resposibility
+ResponsibilityChain<C,A,R>.register(...) / execute / executeAll  // 注意拼写 Responsibility
 
 // f_cache：堆缓存
 HeapCache<V>(maxLife:, maxSize:, checkDuration:, evictionCallback:)   // builder() 亦可
