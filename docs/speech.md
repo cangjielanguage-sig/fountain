@@ -2720,7 +2720,7 @@ public func transfer(from: Int64, to: Int64, amount: Decimal): Unit { ... }
 ```
 
 注解参数：`driverName` `propagation` `isoLevel` `accessMode` `deferrableMode` `rollbackFor` `noRollbackFor`。
-
+其中rollbackFor是发生了rollbackFor指定的异常才会回滚，noRollbackFor是只有发生了这个参数指定的异常才不回滚。
 **② 配置驱动（批量织入，无需逐个加注解）**
 
 ```bash
@@ -2729,16 +2729,13 @@ export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*Se
 export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*ServiceImpl.save*(**): *"
 export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*ServiceImpl.register*(**): *"
 export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*.userSession(**): *"
-# 还可以用正则做包含/排除
-export orm_transactionIncluding='...'
-export orm_transactionExcluding='...'
 ```
 
 **【口播】**
 
 > 这两条是 **OR 关系**：`@Transactional` 注解 和 `orm_transactionalFuncExecution` 配置**只要有一个命中，事务切面就会织入**。
 >
-> `fdemo` 的配置把 `del* remove* insert* save* add* new* create* update* change* register*` 以及 `userSession` 全织上了——**按方法名前缀约定统一开事务**，这是很实用的团队规范落地方式。
+> `fdemo` 的配置把 `del* remove* insert* save* add* new* create* update* change* register*` 开头的函数，以及名为 `userSession`的函数全织入了事务切面——**按方法名前缀约定统一开事务**，这是很实用的团队规范落地方式。
 > 注意 `fdemo/boot.sh` 里 `sayHello` 那一行是**被注释掉**的，讲的时候可以现场打开它，重启后看 `HelloworldServiceImpl.sayHello` 也开始打事务日志——一个很好的即时反馈演示。
 
 **③ 编程式：`execute` 模板**
