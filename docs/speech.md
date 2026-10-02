@@ -4,7 +4,7 @@
 
 > 配套项目：`fdemo`（仓库内的示例工程，本讲稿所有命令都以它为蓝本）
 > 目标：讲清楚「为什么用 fountain」「怎么用 fboot」「IOC / MVC / AOP / ORM 怎么用」，并且全程可以一边讲一边敲命令、一边看输出。
-> 建议录制时长：约 140～165 分钟（可按章节裁剪；核心链路是 第一、三、四、六、八、九、十、十一、十七章；第十六章可按受众深浅整章跳过）
+> 建议录制时长：约 155～185 分钟（可按章节裁剪；核心链路是 第一、三、四、六、八、九、十、十一、十五（日志）、十六（串讲）章；第十七章（运行时基础设施，含随机数）可按受众深浅整章跳过或挑讲；日志这一章不要跳，至少讲到 15.2 与 15.7）
 
 ---
 
@@ -77,10 +77,11 @@ fboot version
 > | CRON | `f_ticktock` | `@Bean` + cron 表达式即可定时执行 |
 > | 随机 | `f_random` | 区间随机数、随机数流、随机字符串、蓄水池抽样 |
 > | 工具箱 | `f_util` | UUID(v1~v8) / IdMaker / TextTemplate / PathPattern / TreeTransformer / CaseFormat / 设计模式骨架 |
+> | 日志 | `f_log` | `stdx.log` 的实现：默认静默、appender 即输出通道、全程异步、模板化消息 |
 > | 基础设施 | `f_cache` `f_pool` `f_collection` `f_time` `f_regex` `f_rx` | 堆缓存 / 对象池 / 集合补位 / 时间 DSL / 正则缓存 / 反应式编程 |
 > | 启动器 | `fboot` / `f_app` | 没有 `main` 也能启动应用 |
 >
-> 外围还有 `f_base` `f_util` `f_collection` `f_concurrent` `f_log` `f_http` `f_net` `f_pool` `f_crypto` `f_store` `f_rpc` `f_llm`……它们既能被框架使用，也能单独当作工具库引入。
+> 外围还有 `f_base` `f_util` `f_collection` `f_concurrent` `f_http` `f_net` `f_pool` `f_crypto` `f_store` `f_rpc` `f_llm`……它们既能被框架使用，也能单独当作工具库引入。
 >
 > 引用方式有两种，等价：
 > ```toml
@@ -3136,175 +3137,514 @@ public abstract class DelayedTicktockTask <: CronTicktockTask {
 
 ---
 
-# 第十五章 随机数：`fountain::f_random`
+# 第十五章 日志：`fountain::f_log`
 
-**【镜头】** `f_random/README.md` + `fdemo/user/src/util/UserSessionCache.cj`（那行 `UUID.random().toHexString()`）
+**【镜头】** 左半边终端 `tail -f ./log/fdemo.log`，右半边 IDE 里打开 `f_log/README.md` 和 `fdemo/boot.sh` 的 `logger_*` 那一段
 
-## 15.1 它补了标准库什么
+## 15.1 为什么还要自己写一个日志模块
 
 **【口播】**
 
-> 仓颉标准库有 `std.random.Random`，stdx 有 `stdx.crypto.crypto.SecureRandom`。但它们缺三样常用的东西：
-> 1. **区间随机数**——`nextInt64(1, 100, closed: true)` 这种；
-> 2. **随机数流**——一次性要一万个随机数时，不想写循环；
-> 3. **随机字符串**——做 token / 验证码 / 盐值时每次都手搓。
+> `f_log` 和后头第十七章那七个模块是同一个定位——**可以单独拿走**：不用启动器、不用 IOC，`import` 进来就能用。但它比工具箱更靠前一步：**一个服务上线前，第一件要配好的事就是日志**，所以我们把它放在正文里讲，不放进基础设施那一章。
 >
-> `f_random` 就干这三件事，外加**蓄水池抽样**和**线程本地随机源**。
-> 它不自己实现随机算法，而是用 `extend Random <: ExtendRandom<Random>` 和 `extend SecureRandom <: ExtendRandom<SecureRandom>` 把能力**扩展到标准库类型上**——所以 API 是「加在原类上」的，不用换类型。
+> 你可能会问：仓颉生态里已经有 `stdx.log` 了（`Logger` / `LogRecord` / `LogWriter` / `LogValue` 一整套抽象），为什么 fountain 还要再写一个？
+>
+> 三个理由：
+>
+> **第一，它是 `stdx.log` 的实现，不是替代品。** `f_log` 的 `AbstractLogger` 直接继承 `stdx.log.Logger`，stdx.log 的写法你照用；更重要的是，它在模块加载时把 **stdx.log 的全局 logger 接管**了：
+>
+> ```cangjie
+> // f_log/src/base/global.cj
+> setGlobalLogger(LoggerFactory.getLogger('fountain::f_log.global'))
+> ```
+>
+> 也就是说，**任何第三方库只要用全局 logger 打日志，输出也会进你的 appender**。两个真例子：`stdx.net.http` 的日志被接进了 MVC（`builder.logger(LoggerFactory.getLogger('stdx.net.http'))`）；openGauss 驱动的日志用 `LoggerFactory.getLogger('opengauss')`。**它们和你的业务日志在同一个文件里、同一套格式、同一个进程号。**
+>
+> **第二，零配置、零注入，而且默认静默。** 不需要启动器、不需要 `logback.xml` 那种配置文件——`private static let log = LoggerFactory.getLogger<MyClass>()` 这一行就能用。而且**不配 appender 它什么都不输出**，不会像很多框架那样先给你刷一屏。
+>
+> **第三，异步 + 模板化。** 业务线程只负责「记下当下时间与线程 ID、把消息闭包排进队列」，渲染、落盘、刷屏全在专属线程上做；消息支持 `{}` 占位符，还能直接拿 `@DataAssist` 对象做**具名取值**——这是 stdx.log 没有的。
+>
+> 先看一页结构：
+>
+> ```
+> LoggerFactory.getLogger<T>()   名字 = T 的完整限定名（如 fountain::f_orm.base.SqlExecutor）
+>   └─ LoggerWrapper            持有 facade 的引用，可 CAS 热替换（15.8）
+>        └─ LoggerAppenderFacade  本身也是异步的：一个名字 → 一条队列 + 一个消费线程
+>             ├─ ConsoleAppender  队列 tag = console://（所有 console 共享）
+>             ├─ FileAppender     队列 tag = file:///<路径>（同路径共享）
+>             └─ Tcp / Udp / Unix / UnixDatagram Appender
+> ```
 
-```toml
-[dependencies]
-  "fountain::f_random" = {path = "../f_random"}
-```
+## 15.2 三条纪律（先记这个，后面都是细节）
 
-```cangjie
-import fountain::f_random.*
-// 或聚合包：import fountain::fountain.random.*
-```
+**【口播】**（这三条是本模块最容易踩的坑）
 
-> 注意：扩展方法（如 `nextInt64(min, max, closed:)`）**只有导入本模块后才可见**。
+> **纪律一：默认什么都不输出。**
+>
+> 内置 6 种 appender：`console`、`file`、`tcp`、`udp`、`unix`、`unixDatagram`。**但一个都不会自动启用**——`logger_appender_<kind>` 没配，这类 appender 就不存在。所以你至少得写一行：
+>
+> ```bash
+> export logger_appender_console=myConsole     # 值是你给这个 appender 起的名字
+> ```
+>
+> 才会有第一条日志。这也是为什么 `fdemo/boot.sh` 里必须有那几行 `logger_*`。
+>
+> **纪律二：级别和格式挂在 appender 上，不挂在 logger 名字上。**
+>
+> 命名规则是两段式的：
+>
+> ```
+> logger_appender_<kind>=<AppenderName>[,<AppenderName2>...]   # 先给这类 appender 挂上若干个具名实例
+> logger_appender_<AppenderName>_level=DEBUG                   # 再逐个配级别
+> logger_appender_<AppenderName>_pattern='...'                 # 和格式
+> ```
+>
+> 所以 fountain **没有** log4j 那种「logger 名字树」的概念：你没法说「只给 `fountain.orm.*` 开 DEBUG」。级别是这个 appender 全局的，**要区分来源就靠格式里的 `%name`**。
+>
+> **纪律三：业务线程只入队，渲染在后台；但默认「队列满就等」。**
+>
+> 调 `log.info{...}` 时，业务线程做的事只有两件：采集时间戳 / 线程 ID，然后把闭包投进队列。**级别判断、字符串渲染、落盘都在后台线程**。而 `loggerAsyncTimeout` 的默认值是 `Duration.Max`，意味着**队列满时入队方会一直等**（业务线程投 facade 队列时就是业务线程等），而不是丢日志。想丢就显式配 `loggerAsyncTimeout` 加 `loggerAsyncTimeoutPolicy`（见 15.5）。
 
-## 15.2 区间随机数：`ExtendRandom`
+## 15.3 配置项全表
 
-```cangjie
-public interface ExtendRandom<R> where R <: ExtendRandom<R> {
-    func nextFloat64(min: Float64, max: Float64, closed!: Bool): Float64
-    func nextFloat32(min: Float32, max: Float32, closed!: Bool): Float32
-    func nextInt64  (min: Int64,  max: Int64,  closed!: Bool): Int64
-    func nextUInt64 (min: UInt64, max: UInt64, closed!: Bool): UInt64
-    func nextInt32  (min: Int32,  max: Int32,  closed!: Bool): Int32
-    func nextUInt32 (min: UInt32, max: UInt32, closed!: Bool): UInt32
-}
-```
+**【口播】** 这张表就是本节的全部，左边一列可以直接抄。
 
-`closed` 在实现中默认 `false`，所以 `rand.nextInt64(1, 100)` 也是合法的。
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `logger_appender_console` | 无 | 值 = 你起的 console appender 名；逗号分隔可挂多个 |
+| `logger_appender_file` | 无 | 同上，文件 appender |
+| `logger_appender_tcp` / `_udp` / `_unix` / `_unixDatagram` | 无 | 远端 appender |
+| `logger_appender_<Name>_level` | `INFO` | `OFF` / `ERROR` / `WARN` / `INFO` / `DEBUG` / `TRACE` / `ALL` |
+| `logger_appender_<Name>_pattern` | `[%level-%name] %d{yyyy/MM/dd,HH:mm:ss.SSS}\|%m` | 见 15.4 占位符表 |
+| `logger_appender_<Name>_path` | `${工作目录}/logs/${命令名}.log` | file 专用；目录自动创建 |
+| `logger_appender_<Name>_rotateDuration` | `DAY` | file 专用；`NANOSECOND`…`YEAR`，大小写不敏感（**别用亚秒级**，见 15.6） |
+| `logger_appender_<Name>_rotateSize` | `Int64.Max` | file 专用；支持 `100k` / `100M` / `1G` 这种写法 |
+| `logger_appender_<Name>_compressFormat` | `''` | file 专用；`Deflate` / `GZip`，可带级别如 `Deflate(9)` |
+| `logger_appender_<Name>_url` | 无 | file 专用；`file://<路径>?rotateSize=..&rotateDuration=..&compressFormat=..`，**url 里的参数优先于上面三个独立配置项** |
+| `logger_appender_<Name>_host` / `_port` | 无 | tcp / udp 专用 |
+| `logger_appender_<Name>_bufSize` | 无 | tcp / unix 专用（发送缓冲字节数） |
+| `logger_appender_<Name>_sendTimeout` / `_writeTimeout` | 无 | udp / unix 专用（`Duration` 字符串） |
+| `loggerAsyncBufsize` | `1024` | 异步队列容量，**同时也是缓冲区池的大小** |
+| `loggerAsyncTimeout` | `Duration.Max` | 队列满时等待多久（超时后才轮到 policy 生效） |
+| `loggerAsyncTimeoutPolicy` | `discard` | `discard` 丢这条 / `abort` 抛 `LogException` / `alwaysWaiting` 死等 |
+| `logger_asyncWaitTimeout` | `5ms` | 借不到缓冲区时的等待时长；超时**丢弃本条**并打印 `AsyncLogger.SyncQueueOutputStream.EmptyPool` |
 
-`BaseRandom` 则把标准库自带的方法统一到一个接口上（大部分是转发，本模块不重复实现）：
-
-```cangjie
-nextBool() / nextInt8/16/32/64() / nextUInt8/16/32/64()
-nextInt64(max) / nextUInt32(max) ...          // [0, max)
-nextFloat16/32/64()                            // [0.0, 1.0)
-nextGaussianFloat16/32/64(mean!, sigma!)       // 高斯分布
-nextBytes(length) / nextUInt8s(array)          // 字节数组 / 原地填充
-```
-
-**【口播】** `Random` 和 `SecureRandom` 用法**完全相同**：需要密码学强度时把 `Random()` 换成 `SecureRandom()` 或 `ThreadLocalRandom.current` 即可，业务代码一行不用改。
-
-## 15.3 随机数流（无限迭代器）
-
-```cangjie
-let stream = rand.randomInt64(0, 10)          // Iterator<Int64>，(0,10) 或 [0,10]
-let next   = stream.next() ?? 0
-
-// 也有 UInt64 / Int32 / UInt32 版本，以及高斯分布流：
-rand.randomGaussianFloat64Stream(mean: 0.0, sigma: 1.0)
-rand.randomGaussianFloat32Stream()
-rand.randomGaussianFloat16Stream()
-```
-
-**【口播】** 这些迭代器的 `next()` **永远返回 `Some`**，是无限流——要多少自己控制（`take(n)` 或循环 break）。具体迭代器类是包内可见的，用工厂方法拿就行。
-
-## 15.4 随机字符串：`RandomString`
-
-```cangjie
-let rs = RandomString()
-println(rs.randomLettersNumbers(16))   // 16 位字母+数字
-println(rs.randomLowerHex(8))          // 8 位小写 16 进制
-```
-
-| 方法 | 字符集 |
-| --- | --- |
-| `randomAscii` | `U+0000`–`U+007F`（**含控制字符**，慎用） |
-| `randomLowerLetters` | `a`–`z` |
-| `randomUpperLetters` | `A`–`Z` |
-| `randomAllLetters` | `A`–`Z` + `a`–`z` |
-| `randomNumbers` | `0`–`9` |
-| `randomLowerHex` | `0`–`9` + `a`–`f` |
-| `randomUpperHex` | `0`–`9` + `A`–`F` |
-| `randomLowerLettersNumbers` | `a`–`z` + `0`–`9` |
-| `randomUpperLettersNumbers` | `A`–`Z` + `0`–`9` |
-| `randomLettersNumbers` | `A`–`Z` + `a`–`z` + `0`–`9` |
-| `randomPrintableAsciis` | 字母数字 + `` `~!@#$%^&*()-_=+[{]}\|'";:/?.>,< `` |
-| `randomAllChars` | 全部 Unicode scalar（自动避开代理区 `0xD800`–`0xDFFF`） |
-| `random(count, source)` | 调用方给定的 `String` 或 `Array<Rune>` |
-
-每个方法都有两个重载：`(count)` 生成固定长度，`(min, max)` 先随机出长度再生成。
-
-## 15.5 `ThreadLocalRandom`
-
-```cangjie
-public class ThreadLocalRandom {
-    private init()
-    @Frozen
-    public static prop current: SecureRandom
-}
-```
-
-**【口播】**
-
-> 每个线程首次访问 `current` 时创建一个 `SecureRandom`（默认 `priv`），之后一直复用——**不用自己处理加锁和复用**。
-> 而且 `RandomString()` 的无参构造器默认就把它作为随机源，所以**默认的 `RandomString` 实例天然线程安全**。
-> 高并发下生成 token、验证码、盐值，用 `RandomString()` 默认构造就对了。
-
-## 15.6 蓄水池抽样
-
-```cangjie
-public func randomReservoir<T>(count: Int64, source: Iterable<T>, priv!: Bool = false): ArrayList<T>
-
-let sample = randomReservoir<Int64>(3, [1, 2, 3, 4, 5, 6, 7, 8])
-```
-
-**【口播】** 只需**遍历一次**数据源就能随机取 `count` 个元素，**不需要事先知道总数**——适合流式数据或超大集合抽样（比如从日志流里随机采样做监控）。`priv` 是内部 `SecureRandom` 的初始化参数，每次调用新建一个 `SecureRandom`。
-
-## 15.7 它在 fountain 里的三个位置
-
-**【口播】**（把工具库和前面讲过的内容串起来）
-
-1. **`fboot randhex`** —— 实现就是 `RandomString().randomLowerHex(n)`（第四章讲过，给 SM4 生成密钥/IV，机制见第三章）；
-2. **JWT 会话密钥** —— `fdemo` 的 `UserSessionCache` 里 `UUID.random().toHexString()` 给每个登录生成独立 HMAC 密钥；
-3. **业务侧** —— 验证码、邀请码、临时 token、幂等号、抽样的盐值。
-
-**【演示】**
+**【命令】**（`fdemo/boot.sh` 的 `exports()`，一个字都不用改）
 
 ```bash
-fboot randhex 32        # ← 就是 f_random 的 randomLowerHex(32)
+export logger_appender_console=FDemoConsole     # 这是控制台日志记录器的名称，可以任意起名，名称得符合标识符规范
+export logger_appender_FDemoConsole_level=DEBUG
+export logger_appender_FDemoConsole_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%tid;%m'
+export logger_appender_file=FDemoFile           # 这是文件日志记录器的名称，可以任意起名
+export logger_appender_FDemoFile_level=INFO
+export logger_appender_FDemoFile_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%tid;%m'
+export logger_appender_FDemoFile_path=./log/fdemo.log
+export logger_appender_FDemoFile_rotateDuration=DAY
+export logger_asyncWaitTimeout=5ms              # 异步日志缓冲区等待时间，默认是5毫秒，超过这个时间，本次日志被忽略
 ```
 
-## 15.8 注意事项与已知行为（照着 README 念，别踩）
+**【口播】**
 
-> 这几条是 `f_random` 当前实现与直觉不一致的地方，README 按代码实际行为记录。讲出来比让观众自己撞墙好。
+> 读法：**「一类 appender 挂几个自定义名字，每个名字自己配级别和格式」**。所以上面这段等于：
+>
+> - 控制台：一个叫 `FDemoConsole` 的 appender，级别 `DEBUG`；
+> - 文件：一个叫 `FDemoFile` 的 appender，级别 `INFO`，写 `./log/fdemo.log`，按天切割。
+>
+> 注意 `fdemo` 给控制台是 `DEBUG`、给文件是 `INFO`——**同一个 Logger 打出来的日志，两个 appender 收的粒度不一样**。这就是「级别挂在 appender 上」带来的第一个好处：**排查问题时开控制台，长期留档只留 INFO。**
 
-1. **浮点版的 `closed` 不是「包含上界」**：实现是 `nextFloat64() * (max - min + (closed ? 1 : 0)) + min`。`closed: true` 时落在 `[min, max + 1.0)`，**有可能超过 `max`**；`closed: false` 落在 `[min, max)`。需要严格不超过上界请自己裁剪。
-2. **整数版先转浮点再取整**：`nextInt64/nextUInt64` 走 `Float64`，`nextInt32/nextUInt32` 走 `Float32`，最后 `floor` 取整。区间接近 `Int64.Max` 时会有精度损失甚至溢出。
-3. **区间参数不校验**：不检查 `min <= max`，传反了不报错，只会得到反转区间的结果。
-4. **`RandomString` 的三个 `(min, max)` 重载调错了方法**：
-   - `randomAllLetters(min, max)` 实际产出**只有小写字母**；
-   - `randomUpperLettersNumbers(min, max)` 实际产出**小写字母+数字**；
-   - `randomLettersNumbers(min, max)` 实际产出**小写字母+数字**。
+## 15.4 写日志：三种写法 + 占位符
 
-   需要对应字符集时请自己先算长度再调 `(count)` 重载：
+**【口播】**（三种写法，覆盖 99% 的场景）
 
-   ```cangjie
-   let rs = RandomString()
-   let len = ThreadLocalRandom.current.nextInt64(8, 16, closed: true)
-   let s = rs.randomLettersNumbers(len)
-   ```
-5. **长度区间不统一**：只有 `randomAscii(min, max)` 和 `random(min, max, source)` 用了 `closed: true`（长度落在 `[min, max]`），其余 `(min, max)` 重载的长度是 `[min, max)`。
-6. **`randomReservoir` 的边界**：`count <= 0` 且数据源非空时会抛参数非法异常；返回值大小是 `min(count, 元素个数)`，不总是等于 `count`；替换下标取自 `[0, i)` 而非经典算法的 `[0, i]`，**抽样结果并非严格均匀**——对均匀性有硬要求的场景请自己实现。
+> ```cangjie
+> private static let log = LoggerFactory.getLogger<UserServiceImpl>()   // 名字 = 完整限定名
+> // 也可以起任意名字：LoggerFactory.getLogger('my.business')          // 名字 = 你写的字面量
+> ```
+
+**① 惰性 lambda（最常用，推荐）**
+
+```cangjie
+log.info{'start create user: ${name}'}            // info(message: () -> String)
+log.debug{'args = ${someExpensiveToString()}'}    // 级别不够时，这个 lambda 根本不会执行
+```
+
+**【口播】**
+
+> 关键在「惰性」：**级别不够时这个 lambda 不会被执行**，所以它里面的字符串拼接、`toString()`、JSON 序列化全都省掉了。对比一下下面的做法——**字符串在调用点就拼好了，级别再低也白拼**：
+>
+> ```cangjie
+> log.debug('args = ' + someExpensiveToString())   // 反例：拼字符串的成本跑不掉
+> ```
+>
+> 但要补一个准确的说明：**级别判断发生在后台消费线程上**（见 15.5），所以 `log.debug{...}` 在 DEBUG 关掉时**仍然会有一次入队**（队列满时这一入队同样会等）。也就是说「零成本」省的是渲染，不是排队本身。
+
+**② 模板占位（`{}` 位置 / `{name}` 具名）**
+
+```cangjie
+log.info('user {} login from {}', [name, ip])        // 位置占位：按数组顺序填
+log.info('user {name} is {age}', user)               // 具名占位：user 是 @DataAssist[fields] 的对象
+log.info('order {id} paid', map)                     // Map / ArrayList / TreeMap 等也支持
+```
+
+**【口播】**
+
+> 底层就是第九章那个 `TextTemplate`（`compile(message, prefix: "{", suffix: "}")`），所以它能用 `TextTemplate` 的全部能力——比如 `{time:yyyy/MM/dd}`、`{a.0.b}` 这种路径取值。
+>
+> 具名形态有个额外好处：**字段会过一次 `LoggerConfig.filter`**，天生就能做脱敏：
+>
+> ```cangjie
+> LoggerConfig.filter = MyLogFilter()   // 实现 LogFilter：filter(key, value) -> Option<(String, String)>
+> ```
+
+**③ 异常（栈会一起写出去）**
+
+```cangjie
+log.error(e){'query user failed: ${id}'}          // error(ex: Exception, message: () -> String)
+log.error('query user failed', e)                 // 或者 message 在前、异常在后
+```
+
+**【口播】** 该用哪个级别：
+
+| 级别 | 什么时候用 |
+| --- | --- |
+| `trace` | 只在本地调疑难杂症时开，基本等于「打点」 |
+| `debug` | 框架自己的 SQL、`MVC.accessLog` 都在这一级 |
+| `info` | 业务关键节点：注册、下单、状态变更 |
+| `warn` | 可恢复的异常：重试、降级、参数被纠正 |
+| `error` | 请求失败、依赖不可用，**一定要带异常对象** |
+| `fatal` | 进程级不可继续 |
+
+另外 `log.debugEnabled` / `infoEnabled` / `errorEnabled`⋯⋯这六个属性是给你在**极端热路径**上做前置判断用的。既然级别判断在后台，`if (log.debugEnabled)` 就不是多余的——**在被调用次数极高的循环里，它能帮你省掉那次入队**。
+
+**【口播】** 占位符全表（`pattern` 里能写什么）：
+
+| 占位符 | 输出 | 备注 |
+| --- | --- | --- |
+| `%level` | `DEBUG` / `INFO` / `WARN` / `ERROR` / `FATAL` / `TRACE` | 纯文本，没有颜色控制符 |
+| `%name` | logger 名字 | `getLogger<T>()` 时是完整限定名；排查问题的第一线索 |
+| `%m` | 消息正文 | 若带了 attrs，会以 `;{"k":v}` 追加在消息后面 |
+| `%d{yyyy/MM/dd HH:mm:ss.SSS}` | 时间 | `%d` 不带参数时默认 `yyyy-MM-dd,HH:mm:ss.SSS` |
+| `%tid` | 线程 ID | **在调用点采集**（记录日志的那个线程） |
+| `%tname` | 线程名 | **在写出时采集**（消费线程），排查问题请用 `%tid` |
+| `%pid` | 进程 ID | 多副本部署时用来对号 |
+| `%app` / `%appver` | 应用名 / 应用版本 | 来自应用自己的 `cjpm.toml`（`fboot build` 生成模块注入） |
+| `%fver` | `fountain(1.3.7)` | 框架版本 |
+| 其它 `%x` | 原样输出 | 不认识的占位符不会报错 |
+
+**【口播】** 两条实用规则：一是**结尾会自动加换行**，`pattern` 里别自己写 `\n`；二是 `%d{...}` 里用的是仓颉 `DateTime.format` 的格式串，`yyyy`/`MM`/`dd`/`HH`/`mm`/`ss`/`SSS` 该大小写敏感就大小写敏感。
+
+## 15.5 一条日志的旅程：异步是怎么做的
+
+**【镜头】** 幻灯片上一张流向图
+
+**【口播】**（本节是全章最硬核的一节，但结论很简单：**业务线程只入队，渲染与落盘都在专属线程**）
+
+> 一条 `log.info{'...'}` 在 fdemo 里的完整路径：
+>
+> ```
+> ① 业务线程：AbstractLogger.append(level, message, ex)
+>      ├─ 先采集时间戳 DateTime.now() 和 %tid（此刻的线程 ID）   ← 时间/线程 ID 是「调用点」的
+>      └─ 交给 LoggerAppenderFacade：把「广播给所有 appender」这个闭包投进队列
+>           队列 tag = f_log.LoggerAppenderFacade_<logger 名字>，容量 = loggerAsyncBufsize
+>
+> ② facade 的消费线程：取出闭包，遍历所有 appender
+>      └─ 对每个 appender 再调 append(level, message, now, tid, ex)
+>           └─ 这里才做「级别判断」+ 求值 lambda（所以 message 字符串是在消费线程上拼出来的）
+>              └─ AsyncLogger：把 pattern + 消息渲染成字节，写进 SyncQueueOutputStream
+>                   遇到 '\0' 结束符 → 这一条日志 = 一个批次，提交到批次队列
+>                   └─ 再往 appender 自己的队列投一个闭包（tag = console:// 或 file:///<path>）
+>
+> ③ appender 的消费线程：把批次按顺序写进真正的 OutputStream（终端 / 文件），并 flush
+> ```
+
+**【口播】** 这段路径里有四个设计点值得单独讲：
+
+> **（1）两级异步，两级队列。** facade 一条队列（**每个 logger 名字一条**），每个 appender 一条队列（**console 全局共享一条；file 按路径共享**）。所以线程数是可算的：
+>
+> ```
+> 线程数 ≈ 不同 logger 名字的个数 + appender 个数
+> ```
+>
+> 一个应用里 `getLogger<T>()` 被几十个类用到，就是几十条常驻消费线程——都是空转等队列，开销很小，但**心里要有这笔账**。
+>
+> **（2）`\0` 是批次边界。** 写日志就是往缓冲区塞字节，塞完写一个 `\0`，`SyncQueueOutputStream` 看到 `\0` 就把整块提交换缓冲区。这样**一条日志在文件里不会被别的线程插进来切成两半**。顺带一个小特性：`\0` 本身**不会**被写进日志文件（源码里留了 `todo`，说明这里为了避开性能更高的写法的 BUG 才这么判）。
+>
+> **（3）缓冲区是池化的，池空会丢日志。** 缓冲区池大小 = `loggerAsyncBufsize`（默认 1024）。上面 ② 那个消费线程在把日志渲染成字节之前，先要从池里借一块缓冲（借用时最多等 `logger_asyncWaitTimeout`，默认 5ms），借不到就打印一行 `AsyncLogger.SyncQueueOutputStream.EmptyPool` 并**丢掉本次写入**。这条 5ms 的配置在 `fdemo/boot.sh` 里就有，注释也写明了：「超过这个时间，本次日志被忽略」。
+>
+> **（4）队列满了怎么办，由 timeout + policy 决定。**
+>
+> ```
+> loggerAsyncTimeout      默认 Duration.Max  → 相当于「一直等到有空位」（入队方被拖住）
+> loggerAsyncTimeoutPolicy 默认 discard      → 只在上面那个 timeout 真的超时后才会被执行
+> ```
+>
+> 这里要特别提醒：**因为默认 timeout 是 `Duration.Max`，默认配置下「队列满」= 入队方阻塞等待，policy 根本轮不到生效**。而"入队方"在两级队列上不是同一个角色：往 facade 队列投递的是**业务线程本身**，往 appender 队列投递的是 **facade 的消费线程**——所以队列满时被拖慢的是业务线程，或者这条日志链路的后续搬运。所以：
+>
+> - 想要「宁可丢日志也别拖慢业务」：`loggerAsyncTimeout=10ms` + `loggerAsyncTimeoutPolicy=discard`；
+> - 想要「日志一条不能少，慢就慢」：保持默认，或明确写 `loggerAsyncTimeoutPolicy=alwaysWaiting`；
+> - `abort` 会抛 `LogException`，**不建议在业务路径上开**。
+>
+> 最后别忘了**退出**：facade 在 `env.atExit` 里注册了关闭动作，`close()` 会**先把队列排空**（自旋等 `queue.size == 0`，再等 100 微秒把最后一个字节数组写出）然后才关流。**这就是为什么 `Ctrl-C` 之后日志文件里不会缺最后几条。**
+
+## 15.6 文件切割与压缩
+
+**【口播】**
+
+> 文件 appender 的行为，一句话概括：**「默认按天切，切完的文件加时间后缀，配了压缩就压」**。
+>
+> **（1）切割时机**，两个条件满足任一即切：
+> - **跨周期**：文件创建时间早于当前时间单位的起点（按天切 = 今天凌晨之前创建的）；
+> - **超大小**：`size + 本批字节数 >= rotateSize`（写在文件里的预判，不是事后检查）。
+>
+> **（2）切割动作**：关掉当前文件 → `rename` 成 `<原路径>.<上一个周期的时间戳>` → 如果配了 `compressFormat`，在**独立线程里**压缩（`Deflate` → `.lz`，`GZip` → `.gz`），然后原文件被删掉 → 重新以 Append 模式打开原路径。
+>
+> 所以按天切、不压缩时，你会看到：
+>
+> ```
+> log/fdemo.log         ← 当前正在写
+> log/fdemo.log.20261001 ← 昨天那份（后缀是"上一个周期"）
+> ```
+>
+> **（3）`_url` 写法**（一个字符串替代四个配置项，url 参数优先）：
+>
+> ```bash
+> export logger_appender_myfile_url='file://./log/app.log?rotateSize=100M&rotateDuration=HOUR&compressFormat=GZip'
+> ```
+>
+> **（4）`rotateSize` 支持人类可读写法**：`100k`、`10M`、`1G`（内部 `computeBytes` 解析，不写单位就是字节）。
+>
+> ⚠️ **两个要注意的地方**：
+>
+> - **`rotateDuration` 不要配亚秒级**（`MILLISECOND` / `MICROSECOND` / `NANOSECOND`）。切割后文件名的后缀粒度只到秒，而"跨周期"判断几乎每一次写入都会成立——结果是**每次写日志都 rename 一次 + 重开文件**。按 `MINUTE` 起步、常用 `HOUR` / `DAY`。
+> - **压缩失败也会删掉原文件**：压缩那段的 `finally` 里直接 `removeIfExists(原路径)`，压缩过程中出的错只打印栈。**日志是重要证据的场景（审计、计费）建议先不压缩，或者自测一遍压缩路径。**
+
+## 15.7 现场演示：把框架自己的日志调出来
+
+**【镜头】** 终端 `cd fdemo && ./boot.sh run`；另一个终端 `curl`
+
+**【命令】**
+
+```bash
+# ① 启动（boot.sh 的 exports() 已经带了 console=DEBUG、file=INFO）
+./boot.sh run
+
+# ② 另开终端发一个注册请求（这个接口声明的是 form 表单，不是 JSON）
+curl -X POST 'http://127.0.0.1:8080/api/user/register' \
+     -d 'username=fountain&password=123456'
+
+# ③ 看文件那份
+tail -f ./log/fdemo.log
+```
+
+**【预期】**
+
+> 控制台（`FDemoConsole`，`DEBUG`）里会出现两类**框架自己打的**日志：
+>
+> ```
+> [DEBUG-std.reflect.TypeInfo.get("fountain::f_orm.base.SqlExecutor")]2026/10/02,10:21:33.508649747|12876;postgres is executing a sql: insert into user_info( "id" , "username" , "password" , "save_time" )values(?,?,?,?) returning id, args: [(0, Int64, 0), (1, String, fountain), (2, String, 123456), null], consumed: 3ms200us101ns
+> [INFO-std.reflect.TypeInfo.get("fountain::user.controller.CurrentUserController")]2026/10/02,10:21:33.512649747|12876;MVC.accessLog:POST:/api/user/register?username=fountain&password=123456; consumes:Some(application/x-www-form-urlencoded); params:[fountain,123456]; returned:{…}; status:200; elapsed:2ms300us123ns
+> ```
+>
+> 文件（`FDemoFile`，`INFO`）里只有第二行——**第一条是 `DEBUG`，被文件 appender 过滤掉了**。
+
+**【口播】**
+
+> 这一屏要讲的其实是三件事：
+>
+> **第一，`%name` 是你定位问题的第一把钥匙。** `std.reflect.TypeInfo.get("fountain::f_orm.base.SqlExecutor")` 这一行告诉你：**这是 ORM 在执行 SQL**——`%name` 就是 `LoggerFactory.getLogger<T>()` 里 `T` 的完整限定名（仓颉的限定名用 `::` 分段）；`consumed:` 后面是这条 SQL 的耗时，`3ms200us101ns` 就是 3 毫秒 200 微秒 101 纳秒。而 `...CurrentUserController` 这一行是 MVC 的 access log——**名字就是处理这个请求的 controller 类**，`MVC.accessLog:` 后面依次是方法、URL（POST 的表单字段拼在 `?` 后面）、Content-Type、入参、返回值、状态码、耗时。
+>
+> 两个可以顺嘴讲的细节：SQL 里 `"id"`、`"username"` 的双引号是方言的 `involve` 包上去的，末尾的 `returning id` 也是 PostgreSQL 方言追加的 `lastInsertId` 片段；`returned:` 后面是 controller 的返回值**原样拼进去**的——这个接口返回的是多行 JSON，所以文件里这条 access log 会跟着展开成好几行。
+>
+> 换句话说：**你几乎不用写日志，框架已经给你打好了。** 排查线上问题时，你需要的动作是「把级别调成 DEBUG，然后按 `%name` 去 grep」。
+>
+> **第二，`fboot` 生成的应用信息自动进了日志。** `%app` / `%appver` 的值不来自任何配置文件——`fboot build` 读你的 `cjpm.toml`，生成一段代码调 `AppVersion.set(banner, name, version)`，日志里的应用名和版本就是从这里来的。这是 `fboot` 和 `f_log` 之间唯一的一根线，也是「零配置」为什么不等于「没有信息」。
+>
+> **第三，想只看文件不看控制台？** 把 `logger_appender_console` 那两行删掉（或注掉）重启就行——**没有配置就没有这个 appender**，这正是纪律一。
+
+**【命令】**（再演示一次「按小时切 + 压缩」）
+
+```bash
+export logger_appender_FDemoFile_rotateDuration=HOUR
+export logger_appender_FDemoFile_rotateSize=10M
+export logger_appender_FDemoFile_compressFormat=GZip
+./boot.sh run
+```
+
+**【预期】** `log/` 目录下会积累 `fdemo.log.2026100210.gz` 这样的文件。**演示完记得把这三行撤掉**，否则一小时一个文件。
+
+## 15.8 运行期刷新：`LoggerFactory.refresh()`
+
+**【口播】**
+
+> 配置读一次就固定了吗？不是。
+>
+> ```
+> LoggerWrapper.refresh()
+>   → 按当前配置新建一个 LoggerAppenderFacade
+>   → CAS 把引用换过去（换的时候老的 facade 关闭：排空队列、关流）
+> ```
+>
+> 所以「运行期换级别、换格式、加一个 appender」在理论上是支持的，入口是一行：
+>
+> ```cangjie
+> LoggerFactory.refresh()    // 刷新所有已创建的 logger
+> ```
+>
+> 但这里有个**必须知道的现实**：`LoggerConfig` 的 `static init` 里确实注册了回调——
+>
+> ```cangjie
+> Config.refresher(confPrefix, LoggerFactory.refresh)
+> ```
+>
+> 可是按第三章 3.8 里那条已知问题，`f_config` 的 `refresher` 前缀匹配恒不成立，**`Config.set` 不会触发任何刷新回调**。所以现阶段的实际做法是：**改完配置自己调一次 `LoggerFactory.refresh()`。**
+>
+> ```cangjie
+> Config.set('logger_appender_FDemoConsole_level', 'DEBUG')
+> LoggerFactory.refresh()      // 立刻生效，不用重启
+> ```
+>
+> 想看效果，就在 fdemo 里随便找个 controller 加一个临时端点干这两件事，然后观察同一份日志文件里前后两段的粒度变化。**注意 level 是读 `logger_appender_<Name>_level` 这个键，不是 `logger_appender_console_level`——`<Name>` 是你起的名字。**
+>
+> 顺便交个底：**哪些配置 `refresh()` 能改、哪些必须重启**——
+>
+> | 配置 | 生效方式 |
+> | --- | --- |
+> | appender 的名字、级别、pattern、路径、切割、压缩 | `refresh()` 生效（重建 facade 与 appender） |
+> | `loggerAsyncTimeout`、`loggerAsyncTimeoutPolicy`、异步队列容量 | 在 logger / appender **构造时**读取，`refresh()` 生效 |
+> | `loggerAsyncBufsize` 的**池大小**那一半 | 缓冲区池是**进程级静态单例**，只在首次用到时按当时的配置建一次——**只能重启** |
+>
+> 「改配置→刷新」这条路最适合做的是**调级别**（`INFO` ↔ `DEBUG`），这也是线上最常用的动作；其余配置建议当成「重启才生效」来对待。
+
+## 15.9 八个坑
+
+| # | 现象 | 原因 / 解法 |
+| --- | --- | --- |
+| 1 | 日志一条都不输出 | 没配任何 appender。fountain **默认静默**，至少要 `logger_appender_console=<名字>` |
+| 2 | 配了级别没生效 | 写成了 `logger_appender_console_level`。级别挂在**你起的名字**上：`logger_appender_FDemoConsole_level` |
+| 3 | 想只给某个包开 DEBUG，做不到 | 级别挂在 appender 上，没有 logger 名字树。要分来源就加一个 appender 配不同 pattern，用 `%name` 区分 |
+| 4 | 高并发时丢日志，控制台出现 `AsyncLogger.SyncQueueOutputStream.EmptyPool` | 缓冲区池（`loggerAsyncBufsize`，默认 1024）被占满且 `logger_asyncWaitTimeout`（默认 5ms）内没借到。加大 `loggerAsyncBufsize`，或接受丢弃 |
+| 5 | 业务线程偶发变慢 / 卡顿 | 队列满时默认 `loggerAsyncTimeout=Duration.Max` 会**一直等**。要「宁可丢日志」就设 `loggerAsyncTimeout=10ms` + `loggerAsyncTimeoutPolicy=discard` |
+| 6 | 日志按秒切割，文件爆炸 | `rotateDuration` 配了亚秒级（`MILLISECOND` 等）。按 `MINUTE` 起步，常用 `HOUR` / `DAY` |
+| 7 | 改了 `loggerAsyncBufsize` 没生效 | 它同时是**缓冲区池的大小**，而池是进程级静态单例——首次用到时建一次，**改它只能重启** |
+| 8 | 改了 `loggerAsyncTimeout` / `_policy` 没生效 | 这两个值在 logger / appender **构造时**读取。改完要 `LoggerFactory.refresh()`（见 15.8） |
+
+**【口播】**（再补两条不算坑但常被误会的）
+
+> - `FATAL` **不是**可配的级别字符串：级别解析只认 `OFF` / `ERROR` / `WARN` / `INFO` / `DEBUG` / `TRACE` / `ALL`，写别的（包括 `FATAL`）会**落到 `INFO`**——这不是「不输出」，而是「比你想的更啰嗦」。
+> - 日志格式里没有颜色控制符，别指望控制台是彩色的（`%level` 输出的是纯文本 `DEBUG` / `ERROR`⋯⋯）。
+
+## 15.10 速查卡
+
+```cangjie
+// 拿 logger：名字 = 完整限定名（推荐）/ 或任意字面量
+private static let log = LoggerFactory.getLogger<UserServiceImpl>()
+private static let log2 = LoggerFactory.getLogger('my.business')
+
+// 写日志：惰性 lambda（级别不够零成本）/ 模板 / 异常
+log.info{'start create user: ${name}'}
+log.info('user {} login from {}', [name, ip])
+log.info('user {name} is {age}', userPo)          // @DataAssist[fields] 对象 → 具名占位
+log.error(e){'query user failed: ${id}'}
+log.error('query user failed', e)
+
+// 脱敏 / 附带属性
+LoggerConfig.filter = MyLogFilter()               // LogFilter 接口
+log.withAttrs([Attr('traceId', LogValue('...'))])
+
+// 运行期刷新（f_config 的 refresher 目前不会自动触发，要手动调）
+LoggerFactory.refresh()
+```
+
+```bash
+# 配置：一类 appender 挂若干具名实例，实例各自配级别/格式
+export logger_appender_console=FDemoConsole
+export logger_appender_FDemoConsole_level=DEBUG
+export logger_appender_FDemoConsole_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%tid;%m'
+export logger_appender_file=FDemoFile
+export logger_appender_FDemoFile_level=INFO
+export logger_appender_FDemoFile_path=./log/fdemo.log
+export logger_appender_FDemoFile_rotateDuration=DAY          # NANOSECOND..YEAR，别用亚秒级
+export logger_appender_FDemoFile_rotateSize=100M             # 可选，支持 100k/100M/1G
+export logger_appender_FDemoFile_compressFormat=GZip         # 可选：Deflate / GZip
+export logger_asyncWaitTimeout=5ms                           # 借不到缓冲区→丢弃本条
+# export loggerAsyncBufsize=1024                             # 队列容量 & 缓冲区池大小
+# export loggerAsyncTimeout=10ms                             # 队列满时的等待（默认 Duration.Max＝死等）
+# export loggerAsyncTimeoutPolicy=discard                    # discard / abort / alwaysWaiting
+```
+
+**【口播】**（收尾）
+
+> 这一章的核心其实就两句话：
+>
+> **第一，`f_log` 是 stdx.log 的实现，而且默认静默**——它不是「又一个日志框架」，而是「把你的日志（业务日志、MVC access log、ORM SQL、第三方库日志、数据库驱动日志）统一收进同一条异步管道」的那一层。
+>
+> **第二，调试靠 `%name` + 级别，落盘靠 appender**——级别挂在 appender 上（所以没有「只给某个包开 DEBUG」），来源靠 `%name` 认（所以排查时 `grep 'fountain::f_orm' ./log/fdemo.log` 就行了）。
+>
+> 下一章我们把这些东西串起来：**一次 `POST /api/user/register`，从 `f_config` 装载配置开始，穿过 MVC、bean、aspect、ORM，最后落进这张日志表。**
 
 ---
 
-# 第十六章 运行时基础设施：`f_cache` / `f_pool` / `f_collection` / `f_time` / `f_regex` / `f_rx`
+# 第十六章 串讲：一次请求穿过整个框架
 
-**【镜头】** 先给六个模块的 README 各一屏，再回到它们在框架内部的调用点
+**【镜头】** 画一张纵向调用链 + 终端实时日志。用一个 `POST /api/user/register` 走完全流程。
 
-## 16.1 开场：框架之下的那一层
+```
+⓪ 进程启动：f_config 的 static init 装载环境变量 + 命令行参数（命令行覆盖环境变量），
+   并准备 sensitiveMap（编译期内嵌的敏感配置，配了 SM4 则运行期解密）
+① fboot run 加载动态链接库
+   └─ static init(): @Bean 注册进 BeanFactory；Initializer 注册进 InitializerCollection
+   └─ 拓扑排序 initialize()：BeanInitializer → ORMInitializer → MVCInitializer → TickTockInitializer ...
+   └─ 各 start() spawn 到新线程：MVC 启动 HTTP 服务（阻塞）、TickTock 启动定时器
+
+② curl -XPOST /api/user/register
+   └─ MVC 路由匹配（@PostMapping + consumes/produces/params/headers）
+   └─ 参数绑定（@RequestParam）
+        └─ f_http 的 MediaType 把请求体字节转成 Data
+        └─ f_data 把 Data 转成对象并触发校验（@CombinedValidator）
+   └─ AuthHandlerProxy.check：ignoreAuth=true → 直接 OK
+   └─ 【AOP】ControllerAspect.around（controllerPointcut 命中）
+        └─ 原函数体 register()
+             └─ lookup<UserService>() → UserServiceImpl
+                  └─ 【AOP】TransactionAspect（orm_transactionalFuncExecution 命中 register*）
+                       └─ orm execute：newTxAndBegin
+                            ├─ TransactionHook.beforeTx
+                            ├─ executor().register(...)  ← SqlExecutor 即 UserDAO
+                            │    └─ INSERT_INTO<UserPO>(user) → 绑定参数 → 执行
+                            ├─ TransactionHook.beforeCommit
+                            ├─ commit
+                            ├─ TransactionHook.afterCommit
+                            └─ TransactionHook.afterComplete(Committed)
+   └─ 返回值按 produces 序列化
+
+③ 定时线程：TickTockTaskImpl 按 cron 触发（独立线程，与请求互不干扰）
+
+④ 旁路：f_util.UUID + f_random 给会话发密钥（UserSessionCache 里的 UUID.random()），
+   f_http 的 MediaType 配合 f_data 给响应做序列化；
+   f_util 的 PathPattern 是 ② 里「路由匹配 + 抽路径变量」的引擎
+
+⑤ 底座：f_cache 存登录状态、f_pool 撑起数据库连接池、f_regex 缓存住路径正则、
+   f_time 解析所有 Duration 型配置；f_log 在 ② 的每一步上落日志——SQL 的 DEBUG、accessLog 的 INFO
+```
 
 **【口播】**
 
-> 前面讲了 IOC、AOP、MVC、ORM、安全、定时任务——这些是**你能直接感知到的框架能力**。
-> 但它们是站在另一层之上的。这一章讲的就是那一层：**运行时基础设施**。
+> 这一屏就是 fountain 的全部：
+> **f_config 负责配置、f_bean 负责装配、f_aspect 负责横切、f_data 负责流动、f_util 提供工具箱、f_http 负责格式、f_mvc 负责协议、f_orm 负责数据库、f_security + f_jwt 负责身份、f_ticktock 负责CRON定时器、f_random 负责随机性、f_log 负责日志、f_cache/f_pool/f_collection/f_time/f_regex/f_rx 构成运行时底座。**
+> 而且从头到尾你没写过一个配置文件、没写过一行 `main`。
+> 业务代码里你只写了 `UserController`、`UserService`、`UserDAO`、`UserPO` 四个东西，加起来不到 200 行。
+
+---
+
+# 第十七章 运行时基础设施：`f_cache` / `f_pool` / `f_collection` / `f_time` / `f_regex` / `f_rx` / `f_random`
+
+**【镜头】** 先给七个模块的 README 各一屏，再回到它们在框架内部的调用点
+
+## 17.1 开场：框架之下的那一层
+
+**【口播】**
+
+> 前面讲了 IOC、AOP、MVC、ORM、安全、定时任务、日志——这些是**你能直接感知到的框架能力**。
+> 但它们是站在另一层之上的。这一章讲的就是那一层：**运行时基础设施**，当「零部件手册」单独翻也完全可以。
 >
 > | 模块 | 一句话 | 在 fountain 里被谁用了 |
 > | --- | --- | --- |
@@ -3314,10 +3654,11 @@ fboot randhex 32        # ← 就是 f_random 的 randomLowerHex(32)
 > | `f_time` | `std.time` 扩展：`TimeUnit` + `Int64` 时间 DSL | 所有用 `Duration` 作配置项的地方（`mvc_readTimeout` 等） |
 > | `f_regex` | 正则扩展 + **正则缓存** | `f_util` 的 `PathPattern`、`f_data` 的校验器 |
 > | `f_rx` | 反应式编程（Observable / Observer / 背压） | 流式数据处理场景 |
+> | `f_random` | 随机数扩展：区间随机、随机流、随机字符串、蓄水池抽样 | `f_app` 的 `fboot randhex`、`fdemo` 的 `UserSessionCache` 会话密钥 |
 >
-> 这六个模块的共同特点：**零配置、可以单独引入、不绑架你的架构**。就算你不用 fountain 的框架部分，把它们当工具库用也完全没问题。
+> 这七个模块的共同特点：**零配置、可以单独引入、不绑架你的架构**。就算你不用 fountain 的框架部分，把它们当工具库用也完全没问题。
 
-## 16.2 `f_cache`：堆缓存
+## 17.2 `f_cache`：堆缓存
 
 ### 强引用 `HeapCache`
 
@@ -3394,7 +3735,7 @@ private static let context = JWTSecurityContext<String>(JWTHeapCacheStore(Durati
 
 **【口播】** `JWTHeapCacheStore` 就是 `HeapCacheStore<String, JWTPrincipal<String>>`，底层正是 `f_cache` 的堆缓存——所以第十三章那个「登录状态存 1 小时」的能力，根源在这里。
 
-## 16.3 `f_pool`：对象池
+## 17.3 `f_pool`：对象池
 
 ### 池的存储模式
 
@@ -3468,7 +3809,7 @@ public ArrayListPool(...)   // 参数同上
 
 **【口播】** 高频临时缓冲区的老问题：每次 new 一个 128 长度的数组，GC 压力全在这儿。数组池直接复用——这是 `f_base` 里 `StringGenerator` 那类组件敢放开手脚用的底气。
 
-## 16.4 `f_collection`：补标准库的位
+## 17.4 `f_collection`：补标准库的位
 
 **【口播】** 这节不用逐条念，挑四个最能解决痛点的讲。
 
@@ -3558,7 +3899,7 @@ public interface SetOp<T> {
 
 **【口播】** `PriorityQueue` 容量满时**自动扩容**，也可以给 `OverSizePolicy` 做拒绝策略；`SetOp` 的 `IntersectionSetView` / `UnionSetView` / `DifferenceSetView` 都是**只读视图**——做集合运算不产生拷贝。
 
-## 16.5 `f_time`：把时间操作变成 DSL
+## 17.5 `f_time`：把时间操作变成 DSL
 
 **【口播】**
 
@@ -3642,7 +3983,7 @@ Month.January   - Month.December      // -11
 TimeZone.Z                            // UTC 时区常量
 ```
 
-## 16.6 `f_regex`：正则扩展与正则缓存
+## 17.6 `f_regex`：正则扩展与正则缓存
 
 ### 常用正则常量
 
@@ -3684,7 +4025,7 @@ let r = '^/api/.*'.regex(solid: false)
 > **编译正则是有成本的**。热路径上反复 `str.regex()` 而不用缓存，是很多服务的隐形 CPU 杀手。
 > 顺带闭环：`f_util.PathPattern` 在编译路径时会先做几步正则预处理（把 `{*name}` 归一化、把连续 `//` 合并成 `/`），这些正则就是用 `regex(solid: true)` 建的——进程内编译一次、复用一生。
 
-## 16.7 `f_rx`：反应式编程
+## 17.7 `f_rx`：反应式编程
 
 **【口播】**
 
@@ -3775,9 +4116,166 @@ Observable.replaySize(capacity)   // 启动后再注册的观察者会异步重�
 
 每个创建函数都接受命名参数 `asyncCombined!: Bool`——决定多个观察者**各自开线程**还是**共用一个线程**。
 
-## 16.8 现场演示
+## 17.8 `f_random`：随机数
 
-**【镜头】** 建议临时建一个小模块，把六个模块各跑一行
+**【镜头】** `f_random/README.md` + `fdemo/user/src/util/UserSessionCache.cj`（那行 `UUID.random().toHexString()`）
+
+### 它补了标准库什么
+
+**【口播】**
+
+> 仓颉标准库有 `std.random.Random`，stdx 有 `stdx.crypto.crypto.SecureRandom`。但它们缺三样常用的东西：
+> 1. **区间随机数**——`nextInt64(1, 100, closed: true)` 这种；
+> 2. **随机数流**——一次性要一万个随机数时，不想写循环；
+> 3. **随机字符串**——做 token / 验证码 / 盐值时每次都手搓。
+>
+> `f_random` 就干这三件事，外加**蓄水池抽样**和**线程本地随机源**。
+> 它不自己实现随机算法，而是用 `extend Random <: ExtendRandom<Random>` 和 `extend SecureRandom <: ExtendRandom<SecureRandom>` 把能力**扩展到标准库类型上**——所以 API 是「加在原类上」的，不用换类型。
+
+```toml
+[dependencies]
+  "fountain::f_random" = {path = "../f_random"}
+```
+
+```cangjie
+import fountain::f_random.*
+// 或聚合包：import fountain::fountain.random.*
+```
+
+> 注意：扩展方法（如 `nextInt64(min, max, closed:)`）**只有导入本模块后才可见**。
+
+### 区间随机数：`ExtendRandom`
+
+```cangjie
+public interface ExtendRandom<R> where R <: ExtendRandom<R> {
+    func nextFloat64(min: Float64, max: Float64, closed!: Bool): Float64
+    func nextFloat32(min: Float32, max: Float32, closed!: Bool): Float32
+    func nextInt64  (min: Int64,  max: Int64,  closed!: Bool): Int64
+    func nextUInt64 (min: UInt64, max: UInt64, closed!: Bool): UInt64
+    func nextInt32  (min: Int32,  max: Int32,  closed!: Bool): Int32
+    func nextUInt32 (min: UInt32, max: UInt32, closed!: Bool): UInt32
+}
+```
+
+`closed` 在实现中默认 `false`，所以 `rand.nextInt64(1, 100)` 也是合法的。
+
+`BaseRandom` 则把标准库自带的方法统一到一个接口上（大部分是转发，本模块不重复实现）：
+
+```cangjie
+nextBool() / nextInt8/16/32/64() / nextUInt8/16/32/64()
+nextInt64(max) / nextUInt32(max) ...          // [0, max)
+nextFloat16/32/64()                            // [0.0, 1.0)
+nextGaussianFloat16/32/64(mean!, sigma!)       // 高斯分布
+nextBytes(length) / nextUInt8s(array)          // 字节数组 / 原地填充
+```
+
+**【口播】** `Random` 和 `SecureRandom` 用法**完全相同**：需要密码学强度时把 `Random()` 换成 `SecureRandom()` 或 `ThreadLocalRandom.current` 即可，业务代码一行不用改。
+
+### 随机数流（无限迭代器）
+
+```cangjie
+let stream = rand.randomInt64(0, 10)          // Iterator<Int64>，(0,10) 或 [0,10]
+let next   = stream.next() ?? 0
+
+// 也有 UInt64 / Int32 / UInt32 版本，以及高斯分布流：
+rand.randomGaussianFloat64Stream(mean: 0.0, sigma: 1.0)
+rand.randomGaussianFloat32Stream()
+rand.randomGaussianFloat16Stream()
+```
+
+**【口播】** 这些迭代器的 `next()` **永远返回 `Some`**，是无限流——要多少自己控制（`take(n)` 或循环 break）。具体迭代器类是包内可见的，用工厂方法拿就行。
+
+### 随机字符串：`RandomString`
+
+```cangjie
+let rs = RandomString()
+println(rs.randomLettersNumbers(16))   // 16 位字母+数字
+println(rs.randomLowerHex(8))          // 8 位小写 16 进制
+```
+
+| 方法 | 字符集 |
+| --- | --- |
+| `randomAscii` | `U+0000`–`U+007F`（**含控制字符**，慎用） |
+| `randomLowerLetters` | `a`–`z` |
+| `randomUpperLetters` | `A`–`Z` |
+| `randomAllLetters` | `A`–`Z` + `a`–`z` |
+| `randomNumbers` | `0`–`9` |
+| `randomLowerHex` | `0`–`9` + `a`–`f` |
+| `randomUpperHex` | `0`–`9` + `A`–`F` |
+| `randomLowerLettersNumbers` | `a`–`z` + `0`–`9` |
+| `randomUpperLettersNumbers` | `A`–`Z` + `0`–`9` |
+| `randomLettersNumbers` | `A`–`Z` + `a`–`z` + `0`–`9` |
+| `randomPrintableAsciis` | 字母数字 + `` `~!@#$%^&*()-_=+[{]}\|'";:/?.>,< `` |
+| `randomAllChars` | 全部 Unicode scalar（自动避开代理区 `0xD800`–`0xDFFF`） |
+| `random(count, source)` | 调用方给定的 `String` 或 `Array<Rune>` |
+
+每个方法都有两个重载：`(count)` 生成固定长度，`(min, max)` 先随机出长度再生成。
+
+### `ThreadLocalRandom`
+
+```cangjie
+public class ThreadLocalRandom {
+    private init()
+    @Frozen
+    public static prop current: SecureRandom
+}
+```
+
+**【口播】**
+
+> 每个线程首次访问 `current` 时创建一个 `SecureRandom`（默认 `priv`），之后一直复用——**不用自己处理加锁和复用**。
+> 而且 `RandomString()` 的无参构造器默认就把它作为随机源，所以**默认的 `RandomString` 实例天然线程安全**。
+> 高并发下生成 token、验证码、盐值，用 `RandomString()` 默认构造就对了。
+
+### 蓄水池抽样
+
+```cangjie
+public func randomReservoir<T>(count: Int64, source: Iterable<T>, priv!: Bool = false): ArrayList<T>
+
+let sample = randomReservoir<Int64>(3, [1, 2, 3, 4, 5, 6, 7, 8])
+```
+
+**【口播】** 只需**遍历一次**数据源就能随机取 `count` 个元素，**不需要事先知道总数**——适合流式数据或超大集合抽样（比如从日志流里随机采样做监控）。`priv` 是内部 `SecureRandom` 的初始化参数，每次调用新建一个 `SecureRandom`。
+
+### 它在 fountain 里的三个位置
+
+**【口播】**（把工具库和前面讲过的内容串起来）
+
+1. **`fboot randhex`** —— 实现就是 `RandomString().randomLowerHex(n)`（第四章讲过，给 SM4 生成密钥/IV，机制见第三章）；
+2. **JWT 会话密钥** —— `fdemo` 的 `UserSessionCache` 里 `UUID.random().toHexString()` 给每个登录生成独立 HMAC 密钥；
+3. **业务侧** —— 验证码、邀请码、临时 token、幂等号、抽样的盐值。
+
+**【演示】**
+
+```bash
+fboot randhex 32        # ← 就是 f_random 的 randomLowerHex(32)
+```
+
+### 注意事项与已知行为（照着 README 念，别踩）
+
+> 这几条是 `f_random` 当前实现与直觉不一致的地方，README 按代码实际行为记录。讲出来比让观众自己撞墙好。
+
+1. **浮点版的 `closed` 不是「包含上界」**：实现是 `nextFloat64() * (max - min + (closed ? 1 : 0)) + min`。`closed: true` 时落在 `[min, max + 1.0)`，**有可能超过 `max`**；`closed: false` 落在 `[min, max)`。需要严格不超过上界请自己裁剪。
+2. **整数版先转浮点再取整**：`nextInt64/nextUInt64` 走 `Float64`，`nextInt32/nextUInt32` 走 `Float32`，最后 `floor` 取整。区间接近 `Int64.Max` 时会有精度损失甚至溢出。
+3. **区间参数不校验**：不检查 `min <= max`，传反了不报错，只会得到反转区间的结果。
+4. **`RandomString` 的三个 `(min, max)` 重载调错了方法**：
+   - `randomAllLetters(min, max)` 实际产出**只有小写字母**；
+   - `randomUpperLettersNumbers(min, max)` 实际产出**小写字母+数字**；
+   - `randomLettersNumbers(min, max)` 实际产出**小写字母+数字**。
+
+   需要对应字符集时请自己先算长度再调 `(count)` 重载：
+
+   ```cangjie
+   let rs = RandomString()
+   let len = ThreadLocalRandom.current.nextInt64(8, 16, closed: true)
+   let s = rs.randomLettersNumbers(len)
+   ```
+5. **长度区间不统一**：只有 `randomAscii(min, max)` 和 `random(min, max, source)` 用了 `closed: true`（长度落在 `[min, max]`），其余 `(min, max)` 重载的长度是 `[min, max)`。
+6. **`randomReservoir` 的边界**：`count <= 0` 且数据源非空时会抛参数非法异常；返回值大小是 `min(count, 元素个数)`，不总是等于 `count`；替换下标取自 `[0, i)` 而非经典算法的 `[0, i]`，**抽样结果并非严格均匀**——对均匀性有硬要求的场景请自己实现。
+
+## 17.9 现场演示
+
+**【镜头】** 建议临时建一个小模块，把七个模块各跑一行
 
 ```bash
 cd /tmp/fountain_live/hello_app
@@ -3827,69 +4325,21 @@ Observable<Int64>.iterable([1, 2, 3])
     .subscribe('demo', FuncObserver<Int64>().setNext{v => println(v)})
     .withCurrent()
     .defer()
+
+// ⑦ f_random：带线程本地随机源的随机字符串
+RandomString().randomLowerHex(16)
 ```
 
 **【口播】**
 
-> 这六个模块没有一个需要配置文件、没有一个需要启动器、没有一个依赖 IOC。
-> **它们就是六个可以随手拿走的工具库**——这也是 fountain 的设计哲学：**框架给你便利，但不劫持你的代码。**
-
----
-
-# 第十七章 串讲：一次请求穿过整个框架
-
-**【镜头】** 画一张纵向调用链 + 终端实时日志。用一个 `POST /api/user/register` 走完全流程。
-
-```
-⓪ 进程启动：f_config 的 static init 装载环境变量 + 命令行参数（命令行覆盖环境变量），
-   并准备 sensitiveMap（编译期内嵌的敏感配置，配了 SM4 则运行期解密）
-① fboot run 加载动态链接库
-   └─ static init(): @Bean 注册进 BeanFactory；Initializer 注册进 InitializerCollection
-   └─ 拓扑排序 initialize()：BeanInitializer → ORMInitializer → MVCInitializer → TickTockInitializer ...
-   └─ 各 start() spawn 到新线程：MVC 启动 HTTP 服务（阻塞）、TickTock 启动定时器
-
-② curl -XPOST /api/user/register
-   └─ MVC 路由匹配（@PostMapping + consumes/produces/params/headers）
-   └─ 参数绑定（@RequestParam）
-        └─ f_http 的 MediaType 把请求体字节转成 Data
-        └─ f_data 把 Data 转成对象并触发校验（@CombinedValidator）
-   └─ AuthHandlerProxy.check：ignoreAuth=true → 直接 OK
-   └─ 【AOP】ControllerAspect.around（controllerPointcut 命中）
-        └─ 原函数体 register()
-             └─ lookup<UserService>() → UserServiceImpl
-                  └─ 【AOP】TransactionAspect（orm_transactionalFuncExecution 命中 register*）
-                       └─ orm execute：newTxAndBegin
-                            ├─ TransactionHook.beforeTx
-                            ├─ executor().register(...)  ← SqlExecutor 即 UserDAO
-                            │    └─ INSERT_INTO<UserPO>(user) → 绑定参数 → 执行
-                            ├─ TransactionHook.beforeCommit
-                            ├─ commit
-                            ├─ TransactionHook.afterCommit
-                            └─ TransactionHook.afterComplete(Committed)
-   └─ 返回值按 produces 序列化
-
-③ 定时线程：TickTockTaskImpl 按 cron 触发（独立线程，与请求互不干扰）
-
-④ 旁路：f_util.UUID + f_random 给会话发密钥（UserSessionCache 里的 UUID.random()），
-   f_http 的 MediaType 配合 f_data 给响应做序列化；
-   f_util 的 PathPattern 是 ② 里「路由匹配 + 抽路径变量」的引擎
-
-⑤ 底座：f_cache 存登录状态、f_pool 撑起数据库连接池、f_regex 缓存住路径正则、
-   f_time 解析所有 Duration 型配置
-```
-
-**【口播】**
-
-> 这一屏就是 fountain 的全部：
-> **f_config 负责配置、f_bean 负责装配、f_aspect 负责横切、f_data 负责流动、f_util 提供工具箱、f_http 负责格式、f_mvc 负责协议、f_orm 负责数据库、f_security + f_jwt 负责身份、f_ticktock 负责CRON定时器、f_random 负责随机性、f_cache/f_pool/f_collection/f_time/f_regex/f_rx 构成运行时底座。**
-> 而且从头到尾你没写过一个配置文件、没写过一行 `main`。
-> 业务代码里你只写了 `UserController`、`UserService`、`UserDAO`、`UserPO` 四个东西，加起来不到 200 行。
+> 这七个模块没有一个需要配置文件、没有一个需要启动器、没有一个依赖 IOC。
+> **它们就是七个可以随手拿走的工具库**——这也是 fountain 的设计哲学：**框架给你便利，但不劫持你的代码。**
 
 ---
 
 # 第十八章 收尾：常见坑与 Q&A
 
-## 18.1 二十个高频坑
+## 18.1 二十二个高频坑
 
 | # | 现象 | 原因 / 解法 |
 | --- | --- | --- |
@@ -3904,7 +4354,7 @@ Observable<Int64>.iterable([1, 2, 3])
 | 9 | 宏报「must be modified by public var or public mut prop」 | `@ORMField` 的约束 |
 | 10 | `fboot run` 卡住不动 | 这是**预期行为**，它永久阻塞；另开终端发请求 |
 | 11 | `populate` 之后目标对象字段是空的 | 目标类没加 `@DataAssist[fields]`；或默认 `SILENCE` 把「字段不存在 / 类型不匹配 / 无法转换」静默跳过了（见第八章） |
-| 12 | 随机字符串里只有小写字母 | `randomLettersNumbers(min,max)` 等三个 `(min,max)` 重载的实现与命名不符；自己先算长度再调 `(count)` 重载（见第十五章） |
+| 12 | 随机字符串里只有小写字母 | `randomLettersNumbers(min,max)` 等三个 `(min,max)` 重载的实现与命名不符；自己先算长度再调 `(count)` 重载（见第十七章 17.8） |
 | 13 | 自定义格式报 `<x> is an illegal MediaType string` | 自定义 `MediaType` 漏了 `@Bean`，或它所在的动态库没被 `--dylibPattern` 匹配到（见第十一章） |
 | 14 | 上传的文件在磁盘上堆积 | `MultipartFile` 是 `Resource`，用完必须 `close()`——`close()` 才会删掉临时文件 |
 | 15 | 改了配置却不生效 | 有编译期内嵌值被运行期覆盖了（或反过来）；或用了 `fountain_` 前缀却写成了原名。按第三章的四级优先级逐层排查 |
@@ -3913,6 +4363,8 @@ Observable<Int64>.iterable([1, 2, 3])
 | 18 | 找不到 `Responsibility` / `ResponsibilityChain` 类型 | 源码拼写是 **`Resposibility`**（少一个 n），文件名也是 `ResposibilityChain.cj` |
 | 19 | 缓存对象「取了就续期」，永远不过期 | `HeapCache` 默认是**非一次性**对象（滑动窗口）。要绝对过期请 `set(..., once: true)` 或用 `prolong(key, deathTime)` |
 | 20 | 热路径上反复 `str.regex()` 导致 CPU 高 | 正则编译没走缓存。用 `regex(solid: true)`（进程内常驻）或 `solid: false`（`HeapCache`，1 万条 / 1 天） |
+| 21 | 日志一条都不输出 | `f_log` **默认静默**：不配 appender 就没有输出通道。至少 `logger_appender_console=<你起的名字>`（见第十五章 15.2） |
+| 22 | 想只给某个包开 DEBUG，配不出来 | 级别挂在 **appender** 上（`logger_appender_<你起的名字>_level`），不是挂在 logger 名字上，没有名字树；来源用 pattern 里的 `%name` 区分（见第十五章 15.2） |
 
 ## 18.2 预设 Q&A
 
@@ -3937,6 +4389,18 @@ A：能用，而且不需要做任何事。**这不是 `fboot` 的开关，而�
 **Q：`fboot build --k=v` 和 `fboot run --k=v` 有什么区别？**
 A：**在配置的解析方式上没有任何区别**——都是 `f_config` 读当前进程的 argv。区别在**这个进程要拿配置干什么**：`fboot build` 是把它转成 `cjpm build` 子进程的环境变量，供**编译期宏**（`@EmbedSensitive`、`ORMConfig`）读取并嵌入产物；`fboot run` 是让**应用运行期**直接读到。
 
+**Q：为什么我一条日志都看不到？**
+A：先看有没有配 appender——fountain 的日志**默认静默**。至少要 `logger_appender_console=随便一个名字`，然后再用 `logger_appender_<这个名字>_level` 配级别（注意：名字是你自己起的，不是 `console`）。第二看级别：控制台默认 `INFO`，`log.debug{...}` 不会出现。
+
+**Q：日志丢了怎么办？**
+A：三种可能。① 缓冲区池被占满且 5ms 内没借到 → 控制台会打印 `AsyncLogger.SyncQueueOutputStream.EmptyPool`，加大 `loggerAsyncBufsize`；② 你配了 `loggerAsyncTimeout` + `discard`，队列满时被主动丢弃；③ 进程被 `kill -9` —— `f_log` 在 `atExit` 里会排空队列再关流，但 `-9` 抓不到。正常 `Ctrl-C` 不会丢。
+
+**Q：日志文件能按天切割并压缩吗？**
+A：能，两个配置项：`logger_appender_<Name>_rotateDuration=DAY`、`logger_appender_<Name>_compressFormat=GZip`（`Deflate` 也行）。切割出来的文件是 `<路径>.<上一周期时间戳>.gz`。注意两点：`rotateDuration` 别配亚秒级（会疯狂 rename）；压缩失败时原文件也会被删掉，审计类日志建议先不压缩。
+
+**Q：运行期能改日志级别吗？**
+A：能，`LoggerFactory.refresh()` 会按当前配置重建 facade 并 CAS 换过去。但 `Config.set` **不会**自动触发它（`f_config` 的 refresher 前缀匹配有已知问题，见第三章 3.8），所以现状是「`Config.set` + 手动 `LoggerFactory.refresh()`」两步。
+
 **Q：把密码编进产物安全吗？**
 A：它解决的是「不让密码出现在运行环境里」，**不是**「密码不可破解」——SM4 密钥本身也在产物里。真要保护密钥请用 KMS。另外记得运行期同名环境变量可以覆盖内嵌值。
 
@@ -3959,7 +4423,7 @@ A：要**背压、错误恢复、重放、多观察者**这些语义时用 `f_rx
 A：**要 bean 的完整生命周期（懒加载、条件装配、`@Value` 注入、销毁回调）→ 用 IOC**；只是想把「一段按 key 分派的逻辑」集中管理 → `Strategies` 更轻。两者不冲突，很多项目是混着用的。
 
 **Q：随机数够安全吗？要用哪个？**
-A：默认优先 `SecureRandom` / `ThreadLocalRandom.current`（`RandomString()` 的无参构造就是它）。只有对性能极度敏感、且不涉及安全语义的场景（比如模拟数据、抽样）才用 `Random`。另外记住第十二章那几条已知行为——尤其是浮点 `closed` 的含义。
+A：默认优先 `SecureRandom` / `ThreadLocalRandom.current`（`RandomString()` 的无参构造就是它）。只有对性能极度敏感、且不涉及安全语义的场景（比如模拟数据、抽样）才用 `Random`。另外记住 `f_random` 那几条已知行为——尤其是浮点 `closed` 的含义（见第十七章 17.8）。
 
 **Q：数据库不支持怎么办？**
 A：`f_orm` 基于 `std.database.sql`，只要有驱动就能用；配置项 `orm_drivers` 是逗号分隔的，可同时注册多个数据源，`ORM.executor(driverName)` 按驱动名取。还可以用 `f_mockdb` 做无数据库的集成测试。
@@ -4032,6 +4496,23 @@ Config.getSM4() / Config.registerSensitive(key, value)
 @DateTimeConfConverter[myDateFormat]             // 时间格式本身也可配置
 ```
 
+```bash
+# 日志（f_log）：默认静默——不配 appender 就没有任何输出
+export logger_appender_console=MyConsole          # 值 = 你起的 appender 名，逗号分隔可多个
+export logger_appender_MyConsole_level=INFO        # OFF/ERROR/WARN/INFO/DEBUG/TRACE/ALL（无 FATAL）
+export logger_appender_MyConsole_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%tid;%m'
+export logger_appender_file=MyFile
+export logger_appender_MyFile_level=INFO
+export logger_appender_MyFile_path=./log/app.log   # 默认 ${工作目录}/logs/${命令名}.log
+export logger_appender_MyFile_rotateDuration=DAY   # NANOSECOND..YEAR，别用亚秒级
+export logger_appender_MyFile_rotateSize=100M      # 可选，支持 100k/100M/1G
+export logger_appender_MyFile_compressFormat=GZip  # 可选：Deflate / GZip
+# export loggerAsyncBufsize=1024                   # 异步队列容量 & 缓冲区池大小
+# export loggerAsyncTimeout=10ms                   # 队列满时的等待（默认 Duration.Max＝死等）
+# export loggerAsyncTimeoutPolicy=discard          # discard / abort / alwaysWaiting
+# export logger_asyncWaitTimeout=5ms               # 借不到缓冲区→丢弃本条并打印 EmptyPool
+```
+
 ## 关键 API
 
 ```cangjie
@@ -4043,6 +4524,17 @@ executor.INSERT_INTO<T>(po) / executor.UPDATE<T>(map|po, dirty:)
 executor.execute<T>(propagation:, rollbackFor:) { exec => (result, true) }
 CurrentHttpContext.instance
 JWT.encoder()....sign()  /  JWT.verifier(token).verify()
+
+// f_log：日志（默认静默；级别/格式挂在 appender 上，不挂在 logger 名字上）
+LoggerFactory.getLogger<T>() / getLogger('任意名字')       // 名字 = 完整限定名 / 字面量
+log.info{'...${name}'} / log.debug{'...'}                 // lambda：级别不够不求值
+log.info('user {} login', [name, ip])                     // 模板占位（TextTemplate）
+log.info('user {name} is {age}', data)                    // @DataAssist 对象 → 具名占位
+log.error(e){'...'} / log.error('...', e)                 // 异常栈一起写出
+log.debugEnabled / infoEnabled / warnEnabled / errorEnabled / fatalEnabled / logLevelEnabled(level)
+log.withAttrs([Attr('traceId', LogValue('...'))])         // 附加属性（输出为 ;{"k":v}）
+LoggerConfig.filter = MyLogFilter()                       // LogFilter：脱敏 / 改键
+LoggerFactory.refresh()                                   // 按当前配置重建 facade（CAS 热替换）
 
 // f_data：对象 / JSON / Map 互转
 DataObject<T>.populate(src, flag: DEFAULT_DATA_FLAG)      // 类实例 → 类实例
@@ -4146,12 +4638,12 @@ MultipartFile.filename / .size / .bytes() / .copyTo(out) / .close()
 | 21 | 8' | 事务：三种开启方式 + 钩子顺序 + 现场日志 | IDE + 终端 |
 | 22 | 8' | 安全：f_security + f_jwt 端到端 | IDE + 终端（401 vs 200） |
 | 23 | 4' | CRON：f_ticktock（含"忘了 dylibPattern"的坑） | IDE + 终端 |
-| 24 | 5' | 随机：f_random（区间/流/字符串/ThreadLocalRandom/已知行为） | IDE + 终端（`fboot randhex 32`） |
-| 25 | 12' | 基础设施：f_cache / f_pool / f_collection / f_time / f_regex / f_rx | IDE + 终端 |
-| 26 | 4' | 串讲：一次请求的完整穿越 | 架构图 |
+| 24 | 11' | 日志：f_log（默认静默 / 级别挂 appender / 异步管道 / 切割压缩 / 现场调 DEBUG 看 access log 与 SQL） | IDE + 终端（`tail -f ./log/fdemo.log`） |
+| 25 | 4' | 串讲：一次请求的完整穿越 | 架构图 |
+| 26 | 17' | 基础设施：f_cache / f_pool / f_collection / f_time / f_regex / f_rx / f_random（含随机数的区间/流/字符串/已知行为） | IDE + 终端（`fboot randhex 32`） |
 | 27 | 5' | 坑 & Q&A + 性能压测 | 终端 |
 
 ---
 
-> 讲稿中所有的路径、包名、注解名均取自本仓库当前源码（`fboot`、`f_app`、`f_config`、`f_bean`、`f_aspect`、`f_data`、`f_util`、`f_mvc`、`f_http`、`f_orm`、`f_security`、`f_ticktock`、`f_jwt`、`f_random`、`f_cache`、`f_pool`、`f_collection`、`f_time`、`f_regex`、`f_rx`、`fdemo`）。
+> 讲稿中所有的路径、包名、注解名均取自本仓库当前源码（`fboot`、`f_app`、`f_config`、`f_bean`、`f_aspect`、`f_data`、`f_util`、`f_mvc`、`f_http`、`f_orm`、`f_security`、`f_ticktock`、`f_jwt`、`f_random`、`f_log`、`f_cache`、`f_pool`、`f_collection`、`f_time`、`f_regex`、`f_rx`、`fdemo`）。
 > 若后续版本有变更，以各模块 `README.md` 与源码为准。
