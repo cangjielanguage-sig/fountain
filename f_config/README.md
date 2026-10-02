@@ -397,11 +397,7 @@ for (k in set where k.startsWith(prefix) || k.startsWith('${Config.prefix}_${pre
 
 `sm4Key` / `sm4Iv` 不合法时抛出的 `IllegalArgumentException` 文案是 `"orm config item ${Config.sm4Key} ..."`，源自 f_orm 的实现，与本模块的配置项名无关，属措辞遗留。
 
-### 8.3 跨模块文档不一致
-
-`f_orm/README.md` §18.1 把 SM4 配置项写成 `orm_sm4Key` 等，但本模块实际读取的名字是不带模块前缀的 `sm4Key`（见 `fdemo/boot.sh` 中的 `--sm4Key=`）。以本文件为准。
-
-### 8.4 其它实现细节
+### 8.3 其它实现细节
 
 * `getAll` 使用 `String.replace('fountain_', '')` 去前缀，会替换字符串中的**全部**匹配片段，key 中间再次出现该子串时会被一并去掉；
 * `SM4Conf.getBytes` 的三个分支都会返回 `Some`，其 `else` 分支（"没有配置项"时的异常文案）不可达，缺失配置最终在 key/iv 的长度校验处报错；

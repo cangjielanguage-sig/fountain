@@ -233,8 +233,8 @@ build(){
     args="$args --postgres_orm_connectionUrl=$POSTGRES"
     args="$args --postgres_orm_option_username=$POSTGRES_USERNAME"   # 用户名密码也可以放进 connectionUrl
     args="$args --postgres_orm_option_password=$POSTGRES_PASSWORD"
-    args="$args --orm_sm4Key=$(fboot randhex 32)"   # 每次加密用不同的 KEY
-    args="$args --orm_sm4Iv=$(fboot randhex 32)"
+    args="$args --sm4Key=$(fboot randhex 32)"   # 每次加密用不同的 KEY
+    args="$args --sm4Iv=$(fboot randhex 32)"
     # 以上是敏感信息
 
     fboot build $target_path $args     # ← 注意 $target_path 必须是第一个参数
@@ -417,8 +417,7 @@ export sm4Iv=$(fboot randhex 32)    # CBC 的 IV；GCM 用 fboot randhex 24
 > 注意这两点，讲出来比藏着好：
 > 1. **SM4 参数本身（含密钥）也会以字节数组形式出现在编译产物里**。这个机制抬高的是「直接从二进制里 grep 出配置」的门槛，**不能替代密钥管理服务**；
 > 2. 每次解密都会**重新构造一次 `SM4` 实例**，敏感配置多或读取频繁时建议自己缓存结果。
->
-> 另外还有一个跨模块的不一致：`f_orm` 的文档里写的是 `orm_sm4Key`，但 `f_config` 实际读的是**不带模块前缀的 `sm4Key`**——看 `fdemo/boot.sh` 里的 `--orm_sm4Key=` 是 `f_orm` 自己的封装。以 `f_config` 的说法为准。
+
 
 ## 3.6 `@EmbedSensitive` 宏
 
@@ -496,7 +495,7 @@ grep -c 'export' fdemo/boot.sh
 cd fdemo
 export POSTGRES='postgres://user:pass@host:5432/dbname'
 ./boot.sh build
-# 内部：--orm_sm4Key=$(fboot randhex 32) --orm_sm4Iv=$(fboot randhex 32)
+# 内部：--sm4Key=$(fboot randhex 32) --sm4Iv=$(fboot randhex 32)
 
 # 3) 运行期覆盖（写法一：环境变量），产物不用重新编译
 export mvc_port=9090
@@ -739,8 +738,8 @@ fboot build ./fdemo \
   --postgres_orm_connectionUrl=$POSTGRES \
   --postgres_orm_option_username=$POSTGRES_USERNAME \
   --postgres_orm_option_password=$POSTGRES_PASSWORD \
-  --orm_sm4Key=$(fboot randhex 32) \
-  --orm_sm4Iv=$(fboot randhex 32)
+  --sm4Key=$(fboot randhex 32) \
+  --sm4Iv=$(fboot randhex 32)
 ```
 
 **【口播】**
@@ -749,7 +748,7 @@ fboot build ./fdemo \
 > 也可以把`--`去掉，改成环境变量，也是一样的效果。
 > 于是：
 > - 数据库连接串、用户名密码在**编译期**就被写进产物；
-> - 因为同时给了 `orm_sm4Key` / `orm_sm4Iv`，这些敏感信息是 **SM4 加密后的字节数组**嵌入的，不是明文；
+> - 因为同时给了 `sm4Key` / `sm4Iv`，这些敏感信息是 **SM4 加密后的字节数组**嵌入的，不是明文；
 > - **运行期同名环境变量优先级更高**——运行环境如果同名配置项有其他值，可以用新值覆盖即可，一份产物跑多套环境。
 > 覆盖方法也很简单，同样是`--`开头的命令行参数或同名的环境变量。
 > 顺带提醒：真实项目不要把密码写进 `boot.sh`，这里只是演示。
@@ -958,7 +957,7 @@ cd fdemo
 export POSTGRES='postgres://user:pass@host:5432/dbname'
 export CANGJIE_STDX_PATH=$CANGJIE_STDX_DYNAMIC_PATH
 
-./boot.sh build      # 内部就是 fboot build ./fdemo --orm_drivers=postgres ... --orm_sm4Key=$(fboot randhex 32) ...
+./boot.sh build      # 内部就是 fboot build ./fdemo --orm_drivers=postgres ... --sm4Key=$(fboot randhex 32) ...
 ./boot.sh run        # 内部就是 fboot run ./fdemo --dylibPattern='(boot|user\.util\.(auth|cron)|\.(controller|service\.impl))'
 ```
 
@@ -2603,8 +2602,8 @@ export orm_databasePoolMinSize=1
 export orm_databasePoolInitSize=1
 export orm_databasePoolConnectTimeout=50     # 毫秒
 export orm_databasePoolCheckSql='select 1'
-export orm_sm4Key=$(fboot randhex 32)
-export orm_sm4Iv=$(fboot randhex 32)
+export sm4Key=$(fboot randhex 32)
+export sm4Iv=$(fboot randhex 32)
 ```
 
 > 约定：全局 `orm_<key>`；按驱动覆盖 `<driverName>_orm_<key>`，**后者优先级更高**。

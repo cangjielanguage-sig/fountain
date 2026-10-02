@@ -268,7 +268,6 @@ public class ORMConfig {
     // 敏感信息（编译期由 @EmbedSensitive 写入 sensitiveMap，运行时读取；见第 18 节）
     public static func genKey(driverName: String, suffix: String): String          // '<driverName>_<suffix>'
     public static func registerSensitive(key: String, value: Array<Byte>): Unit
-    public static func getSM4(): ?SM4                                              // 未配置 orm_sm4Key 时返回 None
     public static func getOption(option: String, driverName!: String = String.empty): ?String
     public static func getUsername(driverName!: String = String.empty): ?String
     public static func getPassword(driverName!: String = String.empty): ?String
@@ -2046,8 +2045,8 @@ init(message: String, caused: Exception)
 # 这些加密配置项也会作为敏感信息嵌入编译产物
 export orm_sm4Operation='CBC' # CBC CFB CTR GCM OFB，默认CBC。ECB被文档标记为不安全，没有给予支持
 export orm_sm4Padding='PKCS7Padding' # PKCS7Padding NoPadding，默认是PKCS7Padding
-export orm_sm4Key='1234567812345678' # 16字节，没有默认值，以长度为32的16进制字符串表示；缺失或长度不符抛 IllegalArgumentException
-export orm_sm4Iv='1234567812345678' # 没有默认值，以 16 进制字符串表示；CBC/OFB/CFB 要求 16 字节，GCM 要求 12 字节，缺失或长度不符抛 IllegalArgumentException
+export sm4Key='1234567812345678' # 16字节，没有默认值，以长度为32的16进制字符串表示；缺失或长度不符抛 IllegalArgumentException
+export sm4Iv='1234567812345678' # 没有默认值，以 16 进制字符串表示；CBC/OFB/CFB 要求 16 字节，GCM 要求 12 字节，缺失或长度不符抛 IllegalArgumentException
 export orm_sm4Aad='1234567812345678' # 附加认证数据，默认是空字节数组，以长度为32的16进制字符串表示
 export orm_sm4TagSize=16 # Int64，默认16
 ```
