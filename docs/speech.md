@@ -1246,7 +1246,7 @@ export controllerPointcut='*::*..*Controller.*(**): *'
 **【口播】**
 
 > 这里有个非常值得强调的设计：**`controllerPointcut` 不是 MVC 的配置项，它是为这个切面专门起的名字**。
-> `ConfigExecutionRouteRule('controllerPointcut')` 的意思是「去环境变量里读 `controllerPointcut` 这一项，把它当作 ExecutionRouteRule 规则」。
+> `ConfigExecutionRouteRule('controllerPointcut')` 的意思是「去配置项里读 `controllerPointcut` 这一项，把它当作 ExecutionRouteRule 规则」。
 >
 > 于是切点表达式变成了**部署期可配**的：开发环境织上，生产环境改窄甚至关掉，都不用改代码。
 >
@@ -1258,7 +1258,7 @@ export controllerPointcut='*::*..*Controller.*(**): *'
 [INFO-ControllerAspect]...ControllerAspect around
 ```
 
-**【演示】** 改一下 `controllerPointcut` 再启动（比如改成 `*::*..*UserController.*(**): *`），只有 User 开头的 controller 会打日志。
+**【演示】** 改一下 `controllerPointcut` 再启动（比如改成 `*::*..User*Controller.*(**): *`），只有 User 开头的 controller 会打日志。
 
 ## 7.5 AOP 在 fountain 里的两个"杀手级"用法
 
