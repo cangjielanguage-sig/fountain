@@ -168,8 +168,9 @@ public class ORMConfig {
             x
         }else if(let Some(x) <- getConf(driverName: '', key: connectionUrl) && x.size > 0){
             x
+        }else{
+            throw ORMException("connection url for ${driverName} is not be configed, config which key is ${genKey(driverName, connectionUrl)} or ${connectionUrl} must be specified")
         }
-        throw ORMException("connection url for ${driverName} is not be configed, config which key is ${genKey(driverName, connectionUrl)} or ${connectionUrl} must be specified")
     }
     private static func get<T>(driverName!: String = String.empty, key!: String, default!: T): T where T <: Parsable<T> {
         match (getConf(driverName: driverName, key: key)) {

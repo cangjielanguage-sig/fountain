@@ -1,5 +1,4 @@
 [dependencies]
-  "fountain::f_base" = {path = "../f_base"}
   "fountain::f_data" = {path = "../f_data"}
 [package]
   cjc-version = "1.2.0"

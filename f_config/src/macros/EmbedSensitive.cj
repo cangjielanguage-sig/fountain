@@ -16,28 +16,24 @@ limitations under the License.
 macro package fountain::f_config.macros
 
 import std.ast.*
-import std.collection.HashSet
 import stdx.crypto.crypto.*
-import fountain::f_base.*
 import fountain::f_config.*
 
 public macro EmbedSensitive(input: Tokens): Tokens {
-    let keys = HashSet<String>()
-    for(k in input where k.kind == TokenKind.IDENTIFIER || k.kind == TokenKind.STRING_LITERAL || k.kind == TokenKind.SINGLE_QUOTED_STRING_LITERAL){
-        keys.add(k.value)
-    }
     var tokens = quote()
-    for((k, v) in Config.getAll() where keys.contains(k)){
-        let vbytes = v.unsafeBytes()
-        tokens += if(let Some(sm4) <- Config.getSM4()){
-            let cipher = sm4.encrypt(vbytes)
-            quote(
-                Config.registerSensitive($k, $cipher)
-            )
-        }else{
-            quote(
-                Config.registerSensitive($k, $vbytes)
-            )
+    for(k in input where k.kind == TokenKind.IDENTIFIER || k.kind == TokenKind.STRING_LITERAL || k.kind == TokenKind.SINGLE_QUOTED_STRING_LITERAL){
+        if(let Some(v) <- Config.getString(k.value)){
+            let vbytes = v.toArray()
+            tokens += if(let Some(sm4) <- Config.getSM4()){
+                let cipher = sm4.encrypt(vbytes)
+                quote(
+                    Config.registerSensitive($k, $cipher)
+                )
+            }else{
+                quote(
+                    Config.registerSensitive($k, $vbytes)
+                )
+            }
         }
     }
     let sm4conf = Config.sm4conf
