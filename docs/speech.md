@@ -179,15 +179,24 @@ fboot version
 >
 > **「不依赖任何配置文件。」**
 >
-> 配置项只有四个来源：环境变量、命令行参数、进程内 `Config.set`、以及编译期内嵌的敏感配置。没有 `application.yml`，没有 properties，没有 JSON。
+> 配置项只有四个来源：**环境变量**、**`--key=value` 形式的命令行参数**、进程内 `Config.set`、以及编译期内嵌的敏感配置。没有 `application.yml`，没有 properties，没有 JSON。
+>
+> 前两个是**完全平级**的：环境变量能做的事，命令行参数都能做，而且**命令行参数会覆盖同名环境变量**。
+>
+> 这里先埋一个后面会反复用到的规则：**只要一个仓颉进程链接了 `f_config`，它的命令行参数就会被自动解析成配置项**——不限于 `fboot` 的任何子命令，也包括你自己写的、依赖了 `f_config` 的程序。**3.2 会详细讲。**
 
-| 来源 | 何时生效 |
-| --- | --- |
-| 环境变量 / 命令行参数 | 进程启动时由 `static init` 装载（**命令行覆盖同名环境变量**） |
-| 进程内 `Config.set(...)` | 运行期写入/覆盖 |
-| 编译期内嵌的敏感值（`@EmbedSensitive`） | `fboot build` 时嵌入产物，运行期解密/还原 |
+| 来源 | 形态 | 何时生效 |
+| --- | --- | --- |
+| 环境变量 | `export mvc_port=8080` | 进程启动时由 `static init` 装载 |
+| 命令行参数 | `--mvc_port=9090` | 同上，**覆盖同名环境变量** |
+| 进程内 `Config.set(...)` | `Config.set<Int64>([('mvc_port', 9090)])` | 运行期写入/覆盖 |
+| 编译期内嵌的敏感值（`@EmbedSensitive`） | `fboot build --paySecret=xxx` | 编译时嵌入产物，运行期解密/还原 |
 
-**【口播】** 这一条直接决定了部署形态：**一份编译产物，靠环境变量跑遍开发/测试/生产**。这也是 `fboot build --k=v` 那套编译期注入能成立的前提。
+**【口播】**
+
+> 命令行参数这一条我要特别强调：**`fdemo/boot.sh` 的 `build()` 函数就是现成的例子**——它把驱动名、连接串、用户名、密码、SM4 密钥全部写成 `--orm_drivers=postgres --postgres_orm_connectionUrl=...` 这样的 `--key=value`，而不是 `export`。**详见 3.2。**
+>
+> 这一条直接决定了部署形态：**一份编译产物，靠环境变量或命令行参数跑遍开发/测试/生产**。这也是 `fboot build --k=v` 那套编译期注入能成立的前提。
 
 ## 3.2 命令行参数的四种合法写法
 
@@ -201,6 +210,84 @@ fboot version
 - 单横线形式**不支持 `=` 赋值**，`-argName=argValue` 会被整体当成配置项名；
 - 不以 `-` 开头的参数被忽略；`env.getCommandLine()[0]`（程序自身路径）不参与解析；
 - **命名风格不被改写**——仓颉运行时自身的环境变量是驼峰命名，业务配置建议同样用驼峰。
+
+### 现成的例子：`fdemo/boot.sh` 的 `build()` 函数
+
+**【镜头】** `fdemo/boot.sh` 的 `build()`（顺带把它上面那段被注释掉的「环境变量版」一起放出来做对比）
+
+```bash
+build(){
+    export CANGJIE_STDX_PATH=$CANGJIE_STDX_DYNAMIC_PATH
+
+    # 下面全部是 --key=value 形式的命令行参数
+    args='--orm_drivers=postgres'
+    args="$args --postgres_orm_connectionUrl=$POSTGRES"
+    args="$args --postgres_orm_option_username=$POSTGRES_USERNAME"   # 用户名密码也可以放进 connectionUrl
+    args="$args --postgres_orm_option_password=$POSTGRES_PASSWORD"
+    args="$args --orm_sm4Key=$(fboot randhex 32)"   # 每次加密用不同的 KEY
+    args="$args --orm_sm4Iv=$(fboot randhex 32)"
+    # 以上是敏感信息
+
+    fboot build $target_path $args     # ← 注意 $target_path 必须是第一个参数
+    echo -e '\a'
+}
+```
+
+而就在它上面，作者留了一段**被注释掉的等价写法**，用的全是 `export`。注释原文写得很直白：
+
+```bash
+###############上面注释的跟下面的脚本功能是一样的，只是一个环境变量，一个命令行参数########################
+```
+
+**【口播】**
+
+> 这一屏请记住三件事：
+> 1. **`--key=value` 和 `export` 完全等价**——选哪个纯粹是部署习惯：容器里用环境变量方便，脚本里用命令行参数直观、能一眼看全；
+> 2. 注意 `$target_path` 必须是 `build` 后的**第一个参数**（见第四章 4.4），`--k=v` 们排在它后面；
+> 3. **别误以为这是 `fboot` 的特权**——下一节会说清边界：只要进程链了 `f_config`，命令行参数就自动是配置项。
+>
+> Windows 版 `boot-win-gitbash.sh` 的 `build()` 是同一套写法，可以顺带扫一眼证明不是特例。
+
+### 关键前提：不是「fboot 支持命令行参数」，而是「任何用了 `f_config` 的仓颉进程都支持」
+
+**【口播】**（这一句先把边界划清，后面才不会误解）
+
+> 请务必记住这句话：
+>
+> **只要一个仓颉进程链接了 `f_config` 模块，它的 `static init` 就会去读自己的命令行参数（`env.getCommandLine()`），并把 `--key=value` 装载成配置项。**
+>
+> 这跟 `fboot` 没什么特殊关系——`fboot` 只是**恰好也用了 `f_config`** 的一个仓颉进程而已。同样适用的还有：
+>
+> - `fboot run` 启动的应用进程（应用就是被加载进这个进程的）；
+> - 你自己写的任何带 `main` 的可执行程序（只要 `import fountain::f_config.*`）；
+> - 任何用 `cjpm run` 跑起来的、依赖了 `f_config` 的二进制；
+> - 任何**间接**依赖了 `f_config` 的程序（比如你引了 `f_orm`，它依赖 `f_config`）。
+>
+> 所以 `--key=value` 是 **`f_config` 这个模块的能力**，不是某个命令的开关。`fdemo/boot.sh` 的 `build()` 只是一个**恰好长这样**的例子。
+
+### 同一个写法，两个舞台：编译期 vs 运行期
+
+**【口播】**（承接上面那条规则，看它在 `fboot` 的两个子命令上分别落到哪儿）
+
+> 同一个 `--key=value`，在 `fdemo` 的两个脚本函数里走的路径不一样：
+>
+> | 阶段 | 命令行参数在谁的 argv 里 | 谁读到它 | 效果 |
+> | --- | --- | --- | --- |
+> | **编译期** | `fboot build` 进程自己的 argv | `fboot` 进程里的 `f_config` | 转成 `cjpm build` 子进程的**环境变量**；宏（`@EmbedSensitive`、`ORMConfig`）在编译期读到它们，把连接串 / 口令**加密嵌入产物** |
+> | **运行期** | `fboot run` 进程的 argv（应用就加载在这个进程里） | 同一个 `f_config`，同一套 `static init` | 装载进 `ARGS`，**覆盖同名环境变量** |
+>
+> 两边**都是同一条规则**在起作用：**谁的命令行里有 `--k=v`，且那个进程链了 `f_config`，谁就把它读成配置项。**
+>
+> 对照 `fdemo` 的两个启动脚本就更清楚了：
+> - `boot.sh` 的 **`build()`** 把 `--k=v` 交给 `fboot build` → 编译期，最终嵌进产物；
+> - `boot.sh` 的 **`run()`** 用的是 `export`（环境变量）→ 运行期；
+> - 而 **`boot-win-gitbash.sh` 的 `run()`** 直接把 `--k=v` 拼在 `fboot run` 后面：
+>   ```bash
+>   fboot run $target_path --dylibPattern='(boot|user\.util\.(auth|cron)|\.(controller|service\.impl))' $args
+>   ```
+>   这些 `--logger_*=...` `--mvc_port=8080` `--orm_*=...` 落在 `fboot run` 进程的 argv 里，被 `f_config` 直接装载 → 运行期。
+>
+> 不管是哪条路进来，**最终都由 `f_config` 用同一套优先级读取**（见 3.3），所以对你写业务代码是透明的。
 
 ## 3.3 读取优先级（重点，建议做成动画）
 
@@ -402,17 +489,29 @@ export POSTGRES='postgres://user:pass@host:5432/dbname'
 ./boot.sh build
 # 内部：--orm_sm4Key=$(fboot randhex 32) --orm_sm4Iv=$(fboot randhex 32)
 
-# 3) 运行期覆盖：启动前改环境变量即可，产物不用重新编译
+# 3) 运行期覆盖（写法一：环境变量），产物不用重新编译
 export mvc_port=9090
 ./boot.sh run
+
+# 3') 运行期覆盖（写法二：--key=value 命令行参数），与写法一完全等价
+./boot.sh run
+# 等价的裸命令（Windows 版 boot-win-gitbash.sh 的 run() 就是这个形态）：
+fboot run ./fdemo \
+  --dylibPattern='(boot|user\.util\.(auth|cron)|\.(controller|service\.impl))' \
+  --mvc_port=9090 \
+  --orm_drivers=postgres
 ```
 
 **【预期】**
 
 - 第 2 步：编译成功，连接串与口令被加密嵌入产物；
-- 第 3 步：日志里出现 `9090` 端口，`Config.getString('mvc_port')` 拿到的是运行期的值，**覆盖了编译期内嵌值**。
+- 第 3 / 3' 步：日志里出现 `9090` 端口，`Config.getString('mvc_port')` 拿到的是运行期的值，**覆盖了编译期内嵌值**；
+- 两种写法效果完全一致——**环境变量与 `--key=value` 平级，后者覆盖前者**。
 
-**【口播】** 这一组三步就是 `f_config` 的全部价值：**编译期可内嵌、运行期可覆盖、全程无配置文件**。
+**【口播】**
+
+> 这一组三步就是 `f_config` 的全部价值：**编译期可内嵌、运行期可覆盖、全程无配置文件**。
+> 而且请注意第 3 步的两种写法：同一个配置项 `mvc_port`，你既可以 `export`，也可以写成 `--mvc_port=9090`——**这就是「f_config 支持命令行参数」最直观的证明**。
 
 ---
 
@@ -3832,6 +3931,12 @@ A：绝大多数场景可以。`DataObject<Target>.populate(src)` 按**同名字
 **Q：没有配置文件，本地开发怎么管理几十个配置项？**
 A：写进启动脚本。`fdemo/boot.sh` 的 `exports()` 函数就是标准答案——所有 `export` 集中在一个地方，`fboot run` 之前 source 一下。容器化时这些 `export` 换成 ConfigMap / Secret 即可，`f_config` 的读取逻辑一行不用改。
 
+**Q：`--key=value` 是 `fboot` 的功能吗？我自己写的程序能用吗？**
+A：能用，而且不需要做任何事。**这不是 `fboot` 的开关，而是 `f_config` 模块的能力**：任何链接了 `f_config` 的仓颉进程，在 `static init` 时都会读 `env.getCommandLine()` 并装载 `--key=value`。`fboot` 只是恰好也用了 `f_config` 而已——`fboot build`、`fboot run`、你自己 `import fountain::f_config.*` 的 `main`、甚至只是间接依赖（比如引了 `f_orm`）都一视同仁。
+
+**Q：`fboot build --k=v` 和 `fboot run --k=v` 有什么区别？**
+A：**在配置的解析方式上没有任何区别**——都是 `f_config` 读当前进程的 argv。区别在**这个进程要拿配置干什么**：`fboot build` 是把它转成 `cjpm build` 子进程的环境变量，供**编译期宏**（`@EmbedSensitive`、`ORMConfig`）读取并嵌入产物；`fboot run` 是让**应用运行期**直接读到。
+
 **Q：把密码编进产物安全吗？**
 A：它解决的是「不让密码出现在运行环境里」，**不是**「密码不可破解」——SM4 密钥本身也在产物里。真要保护密钥请用 KMS。另外记得运行期同名环境变量可以覆盖内嵌值。
 
@@ -3908,6 +4013,7 @@ fboot help
 
 ```bash
 # 优先级：命令行参数 > 环境变量 > 编译期内嵌（fountain_ 前缀为等价回退）
+# 命令行参数对「任何链接了 f_config 的仓颉进程」都生效（不限于 fboot）
 --argName=argValue | --argName | -argName argVal | -argName
 export sm4Key=$(fboot randhex 32)   # 16 字节；GCM 的 IV 用 fboot randhex 24
 export sm4Iv=$(fboot randhex 32)
