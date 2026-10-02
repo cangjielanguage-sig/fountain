@@ -46,3 +46,7 @@ datalog/
 common_virtual_env/
 
 frpcdemo/log/
+
+.autocode/**/*.py
+.autocode/**/*.sh
+.autocode/**/*.cj
