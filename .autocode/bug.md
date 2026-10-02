@@ -6,6 +6,33 @@
 
 ---
 
+## 状态总览（2026-10-02 更新）
+
+图例：✅ 已解决　🟡 部分解决（附遗留）　⬜ 未解决
+
+| # | 问题 | 状态 | 说明 / 依据 |
+| --- | --- | --- | --- |
+| 缺陷 A | `EncodedMessage.copy` 写失败不归还池项 | ✅ | 早前会话已修（try/finally + 幂等 `release`）；本轮又修「归还不清空」（`Pool.init` 漏传 `clear`，见 6.8.1）——修后解码错误归零 |
+| 缺陷 B | 一条消息拆多次 `write`，失败留半条 | 🟡 | ≤4096B 已合并成**一次 write**（见 6.9 第 4 条）；大消息仍流式且协议无长度头 ⇒ 仍可能留半条（见 7.1） |
+| 缺陷 C | 解码异常后继续解析错位流 | ✅ | 两侧均改为 `close() + break`；`Message.decode` 中途 EOF 抛 `InputClosedException` |
+| P0-2 | 池项所有权 / 借出必还 | ✅ | `BytesListOutputStream.release()`（幂等）+ `DefaultCodec.release()` + `EncodedMessage` finally 释放 |
+| P1 | 取池项不无限静默阻塞 | ✅ | `KeyPool.get(Duration.Max)` 让出 CPU + 30s 上限 WARN 放弃；`lastBuffer()` 5s 有限超时（见 6.9 第 2 条） |
+| P2 | 心跳与连接生命周期 | 🟡 | ✅ `pingTimeout` 10ms→1s、连续失败 3 次再拆链、`bufferQueueSize` 1e6→1024；⬜ 其余小项见 7.5 |
+| 6.6-1 | f_pool 连线记账（根因） | ✅ | `Pool.init` 漏传 `clear`（确定性根因，见 6.8.1）+ `check()` 不再留 `checking` + 不变量 `s ≡ 节点数 + out` 同临界区 + 脱钩自愈 + 低频自检 |
+| 6.6-2 | 不忙等 / 有限等待 | ✅ | 见 P1 |
+| 6.6-3 | 借出即校验 | ✅ | `DefaultCodec.getBuf()` 借到非空缓冲即抛（编码期失败，绝不会写出半条脏消息） |
+| 6.6-4 | 写路径原子性 | 🟡 | 同缺陷 B |
+| 6.6-5 | 心跳策略 | ✅ | 同 P2 |
+| — | 池记账脱钩的**触发源** | ⬜ | 未定位到具体一行；已加自愈 + `DEQUE-SELFCHECK`/`WEDGE-HEAL` 告警（见 6.8.5、7.2） |
+| — | 重复归还的强约束 | ⬜ | 泛型 `SyncDeque<T>` 无法按值去重，目前只能检出 + 告警（见 6.9、7.3） |
+
+**复验（2026-10-02，WSL Ubuntu-24.04）**：`f_pool` 全量 `cjpm test` = `TOTAL: 22, PASSED: 22, FAILED: 0`；
+frpcdemo 端到端（默认配置约 45s）CPU **0%~2%**、应用日志事件 **0**、解码错误 **0**，无 `DEQUE-SELFCHECK` / `WEDGE-HEAL` 告警。
+
+> 下面 §一~§六 是历次分析原文（保留证据链），**其结论的当前状态以本节与 §七 为准**。
+
+---
+
 ## 一、结论速览
 
 日志里刷的三类异常（`Client reader error` / `tcp closed` / `TcpSocket.check`）**不是传输/编解码失败**，
@@ -39,6 +66,8 @@
 
 ### 缺陷 A：`EncodedMessage.copy` 失败路径不归还池项
 
+> **状态：✅ 已解决**（早前会话：`copy` 的 try/finally 归还 + 幂等 `release()`；本轮补「归还清空」见 6.8.1。）
+
 ```cj
 // f_protocol/src/default/Message.cj
 public func copy(to!: OutputStream, closeToOnEnd!: Bool = false): Unit {
@@ -66,6 +95,8 @@ func getBuf(){
 
 ### 缺陷 B：一条消息被拆成多次 `socket.write`，中途失败 → 流错位
 
+> **状态：🟡 部分解决**（本轮：payload ≤ 4096B 合并成一次 write，见 6.9 第 4 条；大消息仍流式、协议无长度头 ⇒ 见 7.1。）
+
 ```cj
 to.write([command])      // ① 命令字节：一次 write
 bytes.copy(to: to, ...)  // ② 载荷：一次或多次 write（InputStream/File 走分块流式）
@@ -74,6 +105,8 @@ bytes.copy(to: to, ...)  // ② 载荷：一次或多次 write（InputStream/Fil
 若 ① 成功、② 失败，socket 上留下**半条消息**。对端按协议继续解析 ⇒ 字节流从此错位 ⇒ `CodecException` ⇒ 垃圾 Data ⇒ `f_data` SIGSEGV。
 
 ### 缺陷 C：解码异常后继续解析错位流
+
+> **状态：✅ 已解决**（服务端/客户端解码异常均 `close() + break`；`Message.decode` 中途 EOF 抛 `InputClosedException`。）
 
 ```cj
 // 服务端 f_net/src/server/server.cj:147-150
@@ -87,6 +120,8 @@ bytes.copy(to: to, ...)  // ② 载荷：一次或多次 write（InputStream/Fil
 
 ### 最初的引信
 
+> **状态：✅ 已解决**（`pingTimeout` 10ms → 1s，见 6.5；并允许连续失败 3 次再拆链。）
+
 客户端 `Client.checkTimer` 的 `pingTimeout` 默认仅 **10ms**（`f_net/src/client/client.cj:266`，`ClientBuilder.pingTimeout_`）。
 一次 PING 往返要跨 4 次线程唤醒 + 2 次 encode + 2 次 decode，一旦超过 10ms 就 `close()+new()`；
 向**已被自己关掉的 socket** 写就会抛 → 同时触发 A/B/C。这也解释了“服务端 `checkTimer` 关掉后日志全空”（少了这条写失败来源）。
@@ -98,6 +133,8 @@ bytes.copy(to: to, ...)  // ② 载荷：一次或多次 write（InputStream/Fil
 > 原则：**B/C 决定“错误会不会扩散”，A 的归还保证决定“会不会卡死”。** 三者必须一起修。
 
 ### P0-1 修 B：让消息写入具备原子性（不缓冲，适用于任意消息）
+
+> **状态：✅ 已实现**（写失败即断链）；其中「合并」按文中建议只对**有界小消息**做（≤4096B，见 6.9 第 4 条）。
 
 `EncodedMessage.copy` / `SocketBuffer`：**任何一次写失败 → 立即关闭该连接**（宁可断链，也不留半条消息）。通用、零额外内存。
 
@@ -128,6 +165,8 @@ public func copy(to!: OutputStream, closeToOnEnd!: Bool = false): Unit {
 
 ### P0-2 修 A：显式定义池项所有权，保证必还（幂等）
 
+> **状态：✅ 已实现**（`BytesListOutputStream.release()` 幂等 + `DefaultCodec.release()` + `EncodedMessage.copy` finally 释放，并修了归还清空）。
+
 1. `BytesListOutputStream` 加显式释放（幂等）：
 
 ```cj
@@ -151,17 +190,23 @@ public func copy(to!: OutputStream, ...): Unit {
 
 ### P0-3 修 C：解码异常即断链
 
+> **状态：✅ 已实现**。
+
 - 服务端 `server.cj:147-150`：`catch (e: Exception)` 里遇到解码类异常（`CodecException` / `IllegalArgumentException` / 任何非业务异常）应 `buffer.close(); break`，**不要 `continue`**。
 - 客户端 `client.cj:71-78`：解码异常应 `buffer.close(); break`（而不是仅在 `isClosed()` 时 break）。
 - `Message.decode` 在**消息中途读到 EOF** 时也应抛 `InputClosedException`（而不是让 `getOrThrow` 抛 `IllegalArgumentException`），便于上游统一识别。
 
 ### P1：取池项不要无限静默阻塞
 
+> **状态：✅ 已实现**（见 6.9 第 2 条：让出 CPU + 30s 上限告警放弃 + `lastBuffer()` 5s 有限超时）。
+
 - 结论：**“借出必还”是根治，但“无限阻塞”仍应改为有限超时 + 抛出/计数**（否则任何新漏还路径都会变成**无日志的永久挂起**，本次即是）。
 - `DefaultCodec.lastBuffer()`：有限超时，取不到即抛出/计数。
 - `f_pool/src/KeyPool.cj:342`：池满无空闲时快速失败（抛 `PoolException`）；`close()` 要唤醒所有等待者。
 
 ### P2：心跳与连接生命周期
+
+> **状态：🟡 部分实现**（`pingTimeout`、连续失败容忍、`bufferQueueSize` 已做；其余小项见 7.5）。
 
 - 客户端 `pingTimeout` 默认 **10ms** 过紧：放大并允许 N 次失败 + 指数退避再拆链。
 - 服务端 `unavailableChecked` 默认 **3**：放宽，`count` 累加/清零语义与 PING 发送对齐。
@@ -435,3 +480,53 @@ PDIAG] DEQUE-MISS s=1024 nodes=0 idles=0
 **遗留说明**：
 - 条目 4 的“与 `close()` 互斥”未做：合并只覆盖小消息（≤4096B），大消息仍是流式，理论上仍可能出现“半条大消息”；彻底解决建议给消息加长度头/校验（见 6.6 第 4 条）。
 - 重复归还目前在泛型 `SyncDeque<T>` 上只能“检出 + 告警”，无法按值去重；若后续要强约束，需要在 `KeyPool` 层用 `Ref<V>` 身份做借出集合（需要 `Ref` 满足 `Hashable & Equatable`）。
+
+---
+
+## 七、尚未解决的问题（遗留清单）
+
+> 截至 2026-10-02，§一~§六 描述的风暴及其直接缺陷**均已修复并复验**（见文首「状态总览」）。以下是**仍未解决**的部分。
+
+### 7.1 协议层：消息无长度头/校验，截断不可判定（🟡 大消息仍可能留半条）
+
+- 现状：`EncodedMessage.copy` 对 payload ≤ 4096B 的消息已合并为**一次 `write`**（小消息基本消除截断窗口）；
+  大消息（含 InputStream/File 载荷）仍走分块流式，写中途失败仍可能被对端读到半条。
+- 影响：对端**无法在协议层判定「这是半条消息」**，只能靠解析到垃圾才报异常（最早的 `f_data` SIGSEGV 即此类）。
+- 待办建议：给消息加长度头/校验（帧级原子性），或让「写完一条消息」与 `close()` 互斥
+  （注意：互斥会让 `close()` 等待阻塞中的写，需要配合写超时，否则把截断换成挂起）。
+
+### 7.2 池记账脱钩的**触发源**未定位（🟡 已有自愈兜底）
+
+- 现状：历史上出现过「`s` 记着 1024 已满、队列里 0 个节点、也没有借出项」的脱钩，使 `KeyPool.get` 死循环忙等（当时 CPU 2200%+）。
+  已实现 `reconcileIfWedge()` 自愈 + 低频 `DEQUE-SELFCHECK` 告警，但**触发源没有定位到具体一行**：
+  追查探针在临界区外采集，无法区分「真丢项」与「并发中间态」（详见 6.8.5）。
+- 若再现：直接以 `WEDGE-HEAL` / `DEQUE-SELFCHECK` 告警为线索，把不变量校验放进 `head.globalLock` 临界区内再采一次现场。
+
+### 7.3 重复归还（同一对象 `giveBack` 两次）仍会插入重复节点（🟡 只能检出）
+
+- 现状：泛型 `SyncDeque<T>` 无法按值比较/去重，重复归还会让队列出现同一对象的两个节点 ⇒ 该对象可能被两个借用者同时持有。
+  当前策略：低频自检发现并告警（`DEQUE-SELFCHECK`）+ 依赖 `Releasable.release()` 幂等与调用方纪律。
+- 待办建议：在 `KeyPool` 层用 `Ref<V>` 身份维护「借出集合」，归还时校验并拒绝重复归还
+  （前提：`Ref` 满足 `Hashable & Equatable`）。
+
+### 7.4 `SyncDeque.check()` / destroy 路径残留的窄窗口
+
+- `ValueNode.check` 摘节点与调用方 `s.fetchSub(1)` 仍分属两个临界区。
+- 该路径只在「空闲超时巡检 / destroy」触发，本工程的池配置为 `Duration.Max`（字节缓冲池，不触发）与 `Duration.Minute`（byte 数组池，极少），
+  故仅剩极窄窗口；最坏后果是 `s` 偏小（软上限内多建一个池项），不会崩溃。
+- 待办建议：把 `s` 递减并入同一临界区，彻底消除。
+
+### 7.5 §四 P2 中尚未落地的几个小项（🟡 低优先，属健壮性改进）
+
+| 位置 | 现状 | 建议 |
+| --- | --- | --- |
+| `f_net/src/server/server.cj:57` | 取 `buffer.remoteAddress` 前仍无 `isClosed()` 守卫（异常被外层 `try` 吞掉，只产生 WARN 噪音） | 加守卫或复用 `try` 内的地址 |
+| `f_net/src/server/server.cj:53` | accept 循环仍是 `while (i < size && let buffer <- buffers.remove())`（`size` 快照 + 阻塞 `remove`） | 改 `tryRemove()` |
+| `f_net/src/client/client.cj:77` | reader 异常统一 `log.error`，包括「被自身 checkTimer 正常关闭」的场景 | 该场景降级为 WARN/DEBUG |
+| 服务端 `unavailableChecked` | 默认仍为 3（P2 建议放宽并与 PING 发送对齐） | 风暴已消失，建议先观察再定 |
+| `KeyPool.get` 放弃阈值 | 30s 为写死常量 | 如需按池配置，可后续加参数 |
+
+### 7.6 其他
+
+- `KeyPool.get(Duration.Max)` 的「有限等待」是**策略变更**（原来是无限等待）：30s 后 `WARN` 并返回 `None`；
+  若业务上确实需要无限等待，应改为可配置（当前为常量）。
