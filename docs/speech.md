@@ -2831,8 +2831,8 @@ public class TransactionHookImpl <: TransactionHook {
 4. 同一个 `SqlExecutor` 上**不允许并发**：上一次查询结果未关闭时再执行会抛 `ORMException("cannot execute SQL while a previous query result is still active")`；
 5. 结果缓存默认开启（`orm_useCache`），写操作后会清空缓存；
 6. `@DataAssist` 必须在 `@QueryMappersGenerator` 之前；
-7. `tableColumns()` 的属性名是**列名**不是映射类的成员名（`save_time` 不是 `saveTime`）；
-8. `page` 系列要求 SQL 以 `select` 开头，否则抛 `ORMException('<sql> is not a select.')`。
+7. `tableColumns()` 的属性名是**数据库表的列名**不是映射类的成员名（`save_time` 不是 `saveTime`）；
+8. `page` 系列函数要求 SQL 以 `select` 开头，否则抛 `ORMException('<sql> is not a select.')`。
 
 ---
 
