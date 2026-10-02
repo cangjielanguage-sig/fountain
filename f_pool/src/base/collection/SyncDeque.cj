@@ -33,6 +33,27 @@ public class SyncDeque<T> <: Deque<T> {
     /** 已借出（不在队列里）的数量。不变量：s ≡ 队列节点数 + out。 */
     private let out = AtomicInt64(0)
 
+    private let opCount = AtomicInt64(0)
+
+    /**
+     * 低频自检：不变量 s ≡ 队列节点数 + out。
+     * 重复归还（同一对象两次）会让队列里出现重复节点，从而在此暴露；
+     * 这里只告警（不改变行为），取不到项时的自愈在 reconcileIfWedge() 里做。
+     */
+    private func selfCheck(): Unit {
+        if (opCount.fetchAdd(1) % 10000 != 0) {
+            return
+        }
+        synchronized(head.globalLock){
+            let (total, _) = countNodes()
+            let o = out.load()
+            let sa = s.load()
+            if (sa != total + o) {
+                println("DEQUE-SELFCHECK] invariant broken: size=${sa} nodes=${total} out=${o}")
+            }
+        }
+    }
+
     private func markBorrowed(): Unit {
         out.fetchAdd(1)
     }
@@ -60,12 +81,14 @@ public class SyncDeque<T> <: Deque<T> {
             head.insertNext(value)
             s.fetchAdd(1)
         }
+        selfCheck()
     }
     public func insertTail(value: T): Unit {
         synchronized(head.globalLock){
             head.tail.insertPrev(value)
             s.fetchAdd(1)
         }
+        selfCheck()
     }
     public func prepend(value: T, checker: (T) -> Bool, destroier: (T) -> Unit): Unit {
         if(checker(value)){
@@ -80,6 +103,7 @@ public class SyncDeque<T> <: Deque<T> {
                 s.fetchSub(1)
             }
         }
+        selfCheck()
     }
     public func append(value: T, checker: (T) -> Bool, destroier: (T) -> Unit): Unit {
         if(checker(value)){
@@ -94,6 +118,7 @@ public class SyncDeque<T> <: Deque<T> {
                 s.fetchSub(1)
             }
         }
+        selfCheck()
     }
     public func remove(checker: (T) -> Bool, destroier: (T) -> Unit): ?T {
         while(true){
@@ -108,6 +133,7 @@ public class SyncDeque<T> <: Deque<T> {
             }
             if(let Some(x) <- taken){
                 if(checker(x)){
+                    selfCheck()
                     return x
                 }else{
                     destroier(x)
@@ -115,6 +141,7 @@ public class SyncDeque<T> <: Deque<T> {
                         markReturned()
                         s.fetchSub(1)
                     }
+                    selfCheck()
                 }
             }else{
                 break

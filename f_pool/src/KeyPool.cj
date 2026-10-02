@@ -340,13 +340,26 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
                 return v
             }
         }else if(timeout == Duration.Max){
+            // 注意：原实现在「池已满且取不到空闲项」时是 while(running.load()) 无 sleep 忙等，
+            // 既 100% 占用一个核、又会**无日志地永久挂住**调用者（见 .autocode/bug.md 六）。
+            // 这里保持「等待」语义，但每轮让出 CPU，并在超过上限后告警放弃（返回 None），
+            // 由上层决定重试或失败，避免静默挂起。
+            let waitStart = MonoTime.now()
+            let maxWaiting = Duration.second * 30
             while(running.load()) {
                 if (let Some(r) <- pool.get(key, keyedCheck, keyedDestroy) && let Some(v) <- r.get()) {
                     return v
                 }else if (pool.size < totalSize && pool.keyedSize(key) < maxSize && 
-                    let Some(x) <- tryAddTask(key) && !x.wait(Duration.Max)) {
+                    let Some(x) <- tryAddTask(key) && 
+                    let remain <- waitStart + maxWaiting - MonoTime.now() && (remain <= Duration.Zero || !x.wait(remain))) {
                     break
                 }
+                if (MonoTime.now() - waitStart >= maxWaiting) {
+                    logger.warn(
+                        'key pool exhausted but no idle element: size=${pool.size}/${totalSize}, keyedSize=${pool.keyedSize(key)}/${maxSize}, waited ${maxWaiting}, give up')
+                    break
+                }
+                sleep(Duration.millisecond)
             }
         }else{
             let start = MonoTime.now()

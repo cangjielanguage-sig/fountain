@@ -28,6 +28,40 @@ public class BytesListOutputStream <: OutputStream & BytesCopyTo & Releasable {
      * 归还从池中借出的 list。**幂等**：重复调用无副作用。
      * 注意：无论是否写出，都必须调用（或调用 copy），否则池项泄漏。
      */
+    /** 待写字节数。 */
+    public func byteSize(): ?Int64 {
+        var n = 0i64
+        for (b in list) {
+            n += b.size
+        }
+        n
+    }
+    /** 把待写内容拼接成一个数组（不改变/不释放本缓冲）。 */
+    public func asBytes(): ?Array<Byte> {
+        if (let Some(n) <- byteSize()) {
+            let out = Array<Byte>(n, repeat: 0u8)
+            var off = 0i64
+            for (b in list) {
+                for (i in 0..b.size) {
+                    out[off + i] = b[i]
+                }
+                off += b.size
+            }
+            out
+        } else {
+            None<Array<Byte>>
+        }
+    }
+    /** 借出后应为空：本缓冲当前是否没有任何待写内容。 */
+    public prop isEmpty: Bool {
+        get(){
+            list.isEmpty()
+        }
+    }
+    /** 复位：丢弃待写内容。仅供池的借用方在检出脏缓冲时兜底使用。 */
+    public func reset(): Unit {
+        list.clear()
+    }
     public func release(): Unit {
         if(released){
             return

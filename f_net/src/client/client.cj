@@ -35,6 +35,9 @@ public class Client<T> <: Resource where T <: DataFields<T> {
     private var checkTimer: Timer = unsafeZeroValue<Timer>()
     private let closed = AtomicInt64(0)
     private let closeLock = Mutex()
+    /** 连续心跳失败容忍次数：达到后才拆链重建（对齐服务端 unavailableChecked 的语义）。 */
+    private static let CHECK_FAILURE_TOLERANCE = 3
+    private var checkFailures = Array<Int64>()
     
     Client(queueSize: Int64, 
         let checkDuration: Duration, 
@@ -91,6 +94,7 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                 buffer
         }
         this.buffers = buffers
+        this.checkFailures = Array<Int64>(sockets.size, repeat: 0)
         checkTimer = Timer.repeat(checkDuration, checkDuration, {
             => for (i in 0..sockets.size) {
                 func new() {
@@ -113,26 +117,41 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                         new()
                         continue
                     }else if (let Some(m) <- checker() && let Some(res) <- transfer(buffer, m).tryGet(pingTimeout) && res.id == m.id && res.command == Command.ACK) {
-                        //do nothing
+                        checkFailures[i] = 0
                     }else{
-                        if(!buffer.isClosed()){
-                            buffer.close()
+                        // 单次心跳失败不立刻拆链：先容忍 N 次，避免把一次调度抖动放大成重连风暴
+                        checkFailures[i] = checkFailures[i] + 1
+                        if (checkFailures[i] < CHECK_FAILURE_TOLERANCE) {
+                            log.warn('client ping timeout ${checkFailures[i]}/${CHECK_FAILURE_TOLERANCE}, keep connection')
+                        } else {
+                            checkFailures[i] = 0
+                            log.warn('client ping failed ${CHECK_FAILURE_TOLERANCE} times in a row, rebuild connection')
+                            if(!buffer.isClosed()){
+                                buffer.close()
+                            }
+                            new()
                         }
-                        new()
                     }
                 } catch (e: Exception) {
-                    log.error('SocketBuffer.checker', e)
-                    try {
-                        if (!buffer.isClosed()) {
-                            buffer.close()
+                    checkFailures[i] = checkFailures[i] + 1
+                    if (checkFailures[i] < CHECK_FAILURE_TOLERANCE) {
+                        log.warn(
+                            'SocketBuffer.checker error ${checkFailures[i]}/${CHECK_FAILURE_TOLERANCE}, keep connection', e)
+                    } else {
+                        checkFailures[i] = 0
+                        log.error('SocketBuffer.checker', e)
+                        try {
+                            if (!buffer.isClosed()) {
+                                buffer.close()
+                            }
+                        } catch (e: Exception) {
+                            log.error('SocketBuffer.close', e)
                         }
-                    } catch (e: Exception) {
-                        log.error('SocketBuffer.close', e)
-                    }
-                    try{
-                        new()
-                    }catch(e: Exception){
-                        log.error('SocketBuffer.new', e)
+                        try{
+                            new()
+                        }catch(e: Exception){
+                            log.error('SocketBuffer.new', e)
+                        }
                     }
                 }
             }

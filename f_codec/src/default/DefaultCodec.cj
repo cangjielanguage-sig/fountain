@@ -72,7 +72,19 @@ public class DefaultCodec <: Codec & Releasable {
 
     private func lastBuffer(): BytesListOutputStream {
         func getBuf(){
-            let buf = byteListOutputBuilder.build().getOrThrow()
+            // 有限超时取池项：取不到就抛，由调用方（写线程）记录可见失败，
+            // 而不是无限等待（原实现是 build() 默认 Duration.Max）。
+            let buf = byteListOutputBuilder.build(timeout: Duration.second * 5).getOrThrow()
+            if (!buf.isEmpty) {
+                // 池项应当是干净的：这里非空说明池的归还清理/记账出了问题（见 .autocode/bug.md 六）。
+                // 直接抛：编码期失败，绝不会把脏字节写到线上；调用方（写线程）会记录可见错误。
+                let dirtyBytes = if (let Some(n) <- buf.byteSize()) {
+                    '${n}'
+                } else {
+                    'unknown'
+                }
+                throw CodecException('borrowed a non-empty buffer from pool: dirtyBytes=${dirtyBytes}')
+            }
             inputs.add(buf)
             buf
         }

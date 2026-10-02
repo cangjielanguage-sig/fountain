@@ -162,6 +162,8 @@ public struct Message <: Protocol<EncodedMessage, Message> {
 }
 
 public struct EncodedMessage <: MessageCopier & Releasable {
+    /** 超过该字节数就不做合并（避免为了“一次 write”而把大消息全量缓冲）。 */
+    private static let SMALL_MESSAGE_LIMIT = 4096
     EncodedMessage(
         private let command: Byte,
         private let bytes: BytesCopyTo
@@ -172,11 +174,30 @@ public struct EncodedMessage <: MessageCopier & Releasable {
             r.release()
         }
     }
+    /** 小消息合并：payload 已知且不超过 SMALL_MESSAGE_LIMIT 时返回 [cmd][payload]，否则 None。 */
+    private func asOneSmallMessage(): ?Array<Byte> {
+        if (let Some(n) <- bytes.byteSize() && n + 1 <= SMALL_MESSAGE_LIMIT && let Some(payload) <- bytes.asBytes()) {
+            let out = Array<Byte>(n + 1, repeat: 0u8)
+            out[0] = command
+            for (i in 0..payload.size) {
+                out[i + 1] = payload[i]
+            }
+            out
+        } else {
+            None<Array<Byte>>
+        }
+    }
     public func copy(to!: OutputStream, closeToOnEnd!: Bool = false): Unit {
         var ok = false
         try {
-            to.write([command])
-            bytes.copy(to: to, closeToOnEnd: false, closeFromOnEnd: false)
+            if (let Some(one) <- asOneSmallMessage()) {
+                // 小消息：命令字节 + 载荷合并成**一次** write。
+                // 这样即使写出过程失败，也不会把“半条消息”留在流上（大消息仍走流式，避免内存放大）。
+                to.write(one)
+            } else {
+                to.write([command])
+                bytes.copy(to: to, closeToOnEnd: false, closeFromOnEnd: false)
+            }
             to.flush()
             ok = true
         } finally {

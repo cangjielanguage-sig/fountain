@@ -415,3 +415,23 @@ PDIAG] DEQUE-MISS s=1024 nodes=0 idles=0
 
 > 结论：第 1 条的“脱钩”已按“不变量成立 + 自愈兜底 + 现场告警”处理完毕；**触发源未定位到具体一行**，
 > 若日后再现，可直接用 `WEDGE-HEAL` 告警 + 6.8.5 的探针思路（把校验放进临界区）继续收口。
+
+---
+
+### 6.9 §6.6 第 2/3/4/5 条与第 1 条剩余项：已落地（2026-10-02 晚）
+
+| §6.6 条目 | 落地内容 | 落点 |
+| --- | --- | --- |
+| **2 不忙等** | `Duration.Max` 分支每轮 `sleep(1ms)` 让出 CPU；超过 **30s** 未取到即 `WARN` 放弃并返回 `None`（不再静默永久挂起）。`lastBuffer()` 改为 **5s 有限超时**取池项，取不到直接抛，由写线程记录可见失败 | `f_pool/src/KeyPool.cj`、`f_codec/src/default/DefaultCodec.cj` |
+| **1 剩余** | ① 低频自检：每 10000 次变更核对一次 `s ≡ 队列节点数 + out`，违约打印 `DEQUE-SELFCHECK]`（重复归还等都在此暴露；泛型下无法按值去重，故策略为“检出 + 告警”，配合 `Releasable` 幂等与调用方纪律）② 两条验收用例落库：`sizeMatchesBorrowableCount`（借空后 size == 实际可借数，归还后仍成立）、`concurrentBorrowNeverSharesBuffer`（8 线程 × 2000 次，借到的缓冲必须为空 = 无共享底层 list） | `f_pool/src/base/collection/SyncDeque.cj`、`f_pool/src/pool_concurrency_test.cj`（新增） |
+| **3 借出即校验** | `getBuf()` 借到池项后校验：非空即抛 `CodecException`（编码期失败 ⇒ 绝不会写出半条脏消息；调用方可见）。为此给 `BytesListOutputStream` 增加 `isEmpty` / `reset` | `f_codec/src/default/DefaultCodec.cj`、`f_pool/src/BytesListOutputStream.cj` |
+| **5 后半** | 客户端心跳连续失败容忍 **3 次**再拆链（成功即清零），失败 1~2 次只 `WARN` 保留连接；异常路径同样容忍 | `f_net/src/client/client.cj` |
+| **4 写路径原子性** | `BytesCopyTo` 增加 `byteSize()` / `asBytes()`（默认不支持；`BytesListOutputStream` 与 `ChainedBytesCopyTo` 实现）；`EncodedMessage.copy` 在 **payload ≤ 4096B** 时把 `[cmd][payload]` **合并成一次 `write`**，大消息仍流式（不做全量缓冲）。写失败时不再可能只写出前半条 | `f_protocol/src/default/Message.cj`、`f_pool/src/BytesCopier.cj`、`f_pool/src/BytesListOutputStream.cj` |
+
+**验证**（WSL Ubuntu-24.04）：
+- `f_pool` 全量 `cjpm test`：`TOTAL: 22, PASSED: 22, FAILED: 0`（含此前会挂死的 `KeyPoolTest.testConcurrency` 与新增两条验收用例）。
+- frpcdemo 端到端（默认配置，约 45s）：CPU **0%~2%**（9 线程）、应用日志事件 **0**、解码错误 **0**，且无 `DEQUE-SELFCHECK` / `WEDGE-HEAL` 告警。
+
+**遗留说明**：
+- 条目 4 的“与 `close()` 互斥”未做：合并只覆盖小消息（≤4096B），大消息仍是流式，理论上仍可能出现“半条大消息”；彻底解决建议给消息加长度头/校验（见 6.6 第 4 条）。
+- 重复归还目前在泛型 `SyncDeque<T>` 上只能“检出 + 告警”，无法按值去重；若后续要强约束，需要在 `KeyPool` 层用 `Ref<V>` 身份做借出集合（需要 `Ref` 满足 `Hashable & Equatable`）。
