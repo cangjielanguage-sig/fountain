@@ -1245,7 +1245,7 @@ export controllerPointcut='*::*..*Controller.*(**): *'
 
 **【口播】**
 
-> 这里有个非常值得强调的设计：**`controllerPointcut` 不是 MVC 的配置项，它是这个切面的作者自己起的名字**。
+> 这里有个非常值得强调的设计：**`controllerPointcut` 不是 MVC 的配置项，它是为这个切面专门起的名字**。
 > `ConfigExecutionRouteRule('controllerPointcut')` 的意思是「去环境变量里读 `controllerPointcut` 这一项，把它当作 ExecutionRouteRule 规则」。
 >
 > 于是切点表达式变成了**部署期可配**的：开发环境织上，生产环境改窄甚至关掉，都不用改代码。
