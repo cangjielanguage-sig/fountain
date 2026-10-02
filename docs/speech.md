@@ -817,7 +817,7 @@ fboot run [PATH] --dylibPattern=<动态链接库文件名正则（不含扩展�
 > 7. 主线程 `while(true){ sleep(Duration.Max) }` **永久阻塞**。
 > 8. **`fboot run` 不会返回**
 >
-> 最后一条要在视频里强调：**`fboot run` 不会返回，录屏时请另开一个终端敲 curl。**
+> **注意**：**`fboot run` 不会返回**
 
 ### `--dylibPattern` 怎么写（重点，也是最容易踩的坑）
 
