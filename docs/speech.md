@@ -2883,13 +2883,13 @@ NoPrivilege(status,any)     没有权限
 ```
 1. ignoreAuth && ignorePrivilege 都为 true          → 直接 OK（不查）
 2. 存在「通用」AuthHandler                          → 用它一次检查完
-3. 否则：!ignoreAuth 且 UserSessionHandler 存在且通过 → 返回 OK
-4. 否则：!ignorePrivilege 且 PrivilegeHandler 存在   → 用它检查
+3. 否则：!ignoreAuth 且 UserSessionHandler 存在 → 用它检查登录状态 → 通过执行第4步，否则失败
+4. !ignorePrivilege 且 PrivilegeHandler 存在   → 用它检查权限
 5. 都没有                                           → OK
 ```
 
 > **重要结论**：第 3 步一旦通过就直接返回，**第 4 步的权限检查不会执行**。
-> 所以源码注释明确写着：**如果登录状态和权限都要检查，务必在同一个类里实现、一次调用检查完**——`fdemo` 的 `AuthCheckerImpl` 就是这个做法。
+> 所以源码注释明确写着：**如果登录状态和权限都要检查，最好在同一个类里实现、一次调用检查完**——`fdemo` 的 `AuthCheckerImpl` 就是这个做法。
 > 如果你的系统权限模型很复杂，可以实现 `UserSessionHandler` 和 `PrivilegeHandler` 两个 bean，但要清楚这个优先级语义。
 
 ### 第三步：在 controller 上放行
