@@ -56,40 +56,68 @@ public class SyncDeque<T> <: Deque<T> {
         (total, idles)
     }
     public func insertHead(value: T): Unit {
-        head.insertNext(value)
-        s.fetchAdd(1)
+        synchronized(head.globalLock){
+            head.insertNext(value)
+            s.fetchAdd(1)
+        }
     }
     public func insertTail(value: T): Unit {
-        head.tail.insertPrev(value)
-        s.fetchAdd(1)
+        synchronized(head.globalLock){
+            head.tail.insertPrev(value)
+            s.fetchAdd(1)
+        }
     }
     public func prepend(value: T, checker: (T) -> Bool, destroier: (T) -> Unit): Unit {
         if(checker(value)){
-            head.insertNext(value)
+            synchronized(head.globalLock){
+                head.insertNext(value)
+                markReturned()
+            }
         }else{
             destroier(value)
-            s.fetchSub(1)
+            synchronized(head.globalLock){
+                markReturned()
+                s.fetchSub(1)
+            }
         }
-        markReturned()
     }
     public func append(value: T, checker: (T) -> Bool, destroier: (T) -> Unit): Unit {
         if(checker(value)){
-            head.tail.insertPrev(value)
+            synchronized(head.globalLock){
+                head.tail.insertPrev(value)
+                markReturned()
+            }
         }else{
             destroier(value)
-            s.fetchSub(1)
-        }
-        markReturned()
-    }
-    public func remove(checker: (T) -> Bool, destroier: (T) -> Unit): ?T {
-        while(let Some(x) <- head.nextForGet()){
-            markBorrowed()
-            if(checker(x)){
-                return x
-            }else{
-                destroier(x)
+            synchronized(head.globalLock){
                 markReturned()
                 s.fetchSub(1)
+            }
+        }
+    }
+    public func remove(checker: (T) -> Bool, destroier: (T) -> Unit): ?T {
+        while(true){
+            // 取节点与借出计数必须在同一临界区：否则并发下会出现「节点已摘掉、计数未加」
+            // 的中间态，把合法并发误判成记账脱钩（自愈就会误伤）。
+            var taken = None<T>
+            synchronized(head.globalLock){
+                if(let Some(x) <- head.nextForGet()){
+                    markBorrowed()
+                    taken = Some(x)
+                }
+            }
+            if(let Some(x) <- taken){
+                if(checker(x)){
+                    return x
+                }else{
+                    destroier(x)
+                    synchronized(head.globalLock){
+                        markReturned()
+                        s.fetchSub(1)
+                    }
+                }
+            }else{
+                break
             }
         }
         reconcileIfWedge()
@@ -102,14 +130,16 @@ public class SyncDeque<T> <: Deque<T> {
      * 把 s 拉回真实值即可让池重新创建池项。
      */
     private func reconcileIfWedge(): Unit {
-        if (s.load() - out.load() <= 0) {
-            return                      // 正常：队列里有项，或池项都在借出中
-        }
-        let (total, _) = countNodes()
-        if (total == 0 && out.load() == 0 && s.load() > 0) {
-            let lost = s.load()
-            s.store(0)
-            println("WEDGE-HEAL] deque lost ${lost} element(s) with no borrower (bookkeeping broken), size reset to 0")
+        synchronized(head.globalLock){
+            if (s.load() - out.load() <= 0) {
+                return                  // 正常：队列里有项，或池项都在借出中
+            }
+            let (total, _) = countNodes()
+            if (total == 0 && out.load() == 0 && s.load() > 0) {
+                let lost = s.load()
+                s.store(0)
+                println("WEDGE-HEAL] deque lost ${lost} element(s) with no borrower (bookkeeping broken), size reset to 0")
+            }
         }
     }
     public func check(running: () -> Bool, checker: (T) -> Bool, taskPusher: () -> Unit): Int64 {

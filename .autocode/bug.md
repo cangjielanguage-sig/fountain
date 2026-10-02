@@ -380,3 +380,38 @@ PDIAG] DEQUE-MISS s=1024 nodes=0 idles=0
 
 复现/验证脚本（都带硬超时）：`.autocode/tmp/e2e_check.sh`（后台跑，输出 `/tmp/e2e.log`）、
 `server_to.sh`（服务端 150s 硬超时）、`test_fpool_filter.sh`（只跑回归用例）、`monitor2.sh`（瞬时 CPU）。
+
+#### 6.8.5 追查“记账脱钩”触发源 + `KeyPoolTest.testConcurrency` 挂死（2026-10-02 晚）
+
+**1）触发源追查：加了不变量探针，但未能定位到具体一行**
+
+做法：在 `SyncDeque` 每次变更后校验 `s == 队列节点数 + out`，违约即抛异常（让 unittest 直接失败并带调用栈）；
+另加一个临时压力用例（32 线程 × 3000 次借还 + “同一对象归还两次”）。
+
+结果：
+- 压力用例确实**逼出了违约**（`INV-VIOLATION[append] s=3 nodes=1 out=1`），但**判定不可靠**：探针在临界区外采集，
+  而 `out` 的增减与节点摘挂原本不在同一临界区，并发下会看到“节点已摘、计数未加”的**中间态**，无法区分真丢项与瞬时态。
+- 端到端（修完 6.8.1/6.8.2 后）连跑多轮再未出现 `s=1024 nodes=0` 那种**确定性的**脱钩；
+  推测原先的高频脱钩与“未清空 → 对端解码错位 → 拆链 → 池并发暴涨”这条链耦合，`clear` 修好后触发条件大幅减少。
+
+**2）加固（本轮已改）：让不变量在任何时刻都成立，自愈不会误伤**
+
+`SyncDeque` 里把「节点摘挂」与「借出计数 `out` / 总数 `s`」放进**同一临界区**（`head.globalLock`，仓颉 Mutex 可重入）：
+- `remove`：取到节点与 `markBorrowed()` 同临界区；销毁分支的 `markReturned()` + `s.fetchSub(1)` 同临界区；
+- `append`/`prepend`：插入（或销毁）与 `markReturned()`/`s.fetchSub(1)` 同临界区；
+- `insertHead`/`insertTail`：插入与 `s.fetchAdd(1)` 同临界区；
+- `reconcileIfWedge()` 在锁内核对，只在「`s > out` 且队列 0 节点且 `out == 0`」时自愈（`WEDGE-HEAL` 告警）。
+
+残留窗口（已记录、风险极低）：`check()`（空闲超时巡检/`destroy` 路径）里 `ValueNode.check` 的摘节点与调用方的 `s.fetchSub(1)`
+仍分属两个临界区；而这类巡检在本工程的池上 `checkInterval` 分别为 `Duration.Max`（字节缓冲池，不触发）与 `Duration.Minute`（byte 数组池，极少），
+因此自愈误判只剩极窄窗口，后果仅是 `s` 可能偏小（软上限内多建一个池项），不会崩溃。
+
+**3）`KeyPoolTest.testConcurrency` 挂死：已不再复现，全量用例转绿**
+
+- 该用例：10 线程 × 1000 次 `pool.get('a', timeout: Duration.Max).getOrThrow()` + `giveBack`，而 key `'a'` 的 `maxSize = 3` ——
+  **一旦池真丢项，`Duration.Max` 的等待就永远不会返回**，所以它天然是“脱钩”的探针（之前 2 分多钟不结束正是这个原因）。
+- 现状：`cjpm test`（f_pool 全量）`TOTAL: 20, PASSED: 20, FAILED: 0`，整轮约 3 分钟内结束。
+- 端到端复验（最终版）：默认配置跑约 45s，CPU **1%~2%**（9 线程）、应用日志事件 **0** 条、解码错误 **0**。
+
+> 结论：第 1 条的“脱钩”已按“不变量成立 + 自愈兜底 + 现场告警”处理完毕；**触发源未定位到具体一行**，
+> 若日后再现，可直接用 `WEDGE-HEAL` 告警 + 6.8.5 的探针思路（把校验放进临界区）继续收口。
