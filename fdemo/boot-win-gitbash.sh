@@ -112,8 +112,8 @@ build(){
     # connectionUrl username password 这些配置如果在编译环境配置就会被嵌入编译产物。如果在运行环境配置就会在进程启动时加载
     # 如果配置了密钥就会把敏感信息加密后的字节数组嵌入编译产物，否则会把这些字符串的UTF8字节数组嵌入编译产物
     # 运行期的配置优先级高于编译期的
-    args="--orm_sm4Key=$(fboot randhex 32)"
-    args="$args --orm_sm4Iv=$(fboot randhex 32)"
+    args="--sm4Key=$(fboot randhex 32)"
+    args="$args --sm4Iv=$(fboot randhex 32)"
     args="$args --orm_drivers=postgres"
     args="$args --postgres_orm_connectionUrl=$POSTGRES"
     args="$args --postgres_orm_option_username=$POSTGRES_USERNAME"
