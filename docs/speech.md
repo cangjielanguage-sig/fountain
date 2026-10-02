@@ -130,7 +130,7 @@ fboot version
 > - 做到运行环境敏感信息安全性
 > - 运行期用环境变量或命令行参数覆盖，做到「一份产物、多环境部署」。
 >
-> 这套机制由 `fountain::f_config` 提供，**第三章会完整展开**：命令行参数的四种写法、四级读取优先级、SM4 加密内嵌敏感配置、以及 `@EmbedSensitive` 宏。
+> 这套机制由 `fountain::f_config` 提供，**第四章会完整展开**：命令行参数的四种写法、四级读取优先级、SM4 加密内嵌敏感配置、以及 `@EmbedSensitive` 宏。
 
 ## 1.4 什么时候不该用 fountain
 
@@ -175,352 +175,7 @@ fboot version
 
 ---
 
-# 第三章 配置：`fountain::f_config`
-
-**【镜头】** `f_config/README.md` + `fdemo/boot.sh`（那一整屏 `export`）+ `fdemo/boot-win-gitbash.sh`
-
-## 3.1 开场：fountain 没有配置文件
-
-**【口播】**
-
-> 在讲 fboot 之前，必须先讲配置——因为**后面你会看到满屏的环境变量**：`mvc_port`、`orm_drivers`、`logger_*`、`controllerPointcut`……
-> 它们全都由 `f_config` 统一读取。而 `f_config` 最重要的一句话是：
->
-> **「不依赖任何配置文件。」**
->
-> 配置项只有四个来源：**环境变量**、**`--key=value` 形式的命令行参数**、进程内 `Config.set`、以及编译期内嵌的敏感配置。没有 `application.yml`，没有 properties，没有 JSON。
->
-> 前两个是**完全平级**的：环境变量能做的事，命令行参数都能做，而且**命令行参数会覆盖同名环境变量**。
->
-> 这里先埋一个后面会反复用到的规则：**只要一个仓颉进程链接了 `f_config`，它的命令行参数就会被自动解析成配置项**——不限于 `fboot` 的任何子命令，也包括你自己写的、依赖了 `f_config` 的程序。**3.2 会详细讲。**
-
-| 来源 | 形态 | 何时生效 |
-| --- | --- | --- |
-| 环境变量 | `export mvc_port=8080` | 进程启动时由 `static init` 装载 |
-| 命令行参数 | `--mvc_port=9090` | 同上，**覆盖同名环境变量** |
-| 进程内 `Config.set(...)` | `Config.set<Int64>([('mvc_port', 9090)])` | 运行期写入/覆盖 |
-| 编译期内嵌的敏感值（`@EmbedSensitive`） | `fboot build --paySecret=xxx` | 编译时嵌入产物，运行期解密/还原 |
-
-**【口播】**
-
-> 命令行参数这一条我要特别强调：**`fdemo/boot.sh` 的 `build()` 函数就是现成的例子**——它把驱动名、连接串、用户名、密码、SM4 密钥全部写成 `--orm_drivers=postgres --postgres_orm_connectionUrl=...` 这样的 `--key=value`，而不是 `export`。**详见 3.2。**
->
-> 这一条直接决定了部署形态：**一份编译产物，靠环境变量或命令行参数跑遍开发/测试/生产**。这也是 `fboot build --k=v` 那套编译期注入能成立的前提。
-
-## 3.2 命令行参数的四种合法写法
-
-```
---argName=argValue     # key = '=' 左侧，value = '=' 右侧，两侧都 trimAscii，为了跟cjpm参数区分，fboot build只支持这一种写法
---argName              # 等价于 --argName=true
--argName argVal        # 下一个参数若以 '-' 开头则不当作值，该配置项值为 true
--argName               # 等价于 -argName true
-```
-
-- 单横线形式**不支持 `=` 赋值**，`-argName=argValue` 会被整体当成配置项名；
-- 不以 `-` 开头的参数被忽略；`env.getCommandLine()[0]`（程序自身路径）不参与解析；
-- **命名风格不被改写**——仓颉运行时自身的环境变量是驼峰命名，业务配置建议同样用驼峰。
-
-### 现成的例子：`fdemo/boot.sh` 的 `build()` 函数
-
-**【镜头】** `fdemo/boot.sh` 的 `build()`（顺带把它上面那段被注释掉的「环境变量版」一起放出来做对比）
-
-```bash
-build(){
-    export CANGJIE_STDX_PATH=$CANGJIE_STDX_DYNAMIC_PATH
-
-    # 下面全部是 --key=value 形式的命令行参数
-    args='--orm_drivers=postgres'
-    args="$args --postgres_orm_connectionUrl=$POSTGRES"
-    args="$args --postgres_orm_option_username=$POSTGRES_USERNAME"   # 用户名密码也可以放进 connectionUrl
-    args="$args --postgres_orm_option_password=$POSTGRES_PASSWORD"
-    args="$args --sm4Key=$(fboot randhex 32)"   # 每次加密用不同的 KEY
-    args="$args --sm4Iv=$(fboot randhex 32)"
-    # 以上是敏感信息
-
-    fboot build $target_path $args     # ← 注意 $target_path 必须是第一个参数
-    echo -e '\a'
-}
-```
-
-而就在它上面，作者留了一段**被注释掉的等价写法**，用的全是 `export`。注释原文写得很直白：
-
-```bash
-###############上面注释的跟下面的脚本功能是一样的，只是一个环境变量，一个命令行参数########################
-```
-
-**【口播】**
-
-> 这一屏请记住三件事：
-> 1. **`--key=value` 和 `export` 完全等价**——选哪个纯粹是部署习惯：容器里用环境变量方便，脚本里用命令行参数直观、能一眼看全；
-> 2. 注意 `$target_path` 必须是 `build` 后的**第一个参数**（见第四章 4.4），`--k=v` 们排在它后面；
-> 3. **别误以为这是 `fboot` 的特权**——下一节会说清边界：只要进程链了 `f_config`，命令行参数就自动是配置项。
->
-> Windows 版 `boot-win-gitbash.sh` 的 `build()` 是同一套写法，可以顺带扫一眼证明不是特例。
-
-### 关键前提：不是「fboot 支持命令行参数」，而是「任何用了 `f_config` 的仓颉进程都支持」
-
-**【口播】**（这一句先把边界划清，后面才不会误解）
-
-> 请务必记住这句话：
->
-> **只要一个仓颉进程链接了 `f_config` 模块，它的 `static init` 就会去读自己的命令行参数（`env.getCommandLine()`），并把 `--key=value` 装载成配置项。**
->
-> 这跟 `fboot` 没什么特殊关系——`fboot` 只是**恰好也用了 `f_config`** 的一个仓颉进程而已。同样适用的还有：
->
-> - `fboot run` 启动的应用进程（应用就是被加载进这个进程的）；
-> - 你自己写的任何带 `main` 的可执行程序（只要 `import fountain::f_config.*`）；
-> - 任何用 `cjpm run` 跑起来的、依赖了 `f_config` 的二进制；
-> - 任何**间接**依赖了 `f_config` 的程序（比如你引了 `f_orm`，它依赖 `f_config`）。
->
-> 所以 `--key=value` 是 **`f_config` 这个模块的能力**，不是某个命令的开关。`fdemo/boot.sh` 的 `build()` 只是一个**恰好长这样**的例子。
-
-### 同一个写法，两个舞台：编译期 vs 运行期
-
-**【口播】**（承接上面那条规则，看它在 `fboot` 的两个子命令上分别落到哪儿）
-
-> 同一个 `--key=value`，在 `fdemo` 的两个脚本函数里走的路径不一样：
->
-> | 阶段 | 命令行参数在谁的 argv 里 | 谁读到它 | 效果 |
-> | --- | --- | --- | --- |
-> | **编译期** | `fboot build` 进程自己的 argv | `fboot` 进程里的 `f_config` | 转成 `cjpm build` 子进程的**环境变量**；宏（`@EmbedSensitive`、`ORMConfig`）在编译期读到它们，把连接串 / 口令**加密嵌入产物** |
-> | **运行期** | `fboot run` 进程的 argv（应用就加载在这个进程里） | 同一个 `f_config`，同一套 `static init` | 装载进 `ARGS`，**覆盖同名环境变量** |
->
-> 两边**都是同一条规则**在起作用：**谁的命令行里有 `--k=v`，且那个进程链了 `f_config`，谁就把它读成配置项。**
->
-> 对照 `fdemo` 的两个启动脚本就更清楚了：
-> - `boot.sh` 的 **`build()`** 把 `--k=v` 交给 `fboot build` → 编译期，最终嵌进产物；
-> - `boot.sh` 的 **`run()`** 用的是 `export`（环境变量）→ 运行期；
-> - 而 **`boot-win-gitbash.sh` 的 `run()`** 直接把 `--k=v` 拼在 `fboot run` 后面：
->   ```bash
->   fboot run $target_path --dylibPattern='(boot|user\.util\.(auth|cron)|\.(controller|service\.impl))' $args
->   ```
->   这些 `--logger_*=...` `--mvc_port=8080` `--orm_*=...` 落在 `fboot run` 进程的 argv 里，被 `f_config` 直接装载 → 运行期。
->
-> 不管是哪条路进来，**最终都由 `f_config` 用同一套优先级读取**（见 3.3），所以对你写业务代码是透明的。
-
-## 3.3 读取优先级（重点，建议做成动画）
-
-一次 `Config.getString(key)` 的查找顺序，**先命中者生效**：
-
-| 顺序 | 来源 |
-| --- | --- |
-| 1 | 环境变量 / 命令行参数（`ARGS[key]`） |
-| 2 | 带全局前缀的同名项（`ARGS[fountain_key]`） |
-| 3 | 编译期内嵌的敏感值（`sensitiveMap[key]`） |
-| 4 | 带全局前缀的敏感值（`sensitiveMap[fountain_key]`） |
-
-> **结论：运行期配置（环境变量/命令行）优先级高于编译期内嵌值。**
-> 这就是为什么你可以编译期把数据库密码嵌进产物、生产环境再用环境变量覆盖掉。
-
-### 全局前缀 `fountain`
-
-`Config` 内置全局前缀 `fountain`：原名未命中时会再试 `fountain_${key}`；`getAll` 的结果里则会把 `fountain_` 去掉。
-
-```bash
-export myAppSecret='xxx'           # Config.getString('myAppSecret') 命中
-export fountain_myAppSecret='xxx'  # 等价写法
-```
-
-`getAll(prefix)`：prefix 为空返回全部，否则 key 需以 `${prefix}_` 或 `fountain_${prefix}_` 开头。
-
-## 3.4 `Config` API
-
-```cangjie
-package fountain::f_config
-public import std.convert.Parsable
-public import fountain::f_data.DataParsable
-
-public class Config {
-    public static const sm4Operation = 'sm4Operation'
-    public static const sm4Padding    = 'sm4Padding'
-    public static const sm4Key        = 'sm4Key'
-    public static const sm4Iv         = 'sm4Iv'
-    public static const sm4Aad        = 'sm4Aad'
-    public static const sm4TagSize    = 'sm4TagSize'
-
-    public static func refresher(prefix: String, fn: () -> Unit): Unit
-    public static func set<T>(tuples: Array<(String, T)>, ifAbsent!: Bool = false): Unit where T <: ToString
-    public static func getAll(prefix: String): Map<String, String>
-    public static func getAll(): Map<String, String>
-    public static func getString(key: String): ?String
-    public static func getValue<T>(key: String, parser: (String) -> ?T): ?T
-    public static func getValue<T>(key: String): ?T where T <: Parsable<T>
-    public static func getStringArray(key: String, delim!: String = ','): Array<String>
-    public static func getValues<T>(key: String, delim!: String = ',', parser!: (String) -> T): Array<T>
-    public static func getValues<T>(key: String, delim!: String = ','): Array<T> where T <: Parsable<T>
-    public static func getDateTime(key: String, format!: String = ''): ?DateTime
-    public static func getDateTimes(key: String, format!: String = '', delim!: String = ','): Array<DateTime>
-    public static func getData<T>(key: String): ?T where T <: DataParsable<T>
-    public static func getDatas<T>(key: String, delim!: String = ','): Array<T> where T <: DataParsable<T>
-    public static func getDuration(key: String): ?Duration
-    public static func getDurations(key: String, delim!: String = ','): Array<Duration>
-    public static func bufferSize(bufferKey: String, default: Int64, debugging: Bool): Int64
-    public static func getSM4(): ?SM4
-    public static func registerSensitive(key: String, value: Array<Byte>): Unit
-}
-```
-
-**【口播】**（挑几个最有辨识度的讲）
-
-> `getValue` / `getData` 是**单例读取**，解析失败返回 `None`，不抛异常；
-> `getValues` / `getDatas` 是**数组读取**，解析失败**抛异常**，配置项不存在返回空数组——**这个「单数不抛、复数抛」的不对称一定要记住**。
-> `bufferSize` 更贴心：配置项不存在或 `<= 0` 就用默认值；非调试模式下还会**向上取整到 2 的幂**，且恒不小于默认值——环形缓冲区直接拿它。
-
-`bufferSize(bufferKey, default, debugging)` 的返回值：
-
-| 条件 | 返回值 |
-| --- | --- |
-| 配置项不存在 / 解析失败 / `x <= 0` | `default` |
-| `debugging == true` 且 `x > 0` | `x` 原样返回 |
-| `x` 是 2 的幂 | `x` |
-| 其它 | 向上取整到 2 的幂 `s`；`s >= default` 返回 `s`，否则 `default` |
-
-```cangjie
-Config.getValue<Int64>('threadCount')                 // None 或 Int64
-Config.getValues<Int64>('ports')                      // ports=8080,9090 -> [8080, 9090]
-Config.getDateTime('deadline', format: 'yyyy-MM-dd')
-Config.bufferSize('ringBufferSize', 1024, false)      // >= 1024 且向上取到 2 的幂
-Config.set<Bool>([('mySwitch', true)], ifAbsent: true) // 不存在才写入
-Config.getAll('orm')                                  // 所有 orm_ / fountain_orm_ 开头的配置项
-```
-
-## 3.5 敏感配置与 SM4 加密
-
-**【口播】**（这是本章的高潮，也是 `fboot randhex` 的用武之地）
-
-> 数据库密码、第三方密钥这类东西，不适合出现在运行环境的环境变量里。
-> `f_config` 的做法是：**编译期**在编译机上读取环境变量，用 **SM4** 加密后作为字节数组嵌入编译产物；进程启动时注册到独立的 `sensitiveMap`，再用常规 `getString` 读取。
->
-> - 未配置 SM4 → 嵌入的是 **UTF8 明文**字节数组；
-> - 配置了 SM4 → 嵌入的是**密文**，同时把 SM4 参数一并嵌入供运行期解密；
-> - 运行期同名配置优先级更高，可以被覆盖。
-
-### SM4 配置项
-
-| 配置项 | 含义 | 默认值 | 取值 / 格式 |
-| --- | --- | --- | --- |
-| `sm4Operation` | 工作模式 | `CBC` | `CBC` `CFB` `CTR` `GCM` `OFB`（`ECB` 不安全，明确不支持） |
-| `sm4Padding` | 填充模式 | `PKCS7Padding` | `NoPadding` `PKCS7Padding` |
-| `sm4Key` | 密钥 | **必须配置** | 16 字节 = 长度 32 的 16 进制串 |
-| `sm4Iv` | 初始向量 | 配了 key 就必须配 | `CBC`/`OFB`/`CFB` 要 16 字节，`GCM` 要 12 字节 |
-| `sm4Aad` | 附加认证数据 | 空字节数组 | 16 进制串 |
-| `sm4TagSize` | GCM tag 长度 | `16` | `Int64` 字符串 |
-
-```bash
-export paySecretKey='......'
-export sm4Key=$(fboot randhex 32)   # 16 字节密钥
-export sm4Iv=$(fboot randhex 32)    # CBC 的 IV；GCM 用 fboot randhex 24
-```
-
-**【口播】**
-
-> 注意这两点，讲出来比藏着好：
-> 1. **SM4 参数本身（含密钥）也会以字节数组形式出现在编译产物里**。这个机制抬高的是「直接从二进制里 grep 出配置」的门槛，**不能替代密钥管理服务**；
-> 2. 每次解密都会**重新构造一次 `SM4` 实例**，敏感配置多或读取频繁时建议自己缓存结果。
-
-
-## 3.6 `@EmbedSensitive` 宏
-
-```cangjie
-import fountain::f_config.macros.*
-
-@EmbedSensitive(paySecretKey pushToken)   // 源文件顶层调用，逗号分隔亦可
-```
-
-展开后是一个立即执行的匿名闭包：
-
-```cangjie
-private let _ = {=>
-    Config.registerSensitive('paySecretKey', [...密文或明文字节...])
-    Config.registerSensitive('pushToken', [...])
-    Config.registerSensitive('sm4Operation', ...)
-    Config.registerSensitive('sm4Padding', ...)
-    Config.registerSensitive('sm4Key', ...)
-    Config.registerSensitive('sm4Iv', ...)
-    Config.registerSensitive('sm4Aad', ...)
-    Config.registerSensitive('sm4TagSize', ...)
-}()
-```
-
-嵌入规则：
-
-1. **编译期取不到值的名字会被忽略**（编译机上没有对应环境变量就不注册）；
-2. 编译期配了 `sm4Key` 写密文，否则写 UTF8 明文；
-3. 只有「至少注册了一项敏感值」且「`sm4Key` 非空」时才把 SM4 的六个参数一并写入（它们本身按明文字节写入）；
-4. 同名重复注册以最后一次为准；
-5. 运行期读取仍遵循 3.3 的优先级。
-
-**【口播】** `f_orm` 就是基于这个宏的封装：`f_orm/src/ProtectedMacros/EmbedSensitive.cj` 生成 ORM 的连接串/用户名/口令键，再转调 `@EmbedSensitive`，最终在 `f_orm` 里以 `@ORMEmbedSensitive()` 触发。
-所以你在 `boot.sh` 里写的 `--postgres_orm_connectionUrl=...` 才能被嵌进产物。我们看看一个boot.sh 的构建实例（fdemo/boot.sh 的build函数）
-
-## 3.7 可配置的时间格式：`DateTimeConfConverter`
-
-**【镜头】** 这是 `f_config` 与 `f_data` 咬合的地方（第八章会再讲 `DataConverter`）
-
-```cangjie
-package fountain::f_config
-
-@Annotation[target: [MemberProperty, MemberVariable, Parameter]]
-public class DateTimeConfConverter <: AbstractDateTimeConverter {
-    public const DateTimeConfConverter(private let conf: String,
-                                       private let default!: String = 'yyyy-MM-dd HH:mm:ss'){}
-    public func convert(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?DateTime
-}
-```
-
-```cangjie
-@DateTimeConfConverter[myDateFormat]
-private var createdAt: DateTime = DateTime.now()
-
-// export myDateFormat='yyyy/MM/dd'  —— 时间格式本身也变成可配置的
-```
-
-**【口播】** `conf` 是**保存时间格式的配置项名**（不是格式本身），按 3.3 的优先级读取，没配就用 `default`。做多租户、多地区系统时，各家日期格式不一样——一个注解解决。
-
-## 3.8 已知问题（讲出来省得观众踩）
-**`getValues` / `getDateTimes` 解析失败会抛异常**，而单数版本 `getValue` / `getDateTime`（配置不存在时）返回 `None` / 空数组——写容错代码时别搞混。这是故意的，因为复数项配置，在解析过程中，如果有某一个转换失败，则整个配置失效。
-
-## 3.9 现场演示
-
-**【命令】**
-
-```bash
-# 1) 看一眼 fdemo 到底有多少配置（boot.sh 的 exports 函数）
-grep -c 'export' fdemo/boot.sh
-
-# 2) 用 fboot build 把敏感配置在编译期注入（--k=v 会变成 cjpm build 子进程的环境变量）
-cd fdemo
-export POSTGRES='postgres://user:pass@host:5432/dbname'
-./boot.sh build
-# 内部：--sm4Key=$(fboot randhex 32) --sm4Iv=$(fboot randhex 32)
-
-# 3) 运行期覆盖（写法一：环境变量），产物不用重新编译
-export mvc_port=8080
-./boot.sh run
-
-# 3') 运行期覆盖（写法二：--key=value 命令行参数），与写法一完全等价
-./boot.sh run
-# 等价的裸命令（Windows 版 boot-win-gitbash.sh 的 run() 就是这个形态）：
-fboot run ./fdemo \
-  --dylibPattern='(boot|user\.util\.(auth|cron)|\.(controller|service\.impl))' \
-  --mvc_port=9090 \
-  --orm_drivers=postgres
-```
-
-**【预期】**
-
-- 第 2 步：编译成功，连接串与口令被加密嵌入产物；
-- 第 3 / 3' 步：日志里出现 `9090` 端口，`Config.getString('mvc_port')` 拿到的是命令行参数的值，**覆盖了环境变量值**；
-- 两种写法效果完全一致——**环境变量与 `--key=value` 平级，后者覆盖前者**。
-
-**【口播】**
-
-> 这一组三步就是 `f_config` 的全部价值：**编译期可内嵌、运行期可覆盖、全程无配置文件**。
-> 而且请注意第 3 步的两种写法：同一个配置项 `mvc_port`，你既可以 `export`，也可以写成 `--mvc_port=9090`——**这就是「f_config 支持命令行参数」最直观的证明**。
-
----
-
-# 第四章 fboot 命令行
+# 第三章 fboot 命令行
 
 **【镜头】** 终端 + `fboot/src/main.cj`（就 20 行）
 
@@ -539,7 +194,7 @@ fboot run ./fdemo \
 >
 > 也就是说，**fboot 只是 `f_app` 的一个壳**。所有子命令的实现都在 `fountain::f_app.App` 里。理解这一点很重要：你自己的应用也可以用同样的方式启动，而且可以用 `SubCommandMediator` 注册自己的子命令。
 
-## 4.1 `fboot help`
+## 3.1 `fboot help`
 
 **【命令】**
 
@@ -581,7 +236,7 @@ fboot help
 
 > 注意第 1 行，它是整个 fountain 世界的第一公理：**应用项目只需要编译成动态链接库**。后面所有命令都围绕这一条展开。
 
-## 4.2 `fboot workspace` —— 把目录变成仓颉 workspace
+## 3.2 `fboot workspace` —— 把目录变成仓颉 workspace
 
 ### 三种用法
 
@@ -620,7 +275,7 @@ cat cjpm.toml
 
 > 一句话总结：**workspace 是「装模块的盒子」，每个模块都必须编译为动态链接库。**
 
-## 4.3 `fboot module` —— 在 workspace 里加一个动态链接库模块
+## 3.3 `fboot module` —— 在 workspace 里加一个动态链接库模块
 
 ```bash
 # 在 workspace 根目录执行：创建 hello 子模块并挂进 workspace
@@ -676,7 +331,7 @@ hello_app/
 
 > 这一段建议**完整录下来**：不到 20 行代码，一个 HTTP 服务就写完了。这是最有说服力的一镜。
 
-## 4.4 `fboot build` —— 编译使用 fountain 的项目
+## 3.4 `fboot build` —— 编译使用 fountain 的项目
 
 **【口播】**
 
@@ -748,9 +403,9 @@ fboot build ./fdemo \
 > 覆盖方法也很简单，同样是`--`开头的命令行参数或同名的环境变量。
 > 顺带提醒：真实项目不要把密码写进 `boot.sh`，这里只是演示。
 >
-> 这套「编译期内嵌 + 运行期覆盖」的完整机制，见**第三章 `f_config`**。
+> 这套「编译期内嵌 + 运行期覆盖」的完整机制，见**第四章 `f_config`**。
 
-## 4.5 `fboot randhex` —— 生成随机 16 进制串
+## 3.5 `fboot randhex` —— 生成随机 16 进制串
 
 **【命令】**
 
@@ -769,7 +424,7 @@ fboot randhex 32
 >
 > 每次编译换一对 KEY/IV，嵌入的密文就不一样——这是一个很轻量的「产物级」防护。
 
-## 4.6 `fboot cleanUpdate` —— 依赖变了之后的必修课
+## 3.6 `fboot cleanUpdate` —— 依赖变了之后的必修课
 
 **【命令】**
 
@@ -795,7 +450,7 @@ fboot cleanUpdate /abs/path --target-dir=...
 >
 > `fdemo/boot.sh` 里也封装了它：`./boot.sh cleanUpdate`。
 
-## 4.7 `fboot run` —— 启动应用
+## 3.7 `fboot run` —— 启动应用
 
 ### 语法
 
@@ -867,7 +522,7 @@ curl http://localhost:8080/
 
 > 到此，从空目录到可服务的 HTTP 应用，**一共只敲了 4 条命令、写了一个类**。这是本章最好的收尾。
 
-## 4.8 其余命令（快速过一遍）
+## 3.8 其余命令（快速过一遍）
 
 | 命令 | 作用 | 演示 |
 | --- | --- | --- |
@@ -886,6 +541,351 @@ curl http://localhost:8080/
 > ```
 >
 > 未命中时框架会扫描并加载动态链接库、让 `static init()` 完成注册，然后**重试一次**；仍然没有才抛异常并列出可用命令。
+
+---
+
+# 第四章 配置：`fountain::f_config`
+
+**【镜头】** `f_config/README.md` + `fdemo/boot.sh`（那一整屏 `export`）+ `fdemo/boot-win-gitbash.sh`
+
+## 4.1 开场：fountain 没有配置文件
+
+**【口播】**
+
+> 上一章你已经看到：`fboot build`、`fboot run` 后面总要挂一长串参数——**那些全都是配置**：`mvc_port`、`orm_drivers`、`logger_*`、`controllerPointcut`……
+> 它们全都由 `f_config` 统一读取。而 `f_config` 最重要的一句话是：
+>
+> **「不依赖任何配置文件。」**
+>
+> 配置项只有四个来源：**环境变量**、**`--key=value` 形式的命令行参数**、进程内 `Config.set`、以及编译期内嵌的敏感配置。没有 `application.yml`，没有 properties，没有 JSON。
+>
+> 前两个是**完全平级**的：环境变量能做的事，命令行参数都能做，而且**命令行参数会覆盖同名环境变量**。
+>
+> 这里先埋一个后面会反复用到的规则：**只要一个仓颉进程链接了 `f_config`，它的命令行参数就会被自动解析成配置项**——不限于 `fboot` 的任何子命令，也包括你自己写的、依赖了 `f_config` 的程序。**4.2 会详细讲。**
+
+| 来源 | 形态 | 何时生效 |
+| --- | --- | --- |
+| 环境变量 | `export mvc_port=8080` | 进程启动时由 `static init` 装载 |
+| 命令行参数 | `--mvc_port=9090` | 同上，**覆盖同名环境变量** |
+| 进程内 `Config.set(...)` | `Config.set<Int64>([('mvc_port', 9090)])` | 运行期写入/覆盖 |
+| 编译期内嵌的敏感值（`@EmbedSensitive`） | `fboot build --paySecret=xxx` | 编译时嵌入产物，运行期解密/还原 |
+
+**【口播】**
+
+> 命令行参数这一条我要特别强调：**`fdemo/boot.sh` 的 `build()` 函数就是现成的例子**——它把驱动名、连接串、用户名、密码、SM4 密钥全部写成 `--orm_drivers=postgres --postgres_orm_connectionUrl=...` 这样的 `--key=value`，而不是 `export`。**详见 4.2。**
+>
+> 这一条直接决定了部署形态：**一份编译产物，靠环境变量或命令行参数跑遍开发/测试/生产**。这也是 `fboot build --k=v` 那套编译期注入能成立的前提。
+
+## 4.2 命令行参数的四种合法写法
+
+```
+--argName=argValue     # key = '=' 左侧，value = '=' 右侧，两侧都 trimAscii，为了跟cjpm参数区分，fboot build只支持这一种写法
+--argName              # 等价于 --argName=true
+-argName argVal        # 下一个参数若以 '-' 开头则不当作值，该配置项值为 true
+-argName               # 等价于 -argName true
+```
+
+- 单横线形式**不支持 `=` 赋值**，`-argName=argValue` 会被整体当成配置项名；
+- 不以 `-` 开头的参数被忽略；`env.getCommandLine()[0]`（程序自身路径）不参与解析；
+- **命名风格不被改写**——仓颉运行时自身的环境变量是驼峰命名，业务配置建议同样用驼峰。
+
+### 现成的例子：`fdemo/boot.sh` 的 `build()` 函数
+
+**【镜头】** `fdemo/boot.sh` 的 `build()`（顺带把它上面那段被注释掉的「环境变量版」一起放出来做对比）
+
+```bash
+build(){
+    export CANGJIE_STDX_PATH=$CANGJIE_STDX_DYNAMIC_PATH
+
+    # 下面全部是 --key=value 形式的命令行参数
+    args='--orm_drivers=postgres'
+    args="$args --postgres_orm_connectionUrl=$POSTGRES"
+    args="$args --postgres_orm_option_username=$POSTGRES_USERNAME"   # 用户名密码也可以放进 connectionUrl
+    args="$args --postgres_orm_option_password=$POSTGRES_PASSWORD"
+    args="$args --sm4Key=$(fboot randhex 32)"   # 每次加密用不同的 KEY
+    args="$args --sm4Iv=$(fboot randhex 32)"
+    # 以上是敏感信息
+
+    fboot build $target_path $args     # ← 注意 $target_path 必须是第一个参数
+    echo -e '\a'
+}
+```
+
+而就在它上面，作者留了一段**被注释掉的等价写法**，用的全是 `export`。注释原文写得很直白：
+
+```bash
+###############上面注释的跟下面的脚本功能是一样的，只是一个环境变量，一个命令行参数########################
+```
+
+**【口播】**
+
+> 这一屏请记住三件事：
+> 1. **`--key=value` 和 `export` 完全等价**——选哪个纯粹是部署习惯：容器里用环境变量方便，脚本里用命令行参数直观、能一眼看全；
+> 2. 注意 `$target_path` 必须是 `build` 后的**第一个参数**（见第三章 3.4），`--k=v` 们排在它后面；
+> 3. **别误以为这是 `fboot` 的特权**——下一节会说清边界：只要进程链了 `f_config`，命令行参数就自动是配置项。
+>
+> Windows 版 `boot-win-gitbash.sh` 的 `build()` 是同一套写法，可以顺带扫一眼证明不是特例。
+
+### 关键前提：不是「fboot 支持命令行参数」，而是「任何用了 `f_config` 的仓颉进程都支持」
+
+**【口播】**（这一句先把边界划清，后面才不会误解）
+
+> 请务必记住这句话：
+>
+> **只要一个仓颉进程链接了 `f_config` 模块，它的 `static init` 就会去读自己的命令行参数（`env.getCommandLine()`），并把 `--key=value` 装载成配置项。**
+>
+> 这跟 `fboot` 没什么特殊关系——`fboot` 只是**恰好也用了 `f_config`** 的一个仓颉进程而已。同样适用的还有：
+>
+> - `fboot run` 启动的应用进程（应用就是被加载进这个进程的）；
+> - 你自己写的任何带 `main` 的可执行程序（只要 `import fountain::f_config.*`）；
+> - 任何用 `cjpm run` 跑起来的、依赖了 `f_config` 的二进制；
+> - 任何**间接**依赖了 `f_config` 的程序（比如你引了 `f_orm`，它依赖 `f_config`）。
+>
+> 所以 `--key=value` 是 **`f_config` 这个模块的能力**，不是某个命令的开关。`fdemo/boot.sh` 的 `build()` 只是一个**恰好长这样**的例子。
+
+### 同一个写法，两个舞台：编译期 vs 运行期
+
+**【口播】**（承接上面那条规则，看它在 `fboot` 的两个子命令上分别落到哪儿）
+
+> 同一个 `--key=value`，在 `fdemo` 的两个脚本函数里走的路径不一样：
+>
+> | 阶段 | 命令行参数在谁的 argv 里 | 谁读到它 | 效果 |
+> | --- | --- | --- | --- |
+> | **编译期** | `fboot build` 进程自己的 argv | `fboot` 进程里的 `f_config` | 转成 `cjpm build` 子进程的**环境变量**；宏（`@EmbedSensitive`、`ORMConfig`）在编译期读到它们，把连接串 / 口令**加密嵌入产物** |
+> | **运行期** | `fboot run` 进程的 argv（应用就加载在这个进程里） | 同一个 `f_config`，同一套 `static init` | 装载进 `ARGS`，**覆盖同名环境变量** |
+>
+> 两边**都是同一条规则**在起作用：**谁的命令行里有 `--k=v`，且那个进程链了 `f_config`，谁就把它读成配置项。**
+>
+> 对照 `fdemo` 的两个启动脚本就更清楚了：
+> - `boot.sh` 的 **`build()`** 把 `--k=v` 交给 `fboot build` → 编译期，最终嵌进产物；
+> - `boot.sh` 的 **`run()`** 用的是 `export`（环境变量）→ 运行期；
+> - 而 **`boot-win-gitbash.sh` 的 `run()`** 直接把 `--k=v` 拼在 `fboot run` 后面：
+>   ```bash
+>   fboot run $target_path --dylibPattern='(boot|user\.util\.(auth|cron)|\.(controller|service\.impl))' $args
+>   ```
+>   这些 `--logger_*=...` `--mvc_port=8080` `--orm_*=...` 落在 `fboot run` 进程的 argv 里，被 `f_config` 直接装载 → 运行期。
+>
+> 不管是哪条路进来，**最终都由 `f_config` 用同一套优先级读取**（见 4.3），所以对你写业务代码是透明的。
+
+## 4.3 读取优先级（重点，建议做成动画）
+
+一次 `Config.getString(key)` 的查找顺序，**先命中者生效**：
+
+| 顺序 | 来源 |
+| --- | --- |
+| 1 | 环境变量 / 命令行参数（`ARGS[key]`） |
+| 2 | 带全局前缀的同名项（`ARGS[fountain_key]`） |
+| 3 | 编译期内嵌的敏感值（`sensitiveMap[key]`） |
+| 4 | 带全局前缀的敏感值（`sensitiveMap[fountain_key]`） |
+
+> **结论：运行期配置（环境变量/命令行）优先级高于编译期内嵌值。**
+> 这就是为什么你可以编译期把数据库密码嵌进产物、生产环境再用环境变量覆盖掉。
+
+### 全局前缀 `fountain`
+
+`Config` 内置全局前缀 `fountain`：原名未命中时会再试 `fountain_${key}`；`getAll` 的结果里则会把 `fountain_` 去掉。
+
+```bash
+export myAppSecret='xxx'           # Config.getString('myAppSecret') 命中
+export fountain_myAppSecret='xxx'  # 等价写法
+```
+
+`getAll(prefix)`：prefix 为空返回全部，否则 key 需以 `${prefix}_` 或 `fountain_${prefix}_` 开头。
+
+## 4.4 `Config` API
+
+```cangjie
+package fountain::f_config
+public import std.convert.Parsable
+public import fountain::f_data.DataParsable
+
+public class Config {
+    public static const sm4Operation = 'sm4Operation'
+    public static const sm4Padding    = 'sm4Padding'
+    public static const sm4Key        = 'sm4Key'
+    public static const sm4Iv         = 'sm4Iv'
+    public static const sm4Aad        = 'sm4Aad'
+    public static const sm4TagSize    = 'sm4TagSize'
+
+    public static func refresher(prefix: String, fn: () -> Unit): Unit
+    public static func set<T>(tuples: Array<(String, T)>, ifAbsent!: Bool = false): Unit where T <: ToString
+    public static func getAll(prefix: String): Map<String, String>
+    public static func getAll(): Map<String, String>
+    public static func getString(key: String): ?String
+    public static func getValue<T>(key: String, parser: (String) -> ?T): ?T
+    public static func getValue<T>(key: String): ?T where T <: Parsable<T>
+    public static func getStringArray(key: String, delim!: String = ','): Array<String>
+    public static func getValues<T>(key: String, delim!: String = ',', parser!: (String) -> T): Array<T>
+    public static func getValues<T>(key: String, delim!: String = ','): Array<T> where T <: Parsable<T>
+    public static func getDateTime(key: String, format!: String = ''): ?DateTime
+    public static func getDateTimes(key: String, format!: String = '', delim!: String = ','): Array<DateTime>
+    public static func getData<T>(key: String): ?T where T <: DataParsable<T>
+    public static func getDatas<T>(key: String, delim!: String = ','): Array<T> where T <: DataParsable<T>
+    public static func getDuration(key: String): ?Duration
+    public static func getDurations(key: String, delim!: String = ','): Array<Duration>
+    public static func bufferSize(bufferKey: String, default: Int64, debugging: Bool): Int64
+    public static func getSM4(): ?SM4
+    public static func registerSensitive(key: String, value: Array<Byte>): Unit
+}
+```
+
+**【口播】**（挑几个最有辨识度的讲）
+
+> `getValue` / `getData` 是**单例读取**，解析失败返回 `None`，不抛异常；
+> `getValues` / `getDatas` 是**数组读取**，解析失败**抛异常**，配置项不存在返回空数组——**这个「单数不抛、复数抛」的不对称一定要记住**。
+> `bufferSize` 更贴心：配置项不存在或 `<= 0` 就用默认值；非调试模式下还会**向上取整到 2 的幂**，且恒不小于默认值——环形缓冲区直接拿它。
+
+`bufferSize(bufferKey, default, debugging)` 的返回值：
+
+| 条件 | 返回值 |
+| --- | --- |
+| 配置项不存在 / 解析失败 / `x <= 0` | `default` |
+| `debugging == true` 且 `x > 0` | `x` 原样返回 |
+| `x` 是 2 的幂 | `x` |
+| 其它 | 向上取整到 2 的幂 `s`；`s >= default` 返回 `s`，否则 `default` |
+
+```cangjie
+Config.getValue<Int64>('threadCount')                 // None 或 Int64
+Config.getValues<Int64>('ports')                      // ports=8080,9090 -> [8080, 9090]
+Config.getDateTime('deadline', format: 'yyyy-MM-dd')
+Config.bufferSize('ringBufferSize', 1024, false)      // >= 1024 且向上取到 2 的幂
+Config.set<Bool>([('mySwitch', true)], ifAbsent: true) // 不存在才写入
+Config.getAll('orm')                                  // 所有 orm_ / fountain_orm_ 开头的配置项
+```
+
+## 4.5 敏感配置与 SM4 加密
+
+**【口播】**（这是本章的高潮，也是 `fboot randhex` 的用武之地）
+
+> 数据库密码、第三方密钥这类东西，不适合出现在运行环境的环境变量里。
+> `f_config` 的做法是：**编译期**在编译机上读取环境变量，用 **SM4** 加密后作为字节数组嵌入编译产物；进程启动时注册到独立的 `sensitiveMap`，再用常规 `getString` 读取。
+>
+> - 未配置 SM4 → 嵌入的是 **UTF8 明文**字节数组；
+> - 配置了 SM4 → 嵌入的是**密文**，同时把 SM4 参数一并嵌入供运行期解密；
+> - 运行期同名配置优先级更高，可以被覆盖。
+
+### SM4 配置项
+
+| 配置项 | 含义 | 默认值 | 取值 / 格式 |
+| --- | --- | --- | --- |
+| `sm4Operation` | 工作模式 | `CBC` | `CBC` `CFB` `CTR` `GCM` `OFB`（`ECB` 不安全，明确不支持） |
+| `sm4Padding` | 填充模式 | `PKCS7Padding` | `NoPadding` `PKCS7Padding` |
+| `sm4Key` | 密钥 | **必须配置** | 16 字节 = 长度 32 的 16 进制串 |
+| `sm4Iv` | 初始向量 | 配了 key 就必须配 | `CBC`/`OFB`/`CFB` 要 16 字节，`GCM` 要 12 字节 |
+| `sm4Aad` | 附加认证数据 | 空字节数组 | 16 进制串 |
+| `sm4TagSize` | GCM tag 长度 | `16` | `Int64` 字符串 |
+
+```bash
+export paySecretKey='......'
+export sm4Key=$(fboot randhex 32)   # 16 字节密钥
+export sm4Iv=$(fboot randhex 32)    # CBC 的 IV；GCM 用 fboot randhex 24
+```
+
+**【口播】**
+
+> 注意这两点，讲出来比藏着好：
+> 1. **SM4 参数本身（含密钥）也会以字节数组形式出现在编译产物里**。这个机制抬高的是「直接从二进制里 grep 出配置」的门槛，**不能替代密钥管理服务**；
+> 2. 每次解密都会**重新构造一次 `SM4` 实例**，敏感配置多或读取频繁时建议自己缓存结果。
+
+
+## 4.6 `@EmbedSensitive` 宏
+
+```cangjie
+import fountain::f_config.macros.*
+
+@EmbedSensitive(paySecretKey pushToken)   // 源文件顶层调用，逗号分隔亦可
+```
+
+展开后是一个立即执行的匿名闭包：
+
+```cangjie
+private let _ = {=>
+    Config.registerSensitive('paySecretKey', [...密文或明文字节...])
+    Config.registerSensitive('pushToken', [...])
+    Config.registerSensitive('sm4Operation', ...)
+    Config.registerSensitive('sm4Padding', ...)
+    Config.registerSensitive('sm4Key', ...)
+    Config.registerSensitive('sm4Iv', ...)
+    Config.registerSensitive('sm4Aad', ...)
+    Config.registerSensitive('sm4TagSize', ...)
+}()
+```
+
+嵌入规则：
+
+1. **编译期取不到值的名字会被忽略**（编译机上没有对应环境变量就不注册）；
+2. 编译期配了 `sm4Key` 写密文，否则写 UTF8 明文；
+3. 只有「至少注册了一项敏感值」且「`sm4Key` 非空」时才把 SM4 的六个参数一并写入（它们本身按明文字节写入）；
+4. 同名重复注册以最后一次为准；
+5. 运行期读取仍遵循 4.3 的优先级。
+
+**【口播】** `f_orm` 就是基于这个宏的封装：`f_orm/src/ProtectedMacros/EmbedSensitive.cj` 生成 ORM 的连接串/用户名/口令键，再转调 `@EmbedSensitive`，最终在 `f_orm` 里以 `@ORMEmbedSensitive()` 触发。
+所以你在 `boot.sh` 里写的 `--postgres_orm_connectionUrl=...` 才能被嵌进产物。我们看看一个boot.sh 的构建实例（fdemo/boot.sh 的build函数）
+
+## 4.7 可配置的时间格式：`DateTimeConfConverter`
+
+**【镜头】** 这是 `f_config` 与 `f_data` 咬合的地方（第八章会再讲 `DataConverter`）
+
+```cangjie
+package fountain::f_config
+
+@Annotation[target: [MemberProperty, MemberVariable, Parameter]]
+public class DateTimeConfConverter <: AbstractDateTimeConverter {
+    public const DateTimeConfConverter(private let conf: String,
+                                       private let default!: String = 'yyyy-MM-dd HH:mm:ss'){}
+    public func convert(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?DateTime
+}
+```
+
+```cangjie
+@DateTimeConfConverter[myDateFormat]
+private var createdAt: DateTime = DateTime.now()
+
+// export myDateFormat='yyyy/MM/dd'  —— 时间格式本身也变成可配置的
+```
+
+**【口播】** `conf` 是**保存时间格式的配置项名**（不是格式本身），按 4.3 的优先级读取，没配就用 `default`。做多租户、多地区系统时，各家日期格式不一样——一个注解解决。
+
+## 4.8 已知问题（讲出来省得观众踩）
+**`getValues` / `getDateTimes` 解析失败会抛异常**，而单数版本 `getValue` / `getDateTime`（配置不存在时）返回 `None` / 空数组——写容错代码时别搞混。这是故意的，因为复数项配置，在解析过程中，如果有某一个转换失败，则整个配置失效。
+
+## 4.9 现场演示
+
+**【命令】**
+
+```bash
+# 1) 看一眼 fdemo 到底有多少配置（boot.sh 的 exports 函数）
+grep -c 'export' fdemo/boot.sh
+
+# 2) 用 fboot build 把敏感配置在编译期注入（--k=v 会变成 cjpm build 子进程的环境变量）
+cd fdemo
+export POSTGRES='postgres://user:pass@host:5432/dbname'
+./boot.sh build
+# 内部：--sm4Key=$(fboot randhex 32) --sm4Iv=$(fboot randhex 32)
+
+# 3) 运行期覆盖（写法一：环境变量），产物不用重新编译
+export mvc_port=8080
+./boot.sh run
+
+# 3') 运行期覆盖（写法二：--key=value 命令行参数），与写法一完全等价
+./boot.sh run
+# 等价的裸命令（Windows 版 boot-win-gitbash.sh 的 run() 就是这个形态）：
+fboot run ./fdemo \
+  --dylibPattern='(boot|user\.util\.(auth|cron)|\.(controller|service\.impl))' \
+  --mvc_port=9090 \
+  --orm_drivers=postgres
+```
+
+**【预期】**
+
+- 第 2 步：编译成功，连接串与口令被加密嵌入产物；
+- 第 3 / 3' 步：日志里出现 `9090` 端口，`Config.getString('mvc_port')` 拿到的是命令行参数的值，**覆盖了环境变量值**；
+- 两种写法效果完全一致——**环境变量与 `--key=value` 平级，后者覆盖前者**。
+
+**【口播】**
+
+> 这一组三步就是 `f_config` 的全部价值：**编译期可内嵌、运行期可覆盖、全程无配置文件**。
+> 而且请注意第 3 步的两种写法：同一个配置项 `mvc_port`，你既可以 `export`，也可以写成 `--mvc_port=9090`——**这就是「f_config 支持命令行参数」最直观的证明**。
 
 ---
 
@@ -1747,7 +1747,7 @@ public class IdMaker {
 > `IdMaker` 是一个**雪花算法**风格的实现：ID 是一个 `Int64`，位布局是
 > **10 bit 主机序列号 + 41 bit 毫秒时间戳 + 12 bit 毫秒内自增序号**。
 >
-> - 主机序列号 0～1023，来自配置项 `idMakerHostSerial`（走 `Config.getValue`，也就是第三章那套优先级）；
+> - 主机序列号 0～1023，来自配置项 `idMakerHostSerial`（走 `Config.getValue`，也就是第四章那套优先级）；
 > - 时间戳取**构造时的毫秒数**作为起点；
 > - `nextInt64()` 就是一个 `AtomicInt64.fetchAdd(1)`，**无锁、线程安全**。
 
@@ -2469,7 +2469,7 @@ curl -XPOST http://localhost:8080/upload -F 'name=abc' -F 'file=@./banner.txt'
 | `MediaTypeException('charset in <x> is not be supported')` | 文本格式的 charset 不支持 |
 | `MediaTypeException('<x> does not support current access')` | 对 `multipart` 调用了 `fromData(Data)` / `toData(Array<Byte>)` |
 
-**【口播】** 遇到 `is an illegal MediaType string`，99% 是自定义 `MediaType` 的 **`@Bean` 没生效**——回到第三章那条：**它所在的动态库必须被 `--dylibPattern` 匹配到**。`fdemo` 的 `LogTextMediaType` 在 `boot` 包里，所以正则里有 `boot`。
+**【口播】** 遇到 `is an illegal MediaType string`，99% 是自定义 `MediaType` 的 **`@Bean` 没生效**——回到第三章 3.7 那条：**它所在的动态库必须被 `--dylibPattern` 匹配到**。`fdemo` 的 `LogTextMediaType` 在 `boot` 包里，所以正则里有 `boot`。
 
 ---
 
@@ -3498,7 +3498,7 @@ export logger_appender_FDemoFile_compressFormat=GZip
 > Config.refresher(confPrefix, LoggerFactory.refresh)
 > ```
 >
-> 可是按第三章 3.8 里那条已知问题，`f_config` 的 `refresher` 前缀匹配恒不成立，**`Config.set` 不会触发任何刷新回调**。所以现阶段的实际做法是：**改完配置自己调一次 `LoggerFactory.refresh()`。**
+> 可是按第四章 4.8 里那条已知问题，`f_config` 的 `refresher` 前缀匹配恒不成立，**`Config.set` 不会触发任何刷新回调**。所以现阶段的实际做法是：**改完配置自己调一次 `LoggerFactory.refresh()`。**
 >
 > ```cangjie
 > Config.set('logger_appender_FDemoConsole_level', 'DEBUG')
@@ -4243,7 +4243,7 @@ let sample = randomReservoir<Int64>(3, [1, 2, 3, 4, 5, 6, 7, 8])
 
 **【口播】**（把工具库和前面讲过的内容串起来）
 
-1. **`fboot randhex`** —— 实现就是 `RandomString().randomLowerHex(n)`（第四章讲过，给 SM4 生成密钥/IV，机制见第三章）；
+1. **`fboot randhex`** —— 实现就是 `RandomString().randomLowerHex(n)`（第三章讲过，给 SM4 生成密钥/IV，机制见第四章）；
 2. **JWT 会话密钥** —— `fdemo` 的 `UserSessionCache` 里 `UUID.random().toHexString()` 给每个登录生成独立 HMAC 密钥；
 3. **业务侧** —— 验证码、邀请码、临时 token、幂等号、抽样的盐值。
 
@@ -4359,8 +4359,8 @@ RandomString().randomLowerHex(16)
 | 12 | 随机字符串里只有小写字母 | `randomLettersNumbers(min,max)` 等三个 `(min,max)` 重载的实现与命名不符；自己先算长度再调 `(count)` 重载（见第十七章 17.8） |
 | 13 | 自定义格式报 `<x> is an illegal MediaType string` | 自定义 `MediaType` 漏了 `@Bean`，或它所在的动态库没被 `--dylibPattern` 匹配到（见第十一章） |
 | 14 | 上传的文件在磁盘上堆积 | `MultipartFile` 是 `Resource`，用完必须 `close()`——`close()` 才会删掉临时文件 |
-| 15 | 改了配置却不生效 | 有编译期内嵌值被运行期覆盖了（或反过来）；或用了 `fountain_` 前缀却写成了原名。按第三章的四级优先级逐层排查 |
-| 16 | `Config.set` 之后相关模块没刷新 | 已知问题：`refresher` 的前缀匹配恒不成立，`set` **不会**触发任何刷新回调（见第三章 3.8） |
+| 15 | 改了配置却不生效 | 有编译期内嵌值被运行期覆盖了（或反过来）；或用了 `fountain_` 前缀却写成了原名。按第四章的四级优先级逐层排查 |
+| 16 | `Config.set` 之后相关模块没刷新 | 已知问题：`refresher` 的前缀匹配恒不成立，`set` **不会**触发任何刷新回调（见第四章 4.8） |
 | 17 | `TreeTransformer.transform` 抛 `IllegalArgumentException` | 源数据里有重复 id（`ignoreDuplicate` 默认 `false`），或 `transferFn` 返回了 `None`（见第九章） |
 | 18 | 找不到 `Responsibility` / `ResponsibilityChain` 类型 | 源码拼写是 **`Resposibility`**（少一个 n），文件名也是 `ResposibilityChain.cj` |
 | 19 | 缓存对象「取了就续期」，永远不过期 | `HeapCache` 默认是**非一次性**对象（滑动窗口）。要绝对过期请 `set(..., once: true)` 或用 `prolong(key, deathTime)` |
@@ -4401,7 +4401,7 @@ A：三种可能。① 缓冲区池被占满且 5ms 内没借到 → 控制台�
 A：能，两个配置项：`logger_appender_<Name>_rotateDuration=DAY`、`logger_appender_<Name>_compressFormat=GZip`（`Deflate` 也行）。切割出来的文件是 `<路径>.<上一周期时间戳>.gz`。注意两点：`rotateDuration` 别配亚秒级（会疯狂 rename）；压缩失败时原文件也会被删掉，审计类日志建议先不压缩。
 
 **Q：运行期能改日志级别吗？**
-A：能，`LoggerFactory.refresh()` 会按当前配置重建 facade 并 CAS 换过去。但 `Config.set` **不会**自动触发它（`f_config` 的 refresher 前缀匹配有已知问题，见第三章 3.8），所以现状是「`Config.set` + 手动 `LoggerFactory.refresh()`」两步。
+A：能，`LoggerFactory.refresh()` 会按当前配置重建 facade 并 CAS 换过去。但 `Config.set` **不会**自动触发它（`f_config` 的 refresher 前缀匹配有已知问题，见第四章 4.8），所以现状是「`Config.set` + 手动 `LoggerFactory.refresh()`」两步。
 
 **Q：把密码编进产物安全吗？**
 A：它解决的是「不让密码出现在运行环境里」，**不是**「密码不可破解」——SM4 密钥本身也在产物里。真要保护密钥请用 KMS。另外记得运行期同名环境变量可以覆盖内嵌值。
@@ -4620,14 +4620,14 @@ MultipartFile.filename / .size / .bytes() / .copyTo(out) / .close()
 | 1 | 3' | 开场：为什么用 fountain（痛点清单） | 幻灯片 |
 | 2 | 5' | 三个设计决策：无 main / 宏与注解 / 配置来源（环境变量或命令行） | 幻灯片 + `fboot/src/main.cj` |
 | 3 | 3' | 环境准备 | 终端 |
-| 4 | 8' | 配置：f_config（无配置文件 / 四级优先级 / SM4 内嵌 / `@EmbedSensitive`） | IDE + `boot.sh` |
-| 5 | 2' | `fboot help` | 终端 |
-| 6 | 4' | `fboot workspace` + `fboot module`（从零建项目） | 终端 + IDE |
-| 7 | 3' | 写一个 Controller（20 行） | IDE |
-| 8 | 4' | `fboot build`（讲版本模块 + banner + 编译期注入） | 终端 + `boot.sh` |
-| 9 | 2' | `fboot randhex` + SM4 密钥 | 终端 |
-| 10 | 3' | `fboot run` + curl 验证（第一个 hello world） | 终端 |
-| 11 | 2' | `fboot cleanUpdate` | 终端 |
+| 4 | 2' | `fboot help` | 终端 |
+| 5 | 4' | `fboot workspace` + `fboot module`（从零建项目） | 终端 + IDE |
+| 6 | 3' | 写一个 Controller（20 行） | IDE |
+| 7 | 4' | `fboot build`（讲版本模块 + banner + 编译期注入） | 终端 + `boot.sh` |
+| 8 | 2' | `fboot randhex` + SM4 密钥 | 终端 |
+| 9 | 3' | `fboot run` + curl 验证（第一个 hello world） | 终端 |
+| 10 | 2' | `fboot cleanUpdate` | 终端 |
+| 11 | 8' | 配置：f_config（无配置文件 / 四级优先级 / SM4 内嵌 / `@EmbedSensitive`） | IDE + `boot.sh` |
 | 12 | 5' | 切到 `fdemo`：结构 + 建表 + build + run | IDE + 终端 |
 | 13 | 6' | 接口验证清单（12 条 curl，重点 401 那条） | 终端 + 浏览器 |
 | 14 | 8' | IOC：f_bean | IDE + 幻灯片 |
