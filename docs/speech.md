@@ -464,7 +464,7 @@ fboot run [PATH] --dylibPattern=<动态链接库文件名正则（不含扩展�
 >
 > 1. 确定目标路径（第一个不以 `-` 开头的参数，缺省当前目录，不存在就创建）；
 > 2. 按平台选择动态链接库扩展名和搜索路径变量：Windows `.dll` / `Path`，macOS `.dylib` / `DYLD_FALLBACK_LIBRARY_PATH`，其它 `.so` / `LD_LIBRARY_PATH`；
-> 3. **递归扫描目录**，加载文件名匹配 `^lib.*(<--dylibPattern> | .+_stAtIc__).*$` 的库
+> 3. **递归扫描目录**，加载文件名匹配 `^lib.*((${dylibPattern})|.+_stAtIc__).*$` 的库
 >    —— 即文件名要以 `lib` 开头，并且匹配你给的正则，或者是前面介绍过的fboot build自动创建的那个`static`版本模块；
 > 4. 加载即执行各模块的动态链接库，加载时即执行fountain宏展开时生成的顶级匿名闭包，把 `@Bean` 注册进 IOC、把fountain的各个`Initializer` 实现注册进 `InitializerCollection`、把controller函数注册到mvc；
 > 5. 按 `dependencies` 做**拓扑排序**后依次 `initialize()`，收集所有 `start()`；
@@ -3625,7 +3625,7 @@ export logger_asyncWaitTimeout=5ms                           # 借不到缓冲�
 **【口播】**
 
 > 这一屏就是 fountain 的全部：
-> **f_config 负责配置、f_bean 负责装配、f_aspect 负责横切、f_data 负责流动、f_util 提供工具箱、f_http 负责格式、f_mvc 负责协议、f_orm 负责数据库、f_security + f_jwt 负责身份、f_ticktock 负责CRON定时器、f_random 负责随机性、f_log 负责日志、f_cache/f_pool/f_collection/f_time/f_regex/f_rx 构成运行时底座。**
+> **f_config 负责配置、f_bean 负责装配、f_aspect 负责横切、f_data 负责流动、f_util 提供工具箱、f_http 负责格式、f_mvc 负责协议、f_orm 负责数据库、f_security + f_jwt 负责身份、f_ticktock 负责CRON定时器、f_random 负责随机性、f_log 负责日志、f_base/f_io/f_cache/f_pool/f_collection/f_time/f_regex/f_rx 构成运行时底座。**
 > 而且从头到尾你没写过一个配置文件、没写过一行 `main`。
 > 业务代码里你只写了 `UserController`、`UserService`、`UserDAO`、`UserPO` 四个东西，加起来不到 200 行。
 
