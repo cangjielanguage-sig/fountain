@@ -2336,7 +2336,7 @@ public class MediaTypes {
 >
 > 所以 `fdemo` 的 `LogTextMediaType` 只要加个 `@Bean`，`application/json+log` 就自动可用了——**不需要任何注册代码**。
 >
-> 解析时还有一个宽容处理：`tryParse` 先按完整字符串找，找不到就**截掉 `;` 之后的参数**再找一次（比如 `application/json; charset=utf-8` → `application/json`），找到后再用 `make()` 把参数带回去。
+> 解析时还有一个宽容处理：`tryParse` 先按完整的media type字符串查找，找不到就**截掉 `;` 之后的参数**再找一次（比如 `application/json; charset=utf-8` → `application/json`），找到后再调用用 MediaType的`make()`函数把参数带回去。
 
 ## 11.5 自定义数据格式：完整清单
 
