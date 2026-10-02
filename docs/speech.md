@@ -107,7 +107,7 @@ fboot version
 
 **【口播】**
 
-> 先把话说准：fountain **不是不用注解**。IOC 的 bean 元数据（`@BeanMeta`）、AOP 的织入规则（`@AspectRoute`）、controller 的 HTTP 映射（`@GetMapping`、`@PostMapping`）与参数绑定（`@RequestParam`、`@RequestBody`）——**这些都是注解**，写起来和 Spring 很像。
+> 先把话说准：fountain **也用了很多注解**。IOC 的 bean 元数据（`@BeanMeta`）、AOP 的织入规则（`@AspectRoute`）、controller 的 HTTP 映射（`@GetMapping`、`@PostMapping`）与参数绑定（`@RequestParam`、`@RequestBody`）——**这些都是注解**，写起来和 Spring 很像。
 >
 > 区别在于**注解由谁处理、什么时候处理**。`@Bean`、`@Controller`、`@DAO`、`@QueryMappersGenerator`、`@ORMField`、`@DataAssist` 这些在 fountain 里是**仓颉宏**：编译期就把注册代码、getter/setter、列映射、DAO 实现扩展全部生成好了。所以你不会看到 XML，也不会有「启动扫包扫半天」——注解负责声明，干活的是宏在编译期生成的代码。
 >
@@ -210,7 +210,7 @@ fboot version
 ## 3.2 命令行参数的四种合法写法
 
 ```
---argName=argValue     # key = '=' 左侧，value = '=' 右侧，两侧都 trimAscii
+--argName=argValue     # key = '=' 左侧，value = '=' 右侧，两侧都 trimAscii，为了跟cjpm参数区分，fboot build只支持这一种写法
 --argName              # 等价于 --argName=true
 -argName argVal        # 下一个参数若以 '-' 开头则不当作值，该配置项值为 true
 -argName               # 等价于 -argName true
