@@ -19,6 +19,8 @@ import std.collection.{HashMap, Map, HashSet}
 import std.collection.concurrent.ConcurrentHashMap
 import std.env
 import std.time.DateTime
+import stdx.crypto.crypto.*
+import stdx.encoding.hex.*
 public import fountain::f_data.DataParsable
 public import std.convert.Parsable
 
@@ -32,11 +34,29 @@ public import std.convert.Parsable
  *   3. -argName argVal
  *   4. -argName
  *      * 相当于-argName true
+ * 敏感配置信息使用sm4加密，如果不指定sm4加密参数，会把敏感配置的UTF8字节数组嵌入编译产物。
+ * 指定了sm4加密参数，会把敏感配置的密文嵌入编译产物。
+ * - sm4Operation SM4 的OperationMode
+ * - sm4Padding SM4 的PaddingMode
+ * - sm4Key 密钥
+ * - sm4Iv IV
+ * - sm4Aad 密文填充的AAD
+ * - sm4TagSize 密文填充的TagSize
  */
 public class Config {
     private static let prefix = 'fountain'
     private static let ARGS = ConcurrentHashMap<String, String>()
     private static let REFRESHER = ConcurrentHashMap<String, () -> Unit>()
+
+    public static const sm4Operation = 'sm4Operation'
+    public static const sm4Padding = 'sm4Padding'
+    public static const sm4Key = 'sm4Key'
+    public static const sm4Iv = 'sm4Iv'
+    public static const sm4Aad = 'sm4Aad'
+    public static const sm4TagSize = 'sm4TagSize'
+
+    private static let sensitiveMap = ConcurrentHashMap<String, Array<Byte>>()
+
     static init() {
         for ((k, v) in env.getVariables()) {
             ARGS[k] = v
@@ -109,11 +129,32 @@ public class Config {
      * 得到相同前缀的配置项
      */
     public static func getAll(prefix: String): Map<String, String> {
+        func matches(k: String){
+            prefix.isEmpty() || k.startsWith('${prefix}_') || k.startsWith('${Config.prefix}_${prefix}_')
+        }
         let map = HashMap<String, String>()
-        for ((k, v) in ARGS where k.startsWith('${prefix}_') || k.startsWith('${Config.prefix}_${prefix}_')) {
-            map[k] = v
+        for ((k, v) in ARGS where matches(k)) {
+            map[k.replace('${Config.prefix}_', '')] = v
+        }
+        for((k, v) in sensitiveMap where matches(k)){
+            let view = map.entryView(k.replace('${Config.prefix}_', ''))
+            if(view.value.isNone()){
+                view.value = sensitive2Str(v)
+            }
         }
         map
+    }
+    public static func getAll(): Map<String, String> {
+        getAll('')
+    }
+    private static func sensitive2Str(bytes: Array<Byte>){
+        if(bytes.size == 0){
+            return ''
+        }else if(let Some(sm4) <- getSM4()){
+            bytes |> sm4.decrypt
+        }else{
+            bytes
+        } |> String.fromUtf8
     }
     /**
      * 得到名是key的配置项
@@ -121,8 +162,14 @@ public class Config {
     public static func getString(key: String): ?String {
         if (let Some(v) <- ARGS.get(key)) {
             v
+        } else if (let Some(v) <- ARGS.get("${prefix}_${key}")){
+            v
+        } else if (let Some(v) <- sensitiveMap.get(key)){
+            sensitive2Str(v)
+        } else if (let Some(v) <- sensitiveMap.get("${prefix}_${key}")){
+            sensitive2Str(v)
         } else {
-            ARGS.get("${prefix}_${key}")
+            None<String>
         }
     }
 
@@ -196,6 +243,109 @@ public class Config {
             }
         } else {
             default
+        }
+    }
+    public static func getSM4(): ?SM4 {
+        let sm4conf = Config.sm4conf
+        let key = sm4conf.key
+        if(key.isEmpty()){
+            return None<SM4>
+        }
+        let iv = sm4conf.iv
+        let aad = sm4conf.aad
+        let operation = sm4conf.operation
+        let padding = sm4conf.padding
+        let tagSize = sm4conf.tagSize
+        SM4(match(operation){
+            case 'CBC' => OperationMode.CBC
+            case 'CFB' => OperationMode.CFB
+            case 'CTR' => OperationMode.CTR
+            case 'GCM' => OperationMode.GCM
+            case 'OFB' => OperationMode.OFB
+            case _ => throw IllegalArgumentException("${operation} is not a legal sm4 OperationMode, and ECB is not safe to use, so it is not supported")
+        }, key, iv: iv, paddingMode: match(padding){
+            case 'NoPadding' => PaddingMode.NoPadding
+            case 'PKCS7Padding' => PaddingMode.PKCS7Padding
+            case _ => throw IllegalArgumentException("${padding} is not a legal sm4 PaddingMode, only NoPadding and PKCS7Padding are supported")
+        }, aad: aad, tagSize: tagSize)
+    }
+    public static func registerSensitive(key: String, value: Array<Byte>): Unit {
+        sensitiveMap[key] = value
+    }
+    protected static prop sm4conf: SM4Conf {
+        get(){
+            SM4Conf(sensitiveMap)
+        }
+    }
+}
+
+protected struct SM4Conf{
+    SM4Conf(
+        private let sensitiveMap: ConcurrentHashMap<String, Array<Byte>>
+    ){}
+    private func getString(key: String): ?String {
+        if(let Some(bytes) <- sensitiveMap.get(key)){
+            String.fromUtf8(bytes)
+        }else if (let Some(v) <- Config.getString(key)){
+            v
+        }else{
+            None<String>
+        }
+    }
+    private func getBytes(key: String): ?Array<Byte> {
+        if(let Some(bytes) <- sensitiveMap.get(key)){
+            bytes
+        }else if (let Some(v) <- Config.getString(key)){
+            fromHexString(v)
+        }else{
+            []
+        }
+    }
+    protected prop operation: String {
+        get(){
+            return getString(Config.sm4Operation) ?? 'CBC'
+        }
+    }
+    protected prop padding: String {
+        get(){
+            return getString(Config.sm4Padding) ?? 'PKCS7Padding'
+        }
+    }
+    protected prop key: Array<Byte> {
+        get(){
+            if(let Some(bytes) <- getBytes(Config.sm4Key)){
+                if(bytes.size == 16 || bytes.size == 0){
+                    bytes
+                }else{
+                    throw IllegalArgumentException("size of orm config item ${Config.sm4Key} is not 16")
+                }
+            }else{
+                throw IllegalArgumentException("orm config item ${Config.sm4Key} is not a legal hex string or is not be specified or its size is not 16")
+            }
+        }
+    }
+    protected prop iv: Array<Byte> {
+        get(){
+            if(let Some(bytes) <- getBytes(Config.sm4Iv)){
+                match(operation){
+                    case 'CBC' | 'OFB' | 'CFB' where bytes.size != 16 => throw IllegalArgumentException("size 16 of orm config item ${Config.sm4Iv} is suggested for OperationMode.CBC, OperationMode.OFB and OperationMode.CFB.")
+                    case 'GCM' where bytes.size != 12 => throw IllegalArgumentException("size 12 of orm config item ${Config.sm4Iv} is suggested for OperationMode.GCM")
+                    case 'CBC' | 'OFB' | 'CFB' | 'GCM' => bytes
+                    case _ => throw IllegalArgumentException("${operation} is not a legal sm4 OperationMode, and ECB is not safe to use, so it is not supported.")
+                }
+            }else{
+                throw IllegalArgumentException("orm config item ${Config.sm4Iv} is not a legal hex string or is not be specified.")
+            }
+        }
+    }
+    protected prop aad: Array<Byte> {
+        get(){
+            getBytes(Config.sm4Aad) ?? []
+        }
+    }
+    protected prop tagSize: Int64 {
+        get(){
+            (getString(Config.sm4TagSize) ?? '16') |> Int64.parse
         }
     }
 }

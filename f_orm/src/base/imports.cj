@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_orm.base
 
+
 internal import std.collection.concurrent.ConcurrentHashMap
 internal import fountain::f_collection.*
 internal import fountain::f_exception.IllegalAccessException
@@ -24,11 +25,12 @@ internal import fountain::f_orm.exception.*
 
 public import fountain::f_base.*
 public import fountain::f_bean.*
+public import fountain::f_config.*
 public import fountain::f_data.*
 public import fountain::f_orm.wrap.ORMConfig
 
-import fountain::f_orm.ProtectedMacros.EmbedSensitive
-@EmbedSensitive()
+import fountain::f_orm.ProtectedMacros.*
+@ORMEmbedSensitive()
 
 func emptyLogicalExpr(cond: String): Bool {
     #'^[\s()]*$'#.regex(solid: true).matches(cond)

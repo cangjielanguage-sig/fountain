@@ -22,9 +22,9 @@ import fountain::f_bean.*
 import fountain::f_bean.macros.*
 import fountain::f_data.*
 import fountain::f_data.macros.*
-import fountain::f_log.LoggerFactory
+// import fountain::f_log.LoggerFactory
 // import fountain::f_mockdb.*
-import fountain::f_orm.* // orm初始化不要再导入这个包，会在首个DAO初始化时自动初始化orm
+// import fountain::f_orm.* // orm初始化不要再导入这个包，会在首个DAO初始化时自动初始化orm
 import postgres_driver.*
 
 private let _ = {=>
@@ -40,7 +40,7 @@ private let _ = {=>
         // let ds = driver.open('mockdb://')
         // ORM.register(NamedDatasource(false, driverName, ds))
         // lookup<MockdbDialect>().mock = 'opengauss'
-        println(lookup<OpenGaussDialect>().dialect)
+        // println(lookup<OpenGaussDialect>().dialect)
     }catch(e: Exception){
         e.printStackTrace()
         throw e 

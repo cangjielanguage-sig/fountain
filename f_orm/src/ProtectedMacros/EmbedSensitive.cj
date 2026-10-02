@@ -18,53 +18,26 @@ protected macro package fountain::f_orm.ProtectedMacros
 import std.ast.*
 import std.database.sql.SqlOption
 import stdx.crypto.crypto.*
+import fountain::f_config.*
 import fountain::f_macros.*
-import fountain::f_orm.wrap.{ORMConfig, SM4Conf}
+import fountain::f_orm.wrap.ORMConfig
 import fountain::f_base.UnsafeBytes
 
-public macro EmbedSensitive(_: Tokens): Tokens {
-    var tokens = quote(
-        private let _ = {=>
+public import fountain::f_config.macros.EmbedSensitive
+
+public macro ORMEmbedSensitive(_: Tokens): Tokens {
+    var keys = quote(
+        $(ORMConfig.connectionUrl)
+        $(ORMConfig.username)
+        $(ORMConfig.password)
     )
-    let startTokensSize = tokens.size
+        
     for(d in ORMConfig.getDriverNames()){
-        let url = try{
-            ORMConfig.getUrl(driverName: d)
-        }catch(_){
-            ''
-        }
-        if(url.size > 0){
-            tokens += str2bytesTokens(d, ORMConfig.connectionUrl, url)
-        }
-        if(let Some(u) <- ORMConfig.getUsername(driverName: d) && u.size > 0){
-            tokens += str2bytesTokens(d, ORMConfig.genKey(ORMConfig.ormOption, SqlOption.Username).replace("__", '_'), u)
-        }
-        if(let Some(p) <- ORMConfig.getPassword(driverName: d) && p.size > 0){
-            tokens += str2bytesTokens(d, ORMConfig.genKey(ORMConfig.ormOption, SqlOption.Password).replace("__", '_'), p)
-        }
+        keys += quote(
+            $(ORMConfig.genKey(d, ORMConfig.connectionUrl))
+            $(ORMConfig.genKey(d, ORMConfig.username))
+            $(ORMConfig.genKey(d, ORMConfig.password))
+        )
     }
-    let sm4conf = ORMConfig.sm4conf
-    if(sm4conf.key.size > 0 && tokens.size > startTokensSize){
-       tokens += quote(
-            ORMConfig.registerSensitive(ORMConfig.sm4Operation, $(sm4conf.operation.toArray()))
-            ORMConfig.registerSensitive(ORMConfig.sm4Padding, $(sm4conf.padding.toArray()))
-            ORMConfig.registerSensitive(ORMConfig.sm4Key, $(sm4conf.key))
-            ORMConfig.registerSensitive(ORMConfig.sm4Iv, $(sm4conf.iv))
-            ORMConfig.registerSensitive(ORMConfig.sm4Aad, $(sm4conf.aad))
-            ORMConfig.registerSensitive(ORMConfig.sm4TagSize, $(sm4conf.tagSize.toString().toArray()))
-       )
-    }
-    quote(
-        $tokens
-        }()
-    )
-}
-private func str2bytesTokens(driver: String, key: String, value: String){
-    var bytes = value.unsafeBytes()
-    if(let Some(sm4) <- ORMConfig.getSM4()){
-        bytes = sm4.encrypt(bytes)
-    }
-    quote(
-            ORMConfig.registerSensitive(ORMConfig.genKey($driver, $key), $bytes)
-    )
+    quote(@EmbedSensitive($keys))
 }

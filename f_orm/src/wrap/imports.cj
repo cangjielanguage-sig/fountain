@@ -25,8 +25,6 @@ internal import std.math.numeric.{Decimal, BigInt}
 internal import std.reflect.TypeInfo
 internal import std.regex.Regex
 internal import std.time.DateTime
-internal import stdx.crypto.crypto.*
-internal import stdx.encoding.hex.*
 internal import fountain::f_config.*
 internal import fountain::f_data.*
 internal import fountain::f_regex.*

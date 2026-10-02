@@ -58,20 +58,13 @@ public class ORMConfig {
 
     public static const indexStartsWithZero = confPrefix + '_indexStartsWithZero'
 
-    public static const sm4Operation = confPrefix + '_sm4Operation'
-    public static const sm4Padding = confPrefix + '_sm4Padding'
-    public static const sm4Key = confPrefix + '_sm4Key'
-    public static const sm4Iv = confPrefix + '_sm4Iv'
-    public static const sm4Aad = confPrefix + '_sm4Aad'
-    public static const sm4TagSize = confPrefix + '_sm4TagSize'
-
     public static const ormOption = confPrefix + '_option_'
+    public static const username = ormOption + SqlOption.Username
+    public static const password = ormOption + SqlOption.Password
 
     private static let converterMap = ConcurrentHashMap<String, Any>()
     private static var transactionIncludingRegex = None<Regex>
     private static var transactionExcludingRegex = None<Regex>
-
-    private static let sensitiveMap = ConcurrentHashMap<String, Array<Byte>>()
 
     static init() {
         refresh {
@@ -93,15 +86,7 @@ public class ORMConfig {
     public static func getConverter<D, T>(name: String): (D) -> T {
         (converterMap[name] as (D) -> T).getOrThrow()
     }
-    private static func sensitive2Str(bytes: Array<Byte>){
-        if(bytes.size == 0){
-            return ''
-        }else if(let Some(sm4) <- getSM4()){
-            bytes |> sm4.decrypt
-        }else{
-            bytes
-        } |> String.fromUtf8
-    }
+    
     public static func genKey(driverName: String, suffix: String): String {
         '${driverName}_${suffix}'
     }
@@ -111,19 +96,6 @@ public class ORMConfig {
             let driverConfs = Config.getAll(genKey(driverName, confPrefix))
             for ((k, v) in driverConfs) {
                 confMap[k.replace(genKey(driverName, ''), '')] = v
-            }
-        }
-        for((k, v) in sensitiveMap){
-            let kk = if(driverName.size > 0 && let p <- genKey(driverName, '') && k.startsWith(p)){
-                 k.replace(p, '')
-            }else if(k.startsWith(genKey(confPrefix, '')) && !k.startsWith(genKey(confPrefix, 'sm4'))){
-                k
-            }else{
-                continue
-            }
-            let view = confMap.entryView(kk)
-            if(view.value.isNone()){
-                view.value = sensitive2Str(v)
             }
         }
         confMap
@@ -192,19 +164,10 @@ public class ORMConfig {
         getDriverNames().map{d => getDriver(d)}
     }
     public static func getUrl(driverName!: String = String.empty): String {
-        if(driverName.size > 0){
-            match (getConf(driverName: driverName, key: connectionUrl)) {
-                case Some(x) where x.size > 0 => return x
-                case _ => if(let Some(bytes) <- sensitiveMap.get(genKey(driverName, connectionUrl))){
-                    return sensitive2Str(bytes)
-                }
-            }
-        }
-        match (getConf(driverName: '', key: connectionUrl)) {
-            case Some(x) where x.size > 0 => return x
-            case _ => if(let Some(bytes) <- sensitiveMap.get(connectionUrl)){
-                return sensitive2Str(bytes)
-            }
+        if(driverName.size > 0 && let Some(x) <- getConf(driverName: driverName, key: connectionUrl) && x.size > 0){
+            x
+        }else if(let Some(x) <- getConf(driverName: '', key: connectionUrl) && x.size > 0){
+            x
         }
         throw ORMException("connection url for ${driverName} is not be configed, config which key is ${genKey(driverName, connectionUrl)} or ${connectionUrl} must be specified")
     }
@@ -384,109 +347,6 @@ public class ORMConfig {
             0
         }else{
             1
-        }
-    }
-
-    public static func getSM4(): ?SM4 {
-        let sm4conf = ORMConfig.sm4conf
-        let key = sm4conf.key
-        if(key.isEmpty()){
-            return None<SM4>
-        }
-        let iv = sm4conf.iv
-        let aad = sm4conf.aad
-        let operation = sm4conf.operation
-        let padding = sm4conf.padding
-        let tagSize = sm4conf.tagSize
-        SM4(match(operation){
-            case 'CBC' => OperationMode.CBC
-            case 'CFB' => OperationMode.CFB
-            case 'CTR' => OperationMode.CTR
-            case 'GCM' => OperationMode.GCM
-            case 'OFB' => OperationMode.OFB
-            case _ => throw IllegalArgumentException("${operation} is not a legal sm4 OperationMode, and ECB is not safe to use, so it is not supported")
-        }, key, iv: iv, paddingMode: match(padding){
-            case 'NoPadding' => PaddingMode.NoPadding
-            case 'PKCS7Padding' => PaddingMode.PKCS7Padding
-            case _ => throw IllegalArgumentException("${padding} is not a legal sm4 PaddingMode, only NoPadding and PKCS7Padding are supported")
-        }, aad: aad, tagSize: tagSize)
-    }
-    public static func registerSensitive(key: String, value: Array<Byte>): Unit {
-        sensitiveMap[key] = value
-    }
-    protected static prop sm4conf: SM4Conf {
-        get(){
-            SM4Conf(sensitiveMap)
-        }
-    }
-}
-protected struct SM4Conf{
-    SM4Conf(
-        private let sensitiveMap: ConcurrentHashMap<String, Array<Byte>>
-    ){}
-    private func getString(key: String): ?String {
-        if(let Some(bytes) <- sensitiveMap.get(key)){
-            String.fromUtf8(bytes)
-        }else if (let Some(v) <- Config.getString(key)){
-            v
-        }else{
-            None<String>
-        }
-    }
-    private func getBytes(key: String): ?Array<Byte> {
-        if(let Some(bytes) <- sensitiveMap.get(key)){
-            bytes
-        }else if (let Some(v) <- Config.getString(key)){
-            fromHexString(v)
-        }else{
-            []
-        }
-    }
-    protected prop operation: String {
-        get(){
-            return getString(ORMConfig.sm4Operation) ?? 'CBC'
-        }
-    }
-    protected prop padding: String {
-        get(){
-            return getString(ORMConfig.sm4Padding) ?? 'PKCS7Padding'
-        }
-    }
-    protected prop key: Array<Byte> {
-        get(){
-            if(let Some(bytes) <- getBytes(ORMConfig.sm4Key)){
-                if(bytes.size == 16 || bytes.size == 0){
-                    bytes
-                }else{
-                    throw IllegalArgumentException("size of orm config item ${ORMConfig.sm4Key} is not 16")
-                }
-            }else{
-                throw IllegalArgumentException("orm config item ${ORMConfig.sm4Key} is not a legal hex string or is not be specified or its size is not 16")
-            }
-        }
-    }
-    protected prop iv: Array<Byte> {
-        get(){
-            if(let Some(bytes) <- getBytes(ORMConfig.sm4Iv)){
-                match(operation){
-                    case 'CBC' | 'OFB' | 'CFB' where bytes.size != 16 => throw IllegalArgumentException("size 16 of orm config item ${ORMConfig.sm4Iv} is suggested for OperationMode.CBC, OperationMode.OFB and OperationMode.CFB.")
-                    case 'GCM' where bytes.size != 12 => throw IllegalArgumentException("size 12 of orm config item ${ORMConfig.sm4Iv} is suggested for OperationMode.GCM")
-                    case 'CBC' | 'OFB' | 'CFB' | 'GCM' => bytes
-                    case _ => throw IllegalArgumentException("${operation} is not a legal sm4 OperationMode, and ECB is not safe to use, so it is not supported.")
-                }
-            }else{
-                throw IllegalArgumentException("orm config item ${ORMConfig.sm4Iv} is not a legal hex string or is not be specified.")
-            }
-        }
-    }
-    protected prop aad: Array<Byte> {
-        get(){
-            getBytes(ORMConfig.sm4Aad) ?? []
-        }
-    }
-    protected prop tagSize: Int64 {
-        get(){
-            (getString(ORMConfig.sm4TagSize) ?? '16') |> Int64.parse
         }
     }
 }
