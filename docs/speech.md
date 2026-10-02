@@ -1512,7 +1512,7 @@ public class DateTimeConverter <: AbstractDateTimeConverter {
 }
 ```
 
-**【口播】** 这也是 `f_mvc` 的 `@RequestParam` 能把 `?createTime=2026-10-01 12:00:00` 直接绑成 `DateTime` 的原因——转换器在链路里被自动调用。
+**【口播】** 这也是 `f_mvc` 的 `@RequestParam` 能把 `?createTime=2026-10-01 12:00:00` 直接转成 `DateTime` 的原因——转换器在链路里被自动调用。
 
 ## 8.7 JSON Schema
 
@@ -1605,9 +1605,6 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHH {fromJson 回来后的 Data}
 
 > 这一屏就是 `f_data` 的全部能力：8 行字母标号，走完了「对象→对象」「对象→JSON」「JSON→对象」「Map→对象」四条路。**这些代码不需要你写，全部是宏生成的。**
 
-**【口播】**
-
-> 这一屏就是 `f_data` 的全部能力：8 行字母标号，走完了「对象→对象」「对象→JSON」「JSON→对象」「Map→对象」四条路。**这些代码不需要你写，全部是宏生成的。**
 >
 > 下一章我们接着讲 `f_util` 工具箱——`UUID`、`IsUUID`、`IdMaker`、`TextTemplate`、`PathPattern`、`TreeTransformer` 以及几个设计模式的现成骨架，它们大多也是**站在 `f_data` 肩膀上**的。
 
@@ -1635,7 +1632,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHH {fromJson 回来后的 Data}
 | 哈希/摘要 | `crc16` `crc32` `crc64`、`CityHash`、`MurmurHash3X128`、`wyhash`、`UInt128` |
 | 其它 | `geohash`、`DiffieHellmanKeyExchanger`（密钥交换）、`prime`（素数） |
 
-> 这一章挑其中 **9 个最常用**的讲，剩下的（哈希家族、geohash、密钥交换）一句话带过——它们在 `f_util/doc/` 下都有独立文档，需要时查即可。
+> 这一章挑其中 **9 个最常用**的讲，剩下的————哈希家族、geohash、密钥交换、命名风格转换器等————它们在 `f_util/doc/` 下都有独立文档，需要时查即可。
 
 ## 9.2 `UUID`：全版本覆盖的唯一 ID
 
