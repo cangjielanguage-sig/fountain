@@ -3526,7 +3526,6 @@ export logger_appender_FDemoFile_compressFormat=GZip
 
 **【口播】**（再补两条不算坑但常被误会的）
 
-> - `FATAL` **不是**可配的级别字符串：级别解析只认 `OFF` / `ERROR` / `WARN` / `INFO` / `DEBUG` / `TRACE` / `ALL`，写别的（包括 `FATAL`）会**落到 `INFO`**——这不是「不输出」，而是「比你想的更啰嗦」。
 > - 日志格式里没有颜色控制符，别指望控制台是彩色的（`%level` 输出的是纯文本 `DEBUG` / `ERROR`⋯⋯）。
 
 ## 15.10 速查卡
