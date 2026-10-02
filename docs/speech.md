@@ -450,7 +450,8 @@ private let _ = {=>
 4. 同名重复注册以最后一次为准；
 5. 运行期读取仍遵循 3.3 的优先级。
 
-**【口播】** `f_orm` 就是基于这个宏的封装：`f_orm/src/ProtectedMacros/EmbedSensitive.cj` 生成 ORM 的连接串/用户名/口令键，再转调 `@EmbedSensitive`，最终在 `f_orm/src/base/imports.cj` 里以 `@ORMEmbedSensitive()` 触发。所以你在 `boot.sh` 里写的 `--postgres_orm_connectionUrl=...` 才能被嵌进产物。
+**【口播】** `f_orm` 就是基于这个宏的封装：`f_orm/src/ProtectedMacros/EmbedSensitive.cj` 生成 ORM 的连接串/用户名/口令键，再转调 `@EmbedSensitive`，最终在 `f_orm` 里以 `@ORMEmbedSensitive()` 触发。
+所以你在 `boot.sh` 里写的 `--postgres_orm_connectionUrl=...` 才能被嵌进产物。我们看看一个boot.sh 的构建实例（fdemo/boot.sh 的build函数）
 
 ## 3.7 可配置的时间格式：`DateTimeConfConverter`
 
@@ -477,11 +478,7 @@ private var createdAt: DateTime = DateTime.now()
 **【口播】** `conf` 是**保存时间格式的配置项名**（不是格式本身），按 3.3 的优先级读取，没配就用 `default`。做多租户、多地区系统时，各家日期格式不一样——一个注解解决。
 
 ## 3.8 已知问题（讲出来省得观众踩）
-
-1. **`refresher` 匹配失效**：`refresher` 以 `${prefix}_`（带尾随下划线）为键登记，而 `set` 收集的前缀是配置项名第一个 `_` **之前**的片段（仓颉 `a..b` 左闭右开），所以 `'logger'.startsWith('logger_')` 恒为 `false`——**`Config.set` 写入不会触发任何刷新回调**。影响：`f_log` 的 `LoggerFactory.refresh` 登记后再也不会被调用；`f_orm` 的 `ORMConfig.refresh` 只在 `static init` 里被执行一次。
-2. **SM4 异常文案残留其它模块名**：`sm4Key`/`sm4Iv` 不合法时抛出的是 `"orm config item ${Config.sm4Key} ..."`，源自 `f_orm` 的实现，属措辞遗留。
-3. **`getAll` 去前缀用的是 `String.replace`**：会替换 key 中**全部** `fountain_` 片段，key 中间再出现该子串会被一并去掉。
-4. **`getValues` / `getDateTimes` 解析失败会抛异常**，而单数版本 `getValue` / `getDateTime`（配置不存在时）返回 `None` / 空数组——写容错代码时别搞混。
+**`getValues` / `getDateTimes` 解析失败会抛异常**，而单数版本 `getValue` / `getDateTime`（配置不存在时）返回 `None` / 空数组——写容错代码时别搞混。这是故意的，因为复数项配置，在解析过程中，如果有某一个转换失败，则整个配置失效。
 
 ## 3.9 现场演示
 
@@ -498,7 +495,7 @@ export POSTGRES='postgres://user:pass@host:5432/dbname'
 # 内部：--sm4Key=$(fboot randhex 32) --sm4Iv=$(fboot randhex 32)
 
 # 3) 运行期覆盖（写法一：环境变量），产物不用重新编译
-export mvc_port=9090
+export mvc_port=8080
 ./boot.sh run
 
 # 3') 运行期覆盖（写法二：--key=value 命令行参数），与写法一完全等价
@@ -513,7 +510,7 @@ fboot run ./fdemo \
 **【预期】**
 
 - 第 2 步：编译成功，连接串与口令被加密嵌入产物；
-- 第 3 / 3' 步：日志里出现 `9090` 端口，`Config.getString('mvc_port')` 拿到的是运行期的值，**覆盖了编译期内嵌值**；
+- 第 3 / 3' 步：日志里出现 `9090` 端口，`Config.getString('mvc_port')` 拿到的是命令行参数的值，**覆盖了环境变量值**；
 - 两种写法效果完全一致——**环境变量与 `--key=value` 平级，后者覆盖前者**。
 
 **【口播】**
@@ -540,7 +537,7 @@ fboot run ./fdemo \
 > }
 > ```
 >
-> 也就是说，**fboot 只是 `f_app` 的一个壳**。所有子命令的实现都在 `fountain::f_app.App` 里。理解这一点很重要：你自己的应用也可以用同样的方式启动，甚至可以用 `SubCommandMediator` 注册自己的子命令。
+> 也就是说，**fboot 只是 `f_app` 的一个壳**。所有子命令的实现都在 `fountain::f_app.App` 里。理解这一点很重要：你自己的应用也可以用同样的方式启动，而且可以用 `SubCommandMediator` 注册自己的子命令。
 
 ## 4.1 `fboot help`
 
@@ -583,8 +580,6 @@ fboot help
 **【口播】**
 
 > 注意第 1 行，它是整个 fountain 世界的第一公理：**应用项目只需要编译成动态链接库**。后面所有命令都围绕这一条展开。
->
-> 另外 `help` 里没列全的内置命令还有 `cleanUpdate`、`test`；`pub` 和 `randhex` 不是内置命令，而是 `f_app` 自己注册进 `SubCommandMediator` 的子命令实现——这个机制我们等下会展开。
 
 ## 4.2 `fboot workspace` —— 把目录变成仓颉 workspace
 
@@ -623,7 +618,7 @@ cat cjpm.toml
 
 **【预期】** `cjpm.toml` 里已经有 `[workspace]`、`f_base` / `f_version` 依赖、`--dy-std -Woff all`、以及各平台 target 段。
 
-> 台上一句话总结：**workspace 是「装模块的盒子」，每个模块都必须编译为动态链接库。**
+> 一句话总结：**workspace 是「装模块的盒子」，每个模块都必须编译为动态链接库。**
 
 ## 4.3 `fboot module` —— 在 workspace 里加一个动态链接库模块
 
