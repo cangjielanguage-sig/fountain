@@ -2464,7 +2464,7 @@ curl -XPOST http://localhost:8080/upload -F 'name=abc' -F 'file=@./banner.txt'
 | `MediaTypeException('charset in <x> is not be supported')` | 文本格式的 charset 不支持 |
 | `MediaTypeException('<x> does not support current access')` | 对 `multipart` 调用了 `fromData(Data)` / `toData(Array<Byte>)` |
 
-**【口播】** 遇到 `is an illegal MediaType string`，99% 是自定义 `MediaType` 的 **`@Bean` 没生效**——回到第三章 3.7 那条：**它所在的动态库必须被 `--dylibPattern` 匹配到**。`fdemo` 的 `LogTextMediaType` 在 `boot` 包里，所以正则里有 `boot`。
+**【口播】** 遇到 `is an illegal MediaType string`，99% 是自定义 `MediaType` 的 **`@Bean` 没生效**——回到第三章 3.7 那条：**它所在的动态库必须被 `--dylibPattern` 匹配到**。`fdemo` 的 `LogTextMediaType` 在 `boot` 包里，而正则里有 `boot`，所以能加载到。
 
 ---
 
