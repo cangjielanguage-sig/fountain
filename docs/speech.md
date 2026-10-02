@@ -2572,7 +2572,7 @@ public class UserServiceImpl <: UserService {
 > `@TransactionalService` 其实是 `f_aspect.macros.WeavedBean` 的再导出——它把 Service 织进切面链，事务切面才能生效。
 >
 > 两条铁律（**一定要念出来，这是最常见的线上事故来源**）：
-> 1. **每次调用 DAO 函数都必须从 `executor()` 开始**——不要缓存 DAO 实例；
+> 1. **每次调用 DAO 函数都必须从 `executor()` 开始**——不要试图声明SqlExecutor或DAO接口类型的变量；
 > 2. **一个 DAO 函数只执行一个 SQL**（或一次分页查询：一次 count + 一次列表）。
 
 ## 12.2 配置（环境变量 / `--key=value` 命令行参数）
@@ -2645,6 +2645,8 @@ executor.UPDATE<UserPO>(map)
 
 // 更新：对象直改（主键作 WHERE 条件）
 executor.UPDATE<UserPO>(user, dirty: true)   // 只更新脏字段
+executor.UPDATE<UserPO>(user, ignoredColumns: [UserPO.tableColumns().id]) // 还有includingColumns命名参数
+// dirty ignoredColumns includingColumns 是同一个函数的三个命名实参，每次调用，只能指定其中一个，一次指定任意两个会抛出异常
 ```
 
 **【口播】** `dirty: true` 配合 `@QueryMappersGenerator[dirty]`：setter 会自动调用 `DirtyTag.setDirtyField`，`UPDATE` 时只更新被改过的列。
