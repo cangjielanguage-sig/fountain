@@ -1216,7 +1216,7 @@ public interface Aspect {
 @Pointcut       // 修饰函数：只有这个函数织入；修饰类：全部公共函数织入
 @WeavedBean     // 注册进 IOC + 全部公共成员函数织入
 @WeavedController // mvc模块声明的专用宏：包含@Controller 的全部功能 + 织入
-@TransactionalService // orm模块声明的专用宏，包含@Bean的全部功能 + 事务切面织入
+@TransactionalService // orm模块声明的专用宏，是WeavedBean的别名
 ```
 
 **【口播】** 织入逻辑在**这些函数首次调用时**执行，不是启动期——所以启动很快。
