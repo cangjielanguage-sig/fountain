@@ -3141,7 +3141,7 @@ public abstract class DelayedTicktockTask <: CronTicktockTask {
 
 **【口播】**
 
-> `f_log` 和后头第十七章那七个模块是同一个定位——**可以单独拿走**：不用启动器、不用 IOC，`import` 进来就能用。但它比工具箱更靠前一步：**一个服务上线前，第一件要配好的事就是日志**，所以我们把它放在正文里讲，不放进基础设施那一章。
+> `f_log` 和后头第十七章那八个模块是同一个定位——**可以单独拿走**：不用启动器、不用 IOC，`import` 进来就能用。但它比工具箱更靠前一步：**一个服务上线前，第一件要配好的事就是日志**，所以我们把它放在正文里讲，不放进基础设施那一章。
 >
 > 你可能会问：仓颉生态里已经有 `stdx.log` 了（`Logger` / `LogRecord` / `LogWriter` / `LogValue` 一整套抽象），为什么 fountain 还要再写一个？
 >
@@ -3618,7 +3618,8 @@ export logger_asyncWaitTimeout=5ms                           # 借不到缓冲�
    f_util 的 PathPattern 是 ② 里「路由匹配 + 抽路径变量」的引擎
 
 ⑤ 底座：f_cache 存登录状态、f_pool 撑起数据库连接池、f_regex 缓存住路径正则、
-   f_time 解析所有 Duration 型配置；f_log 在 ② 的每一步上落日志——SQL 的 DEBUG、accessLog 的 INFO
+   f_time 解析所有 Duration 型配置；f_log 在 ② 的每一步上落日志——SQL 的 DEBUG、accessLog 的 INFO；
+   而 f_base 在进程退出时按权重把上面这些依次收掉（先停服务、最后关数据库）
 ```
 
 **【口播】**
@@ -3630,9 +3631,9 @@ export logger_asyncWaitTimeout=5ms                           # 借不到缓冲�
 
 ---
 
-# 第十七章 运行时基础设施：`f_cache` / `f_pool` / `f_collection` / `f_time` / `f_regex` / `f_rx` / `f_random`
+# 第十七章 运行时基础设施：`f_base` / `f_cache` / `f_pool` / `f_collection` / `f_time` / `f_regex` / `f_rx` / `f_random
 
-**【镜头】** 先给七个模块的 README 各一屏，再回到它们在框架内部的调用点
+**【镜头】** 先给八个模块的 README 各一屏，再回到它们在框架内部的调用点
 
 ## 17.1 开场：框架之下的那一层
 
@@ -3643,6 +3644,7 @@ export logger_asyncWaitTimeout=5ms                           # 借不到缓冲�
 >
 > | 模块 | 一句话 | 在 fountain 里被谁用了 |
 > | --- | --- | --- |
+> | `f_base` | 所有模块的公共底座：进程优雅退出、Result/Option 与集合迭代器扩展、`Comparator`、`StringGenerator`、`FutureTask` | 全部模块；`f_app` 启动时调 `ExitCallbacks.toExitGracefully()`，`f_mvc` / `f_pool` / `f_cache` / `f_orm` / `f_bean` / `f_rpc` 都用 `atExit` 登记清理 |
 > | `f_cache` | 堆缓存（强引用 / 弱引用），可设寿命与容量 | `f_security` 的 `JWTHeapCacheStore`、`f_data` 的 `DataPath.cache`、`f_orm` 的结果缓存 |
 > | `f_pool` | 通用对象池、键池、数组池 | `f_orm` 的 `DatabasePool`（`orm_databasePool*` 那批配置项） |
 > | `f_collection` | 标准库没有的集合 + 集合扩展 | `f_store`（LSM-Tree）、`f_concurrent`、ORM 分页 |
@@ -3651,9 +3653,113 @@ export logger_asyncWaitTimeout=5ms                           # 借不到缓冲�
 > | `f_rx` | 反应式编程（Observable / Observer / 背压） | 流式数据处理场景 |
 > | `f_random` | 随机数扩展：区间随机、随机流、随机字符串、蓄水池抽样 | `f_app` 的 `fboot randhex`、`fdemo` 的 `UserSessionCache` 会话密钥 |
 >
-> 这七个模块的共同特点：**零配置、可以单独引入、不绑架你的架构**。就算你不用 fountain 的框架部分，把它们当工具库用也完全没问题。
+> 这八个模块的共同特点：**零配置、可以单独引入、不绑架你的架构**。就算你不用 fountain 的框架部分，把它们当工具库用也完全没问题。
 
-## 17.2 `f_cache`：堆缓存
+## 17.2 `f_base`：所有模块脚下的那一层
+
+**【口播】**
+
+> `f_base` 是 fountain 的公共底座——README 的第一句话就是「建议开发时无脑导入本包」。它自己只有一个外部依赖（字符集转换库 `charset4cj`），但仓库里每个模块都依赖它，所以先讲它。
+> 它做的事可以归成四类：**一个 import 打底、进程退出、类型转换与集合扩展、一批通用小工具**。
+
+### 一个 import 打底
+
+```cangjie
+import fountain::f_base.*
+```
+
+**注意**：`f_base` 在包里做了 `public import`——`std.collection.*`、`std.reflect.*`、`std.regex.*`、`std.time.*`，以及 `std.math.MathExtension`。所以这一个 import 之后，`ArrayList`、`HashMap`、`Regex`、`Duration`、`DateTime` 都不必再单独引入。这也是 `fboot workspace` 生成的 `cjpm.toml` 里默认就带 `f_base` 依赖的原因（见 3.2）。
+
+### 进程退出：`ExitCallbacks`（`f_base` 最容易被低估的一段）
+
+```cangjie
+public struct ExitCallbacks {
+    // 重置并注册 SIGTERM / SIGINT，回调跑完 exit(0)
+    public static func toExitGracefully(): Unit
+    // 回调按权重升序执行，权重相同的按注册顺序
+    public static func atExit(priority: UInt16, atexit: () -> Unit): Unit
+}
+```
+
+**【口播】**
+
+> 只要进程收到 `kill 15`（SIGTERM）或 `Ctrl+C`（SIGINT），`f_base` 注册的处理函数就会依次执行所有通过 `atExit` 登记的清理函数，**权重升序、权重相同的按注册顺序**，全部跑完再 `exit(0)`。
+> 注册时机是**所有动态链接库加载完成之后**，而且会先重置之前注册的同名处理函数——避免和第三方库、或你自己注册的 SIGTERM / SIGINT 处理函数打架。
+>
+> 什么时候需要自己调 `toExitGracefully()`？**用了 `f_app` 就不需要**——fountain 应用的启动器在初始化 starter 之后会自动调用它；只有「只引 `f_base`、不引 `f_app`」的独立工具才会漏掉这一步。
+>
+> 业务代码基本碰不到它，因为框架模块在自己的 `static init` 或构造阶段就把清理登记好了：
+
+| 模块 | 登记的内容 | 权重 |
+| --- | --- | --- |
+| `f_mvc` | 关闭 HTTP 服务器（`closeGracefully`） | 0 |
+| `f_rpc` | 服务端注销、客户端关连接 | 0 / 252 |
+| `f_bean` | `BeanFactory.shutdown` | 253 |
+| `f_pool` | `KeyPool.close` | 254 |
+| `f_cache` | `HeapCache.destroy`（停检查线程） | 254 |
+| `f_orm` | `ORM.close`（关数据库） | 255 |
+
+> 权重小的先跑，所以 `Ctrl+C` 的顺序是**先停服务、再关中间件、最后关数据库**——一个进程最体面的下线姿势。想给自己的模块加清理，就来一行 `ExitCallbacks.atExit(200){ ... }`。
+>
+> 一个前提：Windows 上这整段是条件编译出来的空实现（`@When[os != "Windows"]`），所以这套优雅退出只在非 Windows 平台生效。
+
+### `Result<T, E>` 与 `Option` 扩展：把转换补齐
+
+```cangjie
+// Result：Ok / Ok(T) / Err / Err(E) / NoResult 五态
+r.isOk / r.withValue / r.result() / r.err()
+r.orDefault(0) / r.orElse{ 0 } / r.mapValue{ v => ... } / r.mapError{ e => Ok(...) }
+r.filterOk() / r.filterErr() / r.ignore() / r.flatten() / r.transpose<U>()
+
+// Option：转 Result、当迭代器、链式调用
+v.toResult<Int64, String>() / v.iterator() / v.call{ x => x + 1 }
+v.caller{ x => x + 1 }.none{ 0 }.call()
+```
+
+**【口播】** 标准库的 `Option` / `Result` 本身没多少转换手段，`f_base` 把 `Option ↔ Result ↔ 迭代器` 之间的桥都补上了：一个 `?` 值可以变迭代器、可以 `call` 成 `?R`、也可以 `toResult()` 变成五态枚举。写业务代码时能省掉大量 `if (let Some(x) <- ...)`。
+
+### 集合与迭代器扩展
+
+```cangjie
+EmptyArray<Int64>.instance() / EmptySet<String>.instance() / EmptyMap<String, Int64>.instance()
+it.toArray() / it.toArrayList() / it.groupBy{ x => x.dept } / it.peekable()
+itr.min(cmp) / itr.max(cmp) / itr.flatten(toThrow: true) / itr.filterType<Sub>(exactly: false)
+arr.grow(10) / arr * 3                        // 扩容 / 重复
+1.isOdd / 1.flip() / Int64.BYTES / i.numberOfLeadingZeros()
+'abcabc'.replaceFirst('a', 'x') / stringJoin(['a', 'b'], delimiter: ',')
+'  x  '.trimAsciiBlanks()
+```
+
+**【口播】**（挑三个讲）
+
+> `EmptyArray` 这一组空集合是标准库各类容器的「空实现」：`EmptySet` 实现了 `Set`、`EmptyIterator` 实现了 `Iterator`、`EmptyMap` 同时是 `Map` 和 `Bucket`……需要返回「空的那一个」时一行 `instance()` 就行，不用自己造空容器、也不会拿到 `null`。它们都把构造函数声明成 `private`，只能通过 `instance()` 取，本身没有任何状态。
+> `groupBy` 一行把列表按 key 分组，返回 `HashMap<K, ArrayList<T>>`。
+> `peekable()` 可以先 `peek()` 看一眼下一个元素、**不消费**——「看一眼再决定」的解析逻辑用它最舒服；它还实现了 `Resource`：关自己时会顺带关掉底层迭代器（底层没实现 `Resource` 就什么都不做）。
+
+### 通用小工具（快速过一遍）
+
+```cangjie
+StringGenerator()                // 加强版 StringBuilder：indexOf / lastIndexOf / insert
+                                 // / replaceFirst / replaceLast / reverse / substring / unsafeBytes
+Comparator<T>(cmp).then{...}.reverse()   // 链式比较器；Comparator.create<T>() 把 Comparable 包成比较器
+Equaler<T>                       // 同上，用于"多字段相等"与去重
+HashBuilder()                    // 局部变量的哈希计算：.append(a).append(b).build()
+resource(res){ r => ... }        // 替代 try-with-resource：fn 返回即关闭
+ResourceManager(new)             // 每次 call 新建资源、结束时关闭
+FutureTask<T>(fn)                // 父子任务：shutdownSubOnFinish 决定父任务结束时是否连子任务一起结束
+InheritedTaskLocal<T>            // 可继承的 ThreadLocal：本任务没值就去父任务找
+OverSizePolicy 家族               // 满了怎么办：Abort / Discard / RemoveSomeOne / CallerRuns / Blocking
+Addable / Subable / Mulable / Cmpable / BitAndable ...   // 基础运算符接口：给泛型加"支持 +"这类约束
+Option<T> 的 + - * / % ** & | ^ ! << >>                  // v + 1 -> ?T（另一个操作数是 T 或 ?T 都行）
+@nameof(obj.field) / @nameValueOf(obj.field)             // 宏包 fountain::f_base.macros
+```
+
+**【口播】**
+
+> 这批东西没什么故事，但都「写起来顺手」：`StringGenerator` 比标准库 `StringBuilder` 多出一整套查找与替换；`Comparator.then` 把多级排序写成一条链；`OverSizePolicy` 这套「满了怎么办」的策略家族被 `f_collection` 的优先队列与 `f_concurrent` 的同步优先队列拿去复用；`Addable` / `Cmpable` 这些接口解决的是「泛型参数想用 `+`、`>` 怎么约束」——标准库只给到 `Comparable` / `Equatable`。
+> `@nameof` 这类宏适合把字段名当字符串用（日志键、配置键），展开发生在编译期，没有运行期开销。
+
+## 17.3 `f_cache`：堆缓存
 
 ### 强引用 `HeapCache`
 
@@ -3730,7 +3836,7 @@ private static let context = JWTSecurityContext<String>(JWTHeapCacheStore(Durati
 
 **【口播】** `JWTHeapCacheStore` 就是 `HeapCacheStore<String, JWTPrincipal<String>>`，底层正是 `f_cache` 的堆缓存——所以第十三章那个「登录状态存 1 小时」的能力，根源在这里。
 
-## 17.3 `f_pool`：对象池
+## 17.4 `f_pool`：对象池
 
 ### 池的存储模式
 
@@ -3804,7 +3910,7 @@ public ArrayListPool(...)   // 参数同上
 
 **【口播】** 高频临时缓冲区的老问题：每次 new 一个 128 长度的数组，GC 压力全在这儿。数组池直接复用——这是 `f_base` 里 `StringGenerator` 那类组件敢放开手脚用的底气。
 
-## 17.4 `f_collection`：补标准库的位
+## 17.5 `f_collection`：补标准库的位
 
 **【口播】** 这节不用逐条念，挑四个最能解决痛点的讲。
 
@@ -3894,7 +4000,7 @@ public interface SetOp<T> {
 
 **【口播】** `PriorityQueue` 容量满时**自动扩容**，也可以给 `OverSizePolicy` 做拒绝策略；`SetOp` 的 `IntersectionSetView` / `UnionSetView` / `DifferenceSetView` 都是**只读视图**——做集合运算不产生拷贝。
 
-## 17.5 `f_time`：把时间操作变成 DSL
+## 17.6 `f_time`：把时间操作变成 DSL
 
 **【口播】**
 
@@ -3978,7 +4084,7 @@ Month.January   - Month.December      // -11
 TimeZone.Z                            // UTC 时区常量
 ```
 
-## 17.6 `f_regex`：正则扩展与正则缓存
+## 17.7 `f_regex`：正则扩展与正则缓存
 
 ### 常用正则常量
 
@@ -4020,7 +4126,7 @@ let r = '^/api/.*'.regex(solid: false)
 > **编译正则是有成本的**。热路径上反复 `str.regex()` 而不用缓存，是很多服务的隐形 CPU 杀手。
 > 顺带闭环：`f_util.PathPattern` 在编译路径时会先做几步正则预处理（把 `{*name}` 归一化、把连续 `//` 合并成 `/`），这些正则就是用 `regex(solid: true)` 建的——进程内编译一次、复用一生。
 
-## 17.7 `f_rx`：反应式编程
+## 17.8 `f_rx`：反应式编程
 
 **【口播】**
 
@@ -4111,7 +4217,7 @@ Observable.replaySize(capacity)   // 启动后再注册的观察者会异步重�
 
 每个创建函数都接受命名参数 `asyncCombined!: Bool`——决定多个观察者**各自开线程**还是**共用一个线程**。
 
-## 17.8 `f_random`：随机数
+## 17.9 `f_random`：随机数
 
 **【镜头】** `f_random/README.md` + `fdemo/user/src/util/UserSessionCache.cj`（那行 `UUID.random().toHexString()`）
 
@@ -4268,9 +4374,9 @@ fboot randhex 32        # ← 就是 f_random 的 randomLowerHex(32)
 5. **长度区间不统一**：只有 `randomAscii(min, max)` 和 `random(min, max, source)` 用了 `closed: true`（长度落在 `[min, max]`），其余 `(min, max)` 重载的长度是 `[min, max)`。
 6. **`randomReservoir` 的边界**：`count <= 0` 且数据源非空时会抛参数非法异常；返回值大小是 `min(count, 元素个数)`，不总是等于 `count`；替换下标取自 `[0, i)` 而非经典算法的 `[0, i]`，**抽样结果并非严格均匀**——对均匀性有硬要求的场景请自己实现。
 
-## 17.9 现场演示
+## 17.10 现场演示
 
-**【镜头】** 建议临时建一个小模块，把七个模块各跑一行
+**【镜头】** 建议临时建一个小模块，把八个模块各跑一行
 
 ```bash
 cd /tmp/fountain_live/hello_app
@@ -4283,6 +4389,7 @@ fboot build && fboot run --dylibPattern='infra'
 ```
 
 ```cangjie
+import fountain::f_base.*
 import fountain::f_cache.*
 import fountain::f_pool.*
 import fountain::f_collection.*
@@ -4290,11 +4397,15 @@ import fountain::f_time.*
 import fountain::f_regex.*
 import fountain::f_rx.*
 
-// ① f_cache：1 小时寿命、最多 10000 个的堆缓存
+// ① f_base：一个 import 打底 + 优雅退出的清理登记 + 各类容器的空实现
+EmptyArray<Int64>.instance()
+ExitCallbacks.atExit(200){ println('byebye from my module') }
+
+// ② f_cache：1 小时寿命、最多 10000 个的堆缓存
 let cache = HeapCache<String>(maxLife: Duration.hour, maxSize: 10000)
 cache.getOrCompute('k'){ expensive() }
 
-// ② f_pool：最多 8 个连接的对象池
+// ③ f_pool：最多 8 个连接的对象池
 let pool = Pool<Conn>(mode: Mode.Fifo, initSize: 2, maxSize: 8,
                       idleTimeout: Duration.minute,
                       creator: {=> connect()},
@@ -4304,31 +4415,31 @@ let c = pool.get(timeout: Duration.second * 5)
 // ... 用完
 pool.giveBack(c.getOrThrow())
 
-// ③ f_collection：KEY 不需要 Hashable 的字典
+// ④ f_collection：KEY 不需要 Hashable 的字典
 let dict = HashDict<Conn, String>(hasher: {c => c.id}, equals: {a, b => a.id == b.id})
 
-// ④ f_time：时间 DSL
+// ⑤ f_time：时间 DSL
 let deadline = 30.minutes.later
 let startOfDay = DateTime.today
 let nextHour = TimeUnit.HOUR.next()
 
-// ⑤ f_regex：带缓存的正则
+// ⑥ f_regex：带缓存的正则
 let r = '^/api/.*'.regex(solid: false)
 
-// ⑥ f_rx：反应式流
+// ⑦ f_rx：反应式流
 Observable<Int64>.iterable([1, 2, 3])
     .subscribe('demo', FuncObserver<Int64>().setNext{v => println(v)})
     .withCurrent()
     .defer()
 
-// ⑦ f_random：带线程本地随机源的随机字符串
+// ⑧ f_random：带线程本地随机源的随机字符串
 RandomString().randomLowerHex(16)
 ```
 
 **【口播】**
 
-> 这七个模块没有一个需要配置文件、没有一个需要启动器、没有一个依赖 IOC。
-> **它们就是七个可以随手拿走的工具库**——这也是 fountain 的设计哲学：**框架给你便利，但不劫持你的代码。**
+> 这八个模块没有一个需要配置文件、没有一个需要启动器、没有一个依赖 IOC。
+> **它们就是八个可以随手拿走的工具库**——这也是 fountain 的设计哲学：**框架给你便利，但不劫持你的代码。**
 
 ---
 
@@ -4349,7 +4460,7 @@ RandomString().randomLowerHex(16)
 | 9 | 宏报「must be modified by public var or public mut prop」 | `@ORMField` 的约束 |
 | 10 | `fboot run` 卡住不动 | 这是**预期行为**，它永久阻塞；另开终端发请求 |
 | 11 | `populate` 之后目标对象字段是空的 | 目标类没加 `@DataAssist[fields]`；或默认 `SILENCE` 把「字段不存在 / 类型不匹配 / 无法转换」静默跳过了（见第八章） |
-| 12 | 随机字符串里只有小写字母 | `randomLettersNumbers(min,max)` 等三个 `(min,max)` 重载的实现与命名不符；自己先算长度再调 `(count)` 重载（见第十七章 17.8） |
+| 12 | 随机字符串里只有小写字母 | `randomLettersNumbers(min,max)` 等三个 `(min,max)` 重载的实现与命名不符；自己先算长度再调 `(count)` 重载（见第十七章 17.9） |
 | 13 | 自定义格式报 `<x> is an illegal MediaType string` | 自定义 `MediaType` 漏了 `@Bean`，或它所在的动态库没被 `--dylibPattern` 匹配到（见第十一章） |
 | 14 | 上传的文件在磁盘上堆积 | `MultipartFile` 是 `Resource`，用完必须 `close()`——`close()` 才会删掉临时文件 |
 | 15 | 改了配置却不生效 | 有编译期内嵌值被运行期覆盖了（或反过来）；或用了 `fountain_` 前缀却写成了原名。按第四章的四级优先级逐层排查 |
@@ -4388,7 +4499,7 @@ A：**在配置的解析方式上没有任何区别**——都是 `f_config` 读
 A：先看有没有配 appender——fountain 的日志**默认静默**。至少要 `logger_appender_console=随便一个名字`，然后再用 `logger_appender_<这个名字>_level` 配级别（注意：名字是你自己起的，不是 `console`）。第二看级别：控制台默认 `INFO`，`log.debug{...}` 不会出现。
 
 **Q：日志丢了怎么办？**
-A：三种可能。① 缓冲区池被占满且 5ms 内没借到 → 控制台会打印 `AsyncLogger.SyncQueueOutputStream.EmptyPool`，加大 `loggerAsyncBufsize`；② 你配了 `loggerAsyncTimeout` + `discard`，队列满时被主动丢弃；③ 进程被 `kill -9` —— `f_log` 在 `atExit` 里会排空队列再关流，但 `-9` 抓不到。正常 `Ctrl-C` 不会丢。
+A：三种可能。① 缓冲区池被占满且 5ms 内没借到 → 控制台会打印 `AsyncLogger.SyncQueueOutputStream.EmptyPool`，加大 `loggerAsyncBufsize`；② 你配了 `loggerAsyncTimeout` + `discard`，队列满时被主动丢弃；③ 进程被 `kill -9` —— `f_log` 在 `atExit` 里会排空队列再关流，但 `-9` 抓不到。正常 `Ctrl-C` 不会丢（`atExit` 与信号处理见第十七章 17.2）。
 
 **Q：日志文件能按天切割并压缩吗？**
 A：能，两个配置项：`logger_appender_<Name>_rotateDuration=DAY`、`logger_appender_<Name>_compressFormat=GZip`（`Deflate` 也行）。切割出来的文件是 `<路径>.<上一周期时间戳>.gz`。注意两点：`rotateDuration` 别配亚秒级（会疯狂 rename）；压缩失败时原文件也会被删掉，审计类日志建议先不压缩。
@@ -4418,7 +4529,7 @@ A：要**背压、错误恢复、重放、多观察者**这些语义时用 `f_rx
 A：**要 bean 的完整生命周期（懒加载、条件装配、`@Value` 注入、销毁回调）→ 用 IOC**；只是想把「一段按 key 分派的逻辑」集中管理 → `Strategies` 更轻。两者不冲突，很多项目是混着用的。
 
 **Q：随机数够安全吗？要用哪个？**
-A：默认优先 `SecureRandom` / `ThreadLocalRandom.current`（`RandomString()` 的无参构造就是它）。只有对性能极度敏感、且不涉及安全语义的场景（比如模拟数据、抽样）才用 `Random`。另外记住 `f_random` 那几条已知行为——尤其是浮点 `closed` 的含义（见第十七章 17.8）。
+A：默认优先 `SecureRandom` / `ThreadLocalRandom.current`（`RandomString()` 的无参构造就是它）。只有对性能极度敏感、且不涉及安全语义的场景（比如模拟数据、抽样）才用 `Random`。另外记住 `f_random` 那几条已知行为——尤其是浮点 `closed` 的含义（见第十七章 17.9）。
 
 **Q：数据库不支持怎么办？**
 A：`f_orm` 基于 `std.database.sql`，只要有驱动就能用；配置项 `orm_drivers` 是逗号分隔的，可同时注册多个数据源，`ORM.executor(driverName)` 按驱动名取。还可以用 `f_mockdb` 做无数据库的集成测试。
@@ -4561,6 +4672,17 @@ Factory<A,O>.assemble<T>(producer) / .produce<T>(arg)     // 按类型分派的�
 Strategies<N,A,R>.register(strategy) / .execute(name, arg)
 ResponsibilityChain<C,A,R>.register(...) / execute / executeAll  // 注意拼写 Responsibility
 
+// f_base：公共底座（建议无脑导入；顺带 public import std.collection/reflect/regex/time/math）
+ExitCallbacks.atExit(priority){...} / ExitCallbacks.toExitGracefully()   // 权重升序执行清理；f_app 已自动注册 SIGTERM/SIGINT
+EmptyArray/EmptySet/EmptyMap/EmptyList<T>.instance()                     // 各类容器的"空实现"，private 构造，只能这么取
+it.toArrayList()/groupBy{...}/peekable()/flatten(toThrow:)/filterType<R>(exactly:)
+arr.grow(n) / arr * 3 / 1.isOdd / 1.flip() / Int64.BYTES
+Option.toResult()/iterator()/caller{...}  /  Result.orDefault/orElse/mapValue/filterOk/transpose
+StringGenerator().append/insert/replaceFirst/reverse/unsafeBytes
+Comparator<T>(cmp).then{...}.reverse() / Comparator.create<T>() / Equaler<T> / HashBuilder()
+resource(res){ r => ... } / ResourceManager<R>(new) / FutureTask<T>(fn) / InheritedTaskLocal<T>
+@nameof(expr) / @nameValueOf(expr)                                       // 宏包 fountain::f_base.macros
+
 // f_cache：堆缓存
 HeapCache<V>(maxLife:, maxSize:, checkDuration:, evictionCallback:)   // builder() 亦可
   .get/set(life:,once:)/prolong/getOrCompute/getOrDefault/removeIf/destroy
@@ -4635,7 +4757,7 @@ MultipartFile.filename / .size / .bytes() / .copyTo(out) / .close()
 | 23 | 4' | CRON：f_ticktock（含"忘了 dylibPattern"的坑） | IDE + 终端 |
 | 24 | 11' | 日志：f_log（默认静默 / 级别挂 appender / 异步管道 / 切割压缩 / 现场调 DEBUG 看 access log 与 SQL） | IDE + 终端（`tail -f ./log/fdemo.log`） |
 | 25 | 4' | 串讲：一次请求的完整穿越 | 架构图 |
-| 26 | 17' | 基础设施：f_cache / f_pool / f_collection / f_time / f_regex / f_rx / f_random（含随机数的区间/流/字符串/已知行为） | IDE + 终端（`fboot randhex 32`） |
+| 26 | 19' | 基础设施：f_base（优雅退出 + 扩展）+ f_cache / f_pool / f_collection / f_time / f_regex / f_rx / f_random（含随机数的区间/流/字符串/已知行为） | IDE + 终端（`fboot randhex 32`） |
 | 27 | 5' | 坑 & Q&A + 性能压测 | 终端 |
 
 ---
