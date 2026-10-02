@@ -12,6 +12,8 @@
   link-option = ""
   package-configuration = {}
   category = ["Data Monitoring"]
+  authors = ["吴京润"]
+  repository = "https://gitcode.com/Cangjie-SIG/fountain/tree/master/f_health"
 
 [dependencies]
   "fountain::f_app" = {path = "../f_app"}

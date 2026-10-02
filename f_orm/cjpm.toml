@@ -36,6 +36,7 @@
   include = ["src", "doc"]
   exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
   authors = ["吴京润"]
+  repository = "https://gitcode.com/Cangjie-SIG/fountain/tree/master/f_orm"
 
 [profile.build]
   incremental = true

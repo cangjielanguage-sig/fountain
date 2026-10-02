@@ -12,6 +12,8 @@
   link-option = ""
   package-configuration = {}
   category = ["Utility", "Developer Tools"]
+  authors = ["吴京润"]
+  repository = "https://gitcode.com/Cangjie-SIG/fountain/tree/master/f_bloom"
 
 [dependencies]
   "fountain::f_base" = {path = "../f_base"}

@@ -22,6 +22,7 @@
   include = ["src", "doc"]
   exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
   authors = ["吴京润"]
+  repository = "https://gitcode.com/Cangjie-SIG/fountain/tree/master/f_httpclient"
 
 [target]
 [target.x86_64-unknown-linux-gnu]
