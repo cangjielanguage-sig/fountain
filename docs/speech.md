@@ -4,7 +4,7 @@
 
 > 配套项目：`fdemo`（仓库内的示例工程，本讲稿所有命令都以它为蓝本）
 > 目标：讲清楚「为什么用 fountain」「怎么用 fboot」「IOC / MVC / AOP / ORM 怎么用」，并且全程可以一边讲一边敲命令、一边看输出。
-> 建议录制时长：约 125～150 分钟（可按章节裁剪；核心链路是 第一、三、四、六、八、九、十、十一、十六章）
+> 建议录制时长：约 140～165 分钟（可按章节裁剪；核心链路是 第一、三、四、六、八、九、十、十一、十七章；第十六章可按受众深浅整章跳过）
 
 ---
 
@@ -77,6 +77,7 @@ fboot version
 > | CRON | `f_ticktock` | `@Bean` + cron 表达式即可定时执行 |
 > | 随机 | `f_random` | 区间随机数、随机数流、随机字符串、蓄水池抽样 |
 > | 工具箱 | `f_util` | UUID(v1~v8) / IdMaker / TextTemplate / PathPattern / TreeTransformer / CaseFormat / 设计模式骨架 |
+> | 基础设施 | `f_cache` `f_pool` `f_collection` `f_time` `f_regex` `f_rx` | 堆缓存 / 对象池 / 集合补位 / 时间 DSL / 正则缓存 / 反应式编程 |
 > | 启动器 | `fboot` / `f_app` | 没有 `main` 也能启动应用 |
 >
 > 外围还有 `f_base` `f_util` `f_collection` `f_concurrent` `f_log` `f_http` `f_net` `f_pool` `f_crypto` `f_store` `f_rpc` `f_llm`……它们既能被框架使用，也能单独当作工具库引入。
@@ -3195,7 +3196,548 @@ fboot randhex 32        # ← 就是 f_random 的 randomLowerHex(32)
 
 ---
 
-# 第十六章 串讲：一次请求穿过整个框架
+# 第十六章 运行时基础设施：`f_cache` / `f_pool` / `f_collection` / `f_time` / `f_regex` / `f_rx`
+
+**【镜头】** 先给六个模块的 README 各一屏，再回到它们在框架内部的调用点
+
+## 16.1 开场：框架之下的那一层
+
+**【口播】**
+
+> 前面讲了 IOC、AOP、MVC、ORM、安全、定时任务——这些是**你能直接感知到的框架能力**。
+> 但它们是站在另一层之上的。这一章讲的就是那一层：**运行时基础设施**。
+>
+> | 模块 | 一句话 | 在 fountain 里被谁用了 |
+> | --- | --- | --- |
+> | `f_cache` | 堆缓存（强引用 / 弱引用），可设寿命与容量 | `f_security` 的 `JWTHeapCacheStore`、`f_data` 的 `DataPath.cache`、`f_orm` 的结果缓存 |
+> | `f_pool` | 通用对象池、键池、数组池 | `f_orm` 的 `DatabasePool`（`orm_databasePool*` 那批配置项） |
+> | `f_collection` | 标准库没有的集合 + 集合扩展 | `f_store`（LSM-Tree）、`f_concurrent`、ORM 分页 |
+> | `f_time` | `std.time` 扩展：`TimeUnit` + `Int64` 时间 DSL | 所有用 `Duration` 作配置项的地方（`mvc_readTimeout` 等） |
+> | `f_regex` | 正则扩展 + **正则缓存** | `f_util` 的 `PathPattern`、`f_data` 的校验器 |
+> | `f_rx` | 反应式编程（Observable / Observer / 背压） | 流式数据处理场景 |
+>
+> 这六个模块的共同特点：**零配置、可以单独引入、不绑架你的架构**。就算你不用 fountain 的框架部分，把它们当工具库用也完全没问题。
+
+## 16.2 `f_cache`：堆缓存
+
+### 强引用 `HeapCache`
+
+```cangjie
+public class HeapCache<V> where V <: Object {
+    public HeapCache(
+        private let concurrencyLevel!: Int64 = DEFAULT_HEAP_CACHE_CONCURRENCY_LEVEL,  // 并发度，默认 128
+        private let maxLife!: Duration = DEFAULT_HEAP_CACHE_MAX_LIFE,                 // 最大寿命
+        private let maxSize!: Int64 = DEFAULT_HEAP_CACHE_MAX_SIZE,                    // 最大对象数
+        private let checkDuration!: Duration = DEFAULT_HEAP_CHECK_CHECK_DURATION,     // 检查周期
+        private let evictionCallback!: (String, V) -> Unit = {_, _ => ()}             // 失效回调
+    )
+    public static func builder(): HeapCacheBuilder<V>
+    public func get(key: String): Option<V>
+    public func contains(key: String): Bool
+    public func once(key: String): Bool                          // 是否「一次性」对象
+    public func prolong(key: String, life: Duration, once!: Bool = false): Bool
+    public func prolong(key: String, deathTime: DateTime): Bool
+    public func set(key: String, value: V, life!: Duration = this.maxLife, once!: Bool = false): ?V
+    public func set(key: String, value: V, dieAt: DateTime): ?V
+    public func getOrDefault(key: String, default: V): V
+    public func getOrStore(key: String, value: V): V
+    public func getOrCompute(key: String, callable: () -> V): V
+    public func getOrCompute(key: String, callable: () -> (V, DateTime)): V
+    public func getOrCompute(key: String, callable: () -> (V, Duration, Bool)): V
+    public func remove(key: String): Option<V>
+    public func removeIf(predicate: (String, V) -> Bool): Unit
+    public prop size: Int64
+    public func clear(): Unit
+    public func destroy(): Unit                                  // 销毁后不可再用
+}
+
+public open class HeapCacheBuilder<V> where V <: Object {
+    public func setMaxLife(maxLife: Duration): HeapCacheBuilder<V>
+    public func setConcurrencyLevel(concurrencyLevel: Int64): HeapCacheBuilder<V>
+    public func setMaxSize(maxSize: Int64): HeapCacheBuilder<V>
+    public func setEvictionCallback(callback: (String, V) -> Unit): HeapCacheBuilder<V>
+    public func setCheckDuration(checkDuration: Duration): HeapCacheBuilder<V>
+    public open func build(): HeapCache<V>
+}
+```
+
+**【口播】**（「一次性对象」这个概念要讲清楚，它和常见的 TTL 缓存不一样）
+
+> 默认是**非一次性**的：每次 `get` 都会把过期时间**重新计时**（滑动窗口）。
+> `once: true` 的对象则相反：**取用不续期**，到点就走，适合做「绝对过期」的会话、验证码。
+> `prolong` 可以在运行中改寿命和一次性标志；`evictionCallback` 让你在对象失效时做收尾（比如关掉文件句柄）。
+
+### 弱引用 `WeakHeapCache`
+
+```cangjie
+public class WeakHeapCache<T> where T <: Object {
+    public init()
+    public func set(key: String, value: T): ?T
+    public func getOrCompute(key: String, fn: () -> ?T): ?T
+    public func get(key: String): ?T
+    public func getOrDefault(key: String, default: T): T
+    public func getOrStore(key: String, value: T): T
+    public func remove(key: String): ?T
+    public func removeIf(predicate: (String, T) -> Bool): Unit
+    public prop size: Int64
+    public func clear(): Unit
+}
+```
+
+**【口播】** 内部键和值都被弱引用包装，**定时遍历清除已经被 GC 掉的弱引用**——适合缓存「可被重建的大对象」，不会因为缓存导致内存泄漏。
+
+### 在 `fdemo` 里看它
+
+```cangjie
+// UserSessionCache：登录状态存 1 小时
+private static let context = JWTSecurityContext<String>(JWTHeapCacheStore(Duration.hour), ...)
+```
+
+**【口播】** `JWTHeapCacheStore` 就是 `HeapCacheStore<String, JWTPrincipal<String>>`，底层正是 `f_cache` 的堆缓存——所以第十三章那个「登录状态存 1 小时」的能力，根源在这里。
+
+## 16.3 `f_pool`：对象池
+
+### 池的存储模式
+
+```cangjie
+public enum Mode {
+  | Fifo      // 先进先出，默认
+  | Lifo      // 后进先出
+  | WeakFifo  // 弱引用先进先出（DEFERRED 策略）
+  | WeakLifo  // 弱引用后进先出
+}
+```
+
+### `Pool<V>`：通用对象池
+
+```cangjie
+public interface ObjectManager<V> {
+    func create(): V                 // 创建对象
+    func check(value: V): Bool       // 检查对象
+    func destroy(value: V): Unit     // 销毁对象
+    func clear(value: V): Unit {}    // 清除对象
+}
+
+public struct Pool<V> <: Resource {
+    public init(
+        mode!: Mode = Mode.Fifo,
+        initSize!: Int64,
+        minSize!: Int64 = 0,
+        maxSize!: Int64 = 10,
+        idleTimeout!: Duration = Duration.hour,      // 空闲时间
+        checkOnCreation!: Bool = false,              // 创建时检查
+        checkOnBorrowing!: Bool = true,              // 借出时检查
+        checkOnReturning!: Bool = true,              // 归还时检查
+        clearOnReturning!: Bool = false,             // 归还时清除
+        checkInterval!: Duration = Duration.minute,  // 检查周期
+        creator!: () -> V,
+        checker!: (V) -> Bool,
+        destroier!: (V) -> Unit,
+        clear!: (V) -> Unit = {_ =>}
+    )
+    public static func builder(): PoolBuilder<V>
+    public func get(timeout!: Duration = Duration.Max): ?V   // timeout <= 0 时不等待立即返回
+    public func giveBack(value: V): Unit
+}
+```
+
+**【口播】**
+
+> 看到 `initSize / minSize / maxSize / idleTimeout / checkOnCreation / checkOnBorrowing / checkOnReturning / checkInterval` 这八个参数是不是很眼熟？
+> **对，它们就是第十二章 ORM 那批 `orm_databasePool*` 配置项**。ORM 的 `DatabasePool` 就是 `f_pool` 的一个应用——所以你调 ORM 连接池和直接调 `f_pool`，手感完全一样。
+>
+> 另外 `Pool` 实现了 `Resource`，用完 `close()`。
+
+### `KeyPool<K, V>`：每个键一个池
+
+```cangjie
+public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
+    public func get(key: K, timeout!: Duration = Duration.Max): ?V
+    public func giveBack(key: K, object: V): Unit
+}
+```
+
+**【口播】** 只有池对象需要销毁，**键不需要销毁**。典型场景：多数据源 / 多租户，每个库一个连接池；`totalSize` 与 `maxSize` 共同约束总量。
+
+### 数组池
+
+```cangjie
+public ArrayPool(initSize!, minSize!, maxSize!, elementLife!, checkInterval!,
+                 clearOnReturning!, arraySize!: Int64 = 128, creator!: () -> T)
+public ArrayListPool(...)   // 参数同上
+```
+
+**【口播】** 高频临时缓冲区的老问题：每次 new 一个 128 长度的数组，GC 压力全在这儿。数组池直接复用——这是 `f_base` 里 `StringGenerator` 那类组件敢放开手脚用的底气。
+
+## 16.4 `f_collection`：补标准库的位
+
+**【口播】** 这节不用逐条念，挑四个最能解决痛点的讲。
+
+### `BitSet`
+
+```cangjie
+public init()                      // 64 位
+public init(capacity: Int64)       // 64 * capacity 位
+public init(set: BitSet)           // 拷贝
+public prop size: Int64
+public func contains<T>(value: T): Bool where T <: Hashable   // 用哈希判断存在
+public func set<T>(value: T): Bool where T <: Hashable
+public func remove<T>(value: T): Bool where T <: Hashable
+public operator func [](index: Int64): Bool                    // 读写指定位
+public operator func |(index: Int64): Bool                     // 位或
+public operator func &(index: Int64): Bool                     // 位与
+public operator func ^(index: Int64): Bool                     // 位异或
+```
+
+**【口播】** 布隆过滤器的底座（`f_bloom` 就依赖它）、权限位、标记位、去重集合——**一个 Int64 数组存 64N 个开关**。
+
+### `Dict<K, V>` 家族：KEY 不要求 `Hashable`
+
+**【口播】**（这是它最独特的地方）
+
+> 标准库的 `HashMap` 要求 `K <: Hashable & Equatable<K>`，`TreeMap` 要求 `K <: Comparable<K>`。
+> 但现实中大量 KEY 类型**两个都不实现**——比如第三方库的类型、接口类型。
+> `Dict` 家族的解法是：**把 `hasher` 和 `equals` 作为构造函数参数传进去**。
+
+```cangjie
+public interface Dict<K, V> <: Collection<(K, V)> {
+    func get(key: K): Option<V>
+    func contains(key: K): Bool
+    func add(key: K, value: V): Option<V>
+    func addIfAbsent(key: K, value: V): ?V
+    func replace(key: K, value: V): ?V
+    func remove(key: K): Option<V>
+    func removeIf(predicate: (K, V) -> Bool): Unit
+    operator func [](key: K): V
+    operator func [](key: K, value!: V): Unit
+    func keys(): Collection<K>
+    func values(): Collection<V>
+    prop size: Int64
+    ...
+}
+
+public class HashDict<K, V> <: Dict<K, V> {
+    public init(hasher: (K) -> Int64, equals: (K, K) -> Bool)
+    public init(elements: Array<(K, V)>, hasher: (K) -> Int64, equals: (K, K) -> Bool)
+    public init(size: Int64, hasher: (K) -> Int64, equals: (K, K) -> Bool)
+}
+
+public class LinkedHashDict<K, V> <: Dict<K, V> { ... }   // 按最近访问顺序遍历
+public class TreeDict<K, V>       <: Dict<K, V> { public TreeDict(private let cmp: (K, K) -> Ordering) }
+```
+
+### 保持插入/访问顺序的集合
+
+```cangjie
+public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>   // 按最近访问顺序遍历
+public class LinkedHashSet<T>    <: Set<T>     where T <: Hashable & Equatable<T>   // 按最近访问顺序遍历
+```
+
+**【口播】** LRU 缓存只差一层封装——`LinkedHashMap` 已经按访问顺序排好了。
+
+### `PriorityQueue` 与集合运算视图
+
+```cangjie
+public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growable {
+    public PriorityQueue(comparator: (T, T) -> Ordering, capacity!: Int64, overSizePolicy!: OverSizePolicy<...>)
+    public static func create<T>(capacity!, overSizePolicy!): PriorityQueue<T> where T <: Comparable<T>
+    public static func createReverse<T>(...)                       // 反序
+    public func add(x: T): Unit
+    public func peek(): Option<T>
+    public func remove(): Option<T>
+    public func removeIf(predicate: (T) -> Bool): Unit
+    public func toArray(): Array<T>
+}
+
+// 所有 Set 实现都扩展了 SetOp<T>：返回**只读视图**，不复制数据
+public interface SetOp<T> {
+    func intersection<C>(collection: C): Set<T> where C <: Collection<T>   // 交集
+    func union<C>(collection: C): Set<T>                                    // 并集
+    func difference<C>(collection: C): Set<T>                               // 差集
+}
+```
+
+**【口播】** `PriorityQueue` 容量满时**自动扩容**，也可以给 `OverSizePolicy` 做拒绝策略；`SetOp` 的 `IntersectionSetView` / `UnionSetView` / `DifferenceSetView` 都是**只读视图**——做集合运算不产生拷贝。
+
+## 16.5 `f_time`：把时间操作变成 DSL
+
+**【口播】**
+
+> 标准库的 `DateTime` / `Duration` 能用，但「下一个整分钟」「今天零点」「5 秒后」这种需求每次都要手写。
+> `f_time` 把这类操作变成**可读的链式 DSL**。
+
+### `TimeUnit`：10 个粒度
+
+```cangjie
+public enum TimeUnit <: ToString & Parsable<TimeUnit> {
+    | NANOSECOND | MICROSECOND | MILLISECOND | SECOND | MINUTE
+    | HOUR | DAY | WEEK | MONTH | YEAR
+}
+public type TU = TimeUnit        // 简写别名
+
+TimeUnit.parse("minute")         // MINUTE（大小写不敏感）；失败抛 IllegalArgumentException
+TimeUnit.tryParse("Foo")         // None<TimeUnit>
+```
+
+| 成员 | 作用 |
+| --- | --- |
+| `trim(t)` | 截断到当前单位的整点：`WEEK` 对齐到周一，`MONTH` 对齐到 1 号，`YEAR` 对齐到 1 月 1 日 |
+| `next(datetime!, duration!, toTrim!)` | 未来第 `duration` 个整点（可为负） |
+| `prev(...)` | 过去第 `duration` 个整点 |
+| `since(datetime!, duration!)` | 距离未来整点还有多久，返回 `Duration` |
+| `ago(n)` / `later(n)` | 以**当前时间**为基准回退 / 推进 |
+| `before(t, n)` / `after(t, n)` | 以 `t` 为基准回退 / 推进 |
+| `duration(n)` | `n` 个单位 → `Duration`；**`WEEK`/`MONTH`/`YEAR` 不定长，返回 `None`** |
+| `current` | 当前时刻 `trim` 后的值 |
+
+```cangjie
+TimeUnit.MINUTE.next(datetime: '2023-10-11 12:31:32.568900')  // → 2023-10-11 12:32:00.000000
+TimeUnit.MINUTE.prev(datetime: '2023-10-11 12:31:32.568900')  // → 2023-10-11 12:31:00.000000
+TimeUnit.MINUTE.since(datetime: '2023-10-11 12:31:32.568900') // ≈ Duration.minute
+```
+
+### `Int64` 的时间 DSL
+
+```cangjie
+public interface DurationCategory {
+    prop nanoseconds / nanosecond / microseconds / microsecond / milliseconds / millisecond
+    prop seconds / second / minutes / minute / hours / hour / days / day / weeks / week
+}
+extend Int64 <: DurationCategory
+```
+
+```cangjie
+let d1   = 5.seconds.later       // 5 秒后的 DateTime
+let d2   = 2.minutes.ago         // 2 分钟前的 DateTime
+let dur  = 1.day.duration        // Some(Duration.day)
+let bad  = 1.month.duration      // None<Duration>  ← MONTH 不定长
+```
+
+**【口播】** 单复数同义（`second == seconds`），读起来就是自然语言。
+
+### `DateTime` / `Duration` / 其它扩展
+
+```cangjie
+// DateTime
+DateTime.today          // 今日 00:00:00
+DateTime.yesterday      // 昨日 00:00:00
+DateTime.tomorrow       // 明日 00:00:00
+DateTime.currentDuration
+today.isLeapYear        // 是否闰年
+today.isLastMonthDay    // 是否当月最后一天
+now.toUnixEpochSeconds() / .toUnixEpochMillis() / .toUnixEpochMicros() / .toUnixEpochNanos()
+now.setYear(2026) / .setMonth(Month.January) / .setDay(1) / .setHour(0) / .setMinute(0) ...
+now.addMilliseconds(500) / .addMicroseconds(500)
+
+// Duration
+Duration.minute.ago                // DateTime.now() - 1min
+Duration.hour.later                // DateTime.now() + 1h
+Duration.day.before(DateTime.tomorrow)
+Duration.day.after(DateTime.today)
+
+// DayOfWeek / Month 支持相减
+DayOfWeek.Monday - DayOfWeek.Sunday   // 1
+Month.January   - Month.December      // -11
+
+// TimeZone
+TimeZone.Z                            // UTC 时区常量
+```
+
+## 16.6 `f_regex`：正则扩展与正则缓存
+
+### 常用正则常量
+
+```cangjie
+public interface ExtendRegex {
+    static prop INTEGER: Regex          // 整数
+    static prop DECIMAL: Regex          // 小数
+    static prop REAL_NUMBER: Regex      // 实数
+    static prop EMAIL: Regex            // 电邮
+    static prop DURATION: Regex         // Duration 字符串
+    static prop IDENTIFIER: Regex       // 标识符
+    static prop BASE64: Regex           // BASE64
+    static func wildcard(wildcard: String): Regex          // 通配符串 → 正则
+    func doReplace(input: String, replacement!: String, index!: Int64): String
+    func doReplaceAll(input: String, replacement!: String, index!: Int64): String
+    func doReplaceAll(input: String, replacement!: (MatchData) -> ?String, index!: Int64): String
+}
+```
+
+**【口播】** `doReplace` / `doReplaceAll` 相比标准库多了**起始下标**和**「按匹配内容动态决定替换值」**两个能力（回调返回 `None` 就不替换）——做模板渲染、脱敏很顺手。
+
+### 字符串直接变正则（带缓存）
+
+```cangjie
+public interface RegexFromString {
+    func regex(flags!: Array<RegexFlag>, solid!: Bool): Regex
+}
+```
+
+```cangjie
+let r = '^/api/.*'.regex(solid: false)
+```
+
+**【口播】**（这一条很关键，值得强调）
+
+> `solid: true` → 正则在**整个进程生命周期**内存在；
+> `solid: false` → 用 `f_cache.HeapCache` 缓存，**最多 10000 个、寿命一天**。
+>
+> **编译正则是有成本的**。热路径上反复 `str.regex()` 而不用缓存，是很多服务的隐形 CPU 杀手。
+> 顺带闭环：`f_util.PathPattern` 在编译路径时会先做几步正则预处理（把 `{*name}` 归一化、把连续 `//` 合并成 `/`），这些正则就是用 `regex(solid: true)` 建的——进程内编译一次、复用一生。
+
+## 16.7 `f_rx`：反应式编程
+
+**【口播】**
+
+> `f_rx` 是一套 Observable / Observer 实现。它的价值不在「又一套 Rx」，而在于：**把「数据怎么产出」和「数据怎么处理」的线程模型、背压策略、错误恢复都显式化了**。
+
+### 最小可用
+
+```cangjie
+let observable = Observable<Int64>
+    .iterable([1, 2, 3])
+    .subscribe('test', FuncObserver<Int64>().setNext{v => println(v)})
+    .withCurrent()
+    .defer()
+
+observable.pause()   // 暂停产生新数据
+```
+
+### 六种创建方式
+
+| 方式 | 入参 |
+| --- | --- |
+| `iterable` | `Iterable<T>` / `()->Iterable<T>` / `Future<Iterable<T>>` / `()->Future<Iterable<T>>` |
+| `emitter` | `(Emitter<T>) -> Unit`；`Emitter` 有 `onNext(T)` / `onComplete()` / `onError(Exception)` |
+| `single` | `T` / `()->T` / `Future<T>` / `()->Future<T>` |
+| `maybe` | `?T` / `()->?T` / `Future<?T>` / `()->Future<?T>` |
+| `empty` | 创建空的被观察者 |
+| `concat` | `Iterable<Iterable<T>>` 及其 Future/闭包变体，展开成 `Iterator<T>` |
+
+### 每条数据的处理策略
+
+| 策略 | 线程模型 |
+| --- | --- |
+| `withAlwaysNew()` | 每条数据都开**新线程** |
+| `withCurrent()` | 始终用**当前线程** |
+| `withSingle(...)` | 固定**一个线程**处理所有数据（支持背压） |
+| `withFixed(...)` | 固定**若干线程**处理所有数据（支持背压） |
+
+### 启动与停止
+
+```cangjie
+.delay(Duration)     // 延迟启动
+.defer()             // 0 延迟，新线程启动
+.immediately()       // 当前线程立即启动
+
+dispose(completion!: Bool = false)   // 停止；true 则发送 onComplete
+dispose(name)                        // 注销指定名称的观察者
+dispose<O>()                         // 注销指定类型的全部观察者
+disposeAll()                         // 注销全部
+pause(completion!: Bool = false)     // 暂停产生新数据
+```
+
+> 细节：内部 `disposed_` 是 `AtomicBool`，每次取下一批数据前检查；**没有观察者时会自动暂停产出**，直到注册新观察者并重新启动。
+
+### 背压策略 `BackPressure`
+
+**【口播】** 只有 `withSingle` / `withFixed` 支持背压——因为只有固定线程池才有「队列满了」这件事。
+
+| 策略 | 队列满时 |
+| --- | --- |
+| `Discarding` | 丢弃新数据 |
+| `ToDropOldest` | 丢弃队头 |
+| `AlwaysBlocking` | 一直阻塞 |
+| `Throwing` | 立即抛异常 |
+| `Current` | 立即用当前线程处理 |
+| `NewThread` | 立即开新线程处理 |
+| `Action((()->Unit) -> Unit)` | 用你给的函数处理 |
+| `AfterBlockingOrCurrent(Duration, BackPressure<T>)` | 阻塞指定时长后仍满 → 执行指定策略（默认 `Discarding`） |
+
+### 观察者与错误恢复
+
+```cangjie
+// FuncObserver：三个回调都能单独设
+FuncObserver<T>().setNext{v => ...}.setError{e => ...}.setComplete{() => ...}
+// setNext 还可以接收 Single<T>（= SingleIterator<T> 别名），闭包内可用 Iterator 的各类函数
+
+// 错误恢复器（四个重载）
+public func setErrorResumer(resumer: (Exception) -> ?Iterable<T>): This
+public func setErrorResumer(resumeIfNone: Bool, resumer: (Exception) -> ?T): This
+public func setErrorResumer(resumer: (Exception) -> Unit): This
+public func setErrorResumer(resumeIfFalse: Bool, resumer: (Exception) -> Bool): This
+public func setErrorResumer(resumeIfNone: Bool, resumer: (Exception) -> ?(Emitter<T>) -> Unit): This
+
+// 重放
+Observable.replaySize(capacity)   // 启动后再注册的观察者会异步重放最多 capacity 条缓存数据
+```
+
+### 多观察者
+
+每个创建函数都接受命名参数 `asyncCombined!: Bool`——决定多个观察者**各自开线程**还是**共用一个线程**。
+
+## 16.8 现场演示
+
+**【镜头】** 建议临时建一个小模块，把六个模块各跑一行
+
+```bash
+cd /tmp/fountain_live/hello_app
+fboot module infra
+cat > infra/src/Infra.cj <<'EOF'
+package infra
+...
+EOF
+fboot build && fboot run --dylibPattern='infra'
+```
+
+```cangjie
+import fountain::f_cache.*
+import fountain::f_pool.*
+import fountain::f_collection.*
+import fountain::f_time.*
+import fountain::f_regex.*
+import fountain::f_rx.*
+
+// ① f_cache：1 小时寿命、最多 10000 个的堆缓存
+let cache = HeapCache<String>(maxLife: Duration.hour, maxSize: 10000)
+cache.getOrCompute('k'){ expensive() }
+
+// ② f_pool：最多 8 个连接的对象池
+let pool = Pool<Conn>(mode: Mode.Fifo, initSize: 2, maxSize: 8,
+                      idleTimeout: Duration.minute,
+                      creator: {=> connect()},
+                      checker: {c => c.isValid()},
+                      destroier: {c => c.close()})
+let c = pool.get(timeout: Duration.second * 5)
+// ... 用完
+pool.giveBack(c.getOrThrow())
+
+// ③ f_collection：KEY 不需要 Hashable 的字典
+let dict = HashDict<Conn, String>(hasher: {c => c.id}, equals: {a, b => a.id == b.id})
+
+// ④ f_time：时间 DSL
+let deadline = 30.minutes.later
+let startOfDay = DateTime.today
+let nextHour = TimeUnit.HOUR.next()
+
+// ⑤ f_regex：带缓存的正则
+let r = '^/api/.*'.regex(solid: false)
+
+// ⑥ f_rx：反应式流
+Observable<Int64>.iterable([1, 2, 3])
+    .subscribe('demo', FuncObserver<Int64>().setNext{v => println(v)})
+    .withCurrent()
+    .defer()
+```
+
+**【口播】**
+
+> 这六个模块没有一个需要配置文件、没有一个需要启动器、没有一个依赖 IOC。
+> **它们就是六个可以随手拿走的工具库**——这也是 fountain 的设计哲学：**框架给你便利，但不劫持你的代码。**
+
+---
+
+# 第十七章 串讲：一次请求穿过整个框架
 
 **【镜头】** 画一张纵向调用链 + 终端实时日志。用一个 `POST /api/user/register` 走完全流程。
 
@@ -3232,20 +3774,23 @@ fboot randhex 32        # ← 就是 f_random 的 randomLowerHex(32)
 ④ 旁路：f_util.UUID + f_random 给会话发密钥（UserSessionCache 里的 UUID.random()），
    f_http 的 MediaType 配合 f_data 给响应做序列化；
    f_util 的 PathPattern 是 ② 里「路由匹配 + 抽路径变量」的引擎
+
+⑤ 底座：f_cache 存登录状态、f_pool 撑起数据库连接池、f_regex 缓存住路径正则、
+   f_time 解析所有 Duration 型配置
 ```
 
 **【口播】**
 
 > 这一屏就是 fountain 的全部：
-> **f_config 负责配置、f_bean 负责装配、f_aspect 负责横切、f_data 负责流动、f_util 提供工具箱、f_http 负责格式、f_mvc 负责协议、f_orm 负责数据库、f_security + f_jwt 负责身份、f_ticktock 负责CRON定时器、f_random 负责随机性。**
+> **f_config 负责配置、f_bean 负责装配、f_aspect 负责横切、f_data 负责流动、f_util 提供工具箱、f_http 负责格式、f_mvc 负责协议、f_orm 负责数据库、f_security + f_jwt 负责身份、f_ticktock 负责CRON定时器、f_random 负责随机性、f_cache/f_pool/f_collection/f_time/f_regex/f_rx 构成运行时底座。**
 > 而且从头到尾你没写过一个配置文件、没写过一行 `main`。
 > 业务代码里你只写了 `UserController`、`UserService`、`UserDAO`、`UserPO` 四个东西，加起来不到 200 行。
 
 ---
 
-# 第十七章 收尾：常见坑与 Q&A
+# 第十八章 收尾：常见坑与 Q&A
 
-## 17.1 十八个高频坑
+## 18.1 二十个高频坑
 
 | # | 现象 | 原因 / 解法 |
 | --- | --- | --- |
@@ -3267,8 +3812,10 @@ fboot randhex 32        # ← 就是 f_random 的 randomLowerHex(32)
 | 16 | `Config.set` 之后相关模块没刷新 | 已知问题：`refresher` 的前缀匹配恒不成立，`set` **不会**触发任何刷新回调（见第三章 3.8） |
 | 17 | `TreeTransformer.transform` 抛 `IllegalArgumentException` | 源数据里有重复 id（`ignoreDuplicate` 默认 `false`），或 `transferFn` 返回了 `None`（见第九章） |
 | 18 | 找不到 `Responsibility` / `ResponsibilityChain` 类型 | 源码拼写是 **`Resposibility`**（少一个 n），文件名也是 `ResposibilityChain.cj` |
+| 19 | 缓存对象「取了就续期」，永远不过期 | `HeapCache` 默认是**非一次性**对象（滑动窗口）。要绝对过期请 `set(..., once: true)` 或用 `prolong(key, deathTime)` |
+| 20 | 热路径上反复 `str.regex()` 导致 CPU 高 | 正则编译没走缓存。用 `regex(solid: true)`（进程内常驻）或 `solid: false`（`HeapCache`，1 万条 / 1 天） |
 
-## 17.2 预设 Q&A
+## 18.2 预设 Q&A
 
 **Q：能不用动态链接库吗？**
 A：IOC/AOP/ORM 这些能力本身不依赖动态链接库，但 `fboot run` 的「扫描加载」机制依赖它。用 `App(..., dynamic: false)` 可以不扫描，此时只有内置命令和静态链接进来的子命令可用，业务 bean 需要你自己保证已被加载。
@@ -3296,6 +3843,12 @@ A：`f_orm` 的 `INSERT_INTO` 直接返回自增主键；需要分布式生成�
 
 **Q：主键该用 `IdMaker` 还是 `UUID`？**
 A：要**时间有序、索引局部性好** → `IdMaker`（需保证 `idMakerHostSerial` 全局唯一）或 `UUID.unixTimeBased()`；要**去中心、任何机器随时可生成** → `UUID.random()`。`UUID` 实现了 `DataFields<UUID>`，可以**直接作为 PO 字段**参与 ORM 映射和 JSON 序列化，不用自己写转换器。
+
+**Q：本地缓存用 `f_cache` 还是自己写 `HashMap`？**
+A：只要涉及**过期**就用 `f_cache`：`HeapCache` 自带寿命、最大容量、检查周期和失效回调；并且默认是**滑动续期**的，想要绝对过期就 `once: true`。缓存「可被重建的大对象」时用 `WeakHeapCache`（弱引用，被 GC 后自动清理），不会内存泄漏。
+
+**Q：`f_rx` 和直接用 `spawn` + `Channel` 怎么选？**
+A：要**背压、错误恢复、重放、多观察者**这些语义时用 `f_rx`（它把线程模型和队列满策略都显式化了）；只是简单地「扔个任务到后台」，`spawn` 就够了。
 
 **Q：`Strategies` 和 IOC 的 `lookupList<T>()` 该怎么选？**
 A：**要 bean 的完整生命周期（懒加载、条件装配、`@Value` 注入、销毁回调）→ 用 IOC**；只是想把「一段按 key 分派的逻辑」集中管理 → `Strategies` 更轻。两者不冲突，很多项目是混着用的。
@@ -3415,6 +3968,41 @@ Factory<A,O>.assemble<T>(producer) / .produce<T>(arg)     // 按类型分派的�
 Strategies<N,A,R>.register(strategy) / .execute(name, arg)
 ResposibilityChain<C,A,R>.register(...) / execute / executeAll  // 注意拼写 Resposibility
 
+// f_cache：堆缓存
+HeapCache<V>(maxLife:, maxSize:, checkDuration:, evictionCallback:)   // builder() 亦可
+  .get/set(life:,once:)/prolong/getOrCompute/getOrDefault/removeIf/destroy
+WeakHeapCache<T>                                                      // 弱引用，GC 后自动清理
+
+// f_pool：对象池（ORM 的 DatabasePool 就是它）
+Pool<V>(mode:, initSize:, minSize:, maxSize:, idleTimeout:,
+        checkOnCreation:, checkOnBorrowing:, checkOnReturning:,
+        checkInterval:, creator:, checker:, destroier:)
+  .get(timeout:) / .giveBack(v)          // Mode: Fifo Lifo WeakFifo WeakLifo
+KeyPool<K,V>.get(key, timeout:) / .giveBack(key, obj)
+ArrayPool / ArrayListPool
+
+// f_collection
+BitSet / HashDict<K,V>(hasher:, equals:) / LinkedHashDict / TreeDict
+LinkedHashMap / LinkedHashSet / PriorityQueue.create<T>() / SetOp(交集并集差集视图)
+
+// f_time：时间 DSL
+TimeUnit.{NANOSECOND..YEAR}  .trim .next .prev .since .ago .later .before .after .duration
+5.seconds.later / 2.minutes.ago / 1.day.duration
+DateTime.today / .yesterday / .tomorrow / .isLeapYear / .toUnixEpochMillis()
+Duration.minute.ago / Duration.hour.later / TimeZone.Z
+
+// f_regex：正则扩展 + 缓存
+ExtendRegex.{INTEGER DECIMAL REAL_NUMBER EMAIL DURATION IDENTIFIER BASE64}
+'pattern'.regex(solid: true|false)       // solid:false → HeapCache，1 万条 / 1 天
+
+// f_rx：反应式
+Observable<T>.iterable/emitter/single/maybe/empty/concat
+  .subscribe(name, FuncObserver<T>().setNext{}.setError{}.setComplete{})
+  .withAlwaysNew() / withCurrent() / withSingle(...) / withFixed(...)
+  .delay(d) / .defer() / .immediately()
+BackPressure.{Discarding ToDropOldest AlwaysBlocking Throwing Current NewThread ...}
+setErrorResumer(...) / Observable.replaySize(capacity)
+
 // f_http：数据格式
 MediaTypes.parse('application/json') / .tryParse(s) / .register(mt)
 mediaType.fromData(data)                                  // Data → 字节（响应）
@@ -3453,10 +4041,11 @@ MultipartFile.filename / .size / .bytes() / .copyTo(out) / .close()
 | 22 | 8' | 安全：f_security + f_jwt 端到端 | IDE + 终端（401 vs 200） |
 | 23 | 4' | CRON：f_ticktock（含"忘了 dylibPattern"的坑） | IDE + 终端 |
 | 24 | 5' | 随机：f_random（区间/流/字符串/ThreadLocalRandom/已知行为） | IDE + 终端（`fboot randhex 32`） |
-| 25 | 4' | 串讲：一次请求的完整穿越 | 架构图 |
-| 26 | 5' | 坑 & Q&A + 性能压测 | 终端 |
+| 25 | 12' | 基础设施：f_cache / f_pool / f_collection / f_time / f_regex / f_rx | IDE + 终端 |
+| 26 | 4' | 串讲：一次请求的完整穿越 | 架构图 |
+| 27 | 5' | 坑 & Q&A + 性能压测 | 终端 |
 
 ---
 
-> 讲稿中所有的路径、包名、注解名均取自本仓库当前源码（`fboot`、`f_app`、`f_config`、`f_bean`、`f_aspect`、`f_data`、`f_util`、`f_mvc`、`f_http`、`f_orm`、`f_security`、`f_ticktock`、`f_jwt`、`f_random`、`fdemo`）。
+> 讲稿中所有的路径、包名、注解名均取自本仓库当前源码（`fboot`、`f_app`、`f_config`、`f_bean`、`f_aspect`、`f_data`、`f_util`、`f_mvc`、`f_http`、`f_orm`、`f_security`、`f_ticktock`、`f_jwt`、`f_random`、`f_cache`、`f_pool`、`f_collection`、`f_time`、`f_regex`、`f_rx`、`fdemo`）。
 > 若后续版本有变更，以各模块 `README.md` 与源码为准。
