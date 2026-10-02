@@ -541,7 +541,8 @@ curl http://localhost:8080/
 fdemo/
 ├── cjpm.toml          # workspace：members = ["./boot", "./user"]
 ├── banner.txt         # 启动横幅（会被 fboot build 打包进版本模块）
-├── boot.sh            # Linux/macOS 启动脚本
+├── boot.sh            # Linux 启动脚本
+├── boot-macos.sh      # macOS 启动脚本
 ├── boot-win-gitbash.sh# Windows git-bash 启动脚本
 ├── boot/              # 初始化模块：切面、事务钩子、MediaType、500 处理器
 │   └── src/
