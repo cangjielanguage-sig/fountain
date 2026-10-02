@@ -71,8 +71,8 @@ exports(){
     export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*.userSession(**): *"
     # export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*.sayHello(**): *"
     # export postgres_orm_connectionUrl=$POSTGRES # 如果在build函数配置，就会把URL嵌入编译产物，在此配置则不会，详细见build函数
-    export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:`find ${target_path:-"./fdemo"}/release/* -type d|grep -a -v -E '\.build-logs|bin|_stAtIc__|boot'|tr '\n' ':'`
-    echo "DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH"
+    export DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH:`find ${target_path:-"./fdemo"}/release/* -type d|grep -a -v -E '\.build-logs|bin|_stAtIc__|boot'|tr '\n' ':'`
+    echo "DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH"
 }
 run(){
     exports
