@@ -157,7 +157,11 @@ public struct Pool<V> <: Resource {
             checkInterval: checkInterval,
             creator: {_ => creator()},
             checker: {_, v => checker(v)},
-            destroier: {_, v => destroier(v)}
+            destroier: {_, v => destroier(v)},
+            // 必须把 clear 传下去：clearOnReturning 只有在 clear 非空时才真正清空池项。
+            // 漏传 = 归还的池项保留旧内容（表现为“编码结果里混进上一条消息的字节、消息缺命令字节、
+            // 对端解码错位 → 拆链风暴”，见 .autocode/bug.md 六）。
+            clear: {_, v => clear(v)}
         )
     }
     public init(

@@ -84,6 +84,14 @@ protected class HeadNode<T> <: AbstractNode<T> {
             this.next_.store(value)
         }
     }
+    /** 只读后继访问器（不改变任何状态），供队列统计节点数使用。 */
+    protected func nextForCount(): ?Node<T> {
+        match(next){
+            case x: TailNode<T> => None
+            case x: ValueNode<T> => x
+            case _ => None
+        }
+    }
     protected func nextForGet(): ?T {
         match(next){
             case x: TailNode<T> => None
@@ -217,6 +225,13 @@ protected class ValueNode<T> <: AbstractNode<T> {
             sleep(Duration.Zero)
         }
         None
+    }
+    /** 只读后继访问器（不改状态）。 */
+    protected func nextForCount(): ?Node<T> {
+        match(next){
+            case x: ValueNode<T> => x
+            case _ => None
+        }
     }
     protected func nextForGet(): ?T {
         var node: Node<T> = this.next

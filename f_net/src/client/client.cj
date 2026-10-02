@@ -269,7 +269,9 @@ public class Client<T> <: Resource where T <: DataFields<T> {
 }
 
 public class ClientBuilder<T> where T <: DataFields<T>{
-    private var pingTimeout_ = Duration.millisecond * 10
+    // 10ms 对一次 PING 往返（4 次线程唤醒 + 2 次编解码）过紧：调度稍有抖动即超时 → 拆链重连风暴。
+    // 这里放宽到 1s（可用 ClientBuilder.pingTimeout 覆盖）。
+    private var pingTimeout_ = Duration.second
     ClientBuilder(let queueSize!: Int64 = 1024, private let socketCount!: Int64 = 1, private let address!: IPSocketAddress, 
                   private let checkDuration!: Duration, private let checker!: () -> ?Message){}
     init(queueSize!: Int64 = 1024, socketCount!: Int64 = 1, 

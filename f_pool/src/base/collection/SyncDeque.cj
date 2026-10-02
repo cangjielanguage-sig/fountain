@@ -27,9 +27,34 @@ protected interface Deque<T> {
     func check(running: () -> Bool, checker: (T) -> Bool, taskPusher: () -> Unit): Int64
     prop size: Int64
 }
-protected class SyncDeque<T> <: Deque<T> {
+public class SyncDeque<T> <: Deque<T> {
     private let head = HeadNode<T>(Mutex())
     private var s = AtomicInt64(0)
+    /** 已借出（不在队列里）的数量。不变量：s ≡ 队列节点数 + out。 */
+    private let out = AtomicInt64(0)
+
+    private func markBorrowed(): Unit {
+        out.fetchAdd(1)
+    }
+
+    private func markReturned(): Unit {
+        if (out.load() > 0) {
+            out.fetchSub(1)
+        }
+    }
+
+    /** 只读遍历队列，返回 (节点总数, idle 数)。用于自愈前的现场核对。 */
+    private func countNodes(): (Int64, Int64) {
+        var total = 0
+        var idles = 0
+        var node: ?Node<T> = head.nextForCount()
+        while(let Some(n: ValueNode<T>) <- node){
+            total += 1
+            if(n.idle){ idles += 1 }
+            node = n.nextForCount()
+        }
+        (total, idles)
+    }
     public func insertHead(value: T): Unit {
         head.insertNext(value)
         s.fetchAdd(1)
@@ -45,6 +70,7 @@ protected class SyncDeque<T> <: Deque<T> {
             destroier(value)
             s.fetchSub(1)
         }
+        markReturned()
     }
     public func append(value: T, checker: (T) -> Bool, destroier: (T) -> Unit): Unit {
         if(checker(value)){
@@ -53,22 +79,49 @@ protected class SyncDeque<T> <: Deque<T> {
             destroier(value)
             s.fetchSub(1)
         }
+        markReturned()
     }
     public func remove(checker: (T) -> Bool, destroier: (T) -> Unit): ?T {
         while(let Some(x) <- head.nextForGet()){
+            markBorrowed()
             if(checker(x)){
                 return x
             }else{
                 destroier(x)
+                markReturned()
                 s.fetchSub(1)
             }
         }
+        reconcileIfWedge()
         None
+    }
+
+    /**
+     * 自愈：s 记着有池项，但队列为空、且没有任何借出项 —— 说明记账已脱钩
+     * （节点被并发摘掉/漏减，见 .autocode/bug.md 六）。此时调用者会永久取不到项，
+     * 把 s 拉回真实值即可让池重新创建池项。
+     */
+    private func reconcileIfWedge(): Unit {
+        if (s.load() - out.load() <= 0) {
+            return                      // 正常：队列里有项，或池项都在借出中
+        }
+        let (total, _) = countNodes()
+        if (total == 0 && out.load() == 0 && s.load() > 0) {
+            let lost = s.load()
+            s.store(0)
+            println("WEDGE-HEAL] deque lost ${lost} element(s) with no borrower (bookkeeping broken), size reset to 0")
+        }
     }
     public func check(running: () -> Bool, checker: (T) -> Bool, taskPusher: () -> Unit): Int64 {
         var rm = 0
         var node: ?Node<T> = head.tail.prevForChecking()
-        while(running() && let Some(n: ValueNode<T>) <- node){
+        while(let Some(n: ValueNode<T>) <- node){
+            if(!running()){
+                // 退出前必须把刚被标记 checking 的节点还原：否则它永远不会再 idle，
+                // 既取不到也不会被清理，等于永久丢一个池项（size 与实际可借数脱钩）。
+                n.setIdle()
+                break
+            }
             node = n.prevForChecking()
             if(!n.check(checker)){
                 s.fetchSub(1)
