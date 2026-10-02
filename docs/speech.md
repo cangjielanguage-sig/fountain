@@ -1632,7 +1632,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHH {fromJson 回来后的 Data}
 | 哈希/摘要 | `crc16` `crc32` `crc64`、`CityHash`、`MurmurHash3X128`、`wyhash`、`UInt128` |
 | 其它 | `geohash`、`DiffieHellmanKeyExchanger`（密钥交换）、`prime`（素数） |
 
-> 这一章挑其中 **9 个最常用**的讲，剩下的————哈希家族、geohash、密钥交换、命名风格转换器等————它们在 `f_util/doc/` 下都有独立文档，需要时查即可。
+> 这一章挑其中 **9 个最常用**的讲，剩下的————哈希家族、geohash、密钥交换————它们在 `f_util/doc/` 下都有独立文档，需要时查即可。
 
 ## 9.2 `UUID`：全版本覆盖的唯一 ID
 
@@ -1774,8 +1774,8 @@ CaseFormat.Pascal.convert("CaseFormat",          to: CaseFormat.UpperHyphen)    
 
 **【口播】**（把工具和前面 ORM 的内容连起来——这是很好的「原来如此」时刻）
 
-> 还记得第十二章 ORM 里的 `@ORMField[LowerUnderScore]` 和 `@QueryMappersGenerator[table: LowerUnderScore]` 吗？
-> **它们底层用的就是这个 `CaseFormat`**。
+> 还记得后面ORM 里的 `@ORMField[LowerUnderScore]` 和 `@QueryMappersGenerator[table: LowerUnderScore]` 吗？
+> **它们底层用的就是这个 `CaseFormat`**，完成默认的类实例成员名与表列名转换。
 > 所以当你自己写命名策略、写代码生成器、写导入导出工具时，直接用同一个枚举，命名风格就和框架生成的一致了。
 
 ## 9.6 `TextTemplate`：文本模板
