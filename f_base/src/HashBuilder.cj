@@ -108,7 +108,12 @@ public class HashBuilder <: Hashable {
             match ((k, v)) {
                 case (x: Hashable, y: Hashable) => append(x.hashCode()).append(y.hashCode())
                 case (x: Hashable, y: ToString) => append(x.hashCode()).append(y.toString())
+                case (x: ToString, y: Hashable) => append(x.toString()).append(y.hashCode())
+                case (x: ToString, y: ToString) => append(x.toString()).append(y.toString())
                 case (x: Hashable, _) => append(x.hashCode()).append('_')
+                case (x: ToString, _) => append(x.toString()).append('_')
+                case (_, y: Hashable) => append('_').append(y.hashCode())
+                case (_, y: ToString) => append('_').append(y.toString())
                 case _ => append('_').append('_')
             }
         }
