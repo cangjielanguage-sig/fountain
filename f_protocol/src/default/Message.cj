@@ -147,7 +147,7 @@ public struct Message <: Protocol<EncodedMessage, Message> {
     public static func decode<T>(input: InputStream): Message where T <: FromToData {
         let b = [0u8]
         let l = input.read(b)
-        if (l == 0) {
+        if (l <= 0) {
             throw InputClosedException('no readable byte in InputStream')
         }
         let command = Command.parse(b[0])

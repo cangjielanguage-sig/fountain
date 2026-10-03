@@ -680,7 +680,10 @@ public class DefaultCodec <: Codec & Releasable {
         // decodeSizeOfEncoded(input)
         var bytes = [0u8]
         var size = input.read(bytes)
-        if (size == 0 || bytes[0] == 0) {
+        if (size <= 0) {
+            // 读到 0（或 -1）字节 = 写端已关闭，而这里正处在“装配中” ⇒ 消息不完整，必须抛
+            throw CodecException('input closed while decoding data: message is incomplete')
+        } else if (bytes[0] == 0) {
             return DataNone.INSTANCE
         } else if (bytes[0] <= 0x0f) {
             throw CodecException('Illegal serialization header ${toHex(bytes[0])}')
@@ -869,10 +872,12 @@ public class DefaultCodec <: Codec & Releasable {
                 if (size == 0) {
                     return (Array<Byte>()).toData()
                 }
-                let array = Array<Byte>(size, repeat: 0)
-                size = input.read(array)
-                if (size < s) {
-                    throw CodecException('current data head is ${toHex(head)}, but read size is ${size}')
+                let declared = size
+                let array = Array<Byte>(declared, repeat: 0)
+                let read = input.read(array)
+                if (read != declared) {
+                    // 没读满 = 消息不完整（截断）；绝不能零填充后当成完整消息返回
+                    throw CodecException('payload is incomplete: declared ${declared} bytes, but read ${read}')
                 }
                 return if (f == 0) {
                     array.toData()
@@ -902,15 +907,16 @@ public class DefaultCodec <: Codec & Releasable {
             let file = File.createTemp(dir)
             if(let Some(buffer) <- bytesPool.get()){
                 try{
-                    while (true) {
+                    var remain = size
+                    while (remain > 0) {
                         let readSize = input.read(buffer)
-                        if (readSize == size) {
-                            file.write(buffer)
-                        } else if (readSize < buffer.size) {
-                            let buf = buffer[0..size - readSize]
-                            file.write(buf)
-                            break
+                        if (readSize <= 0) {
+                            // 读到 0（或 -1）字节 = 写端已关闭，而载荷还差 remain 字节 ⇒ 不完整
+                            throw CodecException('payload is incomplete: ${remain} bytes unread')
                         }
+                        let take = if (readSize < remain) { readSize } else { remain }
+                        file.write(buffer[0..take])
+                        remain -= take
                     }
                 }finally{
                     bytesPool.giveBack(buffer)
