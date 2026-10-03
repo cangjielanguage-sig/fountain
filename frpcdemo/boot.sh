@@ -27,7 +27,10 @@ exports(){
     export logger_asyncWaitTimeout=5ms # 异步日志缓冲区等待时间，默认是5毫秒，超过这个时间，本次日志被忽略
     export rpcServer_baseAddresses=$3
     regexp="_stAtIc__|$1"
-    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`find ./target/release/* -type d|grep -a -v -P $regexp|tr '\n' ':'`
+    # 注意：本工程自建的库目录必须放在 $LD_LIBRARY_PATH **前面**，否则会命中
+    # /mnt/d/docs/work/cangjie/installed/libs/fboot 下的旧副本（该目录里的 .so 没有 SONAME，
+    # 链接器按文件名先在 LD_LIBRARY_PATH 里找），表现为“新符号明明在自建库里有，却报 undefined symbol”。
+    export LD_LIBRARY_PATH=`find ./target/release/* -type d|grep -a -v -P $regexp|tr '\n' ':'`$LD_LIBRARY_PATH
     echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
 }
 runServer(){

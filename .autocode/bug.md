@@ -26,7 +26,7 @@
 | 7.1 前半 | 半条消息被接收侧**静默吞掉**（零填充 / 当成“无 data”） | ✅ | 2026-10-03 修复（见 6.10）：`decodeData` 的 EOF 不再等价 `DataNone`；载荷短读不再被放行（原判据写错成 `size < s`）；流式分支改为“剩余待读”；`Message.decode` 的 `l == 0` → `l <= 0` |
 | 7.1 后半 | 帧格式：无总长 / 无校验 | ✅ | 2026-10-03 改为 `[cmd][len][payload][crc32]`（见 6.11）：发送侧头里带 len、尾带 CRC；接收侧限长流（读不出帧外）+ 增量 CRC + `maxFramePayload` 上限；截断/损坏/长度不符一律抛 |
 | — | (7.5 起) §四 P2 小项与池相关遗留 | ⬜ | 见 §7.2~7.6，未动 |
-| — | **f_protocol→f_util 依赖**：应用加载期 `undefined symbol: crc32Update`（本轮引入） | ⬜ | 见 7.8：需配套修加载器（f_app.load 预打开）或撤销该依赖 |
+| — | **f_protocol→f_util 依赖**：应用加载期 `undefined symbol: crc32Update` | ✅ | 真因是 `installed/libs/fboot` 里的**旧库副本抢先**（非加载顺序）；已在 7.8 定因并修 `boot.sh` 的库搜索顺序 |
 | — | 池记账脱钩的**触发源** | ⬜ | 未定位到具体一行；已加自愈 + `DEQUE-SELFCHECK`/`WEDGE-HEAL` 告警（见 6.8.5、7.2） |
 | — | 重复归还的强约束 | ⬜ | 泛型 `SyncDeque<T>` 无法按值去重，目前只能检出 + 告警（见 6.9、7.3） |
 
@@ -612,26 +612,35 @@ EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已�
 - 影响：无法用 demo 做 client↔server 的**业务级**端到端回归；帧的端到端行为暂由 socket 级别
   短读/短写用例 + 服务端启动验证覆盖。
 
-### 7.8 **阻塞项**：f_protocol 依赖 f_util 后，应用加载期 `undefined symbol`（2026-10-03 引入）
+### 7.8 `undefined symbol: crc32Update`：**已定因并修复**（2026-10-03）
 
-- 现象：`frpcdemo` 重建成功（`cjpm build success`），但一启动就失败，端口未监听：
+- 现象：`frpcdemo` 重建成功（`cjpm build success`），一启动就失败、端口未监听：
   ```
-  undefined symbol: _CN15fountain:f_util11crc32UpdateHjRNat5ArrayIhE
-  --- 监听 1203 ---  !! 未监听
+  f_protocol@fountain/libf_protocol.default@fountain.so: undefined symbol: _CN15fountain:f_util11crc32UpdateHjRNat5ArrayIhE
+  LoadCJLibrary fail.
   ```
-  （`f_util` 的 .so 本身在 target 目录里，不是缺文件。）
-- 根因：应用启动时 `f_app.load` **按目录路径顺序**逐个 `PackageInfo.load`（dlopen）各包 .so，且符号**即时解析**；
-  `f_protocol@fountain` 排在 `f_util@fountain` **之前** ⇒ 加载 `libf_protocol.default.so` 时 `crc32Update` 尚未定义。
-- 触发来源：「帧 CRC 改用 f_util 的 crc32」（提交 `2a72c390`）新增了 `fountain::f_util` 依赖；
-  此前帧 CRC 自包含在 f_protocol，就是为了规避这条（见 6.11 的历史说明）。
-- 收尾二选一（**合并前必须处理**）：
-  1. **配套修加载器**（保留依赖）：在 `f_app.load` 里，先对目标目录中所有匹配的 .so 做一次
-     `dlopen(path, RTLD_LAZY | RTLD_GLOBAL)` 预打开，再做 `PackageInfo.load`。只影响 dlopen 期的符号解析
-     （延迟绑定 + 全局命名空间 ⇒ 与目录顺序无关）；与「Init Image 失败」（如包初始化期读配置）是两回事，后者仍会正常失败。
-  2. **撤销依赖**：帧 CRC 改回自包含实现（回滚提交 `2a72c390`）。
-- 影响面：所有经由 f_protocol 使用消息的应用（frpcdemo、fleet 等）；单元测试不受影响
-  （`cjpm test` 走正常链接，`f_util` 28/28、`f_protocol` 55/55、`f_codec` 15/15 全绿），
-  因此**单测无法发现此类问题，必须做「启动应用」级别的验证**。
+- **真因（与加载顺序无关，也与 `PackageInfo.load` 无关）**：`LD_LIBRARY_PATH` 里
+  `/mnt/d/docs/work/cangjie/installed/libs/fboot` 排在**工程自建库目录之前**，而该目录下的
+  `libf_util@fountain.so` 是 **2026-10-02 的旧副本（不含 `crc32Update`）** ⇒ 动态链接器先命中旧副本。
+  对应事实（`readelf`/`nm` 实测）：
+
+  | 事实 | 证据 |
+  | --- | --- |
+  | `libf_protocol.default.so` **确实**记录了依赖 | `readelf -d` → `NEEDED libf_util@fountain.so` |
+  | 它对 `crc32Update` 是**未定义引用** | `nm -D -u` → `U _CN15fountain:f_util11crc32UpdateHjRNat5ArrayIhE` |
+  | 自建库里**有**该符号 | `nm -D` → `T _CN15fountain:f_util11crc32UpdateHjRNat5ArrayIhE`（16:58 构建） |
+  | `installed/libs/fboot` 的副本**没有**该符号 | 同一条 `nm` → `crc32Update=0`（10-02 构建） |
+  | `libf_util@fountain.so` **没有 SONAME** | `readelf -d` → 无 `SONAME`（因此按文件名在 `LD_LIBRARY_PATH` 里先命中者胜） |
+  | 库搜索顺序里旧目录在前 | `boot.sh` 生成 `LD_LIBRARY_PATH` 时把自建目录 **append 在后**：`$LD_LIBRARY_PATH:<target dirs>` |
+
+- **修复**：`frpcdemo/boot.sh` 改为把自建库目录**前置**（`<target dirs>:$LD_LIBRARY_PATH`），
+  已实测：服务端正常加载并监听 1203、0 加载失败。
+  - 同一脚本在每个 app 里各有一份（fdemo/fleet 等），如需彻底根治，建议在部署脚本同步
+    `installed/libs/fboot` 的内容，或统一改成“自建库优先”。
+- **不再是阻塞项**：`f_protocol → f_util` 的依赖可以保留；此前的“加载顺序/预打开 .so”方案**不需要**了
+  （那是我最初的误判：库其实会被 `DT_NEEDED` 正常拉起，问题出在命中了旧副本）。
+- 教训：这类问题**单测发现不了**（`cjpm test` 走工程内的链接，`f_util` 28/28、`f_protocol` 55/55、`f_codec` 15/15 全绿），
+  必须做“启动应用 + 看加载日志”级别的验证；排查时先 `readelf -d` / `nm -D`，别急着改加载器。
 
 ### 7.9 零散遗留（低优先）
 
