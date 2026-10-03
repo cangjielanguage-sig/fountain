@@ -526,7 +526,9 @@ frpcdemo 端到端（worktree 内构建，跑 40s）日志事件 0、`decode err
 | 发送 `EncodedMessage.copy` | payload ≤ 4096B：整帧拼好**一次 write**；否则：先写头（含 len）→ 流式写载荷（**边写边算** CRC，零缓冲、零二次读）→ 写尾 CRC。写失败仍断链 ✓ |
 | 接收 `Message.decode` | 读帧头（0 字节 = 干净关闭）→ 校验 `len ≤ maxFramePayload` → 用**限长流** `FrameBodyStream` 解码（物理上读不出帧外，载荷内部长度被写坏也不会越界）→ 校验“载荷是否被完整消费” → 读尾 CRC 比对 |
 | 上限 | `protocol_maxFramePayload`（默认 1GB）——**首次使用时才读配置**：包初始化期读配置会在应用 `Init Image` 阶段抛 NoneValueException（已实测），故改为懒读 + 缓存 |
-| CRC 实现 | 帧 CRC 自包含在 f_protocol（不在包初始化期依赖外部包）。**踩坑**：`f_protocol` 依赖 `f_util` 会导致应用加载期 `undefined symbol: crc32Update` —— 本仓库应用按目录顺序 dlopen 各包 .so，`f_protocol@fountain` 先于 `f_util@fountain` |
+| CRC 类型 | **CRC-32**（IEEE 802.3 / zlib：反射多项式 `0xEDB88320`、初值 `0xFFFFFFFF`、末尾异或 `0xFFFFFFFF`），线上 4 字节大端，覆盖 `cmd+len+payload`。标准检查值 `CRC-32("123456789") == 0xCBF43926` 有专门用例（`frameCrcIsStandardCrc32`） |
+| CRC 实现 | **不用 `f_util.crc32`**，帧 CRC 自包含在 f_protocol（与 f_util 同算法、输出一致，但独立一份，`frameCrcInit/Update/Finish/frameCrc`，internal 供同包用例复用）。原因见下行的加载顺序踩坑；`f_util/src/crc32.cj` 本次未改动 |
+| 加载顺序踩坑 | 给 f_protocol 加 `fountain::f_util` 依赖 ⇒ 应用加载期 `undefined symbol: crc32Update`。**踩坑**：`f_protocol` 依赖 `f_util` 会导致应用加载期 `undefined symbol: crc32Update` —— 本仓库应用按目录顺序 dlopen 各包 .so，`f_protocol@fountain` 先于 `f_util@fountain` |
 
 **配套改动**：`PooledBufferBytesCopyTo` 记住调用方声明的长度并实现 `byteSize()`（流式载荷也要能给出 len）；`DefaultCodec.encode(value: Array<Byte>)` 的 `this.size += size + sizeBuf.size` 把计数器算成两倍，改为 `value.size`。
 
