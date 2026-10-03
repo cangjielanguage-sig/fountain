@@ -8,7 +8,7 @@
 
 ## 状态总览（2026-10-03 更新）
 
-图例：✅ 已解决　🟡 部分解决（附遗留）　⬜ 未解决
+图例：✅ 已解决　🟡 部分解决（附遗留）　⬜ 未解决　⚠️ 曾误判（结论已更正，见对应小节）
 
 | # | 问题 | 状态 | 说明 / 依据 |
 | --- | --- | --- | --- |
@@ -26,7 +26,7 @@
 | 7.1 前半 | 半条消息被接收侧**静默吞掉**（零填充 / 当成“无 data”） | ✅ | 2026-10-03 修复（见 6.10）：`decodeData` 的 EOF 不再等价 `DataNone`；载荷短读不再被放行（原判据写错成 `size < s`）；流式分支改为“剩余待读”；`Message.decode` 的 `l == 0` → `l <= 0` |
 | 7.1 后半 | 帧格式：无总长 / 无校验 | ✅ | 2026-10-03 改为 `[cmd][len][payload][crc32]`（见 6.11）：发送侧头里带 len、尾带 CRC；接收侧限长流（读不出帧外）+ 增量 CRC + `maxFramePayload` 上限；截断/损坏/长度不符一律抛 |
 | — | (7.5 起) §四 P2 小项与池相关遗留 | ⬜ | 见 §7.2~7.6，未动 |
-| — | **f_protocol→f_util 依赖**：应用加载期 `undefined symbol: crc32Update` | ✅ | 真因是 `installed/libs/fboot` 里的**旧库副本抢先**（非加载顺序）；已在 7.8 定因并修 `boot.sh` 的库搜索顺序 |
+| — | **f_protocol→f_util 依赖**：应用加载期 `undefined symbol: crc32Update` | ✅⚠️ | **已修**（`boot.sh` 自建库优先）。曾误判为"加载顺序/需要预打开 .so"，实际是 `installed/libs/fboot` 的**旧副本抢先**（库无 SONAME），见 7.8 |
 | — | 池记账脱钩的**触发源** | ⬜ | 未定位到具体一行；已加自愈 + `DEQUE-SELFCHECK`/`WEDGE-HEAL` 告警（见 6.8.5、7.2） |
 | — | 重复归还的强约束 | ⬜ | 泛型 `SyncDeque<T>` 无法按值去重，目前只能检出 + 告警（见 6.9、7.3） |
 
@@ -35,9 +35,9 @@ frpcdemo 端到端（默认配置约 45s）CPU **0%~2%**、应用日志事件 **
 
 **复验（2026-10-03，分支 `fix/half-message-detect`）**：`f_util` **28/28**、`f_protocol` **55/55**（修复前基线 43/45）、`f_codec` **15/15**。
 
-⚠️ **当前状态提醒**：自「帧 CRC 改用 f_util 的 crc32」之后，应用加载期会 `undefined symbol: crc32Update`，
-**frpcdemo 服务端现在起不来**（见 7.8）。在此之前（帧 CRC 自包含时）的端到端结果是：
-服务端正常加载并监听、日志事件 0、帧错误 0。
+**加载现状**：帧 CRC 改用 f_util 后曾出现 `undefined symbol: crc32Update`（frpcdemo 起不来），
+**已定因并修复**（`boot.sh` 自建库优先，提交 `7cdc025a`，见 7.8）；修复后服务端正常加载并监听 1203、
+0 加载失败、0 帧错误。`f_protocol → f_util` 的依赖予以保留。
 
 > 下面 §一~§六 是历次分析原文（保留证据链），**其结论的当前状态以本节与 §七 为准**。
 
@@ -533,7 +533,7 @@ frpcdemo 端到端（worktree 内构建，跑 40s）日志事件 0、`decode err
 | 上限 | `protocol_maxFramePayload`（默认 1GB）——**首次使用时才读配置**：包初始化期读配置会在应用 `Init Image` 阶段抛 NoneValueException（已实测），故改为懒读 + 缓存 |
 | CRC 类型 | **CRC-32**（IEEE 802.3 / zlib：反射多项式 `0xEDB88320`、初值 `0xFFFFFFFF`、末尾异或 `0xFFFFFFFF`），线上 4 字节大端，覆盖 `cmd+len+payload`。标准检查值 `CRC-32("123456789") == 0xCBF43926` 有专门用例（`frameCrcIsStandardCrc32`） |
 | CRC 实现 | 帧 CRC 用 `fountain::f_util` 的**增量接口**（`crc32Init` / `crc32Update` / `crc32Finish`，2026-10-03 调整）；原来的自包含实现（`FRAME_CRC_TABLE` + `frameCrc*`）已删除 |
-| 加载顺序（**阻塞项**） | 该依赖要求 `f_protocol@fountain` 在 `f_util@fountain` **之后**加载；而应用按目录顺序 dlopen 各包 .so 且符号即时解析，顺序不满足时加载期即 `undefined symbol: crc32Update`（实测：frpcdemo 服务端起不来）。收尾方案见 7.8 |
+| 加载顺序 ⚠️ | **本条结论已更正**：最初判断为"f_protocol 必须先于 f_util 加载"，是**误判** —— `readelf -d` 显示 `NEEDED` 正常记录、库也会被正常拉起；真正原因是 `LD_LIBRARY_PATH` 命中了 `installed/libs/fboot` 里的**旧副本**（该 .so 无 SONAME，按文件名先命中）。详见 7.8 |
 
 **配套改动**：`PooledBufferBytesCopyTo` 记住调用方声明的长度并实现 `byteSize()`（流式载荷也要能给出 len）；`DefaultCodec.encode(value: Array<Byte>)` 的 `this.size += size + sizeBuf.size` 把计数器算成两倍，改为 `value.size`。
 
@@ -599,6 +599,8 @@ EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已�
 
 - `KeyPool.get(Duration.Max)` 的「有限等待」是**策略变更**（原来是无限等待）：30s 后 `WARN` 并返回 `None`；
   若业务上确实需要无限等待，应改为可配置（当前为常量）。
+- 用户已明确表达过立场：**`timeout == Duration.Max` 这个分支语义上就是"无限等待"**（当初要求不要改它）。
+  因此这一条的处置需要拍板：保留当前"让出 CPU + 30s 上限"（避免无日志挂死），或恢复"真无限等待"并把它做成可配置。
 
 ### 7.7 frpcdemo 客户端当前无法启动（**既有问题**，2026-10-03 实测）
 
@@ -612,7 +614,7 @@ EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已�
 - 影响：无法用 demo 做 client↔server 的**业务级**端到端回归；帧的端到端行为暂由 socket 级别
   短读/短写用例 + 服务端启动验证覆盖。
 
-### 7.8 `undefined symbol: crc32Update`：**已定因并修复**（2026-10-03）
+### 7.8 `undefined symbol: crc32Update`：**已定因并修复**（2026-10-03）⚠️ 本条曾被误判
 
 - 现象：`frpcdemo` 重建成功（`cjpm build success`），一启动就失败、端口未监听：
   ```
