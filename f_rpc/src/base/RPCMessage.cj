@@ -69,28 +69,18 @@ public class RPCMessage {
         build<Bool>('subscribe', msg)
     }
 }
-@DataAssist[fields props]
-public class ServiceMeta <: Hashable & Equatable<ServiceMeta> {
+@DataAssist[fields props hash equal]
+public class ServiceMeta {
     private var version: String = ''
     private var name: String = ''
     private var typeName: String = ''
     private var methodName: String = ''
     private var argTypeNames: Array<String> = []
+    // weight 是**节点侧**元数据，不能参与相等/哈希：客户端 stub 生成的 meta 不带 weight（默认 0.0），
+    // 服务端注册的带实际权重，若让它参与比较，两边永远匹配不上 ⇒ 服务端 hub 查不到骨架、
+    // 客户端 services 查不到客户端，RPC 永远超时（见 bug.md 7.10）
+    @DataExclude[equal hash]
     private var weight: Float64 = 1.0
-
-    /**
-     * 身份只由“服务坐标”（version/name/typeName/methodName/argTypeNames）决定。
-     * weight 是**节点侧**的元数据：客户端 stub 生成的 meta 不带 weight（默认 0.0），而服务端注册的带实际权重，
-     * 若让它参与相等/哈希，两边永远匹配不上 ⇒ 服务端 hub 查不到骨架、客户端 services 查不到客户端，RPC 永远超时（见 bug.md 7.10）。
-     */
-    public func hashCode(): Int64 {
-        HashBuilder().append(version).append(name).append(typeName).append(methodName)
-            .append(argTypeNames.toString()).build()
-    }
-    public operator func ==(other: ServiceMeta): Bool {
-        version == other.version && name == other.name && typeName == other.typeName &&
-        methodName == other.methodName && argTypeNames == other.argTypeNames
-    }
 
     public init(){}
     public init(version: String, name: String, typeName: String, methodName: String, argTypeNames: Array<String>, weight: Float64, exactlyVersion!: Bool = false){

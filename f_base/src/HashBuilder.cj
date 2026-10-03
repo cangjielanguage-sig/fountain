@@ -47,6 +47,9 @@ public class HashBuilder <: Hashable {
     public func append<T>(arg: T): This where T <: Hashable {
         append(arg.hashCode())
     }
+    // 注：无法用重载覆盖集合字段 —— `Array<T>`/`ArrayList<T>` 自身满足 `Hashable`，
+    // 于是 `append<T>(arg: T) where T <: Hashable`（身份哈希）比 `append<T>(arg: Array<T>)` 更容易被选中。
+    // 集合按内容参与哈希这件事由 `@DataAssist` 生成 hashCode 时处理（见 f_data/src/macros/DataAssist.cj）。
     public func append(arg: Int8): This {
         append(arg.hashCode())
     }

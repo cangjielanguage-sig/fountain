@@ -733,6 +733,20 @@ NoneValueException: Value does not exist.
 - `Init Image fail` **0**、客户端不再崩溃（跑到超时被杀，exit 124）。
 
 **影响**：`frpcdemo` 的业务级端到端**已可用** —— 这也是 7.7 的最终验收。
+
+**补充（2026-10-03，`ServiceMeta` 改注解版）**：第 6 条的实现从"手写 `hashCode`/`==`"改为注解版 ——
+`@DataAssist[fields props hash equal]` + 在 `weight` 上 `@DataExclude[equal hash]`。改用注解的过程中查出并修掉两个 `@DataAssist` 宏缺陷：
+
+1. **集合字段按身份哈希**：`Array<T>`/`ArrayList<T>` 自身满足 `Hashable`，默认 `hashCode` 是**身份**哈希 ⇒
+   `argTypeNames` 内容相同但实例不同时哈希不同。实测给 `HashBuilder` 加集合重载**没用**（抢不过
+   `append<T>(arg: T) where T <: Hashable`），改为在生成的 `hashCode` 里对集合字段用 `字段.toString()` 参与哈希
+   （碰撞只会多一次 equals 检查）。
+2. **`@DataExclude[hash]`/`[equal]`/`[compare]`/`[tostring]` 对私有 var 静默失效**：`generateProps` 会把私有字段改名成
+   `<name>_`，而这些生成器都在改名**之后**运行，排除集合里只有源码名 ⇒ 匹配不上（`ServiceMeta.weight` 因此仍参与比较：
+   实测两个内容相同的 meta `hashCode` 不同、`==` 为 false ⇒ `services`/`hub` 查表落空）。修法：登记排除项时同时登记改名后的键。
+
+回归用例 `ServiceMetaIdentityTest.equalMetaWithDistinctArgTypeArraysMustMatch`（f_rpc **2/2**）覆盖这一组合；
+demo 端到端与之前一致：分隔线 ×2、客户端 JSON、服务端 `CONSUME(8)`、`Init Image fail` 0。
 协议/消息层行为另有 `f_protocol` **58/58** 用例覆盖（含帧长自洽与消息 id 往返）。
 
 ### 7.11 对象类型的注册应由框架自动完成（**建议**，2026-10-03）

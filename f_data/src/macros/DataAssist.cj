@@ -82,6 +82,15 @@ private func assist(attr: Tokens, input: Decl): Tokens {
                 populateExclusion(message, 'tostring', excludeToString)
                 populateExclusion(message, 'field', excludeFields)
             }
+            // `generateProps` 会把私有字段改名成 `<name>_`，而 hash/equal/compare/tostring/fields 的生成都在改名之后运行，
+            // 只登记源码名会让 `@DataExclude[hash]`/`[equal]` 对**私有 var** 静默失效（ServiceMeta.weight 正是这种，
+            // 见 bug.md 7.10：weight 未被排除 ⇒ 客户端 stub 与服务端注册的 meta 哈希不同 ⇒ 查表永远落空）。
+            // 这里把改名后的名字一并登记。prop 不在其列：props 生成发生在改名之前。
+            for (set in [excludeHash, excludeEqual, excludeCompare, excludeToString, excludeFields]) {
+                for (name in set.toArray()) {
+                    set.add('${name}_')
+                }
+            }
             excludeEqual.add('__hAsh__')
             excludeCompare.add('__hAsh__')
             excludeToString.add('__hAsh__')
@@ -215,7 +224,22 @@ func generateHash(d: ClassDecl, exclusion: HashSet<String>) {
     var hashed = `nl`
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        hashed += quote(hasher.append($(d.identifier))$(`nl`))
+        // 集合字段不能用默认 hashCode：Array/ArrayList 等满足 Hashable，但它们的 hashCode 是**身份**哈希，
+        // “内容相同”的两个实例会得到不同哈希 ⇒ 用它当 map key（例如 ServiceMeta.argTypeNames）查表永远落空
+        // （见 bug.md 7.10：客户端 stub 与服务端注册各自构造 meta，数组实例不同）。
+        // 集合按内容（toString）参与哈希；万一碰撞也只多一次 equals 检查，不影响正确性。
+        let typeText = match (d) {
+            case x: VarDecl => x.declType.toTokens().toString()
+            case _ => ''
+        }
+        let isCollection = typeText.contains('Array') || typeText.contains('ArrayList') ||
+            typeText.contains('HashSet') || typeText.contains('HashMap') || typeText.contains('TreeMap') ||
+            typeText.contains('TreeSet') || typeText.contains('Collection') || typeText.contains('DataList')
+        if (isCollection) {
+            hashed += quote(hasher.append($(d.identifier).toString())$(`nl`))
+        } else {
+            hashed += quote(hasher.append($(d.identifier))$(`nl`))
+        }
     }
     d.body.decls.add(
             all: [VarDecl(quote(
