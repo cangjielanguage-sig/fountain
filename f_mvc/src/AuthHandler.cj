@@ -123,14 +123,12 @@ class AuthHandlerProxy <: AuthHandler {
         } else if (let Some(x) <- authHandler) {
             x.check(param)
         } else if (!param.ignoreAuth && let Some(h) <- sessionHandler && let s <- h.check(param)) {
-            if(s.isOK){
-                if (!param.ignorePrivilege && let Some(h) <- privilegeHandler) {
-                    h.check(param)
-                } else {
-                    AuthStatus.OK
-                }
-            }else{
+            if (!s.isOK) {
                 s
+            } else if (!param.ignorePrivilege && let Some(h) <- privilegeHandler) {
+                h.check(param)
+            } else {
+                AuthStatus.OK
             }
         } else {
             AuthStatus.OK
