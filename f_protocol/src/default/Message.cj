@@ -92,12 +92,18 @@ private class Crc32OutputStream <: OutputStream {
 }
 
 /** 帧体输入流：最多读出 len 字节（物理上读不出帧外）+ 增量 CRC；帧体读尽后表现为 EOF。 */
-private class FrameBodyStream <: InputStream {
+private class FrameBodyStream <: SizeBoundedInput {
     var remaining: Int64
     var crc: UInt32
     FrameBodyStream(size: Int64, crc0: UInt32, private let inner: InputStream) {
         this.remaining = size
         this.crc = crc0
+    }
+    /** 本帧还剩多少字节：解码器据此在**分配缓冲前**挡下超大声明长度（见 bug.md 7.1）。 */
+    public prop remainingBytes: Int64 {
+        get() {
+            remaining
+        }
     }
     public func read(buffer: Array<Byte>): Int64 {
         var got = 0i64

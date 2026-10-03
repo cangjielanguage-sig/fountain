@@ -71,4 +71,15 @@ public interface Decoder {
     func decode<T>(input: InputStream): ?T where T <: FromToData
 }
 
+/**
+ * 知道「本帧还剩多少字节」的输入流。实现它，解码器就能在**按线上声明长度分配缓冲之前**挡下超大长度。
+ *
+ * 帧头的 len 只限住了「可读字节数」，限不住 `Array<Byte>(声明长度)` 这一步：载荷内部一个 8 字节的
+ * 损坏/恶意长度字段就能让解码器尝试 TB 级分配（见 bug.md 7.1）。实现方：f_protocol 的帧体流。
+ */
+public interface SizeBoundedInput <: InputStream {
+    /** 本帧剩余可读字节数（不得为负）。 */
+    prop remainingBytes: Int64
+}
+
 public interface Codec <: Encoder & Decoder {}

@@ -287,4 +287,79 @@ public class Truncated_message_test {
         @Assert(crc32('123456789'.unsafeBytes()) == 0xCBF43926u32)
         @Assert(crc32(Array<Byte>()) == 0u32)
     }
+
+    // ---------- 帧内“值级”长度：必须在分配缓冲前挡住超大声明 ----------
+
+    /** 一段 data 字段的线上字节：STRING 头(低4位=长度字段占几字节) + 长度 + 内容。 */
+    private func stringField(declared: Int64, content: Array<Byte>): Array<Byte> {
+        let out = Array<Byte>(9 + content.size, repeat: 0u8)
+        out[0] = DataType.STRING.value | 8u8                    // 长度字段固定 8 字节，便于构造超大声明
+        for (i in 0..8) {
+            out[1 + i] = UInt8((declared >> (8 * (7 - i))) & 0xff)
+        }
+        for (i in 0..content.size) {
+            out[9 + i] = content[i]
+        }
+        out
+    }
+
+    /** 借合法帧的“消息 id 前缀”，只把 data 字段换成给定的字节，并重算 len/CRC。 */
+    private func frameWithDataField(dataField: Array<Byte>): Array<Byte> {
+        let legit = wireOf(Message(Command.REGISTER, 'AB'.toData()))
+        let dataSize = dataFieldSize('AB'.toData())
+        @Assert(dataSize > 0)
+        let prefix = legit[5..legit.size - 4 - dataSize]         // id 字段部分（帧头 5B、CRC 4B）
+        let payload = Array<Byte>(prefix.size + dataField.size, repeat: 0u8)
+        for (i in 0..prefix.size) {
+            payload[i] = prefix[i]
+        }
+        for (i in 0..dataField.size) {
+            payload[prefix.size + i] = dataField[i]
+        }
+        let frame = Array<Byte>(5 + payload.size + 4, repeat: 0u8)
+        frame[0] = Command.REGISTER.value
+        for (i in 0..4) {
+            frame[1 + i] = UInt8((payload.size >> (8 * (3 - i))) & 0xff)
+        }
+        for (i in 0..payload.size) {
+            frame[5 + i] = payload[i]
+        }
+        let crc = crc32(frame[0..5 + payload.size])               // crc 覆盖 cmd+len+payload
+        for (i in 0..4) {
+            frame[5 + payload.size + i] = UInt8((Int64(crc) >> (8 * (3 - i))) & 0xff)
+        }
+        frame
+    }
+
+    /** 自检：换成“声明长度正确”的 data 字段后仍能解出 AB —— 证明上面的拼接方式没问题。 */
+    @TestCase
+    public func splicedDataFieldStillDecodes(): Unit {
+        let frame = frameWithDataField(stringField(2, 'AB'.unsafeBytes()))
+        let decoded = Message.decode<DataAny>(DribbleInputStream(frame, frame.size))
+        match (decoded.data) {
+            case x: DataString => @Assert(x.data == 'AB')
+            case _ => @Assert(false)
+        }
+    }
+
+    /**
+     * 载荷内部的“值级”长度声明超过本帧剩余字节 ⇒ 必须在**分配缓冲前**拒绝。
+     * 修复前：这里会直接按 1TB 去 `Array<Byte>(size)`，结果是 OOM / 分配失败，而不是可诊断的 CodecException。
+     */
+    @TestCase
+    public func oversizedValueLengthIsRejectedBeforeAllocating(): Unit {
+        let declared = 1i64 << 40                                 // 1TB
+        let frame = frameWithDataField(stringField(declared, 'AB'.unsafeBytes()))
+        let buf = ByteBuffer()
+        buf.write(frame)
+        buf.seek(SeekPosition.Begin(0))
+        try {
+            Message.decode<DataAny>(BufferedInputStream(buf))
+            @Assert(false)                                        // 必须抛
+        } catch (e: CodecException) {
+            @Assert(e.message.contains('left in frame'))           // 且必须是“超预算”这一条，而不是分配失败
+        } catch (_: Exception) {
+            @Assert(false)
+        }
+    }
 }

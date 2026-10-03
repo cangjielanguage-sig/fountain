@@ -688,6 +688,23 @@ public class DefaultCodec <: Codec & Releasable {
         }
         v
     }
+    /**
+     * 按线上声明的长度准备字节缓冲。**分配之前**先确认它不超过输入的剩余字节数：
+     * 帧的 len 只限住“可读字节数”，挡不住 `Array<Byte>(声明长度)` —— 载荷里一个损坏/恶意的长度字段
+     * 就足以让这里尝试分配 TB 级内存（见 bug.md 7.1）。输入不支持报剩余量（非帧内解码）时退化为原行为。
+     */
+    private func checkedBuffer(input: InputStream, declared: Int64, what: String): Array<Byte> {
+        if (declared < 0) {
+            throw CodecException('${what} declares negative size ${declared}')
+        }
+        if (let bounded: SizeBoundedInput <- input) {
+            let remaining = bounded.remainingBytes
+            if (declared > remaining) {
+                throw CodecException('${what} declares ${declared} bytes but only ${remaining} bytes left in frame')
+            }
+        }
+        Array<Byte>(declared, repeat: 0)
+    }
     public func decodeData(input: InputStream): Data {
         // decodeSizeOfEncoded(input)
         var bytes = [0u8]
@@ -713,7 +730,7 @@ public class DefaultCodec <: Codec & Releasable {
                 throw CodecException('current data head is ${toHex(head)} but read ${size} bytes')
             }
             size = parseInt64(head, true, bytes)
-            bytes = Array<Byte>(size, repeat: 0)
+            bytes = checkedBuffer(input, size, 'string')
             size = input.read(bytes)
             if (size < bytes.size) {
                 throw CodecException('size of string is less than encoded ${size}')
@@ -894,7 +911,7 @@ public class DefaultCodec <: Codec & Releasable {
                     return (Array<Byte>()).toData()
                 }
                 let declared = size
-                let array = Array<Byte>(declared, repeat: 0)
+                let array = checkedBuffer(input, declared, 'inputstream payload')
                 let read = input.read(array)
                 if (read != declared) {
                     // 没读满 = 消息不完整（截断）；绝不能零填充后当成完整消息返回
@@ -904,7 +921,7 @@ public class DefaultCodec <: Codec & Releasable {
                     array.toData()
                 } else {
                     let fileNameSize = decodeSizeOfEncoded(input)
-                    bytes = Array<Byte>(fileNameSize, repeat: 0)
+                    bytes = checkedBuffer(input, fileNameSize, 'file name')
                     size = input.read(bytes)
                     if (size < fileNameSize) {
                         throw CodecException(
@@ -945,7 +962,7 @@ public class DefaultCodec <: Codec & Releasable {
             }
             if (f != 0) {
                 let fileNameSize = decodeSizeOfEncoded(input)
-                bytes = Array<Byte>(fileNameSize, repeat: 0)
+                bytes = checkedBuffer(input, fileNameSize, 'file name')
                 size = input.read(bytes)
                 if (size < fileNameSize) {
                     throw CodecException(

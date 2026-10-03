@@ -25,6 +25,7 @@
 | 6.6-5 | 心跳策略 | ✅ | 同 P2 |
 | 7.1 前半 | 半条消息被接收侧**静默吞掉**（零填充 / 当成“无 data”） | ✅ | 2026-10-03 修复（见 6.10）：`decodeData` 的 EOF 不再等价 `DataNone`；载荷短读不再被放行（原判据写错成 `size < s`）；流式分支改为“剩余待读”；`Message.decode` 的 `l == 0` → `l <= 0` |
 | 7.1 后半 | 帧格式：无总长 / 无校验 | ✅ | 2026-10-03 改为 `[cmd][len][payload][crc32]`（见 6.11）：发送侧头里带 len、尾带 CRC；接收侧限长流（读不出帧外）+ 增量 CRC + `maxFramePayload` 上限；截断/损坏/长度不符一律抛 |
+| 7.1 值级长度 | 帧内**值级**声明长度可触发超大分配 | ✅ | 2026-10-04：`SizeBoundedInput` + `DefaultCodec.checkedBuffer()` 分配前校验「声明 ≤ 帧剩余」，超了抛 `CodecException`；f_protocol **60/60**（含 1TB 声明用例，见 7.1） |
 | 7.7 | frpcdemo 客户端无法启动（**既有问题**） | ✅ | 2026-10-03 定位并修好启动链路（缺 `rpcClient_serverAddress` ⇒ ERROR+`exit(1)`；RPC 调用移出 Init Image；另修 4 处段错误）：实测 0 Init Image fail、0 段错误。**业务级 E2E 已跑通**（见 7.10） |
 | 7.10 | 业务级 E2E 的 10 层断链 | ✅ | 2026-10-03 逐层定位并修复：消息 id 时区/相等、`ExecutorFuture.get` 丢结果、客户端 reader 中性解码、骨架注册前缀过滤、`ServiceMeta` 含 weight、发现连接复用、重试判断、demo 侧接口/载荷、对象类型未注册。实测客户端打印 JSON、服务端 `CONSUME` 正常（见 7.10） |
 | — | (7.5 起) §四 P2 小项与池相关遗留 | ⬜ | 见 §7.2~7.6，未动 |
@@ -41,6 +42,7 @@ frpcdemo 端到端（默认配置约 45s）CPU **0%~2%**、应用日志事件 **
 **复验（2026-10-03，分支 `fix/half-message-detect`）**：`f_util` **28/28**、`f_protocol` **55/55**（修复前基线 43/45）、`f_codec` **15/15**。
 
 **复验（2026-10-04，worktree `fix-half-message`）**：`f_net` **14/14**（迁移后的读写路径用例 + 既有用例，见 7.9）；
+`f_codec` **15/15**、`f_protocol` **60/60**（含 §7.1 值级长度的 1TB 声明用例）；
 frpcdemo 业务级 E2E 仍跑通（客户端打印 JSON、服务端 `CONSUME(8)`、两侧 `Init Image fail` 0、`not registered` 0）——
 此轮**删除了 demo 手工的 `DefaultCodec.registerType<EchoPO>()`**，改由 §7.11 的宏展开自动登记。
 另：一次 70s 的客户端运行里出现 138 条 `[ERROR] Client reader error ... true`，**全部**来自发现循环的正常 `close()`
@@ -570,8 +572,11 @@ EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已�
 - ⬜ 未完成：大帧（> 4096B，尤其含 InputStream/File 流式载荷）发送侧仍是“头 + 多段载荷 + 尾 CRC”，
   写中途失败仍会在流上留下**半帧**；接收侧现在能**确定性判定**（len 未读满/CRC 缺失 ⇒ 抛 + 断链），
   但发送侧窗口本身没有消除。可选做法：把“写完一帧”与 `close()` 互斥（需配合写超时，否则把截断换成挂起）。
-- ⬜ 未完成：帧内**值级**长度仍未设上限 —— 帧的 `len` 把可读字节数限住了，但 `DefaultCodec` 仍会按线上声明的长度
-  直接分配（如 STRING 分支 `Array<Byte>(size, repeat: 0)`），恶意/损坏长度可造成超大分配。建议给值长度也加上限或与帧剩余量对齐。
+- ✅ 已修（2026-10-04）：帧内**值级**长度不再按声明值直接分配。新增 `f_codec.SizeBoundedInput`（能报「本帧还剩多少字节」，
+  由 `f_protocol` 的帧体流实现），`DefaultCodec.checkedBuffer()` 在**分配缓冲之前**校验「声明长度 ≤ 本帧剩余」，
+  超了立刻抛 `CodecException`（三处：STRING、INPUTSTREAM 内联载荷、FILE 文件名×2）；输入不支持报剩余量时退化为原行为。
+  用例（`truncated_message_test.cj`）：`splicedDataFieldStillDecodes`（拼接自检）+ `oversizedValueLengthIsRejectedBeforeAllocating`
+  （载荷内声明 **1TB** ⇒ 只得到「超出帧剩余」的 `CodecException`，而不是 OOM/分配失败）。`f_protocol` **60/60**、`f_codec` **15/15**。
 - ⬜ 未完成：帧头**没有版本位** —— 以后要换校验算法或字段宽度，只能两端同时升级；建议加 1 字节版本位，
   为「换 CRC 宽度/算法」留出平滑迁移的余地。
 
