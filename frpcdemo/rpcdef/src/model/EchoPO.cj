@@ -17,6 +17,15 @@ package fountain::rpcdef.model
 
 import fountain::f_data.macros.*
 import fountain::f_data.*
+import fountain::f_codec.default.DefaultCodec
+
+/**
+ * 解码侧必须先注册对象类型的创建者：`DefaultCodec` 的类型hash→creator 注册表只在该进程
+ * **编码过**该类型时才登记，只解码不编码的一侧（客户端第一次收EchoPO响应、服务端第一次收EchoPO请求）
+ * 否则会以“object type murmur ... is not registered”失败。
+ * rpcdef 是两端共享的模块，在这里注册一次即可覆盖两侧。
+ */
+private let _ = DefaultCodec.registerType<EchoPO>()
 
 @DataAssist[props fields]
 public open class EchoPO {

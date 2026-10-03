@@ -847,7 +847,15 @@ public class DefaultCodec <: Codec & Releasable {
             tuples
         } else if (dataType == DataType.OBJECT.value) {
             let murmur = UInt128.fromBytes(readBytes(head, input))
-            let object = typeMurmurCreators[murmur]()
+            // 类型创建者只在本进程“编码过该类型”时才登记；只解码不编码的一侧（客户端第一次收响应、
+            // 服务端第一次收请求）会走到这里。用下标取值会抛 NoneValueException，上层再一包装就成了
+            // 难以定位的错误（曾表现为消息id格式化时的空指针），这里显式报出哈希与补救办法。
+            let creator = match (typeMurmurCreators.get(murmur)) {
+                case Some(c) => c
+                case _ => throw CodecException(
+                    'object type murmur ${murmur} is not registered in this process; encode it here once, or call DefaultCodec.registerType<T>() on this side')
+            }
+            let object = creator()
             size = decodeSizeOfEncoded(input)
             for (_ in 0..size) {
                 let name = match (decodeData(input)) {

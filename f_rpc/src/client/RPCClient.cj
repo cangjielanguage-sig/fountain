@@ -39,9 +39,7 @@ public class RPCClient {
                     func subscribe(client: Client<RPCMessage>, closingOnEnd: Bool){
                         try{
                             let message = Message.subscribe(data: RPCMessage.subscribe(false))
-                            rpclog.debug{'[RPCClient.init.diag] subscribe request sent id=${message.id} to ${client.address}'}
                             let data = client.transfer(message).get().data
-                            rpclog.debug{'[RPCClient.init.diag] subscribe response received from ${client.address}'}
                             let any = Array<ServiceMeta>.tryFromData(data)
                             let array: Array<ServiceMeta> = match(any){
                                 case x: Array<ServiceMeta> => x
@@ -74,9 +72,7 @@ public class RPCClient {
                             // 载荷必须是 RPCMessage：服务端会 tryFromData<RPCMessage>() 后取 params[0]，
                             // 传裸 Bool 会被宽松转成“params 为空的 RPCMessage”⇒ 服务端取 params[0] 越界（见 bug.md 7.10）
                             let msg = Message.subscribe(data: RPCMessage.subscribe(true))
-                            rpclog.debug{'[RPCClient.init.diag] hosts request sent id=${msg.id} to ${client.address}'}
                             let response = client.transfer(msg).get()
-                            rpclog.debug{'[RPCClient.init.diag] hosts response received from ${client.address}, command=${response.command}, id=${response.id}'}
                             let resp = response.data
                             let any = Array<String>.tryFromData(resp)
                             let array: Array<String> = match(any){
@@ -91,11 +87,8 @@ public class RPCClient {
                                 hostMap.add(host, weight)
                             }
                             let ok = subscribe(client, false)
-                            rpclog.debug{'[RPCClient.init.diag] services subscribe ok=${ok}, metas=${metas.size}'}
                         }
-                        rpclog.debug{'[RPCClient.init.diag] hostMap=${hostMap.size}, closing initial clients'}
                         clients.close()
-                        rpclog.debug{'[RPCClient.init.diag] initial clients closed, building per-host clients'}
                         for((host, weight) in hostMap){
                             while(true){
                                 var client: Client<RPCMessage> = unsafeZeroValue<Client<RPCMessage>>()

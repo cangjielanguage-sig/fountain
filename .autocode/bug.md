@@ -25,7 +25,8 @@
 | 6.6-5 | 心跳策略 | ✅ | 同 P2 |
 | 7.1 前半 | 半条消息被接收侧**静默吞掉**（零填充 / 当成“无 data”） | ✅ | 2026-10-03 修复（见 6.10）：`decodeData` 的 EOF 不再等价 `DataNone`；载荷短读不再被放行（原判据写错成 `size < s`）；流式分支改为“剩余待读”；`Message.decode` 的 `l == 0` → `l <= 0` |
 | 7.1 后半 | 帧格式：无总长 / 无校验 | ✅ | 2026-10-03 改为 `[cmd][len][payload][crc32]`（见 6.11）：发送侧头里带 len、尾带 CRC；接收侧限长流（读不出帧外）+ 增量 CRC + `maxFramePayload` 上限；截断/损坏/长度不符一律抛 |
-| 7.7 | frpcdemo 客户端无法启动（**既有问题**） | 🟡 | 2026-10-03 定位并修好**启动链路**：缺 `rpcClient_serverAddress` ⇒ ERROR+`exit(1)`；RPC 调用移出 Init Image；另修 4 处会导致段错误的零值/固定缓冲用法。实测 0 Init Image fail、0 段错误。**业务级 E2E 仍受阻**于服务端拒收 SUBSCRIBE（新定位，见 7.10） |
+| 7.7 | frpcdemo 客户端无法启动（**既有问题**） | ✅ | 2026-10-03 定位并修好启动链路（缺 `rpcClient_serverAddress` ⇒ ERROR+`exit(1)`；RPC 调用移出 Init Image；另修 4 处段错误）：实测 0 Init Image fail、0 段错误。**业务级 E2E 已跑通**（见 7.10） |
+| 7.10 | 业务级 E2E 的 10 层断链 | ✅ | 2026-10-03 逐层定位并修复：消息 id 时区/相等、`ExecutorFuture.get` 丢结果、客户端 reader 中性解码、骨架注册前缀过滤、`ServiceMeta` 含 weight、发现连接复用、重试判断、demo 侧接口/载荷、对象类型未注册。实测客户端打印 JSON、服务端 `CONSUME` 正常（见 7.10） |
 | — | (7.5 起) §四 P2 小项与池相关遗留 | ⬜ | 见 §7.2~7.6，未动 |
 | — | **f_protocol→f_util 依赖**：应用加载期 `undefined symbol: crc32Update` | ✅⚠️ | **已修**（`boot.sh` 自建库优先）。曾误判为"加载顺序/需要预打开 .so"，实际是 `installed/libs/fboot` 的**旧副本抢先**（库无 SONAME），见 7.8 |
 | — | 池记账脱钩的**触发源** | ⬜ | 未定位到具体一行；已加自愈 + `DEQUE-SELFCHECK`/`WEDGE-HEAL` 告警（见 6.8.5、7.2） |
@@ -689,7 +690,7 @@ EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已�
   与现在的 `Server<T>` / `Client<T>` 不符 ⇒ `cjpm test` 直接编译失败。不是本轮改动引入的，但意味着
   **f_net 的读取/发送路径目前没有可执行的用例覆盖**（本轮 f_net 客户端的改动只能靠 demo 运行验证）。
 
-### 7.10 业务级 E2E 的完整断链（2026-10-03 逐层定位，已修 8 处，**仍未跑通**）
+### 7.10 业务级 E2E 的完整断链（2026-10-03 逐层定位，共 10 层，**已跑通**）
 
 修完 7.7 后 `./boot.sh runClient 127.0.0.1:1203` 的失败点逐层后移，每层都是一个独立缺陷：
 
@@ -706,7 +707,7 @@ EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已�
 
 **链路已推进到**：客户端能连上 → 能发现服务（`metas=2`）→ 能把 CONSUME 发到服务端；服务端骨架也已注册。
 
-**当前最后一道坎（未修）**：服务端解码 CONSUME 载荷时抛
+**第 10 层（最后一层，已修）**：服务端解码 CONSUME 载荷时曾抛（原始证据）：
 ```
 NoneValueException: Value does not exist.
   at std.collection.concurrent.ConcurrentHashMap::[]
@@ -716,7 +717,30 @@ NoneValueException: Value does not exist.
   at fountain::f_net.server.Server::start::lambda.0 (server.cj:125)
 ```
 即 `DefaultCodec` 重建 `@DataAssist` 对象时，**"类型hash → creator"注册表里没有该类型**（服务端没见过客户端侧构造的某个类型）。
-下一步：把缺失的 hash 与对应类型打印出来，判定是"creator 注册时机"问题还是"两侧类型 hash 算法不一致"。
+**第 10 层（最后一层）的根因与处置**：不是"hash 算法不一致"，而是**注册时机** —— 类型hash→creator 注册表
+只在该进程**编码过该类型**时才登记（`encode` 的 `SimpleDataObject` 分支 `addIfAbsent`），而解码侧用下标直接取值 ⇒
+只解码不编码的一侧（客户端第一次收响应、服务端第一次收请求）必然踩空。处置：
 
-**影响**：`frpcdemo` 的业务级端到端仍不可用；但客户端不再崩溃、不再静默挂住，失败信息明确（`no available client` → `retry count exceeded` → 服务端解码异常）。
-协议/消息层行为由 `f_protocol` **58/58** 用例覆盖（含新增的帧长自洽与消息 id 往返）。
+| 改动 | 内容 |
+| --- | --- |
+| `f_codec` | `decodeData` 的 OBJECT 分支改为显式 `CodecException`，报出缺失的哈希并指出补救办法（原来抛 `NoneValueException`，上层再一包装就成了难以定位的错误） |
+| `rpcdef`（两端共享模块） | 加 `private let _ = DefaultCodec.registerType<EchoPO>()` —— `registerType<T>()` 早已存在却**从未被调用**，显式注册一次即可覆盖两侧 |
+| `frpcdemo/cjpm.toml` | 增加 `fountain::f_codec` 依赖 |
+
+**✅ 2026-10-03 业务级端到端跑通**（`./boot.sh runServer 1203 127.0.0.1:1203` + `./boot.sh runClient 127.0.0.1:1203`）：
+- 客户端打印分隔线 ×2 与 JSON：`{"a":100,"b":"hello world","c":false,"d":2.71828...}`；
+- 服务端：`[FOUNTAIN_RPC.Skeleton.CONSUME(8)] ...; {"param":{...echo...},"result":{...},"consumed":"582us246ns"}`；
+- `Init Image fail` **0**、客户端不再崩溃（跑到超时被杀，exit 124）。
+
+**影响**：`frpcdemo` 的业务级端到端**已可用** —— 这也是 7.7 的最终验收。
+协议/消息层行为另有 `f_protocol` **58/58** 用例覆盖（含帧长自洽与消息 id 往返）。
+
+### 7.11 对象类型的注册应由框架自动完成（**建议**，2026-10-03）
+
+- 现状：跨网络传输的对象类型（`@DataAssist` 生成的类）必须在**每一侧**调用 `DefaultCodec.registerType<T>()`，
+  否则第一次解码该类型就会失败（7.10 第 10 层）。目前靠 demo 在 `rpcdef` 里手工注册。
+- 建议：让 `@RPCSkeleton` / `@RPCStub` 宏在展开时自动注册其**参数与返回类型**（宏本来就在生成 `TypeInfo.of<...>()`，
+  加一行 `DefaultCodec.registerType<X>()` 即可），这样"跨 RPC 边界的类型"无需应用手工登记。
+- 注意依赖方向：注册表与 murmur 在 `f_codec`，而 `@DataAssist` 在 `f_data`，**f_data → f_codec 会成环**，
+  所以不能在 `@DataAssist` 里注册；`f_rpc` 依赖 `f_codec`，放在 RPC 的两个宏里可行。
+- 另：嵌套对象类型不会被这条覆盖（只有顶层参数/返回类型），若日后出现嵌套对象字段，需要单独方案。
