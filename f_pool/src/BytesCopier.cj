@@ -41,7 +41,16 @@ public interface Releasable {
 
 public struct PooledBufferBytesCopyTo <: BytesCopyTo { 
     public PooledBufferBytesCopyTo(private let input: InputStream,
-                                    private let pool: ArrayPool<Byte>){}
+                                    private let pool: ArrayPool<Byte>,
+                                    private let declaredSize!: Int64 = -1){}
+    /** 待写字节数：流式内容本身不可数，但调用方声明过长度时可知（帧的 len 字段需要它）。 */
+    public func byteSize(): ?Int64 {
+        if (declaredSize >= 0) {
+            declaredSize
+        } else {
+            None<Int64>
+        }
+    }
     public func copy(to!: OutputStream, closeFromOnEnd!: Bool = true, closeToOnEnd!: Bool = false): Unit {
         func copyTo(buf: Array<Byte>){
             try{

@@ -15,6 +15,150 @@ limitations under the License.
  */
 package fountain::f_protocol.default
 
+internal import fountain::f_codec.exception.CodecException
+
+/*
+ * 帧校验用的 CRC-32（IEEE 802.3，与 f_util.crc32 同算法）。
+ *
+ * 这里自包含实现、不复用 f_util：本仓库应用启动时按目录顺序依次 dlopen 各包 .so，
+ * `PackageInfo.load` 会即时解析符号，而 `f_protocol@fountain` 排在 `f_util@fountain` 之前 ——
+ * 给 f_protocol 增加对 f_util 的依赖，加载期就会 `undefined symbol: crc32Update`（已实测）。
+ * 帧校验是协议自身的实现细节，自带一份最稳。
+ */
+private let FRAME_CRC_TABLE: Array<UInt32> = {
+    =>
+        let table = Array<UInt32>(256, repeat: 0)
+        for (i in 0..256) {
+            var c: UInt32 = UInt32(i)
+            for (_ in 0..8) {
+                c = if ((c & 1) != 0) {
+                    (c >> 1) ^ 0xEDB88320
+                } else {
+                    c >> 1
+                }
+            }
+            table[i] = c
+        }
+        table
+}()
+
+/** 帧 CRC：初始化。 */
+internal func frameCrcInit(): UInt32 {
+    0xFFFFFFFF
+}
+/** 帧 CRC：继续累计。 */
+internal func frameCrcUpdate(crc: UInt32, data: Array<Byte>): UInt32 {
+    var c = crc
+    for (b in data) {
+        c = (c >> 8) ^ FRAME_CRC_TABLE[Int64((c ^ UInt32(b)) & 0xFFu32)]
+    }
+    c
+}
+/** 帧 CRC：收尾。 */
+internal func frameCrcFinish(crc: UInt32): UInt32 {
+    crc ^ 0xFFFFFFFF
+}
+/** 帧 CRC：一次算完整段。 */
+internal func frameCrc(data: Array<Byte>): UInt32 {
+    frameCrcFinish(frameCrcUpdate(frameCrcInit(), data))
+}
+
+/**
+ * 单帧 payload 上限（默认 1GB，可由 `protocol_maxFramePayload` 配置）：防“声称超大长度”拖死对端。
+ *
+ * 注意：**不能在包初始化期读配置** —— 应用启动时 `f_app` 会逐个加载并初始化各包，
+ * 那一刻 `Config` 可能还没就绪，会在 Init Image 阶段抛 NoneValueException，把整包 init 打挂（已实测）。
+ * 因此延迟到首次使用时再读一次并缓存。
+ */
+private var maxFramePayloadCache = None<Int64>
+internal func framePayloadLimit(): Int64 {
+    match (maxFramePayloadCache) {
+        case Some(n) => n
+        case None =>
+            let n = ProtocolConfig.getMaxFramePayload()
+            maxFramePayloadCache = Some(n)
+            n
+    }
+}
+/** 帧头：cmd(1B) + len(4B)；帧尾：crc32(4B)。 */
+private const FRAME_HEAD_SIZE: Int64 = 5
+private const FRAME_CRC_SIZE: Int64 = 4
+private const FRAME_OVERHEAD: Int64 = FRAME_HEAD_SIZE + FRAME_CRC_SIZE
+
+/** 大端写 4 字节（取 Int64 低 32 位）。 */
+private func putInt32BE(out: Array<Byte>, offset: Int64, value: Int64): Unit {
+    out[offset] = UInt8((value >> 24) & 0xff)
+    out[offset + 1] = UInt8((value >> 16) & 0xff)
+    out[offset + 2] = UInt8((value >> 8) & 0xff)
+    out[offset + 3] = UInt8(value & 0xff)
+}
+/** 大端读 4 字节为无符号值（0..2^32-1）。 */
+private func getInt32BE(data: Array<Byte>, offset: Int64): Int64 {
+    (Int64(data[offset]) << 24) | (Int64(data[offset + 1]) << 16) |
+        (Int64(data[offset + 2]) << 8) | Int64(data[offset + 3])
+}
+/** 读满 buffer。返回 0 表示“一个字节都没读到”（对端干净关闭）；读到一半就 EOF 视为帧被截断。 */
+private func readFully(input: InputStream, buffer: Array<Byte>): Int64 {
+    var got = 0i64
+    while (got < buffer.size) {
+        let tmp = Array<Byte>(buffer.size - got, repeat: 0u8)
+        let n = input.read(tmp)
+        if (n <= 0) {
+            if (got == 0) {
+                return 0
+            }
+            throw CodecException('frame truncated: ${got} of ${buffer.size} bytes read')
+        }
+        for (i in 0..n) {
+            buffer[got + i] = tmp[i]
+        }
+        got += n
+    }
+    got
+}
+
+/** 透传写出，同时增量累计 CRC32（让 crc 覆盖 cmd+len+payload）。 */
+private class Crc32OutputStream <: OutputStream {
+    var crc: UInt32
+    Crc32OutputStream(crc0: UInt32, private let inner: OutputStream) {
+        this.crc = crc0
+    }
+    public func write(bytes: Array<Byte>): Unit {
+        crc = frameCrcUpdate(crc, bytes)
+        inner.write(bytes)
+    }
+}
+
+/** 帧体输入流：最多读出 len 字节（物理上读不出帧外）+ 增量 CRC；帧体读尽后表现为 EOF。 */
+private class FrameBodyStream <: InputStream {
+    var remaining: Int64
+    var crc: UInt32
+    FrameBodyStream(size: Int64, crc0: UInt32, private let inner: InputStream) {
+        this.remaining = size
+        this.crc = crc0
+    }
+    public func read(buffer: Array<Byte>): Int64 {
+        var got = 0i64
+        while (got < buffer.size && remaining > 0) {
+            let left = buffer.size - got
+            let want = if (left < remaining) { left } else { remaining }
+            let tmp = Array<Byte>(want, repeat: 0u8)
+            let n = inner.read(tmp)
+            if (n <= 0) {
+                // 帧还没读完，对端就没了 ⇒ 截断（不是“干净关闭”）
+                throw CodecException('frame truncated: ${remaining} bytes unread')
+            }
+            for (i in 0..n) {
+                buffer[got + i] = tmp[i]
+            }
+            crc = frameCrcUpdate(crc, tmp[0..n])
+            got += n
+            remaining -= n
+        }
+        got
+    }
+}
+
 public struct Message <: Protocol<EncodedMessage, Message> {
     public Message(
         public let command: Command,
@@ -144,25 +288,50 @@ public struct Message <: Protocol<EncodedMessage, Message> {
         let bytes = DefaultCodec().encode(id.time).encode(id.pid).encode(id.tid).encode(id.hostId).encode(data).finish()
         EncodedMessage(command.value, bytes)
     }
+    /**
+     * 解码一帧：`[cmd(1B)][len(4B 大端 = payload 字节数)][payload][crc32(4B，覆盖 cmd+len+payload)]`。
+     *
+     * - 帧头一个字节都没读到 = 对端干净关闭（`InputClosedException`，reader 视为连接结束）；
+     * - 帧中途 EOF / `len` 与实际不符 / CRC 不符 ⇒ 一律抛，绝不返回“半条消息”；
+     * - payload 用限长流解码，**物理上读不出本帧**（即使载荷内部长度字段被写坏）。
+     */
     public static func decode<T>(input: InputStream): Message where T <: FromToData {
-        let b = [0u8]
-        let l = input.read(b)
-        if (l <= 0) {
+        let header = Array<Byte>(FRAME_HEAD_SIZE, repeat: 0u8)
+        if (readFully(input, header) == 0) {
             throw InputClosedException('no readable byte in InputStream')
         }
-        let command = Command.parse(b[0])
+        let command = Command.parse(header[0])
+        let payloadSize = getInt32BE(header, 1)
+        if (payloadSize > framePayloadLimit()) {
+            throw CodecException('frame payload size ${payloadSize} exceeds limit ${framePayloadLimit()}')
+        }
+        // 限长流：解码器最多读到本帧末尾；CRC 从帧头开始累计
+        let body = FrameBodyStream(payloadSize, frameCrcUpdate(frameCrcInit(), header), input)
         let decoder = DefaultCodec()
-        let time = decoder.decode<DateTime>(input).getOrThrow {IllegalArgumentException()}
-        let pid = decoder.decode<Int64>(input).getOrThrow {IllegalArgumentException()}
-        let tid = decoder.decode<Int64>(input).getOrThrow {IllegalArgumentException()}
-        let hostId = decoder.decode<Int64>(input).getOrThrow {IllegalArgumentException()}
-        let data = decoder.decode<T>(input)
+        let time = decoder.decode<DateTime>(body).getOrThrow {IllegalArgumentException()}
+        let pid = decoder.decode<Int64>(body).getOrThrow {IllegalArgumentException()}
+        let tid = decoder.decode<Int64>(body).getOrThrow {IllegalArgumentException()}
+        let hostId = decoder.decode<Int64>(body).getOrThrow {IllegalArgumentException()}
+        let data = decoder.decode<T>(body)
+        if (body.remaining > 0) {
+            // 声明长度比实际载荷长 ⇒ 载荷内部字段边界与帧不一致
+            throw CodecException('frame payload not fully consumed: ${body.remaining} of ${payloadSize} bytes left')
+        }
+        let crcBytes = Array<Byte>(FRAME_CRC_SIZE, repeat: 0u8)
+        if (readFully(input, crcBytes) == 0) {
+            throw CodecException('frame crc missing')
+        }
+        let expected = frameCrcFinish(body.crc)
+        let actual = UInt32(getInt32BE(crcBytes, 0))
+        if (expected != actual) {
+            throw CodecException('frame crc mismatch: expect ${expected}, actual ${actual}')
+        }
         build<T>(command, MessageID(time: time, pid: pid, tid: tid, hostId: hostId), data)
     }
 }
 
 public struct EncodedMessage <: MessageCopier & Releasable {
-    /** 超过该字节数就不做合并（避免为了“一次 write”而把大消息全量缓冲）。 */
+    /** 超过该字节数就不做合并（避免为了“一次 write”而把大帧全量缓冲）。 */
     private static let SMALL_MESSAGE_LIMIT = 4096
     EncodedMessage(
         private let command: Byte,
@@ -174,14 +343,27 @@ public struct EncodedMessage <: MessageCopier & Releasable {
             r.release()
         }
     }
-    /** 小消息合并：payload 已知且不超过 SMALL_MESSAGE_LIMIT 时返回 [cmd][payload]，否则 None。 */
-    private func asOneSmallMessage(): ?Array<Byte> {
-        if (let Some(n) <- bytes.byteSize() && n + 1 <= SMALL_MESSAGE_LIMIT && let Some(payload) <- bytes.asBytes()) {
-            let out = Array<Byte>(n + 1, repeat: 0u8)
+    /** 帧的 len 字段：payload 字节数。流式载荷也必须给得出（否则无法成帧）。 */
+    private func payloadSize(): Int64 {
+        match (bytes.byteSize()) {
+            case Some(n) =>
+                if (n > framePayloadLimit()) {
+                    throw CodecException('frame payload size ${n} exceeds limit ${framePayloadLimit()}')
+                }
+                n
+            case None => throw CodecException('payload size unknown: cannot frame this message')
+        }
+    }
+    /** 小帧：整帧 `[cmd][len][payload][crc]` 一次 write。 */
+    private func asOneSmallFrame(): ?Array<Byte> {
+        if (let Some(n) <- bytes.byteSize() && n <= SMALL_MESSAGE_LIMIT && let Some(payload) <- bytes.asBytes()) {
+            let out = Array<Byte>(FRAME_OVERHEAD + n, repeat: 0u8)
             out[0] = command
+            putInt32BE(out, 1, n)
             for (i in 0..payload.size) {
-                out[i + 1] = payload[i]
+                out[FRAME_HEAD_SIZE + i] = payload[i]
             }
+            putInt32BE(out, FRAME_HEAD_SIZE + n, Int64(frameCrc(out[0..FRAME_HEAD_SIZE + n])))
             out
         } else {
             None<Array<Byte>>
@@ -190,13 +372,23 @@ public struct EncodedMessage <: MessageCopier & Releasable {
     public func copy(to!: OutputStream, closeToOnEnd!: Bool = false): Unit {
         var ok = false
         try {
-            if (let Some(one) <- asOneSmallMessage()) {
-                // 小消息：命令字节 + 载荷合并成**一次** write。
-                // 这样即使写出过程失败，也不会把“半条消息”留在流上（大消息仍走流式，避免内存放大）。
-                to.write(one)
+            let size = payloadSize()
+            if (let Some(frame) <- asOneSmallFrame()) {
+                // 小帧：整帧一次 write，写失败也不会在流上留下“半条”
+                to.write(frame)
             } else {
-                to.write([command])
-                bytes.copy(to: to, closeToOnEnd: false, closeFromOnEnd: false)
+                // 大帧：头（含 len）→ 流式载荷（边写边算 CRC）→ 尾 CRC。
+                // 对端凭 len 即可判定截断；CRC 覆盖 cmd+len+payload，能发现损坏。
+                let header = Array<Byte>(FRAME_HEAD_SIZE, repeat: 0u8)
+                header[0] = command
+                putInt32BE(header, 1, size)
+                // 初值只做 init：header 由 tee.write 累加一次，避免帧头被算两遍
+                let tee = Crc32OutputStream(frameCrcInit(), to)
+                tee.write(header)
+                bytes.copy(to: tee, closeToOnEnd: false, closeFromOnEnd: false)
+                let crcBytes = Array<Byte>(FRAME_CRC_SIZE, repeat: 0u8)
+                putInt32BE(crcBytes, 0, Int64(frameCrcFinish(tee.crc)))
+                to.write(crcBytes)
             }
             to.flush()
             ok = true
@@ -204,7 +396,7 @@ public struct EncodedMessage <: MessageCopier & Releasable {
             // 无论成败都归还池项（原实现只在 bytes.copy 走完时才归还）
             release()
             if (!ok && let r: Resource <- to && !r.isClosed()) {
-                // 写失败：消息只剩半条留在流上，必须断链，让对端看到 EOF 而不是半条消息
+                // 写失败：帧只剩一半留在流上，必须断链，让对端看到 EOF 而不是半条
                 r.close()
             }
         }

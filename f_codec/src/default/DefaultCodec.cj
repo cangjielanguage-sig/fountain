@@ -497,7 +497,7 @@ public class DefaultCodec <: Codec & Releasable {
         let buffer = lastBuffer()
         buffer.write(sizeBuf)
         buffer.write(value)
-        this.size += size + sizeBuf.size
+        this.size += value.size + sizeBuf.size
         this
     }
     public func encode(data: InputStream, size: Int64): Encoder {
@@ -507,7 +507,7 @@ public class DefaultCodec <: Codec & Releasable {
         let sizeBuf = encodeSizeOfValue(INPUTSTREAM, !isFile, size, forInt: true)
         let buffer = lastBuffer()
         buffer.write(sizeBuf)
-        inputs.add(PooledBufferBytesCopyTo(data, bytesPool))
+        inputs.add(PooledBufferBytesCopyTo(data, bytesPool, declaredSize: size))
         this.size += size + sizeBuf.size //+sizeBuf.size是类型头的1字节 + size序列化后的字节数
         this
     }

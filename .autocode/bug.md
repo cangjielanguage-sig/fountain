@@ -24,6 +24,8 @@
 | 6.6-4 | 写路径原子性 | 🟡 | 同缺陷 B |
 | 6.6-5 | 心跳策略 | ✅ | 同 P2 |
 | 7.1 前半 | 半条消息被接收侧**静默吞掉**（零填充 / 当成“无 data”） | ✅ | 2026-10-03 修复（见 6.10）：`decodeData` 的 EOF 不再等价 `DataNone`；载荷短读不再被放行（原判据写错成 `size < s`）；流式分支改为“剩余待读”；`Message.decode` 的 `l == 0` → `l <= 0` |
+| 7.1 后半 | 帧格式：无总长 / 无校验 | ✅ | 2026-10-03 改为 `[cmd][len][payload][crc32]`（见 6.11）：发送侧头里带 len、尾带 CRC；接收侧限长流（读不出帧外）+ 增量 CRC + `maxFramePayload` 上限；截断/损坏/长度不符一律抛 |
+| — | (7.5 起) §四 P2 小项与池相关遗留 | ⬜ | 见 §7.2~7.6，未动 |
 | — | 池记账脱钩的**触发源** | ⬜ | 未定位到具体一行；已加自愈 + `DEQUE-SELFCHECK`/`WEDGE-HEAL` 告警（见 6.8.5、7.2） |
 | — | 重复归还的强约束 | ⬜ | 泛型 `SyncDeque<T>` 无法按值去重，目前只能检出 + 告警（见 6.9、7.3） |
 
@@ -510,29 +512,48 @@ frpcdemo 端到端（worktree 内构建，跑 40s）日志事件 0、`decode err
 
 **仍未解决**：发送侧大消息仍是多段 `write`（可能写出半条），且协议没有帧总长/校验 —— 收不到“剩余字节数”“损坏检测”，见 7.1。
 
+### 6.11 帧格式改造：`[cmd][len][payload][crc32]`（2026-10-03）
+
+- 目标：把 6.10 的“**能判定不完整**”升级为“**有帧边界 + 有校验**”——接收侧能提前知道剩余字节数，也能发现损坏。
+- 线上格式（payload = 原 `[time][pid][tid][hostId][data]`）：
+
+```
+[cmd(1B)][len(4B 大端, = payload 字节数)][payload(len B)][crc32(4B, 覆盖 cmd+len+payload)]
+```
+
+| 侧 | 实现 |
+| --- | --- |
+| 发送 `EncodedMessage.copy` | payload ≤ 4096B：整帧拼好**一次 write**；否则：先写头（含 len）→ 流式写载荷（**边写边算** CRC，零缓冲、零二次读）→ 写尾 CRC。写失败仍断链 ✓ |
+| 接收 `Message.decode` | 读帧头（0 字节 = 干净关闭）→ 校验 `len ≤ maxFramePayload` → 用**限长流** `FrameBodyStream` 解码（物理上读不出帧外，载荷内部长度被写坏也不会越界）→ 校验“载荷是否被完整消费” → 读尾 CRC 比对 |
+| 上限 | `protocol_maxFramePayload`（默认 1GB）——**首次使用时才读配置**：包初始化期读配置会在应用 `Init Image` 阶段抛 NoneValueException（已实测），故改为懒读 + 缓存 |
+| CRC 实现 | 帧 CRC 自包含在 f_protocol（不在包初始化期依赖外部包）。**踩坑**：`f_protocol` 依赖 `f_util` 会导致应用加载期 `undefined symbol: crc32Update` —— 本仓库应用按目录顺序 dlopen 各包 .so，`f_protocol@fountain` 先于 `f_util@fountain` |
+
+**配套改动**：`PooledBufferBytesCopyTo` 记住调用方声明的长度并实现 `byteSize()`（流式载荷也要能给出 len）；`DefaultCodec.encode(value: Array<Byte>)` 的 `this.size += size + sizeBuf.size` 把计数器算成两倍，改为 `value.size`。
+
+**新增/更新用例**（`f_protocol/src/default/truncated_message_test.cj`，共 13 条）：
+帧结构自洽（cmd/len/crc 与内容对应）、头截断、载荷截断（inline/流式）、尾 CRC 截断、
+EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已重算）、声称 1MB 快速失败、
+**逐字节短读**、**大帧（9000B）自洽性** —— 最后这条当场抓出了“流式路径把帧头算了两遍 CRC”的真 bug。
+
+**验证**：`f_protocol` **54/54**、`f_codec` **15/15**；demo 重建通过、服务端正常加载并监听（0 加载失败）。
+
+**已知限制**：`frpcdemo` 客户端在本仓库当前 HEAD 上**本来就起不来**（`Init Image fail: NoneValueException` → SIGSEGV，主工作区未含本次改动时同样复现，见下），
+因此本轮没能跑通“client 业务调用”级别的端到端；帧的端到端行为由 socket 级别的短读/短写用例 + 服务端启动验证覆盖。
+
 ---
 
 ## 七、尚未解决的问题（遗留清单）
 
-> 截至 2026-10-03，§一~§六 描述的风暴及其直接缺陷**均已修复并复验**（含 6.10 的“半条必被识别”）；见文首「状态总览」。以下是**仍未解决**的部分。
+> 截至 2026-10-03，§一~§六 描述的风暴及其直接缺陷**均已修复并复验**（含 6.10 的“半条必被识别”与 6.11 的帧格式）；见文首「状态总览」。以下是**仍未解决**的部分。
 
-### 7.1 帧完整性：会报“不完整”，但没有“帧总长/校验”（🟡 只完成一半）
+### 7.1 帧完整性：已完成（见 6.11），但发送侧仍有“多段写”窗口
 
-- **已完成（2026-10-03，见 6.10）**：接收侧能判定“半条”——装配中遇 EOF/短读一律抛 + 断链，
-  不再零填充、不再静默当成“无 data”。所以对端**不会拿到错数据**，最坏是这次调用失败。
-- **未完成（发送侧与帧格式）**：
-  1. 发送侧大消息仍是多段 `write`（含 InputStream/File 载荷的流式），写中途失败**仍可能写出半条**；小消息靠 ≤4096B 合并规避。
-  2. 协议**没有帧总长** ⇒ 接收侧**无法知道“数据包剩余字节数”**，只能一路解到结束；也无法据此预检/限流。
-  3. **没有校验** ⇒ 无法检出“字节数够但内容损坏”（位翻转、串包、脏内存）。
-- 待办建议（按性价比排序）：
-  1. **校验尾**（`[cmd][payload][len+crc]`）：不需要提前知道长度，对**未知长度的流式载荷**也成立；接收侧在派发前校验。
-     代价：+4~8B/消息、两端同改、需协议版本位。
-  2. **长度头 + 限长流**（`[len][cmd][payload]`，接收侧用 `LimitedInputStream(inner, len)` 包一层，不把整条读进内存）：
-     能提前知道剩余字节数、可预检/限流。发送侧侧前置条件：非流式消息可用 `byteSize()`（`ChainedBytesCopyTo`/`BytesListOutputStream` 已实现）；
-     `DefaultCodec` 另有精确计数器 `size`（**私有未暴露**，且 `encode(value: Array<Byte>)` 里 `this.size += size + sizeBuf.size` 的 `size`
-     解析成了字段自身 ⇒ 计数翻倍，要用必须先修）；流式项 `PooledBufferBytesCopyTo` 未实现 `byteSize()`（其长度是 API 入参，可补）。
-     真正“调用方也不知道长度”的 InputStream 只能退化到方案 1。
-  3. “写完一条消息”与 `close()` 互斥：会让 `close()` 等阻塞写，需配合写超时，**不推荐单独使用**。
+- ✅ 已完成：`[cmd][len][payload][crc32]` 帧格式 + 限长流 + 增量 CRC + 上限校验（6.11）。
+- ⬜ 未完成：大帧（> 4096B，尤其含 InputStream/File 流式载荷）发送侧仍是“头 + 多段载荷 + 尾 CRC”，
+  写中途失败仍会在流上留下**半帧**；接收侧现在能**确定性判定**（len 未读满/CRC 缺失 ⇒ 抛 + 断链），
+  但发送侧窗口本身没有消除。可选做法：把“写完一帧”与 `close()` 互斥（需配合写超时，否则把截断换成挂起）。
+- ⬜ 未完成：帧内**值级**长度仍未设上限 —— 帧的 `len` 把可读字节数限住了，但 `DefaultCodec` 仍会按线上声明的长度
+  直接分配（如 STRING 分支 `Array<Byte>(size, repeat: 0)`），恶意/损坏长度可造成超大分配。建议给值长度也加上限或与帧剩余量对齐。
 
 ### 7.2 池记账脱钩的**触发源**未定位（🟡 已有自愈兜底）
 
@@ -569,3 +590,15 @@ frpcdemo 端到端（worktree 内构建，跑 40s）日志事件 0、`decode err
 
 - `KeyPool.get(Duration.Max)` 的「有限等待」是**策略变更**（原来是无限等待）：30s 后 `WARN` 并返回 `None`；
   若业务上确实需要无限等待，应改为可配置（当前为常量）。
+
+### 7.7 frpcdemo 客户端当前无法启动（**既有问题**，2026-10-03 实测）
+
+- 症状：`cd frpcdemo && ./boot.sh runClient` → `Init Image fail! exception ...: std.core:NoneValueException`
+  （加载 `.../target/release/rpcclient@fountain/librpcclient@fountain` 失败）→ 随后 `MessageID.toString`
+  解引用空值 SIGSEGV，进程 exit 139。
+- **与本轮帧改造无关**：在不含本轮任何改动的主工作区（HEAD `e8d71105`）用同样命令复现，输出一致。
+- 线索：崩点前最后两条是 `BeanFactory.getFirst: requiredType-fountain::rpcdef.EchoRPC` →
+  `beanType-fountain::rpcdef.EchoRPC_Stub__`，即挂在 `f_bean`/`f_rpc` 宏生成的 stub 创建路径上；
+  服务端不受影响（能正常加载、监听端口）。
+- 影响：无法用 demo 做 client↔server 的**业务级**端到端回归；帧的端到端行为暂由 socket 级别
+  短读/短写用例 + 服务端启动验证覆盖。
