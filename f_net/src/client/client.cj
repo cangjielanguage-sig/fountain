@@ -80,7 +80,14 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                 } catch (e: Exception) {
                     let mid = mid
                     let cmd = cmd
-                    log.error(e){'Client reader error ${cmd}:${mid} ${buffer.isClosed()}'}
+                    if (buffer.isClosed()) {
+                        // 连接是我们自己关的（发现循环每轮重建、checkTimer 拆链、close()），读到“socket 已关闭”
+                        // 属于正常收尾；记 ERROR 会在每次正常关闭时刷一整条栈（实测一次 70s 运行 138 条），
+                        // 把真正的读取失败淹没在噪音里（见 bug.md 7.5）。
+                        log.debug{'Client reader closed ${cmd}:${mid}'}
+                    } else {
+                        log.error(e){'Client reader error ${cmd}:${mid} ${buffer.isClosed()}'}
+                    }
                     // 解码失败 = 字节流已错位，必须断链（不能继续在错位的流上解析）
                     if(!buffer.isClosed()){
                         try{

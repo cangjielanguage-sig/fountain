@@ -28,7 +28,7 @@
 | 7.1 值级长度 | 帧内**值级**声明长度可触发超大分配 | ✅ | 2026-10-04：`SizeBoundedInput` + `DefaultCodec.checkedBuffer()` 分配前校验「声明 ≤ 帧剩余」，超了抛 `CodecException`；f_protocol **60/60**（含 1TB 声明用例，见 7.1） |
 | 7.7 | frpcdemo 客户端无法启动（**既有问题**） | ✅ | 2026-10-03 定位并修好启动链路（缺 `rpcClient_serverAddress` ⇒ ERROR+`exit(1)`；RPC 调用移出 Init Image；另修 4 处段错误）：实测 0 Init Image fail、0 段错误。**业务级 E2E 已跑通**（见 7.10） |
 | 7.10 | 业务级 E2E 的 10 层断链 | ✅ | 2026-10-03 逐层定位并修复：消息 id 时区/相等、`ExecutorFuture.get` 丢结果、客户端 reader 中性解码、骨架注册前缀过滤、`ServiceMeta` 含 weight、发现连接复用、重试判断、demo 侧接口/载荷、对象类型未注册。实测客户端打印 JSON、服务端 `CONSUME` 正常（见 7.10） |
-| — | (7.5 起) §四 P2 小项与池相关遗留 | ⬜ | 见 §7.2~7.6，未动 |
+| — | (7.5 起) §四 P2 小项与池相关遗留 | 🟡 | 7.5 的 **f_net 三条已修**（2026-10-04：`tryRemove` 活性修复 + 客户端日志分级 + remoteAddress 守卫）；7.2~7.4、7.6 未动；另新发现服务端 `tcp closed` WARN 噪音（见 7.5） |
 | — | **f_protocol→f_util 依赖**：应用加载期 `undefined symbol: crc32Update` | ✅⚠️ | **已修**（`boot.sh` 自建库优先）。曾误判为"加载顺序/需要预打开 .so"，实际是 `installed/libs/fboot` 的**旧副本抢先**（库无 SONAME），见 7.8 |
 | — | 池记账脱钩的**触发源** | ⬜ | 未定位到具体一行；已加自愈 + `DEQUE-SELFCHECK`/`WEDGE-HEAL` 告警（见 6.8.5、7.2） |
 | — | 重复归还的强约束 | ⬜ | 泛型 `SyncDeque<T>` 无法按值去重，目前只能检出 + 告警（见 6.9、7.3） |
@@ -42,7 +42,8 @@ frpcdemo 端到端（默认配置约 45s）CPU **0%~2%**、应用日志事件 **
 **复验（2026-10-03，分支 `fix/half-message-detect`）**：`f_util` **28/28**、`f_protocol` **55/55**（修复前基线 43/45）、`f_codec` **15/15**。
 
 **复验（2026-10-04，worktree `fix-half-message`）**：`f_net` **14/14**（迁移后的读写路径用例 + 既有用例，见 7.9）；
-`f_codec` **15/15**、`f_protocol` **60/60**（含 §7.1 值级长度的 1TB 声明用例）；
+`f_codec` **15/15**、`f_protocol` **60/60**（含 §7.1 值级长度的 1TB 声明用例）、`f_net` **14/14**；
+客户端 `[ERROR]` 计数 **138 → 0**（§7.5 第 3 条，同批消息改为 DEBUG）、`ping_failures=0`；服务端 `[WARN]` 140 条（`tcp closed`，见 §7.5 新行，未修）；
 frpcdemo 业务级 E2E 仍跑通（客户端打印 JSON、服务端 `CONSUME(8)`、两侧 `Init Image fail` 0、`not registered` 0）——
 此轮**删除了 demo 手工的 `DefaultCodec.registerType<EchoPO>()`**，改由 §7.11 的宏展开自动登记。
 另：一次 70s 的客户端运行里出现 138 条 `[ERROR] Client reader error ... true`，**全部**来自发现循环的正常 `close()`
@@ -605,9 +606,10 @@ EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已�
 
 | 位置 | 现状 | 建议 |
 | --- | --- | --- |
-| `f_net/src/server/server.cj:57` | 取 `buffer.remoteAddress` 前仍无 `isClosed()` 守卫（异常被外层 `try` 吞掉，只产生 WARN 噪音） | 加守卫或复用 `try` 内的地址 |
-| `f_net/src/server/server.cj:53` | accept 循环仍是 `while (i < size && let buffer <- buffers.remove())`（`size` 快照 + 阻塞 `remove`） | 改 `tryRemove()` |
-| `f_net/src/client/client.cj:77` | reader 异常统一 `log.error`，包括「被自身 checkTimer 正常关闭」的场景（**2026-10-04 E2E 实测：一次 70s 运行刷出 138 条 ERROR，全部是这个场景**） | 该场景降级为 WARN/DEBUG；纯日志噪音，不影响功能 |
+| `f_net/src/server/server.cj:57` | ✅ 已修（2026-10-04）：取 `remoteAddress` 前加 `!buffer.isClosed()` 守卫 | — |
+| `f_net/src/server/server.cj:53` | ✅ 已修（2026-10-04）：`buffers.remove()` → `tryRemove()`。**这不是纯噪音**：`std.collection.concurrent` 的 `remove(): E` 是阻塞出队，而 `size` 只是快照 —— 队列被并发消费（其它 tick 回调 / `close()` 时 `doClose` 抽干）时会把定时器线程**永久卡住**（巡检停摆 + 每 tick 泄漏一个阻塞线程） | — |
+| `f_net/src/client/client.cj:77` | ✅ 已修（2026-10-04）：`buffer.isClosed()` 为真（连接是自己关的）时降级 `log.debug{'Client reader closed …'}`，其余仍 `log.error` 带栈。实测一次 70s E2E：`[ERROR]` **138 → 0**，同一批消息以 `Client reader closed`（DEBUG）出现 138 条；`ping_failures=0`（心跳与发现正常） | — |
+| `f_net/src/server/server.cj:127` | ⬜ **本轮新发现**：对端正常关闭（发现循环每轮重建连接）也记 WARN `tcp closed` 带栈 —— 同一次 70s E2E 实测 **140 条**（约 2/s），与 §7.5 第 3 条同源（"正常收尾被记成高等级"）。`Client` 侧的同类问题本轮已修，服务端这条**未改**（服务端能否区分"对端正常断开"与"异常断开"需要单独设计） | 降级为 DEBUG/INFO，或按"对端 FIN / 读错误"区分等级 |
 | 服务端 `unavailableChecked` | 默认仍为 3（P2 建议放宽并与 PING 发送对齐） | 风暴已消失，建议先观察再定 |
 | `KeyPool.get` 放弃阈值 | 30s 为写死常量 | 如需按池配置，可后续加参数 |
 

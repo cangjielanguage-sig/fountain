@@ -50,10 +50,15 @@ public class Server<T> <: Resource where T <: DataFields<T> {
             {=>
                 let size = buffers.size
                 var i = 0
-                while (i < size && let buffer <- buffers.remove()) {
+                // 不能用阻塞的 remove()：size 只是快照，队列若被并发消费（其它 tick 的回调、或 close() 时
+                // doClose 抽干队列）就会少那么多个元素，remove() 会把本定时器线程**永久卡住** ——
+                // 连接有效性巡检就此停摆，且每个这样的 tick 泄漏一个阻塞线程（见 bug.md 7.5）。
+                while (i < size && let Some(buffer) <- buffers.tryRemove()) {
                     spawn {
                         let available = try {
-                            if(let Some(m) <- checker()){
+                            // 连接已关时 socket.remoteAddress 会抛 SocketException（拆链/关闭路径上的正常收尾），
+                            // 先判一次，避免每个关闭的连接都刷一条 WARN 栈
+                            if(let Some(m) <- checker() && !buffer.isClosed()){
                                 let counter = checkerId.entryView(buffer.remoteAddress){view => 
                                     if(let Some(c) <- view.value){
                                         c.id = m.id
