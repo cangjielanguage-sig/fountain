@@ -23,7 +23,10 @@ import fountain::rpcdef.model.EchoPO
 
 
 @RPCSkeleton
-public class EchoPOImpl <: EchoPO {
+// 必须实现 RPC 接口（EchoRPC），不是数据模型（EchoPO）：
+// 骨架注册要沿接口找“声明了 echo 的接口”，继承数据模型时找不到任何接口 ⇒ 服务不会出现在服务列表里
+// （服务端 SUBSCRIBE 因此返回空数组，客户端永远发现不了服务，见 bug.md 7.10）
+public class EchoPOImpl <: EchoRPC {
     public func echo(po: EchoPO): EchoPO {
         let obj = po.toData()
         let json = JsonValue.from(obj)

@@ -125,6 +125,41 @@ public class Truncated_message_test {
         body
     }
 
+    // ---------- 帧长自洽：头里的 len 必须等于实际写出的载荷字节数 ----------
+
+    @TestCase
+    public func declaredLenMatchesWrittenPayload(): Unit {
+        // 服务端响应的真实载荷形状：Array<String>（订阅返回的主机列表）
+        let data: Array<String> = ['127.0.0.1:1203,1.000000']
+        let frame = wireOf(Message.resp(MessageID(pid: 1, tid: 1, hostId: 0),
+            qos: QoS.AtMostOnce, ack: false, data: data))
+        @Assert(lenOf(frame) == frame.size - 5 - 4)
+        let decoded = Message.decode<Array<String>>(DribbleInputStream(frame, frame.size))
+        let got: Array<String> = match (decoded.tryFromData<Array<String>>()) {
+            case x: Array<String> => x
+            case x: ?Array<String> => x ?? []
+            case _ => []
+        }
+        println('Array<String> 往返: got.size=${got.size}, want=${data.size}, first=${if (got.size > 0) { got[0] } else { '<empty>' }}')
+        @Assert(got.size == data.size)
+        @Assert(got[0] == data[0])
+    }
+
+    @TestCase
+    public func declaredLenMatchesNestedPayload(): Unit {
+        // 嵌套结构（数组里再套数组）最容易把长度算错：len 偏大 ⇒ 对端会一直等永远不来的剩余字节
+        let nested: Array<Array<String>> = [['a', 'bb'], ['ccc']]
+        let frame = wireOf(Message(Command.REGISTER, nested.toData()))
+        @Assert(lenOf(frame) == frame.size - 5 - 4)
+        let decoded = Message.decode<Array<Array<String>>>(DribbleInputStream(frame, frame.size))
+        let got: Array<Array<String>> = match (decoded.tryFromData<Array<Array<String>>>()) {
+            case x: Array<Array<String>> => x
+            case x: ?Array<Array<String>> => x ?? []
+            case _ => []
+        }
+        @Assert(got.size == 2 && got[1].size == 1 && got[1][0] == 'ccc')
+    }
+
     // ---------- 正常路径 ----------
 
     /** 完整消息必须能正常解出来（防止把修复做成“一律抛”）。 */

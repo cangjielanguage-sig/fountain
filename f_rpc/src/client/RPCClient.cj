@@ -30,14 +30,18 @@ public class RPCClient {
         if (started.load() == 2) {
             return
         } else if (started.compareAndSwap(0, 1)) {
-            let clients = ClientConfig.createClient()
             spawn{
                 while(true){
+                    // 每轮重新建立“发现用”连接：上一轮末尾会 close() 掉它们，
+                    // 若在循环外只建一次，第二轮起 transfer 会抛 "Client is closed"，发现流程整体中断（bug.md 7.10）
+                    let clients = ClientConfig.createClient()
                     let metas = HashMap<ServiceMeta, TreeSet<String>>()
                     func subscribe(client: Client<RPCMessage>, closingOnEnd: Bool){
                         try{
                             let message = Message.subscribe(data: RPCMessage.subscribe(false))
+                            rpclog.debug{'[RPCClient.init.diag] subscribe request sent id=${message.id} to ${client.address}'}
                             let data = client.transfer(message).get().data
+                            rpclog.debug{'[RPCClient.init.diag] subscribe response received from ${client.address}'}
                             let any = Array<ServiceMeta>.tryFromData(data)
                             let array: Array<ServiceMeta> = match(any){
                                 case x: Array<ServiceMeta> => x
@@ -67,8 +71,13 @@ public class RPCClient {
                     let hostMap = TreeMap<String, Float64>()
                     try{
                         for(client in clients){
-                            let msg = Message.subscribe(data: true)
-                            let resp = client.transfer(msg).get().data
+                            // 载荷必须是 RPCMessage：服务端会 tryFromData<RPCMessage>() 后取 params[0]，
+                            // 传裸 Bool 会被宽松转成“params 为空的 RPCMessage”⇒ 服务端取 params[0] 越界（见 bug.md 7.10）
+                            let msg = Message.subscribe(data: RPCMessage.subscribe(true))
+                            rpclog.debug{'[RPCClient.init.diag] hosts request sent id=${msg.id} to ${client.address}'}
+                            let response = client.transfer(msg).get()
+                            rpclog.debug{'[RPCClient.init.diag] hosts response received from ${client.address}, command=${response.command}, id=${response.id}'}
+                            let resp = response.data
                             let any = Array<String>.tryFromData(resp)
                             let array: Array<String> = match(any){
                                 case x: Array<String> => x
@@ -81,9 +90,12 @@ public class RPCClient {
                                 let weight = Float64.parse(h[idx + 1 ..])
                                 hostMap.add(host, weight)
                             }
-                            subscribe(client, false)
+                            let ok = subscribe(client, false)
+                            rpclog.debug{'[RPCClient.init.diag] services subscribe ok=${ok}, metas=${metas.size}'}
                         }
+                        rpclog.debug{'[RPCClient.init.diag] hostMap=${hostMap.size}, closing initial clients'}
                         clients.close()
+                        rpclog.debug{'[RPCClient.init.diag] initial clients closed, building per-host clients'}
                         for((host, weight) in hostMap){
                             while(true){
                                 var client: Client<RPCMessage> = unsafeZeroValue<Client<RPCMessage>>()
@@ -173,7 +185,9 @@ public class RPCClient {
         let start = MonoTime.now()
         try{
             for(client in availableClients(message.meta)){
-                if(tried >= retryCount){
+                // retryCount 是“重试次数”，must allow tried==0（首次尝试）；
+                // 原来写 tried >= retryCount，默认 retryCount=0 时首次尝试就被判为超出重试，调用永远发不出去
+                if(tried > retryCount){
                     let exceeded = RPCException("retry count exceeded")
                     if(let Some(e) <- ex){
                         e.addSuppressed(exceeded)

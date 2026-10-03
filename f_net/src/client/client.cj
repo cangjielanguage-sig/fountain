@@ -52,7 +52,10 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                 var mid = None<MessageID>
                 var cmd = None<Command>
                 try {
-                    let message: Message = Message.decode<T>(buffer)
+                    // 用 DataAny 中性解码：客户端的响应载荷类型是多样的（Array<String>、Array<ServiceMeta>…），
+                    // 若按 T（RPCMessage）解码，会把这类载荷“宽松转换”成字段为空的 RPCMessage，
+                    // 调用方随后据其转换会在 f_data 里段错误（见 bug.md 7.10）。原始 Data 交给调用方自行转换。
+                    let message: Message = Message.decode<DataAny>(buffer)
                     let id = message.id
                     mid = id
                     cmd = message.command
@@ -62,6 +65,9 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                     }else if (let Some(fut) <- futures.remove(id)) {
                         var f = fut
                         f.set(message)
+                    }else{
+                        // 响应到了但该id上没有等待者（id不匹配/已被超时移除）：此前完全静默，是排查时的盲区
+                        log.debug{'Client reader: no future for id ${id}, command ${message.command}'}
                     }
                 } catch(e: InputClosedException){
                     log.warn('Client reader closed', e)

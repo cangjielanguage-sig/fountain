@@ -684,19 +684,39 @@ EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已�
   如果实际期望的是 CCITT-FALSE（init=`0xFFFF`、检查值 `0x29B1`），那要改的是 init，而不是现在的实现。待确认。
 - `f_util` 里 `crc64` 的相关 API（`crc64<T>`）此前存在"返回 UInt16 却叫 crc64"的复制粘贴 bug，**已修**（提交 `02d57ee0`）；
   但 `crc64` 目前在仓库里无人调用，属于"修好了但没有使用方"的状态。
+- `f_net` 的用例**长期编译不过**（2026-10-03 实测）：`src/test/f_net_tcp_test.cj`、`socket_params_test.cj` 等仍是旧泛型签名
+  （`Server<Message, EncodedMessage, Message, String>`、`Client<Message, EncodedMessage, Message, String, MessageID>`），
+  与现在的 `Server<T>` / `Client<T>` 不符 ⇒ `cjpm test` 直接编译失败。不是本轮改动引入的，但意味着
+  **f_net 的读取/发送路径目前没有可执行的用例覆盖**（本轮 f_net 客户端的改动只能靠 demo 运行验证）。
 
-### 7.10 SUBSCRIBE 帧的载荷读不出（**2026-10-03 新定位**，业务级 E2E 的最后一道坎）
+### 7.10 业务级 E2E 的完整断链（2026-10-03 逐层定位，已修 8 处，**仍未跑通**）
 
-- 现象（服务端日志，客户端发 SUBSCRIBE 时）：
-  ```
-  [ERROR-rpc][FOUNTAIN_RPC.Skeleton.SUBSCRIBE] 2516833_30_0_...; An exception has occured:
-  IndexOutOfBoundsException: Index out of bounds: index is '0', but array size is '0'.
-  fountain::f_protocol.exception.InputClosedException:no readable byte in InputStream
-  ```
-- 推断链路：SUBSCRIBE 帧的 payload 没被服务端读出 ⇒ 解出的 `RPCMessage.params` 为空 ⇒ `RPCServer.execute`
-  的 `fromData<Bool>`（`rpcmsg.params[0].data`）越界 ⇒ 服务端回 ERROR（不再崩溃，见 7.7 的修复）⇒
-  客户端服务发现始终拿不到服务列表 ⇒ `services` 为空 ⇒ `RPCException: no available client for ... after 5s`。
-- 与 7.7 修复的关系：7.7 只是让这条链**可见**（错误文本能打印出来、不再段错误），并没有修掉它。
-- 下一步（未做）：在客户端发送侧 dump 帧头 `len`/CRC 与实际写出的字节数，服务端记录收到的字节数，
-  判定是"发送侧写少了"还是"接收侧读少了"；重点看 ≤4096B 的整帧一次 write 路径与 `FrameBodyStream` 的边界。
-- 影响：client↔server 的**业务级**端到端回归仍不可用（帧的端到端行为目前由 socket 级短读/短写用例覆盖）。
+修完 7.7 后 `./boot.sh runClient 127.0.0.1:1203` 的失败点逐层后移，每层都是一个独立缺陷：
+
+| # | 层 | 现象 | 根因 | 处置 |
+| --- | --- | --- | --- | --- |
+| 1 | demo | 服务端处理 SUBSCRIBE 时 `params[0]` 越界 | 主机列表订阅写成 `Message.subscribe(data: true)`（**裸 Bool**），而服务端要求载荷是 `RPCMessage`（再取 `params[0]`）；`Message.subscribe<T>(data!)` 是泛型直通、不包一层 | 改为 `Message.subscribe(data: RPCMessage.subscribe(true))`（同文件另一处本来就这么写） |
+| 2 | 编解码 | 响应带回的消息 id 与请求不同（实测相差整 8 小时） | `DefaultCodec.encode(DateTime)` 用 `value - DateTime.UnixEpoch`（与时区相关），解码用 `UnixEpoch + duration` ⇒ 时刻偏移；`MessageID` 的 hash/相等又按带时区的 `DateTime` 比较 ⇒ `futures` 永远查不到 | 改用绝对时刻 `toUnixTimeStamp()` / `fromUnixTimeStamp()`；`MessageID` 的 hash/相等按绝对时刻；新增用例 `messageIdSurvivesFrameRoundTrip`（修前必失败） |
+| 3 | f_concurrent | 服务端处理完了，但响应**从不回**客户端（reader 侧只收到 PING/ACK，0 个 RESP） | `ExecutorFuture.get(default)` 在任务 `finished` 后直接 `return default()`，**丢掉 result** | finished 后先返回 result，无结果才用 default |
+| 4 | f_net 客户端 | 拿到响应后在 `String.tryFromData` → `DataObject.toString` 段错误 | reader 用 `Message.decode<T>`（T=RPCMessage）解码**所有**消息；`Array<String>`/`Array<ServiceMeta>` 响应被宽松转换成字段为空的 RPCMessage ⇒ 后续转换踩空对象 | reader 改中性解码 `Message.decode<DataAny>`；并补"响应无等待者"的 DEBUG 日志（此前完全静默） |
+| 5 | f_rpc 服务端 | 服务列表订阅返回 `[]` | `ServiceHub.register` 的接口遍历把 `fountain::` 前缀一律当框架接口排除，而 demo 接口 `fountain::rpcdef.EchoRPC` 恰是这个前缀 ⇒ 永远遍历不到 ⇒ 骨架注册不进去（日志里只有 class 行、没有 interface 行） | 只排除 `std.`/算子接口（真正决定注册的是 `getInstanceFunction` 判定） |
+| 6 | demo | 骨架注册后服务列表仍是 `[]` | `EchoPOImpl <: EchoPO` —— 继承的是**数据模型**，根本没实现 RPC 接口 `EchoRPC` | 改为 `<: EchoRPC` |
+| 7 | f_rpc 客户端 | 发现循环第一轮之后每轮抛 `Client is closed` | 发现用的 `clients` 建在 `while(true)` 之外，第一轮末尾 `close()` 后第二轮起 `transfer` 直接抛 | 每轮重建（`createClient()` 移进循环） |
+| 8 | f_rpc | 服务找到了却立刻 `retry count exceeded` | `if(tried >= retryCount)`，而 `retryCount` 默认 0、`tried` 从 0 起 ⇒ **首次尝试就被判超限** | 改为 `tried > retryCount`（放行首次尝试） |
+
+**链路已推进到**：客户端能连上 → 能发现服务（`metas=2`）→ 能把 CONSUME 发到服务端；服务端骨架也已注册。
+
+**当前最后一道坎（未修）**：服务端解码 CONSUME 载荷时抛
+```
+NoneValueException: Value does not exist.
+  at std.collection.concurrent.ConcurrentHashMap::[]
+  at fountain::f_codec.default.DefaultCodec::decodeData (DefaultCodec.cj:850 ← 830 ← 858)
+  at fountain::f_codec.default.DefaultCodec::decode (DefaultCodec.cj:949)
+  at fountain::f_protocol.default.Message::decode (Message.cj:277)   ← 解码 data 字段
+  at fountain::f_net.server.Server::start::lambda.0 (server.cj:125)
+```
+即 `DefaultCodec` 重建 `@DataAssist` 对象时，**"类型hash → creator"注册表里没有该类型**（服务端没见过客户端侧构造的某个类型）。
+下一步：把缺失的 hash 与对应类型打印出来，判定是"creator 注册时机"问题还是"两侧类型 hash 算法不一致"。
+
+**影响**：`frpcdemo` 的业务级端到端仍不可用；但客户端不再崩溃、不再静默挂住，失败信息明确（`no available client` → `retry count exceeded` → 服务端解码异常）。
+协议/消息层行为由 `f_protocol` **58/58** 用例覆盖（含新增的帧长自洽与消息 id 往返）。

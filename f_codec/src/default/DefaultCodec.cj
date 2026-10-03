@@ -476,7 +476,9 @@ public class DefaultCodec <: Codec & Releasable {
         encode(value, lastBuffer())
     }
     private func encode(value: DateTime, buffer: BytesListOutputStream): Encoder {
-        let duration = value - DateTime.UnixEpoch
+        // 必须用绝对时刻：`value - DateTime.UnixEpoch` 与时区相关（本地时间会多算一个UTC偏移），
+        // 解码端再做 `UnixEpoch + duration` 就得到另一个时刻，响应里的消息id与请求对不上（bug.md 7.10）
+        let duration = value.toUnixTimeStamp()
         let int = BigInt(duration.toSeconds()) * TEN_POW_NINE + BigInt(
             (duration - Duration.second * duration.toSeconds()).toNanoseconds())
         if (int >= MIN_INT && int < ZERO_BIGINT) {
@@ -811,9 +813,10 @@ public class DefaultCodec <: Codec & Releasable {
         } else if (dataType == DataType.DURATION2.value) {
             readDuration2(head, input).toData()
         } else if (dataType == DataType.DATETIME1.value) {
-            (DateTime.UnixEpoch + readDuration1(head, input)).toData()
+            // 与 encode(DateTime) 对称：按绝对时刻还原
+            DateTime.fromUnixTimeStamp(readDuration1(head, input)).toData()
         } else if (dataType == DataType.DATETIME2.value) {
-            (DateTime.UnixEpoch + readDuration2(head, input)).toData()
+            DateTime.fromUnixTimeStamp(readDuration2(head, input)).toData()
         } else if (dataType == DataType.COLLECTION.value) {
             let list = DataList()
             let s = Int64(head & 0x0f)

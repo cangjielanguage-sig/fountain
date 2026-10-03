@@ -131,6 +131,22 @@ public class ProtocolTest {
         @Assert(id1.hashCode() == id2.hashCode())
     }
 
+    @TestCase
+    public func messageIdSurvivesFrameRoundTrip(): Unit {
+        // 帧往返后消息id必须与发出时一致（相等与hash都要成立）：id一旦漂移（例如本地时间被当成绝对时刻，
+        // 服务端日志里会看到8小时时间差），响应就再也对不上请求，调用方会一直等到超时（见 bug.md 7.10）
+        let time = DateTime.now()
+        let id = MessageID(time: time, pid: 1234, tid: 5678, hostId: 0)
+        let msg = Message.build(Command.REGISTER, id, DataNone.INSTANCE)
+        let buf = ByteBuffer()
+        msg.encode().copy(to: buf, closeToOnEnd: false)
+        buf.seek(SeekPosition.Begin(0))
+        let decoded = Message.decode<DataAny>(BufferedInputStream(buf))
+        @Assert(decoded.id.time.toUnixTimeStamp() == time.toUnixTimeStamp())
+        @Assert(decoded.id == id)
+        @Assert(decoded.id.hashCode() == id.hashCode())
+    }
+
     // ========== Message 工厂方法 ==========
 
     @TestCase

@@ -132,6 +132,12 @@ public class ExecutorFuture<T> {
                 }
                 condition.wait()
             }
+            // 任务已完成：有结果就必须返回结果。
+            // 原实现在这里直接落到 default()，丢掉了 result ⇒ 调用方（如 f_net 服务端取执行结果）永远拿不到响应内容，
+            // 表现为“请求处理完了但对端收不到响应”。
+            if(let Some(r) <- result){
+                return r
+            }
         }
         default()
     }
