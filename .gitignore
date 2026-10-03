@@ -50,3 +50,5 @@ frpcdemo/log/
 .autocode/**/*.py
 .autocode/**/*.sh
 .autocode/**/*.cj
+# git worktree 隔离工作区
+.worktrees/
