@@ -533,7 +533,7 @@ frpcdemo 端到端（worktree 内构建，跑 40s）日志事件 0、`decode err
 | 上限 | `protocol_maxFramePayload`（默认 1GB）——**首次使用时才读配置**：包初始化期读配置会在应用 `Init Image` 阶段抛 NoneValueException（已实测），故改为懒读 + 缓存 |
 | CRC 类型 | **CRC-32**（IEEE 802.3 / zlib：反射多项式 `0xEDB88320`、初值 `0xFFFFFFFF`、末尾异或 `0xFFFFFFFF`），线上 4 字节大端，覆盖 `cmd+len+payload`。标准检查值 `CRC-32("123456789") == 0xCBF43926` 有专门用例（`frameCrcIsStandardCrc32`） |
 | CRC 实现 | 帧 CRC 用 `fountain::f_util` 的**增量接口**（`crc32Init` / `crc32Update` / `crc32Finish`，2026-10-03 调整）；原来的自包含实现（`FRAME_CRC_TABLE` + `frameCrc*`）已删除 |
-| 加载顺序踩坑 | 给 f_protocol 加 `fountain::f_util` 依赖 ⇒ 应用加载期 `undefined symbol: crc32Update`。**踩坑**：`f_protocol` 依赖 `f_util` 会导致应用加载期 `undefined symbol: crc32Update` —— 本仓库应用按目录顺序 dlopen 各包 .so，`f_protocol@fountain` 先于 `f_util@fountain` |
+| 加载顺序（**阻塞项**） | 该依赖要求 `f_protocol@fountain` 在 `f_util@fountain` **之后**加载；而应用按目录顺序 dlopen 各包 .so 且符号即时解析，顺序不满足时加载期即 `undefined symbol: crc32Update`（实测：frpcdemo 服务端起不来）。收尾方案见 7.8 |
 
 **配套改动**：`PooledBufferBytesCopyTo` 记住调用方声明的长度并实现 `byteSize()`（流式载荷也要能给出 len）；`DefaultCodec.encode(value: Array<Byte>)` 的 `this.size += size + sizeBuf.size` 把计数器算成两倍，改为 `value.size`。
 
