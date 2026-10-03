@@ -117,7 +117,7 @@ public class Truncated_message_test {
         body[2] = UInt8((declaredLen >> 16) & 0xff)
         body[3] = UInt8((declaredLen >> 8) & 0xff)
         body[4] = UInt8(declaredLen & 0xff)
-        let crc = frameCrc(body[0..body.size - 4])
+        let crc = crc32(body[0..body.size - 4])
         body[body.size - 4] = UInt8((Int64(crc) >> 24) & 0xff)
         body[body.size - 3] = UInt8((Int64(crc) >> 16) & 0xff)
         body[body.size - 2] = UInt8((Int64(crc) >> 8) & 0xff)
@@ -141,7 +141,7 @@ public class Truncated_message_test {
         let all = wireOf(Message(Command.REGISTER, payload(1000)))
         @Assert(all[0] == cmd)
         @Assert(lenOf(all) == all.size - 9)                       // payload = 总长 - 头 5 - crc 4
-        @Assert(crcOf(all) == frameCrc(all[0..all.size - 4]))        // crc 覆盖 cmd+len+payload
+        @Assert(crcOf(all) == crc32(all[0..all.size - 4]))        // crc 覆盖 cmd+len+payload
     }
 
     // ---------- 截断：头 / 体 / 尾 ----------
@@ -239,7 +239,7 @@ public class Truncated_message_test {
         let bytes = sink.bytes()
         @Assert(bytes[0] == Command.REGISTER.value)
         @Assert(lenOf(bytes) == bytes.size - 9)
-        @Assert(crcOf(bytes) == frameCrc(bytes[0..bytes.size - 4]))
+        @Assert(crcOf(bytes) == crc32(bytes[0..bytes.size - 4]))
         @Assert(decodeThrows(bytes, bytes.size) == false)
     }
 
@@ -249,7 +249,7 @@ public class Truncated_message_test {
      */
     @TestCase
     public func frameCrcIsStandardCrc32(): Unit {
-        @Assert(frameCrc('123456789'.unsafeBytes()) == 0xCBF43926u32)
-        @Assert(frameCrc(Array<Byte>()) == 0u32)
+        @Assert(crc32('123456789'.unsafeBytes()) == 0xCBF43926u32)
+        @Assert(crc32(Array<Byte>()) == 0u32)
     }
 }

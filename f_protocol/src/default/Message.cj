@@ -16,52 +16,14 @@ limitations under the License.
 package fountain::f_protocol.default
 
 internal import fountain::f_codec.exception.CodecException
+// 帧校验用的是 f_util 的标准 CRC-32（IEEE 802.3）；帧要“边写边算/边读边算”，故用其增量接口
+internal import fountain::f_util.{crc32, crc32Init, crc32Update, crc32Finish}
 
 /*
- * 帧校验用的 CRC-32（IEEE 802.3，与 f_util.crc32 同算法）。
- *
- * 这里自包含实现、不复用 f_util：本仓库应用启动时按目录顺序依次 dlopen 各包 .so，
- * `PackageInfo.load` 会即时解析符号，而 `f_protocol@fountain` 排在 `f_util@fountain` 之前 ——
- * 给 f_protocol 增加对 f_util 的依赖，加载期就会 `undefined symbol: crc32Update`（已实测）。
- * 帧校验是协议自身的实现细节，自带一份最稳。
+ * f_protocol 因此依赖 f_util。注意加载顺序：应用启动时 f_app 按目录顺序依次 dlopen 各包 .so
+ * 且符号即时解析，`f_protocol@fountain` 排在 `f_util@fountain` 之前 —— 顺序不满足时会在加载期
+ * 报 `undefined symbol: crc32Update`（已实测）。详见 .autocode/bug.md 的相关记录。
  */
-private let FRAME_CRC_TABLE: Array<UInt32> = {
-    =>
-        let table = Array<UInt32>(256, repeat: 0)
-        for (i in 0..256) {
-            var c: UInt32 = UInt32(i)
-            for (_ in 0..8) {
-                c = if ((c & 1) != 0) {
-                    (c >> 1) ^ 0xEDB88320
-                } else {
-                    c >> 1
-                }
-            }
-            table[i] = c
-        }
-        table
-}()
-
-/** 帧 CRC：初始化。 */
-internal func frameCrcInit(): UInt32 {
-    0xFFFFFFFF
-}
-/** 帧 CRC：继续累计。 */
-internal func frameCrcUpdate(crc: UInt32, data: Array<Byte>): UInt32 {
-    var c = crc
-    for (b in data) {
-        c = (c >> 8) ^ FRAME_CRC_TABLE[Int64((c ^ UInt32(b)) & 0xFFu32)]
-    }
-    c
-}
-/** 帧 CRC：收尾。 */
-internal func frameCrcFinish(crc: UInt32): UInt32 {
-    crc ^ 0xFFFFFFFF
-}
-/** 帧 CRC：一次算完整段。 */
-internal func frameCrc(data: Array<Byte>): UInt32 {
-    frameCrcFinish(frameCrcUpdate(frameCrcInit(), data))
-}
 
 /**
  * 单帧 payload 上限（默认 1GB，可由 `protocol_maxFramePayload` 配置）：防“声称超大长度”拖死对端。
@@ -124,7 +86,7 @@ private class Crc32OutputStream <: OutputStream {
         this.crc = crc0
     }
     public func write(bytes: Array<Byte>): Unit {
-        crc = frameCrcUpdate(crc, bytes)
+        crc = crc32Update(crc, bytes)
         inner.write(bytes)
     }
 }
@@ -151,7 +113,7 @@ private class FrameBodyStream <: InputStream {
             for (i in 0..n) {
                 buffer[got + i] = tmp[i]
             }
-            crc = frameCrcUpdate(crc, tmp[0..n])
+            crc = crc32Update(crc, tmp[0..n])
             got += n
             remaining -= n
         }
@@ -306,7 +268,7 @@ public struct Message <: Protocol<EncodedMessage, Message> {
             throw CodecException('frame payload size ${payloadSize} exceeds limit ${framePayloadLimit()}')
         }
         // 限长流：解码器最多读到本帧末尾；CRC 从帧头开始累计
-        let body = FrameBodyStream(payloadSize, frameCrcUpdate(frameCrcInit(), header), input)
+        let body = FrameBodyStream(payloadSize, crc32Update(crc32Init(), header), input)
         let decoder = DefaultCodec()
         let time = decoder.decode<DateTime>(body).getOrThrow {IllegalArgumentException()}
         let pid = decoder.decode<Int64>(body).getOrThrow {IllegalArgumentException()}
@@ -321,7 +283,7 @@ public struct Message <: Protocol<EncodedMessage, Message> {
         if (readFully(input, crcBytes) == 0) {
             throw CodecException('frame crc missing')
         }
-        let expected = frameCrcFinish(body.crc)
+        let expected = crc32Finish(body.crc)
         let actual = UInt32(getInt32BE(crcBytes, 0))
         if (expected != actual) {
             throw CodecException('frame crc mismatch: expect ${expected}, actual ${actual}')
@@ -363,7 +325,7 @@ public struct EncodedMessage <: MessageCopier & Releasable {
             for (i in 0..payload.size) {
                 out[FRAME_HEAD_SIZE + i] = payload[i]
             }
-            putInt32BE(out, FRAME_HEAD_SIZE + n, Int64(frameCrc(out[0..FRAME_HEAD_SIZE + n])))
+            putInt32BE(out, FRAME_HEAD_SIZE + n, Int64(crc32(out[0..FRAME_HEAD_SIZE + n])))
             out
         } else {
             None<Array<Byte>>
@@ -383,11 +345,11 @@ public struct EncodedMessage <: MessageCopier & Releasable {
                 header[0] = command
                 putInt32BE(header, 1, size)
                 // 初值只做 init：header 由 tee.write 累加一次，避免帧头被算两遍
-                let tee = Crc32OutputStream(frameCrcInit(), to)
+                let tee = Crc32OutputStream(crc32Init(), to)
                 tee.write(header)
                 bytes.copy(to: tee, closeToOnEnd: false, closeFromOnEnd: false)
                 let crcBytes = Array<Byte>(FRAME_CRC_SIZE, repeat: 0u8)
-                putInt32BE(crcBytes, 0, Int64(frameCrcFinish(tee.crc)))
+                putInt32BE(crcBytes, 0, Int64(crc32Finish(tee.crc)))
                 to.write(crcBytes)
             }
             to.flush()

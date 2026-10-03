@@ -53,30 +53,31 @@ private let table: Array<UInt32> = {
         table
 }()
 
-// 2.4 核心计算函数：计算字节数组的CRC32值
-// 参数 data: 需要计算校验和的字节数组
-// 返回值: 计算得到的32位CRC校验值（UInt32类型）
+// 2.4 核心计算函数（增量式：帧校验需要“边写边算 / 边读边算”，不能等整块拼齐）
+/** 初始化 CRC 寄存器。 */
+@Frozen
+public func crc32Init(): UInt32 {
+    INIT_VALUE
+}
+/** 继续累计一段字节。 */
+@Frozen
+public func crc32Update(crc: UInt32, data: Array<Byte>): UInt32 {
+    var c = crc
+    for (byte in data) {
+        let index: UInt32 = (c ^ UInt32(byte)) & 0xFFu32
+        c = (c >> 8) ^ table[Int64(index)]
+    }
+    c
+}
+/** 收尾：与 FINAL_XOR_VALUE 异或。 */
+@Frozen
+public func crc32Finish(crc: UInt32): UInt32 {
+    crc ^ FINAL_XOR_VALUE
+}
+/** 一次算完整段（等价 init → update → finish）。 */
 @Frozen
 public func crc32(data: Array<Byte>): UInt32 {
-    // 初始化CRC寄存器
-    var crc: UInt32 = INIT_VALUE
-
-    // 遍历输入数据的每一个字节
-    for (byte in data) {
-        // 将byte转换为UInt32，并与当前CRC寄存器的低8位进行异或，作为查表索引
-        // 仓颉语言的数组索引可能要求整数类型，这里进行类型转换
-        let index: UInt32 = (crc ^ UInt32(byte)) & 0xFFu32
-
-        // 更新CRC寄存器
-        // 步骤：
-        // 1. 将当前CRC寄存器右移8位
-        // 2. 查表得到索引对应的预计算值
-        // 3. 将移位后的CRC值与查表得到的值进行异或
-        crc = (crc >> 8) ^ table[Int64(index)]
-    }
-
-    // 最终结果与FINAL_XOR_VALUE进行异或，完成计算
-    return crc ^ FINAL_XOR_VALUE
+    crc32Finish(crc32Update(crc32Init(), data))
 }
 @Frozen
 public func crc32(data: String): UInt32 {
