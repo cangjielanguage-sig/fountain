@@ -26,13 +26,18 @@
 | 7.1 前半 | 半条消息被接收侧**静默吞掉**（零填充 / 当成“无 data”） | ✅ | 2026-10-03 修复（见 6.10）：`decodeData` 的 EOF 不再等价 `DataNone`；载荷短读不再被放行（原判据写错成 `size < s`）；流式分支改为“剩余待读”；`Message.decode` 的 `l == 0` → `l <= 0` |
 | 7.1 后半 | 帧格式：无总长 / 无校验 | ✅ | 2026-10-03 改为 `[cmd][len][payload][crc32]`（见 6.11）：发送侧头里带 len、尾带 CRC；接收侧限长流（读不出帧外）+ 增量 CRC + `maxFramePayload` 上限；截断/损坏/长度不符一律抛 |
 | — | (7.5 起) §四 P2 小项与池相关遗留 | ⬜ | 见 §7.2~7.6，未动 |
+| — | **f_protocol→f_util 依赖**：应用加载期 `undefined symbol: crc32Update`（本轮引入） | ⬜ | 见 7.8：需配套修加载器（f_app.load 预打开）或撤销该依赖 |
 | — | 池记账脱钩的**触发源** | ⬜ | 未定位到具体一行；已加自愈 + `DEQUE-SELFCHECK`/`WEDGE-HEAL` 告警（见 6.8.5、7.2） |
 | — | 重复归还的强约束 | ⬜ | 泛型 `SyncDeque<T>` 无法按值去重，目前只能检出 + 告警（见 6.9、7.3） |
 
 **复验（2026-10-02，WSL Ubuntu-24.04）**：`f_pool` 全量 `cjpm test` = `TOTAL: 22, PASSED: 22, FAILED: 0`；
 frpcdemo 端到端（默认配置约 45s）CPU **0%~2%**、应用日志事件 **0**、解码错误 **0**，无 `DEQUE-SELFCHECK` / `WEDGE-HEAL` 告警。
 
-**复验（2026-10-03，分支 `fix/half-message-detect`）**：`f_protocol` **45/45**、`f_codec` **15/15**（修复前基线为 43/45）；frpcdemo 端到端日志事件 0、`decode errors` 0、`reader errors` 0、CPU **2.0%**。
+**复验（2026-10-03，分支 `fix/half-message-detect`）**：`f_util` **28/28**、`f_protocol` **55/55**（修复前基线 43/45）、`f_codec` **15/15**。
+
+⚠️ **当前状态提醒**：自「帧 CRC 改用 f_util 的 crc32」之后，应用加载期会 `undefined symbol: crc32Update`，
+**frpcdemo 服务端现在起不来**（见 7.8）。在此之前（帧 CRC 自包含时）的端到端结果是：
+服务端正常加载并监听、日志事件 0、帧错误 0。
 
 > 下面 §一~§六 是历次分析原文（保留证据链），**其结论的当前状态以本节与 §七 为准**。
 
@@ -527,7 +532,7 @@ frpcdemo 端到端（worktree 内构建，跑 40s）日志事件 0、`decode err
 | 接收 `Message.decode` | 读帧头（0 字节 = 干净关闭）→ 校验 `len ≤ maxFramePayload` → 用**限长流** `FrameBodyStream` 解码（物理上读不出帧外，载荷内部长度被写坏也不会越界）→ 校验“载荷是否被完整消费” → 读尾 CRC 比对 |
 | 上限 | `protocol_maxFramePayload`（默认 1GB）——**首次使用时才读配置**：包初始化期读配置会在应用 `Init Image` 阶段抛 NoneValueException（已实测），故改为懒读 + 缓存 |
 | CRC 类型 | **CRC-32**（IEEE 802.3 / zlib：反射多项式 `0xEDB88320`、初值 `0xFFFFFFFF`、末尾异或 `0xFFFFFFFF`），线上 4 字节大端，覆盖 `cmd+len+payload`。标准检查值 `CRC-32("123456789") == 0xCBF43926` 有专门用例（`frameCrcIsStandardCrc32`） |
-| CRC 实现 | **不用 `f_util.crc32`**，帧 CRC 自包含在 f_protocol（与 f_util 同算法、输出一致，但独立一份，`frameCrcInit/Update/Finish/frameCrc`，internal 供同包用例复用）。原因见下行的加载顺序踩坑；`f_util/src/crc32.cj` 本次未改动 |
+| CRC 实现 | 帧 CRC 用 `fountain::f_util` 的**增量接口**（`crc32Init` / `crc32Update` / `crc32Finish`，2026-10-03 调整）；原来的自包含实现（`FRAME_CRC_TABLE` + `frameCrc*`）已删除 |
 | 加载顺序踩坑 | 给 f_protocol 加 `fountain::f_util` 依赖 ⇒ 应用加载期 `undefined symbol: crc32Update`。**踩坑**：`f_protocol` 依赖 `f_util` 会导致应用加载期 `undefined symbol: crc32Update` —— 本仓库应用按目录顺序 dlopen 各包 .so，`f_protocol@fountain` 先于 `f_util@fountain` |
 
 **配套改动**：`PooledBufferBytesCopyTo` 记住调用方声明的长度并实现 `byteSize()`（流式载荷也要能给出 len）；`DefaultCodec.encode(value: Array<Byte>)` 的 `this.size += size + sizeBuf.size` 把计数器算成两倍，改为 `value.size`。
@@ -556,6 +561,8 @@ EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已�
   但发送侧窗口本身没有消除。可选做法：把“写完一帧”与 `close()` 互斥（需配合写超时，否则把截断换成挂起）。
 - ⬜ 未完成：帧内**值级**长度仍未设上限 —— 帧的 `len` 把可读字节数限住了，但 `DefaultCodec` 仍会按线上声明的长度
   直接分配（如 STRING 分支 `Array<Byte>(size, repeat: 0)`），恶意/损坏长度可造成超大分配。建议给值长度也加上限或与帧剩余量对齐。
+- ⬜ 未完成：帧头**没有版本位** —— 以后要换校验算法或字段宽度，只能两端同时升级；建议加 1 字节版本位，
+  为「换 CRC 宽度/算法」留出平滑迁移的余地。
 
 ### 7.2 池记账脱钩的**触发源**未定位（🟡 已有自愈兜底）
 
@@ -604,3 +611,31 @@ EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已�
   服务端不受影响（能正常加载、监听端口）。
 - 影响：无法用 demo 做 client↔server 的**业务级**端到端回归；帧的端到端行为暂由 socket 级别
   短读/短写用例 + 服务端启动验证覆盖。
+
+### 7.8 **阻塞项**：f_protocol 依赖 f_util 后，应用加载期 `undefined symbol`（2026-10-03 引入）
+
+- 现象：`frpcdemo` 重建成功（`cjpm build success`），但一启动就失败，端口未监听：
+  ```
+  undefined symbol: _CN15fountain:f_util11crc32UpdateHjRNat5ArrayIhE
+  --- 监听 1203 ---  !! 未监听
+  ```
+  （`f_util` 的 .so 本身在 target 目录里，不是缺文件。）
+- 根因：应用启动时 `f_app.load` **按目录路径顺序**逐个 `PackageInfo.load`（dlopen）各包 .so，且符号**即时解析**；
+  `f_protocol@fountain` 排在 `f_util@fountain` **之前** ⇒ 加载 `libf_protocol.default.so` 时 `crc32Update` 尚未定义。
+- 触发来源：「帧 CRC 改用 f_util 的 crc32」（提交 `2a72c390`）新增了 `fountain::f_util` 依赖；
+  此前帧 CRC 自包含在 f_protocol，就是为了规避这条（见 6.11 的历史说明）。
+- 收尾二选一（**合并前必须处理**）：
+  1. **配套修加载器**（保留依赖）：在 `f_app.load` 里，先对目标目录中所有匹配的 .so 做一次
+     `dlopen(path, RTLD_LAZY | RTLD_GLOBAL)` 预打开，再做 `PackageInfo.load`。只影响 dlopen 期的符号解析
+     （延迟绑定 + 全局命名空间 ⇒ 与目录顺序无关）；与「Init Image 失败」（如包初始化期读配置）是两回事，后者仍会正常失败。
+  2. **撤销依赖**：帧 CRC 改回自包含实现（回滚提交 `2a72c390`）。
+- 影响面：所有经由 f_protocol 使用消息的应用（frpcdemo、fleet 等）；单元测试不受影响
+  （`cjpm test` 走正常链接，`f_util` 28/28、`f_protocol` 55/55、`f_codec` 15/15 全绿），
+  因此**单测无法发现此类问题，必须做「启动应用」级别的验证**。
+
+### 7.9 零散遗留（低优先）
+
+- `crc16` 的变体名没写进注释：实测参数是 **CRC-16/XMODEM**（poly `0x1021`、非反射、init=0、xorout=0，检查值 `0x31C3`）。
+  如果实际期望的是 CCITT-FALSE（init=`0xFFFF`、检查值 `0x29B1`），那要改的是 init，而不是现在的实现。待确认。
+- `f_util` 里 `crc64` 的相关 API（`crc64<T>`）此前存在"返回 UInt16 却叫 crc64"的复制粘贴 bug，**已修**（提交 `02d57ee0`）；
+  但 `crc64` 目前在仓库里无人调用，属于"修好了但没有使用方"的状态。
