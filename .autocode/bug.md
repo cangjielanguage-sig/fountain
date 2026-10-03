@@ -25,6 +25,7 @@
 | 6.6-5 | 心跳策略 | ✅ | 同 P2 |
 | 7.1 前半 | 半条消息被接收侧**静默吞掉**（零填充 / 当成“无 data”） | ✅ | 2026-10-03 修复（见 6.10）：`decodeData` 的 EOF 不再等价 `DataNone`；载荷短读不再被放行（原判据写错成 `size < s`）；流式分支改为“剩余待读”；`Message.decode` 的 `l == 0` → `l <= 0` |
 | 7.1 后半 | 帧格式：无总长 / 无校验 | ✅ | 2026-10-03 改为 `[cmd][len][payload][crc32]`（见 6.11）：发送侧头里带 len、尾带 CRC；接收侧限长流（读不出帧外）+ 增量 CRC + `maxFramePayload` 上限；截断/损坏/长度不符一律抛 |
+| 7.7 | frpcdemo 客户端无法启动（**既有问题**） | 🟡 | 2026-10-03 定位并修好**启动链路**：缺 `rpcClient_serverAddress` ⇒ ERROR+`exit(1)`；RPC 调用移出 Init Image；另修 4 处会导致段错误的零值/固定缓冲用法。实测 0 Init Image fail、0 段错误。**业务级 E2E 仍受阻**于服务端拒收 SUBSCRIBE（新定位，见 7.10） |
 | — | (7.5 起) §四 P2 小项与池相关遗留 | ⬜ | 见 §7.2~7.6，未动 |
 | — | **f_protocol→f_util 依赖**：应用加载期 `undefined symbol: crc32Update` | ✅⚠️ | **已修**（`boot.sh` 自建库优先）。曾误判为"加载顺序/需要预打开 .so"，实际是 `installed/libs/fboot` 的**旧副本抢先**（库无 SONAME），见 7.8 |
 | — | 池记账脱钩的**触发源** | ⬜ | 未定位到具体一行；已加自愈 + `DEQUE-SELFCHECK`/`WEDGE-HEAL` 告警（见 6.8.5、7.2） |
@@ -602,7 +603,7 @@ EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已�
 - 用户已明确表达过立场：**`timeout == Duration.Max` 这个分支语义上就是"无限等待"**（当初要求不要改它）。
   因此这一条的处置需要拍板：保留当前"让出 CPU + 30s 上限"（避免无日志挂死），或恢复"真无限等待"并把它做成可配置。
 
-### 7.7 frpcdemo 客户端当前无法启动（**既有问题**，2026-10-03 实测）
+### 7.7 frpcdemo 客户端无法启动（**既有问题**）⚠️ 启动链路已于 2026-10-03 修好，原症状与根因见本节末尾
 
 - 症状：`cd frpcdemo && ./boot.sh runClient` → `Init Image fail! exception ...: std.core:NoneValueException`
   （加载 `.../target/release/rpcclient@fountain/librpcclient@fountain` 失败）→ 随后 `MessageID.toString`
@@ -613,6 +614,39 @@ EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已�
   服务端不受影响（能正常加载、监听端口）。
 - 影响：无法用 demo 做 client↔server 的**业务级**端到端回归；帧的端到端行为暂由 socket 级别
   短读/短写用例 + 服务端启动验证覆盖。
+
+**根因（三段式，2026-10-03 定位）**：
+1. `frpcdemo/rpcclient/src/client.cj` 把一次**真实 RPC** 写在包级初始化器里 ⇒ 它在 `Init Image`（包初始化）阶段执行；
+2. `frpcdemo/boot.sh` 的 `runClient` 从没给过客户端服务端地址（脚本只导出服务端语义的 `rpcServer_baseAddresses`，
+   客户端要的 `rpcClient_serverAddress` 始终未设置）⇒ 地址表为空；
+3. 空地址表一路下传 ⇒ 包初始化阶段抛 `NoneValueException` ⇒ 包加载失败 ⇒ 进程带着未初始化完的静态状态继续跑
+   ⇒ `f_log` 异步线程格式化**零值 `MessageID`**（`time` 未初始化）⇒ SIGSEGV / exit 139。
+   （`MessageID` 自身默认值是对的（`time = DateTime.now()`）；段错误是次生现象，别往 `MessageID` 报 bug。）
+
+**探针证据**：不设地址 ⇒ `NoneValueException` + exit 139；设 `rpcClient_serverAddress=1.0,127.0.0.1:1203`
+⇒ 异常变成可诊断的 `fountain/f_net.client:ClientException`、exit 1（不再段错误）。
+
+**本轮修复（9 个文件）**：
+
+| 位置 | 改动 | 实测结果 |
+| --- | --- | --- |
+| `frpcdemo/boot.sh` | 透传地址：`runClient $2` ⇒ `export rpcClient_serverAddress="1.0,$地址"`；不给地址则不设置（交由客户端报错） | 两条路径都能演示 |
+| `frpcdemo/rpcclient/src/client.cj` | 包级初始化器 ⇒ `ClientInitializer`（`Initializer.start()`，由 `f_app` 启动后另起线程调用）；失败只记 ERROR | **Init Image fail 0**、进程不再 139；演示调用失败不再阻止应用启动 |
+| `f_rpc/src/client/ClientConfig.cj` | 新增 `requireServerAddresses()`：缺 `rpcClient_serverAddress` ⇒ `rpclog.error`（键名/格式/示例/后果）⇒ `exit(1)` | 满足"记录 ERROR 说明原因后结束进程"：实测 exit 1、ERROR 可读 |
+| `f_rpc/src/client/ClientConfig.cj` | 新增 `rpcClient_discoveryTimeout`（默认 5s，可配，不写死常量） | 服务发现未完成时有上限 |
+| `f_rpc/src/client/RPCClient.cj` | `services[message.meta]` 直接下标 ⇒ `availableClients()` 等待发现完成，超时抛明确 `RPCException`（服务名/方法/版本） | 第二层 `NoneValueException` 消失，失败可诊断 |
+| `f_rpc/src/client/RPCClient.cj` | `hostMap[host]` ⇒ `hostMap.get(host) ?? 1.0` | 键不存在不再抛 |
+| `f_rpc/src/client/RPCClient.cj` | `var consume = unsafeZeroValue<Message>()` ⇒ `Option<Message>`；`finally` 只在真发出过消息时记日志 | **段错误根因之一**：零值 `MessageID` 一格式化就崩 |
+| `f_rpc/src/macros/RPCStub.cj` | `qualifiedName.indexOf('.').getOrThrow()` ⇒ `?? qualified.size` | 宏生成代码里的 `NoneValueException` 隐患 |
+| `f_rpc/src/server/LogMessage.cj` | `ErrorMessage.new(param, e)` 不再写固定容量缓冲（曾把 875B 堆栈写进 80B 缓冲抛下标越界）；`EMPTY_DATA_ANY` 由 `unsafeZeroValue<DataAny>()` 改为 `DataAny(DataNone.INSTANCE)` | 服务端错误响应不再自崩 |
+| `f_rpc/src/server/RPCServer.cj` | `error()` 的错误日志只记文本，不再对请求数据做 `JsonValue` 转换 | 错误路径不再遍历形状未知的 `Data`（曾段错误），真实异常得以打印 |
+
+**复验（2026-10-03，worktree `fix-half-message-detect`）**：
+- A) `./boot.sh runClient`（不给地址）⇒ `Init Image fail` **0**、`CLIENT_EXIT=1`、ERROR 日志含原因与格式示例；
+- B) 服务端在跑 + `./boot.sh runClient 127.0.0.1:1203` ⇒ `Init Image fail` **0**、客户端**不再段错误**
+  （跑到超时被杀，exit 124），失败信息为 `RPCException: no available client for ... after 5s`。
+
+**仍未通过业务级 E2E**：服务端拒收客户端的 SUBSCRIBE ⇒ 服务发现始终为空 ⇒ 调用失败。见 7.10。
 
 ### 7.8 `undefined symbol: crc32Update`：**已定因并修复**（2026-10-03）⚠️ 本条曾被误判
 
@@ -650,3 +684,19 @@ EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已�
   如果实际期望的是 CCITT-FALSE（init=`0xFFFF`、检查值 `0x29B1`），那要改的是 init，而不是现在的实现。待确认。
 - `f_util` 里 `crc64` 的相关 API（`crc64<T>`）此前存在"返回 UInt16 却叫 crc64"的复制粘贴 bug，**已修**（提交 `02d57ee0`）；
   但 `crc64` 目前在仓库里无人调用，属于"修好了但没有使用方"的状态。
+
+### 7.10 SUBSCRIBE 帧的载荷读不出（**2026-10-03 新定位**，业务级 E2E 的最后一道坎）
+
+- 现象（服务端日志，客户端发 SUBSCRIBE 时）：
+  ```
+  [ERROR-rpc][FOUNTAIN_RPC.Skeleton.SUBSCRIBE] 2516833_30_0_...; An exception has occured:
+  IndexOutOfBoundsException: Index out of bounds: index is '0', but array size is '0'.
+  fountain::f_protocol.exception.InputClosedException:no readable byte in InputStream
+  ```
+- 推断链路：SUBSCRIBE 帧的 payload 没被服务端读出 ⇒ 解出的 `RPCMessage.params` 为空 ⇒ `RPCServer.execute`
+  的 `fromData<Bool>`（`rpcmsg.params[0].data`）越界 ⇒ 服务端回 ERROR（不再崩溃，见 7.7 的修复）⇒
+  客户端服务发现始终拿不到服务列表 ⇒ `services` 为空 ⇒ `RPCException: no available client for ... after 5s`。
+- 与 7.7 修复的关系：7.7 只是让这条链**可见**（错误文本能打印出来、不再段错误），并没有修掉它。
+- 下一步（未做）：在客户端发送侧 dump 帧头 `len`/CRC 与实际写出的字节数，服务端记录收到的字节数，
+  判定是"发送侧写少了"还是"接收侧读少了"；重点看 ≤4096B 的整帧一次 write 路径与 `FrameBodyStream` 的边界。
+- 影响：client↔server 的**业务级**端到端回归仍不可用（帧的端到端行为目前由 socket 级短读/短写用例覆盖）。

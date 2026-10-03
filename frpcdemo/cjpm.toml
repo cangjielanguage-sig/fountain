@@ -1,6 +1,8 @@
 [dependencies]
+  "fountain::f_app" = {path = "../f_app"}
   "fountain::f_bean" = {path = "../f_bean"}
   "fountain::f_data" = {path = "../f_data"}
+  "fountain::f_log" = {path = "../f_log"}
   "fountain::f_rpc" = {path = "../f_rpc"}
   "fountain::f_version" = {path = "../f_version"}
   "fountain::rpcdef" = {path = "./rpcdef"}

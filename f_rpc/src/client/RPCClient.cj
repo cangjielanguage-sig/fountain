@@ -107,7 +107,8 @@ public class RPCClient {
                                 let weight = if(meta.weight != 1.0){
                                     meta.weight
                                 }else{
-                                    hostMap[host]
+                                    // 服务节点可能没有上报该主机权重（键不存在时下标取值会抛 NoneValueException），缺省按 1.0
+                                    hostMap.get(host) ?? 1.0
                                 }
                                 (weight, host)
                             }
@@ -142,15 +143,36 @@ public class RPCClient {
         }
     }
     private init(){}
+    /**
+     * 取某个服务对应的客户端集合。服务发现由 start() 的后台线程异步完成，首个调用可能早于发现完成；
+     * 直接写 services[meta] 在键不存在时会抛 NoneValueException（既无法重试也说不清原因），
+     * 这里改成在 discoveryTimeout 内等待，超时则明确报出服务名。
+     */
+    private static func availableClients(meta: ServiceMeta): MultiClient<Float64, RPCMessage> {
+        let timeout = ClientConfig.discoveryTimeout
+        let deadline = MonoTime.now() + timeout
+        while(true){
+            if(let Some(clients) <- services.get(meta)){
+                return clients
+            }
+            if(MonoTime.now() >= deadline){
+                break
+            }
+            sleep(Duration.millisecond * 20)
+        }
+        throw RPCException("no available client for ${meta.typeName}.${meta.methodName}(version ${meta.version}) after ${timeout}, check that the service node is started and registered")
+    }
     public static func call<R>(message: RPCMessage): R where R <: DataFields<R> {
         start()
         var tried = 0
         var ex = None<RPCException>
         let result = LogMessage(message)
-        var consume = unsafeZeroValue<Message>()
+        // 不能用 unsafeZeroValue<Message>()：它的id是零值，一旦调用在发出消息前就失败，
+        // finally里的日志会格式化零值MessageID（DateTime未初始化）而段错误
+        var consume = None<Message>
         let start = MonoTime.now()
         try{
-            for(client in services[message.meta]){
+            for(client in availableClients(message.meta)){
                 if(tried >= retryCount){
                     let exceeded = RPCException("retry count exceeded")
                     if(let Some(e) <- ex){
@@ -160,9 +182,10 @@ public class RPCClient {
                     }
                     break
                 }
-                consume = Message.consume<RPCMessage>(once: true, qos: AtMostOnce, data: message)
+                let sending = Message.consume<RPCMessage>(once: true, qos: AtMostOnce, data: message)
+                consume = Some(sending)
                 try{
-                    let resp = client.transfer(consume).get()
+                    let resp = client.transfer(sending).get()
                     let data = resp.data
                     result.result = DataAny(data)
                     return match(resp.command){//必须明确return，否则编译器推断最后的throw才是返回值
@@ -182,7 +205,7 @@ public class RPCClient {
                     }
                 }catch(e: Exception){
                     tried++
-                    errorLog(consume.id, 'Stub', consume.command, message, e)
+                    errorLog(sending.id, 'Stub', sending.command, message, e)
                     if(let Some(ee) <- ex){
                         ee.addSuppressed(e)
                     }else{
@@ -197,9 +220,12 @@ public class RPCClient {
             }
             throw RPCException("no client is available")
         }finally{
-            infoLog<LogMessage>(consume.id, 'Stub', consume.command){
-                result.consumed = MonoTime.now() - start
-                result
+            // 只有真的发出过消息才有消息id可记
+            if(let Some(c) <- consume){
+                infoLog<LogMessage>(c.id, 'Stub', c.command){
+                    result.consumed = MonoTime.now() - start
+                    result
+                }
             }
         }
     }

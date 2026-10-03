@@ -115,7 +115,8 @@ private func genStub(exactlyVersion: Bool, version: String, name: String, decl: 
             let skeleton = ClientConfig.currentSkeleton
             let klass = TypeInfo.of<$(className)>()
             let qualified = klass.qualifiedName
-            let modEnd = qualified.indexOf('.').getOrThrow()
+            // 取限定名里类名前的包名部分；限定名不含'.'时退回整名，避免在包初始化阶段抛 NoneValueException
+            let modEnd = qualified.indexOf('.') ?? qualified.size
             if(skeleton == '' || skeleton != qualified[0 .. modEnd]) {
                 BeanFactory.instance.register<$(className)>{$(className)()}
             }
