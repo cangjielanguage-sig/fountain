@@ -1552,6 +1552,7 @@ public func transfer(from: Int64, to: Int64, amount: Decimal): Unit { ... }
 ```cangjie
 public interface TransactionHook {
     func beforeTx(): Unit {}
+    func inTx(): Unit {}
     func beforeCommit(readOnly: Bool): Unit {}
     func afterCommit(): Unit {}
     func afterThrowing(e: Exception): Unit {}

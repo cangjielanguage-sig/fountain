@@ -26,6 +26,9 @@ public class TransactionHookImpl <: TransactionHook {
     public func beforeTx(): Unit {
         log.info('beforeTx')
     }
+    public func inTx(): Unit {
+        log.info('inTx')
+    }
     public func beforeCommit(readOnly: Bool): Unit {
         log.info('beforeCommit')
     }
