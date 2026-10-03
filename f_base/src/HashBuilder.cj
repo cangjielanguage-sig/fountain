@@ -85,11 +85,12 @@ public class HashBuilder <: Hashable {
     }
 
     public func append<T, I>(args: I): This where T <: Hashable, I <: Iterable<T> {
-        match (args) {
-            case x: Hashable => append(x.hashCode())
-            case _ => for (arg in args) {
-                append(arg.hashCode())
-            }
+        if (let x: Hashable <- args) {
+            append(x.hashCode())
+            return this
+        }
+        for (arg in args) {
+            append(arg.hashCode())
         }
         this
     }
