@@ -34,20 +34,21 @@
 | — | 重复归还的强约束 | ⬜ | 泛型 `SyncDeque<T>` 无法按值去重，目前只能检出 + 告警（见 6.9、7.3） |
 | 7.12 | `f_pool` 全量用例**偶发** SIGSEGV | ⬜🟡 | 仅观察到一次（栈顶 `UnitKeyPool.size` 的运行时泛型 MTable 空指针），重跑 22/22 通过，未复现；见 7.12 |
 | 7.9 | `f_net` 用例长期编译不过（读写路径无回归覆盖） | ✅ | 2026-10-04 迁移到 `Server<T>`/`Client<T>`：`cjpm test` = **14/14**（含 PING→ACK、executor 请求/响应 + 载荷逐字节往返）；见 7.9 |
-| 7.11 | 对象类型的注册应由框架自动完成 | ✅ | 2026-10-04：`@RPCStub`/`@RPCSkeleton` 展开时自动登记参数/返回类型（无约束泛型 + 运行时探测）；删掉 demo 手工 `registerType<EchoPO>()` 后 E2E 仍跑通；见 7.11 |
+| 7.11 | 对象类型的注册应由框架自动完成（含**嵌套**） | ✅ | 2026-10-04 两条路径：`@RPCStub`/`@RPCSkeleton` 登记顶层参数/返回类型；`@DataAssist[fields]` 在包初始化时自登记（覆盖嵌套，f_codec 解码未命中时拉取）。删掉 demo 手工 `registerType<EchoPO>()` 后 E2E 仍跑通，且嵌套 `EchoPO.inner` 出现在 JSON 里；见 7.11 |
 
 **复验（2026-10-02，WSL Ubuntu-24.04）**：`f_pool` 全量 `cjpm test` = `TOTAL: 22, PASSED: 22, FAILED: 0`；
 frpcdemo 端到端（默认配置约 45s）CPU **0%~2%**、应用日志事件 **0**、解码错误 **0**，无 `DEQUE-SELFCHECK` / `WEDGE-HEAL` 告警。
 
 **复验（2026-10-03，分支 `fix/half-message-detect`）**：`f_util` **28/28**、`f_protocol` **55/55**（修复前基线 43/45）、`f_codec` **15/15**。
 
-**复验（2026-10-04，worktree `fix-half-message`）**：`f_net` **14/14**（迁移后的读写路径用例 + 既有用例，见 7.9）；
-`f_codec` **15/15**、`f_protocol` **60/60**（含 §7.1 值级长度的 1TB 声明用例）、`f_net` **14/14**；
-客户端 `[ERROR]` 计数 **138 → 0**（§7.5 第 3 条，同批消息改为 DEBUG）、`ping_failures=0`；服务端 `[WARN]` 140 条（`tcp closed`，见 §7.5 新行，未修）；
-frpcdemo 业务级 E2E 仍跑通（客户端打印 JSON、服务端 `CONSUME(8)`、两侧 `Init Image fail` 0、`not registered` 0）——
-此轮**删除了 demo 手工的 `DefaultCodec.registerType<EchoPO>()`**，改由 §7.11 的宏展开自动登记。
-另：一次 70s 的客户端运行里出现 138 条 `[ERROR] Client reader error ... true`，**全部**来自发现循环的正常 `close()`
-（§7.5 第 3 条，属日志噪音），除它之外 0 条 ERROR。
+**复验（2026-10-04，worktree `fix-half-message`）**：`f_data` **104/104**、`f_codec` **15/15**、
+`f_protocol` **60/60**（含 §7.1 值级长度的 1TB 声明用例）、`f_net` **14/14**（迁移后的读写路径用例，见 7.9）；
+全仓 `cjpm build` **success**（验证 `@DataAssist` 宏改动在 f_orm/f_mvc/f_bean 等全部使用者上的影响面）。
+frpcdemo 业务级 E2E 跑通：客户端打印 JSON —— **含嵌套** `"inner":{"tag":"inner-default","count":7}`、
+服务端 `CONSUME(8)`（param/result 里同样有 `inner`）、两侧 `Init Image fail` 0、`not registered` 0、
+客户端 `[ERROR]` **138 → 0**、`ping_failures=0`。
+（服务端 `[WARN]` 140 条 `tcp closed` = 发现循环每轮重建连接造成的正常收尾，见 §7.5 新行，未修。）
+demo 已删除手工的 `DefaultCodec.registerType<EchoPO>()`，登记改由 §7.11 的两条自动路径完成（含嵌套类型）。
 
 **加载现状**：帧 CRC 改用 f_util 后曾出现 `undefined symbol: crc32Update`（frpcdemo 起不来），
 **已定因并修复**（`boot.sh` 自建库优先，提交 `7cdc025a`，见 7.8）；修复后服务端正常加载并监听 1203、
@@ -787,9 +788,19 @@ demo 端到端与之前一致：分隔线 ×2、客户端 JSON、服务端 `CONS
 - **验证**：把 demo 里手工的 `DefaultCodec.registerType<EchoPO>()` 删掉后，
   `./boot.sh runServer 1203 127.0.0.1:1203` + `./boot.sh runClient 127.0.0.1:1203` 的业务级 E2E **仍然跑通**
   （客户端打印 JSON、服务端 `CONSUME(8)`、两侧 `not registered` 0 次）⇒ 自动登记确实生效。
-- 仍然存在的限制（未变）：只覆盖**顶层**参数/返回类型。若传输对象内部**嵌套**了另一个 `@DataAssist` 类型，
-  解码该嵌套字段时仍可能踩「未登记」。若要一并解决，可让 `@DataAssist` 把类型登记进 **f_data 自己的注册表**、
-  再由 f_codec 在解码未命中时拉取（f_data 不依赖 f_codec，不构成环，且能覆盖嵌套类型）——本轮未做。
+- ✅ **嵌套类型也已覆盖（同日第二轮）**：`@DataAssist[fields]` 展开时在**包初始化**处生成
+  `DataTypeRegistry.registerDataType<Klass>()`（纯内存操作，不做 I/O、不读配置），把「限定名 → 创建者」登记进
+  **f_data 自己的注册表**（新增 `f_data/src/base/DataTypeRegistry.cj`，因此不构成 f_data → f_codec 的环）；
+  `f_codec` 在解码 OBJECT 未命中时按名字补算 murmur（与编码侧同规则）并拉取该表后重试
+  （`DefaultCodec.pullRegisteredTypes()`，用注册表条目数当「版本」避免每次未命中都遍历全表），仍缺才抛原来的 `CodecException`。
+- 两条登记路径的分工（**都保留**，覆盖不同集合）：RPC 宏那条登记**顶层**参数/返回类型，连**手写**的
+  `ObjectData` 实现也覆盖得到；`@DataAssist` 自登记覆盖**全部**宏生成类型（含嵌套），是嵌套字段的唯一依靠。
+- 嵌套的验证（decisive）：demo 模型加了 `EchoPO.inner: InnerPO` —— `InnerPO` **不是**任何 RPC 方法的顶层参数/返回类型，
+  RPC 宏够不着它。E2E 客户端打印的 JSON 为
+  `{"a":100,"b":"hello world","c":false,"d":2.71828…,"inner":{"tag":"inner-default","count":7}}`，
+  服务端 `CONSUME(8)` 的 `param`/`result` 里同样有 `inner`，两侧 `not registered` 0 ⇒ **嵌套解码确实由自登记兜住**。
+- 已知不覆盖：**泛型** `@DataAssist` 类（文件级拿不到类型实参：`Foo` 不是类型、`Foo<…>` 才是），
+  这类类型仍需在解码侧手工 `DefaultCodec.registerType<Foo<…>>()`。
 
 ### 7.12 `f_pool` 全量用例偶发 SIGSEGV（2026-10-03 观察到一次，未复现）
 

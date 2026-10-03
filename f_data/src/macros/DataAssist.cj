@@ -46,9 +46,42 @@ public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
     }
     let tokens = quote(
         $(assist(attr, decl))
+        $(typeRegistration(attr, decl))
         $(remainder)
     )
     tokens
+}
+/**
+ * 生成「包初始化时把自己登记进 `DataTypeRegistry`」的语句。
+ *
+ * 必要性：f_codec 的类型创建者表只在该进程**编码过**该类型时才登记，只解码不编码的一侧
+ * （客户端第一次收响应、服务端第一次收请求）以及**嵌套**对象字段都会踩「object type murmur is not registered」
+ * （bug.md 7.10 第 10 层 / 7.11）。f_data 不能反向依赖 f_codec（成环），所以这里只登记到 f_data 自己的表，
+ * f_codec 解码未命中时按名字补算 murmur 再拉取。
+ *
+ * 只在非泛型类上生成：文件级拿不到泛型实参。只声明 `fields` 时生成（`toData()` 与 `ObjectData<T>` 都由它带来）。
+ */
+private func typeRegistration(attr: Tokens, decl: Decl): Tokens {
+    match (decl) {
+        case c: ClassDecl =>
+            if (c.isGenericDecl) {
+                return `empty_tokens`
+            }
+            var hasFields = false
+            for (t in attr) {
+                if (t.value.toAsciiLower() == 'fields') {
+                    hasFields = true
+                }
+            }
+            if (!hasFields) {
+                return `empty_tokens`
+            }
+            let klass = c.identifier
+            quote(
+                private let _ = DataTypeRegistry.registerDataType<$klass>()
+            )
+        case _ => `empty_tokens`
+    }
 }
 private func assist(attr: Tokens, input: Decl): Tokens {
     match (input) {

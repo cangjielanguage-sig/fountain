@@ -69,6 +69,22 @@ public class DefaultCodec <: Codec & Releasable {
         })
         typeMurmur
     }
+    /** 上次从 `DataTypeRegistry` 拉取时它的大小（只增不减），用来避免每次未命中都遍历全表。 */
+    private static var pulledTypeCount = 0
+    /**
+     * 把 f_data 侧「`@DataAssist` 自登记」的类型补进本表：注册表存的是「限定名 + 创建者」，
+     * 这里用与编码侧相同的规则补算 murmur（`murmurHash(限定名)`）。
+     */
+    private static func pullRegisteredTypes(): Unit {
+        let total = DataTypeRegistry.size
+        if (total == pulledTypeCount) {
+            return
+        }
+        for ((name, creator) in DataTypeRegistry.snapshot()) {
+            typeMurmurCreators.addIfAbsent(murmurHash(name), creator)
+        }
+        pulledTypeCount = total
+    }
     /**
      * 按「限定名 + 创建者」登记对象类型：与 `registerType<T>()` 等价，但**不要求调用方静态满足 T 的约束**。
      *
@@ -877,7 +893,14 @@ public class DefaultCodec <: Codec & Releasable {
             // 类型创建者只在本进程“编码过该类型”时才登记；只解码不编码的一侧（客户端第一次收响应、
             // 服务端第一次收请求）会走到这里。用下标取值会抛 NoneValueException，上层再一包装就成了
             // 难以定位的错误（曾表现为消息id格式化时的空指针），这里显式报出哈希与补救办法。
-            let creator = match (typeMurmurCreators.get(murmur)) {
+            var registered = typeMurmurCreators.get(murmur)
+            if (registered.isNone()) {
+                // 本进程可能只解码不编码（客户端第一次收响应 / 服务端第一次收请求 / 嵌套对象字段）：
+                // f_data 侧的注册表里由 @DataAssist 生成的类在包初始化时自行登记过，这里补登记再重试（bug.md 7.11）
+                pullRegisteredTypes()
+                registered = typeMurmurCreators.get(murmur)
+            }
+            let creator = match (registered) {
                 case Some(c) => c
                 case _ => throw CodecException(
                     'object type murmur ${murmur} is not registered in this process; encode it here once, or call DefaultCodec.registerType<T>() on this side')
