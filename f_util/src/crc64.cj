@@ -35,18 +35,14 @@ private const FINAL_XOR_VALUE: UInt64 = 0x0000000000000000
 private let table: Array<UInt64> = {
     =>
         let table = Array<UInt64>(256, repeat: 0)
-        // 遍历所有可能的单字节值（0x00 到 0xFF）
+        // ECMA-182 是**非反射**算法：寄存器左移，取高 8 位作索引
         for (i in 0..256) {
-            var crc: UInt64 = i.toUInt()
-            // 对每个可能的字节值进行 8 次迭代
+            var crc: UInt64 = UInt64(i) << 56
             for (_ in 0..8) {
-                // 判断最低位是否为 1
-                if ((crc & 1) != 0) {
-                    // 如果是 1，则右移一位后与多项式进行异或运算
-                    crc = (crc >> 1) ^ POLYNOMIAL
+                if ((crc & 0x8000000000000000) != 0) {
+                    crc = (crc << 1) ^ POLYNOMIAL
                 } else {
-                    // 如果为 0，则直接右移一位
-                    crc = crc >> 1
+                    crc = crc << 1
                 }
             }
             table[i] = crc
@@ -63,16 +59,11 @@ public func crc64(data: Array<Byte>): UInt64 {
     var crc: UInt64 = INIT_VALUE
 
     for (byte in data) {
-        // 将 byte 转换为 UInt64，并与当前 CRC 寄存器的低 8 位进行异或，作为查表索引
-        // 索引 = (crc的低8位 ^ 字节值) & 0xFF
-        let index: Int64 = ((crc ^ UInt64(byte)) & 0xFFu64).toInt()
+        // 非反射：索引 = (寄存器高 8 位 ^ 字节值) & 0xFF
+        let index: Int64 = Int64(((crc >> 56) ^ UInt64(byte)) & 0xFF)
 
-        // 更新 CRC 寄存器
-        // 步骤：
-        // 1. 将当前 CRC 寄存器右移 8 位
-        // 2. 查表得到索引对应的预计算值
-        // 3. 将移位后的 CRC 值与查表得到的值进行异或
-        crc = (crc >> 8) ^ table[index]
+        // 1. 寄存器左移 8 位；2. 与查表值异或
+        crc = (crc << 8) ^ table[index]
     }
 
     // 最终结果与 FINAL_XOR_VALUE 进行异或
@@ -83,6 +74,6 @@ public func crc64(data: String): UInt64 {
     return crc64(data.unsafeBytes())
 }
 @Frozen
-public func crc64<T>(s: T): UInt16 where T <: ToString {
-    crc16(s.toString().unsafeBytes())
+public func crc64<T>(s: T): UInt64 where T <: ToString {
+    crc64(s.toString().unsafeBytes())
 }
