@@ -31,11 +31,20 @@
 | — | **f_protocol→f_util 依赖**：应用加载期 `undefined symbol: crc32Update` | ✅⚠️ | **已修**（`boot.sh` 自建库优先）。曾误判为"加载顺序/需要预打开 .so"，实际是 `installed/libs/fboot` 的**旧副本抢先**（库无 SONAME），见 7.8 |
 | — | 池记账脱钩的**触发源** | ⬜ | 未定位到具体一行；已加自愈 + `DEQUE-SELFCHECK`/`WEDGE-HEAL` 告警（见 6.8.5、7.2） |
 | — | 重复归还的强约束 | ⬜ | 泛型 `SyncDeque<T>` 无法按值去重，目前只能检出 + 告警（见 6.9、7.3） |
+| 7.12 | `f_pool` 全量用例**偶发** SIGSEGV | ⬜🟡 | 仅观察到一次（栈顶 `UnitKeyPool.size` 的运行时泛型 MTable 空指针），重跑 22/22 通过，未复现；见 7.12 |
+| 7.9 | `f_net` 用例长期编译不过（读写路径无回归覆盖） | ✅ | 2026-10-04 迁移到 `Server<T>`/`Client<T>`：`cjpm test` = **14/14**（含 PING→ACK、executor 请求/响应 + 载荷逐字节往返）；见 7.9 |
+| 7.11 | 对象类型的注册应由框架自动完成 | ✅ | 2026-10-04：`@RPCStub`/`@RPCSkeleton` 展开时自动登记参数/返回类型（无约束泛型 + 运行时探测）；删掉 demo 手工 `registerType<EchoPO>()` 后 E2E 仍跑通；见 7.11 |
 
 **复验（2026-10-02，WSL Ubuntu-24.04）**：`f_pool` 全量 `cjpm test` = `TOTAL: 22, PASSED: 22, FAILED: 0`；
 frpcdemo 端到端（默认配置约 45s）CPU **0%~2%**、应用日志事件 **0**、解码错误 **0**，无 `DEQUE-SELFCHECK` / `WEDGE-HEAL` 告警。
 
 **复验（2026-10-03，分支 `fix/half-message-detect`）**：`f_util` **28/28**、`f_protocol` **55/55**（修复前基线 43/45）、`f_codec` **15/15**。
+
+**复验（2026-10-04，worktree `fix-half-message`）**：`f_net` **14/14**（迁移后的读写路径用例 + 既有用例，见 7.9）；
+frpcdemo 业务级 E2E 仍跑通（客户端打印 JSON、服务端 `CONSUME(8)`、两侧 `Init Image fail` 0、`not registered` 0）——
+此轮**删除了 demo 手工的 `DefaultCodec.registerType<EchoPO>()`**，改由 §7.11 的宏展开自动登记。
+另：一次 70s 的客户端运行里出现 138 条 `[ERROR] Client reader error ... true`，**全部**来自发现循环的正常 `close()`
+（§7.5 第 3 条，属日志噪音），除它之外 0 条 ERROR。
 
 **加载现状**：帧 CRC 改用 f_util 后曾出现 `undefined symbol: crc32Update`（frpcdemo 起不来），
 **已定因并修复**（`boot.sh` 自建库优先，提交 `7cdc025a`，见 7.8）；修复后服务端正常加载并监听 1203、
@@ -593,7 +602,7 @@ EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已�
 | --- | --- | --- |
 | `f_net/src/server/server.cj:57` | 取 `buffer.remoteAddress` 前仍无 `isClosed()` 守卫（异常被外层 `try` 吞掉，只产生 WARN 噪音） | 加守卫或复用 `try` 内的地址 |
 | `f_net/src/server/server.cj:53` | accept 循环仍是 `while (i < size && let buffer <- buffers.remove())`（`size` 快照 + 阻塞 `remove`） | 改 `tryRemove()` |
-| `f_net/src/client/client.cj:77` | reader 异常统一 `log.error`，包括「被自身 checkTimer 正常关闭」的场景 | 该场景降级为 WARN/DEBUG |
+| `f_net/src/client/client.cj:77` | reader 异常统一 `log.error`，包括「被自身 checkTimer 正常关闭」的场景（**2026-10-04 E2E 实测：一次 70s 运行刷出 138 条 ERROR，全部是这个场景**） | 该场景降级为 WARN/DEBUG；纯日志噪音，不影响功能 |
 | 服务端 `unavailableChecked` | 默认仍为 3（P2 建议放宽并与 PING 发送对齐） | 风暴已消失，建议先观察再定 |
 | `KeyPool.get` 放弃阈值 | 30s 为写死常量 | 如需按池配置，可后续加参数 |
 
@@ -647,7 +656,8 @@ EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已�
 - B) 服务端在跑 + `./boot.sh runClient 127.0.0.1:1203` ⇒ `Init Image fail` **0**、客户端**不再段错误**
   （跑到超时被杀，exit 124），失败信息为 `RPCException: no available client for ... after 5s`。
 
-**仍未通过业务级 E2E**：服务端拒收客户端的 SUBSCRIBE ⇒ 服务发现始终为空 ⇒ 调用失败。见 7.10。
+**后续**：A)「不给地址」与 B)「发现未完成」两条路径都已按预期可诊断；B 路径当时暴露的「服务端拒收 SUBSCRIBE ⇒ 服务发现为空」
+已在 §7.10 逐层修复 —— **业务级 E2E 已跑通**（客户端打印 JSON、服务端 `CONSUME(8)`，见 7.10）。
 
 ### 7.8 `undefined symbol: crc32Update`：**已定因并修复**（2026-10-03）⚠️ 本条曾被误判
 
@@ -685,10 +695,13 @@ EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已�
   如果实际期望的是 CCITT-FALSE（init=`0xFFFF`、检查值 `0x29B1`），那要改的是 init，而不是现在的实现。待确认。
 - `f_util` 里 `crc64` 的相关 API（`crc64<T>`）此前存在"返回 UInt16 却叫 crc64"的复制粘贴 bug，**已修**（提交 `02d57ee0`）；
   但 `crc64` 目前在仓库里无人调用，属于"修好了但没有使用方"的状态。
-- `f_net` 的用例**长期编译不过**（2026-10-03 实测）：`src/test/f_net_tcp_test.cj`、`socket_params_test.cj` 等仍是旧泛型签名
-  （`Server<Message, EncodedMessage, Message, String>`、`Client<Message, EncodedMessage, Message, String, MessageID>`），
-  与现在的 `Server<T>` / `Client<T>` 不符 ⇒ `cjpm test` 直接编译失败。不是本轮改动引入的，但意味着
-  **f_net 的读取/发送路径目前没有可执行的用例覆盖**（本轮 f_net 客户端的改动只能靠 demo 运行验证）。
+- ✅ `f_net` 用例已修（2026-10-04）：`src/test/f_net_tcp_test.cj`、`socket_params_test.cj` 从旧泛型签名
+  （`Server<Message, EncodedMessage, Message, String>` …）迁移到 `Server<T>` / `Client<T>`
+  （`Server<T>.builder(...).reuseAddress(true).build()`、`spawn { server.start({ _, req => ... }) }`、
+  `Client<T>.builder(...).noDelay(true).build()`、`client.transfer(msg, timeout)`），并按新的服务端行为改写断言：
+  **PING 由服务端内置回 ACK（不进 executor）**，业务请求-响应另用 SUBSCRIBE→RESP 覆盖。
+  实测 `cjpm test` = **14/14 通过**（含 `Array<Int64>` 载荷逐字节往返、accept 后 `SocketParams.populate` 不抛）⇒
+  **f_net 的读取/发送路径重新有了可执行覆盖**（此前只能靠 demo 运行验证）。
 
 ### 7.10 业务级 E2E 的完整断链（2026-10-03 逐层定位，共 10 层，**已跑通**）
 
@@ -749,12 +762,37 @@ NoneValueException: Value does not exist.
 demo 端到端与之前一致：分隔线 ×2、客户端 JSON、服务端 `CONSUME(8)`、`Init Image fail` 0。
 协议/消息层行为另有 `f_protocol` **58/58** 用例覆盖（含帧长自洽与消息 id 往返）。
 
-### 7.11 对象类型的注册应由框架自动完成（**建议**，2026-10-03）
+### 7.11 对象类型的注册应由框架自动完成（✅ 2026-10-04 已实现）
 
-- 现状：跨网络传输的对象类型（`@DataAssist` 生成的类）必须在**每一侧**调用 `DefaultCodec.registerType<T>()`，
-  否则第一次解码该类型就会失败（7.10 第 10 层）。目前靠 demo 在 `rpcdef` 里手工注册。
-- 建议：让 `@RPCSkeleton` / `@RPCStub` 宏在展开时自动注册其**参数与返回类型**（宏本来就在生成 `TypeInfo.of<...>()`，
-  加一行 `DefaultCodec.registerType<X>()` 即可），这样"跨 RPC 边界的类型"无需应用手工登记。
-- 注意依赖方向：注册表与 murmur 在 `f_codec`，而 `@DataAssist` 在 `f_data`，**f_data → f_codec 会成环**，
-  所以不能在 `@DataAssist` 里注册；`f_rpc` 依赖 `f_codec`，放在 RPC 的两个宏里可行。
-- 另：嵌套对象类型不会被这条覆盖（只有顶层参数/返回类型），若日后出现嵌套对象字段，需要单独方案。
+- 原问题：跨网络传输的对象类型（`@DataAssist` 生成的类）必须在**每一侧**调用 `DefaultCodec.registerType<T>()`，
+  否则第一次解码该类型就会失败（7.10 第 10 层）。原先靠 demo 在 `rpcdef` 里手工注册。
+- **已实现**：`@RPCStub` / `@RPCSkeleton` 展开时自动为**参数与返回类型**生成登记调用
+  （类型收集在 `f_rpc/src/macros/TypeRegistration.cj`；登记走新公开的 `f_rpc.base.registerRPCType<T>()`）。
+  实现过程中试过并**排除**的两条路（均有实测结论）：
+  1. 直接生成 `DefaultCodec.registerType<X>()` —— 它的约束是 `T <: Object & ObjectData<T> & DataFields<T>`，
+     而宏是 token 级的、拿不到类型约束：参数/返回类型是 `Int64`/`String`/`Unit`/集合的接口会**编译失败**；
+  2. 「同名泛型函数 + 带约束版 + 无约束兜底版」靠重载选择 —— 编译器明确报
+     `generic constraints are not involved in the overloading`（约束不参与重载求解），此路不通。
+  因此生成的是**无约束**的 `registerRPCType<X>()`：运行时用反射判断 X 是否有静态 `dataFields()`
+  （`@DataAssist[fields]` 必生成），有则把「限定名 + 创建者」交给新增的
+  `DefaultCodec.registerType(qualifiedName:creator:)`（键与 `registerType<T>()` 一致，两种方式可混用）；
+  非对象类型直接跳过 —— 它们走各自的 dataType 分支，本来就不需要登记。
+- **验证**：把 demo 里手工的 `DefaultCodec.registerType<EchoPO>()` 删掉后，
+  `./boot.sh runServer 1203 127.0.0.1:1203` + `./boot.sh runClient 127.0.0.1:1203` 的业务级 E2E **仍然跑通**
+  （客户端打印 JSON、服务端 `CONSUME(8)`、两侧 `not registered` 0 次）⇒ 自动登记确实生效。
+- 仍然存在的限制（未变）：只覆盖**顶层**参数/返回类型。若传输对象内部**嵌套**了另一个 `@DataAssist` 类型，
+  解码该嵌套字段时仍可能踩「未登记」。若要一并解决，可让 `@DataAssist` 把类型登记进 **f_data 自己的注册表**、
+  再由 f_codec 在解码未命中时拉取（f_data 不依赖 f_codec，不构成环，且能覆盖嵌套类型）——本轮未做。
+
+### 7.12 `f_pool` 全量用例偶发 SIGSEGV（2026-10-03 观察到一次，未复现）
+
+- 现象：`f_pool` 全量 `cjpm test` 的某一次运行中，`concurrentBorrowNeverSharesBuffer` 触发 **SIGSEGV**；
+  栈顶落在 `fountain::f_pool` 的 `UnitKeyPool.size`，表现为**运行时泛型 MTable 空指针**（对象/虚表字段未初始化）。
+  同一次会话内立刻重跑 ⇒ `TOTAL: 22, PASSED: 22, FAILED: 0`，其后多轮复验（含 2026-10-02 的 22/22）均通过。
+- 证据强度：**只观察到一次，未保留完整栈与日志**，没有稳定复现路径 ⇒ 当前判定为**偶发**，不能排除环境/调度因素。
+- 影响面：`f_pool` 是 f_codec / f_net 的缓冲池底座。若确有竞态，症状会是**随机崩溃**而不是可复现的用例失败，
+  排查成本高；反之若只是环境抖动，则会白白背上一个"疑案"。
+- 待办建议：
+  1. 再现时**先留全量与完整栈**（`cjpm test 2>&1 | tee`），并记录当次是否并发跑过其它构建/用例；
+  2. 重点确认 `UnitKeyPool.size` 读到的实例是否来自**未初始化完的静态/共享对象**（MTable 空指针 ⇒ 对象头未就绪）；
+  3. 用 `-j1`（串行）与默认并行各跑 N 轮做对照，区分「用例间互相干扰」与「单用例自身竞态」。

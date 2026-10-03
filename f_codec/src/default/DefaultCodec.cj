@@ -69,6 +69,16 @@ public class DefaultCodec <: Codec & Releasable {
         })
         typeMurmur
     }
+    /**
+     * 按「限定名 + 创建者」登记对象类型：与 `registerType<T>()` 等价，但**不要求调用方静态满足 T 的约束**。
+     *
+     * 供框架在宏展开处自动登记跨网络传输的类型（见 bug.md 7.11）：宏是 token 级的、给不出类型约束，
+     * 无法对任意参数/返回类型生成 `registerType<T>()` 直调，只能把「运行时探测到的限定名与创建者」交给这里。
+     * 键与 `registerType<T>()` 完全一致（都是 murmurHash(限定名)），两种登记方式可混用。
+     */
+    public static func registerType(qualifiedName: String, creator: () -> SimpleDataObject): Unit {
+        typeMurmurCreators.addIfAbsent(murmurHash(qualifiedName), creator)
+    }
 
     private func lastBuffer(): BytesListOutputStream {
         func getBuf(){

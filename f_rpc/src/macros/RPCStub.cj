@@ -81,6 +81,8 @@ private func genStub(exactlyVersion: Bool, version: String, name: String, decl: 
         throw RPCException()
     }catch(_){}
     var funcs = `empty_tokens`
+    // 接口里所有方法的参数与返回类型：展开处自动向 DefaultCodec 登记创建者（bug.md 7.11）
+    let types = ArrayList<Tokens>()
     match(decl){
         case x: InterfaceDecl where isPublic(x) => 
             let typeName = x.identifier
@@ -92,6 +94,7 @@ private func genStub(exactlyVersion: Bool, version: String, name: String, decl: 
                         funcs += `nl`
                     }
                     funcs += genStub(exactlyVersion, version, name, typeName, f)
+                    collectRPCTypes(types, f)
                 }else if (let f: FuncDecl <- d && f.block.lBrace.kind == LCURL){
                     continue
                 }else if (let p: PropDecl <- d && p.lBrace.kind == LCURL){
@@ -112,6 +115,7 @@ private func genStub(exactlyVersion: Bool, version: String, name: String, decl: 
             $funcs
         }
         private let _ = {=>
+            $(rpcTypeRegistrations(types))
             let skeleton = ClientConfig.currentSkeleton
             let klass = TypeInfo.of<$(className)>()
             let qualified = klass.qualifiedName
