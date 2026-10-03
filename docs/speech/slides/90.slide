@@ -1,0 +1,71 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`f_jwt 的 API，编码和解码两边各看一遍。
+
+编码是一个链式调用：encoder 拿到编码器，然后可以加自定义 header、设置签名密钥、设置 keyId 也就是 kid、issuer、subject、audience、expire、notBeforeAt、issuedAt，还能 addPayload 加自定义负载，最后 sign 出 token。
+
+注意 expire 支持四种形式：Duration、Int64 秒、DateTime、还有 expireAt。
+
+签名算法全家桶分两类。HMAC 有六个：MD5、SHA1、SHA224、SHA256、SHA384、SHA512；每种都有三个重载——直接传字节数组、传 Base64 字符串、传十六进制字符串。非对称有 ECDSA 的 224/256/384/512、RSA 的 256/384/512（可以指定填充类型），还有国密的 SM2。
+
+负载还可以一次性塞进去：addPayload 传一个对象，前提是它实现了 ObjectData，公共成员就变成负载；或者传一个 Map。另外 jwtId 可以配合 JwtIdCache 做防重放。
+
+解码这边，verifier 拿到验证器，然后一系列 get：getKeyId、getPayload、getPayloadValue、getHeader、getExpireAt 有 DateTime 和 Duration、秒三种版本，还有 getNotBefore。
+
+校验方法分层次：verifySign 只验签名；verify 是 exp、nbf、签名一起验；还可以单独验 issuer、subject、audience、payload、id。
+
+一句话记住：verify 已经把 exp、nbf 和签名都检查了，没有指定 exp 或 nbf 的字段就认为该维度当前有效。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 13 章 · 安全 f_security + f_jwt · 13.3</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>f_jwt API 速览</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>编码 / 解码</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #38BDF8', padding: 18, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 13, color: '#38BDF8', marginBottom: 8 }}>编码（签名）</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"let token = JWT.encoder()"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    .header('x-custom', 'v')            // 自定义 header"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    .hmacMD5(key)                       // 也支持 ByBase64Key / ByHexKey"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    .keyId('12345')                     // kid"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    .issuer('fountain')                 // iss"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    .subject('user') / .audience('web') // sub / aud"}</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    .expire(Duration.hour)              // exp：Duration / Int64 秒 / DateTime / expireAt"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    .notBeforeAt(DateTime.nowUTC())     // nbf"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    .issuedAt(DateTime.nowUTC())        // iat"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    .addPayload('userId', 123)          // 自定义负载"}</Text>
+      <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    .sign()"}</Text>
+      <Box style={{ height: 1, background: '#1E293B', marginTop: 10, marginBottom: 8 }} />
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7 }}>HMAC：hmacMD5 / SHA1 / SHA224 / SHA256 / SHA384 / SHA512（各有字节数组、Base64、十六进制三个重载）</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, marginTop: 6 }}>非对称：ecdsa224/256/384/512、rsa256/384/512（可指定 padType）、SM2</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 6 }}>负载还可一次性塞入：addPayload(userObject)（T 实现 ObjectData）/ addPayload(map)；jwtId(jti, expire:, cache: HeapJwtIdCache) 做防重放</Text>
+    </Box>
+
+    <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 18, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>解码（验签）</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"let v = JWT.verifier(token)"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"v.getKeyId()                 // ?String"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"v.getPayload('userId')       // ?Any"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"v.getPayloadValue<Int64>('userId')"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"v.getHeader('alg')           // ?String"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"v.getExpireAt()              // ?DateTime（还有 Duration / Seconds）"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"v.getNotBefore() / v.isExpired() / v.isNotBefore()"}</Text>
+      <Box style={{ height: 1, background: '#1E293B', marginTop: 10, marginBottom: 8 }} />
+      <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"v.verifySign()               // 只验签名"}</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"v.verify()                   // exp + nbf + sign 一起验"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"v.verifyIssuer('fountain') / verifySubject('user')"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"v.verifyAudience('web') / verifyPayload('userId', 123)"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"v.verifyId(cache)            // jti 是否有效"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 'auto' }}>verify() 已经把 exp、nbf、签名都检查了；没有指定 exp / nbf 的字段就认为该维度当前有效。jti 配 JwtIdCache（HeapJwtIdCache / NoneJwtIdCache）可做防重放。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>90 / 116</Text>
+  </Box>
+</Slide>

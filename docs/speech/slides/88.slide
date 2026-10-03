@@ -1,0 +1,64 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`第二步是 MVC 怎么挑 handler，这个判断顺序决定了你的类该怎么设计。
+
+五步。第一步，如果 ignoreAuth 和 ignorePrivilege 都为 true，直接 OK，什么都不查。
+
+第二步，如果存在「通用」的 AuthHandler，就用它一次检查完。
+
+第三步，否则，如果没忽略鉴权而且 UserSessionHandler 存在，就用它检查登录状态；通过就执行第四步，不通过就失败。
+
+第四步，如果没忽略权限且 PrivilegeHandler 存在，用它检查权限。
+
+第五步，都没有的话就是 OK。
+
+这里有一个非常重要的结论：第三步一旦通过就直接返回，第四步的权限检查不会执行。
+
+所以源码注释里明确写着：如果登录状态和权限都要检查，最好在同一个类里实现、一次调用检查完——fdemo 的 AuthCheckerImpl 就是这个做法，它实现了 AuthHandler，一次把两件事都做完。
+
+如果你的系统权限模型很复杂，确实需要拆成两个 bean，那就分别实现 UserSessionHandler 和 PrivilegeHandler，但要清楚这个优先级语义——否则你会发现权限检查莫名其妙地没生效。
+
+这个结论是这一章最容易被忽略的一条。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 13 章 · 安全 f_security + f_jwt · 13.1 续</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>MVC 怎么挑 handler</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>这决定了你的类该怎么设计</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 10 }}>
+    <Box style={{ flexDirection: 'row', gap: 14, background: '#111C2E', borderRadius: 10, padding: 14 }}>
+      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 34 }}>1</Text>
+      <Text style={{ fontSize: 15, color: '#E2E8F0', lineHeight: 1.6, flex: 1 }}>ignoreAuth 且 ignorePrivilege 都为 true → 直接 OK（不查）</Text>
+    </Box>
+    <Box style={{ flexDirection: 'row', gap: 14, background: '#111C2E', borderRadius: 10, padding: 14 }}>
+      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 34 }}>2</Text>
+      <Text style={{ fontSize: 15, color: '#E2E8F0', lineHeight: 1.6, flex: 1 }}>存在「通用」AuthHandler → 用它一次检查完</Text>
+    </Box>
+    <Box style={{ flexDirection: 'row', gap: 14, background: '#111C2E', borderRadius: 10, padding: 14 }}>
+      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 34 }}>3</Text>
+      <Text style={{ fontSize: 15, color: '#E2E8F0', lineHeight: 1.6, flex: 1 }}>否则：未忽略鉴权且 UserSessionHandler 存在 → 用它检查登录状态；通过则执行第 4 步，否则失败</Text>
+    </Box>
+    <Box style={{ flexDirection: 'row', gap: 14, background: '#111C2E', borderRadius: 10, padding: 14 }}>
+      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 34 }}>4</Text>
+      <Text style={{ fontSize: 15, color: '#E2E8F0', lineHeight: 1.6, flex: 1 }}>未忽略权限且 PrivilegeHandler 存在 → 用它检查权限</Text>
+    </Box>
+    <Box style={{ flexDirection: 'row', gap: 14, background: '#111C2E', borderRadius: 10, padding: 14 }}>
+      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 34 }}>5</Text>
+      <Text style={{ fontSize: 15, color: '#E2E8F0', lineHeight: 1.6, flex: 1 }}>都没有 → OK</Text>
+    </Box>
+    <Box style={{ flex: 1, background: 'rgba(245,158,11,0.07)', borderRadius: 12, border: '1px solid #F59E0B', padding: 18, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#F59E0B' }}>重要结论：第 3 步一旦通过就直接返回，第 4 步的权限检查不会执行</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.7, marginTop: 8 }}>所以源码注释明确写着：如果登录状态和权限都要检查，最好在同一个类里实现、一次调用检查完 —— fdemo 的 AuthCheckerImpl 就是这个做法。</Text>
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 6 }}>确实需要拆成两个 bean 时，分别实现 UserSessionHandler 和 PrivilegeHandler，但要清楚这个优先级语义。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>88 / 116</Text>
+  </Box>
+</Slide>

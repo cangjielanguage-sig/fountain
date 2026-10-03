@@ -1,0 +1,65 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`这份讲稿分成四个板块，从「为什么用」一直到「怎么用」，最后收在常见坑和速查表上。
+
+第一个板块是总览与启动，先讲清楚我们到底在重复什么、fountain 是什么、它三个反直觉的设计决策，然后过一遍环境准备，再把 fboot 的整套命令行讲透，最后用 f_config 把「没有配置文件」这件事说清楚，并跑通 fdemo。
+
+第二个板块是框架核心，六个模块：IOC、AOP、数据、工具箱、MVC 和 HTTP 数据格式。这六个是日常写代码时碰得最多的。
+
+第三个板块是数据与安全，讲 ORM 的 PO / DAO / Service 三个角色、事务控制、安全与 JWT、还有 CRON 定时任务。
+
+第四个板块是日志、串讲与底座：先把 f_log 讲透，再用一次请求把整个框架串起来，然后翻一遍运行时基础设施那一层，最后是二十个常见坑和预设问答。附录里是三张速查表，可以单独拿出来用。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>课程结构 · 18 章 / 4 大板块 / 116 页</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>目录</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>建议按板块裁剪录制</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 16 }}>
+    <Box style={{ flex: 1, flexDirection: 'column', gap: 16 }}>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 24, flexDirection: 'column' }}>
+        <Box style={{ flexDirection: 'row', alignItems: 'baseline', gap: 14 }}>
+          <Text style={{ fontSize: 44, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>01</Text>
+          <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#E2E8F0' }}>总览与启动</Text>
+        </Box>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.7, marginTop: 14 }}>为什么用 fountain · 三个反直觉的设计决策 · 环境准备 · fboot 整套命令行 · f_config 四级配置 · 跑通 fdemo</Text>
+        <Text style={{ fontSize: 14, color: '#64748B', marginTop: 'auto' }}>第 1–5 章　·　对应第 06–35 页</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 24, flexDirection: 'column' }}>
+        <Box style={{ flexDirection: 'row', alignItems: 'baseline', gap: 14 }}>
+          <Text style={{ fontSize: 44, fontWeight: 'bold', color: '#22D3EE', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>02</Text>
+          <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#E2E8F0' }}>框架核心</Text>
+        </Box>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.7, marginTop: 14 }}>f_bean 的 lookup 家族与条件装配 · f_aspect 的织入规则 · f_data 的统一数据模型 · f_util 工具箱 · f_mvc 路由与参数绑定 · f_http 的 MediaType</Text>
+        <Text style={{ fontSize: 14, color: '#64748B', marginTop: 'auto' }}>第 6–11 章　·　对应第 37–74 页</Text>
+      </Box>
+    </Box>
+    <Box style={{ flex: 1, flexDirection: 'column', gap: 16 }}>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 24, flexDirection: 'column' }}>
+        <Box style={{ flexDirection: 'row', alignItems: 'baseline', gap: 14 }}>
+          <Text style={{ fontSize: 44, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>03</Text>
+          <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#E2E8F0' }}>数据与安全</Text>
+        </Box>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.7, marginTop: 14 }}>f_orm 的 PO / DAO / Service 三角色 · 三种构造 SQL 的方式 · 分页与方言 · 事务三种开启方式与事务钩子 · f_security + f_jwt · f_ticktock</Text>
+        <Text style={{ fontSize: 14, color: '#64748B', marginTop: 'auto' }}>第 12–14 章　·　对应第 76–92 页</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 24, flexDirection: 'column' }}>
+        <Box style={{ flexDirection: 'row', alignItems: 'baseline', gap: 14 }}>
+          <Text style={{ fontSize: 44, fontWeight: 'bold', color: '#F59E0B', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>04</Text>
+          <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#E2E8F0' }}>日志、串讲与底座</Text>
+        </Box>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.7, marginTop: 14 }}>f_log 三条纪律与一条日志的旅程 · 一次请求穿过整个框架 · 运行时基础设施九个模块 · 二十二个高频坑与预设 Q&A · 三张速查表</Text>
+        <Text style={{ fontSize: 14, color: '#64748B', marginTop: 'auto' }}>第 15–18 章 + 附录　·　对应第 94–115 页</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>02 / 116</Text>
+  </Box>
+</Slide>

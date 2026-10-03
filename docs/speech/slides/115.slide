@@ -1,0 +1,83 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`第三张速查表是关键 API，按模块分组。
+
+f_bean：lookup 系列，无参、带名字、带条件；lookupOption、lookupList、lookupHashMap。
+
+f_orm：ORM.initialize、ORM.register、ORM.executor、ORM.executor 带驱动名；executor.setSql 后面跟 update / insert / delete；executor.FROM 泛型接 WHERE、ORDER_BY、page；INSERT_INTO 和 UPDATE；execute 模板传传播行为和回滚规则。
+
+f_mvc：CurrentHttpContext.instance，一行拿到当前请求上下文。
+
+f_jwt：encoder 链式签名，verifier 拿 token 然后 verify。
+
+f_log：getLogger 泛型或字面量；三种写日志方式；六个 enabled 属性；withAttrs 附加属性；LoggerConfig.filter 脱敏；LoggerFactory.refresh 刷新。
+
+f_data：DataObject 泛型 populate 做类实例到类实例；DataObject 按名读写；toJson 和 fromJson 做对象与 JSON 串互转；JsonValue 的两个入口；DataPath.cache 做 JSONPath 查询。
+
+f_random：区间随机数、随机流、RandomString 的两种生成、ThreadLocalRandom.current、randomReservoir 抽样。
+
+f_util：UUID 的六种生成；parse 和 tryParse；IsUUID 注解；IdMaker；CaseFormat；TextTemplate；PathPattern；TreeTransformer 的 transform；Factory、Strategies、ResponsibilityChain。
+
+f_base：ExitCallbacks 的 atExit；四类空容器；迭代器扩展的 toArrayList、groupBy、peekable；数组的 grow 和重复；Option 的 toResult、iterator、caller；StringGenerator；Comparator 和 Equaler；resource 和 ResourceManager；FutureTask；InheritedTaskLocal；还有两个宏 nameof 和 nameValueOf。
+
+这三张速查表就是整个讲稿的索引。需要时回到对应的章节看细节，平时开发直接翻附录就够了。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>附录 A · 一页速查表</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>关键 API 速查</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>整个讲稿的索引</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #38BDF8', padding: 18, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 11, color: '#94A3B8', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"// f_bean：IOC"}</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>lookup&lt;T&gt;() / lookup&lt;T&gt;(name) / lookup&lt;T&gt;(cond) / lookupOption / lookupList / lookupHashMap</Text>
+      <Text style={{ fontSize: 11, color: '#64748B', lineHeight: 1.7, marginTop: 8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"// f_orm"}</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>ORM.initialize() / register(...) / executor() / executor(driver)</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>executor.setSql(...).update / .insert / .delete</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>executor.FROM&lt;T&gt;().WHERE(...).ORDER_BY(...).page&lt;T&gt;(size, page:)</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>executor.INSERT_INTO&lt;T&gt;(po) / UPDATE&lt;T&gt;(map|po, dirty:)</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>executor.execute&lt;T&gt;(propagation:, rollbackFor:) &#123; exec =&gt; (result, true) &#125;</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>CurrentHttpContext.instance</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>JWT.encoder()....sign() / JWT.verifier(token).verify()</Text>
+      <Text style={{ fontSize: 11, color: '#64748B', lineHeight: 1.7, marginTop: 8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"// f_log（默认静默；级别 / 格式挂在 appender 上）"}</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>LoggerFactory.getLogger&lt;T&gt;() / getLogger('任意名字')</Text>
+      <Text style={{ fontSize: 11, color: '#38BDF8', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"log.info{'...${name}'} / log.debug{'...'}   // lambda：级别不够不求值"}</Text>
+      <Text style={{ fontSize: 11, color: '#38BDF8', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"log.info('user {} login', [name, ip]) / log.info('user {name}', data)"}</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"log.error(e){'...'} / log.error('...', e) / log.withAttrs([...])"}</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"log.debugEnabled / infoEnabled / warnEnabled / errorEnabled / fatalEnabled"}</Text>
+      <Text style={{ fontSize: 11, color: '#F59E0B', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>LoggerConfig.filter = MyLogFilter() / LoggerFactory.refresh()</Text>
+    </Box>
+
+    <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 18, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 11, color: '#64748B', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"// f_data：对象 / JSON / Map 互转"}</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>DataObject&lt;T&gt;.populate(src, flag: DEFAULT_DATA_FLAG) / DataObject&lt;T&gt;(obj)['field']</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>toJson(obj) / fromJson&lt;T&gt;(jsonString) / JsonValue.from(...) / fromStr(s)</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{'DataPath.cache("$.a[?(@.b > 1)].c").get(data)   // JSONPath'}</Text>
+      <Text style={{ fontSize: 11, color: '#64748B', lineHeight: 1.7, marginTop: 8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"// f_random"}</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>rand.nextInt64(1, 100, closed: true) / randomInt64(0, 10)（无限流）</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>RandomString().randomLowerHex(32) / ThreadLocalRandom.current</Text>
+      <Text style={{ fontSize: 11, color: '#64748B', lineHeight: 1.7, marginTop: 8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"// f_util"}</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>UUID.random() / unixTimeBased() / md5(s) / sha1(s) / parse(s) / toHexString()</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"CaseFormat.Camel.convert('userName', to: CaseFormat.LowerUnderScore)"}</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"TextTemplate.compile('订单 ${id} 已创建').format(map)"}</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"PathPattern().compileIfAbsent('/api/{id}'){data}.data<T>(path)"}</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>MenuNode.transform&lt;MenuPO&gt;(list, emptyId: 0)&#123; po =&gt; MenuNode(po) &#125;</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>Strategies&lt;N,A,R&gt;.register(s) / .execute(name, arg)　·　IdMaker().nextInt64()</Text>
+      <Text style={{ fontSize: 11, color: '#64748B', lineHeight: 1.7, marginTop: 8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"// f_base（建议无脑导入）"}</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>ExitCallbacks.atExit(priority)&#123;...&#125; / toExitGracefully()</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>EmptyArray / EmptySet / EmptyMap&lt;T&gt;.instance()　·　it.groupBy&#123;...&#125; / peekable()</Text>
+      <Text style={{ fontSize: 11, color: '#E2E8F0', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>Option.toResult() / iterator() / caller&#123;...&#125;　·　Comparator&lt;T&gt;(cmp).then&#123;...&#125;</Text>
+      <Text style={{ fontSize: 11, color: '#94A3B8', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>resource(res)&#123; r =&gt; ... &#125; / ResourceManager / FutureTask&lt;T&gt;(fn)</Text>
+      <Text style={{ fontSize: 11, color: '#94A3B8', lineHeight: 1.45, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>@nameof(expr) / @nameValueOf(expr)　·　HeapCache / Pool / BitSet / Dict / f_time DSL</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>115 / 116</Text>
+  </Box>
+</Slide>

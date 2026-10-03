@@ -1,0 +1,78 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`设计模式这种东西，道理大家都懂，但每次都要写一遍接口加注册表。f_util 直接给了骨架，讲三个。
+
+第一个是工厂模式。Producer 接口有两个 produce 方法，一个无参一个带参，默认都抛异常。Factory 提供 assemble 和 produce：assemble 用 TypeInfo.of 当 KEY 注册生产者，produce 按目标类型取——所以它是「按类型分派的工厂」。取不到会抛 TypeNotMatchException。
+
+第二个是策略模式。Strategy 接口有 name 和 execute 两个成员，name 是策略标识。Strategies 提供 register 和 execute，execute 按名字找策略，找不到抛 IllegalAccessException。
+
+它和 IOC 的 lookupLables 是互补的两种做法：要 bean 的完整生命周期管理，用 IOC；只是想按 key 分派一段逻辑，用 Strategies 更轻。
+
+第三个是责任链模式。Responsibility 有 check 和 execute，check 决定是否由本策略处理。ResponsibilityChain 提供 register 和两个执行方法：execute 是「找到第一个能处理的就执行」，executeAll 是「所有符合条件的都执行一遍」。后者特别适合多级校验、多环节加工。
+
+还有两个顺带的：中介者模式，Colleague 有 name，Mediator 用参数里的 name 找策略并执行；状态模式，State 有 continues、data、exec、startup。
+
+注意一个拼写：源码里是 Responsibility，少一个 n，文件名也是 ResponsibilityChain 点 cj。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 9 章 · 工具箱 f_util · 9.9</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>三个现成的设计模式骨架</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>接口 + 注册表，一次到位</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 16 }}>
+    <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 22, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#38BDF8' }}>工厂模式</Text>
+      <Text style={{ fontSize: 14, color: '#64748B', marginTop: 6 }}>按类型分派</Text>
+      <Box style={{ background: '#0B1220', borderRadius: 8, border: '1px solid #1E293B', padding: 14, marginTop: 14 }}>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public interface Producer<A, O> {"}</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    func produce(): O      // 默认抛异常"}</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    func produce(arg: A): O"}</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"}"}</Text>
+        <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.65, marginTop: 8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"Factory<A, O>.assemble<T>(producer)"}</Text>
+        <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"Factory<A, O>.produce<T>(arg)"}</Text>
+      </Box>
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 14 }}>assemble 用 TypeInfo.of 当 KEY 注册生产者，produce 按目标类型取。</Text>
+      <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.7, marginTop: 'auto' }}>取不到会抛 TypeNotMatchException。</Text>
+    </Box>
+
+    <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 22, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#E2E8F0' }}>策略模式</Text>
+      <Text style={{ fontSize: 14, color: '#64748B', marginTop: 6 }}>按 key 分派逻辑</Text>
+      <Box style={{ background: '#0B1220', borderRadius: 8, border: '1px solid #1E293B', padding: 14, marginTop: 14 }}>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public interface Strategy<N, A, R> where N <: Hashable & Equatable<N> {"}</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    prop name: N          // 策略标识"}</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    func execute(arg: A): R"}</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"}"}</Text>
+        <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.65, marginTop: 8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"Strategies<N, A, R>.register(strategy)"}</Text>
+        <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"Strategies<N, A, R>.execute(name, arg)"}</Text>
+      </Box>
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 14 }}>和 IOC 的 lookupLables 互补：要 bean 的完整生命周期用 IOC，只按 key 分派逻辑用 Strategies 更轻。</Text>
+      <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.7, marginTop: 'auto' }}>找不到策略抛 IllegalAccessException。</Text>
+    </Box>
+
+    <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 22, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#E2E8F0' }}>责任链模式</Text>
+      <Text style={{ fontSize: 14, color: '#64748B', marginTop: 6 }}>注意拼写 Responsibility</Text>
+      <Box style={{ background: '#0B1220', borderRadius: 8, border: '1px solid #1E293B', padding: 14, marginTop: 14 }}>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public interface Responsibility<C, A, R> {"}</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    func check(condition: C): Bool  // 是否由本策略处理"}</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    func execute(arg: A): R"}</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"}"}</Text>
+        <Text style={{ fontSize: 13, color: '#0F172A', lineHeight: 1.65, marginTop: 8 }}> </Text>
+        <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"chain.execute(condition, arg)     // 第一个 check 通过的"}</Text>
+        <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"chain.executeAll(condition, arg)  // 所有满足条件的"}</Text>
+      </Box>
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 14 }}>executeAll 特别适合多级校验、多环节加工。</Text>
+      <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.7, marginTop: 'auto' }}>源码拼写是 Responsibility（少一个 n），文件名也是 ResponsibilityChain.cj。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>60 / 116</Text>
+  </Box>
+</Slide>

@@ -1,0 +1,19 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: 0, position: 'relative', overflow: 'hidden' }}
+  notes={`@@NOTES@@`}
+>
+  <Text style={{ position: 'absolute', right: 40, top: 170, fontSize: 200, fontWeight: 'bold', color: '#16233A', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>END</Text>
+  <Box style={{ position: 'absolute', left: 0, top: 0, width: 8, height: 720, background: 'linear-gradient(135deg, #38BDF8 0%, #22D3EE 100%)' }} />
+  <Box style={{ position: 'absolute', left: 120, top: 150, width: 4, height: 34, background: '#38BDF8' }} />
+  <Text style={{ position: 'absolute', left: 140, top: 159, fontSize: 15, color: '#38BDF8', letterSpacing: 4 }}>本讲小结 @@NUM@@ / @@N@@</Text>
+  <Text style={{ position: 'absolute', left: 120, top: 212, fontSize: 40, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.2 }}>@@TITLE@@</Text>
+  <Box style={{ position: 'absolute', left: 120, top: 286, width: 160, height: 6, background: 'linear-gradient(135deg, #38BDF8 0%, #22D3EE 100%)' }} />
+  <Text style={{ position: 'absolute', left: 120, top: 336, fontSize: 17, color: '#E2E8F0', lineHeight: 2 }}>@@P1@@</Text>
+  <Text style={{ position: 'absolute', left: 120, top: 382, fontSize: 17, color: '#E2E8F0', lineHeight: 2 }}>@@P2@@</Text>
+  <Text style={{ position: 'absolute', left: 120, top: 428, fontSize: 17, color: '#E2E8F0', lineHeight: 2 }}>@@P3@@</Text>
+  <Box style={{ position: 'absolute', left: 120, top: 500, flexDirection: 'row', alignItems: 'center', gap: 20 }}>
+    <Box style={{ width: 4, height: 40, background: '#F59E0B' }} />
+    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#F59E0B' }}>@@NEXT@@</Text>
+  </Box>
+  <Text style={{ position: 'absolute', left: 64, top: 668, fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库　　@@URL1@@　　@@URL2@@</Text>
+</Slide>

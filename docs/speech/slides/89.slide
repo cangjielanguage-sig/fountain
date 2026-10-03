@@ -1,0 +1,66 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`第三步，用 JWT 维持登录状态。fdemo 的 UserSessionCache 整屏展示。
+
+它有三块。
+
+第一块，安全上下文。这里构造了一个 JWTSecurityContext 泛型 String，第一个参数是 JWTHeapCacheStore，寿命一小时，也就是身份存在堆缓存里；第二个参数是生成 principal 的函数，用 UUID 随机十六进制串当密钥；第三个参数是校验函数，用 HMAC MD5。
+
+第二块，登录。generate 方法接收 userId，先调 context 的 login 把身份存进缓存，然后用 JWT 编码器的链式 API：设置密钥、keyId 为 userId、过期时间一小时、最后 sign 出 token。
+
+第三块，校验。verify 方法只有一行，调 context 的 check。它会从当前请求的 Authorization 头里取 JWT，验签加验证过期时间，再用 principal 里的密钥校验。
+
+这里最值得讲的设计是：每次登录用 UUID 随机生成一把独立的 HMAC 密钥，存进 principal —— 也就是每个会话一把钥匙。这样即使某一把密钥泄露，也只影响那一个会话。
+
+而且因为 check 是从 CurrentHttpContext 取当前请求，所以校验逻辑不用写在 controller 里——这就是上一章说的那个线程级上下文的实际用途。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 13 章 · 安全 f_security + f_jwt · 13.2</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>用 JWT 维持登录状态</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>建议整屏展示</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #38BDF8', padding: 18, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 13, color: '#38BDF8', marginBottom: 8 }}>fdemo/user/src/util/UserSessionCache.cj</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>public class UserSessionCache {"{"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    // ① 安全上下文：JWT 登录状态 + 堆缓存（1 小时）"}</Text>
+      <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    private static let context = JWTSecurityContext<String>("}</Text>
+      <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        JWTHeapCacheStore(Duration.hour),"}</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        {id => JWTPrincipal<String>(id, '', UUID.random().toHexString())}   // 每个登录一把随机签名密钥"}</Text>
+      <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    ){verifier, principal => hmacKey(verifier, principal)}"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    private static func hmacKey(jwt, key: Array<Byte>) { jwt.hmacMD5(key) }"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, marginTop: 8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    // ② 登录：生成 JWT"}</Text>
+      <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    public static func generate(userId: Int64): String {"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        let uids = userId.toString()"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        let principal = context.login(uids).getOrThrow{SecurityException()}"}</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        hmacKey(JWT.encoder(), principal).keyId(uids).expire(expire).sign()"}</Text>
+      <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    }"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, marginTop: 8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    // ③ 校验：从当前请求的 Authorization 头取 JWT 校验"}</Text>
+      <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    public static func verify(): Bool { context.check(()) }"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"}"}</Text>
+    </Box>
+
+    <Box style={{ width: 400, flexDirection: 'column', gap: 14 }}>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 20, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#38BDF8' }}>三件事</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.8, marginTop: 10 }}>① JWTSecurityContext 用 Authorization 头传递 JWT，身份存在 JWTHeapCacheStore（堆缓存，1 小时）里。</Text>
+        <Text style={{ fontSize: 13, color: '#F59E0B', lineHeight: 1.8, marginTop: 8 }}>② 每次登录用 UUID.random().toHexString() 生成一把独立的 HMAC 密钥存进 principal —— 每个会话一把钥匙。</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.8, marginTop: 8 }}>③ context.login(id) 存状态，context.check(()) 直接从 CurrentHttpContext 取当前请求校验 —— 校验逻辑不用写在 controller 里。</Text>
+      </Box>
+      <Box style={{ height: 150, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#E2E8F0' }}>其它登录状态方案</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 8 }}>JWTSecurityContext（Authorization 头）· UserTokenSecurityContext（userId + token 两个头）· HeapCacheStore / UserTokenHeapCacheStore · PrincipalStore（自己实现 Redis 等）</Text>
+        <Text style={{ fontSize: 12, color: '#64748B', lineHeight: 1.7, marginTop: 'auto' }}>想把登录状态放 Redis？实现 PrincipalStore 做成 @Bean 就行，其他代码一行不用改。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>89 / 116</Text>
+  </Box>
+</Slide>

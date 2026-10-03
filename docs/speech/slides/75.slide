@@ -1,0 +1,34 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: 0, position: 'relative', overflow: 'hidden' }}
+  notes={`进入第三个板块，数据与安全。
+
+三章内容：第十二章 ORM，这是全场最长的一章，重点是 PO、DAO、Service 三个角色，三种构造 SQL 的方式，以及事务控制。第十三章安全和 JWT，讲登录状态怎么检查、怎么用 JWT 维持会话。第十四章 CRON 定时任务，很短，六分钟带过。
+
+这个板块的核心是第十二章。ORM 里最反直觉的一点是 DAO 就是接口——加了 @DAO 以后 SqlExecutor 本身就是实现。这一点第一次看会觉得不可思议，但它解决的是「DAO 实现类全是模板代码」这个真问题。
+
+事务部分要展开讲：三种开启方式、七种传播行为、七种事务钩子的调用顺序，还有「为什么同一线程共用连接」这个底层原理。
+
+安全部分不讲密码学，只讲 fountain 的抽象：AuthHandler 怎么被挑选、AuthStatus 有哪几种、JWT 怎么从 Authorization 头里取出来校验。`}
+>
+  <Text style={{ position: 'absolute', right: 40, top: 120, fontSize: 320, fontWeight: 'bold', color: '#16233A', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>03</Text>
+  <Box style={{ position: 'absolute', left: 0, top: 0, width: 8, height: 720, background: 'linear-gradient(135deg, #38BDF8 0%, #22D3EE 100%)' }} />
+
+  <Text style={{ position: 'absolute', left: 120, top: 218, fontSize: 16, color: '#38BDF8', letterSpacing: 6 }}>PART 03</Text>
+  <Text style={{ position: 'absolute', left: 120, top: 254, fontSize: 56, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.15 }}>数据与安全</Text>
+  <Box style={{ position: 'absolute', left: 120, top: 344, width: 160, height: 6, background: 'linear-gradient(135deg, #38BDF8 0%, #22D3EE 100%)' }} />
+
+  <Text style={{ position: 'absolute', left: 120, top: 392, fontSize: 18, color: '#94A3B8', lineHeight: 1.9 }}>
+    <>f_orm 的 PO / DAO / Service 三角色　·　三种构造 SQL 的方式　·　分页与方言</>
+  </Text>
+  <Text style={{ position: 'absolute', left: 120, top: 428, fontSize: 18, color: '#94A3B8', lineHeight: 1.9 }}>
+    <>事务三种开启方式与事务钩子　·　f_security + f_jwt　·　f_ticktock</>
+  </Text>
+
+  <Box style={{ position: 'absolute', left: 120, top: 512, flexDirection: 'row', alignItems: 'center', gap: 24 }}>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>第 12–14 章</Text>
+    <Box style={{ width: 1, height: 16, background: '#1E293B' }} />
+    <Text style={{ fontSize: 14, color: '#64748B' }}>对应第 76–92 页</Text>
+    <Box style={{ width: 1, height: 16, background: '#1E293B' }} />
+    <Text style={{ fontSize: 14, color: '#64748B' }}>建议 51 分钟</Text>
+  </Box>
+</Slide>

@@ -1,0 +1,76 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`先说 f_base，它是所有模块脚下的那一层。README 的第一句话就是「建议开发时无脑导入本包」。
+
+一个 import 打底：f_base 在包里做了 public import，把 std.collection、std.reflect、std.regex、std.time 以及 std.math 的 MathExtension 都带进来了。所以这一个 import 之后，ArrayList、HashMap、Regex、Duration、DateTime 都不必再单独引入。这也是 fboot workspace 生成的 cjpm.toml 里默认就带 f_base 依赖的原因。
+
+进程退出是它最容易被低估的一段。ExitCallbacks 有两个静态函数：toExitGracefully 重置并注册 SIGTERM 和 SIGINT，回调跑完 exit(0)；atExit 按权重升序登记清理函数，权重相同的按注册顺序。
+
+只要进程收到 kill 十五或者 Ctrl-C，所有 atExit 登记的清理函数就会依次执行，全部跑完再 exit。
+
+注册时机是所有动态链接库加载完成之后，而且会先重置之前注册的同名处理函数，避免和第三方库或你自己注册的信号处理函数打架。
+
+用了 f_app 就不需要自己调 toExitGracefully，启动器在初始化 starter 之后会自动调用。只有「只引 f_base、不引 f_app」的独立工具才会漏掉这一步。
+
+各模块登记的清理和权重：f_mvc 关闭 HTTP 服务器权重零；f_rpc 权重零和二百五十二；f_bean 的 BeanFactory.shutdown 二百五十三；f_pool 的 KeyPool.close 二百五十四；f_cache 的 HeapCache.destroy 二百五十四；f_orm 的 ORM.close 二百五十五。
+
+权重小的先跑，所以 Ctrl-C 的顺序是先停服务、再关中间件、最后关数据库——一个进程最体面的下线姿势。
+
+一个前提：Windows 上这整段是条件编译出来的空实现，所以这套优雅退出只在非 Windows 平台生效。
+
+f_io 这一节只挑上层最常碰的一对类：ByteBuffer 和 SyncByteBuffer。ByteBuffer 实现 IOStream，也就是可读可写，所以最常用的姿势不是自己写循环，而是把它当内存里的输出目标——printStackTrace 写进去、codec.encode 的 copy 写进去，写完一个 bytes() 把结果一次性取走。
+
+两个细节：reserve 的「扩容」其实分两步，如果剩余空间够，只把未读数据搬到头部、两个偏移重排，不新建数组；真的不够才开新数组。toOverwriteOnClearing 默认关着，clear 只把偏移归零、数据留在数组里；打开它，清空时会把已写区域填零抹掉——装密钥、令牌这类敏感内容的缓冲记得打开。
+
+SyncByteBuffer 就是给 ByteBuffer 套上 Mutex 和 Condition：写方写完 notify，读方没数据就 wait 带超时；end 表示「不会再有数据」，读完就拿到 EOF 语义。它是一个无界、自动扩容的字节队列，f_mvc 的 FileDownload 内部就有一个当下载管道。唯一的 unsafe 方法 bytes 是留给「此刻确定没有并发写」的场景的。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 17 章 · 运行时基础设施 · 17.2 / 17.3</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>f_base 与 f_io</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>脚下的那一层</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ flex: 1, flexDirection: 'column', gap: 12 }}>
+      <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #38BDF8', padding: 16, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#38BDF8', marginBottom: 8 }}>f_base · 一个 import 打底</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>import fountain::f_base.*</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 8 }}>它 public import 了 std.collection / reflect / regex / time 与 std.math.MathExtension —— ArrayList、HashMap、Regex、Duration、DateTime 都不用再引。这也是 fboot workspace 生成的 cjpm.toml 默认带 f_base 的原因。</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 16, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>进程退出（最容易被低估的一段）</Text>
+        <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"ExitCallbacks.toExitGracefully()　// 重置并注册 SIGTERM / SIGINT，回调跑完 exit(0)"}</Text>
+        <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"ExitCallbacks.atExit(priority: UInt16, atexit: () -> Unit)"}</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 8 }}>回调按权重升序执行，权重相同的按注册顺序。用了 f_app 就不需要自己调；只有「只引 f_base」的独立工具才会漏掉。</Text>
+        <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.7, marginTop: 'auto' }}>Ctrl-C 顺序：f_mvc 关服务器(0) → f_bean(253) → f_pool / f_cache(254) → f_orm 关数据库(255)。Windows 上是条件编译出来的空实现。</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, flexDirection: 'column', gap: 12 }}>
+      <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #38BDF8', padding: 16, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#38BDF8', marginBottom: 8 }}>f_io · ByteBuffer（读写双偏移）</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"ByteBuffer(initialCapacity! = 32, toOverwriteOnClearing! = false)"}</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"capacity / writeOffset / readOffset　·　bytes()　·　readByte() / read(buf)"}</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"writeByte(b)（写满自动扩容，约 1.5 倍） / write(buf)"}</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"reserve(n) / seekReading(pos) / seekWriting(pos) / clear() / clone()"}</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 8 }}>它实现 IOStream（可读 + 可写），最常用姿势是把它当内存里的输出目标：printStackTrace(e, buffer)、codec.encode(data).copy(to: buffer)，写完一个 bytes() 取走。</Text>
+        <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.7, marginTop: 'auto' }}>reserve 的「扩容」分两步：剩余空间够就只把未读数据挪到头部；够才真开新数组。toOverwriteOnClearing 打开后，clear() 会把已写区域 fill(0) 抹掉 —— 装密钥、令牌的缓冲记得打开。</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 16, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>加锁版：SyncByteBuffer</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"readByte()（没数据立即返回 None） / readByte(timeout: Duration)"}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"writeByte(b) / write(bytes)（写完 notify）　·　end()　·　batch(fn)"}</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 8 }}>Mutex + Condition 包装：写方 notify，读方没数据就 wait(timeout)；end() 之后读侧拿到 EOF 语义。它是一个无界、自动扩容的字节队列 —— f_mvc 的 FileDownload 内部就有一个当下载管道。</Text>
+        <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.7, marginTop: 'auto' }}>唯一的 unsafe 方法 bytes() 留给「此刻确定没有并发写」的场景；要安全就用 clone() 或 batch。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>105 / 116</Text>
+  </Box>
+</Slide>

@@ -1,0 +1,52 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`这一节两个小能力：重定向和请求上下文。
+
+重定向有三个函数。Redirect.found 是 302，最常用。Redirect.permanently 是永久重定向：retain 为 false 是 301，为 true 是 308。Redirect.temporarily 是临时重定向：retain 为 false 是 302，为 true 是 307。retain 的意思是「是否保留方法和请求体」——301 和 302 在历史上有些客户端会把 POST 改成 GET，307 和 308 明确保留。
+
+拿到当前请求上下文，一行就够：从 CurrentHttpContext 取 instance，它返回当前线程正在处理的 HttpContext。
+
+这里要强调一句：是「当前线程」，不是全局变量。因为每个请求由一个线程处理，所以这个 instance 是线程级的。正因为有它，f_security 才能在 Service 层和 Util 层做鉴权——鉴权逻辑不必写在 controller 里。第十三章的 UserSessionCache 点 verify 就是靠它拿到 Authorization 头的。
+
+这是个很实用的小接口：你在任何深度的调用栈里都能拿到当前请求，不用一层层往下传。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 10 章 · MVC f_mvc · 10.7 / 10.8</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>重定向与当前请求上下文</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>线程级，不是全局变量</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 16 }}>
+    <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 22, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#38BDF8' }}>重定向</Text>
+      <Text style={{ fontSize: 14, color: '#64748B', marginTop: 6 }}>三个入口函数</Text>
+      <Box style={{ background: '#0B1220', borderRadius: 8, border: '1px solid #1E293B', padding: 14, marginTop: 16 }}>
+        <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"Redirect.found('/helloworld')              // 302"}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"Redirect.permanently('/x', retain: true)   // false→301 / true→308"}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"Redirect.temporarily('/x', retain: true)   // false→302 / true→307"}</Text>
+      </Box>
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.75, marginTop: 16 }}>retain 决定是否保留请求方法与请求体：307 / 308 明确保留，301 / 302 历史上可能被改成 GET。</Text>
+      <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.75, marginTop: 'auto' }}>演示：curl -i .../redirect/helloworld 得到 302 与 Location。</Text>
+    </Box>
+
+    <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 22, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#E2E8F0' }}>当前请求上下文</Text>
+      <Text style={{ fontSize: 14, color: '#64748B', marginTop: 6 }}>一行拿到 HttpContext</Text>
+      <Box style={{ background: '#0B1220', borderRadius: 8, border: '1px solid #1E293B', padding: 14, marginTop: 16 }}>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>import fountain::f_mvc.CurrentHttpContext</Text>
+        <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>let ctx = CurrentHttpContext.instance</Text>
+      </Box>
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.75, marginTop: 16 }}>返回「当前线程正在处理」的 HttpContext —— 是线程级的，不是全局变量。</Text>
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.75, marginTop: 10 }}>任何深度的调用栈里都能拿到当前请求，不用一层层往下传。</Text>
+      <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.75, marginTop: 'auto' }}>这是 f_security 能在 Service / Util 层做鉴权的关键（见第十三章 UserSessionCache.verify()）。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>68 / 116</Text>
+  </Box>
+</Slide>

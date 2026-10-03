@@ -1,0 +1,63 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`构造 SQL 有三种方式，这是本章重点。这一页讲前两种。
+
+方式一是模板 SQL，用 setSql 加 arg。看右边的 deleteUser：setSql 里写完整的 SQL，参数位置用美元加大括号包住 arg 调用。
+
+arg 做两件事：把你的值绑定到 PreparedStatement，并返回占位符问号。所以必须写成字符串插值的形式。它的价值是：所有参数都走绑定，不存在字符串拼接注入。
+
+支持的类型很全：布尔、各种整数、各种无符号整数、各种浮点、大整数、Decimal、Rune、字符串、Duration、DateTime、InputStream、字节数组、Data，以及 Any；还有这些类型的可空版本，None 等价于 argNull。
+
+还有一个很好用的能力是集合展开，用于 IN。传一维数组会展开成括号里若干个问号；传二维数组会展开成多组括号，适合批量插入的 values 部分。
+
+方式二是面向对象的 DSL。查询用 FROM 加 WHERE 加 first；插入用 INSERT_INTO，它直接返回自增主键，这个很方便；也支持 INTO 加 ignoreColumns 忽略某些列。更新有两种：一种传 Map，key 可以是列名、成员名或者 Column 对象；另一种直接传对象，主键作 WHERE 条件，加 dirty 为 true 就只更新脏字段。
+
+dirty 要配合 @QueryMappersGenerator 的 dirty 标记用：setter 会自动调用 DirtyTag 记录脏字段，UPDATE 时只更新被改过的列。
+
+注意 UPDATE 对象的三个命名实参——dirty、ignoredColumns、includingColumns——每次调用只能指定其中一个，同时指定两个会抛异常。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 12 章 · ORM f_orm · 12.3</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>构造 SQL：模板 SQL 与对象 DSL</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>所有参数都走绑定</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 14 }}>
+    <Box style={{ height: 246, flexDirection: 'row', gap: 16 }}>
+      <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #38BDF8', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#38BDF8', marginBottom: 8 }}>方式一 · 模板 SQL：setSql + arg()</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"func deleteUser(id: Int64): Int64 {"}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    executor.setSql('''"}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        delete from user_info where id = ${arg(id)}"}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    ''').delete"}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"}"}</Text>
+        <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.7, marginTop: 8 }}>arg(x) 把 x 绑定到 PreparedStatement 并返回占位符 ?，所以必须写成字符串插值 —— 不存在字符串拼接注入。</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>arg 支持的类型与集合展开</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7 }}>Bool / Int* / UInt* / Float* / BigInt / Decimal / Rune / String / Duration / DateTime / InputStream / 字节数组 / Data / Any，以及这些类型的可空版本（None 等价于 argNull()）。</Text>
+        <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, marginTop: 10, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>arg(ids)　　 // 一维 → ' (?,?,?)'</Text>
+        <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>arg(matrix) // 二维 → ' ((?,?),(?,?))'</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 18, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>方式二 · 面向对象 DSL</Text>
+      <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"executor.FROM<UserPO>().WHERE(UserPO.tableColumns().id.eq(id)).first<UserPO>().getOrThrow()"}</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"executor.INSERT_INTO<UserPO>(user)          // 返回自增主键"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"executor.INTO<UserPO>(user, ignoreColumns: ['password'])"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"let map = HashMap<Column, Any>()　// key 可以是列名、成员名或 Column 对象"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"executor.UPDATE<UserPO>(map)　·　executor.UPDATE<UserPO>(user, dirty: true)"}</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.65, marginTop: 8 }}>dirty / ignoredColumns / includingColumns 是同一个函数的三个命名实参，每次调用只能指定其中一个，指定两个会抛异常。</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.65, marginTop: 'auto' }}>dirty: true 配合 @QueryMappersGenerator[dirty]：setter 自动调 DirtyTag.setDirtyField，UPDATE 时只更新改过的列。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>80 / 116</Text>
+  </Box>
+</Slide>

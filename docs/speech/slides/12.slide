@@ -1,0 +1,70 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`这一段能显著提升可信度，所以我讲得直白一点：fountain 不是万能的。
+
+第一，它只支持仓颉语言，而且当前主要面向 Linux、macOS、Windows、OHOS 的服务端场景。你要是写别的语言，或者主要跑在别的形态上，它帮不上忙。
+
+第二，IOC 只管理 class，不管理 struct。因为 struct 是值类型，取出来就会复制，作者认为得不偿失。这是明确的取舍，不是遗漏。
+
+第三，它依赖 stdx，需要配置 CANGJIE_STDX_DYNAMIC_PATH 这个环境变量。
+
+第四，宏的约定比较硬，第一次上手会有一个「为什么这么写才编译得过」的阶段，这个阶段躲不掉。
+
+所以结论是：如果你的项目只有几百行、只有一个接口，直接写一个 HTTP 服务可能更省事。fountain 的价值在中大型、需要长期演进的服务端应用上。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 1 章 · 为什么使用 fountain · 1.4</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>什么时候不该用 fountain</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>坦白讲，它不是万能的</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 14 }}>
+    <Box style={{ height: 200, flexDirection: 'row', gap: 14 }}>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+        <Box style={{ flexDirection: 'row', alignItems: 'baseline', gap: 12 }}>
+          <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>01</Text>
+          <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#E2E8F0' }}>语言与平台限制</Text>
+        </Box>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.7, marginTop: 14 }}>只支持仓颉语言；当前主要面向 Linux / macOS / Windows / OHOS 的服务端场景。</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+        <Box style={{ flexDirection: 'row', alignItems: 'baseline', gap: 12 }}>
+          <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>02</Text>
+          <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#E2E8F0' }}>IOC 的明确取舍</Text>
+        </Box>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.7, marginTop: 14 }}>IOC 只管理 class，不管理 struct——值类型取出来就会复制，会有性能损失，这是作者明确的取舍。</Text>
+      </Box>
+    </Box>
+    <Box style={{ height: 200, flexDirection: 'row', gap: 14 }}>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+        <Box style={{ flexDirection: 'row', alignItems: 'baseline', gap: 12 }}>
+          <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>03</Text>
+          <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#E2E8F0' }}>依赖前提</Text>
+        </Box>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.7, marginTop: 14 }}>依赖 stdx，需要配置 CANGJIE_STDX_DYNAMIC_PATH；环境没配好，第一步就会卡住。</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+        <Box style={{ flexDirection: 'row', alignItems: 'baseline', gap: 12 }}>
+          <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>04</Text>
+          <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#E2E8F0' }}>上手成本</Text>
+        </Box>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.7, marginTop: 14 }}>宏的约定比较硬，第一次上手会有「为什么这么写才编译得过」的阶段，这是必经成本。</Text>
+      </Box>
+    </Box>
+    <Box style={{ height: 112, background: 'rgba(245,158,11,0.07)', borderRadius: 12, border: '1px solid #F59E0B', padding: 20, flexDirection: 'row', alignItems: 'center', gap: 20 }}>
+      <Box style={{ width: 4, height: 56, background: '#F59E0B' }} />
+      <Box style={{ flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#F59E0B' }}>只有几百行、只有一个接口 → 直接写 HTTP 服务可能更省事</Text>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.6, marginTop: 6 }}>fountain 的价值在中大型、需要长期演进的服务端应用。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>12 / 116</Text>
+  </Box>
+</Slide>

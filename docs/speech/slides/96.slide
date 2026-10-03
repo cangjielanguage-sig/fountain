@@ -1,0 +1,54 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`这张表就是本节的全部，左边一列可以直接抄。
+
+先看 appender 的挂载项：logger_appender_console、_file、_tcp、_udp、_unix、_unixDatagram，值都是你给这个 appender 起的名字，逗号分隔可以挂多个。
+
+然后是每个实例自己的配置：_level 默认 INFO，取值有 OFF、ERROR、WARN、INFO、DEBUG、TRACE、ALL——注意没有 FATAL；_pattern 是格式串，默认是「级别减名字」加大括号时间再竖线加消息。
+
+file 专用的一批：_path 默认是工作目录下的 logs 目录加命令名点 log，目录会自动创建；_rotateDuration 默认 DAY，从纳秒到年，大小写不敏感，但别用亚秒级；_rotateSize 默认最大值，支持一百 k、一百 M、一 G 这种写法；_compressFormat 默认空，支持 Deflate 和 GZip，还可以带压缩级别；还有一个 _url，一个字符串替代上面这几个独立配置项，而且 url 里的参数优先。
+
+tcp、udp 专用的有 _host、_port，tcp 和 unix 还有 _bufSize 发送缓冲，udp 和 unix 有 _sendTimeout 和 _writeTimeout。
+
+最后五个是异步相关的：loggerAsyncBufsize 默认一千零二十四，它既是异步队列容量，也是缓冲区池的大小；loggerAsyncTimeout 默认 Duration.Max；loggerAsyncTimeoutPolicy 默认 discard，可选 discard、abort、alwaysWaiting；logger_asyncWaitTimeout 默认五毫秒，借不到缓冲区时等这么久，超时就丢弃本条并打印 EmptyPool。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 15 章 · 日志 f_log · 15.3</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>配置项全表</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>左边一列可以直接抄</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 12 }}>
+    <Table
+      style={{ width: '100%', height: 484 }}
+      defaultTextStyle={{ fontSize: 12, textAlign: 'left', color: '#E2E8F0' }}
+      defaultCellStyle={{ border: { left: { width: 1, color: '#1E293B' }, right: { width: 1, color: '#1E293B' }, top: { width: 1, color: '#1E293B' }, bottom: { width: 1, color: '#1E293B' } } }}
+      cells={[
+        [ { text: '配置项', textStyle: { bold: true, color: '#22D3EE', fontSize: 12 }, cellStyle: { background: { color: '#16233A' } } }, { text: '默认值', textStyle: { bold: true, color: '#22D3EE', fontSize: 12 }, cellStyle: { background: { color: '#16233A' } } }, { text: '说明', textStyle: { bold: true, color: '#22D3EE', fontSize: 12 }, cellStyle: { background: { color: '#16233A' } } } ],
+        [ 'logger_appender_console / _file / _tcp / _udp / _unix / _unixDatagram', '无', '值 = 你起的 appender 名；逗号分隔可挂多个' ],
+        [ 'logger_appender_【Name】_level', 'INFO', 'OFF / ERROR / WARN / INFO / DEBUG / TRACE / ALL（无 FATAL）' ],
+        [ 'logger_appender_【Name】_pattern', '[%level-%name] %d{yyyy/MM/dd,HH:mm:ss.SSS}|%m', '见 15.4 占位符表' ],
+        [ 'logger_appender_【Name】_path', '${工作目录}/logs/${命令名}.log', 'file 专用；目录自动创建' ],
+        [ 'logger_appender_【Name】_rotateDuration', 'DAY', 'file 专用；NANOSECOND…YEAR，别用亚秒级（见 15.6）' ],
+        [ 'logger_appender_【Name】_rotateSize', 'Int64.Max', 'file 专用；支持 100k / 100M / 1G' ],
+        [ 'logger_appender_【Name】_compressFormat', "''", 'file 专用；Deflate / GZip，可带级别如 Deflate(9)' ],
+        [ 'logger_appender_【Name】_url', '无', 'file 专用；file://【路径】?rotateSize=..&rotateDuration=..&compressFormat=..（url 参数优先）' ],
+        [ 'logger_appender_【Name】_host / _port', '无', 'tcp / udp 专用' ],
+        [ 'logger_appender_【Name】_bufSize', '无', 'tcp / unix 专用（发送缓冲字节数）' ],
+        [ 'logger_appender_【Name】_sendTimeout / _writeTimeout', '无', 'udp / unix 专用（Duration 字符串）' ],
+        [ 'loggerAsyncBufsize', '1024', '异步队列容量，同时也是缓冲区池的大小' ],
+        [ 'loggerAsyncTimeout', 'Duration.Max', '队列满时等待多久（超时后才轮到 policy 生效）' ],
+        [ 'loggerAsyncTimeoutPolicy', 'discard', 'discard 丢这条 / abort 抛 LogException / alwaysWaiting 死等' ],
+        [ 'logger_asyncWaitTimeout', '5ms', '借不到缓冲区时的等待时长；超时丢弃本条并打印 EmptyPool' ],
+      ]}
+    />
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>96 / 116</Text>
+  </Box>
+</Slide>

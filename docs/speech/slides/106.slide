@@ -1,0 +1,75 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`f_cache 和 f_pool。
+
+先说堆缓存。强引用版是 HeapCache，五个构造参数：并发度默认一百二十八、最大寿命、最大对象数、检查周期、失效回调。它在 fountain 里被三处用到：f_security 的 JWTHeapCacheStore、f_data 的 DataPath.cache、f_orm 的结果缓存。
+
+这里有个概念要讲清楚，它和常见的 TTL 缓存不一样：默认是「非一次性」的，每次 get 都会把过期时间重新计时，也就是滑动窗口。而 once 为 true 的对象相反——取用不续期，到点就走，适合做「绝对过期」的会话、验证码。
+
+prolong 可以在运行中改寿命和一次性标志；evictionCallback 让你在对象失效时做收尾，比如关掉文件句柄。
+
+弱引用版是 WeakHeapCache。内部键和值都被弱引用包装，定时遍历清除已经被 GC 掉的弱引用——适合缓存「可被重建的大对象」，不会因为缓存导致内存泄漏。
+
+再说对象池。Pool 的构造参数有八个：存储模式、初始大小、最小大小、最大大小、空闲时间、创建时检查、借出时检查、归还时检查，还有检查周期和三个回调。看到这八个参数是不是很眼熟？对，它们就是第十二章 ORM 那批 orm_databasePool 开头的配置项。ORM 的 DatabasePool 就是 f_pool 的一个应用——所以你调 ORM 连接池和直接调 f_pool，手感完全一样。
+
+存储模式有四种：Fifo 先进先出、Lifo 后进先出、WeakFifo 弱引用先进先出、WeakLifo 弱引用后进先出。
+
+Pool 实现了 Resource，用完 close。get 的 timeout 小于等于零时不等待、立即返回。
+
+KeyPool 是每个键一个池：只有池对象需要销毁，键不需要销毁。典型场景是多数据源、多租户，每个库一个连接池。
+
+还有数组池和 ArrayList 池：高频临时缓冲区的老问题——每次 new 一个一百二十八长度的数组，GC 压力全在这儿。数组池直接复用，这是 f_base 里 StringGenerator 那类组件敢放开手脚用的底气。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 17 章 · 运行时基础设施 · 17.4 / 17.5</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>f_cache 与 f_pool</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>滑动续期 · 对象池</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ flex: 1, flexDirection: 'column', gap: 12 }}>
+      <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #38BDF8', padding: 16, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#38BDF8', marginBottom: 8 }}>f_cache · HeapCache（强引用）</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"HeapCache<V>(concurrencyLevel! = 128, maxLife!, maxSize!,"}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"                checkDuration!, evictionCallback!)"}</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"get / set(life!, once!) / prolong / getOrCompute / getOrStore"}</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"getOrDefault / removeIf / once(key) / destroy / builder()"}</Text>
+        <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.75, marginTop: 8 }}>默认是「非一次性」的：每次 get 都会把过期时间重新计时（滑动窗口）。once 为 true 则取用不续期，到点就走 —— 适合绝对过期的会话、验证码。</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.75, marginTop: 'auto' }}>WeakHeapCache：键与值都被弱引用包装，定时清除已被 GC 的弱引用 —— 适合缓存「可被重建的大对象」，不会内存泄漏。</Text>
+      </Box>
+      <Box style={{ height: 106, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 14, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#64748B' }}>在 fdemo 里</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, marginTop: 6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"JWTSecurityContext<String>(JWTHeapCacheStore(Duration.hour), ...)"}</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 4 }}>第十三章「登录状态存 1 小时」的能力，根源在这里。</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, flexDirection: 'column', gap: 12 }}>
+      <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #38BDF8', padding: 16, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#38BDF8', marginBottom: 8 }}>f_pool · Pool 泛型 V（通用对象池）</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"Pool<V>(mode! = Mode.Fifo, initSize!, minSize! = 0, maxSize! = 10,"}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        idleTimeout! = Duration.hour, checkOnCreation! = false,"}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        checkOnBorrowing! = true, checkOnReturning! = true,"}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        clearOnReturning! = false, checkInterval! = Duration.minute,"}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        creator!, checker!, destroier!, clear!)"}</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"get(timeout! = Duration.Max)　// timeout <= 0 时不等待立即返回"}</Text>
+        <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>giveBack(value: V)　·　Mode: Fifo / Lifo / WeakFifo / WeakLifo</Text>
+        <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.75, marginTop: 8 }}>这八个参数就是第十二章 ORM 那批 orm_databasePool* 配置项 —— ORM 的 DatabasePool 就是 f_pool 的一个应用，手感完全一样。Pool 实现 Resource，用完 close()。</Text>
+      </Box>
+      <Box style={{ height: 132, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 14, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#E2E8F0' }}>KeyPool 与数组池</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"KeyPool<K, V>.get(key, timeout!) / giveBack(key, object)"}</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.75, marginTop: 6 }}>只有池对象需要销毁，键不需要销毁 —— 典型场景是多数据源 / 多租户，每个库一个连接池。</Text>
+        <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.75, marginTop: 'auto' }}>ArrayPool / ArrayListPool：高频临时缓冲区不再每次 new —— 这是 StringGenerator 那类组件敢放开手脚用的底气。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>106 / 116</Text>
+  </Box>
+</Slide>

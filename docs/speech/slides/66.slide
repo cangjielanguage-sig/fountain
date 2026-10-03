@@ -1,0 +1,64 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`MVC 的配置项全部走环境变量或者等价的命令行参数，逐条说几个关键的。
+
+mvc_port 是端口，最常用。mvc_maxRequestBodySize 是请求体大小上限，注意它的默认值是 stdx 的两兆——你要做文件上传就必须调大，否则大文件直接被拒。fdemo 里调到了六十四兆。
+
+mvc_overallElapsedSwitch 是总耗时统计开关，生产建议关掉。mvc_internalServerErrorMessageKind 是 500 错误的三种处理方式：BEAN、TEXT、BASE64BINARY。mvc_internalServerErrorMessage 配合它使用，下一节详细讲。
+
+接下来四个是超时：readTimeout 读超时、readHeaderTimeout 读请求头超时、writeTimeout 写超时、keepAliveTimeout 长连接超时。mvc_maxRequestHeaderSize 是请求头大小上限。
+
+mvc_downloadBufferSize 是下载缓冲区大小。
+
+最后三个是跨域：accessControlAllowOrigin、accessControlAllowHeaders、accessControlMaxAge。演示环境一般写星号，生产环境要收紧。
+
+这些配置项名字里都是 mvc 下划线开头，走的还是第四章那套四级优先级——环境变量和命令行参数完全平级。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 10 章 · MVC f_mvc · 10.5</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>MVC 配置项</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>环境变量或等价的 --key=value</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ width: 460, flexDirection: 'column', gap: 14 }}>
+      <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 20, flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#38BDF8' }}>三个必须注意的</Text>
+        <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.75, marginTop: 12 }}>· mvc_port —— 端口</Text>
+        <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.75, marginTop: 8 }}>· mvc_maxRequestBodySize —— 默认是 stdx 的 2MB，上传必须调大</Text>
+        <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.75, marginTop: 8 }}>· mvc_overallElapsedSwitch —— 总耗时统计，生产建议关掉</Text>
+      </Box>
+      <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#E2E8F0' }}>500 错误的三种形态</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.75, marginTop: 10 }}>mvc_internalServerErrorMessageKind 取 BEAN / TEXT / BASE64BINARY；配套 mvc_internalServerErrorMessage 使用，见 10.6。</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>@Bean · 全部走环境变量或等价的命令行参数</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export mvc_port=8080</Text>
+      <Text style={{ fontSize: 13, color: '#F59E0B', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export mvc_maxRequestBodySize=67108864　# 默认 stdx 的 2MB，上传必须调大</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export mvc_overallElapsedSwitch=true　　# 生产建议 false</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export mvc_internalServerErrorMessageKind=BEAN</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export mvc_internalServerErrorMessage=NameOf500Handler</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export mvc_readTimeout=500ms</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export mvc_readHeaderTimeout=500ms</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export mvc_writeTimeout=500ms</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export mvc_keepAliveTimeout=500s</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export mvc_maxRequestHeaderSize=102400</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export mvc_downloadBufferSize=4096</Text>
+      <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export mvc_accessControlAllowOrigin='*'</Text>
+      <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export mvc_accessControlAllowHeaders='*'</Text>
+      <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export mvc_accessControlMaxAge=0</Text>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.7, marginTop: 'auto' }}>演示环境 CORS 写星号，生产要收紧。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>66 / 116</Text>
+  </Box>
+</Slide>

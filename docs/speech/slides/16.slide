@@ -1,0 +1,70 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`fboot module 是在 workspace 里加一个动态链接库模块。在 workspace 根目录执行 fboot module hello。
+
+它做三件事。第一，在 hello 目录执行 cjpm init --type=dynamic。第二，把 hello 加进上一层目录 cjpm.toml 的 members，所以必须在 workspace 根目录执行。第三，生成 hello/src/hello.cj，内容就是一行 package hello。
+
+注意：模块一定是 dynamic。这是 fountain「加载即生效」机制的前提。
+
+右边就是从零到第一个接口的完整过程。你不用敲很多代码——不到二十行，一个 HTTP 服务就写完了。一个 @Controller 类，一个 @GetMapping，配 text/plain，加 @IgnoreSecurity 跳过安全检查，返回一句 hello Fountain。
+
+这一段建议完整录下来，这是最有说服力的一镜。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 3 章 · fboot 命令行 · 3.3</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>fboot module：加一个动态链接库模块</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>从零到第一个接口</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ width: 430, flexDirection: 'column', gap: 14 }}>
+      <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 22, flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#E2E8F0' }}>它做三件事</Text>
+        <Box style={{ flexDirection: 'column', gap: 16, marginTop: 16 }}>
+          <Box style={{ flexDirection: 'row', gap: 14 }}>
+            <Text style={{ fontSize: 18, color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>1</Text>
+            <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.7, flex: 1 }}>在 hello/ 执行 cjpm init --type=dynamic</Text>
+          </Box>
+          <Box style={{ flexDirection: 'row', gap: 14 }}>
+            <Text style={{ fontSize: 18, color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>2</Text>
+            <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.7, flex: 1 }}>把 hello 加进「上一层目录」cjpm.toml 的 members —— 所以必须在 workspace 根执行</Text>
+          </Box>
+          <Box style={{ flexDirection: 'row', gap: 14 }}>
+            <Text style={{ fontSize: 18, color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>3</Text>
+            <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.7, flex: 1 }}>生成 hello/src/hello.cj，内容就是一行 package hello</Text>
+          </Box>
+        </Box>
+        <Box style={{ background: 'rgba(245,158,11,0.07)', borderRadius: 8, border: '1px solid #F59E0B', padding: 14, marginTop: 'auto' }}>
+          <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#F59E0B' }}>模块一定是 dynamic</Text>
+          <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.6, marginTop: 4 }}>这是「加载即生效」机制的前提。</Text>
+        </Box>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, flexDirection: 'column', gap: 14 }}>
+      <Box style={{ height: 272, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 15, color: '#64748B', marginBottom: 8 }}>目录结构</Text>
+        <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>
+          <>hello_app/<br />├── cjpm.toml　　　# [workspace] members = ["./hello", ...]<br />└── hello/<br />　　├── cjpm.toml　# output-type = "dynamic"<br />　　└── src/<br />　　　　├── hello.cj<br />　　　　└── HelloWordController.cj</>
+        </Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 20, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 15, color: '#38BDF8', marginBottom: 10 }}>不到 20 行，一个 HTTP 服务就写完了</Text>
+        <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>@Controller</Text>
+        <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public class HelloWordController {"}</Text>
+        <Text style={{ fontSize: 14, color: '#22D3EE', lineHeight: 1.8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{'    @GetMapping[path:"/", produces:\'text/plain\']'}</Text>
+        <Text style={{ fontSize: 14, color: '#22D3EE', lineHeight: 1.8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    @IgnoreSecurity"}</Text>
+        <Text style={{ fontSize: 14, color: '#22D3EE', lineHeight: 1.8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{'    public func helloWorld(): String { return "hello Fountain!" }'}</Text>
+        <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"}"}</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>16 / 116</Text>
+  </Box>
+</Slide>

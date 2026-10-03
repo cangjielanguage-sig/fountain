@@ -1,0 +1,65 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`织入规则决定了「哪些函数会被切面织进去」。
+
+先说通配符：所有规则都支持星号和问号，包名支持两个点表示任意层级，还支持点星、星点、点星点这三种任意包名写法，组织名用双冒号分隔。规则之间可以用 & | ! 组合。
+
+规则一共十四种。按匹配依据分四类。
+
+按「类加函数签名」匹配的是 ExecutionRouteRule，四个参数是类全限定名、函数名、参数类型、返回类型。按「类型」匹配的是 WithinRouteRule，匹配到的类型下所有公共实例函数都会被织入；TargetRouteRule 匹配该类及其子类。
+
+按「函数」匹配的有 FuncNameRouteRule、FuncTypeRouteRule、ArgsRouteRule、ReturnTypeRouteRule。ArgsRouteRule 里两个星号表示任意数量参数，星号逗号和逗号星号表示忽略首尾。
+
+按「注解」匹配的有三个：TargetAnnotationRouteRule 看目标类型上的注解，FuncAnnotationRouteRule 看目标函数上的注解，还有参数注解那一族四个。
+
+最后两个特别的：BeanNameRouteRule 按目标对象的 bean 名匹配；ConfigExecutionRouteRule 是从环境变量里读规则，这个下一节会重点讲。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 7 章 · AOP f_aspect · 7.2</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>织入规则：RouteRule</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>& | ! 可组合</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 12 }}>
+    <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.6 }}>全部支持 * ? 通配符；包名支持 .. （任意层级）与 .* / *. / .*. （任意包名）；组织名用 :: 分隔。</Text>
+    <Box style={{ height: 488, flexDirection: 'row', gap: 16 }}>
+      <Table
+        style={{ width: '50%', height: '100%' }}
+        defaultTextStyle={{ fontSize: 13, textAlign: 'left', color: '#E2E8F0' }}
+        defaultCellStyle={{ border: { left: { width: 1, color: '#1E293B' }, right: { width: 1, color: '#1E293B' }, top: { width: 1, color: '#1E293B' }, bottom: { width: 1, color: '#1E293B' } } }}
+        cells={[
+          [ { text: '规则', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } }, { text: '匹配依据', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } } ],
+          [ 'ExecutionRouteRule', '类全限定名 + 函数名 + 参数类型 + 返回类型' ],
+          [ 'WithinRouteRule', '类型名匹配 → 该类全部公共实例函数' ],
+          [ 'FuncNameRouteRule', '函数名' ],
+          [ 'FuncTypeRouteRule', '参数 + 返回类型' ],
+          [ 'ArgsRouteRule', '参数类型（** 任意数量；*, 与 ,* 忽略首尾）' ],
+          [ 'ReturnTypeRouteRule', '返回类型' ],
+          [ 'TargetRouteRule', '该类及其子类' ],
+        ]}
+      />
+      <Table
+        style={{ width: '50%', height: '100%' }}
+        defaultTextStyle={{ fontSize: 13, textAlign: 'left', color: '#E2E8F0' }}
+        defaultCellStyle={{ border: { left: { width: 1, color: '#1E293B' }, right: { width: 1, color: '#1E293B' }, top: { width: 1, color: '#1E293B' }, bottom: { width: 1, color: '#1E293B' } } }}
+        cells={[
+          [ { text: '规则', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } }, { text: '匹配依据', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } } ],
+          [ 'TargetAnnotationRouteRule', '目标类型上有指定注解' ],
+          [ 'FuncAnnotationRouteRule', '目标函数上有指定注解' ],
+          [ 'ArgAnnotationsRouteRule / AnyArg / ArgPrefix / ArgSuffix （参数注解一族）', '参数上的注解' ],
+          [ 'BeanNameRouteRule', '目标对象的 bean 名' ],
+          [ { text: 'ConfigExecutionRouteRule', textStyle: { color: '#F59E0B', bold: true } }, { text: '从环境变量读规则', textStyle: { color: '#F59E0B' } } ],
+          [ 'AndRouteRule / OrRouteRule / NotRouteRule', '组合' ],
+        ]}
+      />
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>43 / 116</Text>
+  </Box>
+</Slide>

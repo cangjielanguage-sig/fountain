@@ -1,0 +1,79 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`现场演示：把框架自己的日志调出来。
+
+第一步，启动。boot.sh 的 exports 已经带了 console 是 DEBUG、file 是 INFO。
+
+第二步，另开终端发一个注册请求。注意这个接口声明的是表单，不是 JSON，所以命令里直接带 username 和 password 两个字段就行。
+
+第三步，tail 一下文件那份。
+
+预期结果：控制台里会出现两类「框架自己打的」日志。
+
+第一类是 ORM 的，名字是 std.reflect.TypeInfo.get("fountain::f_orm.base.SqlExecutor")。它告诉你这是 ORM 在执行 SQL；后面是完整的 insert 语句、绑定的参数列表，最后是 consumed，也就是这条 SQL 的耗时——三毫秒两百微秒一百零一纳秒。
+
+第二类是 MVC 的 access log，名字是处理这个请求的 controller 类。MVC.accessLog 后面依次是方法、URL、Content-Type、入参、返回值、状态码和耗时。
+
+而文件那一份只有第二行——因为第一条是 DEBUG，被文件 appender 的 INFO 级别过滤掉了。
+
+这一屏要讲三件事。
+
+第一，%name 是定位问题的第一把钥匙。std.reflect.TypeInfo.get 这一行告诉你这是 ORM 在执行 SQL；consumed 后面是耗时。排查线上问题时，你需要的动作是「把级别调成 DEBUG，然后按 %name 去 grep」。
+
+第二，fboot 生成的应用信息自动进了日志。%app 和 %appver 的值不来自任何配置文件——fboot build 读你的 cjpm.toml，生成一段代码调 AppVersion.set，日志里的应用名和版本就是从这里来的。
+
+第三，想只看文件不看控制台？把 logger_appender_console 那两行删掉重启就行——没有配置就没有这个 appender，这正是纪律一。
+
+顺带可以再演示一次「按小时切加压缩」：把 rotateDuration 改成 HOUR、rotateSize 改成 10M、compressFormat 改成 GZip，重启后 log 目录下会积累形如 fdemo.log 加时间加 gz 的文件。演示完记得把这三行撤掉，否则一小时一个文件。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 15 章 · 日志 f_log · 15.7</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>现场演示：把框架自己的日志调出来</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>%name 是第一把钥匙</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ width: 500, flexDirection: 'column', gap: 12 }}>
+      <Box style={{ height: 160, background: '#0B1220', borderRadius: 12, border: '1px solid #38BDF8', padding: 16, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#38BDF8', marginBottom: 8 }}>命令</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>cd fdemo && ./boot.sh run　　　# ① 启动</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>curl -X POST 'http://127.0.0.1:8080/api/user/register' \</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>　　 -d 'username=fountain&password=123456'　# ② 发注册请求</Text>
+        <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>tail -f ./log/fdemo.log　# ③ 看文件那份</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 16, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>预期（控制台 FDemoConsole / DEBUG）</Text>
+        <Text style={{ fontSize: 11, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>[DEBUG-std.reflect.TypeInfo.get("fountain::f_orm.base.SqlExecutor")]|12876;postgres is executing a sql: insert into user_info( "id" , "username" , "password" , "save_time" )values(?,?,?,?) returning id, args: […], consumed: 3ms200us101ns</Text>
+        <Text style={{ fontSize: 11, color: '#F59E0B', lineHeight: 1.7, marginTop: 8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>[INFO-std.reflect.TypeInfo.get("fountain::user.controller.CurrentUserController")]|12876;MVC.accessLog:POST:/api/user/register?username=…; consumes:Some(application/x-www-form-urlencoded); params:[…]; returned:…; status:200; elapsed:2ms300us123ns</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 'auto' }}>文件（FDemoFile / INFO）里只有第二行 —— 第一条是 DEBUG，被文件 appender 过滤掉了。</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, flexDirection: 'column', gap: 12 }}>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 16, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#38BDF8' }}>%name 是定位问题的第一把钥匙</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, marginTop: 8 }}>std.reflect.TypeInfo.get("fountain::f_orm.base.SqlExecutor") 告诉你：这是 ORM 在执行 SQL。consumed 后面是这条 SQL 的耗时。</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 6 }}>CurrentUserController 这一行是 MVC 的 access log —— 名字就是处理这个请求的 controller 类。</Text>
+        <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.7, marginTop: 'auto' }}>排查动作：把级别调成 DEBUG，然后按 %name 去 grep。</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 16, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#E2E8F0' }}>fboot 生成的应用信息自动进了日志</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 8 }}>%app / %appver 的值不来自任何配置文件 —— fboot build 读 cjpm.toml 生成版本模块，日志里的应用名与版本从这里来。</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 'auto' }}>想只看文件不看控制台？把 logger_appender_console 那两行删掉重启即可 —— 没有配置就没有这个 appender。</Text>
+      </Box>
+      <Box style={{ height: 120, background: 'rgba(245,158,11,0.07)', borderRadius: 12, border: '1px solid #F59E0B', padding: 16, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#F59E0B' }}>再演示一次「按小时切 + 压缩」</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, marginTop: 8 }}>rotateDuration=HOUR / rotateSize=10M / compressFormat=GZip，重启后 log 目录会积累 fdemo.log.【时间】.gz。</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 4 }}>演示完记得把这三行撤掉，否则一小时一个文件。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>100 / 116</Text>
+  </Box>
+</Slide>

@@ -1,0 +1,71 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`第八章讲数据，f_data。为什么先讲它？
+
+前面讲的 IOC 和 AOP 解决的是「对象怎么来、横切逻辑放哪」。这一章解决的是「数据怎么流动」。
+
+一个服务端应用的绝大部分代码，本质上都在做三件事：把 HTTP 请求、数据库行、配置变成对象；在对象与对象之间搬运数据，比如 PO 变成 DTO、DTO 变成 Entity；把对象变成响应，JSON 或者其他格式。
+
+这三件事，f_data 用一个宏加一个统一数据模型全部解决掉了。它是 MVC 的参数绑定、ORM 的结果映射、以及 JWT 负载填充的共同底座——所以 f_mvc、f_orm、f_jwt 都依赖它。
+
+f_data 有五个基本特性：公共成员变量和公共成员属性的复制；随时获取指定名称的公共成员的值；随时为指定名称的公共成员赋值；在不同的类实例之间互相复制；任意类实例与 JSON 之间互相复制。
+
+一把钥匙是 @DataAssist 宏，它有五个属性：equal、hash、tostring、props、fields。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 8 章 · 数据 f_data · 8.1 / 8.2</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>为什么先讲 f_data，以及那把钥匙</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>MVC / ORM / JWT 的共同底座</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 16 }}>
+    <Box style={{ height: 224, flexDirection: 'row', gap: 14 }}>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>1</Text>
+        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#E2E8F0', marginTop: 12 }}>进来：变成对象</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 8 }}>HTTP 请求 / 数据库行 / 配置 → 对象</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#22D3EE', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>2</Text>
+        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#E2E8F0', marginTop: 12 }}>搬运：对象到对象</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 8 }}>PO → DTO、DTO → Entity</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#F59E0B', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>3</Text>
+        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#E2E8F0', marginTop: 12 }}>出去：变成响应</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 8 }}>对象 → JSON / 其它格式</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, flexDirection: 'row', gap: 16 }}>
+      <Box style={{ width: 460, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 14, color: '#64748B', marginBottom: 10 }}>一把钥匙</Text>
+        <Text style={{ fontSize: 15, color: '#22D3EE', lineHeight: 1.9, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>@DataAssist[equal hash tostring props fields]</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 12 }}>public open class TestData1 {"{"} ... {"}"}</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 12 }}>一个宏，把「属性、相等、哈希、ToString、复制与 JSON 互转」全部生成好。</Text>
+        <Text style={{ fontSize: 14, color: '#64748B', lineHeight: 1.8, marginTop: 'auto' }}>它是 MVC 参数绑定、ORM 结果映射、JWT 负载填充的共同底座。</Text>
+      </Box>
+      <Table
+        style={{ flex: 1, height: '100%' }}
+        defaultTextStyle={{ fontSize: 13, textAlign: 'left', color: '#E2E8F0' }}
+        defaultCellStyle={{ border: { left: { width: 1, color: '#1E293B' }, right: { width: 1, color: '#1E293B' }, top: { width: 1, color: '#1E293B' }, bottom: { width: 1, color: '#1E293B' } } }}
+        cells={[
+          [ { text: '属性', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } }, { text: '生成什么', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } } ],
+          [ { text: 'equal', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", Consolas, monospace' } }, '实现 Equatable' ],
+          [ { text: 'hash', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", Consolas, monospace' } }, '实现 Hashable' ],
+          [ { text: 'tostring', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", Consolas, monospace' } }, '实现 ToString' ],
+          [ { text: 'props', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", Consolas, monospace' } }, '把非公共实例成员变量改写成公共成员属性' ],
+          [ { text: 'fields', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", Consolas, monospace' } }, '实例间复制、实例与 JSON 互转（dataFields / toData / tryFromData）' ],
+        ]}
+      />
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>46 / 116</Text>
+  </Box>
+</Slide>

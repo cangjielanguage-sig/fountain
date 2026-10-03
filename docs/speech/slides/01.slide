@@ -1,0 +1,42 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: 0, position: 'relative', overflow: 'hidden' }}
+  notes={`大家好，这一讲我们完整过一遍 fountain —— 仓颉生态里的一站式服务器应用开发工具库。它由四十多个模块组成，覆盖从配置、IOC、AOP、数据、MVC、ORM，一直到日志和运行时底座的全部环节。
+
+我先把结论放到前面：用 fountain 写服务端，你的业务代码里只需要写 controller、service、dao、po 四样东西，加起来不到两百行；没有配置文件，也没有 main 函数。
+
+整个讲稿都配套仓库里的示例工程 fdemo，我讲到的每一条命令都可以直接复制执行。建议录制时长大约一百五十五到一百八十五分钟，核心链路是第一章、第三章、第四章、第六章、第八章、第九章、第十章、第十一章、第十五章和第十六章；第十七章运行时基础设施可以按受众深浅整章跳过或挑讲，但日志那一章不要跳，至少要讲到三条纪律和现场演示。`}
+>
+  <Box style={{ position: 'absolute', top: 0, right: 0, width: 360, height: 720, background: 'linear-gradient(135deg, #38BDF8 0%, #22D3EE 100%)', opacity: 0.09 }} />
+  <Box style={{ position: 'absolute', top: 0, right: 0, width: 6, height: 720, background: 'linear-gradient(135deg, #38BDF8 0%, #22D3EE 100%)' }} />
+  <Box style={{ position: 'absolute', top: 0, left: 0, width: 6, height: 720, background: '#1E293B' }} />
+
+  <Box style={{ position: 'absolute', left: 100, top: 112, width: 4, height: 42, background: '#38BDF8' }} />
+  <Text style={{ position: 'absolute', left: 120, top: 122, fontSize: 17, color: '#94A3B8', letterSpacing: 5 }}>CANGJIE ECOSYSTEM · SERVER TOOLKIT</Text>
+
+  <Text style={{ position: 'absolute', left: 100, top: 182, fontSize: 68, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.1 }}>fountain</Text>
+  <Text style={{ position: 'absolute', left: 100, top: 272, fontSize: 32, fontWeight: 'bold', color: '#38BDF8', lineHeight: 1.3 }}>一站式服务器应用开发工具库</Text>
+
+  <Box style={{ position: 'absolute', left: 100, top: 340, width: 520, height: 1, background: '#1E293B' }} />
+
+  <Text style={{ position: 'absolute', left: 100, top: 372, fontSize: 18, color: '#E2E8F0', lineHeight: 1.9 }}>
+    <>没有配置文件 · 没有 main 函数 · 业务代码只有业务</>
+  </Text>
+  <Text style={{ position: 'absolute', left: 100, top: 410, fontSize: 15, color: '#64748B', lineHeight: 1.9 }}>
+    <>配套示例工程 fdemo　|　核心链路 10 章　|　建议时长 155–185 分钟</>
+  </Text>
+
+  <Box style={{ position: 'absolute', left: 100, top: 500, flexDirection: 'row', alignItems: 'flex-end', gap: 56 }}>
+    <Box style={{ flexDirection: 'column' }}>
+      <Text style={{ fontSize: 56, fontWeight: 'bold', color: '#F59E0B', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>40+</Text>
+      <Text style={{ fontSize: 14, color: '#94A3B8', marginTop: 8 }}>功能模块</Text>
+    </Box>
+    <Box style={{ flexDirection: 'column' }}>
+      <Text style={{ fontSize: 56, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>0</Text>
+      <Text style={{ fontSize: 14, color: '#94A3B8', marginTop: 8 }}>配置文件数量</Text>
+    </Box>
+    <Box style={{ flexDirection: 'column' }}>
+      <Text style={{ fontSize: 56, fontWeight: 'bold', color: '#22D3EE', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>4</Text>
+      <Text style={{ fontSize: 14, color: '#94A3B8', marginTop: 8 }}>配置来源层级</Text>
+    </Box>
+  </Box>
+</Slide>

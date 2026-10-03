@@ -1,0 +1,83 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`自定义数据格式的完整清单，六步，漏一件就会编译不过或者匹配不上。
+
+第一步，构造器里 super 你的格式名。
+
+第二步，实现 make 函数。为什么需要它？因为同一种格式可能带不同的参数——文本格式可能带不同 charset，multipart 可能带不同 boundary。所以要用它基于当前实例创建一个新的 MediaType。不需要参数就直接返回 this。
+
+第三步，实现 toString。
+
+第四步，实现等号和 hashCode。因为它是 Hashable 和 Equatable，而且 MediaTypes 会拿它做比较——漏了这一步，格式注册进去也匹配不上。
+
+第五步，实现 fromData 和 toData。fromData 是响应方向：对象到字节；toData 是请求方向：字节到 Data。
+
+第六步，加 @Bean。这是它被 MediaTypes 发现的唯一途径——前面讲过，MediaTypes 首次 tryParse 时会从 BeanFactory 里拉所有 MediaType。
+
+用起来就是 consumes 和 produces 里写你自己的格式名。右边是完整的演示：一个 PostMapping 声明 application/json+log，然后用 curl 发一个同样 Content-Type 的请求；预期控制台出现 fromData 和 toData 两条日志，证明请求体和响应体都走了自定义格式。
+
+这就是协议扩展点的用法：私有协议、加密报文、带签名的请求体，都可以用这种方式接入，业务代码完全不用关心编解码。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 11 章 · HTTP 数据格式 f_http · 11.5</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>自定义数据格式：完整清单</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>漏一件就编译不过</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ flex: 1, flexDirection: 'column', gap: 10 }}>
+      <Box style={{ flexDirection: 'row', gap: 14, background: '#111C2E', borderRadius: 10, padding: 14 }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 34 }}>1</Text>
+        <Text style={{ fontSize: 15, color: '#E2E8F0', lineHeight: 1.6, flex: 1 }}>构造器里 super(你的格式名)</Text>
+      </Box>
+      <Box style={{ flexDirection: 'row', gap: 14, background: '#111C2E', borderRadius: 10, padding: 14 }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 34 }}>2</Text>
+        <Text style={{ fontSize: 15, color: '#E2E8F0', lineHeight: 1.6, flex: 1 }}>实现 make：同一格式可能带不同参数（charset / boundary），用它创建新实例；不需要参数就返回 this</Text>
+      </Box>
+      <Box style={{ flexDirection: 'row', gap: 14, background: '#111C2E', borderRadius: 10, padding: 14 }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 34 }}>3</Text>
+        <Text style={{ fontSize: 15, color: '#E2E8F0', lineHeight: 1.6, flex: 1 }}>实现 toString()</Text>
+      </Box>
+      <Box style={{ flexDirection: 'row', gap: 14, background: '#111C2E', borderRadius: 10, padding: 14 }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 34 }}>4</Text>
+        <Text style={{ fontSize: 15, color: '#E2E8F0', lineHeight: 1.6, flex: 1 }}>实现 == 与 hashCode()：它是 Hashable 且 Equatable，MediaTypes 会拿它做比较</Text>
+      </Box>
+      <Box style={{ flexDirection: 'row', gap: 14, background: '#111C2E', borderRadius: 10, padding: 14 }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 34 }}>5</Text>
+        <Text style={{ fontSize: 15, color: '#E2E8F0', lineHeight: 1.6, flex: 1 }}>实现 fromData（响应方向：对象 → 字节）与 toData（请求方向：字节 → Data）</Text>
+      </Box>
+      <Box style={{ flexDirection: 'row', gap: 14, background: 'rgba(245,158,11,0.07)', borderRadius: 10, border: '1px solid #F59E0B', padding: 14 }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#F59E0B', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 34 }}>6</Text>
+        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#F59E0B', lineHeight: 1.6, flex: 1 }}>加 @Bean —— 这是它被 MediaTypes 发现的唯一途径</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, flexDirection: 'column', gap: 14 }}>
+      <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #38BDF8', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>用起来：consumes / produces 直接写你的格式名</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{'@PostMapping[path:\'/api/user/sessionLog\','}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{'             consumes:\'application/json+log\','}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{'             produces:\'application/json+log\','}</Text>
+        <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{'             ignoreAuth: true]'}</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{'public func loginLog(@RequestBody user: UserRequest): UserRequest'}</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>演示</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{'curl -XPOST http://localhost:8080/api/user/sessionLog \\'}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{'  -H \'Content-Type:application/json+log\' \\'}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{'  -H \'Accept:application/json+log\' \\'}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{'  -d \'{"username":"abcdef","password":"bcbcbcbc"}\''}</Text>
+        <Text style={{ fontSize: 13, color: '#F59E0B', lineHeight: 1.7, marginTop: 10 }}>预期：控制台出现 fromData: 与 toData: 两条日志 —— 请求体和响应体都走了自定义格式。</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.7, marginTop: 'auto' }}>私有协议、加密报文、带签名的请求体，都可以这样接入，业务代码完全不用关心编解码。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>72 / 116</Text>
+  </Box>
+</Slide>

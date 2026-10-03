@@ -1,0 +1,58 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`AOP 在 fountain 里有两个杀手级用法。
+
+第一个是事务。f_orm 的 TransactionAspect 就是一个切面，它的织入规则是两个条件取或：一是函数上有 Transactional 注解，二是函数的执行签名命中了 orm_transactionalFuncExecution 这个配置项。这就是为什么你可以「只加注解」或者「只配一行环境变量」两种方式开事务。这个第十二章会完整展开。
+
+第二个是统一日志、耗时和审计。就像 ControllerAspect 那样，一处改动覆盖全部 controller。你不再需要在每个接口开头写耗时统计，切面里加一次就行了。
+
+除了这两个，还有一个设计值得单独强调：切点表达式是从配置项读的。所以「开发环境织上、生产环境改窄甚至关掉」这种需求，不用改一行代码，改环境变量就够了。
+
+这就是 ConfigExecutionRouteRule 的价值——把「哪些函数被切」这件事从代码里挪到了部署配置里。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 7 章 · AOP f_aspect · 7.5</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>AOP 的两个杀手级用法</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>事务 · 统一日志 · 部署期可配</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 16 }}>
+    <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 24, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 44, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>01</Text>
+      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#E2E8F0', marginTop: 16 }}>事务</Text>
+      <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 14 }}>f_orm 的 TransactionAspect 就是这样一个切面：</Text>
+      <Box style={{ background: '#0B1220', borderRadius: 8, border: '1px solid #1E293B', padding: 14, marginTop: 12 }}>
+        <Text style={{ fontSize: 13, color: '#22D3EE', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>
+          <>@AspectRoute[<br />　FuncAnnotationRouteRule("…Transactional")<br />　| ConfigExecutionRouteRule(ORMConfig.…)]</>
+        </Text>
+      </Box>
+      <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 14 }}>注解命中，或者配置命中函数签名，事务切面就织入。</Text>
+      <Text style={{ fontSize: 15, color: '#F59E0B', lineHeight: 1.8, marginTop: 'auto' }}>两条路是 OR 关系 —— 见第十二章。</Text>
+    </Box>
+
+    <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 24, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 44, fontWeight: 'bold', color: '#22D3EE', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>02</Text>
+      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#E2E8F0', marginTop: 16 }}>统一日志 / 耗时 / 审计</Text>
+      <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 14 }}>就像 ControllerAspect：一处改动覆盖全部 controller。</Text>
+      <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 12 }}>接口开头的「耗时统计 + 出入参日志」这十几行，从此写在切面里一次就够。</Text>
+      <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 12 }}>需要审计时，同样是在 around 里加一段，而不是改 N 个 controller。</Text>
+      <Text style={{ fontSize: 15, color: '#64748B', lineHeight: 1.8, marginTop: 'auto' }}>这就是「横切逻辑集中一处」的实际收益。</Text>
+    </Box>
+
+    <Box style={{ flex: 1, background: 'rgba(245,158,11,0.07)', borderRadius: 12, border: '1px solid #F59E0B', padding: 24, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 44, fontWeight: 'bold', color: '#F59E0B', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>03</Text>
+      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#E2E8F0', marginTop: 16 }}>切点是部署期可配的</Text>
+      <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 14 }}>ConfigExecutionRouteRule 让切点表达式从环境变量读。</Text>
+      <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 12 }}>开发环境织上；生产环境改窄，甚至直接关掉。</Text>
+      <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#F59E0B', lineHeight: 1.8, marginTop: 'auto' }}>都不用改代码，改环境变量就够了。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>45 / 116</Text>
+  </Box>
+</Slide>

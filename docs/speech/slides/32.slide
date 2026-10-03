@@ -1,0 +1,50 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`第五章现场跑通 fdemo。先看目录结构。
+
+fdemo 根目录下有一个 cjpm.toml，是 workspace，members 里是 boot 和 user 两个模块。banner.txt 会被 fboot build 打包进版本模块。三个启动脚本分别对应 Linux、macOS 和 Windows 的 git-bash。
+
+boot 是初始化模块，放切面、事务钩子、MediaType 和 500 处理器；user 是业务模块，下面按 controller、service、service 点 impl、dao、model 点 po、model 点 mvc、model 点 entity、util 分包。
+
+注意这个分包不是随意的：分包决定了动态链接库的粒度，而动态链接库粒度决定了 --dylibPattern。所以「切面放哪个包」「鉴权器放哪个包」，是需要在设计阶段就想的。
+
+右边是验证用的接口：注册、登录、查用户、列表、上传、错误、重定向、会话日志、定时任务，全部在 user 模块里。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 5 章 · 现场跑通 fdemo · 5.1</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>fdemo 目录结构</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>分包决定 dylib 粒度</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ width: 620, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 14, color: '#64748B', marginBottom: 10 }}>fdemo/</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.5, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>
+        <>├── cjpm.toml　　　# workspace：members = ["./boot", "./user"]<br />├── banner.txt　　　# 启动横幅（fboot build 打包进版本模块）<br />├── boot.sh · boot-macos.sh · boot-win-gitbash.sh<br />├── boot/　　　　　 # 初始化模块<br />│　　└── src/　　ControllerAspect · TransactionHookImpl<br />│　　　　　　　　LogMediaType · error/ErrorHandler<br />└── user/　　　　　 # 业务模块<br />　　　└── src/<br />　　　　　　├── controller/　　UserController · CurrentUserController<br />　　　　　　│　　　　　　　　 HellowordController · UploadController<br />　　　　　　├── service/　　　　UserService（接口）<br />　　　　　　├── service/impl/　 UserServiceImpl · HelloworldServiceImpl<br />　　　　　　├── dao/　　　　　　UserDAO<br />　　　　　　├── model/po/　　　 UserPO（持久化对象）<br />　　　　　　├── model/mvc/　　　UserRequest · UserResponse · UserSession<br />　　　　　　├── model/entity/　 UserEntity<br />　　　　　　└── util/　　　　　 UserSessionCache · auth/ · cron/</>
+      </Text>
+    </Box>
+
+    <Box style={{ flex: 1, flexDirection: 'column', gap: 14 }}>
+      <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 20, flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#38BDF8' }}>为什么这样分包</Text>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 12 }}>分包决定动态链接库的粒度，动态链接库粒度决定 --dylibPattern。</Text>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 10 }}>所以「切面放哪个包」「鉴权器放哪个包」是需要在设计阶段就想清楚的事。</Text>
+        <Text style={{ fontSize: 15, color: '#F59E0B', lineHeight: 1.8, marginTop: 'auto' }}>boot 包在正则里有专门的一段，就是这个原因。</Text>
+      </Box>
+      <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#E2E8F0' }}>一段最真实的动态链接库拆分</Text>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 12 }}>boot 里的四样东西都不是业务，但都必须被加载：切面、事务钩子、自定义 MediaType、500 处理器。</Text>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 10 }}>user 里则是标准的 controller / service / dao / model 四层。</Text>
+        <Text style={{ fontSize: 15, color: '#64748B', lineHeight: 1.8, marginTop: 'auto' }}>业务代码里你只写了这四个东西。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>32 / 116</Text>
+  </Box>
+</Slide>

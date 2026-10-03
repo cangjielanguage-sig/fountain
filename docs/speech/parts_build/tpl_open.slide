@@ -1,0 +1,18 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: 0, position: 'relative', overflow: 'hidden' }}
+  notes={`@@NOTES@@`}
+>
+  <Text style={{ position: 'absolute', right: 40, top: 120, fontSize: 320, fontWeight: 'bold', color: '#16233A', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>@@NUM@@</Text>
+  <Box style={{ position: 'absolute', left: 0, top: 0, width: 8, height: 720, background: 'linear-gradient(135deg, #38BDF8 0%, #22D3EE 100%)' }} />
+  <Box style={{ position: 'absolute', left: 120, top: 196, width: 4, height: 34, background: '#38BDF8' }} />
+  <Text style={{ position: 'absolute', left: 140, top: 205, fontSize: 15, color: '#38BDF8', letterSpacing: 4 }}>PART @@NUM@@ / @@N@@ @@KICK@@</Text>
+  <Text style={{ position: 'absolute', left: 120, top: 262, fontSize: 44, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.2 }}>@@TITLE@@</Text>
+  <Box style={{ position: 'absolute', left: 120, top: 348, width: 160, height: 6, background: 'linear-gradient(135deg, #38BDF8 0%, #22D3EE 100%)' }} />
+  <Text style={{ position: 'absolute', left: 120, top: 396, fontSize: 18, color: '#94A3B8', lineHeight: 1.9 }}>@@L1@@</Text>
+  <Text style={{ position: 'absolute', left: 120, top: 432, fontSize: 18, color: '#94A3B8', lineHeight: 1.9 }}>@@L2@@</Text>
+  <Text style={{ position: 'absolute', left: 120, top: 468, fontSize: 18, color: '#64748B', lineHeight: 1.9 }}>@@L3@@</Text>
+  <Box style={{ position: 'absolute', left: 120, top: 528, flexDirection: 'row', alignItems: 'center', gap: 24 }}>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>@@META@@</Text>
+  </Box>
+  <Text style={{ position: 'absolute', left: 64, top: 668, fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库　　@@URL1@@　　@@URL2@@</Text>
+</Slide>

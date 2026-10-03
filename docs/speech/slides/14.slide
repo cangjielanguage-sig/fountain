@@ -1,0 +1,65 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`先看一下 fboot 自己有多简单——整个 fboot 可执行程序的源码只有这么几行：包名 fountain::fboot，导入 fountain::f_app，然后 main 函数里一行 App(args, dynamic: true).boot()。
+
+也就是说，fboot 只是 f_app 的一个壳。所有子命令的实现都在 f_app 的 App 类里。理解这一点很重要：你自己的应用也可以用同样的方式启动，而且可以用 SubCommandMediator 注册自己的子命令。
+
+右边是 fboot help 的输出，一共十五条。请注意第一行，它是整个 fountain 世界的第一公理：应用项目只需要编译成动态链接库。后面所有命令都围绕这一条展开。
+
+第十三条到第十五条是用来管理 fountain 本身的，比如替换版本号、打 tag，这些你日常用不到，但要记得 version 命令会动 git，演示的时候谨慎一点。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 3 章 · fboot 命令行 · 3.1</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>fboot 只是一个壳，第一公理在这里</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ width: 400, flexDirection: 'column', gap: 14 }}>
+      <Box style={{ background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 14, color: '#64748B', marginBottom: 10 }}>fboot/src/main.cj（全文）</Text>
+        <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>package fountain::fboot</Text>
+        <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>import fountain::f_app.*</Text>
+        <Text style={{ fontSize: 14, color: '#22D3EE', lineHeight: 1.8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"main(args: Array<String>): Int64 {"}</Text>
+        <Text style={{ fontSize: 14, color: '#22D3EE', lineHeight: 1.8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    App(args, dynamic: true).boot()"}</Text>
+        <Text style={{ fontSize: 14, color: '#22D3EE', lineHeight: 1.8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"}"}</Text>
+      </Box>
+      <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#E2E8F0' }}>三个推论</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 10 }}>· 所有子命令实现都在 fountain::f_app.App 里</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 6 }}>· 你自己的应用也可以用同样方式启动</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 6 }}>· 可以用 SubCommandMediator 注册自己的子命令</Text>
+        <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.7, marginTop: 'auto' }}>第一公理：应用项目只需要编译成动态链接库</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 22, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#E2E8F0' }}>fboot help</Text>
+      <Box style={{ marginTop: 12, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#F59E0B', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>1. 应用项目只需要编译为动态链接库，把应用的动态链接库加入 LD_LIBRARY_PATH</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>2. fboot run [PATH] --dylibPattern=【正则，不含扩展名】</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>3. fboot shutdown 【PID】</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>4. fboot restart 【PID】 [PATH] --dylibPattern=【正则】</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>5. fboot workspace 【dir_path】 把当前目录初始化为仓颉 workspace</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>6. fboot module 将当前目录初始化为仓颉 dynamic 项目</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>7. fboot module 【module_name】 创建子目录、初始化为 dynamic 模块并挂进 cjpm.toml</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>8. fboot cleanUpdate = cjpm clean → 删 cjpm.lock → cjpm update</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>9. fboot build 编译使用 fountain 开发的应用项目</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>10. fboot count 数模块数、包数、文件数、行数、耗时</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>11. fboot pub 【version】 发布当前路径下的仓颉模块</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>12. fboot randhex n 生成 n 位随机 16 进制数</Text>
+        <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>── 以下命令用来管理 fountain 本身 ──</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>13. fboot version x.y.z 替换版本号并提交推送、可打 tag</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>14. fboot version 显示当前 fountain 版本号</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>15. fboot help 显示命令列表</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>14 / 116</Text>
+  </Box>
+</Slide>

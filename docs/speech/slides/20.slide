@@ -1,0 +1,81 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`fboot run 是整个框架最有意思的一条命令。它的执行流程是八步。
+
+第一步，确定目标路径：第一个不以横线开头的参数，缺省是当前目录，不存在就创建。
+
+第二步，按平台选择动态链接库的扩展名和搜索路径变量：Windows 用 dll 和 Path，macOS 用 dylib 和 DYLD_FALLBACK_LIBRARY_PATH，其它用 so 和 LD_LIBRARY_PATH。
+
+第三步，递归扫描目录，加载文件名匹配这个正则的库——文件名要以 lib 开头，并且匹配你给的正则，或者是 fboot build 自动创建的那个 static 版本模块。
+
+第四步，加载即执行。宏展开时生成的顶级匿名闭包会执行，把 @Bean 注册进 IOC、把各个 Initializer 注册进集合、把 controller 函数注册到 MVC。
+
+第五步，按 dependencies 做拓扑排序后依次 initialize，收集所有 start。
+
+第六步，每个 start 在新线程执行，其中 MVC 的 start 会启动 HTTP 服务并阻塞。
+
+第七步，主线程永久阻塞。第八步，也是要记住的：fboot run 不会返回。这是预期行为，不是卡住，另开一个终端发请求就行。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 3 章 · fboot 命令行 · 3.7</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>fboot run：启动应用</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fboot run [PATH] --dylibPattern=【正则】</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ flex: 1, flexDirection: 'column', gap: 8 }}>
+      <Box style={{ flexDirection: 'row', gap: 14, background: '#111C2E', borderRadius: 10, padding: 12 }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 34 }}>1</Text>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.6, flex: 1 }}>确定目标路径：第一个不以 - 开头的参数；缺省当前目录，不存在就创建</Text>
+      </Box>
+      <Box style={{ flexDirection: 'row', gap: 14, background: '#111C2E', borderRadius: 10, padding: 12 }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 34 }}>2</Text>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.6, flex: 1 }}>按平台选扩展名与搜索路径变量：Windows .dll / Path；macOS .dylib / DYLD_...；其它 .so / LD_LIBRARY_PATH</Text>
+      </Box>
+      <Box style={{ flexDirection: 'row', gap: 14, background: '#111C2E', borderRadius: 10, padding: 12 }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 34 }}>3</Text>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.6, flex: 1 }}>递归扫描目录，加载文件名匹配 ^lib.*(--dylibPattern | .+_stAtIc__).*$ 的库</Text>
+      </Box>
+      <Box style={{ flexDirection: 'row', gap: 14, background: '#111C2E', borderRadius: 10, padding: 12 }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 34 }}>4</Text>
+        <Text style={{ fontSize: 15, color: '#38BDF8', lineHeight: 1.6, flex: 1 }}>加载即执行宏生成的顶级匿名闭包：@Bean 进 IOC、Initializer 进集合、controller 进 MVC</Text>
+      </Box>
+      <Box style={{ flexDirection: 'row', gap: 14, background: '#111C2E', borderRadius: 10, padding: 12 }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 34 }}>5</Text>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.6, flex: 1 }}>按 dependencies 拓扑排序后依次 initialize()，收集所有 start()</Text>
+      </Box>
+      <Box style={{ flexDirection: 'row', gap: 14, background: '#111C2E', borderRadius: 10, padding: 12 }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 34 }}>6</Text>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.6, flex: 1 }}>每个 start() 在新线程执行；MVC 的 start() 启动 HTTP 服务并阻塞</Text>
+      </Box>
+      <Box style={{ flexDirection: 'row', gap: 14, background: '#111C2E', borderRadius: 10, padding: 12 }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 34 }}>7</Text>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.6, flex: 1 }}>主线程永久阻塞：{"while(true){ sleep(Duration.Max) }"}</Text>
+      </Box>
+      <Box style={{ flexDirection: 'row', gap: 14, background: 'rgba(245,158,11,0.07)', borderRadius: 10, border: '1px solid #F59E0B', padding: 14 }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#F59E0B', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 34 }}>8</Text>
+        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#F59E0B', lineHeight: 1.6, flex: 1 }}>fboot run 不会返回</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ width: 380, flexDirection: 'column', gap: 14 }}>
+      <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#E2E8F0' }}>--dylibPattern 是最容易踩的坑</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 10 }}>不给自己加正则，fboot 会加载目录下全部 lib* 库，可能导致某些动态链接库被重复加载，应用启动失败。</Text>
+        <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.7, marginTop: 'auto' }}>凡是靠 @Bean 生效的东西，所在动态链接库都必须被 --dylibPattern 匹配到。</Text>
+      </Box>
+      <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#E2E8F0' }}>它「卡住」是正常的</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 10 }}>启动完成后进程会永久阻塞在服务循环里，另开终端发请求即可。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>20 / 116</Text>
+  </Box>
+</Slide>

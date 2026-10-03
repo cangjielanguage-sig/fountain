@@ -1,0 +1,69 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`fboot randhex 生成随机十六进制串，参数是位数。它的实现就是 f_random 里的 RandomString().randomLowerHex(n)，由 f_app 的 RandHexCommand 注册到 SubCommandMediator。
+
+在 fountain 里它最常见的用途就是刚才那一节：给 SM4 生成密钥和 IV。SM4 的密钥是十六字节，也就是三十二个十六进制字符，所以写 fboot randhex 32。
+
+fboot cleanUpdate 是依赖变了之后的必修课。它等价于三步：cjpm clean、删除 cjpm.lock、cjpm update。也可以指定路径。
+
+什么时候必须用它？当你改了 cjpm.toml 的依赖，或者切换了 SDK、stdx 版本，旧产物可能和新依赖的二进制不兼容。这时候不要浪费时间 debug，直接 fboot cleanUpdate。fdemo 的 boot.sh 里也封装了它，一条 ./boot.sh cleanUpdate。
+
+这个命令值得在视频里讲一次，因为它能省掉观众大量的排查时间。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 3 章 · fboot 命令行 · 3.5 / 3.6</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>randhex 与 cleanUpdate</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>两个高频小命令</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 16 }}>
+    <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 24, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 40, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>randhex</Text>
+      <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 18 }}>生成随机 16 进制串。</Text>
+      <Box style={{ background: '#0B1220', borderRadius: 8, border: '1px solid #1E293B', padding: 14, marginTop: 14 }}>
+        <Text style={{ fontSize: 14, color: '#22D3EE', lineHeight: 1.8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>
+          <>fboot randhex 16<br />fboot randhex 32</>
+        </Text>
+      </Box>
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 16 }}>实现是 f_random 的 RandomString().randomLowerHex(n)，由 f_app 的 RandHexCommand 注册到 SubCommandMediator。</Text>
+      <Box style={{ marginTop: 'auto', flexDirection: 'column' }}>
+        <Text style={{ fontSize: 14, color: '#64748B', lineHeight: 1.7 }}>最常见用途：给 SM4 生成密钥与 IV</Text>
+        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#F59E0B', lineHeight: 1.7 }}>密钥 16 字节 = 32 个 16 进制字符 → fboot randhex 32</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 24, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 40, fontWeight: 'bold', color: '#22D3EE', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>cleanUpdate</Text>
+      <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 18 }}>等价于三步：</Text>
+      <Box style={{ marginTop: 10, flexDirection: 'column', gap: 8 }}>
+        <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>1　cjpm clean --target-dir=...</Text>
+        <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>2　删除 cjpm.lock</Text>
+        <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>3　cjpm update</Text>
+      </Box>
+      <Box style={{ background: '#0B1220', borderRadius: 8, border: '1px solid #1E293B', padding: 14, marginTop: 16 }}>
+        <Text style={{ fontSize: 14, color: '#22D3EE', lineHeight: 1.8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>
+          <>fboot cleanUpdate<br />fboot cleanUpdate ./fdemo</>
+        </Text>
+      </Box>
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 'auto' }}>fdemo/boot.sh 里也封装了它：./boot.sh cleanUpdate</Text>
+    </Box>
+
+    <Box style={{ flex: 1, background: 'rgba(56,189,248,0.06)', borderRadius: 12, border: '1px solid #38BDF8', padding: 24, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#38BDF8' }}>什么时候必须用它</Text>
+      <Box style={{ flexDirection: 'column', gap: 14, marginTop: 20 }}>
+        <Text style={{ fontSize: 16, color: '#E2E8F0', lineHeight: 1.7 }}>· 改了 cjpm.toml 的依赖</Text>
+        <Text style={{ fontSize: 16, color: '#E2E8F0', lineHeight: 1.7 }}>· 切换了 SDK / stdx 版本</Text>
+      </Box>
+      <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 18 }}>旧产物可能与新依赖二进制不兼容，症状是各种诡异错误。</Text>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#F59E0B', lineHeight: 1.8, marginTop: 'auto' }}>不要浪费时间 debug，直接 cleanUpdate。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>19 / 116</Text>
+  </Box>
+</Slide>

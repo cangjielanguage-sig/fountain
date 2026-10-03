@@ -1,0 +1,87 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`最后三个运行时模块：f_regex、f_rx、f_random。
+
+f_regex 有两块。第一块是常用正则常量：INTEGER、DECIMAL、REAL_NUMBER、EMAIL、DURATION、IDENTIFIER、BASE64，还有一个 wildcard 把通配符串转成正则。它的 doReplace 和 doReplaceAll 相比标准库多了两个能力：起始下标，以及「按匹配内容动态决定替换值」——回调返回 None 就不替换，做模板渲染和脱敏很顺手。
+
+第二块是字符串直接变正则，带缓存。solid 为 true 时正则在进程生命周期内一直存在；为 false 时用 f_cache 的堆缓存，最多一万个、寿命一天。
+
+这里有一条很关键：编译正则是有成本的。热路径上反复调 str.regex() 而不用缓存，是很多服务的隐形 CPU 杀手。顺带闭环一下——f_util 的 PathPattern 在编译路径时会先做几步正则预处理，那些正则就是用 solid 为 true 建的，进程内编译一次、复用一生。
+
+f_rx 是一套 Observable 和 Observer 实现。它的价值不在「又一套 Rx」，而在于把「数据怎么产出」和「数据怎么处理」的线程模型、背压策略、错误恢复都显式化了。
+
+创建方式六种：iterable 从可迭代对象、emitter 用发射器、single 单值、maybe 可空值、empty 空、concat 拼接。每条数据的处理策略四种：withAlwaysNew 每条数据开新线程、withCurrent 始终用当前线程、withSingle 固定一个线程、withFixed 固定若干线程。
+
+背压只有 withSingle 和 withFixed 支持——因为只有固定线程池才有「队列满了」这件事。策略有八个：丢弃新数据、丢弃队头、一直阻塞、立即抛异常、立即用当前线程处理、立即开新线程处理、用你给的函数处理、以及「阻塞指定时长后仍满就执行指定策略」。
+
+还有错误恢复器 setErrorResumer 有五个重载，以及 replaySize 做重放。每个创建函数都接受一个 asyncCombined 命名参数，决定多个观察者各自开线程还是共用一个线程。
+
+f_random 补的是标准库缺的三样：区间随机数、随机数流、随机字符串。它不自己实现随机算法，而是用 extend 把能力扩展到标准库的 Random 和 SecureRandom 上——所以 API 是「加在原类上」的，不用换类型。注意扩展方法只有导入本模块后才可见。
+
+RandomString 的字符集方法很全：小写十六进制、大小写字母加数字、可打印 ASCII、全部 Unicode，还有一个 random 接收调用方给定的字符集。每个方法都有两个重载：指定长度，或者先随机出长度再生成。
+
+ThreadLocalRandom 是每个线程首次访问 current 时创建一个 SecureRandom，之后一直复用。而 RandomString 的无参构造器默认就把它作为随机源，所以默认的 RandomString 实例天然线程安全。高并发下生成 token、验证码、盐值，用默认构造就对了。
+
+蓄水池抽样 randomReservoir 只需遍历一次数据源就能随机取 n 个元素，不需要事先知道总数——适合流式数据或超大集合抽样。
+
+最后一页要讲的是 f_random 的已知行为，这几条和直觉不一致，讲出来比让观众自己撞墙好。
+
+第一，浮点版的 closed 不是「包含上界」：实现是 nextFloat64 乘上区间宽度加下界，closed 为 true 时落在下界到上界加一之间，有可能超过上界；需要严格不超过上界请自己裁剪。
+
+第二，整数版先转浮点再取整：Int64 走 Float64，Int32 走 Float32，最后 floor。区间接近上界时会有精度损失甚至溢出。
+
+第三，区间参数不校验：不检查下界小于等于上界，传反了不报错，只会得到反转区间的结果。
+
+第四，RandomString 有三个 (min, max) 重载调错了方法：randomAllLetters 实际只有小写字母；randomUpperLettersNumbers 实际是小写字母加数字；randomLettersNumbers 也是小写字母加数字。需要对应字符集时自己先算长度再调 (count) 重载。
+
+第五，长度区间不统一：只有 randomAscii 和 random 用了闭区间，其余的 (min, max) 重载长度是左闭右开。
+
+第六，randomReservoir 的边界：count 小于等于零且数据源非空时会抛参数非法异常；返回值大小是 count 和元素个数取小，不总是等于 count；替换下标取自零到 i 开区间而非经典算法的零到 i 闭区间，抽样结果并非严格均匀。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 17 章 · 运行时基础设施 · 17.8 / 17.9 / 17.10</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>f_regex / f_rx / f_random</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>正则缓存 · 背压 · 随机数</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 16 }}>
+    <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 18, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#38BDF8' }}>f_regex</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, marginTop: 12 }}>常用正则常量：INTEGER / DECIMAL / REAL_NUMBER / EMAIL / DURATION / IDENTIFIER / BASE64 / wildcard(通配符串)</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 8 }}>doReplace / doReplaceAll 比标准库多了「起始下标」和「按匹配内容动态决定替换值」（回调返回 None 就不替换）—— 模板渲染、脱敏很顺手。</Text>
+      <Box style={{ background: '#0B1220', borderRadius: 8, border: '1px solid #1E293B', padding: 12, marginTop: 12 }}>
+        <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>let r = '^/api/.*'.regex(solid: false)</Text>
+      </Box>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 10 }}>solid: true → 正则在进程生命周期内存在；solid: false → 用 f_cache.HeapCache 缓存，最多 10000 个、寿命一天。</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.75, marginTop: 'auto' }}>编译正则是有成本的。热路径上反复 str.regex() 而不用缓存，是很多服务的隐形 CPU 杀手。f_util.PathPattern 编译路径时的正则预处理就是用 solid: true 建的 —— 进程内编译一次、复用一生。</Text>
+    </Box>
+
+    <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 18, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#E2E8F0' }}>f_rx</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 10 }}>价值不在「又一套 Rx」，而在于把线程模型、背压策略、错误恢复都显式化了。</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, marginTop: 8 }}>六种创建：iterable / emitter / single / maybe / empty / concat</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, marginTop: 6 }}>四种处理策略：withAlwaysNew（每条数据开新线程）/ withCurrent（当前线程）/ withSingle（固定一个线程）/ withFixed（固定若干线程，支持背压）</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.7, marginTop: 8 }}>背压只有 withSingle / withFixed 支持 —— 只有固定线程池才有「队列满了」这件事。策略八个：Discarding / ToDropOldest / AlwaysBlocking / Throwing / Current / NewThread / Action / AfterBlockingOrCurrent。</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 8 }}>setErrorResumer 五个重载做错误恢复；replaySize(capacity) 做重放；每个创建函数都有 asyncCombined 命名参数，决定多观察者各自开线程还是共用。</Text>
+      <Text style={{ fontSize: 12, color: '#64748B', lineHeight: 1.7, marginTop: 'auto' }}>没有观察者时会自动暂停产出，直到注册新观察者并重新启动；disposed_ 是 AtomicBool，每次取下一批数据前检查。</Text>
+    </Box>
+
+    <Box style={{ flex: 1, background: 'rgba(56,189,248,0.06)', borderRadius: 12, border: '1px solid #38BDF8', padding: 18, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#38BDF8' }}>f_random</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, marginTop: 12 }}>补标准库缺的三样：区间随机数、随机数流、随机字符串。它用 extend 把能力扩展到 std.random.Random 与 SecureRandom 上 —— API 是「加在原类上」的，不用换类型。</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 8 }}>区间随机：nextInt64 / nextUInt64 / nextInt32 / nextUInt32 / nextFloat64 / nextFloat32(min, max, closed!)。</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 6 }}>随机流：rand.randomInt64(0, 10) 返回无限 Iterator，next() 永远返回 Some；也有高斯分布流。</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 6 }}>随机字符串：RandomString().randomLowerHex(32) 就是 fboot randhex 的实现。</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.7, marginTop: 8 }}>ThreadLocalRandom.current 是线程本地 SecureRandom；RandomString 无参构造默认就用它 —— 所以默认实例天然线程安全，高并发生成 token / 验证码 / 盐值用它就对了。</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 'auto' }}>randomReservoir(count, source) 只需遍历一次就能随机取 count 个，不需要事先知道总数 —— 适合流式数据或超大集合抽样。注意它的已知行为：浮点 closed 可能超过上界、整数版先转浮点会丢精度、区间参数不校验、(min, max) 重载有三处字符集与命名不符、randomReservoir 的抽样并非严格均匀。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>108 / 116</Text>
+  </Box>
+</Slide>

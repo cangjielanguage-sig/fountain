@@ -1,0 +1,69 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`接着讲两个：IsUUID 注解和 IdMaker。
+
+IsUUID 只有三十五行的源码，注意它的父类——f_data.validation.Validator。也就是说，f_util 的校验注解和 f_data 那十几个内置校验器是同一套体系，可以一起用与、或、非组合。看右边的例子：orderId 上打 @IsUUID，username 上用 CombinedValidator 组合两个规则。
+
+而且因为它的 target 里包含 Parameter，函数参数上也能用——f_mvc 绑定 controller 实参时会自动触发。
+
+再说 IdMaker。它是雪花算法风格的实现，ID 是一个 Int64，位布局是：十位主机序列号、四十一位毫秒时间戳、十二位毫秒内自增序号。
+
+主机序列号取零到一千零二十三，来自配置项 idMakerHostSerial，走的是第四章那套优先级。时间戳取构造时的毫秒数作为起点。nextInt64 就是一个原子自增，无锁、线程安全。
+
+三个必须讲的注意点：第一，主机序列号必须全局唯一，重复会产生重复 ID。第二，十二位序号意味着每毫秒四千零九十六个，超出自增位宽会向时间戳位进位——ID 仍然唯一且递增，但时间戳含义会漂移。第三，起点是构造时刻，进程重启后时间戳基准改变，但因为有主机号兜底，跨进程仍然不冲突。
+
+和 UUID 怎么选？要时间有序、索引局部性好，用 IdMaker 或者 UUID 的 v7；要无中心、随便哪台机器都能生成，用 UUID.random。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 9 章 · 工具箱 f_util · 9.3 / 9.4</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>IsUUID 注解与 IdMaker</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>35 行源码 · 雪花算法</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 16 }}>
+    <Box style={{ height: 266, flexDirection: 'row', gap: 16 }}>
+      <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>f_util/src/IsUUID.cj（35 行）</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"@Annotation[target: [MemberVariable, MemberProperty, Parameter]]"}</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public class IsUUID <: Validator {"}</Text>
+        <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    public func validate(value: ?String): Bool {"}</Text>
+        <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        if(let Some(x) <- value){ UUID.tryParse(x).isSome() } else { false }"}</Text>
+        <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    }"}</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    public prop description: String { get(){ '必须是UUID格式的字符串' } }"}</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"}"}</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#38BDF8' }}>和 f_data 是同一套体系</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.7, marginTop: 10 }}>父类是 fountain::f_data.validation.Validator，所以可以和其他校验器一起用 & | ! 组合：</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.75, marginTop: 10, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"@IsUUID            // 必须是 UUID"}</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"private var orderId: String = ''"}</Text>
+        <Text style={{ fontSize: 13, color: '#F59E0B', lineHeight: 1.75, marginTop: 'auto' }}>target 里有 Parameter —— 函数参数上也能用，f_mvc 绑定时会自动触发。</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ height: 258, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#E2E8F0' }}>IdMaker：趋势递增的分布式 ID（雪花算法）</Text>
+      <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 }}>
+        <Box style={{ width: 220, height: 44, background: '#0B1220', borderRadius: 8, border: '1px solid #38BDF8', alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ fontSize: 14, color: '#38BDF8' }}>10 bit 主机序列号</Text>
+        </Box>
+        <Box style={{ flex: 1, height: 44, background: '#0B1220', borderRadius: 8, border: '1px solid #1E293B', alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ fontSize: 14, color: '#E2E8F0' }}>41 bit 毫秒时间戳</Text>
+        </Box>
+        <Box style={{ width: 240, height: 44, background: '#0B1220', borderRadius: 8, border: '1px solid #1E293B', alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ fontSize: 14, color: '#E2E8F0' }}>12 bit 毫秒内自增序号</Text>
+        </Box>
+      </Box>
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.6, marginTop: 12 }}>主机序列号 0–1023，来自配置项 idMakerHostSerial；nextInt64() 是原子自增，无锁、线程安全。</Text>
+      <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.7, marginTop: 8 }}>注意三点：① 主机号必须全局唯一；② 每毫秒 4096 个，超出会向时间戳位进位（ID 仍递增，时间戳含义漂移）；③ 跨进程重启不冲突（有主机号兜底）。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>56 / 116</Text>
+  </Box>
+</Slide>

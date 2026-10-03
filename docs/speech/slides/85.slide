@@ -1,0 +1,58 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`事务钩子这一节，把调用顺序讲清楚。
+
+TransactionHook 接口有七个方法：beforeTx 在事务开始前；beforeCommit 在提交前，参数是「是否只读」；afterCommit 在提交后；afterThrowing 在抛异常时；beforeRollback 在回滚前，参数是异常；afterRollback 在回滚后；afterComplete 在事务完成时，参数是事务状态。
+
+注册方式是 ORM 的 registerTransactionHook，或者 registerTransactionHooks 从 lookupList 批量取。多个钩子的执行顺序由 order 属性决定，升序。
+
+然后是五种场景的顺序，这张表建议做成动画或者表格。
+
+正常提交：beforeTx、beforeCommit、提交、afterCommit、afterComplete。
+
+一般异常：afterThrowing、beforeRollback、回滚、afterRollback、afterComplete。
+
+命中 noRollbackFor：afterThrowing、beforeCommit、然后提交、afterCommit、afterComplete，最后重抛异常。注意它是「提交之后重抛」。
+
+命中 rollbackFor：afterThrowing、beforeRollback、回滚、afterRollback、afterComplete，然后重抛。
+
+第五种情况最容易忽略：配了 rollbackFor 但异常类型不匹配，行为和 noRollbackFor 一样——提交后重抛。
+
+演示：访问一次 /api/user/register，它命中 register 前缀，事务生效，控制台依次出现 beforeTx、beforeCommit、afterCommit、afterComplete。再访问 /api/error，或者让某个 DAO 抛异常，就会出现 afterThrowing、beforeRollback、afterRollback。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 12 章 · ORM f_orm · 12.5 续</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>事务钩子与调用顺序</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>建议做成动画或表格</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 14 }}>
+    <Box style={{ height: 118, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 16, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 6 }}>fdemo/boot/src/TransactionHookImpl.cj · 七个回调</Text>
+      <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>beforeTx　beforeCommit(readOnly)　afterCommit　afterThrowing(e)　beforeRollback(e)　afterRollback(e)　afterComplete(status)</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 'auto' }}>注册：ORM.registerTransactionHook 传 MyHook 实例，或 registerTransactionHooks 批量注册（从 lookupList 批量取）；多个钩子按 prop order 升序执行。</Text>
+    </Box>
+
+    <Table
+      style={{ width: '100%', height: 360 }}
+      defaultTextStyle={{ fontSize: 13, textAlign: 'left', color: '#E2E8F0' }}
+      defaultCellStyle={{ border: { left: { width: 1, color: '#1E293B' }, right: { width: 1, color: '#1E293B' }, top: { width: 1, color: '#1E293B' }, bottom: { width: 1, color: '#1E293B' } } }}
+      cells={[
+        [ { text: '场景', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } }, { text: '顺序', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } } ],
+        [ '正常提交', 'beforeTx → beforeCommit → commit → afterCommit → afterComplete(Committed)' ],
+        [ '一般异常', 'afterThrowing → beforeRollback → rollback → afterRollback → afterComplete(Rollback)' ],
+        [ { text: '命中 noRollbackFor', textStyle: { color: '#F59E0B' } }, { text: 'afterThrowing → beforeCommit → 提交 → afterCommit → afterComplete(Committed) → 重抛', textStyle: { color: '#F59E0B' } } ],
+        [ { text: '命中 rollbackFor', textStyle: { color: '#F59E0B' } }, { text: 'afterThrowing → beforeRollback → 回滚 → afterRollback → afterComplete(Rollback) → 重抛', textStyle: { color: '#F59E0B' } } ],
+        [ '配了 rollbackFor 但类型不匹配', '同 noRollbackFor：提交后重抛' ],
+      ]}
+    />
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>85 / 116</Text>
+  </Box>
+</Slide>

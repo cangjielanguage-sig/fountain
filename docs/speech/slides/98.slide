@@ -1,0 +1,72 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`一条日志的旅程，这是全章最硬核的一节，但结论很简单：业务线程只入队，渲染与落盘都在专属线程。
+
+第一级，业务线程。AbstractLogger 的 append 先采集时间戳和当前的线程 ID——注意这两个信息是「调用点」的，不是写出时的。然后把「广播给所有 appender」这个闭包投进队列。队列的 tag 是 LoggerAppenderFacade 加 logger 名字，容量就是 loggerAsyncBufsize。
+
+第二级，facade 的消费线程。它取出闭包，遍历所有 appender，对每个 appender 再调一次 append。这里才做级别判断、才求值 lambda——所以消息字符串是在消费线程上拼出来的。然后 AsyncLogger 把 pattern 和消息渲染成字节，写进 SyncQueueOutputStream；遇到空字符结束符，这一条日志就是一个批次，提交到批次队列，再往 appender 自己的队列投一个闭包。
+
+第三级，appender 的消费线程。把批次按顺序写进真正的输出流，终端或者文件，并 flush。
+
+四个设计点值得单独讲。第一，两级异步、两级队列：facade 每个 logger 名字一条队列，appender 里 console 全局共享一条、file 按路径共享。所以线程数大约等于不同 logger 名字的个数加 appender 个数。
+
+第二，空字符是批次边界。写日志就是往缓冲区塞字节，塞完写一个空字符，SyncQueueOutputStream 看到它就提交换缓冲区。这样一条日志在文件里不会被别的线程插进来切成两半。顺带一个小特性：这个空字符本身不会被写进文件。
+
+第三，缓冲区是池化的，池空会丢日志。缓冲区池大小就是 loggerAsyncBufsize，默认一千零二十四。消费线程在渲染之前先从池里借一块缓冲，最多等 logger_asyncWaitTimeout，默认五毫秒，借不到就打印一行 EmptyPool 并丢掉本次写入。
+
+第四，队列满了怎么办，由 timeout 加 policy 决定。而因为默认 timeout 是 Duration.Max，默认配置下「队列满」等于入队方一直等，policy 根本轮不到生效。所以想「宁可丢日志也别拖慢业务」就配十毫秒加 discard；想「日志一条不能少」就保持默认。
+
+最后别忘了退出：facade 在 atExit 里注册了关闭动作，close 会先把队列排空再关流。这就是为什么 Ctrl-C 之后日志文件里不会缺最后几条。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 15 章 · 日志 f_log · 15.5</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>一条日志的旅程</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>全章最硬核的一节</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 16 }}>
+    <Box style={{ height: 260, flexDirection: 'column', gap: 10 }}>
+      <Box style={{ flexDirection: 'row', gap: 12, background: '#111C2E', borderRadius: 10, padding: 14 }}>
+        <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#38BDF8', width: 92 }}>① 业务线程</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.65, flex: 1 }}>先采集时间戳 DateTime.now() 和 %tid（此刻的线程 ID）—— 时间 / 线程 ID 是「调用点」的；然后把「广播给所有 appender」这个闭包投进队列（tag = f_log.LoggerAppenderFacade_【logger 名字】）</Text>
+      </Box>
+      <Box style={{ flexDirection: 'row', gap: 12, background: '#111C2E', borderRadius: 10, padding: 14, border: '1px solid #38BDF8' }}>
+        <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#38BDF8', width: 92 }}>② facade 消费线程</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.65, flex: 1 }}>取出闭包，遍历所有 appender，对每个 appender 再 append(level, message, now, tid, ex)。这里才做级别判断、才求值 lambda（所以 message 字符串是在消费线程上拼出来的）→ AsyncLogger 把 pattern + 消息渲染成字节写进 SyncQueueOutputStream → 遇到 \0 结束符即一个批次 → 往 appender 自己的队列投闭包（tag = console:// 或 file:///【path】）</Text>
+      </Box>
+      <Box style={{ flexDirection: 'row', gap: 12, background: '#111C2E', borderRadius: 10, padding: 14 }}>
+        <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#38BDF8', width: 92 }}>③ appender 消费线程</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.65, flex: 1 }}>把批次按顺序写进真正的 OutputStream（终端 / 文件），并 flush</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, flexDirection: 'row', gap: 14 }}>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 16, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#E2E8F0' }}>两级异步，两级队列</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 8 }}>facade 一条队列（每个 logger 名字一条）；appender 一条队列（console 全局共享；file 按路径共享）。</Text>
+        <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.7, marginTop: 'auto' }}>线程数 ≈ 不同 logger 名字的个数 + appender 个数。</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 16, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#E2E8F0' }}>空字符是批次边界</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 8 }}>塞完字节写一个 \0，SyncQueueOutputStream 看到就整块提交换缓冲 —— 一条日志在文件里不会被别的线程切成两半。\0 本身不会写进文件。</Text>
+      </Box>
+      <Box style={{ flex: 1, background: 'rgba(245,158,11,0.07)', borderRadius: 12, border: '1px solid #F59E0B', padding: 16, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#F59E0B' }}>缓冲区池化，池空丢日志</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, marginTop: 8 }}>池大小 = loggerAsyncBufsize（默认 1024）。借用最多等 logger_asyncWaitTimeout（默认 5ms），借不到就打印 EmptyPool 并丢掉本次写入。</Text>
+      </Box>
+      <Box style={{ flex: 1, background: 'rgba(245,158,11,0.07)', borderRadius: 12, border: '1px solid #F59E0B', padding: 16, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#F59E0B' }}>队列满了怎么办</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, marginTop: 8 }}>默认 timeout = Duration.Max → 入队方一直等，policy 轮不到生效。想丢：10ms + discard；想一条不落：保持默认或写 alwaysWaiting。</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 'auto' }}>atExit 里 close() 会先排空队列再关流 —— Ctrl-C 之后日志不会缺最后几条。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>98 / 116</Text>
+  </Box>
+</Slide>

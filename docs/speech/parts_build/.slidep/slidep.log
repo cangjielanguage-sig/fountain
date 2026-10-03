@@ -1,0 +1,24 @@
+=== boot pid=42156 ts=2026-10-03 10:46:55.982 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech\parts_build argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js create tpl.pptx ===
+[2026-10-03 10:46:55.981] [INFO ] [pid=42156] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+=== boot pid=45852 ts=2026-10-03 10:47:14.195 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech\parts_build argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl tpl.pptx --dsl-file t1.slide ===
+[2026-10-03 10:47:14.194] [INFO ] [pid=45852] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-03 10:47:14.224] [INFO ] [pid=45852] [slide-version] fileId=59D15048 version=0 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech\parts_build\tpl.pptx
+=== boot pid=46220 ts=2026-10-03 10:47:18.859 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech\parts_build argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl tpl.pptx --dsl-file t2.slide ===
+[2026-10-03 10:47:18.858] [INFO ] [pid=46220] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-03 10:47:18.892] [INFO ] [pid=46220] [slide-version] fileId=59D15048 version=1 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech\parts_build\tpl.pptx
+=== boot pid=14916 ts=2026-10-03 10:49:55.434 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech\parts_build argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js create tpl.pptx ===
+[2026-10-03 10:49:55.433] [INFO ] [pid=14916] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+=== boot pid=11692 ts=2026-10-03 10:50:04.561 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech\parts_build argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl tpl.pptx --dsl-file tpl_open.slide ===
+[2026-10-03 10:50:04.561] [INFO ] [pid=11692] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-03 10:50:04.596] [INFO ] [pid=11692] [slide-version] fileId=D4C3E161 version=0 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech\parts_build\tpl.pptx
+=== boot pid=19452 ts=2026-10-03 10:50:14.698 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech\parts_build argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl tpl.pptx --dsl-file tpl_end.slide ===
+[2026-10-03 10:50:14.697] [INFO ] [pid=19452] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-03 10:50:14.731] [INFO ] [pid=19452] [slide-version] fileId=D4C3E161 version=1 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech\parts_build\tpl.pptx
+=== boot pid=23992 ts=2026-10-03 10:52:21.769 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech\parts_build argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js create tpl.pptx ===
+[2026-10-03 10:52:21.769] [INFO ] [pid=23992] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+=== boot pid=33512 ts=2026-10-03 10:52:25.830 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech\parts_build argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl tpl.pptx --dsl-file tpl_open.slide ===
+[2026-10-03 10:52:25.830] [INFO ] [pid=33512] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-03 10:52:25.863] [INFO ] [pid=33512] [slide-version] fileId=B81431E1 version=0 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech\parts_build\tpl.pptx
+=== boot pid=40360 ts=2026-10-03 10:52:30.601 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech\parts_build argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl tpl.pptx --dsl-file tpl_end.slide ===
+[2026-10-03 10:52:30.600] [INFO ] [pid=40360] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-03 10:52:30.634] [INFO ] [pid=40360] [slide-version] fileId=B81431E1 version=1 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech\parts_build\tpl.pptx

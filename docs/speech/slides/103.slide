@@ -1,0 +1,69 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`第十六章串讲：一次请求穿过整个框架。用一个 POST 注册请求走完全流程。
+
+第零步，进程启动。f_config 的 static init 装载环境变量和命令行参数——命令行覆盖环境变量，并准备 sensitiveMap，配了 SM4 的话运行期解密。
+
+第一步，fboot run 加载动态链接库。加载时 static init 把 @Bean 注册进 BeanFactory、把 Initializer 注册进集合；然后拓扑排序依次 initialize，顺序是 BeanInitializer、ORMInitializer、MVCInitializer、TickTockInitializer 等等；最后各 start 被 spawn 到新线程，MVC 启动 HTTP 服务并阻塞，TickTock 启动定时器。
+
+第二步，curl 发出注册请求。MVC 先做路由匹配，看 PostMapping 加 consumes、produces、params、headers；然后参数绑定，f_http 的 MediaType 把请求体字节转成 Data，f_data 把 Data 转成对象并触发校验；接着 AuthHandlerProxy 检查，因为 ignoreAuth 是 true 所以直接 OK；然后 AOP 的 ControllerAspect 的 around 执行，因为 controllerPointcut 命中了；再进原函数体 register。
+
+在 register 里，lookup 拿到 UserService 的实现；TransactionAspect 因为 orm_transactionalFuncExecution 命中了 register 前缀而织入；然后 orm 的 execute 开始新事务：先 beforeTx；再调 executor().register，注意 SqlExecutor 本身就是 UserDAO，里面 INSERT_INTO 绑定参数执行；然后 beforeCommit、commit、afterCommit、afterComplete。最后返回值按 produces 序列化。
+
+第三步，定时线程按 cron 触发，独立线程，与请求互不干扰。
+
+第四步，旁路：f_util 的 UUID 和 f_random 给会话发密钥；f_http 的 MediaType 配合 f_data 做序列化；f_util 的 PathPattern 是路由匹配和抽路径变量的引擎。
+
+第五步，底座：f_cache 存登录状态，f_pool 撑起数据库连接池，f_regex 缓存路径正则，f_time 解析所有 Duration 型配置，f_log 在每一步上落日志——SQL 的 DEBUG、accessLog 的 INFO；f_io 的 ByteBuffer 是报文与下载管道的字节缓冲；而 f_base 在进程退出时按权重把这些依次收掉：先停服务、最后关数据库。
+
+这一屏就是 fountain 的全部。而且从头到尾你没写过一个配置文件、没写过一行 main。业务代码里你只写了 UserController、UserService、UserDAO、UserPO 四个东西，加起来不到两百行。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 16 章 · 串讲</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>一次请求穿过整个框架</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>POST /api/user/register</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 8 }}>
+    <Box style={{ flexDirection: 'row', gap: 12, background: 'rgba(56,189,248,0.06)', borderRadius: 10, border: '1px solid #38BDF8', padding: 12 }}>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#38BDF8', width: 30 }}>⓪</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.6, flex: 1 }}>进程启动：f_config 的 static init 装载环境变量 + 命令行参数（命令行覆盖环境变量），并准备 sensitiveMap（编译期内嵌的敏感配置，配了 SM4 则运行期解密）</Text>
+    </Box>
+    <Box style={{ flexDirection: 'row', gap: 12, background: '#111C2E', borderRadius: 10, padding: 12 }}>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#38BDF8', width: 30 }}>①</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.6, flex: 1 }}>fboot run 加载动态链接库 → static init()：@Bean 进 BeanFactory、Initializer 进 InitializerCollection → 拓扑排序 initialize()（BeanInitializer → ORMInitializer → MVCInitializer → TickTockInitializer …）→ 各 start() spawn 到新线程：MVC 启动 HTTP 服务（阻塞）、TickTock 启动定时器</Text>
+    </Box>
+    <Box style={{ flex: 1, flexDirection: 'row', gap: 12, background: '#111C2E', borderRadius: 10, border: '1px solid #38BDF8', padding: 12 }}>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#38BDF8', width: 30 }}>②</Text>
+      <Box style={{ flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.65 }}>curl -XPOST /api/user/register → MVC 路由匹配（@PostMapping + consumes / produces / params / headers）</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.65 }}>　→ 参数绑定：f_http 把请求体字节转成 Data；f_data 把 Data 转成对象并触发校验</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.65 }}>　→ AuthHandlerProxy.check：ignoreAuth=true → 直接 OK</Text>
+        <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.65 }}>　→ 【AOP】ControllerAspect.around（controllerPointcut 命中）→ 原函数体 register()</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.65 }}>　　　→ lookup 泛型 UserService 拿到 UserServiceImpl</Text>
+        <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.65 }}>　　　→ 【AOP】TransactionAspect（orm_transactionalFuncExecution 命中 register*）</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.65 }}>　　　→ orm execute：newTxAndBegin → beforeTx → executor().register(...)（SqlExecutor 即 UserDAO；INSERT_INTO 绑参执行）→ beforeCommit → commit → afterCommit → afterComplete(Committed)</Text>
+              </Box>
+    </Box>
+    <Box style={{ flexDirection: 'row', gap: 12, background: '#111C2E', borderRadius: 10, padding: 12 }}>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#38BDF8', width: 30 }}>③</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.6, flex: 1 }}>定时线程：TickTockTaskImpl 按 cron 触发（独立线程，与请求互不干扰）</Text>
+    </Box>
+    <Box style={{ flexDirection: 'row', gap: 12, background: '#111C2E', borderRadius: 10, padding: 12 }}>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#38BDF8', width: 30 }}>④</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.6, flex: 1 }}>旁路：f_util.UUID + f_random 给会话发密钥；f_http 的 MediaType 配合 f_data 做序列化；f_util 的 PathPattern 是 ② 里「路由匹配 + 抽路径变量」的引擎</Text>
+    </Box>
+    <Box style={{ flexDirection: 'row', gap: 12, background: 'rgba(245,158,11,0.07)', borderRadius: 10, border: '1px solid #F59E0B', padding: 12 }}>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#F59E0B', width: 30 }}>⑤</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.6, flex: 1 }}>底座：f_cache 存登录状态、f_pool 撑起数据库连接池、f_regex 缓存路径正则、f_time 解析所有 Duration 型配置；f_log 在 ② 的每一步上落日志（SQL 的 DEBUG、accessLog 的 INFO）；f_io 的 ByteBuffer 是报文与下载管道的字节缓冲；f_base 在进程退出时按权重依次收掉（先停服务、最后关数据库）</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>103 / 116</Text>
+  </Box>
+</Slide>

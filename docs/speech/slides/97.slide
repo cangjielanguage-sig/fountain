@@ -1,0 +1,69 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`写日志有三种写法，覆盖百分之九十九的场景。
+
+拿 logger 就一行：LoggerFactory.getLogger 泛型传类名，名字就是完整限定名；也可以传一个字面量起任意名字。
+
+写法一是惰性 lambda，最常用，推荐。关键在「惰性」：级别不够时这个 lambda 根本不会执行，所以里面的字符串拼接、toString、JSON 序列化全都省掉了。对比下面这个反例——字符串在调用点就拼好了，日志级别不符也白拼。
+
+但要补一个准确的说明：级别判断发生在后台消费线程上，所以 log.debug 在 DEBUG 关掉时仍然会有一次入队，队列满时这一入队同样会等。也就是说「零成本」省的是渲染，不是排队本身。
+
+写法二是模板占位。位置占位用两个大括号，按数组顺序填；具名占位用大括号加字段名，数据源可以是 @DataAssist 对象，也可以是 Map、ArrayList、TreeMap。底层就是第九章那个 TextTemplate，所以它能用 TextTemplate 的全部能力，比如时间格式化、路径取值。
+
+具名形态还有个额外好处：字段会过一次 LoggerConfig 的 filter，天生就能做脱敏。
+
+写法三是异常，把异常对象传进去，栈会一起写出去。有两种参数顺序：异常在前消息在后，或者消息在前异常在后。
+
+右边是级别选择的建议和占位符全表。注意两个实用规则：结尾会自动加换行，pattern 里别自己写换行符；时间格式串用的是仓颉 DateTime 的格式，该大小写敏感就大小写敏感。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 15 章 · 日志 f_log · 15.4</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>三种写法与占位符</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>其实就只有三种</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ width: 620, flexDirection: 'column', gap: 12 }}>
+      <Box style={{ height: 276, background: '#0B1220', borderRadius: 12, border: '1px solid #38BDF8', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#38BDF8', marginBottom: 6 }}>三种写法</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"private static let log = LoggerFactory.getLogger<UserServiceImpl>()   // 名字 = 完整限定名"}</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"LoggerFactory.getLogger('my.business')                           // 名字 = 你写的字面量"}</Text>
+        <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.65, marginTop: 8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"log.info{'start create user: ${name}'}      // ① 惰性 lambda（推荐）：级别不够不求值"}</Text>
+        <Text style={{ fontSize: 12, color: '#64748B', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"log.debug('args = ' + expensive())          // 反例：拼字符串的成本跑不掉"}</Text>
+        <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.65, marginTop: 8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"log.info('user {} login from {}', [name, ip])   // ② 位置占位"}</Text>
+        <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"log.info('user {name} is {age}', user)         // ② 具名占位（@DataAssist 对象 / Map）"}</Text>
+        <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.65, marginTop: 8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"log.error(e){'query user failed: ${id}'}     // ③ 异常（栈会一起写出去）"}</Text>
+        <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"log.error('query user failed', e)"}</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#E2E8F0' }}>该用哪个级别</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.75, marginTop: 8 }}>trace 只在本地调疑难杂症时开　·　debug 框架自己的 SQL 与 MVC.accessLog　·　info 业务关键节点（注册、下单、状态变更）</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.75, marginTop: 6 }}>warn 可恢复的异常（重试、降级、参数被纠正）　·　error 请求失败、依赖不可用（一定要带异常对象）　·　fatal 进程级不可继续</Text>
+        <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.75, marginTop: 'auto' }}>六个 enabled 属性（debugEnabled / infoEnabled…）是给极端热路径做前置判断用的 —— 在被调用次数极高的循环里能省掉那次入队。</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 18, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#E2E8F0' }}>占位符全表（pattern 里能写什么）</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, marginTop: 10 }}>%level　DEBUG / INFO / WARN / ERROR / FATAL / TRACE（纯文本，无颜色）</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, marginTop: 5 }}>%name　logger 名字 —— getLogger 泛型时是完整限定名，排查问题的第一线索</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, marginTop: 5 }}>%m　消息正文（若带了 attrs，会以 ;{"{"}k:v{"}"} 追加在消息后面）</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, marginTop: 5 }}>%d 加大括号写时间格式　时间（不带参数时默认 yyyy-MM-dd,HH:mm:ss.SSS）</Text>
+      <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, marginTop: 5 }}>%tid　线程 ID —— 在调用点采集（记录日志的那个线程）</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.7, marginTop: 5 }}>%tname　线程名 —— 在写出时采集（消费线程）；排查问题请用 %tid</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, marginTop: 5 }}>%pid　进程 ID（多副本部署时用来对号）</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, marginTop: 5 }}>%app / %appver　应用名 / 应用版本（来自应用自己的 cjpm.toml，由 fboot build 注入）</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, marginTop: 5 }}>%fver　fountain(1.3.7) 框架版本</Text>
+      <Text style={{ fontSize: 12, color: '#64748B', lineHeight: 1.7, marginTop: 5 }}>其它 %x　原样输出（不认识的占位符不会报错）</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.7, marginTop: 'auto' }}>两条实用规则：结尾会自动加换行，pattern 里别自己写 \n；%d 里用的是仓颉 DateTime.format 的格式串，大小写敏感。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>97 / 116</Text>
+  </Box>
+</Slide>

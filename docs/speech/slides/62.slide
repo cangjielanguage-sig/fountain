@@ -1,0 +1,64 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`第十章 MVC。
+
+先看声明 controller 的最小写法：@Controller 加一个 @GetMapping。看这行 GetMapping 的三个属性：path 是 /helloworld，produces 是 text/plain，consumes 是表单。函数上还有一个 @IgnoreSecurity。
+
+三条规则要记住。第一，只有被星号 Mapping 注解修饰的公共实例函数才会注册到 MVC。第二，@Controller 同时展开 @Bean，所以 controller 天然是 IOC bean，可以直接 lookup。第三，需要织入切面时改用 @WeavedController，CurrentUserController 就是例子。
+
+Mapping 家族有五个：GetMapping、PostMapping、PutMapping、DeleteMapping、PatchMapping。
+
+公共参数有七个：path、produces、consumes、params、headers，另外还有 ignoreAuth 和 ignorePrivilege。
+
+path 支持大括号路径参数，produces 和 consumes 可以用竖线分隔多种格式，默认是 application/json。
+
+注意 @IgnoreSecurity 的语义：它等于 @IgnoreAuth 加 @IgnorePrivilege，两个都忽略。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 10 章 · MVC f_mvc · 10.1</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>声明 Controller 与 Mapping 家族</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>@Controller = 路由注册 + @Bean 展开</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>import fountain::f_mvc.*</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>import fountain::f_mvc.macros.*</Text>
+      <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.7, marginTop: 10, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"@Controller          // = 路由注册 + @Bean 展开"}</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public class HellowordController {"}</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    private let helloworldService = lookup<HelloworldService>()"}</Text>
+      <Text style={{ fontSize: 13, color: '#F59E0B', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{'    @GetMapping[path:"/helloworld", produces:\'text/plain\','}</Text>
+      <Text style={{ fontSize: 13, color: '#F59E0B', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{'               consumes:\'application/x-www-form-urlencoded\']'}</Text>
+      <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    @IgnoreSecurity   // = @IgnoreAuth + @IgnorePrivilege"}</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    public func helloworld(): String {"}</Text>
+      <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        helloworldService.sayHello('haha')"}</Text>
+      <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{'        return "helloworld"'}</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    }"}</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"}"}</Text>
+    </Box>
+
+    <Box style={{ flex: 1, flexDirection: 'column', gap: 14 }}>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 20, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#38BDF8' }}>三条规则</Text>
+        <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.7, marginTop: 10 }}>1　只有被 *Mapping 注解修饰的公共实例函数才会注册到 MVC</Text>
+        <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.7, marginTop: 8 }}>2　@Controller 同时展开 @Bean —— controller 天然是 IOC bean，可直接 lookup</Text>
+        <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.7, marginTop: 8 }}>3　需要织入切面时改用 @WeavedController（CurrentUserController 就是例子）</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#E2E8F0' }}>Mapping 家族与公共参数</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 10 }}>@GetMapping　@PostMapping　@PutMapping　@DeleteMapping　@PatchMapping</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 10 }}>公共参数：path　produces　consumes　params　headers</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 6 }}>另有 ignoreAuth　ignorePrivilege</Text>
+        <Text style={{ fontSize: 14, color: '#64748B', lineHeight: 1.7, marginTop: 'auto' }}>path 支持大括号路径参数：/api/user/{"{id}"}；produces / consumes 可用 | 分隔多种格式，默认 application/json。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>62 / 116</Text>
+  </Box>
+</Slide>

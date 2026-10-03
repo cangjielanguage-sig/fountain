@@ -1,0 +1,61 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`自定义数据格式，fdemo 里有个现成的例子：LogMediaType。
+
+看右边这段代码：类上加 @Bean，继承 MediaType，构造器里 super 指定格式名 application/json+log。然后实现五个东西：make 用来基于当前实例创建同格式的新实例；toString 输出格式名；两个 fromData 重载，data 版本和 JsonValue 版本，做响应方向的对象到字节；两个 toData 重载，做请求方向的字节或字符串到 Data。另外 == 和 hashCode 也必须实现。
+
+它的效果是：所有走这个 Content-Type 的请求都会先落一条日志。
+
+这里有一个非常值得强调的设计：只要把 MediaType 的实现注册成 @Bean，consumes 和 produces 就可以直接写你的自定义类型。这就是「协议扩展点」——不用改框架，加个 bean 就多一种数据格式。
+
+下一章会把 MediaType 这套机制完整展开，因为它是 f_http 提供的，只是被 f_mvc 直接 public import 了出来。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 10 章 · MVC f_mvc · 10.9</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>自定义数据格式（MediaType）</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fdemo/boot/src/LogMediaType.cj</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 18, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>@Bean</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public class LogTextMediaType <: MediaType {"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    public init() { super('application/json+log') }"}</Text>
+      <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    public func make(mediaType: String): MediaType { this }"}</Text>
+      <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    public func toString() { mediaType }"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    public operator func ==(other: MediaType) { ... }    // 必须实现"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    public func hashCode(): Int64 { ... }                // 必须实现"}</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.6, marginTop: 8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    public func fromData(data: Data): Array<Byte> { fromData(JsonValue.from(data)) }"}</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    public func fromData(data: JsonValue): Array<Byte> {"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        let json = data.toString()"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        log.info{'fromData:${json}'}"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        json.unsafeBytes()"}</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    }"}</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    public func toData(data: Array<Byte>): Data { toData(String.fromUtf8(data)) }"}</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    public func toData(data: String): Data { JsonValue.fromStr(data).toData() }"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"}"}</Text>
+    </Box>
+
+    <Box style={{ width: 420, flexDirection: 'column', gap: 14 }}>
+      <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 20, flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#38BDF8' }}>协议扩展点</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.75, marginTop: 12 }}>只要把 MediaType 的实现注册成 @Bean，consumes 和 produces 就可以直接写你的自定义类型。</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.75, marginTop: 10 }}>不用改框架，加个 bean 就多一种数据格式。</Text>
+        <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.75, marginTop: 'auto' }}>所有走 application/json+log 的请求都会先落一条日志。</Text>
+      </Box>
+      <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#E2E8F0' }}>必须实现的六件</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.7, marginTop: 8 }}>super(格式名)　make　toString　==　hashCode　fromData + toData</Text>
+        <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.7, marginTop: 8 }}>漏一件就会编译不过或匹配不上（下一章展开完整清单）。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>69 / 116</Text>
+  </Box>
+</Slide>

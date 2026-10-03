@@ -1,0 +1,90 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`这是本章的高潮，也是 fboot randhex 的用武之地。
+
+数据库密码、第三方密钥这类东西，不适合出现在运行环境的环境变量里。f_config 的做法是：编译期在编译机上读取环境变量，用 SM4 加密后作为字节数组嵌入编译产物；进程启动时注册到独立的 sensitiveMap，再用常规的 getString 读取。
+
+三种情况：没配 SM4，嵌入的是 UTF8 明文字节数组；配了 SM4，嵌入的是密文，同时把 SM4 的参数一并嵌入，供运行期解密；运行期同名配置优先级更高，可以被覆盖。
+
+SM4 有六个配置项。工作模式默认 CBC，支持 CBC、CFB、CTR、GCM、OFB——ECB 不安全，明确不支持。填充模式默认 PKCS7Padding。密钥必须配置，是十六字节，也就是长度三十二的十六进制串，用 fboot randhex 32 生成。初始向量配了 key 就必须配：CBC、OFB、CFB 要十六字节，GCM 要十二字节，所以 GCM 用 fboot randhex 24。还有附加认证数据和 GCM 的 tag 长度。
+
+最后两点讲出来比藏着好。第一，SM4 的参数本身，包括密钥，也会以字节数组形式出现在编译产物里。这个机制抬高的是「直接从二进制里 grep 出配置」的门槛，不能替代密钥管理服务。第二，每次解密都会重新构造一次 SM4 实例，敏感配置多或者读取频繁时建议自己缓存结果。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 4 章 · 配置 f_config · 4.5</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>敏感配置与 SM4 加密</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>本章高潮</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 16 }}>
+    <Box style={{ height: 348, flexDirection: 'row', gap: 16 }}>
+      <Box style={{ width: 450, background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 22, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#38BDF8' }}>敏感值怎么走</Text>
+        <Box style={{ marginTop: 12, flexDirection: 'column', gap: 6 }}>
+          <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.6 }}>1　编译期在编译机上读取环境变量</Text>
+          <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.6 }}>2　用 SM4 加密</Text>
+          <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.6 }}>3　作为字节数组嵌入编译产物</Text>
+          <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.6 }}>4　进程启动时注册到独立的 sensitiveMap</Text>
+          <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.6 }}>5　再用常规 getString 读取</Text>
+        </Box>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 12 }}>未配 SM4 → 嵌入 UTF8 明文；配了 SM4 → 嵌入密文，SM4 参数一并嵌入供运行期解密。</Text>
+        <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.7, marginTop: 'auto' }}>运行期同名配置优先级更高，可以被覆盖。</Text>
+      </Box>
+
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#E2E8F0' }}>SM4 配置项</Text>
+        <Box style={{ marginTop: 12, flexDirection: 'column', gap: 8 }}>
+          <Box style={{ flexDirection: 'row', gap: 10 }}>
+            <Text style={{ fontSize: 13, color: '#22D3EE', width: 120, fontFamily: '"JetBrains Mono", Consolas, monospace' }}>sm4Operation</Text>
+            <Text style={{ fontSize: 13, color: '#94A3B8', width: 106 }}>默认 CBC</Text>
+            <Text style={{ fontSize: 13, color: '#94A3B8', flex: 1, lineHeight: 1.5 }}>CBC CFB CTR GCM OFB（ECB 不支持）</Text>
+          </Box>
+          <Box style={{ flexDirection: 'row', gap: 10 }}>
+            <Text style={{ fontSize: 13, color: '#22D3EE', width: 120, fontFamily: '"JetBrains Mono", Consolas, monospace' }}>sm4Padding</Text>
+            <Text style={{ fontSize: 13, color: '#94A3B8', width: 106 }}>默认 PKCS7</Text>
+            <Text style={{ fontSize: 13, color: '#94A3B8', flex: 1 }}>NoPadding / PKCS7Padding</Text>
+          </Box>
+          <Box style={{ flexDirection: 'row', gap: 10 }}>
+            <Text style={{ fontSize: 13, color: '#F59E0B', width: 120, fontFamily: '"JetBrains Mono", Consolas, monospace' }}>sm4Key</Text>
+            <Text style={{ fontSize: 13, color: '#F59E0B', width: 106 }}>必须配置</Text>
+            <Text style={{ fontSize: 13, color: '#94A3B8', flex: 1 }}>16 字节 = 长度 32 的 16 进制串</Text>
+          </Box>
+          <Box style={{ flexDirection: 'row', gap: 10 }}>
+            <Text style={{ fontSize: 13, color: '#22D3EE', width: 120, fontFamily: '"JetBrains Mono", Consolas, monospace' }}>sm4Iv</Text>
+            <Text style={{ fontSize: 13, color: '#94A3B8', width: 106 }}>配 key 就要配</Text>
+            <Text style={{ fontSize: 13, color: '#94A3B8', flex: 1, lineHeight: 1.5 }}>CBC/OFB/CFB 要 16 字节，GCM 要 12</Text>
+          </Box>
+          <Box style={{ flexDirection: 'row', gap: 10 }}>
+            <Text style={{ fontSize: 13, color: '#22D3EE', width: 120, fontFamily: '"JetBrains Mono", Consolas, monospace' }}>sm4Aad</Text>
+            <Text style={{ fontSize: 13, color: '#94A3B8', width: 106 }}>空字节数组</Text>
+            <Text style={{ fontSize: 13, color: '#94A3B8', flex: 1 }}>16 进制串</Text>
+          </Box>
+          <Box style={{ flexDirection: 'row', gap: 10 }}>
+            <Text style={{ fontSize: 13, color: '#22D3EE', width: 120, fontFamily: '"JetBrains Mono", Consolas, monospace' }}>sm4TagSize</Text>
+            <Text style={{ fontSize: 13, color: '#94A3B8', width: 106 }}>默认 16</Text>
+            <Text style={{ fontSize: 13, color: '#94A3B8', flex: 1 }}>Int64 字符串</Text>
+          </Box>
+        </Box>
+        <Box style={{ background: '#0B1220', borderRadius: 8, border: '1px solid #1E293B', padding: 12, marginTop: 'auto' }}>
+          <Text style={{ fontSize: 13, color: '#22D3EE', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>
+            <>export sm4Key=$(fboot randhex 32)<br />export sm4Iv=$(fboot randhex 32)　# GCM 用 24</>
+          </Text>
+        </Box>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, background: 'rgba(245,158,11,0.07)', borderRadius: 12, border: '1px solid #F59E0B', padding: 20, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#F59E0B' }}>两点讲出来比藏着好</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.7, marginTop: 8 }}>① SM4 参数本身（含密钥）也会以字节数组形式出现在编译产物里 —— 抬高的是「直接从二进制 grep 出配置」的门槛，不能替代密钥管理服务。</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.7, marginTop: 6 }}>② 每次解密都会重新构造一次 SM4 实例，敏感配置多或读取频繁时建议自己缓存结果。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>28 / 116</Text>
+  </Box>
+</Slide>
