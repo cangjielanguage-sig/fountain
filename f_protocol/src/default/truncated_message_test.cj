@@ -242,4 +242,14 @@ public class Truncated_message_test {
         @Assert(crcOf(bytes) == frameCrc(bytes[0..bytes.size - 4]))
         @Assert(decodeThrows(bytes, bytes.size) == false)
     }
+
+    /**
+     * 帧 CRC 的类型实证：标准检查值 CRC-32("123456789") = 0xCBF43926
+     * （IEEE 802.3 / zlib：反射多项式 0xEDB88320、初值 0xFFFFFFFF、末尾异或 0xFFFFFFFF）。
+     */
+    @TestCase
+    public func frameCrcIsStandardCrc32(): Unit {
+        @Assert(frameCrc('123456789'.unsafeBytes()) == 0xCBF43926u32)
+        @Assert(frameCrc(Array<Byte>()) == 0u32)
+    }
 }
