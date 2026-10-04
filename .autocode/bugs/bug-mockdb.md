@@ -240,4 +240,4 @@ cjpm test --no-capture-output        # 基线 30/30
 - 方法：f_mockdb 全部 13 个 `.cj`（10 生产 + 3 用例）逐行通读；每条结论给 `文件:行号`；「严重 / 中」全部做了**实测**（探针）或**契约取证**（std 本地文档 `cangjie_runtime/std/doc/libs/std/database_sql`，逐条比对 `ColumnInfo`/`Connection`/`QueryResult`/`DriverManager`/`ConnectionState`）；编译器警告取自基线构建 errlog（外部证据）。
 - 调用面（决定影响范围）：①仓内唯一直接使用者 `f_orm/src/wrap/DatabasePool_test.cj`（`MOCKDB.execution` + `DriverManager.getDriver('mockdb')`）；②`f_orm` 的 `MockdbDialect` / `ORM.register()` 支持把 `mockdb` 配成运行期驱动（也可用于非用例场景）；③门面包 `src/mockdb/mockdb.cj` 只 `public import`（`internal` 的 `clear()` 不会带出去）。
 - 本模块是**测试替身**，所以「与真实驱动契约一致」是它的核心质量指标：本次 3 条严重里有 2 条（`MOCK-1`/`MOCK-3`）属于「mock 与真驱动行为不同且不报错」，会直接让上层 ORM 用例得出不可迁移的结论。
-- 本次审查**只读**，未改动 f_mockdb 任何代码；报告落在本分支 `.autocode/bug-mockdb.md`。探针文件与临时脚本已删除（`/tmp` 日志保留作证据）。
+- 本次审查**只读**，未改动 f_mockdb 任何代码；报告落在本分支 `.autocode/bugs/bug-mockdb.md`（与 `bug.md` 同目录）。探针文件与临时脚本已删除（`/tmp` 日志保留作证据）。
