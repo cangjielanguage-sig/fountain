@@ -119,7 +119,7 @@ public class MockDBCoreTest {
     }
 
     @TestCase
-    public func testGetOrNullReturnsNone(): Unit {
+    public func testGetOrNullOutOfRangeThrows(): Unit {
         MOCKDB.clear()
         MOCKDB.execution = {_: String, _: ArrayList<Any> =>
             MOCKDB.addQueryResultColumnInfo(name: 'val', nullable: true, typeName: 'SqlVarchar')
@@ -129,9 +129,75 @@ public class MockDBCoreTest {
         let stmt = conn.prepareStatement('SELECT val FROM t')
         let rs = stmt.query()
         @Assert(true, rs.next())
-        // getOrNull with wrong index returns None
-        let r = rs.getOrNull<String>(99)
-        @Assert(true, r.isNone())
+        //按 std 契约：索引超出列范围抛 SqlException（修复前返回 None）
+        try {
+            let _ = rs.getOrNull<String>(99)
+            @Assert(false)
+        } catch (e: SqlException) {
+            @Assert(true)
+        }
+        try {
+            let _ = rs.getOrNull<String>(-1)
+            @Assert(false)
+        } catch (e: SqlException) {
+            @Assert(true)
+        }
+    }
+
+    @TestCase
+    public func testGetOrNullBeforeNextThrows(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'val', nullable: false, typeName: 'SqlInteger')
+            MOCKDB.addQueryResultRow([1])
+        }
+        let conn = MockConnection()
+        let stmt = conn.prepareStatement('SELECT val FROM t')
+        let rs = stmt.query()
+        //还没调用 next()：行数据未准备好 ⇒ 按 std 契约抛 SqlException（修复前返回 None）
+        try {
+            let _ = rs.getOrNull<Int64>(0)
+            @Assert(false)
+        } catch (e: SqlException) {
+            @Assert(true)
+        }
+    }
+
+    @TestCase
+    public func testGetOrNullTypeMismatchThrows(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'val', nullable: false, typeName: 'SqlInteger')
+            MOCKDB.addQueryResultRow([1])
+        }
+        let conn = MockConnection()
+        let stmt = conn.prepareStatement('SELECT val FROM t')
+        let rs = stmt.query()
+        @Assert(true, rs.next())
+        //列值是 Int64，却按 String 取：这不是 SQL NULL，应抛异常而不是静默 None（修复前返回 None）
+        try {
+            let _ = rs.getOrNull<String>(0)
+            @Assert(false)
+        } catch (e: SqlException) {
+            @Assert(true)
+        }
+    }
+
+    @TestCase
+    public func testGetOrNullNullValueReturnsNone(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'val', nullable: true, typeName: 'SqlInteger')
+            let nullRow = ArrayList<Any>()
+            nullRow.add(None<Any>)
+            MOCKDB.addQueryResultRow(nullRow.toArray())
+        }
+        let conn = MockConnection()
+        let stmt = conn.prepareStatement('SELECT val FROM t')
+        let rs = stmt.query()
+        @Assert(true, rs.next())
+        //真正的 SQL NULL 仍返回 None —— None 的唯一含义
+        @Assert(true, rs.getOrNull<Int64>(0).isNone())
     }
 
     @TestCase

@@ -14,13 +14,13 @@
 | 中 | 5 |
 | 低危 / 待验证 | 9 |
 
-> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2` 已修复 ⇒ 待修严重级 **1** 条（见各自修复标记）。
+> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3` 已修复 ⇒ 待修严重级 **0** 条（见各自修复标记）。
 
 **建议修复顺序**：
 
 1. `MOCK-1`（§1.1）查询结果行不按「一次执行」清理 —— 事务内第二条语句读到第一条的行（静默错数据，实测复现）　**✅已修复（2026-10-04，见 §1.1 修复标记）**
 2. `MOCK-2`（§1.2）`MockUpdateResult` 惰性读全局 —— 两个 update 结果互相串（实测复现）　**✅已修复（2026-10-04，见 §1.2 修复标记）**
-3. `MOCK-3`（§1.3）`getOrNull` 越界/未就绪返回 None（std 契约要求抛 `SqlException`），类型不匹配也静默 None
+3. `MOCK-3`（§1.3）`getOrNull` 越界/未就绪返回 None（std 契约要求抛 `SqlException`），类型不匹配也静默 None　**✅已修复（2026-10-04，见 §1.3 修复标记）**
 4. `MOCK-4`（§2.1）`close()` 后 `isClosed()` 仍为 false、`state` 仍为 `Connected`（实测复现）
 5. `MOCK-5`（§2.2）`MockConnection.close()` 隐式清空夹具，且是外部唯一可用的重置入口
 6. `MOCK-7`（§2.4）参数槽语义：跨执行累积、`None<Any>` 兼作「未绑定」与「绑定 NULL」
@@ -89,7 +89,15 @@ PROBE_UR2_ROWCOUNT=22
 
 DT：两次 update 分别设 11 / 22，断言两个返回值各为 11 / 22（现有 `testUpdateResult`/`testDeleteUpdateResult` 都是「设完立刻读」，拦不住）。
 
-### 1.3 [严重｜正确性] `MOCK-3` `getOrNull` 偏离 std 契约：越界/行未就绪应抛 `SqlException`，实测静默返回 None；类型不匹配也静默 None（f_mockdb）
+### 1.3 [严重｜正确性] `MOCK-3` `getOrNull` 偏离 std 契约：越界/行未就绪应抛 `SqlException`，实测静默返回 None；类型不匹配也静默 None（f_mockdb） → ✅已修复（2026-10-04）
+
+**✅ 修复标记（2026-10-04）**：分支 `fix/mock-1-query-isolation`（同一 worktree，在 MOCK-2 之后追加提交），**代码、用例、本标记在同一提交**。
+
+- 改动：`src/QueryResult.cj` 的 `getOrNull<T>` 按 std 契约分三种情况 —— ①行未就绪（`rowIndex < 0 || rowIndex >= rowData.size`）⇒ `throw SqlException('row data is not ready, invoke next() before reading column N')`；②列越界（`index < 0 || index >= row.size`）⇒ `throw SqlException('column index N is out of range, the current row has M columns')`；③值既不是 `T` 也不是 SQL NULL ⇒ `throw SqlException('value of column N is <实际类型>, which does not match <T>')`（用 `TypeInfo.of` 打印两侧类型）；④真正的 SQL NULL（槽里是 `None<Any>`）仍返回 `None`。
+- 用例：改造 1 条 + 新增 3 条 —— 旧用例 `testGetOrNullReturnsNone`（把「越界返回 None」当期望）改名为 `testGetOrNullOutOfRangeThrows`，断言越界（含 `-1`）抛 `SqlException`；新增 `testGetOrNullBeforeNextThrows`（未 `next()` 抛）、`testGetOrNullTypeMismatchThrows`（`Int64` 列按 `String` 取抛）、`testGetOrNullNullValueReturnsNone`（真 NULL 仍返回 None 的回归护栏）。
+- 测量证据：**修复前** PASSED 35 / **FAILED 3**（EXIT=1）：`testGetOrNullOutOfRangeThrows`、`testGetOrNullBeforeNextThrows`、`testGetOrNullTypeMismatchThrows` 三条都在「应当抛异常」处走到 `@Assert(false)`（`getOrNull` 静默返回 None）；**修复后** = **38/38 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**，编译警告 9 条与修复前逐条一致（未新增）。日志 `/tmp/mock3_before.log`、`/tmp/mock3_after.log`。
+- 保留行为（有意）：`get<T>` 仍是 `getOrNull<T>(index).getOrThrow()` ⇒ 真 SQL NULL 时抛 `NoneValueException`（值确实是 null，属仓颉语义）；越界与类型不符改走 `SqlException`，与真驱动一致。
+- 影响面核查：`f_orm/src/wrap/QueryResultWrap.cj:46-50` 自己先判 `columns.size <= index` 就返回 `None`，不依赖 mock 的越界行为；`DatabasePool_test` 的夹具 `typeName='SqlBigInt'` 配 `[1]`（Int64）类型一致 ⇒ 本次改动只影响**直接使用 mock 驱动**的用例（本模块 38 条 + 将来的直连用例）。
 
 位置：`src/QueryResult.cj:37-52`（`get<T>` = `getOrNull<T>(index).getOrThrow()`；`getOrNull` 对「行未就绪 / 列越界 / 类型不符」一律 `None`）
 
