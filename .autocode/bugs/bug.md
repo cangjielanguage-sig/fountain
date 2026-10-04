@@ -17,11 +17,13 @@
 | 低 / 待验证 | 14 | 13 | 9 | 8 | 0 | **44** |
 | 合计 | 24 | 25 | 14 | 17 | 2 | **82** |
 
+> 计数修正（2026-10-04）：§1.3 `ASP-1` 判定为**误判**（设计目的，非缺陷）⇒ 待修严重级 **13** 条（f_aspect 严重 4 条）；上表保留审查当时的原始计数。
+
 **建议修复顺序**（即严重级内部的落地顺序）：
 
 1. `ORM-1`（§1.1）结果缓存键退化 —— 事务内可能返回**别的参数**的查询结果（静默错数据）
-2. `X-1`（§1.2）`TypeInfos.get(String)` 无限递归 —— 波及 14 处调用（f_bean 条件装配、f_aspect 三条规则、f_orm 一处）
-3. `ASP-1`/`ASP-2`（§1.3/§1.4）切面链绑定首次调用的接收者、共享参数槽 —— 错误对象上执行方法体、并发下参数互串
+2. `X-1`（§1.2）`TypeInfos.get(String)` 无限递归 —— 波及 14 处调用（f_bean 条件装配、f_aspect 三条规则、f_orm 一处）　**✅已修复（2026-10-04，见 §1.2 修复标记）**
+3. `ASP-2`（§1.4）切面链共享参数槽 —— 并发下参数互串（原先并列的 `ASP-1`/§1.3 已于 2026-10-04 判定为**误判**：链按类型缓存、链尾固化首次 `callee` 是设计目的，非缺陷）
 4. `ORM-C1`（§1.5）`iterator` 返回前结果集已被关闭 —— 真实驱动下不可用
 5. `ASP-4`/`ASP-5`（§1.6/§1.7）参数注解规则越界崩溃 / 恒不织入
 6. `BEAN-1`（§1.8）宏生成不存在的 `lookupSet` —— `HashSet`/`Set` 形参直接编译失败
@@ -97,7 +99,14 @@
 - **删声明 + 调用点换成 `this.args = SqlArgs()` ✓ 就是正解**（见上面第 1 条）。`SqlArgs` 全仓只被 `SqlCacheKey` 与 `SqlExecutor` 持有 ⇒ 换实例不影响别处；`add` 的序号从 0 重新开始 ⇒ 绑定正确；不累积。
 - **自我修正**：我先前写过「`clearArgsAfterExec: false` 的保留路径仍会误命中、必须靠 key 持快照才能关掉」——**这个判断不成立**。它默认了保留窗口内还能替换参数，而替换的唯一入口就是 `clear()`；删掉它之后，保留窗口内的内容只能追加，有效参数不会变，因此命中旧结果不构成错数据。快照因此从「必需」降级为「可选（命中率）」。
 
-### 1.2 [严重｜正确性] `X-1` `f_base.TypeInfos.get(String)` 无限递归（跨模块）✓已复核
+### 1.2 [严重｜正确性] `X-1` `f_base.TypeInfos.get(String)` 无限递归（跨模块）✓已复核 → ✅已修复（2026-10-04）
+
+**✅ 修复标记（2026-10-04）**：分支 `fix/x-1-typeinfos-get`（worktree `.worktrees/x-1-typeinfos-get`，基线 `8be67951`），代码、用例、本标记在**同一提交**（提交信息 `fix(f_base): X-1 TypeInfos.get(String) 改查 std.reflect 注册表，无限递归→InfoNotFoundException`）。
+
+- 改动：`f_base/src/TypeInfos.cj:47` 的 `TypeInfos.get(qualifiedName)` → `TypeInfo.get(qualifiedName)`（按名称查 std.reflect 类型注册表；未注册类型由 `TypeInfo.get` 抛 `InfoNotFoundException`）。`INFOS` 缓存与双检锁保留不变。
+- 用例：`f_base/src/TypeInfos_test.cj` → `TypeInfos_test.testGetByQualifiedName`（已注册全限定名返回正确 `TypeInfo`）、`TypeInfos_test.testGetUnregisteredThrows`（未注册名抛 `InfoNotFoundException`，不再递归）。
+- 测量证据：**修前基线** `cjpm test --filter TypeInfos_test` 卡在 `testGetByQualifiedName`（0/2 用例，2:33 未返回），worker 进程 `f_base@fountain` 101% CPU、`VmRSS 1374372 kB`（`VmSize 2365304 kB`）、CPU 时间 2:49，无任何异常/栈溢出输出，手工 `kill` 终止 ⇒ 无限递归（持锁、吃内存）**不是**可恢复的失败。**修后** `cjpm test --filter TypeInfos_test` = `PASSED: 2, FAILED: 0, ERROR: 0`；`f_base` 全量 `cjpm test` = `PASSED: 3, FAILED: 0, ERROR: 0`（含既有 `Comparator_test.test`），两次都 `cjpm test success`（EXIT=0）。
+- 未覆盖：14 处调用方（f_aspect 三条规则 / f_bean 条件装配 / f_orm 回滚规则）只做了同一 API 的直连验证，未逐个跑其端到端用例（f_aspect/f_bean 测试编译耗时长，留给对应条目修复时一并验证）。
 
 位置：`f_base/src/TypeInfos.cj:37-51`
 
@@ -120,7 +129,19 @@ public static func get(qualifiedName: String): TypeInfo {
 
 修法：该分支应改为「按名称构造 `TypeInfo`」的实现（例如从 `qualifiedName` 解析包名/类型名后查 `TypeInfo` 注册表，或抛明确的「未注册类型」异常），绝不能回调自身；修完补一条 `TypeInfos.get("a.b.C")` 的单测（断言不递归、返回值或异常符合约定）。
 
-### 1.3 [严重｜正确性+内存] `ASP-1` 拦截器链把「首次调用的 `fn`」永久烧进静态缓存（f_aspect）✓已复核
+### 1.3 [误判｜非缺陷] `ASP-1` 拦截器链把「首次调用的 `fn`」永久烧进静态缓存（f_aspect）✓已复核 → ❌误判（2026-10-04：设计目的，非缺陷）
+
+**❌ 误判标记（2026-10-04）**：判定为**误判**，非缺陷（理由见下方判定）。分支 `docs/asp-1-design-note`（worktree `.worktrees/asp-1-design-note`，基线 `8be67951`），**代码注释与本标记在同一提交**：`31c023bf docs(f_aspect): 补切面链缓存的设计说明注释；bug.md §1.3 ASP-1 判定为误判`；该分支已并入 `sts/1.3.x`（合并提交 `b1a706ad`）。代码侧设计说明见 `f_aspect/src/Aspects.cj:25-33`（`aspects` 声明处）与 `f_aspect/src/Aspects.cj:44`（链尾 `{args => fn(args)}` 处）。收尾时 worktree 与分支已按约定删除（分支 was `31c023bf`）。
+
+**判定（2026-10-04）：误判，非缺陷。** 链按「(类型, 函数)」**只在切点函数首次被调用时构建一次、之后一直复用**，以及由此产生的「链尾固化首次调用传入的 `callee`（含该次调用的接收者）」，两者都是**刻意的设计**：
+
+- 为什么只建一次：建链要遍历 IoC 中全部 `Aspect` bean 并逐条做织入规则匹配（`Aspects.cj:36-56`），成本高，而匹配结果只取决于切点函数的签名（类型 + 函数），与实例无关 ⇒ 只算一次；
+- 织入的粒度是「**类型**」而不是「实例」：同一类型的多个实例共享同一条链，不按实例建链（`f_aspect/README.md`：「织入逻辑会在这些函数首次调用时执行」）；
+- 使用前提：被织入的对象必须是 **IoC 管理的 bean**（`singleton` 或 `prototype` 均可），手工 `new` 出来的实例不在支持范围内。
+
+本条目不再进入修复队列（§0 建议修复顺序第 3 条已同步去列）。
+
+**以下为审查时的原始判断与证据（已作废，留档对照）**：
 
 位置：`src/Aspects.cj:25-46`（配合 `macros/PointCut.cj:109-118`）
 
@@ -131,7 +152,7 @@ public static func get(qualifiedName: String): TypeInfo {
 // PointCut.cj:111-113  func callee(args: Array<Any>){ $argVars; $(decl.block.nodes) }   // 在被织入函数体内 ⇒ 捕获 this
 ```
 
-影响：链按 (TypeInfo, InstanceFunctionInfo) 只建一次，链尾永远是最早那次调用的 `callee`；`callee` 定义在原方法体内（宏展开见 `PointCut.cj:109-118`）⇒ 捕获首个接收者 `this` ⇒ **prototype / 手工 `new` 的实例上会在错误对象上执行方法体**；同时该实例被静态 map 永久引用（无法回收）。修法：链里只保存切面名列表，把 `fn`（与 args）作为参数逐次传入。
+影响：链按 (TypeInfo, InstanceFunctionInfo) 只建一次，链尾永远是最早那次调用的 `callee`；`callee` 定义在原方法体内（宏展开见 `PointCut.cj:109-118`）⇒ 捕获首个接收者 `this` ⇒ **prototype / 手工 `new` 的实例上会在错误对象上执行方法体**；同时该实例被静态 map 永久引用（无法回收）。修法：链里只保存切面名列表，把 `fn`（与 args）作为参数逐次传入。（原始提案，已作废——见上方判定：按类型建链、固化首次 `callee` 即为设计目的。）
 
 ### 1.4 [严重｜正确性] `ASP-2` 缓存的 `InvocationFuncInfo` 每调用被改写参数，并发下互相覆盖（f_aspect）✓已复核
 
@@ -315,7 +336,7 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 
 ### 2.9 [中｜内存] `ASP-8` 切面链缓存只增不减、无失效接口（f_aspect）
 
-`src/Aspects.cj:25`（全文无 `remove/clear`）：若某织入函数在切面 bean 注册完成前被调用过一次，**空链会被永久固化**（切面静默失效）；条目上界是织入函数数，但每条经 `ASP-1` 持有首个接收者。修法：暴露 `clear()/refresh()`，并在 bean 注册变更时清理。
+`src/Aspects.cj:25`（全文无 `remove/clear`）：若某织入函数在切面 bean 注册完成前被调用过一次，**空链会被永久固化**（切面静默失效）；条目上界是织入函数数，但每条会持有首次调用传入的原函数体（`ASP-1` 的设计如此，非缺陷）。修法：暴露 `clear()/refresh()`，并在 bean 注册变更时清理。
 
 ### 2.10 [中｜性能] `ORM-3` 每条非事务 SQL 的 `close()` 都全量清扫脏字段注册表（f_orm）
 
