@@ -44,17 +44,33 @@ public class DefaultCodec <: Codec & Releasable {
     private static let TEN_POW_NINE = BigInt(10 ** 9)
     private static let typeMurmurHashs = ConcurrentHashMap<TypeInfo, UInt128>()
     private static let typeMurmurCreators = ConcurrentHashMap<UInt128, () -> SimpleDataObject>()
-    private static var byteListOutputBuilder = BytesListOutputStream.builder(initSize: 1024, minSize: 1024, maxSize: 1024)
+    // 取池项的等待上限是**池初始化参数**（bug.md 7.6）：池耗尽超过它就 WARN 并返回 None，由调用方失败可见。
+    // 需要"无限等待"的部署把它设成 Duration.Max（实现仍每轮让出 CPU）。
+    private static var byteListOutputBuilder = BytesListOutputStream.builder(
+        initSize: 1024, minSize: 1024, maxSize: 1024, maxWaiting: Duration.second * 30)
     private static var fileThreshold = 4096
-    private static var bytesPool = ArrayPool<Byte>(initSize: 0, minSize: 1, maxSize: 1024, arraySize: 4096)
+    private static var bytesPool = ArrayPool<Byte>(
+        initSize: 0, minSize: 1, maxSize: 1024, arraySize: 4096, maxWaiting: Duration.second * 30)
     private var size = 0
     private let inputs = ArrayList<BytesCopyTo>()
 
     public static func setBytesPool(output: BytesListOutputStreamBuilder): Unit {
         byteListOutputBuilder = output
     }
-    public static func setBytesPool(initSize!: Int64 = 0, minSize!: Int64 = 1, maxSize!: Int64 = 1024, arraySize!: Int64 = 4096): Unit {
-        bytesPool = ArrayPool<Byte>(initSize: initSize, minSize: minSize, maxSize: maxSize, arraySize: arraySize)
+    /**
+     * 按参数重建「编码缓冲池」（`byteListOutputBuilder` 内部的 ArrayListPool），
+     * 与下面 `setBytesPool(initSize:…)` 对称 —— 两者的参数都带默认值（默认值与包初始化时用的值一致）。
+     * 不要求调用方 import f_pool（f_rpc 就是这样按配置初始化的，见 bug.md 7.6）。
+     */
+    public static func setBufferPool(initSize!: Int64 = 1024, minSize!: Int64 = 1024, maxSize!: Int64 = 1024,
+        maxWaiting!: Duration = Duration.second * 30): Unit {
+        byteListOutputBuilder = BytesListOutputStream.builder(
+            initSize: initSize, minSize: minSize, maxSize: maxSize, maxWaiting: maxWaiting)
+    }
+    public static func setBytesPool(initSize!: Int64 = 0, minSize!: Int64 = 1, maxSize!: Int64 = 1024, arraySize!: Int64 = 4096,
+        maxWaiting!: Duration = Duration.second * 30): Unit {
+        bytesPool = ArrayPool<Byte>(initSize: initSize, minSize: minSize, maxSize: maxSize, arraySize: arraySize,
+            maxWaiting: maxWaiting)
         fileThreshold = arraySize
     }
     public static func registerType<T>(): UInt128 where T <: Object & ObjectData<T> & DataFields<T> {
@@ -966,22 +982,26 @@ public class DefaultCodec <: Codec & Releasable {
                 Directory.create(dir)
             }
             let file = File.createTemp(dir)
-            if(let Some(buffer) <- bytesPool.get()){
-                try{
-                    var remain = size
-                    while (remain > 0) {
-                        let readSize = input.read(buffer)
-                        if (readSize <= 0) {
-                            // 读到 0（或 -1）字节 = 写端已关闭，而载荷还差 remain 字节 ⇒ 不完整
-                            throw CodecException('payload is incomplete: ${remain} bytes unread')
-                        }
-                        let take = if (readSize < remain) { readSize } else { remain }
-                        file.write(buffer[0..take])
-                        remain -= take
+            let buffer = match (bytesPool.get()) {
+                case Some(b) => b
+                // 池耗尽（超过该池的 maxWaiting）时不能"静默跳过写文件"：那会把内容缺失的 File 交给上层。
+                case _ => throw CodecException(
+                    'cannot borrow a buffer to write the received file payload (${size} bytes): bytes pool is exhausted')
+            }
+            try{
+                var remain = size
+                while (remain > 0) {
+                    let readSize = input.read(buffer)
+                    if (readSize <= 0) {
+                        // 读到 0（或 -1）字节 = 写端已关闭，而载荷还差 remain 字节 ⇒ 不完整
+                        throw CodecException('payload is incomplete: ${remain} bytes unread')
                     }
-                }finally{
-                    bytesPool.giveBack(buffer)
+                    let take = if (readSize < remain) { readSize } else { remain }
+                    file.write(buffer[0..take])
+                    remain -= take
                 }
+            }finally{
+                bytesPool.giveBack(buffer)
             }
             if (f != 0) {
                 let fileNameSize = decodeSizeOfEncoded(input)

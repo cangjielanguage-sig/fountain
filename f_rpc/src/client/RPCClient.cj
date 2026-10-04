@@ -30,6 +30,8 @@ public class RPCClient {
         if (started.load() == 2) {
             return
         } else if (started.compareAndSwap(0, 1)) {
+            // 按配置初始化 codec 的两个池（编码缓冲池 / 字节数组池）；首次生效，见 PoolConfig.cj 与 bug.md 7.6
+            initCodecPools()
             spawn{
                 while(true){
                     // 每轮重新建立“发现用”连接：上一轮末尾会 close() 掉它们，

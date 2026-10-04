@@ -190,6 +190,33 @@ public class KeyPoolTest {
             f.get()
         }
     }
+    /**
+     * `maxWaiting` 是**池初始化参数**：池取空后 `get(timeout: Duration.Max)` 只在 maxWaiting 内等待，
+     * 超过就记 WARN 并返回 None（bug.md 7.6）。这里用 200ms 而不是默认 30s，顺带证明它不是写死的常量。
+     */
+    @TestCase
+    public func maxWaitingBoundsInfiniteWait(): Unit {
+        let pool = KeyPool<String, Object>(
+            mode: Fifo,
+            initKeys: {=> None},
+            maxSize: 1,
+            totalSize: 1,
+            checkInterval: Duration.Zero,
+            maxWaiting: Duration.millisecond * 200,
+            creator: {_=>Object()},
+            checker:{_,_=>true},
+            destroier:{_,_=>}
+        )
+        let held = pool.get('a', timeout: Duration.second).getOrThrow()   // 先占满（maxSize = 1）
+        let start = MonoTime.now()
+        let got = pool.get('a', timeout: Duration.Max)                    // 无限等待也必须受 maxWaiting 约束
+        let elapsed = MonoTime.now() - start
+        @Assert(got.isNone())
+        @Assert(elapsed >= Duration.millisecond * 150)
+        @Assert(elapsed < Duration.second * 5)                            // 不能退化成默认的 30s
+        pool.giveBack('a', held)
+        pool.close()
+    }
 }
 
 @Test

@@ -46,6 +46,7 @@ public class ORMConfig {
     public static const databasePoolCheckOnCreation = confPrefix + "_databasePoolCheckOnCreation"
     public static const databasePoolCheckOnBorrowing = confPrefix + "_databasePoolCheckOnBorrowing"
     public static const databasePoolCheckOnReturning = confPrefix + "_databasePoolCheckOnReturning"
+    public static const databasePoolMaxWaiting = confPrefix + "_databasePoolMaxWaiting"
     public static const databasePoolCheckSql = confPrefix + "_databasePoolCheckSql"
     public static const stdPoolIdleTimeout = confPrefix + "_stdPoolIdleTimeout"
     public static const stdPoolMaxLifeTime = confPrefix + "_pooledDatasourceMaxLifeTime"
@@ -214,6 +215,18 @@ public class ORMConfig {
     }
     public static func getConnectTimeout(driverName!: String = String.empty): Duration {
         Duration.millisecond * get<Int64>(driverName: driverName, key: databasePoolConnectTimeout, default: 50)
+    }
+    /**
+     * 池耗尽时 `get(timeout: Duration.Max)` 的等待上限（秒）：超过它就返回 None 而不是无限挂住调用方；
+     * 配成 0 表示真无限等待（仍每轮让出 CPU）。默认 30s，与池自身的默认值一致。
+     */
+    public static func getPoolMaxWaiting(driverName!: String = String.empty): Duration {
+        let seconds = get<Int64>(driverName: driverName, key: databasePoolMaxWaiting, default: 30)
+        if (seconds <= 0) {
+            Duration.Max
+        } else {
+            Duration.second * seconds
+        }
     }
     public static func getPoolCheckSql(driverName!: String = String.empty, default!: String = 'select 1'): String {
         getConf(driverName: driverName, key: databasePoolCheckSql) ?? default

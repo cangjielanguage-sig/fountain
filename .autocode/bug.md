@@ -28,7 +28,7 @@
 | 7.1 值级长度 | 帧内**值级**声明长度可触发超大分配 | ✅ | 2026-10-04：`SizeBoundedInput` + `DefaultCodec.checkedBuffer()` 分配前校验「声明 ≤ 帧剩余」，超了抛 `CodecException`；f_protocol **60/60**（含 1TB 声明用例，见 7.1） |
 | 7.7 | frpcdemo 客户端无法启动（**既有问题**） | ✅ | 2026-10-03 定位并修好启动链路（缺 `rpcClient_serverAddress` ⇒ ERROR+`exit(1)`；RPC 调用移出 Init Image；另修 4 处段错误）：实测 0 Init Image fail、0 段错误。**业务级 E2E 已跑通**（见 7.10） |
 | 7.10 | 业务级 E2E 的 10 层断链 | ✅ | 2026-10-03 逐层定位并修复：消息 id 时区/相等、`ExecutorFuture.get` 丢结果、客户端 reader 中性解码、骨架注册前缀过滤、`ServiceMeta` 含 weight、发现连接复用、重试判断、demo 侧接口/载荷、对象类型未注册。实测客户端打印 JSON、服务端 `CONSUME` 正常（见 7.10） |
-| — | (7.5 起) §四 P2 小项与池相关遗留 | 🟡 | **7.5 已收口（2026-10-04）**：f_net 三条已修（`tryRemove` 活性修复 + 客户端日志分级 + remoteAddress 守卫）+ 服务端 `tcp closed` 已分级（WARN 140 → 1）+ `unavailableChecked` 评估后关闭；`KeyPool.get` 阈值与 §7.6 同批待拍板，7.2~7.4 未动 |
+| — | (7.5 起) §四 P2 小项与池相关遗留 | 🟡 | **7.5 已收口、7.6 已实现（2026-10-04）**：f_net 三条已修 + 服务端 `tcp closed` 已分级（WARN 140 → 1）+ `unavailableChecked` 评估后关闭；`KeyPool.get` 的 30s 改成池初始化参数 `maxWaiting`（f_pool/f_codec/f_orm/f_rpc 全部接上，ORM/RPC 各有配置项）；**7.2~7.4 未动** |
 | — | **f_protocol→f_util 依赖**：应用加载期 `undefined symbol: crc32Update` | ✅⚠️ | **已修**（`boot.sh` 自建库优先）。曾误判为"加载顺序/需要预打开 .so"，实际是 `installed/libs/fboot` 的**旧副本抢先**（库无 SONAME），见 7.8 |
 | — | 池记账脱钩的**触发源** | ⬜ | 未定位到具体一行；已加自愈 + `DEQUE-SELFCHECK`/`WEDGE-HEAL` 告警（见 6.8.5、7.2） |
 | — | 重复归还的强约束 | ⬜ | 泛型 `SyncDeque<T>` 无法按值去重，目前只能检出 + 告警（见 6.9、7.3） |
@@ -41,7 +41,7 @@ frpcdemo 端到端（默认配置约 45s）CPU **0%~2%**、应用日志事件 **
 
 **复验（2026-10-03，分支 `fix/half-message-detect`）**：`f_util` **28/28**、`f_protocol` **55/55**（修复前基线 43/45）、`f_codec` **15/15**。
 
-**复验（2026-10-04，worktree `fix-half-message`）**：`f_data` **104/104**、`f_codec` **15/15**、
+**复验（2026-10-04，worktree `fix-half-message`）**：`f_data` **104/104**、`f_pool` **23/23**（含 §7.6 的 `maxWaiting` 用例）、`f_codec` **15/15**、
 `f_protocol` **60/60**（含 §7.1 值级长度的 1TB 声明用例）、`f_net` **14/14**（迁移后的读写路径用例，见 7.9）；
 全仓 `cjpm build` **success**（验证 `@DataAssist` 宏改动在 f_orm/f_mvc/f_bean 等全部使用者上的影响面）。
 frpcdemo 业务级 E2E 跑通：客户端打印 JSON —— **含嵌套** `"inner":{"tag":"inner-default","count":7}`、
@@ -612,14 +612,33 @@ EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已�
 | `f_net/src/client/client.cj:77` | ✅ 已修（2026-10-04）：`buffer.isClosed()` 为真（连接是自己关的）时降级 `log.debug{'Client reader closed …'}`，其余仍 `log.error` 带栈。实测一次 70s E2E：`[ERROR]` **138 → 0**，同一批消息以 `Client reader closed`（DEBUG）出现 138 条；`ping_failures=0`（心跳与发现正常） | — |
 | `f_net/src/server/server.cj:131/159` | ✅ 已修（2026-10-04）：两处 `InputClosedException`（对端干净关闭 = 读到 EOF）由 `log.warn('tcp closed', e)` 改为 `log.debug{'tcp closed'}`、不带栈。实测一次 70s E2E 服务端 `[WARN]` **140 → 1**（剩的那条是收尾时真实的 `SocketBuffer write error`）；真正的解码/执行失败仍是 WARN + 栈 | — |
 | 服务端 `unavailableChecked` | 默认仍为 3（P2 建议放宽并与 PING 发送对齐） | ✅ **本行关闭（2026-10-04 评估）**：该项已可用 `rpcServer_unavailableChecked` 配置；多轮 E2E 无"误判拆链"证据（`ping_failures=0`）⇒ 保持默认 3，不为无证据的假设放宽 |
-| `KeyPool.get` 放弃阈值 | 30s 为写死常量 | ⬜ 与 §7.6 同源（`Duration.Max` 该是"无限等待"还是"有限兜底"，需用户拍板）⇒ **与 7.6 一起做**，不单独改池代码 |
+| `KeyPool.get` 放弃阈值 | ✅ 已修（2026-10-04，随 §7.6）：30s 不再是写死常量，改成池初始化参数 `maxWaiting`（默认 30s，可传 `Duration.Max` 表示真无限等待）；全项目的建池点都已接上 | — |
 
-### 7.6 其他
+### 7.6 `KeyPool.get(Duration.Max)` 的等待语义：✅ 已拍板并实现（2026-10-04）
 
-- `KeyPool.get(Duration.Max)` 的「有限等待」是**策略变更**（原来是无限等待）：30s 后 `WARN` 并返回 `None`；
-  若业务上确实需要无限等待，应改为可配置（当前为常量）。
-- 用户已明确表达过立场：**`timeout == Duration.Max` 这个分支语义上就是"无限等待"**（当初要求不要改它）。
-  因此这一条的处置需要拍板：保留当前"让出 CPU + 30s 上限"（避免无日志挂死），或恢复"真无限等待"并把它做成可配置。
+- **决定**：等待上限 `maxWaiting` 改成**池初始化参数**（默认 **30s**）—— f_pool **不读配置**（不加 f_config 依赖）；
+  `timeout == Duration.Max` 仍走"让出 CPU 的等待"分支，超过 `maxWaiting` 记 WARN 并返回 `None`；
+  把 `maxWaiting` 传成 `Duration.Max` 就是**真无限等待**（实现仍每轮 `sleep(1ms)` + 分片等待，**不是**当初那个忙等）。
+- 实现（全项目池使用点已接上；f_orm/f_rpc 的配置项风格分别是 `orm_*` / `rpc_codec*`）：
+
+| 位置 | 改动 |
+| --- | --- |
+| `f_pool` | `KeyPool`（两个构造 + `KeyPoolBuilder` + `setMaxWaiting`）、`Pool`（同）、`ArrayPool`、`ArrayListPool`、`BytesListOutputStream.builder` 全部新增 `maxWaiting!: Duration = Duration.second * 30` 并逐层透传；`KeyPool.get` 用它替代写死的常量，并加 `waitChunk()` 防 `MonoTime + Duration.Max` 溢出。内部 `UnitKeyPool`/`BaseKeyPool`/`base/*` 只是存储实现（不做等待），不需要该参数 |
+| `f_codec` | 新增 `DefaultCodec.setBufferPool(initSize!, minSize!, maxSize!, maxWaiting!)`（不暴露 f_pool 类型）、`setBytesPool(..., maxWaiting!)`；两个静态池显式按参数初始化 |
+| `f_orm` | `DatabasePool` 三个构造新增 `maxWaiting!` 并传给 `Pool<PooledConnection>`；配置驱动的构造读 `ORMConfig.getPoolMaxWaiting` = **`orm_databasePoolMaxWaiting`**（秒，默认 30，≤0 = 真无限等待） |
+| `f_rpc` | 新增 `f_rpc/src/base/PoolConfig.cj`（module 级 `protected`，因为 `f_rpc.client`/`f_rpc.server` 是**兄弟包**）：`rpc_codecBufferPoolInitSize/MinSize/MaxSize`、`rpc_codecBytesPoolInitSize/MinSize/MaxSize/ArraySize`、`rpc_codecPoolMaxWaiting`（秒，≤0 = 无限，默认 30）；`initCodecPools()` 在 `RPCServer.start()` / `RPCClient.start()` 首次调用，用配置项初始化 codec 的两个池 |
+| `f_protocol` | 生产代码**不建池**（只用 `BytesCopyTo`/`Releasable` 两个接口），无需参数；其用例通过 `DefaultCodec.setBytesPool` 注入的是 f_codec 的池 |
+
+- 验证：
+  1. 新用例 `f_pool/src/KeyPool_test.cj::maxWaitingBoundsInfiniteWait`：`maxWaiting = 200ms` 的池取空后
+     `get(timeout: Duration.Max)` 实测 **200.7ms** 返回 `None`（既不是 0.2ms 也不是默认 30s）⇒ 参数确实生效；
+  2. 全仓 `cjpm build` **success**（含 f_orm/f_rpc）；`f_pool` **23/23**、`f_codec` **15/15**、`f_protocol` **60/60**、`f_net` **14/14**；
+  3. demo E2E 跑通，两侧启动日志出现 `[FOUNTAIN_RPC.pool] codec pools initialized: … maxWaiting=30s`；
+     再用自定义配置启动服务端（`rpc_codecPoolMaxWaiting=5 rpc_codecBytesPoolArraySize=2048 rpc_codecBufferPoolMaxSize=256`）
+     ⇒ 日志变为 `bufferPool(… max=256), bytesPool(… arraySize=2048), maxWaiting=5s` ⇒ **确实按配置项初始化**。
+- 附带修掉一个静默隐患：`DefaultCodec` 文件载荷解码时 `bytesPool.get()` 取不到会**静默跳过写文件**（把内容缺失的 `File` 交给上层），
+  现改为抛可见的 `CodecException`。
+- 精确边界：`maxWaiting` 只在 `timeout == Duration.Max` 分支生效；编码借缓冲走 `lastBuffer()` 的**有限 5s** 超时，不受它影响。
 
 ### 7.7 frpcdemo 客户端无法启动（**既有问题**）⚠️ 启动链路已于 2026-10-03 修好，原症状与根因见本节末尾
 

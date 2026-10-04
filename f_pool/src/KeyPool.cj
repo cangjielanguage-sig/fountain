@@ -38,6 +38,8 @@ public class KeyPoolBuilder<K, V> where K <: Hashable & Equatable<K> {
     private var checkOnReturning: Bool = true
     private var clearOnReturning: Bool = false
     private var checkInterval: Duration = Duration.minute
+    /** 池耗尽时 `get(timeout: Duration.Max)` 的等待上限；`Duration.Max` = 真无限等待（每轮仍让出 CPU）。 */
+    private var maxWaiting: Duration = Duration.second * 30
     private var creator: ?(K) -> V = None
     private var checker: ?(K, V) -> Bool = None
     private var destroier: ?(K, V) -> Unit = None
@@ -110,6 +112,14 @@ public class KeyPoolBuilder<K, V> where K <: Hashable & Equatable<K> {
         this.checkInterval = checkInterval
         this
     }
+    /**
+     * 池耗尽时 `get(timeout: Duration.Max)` 的等待上限：超过就 WARN 并返回 None（由调用方决定重试/失败）。
+     * 传 `Duration.Max` 表示真无限等待 —— 实现每轮仍让出 CPU，不会是忙等。
+     */
+    public func setMaxWaiting(maxWaiting: Duration): This {
+        this.maxWaiting = maxWaiting
+        this
+    }
     public func setCreator(creator: (K) -> V): This {
         this.creator = creator
         this
@@ -149,6 +159,7 @@ public class KeyPoolBuilder<K, V> where K <: Hashable & Equatable<K> {
             checkOnReturning: checkOnReturning,
             clearOnReturning: clearOnReturning,
             checkInterval: checkInterval,
+            maxWaiting: maxWaiting,
             creator: creator ?? toThrow(),
             checker: checker ?? toThrow(),
             destroier: destroier ?? toThrow(),
@@ -172,6 +183,11 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         private let checkOnReturning!: Bool = true,
         private let clearOnReturning!: Bool = false,
         private let checkInterval!: Duration = Duration.minute,
+        /**
+         * 池耗尽且 `get(timeout: Duration.Max)` 时的等待上限：超过它记 WARN 并返回 None；
+         * 传 `Duration.Max` 表示真无限等待（实现仍每轮让出 CPU）。
+         */
+        private let maxWaiting!: Duration = Duration.second * 30,
         private let creator!: (K) -> V,
         private let checker!: (K, V) -> Bool,
         private let destroier!: (K, V) -> Unit,
@@ -201,6 +217,7 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         checkOnReturning!: Bool = true,
         clearOnReturning!: Bool = false,
         checkInterval!: Duration = Duration.minute,
+        maxWaiting!: Duration = Duration.second * 30,
         manager!: KeyedObjectManager<K, V>
     ){
         this(
@@ -215,6 +232,7 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             checkOnReturning: checkOnReturning,
             clearOnReturning: clearOnReturning,
             checkInterval: checkInterval,
+            maxWaiting: maxWaiting,
             creator: manager.create,
             checker: manager.check,
             destroier: manager.destroy,
@@ -331,6 +349,24 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             true
         }
     }
+    /**
+     * 本轮「等新建池项」愿意等多久。
+     *
+     * - 有限上限（默认 30s）：给出剩余等待预算，行为与原实现一致 —— 新建出来会立刻把调用方唤醒；
+     * - 真无限等待（`maxWaiting == Duration.Max`）：给一个固定分片。既避免 `MonoTime + Duration.Max` 溢出，
+     *   也不至于长时间睡着而看不到 `running` 变化。
+     */
+    private func waitChunk(waitStart: MonoTime): Duration {
+        if (maxWaiting == Duration.Max) {
+            return Duration.second
+        }
+        let remain = waitStart + maxWaiting - MonoTime.now()
+        if (remain <= Duration.Zero) {
+            Duration.Zero
+        } else {
+            remain
+        }
+    }
     public func get(key: K, timeout!: Duration = Duration.Max): ?V {
         func keyedCheck(key: K, ref: Ref<V>){
             this.keyedCheck(checkOnBorrowing, key, ref)
@@ -345,16 +381,15 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             // 这里保持「等待」语义，但每轮让出 CPU，并在超过上限后告警放弃（返回 None），
             // 由上层决定重试或失败，避免静默挂起。
             let waitStart = MonoTime.now()
-            let maxWaiting = Duration.second * 30
             while(running.load()) {
                 if (let Some(r) <- pool.get(key, keyedCheck, keyedDestroy) && let Some(v) <- r.get()) {
                     return v
                 }else if (pool.size < totalSize && pool.keyedSize(key) < maxSize && 
                     let Some(x) <- tryAddTask(key) && 
-                    let remain <- waitStart + maxWaiting - MonoTime.now() && (remain <= Duration.Zero || !x.wait(remain))) {
+                    let remain <- waitChunk(waitStart) && (remain <= Duration.Zero || !x.wait(remain))) {
                     break
                 }
-                if (MonoTime.now() - waitStart >= maxWaiting) {
+                if (maxWaiting != Duration.Max && MonoTime.now() - waitStart >= maxWaiting) {
                     logger.warn(
                         'key pool exhausted but no idle element: size=${pool.size}/${totalSize}, keyedSize=${pool.keyedSize(key)}/${maxSize}, waited ${maxWaiting}, give up')
                     break
