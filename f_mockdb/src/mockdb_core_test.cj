@@ -603,4 +603,33 @@ public class MockDBCoreTest {
         opts['cachePrepStmts'] = 'false'
         @Assert('true', mock.options.get('cachePrepStmts').getOrThrow())
     }
+
+    @TestCase
+    public func testSetIndexBeyondSqlParametersThrows(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'v', nullable: false, typeName: 'SqlVarchar')
+            MOCKDB.addQueryResultRow(['ok'])
+        }
+        let conn = MockConnection()
+        let stmt = conn.prepareStatement('SELECT v FROM t WHERE v = ?')
+        //SQL 只有 1 个占位符：大索引必须在 set 阶段就失败，不能真的补出上百万个占位符（修复前会分配）
+        try {
+            stmt.set<String>(1000000, 'x')
+            @Assert(false)
+        } catch (e: SqlException) {
+            @Assert(true)
+        }
+        try {
+            stmt.setNull(5)
+            @Assert(false)
+        } catch (e: SqlException) {
+            @Assert(true)
+        }
+        //合法索引照常
+        stmt.set<String>(0, 'ok')
+        let rs = stmt.query()
+        @Assert(true, rs.next())
+        @Assert('ok', rs.get<String>(0))
+    }
 }

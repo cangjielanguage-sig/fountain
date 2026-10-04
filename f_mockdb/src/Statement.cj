@@ -33,21 +33,35 @@ public class MockStatement <: Statement {
     public func update(params: Array<SqlDbType>): UpdateResult {
         throw MockDbException('not supported')
     }
-    public func set<T>(index: Int, value: T): Unit {
+    /**SQL 里的占位符（?）个数：真驱动按语句参数个数判定越界，mock 用同一口径定上界，避免大索引补出天量占位符*/
+    private func placeholderCount(): Int64 {
+        let questionMark: Byte = 63//'?'
+        var count = 0
+        for (b in sql.toArray()) {
+            if (b == questionMark) {
+                count++
+            }
+        }
+        count
+    }
+    private func checkIndex(index: Int, parameters: Int64): Unit {
         if(index < 0){
             //按 std 契约：参数索引越界抛 SqlException
             throw SqlException('parameter index ${index} is negative')
         }
+        if(index >= parameters){
+            throw SqlException('parameter index ${index} is out of range, the sql has ${parameters} parameters')
+        }
+    }
+    public func set<T>(index: Int, value: T): Unit {
+        checkIndex(index, placeholderCount())
         for(_ in args.size ..= index) {
             args.add(None<Any>)
         }
         args[index] = value
     }
     public func setNull(index: Int): Unit {
-        if(index < 0){
-            //按 std 契约：参数索引越界抛 SqlException
-            throw SqlException('parameter index ${index} is negative')
-        }
+        checkIndex(index, placeholderCount())
         for(_ in args.size ..= index) {
             args.add(None<Any>)
         }

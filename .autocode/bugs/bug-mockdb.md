@@ -14,7 +14,7 @@
 | 中 | 5 |
 | 低危 / 待验证 | 9 |
 
-> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4`、§2.2 `MOCK-5`、§2.3 `MOCK-6`、§2.4 `MOCK-7`（①③）、§2.5 `MOCK-8` 已修复 ⇒ **待修严重级 0 条、中危 0 条**；低危批次（§3.3：`MOCK-L1`/`L2`/`L4`/`L5`/`L6`/`L7`）已修复，`MOCK-L3` 暂不处理，`MOCK-V1` 判为不成立（见 §3.2）。仍未动：§2.4 的 ②（未绑定 vs 绑定 NULL）、建议新增的 `MOCK-L8`、§3.2 的 `MOCK-V2`（覆盖缺口）。并入状态：`MOCK-1`/`MOCK-2` 已并入 `sts/1.3.x`（合并提交 `12c19d94`）；`MOCK-3`~`MOCK-8` 与低危批次在分支 `fix/mock-1-query-isolation`（`e904ac87`/`ba04b79f`/`80d67a36`/`edb10235`/`7704cd91`/`924ec6f8` + 本次提交），待下次同步。标记补录提交：`fa822423`、`cd429689`、`cee6dc6d`。
+> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4`、§2.2 `MOCK-5`、§2.3 `MOCK-6`、§2.4 `MOCK-7`（①③）、§2.5 `MOCK-8` 已修复 ⇒ **待修严重级 0 条、中危 0 条**；低危批次（§3.3：`MOCK-L1`/`L2`/`L4`/`L5`/`L6`/`L7`）与审查后新增的 `MOCK-L8`（§3.4）已修复 ⇒ 低危 8 条全清，`MOCK-L3` 暂不处理，`MOCK-V1` 判为不成立（见 §3.2）。仍未动：§2.4 的 ②（未绑定 vs 绑定 NULL）、§3.2 的 `MOCK-V2`（覆盖缺口）。并入状态：`MOCK-1`/`MOCK-2` 已并入 `sts/1.3.x`（合并提交 `12c19d94`）；`MOCK-3`~`MOCK-8` 与低危批次在分支 `fix/mock-1-query-isolation`（`e904ac87`/`ba04b79f`/`80d67a36`/`edb10235`/`7704cd91`/`924ec6f8` + 本次提交），待下次同步。标记补录提交：`fa822423`、`cd429689`、`cee6dc6d`、`78bc9f30`。
 
 **建议修复顺序**：
 
@@ -211,7 +211,7 @@ DT：断言三个属性返回契约值、不抛异常。
 - 测量证据：**修复前** PASSED 44 / **FAILED 1 + ERROR 1**（EXIT=1）：`testStatementReuseDoesNotKeepArgs` 在 `@Assert(1, argSizes[1])` 失败（left 1 / right 2 —— 第二次仍带着上一次的参数）、`testSetNegativeIndexThrows` 报 `IndexOutOfBoundsException: Invalid index '-1': expected 0 to '0'`；**修复后** = **46/46 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**，编译警告 9 条无新增。日志 `/tmp/mock7_before.log`、`/tmp/mock7_after.log`。
 - 行为变化（有意）：语句对象不再跨执行保留参数 —— 复用同一 `MockStatement` 时第二次执行前需重新 `set`（`f_orm` 每次执行都新建并关闭语句，`SqlExecutor.cj:396-404`，不受影响）；夹具在回调里看到的 `args` 仍是本次参数，但回调结束后该表被清空（若夹具保存了它的引用，之后会读到空表 —— 需要稳定快照再议）。
 - 未做（本条目 ②「未绑定 vs 绑定 NULL 不可区分」）：要区分两者必须让夹具可见的表示能表达二者，而 `MOCKDB.execution` 的签名 `(String, ArrayList<Any>) -> Unit` 是公开 API（README、`f_orm/src/wrap/DatabasePool_test.cj`、本模块 40+ 处夹具都按它写），改动属**破坏性变更** ⇒ 单列待定（可选方向：改签名 `ArrayList<?Any>`、加哨兵值 + 判断辅助、保持现状并在 README 写明）。
-- 顺带发现（未修，建议单列 `MOCK-L8`）：`set<T>(bigIndex, v)` 会真的补出 `bigIndex + 1` 个占位符（例如索引 100 万就分配 100 万个 `None`）；真实驱动按语句参数个数报「索引越界」，mock 目前不解析 SQL、定不出上界。
+- 顺带发现 → 已单列为 §3.1 `MOCK-L8`：`set<T>(bigIndex, v)` 会真的补出 `bigIndex + 1` 个占位符（例如索引 100 万就分配 100 万个 `None`）；2026-10-04 已修复（见 §3.4）。
 
 位置：`src/Statement.cj:19`（`args` 生命周期 = 语句对象）、`35-40`（`set<T>` 用 `args.add(None<Any>)` 补位）、`41-48`（`setNull` 同一套 `None<Any>`）
 
@@ -244,7 +244,7 @@ DT：`toThrowOnExecuting = true` 后执行，断言抛异常**且** `MOCKDB.getQ
 
 ## 3. 低危 / 待验证（9 条）
 
-### 3.1 低危（7 条）
+### 3.1 低危（8 条）
 
 - **`MOCK-L1` 异常无 message，诊断差**：`src/Statement.cj:52,59`、`src/Transaction.cj:49,55,61,67,73,79` 全是 `throw MockDbException()`；事务/执行的失败信息里看不出是哪条 SQL、哪个 savepoint（有 message 的只有 `MockColumnInfo` 的 `'not supported'`、`MockQueryResult.columnInfos` 与 `Statement.query(params)/update(params)` 的 `'not supported'`）。修法：带 `sql` / `savePointName` / 触发标志名。　**✅已修复（2026-10-04，见 §3.3）**
 - **`MOCK-L2` 无条件输出到 stdout，无开关**：`src/mockdb.cj:25,29-31`（默认 `EMPTY_EXECUTION` 打印 `EMPTY_EXECUTION`）、`Driver.cj:40`、`Datasource.cj:27`、`Statement.cj:30`、`Transaction.cj:47,53,59,65,71,77`。批量用例下这些是主要 I/O，且污染测试输出；多线程用例（`f_orm` 的 `DatabasePool_test` spawn 10 线程）还会交织。修法：加 `MOCKDB.verbose`（默认 false），或走 `f_log` 的 debug 级别。　**✅已修复（2026-10-04，见 §3.3）**
@@ -253,6 +253,7 @@ DT：`toThrowOnExecuting = true` 后执行，断言抛异常**且** `MOCKDB.getQ
 - **`MOCK-L5` `getMetaData()` 的两种返回语义**：`src/mockdb.cj:130-137` 未设置时每次返回**新建**的空 `HashMap`（在它上面写东西会静默丢失），设置后返回的又是 live map（外部可改夹具）。修法：统一返回副本，或文档写明「未设置即空、只读」。　**✅已修复（2026-10-04，见 §3.3）**
 - **`MOCK-L6` 驱动的入口参数被忽略**：`src/Driver.cj:39-46` 的 `open(connectionString, opts)` 只打印 url、不透出连接串；`src/Datasource.cj:26-28` 的 `setOption` 只打印不保存 ⇒ 用例无法验证「连接串 / 选项是否正确传到驱动」，也无法回读选项。　**✅已修复（2026-10-04，见 §3.3）**
 - **`MOCK-L7` 事务无状态机**：`src/Transaction.cj:46-81` 允许重复 `begin()`、未 `begin()` 就 `commit()/rollback()`；`MockConnection.createTransaction()`（`src/Connection.cj:24-26`）永不失败，而 std 契约规定「已处于事务状态且不支持并行事务时应抛 `SqlException`」⇒ ORM 的事务传播/嵌套失败分支在 mock 下测不到。修法：加最小状态（`begun`），或在 README 写明「mock 不校验事务状态」。　**✅已修复（2026-10-04，见 §3.3）**
+- **`MOCK-L8` `set` 的大索引会补出天量占位符（审查后新增）**：`src/Statement.cj` 的 `set<T>(index, …)` 用 `for(_ in args.size ..= index) { args.add(None<Any>) }` 补位 ⇒ `index = 1000000` 就真的分配 100 万个 `None`；真驱动按语句参数个数报「索引越界」，mock 原先不解析 SQL、定不出上界。修法：按 SQL 里的 `?` 个数定上界，越界抛 `SqlException`。　**✅已修复（2026-10-04，见 §3.4）**
 
 ### 3.2 待验证（2 条，需实测）
 
@@ -273,7 +274,19 @@ DT：`toThrowOnExecuting = true` 后执行，断言抛异常**且** `MOCKDB.getQ
 - **`MOCK-L6`（驱动入口参数被忽略）✅ 已修复**：`MockDatasource` 记录 `connectionString`（`open` 时由驱动写入）与累积的 `options`，两者都有公开只读入口（`options` 返回副本）。用例 `testDriverOpenRecordsArguments`（`DriverManager` 取驱动 → `open('mockdb://localhost', [...])` → 断言连接串与两个选项可读回，且改副本不影响 mock）。属**接口补齐型**：修复前写不出该断言（编译不过），故没有「修复前失败」证据。
 - **`MOCK-L7`（事务无状态机）✅ 已修复**：`MockTransaction` 增加 `begun_` / `finished_` 与 `requireBegun(step)` —— 未 `begin()` 就 `commit` / `rollback` / `save` / `release`、重复 `begin()`、事务已结束后再 `commit` / `rollback`，统一抛 `SqlException`（消息带动作）；失败模拟的抛点相应后移，且**模拟失败不改变事务状态**（`begin` 抛异常时 `begun_` 保持 false）。用例 `testTransactionStateMachine`；同时给 5 条既有用例补上 `begin()`（`testCommitThrows`、`testSavepointOperations`、`testSavepointSaveThrows`、`testSavepointReleaseThrows`、`testSavepointRollbackThrows`）。修复前 `testTransactionStateMachine` 失败（未 begin 就 commit 静默通过）。兼容性：`f_orm` 的事务路径始终以 `createTransaction(...).begin()` 起手（`SqlExecutor.cj:270`），`TransactionWrap` 只做委派 ⇒ mock 侧收紧不影响它。
 - **`MOCK-L3`（编译器警告）⏸ 暂不处理**：2026-10-04 决定忽略（未使用参数、废弃重载未标 `@Deprecated`、`SqlDbType` 废弃提示等 9~10 条）。留档理由：纯噪声；改动会碰 `Statement.cj` / `QueryResult.cj` 里公开重载的注解，收益低。
-- **顺带发现（未修，建议单列 `MOCK-L8`）**：`MockStatement.set<T>(bigIndex, v)` 会真的补出 `bigIndex + 1` 个占位符（索引 100 万 ⇒ 100 万个 `None`）；真实驱动按语句参数个数报越界，mock 不解析 SQL、定不出上界。
+- **顺带发现 → 已单列为 §3.1 `MOCK-L8`**：`MockStatement.set<T>(bigIndex, v)` 会真的补出 `bigIndex + 1` 个占位符（索引 100 万 ⇒ 100 万个 `None`）；2026-10-04 已修复（见 §3.4）。
+
+---
+
+### 3.4 `MOCK-L8` 修复记录（2026-10-04，审查后新增条目）
+
+**✅ 修复标记（2026-10-04）**：分支 `fix/mock-1-query-isolation`（同一 worktree，在低危批次之后追加提交），**代码、用例、README 与本标记在同一提交**（提交信息 `fix(f_mockdb): MOCK-L8 参数索引按 SQL 占位符个数定上界（bug-mockdb §3.4）`；提交哈希由下一次标记同步补录）。
+
+- 改动（`src/Statement.cj`）：新增 `private func placeholderCount()`（数 `sql` 里的 `?` 字节，ASCII 安全）与 `private func checkIndex(index, parameters)` —— `set<T>` / `setNull` 改为先 `checkIndex(index, placeholderCount())`：`index < 0` 抛「negative」，`index >= 占位符个数` 抛「out of range, the sql has N parameters」。口径与真驱动（按语句参数个数判定越界）一致；SQL 字面量里出现的 `?` 只会把上界**放宽**，不会误拒合法绑定。
+- 用例：`src/mockdb_core_test.cj` 新增 `testSetIndexBeyondSqlParametersThrows` —— 对只有 1 个占位符的 SQL 调 `set(1000000, …)` 与 `setNull(5)` 都断言抛 `SqlException`，随后用合法索引 `set(0, …)` 执行查询照常通过。
+- 测量证据：**修复前** PASSED 53 / **FAILED 1**（EXIT=1），且该用例耗时 **35 270 059 ns（≈35.3 ms —— 真的分配了约 100 万个占位符之后断言失败）**；**修复后** = **54/54 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**，同一用例耗时降到 **42 878 ns（≈42.9 µs，立即抛异常）** ⇒ **≈822×**；编译警告 9 条无新增。日志 `/tmp/l8_before.log`、`/tmp/l8_after.log`。
+- 兼容性：现有 53 条用例里所有 `set` / `setNull` 的索引都与 SQL 占位符数量匹配（已全量核对 `f_mockdb/src` 内 `prepareStatement` × `set`/`setNull` 组合）⇒ 无行为回归；`f_orm` 的 mockdb 路径不绑定参数（`DatabasePool_test`）⇒ 无影响。
+- 口径变化（有意）：在「SQL 无占位符」的语句上 `set(0, …)` 现在会抛 `SqlException` —— 与真驱动一致（语句没有参数却绑定参数属调用方错误）；README「参数槽」一节已同步。
 
 ---
 
