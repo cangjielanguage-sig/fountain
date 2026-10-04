@@ -277,4 +277,39 @@ public class MockDBCoreTest {
         @Assert(1, rs1.get<Int64>(0))
         @Assert(false, rs1.next())
     }
+
+    @TestCase
+    public func testUpdateResultIsSnapshot(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {sql: String, _: ArrayList<Any> =>
+            if (sql == 'INSERT 1') {
+                MOCKDB.lastInsertId = 11
+                MOCKDB.rowCount = 1
+            } else {
+                MOCKDB.lastInsertId = 22
+                MOCKDB.rowCount = 2
+            }
+        }
+        let conn = MockConnection()
+        let ur1 = conn.prepareStatement('INSERT 1').update()
+        let ur2 = conn.prepareStatement('INSERT 2').update()
+        @Assert(11, ur1.lastInsertId)
+        @Assert(1, ur1.rowCount)
+        @Assert(22, ur2.lastInsertId)
+        @Assert(2, ur2.rowCount)
+    }
+
+    @TestCase
+    public func testUpdateResultSurvivesLaterReset(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.lastInsertId = 11
+            MOCKDB.rowCount = 1
+        }
+        let conn = MockConnection()
+        let ur = conn.prepareStatement('INSERT 1').update()
+        MOCKDB.clear()
+        @Assert(11, ur.lastInsertId)
+        @Assert(1, ur.rowCount)
+    }
 }

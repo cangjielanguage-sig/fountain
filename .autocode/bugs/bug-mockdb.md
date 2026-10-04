@@ -14,12 +14,12 @@
 | 中 | 5 |
 | 低危 / 待验证 | 9 |
 
-> 修复进度（2026-10-04）：§1.1 `MOCK-1` 已修复 ⇒ 待修严重级 **2** 条（见 §1.1 修复标记）。
+> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2` 已修复 ⇒ 待修严重级 **1** 条（见各自修复标记）。
 
 **建议修复顺序**：
 
 1. `MOCK-1`（§1.1）查询结果行不按「一次执行」清理 —— 事务内第二条语句读到第一条的行（静默错数据，实测复现）　**✅已修复（2026-10-04，见 §1.1 修复标记）**
-2. `MOCK-2`（§1.2）`MockUpdateResult` 惰性读全局 —— 两个 update 结果互相串（实测复现）
+2. `MOCK-2`（§1.2）`MockUpdateResult` 惰性读全局 —— 两个 update 结果互相串（实测复现）　**✅已修复（2026-10-04，见 §1.2 修复标记）**
 3. `MOCK-3`（§1.3）`getOrNull` 越界/未就绪返回 None（std 契约要求抛 `SqlException`），类型不匹配也静默 None
 4. `MOCK-4`（§2.1）`close()` 后 `isClosed()` 仍为 false、`state` 仍为 `Connected`（实测复现）
 5. `MOCK-5`（§2.2）`MockConnection.close()` 隐式清空夹具，且是外部唯一可用的重置入口
@@ -65,7 +65,14 @@ PROBE_ROWS_Q2=2      // 第二条 SQL "B"，夹具同样加 1 行 ⇒ 读到 2 �
 
 DT：①同一连接上两条 SELECT（各 1 行）断言第二条只返回 1 行；②事务内两条 SELECT 同样断言（在 f_orm 层加，语义归属事务层）；③`conn.close()` 后断言夹具已清空。
 
-### 1.2 [严重｜正确性] `MOCK-2` `MockUpdateResult` 不是快照 —— 惰性读线程局部状态，两个 update 结果互相串（f_mockdb）
+### 1.2 [严重｜正确性] `MOCK-2` `MockUpdateResult` 不是快照 —— 惰性读线程局部状态，两个 update 结果互相串（f_mockdb） → ✅已修复（2026-10-04）
+
+**✅ 修复标记（2026-10-04）**：分支 `fix/mock-1-query-isolation`（同一 worktree，在 MOCK-1 之后追加提交），**代码、用例、本标记在同一提交**。
+
+- 改动：①`src/UpdateResult.cj` 的 `MockUpdateResult` 改为携带快照（构造函数 `MockUpdateResult(lastInsertId_, rowCount_)`，两个属性返回字段）；②`src/Statement.cj` 的 `update()` 在夹具执行后取快照 —— `MockUpdateResult(MOCKDB.lastInsertId, MOCKDB.rowCount)`。
+- 用例：`src/mockdb_core_test.cj` 新增 2 条 —— `testUpdateResultIsSnapshot`（两次 update 各设 `lastInsertId/rowCount` = 11/1 与 22/2，断言两个返回值互不干扰）、`testUpdateResultSurvivesLaterReset`（拿到返回值后 `MOCKDB.clear()`，断言旧返回值不变）。
+- 测量证据：**修复前** PASSED 33 / **FAILED 2**（EXIT=1）：`testUpdateResultIsSnapshot` 在 `@Assert(11, ur1.lastInsertId)` 失败（left 11 / right 22）、`testUpdateResultSurvivesLaterReset` 在 `@Assert(11, ur.lastInsertId)` 失败（right 0）；**修复后** = **35/35 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**，编译警告 9 条无新增。日志 `/tmp/mock2_before.log`、`/tmp/mock2_after.log`。
+- 影响面：`MockUpdateResult` 的构造点全仓只有 `Statement.cj` 一处（`git grep MockUpdateResult`）；`f_orm` 的 `SqlExecutor.cj:407/422` 本来就是「拿到就立刻读」，语义不变。
 
 位置：`src/UpdateResult.cj:19-28`（`lastInsertId`/`rowCount` 的 getter 现读 `MOCKDB.lastInsertId` / `MOCKDB.rowCount`）、`src/Statement.cj:49-55`（`update()` 不取值、只返回 `MockUpdateResult()`）
 
