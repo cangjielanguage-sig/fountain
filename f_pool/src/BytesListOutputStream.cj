@@ -88,15 +88,18 @@ public class BytesListOutputStream <: OutputStream & BytesCopyTo & Releasable {
         elementLife!: Duration = Duration.Max,
         checkInterval!: Duration = Duration.Max,
         clearOnReturning!: Bool = true,
-        capacity!: Int64 = 16
+        capacity!: Int64 = 16,
+        /** 池耗尽且 `get(timeout: Duration.Max)` 时的等待上限；`Duration.Max` = 真无限等待。 */
+        maxWaiting!: Duration = Duration.second * 30
     ): BytesListOutputStreamBuilder {
-        BytesListOutputStreamBuilder(initSize, minSize, maxSize, elementLife, checkInterval, clearOnReturning, capacity)
+        BytesListOutputStreamBuilder(initSize, minSize, maxSize, elementLife, checkInterval, clearOnReturning, capacity, maxWaiting)
     }
 }
 public class BytesListOutputStreamBuilder {
     private let pool: ArrayListPool<Array<Byte>>
     init(
-        initSize: Int64, minSize: Int64, maxSize: Int64, elementLife: Duration, checkInterval: Duration, clearOnReturning: Bool, capacity: Int64
+        initSize: Int64, minSize: Int64, maxSize: Int64, elementLife: Duration, checkInterval: Duration, clearOnReturning: Bool, capacity: Int64,
+        maxWaiting: Duration
     ){
         pool = ArrayListPool<Array<Byte>>(
             initSize: initSize,
@@ -104,7 +107,8 @@ public class BytesListOutputStreamBuilder {
             maxSize: maxSize,
             elementLife: elementLife,
             checkInterval: checkInterval,
-            clearOnReturning: clearOnReturning)
+            clearOnReturning: clearOnReturning,
+            maxWaiting: maxWaiting)
     }
     public func build(timeout!: Duration = Duration.Max): ?BytesListOutputStream {
         if(let Some(l) <- pool.get(timeout: timeout)){

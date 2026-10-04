@@ -19,6 +19,7 @@ import std.unittest.*
 import std.unittest.testmacro.*
 import std.io.OutputStream
 import fountain::f_protocol.default.Message
+import fountain::f_rpc.base.ServiceMeta
 
 class EncodedMessageTestFailingSink <: OutputStream & Resource {
     private var closed = false
@@ -64,5 +65,24 @@ public class EncodedMessageReleaseTest {
             }
         }
         @Assert(true)
+    }
+}
+
+@Test
+public class ServiceMetaIdentityTest {
+    /**
+     * 客户端 stub 与服务端注册各自构造 meta：argTypeNames 是**不同的数组实例**，weight 也不同。
+     * 它们必须相等、且 hashCode 相同，否则 services / hub 的查表永远落空（.autocode/bugs/bug-archived-on-20261004.md 7.10）。
+     */
+    @TestCase
+    public func equalMetaWithDistinctArgTypeArraysMustMatch(): Unit {
+        let stub = ServiceMeta('*', '', 'fountain::rpcdef.EchoRPC', 'echo',
+            ['fountain::rpcdef.model.EchoPO'], 0.0, exactlyVersion: false)
+        let registered = ServiceMeta('*', '', 'fountain::rpcdef.EchoRPC', 'echo',
+            ['fountain::rpcdef.model.EchoPO'], 1.0, exactlyVersion: false)
+        println('stub.hash=${stub.hashCode()}, registered.hash=${registered.hashCode()}, equal=${stub == registered}')
+        // weight 不参与身份：hash 与相等都要成立
+        @Assert(stub.hashCode() == registered.hashCode())
+        @Assert(stub == registered)
     }
 }

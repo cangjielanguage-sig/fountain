@@ -41,6 +41,8 @@ public class DatabasePool <: Resource & Datasource {
         idleTimeout!: Duration = Duration.Zero,
         checkInterval!: Duration = Duration.minute * 5,
         connectTimeout!: Duration = Duration.Max,
+        /** 池耗尽且 `get(timeout: Duration.Max)` 时的等待上限（池初始化参数）；`Duration.Max` = 真无限等待。 */
+        maxWaiting!: Duration = Duration.second * 30,
         checker!: (Connection) -> Bool
     ) {
         this.ds = ds
@@ -54,6 +56,7 @@ public class DatabasePool <: Resource & Datasource {
             checkOnReturning: checkOnReturning,
             idleTimeout: idleTimeout,
             checkInterval: checkInterval,
+            maxWaiting: maxWaiting,
             creator:  {=> PooledConnection(ds.connect())},
             checker: {
                 c => try {
@@ -90,6 +93,7 @@ public class DatabasePool <: Resource & Datasource {
         idleTimeout!: Duration = Duration.Zero,
         checkInterval!: Duration = Duration.minute * 5,
         connectTimeout!: Duration = Duration.Max,
+        maxWaiting!: Duration = Duration.second * 30,
         checkSql!: String = "select 1"
     ) {
         this(ds,
@@ -103,6 +107,7 @@ public class DatabasePool <: Resource & Datasource {
             idleTimeout: idleTimeout,
             checkInterval: checkInterval,
             connectTimeout: connectTimeout,
+            maxWaiting: maxWaiting,
             checker: {
                 c => if (checkSql[0..6].toLower() == "select") {
                     try (stmt = c.prepareStatement(checkSql)) {
@@ -133,6 +138,7 @@ public class DatabasePool <: Resource & Datasource {
         idleTimeout!: Duration = Duration.Zero,
         checkInterval!: Duration = Duration.minute * 5,
         connectTimeout!: Duration = Duration.Max,
+        maxWaiting!: Duration = Duration.second * 30,
         checkSql!: String = "select 1"
     ) {
         this(open(driver, options), 
@@ -146,6 +152,7 @@ public class DatabasePool <: Resource & Datasource {
              idleTimeout: idleTimeout,
              checkInterval: checkInterval,
              connectTimeout: connectTimeout,
+             maxWaiting: maxWaiting,
              checkSql: checkSql)
     }
     
@@ -162,6 +169,7 @@ public class DatabasePool <: Resource & Datasource {
             idleTimeout: ORMConfig.getIdleTimeout(driverName: driver.name),
             checkInterval: ORMConfig.getPoolCheckInterval(driverName: driver.name),
             connectTimeout: ORMConfig.getConnectTimeout(driverName: driver.name),
+            maxWaiting: ORMConfig.getPoolMaxWaiting(driverName: driver.name),
             checkSql: ORMConfig.getPoolCheckSql(driverName: driver.name)
         )
     }

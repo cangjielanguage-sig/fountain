@@ -30,9 +30,13 @@ public class RPCClient {
         if (started.load() == 2) {
             return
         } else if (started.compareAndSwap(0, 1)) {
-            let clients = ClientConfig.createClient()
+            // 按配置初始化 codec 的两个池（编码缓冲池 / 字节数组池）；首次生效，见 PoolConfig.cj 与 .autocode/bugs/bug-archived-on-20261004.md 7.6
+            initCodecPools()
             spawn{
                 while(true){
+                    // 每轮重新建立“发现用”连接：上一轮末尾会 close() 掉它们，
+                    // 若在循环外只建一次，第二轮起 transfer 会抛 "Client is closed"，发现流程整体中断（.autocode/bugs/bug-archived-on-20261004.md 7.10）
+                    let clients = ClientConfig.createClient()
                     let metas = HashMap<ServiceMeta, TreeSet<String>>()
                     func subscribe(client: Client<RPCMessage>, closingOnEnd: Bool){
                         try{
@@ -67,8 +71,11 @@ public class RPCClient {
                     let hostMap = TreeMap<String, Float64>()
                     try{
                         for(client in clients){
-                            let msg = Message.subscribe(data: true)
-                            let resp = client.transfer(msg).get().data
+                            // 载荷必须是 RPCMessage：服务端会 tryFromData<RPCMessage>() 后取 params[0]，
+                            // 传裸 Bool 会被宽松转成“params 为空的 RPCMessage”⇒ 服务端取 params[0] 越界（见 .autocode/bugs/bug-archived-on-20261004.md 7.10）
+                            let msg = Message.subscribe(data: RPCMessage.subscribe(true))
+                            let response = client.transfer(msg).get()
+                            let resp = response.data
                             let any = Array<String>.tryFromData(resp)
                             let array: Array<String> = match(any){
                                 case x: Array<String> => x
@@ -81,7 +88,7 @@ public class RPCClient {
                                 let weight = Float64.parse(h[idx + 1 ..])
                                 hostMap.add(host, weight)
                             }
-                            subscribe(client, false)
+                            let ok = subscribe(client, false)
                         }
                         clients.close()
                         for((host, weight) in hostMap){
@@ -107,7 +114,8 @@ public class RPCClient {
                                 let weight = if(meta.weight != 1.0){
                                     meta.weight
                                 }else{
-                                    hostMap[host]
+                                    // 服务节点可能没有上报该主机权重（键不存在时下标取值会抛 NoneValueException），缺省按 1.0
+                                    hostMap.get(host) ?? 1.0
                                 }
                                 (weight, host)
                             }
@@ -142,16 +150,39 @@ public class RPCClient {
         }
     }
     private init(){}
+    /**
+     * 取某个服务对应的客户端集合。服务发现由 start() 的后台线程异步完成，首个调用可能早于发现完成；
+     * 直接写 services[meta] 在键不存在时会抛 NoneValueException（既无法重试也说不清原因），
+     * 这里改成在 discoveryTimeout 内等待，超时则明确报出服务名。
+     */
+    private static func availableClients(meta: ServiceMeta): MultiClient<Float64, RPCMessage> {
+        let timeout = ClientConfig.discoveryTimeout
+        let deadline = MonoTime.now() + timeout
+        while(true){
+            if(let Some(clients) <- services.get(meta)){
+                return clients
+            }
+            if(MonoTime.now() >= deadline){
+                break
+            }
+            sleep(Duration.millisecond * 20)
+        }
+        throw RPCException("no available client for ${meta.typeName}.${meta.methodName}(version ${meta.version}) after ${timeout}, check that the service node is started and registered")
+    }
     public static func call<R>(message: RPCMessage): R where R <: DataFields<R> {
         start()
         var tried = 0
         var ex = None<RPCException>
         let result = LogMessage(message)
-        var consume = unsafeZeroValue<Message>()
+        // 不能用 unsafeZeroValue<Message>()：它的id是零值，一旦调用在发出消息前就失败，
+        // finally里的日志会格式化零值MessageID（DateTime未初始化）而段错误
+        var consume = None<Message>
         let start = MonoTime.now()
         try{
-            for(client in services[message.meta]){
-                if(tried >= retryCount){
+            for(client in availableClients(message.meta)){
+                // retryCount 是“重试次数”，must allow tried==0（首次尝试）；
+                // 原来写 tried >= retryCount，默认 retryCount=0 时首次尝试就被判为超出重试，调用永远发不出去
+                if(tried > retryCount){
                     let exceeded = RPCException("retry count exceeded")
                     if(let Some(e) <- ex){
                         e.addSuppressed(exceeded)
@@ -160,9 +191,10 @@ public class RPCClient {
                     }
                     break
                 }
-                consume = Message.consume<RPCMessage>(once: true, qos: AtMostOnce, data: message)
+                let sending = Message.consume<RPCMessage>(once: true, qos: AtMostOnce, data: message)
+                consume = Some(sending)
                 try{
-                    let resp = client.transfer(consume).get()
+                    let resp = client.transfer(sending).get()
                     let data = resp.data
                     result.result = DataAny(data)
                     return match(resp.command){//必须明确return，否则编译器推断最后的throw才是返回值
@@ -182,7 +214,7 @@ public class RPCClient {
                     }
                 }catch(e: Exception){
                     tried++
-                    errorLog(consume.id, 'Stub', consume.command, message, e)
+                    errorLog(sending.id, 'Stub', sending.command, message, e)
                     if(let Some(ee) <- ex){
                         ee.addSuppressed(e)
                     }else{
@@ -197,9 +229,12 @@ public class RPCClient {
             }
             throw RPCException("no client is available")
         }finally{
-            infoLog<LogMessage>(consume.id, 'Stub', consume.command){
-                result.consumed = MonoTime.now() - start
-                result
+            // 只有真的发出过消息才有消息id可记
+            if(let Some(c) <- consume){
+                infoLog<LogMessage>(c.id, 'Stub', c.command){
+                    result.consumed = MonoTime.now() - start
+                    result
+                }
             }
         }
     }

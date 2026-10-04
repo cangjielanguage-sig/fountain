@@ -20,6 +20,8 @@ interface IKeyPool<K, V> {
     func giveBack(key: K, value: V, checker: (K, V) -> Bool, destroier: (K, V) -> Unit): Unit
     func get(key: K, checker: (K, V) -> Bool, destroier: (K, V) -> Unit): ?V
     func check(running: () -> Bool, checker: (K, V) -> Bool, taskPusher: (K) -> Unit): Unit
+    /** 主动审计自愈（巡检线程每轮调用，见 .autocode/bugs/bug-archived-on-20261004.md 7.12）：返回校正的动作数。 */
+    func audit(): Int64
     func destroy(destroier: (K, V) -> Unit): Unit
     prop size: Int64
     func keyedSize(key: K): Int64

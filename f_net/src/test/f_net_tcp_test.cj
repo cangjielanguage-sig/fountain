@@ -15,40 +15,50 @@ limitations under the License.
  */
 
 /**
- * f_net TCP 集成测试（放在 fmq 模块避免 f_net 子包循环依赖）。
+ * f_net TCP 集成测试。
  *
- * 测试覆盖：
- *   1. Server bind + Client connect
- *   2. Client.transfer() PING → Server reply PONG
+ * 覆盖（对应 .autocode/bugs/bug-archived-on-20261004.md 7.9：f_net 的读取/发送路径必须有可执行用例）：
+ *   1. Server bind + 裸 socket connect；
+ *   2. Client.transfer() PING → 服务端内置 ACK（心跳路径）；
+ *   3. SUBSCRIBE → 服务端 executor 回 RESP（业务请求/响应路径，含载荷往返）。
+ *
+ * 说明：`Server<T>` / `Client<T>` 的 T 是**服务端解码载荷用的类型**（约束 `T <: DataFields<T>`），
+ * 这里用 `Array<Int64>`：f_data 已为集合实现 DataFields，且集合走独立的 dataType，
+ * 不需要对象类型创建者注册（也就不会让用例依赖 DefaultCodec 的注册表状态）。
  */
 package fountain::f_net.test
 
+import std.net.TcpSocket
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_data.*
 import fountain::f_net.client.*
 import fountain::f_net.server.*
-import fountain::f_protocol.default.{MessageID, EncodedMessage, Message, Command}
+import fountain::f_protocol.default.{MessageID, Message, Command}
+
+private func pingChecker(): ?Message {
+    Message.ping()
+}
 
 @Test
 public class FNetTcpTest {
     private static let PORT: UInt16 = 20901
     private static let PORT2: UInt16 = 20902
+    private static let PORT3: UInt16 = 20903
     private static let HOST = "127.0.0.1"
 
     // ================================================================
-    // 测试 1：服务端启动 + 客户端 connect
+    // 测试 1：服务端启动 + 裸 socket connect
     // ================================================================
 
     @TestCase
     public func testServerBindAndClientConnect(): Unit {
-        let server = Server<Message, EncodedMessage, Message, String>(
-            queueSize: 64, bindAt: PORT,
-            checkDuration: Duration.second * 60,
-            checker: { _ => true })
+        let server = Server<Array<Int64>>.builder(
+            bufferQueueSize: 64, checkDuration: Duration.second * 60, checker: pingChecker, bindAt: PORT)
+            .reuseAddress(true).build()
 
         spawn {
-            server.start({ msg => msg })
+            server.start({ _, msg => msg })
         }
         sleep(Duration.millisecond * 800)
 
@@ -67,34 +77,72 @@ public class FNetTcpTest {
     }
 
     // ================================================================
-    // 测试 2：Client.transfer() PING → PONG
+    // 测试 2：Client.transfer() PING → 服务端内置 ACK
     // ================================================================
 
     @TestCase
-    public func testClientTransferPingPong(): Unit {
-        // 服务端：收到任何消息均回复 PING(1)
-        let server = Server<Message, EncodedMessage, Message, String>(
-            queueSize: 64, bindAt: PORT2,
-            checkDuration: Duration.second * 60,
-            checker: { _ => true })
+    public func testClientTransferPingAck(): Unit {
+        let server = Server<Array<Int64>>.builder(
+            bufferQueueSize: 64, checkDuration: Duration.second * 60, checker: pingChecker, bindAt: PORT2)
+            .reuseAddress(true).build()
         spawn {
-            server.start({ req => Message(Command.PING(1), req.id, "pong".toData()) })
+            // PING/ACK 由 Server.start 的内置逻辑处理，不会走到 executor
+            server.start({ _, req => req })
         }
         sleep(Duration.millisecond * 800)
 
-        let client = Client<Message, EncodedMessage, Message, String, MessageID>.builder(
-            queueSize: 64, socketCount: 1,
-            host: HOST, port: PORT2,
-            idGetter: { m => m.id },
-            checkDuration: Duration.second * 60,
-            checker: { _ => true }
+        let client = Client<Array<Int64>>.builder(
+            queueSize: 64, socketCount: 1, host: HOST, port: PORT2,
+            checkDuration: Duration.second * 60, checker: pingChecker
         ).noDelay(true).build()
 
-        let req = Message(Command.PING(0), MessageID(), "hello".toData())
-        let resp = client.transfer(req.id, req, Duration.second * 5)
+        let req = Message.ping()
+        let resp = client.transfer(req, Duration.second * 5)
         @Assert(resp.isSome())
         if (let Some(r) <- resp) {
-            @Assert(match (r.command) { case PING(1) => true case _ => false })
+            @Assert(r.id == req.id)
+            @Assert(match (r.command) { case Command.ACK => true case _ => false })
+        }
+
+        client.close()
+        server.close()
+        sleep(Duration.millisecond * 200)
+    }
+
+    // ================================================================
+    // 测试 3：executor 请求/响应 + 载荷往返
+    // ================================================================
+
+    @TestCase
+    public func testExecutorRespondsWithPayload(): Unit {
+        let server = Server<Array<Int64>>.builder(
+            bufferQueueSize: 64, checkDuration: Duration.second * 60, checker: pingChecker, bindAt: PORT3)
+            .reuseAddress(true).build()
+        spawn {
+            // 收到非 PING 的请求：把载荷原样带回，用 RESP 响应（覆盖 executor 与响应写回路径）
+            server.start({ _, req => Message(Command.RESP(0u8), req.id, req.data) })
+        }
+        sleep(Duration.millisecond * 800)
+
+        let client = Client<Array<Int64>>.builder(
+            queueSize: 64, socketCount: 1, host: HOST, port: PORT3,
+            checkDuration: Duration.second * 60, checker: pingChecker
+        ).noDelay(true).build()
+
+        let payload: Array<Int64> = [7, 8, 9]
+        let req = Message.subscribe(data: payload)
+        let resp = client.transfer(req, Duration.second * 5)
+        @Assert(resp.isSome())
+        if (let Some(r) <- resp) {
+            @Assert(r.id == req.id)
+            @Assert(match (r.command) { case Command.RESP(_) => true case _ => false })
+            // 载荷必须逐字节往返：这是帧 + 编解码合起来的行为
+            let echoed = convert<Array<Int64>>(r.data)
+            @Assert(echoed.isSome())
+            if (let Some(a) <- echoed) {
+                @Assert(a.size == 3)
+                @Assert(a[0] == 7 && a[1] == 8 && a[2] == 9)
+            }
         }
 
         client.close()

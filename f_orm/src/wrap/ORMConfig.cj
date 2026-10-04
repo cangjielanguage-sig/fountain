@@ -46,6 +46,7 @@ public class ORMConfig {
     public static const databasePoolCheckOnCreation = confPrefix + "_databasePoolCheckOnCreation"
     public static const databasePoolCheckOnBorrowing = confPrefix + "_databasePoolCheckOnBorrowing"
     public static const databasePoolCheckOnReturning = confPrefix + "_databasePoolCheckOnReturning"
+    public static const databasePoolMaxWaiting = confPrefix + "_databasePoolMaxWaiting"
     public static const databasePoolCheckSql = confPrefix + "_databasePoolCheckSql"
     public static const stdPoolIdleTimeout = confPrefix + "_stdPoolIdleTimeout"
     public static const stdPoolMaxLifeTime = confPrefix + "_pooledDatasourceMaxLifeTime"
@@ -214,6 +215,20 @@ public class ORMConfig {
     }
     public static func getConnectTimeout(driverName!: String = String.empty): Duration {
         Duration.millisecond * get<Int64>(driverName: driverName, key: databasePoolConnectTimeout, default: 50)
+    }
+    /**
+     * 池耗尽时 `get(timeout: Duration.Max)` 的等待上限：超过它就返回 None 而不是无限挂住调用方；
+     * 配成 ≤ 0（如 `0s`）表示真无限等待（仍每轮让出 CPU）。默认 30s，与池自身的默认值一致。
+     * 配置值按 `Duration.toString()` 的格式书写，例如 `orm_databasePoolMaxWaiting=30s`；
+     * 也支持驱动级覆盖（`postgres_orm_databasePoolMaxWaiting`），与其它 orm_ 配置项一致。
+     */
+    public static func getPoolMaxWaiting(driverName!: String = String.empty): Duration {
+        let duration = Config.getData<Duration>(genKey(driverName, databasePoolMaxWaiting)) ?? Config.getData<Duration>(databasePoolMaxWaiting) ?? Duration.second * 30
+        if (duration <= Duration.Zero) {
+            Duration.Max
+        } else {
+            duration
+        }
     }
     public static func getPoolCheckSql(driverName!: String = String.empty, default!: String = 'select 1'): String {
         getConf(driverName: driverName, key: databasePoolCheckSql) ?? default

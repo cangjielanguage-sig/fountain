@@ -26,6 +26,8 @@ public struct ArrayPool<T> {
         elementLife!: Duration = Duration.Max, 
         checkInterval!: Duration = Duration.Zero,
         clearOnReturning!: Bool = false,
+        /** 池耗尽且 `get(timeout: Duration.Max)` 时的等待上限；`Duration.Max` = 真无限等待。 */
+        maxWaiting!: Duration = Duration.second * 30,
         private let arraySize!: Int64 = 128, 
         private let creator!: () -> T = {=> unsafeZeroValue<T>()}) {
         let initValue = creator()
@@ -39,6 +41,7 @@ public struct ArrayPool<T> {
             checkOnReturning: false,
             checkInterval: checkInterval,
             clearOnReturning: clearOnReturning,
+            maxWaiting: maxWaiting,
             creator: {
                 => Array<T>(arraySize) {_ => initValue}
             },

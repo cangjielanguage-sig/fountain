@@ -83,7 +83,10 @@ public struct ServiceHub {
                     return false
                 }
                 let qualifiedName = sti.qualifiedName
-                !(qualifiedName.startsWith('std.') || qualifiedName.startsWith('fountain::') || 
+                // 只排除标准库接口。曾经连 `fountain::` 前缀一起排除，导致“应用接口恰好也在 fountain:: 下”
+                // （例如 demo 的 fountain::rpcdef.EchoRPC）永远遍历不到 ⇒ 骨架注册不进去 ⇒ 服务列表为空。
+                // 真正决定“要不要注册”的是下面的 getInstanceFunction 判定，前缀过滤只需挡住标准库。
+                !(qualifiedName.startsWith('std.') || 
                   qualifiedName.startsWith('Equatable') || qualifiedName.startsWith('Comparable') || 
                   qualifiedName.startsWith('Iterable') || qualifiedName.startsWith('Collection') || 
                   qualifiedName.startsWith('Equal') || qualifiedName.startsWith('NotEqual') ||

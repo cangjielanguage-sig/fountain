@@ -24,6 +24,7 @@
   "fountain::f_data" = {path = "../f_data"}
   "fountain::f_exception" = {path = "../f_exception"}
   "fountain::f_pool" = {path = "../f_pool"}
+  "fountain::f_util" = {path = "../f_util"}
 
 [profile.build]
   incremental = true

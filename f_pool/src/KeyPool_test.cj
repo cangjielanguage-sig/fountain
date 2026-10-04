@@ -15,6 +15,9 @@ limitations under the License.
 */
 package fountain::f_pool
 
+import std.sync.AtomicInt64
+import fountain::f_pool.diagnostics.PoolDiagnostics
+
 @Test
 public class KeyPoolTest {
     @TestCase
@@ -189,6 +192,80 @@ public class KeyPoolTest {
         for(f in array){
             f.get()
         }
+    }
+    /**
+     * `maxWaiting` 是**池初始化参数**：池取空后 `get(timeout: Duration.Max)` 只在 maxWaiting 内等待，
+     * 超过就记 WARN 并返回 None（.autocode/bugs/bug-archived-on-20261004.md 7.6）。这里用 200ms 而不是默认 30s，顺带证明它不是写死的常量。
+     */
+    @TestCase
+    public func maxWaitingBoundsInfiniteWait(): Unit {
+        let pool = KeyPool<String, Object>(
+            mode: Fifo,
+            initKeys: {=> None},
+            maxSize: 1,
+            totalSize: 1,
+            checkInterval: Duration.Zero,
+            maxWaiting: Duration.millisecond * 200,
+            creator: {_=>Object()},
+            checker:{_,_=>true},
+            destroier:{_,_=>}
+        )
+        let held = pool.get('a', timeout: Duration.second).getOrThrow()   // 先占满（maxSize = 1）
+        let start = MonoTime.now()
+        let got = pool.get('a', timeout: Duration.Max)                    // 无限等待也必须受 maxWaiting 约束
+        let elapsed = MonoTime.now() - start
+        @Assert(got.isNone())
+        @Assert(elapsed >= Duration.millisecond * 150)
+        @Assert(elapsed < Duration.second * 5)                            // 不能退化成默认的 30s
+        pool.giveBack('a', held)
+        pool.close()
+    }
+    /**
+     * 后台维护线程的"看护"：creator 连续抛异常后，创建线程必须还活着、能把池项补起来
+     * （创建/巡检线程一旦静默退出，池就再也补不回项、也不会回收空闲项，见 .autocode/bugs/bug-archived-on-20261004.md 7.12）。
+     */
+    @TestCase
+    public func scheduleSurvivesCallbackErrors(): Unit {
+        let attempts = AtomicInt64(0)
+        let pool = KeyPool<String, Object>(
+            mode: Fifo,
+            initKeys: ['a','a','a'].iterator().next,
+            minSize: 2,
+            maxSize: 3,
+            totalSize: 10,
+            checkInterval: Duration.minute,
+            creator: {_ =>
+                if (attempts.fetchAdd(1) < 2) {
+                    throw Exception('creator boom')
+                }
+                Object()
+            },
+            checker:{_,_=>true},
+            destroier:{_,_=>}
+        )
+        sleep(Duration.second * 2)
+        @Assert(pool.size > 0)                                  // 两次异常之后仍自动创建成功 ⇒ 创建线程活着
+        @Assert(pool.get('a', timeout: Duration.second).isSome())
+        pool.close()
+    }
+    /** 巡检里带的审计自愈：至少跑过一轮后，全局 size 与各 key 队列之和必须一致（见 .autocode/bugs/bug-archived-on-20261004.md 7.2/7.12）。 */
+    @TestCase
+    public func auditRunsFromSchedule(): Unit {
+        let pool = KeyPool<String, Object>(
+            mode: Fifo,
+            initKeys: ['a','a'].iterator().next,
+            minSize: 1,
+            maxSize: 3,
+            totalSize: 10,
+            checkInterval: Duration.millisecond * 50,
+            creator: {_=>Object()},
+            checker:{_,_=>true},
+            destroier:{_,_=>}
+        )
+        sleep(Duration.millisecond * 300)
+        @Assert(pool.checkSize())
+        PoolDiagnostics.dump(reason: 'after-schedule-audit')
+        pool.close()
     }
 }
 

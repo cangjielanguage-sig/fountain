@@ -24,4 +24,11 @@ public class ProtocolConfig {
     public static func getProtocolHostId(): Int64 {
         return Config.getValue<Int64>(protocol_hostId) ?? 0
     }
+
+    public static const protocol_maxFramePayload = protocol + '_maxFramePayload'
+
+    /** 单帧 payload 上限：防止“声称超大长度”把对端拖死（默认 1GB）。 */
+    public static func getMaxFramePayload(): Int64 {
+        return Config.getValue<Int64>(protocol_maxFramePayload) ?? (1 << 30)
+    }
 }

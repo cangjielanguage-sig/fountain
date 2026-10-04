@@ -22,12 +22,16 @@ import fountain::f_net.server.Server
 private let serviceHosts = ConcurrentHashMap<String, Float64>()
 
 private func error(id: MessageID, cmd: Command, msg: ErrorMessage): Message {
-    errorLog(id, cmd, msg)
+    // 只记录错误文本：ErrorMessage.param是请求侧数据，对它做JsonValue转换会遍历形状未知的Data
+    // （曾因此让错误响应路径本身段错误，连接被重置，真正的原因反而看不到）
+    errorLog(id, SKELETON, cmd, msg.error)
     Message.error(id, data: msg.error)
 }
 
 class RPCServer {
     internal static func start(): Unit {
+        // 按配置初始化 codec 的两个池（编码缓冲池 / 字节数组池）；首次生效，见 PoolConfig.cj 与 .autocode/bugs/bug-archived-on-20261004.md 7.6
+        initCodecPools()
         let qsize = ServerConfig.bufferQueueSize
         let port = ServerConfig.port
         let checkDuration = ServerConfig.connectionCheckDuration

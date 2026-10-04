@@ -27,7 +27,10 @@ exports(){
     export logger_asyncWaitTimeout=5ms # 异步日志缓冲区等待时间，默认是5毫秒，超过这个时间，本次日志被忽略
     export rpcServer_baseAddresses=$3
     regexp="_stAtIc__|$1"
-    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`find ./target/release/* -type d|grep -a -v -P $regexp|tr '\n' ':'`
+    # 注意：本工程自建的库目录必须放在 $LD_LIBRARY_PATH **前面**，否则会命中
+    # /mnt/d/docs/work/cangjie/installed/libs/fboot 下的旧副本（该目录里的 .so 没有 SONAME，
+    # 链接器按文件名先在 LD_LIBRARY_PATH 里找），表现为“新符号明明在自建库里有，却报 undefined symbol”。
+    export LD_LIBRARY_PATH=`find ./target/release/* -type d|grep -a -v -P $regexp|tr '\n' ':'`$LD_LIBRARY_PATH
     echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
 }
 runServer(){
@@ -37,7 +40,15 @@ runServer(){
     fboot run $path --dylibPattern='(rpcserver)'
 }
 runClient(){
+    # 客户端必须知道要连接哪个服务节点：./boot.sh runClient 127.0.0.1:1203
+    # $1 缺省时不设置 rpcClient_serverAddress，由 f_rpc 客户端打印 ERROR 说明原因并结束进程
     exports rpcclient frpcdemoclient # rpcclient是包名
+    if [[ -n "$1" ]]; then
+        export rpcClient_serverAddress="1.0,$1"
+        echo "rpcClient_serverAddress=$rpcClient_serverAddress"
+    else
+        echo "未指定服务节点地址，客户端将打印 ERROR 并结束进程。用法：./boot.sh runClient 127.0.0.1:1203"
+    fi
     fboot run $path --dylibPattern='(rpcclient)'
 }
 build(){
@@ -50,7 +61,7 @@ cleanUpdate(){
 }
 case "$1" in 
 runClient)
-    runClient
+    runClient $2 # $2 是服务节点地址，如 127.0.0.1:1203
     ;;
 runServer)
     runServer $2 $3 # $2 是端口号 $3 是种子服务节点进程
