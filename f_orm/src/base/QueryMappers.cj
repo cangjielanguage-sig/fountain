@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_orm.base
 
 import std.collection.HashMap
+import std.database.sql.*
 import fountain::f_base.*
 import fountain::f_collection.{LinkedHashMap, ExtendMap}
 
@@ -106,8 +107,8 @@ public class QueryMappers<O> {
             list(result)
         }
     }
-    public func iterator(result: QueryResultWrap, executor: SqlExecutor): QueryResultIterator<O> {
-        QueryResultIterator<O>(result, executor, this)
+    public func iterator(result: QueryResultWrap, statement: Statement, executor: SqlExecutor): QueryResultIterator<O> {
+        QueryResultIterator<O>(result, statement, executor, this)
     }
     public func one(result: QueryResultWrap): Option<O> {
         doMap(result)

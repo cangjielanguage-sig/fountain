@@ -15,23 +15,28 @@ limitations under the License.
  */
 package fountain::f_orm.base
 
+import std.database.sql.*
+import fountain::f_log.impl.*
+
 /**
- * 结果集迭代器的公共父类：持有结果集与它的 executor，负责资源的最终收尾。
+ * 结果集迭代器的公共父类：持有本次查询的 QueryResult、Statement 与它的 executor，负责资源的最终收尾。
  *
- * executor 同时持有本次查询的 Statement / Connection / Transaction，因此迭代器返回后
- * 底层资源不会被提前回收（`SqlExecutor` 的非事务收尾会跳过移交出去的这次查询）。
+ * 持有 Statement 后，「事务中移交出去的语句」不再依赖 `SqlExecutor` 的 `stmt` 槽位——迭代器自己
+ * 就是它的唯一持有者，事务里再执行别的 SQL 也不会把它顶掉（见 bug.md §1.5）。
  *
- * close() 的顺序与语义：
- * 1. 总是关闭 QueryResult（结果集本身）；
- * 2. 其余交给 `SqlExecutor.close()` —— 它自带 `tx.isNone()` 判断：不在事务中时关闭
- *    Statement 与 Connection；在事务中则不动它们（留给事务结束后的 `close()`）。
+ * close() 的顺序：QueryResult → Statement → executor 收尾（releaseActiveQueryResult）。
+ * - Statement 关失败只记日志不抛出（与 `SqlExecutor.close()` 关语句的口径一致）；
+ * - 最后一步交给 executor：复位「活动结果集」保护，并走 `SqlExecutor.close()`——不在事务中时
+ *   归还连接，在事务中则只复位标记（连接留给事务结束后的 `close()`）。
  *
  * 实现 `Resource`：可放进 `try (it = ...)` 自动关闭；`next()` 读尽时也会自动关闭。
  */
 public abstract class AbstractQueryResultIterator<T> <: Iterator<T> & Resource {
+    private static let logger = LoggerFactory.getLogger('fountain::f_orm.base.AbstractQueryResultIterator', [])
     private var closed_ = false
     protected AbstractQueryResultIterator(
         protected let result: QueryResultWrap,
+        protected let statement: Statement,
         private let executor: SqlExecutor
     ) {}
     public func isClosed(): Bool {
@@ -45,8 +50,16 @@ public abstract class AbstractQueryResultIterator<T> <: Iterator<T> & Resource {
         try {
             result.close()
         } finally {
-            // 即使关闭结果集失败也要走 executor 收尾，否则该 executor 会一直卡在「活动结果集」保护里
-            executor.releaseActiveQueryResult()
+            try {
+                if (!statement.isClosed()) {
+                    statement.close()
+                }
+            } catch (e: Exception) {
+                logger.warn(e)
+            } finally {
+                // 即使前两步失败也要复位「活动结果集」，否则该 executor 之后的查询会一直被拒
+                executor.releaseActiveQueryResult()
+            }
         }
     }
 }
@@ -55,10 +68,11 @@ public abstract class AbstractQueryResultIterator<T> <: Iterator<T> & Resource {
 public class QueryResultIterator<T> <: AbstractQueryResultIterator<T> {
     QueryResultIterator(
         result: QueryResultWrap,
+        statement: Statement,
         executor: SqlExecutor,
         private let mappers: QueryMappers<T>
     ) {
-        super(result, executor)
+        super(result, statement, executor)
     }
     public func next(): ?T {
         if (isClosed()) {
@@ -77,11 +91,12 @@ public class QueryResultIterator<T> <: AbstractQueryResultIterator<T> {
 public class SingleColumnIterator<T> <: AbstractQueryResultIterator<T> {
     SingleColumnIterator(
         result: QueryResultWrap,
+        statement: Statement,
         executor: SqlExecutor,
         private let index!: Int64 = 0,
         private let column!: String = String.empty
     ) {
-        super(result, executor)
+        super(result, statement, executor)
     }
     public func next(): ?T {
         if (isClosed()) {

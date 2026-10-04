@@ -67,9 +67,9 @@ public class QueryResultIteratorTest {
         @Assert(None, it.next())
     }
 
-    /** 事务中：close() 只关结果集，Statement/Connection 不动，同一事务里可以继续执行 SQL */
+    /** 事务中：close() 关结果集与语句，但不动连接，同一事务里可以继续执行 SQL */
     @TestCase
-    public func testIteratorCloseInTransactionOnlyClosesResult(): Unit {
+    public func testIteratorCloseInTransactionKeepsConnection(): Unit {
         setupRows()
         ORM.register(DriverManager.getDriver(ORMConfig.mockdb).getOrThrow(), 'mockdb://', default: true)
         let ex = ORM.executor(ORMConfig.mockdb)

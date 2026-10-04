@@ -1368,7 +1368,7 @@ public class QueryMappers<O> {
 
     public func list(result: QueryResultWrap): ArrayList<O>
     public func groupedList<ID>(result: QueryResultWrap): ArrayList<O> where ID <: Hashable & Equatable<ID>
-    public func iterator(result: QueryResultWrap, executor: SqlExecutor): QueryResultIterator<O>
+    public func iterator(result: QueryResultWrap, statement: Statement, executor: SqlExecutor): QueryResultIterator<O>
     public func one(result: QueryResultWrap): Option<O>
 
     protected prop idName: ?String       // 主键列名（无主键为 None）
@@ -1448,7 +1448,7 @@ public class SingleColumnIterator<T> <: AbstractQueryResultIterator<T> {
 }
 ```
 
-三者的构造函数均为 internal，只能由框架创建；`next()` 在结果集耗尽时返回 `Option<T>.None` 并自动释放。父类 `AbstractQueryResultIterator` 实现 `Resource`，所以 `try (it = executor.iterator<UserPO>()) { ... }` 可自动关闭，也可显式 `close()`。`close()` 总是关闭结果集；Statement 与 Connection 的收尾交给 `SqlExecutor.close()`——不在事务中时随之关闭，在事务中则留到事务结束后关闭，因此事务内 `close()` 迭代器之后，同一事务仍可继续执行 SQL。
+三者的构造函数均为 internal，只能由框架创建；迭代器持有本次查询的 QueryResult、Statement 与 executor，`next()` 在结果集耗尽时返回 `Option<T>.None` 并自动释放。父类 `AbstractQueryResultIterator` 实现 `Resource`，所以 `try (it = executor.iterator<UserPO>()) { ... }` 可自动关闭，也可显式 `close()`。`close()` 的顺序是 **结果集 → 语句 → executor 收尾**：不在事务中时由 `SqlExecutor.close()` 一并归还连接，在事务中只复位「活动结果集」标记、连接留给事务结束后的 `close()`，因此事务内 `close()` 迭代器之后，同一事务仍可继续执行 SQL。
 
 > `SingleColumnIterator` 的 `column` 非空时按列名取值，否则按 `index`（默认 0）取值。
 

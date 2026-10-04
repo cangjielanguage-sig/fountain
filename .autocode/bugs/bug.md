@@ -185,12 +185,13 @@ public static func get(qualifiedName: String): TypeInfo {
   2. 新增迭代器专用通道 `SqlExecutor.cj:964` `executeIterator`（= `execute(false, …)`）；`singleIterator*`（`:484/:487/:492`）与 `iterator<T>(mappers)`（`:547`）改走它 ⇒ **返回前不关结果集**；
   3. 非事务收尾跳过「已移交」的查询：基座 `exec()` 的 `finally` 改为 `if (!activeQueryResult) { this.close() }`（`:852`）——否则返回迭代器时就把连接还掉了；Statement 也保留在 `this.stmt` 槽位，由 `SqlExecutor.close()` 统一关闭；
   4. 移交结果集的查询不写结果缓存（`:866`）：迭代器有状态，否则同一「SQL + 参数」的第二次调用会命中缓存拿到同一个已被消费的迭代器（还会绕过 `activeQueryResult` 守卫）；
-  5. `QueryResultIterator.cj:31` 新增公共父类 `AbstractQueryResultIterator<T> <: Iterator<T> & Resource`，持有 `result` + `executor`：`close()`（`:40`）总是关结果集，随后调 `SqlExecutor.releaseActiveQueryResult()`（`:166`，= 复位 `activeQueryResult` + `close()`）。**「是否在事务中」复用 `SqlExecutor.close()` 自己的 `tx.isNone()` 判断**：不在事务中时一并关闭 Statement/Connection，在事务中不动它们（留给事务结束后的 `close()`）；
-  6. `next()`（`QueryResultIterator.cj:63/:86`）读尽即自动 `close()`；三个入口的静态返回类型统一收窄/统一为 `Resource`（`Iterator<T>` 本身不继承 `Resource`，仓颉库同款实现如 `EmptyIterator<T> <: Iterator<T>`）。
-- **用例**：`f_orm/src/base/QueryResultIterator_test.cj`（5 条）—— 非事务返回后可逐行读、读尽自动关闭且 Statement+Connection 已关；事务中 `close()` 只关结果集、同一事务可继续查询、事务结束后连接才关；未关闭的迭代器拦住同 executor 的后续查询；`try (it = …)` 自动关闭；`singleIterator<T>(column:)` 按列名取值（同批修复，见 §2.1）。判据用 `it.isClosed()`（mock 的 `MockQueryResult.close()` 会置内部 `closed_`）与 `ex.isClosed()`。
+  5. `QueryResultIterator.cj:34` 新增公共父类 `AbstractQueryResultIterator<T> <: Iterator<T> & Resource`，持有 `result` + **`statement`** + `executor`：`close()`（`:45`）顺序固定为 **结果集 → 语句 → `executor.releaseActiveQueryResult()`**（`:166`，= 复位 `activeQueryResult` + `close()`，**不关语句**；语句由迭代器自己关，关失败只记日志）。**连接是否归还**由 `close()` 自己的 `tx.isNone()` 判断：不在事务中时归还连接，在事务中不动它（留给事务结束后的 `close()`）；
+  6. `next()`（`QueryResultIterator.cj:77/:101`）读尽即自动 `close()`；三个入口的静态返回类型统一收窄/统一为 `Resource`（`Iterator<T>` 本身不继承 `Resource`，仓颉库同款实现如 `EmptyIterator<T> <: Iterator<T>`）。
+- **用例**：`f_orm/src/base/QueryResultIterator_test.cj`（5 条）—— 非事务返回后可逐行读、读尽自动关闭且 Statement+Connection 已关；事务中 `close()` 关结果集与语句、连接仍在（`testIteratorCloseInTransactionKeepsConnection`）、同一事务可继续查询，事务结束后连接才关；未关闭的迭代器拦住同 executor 的后续查询；`try (it = …)` 自动关闭；`singleIterator<T>(column:)` 按列名取值（同批修复，见 §2.1）。判据用 `it.isClosed()`（mock 的 `MockQueryResult.close()` 会置内部 `closed_`）与 `ex.isClosed()`。
 - **修复前基线**（把 3 个入口临时退回消费型 `execute` 后跑同一套用例）：**5/5 FAILED**，首条断言即 `Assert Failed: (false == it.isClosed())`（返回时结果集已关闭）⇒ 与本节描述的形态一致 ✓。
 - **修复后**：`f_orm` 构建 **exit 0**（0 error）；`cjpm test` 该项目 **32 PASSED / 1 ERROR / 0 FAILED**，新用例 **5/5 PASSED**。唯一 ERROR 是既有环境相关用例 `f_orm.wrap / ORMConfigTest.testPoolMaxWaiting`（断言 45s/1m，本机读到 4s；与本次改动无关）。
-- **残留（本次未改）**：事务中移交出去的 Statement 只由 `this.stmt` 单槽位引用，若同一事务内又执行了 SQL，旧语句会被新语句覆盖而漏关（`close()` 只关最新一句），最终随连接关闭释放；要彻底收口可在 `statement` 属性 prepare 之前回收未关闭的旧语句（用 `!activeQueryResult` 保护，避免动到活结果集）。
+- **残留（已随 2026-10-05 调整消除）**：原先「事务中移交出去的 Statement 只由 `this.stmt` 单槽位引用，被同一事务里的下一条 SQL 覆盖而漏关」⇒ 现在 Statement 由迭代器直接持有并自行关闭，不再依赖槽位；`SqlExecutor.stmt` 槽位里的引用只作「迭代器一直未关闭」时的兜底（`close()` 会跳过已关闭的语句）。
+- **2026-10-05 调整**：迭代器改为持有 `Statement`（原先只持 executor），`close()` 顺序固定为 结果集 → 语句 → `releaseActiveQueryResult()`；后者不再涉及语句 ⇒ 上一行的残留随之消失。
 - **顺带**：`QueryMappers.iterator(result)` 签名改为 `iterator(result, executor)`（迭代器需要 executor 才能做事务感知收尾）；README §5.2 / §13.2 / §13.4 已同步。
 
 位置（修复前形态）：`src/base/SqlExecutor.cj:473-482, 533-537`（关闭点在 `904-906`）
