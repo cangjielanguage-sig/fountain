@@ -119,12 +119,18 @@ public class RPCClient {
                                 }
                                 (weight, host)
                             }
+                            let hostDesc = StringBuilder()
+                            for((w, h) in hosts){
+                                hostDesc.append('${h}(${w}) ')
+                            }
+                            rpclog.debug{'[FOUNTAIN_RPC.hosts] ${meta.typeName}.${meta.methodName} v=${meta.version} -> ${hosts.size} host(s): ${hostDesc.toString()}'}
                             if(let Some(clients) <- services.get(meta)){
                                 let set = TreeSet<String>()
                                 for(c in clients){
                                     set.add(c.address.toString())
                                 }
                                 if(let hostArray <- hostSet.toArray() && set.toArray() != hostArray){
+                                    rpclog.debug{'[FOUNTAIN_RPC.hosts] rebuild ${meta.typeName}.${meta.methodName}: ${set.size} -> ${hostArray.size}'}
                                     services[meta] = ClientConfig.createClient(hosts)
                                     clients.close()
                                 }

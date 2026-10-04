@@ -16,17 +16,17 @@
 
 ## 模块依赖
 
-`f_app` `f_base` `f_bean` `f_codec` `f_collection` `f_concurrent` `f_config` `f_data` `f_health` `f_io` `f_log` `f_macros` `f_net` `f_process` `f_protocol` `f_store` `f_util`
+`f_app` `f_aspect` `f_base` `f_bean` `f_codec` `f_collection` `f_concurrent` `f_config` `f_data` `f_health` `f_io` `f_log` `f_macros` `f_net` `f_process` `f_protocol` `f_store` `f_util`
 
 ## 包结构
 
 | 包 | 说明 |
 | --- | --- |
-| `fountain::f_rpc` | 根包 |
-| `fountain::f_rpc.base` | 基础类型：`RPCMessage`、`ServiceMeta`、`RPCException`、日志辅助 |
-| `fountain::f_rpc.macros` | 宏包（macro package）：`@RPCSkeleton`、`@RPCStub` |
-| `fountain::f_rpc.client` | 客户端：`RPCClient`、`ClientConfig` |
-| `fountain::f_rpc.server` | 服务端：`ServiceHub`、`RPCServerInitializer`、`RPCVersionException` |
+| `fountain::f_rpc` | 根包（空） |
+| `fountain::f_rpc.base` | 基础类型：`RPCMessage`、`ServiceMeta`、`RPCException`、`rpc_codec*` 池配置（`PoolConfig`）、`ControllerTraceAspect`、日志辅助 |
+| `fountain::f_rpc.macros` | 宏包（macro package）：`@RPCSkeleton`、`@RPCStub`、类型自动登记 |
+| `fountain::f_rpc.client` | 客户端：`RPCClient`、`ClientConfig`、`LogMessage` |
+| `fountain::f_rpc.server` | 服务端：`RPCServer`、`ServerConfig`、`ServiceHub`、`RPCServerInitializer`、`RPCVersionException` |
 | `fountain::f_rpc.health` | 内置健康检查 RPC 接口：`HealthRPC` |
 | `fountain::f_rpc.health.server` | 内置健康检查服务实现：`HealthRPCImpl` |
 
@@ -34,13 +34,18 @@
 
 ### 服务注册与发现
 
-1. 服务节点启动时监听 `rpcServer_port` 端口，并向 `rpcServer_baseAddresses` 配置的种子节点发送 `REGISTER` 命令（携带自身端口），将自己的地址加入种子节点维护的节点地址集合
-2. 客户端首次使用 `RPCClient` 时（类静态初始化）：
-   - 连接 `rpcClient_serverAddress` 配置的种子地址，发送 `SUBSCRIBE(data: true)` 获取**全部服务节点地址列表**
-   - 逐个连接每个服务节点，发送 `SUBSCRIBE(data: false)` 获取该节点提供的**服务元数据列表**（`Array<ServiceMeta>`）
-   - 为每个服务元数据建立一个带负载均衡的连接池（`MultiClient`）
-   - 进程退出时自动关闭全部连接
-3. 服务节点退出时向种子节点发送 `DEREGISTER` 命令
+1. 服务节点启动时监听 `rpcServer_port` 端口，并向 `rpcServer_baseAddresses`（逗号分隔的种子节点列表）逐个发送 `REGISTER`：
+   载荷是 `"<port>,<weight>"`（`weight` 来自 `rpcServer_weight`，`@RPCSkeleton[weight=…]` 会覆盖它）；
+   注册表用**TCP 对端的 IP** 加上这个 port 作为地址键（所以节点不需要知道自己的对外地址），值为权重；
+   注册失败会按固定周期重试，不阻塞启动。
+2. 客户端首次使用 `RPCClient` 时启动一个**后台发现线程**（不是一次性动作）：
+   - 按 `rpcClient_serverAddress` 连接配置的节点，`SUBSCRIBE(data: true)` 取回**全量服务节点列表**
+     （`Array<String>`，每项 `"<ip>:<port>,<权重>"`）
+   - 逐个连接每个服务节点，`SUBSCRIBE(data: false)` 取回它提供的**服务元数据列表**（`Array<ServiceMeta>`）
+   - 为每个服务元数据建立带负载均衡的连接池（`MultiClient`），并对每条服务打印一行 DEBUG：
+     `[FOUNTAIN_RPC.hosts] <接口>.<方法> v=<版本> -> N host(s): host(weight) …`
+   - 之后每 `rpcClient_refreshIntervalSeconds`（默认 1s）刷新一轮；节点集合变化时重建对应连接池；进程退出时关闭全部连接
+3. 服务节点退出时向种子节点发送 `DEREGISTER`（载荷只有 port）
 
 ### RPC 调用流程
 
@@ -146,7 +151,7 @@ export rpcServer_weight=1.0
 
 # 客户端：种子节点地址，格式 weight,address（weight 为权重，| 分隔多个）
 export rpcClient_serverAddress='1.0,192.168.1.10:1203|2.0,192.168.1.11:1203'
-# 客户端：负载均衡策略（random、roundrobin）默认是 roundrobin
+# 客户端：负载均衡策略（random、roundrobin），默认 random
 export rpcClient_loadbalance=roundrobin
 # 客户端：重试次数，默认是0
 export rpcClient_retryCount=1
@@ -276,6 +281,15 @@ public class RPCMessage {
     public mut prop params: Array<DataAny>   // 方法实参
     public init()
     public init(meta: ServiceMeta, params: Array<DataAny>)
+
+    // 服务端再次调用其它服务时会自动继承当前服务从客户端接收到的 trace
+    @DataExclude[prop]                       // 不参与序列化
+    public mut prop trace: String
+    // trace 无值时由本类的静态 ThreadLocal 自动生成一个
+    public static func currentTrace(): String
+    // 由开发者决定何时清除 ThreadLocal；f_rpc 提供服务端自动清除与针对 f_mvc 的切面
+    // （fountain::f_mvc.macros.WeavedController，见「ControllerTraceAspect」一节）
+    public static func clearCurrentTrace(): Unit
 }
 ```
 
@@ -289,26 +303,21 @@ public class ServiceMeta {
     public mut prop typeName: String             // 接口完全限定名
     public mut prop methodName: String           // 方法名
     public mut prop argTypeNames: Array<String>  // 形参类型完全限定名
+    public mut prop weight: Float64              // 服务权重（来自 @RPCSkeleton[weight=…]，默认 1.0）
     public init()
     public init(version: String, name: String, typeName: String,
-        methodName: String, argTypeNames: Array<String>, exactlyVersion!: Bool = false)
+        methodName: String, argTypeNames: Array<String>, weight!: Float64 = 1.0,
+        exactlyVersion!: Bool = false)
     public init(version: String, name: String, typeName: TypeInfo,
-        methodName: String, argTypeNames: Array<TypeInfo>, exactlyVersion!: Bool = false)
-    
-    //服务端再次调用其它服务时会自动继承当前服务从客户端接收到的trace
-    public mut prop trace: String
-    //属性trace如果没有trace值会调用currentTrace()获得一个
-    //本类维持一个静态ThreadLocal成员变量，currentTrace()会从这个静态变量获得追踪标志，如果静态变量无值会自动创建一个
-    public static func currentTrace(): String
-    //由开发者决定何时清除ThreadLocal，f_rpc提供了针对f_mvc的切面，
-    //只要使用fountain::f_mvc.macros.WeavedController修饰controller类这个切面即可生效
-    //f_rpc的服务端会在服务结束前自动调用clearCurrentTrace()
-    public static func clearCurrentTrace(): Unit
+        methodName: String, argTypeNames: Array<TypeInfo>, weight!: Float64 = 1.0,
+        exactlyVersion!: Bool = false)
 }
 ```
 
-- `exactlyVersion` 为 `false`（默认）时只保留 `version` 前两位数字（`1.2.3` → `1.2`），`true` 时保留全部
-- 实现 `Hashable` / `Equatable`，五个字段全部相等才视为同一服务
+- `exactlyVersion` 为 `false`（默认）时只保留 `version` 前两位数字（`1.2.3` → `1.2`），`true` 时保留全部；
+- 实现 `Hashable` / `Equatable`：**`weight` 被 `@DataExclude[equal hash]` 排除**，参与相等/哈希的仍是
+  version / name / typeName / methodName / argTypeNames 五个字段；
+- 客户端选节点的权重优先用 `weight`（≠ 1.0 时由骨架权重覆盖）；为 1.0（默认）时改用注册表里该节点的权重。
 
 #### 常量
 
@@ -454,7 +463,7 @@ public class HealthRPCImpl <: HealthRPC {
 | 配置项 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `rpcServer_port` | UInt16 | `1203` | 服务监听端口 |
-| `rpcServer_bufferQueueSize` | `Int64` | `1000000` | 数据传输任务队列大小 |
+| `rpcServer_bufferQueueSize` | `Int64` | `1024` | 数据传输任务队列大小 |
 | `rpcServer_connectionCheckDuration` | `Int64`（毫秒） | `1000` | TCP 连接有效性检查周期 |
 | `rpcServer_baseAddresses` | `Array<String>`（逗号分隔） | 空 | 种子节点地址列表（如 `192.168.1.10:1203,192.168.1.11:1203`），启动后向这些节点注册自身 |
 | `rpcServer_unavailableChecked` | `Int64` | `3` | 不可用检查次数 |
@@ -469,8 +478,8 @@ public class HealthRPCImpl <: HealthRPC {
 | --- | --- | --- | --- |
 | `rpcClient_serverAddress` | `String` | 无 | 种子节点地址，格式 `weight,address`，多个地址用 `\|` 分隔，如 `'1.0,192.168.1.10:1203\|2.0,192.168.1.11:1203'`（weight 为 `Float64` 权重） |
 | `rpcClient_loadbalance` | `String` | `random` | 负载均衡算法：`random`（随机）/ `roundrobin`（轮询），其它值抛 `LoadBalanceException` |
-| `rpcClient_queueSize` | `Int64` | `1024` | 写数据任务队列大小 |
-| `rpcClient_socketCount` | `Int64` | `1` | 每个服务节点的连接数 |
+| `rpcClient_queueSize` | `Int64` | `1024` | 写数据任务队列大小（未配置时不传给 builder，默认值来自 `f_net`） |
+| `rpcClient_socketCount` | `Int64` | `1` | 每个服务节点的连接数（同上） |
 | `rpcClient_checkDuration` | `Duration` | `1s` | 连接有效性检查周期（如 `1s`、`500ms`） |
 | `rpcClient_bindToDevice` | `String` | 无 | 绑定网卡名 |
 | `rpcClient_socketKeepaliveConfig_count` | `UInt32` | 无 | keepalive 探测计数 |
@@ -486,8 +495,9 @@ public class HealthRPCImpl <: HealthRPC {
 | `rpcClient_socketOptionBool` | `level,option,value` | 无 | 布尔型套接字选项，如 `6,1,true` |
 | `rpcClient_socketOptionInt` | `level,option,value` | 无 | 整型套接字选项，如 `6,2,128` |
 | `rpcClient_pingTimeout` | `Duration` | 无 | ping 超时 |
-| `rpcClient_retryCount` | `Int64` | `0` | 单次调用最大尝试次数（每次尝试前检查已尝试次数是否达到上限，**需配置为不小于 1 才能发起调用**） |
-| `_refreshIntervalSeconds` | `Duration` | `1` | 刷新服务端连接的周期，单位是秒，定时从种子节点获取服务端节点，并获得每个节点提供的RPC服务元数据 |
+| `rpcClient_retryCount` | `Int64` | `0` | **首次尝试之外的重试次数**：总尝试次数 ≤ `retryCount + 1`（默认 0 也能发出第一次调用）；判定是 `tried > retryCount` |
+| `rpcClient_refreshIntervalSeconds` | `Int64`（秒） | `1` | 服务发现后台线程的刷新周期：定时重新 SUBSCRIBE 取节点与服务元数据，节点集合变化时重建连接池 |
+| `rpcClient_discoveryTimeout` | `Duration` | `5s` | 首次调用等待服务发现完成的时限，超时抛 `RPCException("no available client for <接口>.<方法>(version …) after …")` |
 | `rpc_currentSkeleton` | `String` | 无 | 当前服务模块名，用于阻止存根在服务端模块注册到 IOC（见 `@RPCStub`） |
 
 ### 限流器配置
@@ -506,7 +516,8 @@ export rpcServer_timeout=100
 | `slidingWindowRateLimiter` | `window`、`limit`、`timeout` | `150ms`、`1024`、`100`（单位毫秒） |
 | `tokenBucketRateLimiter` | `tokens`、`timeout`、`populationPeriod` | `1024`、`100`（单位毫秒）、`150`（单位毫秒） |
 
-未配置 `rpcServer_rateLimiterName` 时使用 `UnlimitedRateLimiter`（不限流）。限流触发时服务端返回 `ERROR` 命令，data 为 `ServerExceeding`。
+未配置 `rpcServer_rateLimiterName` 时使用 `UnlimitedRateLimiter`（不限流）；**配了无法识别的名称也是静默退化为它**（不报错）。
+限流触发时服务端返回 `ERROR` 命令，data 为 `ServerExceeding`。
 
 ## 协议命令
 
@@ -516,7 +527,7 @@ RPC 基于 `fountain::f_protocol` 的 `Command` 枚举：
 | --- | --- | --- |
 | `REGISTER` | Client → Server | 服务节点向种子节点注册自身地址与端口，服务端回复 `ACK` |
 | `DEREGISTER` | Server → BaseServer | 服务节点向种子节点注销自身地址与端口，服务端回复 `ACK` |
-| `SUBSCRIBE` | Client → Server | `data=true` 返回全部服务节点地址列表（`Array<String>`）；`data=false` 返回本节点提供的服务元数据列表（`Array<ServiceMeta>`） |
+| `SUBSCRIBE` | Client → Server | `data=true` 返回注册表里的全部服务节点（`Array<String>`，每项 `"<ip>:<port>,<权重>"`）；`data=false` 返回本节点提供的服务元数据列表（`Array<ServiceMeta>`） |
 | `CONSUME` | Client → Server | 发起 RPC 调用，data 为 `RPCMessage`（`once: true`，QoS 为 `AtMostOnce`） |
 | `RESP` | Server → Client | 返回调用结果或订阅数据 |
 | `ACK` | 双向 | 注册确认，无响应体 |
@@ -531,8 +542,11 @@ RPC 基于 `fountain::f_protocol` 的 `Command` 枚举：
 [FOUNTAIN_RPC.{label}.{command}] {messageId}; {JSON}
 ```
 
-- `label`：`Stub`（客户端）或 `Skeleton`（服务端）
+- `label`：`Stub`（客户端调用）或 `Skeleton`（服务端执行）；此外还有 `subscribe.services`、`subscribe.hosts`、`hosts`、
+  `register`、`register.newClient`、`deregister`、`pool` 等**不带 messageId** 的 label
 - 正常调用以 INFO 级别记录（含请求消息、结果、耗时 `consumed`），注册/订阅以 DEBUG 级别记录，异常以 ERROR 级别记录（附异常堆栈）
+- 服务发现每轮为每条服务打印调用池组成，**排障负载均衡先看这一行**：
+  `[FOUNTAIN_RPC.hosts] <接口>.<方法> v=<版本> -> N host(s): host(weight) …`
 
 ## 版本匹配规则
 
@@ -550,36 +564,14 @@ RPC 基于 `fountain::f_protocol` 的 `Command` 枚举：
 data是返回给客户端的数据
 
 ## ControllerTraceAspect
-对于同时使用f_mvc和f_rpc的项目，一次http访问需要依赖f_rpc服务，为了及时清除trace，应当使用`fountain::f_mvc.macros.WeavedController`宏修饰Controller类。
-如此本模块的ControllerTraceAspect就会生效。Controller函数返回前会清除ServiceMeta的trace。
-另外此类还会记录当前Controller的trace到日志。
-其他客户端场景可参考此类。
-```cj
-import fountain::f_aspect.*
-import fountain::f_bean.{BeanFactory, BeanMeta}
-import fountain::f_log.LoggerFactory
 
-@AspectRoute[FuncAnnotationRouteRule("fountain::f_mvc.PostMapping") | FuncAnnotationRouteRule("fountain::f_mvc.PutMapping") | FuncAnnotationRouteRule("fountain::f_mvc.GetMapping") | FuncAnnotationRouteRule("fountain::f_mvc.DeleteMapping") | FuncAnnotationRouteRule("fountain::f_mvc.PatchMapping")]
-@BeanMeta
-public class ControllerTraceAspect <: Aspect {
-    private static let log = LoggerFactory.getLogger<ControllerTraceAspect>()
-    static init(){
-        BeanFactory.instance.register<ControllerTraceAspect>({=> ControllerTraceAspect()})
-    }
+对于同时使用 f_mvc 和 f_rpc 的项目：一次 HTTP 访问里如果调用了 f_rpc 服务，thread-local 的 trace 需要及时清除，
+否则会被同一个线程上的后续请求继承。做法是用 `fountain::f_mvc.macros.WeavedController` 修饰 Controller 类，
+本模块的 `ControllerTraceAspect` 就会生效：进入被修饰的方法时先取当前 trace（`RPCMessage.currentTrace()`），
+方法返回前调用 `RPCMessage.clearCurrentTrace()`，并以 INFO 记录
+`ControllerTrace.proceed start: <trace> <类>.<方法>(args)`。其他调用场景可参考该实现。
 
-    private init(){}
-
-    public func proceed(funcInfo: InvocationFuncInfo, point: (Array<Any>) -> Any): Any {
-        log.debug('ControllerTraceAspect.proceed start')
-        try{
-            point(funcInfo.args)
-        }finally{
-            RPCMessage.clearCurrentTrace()
-            log.debug('ControllerTraceAspect.proceed end')
-        }
-    }
-}
-```
+实现见 `f_rpc/src/base/ControllerTraceAspect.cj`（源码为准，不再在文档里内嵌代码副本）。
 
 ## 注意事项与限制
 
@@ -587,7 +579,8 @@ public class ControllerTraceAspect <: Aspect {
 2. 被 `@RPCStub` 修饰的接口不能带泛型参数，否则编译报错
 3. RPC 方法参数类型需支持 `ToData` 序列化、返回类型需满足 `DataFields<R>`（用 `@DataAssist` 修饰即可）
 4. 服务端工作目录的 `cjpm.toml` 必须包含 `version=` 字段，否则启动时抛 `RPCVersionException`
-5. `rpcClient_retryCount` 默认为 `0`，且每次尝试前检查已达上限即抛出 `RPCException("retry count exceeded")`，使用时需配置为不小于 `1`
+5. `rpcClient_retryCount` 是「首次尝试之外的重试次数」：默认 `0` 也能发出第一次调用，判定为 `tried > retryCount`，
+   超出后抛 `RPCException("retry count exceeded")`（多节点失败会用 `addSuppressed` 聚合）
 6. 客户端与服务端的接口定义需保持一致（接口完全限定名、方法名、参数类型完全限定名均参与匹配），推荐共享 API 包
 7. 服务端调用异常不会抛给客户端，而是通过 `ERROR` 命令返回异常堆栈文本（客户端表现为 `RPCException`）
 8. skeleton `rpcServer_exactlyVersion=true`时，`a.b.c`版本不能服务指定版本是`a.b`的客户端访问。

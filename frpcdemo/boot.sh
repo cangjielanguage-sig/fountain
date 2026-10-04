@@ -34,18 +34,53 @@ exports(){
     echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
 }
 runServer(){
-    exports rpcserver "frpcdemoserver-$1" $2 # rpcserver是包名
+    # ./boot.sh runServer <主机:端口> [种子节点地址] [权重]
+    #   rpcServer_port 只接受端口号（UInt16，见 f_rpc/README.md）⇒ 从“主机:端口”里取出端口，
+    #   直接传 "127.0.0.1:1203" 会解析失败并回落到默认端口 1203（两个服务节点就会撞端口）。
+    #   baseAddresses 除显式给的种子节点外还加上自己：服务节点自己也要出现在注册表里，
+    #   否则注册表报不出它的权重，客户端只能按缺省 1.0 分配（见 .autocode/bugs/bug-archived-20261004-2.md）。
+    local addr=${1:-127.0.0.1:1203}
+    if [[ "$addr" != *:* ]]; then
+        addr="127.0.0.1:$addr"
+    fi
+    local port=${addr##*:}
+    local weight=${3:-1.0}
+    local base="$2"
+    # 种子节点参数写 "-" 表示没有种子（只是为了让权重参数能写在第三位：
+    # ./boot.sh runServer 127.0.0.1:1203 - 2.0）
+    if [[ "$base" == "-" ]]; then
+        base=""
+    fi
+    if [[ -n "$base" ]]; then
+        base="$base,$addr"
+    else
+        base="$addr"
+    fi
+    exports rpcserver "frpcdemoserver-$addr" "$base" # rpcserver是包名
     export rpc_currentSkeleton='fountain::rpcserver'
-    export rpcServer_port=$1
+    export rpcServer_port=$port
+    export rpcServer_weight=$weight
+    echo "rpcServer_port=$rpcServer_port rpcServer_baseAddresses=$rpcServer_baseAddresses rpcServer_weight=$rpcServer_weight"
     fboot run $path --dylibPattern='(rpcserver)'
 }
 runClient(){
-    # 客户端必须知道要连接哪个服务节点：./boot.sh runClient 127.0.0.1:1203
+    # ./boot.sh runClient <主机:端口>[,<主机:端口>...]
+    #   多个服务节点用逗号分隔；rpcClient_serverAddress 的格式是「权重,地址」，多个地址用 | 分隔。
+    #   本 demo 固定用轮询（rpcClient_loadbalance=roundrobin），各节点权重都写 1.0
+    #   —— 真正决定调用分配的是**服务节点注册到注册表的权重**（rpcServer_weight）；
+    #   注册表里查不到的节点才会退回这里配置的权重。
     # $1 缺省时不设置 rpcClient_serverAddress，由 f_rpc 客户端打印 ERROR 说明原因并结束进程
     exports rpcclient frpcdemoclient # rpcclient是包名
-    if [[ -n "$1" ]]; then
-        export rpcClient_serverAddress="1.0,$1"
-        echo "rpcClient_serverAddress=$rpcClient_serverAddress"
+    local list="$1"
+    if [[ -n "$list" ]]; then
+        local spec=""
+        local IFS=','
+        for addr in $list; do
+            spec="${spec}${spec:+|}1.0,${addr}"
+        done
+        export rpcClient_serverAddress="$spec"
+        export rpcClient_loadbalance=roundrobin
+        echo "rpcClient_serverAddress=$rpcClient_serverAddress rpcClient_loadbalance=$rpcClient_loadbalance"
     else
         echo "未指定服务节点地址，客户端将打印 ERROR 并结束进程。用法：./boot.sh runClient 127.0.0.1:1203"
     fi
@@ -61,10 +96,10 @@ cleanUpdate(){
 }
 case "$1" in 
 runClient)
-    runClient $2 # $2 是服务节点地址，如 127.0.0.1:1203
+    runClient "$2" # $2 是服务节点地址（多个用逗号分隔），如 127.0.0.1:1203,127.0.0.1:1204
     ;;
 runServer)
-    runServer $2 $3 # $2 是端口号 $3 是种子服务节点进程
+    runServer "$2" "$3" "$4" # $2 是主机:端口 $3 是种子服务节点地址 $4 是权重
     ;;
 build)
     build 

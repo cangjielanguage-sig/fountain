@@ -877,33 +877,47 @@ public class DefaultCodec <: Codec & Releasable {
         } else if (dataType == DataType.DATETIME2.value) {
             DateTime.fromUnixTimeStamp(readDuration2(head, input)).toData()
         } else if (dataType == DataType.COLLECTION.value) {
-            let list = DataList()
+            // 空集合：编码侧只写一个 head 字节、低半字节 0（不写长度字节，见 `encode` 的 `x.isEmpty()` 分支），
+            // 与字符串分支的 `ss == 0` 是同一约定 —— 这里必须直接返回空集合，
+            // 否则会去读长度字节、`parseInt64` 拿到长度 0 的数组后在 else 分支索引 bytes[0] 越界
+            // （实测表现：RPC 客户端用 DataAny 中性解码，收到"params 为空"的响应就断链，
+            // 见 .autocode/bugs/bug-archived-on-20261004.md）
             let s = Int64(head & 0x0f)
-            bytes = Array<Byte>(s, repeat: 0)
-            size = input.read(bytes)
-            if (size < s) {
-                throw CodecException('current data head is ${toHex(head)}, but read ${size} bytes')
+            if (s == 0) {
+                DataList()
+            } else {
+                let list = DataList()
+                bytes = Array<Byte>(s, repeat: 0)
+                size = input.read(bytes)
+                if (size < s) {
+                    throw CodecException('current data head is ${toHex(head)}, but read ${size} bytes')
+                }
+                size = parseInt64(head, true, bytes)
+                for (_ in 0..size) {
+                    list.add(decodeData(input))
+                }
+                list
             }
-            size = parseInt64(head, true, bytes)
-            for (_ in 0..size) {
-                list.add(decodeData(input))
-            }
-            list
         } else if (dataType == DataType.MAP.value) {
-            let tuples = DataTuples()
+            // 空映射：同空集合（低半字节 0 = 没有长度字节）
             let s = Int64(head & 0x0f)
-            bytes = Array<Byte>(s, repeat: 0)
-            size = input.read(bytes)
-            if (size < s) {
-                throw CodecException('current data head is ${toHex(head)}, but read ${size} bytes')
+            if (s == 0) {
+                DataTuples()
+            } else {
+                let tuples = DataTuples()
+                bytes = Array<Byte>(s, repeat: 0)
+                size = input.read(bytes)
+                if (size < s) {
+                    throw CodecException('current data head is ${toHex(head)}, but read ${size} bytes')
+                }
+                size = parseInt64(head, true, bytes)
+                for (_ in 0..size) {
+                    let key = decodeData(input)
+                    let value = decodeData(input)
+                    tuples.add(key, value)
+                }
+                tuples
             }
-            size = parseInt64(head, true, bytes)
-            for (_ in 0..size) {
-                let key = decodeData(input)
-                let value = decodeData(input)
-                tuples.add(key, value)
-            }
-            tuples
         } else if (dataType == DataType.OBJECT.value) {
             let murmur = UInt128.fromBytes(readBytes(head, input))
             // 类型创建者只在本进程“编码过该类型”时才登记；只解码不编码的一侧（客户端第一次收响应、
