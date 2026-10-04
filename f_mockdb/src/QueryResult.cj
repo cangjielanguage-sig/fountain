@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_mockdb
 
 public class MockQueryResult <: QueryResult {
+    private var closed_ = false
     private var rowIndex = -1
     //构造时快照本次执行的结果：之后的执行（或 clearQueryResult）不再改变本结果集
     private let rowData: Array<Array<Any>> = MOCKDB.getQueryResultRows().toArray()
@@ -55,7 +56,9 @@ public class MockQueryResult <: QueryResult {
         }
     }
     public func isClosed(): Bool {
-        false
+        closed_
     }
-    public func close(): Unit {}
+    public func close(): Unit {
+        closed_ = true
+    }
 }

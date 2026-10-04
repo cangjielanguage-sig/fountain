@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_mockdb
 
 public class MockStatement <: Statement {
+    private var closed_ = false
     private let args = ArrayList<Any>()
     MockStatement(private let sql: String){}
     public prop parameterColumnInfos: Array<ColumnInfo> {
@@ -66,9 +67,9 @@ public class MockStatement <: Statement {
         MockQueryResult()
     }
     public func isClosed(): Bool {
-        false
+        closed_
     }
     public func close(): Unit {
-
+        closed_ = true
     }
 }

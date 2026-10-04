@@ -14,14 +14,14 @@
 | 中 | 5 |
 | 低危 / 待验证 | 9 |
 
-> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3` 已修复 ⇒ 待修严重级 **0** 条（见各自修复标记）。
+> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4` 已修复 ⇒ 待修严重级 **0** 条、中危 **4** 条（见各自修复标记）。
 
 **建议修复顺序**：
 
 1. `MOCK-1`（§1.1）查询结果行不按「一次执行」清理 —— 事务内第二条语句读到第一条的行（静默错数据，实测复现）　**✅已修复（2026-10-04，见 §1.1 修复标记）**
 2. `MOCK-2`（§1.2）`MockUpdateResult` 惰性读全局 —— 两个 update 结果互相串（实测复现）　**✅已修复（2026-10-04，见 §1.2 修复标记）**
 3. `MOCK-3`（§1.3）`getOrNull` 越界/未就绪返回 None（std 契约要求抛 `SqlException`），类型不匹配也静默 None　**✅已修复（2026-10-04，见 §1.3 修复标记）**
-4. `MOCK-4`（§2.1）`close()` 后 `isClosed()` 仍为 false、`state` 仍为 `Connected`（实测复现）
+4. `MOCK-4`（§2.1）`close()` 后 `isClosed()` 仍为 false、`state` 仍为 `Connected`（实测复现）　**✅已修复（2026-10-04，见 §2.1 修复标记）**
 5. `MOCK-5`（§2.2）`MockConnection.close()` 隐式清空夹具，且是外部唯一可用的重置入口
 6. `MOCK-7`（§2.4）参数槽语义：跨执行累积、`None<Any>` 兼作「未绑定」与「绑定 NULL」
 7. 其余见 §2、§3
@@ -123,7 +123,16 @@ DT：越界与未 `next()` 时断言抛异常；类型不符断言抛异常；�
 
 ## 2. 中（5 条）
 
-### 2.1 [中｜契约] `MOCK-4` 关闭语义完全没建模：`close()` 之后 `isClosed()` 仍 false、`state` 仍是 `Connected`（f_mockdb）
+### 2.1 [中｜契约] `MOCK-4` 关闭语义完全没建模：`close()` 之后 `isClosed()` 仍 false、`state` 仍是 `Connected`（f_mockdb） → ✅已修复（2026-10-04）
+
+**✅ 修复标记（2026-10-04）**：分支 `fix/mock-1-query-isolation`（同一 worktree，在 MOCK-3 之后追加提交），**代码、用例、本标记在同一提交**。
+
+- 改动：四个类各加 `private var closed_ = false` —— ①`src/Connection.cj`：`state` 关后返回 `Closed`（否则 `Connected`）、`isClosed()` 返回标志、`close()` 置标志（**仍保留** `MOCKDB.clear()` 副作用，解耦留给 §2.2 MOCK-5）；②`src/Statement.cj`、③`src/QueryResult.cj`、④`src/Datasource.cj`：`close()` 置标志、`isClosed()` 返回标志（重复关闭幂等）。
+- 用例：`src/mockdb_core_test.cj` 新增 3 条 —— `testConnectionCloseState`（关前 `false`/`Connected` → 关后 `true`/`Closed` → 双关幂等）、`testStatementAndQueryResultCloseState`、`testDatasourceCloseState`。
+- 测量证据：**修复前** PASSED 38 / **FAILED 3**（EXIT=1，三条都失败在「`close()` 后 `isClosed()` 仍为 false」）；**修复后** = **41/41 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**，编译警告 9 条无新增。日志 `/tmp/mock4_before.log`、`/tmp/mock4_after.log`。
+- 与既有调用方的兼容性：`f_orm/src/base/SqlExecutor.cj:370-386`（`connection` prop 按 `state` 判断「复用还是重取」）与 `:99-113`（`getInstance` 对 `Closed` 置 `NoneConnection`）在 mock 下从此走**重取连接**分支（更贴近真驱动）；`statement` prop（`:396-404`）每次执行都新建 `Statement` ⇒ 关闭位不影响它；`DatabasePool` 回收时 `!(assigned || connection.isClosed())` 的判断也从此正确。
+- 未覆盖：`f_orm` 侧唯一的 mockdb 用例 `f_orm/src/wrap/DatabasePool_test.cj`（已被并行会话改成可终止的冒烟用例：借还一次连接 + `pool.close()`）本轮**未复跑**；建议合并回主线后于主工作区跑 `cjpm test --filter DatabasePoolTest`（其断言 `c.isClosed() == false` 与本次改动方向一致）。
+- 保留（属 §2.2 MOCK-5）：`MockConnection.close()` 仍会调 `MOCKDB.clear()`（关连接 = 清夹具）；本次只让「关闭」这件事可观测，未涉及「关闭后继续使用是否报错」。
 
 位置：`src/Connection.cj:19-23,33-35`、`src/Statement.cj:63-68`、`src/QueryResult.cj:53-56`、`src/Datasource.cj:19-22`
 

@@ -378,4 +378,48 @@ public class MockDBCoreTest {
         @Assert(11, ur.lastInsertId)
         @Assert(1, ur.rowCount)
     }
+
+    @TestCase
+    public func testConnectionCloseState(): Unit {
+        MOCKDB.clear()
+        let conn = MockConnection()
+        @Assert(false, conn.isClosed())
+        @Assert(Connected, conn.state)
+        conn.close()
+        //关闭后必须能看出来（修复前 isClosed 恒 false、state 恒 Connected）
+        @Assert(true, conn.isClosed())
+        @Assert(Closed, conn.state)
+        //重复关闭幂等
+        conn.close()
+        @Assert(true, conn.isClosed())
+        @Assert(Closed, conn.state)
+    }
+
+    @TestCase
+    public func testStatementAndQueryResultCloseState(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'v', nullable: false, typeName: 'SqlInteger')
+            MOCKDB.addQueryResultRow([1])
+        }
+        let conn = MockConnection()
+        let stmt = conn.prepareStatement('SELECT v FROM t')
+        @Assert(false, stmt.isClosed())
+        let rs = stmt.query()
+        @Assert(false, rs.isClosed())
+        rs.close()
+        @Assert(true, rs.isClosed())
+        stmt.close()
+        @Assert(true, stmt.isClosed())
+    }
+
+    @TestCase
+    public func testDatasourceCloseState(): Unit {
+        let ds = MockDatasource()
+        @Assert(false, ds.isClosed())
+        ds.close()
+        @Assert(true, ds.isClosed())
+        ds.close()
+        @Assert(true, ds.isClosed())
+    }
 }

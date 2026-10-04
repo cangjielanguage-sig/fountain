@@ -16,10 +16,13 @@ limitations under the License.
 package fountain::f_mockdb
 
 public class MockDatasource <: Datasource {
+    private var closed_ = false
     public func isClosed(): Bool {
-        false
+        closed_
     }
-    public func close(): Unit {}
+    public func close(): Unit {
+        closed_ = true
+    }
     public func connect(): Connection {
         MockConnection()
     }

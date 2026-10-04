@@ -16,9 +16,14 @@ limitations under the License.
 package fountain::f_mockdb
 
 public class MockConnection <: Connection {
+    private var closed_ = false
     public prop state: ConnectionState {
         get(){
-            Connected
+            if(closed_){
+                Closed
+            }else{
+                Connected
+            }
         }
     }
     public func createTransaction(): Transaction{
@@ -31,9 +36,10 @@ public class MockConnection <: Connection {
         MockStatement(sql)
     }
     public func isClosed(): Bool {
-        false
+        closed_
     }
     public func close(): Unit {
+        closed_ = true
         MOCKDB.clear()
     }
 }
