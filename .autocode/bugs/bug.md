@@ -20,6 +20,7 @@
 > 计数修正（2026-10-04）：§1.3 `ASP-1` 判定为**误判**（设计目的，非缺陷）⇒ 待修严重级 **13** 条（f_aspect 严重 4 条）；上表保留审查当时的原始计数。
 > 二次修正（2026-10-04）：§1.4 `ASP-2` 已修复 ⇒ 待修严重级 **12** 条（f_aspect 严重 3 条）。
 > 三次修正（2026-10-04）：§1.6 `ASP-4` 已修复 ⇒ 待修严重级 **11** 条（f_aspect 严重 2 条）。
+> 四次修正（2026-10-05）：§1.7 `ASP-5` 已修复 ⇒ 待修严重级 **10** 条（f_aspect 严重 1 条）。
 
 **建议修复顺序**（即严重级内部的落地顺序）：
 
@@ -27,7 +28,7 @@
 2. `X-1`（§1.2）`TypeInfos.get(String)` 无限递归 —— 波及 14 处调用（f_bean 条件装配、f_aspect 三条规则、f_orm 一处）　**✅已修复（2026-10-04，见 §1.2 修复标记）**
 3. `ASP-2`（§1.4）切面链共享参数槽 —— 并发下参数互串（原先并列的 `ASP-1`/§1.3 已于 2026-10-04 判定为**误判**：链按类型缓存、链尾固化首次 `callee` 是设计目的，非缺陷）　**✅已修复（2026-10-04，见 §1.4 修复标记）**
 4. `ORM-C1`（§1.5）`iterator` 返回前结果集已被关闭 —— 真实驱动下不可用
-5. `ASP-4`/`ASP-5`（§1.6/§1.7）参数注解规则越界崩溃 / 恒不织入　**ASP-4 ✅已修复（2026-10-04，见 §1.6 修复标记）；ASP-5 待修**
+5. `ASP-4`/`ASP-5`（§1.6/§1.7）参数注解规则越界崩溃 / 恒不织入　**ASP-4 ✅已修复（2026-10-04，见 §1.6 修复标记）；ASP-5 ✅已修复（2026-10-05，见 §1.7 修复标记）**
 6. `BEAN-1`（§1.8）宏生成不存在的 `lookupSet` —— `HashSet`/`Set` 形参直接编译失败
 7. `MVC-4`（§1.9）`download` 输出整块缓冲 —— 下载内容损坏
 8. `MVC-1`/`MVC-3`（§1.10/§1.11）静态资源缓存无界（含 404 负缓存）/ WS ping Timer 每断链泄漏一个周期任务
@@ -209,7 +210,14 @@ public static func get(qualifiedName: String): TypeInfo {
 
 影响：规则项少于参数个数时抛 `IndexOutOfBoundsException`（无人捕获，直接从 `Aspects.doProceed` 冒泡到业务调用方 ⇒ 该函数**每次调用都失败**）。而 `AspectRoute.cj:311-317` 的文档示例恰好就是这个形状：`a.Annotation1,b.Annotation2` 匹配 `test2(@Annotation1 a, @Annotation2 b, c)`（3 参数 2 规则项）。修法：`range` 按 `annotations.size` 收敛（suffix 反向同理），并在长度不匹配时明确返回 `false`。
 
-### 1.7 [严重｜正确性] `ASP-5` `ArgAnnotationsRouteRule` 恒返回 false（静默不织入）（f_aspect）✓已复核
+### 1.7 [严重｜正确性] `ASP-5` `ArgAnnotationsRouteRule` 恒返回 false（静默不织入）（f_aspect）✓已复核 → ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：分支 `fix/asp-4`（worktree `.worktrees/asp-4`，基线 `7cd7863e`），代码、用例、README、本标记在**同一提交**（提交信息 `fix(f_aspect): ASP-5 ArgAnnotationsRouteRule 命中判定修正 + 长度必须逐参数一致（§1.7）`）。
+
+- 改动：`f_aspect/src/AspectRoute.cj:255` —— ①内层命中改为置 `matched` 标志、循环后 `if (!matched) { return false }`（原来 `continue` 只结束内层循环，随后必然走到 `return false` ⇒ 恒 false）；②`params.size != annotationNames.size` 时返回 `false`（原来 `for (i in 0..params.size)` 配 `annotationNames[i]`，首项为 `*` 且规则项更少时越界崩溃）；③判定维持"参数**拥有**该注解即通过"（多注解也算命中、无注解不得命中）。**分隔符保持 `&`**（2026-10-05 决定），类注释与 `f_aspect/README.md` 的示例由 `,` 改成 `&`，并写明"个数必须与参数个数一致"。
+- 用例：`f_aspect/src/test/arg_annotations_route_test.cj` —— 逐位命中、`*` 占位跳过、位置/顺序不符、参数无注解、参数多注解、规则项多于参数、规则项少于参数（首项 `*`，修前越界）。
+- 测量证据：**修前** `testPositionalMatch` = `[ FAILED ] Assert Failed: (ArgAnnotationsRouteRule('${ARG1}&${ARG2}').matches(info('both', 2)) == true)`；`testRuleLengthMustEqualParamCount` = `[ ERROR ] IndexOutOfBoundsException: Index out of bounds: index is '1', but array size is '1'`；合计 `PASSED: 5, ERROR: 1, FAILED: 1`（EXIT=1）。**修后** `PASSED: 7, FAILED: 0, ERROR: 0`、`cjpm test success`（EXIT=0）。
+- 兼容性：改前该规则只有"全部项为 `*`"才可能返回 `true`，没有可依赖的旧行为；分隔符维持 `&` 不变。
 
 位置：`src/AspectRoute.cj:258-273`
 
