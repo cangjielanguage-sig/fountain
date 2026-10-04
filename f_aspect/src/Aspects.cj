@@ -22,6 +22,15 @@ import fountain::f_collection.*
 import fountain::f_macros.*
 
 public class Aspects {
+    /**
+     * 切面链缓存：按「(类型, 函数)」只在切点函数首次被调用时构建一次，之后一直复用，这是刻意的设计。
+     *
+     * 建链要遍历 IoC 中全部 Aspect bean 并逐条做织入规则匹配（见 doProceed），成本高，而匹配结果只取决于切点函数的签名（类型 + 函数），
+     * 与实例无关，所以只算一次；由此织入的粒度是「类型」而不是「实例」：同一类型的多个实例共享同一条链，
+     * 链尾保存的是首次调用传入的 callee（宏展开出的原函数体闭包，含该次调用的接收者），见 f_aspect/README.md「织入逻辑会在这些函数首次调用时执行」。
+     *
+     * 前提：被织入的对象必须是 IoC 管理的 bean（singleton 或 prototype 均可），手工 new 出来的实例不在支持范围内。
+     */
     private static let aspects = ConcurrentHashMap<QualifiedFuncInfo, (Array<Any>) -> Any>()
     private static func doProceed<T>(funcInfo: InvocationFuncInfo, fn: (Array<Any>) -> T): T {
         let f = aspects.computeIfAbsent(funcInfo.qualifiedFuncInfo){
@@ -32,6 +41,7 @@ public class Aspects {
                     .matches(funcInfo) ?? false) {
                     list.add(m.name)
                 }
+                // 链尾固化首次调用传入的 fn（原函数体闭包）—— 链属于「类型」，设计说明见 aspects 声明处
                 var f: (Array<Any>) -> Any = {args => fn(args)}
                 for (i in list.size - 1..=0 : -1) {
                     let aspected = f
