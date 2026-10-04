@@ -380,7 +380,7 @@ public static func get(qualifiedName: String): TypeInfo {
 ## 6. 基线与验证状态
 
 - 基线脚本：`cjpm build` + `cjpm test --no-capture-output`，模块顺序 `f_bean → f_aspect → f_mvc → f_orm`（日志 `/tmp/review_baseline.log`、`/tmp/bl_<模块>_{build,test}.log`）。
-- 已完成：`f_bean` 的 `cjpm build` **exit 0**（0 条 error）。`f_bean` 的 `cjpm test` 运行超过 5 分钟仍未结束，其余模块尚未开始 —— 属**超长/可能卡住**，尚未拿到完整基线；本报告的结论均来自代码阅读，不依赖该基线。
+- 已完成：`f_bean` 的 `cjpm build` **exit 0**（0 条 error）。`f_bean` 的 `cjpm test` 长时间停留在**测试编译阶段**（编译 f_util 等测试依赖，非卡死），`f_aspect/f_mvc/f_orm` 尚未开始 ⇒ 本次审查未拿到 `cjpm test` 结果；本报告结论均来自代码阅读，不依赖该基线。
 - 本报告未做**运行时实测**（无 benchmark、无 heap profile）。凡标「**待验证**」的条目都给出了验证方法：
   - `ORM-1`：同一 executor 上「同 SQL、不同参数」两次查询，断言结果不同；
   - `ORM-C1`：真实驱动（postgres/mysql）下取回 `iterator` 后逐行读，观察 `close()` 后行为；
