@@ -20,14 +20,14 @@
 1. `CACHE-1`（§1.1）`HeapCache.set(key, value, life!/dieAt)` 在**新建键**时忽略寿命参数 —— JWT id 过期语义失效（安全相关，实测复现）　**✅已修复（2026-10-05，见 §1.1 修复标记）**
 2. `CACHE-2`（§1.2）`ConcHashMap.computeIfAbsent` 不记账 size —— `getOrCompute` 建的条目不计入 `size`，**`maxSize` 上限完全失效**（f_data/f_orm/f_regex 三处真实使用，实测复现）　**✅已修复（2026-10-05，见 §1.2 修复标记）**
 3. `CACHE-3`（§1.3）`ConcHashMap.add` 覆盖已存在键多计、`clear()` 不归零 —— `size`/`isEmpty` 失真（实测复现）　**✅已修复（2026-10-05，见 §1.3 修复标记）**
-4. `CACHE-4`（§2.1）用户代码（`removeIf` 谓词 / `getOrCompute` 的 callable）在**段写锁内**执行 —— 同段操作被串行阻塞（实测：同段 292.87 ms vs 异段 0.0228 ms）
+4. `CACHE-4`（§2.1）用户代码（`removeIf` 谓词 / `getOrCompute` 的 callable）在**段写锁内**执行 —— 同段操作被串行阻塞（实测：同段 292.87 ms vs 异段 0.0228 ms）　**✅已修复（2026-10-05，方案 C，见 §2.1 修复标记）**
 5. `CACHE-5`（§2.2）每个 `HeapCache` 实例泄漏 1 个阻塞线程 + 1 条全局 `atExit` 强引用；`WeakHeapCache` 另泄漏 1 个 `while(true)` 清扫线程
 6. `CACHE-6`（§2.3）`once()` / `prolong()` 不判过期 ⇒ 可“复活”已过期条目（实测复现）
 7. `CACHE-7`（§2.4）`destroy()` 之后再写入的条目**永不被清理**（实测复现）
 8. `CACHE-8`（§2.5）`Priority` 比较基线的无锁竞争 + `compare` 的“保护新生”分支疑似写反
 9. 其余低危/待验证见 §3
 
-> 修复进度（2026-10-05）：**§1 的 3 条严重级已全部修复并并入 `sts/1.3.x`**（`CACHE-1` = `3171d664`、`CACHE-2` = `0e3d70d6`、`CACHE-3` = `14733baf`；双向合并：`0448df98` 把主线拉进分支、`4a01a26f` 合入主分支，合并后主工作区复跑 6/6 PASSED）；§2 的 5 条中危与 §3 的低危/待验证未动（`CACHE-4` 起继续在分支 `review/f_cache` 上做）。用例 1 → 6 条（全绿）。
+> 修复进度（2026-10-05）：§1 的 3 条严重级（`CACHE-1` = `3171d664`、`CACHE-2` = `0e3d70d6`、`CACHE-3` = `14733baf`）已修复并并入 `sts/1.3.x`（`0448df98` 把主线拉进分支、`4a01a26f` 合入主分支，合并后主工作区复跑 6/6 PASSED）；**§2.1 `CACHE-4` 已按方案 C 修复并并入 `sts/1.3.x`**（callable 移出段写锁 + `removeIf` 两阶段，见 §2.1；`302bd9f2` 拉齐主线进分支、`e131fa7f` 合入主分支）；§2 其余 4 条与 §3 的低危/待验证未动。用例 1 → 9 条（全绿）。
 
 ---
 
@@ -166,7 +166,18 @@ store.add(key, Priority<V>(key, value, life, checkDuration, once))
 
 ## 2. 中（5 条）
 
-### 2.1 [中｜并发/契约] `CACHE-4` 用户代码在**段写锁内**执行：`removeIf` 谓词与 `getOrCompute` 的 callable 都会阻塞同段全部操作
+### 2.1 [中｜并发/契约] `CACHE-4` 用户代码在**段写锁内**执行：`removeIf` 谓词与 `getOrCompute` 的 callable 都会阻塞同段全部操作 → ✅已修复（2026-10-05，方案 C）
+
+**✅ 修复标记（2026-10-05，方案 C：callable 移出锁 + `removeIf` 两阶段）**：分支 `review/f_cache`，**代码、用例、README、本标记在同一提交**（提交信息 `fix(f_cache): CACHE-4 用户代码移出段写锁（callable 锁外计算 + removeIf 两阶段）（bug-cache §2.1 修复标记）`；提交哈希由下一次标记同步补录）。
+
+- 改动：
+  - `src/SyncLinkedHashMap.cj`：`computeIfAbsentCounted` 把 `callable()` 移到段写锁**之外**（锁内只做「查 → 二次判定 → 写」，重复计算的结果被丢弃）；新增 `removeIfOutside`（读锁取快照 → 锁外跑谓词 → 写锁按 key 删，返回实际删除数）；原 `removeIf` 改名 `removeIfLocked`（谓词在写锁内，保留给定时清扫）。
+  - `src/ConcHashMap.cj`：`removeIf` 改为两阶段版（按删除数 `size_.fetchSub`）；新增 `removeIfLocked`（锁内版，带 `decrSize`）。
+  - `src/HeapCache.cj`：`checkTimeout` 改走 `removeIfLocked`；公开 `removeIf` 走两阶段 ⇒ 用户谓词不再持段锁。
+- 契约变化（有意，已写入 `f_cache/README.md` 新增的「并发与约定」）：① `getOrCompute` 的 callable 在段锁外执行 ⇒ **同一键可能被并发计算多次、只有第一次的结果落库**（纯计算/幂等 callable 无影响）；② `removeIf` 是两阶段 ⇒ 「判定—删除」不再原子，两阶段之间新写入的条目也可能按快照里的旧值被删除；需要原子且谓词廉价时用内部的 `removeIfLocked`；③ 顺带写明 `size` 含「已过期但未清扫」条目的口径（覆盖 `CACHE-L7` 的文档诉求）。
+- 用例（`src/HeapCache_test.cj`）：`testGetOrComputeComputesOnceWhenPresent`（已存在时 callable 只被调用 1 次）、`testGetOrComputeDoesNotHoldSegmentLock`（callable 睡 400 ms，同段 `get` < 100 ms）、`testRemoveIfDoesNotHoldSegmentLock`（谓词睡 400 ms，同段 `get` < 100 ms；并断言谓词为真的被删、其余保留）。
+- 测量证据：**修复前** PASSED 7 / **FAILED 2**（两条并发用例均报 `Assert Failed: (true == cost.value < 100.0)` —— 同段 `get` 被拖住约 300 ms，EXIT=1）→ **修复后** = **9/9 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**；f_cache 自身编译警告仍 2 条、无新增。日志 `/tmp/cache4_before.log`、`/tmp/cache4_after.log`。
+- 影响面：`f_data` / `f_orm` / `f_regex` 三处 `getOrCompute` 的昂贵 callable 不再阻塞同段读写（并发未命中时可能重复编译一次，重复结果被丢弃）；仓库内暂无 `HeapCache.removeIf` 的调用方。
 
 **位置**：`src/SyncLinkedHashMap.cj:44-58`（`computeIfAbsent` 在 `synchronized(wl)` 内调用 `callable()`）、`:64-68`（`removeIf` 在写锁内跑谓词）；`src/ConcHashMap.cj:305-315`（逐段持有写锁）；`src/HeapCache.cj:219-221`（谓词包装）
 

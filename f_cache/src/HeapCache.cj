@@ -71,7 +71,7 @@ public class HeapCache<V> where V <: Object {
         }
     }
     private func checkTimeout(evictionQueue: LinkedBlockingQueue<(String, V)>): Unit {
-        removeIf {
+        removeIfLocked {
             k, p => if (alive.load()) {
                 if (evicated(p)) {
                     evictionQueue.add((k, p.load()))
@@ -217,11 +217,16 @@ public class HeapCache<V> where V <: Object {
     public func remove(key: String): Option<V> {
         store.remove(key)?.load()
     }
+    /**
+     * 删除 predicate 返回 true 的条目。谓词在分段锁**之外**执行（两阶段：快照 → 锁外判定 → 按 key 删除），
+     * 不会阻塞同段读写；代价是谓词看到的是快照，两阶段之间新写入的条目也可能被删除。
+     */
     public func removeIf(predicate: (String, V) -> Bool): Unit {
-        removeIf {k: String, p: Priority<V> => predicate(k, p.load())}
+        store.removeIf {k: String, p: Priority<V> => predicate(k, p.load())}
     }
-    private func removeIf(predicate: (String, Priority<V>) -> Bool): Unit {
-        store.removeIf(predicate)
+    /**锁内版本：谓词廉价且需要「判定—删除」原子（定时清扫用）*/
+    private func removeIfLocked(predicate: (String, Priority<V>) -> Bool): Unit {
+        store.removeIfLocked(predicate)
     }
     public prop size: Int64 {
         get() {

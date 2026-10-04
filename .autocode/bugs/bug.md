@@ -22,13 +22,14 @@
 > 三次修正（2026-10-04）：§1.6 `ASP-4` 已修复 ⇒ 待修严重级 **11** 条（f_aspect 严重 2 条）。
 > 四次修正（2026-10-05）：§1.7 `ASP-5` 已修复 ⇒ 待修严重级 **10** 条（f_aspect 严重 1 条）。
 > 五次修正（2026-10-05）：§1.8 `BEAN-1` 已修复 ⇒ 待修严重级 **9** 条（f_bean 严重 0 条）。
+> 六次修正（2026-10-05）：§1.5 `ORM-C1` 已修复（迭代器持有结果集/语句所有权、事务感知关闭），§2.1 `ORM-C2` 一并修复 ⇒ 严重级待修再减 1（**f_orm 严重级清零**）。**核对**：把此前已修复的 `X-1`、`ORM-1` 一并计入后，实际剩余严重级 **6** 条 —— §1.9 `MVC-4`、§1.10 `MVC-1`、§1.11 `MVC-3`、§1.12 `MVC-2`、§1.13 `ORM-2`、§1.14 `ASP-3`（前述逐次递减的「9 条」未扣减 `X-1` 与 `ORM-1`）。
 
 **建议修复顺序**（即严重级内部的落地顺序）：
 
-1. `ORM-1`（§1.1）结果缓存键退化 —— 事务内可能返回**别的参数**的查询结果（静默错数据）
+1. `ORM-1`（§1.1）结果缓存键退化 —— 事务内可能返回**别的参数**的查询结果（静默错数据）　**✅已修复（2026-10-04，见 §1.1 修复标记）**
 2. `X-1`（§1.2）`TypeInfos.get(String)` 无限递归 —— 波及 14 处调用（f_bean 条件装配、f_aspect 三条规则、f_orm 一处）　**✅已修复（2026-10-04，见 §1.2 修复标记）**
 3. `ASP-2`（§1.4）切面链共享参数槽 —— 并发下参数互串（原先并列的 `ASP-1`/§1.3 已于 2026-10-04 判定为**误判**：链按类型缓存、链尾固化首次 `callee` 是设计目的，非缺陷）　**✅已修复（2026-10-04，见 §1.4 修复标记）**
-4. `ORM-C1`（§1.5）`iterator` 返回前结果集已被关闭 —— 真实驱动下不可用
+4. `ORM-C1`（§1.5）`iterator` 返回前结果集已被关闭 —— 真实驱动下不可用　**✅已修复（2026-10-04，见 §1.5 修复标记）**
 5. `ASP-4`/`ASP-5`（§1.6/§1.7）参数注解规则越界崩溃 / 恒不织入　**ASP-4 ✅已修复（2026-10-04，见 §1.6 修复标记）；ASP-5 ✅已修复（2026-10-05，见 §1.7 修复标记）**
 6. `BEAN-1`（§1.8）宏生成不存在的 `lookupSet` —— `HashSet`/`Set` 形参直接编译失败　**✅已修复（2026-10-05，见 §1.8 修复标记）**
 7. `MVC-4`（§1.9）`download` 输出整块缓冲 —— 下载内容损坏
@@ -178,9 +179,25 @@ public static func get(qualifiedName: String): TypeInfo {
 
 影响：两个线程调用同一织入函数时，A 的参数可能被 B 覆盖；切面在 `around` 里读 `funcInfo.args` 会拿到别人的参数（`f_orm` 的 `TransactionAspect.proceed` 正是基于 `funcInfo` 判断）。修法：去掉可变共享槽，`proceed(funcInfo, args, fn)` 显式传参。
 
-### 1.5 [严重｜正确性] `ORM-C1` `iterator`/`singleIterator` 在返回前就把结果集关掉了（f_orm）✓已复核
+### 1.5 [严重｜正确性] `ORM-C1` `iterator`/`singleIterator` 在返回前就把结果集关掉了（f_orm）✅已修复（2026-10-04）
 
-位置：`src/base/SqlExecutor.cj:473-482, 533-537`（关闭点在 `904-906`）
+**✅ 修复记录（2026-10-04）**
+
+- **改动（6 处）**：
+  1. `SqlExecutor.cj:893` 语句级 `execute` 与 `:914` 结果级 `execute` 都加 `closeBeforeReturning: Bool`：是否关闭 Statement、是否关闭结果集并复位 `activeQueryResult` 统一听这个开关；消费型路径（`first`/`singleFirst`/`list`/`one`/…）传 `true`，语义不变；
+  2. 新增迭代器专用通道 `SqlExecutor.cj:964` `executeIterator`（= `execute(false, …)`）；`singleIterator*`（`:484/:487/:492`）与 `iterator<T>(mappers)`（`:547`）改走它 ⇒ **返回前不关结果集**；
+  3. 非事务收尾跳过「已移交」的查询：基座 `exec()` 的 `finally` 改为 `if (!activeQueryResult) { this.close() }`（`:852`）——否则返回迭代器时就把连接还掉了；Statement 也保留在 `this.stmt` 槽位，由 `SqlExecutor.close()` 统一关闭；
+  4. 移交结果集的查询不写结果缓存（`:866`）：迭代器有状态，否则同一「SQL + 参数」的第二次调用会命中缓存拿到同一个已被消费的迭代器（还会绕过 `activeQueryResult` 守卫）；
+  5. `QueryResultIterator.cj:34` 新增公共父类 `AbstractQueryResultIterator<T> <: Iterator<T> & Resource`，持有 `result` + **`statement`** + `executor`：`close()`（`:45`）顺序固定为 **结果集 → 语句 → `executor.releaseActiveQueryResult()`**（`:166`，= 复位 `activeQueryResult` + `close()`，**不关语句**；语句由迭代器自己关，关失败只记日志）。**连接是否归还**由 `close()` 自己的 `tx.isNone()` 判断：不在事务中时归还连接，在事务中不动它（留给事务结束后的 `close()`）；
+  6. `next()`（`QueryResultIterator.cj:77/:101`）读尽即自动 `close()`；三个入口的静态返回类型统一收窄/统一为 `Resource`（`Iterator<T>` 本身不继承 `Resource`，仓颉库同款实现如 `EmptyIterator<T> <: Iterator<T>`）。
+- **用例**：`f_orm/src/base/QueryResultIterator_test.cj`（5 条）—— 非事务返回后可逐行读、读尽自动关闭且 Statement+Connection 已关；事务中 `close()` 关结果集与语句、连接仍在（`testIteratorCloseInTransactionKeepsConnection`）、同一事务可继续查询，事务结束后连接才关；未关闭的迭代器拦住同 executor 的后续查询；`try (it = …)` 自动关闭；`singleIterator<T>(column:)` 按列名取值（同批修复，见 §2.1）。判据用 `it.isClosed()`（mock 的 `MockQueryResult.close()` 会置内部 `closed_`）与 `ex.isClosed()`。
+- **修复前基线**（把 3 个入口临时退回消费型 `execute` 后跑同一套用例）：**5/5 FAILED**，首条断言即 `Assert Failed: (false == it.isClosed())`（返回时结果集已关闭）⇒ 与本节描述的形态一致 ✓。
+- **修复后**：`f_orm` 构建 **exit 0**（0 error）；`cjpm test` 该项目 **32 PASSED / 1 ERROR / 0 FAILED**，新用例 **5/5 PASSED**。唯一 ERROR 是既有环境相关用例 `f_orm.wrap / ORMConfigTest.testPoolMaxWaiting`（断言 45s/1m，本机读到 4s；与本次改动无关）。
+- **残留（已随 2026-10-05 调整消除）**：原先「事务中移交出去的 Statement 只由 `this.stmt` 单槽位引用，被同一事务里的下一条 SQL 覆盖而漏关」⇒ 现在 Statement 由迭代器直接持有并自行关闭，不再依赖槽位；`SqlExecutor.stmt` 槽位里的引用只作「迭代器一直未关闭」时的兜底（`close()` 会跳过已关闭的语句）。
+- **2026-10-05 调整**：迭代器改为持有 `Statement`（原先只持 executor），`close()` 顺序固定为 结果集 → 语句 → `releaseActiveQueryResult()`；后者不再涉及语句 ⇒ 上一行的残留随之消失。
+- **顺带**：`QueryMappers.iterator(result)` 签名改为 `iterator(result, executor)`（迭代器需要 executor 才能做事务感知收尾）；README §5.2 / §13.2 / §13.4 已同步。
+
+位置（修复前形态）：`src/base/SqlExecutor.cj:473-482, 533-537`（关闭点在 `904-906`）
 
 ```cangjie
 // SqlExecutor.cj:474  execute<Iterator<T>> {r => SingleColumnIterator<T>(r, index: index)}
@@ -337,9 +354,15 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 
 排序：语义/正确性 → 资源与状态 → 性能（按波及面从大到小）。
 
-### 2.1 [中｜正确性] `ORM-C2` `SingleColumnIterator` 忽略 `column` 参数（f_orm）
+### 2.1 [中｜正确性] `ORM-C2` `SingleColumnIterator` 忽略 `column` 参数（f_orm）✅已修复（2026-10-04）
 
-`src/base/QueryResultIterator.cj:34-46` 的 `next()` 只用 `index`，而 `SqlExecutor.cj:478-482` 的 `singleIterator<T>(column:)` 把 `column` 传了进来 ⇒ `singleIterator<String>('name')` 实际读第 0 列（静默读错列；README 已记录为已知问题）。修法：`column` 非空时走 `result.getOrNull<T>(column)`。
+**✅ 修复记录（2026-10-04）**
+
+- **改动**：`QueryResultIterator.cj:86` 的 `next()` 改为 `column` 非空时走 `result.getOrNull<T>(column)`，否则走 `index`（默认 0）；两者同时给出时以列名为准（与 `singleFirst<T>(column:)` 的取值口径一致）。
+- **用例**：`QueryResultIterator_test.cj / testSingleIteratorByColumn` —— 同一行第 0 列 `id=7`、第 1 列 `name='bob'`，`singleIterator<String>('name')` 必须取到 `bob`；修复前该用例 FAILED ✓（随 §1.5 的修复前对照跑一并复现）。
+- **文档**：README §13.4 的「已知问题」条目已删除并改写为正确语义（原条目指向的 §19.6 在 README 中并不存在，属死链）。
+
+`src/base/QueryResultIterator.cj:34-46`（修复前）的 `next()` 只用 `index`，而 `SqlExecutor.cj:478-482` 的 `singleIterator<T>(column:)` 把 `column` 传了进来 ⇒ `singleIterator<String>('name')` 实际读第 0 列（静默读错列）。
 
 ### 2.2 [中｜正确性] `MVC-C3` 无 `Content-Type` 的请求直接 500（f_mvc）✓已复核
 
@@ -552,9 +575,10 @@ Summary: TOTAL: 28   PASSED: 27, SKIPPED: 0, ERROR: 1, FAILED: 0
 
 - 基线脚本：`cjpm build` + `cjpm test --no-capture-output`，模块顺序 `f_bean → f_aspect → f_mvc → f_orm`（日志 `/tmp/review_baseline.log`、`/tmp/bl_<模块>_{build,test}.log`）。
 - 已完成：`f_bean` 的 `cjpm build` **exit 0**（0 条 error）。`f_bean` 的 `cjpm test` 长时间停留在**测试编译阶段**（编译 f_util 等测试依赖，非卡死），`f_aspect/f_mvc/f_orm` 尚未开始 ⇒ 本次审查未拿到 `cjpm test` 结果；本报告结论均来自代码阅读，不依赖该基线。
+- 修复期验证（2026-10-04，本分支上的修复提交）：`f_orm` 的 `cjpm build` **exit 0**；`cjpm test` **TOTAL 33 / PASSED 32 / ERROR 1 / FAILED 0**。唯一 ERROR 是既有环境相关用例 `f_orm.wrap / ORMConfigTest.testPoolMaxWaiting`（用例先 `Config.set(key, '45s')` 再断言读出 45s，本机 `left: 4s` ⇒ 环境里该配置项已存在并压过内存设置；该用例不执行 SQL，与修复路径无交集）。本次修复新增的 5 条用例 **5/5 PASSED**（同一套用例在修复前对照跑为 **5/5 FAILED**），逐条记录见 §1.5 / §2.1。
 - 本报告未做**运行时实测**（无 benchmark、无 heap profile）。凡标「**待验证**」的条目都给出了验证方法（见 §3.2），另补几条高危项的复现方式：
-  - `ORM-1`：同一 executor 上「同 SQL、不同参数」两次查询，断言结果不同；
-  - `ORM-C1`：真实驱动（postgres/mysql）下取回 `iterator` 后逐行读，观察 `close()` 后行为；
+  - `ORM-1`：同一 executor 上「同 SQL、不同参数」两次查询，断言结果不同（✅ 已由 `SqlResultCache_test.cj` 落地，见 §1.1）；
+  - `ORM-C1`：真实驱动（postgres/mysql）下取回 `iterator` 后逐行读，观察 `close()` 后行为（✅ 所有权/关闭语义已由 `QueryResultIterator_test.cj` 在 mock 上钉死，见 §1.5；真实驱动的 `next()` 仍未实测）；
   - `BEAN-1`：写一个含 `HashSet<T>` 形参的 `@Bean`+`@Constructor` 类，编译即见未定义符号；
   - `ASP-4`/`ASP-5`：按 `AspectRoute.cj:311-317` 的文档示例写规则，观察崩溃/不织入；
   - `X-1`：`TypeInfos.get("a.b.C")` 单测。

@@ -308,13 +308,26 @@ class ConcHashMap<V> <: Collection<(String, V)> {
         }
     }
     /**
-     * 
+     * 两阶段删除（普通调用方用这个）：谓词在段锁之外执行，不阻塞同段读写。
+     * 代价：谓词看到的是快照，两阶段之间新写入的条目也可能被删除。
      */
     func removeIf(predicate: (String, V) -> Bool): Unit {
-        for(segment in segments){
-            segment.removeIf{k, v => 
+        for (segment in segments) {
+            let removed = segment.removeIfOutside(predicate)
+            if (removed > 0) {
+                size_.fetchSub(removed)
+            }
+        }
+    }
+
+    /**
+     * 锁内删除：谓词在段写锁内执行，必须廉价且不得回调本缓存；定时清扫用它保证「判定—删除」原子。
+     */
+    func removeIfLocked(predicate: (String, V) -> Bool): Unit {
+        for (segment in segments) {
+            segment.removeIfLocked {k, v =>
                 let r = predicate(k, v)
-                if(r){
+                if (r) {
                     decrSize()
                 }
                 r
