@@ -224,6 +224,29 @@ public class HeapCache_test {
     }
 
     @TestCase
+    public func testOnceRejectsExpiredEntry(): Unit {
+        let cache = HeapCache<Test>(maxLife: Duration.second * 30, checkDuration: Duration.second * 30)
+        cache.set('k', Test(1))
+        cache.set('k', Test(2), life: Duration.millisecond * 100)//更新路径：life 生效
+        sleep(Duration.millisecond * 300)
+        @Assert(false, cache.contains('k'))//已过期（且未被定时清扫）
+        @Assert(false, cache.once('k'))//过期即不存在：once 不应返回 true
+    }
+
+    @TestCase
+    public func testProlongRejectsExpiredEntry(): Unit {
+        let cache = HeapCache<Test>(maxLife: Duration.second * 30, checkDuration: Duration.second * 30)
+        cache.set('k', Test(1))
+        cache.set('k', Test(2), life: Duration.millisecond * 100)
+        sleep(Duration.millisecond * 300)
+        @Assert(false, cache.contains('k'))
+        @Assert(false, cache.prolong('k', Duration.second * 5))
+        @Assert(false, cache.prolong('k', DateTime.now() + Duration.second * 5))
+        //被拒的续期不得把过期条目“复活”
+        @Assert(false, cache.contains('k'))
+    }
+
+    @TestCase
     public func testHeapCacheIsResource(): Unit {
         let cache = HeapCache<Test>(maxLife: Duration.second * 30,
             checkDuration: Duration.millisecond * 200)

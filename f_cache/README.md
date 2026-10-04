@@ -152,4 +152,5 @@ public class WeakHeapCache<T> where T <: Object {
 - **`HeapCache` 与 `WeakHeapCache` 实现了 `Resource`**：两者各持有 1 个常驻内部线程（`HeapCache` = 淘汰回调消费线程 + 1 个定时器；`WeakHeapCache` = 弱引用清扫线程）。用完请 `close()`（可重复调用）：它会向内部线程发送取消请求、取消定时器（`HeapCache`）并清空缓存；内部线程每轮循环检查 `Thread.currentThread.hasPendingCancellation`，`HeapCache` 的消费线程在收到取消后会把已入队的淘汰回调投递完再退出。（`HeapCache` 原 `destroy()` 已删除，统一用 `close()`。）
 - **关闭延迟**：`HeapCache` 的消费线程按 100 ms 轮询、`WeakHeapCache` 的清扫周期是 1 s，因此 `close()` 后内部线程最迟分别在 100 ms / 1 s 内退出（`isClosed()` 立即变为 true）。
 - **关闭之后**：不再做定时淘汰与清扫（`set`/`get` 仍可调用，但写入的条目不会再被自动清理）。
+- **`once` / `prolong` 与 `get` / `contains` 同口径**：已过期（即使尚未被定时清扫）的条目视为不存在 —— `once`/`prolong` 返回 `false`，**不会把过期条目「复活」**；要续期或重建请用 `set`。
 

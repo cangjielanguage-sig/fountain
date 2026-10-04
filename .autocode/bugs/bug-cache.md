@@ -22,12 +22,12 @@
 3. `CACHE-3`（§1.3）`ConcHashMap.add` 覆盖已存在键多计、`clear()` 不归零 —— `size`/`isEmpty` 失真（实测复现）　**✅已修复（2026-10-05，见 §1.3 修复标记）**
 4. `CACHE-4`（§2.1）用户代码（`removeIf` 谓词 / `getOrCompute` 的 callable）在**段写锁内**执行 —— 同段操作被串行阻塞（实测：同段 292.87 ms vs 异段 0.0228 ms）　**✅已修复（2026-10-05，方案 C，见 §2.1 修复标记）**
 5. `CACHE-5`（§2.2）每个 `HeapCache` 实例泄漏 1 个阻塞线程 + 1 条全局 `atExit` 强引用；`WeakHeapCache` 另泄漏 1 个 `while(true)` 清扫线程　**✅已修复（2026-10-05，实现 `Resource` + `close()` 取消线程，见 §2.2；② 的 `atExit` 注册仍待定）**
-6. `CACHE-6`（§2.3）`once()` / `prolong()` 不判过期 ⇒ 可“复活”已过期条目（实测复现）
-7. `CACHE-7`（§2.4）`destroy()` 之后再写入的条目**永不被清理**（实测复现）
+6. `CACHE-6`（§2.3）`once()` / `prolong()` 不判过期 ⇒ 可“复活”已过期条目（实测复现）　**✅已修复（2026-10-05，方案 A，见 §2.3 修复标记）**
+7. `CACHE-7`（§2.4）缓存关闭（原 `destroy()`，现 `close()`）之后再写入的条目**永不被清理**（实测复现）
 8. `CACHE-8`（§2.5）`Priority` 比较基线的无锁竞争 + `compare` 的“保护新生”分支疑似写反
 9. 其余低危/待验证见 §3
 
-> 修复进度（2026-10-05）：§1 的 3 条严重级（`CACHE-1` = `3171d664`、`CACHE-2` = `0e3d70d6`、`CACHE-3` = `14733baf`）已修复并并入 `sts/1.3.x`（`0448df98` 把主线拉进分支、`4a01a26f` 合入主分支，合并后主工作区复跑 6/6 PASSED）；**§2.1 `CACHE-4` 已按方案 C 修复并并入 `sts/1.3.x`**（callable 移出段写锁 + `removeIf` 两阶段，见 §2.1；`302bd9f2` 拉齐主线进分支、`e131fa7f` 合入主分支）；**§2.2 `CACHE-5` 已修复**（`HeapCache`/`WeakHeapCache` 实现 `Resource`，`close()` 取消内部线程，见 §2.2，分支 `review/f_cache` 上待并入）；2026-10-05 按指示删除 `HeapCache.destroy()`（`atExit` 注册与用例全部改为 `close()`，原 `testDestroyStopsEvictionThread` 更名 `testCloseStopsEvictionThread`）；§2 其余 3 条与 §3 的低危/待验证未动。用例 1 → 12 条（全绿）。
+> 修复进度（2026-10-05）：§1 的 3 条严重级（`CACHE-1` = `3171d664`、`CACHE-2` = `0e3d70d6`、`CACHE-3` = `14733baf`）已修复并并入 `sts/1.3.x`（`0448df98` 把主线拉进分支、`4a01a26f` 合入主分支，合并后主工作区复跑 6/6 PASSED）；**§2.1 `CACHE-4` 已按方案 C 修复并并入 `sts/1.3.x`**（callable 移出段写锁 + `removeIf` 两阶段，见 §2.1；`302bd9f2` 拉齐主线进分支、`e131fa7f` 合入主分支）；**§2.2 `CACHE-5` 已修复并并入 `sts/1.3.x`**（实现 `Resource` + `close()` 取消内部线程；按指示删除 `destroy`、`atExit` 与用例统一改 `close()`，见 §2.2；`2b49dfc1` 拉齐主线进分支、`eb8363c8` 合入主分支）；**§2.3 `CACHE-6` 已修复**（`once`/`prolong` 拒绝过期条目，见 §2.3，分支 `review/f_cache` 上待并入）；§2 其余 2 条（`CACHE-7`/`CACHE-8`）与 §3 的低危/待验证未动。用例 1 → 14 条（全绿）。
 
 ---
 
@@ -249,7 +249,14 @@ std 契约（`std.collection.concurrent.LinkedBlockingQueue.remove()`）：**阻
 
 **DT**：创建 N 个缓存实例并 `destroy()`，断言消费线程数回落（可用线程计数或队列可关闭性间接断言）；`WeakHeapCache.close()` 后清扫线程退出。
 
-### 2.3 [中｜正确性] `CACHE-6` `once()` / `prolong()` 不做过期判定 ⇒ 可“复活”已过期但未被清扫的条目
+### 2.3 [中｜正确性] `CACHE-6` `once()` / `prolong()` 不做过期判定 ⇒ 可“复活”已过期但未被清扫的条目 → ✅已修复（2026-10-05，方案 A）
+
+**✅ 修复标记（2026-10-05，方案 A：与 `get`/`contains` 同口径）**：分支 `review/f_cache`，**代码、用例、README、本标记在同一提交**（提交信息 `fix(f_cache): CACHE-6 once/prolong 拒绝已过期条目（bug-cache §2.3 修复标记）`；提交哈希由下一次标记同步补录）。
+
+- 改动（`src/HeapCache.cj`）：`once`、`prolong(key, life!, once!)`、`prolong(key, deathTime)` 三个入口的 `case Some(p)` 加上 `where !evicated(p)` 守卫 ⇒ 已过期（即使尚未被定时清扫）的条目一律按「不存在」处理，与 `get`/`contains` 一致；不能再把过期条目「复活」。
+- 用例（`src/HeapCache_test.cj`）：`testOnceRejectsExpiredEntry`、`testProlongRejectsExpiredEntry` —— 都是「`set` → `set(life: 100ms)`（更新路径）→ 等 300 ms（< checkDuration，保证未被定时清扫）」后断言 `contains`、`once`、两个 `prolong` 全为 `false`，且续期被拒后 `contains` 仍为 `false`。
+- 测量证据：**修复前** PASSED 12 / **FAILED 2**（`Assert Failed: (false == cache.once('k'))` 实测 `true`；`(false == cache.prolong('k', Duration.second * 5))` 实测 `true`；EXIT=1）→ **修复后** = **14/14 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**；f_cache 自身编译警告仍 2 条。日志 `/tmp/cache6_before.log`、`/tmp/cache6_after.log`。
+- 契约变化（有意，已写入 `f_cache/README.md`「并发与约定」）：过期条目不再能通过 `once`/`prolong` 续期/复活 ⇒ 调用方要「续期已过期条目」请改用 `set` 重建。仓库内目前**没有** `once`/`prolong` 的调用方（grep 确认），故无下游影响。
 
 **位置**：`src/HeapCache.cj:144-175`（对比 `get`/`contains` 在 `:135-140` 会先判 `evicated(p)`）
 

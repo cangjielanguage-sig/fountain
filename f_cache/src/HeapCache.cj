@@ -164,7 +164,8 @@ public class HeapCache<V> <: Resource where V <: Object {
     }
     public func once(key: String): Bool {
         match (store.get(key)) {
-            case Some(p) => synchronized(p.lock) {
+            //与 get/contains 同口径：已过期（即使尚未被定时清扫）视为不存在
+            case Some(p) where !evicated(p) => synchronized(p.lock) {
                 p.load()
                 p.once = true
                 true
@@ -174,7 +175,8 @@ public class HeapCache<V> <: Resource where V <: Object {
     }
     public func prolong(key: String, life: Duration, once!: Bool = false): Bool {
         match (store.get(key)) {
-            case Some(p) => synchronized(p.lock) {
+            //已过期条目不允许通过续期“复活”，调用方应改用 set 重建
+            case Some(p) where !evicated(p) => synchronized(p.lock) {
                 p.load()
                 p.maxLife = life
                 p.once = once
@@ -185,7 +187,7 @@ public class HeapCache<V> <: Resource where V <: Object {
     }
     public func prolong(key: String, deathTime: DateTime): Bool {
         match (store.get(key)) {
-            case Some(p) => synchronized(p.lock) {
+            case Some(p) where !evicated(p) => synchronized(p.lock) {
                 p.load()
                 p.deathTime = deathTime
                 p.once = true
