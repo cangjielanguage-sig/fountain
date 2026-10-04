@@ -20,9 +20,6 @@ public class SqlArgs <: Hashable & Equatable<SqlArgs> & ToString {
     public init(){
         this.args = ArrayList<SqlArg>()
     }
-    protected func clear() {
-        args = ArrayList<SqlArg>()
-    }
     protected func clone(){
         SqlArgs(args)
     }
@@ -33,6 +30,10 @@ public class SqlArgs <: Hashable & Equatable<SqlArgs> & ToString {
     }
     public func add(arg: SqlArg) {
         args.add(arg)
+        // 内容变了必须让 hashCode 的记忆失效（bug.md §1.1 / ORM-1）：
+        // 执行器在查询之间会跑空 SQL 的检查类执行，那时 args 还是空的、h 已被算成“空参数”的值；
+        // 之后 add 填了参数但 h 不复位，会让同样参数的两个 SqlCacheKey 哈希不同 ⇒ 结果缓存永不命中。
+        h = 0
     }
     public func add(arg: Bool) {
         add(BoolSqlArg(args.size, arg))
@@ -99,6 +100,7 @@ public class SqlArgs <: Hashable & Equatable<SqlArgs> & ToString {
     }
     protected func add(all!: SqlArgs) {
         this.args.add(all: all.args)
+        h = 0
     }
     public func toString() {
         args.toString()

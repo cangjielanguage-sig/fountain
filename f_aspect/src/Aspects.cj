@@ -29,30 +29,37 @@ public class Aspects {
      * 与实例无关，所以只算一次；由此织入的粒度是「类型」而不是「实例」：同一类型的多个实例共享同一条链，
      * 链尾保存的是首次调用传入的 callee（宏展开出的原函数体闭包，含该次调用的接收者），见 f_aspect/README.md「织入逻辑会在这些函数首次调用时执行」。
      *
+     * 链上**不保存调用数据**：链的构造只依赖不可变的函数元数据（`qualifiedFuncInfo`）；实参按调用逐层传递，
+     * 每层用本次调用的 `args` 新建一个 `InvocationFuncInfo` 交给切面（见 doProceed 的层闭包），
+     * 因此并发调用之间不共享任何可变状态。
+     *
      * 前提：被织入的对象必须是 IoC 管理的 bean（singleton 或 prototype 均可），手工 new 出来的实例不在支持范围内。
      */
     private static let aspects = ConcurrentHashMap<QualifiedFuncInfo, (Array<Any>) -> Any>()
     private static func doProceed<T>(funcInfo: InvocationFuncInfo, fn: (Array<Any>) -> T): T {
-        let f = aspects.computeIfAbsent(funcInfo.qualifiedFuncInfo){
-                let list = ArrayList<String>()
-                for (m in BeanFactory.instance.iterator<Aspect>() where m
-                    .beanType
-                    .findAnnotation<AspectRoute>()?
-                    .matches(funcInfo) ?? false) {
-                    list.add(m.name)
+        let qualifiedFuncInfo = funcInfo.qualifiedFuncInfo // 链只依赖这个不可变的函数元数据
+        let f = aspects.computeIfAbsent(qualifiedFuncInfo) {
+            let list = ArrayList<String>()
+            for (m in BeanFactory.instance.iterator<Aspect>() where m
+                .beanType
+                .findAnnotation<AspectRoute>()?
+                .matches(funcInfo) ?? false) {
+                list.add(m.name)
+            }
+            // 链尾固化首次调用传入的 fn（原函数体闭包）—— 链属于「类型」，设计说明见 aspects 声明处
+            var f: (Array<Any>) -> Any = {args => fn(args)}
+            for (i in list.size - 1..=0 : -1) {
+                let aspected = f
+                let aspectName = list[i]
+                f = {
+                    args =>
+                        // 实参逐调用传递：用本次调用的 args 新建 InvocationFuncInfo，切面与后续层只持有它，
+                        // 不再改写链上首个实例（见 bug.md §1.4：原来 setArgs 写共享槽，并发下参数互串）
+                        let info = InvocationFuncInfo(qualifiedFuncInfo, args)
+                        BeanFactory.instance.get<Aspect>(aspectName).getOrThrow().proceed(info, aspected)
                 }
-                // 链尾固化首次调用传入的 fn（原函数体闭包）—— 链属于「类型」，设计说明见 aspects 声明处
-                var f: (Array<Any>) -> Any = {args => fn(args)}
-                for (i in list.size - 1..=0 : -1) {
-                    let aspected = f
-                    let aspectName = list[i]
-                    f = {
-                        args =>
-                        funcInfo.setArgs(args)
-                        BeanFactory.instance.get<Aspect>(aspectName).getOrThrow().proceed(funcInfo, aspected)
-                    }
-                }
-                f
+            }
+            f
         }
         match (f(funcInfo.args)) {
             case x: T => x

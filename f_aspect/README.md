@@ -43,6 +43,17 @@ public interface Aspect {
 }
 ```
 
+## 并发与线程安全
+
+切面（`Aspect` 的实现类）在 IoC 中是**单例 bean**：同一类型的所有切点函数、所有线程共享同一个切面实例，
+框架不会对切面的调用做同步。因此：
+
+  - 切面实现**必须自身线程安全**：不要在实例字段等跨调用共享的位置保存每次调用的状态
+    （计数器、缓存、上一次的 `funcInfo`/参数等），需要跨步骤传递时用局部变量或参数；
+  - 切点函数被并发调用时，`before`/`after`/`around`/`throwing`/`final` 会并发进入同一个切面实例，
+    切面内访问的共享资源（文件、连接、容器等）要自行加锁或使用并发容器；
+  - 同一类型的多个实例共享同一条切面链，链只在切点函数首次调用时构建一次（见 `Aspects`），
+    "切面实例的并发安全"由切面实现自己负责。
 
 ## `@Pointcut`
 
@@ -123,7 +134,7 @@ public class AspectRoute <: RouteRule {
 public class InvocationFuncInfo {
     public InvocationFuncInfo(
         private let _funcInfo: QualifiedFuncInfo, //函数元数据
-        private var _args: Array<Any>//函数实参
+        private let _args: Array<Any>//函数实参
     ) {}
     /**
      * typeInfo funcName argTypes 构成函数元数据

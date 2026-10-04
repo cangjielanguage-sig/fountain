@@ -18,7 +18,7 @@ package fountain::f_aspect
 public class InvocationFuncInfo {
     public InvocationFuncInfo(
         private let _funcInfo: QualifiedFuncInfo,
-        private var _args: Array<Any>
+        private let _args: Array<Any>
     ) {
     }
     public init(
@@ -28,9 +28,6 @@ public class InvocationFuncInfo {
         args: Array<Any>
     ) {
         this(QualifiedFuncInfo(typeInfo, funcName, argTypes), args)
-    }
-    func setArgs(args: Array<Any>) {
-        this._args = args
     }
     public prop args: Array<Any> {
         get() {
