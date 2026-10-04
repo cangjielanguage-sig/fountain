@@ -21,13 +21,13 @@
 2. `CACHE-2`（§1.2）`ConcHashMap.computeIfAbsent` 不记账 size —— `getOrCompute` 建的条目不计入 `size`，**`maxSize` 上限完全失效**（f_data/f_orm/f_regex 三处真实使用，实测复现）　**✅已修复（2026-10-05，见 §1.2 修复标记）**
 3. `CACHE-3`（§1.3）`ConcHashMap.add` 覆盖已存在键多计、`clear()` 不归零 —— `size`/`isEmpty` 失真（实测复现）　**✅已修复（2026-10-05，见 §1.3 修复标记）**
 4. `CACHE-4`（§2.1）用户代码（`removeIf` 谓词 / `getOrCompute` 的 callable）在**段写锁内**执行 —— 同段操作被串行阻塞（实测：同段 292.87 ms vs 异段 0.0228 ms）　**✅已修复（2026-10-05，方案 C，见 §2.1 修复标记）**
-5. `CACHE-5`（§2.2）每个 `HeapCache` 实例泄漏 1 个阻塞线程 + 1 条全局 `atExit` 强引用；`WeakHeapCache` 另泄漏 1 个 `while(true)` 清扫线程
+5. `CACHE-5`（§2.2）每个 `HeapCache` 实例泄漏 1 个阻塞线程 + 1 条全局 `atExit` 强引用；`WeakHeapCache` 另泄漏 1 个 `while(true)` 清扫线程　**✅已修复（2026-10-05，实现 `Resource` + `close()` 取消线程，见 §2.2；② 的 `atExit` 注册仍待定）**
 6. `CACHE-6`（§2.3）`once()` / `prolong()` 不判过期 ⇒ 可“复活”已过期条目（实测复现）
 7. `CACHE-7`（§2.4）`destroy()` 之后再写入的条目**永不被清理**（实测复现）
 8. `CACHE-8`（§2.5）`Priority` 比较基线的无锁竞争 + `compare` 的“保护新生”分支疑似写反
 9. 其余低危/待验证见 §3
 
-> 修复进度（2026-10-05）：§1 的 3 条严重级（`CACHE-1` = `3171d664`、`CACHE-2` = `0e3d70d6`、`CACHE-3` = `14733baf`）已修复并并入 `sts/1.3.x`（`0448df98` 把主线拉进分支、`4a01a26f` 合入主分支，合并后主工作区复跑 6/6 PASSED）；**§2.1 `CACHE-4` 已按方案 C 修复并并入 `sts/1.3.x`**（callable 移出段写锁 + `removeIf` 两阶段，见 §2.1；`302bd9f2` 拉齐主线进分支、`e131fa7f` 合入主分支）；§2 其余 4 条与 §3 的低危/待验证未动。用例 1 → 9 条（全绿）。
+> 修复进度（2026-10-05）：§1 的 3 条严重级（`CACHE-1` = `3171d664`、`CACHE-2` = `0e3d70d6`、`CACHE-3` = `14733baf`）已修复并并入 `sts/1.3.x`（`0448df98` 把主线拉进分支、`4a01a26f` 合入主分支，合并后主工作区复跑 6/6 PASSED）；**§2.1 `CACHE-4` 已按方案 C 修复并并入 `sts/1.3.x`**（callable 移出段写锁 + `removeIf` 两阶段，见 §2.1；`302bd9f2` 拉齐主线进分支、`e131fa7f` 合入主分支）；**§2.2 `CACHE-5` 已修复**（`HeapCache`/`WeakHeapCache` 实现 `Resource`，`close()` 取消内部线程，见 §2.2，分支 `review/f_cache` 上待并入）；2026-10-05 按指示删除 `HeapCache.destroy()`（`atExit` 注册与用例全部改为 `close()`，原 `testDestroyStopsEvictionThread` 更名 `testCloseStopsEvictionThread`）；§2 其余 3 条与 §3 的低危/待验证未动。用例 1 → 12 条（全绿）。
 
 ---
 
@@ -210,7 +210,18 @@ store.add(key, Priority<V>(key, value, life, checkDuration, once))
 
 **实测（探针 P10）**：谓词内 `sleep(400 ms)` 期间，同段 `get` = **292.87 ms**，异段 `get` = **0.0228 ms**（≈ 1.3 万倍差）。
 
-### 2.2 [中｜资源] `CACHE-5` 线程与实例泄漏：每实例 1 个阻塞淘汰线程 + 1 条全局强引用；`WeakHeapCache` 另加 1 个 `while(true)` 线程
+### 2.2 [中｜资源] `CACHE-5` 线程与实例泄漏：每实例 1 个阻塞淘汰线程 + 1 条全局强引用；`WeakHeapCache` 另加 1 个 `while(true)` 线程 → ✅已修复（2026-10-05，实现 `Resource` + 协作取消）
+
+**✅ 修复标记（2026-10-05，方案：两个缓存实现 `Resource`，用线程句柄 + `Future.cancel()` + `hasPendingCancellation` 协作取消）**：分支 `review/f_cache`，**代码、用例、README、本标记在同一提交**（提交信息 `feat(f_cache): HeapCache/WeakHeapCache 实现 Resource，close() 取消内部线程（bug-cache §2.2 修复标记）`；提交哈希由下一次标记同步补录）。
+
+- 改动：
+  - `src/HeapCache.cj`：类改为 `<: Resource`；`alive` 换成 `closedFlag`；新增两个**内部线程/定时器句柄字段** `evictionTask: ?Future<Unit>`、`timerHandle: ?Timer`（另有轮询常量 `EVICTION_POLL_INTERVAL = 100 ms`）；淘汰消费线程改为「`q.remove(轮询间隔)` + 每轮检查 `Thread.currentThread.hasPendingCancellation`」，收到取消后把**已入队**的淘汰回调投递完再退出；新增 `close()`（置位 + `Timer.cancel()` + `Future.cancel()` + `store.clear()`，可重复调用）与 `isClosed()`；`destroy()` 保留为 `close()` 的别名。
+  - `src/WeakHeapCache.cj`：类改为 `<: Resource`；新增 `closedFlag` 与 `cleanerTask: ?Future<Unit>`（清扫周期常量 `CLEAN_INTERVAL = 1 s`）；清扫线程由 `while (true)` 改为 `while (!Thread.currentThread.hasPendingCancellation)`；新增 `close()`/`isClosed()`。
+  - `f_cache/README.md`「并发与约定」补 `Resource` 与关闭语义（含「最迟 100 ms / 1 s 退出」「关闭后不再自动清理」）。
+- 用例（`src/HeapCache_test.cj`）：`testDestroyStopsEvictionThread`（**钉住用例**，只用修复前已存在的 `destroy()` + 内部句柄）、`testHeapCacheIsResource`、`testWeakHeapCacheIsResource`（这两条属**接口补齐型**：`close()`/`isClosed()` 修复前不存在、断言写不出来 ⇒ 没有「修复前失败」证据，与 `MOCK-L6` 同类）。
+- 测量证据：**修复前** PASSED 9 / **FAILED 1**（`testDestroyStopsEvictionThread` 卡满 3 006 740 863 ns ≈ 3.01 s —— `f.get(3 s)` 抛 `TimeoutException`，即 `destroy()` 后消费线程永不退出；EXIT=1）→ **修复后** = **12/12 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**：`testDestroyStopsEvictionThread` **421 729 ns（≈0.42 ms，线程立即退出）**、`testHeapCacheIsResource` ≈100.8 ms、`testWeakHeapCacheIsResource` ≈1.01 s（分别对应两个线程的轮询周期）；f_cache 自身编译警告仍 2 条。日志 `/tmp/cache5_before.log`、`/tmp/cache5_after.log`。
+- 附带说明（2026-10-05 按指示补做）：`HeapCache.destroy()` **已删除**，全部调用点改为 `close()`（`atExit` 注册、用例；原 `testDestroyStopsEvictionThread` 更名 `testCloseStopsEvictionThread`，README 成员表同步）；`close()` 只负责线程/内存的释放，**关闭后 `set`/`get` 仍可调用**（`CACHE-7` 的语义另议，见 §2.4）。
+- **未做（本条目 ②，仍待定）**：`ExitCallbacks.atExit(254, destroy)` 仍是每实例一条注册，注册表是 `f_base` 的全局静态强引用 ⇒ 被应用丢弃的实例仍不会被 GC 回收。`close()` 已给出释放手段，但这条注册本身未改（方案可选项：改为「只注册一次」的静态入口，或直接去掉）。
 
 **位置**：`src/HeapCache.cj:49-57`、`:43`；`src/WeakHeapCache.cj:48-55`
 
@@ -263,19 +274,21 @@ std 契约（`std.collection.concurrent.LinkedBlockingQueue.remove()`）：**阻
 
 **实测（探针 P3a/P3b/P3c）**：`contains=false` ✓（已过期）、`once=true` ✗、`prolong=true` ✗ 且随后 `contains=true`（被复活）✗。
 
-### 2.4 [中｜内存] `CACHE-7` `destroy()` 之后再 `set` 的条目永不被清理（定时器已停、仍可写）
+### 2.4 [中｜内存] `CACHE-7` `close()` 之后再 `set` 的条目永不被清理（定时器已停、仍可写）
 
-**位置**：`src/HeapCache.cj:233-236`、`:58-72`
+> 原标题基于 `destroy()`；2026-10-05 按指示删除 `HeapCache.destroy()`、统一 `close()`（该关闭路径的语义不变）。
 
-`destroy()` 置 `alive=false` 并 `store.clear()`；定时器回调下一次执行时 `alive=false` ⇒ `checkTimeout` 的谓词对**所有**条目返回 true（清空），随后回调返回 `None<Duration>` ⇒ **定时器永久停止**（`Timer.after` 契约：返回 None 即失效）。但 `set`/`get`/`getOrCompute` 都没有 `alive` 守卫 ⇒ 之后写入的条目：既没有过期清扫，也没有 maxSize 淘汰。
+**位置**：`src/HeapCache.cj` 的 `close()` 与 `startTimer()` 回调
 
-**影响**：文档（`README.md:88`）只说「销毁的堆缓存不可再用」，实现上却是「可继续写入且永不回收」⇒ 误用（忘记销毁、或销毁后复用同一实例）会得到只增不减的 map；`size` 也随之永久虚高（叠加 `CACHE-3`）。
+`close()`（原 `destroy()`）置 `closedFlag=true` 并 `store.clear()` ⇒ `checkTimeout` 的谓词对**所有**条目返回 true（清空），随后定时器已 `cancel()` ⇒ **不再有清扫**。但 `set`/`get`/`getOrCompute` 都没有 `isClosed()` 守卫 ⇒ 关闭之后写入的条目：既没有过期清扫，也没有 maxSize 淘汰。
 
-**修法**：`set`/`getOrCompute` 在 `!alive.load()` 时抛 `IllegalStateException`（与文档一致），或 `destroy()` 后彻底禁用；二期再考虑让 `checkTimeout` 在销毁时清空而不依赖「最后一次 tick」。
+**影响**：关闭后复用同一实例（或忘记关闭后又被继续写入）会得到只增不减的 map；`size` 也随之永久虚高（叠加 `CACHE-3`）。当前该行为**已文档化**（`README.md`「并发与约定」写明「关闭后 `set`/`get` 仍可调用，但写入的条目不会再被自动清理」）⇒ 剩下的是「要不要改成禁用写入」的语义决定。
 
-**DT**：`destroy()` → 等 1 个检查周期 → `set(k1)/set(k2)` → 再等 1 个周期 ⇒ `size==0`（当前实测 2）、或按文档抛异常。
+**修法（待定方向）**：①`set`/`getOrCompute` 在 `isClosed()` 时抛 `IllegalStateException`（关闭即不可用，语义更硬）；②保持可写 + 文档化（现状，已在 README 写明）。
 
-**实测（探针 P7/P8）**：`destroy()` 后 `set` 两次、等 1 s（`maxLife=300ms`、`maxSize=1`）：`d1=false d2=false`（按寿命已过期）但 **`size=2` 且此后不降** ⇒ 过期条目永驻。
+**DT**：`close()` → 等 1 个检查周期 → `set(k1)/set(k2)` → 再等 1 个周期 ⇒ 按选定语义断言「抛异常」或「`size==2` 且不再变化」。
+
+**实测（探针 P7/P8，当时走 `destroy()`）**：关闭后 `set` 两次、等 1 s（`maxLife=300ms`、`maxSize=1`）：`d1=false d2=false`（按寿命已过期）但 **`size=2` 且此后不降** ⇒ 过期条目永驻。
 
 ### 2.5 [中｜并发] `CACHE-8` `Priority` 比较基线字段无锁读写竞争；`compare` 的“保护新生”分支疑似写反且含不可达分支
 

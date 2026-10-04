@@ -116,7 +116,7 @@ public class HeapCache_test {
         //clear 之后重新计数：幻影计数会让真实条目被提前淘汰
         cache.set('c0', Test(0))
         @Assert(1, cache.size)
-        cache.destroy()
+        cache.close()
         @Assert(0, cache.size)
     }
 
@@ -204,6 +204,67 @@ public class HeapCache_test {
         @Assert(false, cache.contains(victim))
         @Assert(true, cache.contains(reader))
         @Assert(true, cache.contains('rfOther'))
+    }
+
+    @TestCase
+    public func testCloseStopsEvictionThread(): Unit {
+        let cache = HeapCache<Test>(maxLife: Duration.second * 30,
+            checkDuration: Duration.millisecond * 200)
+        @Assert(1, cache.threadHandles().size)
+        cache.close()
+        //close 之后内部淘汰消费线程必须结束（修复前该路径阻塞在队列上，线程永不退出）
+        for (f in cache.threadHandles()) {
+            try {
+                f.get(Duration.second * 3)
+                @Assert(true)
+            } catch (e: TimeoutException) {
+                @Assert(false)
+            }
+        }
+    }
+
+    @TestCase
+    public func testHeapCacheIsResource(): Unit {
+        let cache = HeapCache<Test>(maxLife: Duration.second * 30,
+            checkDuration: Duration.millisecond * 200)
+        cache.set('r1', Test(1))
+        @Assert(false, cache.isClosed())
+        cache.close()
+        @Assert(true, cache.isClosed())
+        cache.close()//close 可重复调用
+        @Assert(true, cache.isClosed())
+        //close 之后内部线程结束、定时器已取消、缓存已清空
+        for (f in cache.threadHandles()) {
+            try {
+                f.get(Duration.second * 3)
+                @Assert(true)
+            } catch (e: TimeoutException) {
+                @Assert(false)
+            }
+        }
+        @Assert(0, cache.size)
+    }
+
+    @TestCase
+    public func testWeakHeapCacheIsResource(): Unit {
+        let cache = WeakHeapCache<Test>()
+        @Assert(1, cache.threadHandles().size)
+        let _ = cache.set('wk', Test(1))
+        @Assert(false, cache.isClosed())
+        cache.close()
+        @Assert(true, cache.isClosed())
+        cache.close()//close 可重复调用
+        @Assert(true, cache.isClosed())
+        //清扫线程最多一个清扫周期（1s）后退出
+        for (f in cache.threadHandles()) {
+            try {
+                f.get(Duration.second * 3)
+                @Assert(true)
+            } catch (e: TimeoutException) {
+                @Assert(false)
+            }
+        }
+        @Assert(0, cache.size)
     }
 }
 
