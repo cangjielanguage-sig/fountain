@@ -53,3 +53,4 @@ frpcdemo/log/
 # git worktree 隔离工作区
 .worktrees/
 .autocode/tmp/
+.dep-cache
