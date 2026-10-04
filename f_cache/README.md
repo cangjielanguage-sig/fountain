@@ -139,3 +139,12 @@ public class WeakHeapCache<T> where T <: Object {
 }
 ```
 
+# 并发与约定（2026-10-05 补充）
+
+缓存内部按 `concurrencyLevel` 分成若干分段，每个分段一把可重入读写锁，段与段之间互不阻塞：
+
+- **`getOrCompute` 的 callable 在分段锁之外执行**：同一键可能被并发计算多次，只有第一次写入的结果生效，其余计算结果被丢弃。callable 应当是纯计算或幂等的；有副作用、或必须「只算一次」时请在调用方自行去重。
+- **`removeIf` 是两阶段删除**：先在读锁下取快照，再在锁外执行谓词，最后在写锁下按 key 删除。谓词不会阻塞同段读写；代价是「判定—删除」不是原子的——两阶段之间新写入的条目也可能因快照里的旧值满足谓词而被删除。
+- **`size` 与 `get`/`contains` 的口径差**：`get`/`contains` 会先做寿命判定，而 `size` 统计 map 中的条目 ⇒ 已过期但尚未被定时清扫的条目（最长一个 `checkDuration`）仍计入 `size`；`maxSize` 淘汰也以 `size` 为准。
+- `set` / `get` / `remove` / `once` / `prolong` / `clear` 等公开方法都可并发调用（分段锁 + 原子计数）。
+
