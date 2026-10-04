@@ -42,8 +42,14 @@ internal func framePayloadLimit(): Int64 {
             n
     }
 }
-/** 帧头：cmd(1B) + len(4B)；帧尾：crc32(4B)。 */
-private const FRAME_HEAD_SIZE: Int64 = 5
+/**
+ * 帧版本位（见 bug.md 7.1）：为将来「换校验算法 / 改字段宽度」留出平滑迁移余地 ——
+ * 接收侧按版本显式判定，而不是拿当前布局去硬解未知帧。加版本位后旧实现解不了新帧（会当成 cmd 解析失败），
+ * 但新实现能给出可诊断的报错，且未来可在此处做「同时接受 N 与 N+1」的过渡。
+ */
+internal const FRAME_VERSION: UInt8 = 1
+/** 帧头：version(1B) + cmd(1B) + len(4B)；帧尾：crc32(4B)。 */
+private const FRAME_HEAD_SIZE: Int64 = 6
 private const FRAME_CRC_SIZE: Int64 = 4
 private const FRAME_OVERHEAD: Int64 = FRAME_HEAD_SIZE + FRAME_CRC_SIZE
 
@@ -79,7 +85,7 @@ private func readFully(input: InputStream, buffer: Array<Byte>): Int64 {
     got
 }
 
-/** 透传写出，同时增量累计 CRC32（让 crc 覆盖 cmd+len+payload）。 */
+/** 透传写出，同时增量累计 CRC32（让 crc 覆盖 version+cmd+len+payload）。 */
 private class Crc32OutputStream <: OutputStream {
     var crc: UInt32
     Crc32OutputStream(crc0: UInt32, private let inner: OutputStream) {
@@ -257,9 +263,10 @@ public struct Message <: Protocol<EncodedMessage, Message> {
         EncodedMessage(command.value, bytes)
     }
     /**
-     * 解码一帧：`[cmd(1B)][len(4B 大端 = payload 字节数)][payload][crc32(4B，覆盖 cmd+len+payload)]`。
+     * 解码一帧：`[version(1B)][cmd(1B)][len(4B 大端 = payload 字节数)][payload][crc32(4B，覆盖 version+cmd+len+payload)]`。
      *
      * - 帧头一个字节都没读到 = 对端干净关闭（`InputClosedException`，reader 视为连接结束）；
+     * - 版本位不认识 ⇒ 抛 `CodecException`（不按当前布局硬解）；
      * - 帧中途 EOF / `len` 与实际不符 / CRC 不符 ⇒ 一律抛，绝不返回“半条消息”；
      * - payload 用限长流解码，**物理上读不出本帧**（即使载荷内部长度字段被写坏）。
      */
@@ -268,8 +275,11 @@ public struct Message <: Protocol<EncodedMessage, Message> {
         if (readFully(input, header) == 0) {
             throw InputClosedException('no readable byte in InputStream')
         }
-        let command = Command.parse(header[0])
-        let payloadSize = getInt32BE(header, 1)
+        if (header[0] != FRAME_VERSION) {
+            throw CodecException('unsupported frame version ${header[0]}, expect ${FRAME_VERSION}')
+        }
+        let command = Command.parse(header[1])
+        let payloadSize = getInt32BE(header, 2)
         if (payloadSize > framePayloadLimit()) {
             throw CodecException('frame payload size ${payloadSize} exceeds limit ${framePayloadLimit()}')
         }
@@ -322,12 +332,13 @@ public struct EncodedMessage <: MessageCopier & Releasable {
             case None => throw CodecException('payload size unknown: cannot frame this message')
         }
     }
-    /** 小帧：整帧 `[cmd][len][payload][crc]` 一次 write。 */
+    /** 小帧：整帧 `[version][cmd][len][payload][crc]` 一次 write。 */
     private func asOneSmallFrame(): ?Array<Byte> {
         if (let Some(n) <- bytes.byteSize() && n <= SMALL_MESSAGE_LIMIT && let Some(payload) <- bytes.asBytes()) {
             let out = Array<Byte>(FRAME_OVERHEAD + n, repeat: 0u8)
-            out[0] = command
-            putInt32BE(out, 1, n)
+            out[0] = FRAME_VERSION
+            out[1] = command
+            putInt32BE(out, 2, n)
             for (i in 0..payload.size) {
                 out[FRAME_HEAD_SIZE + i] = payload[i]
             }
@@ -345,11 +356,12 @@ public struct EncodedMessage <: MessageCopier & Releasable {
                 // 小帧：整帧一次 write，写失败也不会在流上留下“半条”
                 to.write(frame)
             } else {
-                // 大帧：头（含 len）→ 流式载荷（边写边算 CRC）→ 尾 CRC。
-                // 对端凭 len 即可判定截断；CRC 覆盖 cmd+len+payload，能发现损坏。
+                // 大帧：头（含 version/len）→ 流式载荷（边写边算 CRC）→ 尾 CRC。
+                // 对端凭 len 即可判定截断；CRC 覆盖 version+cmd+len+payload，能发现损坏。
                 let header = Array<Byte>(FRAME_HEAD_SIZE, repeat: 0u8)
-                header[0] = command
-                putInt32BE(header, 1, size)
+                header[0] = FRAME_VERSION
+                header[1] = command
+                putInt32BE(header, 2, size)
                 // 初值只做 init：header 由 tee.write 累加一次，避免帧头被算两遍
                 let tee = Crc32OutputStream(crc32Init(), to)
                 tee.write(header)

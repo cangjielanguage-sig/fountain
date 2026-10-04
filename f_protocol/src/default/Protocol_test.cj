@@ -243,12 +243,13 @@ public class ProtocolTest {
         let msg = Message(Command.AUTH(ACK), data)
         let buf = ByteBuffer()
         msg.encode().copy(to: buf, closeToOnEnd: false)
-        // 验证命令字节
+        // 验证帧头：version 1B + cmd 1B
         buf.seek(SeekPosition.Begin(0))
-        let cmdByte = Array<Byte>(1, repeat: 0u8)
-        let n = buf.read(cmdByte)
-        @Assert(n == 1)
-        @Assert(cmdByte[0] == Command.AUTH(ACK).value)
+        let head = Array<Byte>(2, repeat: 0u8)
+        let n = buf.read(head)
+        @Assert(n == 2)
+        @Assert(head[0] == FRAME_VERSION)
+        @Assert(head[1] == Command.AUTH(ACK).value)
     }
 
     // ========== 边界情况 ==========
@@ -563,11 +564,11 @@ public class ProtocolTest {
         }
     }
 
-    // 截断流（只有命令字节，无 id/data）：必须抛异常，而不是返回垃圾消息
+    // 截断流（帧头只有 version+cmd+2B 的 len，缺 len 后 2B 与 id/data）：必须抛异常，而不是返回垃圾消息
     @TestCase
     public func messageDecodeTruncatedBodyThrows(): Unit {
         let buf = ByteBuffer()
-        buf.write([Command.ACK.value])
+        buf.write([FRAME_VERSION, Command.ACK.value, 0u8, 0u8])
         buf.seek(SeekPosition.Begin(0))
         var threw = false
         try {

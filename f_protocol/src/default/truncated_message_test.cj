@@ -21,10 +21,11 @@ import std.unittest.*
 import std.unittest.testmacro.*
 
 /**
- * 帧格式 `[cmd(1B)][len(4B 大端)][payload][crc32(4B)]` 的语义测试。
+ * 帧格式 `[version(1B)][cmd(1B)][len(4B 大端)][payload][crc32(4B)]` 的语义测试。
  *
  * 不变式：
  * - 帧头一个字节都没有 ⇒ 对端干净关闭（InputClosedException）；
+ * - 版本位不是当前版本 ⇒ 必须抛（不按当前布局硬解未知帧）；
  * - 帧中途 EOF、`len` 与实际不符、CRC 不符 ⇒ 必须抛，绝不返回“半条/损坏”的消息；
  * - 接收侧能提前知道本帧剩余字节数（len），因此载荷解码读不出帧外。
  */
@@ -98,9 +99,9 @@ public class Truncated_message_test {
     private func dataFieldSize(data: Data): Int64 {
         DefaultCodec().encode(data).finish().byteSize() ?? -1
     }
-    /** 帧头声明的 len。 */
+    /** 帧头声明的 len（版本位 1B + cmd 1B 之后）。 */
     private func lenOf(frame: Array<Byte>): Int64 {
-        (Int64(frame[1]) << 24) | (Int64(frame[2]) << 16) | (Int64(frame[3]) << 8) | Int64(frame[4])
+        (Int64(frame[2]) << 24) | (Int64(frame[3]) << 16) | (Int64(frame[4]) << 8) | Int64(frame[5])
     }
     /** 帧尾的 crc。 */
     private func crcOf(frame: Array<Byte>): UInt32 {
@@ -113,10 +114,10 @@ public class Truncated_message_test {
         for (i in 0..frame.size) {
             body[i] = frame[i]
         }
-        body[1] = UInt8((declaredLen >> 24) & 0xff)
-        body[2] = UInt8((declaredLen >> 16) & 0xff)
-        body[3] = UInt8((declaredLen >> 8) & 0xff)
-        body[4] = UInt8(declaredLen & 0xff)
+        body[2] = UInt8((declaredLen >> 24) & 0xff)
+        body[3] = UInt8((declaredLen >> 16) & 0xff)
+        body[4] = UInt8((declaredLen >> 8) & 0xff)
+        body[5] = UInt8(declaredLen & 0xff)
         let crc = crc32(body[0..body.size - 4])
         body[body.size - 4] = UInt8((Int64(crc) >> 24) & 0xff)
         body[body.size - 3] = UInt8((Int64(crc) >> 16) & 0xff)
@@ -133,7 +134,7 @@ public class Truncated_message_test {
         let data: Array<String> = ['127.0.0.1:1203,1.000000']
         let frame = wireOf(Message.resp(MessageID(pid: 1, tid: 1, hostId: 0),
             qos: QoS.AtMostOnce, ack: false, data: data))
-        @Assert(lenOf(frame) == frame.size - 5 - 4)
+        @Assert(lenOf(frame) == frame.size - 6 - 4)
         let decoded = Message.decode<Array<String>>(DribbleInputStream(frame, frame.size))
         let got: Array<String> = match (decoded.tryFromData<Array<String>>()) {
             case x: Array<String> => x
@@ -150,7 +151,7 @@ public class Truncated_message_test {
         // 嵌套结构（数组里再套数组）最容易把长度算错：len 偏大 ⇒ 对端会一直等永远不来的剩余字节
         let nested: Array<Array<String>> = [['a', 'bb'], ['ccc']]
         let frame = wireOf(Message(Command.REGISTER, nested.toData()))
-        @Assert(lenOf(frame) == frame.size - 5 - 4)
+        @Assert(lenOf(frame) == frame.size - 6 - 4)
         let decoded = Message.decode<Array<Array<String>>>(DribbleInputStream(frame, frame.size))
         let got: Array<Array<String>> = match (decoded.tryFromData<Array<Array<String>>>()) {
             case x: Array<Array<String>> => x
@@ -169,14 +170,38 @@ public class Truncated_message_test {
         @Assert(decodeThrows(all, all.size) == false)
     }
 
-    /** 帧结构就是 [cmd][len][payload][crc]，且 len/crc 与内容自洽。 */
+    /** 帧结构就是 [version][cmd][len][payload][crc]，且 version/len/crc 与内容自洽。 */
     @TestCase
-    public func frameLayoutIsCmdLenPayloadCrc(): Unit {
+    public func frameLayoutIsVersionCmdLenPayloadCrc(): Unit {
         let cmd = Command.REGISTER.value
         let all = wireOf(Message(Command.REGISTER, payload(1000)))
-        @Assert(all[0] == cmd)
-        @Assert(lenOf(all) == all.size - 9)                       // payload = 总长 - 头 5 - crc 4
-        @Assert(crcOf(all) == crc32(all[0..all.size - 4]))        // crc 覆盖 cmd+len+payload
+        @Assert(all[0] == FRAME_VERSION)
+        @Assert(all[1] == cmd)
+        @Assert(lenOf(all) == all.size - 10)                      // payload = 总长 - 头 6 - crc 4
+        @Assert(crcOf(all) == crc32(all[0..all.size - 4]))        // crc 覆盖 version+cmd+len+payload
+    }
+
+    /** 版本位不是当前版本 ⇒ 必须抛（不按当前布局硬解），且不能是“干净关闭”。 */
+    @TestCase
+    public func unknownFrameVersionMustThrow(): Unit {
+        let all = wireOf(Message(Command.REGISTER, payload(16)))
+        for (v in [0u8, 2u8, 0xffu8]) {
+            let body = Array<Byte>(all.size, repeat: 0u8)
+            for (i in 0..all.size) {
+                body[i] = all[i]
+            }
+            body[0] = v
+            // 版本位变了 ⇒ CRC 也失配，但首当其冲的判据是版本；无论哪条，都必须抛
+            @Assert(decodeThrows(body, body.size))
+        }
+    }
+
+    /** 帧头只收到 1 / 5 字节（不足 6）⇒ 必须抛。 */
+    @TestCase
+    public func partiallyReceivedHeaderMustThrow(): Unit {
+        let all = wireOf(Message(Command.REGISTER, payload(16)))
+        @Assert(decodeThrows(all, 1))
+        @Assert(decodeThrows(all, 5))
     }
 
     // ---------- 截断：头 / 体 / 尾 ----------
@@ -272,8 +297,9 @@ public class Truncated_message_test {
         let sink = CollectOutputStream()
         Message(Command.REGISTER, payload(9000)).encode().copy(to: sink, closeToOnEnd: false)
         let bytes = sink.bytes()
-        @Assert(bytes[0] == Command.REGISTER.value)
-        @Assert(lenOf(bytes) == bytes.size - 9)
+        @Assert(bytes[0] == FRAME_VERSION)
+        @Assert(bytes[1] == Command.REGISTER.value)
+        @Assert(lenOf(bytes) == bytes.size - 10)
         @Assert(crcOf(bytes) == crc32(bytes[0..bytes.size - 4]))
         @Assert(decodeThrows(bytes, bytes.size) == false)
     }
@@ -308,7 +334,7 @@ public class Truncated_message_test {
         let legit = wireOf(Message(Command.REGISTER, 'AB'.toData()))
         let dataSize = dataFieldSize('AB'.toData())
         @Assert(dataSize > 0)
-        let prefix = legit[5..legit.size - 4 - dataSize]         // id 字段部分（帧头 5B、CRC 4B）
+        let prefix = legit[6..legit.size - 4 - dataSize]         // id 字段部分（帧头 6B、CRC 4B）
         let payload = Array<Byte>(prefix.size + dataField.size, repeat: 0u8)
         for (i in 0..prefix.size) {
             payload[i] = prefix[i]
@@ -316,17 +342,18 @@ public class Truncated_message_test {
         for (i in 0..dataField.size) {
             payload[prefix.size + i] = dataField[i]
         }
-        let frame = Array<Byte>(5 + payload.size + 4, repeat: 0u8)
-        frame[0] = Command.REGISTER.value
+        let frame = Array<Byte>(6 + payload.size + 4, repeat: 0u8)
+        frame[0] = FRAME_VERSION
+        frame[1] = Command.REGISTER.value
         for (i in 0..4) {
-            frame[1 + i] = UInt8((payload.size >> (8 * (3 - i))) & 0xff)
+            frame[2 + i] = UInt8((payload.size >> (8 * (3 - i))) & 0xff)
         }
         for (i in 0..payload.size) {
-            frame[5 + i] = payload[i]
+            frame[6 + i] = payload[i]
         }
-        let crc = crc32(frame[0..5 + payload.size])               // crc 覆盖 cmd+len+payload
+        let crc = crc32(frame[0..6 + payload.size])               // crc 覆盖 version+cmd+len+payload
         for (i in 0..4) {
-            frame[5 + payload.size + i] = UInt8((Int64(crc) >> (8 * (3 - i))) & 0xff)
+            frame[6 + payload.size + i] = UInt8((Int64(crc) >> (8 * (3 - i))) & 0xff)
         }
         frame
     }

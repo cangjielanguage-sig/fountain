@@ -18,6 +18,9 @@ protected package fountain::f_pool.base.collection
 import std.sync.{Mutex, AtomicInt64}
 import std.ref.*
 
+/** 操作代号 → 名字：不变量告警里带上"当时在跑哪类操作"，便于再现时定位触发源（见 bug.md 7.2）。 */
+private let DEQUE_OP_NAMES = ['insertHead', 'insertTail', 'prepend', 'append', 'remove', 'check', 'reconcile']
+
 protected interface Deque<T> {
     func insertHead(value: T): Unit
     func insertTail(value: T): Unit
@@ -34,11 +37,15 @@ public class SyncDeque<T> <: Deque<T> {
     private let out = AtomicInt64(0)
 
     private let opCount = AtomicInt64(0)
+    /** 最近一次进入的操作代号（诊断用，见 bug.md 7.2）。 */
+    private let lastOp = AtomicInt64(0)
 
     /**
-     * 低频自检：不变量 s ≡ 队列节点数 + out。
+     * 低频自检：不变量 s ≡ 队列节点数 + out，**在 head.globalLock 临界区内**核对
+     * （临界区外采集分不清「真丢项」与「并发中间态」，见 bug.md 7.2）。
      * 重复归还（同一对象两次）会让队列里出现重复节点，从而在此暴露；
-     * 这里只告警（不改变行为），取不到项时的自愈在 reconcileIfWedge() 里做。
+     * 告警带「最近一次操作」以便再现时定位触发源；这里只告警（不改变行为），
+     * 取不到项时的自愈在 reconcileIfWedge() 里做。
      */
     private func selfCheck(): Unit {
         if (opCount.fetchAdd(1) % 10000 != 0) {
@@ -49,7 +56,7 @@ public class SyncDeque<T> <: Deque<T> {
             let o = out.load()
             let sa = s.load()
             if (sa != total + o) {
-                println("DEQUE-SELFCHECK] invariant broken: size=${sa} nodes=${total} out=${o}")
+                println("DEQUE-SELFCHECK] invariant broken: size=${sa} nodes=${total} out=${o}, lastOp=${DEQUE_OP_NAMES[lastOp.load()]}")
             }
         }
     }
@@ -77,6 +84,7 @@ public class SyncDeque<T> <: Deque<T> {
         (total, idles)
     }
     public func insertHead(value: T): Unit {
+        lastOp.store(0)
         synchronized(head.globalLock){
             head.insertNext(value)
             s.fetchAdd(1)
@@ -84,6 +92,7 @@ public class SyncDeque<T> <: Deque<T> {
         selfCheck()
     }
     public func insertTail(value: T): Unit {
+        lastOp.store(1)
         synchronized(head.globalLock){
             head.tail.insertPrev(value)
             s.fetchAdd(1)
@@ -91,6 +100,7 @@ public class SyncDeque<T> <: Deque<T> {
         selfCheck()
     }
     public func prepend(value: T, checker: (T) -> Bool, destroier: (T) -> Unit): Unit {
+        lastOp.store(2)
         if(checker(value)){
             synchronized(head.globalLock){
                 head.insertNext(value)
@@ -106,6 +116,7 @@ public class SyncDeque<T> <: Deque<T> {
         selfCheck()
     }
     public func append(value: T, checker: (T) -> Bool, destroier: (T) -> Unit): Unit {
+        lastOp.store(3)
         if(checker(value)){
             synchronized(head.globalLock){
                 head.tail.insertPrev(value)
@@ -121,6 +132,7 @@ public class SyncDeque<T> <: Deque<T> {
         selfCheck()
     }
     public func remove(checker: (T) -> Bool, destroier: (T) -> Unit): ?T {
+        lastOp.store(4)
         while(true){
             // 取节点与借出计数必须在同一临界区：否则并发下会出现「节点已摘掉、计数未加」
             // 的中间态，把合法并发误判成记账脱钩（自愈就会误伤）。
@@ -157,6 +169,7 @@ public class SyncDeque<T> <: Deque<T> {
      * 把 s 拉回真实值即可让池重新创建池项。
      */
     private func reconcileIfWedge(): Unit {
+        lastOp.store(6)
         synchronized(head.globalLock){
             if (s.load() - out.load() <= 0) {
                 return                  // 正常：队列里有项，或池项都在借出中
@@ -165,11 +178,12 @@ public class SyncDeque<T> <: Deque<T> {
             if (total == 0 && out.load() == 0 && s.load() > 0) {
                 let lost = s.load()
                 s.store(0)
-                println("WEDGE-HEAL] deque lost ${lost} element(s) with no borrower (bookkeeping broken), size reset to 0")
+                println("WEDGE-HEAL] deque lost ${lost} element(s) with no borrower (bookkeeping broken), size reset to 0, lastOp=${DEQUE_OP_NAMES[lastOp.load()]}")
             }
         }
     }
     public func check(running: () -> Bool, checker: (T) -> Bool, taskPusher: () -> Unit): Int64 {
+        lastOp.store(5)
         var rm = 0
         var node: ?Node<T> = head.tail.prevForChecking()
         while(let Some(n: ValueNode<T>) <- node){
@@ -180,8 +194,9 @@ public class SyncDeque<T> <: Deque<T> {
                 break
             }
             node = n.prevForChecking()
-            if(!n.check(checker)){
-                s.fetchSub(1)
+            // 摘节点与 s 递减必须在同一临界区（见 bug.md 7.4）：分属两处时会留下
+            // 「节点已摘、s 未减」的中间态，被并发的不变量校验误判成记账脱钩。
+            if(!n.check(checker, onRemoved: {=> s.fetchSub(1)})){
                 taskPusher()
                 rm++
             }

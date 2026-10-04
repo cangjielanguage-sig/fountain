@@ -287,12 +287,20 @@ protected class ValueNode<T> <: AbstractNode<T> {
     func setChecking(): Unit {
         status.store(VALUE_NODE_CHECKING)
     }
-    protected func check(fn: (T) -> Bool): Bool {
+    /**
+     * 校验池项：`fn` 为 false 时摘除该节点。
+     * `onRemoved` 在**摘节点的同一临界区**内执行，供调用方把「队列计数 `s` 递减」并进来
+     * —— 否则「节点已摘、计数未减」的中间态会被并发的不变量校验当成记账脱钩（见 bug.md 7.4）。
+     */
+    protected func check(fn: (T) -> Bool, onRemoved!: () -> Unit = {=>}): Bool {
         if(fn(value)){
             this.setIdle()
             true
         }else{
-            remove()
+            synchronized(globalLock){
+                doRemove()
+                onRemoved()
+            }
             false
         }
     }
