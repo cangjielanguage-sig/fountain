@@ -108,7 +108,9 @@ public static func get(qualifiedName: String): TypeInfo {
 
 修法：该分支应改为「按名称构造 `TypeInfo`」的实现（例如从 `qualifiedName` 解析包名/类型名后查 `TypeInfo` 注册表，或抛明确的「未注册类型」异常），绝不能回调自身；修完补一条 `TypeInfos.get("a.b.C")` 的单测（断言不递归、返回值或异常符合约定）。
 
-### 1.3 [误判｜非缺陷] `ASP-1` 拦截器链把「首次调用的 `fn`」永久烧进静态缓存（f_aspect）——设计目的，非缺陷（2026-10-04 判定）
+### 1.3 [误判｜非缺陷] `ASP-1` 拦截器链把「首次调用的 `fn`」永久烧进静态缓存（f_aspect）✓已复核 → ❌误判（2026-10-04：设计目的，非缺陷）
+
+**❌ 误判标记（2026-10-04）**：判定为**误判**，非缺陷（理由见下方判定）。分支 `docs/asp-1-design-note`（worktree `.worktrees/asp-1-design-note`，基线 `8be67951`），**代码注释与本标记在同一提交**：`31c023bf docs(f_aspect): 补切面链缓存的设计说明注释；bug.md §1.3 ASP-1 判定为误判`；该分支已并入 `sts/1.3.x`（合并提交 `b1a706ad`）。代码侧设计说明见 `f_aspect/src/Aspects.cj:25-33`（`aspects` 声明处）与 `f_aspect/src/Aspects.cj:44`（链尾 `{args => fn(args)}` 处）。收尾时 worktree 与分支已按约定删除（分支 was `31c023bf`）。
 
 **判定（2026-10-04）：误判，非缺陷。** 链按「(类型, 函数)」**只在切点函数首次被调用时构建一次、之后一直复用**，以及由此产生的「链尾固化首次调用传入的 `callee`（含该次调用的接收者）」，两者都是**刻意的设计**：
 
@@ -116,7 +118,7 @@ public static func get(qualifiedName: String): TypeInfo {
 - 织入的粒度是「**类型**」而不是「实例」：同一类型的多个实例共享同一条链，不按实例建链（`f_aspect/README.md`：「织入逻辑会在这些函数首次调用时执行」）；
 - 使用前提：被织入的对象必须是 **IoC 管理的 bean**（`singleton` 或 `prototype` 均可），手工 `new` 出来的实例不在支持范围内。
 
-已在 `f_aspect/src/Aspects.cj:25-33`（`aspects` 声明处的设计说明）与 `f_aspect/src/Aspects.cj:44`（链尾 `{args => fn(args)}` 处）写下同口径注释；本条目不再进入修复队列。
+本条目不再进入修复队列（§0 建议修复顺序第 3 条已同步去列）。
 
 **以下为审查时的原始判断与证据（已作废，留档对照）**：
 
