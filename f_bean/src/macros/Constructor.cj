@@ -12,31 +12,32 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 macro package fountain::f_bean.macros
 
 public macro Constructor(input: Tokens): Tokens {
     assertParentContext('Bean')
     let beanCond = HashMap<String, Tokens>()
     let valueCond = HashMap<String, Tokens>()
-    for(msg in getChildMessages('BeanParam')){
+    for (msg in getChildMessages('BeanParam')) {
         beanCond[msg.getString('name')] = msg.getTokens('cond')
     }
-    for(msg in getChildMessages('Value')){
+    for (msg in getChildMessages('Value')) {
         valueCond[msg.getString('name')] = msg.getTokens('cond')
     }
-    let decl = try{
+    let decl = try {
         parseDecl(input)
-    }catch(_: ParseASTException){
+    } catch (_: ParseASTException) {
         parseDecl(input, astKind: 'PrimaryCtorDecl')
-    }catch(e: Exception){
+    } catch (e: Exception) {
         throw e
     }
     constructor(decl, beanCond, valueCond)
     input
 }
+
 private func constructor(decl: Decl, beanCond: HashMap<String, Tokens>, valueCond: HashMap<String, Tokens>): Unit {
-    match(decl){
+    match (decl) {
         case x: FuncDecl where x.isPublic() && x.identifier.value == 'init' =>
             argTokens(x.funcParams, beanCond, valueCond)
             setItem('constructor', 'init')
@@ -48,48 +49,58 @@ private func constructor(decl: Decl, beanCond: HashMap<String, Tokens>, valueCon
             setItem('constructor', 'init')
         case x: MacroExpandDecl =>
             var d: Decl = x
-            while(let md: MacroExpandDecl <- d){
+            while (let md: MacroExpandDecl <- d) {
                 d = md.macroInputDecl
             }
             constructor(d, beanCond, valueCond)
-        case _ => 
+        case _ =>
             let tokens = decl.toTokens()
-            diagReport(ERROR, tokens, '${decl.identifier.value} must be a public constructor or public static func without generic parameter', '')
+            diagReport(ERROR, tokens,
+                '${decl.identifier.value} must be a public constructor or public static func without generic parameter',
+                '')
     }
 }
 
-private func argTokens(params: ArrayList<FuncParam>, beanCond: HashMap<String, Tokens>, valueCond: HashMap<String, Tokens>): Unit {
+private func argTokens(params: ArrayList<FuncParam>, beanCond: HashMap<String, Tokens>,
+    valueCond: HashMap<String, Tokens>): Unit {
     var assigns = quote()
     var actualArgs = quote()
-    for(param in params){
-        if(assigns.size > 0){
+    for (param in params) {
+        if (assigns.size > 0) {
             assigns += `nl`
             actualArgs += `comma`
         }
-        actualArgs += if(param.not.kind == ILLEGAL){
+        actualArgs += if (param.not.kind == ILLEGAL) {
             quote($(param.identifier))
-        }else{
+        } else {
             quote($(param.identifier): $(param.identifier))
         }
         let paramTypeTokens = param.paramType.toTokens()
-        assigns += quote(let $(param.identifier) = ) + 
-        if(let Some(cond) <- beanCond.get(param.identifier.value)){
-            match(paramTypeTokens[0].value){
+        // HashMap/Map 形参只能按 bean name（String 键）注入：lookupHashMap 返回 HashMap<String, T>。
+        // 键类型不是 String 时直接报编译错误，避免生成类型检查不过的代码。
+        if ((paramTypeTokens[0].value == 'HashMap' || paramTypeTokens[0].value == 'Map') && paramTypeTokens.size > 2 &&
+            paramTypeTokens[2].value != 'String') {
+            diagReport(ERROR, paramTypeTokens,
+                'the key type of the ${paramTypeTokens[0].value} parameter ${param.identifier.value} must be String',
+                'declare it as ${paramTypeTokens[0].value}<String, T>')
+        }
+        assigns += quote(let $(param.identifier) = ) + if (let Some(cond) <- beanCond.get(param.identifier.value)) {
+            match (paramTypeTokens[0].value) {
                 case 'ArrayList' | 'List' => quote(lookupList<$(paramTypeTokens[2 .. paramTypeTokens.size - 1])>($cond))
                 case 'Array' => quote(lookupList<$(paramTypeTokens[2 .. paramTypeTokens.size - 1])>($cond).toArray())
-                case 'HashSet' | 'Set' => quote(lookupSet<$(paramTypeTokens[2 .. paramTypeTokens.size - 1])>($cond))
+                case 'HashSet' | 'Set' => quote(lookupHashSet<$(paramTypeTokens[2 .. paramTypeTokens.size - 1])>($cond))
                 case 'Option' => quote(lookupOption<$(paramTypeTokens[2 .. paramTypeTokens.size - 1])>($cond))
                 case '?' => quote(lookupOption<$(paramTypeTokens[1 .. ])>($cond))
-                case 'HashMap' | 'Map' => quote(lookupMap<$(paramTypeTokens[4 .. paramTypeTokens.size - 1])>($cond))
+                case 'HashMap' | 'Map' => quote(lookupHashMap<$(paramTypeTokens[4 .. paramTypeTokens.size - 1])>($cond))
                 case _ => quote(lookup<$(param.paramType)>($cond))
             }
-        }else if (let Some(cond) <- valueCond.get(param.identifier.value)) {
+        } else if (let Some(cond) <- valueCond.get(param.identifier.value)) {
             cond
-        } else{
-            match(paramTypeTokens[0].value){
+        } else {
+            match (paramTypeTokens[0].value) {
                 case 'ArrayList' | 'List' => quote(lookupList<$(paramTypeTokens[2 .. paramTypeTokens.size - 1])>())
                 case 'Array' => quote(lookupList<$(paramTypeTokens[2 .. paramTypeTokens.size - 1])>().toArray())
-                case 'HashSet' | 'Set' => quote(lookupSet<$(paramTypeTokens[2 .. paramTypeTokens.size - 1])>())
+                case 'HashSet' | 'Set' => quote(lookupHashSet<$(paramTypeTokens[2 .. paramTypeTokens.size - 1])>())
                 case 'Option' => quote(if(let Some(x) <- lookupOption<$(paramTypeTokens[2 .. paramTypeTokens.size - 1])>($(param.identifier.value))){
                     x
                 }else{
@@ -100,12 +111,12 @@ private func argTokens(params: ArrayList<FuncParam>, beanCond: HashMap<String, T
                 }else{
                     lookupOption<$(paramTypeTokens[1 .. ])>()
                 })
-                case 'HashMap' | 'Map' => quote(lookupMap<$(paramTypeTokens[4 .. paramTypeTokens.size - 1])>())
+                case 'HashMap' | 'Map' => quote(lookupHashMap<$(paramTypeTokens[4 .. paramTypeTokens.size - 1])>())
                 case _ => quote(if(let Some(x) <- lookupOption<$(param.paramType)>($(param.identifier.value))){
                     x
                 }else{
                     lookup<$(param.paramType)>()
-                }) 
+                })
             }
         }
     }
