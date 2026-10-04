@@ -16,14 +16,19 @@ limitations under the License.
 package fountain::f_mockdb
 
 public class MockUpdateResult <: UpdateResult {
+    /**构造时快照本次执行的结果：之后的执行（或 clear）不再改变本对象*/
+    public MockUpdateResult(
+        private let lastInsertId_: Int64,
+        private let rowCount_: Int64
+    ){}
     public prop lastInsertId: Int64 {
         get(){
-            MOCKDB.lastInsertId
+            lastInsertId_
         }
     }
     public prop rowCount: Int64 {
         get(){
-            MOCKDB.rowCount
+            rowCount_
         }
     }
 }

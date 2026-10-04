@@ -214,4 +214,102 @@ public class MockDBCoreTest {
         let _ = stmt.query()
         @Assert('SELECT 1', capturedSql[0])
     }
+
+    @TestCase
+    public func testQueryResultRowsIsolatedPerExecution(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {sql: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'v', nullable: false, typeName: 'SqlInteger')
+            if (sql == 'SELECT 1') {
+                MOCKDB.addQueryResultRow([1])
+            } else {
+                MOCKDB.addQueryResultRow([2])
+            }
+        }
+        let conn = MockConnection()
+        let rs1 = conn.prepareStatement('SELECT 1').query()
+        @Assert(true, rs1.next())
+        @Assert(1, rs1.get<Int64>(0))
+        @Assert(false, rs1.next())
+        let rs2 = conn.prepareStatement('SELECT 2').query()
+        @Assert(true, rs2.next())
+        @Assert(2, rs2.get<Int64>(0))
+        @Assert(false, rs2.next())
+    }
+
+    @TestCase
+    public func testClearQueryResultKeepsFlagsAndExecution(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'v', nullable: false, typeName: 'SqlInteger')
+            MOCKDB.addQueryResultRow([1])
+        }
+        let conn = MockConnection()
+        let _ = conn.prepareStatement('SELECT 1').query()
+        @Assert(1, MOCKDB.getQueryResultRows().size)
+        @Assert(1, MOCKDB.queryResultColumnInfos.size)
+        MOCKDB.toThrowOnExecuting = true
+        MOCKDB.clearQueryResult()
+        @Assert(0, MOCKDB.getQueryResultRows().size)
+        @Assert(0, MOCKDB.queryResultColumnInfos.size)
+        @Assert(true, MOCKDB.toThrowOnExecuting)
+        MOCKDB.toThrowOnExecuting = false
+        let rs = conn.prepareStatement('SELECT 2').query()
+        @Assert(true, rs.next())
+        @Assert(1, rs.get<Int64>(0))
+    }
+
+    @TestCase
+    public func testQueryResultRowIsSnapshot(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {sql: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'v', nullable: false, typeName: 'SqlInteger')
+            if (sql == 'SELECT 1') {
+                MOCKDB.addQueryResultRow([1])
+            } else {
+                MOCKDB.addQueryResultRow([2])
+            }
+        }
+        let conn = MockConnection()
+        let rs1 = conn.prepareStatement('SELECT 1').query()
+        let _ = conn.prepareStatement('SELECT 2').query()
+        @Assert(true, rs1.next())
+        @Assert(1, rs1.get<Int64>(0))
+        @Assert(false, rs1.next())
+    }
+
+    @TestCase
+    public func testUpdateResultIsSnapshot(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {sql: String, _: ArrayList<Any> =>
+            if (sql == 'INSERT 1') {
+                MOCKDB.lastInsertId = 11
+                MOCKDB.rowCount = 1
+            } else {
+                MOCKDB.lastInsertId = 22
+                MOCKDB.rowCount = 2
+            }
+        }
+        let conn = MockConnection()
+        let ur1 = conn.prepareStatement('INSERT 1').update()
+        let ur2 = conn.prepareStatement('INSERT 2').update()
+        @Assert(11, ur1.lastInsertId)
+        @Assert(1, ur1.rowCount)
+        @Assert(22, ur2.lastInsertId)
+        @Assert(2, ur2.rowCount)
+    }
+
+    @TestCase
+    public func testUpdateResultSurvivesLaterReset(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.lastInsertId = 11
+            MOCKDB.rowCount = 1
+        }
+        let conn = MockConnection()
+        let ur = conn.prepareStatement('INSERT 1').update()
+        MOCKDB.clear()
+        @Assert(11, ur.lastInsertId)
+        @Assert(1, ur.rowCount)
+    }
 }

@@ -47,13 +47,18 @@ public class MockStatement <: Statement {
         }
     }
     public func update(): UpdateResult {
+        //每次执行前清掉上一次的结果，保证本次只看到本次夹具写入的行与列信息
+        MOCKDB.clearQueryResult()
         MOCKDB.execution(sql, args)
         if(MOCKDB.toThrowOnExecuting){
             throw MockDbException()
         }
-        MockUpdateResult()
+        //取快照：本次执行写入的 lastInsertId / rowCount 就是本对象的值
+        MockUpdateResult(MOCKDB.lastInsertId, MOCKDB.rowCount)
     }
     public func query(): QueryResult {
+        //每次执行前清掉上一次的结果，保证本次只看到本次夹具写入的行与列信息
+        MOCKDB.clearQueryResult()
         MOCKDB.execution(sql, args)
         if(MOCKDB.toThrowOnExecuting){
             throw MockDbException()

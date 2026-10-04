@@ -17,14 +17,15 @@ package fountain::f_mockdb
 
 public class MockQueryResult <: QueryResult {
     private var rowIndex = -1
-    private var rowData = MOCKDB.getQueryResultRows()
+    //构造时快照本次执行的结果：之后的执行（或 clearQueryResult）不再改变本结果集
+    private let rowData: Array<Array<Any>> = MOCKDB.getQueryResultRows().toArray()
+    private let columnInfos_: Array<ColumnInfo> = MOCKDB.queryResultColumnInfos
     public prop columnInfos: Array<ColumnInfo> {
         get() {
-            let infos = MOCKDB.queryResultColumnInfos
-            if(infos.isEmpty()){
+            if(columnInfos_.isEmpty()){
                 throw MockDbException('column infos from QueryResult must not be empty, to invoke MOCKDB.addQueryResultColumnInfo(name: "...", nullable: "...", typeName: "...") to add ColumnInfo for QueryResult.')
             }
-            infos
+            columnInfos_
         }
     }
     public func next(values: Array<SqlDbType>): Bool {
