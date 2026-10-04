@@ -35,6 +35,16 @@ class Ref<T> {
     func get(): ?T {
         value
     }
+    /**
+     * 取走值并把 `value` 置空：**借出**与**显式销毁**之后都必须调用它。
+     * 终结器只看 `value` 是否还在 —— 不 `take()` 的话，借出的池项会在借用方手里被销毁，
+     * 显式销毁过的池项会被终结器销毁第二次（见 .autocode/bugs/bug-pool.md §1.1）。
+     */
+    func take(): ?T {
+        let v = value
+        value = None
+        v
+    }
     prop pooledTime: MonoTime {
         get(){
             pooledTime_

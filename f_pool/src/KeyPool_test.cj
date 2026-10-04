@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_pool
 
+import std.runtime.gc
 import std.sync.AtomicInt64
 import fountain::f_pool.diagnostics.PoolDiagnostics
 
@@ -266,6 +267,68 @@ public class KeyPoolTest {
         @Assert(pool.checkSize())
         PoolDiagnostics.dump(reason: 'after-schedule-audit')
         pool.close()
+    }
+    /**
+     * `POOL-1`（`.autocode/bugs/bug-pool.md` §1.1）：**借出期间池项不得被销毁**。
+     *
+     * 借出时 `Ref<V>` 被解包后立即不可达，若不把它的值 `take()` 空，GC 终结器就会在借用方手里调
+     * `destroier`（对连接/句柄类池项就是「借用中被关掉」）；显式销毁路径同理，`Ref.value` 仍在 ⇒
+     * 同一个池项会被终结器销毁第二次。
+     *
+     * 用例覆盖两段：① 借出后强制 GC，销毁计数必须仍为 0，且归还后还能再借出；
+     * ② `close()` 显式销毁空闲项一次后，再强制 GC 不得出现第二次销毁。
+     */
+    @TestCase
+    public func borrowedItemMustNotBeDestroyedByFinalizer(): Unit {
+        let destroyed = AtomicInt64(0)
+        let pool = KeyPool<String, Object>(
+            mode: Fifo,
+            initKeys: ['k'].iterator().next,
+            minSize: 0,
+            maxSize: 1,
+            totalSize: 1,
+            idleTimeout: Duration.hour,
+            checkOnCreation: false,
+            checkOnBorrowing: false,
+            checkOnReturning: false,
+            checkInterval: Duration.Zero,
+            maxWaiting: Duration.second,
+            creator: {_ => Object()},
+            checker: {_, _ => true},
+            destroier: {_, _ => destroyed.fetchAdd(1)}
+        )
+        // 初始池项由创建线程异步创建
+        var borrowed = None<Object>
+        for (_ in 0 .. 300) {
+            if (let Some(v) <- pool.get('k', timeout: Duration.Zero)) {
+                borrowed = Some(v)
+                break
+            }
+            sleep(Duration.millisecond * 10)
+        }
+        @Assert(borrowed.isSome())
+        let o = borrowed.getOrThrow()
+        @Assert(destroyed.load(), 0)
+        gc()
+        sleep(Duration.millisecond * 200)
+        gc()
+        sleep(Duration.millisecond * 200)
+        // ① 借出期间被终结器销毁 ⇒ 这里失败
+        @Assert(destroyed.load(), 0)
+        pool.giveBack('k', o)
+        let again = pool.get('k', timeout: Duration.second)
+        @Assert(again.isSome())
+        if (let Some(v) <- again) {
+            pool.giveBack('k', v)
+        }
+        // ② close 销毁空闲项一次；再 gc 不得二次销毁
+        pool.close()
+        @Assert(destroyed.load(), 1)
+        gc()
+        sleep(Duration.millisecond * 200)
+        gc()
+        sleep(Duration.millisecond * 200)
+        @Assert(destroyed.load(), 1)
     }
 }
 

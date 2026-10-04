@@ -27,7 +27,7 @@
 8. `CACHE-8`（§2.5）`Priority` 比较基线的无锁竞争 + `compare` 的“保护新生”分支疑似写反
 9. 其余低危/待验证见 §3
 
-> 修复进度（2026-10-05）：§1 的 3 条严重级（`CACHE-1` = `3171d664`、`CACHE-2` = `0e3d70d6`、`CACHE-3` = `14733baf`）已修复并并入 `sts/1.3.x`（`0448df98` 把主线拉进分支、`4a01a26f` 合入主分支）；**§2.1 `CACHE-4` 已按方案 C 修复并并入 `sts/1.3.x`**（`302bd9f2` 拉齐主线进分支、`e131fa7f` 合入主分支）；**§2.2 `CACHE-5` 已修复**（`HeapCache`/`WeakHeapCache` 实现 `Resource`，`close()` 取消内部线程，见 §2.2，分支 `review/f_cache` 上待并入）；2026-10-05 按指示删除 `HeapCache.destroy()`（`atExit` 注册与用例全部改为 `close()`，原 `testDestroyStopsEvictionThread` 更名 `testCloseStopsEvictionThread`）；§2 其余 3 条与 §3 的低危/待验证未动。用例 1 → 12 条（全绿）。
+> 修复进度（2026-10-05）：§1 的 3 条严重级（`CACHE-1` = `3171d664`、`CACHE-2` = `0e3d70d6`、`CACHE-3` = `14733baf`）已修复并并入 `sts/1.3.x`（`0448df98` 把主线拉进分支、`4a01a26f` 合入主分支，合并后主工作区复跑 6/6 PASSED）；**§2.1 `CACHE-4` 已按方案 C 修复并并入 `sts/1.3.x`**（callable 移出段写锁 + `removeIf` 两阶段，见 §2.1；`302bd9f2` 拉齐主线进分支、`e131fa7f` 合入主分支）；**§2.2 `CACHE-5` 已修复**（`HeapCache`/`WeakHeapCache` 实现 `Resource`，`close()` 取消内部线程，见 §2.2，分支 `review/f_cache` 上待并入）；2026-10-05 按指示删除 `HeapCache.destroy()`（`atExit` 注册与用例全部改为 `close()`，原 `testDestroyStopsEvictionThread` 更名 `testCloseStopsEvictionThread`）；§2 其余 3 条与 §3 的低危/待验证未动。用例 1 → 12 条（全绿）。
 
 ---
 
