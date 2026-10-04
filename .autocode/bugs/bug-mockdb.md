@@ -14,7 +14,7 @@
 | 中 | 5 |
 | 低危 / 待验证 | 9 |
 
-> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4`、§2.2 `MOCK-5`、§2.3 `MOCK-6` 已修复 ⇒ 待修严重级 **0** 条、中危 **2** 条（见各自修复标记）。其中 `MOCK-1`/`MOCK-2` 已并入 `sts/1.3.x`（合并提交 `12c19d94`）；`MOCK-3`~`MOCK-6` 在分支 `fix/mock-1-query-isolation`（`e904ac87`/`ba04b79f`/`80d67a36` + 本次提交），待下次同步。标记补录提交：`fa822423`。
+> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4`、§2.2 `MOCK-5`、§2.3 `MOCK-6`、§2.4 `MOCK-7`（①③）已修复 ⇒ 待修严重级 **0** 条、中危 **1** 条（见各自修复标记）。其中 `MOCK-1`/`MOCK-2` 已并入 `sts/1.3.x`（合并提交 `12c19d94`）；`MOCK-3`~`MOCK-7` 在分支 `fix/mock-1-query-isolation`（`e904ac87`/`ba04b79f`/`80d67a36`/`edb10235` + 本次提交），待下次同步。标记补录提交：`fa822423`、`cd429689`。
 
 **建议修复顺序**：
 
@@ -202,7 +202,16 @@ DT：`close()` 后断言夹具未变；显式 `clear()` 后断言夹具已清（
 
 DT：断言三个属性返回契约值、不抛异常。
 
-### 2.4 [中｜正确性] `MOCK-7` `MockStatement` 参数槽三处语义问题：跨执行累积、`None<Any>` 双关、负索引异常类型（f_mockdb）
+### 2.4 [中｜正确性] `MOCK-7` `MockStatement` 参数槽三处语义问题：跨执行累积、`None<Any>` 双关、负索引异常类型（f_mockdb） → ✅已修复（2026-10-04，①③；②单列待定）
+
+**✅ 修复标记（2026-10-04）**：分支 `fix/mock-1-query-isolation`（同一 worktree，在 MOCK-6 之后追加提交），**代码、用例、本标记在同一提交**（提交信息 `fix(f_mockdb): MOCK-7 参数槽执行后清空 + 负索引抛 SqlException（bug-mockdb §2.4 修复标记）`；提交哈希由下一次标记同步补录）。
+
+- 改动（`src/Statement.cj`）：**①跨执行累积** —— `update()` / `query()` 把 `MOCKDB.execution(sql, args)` 包进 `try { … } finally { args.clear() }`，一次执行结束即清空参数槽（夹具抛异常也清），语句复用时不再带上一次绑定的参数；**③负索引** —— `set<T>` / `setNull` 开头新增 `index < 0` 校验 ⇒ `throw SqlException('parameter index N is negative')`（按 std 契约，此前抛 `IndexOutOfBoundsException`）。
+- 用例：`src/mockdb_core_test.cj` 新增 2 条 —— `testStatementReuseDoesNotKeepArgs`（同一语句两次执行、第二次只绑 0 号参数：夹具两次看到的参数个数应为 2、1）、`testSetNegativeIndexThrows`（`set(-1, …)` 与 `setNull(-1)` 都断言抛 `SqlException`）。
+- 测量证据：**修复前** PASSED 44 / **FAILED 1 + ERROR 1**（EXIT=1）：`testStatementReuseDoesNotKeepArgs` 在 `@Assert(1, argSizes[1])` 失败（left 1 / right 2 —— 第二次仍带着上一次的参数）、`testSetNegativeIndexThrows` 报 `IndexOutOfBoundsException: Invalid index '-1': expected 0 to '0'`；**修复后** = **46/46 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**，编译警告 9 条无新增。日志 `/tmp/mock7_before.log`、`/tmp/mock7_after.log`。
+- 行为变化（有意）：语句对象不再跨执行保留参数 —— 复用同一 `MockStatement` 时第二次执行前需重新 `set`（`f_orm` 每次执行都新建并关闭语句，`SqlExecutor.cj:396-404`，不受影响）；夹具在回调里看到的 `args` 仍是本次参数，但回调结束后该表被清空（若夹具保存了它的引用，之后会读到空表 —— 需要稳定快照再议）。
+- 未做（本条目 ②「未绑定 vs 绑定 NULL 不可区分」）：要区分两者必须让夹具可见的表示能表达二者，而 `MOCKDB.execution` 的签名 `(String, ArrayList<Any>) -> Unit` 是公开 API（README、`f_orm/src/wrap/DatabasePool_test.cj`、本模块 40+ 处夹具都按它写），改动属**破坏性变更** ⇒ 单列待定（可选方向：改签名 `ArrayList<?Any>`、加哨兵值 + 判断辅助、保持现状并在 README 写明）。
+- 顺带发现（未修，建议单列 `MOCK-L8`）：`set<T>(bigIndex, v)` 会真的补出 `bigIndex + 1` 个占位符（例如索引 100 万就分配 100 万个 `None`）；真实驱动按语句参数个数报「索引越界」，mock 目前不解析 SQL、定不出上界。
 
 位置：`src/Statement.cj:19`（`args` 生命周期 = 语句对象）、`35-40`（`set<T>` 用 `args.add(None<Any>)` 补位）、`41-48`（`setNull` 同一套 `None<Any>`）
 

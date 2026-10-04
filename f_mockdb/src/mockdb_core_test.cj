@@ -492,4 +492,45 @@ public class MockDBCoreTest {
         @Assert(0, info.length)
         @Assert(0, info.scale)
     }
+
+    @TestCase
+    public func testStatementReuseDoesNotKeepArgs(): Unit {
+        MOCKDB.clear()
+        let argSizes = ArrayList<Int64>()
+        MOCKDB.execution = {_: String, args: ArrayList<Any> =>
+            argSizes.add(args.size)
+        }
+        let conn = MockConnection()
+        let stmt = conn.prepareStatement('UPDATE t SET a = ?, b = ?')
+        stmt.set<String>(0, 'a')
+        stmt.set<String>(1, 'b')
+        let _ = stmt.update()
+        stmt.set<String>(0, 'c')
+        let _ = stmt.update()
+        @Assert(2, argSizes.size)
+        @Assert(2, argSizes[0])
+        //第二次只绑定了 0 号参数：不应再带上第一次的 1 号参数（修复前这里读到 2）
+        @Assert(1, argSizes[1])
+    }
+
+    @TestCase
+    public func testSetNegativeIndexThrows(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> => ()}
+        let conn = MockConnection()
+        let stmt = conn.prepareStatement('SELECT v FROM t WHERE v = ?')
+        //按 std 契约：参数索引越界抛 SqlException（修复前抛 IndexOutOfBoundsException）
+        try {
+            stmt.set<String>(-1, 'x')
+            @Assert(false)
+        } catch (e: SqlException) {
+            @Assert(true)
+        }
+        try {
+            stmt.setNull(-1)
+            @Assert(false)
+        } catch (e: SqlException) {
+            @Assert(true)
+        }
+    }
 }

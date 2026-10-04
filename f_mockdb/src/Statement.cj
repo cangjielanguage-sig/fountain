@@ -34,12 +34,20 @@ public class MockStatement <: Statement {
         throw MockDbException('not supported')
     }
     public func set<T>(index: Int, value: T): Unit {
+        if(index < 0){
+            //按 std 契约：参数索引越界抛 SqlException
+            throw SqlException('parameter index ${index} is negative')
+        }
         for(_ in args.size ..= index) {
             args.add(None<Any>)
         }
         args[index] = value
     }
     public func setNull(index: Int): Unit {
+        if(index < 0){
+            //按 std 契约：参数索引越界抛 SqlException
+            throw SqlException('parameter index ${index} is negative')
+        }
         for(_ in args.size ..= index) {
             args.add(None<Any>)
         }
@@ -50,7 +58,12 @@ public class MockStatement <: Statement {
     public func update(): UpdateResult {
         //每次执行前清掉上一次的结果，保证本次只看到本次夹具写入的行与列信息
         MOCKDB.clearQueryResult()
-        MOCKDB.execution(sql, args)
+        try {
+            MOCKDB.execution(sql, args)
+        } finally {
+            //本次执行结束即清空参数槽：语句复用时不再带上一次绑定的参数
+            args.clear()
+        }
         if(MOCKDB.toThrowOnExecuting){
             throw MockDbException()
         }
@@ -60,7 +73,12 @@ public class MockStatement <: Statement {
     public func query(): QueryResult {
         //每次执行前清掉上一次的结果，保证本次只看到本次夹具写入的行与列信息
         MOCKDB.clearQueryResult()
-        MOCKDB.execution(sql, args)
+        try {
+            MOCKDB.execution(sql, args)
+        } finally {
+            //本次执行结束即清空参数槽：语句复用时不再带上一次绑定的参数
+            args.clear()
+        }
         if(MOCKDB.toThrowOnExecuting){
             throw MockDbException()
         }
