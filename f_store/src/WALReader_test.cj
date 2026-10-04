@@ -131,14 +131,12 @@ public class WALWALReaderTest {
         wal.sync()
         wal.close()
 
-        // 读取文件，翻转第 2 条记录 key 字节
-        let file = File(walPath, OpenMode.ReadWrite)
-        let fileBytes = Array<Byte>(file.length, repeat: 0u8)
-        file.read(fileBytes)
+        // 翻转第 2 条记录 key 字节：**按偏移就地改 1 字节**。
+        // WAL 文件是 SegmentedLog 预分配的（默认 64MB），整读整写会吃掉 64MB×N 的内存（见 bug.md 7.13）。
         // 第 2 条记录起始偏移: 38B，key 字节在 header(36B) 之后 → 38 + 36 = 74
-        fileBytes[74] = 0xFF
-        file.seek(SeekPosition.Begin(0))
-        file.write(fileBytes)
+        let file = File(walPath, OpenMode.ReadWrite)
+        file.seek(SeekPosition.Begin(74))
+        file.write([0xFFu8])
         file.close()
 
         // 读取应只返回第 1 条（损坏处截断）
@@ -169,15 +167,13 @@ public class WALWALReaderTest {
         wal.sync()
         wal.close()
 
-        // 翻转第 2、3 条记录的 key 字节
-        let file = File(walPath, OpenMode.ReadWrite)
-        let fileBytes = Array<Byte>(file.length, repeat: 0u8)
-        file.read(fileBytes)
+        // 翻转第 2、3 条记录的 key 字节（同样只就地改字节，不整读整写）
         // 每条 38B: 第 2 条 key @ 38+36=74，第 3 条 key @ 76+36=112
-        fileBytes[74] = 0xFE
-        fileBytes[112] = 0xFD
-        file.seek(SeekPosition.Begin(0))
-        file.write(fileBytes)
+        let file = File(walPath, OpenMode.ReadWrite)
+        file.seek(SeekPosition.Begin(74))
+        file.write([0xFEu8])
+        file.seek(SeekPosition.Begin(112))
+        file.write([0xFDu8])
         file.close()
 
         // 截断在第 2 条，只返回第 1 条
@@ -218,12 +214,10 @@ public class WALWALReaderTest {
         badWal.append([0x03], [0x33])
         badWal.sync()
         badWal.close()
+        // 损坏第 2 条（就地改 1 字节：预分配文件整读整写会爆内存，见 bug.md 7.13）
         let badFile = File(badPath, OpenMode.ReadWrite)
-        let badBytes = Array<Byte>(badFile.length, repeat: 0u8)
-        badFile.read(badBytes)
-        badBytes[38 + 36] = 0xEE  // 损坏第 2 条
-        badFile.seek(SeekPosition.Begin(0))
-        badFile.write(badBytes)
+        badFile.seek(SeekPosition.Begin(38 + 36))
+        badFile.write([0xEEu8])
         badFile.close()
 
         // recoverAll 读取全部 3 个文件

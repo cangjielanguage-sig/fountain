@@ -28,12 +28,13 @@
 | 7.1 值级长度 | 帧内**值级**声明长度可触发超大分配 | ✅ | 2026-10-04：`SizeBoundedInput` + `DefaultCodec.checkedBuffer()` 分配前校验「声明 ≤ 帧剩余」，超了抛 `CodecException`；f_protocol **60/60**（含 1TB 声明用例，见 7.1） |
 | 7.7 | frpcdemo 客户端无法启动（**既有问题**） | ✅ | 2026-10-03 定位并修好启动链路（缺 `rpcClient_serverAddress` ⇒ ERROR+`exit(1)`；RPC 调用移出 Init Image；另修 4 处段错误）：实测 0 Init Image fail、0 段错误。**业务级 E2E 已跑通**（见 7.10） |
 | 7.10 | 业务级 E2E 的 10 层断链 | ✅ | 2026-10-03 逐层定位并修复：消息 id 时区/相等、`ExecutorFuture.get` 丢结果、客户端 reader 中性解码、骨架注册前缀过滤、`ServiceMeta` 含 weight、发现连接复用、重试判断、demo 侧接口/载荷、对象类型未注册。实测客户端打印 JSON、服务端 `CONSUME` 正常（见 7.10） |
-| — | (7.5 起) §四 P2 小项与池相关遗留 | 🟡 | **7.5 已收口、7.6 已实现、7.4 已修（2026-10-04）**：f_net 三条已修 + 服务端 `tcp closed` 已分级（WARN 140 → 1）+ `unavailableChecked` 评估后关闭；`KeyPool.get` 的 30s 改成池初始化参数 `maxWaiting`（全项目接上，ORM/RPC 各有配置项）；`SyncDeque.check()` 的「摘节点 / `s` 递减」已并入同一临界区；**7.2 已增强诊断、7.3 的方案待定** |
+| — | (7.5 起) §四 P2 小项与池相关遗留 | ✅ | **7.5 已收口、7.6 已实现、7.4 已修（2026-10-04）**：f_net 三条已修 + 服务端 `tcp closed` 已分级（WARN 140 → 1）+ `unavailableChecked` 评估后关闭；`KeyPool.get` 的 30s 改成池初始化参数 `maxWaiting`（全项目接上，ORM/RPC 各有配置项）；`SyncDeque.check()` 的「摘节点 / `s` 递减」已并入同一临界区；7.2 已增强诊断、7.3 已决定不改（见各自小节） |
 | — | **f_protocol→f_util 依赖**：应用加载期 `undefined symbol: crc32Update` | ✅⚠️ | **已修**（`boot.sh` 自建库优先）。曾误判为"加载顺序/需要预打开 .so"，实际是 `installed/libs/fboot` 的**旧副本抢先**（库无 SONAME），见 7.8 |
 | — | 池记账脱钩的**触发源** | 🟡 | 仍未定位到具体一行；2026-10-04 增强诊断：告警带上「最近一次操作」`lastOp`（见 7.2）；自愈 + 告警见 6.8.5 |
 | — | 重复归还的强约束 | ⬜ | **决定：暂不改（2026-10-04）** —— 容量护栏（方案 A）不解决问题；方案 B（给 `V` 加 `Hashable & Equatable` 约束或改句柄 API）与"支持任意类型对象"的目标冲突 ⇒ 保持现状（低频自检 + `Release` 幂等），见 7.3 |
 | 7.12 | `f_pool` 全量用例**偶发** SIGSEGV | ⬜ | 仅 2026-10-03 观察到一次（栈顶 `UnitKeyPool.size` 的运行时泛型 MTable 空指针）；2026-10-04 做了对照（默认并行 5 轮 + `--parallel 1` 2 轮）**仍未复现**，触发条件未知 —— 只能等再现时留栈；见 7.12 |
-| 7.13 | `f_store` 的 6 个 WAL 用例 ERROR（**既有**） | ⬜ | 204 项里 6 个 ERROR 全在 WAL；把 `f_util` 暂回 HEAD 重跑**同样 6 个** ⇒ 与 §7.9 的 CRC 重构无关；unittest 不打异常详情，待单独定位；见 7.13 |
+| 7.13 | `f_store` 的 6 个 WAL 用例 ERROR（**既有**） | ✅ | 2026-10-04 定位并修复：`SegmentLog` 预分配 64MB 的文件被用例按"文件长度"整读（并发时撑爆堆）⇒ 测试侧改为"有界前缀读 + 就地改 1 字节"，`f_store` **204/204**；见 7.13 |
+| 7.14 | `f_store` 全量用例在 `/tmp` 留 ~4GB 残留 | ⬜ | 几十个 `Concurrency_*`/`Integration_*` 目录各含 64MB 预分配文件，用例结束不清理；建议 `atExit`/`finally` 清理或把测试用 `maxFileSize` 调小；见 7.14 |
 | 7.9 | `f_net` 用例长期编译不过（读写路径无回归覆盖） | ✅ | 2026-10-04 迁移到 `Server<T>`/`Client<T>`：`cjpm test` = **14/14**（含 PING→ACK、executor 请求/响应 + 载荷逐字节往返）；见 7.9 |
 | 7.11 | 对象类型的注册应由框架自动完成（含**嵌套**） | ✅ | 2026-10-04 两条路径：`@RPCStub`/`@RPCSkeleton` 登记顶层参数/返回类型；`@DataAssist[fields]` 在包初始化时自登记（覆盖嵌套，f_codec 解码未命中时拉取）。删掉 demo 手工 `registerType<EchoPO>()` 后 E2E 仍跑通，且嵌套 `EchoPO.inner` 出现在 JSON 里；见 7.11 |
 
@@ -902,18 +903,35 @@ demo 端到端与之前一致：分隔线 ×2、客户端 JSON、服务端 `CONS
   共 7 轮全部 `TOTAL: 23, PASSED: 23, FAILED: 0`、退出码 0，无 SIGSEGV、无崩溃进程 ⇒ **仍未复现**。
   结论：不能据此判定"已修复"（触发条件依旧未知）；后续再现时按上面第 1、2 条留现场。
 
-### 7.13 `f_store` 的 6 个 WAL 用例 ERROR（**既有问题**，2026-10-04 发现并确认与本轮改动无关）
+### 7.13 `f_store` 的 6 个 WAL 用例 ERROR（**既有问题**）：✅ 已修（2026-10-04）
 
-- 现状：`f_store` 全量 `cjpm test` = `TOTAL: 204, PASSED: 198, ERROR: 6`（`FAILED: 0`）。6 个 ERROR 全在 WAL：
+- 现象：`f_store` 全量 `cjpm test` = `TOTAL: 204, PASSED: 198, ERROR: 6`（`FAILED: 0`），6 个 ERROR 全在 WAL：
   `walChecksumCorruptionSingleRecord` / `walChecksumCorruptionConsecutive` / `walRecoverEmptyAndCorruptedMixed`
   （`WALWALReaderTest`），`walAppendAndRecover` / `walAppendWithExpireAt` / `walTombstoneRecord`（`WALTest`）；
   同族的 `StoreIntegrationTest.testWALRecovery`、`WALRecordTest`、`WALTest.walSyncCloseRace` 都通过。
-- **已确认与本轮 CRC 重构无关**：`git stash push --include-untracked -- f_util`（回到 HEAD 的旧 CRC 实现）后重跑，
-  **同样的 6 个 ERROR 依旧**；且 `crc32` 的取值有逐位一致的用例（`crc_check_test.cj`：检查值 `0xCBF43926`、
-  空输入、增量等价、包装一致性）。
-- 难点：Cangjie 的 unittest 在当前输出模式下只标 `[ ERROR ] CASE: …`，**不打异常详情**（`--verbose` 也不打）。
-  定位建议：用 `cjpm test --filter …`（值要能匹配 `包.类.用例`，实测 `--filter wal` 会把 204 个全 `SKIPPED`）
-  单独跑一个用例，或改用带报告文件的输出，或临时在用例里 `println` 关键步骤。
-- 线索：6 个都走 `tempWALPath()`（`/tmp/f_store_test/WAL_*.wal`）→ `ensureDir`/`cleanWAL` → `WAL.append` → `readRecords`
-  这条路径；`readRecords` 第一步是 `File(path, OpenMode.Read)` —— 如果 WAL 在 close/恢复时把文件删掉或改名，
-  就会在这里抛异常（表现为 ERROR 而不是断言失败）。
+  **与本轮 CRC 重构无关**：`git stash push --include-untracked -- f_util`（回到 HEAD 的旧实现）后重跑，同样 6 个。
+- 定位手段：Cangjie 的 unittest 只标 `[ ERROR ] CASE:`、**不打异常详情**（`--verbose` 也不打），
+  于是加了个临时诊断用例（复刻这两条路径 + 分步 `println`），跑完整套件时它的输出才被打印出来：
+  ```
+  [diag] 4) exists(path)=true
+  [diag] 5) size=67108864        ← 打印完这一步就死了
+  ```
+- **根因：把「预分配文件」按文件长度整读，撑爆堆**。`WAL` 建在 `f_io.SegmentedLog` 上，
+  segment 会按 `maxFileSize`（默认 **64MB**）**fallocate 预分配 + mmap** ⇒ `file.info.size`/`file.length`
+  永远是 64MB，而真实数据只有一百多字节。这些用例却按文件长度整读（`Array<Byte>(fileSize)` + `read`），
+  损坏用例还整读整写 ⇒ 每次 64MB（`bytes[offset..]` 切片再复制一份）⇒ 与 `ConcurrencyTest`（66s 重载）并发时
+  堆被吃穿 ⇒ 抛异常、表现为 ERROR。单独跑（内存宽裕）同一路径**通过**，所以容易误判为"偶发/并发问题"。
+- 修法（**只在测试侧**，不动实现）：
+  1. `WAL_test.cj::readRecords` 改成只读**有界前缀**（64KB）再解析，不按文件长度整读；
+  2. `WALReader_test.cj` 的 3 个损坏用例改成 `seek(offset) + write([byte])` **就地改 1 字节**，不整读整写。
+  原则：**预分配文件的实际数据长度不能从 `file.info.size` 推断** —— 需要真实长度时走 `SegmentedLog` 的游标/mmap 视图。
+- 验证：`f_store` **204/204**（`FAILED: 0, ERROR: 0`, `EXIT=0`）。
+
+### 7.14 `f_store` 全量用例在 `/tmp` 留约 4GB 残留（2026-10-04 发现，低优先）
+
+- 现象：跑完一次 `cjpm test`，`/tmp/f_store_test` 约 **3.9~4.1GB**、`/tmp` 合计 4.5GB；里面是几十个
+  `Concurrency_*` / `Integration_*` 目录，每个含 64MB 预分配的 WAL/SST 文件（`SegmentedLog` 的老配置）。
+- 原因：这些用例正常结束时**没有** `remove(dir, recursive: true)`（或只删了一部分）；用例失败时更不会清理
+  （本轮排查中一度累积到 4.1GB）。不是功能缺陷，但会把 `/tmp` 当磁盘吃掉（CI 上尤其危险）。
+- 建议：给每个用例的目录加 `atExit`/`finally` 清理，或统一把测试用的 `maxFileSize` 调小
+  （如 4KB~1MB，预分配就不再是 64MB）。
