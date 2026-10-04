@@ -80,7 +80,8 @@ struct BaseKeyPool<K, V> <: IKeyPool<K, V> where K <: Hashable & Equatable<K> {
             s.store(total)
             PoolDiagnostics.onBookkeepingHealed()
             healed += 1
-            PoolDiagnostics.warn("WEDGE-HEAL] keypool: global size=${current} -> ${total}")
+            // 不在这里打日志：`size a -> b` 由调用方（`KeyPool` 巡检）统一 WARN 出来，
+            // 避免同一次校正既被底层打、又被上层打（见 bug.md 7.12）
         }
         healed
     }

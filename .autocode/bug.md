@@ -946,11 +946,13 @@ demo 端到端与之前一致：分隔线 ×2、客户端 JSON、服务端 `CONS
      `[FOUNTAIN_POOL.crash] fatal signal=…, pools=…/… items=+… borrow=… callbackErr=… strandedRevived=… bookkeepingHealed=… scheduleRestarts=…`
      再 `exit(134)`，把"偶发崩溃零现场"变成"至少有一行统计"。可用 `PoolDiagnostics.uninstallCrashHandler()`
      交还信号处理，或把 `CRASH_DUMP_ON_FATAL` 置 false。用例：`testDiagnosticsSnapshotTracksActivity`。
-     **输出通道**：除信号处理器里那一行，f_pool 的常规告警/统计都走 f_log
-     （`PoolDiagnostics.warn/error` 转发、`dump()` 走 WARN）—— `SyncDeque` 在最底层，反向 import 父包的
-     logger 会形成包环，所以统一经 `fountain::f_pool.diagnostics` 转发；只有崩溃取证那一行保留 `println`
-     （f_log 是"队列 + 独立写线程"，崩溃时可能死锁或丢行）。查过 `f_pool`/`f_codec`/`f_net`/`f_protocol`/`f_rpc`
-     的非测试代码：除这一处外已无 `println`/`print`/`Console.*`/`printStackTrace`。
+     **输出通道**：底层告警经**可注入钩子**输出（`PoolDiagnostics.warnHook/errorHook`，默认 `println`），
+     `KeyPool` 首次建池时把钩子接到 f_log 的 logger（应用可用 `redirectWarningsTo` 更早接管，不会被覆盖）
+     —— 用钩子而非直接 `import f_log`，是因为 `SyncDeque` 所在的最底层包反向 import 父包会形成包环；
+     只有 `dump()` 与信号处理器里那一行固定 `println`（崩溃时日志框架可能死锁/丢行）。
+     日志去重：`BaseKeyPool.audit()` 不再自己打 `size a->b`，改由 `KeyPool` 巡检统一 WARN
+     （`pool audit healed N anomaly(ies): size a -> b`）。查过 `f_pool`/`f_codec`/`f_net`/`f_protocol`/`f_rpc`
+     的非测试代码：除上述 `dump()`/崩溃行外已无 `println`/`print`/`Console.*`/`printStackTrace`。
 - **验证**：`f_pool` **36/36**（原 29/29 + 7 个新用例）；`fdemo` 全量构建 `BUILD_EXIT=0`、`f_rpc` 用例 2/2。
 - 未关闭的部分：**根因未证**（仍算"偶发"，不声称已修）。下次再现时按上面待办第 1、2 条留现场，
   并优先看 `[FOUNTAIN_POOL.crash]` 那行统计 —— 尤其 `bookkeepingHealed` / `strandedRevived` / `scheduleRestarts`

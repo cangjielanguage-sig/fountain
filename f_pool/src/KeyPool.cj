@@ -208,6 +208,10 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         }
         tasks = ArrayBlockingQueue<PoolTask<K>>(totalSize)
         PoolDiagnostics.onPoolCreated()
+        // 把池内的常规告警接到 f_log（幂等：应用若已用 redirectWarningsTo 接管，这里不会覆盖）
+        PoolDiagnostics.installDefaultHooks(
+            {message => logger.warn(message)},
+            {message => logger.error(message)})
         if (PoolDiagnostics.CRASH_DUMP_ON_FATAL) {
             // 首次建池装一次致命信号取证（幂等）：下次真出 SIGSEGV，至少能拿到池的运行统计（见 bug.md 7.12）
             PoolDiagnostics.installCrashHandler()
@@ -328,10 +332,12 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             }
             // 巡检顺带审计自愈（见 bug.md 7.2 / 7.12）：滞留项与计数脱钩在空闲期就修掉，
             // 不必等某个 get 取不到项才暴露。
+            // 这里统一打一条 WARN（含 size 校正前后的值），底层各层只负责"修 + 返回动作数"，不重复打日志。
+            let sizeBefore = pool.size
             let healed = pool.audit()
             PoolDiagnostics.onAuditRound()
             if(healed > 0){
-                logger.warn('pool audit healed ${healed} anomaly(ies), size=${pool.size}')
+                logger.warn('pool audit healed ${healed} anomaly(ies): size ${sizeBefore} -> ${pool.size}')
             }
         }
     }

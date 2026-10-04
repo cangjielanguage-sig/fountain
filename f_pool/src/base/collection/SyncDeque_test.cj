@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_pool.base.collection
 
+import std.collection.ArrayList
 import std.sync.AtomicInt64
 import fountain::f_pool.diagnostics.PoolDiagnostics
 
@@ -249,6 +250,34 @@ public class SyncDequeTest {
         PoolDiagnostics.installCrashHandler()
         PoolDiagnostics.dump(reason: 'unittest')
         @Assert(PoolDiagnostics.snapshot().size > 0)
+    }
+    @TestCase
+    public func testWarningHookCanBeRedirected(){
+        // 底层（SyncDeque）的告警默认 println；能不能进 f_log 取决于上层注入的钩子。
+        // 这里验证"注入的通道确实收到消息"，而不是库内自己写 stdout（见 bug.md 7.12）。
+        let collected = ArrayList<String>()
+        PoolDiagnostics.redirectWarningsTo(
+            warn: {message =>
+                collected.add('[warn] ${message}')
+                ()
+            },
+            error: {message =>
+                collected.add('[error] ${message}')
+                ()
+            })
+        let o1 = Object()
+        let o2 = Object()
+        let deque = SyncDeque<Object>()
+        deque.insertTail(o1)
+        deque.insertTail(o2)
+        @Assert(deque.strandHeadForTest())
+        @Assert(deque.audit() > 0)                        // 触发 WEDGE-HEAL 告警
+        @Assert(collected.size > 0)
+        @Assert(collected[0].contains('WEDGE-HEAL'))
+        // 收尾：恢复默认通道（默认即 println），避免影响后续用例
+        PoolDiagnostics.redirectWarningsTo(
+            warn: {message => println(message)},
+            error: {message => println(message)})
     }
     @TestCase
     public func testWeakDequeRemoveMustReturnElement(){

@@ -19,15 +19,21 @@ import std.env.exit
 import std.posix.{SIGSEGV, SIGIOT}
 import std.sync.{AtomicBool, AtomicInt64}
 import fountain::f_base.{registerSignalHandler, resetSignalHandler, Signal}
-import fountain::f_log.LoggerFactory
 
 /**
- * 诊断输出通道：
- * - **常规（非崩溃）告警走 f_log**（`warn`/`error`），与业务日志同一条流水，级别/格式/落盘都由日志配置决定；
- * - `dump()` 例外，仍用 `println` —— 它会被**信号处理器**调用（见 `installCrashHandler`），
- *   那里不能碰日志框架：f_log 是"队列 + 独立写线程"（`AsyncLogger`），崩溃时可能死锁，或那行字永远刷不出来。
+ * f_pool 的运行时统计 + 致命信号取证（见 bug.md 7.12）。
+ *
+ * 放在独立的子包 `fountain::f_pool.diagnostics` 里，是为了让最底层的
+ * `fountain::f_pool.base.collection`（`SyncDeque`/`LinkedNode`）也能记账/告警，
+ * 又不至于形成 `base.collection ⇄ f_pool` 的包环。
+ *
+ * **输出通道**：
+ * - **常规（非崩溃）告警经可注入钩子输出**：默认 `println`；上层（`KeyPool` 首次建池时自动接，
+ *   或应用自己更早调用 `redirectWarningsTo`）可以把它接到 f_log，从而与业务日志同一条流水。
+ *   用钩子而不是直接 `import f_log`：本包要保持零依赖，且"往哪写"的决策属于上层；
+ * - `dump()` 与信号处理器里那行**固定 `println`**：它们可能在崩溃现场执行，此时日志框架
+ *   （`AsyncLogger` 是"队列 + 独立写线程"）可能死锁或丢行，不能碰。
  */
-private let logger = LoggerFactory.getLogger('fountain::f_pool')
 
 /**
  * 要取证的致命信号：`std.runtime.Signal` 只枚举了 SIGTERM/SIGINT 等少数几个，
@@ -111,13 +117,38 @@ public struct PoolDiagnostics {
         auditRounds.fetchAdd(1)
     }
 
-    /** 常规告警（走 f_log）。 */
-    protected static func warn(message: String): Unit {
-        logger.warn(message)
+    /** 常规告警的输出钩子（默认 `println`）。 */
+    protected static var warnHook: (String) -> Unit = {message => println(message)}
+    /** 严重告警的输出钩子（默认 `println`）。 */
+    protected static var errorHook: (String) -> Unit = {message => println(message)}
+    private static let hooksInstalled = AtomicBool(false)
+
+    /**
+     * 接管本模块的告警输出（幂等；应用可以在启动早期调用它把告警接进自己的 logger/采集器，
+     * 之后 `KeyPool` 首次建池时的默认接线不会再覆盖它）。
+     */
+    public static func redirectWarningsTo(warn!: (String) -> Unit, error!: (String) -> Unit): Unit {
+        warnHook = warn
+        errorHook = error
+        hooksInstalled.store(true)
     }
-    /** 不变式被破坏等严重情况（走 f_log）。 */
+
+    /** 首次建池时接一次默认输出；应用已经用 `redirectWarningsTo` 接管过就不动。 */
+    protected static func installDefaultHooks(warn: (String) -> Unit, error: (String) -> Unit): Unit {
+        if (!hooksInstalled.compareAndSwap(false, true)) {
+            return
+        }
+        warnHook = warn
+        errorHook = error
+    }
+
+    /** 常规告警（默认 `println`，可被 `redirectWarningsTo` 接管）。 */
+    protected static func warn(message: String): Unit {
+        warnHook(message)
+    }
+    /** 不变式被破坏等严重情况（同 `warn` 的通道）。 */
     protected static func error(message: String): Unit {
-        logger.error(message)
+        errorHook(message)
     }
 
     /** 统计快照（单行，便于直接塞进日志/崩溃输出）。 */
@@ -126,11 +157,11 @@ public struct PoolDiagnostics {
     }
 
     /**
-     * 输出统计（带固定前缀，便于 grep）。走 f_log，跟业务日志同一条流水；
-     * 崩溃路径**不经过这里**（`installCrashHandler` 的处理器自己 `println`），所以日志框架不可用时也不受影响。
+     * 输出统计（带固定前缀，便于 grep）。**固定 `println`、不经告警钩子**：
+     * 它和信号处理器共享"崩溃时也必须能出来"的通道，而钩子可能被接到日志框架上（崩溃现场不可信）。
      */
     public static func dump(reason!: String = 'manual'): Unit {
-        logger.warn("[FOUNTAIN_POOL.diag] ${reason}: ${snapshot()}")
+        println("[FOUNTAIN_POOL.diag] ${reason}: ${snapshot()}")
     }
 
     /**
