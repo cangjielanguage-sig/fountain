@@ -322,7 +322,8 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
                     false
                 }
                 if(!valid){
-                    if(let Some(v) <- r.get()){
+                    // take()：显式销毁过的池项其 Ref 已空，终结器不会再销毁第二次（见 .autocode/bugs/bug-pool.md §1.1）
+                    if(let Some(v) <- r.take()){
                         doDestroy(k, v, destroier)
                     }
                 }
@@ -404,7 +405,8 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         running.store(false)
         while(let Some(_) <- tasks.tryRemove()){}
         pool.destroy{k, r => 
-            if(let Some(v) <- r.get()){
+            // take()：显式销毁过的池项其 Ref 已空，终结器不会再销毁第二次（见 .autocode/bugs/bug-pool.md §1.1）
+            if(let Some(v) <- r.take()){
                 doDestroy(k, v, destroier)
             }
         }
@@ -418,7 +420,8 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         }
     }
     private func keyedDestroy(key: K, ref: Ref<V>): Unit {
-        if(let Some(v) <- ref.get()){
+        // take()：借出/归还校验不过而销毁时也把 Ref 取空，避免终结器二次销毁（见 .autocode/bugs/bug-pool.md §1.1）
+        if(let Some(v) <- ref.take()){
             doDestroy(key, v, destroier)
         }
     }
@@ -456,7 +459,9 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             this.keyedCheck(checkOnBorrowing, key, ref)
         }
         if(timeout <= Duration.Zero){
-            if(running.load() && let Some(r) <- pool.get(key, keyedCheck, keyedDestroy) && let Some(v) <- r.get()){
+            // 三处借出都从 Ref 里 take()：借出即把值取空，终结器就不会在借用方手里销毁这一项
+            // （见 .autocode/bugs/bug-pool.md §1.1）。
+            if(running.load() && let Some(r) <- pool.get(key, keyedCheck, keyedDestroy) && let Some(v) <- r.take()){
                 return v
             }
         }else if(timeout == Duration.Max){
@@ -466,7 +471,7 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             // 由上层决定重试或失败，避免静默挂起。
             let waitStart = MonoTime.now()
             while(running.load()) {
-                if (let Some(r) <- pool.get(key, keyedCheck, keyedDestroy) && let Some(v) <- r.get()) {
+                if (let Some(r) <- pool.get(key, keyedCheck, keyedDestroy) && let Some(v) <- r.take()) {
                     return v
                 }else if (pool.size < totalSize && pool.keyedSize(key) < maxSize && 
                     let Some(x) <- tryAddTask(key) && 
@@ -483,7 +488,7 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         }else{
             let start = MonoTime.now()
             while(running.load() && MonoTime.now() < start + timeout) {
-                if (let Some(r) <- pool.get(key, keyedCheck, keyedDestroy) && let Some(v) <- r.get()) {
+                if (let Some(r) <- pool.get(key, keyedCheck, keyedDestroy) && let Some(v) <- r.take()) {
                     return v
                 }else if (pool.size < totalSize && pool.keyedSize(key) < maxSize && 
                     let Some(x) <- tryAddTask(key) && 

@@ -259,7 +259,10 @@ class ConcHashMap<V> <: Collection<(String, V)> {
      */
     func add(key: String, value: V): Option<V> {
         let opt = segment(key).add(key, value)
-        incrSize()
+        if (opt.isNone()) {
+            //覆盖已存在的键不是新增，不能记账
+            incrSize()
+        }
         return opt
     }
 
@@ -274,7 +277,12 @@ class ConcHashMap<V> <: Collection<(String, V)> {
         }
     }
     func computeIfAbsent(key: String, callable: () -> V): V {
-        segment(key).computeIfAbsent(key, callable)
+        //新建条目同样要记账 size，否则 maxSize 淘汰失效、remove 会把 size 减成负数
+        let (value, added) = segment(key).computeIfAbsentCounted(key, callable)
+        if (added) {
+            incrSize()
+        }
+        value
     }
 
     /**
@@ -300,13 +308,26 @@ class ConcHashMap<V> <: Collection<(String, V)> {
         }
     }
     /**
-     * 
+     * 两阶段删除（普通调用方用这个）：谓词在段锁之外执行，不阻塞同段读写。
+     * 代价：谓词看到的是快照，两阶段之间新写入的条目也可能被删除。
      */
     func removeIf(predicate: (String, V) -> Bool): Unit {
-        for(segment in segments){
-            segment.removeIf{k, v => 
+        for (segment in segments) {
+            let removed = segment.removeIfOutside(predicate)
+            if (removed > 0) {
+                size_.fetchSub(removed)
+            }
+        }
+    }
+
+    /**
+     * 锁内删除：谓词在段写锁内执行，必须廉价且不得回调本缓存；定时清扫用它保证「判定—删除」原子。
+     */
+    func removeIfLocked(predicate: (String, V) -> Bool): Unit {
+        for (segment in segments) {
+            segment.removeIfLocked {k, v =>
                 let r = predicate(k, v)
-                if(r){
+                if (r) {
                     decrSize()
                 }
                 r
@@ -321,6 +342,7 @@ class ConcHashMap<V> <: Collection<(String, V)> {
         for (segm in segments) {
             segm.clear()
         }
+        size_.store(0)
     }
 
     /**

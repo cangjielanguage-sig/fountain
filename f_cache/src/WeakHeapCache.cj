@@ -15,7 +15,9 @@ limitations under the License.
  */
 package fountain::f_cache
 
+import std.collection.ArrayList
 import std.collection.concurrent.ConcurrentHashMap
+import std.sync.AtomicBool
 import std.ref.*
 import fountain::f_collection.*
 
@@ -43,15 +45,43 @@ private struct WeakKey <: Hashable & Equatable<WeakKey> {
         key.value?.value
     }
 }
-public class WeakHeapCache<T> where T <: Object {
+public class WeakHeapCache<T> <: Resource where T <: Object {
     private let cache = ConcurrentHashMap<WeakKey, WeakRef<T>>()
+    private let closedFlag = AtomicBool(false)
+    /**内部清扫线程的句柄：close() 时向它发送取消请求，用例可通过 threadHandles() 等它结束*/
+    private var cleanerTask: Option<Future<Unit>> = None
+    /**清扫周期：close() 的取消请求最迟在下一轮循环被感知*/
+    private static let CLEAN_INTERVAL = Duration.second
     public init() {
-        spawn {
-            while (true) {
+        cleanerTask = Some(spawn {
+            //每轮检查一次取消请求：close() 发 cancel 后最多一个 CLEAN_INTERVAL 内退出
+            while (!Thread.currentThread.hasPendingCancellation) {
                 cache.removeIf{k, v => k.isNone() || v.value.isNone()}
-                sleep(Duration.second)
+                sleep(CLEAN_INTERVAL)
             }
+        })
+    }
+    /**停止内部清扫线程并清空缓存；可重复调用*/
+    public func close(): Unit {
+        if (closedFlag.load()) {
+            return
         }
+        closedFlag.store(true)
+        if (let Some(f) <- cleanerTask) {
+            f.cancel()
+        }
+        cache.removeIf {_, _ => true}
+    }
+    public func isClosed(): Bool {
+        closedFlag.load()
+    }
+    /**仅供同包用例使用：内部线程句柄（WeakHeapCache = 1 个清扫线程），用来等待它结束*/
+    func threadHandles(): ArrayList<Future<Unit>> {
+        let handles = ArrayList<Future<Unit>>()
+        if (let Some(f) <- cleanerTask) {
+            handles.add(f)
+        }
+        handles
     }
     private func weakRef(value: T) {
         WeakRef(value, DEFERRED)
