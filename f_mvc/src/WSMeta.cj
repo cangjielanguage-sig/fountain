@@ -193,51 +193,57 @@ public class WSMeta<T> where T <: Object {
             }
             bytes
         }
-        while(let frame <- ws.read()){
-            try{
-                match(frame.frameType){
-                    case TextWebFrame | BinaryWebFrame =>
-                        if(!bytes.isEmpty()){
-                            throw WSException('current payload is not empty')
-                        }
-                        frameType = frame.frameType
-                        bytes = doExec(frame.payload, frame.fin, frameType, bytes)
-                    case ContinuationWebFrame =>
-                        bytes = doExec(frame.payload, frame.fin, frameType, bytes)
-                    case PingWebFrame => 
-                        if(let Some(ping) <- pingMeta_){
-                            let bytes = ping.`handle`(endpoint, ctx, pattern, ws, frame.payload)
-                            ws.writePongFrame(bytes)
-                        }else{
-                            ws.writePongFrame(frame.payload)
-                        }
-                    case PongWebFrame =>
-                        if(let Some(pong) <- pongMeta_){
-                            pong.`handle`(endpoint, ctx, pattern, ws, frame.payload)
-                        }
-                    case CloseWebFrame =>
-                        try{
-                            if(let Some(c) <- closeMeta_){
-                                let bytes = c.`handle`(endpoint, ctx, pattern, ws, frame.payload)
-                                if(!bytes.isEmpty()){
-                                    ws.write(CloseWebFrame, bytes)
-                                }
-                            }else{
-                                ws.write(CloseWebFrame, frame.payload)
+        try {
+            while(let frame <- ws.read()){
+                try{
+                    match(frame.frameType){
+                        case TextWebFrame | BinaryWebFrame =>
+                            if(!bytes.isEmpty()){
+                                throw WSException('current payload is not empty')
                             }
-                        }catch(e: Exception){
-                            log.error('error on handling close ${toBase64String(frame.payload)}', e)
-                        }
-                        pingTimer?.cancel()
-                        ws.closeConn()
-                        return
-                    case _ => 
-                        log.error('unsupport frame ${frame.frameType}')
-                        ws.closeConn()
+                            frameType = frame.frameType
+                            bytes = doExec(frame.payload, frame.fin, frameType, bytes)
+                        case ContinuationWebFrame =>
+                            bytes = doExec(frame.payload, frame.fin, frameType, bytes)
+                        case PingWebFrame => 
+                            if(let Some(ping) <- pingMeta_){
+                                let bytes = ping.`handle`(endpoint, ctx, pattern, ws, frame.payload)
+                                ws.writePongFrame(bytes)
+                            }else{
+                                ws.writePongFrame(frame.payload)
+                            }
+                        case PongWebFrame =>
+                            if(let Some(pong) <- pongMeta_){
+                                pong.`handle`(endpoint, ctx, pattern, ws, frame.payload)
+                            }
+                        case CloseWebFrame =>
+                            try{
+                                if(let Some(c) <- closeMeta_){
+                                    let bytes = c.`handle`(endpoint, ctx, pattern, ws, frame.payload)
+                                    if(!bytes.isEmpty()){
+                                        ws.write(CloseWebFrame, bytes)
+                                    }
+                                }else{
+                                    ws.write(CloseWebFrame, frame.payload)
+                                }
+                            }catch(e: Exception){
+                                log.error('error on handling close ${toBase64String(frame.payload)}', e)
+                            }
+                            ws.closeConn()
+                            return
+                        case _ => 
+                            log.error('unsupport frame ${frame.frameType}')
+                            ws.closeConn()
+                    }
+                }catch(e: Exception){
+                    log.error('error on handling ${frame.frameType}; frame: ${toBase64String(frame.payload)}', e)
                 }
-            }catch(e: Exception){
-                log.error('error on handling ${frame.frameType}; frame: ${toBase64String(frame.payload)}', e)
             }
+        } finally {
+            // bug.md §1.11 / MVC-3：连接以任何方式结束都要取消 ping 定时器 ——
+            // 收到 Close 帧（上面的 return）、对端断链（read 返回 None 落到循环外）、read 抛异常。
+            // 原先只在 Close 帧那一条路径上 cancel ⇒ 断网会让定时器一直持有 endpoint/ctx/pattern/ws 空转。
+            pingTimer?.cancel()
         }
     }
     
