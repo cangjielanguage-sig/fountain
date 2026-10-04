@@ -2,170 +2,58 @@
 配置环境变量：`export CANGJIE_STDX_DYNAMIC_PATH=/path/to/dynamic_stdx`
 
 ## 并发安全的字典
-未实现`Hashable & Equatable<K>` 也没有实现`Comparable<K>`，目前只提供了
+
+`ConcDict<K, V>` 是并发字典接口（`<: Collection<(K, V)>`）：**不要求 `K` 实现 `Hashable & Equatable<K>` 或 `Comparable<K>`** ——
+散列与相等由实现方在构造时给出（`hasher: (K) -> Int64` / `equals: (K, K) -> Bool`），因此键可以是任意自定义类型。
+`ConcHashDict` 是它的哈希实现，`ConcurrentHashSet` 在此基础上提供并发 Set。
+
 ```cj
 public interface ConcDict<K, V> <: Collection<(K, V)> {
-    /**
-     * 根据 key 得到 Map 中映射的值
-     * 参数 key - 传递 key，获取 value
-     * 返回值 Option<V> - key 对应的值是用 Option 封装的
-     */
+    /* 需要实现方自己实现 */
     func get(key: K): Option<V>
-
-    /**
-     * 判断是否包含指定键的映射
-     * 参数 key - 传递要判断的 key
-     * 返回值 Bool - 如果存在，则返回 true；否则，返回 false
-     */
-    func contains(key: K): Bool
-
-    /**
-     * 判断是否包含指定集合键的映射
-     * 参数 keys - 传递待判断的 keys
-     * 返回值 Bool - 如果存在，则返回 true；否则，返回 false
-     */
-    func contains(all!: Collection<K>): Bool
-
-    /**
-     * 将指定的值与此映射中指定的键关联
-          120
-     * 如果映射以前包含键的映射，则旧值将被替换
-     * 参数 key - 要放置的键
-     * 参数 value - 要分配的值
-     * 返回值 Option<V> - 如果赋值之前 key 存在，旧的 value 用 Option 封装；
-     * 否则，返回 Option<V>.None
-     */
-    func add(key: K, value: V): Option<V>
-
-    /**
-     * 传递指定元素进行遍历，并按顺序赋值
-     * 如果映射以前包含键的映射，则旧值将被替换
-     * 参数 element - 传递给遍历赋值的元素
-     */
+    func add(key: K, value: V): Option<V>            // 返回被覆盖的旧值（若有）
     func add(all!: Collection<(K, V)>): Unit
-    /**
-     * 如果key存在就返回对应的值，否则保存value并返回None<T>
-     */
-    func addIfAbsent(key: K, value: V): ?V
-    /**
-     * 将key对应的值替换为value，如果key不存在等同于add(key, value)
-     */
-    func replace(key: K, value: V): ?V
-
-    /**
-     * 从此映射中删除指定键的映射（如果存在）
-     * 参数 key - 传入要删除的 key
-     * 返回值 Option<V> - 被移除映射的 V 用 Option 封装
-     */
+    func addIfAbsent(key: K, value: V): ?V           // 不存在才放入，返回原值（若有）
+    func replace(key: K, value: V): ?V               // 已存在才替换，返回旧值
     func remove(key: K): Option<V>
-
-    /**
-     * 从此映射中删除指定集合的映射（如果存在）
-     * 参数 all - 传人要删除的集合
-     */
     func remove(all!: Collection<K>): Unit
-    /**
-     * 传入 lambda 表达式，如果满足条件，则删除对应的键值
-     * 参数 predicate - 传递一个 lambda 表达式进行判断
-     */
     func removeIf(predicate: (K, V) -> Bool): Unit
-    /**
-     * 清除所有键值对
-     */
+    func contains(key: K): Bool
+    func contains(all!: Collection<K>): Bool
     func clear(): Unit
-
-    /**
-     * 运算符重载集合，如果键存在，返回键对应的值，如果不存在，抛出异常。
-     * 参数 key - 传递值进行判断
-     * 返回值 V - 与键对应的值
-     */
-    operator func [](key: K): V
-
-    /**
-     * 运算符重载集合，如果键存在，新 value 覆盖旧 value，如果键不存在，
-     * 添加此键值对
-     * 参数 key - 传递值进行判断
-     * 参数 value - 传递要设置的值
-     */
+    func keys(): Collection<K>
+    func values(): Collection<V>
+    func entryView(key: K, fn: (K, ?V) -> ?V): ?V    // 原子化的「读-改-写」，下面的便捷方法都建在它之上
+    prop size: Int64
+    func isEmpty(): Bool
+    func iterator(): Iterator<(K, V)>
+    operator func [](key: K): V                      // 键不存在抛异常
     operator func [](key: K, value!: V): Unit
 
-    /**
-     * 返回 Map 中所有的 key，并将所有 key 存储在一个 Keys 容器中
-     * 返回值 Keys<K> - 保存所有返回的 key
-     */
-    func keys(): Collection<K>
-
-    /**
-     * 返回 Map 中所有的 value，并将所有 value 存储在一个 Values 容器中
-     * 返回值 Values<V> - 保存所有返回的 value
-     */
-    func values(): Collection<V>
-
-    /**
-     * 返回 Map 中所有的元素个数
-     * 返回值 Int64 - 元素个数
-     */
-    prop size: Int64
-
-    /**
-     * 检查 Map 是否为空
-     * 返回值 Bool - 如果是，则返回 true; 否则，返回 false
-     */
-    func isEmpty(): Bool
-
-    /**
-     * 返回 Map 的迭代器
-     * 返回值 Iterator<(K,V)> - Map 的迭代器
-     */
-    func iterator(): Iterator<(K, V)>
-    /**
-     * key和当前dict中的key对应的值作fn的参数，如果fn返回Some则将值保存到dict，如果返回None将原键值对删除
-     * 本函数返回值是执行fn之前保存在dict中的值，如果key在之前不存在返回None
-     */
-    func entryView(key: K, fn: (K, ?V) -> ?V): ?V
-    /**
-     * 如果key不存在，将fn的返回值存入dict，并返回fn的返回，如果key存在就返回key对应的值
-     */
-    func addIfAbsent(key: K, fn: () -> V): V
-    /**
-     * 如果key存在，将fn的返回值存入dict，并返回dict之前的值，如果key不存在就返回None
-     */
-    func addIfPreset(key: K, fn: () -> V): ?V
-    /**
-     * 如果key存在，用key对应的值做参数调用predicate，且predicate返回true，就删除键值对，并返回None，
-     * 如果predicate返回false就返回key对应的值。如果key不存在返回None。
-     */
+    /* 接口里已给出默认实现（都基于 entryView） */
+    func addIfAbsent(key: K, fn: () -> V): V         // 不存在则用 fn 建值并放入，返回最终值
+    func addIfPreset(key: K, fn: () -> V): ?V        // 已存在则用 fn 生成新值替换
     func removeIf(key: K, predicate: (V) -> Bool): ?V
 }
+```
 
+两点容易看漏：
+
+- `addIfAbsent` 有**两个重载** —— `(key, value)` 返回旧值、需要实现方实现；`(key, fn: () -> V)` 有默认实现、返回最终值；
+- `removeIf` 也有两个不同签名 —— `(predicate: (K, V) -> Bool): Unit` 与 `(key, predicate: (V) -> Bool): ?V`。
+
+```cj
 public class ConcHashDict<K, V> <: ConcDict<K, V> {
-    /**
-     * hasher 是哈希函数，equals 比较两个KEY是否相等
-     */
     public init(hasher: (K) -> Int64, equals: (K, K) -> Bool)
-    /**
-     * hasher 是哈希函数，equals 比较两个KEY是否相等
-     * elements 是初始元素
-     */
     public init(elements: Array<(K, V)>, hasher: (K) -> Int64, equals: (K, K) -> Bool)
-    /**
-     * hasher 是哈希函数，equals 比较两个KEY是否相等
-     * elements 是初始元素
-     */
     public init(elements: Collection<(K, V)>, hasher: (K) -> Int64, equals: (K, K) -> Bool)
-    /**
-     * hasher 是哈希函数，equals 比较两个KEY是否相等
-     * size 是初始容量
-     */
     public init(size: Int64, hasher: (K) -> Int64, equals: (K, K) -> Bool)
-    /**
-     * hasher 是哈希函数，equals 比较两个KEY是否相等
-     * size 是初始容量，
-     * initElement 的返回值是初始元素，它的参数范围是 0 .. size
-     */
+    /** initElement 的入参范围是 0 ～ size，返回该位置的初始键值对 */
     public init(size: Int64, initElement: (Int64) -> (K, V), hasher: (K) -> Int64, equals: (K, K) -> Bool)
 }
 ```
+
+（`toArray()` 等来自 `Collection` 父接口。）
 
 ## `public class ConcurrentHashSet<T> <: Set<T> where T <: Hashable & Equatable<T>`
 并发安全的 Set：4 个 `init`（容量 / 初始集合等）、`retainAll`、`clone`，并扩展了 `==` / `toString` /
