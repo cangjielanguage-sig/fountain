@@ -23,12 +23,14 @@ public class MockColumnInfo <: ColumnInfo {
     ){}
     public prop displaySize: Int64 {
         get(){
-            throw MockDbException('not supported')
+            //按 std.database.sql 契约：无限制返回 Int64.Max
+            Int64.Max
         }
     }
     public prop length: Int64 {
         get(){
-            throw MockDbException('not supported')
+            //按 std.database.sql 契约：列大小不适用返回 0
+            0
         }
     }
     public prop name: String {
@@ -43,7 +45,8 @@ public class MockColumnInfo <: ColumnInfo {
     }
     public prop scale: Int64 {
         get(){
-            throw MockDbException('not supported')
+            //按 std.database.sql 契约：无小数部分返回 0
+            0
         }
     }
     public prop typeName: String {

@@ -476,4 +476,20 @@ public class MockDBCoreTest {
         @Assert(0, MOCKDB.rowCount)
         @Assert(true, MOCKDB.metadata.get('k').isNone())
     }
+
+    @TestCase
+    public func testColumnInfoContractValues(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'v', nullable: false, typeName: 'SqlInteger')
+            MOCKDB.addQueryResultRow([1])
+        }
+        let conn = MockConnection()
+        let rs = conn.prepareStatement('SELECT v FROM t').query()
+        let info = rs.columnInfos[0]
+        //按 std 契约：无限制返回 Int64.Max、列大小不适用返回 0、无小数部分返回 0（修复前三个都抛 MockDbException）
+        @Assert(Int64.Max, info.displaySize)
+        @Assert(0, info.length)
+        @Assert(0, info.scale)
+    }
 }

@@ -14,7 +14,7 @@
 | 中 | 5 |
 | 低危 / 待验证 | 9 |
 
-> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4`、§2.2 `MOCK-5` 已修复 ⇒ 待修严重级 **0** 条、中危 **3** 条（见各自修复标记）。其中 `MOCK-1`/`MOCK-2` 已并入 `sts/1.3.x`（合并提交 `12c19d94`）；`MOCK-3`/`MOCK-4`/`MOCK-5` 在分支 `fix/mock-1-query-isolation`（`e904ac87`/`ba04b79f`/`80d67a36`），待下次同步。
+> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4`、§2.2 `MOCK-5`、§2.3 `MOCK-6` 已修复 ⇒ 待修严重级 **0** 条、中危 **2** 条（见各自修复标记）。其中 `MOCK-1`/`MOCK-2` 已并入 `sts/1.3.x`（合并提交 `12c19d94`）；`MOCK-3`~`MOCK-6` 在分支 `fix/mock-1-query-isolation`（`e904ac87`/`ba04b79f`/`80d67a36` + 本次提交），待下次同步。标记补录提交：`fa822423`。
 
 **建议修复顺序**：
 
@@ -182,7 +182,15 @@ DT：`close()` 后断言 `isClosed()==true`、`state==Closed`；双关幂等；�
 
 DT：`close()` 后断言夹具未变；显式 `clear()` 后断言夹具已清（并保留 `execution`）。
 
-### 2.3 [中｜契约] `MOCK-6` `MockColumnInfo` 的 `displaySize` / `length` / `scale` 直接抛 `MockDbException('not supported')`（f_mockdb）
+### 2.3 [中｜契约] `MOCK-6` `MockColumnInfo` 的 `displaySize` / `length` / `scale` 直接抛 `MockDbException('not supported')`（f_mockdb） → ✅已修复（2026-10-04）
+
+**✅ 修复标记（2026-10-04）**：分支 `fix/mock-1-query-isolation`（同一 worktree，在 MOCK-5 之后追加提交），**代码、用例、本标记在同一提交**（提交信息 `fix(f_mockdb): MOCK-6 MockColumnInfo 三个成员返回契约值（bug-mockdb §2.3 修复标记）`；提交哈希由下一次标记同步补录）。
+
+- 改动：`src/ColumnInfo.cj` 的 `displaySize` / `length` / `scale` 由 `throw MockDbException('not supported')` 改为返回 std 契约值 —— `Int64.Max`（「如果无限制，则应该返回 `Int64.Max`」）、`0`（「对于列大小不适用的数据类型，返回 0」）、`0`（「如果无小数部分，返回 0」），各带一行注释标明契约来源。
+- 用例：`src/mockdb_core_test.cj` 新增 `testColumnInfoContractValues` —— 跑一次查询后取 `rs.columnInfos[0]`，断言三个值分别为 `Int64.Max` / `0` / `0`。
+- 测量证据：**修复前** PASSED 43 / **ERROR 1**（EXIT=1，`testColumnInfoContractValues`）：`REASON: An exception has occurred:Exception: not supported`，栈 `MockColumnInfo.displaySize.get() (src/ColumnInfo.cj:26)`；**修复后** = **44/44 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**，编译警告 9 条无新增。日志 `/tmp/mock6_before.log`、`/tmp/mock6_after.log`。
+- 影响面：`f_orm` 的列映射只按 `typeName` 分派（`QueryResultWrap.cj:973`），不用这三个属性 ⇒ 本次只把「一碰就抛」换成契约默认值，不改变任何既有行为。
+- 未做（能力补齐，另行评估）：让夹具能填真实长度/精度 —— 给 `MockColumnInfo` 与 `MOCKDB.addQueryResultColumnInfo` 加可选参数 `displaySize!` / `length!` / `scale!`。
 
 位置：`src/ColumnInfo.cj:24-33,44-48`
 
