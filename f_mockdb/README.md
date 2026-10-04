@@ -41,7 +41,7 @@ private let _ = {=>
 ## 时序与约定
 
 - **一次执行一份结果**：`MockStatement.query()` / `update()` 先清空上一次的行与列信息，再执行 `execution`，然后把结果**快照**交给 `QueryResult`。夹具请在 `execution` **内**写行/列信息（写在外部会被清掉）；因此同一线程（含事务内）多次查询互不串数据。
-- **参数槽**：`set` / `setNull` 的参数在该次执行结束后清空 ⇒ 复用同一个 `Statement` 时每次执行前都要重新绑定；参数索引为负、或 **≥ SQL 里 `?` 占位符个数**（按真驱动口径定上界，避免大索引补出天量占位符）都抛 `SqlException`。当前占位符与 `setNull` 都写 `None<Any>`，夹具里「未绑定」与「绑定 SQL NULL」不可区分。
+- **参数槽**：`set` / `setNull` 的参数在该次执行结束后清空 ⇒ 复用同一个 `Statement` 时每次执行前都要重新绑定；参数索引为负、或 **≥ SQL 里 `?` 占位符个数**（按真驱动口径定上界，避免大索引补出天量占位符）都抛 `SqlException`。**参数值口径：`args[i]` 是 `None<Any>` 就按 SQL NULL 处理**——未绑定的位置（`set` 补出的空位）与 `setNull` 写入的值都是 `None<Any>`，mock 不区分二者、也不做「参数未设置」完备性校验（真驱动会在执行时报错）；夹具断言「显式 NULL」直接判 `args[i].isNone()` 即可。
 - **结果集契约**：`getOrNull<T>` 只在「该列是 SQL NULL」时返回 `None`；行未准备好（未 `next()`）或列索引越界抛 `SqlException`；列值类型与 `T` 不符也抛 `SqlException`。`get<T>` = `getOrNull` + `getOrThrow`，真 NULL 时抛 `NoneValueException`。
 - **列信息**：`MockColumnInfo` 的 `displaySize` 返回 `Int64.Max`、`length` / `scale` 返回 `0`（std 契约里「无限制 / 列大小不适用 / 无小数」的取值）。
 - **关闭语义**：`close()` 之后 `isClosed()` 为 `true`、`Connection.state` 为 `Closed`（重复关闭幂等）；**关连接不再清夹具**，夹具用 `MOCKDB.clear()` 显式管理。

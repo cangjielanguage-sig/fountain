@@ -689,4 +689,48 @@ public class MockDBCoreTest {
         @Assert(true, rs2.next())
         @Assert(7, rs2.get<Int64>(0))
     }
+
+    @TestCase
+    public func testUnsetParameterIsNullInFixture(): Unit {
+        MOCKDB.clear()
+        let capturedArgs = ArrayList<Any>()
+        MOCKDB.execution = {_: String, args: ArrayList<Any> =>
+            for (a in args) {
+                capturedArgs.add(a)
+            }
+        }
+        let conn = MockConnection()
+        let stmt = conn.prepareStatement('INSERT INTO t(a, b, c) VALUES(?, ?, ?)')
+        //只绑 2 号位：0、1 两个空位由 set 补出
+        stmt.set<Int64>(2, 42)
+        let _ = stmt.update()
+        //口径（README「参数槽」）：空位与 setNull 一样都是 None<Any>，夹具一律按 SQL NULL 处理；
+        //mock 不做「参数未设置」校验 ⇒ 上面这次带空位的执行照常成功
+        @Assert(3, capturedArgs.size)
+        if (let x: Option<Any> <- capturedArgs[0]) {
+            @Assert(true, x.isNone())
+        } else {
+            @Assert(false)
+        }
+        if (let x: Option<Any> <- capturedArgs[1]) {
+            @Assert(true, x.isNone())
+        } else {
+            @Assert(false)
+        }
+        if (let x: Int64 <- capturedArgs[2]) {
+            @Assert(42, x)
+        } else {
+            @Assert(false)
+        }
+        //setNull 写出的值同样按 NULL 处理
+        let stmt2 = conn.prepareStatement('INSERT INTO t(a) VALUES(?)')
+        stmt2.setNull(0)
+        let _ = stmt2.update()
+        @Assert(4, capturedArgs.size)
+        if (let x: Option<Any> <- capturedArgs[3]) {
+            @Assert(true, x.isNone())
+        } else {
+            @Assert(false)
+        }
+    }
 }

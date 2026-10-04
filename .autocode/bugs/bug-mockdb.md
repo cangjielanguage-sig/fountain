@@ -14,7 +14,7 @@
 | 中 | 5 |
 | 低危 / 待验证 | 9 |
 
-> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4`、§2.2 `MOCK-5`、§2.3 `MOCK-6`、§2.4 `MOCK-7`（①③）、§2.5 `MOCK-8` 已修复 ⇒ **待修严重级 0 条、中危 0 条**；低危批次（§3.3：`MOCK-L1`/`L2`/`L4`/`L5`/`L6`/`L7`）与审查后新增的 `MOCK-L8`（§3.4）已修复 ⇒ 低危 8 条全清，`MOCK-L3` 暂不处理，`MOCK-V1` 判为不成立、`MOCK-V2`（覆盖缺口）已补齐（均见 §3.2）⇒ **本轮审查提出的 16 条全部了结**，仅剩 §2.4 的 ②（未绑定 vs 绑定 NULL，需改公开签名）待定方向。用例总数 **30 → 56**。并入状态：`MOCK-1`/`MOCK-2` 已并入 `sts/1.3.x`（合并提交 `12c19d94`）；`MOCK-3`~`MOCK-8` 与低危批次在分支 `fix/mock-1-query-isolation`（代码/用例：`e904ac87`/`ba04b79f`/`80d67a36`/`edb10235`/`7704cd91`/`540db7ca`/`924ec6f8`/`0742124b`/`835f7032`；标记补录：`fa822423`/`cd429689`/`cee6dc6d`/`78bc9f30`/`eba8389f` + 本次），待下次同步。
+> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4`、§2.2 `MOCK-5`、§2.3 `MOCK-6`、§2.4 `MOCK-7`（①③）、§2.5 `MOCK-8` 已修复 ⇒ **待修严重级 0 条、中危 0 条**；低危批次（§3.3：`MOCK-L1`/`L2`/`L4`/`L5`/`L6`/`L7`）与审查后新增的 `MOCK-L8`（§3.4）已修复 ⇒ 低危 8 条全清，`MOCK-L3` 暂不处理，`MOCK-V1` 判为不成立、`MOCK-V2`（覆盖缺口）已补齐（均见 §3.2）；§2.4 的 ② 定为**保持现状 + 文档明确：未设置的参数按 NULL 处理**（见 §2.4）⇒ **本轮审查提出的 16 条全部了结、无待定项**。用例总数 **30 → 57**。并入状态：`MOCK-1`/`MOCK-2` 已并入 `sts/1.3.x`（合并提交 `12c19d94`）；`MOCK-3`~`MOCK-8` 与低危批次在分支 `fix/mock-1-query-isolation`（代码/用例：`e904ac87`/`ba04b79f`/`80d67a36`/`edb10235`/`7704cd91`/`540db7ca`/`924ec6f8`/`0742124b`/`835f7032`；标记补录：`fa822423`/`cd429689`/`cee6dc6d`/`78bc9f30`/`eba8389f` + 本次），待下次同步。
 
 **建议修复顺序**：
 
@@ -202,7 +202,7 @@ DT：`close()` 后断言夹具未变；显式 `clear()` 后断言夹具已清（
 
 DT：断言三个属性返回契约值、不抛异常。
 
-### 2.4 [中｜正确性] `MOCK-7` `MockStatement` 参数槽三处语义问题：跨执行累积、`None<Any>` 双关、负索引异常类型（f_mockdb） → ✅已修复（2026-10-04，①③；②单列待定）
+### 2.4 [中｜正确性] `MOCK-7` `MockStatement` 参数槽三处语义问题：跨执行累积、`None<Any>` 双关、负索引异常类型（f_mockdb） → ✅已了结（2026-10-04：①③ 修复；② 决定保持现状 + 文档明确）
 
 **✅ 修复标记（2026-10-04）**：分支 `fix/mock-1-query-isolation`（同一 worktree，在 MOCK-6 之后追加提交），**代码、用例、本标记在同一提交**：提交 `7704cd91`（`fix(f_mockdb): MOCK-7 参数槽执行后清空 + 负索引抛 SqlException（bug-mockdb §2.4 修复标记）`）；尚未并入 `sts/1.3.x`（待下次同步）。
 
@@ -210,7 +210,10 @@ DT：断言三个属性返回契约值、不抛异常。
 - 用例：`src/mockdb_core_test.cj` 新增 2 条 —— `testStatementReuseDoesNotKeepArgs`（同一语句两次执行、第二次只绑 0 号参数：夹具两次看到的参数个数应为 2、1）、`testSetNegativeIndexThrows`（`set(-1, …)` 与 `setNull(-1)` 都断言抛 `SqlException`）。
 - 测量证据：**修复前** PASSED 44 / **FAILED 1 + ERROR 1**（EXIT=1）：`testStatementReuseDoesNotKeepArgs` 在 `@Assert(1, argSizes[1])` 失败（left 1 / right 2 —— 第二次仍带着上一次的参数）、`testSetNegativeIndexThrows` 报 `IndexOutOfBoundsException: Invalid index '-1': expected 0 to '0'`；**修复后** = **46/46 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**，编译警告 9 条无新增。日志 `/tmp/mock7_before.log`、`/tmp/mock7_after.log`。
 - 行为变化（有意）：语句对象不再跨执行保留参数 —— 复用同一 `MockStatement` 时第二次执行前需重新 `set`（`f_orm` 每次执行都新建并关闭语句，`SqlExecutor.cj:396-404`，不受影响）；夹具在回调里看到的 `args` 仍是本次参数，但回调结束后该表被清空（若夹具保存了它的引用，之后会读到空表 —— 需要稳定快照再议）。
-- 未做（本条目 ②「未绑定 vs 绑定 NULL 不可区分」）：要区分两者必须让夹具可见的表示能表达二者，而 `MOCKDB.execution` 的签名 `(String, ArrayList<Any>) -> Unit` 是公开 API（README、`f_orm/src/wrap/DatabasePool_test.cj`、本模块 40+ 处夹具都按它写），改动属**破坏性变更** ⇒ 单列待定（可选方向：改签名 `ArrayList<?Any>`、加哨兵值 + 判断辅助、保持现状并在 README 写明）。
+- **②「未绑定 vs 绑定 SQL NULL 不可区分」→ 决定保持现状 + 文档明确（2026-10-04，用户决策，方案 D）**：表示不动（夹具可见的 `ArrayList<Any>` 与 `None<Any>` 双关保留），口径定为 —— **没有设置的参数就认为是 NULL**：`args[i]` 为 `None<Any>` 时夹具一律按 SQL NULL 处理，mock 也不做「参数未设置」完备性校验（真驱动会在执行时报错）。**行为零改动**，只写文档 + 钉口径用例（提交信息 `docs(f_mockdb): 明确「未设置的参数按 NULL 处理」口径（bug-mockdb §2.4 ②）`；提交哈希由下一次标记同步补录）。
+  - 决策依据：要区分二者必须改夹具可见的表示 ⇒ 属公开契约变更（`MOCKDB.execution` 的签名 `(String, ArrayList<Any>) -> Unit`、README、本模块全部夹具、`f_orm` 用例），改造成本与「多区分一种情形」的收益不成比例。
+  - 实测影响面（2026-10-04 全仓核对）：只有 3 处夹具真的读 `args` —— `f_orm/src/base/SqlResultCache_test.cj:44`、`:88`（回显 `args[0]`，值为 Int64）、`f_mockdb/src/mockdb_core_test.cj` 的 `testParameterBindingOrder`（三个位置全绑值）与 `testStatementReuseDoesNotKeepArgs`（只数个数）；**没有任何一处对 `None` 参数位做断言** ⇒ 该限制目前不掩盖任何已有断言。
+  - 落地：`f_mockdb/README.md`「参数槽」写明口径；新增用例 `testUnsetParameterIsNullInFixture` —— 只绑 2 号位的三占位符语句执行照常成功（冻结「不做完备性校验」）、空位与 `setNull` 写入的位置都断言 `args[i].isNone()`。`MOCK-L8` 对「占位符越界」的校验与本决定互不影响。
 - 顺带发现 → 已单列为 §3.1 `MOCK-L8`：`set<T>(bigIndex, v)` 会真的补出 `bigIndex + 1` 个占位符（例如索引 100 万就分配 100 万个 `None`）；2026-10-04 已修复（见 §3.4）。
 
 位置：`src/Statement.cj:19`（`args` 生命周期 = 语句对象）、`35-40`（`set<T>` 用 `args.add(None<Any>)` 补位）、`41-48`（`setNull` 同一套 `None<Any>`）
@@ -332,7 +335,7 @@ DT：`toThrowOnExecuting = true` 后执行，断言抛异常**且** `MOCKDB.getQ
 | 探针用例 | 临时 `src/mockdb_review_probe_test.cj`（**已删除，未入库**） | 31/31 PASSED，打印 8 条实测值（`/tmp/mockdb_probe.log:36-43`），支撑 `MOCK-1`/`MOCK-2`/`MOCK-3`/`MOCK-4` |
 | 编译警告 | 同上构建（基线产物 errlog） | 10 条 warning、0 条 error（清单见 `MOCK-L3`） |
 
-**修复完成后**（2026-10-04，分支 `fix/mock-1-query-isolation`，提交范围 `e904ac87`…`835f7032`）：`cjpm test --no-capture-output` = **56/56 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**；编译警告 **9 条**（基线 10 条）；用例 **30 → 56**（新增 26 条，覆盖 `MOCK-1`~`MOCK-8`、`MOCK-L1`~`L8`、`MOCK-V2` 的全部子项）。
+**修复完成后**（2026-10-04，分支 `fix/mock-1-query-isolation`，提交范围 `e904ac87`…`835f7032` + §2.4 ② 文档提交）：`cjpm test --no-capture-output` = **57/57 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**；编译警告 **9 条**（基线 10 条）；用例 **30 → 57**（新增 27 条，覆盖 `MOCK-1`~`MOCK-8`、`MOCK-L1`~`L8`、`MOCK-V2` 全部子项与 §2.4 ② 的参数口径）。
 
 探针原文（`MockDB.clear()` → 两次 query / 两次 update / `getOrNull` 越界与类型不符 / `close()` 后状态）：
 
