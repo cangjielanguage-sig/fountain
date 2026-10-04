@@ -259,7 +259,10 @@ class ConcHashMap<V> <: Collection<(String, V)> {
      */
     func add(key: String, value: V): Option<V> {
         let opt = segment(key).add(key, value)
-        incrSize()
+        if (opt.isNone()) {
+            //覆盖已存在的键不是新增，不能记账
+            incrSize()
+        }
         return opt
     }
 
@@ -274,7 +277,12 @@ class ConcHashMap<V> <: Collection<(String, V)> {
         }
     }
     func computeIfAbsent(key: String, callable: () -> V): V {
-        segment(key).computeIfAbsent(key, callable)
+        //新建条目同样要记账 size，否则 maxSize 淘汰失效、remove 会把 size 减成负数
+        let (value, added) = segment(key).computeIfAbsentCounted(key, callable)
+        if (added) {
+            incrSize()
+        }
+        value
     }
 
     /**
@@ -321,6 +329,7 @@ class ConcHashMap<V> <: Collection<(String, V)> {
         for (segm in segments) {
             segm.clear()
         }
+        size_.store(0)
     }
 
     /**

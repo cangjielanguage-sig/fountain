@@ -19,7 +19,10 @@
 
 > 计数修正（2026-10-04）：§1.3 `ASP-1` 判定为**误判**（设计目的，非缺陷）⇒ 待修严重级 **13** 条（f_aspect 严重 4 条）；上表保留审查当时的原始计数。
 > 二次修正（2026-10-04）：§1.4 `ASP-2` 已修复 ⇒ 待修严重级 **12** 条（f_aspect 严重 3 条）。
-> 三次修正（2026-10-04）：§1.5 `ORM-C1` 已修复（迭代器持有结果集所有权、事务感知关闭），§2.1 `ORM-C2` 一并修复 ⇒ 严重级待修再减 1，**f_orm 严重级清零**。
+> 三次修正（2026-10-04）：§1.6 `ASP-4` 已修复 ⇒ 待修严重级 **11** 条（f_aspect 严重 2 条）。
+> 四次修正（2026-10-05）：§1.7 `ASP-5` 已修复 ⇒ 待修严重级 **10** 条（f_aspect 严重 1 条）。
+> 五次修正（2026-10-05）：§1.8 `BEAN-1` 已修复 ⇒ 待修严重级 **9** 条（f_bean 严重 0 条）。
+> 六次修正（2026-10-05）：§1.5 `ORM-C1` 已修复（迭代器持有结果集/语句所有权、事务感知关闭），§2.1 `ORM-C2` 一并修复 ⇒ 严重级待修再减 1（**f_orm 严重级清零**）。**核对**：把此前已修复的 `X-1`、`ORM-1` 一并计入后，实际剩余严重级 **6** 条 —— §1.9 `MVC-4`、§1.10 `MVC-1`、§1.11 `MVC-3`、§1.12 `MVC-2`、§1.13 `ORM-2`、§1.14 `ASP-3`（前述逐次递减的「9 条」未扣减 `X-1` 与 `ORM-1`）。
 
 **建议修复顺序**（即严重级内部的落地顺序）：
 
@@ -27,8 +30,8 @@
 2. `X-1`（§1.2）`TypeInfos.get(String)` 无限递归 —— 波及 14 处调用（f_bean 条件装配、f_aspect 三条规则、f_orm 一处）　**✅已修复（2026-10-04，见 §1.2 修复标记）**
 3. `ASP-2`（§1.4）切面链共享参数槽 —— 并发下参数互串（原先并列的 `ASP-1`/§1.3 已于 2026-10-04 判定为**误判**：链按类型缓存、链尾固化首次 `callee` 是设计目的，非缺陷）　**✅已修复（2026-10-04，见 §1.4 修复标记）**
 4. `ORM-C1`（§1.5）`iterator` 返回前结果集已被关闭 —— 真实驱动下不可用　**✅已修复（2026-10-04，见 §1.5 修复标记）**
-5. `ASP-4`/`ASP-5`（§1.6/§1.7）参数注解规则越界崩溃 / 恒不织入
-6. `BEAN-1`（§1.8）宏生成不存在的 `lookupSet` —— `HashSet`/`Set` 形参直接编译失败
+5. `ASP-4`/`ASP-5`（§1.6/§1.7）参数注解规则越界崩溃 / 恒不织入　**ASP-4 ✅已修复（2026-10-04，见 §1.6 修复标记）；ASP-5 ✅已修复（2026-10-05，见 §1.7 修复标记）**
+6. `BEAN-1`（§1.8）宏生成不存在的 `lookupSet` —— `HashSet`/`Set` 形参直接编译失败　**✅已修复（2026-10-05，见 §1.8 修复标记）**
 7. `MVC-4`（§1.9）`download` 输出整块缓冲 —— 下载内容损坏
 8. `MVC-1`/`MVC-3`（§1.10/§1.11）静态资源缓存无界（含 404 负缓存）/ WS ping Timer 每断链泄漏一个周期任务
 9. `MVC-2`、`ORM-2`、`ASP-3`（§1.12–§1.14）三个热点：每请求全量序列化 / 逐单元格类型分派 / 每调用重建元信息
@@ -205,7 +208,15 @@ public static func get(qualifiedName: String): TypeInfo {
 
 影响：`iterator`/`singleIterator` 把迭代器包在 `execute<T>` 里返回，而该重载的 `finally` 是 `r?.close()` ⇒ 方法一返回底层结果集已关闭；`activeQueryResult` 也随之复位（后续查询不会报「上一个结果集还活着」）。`f_mockdb` 的 `QueryResult.close()` 是空实现（`f_mockdb/src/QueryResult.cj:53-56`）所以单测看不出来；**待验证**：真实驱动（postgres/mysql）下 `close()` 后 `next()` 的行为。修法：`iterator*` 路径不走 `finally close`，把资源所有权交给返回的迭代器。
 
-### 1.6 [严重｜正确性] `ASP-4` 前缀/后缀参数注解规则用 `params.size` 索引注解数组 ⇒ 越界崩溃（f_aspect）✓已复核
+### 1.6 [严重｜正确性] `ASP-4` 前缀/后缀参数注解规则用 `params.size` 索引注解数组 ⇒ 越界崩溃（f_aspect）✓已复核 → ✅已修复（2026-10-04）
+
+**✅ 修复标记（2026-10-04）**：分支 `fix/asp-4`（worktree `.worktrees/asp-4`，基线 `51030f8c`），代码、用例、本标记在**同一提交**（提交信息 `fix(f_aspect): ASP-4 前缀/后缀参数注解规则按下标对齐，越界/恒 true → false（§1.6）`）。
+
+- 改动：`f_aspect/src/AspectRoute.cj:290` 的公共实现 `matches(asc:...)` —— `range` 改为按 `annotations.size` 收敛、下标基准换成「规则项下标」（前缀 `offset = 0`、后缀 `offset = params.size - annotations.size`，规则项**正序**对应最后 N 个参数）；`params.size < annotations.size` 时返回 `false`；规则项补 `trimAscii()`；判定维持"参数**拥有**该注解即通过"（同文件 `contains :197-206` 的写法）。两个规则类本体不变，其文档示例（`:311-317`、`:324-330`）现在成立。
+- **实测修正（与审查原文不同）**：原后缀分支 `params.size - 1..=0` **缺 `: -1`** ⇒ 按语言语义是**空循环**（最小实验：`for (i in 3..=0)` 迭代 0 次，`3..=0 : -1` 才是 `3 2 1 0`；仓库其它降序循环都写 `: -1`）⇒ 后缀规则的真实症状是**不校验任何参数、恒 `true`（过织入）**，不是越界；越界崩溃只发生在前缀分支（`0..params.size` + 规则项更少时）。两者同根：都用**参数下标**去索引规则项。
+- 用例：`f_aspect/src/test/arg_prefix_suffix_route_test.cj` —— 规则项数 == / < / > 参数数 × 前缀/后缀、参数无注解（必须 `false`，防"空集合真空通过"）、参数多注解（"拥有"即可，`true`），共 2 个 `@TestCase`。
+- 测量证据：**修前** `testPrefixRule` = `[ ERROR ] IndexOutOfBoundsException: Index out of bounds: index is '2', but array size is '2'`；`testSuffixRule` = `[ FAILED ] Assert Failed: (rule.matches(info('test3', 3)) == false)`（空循环误判 `true`）；合计 `PASSED: 3, ERROR: 1, FAILED: 1`（EXIT=1）。**修后** `PASSED: 5, FAILED: 0, ERROR: 0`、`cjpm test success`（EXIT=0）。
+- 未覆盖：`ArgAnnotationsRouteRule` 的"恒 `false`"属 §1.7 `ASP-5`，本次未动。
 
 位置：`src/AspectRoute.cj:290-309, 318-336`
 
@@ -217,7 +228,14 @@ public static func get(qualifiedName: String): TypeInfo {
 
 影响：规则项少于参数个数时抛 `IndexOutOfBoundsException`（无人捕获，直接从 `Aspects.doProceed` 冒泡到业务调用方 ⇒ 该函数**每次调用都失败**）。而 `AspectRoute.cj:311-317` 的文档示例恰好就是这个形状：`a.Annotation1,b.Annotation2` 匹配 `test2(@Annotation1 a, @Annotation2 b, c)`（3 参数 2 规则项）。修法：`range` 按 `annotations.size` 收敛（suffix 反向同理），并在长度不匹配时明确返回 `false`。
 
-### 1.7 [严重｜正确性] `ASP-5` `ArgAnnotationsRouteRule` 恒返回 false（静默不织入）（f_aspect）✓已复核
+### 1.7 [严重｜正确性] `ASP-5` `ArgAnnotationsRouteRule` 恒返回 false（静默不织入）（f_aspect）✓已复核 → ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：分支 `fix/asp-4`（worktree `.worktrees/asp-4`，基线 `7cd7863e`），代码、用例、README、本标记在**同一提交**（提交信息 `fix(f_aspect): ASP-5 ArgAnnotationsRouteRule 命中判定修正 + 长度必须逐参数一致（§1.7）`）。
+
+- 改动：`f_aspect/src/AspectRoute.cj:255` —— ①内层命中改为置 `matched` 标志、循环后 `if (!matched) { return false }`（原来 `continue` 只结束内层循环，随后必然走到 `return false` ⇒ 恒 false）；②`params.size != annotationNames.size` 时返回 `false`（原来 `for (i in 0..params.size)` 配 `annotationNames[i]`，首项为 `*` 且规则项更少时越界崩溃）；③判定维持"参数**拥有**该注解即通过"（多注解也算命中、无注解不得命中）。**分隔符保持 `&`**（2026-10-05 决定），类注释与 `f_aspect/README.md` 的示例由 `,` 改成 `&`，并写明"个数必须与参数个数一致"。
+- 用例：`f_aspect/src/test/arg_annotations_route_test.cj` —— 逐位命中、`*` 占位跳过、位置/顺序不符、参数无注解、参数多注解、规则项多于参数、规则项少于参数（首项 `*`，修前越界）。
+- 测量证据：**修前** `testPositionalMatch` = `[ FAILED ] Assert Failed: (ArgAnnotationsRouteRule('${ARG1}&${ARG2}').matches(info('both', 2)) == true)`；`testRuleLengthMustEqualParamCount` = `[ ERROR ] IndexOutOfBoundsException: Index out of bounds: index is '1', but array size is '1'`；合计 `PASSED: 5, ERROR: 1, FAILED: 1`（EXIT=1）。**修后** `PASSED: 7, FAILED: 0, ERROR: 0`、`cjpm test success`（EXIT=0）。
+- 兼容性：改前该规则只有"全部项为 `*`"才可能返回 `true`，没有可依赖的旧行为；分隔符维持 `&` 不变。
 
 位置：`src/AspectRoute.cj:258-273`
 
@@ -234,7 +252,15 @@ for (i in 0..params.size) {
 
 影响：内层 `for ... where` 无论命中与否都正常结束，随后必然执行 `return false` ⇒ 只要规则里写了非 `*` 的注解，该规则**永不匹配**（静默失效、无任何提示）；全部写成 `*` 才会返回 `true`（`272`）。修法：命中置标志，循环结束后 `if (matched) { continue }` 再继续外层。
 
-### 1.8 [严重｜正确性] `BEAN-1` 宏生成不存在的 `lookupSet`（f_bean）✓已复核
+### 1.8 [严重｜正确性] `BEAN-1` 宏生成不存在的 `lookupSet`（f_bean）✓已复核 → ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：分支 `fix/asp-4`（worktree `.worktrees/asp-4`，基线 `ba6fc979`），代码、用例、本标记在**同一提交**（提交信息 `fix(f_bean): BEAN-1 @Constructor 集合形参改用 lookupHashSet/lookupHashMap，Map 键必须 String（§1.8）`）。
+
+- 改动：`f_bean/src/macros/Constructor.cj` —— `lookupSet` → `lookupHashSet`（`:80`、`:92`）、`lookupMap` → `lookupHashMap`（`:83`、`:103`）；并按用户要求对 `HashMap`/`Map` 形参加**编译期检查**：键类型不是 `String` 时 `diagReport(ERROR, ...)` 报「the key type of the HashMap parameter X must be String」，附建议 `declare it as HashMap<String, T>`。
+- **实测补充（报告只写了 `lookupSet`）**：`lookupMap` 同样缺失。名字集合对照：宏生成 `lookup`/`lookupList`/`lookupSet`/`lookupMap`/`lookupOption`；库只定义 `lookupHashSet`（`lookup.cj:52-58`）与 `lookupHashMap`（`:68-74`）（`lookupList`/`lookupOption`/`lookup` 有 ✓）。
+- 用例：`f_bean/src/test/constructor_param_test.cj` —— `@Bean` + `@Constructor` 覆盖 `ArrayList`/`Array`/`HashSet`/`Set`/`HashMap<String,_>`/`Map<String,_>`/`Option` 七种形态，并在运行时断言各集合/可选形参都注入了注册的元素 bean（`list`/`arr`/`hashSet`/`set`/`hashMap`/`map` 各 `size == 1`、`opt.isSome()`）。
+- 测量证据：**修前** `cjpm test` **编译失败**：`error: the error originates in the macro \`Bean\`` + `note: undeclared identifier 'lookupSet'`（`let hashSet = lookupSet < CtorParamItem >()`、`let set = lookupSet < CtorParamItem >()`）与 `note: undeclared identifier 'lookupMap'`（`hashMap`/`map` 两处），`EXIT=1`。**修后** `PASSED: 3, FAILED: 0, ERROR: 0`、`cjpm test success`（EXIT=0），含 `testCollectionParamsInjected`。**键检查探针**（临时文件，验证后已删）：`HashMap<Int64, CtorParamItem>` 形参报 `error: the key type of the HashMap parameter bad must be String`（附建议行），`EXIT=1`。
+- 未覆盖：`Set`/`Map` 靠 `HashSet`/`HashMap` 隐式转换（已含在用例里）；`HashMap<K,V>`（K≠String）现在由编译期错误拦住，不再生成类型不符的代码。
 
 位置：`src/macros/Constructor.cj:80, 92`；`src/lookup.cj`（只有 `lookupHashSet`、`lookupTreeSet`）
 
