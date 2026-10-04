@@ -14,7 +14,7 @@
 | 中 | 5 |
 | 低危 / 待验证 | 9 |
 
-> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4`、§2.2 `MOCK-5` 已修复 ⇒ 待修严重级 **0** 条、中危 **3** 条（见各自修复标记）。
+> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4`、§2.2 `MOCK-5` 已修复 ⇒ 待修严重级 **0** 条、中危 **3** 条（见各自修复标记）。其中 `MOCK-1`/`MOCK-2` 已并入 `sts/1.3.x`（合并提交 `12c19d94`）；`MOCK-3`/`MOCK-4`/`MOCK-5` 在分支 `fix/mock-1-query-isolation`（`e904ac87`/`ba04b79f`/`80d67a36`），待下次同步。
 
 **建议修复顺序**：
 
@@ -33,6 +33,8 @@
 ### 1.1 [严重｜正确性] `MOCK-1` 查询结果行不按「一次执行」清理 —— 同一线程内多次 query 的行互相叠加（f_mockdb） → ✅已修复（2026-10-04）
 
 **✅ 修复标记（2026-10-04）**：分支 `fix/mock-1-query-isolation`（worktree `.worktrees/mock-1-query-isolation`，基线 `4184f45c` = 审查分支 `review/f_mockdb` 现值），**代码、用例、本标记在同一提交**。
+
+提交 `75d72989`；**已并入 `sts/1.3.x`**（合并提交 `12c19d94`，2026-10-04）。
 
 - 改动：①`src/mockdb.cj` 新增 `public static func clearQueryResult()`（只清 `queryResultList_` / `queryResultColumnInfos_`，不动 `execution` 与 `toThrowOn*` 标志），`clear()` 改为复用它；②`src/Statement.cj` 的 `update()` / `query()` 在调 `MOCKDB.execution(sql, args)` **之前**先 `MOCKDB.clearQueryResult()`；③`src/QueryResult.cj` 的行数据与列信息改成**构造时快照**（`getQueryResultRows().toArray()` / `queryResultColumnInfos`），已交给调用方的结果集不再被后续执行改变。
 - 用例：`src/mockdb_core_test.cj` 新增 3 条 —— `testQueryResultRowsIsolatedPerExecution`（两条 SQL 各 1 行，各自只看到自己的行）、`testQueryResultRowIsSnapshot`（后续执行不改变已返回的结果集）、`testClearQueryResultKeepsFlagsAndExecution`（`clearQueryResult()` 清结果但保留 `execution` 与标志）。
@@ -69,6 +71,8 @@ DT：①同一连接上两条 SELECT（各 1 行）断言第二条只返回 1 �
 
 **✅ 修复标记（2026-10-04）**：分支 `fix/mock-1-query-isolation`（同一 worktree，在 MOCK-1 之后追加提交），**代码、用例、本标记在同一提交**。
 
+提交 `ab85d051`；**已并入 `sts/1.3.x`**（合并提交 `12c19d94`，2026-10-04）。
+
 - 改动：①`src/UpdateResult.cj` 的 `MockUpdateResult` 改为携带快照（构造函数 `MockUpdateResult(lastInsertId_, rowCount_)`，两个属性返回字段）；②`src/Statement.cj` 的 `update()` 在夹具执行后取快照 —— `MockUpdateResult(MOCKDB.lastInsertId, MOCKDB.rowCount)`。
 - 用例：`src/mockdb_core_test.cj` 新增 2 条 —— `testUpdateResultIsSnapshot`（两次 update 各设 `lastInsertId/rowCount` = 11/1 与 22/2，断言两个返回值互不干扰）、`testUpdateResultSurvivesLaterReset`（拿到返回值后 `MOCKDB.clear()`，断言旧返回值不变）。
 - 测量证据：**修复前** PASSED 33 / **FAILED 2**（EXIT=1）：`testUpdateResultIsSnapshot` 在 `@Assert(11, ur1.lastInsertId)` 失败（left 11 / right 22）、`testUpdateResultSurvivesLaterReset` 在 `@Assert(11, ur.lastInsertId)` 失败（right 0）；**修复后** = **35/35 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**，编译警告 9 条无新增。日志 `/tmp/mock2_before.log`、`/tmp/mock2_after.log`。
@@ -92,6 +96,8 @@ DT：两次 update 分别设 11 / 22，断言两个返回值各为 11 / 22（现
 ### 1.3 [严重｜正确性] `MOCK-3` `getOrNull` 偏离 std 契约：越界/行未就绪应抛 `SqlException`，实测静默返回 None；类型不匹配也静默 None（f_mockdb） → ✅已修复（2026-10-04）
 
 **✅ 修复标记（2026-10-04）**：分支 `fix/mock-1-query-isolation`（同一 worktree，在 MOCK-2 之后追加提交），**代码、用例、本标记在同一提交**。
+
+提交 `e904ac87`；尚未并入 `sts/1.3.x`（待下次同步）。
 
 - 改动：`src/QueryResult.cj` 的 `getOrNull<T>` 按 std 契约分三种情况 —— ①行未就绪（`rowIndex < 0 || rowIndex >= rowData.size`）⇒ `throw SqlException('row data is not ready, invoke next() before reading column N')`；②列越界（`index < 0 || index >= row.size`）⇒ `throw SqlException('column index N is out of range, the current row has M columns')`；③值既不是 `T` 也不是 SQL NULL ⇒ `throw SqlException('value of column N is <实际类型>, which does not match <T>')`（用 `TypeInfo.of` 打印两侧类型）；④真正的 SQL NULL（槽里是 `None<Any>`）仍返回 `None`。
 - 用例：改造 1 条 + 新增 3 条 —— 旧用例 `testGetOrNullReturnsNone`（把「越界返回 None」当期望）改名为 `testGetOrNullOutOfRangeThrows`，断言越界（含 `-1`）抛 `SqlException`；新增 `testGetOrNullBeforeNextThrows`（未 `next()` 抛）、`testGetOrNullTypeMismatchThrows`（`Int64` 列按 `String` 取抛）、`testGetOrNullNullValueReturnsNone`（真 NULL 仍返回 None 的回归护栏）。
@@ -127,6 +133,8 @@ DT：越界与未 `next()` 时断言抛异常；类型不符断言抛异常；�
 
 **✅ 修复标记（2026-10-04）**：分支 `fix/mock-1-query-isolation`（同一 worktree，在 MOCK-3 之后追加提交），**代码、用例、本标记在同一提交**。
 
+提交 `ba04b79f`；尚未并入 `sts/1.3.x`（待下次同步）。
+
 - 改动：四个类各加 `private var closed_ = false` —— ①`src/Connection.cj`：`state` 关后返回 `Closed`（否则 `Connected`）、`isClosed()` 返回标志、`close()` 置标志（**仍保留** `MOCKDB.clear()` 副作用，解耦留给 §2.2 MOCK-5）；②`src/Statement.cj`、③`src/QueryResult.cj`、④`src/Datasource.cj`：`close()` 置标志、`isClosed()` 返回标志（重复关闭幂等）。
 - 用例：`src/mockdb_core_test.cj` 新增 3 条 —— `testConnectionCloseState`（关前 `false`/`Connected` → 关后 `true`/`Closed` → 双关幂等）、`testStatementAndQueryResultCloseState`、`testDatasourceCloseState`。
 - 测量证据：**修复前** PASSED 38 / **FAILED 3**（EXIT=1，三条都失败在「`close()` 后 `isClosed()` 仍为 false」）；**修复后** = **41/41 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**，编译警告 9 条无新增。日志 `/tmp/mock4_before.log`、`/tmp/mock4_after.log`。
@@ -154,6 +162,8 @@ DT：`close()` 后断言 `isClosed()==true`、`state==Closed`；双关幂等；�
 ### 2.2 [中｜正确性] `MOCK-5` `MockConnection.close()` 带隐藏全局副作用：关连接 = 清空当前线程夹具，而且是包外唯一可用的重置入口（f_mockdb） → ✅已修复（2026-10-04）
 
 **✅ 修复标记（2026-10-04）**：分支 `fix/mock-1-query-isolation`（同一 worktree，在 MOCK-4 之后追加提交），**代码、用例、本标记在同一提交**。
+
+提交 `80d67a36`；尚未并入 `sts/1.3.x`（待下次同步）。
 
 - 改动：①`src/Connection.cj` 的 `close()` 只置 `closed_`，**不再**调 `MOCKDB.clear()`（夹具与连接生命周期解耦）；②`src/mockdb.cj` 的 `static func clear()` 提升为 **`public static func clear()`** 并补文档注释（「清空当前线程的全部夹具：查询结果、`lastInsertId`/`rowCount`、`toThrowOn*` 标志、metadata，不动 `execution`；用例开头调一次」，只清结果的入口仍是 `clearQueryResult()`）——包外（`f_orm` / `fcoder` / `fdemo`）与 `fountain::fountain.mockdb` 门面从此可以显式重置夹具，不必再借「关连接」这个副作用。
 - 用例：`src/mockdb_core_test.cj` 新增 2 条 —— `testCloseKeepsFixture`（跑一次查询后关连接：断言行、列信息、`toThrowOnExecuting`、metadata 都还在，只有 `isClosed()` 变 true）、`testClearResetsFixture`（显式 `clear()` 后行、列信息、标志、`lastInsertId`、`rowCount`、metadata 全部回默认）。
