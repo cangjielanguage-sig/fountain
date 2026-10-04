@@ -146,7 +146,7 @@ export rpcServer_weight=1.0
 
 # 客户端：种子节点地址，格式 weight,address（weight 为权重，| 分隔多个）
 export rpcClient_serverAddress='1.0,192.168.1.10:1203|2.0,192.168.1.11:1203'
-# 客户端：负载均衡策略（random、roundrobin）默认是 roundrobin
+# 客户端：负载均衡策略（random、roundrobin），默认 random
 export rpcClient_loadbalance=roundrobin
 # 客户端：重试次数，默认是0
 export rpcClient_retryCount=1
