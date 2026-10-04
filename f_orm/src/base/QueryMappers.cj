@@ -106,8 +106,8 @@ public class QueryMappers<O> {
             list(result)
         }
     }
-    public func iterator(result: QueryResultWrap): QueryResultIterator<O> {
-        QueryResultIterator<O>(result, this)
+    public func iterator(result: QueryResultWrap, executor: SqlExecutor): QueryResultIterator<O> {
+        QueryResultIterator<O>(result, executor, this)
     }
     public func one(result: QueryResultWrap): Option<O> {
         doMap(result)

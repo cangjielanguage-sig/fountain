@@ -444,9 +444,9 @@ public func singleList<T>(): ArrayList<T>
 public func singleList<T>(index: Int64): ArrayList<T>
 public func singleList<T>(column: String): ArrayList<T>
 
-public func singleIterator<T>(): Iterator<T>
-public func singleIterator<T>(index: Int64): Iterator<T>
-public func singleIterator<T>(column: String): Iterator<T>
+public func singleIterator<T>(): SingleColumnIterator<T>
+public func singleIterator<T>(index: Int64): SingleColumnIterator<T>
+public func singleIterator<T>(column: String): SingleColumnIterator<T>
 ```
 
 **对象映射**（依赖 `QueryMappers`）：
@@ -457,7 +457,7 @@ public func first<T>(): Option<T> where T <: QueryMappersInit<T>
 public func list<T>(mappers: QueryMappers<T>): ArrayList<T>  // 全部行
 public func list<T>(): ArrayList<T> where T <: QueryMappersInit<T>
 public func iterator<T>(mappers: QueryMappers<T>): QueryResultIterator<T>
-public func iterator<T>(): Iterator<T> where T <: QueryMappersInit<T>
+public func iterator<T>(): AbstractQueryResultIterator<T> where T <: QueryMappersInit<T>
 public func one<T>(mappers: QueryMappers<T>): Option<T>      // 与 first 类似，用于 grouped 映射
 public func one<T>(): Option<T> where T <: QueryMappersInit<T>
 ```
@@ -470,7 +470,7 @@ public func mapList(): ArrayList<HashMap<String, Any>>  // 全部行 → Map 列
 ```
 
 > `T.isSimpleData()` 为 `true` 时（基础类型等），`first<T>()` / `list<T>()` / `iterator<T>()` / `one<T>()` 自动退化为对应的 `singleXxx` 版本。
-> `singleIterator<T>()`（含 `index` / `column` 重载）的**静态返回类型是 `Iterator<T>`**，拿不到 `Resource` 接口；需要 `close()` 语义时用 `iterator<T>(mappers)`（返回 `QueryResultIterator<T>`）。
+> 三个迭代器入口（`singleIterator<T>()` 含 `index` / `column` 重载、`iterator<T>(mappers)`、`iterator<T>()`）返回的静态类型都是 `Resource`：可用 `try (it = ...)` 自动关闭，也可显式 `close()`；`next()` 读尽时同样会自动关闭。
 
 ### 5.3 更新 / 删除 / 插入
 
@@ -1368,7 +1368,7 @@ public class QueryMappers<O> {
 
     public func list(result: QueryResultWrap): ArrayList<O>
     public func groupedList<ID>(result: QueryResultWrap): ArrayList<O> where ID <: Hashable & Equatable<ID>
-    public func iterator(result: QueryResultWrap): QueryResultIterator<O>
+    public func iterator(result: QueryResultWrap, executor: SqlExecutor): QueryResultIterator<O>
     public func one(result: QueryResultWrap): Option<O>
 
     protected prop idName: ?String       // 主键列名（无主键为 None）
@@ -1434,22 +1434,23 @@ public class NullableGroupedQueryMapper<T, O> <: QueryMapper<O> {
 ### 13.4 迭代器
 
 ```cangjie
-public class QueryResultIterator<T> <: Iterator<T> & Resource {
-    public func next(): ?T
+public abstract class AbstractQueryResultIterator<T> <: Iterator<T> & Resource {
     public func isClosed(): Bool
     public func close(): Unit
 }
 
-public class SingleColumnIterator<T> <: Iterator<T> & Resource {
+public class QueryResultIterator<T> <: AbstractQueryResultIterator<T> {
     public func next(): ?T
-    public func isClosed(): Bool
-    public func close(): Unit
+}
+
+public class SingleColumnIterator<T> <: AbstractQueryResultIterator<T> {
+    public func next(): ?T
 }
 ```
 
-两者的构造函数均为 internal，只能由框架创建；`next()` 在结果集耗尽时返回 `Option<T>.None`。`executor.iterator<T>(mappers)` 返回的 `QueryResultIterator<T>`（同时是 `Resource`）可用 `try (it = executor.iterator<UserPO>()) { ... }` 自动关闭，也可显式 `close()`；而 `executor.iterator<T>()` / `executor.singleIterator<T>()` 的**静态返回类型是 `Iterator<T>`**，`Resource` 语义不可用（只用 `try` 无法自动关闭），需要显式关闭时请用带 `mappers` 的重载。
+三者的构造函数均为 internal，只能由框架创建；`next()` 在结果集耗尽时返回 `Option<T>.None` 并自动释放。父类 `AbstractQueryResultIterator` 实现 `Resource`，所以 `try (it = executor.iterator<UserPO>()) { ... }` 可自动关闭，也可显式 `close()`。`close()` 总是关闭结果集；Statement 与 Connection 的收尾交给 `SqlExecutor.close()`——不在事务中时随之关闭，在事务中则留到事务结束后关闭，因此事务内 `close()` 迭代器之后，同一事务仍可继续执行 SQL。
 
-> `SingleColumnIterator` 的 `column` 形参目前不参与取值——无论是否指定 `column`，都由 `index`（默认 0）决定读取哪一列，见 [19.6](#196-已知问题与复核记录)。
+> `SingleColumnIterator` 的 `column` 非空时按列名取值，否则按 `index`（默认 0）取值。
 
 ### 13.5 自定义类型转换：`QueryMapperConverter`
 

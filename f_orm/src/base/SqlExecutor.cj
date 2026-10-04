@@ -157,6 +157,16 @@ public class SqlExecutor <: Resource & RootDAO {
             DirtyTag.clearAll()
         }
     }
+    /**
+     * 迭代器关闭其结果集后的收尾（由 AbstractQueryResultIterator.close() 调用）：
+     * 1）解除「活动结果集」保护，使同一 executor 可以继续执行 SQL；
+     * 2）按 close() 的事务感知规则归还资源——不在事务中时关闭 Statement/Connection，
+     *    在事务中不动它们（留给事务结束后的 close()）。
+     */
+    internal func releaseActiveQueryResult(): Unit {
+        activeQueryResult = false
+        close()
+    }
     private func createTransaction(
         propagation!: Propagation = ORMConfig.getTransactionPropagation(driverName: driverName),
         isoLevel!: ?TransactionIsoLevel = ORMConfig.getTransactionLevel(driverName: driverName),
@@ -471,17 +481,17 @@ public class SqlExecutor <: Resource & RootDAO {
             return list
         }
     }
-    public func singleIterator<T>(): Iterator<T> {
+    public func singleIterator<T>(): SingleColumnIterator<T> {
         singleIterator<T>(0)
     }
-    public func singleIterator<T>(index: Int64): Iterator<T> {
-        execute<Iterator<T>> {r =>
-            SingleColumnIterator<T>(r, index: index)
+    public func singleIterator<T>(index: Int64): SingleColumnIterator<T> {
+        executeIterator<SingleColumnIterator<T>> {r =>
+            SingleColumnIterator<T>(r, this, index: index)
         }
     }
-    public func singleIterator<T>(column: String): Iterator<T> {
-        execute<Iterator<T>> {r =>
-            SingleColumnIterator<T>(r, column: column)
+    public func singleIterator<T>(column: String): SingleColumnIterator<T> {
+        executeIterator<SingleColumnIterator<T>> {r =>
+            SingleColumnIterator<T>(r, this, column: column)
         }
     }
     public func first<T>(mappers: QueryMappers<T>): Option<T> {
@@ -535,11 +545,11 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
     public func iterator<T>(mappers: QueryMappers<T>): QueryResultIterator<T> {
-        execute<QueryResultIterator<T>> {r =>
-            mappers.iterator(r)
+        executeIterator<QueryResultIterator<T>> {r =>
+            mappers.iterator(r, this)
         }
     }
-    public func iterator<T>(): Iterator<T> where T <: QueryMappersInit<T> {
+    public func iterator<T>(): AbstractQueryResultIterator<T> where T <: QueryMappersInit<T> {
         if (T.isSimpleData()) {
             singleIterator<T>()
         } else {
@@ -837,7 +847,11 @@ public class SqlExecutor <: Resource & RootDAO {
             try { 
                 return executor()
             } finally {
-                this.close()
+                // 结果集已移交迭代器（executeIterator 通道）时不能在这里归还连接：
+                // Statement/Connection 由迭代器关闭时经 releaseActiveQueryResult()/close() 收尾
+                if (!activeQueryResult) {
+                    this.close()
+                }
             }
         }
         try {
@@ -848,7 +862,10 @@ public class SqlExecutor <: Resource & RootDAO {
                     case Some(_) => throw ORMException("type of cached data with key '${key}' does not match")
                     case _ =>
                         let v = exec()
-                        cache[key] = v
+                        // 迭代器有状态：移交结果集的查询不写缓存，否则同一「SQL + 参数」会拿到同一个已被消费的迭代器
+                        if (!activeQueryResult) {
+                            cache[key] = v
+                        }
                         v
                 }
             } else {
@@ -873,41 +890,53 @@ public class SqlExecutor <: Resource & RootDAO {
             }
         }
     }
-    private func execute<T>(executor: (Statement) -> T): T {
+    private func execute<T>(closeBeforeReturning: Bool, executor: (Statement) -> T): T {
         execute<T>{
             let stmt = statement
             try{
                 executor(stmt)
             }finally{
-                stmt.close()
-                this.stmt = None<Statement>
+                // 结果集已移交迭代器时不在此关闭语句：Statement 留给 SqlExecutor.close() 统一关闭
+                if (closeBeforeReturning) {
+                    stmt.close()
+                    this.stmt = None<Statement>
+                }
             }
         }
     }
     private func execute<T>(extract: (UpdateResult) -> T): T {
         clearCache = true
-        execute<T> {stmt =>
+        execute<T>(true) {stmt: Statement =>
             let result = stmt.update()
             extract(result)
         }
     }
-    private func execute<T>(extract: (QueryResultWrap) -> T): T {
+    private func execute<T>(closeBeforeReturning: Bool, extract: (QueryResultWrap) -> T): T {
         if (activeQueryResult) {
             throw ORMException("cannot execute SQL while a previous query result is still active")
         }
-        execute<T> {stmt: Statement =>
+        execute<T>(closeBeforeReturning) {stmt: Statement =>
             var r = None<QueryResultWrap>
             var ex = None<Exception>
+            var handedOver = false
             try{
                 activeQueryResult = true
                 r = Some((stmt.query() as QueryResultWrap).getOrThrow())
-                extract(r.getOrThrow())
+                let value = extract(r.getOrThrow())
+                // 走到这里说明迭代器已构造成功：结果集所有权移交，本次调用不再关闭它
+                handedOver = !closeBeforeReturning
+                value
             } catch (e: Exception) {
                 ex = Some(e)
                 throw e
             } finally {
+                // 消费型路径（closeBeforeReturning = true）与「构造中途抛异常」仍在此关闭，避免泄漏；
+                // 移交成功则由迭代器 close()/读尽时经 releaseActiveQueryResult() 收尾
+                let mustClose = closeBeforeReturning || !handedOver
                 try{
-                    r?.close()
+                    if (mustClose) {
+                        r?.close()
+                    }
                 }catch(e: Exception){
                     logger.error(e)
                     if (let ei: BaseException <- e && let Some(eo) <- ex) {
@@ -920,10 +949,20 @@ public class SqlExecutor <: Resource & RootDAO {
                     }
                     throw e
                 } finally {
-                    activeQueryResult = false
+                    if (mustClose) {
+                        activeQueryResult = false
+                    }
                 }
             }
         }
+    }
+    /** 消费型查询：返回前关闭结果集与语句（first/singleFirst/list/... 走这条） */
+    private func execute<T>(extract: (QueryResultWrap) -> T): T {
+        execute<T>(true, extract)
+    }
+    /** 迭代器型查询：返回前不关闭结果集，把所有权交给返回的迭代器（由迭代器负责最终关闭） */
+    private func executeIterator<T>(extract: (QueryResultWrap) -> T): T {
+        execute<T>(false, extract)
     }
     public func execute<T>(executor: (SqlExecutor) -> T): T {
         execute<T> {
