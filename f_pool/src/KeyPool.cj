@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_pool
 
 import std.collection.concurrent.ArrayBlockingQueue
-import std.sync.{AtomicBool, Mutex, Condition}
+import std.sync.{AtomicBool, AtomicInt64, Mutex, Condition}
 import fountain::f_base.ExitCallbacks
 import fountain::f_pool.diagnostics.PoolDiagnostics
 import fountain::f_pool.exception.PoolException
@@ -169,8 +169,20 @@ public class KeyPoolBuilder<K, V> where K <: Hashable & Equatable<K> {
 }
 public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
     private let pool: IKeyPool<K, Ref<V>>
-    private let tasks: ArrayBlockingQueue<PoolTask<K>>
+    /** 「给某键建一个池项」的任务队列（元素就是键，历史实现里元素是每等待者一个的 `PoolTask`）。 */
+    private let tasks: ArrayBlockingQueue<K>
     private let running = AtomicBool(true)
+    /**
+     * 「等待池项」的通道：池耗尽时 `get` park 在这里，由**创建完成 / 归还 / 关停**三处唤醒 ——
+     * 不再有 1ms 轮询（见 .autocode/bugs/bug-pool.md §1.2 `POOL-2`、§2.1 `POOL-6`）。
+     * `available` 是「池状态可能变好」的纪元号：`wakeWaiters()` 先加它再通知，
+     * 等待者登记后若发现纪元变了就不 park（关掉 notify 早于 park 的丢唤醒窗口）；
+     * `waiters` 只用于省掉无人等待时的空通知。
+     */
+    private let waitMutex = Mutex()
+    private let waitCond = synchronized(waitMutex){ waitMutex.condition() }
+    private let available = AtomicInt64(0)
+    private let waiters = AtomicInt64(0)
     /**
      * 构造完成标志：后台维护线程在构造函数返回前**不许碰 `this`**。
      * 归档报告 7.12（`.autocode/bugs/bug-archived-on-20261004.md`）那次 SIGSEGV 的栈顶是 `UnitKeyPool.size`（运行时泛型 MTable 空指针），
@@ -206,7 +218,7 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             case _: ?Unit => UnitKeyPool<K, Ref<V>>(mode, maxSize)
             case _ => BaseKeyPool<K, Ref<V>>(mode, maxSize)
         }
-        tasks = ArrayBlockingQueue<PoolTask<K>>(totalSize)
+        tasks = ArrayBlockingQueue<K>(totalSize)
         PoolDiagnostics.onPoolCreated()
         // 把池内的常规告警接到 f_log（幂等：应用若已用 redirectWarningsTo 接管，这里不会覆盖）
         PoolDiagnostics.installDefaultHooks(
@@ -344,15 +356,26 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             }
             // 异常计数一旦有变化就落一条统计（健康时静默）：崩溃前"最后已知状态"靠这条留在日志里（见 .autocode/bugs/bug-archived-on-20261004.md 7.12）
             PoolDiagnostics.reportIfChanged('pool audit')
+            // 本轮可能销毁了失效项（腾出额度）⇒ 唤醒等待者去重试「建一个」（见 §1.2 POOL-2）
+            wakeWaiters()
         }
     }
-    private func tryAddTask(key: K){
-        let task = PoolTask<K>(key)
-        if(tasks.tryAdd(task)){
-            task
-        }else{
-            None<PoolTask<K>>
+    /**
+     * 唤醒所有等池项的 `get`：先推进 `available` 纪元（等待者据此避免「通知早于 park」的丢唤醒），
+     * 再在有人等待时通知。创建完成、归还、关停、巡检腾额度四处都会调它。
+     */
+    private func wakeWaiters(): Unit {
+        available.fetchAdd(1)
+        if(waiters.load() <= 0){
+            return
         }
+        synchronized(waitMutex){
+            waitCond.notifyAll()
+        }
+    }
+    /** 把「给某键建一个池项」的任务入队；队列满/已关停返回 false（调用方下一轮再试）。 */
+    private func tryAddTask(key: K): Bool {
+        tasks.tryAdd(key)
     }
     private func startCreationSchedule() {
         spawn {
@@ -375,8 +398,8 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
     }
     /** 创建线程的一轮循环（拆出来便于看护重开）。 */
     private func creationLoop(): Unit {
-        while(running.load() && let task <- tasks.remove()){
-            while(running.load() && pool.size < totalSize && let k <- task.key && pool.keyedSize(k) < maxSize){
+        while(running.load() && let k <- tasks.remove()){
+            while(running.load() && pool.size < totalSize && pool.keyedSize(k) < maxSize){
                 try {
                     let object = creator(k)
                     if (checkOnCreation && !doCheck(k, object, checker)){
@@ -392,7 +415,8 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
                 sleep(Duration.Zero)
                 continue
             }
-            task.notify()
+            // 处理完一条任务就唤醒等待者：建成了他要立刻来取，没建成（额度满）他也要复查一次（见 §1.2 POOL-2）
+            wakeWaiters()
         }
     }
     private func ref(key: K, object: V){
@@ -403,6 +427,8 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
     }
     public func close(): Unit {
         running.store(false)
+        // 等待者必须立刻看到 running=false 并返回 None，不能让他们 park 到预算耗尽（见 §2.1 POOL-6）
+        wakeWaiters()
         while(let Some(_) <- tasks.tryRemove()){}
         pool.destroy{k, r => 
             // take()：显式销毁过的池项其 Ref 已空，终结器不会再销毁第二次（见 .autocode/bugs/bug-pool.md §1.1）
@@ -437,21 +463,35 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         }
     }
     /**
-     * 本轮「等新建池项」愿意等多久。
+     * park 等「池项可借 / 池已关停」的通知（**不轮询**，见 .autocode/bugs/bug-pool.md §1.2 `POOL-2`）。
      *
-     * - 有限上限（默认 30s）：给出剩余等待预算，行为与原实现一致 —— 新建出来会立刻把调用方唤醒；
-     * - 真无限等待（`maxWaiting == Duration.Max`）：给一个固定分片。既避免 `MonoTime + Duration.Max` 溢出，
-     *   也不至于长时间睡着而看不到 `running` 变化。
+     * 调用前调用方已把自己要的池项任务入队；创建完成、`giveBack`、`close`、巡检腾出额度四处都会 `wakeWaiters`。
+     * 被唤醒不代表一定有事发生（可能归还的项被别人抢走）—— 调用方醒来后必须自己复查池与 `running`。
+     *
+     * 丢唤醒说明：`wakeWaiters` 先推进 `available` 纪元再通知；等待者「登记 `waiters` → 读纪元 →
+     * 持 `waitMutex` 再确认」——纪元已变就直接返回不 park，因此「通知发生在 park 之前」不会丢。
      */
-    private func waitChunk(waitStart: MonoTime): Duration {
-        if (maxWaiting == Duration.Max) {
-            return Duration.second
-        }
-        let remain = waitStart + maxWaiting - MonoTime.now()
-        if (remain <= Duration.Zero) {
-            Duration.Zero
-        } else {
-            remain
+    private func waitItem(remain: Duration): Unit {
+        waiters.fetchAdd(1)
+        let seen = available.load()
+        try {
+            if (available.load() != seen) {
+                return
+            }
+            synchronized(waitMutex){
+                // 同一把锁下再确认一次：纪元推进是无锁的，但通知必须拿这把锁
+                // ⇒ 只要纪元没变，park 之后的那个通知一定能拿到锁把我们叫醒。
+                if (available.load() != seen) {
+                    return
+                }
+                if (remain == Duration.Max) {
+                    waitCond.wait()                  // 真无限等待：只靠通知（close 也会通知）
+                } else {
+                    waitCond.wait(timeout: remain)
+                }
+            }
+        } finally {
+            waiters.fetchSub(1)
         }
     }
     public func get(key: K, timeout!: Duration = Duration.Max): ?V {
@@ -459,42 +499,39 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             this.keyedCheck(checkOnBorrowing, key, ref)
         }
         if(timeout <= Duration.Zero){
-            // 三处借出都从 Ref 里 take()：借出即把值取空，终结器就不会在借用方手里销毁这一项
+            // 借出从 Ref 里 take()：借出即把值取空，终结器就不会在借用方手里销毁这一项
             // （见 .autocode/bugs/bug-pool.md §1.1）。
             if(running.load() && let Some(r) <- pool.get(key, keyedCheck, keyedDestroy) && let Some(v) <- r.take()){
                 return v
             }
-        }else if(timeout == Duration.Max){
-            // 注意：原实现在「池已满且取不到空闲项」时是 while(running.load()) 无 sleep 忙等，
-            // 既 100% 占用一个核、又会**无日志地永久挂住**调用者（见 .autocode/bugs/bug-archived-on-20261004.md 六）。
-            // 这里保持「等待」语义，但每轮让出 CPU，并在超过上限后告警放弃（返回 None），
-            // 由上层决定重试或失败，避免静默挂起。
+        }else{
+            /**
+             * 两条等待路径合成一条：
+             * - `timeout == Duration.Max`（默认）：等待上限是池参数 `maxWaiting`（它传 `Duration.Max` = 真无限）；
+             * - 有限 `timeout`：等待上限就是它。
+             * 两条都在**通知上 park**：不再 1ms 轮询（`POOL-2`），也不会因为「分片超时」提前放弃（`POOL-5`）。
+             */
             let waitStart = MonoTime.now()
+            let limit = if (timeout == Duration.Max) { maxWaiting } else { timeout }
+            let infinite = limit == Duration.Max
             while(running.load()) {
                 if (let Some(r) <- pool.get(key, keyedCheck, keyedDestroy) && let Some(v) <- r.take()) {
                     return v
-                }else if (pool.size < totalSize && pool.keyedSize(key) < maxSize && 
-                    let Some(x) <- tryAddTask(key) && 
-                    let remain <- waitChunk(waitStart) && (remain <= Duration.Zero || !x.wait(remain))) {
+                }
+                // 还有额度就把「建一个」入队；建好由创建线程 wakeWaiters 唤醒（被别的键/线程唤醒也会重试）
+                if (pool.size < totalSize && pool.keyedSize(key) < maxSize) {
+                    tryAddTask(key)
+                }
+                let remain = if (infinite) { Duration.Max } else { limit - (MonoTime.now() - waitStart) }
+                if (remain != Duration.Max && remain <= Duration.Zero) {
                     break
                 }
-                if (maxWaiting != Duration.Max && MonoTime.now() - waitStart >= maxWaiting) {
-                    logger.warn(
-                        'key pool exhausted but no idle element: size=${pool.size}/${totalSize}, keyedSize=${pool.keyedSize(key)}/${maxSize}, waited ${maxWaiting}, give up')
-                    break
-                }
-                sleep(Duration.millisecond)
+                waitItem(remain)
             }
-        }else{
-            let start = MonoTime.now()
-            while(running.load() && MonoTime.now() < start + timeout) {
-                if (let Some(r) <- pool.get(key, keyedCheck, keyedDestroy) && let Some(v) <- r.take()) {
-                    return v
-                }else if (pool.size < totalSize && pool.keyedSize(key) < maxSize && 
-                    let Some(x) <- tryAddTask(key) && 
-                    let wait <- start + timeout - MonoTime.now() && (wait <= Duration.Zero || !x.wait(wait))) {
-                    break
-                }
+            if (running.load() && !infinite && timeout == Duration.Max) {
+                // 只有「Duration.Max + 有限 maxWaiting」档告警放弃（与原实现/README 口径一致）
+                logger.warn(
+                    'key pool exhausted but no idle element: size=${pool.size}/${totalSize}, keyedSize=${pool.keyedSize(key)}/${maxSize}, waited ${maxWaiting}, give up')
             }
         }
         None
@@ -510,6 +547,15 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             clear(key, object)
         }
         pool.giveBack(key, ref(key, object), keyedCheck, keyedDestroy)
+        // 与 close() 交错时本项可能是在「清池」之后才入池的 ⇒ 取出来销毁，不让它留在一个已关闭的池里
+        // （既没人取也没人销毁；池对象还被 atExit 回调长期持有，见 §2.1 POOL-6 / §2.8 POOL-13）
+        if(!running.load()){
+            if (let Some(r) <- pool.get(key, {_, _ => true}, keyedDestroy) && let Some(v) <- r.take()) {
+                doDestroy(key, v, destroier)
+            }
+        }
+        // 唤醒等池项的 get（见 §1.2 POOL-2）
+        wakeWaiters()
     }
     prop size: Int64{
         get(){
@@ -522,22 +568,5 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             s += ps
         }
         s == size
-    }
-}
-private struct PoolTask<K> where K <: Hashable & Equatable<K> {
-    private let mutex = Mutex()
-    private let condition = synchronized(mutex){
-        mutex.condition()
-    }
-    PoolTask(let key: K){}
-    func wait(timeout: Duration): Bool {
-        synchronized(mutex){
-            condition.wait(timeout: timeout)
-        }
-    }
-    func notify(): Unit {
-        synchronized(mutex){
-            condition.notify()
-        }
     }
 }

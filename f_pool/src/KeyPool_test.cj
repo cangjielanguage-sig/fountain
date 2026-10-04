@@ -15,9 +15,28 @@ limitations under the License.
 */
 package fountain::f_pool
 
+import std.convert.*
+import std.fs.File
 import std.runtime.gc
 import std.sync.AtomicInt64
 import fountain::f_pool.diagnostics.PoolDiagnostics
+
+/**
+ * 读 `/proc/self/stat` 的 utime+stime（时钟 tick，USER_HZ=100 ⇒ 1 tick ≈ 10ms）。
+ * 非 Linux / 读不到时返回 None，调用方据此跳过 CPU 断言（`POOL-2` 的测量用，见 `.autocode/bugs/bug-pool.md` §1.2）。
+ */
+func procCpuTicks(): ?Int64 {
+    try {
+        let content = String.fromUtf8(File.readFrom("/proc/self/stat"))
+        // 字段 2 是 (comm)，可能含空格与括号 ⇒ 从最后一个 ')' 之后开始切
+        let close = content.lastIndexOf(")").getOrThrow()
+        let parts = content[close + 1 .. content.size].trimAscii().split(" ")
+        // 切完 parts[0] 是字段 3（state）⇒ utime（字段 14）= parts[11]，stime（字段 15）= parts[12]
+        Int64.parse(parts[11]) + Int64.parse(parts[12])
+    } catch (e: Exception) {
+        None<Int64>
+    }
+}
 
 @Test
 public class KeyPoolTest {
@@ -329,6 +348,168 @@ public class KeyPoolTest {
         gc()
         sleep(Duration.millisecond * 200)
         @Assert(destroyed.load(), 1)
+    }
+    /**
+     * `POOL-2`（`.autocode/bugs/bug-pool.md` §1.2）：池耗尽时「有限超时」的等待**不得烧 CPU**。
+     * 用 `/proc/self/stat` 的 utime+stime 差值判定（1 tick ≈ 10ms）：忙等 300ms ≈ 30 tick，park 等通知应 ≈ 0 tick。
+     * 非 Linux 平台拿不到该文件 ⇒ 只验语义（仍返回 None）。
+     */
+    @TestCase
+    public func finiteTimeoutWaitMustNotBurnCpu(): Unit {
+        let pool = KeyPool<String, Object>(
+            mode: Fifo,
+            initKeys: ['k'].iterator().next,
+            minSize: 0,
+            maxSize: 1,
+            totalSize: 1,
+            idleTimeout: Duration.hour,
+            checkOnCreation: false,
+            checkOnBorrowing: false,
+            checkOnReturning: false,
+            checkInterval: Duration.Zero,
+            maxWaiting: Duration.second,
+            creator: {_ => Object()},
+            checker: {_, _ => true},
+            destroier: {_, _ => ()}
+        )
+        var held = None<Object>
+        for (_ in 0 .. 300) {
+            if (let Some(v) <- pool.get('k', timeout: Duration.Zero)) {
+                held = Some(v)
+                break
+            }
+            sleep(Duration.millisecond * 10)
+        }
+        @Assert(held.isSome())                       // 先占满（maxSize = 1）
+        let before = procCpuTicks()
+        let got = pool.get('k', timeout: Duration.millisecond * 300)
+        let after = procCpuTicks()
+        @Assert(got.isNone())
+        if (let Some(b) <- before && let Some(a) <- after) {
+            @Assert(a - b < 10)                      // 忙等会到 ~30 tick（修前实测 2s 等待烧 2.25s 用户态）
+        }
+        pool.close()
+    }
+    /**
+     * `POOL-6`（§2.1）第一面：`close()` 必须**唤醒**正等池项的 `get`。
+     * `maxWaiting = Duration.Max` + 池被借空 ⇒ 等待者只能靠 close 的通知回来；
+     * 修前它要等内部 1s 分片到期（close 之后 ~0.9s），修后应当立刻返回。
+     */
+    @TestCase
+    public func closeMustWakeWaitingGetter(): Unit {
+        let pool = KeyPool<String, Object>(
+            mode: Fifo,
+            initKeys: ['k'].iterator().next,
+            minSize: 0,
+            maxSize: 1,
+            totalSize: 1,
+            idleTimeout: Duration.hour,
+            checkOnCreation: false,
+            checkOnBorrowing: false,
+            checkOnReturning: false,
+            checkInterval: Duration.Zero,
+            maxWaiting: Duration.Max,
+            creator: {_ => Object()},
+            checker: {_, _ => true},
+            destroier: {_, _ => ()}
+        )
+        var holder = None<Object>
+        for (_ in 0 .. 300) {
+            if (let Some(v) <- pool.get('k', timeout: Duration.Zero)) {
+                holder = Some(v)
+                break
+            }
+            sleep(Duration.millisecond * 10)
+        }
+        @Assert(holder.isSome())
+        let waiter = spawn {
+            pool.get('k')
+        }
+        sleep(Duration.millisecond * 100)            // 让等待者 park
+        let t0 = MonoTime.now()
+        pool.close()
+        let got = waiter.get()
+        let afterClose = MonoTime.now() - t0
+        @Assert(got.isNone())
+        @Assert(afterClose < Duration.millisecond * 700)
+    }
+    /**
+     * `POOL-6`（§2.1）第二面：`giveBack` 与 `close` 交错时，池项**不得留在已关闭的池里**
+     * （留下去既没人取也没人销毁）。每轮：借出唯一一项 ⇒ 并发「归还 ‖ 关池」⇒ 断言恰好销毁 1 次。
+     */
+    @TestCase
+    public func giveBackRacingCloseMustNotStrandItem(): Unit {
+        let rounds = 100
+        let destroyed = AtomicInt64(0)
+        for (i in 0 .. rounds) {
+            let pool = KeyPool<String, Object>(
+                mode: Fifo,
+                initKeys: ['k'].iterator().next,
+                minSize: 0,
+                maxSize: 1,
+                totalSize: 1,
+                idleTimeout: Duration.hour,
+                checkOnCreation: false,
+                checkOnBorrowing: false,
+                checkOnReturning: false,
+                checkInterval: Duration.Zero,
+                maxWaiting: Duration.second,
+                creator: {_ => Object()},
+                checker: {_, _ => true},
+                destroier: {_, _ => destroyed.fetchAdd(1)}
+            )
+            var held = None<Object>
+            for (_ in 0 .. 300) {
+                if (let Some(v) <- pool.get('k', timeout: Duration.Zero)) {
+                    held = Some(v)
+                    break
+                }
+                sleep(Duration.millisecond * 2)
+            }
+            @Assert(held.isSome())
+            let obj = held.getOrThrow()
+            let returning = spawn {
+                pool.giveBack('k', obj)
+            }
+            pool.close()
+            returning.get()
+            @Assert(destroyed.load() == i + 1)       // 这一项必须被销毁（不能滞留在已关闭的池里）
+        }
+    }
+    /**
+     * `POOL-5`（§1.5）：`maxWaiting = Duration.Max` 是**真无限等待** —— creator 慢 2s 也必须等到，
+     * 不能因为内部等待分片到期就静默放弃（修前 1008ms 就返回 `None`）。
+     */
+    @TestCase
+    public func infiniteWaitMustWaitForSlowCreation(): Unit {
+        let pool = KeyPool<String, Object>(
+            mode: Fifo,
+            initKeys: {=> None},
+            minSize: 0,
+            maxSize: 1,
+            totalSize: 1,
+            idleTimeout: Duration.hour,
+            checkOnCreation: false,
+            checkOnBorrowing: false,
+            checkOnReturning: false,
+            checkInterval: Duration.Zero,
+            maxWaiting: Duration.Max,
+            creator: {_ =>
+                sleep(Duration.second * 2)
+                Object()
+            },
+            checker: {_, _ => true},
+            destroier: {_, _ => ()}
+        )
+        let t0 = MonoTime.now()
+        let got = pool.get('k')
+        let elapsed = MonoTime.now() - t0
+        @Assert(got.isSome())
+        @Assert(elapsed >= Duration.millisecond * 1800)
+        if (let Some(v) <- got) {
+            pool.giveBack('k', v)
+        }
+        pool.close()
     }
 }
 

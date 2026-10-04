@@ -17,15 +17,16 @@
 | 合计 | 22 | — |
 
 > 计数修正（2026-10-05）：§1.1 `POOL-1` 已修复 ⇒ 待修严重级 **4** 条（`POOL-2`~`POOL-5`）；上表保留审查当时的原始计数。
+> 二次修正（2026-10-05）：§1.2 `POOL-2`、§1.5 `POOL-5`、§2.1 `POOL-6` 已修复（同一次提交）⇒ 待修严重级 **2** 条（`POOL-3`、`POOL-4`），中危 **7** 条。
 
 **建议修复顺序**：
 
 1. `POOL-1`（§1.1）借出中的池项被 GC 终结器销毁 → 池的「借出期所有权」契约不成立（实测借出对象被打上已销毁标记）　**✅已修复（2026-10-05，见 §1.1 修复标记）**
-2. `POOL-2`（§1.2）`KeyPool.get` 有限超时分支在池耗尽时**无让步忙等** → 编码热路径（`DefaultCodec` 的 `build(timeout: 5s)`）整核空转（实测 2s 等待烧 2.25s 用户态 CPU）
+2. `POOL-2`（§1.2）`KeyPool.get` 有限超时分支在池耗尽时**无让步忙等** → 编码热路径（`DefaultCodec` 的 `build(timeout: 5s)`）整核空转（实测 2s 等待烧 2.25s 用户态 CPU）　**✅已修复（2026-10-05，见 §1.2 修复标记：等待改条件变量通知）**
 3. `POOL-3`（§1.3）巡检把**满载 key** 的空闲项当「校验不过」摘掉，并整轮跳过用户 checker → 稳态抖动、`connectionLife`/`idleTimeout` 判定被绕过（实测满载空闲池 idle 2→1）
 4. `POOL-4`（§1.4）creator/checker 持续失败时**无退避紧重试** → 对下游的重连风暴 + 每轮一条 WARN（实测 300ms 内 75,976 次尝试）
-5. `POOL-5`（§1.5）`maxWaiting = Duration.Max` 的「真无限等待」实际只等 1s 就**静默放弃**（实测 1008ms 返回 `None`，对照 30s 档 2016ms 返回项）；同一分支还会吞掉丢失的唤醒
-6. 其后按 §2 顺序：`POOL-6`（关停不唤醒/归还竞态）→ `POOL-7`（关池泄漏线程）→ `POOL-8`（队列按 `totalSize` 预分配 + 两个池默认 `maxSize=Int64.Max` 构造即 OOM）→ `POOL-9`（`release` 后仍可写，实测污染池项）→ `POOL-10`~`POOL-13`
+5. `POOL-5`（§1.5）`maxWaiting = Duration.Max` 的「真无限等待」实际只等 1s 就**静默放弃**（实测 1008ms 返回 `None`，对照 30s 档 2016ms 返回项）；同一分支还会吞掉丢失的唤醒　**✅已修复（2026-10-05，随 §1.2 的统一等待重写一并解决，见 §1.5 修复标记）**
+6. 其后按 §2 顺序：`POOL-6`（关停不唤醒/归还竞态）**✅已修复（2026-10-05，见 §2.1 修复标记）** → `POOL-7`（关池泄漏线程）→ `POOL-8`（队列按 `totalSize` 预分配 + 两个池默认 `maxSize=Int64.Max` 构造即 OOM）→ `POOL-9`（`release` 后仍可写，实测污染池项）→ `POOL-10`~`POOL-13`
 
 ---
 
@@ -91,7 +92,21 @@ double_destroy: after_close=1 after_gc=2
 
 修法 1 需要同时改 `keyedDestroy`/`checkingLoop` 里对 `r.get()` 的用法（当前 `r.get()` 是「读」而非「取走」，正好配合 `take()` 无冲突）。
 
-### 1.2 [严重｜性能+可用性] `POOL-2` `KeyPool.get` 的「有限超时」分支在池耗尽时无让步忙等
+### 1.2 [严重｜性能+可用性] `POOL-2` `KeyPool.get` 的「有限超时」分支在池耗尽时无让步忙等 ✓已复核 → ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：与 `POOL-6`（§2.1）、`POOL-5`（§1.5）**同一次提交**（提交信息 `fix(f_pool): POOL-2/POOL-6/POOL-5 池等待改条件变量通知（去掉 1ms 轮询与忙等）`），分支 `review/f_pool`。
+
+- 改动（等待从「轮询/自旋」改成「条件变量通知」）：
+  1. `f_pool/src/KeyPool.cj:174-186`：新增等待设施 —— `waitMutex` / `waitCond` / `available`（「池状态可能变好」的纪元号）/ `waiters`（无人等待时空通知的短路计数）；
+  2. `KeyPool.cj:466-500` 新增 `waitItem(remain)`：在条件变量上 park（真无限档 `wait()`，有限档 `wait(timeout: remain)`）；登记 `waiters` 后**持锁复检纪元**，关掉「通知早于 park」的丢唤醒窗口；
+  3. `KeyPool.cj:501-547` `get`：两条等待路径合并为「取项 → 需要就入队建项 → 算剩余预算 → park」，**删除 `sleep(1ms)` 与自旋**（有限档与 `Duration.Max` 档共用）；
+  4. `wakeWaiters()`（`:367-374`）四处调用：创建线程处理完一条任务（`:419`）、`close()`（`:431`）、归还（`:558`）、巡检每轮（`:360`，腾出额度时）；
+  5. 旧机制删除：`waitChunk`、每等待者一个的 `PoolTask` 类（`tasks` 元素类型改为 `K`）。
+- 用例：`f_pool/src/KeyPool_test.cj` → `KeyPoolTest.finiteTimeoutWaitMustNotBurnCpu`（池借空后 `get(timeout: 300ms)` 期间进程 CPU 增量必须 < 10 tick；`/proc/self/stat` 的 utime+stime，1 tick ≈ 10ms；非 Linux 拿不到该文件则只验语义）。
+- 测量证据：
+  - **修前**：`[ FAILED ] Assert Failed: (a - b < 10)`（≈30 tick 的忙等；探针 `spin_finite` 里 2s 等待烧 user 2.25s）；
+  - **修后**：`[ PASSED ]`（`FILTERED_EXIT=0`）；`f_pool` 全量 **`PASSED: 42, SKIPPED: 0, ERROR: 0, FAILED: 0`**（`FULL_EXIT=0`，日志 `.autocode/tmp/pool_fix2_{pre,post}.log`）。
+- 未覆盖：`PoolTask` 的去留顺带把「每次取项都新建一个等待者对象」也去掉了（原来是每等待者一个 `PoolTask` + 一个 `Mutex`+`Condition`）；`tasks` 队列容量仍是 `totalSize`（`POOL-8` §2.3 未动，仍待修）。
 
 **现象**：`timeout == Duration.Max` 分支每轮 `sleep(1ms)`（注释里专门写了「不是忙等」），但**有限超时分支没有任何 `sleep`/让出**：一旦 `pool.size >= totalSize` 或 `keyedSize(key) >= maxSize`，`else if` 的整个链短路，循环变成「查一次池 → 立刻再查一次池」的热自旋，直到超时。
 
@@ -201,7 +216,13 @@ createflood: creator_attempts_in_300ms=75976
 
 **建议修法**：失败重试加**指数退避 + 上限**（如 10ms → 20ms → … → 1s，成功即复位），并把「连续失败 N 次」升级为一条错误统计而不是每轮一条 WARN；`checkOnCreation` 判不过时同样适用（现在也是零延迟重建）。
 
-### 1.5 [严重｜可用性+语义] `POOL-5` `maxWaiting = Duration.Max` 的「真无限等待」实际只等 1s 就静默放弃
+### 1.5 [严重｜可用性+语义] `POOL-5` `maxWaiting = Duration.Max` 的「真无限等待」实际只等 1s 就静默放弃 ✓已复核 → ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：**随 `POOL-2`/`POOL-6` 的统一等待重写一并解决**（同一提交；分支 `review/f_pool`）—— 「分片超时当截止」的那段（旧 `waitChunk` 给 1s 分片 + `!x.wait(remain)` → `break`）在重写中整体删除：真无限档现在直接 `waitCond.wait()`（**无超时**），只等「创建完成 / 归还 / 关停」的通知；有限档的截止只由「剩余预算 ≤ 0」判定。
+
+- 用例：`f_pool/src/KeyPool_test.cj` → `KeyPoolTest.infiniteWaitMustWaitForSlowCreation`（creator 睡 2s、`maxWaiting = Duration.Max`：必须 `Some` 且耗时 ≥ 1.8s）。
+- 测量证据：**修前** `[ FAILED ] Assert Failed: (got.isSome())`（1008ms 就返回 `None`，与探针 `slowcreate` 的 1008ms 一致）→ **修后** `[ PASSED ]`（`PASSED: 42` 全量全绿）。
+- 备注：**这条不在你这次的点名范围内**，但它的根因正落在被重写的那段等待逻辑上（要保留旧行为得刻意写回 `break`）；如果希望它单独走一个条目/提交，可以把这块拆出来。
 
 **现象**：README（`:240-241`）与归档 §7.6 的口径是「`maxWaiting` 传 `Duration.Max` = **真无限等待**；实现按固定分片等待，既避免 `MonoTime + Duration.Max` 溢出，**也保证能及时看见 `running` 变化**」。但实现把「分片超时」当成了「截止」：`waitChunk` 每片返回 1s，`x.wait(1s)` 一旦超时就让 `else if` 为真 ⇒ `break` ⇒ 返回 `None`，而且这条路径**不打 WARN**（WARN 只在 `maxWaiting != Duration.Max` 的检查里）。
 
@@ -246,7 +267,19 @@ slowcreate(maxWaiting=30s):          got_some=true  elapsed_ms=2016
 
 ## 2. 中（8 条）
 
-### 2.1 [中｜可用性+资源] `POOL-6` `close()` 不唤醒等待者；`giveBack` 与 `close` 的检查-使用竞态会让池项永久滞留
+### 2.1 [中｜可用性+资源] `POOL-6` `close()` 不唤醒等待者；`giveBack` 与 `close` 的检查-使用竞态会让池项永久滞留 ✓已复核 → ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：与 `POOL-2`（§1.2）、`POOL-5`（§1.5）**同一次提交**（分支 `review/f_pool`）。
+
+- 改动：
+  1. **关停唤醒**：`close()` 置 `running=false` 后立刻 `wakeWaiters()`（`f_pool/src/KeyPool.cj:428-431`）⇒ 等待者当场复查到 `running=false` 返回 `None`，不再 park 到预算/分片到期；
+  2. **归还竞态**：`giveBack` 入池后**复检 `running`**，若与 `close` 交错落败，把刚入池的那一项取出来销毁（`KeyPool.cj:549-556`），不让它留在一个已关闭的池里（原来会永久滞留：没人取、没人销毁，且池对象还被 `atExit` 回调长期持有，见 `POOL-13`）；
+  3. 等待侧本身从轮询改成通知（同 `POOL-2`）—— 这条也把「等待者靠 1ms 轮询顺带发现 `running=false`」的隐式依赖去掉了。
+- 用例：`f_pool/src/KeyPool_test.cj` → `closeMustWakeWaitingGetter`（`maxWaiting = Duration.Max` + 池借空，`close()` 后等待者在 700ms 内返回 `None`）、`giveBackRacingCloseMustNotStrandItem`（100 轮「归还 ‖ 关池」，每轮恰好销毁 1 次）。
+- 测量证据：
+  - **修前**：`giveBackRacingCloseMustNotStrandItem` **`[ FAILED ]`**（`Assert Failed: (destroyed.load() == i + 1)` —— 100 轮里竞态确实命中，有项没被销毁）；`closeMustWakeWaitingGetter` 修前**也通过**（修前等待者靠 1ms 轮询看到 `running`，延迟 ~1ms）⇒ 它的作用是**重写后的不变量守卫**（若通知漏了 `close` 这条就会挂住），不是失败复现；
+  - **修后**：两条都 `[ PASSED ]`，全量 `PASSED: 42, SKIPPED: 0, ERROR: 0, FAILED: 0`。
+- 未覆盖：`POOL-7`（`close()` 后**创建线程**仍可能永久阻塞在 `tasks.remove()`，与等待者无关）未动，仍待修。
 
 - **关停延迟**：`close()`（`f_pool/src/KeyPool.cj:403-412`）只置 `running=false` + 排空任务队列 + `pool.destroy`，**不通知**正阻塞在 `PoolTask.condition` 上的等待者。等待者是按 `waitChunk` 给的预算 park 的（默认 `maxWaiting=30s`，即最长 30s）⇒ `get()` 可能在 `close()` 之后最长 30s 才返回。巡检线程同理（`sleep(checkInterval)` 在 `running` 复检之前，最坏睡到 `checkInterval`）。
 - **归还竞态**：`giveBack` 先查 `running` 再入池（`497:498-507`），两步之间 `close()` 若已完成 destroy，这一项就会被加进**已关闭**的池的队列：既不会被销毁（没有 drain 了），也不会有人取走 —— 而池对象被 `atExit` 回调长期持有（见 `POOL-13`），于是这一项连同其资源**永久泄漏**。
@@ -388,6 +421,8 @@ useafterrelease: second_is_empty=false second_bytes=5
 | `lostwakeup` / `lostwakeup_load` | 每次 get 都必须等新建（×100；负载版另加 30 个 CPU 线程） | none=0/100（**未复现**，见 `POOL-5` 第二个面） |
 
 > `POOL-1` 修复后的复测：把探针的 path 依赖指向 worktree 的 `f_pool`（工程 `.autocode/tmp/pool_probe_fixed`，其余同）—— `finalizer` → `after_gc=0 / borrowed_is_destroyed=false`、`double_destroy` → `after_close=1 after_gc=1`（修前分别是 `1/true` 与 `2`）。即上表中这两行是**修前基线**，修复记录见 §1.1。
+
+> `POOL-2`/`POOL-5`/`POOL-6` 修复后的复测：等待改成条件变量通知后，上表里 `spin_finite`/`slowcreate` 的旧读数不再适用，改由单测钉住 —— `finiteTimeoutWaitMustNotBurnCpu`（`/proc/self/stat` 的 utime+stime tick 断言，修前 ≈30 tick 失败、修后通过）与 `infiniteWaitMustWaitForSlowCreation`（修前 1008ms 返回 `None` 失败、修后 ≥1.8s 拿到项）；`giveBackRacingCloseMustNotStrandItem`（100 轮「归还 ‖ 关池」）修前失败、修后通过。全量 `cjpm test` = **`PASSED: 42, SKIPPED: 0, ERROR: 0, FAILED: 0`**（日志 `.autocode/tmp/pool_fix2_{pre,post}.log`）。
 
 复跑方式（WSL Ubuntu-24.04）：`source /mnt/d/docs/work/cangjie/cangjie.sh` → `cd .autocode/tmp/pool_probe && cjpm build` → 按脚本里的 `LD_LIBRARY_PATH`（各 `target/release/*@*` 目录**排在 `installed/libs/fboot` 之前**）直接跑 `target/release/bin/main <mode>`，用 `time -p` 量 CPU。
 
