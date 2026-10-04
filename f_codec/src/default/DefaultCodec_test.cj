@@ -43,6 +43,30 @@ public class DefaultCodec_test {
         bool = decoder.decode<Bool>(input)
         @Assert(bool, false)
     }
+    /**
+     * 空集合 / 空映射：编码侧只写一个 head 字节（低半字节 0 = 没有长度字节，见 `encode` 里
+     * `if (x.isEmpty()) { buffer.write([COLLECTION.value]) }`）⇒ 解码侧必须按"空"处理。
+     * 修前：解码侧照常去读长度字节，`parseInt64` 拿到长度 0 的数组后在 `else` 分支索引 `bytes[0]` 越界
+     * （实测表现：RPC 客户端用 `DataAny` 中性解码，收到"params 为空"的响应就抛
+     * `IndexOutOfBoundsException: index is '0', but array size is '0'` 并断链，
+     * 见 .autocode/bugs/bug-archived-on-20261004.md）。
+     */
+    @TestCase
+    public func testEmptyCollectionAndMap(): Unit {
+        let encoder = DefaultCodec()
+        let input = ByteBuffer()
+        encoder.encode(DataList()).encode(DataTuples())
+            .finish().copy(to: input, closeFromOnEnd: true, closeToOnEnd: false)
+        let decoder = DefaultCodec()
+        @Assert(match (decoder.decodeData(input)) {
+            case l: DataList => l.isEmpty()
+            case _ => false
+        })
+        @Assert(match (decoder.decodeData(input)) {
+            case m: DataTuples => m.isEmpty()
+            case _ => false
+        })
+    }
     @TestCase
     public func testInt64(): Unit {
         let encoder = DefaultCodec()
