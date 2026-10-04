@@ -30,7 +30,7 @@
 | 7.10 | 业务级 E2E 的 10 层断链 | ✅ | 2026-10-03 逐层定位并修复：消息 id 时区/相等、`ExecutorFuture.get` 丢结果、客户端 reader 中性解码、骨架注册前缀过滤、`ServiceMeta` 含 weight、发现连接复用、重试判断、demo 侧接口/载荷、对象类型未注册。实测客户端打印 JSON、服务端 `CONSUME` 正常（见 7.10） |
 | — | (7.5 起) §四 P2 小项与池相关遗留 | ✅ | **7.5 已收口、7.6 已实现、7.4 已修（2026-10-04）**：f_net 三条已修 + 服务端 `tcp closed` 已分级（WARN 140 → 1）+ `unavailableChecked` 评估后关闭；`KeyPool.get` 的 30s 改成池初始化参数 `maxWaiting`（全项目接上，ORM/RPC 各有配置项）；`SyncDeque.check()` 的「摘节点 / `s` 递减」已并入同一临界区；7.2 已增强诊断、7.3 已决定不改（见各自小节） |
 | — | **f_protocol→f_util 依赖**：应用加载期 `undefined symbol: crc32Update` | ✅⚠️ | **已修**（`boot.sh` 自建库优先）。曾误判为"加载顺序/需要预打开 .so"，实际是 `installed/libs/fboot` 的**旧副本抢先**（库无 SONAME），见 7.8 |
-| — | 池记账脱钩的**触发源** | 🟡 | 仍未定位到具体一行；2026-10-04 增强诊断：告警带上「最近一次操作」`lastOp`（见 7.2）；自愈 + 告警见 6.8.5 |
+| — | 池记账脱钩的**触发源** | ✅ | 2026-10-04 定位到具体一行：`ValueNode.nextForGet()` 摘掉节点后**没把值返回**（队首非 idle 时"扫到却拿不到"）⇒ 池项凭空消失、`s` 多记 ⇒ 攒满后永久卡死；已修 + `check` 异常安全 + 自愈泛化 + `destroy` 计数同步 + 弱引用池同类修复，`f_pool` **29/29**；见 7.2 |
 | — | 重复归还的强约束 | ⬜ | **决定：暂不改（2026-10-04）** —— 容量护栏（方案 A）不解决问题；方案 B（给 `V` 加 `Hashable & Equatable` 约束或改句柄 API）与"支持任意类型对象"的目标冲突 ⇒ 保持现状（低频自检 + `Release` 幂等），见 7.3 |
 | 7.12 | `f_pool` 全量用例**偶发** SIGSEGV | ⬜ | 仅 2026-10-03 观察到一次（栈顶 `UnitKeyPool.size` 的运行时泛型 MTable 空指针）；2026-10-04 做了对照（默认并行 5 轮 + `--parallel 1` 2 轮）**仍未复现**，触发条件未知 —— 只能等再现时留栈；见 7.12 |
 | 7.13 | `f_store` 的 6 个 WAL 用例 ERROR（**既有**） | ✅ | 2026-10-04 定位并修复：`SegmentLog` 预分配 64MB 的文件被用例按"文件长度"整读（并发时撑爆堆）⇒ 测试侧改为"有界前缀读 + 就地改 1 字节"，`f_store` **204/204**；见 7.13 |
@@ -440,6 +440,8 @@ PDIAG] DEQUE-MISS s=1024 nodes=0 idles=0
 
 > 说明：脱钩的**触发源**（节点为何在并发下被摘掉而 `s` 未减）仍未定位到具体一行；上述自愈按 §6.6 第 1 条
 > “一旦脱钩池要能自愈”实现，并把现场以 `WEDGE-HEAL` 告警暴露出来，便于下次直接抓现场。
+>
+> **2026-10-04 收口**：触发源已定位到 `ValueNode.nextForGet()` 丢值（见 §7.2）并已修复；本节的自愈机制保留并泛化。
 
 #### 6.8.3 本轮改动清单（最小 diff）
 
@@ -498,6 +500,9 @@ PDIAG] DEQUE-MISS s=1024 nodes=0 idles=0
 
 > 结论：第 1 条的“脱钩”已按“不变量成立 + 自愈兜底 + 现场告警”处理完毕；**触发源未定位到具体一行**，
 > 若日后再现，可直接用 `WEDGE-HEAL` 告警 + 6.8.5 的探针思路（把校验放进临界区）继续收口。
+>
+> **2026-10-04 收口**：已定位到具体一行 —— `ValueNode.nextForGet()` 摘掉节点后把值丢了（见 §7.2）；
+> 本节的探针思路（把校验放进临界区、只看权威状态）正是最终抓到这个 bug 的方法。
 
 ---
 
@@ -601,16 +606,38 @@ EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已�
   `unknownFrameVersionMustThrow`（0/2/0xff ⇒ 抛）、`partiallyReceivedHeaderMustThrow`（1/5 字节半头 ⇒ 抛）；
   `f_protocol` **62/62**（原 60/60 + 2）。
 
-### 7.2 池记账脱钩的**触发源**未定位（🟡 已有自愈兜底）
+### 7.2 池记账脱钩的**触发源**：✅ 已定位并修复（2026-10-04）
 
-- 现状：历史上出现过「`s` 记着 1024 已满、队列里 0 个节点、也没有借出项」的脱钩，使 `KeyPool.get` 死循环忙等（当时 CPU 2200%+）。
-  已实现 `reconcileIfWedge()` 自愈 + 低频 `DEQUE-SELFCHECK` 告警，但**触发源没有定位到具体一行**：
-  追查探针在临界区外采集，无法区分「真丢项」与「并发中间态」（详见 6.8.5）。
-- 若再现：直接以 `WEDGE-HEAL` / `DEQUE-SELFCHECK` 告警为线索，把不变量校验放进 `head.globalLock` 临界区内再采一次现场。
-- **现场采集已加强（2026-10-04）**：不变量的清点与比对本就在 `head.globalLock` 临界区内；现在告警还带
-  「最近一次进入的操作」——`SyncDeque` 用 `lastOp`（代号见 `DEQUE_OP_NAMES`：insertHead/insertTail/prepend/append/remove/check/reconcile）
-  在每个操作入口记一次，`DEQUE-SELFCHECK` 与 `WEDGE-HEAL` 都会打印它 ⇒ 再现时能直接看出**是哪类操作在跑**，
-  而不是只知道"脱钩了"。
+- 历史症状：`s` 记着 1024（池上限）已满、队列里 0 个节点、也没有借出项 ⇒ `KeyPool.get` 再也取不到项；
+  旧实现在那里是 `while(running.load())` 无 sleep 忙等（CPU 2200%+、且无日志）。
+- **触发源（已定位到具体一行）**：`ValueNode.nextForGet()`（`LinkedNode.cj`，**队首节点不是 idle** 时向后续扫描的路径）
+  在 `synchronized(globalLock){ … x.value }` 里摘掉节点后**没有把值 return 出去**，块的值又被紧随的
+  `sleep(Duration.Zero)` 丢掉 ⇒ **池项被摘掉却没人拿到**：值凭空消失、`s` 不减（还继续记着它）。
+  - 触发条件很常见：空闲巡检（`KeyPool.startCheckingSchedule` → `pool.check`）会把节点标记成 CHECKING，
+    只要被标记的正好是**队首**节点，此刻并发上来的 `get` 就走这条扫描路径 ⇒ 每发生一次丢一个池项、`s` 多记一个。
+    累积到 `s == totalSize` 而实际池项为 0 时，`KeyPool.get` 认为「池已满且没有空闲项」⇒ 既不新建也取不到
+    ⇒ 永久卡死。这与历史症状（含「队列里 0 个节点」）完全吻合，也解释了当时为什么抓不到日志——这条路径不抛异常。
+  - 修法：摘到的值放进局部 `taken` 再 `return`；内层复检失败则前移继续扫描（`LinkedNode.cj`）。
+- **同时修掉的两处同类隐患**（都会造成「池项还在/记着，却取不到」）：
+  1. `check` 循环的异常安全：`ValueNode.check` 在 `checker` 抛异常时先 `setIdle()` 再往外抛；
+     `SyncDeque.check` 改用 `try/finally` 保证「已标记 CHECKING、还没被处理」的节点一定还原
+     —— 原来除 `!running()` 以外的任何异常退出（checker/taskPusher 抛异常）都会把它永久留在 CHECKING：
+     既取不到、也不会再被 `prevForChecking` 挑中清理。
+  2. `BaseKeyPool.destroy()` 不同步全局计数 `s`（改为 `BasePool.destroy` 返回清掉的数量，`s.fetchSub(...)`）
+     ⇒ 原来 destroy 之后 `size` 仍报旧值，会让后续 `get` 以为池已满。
+  3. `WeakSyncDeque.remove()` 只匹配 `WeakRef<Box<T>>`：引用类型（对象本身）会「节点已摘掉却返回 None」
+     ⇒ 与 1 同类的池项凭空丢失（`Mode.WeakFifo/WeakLifo` 这条路径当前仓库里没人用，属潜伏问题）。
+- **自愈泛化**（`reconcileIfWedge`，仍在「`remove()` 一个都取不到」时触发）：**队列是权威**，两种形态都校正 ——
+  ①「滞留项」：队列上还有非 idle 节点且**没有 check 在飞**（`checkers == 0`）⇒ 全部还原为 idle
+  （该判据不依赖计数，`out > 0` 时也照样能救）；②「计数脱钩」：**没有借出项**时 `s != 节点数` ⇒ `s` 拉回节点数。
+  告警带 `stranded/bookkeeping` 明细、`out`、`lastOp`；`DEQUE-SELFCHECK` 另加「无可取项」形态
+  （打印 `idle/checking/在飞 check 数`）。
+- 验证：`f_pool` **29/29**（原 23/23 + 6 个新用例）——
+  `testScanForwardMustReturnTakenElement`（队首非 idle 时借用必须真的返回所摘项：修前返回 None 且项被摘走）、
+  `testCheckerThrowingMustNotLoseElement`、`testTaskPusherThrowingMustNotLoseElement`、
+  `testWeakDequeRemoveMustReturnElement`（弱引用池同类丢值）、
+  `testStrandedCheckingMustBeHealed`（人为制造滞留 ⇒ 下一次取不到时自愈救回）、`BaseKeyPoolTest.destroyMustSyncSize`；
+  依赖模块回归：`fdemo` 全量构建 **BUILD_EXIT=0**、`f_rpc` 用例 **2/2**。
 
 ### 7.3 重复归还（同一对象 `giveBack` 两次）仍会插入重复节点（🟡 只能检出）
 

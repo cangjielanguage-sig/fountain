@@ -63,7 +63,9 @@ struct BaseKeyPool<K, V> <: IKeyPool<K, V> where K <: Hashable & Equatable<K> {
     }
     public func destroy(fn: (K, V) -> Unit): Unit {
         for((k, p) in map){
-            p.destroy{v => fn(k, v)}
+            // 队列自己的计数由 check/onRemoved 维护；这里的全局计数 s 也必须同步减掉，
+            // 否则 destroy 之后 size 仍报旧值、后续 get 会以为池已满而不再新建池项（见 bug.md 7.2）
+            s.fetchSub(p.destroy{v => fn(k, v)})
         }
     }
     public prop size: Int64 {
