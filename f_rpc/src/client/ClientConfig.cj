@@ -223,7 +223,7 @@ public class ClientConfig {
         // LoadBalance 的 TreeMap 以各节点的累计权重为键（K_i = w_1 + ... + w_i），
         // 取节点 = 第一个键 >= v ⇒ 节点 i 的桶是 (K_{i-1}, K_i]，v 落在桶内的概率就是权重占比。
         // 原来传的是权重最小值/最大值 ⇒ 等权 [1.0,1.0] 时区间是 [0,1]，两个节点都只会命中前一个
-        //（实测 A=100/B=0，见 .autocode/bugs/bug.md）。
+        //（实测 A=100/B=0，见 .autocode/bugs/bug-archived-20261004-2.md）。
         var sum = 0.0f64
         for((w, _) in addresses){
             sum += w
@@ -234,7 +234,7 @@ public class ClientConfig {
             // 轮询：step 固定 1.0，从「桶中点」0.5 起步（起点落在桶边界上会永远归前一个节点）；
             // 累计键原点必须是 0（= origin），不能与取值起点 0.5 混用 ——
             // 否则桶边界变成 1.5/2.5，取值 0.5/1.5/2.5 正好踩在边界上，永远命中第一个节点
-            // （实测 A=100/B=0，见 .autocode/bugs/bug.md）。整数权重下比例精确。
+            // （实测 A=100/B=0，见 .autocode/bugs/bug-archived-20261004-2.md）。整数权重下比例精确。
             case 'roundrobin' => builder.roundRobin(1.0f64, 0.5f64, sum, origin: 0.0f64)
             case x => throw LoadBalanceException("unsupported loadbalance algorithm: ${x}")
         }

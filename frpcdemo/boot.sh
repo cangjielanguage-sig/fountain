@@ -38,7 +38,7 @@ runServer(){
     #   rpcServer_port 只接受端口号（UInt16，见 f_rpc/README.md）⇒ 从“主机:端口”里取出端口，
     #   直接传 "127.0.0.1:1203" 会解析失败并回落到默认端口 1203（两个服务节点就会撞端口）。
     #   baseAddresses 除显式给的种子节点外还加上自己：服务节点自己也要出现在注册表里，
-    #   否则注册表报不出它的权重，客户端只能按缺省 1.0 分配（见 .autocode/bugs/bug.md）。
+    #   否则注册表报不出它的权重，客户端只能按缺省 1.0 分配（见 .autocode/bugs/bug-archived-20261004-2.md）。
     local addr=${1:-127.0.0.1:1203}
     if [[ "$addr" != *:* ]]; then
         addr="127.0.0.1:$addr"

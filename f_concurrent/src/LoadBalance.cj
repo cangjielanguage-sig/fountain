@@ -67,7 +67,7 @@ public class Float64Weight <: RandomWeight<Float64>{
     public func next(): Float64 {
         // 不能用 closed: true —— 那是给整数类型准备的（把区间扩成 [min, max] 要 +1），
         // 对浮点会把取值区间放大成 [min, max+1) ⇒ 权重比例整体失真
-        //（实测等权 [1,1]、区间 [0,2] 时命中率是 653:347，见 .autocode/bugs/bug.md）。
+        //（实测等权 [1,1]、区间 [0,2] 时命中率是 653:347，见 .autocode/bugs/bug-archived-20261004-2.md）。
         // 均匀分布取到端点的概率本来就为 0，[min, max) 与 [min, max] 等价。
         random.nextFloat64(min, max)
     }
@@ -132,7 +132,7 @@ class LoadBalanceIterator<D, R> <: Iterator<(D) -> R> {
     public func next(): ?(D) -> R {
         // 先走负载算法选定的位置（sub：从当前键往后的部分），走完再从头（itr）绕回。
         // 原来这里读的是 itr（整棵树、按键升序）⇒ 算法的选择从未生效，每次都命中键最小的节点
-        // （= 最先 add 的节点），负载均衡形同虚设：权重、随机、轮询全都不起作用（见 .autocode/bugs/bug.md）。
+        // （= 最先 add 的节点），负载均衡形同虚设：权重、随机、轮询全都不起作用（见 .autocode/bugs/bug-archived-20261004-2.md）。
         if(endsub){
             return itr.next()
         }else if(let Some(f) <- sub.next()){

@@ -20,7 +20,7 @@ import std.unittest.*
 import std.unittest.testmacro.*
 
 /**
- * 负载均衡的取值语义（见 .autocode/bugs/bug.md）：
+ * 负载均衡的取值语义（见 .autocode/bugs/bug-archived-20261004-2.md）：
  *
  * `LoadBalance` 的 TreeMap 以各节点的**累计权重**为键：K_i = w_1 + ... + w_i；取节点用
  * `tree.forward(v, inclusive: true)` 找第一个键 >= v ⇒ 节点 i 的「桶」是 (K_{i-1}, K_i]。

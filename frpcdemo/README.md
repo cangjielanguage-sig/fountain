@@ -148,4 +148,4 @@ grep -c '^{' server-1203.out      # 该节点实际服务了多少次
   - 服务端报 `Connection reset by peer`：多半是客户端进程异常退出导致的断链，去看客户端那边的异常。
 
 负载均衡（轮询/权重）曾经完全不生效（永远命中第一个节点），根因与修复记录在
-`../.autocode/bugs/bug.md` 第 2 部分。
+`../.autocode/bugs/bug-archived-20261004-2.md` 第 2 部分。

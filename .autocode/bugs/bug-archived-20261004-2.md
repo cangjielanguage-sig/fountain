@@ -1,9 +1,14 @@
-# Bug 分析报告（当前活动）：客户端解码崩溃 与 客户端负载均衡（轮询/权重）
+# Bug 分析报告：客户端解码崩溃 与 客户端负载均衡（轮询/权重）（已归档）
+
+> **归档说明（2026-10-04）**：本报告已归档到 `.autocode/bugs/bug-archived-20261004-2.md`，
+> 两个问题均已关闭 —— 第 1 部分：空集合 / 空映射解码越界（`f_codec` 16/16，端到端 100 次调用无异常）；
+> 第 2 部分：负载均衡不生效（`f_concurrent` 6 个新用例 + frpcdemo 三场景 50:50 / 67:33 / 67:33）。
+> 后续新问题请新建 `.autocode/bugs/bug.md`（或 `bugs/bug-<日期>.md`）。
 
 - 日期：2026-10-04
 - 分支：`fix/empty-payload-decode`（worktree `.worktrees/fix-empty-payload-decode`，基于 `sts/1.3.x`）
-- 修复提交：`6518cb48`（第 1 部分）；第 2 部分见文末
-- 历史报告（已归档）：`.autocode/bugs/bug-archived-on-20261004.md`
+- 修复提交：`6518cb48`（第 1 部分）、`21a9ab7b`（第 2 部分）
+- 上一份归档报告：`.autocode/bugs/bug-archived-on-20261004.md`
   —— 其中仍开着的两项：**§7.12**（`f_pool` 偶发 SIGSEGV，根因未证）、**§7.3**（重复归还同一对象，已裁定暂不改）。
 
 ## 状态总览
