@@ -42,12 +42,11 @@ protected const RPC_CODEC_BYTES_POOL_MIN_SIZE = 'rpc_codecBytesPoolMinSize'
 protected const RPC_CODEC_BYTES_POOL_MAX_SIZE = 'rpc_codecBytesPoolMaxSize'
 protected const RPC_CODEC_BYTES_POOL_ARRAY_SIZE = 'rpc_codecBytesPoolArraySize'
 /**
- * 两个池共用的等待上限（**秒**）：池耗尽时 `get(timeout: Duration.Max)` 超过它就 WARN 并返回 None；
- * 配成 ≤ 0 表示真无限等待（实现仍每轮让出 CPU）。缺省 30s，与 f_pool / f_codec 的默认一致。
+ * 两个池共用的等待上限：池耗尽时 `get(timeout: Duration.Max)` 超过它就 WARN 并返回 None；
+ * 配成 ≤ 0（如 `0s`）表示真无限等待（实现仍每轮让出 CPU）。缺省 30s，与 f_pool / f_codec 的默认一致。
+ * 配置值按 `Duration.toString()` 的格式书写，例如 `rpc_codecPoolMaxWaiting=30s`。
  */
 protected const RPC_CODEC_POOL_MAX_WAITING = 'rpc_codecPoolMaxWaiting'
-
-private const CODEC_POOL_DEFAULT_MAX_WAITING_SECONDS = 30
 
 private func codecBufferPoolInitSize(): Int64 {
     Config.getValue<Int64>(RPC_CODEC_BUFFER_POOL_INIT_SIZE) ?? 1024
@@ -70,13 +69,13 @@ private func codecBytesPoolMaxSize(): Int64 {
 private func codecBytesPoolArraySize(): Int64 {
     Config.getValue<Int64>(RPC_CODEC_BYTES_POOL_ARRAY_SIZE) ?? 4096
 }
-/** 缺省 30s；配成 ≤ 0 视为"真无限等待"。 */
+/** 缺省 30s；配成 ≤ 0（如 `0s`）视为"真无限等待"。 */
 private func codecPoolMaxWaiting(): Duration {
-    let seconds = Config.getValue<Int64>(RPC_CODEC_POOL_MAX_WAITING) ?? CODEC_POOL_DEFAULT_MAX_WAITING_SECONDS
-    if (seconds <= 0) {
+    let duration = Config.getData<Duration>(RPC_CODEC_POOL_MAX_WAITING) ?? Duration.second * 30
+    if (duration <= Duration.Zero) {
         Duration.Max
     } else {
-        Duration.second * seconds
+        duration
     }
 }
 private let codecPoolsInitialized = AtomicBool(false)

@@ -24,4 +24,22 @@ public class ORMConfigTest {
     public func testORMConfig(): Unit {
         ORMConfig.refresh{}
     }
+    /**
+     * `orm_databasePoolMaxWaiting` 的值按 `Duration.toString()` 解析（如 `30s`、`1m`）：
+     * ≤ 0（如 `0s`）表示真无限等待，非法值退回默认 30s。
+     */
+    @TestCase
+    public func testPoolMaxWaiting(): Unit {
+        let key = ORMConfig.databasePoolMaxWaiting
+        Config.set([(key, '45s')])
+        @Expect(ORMConfig.getPoolMaxWaiting(), Duration.second * 45)
+        Config.set([(key, '1m')])
+        @Expect(ORMConfig.getPoolMaxWaiting(), Duration.minute)
+        Config.set([(key, '0s')])
+        @Expect(ORMConfig.getPoolMaxWaiting(), Duration.Max)
+        Config.set([(key, 'abc')])
+        @Expect(ORMConfig.getPoolMaxWaiting(), Duration.second * 30)
+        Config.set([(key, '30s')])
+        @Expect(ORMConfig.getPoolMaxWaiting(), Duration.second * 30)
+    }
 }
