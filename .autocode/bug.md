@@ -34,7 +34,7 @@
 | — | 重复归还的强约束 | ⬜ | **决定：暂不改（2026-10-04）** —— 容量护栏（方案 A）不解决问题；方案 B（给 `V` 加 `Hashable & Equatable` 约束或改句柄 API）与"支持任意类型对象"的目标冲突 ⇒ 保持现状（低频自检 + `Release` 幂等），见 7.3 |
 | 7.12 | `f_pool` 全量用例**偶发** SIGSEGV | ⬜ | 仅 2026-10-03 观察到一次（栈顶 `UnitKeyPool.size` 的运行时泛型 MTable 空指针）；2026-10-04 做了对照（默认并行 5 轮 + `--parallel 1` 2 轮）**仍未复现**，触发条件未知 —— 只能等再现时留栈；见 7.12 |
 | 7.13 | `f_store` 的 6 个 WAL 用例 ERROR（**既有**） | ✅ | 2026-10-04 定位并修复：`SegmentLog` 预分配 64MB 的文件被用例按"文件长度"整读（并发时撑爆堆）⇒ 测试侧改为"有界前缀读 + 就地改 1 字节"，`f_store` **204/204**；见 7.13 |
-| 7.14 | `f_store` 全量用例在 `/tmp` 留 ~4GB 残留 | ⬜ | 几十个 `Concurrency_*`/`Integration_*` 目录各含 64MB 预分配文件，用例结束不清理；建议 `atExit`/`finally` 清理或把测试用 `maxFileSize` 调小；见 7.14 |
+| 7.14 | `f_store` 全量用例在 `/tmp` 留 ~4GB 残留 | ✅ | 2026-10-04 修复：新增测试专用 `TestTmpDirs_test.cj`，包初始化与进程退出各清一次 `/tmp/f_store*`；验证 `f_store` 204/204 且运行后无残留（修前每次 +3.9~4.1GB）；见 7.14 |
 | 7.9 | `f_net` 用例长期编译不过（读写路径无回归覆盖） | ✅ | 2026-10-04 迁移到 `Server<T>`/`Client<T>`：`cjpm test` = **14/14**（含 PING→ACK、executor 请求/响应 + 载荷逐字节往返）；见 7.9 |
 | 7.11 | 对象类型的注册应由框架自动完成（含**嵌套**） | ✅ | 2026-10-04 两条路径：`@RPCStub`/`@RPCSkeleton` 登记顶层参数/返回类型；`@DataAssist[fields]` 在包初始化时自登记（覆盖嵌套，f_codec 解码未命中时拉取）。删掉 demo 手工 `registerType<EchoPO>()` 后 E2E 仍跑通，且嵌套 `EchoPO.inner` 出现在 JSON 里；见 7.11 |
 
@@ -927,11 +927,17 @@ demo 端到端与之前一致：分隔线 ×2、客户端 JSON、服务端 `CONS
   原则：**预分配文件的实际数据长度不能从 `file.info.size` 推断** —— 需要真实长度时走 `SegmentedLog` 的游标/mmap 视图。
 - 验证：`f_store` **204/204**（`FAILED: 0, ERROR: 0`, `EXIT=0`）。
 
-### 7.14 `f_store` 全量用例在 `/tmp` 留约 4GB 残留（2026-10-04 发现，低优先）
+### 7.14 `f_store` 全量用例在 `/tmp` 留约 4GB 残留：✅ 已修（2026-10-04）
 
 - 现象：跑完一次 `cjpm test`，`/tmp/f_store_test` 约 **3.9~4.1GB**、`/tmp` 合计 4.5GB；里面是几十个
-  `Concurrency_*` / `Integration_*` 目录，每个含 64MB 预分配的 WAL/SST 文件（`SegmentedLog` 的老配置）。
-- 原因：这些用例正常结束时**没有** `remove(dir, recursive: true)`（或只删了一部分）；用例失败时更不会清理
-  （本轮排查中一度累积到 4.1GB）。不是功能缺陷，但会把 `/tmp` 当磁盘吃掉（CI 上尤其危险）。
-- 建议：给每个用例的目录加 `atExit`/`finally` 清理，或统一把测试用的 `maxFileSize` 调小
-  （如 4KB~1MB，预分配就不再是 64MB）。
+  `Concurrency_*` / `Integration_*` / `Store_*` / `PrefixIterator_*` / `SSTable_*` 目录，每个含 64MB
+  预分配文件（`SegmentedLog` 按 `maxFileSize` fallocate + mmap）。
+- 原因：这些用例的 `getTestDir()` 只在自己**开始时**清目录（start-clean），结束时（尤其中途失败）不管；
+  WAL 用例的 `cleanWAL()` 同理 ⇒ 每跑一次就累积一批。
+- 修法：新增测试专用文件 `f_store/src/TestTmpDirs_test.cj`（`_test.cj` 结尾 ⇒ 只在测试构建里编译，不进库产物）：
+  `/tmp` 下以 `f_store` 开头的顶层目录都视为本模块用例的临时数据，在 **包初始化（用例开始前）** 与
+  **进程退出** 各清一次（`Directory.walk('/tmp')` 是非递归的 ⇒ 只处理顶层项 + 前缀匹配）；
+  需要保留现场排查时把 `KEEP_TEST_TMP_DIRS` 置 true。一处改动覆盖所有现有目录，新增用例沿用 `f_store` 前缀即可自动纳入。
+- 验证：`f_store` **204/204**（`EXIT=0`）；运行前后 `/tmp` 都是 **150M**、运行后 `/tmp/f_store*` **为空**
+  （修前每次运行 +3.9~4.1GB）。
+- 注意：清理按前缀删 `/tmp/f_store*` ⇒ 不要在同一台机上并行跑两份 f_store 用例（先退出者会删掉另一份的目录）。
