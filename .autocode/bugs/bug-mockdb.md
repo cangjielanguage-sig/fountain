@@ -14,7 +14,7 @@
 | 中 | 5 |
 | 低危 / 待验证 | 9 |
 
-> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4`、§2.2 `MOCK-5`、§2.3 `MOCK-6`、§2.4 `MOCK-7`（①③）已修复 ⇒ 待修严重级 **0** 条、中危 **1** 条（见各自修复标记）。其中 `MOCK-1`/`MOCK-2` 已并入 `sts/1.3.x`（合并提交 `12c19d94`）；`MOCK-3`~`MOCK-7` 在分支 `fix/mock-1-query-isolation`（`e904ac87`/`ba04b79f`/`80d67a36`/`edb10235` + 本次提交），待下次同步。标记补录提交：`fa822423`、`cd429689`。
+> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4`、§2.2 `MOCK-5`、§2.3 `MOCK-6`、§2.4 `MOCK-7`（①③）、§2.5 `MOCK-8` 已修复 ⇒ **待修严重级 0 条、中危 0 条**（见各自修复标记；§2.4 的 ② 与 §3 的低危/待验证仍未动）。其中 `MOCK-1`/`MOCK-2` 已并入 `sts/1.3.x`（合并提交 `12c19d94`）；`MOCK-3`~`MOCK-8` 在分支 `fix/mock-1-query-isolation`（`e904ac87`/`ba04b79f`/`80d67a36`/`edb10235`/`7704cd91` + 本次提交），待下次同步。标记补录提交：`fa822423`、`cd429689`、`cee6dc6d`。
 
 **建议修复顺序**：
 
@@ -223,7 +223,14 @@ DT：断言三个属性返回契约值、不抛异常。
 
 DT：语句复用两次断言各自参数；未绑定位置断言与 `setNull` 可区分；负索引断言异常类型。
 
-### 2.5 [中｜正确性] `MOCK-8` `toThrowOnExecuting` 在 `execution` 之后判定：声明抛异常的语句仍先跑完夹具（f_mockdb）
+### 2.5 [中｜正确性] `MOCK-8` `toThrowOnExecuting` 在 `execution` 之后判定：声明抛异常的语句仍先跑完夹具（f_mockdb） → ✅已修复（2026-10-04）
+
+**✅ 修复标记（2026-10-04）**：分支 `fix/mock-1-query-isolation`（同一 worktree，在 MOCK-7 之后追加提交），**代码、用例、本标记在同一提交**（提交信息 `fix(f_mockdb): MOCK-8 toThrowOnExecuting 判定前移到夹具之前（bug-mockdb §2.5 修复标记）`；提交哈希由下一次标记同步补录）。
+
+- 改动（`src/Statement.cj`）：`query()` / `update()` 里的 `toThrowOnExecuting` 判定从「夹具执行之后」前移到「`clearQueryResult()` 之后、`MOCKDB.execution(sql, args)` **之前**」⇒ 声明失败的语句不执行夹具、不产生结果（与真驱动一致）；参数槽的 `try/finally` 清空与 `MockUpdateResult` 快照逻辑不变（本次抛异常发生在清参数之前，参数槽保持为空即可）。
+- 用例：`src/mockdb_core_test.cj` 新增 `testThrowOnExecutingSkipsFixture`（夹具记录被调用次数 + `toThrowOnExecuting = true`：断言抛 `MockDbException` **且** 夹具未被调用、`MOCKDB.getQueryResultRows()` 为空）；同时**调整既有 `testClearResetsFixture`** —— 它原先依赖「抛异常前夹具已执行」来填充夹具，改为「先正常执行一次查询填充、再置标志」，验证意图不变（`clear()` 复位全部夹具）。
+- 测量证据：**修复前** PASSED 46 / **FAILED 1**（EXIT=1）：`testThrowOnExecutingSkipsFixture` 在 `@Assert(0, executed.size)` 失败（left 0 / right 1 —— 夹具被执行过，行也确实写进了结果集）；**修复后** = **47/47 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**，编译警告 9 条无新增。日志 `/tmp/mock8_before.log`、`/tmp/mock8_after.log`。
+- 兼容性：既有异常用例 `testThrowOnExecutingQuery` / `testThrowOnExecutingUpdate` 只断言抛异常 ⇒ 不受影响；`f_orm` 不设该标志 ⇒ 无影响。
 
 位置：`src/Statement.cj:49-55`（`update()`：先 `MOCKDB.execution(sql, args)` 再判 `toThrowOnExecuting`）、`56-62`（`query()` 同样）
 

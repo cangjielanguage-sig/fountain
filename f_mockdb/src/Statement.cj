@@ -58,14 +58,15 @@ public class MockStatement <: Statement {
     public func update(): UpdateResult {
         //每次执行前清掉上一次的结果，保证本次只看到本次夹具写入的行与列信息
         MOCKDB.clearQueryResult()
+        //声明抛异常时直接失败：不执行夹具、不产生结果（与真驱动一致）
+        if(MOCKDB.toThrowOnExecuting){
+            throw MockDbException()
+        }
         try {
             MOCKDB.execution(sql, args)
         } finally {
             //本次执行结束即清空参数槽：语句复用时不再带上一次绑定的参数
             args.clear()
-        }
-        if(MOCKDB.toThrowOnExecuting){
-            throw MockDbException()
         }
         //取快照：本次执行写入的 lastInsertId / rowCount 就是本对象的值
         MockUpdateResult(MOCKDB.lastInsertId, MOCKDB.rowCount)
@@ -73,14 +74,15 @@ public class MockStatement <: Statement {
     public func query(): QueryResult {
         //每次执行前清掉上一次的结果，保证本次只看到本次夹具写入的行与列信息
         MOCKDB.clearQueryResult()
+        //声明抛异常时直接失败：不执行夹具、不产生结果（与真驱动一致）
+        if(MOCKDB.toThrowOnExecuting){
+            throw MockDbException()
+        }
         try {
             MOCKDB.execution(sql, args)
         } finally {
             //本次执行结束即清空参数槽：语句复用时不再带上一次绑定的参数
             args.clear()
-        }
-        if(MOCKDB.toThrowOnExecuting){
-            throw MockDbException()
         }
         MockQueryResult()
     }

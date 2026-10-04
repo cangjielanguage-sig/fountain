@@ -455,18 +455,14 @@ public class MockDBCoreTest {
             MOCKDB.lastInsertId = 7
             MOCKDB.rowCount = 3
         }
-        MOCKDB.toThrowOnExecuting = true
         let meta = HashMap<String, String>()
         meta['k'] = 'v'
         MOCKDB.metadata = meta
         let conn = MockConnection()
-        try {
-            let _ = conn.prepareStatement('SELECT v FROM t').query()
-            @Assert(false)
-        } catch (e: MockDbException) {
-            @Assert(true)
-        }
+        let _ = conn.prepareStatement('SELECT v FROM t').query()
+        MOCKDB.toThrowOnExecuting = true
         @Assert(1, MOCKDB.getQueryResultRows().size)
+        @Assert(3, MOCKDB.rowCount)
         //显式清夹具（提升为 public 后包外也能调）后一切回默认值
         MOCKDB.clear()
         @Assert(0, MOCKDB.getQueryResultRows().size)
@@ -532,5 +528,28 @@ public class MockDBCoreTest {
         } catch (e: SqlException) {
             @Assert(true)
         }
+    }
+
+    @TestCase
+    public func testThrowOnExecutingSkipsFixture(): Unit {
+        MOCKDB.clear()
+        let executed = ArrayList<Bool>()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            executed.add(true)
+            MOCKDB.addQueryResultColumnInfo(name: 'v', nullable: false, typeName: 'SqlInteger')
+            MOCKDB.addQueryResultRow([1])
+        }
+        MOCKDB.toThrowOnExecuting = true
+        let conn = MockConnection()
+        let stmt = conn.prepareStatement('SELECT v FROM t')
+        try {
+            let _ = stmt.query()
+            @Assert(false)
+        } catch (e: MockDbException) {
+            @Assert(true)
+        }
+        //声明抛异常的语句不应执行夹具、不应留下结果（修复前夹具已执行且行已写入结果集）
+        @Assert(0, executed.size)
+        @Assert(0, MOCKDB.getQueryResultRows().size)
     }
 }
