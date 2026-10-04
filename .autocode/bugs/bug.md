@@ -13,9 +13,9 @@
 | 严重度 | f_orm | f_mvc | f_bean | f_aspect | 跨模块 | 合计 |
 |---|---|---|---|---|---|---|
 | 严重 | 3 | 4 | 1 | 5 | 1 | **14** |
-| 中 | 7 | 8 | 4 | 4 | 0 | **23** |
+| 中 | 7 | 8 | 4 | 4 | 1 | **24** |
 | 低 / 待验证 | 14 | 13 | 9 | 8 | 0 | **44** |
-| 合计 | 24 | 25 | 14 | 17 | 1 | **81** |
+| 合计 | 24 | 25 | 14 | 17 | 2 | **82** |
 
 **建议修复顺序**（即严重级内部的落地顺序）：
 
@@ -277,7 +277,7 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 
 ---
 
-## 2. 中（23 条）
+## 2. 中（24 条）
 
 排序：语义/正确性 → 资源与状态 → 性能（按波及面从大到小）。
 
@@ -372,6 +372,28 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 ### 2.23 [中｜性能] `ASP-7` 链里存切面**名字字符串**，每次调用重做查找（f_aspect）
 
 `src/Aspects.cj:42`（`f_bean/src/BeanFactory.cj:208-234, 314-316`：`beans.get` + `isSubtypeOf` + 日志闭包）。修法：建链时解析成 `Aspect` 实例并缓存。
+
+### 2.24 [中｜正确性] `X-2` `orm_databasePoolMaxWaiting` 的 Duration 配置解析与回退不符约定（跨模块：f_data/f_config）
+
+> 2026-10-04 复跑 f_orm 全量用例时新发现；**追加在 §2 末尾以保持既有编号不变**，定级待复核。
+
+位置：用例 `f_orm/src/wrap/ORMConfig_test.cj:27-44`（用例本身未改）；失败栈落在 `f_config/src/Config.cj:178/215` → `f_data/src/base/DataParsable.cj:30/58`（`Duration.tryParse`）。
+
+证据（`cjpm test` 全量，f_orm）：
+
+```
+[ ERROR  ] CASE: testPoolMaxWaiting
+Expect Failed: `(ORMConfig.getPoolMaxWaiting() == Duration.second * 45)`   left: 4s    right: 45s
+Expect Failed: `(ORMConfig.getPoolMaxWaiting() == Duration.minute)`       left: 106751991167300d15h30m7s999ms999us999ns    right: 1m
+An exception has occurred: fountain::f_data.exception.DataParsableException: abc cannot be parsed to Duration
+Summary: TOTAL: 28   PASSED: 27, SKIPPED: 0, ERROR: 1, FAILED: 0
+```
+
+影响：`orm_databasePoolMaxWaiting`（连接池最大等待，按用例注释「≤0 表示真无限等待、非法值退回默认 30s」）读出来的值与配置文本不符 —— 输入 `45s` 得到 `4s`、`1m` 得到 `Duration.Max`；非法值 `abc` 直接抛 `DataParsableException` 而不回退 ⇒ 生产里配错一个字符可能让启动直接失败，或把等待时长设成错误值。
+
+与 §1.1 的关系：调用链（`f_config`/`f_data`）与 `ORM-1` 的改动（`SqlArgs`/`SqlExecutor`）无交集；其余 27 例全过（含新增的 3 例）⇒ 属**既有缺陷**。
+
+修法方向：先补 `f_data` 层 `Duration.tryParse` 的用例钉住约定（`45s`/`1m`/`0s`/`abc` 各自的期望），再决定是改解析规则还是改调用方（`Config.getData`）的回退分支。
 
 ---
 
