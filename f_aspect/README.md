@@ -301,10 +301,10 @@ public class FuncAnnotationRouteRule <: RouteRule {
 ```cj
 /**
  * 目标函数参数都有指定类型注解将被织入，本规则不适用通配符
- * 参数是注解类型的全限定名，多个注解类型用&分割，每个注解类型依次对应一个参数。
+ * 参数是注解类型的全限定名，多个注解类型用&分割，每个注解类型依次对应一个参数（个数必须与参数个数一致）。
  * 忽略某个参数的注解需要使用*占位，
- * 比如*,a.b.c.AnnotationType表示目标函数有两个参数，忽略第一个参数的注解，第二个参数必须有a.b.c.AnnotationType注解
- * a.Annotation1,*,b.Annotation2表示目标函数有三个参数，忽略第二个参数的注解，第一第三个参数必须有a.Annotation1和b.Annotation2
+ * 比如*&a.b.c.AnnotationType表示目标函数有两个参数，忽略第一个参数的注解，第二个参数必须有a.b.c.AnnotationType注解
+ * a.Annotation1&*&b.Annotation2表示目标函数有三个参数，忽略第二个参数的注解，第一第三个参数必须有a.Annotation1和b.Annotation2
  */
 public class ArgAnnotationsRouteRule <: RouteRule {
     public const ArgAnnotationsRouteRule(public let annotationTypes: String) {}
