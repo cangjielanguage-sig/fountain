@@ -162,6 +162,7 @@ public static func get(qualifiedName: String): TypeInfo {
 - 改动：`f_aspect/src/Aspects.cj` doProceed —— 链只捕获不可变的 `qualifiedFuncInfo`；层闭包把 `funcInfo.setArgs(args)` 换成 `InvocationFuncInfo(qualifiedFuncInfo, args)` 后交给切面（实参逐调用、逐层传递）。链仍按 `(类型, 函数)` 只在首次调用构建、链尾仍固化首次 `callee`（§1.3 判定的设计不动）。`f_aspect/src/QualifiedFuncInfo.cj`：`_args` 改 `private let`、删 `setArgs`（全仓唯一调用点已移除）；`f_aspect/README.md` 的 `InvocationFuncInfo` 片段同步（`var`→`let`）。
 - 用例（f_aspect 原先没有测试目录，本提交新建）：`aspect_args_race_test.cj`（并发串台回归：切面无状态、不加锁、不读 args，用 `AtomicBool` 制造确定性交错）、`aspect_chain_capture_test.cj`（每次调用各自的 info、实参与元数据正确；切面经 `point()` 改造实参的语义保留）。
 - 测量证据：**修前** `T1 传入实参 1，业务方法实收 2；T2 传入实参 2，业务方法实收 2`，`Assert Failed: (r1 == 1)`，`FAILED: 1`（EXIT=1）；**修后** `T1 传入实参 1，业务方法实收 1；T2 传入实参 2，业务方法实收 2`，三条用例 `PASSED: 3, FAILED: 0, ERROR: 0`、`cjpm test success`（EXIT=0）。机制用例的实测行：`切面拿到的 info 与本次入参是同一实例（第1/2次）：false/false`、`两次拿到的 info 是同一实例：false`、`切面在两次调用里看到的实参：1/2`、`切面把实参 7 改成 100，业务方法实收 100`。
+- 后续（2026-10-04，同一分支 `fix/asp-2`）：按用户要求把 `InvocationFuncInfo` 从 `class` 改为 `struct`（值类型、不可变、按值传递）——「跨调用共享参数槽」在语言层面不再可能；用例改为值语义断言（struct 下对象身份断言无意义）；三条用例仍 `PASSED: 3, FAILED: 0`；`f_aspect/README.md` 的 `InvocationFuncInfo` 片段与说明同步为 `struct`。
 - 未覆盖：`f_orm`/`f_rpc` 未重跑构建——本次不改公开 API（两模块只是实现 `Aspect`、读 `funcInfo.args`），如需可单独 `cjpm build`。
 
 位置：`src/Aspects.cj:41`（配合 `:47`）
