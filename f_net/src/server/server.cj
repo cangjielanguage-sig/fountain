@@ -129,7 +129,10 @@ public class Server<T> <: Resource where T <: DataFields<T> {
                     let req = try {
                         Message.decode<T>(buffer)
                     } catch(e: InputClosedException){
-                        log.warn('tcp closed', e)
+                        // 对端干净关闭（读到 EOF）。本工程的发现循环每轮重建连接，服务端会频繁看到这种收尾；
+                        // 记 WARN + 整条栈会把真正的解码/执行错误淹没（实测一次 70s E2E 刷 140 条，见 bug.md 7.5），
+                        // 故降为 DEBUG 且不带栈（该异常本身只说明“读不到字节”，没有额外信息）。
+                        log.debug{'tcp closed'}
                         try{
                             buffer.close()
                         }catch(_){}
@@ -156,7 +159,7 @@ public class Server<T> <: Resource where T <: DataFields<T> {
                             buffer.transfer(m)
                         }
                     }catch(e: InputClosedException){
-                        log.warn('tcp closed', e)
+                        log.debug{'tcp closed'}          // 同上：对端正常收尾，不刷 WARN 栈
                         try{
                             buffer.close()
                         }catch(_){}
