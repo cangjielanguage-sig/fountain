@@ -195,7 +195,7 @@ public class KeyPoolTest {
     }
     /**
      * `maxWaiting` 是**池初始化参数**：池取空后 `get(timeout: Duration.Max)` 只在 maxWaiting 内等待，
-     * 超过就记 WARN 并返回 None（bug.md 7.6）。这里用 200ms 而不是默认 30s，顺带证明它不是写死的常量。
+     * 超过就记 WARN 并返回 None（.autocode/bugs/bug-archived-on-20261004.md 7.6）。这里用 200ms 而不是默认 30s，顺带证明它不是写死的常量。
      */
     @TestCase
     public func maxWaitingBoundsInfiniteWait(): Unit {
@@ -222,7 +222,7 @@ public class KeyPoolTest {
     }
     /**
      * 后台维护线程的"看护"：creator 连续抛异常后，创建线程必须还活着、能把池项补起来
-     * （创建/巡检线程一旦静默退出，池就再也补不回项、也不会回收空闲项，见 bug.md 7.12）。
+     * （创建/巡检线程一旦静默退出，池就再也补不回项、也不会回收空闲项，见 .autocode/bugs/bug-archived-on-20261004.md 7.12）。
      */
     @TestCase
     public func scheduleSurvivesCallbackErrors(): Unit {
@@ -248,7 +248,7 @@ public class KeyPoolTest {
         @Assert(pool.get('a', timeout: Duration.second).isSome())
         pool.close()
     }
-    /** 巡检里带的审计自愈：至少跑过一轮后，全局 size 与各 key 队列之和必须一致（见 bug.md 7.2/7.12）。 */
+    /** 巡检里带的审计自愈：至少跑过一轮后，全局 size 与各 key 队列之和必须一致（见 .autocode/bugs/bug-archived-on-20261004.md 7.2/7.12）。 */
     @TestCase
     public func auditRunsFromSchedule(): Unit {
         let pool = KeyPool<String, Object>(

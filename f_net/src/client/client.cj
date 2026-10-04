@@ -54,7 +54,7 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                 try {
                     // 用 DataAny 中性解码：客户端的响应载荷类型是多样的（Array<String>、Array<ServiceMeta>…），
                     // 若按 T（RPCMessage）解码，会把这类载荷“宽松转换”成字段为空的 RPCMessage，
-                    // 调用方随后据其转换会在 f_data 里段错误（见 bug.md 7.10）。原始 Data 交给调用方自行转换。
+                    // 调用方随后据其转换会在 f_data 里段错误（见 .autocode/bugs/bug-archived-on-20261004.md 7.10）。原始 Data 交给调用方自行转换。
                     let message: Message = Message.decode<DataAny>(buffer)
                     let id = message.id
                     mid = id
@@ -83,7 +83,7 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                     if (buffer.isClosed()) {
                         // 连接是我们自己关的（发现循环每轮重建、checkTimer 拆链、close()），读到“socket 已关闭”
                         // 属于正常收尾；记 ERROR 会在每次正常关闭时刷一整条栈（实测一次 70s 运行 138 条），
-                        // 把真正的读取失败淹没在噪音里（见 bug.md 7.5）。
+                        // 把真正的读取失败淹没在噪音里（见 .autocode/bugs/bug-archived-on-20261004.md 7.5）。
                         log.debug{'Client reader closed ${cmd}:${mid}'}
                     } else {
                         log.error(e){'Client reader error ${cmd}:${mid} ${buffer.isClosed()}'}

@@ -19,7 +19,7 @@ import std.fs.*
 import std.env.atExit
 
 /**
- * 共享测试工具：清理 f_store 用例在 `/tmp` 下的临时目录（见 bug.md 7.14）。
+ * 共享测试工具：清理 f_store 用例在 `/tmp` 下的临时目录（见 .autocode/bugs/bug-archived-on-20261004.md 7.14）。
  *
  * 背景：`Store`/`WAL` 底层的 `SegmentedLog` 按 `maxFileSize`（默认 **64MB**）fallocate 预分配 + mmap，
  * 一个用例目录动辄几十 MB；而各用例只在自己**开始时**清自己的目录（`getTestDir()` 里那句 start-clean），

@@ -31,7 +31,7 @@ public class SocketBuffer <: IOStream & Resource {
     private let socket: TcpSocket
     private let stop = StopSignal()
     /**
-     * 整帧写出的互斥（见 bug.md 7.1）：`close()` 先等正在写的那一帧退场再关 socket，
+     * 整帧写出的互斥（见 .autocode/bugs/bug-archived-on-20261004.md 7.1）：`close()` 先等正在写的那一帧退场再关 socket，
      * 这样正常关闭时序下对端看到的是「完整帧 + EOF」，而不是**半帧**。
      */
     private let frameLock = Mutex()
@@ -87,13 +87,13 @@ public class SocketBuffer <: IOStream & Resource {
     }
     public func close(): Unit {
         stop.stopped.store(1)
-        // 先等在写的那一帧退场，再关 socket：对端应看到「完整帧 + EOF」而不是半帧（bug.md 7.1）
+        // 先等在写的那一帧退场，再关 socket：对端应看到「完整帧 + EOF」而不是半帧（.autocode/bugs/bug-archived-on-20261004.md 7.1）
         awaitFrameWrite()
         if(!socket.isClosed()){
             socket.close()
         }
     }
-    /** `close()` 愿意等一帧写完的上限：超过就照关 —— 不把“截断”换成“挂起”（见 bug.md 7.1）。 */
+    /** `close()` 愿意等一帧写完的上限：超过就照关 —— 不把“截断”换成“挂起”（见 .autocode/bugs/bug-archived-on-20261004.md 7.1）。 */
     private static let FRAME_CLOSE_WAIT = Duration.second * 2
     /**
      * 等正在写的那一帧退场。写帧本身受 socket 写超时约束（`socketWriteTimeout`，默认未设置），

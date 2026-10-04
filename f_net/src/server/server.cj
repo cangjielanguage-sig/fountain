@@ -52,7 +52,7 @@ public class Server<T> <: Resource where T <: DataFields<T> {
                 var i = 0
                 // 不能用阻塞的 remove()：size 只是快照，队列若被并发消费（其它 tick 的回调、或 close() 时
                 // doClose 抽干队列）就会少那么多个元素，remove() 会把本定时器线程**永久卡住** ——
-                // 连接有效性巡检就此停摆，且每个这样的 tick 泄漏一个阻塞线程（见 bug.md 7.5）。
+                // 连接有效性巡检就此停摆，且每个这样的 tick 泄漏一个阻塞线程（见 .autocode/bugs/bug-archived-on-20261004.md 7.5）。
                 while (i < size && let Some(buffer) <- buffers.tryRemove()) {
                     spawn {
                         let available = try {
@@ -130,7 +130,7 @@ public class Server<T> <: Resource where T <: DataFields<T> {
                         Message.decode<T>(buffer)
                     } catch(e: InputClosedException){
                         // 对端干净关闭（读到 EOF）。本工程的发现循环每轮重建连接，服务端会频繁看到这种收尾；
-                        // 记 WARN + 整条栈会把真正的解码/执行错误淹没（实测一次 70s E2E 刷 140 条，见 bug.md 7.5），
+                        // 记 WARN + 整条栈会把真正的解码/执行错误淹没（实测一次 70s E2E 刷 140 条，见 .autocode/bugs/bug-archived-on-20261004.md 7.5），
                         // 故降为 DEBUG 且不带栈（该异常本身只说明“读不到字节”，没有额外信息）。
                         log.debug{'tcp closed'}
                         try{

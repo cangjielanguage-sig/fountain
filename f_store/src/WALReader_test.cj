@@ -132,7 +132,7 @@ public class WALWALReaderTest {
         wal.close()
 
         // 翻转第 2 条记录 key 字节：**按偏移就地改 1 字节**。
-        // WAL 文件是 SegmentedLog 预分配的（默认 64MB），整读整写会吃掉 64MB×N 的内存（见 bug.md 7.13）。
+        // WAL 文件是 SegmentedLog 预分配的（默认 64MB），整读整写会吃掉 64MB×N 的内存（见 .autocode/bugs/bug-archived-on-20261004.md 7.13）。
         // 第 2 条记录起始偏移: 38B，key 字节在 header(36B) 之后 → 38 + 36 = 74
         let file = File(walPath, OpenMode.ReadWrite)
         file.seek(SeekPosition.Begin(74))
@@ -214,7 +214,7 @@ public class WALWALReaderTest {
         badWal.append([0x03], [0x33])
         badWal.sync()
         badWal.close()
-        // 损坏第 2 条（就地改 1 字节：预分配文件整读整写会爆内存，见 bug.md 7.13）
+        // 损坏第 2 条（就地改 1 字节：预分配文件整读整写会爆内存，见 .autocode/bugs/bug-archived-on-20261004.md 7.13）
         let badFile = File(badPath, OpenMode.ReadWrite)
         badFile.seek(SeekPosition.Begin(38 + 36))
         badFile.write([0xEEu8])

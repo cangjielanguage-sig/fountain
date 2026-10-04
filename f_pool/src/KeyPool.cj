@@ -173,7 +173,7 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
     private let running = AtomicBool(true)
     /**
      * 构造完成标志：后台维护线程在构造函数返回前**不许碰 `this`**。
-     * bug.md 7.12 那次 SIGSEGV 的栈顶是 `UnitKeyPool.size`（运行时泛型 MTable 空指针），
+     * 归档报告 7.12（`.autocode/bugs/bug-archived-on-20261004.md`）那次 SIGSEGV 的栈顶是 `UnitKeyPool.size`（运行时泛型 MTable 空指针），
      * 一种可能是后台线程在对象尚未构造完（类型信息未就绪）时就开始使用它 ⇒ 这里加一道栅栏兜住这类风险。
      */
     private let constructed = AtomicBool(false)
@@ -212,10 +212,10 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         PoolDiagnostics.installDefaultHooks(
             {message => logger.warn(message)},
             {message => logger.error(message)})
-        // 进程退出时若发生过异常，落一条统计（健康时静默）——SIGSEGV 现场拿不到，这是可用的替代（见 bug.md 7.12）
+        // 进程退出时若发生过异常，落一条统计（健康时静默）——SIGSEGV 现场拿不到，这是可用的替代（见 .autocode/bugs/bug-archived-on-20261004.md 7.12）
         PoolDiagnostics.installShutdownReport()
         if (PoolDiagnostics.CRASH_DUMP_ON_FATAL) {
-            // 首次建池装一次致命信号取证（幂等）：下次真出 SIGSEGV，至少能拿到池的运行统计（见 bug.md 7.12）
+            // 首次建池装一次致命信号取证（幂等）：下次真出 SIGSEGV，至少能拿到池的运行统计（见 .autocode/bugs/bug-archived-on-20261004.md 7.12）
             PoolDiagnostics.installCrashHandler()
         }
         startCheckingSchedule()
@@ -293,7 +293,7 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         spawn {
             waitConstructed()
             // 看护循环：巡检线程**不允许**静默退出 —— 一旦退出，空闲回收、minSize 补足、审计自愈
-            // 都会永久停摆（见 bug.md 7.12）。异常或意外退出都记 WARN 并重开。
+            // 都会永久停摆（见 .autocode/bugs/bug-archived-on-20261004.md 7.12）。异常或意外退出都记 WARN 并重开。
             while(running.load()){
                 try{
                     checkingLoop()
@@ -332,7 +332,7 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
                 sleep(Duration.Zero)
                 tryAddTask(k)
             }
-            // 巡检顺带审计自愈（见 bug.md 7.2 / 7.12）：滞留项与计数脱钩在空闲期就修掉，
+            // 巡检顺带审计自愈（见 .autocode/bugs/bug-archived-on-20261004.md 7.2 / 7.12）：滞留项与计数脱钩在空闲期就修掉，
             // 不必等某个 get 取不到项才暴露。
             // 这里统一打一条 WARN（含 size 校正前后的值），底层各层只负责"修 + 返回动作数"，不重复打日志。
             let sizeBefore = pool.size
@@ -341,7 +341,7 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             if(healed > 0){
                 logger.warn('pool audit healed ${healed} anomaly(ies): size ${sizeBefore} -> ${pool.size}, ${PoolDiagnostics.snapshot()}')
             }
-            // 异常计数一旦有变化就落一条统计（健康时静默）：崩溃前"最后已知状态"靠这条留在日志里（见 bug.md 7.12）
+            // 异常计数一旦有变化就落一条统计（健康时静默）：崩溃前"最后已知状态"靠这条留在日志里（见 .autocode/bugs/bug-archived-on-20261004.md 7.12）
             PoolDiagnostics.reportIfChanged('pool audit')
         }
     }
@@ -357,7 +357,7 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         spawn {
             waitConstructed()
             // 看护循环：创建线程一旦退出，池就再也补不回池项（`get` 只会等到 maxWaiting 超时），
-            // 所以同样不许静默退出（见 bug.md 7.12）。
+            // 所以同样不许静默退出（见 .autocode/bugs/bug-archived-on-20261004.md 7.12）。
             while(running.load()){
                 try{
                     creationLoop()
@@ -461,7 +461,7 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             }
         }else if(timeout == Duration.Max){
             // 注意：原实现在「池已满且取不到空闲项」时是 while(running.load()) 无 sleep 忙等，
-            // 既 100% 占用一个核、又会**无日志地永久挂住**调用者（见 .autocode/bug.md 六）。
+            // 既 100% 占用一个核、又会**无日志地永久挂住**调用者（见 .autocode/bugs/bug-archived-on-20261004.md 六）。
             // 这里保持「等待」语义，但每轮让出 CPU，并在超过上限后告警放弃（返回 None），
             // 由上层决定重试或失败，避免静默挂起。
             let waitStart = MonoTime.now()

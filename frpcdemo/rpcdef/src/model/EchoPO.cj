@@ -20,7 +20,7 @@ import fountain::f_data.*
 
 /**
  * 嵌套对象字段的用例：它在**线上**以 OBJECT 出现，但不是任何 RPC 方法的顶层参数/返回类型 ——
- * RPC 宏的自动登记够不着它，只能靠 `@DataAssist` 在包初始化时自登记（见 bug.md 7.11）。
+ * RPC 宏的自动登记够不着它，只能靠 `@DataAssist` 在包初始化时自登记（见 .autocode/bugs/bug-archived-on-20261004.md 7.11）。
  * 客户端打印的 JSON 里出现 `inner` 就说明解码侧认出了这个嵌套类型。
  */
 @DataAssist[props fields]

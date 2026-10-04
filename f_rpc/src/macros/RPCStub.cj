@@ -81,7 +81,7 @@ private func genStub(exactlyVersion: Bool, version: String, name: String, decl: 
         throw RPCException()
     }catch(_){}
     var funcs = `empty_tokens`
-    // 接口里所有方法的参数与返回类型：展开处自动向 DefaultCodec 登记创建者（bug.md 7.11）
+    // 接口里所有方法的参数与返回类型：展开处自动向 DefaultCodec 登记创建者（.autocode/bugs/bug-archived-on-20261004.md 7.11）
     let types = ArrayList<Tokens>()
     match(decl){
         case x: InterfaceDecl where isPublic(x) => 

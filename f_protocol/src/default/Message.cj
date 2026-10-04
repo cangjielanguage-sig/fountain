@@ -22,7 +22,7 @@ internal import fountain::f_util.{crc32, crc32Init, crc32Update, crc32Finish}
 /*
  * f_protocol 因此依赖 f_util。注意加载顺序：应用启动时 f_app 按目录顺序依次 dlopen 各包 .so
  * 且符号即时解析，`f_protocol@fountain` 排在 `f_util@fountain` 之前 —— 顺序不满足时会在加载期
- * 报 `undefined symbol: crc32Update`（已实测）。详见 .autocode/bug.md 的相关记录。
+ * 报 `undefined symbol: crc32Update`（已实测）。详见 .autocode/bugs/bug-archived-on-20261004.md 的相关记录。
  */
 
 /**
@@ -43,7 +43,7 @@ internal func framePayloadLimit(): Int64 {
     }
 }
 /**
- * 帧版本位（见 bug.md 7.1）：为将来「换校验算法 / 改字段宽度」留出平滑迁移余地 ——
+ * 帧版本位（见 .autocode/bugs/bug-archived-on-20261004.md 7.1）：为将来「换校验算法 / 改字段宽度」留出平滑迁移余地 ——
  * 接收侧按版本显式判定，而不是拿当前布局去硬解未知帧。加版本位后旧实现解不了新帧（会当成 cmd 解析失败），
  * 但新实现能给出可诊断的报错，且未来可在此处做「同时接受 N 与 N+1」的过渡。
  */
@@ -105,7 +105,7 @@ private class FrameBodyStream <: SizeBoundedInput {
         this.remaining = size
         this.crc = crc0
     }
-    /** 本帧还剩多少字节：解码器据此在**分配缓冲前**挡下超大声明长度（见 bug.md 7.1）。 */
+    /** 本帧还剩多少字节：解码器据此在**分配缓冲前**挡下超大声明长度（见 .autocode/bugs/bug-archived-on-20261004.md 7.1）。 */
     public prop remainingBytes: Int64 {
         get() {
             remaining

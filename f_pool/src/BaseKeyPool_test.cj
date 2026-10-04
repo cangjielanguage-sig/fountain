@@ -19,7 +19,7 @@ import std.unittest.*
 import std.unittest.testmacro.*
 import std.sync.AtomicInt64
 
-/** `BaseKeyPool` 的记账一致性（见 bug.md 7.2：size 与实际可借数不能脱钩）。 */
+/** `BaseKeyPool` 的记账一致性（见 .autocode/bugs/bug-archived-on-20261004.md 7.2：size 与实际可借数不能脱钩）。 */
 @Test
 public class BaseKeyPoolTest {
     @TestCase

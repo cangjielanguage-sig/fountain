@@ -56,7 +56,7 @@ public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
  *
  * 必要性：f_codec 的类型创建者表只在该进程**编码过**该类型时才登记，只解码不编码的一侧
  * （客户端第一次收响应、服务端第一次收请求）以及**嵌套**对象字段都会踩「object type murmur is not registered」
- * （bug.md 7.10 第 10 层 / 7.11）。f_data 不能反向依赖 f_codec（成环），所以这里只登记到 f_data 自己的表，
+ * （.autocode/bugs/bug-archived-on-20261004.md 7.10 第 10 层 / 7.11）。f_data 不能反向依赖 f_codec（成环），所以这里只登记到 f_data 自己的表，
  * f_codec 解码未命中时按名字补算 murmur 再拉取。
  *
  * 只在非泛型类上生成：文件级拿不到泛型实参。只声明 `fields` 时生成（`toData()` 与 `ObjectData<T>` 都由它带来）。
@@ -117,7 +117,7 @@ private func assist(attr: Tokens, input: Decl): Tokens {
             }
             // `generateProps` 会把私有字段改名成 `<name>_`，而 hash/equal/compare/tostring/fields 的生成都在改名之后运行，
             // 只登记源码名会让 `@DataExclude[hash]`/`[equal]` 对**私有 var** 静默失效（ServiceMeta.weight 正是这种，
-            // 见 bug.md 7.10：weight 未被排除 ⇒ 客户端 stub 与服务端注册的 meta 哈希不同 ⇒ 查表永远落空）。
+            // 见 .autocode/bugs/bug-archived-on-20261004.md 7.10：weight 未被排除 ⇒ 客户端 stub 与服务端注册的 meta 哈希不同 ⇒ 查表永远落空）。
             // 这里把改名后的名字一并登记。prop 不在其列：props 生成发生在改名之前。
             for (set in [excludeHash, excludeEqual, excludeCompare, excludeToString, excludeFields]) {
                 for (name in set.toArray()) {
@@ -259,7 +259,7 @@ func generateHash(d: ClassDecl, exclusion: HashSet<String>) {
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
         // 集合字段不能用默认 hashCode：Array/ArrayList 等满足 Hashable，但它们的 hashCode 是**身份**哈希，
         // “内容相同”的两个实例会得到不同哈希 ⇒ 用它当 map key（例如 ServiceMeta.argTypeNames）查表永远落空
-        // （见 bug.md 7.10：客户端 stub 与服务端注册各自构造 meta，数组实例不同）。
+        // （见 .autocode/bugs/bug-archived-on-20261004.md 7.10：客户端 stub 与服务端注册各自构造 meta，数组实例不同）。
         // 集合按内容（toString）参与哈希；万一碰撞也只多一次 equals 检查，不影响正确性。
         let typeText = match (d) {
             case x: VarDecl => x.declType.toTokens().toString()

@@ -72,7 +72,7 @@ public class EncodedMessageReleaseTest {
 public class ServiceMetaIdentityTest {
     /**
      * 客户端 stub 与服务端注册各自构造 meta：argTypeNames 是**不同的数组实例**，weight 也不同。
-     * 它们必须相等、且 hashCode 相同，否则 services / hub 的查表永远落空（bug.md 7.10）。
+     * 它们必须相等、且 hashCode 相同，否则 services / hub 的查表永远落空（.autocode/bugs/bug-archived-on-20261004.md 7.10）。
      */
     @TestCase
     public func equalMetaWithDistinctArgTypeArraysMustMatch(): Unit {

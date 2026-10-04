@@ -22,11 +22,11 @@ protected interface BasePool<T> {
     func giveBack(value: T, checker: (T) -> Bool, destroier: (T) -> Unit): Unit
     func get(checker: (T) -> Bool, destroier: (T) -> Unit): ?T
     func check(running: () -> Bool, checker: (T) -> Bool, taskPusher: () -> Unit): Int64 
-    /** 主动审计自愈（巡检线程每轮调用，见 bug.md 7.12）：返回校正的动作数。 */
+    /** 主动审计自愈（巡检线程每轮调用，见 .autocode/bugs/bug-archived-on-20261004.md 7.12）：返回校正的动作数。 */
     func audit(): Int64
     /**
      * 清空池：`fn` 逐个处理每个池项，返回处理掉的数量 ——
-     * 调用方（`BaseKeyPool`）据此同步自己的全局计数，避免 destroy 之后 `size` 与队列脱钩（见 bug.md 7.2）。
+     * 调用方（`BaseKeyPool`）据此同步自己的全局计数，避免 destroy 之后 `size` 与队列脱钩（见 .autocode/bugs/bug-archived-on-20261004.md 7.2）。
      */
     func destroy(fn: (T) -> Unit): Int64 {
         check({=> true}, {v => 

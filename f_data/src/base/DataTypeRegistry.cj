@@ -24,7 +24,7 @@ import std.reflect.ClassTypeInfo
  *
  * **为什么需要**：f_codec 的「类型hash → 创建者」表原先只在该进程**编码过**该类型时才登记，
  * 于是只解码不编码的一侧（客户端第一次收响应、服务端第一次收请求）会失败；而**嵌套**的对象字段
- * 更麻烦 —— 它不是任何 RPC 方法的顶层参数/返回类型，连 RPC 宏的自动登记也够不着（bug.md 7.11）。
+ * 更麻烦 —— 它不是任何 RPC 方法的顶层参数/返回类型，连 RPC 宏的自动登记也够不着（.autocode/bugs/bug-archived-on-20261004.md 7.11）。
  *
  * **为什么放在 f_data**：`@DataAssist` 在 f_data 里，而「hash→创建者」表与 murmur 在 f_codec；
  * f_data → f_codec 会构成依赖环。所以这里只登记到 f_data 自己的表（纯内存操作，不做 I/O、不读配置），

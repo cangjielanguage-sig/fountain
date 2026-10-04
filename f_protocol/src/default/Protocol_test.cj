@@ -134,7 +134,7 @@ public class ProtocolTest {
     @TestCase
     public func messageIdSurvivesFrameRoundTrip(): Unit {
         // 帧往返后消息id必须与发出时一致（相等与hash都要成立）：id一旦漂移（例如本地时间被当成绝对时刻，
-        // 服务端日志里会看到8小时时间差），响应就再也对不上请求，调用方会一直等到超时（见 bug.md 7.10）
+        // 服务端日志里会看到8小时时间差），响应就再也对不上请求，调用方会一直等到超时（见 .autocode/bugs/bug-archived-on-20261004.md 7.10）
         let time = DateTime.now()
         let id = MessageID(time: time, pid: 1234, tid: 5678, hostId: 0)
         let msg = Message.build(Command.REGISTER, id, DataNone.INSTANCE)

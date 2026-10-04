@@ -24,7 +24,7 @@ class BytesListClearOnReturnTest {
     /**
      * 池项归还后必须被清空（clearOnReturning 生效）。
      * 若不清空，下一个借用者会把新消息直接追加在旧字节后面 —— 编码结果里混进上一条消息的字节、
-     * 消息丢了命令字节、对端解码错位，最终表现为心跳拆链风暴（见 .autocode/bug.md 六）。
+     * 消息丢了命令字节、对端解码错位，最终表现为心跳拆链风暴（见 .autocode/bugs/bug-archived-on-20261004.md 六）。
      */
     @TestCase
     func returnedBufferMustBeEmpty(): Unit {

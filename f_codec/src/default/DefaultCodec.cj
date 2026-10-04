@@ -44,7 +44,7 @@ public class DefaultCodec <: Codec & Releasable {
     private static let TEN_POW_NINE = BigInt(10 ** 9)
     private static let typeMurmurHashs = ConcurrentHashMap<TypeInfo, UInt128>()
     private static let typeMurmurCreators = ConcurrentHashMap<UInt128, () -> SimpleDataObject>()
-    // 取池项的等待上限是**池初始化参数**（bug.md 7.6）：池耗尽超过它就 WARN 并返回 None，由调用方失败可见。
+    // 取池项的等待上限是**池初始化参数**（.autocode/bugs/bug-archived-on-20261004.md 7.6）：池耗尽超过它就 WARN 并返回 None，由调用方失败可见。
     // 需要"无限等待"的部署把它设成 Duration.Max（实现仍每轮让出 CPU）。
     private static var byteListOutputBuilder = BytesListOutputStream.builder(
         initSize: 1024, minSize: 1024, maxSize: 1024, maxWaiting: Duration.second * 30)
@@ -60,7 +60,7 @@ public class DefaultCodec <: Codec & Releasable {
     /**
      * 按参数重建「编码缓冲池」（`byteListOutputBuilder` 内部的 ArrayListPool），
      * 与下面 `setBytesPool(initSize:…)` 对称 —— 两者的参数都带默认值（默认值与包初始化时用的值一致）。
-     * 不要求调用方 import f_pool（f_rpc 就是这样按配置初始化的，见 bug.md 7.6）。
+     * 不要求调用方 import f_pool（f_rpc 就是这样按配置初始化的，见 .autocode/bugs/bug-archived-on-20261004.md 7.6）。
      */
     public static func setBufferPool(initSize!: Int64 = 1024, minSize!: Int64 = 1024, maxSize!: Int64 = 1024,
         maxWaiting!: Duration = Duration.second * 30): Unit {
@@ -104,7 +104,7 @@ public class DefaultCodec <: Codec & Releasable {
     /**
      * 按「限定名 + 创建者」登记对象类型：与 `registerType<T>()` 等价，但**不要求调用方静态满足 T 的约束**。
      *
-     * 供框架在宏展开处自动登记跨网络传输的类型（见 bug.md 7.11）：宏是 token 级的、给不出类型约束，
+     * 供框架在宏展开处自动登记跨网络传输的类型（见 .autocode/bugs/bug-archived-on-20261004.md 7.11）：宏是 token 级的、给不出类型约束，
      * 无法对任意参数/返回类型生成 `registerType<T>()` 直调，只能把「运行时探测到的限定名与创建者」交给这里。
      * 键与 `registerType<T>()` 完全一致（都是 murmurHash(限定名)），两种登记方式可混用。
      */
@@ -118,7 +118,7 @@ public class DefaultCodec <: Codec & Releasable {
             // 而不是无限等待（原实现是 build() 默认 Duration.Max）。
             let buf = byteListOutputBuilder.build(timeout: Duration.second * 5).getOrThrow()
             if (!buf.isEmpty) {
-                // 池项应当是干净的：这里非空说明池的归还清理/记账出了问题（见 .autocode/bug.md 六）。
+                // 池项应当是干净的：这里非空说明池的归还清理/记账出了问题（见 .autocode/bugs/bug-archived-on-20261004.md 六）。
                 // 直接抛：编码期失败，绝不会把脏字节写到线上；调用方（写线程）会记录可见错误。
                 let dirtyBytes = if (let Some(n) <- buf.byteSize()) {
                     '${n}'
@@ -519,7 +519,7 @@ public class DefaultCodec <: Codec & Releasable {
     }
     private func encode(value: DateTime, buffer: BytesListOutputStream): Encoder {
         // 必须用绝对时刻：`value - DateTime.UnixEpoch` 与时区相关（本地时间会多算一个UTC偏移），
-        // 解码端再做 `UnixEpoch + duration` 就得到另一个时刻，响应里的消息id与请求对不上（bug.md 7.10）
+        // 解码端再做 `UnixEpoch + duration` 就得到另一个时刻，响应里的消息id与请求对不上（.autocode/bugs/bug-archived-on-20261004.md 7.10）
         let duration = value.toUnixTimeStamp()
         let int = BigInt(duration.toSeconds()) * TEN_POW_NINE + BigInt(
             (duration - Duration.second * duration.toSeconds()).toNanoseconds())
@@ -723,7 +723,7 @@ public class DefaultCodec <: Codec & Releasable {
     /**
      * 按线上声明的长度准备字节缓冲。**分配之前**先确认它不超过输入的剩余字节数：
      * 帧的 len 只限住“可读字节数”，挡不住 `Array<Byte>(声明长度)` —— 载荷里一个损坏/恶意的长度字段
-     * 就足以让这里尝试分配 TB 级内存（见 bug.md 7.1）。输入不支持报剩余量（非帧内解码）时退化为原行为。
+     * 就足以让这里尝试分配 TB 级内存（见 .autocode/bugs/bug-archived-on-20261004.md 7.1）。输入不支持报剩余量（非帧内解码）时退化为原行为。
      */
     private func checkedBuffer(input: InputStream, declared: Int64, what: String): Array<Byte> {
         if (declared < 0) {
@@ -912,7 +912,7 @@ public class DefaultCodec <: Codec & Releasable {
             var registered = typeMurmurCreators.get(murmur)
             if (registered.isNone()) {
                 // 本进程可能只解码不编码（客户端第一次收响应 / 服务端第一次收请求 / 嵌套对象字段）：
-                // f_data 侧的注册表里由 @DataAssist 生成的类在包初始化时自行登记过，这里补登记再重试（bug.md 7.11）
+                // f_data 侧的注册表里由 @DataAssist 生成的类在包初始化时自行登记过，这里补登记再重试（.autocode/bugs/bug-archived-on-20261004.md 7.11）
                 pullRegisteredTypes()
                 registered = typeMurmurCreators.get(murmur)
             }

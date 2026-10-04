@@ -30,7 +30,7 @@ private func error(id: MessageID, cmd: Command, msg: ErrorMessage): Message {
 
 class RPCServer {
     internal static func start(): Unit {
-        // 按配置初始化 codec 的两个池（编码缓冲池 / 字节数组池）；首次生效，见 PoolConfig.cj 与 bug.md 7.6
+        // 按配置初始化 codec 的两个池（编码缓冲池 / 字节数组池）；首次生效，见 PoolConfig.cj 与 .autocode/bugs/bug-archived-on-20261004.md 7.6
         initCodecPools()
         let qsize = ServerConfig.bufferQueueSize
         let port = ServerConfig.port

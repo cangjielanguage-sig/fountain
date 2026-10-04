@@ -137,7 +137,7 @@ public class SyncDequeTest {
     @TestCase
     public func testCheckerThrowingMustNotLoseElement(){
         // check 的校验函数抛异常时，异常可以往外抛（调度方会记日志），但池项一个都不能丢：
-        // 被标记 CHECKING 的节点必须还原成 idle，否则它既取不到、也不会再被清理（见 bug.md 7.2）。
+        // 被标记 CHECKING 的节点必须还原成 idle，否则它既取不到、也不会再被清理（见 .autocode/bugs/bug-archived-on-20261004.md 7.2）。
         let o1 = Object()
         let o2 = Object()
         let deque = SyncDeque<Object>()
@@ -155,7 +155,7 @@ public class SyncDequeTest {
     @TestCase
     public func testTaskPusherThrowingMustNotLoseElement(){
         // taskPusher 抛异常时同理：本轮「已标记待处理」的那个节点也要还原，
-        // 否则它永久停在 CHECKING、池记着它却取不出来（见 bug.md 7.2）。
+        // 否则它永久停在 CHECKING、池记着它却取不出来（见 .autocode/bugs/bug-archived-on-20261004.md 7.2）。
         let o1 = Object()
         let o2 = Object()
         let deque = SyncDeque<Object>()
@@ -173,7 +173,7 @@ public class SyncDequeTest {
     public func testScanForwardMustReturnTakenElement(){
         // 队首节点不是 idle 时（例如正被 check 标记），借用要往后续扫：
         // 扫到的项必须真的返回给调用方。修前这里返回 None，而项已经被摘掉
-        // ⇒ 池项凭空消失、size 还记着它（历史症状，见 bug.md 7.2）。
+        // ⇒ 池项凭空消失、size 还记着它（历史症状，见 .autocode/bugs/bug-archived-on-20261004.md 7.2）。
         let o1 = Object()
         let o2 = Object()
         let deque = SyncDeque<Object>()
@@ -188,7 +188,7 @@ public class SyncDequeTest {
     @TestCase
     public func testBorrowCheckerThrowingMustNotLeakElement(){
         // 借出后的校验回调抛异常时，这一项既没被拿走、也不算"已归还" ⇒ 若不管，它会永久挂在 out 上
-        // （池项凭空消失、池越用越小）。自愈：按"校验不过"结清（销毁 + 计数还原）后再抛出（见 bug.md 7.12）。
+        // （池项凭空消失、池越用越小）。自愈：按"校验不过"结清（销毁 + 计数还原）后再抛出（见 .autocode/bugs/bug-archived-on-20261004.md 7.12）。
         let o1 = Object()
         let deque = SyncDeque<Object>()
         deque.insertTail(o1)
@@ -229,7 +229,7 @@ public class SyncDequeTest {
     }
     @TestCase
     public func testAuditHealsStrandedWithoutBorrowAttempt(){
-        // 巡检线程每轮都会调 audit()：不必等某个 get 取不到项，滞留项在空闲期就被修掉（见 bug.md 7.12）
+        // 巡检线程每轮都会调 audit()：不必等某个 get 取不到项，滞留项在空闲期就被修掉（见 .autocode/bugs/bug-archived-on-20261004.md 7.12）
         let o1 = Object()
         let o2 = Object()
         let deque = SyncDeque<Object>()
@@ -242,7 +242,7 @@ public class SyncDequeTest {
     }
     @TestCase
     public func testDiagnosticsSnapshotTracksActivity(){
-        // 自愈动作与借还都被记数：即使问题不复现，也能从统计判断"到底发生过没有"（见 bug.md 7.12）
+        // 自愈动作与借还都被记数：即使问题不复现，也能从统计判断"到底发生过没有"（见 .autocode/bugs/bug-archived-on-20261004.md 7.12）
         let before = PoolDiagnostics.snapshot()
         let deque = SyncDeque<Object>()
         deque.insertTail(Object())
@@ -255,7 +255,7 @@ public class SyncDequeTest {
     @TestCase
     public func testWarningHookCanBeRedirected(){
         // 底层（SyncDeque）的告警默认写 stderr；能不能进 f_log 取决于上层注入的钩子。
-        // 这里验证"注入的通道确实收到消息"，而不是库内自己写 stdout（见 bug.md 7.12）。
+        // 这里验证"注入的通道确实收到消息"，而不是库内自己写 stdout（见 .autocode/bugs/bug-archived-on-20261004.md 7.12）。
         let collected = ArrayList<String>()
         PoolDiagnostics.redirectWarningsTo(
             warn: {message =>
@@ -289,7 +289,7 @@ public class SyncDequeTest {
     @TestCase
     public func testWeakDequeRemoveMustReturnElement(){
         // 弱引用池（Mode.WeakFifo/WeakLifo）走的是同一条"摘节点"路径：引用类型的池项包的是对象本身，
-        // 修前只匹配 WeakRef<Box<T>> ⇒ 摘掉节点却返回 None，池项凭空丢失（见 bug.md 7.2）。
+        // 修前只匹配 WeakRef<Box<T>> ⇒ 摘掉节点却返回 None，池项凭空丢失（见 .autocode/bugs/bug-archived-on-20261004.md 7.2）。
         let o = Object()
         let deque = WeakSyncDeque<Object>()
         deque.insertTail(o)

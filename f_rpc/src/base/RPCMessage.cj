@@ -78,7 +78,7 @@ public class ServiceMeta {
     private var argTypeNames: Array<String> = []
     // weight 是**节点侧**元数据，不能参与相等/哈希：客户端 stub 生成的 meta 不带 weight（默认 0.0），
     // 服务端注册的带实际权重，若让它参与比较，两边永远匹配不上 ⇒ 服务端 hub 查不到骨架、
-    // 客户端 services 查不到客户端，RPC 永远超时（见 bug.md 7.10）
+    // 客户端 services 查不到客户端，RPC 永远超时（见 .autocode/bugs/bug-archived-on-20261004.md 7.10）
     @DataExclude[equal hash]
     private var weight: Float64 = 1.0
 

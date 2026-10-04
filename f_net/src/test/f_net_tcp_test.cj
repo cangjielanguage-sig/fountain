@@ -17,7 +17,7 @@ limitations under the License.
 /**
  * f_net TCP 集成测试。
  *
- * 覆盖（对应 bug.md 7.9：f_net 的读取/发送路径必须有可执行用例）：
+ * 覆盖（对应 .autocode/bugs/bug-archived-on-20261004.md 7.9：f_net 的读取/发送路径必须有可执行用例）：
  *   1. Server bind + 裸 socket connect；
  *   2. Client.transfer() PING → 服务端内置 ACK（心跳路径）；
  *   3. SUBSCRIBE → 服务端 executor 回 RESP（业务请求/响应路径，含载荷往返）。

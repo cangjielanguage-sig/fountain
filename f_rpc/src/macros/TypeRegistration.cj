@@ -49,7 +49,7 @@ private func addRPCType(types: ArrayList<Tokens>, t: Tokens): Unit {
  * 生成的是**无约束**的泛型调用 `registerRPCType<X>()`：宏是 token 级的、拿不到类型约束，
  * 若直接生成 `DefaultCodec.registerType<X>()`，则「参数/返回类型是 Int64/String/Unit/集合」的接口
  * 会编译失败（该约束是 `T <: Object & ObjectData<T> & DataFields<T>`）。
- * 「是不是需要登记的数据对象类型」由 `f_rpc.base.registerRPCType` 在运行时探测，见 bug.md 7.11。
+ * 「是不是需要登记的数据对象类型」由 `f_rpc.base.registerRPCType` 在运行时探测，见 .autocode/bugs/bug-archived-on-20261004.md 7.11。
  */
 func rpcTypeRegistrations(types: ArrayList<Tokens>): Tokens {
     var calls = `empty_tokens`

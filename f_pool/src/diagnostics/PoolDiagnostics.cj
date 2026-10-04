@@ -20,7 +20,7 @@ import std.sync.{AtomicBool, AtomicInt64}
 import fountain::f_base.{registerSignalHandler, resetSignalHandler, Signal, SIGIOT, SIGSEGV}
 
 /**
- * f_pool 的运行时统计 + 致命信号取证（见 bug.md 7.12）。
+ * f_pool 的运行时统计 + 致命信号取证（见 .autocode/bugs/bug-archived-on-20261004.md 7.12）。
  *
  * 放在独立的子包 `fountain::f_pool.diagnostics` 里，是为了让最底层的
  * `fountain::f_pool.base.collection`（`SyncDeque`/`LinkedNode`）也能记账/告警，
@@ -43,7 +43,7 @@ import fountain::f_base.{registerSignalHandler, resetSignalHandler, Signal, SIGI
 private let FATAL_SIGNALS = [Signal(SIGSEGV, 'segv'), Signal(SIGIOT, 'abort')]
 
 /**
- * f_pool 的运行时统计 + 致命信号取证（见 bug.md 7.12）。
+ * f_pool 的运行时统计 + 致命信号取证（见 .autocode/bugs/bug-archived-on-20261004.md 7.12）。
  *
  * 放在独立的子包 `fountain::f_pool.diagnostics` 里，是为了让最底层的
  * `fountain::f_pool.base.collection`（`SyncDeque`/`LinkedNode`）也能记账，

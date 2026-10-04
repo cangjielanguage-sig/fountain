@@ -30,12 +30,12 @@ public class RPCClient {
         if (started.load() == 2) {
             return
         } else if (started.compareAndSwap(0, 1)) {
-            // 按配置初始化 codec 的两个池（编码缓冲池 / 字节数组池）；首次生效，见 PoolConfig.cj 与 bug.md 7.6
+            // 按配置初始化 codec 的两个池（编码缓冲池 / 字节数组池）；首次生效，见 PoolConfig.cj 与 .autocode/bugs/bug-archived-on-20261004.md 7.6
             initCodecPools()
             spawn{
                 while(true){
                     // 每轮重新建立“发现用”连接：上一轮末尾会 close() 掉它们，
-                    // 若在循环外只建一次，第二轮起 transfer 会抛 "Client is closed"，发现流程整体中断（bug.md 7.10）
+                    // 若在循环外只建一次，第二轮起 transfer 会抛 "Client is closed"，发现流程整体中断（.autocode/bugs/bug-archived-on-20261004.md 7.10）
                     let clients = ClientConfig.createClient()
                     let metas = HashMap<ServiceMeta, TreeSet<String>>()
                     func subscribe(client: Client<RPCMessage>, closingOnEnd: Bool){
@@ -72,7 +72,7 @@ public class RPCClient {
                     try{
                         for(client in clients){
                             // 载荷必须是 RPCMessage：服务端会 tryFromData<RPCMessage>() 后取 params[0]，
-                            // 传裸 Bool 会被宽松转成“params 为空的 RPCMessage”⇒ 服务端取 params[0] 越界（见 bug.md 7.10）
+                            // 传裸 Bool 会被宽松转成“params 为空的 RPCMessage”⇒ 服务端取 params[0] 越界（见 .autocode/bugs/bug-archived-on-20261004.md 7.10）
                             let msg = Message.subscribe(data: RPCMessage.subscribe(true))
                             let response = client.transfer(msg).get()
                             let resp = response.data

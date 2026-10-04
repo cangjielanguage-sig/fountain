@@ -21,7 +21,7 @@ import fountain::f_codec.default.DefaultCodec
 /**
  * RPC 用到的池的配置项（f_rpc 自己不建池，它把 f_codec 的两个全局池按配置初始化）。
  *
- * 为什么在这里：池的等待上限 `maxWaiting` 是**池初始化参数**（见 bug.md 7.6），
+ * 为什么在这里：池的等待上限 `maxWaiting` 是**池初始化参数**（见 .autocode/bugs/bug-archived-on-20261004.md 7.6），
  * f_pool 不读配置；由使用方在自己的配置里给出值 —— ORM 那边是 `orm_databasePoolMaxWaiting`，
  * RPC 这边就是本文件这些 `rpc_codec*` 项。
  *

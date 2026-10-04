@@ -1,7 +1,7 @@
 # Bug 分析报告：frpcdemo 错误日志成因（最终版 v2，已归档）
 
 > **归档说明（2026-10-04）**：本报告已归档到 `.autocode/bugs/bug-archived-on-20261004.md`
-> （原 `.autocode/bug.md` 位置留了一个跳转桩，方便代码注释里的引用继续找得到）。
+> （原 `.autocode/bug.md` 已删除，全仓引用统一改为指向本文件）。
 > **除下面两项外，其余问题均已关闭**：
 >
 > - **§7.12**（🟡 部分解决）：`f_pool` 全量用例**偶发 SIGSEGV**（栈顶 `UnitKeyPool.size`，运行时泛型 MTable 空指针）

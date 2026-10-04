@@ -65,7 +65,7 @@ struct BaseKeyPool<K, V> <: IKeyPool<K, V> where K <: Hashable & Equatable<K> {
     /**
      * 主动审计自愈：先让每个 key 的队列自愈，再把全局计数 `s` 与各队列之和校正一致。
      * `s` 里既有空闲项也有借出项（借出不会从队列计数里减掉），所以两者**任何时刻**都该相等，
-     * 不等就是真脱钩 —— 校正它可以让 `get` 不再误以为"池已满"（见 bug.md 7.2 / 7.12）。
+     * 不等就是真脱钩 —— 校正它可以让 `get` 不再误以为"池已满"（见 .autocode/bugs/bug-archived-on-20261004.md 7.2 / 7.12）。
      */
     public func audit(): Int64 {
         var healed = 0
@@ -81,14 +81,14 @@ struct BaseKeyPool<K, V> <: IKeyPool<K, V> where K <: Hashable & Equatable<K> {
             PoolDiagnostics.onBookkeepingHealed()
             healed += 1
             // 不在这里打日志：`size a -> b` 由调用方（`KeyPool` 巡检）统一 WARN 出来，
-            // 避免同一次校正既被底层打、又被上层打（见 bug.md 7.12）
+            // 避免同一次校正既被底层打、又被上层打（见 .autocode/bugs/bug-archived-on-20261004.md 7.12）
         }
         healed
     }
     public func destroy(fn: (K, V) -> Unit): Unit {
         for((k, p) in map){
             // 队列自己的计数由 check/onRemoved 维护；这里的全局计数 s 也必须同步减掉，
-            // 否则 destroy 之后 size 仍报旧值、后续 get 会以为池已满而不再新建池项（见 bug.md 7.2）
+            // 否则 destroy 之后 size 仍报旧值、后续 get 会以为池已满而不再新建池项（见 .autocode/bugs/bug-archived-on-20261004.md 7.2）
             s.fetchSub(p.destroy{v => fn(k, v)})
         }
     }
