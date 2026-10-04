@@ -183,7 +183,8 @@ public class HeapCache<V> where V <: Object {
                 old
             }
         } else {
-            store.add(key, Priority<V>(key, value, maxLife, checkDuration, once))
+            //新建条目同样按本次调用给出的寿命与一次性标记：life 的默认值就是缓存级 maxLife
+            store.add(key, Priority<V>(key, value, life, checkDuration, once))
             Option<V>.None
         }
     }
