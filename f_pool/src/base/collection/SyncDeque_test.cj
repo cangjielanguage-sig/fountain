@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_pool.base.collection
 
 import std.collection.ArrayList
+import std.env.getStdErr
 import std.sync.AtomicInt64
 import fountain::f_pool.diagnostics.PoolDiagnostics
 
@@ -274,10 +275,16 @@ public class SyncDequeTest {
         @Assert(deque.audit() > 0)                        // 触发 WEDGE-HEAL 告警
         @Assert(collected.size > 0)
         @Assert(collected[0].contains('WEDGE-HEAL'))
-        // 收尾：恢复默认通道（默认即 println），避免影响后续用例
+        // 收尾：恢复成"默认通道"的样子（stderr），避免影响后续用例
         PoolDiagnostics.redirectWarningsTo(
-            warn: {message => println(message)},
-            error: {message => println(message)})
+            warn: {message =>
+                getStdErr().writeln(message)
+                ()
+            },
+            error: {message =>
+                getStdErr().writeln(message)
+                ()
+            })
     }
     @TestCase
     public func testWeakDequeRemoveMustReturnElement(){

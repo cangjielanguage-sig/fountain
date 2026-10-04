@@ -959,7 +959,7 @@ demo 端到端与之前一致：分隔线 ×2、客户端 JSON、服务端 `CONS
      API 保留并标注了该限制（留给"非 Cangjie 运行时宿主"场景），但不要指望它取证；
      实际起作用的是上面两条 + 输出通道。
      用例：`testDiagnosticsSnapshotTracksActivity`（幂等安装 + 统计随活动变化）、`auditRunsFromSchedule`（巡检路径会执行 `reportIfChanged`）。
-     **输出通道**：底层告警经**可注入钩子**输出（`PoolDiagnostics.warnHook/errorHook`，默认 `println`），
+     **输出通道**：底层告警经**可注入钩子**输出（`PoolDiagnostics.warnHook/errorHook`，默认写 **stderr + flush**），
      `KeyPool` 首次建池时把钩子接到 f_log 的 logger（应用可用 `redirectWarningsTo` 更早接管，不会被覆盖）
      —— 用钩子而非直接 `import f_log`，是因为 `SyncDeque` 所在的最底层包反向 import 父包会形成包环；
      只有 `dump()` 与信号处理器里那一行固定 `println`（崩溃时日志框架可能死锁/丢行）。

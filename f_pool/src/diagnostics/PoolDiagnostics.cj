@@ -26,12 +26,13 @@ import fountain::f_base.{registerSignalHandler, resetSignalHandler, Signal, SIGI
  * `fountain::f_pool.base.collection`（`SyncDeque`/`LinkedNode`）也能记账/告警，
  * 又不至于形成 `base.collection ⇄ f_pool` 的包环。
  *
- * **输出通道**：
- * - **常规（非崩溃）告警经可注入钩子输出**：默认 `println`；上层（`KeyPool` 首次建池时自动接，
+ * **输出通道**（一律 **stderr + flush**，不写 stdout —— 库不占应用的数据通道，
+ * 且 stdout 重定向时是块缓冲，进程被信号带走会丢掉缓冲区里的行）：
+ * - **常规（非崩溃）告警经可注入钩子输出**：默认写 stderr；上层（`KeyPool` 首次建池时自动接，
  *   或应用自己更早调用 `redirectWarningsTo`）可以把它接到 f_log，从而与业务日志同一条流水。
  *   用钩子而不是直接 `import f_log`：本包要保持零依赖，且"往哪写"的决策属于上层；
- * - `dump()` 与信号处理器里那行**固定 `println`**：它们可能在崩溃现场执行，此时日志框架
- *   （`AsyncLogger` 是"队列 + 独立写线程"）可能死锁或丢行，不能碰。
+ * - `dump()` 与信号处理器里那行**固定直写 stderr、不经钩子**：它们可能在崩溃现场执行，
+ *   此时日志框架（`AsyncLogger` 是"队列 + 独立写线程"）可能死锁或丢行，不能碰。
  */
 
 /**
@@ -116,10 +117,21 @@ public struct PoolDiagnostics {
         auditRounds.fetchAdd(1)
     }
 
-    /** 常规告警的输出钩子（默认 `println`）。 */
-    protected static var warnHook: (String) -> Unit = {message => println(message)}
-    /** 严重告警的输出钩子（默认 `println`）。 */
-    protected static var errorHook: (String) -> Unit = {message => println(message)}
+    /**
+     * 诊断/告警的唯一落点：**stderr + 立刻 flush**。
+     * 不用 stdout：库不该占应用的数据通道，而且实测 stdout 在重定向时是块缓冲，
+     * 进程被信号带走会丢掉缓冲区里的行 —— 而告警往往正是"崩溃前的最后一条"。
+     */
+    private static func writeDiagnostic(line: String): Unit {
+        let err = getStdErr()
+        err.writeln(line)
+        err.flush()
+    }
+
+    /** 常规告警的输出钩子（默认写 stderr）。 */
+    protected static var warnHook: (String) -> Unit = {message => writeDiagnostic(message)}
+    /** 严重告警的输出钩子（默认写 stderr）。 */
+    protected static var errorHook: (String) -> Unit = {message => writeDiagnostic(message)}
     private static let hooksInstalled = AtomicBool(false)
 
     /**
@@ -195,7 +207,7 @@ public struct PoolDiagnostics {
      * 缓冲区里的行**不会落盘**（最后一行丢掉），stderr 的不丢。
      */
     public static func dump(reason!: String = 'manual'): Unit {
-        getStdErr().writeln("[FOUNTAIN_POOL.diag] ${reason}: ${snapshot()}")
+        writeDiagnostic("[FOUNTAIN_POOL.diag] ${reason}: ${snapshot()}")
     }
 
     /**
@@ -215,8 +227,8 @@ public struct PoolDiagnostics {
         }
         registerSignalHandler(FATAL_SIGNALS){ signal =>
             if (dumping.compareAndSwap(false, true)) {
-                // stderr：stdout 在重定向时是块缓冲，进程被信号带走会丢掉最后一行（实测）
-                getStdErr().writeln("[FOUNTAIN_POOL.crash] fatal signal=${signal}, ${snapshot()}")
+                // stderr + flush：stdout 在重定向时是块缓冲，进程被信号带走会丢掉最后一行（实测）
+                writeDiagnostic("[FOUNTAIN_POOL.crash] fatal signal=${signal}, ${snapshot()}")
                 resetSignalHandler(FATAL_SIGNALS)
                 exit(134)
             }
