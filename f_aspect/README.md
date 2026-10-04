@@ -134,7 +134,7 @@ public class AspectRoute <: RouteRule {
 public class InvocationFuncInfo {
     public InvocationFuncInfo(
         private let _funcInfo: QualifiedFuncInfo, //函数元数据
-        private var _args: Array<Any>//函数实参
+        private let _args: Array<Any>//函数实参
     ) {}
     /**
      * typeInfo funcName argTypes 构成函数元数据

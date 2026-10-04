@@ -18,12 +18,13 @@
 | 合计 | 24 | 25 | 14 | 17 | 1 | **81** |
 
 > 计数修正（2026-10-04）：§1.3 `ASP-1` 判定为**误判**（设计目的，非缺陷）⇒ 待修严重级 **13** 条（f_aspect 严重 4 条）；上表保留审查当时的原始计数。
+> 二次修正（2026-10-04）：§1.4 `ASP-2` 已修复 ⇒ 待修严重级 **12** 条（f_aspect 严重 3 条）。
 
 **建议修复顺序**（即严重级内部的落地顺序）：
 
 1. `ORM-1`（§1.1）结果缓存键退化 —— 事务内可能返回**别的参数**的查询结果（静默错数据）
 2. `X-1`（§1.2）`TypeInfos.get(String)` 无限递归 —— 波及 14 处调用（f_bean 条件装配、f_aspect 三条规则、f_orm 一处）　**✅已修复（2026-10-04，见 §1.2 修复标记）**
-3. `ASP-2`（§1.4）切面链共享参数槽 —— 并发下参数互串（原先并列的 `ASP-1`/§1.3 已于 2026-10-04 判定为**误判**：链按类型缓存、链尾固化首次 `callee` 是设计目的，非缺陷）
+3. `ASP-2`（§1.4）切面链共享参数槽 —— 并发下参数互串（原先并列的 `ASP-1`/§1.3 已于 2026-10-04 判定为**误判**：链按类型缓存、链尾固化首次 `callee` 是设计目的，非缺陷）　**✅已修复（2026-10-04，见 §1.4 修复标记）**
 4. `ORM-C1`（§1.5）`iterator` 返回前结果集已被关闭 —— 真实驱动下不可用
 5. `ASP-4`/`ASP-5`（§1.6/§1.7）参数注解规则越界崩溃 / 恒不织入
 6. `BEAN-1`（§1.8）宏生成不存在的 `lookupSet` —— `HashSet`/`Set` 形参直接编译失败
@@ -133,7 +134,14 @@ public static func get(qualifiedName: String): TypeInfo {
 
 影响：链按 (TypeInfo, InstanceFunctionInfo) 只建一次，链尾永远是最早那次调用的 `callee`；`callee` 定义在原方法体内（宏展开见 `PointCut.cj:109-118`）⇒ 捕获首个接收者 `this` ⇒ **prototype / 手工 `new` 的实例上会在错误对象上执行方法体**；同时该实例被静态 map 永久引用（无法回收）。修法：链里只保存切面名列表，把 `fn`（与 args）作为参数逐次传入。（原始提案，已作废——见上方判定：按类型建链、固化首次 `callee` 即为设计目的。）
 
-### 1.4 [严重｜正确性] `ASP-2` 缓存的 `InvocationFuncInfo` 每调用被改写参数，并发下互相覆盖（f_aspect）✓已复核
+### 1.4 [严重｜正确性] `ASP-2` 缓存的 `InvocationFuncInfo` 每调用被改写参数，并发下互相覆盖（f_aspect）✓已复核 → ✅已修复（2026-10-04）
+
+**✅ 修复标记（2026-10-04）**：分支 `fix/asp-2`（worktree `.worktrees/asp-2`，基线 `859e3759`），代码、用例、README、本标记在**同一提交**（提交信息 `fix(f_aspect): ASP-2 实参逐调用传递，切面链不再共享可变参数槽（§1.4）`）。**落地方式与原「修法」不同**：不需要改成 `proceed(funcInfo, args, fn)`，而是在层闭包内用本次调用的 `args` 新建 `InvocationFuncInfo`——`Aspect.proceed(funcInfo, point)` 签名与 `point(args)` 语义都不变。（原条目引用的 `Aspects.cj:41/47/64` 在 §1.3 补注释后为 `51/57/74`，均已改掉。）
+
+- 改动：`f_aspect/src/Aspects.cj` doProceed —— 链只捕获不可变的 `qualifiedFuncInfo`；层闭包把 `funcInfo.setArgs(args)` 换成 `InvocationFuncInfo(qualifiedFuncInfo, args)` 后交给切面（实参逐调用、逐层传递）。链仍按 `(类型, 函数)` 只在首次调用构建、链尾仍固化首次 `callee`（§1.3 判定的设计不动）。`f_aspect/src/QualifiedFuncInfo.cj`：`_args` 改 `private let`、删 `setArgs`（全仓唯一调用点已移除）；`f_aspect/README.md` 的 `InvocationFuncInfo` 片段同步（`var`→`let`）。
+- 用例（f_aspect 原先没有测试目录，本提交新建）：`aspect_args_race_test.cj`（并发串台回归：切面无状态、不加锁、不读 args，用 `AtomicBool` 制造确定性交错）、`aspect_chain_capture_test.cj`（每次调用各自的 info、实参与元数据正确；切面经 `point()` 改造实参的语义保留）。
+- 测量证据：**修前** `T1 传入实参 1，业务方法实收 2；T2 传入实参 2，业务方法实收 2`，`Assert Failed: (r1 == 1)`，`FAILED: 1`（EXIT=1）；**修后** `T1 传入实参 1，业务方法实收 1；T2 传入实参 2，业务方法实收 2`，三条用例 `PASSED: 3, FAILED: 0, ERROR: 0`、`cjpm test success`（EXIT=0）。机制用例的实测行：`切面拿到的 info 与本次入参是同一实例（第1/2次）：false/false`、`两次拿到的 info 是同一实例：false`、`切面在两次调用里看到的实参：1/2`、`切面把实参 7 改成 100，业务方法实收 100`。
+- 未覆盖：`f_orm`/`f_rpc` 未重跑构建——本次不改公开 API（两模块只是实现 `Aspect`、读 `funcInfo.args`），如需可单独 `cjpm build`。
 
 位置：`src/Aspects.cj:41`（配合 `:47`）
 

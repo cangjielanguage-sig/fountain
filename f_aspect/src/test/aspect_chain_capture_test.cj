@@ -31,64 +31,96 @@ public class CaptureTarget {
     }
 }
 
-/**
- * 机制验证用切面：**不读 args 做业务判断**，只记录
- * ①本次调用收到的 `funcInfo` 是否与首次调用传入的 info 是同一实例（`refEq`）；
- * ②从这个（共享）对象上读到的实参值。
- */
-@AspectRoute[FuncNameRouteRule("n")]
-public class ArgsIdentityAspect <: Aspect {
-    public static let firstCallInfo = ArrayList<InvocationFuncInfo>()
-    public static let sameAsFirst = ArrayList<Bool>()
-    public static let argsOnCapturedInfo = ArrayList<Int64>()
-
-    public init() {}
-
-    public func before(funcInfo: InvocationFuncInfo): Unit {
-        sameAsFirst.add(refEq(funcInfo, firstCallInfo[0]))
-        argsOnCapturedInfo.add((funcInfo.args[0] as Int64).getOrThrow())
+/** 「切面改造实参」用例的目标函数。 */
+public class RewriteTarget {
+    public func p(v: Int64): Int64 {
+        v
     }
 }
 
 /**
- * 验证「`Aspects.doProceed` 在首次调用时构建闭包链，并把**首次调用的** `InvocationFuncInfo`
- * （含其可变的 `_args`）捕获进闭包」这一说法 —— 对应 `Aspects.cj:36-56` 的 `computeIfAbsent`
- * 闭包，闭包内 `setArgs`/`proceed` 用的 `funcInfo` 恒为首次调用捕获的那个（下称 info₀）。
- *
- * 证据链（全部单线程，不涉及并发交错）：
- *   - 第 1 次调用：切面收到的 funcInfo 与 `info1` refEq 相等；
- *   - 第 2 次调用：传入的是 `info2`（与 `info1` 不是同一对象），但切面收到的 funcInfo **仍与 info1 同一实例**
- *     ⇒ 链上复用的就是首次调用捕获的那个对象；
- *   - 同一对象上再读 `args` 得到 2 ⇒ 该对象的 `_args` 被后续调用改写。
- * 结论：串台的载体是"**被捕获进链的那个对象**"，而不是"缓存的参数值"；且单线程下参数始终正确
- * （写—读顺序发生）——串台只在并发交错时出现（另见 `aspect_args_race_test.cj`）。
+ * 记录切面每次调用实际拿到的 `InvocationFuncInfo`（对象、实参、元数据）。
+ * 切面自身不读 args 做判断，无状态、不加锁。
+ */
+@AspectRoute[FuncNameRouteRule("n")]
+public class ArgsIdentityAspect <: Aspect {
+    public static let seenInfo = ArrayList<InvocationFuncInfo>()
+    public static let argsOnSeen = ArrayList<Int64>()
+
+    public init() {}
+
+    public func before(funcInfo: InvocationFuncInfo): Unit {
+        seenInfo.add(funcInfo)
+        argsOnSeen.add((funcInfo.args[0] as Int64).getOrThrow())
+    }
+}
+
+/**
+ * 切面把实参改成 100 再继续（验证实参逐调用传递后 `point(args)` 的语义仍然保留）。
+ */
+@AspectRoute[FuncNameRouteRule("p")]
+public class ArgsRewriteAspect <: Aspect {
+    public init() {}
+
+    public func around(funcInfo: InvocationFuncInfo, point: (Array<Any>) -> Any): Any {
+        point([100])
+    }
+}
+
+/**
+ * 验证 `Aspects.doProceed` 的实参传递语义：链只在切点函数首次调用时按「(类型, 函数)」构建一次、
+ * 链尾固化首次调用传入的 callee（设计说明见 `Aspects` 声明处），但**每层用本次调用的 `args`
+ * 新建一个 `InvocationFuncInfo`** 交给切面，因此：
+ *   - 切面拿到的 info 既不是首次调用固化在链上的那个对象，也不是本次调用方传入的对象，而是链为本次调用新建的；
+ *   - 两次调用各自一个实例（不再复用同一个对象），各自带的实参互不干扰；
+ *   - 元数据（类型、函数名）仍然正确。
+ * 修复前的行为见 `.autocode/bugs/bug.md` §1.4：层闭包用 `setArgs` 改写首次调用的那个实例，
+ * 并发下参数互串（复现在 `aspect_args_race_test.cj`）。
  */
 @Test
-public class AspectChainCapture_test {
+public class AspectPerCallInfo_test {
     @TestCase
-    public func testChainCapturesFirstCallInfo(): Unit {
+    public func testPerCallInvocationFuncInfo(): Unit {
         BeanFactory.instance.register<ArgsIdentityAspect>({=> ArgsIdentityAspect()})
 
         let info1 = InvocationFuncInfo(TypeInfo.of<CaptureTarget>(), 'n', [TypeInfo.of<Int64>()], [1])
         let info2 = InvocationFuncInfo(TypeInfo.of<CaptureTarget>(), 'n', [TypeInfo.of<Int64>()], [2])
-        @Assert(refEq(info1, info2), false) // 先确认两次调用的 info 是两个不同对象
-        ArgsIdentityAspect.firstCallInfo.add(info1)
+        @Assert(refEq(info1, info2), false) // 两次调用的入参是两个不同对象
 
         let r1 = Aspects.proceed<Int64>(info1, {args: Array<Any> => (args[0] as Int64).getOrThrow()})
         let r2 = Aspects.proceed<Int64>(info2, {args: Array<Any> => (args[0] as Int64).getOrThrow()})
-        println("第 1 次调用返回 ${r1}；第 2 次调用返回 ${r2}")
-        println("切面收到的 funcInfo 与 info1（首次调用）同一实例：第1次=${ArgsIdentityAspect.sameAsFirst[0]}，第2次=${ArgsIdentityAspect.sameAsFirst[1]}")
-        println("该对象上的 args 依次为 ${ArgsIdentityAspect.argsOnCapturedInfo[0]}/${ArgsIdentityAspect.argsOnCapturedInfo[1]}")
+        println("第 1/2 次调用返回 ${r1}/${r2}")
+        println(
+            "切面拿到的 info 与本次入参是同一实例（第1/2次）：${refEq(ArgsIdentityAspect.seenInfo[0], info1)}/${refEq(ArgsIdentityAspect.seenInfo[1], info2)}")
+        println("两次拿到的 info 是同一实例：${refEq(ArgsIdentityAspect.seenInfo[0], ArgsIdentityAspect.seenInfo[1])}")
+        println("切面在两次调用里看到的实参：${ArgsIdentityAspect.argsOnSeen[0]}/${ArgsIdentityAspect.argsOnSeen[1]}")
 
-        // 单线程下参数正确：串台只在并发交错时出现
+        // 单线程下参数正确
         @Assert(r1, 1)
         @Assert(r2, 2)
-        // 第 1 次调用：切面收到的就是本次传入的 info1
-        @Assert(ArgsIdentityAspect.sameAsFirst[0], true)
-        @Assert(ArgsIdentityAspect.argsOnCapturedInfo[0], 1)
-        // 第 2 次调用：切面收到的仍是 info1（不是 info2）⇒ 闭包固化的是首次调用那个对象
-        @Assert(ArgsIdentityAspect.sameAsFirst[1], true)
-        // 同一对象上的 _args 已被第 2 次调用改写成 2 ⇒ "可变槽"就是这个被捕获的对象
-        @Assert(ArgsIdentityAspect.argsOnCapturedInfo[1], 2)
+        // 切面拿到的是链为本次调用新建的实例：既不是固化在链上的首个对象，也不是本次入参对象
+        @Assert(refEq(ArgsIdentityAspect.seenInfo[0], info1), false)
+        @Assert(refEq(ArgsIdentityAspect.seenInfo[1], info2), false)
+        // 两次调用各自一个实例：不再复用同一个对象
+        @Assert(refEq(ArgsIdentityAspect.seenInfo[0], ArgsIdentityAspect.seenInfo[1]), false)
+        // 各自带的实参与元数据都正确
+        @Assert(ArgsIdentityAspect.argsOnSeen[0], 1)
+        @Assert(ArgsIdentityAspect.argsOnSeen[1], 2)
+        @Assert(ArgsIdentityAspect.seenInfo[1].typeInfo, TypeInfo.of<CaptureTarget>())
+        @Assert(ArgsIdentityAspect.seenInfo[1].funcInfo.name, 'n')
+    }
+
+    /**
+     * 切面把改造过的实参传给 `point(...)` 时，链尾（业务方法体）必须收到改造后的值——
+     * 这条语义在实参改为逐调用传递后必须保持不变。
+     */
+    @TestCase
+    public func testAspectCanRewriteArgsPassedToPoint(): Unit {
+        BeanFactory.instance.register<ArgsRewriteAspect>({=> ArgsRewriteAspect()})
+
+        let info = InvocationFuncInfo(TypeInfo.of<RewriteTarget>(), 'p', [TypeInfo.of<Int64>()], [7])
+        let r = Aspects.proceed<Int64>(info, {args: Array<Any> => (args[0] as Int64).getOrThrow()})
+        println("切面把实参 7 改成 100，业务方法实收 ${r}")
+        @Assert(r, 100)
     }
 }
