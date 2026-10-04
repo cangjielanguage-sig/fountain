@@ -14,7 +14,7 @@
 | 中 | 5 |
 | 低危 / 待验证 | 9 |
 
-> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4` 已修复 ⇒ 待修严重级 **0** 条、中危 **4** 条（见各自修复标记）。
+> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4`、§2.2 `MOCK-5` 已修复 ⇒ 待修严重级 **0** 条、中危 **3** 条（见各自修复标记）。
 
 **建议修复顺序**：
 
@@ -22,7 +22,7 @@
 2. `MOCK-2`（§1.2）`MockUpdateResult` 惰性读全局 —— 两个 update 结果互相串（实测复现）　**✅已修复（2026-10-04，见 §1.2 修复标记）**
 3. `MOCK-3`（§1.3）`getOrNull` 越界/未就绪返回 None（std 契约要求抛 `SqlException`），类型不匹配也静默 None　**✅已修复（2026-10-04，见 §1.3 修复标记）**
 4. `MOCK-4`（§2.1）`close()` 后 `isClosed()` 仍为 false、`state` 仍为 `Connected`（实测复现）　**✅已修复（2026-10-04，见 §2.1 修复标记）**
-5. `MOCK-5`（§2.2）`MockConnection.close()` 隐式清空夹具，且是外部唯一可用的重置入口
+5. `MOCK-5`（§2.2）`MockConnection.close()` 隐式清空夹具，且是外部唯一可用的重置入口　**✅已修复（2026-10-04，见 §2.2 修复标记）**
 6. `MOCK-7`（§2.4）参数槽语义：跨执行累积、`None<Any>` 兼作「未绑定」与「绑定 NULL」
 7. 其余见 §2、§3
 
@@ -151,7 +151,15 @@ PROBE_STATE_AFTER_CLOSE=Connected
 
 DT：`close()` 后断言 `isClosed()==true`、`state==Closed`；双关幂等；关闭后 query 抛异常。
 
-### 2.2 [中｜正确性] `MOCK-5` `MockConnection.close()` 带隐藏全局副作用：关连接 = 清空当前线程夹具，而且是包外唯一可用的重置入口（f_mockdb）
+### 2.2 [中｜正确性] `MOCK-5` `MockConnection.close()` 带隐藏全局副作用：关连接 = 清空当前线程夹具，而且是包外唯一可用的重置入口（f_mockdb） → ✅已修复（2026-10-04）
+
+**✅ 修复标记（2026-10-04）**：分支 `fix/mock-1-query-isolation`（同一 worktree，在 MOCK-4 之后追加提交），**代码、用例、本标记在同一提交**。
+
+- 改动：①`src/Connection.cj` 的 `close()` 只置 `closed_`，**不再**调 `MOCKDB.clear()`（夹具与连接生命周期解耦）；②`src/mockdb.cj` 的 `static func clear()` 提升为 **`public static func clear()`** 并补文档注释（「清空当前线程的全部夹具：查询结果、`lastInsertId`/`rowCount`、`toThrowOn*` 标志、metadata，不动 `execution`；用例开头调一次」，只清结果的入口仍是 `clearQueryResult()`）——包外（`f_orm` / `fcoder` / `fdemo`）与 `fountain::fountain.mockdb` 门面从此可以显式重置夹具，不必再借「关连接」这个副作用。
+- 用例：`src/mockdb_core_test.cj` 新增 2 条 —— `testCloseKeepsFixture`（跑一次查询后关连接：断言行、列信息、`toThrowOnExecuting`、metadata 都还在，只有 `isClosed()` 变 true）、`testClearResetsFixture`（显式 `clear()` 后行、列信息、标志、`lastInsertId`、`rowCount`、metadata 全部回默认）。
+- 测量证据：**修复前** PASSED 42 / **FAILED 1**（EXIT=1）：`testCloseKeepsFixture` 在 `@Assert(1, MOCKDB.getQueryResultRows().size)` 失败（left 1 / right 0 —— `close()` 把夹具清掉了）；**修复后** = **43/43 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**，编译警告 9 条无新增。日志 `/tmp/mock5_before.log`、`/tmp/mock5_after.log`。
+- 影响面核查：`MOCKDB.clear()` 的生产调用点全仓只有 `Connection.cj` 这一处（改后为 0），其余都是各用例开头的显式调用；仓内除 f_mockdb 外只有 `f_orm/src/wrap/DatabasePool_test.cj` 使用 mockdb（夹具写在 `execution` 内、用 `pool` 借还连接），不依赖「关连接清夹具」。
+- 行为变化（有意）：`MockConnection.close()` 不再是「重置夹具」的隐式入口；包外用例若此前依赖这个副作用，改成显式 `MOCKDB.clear()` 即可（README 相应补充见 §3.1 `MOCK-L4`）。
 
 位置：`src/Connection.cj:36-38`（`close()` → `MOCKDB.clear()`）、`src/mockdb.cj:46-59`（`clear()` 清 11 个 ThreadLocal：行、列信息、`toThrowOn*` 标志、metadata、`lastInsertId`、`rowCount`）
 

@@ -49,7 +49,8 @@ public class MOCKDB {
         queryResultColumnInfos_.set(None)
     }
 
-    static func clear(): Unit {
+    /**清空当前线程的全部夹具（查询结果、lastInsertId/rowCount、toThrowOn* 标志、metadata），不动 execution；用例开头调一次即可*/
+    public static func clear(): Unit {
         clearQueryResult()
         lastInsertId_.set(None)
         rowCount_.set(None)

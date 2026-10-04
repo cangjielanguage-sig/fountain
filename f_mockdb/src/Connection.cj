@@ -39,7 +39,7 @@ public class MockConnection <: Connection {
         closed_
     }
     public func close(): Unit {
+        //只关闭连接自身：夹具的生命周期由用例用 MOCKDB.clear() 显式管理，关连接不再清夹具
         closed_ = true
-        MOCKDB.clear()
     }
 }

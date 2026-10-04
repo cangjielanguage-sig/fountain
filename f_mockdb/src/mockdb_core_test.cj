@@ -422,4 +422,58 @@ public class MockDBCoreTest {
         ds.close()
         @Assert(true, ds.isClosed())
     }
+
+    @TestCase
+    public func testCloseKeepsFixture(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'v', nullable: false, typeName: 'SqlInteger')
+            MOCKDB.addQueryResultRow([1])
+        }
+        MOCKDB.toThrowOnExecuting = false
+        let meta = HashMap<String, String>()
+        meta['version'] = '1.0'
+        MOCKDB.metadata = meta
+        let conn = MockConnection()
+        let _ = conn.prepareStatement('SELECT v FROM t').query()
+        @Assert(1, MOCKDB.getQueryResultRows().size)
+        conn.close()
+        //关连接只应改变连接自身状态，不应动夹具（修复前 close() 会 MOCKDB.clear()）
+        @Assert(1, MOCKDB.getQueryResultRows().size)
+        @Assert(1, MOCKDB.queryResultColumnInfos.size)
+        @Assert(false, MOCKDB.toThrowOnExecuting)
+        @Assert('1.0', conn.getMetaData().get('version').getOrThrow())
+        @Assert(true, conn.isClosed())
+    }
+
+    @TestCase
+    public func testClearResetsFixture(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'v', nullable: false, typeName: 'SqlInteger')
+            MOCKDB.addQueryResultRow([1])
+            MOCKDB.lastInsertId = 7
+            MOCKDB.rowCount = 3
+        }
+        MOCKDB.toThrowOnExecuting = true
+        let meta = HashMap<String, String>()
+        meta['k'] = 'v'
+        MOCKDB.metadata = meta
+        let conn = MockConnection()
+        try {
+            let _ = conn.prepareStatement('SELECT v FROM t').query()
+            @Assert(false)
+        } catch (e: MockDbException) {
+            @Assert(true)
+        }
+        @Assert(1, MOCKDB.getQueryResultRows().size)
+        //显式清夹具（提升为 public 后包外也能调）后一切回默认值
+        MOCKDB.clear()
+        @Assert(0, MOCKDB.getQueryResultRows().size)
+        @Assert(0, MOCKDB.queryResultColumnInfos.size)
+        @Assert(false, MOCKDB.toThrowOnExecuting)
+        @Assert(0, MOCKDB.lastInsertId)
+        @Assert(0, MOCKDB.rowCount)
+        @Assert(true, MOCKDB.metadata.get('k').isNone())
+    }
 }
