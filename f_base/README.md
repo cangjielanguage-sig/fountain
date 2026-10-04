@@ -47,7 +47,7 @@ public func then<O>(mapper: (T) -> O, comparator: (O, O) -> Ordering): Comparato
 public func then<O>(mapper: (T) -> O, comparator: Comparator<O>): Comparator<T>
 
 //返回的Comparator调用本函数参数完成类型转换，并对转换结果做比较
-public static func comparing<O, T>(mapper: (O) -> T): Comparator<O> where T <: Comparator<T>
+public static func comparing<O, T>(mapper: (O) -> T): Comparator<O> where T <: Comparable<T>
 //返回的Comparator调用mapper完成类型转换，并调用comparator完成比较
 public static func comparing<O, T>(mapper: (O) -> T, comparator: (T, T) -> Ordering): Comparator<O>
 public static func comparing<O>(mapper: (O) -> T, comparator: Comparator<T>): Comparator<O>
@@ -194,7 +194,7 @@ func toResult<U, E>(fn: (T) -> ?U): ?Result<U, E>
 func toResult<U, E>(fn: () -> Exception): Result<U, E>
 //将当前Option包装为Result.Ok(this)
 func wrapResult<E>(): Result<?T, E>
-``
+```
 
 ## OptionCaller
 
@@ -332,9 +332,9 @@ private func append<K, V>(value: Map<K, V>): This where K <: Equatable<K>
 ## Help
 
 ```cj
-//convert返回第一个非None且非空的值
-//Help.convert<T>(a, b, c)
-//Help.convert<T>(list)
+//convert返回第一个非None（Array<?T> 只判 isSome）且非空（Array<?String>/Array<C> 还会过滤空串/空集合）的值
+//Help.convert<T>([a, b, c])
+//Help.convert<T>([list])
 public static func convert<T>(options: Array<?T>): ?T
 public static func convert<T>(options: Array<?String>): String
 public static func convert<T, C>(collections: Array<C>): ?C where C <: Collection<T>
@@ -351,15 +351,21 @@ public enum OS <: Equatable<OS> & ToString & Hashable {
     | Windows
     | macOS
     | HarmonyOS
+    | OpenHarmony
+    | Android
+    | iOS
     public operator func ==(other: OS): Bool
     public prop isWindows: Bool
     public prop isLinux: Bool
     public prop isMacOS: Bool
     public prop isHarmonyOS: Bool
+    public prop isOpenHarmony: Bool
+    public prop isAndroid: Bool
+    public prop isiOS: Bool
     public func toString(): String
     public static func valueOf(value: String): OS
     public func hashCode(): Int64
-    //返回当前操作系统的实例
+    //返回当前操作系统的实例（注意：HarmonyOS 的分支当前处于注释状态，ohos 环境实际返回 OpenHarmony）
     public static prop current: OS
     //返回当前操作系统的换行符
     public prop nextLine: String
@@ -379,7 +385,9 @@ public func resource<R, T>(res: R, fn: (R) -> T): T where R <: Resource
 
 ```cj
 /**
- * 构造函数接收一个返回Resource实现的闭包，call函数执行fn，fn结束时关闭new闭包返回的实例
+ * 构造函数接收一个返回 Resource 实现的闭包（**只调用一次**，实例被本类持有）；
+ * call 函数执行 fn，fn 结束时关闭该实例 —— 因此**同一个 ResourceManager 的第二次 call 会拿到已关闭的资源**，
+ * 需要「每次都用新实例」时请用顶级函数 `resource(res, fn)`。
  */
 public struct ResourceManager<R> where R <: Resource {
     public init(new: () -> R)
@@ -650,6 +658,29 @@ public class InheritedTaskLocal<T> <: AbstractInheritedTaskLocal {
 }
 ```
 
+## 补充：README 未逐条展开的公开符号（以源码为准）
+
+- **std 重导出**：`public import std.collection.* / MathExtension / reflect.* / regex.* / time.*`（`src/public_std_imports.cj`）
+  与 `TypeInfo` / `BigInt` / `Decimal` / `DateTime`（`src/TypeInfos.cj`）⇒ `import fountain::f_base.*` 会连带带出这些 std 符号。
+- **`Options<T, R>`**（`src/Options.cj`）：`isEmptyOrBlank` / `isNotEmptyOrZero` / `convert` / `convertOrThrow` 等。
+- **Option 的运算符扩展**（`src/ExtendOption.cj`）：`+ - * / % ** & | ^ ! << >>`（`?(T)` 与 `T` 两组重载）、
+  `OptionComparable`、`noneOrder!: NoneOrder`。
+- **`ExtendArray`**：`grow(size, new!)`、`expand`、`operator *(repeat)`、`GrownArrayNewValue<T>`。
+- **`ExtendNumber`**：接口族 `Number` / `Integer` / `SignedInteger` / `UnsignedInteger` / `Float`，
+  以及 `Int8..UInt64` 的 `isOdd` / `isEven` / `numberOfLeadingZeros` / `flip` / `toUInt` / `toInt` / `to`。
+- **字符串 / Range / Rune 扩展**：`stringJoin<T[,C]>`、`String.trimAsciiBlanks` / `replaceFirst` / `replaceLast`、
+  `Range<T>.toString()`、`Rune ± 整数`、`Rune * Int64: String`。
+- **`Arch`**：`Arch.current` / `isX86_64` / `isAarch64`（与 OS 同级的平台判定）。
+- **`Result` 链式 API**：`filter()` → `ResultFilter`、`mapper()` → `ResultMapper`。
+- **`BaseException`**：4 个构造器 + `addSuppressed` + `prop suppressed: ArrayList<Exception>`；顶层 `printStackTrace(exception, output)`。
+- **`Bucket<K, V> <: Map<K, V> & Iterable<(K, V)>`**、`EmptyMap <: Bucket`、`EmptyMapEntryView`。
+- **反射工具**：`TypeInfos`、`TypeMemberInfos`、`SubTypeOf`（`src/TypeInfos.cj`）。
+- **信号与原生**：`SIGIOT` / `SIGSEGV` 等常量与 `Signal` / `SignalHandlerFunc`（`src/signal.cj`）、
+  `nextPowerOf2`、`toHex` / `fromHex`、`MEM_PAGE_SIZE` / `nullptr` / `mcopy`、`WorkerStrategy`、
+  `BaseCommand<R, T>`、`OverSizeException`、`UnsafeBytes.unsafeUtf8`。
+- **宏包**：`fountain::f_base.macros` 的 `@nameof` / `@nameValueOf`（需单独 `import fountain::f_base.macros.*`）。
+- `src/Comparator_test.cj` 因 `include=["src"]` 会随包发布（测试文件位置未与源码分离）。
+
 ## 结束进程信号处理函数
 本模块确保在使用fountain的应用项目所有动态链接库完成加载后再注册SIGTERM、SIGINT两个信号处理函数，并清除之前注册的这两个信号的处理函数。
 应用项目模块如果需要在进程结束前做一些清除工作应当调用以下函数：
@@ -670,7 +701,7 @@ public struct ExitCallbacks {
 ```
 
 ## 注册信号处理函数
-只有linux有效，其它操作系统是空函数体。
+POSIX 平台有效；**仅 Windows 是空实现**（macOS / OpenHarmony 走真实实现）。
 与std.runtime.registerSignalHandler(signal: Signal, handler: (Int32) -> Bool)拥有相同的意义
 ```cj
 //注册新的信号处理函数，不清空相同信号的其它处理函数

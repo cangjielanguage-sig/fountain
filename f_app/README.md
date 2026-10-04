@@ -1,7 +1,7 @@
 # fountain::f_app API 参考
 
-> 本文档基于 `f_app` 模块当前源码整理（`f_app/cjpm.toml`：包名 `f_app`，版本 `1.3.6`，输出类型 `dynamic`，`cjc-version 1.2.0`）。
-> 依赖包：`f_base`、`f_concurrent`、`f_data`、`f_log`、`f_random`、`f_version`，以及 `std.env` / `std.fs` / `std.process` / `std.regex` / `stdx.net.http`（`pub` 查询制品仓库时使用）。
+> 本文档基于 `f_app` 模块当前源码整理：版本以 `f_app/cjpm.toml` 为准（当前 `1.3.7`，与 `f_version/src/FountainVersion.cj` 同步），输出类型 `dynamic`。
+> 依赖包：`f_base`、`f_concurrent`、`f_data`、`f_log`、`f_random`、`f_version`，以及 `std.env` / `std.fs` / `std.process` / `std.regex` / `std.random` / `stdx.net.http` / `stdx.net.tls`（`pub` 查询制品仓库与随机串使用）。
 > 全部类型都在唯一包 `fountain::f_app` 下（没有 `f_app.SubCommand` 这样的子包）。
 
 ## 目录
@@ -47,6 +47,10 @@ public struct App {
 
 分发规则：先匹配内置子命令（`run` / `shutdown` / `restart` / `module` / `workspace` / `cleanUpdate` / `build` / `test` / `count` / `version` / `help`），未匹配则交给 `SubCommandMediator.exec(args[0], args[1..])`（见第 4 节）。
 
+**只有 `run` / `restart` / `test` 与「未命中任何命令」这条路径才会走 `load()`**（扫描并加载动态库 →
+`InitializerCollection.initialize()` → 注册退出回调）；`shutdown` / `version` / `help` / `count` / `build` 等
+既不扫描也不初始化。`InitializerCollection.initialize()` 是一次性的（结束时会把自己置空）。
+
 ```cangjie
 // 使用自己的 main 函数启动应用（会自动补上 run 子命令）
 main(args: Array<String>): Int64 {
@@ -75,7 +79,7 @@ main(args: Array<String>): Int64 {
 | `test` | `fboot test [PATH] [args...] --dylibPattern=<正则>` | 用 `PATH/test/cjpm.toml` 覆盖 `PATH/cjpm.toml`，先 `build` 再用 `run` 启动；缺少 `--dylibPattern` 时抛 `BootException("arg --dylibPattern='...' in command line is required")` |
 | `count` | `fboot count [PATH] [--ext=cj] [--ignoreBrackets] [--ignoreComments]` | 统计 modules（`*.toml`）、packages（路径含 `/src/` 的目录）、files、lines（默认按 `--ext=cj`，可忽略纯括号行与注释），并输出耗时 |
 | `version` | `fboot version [x.y.z] [msg] [tag [tagmsg]]` | 见 3.7（用于管理 fountain 自身） |
-| `help` | `fboot help` | 打印帮助文本，内容即本节所列命令 |
+| `help` | `fboot help` | 打印帮助文本（内置命令的说明文本硬编码在 `App.cj`，与本节略有出入：不含 `test`，`module` 一条写的是"当前目录"而实际改的是上一层目录） |
 | `pub` | `fboot pub <x.y.z> [--skip-lint] [--skip-test]` | 由 `PublishCommand` 注册的子命令，见第 6 节 |
 | `randhex` | `fboot randhex <n>` | 由 `RandHexCommand` 注册：打印 `n` 位随机小写 16 进制串（`RandomString().randomLowerHex(n)`） |
 
@@ -91,7 +95,7 @@ main(args: Array<String>): Int64 {
 仅用于管理 fountain 自身（要求可免密操作 git）：
 
 * `fboot version`：打印 `FountainVersion`（`f_version` 模块）。
-* `fboot version x.y.z [msg] [tag [tagmsg]]`：`git pull` → 递归改写工作目录下所有 `cjpm.toml` 的 `version` 为 `x.y.z`，同时把 `cjc-version` 更新为 `cjc -v` 报出的版本 → 若工作目录属于 `fountain` / `fboot` 项目，替换 `f_version/src/FountainVersion.cj` 中的 `fountain(x.y.z)` 与 `release-x.y.z` → `git add .` → `git commit`（`msg` 缺省时为 `Some codes were changed, version: x.y.z`）→ 需要时创建 `release-x.y.z` 标签（有 tagmsg 时用 `-a ... -m`）→ `git push` 与 `git push origin release-x.y.z`。
+* `fboot version x.y.z [msg] [tag [tagmsg]]`：`git pull` → 递归改写工作目录下所有 `cjpm.toml` 的 `version` 为 `x.y.z`，同时把 `cjc-version` 更新为 `cjc -v` 报出的版本 → 若工作目录属于 `fountain` / `fboot` 项目，替换 `f_version/src/FountainVersion.cj` 中的 `fountain(x.y.z)` 与 `release-x.y.z` → `git add .` → `git commit`（`msg` 缺省时为 `Some codes were changed, version: x.y.z`）→ 只要出现 `tag` 参数就执行 `git tag -a release-x.y.z -m <提交信息>`（额外的 `tagmsg` 只会被拼成附加行，用户给的 `tagmsg` 实际未被直接使用）→ `git push` 与 `git push origin release-x.y.z`。
 * 版本号不匹配 `x.y.z` 时只打印提示，不执行任何操作。
 
 ## 4. 自定义子命令
@@ -234,10 +238,13 @@ fboot pub <x.y.z> [--skip-test] [--skip-lint]
 * 发布顺序：按模块间依赖自动排序——只要还有“同项目内、且尚未发布完成”的被依赖模块，就把当前模块放回队列等待。
 * 每个模块的发布步骤：
   1. `checkPublished(..., once: true)` 先探测制品仓库是否已存在该版本，存在则跳过实际发布（`https://pkg.cangjie-lang.cn/v1/artifact/getPackageMetadata?...`）；
-  2. 备份并改写其 `cjpm.toml`：`version` 改为目标版本，同项目的 `path` / `git` 依赖改写为 `"x.y.z"`（原文件备份为 `cjpm.toml.bak`，发布结束在 `finally` 中还原）；
+     注意探测失败（响应解析异常、body 为空）会被**吞掉并返回「未发布」**、按退避无限重试；`once=true` 也不会因失败而返回 false；
+  2. 改写其 `cjpm.toml` 的 `version` 为发布版本、把同项目的 `path` / `git` 依赖改写成 `"x.y.z"`，
+     然后才把当前内容备份为 `cjpm.toml.bak`（发布结束在 `finally` 中还原 ⇒ **还原回来的 `version` 仍是发布版本**）；
   3. `cjpm clean` → 删除 `cjpm.lock` → `cjpm bundle ...` → `cjpm publish`；
-  4. 若该模块被其它模块依赖，则以斐波那契退避轮询仓库，直到该版本可被安装，并执行 `cjpm install <organization>::<module>-<version>`；
-  5. 任一步失败会打印堆栈并重试整段流程。
+  4. 若该模块被其它模块依赖，则以斐波那契退避轮询仓库，直到该版本可被安装，
+     再由 `checkPublished` 内部执行 `cjpm install <organization>::<module>-<version>`；
+  5. 各步骤的成败靠抓子进程 stdout 的固定行（如 `cjpm clean success`）判断，**不看退出码**；任一步失败会打印堆栈并重试整段流程。
 * 结束时打印 `publish completed in <耗时>`。
 
 ## 7. 其它公开类型
@@ -255,7 +262,7 @@ fboot pub <x.y.z> [--skip-test] [--skip-lint]
 
 | 符号 | 说明 |
 | --- | --- |
-| `internal func load(args: Array<String>, dynamic: Bool): (Path, ArrayList<() -> Unit>)` | 确定目标路径（`confirmTargetPath`）→ 按平台选择扩展名与库搜索路径变量（Windows `.dll` / `Path`，macOS `.dylib` / `DYLD_FALLBACK_LIBRARY_PATH`，其它 `.so` / `LD_LIBRARY_PATH`）→ `dynamic` 为真时递归扫描并 `PackageInfo.load` 文件名匹配 `^lib.*(<--dylibPattern 的值>\|.+_stAtIc__).*$` 的库（即文件名须以 `lib` 开头，且匹配正则或带 `_stAtIc__` 后缀；未给出 `--dylibPattern` 时等价于加载目录下全部 `lib*` 动态库）→ 调用 `InitializerCollection.initialize()` → 注册 `ExitCallbacks.toExitGracefully()` |
+| `internal func load(args: Array<String>, dynamic: Bool): (Path, ArrayList<() -> Unit>)` | 确定目标路径（`confirmTargetPath`）→ 按平台选扩展名（Windows `.dll` / macOS `.dylib` / 其它 `.so`；库搜索路径变量并未实际设置）→ `dynamic` 为真时递归扫描并 `PackageInfo.load` 文件名匹配 `^lib.*(<--dylibPattern 的值>\|.+_stAtIc__).*$` 的库 → 调用 `InitializerCollection.initialize()` → 注册 `ExitCallbacks.toExitGracefully()`。注意 `--dylibPattern` 的提取（`extractPattern`）是「取首个非 `--dylibPattern=` 参数的下一个下标」再切片 ⇒ 只有「正则紧跟第一个位置参数」这种写法可用，缺省 `PATH` 或不带位置参数时会下标越界 |
 | `internal const APP_STATIC_RESOURCE_SUFFIX = '_stAtIc__'` | 版本模块的固定后缀，`build` 阶段生成的 `<模块名>_stAtIc__` 会随主库一起被加载，用于携带 `AppVersion` |
 | `internal func confirmTargetPath(args: Array<String>): Path` | `args[1]` 不以 `-` 开头时视为路径（不存在则创建），否则用当前工作目录；返回规范化后的绝对路径 |
 | `internal let log` | `LoggerFactory.getLogger<App>()` |

@@ -20,7 +20,12 @@
 - equal 为被修饰的类实现Equatable接口
 - hash 为被修饰的类实现Hashable接口
 - tostring 为被修饰的类实现ToString接口
-- props 把被修饰的类的非公共实例成员变量添加公共实例成员属性
+- compare 为被修饰的类实现Comparable接口（`@DataAssist[compare]`）
+- props 把被修饰的类的非公共实例成员变量添加公共实例成员属性（**`var` 字段才有 setter，`let` 只生成不可变属性**）
+- fields 生成 `DataFields<T>` 所需的字段描述，并自动向 `DataTypeRegistry` 登记该类型
+  （跨模块解码未登记类型会失败；泛型类不登记）
+- 属性名大小写不敏感、可混写；另有配套注解 `@DataExclude[prop|hash|equal|compare|tostring|field]`
+  可把成员排除在对应能力之外
   ```cj
   //假设存在类
   @DataAssist[props]
@@ -55,7 +60,7 @@
 - fields 为被修饰的类实现实例间和类实例与JSON之间的互相复制
 
 ```cj
-import fountain.f_data.*
+import fountain::f_data.*
 /**这一行往下单纯只是为了演示实例复制和类实例与json互相转换的功能*******************/
 //@DataAssist[fields]宏修饰的类即可做到以上这些
 @DataAssist[equal hash tostring props fields]
@@ -762,10 +767,34 @@ depth=n: match(...match(@.name, 'Alice')..., 'Alice')
 ## 参考
 
 - [RFC 9535: JSONPath: Query Expressions for JSON](https://www.rfc-editor.org/rfc/rfc9535)
-- [RFC 9535 覆盖清单](RFC9535_COVERAGE.md)
+- [RFC 9535 覆盖清单](doc/RFC9535_COVERAGE.md)
 
 
 ## 快速失败
 `import fountain::f_data.BreakingCommand`
-服务端业执行过程中执行perform BreakingCommand(toDataValue)立即结束当前业务，快速失败
-data是返回给客户端的数据
+服务端业务执行过程中执行 `BreakingCommand.new(value)` 立即结束当前业务（快速失败），
+`value` 是返回给客户端的数据（`BreakingCommand` 本体定义在 `src/base/BreakingCommand.cj`）。
+
+## 补充：README 未逐条展开的要点（以源码为准）
+
+- **转换 flag**（`src/base/global_objects.cj`，作为 `toData` / `fromData` / `populate` 的 `flag!` 参数）：
+  `DEFAULT`、`IGNORE_FIELD_NOT_FOUND`、`IGNORE_FIELD_TYPE_NOT_MATCH`、`IGNORE_NONE`、`IGNORE_VALIDATION`、
+  `IGNORE_NOT_MATCHED_VALIDATION`、`DEEP`、`WRAPPING`、`THROWING`、`SATURATING_ON_INT_OVERFLOW`。
+- **校验生效时机**：校验器只在 `MutableField.set` 写入时执行，且**仅当值是 `DataString`** 时才跑；
+  `ReadableField.validator` 可读取；失败抛 `ValidationException`。
+- **异常家族**（`src/exception/`）：`DataException`、`DataParsableException`、`JsonException`、`ValidationException`。
+- **数据对象扩展点**：`ObjectData<T>` / `DataFields<T>` / `ObjectFields` / `MutableField` / `ReadonlyField`；
+  `DataObject<T>` 提供多个 `populate` 重载、`set/get(name, flag)` 与公共字段 `data`。
+- **注解补充**：`@DataExclude[prop|hash|equal|compare|tostring|field]`、`@FieldAlias(name)`、
+  `@DateTimeConverter(format)`；校验器组合 `AndValidator` / `OrValidator` / `NotValidator` / `DummyValidator`、
+  `CombinedValidator(validator)`。
+- **类型表补充**：`DataAny`（示例里用到的中性类型）、`DataUnit`、`DataTuples`、`DataInputStream`；
+  已内置 `DataFields` 扩展的 std 类型见 `src/base/NumberData.cj`、`DataString.cj`、`DataBool.cj`、
+  `DataDuration.cj`、`DataDateTime.cj`、`CollectionData` / `MapData` / `ConcurrentMapData`、`DataInputStream`。
+- **JSON 转换签名**：`toJson<T>(d, flag!)` / `fromJson<T>(s, flag!): ?T`（`src/json/JsonConverter.cj`）；
+  `toJsonSchema<T>()` 返回的是 `JsonObject`（不是 `String`）。
+- **`DataPath.cache` 依赖 `f_cache.HeapCache`、`DataPath.solid` 依赖 `ConcurrentHashMap`**；
+  基类 `DataPathNode` 是 internal 接口 ⇒ **不能在包外自定义路径节点**。
+- `src/path/` 下的 8 个测试文件随包发布（`cjpm.toml` 的 `include = ["src","doc"]`）。
+- **已过期的文档**：`doc/RFC9535_GAPS.md` 里不少「Missing」项实际已实现（filter 内 `count/value` 比较、
+  I-JSON 校验、对象/数组结构相等、`in [null]`），以 `doc/RFC9535_COVERAGE.md` 与源码为准。
