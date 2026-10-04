@@ -35,7 +35,7 @@
 
 ### 1.1 [严重｜正确性+安全] `CACHE-1` `HeapCache.set(key, value, life!/dieAt)` 在**新建键**时忽略寿命参数：新建时用缓存级 `maxLife`，覆盖时才用 `life` → ✅已修复（2026-10-05）
 
-**✅ 修复标记（2026-10-05）**：分支 `review/f_cache`（审查 worktree 内直接修），**代码、用例、本标记在同一提交**（提交信息 `fix(f_cache): CACHE-1 新建键忽略 set(life!/dieAt)（bug-cache §1.1 修复标记）`；提交哈希由下一次标记同步补录）。
+**✅ 修复标记（2026-10-05）**：分支 `review/f_cache`（审查 worktree 内直接修），**代码、用例、本标记在同一提交**（提交 `3171d664`：`fix(f_cache): CACHE-1 新建键忽略 set(life!/dieAt)（bug-cache §1.1 修复标记）`）。
 
 - 改动（`src/HeapCache.cj:185-188`）：新建路径改为 `Priority<V>(key, value, life, checkDuration, once)`（原为缓存级 `maxLife`）。`life` 的默认值就是 `this.maxLife` ⇒ **不传 life 时行为不变**；`set(key, value, dieAt:)` 走 `life: dieAt - now()` ⇒ 一并恢复。
 - 用例（`src/HeapCache_test.cj`）：新增 `testSetLifeOnNewKey` —— 新建键 `set(life=100ms)`、已存在键同参数（对照，修复前即正确）、新建键 `set(dieAt=now+100ms)`，300 ms 后三者都断言不存在；`checkDuration` 取 30 s 以隔离定时清扫。
@@ -94,7 +94,7 @@ store.add(key, Priority<V>(key, value, life, checkDuration, once))
 
 ### 1.2 [严重｜正确性+内存] `CACHE-2` `ConcHashMap.computeIfAbsent` 不记账 `size`：`getOrCompute` 建的条目不计入 size ⇒ `maxSize` 上限完全失效、size 可为负 → ✅已修复（2026-10-05）
 
-**✅ 修复标记（2026-10-05）**：分支 `review/f_cache`，**代码、用例、本标记在同一提交**（提交信息 `fix(f_cache): CACHE-2 getOrCompute 计入 size（bug-cache §1.2 修复标记）`；提交哈希由下一次标记同步补录）。
+**✅ 修复标记（2026-10-05）**：分支 `review/f_cache`，**代码、用例、本标记在同一提交**（提交 `0e3d70d6`：`fix(f_cache): CACHE-2 getOrCompute 计入 size（bug-cache §1.2 修复标记）`）。
 
 - 改动：`src/SyncLinkedHashMap.cj:44-62` 的 `computeIfAbsent` 改为 `computeIfAbsentCounted(key, callable): (V, Bool)`（仍在同一段写锁内完成「查—算—写」，第二个返回值表示本次是否真的新建）；`src/ConcHashMap.cj:276-283` 改用它并在 `added` 时 `incrSize()`。两处类都是包内实现（全仓 grep 确认段级方法只有这一个调用方），公开 API 不变。
 - 用例（`src/HeapCache_test.cj`）：`testGetOrComputeAccountsSize`（`getOrCompute×5` ⇒ `size==5`、`remove` 一个 ⇒ `size==4` 且不为负）、`testGetOrComputeObeysMaxSize`（`maxSize=2`、`getOrCompute×5`、等 1 s ⇒ 存活数与 `size` 都 ≤2）。
@@ -129,7 +129,7 @@ store.add(key, Priority<V>(key, value, life, checkDuration, once))
 
 ### 1.3 [严重｜正确性] `CACHE-3` `ConcHashMap.add` 覆盖已存在键时多计 size；`clear()` 不归零 ⇒ `size`/`isEmpty` 长期失真 → ✅已修复（2026-10-05）
 
-**✅ 修复标记（2026-10-05）**：分支 `review/f_cache`，**代码、用例、本标记在同一提交**（提交信息 `fix(f_cache): CACHE-3 add 覆盖记账 + clear 归零（bug-cache §1.3 修复标记）`；提交哈希由下一次标记同步补录）。
+**✅ 修复标记（2026-10-05）**：分支 `review/f_cache`，**代码、用例、本标记在同一提交**（提交 `14733baf`：`fix(f_cache): CACHE-3 add 覆盖记账 + clear 归零（bug-cache §1.3 修复标记）`）。
 
 - 改动（`src/ConcHashMap.cj`）：`add` 只在段级 `add` 返回 `None`（确为新增）时 `incrSize()`（`:260-268`）；`clear()` 清空各段后 `size_.store(0)`（`:325-331`）—— `destroy()` 走 `clear()`，一并归零。
 - 用例（`src/HeapCache_test.cj`）：`testAddOverwriteCountsOnce`（同键 `add`×2 ⇒ `size==1`，再 `add` 一个新键 ⇒ `2`）、`testClearResetsSize`（`set`×3 ⇒ 3；`clear()` ⇒ 0；再 `set` ⇒ 1；`destroy()` ⇒ 0）。
