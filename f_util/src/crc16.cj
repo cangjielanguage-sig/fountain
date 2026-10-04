@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2025 WuJingrun（吴京润）
+Copyright (c) 2026 WuJingrun（吴京润）
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,281 +17,123 @@ package fountain::f_util
 
 import fountain::f_base.*
 
-let CRC16_LOOKUP_TABLE: Array<UInt16> = [
-    0x0000,
-    0x1021,
-    0x2042,
-    0x3063,
-    0x4084,
-    0x50A5,
-    0x60C6,
-    0x70E7,
-    0x8108,
-    0x9129,
-    0xA14A,
-    0xB16B,
-    0xC18C,
-    0xD1AD,
-    0xE1CE,
-    0xF1EF,
-    0x1231,
-    0x0210,
-    0x3273,
-    0x2252,
-    0x52B5,
-    0x4294,
-    0x72F7,
-    0x62D6,
-    0x9339,
-    0x8318,
-    0xB37B,
-    0xA35A,
-    0xD3BD,
-    0xC39C,
-    0xF3FF,
-    0xE3DE,
-    0x2462,
-    0x3443,
-    0x0420,
-    0x1401,
-    0x64E6,
-    0x74C7,
-    0x44A4,
-    0x5485,
-    0xA56A,
-    0xB54B,
-    0x8528,
-    0x9509,
-    0xE5EE,
-    0xF5CF,
-    0xC5AC,
-    0xD58D,
-    0x3653,
-    0x2672,
-    0x1611,
-    0x0630,
-    0x76D7,
-    0x66F6,
-    0x5695,
-    0x46B4,
-    0xB75B,
-    0xA77A,
-    0x9719,
-    0x8738,
-    0xF7DF,
-    0xE7FE,
-    0xD79D,
-    0xC7BC,
-    0x48C4,
-    0x58E5,
-    0x6886,
-    0x78A7,
-    0x0840,
-    0x1861,
-    0x2802,
-    0x3823,
-    0xC9CC,
-    0xD9ED,
-    0xE98E,
-    0xF9AF,
-    0x8948,
-    0x9969,
-    0xA90A,
-    0xB92B,
-    0x5AF5,
-    0x4AD4,
-    0x7AB7,
-    0x6A96,
-    0x1A71,
-    0x0A50,
-    0x3A33,
-    0x2A12,
-    0xDBFD,
-    0xCBDC,
-    0xFBBF,
-    0xEB9E,
-    0x9B79,
-    0x8B58,
-    0xBB3B,
-    0xAB1A,
-    0x6CA6,
-    0x7C87,
-    0x4CE4,
-    0x5CC5,
-    0x2C22,
-    0x3C03,
-    0x0C60,
-    0x1C41,
-    0xEDAE,
-    0xFD8F,
-    0xCDEC,
-    0xDDCD,
-    0xAD2A,
-    0xBD0B,
-    0x8D68,
-    0x9D49,
-    0x7E97,
-    0x6EB6,
-    0x5ED5,
-    0x4EF4,
-    0x3E13,
-    0x2E32,
-    0x1E51,
-    0x0E70,
-    0xFF9F,
-    0xEFBE,
-    0xDFDD,
-    0xCFFC,
-    0xBF1B,
-    0xAF3A,
-    0x9F59,
-    0x8F78,
-    0x9188,
-    0x81A9,
-    0xB1CA,
-    0xA1EB,
-    0xD10C,
-    0xC12D,
-    0xF14E,
-    0xE16F,
-    0x1080,
-    0x00A1,
-    0x30C2,
-    0x20E3,
-    0x5004,
-    0x4025,
-    0x7046,
-    0x6067,
-    0x83B9,
-    0x9398,
-    0xA3FB,
-    0xB3DA,
-    0xC33D,
-    0xD31C,
-    0xE37F,
-    0xF35E,
-    0x02B1,
-    0x1290,
-    0x22F3,
-    0x32D2,
-    0x4235,
-    0x5214,
-    0x6277,
-    0x7256,
-    0xB5EA,
-    0xA5CB,
-    0x95A8,
-    0x8589,
-    0xF56E,
-    0xE54F,
-    0xD52C,
-    0xC50D,
-    0x34E2,
-    0x24C3,
-    0x14A0,
-    0x0481,
-    0x7466,
-    0x6447,
-    0x5424,
-    0x4405,
-    0xA7DB,
-    0xB7FA,
-    0x8799,
-    0x97B8,
-    0xE75F,
-    0xF77E,
-    0xC71D,
-    0xD73C,
-    0x26D3,
-    0x36F2,
-    0x0691,
-    0x16B0,
-    0x6657,
-    0x7676,
-    0x4615,
-    0x5634,
-    0xD94C,
-    0xC96D,
-    0xF90E,
-    0xE92F,
-    0x99C8,
-    0x89E9,
-    0xB98A,
-    0xA9AB,
-    0x5844,
-    0x4865,
-    0x7806,
-    0x6827,
-    0x18C0,
-    0x08E1,
-    0x3882,
-    0x28A3,
-    0xCB7D,
-    0xDB5C,
-    0xEB3F,
-    0xFB1E,
-    0x8BF9,
-    0x9BD8,
-    0xABBB,
-    0xBB9A,
-    0x4A75,
-    0x5A54,
-    0x6A37,
-    0x7A16,
-    0x0AF1,
-    0x1AD0,
-    0x2AB3,
-    0x3A92,
-    0xFD2E,
-    0xED0F,
-    0xDD6C,
-    0xCD4D,
-    0xBDAA,
-    0xAD8B,
-    0x9DE8,
-    0x8DC9,
-    0x7C26,
-    0x6C07,
-    0x5C64,
-    0x4C45,
-    0x3CA2,
-    0x2C83,
-    0x1CE0,
-    0x0CC1,
-    0xEF1F,
-    0xFF3E,
-    0xCF5D,
-    0xDF7C,
-    0xAF9B,
-    0xBFBA,
-    0x8FD9,
-    0x9FF8,
-    0x6E17,
-    0x7E36,
-    0x4E55,
-    0x5E74,
-    0x2E93,
-    0x3EB2,
-    0x0ED1,
-    0x1EF0
-]
-@Frozen
-func crc16(bytes: Array<Byte>, s: Int64, e: Int64) {
-    var crc: UInt16 = 0x0000
-    for (i in s..e) {
-        crc = (crc << 8) ^ CRC16_LOOKUP_TABLE[Int64((UInt8(crc >> 8) ^ (bytes[i] & 0xFF)) & 0xFF)]
+/**
+ * CRC-16 各变体（参数口径见 `CrcEngine`，检查值是 `"123456789"` 的 CRC-16）。
+ *
+ * 用法：
+ * ```
+ * let c = Crc16.xmodem.compute('123456789')      // 0x31C3
+ * let c2 = Crc16.ccittFalse.compute(bytes)
+ * ```
+ *
+ * 注：顶层函数 `crc16(...)` 用**最常用**的 `Crc16.modbus`（CRC-16/MODBUS：poly=0x8005、反射、init=0xFFFF）。
+ * 与具体对端互通时请显式挑变体，例如 `Crc16.ccittFalse`（poly=0x1021、init=0xFFFF、非反射、检查值 0x29B1）
+ * 或 `Crc16.xmodem`（同族但 init=0x0000）。
+ */
+public class Crc16 {
+    // ---- 非反射（MSB-first）----
+    /** CRC-16/XMODEM：poly=0x1021 init=0x0000 xorout=0x0000（顶层 `crc16()` 曾经用过它）。 */
+    public static let xmodem = Crc16('CRC-16/XMODEM', 0x1021, 0x0000, false, false, 0x0000, 0x31C3)
+    /** CRC-16/CCITT-FALSE（同 IBM-3740）：poly=0x1021 init=0xFFFF xorout=0x0000。 */
+    public static let ccittFalse = Crc16('CRC-16/CCITT-FALSE', 0x1021, 0xFFFF, false, false, 0x0000, 0x29B1)
+    /** CRC-16/GENIBUS（同 XMODEM 的 init=0xFFFF 且 xorout=0xFFFF 版）。 */
+    public static let genibus = Crc16('CRC-16/GENIBUS', 0x1021, 0xFFFF, false, false, 0xFFFF, 0xD64E)
+    /** CRC-16/GSM：poly=0x1021 init=0x0000 xorout=0xFFFF。 */
+    public static let gsm = Crc16('CRC-16/GSM', 0x1021, 0x0000, false, false, 0xFFFF, 0xCE3C)
+    /** CRC-16/PROFIBUS：poly=0x1DCF init=0xFFFF xorout=0xFFFF。 */
+    public static let profibus = Crc16('CRC-16/PROFIBUS', 0x1DCF, 0xFFFF, false, false, 0xFFFF, 0xA819)
+    /** CRC-16/EN-13757：poly=0x3D65 init=0x0000 xorout=0xFFFF。 */
+    public static let en13757 = Crc16('CRC-16/EN-13757', 0x3D65, 0x0000, false, false, 0xFFFF, 0xC2B7)
+    /** CRC-16/T10-DIF：poly=0x8BB7 init=0x0000 xorout=0x0000。 */
+    public static let t10Dif = Crc16('CRC-16/T10-DIF', 0x8BB7, 0x0000, false, false, 0x0000, 0xD0DB)
+    /**
+     * 未收录（参数待核对，宁缺勿错）：`CRC-16/A` / `CRC-16/ISO-IEC-14443-3-A`（init=0xC6C6，检查值 0xBF05）。
+     * 加它只需一行：确认 `refin/refout` 后写 `Crc16('CRC-16/A', 0x1021, 0xC6C6, ?, ?, 0x0000, 0xBF05)`，
+     * 用例会自动核对检查值。
+     */
+    /** CRC-16/CDMA2000：poly=0xC867 init=0xFFFF xorout=0x0000。 */
+    public static let cdma2000 = Crc16('CRC-16/CDMA2000', 0xC867, 0xFFFF, false, false, 0x0000, 0x4C06)
+    /** CRC-16/CMS：poly=0x8005 init=0xFFFF xorout=0x0000。 */
+    public static let cms = Crc16('CRC-16/CMS', 0x8005, 0xFFFF, false, false, 0x0000, 0xAEE7)
+    /** CRC-16/BUYPASS（同 VERIFONE）：poly=0x8005 init=0x0000 xorout=0x0000。 */
+    public static let buypass = Crc16('CRC-16/BUYPASS', 0x8005, 0x0000, false, false, 0x0000, 0xFEE8)
+    /** CRC-16/DECT-R：poly=0x0589 init=0x0000 xorout=0x0001。 */
+    public static let dectR = Crc16('CRC-16/DECT-R', 0x0589, 0x0000, false, false, 0x0001, 0x007E)
+    /** CRC-16/DECT-X：poly=0x0589 init=0x0000 xorout=0x0000。 */
+    public static let dectX = Crc16('CRC-16/DECT-X', 0x0589, 0x0000, false, false, 0x0000, 0x007F)
+    /** CRC-16/TELEDISK：poly=0xA097 init=0x0000 xorout=0x0000。 */
+    public static let teledisk = Crc16('CRC-16/TELEDISK', 0xA097, 0x0000, false, false, 0x0000, 0x0FB3)
+    /** CRC-16/SPI-FUJITSU（同 AUG-CCITT）：poly=0x1021 init=0x1D0F xorout=0x0000。 */
+    public static let spiFujitsu = Crc16('CRC-16/SPI-FUJITSU', 0x1021, 0x1D0F, false, false, 0x0000, 0xE5CC)
+    // ---- 反射（LSB-first）----
+    /** CRC-16/ARC（同 IBM/CRC-16/LHA）：poly=0x8005 init=0x0000 xorout=0x0000。 */
+    public static let arc = Crc16('CRC-16/ARC', 0x8005, 0x0000, true, true, 0x0000, 0xBB3D)
+    /** CRC-16/MODBUS：poly=0x8005 init=0xFFFF xorout=0x0000。 */
+    public static let modbus = Crc16('CRC-16/MODBUS', 0x8005, 0xFFFF, true, true, 0x0000, 0x4B37)
+    /** CRC-16/USB：poly=0x8005 init=0xFFFF xorout=0xFFFF。 */
+    public static let usb = Crc16('CRC-16/USB', 0x8005, 0xFFFF, true, true, 0xFFFF, 0xB4C8)
+    /** CRC-16/MAXIM-DOW：poly=0x8005 init=0x0000 xorout=0xFFFF。 */
+    public static let maximDow = Crc16('CRC-16/MAXIM-DOW', 0x8005, 0x0000, true, true, 0xFFFF, 0x44C2)
+    /** CRC-16/KERMIT（同 CRC-16/BLUETOOTH）：poly=0x1021 init=0x0000 xorout=0x0000。 */
+    public static let kermit = Crc16('CRC-16/KERMIT', 0x1021, 0x0000, true, true, 0x0000, 0x2189)
+    /** CRC-16/X-25：poly=0x1021 init=0xFFFF xorout=0xFFFF。 */
+    public static let x25 = Crc16('CRC-16/X-25', 0x1021, 0xFFFF, true, true, 0xFFFF, 0x906E)
+    /** CRC-16/MCRF4XX：poly=0x1021 init=0xFFFF xorout=0x0000。 */
+    public static let mcrf4xx = Crc16('CRC-16/MCRF4XX', 0x1021, 0xFFFF, true, true, 0x0000, 0x6F91)
+    /** CRC-16/RIELLO：poly=0x1021 init=0xB2AA xorout=0x0000。 */
+    public static let riello = Crc16('CRC-16/RIELLO', 0x1021, 0xB2AA, true, true, 0x0000, 0x63D0)
+    /** CRC-16/TMS37157：poly=0x1021 init=0x89EC xorout=0x0000。 */
+    public static let tms37157 = Crc16('CRC-16/TMS37157', 0x1021, 0x89EC, true, true, 0x0000, 0x26B1)
+    /** CRC-16/DNP：poly=0x3D65 init=0x0000 xorout=0xFFFF。 */
+    public static let dnp = Crc16('CRC-16/DNP', 0x3D65, 0x0000, true, true, 0xFFFF, 0xEA82)
+
+    /** 全部变体：便于遍历自检与按名字挑选（见 crc_check_test.cj）。 */
+    public static let all = [
+        xmodem, ccittFalse, genibus, gsm, profibus, en13757, t10Dif, cdma2000, cms, buypass,
+        dectR, dectX, teledisk, spiFujitsu,
+        arc, modbus, usb, maximDow, kermit, x25, mcrf4xx, riello, tms37157, dnp
+    ]
+    private let engine: CrcEngine
+    /** RevEng 名称（如 `CRC-16/XMODEM`），便于日志与自检报告。 */
+    public let name: String
+    /** 该变体对 `"123456789"` 的标准检查值。 */
+    public let checkValue: UInt16
+    /** `initValue` 即 RevEng catalogue 的 `init`（`init` 是仓颉关键字，故改名）。 */
+    public init(name: String, poly: UInt64, initValue: UInt64, refin: Bool, refout: Bool, xorout: UInt64, check: UInt64) {
+        this.name = name
+        this.engine = CrcEngine(16, poly, initValue, refin, refout, xorout)
+        this.checkValue = UInt16(check & 0xFFFFu64)
     }
-    return crc & 0xFFFF;
+    public func initRegister(): UInt16 {
+        UInt16(engine.initRegister())
+    }
+    public func update(crc: UInt16, data: Array<Byte>): UInt16 {
+        UInt16(engine.update(UInt64(crc), data))
+    }
+    public func finish(crc: UInt16): UInt16 {
+        UInt16(engine.finish(UInt64(crc)))
+    }
+    public func compute(data: Array<Byte>): UInt16 {
+        UInt16(engine.compute(data))
+    }
+    public func compute(s: String): UInt16 {
+        compute(s.unsafeBytes())
+    }
+    public func compute<T>(s: T): UInt16 where T <: ToString {
+        compute(s.toString().unsafeBytes())
+    }
 }
+
+// ---- 顶层 API：用最常用的变体（CRC-16/MODBUS）----
 @Frozen
 public func crc16(bytes: Array<Byte>): UInt16 {
-    return crc16(bytes, 0, bytes.size)
+    Crc16.modbus.compute(bytes)
 }
 @Frozen
 public func crc16(s: String): UInt16 {
-    crc16(s.unsafeBytes())
+    Crc16.modbus.compute(s)
 }
 @Frozen
 public func crc16<T>(s: T): UInt16 where T <: ToString {
-    crc16(s.toString().unsafeBytes())
+    Crc16.modbus.compute(s)
 }

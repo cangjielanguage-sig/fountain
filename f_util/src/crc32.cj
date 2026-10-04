@@ -15,69 +15,104 @@ limitations under the License.
  */
 package fountain::f_util
 
-// 1. 导入可能需要的标准库模块
-import std.io.*
-import std.convert.*
 import fountain::f_base.*
 
-// 2. 定义CRC32查表法的主要结构体（使用struct模拟命名空间）
+/**
+ * CRC-32 各变体（参数口径见 `CrcEngine`，检查值是 `"123456789"` 的 CRC-32）。
+ *
+ * 用法：
+ * ```
+ * let c = Crc32.isoHdlc.compute(bytes)          // zlib/gzip/PNG 用的那个
+ * let c2 = Crc32.crc32c.compute(bytes)          // iSCSI/SSE4.2 硬件指令支持的那个
+ * let c3 = Crc32.crc32c.initRegister()          // 增量：init -> update -> finish
+ * ```
+ *
+ * 注：旧的顶层函数 `crc32(...)` / `crc32Init()` / `crc32Update()` / `crc32Finish()` 等价于
+ * `Crc32.isoHdlc`（CRC-32/ISO-HDLC，即 IEEE 802.3 / zlib），保留兼容；帧校验（f_protocol）与
+ * WAL 校验（f_store）用的就是它。
+ */
+public class Crc32 {
+    // ---- 反射（LSB-first）----
+    /** CRC-32/ISO-HDLC（同 ADCCP/PKZIP/V-42/XZ 里非 64 位那个）：zlib/gzip/PNG/以太网。 */
+    public static let isoHdlc = Crc32('CRC-32/ISO-HDLC', 0x04C11DB7, 0xFFFFFFFF, true, true, 0xFFFFFFFF, 0xCBF43926)
+    /** CRC-32/JAMCRC：同 ISO-HDLC 但 **不做** 末尾异或（即 ISO-HDLC 的结果再取反）。 */
+    public static let jamcrc = Crc32('CRC-32/JAMCRC', 0x04C11DB7, 0xFFFFFFFF, true, true, 0x00000000, 0x340BC6D9)
+    /** CRC-32/ISCSI（即 CRC-32C/Castagnoli）：poly=0x1EDC6F41，SSE4.2 有硬件指令。 */
+    public static let crc32c = Crc32('CRC-32/ISCSI', 0x1EDC6F41, 0xFFFFFFFF, true, true, 0xFFFFFFFF, 0xE3069283)
+    /** CRC-32/KOOPMAN（即 CRC-32K）：poly=0x741B8CD7，Koopman 的低碰撞多项式。 */
+    public static let koopman = Crc32('CRC-32/KOOPMAN', 0x741B8CD7, 0xFFFFFFFF, true, true, 0xFFFFFFFF, 0x2D3DD0AE)
+    /** CRC-32/BASE91-D：poly=0xA833982B。 */
+    public static let base91D = Crc32('CRC-32/BASE91-D', 0xA833982B, 0xFFFFFFFF, true, true, 0xFFFFFFFF, 0x87315576)
+    /** CRC-32/AUTOSAR：poly=0xF4ACFB13。 */
+    public static let autosar = Crc32('CRC-32/AUTOSAR', 0xF4ACFB13, 0xFFFFFFFF, true, true, 0xFFFFFFFF, 0x1697D06A)
+    // ---- 非反射（MSB-first）----
+    /** CRC-32/BZIP2（同 AAL5）：非反射，init/xorout 全 1。 */
+    public static let bzip2 = Crc32('CRC-32/BZIP2', 0x04C11DB7, 0xFFFFFFFF, false, false, 0xFFFFFFFF, 0xFC891918)
+    /** CRC-32/MPEG-2：非反射，init 全 1、xorout=0。 */
+    public static let mpeg2 = Crc32('CRC-32/MPEG-2', 0x04C11DB7, 0xFFFFFFFF, false, false, 0x00000000, 0x0376E6E7)
+    /** CRC-32/POSIX（即 CKSUM）：非反射，init=0、xorout 全 1（`crc32` 命令行工具的输出）。 */
+    public static let posix = Crc32('CRC-32/POSIX', 0x04C11DB7, 0x00000000, false, false, 0xFFFFFFFF, 0x765E7680)
+    /** CRC-32/XFER：poly=0x000000AF，init/xorout=0。 */
+    public static let xfer = Crc32('CRC-32/XFER', 0x000000AF, 0x00000000, false, false, 0x00000000, 0xBD0BE338)
+    /** CRC-32/Q（同 AIXM）：poly=0x814141AB，init/xorout=0，航空数据库用。 */
+    public static let q = Crc32('CRC-32/Q', 0x814141AB, 0x00000000, false, false, 0x00000000, 0x3010BF7F)
 
-// 2.1 定义算法常量
-// 标准CRC-32（IEEE 802.3）使用的多项式，也是zlib、gzip、PNG等采用的值
-private const POLYNOMIAL: UInt32 = 0xEDB88320
-// 初始值和最终异或值
-private const INIT_VALUE: UInt32 = 0xFFFFFFFF
-private const FINAL_XOR_VALUE: UInt32 = 0xFFFFFFFF
+    /** 全部变体：便于遍历自检与按名字挑选（见 crc_check_test.cj）。 */
+    public static let all = [
+        isoHdlc, jamcrc, crc32c, koopman, base91D, autosar,
+        bzip2, mpeg2, posix, xfer, q
+    ]
+    private let engine: CrcEngine
+    /** RevEng 名称（如 `CRC-32/ISO-HDLC`）。 */
+    public let name: String
+    /** 该变体对 `"123456789"` 的标准检查值。 */
+    public let checkValue: UInt32
+    /** `initValue` 即 RevEng catalogue 的 `init`（`init` 是仓颉关键字，故改名）。 */
+    public init(name: String, poly: UInt64, initValue: UInt64, refin: Bool, refout: Bool, xorout: UInt64, check: UInt64) {
+        this.name = name
+        this.engine = CrcEngine(32, poly, initValue, refin, refout, xorout)
+        this.checkValue = UInt32(check & 0xFFFFFFFFu64)
+    }
+    public func initRegister(): UInt32 {
+        UInt32(engine.initRegister())
+    }
+    public func update(crc: UInt32, data: Array<Byte>): UInt32 {
+        UInt32(engine.update(UInt64(crc), data))
+    }
+    public func finish(crc: UInt32): UInt32 {
+        UInt32(engine.finish(UInt64(crc)))
+    }
+    public func compute(data: Array<Byte>): UInt32 {
+        UInt32(engine.compute(data))
+    }
+    public func compute(s: String): UInt32 {
+        compute(s.unsafeBytes())
+    }
+    public func compute<T>(s: T): UInt32 where T <: ToString {
+        compute(s.toString().unsafeBytes())
+    }
+}
 
-// 2.2 预计算表（查找表）
-// 使用Array<UInt32>类型，长度为256，所有元素初始化为0
-private let table: Array<UInt32> = {
-    =>
-        let table = Array<UInt32>(256, repeat: 0)
-        // 在结构体加载时自动执行，用于生成table的内容
-        for (i in 0..256) {
-            var crc: UInt32 = UInt32(i)
-            // 对每个可能的字节值进行8次迭代
-            for (_ in 0..8) {
-                // 判断最低位是否为1
-                if ((crc & 1) != 0) {
-                    // 如果是1，则右移一位后与多项式进行异或运算
-                    crc = (crc >> 1) ^ POLYNOMIAL
-                } else {
-                    // 如果为0，则直接右移一位
-                    crc = crc >> 1
-                }
-            }
-            table[i] = crc
-        }
-        table
-}()
-
-// 2.4 核心计算函数（增量式：帧校验需要“边写边算 / 边读边算”，不能等整块拼齐）
+// ---- 兼容旧 API：`crc32*` = CRC-32/ISO-HDLC（顶层函数语义不变）----
 /** 初始化 CRC 寄存器。 */
 @Frozen
 public func crc32Init(): UInt32 {
-    INIT_VALUE
+    Crc32.isoHdlc.initRegister()
 }
 /** 继续累计一段字节。 */
 @Frozen
 public func crc32Update(crc: UInt32, data: Array<Byte>): UInt32 {
-    var c = crc
-    for (byte in data) {
-        let index: UInt32 = (c ^ UInt32(byte)) & 0xFFu32
-        c = (c >> 8) ^ table[Int64(index)]
-    }
-    c
+    Crc32.isoHdlc.update(crc, data)
 }
 /** 收尾：与 FINAL_XOR_VALUE 异或。 */
 @Frozen
 public func crc32Finish(crc: UInt32): UInt32 {
-    crc ^ FINAL_XOR_VALUE
+    Crc32.isoHdlc.finish(crc)
 }
 /** 一次算完整段（等价 init → update → finish）。 */
 @Frozen
 public func crc32(data: Array<Byte>): UInt32 {
-    crc32Finish(crc32Update(crc32Init(), data))
+    Crc32.isoHdlc.compute(data)
 }
 @Frozen
 public func crc32(data: String): UInt32 {

@@ -15,51 +15,131 @@ limitations under the License.
 */
 package fountain::f_util
 
+import std.collection.ArrayList
 import fountain::f_base.*
 import std.unittest.*
 import std.unittest.testmacro.*
 
 /**
- * CRC 的**标准检查值**（CRC catalogue，输入 "123456789"）。
- * 用途：钉住算法参数，避免"名字是某个标准、算出来却是另一套"而不被察觉。
+ * CRC 自检：**每个变体都带 RevEng 标准检查值**（`"123456789"` 的 CRC），逐个核对。
+ * 用途：钉住参数（多项式/初值/反射/异或），避免"名字是某个标准、算出来却是另一套"而不被察觉；
+ * 新加变体只要在 `CrcXX.all` 里带上正确的 `check` 就会被自动覆盖。
  *
- * | 函数 | 变体与参数 | 检查值 |
- * | --- | --- | --- |
- * | `crc16` | CRC-16/XMODEM：poly=0x1021, init=0, xorout=0, 非反射 | 0x31C3 |
- * | `crc32` | CRC-32/IEEE（zlib/gzip/PNG）：poly=0xEDB88320, init/xorout=全 1, 反射 | 0xCBF43926 |
- * | `crc64` | CRC-64/ECMA-182：poly=0x42F0E1EBA9EA3693, init=0, xorout=0, 非反射 | 0x6C40DF5F0B497347 |
+ * 同时验证：顶层函数（`crc16`/`crc32`/`crc64`/`crc32Init`/`crc32Update`/`crc32Finish`）指向的变体 ——
+ * 最常用的 MODBUS / ISO-HDLC / REDIS（`crc32*` 系列 = ISO-HDLC，f_protocol 帧校验与 f_store WAL 用它），
+ * 以及**增量接口与一次算完等价**（帧要边写边算）。
  */
 @Test
 public class Crc_check_test {
     private let check: Array<Byte> = '123456789'.unsafeBytes()
     private let empty: Array<Byte> = []
 
-    /** 与实际使用一致的：CRC-16/XMODEM。 */
-    @TestCase
-    public func crc16MatchesStandard(): Unit {
-        @Assert(crc16(check), 0x31C3u16)
-        @Assert(crc16(empty), 0x0000u16)
+    /** 十六进制打印（仓颉整数 toString 是十进制，报表里看十六进制更直观）。 */
+    private func hex(value: UInt64, width: Int64): String {
+        let out = ArrayList<Byte>()
+        for (i in 0..width) {
+            let nib = UInt8((value >> (4 * (width - 1 - i))) & 0xF)
+            out.add(if (nib < 10u8) { nib + 48u8 } else { nib + 87u8 })
+        }
+        String.fromUtf8(out.toArray())
     }
 
-    /** 标准 CRC-32（IEEE 802.3）；`f_store` 的 WAL 记录校验用的就是它。 */
+    /** 顶层 API 用最常用变体：`crc16`=MODBUS、`crc32`=ISO-HDLC、`crc64`=REDIS。 */
     @TestCase
-    public func crc32MatchesStandard(): Unit {
+    public func topLevelFuncsUseMostCommonVariants(): Unit {
+        @Assert(crc16(check), 0x4B37u16)
+        @Assert(crc16(empty), 0xFFFFu16)                   // MODBUS：init 全 1、xorout=0
         @Assert(crc32(check), 0xCBF43926u32)
         @Assert(crc32(empty), 0x00000000u32)
-    }
-
-    /** 标准 CRC-64/ECMA-182（修复前算出来是 0x4db9a9f87ec10c59，两套标准都对不上）。 */
-    @TestCase
-    public func crc64MatchesStandard(): Unit {
-        @Assert(crc64(check), 0x6C40DF5F0B497347u64)
+        @Assert(crc64(check), 0xE9C6D914C4B8D9CAu64)
         @Assert(crc64(empty), 0x0000000000000000u64)
+        // 泛型/字符串重载必须返回各自位宽的同值（历史上出过"返回 UInt16 却叫 crc64"的复制粘贴 bug）
+        @Assert(crc16('123456789'), 0x4B37u16)
+        @Assert(crc32('123456789'), 0xCBF43926u32)
+        @Assert(crc64('123456789'), 0xE9C6D914C4B8D9CAu64)
     }
 
-    /** 泛型重载必须返回各自位宽的同值（修复前返回的是 crc16 的 16 位结果）。 */
+    /** 顶层 API 必须等于其对应的变体（包装层没走样）。 */
     @TestCase
-    public func genericOverloadsReturnOwnWidth(): Unit {
-        @Assert(crc16('123456789'.unsafeBytes()), 0x31C3u16)
-        @Assert(crc32('123456789'), 0xCBF43926u32)
-        @Assert(crc64('123456789'), 0x6C40DF5F0B497347u64)
+    public func topLevelFuncsMatchVariants(): Unit {
+        @Assert(crc16(check), Crc16.modbus.compute(check))
+        @Assert(crc32(check), Crc32.isoHdlc.compute(check))
+        @Assert(crc64(check), Crc64.redis.compute(check))
+        @Assert(crc32Init(), Crc32.isoHdlc.initRegister())
+        @Assert(crc32Finish(0u32), Crc32.isoHdlc.finish(0u32))
+        @Assert(crc32Update(0u32, empty), 0u32)
+    }
+
+    /** CRC-16 全变体按 catalog 检查值自检。 */
+    @TestCase
+    public func crc16VariantsMatchCatalogue(): Unit {
+        for (v in Crc16.all) {
+            let got = v.compute(check)
+            if (got != v.checkValue) {
+                @Fail('${v.name}: crc16("123456789") = 0x${hex(UInt64(got), 4)}, 期望 0x${hex(UInt64(v.checkValue), 4)}')
+            }
+        }
+    }
+
+    /** CRC-32 全变体按 catalog 检查值自检。 */
+    @TestCase
+    public func crc32VariantsMatchCatalogue(): Unit {
+        for (v in Crc32.all) {
+            let got = v.compute(check)
+            if (got != v.checkValue) {
+                @Fail('${v.name}: crc32("123456789") = 0x${hex(UInt64(got), 8)}, 期望 0x${hex(UInt64(v.checkValue), 8)}')
+            }
+        }
+    }
+
+    /** CRC-64 全变体按 catalog 检查值自检。 */
+    @TestCase
+    public func crc64VariantsMatchCatalogue(): Unit {
+        for (v in Crc64.all) {
+            let got = v.compute(check)
+            if (got != v.checkValue) {
+                @Fail('${v.name}: crc64("123456789") = 0x${hex(got, 16)}, 期望 0x${hex(v.checkValue, 16)}')
+            }
+        }
+    }
+
+    /** 增量（init → update → update → finish）必须等于一次算完 —— 分片/短读短写都不能改变结果。 */
+    @TestCase
+    public func incrementalEqualsOneShot(): Unit {
+        let payload = Array<Byte>(1777) {i => UInt8((i * 31 + 7) % 251)}
+        let head = payload[0..1000]
+        let tail = payload[1000..]
+        for (v in Crc16.all) {
+            let pieces = v.finish(v.update(v.update(v.initRegister(), head), tail))
+            if (pieces != v.compute(payload)) {
+                @Fail('${v.name}: 增量 0x${hex(UInt64(pieces), 4)} != 一次算完 0x${hex(UInt64(v.compute(payload)), 4)}')
+            }
+        }
+        for (v in Crc32.all) {
+            let pieces = v.finish(v.update(v.update(v.initRegister(), head), tail))
+            if (pieces != v.compute(payload)) {
+                @Fail('${v.name}: 增量 0x${hex(UInt64(pieces), 8)} != 一次算完 0x${hex(UInt64(v.compute(payload)), 8)}')
+            }
+        }
+        for (v in Crc64.all) {
+            let pieces = v.finish(v.update(v.update(v.initRegister(), head), tail))
+            if (pieces != v.compute(payload)) {
+                @Fail('${v.name}: 增量 0x${hex(pieces, 16)} != 一次算完 0x${hex(v.compute(payload), 16)}')
+            }
+        }
+    }
+
+    /** 空输入：一次算完必须等于"初值直接收尾"（反射/非反射变体都不能例外）。 */
+    @TestCase
+    public func emptyInputEqualsFinishOfInit(): Unit {
+        for (v in Crc16.all) {
+            @Assert(v.compute(empty), v.finish(v.initRegister()))
+        }
+        for (v in Crc32.all) {
+            @Assert(v.compute(empty), v.finish(v.initRegister()))
+        }
+        for (v in Crc64.all) {
+            @Assert(v.compute(empty), v.finish(v.initRegister()))
+        }
     }
 }
