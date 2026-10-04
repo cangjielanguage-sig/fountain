@@ -14,7 +14,7 @@
 | 中 | 5 |
 | 低危 / 待验证 | 9 |
 
-> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4`、§2.2 `MOCK-5`、§2.3 `MOCK-6`、§2.4 `MOCK-7`（①③）、§2.5 `MOCK-8` 已修复 ⇒ **待修严重级 0 条、中危 0 条**；低危批次（§3.3：`MOCK-L1`/`L2`/`L4`/`L5`/`L6`/`L7`）与审查后新增的 `MOCK-L8`（§3.4）已修复 ⇒ 低危 8 条全清，`MOCK-L3` 暂不处理，`MOCK-V1` 判为不成立（见 §3.2）。仍未动：§2.4 的 ②（未绑定 vs 绑定 NULL）、§3.2 的 `MOCK-V2`（覆盖缺口）。并入状态：`MOCK-1`/`MOCK-2` 已并入 `sts/1.3.x`（合并提交 `12c19d94`）；`MOCK-3`~`MOCK-8` 与低危批次在分支 `fix/mock-1-query-isolation`（`e904ac87`/`ba04b79f`/`80d67a36`/`edb10235`/`7704cd91`/`924ec6f8`/`0742124b` + 本次提交），待下次同步。标记补录提交：`fa822423`、`cd429689`、`cee6dc6d`、`78bc9f30`。
+> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4`、§2.2 `MOCK-5`、§2.3 `MOCK-6`、§2.4 `MOCK-7`（①③）、§2.5 `MOCK-8` 已修复 ⇒ **待修严重级 0 条、中危 0 条**；低危批次（§3.3：`MOCK-L1`/`L2`/`L4`/`L5`/`L6`/`L7`）与审查后新增的 `MOCK-L8`（§3.4）已修复 ⇒ 低危 8 条全清，`MOCK-L3` 暂不处理，`MOCK-V1` 判为不成立、`MOCK-V2`（覆盖缺口）已补齐（均见 §3.2）⇒ **本轮审查提出的 16 条全部了结**，仅剩 §2.4 的 ②（未绑定 vs 绑定 NULL，需改公开签名）待定方向。用例总数 **30 → 56**。并入状态：`MOCK-1`/`MOCK-2` 已并入 `sts/1.3.x`（合并提交 `12c19d94`）；`MOCK-3`~`MOCK-8` 与低危批次在分支 `fix/mock-1-query-isolation`（`e904ac87`/`ba04b79f`/`80d67a36`/`edb10235`/`7704cd91`/`924ec6f8`/`0742124b`/`eba8389f` + 本次提交），待下次同步。标记补录提交：`fa822423`、`cd429689`、`cee6dc6d`、`78bc9f30`。
 
 **建议修复顺序**：
 
@@ -255,10 +255,26 @@ DT：`toThrowOnExecuting = true` 后执行，断言抛异常**且** `MOCKDB.getQ
 - **`MOCK-L7` 事务无状态机**：`src/Transaction.cj:46-81` 允许重复 `begin()`、未 `begin()` 就 `commit()/rollback()`；`MockConnection.createTransaction()`（`src/Connection.cj:24-26`）永不失败，而 std 契约规定「已处于事务状态且不支持并行事务时应抛 `SqlException`」⇒ ORM 的事务传播/嵌套失败分支在 mock 下测不到。修法：加最小状态（`begun`），或在 README 写明「mock 不校验事务状态」。　**✅已修复（2026-10-04，见 §3.3）**
 - **`MOCK-L8` `set` 的大索引会补出天量占位符（审查后新增）**：`src/Statement.cj` 的 `set<T>(index, …)` 用 `for(_ in args.size ..= index) { args.add(None<Any>) }` 补位 ⇒ `index = 1000000` 就真的分配 100 万个 `None`；真驱动按语句参数个数报「索引越界」，mock 原先不解析 SQL、定不出上界。修法：按 SQL 里的 `?` 个数定上界，越界抛 `SqlException`。　**✅已修复（2026-10-04，见 §3.4）**
 
-### 3.2 待验证（2 条，需实测）
+### 3.2 待验证（2 条，均已了结：`MOCK-V1` 不成立 / `MOCK-V2` 已补齐）
 
 - **`MOCK-V1` 重复加载动态库时的驱动注册**：`src/Driver.cj:21-23` 在 `static init()` 里 `DriverManager.register('mockdb', MockDriver())`；fountain 的应用允许「同一动态库被主动加载 + 被依赖再加载」两次（`fboot run` 的 `--dylibPattern` 说明里明确提到重复加载），std 文档只写「名称和实例一一对应，本方法并发安全」，没定义同名重复注册是覆盖还是报错。验证：写一个只链 `f_mockdb` 的小程序，手动 `dlopen` 两次后 `DriverManager.getDriver('mockdb')`，观察是否异常/是否为后一次实例。　**✗ 不成立（2026-10-04 判定）**：重复加载与否由**运行时**决定 —— 用 `PackageInfo.load` 重复加载同一个动态库会直接**运行时崩溃**，不用它加载就不会重复加载；仓内唯一的加载入口是 `f_app/src/funcs.cj:61` 的 `PackageInfo.load`，一个库只会被加载一次 ⇒「重复加载 ⇒ 驱动重复注册」在本项目不可能发生，无需处理。
 - **`MOCK-V2` 用例覆盖缺口（未被任何用例冻结的行为）**：`query(params)` / `update(params)` / `next(values)` 三个 `'not supported'` 分支、`getOrNull` 未 `next()` 与类型不符、`MockStatement.set` 负索引、语句复用的参数累积、`MockUpdateResult` 的惰性读取、`close()` 后的 `isClosed()`/`state`、`MOCKDB.execution` 缺省（`EMPTY_EXECUTION`）路径。现状 30 个用例全绿（§5），但这些分支一条都没测——修 §1/§2 时建议一并补上（否则改动没有回归网）。
+
+　**✅ 已完成（2026-10-04）**：8 个子项逐条落成用例，用例总数 **30 → 56**，全部通过：
+
+| 子项（审查时点出的缺口） | 冻结它的用例 |
+|---|---|
+| `query(params)` / `update(params)` / `next(values)` 三个 `'not supported'` 分支 | `testDeprecatedOverloadsThrowNotSupported`（本轮新增：三条分支都断言抛 `MockDbException('not supported')`） |
+| `getOrNull` 未 `next()`、类型不符 | `testGetOrNullBeforeNextThrows`、`testGetOrNullTypeMismatchThrows`（另配越界 `testGetOrNullOutOfRangeThrows`、NULL 值 `testGetOrNullNullValueReturnsNone`） |
+| `MockStatement.set` 负索引 | `testSetNegativeIndexThrows`（另配上界 `testSetIndexBeyondSqlParametersThrows`，见 §3.4） |
+| 语句复用的参数累积 | `testStatementReuseDoesNotKeepArgs` |
+| `MockUpdateResult` 的惰性读取 | `testUpdateResultIsSnapshot`、`testUpdateResultSurvivesLaterReset`、`testDeleteUpdateResult` |
+| `close()` 后的 `isClosed()` / `state` | `testConnectionCloseState`、`testDatasourceCloseState`、`testStatementAndQueryResultCloseState`、`testCloseKeepsFixture` |
+| `MOCKDB.execution` 缺省（`EMPTY_EXECUTION`）路径 | `testDefaultExecutionPath`（本轮新增：缺省夹具 0 行且 `columnInfos` 抛 `MockDbException`；随后设置自定义夹具可恢复常规行为） |
+
+测量：`cjpm test --no-capture-output` = **56/56 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**，编译警告 9 条无新增；日志 `/tmp/v2_after.log`。
+
+为冻结「缺省路径」，新增**包内可见**的 `MOCKDB.clearExecution()`（`src/mockdb.cj`：`execution_.store(None)`）—— 「未设置 `execution`」是缺省路径的前置状态，此前没有任何入口能回到它，用例无法触达该分支；该成员不带 `public` ⇒ 公开 API 与 README 均不变（同一提交）。
 
 ---
 
@@ -315,6 +331,8 @@ DT：`toThrowOnExecuting = true` 后执行，断言抛异常**且** `MOCKDB.getQ
 | 既有用例 | `cjpm test --no-capture-output`（WSL Ubuntu-24.04，SDK 1.3.0-alpha.20261001001050） | **30/30 PASSED，ERROR 0，FAILED 0，`cjpm test success`（EXIT=0）**，日志 `/tmp/mockdb_base.log` |
 | 探针用例 | 临时 `src/mockdb_review_probe_test.cj`（**已删除，未入库**） | 31/31 PASSED，打印 8 条实测值（`/tmp/mockdb_probe.log:36-43`），支撑 `MOCK-1`/`MOCK-2`/`MOCK-3`/`MOCK-4` |
 | 编译警告 | 同上构建（基线产物 errlog） | 10 条 warning、0 条 error（清单见 `MOCK-L3`） |
+
+**修复完成后**（2026-10-04，分支 `fix/mock-1-query-isolation`）：`cjpm test --no-capture-output` = **56/56 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**；编译警告 **9 条**（基线 10 条）；用例 **30 → 56**（新增 26 条，覆盖 `MOCK-1`~`MOCK-8`、`MOCK-L1`~`L8`、`MOCK-V2` 的全部子项）。
 
 探针原文（`MockDB.clear()` → 两次 query / 两次 update / `getOrNull` 越界与类型不符 / `close()` 后状态）：
 

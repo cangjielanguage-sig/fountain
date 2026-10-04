@@ -632,4 +632,61 @@ public class MockDBCoreTest {
         @Assert(true, rs.next())
         @Assert('ok', rs.get<String>(0))
     }
+
+    @TestCase
+    public func testDeprecatedOverloadsThrowNotSupported(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'v', nullable: false, typeName: 'SqlInteger')
+            MOCKDB.addQueryResultRow([1])
+        }
+        let conn = MockConnection()
+        let stmt = conn.prepareStatement('SELECT v FROM t')
+        let noParams = ArrayList<SqlDbType>().toArray()
+        //std 里带 params / values 的重载：mock 一律不支持，抛 MockDbException('not supported')
+        try {
+            let _ = stmt.query(noParams)
+            @Assert(false)
+        } catch (e: MockDbException) {
+            @Assert('not supported', e.message)
+        }
+        try {
+            let _ = stmt.update(noParams)
+            @Assert(false)
+        } catch (e: MockDbException) {
+            @Assert('not supported', e.message)
+        }
+        let rs = stmt.query()
+        try {
+            let _ = rs.next(noParams)
+            @Assert(false)
+        } catch (e: MockDbException) {
+            @Assert('not supported', e.message)
+        }
+    }
+
+    @TestCase
+    public func testDefaultExecutionPath(): Unit {
+        MOCKDB.clear()
+        MOCKDB.clearExecution()//回到「未设置 execution」的初态：走缺省夹具 EMPTY_EXECUTION
+        let conn = MockConnection()
+        let rs = conn.prepareStatement('SELECT v FROM t').query()
+        //缺省夹具不产生任何行
+        @Assert(false, rs.next())
+        //也不产生列信息：访问 columnInfos 抛 MockDbException
+        try {
+            let _ = rs.columnInfos
+            @Assert(false)
+        } catch (e: MockDbException) {
+            @Assert(true)
+        }
+        //设为自定义夹具后恢复常规行为
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'v', nullable: false, typeName: 'SqlInteger')
+            MOCKDB.addQueryResultRow([7])
+        }
+        let rs2 = conn.prepareStatement('SELECT v FROM t').query()
+        @Assert(true, rs2.next())
+        @Assert(7, rs2.get<Int64>(0))
+    }
 }

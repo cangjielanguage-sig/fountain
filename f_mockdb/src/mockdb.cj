@@ -89,6 +89,11 @@ public class MOCKDB {
         toThrowOnSavingSavePoint_.set(None)
     }
 
+    /**恢复到「未设置 execution」的初态（此后走缺省夹具 EMPTY_EXECUTION）；包内可见，供用例冻结缺省路径，不在公开 API 内*/
+    static func clearExecution(): Unit {
+        execution_.store(None)
+    }
+
     static prop currentThreadId: Int64 {
         get(){
             Thread.currentThread.id
