@@ -13,26 +13,27 @@
 | # | 问题 | 状态 | 说明 / 依据 |
 | --- | --- | --- | --- |
 | 缺陷 A | `EncodedMessage.copy` 写失败不归还池项 | ✅ | 早前会话已修（try/finally + 幂等 `release`）；本轮又修「归还不清空」（`Pool.init` 漏传 `clear`，见 6.8.1）——修后解码错误归零 |
-| 缺陷 B | 一条消息拆多次 `write`，失败留半条 | 🟡 | 发送侧：≤4096B 已合并成**一次 write**（见 6.9 第 4 条），大消息仍流式 ⇒ 仍可能写出半条。**接收侧：已能在“装配中”判定半条并抛 + 断链（见 6.10）** ⇒ 剩下的只是“减少发送侧窗口”（见 7.1） |
+| 缺陷 B | 一条消息拆多次 `write`，失败留半条 | ✅ | 发送侧：≤4096B 合并成**一次 write**（6.9 第 4 条）；大消息仍流式，但 `SocketBuffer.close()` 现在**先等在写的那一帧退场**（上限 2s）再关 socket ⇒ 正常关闭时序下对端看到「完整帧 + EOF」，不再是半帧（见 7.1）。接收侧本就能确定性判定半条并抛 + 断链（6.10） |
 | 缺陷 C | 解码异常后继续解析错位流 | ✅ | 两侧均改为 `close() + break`；`Message.decode` 中途 EOF 抛 `InputClosedException` |
 | P0-2 | 池项所有权 / 借出必还 | ✅ | `BytesListOutputStream.release()`（幂等）+ `DefaultCodec.release()` + `EncodedMessage` finally 释放 |
 | P1 | 取池项不无限静默阻塞 | ✅ | `KeyPool.get(Duration.Max)` 让出 CPU + 30s 上限 WARN 放弃；`lastBuffer()` 5s 有限超时（见 6.9 第 2 条） |
-| P2 | 心跳与连接生命周期 | 🟡 | ✅ `pingTimeout` 10ms→1s、连续失败 3 次再拆链、`bufferQueueSize` 1e6→1024；⬜ 其余小项见 7.5 |
+| P2 | 心跳与连接生命周期 | ✅ | `pingTimeout` 10ms→1s、连续失败 3 次再拆链、`bufferQueueSize` 1e6→1024；其余小项见 7.5，**7.5 各行已全部关闭** |
 | 6.6-1 | f_pool 连线记账（根因） | ✅ | `Pool.init` 漏传 `clear`（确定性根因，见 6.8.1）+ `check()` 不再留 `checking` + 不变量 `s ≡ 节点数 + out` 同临界区 + 脱钩自愈 + 低频自检 |
 | 6.6-2 | 不忙等 / 有限等待 | ✅ | 见 P1 |
 | 6.6-3 | 借出即校验 | ✅ | `DefaultCodec.getBuf()` 借到非空缓冲即抛（编码期失败，绝不会写出半条脏消息） |
-| 6.6-4 | 写路径原子性 | 🟡 | 同缺陷 B |
+| 6.6-4 | 写路径原子性 | ✅ | 同缺陷 B：整帧写与 `close()` 互斥（`SocketBuffer` 的 `frameLock`），close 侧上限 2s |
 | 6.6-5 | 心跳策略 | ✅ | 同 P2 |
 | 7.1 前半 | 半条消息被接收侧**静默吞掉**（零填充 / 当成“无 data”） | ✅ | 2026-10-03 修复（见 6.10）：`decodeData` 的 EOF 不再等价 `DataNone`；载荷短读不再被放行（原判据写错成 `size < s`）；流式分支改为“剩余待读”；`Message.decode` 的 `l == 0` → `l <= 0` |
 | 7.1 后半 | 帧格式：无总长 / 无校验 | ✅ | 2026-10-03 改为 `[cmd][len][payload][crc32]`（见 6.11）：发送侧头里带 len、尾带 CRC；接收侧限长流（读不出帧外）+ 增量 CRC + `maxFramePayload` 上限；截断/损坏/长度不符一律抛 |
 | 7.1 值级长度 | 帧内**值级**声明长度可触发超大分配 | ✅ | 2026-10-04：`SizeBoundedInput` + `DefaultCodec.checkedBuffer()` 分配前校验「声明 ≤ 帧剩余」，超了抛 `CodecException`；f_protocol **60/60**（含 1TB 声明用例，见 7.1） |
 | 7.7 | frpcdemo 客户端无法启动（**既有问题**） | ✅ | 2026-10-03 定位并修好启动链路（缺 `rpcClient_serverAddress` ⇒ ERROR+`exit(1)`；RPC 调用移出 Init Image；另修 4 处段错误）：实测 0 Init Image fail、0 段错误。**业务级 E2E 已跑通**（见 7.10） |
 | 7.10 | 业务级 E2E 的 10 层断链 | ✅ | 2026-10-03 逐层定位并修复：消息 id 时区/相等、`ExecutorFuture.get` 丢结果、客户端 reader 中性解码、骨架注册前缀过滤、`ServiceMeta` 含 weight、发现连接复用、重试判断、demo 侧接口/载荷、对象类型未注册。实测客户端打印 JSON、服务端 `CONSUME` 正常（见 7.10） |
-| — | (7.5 起) §四 P2 小项与池相关遗留 | 🟡 | **7.5 已收口、7.6 已实现（2026-10-04）**：f_net 三条已修 + 服务端 `tcp closed` 已分级（WARN 140 → 1）+ `unavailableChecked` 评估后关闭；`KeyPool.get` 的 30s 改成池初始化参数 `maxWaiting`（f_pool/f_codec/f_orm/f_rpc 全部接上，ORM/RPC 各有配置项）；**7.2~7.4 未动** |
+| — | (7.5 起) §四 P2 小项与池相关遗留 | 🟡 | **7.5 已收口、7.6 已实现、7.4 已修（2026-10-04）**：f_net 三条已修 + 服务端 `tcp closed` 已分级（WARN 140 → 1）+ `unavailableChecked` 评估后关闭；`KeyPool.get` 的 30s 改成池初始化参数 `maxWaiting`（全项目接上，ORM/RPC 各有配置项）；`SyncDeque.check()` 的「摘节点 / `s` 递减」已并入同一临界区；**7.2 已增强诊断、7.3 的方案待定** |
 | — | **f_protocol→f_util 依赖**：应用加载期 `undefined symbol: crc32Update` | ✅⚠️ | **已修**（`boot.sh` 自建库优先）。曾误判为"加载顺序/需要预打开 .so"，实际是 `installed/libs/fboot` 的**旧副本抢先**（库无 SONAME），见 7.8 |
-| — | 池记账脱钩的**触发源** | ⬜ | 未定位到具体一行；已加自愈 + `DEQUE-SELFCHECK`/`WEDGE-HEAL` 告警（见 6.8.5、7.2） |
-| — | 重复归还的强约束 | ⬜ | 泛型 `SyncDeque<T>` 无法按值去重，目前只能检出 + 告警（见 6.9、7.3） |
-| 7.12 | `f_pool` 全量用例**偶发** SIGSEGV | ⬜🟡 | 仅观察到一次（栈顶 `UnitKeyPool.size` 的运行时泛型 MTable 空指针），重跑 22/22 通过，未复现；见 7.12 |
+| — | 池记账脱钩的**触发源** | 🟡 | 仍未定位到具体一行；2026-10-04 增强诊断：告警带上「最近一次操作」`lastOp`（见 7.2）；自愈 + 告警见 6.8.5 |
+| — | 重复归还的强约束 | ⬜ | **决定：暂不改（2026-10-04）** —— 容量护栏（方案 A）不解决问题；方案 B（给 `V` 加 `Hashable & Equatable` 约束或改句柄 API）与"支持任意类型对象"的目标冲突 ⇒ 保持现状（低频自检 + `Release` 幂等），见 7.3 |
+| 7.12 | `f_pool` 全量用例**偶发** SIGSEGV | ⬜ | 仅 2026-10-03 观察到一次（栈顶 `UnitKeyPool.size` 的运行时泛型 MTable 空指针）；2026-10-04 做了对照（默认并行 5 轮 + `--parallel 1` 2 轮）**仍未复现**，触发条件未知 —— 只能等再现时留栈；见 7.12 |
+| 7.13 | `f_store` 的 6 个 WAL 用例 ERROR（**既有**） | ⬜ | 204 项里 6 个 ERROR 全在 WAL；把 `f_util` 暂回 HEAD 重跑**同样 6 个** ⇒ 与 §7.9 的 CRC 重构无关；unittest 不打异常详情，待单独定位；见 7.13 |
 | 7.9 | `f_net` 用例长期编译不过（读写路径无回归覆盖） | ✅ | 2026-10-04 迁移到 `Server<T>`/`Client<T>`：`cjpm test` = **14/14**（含 PING→ACK、executor 请求/响应 + 载荷逐字节往返）；见 7.9 |
 | 7.11 | 对象类型的注册应由框架自动完成（含**嵌套**） | ✅ | 2026-10-04 两条路径：`@RPCStub`/`@RPCSkeleton` 登记顶层参数/返回类型；`@DataAssist[fields]` 在包初始化时自登记（覆盖嵌套，f_codec 解码未命中时拉取）。删掉 demo 手工 `registerType<EchoPO>()` 后 E2E 仍跑通，且嵌套 `EchoPO.inner` 出现在 JSON 里；见 7.11 |
 
@@ -49,6 +50,15 @@ frpcdemo 业务级 E2E 跑通：客户端打印 JSON —— **含嵌套** `"inne
 客户端 `[ERROR]` **138 → 0**、`ping_failures=0`。
 （§7.5 已收口：客户端 `[ERROR]`/`[WARN]` 均 **0**，服务端 `[WARN]` **140 → 1**——剩的那条是收尾时真实的 `SocketBuffer write error`。）
 demo 已删除手工的 `DefaultCodec.registerType<EchoPO>()`，登记改由 §7.11 的两条自动路径完成（含嵌套类型）。
+
+**复验（2026-10-04 第二轮，worktree `fix-half-message`）**：§7.1a（帧写/close 互斥）+ §7.1b（帧版本位）+ §7.2（诊断带 `lastOp`）
++ §7.4（`s` 递减并入临界区）落地后：`f_pool` **23/23**、`f_protocol` **62/62**（原 60/60 + 2 个版本位用例）、
+`f_net` **14/14**、`f_codec` **15/15**，全仓 `cjpm build` **success**。
+
+**复验（2026-10-04 第三轮）**：§7.9 的 CRC 多变体重构（`CrcEngine` + `Crc16`/`Crc32`/`Crc64`，顶层按最常用变体
+MODBUS/ISO-HDLC/REDIS）后：`f_util` **31/31**（41 个变体逐个对上 RevEng 目录检查值 + 增量等价 + 顶层包装一致性）；
+另修 `fdemo/boot.sh` 的库搜索顺序（见 7.8）—— 该问题表现为 `libboot.error@fountain.so` 加载期
+`undefined symbol: fountain/f_data.base:DataTypeRegistry.ti`。
 
 **加载现状**：帧 CRC 改用 f_util 后曾出现 `undefined symbol: crc32Update`（frpcdemo 起不来），
 **已定因并修复**（`boot.sh` 自建库优先，提交 `7cdc025a`，见 7.8）；修复后服务端正常加载并监听 1203、
@@ -120,7 +130,8 @@ func getBuf(){
 
 ### 缺陷 B：一条消息被拆成多次 `socket.write`，中途失败 → 流错位
 
-> **状态：🟡 部分解决**（本轮：payload ≤ 4096B 合并成一次 write，见 6.9 第 4 条；大消息仍流式、协议无长度头 ⇒ 见 7.1。）
+> **状态：✅ 已解决（2026-10-04）**，本节保留当时的分析原文：payload ≤ 4096B 合并成一次 write（6.9 第 4 条）；
+> 大消息仍流式，但整帧写与 `close()` 已互斥（`SocketBuffer`，见 7.1），协议也补了总长 + CRC + 版本位（6.11、7.1）。
 
 ```cj
 to.write([command])      // ① 命令字节：一次 write
@@ -231,7 +242,8 @@ public func copy(to!: OutputStream, ...): Unit {
 
 ### P2：心跳与连接生命周期
 
-> **状态：🟡 部分实现**（`pingTimeout`、连续失败容忍、`bufferQueueSize` 已做；其余小项见 7.5）。
+> **状态：✅ 已解决（2026-10-04）**，本节保留当时的分析原文：`pingTimeout`、连续失败容忍、`bufferQueueSize` 已做；
+> 其余小项（7.5 表）各行已全部关闭。
 
 - 客户端 `pingTimeout` 默认 **10ms** 过紧：放大并允许 N 次失败 + 指数退避再拆链。
 - 服务端 `unavailableChecked` 默认 **3**：放宽，`count` 累加/清零语义与 PING 发送对齐。
@@ -571,16 +583,22 @@ EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已�
 ### 7.1 帧完整性：已完成（见 6.11），但发送侧仍有“多段写”窗口
 
 - ✅ 已完成：`[cmd][len][payload][crc32]` 帧格式 + 限长流 + 增量 CRC + 上限校验（6.11）。
-- ⬜ 未完成：大帧（> 4096B，尤其含 InputStream/File 流式载荷）发送侧仍是“头 + 多段载荷 + 尾 CRC”，
-  写中途失败仍会在流上留下**半帧**；接收侧现在能**确定性判定**（len 未读满/CRC 缺失 ⇒ 抛 + 断链），
-  但发送侧窗口本身没有消除。可选做法：把“写完一帧”与 `close()` 互斥（需配合写超时，否则把截断换成挂起）。
+- ✅ 已修（2026-10-04）：发送侧窗口已收窄。`f_net` 的 `SocketBuffer` 里**整帧写出**（含大帧的流式载荷 —— `transfer`
+  队列的单线程 writer 全程）与 `close()` 互斥：`close()` 先等这一帧退场（条件变量 `frameDone`，上限
+  `FRAME_CLOSE_WAIT = 2s`），超时才记 WARN 后照关 —— 既不让对端看到半帧，也不把「截断」换成「挂起」；
+  `isClosed()` 的懒关闭路径同样遵守该纪律。剩余的理论窗口只有「写卡住超过 2s」一种（有 WARN；写本身受
+  socket 写超时约束，`socketWriteTimeout` 默认未设置）。用例：`f_net` 14/14（读写路径）。
 - ✅ 已修（2026-10-04）：帧内**值级**长度不再按声明值直接分配。新增 `f_codec.SizeBoundedInput`（能报「本帧还剩多少字节」，
   由 `f_protocol` 的帧体流实现），`DefaultCodec.checkedBuffer()` 在**分配缓冲之前**校验「声明长度 ≤ 本帧剩余」，
   超了立刻抛 `CodecException`（三处：STRING、INPUTSTREAM 内联载荷、FILE 文件名×2）；输入不支持报剩余量时退化为原行为。
   用例（`truncated_message_test.cj`）：`splicedDataFieldStillDecodes`（拼接自检）+ `oversizedValueLengthIsRejectedBeforeAllocating`
   （载荷内声明 **1TB** ⇒ 只得到「超出帧剩余」的 `CodecException`，而不是 OOM/分配失败）。`f_protocol` **60/60**、`f_codec` **15/15**。
-- ⬜ 未完成：帧头**没有版本位** —— 以后要换校验算法或字段宽度，只能两端同时升级；建议加 1 字节版本位，
-  为「换 CRC 宽度/算法」留出平滑迁移的余地。
+- ✅ 已修（2026-10-04）：帧头加 1 字节版本位 —— 帧格式变为
+  `[version(1B)][cmd(1B)][len(4B 大端)][payload][crc32(4B，覆盖 version+cmd+len+payload)]`；
+  `FRAME_VERSION = 1`（`f_protocol` 内部常量），接收侧遇到不认识的版本直接抛
+  `CodecException('unsupported frame version …')`，不按当前布局硬解。用例：`frameLayoutIsVersionCmdLenPayloadCrc`、
+  `unknownFrameVersionMustThrow`（0/2/0xff ⇒ 抛）、`partiallyReceivedHeaderMustThrow`（1/5 字节半头 ⇒ 抛）；
+  `f_protocol` **62/62**（原 60/60 + 2）。
 
 ### 7.2 池记账脱钩的**触发源**未定位（🟡 已有自愈兜底）
 
@@ -588,22 +606,37 @@ EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已�
   已实现 `reconcileIfWedge()` 自愈 + 低频 `DEQUE-SELFCHECK` 告警，但**触发源没有定位到具体一行**：
   追查探针在临界区外采集，无法区分「真丢项」与「并发中间态」（详见 6.8.5）。
 - 若再现：直接以 `WEDGE-HEAL` / `DEQUE-SELFCHECK` 告警为线索，把不变量校验放进 `head.globalLock` 临界区内再采一次现场。
+- **现场采集已加强（2026-10-04）**：不变量的清点与比对本就在 `head.globalLock` 临界区内；现在告警还带
+  「最近一次进入的操作」——`SyncDeque` 用 `lastOp`（代号见 `DEQUE_OP_NAMES`：insertHead/insertTail/prepend/append/remove/check/reconcile）
+  在每个操作入口记一次，`DEQUE-SELFCHECK` 与 `WEDGE-HEAL` 都会打印它 ⇒ 再现时能直接看出**是哪类操作在跑**，
+  而不是只知道"脱钩了"。
 
 ### 7.3 重复归还（同一对象 `giveBack` 两次）仍会插入重复节点（🟡 只能检出）
 
 - 现状：泛型 `SyncDeque<T>` 无法按值比较/去重，重复归还会让队列出现同一对象的两个节点 ⇒ 该对象可能被两个借用者同时持有。
   当前策略：低频自检发现并告警（`DEQUE-SELFCHECK`）+ 依赖 `Releasable.release()` 幂等与调用方纪律。
-- 待办建议：在 `KeyPool` 层用 `Ref<V>` 身份维护「借出集合」，归还时校验并拒绝重复归还
-  （前提：`Ref` 满足 `Hashable & Equatable`）。
+- **原待办方案经查不成立（2026-10-04）**：「用 `Ref<V>` 身份维护借出集合」需要借出方与归还方看到**同一个 `Ref`**，
+  但现状是 `KeyPool.giveBack` 每次都 `ref(key, object)` **新建** `Ref<V>`（`KeyPool.cj`），且 `KeyPool.get` 返回的是解包后的
+  `V`（借出方根本看不到 `Ref`）⇒ 拿 `Ref` 当身份判不出"同一个对象被还两次"。
+- **决定（2026-10-04）**：**暂不改**。—— A（容量护栏）不解决问题；B 需要给 `V` 加 `Hashable & Equatable` 约束或改成句柄式 API，
+  而"支持各种类型的对象"才是本池的目标（用户明确）⇒ 维持"低频自检 + 告警 + `Releasable.release()` 幂等 + 调用方纪律"。
+  下面两条路作为记录保留（日后若改变取舍可直接照做）：
+- 两条可落地的路（二者代价不同）：
+  1. **容量护栏（便宜、部分）**：归还时若该 key 的**空闲项数**已达 `maxSize`（注意不能用 `keyedSize`，它含借出项，
+     会把合法归还误拒），就丢弃这次归还并 WARN。能拦住"重复归还把池撑到上限以上"（历史症状正是 `s` 记满 1024），
+     但拦不住"池没满时的重复归还"；需要给 `SyncDeque`/`BasePool`/`IKeyPool` 加一个 `idleSize` 视图。
+  2. **精确拒绝（彻底、破坏 API）**：`KeyPool` 的 `V` 加 `Hashable & Equatable` 约束并用借出集合去重，
+     或把 `get` 改成返回句柄（`Ref<V>`）。能精确判重，但改动公开 API 与所有调用点。
 
-### 7.4 `SyncDeque.check()` / destroy 路径残留的窄窗口
+### 7.4 `SyncDeque.check()` / destroy 路径残留的窄窗口：✅ 已修（2026-10-04）
 
-- `ValueNode.check` 摘节点与调用方 `s.fetchSub(1)` 仍分属两个临界区。
-- 该路径只在「空闲超时巡检 / destroy」触发，本工程的池配置为 `Duration.Max`（字节缓冲池，不触发）与 `Duration.Minute`（byte 数组池，极少），
-  故仅剩极窄窗口；最坏后果是 `s` 偏小（软上限内多建一个池项），不会崩溃。
-- 待办建议：把 `s` 递减并入同一临界区，彻底消除。
+- 原状：`ValueNode.check` 摘节点（自己进一次临界区）与调用方 `s.fetchSub(1)` 分属两个临界区，
+  会留下「节点已摘、`s` 未减」的中间态，被并发的不变量校验误判成记账脱钩；该路径只在「空闲超时巡检 / destroy」触发。
+- 修法：`ValueNode.check(fn, onRemoved!)` 新增回调，**在摘节点的同一临界区内**执行 —— `SyncDeque.check` 传
+  `{=> s.fetchSub(1)}`；`taskPusher()` 仍在锁外（可能阻塞，不能带进临界区）。
+- 验证：`f_pool` **23/23**（含并发用例）。
 
-### 7.5 §四 P2 中尚未落地的几个小项（🟡 低优先，属健壮性改进）
+### 7.5 §四 P2 中尚未落地的几个小项：✅ 全部关闭（2026-10-04）
 
 | 位置 | 现状 | 建议 |
 | --- | --- | --- |
@@ -625,8 +658,8 @@ EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已�
 | --- | --- |
 | `f_pool` | `KeyPool`（两个构造 + `KeyPoolBuilder` + `setMaxWaiting`）、`Pool`（同）、`ArrayPool`、`ArrayListPool`、`BytesListOutputStream.builder` 全部新增 `maxWaiting!: Duration = Duration.second * 30` 并逐层透传；`KeyPool.get` 用它替代写死的常量，并加 `waitChunk()` 防 `MonoTime + Duration.Max` 溢出。内部 `UnitKeyPool`/`BaseKeyPool`/`base/*` 只是存储实现（不做等待），不需要该参数 |
 | `f_codec` | 新增 `DefaultCodec.setBufferPool(initSize!, minSize!, maxSize!, maxWaiting!)`（不暴露 f_pool 类型）、`setBytesPool(..., maxWaiting!)`；两个静态池显式按参数初始化 |
-| `f_orm` | `DatabasePool` 三个构造新增 `maxWaiting!` 并传给 `Pool<PooledConnection>`；配置驱动的构造读 `ORMConfig.getPoolMaxWaiting` = **`orm_databasePoolMaxWaiting`**（秒，默认 30，≤0 = 真无限等待） |
-| `f_rpc` | 新增 `f_rpc/src/base/PoolConfig.cj`（module 级 `protected`，因为 `f_rpc.client`/`f_rpc.server` 是**兄弟包**）：`rpc_codecBufferPoolInitSize/MinSize/MaxSize`、`rpc_codecBytesPoolInitSize/MinSize/MaxSize/ArraySize`、`rpc_codecPoolMaxWaiting`（秒，≤0 = 无限，默认 30）；`initCodecPools()` 在 `RPCServer.start()` / `RPCClient.start()` 首次调用，用配置项初始化 codec 的两个池 |
+| `f_orm` | `DatabasePool` 三个构造新增 `maxWaiting!` 并传给 `Pool<PooledConnection>`；配置驱动的构造读 `ORMConfig.getPoolMaxWaiting` = **`orm_databasePoolMaxWaiting`**（**Duration 格式**，如 `30s`/`1m`，默认 30s，≤0 如 `0s` = 真无限等待） |
+| `f_rpc` | 新增 `f_rpc/src/base/PoolConfig.cj`（module 级 `protected`，因为 `f_rpc.client`/`f_rpc.server` 是**兄弟包**）：`rpc_codecBufferPoolInitSize/MinSize/MaxSize`、`rpc_codecBytesPoolInitSize/MinSize/MaxSize/ArraySize`、`rpc_codecPoolMaxWaiting`（**Duration 格式**，如 `30s`，默认 30s，≤0 = 无限）；`initCodecPools()` 在 `RPCServer.start()` / `RPCClient.start()` 首次调用，用配置项初始化 codec 的两个池 |
 | `f_protocol` | 生产代码**不建池**（只用 `BytesCopyTo`/`Releasable` 两个接口），无需参数；其用例通过 `DefaultCodec.setBytesPool` 注入的是 f_codec 的池 |
 
 - 验证：
@@ -634,8 +667,12 @@ EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已�
      `get(timeout: Duration.Max)` 实测 **200.7ms** 返回 `None`（既不是 0.2ms 也不是默认 30s）⇒ 参数确实生效；
   2. 全仓 `cjpm build` **success**（含 f_orm/f_rpc）；`f_pool` **23/23**、`f_codec` **15/15**、`f_protocol` **60/60**、`f_net` **14/14**；
   3. demo E2E 跑通，两侧启动日志出现 `[FOUNTAIN_RPC.pool] codec pools initialized: … maxWaiting=30s`；
-     再用自定义配置启动服务端（`rpc_codecPoolMaxWaiting=5 rpc_codecBytesPoolArraySize=2048 rpc_codecBufferPoolMaxSize=256`）
-     ⇒ 日志变为 `bufferPool(… max=256), bytesPool(… arraySize=2048), maxWaiting=5s` ⇒ **确实按配置项初始化**。
+     再用自定义配置启动服务端（`rpc_codecPoolMaxWaiting=5s rpc_codecBytesPoolArraySize=2048 rpc_codecBufferPoolMaxSize=256`）
+    ⇒ 日志变为 `bufferPool(… max=256), bytesPool(… arraySize=2048), maxWaiting=5s` ⇒ **确实按配置项初始化**。
+- **2026-10-04 补充（配置项改为 Duration 语义）**：`orm_databasePoolMaxWaiting` / `rpc_codecPoolMaxWaiting` 的值
+  按 `Duration.toString()` 书写（`30s`、`1m`），由 `Config.getData<Duration>`（f_config，走 `DataParsable`）解析，ORM 侧仍支持驱动级 key
+  （`postgres_orm_databasePoolMaxWaiting`）；非法值退回默认 30s；
+  用例 `f_orm/src/wrap/ORMConfig_test.cj::testPoolMaxWaiting` 覆盖 `45s` / `1m` / `0s`(⇒`Duration.Max`) / 非法值(⇒默认 30s)。
 - 附带修掉一个静默隐患：`DefaultCodec` 文件载荷解码时 `bytesPool.get()` 取不到会**静默跳过写文件**（把内容缺失的 `File` 交给上层），
   现改为抛可见的 `CodecException`。
 - 精确边界：`maxWaiting` 只在 `timeout == Duration.Max` 分支生效；编码借缓冲走 `lastBuffer()` 的**有限 5s** 超时，不受它影响。
@@ -713,15 +750,35 @@ EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已�
     `installed/libs/fboot` 的内容，或统一改成“自建库优先”。
 - **不再是阻塞项**：`f_protocol → f_util` 的依赖可以保留；此前的“加载顺序/预打开 .so”方案**不需要**了
   （那是我最初的误判：库其实会被 `DT_NEEDED` 正常拉起，问题出在命中了旧副本）。
+- **同一坑第二次命中（2026-10-04，fdemo）+ 已修**：`./fdemo/boot.sh run` 启动期报
+  ```
+  libboot.error@fountain.so: undefined symbol: fountain/f_data.base:DataTypeRegistry.ti
+  LoadCJLibrary fail. / ReflectException : Failed to load package from '.../libboot.error@fountain'
+  ```
+  取证：用户那次跑的是**嵌套产物** `fdemo/fdemo/release`（`cd fdemo && ./boot.sh run` ⇒ `target_path=./fdemo` 相对于该目录）；
+  那份 `libboot.error@fountain.so` 引用了 §7.11 自动登记用的 `DataTypeRegistry`（`nm -D -u` 可见），
+  它自己目录下的 `libf_data.base@fountain.so` **有**该符号（5 处），而 `installed/libs/fboot` 的副本 **0 处** ——
+  但该目录排在 `LD_LIBRARY_PATH` **前面**（`cangjie.sh` 就把它放在前面），于是命中了旧副本。
+  修法（与 frpcdemo 一致）：`fdemo/boot.sh` 的 `exports()` 把自建 release 目录**前置**；顺带把默认目标目录改成
+  **脚本自身所在目录**，避免 `cd fdemo` 后再跑出 `fdemo/fdemo` 这种嵌套产物。静态复验：第一命中变为自建库、
+  `DataTypeRegistry` 符号数 5。
+- 教训：这类问题**单测发现不了**
 - 教训：这类问题**单测发现不了**（`cjpm test` 走工程内的链接，`f_util` 28/28、`f_protocol` 55/55、`f_codec` 15/15 全绿），
   必须做“启动应用 + 看加载日志”级别的验证；排查时先 `readelf -d` / `nm -D`，别急着改加载器。
 
 ### 7.9 零散遗留（低优先）
 
-- `crc16` 的变体名没写进注释：实测参数是 **CRC-16/XMODEM**（poly `0x1021`、非反射、init=0、xorout=0，检查值 `0x31C3`）。
-  如果实际期望的是 CCITT-FALSE（init=`0xFFFF`、检查值 `0x29B1`），那要改的是 init，而不是现在的实现。待确认。
-- `f_util` 里 `crc64` 的相关 API（`crc64<T>`）此前存在"返回 UInt16 却叫 crc64"的复制粘贴 bug，**已修**（提交 `02d57ee0`）；
-  但 `crc64` 目前在仓库里无人调用，属于"修好了但没有使用方"的状态。
+- ✅ **已重构为多变体实现（2026-10-04）**：新增通用引擎 `f_util/src/CrcEngine.cj`（width/poly/init/refin/refout/xorout，
+  参数口径同 [RevEng CRC catalogue](https://reveng.sourceforge.io/crc-catalogue/)，表在构造时现算、内部 UInt64 寄存器 + mask 截宽），
+  三个宽度各自包装成类：`Crc16`（24 个变体）/`Crc32`（11 个）/`Crc64`（6 个），每个变体都带目录检查值，
+  由 `crc_check_test.cj` 遍历 `CrcXX.all` 逐个核对（`"123456789"`）。
+  **顶层函数按最常用变体**（2026-10-04 拍板）：`crc16`=**CRC-16/MODBUS**、`crc32`（含 `crc32Init/Update/Finish`）=**CRC-32/ISO-HDLC**、
+  `crc64`=**CRC-64/REDIS**；`crc32*` 的语义与重构前完全一致（f_protocol 帧校验、f_store WAL 校验不受影响）。
+  两个坑已在实现里注明：① 反射表要按 LSB-first 直接生成（只反射多项式，不能漏索引反序）；② 反射变体的 `init`
+  在 catalogue 里是"非反射表示"，要整体反射后再作为寄存器初值（非对称 init 如 `0x89EC` 会算错）。
+  暂未收录（参数待核对，宁缺勿错）：`CRC-16/A`、`CRC-64/NVME`——加一个变体只需一行并带上检查值，用例会自动核对。
+- `crc64`（`f_util`）：复制粘贴 bug 早已修（`02d57ee0`）；**保留**（公开库函数，删掉属破坏性变更），
+  现在它是顶层 `crc64()` 的默认实现（CRC-64/REDIS），"无使用方"的状态随之解除。
 - ✅ `f_net` 用例已修（2026-10-04）：`src/test/f_net_tcp_test.cj`、`socket_params_test.cj` 从旧泛型签名
   （`Server<Message, EncodedMessage, Message, String>` …）迁移到 `Server<T>` / `Client<T>`
   （`Server<T>.builder(...).reuseAddress(true).build()`、`spawn { server.start({ _, req => ... }) }`、
@@ -833,3 +890,22 @@ demo 端到端与之前一致：分隔线 ×2、客户端 JSON、服务端 `CONS
   1. 再现时**先留全量与完整栈**（`cjpm test 2>&1 | tee`），并记录当次是否并发跑过其它构建/用例；
   2. 重点确认 `UnitKeyPool.size` 读到的实例是否来自**未初始化完的静态/共享对象**（MTable 空指针 ⇒ 对象头未就绪）；
   3. 用 `-j1`（串行）与默认并行各跑 N 轮做对照，区分「用例间互相干扰」与「单用例自身竞态」。
+- **复现尝试（2026-10-04）**：按待办第 3 条做了对照 —— 默认并行 **5 轮** + `cjpm test --parallel 1` **2 轮**，
+  共 7 轮全部 `TOTAL: 23, PASSED: 23, FAILED: 0`、退出码 0，无 SIGSEGV、无崩溃进程 ⇒ **仍未复现**。
+  结论：不能据此判定"已修复"（触发条件依旧未知）；后续再现时按上面第 1、2 条留现场。
+
+### 7.13 `f_store` 的 6 个 WAL 用例 ERROR（**既有问题**，2026-10-04 发现并确认与本轮改动无关）
+
+- 现状：`f_store` 全量 `cjpm test` = `TOTAL: 204, PASSED: 198, ERROR: 6`（`FAILED: 0`）。6 个 ERROR 全在 WAL：
+  `walChecksumCorruptionSingleRecord` / `walChecksumCorruptionConsecutive` / `walRecoverEmptyAndCorruptedMixed`
+  （`WALWALReaderTest`），`walAppendAndRecover` / `walAppendWithExpireAt` / `walTombstoneRecord`（`WALTest`）；
+  同族的 `StoreIntegrationTest.testWALRecovery`、`WALRecordTest`、`WALTest.walSyncCloseRace` 都通过。
+- **已确认与本轮 CRC 重构无关**：`git stash push --include-untracked -- f_util`（回到 HEAD 的旧 CRC 实现）后重跑，
+  **同样的 6 个 ERROR 依旧**；且 `crc32` 的取值有逐位一致的用例（`crc_check_test.cj`：检查值 `0xCBF43926`、
+  空输入、增量等价、包装一致性）。
+- 难点：Cangjie 的 unittest 在当前输出模式下只标 `[ ERROR ] CASE: …`，**不打异常详情**（`--verbose` 也不打）。
+  定位建议：用 `cjpm test --filter …`（值要能匹配 `包.类.用例`，实测 `--filter wal` 会把 204 个全 `SKIPPED`）
+  单独跑一个用例，或改用带报告文件的输出，或临时在用例里 `println` 关键步骤。
+- 线索：6 个都走 `tempWALPath()`（`/tmp/f_store_test/WAL_*.wal`）→ `ensureDir`/`cleanWAL` → `WAL.append` → `readRecords`
+  这条路径；`readRecords` 第一步是 `File(path, OpenMode.Read)` —— 如果 WAL 在 close/恢复时把文件删掉或改名，
+  就会在这里抛异常（表现为 ERROR 而不是断言失败）。
