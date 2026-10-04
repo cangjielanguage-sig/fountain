@@ -94,7 +94,7 @@ double_destroy: after_close=1 after_gc=2
 
 ### 1.2 [严重｜性能+可用性] `POOL-2` `KeyPool.get` 的「有限超时」分支在池耗尽时无让步忙等 ✓已复核 → ✅已修复（2026-10-05）
 
-**✅ 修复标记（2026-10-05）**：与 `POOL-6`（§2.1）、`POOL-5`（§1.5）**同一次提交**（提交信息 `fix(f_pool): POOL-2/POOL-6/POOL-5 池等待改条件变量通知（去掉 1ms 轮询与忙等）`），分支 `review/f_pool`。
+**✅ 修复标记（2026-10-05）**：与 `POOL-6`（§2.1）、`POOL-5`（§1.5）**同一次提交**（提交 `315ada9e`，提交信息 `fix(f_pool): POOL-2/POOL-6/POOL-5 池等待改条件变量通知（去掉 1ms 轮询与忙等）`），分支 `review/f_pool`。
 
 - 改动（等待从「轮询/自旋」改成「条件变量通知」）：
   1. `f_pool/src/KeyPool.cj:174-186`：新增等待设施 —— `waitMutex` / `waitCond` / `available`（「池状态可能变好」的纪元号）/ `waiters`（无人等待时空通知的短路计数）；
@@ -269,7 +269,7 @@ slowcreate(maxWaiting=30s):          got_some=true  elapsed_ms=2016
 
 ### 2.1 [中｜可用性+资源] `POOL-6` `close()` 不唤醒等待者；`giveBack` 与 `close` 的检查-使用竞态会让池项永久滞留 ✓已复核 → ✅已修复（2026-10-05）
 
-**✅ 修复标记（2026-10-05）**：与 `POOL-2`（§1.2）、`POOL-5`（§1.5）**同一次提交**（分支 `review/f_pool`）。
+**✅ 修复标记（2026-10-05）**：与 `POOL-2`（§1.2）、`POOL-5`（§1.5）**同一次提交**（提交 `315ada9e`；分支 `review/f_pool`）。
 
 - 改动：
   1. **关停唤醒**：`close()` 置 `running=false` 后立刻 `wakeWaiters()`（`f_pool/src/KeyPool.cj:428-431`）⇒ 等待者当场复查到 `running=false` 返回 `None`，不再 park 到预算/分片到期；
