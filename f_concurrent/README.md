@@ -168,41 +168,40 @@ public class ConcHashDict<K, V> <: ConcDict<K, V> {
 ```
 
 ## `public class ConcurrentHashSet<T> <: Set<T> where T <: Hashable & Equatable<T>`
-并发安全的Set
+并发安全的 Set：4 个 `init`（容量 / 初始集合等）、`retainAll`、`clone`，并扩展了 `==` / `toString` /
+`intersection` / `union` / `difference`。详见 `doc/ConcurrentHashSet.md`。
 
 ## 负载均衡
-### 轮转法
+
 ```cj
-public struct RoundRobin<W> <: LoadBalanceAlgo<W> where W <: Addable<W> & Comparable<W>{
+/** 轮转法：每次 next() 返回 current，然后 current += step；current > max 时回到 min */
+public struct RoundRobin<W> <: LoadBalanceAlgo<W> where W <: Addable<W> & Comparable<W> {
     public RoundRobin(private let step: W, private let min: W, private let max: W)
 }
-```
-### 随机权重
-```cj
-public abstract class RandomWeight<W> <: LoadBalanceAlgo<W> where W <: StdNumber<W> & Addable<W> & Comparable<W> {
-    public RandomWeight(protected let min: W, protected let max: W){}
-}
+/** 随机权重：Int64Weight 取值 [min, max]，Float64Weight 取值 [min, max)（浮点不能用 closed 的 +1 语义） */
+public abstract class RandomWeight<W> <: LoadBalanceAlgo<W> where W <: StdNumber<W> & Addable<W> & Comparable<W>
 public class Int64Weight <: RandomWeight<Int64>
 public class Float64Weight <: RandomWeight<Float64>
-```
-### 负载均衡
-```cj
+
 public class LoadBalance<W, D, R> where W <: Addable<W> & Comparable<W> {
-    /**
-     * min是最小权重，algo是权重算法
-     */
-    public LoadBalance(private let min: W, private let algo: LoadBalanceAlgo<W>{})
-    /**
-     * 添加权重和对应的函数
-     */
+    /** min 是**累计权重键的起点**，不是「最小权重」；algo 必传 */
+    public LoadBalance(min: W, algo: LoadBalanceAlgo<W>)
     public func add(weight: W, fn: (D) -> R): Unit
-    public func add(all!: Array<(W, (D) -> R)>): Unit
-    /**
-     * 要执行的数据
-     */
+    public func add(all!: Iterable<(W, (D) -> R)>): Unit
+    /** 按算法取一个节点执行 */
     public func call(data: D): R
+    /** 失败时按顺序换下一个节点重试最多 maxRetrying 次 */
+    public func call(data: D, maxRetrying: Int64): (?R, ?LoadBalanceException)
+    /** 从算法选定的位置开始迭代，走完绕回开头（首个元素即选中节点，其余是重试节点） */
+    public func iterator(): Iterator<(D) -> R>
 }
 ```
+
+语义（**最容易踩的点**）：内部用 `TreeMap`，键是各节点的**累计权重** `K_i = min + w₁ + … + w_i`，
+取节点 = 第一个键 ≥ 算法给出的值 ⇒ 节点 i 覆盖 `(K_{i-1}, K_i]`。因此算法取值必须落在**桶的内部**：
+若取值与桶边界对齐（例如让取值起点等于 `min`），就会**永远命中同一个节点**。
+权重场景推荐 `min = 0`、取值起点 `step / 2`、上界 `Σw`（`f_rpc` 的 `ClientConfig` 即如此接线，
+见 `.autocode/bugs/bug-archived-20261004-2.md` 第 2 部分）。完整说明与示例见 `doc/负载均衡.md`。
 
 
 ## 限流算法
@@ -242,8 +241,9 @@ public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
 ```cj
 public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
     /**
-     * @param timeout 时间窗口
-     * @param limit 时间窗口内最大任务数
+     * @param window 时间窗口（必须 > 0）
+     * @param timeout 阻塞超时时长
+     * @param limit 时间窗口内最大任务数（必须 > 0）
      */
     public init(window!: Duration, timeout!: Duration, limit!: Int64)
 }
@@ -293,8 +293,11 @@ public struct Constants {
 基于跳表实现的并发安全字典，支持有序键操作。
 
 ```cj
-public class ConcurrentSkipListMap<K, V> where K <: Comparable<K>
+public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K, V)> where K <: Comparable<K>
 ```
+
+除下表列出的自有方法外，`put` / `putIfAbsent` / `add(all!)` / `contains(all!)` / `toArray()` 等来自
+`ConcurrentMap` / `Collection` 父接口（见 `src/ConcurrentSkipListMap.cj`）。
 
 ### 构造函数
 
@@ -433,12 +436,9 @@ public class DelayQueue<T> <: Queue<T> where T <: Delayed<T> {
     public func add(element: T): Unit
     //非同步函数，返回队列头部数据，不删除队列头
     public func peek(): ?T
-    //同步函数，如果队列为空则等待直到非空，否则等待队列头部数据延迟时间后再返回
-    //如果等待延迟时间后队列头部数据被其他线程获得，重复这个过程
+    //同步函数，如果队列为空则等待直到非空，否则等待队列头部数据的延迟时间后返回
     public func remove(): ?T
-    //同步函数，如果队列为空则等待直到非空或超时，否则等待队列头部数据延迟时间后再返回
-    //如果等待延迟时间后队列头部数据被其他线程获得，重复这个过程，
-    //每次等待的超时时间为上一次等待的剩余时间
+    //同步函数，如果队列为空则等待直到非空或超时，否则等待队列头部数据的延迟时间后返回
     public func remove(timeout: Duration): ?T
     //非同步函数，获取队列大小
     public prop size: Int64
@@ -448,3 +448,22 @@ public class DelayQueue<T> <: Queue<T> where T <: Delayed<T> {
     public func iterator(): Iterator<T>
 }
 ```
+
+## 补充：README 未展开的公开面（以源码为准）
+
+- **`Executors` / `Executor` / `ExecutorFuture`**（`Executor.cj`）：线程池 + Future ——
+  `Executors(n)` 创建，`call(task)` / `tryCall(task)` / `call(limiter, task)` 提交，`get(...)` 取结果。
+- **事件总线**（`eventbus/`）：`EventBus`（`init(workers, maxWaitingJobPerWorker, fullJobQueueStrategy,
+  toThrowIfNotMatch, abilities)`，方法 `arrange` / `arrangeAndGet` / `register` / `retireAll`）、
+  `Event`（抽象事件基类：`name` / `getData` / `setData` / `deliverResult` / `workerId`）、
+  `EndEvent`（返回它以结束任务）、`Worker` / `JobQueue`；异常 `EventBusException`（队列满 / 超时）。
+- **`SyncPriorityQueue<T>`**（`SyncPriorityQueue.cj`）：并发优先队列 ——
+  `init(comparator, capacity, overSizePolicy)`、`create` / `createReverse`、`peek` / `remove` / `add`。
+- **其它并发容器与工具**：`ConcDict`（字典接口，部分方法在接口内已有默认实现）、`ConcHashDict`（`toArray()` 等）、
+  `ConcurrentHashSet`、`AtomicInteger` 与 `ExtendAtomic{Int8..UInt64}`（`fetchIncr` / `incrFetch` / `addFetch` …）、
+  `Constants.get<T>`（键为 `TypeInfo.of<T>() + key`，类型不符抛 `TypeNotMatchException`）。
+- **异常**（`exception/`）：`ConcurrentException`、`LoadBalanceException`、`RateLimiterException`、
+  `ReadWriteSyncerException`、`TimeoutException`；`RateLimiter` 在 `timeout <= 0` 时抛 `RateLimiterException`，
+  `UnlimitedRateLimiter` 内部用 `Duration.Max`。
+- **负载均衡的用例**：`src/LoadBalance_test.cj`（等权 50/50、2:1 → 67/33、4:1 → 80/20、随机两档）。
+- ⚠️ `doc/ConcurrentHashSet.md` 当前正文与标题不符（内容是 `LoadBalanceAlgo` 接口），需要重写。
