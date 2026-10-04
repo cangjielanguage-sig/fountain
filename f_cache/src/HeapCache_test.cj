@@ -116,7 +116,7 @@ public class HeapCache_test {
         //clear 之后重新计数：幻影计数会让真实条目被提前淘汰
         cache.set('c0', Test(0))
         @Assert(1, cache.size)
-        cache.destroy()
+        cache.close()
         @Assert(0, cache.size)
     }
 
@@ -207,12 +207,12 @@ public class HeapCache_test {
     }
 
     @TestCase
-    public func testDestroyStopsEvictionThread(): Unit {
+    public func testCloseStopsEvictionThread(): Unit {
         let cache = HeapCache<Test>(maxLife: Duration.second * 30,
             checkDuration: Duration.millisecond * 200)
         @Assert(1, cache.threadHandles().size)
-        cache.destroy()
-        //destroy 之后内部淘汰消费线程必须结束（修复前它阻塞在队列上，永不退出）
+        cache.close()
+        //close 之后内部淘汰消费线程必须结束（修复前该路径阻塞在队列上，线程永不退出）
         for (f in cache.threadHandles()) {
             try {
                 f.get(Duration.second * 3)

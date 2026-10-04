@@ -46,7 +46,7 @@ public class HeapCache<V> <: Resource where V <: Object {
         }
         this.store = ConcHashMap<Priority<V>>.create(concurrencyLevel: concurrencyLevel)
         startTimer()
-        ExitCallbacks.atExit(254, destroy)
+        ExitCallbacks.atExit(254, close)
     }
 
     public static func builder(): HeapCacheBuilder<V> {
@@ -273,9 +273,5 @@ public class HeapCache<V> <: Resource where V <: Object {
     }
     public func isClosed(): Bool {
         closedFlag.load()
-    }
-    /**销毁堆缓存（兼容旧 API，等价于 close()）*/
-    public func destroy(): Unit {
-        close()
     }
 }
