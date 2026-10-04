@@ -204,7 +204,7 @@ DT：断言三个属性返回契约值、不抛异常。
 
 ### 2.4 [中｜正确性] `MOCK-7` `MockStatement` 参数槽三处语义问题：跨执行累积、`None<Any>` 双关、负索引异常类型（f_mockdb） → ✅已修复（2026-10-04，①③；②单列待定）
 
-**✅ 修复标记（2026-10-04）**：分支 `fix/mock-1-query-isolation`（同一 worktree，在 MOCK-6 之后追加提交），**代码、用例、本标记在同一提交**（提交信息 `fix(f_mockdb): MOCK-7 参数槽执行后清空 + 负索引抛 SqlException（bug-mockdb §2.4 修复标记）`；提交哈希由下一次标记同步补录）。
+**✅ 修复标记（2026-10-04）**：分支 `fix/mock-1-query-isolation`（同一 worktree，在 MOCK-6 之后追加提交），**代码、用例、本标记在同一提交**：提交 `7704cd91`（`fix(f_mockdb): MOCK-7 参数槽执行后清空 + 负索引抛 SqlException（bug-mockdb §2.4 修复标记）`）；尚未并入 `sts/1.3.x`（待下次同步）。
 
 - 改动（`src/Statement.cj`）：**①跨执行累积** —— `update()` / `query()` 把 `MOCKDB.execution(sql, args)` 包进 `try { … } finally { args.clear() }`，一次执行结束即清空参数槽（夹具抛异常也清），语句复用时不再带上一次绑定的参数；**③负索引** —— `set<T>` / `setNull` 开头新增 `index < 0` 校验 ⇒ `throw SqlException('parameter index N is negative')`（按 std 契约，此前抛 `IndexOutOfBoundsException`）。
 - 用例：`src/mockdb_core_test.cj` 新增 2 条 —— `testStatementReuseDoesNotKeepArgs`（同一语句两次执行、第二次只绑 0 号参数：夹具两次看到的参数个数应为 2、1）、`testSetNegativeIndexThrows`（`set(-1, …)` 与 `setNull(-1)` 都断言抛 `SqlException`）。
