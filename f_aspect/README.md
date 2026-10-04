@@ -130,8 +130,9 @@ public class AspectRoute <: RouteRule {
 ```
 
 #### `InvocationFuncInfo`
+  - 值类型（`struct`）：不可变、按值传递，每次调用（每层）各一个实例 —— 并发调用之间不共享参数
 ```cj
-public class InvocationFuncInfo {
+public struct InvocationFuncInfo {
     public InvocationFuncInfo(
         private let _funcInfo: QualifiedFuncInfo, //函数元数据
         private let _args: Array<Any>//函数实参

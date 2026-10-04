@@ -39,7 +39,7 @@ public class RewriteTarget {
 }
 
 /**
- * 记录切面每次调用实际拿到的 `InvocationFuncInfo`（对象、实参、元数据）。
+ * 记录切面每次调用实际拿到的 `InvocationFuncInfo`（值、实参、元数据）。
  * 切面自身不读 args 做判断，无状态、不加锁。
  */
 @AspectRoute[FuncNameRouteRule("n")]
@@ -70,11 +70,10 @@ public class ArgsRewriteAspect <: Aspect {
 /**
  * 验证 `Aspects.doProceed` 的实参传递语义：链只在切点函数首次调用时按「(类型, 函数)」构建一次、
  * 链尾固化首次调用传入的 callee（设计说明见 `Aspects` 声明处），但**每层用本次调用的 `args`
- * 新建一个 `InvocationFuncInfo`** 交给切面，因此：
- *   - 切面拿到的 info 既不是首次调用固化在链上的那个对象，也不是本次调用方传入的对象，而是链为本次调用新建的；
- *   - 两次调用各自一个实例（不再复用同一个对象），各自带的实参互不干扰；
- *   - 元数据（类型、函数名）仍然正确。
- * 修复前的行为见 `.autocode/bugs/bug.md` §1.4：层闭包用 `setArgs` 改写首次调用的那个实例，
+ * 新建一个 `InvocationFuncInfo`** 交给切面——它是 `struct`（值类型、不可变），所以：
+ *   - 每个调用（每层）拿到的都是各自的值，一次调用的实参不会被另一次调用改写（不存在可共享的参数槽）；
+ *   - 实参与元数据（类型、函数名）都正确。
+ * 修复前的行为见 `.autocode/bugs/bug.md` §1.4：层闭包用 `setArgs` 改写首次调用的那个对象，
  * 并发下参数互串（复现在 `aspect_args_race_test.cj`）。
  */
 @Test
@@ -85,27 +84,22 @@ public class AspectPerCallInfo_test {
 
         let info1 = InvocationFuncInfo(TypeInfo.of<CaptureTarget>(), 'n', [TypeInfo.of<Int64>()], [1])
         let info2 = InvocationFuncInfo(TypeInfo.of<CaptureTarget>(), 'n', [TypeInfo.of<Int64>()], [2])
-        @Assert(refEq(info1, info2), false) // 两次调用的入参是两个不同对象
 
         let r1 = Aspects.proceed<Int64>(info1, {args: Array<Any> => (args[0] as Int64).getOrThrow()})
         let r2 = Aspects.proceed<Int64>(info2, {args: Array<Any> => (args[0] as Int64).getOrThrow()})
         println("第 1/2 次调用返回 ${r1}/${r2}")
-        println(
-            "切面拿到的 info 与本次入参是同一实例（第1/2次）：${refEq(ArgsIdentityAspect.seenInfo[0], info1)}/${refEq(ArgsIdentityAspect.seenInfo[1], info2)}")
-        println("两次拿到的 info 是同一实例：${refEq(ArgsIdentityAspect.seenInfo[0], ArgsIdentityAspect.seenInfo[1])}")
         println("切面在两次调用里看到的实参：${ArgsIdentityAspect.argsOnSeen[0]}/${ArgsIdentityAspect.argsOnSeen[1]}")
+        println(
+            "切面在两次调用里看到的函数元数据：${ArgsIdentityAspect.seenInfo[1].typeInfo.qualifiedName}.${ArgsIdentityAspect.seenInfo[1].funcInfo.name}")
 
         // 单线程下参数正确
         @Assert(r1, 1)
         @Assert(r2, 2)
-        // 切面拿到的是链为本次调用新建的实例：既不是固化在链上的首个对象，也不是本次入参对象
-        @Assert(refEq(ArgsIdentityAspect.seenInfo[0], info1), false)
-        @Assert(refEq(ArgsIdentityAspect.seenInfo[1], info2), false)
-        // 两次调用各自一个实例：不再复用同一个对象
-        @Assert(refEq(ArgsIdentityAspect.seenInfo[0], ArgsIdentityAspect.seenInfo[1]), false)
-        // 各自带的实参与元数据都正确
+        // 各自带的实参与元数据都正确（struct 为值语义，每次调用各一份，不存在跨调用共享）
         @Assert(ArgsIdentityAspect.argsOnSeen[0], 1)
         @Assert(ArgsIdentityAspect.argsOnSeen[1], 2)
+        @Assert((ArgsIdentityAspect.seenInfo[0].args[0] as Int64).getOrThrow(), 1)
+        @Assert((ArgsIdentityAspect.seenInfo[1].args[0] as Int64).getOrThrow(), 2)
         @Assert(ArgsIdentityAspect.seenInfo[1].typeInfo, TypeInfo.of<CaptureTarget>())
         @Assert(ArgsIdentityAspect.seenInfo[1].funcInfo.name, 'n')
     }
