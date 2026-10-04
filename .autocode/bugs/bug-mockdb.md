@@ -14,9 +14,11 @@
 | 中 | 5 |
 | 低危 / 待验证 | 9 |
 
+> 修复进度（2026-10-04）：§1.1 `MOCK-1` 已修复 ⇒ 待修严重级 **2** 条（见 §1.1 修复标记）。
+
 **建议修复顺序**：
 
-1. `MOCK-1`（§1.1）查询结果行不按「一次执行」清理 —— 事务内第二条语句读到第一条的行（静默错数据，实测复现）
+1. `MOCK-1`（§1.1）查询结果行不按「一次执行」清理 —— 事务内第二条语句读到第一条的行（静默错数据，实测复现）　**✅已修复（2026-10-04，见 §1.1 修复标记）**
 2. `MOCK-2`（§1.2）`MockUpdateResult` 惰性读全局 —— 两个 update 结果互相串（实测复现）
 3. `MOCK-3`（§1.3）`getOrNull` 越界/未就绪返回 None（std 契约要求抛 `SqlException`），类型不匹配也静默 None
 4. `MOCK-4`（§2.1）`close()` 后 `isClosed()` 仍为 false、`state` 仍为 `Connected`（实测复现）
@@ -28,7 +30,15 @@
 
 ## 1. 严重（3 条）
 
-### 1.1 [严重｜正确性] `MOCK-1` 查询结果行不按「一次执行」清理 —— 同一线程内多次 query 的行互相叠加（f_mockdb）
+### 1.1 [严重｜正确性] `MOCK-1` 查询结果行不按「一次执行」清理 —— 同一线程内多次 query 的行互相叠加（f_mockdb） → ✅已修复（2026-10-04）
+
+**✅ 修复标记（2026-10-04）**：分支 `fix/mock-1-query-isolation`（worktree `.worktrees/mock-1-query-isolation`，基线 `4184f45c` = 审查分支 `review/f_mockdb` 现值），**代码、用例、本标记在同一提交**。
+
+- 改动：①`src/mockdb.cj` 新增 `public static func clearQueryResult()`（只清 `queryResultList_` / `queryResultColumnInfos_`，不动 `execution` 与 `toThrowOn*` 标志），`clear()` 改为复用它；②`src/Statement.cj` 的 `update()` / `query()` 在调 `MOCKDB.execution(sql, args)` **之前**先 `MOCKDB.clearQueryResult()`；③`src/QueryResult.cj` 的行数据与列信息改成**构造时快照**（`getQueryResultRows().toArray()` / `queryResultColumnInfos`），已交给调用方的结果集不再被后续执行改变。
+- 用例：`src/mockdb_core_test.cj` 新增 3 条 —— `testQueryResultRowsIsolatedPerExecution`（两条 SQL 各 1 行，各自只看到自己的行）、`testQueryResultRowIsSnapshot`（后续执行不改变已返回的结果集）、`testClearQueryResultKeepsFlagsAndExecution`（`clearQueryResult()` 清结果但保留 `execution` 与标志）。
+- 测量证据：**修复前**（先写用例钉现状）`cjpm test --no-capture-output` = PASSED 30 / **FAILED 2**（EXIT=1）：`testQueryResultRowsIsolatedPerExecution` 在 `@Assert(2, rs2.get<Int64>(0))` 失败（left 2 / right 1，第二次查询的第一行是第一次的行）、`testQueryResultRowIsSnapshot` 在 `@Assert(false, rs1.next())` 失败（得 true）；**修复后** = **33/33 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**，编译警告 9 条与修复前一致（未新增）。日志 `/tmp/mock1_before.log`、`/tmp/mock1_after.log`。
+- 行为变化（与 README 用法一致）：夹具若在 `execution` **之外**预先写行/列信息，会被执行前的 `clearQueryResult()` 清掉；README 与既有用例都是「在 `execution` 内写入」，`f_orm` 的 mockdb 路径同样如此。
+- 未覆盖：`f_orm` 侧 mockdb 路径（`f_orm/src/wrap/DatabasePool_test.cj`，含 10 线程 + 30s 压测）本轮未复跑；`MOCK-8`（`toThrowOnExecuting` 判定在夹具之后）本轮未动，故「声明抛异常的语句仍会先写行」保持原样。
 
 位置：`src/mockdb.cj:77-88`（`addQueryResultRow` 只追加、`getQueryResultRows` 返回**同一个** `ArrayList` 实例）、`src/Statement.cj:56-62`（`query()` 不清理）、`src/QueryResult.cj:20`（`rowData` 直接持有该实例）、`src/Connection.cj:36-38`（**生产代码里 `clear()` 的唯一调用点**）
 

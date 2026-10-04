@@ -47,6 +47,8 @@ public class MockStatement <: Statement {
         }
     }
     public func update(): UpdateResult {
+        //每次执行前清掉上一次的结果，保证本次只看到本次夹具写入的行与列信息
+        MOCKDB.clearQueryResult()
         MOCKDB.execution(sql, args)
         if(MOCKDB.toThrowOnExecuting){
             throw MockDbException()
@@ -54,6 +56,8 @@ public class MockStatement <: Statement {
         MockUpdateResult()
     }
     public func query(): QueryResult {
+        //每次执行前清掉上一次的结果，保证本次只看到本次夹具写入的行与列信息
+        MOCKDB.clearQueryResult()
         MOCKDB.execution(sql, args)
         if(MOCKDB.toThrowOnExecuting){
             throw MockDbException()

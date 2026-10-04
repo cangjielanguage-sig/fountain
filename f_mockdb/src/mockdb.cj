@@ -43,9 +43,14 @@ public class MOCKDB {
     private static let toThrowOnRollbackingSavePoint_ = ThreadLocal<HashMap<String, Bool>>()
     private static let toThrowOnSavingSavePoint_ = ThreadLocal<HashMap<String, Bool>>()
 
-    static func clear(): Unit {
+    /**清空当前线程的查询结果（行与列信息），不动 execution 与 toThrowOn* 标志；MockStatement 每次执行前会调用本函数*/
+    public static func clearQueryResult(): Unit {
         queryResultList_.set(None)
         queryResultColumnInfos_.set(None)
+    }
+
+    static func clear(): Unit {
+        clearQueryResult()
         lastInsertId_.set(None)
         rowCount_.set(None)
         toThrowOnExecuting_.set(None)
