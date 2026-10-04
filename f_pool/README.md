@@ -226,6 +226,56 @@ public func get(timeout!: Duration = Duration.Max): ?T
 public func giveBack(value: T): Bool
 ```
 
+## `maxWaiting`：池耗尽时的等待上限
+
+`maxWaiting` 是**池的初始化参数**（`Pool` / `KeyPool` / `ArrayListPool` / `ArrayPool` / `BytesListOutputStream.builder`
+都有，默认 `Duration.second * 30`；builder 用 `setMaxWaiting(maxWaiting)` 设置），语义是「池耗尽时 `get()` 愿意等多久」：
+
+| 调用方传的 `timeout` | 行为 |
+| --- | --- |
+| `<= Duration.Zero` | 不等待：取不到空闲项立即返回 `None` |
+| `Duration.Max`（默认） | 循环等待（每轮 `sleep(1ms)`，**不忙等**）。到达 `maxWaiting` 上限时记 WARN `key pool exhausted but no idle element: size=…/…, keyedSize=…/…, waited …, give up` 并返回 `None`，由调用方决定重试还是失败 |
+| 其它有限值 | 等待该时长，等不到返回 `None`（实现见 `KeyPool.get` 的第三个分支） |
+
+`maxWaiting` 自身传 `Duration.Max` 表示**真无限等待**：实现按固定分片等待（既避免 `MonoTime + Duration.Max` 溢出，
+也保证能及时看见 `running` 变化）。
+
+> 这条约束的由来：原实现在「池已满但取不到空闲项」时是 `while(running)` 无 sleep 忙等，既占满一个核又会**无日志地永久挂住**
+> 调用者（见 `.autocode/bugs/bug-archived-on-20261004.md` 六 / §7.6）。用例
+> `KeyPool_test.maxWaitingBoundsInfiniteWait` 直接验证「无限等待也必须受 `maxWaiting` 约束」。
+
+## `clear` / `clearOnReturning` 的语义（`ObjectManager.clear` 默认空体）
+
+- `ObjectManager<V>` / `KeyedObjectManager<K, V>` 的 `clear` 是**默认空实现**（`{_ =>}` / `{_, _ =>}`）——
+  「归还时清除」是可选行为，默认什么都不做；要生效必须显式给 `clear`（或 `clearOnReturning = true` 且 `clear` 非空）；
+- `setManager(manager)` 会把 `manager` 的 `create` / `check` / `destroy` / `clear` 一并接上；
+  `Pool<V>` 内部转交 `KeyPool<Unit, V>` 时也**必须**把 `clear` 继续往下传 —— 漏传会让归还的池项保留旧内容，
+  `f_codec` 曾因此出现「编码结果里混进上一条消息的字节 ⇒ 对端解码错位 ⇒ 拆链风暴」
+  （见 `.autocode/bugs/bug-archived-on-20261004.md` 六）。
+
+## 内部实现：`BasePool<T>` / `BaseKeyPool<K, V>`（internal，非公开 API）
+
+这两层是 `Pool` / `KeyPool` 的底座（`BasePool` 在 `fountain::f_pool.base` 且为 `protected package`；
+`BaseKeyPool` 无 `public`），列出来便于排查问题：
+
+- **`BasePool<T>`**：`add` / `giveBack` / `get(checker, destroier)` / `check(running, checker, taskPusher)` /
+  `audit(): Int64`（主动审计自愈，返回校正动作数）/ `destroy(fn): Int64`（清空池并返回处理掉的数量，
+  调用方据此同步全局计数）/ `prop size`；四个实现是 `FifoPool`（`insertTail` + `append`）、
+  `LifoPool`（`insertHead` + `prepend`）、`WeakFifoPool` / `WeakLifoPool`（弱引用队列）。
+  **`maxWaiting` 不在这里**：它只决定「取不到池项时上层等多久」，由 `Pool` / `KeyPool` 的 `get` 负责。
+- **`BaseKeyPool<K, V>`**：`map: ConcurrentHashMap<K, BasePool<V>>` + 全局计数 `s`。
+  `s` 里**既有空闲项也有借出项**（借出不会从队列计数里减掉），所以 `s` 与「各 key 队列 `size` 之和」**任何时刻都该相等**，
+  不等就是真脱钩：
+  - `add` / `giveBack` / `get(key, checker, destroier)` / `keyedSize(key)` / `entries()` / `size`；
+  - `check(running, checker, taskPusher)`：逐 key 巡检（条件为 `p.size < max && checker(...)`）；
+  - `audit()`：先让每个 key 的队列自愈，再把 `s` 校正为各队列之和（校正的日志由 `KeyPool` 巡检统一 WARN，
+    避免同一处校正被打印两次）；
+  - `destroy(fn)`：逐 key 清空，并按销毁数量 `s.fetchSub(...)` —— 不同步的话，destroy 之后 `size` 仍报旧值，
+    后续 `get` 会以为池已满而不再新建池项。
+- `Mode` 到实现的映射：`Fifo` → `FifoPool`，`Lifo` → `LifoPool`，`WeakFifo` / `WeakLifo` → 对应弱引用实现
+  （当前无调用方）；`KeyPool` 在 `K` 为 `Unit` 时改用特化的 `UnitKeyPool`（见 `KeyPool.cj` 构造处），
+  `IKeyPool<K, V>` 是它们的共同接口。
+
 ## 补充：README 未展开的公开面（以源码为准）
 
 - **`Releasable`**（`BytesCopier.cj`）：`release()` 必须**幂等**，用于把借出的池项还回去；
@@ -239,8 +289,7 @@ public func giveBack(value: T): Bool
 - **`PoolDiagnostics`**（`diagnostics/PoolDiagnostics.cj`）：`snapshot()` / `dump()` / `redirectWarningsTo(...)` /
   `installCrashHandler(...)` / `uninstallCrashHandler()` / `CRASH_DUMP_ON_FATAL`，配合 `[FOUNTAIN_POOL.diag]`
   日志做池异常取证；
-- **其它实现**：`BasePool`（`Mode` 的四个实现）、`BaseKeyPool`、`UnitKeyPool`、`IKeyPool`（接口）；
-  `BasePool.destroy` / `BaseKeyPool.destroy` 返回「销毁掉的数量」，调用方据此同步池的 `size`；
+- **其它实现**：`BasePool` / `BaseKeyPool` / `UnitKeyPool` / `IKeyPool` —— 详见上面「内部实现」一节；
 - **内部机制（排查用）**：`SyncDeque` 的记账不变量 `size ≡ 队列节点数 + 借出数`、每 10000 次操作的
   `DEQUE-SELFCHECK` 自检、取不到池项时的 `WEDGE-HEAL` 自愈（含滞留 CHECKING 项复原）、
   `LinkedNode.check` 的异常安全与 `nextForGet` 的取值路径 —— 细节见源码与
