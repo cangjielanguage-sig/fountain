@@ -962,10 +962,10 @@ demo 端到端与之前一致：分隔线 ×2、客户端 JSON、服务端 `CONS
      **输出通道**：底层告警经**可注入钩子**输出（`PoolDiagnostics.warnHook/errorHook`，默认写 **stderr + flush**），
      `KeyPool` 首次建池时把钩子接到 f_log 的 logger（应用可用 `redirectWarningsTo` 更早接管，不会被覆盖）
      —— 用钩子而非直接 `import f_log`，是因为 `SyncDeque` 所在的最底层包反向 import 父包会形成包环；
-     只有 `dump()` 与信号处理器里那一行固定 `println`（崩溃时日志框架可能死锁/丢行）。
+     只有 `dump()` 与信号处理器里那一行**固定直写 stderr 并 flush**（不进钩子：崩溃时日志框架可能死锁/丢行）。
      日志去重：`BaseKeyPool.audit()` 不再自己打 `size a->b`，改由 `KeyPool` 巡检统一 WARN
      （`pool audit healed N anomaly(ies): size a -> b`）。查过 `f_pool`/`f_codec`/`f_net`/`f_protocol`/`f_rpc`
-     的非测试代码：除上述 `dump()`/崩溃行外已无 `println`/`print`/`Console.*`/`printStackTrace`。
+     的非测试代码：**`println` 已为 0**（`dump()`/崩溃行走 stderr），也没有 `print`/`Console.*`/`printStackTrace`。
 - **验证**：`f_pool` **36/36**（原 29/29 + 7 个新用例）；`fdemo` 全量构建 `BUILD_EXIT=0`、`f_rpc` 用例 2/2。
 - 未关闭的部分：**根因未证**（仍算"偶发"，不声称已修）。下次再现时按上面待办第 1、2 条留现场，
   并优先看 `[FOUNTAIN_POOL.crash]` 那行统计 —— 尤其 `bookkeepingHealed` / `strandedRevived` / `scheduleRestarts`

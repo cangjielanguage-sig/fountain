@@ -254,7 +254,7 @@ public class SyncDequeTest {
     }
     @TestCase
     public func testWarningHookCanBeRedirected(){
-        // 底层（SyncDeque）的告警默认 println；能不能进 f_log 取决于上层注入的钩子。
+        // 底层（SyncDeque）的告警默认写 stderr；能不能进 f_log 取决于上层注入的钩子。
         // 这里验证"注入的通道确实收到消息"，而不是库内自己写 stdout（见 bug.md 7.12）。
         let collected = ArrayList<String>()
         PoolDiagnostics.redirectWarningsTo(

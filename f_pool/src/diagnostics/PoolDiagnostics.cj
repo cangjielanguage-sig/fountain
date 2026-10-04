@@ -153,7 +153,7 @@ public struct PoolDiagnostics {
         errorHook = error
     }
 
-    /** 常规告警（默认 `println`，可被 `redirectWarningsTo` 接管）。 */
+    /** 常规告警（默认写 stderr，可被 `redirectWarningsTo` 接管）。 */
     protected static func warn(message: String): Unit {
         warnHook(message)
     }
@@ -170,7 +170,7 @@ public struct PoolDiagnostics {
     private static let shutdownReportInstalled = AtomicBool(false)
 
     /**
-     * 计数自上次报告以来有变化就落一条统计（走告警通道：默认 `println`，被 `KeyPool` 接到 f_log）。
+     * 计数自上次报告以来有变化就落一条统计（走告警通道：默认写 stderr，被 `KeyPool` 接到 f_log）。
      * 这是致命崩溃取证**实际可用**的那一半：崩溃前日志里已经有"最后已知状态"，
      * 不需要（也拿不到）SIGSEGV 现场。返回本次是否输出了统计。
      */
