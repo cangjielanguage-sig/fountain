@@ -80,7 +80,7 @@ struct BaseKeyPool<K, V> <: IKeyPool<K, V> where K <: Hashable & Equatable<K> {
             s.store(total)
             PoolDiagnostics.onBookkeepingHealed()
             healed += 1
-            println("WEDGE-HEAL] keypool: global size=${current} -> ${total}")
+            PoolDiagnostics.warn("WEDGE-HEAL] keypool: global size=${current} -> ${total}")
         }
         healed
     }

@@ -65,10 +65,10 @@ public class SyncDeque<T> <: Deque<T> {
             let o = out.load()
             let sa = s.load()
             if (sa != total + o) {
-                println("DEQUE-SELFCHECK] invariant broken: size=${sa} nodes=${total} out=${o}, lastOp=${DEQUE_OP_NAMES[lastOp.load()]}")
+                PoolDiagnostics.error("DEQUE-SELFCHECK] invariant broken: size=${sa} nodes=${total} out=${o}, lastOp=${DEQUE_OP_NAMES[lastOp.load()]}")
             }
             if (o == 0 && sa > 0 && idles == 0) {
-                println("DEQUE-SELFCHECK] no takeable element: size=${sa} nodes=${total} idle=${idles} checking=${checkings} inFlightChecks=${checkers.load()}, lastOp=${DEQUE_OP_NAMES[lastOp.load()]}")
+                PoolDiagnostics.warn("DEQUE-SELFCHECK] no takeable element: size=${sa} nodes=${total} idle=${idles} checking=${checkings} inFlightChecks=${checkers.load()}, lastOp=${DEQUE_OP_NAMES[lastOp.load()]}")
             }
         }
     }
@@ -247,7 +247,7 @@ public class SyncDeque<T> <: Deque<T> {
                 actions += 1
             }
             if (healed.size > 0) {
-                println("WEDGE-HEAL]${healed}, out=${o}, lastOp=${DEQUE_OP_NAMES[lastOp.load()]}")
+                PoolDiagnostics.warn("WEDGE-HEAL]${healed}, out=${o}, lastOp=${DEQUE_OP_NAMES[lastOp.load()]}")
             }
             actions
         }

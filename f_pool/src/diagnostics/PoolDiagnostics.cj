@@ -19,6 +19,15 @@ import std.env.exit
 import std.posix.{SIGSEGV, SIGIOT}
 import std.sync.{AtomicBool, AtomicInt64}
 import fountain::f_base.{registerSignalHandler, resetSignalHandler, Signal}
+import fountain::f_log.LoggerFactory
+
+/**
+ * 诊断输出通道：
+ * - **常规（非崩溃）告警走 f_log**（`warn`/`error`），与业务日志同一条流水，级别/格式/落盘都由日志配置决定；
+ * - `dump()` 例外，仍用 `println` —— 它会被**信号处理器**调用（见 `installCrashHandler`），
+ *   那里不能碰日志框架：f_log 是"队列 + 独立写线程"（`AsyncLogger`），崩溃时可能死锁，或那行字永远刷不出来。
+ */
+private let logger = LoggerFactory.getLogger('fountain::f_pool')
 
 /**
  * 要取证的致命信号：`std.runtime.Signal` 只枚举了 SIGTERM/SIGINT 等少数几个，
@@ -102,14 +111,26 @@ public struct PoolDiagnostics {
         auditRounds.fetchAdd(1)
     }
 
+    /** 常规告警（走 f_log）。 */
+    protected static func warn(message: String): Unit {
+        logger.warn(message)
+    }
+    /** 不变式被破坏等严重情况（走 f_log）。 */
+    protected static func error(message: String): Unit {
+        logger.error(message)
+    }
+
     /** 统计快照（单行，便于直接塞进日志/崩溃输出）。 */
     public static func snapshot(): String {
         'pools=${createdPools.load()}/${closedPools.load()} items=+${addedItems.load()} borrow=${borrowedItems.load()} return=${returnedItems.load()} destroy=${destroyedItems.load()} callbackErr=${callbackErrors.load()} strandedRevived=${strandedRevived.load()} bookkeepingHealed=${bookkeepingHealed.load()} scheduleRestarts=${scheduleRestarts.load()} audits=${auditRounds.load()}'
     }
 
-    /** 打印统计（带固定前缀，便于 grep）。 */
+    /**
+     * 输出统计（带固定前缀，便于 grep）。走 f_log，跟业务日志同一条流水；
+     * 崩溃路径**不经过这里**（`installCrashHandler` 的处理器自己 `println`），所以日志框架不可用时也不受影响。
+     */
     public static func dump(reason!: String = 'manual'): Unit {
-        println("[FOUNTAIN_POOL.diag] ${reason}: ${snapshot()}")
+        logger.warn("[FOUNTAIN_POOL.diag] ${reason}: ${snapshot()}")
     }
 
     /**
