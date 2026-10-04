@@ -274,7 +274,12 @@ class ConcHashMap<V> <: Collection<(String, V)> {
         }
     }
     func computeIfAbsent(key: String, callable: () -> V): V {
-        segment(key).computeIfAbsent(key, callable)
+        //新建条目同样要记账 size，否则 maxSize 淘汰失效、remove 会把 size 减成负数
+        let (value, added) = segment(key).computeIfAbsentCounted(key, callable)
+        if (added) {
+            incrSize()
+        }
+        value
     }
 
     /**

@@ -41,17 +41,21 @@ class SyncLinkedHashMap<V> <: Collection<(String, V)> {
             map.add(key, value)
         }
     }
-    public func computeIfAbsent(key: String, callable: () -> V): V {
+    /**
+     * 与 computeIfAbsent 相同，但同时返回「本次是否真的新建了条目」，
+     * 供调用方（ConcHashMap）记账 size —— 本类不再单独提供只返回值的重载。
+     */
+    public func computeIfAbsentCounted(key: String, callable: () -> V): (V, Bool) {
         if (let Some(v) <- get(key)) {
-            v
+            (v, false)
         } else {
             synchronized(wl) {
                 if (let Some(v) <- map.get(key)) {
-                    v
+                    (v, false)
                 } else {
                     let v = callable()
                     map.add(key, v)
-                    v
+                    (v, true)
                 }
             }
         }

@@ -18,7 +18,7 @@
 **建议修复顺序**：
 
 1. `CACHE-1`（§1.1）`HeapCache.set(key, value, life!/dieAt)` 在**新建键**时忽略寿命参数 —— JWT id 过期语义失效（安全相关，实测复现）　**✅已修复（2026-10-05，见 §1.1 修复标记）**
-2. `CACHE-2`（§1.2）`ConcHashMap.computeIfAbsent` 不记账 size —— `getOrCompute` 建的条目不计入 `size`，**`maxSize` 上限完全失效**（f_data/f_orm/f_regex 三处真实使用，实测复现）
+2. `CACHE-2`（§1.2）`ConcHashMap.computeIfAbsent` 不记账 size —— `getOrCompute` 建的条目不计入 `size`，**`maxSize` 上限完全失效**（f_data/f_orm/f_regex 三处真实使用，实测复现）　**✅已修复（2026-10-05，见 §1.2 修复标记）**
 3. `CACHE-3`（§1.3）`ConcHashMap.add` 覆盖已存在键多计、`clear()` 不归零 —— `size`/`isEmpty` 失真（实测复现）
 4. `CACHE-4`（§2.1）用户代码（`removeIf` 谓词 / `getOrCompute` 的 callable）在**段写锁内**执行 —— 同段操作被串行阻塞（实测：同段 292.87 ms vs 异段 0.0228 ms）
 5. `CACHE-5`（§2.2）每个 `HeapCache` 实例泄漏 1 个阻塞线程 + 1 条全局 `atExit` 强引用；`WeakHeapCache` 另泄漏 1 个 `while(true)` 清扫线程
@@ -27,7 +27,7 @@
 8. `CACHE-8`（§2.5）`Priority` 比较基线的无锁竞争 + `compare` 的“保护新生”分支疑似写反
 9. 其余低危/待验证见 §3
 
-> 修复进度（2026-10-05）：§1.1 `CACHE-1` 已修复；`CACHE-2`、`CACHE-3` 待修（均在分支 `review/f_cache`，尚未并入 `sts/1.3.x`）。
+> 修复进度（2026-10-05）：§1.1 `CACHE-1`、§1.2 `CACHE-2` 已修复；`CACHE-3` 待修（均在分支 `review/f_cache`，尚未并入 `sts/1.3.x`）。
 
 ---
 
@@ -92,7 +92,14 @@ store.add(key, Priority<V>(key, value, life, checkDuration, once))
 
 **实测（探针 P1a/P1b/P1c）**：新建键 life=100ms ⇒ 300 ms 后 `contains=true` ✗；已存在键同参数 ⇒ `contains=false` ✓；新建键 dieAt=+100ms ⇒ `contains=true` ✗（日志 `/tmp/cache_probe1.log`、`/tmp/cache_probe3.log`）。
 
-### 1.2 [严重｜正确性+内存] `CACHE-2` `ConcHashMap.computeIfAbsent` 不记账 `size`：`getOrCompute` 建的条目不计入 size ⇒ `maxSize` 上限完全失效、size 可为负
+### 1.2 [严重｜正确性+内存] `CACHE-2` `ConcHashMap.computeIfAbsent` 不记账 `size`：`getOrCompute` 建的条目不计入 size ⇒ `maxSize` 上限完全失效、size 可为负 → ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：分支 `review/f_cache`，**代码、用例、本标记在同一提交**（提交信息 `fix(f_cache): CACHE-2 getOrCompute 计入 size（bug-cache §1.2 修复标记）`；提交哈希由下一次标记同步补录）。
+
+- 改动：`src/SyncLinkedHashMap.cj:44-62` 的 `computeIfAbsent` 改为 `computeIfAbsentCounted(key, callable): (V, Bool)`（仍在同一段写锁内完成「查—算—写」，第二个返回值表示本次是否真的新建）；`src/ConcHashMap.cj:276-283` 改用它并在 `added` 时 `incrSize()`。两处类都是包内实现（全仓 grep 确认段级方法只有这一个调用方），公开 API 不变。
+- 用例（`src/HeapCache_test.cj`）：`testGetOrComputeAccountsSize`（`getOrCompute×5` ⇒ `size==5`、`remove` 一个 ⇒ `size==4` 且不为负）、`testGetOrComputeObeysMaxSize`（`maxSize=2`、`getOrCompute×5`、等 1 s ⇒ 存活数与 `size` 都 ≤2）。
+- 测量证据：**修复前** PASSED 2 / **FAILED 2**（`Assert Failed: (5 == cache.size)` 实测 `0`；`(true == alive <= 2)` 实测 5 条全部存活，EXIT=1）→ **修复后** = **4/4 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**；f_cache 自身编译警告仍 2 条。日志 `/tmp/cache2_before.log`、`/tmp/cache2_after.log`。
+- 影响面：`f_data`（`CacheDataPath`）、`f_orm`（`dslcache`）、`f_regex`（`CACHE`）三处 `getOrCompute` 缓存恢复 `maxSize: 10000` 上限；`set`/`get`/`remove`/`removeIf` 路径不受影响。
 
 **位置**：`src/ConcHashMap.cj:276-278`（对比 `add` 在 `:260-264`、`remove` 在 `:285-291` 都有记账）
 

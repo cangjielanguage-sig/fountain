@@ -59,6 +59,38 @@ public class HeapCache_test {
         @Assert(false, cache.contains('updLife'))
         @Assert(false, cache.contains('newDieAt'))
     }
+
+    @TestCase
+    public func testGetOrComputeAccountsSize(): Unit {
+        let cache = HeapCache<Test>(maxLife: Duration.second * 30, maxSize: 100,
+            checkDuration: Duration.second * 30)
+        for (i in 0..5) {
+            cache.getOrCompute('g${i}') {Test(i)}
+        }
+        //getOrCompute 建的条目同样要计入 size（否则 maxSize 淘汰失效、remove 会把 size 减成负数）
+        @Assert(5, cache.size)
+        @Assert(true, cache.remove('g0').isSome())
+        @Assert(4, cache.size)
+    }
+
+    @TestCase
+    public func testGetOrComputeObeysMaxSize(): Unit {
+        let cache = HeapCache<Test>(maxLife: Duration.second * 30, maxSize: 2,
+            checkDuration: Duration.millisecond * 200)
+        for (i in 0..5) {
+            cache.getOrCompute('m${i}') {Test(i)}
+        }
+        sleep(Duration.second)
+        var alive = 0
+        for (i in 0..5) {
+            if (cache.contains('m${i}')) {
+                alive++
+            }
+        }
+        //maxSize=2 ⇒ 定时淘汰后存活条目不应超过 2
+        @Assert(true, alive <= 2)
+        @Assert(true, cache.size <= 2)
+    }
 }
 
 public class Test <: ToString {
