@@ -13,9 +13,9 @@
 | 严重度 | f_orm | f_mvc | f_bean | f_aspect | 跨模块 | 合计 |
 |---|---|---|---|---|---|---|
 | 严重 | 3 | 4 | 1 | 5 | 1 | **14** |
-| 中 | 7 | 8 | 4 | 4 | 0 | **23** |
+| 中 | 7 | 8 | 4 | 4 | 1 | **24** |
 | 低 / 待验证 | 14 | 13 | 9 | 8 | 0 | **44** |
-| 合计 | 24 | 25 | 14 | 17 | 1 | **81** |
+| 合计 | 24 | 25 | 14 | 17 | 2 | **82** |
 
 > 计数修正（2026-10-04）：§1.3 `ASP-1` 判定为**误判**（设计目的，非缺陷）⇒ 待修严重级 **13** 条（f_aspect 严重 4 条）；上表保留审查当时的原始计数。
 > 二次修正（2026-10-04）：§1.4 `ASP-2` 已修复 ⇒ 待修严重级 **12** 条（f_aspect 严重 3 条）。
@@ -36,7 +36,28 @@
 
 ## 1. 严重（14 条）
 
-### 1.1 [严重｜正确性+性能] `ORM-1` 结果缓存的键实际只剩 SQL 文本这一维（`h` 与 `==` 代码上都含 args，失效点在 `SqlArgs`）（f_orm）✓已复核
+### 1.1 [严重｜正确性+性能] `ORM-1` 结果缓存的键实际只剩 SQL 文本这一维（`h` 与 `==` 代码上都含 args，失效点在 `SqlArgs`）（f_orm）✅已修复（2026-10-04）
+
+**✅ 修复记录（2026-10-04）**
+
+- **改动三处**：①`f_orm/src/base/SqlExecutor.cj:82-91`：`clearSql()` 里 `args.clear()` → `this.args = SqlArgs()`（换实例：旧实例从此冻结、只被缓存 key 引用）；②`f_orm/src/wrap/SqlArgs.cj`：删除 `clear()`（全仓唯一调用点已改）；③`SqlArgs.add(arg: SqlArg)` / `add(all!: SqlArgs)` 内 `h = 0`（内容变更时让 `hashCode` 的记忆失效）。
+- **用例**：`f_orm/src/base/SqlResultCache_test.cj` —— `testSameSqlDifferentArgsMustNotHitCache`（不同参数不得串缓存）、`testSameSqlSameArgsStillHitsCache`（同参数必须命中，用 mock 调用计数断言 = 1）、`testCacheKeyMustDependOnArgsContent`（键只由 SQL + 参数内容决定）。每个用例用各自 SQL 文本并在结束处 `close()`：executor 与缓存按线程复用，共用 SQL 文本会互相污染。
+- **修复前基线**（临时 `git stash` 掉三处改动后跑同一套用例）：`[FAILED] testSameSqlDifferentArgsMustNotHitCache`，`Assert Failed: Some(2) != values[1]`，`DEBUG case1: first=Some(1) second=Some(1)` 且 mock 只被调用 1 次 ⇒ **误命中复现** ✓。
+- **修复后**：3/3 PASSED；`case1: first=Some(1) second=Some(2)`（两次都真的执行）、`case2 fires=1`（同参数命中缓存）、`key1 == key2`。
+- **③ 的必要性（本次探针实测）**：`SqlExecutor` 在两次查询之间会执行空 SQL 的检查类语句，把当时**还是空**的 `SqlArgs` 实例哈希一次（`h = H([])`）；之后 `add` 填了参数却不让记忆失效 ⇒ 同样参数的两个 key 哈希不同。探针证据（做了 ①②、未做 ③ 时）：
+
+  ```
+  PROBE get: sql=[select ? as case2] keyHash=6578699273789510219 args=[(0, Int64, 7)] hit=false
+  PROBE put: keyHash=6578699273789510219 args=[(0, Int64, 7)]
+  PROBE get: sql=[select ? as case2] keyHash=5544947046349531277 args=[(0, Int64, 7)] hit=false   ← 同 sql、同参数内容，哈希却不同
+  PROBE path: sql=[] args=[[]]                        ← 空 SQL/空参数也会走缓存路径并被哈希
+  PROBE put: keyHash=4727480832456190669 args=[[]]
+  ```
+
+  补上 ③ 后：两侧 `keyHash=5544947046349531277` 一致，`hit=true`、`fires=1`。
+- **失败模式提醒**：`h` 的记忆必须与内容同生命周期。只做 ①② 会从「返回别的参数的结果」变成「缓存永不命中」（每次查询都多打一次库），两者都不可接受。
+- **顺带**：`f_orm` 测试套件原本编译不过（`src/base/Driver_test.cj` 的 `DatasourceCreatorImpl` 缺接口要求的 `driverName`；`src/wrap/DatabasePool_test.cj` 是用了旧构造签名 + 无限 `spawn` + `sleep(30s)` 的脚手架）⇒ 已修好，见单独提交。
+
 
 位置：`src/base/SqlExecutor.cj:25-39, 48, 82-87, 134-138, 840-849`、`src/wrap/SqlArgs.cj:23-25, 106-120`
 
@@ -67,7 +88,7 @@
 
 1. **修复本体（两步，即为此条的正解）**：`SqlExecutor.cj:85` 的 `args.clear()` 换成 `this.args = SqlArgs()`，并删掉 `SqlArgs.clear()`（全仓只此一个调用点）。
    为什么这就够了：两条 key 只有在**同一个 `SqlArgs` 实例**上才会被 `refEq` 短路，而同一实例只可能来自「同一个保留窗口」（`clearArgsAfterExec: false` 期间没有任何重置）。在该窗口内 `SqlArgs` 的内容只可能被 `add`/`add(all:)` **追加**（`clear()` 已删，模块内再无替换内容的入口），从下标 0 开始的前 n 个参数（n = 该 SQL 的占位符个数）始终是同一批值，且 `SqlArg` 不可变（`private let value`）⇒ 有效参数不变，命中旧结果**是正确的**，不会返回错数据。而默认路径（`clearArgsAfterExec: true`）每次执行后换新实例 ⇒ 旧实例冻结、只被 key 引用 ⇒ 同一 SQL 文本 + 不同参数必产生不同实例 ⇒ `refEq` 不再短路，退化为内容比较（`SqlArg` 的 `==`/`hashCode` 均是内容比较）⇒ 键不再相等，误命中消失；同参数重复查询依旧命中（缓存不被修坏）。
-2. `SqlArgs.hashCode()` 的 `h` 记忆可以顺手删掉（换实例后没人再哈希被复用的实例，记忆只剩风险没有收益）；`cache` 容量上限可选。
+2. `SqlArgs.hashCode()` 的 `h` 记忆必须与内容同生命周期：内容变更（`add` / `add(all:)`）时复位为 0 —— 实测必需（见上面的修复记录 ③），否则换实例后缓存永不命中；`cache` 容量上限可选。
 3. **可选（与正确性无关，只为命中率）**：让 key 持**冻结快照** —— `SqlArgs.clone()` 改成真拷贝（`ArrayList<SqlArg>(args)`，顺带修 `ORM-C3`）+ `SqlExecutor.cj:841` 用 `SqlCacheKey(sql, args.clone())`。保留窗口内 key 现在持 live 实例，实例被追加后同一实例的旧 key 与后续新实例的 key 不再相等 ⇒ 该窗口会少命中几次、条目略增；用快照可消掉这点小损失。
 
 修完补三条 DT：①同一 executor 上「同 SQL、不同参数」两次查询结果必须不同（事务内执行才稳定复现，非事务路径每次 `close()` 清缓存）；②同参数重复查询**应命中缓存**（确认没修成「永不命中」）；③事务内同一 SQL 用不同参数查两次，断言两次都真的落到数据库（日志或行数计数）。
@@ -285,7 +306,7 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 
 ---
 
-## 2. 中（23 条）
+## 2. 中（24 条）
 
 排序：语义/正确性 → 资源与状态 → 性能（按波及面从大到小）。
 
@@ -380,6 +401,28 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 ### 2.23 [中｜性能] `ASP-7` 链里存切面**名字字符串**，每次调用重做查找（f_aspect）
 
 `src/Aspects.cj:42`（`f_bean/src/BeanFactory.cj:208-234, 314-316`：`beans.get` + `isSubtypeOf` + 日志闭包）。修法：建链时解析成 `Aspect` 实例并缓存。
+
+### 2.24 [中｜正确性] `X-2` `orm_databasePoolMaxWaiting` 的 Duration 配置解析与回退不符约定（跨模块：f_data/f_config）
+
+> 2026-10-04 复跑 f_orm 全量用例时新发现；**追加在 §2 末尾以保持既有编号不变**，定级待复核。
+
+位置：用例 `f_orm/src/wrap/ORMConfig_test.cj:27-44`（用例本身未改）；失败栈落在 `f_config/src/Config.cj:178/215` → `f_data/src/base/DataParsable.cj:30/58`（`Duration.tryParse`）。
+
+证据（`cjpm test` 全量，f_orm）：
+
+```
+[ ERROR  ] CASE: testPoolMaxWaiting
+Expect Failed: `(ORMConfig.getPoolMaxWaiting() == Duration.second * 45)`   left: 4s    right: 45s
+Expect Failed: `(ORMConfig.getPoolMaxWaiting() == Duration.minute)`       left: 106751991167300d15h30m7s999ms999us999ns    right: 1m
+An exception has occurred: fountain::f_data.exception.DataParsableException: abc cannot be parsed to Duration
+Summary: TOTAL: 28   PASSED: 27, SKIPPED: 0, ERROR: 1, FAILED: 0
+```
+
+影响：`orm_databasePoolMaxWaiting`（连接池最大等待，按用例注释「≤0 表示真无限等待、非法值退回默认 30s」）读出来的值与配置文本不符 —— 输入 `45s` 得到 `4s`、`1m` 得到 `Duration.Max`；非法值 `abc` 直接抛 `DataParsableException` 而不回退 ⇒ 生产里配错一个字符可能让启动直接失败，或把等待时长设成错误值。
+
+与 §1.1 的关系：调用链（`f_config`/`f_data`）与 `ORM-1` 的改动（`SqlArgs`/`SqlExecutor`）无交集；其余 27 例全过（含新增的 3 例）⇒ 属**既有缺陷**。
+
+修法方向：先补 `f_data` 层 `Duration.tryParse` 的用例钉住约定（`45s`/`1m`/`0s`/`abc` 各自的期望），再决定是改解析规则还是改调用方（`Config.getData`）的回退分支。
 
 ---
 

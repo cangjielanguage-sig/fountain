@@ -17,38 +17,31 @@ package fountain::f_orm.wrap
 
 import std.unittest.*
 import std.unittest.testmacro.*
+import std.collection.ArrayList
 import std.database.sql.*
-import std.reflect.*
-import std.time.MonoTime
 import fountain::f_mockdb.*
 
+/**
+ * 连接池冒烟用例。
+ *
+ * 原来这里是调试脚手架：用了已不存在的构造参数（driver/initSize/creator/connectTimeout）、
+ * 起了 10 个无限循环的 spawn 并 `sleep(30s)`，测试套件因此编译不过、跑起来也永不结束。
+ * 现改为按当前构造签名（driver + ds）建池、借还一次连接。
+ */
 @Test
 public class DatabasePoolTest {
     @TestCase
     public func testDatabasePool(): Unit {
-        MOCKDB.execution = {_, _ => 
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
             MOCKDB.addQueryResultColumnInfo(name: '1', nullable: false, typeName: 'SqlBigInt')
             MOCKDB.addQueryResultRow([1])
         }
         let driver: Driver = DriverManager.getDriver('mockdb').getOrThrow()
         let ds = driver.open('mockdb://')
-        let pool = DatabasePool(driver: driver, initSize:1, minSize: 1, maxSize:1, creator: {=>ds.connect()}, connectTimeout: Duration.millisecond * 50)
-        for(_ in 0 .. 10){
-            spawn{
-                while(true){
-                    println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA 1')
-                    let start = MonoTime.now()
-                    try(c = pool.connect()){
-                        println('AAAAAAAAAAAAAAAAAAAAAAAAA 2 ${TypeInfo.of(c)}')
-                    }
-                    println('AAAAAAAAAAAAAAAAAAAAAAAAA 3 ${MonoTime.now() - start}')
-                }
-            }
+        let pool = DatabasePool(driver, ds)
+        try(c = pool.connect()){
+            @Assert(false, c.isClosed())
         }
-
-        // let c = pool.connect()
-        // println(TypeInfo.of(c))
-        // c.close()
-        sleep(Duration.second * 30)
+        pool.close()
     }
 }

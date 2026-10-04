@@ -82,7 +82,11 @@ public class SqlExecutor <: Resource & RootDAO {
     protected func clearSql(clearArgsAfterExec!: Bool = clearArgsAfterExec_){
         sql_ = ''
         if(clearArgsAfterExec){
-            args.clear()
+            // 换新实例，而不是原地清空列表（bug.md §1.1 / ORM-1）：
+            // 原地清空时，同一个 SqlArgs 实例会被后续查询继续复用，而 SqlCacheKey 持的就是这个实例——
+            // 两个 key 因 SqlArgs.== 的 refEq 短路而恒等，导致同一 SQL 文本、不同参数的查询互相命中缓存。
+            // 换实例后旧实例冻结（只被缓存 key 引用），key 之间退化为参数内容比较，误命中消失。
+            this.args = SqlArgs()
         }
     }
     public prop isReadOnly: Bool {
