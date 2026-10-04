@@ -19,6 +19,7 @@
 
 > 计数修正（2026-10-04）：§1.3 `ASP-1` 判定为**误判**（设计目的，非缺陷）⇒ 待修严重级 **13** 条（f_aspect 严重 4 条）；上表保留审查当时的原始计数。
 > 二次修正（2026-10-04）：§1.4 `ASP-2` 已修复 ⇒ 待修严重级 **12** 条（f_aspect 严重 3 条）。
+> 三次修正（2026-10-04）：§1.6 `ASP-4` 已修复 ⇒ 待修严重级 **11** 条（f_aspect 严重 2 条）。
 
 **建议修复顺序**（即严重级内部的落地顺序）：
 
@@ -26,7 +27,7 @@
 2. `X-1`（§1.2）`TypeInfos.get(String)` 无限递归 —— 波及 14 处调用（f_bean 条件装配、f_aspect 三条规则、f_orm 一处）　**✅已修复（2026-10-04，见 §1.2 修复标记）**
 3. `ASP-2`（§1.4）切面链共享参数槽 —— 并发下参数互串（原先并列的 `ASP-1`/§1.3 已于 2026-10-04 判定为**误判**：链按类型缓存、链尾固化首次 `callee` 是设计目的，非缺陷）　**✅已修复（2026-10-04，见 §1.4 修复标记）**
 4. `ORM-C1`（§1.5）`iterator` 返回前结果集已被关闭 —— 真实驱动下不可用
-5. `ASP-4`/`ASP-5`（§1.6/§1.7）参数注解规则越界崩溃 / 恒不织入
+5. `ASP-4`/`ASP-5`（§1.6/§1.7）参数注解规则越界崩溃 / 恒不织入　**ASP-4 ✅已修复（2026-10-04，见 §1.6 修复标记）；ASP-5 待修**
 6. `BEAN-1`（§1.8）宏生成不存在的 `lookupSet` —— `HashSet`/`Set` 形参直接编译失败
 7. `MVC-4`（§1.9）`download` 输出整块缓冲 —— 下载内容损坏
 8. `MVC-1`/`MVC-3`（§1.10/§1.11）静态资源缓存无界（含 404 负缓存）/ WS ping Timer 每断链泄漏一个周期任务
@@ -188,7 +189,15 @@ public static func get(qualifiedName: String): TypeInfo {
 
 影响：`iterator`/`singleIterator` 把迭代器包在 `execute<T>` 里返回，而该重载的 `finally` 是 `r?.close()` ⇒ 方法一返回底层结果集已关闭；`activeQueryResult` 也随之复位（后续查询不会报「上一个结果集还活着」）。`f_mockdb` 的 `QueryResult.close()` 是空实现（`f_mockdb/src/QueryResult.cj:53-56`）所以单测看不出来；**待验证**：真实驱动（postgres/mysql）下 `close()` 后 `next()` 的行为。修法：`iterator*` 路径不走 `finally close`，把资源所有权交给返回的迭代器。
 
-### 1.6 [严重｜正确性] `ASP-4` 前缀/后缀参数注解规则用 `params.size` 索引注解数组 ⇒ 越界崩溃（f_aspect）✓已复核
+### 1.6 [严重｜正确性] `ASP-4` 前缀/后缀参数注解规则用 `params.size` 索引注解数组 ⇒ 越界崩溃（f_aspect）✓已复核 → ✅已修复（2026-10-04）
+
+**✅ 修复标记（2026-10-04）**：分支 `fix/asp-4`（worktree `.worktrees/asp-4`，基线 `51030f8c`），代码、用例、本标记在**同一提交**（提交信息 `fix(f_aspect): ASP-4 前缀/后缀参数注解规则按下标对齐，越界/恒 true → false（§1.6）`）。
+
+- 改动：`f_aspect/src/AspectRoute.cj:290` 的公共实现 `matches(asc:...)` —— `range` 改为按 `annotations.size` 收敛、下标基准换成「规则项下标」（前缀 `offset = 0`、后缀 `offset = params.size - annotations.size`，规则项**正序**对应最后 N 个参数）；`params.size < annotations.size` 时返回 `false`；规则项补 `trimAscii()`；判定维持"参数**拥有**该注解即通过"（同文件 `contains :197-206` 的写法）。两个规则类本体不变，其文档示例（`:311-317`、`:324-330`）现在成立。
+- **实测修正（与审查原文不同）**：原后缀分支 `params.size - 1..=0` **缺 `: -1`** ⇒ 按语言语义是**空循环**（最小实验：`for (i in 3..=0)` 迭代 0 次，`3..=0 : -1` 才是 `3 2 1 0`；仓库其它降序循环都写 `: -1`）⇒ 后缀规则的真实症状是**不校验任何参数、恒 `true`（过织入）**，不是越界；越界崩溃只发生在前缀分支（`0..params.size` + 规则项更少时）。两者同根：都用**参数下标**去索引规则项。
+- 用例：`f_aspect/src/test/arg_prefix_suffix_route_test.cj` —— 规则项数 == / < / > 参数数 × 前缀/后缀、参数无注解（必须 `false`，防"空集合真空通过"）、参数多注解（"拥有"即可，`true`），共 2 个 `@TestCase`。
+- 测量证据：**修前** `testPrefixRule` = `[ ERROR ] IndexOutOfBoundsException: Index out of bounds: index is '2', but array size is '2'`；`testSuffixRule` = `[ FAILED ] Assert Failed: (rule.matches(info('test3', 3)) == false)`（空循环误判 `true`）；合计 `PASSED: 3, ERROR: 1, FAILED: 1`（EXIT=1）。**修后** `PASSED: 5, FAILED: 0, ERROR: 0`、`cjpm test success`（EXIT=0）。
+- 未覆盖：`ArgAnnotationsRouteRule` 的"恒 `false`"属 §1.7 `ASP-5`，本次未动。
 
 位置：`src/AspectRoute.cj:290-309, 318-336`
 

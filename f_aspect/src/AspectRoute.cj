@@ -33,13 +33,13 @@ import fountain::f_regex.*
 public abstract class RouteRule {
     public const init() {}
     public func matches(funcInfo: InvocationFuncInfo): Bool
-    public operator const func &(right: RouteRule): RouteRule {
+    public const operator func &(right: RouteRule): RouteRule {
         AndRouteRule(this, right)
     }
-    public operator const func |(right: RouteRule): RouteRule {
+    public const operator func |(right: RouteRule): RouteRule {
         OrRouteRule(this, right)
     }
-    public operator const func !(): RouteRule {
+    public const operator func !(): RouteRule {
         NotRouteRule(this)
     }
 }
@@ -77,9 +77,9 @@ public class ExecutionRouteRule <: AndRouteRule {
 public class WithinRouteRule <: RouteRule {
     public const WithinRouteRule(public let qualifiedName: String) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        let qualifiedName = if(Regex('^.+::').matches(this.qualifiedName)){
+        let qualifiedName = if (Regex('^.+::').matches(this.qualifiedName)) {
             this.qualifiedName
-        }else{
+        } else {
             '*::${this.qualifiedName}'
         }
         Regex.wildcard(qualifiedName).matches(funcInfo.typeInfo.qualifiedName)
@@ -134,10 +134,9 @@ public class ArgsRouteRule <: RouteRule {
 public class ReturnTypeRouteRule <: RouteRule {
     public const ReturnTypeRouteRule(public let returnType: String) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        let matched = returnType == '*' || 
-        ((returnType.contains('*') || returnType.contains('?')) && 
-          Regex.wildcard(returnType).matches(funcInfo.funcInfo.returnType.qualifiedName)) || 
-        TypeInfos.get(returnType).isSubtypeOf(funcInfo.funcInfo.returnType)
+        let matched = returnType == '*' || ((returnType.contains('*') || returnType.contains('?')) &&
+            Regex.wildcard(returnType).matches(funcInfo.funcInfo.returnType.qualifiedName)) ||
+            TypeInfos.get(returnType).isSubtypeOf(funcInfo.funcInfo.returnType)
         matched
     }
 }
@@ -290,16 +289,21 @@ public class AnyArgAnnotationsRouteRule <: RouteRule {
 private func matches(asc: Bool, funcInfo: InvocationFuncInfo, annotationTypes: String) {
     let annotations = annotationTypes.split(',')
     let params = funcInfo.funcInfo.parameters
-    let range = if (asc) {
-        0..params.size
-    } else {
-        params.size - 1..=0
+    if (params.size < annotations.size) {
+        return false // 规则项比参数还多：不可能匹配
     }
-    for (i in range) {
-        let current = annotations[i]
+    // 前缀：规则项正序对应最前面 N 个参数；后缀：规则项正序对应最后面 N 个参数
+    // （N = annotations.size；不能拿参数下标去索引规则项，否则 N < params.size 时越界）
+    let offset = if (asc) {
+        0
+    } else {
+        params.size - annotations.size
+    }
+    for (i in 0..annotations.size) {
+        let current = annotations[i].trimAscii()
         var matched = false
-        for (annotation in params[i].annotations where ClassTypeInfo.of(annotation).qualifiedName == current) {
-            matched = true
+        for (annotation in params[offset + i].annotations where ClassTypeInfo.of(annotation).qualifiedName == current) {
+            matched = true // 参数"拥有"该注解即可：命中一个就通过（同文件 contains :197-206 的写法）
             break
         }
         if (!matched) {
