@@ -119,6 +119,92 @@ public class HeapCache_test {
         cache.destroy()
         @Assert(0, cache.size)
     }
+
+    /**找一个与 key0 落在同一分段的键（concurrencyLevel=4 ⇒ 掩码 3），用于「同段操作是否被阻塞」的对照*/
+    private func sameSegmentKey(key0: String): String {
+        for (i in 0..100) {
+            let k = 'sk${i}'
+            if ((k.hashCode() & 3) == (key0.hashCode() & 3)) {
+                return k
+            }
+        }
+        throw Exception('no same segment key for ${key0}')
+    }
+
+    @TestCase
+    public func testGetOrComputeComputesOnceWhenPresent(): Unit {
+        let cache = HeapCache<Test>(maxLife: Duration.second * 30, checkDuration: Duration.second * 30)
+        let calls = Box<Int64>(0)
+        let first = cache.getOrCompute('once') {
+            calls.value++
+            Test(7)
+        }
+        let second = cache.getOrCompute('once') {
+            calls.value++
+            Test(8)
+        }
+        //已存在时不得再算：callable 只能被调用一次，两次拿到同一个值
+        @Assert(1, calls.value)
+        @Assert(7, first.value)
+        @Assert(7, second.value)
+    }
+
+    @TestCase
+    public func testGetOrComputeDoesNotHoldSegmentLock(): Unit {
+        let cache = HeapCache<Test>(concurrencyLevel: 4, maxLife: Duration.second * 30,
+            checkDuration: Duration.second * 30)
+        let computed = 'gcVictim'
+        let reader = sameSegmentKey(computed)
+        cache.set(reader, Test(1))
+        let cost = Box<Float64>(0.0)
+        let f = spawn {
+            sleep(Duration.millisecond * 100)
+            let t0 = DateTime.now()
+            let _ = cache.get(reader)
+            cost.value = (DateTime.now() - t0) / Duration.millisecond
+        }
+        //callable 睡 400ms：若它被关在段写锁里，上面那次同段 get 会被拖住 ~300ms
+        let computedValue = cache.getOrCompute(computed) {
+            sleep(Duration.millisecond * 400)
+            Test(2)
+        }
+        f.get()
+        @Assert(2, computedValue.value)
+        @Assert(true, cost.value < 100.0)
+    }
+
+    @TestCase
+    public func testRemoveIfDoesNotHoldSegmentLock(): Unit {
+        let cache = HeapCache<Test>(concurrencyLevel: 4, maxLife: Duration.second * 30,
+            checkDuration: Duration.second * 30)
+        let victim = 'rfVictim'
+        let reader = sameSegmentKey(victim)
+        cache.set(victim, Test(1))
+        cache.set(reader, Test(2))
+        cache.set('rfOther', Test(3))
+        let cost = Box<Float64>(0.0)
+        let f = spawn {
+            sleep(Duration.millisecond * 100)
+            let t0 = DateTime.now()
+            let _ = cache.get(reader)
+            cost.value = (DateTime.now() - t0) / Duration.millisecond
+        }
+        //谓词对 victim 睡 400ms：若谓词在段写锁内跑，同段 get 会被拖住
+        cache.removeIf {k, _ =>
+            if (k == victim) {
+                sleep(Duration.millisecond * 400)
+                true
+            } else {
+                false
+            }
+        }
+        f.get()
+        @Assert(true, cost.value < 100.0)
+        //语义不变：谓词为真的被删，其余保留
+        @Assert(false, cache.contains(victim))
+        @Assert(true, cache.contains(reader))
+        @Assert(true, cache.contains('rfOther'))
+    }
 }
 
 public class Test <: ToString {
