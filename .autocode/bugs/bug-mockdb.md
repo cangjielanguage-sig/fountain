@@ -184,7 +184,7 @@ DT：`close()` 后断言夹具未变；显式 `clear()` 后断言夹具已清（
 
 ### 2.3 [中｜契约] `MOCK-6` `MockColumnInfo` 的 `displaySize` / `length` / `scale` 直接抛 `MockDbException('not supported')`（f_mockdb） → ✅已修复（2026-10-04）
 
-**✅ 修复标记（2026-10-04）**：分支 `fix/mock-1-query-isolation`（同一 worktree，在 MOCK-5 之后追加提交），**代码、用例、本标记在同一提交**（提交信息 `fix(f_mockdb): MOCK-6 MockColumnInfo 三个成员返回契约值（bug-mockdb §2.3 修复标记）`；提交哈希由下一次标记同步补录）。
+**✅ 修复标记（2026-10-04）**：分支 `fix/mock-1-query-isolation`（同一 worktree，在 MOCK-5 之后追加提交），**代码、用例、本标记在同一提交**：提交 `edb10235`（`fix(f_mockdb): MOCK-6 MockColumnInfo 三个成员返回契约值（bug-mockdb §2.3 修复标记）`）；尚未并入 `sts/1.3.x`（待下次同步）。
 
 - 改动：`src/ColumnInfo.cj` 的 `displaySize` / `length` / `scale` 由 `throw MockDbException('not supported')` 改为返回 std 契约值 —— `Int64.Max`（「如果无限制，则应该返回 `Int64.Max`」）、`0`（「对于列大小不适用的数据类型，返回 0」）、`0`（「如果无小数部分，返回 0」），各带一行注释标明契约来源。
 - 用例：`src/mockdb_core_test.cj` 新增 `testColumnInfoContractValues` —— 跑一次查询后取 `rs.columnInfos[0]`，断言三个值分别为 `Int64.Max` / `0` / `0`。
