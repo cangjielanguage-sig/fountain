@@ -17,17 +17,7 @@ package fountain::f_pool.diagnostics
 
 import std.env.{atExit, exit}
 import std.sync.{AtomicBool, AtomicInt64}
-import fountain::f_base.{registerSignalHandler, resetSignalHandler, Signal}
-
-/**
- * 致命信号的**信号号**（自己定义，不引用 `std.posix` 里已标记 deprecated 的同名常量）。
- * 这些是 POSIX 固定值，Linux / macOS / ohos 一致：`SIGABRT`（别名 `SIGIOT`，由 `abort()` 触发）= 6，
- * `SIGSEGV`（内存引用无效）= 11；Windows 无这些信号，相关代码由 `@When` 排除。
- */
-@When[os != "Windows"]
-private const SIGABRT_NUMBER: Int32 = 6
-@When[os != "Windows"]
-private const SIGSEGV_NUMBER: Int32 = 11
+import fountain::f_base.{registerSignalHandler, resetSignalHandler, Signal, SIGIOT, SIGSEGV}
 
 /**
  * f_pool 的运行时统计 + 致命信号取证（见 bug.md 7.12）。
@@ -46,10 +36,10 @@ private const SIGSEGV_NUMBER: Int32 = 11
 
 /**
  * 要取证的致命信号：`std.runtime.Signal` 只枚举了 SIGTERM/SIGINT 等少数几个，
- * 段错误/异常终止用上面自定的信号号构造。
+ * 段错误/异常终止用 f_base 里自定的信号号（`SIGSEGV` / `SIGIOT`）构造。
  */
 @When[os != "Windows"]
-private let FATAL_SIGNALS = [Signal(SIGSEGV_NUMBER, 'segv'), Signal(SIGABRT_NUMBER, 'abort')]
+private let FATAL_SIGNALS = [Signal(SIGSEGV, 'segv'), Signal(SIGIOT, 'abort')]
 
 /**
  * f_pool 的运行时统计 + 致命信号取证（见 bug.md 7.12）。

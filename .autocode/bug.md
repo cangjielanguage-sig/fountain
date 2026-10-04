@@ -948,7 +948,8 @@ demo 端到端与之前一致：分隔线 ×2、客户端 JSON、服务端 `CONS
      - **退出落统计**：`installShutdownReport()`（首次建池时注册，走 `std.env.atExit`，有异常才输出）。
      ⚠️ **信号处理器实测无效（2026-10-04 实验结论）**：`installCrashHandler()`（SIGSEGV/SIGABRT ⇒ 打印后 `exit(134)`）
      在 Cangjie 运行时下**不会被执行** —— 运行时自己的 fatal handler 先行接管。用一次性程序实测：
-     `registerSignalHandler` 与 `resetAndRegisterSignalHandler` 都试过（信号号自定：SIGABRT=6 / SIGSEGV=11），
+     `registerSignalHandler` 与 `resetAndRegisterSignalHandler` 都试过（信号号自定并放在 `f_base/src/signal.cj`：
+     `SIGIOT`=6 / `SIGSEGV`=11，不引用 `std.posix` 里已 deprecated 的同名常量），
      进程均以 **139** 退出、我们那行没打出来，stderr 只有运行时的 `CJNative Handle signal: 6` +
      `Check failed: concurrencyModel != nullptr`。API 保留并标注了该限制（留给"非 Cangjie 运行时宿主"场景），
      但不要指望它取证；实际起作用的是上面两条 + 输出通道。

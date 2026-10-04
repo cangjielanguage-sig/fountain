@@ -22,6 +22,16 @@ import std.sync.Mutex
 @When[os != "Windows"]
 public import std.runtime.{registerSignalHandler, resetSignalHandler, Signal}
 
+/**
+ * 致命信号的**信号号**。这里自己定义，不引用 `std.posix` 里已标记 deprecated 的同名常量。
+ * POSIX 固定值，Linux / macOS / ohos 一致：`SIGIOT`（`SIGABRT` 的别名，`abort()` 触发）= 6，
+ * `SIGSEGV`（内存引用无效）= 11。Windows 没有这些信号，故与 `Signal` 一样只在非 Windows 声明。
+ */
+@When[os != "Windows"]
+public const SIGIOT: Int32 = 6
+@When[os != "Windows"]
+public const SIGSEGV: Int32 = 11
+
 @When[os != "Windows"]
 public struct ExitCallbacks {
     private static let mutex = Mutex()
