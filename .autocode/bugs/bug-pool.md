@@ -16,9 +16,11 @@
 | 低危 / 待验证 | 9 | `POOL-L1` ~ `POOL-L9` |
 | 合计 | 22 | — |
 
+> 计数修正（2026-10-05）：§1.1 `POOL-1` 已修复 ⇒ 待修严重级 **4** 条（`POOL-2`~`POOL-5`）；上表保留审查当时的原始计数。
+
 **建议修复顺序**：
 
-1. `POOL-1`（§1.1）借出中的池项被 GC 终结器销毁 → 池的「借出期所有权」契约不成立（实测借出对象被打上已销毁标记）
+1. `POOL-1`（§1.1）借出中的池项被 GC 终结器销毁 → 池的「借出期所有权」契约不成立（实测借出对象被打上已销毁标记）　**✅已修复（2026-10-05，见 §1.1 修复标记）**
 2. `POOL-2`（§1.2）`KeyPool.get` 有限超时分支在池耗尽时**无让步忙等** → 编码热路径（`DefaultCodec` 的 `build(timeout: 5s)`）整核空转（实测 2s 等待烧 2.25s 用户态 CPU）
 3. `POOL-3`（§1.3）巡检把**满载 key** 的空闲项当「校验不过」摘掉，并整轮跳过用户 checker → 稳态抖动、`connectionLife`/`idleTimeout` 判定被绕过（实测满载空闲池 idle 2→1）
 4. `POOL-4`（§1.4）creator/checker 持续失败时**无退避紧重试** → 对下游的重连风暴 + 每轮一条 WARN（实测 300ms 内 75,976 次尝试）
@@ -29,7 +31,22 @@
 
 ## 1. 严重（5 条）
 
-### 1.1 [严重｜正确性] `POOL-1` 借出中的池项会被 `Ref` 终结器销毁（显式销毁路径还会被销毁第二次）
+### 1.1 [严重｜正确性] `POOL-1` 借出中的池项会被 `Ref` 终结器销毁（显式销毁路径还会被销毁第二次）✓已复核 → ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`（worktree `.worktrees/review-f_pool`，基线 `5b76b7a2`，已合入 `sts/1.3.x`），代码、用例、本标记在**同一提交**（提交信息 `fix(f_pool): POOL-1 借出/显式销毁改用 Ref.take()，终结器不得提前或重复销毁池项`）。
+
+- 改动（给 `Ref` 加「取走并置空」，所有「值离开 `Ref` 保护」的路径都改走它）：
+  1. `f_pool/src/Ref.cj:37-47`：新增 `take(): ?T`（返回值并把 `value` 置 `None`）；
+  2. 三处借出 `f_pool/src/KeyPool.cj:464 / 474 / 491`：`r.get()` → `r.take()`；
+  3. `f_pool/src/KeyPool.cj:424`（`keyedDestroy`：借出/归还校验不过而销毁）→ `ref.take()`；
+  4. `f_pool/src/KeyPool.cj:326`（巡检判失效后销毁）、`:409`（`close()` 清池）→ `r.take()`。
+  只读用途（`keyedCheck`、巡检里 `valid = … r.get()`）保持不变。
+- 用例：`f_pool/src/KeyPool_test.cj` → `KeyPoolTest.borrowedItemMustNotBeDestroyedByFinalizer`（借出后强制 `gc()`×2：销毁计数必须为 0、归还后仍能借出；`close()` 显式销毁一次后再 `gc()`×2：计数不得变 2）。
+- 测量证据：
+  - **修前**：该用例 `[ FAILED ]`（`Assert Failed: (destroyed.load() == 0)  left: 1  right: 0`，`TEST_EXIT=1`）—— 借出期间被终结器销毁；
+  - **修后**：单用例 `PASSED: 1, FAILED: 0`（`FILTERED_EXIT=0`）；`f_pool` 全量 `cjpm test` = **`PASSED: 38, SKIPPED: 0, ERROR: 0, FAILED: 0`**（`FULL_EXIT=0`，日志 `.autocode/tmp/pool_fix_{pre,post}.log`）；
+  - 探针复测（`.autocode/tmp/pool_probe_fixed`，path 依赖指向本 worktree 的 `f_pool`）：`finalizer: destroyed_before_gc=0 after_gc=0 borrowed_is_destroyed=false`（修前 `after_gc=1`、`true`）、`double_destroy: after_close=1 after_gc=1`（修前 `after_gc=2`）。
+- 未覆盖：公开 API 未变（仍 `get(): ?V`），但**「借出后漏归还」的兜底弱化**：`take()` 之后该项的 `Ref` 已空，终结器不再为「借出未还」补销毁 —— 原来那个兜底正是提前销毁的来源；若要真兜底需让 `get` 返回句柄（`Ref<V>`），属破坏性 API 变更，不在本条。
 
 **现象**：`KeyPool.get` 借出时返回的是**解包后的 `V`**，包着它的 `Ref<V>` 在函数返回后立即不可达；`Ref` 的终结器 `~init()` 正是「谁值还在就销毁谁」——于是**借用方还在用这个对象时，下一次 GC 就会调 `destroier` 把它销毁掉**。
 
@@ -369,6 +386,8 @@ useafterrelease: second_is_empty=false second_bytes=5
 | `queue_alloc` | `Pool<Object>(maxSize:5_000_000)` | 堆 **+80,004,832 B** |
 | `sleep_max` | `sleep(Duration.Max)` | 不抛异常（线程睡下去不醒） |
 | `lostwakeup` / `lostwakeup_load` | 每次 get 都必须等新建（×100；负载版另加 30 个 CPU 线程） | none=0/100（**未复现**，见 `POOL-5` 第二个面） |
+
+> `POOL-1` 修复后的复测：把探针的 path 依赖指向 worktree 的 `f_pool`（工程 `.autocode/tmp/pool_probe_fixed`，其余同）—— `finalizer` → `after_gc=0 / borrowed_is_destroyed=false`、`double_destroy` → `after_close=1 after_gc=1`（修前分别是 `1/true` 与 `2`）。即上表中这两行是**修前基线**，修复记录见 §1.1。
 
 复跑方式（WSL Ubuntu-24.04）：`source /mnt/d/docs/work/cangjie/cangjie.sh` → `cd .autocode/tmp/pool_probe && cjpm build` → 按脚本里的 `LD_LIBRARY_PATH`（各 `target/release/*@*` 目录**排在 `installed/libs/fboot` 之前**）直接跑 `target/release/bin/main <mode>`，用 `time -p` 量 CPU。
 
