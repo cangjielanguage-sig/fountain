@@ -212,6 +212,8 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         PoolDiagnostics.installDefaultHooks(
             {message => logger.warn(message)},
             {message => logger.error(message)})
+        // 进程退出时若发生过异常，落一条统计（健康时静默）——SIGSEGV 现场拿不到，这是可用的替代（见 bug.md 7.12）
+        PoolDiagnostics.installShutdownReport()
         if (PoolDiagnostics.CRASH_DUMP_ON_FATAL) {
             // 首次建池装一次致命信号取证（幂等）：下次真出 SIGSEGV，至少能拿到池的运行统计（见 bug.md 7.12）
             PoolDiagnostics.installCrashHandler()
@@ -337,8 +339,10 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             let healed = pool.audit()
             PoolDiagnostics.onAuditRound()
             if(healed > 0){
-                logger.warn('pool audit healed ${healed} anomaly(ies): size ${sizeBefore} -> ${pool.size}')
+                logger.warn('pool audit healed ${healed} anomaly(ies): size ${sizeBefore} -> ${pool.size}, ${PoolDiagnostics.snapshot()}')
             }
+            // 异常计数一旦有变化就落一条统计（健康时静默）：崩溃前"最后已知状态"靠这条留在日志里（见 bug.md 7.12）
+            PoolDiagnostics.reportIfChanged('pool audit')
         }
     }
     private func tryAddTask(key: K){

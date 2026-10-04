@@ -15,10 +15,19 @@ limitations under the License.
 */
 package fountain::f_pool.diagnostics
 
-import std.env.exit
-import std.posix.{SIGSEGV, SIGIOT}
+import std.env.{atExit, exit}
 import std.sync.{AtomicBool, AtomicInt64}
 import fountain::f_base.{registerSignalHandler, resetSignalHandler, Signal}
+
+/**
+ * 致命信号的**信号号**（自己定义，不引用 `std.posix` 里已标记 deprecated 的同名常量）。
+ * 这些是 POSIX 固定值，Linux / macOS / ohos 一致：`SIGABRT`（别名 `SIGIOT`，由 `abort()` 触发）= 6，
+ * `SIGSEGV`（内存引用无效）= 11；Windows 无这些信号，相关代码由 `@When` 排除。
+ */
+@When[os != "Windows"]
+private const SIGABRT_NUMBER: Int32 = 6
+@When[os != "Windows"]
+private const SIGSEGV_NUMBER: Int32 = 11
 
 /**
  * f_pool 的运行时统计 + 致命信号取证（见 bug.md 7.12）。
@@ -37,10 +46,10 @@ import fountain::f_base.{registerSignalHandler, resetSignalHandler, Signal}
 
 /**
  * 要取证的致命信号：`std.runtime.Signal` 只枚举了 SIGTERM/SIGINT 等少数几个，
- * 段错误/异常终止要用 `std.posix` 的信号号自己构造（`SIGIOT` 即 SIGABRT，号相同）。
+ * 段错误/异常终止用上面自定的信号号构造。
  */
 @When[os != "Windows"]
-private let FATAL_SIGNALS = [Signal(SIGSEGV, 'segv'), Signal(SIGIOT, 'abort')]
+private let FATAL_SIGNALS = [Signal(SIGSEGV_NUMBER, 'segv'), Signal(SIGABRT_NUMBER, 'abort')]
 
 /**
  * f_pool 的运行时统计 + 致命信号取证（见 bug.md 7.12）。
@@ -151,6 +160,39 @@ public struct PoolDiagnostics {
         errorHook(message)
     }
 
+    /** 异常计数之和（回调异常 + 滞留救回 + 记账校正 + 线程重开）：用作"是否有异常发生"的签名。 */
+    private static func anomalySignature(): Int64 {
+        callbackErrors.load() + strandedRevived.load() + bookkeepingHealed.load() + scheduleRestarts.load()
+    }
+    private static let lastReportedSignature = AtomicInt64(-1)
+    private static let shutdownReportInstalled = AtomicBool(false)
+
+    /**
+     * 计数自上次报告以来有变化就落一条统计（走告警通道：默认 `println`，被 `KeyPool` 接到 f_log）。
+     * 这是致命崩溃取证**实际可用**的那一半：崩溃前日志里已经有"最后已知状态"，
+     * 不需要（也拿不到）SIGSEGV 现场。返回本次是否输出了统计。
+     */
+    protected static func reportIfChanged(reason: String): Bool {
+        let current = anomalySignature()
+        if (current == lastReportedSignature.load()) {
+            return false
+        }
+        lastReportedSignature.store(current)
+        warn("[FOUNTAIN_POOL.diag] ${reason}: ${snapshot()}")
+        true
+    }
+
+    /** 注册"进程退出时若有异常就落一次统计"（幂等；`KeyPool` 首次建池时调用）。健康时静默。 */
+    protected static func installShutdownReport(): Unit {
+        if (!shutdownReportInstalled.compareAndSwap(false, true)) {
+            return
+        }
+        atExit {
+            reportIfChanged('shutdown')
+            ()
+        }
+    }
+
     /** 统计快照（单行，便于直接塞进日志/崩溃输出）。 */
     public static func snapshot(): String {
         'pools=${createdPools.load()}/${closedPools.load()} items=+${addedItems.load()} borrow=${borrowedItems.load()} return=${returnedItems.load()} destroy=${destroyedItems.load()} callbackErr=${callbackErrors.load()} strandedRevived=${strandedRevived.load()} bookkeepingHealed=${bookkeepingHealed.load()} scheduleRestarts=${scheduleRestarts.load()} audits=${auditRounds.load()}'
@@ -167,6 +209,12 @@ public struct PoolDiagnostics {
     /**
      * 安装致命信号处理器（幂等；首次建池时按 `CRASH_DUMP_ON_FATAL` 自动调用）。
      * 处理器行为：打印一行统计 ⇒ 复位这两个信号（退出过程中再崩就交给系统默认处理，避免递归）⇒ `exit(134)`。
+     *
+     * ⚠️ **实测限制（2026-10-04）**：在 Cangjie 运行时里 SIGSEGV / SIGABRT 由运行时自己的 fatal handler
+     * 先行接管（stderr 打出 `CJNative Handle signal: N` + `Check failed: …` 后 abort），本处理器**不会被调用** ——
+     * `registerSignalHandler` 与 `resetAndRegisterSignalHandler` 都实测过，进程依旧以 139 退出，我们这行没打出来。
+     * 因此真正管用的是 `reportIfChanged()`（异常发生即落统计）与 `installShutdownReport()`（退出时落统计）；
+     * 这个 API 保留给"非 Cangjie 运行时宿主"或"将来运行时放开致命信号"的场景。
      */
     @When[os != "Windows"]
     public static func installCrashHandler(): Unit {

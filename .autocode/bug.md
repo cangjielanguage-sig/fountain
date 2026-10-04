@@ -941,11 +941,18 @@ demo 端到端与之前一致：分隔线 ×2、客户端 JSON、服务端 `CONS
      否则空闲回收、minSize 补足、审计自愈会永久停摆。用例：`scheduleSurvivesCallbackErrors`。
   4. **构造完成栅栏**（`KeyPool.constructed` + `Condition`）：后台线程在构造函数返回前不许碰 `this`。
      7.12 的栈顶是"运行时泛型 MTable 空指针"、疑似对象未构造完就被别的线程使用，这条是针对性兜底。
-  5. **崩溃取证**（新增子包 `fountain::f_pool.diagnostics.PoolDiagnostics`）：自愈动作与借还都记数
-     （`snapshot()` / `dump()`）；首次建池时装一次 SIGSEGV / SIGABRT 处理器 —— 致命信号时先打印
-     `[FOUNTAIN_POOL.crash] fatal signal=…, pools=…/… items=+… borrow=… callbackErr=… strandedRevived=… bookkeepingHealed=… scheduleRestarts=…`
-     再 `exit(134)`，把"偶发崩溃零现场"变成"至少有一行统计"。可用 `PoolDiagnostics.uninstallCrashHandler()`
-     交还信号处理，或把 `CRASH_DUMP_ON_FATAL` 置 false。用例：`testDiagnosticsSnapshotTracksActivity`。
+  5. **崩溃取证**（新增子包 `fountain::f_pool.diagnostics.PoolDiagnostics`）：自愈动作与借还都记数，实用的是三件事：
+     - `snapshot()` / `dump()`：随时取/打一行统计；
+     - **异常即落统计**：`reportIfChanged()` 在计数变化时输出一条（`KeyPool` 巡检每轮调用，健康时静默）
+       ⇒ 崩溃前日志里已有"最后已知状态"；
+     - **退出落统计**：`installShutdownReport()`（首次建池时注册，走 `std.env.atExit`，有异常才输出）。
+     ⚠️ **信号处理器实测无效（2026-10-04 实验结论）**：`installCrashHandler()`（SIGSEGV/SIGABRT ⇒ 打印后 `exit(134)`）
+     在 Cangjie 运行时下**不会被执行** —— 运行时自己的 fatal handler 先行接管。用一次性程序实测：
+     `registerSignalHandler` 与 `resetAndRegisterSignalHandler` 都试过（信号号自定：SIGABRT=6 / SIGSEGV=11），
+     进程均以 **139** 退出、我们那行没打出来，stderr 只有运行时的 `CJNative Handle signal: 6` +
+     `Check failed: concurrencyModel != nullptr`。API 保留并标注了该限制（留给"非 Cangjie 运行时宿主"场景），
+     但不要指望它取证；实际起作用的是上面两条 + 输出通道。
+     用例：`testDiagnosticsSnapshotTracksActivity`（幂等安装 + 统计随活动变化）、`auditRunsFromSchedule`（巡检路径会执行 `reportIfChanged`）。
      **输出通道**：底层告警经**可注入钩子**输出（`PoolDiagnostics.warnHook/errorHook`，默认 `println`），
      `KeyPool` 首次建池时把钩子接到 f_log 的 logger（应用可用 `redirectWarningsTo` 更早接管，不会被覆盖）
      —— 用钩子而非直接 `import f_log`，是因为 `SyncDeque` 所在的最底层包反向 import 父包会形成包环；
