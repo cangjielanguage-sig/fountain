@@ -19,7 +19,7 @@
 
 1. `CACHE-1`（§1.1）`HeapCache.set(key, value, life!/dieAt)` 在**新建键**时忽略寿命参数 —— JWT id 过期语义失效（安全相关，实测复现）　**✅已修复（2026-10-05，见 §1.1 修复标记）**
 2. `CACHE-2`（§1.2）`ConcHashMap.computeIfAbsent` 不记账 size —— `getOrCompute` 建的条目不计入 `size`，**`maxSize` 上限完全失效**（f_data/f_orm/f_regex 三处真实使用，实测复现）　**✅已修复（2026-10-05，见 §1.2 修复标记）**
-3. `CACHE-3`（§1.3）`ConcHashMap.add` 覆盖已存在键多计、`clear()` 不归零 —— `size`/`isEmpty` 失真（实测复现）
+3. `CACHE-3`（§1.3）`ConcHashMap.add` 覆盖已存在键多计、`clear()` 不归零 —— `size`/`isEmpty` 失真（实测复现）　**✅已修复（2026-10-05，见 §1.3 修复标记）**
 4. `CACHE-4`（§2.1）用户代码（`removeIf` 谓词 / `getOrCompute` 的 callable）在**段写锁内**执行 —— 同段操作被串行阻塞（实测：同段 292.87 ms vs 异段 0.0228 ms）
 5. `CACHE-5`（§2.2）每个 `HeapCache` 实例泄漏 1 个阻塞线程 + 1 条全局 `atExit` 强引用；`WeakHeapCache` 另泄漏 1 个 `while(true)` 清扫线程
 6. `CACHE-6`（§2.3）`once()` / `prolong()` 不判过期 ⇒ 可“复活”已过期条目（实测复现）
@@ -27,7 +27,7 @@
 8. `CACHE-8`（§2.5）`Priority` 比较基线的无锁竞争 + `compare` 的“保护新生”分支疑似写反
 9. 其余低危/待验证见 §3
 
-> 修复进度（2026-10-05）：§1.1 `CACHE-1`、§1.2 `CACHE-2` 已修复；`CACHE-3` 待修（均在分支 `review/f_cache`，尚未并入 `sts/1.3.x`）。
+> 修复进度（2026-10-05）：**§1 的 3 条严重级已全部修复**（`CACHE-1`/`CACHE-2`/`CACHE-3`）；§2 的 5 条中危与 §3 的低危/待验证**均未动**。全部改动在分支 `review/f_cache`（尚未并入 `sts/1.3.x`）；用例 1 → 6 条（全绿）。
 
 ---
 
@@ -127,7 +127,14 @@ store.add(key, Priority<V>(key, value, life, checkDuration, once))
 
 **实测（探针 P2a/P2b/P2c/P2d/P2e）**：`getOrCompute×5` 后 `size=0` ✗；等 800 ms 后 **5/5 仍存活**（对照：用 `set` 建的 5 个只剩 2 个 ✓）；`remove` 一个后 `size=-1` ✗。
 
-### 1.3 [严重｜正确性] `CACHE-3` `ConcHashMap.add` 覆盖已存在键时多计 size；`clear()` 不归零 ⇒ `size`/`isEmpty` 长期失真
+### 1.3 [严重｜正确性] `CACHE-3` `ConcHashMap.add` 覆盖已存在键时多计 size；`clear()` 不归零 ⇒ `size`/`isEmpty` 长期失真 → ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：分支 `review/f_cache`，**代码、用例、本标记在同一提交**（提交信息 `fix(f_cache): CACHE-3 add 覆盖记账 + clear 归零（bug-cache §1.3 修复标记）`；提交哈希由下一次标记同步补录）。
+
+- 改动（`src/ConcHashMap.cj`）：`add` 只在段级 `add` 返回 `None`（确为新增）时 `incrSize()`（`:260-268`）；`clear()` 清空各段后 `size_.store(0)`（`:325-331`）—— `destroy()` 走 `clear()`，一并归零。
+- 用例（`src/HeapCache_test.cj`）：`testAddOverwriteCountsOnce`（同键 `add`×2 ⇒ `size==1`，再 `add` 一个新键 ⇒ `2`）、`testClearResetsSize`（`set`×3 ⇒ 3；`clear()` ⇒ 0；再 `set` ⇒ 1；`destroy()` ⇒ 0）。
+- 测量证据：**修复前** PASSED 4 / **FAILED 2**（`Assert Failed: (1 == map.size)` 实测 `2`；`(0 == cache.size)` 实测 `3`，EXIT=1）→ **修复后** = **6/6 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**；f_cache 自身编译警告仍 2 条。日志 `/tmp/cache3_before.log`、`/tmp/cache3_after.log`。
+- 影响面：`HeapCache.clear()` / `destroy()` 之后 `size` 与 `isEmpty()` 恢复同口径；`maxSize` 判定不再被幻影计数放大 ⇒ 不再出现「刚清空就被提前淘汰」。
 
 **位置**：`src/ConcHashMap.cj:260-264`、`:320-324`
 

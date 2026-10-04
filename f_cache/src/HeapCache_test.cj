@@ -91,6 +91,34 @@ public class HeapCache_test {
         @Assert(true, alive <= 2)
         @Assert(true, cache.size <= 2)
     }
+
+    @TestCase
+    public func testAddOverwriteCountsOnce(): Unit {
+        let map = ConcHashMap<Test>.create(concurrencyLevel: 4)
+        map.add('a', Test(1))
+        map.add('a', Test(2))
+        //覆盖已存在的键不是新增，size 只能 +1
+        @Assert(1, map.size)
+        map.add('b', Test(3))
+        @Assert(2, map.size)
+    }
+
+    @TestCase
+    public func testClearResetsSize(): Unit {
+        let cache = HeapCache<Test>(maxLife: Duration.second * 30, maxSize: 100,
+            checkDuration: Duration.second * 30)
+        for (i in 0..3) {
+            cache.set('c${i}', Test(i))
+        }
+        @Assert(3, cache.size)
+        cache.clear()
+        @Assert(0, cache.size)
+        //clear 之后重新计数：幻影计数会让真实条目被提前淘汰
+        cache.set('c0', Test(0))
+        @Assert(1, cache.size)
+        cache.destroy()
+        @Assert(0, cache.size)
+    }
 }
 
 public class Test <: ToString {
