@@ -22,6 +22,7 @@
 > 三次修正（2026-10-04）：§1.6 `ASP-4` 已修复 ⇒ 待修严重级 **11** 条（f_aspect 严重 2 条）。
 > 四次修正（2026-10-05）：§1.7 `ASP-5` 已修复 ⇒ 待修严重级 **10** 条（f_aspect 严重 1 条）。
 > 五次修正（2026-10-05）：§1.8 `BEAN-1` 已修复 ⇒ 待修严重级 **9** 条（f_bean 严重 0 条）。
+> 六次修正（2026-10-05）：§1.9 `MVC-4` 已修复 ⇒ 待修严重级 **8** 条（f_mvc 严重 2 条：§1.10 `MVC-1`、§1.11 `MVC-3`）。
 
 **建议修复顺序**（即严重级内部的落地顺序）：
 
@@ -31,7 +32,7 @@
 4. `ORM-C1`（§1.5）`iterator` 返回前结果集已被关闭 —— 真实驱动下不可用
 5. `ASP-4`/`ASP-5`（§1.6/§1.7）参数注解规则越界崩溃 / 恒不织入　**ASP-4 ✅已修复（2026-10-04，见 §1.6 修复标记）；ASP-5 ✅已修复（2026-10-05，见 §1.7 修复标记）**
 6. `BEAN-1`（§1.8）宏生成不存在的 `lookupSet` —— `HashSet`/`Set` 形参直接编译失败　**✅已修复（2026-10-05，见 §1.8 修复标记）**
-7. `MVC-4`（§1.9）`download` 输出整块缓冲 —— 下载内容损坏
+7. `MVC-4`（§1.9）`download` 输出整块缓冲 —— 下载内容损坏　**✅已修复（2026-10-05，见 §1.9 修复标记）**
 8. `MVC-1`/`MVC-3`（§1.10/§1.11）静态资源缓存无界（含 404 负缓存）/ WS ping Timer 每断链泄漏一个周期任务
 9. `MVC-2`、`ORM-2`、`ASP-3`（§1.12–§1.14）三个热点：每请求全量序列化 / 逐单元格类型分派 / 每调用重建元信息
 
@@ -254,7 +255,14 @@ for (i in 0..params.size) {
 
 已核实：全仓 `grep 'func lookupSet'` **无任何定义**，`lookupSet<` 仅出现在这两处宏输出里。影响：任何 `@Bean` + `@Constructor` 类只要有一个 `HashSet<T>`/`Set<T>` 形参，生成代码就引用未定义符号 ⇒ **编译失败**（不是运行时问题，所以只有用到该形参形态的类才暴露）。修法：改为 `lookupHashSet`（或补 `lookupSet` 别名）。建议同时给 `@Constructor` 加一条形参形态的编译期用例（`ArrayList/Array/HashSet/Option/HashMap` 各一）。
 
-### 1.9 [严重｜正确性] `MVC-4` `download` 写出整个缓冲，而不是实际读到的长度（f_mvc）✓已复核
+### 1.9 [严重｜正确性] `MVC-4` `download` 写出整个缓冲，而不是实际读到的长度（f_mvc）✓已复核 → ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：分支 `fix/mvc-4`（worktree `.worktrees/mvc-4`，基线 `a435d58d`），代码、用例、本标记在**同一提交**（提交信息 `fix(f_mvc): MVC-4 download 只写出实际读到的长度，缓冲改用 MVCConfig.downloadBufferSize（§1.9）`）。
+
+- 改动：`f_mvc/src/ResponseDownload.cj` —— 两处循环（`:44-47` 多流重载、`:62-65` `Array<File>` 重载）抽出为包内 `copy(input: InputStream, write: (Array<Byte>) -> Unit)`（顺带去重复），`write(buf)` → `write(buf[0..bytes])`、缓冲分配提到循环外、大小改用 `MVCConfig.downloadBufferSize`（与同模块正确写法 `FileDownload.cj:54-58` 对齐）。
+- 用例：`f_mvc/src/response_download_test.cj`（`package fountain::f_mvc`，与源文件同包以便调用包内 `copy`；沿用 `f_base/src/Comparator_test.cj` 的同包测试约定）—— `testCopyWritesOnlyReadBytes`：19997 字节（非 1024/4096/8192 整数倍）源、逐字节可预测，用内存收集器断言「写出总长 == 源长、逐字节一致」；`testCopyEmptyInput`：空流写出 0 字节。
+- 测量证据：**修前**（`copy` 仍是 `write(buf)` + 1024 缓冲）`cjpm test` → `[ FAILED ] CASE: testCopyWritesOnlyReadBytes`，`Assert Failed: (written.value == size)`，**left: 20480**（= 20×1024）、**right: 19997**，`PASSED: 1, FAILED: 1`、`EXIT=1`（20480 正是「每块多写 缓冲大小−实读」在 1024 缓冲下的结果，随缓冲大小线性放大：默认 4096 时每块多写 4096−实读）。**修后** → `[ PASSED ] testCopyWritesOnlyReadBytes`、`[ PASSED ] testCopyEmptyInput`，`PASSED: 2, FAILED: 0, ERROR: 0`、`cjpm test success`；另跑 `cjpm build`（f_mvc 库）`BUILD EXIT=0`，确认 `*_test.cj` 不进正常构建。
+- 未覆盖：真端到端（HTTP 响应里的多流/多文件下载）未跑 —— `FileDownload` 构造期即取 `CurrentHttpContext.instance`，且 f_mvc 无测试基建；本用例覆盖缺陷所在的复制语义，两个下载重载共用该函数。
 
 位置：`src/ResponseDownload.cj:44-47, 62-65`
 
