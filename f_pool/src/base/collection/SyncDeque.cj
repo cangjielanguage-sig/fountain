@@ -17,6 +17,7 @@ protected package fountain::f_pool.base.collection
 
 import std.sync.{Mutex, AtomicInt64}
 import std.ref.*
+import fountain::f_pool.diagnostics.PoolDiagnostics
 
 /** 操作代号 → 名字：不变量告警里带上"当时在跑哪类操作"，便于再现时定位触发源（见 bug.md 7.2）。 */
 private let DEQUE_OP_NAMES = ['insertHead', 'insertTail', 'prepend', 'append', 'remove', 'check', 'reconcile']
@@ -28,6 +29,8 @@ protected interface Deque<T> {
     func append(value: T, checker: (T) -> Bool, destroier: (T) -> Unit): Unit
     func remove(checker: (T) -> Bool, destroier: (T) -> Unit): ?T
     func check(running: () -> Bool, checker: (T) -> Bool, taskPusher: () -> Unit): Int64
+    /** 主动审计自愈（巡检线程每轮调用）：返回校正的动作数，见 bug.md 7.12。 */
+    func audit(): Int64
     prop size: Int64
 }
 public class SyncDeque<T> <: Deque<T> {
@@ -106,6 +109,7 @@ public class SyncDeque<T> <: Deque<T> {
             head.insertNext(value)
             s.fetchAdd(1)
         }
+        PoolDiagnostics.onItemAdded()
         selfCheck()
     }
     public func insertTail(value: T): Unit {
@@ -114,39 +118,61 @@ public class SyncDeque<T> <: Deque<T> {
             head.tail.insertPrev(value)
             s.fetchAdd(1)
         }
+        PoolDiagnostics.onItemAdded()
         selfCheck()
     }
     public func prepend(value: T, checker: (T) -> Bool, destroier: (T) -> Unit): Unit {
         lastOp.store(2)
-        if(checker(value)){
+        if(checkedBeforeReturn(value, checker, destroier)){
             synchronized(head.globalLock){
                 head.insertNext(value)
                 markReturned()
-            }
-        }else{
-            destroier(value)
-            synchronized(head.globalLock){
-                markReturned()
-                s.fetchSub(1)
+                PoolDiagnostics.onItemReturned()
             }
         }
         selfCheck()
     }
     public func append(value: T, checker: (T) -> Bool, destroier: (T) -> Unit): Unit {
         lastOp.store(3)
-        if(checker(value)){
+        if(checkedBeforeReturn(value, checker, destroier)){
             synchronized(head.globalLock){
                 head.tail.insertPrev(value)
                 markReturned()
-            }
-        }else{
-            destroier(value)
-            synchronized(head.globalLock){
-                markReturned()
-                s.fetchSub(1)
+                PoolDiagnostics.onItemReturned()
             }
         }
         selfCheck()
+    }
+    /**
+     * 归还前的校验：`checker` 抛异常时**先按"校验不过"把这一项结清**（销毁 + 计数还原）再把异常抛出去。
+     * 否则这一项既不算已归还、也没被销毁 ⇒ 永久挂在 `out` 上：池项凭空消失、池会越用越小（见 bug.md 7.12）。
+     */
+    private func checkedBeforeReturn(value: T, checker: (T) -> Bool, destroier: (T) -> Unit): Bool {
+        var valid = false
+        try {
+            valid = checker(value)
+        } catch (e: Exception) {
+            discardItem(value, destroier)
+            throw e
+        }
+        if(!valid){
+            discardItem(value, destroier)
+        }
+        valid
+    }
+    /** 校验不过（或校验回调抛异常）：销毁该项并把「已借出」的计数还原，保证池项不会凭空消失。 */
+    private func discardItem(value: T, destroier: (T) -> Unit): Unit {
+        try {
+            destroier(value)
+        } catch (e: Exception) {
+            // 销毁回调自己抛异常也不能影响记账：这里只记数，由上层日志体现（见 bug.md 7.12）
+            PoolDiagnostics.onCallbackError()
+        }
+        PoolDiagnostics.onItemDestroyed()
+        synchronized(head.globalLock){
+            markReturned()
+            s.fetchSub(1)
+        }
     }
     public func remove(checker: (T) -> Bool, destroier: (T) -> Unit): ?T {
         lastOp.store(4)
@@ -157,19 +183,25 @@ public class SyncDeque<T> <: Deque<T> {
             synchronized(head.globalLock){
                 if(let Some(x) <- head.nextForGet()){
                     markBorrowed()
+                    PoolDiagnostics.onItemBorrowed()
                     taken = Some(x)
                 }
             }
             if(let Some(x) <- taken){
-                if(checker(x)){
+                var valid = false
+                try {
+                    valid = checker(x)
+                } catch (e: Exception) {
+                    // 借出后的校验回调抛异常：这一项既没被拿走、也不算归还 ⇒ 会永久挂在 out 上
+                    // （池项凭空消失）。自愈：按"校验不过"结清后再把异常抛给调用方（见 bug.md 7.12）。
+                    discardItem(x, destroier)
+                    throw e
+                }
+                if(valid){
                     selfCheck()
                     return x
                 }else{
-                    destroier(x)
-                    synchronized(head.globalLock){
-                        markReturned()
-                        s.fetchSub(1)
-                    }
+                    discardItem(x, destroier)
                     selfCheck()
                 }
             }else{
@@ -192,27 +224,42 @@ public class SyncDeque<T> <: Deque<T> {
      *    也没有借出项」）。只在**没有借出项**时判：借出项本来就该「不在队列里」，
      *    有借出在途时 `s != nodes` 是正常的。
      */
-    private func reconcileIfWedge(): Unit {
+    private func reconcileIfWedge(): Int64 {
         lastOp.store(6)
         synchronized(head.globalLock){
             if (checkers.load() != 0) {
-                return                  // 有 check 在飞：非 idle 节点是合法中间态，不动手
+                return 0                // 有 check 在飞：非 idle 节点是合法中间态，不动手
             }
             let (total, idles, checkings) = countNodes()
             let o = out.load()
             var healed = ''
+            var actions = 0
             if (total > idles) {
                 let revived = reviveNonIdle()
+                PoolDiagnostics.onStrandedRevived(revived)
+                actions += revived
                 healed += ' stranded: nodes=${total} idle=${idles} checking=${checkings} revived=${revived}'
             }
             if (o == 0 && s.load() != total) {
                 healed += ' bookkeeping: size=${s.load()} -> ${total}'
                 s.store(total)
+                PoolDiagnostics.onBookkeepingHealed()
+                actions += 1
             }
             if (healed.size > 0) {
                 println("WEDGE-HEAL]${healed}, out=${o}, lastOp=${DEQUE_OP_NAMES[lastOp.load()]}")
             }
+            actions
         }
+    }
+
+    /**
+     * **主动审计自愈**（巡检线程每轮调用，见 bug.md 7.12）：不必等"取不到项"才自愈，
+     * 把滞留项与计数脱钩在空闲期就修掉，避免它们攒成"池记着满、却一个也取不出来"。
+     * 返回本次校正的动作数（0 = 一切正常）。
+     */
+    public func audit(): Int64 {
+        reconcileIfWedge()
     }
 
     /** 把仍挂在队列上、但不是 idle 的节点还原成 idle（滞留在 CHECKING 的池项，见 `reconcileIfWedge`）。 */
@@ -334,6 +381,9 @@ protected struct WeakSyncDeque<T> <: Deque<T> {
     }
     public func check(running: () -> Bool, checker: (T) -> Bool, taskPusher: () -> Unit): Int64 {
         q.check(running, refChecker(checker), taskPusher)
+    }
+    public func audit(): Int64 {
+        q.audit()
     }
     public prop size: Int64 {
         get(){

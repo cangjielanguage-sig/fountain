@@ -32,7 +32,7 @@
 | — | **f_protocol→f_util 依赖**：应用加载期 `undefined symbol: crc32Update` | ✅⚠️ | **已修**（`boot.sh` 自建库优先）。曾误判为"加载顺序/需要预打开 .so"，实际是 `installed/libs/fboot` 的**旧副本抢先**（库无 SONAME），见 7.8 |
 | — | 池记账脱钩的**触发源** | ✅ | 2026-10-04 定位到具体一行：`ValueNode.nextForGet()` 摘掉节点后**没把值返回**（队首非 idle 时"扫到却拿不到"）⇒ 池项凭空消失、`s` 多记 ⇒ 攒满后永久卡死；已修 + `check` 异常安全 + 自愈泛化 + `destroy` 计数同步 + 弱引用池同类修复，`f_pool` **29/29**；见 7.2 |
 | — | 重复归还的强约束 | ⬜ | **决定：暂不改（2026-10-04）** —— 容量护栏（方案 A）不解决问题；方案 B（给 `V` 加 `Hashable & Equatable` 约束或改句柄 API）与"支持任意类型对象"的目标冲突 ⇒ 保持现状（低频自检 + `Release` 幂等），见 7.3 |
-| 7.12 | `f_pool` 全量用例**偶发** SIGSEGV | ⬜ | 仅 2026-10-03 观察到一次（栈顶 `UnitKeyPool.size` 的运行时泛型 MTable 空指针）；2026-10-04 做了对照（默认并行 5 轮 + `--parallel 1` 2 轮）**仍未复现**，触发条件未知 —— 只能等再现时留栈；见 7.12 |
+| 7.12 | `f_pool` 全量用例**偶发** SIGSEGV | 🟡 | 2026-10-03 仅观察到一次（栈顶 `UnitKeyPool.size` 的运行时泛型 MTable 空指针）；2026-10-04 七轮对照仍未复现 ⇒ **加入自愈与取证组合**：回调异常不破账目、巡检期主动审计自愈、维护线程看护重开、构造完成栅栏、SIGSEGV 前打印池统计；`f_pool` **36/36**。根因仍未证；见 7.12 |
 | 7.13 | `f_store` 的 6 个 WAL 用例 ERROR（**既有**） | ✅ | 2026-10-04 定位并修复：`SegmentLog` 预分配 64MB 的文件被用例按"文件长度"整读（并发时撑爆堆）⇒ 测试侧改为"有界前缀读 + 就地改 1 字节"，`f_store` **204/204**；见 7.13 |
 | 7.14 | `f_store` 全量用例在 `/tmp` 留 ~4GB 残留 | ✅ | 2026-10-04 修复：新增测试专用 `TestTmpDirs_test.cj`，包初始化与进程退出各清一次 `/tmp/f_store*`；验证 `f_store` 204/204 且运行后无残留（修前每次 +3.9~4.1GB）；见 7.14 |
 | 7.9 | `f_net` 用例长期编译不过（读写路径无回归覆盖） | ✅ | 2026-10-04 迁移到 `Server<T>`/`Client<T>`：`cjpm test` = **14/14**（含 PING→ACK、executor 请求/响应 + 载荷逐字节往返）；见 7.9 |
@@ -929,6 +929,27 @@ demo 端到端与之前一致：分隔线 ×2、客户端 JSON、服务端 `CONS
 - **复现尝试（2026-10-04）**：按待办第 3 条做了对照 —— 默认并行 **5 轮** + `cjpm test --parallel 1` **2 轮**，
   共 7 轮全部 `TOTAL: 23, PASSED: 23, FAILED: 0`、退出码 0，无 SIGSEGV、无崩溃进程 ⇒ **仍未复现**。
   结论：不能据此判定"已修复"（触发条件依旧未知）；后续再现时按上面第 1、2 条留现场。
+- **自愈机制（2026-10-04 落地）**：根因仍不可复现，因此按"让池在单点故障下继续服务 + 让下一次崩溃可诊断"加固：
+  1. **回调异常不再破坏账目**（`SyncDeque.remove/append/prepend` + `discardItem`）：`checker` / `destroier`
+     抛异常时，该项按"校验不过"结清（销毁 + `out`/`s` 一起还原）后再抛出 —— 否则它会永久挂在 `out` 上：
+     池项凭空消失、池越用越小。用例：`testBorrowCheckerThrowingMustNotLeakElement`、
+     `testReturnCheckerThrowingMustNotLeakElement`、`testDestroyerThrowingMustNotBreakAccounting`。
+  2. **主动审计自愈**（`audit()` 链路：`SyncDeque` → `BasePool` → `IKeyPool`）：巡检线程每轮调一次，
+     不必等某个 `get` 取不到项才自愈；`BaseKeyPool.audit()` 还会把全局 `s` 与各 key 队列之和校正一致。
+     用例：`testAuditHealsStrandedWithoutBorrowAttempt`、`auditRunsFromSchedule`。
+  3. **后台维护线程不许静默退出**（`KeyPool` 的创建/巡检线程加看护循环：异常记 WARN、意外退出则重开并计数），
+     否则空闲回收、minSize 补足、审计自愈会永久停摆。用例：`scheduleSurvivesCallbackErrors`。
+  4. **构造完成栅栏**（`KeyPool.constructed` + `Condition`）：后台线程在构造函数返回前不许碰 `this`。
+     7.12 的栈顶是"运行时泛型 MTable 空指针"、疑似对象未构造完就被别的线程使用，这条是针对性兜底。
+  5. **崩溃取证**（新增子包 `fountain::f_pool.diagnostics.PoolDiagnostics`）：自愈动作与借还都记数
+     （`snapshot()` / `dump()`）；首次建池时装一次 SIGSEGV / SIGABRT 处理器 —— 致命信号时先打印
+     `[FOUNTAIN_POOL.crash] fatal signal=…, pools=…/… items=+… borrow=… callbackErr=… strandedRevived=… bookkeepingHealed=… scheduleRestarts=…`
+     再 `exit(134)`，把"偶发崩溃零现场"变成"至少有一行统计"。可用 `PoolDiagnostics.uninstallCrashHandler()`
+     交还信号处理，或把 `CRASH_DUMP_ON_FATAL` 置 false。用例：`testDiagnosticsSnapshotTracksActivity`。
+- **验证**：`f_pool` **36/36**（原 29/29 + 7 个新用例）；`fdemo` 全量构建 `BUILD_EXIT=0`、`f_rpc` 用例 2/2。
+- 未关闭的部分：**根因未证**（仍算"偶发"，不声称已修）。下次再现时按上面待办第 1、2 条留现场，
+  并优先看 `[FOUNTAIN_POOL.crash]` 那行统计 —— 尤其 `bookkeepingHealed` / `strandedRevived` / `scheduleRestarts`
+  是否为 0（为 0 说明池的账目与线程都正常，崩溃更可能出在泛型 MTable/类型信息侧；不为 0 则有池内线索）。
 
 ### 7.13 `f_store` 的 6 个 WAL 用例 ERROR（**既有问题**）：✅ 已修（2026-10-04）
 

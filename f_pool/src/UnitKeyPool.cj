@@ -44,6 +44,9 @@ struct UnitKeyPool<K, V> <: IKeyPool<K, V> {
     public func destroy(fn: (K, V) -> Unit): Unit {
         pool.destroy{v => fn(eternity, v)}
     }
+    public func audit(): Int64 {
+        pool.audit()
+    }
     public prop size: Int64{
         get(){
             pool.size

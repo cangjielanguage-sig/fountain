@@ -18,6 +18,7 @@ package fountain::f_pool
 import std.collection.concurrent.ArrayBlockingQueue
 import std.sync.{AtomicBool, Mutex, Condition}
 import fountain::f_base.ExitCallbacks
+import fountain::f_pool.diagnostics.PoolDiagnostics
 import fountain::f_pool.exception.PoolException
 
 public interface KeyedObjectManager<K, V> {
@@ -170,6 +171,14 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
     private let pool: IKeyPool<K, Ref<V>>
     private let tasks: ArrayBlockingQueue<PoolTask<K>>
     private let running = AtomicBool(true)
+    /**
+     * 构造完成标志：后台维护线程在构造函数返回前**不许碰 `this`**。
+     * bug.md 7.12 那次 SIGSEGV 的栈顶是 `UnitKeyPool.size`（运行时泛型 MTable 空指针），
+     * 一种可能是后台线程在对象尚未构造完（类型信息未就绪）时就开始使用它 ⇒ 这里加一道栅栏兜住这类风险。
+     */
+    private let constructed = AtomicBool(false)
+    private let barrierMutex = Mutex()
+    private let barrier = synchronized(barrierMutex){ barrierMutex.condition() }
 
     public KeyPool(
         mode!: Mode = Mode.Fifo,
@@ -198,12 +207,33 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             case _ => BaseKeyPool<K, Ref<V>>(mode, maxSize)
         }
         tasks = ArrayBlockingQueue<PoolTask<K>>(totalSize)
+        PoolDiagnostics.onPoolCreated()
+        if (PoolDiagnostics.CRASH_DUMP_ON_FATAL) {
+            // 首次建池装一次致命信号取证（幂等）：下次真出 SIGSEGV，至少能拿到池的运行统计（见 bug.md 7.12）
+            PoolDiagnostics.installCrashHandler()
+        }
         startCheckingSchedule()
         startCreationSchedule()
         while(let Some(k) <- initKeys()){
             tryAddTask(k)
         }
         ExitCallbacks.atExit(254, close)
+        // 必须是构造函数的最后一步：放行两个后台线程（见 constructed 的说明）
+        synchronized(barrierMutex){
+            constructed.store(true)
+            barrier.notifyAll()
+        }
+    }
+    /** 后台线程等"构造完成"再动 `this`；构造一完成即被唤醒，无固定延迟（见 `constructed` 的说明）。 */
+    private func waitConstructed(): Unit {
+        if (constructed.load()) {
+            return
+        }
+        synchronized(barrierMutex){
+            if (!constructed.load()) {
+                barrier.wait()
+            }
+        }
     }
     public init(
         mode!: Mode = Mode.Fifo,
@@ -255,29 +285,53 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             return
         }
         spawn {
+            waitConstructed()
+            // 看护循环：巡检线程**不允许**静默退出 —— 一旦退出，空闲回收、minSize 补足、审计自愈
+            // 都会永久停摆（见 bug.md 7.12）。异常或意外退出都记 WARN 并重开。
             while(running.load()){
-                sleep(checkInterval)
                 try{
-                    pool.check({=> running.load()}, {k, r => 
-                        var valid = !r.isIdleTimeout() && if(let Some(v) <- r.get()){
-                            doCheck(k, v, checker)
-                        }else{
-                            false
-                        }
-                        if(!valid){
-                            if(let Some(v) <- r.get()){
-                                doDestroy(k, v, destroier)
-                            }
-                        }
-                        valid
-                    }){k => tryAddTask(k)}
-                    for ((k, s) in pool.entries() where s < minSize) {
-                        sleep(Duration.Zero)
-                        tryAddTask(k)
-                    }
+                    checkingLoop()
                 }catch(e: Exception){
                     logger.warn('error on pool checking schedule', e)
                 }
+                if(running.load()){
+                    PoolDiagnostics.onScheduleRestart()
+                    logger.warn('pool checking schedule exited unexpectedly, restarting it')
+                    sleep(Duration.second)
+                }
+            }
+        }
+    }
+    /** 巡检的一轮循环（拆出来便于看护重开）。 */
+    private func checkingLoop(): Unit {
+        while(running.load()){
+            sleep(checkInterval)
+            if(!running.load()){
+                return
+            }
+            pool.check({=> running.load()}, {k, r => 
+                var valid = !r.isIdleTimeout() && if(let Some(v) <- r.get()){
+                    doCheck(k, v, checker)
+                }else{
+                    false
+                }
+                if(!valid){
+                    if(let Some(v) <- r.get()){
+                        doDestroy(k, v, destroier)
+                    }
+                }
+                valid
+            }){k => tryAddTask(k)}
+            for ((k, s) in pool.entries() where s < minSize) {
+                sleep(Duration.Zero)
+                tryAddTask(k)
+            }
+            // 巡检顺带审计自愈（见 bug.md 7.2 / 7.12）：滞留项与计数脱钩在空闲期就修掉，
+            // 不必等某个 get 取不到项才暴露。
+            let healed = pool.audit()
+            PoolDiagnostics.onAuditRound()
+            if(healed > 0){
+                logger.warn('pool audit healed ${healed} anomaly(ies), size=${pool.size}')
             }
         }
     }
@@ -291,24 +345,43 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
     }
     private func startCreationSchedule() {
         spawn {
-            while(running.load() && let task <- tasks.remove()){
-                while(running.load() && pool.size < totalSize && let k <- task.key && pool.keyedSize(k) < maxSize){
-                    try {
-                        let object = creator(k)
-                        if (checkOnCreation && !doCheck(k, object, checker)){
-                            doDestroy(k, object, destroier)
-                        } else {
-                            pool.add(k, ref(k, object))
-                            break
-                        }
-                    }catch(e: Exception){
-                        logger.warn('error on creating', e)
-                    }
-                    sleep(Duration.Zero)
-                    continue
+            waitConstructed()
+            // 看护循环：创建线程一旦退出，池就再也补不回池项（`get` 只会等到 maxWaiting 超时），
+            // 所以同样不许静默退出（见 bug.md 7.12）。
+            while(running.load()){
+                try{
+                    creationLoop()
+                }catch(e: Exception){
+                    logger.warn('error on pool creation schedule', e)
                 }
-                task.notify()
+                if(running.load()){
+                    PoolDiagnostics.onScheduleRestart()
+                    logger.warn('pool creation schedule exited unexpectedly, restarting it')
+                    sleep(Duration.second)
+                }
             }
+        }
+    }
+    /** 创建线程的一轮循环（拆出来便于看护重开）。 */
+    private func creationLoop(): Unit {
+        while(running.load() && let task <- tasks.remove()){
+            while(running.load() && pool.size < totalSize && let k <- task.key && pool.keyedSize(k) < maxSize){
+                try {
+                    let object = creator(k)
+                    if (checkOnCreation && !doCheck(k, object, checker)){
+                        doDestroy(k, object, destroier)
+                    } else {
+                        pool.add(k, ref(k, object))
+                        break
+                    }
+                }catch(e: Exception){
+                    PoolDiagnostics.onCallbackError()
+                    logger.warn('error on creating', e)
+                }
+                sleep(Duration.Zero)
+                continue
+            }
+            task.notify()
         }
     }
     private func ref(key: K, object: V){
@@ -325,6 +398,7 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
                 doDestroy(k, v, destroier)
             }
         }
+        PoolDiagnostics.onPoolClosed()
     }
     private func doDestroy(k: K, v: V, destroier: (K, V) -> Unit){
         try{

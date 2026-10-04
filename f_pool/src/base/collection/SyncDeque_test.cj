@@ -15,6 +15,9 @@ limitations under the License.
 */
 package fountain::f_pool.base.collection
 
+import std.sync.AtomicInt64
+import fountain::f_pool.diagnostics.PoolDiagnostics
+
 @Test
 public class SyncDequeTest {
     @TestCase
@@ -179,6 +182,73 @@ public class SyncDequeTest {
         @Assert(taken.isSome())
         @Assert(refEq(taken.getOrThrow(), o2))
         @Assert(deque.size, 2)                      // 借出不改 size，也不能被"顺手"改小
+    }
+    @TestCase
+    public func testBorrowCheckerThrowingMustNotLeakElement(){
+        // 借出后的校验回调抛异常时，这一项既没被拿走、也不算"已归还" ⇒ 若不管，它会永久挂在 out 上
+        // （池项凭空消失、池越用越小）。自愈：按"校验不过"结清（销毁 + 计数还原）后再抛出（见 bug.md 7.12）。
+        let o1 = Object()
+        let deque = SyncDeque<Object>()
+        deque.insertTail(o1)
+        let destroyed = AtomicInt64(0)
+        try {
+            deque.remove({_ => throw Exception('checker boom')}){_ => destroyed.fetchAdd(1)}
+        } catch (_: Exception) {
+        }
+        @Assert(destroyed.load(), 1)                       // 抛异常的那一项必须被销毁（结清）
+        @Assert(deque.size, 0)                             // 结清后 size 归零：池能重新创建池项
+        @Assert(deque.remove({_=>true}){_=>}.isNone())
+    }
+    @TestCase
+    public func testReturnCheckerThrowingMustNotLeakElement(){
+        let o1 = Object()
+        let deque = SyncDeque<Object>()
+        deque.insertTail(o1)
+        @Assert(deque.remove({_=>true}){_=>}.isSome())     // 借出（size 仍为 1，out=1）
+        let destroyed = AtomicInt64(0)
+        try {
+            deque.append(o1, {_ => throw Exception('return checker boom')}){_ => destroyed.fetchAdd(1)}
+        } catch (_: Exception) {
+        }
+        @Assert(destroyed.load(), 1)
+        @Assert(deque.size, 0)                             // 不悬空：不会永久记着一个借出项
+        @Assert(deque.remove({_=>true}){_=>}.isNone())
+    }
+    @TestCase
+    public func testDestroyerThrowingMustNotBreakAccounting(){
+        let o1 = Object()
+        let deque = SyncDeque<Object>()
+        deque.insertTail(o1)
+        deque.remove({_=>true}){_=>}                       // 借出
+        // 归还时校验不过 ⇒ 会调 destroier；destroier 自己抛异常也不能让计数悬空
+        deque.append(o1, {_ => false}){_ => throw Exception('destroier boom')}
+        @Assert(deque.size, 0)
+        @Assert(deque.remove({_=>true}){_=>}.isNone())
+    }
+    @TestCase
+    public func testAuditHealsStrandedWithoutBorrowAttempt(){
+        // 巡检线程每轮都会调 audit()：不必等某个 get 取不到项，滞留项在空闲期就被修掉（见 bug.md 7.12）
+        let o1 = Object()
+        let o2 = Object()
+        let deque = SyncDeque<Object>()
+        deque.insertTail(o1)
+        deque.insertTail(o2)
+        @Assert(deque.strandHeadForTest())
+        @Assert(deque.audit() > 0)                        // 审计发现并修掉滞留
+        @Assert(deque.remove({_=>true}){_=>}.isSome())    // 修完即可正常取用
+        @Assert(deque.remove({_=>true}){_=>}.isSome())
+    }
+    @TestCase
+    public func testDiagnosticsSnapshotTracksActivity(){
+        // 自愈动作与借还都被记数：即使问题不复现，也能从统计判断"到底发生过没有"（见 bug.md 7.12）
+        let before = PoolDiagnostics.snapshot()
+        let deque = SyncDeque<Object>()
+        deque.insertTail(Object())
+        @Assert(PoolDiagnostics.snapshot() != before)
+        PoolDiagnostics.installCrashHandler()             // 幂等：重复安装不能抛
+        PoolDiagnostics.installCrashHandler()
+        PoolDiagnostics.dump(reason: 'unittest')
+        @Assert(PoolDiagnostics.snapshot().size > 0)
     }
     @TestCase
     public func testWeakDequeRemoveMustReturnElement(){

@@ -17,6 +17,7 @@ package fountain::f_pool
 
 import std.collection.concurrent.ConcurrentHashMap
 import std.sync.AtomicInt64
+import fountain::f_pool.diagnostics.PoolDiagnostics
 
 
 struct BaseKeyPool<K, V> <: IKeyPool<K, V> where K <: Hashable & Equatable<K> {
@@ -60,6 +61,28 @@ struct BaseKeyPool<K, V> <: IKeyPool<K, V> where K <: Hashable & Equatable<K> {
             }
             sleep(Duration.Zero)
         }
+    }
+    /**
+     * 主动审计自愈：先让每个 key 的队列自愈，再把全局计数 `s` 与各队列之和校正一致。
+     * `s` 里既有空闲项也有借出项（借出不会从队列计数里减掉），所以两者**任何时刻**都该相等，
+     * 不等就是真脱钩 —— 校正它可以让 `get` 不再误以为"池已满"（见 bug.md 7.2 / 7.12）。
+     */
+    public func audit(): Int64 {
+        var healed = 0
+        var total = 0
+        for((_, p) in map){
+            sleep(Duration.Zero)
+            healed += p.audit()
+            total += p.size
+        }
+        let current = s.load()
+        if (current != total) {
+            s.store(total)
+            PoolDiagnostics.onBookkeepingHealed()
+            healed += 1
+            println("WEDGE-HEAL] keypool: global size=${current} -> ${total}")
+        }
+        healed
     }
     public func destroy(fn: (K, V) -> Unit): Unit {
         for((k, p) in map){
