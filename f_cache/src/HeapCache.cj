@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain::f_cache
 
-import std.collection.HashMap
+import std.collection.{HashMap, ArrayList}
 import std.collection.concurrent.LinkedBlockingQueue
 import std.env.atExit
 import std.time.DateTime
@@ -23,9 +23,15 @@ import std.sync.{Timer, AtomicBool}
 import fountain::f_base.*
 import fountain::f_collection.PriorityQueue
 
-public class HeapCache<V> where V <: Object {
+public class HeapCache<V> <: Resource where V <: Object {
     private let store: ConcHashMap<Priority<V>>
-    private let alive = AtomicBool(true)
+    private let closedFlag = AtomicBool(false)
+    /**内部淘汰消费线程的句柄：close() 时向它发送取消请求，用例可通过 threadHandles() 等它结束*/
+    private var evictionTask: Option<Future<Unit>> = None
+    /**定时器句柄：close() 时 cancel，避免关闭后再触发一轮清扫*/
+    private var timerHandle: Option<Timer> = None
+    /**淘汰消费线程取元素的轮询间隔：既保证 close() 能被及时感知，又不必忙等*/
+    private static let EVICTION_POLL_INTERVAL = Duration.millisecond * 100
 
     public HeapCache(
         private let concurrencyLevel!: Int64 = DEFAULT_HEAP_CACHE_CONCURRENCY_LEVEL,
@@ -48,31 +54,46 @@ public class HeapCache<V> where V <: Object {
     }
     private func onEviction(): LinkedBlockingQueue<(String, V)> {
         let q = LinkedBlockingQueue<(String, V)>()
-        spawn {
-            while (let (k, v) <- q.remove()) {
+        evictionTask = Some(spawn {
+            //按固定间隔取元素，并每轮检查一次取消请求（close() 会 future.cancel()）
+            while (!Thread.currentThread.hasPendingCancellation) {
+                if (let Some((k, v)) <- q.remove(EVICTION_POLL_INTERVAL)) {
+                    evictionCallback(k, v)
+                }
+            }
+            //收到取消请求后，把已入队的淘汰回调投递完再退出
+            while (let Some((k, v)) <- q.tryRemove()) {
                 evictionCallback(k, v)
             }
-        }
+        })
         q
+    }
+    /**仅供同包用例使用：内部线程句柄（HeapCache = 1 个淘汰消费线程），用来等待它结束*/
+    func threadHandles(): ArrayList<Future<Unit>> {
+        let handles = ArrayList<Future<Unit>>()
+        if (let Some(f) <- evictionTask) {
+            handles.add(f)
+        }
+        handles
     }
     private func startTimer() {
         let topVals = PriorityQueue<Priority<V>>.create<Priority<V>>(capacity: concurrencyLevel)
         let tops = HashMap<String, Priority<V>>()
         let q = onEviction()
-        Timer.after(checkDuration) {
+        timerHandle = Some(Timer.after(checkDuration) {
             let iterator = (store.iterator() as ConcHashMapIterator<Priority<V>>).getOrThrow()
             checkTimeout(q)
             checkOverSize(topVals, tops, iterator, q)
-            if (alive.load()) {
+            if (!closedFlag.load()) {
                 checkDuration
             } else {
                 None<Duration>
             }
-        }
+        })
     }
     private func checkTimeout(evictionQueue: LinkedBlockingQueue<(String, V)>): Unit {
         removeIfLocked {
-            k, p => if (alive.load()) {
+            k, p => if (!closedFlag.load()) {
                 if (evicated(p)) {
                     evictionQueue.add((k, p.load()))
                     true
@@ -93,11 +114,11 @@ public class HeapCache<V> where V <: Object {
         let store = this.store
         let maxSize = this.maxSize
         let current = DateTime.now()
-        while (store.size > maxSize && alive.load()) {
+        while (store.size > maxSize && !closedFlag.load()) {
             let segmItrs = iterator.segmentIterators()
             var segmItrMap = HashMap<Int64, Iterator<(String, Priority<V>)>>()
             var i = 0
-            for (segmItr in segmItrs where alive.load()) {
+            for (segmItr in segmItrs where !closedFlag.load()) {
                 if (let Some((k, p)) <- segmItr.next()) {
                     segmItrMap[i] = segmItr
                     p.index = i
@@ -105,7 +126,7 @@ public class HeapCache<V> where V <: Object {
                 }
                 i++
             }
-            while (store.size > maxSize && alive.load()) {
+            while (store.size > maxSize && !closedFlag.load()) {
                 var minIdx = -1
                 if (let Some(p) <- topVals.remove()) {
                     store.remove(p.key)
@@ -119,11 +140,11 @@ public class HeapCache<V> where V <: Object {
                     topVals.add(next[1])
                 }
             }
-            while (let Some(p) <- topVals.remove() && alive.load()) {
+            while (let Some(p) <- topVals.remove() && !closedFlag.load()) {
                 tops.add(p.key, p)
             }
         }
-        for (p in tops.values() where alive.load()) { //不给Priority增加已删除标记，此处也不判断Priority是不是已被主动删除，因为这样做不节省时间
+        for (p in tops.values() where !closedFlag.load()) { //不给Priority增加已删除标记，此处也不判断Priority是不是已被主动删除，因为这样做不节省时间
             p.updateLastChecked(current)
         }
         tops.clear()
@@ -236,8 +257,25 @@ public class HeapCache<V> where V <: Object {
     public func clear(): Unit {
         store.clear()
     }
-    public func destroy(): Unit {
-        alive.store(false)
+    /**停止内部线程（定时器 + 淘汰消费线程）并清空缓存；可重复调用*/
+    public func close(): Unit {
+        if (closedFlag.load()) {
+            return
+        }
+        closedFlag.store(true)
+        if (let Some(t) <- timerHandle) {
+            t.cancel()
+        }
+        if (let Some(f) <- evictionTask) {
+            f.cancel()
+        }
         store.clear()
+    }
+    public func isClosed(): Bool {
+        closedFlag.load()
+    }
+    /**销毁堆缓存（兼容旧 API，等价于 close()）*/
+    public func destroy(): Unit {
+        close()
     }
 }
