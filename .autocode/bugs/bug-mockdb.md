@@ -14,7 +14,7 @@
 | 中 | 5 |
 | 低危 / 待验证 | 9 |
 
-> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4`、§2.2 `MOCK-5`、§2.3 `MOCK-6`、§2.4 `MOCK-7`（①③）、§2.5 `MOCK-8` 已修复 ⇒ **待修严重级 0 条、中危 0 条**（见各自修复标记；§2.4 的 ② 与 §3 的低危/待验证仍未动）。其中 `MOCK-1`/`MOCK-2` 已并入 `sts/1.3.x`（合并提交 `12c19d94`）；`MOCK-3`~`MOCK-8` 在分支 `fix/mock-1-query-isolation`（`e904ac87`/`ba04b79f`/`80d67a36`/`edb10235`/`7704cd91` + 本次提交），待下次同步。标记补录提交：`fa822423`、`cd429689`、`cee6dc6d`。
+> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4`、§2.2 `MOCK-5`、§2.3 `MOCK-6`、§2.4 `MOCK-7`（①③）、§2.5 `MOCK-8` 已修复 ⇒ **待修严重级 0 条、中危 0 条**；低危批次（§3.3：`MOCK-L1`/`L2`/`L4`/`L5`/`L6`/`L7`）已修复，`MOCK-L3` 暂不处理，`MOCK-V1` 判为不成立（见 §3.2）。仍未动：§2.4 的 ②（未绑定 vs 绑定 NULL）、建议新增的 `MOCK-L8`、§3.2 的 `MOCK-V2`（覆盖缺口）。并入状态：`MOCK-1`/`MOCK-2` 已并入 `sts/1.3.x`（合并提交 `12c19d94`）；`MOCK-3`~`MOCK-8` 与低危批次在分支 `fix/mock-1-query-isolation`（`e904ac87`/`ba04b79f`/`80d67a36`/`edb10235`/`7704cd91` + 本次提交），待下次同步。标记补录提交：`fa822423`、`cd429689`、`cee6dc6d`。
 
 **建议修复顺序**：
 
@@ -246,18 +246,34 @@ DT：`toThrowOnExecuting = true` 后执行，断言抛异常**且** `MOCKDB.getQ
 
 ### 3.1 低危（7 条）
 
-- **`MOCK-L1` 异常无 message，诊断差**：`src/Statement.cj:52,59`、`src/Transaction.cj:49,55,61,67,73,79` 全是 `throw MockDbException()`；事务/执行的失败信息里看不出是哪条 SQL、哪个 savepoint（有 message 的只有 `MockColumnInfo` 的 `'not supported'`、`MockQueryResult.columnInfos` 与 `Statement.query(params)/update(params)` 的 `'not supported'`）。修法：带 `sql` / `savePointName` / 触发标志名。
-- **`MOCK-L2` 无条件输出到 stdout，无开关**：`src/mockdb.cj:25,29-31`（默认 `EMPTY_EXECUTION` 打印 `EMPTY_EXECUTION`）、`Driver.cj:40`、`Datasource.cj:27`、`Statement.cj:30`、`Transaction.cj:47,53,59,65,71,77`。批量用例下这些是主要 I/O，且污染测试输出；多线程用例（`f_orm` 的 `DatabasePool_test` spawn 10 线程）还会交织。修法：加 `MOCKDB.verbose`（默认 false），或走 `f_log` 的 debug 级别。
-- **`MOCK-L3` 编译器 10 条警告（基线 errlog 证据）**：`target/release/.build-logs/f_mockdb@fountain/…errlog` = `unused import 'std.reflect.*'`（`src/mockdb.cj:20`）、`unused variable:'params'`（`Statement.cj:26,32`）、`unused variable:'values'`（`QueryResult.cj:30`）、`overridden function 'next'/'query'/'update' should be marked with @Deprecated`（`QueryResult.cj:30`、`Statement.cj:26,32`）、`interface 'SqlDbType' is deprecated`（3 处）。修法：删死导入、参数改 `_`、给废弃重载加 `@Deprecated`（`f_orm` 的 `Statement_test.cj` 也有同类实现，可一起统一）。
-- **`MOCK-L4` README 与实现不一致**：`f_mockdb/README.md:17` 写 `MOCKDB.execution = {sql: String, args: Array<Any> =>`（实际 `ArrayList<Any>`）、`:26` 写 `let rows: Array<Any> = MOCKDB.getQueryResultRows()`（实际 `ArrayList<Array<Any>>`）、`:31-35` 的 `MOCKDB.metadata = {=> …}()` 写法会让读者以为可以写闭包；README 也是**唯一**文档（模块没有 `doc/` 目录），却没有 `clear()`、`rowCount`/`lastInsertId` 默认值、`execution` 默认打印 `EMPTY_EXECUTION`、以及 `queryResultColumnInfos` 为空时抛异常这些关键约定。
-- **`MOCK-L5` `getMetaData()` 的两种返回语义**：`src/mockdb.cj:130-137` 未设置时每次返回**新建**的空 `HashMap`（在它上面写东西会静默丢失），设置后返回的又是 live map（外部可改夹具）。修法：统一返回副本，或文档写明「未设置即空、只读」。
-- **`MOCK-L6` 驱动的入口参数被忽略**：`src/Driver.cj:39-46` 的 `open(connectionString, opts)` 只打印 url、不透出连接串；`src/Datasource.cj:26-28` 的 `setOption` 只打印不保存 ⇒ 用例无法验证「连接串 / 选项是否正确传到驱动」，也无法回读选项。
-- **`MOCK-L7` 事务无状态机**：`src/Transaction.cj:46-81` 允许重复 `begin()`、未 `begin()` 就 `commit()/rollback()`；`MockConnection.createTransaction()`（`src/Connection.cj:24-26`）永不失败，而 std 契约规定「已处于事务状态且不支持并行事务时应抛 `SqlException`」⇒ ORM 的事务传播/嵌套失败分支在 mock 下测不到。修法：加最小状态（`begun`），或在 README 写明「mock 不校验事务状态」。
+- **`MOCK-L1` 异常无 message，诊断差**：`src/Statement.cj:52,59`、`src/Transaction.cj:49,55,61,67,73,79` 全是 `throw MockDbException()`；事务/执行的失败信息里看不出是哪条 SQL、哪个 savepoint（有 message 的只有 `MockColumnInfo` 的 `'not supported'`、`MockQueryResult.columnInfos` 与 `Statement.query(params)/update(params)` 的 `'not supported'`）。修法：带 `sql` / `savePointName` / 触发标志名。　**✅已修复（2026-10-04，见 §3.3）**
+- **`MOCK-L2` 无条件输出到 stdout，无开关**：`src/mockdb.cj:25,29-31`（默认 `EMPTY_EXECUTION` 打印 `EMPTY_EXECUTION`）、`Driver.cj:40`、`Datasource.cj:27`、`Statement.cj:30`、`Transaction.cj:47,53,59,65,71,77`。批量用例下这些是主要 I/O，且污染测试输出；多线程用例（`f_orm` 的 `DatabasePool_test` spawn 10 线程）还会交织。修法：加 `MOCKDB.verbose`（默认 false），或走 `f_log` 的 debug 级别。　**✅已修复（2026-10-04，见 §3.3）**
+- **`MOCK-L3` 编译器 10 条警告（基线 errlog 证据）**：`target/release/.build-logs/f_mockdb@fountain/…errlog` = `unused import 'std.reflect.*'`（`src/mockdb.cj:20`）、`unused variable:'params'`（`Statement.cj:26,32`）、`unused variable:'values'`（`QueryResult.cj:30`）、`overridden function 'next'/'query'/'update' should be marked with @Deprecated`（`QueryResult.cj:30`、`Statement.cj:26,32`）、`interface 'SqlDbType' is deprecated`（3 处）。修法：删死导入、参数改 `_`、给废弃重载加 `@Deprecated`（`f_orm` 的 `Statement_test.cj` 也有同类实现，可一起统一）。　**⏸ 暂不处理（2026-10-04 决定，见 §3.3）**
+- **`MOCK-L4` README 与实现不一致**：`f_mockdb/README.md:17` 写 `MOCKDB.execution = {sql: String, args: Array<Any> =>`（实际 `ArrayList<Any>`）、`:26` 写 `let rows: Array<Any> = MOCKDB.getQueryResultRows()`（实际 `ArrayList<Array<Any>>`）、`:31-35` 的 `MOCKDB.metadata = {=> …}()` 写法会让读者以为可以写闭包；README 也是**唯一**文档（模块没有 `doc/` 目录），却没有 `clear()`、`rowCount`/`lastInsertId` 默认值、`execution` 默认打印 `EMPTY_EXECUTION`、以及 `queryResultColumnInfos` 为空时抛异常这些关键约定。　**✅已修复（2026-10-04，见 §3.3）**
+- **`MOCK-L5` `getMetaData()` 的两种返回语义**：`src/mockdb.cj:130-137` 未设置时每次返回**新建**的空 `HashMap`（在它上面写东西会静默丢失），设置后返回的又是 live map（外部可改夹具）。修法：统一返回副本，或文档写明「未设置即空、只读」。　**✅已修复（2026-10-04，见 §3.3）**
+- **`MOCK-L6` 驱动的入口参数被忽略**：`src/Driver.cj:39-46` 的 `open(connectionString, opts)` 只打印 url、不透出连接串；`src/Datasource.cj:26-28` 的 `setOption` 只打印不保存 ⇒ 用例无法验证「连接串 / 选项是否正确传到驱动」，也无法回读选项。　**✅已修复（2026-10-04，见 §3.3）**
+- **`MOCK-L7` 事务无状态机**：`src/Transaction.cj:46-81` 允许重复 `begin()`、未 `begin()` 就 `commit()/rollback()`；`MockConnection.createTransaction()`（`src/Connection.cj:24-26`）永不失败，而 std 契约规定「已处于事务状态且不支持并行事务时应抛 `SqlException`」⇒ ORM 的事务传播/嵌套失败分支在 mock 下测不到。修法：加最小状态（`begun`），或在 README 写明「mock 不校验事务状态」。　**✅已修复（2026-10-04，见 §3.3）**
 
 ### 3.2 待验证（2 条，需实测）
 
-- **`MOCK-V1` 重复加载动态库时的驱动注册**：`src/Driver.cj:21-23` 在 `static init()` 里 `DriverManager.register('mockdb', MockDriver())`；fountain 的应用允许「同一动态库被主动加载 + 被依赖再加载」两次（`fboot run` 的 `--dylibPattern` 说明里明确提到重复加载），std 文档只写「名称和实例一一对应，本方法并发安全」，没定义同名重复注册是覆盖还是报错。验证：写一个只链 `f_mockdb` 的小程序，手动 `dlopen` 两次后 `DriverManager.getDriver('mockdb')`，观察是否异常/是否为后一次实例。
+- **`MOCK-V1` 重复加载动态库时的驱动注册**：`src/Driver.cj:21-23` 在 `static init()` 里 `DriverManager.register('mockdb', MockDriver())`；fountain 的应用允许「同一动态库被主动加载 + 被依赖再加载」两次（`fboot run` 的 `--dylibPattern` 说明里明确提到重复加载），std 文档只写「名称和实例一一对应，本方法并发安全」，没定义同名重复注册是覆盖还是报错。验证：写一个只链 `f_mockdb` 的小程序，手动 `dlopen` 两次后 `DriverManager.getDriver('mockdb')`，观察是否异常/是否为后一次实例。　**✗ 不成立（2026-10-04 判定）**：重复加载与否由**运行时**决定 —— 用 `PackageInfo.load` 重复加载同一个动态库会直接**运行时崩溃**，不用它加载就不会重复加载；仓内唯一的加载入口是 `f_app/src/funcs.cj:61` 的 `PackageInfo.load`，一个库只会被加载一次 ⇒「重复加载 ⇒ 驱动重复注册」在本项目不可能发生，无需处理。
 - **`MOCK-V2` 用例覆盖缺口（未被任何用例冻结的行为）**：`query(params)` / `update(params)` / `next(values)` 三个 `'not supported'` 分支、`getOrNull` 未 `next()` 与类型不符、`MockStatement.set` 负索引、语句复用的参数累积、`MockUpdateResult` 的惰性读取、`close()` 后的 `isClosed()`/`state`、`MOCKDB.execution` 缺省（`EMPTY_EXECUTION`）路径。现状 30 个用例全绿（§5），但这些分支一条都没测——修 §1/§2 时建议一并补上（否则改动没有回归网）。
+
+---
+
+### 3.3 低危批次修复记录（2026-10-04）
+
+> 本批次一次处理 6 条低危（L1 / L2 / L4 / L5 / L6 / L7），**代码、用例、README 与本记录在同一提交**（提交信息 `fix(f_mockdb): 低危批次 L1/L2/L4/L5/L6/L7（bug-mockdb §3.3）`；提交哈希由下一次标记同步补录）。
+> 测量基线：**修复前** `cjpm test --no-capture-output` = PASSED 47 / **FAILED 4**（可钉的 L1×2、L5、L7）→ **修复后** = **53/53 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**，编译警告 9 条无新增。日志 `/tmp/lowrisk_before.log`、`/tmp/lowrisk_after2.log`。
+
+- **`MOCK-L1`（异常无 message）✅ 已修复**：`src/Statement.cj` 的 `toThrowOnExecuting` 分支改抛 `MockDbException('failed to execute sql: <SQL>')`；`src/Transaction.cj` 六个失败分支分别带 `begin` / `commit` / `rollback` / `release savepoint <名>` / `rollback to savepoint <名>` / `save savepoint <名>` 与 threadID。用例 `testExecutingExceptionMessage`（断言 message 含 SQL）、`testTransactionExceptionMessages`（断言含 `begin` 与 savepoint 名）；修复前两条都失败在「message 为空」。
+- **`MOCK-L2`（无条件 stdout）✅ 已修复**：`MOCKDB` 新增 `public static mut prop verbose`（默认 false）与 `static func log(message)`；`open` / `setOption` / 事务六步 / 默认夹具 `EMPTY_EXECUTION` 全部改走 `log`。**端到端证据**（同一套件的日志计数）：修复前 `Transaction beginning` ×10、`Transaction committing` ×3 → 修复后 0；`testVerboseSwitch` 在 `verbose = true` 窗口内调一次 `setOption` ⇒ 日志里恰好 1 条 `Statement option`（开关双向生效）。用例 `testVerboseSwitch`（开关语义 + 两种取值下功能等价；静默本身无法在进程内断言，故以日志计数佐证）。
+- **`MOCK-L4`（README 与实现不一致）✅ 已修复**：`f_mockdb/README.md` 的使用示例改成真实签名（`ArrayList<Any>` 参数、`ArrayList<Array<Any>>` 返回值），补 `MOCKDB.clear()`；新增「时序与约定」小节写明 —— 一次执行一份结果（夹具写在 `execution` 内）、参数槽执行后清空、`getOrNull` / `get` 的契约与异常、`ColumnInfo` 契约值、关闭语义（关连接不再清夹具）、`verbose` 输出开关、`MOCKDB` 公开成员清单、事务状态机、`MockDatasource.connectionString` / `options`。
+- **`MOCK-L5`（`getMetaData()` 两种语义）✅ 已修复**：新增包内 `copyMap(...)`，`MockConnection.getMetaData()` 统一返回**副本**（未设置时返回空副本）。用例 `testMetadataReturnsCopy`（改副本不影响夹具与后续读取）；修复前该用例失败（读到被改写的 `changed`）。
+- **`MOCK-L6`（驱动入口参数被忽略）✅ 已修复**：`MockDatasource` 记录 `connectionString`（`open` 时由驱动写入）与累积的 `options`，两者都有公开只读入口（`options` 返回副本）。用例 `testDriverOpenRecordsArguments`（`DriverManager` 取驱动 → `open('mockdb://localhost', [...])` → 断言连接串与两个选项可读回，且改副本不影响 mock）。属**接口补齐型**：修复前写不出该断言（编译不过），故没有「修复前失败」证据。
+- **`MOCK-L7`（事务无状态机）✅ 已修复**：`MockTransaction` 增加 `begun_` / `finished_` 与 `requireBegun(step)` —— 未 `begin()` 就 `commit` / `rollback` / `save` / `release`、重复 `begin()`、事务已结束后再 `commit` / `rollback`，统一抛 `SqlException`（消息带动作）；失败模拟的抛点相应后移，且**模拟失败不改变事务状态**（`begin` 抛异常时 `begun_` 保持 false）。用例 `testTransactionStateMachine`；同时给 5 条既有用例补上 `begin()`（`testCommitThrows`、`testSavepointOperations`、`testSavepointSaveThrows`、`testSavepointReleaseThrows`、`testSavepointRollbackThrows`）。修复前 `testTransactionStateMachine` 失败（未 begin 就 commit 静默通过）。兼容性：`f_orm` 的事务路径始终以 `createTransaction(...).begin()` 起手（`SqlExecutor.cj:270`），`TransactionWrap` 只做委派 ⇒ mock 侧收紧不影响它。
+- **`MOCK-L3`（编译器警告）⏸ 暂不处理**：2026-10-04 决定忽略（未使用参数、废弃重载未标 `@Deprecated`、`SqlDbType` 废弃提示等 9~10 条）。留档理由：纯噪声；改动会碰 `Statement.cj` / `QueryResult.cj` 里公开重载的注解，收益低。
+- **顺带发现（未修，建议单列 `MOCK-L8`）**：`MockStatement.set<T>(bigIndex, v)` 会真的补出 `bigIndex + 1` 个占位符（索引 100 万 ⇒ 100 万个 `None`）；真实驱动按语句参数个数报越界，mock 不解析 SQL、定不出上界。
 
 ---
 

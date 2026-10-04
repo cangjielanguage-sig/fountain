@@ -24,10 +24,35 @@ public import std.database.sql.*
 
 internal let output = getStdOut()
 
+/**复制一份字符串映射：外部（连接元数据、数据源选项等）拿到的是副本，改它不影响夹具*/
+func copyMap(source: Map<String, String>): HashMap<String, String> {
+    let copy = HashMap<String, String>()
+    for ((k, v) in source) {
+        copy[k] = v
+    }
+    copy
+}
+
 public class MOCKDB {
     private init(){}
     private static let EMPTY_EXECUTION = {_: String, _: ArrayList<Any> =>
-        output.writeln('EMPTY_EXECUTION')
+        MOCKDB.log('EMPTY_EXECUTION')
+    }
+    private static var verbose_ = false
+    /**mock 内部动作（open / setOption / 事务各步 / 默认夹具）的输出开关，默认关闭；排查「夹具为什么没生效」时可置 true*/
+    public static mut prop verbose: Bool {
+        get(){
+            verbose_
+        }
+        set(value){
+            verbose_ = value
+        }
+    }
+    /**按 verbose 开关输出*/
+    static func log(message: String): Unit {
+        if(verbose){
+            output.writeln(message)
+        }
     }
     private static var execution_ = AtomicOptionReference<Box<(String, ArrayList<Any>) -> Unit>>()
     private static let queryResultList_ = ThreadLocal<ArrayList<Array<Any>>>()

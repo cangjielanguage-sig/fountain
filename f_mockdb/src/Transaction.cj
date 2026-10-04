@@ -19,6 +19,8 @@ public class MockTransaction <: Transaction {
     private var accessMode_ = TransactionAccessMode.Unspecified
     private var deferrableMode_ = TransactionDeferrableMode.Unspecified
     private var isoLevel_ = TransactionIsoLevel.Unspecified
+    private var begun_ = false
+    private var finished_ = false
     public mut prop accessMode: TransactionAccessMode {
         get(){
             accessMode_
@@ -43,40 +45,60 @@ public class MockTransaction <: Transaction {
             isoLevel_ = value
         }
     }
-    public func begin(): Unit {
-        output.writeln('Transaction beginning, threadID: ${MOCKDB.currentThreadId}')
-        if(MOCKDB.toThrowOnBeginning){
-            throw MockDbException()
+    private func requireBegun(step: String): Unit {
+        //事务状态机：未 begin 或已结束后都不允许继续操作（真驱动的行为）
+        if(!begun_){
+            throw SqlException('transaction is not begun, cannot ${step}')
         }
+        if(finished_){
+            throw SqlException('transaction has been finished, cannot ${step}')
+        }
+    }
+    public func begin(): Unit {
+        MOCKDB.log('Transaction beginning, threadID: ${MOCKDB.currentThreadId}')
+        if(begun_){
+            throw SqlException('transaction is already begun')
+        }
+        if(MOCKDB.toThrowOnBeginning){
+            throw MockDbException('failed to begin transaction, threadID: ${MOCKDB.currentThreadId}')
+        }
+        begun_ = true
     }
     public func commit(): Unit {
-        output.writeln('Transaction committing, threadID: ${MOCKDB.currentThreadId}')
+        MOCKDB.log('Transaction committing, threadID: ${MOCKDB.currentThreadId}')
+        requireBegun('commit')
         if(MOCKDB.toThrowOnCommitting){
-            throw MockDbException()
+            throw MockDbException('failed to commit transaction, threadID: ${MOCKDB.currentThreadId}')
         }
+        finished_ = true
     }
     public func release(savePointName: String): Unit {
-        output.writeln('Transaction releasing, threadID: ${MOCKDB.currentThreadId}')
+        MOCKDB.log('Transaction releasing, threadID: ${MOCKDB.currentThreadId}')
+        requireBegun('release savepoint')
         if(MOCKDB.toThrowOnReleasing(savePointName)){
-            throw MockDbException()
+            throw MockDbException('failed to release savepoint ${savePointName}, threadID: ${MOCKDB.currentThreadId}')
         }
     }
     public func rollback(): Unit {
-        output.writeln('Transaction rollbacking, threadID: ${MOCKDB.currentThreadId}')
+        MOCKDB.log('Transaction rollbacking, threadID: ${MOCKDB.currentThreadId}')
+        requireBegun('rollback')
         if(MOCKDB.toThrowOnRollbacking){
-            throw MockDbException()
+            throw MockDbException('failed to rollback transaction, threadID: ${MOCKDB.currentThreadId}')
         }
+        finished_ = true
     }
     public func rollback(savePointName: String): Unit {
-        output.writeln('Transaction rollbacking, threadID: ${MOCKDB.currentThreadId}; savePoint: ${savePointName}')
+        MOCKDB.log('Transaction rollbacking, threadID: ${MOCKDB.currentThreadId}; savePoint: ${savePointName}')
+        requireBegun('rollback to savepoint')
         if(MOCKDB.toThrowOnRollbackingSavePoint(savePointName)){
-            throw MockDbException()
+            throw MockDbException('failed to rollback to savepoint ${savePointName}, threadID: ${MOCKDB.currentThreadId}')
         }
     }
     public func save(savePointName: String): Unit {
-        output.writeln('Transaction save, threadID: ${MOCKDB.currentThreadId}; savePoint: ${savePointName}')
+        MOCKDB.log('Transaction save, threadID: ${MOCKDB.currentThreadId}; savePoint: ${savePointName}')
+        requireBegun('save savepoint')
         if(MOCKDB.toThrowOnSavingSavePoint(savePointName)){
-            throw MockDbException()
+            throw MockDbException('failed to save savepoint ${savePointName}, threadID: ${MOCKDB.currentThreadId}')
         }
     }
 }

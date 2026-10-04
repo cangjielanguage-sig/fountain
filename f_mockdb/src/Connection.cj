@@ -30,7 +30,8 @@ public class MockConnection <: Connection {
         MockTransaction()
     }
     public func getMetaData(): Map<String, String> {
-        MOCKDB.metadata
+        //返回副本：外部改动不会串到夹具里，也不会影响后续读取
+        copyMap(MOCKDB.metadata)
     }
     public func prepareStatement(sql: String): Statement {
         MockStatement(sql)

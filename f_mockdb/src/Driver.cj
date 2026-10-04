@@ -37,8 +37,10 @@ public class MockDriver <: Driver {
         }
     }
     public func open(connectionString: String, opts: Array<(String, String)>): Datasource {
-        output.writeln('url: ${connectionString}')
+        MOCKDB.log('url: ${connectionString}')
         let ds = MockDatasource()
+        //记录连接串，让用例能断言驱动确实收到了 open 的参数
+        ds.setConnectionString(connectionString)
         for((k, v) in opts){
             ds.setOption(k, v)
         }

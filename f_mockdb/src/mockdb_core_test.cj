@@ -552,4 +552,55 @@ public class MockDBCoreTest {
         @Assert(0, executed.size)
         @Assert(0, MOCKDB.getQueryResultRows().size)
     }
+
+    @TestCase
+    public func testMetadataReturnsCopy(): Unit {
+        MOCKDB.clear()
+        let meta = HashMap<String, String>()
+        meta['version'] = '1.0'
+        MOCKDB.metadata = meta
+        let conn = MockConnection()
+        let first = (conn.getMetaData() as HashMap<String, String>).getOrThrow()
+        //改动拿到的元数据不应影响夹具与后续读取（修复前返回的是夹具本体，改一下就串了）
+        first['version'] = 'changed'
+        @Assert('1.0', conn.getMetaData().get('version').getOrThrow())
+        @Assert('1.0', MOCKDB.metadata.get('version').getOrThrow())
+    }
+
+    @TestCase
+    public func testVerboseSwitch(): Unit {
+        //默认关闭（静默本身无法在进程内断言，用例覆盖开关语义与两种取值下的功能等价）
+        @Assert(false, MOCKDB.verbose)
+        MOCKDB.verbose = true
+        @Assert(true, MOCKDB.verbose)
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'v', nullable: false, typeName: 'SqlInteger')
+            MOCKDB.addQueryResultRow([1])
+        }
+        let conn = MockConnection()
+        let stmt = conn.prepareStatement('SELECT v FROM t')
+        //verbose=true 时 mock 内部动作会输出（测试日志里可看到这一条 'Statement option'）
+        stmt.setOption('k', 'v')
+        let _ = stmt.query()
+        MOCKDB.verbose = false
+        let rs = conn.prepareStatement('SELECT v FROM t').query()
+        @Assert(true, rs.next())
+        @Assert(1, rs.get<Int64>(0))
+    }
+
+    @TestCase
+    public func testDriverOpenRecordsArguments(): Unit {
+        MOCKDB.clear()
+        let driver: Driver = DriverManager.getDriver('mockdb').getOrThrow()
+        let ds = driver.open('mockdb://localhost', [('cachePrepStmts', 'true'), ('prepStmtCacheSize', '250')])
+        let mock = (ds as MockDatasource).getOrThrow()
+        //open 的连接串与选项都应能从 mock 数据源读回（修复前只打印、不记录）
+        @Assert('mockdb://localhost', mock.connectionString)
+        @Assert('true', mock.options.get('cachePrepStmts').getOrThrow())
+        @Assert('250', mock.options.get('prepStmtCacheSize').getOrThrow())
+        //读到的选项是副本：改它不影响 mock
+        let opts = (mock.options as HashMap<String, String>).getOrThrow()
+        opts['cachePrepStmts'] = 'false'
+        @Assert('true', mock.options.get('cachePrepStmts').getOrThrow())
+    }
 }

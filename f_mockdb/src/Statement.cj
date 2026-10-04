@@ -28,7 +28,7 @@ public class MockStatement <: Statement {
         throw MockDbException('not supported')
     }
     public func setOption(key: String, value: String): Unit {
-        output.writeln('Statement option: (key: ${key}, value: ${value})')
+        MOCKDB.log('Statement option: (key: ${key}, value: ${value})')
     }
     public func update(params: Array<SqlDbType>): UpdateResult {
         throw MockDbException('not supported')
@@ -60,7 +60,7 @@ public class MockStatement <: Statement {
         MOCKDB.clearQueryResult()
         //声明抛异常时直接失败：不执行夹具、不产生结果（与真驱动一致）
         if(MOCKDB.toThrowOnExecuting){
-            throw MockDbException()
+            throw MockDbException('failed to execute sql: ${sql}')
         }
         try {
             MOCKDB.execution(sql, args)
@@ -76,7 +76,7 @@ public class MockStatement <: Statement {
         MOCKDB.clearQueryResult()
         //声明抛异常时直接失败：不执行夹具、不产生结果（与真驱动一致）
         if(MOCKDB.toThrowOnExecuting){
-            throw MockDbException()
+            throw MockDbException('failed to execute sql: ${sql}')
         }
         try {
             MOCKDB.execution(sql, args)
