@@ -60,16 +60,21 @@
 - `README.md:384-389` 写的是「键基于 SQL 与参数」——那描述的是代码意图，与实际行为不一致。
 - 边界：若 `HashBuilder().build()` 恰好得 0，第 3 条不成立（`hashCode()` 每次重算）⇒ 两个 key 的 `h` 可能不同、`cache.get` 不命中，退化为「缓存不复用、事务内每个参数组合新增一个条目」（不返回错数据，但条目随查询数增长）。
 
-修法（2026-10-04 讨论后定稿，三层一起做）：①`SqlExecutor.cj:85` 的 `args.clear()` 换成 `this.args = SqlArgs()`，并删掉 `SqlArgs.clear()`（全仓只此一个调用点；语义等价的重置，额外收益是旧实例从此冻结、只被缓存 key 引用）；②`SqlArgs.clone()` 改成真拷贝（`ArrayList<SqlArg>(args)`；`SqlArg` 的值字段都是 `private let`，创建后不变，可变的只有那个 list，顺带修 `ORM-C3`）；③`SqlExecutor.cj:841` 改为 `SqlCacheKey(sql, args.clone())`，让 key 持**冻结快照**。有 ③ 之后 `SqlArgs.hashCode()` 的 `h` 记忆可以直接删掉（再没有人哈希被复用的实例），`cache` 容量上限降为可选项。修完补三条 DT：①同一 executor 上「同 SQL、不同参数」两次查询结果必须不同；②同参数重复查询**应命中缓存**（确认修完缓存仍有效，而不是修成永不命中）；③事务内同一 SQL 用不同参数查两次，断言两次都真的落到数据库（日志或行数计数）。
+修法（2026-10-04 二次复核后定稿）：
 
-**关于 `SqlArgs.clear()` 的处理**（2026-10-04 讨论）：
+1. **修复本体（两步，即为此条的正解）**：`SqlExecutor.cj:85` 的 `args.clear()` 换成 `this.args = SqlArgs()`，并删掉 `SqlArgs.clear()`（全仓只此一个调用点）。
+   为什么这就够了：两条 key 只有在**同一个 `SqlArgs` 实例**上才会被 `refEq` 短路，而同一实例只可能来自「同一个保留窗口」（`clearArgsAfterExec: false` 期间没有任何重置）。在该窗口内 `SqlArgs` 的内容只可能被 `add`/`add(all:)` **追加**（`clear()` 已删，模块内再无替换内容的入口），从下标 0 开始的前 n 个参数（n = 该 SQL 的占位符个数）始终是同一批值，且 `SqlArg` 不可变（`private let value`）⇒ 有效参数不变，命中旧结果**是正确的**，不会返回错数据。而默认路径（`clearArgsAfterExec: true`）每次执行后换新实例 ⇒ 旧实例冻结、只被 key 引用 ⇒ 同一 SQL 文本 + 不同参数必产生不同实例 ⇒ `refEq` 不再短路，退化为内容比较（`SqlArg` 的 `==`/`hashCode` 均是内容比较）⇒ 键不再相等，误命中消失；同参数重复查询依旧命中（缓存不被修坏）。
+2. `SqlArgs.hashCode()` 的 `h` 记忆可以顺手删掉（换实例后没人再哈希被复用的实例，记忆只剩风险没有收益）；`cache` 容量上限可选。
+3. **可选（与正确性无关，只为命中率）**：让 key 持**冻结快照** —— `SqlArgs.clone()` 改成真拷贝（`ArrayList<SqlArg>(args)`，顺带修 `ORM-C3`）+ `SqlExecutor.cj:841` 用 `SqlCacheKey(sql, args.clone())`。保留窗口内 key 现在持 live 实例，实例被追加后同一实例的旧 key 与后续新实例的 key 不再相等 ⇒ 该窗口会少命中几次、条目略增；用快照可消掉这点小损失。
+
+修完补三条 DT：①同一 executor 上「同 SQL、不同参数」两次查询结果必须不同（事务内执行才稳定复现，非事务路径每次 `close()` 清缓存）；②同参数重复查询**应命中缓存**（确认没修成「永不命中」）；③事务内同一 SQL 用不同参数查两次，断言两次都真的落到数据库（日志或行数计数）。
+
+**关于 `SqlArgs.clear()` 的处理**（2026-10-04 讨论，含一次自我修正）：
 
 - 单独删声明 ✗：全仓唯一调用点 `SqlExecutor.cj:85` 编译不过（`grep 'args\.clear()'` 仅此一处）。
 - 连调用一起删 ✗：参数在 executor 生命周期内只增不减 —— `SqlArg` 的序号来自 `args.size`（`SqlArgs.cj:38`），绑定是 `statement.set<T>(index, x)`（`SqlArg.cj:20-28`），`args.set(stmt)`（`SqlExecutor.cj:400`）会把历史参数一并绑定 ⇒ 后续查询序号错位、绑定多余参数；参数值（`String`/BLOB/`InputStream`）随查询累积（事务内为整个事务）；还会破坏 `clearArgsAfterExec: true`（默认）那条「每条 SQL 执行完清参数」的隔离契约（`SqlPartial.cj:295-301` 正是靠 `false` + 显式 `clearSql(clearArgsAfterExec: true)` 实现「分页 count 与 select 共用一批参数、之后收尾清空」）。
-- **删声明 + 调用点换成 `this.args = SqlArgs()` ✓ 可行**，这是讨论后采纳的方案。它把「原地清空列表」换成「换一个新实例」，于是：旧实例不再被修改（只被缓存 key 引用）⇒ 两个 key 不是同一实例、`refEq` 不再短路；新实例的 `h` 首次计算时内容已完整（key 构造点 `841`）⇒ 哈希反映真实参数；`add` 的序号自动从 0 开始；不产生累积。并且 `SqlArg` 的 `==`/`hashCode` 是**内容比较**（如 `Int64SqlArg`：`case x: Int64SqlArg => refEq(this, other) || x.value == value`，`hashCode(value)`）⇒ 修完缓存**仍然有效**（同参数重复查询照样命中），不会退化成「永不命中」。`SqlArgs` 全仓只被 `SqlCacheKey` 与 `SqlExecutor` 持有 ⇒ 换实例不影响别处。
-- **但只做这一步仍不彻底**：`clearArgsAfterExec: false` 的保留路径（`SqlPartial.cj:295-301`）上，同一个实例被跨语句保留 ⇒ 只要在缓存存活期内（事务内）出现「同一 SQL 文本 + 不同参数」，两个 key 仍是同一实例 ⇒ `refEq` 恒真 ⇒ 仍会命中旧值。这个口子改 `==` 也救不了（同一实例的两个 key 看到的是同一份 live 列表，「内容相等」同样恒真），只有 ③ 的**冻结快照**能关掉。当前分页流程在 `301` 行有收尾清空所以被挡住，但那是「调用方守规矩」才安全。
-- 反向结论：`clear()` 的职责由「换实例」承担后，它可以安全删除；它与结果缓存无关，缓存那一侧必须靠 ③ 解决。
-
+- **删声明 + 调用点换成 `this.args = SqlArgs()` ✓ 就是正解**（见上面第 1 条）。`SqlArgs` 全仓只被 `SqlCacheKey` 与 `SqlExecutor` 持有 ⇒ 换实例不影响别处；`add` 的序号从 0 重新开始 ⇒ 绑定正确；不累积。
+- **自我修正**：我先前写过「`clearArgsAfterExec: false` 的保留路径仍会误命中、必须靠 key 持快照才能关掉」——**这个判断不成立**。它默认了保留窗口内还能替换参数，而替换的唯一入口就是 `clear()`；删掉它之后，保留窗口内的内容只能追加，有效参数不会变，因此命中旧结果不构成错数据。快照因此从「必需」降级为「可选（命中率）」。
 
 ### 1.2 [严重｜正确性] `X-1` `f_base.TypeInfos.get(String)` 无限递归（跨模块）✓已复核
 
