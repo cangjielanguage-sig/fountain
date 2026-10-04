@@ -14,7 +14,7 @@
 | 中 | 5 |
 | 低危 / 待验证 | 9 |
 
-> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4`、§2.2 `MOCK-5`、§2.3 `MOCK-6`、§2.4 `MOCK-7`（①③）、§2.5 `MOCK-8` 已修复 ⇒ **待修严重级 0 条、中危 0 条**；低危批次（§3.3：`MOCK-L1`/`L2`/`L4`/`L5`/`L6`/`L7`）已修复，`MOCK-L3` 暂不处理，`MOCK-V1` 判为不成立（见 §3.2）。仍未动：§2.4 的 ②（未绑定 vs 绑定 NULL）、建议新增的 `MOCK-L8`、§3.2 的 `MOCK-V2`（覆盖缺口）。并入状态：`MOCK-1`/`MOCK-2` 已并入 `sts/1.3.x`（合并提交 `12c19d94`）；`MOCK-3`~`MOCK-8` 与低危批次在分支 `fix/mock-1-query-isolation`（`e904ac87`/`ba04b79f`/`80d67a36`/`edb10235`/`7704cd91` + 本次提交），待下次同步。标记补录提交：`fa822423`、`cd429689`、`cee6dc6d`。
+> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4`、§2.2 `MOCK-5`、§2.3 `MOCK-6`、§2.4 `MOCK-7`（①③）、§2.5 `MOCK-8` 已修复 ⇒ **待修严重级 0 条、中危 0 条**；低危批次（§3.3：`MOCK-L1`/`L2`/`L4`/`L5`/`L6`/`L7`）已修复，`MOCK-L3` 暂不处理，`MOCK-V1` 判为不成立（见 §3.2）。仍未动：§2.4 的 ②（未绑定 vs 绑定 NULL）、建议新增的 `MOCK-L8`、§3.2 的 `MOCK-V2`（覆盖缺口）。并入状态：`MOCK-1`/`MOCK-2` 已并入 `sts/1.3.x`（合并提交 `12c19d94`）；`MOCK-3`~`MOCK-8` 与低危批次在分支 `fix/mock-1-query-isolation`（`e904ac87`/`ba04b79f`/`80d67a36`/`edb10235`/`7704cd91`/`924ec6f8` + 本次提交），待下次同步。标记补录提交：`fa822423`、`cd429689`、`cee6dc6d`。
 
 **建议修复顺序**：
 
@@ -263,7 +263,7 @@ DT：`toThrowOnExecuting = true` 后执行，断言抛异常**且** `MOCKDB.getQ
 
 ### 3.3 低危批次修复记录（2026-10-04）
 
-> 本批次一次处理 6 条低危（L1 / L2 / L4 / L5 / L6 / L7），**代码、用例、README 与本记录在同一提交**（提交信息 `fix(f_mockdb): 低危批次 L1/L2/L4/L5/L6/L7（bug-mockdb §3.3）`；提交哈希由下一次标记同步补录）。
+> 本批次一次处理 6 条低危（L1 / L2 / L4 / L5 / L6 / L7），**代码、用例、README 与本记录在同一提交**：提交 `924ec6f8`（`fix(f_mockdb): 低危批次 L1/L2/L4/L5/L6/L7（bug-mockdb §3.3）`）；尚未并入 `sts/1.3.x`（待下次同步）。
 > 测量基线：**修复前** `cjpm test --no-capture-output` = PASSED 47 / **FAILED 4**（可钉的 L1×2、L5、L7）→ **修复后** = **53/53 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**，编译警告 9 条无新增。日志 `/tmp/lowrisk_before.log`、`/tmp/lowrisk_after2.log`。
 
 - **`MOCK-L1`（异常无 message）✅ 已修复**：`src/Statement.cj` 的 `toThrowOnExecuting` 分支改抛 `MockDbException('failed to execute sql: <SQL>')`；`src/Transaction.cj` 六个失败分支分别带 `begin` / `commit` / `rollback` / `release savepoint <名>` / `rollback to savepoint <名>` / `save savepoint <名>` 与 threadID。用例 `testExecutingExceptionMessage`（断言 message 含 SQL）、`testTransactionExceptionMessages`（断言含 `begin` 与 savepoint 名）；修复前两条都失败在「message 为空」。
