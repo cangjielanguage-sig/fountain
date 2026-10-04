@@ -203,7 +203,7 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
 `ArrayListPool<T>` 是「池项类型固定为 `ArrayList<T>`」的池：`creator` 固定为 `{=> ArrayList<T>()}`，
 **没有** `arraySize` / `creator` 参数（早期文档把它误抄成了 `ArrayPool` 的签名）。
 其余参数与 `ArrayPool` 相同（`initSize` / `minSize` / `maxSize` / `elementLife` / `checkInterval` /
-`clearOnReturning` / `maxWaiting`），`giveBack` 返回 `Unit`。明细见 `doc/ArrayListPool.md`。
+`clearOnReturning` / `maxWaiting`），`giveBack` 返回 `Unit`（签名见 `src/ArrayListPool.cj`）。
 
 ## ArrayPool
 

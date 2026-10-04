@@ -2142,6 +2142,6 @@ public abstract class SqlDialect {
 
 ### 19.5 相关文档
 
-* `f_orm/doc/*.md`：按主题拆分的补充文档——`配置.md`、`数据映射.md`、`声明DAO接口.md`、`事务.md`、`动态SQL的高级API.md`、`数据库表变更.md`、`ChooseCondition.md`、`LoopCondition.md`、`RootDAO.md`、`RootService.md`、`SqlExcutor.md`、`优化方案.md`、`导入.md`、`STDX依赖.md`。
+* `f_orm/doc/优化方案.md`：优化方案（原按主题拆分的 API 摘录已删除，接口以本 README 与 `src/**` 为准）。
 * `f_orm/src/**/*.cj`：源码即最权威的参考；本文档未覆盖的行为以源码为准。
 * 示例工程 `fdemo`：`fdemo/boot.sh`（配置）、`fdemo/user/src/dao/*DAO.cj`（DAO 定义）、`fdemo/user/src/service/impl/UserServiceImpl.cj`（事务服务）。

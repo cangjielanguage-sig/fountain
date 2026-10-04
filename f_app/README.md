@@ -267,4 +267,4 @@ fboot pub <x.y.z> [--skip-test] [--skip-lint]
 | `internal func confirmTargetPath(args: Array<String>): Path` | `args[1]` 不以 `-` 开头时视为路径（不存在则创建），否则用当前工作目录；返回规范化后的绝对路径 |
 | `internal let log` | `LoggerFactory.getLogger<App>()` |
 
-> 本文档未覆盖的行为以 `f_app/src/**/*.cj` 为准；`f_app/doc/*.md` 是按主题拆分的旧版摘录（`导入.md`、`子命令.md`、`应用初始化.md`、`应用初始化函数的集合.md`）。
+> 本文档未覆盖的行为以 `f_app/src/**/*.cj` 为准（原 `f_app/doc/*.md` 的按主题摘录已删除，本 README 是唯一出处）。

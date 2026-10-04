@@ -33,7 +33,7 @@
   package-configuration = {}
   category = ["Utility", "Developer Tools", "Programming Framework"]
   license = ["Apache-2.0"]
-  include = ["src", "doc"]
+  include = ["src"]
   exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
   authors = ["吴京润"]
 

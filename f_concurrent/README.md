@@ -57,7 +57,7 @@ public class ConcHashDict<K, V> <: ConcDict<K, V> {
 
 ## `public class ConcurrentHashSet<T> <: Set<T> where T <: Hashable & Equatable<T>`
 并发安全的 Set：4 个 `init`（容量 / 初始集合等）、`retainAll`、`clone`，并扩展了 `==` / `toString` /
-`intersection` / `union` / `difference`。详见 `doc/ConcurrentHashSet.md`。
+`intersection` / `union` / `difference`（见 `src/ConcurrentHashSet.cj`）。
 
 ## 负载均衡
 
@@ -89,7 +89,7 @@ public class LoadBalance<W, D, R> where W <: Addable<W> & Comparable<W> {
 取节点 = 第一个键 ≥ 算法给出的值 ⇒ 节点 i 覆盖 `(K_{i-1}, K_i]`。因此算法取值必须落在**桶的内部**：
 若取值与桶边界对齐（例如让取值起点等于 `min`），就会**永远命中同一个节点**。
 权重场景推荐 `min = 0`、取值起点 `step / 2`、上界 `Σw`（`f_rpc` 的 `ClientConfig` 即如此接线，
-见 `.autocode/bugs/bug-archived-20261004-2.md` 第 2 部分）。完整说明与示例见 `doc/负载均衡.md`。
+见 `.autocode/bugs/bug-archived-20261004-2.md` 第 2 部分）。可运行示例见 `src/LoadBalance_test.cj`（等权/2:1/4:1 与随机两档的期望值都在里面）。
 
 
 ## 限流算法
@@ -354,4 +354,3 @@ public class DelayQueue<T> <: Queue<T> where T <: Delayed<T> {
   `ReadWriteSyncerException`、`TimeoutException`；`RateLimiter` 在 `timeout <= 0` 时抛 `RateLimiterException`，
   `UnlimitedRateLimiter` 内部用 `Duration.Max`。
 - **负载均衡的用例**：`src/LoadBalance_test.cj`（等权 50/50、2:1 → 67/33、4:1 → 80/20、随机两档）。
-- ⚠️ `doc/ConcurrentHashSet.md` 当前正文与标题不符（内容是 `LoadBalanceAlgo` 接口），需要重写。

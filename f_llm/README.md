@@ -831,7 +831,7 @@ public class LLMContextMediator {
 
 ## 搜索
 
-- [搜索](doc/搜索.md)
+- 搜索（原 `doc/搜索.md` 已删除，接口见 `src/**`）
 
 ## 函数调用
 

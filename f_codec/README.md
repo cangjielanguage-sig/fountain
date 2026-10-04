@@ -138,6 +138,7 @@ codec.release()
 
 ## 相关文档
 
-- `doc/数据类型.md`：类型号与 head 布局的说明；
-- `doc/默认实现.md`：`DefaultCodec` 的说明；
-- `doc/用法.md`：历史摘录（早期测试副本，已与当前代码不同步，仅作参考）。
+原 `doc/` 下的旧版摘录（数据类型 / 默认实现 / 用法）已删除，本 README 是唯一出处：
+
+- 类型号与 head 布局的权威定义在源码注释里（`src/Codec.cj`、`src/default/DataType.cj`）；
+- 可运行的完整用例见 `src/default/DefaultCodec_test.cj`（含空集合/空映射往返、对象类型登记、池与 release）。

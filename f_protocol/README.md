@@ -198,4 +198,4 @@ public class MessageID <: Hashable & Equatable<MessageID> & ToString {
 
 ## 相关文档
 
-`doc/接口.md`、`doc/默认实现.md` 是本 README 的历史摘录，**以本 README 与源码为准**。
+原 `doc/接口.md`、`doc/默认实现.md` 的旧摘录已删除 —— **本 README 与 `src/**` 是唯一出处**。
