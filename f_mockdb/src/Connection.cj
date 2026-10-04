@@ -16,24 +16,31 @@ limitations under the License.
 package fountain::f_mockdb
 
 public class MockConnection <: Connection {
+    private var closed_ = false
     public prop state: ConnectionState {
         get(){
-            Connected
+            if(closed_){
+                Closed
+            }else{
+                Connected
+            }
         }
     }
     public func createTransaction(): Transaction{
         MockTransaction()
     }
     public func getMetaData(): Map<String, String> {
-        MOCKDB.metadata
+        //返回副本：外部改动不会串到夹具里，也不会影响后续读取
+        copyMap(MOCKDB.metadata)
     }
     public func prepareStatement(sql: String): Statement {
         MockStatement(sql)
     }
     public func isClosed(): Bool {
-        false
+        closed_
     }
     public func close(): Unit {
-        MOCKDB.clear()
+        //只关闭连接自身：夹具的生命周期由用例用 MOCKDB.clear() 显式管理，关连接不再清夹具
+        closed_ = true
     }
 }

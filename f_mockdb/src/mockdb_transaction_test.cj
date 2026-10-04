@@ -48,6 +48,7 @@ public class MockDBTransactionTest {
         MOCKDB.clear()
         MOCKDB.toThrowOnCommitting = true
         let tx = MockTransaction()
+        tx.begin()
         try {
             tx.commit()
             @Assert(false)
@@ -74,6 +75,7 @@ public class MockDBTransactionTest {
     public func testSavepointOperations(): Unit {
         MOCKDB.clear()
         let tx = MockTransaction()
+        tx.begin()
         tx.save('sp1')
         @Assert(true)
     }
@@ -83,6 +85,7 @@ public class MockDBTransactionTest {
         MOCKDB.clear()
         MOCKDB.toThrowOnSavingSavePoint('sp1', true)
         let tx = MockTransaction()
+        tx.begin()
         try {
             tx.save('sp1')
             @Assert(false)
@@ -96,6 +99,7 @@ public class MockDBTransactionTest {
         MOCKDB.clear()
         MOCKDB.toThrowOnReleasing('sp1', true)
         let tx = MockTransaction()
+        tx.begin()
         tx.save('sp1')
         try {
             tx.release('sp1')
@@ -110,6 +114,7 @@ public class MockDBTransactionTest {
         MOCKDB.clear()
         MOCKDB.toThrowOnRollbackingSavePoint('sp1', true)
         let tx = MockTransaction()
+        tx.begin()
         tx.save('sp1')
         try {
             tx.rollback('sp1')
@@ -158,5 +163,75 @@ public class MockDBTransactionTest {
         @Assert(true, MOCKDB.toThrowOnReleasing('sp'))
         MOCKDB.toThrowOnRollbackingSavePoint('sp', true)
         @Assert(true, MOCKDB.toThrowOnRollbackingSavePoint('sp'))
+    }
+
+    @TestCase
+    public func testTransactionStateMachine(): Unit {
+        MOCKDB.clear()
+        let tx = MockTransaction()
+        //未 begin 就 commit / rollback / save：按契约报错（修复前全部静默通过）
+        try {
+            tx.commit()
+            @Assert(false)
+        } catch (e: SqlException) {
+            @Assert(true)
+        }
+        try {
+            tx.rollback()
+            @Assert(false)
+        } catch (e: SqlException) {
+            @Assert(true)
+        }
+        try {
+            tx.save('sp1')
+            @Assert(false)
+        } catch (e: SqlException) {
+            @Assert(true)
+        }
+        tx.begin()
+        //重复 begin：按契约报错（修复前静默通过）
+        try {
+            tx.begin()
+            @Assert(false)
+        } catch (e: SqlException) {
+            @Assert(true)
+        }
+        tx.commit()
+        //已结束的事务再 commit / rollback：按契约报错
+        try {
+            tx.commit()
+            @Assert(false)
+        } catch (e: SqlException) {
+            @Assert(true)
+        }
+        try {
+            tx.rollback()
+            @Assert(false)
+        } catch (e: SqlException) {
+            @Assert(true)
+        }
+    }
+
+    @TestCase
+    public func testTransactionExceptionMessages(): Unit {
+        MOCKDB.clear()
+        let tx = MockTransaction()
+        MOCKDB.toThrowOnBeginning = true
+        try {
+            tx.begin()
+            @Assert(false)
+        } catch (e: MockDbException) {
+            //异常信息里应能看出是哪一步失败（修复前 message 为空）
+            @Assert(true, e.message.contains('begin'))
+        }
+        MOCKDB.clear()
+        MOCKDB.toThrowOnSavingSavePoint('sp1', true)
+        tx.begin()
+        try {
+            tx.save('sp1')
+            @Assert(false)
+        } catch (e: MockDbException) {
+            @Assert(true, e.message.contains('sp1'))
+        }
     }
 }
