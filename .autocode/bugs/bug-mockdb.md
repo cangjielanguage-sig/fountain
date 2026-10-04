@@ -14,7 +14,7 @@
 | 中 | 5 |
 | 低危 / 待验证 | 9 |
 
-> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4`、§2.2 `MOCK-5`、§2.3 `MOCK-6`、§2.4 `MOCK-7`（①③）、§2.5 `MOCK-8` 已修复 ⇒ **待修严重级 0 条、中危 0 条**；低危批次（§3.3：`MOCK-L1`/`L2`/`L4`/`L5`/`L6`/`L7`）与审查后新增的 `MOCK-L8`（§3.4）已修复 ⇒ 低危 8 条全清，`MOCK-L3` 暂不处理，`MOCK-V1` 判为不成立、`MOCK-V2`（覆盖缺口）已补齐（均见 §3.2）⇒ **本轮审查提出的 16 条全部了结**，仅剩 §2.4 的 ②（未绑定 vs 绑定 NULL，需改公开签名）待定方向。用例总数 **30 → 56**。并入状态：`MOCK-1`/`MOCK-2` 已并入 `sts/1.3.x`（合并提交 `12c19d94`）；`MOCK-3`~`MOCK-8` 与低危批次在分支 `fix/mock-1-query-isolation`（`e904ac87`/`ba04b79f`/`80d67a36`/`edb10235`/`7704cd91`/`924ec6f8`/`0742124b`/`eba8389f` + 本次提交），待下次同步。标记补录提交：`fa822423`、`cd429689`、`cee6dc6d`、`78bc9f30`。
+> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4`、§2.2 `MOCK-5`、§2.3 `MOCK-6`、§2.4 `MOCK-7`（①③）、§2.5 `MOCK-8` 已修复 ⇒ **待修严重级 0 条、中危 0 条**；低危批次（§3.3：`MOCK-L1`/`L2`/`L4`/`L5`/`L6`/`L7`）与审查后新增的 `MOCK-L8`（§3.4）已修复 ⇒ 低危 8 条全清，`MOCK-L3` 暂不处理，`MOCK-V1` 判为不成立、`MOCK-V2`（覆盖缺口）已补齐（均见 §3.2）⇒ **本轮审查提出的 16 条全部了结**，仅剩 §2.4 的 ②（未绑定 vs 绑定 NULL，需改公开签名）待定方向。用例总数 **30 → 56**。并入状态：`MOCK-1`/`MOCK-2` 已并入 `sts/1.3.x`（合并提交 `12c19d94`）；`MOCK-3`~`MOCK-8` 与低危批次在分支 `fix/mock-1-query-isolation`（代码/用例：`e904ac87`/`ba04b79f`/`80d67a36`/`edb10235`/`7704cd91`/`540db7ca`/`924ec6f8`/`0742124b`/`835f7032`；标记补录：`fa822423`/`cd429689`/`cee6dc6d`/`78bc9f30`/`eba8389f` + 本次），待下次同步。
 
 **建议修复顺序**：
 
@@ -225,7 +225,7 @@ DT：语句复用两次断言各自参数；未绑定位置断言与 `setNull` �
 
 ### 2.5 [中｜正确性] `MOCK-8` `toThrowOnExecuting` 在 `execution` 之后判定：声明抛异常的语句仍先跑完夹具（f_mockdb） → ✅已修复（2026-10-04）
 
-**✅ 修复标记（2026-10-04）**：分支 `fix/mock-1-query-isolation`（同一 worktree，在 MOCK-7 之后追加提交），**代码、用例、本标记在同一提交**（提交信息 `fix(f_mockdb): MOCK-8 toThrowOnExecuting 判定前移到夹具之前（bug-mockdb §2.5 修复标记）`；提交哈希由下一次标记同步补录）。
+**✅ 修复标记（2026-10-04）**：分支 `fix/mock-1-query-isolation`（同一 worktree，在 MOCK-7 之后追加提交），**代码、用例、本标记在同一提交**：提交 `540db7ca`（`fix(f_mockdb): MOCK-8 toThrowOnExecuting 判定前移到夹具之前（bug-mockdb §2.5 修复标记）`）。
 
 - 改动（`src/Statement.cj`）：`query()` / `update()` 里的 `toThrowOnExecuting` 判定从「夹具执行之后」前移到「`clearQueryResult()` 之后、`MOCKDB.execution(sql, args)` **之前**」⇒ 声明失败的语句不执行夹具、不产生结果（与真驱动一致）；参数槽的 `try/finally` 清空与 `MockUpdateResult` 快照逻辑不变（本次抛异常发生在清参数之前，参数槽保持为空即可）。
 - 用例：`src/mockdb_core_test.cj` 新增 `testThrowOnExecutingSkipsFixture`（夹具记录被调用次数 + `toThrowOnExecuting = true`：断言抛 `MockDbException` **且** 夹具未被调用、`MOCKDB.getQueryResultRows()` 为空）；同时**调整既有 `testClearResetsFixture`** —— 它原先依赖「抛异常前夹具已执行」来填充夹具，改为「先正常执行一次查询填充、再置标志」，验证意图不变（`clear()` 复位全部夹具）。
@@ -260,7 +260,7 @@ DT：`toThrowOnExecuting = true` 后执行，断言抛异常**且** `MOCKDB.getQ
 - **`MOCK-V1` 重复加载动态库时的驱动注册**：`src/Driver.cj:21-23` 在 `static init()` 里 `DriverManager.register('mockdb', MockDriver())`；fountain 的应用允许「同一动态库被主动加载 + 被依赖再加载」两次（`fboot run` 的 `--dylibPattern` 说明里明确提到重复加载），std 文档只写「名称和实例一一对应，本方法并发安全」，没定义同名重复注册是覆盖还是报错。验证：写一个只链 `f_mockdb` 的小程序，手动 `dlopen` 两次后 `DriverManager.getDriver('mockdb')`，观察是否异常/是否为后一次实例。　**✗ 不成立（2026-10-04 判定）**：重复加载与否由**运行时**决定 —— 用 `PackageInfo.load` 重复加载同一个动态库会直接**运行时崩溃**，不用它加载就不会重复加载；仓内唯一的加载入口是 `f_app/src/funcs.cj:61` 的 `PackageInfo.load`，一个库只会被加载一次 ⇒「重复加载 ⇒ 驱动重复注册」在本项目不可能发生，无需处理。
 - **`MOCK-V2` 用例覆盖缺口（未被任何用例冻结的行为）**：`query(params)` / `update(params)` / `next(values)` 三个 `'not supported'` 分支、`getOrNull` 未 `next()` 与类型不符、`MockStatement.set` 负索引、语句复用的参数累积、`MockUpdateResult` 的惰性读取、`close()` 后的 `isClosed()`/`state`、`MOCKDB.execution` 缺省（`EMPTY_EXECUTION`）路径。现状 30 个用例全绿（§5），但这些分支一条都没测——修 §1/§2 时建议一并补上（否则改动没有回归网）。
 
-　**✅ 已完成（2026-10-04）**：8 个子项逐条落成用例，用例总数 **30 → 56**，全部通过：
+　**✅ 完成标记（2026-10-04）**：分支 `fix/mock-1-query-isolation`，**代码、用例、本标记在同一提交**：提交 `835f7032`（`test(f_mockdb): 补齐 MOCK-V2 覆盖缺口（not supported 三分支 + 缺省夹具路径，bug-mockdb §3.2）`）；尚未并入 `sts/1.3.x`（待下次同步）。8 个子项逐条落成用例，用例总数 **30 → 56**，全部通过：
 
 | 子项（审查时点出的缺口） | 冻结它的用例 |
 |---|---|
@@ -332,7 +332,7 @@ DT：`toThrowOnExecuting = true` 后执行，断言抛异常**且** `MOCKDB.getQ
 | 探针用例 | 临时 `src/mockdb_review_probe_test.cj`（**已删除，未入库**） | 31/31 PASSED，打印 8 条实测值（`/tmp/mockdb_probe.log:36-43`），支撑 `MOCK-1`/`MOCK-2`/`MOCK-3`/`MOCK-4` |
 | 编译警告 | 同上构建（基线产物 errlog） | 10 条 warning、0 条 error（清单见 `MOCK-L3`） |
 
-**修复完成后**（2026-10-04，分支 `fix/mock-1-query-isolation`）：`cjpm test --no-capture-output` = **56/56 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**；编译警告 **9 条**（基线 10 条）；用例 **30 → 56**（新增 26 条，覆盖 `MOCK-1`~`MOCK-8`、`MOCK-L1`~`L8`、`MOCK-V2` 的全部子项）。
+**修复完成后**（2026-10-04，分支 `fix/mock-1-query-isolation`，提交范围 `e904ac87`…`835f7032`）：`cjpm test --no-capture-output` = **56/56 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**；编译警告 **9 条**（基线 10 条）；用例 **30 → 56**（新增 26 条，覆盖 `MOCK-1`~`MOCK-8`、`MOCK-L1`~`L8`、`MOCK-V2` 的全部子项）。
 
 探针原文（`MockDB.clear()` → 两次 query / 两次 update / `getOrNull` 越界与类型不符 / `close()` 后状态）：
 
