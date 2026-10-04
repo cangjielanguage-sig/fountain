@@ -946,13 +946,18 @@ demo 端到端与之前一致：分隔线 ×2、客户端 JSON、服务端 `CONS
      - **异常即落统计**：`reportIfChanged()` 在计数变化时输出一条（`KeyPool` 巡检每轮调用，健康时静默）
        ⇒ 崩溃前日志里已有"最后已知状态"；
      - **退出落统计**：`installShutdownReport()`（首次建池时注册，走 `std.env.atExit`，有异常才输出）。
-     ⚠️ **信号处理器实测无效（2026-10-04 实验结论）**：`installCrashHandler()`（SIGSEGV/SIGABRT ⇒ 打印后 `exit(134)`）
-     在 Cangjie 运行时下**不会被执行** —— 运行时自己的 fatal handler 先行接管。用一次性程序实测：
-     `registerSignalHandler` 与 `resetAndRegisterSignalHandler` 都试过（信号号自定并放在 `f_base/src/signal.cj`：
-     `SIGIOT`=6 / `SIGSEGV`=11，不引用 `std.posix` 里已 deprecated 的同名常量），
-     进程均以 **139** 退出、我们那行没打出来，stderr 只有运行时的 `CJNative Handle signal: 6` +
-     `Check failed: concurrencyModel != nullptr`。API 保留并标注了该限制（留给"非 Cangjie 运行时宿主"场景），
-     但不要指望它取证；实际起作用的是上面两条 + 输出通道。
+     ⚠️ **信号处理器实测无效（2026-10-04，两轮实验）**：`installCrashHandler()`（SIGSEGV/SIGABRT ⇒ 打印后 `exit(134)`）
+     在 Cangjie 运行时下**不会被执行** —— 运行时自己的 fatal handler 先行接管。
+     - 第二轮（更干净，已排除工具干扰）：信号由**外部 coreutils `kill -11 <pid>`** 发送，程序内不碰任何 posix API。
+       只装库处理器 ⇒ 退出码 **139**（不是 134）；只装用户层 `registerSignalHandler([Signal(11, 'segv')])` + `exit(42)`
+       ⇒ 依旧 **139**（不是 42）⇒ 用户层注册在 SIGSEGV 上确实不生效。
+     - 第一轮曾用 deprecated 的 `std.posix.kill` 发信号（结论一致）；信号号自定并放在 `f_base/src/signal.cj`
+       （`SIGIOT`=6 / `SIGSEGV`=11，不引用 `std.posix` 里已 deprecated 的同名常量）—— **生效的只是信号号这个值**，
+       声明位置不影响行为。
+     - 附带发现：`println` 到**重定向文件**是块缓冲，进程被信号带走时缓冲区里的行不落盘 ⇒ 崩溃/诊断输出改用
+       **stderr**（`dump()` 与崩溃行都走 `getStdErr().writeln(...)`）。
+     API 保留并标注了该限制（留给"非 Cangjie 运行时宿主"场景），但不要指望它取证；
+     实际起作用的是上面两条 + 输出通道。
      用例：`testDiagnosticsSnapshotTracksActivity`（幂等安装 + 统计随活动变化）、`auditRunsFromSchedule`（巡检路径会执行 `reportIfChanged`）。
      **输出通道**：底层告警经**可注入钩子**输出（`PoolDiagnostics.warnHook/errorHook`，默认 `println`），
      `KeyPool` 首次建池时把钩子接到 f_log 的 logger（应用可用 `redirectWarningsTo` 更早接管，不会被覆盖）

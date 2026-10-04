@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_pool.diagnostics
 
-import std.env.{atExit, exit}
+import std.env.{atExit, exit, getStdErr}
 import std.sync.{AtomicBool, AtomicInt64}
 import fountain::f_base.{registerSignalHandler, resetSignalHandler, Signal, SIGIOT, SIGSEGV}
 
@@ -189,11 +189,13 @@ public struct PoolDiagnostics {
     }
 
     /**
-     * 输出统计（带固定前缀，便于 grep）。**固定 `println`、不经告警钩子**：
+     * 输出统计（带固定前缀，便于 grep）。**固定写 stderr、不经告警钩子**：
      * 它和信号处理器共享"崩溃时也必须能出来"的通道，而钩子可能被接到日志框架上（崩溃现场不可信）。
+     * 用 stderr 而不是 stdout 是因为实测：stdout 重定向到文件时是块缓冲，进程被信号带走后
+     * 缓冲区里的行**不会落盘**（最后一行丢掉），stderr 的不丢。
      */
     public static func dump(reason!: String = 'manual'): Unit {
-        println("[FOUNTAIN_POOL.diag] ${reason}: ${snapshot()}")
+        getStdErr().writeln("[FOUNTAIN_POOL.diag] ${reason}: ${snapshot()}")
     }
 
     /**
@@ -213,7 +215,8 @@ public struct PoolDiagnostics {
         }
         registerSignalHandler(FATAL_SIGNALS){ signal =>
             if (dumping.compareAndSwap(false, true)) {
-                println("[FOUNTAIN_POOL.crash] fatal signal=${signal}, ${snapshot()}")
+                // stderr：stdout 在重定向时是块缓冲，进程被信号带走会丢掉最后一行（实测）
+                getStdErr().writeln("[FOUNTAIN_POOL.crash] fatal signal=${signal}, ${snapshot()}")
                 resetSignalHandler(FATAL_SIGNALS)
                 exit(134)
             }
