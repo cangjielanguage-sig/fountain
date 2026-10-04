@@ -14,7 +14,7 @@
 | 中 | 5 |
 | 低危 / 待验证 | 9 |
 
-> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4`、§2.2 `MOCK-5`、§2.3 `MOCK-6`、§2.4 `MOCK-7`（①③）、§2.5 `MOCK-8` 已修复 ⇒ **待修严重级 0 条、中危 0 条**；低危批次（§3.3：`MOCK-L1`/`L2`/`L4`/`L5`/`L6`/`L7`）与审查后新增的 `MOCK-L8`（§3.4）已修复 ⇒ 低危 8 条全清，`MOCK-L3` 暂不处理，`MOCK-V1` 判为不成立（见 §3.2）。仍未动：§2.4 的 ②（未绑定 vs 绑定 NULL）、§3.2 的 `MOCK-V2`（覆盖缺口）。并入状态：`MOCK-1`/`MOCK-2` 已并入 `sts/1.3.x`（合并提交 `12c19d94`）；`MOCK-3`~`MOCK-8` 与低危批次在分支 `fix/mock-1-query-isolation`（`e904ac87`/`ba04b79f`/`80d67a36`/`edb10235`/`7704cd91`/`924ec6f8` + 本次提交），待下次同步。标记补录提交：`fa822423`、`cd429689`、`cee6dc6d`、`78bc9f30`。
+> 修复进度（2026-10-04）：§1.1 `MOCK-1`、§1.2 `MOCK-2`、§1.3 `MOCK-3`、§2.1 `MOCK-4`、§2.2 `MOCK-5`、§2.3 `MOCK-6`、§2.4 `MOCK-7`（①③）、§2.5 `MOCK-8` 已修复 ⇒ **待修严重级 0 条、中危 0 条**；低危批次（§3.3：`MOCK-L1`/`L2`/`L4`/`L5`/`L6`/`L7`）与审查后新增的 `MOCK-L8`（§3.4）已修复 ⇒ 低危 8 条全清，`MOCK-L3` 暂不处理，`MOCK-V1` 判为不成立（见 §3.2）。仍未动：§2.4 的 ②（未绑定 vs 绑定 NULL）、§3.2 的 `MOCK-V2`（覆盖缺口）。并入状态：`MOCK-1`/`MOCK-2` 已并入 `sts/1.3.x`（合并提交 `12c19d94`）；`MOCK-3`~`MOCK-8` 与低危批次在分支 `fix/mock-1-query-isolation`（`e904ac87`/`ba04b79f`/`80d67a36`/`edb10235`/`7704cd91`/`924ec6f8`/`0742124b` + 本次提交），待下次同步。标记补录提交：`fa822423`、`cd429689`、`cee6dc6d`、`78bc9f30`。
 
 **建议修复顺序**：
 
@@ -280,7 +280,7 @@ DT：`toThrowOnExecuting = true` 后执行，断言抛异常**且** `MOCKDB.getQ
 
 ### 3.4 `MOCK-L8` 修复记录（2026-10-04，审查后新增条目）
 
-**✅ 修复标记（2026-10-04）**：分支 `fix/mock-1-query-isolation`（同一 worktree，在低危批次之后追加提交），**代码、用例、README 与本标记在同一提交**（提交信息 `fix(f_mockdb): MOCK-L8 参数索引按 SQL 占位符个数定上界（bug-mockdb §3.4）`；提交哈希由下一次标记同步补录）。
+**✅ 修复标记（2026-10-04）**：分支 `fix/mock-1-query-isolation`（同一 worktree，在低危批次之后追加提交），**代码、用例、README 与本标记在同一提交**（提交 `0742124b`：`fix(f_mockdb): MOCK-L8 参数索引按 SQL 占位符个数定上界（bug-mockdb §3.4）`）。
 
 - 改动（`src/Statement.cj`）：新增 `private func placeholderCount()`（数 `sql` 里的 `?` 字节，ASCII 安全）与 `private func checkIndex(index, parameters)` —— `set<T>` / `setNull` 改为先 `checkIndex(index, placeholderCount())`：`index < 0` 抛「negative」，`index >= 占位符个数` 抛「out of range, the sql has N parameters」。口径与真驱动（按语句参数个数判定越界）一致；SQL 字面量里出现的 `?` 只会把上界**放宽**，不会误拒合法绑定。
 - 用例：`src/mockdb_core_test.cj` 新增 `testSetIndexBeyondSqlParametersThrows` —— 对只有 1 个占位符的 SQL 调 `set(1000000, …)` 与 `setNull(5)` 都断言抛 `SqlException`，随后用合法索引 `set(0, …)` 执行查询照常通过。
