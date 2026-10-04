@@ -2,9 +2,8 @@
 
 # 默认目标目录取**脚本自身所在目录**（fdemo/）：在工作区根目录执行、或 cd 进 fdemo/ 之后再执行，
 # 都不会建/跑出 fdemo/fdemo 这种嵌套产物（历史踩过：嵌套目录里那份库随后会跑不起来）。
-script_dir=$(cd "$(dirname "$0")" && pwd)
 target_path=$2
-target_path=${target_path:-"$script_dir"}
+target_path=${target_path:-"./fdemo"}
 echo "target-dir=$target_path"
 args=${@:3}
 
@@ -79,7 +78,13 @@ exports(){
     # /mnt/d/docs/work/cangjie/installed/libs/fboot 下的旧副本（该目录里的 .so 没有 SONAME，
     # 链接器按文件名先在 LD_LIBRARY_PATH 里找），表现为“新符号明明在自建库里有，却报 undefined symbol”。
     # fdemo 实测：libboot.error@fountain.so 加载期找不到 fountain/f_data.base:DataTypeRegistry.ti。
-    export LD_LIBRARY_PATH=`find $target_path/release/* -type d|grep -a -v -P '\.build-logs|bin|_stAtIc__|boot'|tr '\n' ':'`$LD_LIBRARY_PATH
+    #
+    # 还要注意：从 registry 拉下来的驱动（如 postgres_driver）**不一定**在 release/* 一级目录下 ——
+    # fboot 可能把产物建在 <target>/<名字>/release/ 这种嵌套目录里（`fboot run` 用的是哪份，就得去哪份里找库）。
+    # 所以这里再按「目录里有 .so」扫一遍 $target_path 兜底，避免出现
+    # `libpostgres_driver.so: cannot open shared object file`（实测：驱动只存在于嵌套产物里时就会这样）。
+    extra_libs=`find $target_path/release -name 'lib*.so' -printf '%h\n' 2>/dev/null|sort -u|grep -a -v -P '\.build-logs'|tr '\n' ':'`
+    export LD_LIBRARY_PATH=$extra_libs$LD_LIBRARY_PATH
     echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
 }
 run(){

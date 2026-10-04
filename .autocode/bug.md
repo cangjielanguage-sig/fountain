@@ -759,9 +759,17 @@ EOF 落在 data 字段起始、CRC 被污染、`len` 比实际长/短（CRC 已�
   那份 `libboot.error@fountain.so` 引用了 §7.11 自动登记用的 `DataTypeRegistry`（`nm -D -u` 可见），
   它自己目录下的 `libf_data.base@fountain.so` **有**该符号（5 处），而 `installed/libs/fboot` 的副本 **0 处** ——
   但该目录排在 `LD_LIBRARY_PATH` **前面**（`cangjie.sh` 就把它放在前面），于是命中了旧副本。
-  修法（与 frpcdemo 一致）：`fdemo/boot.sh` 的 `exports()` 把自建 release 目录**前置**；顺带把默认目标目录改成
-  **脚本自身所在目录**，避免 `cd fdemo` 后再跑出 `fdemo/fdemo` 这种嵌套产物。静态复验：第一命中变为自建库、
-  `DataTypeRegistry` 符号数 5。
+  修法（与 frpcdemo 一致）：`fdemo/boot.sh` 的 `exports()` 让自建 release 目录**优先**（放在继承的
+  `$LD_LIBRARY_PATH` 之前）。静态复验：第一命中变为自建库、`DataTypeRegistry` 符号数 5。
+- **同一处的第二个缺口（2026-10-04，同一脚本）**：`postgres_driver` 的 `.so` 不在 `release/*` 的**一级**目录里，
+  而在 `release/postgres_driver/` 下（产物都在 `$target_path/release` 内，只是一层深）。原来那种
+  `find $target_path/release/* -type d` 只取一级子目录 ⇒ 驱动目录漏掉 ⇒ 运行期
+  `libpostgres_driver.so: cannot open shared object file`。
+  修法：改成**一条**递归 find —— `find $target_path/release -name 'lib*.so' -printf '%h\n'|sort -u`，
+  直接收集「目录里有 .so」的那些目录（一层深、两层深都覆盖，也不会产生重复条目）。
+  （此前 `undefined symbol: DataTypeRegistry.ti` 的另一半原因是：在 `fdemo/` 目录里执行时，旧的相对默认值
+  `./fdemo` 会解析成 `fdemo/fdemo`，即跑到另一棵树上；现在统一在仓库根目录执行 `./fdemo/boot.sh …`，
+  产物只在 `fdemo/release/` 一处，不再有嵌套。）
 - 教训：这类问题**单测发现不了**
 - 教训：这类问题**单测发现不了**（`cjpm test` 走工程内的链接，`f_util` 28/28、`f_protocol` 55/55、`f_codec` 15/15 全绿），
   必须做“启动应用 + 看加载日志”级别的验证；排查时先 `readelf -d` / `nm -D`，别急着改加载器。
