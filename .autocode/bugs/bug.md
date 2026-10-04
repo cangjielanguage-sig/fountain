@@ -33,26 +33,34 @@
 
 ## 1. 严重（14 条）
 
-### 1.1 [严重｜正确性+性能] `ORM-1` 结果缓存的键退化成「只有 SQL 文本」（f_orm）✓已复核
+### 1.1 [严重｜正确性+性能] `ORM-1` 结果缓存的键实际只剩 SQL 文本这一维（`h` 与 `==` 代码上都含 args，失效点在 `SqlArgs`）（f_orm）✓已复核
 
-位置：`src/base/SqlExecutor.cj:25-39, 840-849`、`src/wrap/SqlArgs.cj:106-120`
+位置：`src/base/SqlExecutor.cj:25-39, 48, 82-87, 134-138, 840-849`、`src/wrap/SqlArgs.cj:23-25, 106-120`
 
 ```cangjie
-// SqlExecutor.cj:48    private var args: SqlArgs = SqlArgs()     // executor 自己的字段
-// SqlExecutor.cj:841   let key = SqlCacheKey(sql, args)            // 存/取用的是同一个实例
-// SqlExecutor.cj:28    h = HashBuilder().append(sql).append(args).build()   // 只在构造时算一次
-// SqlArgs.cj:106-117   private var h = 0; public func hashCode() { if (h == 0) {...} h }   // h 被记忆，clear()/add() 后不复位
-// SqlArgs.cj:118-120   operator func ==(other) { refEq(this, other) || args == other.args }  // 同一实例恒等
+// SqlExecutor.cj:28    h = HashBuilder().append(sql).append(args).build()          // ← 代码上确实算了 args
+// SqlExecutor.cj:34    refEq(this, other) || (h == other.h && sql == other.sql && args == other.args)   // ← 也确实比较了 args
+// SqlExecutor.cj:48    private var args: SqlArgs = SqlArgs()                       // 整个 executor 只有这一个实例，之后从不重新赋值
+// SqlExecutor.cj:82-87 protected func clearSql(...) { sql_ = ''; if(clearArgsAfterExec){ args.clear() } }
+// SqlArgs.cj:23-25     protected func clear() { args = ArrayList<SqlArg>() }       // 只换内部 list，实例身份不变
+// SqlArgs.cj:106-117   private var h = 0; public func hashCode() { if (h == 0) {...} h }   // 记忆值，clear()/add() 都不复位
+// SqlArgs.cj:118-120   operator func ==(other) { refEq(this, other) || args == other.args }
+// SqlExecutor.cj:841   let key = SqlCacheKey(sql, args)                            // 全仓唯一的 key 构造点，用的就是这个字段实例
 ```
 
-影响：同一个 executor 上，**SQL 文本相同、参数不同**的两次查询会被判为同一个缓存键。
+影响：**代码上** `h` 与 `==` 都把参数算进去了，但 `args` 这一维度被三处实现抵消，key 的**实际**区分能力只剩 SQL 文本：
 
-- 事务内执行器**不关闭**（`SqlExecutor.cj:830-832` 在事务分支直接 `return executor()`，不走 `close()`）⇒ 缓存不失效 ⇒ 一个事务里同一 SQL 文本的第二次调用**直接返回第一次的结果**（静默错数据）；若两次期望的 `T` 不同，则抛 `type of cached data with key ... does not match`（`844`）。
-- `orm_useCache` 默认 `true`（`SqlExecutor.cj:62`），即默认路径就有这个风险；典型触发是「事务里按不同 id 循环取数」。
-- `README.md:384-389` 写的是「键基于 SQL 与参数」，实现与文档不符。
-- 附带：`h` 记忆 + `clear()` 只换内部 list（`SqlArgs.cj:23-25`）⇒ 哈希桶也可能长期落在陈旧值上。
+1. `SqlExecutor.cj:48` 整个生命周期只有**一个** `SqlArgs` 实例（全仓 grep 无 `args = SqlArgs()` 之类的重新赋值；每次收尾走 `clearSql()` → `args.clear()`，见 `82-87`，而 `SqlArgs.clear()` 只替换内部 `ArrayList`，**实例身份不变**）⇒ 两次查询的两个 key 指向**同一个** `SqlArgs`；
+2. `SqlArgs.==` 先 `refEq(this, other)`（`118-120`）⇒ 同一实例**恒真** ⇒ `args == other.args` 恒真；
+3. `SqlArgs.hashCode()` 把结果记忆在 `h` 字段（`106-117`），而 `clear()`/`add()` 都不复位 ⇒ 同一 executor 构造出的所有 key，`h` 里的参数分量都等于**第一次**算出的那份 ⇒ `h == other.h` 也恒成立。
 
-修法：`clear()`/`add()` 时把 `h` 复位为 0（或改为不缓存的增量哈希）；`SqlCacheKey` 应保存**参数快照**（不可变值列表）而不是活的 `SqlArgs` 引用。修完补一条 DT：同一 executor 上两次「同 SQL 不同参数」的查询结果必须不同。
+⇒ 两次「同 SQL 文本、不同参数」的查询，key 相等。触发条件与后果：
+
+- 缓存需跨查询存活：`execute` 的非事务路径执行完就 `close()`（`830-836`），而 `close()` 里的缓存清理带 `tx.isNone()` 守卫（`134-138`，事务内直接跳过）⇒ **事务内**同一 SQL 文本的第二次调用**直接返回第一次的结果**（静默错数据）；若两次期望的 `T` 不同，则抛 `type of cached data with key ... does not match`（`844`）。
+- `README.md:384-389` 写的是「键基于 SQL 与参数」——那描述的是代码意图，与实际行为不一致。
+- 边界：若 `HashBuilder().build()` 恰好得 0，第 3 条不成立（`hashCode()` 每次重算）⇒ 两个 key 的 `h` 可能不同、`cache.get` 不命中，退化为「缓存不复用、事务内每个参数组合新增一个条目」（不返回错数据，但条目随查询数增长）。
+
+修法：`SqlArgs.clear()`/`add()` 时把 `h` 复位为 0（或干脆不做记忆）；更根本的是让 `SqlCacheKey` 保存**参数快照**（不可变值列表）而不是活的 `SqlArgs` 引用，`SqlArgs.==` 也不要对可变实例用 `refEq` 短路。修完补两条 DT：①同一 executor 上「同 SQL、不同参数」两次查询结果必须不同；②事务内同一 SQL 用不同参数查两次，断言两次都真的落到数据库（用日志或行数计数）。
 
 ### 1.2 [严重｜正确性] `X-1` `f_base.TypeInfos.get(String)` 无限递归（跨模块）✓已复核
 
