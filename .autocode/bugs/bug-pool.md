@@ -33,7 +33,7 @@
 
 ### 1.1 [严重｜正确性] `POOL-1` 借出中的池项会被 `Ref` 终结器销毁（显式销毁路径还会被销毁第二次）✓已复核 → ✅已修复（2026-10-05）
 
-**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`（worktree `.worktrees/review-f_pool`，基线 `5b76b7a2`，已合入 `sts/1.3.x`），代码、用例、本标记在**同一提交**（提交信息 `fix(f_pool): POOL-1 借出/显式销毁改用 Ref.take()，终结器不得提前或重复销毁池项`）。
+**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`（worktree `.worktrees/review-f_pool`，基线 `5b76b7a2`，已合入 `sts/1.3.x`；worktree 注册目录曾被并行会话的 WSL `git worktree prune` 删掉，已按 `.git/worktrees/review-f_pool/{gitdir,commondir,HEAD}` + `read-tree` 重建，未丢改动），代码、用例、本标记在**同一提交**（提交 `411714dc`，提交信息 `fix(f_pool): POOL-1 借出/显式销毁改用 Ref.take()，终结器不得提前或重复销毁池项`）。
 
 - 改动（给 `Ref` 加「取走并置空」，所有「值离开 `Ref` 保护」的路径都改走它）：
   1. `f_pool/src/Ref.cj:37-47`：新增 `take(): ?T`（返回值并把 `value` 置 `None`）；
