@@ -21,11 +21,19 @@ public class BeanManager <: Comparable<BeanManager> & ToString {
     public let index = serialGen.fetchAdd(1)
     private let _name: String
     private let _bean = AtomicOptionReference()
+    /**
+     * §2.18 / BEAN-5：`scope.isSingleton` 的判定结果在构造期算一次。
+     * 原先是每次取 bean 都算：默认 scope（`BeanScope.singleton` 常量）靠 `refEq` 短路约 20 ns，
+     * 自定义 scope 实例则退到 `typeInfo` 比较、约 170 ns/次（每次还要两次 `TypeInfo.of` 获取）。
+     * 该值构造后不再改变，用普通 `let` 成员即可（与 `meta`/`beanType`/`_name` 同一发布路径，无需原子）。
+     */
+    private let _singleton: Bool
     public BeanManager(
         public let meta: BeanMeta,
         public let beanType: TypeInfo,
         private let creator: () -> Object
     ) {
+        _singleton = meta.scope.isSingleton
         _name = if (meta.name.isEmpty()) {
             '${beanType.qualifiedName}_${index}'
         } else {
@@ -57,7 +65,7 @@ public class BeanManager <: Comparable<BeanManager> & ToString {
         meta.condition.on(factory)
     }
     internal func initIfNeed(): Bool {
-        if (shouldInitBean && !meta.lazy && meta.scope.isSingleton) {
+        if (shouldInitBean && !meta.lazy && _singleton) {
             _bean.store(new())
             true
         }else{
@@ -87,7 +95,7 @@ public class BeanManager <: Comparable<BeanManager> & ToString {
     }
     public prop bean: Object {
         get() {
-            if (meta.scope.isSingleton) {
+            if (_singleton) {
                 if (let Some(x) <- _bean.load()) {
                     x
                 } else {

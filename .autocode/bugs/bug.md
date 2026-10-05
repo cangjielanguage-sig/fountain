@@ -28,6 +28,7 @@
 > 九次修正（2026-10-05）：§2.15 `BEAN-2` 已修复（`getFirst` 热路径去掉两处恒真复检；调用形状即 `f_mvc` 每请求一次，基准 ns/op **3951.68 → 2253.18**）⇒ f_bean 中危待修 4 → 3 条，详见 `bug-bean.md` §2.15。
 > 十次修正（2026-10-05）：§2.17 `BEAN-4` 已修复（`StringCond` 的 `Wildcard`/`Regexp` 按模式串 memo 编译结果；基准 ns/op `Wildcard` **4342.47 → 1508.23**、`Regexp` **3886.54 → 1747.54**，对照组不变）⇒ f_bean 中危待修 3 → 2 条（§2.16 `BEAN-3`、§2.18 `BEAN-5` 待验证），详见 `bug-bean.md` §2.17。
 > 十一次修正（2026-10-05）：§2.16 `BEAN-3` 已修复（`iterator<T>()` 的 IgnoreCond 快路径不建闭包 + 单参重载去掉恒真校验；按用户指示一并修 `getFirstTuple` 的逐元素重算；基准 `iterator<Animal>()` ns/op **3262 → 2349 / 3174 → 2586**，见 `bug-bean.md` §2.16）⇒ f_bean 中危待修仅剩 §2.18 `BEAN-5`（待验证）。
+> 十二次修正（2026-10-05）：§2.18 `BEAN-5` 已修复（`BeanManager` 构造期预存 `_singleton`，不再每次取 bean 都算 `scope.isSingleton`；`bean` ns/op **72.50 → 57.09（-21%）**、自定义 scope 实例 **329.33 → 60.62（-82%）**，见 `bug-bean.md` §2.18）⇒ **f_bean 中危清零**，剩 §3 的 9 条低危/待验证。
 
 **建议修复顺序**（即严重级内部的落地顺序）：
 

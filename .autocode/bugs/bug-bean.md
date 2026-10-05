@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 14 条**：严重 1（§1.8 `BEAN-1`）、中 4（§2.15 `BEAN-2`、§2.16 `BEAN-3`、§2.17 `BEAN-4`、§2.18 `BEAN-5`）、低危+待验证 9（§3）。
-- **状态（截至 2026-10-05）**：`BEAN-1` ✅已修复（§1.8）、`BEAN-2` ✅已修复（§2.15）、`BEAN-3` ✅已修复（§2.16，含同族的 `getFirstTuple`）、`BEAN-4` ✅已修复（§2.17）；**待修** §2.18 `BEAN-5`（待验证）、§3 的 9 条低危/待验证。
+- **状态（截至 2026-10-05）**：`BEAN-1` ✅已修复（§1.8）、`BEAN-2` ✅已修复（§2.15）、`BEAN-3` ✅已修复（§2.16，含同族的 `getFirstTuple`）、`BEAN-4` ✅已修复（§2.17）、`BEAN-5` ✅已修复（§2.18）⇒ **本模块中危清零**；**待修**：§3 的 9 条低危/待验证（`BEAN-L9`/`L2`/`L3`/`L1`/`L4`/`L5`/`L6`/`L7` 与待验证的 `BEAN-L8`）。
 
 ## 1. 严重（本模块 1 条）
 
@@ -78,7 +78,30 @@
 
 `BeanStringCondition.cj:74-75`（`Regex.wildcard(v).matches(s)` / `v.regex().matches(s)`；前者是 6 次 `replace` + 缓存查表，见 `f_regex/src/ExtendRegex.cj:76-85`、`RegexFromString.cj:40-64`）。它又被 `BEAN-3` 逐元素调用 ⇒ 每元素 ~7 次字符串分配。修法：`StringCond` 内缓存编译好的 `Regex`。
 
-### 2.18 [中｜性能｜待验证] `BEAN-5` 每次取 bean 都算 `scope.isSingleton`，其中 `==` 会求 `TypeInfo.of<SingletonBeanScope>()`（f_bean）
+### 2.18 [中｜性能｜待验证] `BEAN-5` 每次取 bean 都算 `scope.isSingleton`，其中 `==` 会求 `TypeInfo.of<SingletonBeanScope>()`（f_bean）→ ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：分支 `fix/bean`（worktree `.worktrees/bean`，基线 `7be7225d`），代码、用例、本标记在**同一提交**。
+
+- **待验证项的结论**（用户提供 + 实测）：std.reflect 每次返回的都是**同一个单例**（不需要在 f_bean 里缓存），但**获取它不免费** —— 实测 `TypeInfo.of<SingletonBeanScope>()` ≈ **76–94 ns/次**；而 `BeanScope.==`（`BeanScope.cj:30-32`）对「非 `BeanScope.singleton` 常量」的 scope 会退到 `this.typeInfo == other.typeInfo` ⇒ 每次取 bean 都要两次获取 + 一次比较。
+- 改动（`f_bean/src/BeanManager.cj`）：新增 `private let _singleton: Bool`，构造期 `_singleton = meta.scope.isSingleton` 算一次（`:36`）；`initIfNeed`（`:68`，原 `:60`）与 `bean` getter（`:98`，原 `:90`）改读该字段。**用普通 `let` 成员、不用原子类型**：值构造后不变，与既有 `meta`/`beanType`/`_name` 同一发布路径。
+- **最小对照用例**（用户要求先出数据；三份结构等价的假 manager：现行 / 预存普通 `Bool` / 预存 `AtomicBool`，同一进程内 min-of-4，n = 100 万）：
+
+  | 形态 | ns/op |
+  |---|---|
+  | ① 现行：每次读 `meta.scope.isSingleton`（默认 scope 常量） | 59.82 |
+  | ② 预存**普通 `Bool`**（默认 scope） | **48.33** |
+  | ③ 预存 `AtomicBool`（默认 scope） | 51.78 ⇒ 原子版每次多付 **3.5 ns**，没必要 |
+  | ④ 现行：自定义 scope 实例 | 209.74 |
+  | ⑤ 预存普通 `Bool`（自定义 scope 实例） | **48.94** |
+  | ⑥ 算一次该 Bool：默认 scope 常量 | 19.69（**每 bean 一次**） |
+  | ⑦ 算一次该 Bool：自定义 scope 实例 | 157.95（**每 bean 一次**） |
+
+- **真实代码 A/B**（只跑探针类、after/before 交替两轮、进程内 min-of-4；同轮未改动的 scope 表达式波动 ±15% 作负载对照）：默认 scope 的 `manager.bean` **72.50 → 57.09 ns（-21%）**、第二轮 **97.39 → 57.48**；自定义 scope 实例的 `manager.bean` **329.33 → 60.62（-82%）**、第二轮 **247.13 → 66.87** ⇒ 与最小对照的预期（默认 -19%、自定义 -77%）一致。
+- 用例：`f_bean/src/test/bean_scope_test.cj`（新增）—— 单例 bean 重复取到同一实例（`getFirst` 与直接 `manager.bean` 两路）、prototype 每次 `new`（`refEq` 为 false）、**非常量 `SingletonBeanScope()` 实例仍按单例缓存**、`initIfNeed` 三种判定（lazy ⇒ false；非单例 ⇒ false，这条才区分得出 `_singleton=false`；非 lazy 单例 ⇒ 结果稳定）、非 lazy bean 取多次不再构造（`AtomicInt64` 计数）。
+- 全套：**TOTAL 17 / PASSED 17 / ERROR 0 / FAILED 0**；`cjpm build` exit 0（9 条既有警告，未新增）。探针文件已删除、未入库；日志 `/tmp/bean5_before.log`、`/tmp/bean5_after2.log`、`/tmp/bean5_ab.log`。
+- 未覆盖：`bean` getter 剩下的 ~48 ns = `AtomicOptionReference.load()`（std 文档确认是默认内存序的**原子读**，lock-free）+ `Option` 解包 + prop 调用，**不可省**；prototype 路径的 `new()` 同理。
+
+**以下为审查时的原始描述**：
 
 `BeanScope.cj:31, 38-42, 59-63` + `BeanManager.cj:90`。**待验证** `TypeInfo.of` 是否有运行时缓存（`f_base/src/TypeInfos.cj:32-36` 注释显示作者也想用静态 `INSTANCE`）。修法：`BeanManager` 构造时预存 `Bool` 字段。
 
