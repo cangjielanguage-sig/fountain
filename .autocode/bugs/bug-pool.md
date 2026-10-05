@@ -22,6 +22,7 @@
 > 四次修正（2026-10-05）：§1.4 `POOL-4` 判定为**误判**（设计目的，不修改）⇒ 待修严重级 **0** 条，中危 **7** 条；上表保留审查当时的原始计数。
 > 五次修正（2026-10-05）：§2.2 `POOL-7` 已修复 ⇒ 待修中危 **6** 条（`POOL-8`~`POOL-13`）。
 > 六次修正（2026-10-05）：§2.3 `POOL-8` 已修复 ⇒ 待修中危 **5** 条（`POOL-9`~`POOL-13`）。
+> 七次修正（2026-10-05）：§2.4 `POOL-9` 已修复 ⇒ 待修中危 **4** 条（`POOL-10`~`POOL-13`）。
 
 **建议修复顺序**：
 
@@ -30,7 +31,7 @@
 3. `POOL-3`（§1.3）巡检把**满载 key** 的空闲项当「校验不过」摘掉，并整轮跳过用户 checker → 稳态抖动、`connectionLife`/`idleTimeout` 判定被绕过（实测满载空闲池 idle 2→1）　**✅已修复（2026-10-05，见 §1.3 修复标记：size&lt;max 只约束补建）**
 4. `POOL-4`（§1.4）creator/checker 持续失败时**无退避紧重试** → 对下游的重连风暴 + 每轮一条 WARN（实测 300ms 内 75,976 次尝试）　**❌误判（2026-10-05：设计目的，不修改；见 §1.4 误判标记）**
 5. `POOL-5`（§1.5）`maxWaiting = Duration.Max` 的「真无限等待」实际只等 1s 就**静默放弃**（实测 1008ms 返回 `None`，对照 30s 档 2016ms 返回项）；同一分支还会吞掉丢失的唤醒　**✅已修复（2026-10-05，随 §1.2 的统一等待重写一并解决，见 §1.5 修复标记）**
-6. 其后按 §2 顺序：`POOL-6`（关停不唤醒/归还竞态）**✅已修复（2026-10-05，见 §2.1 修复标记）** → `POOL-7`（关池泄漏线程）**✅已修复（2026-10-05，见 §2.2 修复标记：线程句柄 + cancel + 每轮判状态 + 带超时出队）** → `POOL-8`（队列按 `totalSize` 预分配 + 两个池默认 `maxSize=Int64.Max` 构造即 OOM）**✅已修复（2026-10-05，见 §2.3 修复标记：队列容量解耦、夹取 [1,1024]）** → `POOL-9`（`release` 后仍可写，实测污染池项）→ `POOL-10`~`POOL-13`
+6. 其后按 §2 顺序：`POOL-6`（关停不唤醒/归还竞态）**✅已修复（2026-10-05，见 §2.1 修复标记）** → `POOL-7`（关池泄漏线程）**✅已修复（2026-10-05，见 §2.2 修复标记：线程句柄 + cancel + 每轮判状态 + 带超时出队）** → `POOL-8`（队列按 `totalSize` 预分配 + 两个池默认 `maxSize=Int64.Max` 构造即 OOM）**✅已修复（2026-10-05，见 §2.3 修复标记：队列容量解耦、夹取 [1,1024]）** → `POOL-9`（`release` 后仍可写，实测污染池项）**✅已修复（2026-10-05，见 §2.4 修复标记：释放后读写一律抛）** → `POOL-10`~`POOL-13`
 
 ---
 
@@ -365,7 +366,19 @@ threads: threads 7->27->27, blocking 6->26->26
 
 **修法**：任务队列容量与池容量解耦（固定小容量如 1024，或换成 `ArrayDeque` + 条件变量）；`ArrayPool`/`ArrayListPool` 的默认 `maxSize` 换成一个真实可用的上界（如 `10`/`1024`），或把 `Int64.Max` 当作「不限制」在构造队列时降级。
 
-### 2.4 [中｜正确性] `POOL-9` `BytesListOutputStream.release()` 之后仍可写：下一个借用者拿到脏缓冲
+### 2.4 [中｜正确性] `POOL-9` `BytesListOutputStream.release()` 之后仍可写：下一个借用者拿到脏缓冲 ✓已复核 → ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、本标记在**同一提交**（提交信息 `fix(f_pool): POOL-9 release 之后禁止再写/读/复位/写出（IllegalStateException）`）。
+
+- 改动（`f_pool/src/BytesListOutputStream.cj`）：新增私有 `checkNotReleased()`（抛 `IllegalStateException('bytes list output stream is released')`，与 `f_cache` 的「关闭后统一抛 IllegalStateException」口径一致），在 `write`（`:34`）、`asBytes`（`:47`）、`reset`（`:79`）、`copy`（`:101`）首行调用；`release()` **仍保持幂等**（`copy` 的 `finally` 依赖它，不能加守卫），`isEmpty`/`byteSize` 保持只读不动。顺带把原来错挂在 `byteSize` 上的那条「归还…幂等」文档注释挪回 `release`。
+- 用例（`f_pool/src/releasable_test.cj`）：`writeAfterReleaseMustThrow`（释放后 `write` 必须抛 `IllegalStateException`；再借出的一件 `byteSize() == Some(3)` —— 只应剩 release **之前**写的 3 字节，修前是 5）、`readOrCopyAfterReleaseMustThrow`（`asBytes`/`reset`/`copy` 各抛；`release()` 仍幂等不抛）。
+  > 口径说明：`clearOnReturning: false` 时「归还前写的内容」留在池项上是池的既定语义（借用方自己 `reset`）；本条修的是**释放之后**的写/读 —— 修前它让池项多出 2 字节（探针 `useafterrelease` 的 `5 字节` = 3 + 2）。
+- 测量证据：
+  - **修前**：两条新用例 `[ FAILED ]`（`Assert Failed: (threw == true)` / `(asBytesThrew == true)` —— 一个异常都没抛）；
+  - **修后**：两条 `[ PASSED ]`（`FILTERED_EXIT=0`）；`f_pool` 全量 **`PASSED: 48, SKIPPED: 0, ERROR: 0, FAILED: 0`**（`POOL_EXIT=0`）；
+  - **下游回归**（确认守卫不会打断合法流程）：`f_codec` **`PASSED: 16, FAILED: 0`**（`CODEC_EXIT=0`）、`f_protocol` **`PASSED: 62, FAILED: 0`**（`PROTOCOL_EXIT=0`），后者覆盖 `Message.asOneSmallFrame()` 的 `byteSize()`+`asBytes()` 路径（发生在归还**之前**）。
+  - 日志：`.autocode/tmp/pool_fix9_pre.log`、`pool_fix9_post.log`、`pool_fix9_post2.log`。
+- 未覆盖：`isEmpty`/`byteSize` 不抛（只读视图，`DefaultCodec.lastBuffer()` 借出后立刻要用它们）；`clearOnReturning` 的语义未动。
 
 `released` 只在 `release()` 里用（幂等保护），`write` / `asBytes` / `copy` **都不检查**：
 
@@ -479,6 +492,8 @@ useafterrelease: second_is_empty=false second_bytes=5
 > `POOL-7` 修复后的复测：`closeMustReclaimInternalThread`（建/关 20 个池后线程数回落到基线；修前 `after <= before + 5` 断言失败）与探针 `main threads` 的同一读数（修前 `7->27->27 / blocking 6->26->26`）。全量 `cjpm test` = **`PASSED: 45, SKIPPED: 0, ERROR: 0, FAILED: 0`**（日志 `.autocode/tmp/pool_fix7_{pre,post}.log`）。
 
 > `POOL-8` 修复后的复测：`arrayPoolDefaultsMustConstruct`（默认参数下的 `ArrayPool`/`ArrayListPool` 能构造 + 借还；修前该用例直接 OOM、进程 EXIT=1）。全量 `cjpm test` = **`PASSED: 46, SKIPPED: 0, ERROR: 0, FAILED: 0`**（日志 `.autocode/tmp/pool_fix8_{pre,post}.log`）；探针 `queue_alloc` 的 +80MB 是**修前基线**（修后队列固定 ≤1024 槽）。
+
+> `POOL-9` 修复后的复测：`writeAfterReleaseMustThrow` / `readOrCopyAfterReleaseMustThrow`（修前分别断言 `threw == true`、`asBytesThrew == true` 失败）。全量 `cjpm test` = **`PASSED: 48, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62 全绿（日志 `.autocode/tmp/pool_fix9_{pre,post,post2}.log`）。
 
 复跑方式（WSL Ubuntu-24.04）：`source /mnt/d/docs/work/cangjie/cangjie.sh` → `cd .autocode/tmp/pool_probe && cjpm build` → 按脚本里的 `LD_LIBRARY_PATH`（各 `target/release/*@*` 目录**排在 `installed/libs/fboot` 之前**）直接跑 `target/release/bin/main <mode>`，用 `time -p` 量 CPU。
 
