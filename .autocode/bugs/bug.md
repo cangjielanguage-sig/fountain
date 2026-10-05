@@ -31,6 +31,7 @@
 > 十二次修正（2026-10-05）：§2.18 `BEAN-5` 已修复（`BeanManager` 构造期预存 `_singleton`，不再每次取 bean 都算 `scope.isSingleton`；`bean` ns/op **72.50 → 57.09（-21%）**、自定义 scope 实例 **329.33 → 60.62（-82%）**，见 `bug-bean.md` §2.18）⇒ **f_bean 中危清零**，剩 §3 的 9 条低危/待验证。
 > 十三次修正（2026-10-05）：§3.1 `BEAN-L9` 判为 ❌**不成立**（`beanTypeMap.get(TypeInfo.of<T>())` 的桶只含 `T` 的子类型 ⇒ 「缺前置校验」无对象），见 `bug-bean.md` §3.1 ⇒ f_bean 待修 9 → 8 条。
 > 十四次修正（2026-10-05）：§3.1 `BEAN-L2` 判为 ❌**不成立（设计）**（只有 singleton 由 BeanFactory 管全生命周期并调 destroy；永不清理 BeanFactory 的集合）、`BEAN-L3` ⏸保持现状（同族设计）；`BEAN-L6` 修法确定为「整条注解分支删除」（`annotationMap` 无任何读方 + 不开放注解 bean 功能），顺带覆盖 `BEAN-L7` ⇒ f_bean 待修 8 → 6 条，见 `bug-bean.md` §3.1。
+> 十五次修正（2026-10-05，**更正十四次修正里的 L6 结论**）：`annotationMap` 是**面向应用项目**的特性（`f_bean/README.md:5`：「使用修饰bean的类型的注解，以及父类型的注解获取bean」），**不删** —— 本仓无调用方不等于死代码；L6 改判 ⏸保持现状（成本仅在注册期一次）。**同时记录一条待作者确认的新发现**：`annotationMap` 只写不读，README:5 描述的能力目前没有可用查询入口（所有查询只查 `beanTypeMap`）。⇒ f_bean 待修 5 条（`L1`/`L4`/`L5`/`L7` + 待验证的 `L8`）。
 
 **建议修复顺序**（即严重级内部的落地顺序）：
 
