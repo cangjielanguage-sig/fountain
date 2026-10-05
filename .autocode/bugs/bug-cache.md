@@ -21,13 +21,13 @@
 2. `CACHE-2`（§1.2）`ConcHashMap.computeIfAbsent` 不记账 size —— `getOrCompute` 建的条目不计入 `size`，**`maxSize` 上限完全失效**（f_data/f_orm/f_regex 三处真实使用，实测复现）　**✅已修复（2026-10-05，见 §1.2 修复标记）**
 3. `CACHE-3`（§1.3）`ConcHashMap.add` 覆盖已存在键多计、`clear()` 不归零 —— `size`/`isEmpty` 失真（实测复现）　**✅已修复（2026-10-05，见 §1.3 修复标记）**
 4. `CACHE-4`（§2.1）用户代码（`removeIf` 谓词 / `getOrCompute` 的 callable）在**段写锁内**执行 —— 同段操作被串行阻塞（实测：同段 292.87 ms vs 异段 0.0228 ms）　**✅已修复（2026-10-05，方案 C，见 §2.1 修复标记）**
-5. `CACHE-5`（§2.2）每个 `HeapCache` 实例泄漏 1 个阻塞线程 + 1 条全局 `atExit` 强引用；`WeakHeapCache` 另泄漏 1 个 `while(true)` 清扫线程　**✅已修复（2026-10-05，实现 `Resource` + `close()` 取消线程，见 §2.2；② 的 `atExit` 注册仍待定）**
+5. `CACHE-5`（§2.2）每个 `HeapCache` 实例泄漏 1 个阻塞线程 + 1 条全局 `atExit` 强引用；`WeakHeapCache` 另泄漏 1 个 `while(true)` 清扫线程　**✅已修复（2026-10-05：实现 `Resource` + `close()` 取消线程；② 的 `atExit` 注册已改为持弱引用，`close()` 后实例可回收，见 §2.2）**
 6. `CACHE-6`（§2.3）`once()` / `prolong()` 不判过期 ⇒ 可“复活”已过期条目（实测复现）　**✅已修复（2026-10-05，方案 A，见 §2.3 修复标记）**
 7. `CACHE-7`（§2.4）缓存关闭（原 `destroy()`，现 `close()`）之后再写入的条目**永不被清理**（实测复现）　**✅已修复（2026-10-05，方案 A2 + 主动清空/join，见 §2.4 修复标记）**
 8. `CACHE-8`（§2.5）`Priority` 比较基线的无锁竞争 + `compare` 的“保护新生”分支写反　**✅ 已修复（2026-10-05，①+②：② 按「保护新生」语义对称化年龄门并修正两条 recency 判据，④⑤ 两级 tie-break 亦已同向统一，见 §2.5）**
 9. 其余低危/待验证见 §3
 
-> 修复进度（2026-10-05）：§1 的 3 条严重级（`CACHE-1` = `3171d664`、`CACHE-2` = `0e3d70d6`、`CACHE-3` = `14733baf`）已修复并并入 `sts/1.3.x`（`0448df98` 把主线拉进分支、`4a01a26f` 合入主分支，合并后主工作区复跑 6/6 PASSED）；**§2.1 `CACHE-4` 已按方案 C 修复并并入 `sts/1.3.x`**（callable 移出段写锁 + `removeIf` 两阶段，见 §2.1；`302bd9f2` 拉齐主线进分支、`e131fa7f` 合入主分支）；**§2.2 `CACHE-5` 已修复并并入 `sts/1.3.x`**（实现 `Resource` + `close()` 取消内部线程；按指示删除 `destroy`、`atExit` 注册与用例统一改 `close()`，原 `testDestroyStopsEvictionThread` 更名 `testCloseStopsEvictionThread`，见 §2.2；`2b49dfc1` 拉齐主线进分支、`eb8363c8` 合入主分支）；**§2.3 `CACHE-6` 已修复并并入 `sts/1.3.x`**（`once`/`prolong` 拒绝过期条目，见 §2.3；`8dbe2fc8` 拉齐主线进分支、`5fbe5e5f` 合入主分支）；**§2.4 `CACHE-7` 已修复并并入 `sts/1.3.x`**（`close` 主动清空并等内部线程结束后再返回 + 关闭后一切操作抛 `IllegalStateException`，见 §2.4）；**§2.5 `CACHE-8` 已修复**（① 比较基线字段的读写纳入 `p.lock`；② 年龄门对称化 + `cmp()` 的两条 recency 判据按「保护新生」修正；④⑤ 两级 tie-break 亦已同向统一，见 §2.5）；**已并入 `sts/1.3.x`**（`862eaf15` 拉齐主线进分支、`681f5156` 合入主分支，冲突标记清理 `7b69364e`/`f7711fc2`）；§3 的低危/待验证未动。用例 1 → 20 条（全绿）。
+> 修复进度（2026-10-05）：§1 的 3 条严重级（`CACHE-1` = `3171d664`、`CACHE-2` = `0e3d70d6`、`CACHE-3` = `14733baf`）已修复并并入 `sts/1.3.x`（`0448df98` 把主线拉进分支、`4a01a26f` 合入主分支，合并后主工作区复跑 6/6 PASSED）；**§2.1 `CACHE-4` 已按方案 C 修复并并入 `sts/1.3.x`**（callable 移出段写锁 + `removeIf` 两阶段，见 §2.1；`302bd9f2` 拉齐主线进分支、`e131fa7f` 合入主分支）；**§2.2 `CACHE-5` 已修复并并入 `sts/1.3.x`**（实现 `Resource` + `close()` 取消内部线程；按指示删除 `destroy`、`atExit` 注册与用例统一改 `close()`，原 `testDestroyStopsEvictionThread` 更名 `testCloseStopsEvictionThread`，见 §2.2；`2b49dfc1` 拉齐主线进分支、`eb8363c8` 合入主分支）；**§2.3 `CACHE-6` 已修复并并入 `sts/1.3.x`**（`once`/`prolong` 拒绝过期条目，见 §2.3；`8dbe2fc8` 拉齐主线进分支、`5fbe5e5f` 合入主分支）；**§2.4 `CACHE-7` 已修复并并入 `sts/1.3.x`**（`close` 主动清空并等内部线程结束后再返回 + 关闭后一切操作抛 `IllegalStateException`，见 §2.4）；**§2.5 `CACHE-8` 已修复**（① 比较基线字段的读写纳入 `p.lock`；② 年龄门对称化 + `cmp()` 的两条 recency 判据按「保护新生」修正；④⑤ 两级 tie-break 亦已同向统一，见 §2.5）；**§2.2 的 ②（`atExit` 注册持强引用）已修复**（改为 `WeakRef<HeapCache<V>>` + `CleanupPolicy.EAGER` 的弱引用闭包 ⇒ 关闭后实例可被 GC 回收，退出时自动 `close()` 的语义不变，见 §2.2 ②；分支 `review/f_cache` 上待并入）；**已并入 `sts/1.3.x`**（`862eaf15` 拉齐主线进分支、`681f5156` 合入主分支，冲突标记清理 `7b69364e`/`f7711fc2`）；§3 的低危/待验证未动。用例 1 → 20 条（全绿）。
 
 ---
 
@@ -221,7 +221,10 @@ store.add(key, Priority<V>(key, value, life, checkDuration, once))
 - 用例（`src/HeapCache_test.cj`）：`testDestroyStopsEvictionThread`（**钉住用例**，只用修复前已存在的 `destroy()` + 内部句柄）、`testHeapCacheIsResource`、`testWeakHeapCacheIsResource`（这两条属**接口补齐型**：`close()`/`isClosed()` 修复前不存在、断言写不出来 ⇒ 没有「修复前失败」证据，与 `MOCK-L6` 同类）。
 - 测量证据：**修复前** PASSED 9 / **FAILED 1**（`testDestroyStopsEvictionThread` 卡满 3 006 740 863 ns ≈ 3.01 s —— `f.get(3 s)` 抛 `TimeoutException`，即 `destroy()` 后消费线程永不退出；EXIT=1）→ **修复后** = **12/12 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**：`testDestroyStopsEvictionThread` **421 729 ns（≈0.42 ms，线程立即退出）**、`testHeapCacheIsResource` ≈100.8 ms、`testWeakHeapCacheIsResource` ≈1.01 s（分别对应两个线程的轮询周期）；f_cache 自身编译警告仍 2 条。日志 `/tmp/cache5_before.log`、`/tmp/cache5_after.log`。
 - 附带说明（2026-10-05 按指示补做）：`HeapCache.destroy()` **已删除**，全部调用点改为 `close()`（`atExit` 注册、用例；原 `testDestroyStopsEvictionThread` 更名 `testCloseStopsEvictionThread`，README 成员表同步）；`close()` 只负责线程/内存的释放，**关闭后 `set`/`get` 仍可调用**（`CACHE-7` 的语义另议，见 §2.4）。
-- **未做（本条目 ②，仍待定）**：`ExitCallbacks.atExit(254, destroy)` 仍是每实例一条注册，注册表是 `f_base` 的全局静态强引用 ⇒ 被应用丢弃的实例仍不会被 GC 回收。`close()` 已给出释放手段，但这条注册本身未改（方案可选项：改为「只注册一次」的静态入口，或直接去掉）。
+- **✅ 已修复（本条目 ②，2026-10-05，方案 A：弱引用间接层）**：`ExitCallbacks.atExit(254, close)` 改为注册**只捕弱引用**的闭包（`src/HeapCache.cj` 构造函数：`let selfRef = WeakRef<HeapCache<V>>(this, CleanupPolicy.EAGER)` + `ExitCallbacks.atExit(254, {=> if (let Some(cache) <- selfRef.value) { cache.close() }})`）⇒ `f_base` 的全局注册表（`TreeMap<UInt16, ArrayList<() -> Unit>>`，**无注销 API**）不再是实例的强根，**`close()` 之后对象可被 GC 回收**；「进程退出时若实例仍在 ⇒ 自动 `close()`（把已入队的淘汰回调投递完）」的语义保持不变。`EAGER` 不会误伤未 close 的实例：那种实例被自己的定时器/消费线程闭包强引用着（不满足「不可达」），弱引用不会提前清掉它 —— 本条目真正解决的就是「已 close 的实例仍被钉住」。提交信息 `fix(f_cache): CACHE-5 ② atExit 注册改持弱引用（bug-cache §2.2 ②）`；提交哈希由下一次标记同步补录。
+  - 平台相关：`ExitCallbacks` 整体被 `@When[os != "Windows"]` 包着，Windows 上 `atExit` 是空实现 ⇒ 该泄漏只在非 Windows 平台存在（本改动在 Windows 上也无副作用）。
+  - 诚实标注：**无确定性用例可钉**（仓颉没有公开的 GC 触发入口，用例里无法断言「对象被回收」）⇒ 验收 = 代码层论证（修复前强根 = 注册闭包捕获 `this`；现改为捕 `WeakRef`）+ 20 条用例全绿。注册表仍随实例数线性增长（每实例一条小闭包，与修复前相同）——若将来实例数很大，再考虑「进程级只注册一次」或给 `f_base` 加注销能力。
+  - 未动（相邻的独立条目）：`HeapCache.cj:20` 的 `unused import 'std.env.atExit'` 属 `CACHE-L4`，本次未一并处理。
 
 **位置**：`src/HeapCache.cj:49-57`、`:43`；`src/WeakHeapCache.cj:48-55`
 
@@ -293,7 +296,7 @@ std 契约（`std.collection.concurrent.LinkedBlockingQueue.remove()`）：**阻
 - 测量证据（`git stash` 把两个源文件回退到改动前、测试保持新版运行）：**修复前** PASSED 14 / **FAILED 2**（`testOperationsAfterCloseThrow`：关闭后 `get` 未抛异常；`testWeakHeapCacheIsResource`：清扫线程未 join、入口未抛；EXIT=1）→ **修复后** = **16/16 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**；f_cache 自身编译警告仍 2 条。日志 `/tmp/cache7_before.log`、`/tmp/cache7_after.log`。
   - 诚实标注：`testCloseClearsAndJoinsBeforeReturn` 在「修复前」那次运行是**通过**的（1 ms 窗口偶合上 100 ms 轮询边界，属运气）⇒ 它**不是**可靠的修复前失败证据，作为**修复后的保证性用例**保留（修复后为确定性通过）。
 - 契约变化（有意）：关闭后不再允许任何读写/清理操作（此前是「可继续写入且永不清理」）⇒ 已写入 README；仓库内使用方（f_data / f_orm / f_regex / f_jwt / f_security / fdemo）都不调用 `close()`、也不会关闭后复用实例 ⇒ **无下游影响**。
-- 相关但未做（`CACHE-5` 的 ②）：`ExitCallbacks.atExit(254, close)` 仍是每实例一条全局强引用注册 ⇒ 关闭后实例本身仍被全局表引用（条目与线程已释放，但对象无法回收）。
+- 相关（`CACHE-5` 的 ②）：`ExitCallbacks.atExit(254, close)` 曾是每实例一条全局**强引用**注册 ⇒ 关闭后实例本身仍被全局表引用（条目与线程已释放，但对象无法回收）。**✅ 2026-10-05 已修复**：注册改持弱引用（`WeakRef` + `CleanupPolicy.EAGER`），关闭后实例可被 GC 回收，退出时自动 `close()` 的语义不变 —— 见 §2.2 ②。
 
 **位置**：`src/HeapCache.cj` 的 `close()` 与 `startTimer()` 回调
 

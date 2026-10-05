@@ -18,6 +18,7 @@ package fountain::f_cache
 import std.collection.{HashMap, ArrayList}
 import std.collection.concurrent.LinkedBlockingQueue
 import std.env.atExit
+import std.ref.{WeakRef, CleanupPolicy}
 import std.time.DateTime
 import std.sync.{Timer, AtomicBool}
 import fountain::f_base.*
@@ -46,7 +47,10 @@ public class HeapCache<V> <: Resource where V <: Object {
         }
         this.store = ConcHashMap<Priority<V>>.create(concurrencyLevel: concurrencyLevel)
         startTimer()
-        ExitCallbacks.atExit(254, close)
+        //进程退出时自动 close（close 会把已入队的淘汰回调投递完）；注册项只捕弱引用，
+        //避免 f_base 的全局注册表把实例钉住 —— close() 之后对象可被 GC 回收
+        let selfRef = WeakRef<HeapCache<V>>(this, CleanupPolicy.EAGER)
+        ExitCallbacks.atExit(254, {=> if (let Some(cache) <- selfRef.value) { cache.close() }})
     }
 
     public static func builder(): HeapCacheBuilder<V> {
