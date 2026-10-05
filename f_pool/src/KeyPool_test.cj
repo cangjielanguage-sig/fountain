@@ -21,6 +21,7 @@ import std.fs.File
 import std.runtime.{gc, getThreadCount}
 import std.ref.{CleanupPolicy, WeakRef}
 import std.sync.{AtomicBool, AtomicInt64}
+import fountain::f_exception.IllegalSizeException
 import fountain::f_pool.diagnostics.PoolDiagnostics
 import fountain::f_pool.exception.{ClearFailedException, UnknownKeyException}
 
@@ -636,6 +637,54 @@ public class KeyPoolTest {
         }
         if (let Some(x) <- list.get(timeout: Duration.second)) {
             list.giveBack(x)
+        } else {
+            @Assert(false)
+        }
+    }
+    /** 从 `PoolDiagnostics.snapshot()` 里取 `key=数字` 计数值（找不到返回 -1）。 */
+    private func diagCounter(key: String): Int64 {
+        for (token in PoolDiagnostics.snapshot().split(' ')) {
+            if (token.startsWith(key)) {
+                return Int64.parse(token[key.size ..])
+            }
+        }
+        -1
+    }
+    /**
+     * `POOL-L7`（`.autocode/bugs/bug-pool.md` §3）：`ArrayPool.giveBack` 收到**尺寸不符**的数组必须抛
+     * `IllegalSizeException` —— 抛出即表示**这次没有归还**：数组仍在调用方手里（池无权销毁它），
+     * 借出它的那个池的那份额度也不会结清（口径同 §2.5 `POOL-10`、§2.7 `POOL-12`）。
+     * 修前是静默 `return false`：`DefaultCodec` / `BytesCopier` 两个调用点都在 `finally` 里忽略了返回值
+     * ⇒ 漏判返回值就等于无声无息地漏容量。
+     */
+    @TestCase
+    public func arrayPoolWrongSizeReturnMustThrow(): Unit {
+        let pool = ArrayPool<Int64>(initSize: 1, minSize: 1, maxSize: 1, arraySize: 128, maxWaiting: Duration.second)
+        var borrowed = None<Array<Int64>>
+        for (_ in 0 .. 300) {
+            if (let Some(a) <- pool.get(timeout: Duration.Zero)) {
+                borrowed = Some(a)
+                break
+            }
+            sleep(Duration.millisecond * 2)
+        }
+        @Assert(borrowed.isSome())
+        let before = diagCounter('returnRejected=')
+        @Assert(before >= 0, true)                            // 快照里必须有这个计数（修前：没有 ⇒ 到这里就失败）
+        var threw = false
+        try {
+            pool.giveBack(Array<Int64>(64, repeat: 0))        // 外来数组：尺寸不符
+        } catch (_: IllegalSizeException) {
+            threw = true
+        }
+        @Assert(threw)                                        // 修前：静默返回 false，不抛
+        @Assert(diagCounter('returnRejected='), before + 1)   // 异常必留痕（应用层吞掉异常也看得见）
+        // 残量（已知、登记在 §3 POOL-L7）：借出的那一项没回来 ⇒ `maxSize = 1` 的池那份额度被永久占住
+        @Assert(pool.get(timeout: Duration.Zero).isNone())
+        // 尺寸正确的归还照常工作（同一个池）
+        pool.giveBack(borrowed.getOrThrow())
+        if (let Some(a) <- pool.get(timeout: Duration.Zero)) {
+            pool.giveBack(a)
         } else {
             @Assert(false)
         }

@@ -235,8 +235,12 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
 
 ## ArrayPool
 
-池项是**定长数组**：`arraySize` 是每个数组的长度，**尺寸不等于 `arraySize` 的数组归还时不会被接纳**
-（`giveBack` 返回 `false`）。
+池项是**定长数组**：`arraySize` 是每个数组的长度，**尺寸不等于 `arraySize` 的数组归还时抛
+`IllegalSizeException`**（`fountain::f_exception`，`f_base.BaseException` 的子类，消息带期望/实际尺寸）。
+抛出即表示**这次没有归还**：数组仍在调用方手里（池无权销毁它），借出它的那个池的那份额度也不会结清 ——
+归还路径通常写在 `finally` / `release()` 里，若顶掉了正在传播的异常，用 `addSuppressed` 挂上再抛。
+尺寸不符是应用层的 BUG（把外来数组、或另一套 `arraySize` 的池的数组还了回来），详见
+`.autocode/bugs/bug-pool.md` §3 `POOL-L7`。
 
 ```cj
 // 池项是定长数组
@@ -251,7 +255,8 @@ ArrayPool<T>(
         maxWaiting!: Duration = Duration.second * 30,
         creator!: () -> T = {=> unsafeZeroValue<T>()})
 public func get(timeout!: Duration = Duration.Max): ?T
-public func giveBack(value: T): Bool
+// 归还数组；尺寸不等于 arraySize 时抛 IllegalSizeException（这次没有归还，见上）
+public func giveBack(array: Array<T>): Unit
 ```
 
 ## `maxWaiting`：池耗尽时的等待上限
