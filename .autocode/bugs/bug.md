@@ -311,9 +311,11 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 
 **✅ 修复标记（2026-10-05）**：分支 `fix/mvc-3`（worktree `.worktrees/mvc-3`，基线 `sts/1.3.x` 的 `41c2df49`），代码与本标记在**同一提交**（提交信息 `fix(f_mvc): MVC-3 ping 定时器在 WS 读循环的 finally 里取消（§1.11）；并记录 §1.10 MVC-1 误判`）。
 
-- 改动：`f_mvc/src/WSMeta.cj` 的 `exec()` —— 把「读帧循环」整段包进 `try { … } finally { pingTimer?.cancel() }`，并删掉原来只写在 `case CloseWebFrame` 里的那一句 `pingTimer?.cancel()`。现在三条退出路径都会取消定时器：① 收到 Close 帧（循环内 `return`）；② 对端断链（`ws.read()` 返回 `None`，落到循环之外）；③ `ws.read()` 自身抛异常。
-- 为什么没有单测：`exec()` 需要可用的 `WebSocket` 与 `HttpContext`（循环体内用到 `ctx.request.url` 等），f_mvc 也没有测试基建，无法在单测里构造 ⇒ 本条以**代码路径覆盖**为验证：`try/finally` 保证上述三条路径都会经过 `pingTimer?.cancel()`，且 `finally` 内只有 `cancel()`（不会覆盖原有异常或返回值）。编译验证：`cjpm build`（f_mvc 目前无 `*_test.cj`）。
-- 未覆盖：真实断链的端到端验证（需要实际 WS 连接，按约定由用户在 `frpcdemo` 之类环境自行跑）。
+- 改动（两个提交，同属本条目）：①`WSMeta.exec` 的读帧循环改为调用新抽出的包内接缝 `pumpFrames`（见下），退出路径统一在 `finally` 里 `timer?.cancel()`，删掉原来只写在 `case CloseWebFrame` 的那一句；②**加固**（用户提出）：ping 回调里的 `ws.writePingFrame(h(...))` 包 `try/catch(_:Exception)`——stdx 契约明确「`closeConn` 关闭连接后调用写，抛出异常」，包一层可避免异常抛进定时器线程。
+- **stdx 契约更正**：`WebSocket.read(): WebSocketFrame`（**非 Option**），连接结束时不是「返回 None」，而是**抛异常**（`ConnectionException`（对端已关闭连接）/ `SocketException` / `WebSocketException`，见 stdx.net.http 的 `WebSocket.read` 文档）。真实退出路径是：① 收到 Close 帧（`onFrame` 返回 true ⇒ 正常 `return`）；② 对端断开/连接被关（`read` 抛异常 ⇒ 穿出循环，经 `finally` 取消后继续向外传播）；③ 处理帧时抛出的异常（每帧的 `try/catch` 只吞「处理帧」的异常，`read` 的异常不吞）。原文「read 返回 None，落到循环之外」作废。
+- **用例（B 方案：可测接缝）**：`f_mvc/src/WSMeta_test.cj`（新增，f_mvc 首个测试文件）。把「建定时器 + 读帧循环 + 退出取消」抽成 `WSMeta.cj` 的包内函数 `pumpFrames(readFrame, onFrame, ping, interval)`——形参不含 `HttpContext`/`WebSocket`（两者都是 stdx 的**类**，测试里造不出来：全仓 0 处构造、0 处实现，`CurrentHttpContext` 也只是读取点），于是用「假帧源 + 计数 ping 动作」即可测：`testPingStopsAfterConnectionDrops`（首读即抛异常 ⇒ 退出后 3 个周期内 ping 必须为 0）、`testPingRunsWhileAliveAndStopsAfterReturn`（read 阻塞 3 个周期 ⇒ 存活期间 ping ≥1 防空转；退出后先等 1 个周期让在途 tick 落地取基线，再等 3 个周期断言不再增长）。
+- **RED/GREEN 实测**：把 `pumpFrames` 里 `finally` 的 `timer?.cancel()` 临时注释掉复跑 ⇒ **PASSED: 0 / FAILED: 2**，断言分别为 `Assert Failed: (0 == pings.value)`（实际 2 ⇒ 退出后定时器仍在 ping，泄漏复现 ✓）与 `(baseline == pings.value)`（3 → 6 持续增长）；恢复后复跑 ⇒ **PASSED: 2 / FAILED: 0**，`cjpm build` exit 0。
+- **C（端到端）现状**：本仓库目前**没有任何 WS 端点或示例**（`frpcdemo` 里 0 处 `WebSocket`/`@WS`/`WSMeta`，`f_mvc/README.md` 也无 WS 章节）⇒ 端到端验证需要先新增一个最小 WS 服务（位置待用户指定），本条暂记**待办**。
 - 顺带：本次同一分支曾按审查意见尝试 §1.10 `MVC-1` 的有界 LRU 缓存，经用户判定为误判后**已回退**（见 §1.10 误判标记第 3 点），本分支只保留 §1.11。
 
 位置：`src/WSMeta.cj:158-168, 196-242`

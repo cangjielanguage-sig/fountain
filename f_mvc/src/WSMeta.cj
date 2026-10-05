@@ -77,6 +77,46 @@ public class WSPingFunc<T> <: WSFuncMeta<T> {
     }
 }
 
+/**
+ * 包内接缝（bug.md §1.11 / MVC-3 的 B 方案）：只负责「ping 定时器 + 读帧循环 + 退出时取消」的生命周期。
+ * 形参不含 `HttpContext`/`WebSocket`，便于用「假帧源 + 计数 ping 动作」做单测。
+ *
+ * - `readFrame`：取下一帧；stdx 契约里连接结束/被关闭时它**抛异常**（`ConnectionException` /
+ *   `SocketException` / `WebSocketException`），不是返回一个哨兵值
+ * - `onFrame`：处理一帧；返回 `true` 表示处理方要求结束会话（收到 Close 帧）
+ * - `ping` / `interval`：ping 动作与周期；`ping` 为 `None` 表示不启动定时器
+ */
+func pumpFrames(
+    readFrame!: () -> WebSocketFrame,
+    onFrame!: (WebSocketFrame) -> Bool,
+    ping!: Option<() -> Unit>,
+    interval!: Duration
+): Unit {
+    let timer: ?Timer = if (let Some(action) <- ping) {
+        Timer.repeat(interval, interval, action)
+    } else {
+        None<Timer>
+    }
+    try {
+        while (true) {
+            let frame = readFrame()
+            if (onFrame(frame)) {
+                return
+            }
+        }
+    } finally {
+        // bug.md §1.11 / MVC-3：连接以任何方式结束都要取消 ping 定时器 ——
+        // ① 收到 Close 帧：onFrame 返回 true ⇒ 正常 return；
+        // ② 对端断开 / 连接被关：`WebSocket.read()` 抛 ConnectionException / SocketException /
+        //    WebSocketException（见 stdx.net.http 的 WebSocket.read 文档「异常」一节），
+        //    异常穿出 while，先经这里取消再向外传播；
+        // ③ onFrame 自身抛异常（每帧的 try/catch 只吞「处理帧」的异常，read 的异常不吞）。
+        // 原先只在 Close 帧那一条路径上 cancel ⇒ 断网会留下一个持续向已关闭连接写帧的定时器，
+        // 且其闭包一直持有 endpoint/ctx/pattern/ws。
+        timer?.cancel()
+    }
+}
+
 public class WSMeta<T> where T <: Object {
     private let log = LoggerFactory.getLogger<WSMeta<T>>()
     var pattern = None<HttpRequestPathPatterns>
@@ -157,22 +197,9 @@ public class WSMeta<T> where T <: Object {
     }
     public func exec(endpoint: T, ctx: HttpContext, pattern: HttpRequestPathPatterns, ws: WebSocket): Unit {
         openMeta_?.`handle`(endpoint, ctx, pattern, ws, [])
-        let pingTimer = if(let Some(f) <- pingFunc_) {
-            let duration = f.duration
-            let h = f.`handle`
-            Timer.repeat(duration, duration, {=>
-                // 加固（§1.11 / MVC-3）：在途 ping 撞上已关闭的连接时，异常不能抛进定时器线程；
-                // 连接真正结束时由下面读循环的 finally 取消该定时器。
-                try {
-                    ws.writePingFrame(h(endpoint, ctx, pattern, ws, []))
-                } catch (_: Exception) {
-                }
-            })
-        }else{
-            None<Timer>
-        }
-        var bytes = ArrayList<Byte>()
-        var frameType = None<WebSocketFrameType>
+        // 闭包里不能改写捕获的局部 var ⇒ 帧处理状态用 Box 持有（与 FileDownload 的 started 同法）
+        let bytes = Box<ArrayList<Byte>>(ArrayList<Byte>())
+        let frameType = Box<Option<WebSocketFrameType>>(None<WebSocketFrameType>)
         func doExec(payload: Array<Byte>, fin: Bool, frameType: ?WebSocketFrameType, bytes: ArrayList<Byte>){
             if(let Some(ft) <- frameType){
                 bytes.add(all: payload)
@@ -198,22 +225,37 @@ public class WSMeta<T> where T <: Object {
             }
             bytes
         }
-        try {
-            while(let frame <- ws.read()){
+        let pingAction: Option<() -> Unit> = if(let Some(f) <- pingFunc_) {
+            let h = f.`handle`
+            Some({=>
+                // 加固（§1.11 / MVC-3）：在途 ping 撞上已关闭的连接时，异常不能抛进定时器线程；
+                // 连接真正结束时由 pumpFrames 的 finally 取消该定时器。
+                try {
+                    ws.writePingFrame(h(endpoint, ctx, pattern, ws, []))
+                } catch (_: Exception) {
+                }
+            })
+        } else {
+            None<() -> Unit>
+        }
+        let pingInterval = if(let Some(f) <- pingFunc_) { f.duration } else { Duration.Zero }
+        pumpFrames(
+            readFrame: {=> ws.read()},
+            onFrame: {frame =>
                 try{
                     match(frame.frameType){
                         case TextWebFrame | BinaryWebFrame =>
-                            if(!bytes.isEmpty()){
+                            if(!bytes.value.isEmpty()){
                                 throw WSException('current payload is not empty')
                             }
-                            frameType = frame.frameType
-                            bytes = doExec(frame.payload, frame.fin, frameType, bytes)
+                            frameType.value = frame.frameType
+                            bytes.value = doExec(frame.payload, frame.fin, frameType.value, bytes.value)
                         case ContinuationWebFrame =>
-                            bytes = doExec(frame.payload, frame.fin, frameType, bytes)
-                        case PingWebFrame => 
+                            bytes.value = doExec(frame.payload, frame.fin, frameType.value, bytes.value)
+                        case PingWebFrame =>
                             if(let Some(ping) <- pingMeta_){
-                                let bytes = ping.`handle`(endpoint, ctx, pattern, ws, frame.payload)
-                                ws.writePongFrame(bytes)
+                                let payload = ping.`handle`(endpoint, ctx, pattern, ws, frame.payload)
+                                ws.writePongFrame(payload)
                             }else{
                                 ws.writePongFrame(frame.payload)
                             }
@@ -224,9 +266,9 @@ public class WSMeta<T> where T <: Object {
                         case CloseWebFrame =>
                             try{
                                 if(let Some(c) <- closeMeta_){
-                                    let bytes = c.`handle`(endpoint, ctx, pattern, ws, frame.payload)
-                                    if(!bytes.isEmpty()){
-                                        ws.write(CloseWebFrame, bytes)
+                                    let payload = c.`handle`(endpoint, ctx, pattern, ws, frame.payload)
+                                    if(!payload.isEmpty()){
+                                        ws.write(CloseWebFrame, payload)
                                     }
                                 }else{
                                     ws.write(CloseWebFrame, frame.payload)
@@ -235,21 +277,19 @@ public class WSMeta<T> where T <: Object {
                                 log.error('error on handling close ${toBase64String(frame.payload)}', e)
                             }
                             ws.closeConn()
-                            return
-                        case _ => 
+                            return true
+                        case _ =>
                             log.error('unsupport frame ${frame.frameType}')
                             ws.closeConn()
                     }
                 }catch(e: Exception){
                     log.error('error on handling ${frame.frameType}; frame: ${toBase64String(frame.payload)}', e)
                 }
-            }
-        } finally {
-            // bug.md §1.11 / MVC-3：连接以任何方式结束都要取消 ping 定时器 ——
-            // 收到 Close 帧（上面的 return）、对端断链（read 返回 None 落到循环外）、read 抛异常。
-            // 原先只在 Close 帧那一条路径上 cancel ⇒ 断网会让定时器一直持有 endpoint/ctx/pattern/ws 空转。
-            pingTimer?.cancel()
-        }
+                false
+            },
+            ping: pingAction,
+            interval: pingInterval
+        )
     }
     
     private func doExtractArgOption<P, M>(meta: ?M, ctx: HttpContext, name: String): ?P where P <: DataFields<P>, M <: WSFuncMeta<T> {
