@@ -401,7 +401,7 @@ useafterrelease: second_is_empty=false second_bytes=5
 
 ### 2.5 [中｜契约/正确性] `POOL-10` `BaseKeyPool.giveBack` 对「键对应的池不存在」静默丢弃对象 ✓已复核 → ✅已修复（2026-10-05）
 
-**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、`f_pool/README.md` 与标记在**同一提交**（提交 `xxxx`，提交信息 `fix(f_pool): POOL-10 还给未建池的键改为抛 UnknownKeyException`）。
+**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、`f_pool/README.md` 与标记在**同一提交**（提交 `a53ea3a8`，提交信息 `fix(f_pool): POOL-10 还给未建池的键改为抛 UnknownKeyException（不销毁、不建池、不归还）`）。
 
 - **口径修正（2026-10-05，用户拍板）**：本节原来写的「未命中就按 `!running` 分支直接 `destroier` 销毁」**已否决** —— 还错键是**应用层的 BUG**，池不替它决定怎么处置。改为**抛异常**：池**不销毁、不归还、也不替这个键建池**，把处置权（重试 / 销毁 / 上报）交回调用方。
 - 改动：
