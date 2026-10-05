@@ -533,7 +533,7 @@ useafterrelease: second_is_empty=false second_bytes=5
 - `POOL-L4` **`selfCheck`/`audit` 的全队列遍历在锁内**：每 1e4 次操作一次 `countNodes()`（O(队列长度)，`SyncDeque.cj:59-74`、`227-254`）；长队列 + 高并发时是周期性长临界区。可只统计计数，或在锁外做快照核对。
 - `POOL-L5` **`get` 内定义局部函数** `keyedCheck`（`KeyPool.cj:638-640`、`KeyPool.cj:593-595`）：每次调用建闭包并走闭包调用（借用/归还是热路径）。可提到成员函数/用 `checkOnBorrowing` 直接分派。
 - `POOL-L6` **`waitChunk` 溢出**：`waitStart + maxWaiting - MonoTime.now()`（`KeyPool.cj:618-621`）在 `maxWaiting` 取很大的有限值（如 `Duration.Max - 1`）时可能溢出成负 ⇒ 立即放弃；建议写成 `maxWaiting - (now - waitStart)` 并夹取。
-- `POOL-L7` **`ArrayPool.giveBack` 拒绝尺寸不符的数组时既不销毁也不告警**（`f_pool/src/ArrayPool.cj:60-67`）✓已复核 → **✅已修复（2026-10-05，提交 `xxxx`）**
+- `POOL-L7` **`ArrayPool.giveBack` 拒绝尺寸不符的数组时既不销毁也不告警**（`f_pool/src/ArrayPool.cj:60-67`）✓已复核 → **✅已修复（2026-10-05，提交 `81476d9a`）**
   - **口径（2026-10-05 拍板）**：尺寸不符 = 应用层 BUG ⇒ **抛异常**（不是「记一条计数就算」）。抛出即表示**这次没有归还**：数组仍在调用方手里（池无权销毁它），借出它的那个池的那份额度也不会结清 —— 与 `POOL-10`/`POOL-12` 同一套口径（`giveBack` 抛异常 = 没归还）。
   - **改法**：`ArrayPool.giveBack` 的签名 `Bool` → `Unit`（一旦不符就抛，`Bool` 只可能是 `true`，留着是误导；顺带与 `ArrayListPool.giveBack(list): Unit` 对齐），不符时抛 `f_exception.IllegalSizeException`（现成的 `f_base.BaseException` 子类；`f_io/src/f_io.cj:55` 有同类「尺寸不符」先例），消息带期望/实际尺寸；另记一条 `PoolDiagnostics.onReturnRejected()`（新计数 `returnRejected`，进 `snapshot()` 与 `anomalySignature()`）—— 应用层即便把异常吞了，下一次 `reportIfChanged`/退出报告也会带出这个计数。
   - **调用方零改动**：仓库内两个归还点（`f_codec/src/default/DefaultCodec.cj:1018`、`f_pool/src/BytesCopier.cj:73`）都是 `finally { pool.giveBack(buf) }` 的语句用法、**本来就忽略返回值** ⇒ 改成 `Unit` 不影响它们；`git grep` 确认全仓没有把返回值用在条件/表达式里的地方。
