@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 25 条**：严重 4（§1.9 `MVC-4`、§1.10 `MVC-1`、§1.11 `MVC-3`、§1.12 `MVC-2`）、中 8（§2.2 `MVC-C3`、§2.3 `MVC-C5`、§2.5 `MVC-C2`、§2.6 `MVC-8`、§2.7 `MVC-6`、§2.19 `MVC-5`、§2.20 `MVC-7`、§2.21 `MVC-9`）、低危+待验证 13（§3）。
-- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；`MVC-8` ✅已修复（§2.6，`fix/mvc-rest`）；**待修** §2 的 4 条中危（§2.7、§2.19–§2.21）、§3 的 13 条低危/待验证（**本模块严重级已清零**）。
+- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；`MVC-8` ✅已修复（§2.6，`fix/mvc-rest`）；`MVC-6` ❌误判（§2.7，用户判定非缺陷：WS 消息总长上限属端点/部署侧策略，不设硬上限是设计选择）；**待修** §2 的 3 条中危（§2.19–§2.21）、§3 的 13 条低危/待验证（**本模块严重级已清零**）。
 
 ## 1. 严重（本模块 4 条）
 
@@ -148,9 +148,17 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 
 `src/RequestMeta.cj:25-35, 552`：`currentResponseStatus` 只 set 不清 ⇒ `accessLog` 的 status 会沿用上一个请求（如前一个 401，本请求 200 也记 401）；`src/OverallStopwatch.cj:29-39`：`start` 在 404/405/OPTIONS 路径不调用 `elapsed` ⇒ 线程继续持有上个请求的 path 字符串。修法：请求 `finally` 统一清理。
 
-### 2.7 [中｜内存] `MVC-6` WS continuation 帧累积无上限（f_mvc）
+### 2.7 [中｜内存] `MVC-6` WS continuation 帧累积无上限（f_mvc）→ ❌误判（2026-10-05：用户判定「这不是错」，消息总长上限属端点/部署侧策略）
 
-`src/WSMeta.cj:169-173`：`bytes.add(all: payload)`，只有 fin 才清空 ⇒ 客户端持续发 continuation 不发 fin 即可打爆单连接内存。修法：累积时校验总长上限（可配置），超限直接关连接。
+**❌ 误判标记（2026-10-05）**：用户 2026-10-05 判定本条**不是缺陷**，不进入修复队列（「MVC-6 也不改。我认为这不是错」）。支撑这一判定、已核对的事实：
+
+1. **帧与消息是两层粒度**：框架已把「按帧」上限做成可配置项 —— `MVCConfig.MAX_FRAME_SIZE` / `maxFrameSize`（`MVCConfig.cj:48, 223-225`）→ `MVCStarter.cj:64` 的 `ServerBuilder.maxFrameSize`；`WSMeta.cj` 里 0 处长度校验是因为「消息总长」不是框架的职责层。
+2. **端点拿到的就是完整消息**：`WSMeta.cj:209` 把 `bytes.unsafeData()` 整块交给 meta 的 `handle` ⇒ 消息总长的校验/拒绝属端点（业务）策略。
+3. **硬上限会切断合法用法**：超大消息（大图片、大 JSON）本来就是靠 continuation 分片传输的，框架设死上限会让这类合法流量断连。
+
+> 审查建议的「可配置上限 + 超限关连接」保留为**可选加固**：日后若要防滥用（恶意客户端持续发 continuation 不发 fin），再单独登记条目。
+
+**以下为审查时的原始判断（留档对照）**：`src/WSMeta.cj:169-173`：`bytes.add(all: payload)`，只有 fin 才清空 ⇒ 客户端持续发 continuation 不发 fin 即可打爆单连接内存。修法：累积时校验总长上限（可配置），超限直接关连接。
 
 ### 2.19 [中｜性能] `MVC-5` 每个 `@PathVariable` 参数都做一次全路径解析 + 全量 `HashMap` 构造（f_mvc）
 
