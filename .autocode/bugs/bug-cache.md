@@ -27,7 +27,7 @@
 8. `CACHE-8`（§2.5）`Priority` 比较基线的无锁竞争 + `compare` 的“保护新生”分支写反　**✅ 已修复（2026-10-05，①+②：② 按「保护新生」语义对称化年龄门并修正两条 recency 判据，④⑤ 两级 tie-break 亦已同向统一，见 §2.5）**
 9. §3 低危 8 条已全清（见 §3.1）；待验证：`V1` 已了结；`V2` 已降级为**观测项**（不单造压测，随四个使用模块的端到端验证一起看，见 §3.2）
 
-> 修复进度（2026-10-05）：§1 的 3 条严重级（`CACHE-1` = `3171d664`、`CACHE-2` = `0e3d70d6`、`CACHE-3` = `14733baf`）已修复并并入 `sts/1.3.x`（`0448df98` 把主线拉进分支、`4a01a26f` 合入主分支，合并后主工作区复跑 6/6 PASSED）；**§2.1 `CACHE-4` 已按方案 C 修复并并入 `sts/1.3.x`**（callable 移出段写锁 + `removeIf` 两阶段，见 §2.1；`302bd9f2` 拉齐主线进分支、`e131fa7f` 合入主分支）；**§2.2 `CACHE-5` 已修复并并入 `sts/1.3.x`**（实现 `Resource` + `close()` 取消内部线程；按指示删除 `destroy`、`atExit` 注册与用例统一改 `close()`，原 `testDestroyStopsEvictionThread` 更名 `testCloseStopsEvictionThread`，见 §2.2；`2b49dfc1` 拉齐主线进分支、`eb8363c8` 合入主分支）；**§2.3 `CACHE-6` 已修复并并入 `sts/1.3.x`**（`once`/`prolong` 拒绝过期条目，见 §2.3；`8dbe2fc8` 拉齐主线进分支、`5fbe5e5f` 合入主分支）；**§2.4 `CACHE-7` 已修复并并入 `sts/1.3.x`**（`close` 主动清空并等内部线程结束后再返回 + 关闭后一切操作抛 `IllegalStateException`，见 §2.4）；**§2.5 `CACHE-8` 已修复**（① 比较基线字段的读写纳入 `p.lock`；② 年龄门对称化 + `cmp()` 的两条 recency 判据按「保护新生」修正；④⑤ 两级 tie-break 亦已同向统一，见 §2.5）；**§2.2 的 ②（`atExit` 注册持强引用）已修复**（改为 `WeakRef<HeapCache<V>>` + `CleanupPolicy.EAGER` 的弱引用闭包 ⇒ 关闭后实例可被 GC 回收，退出时自动 `close()` 的语义不变，见 §2.2 ②；分支 `review/f_cache` 上待并入）；**已并入 `sts/1.3.x`**（`862eaf15` 拉齐主线进分支、`681f5156` 合入主分支，冲突标记清理 `7b69364e`/`f7711fc2`）；**§3 低危 8 条已全清**（`L4`+`L2` 修复 ⇒ 编译警告 2 → 0；`L1`/`L3` 修复并补用例、`L8` 补齐用例、`L5`~`L7` 命名与文档，均见 §3.1），仅 `V2` 待验证未做。用例 1 → 27 条（全绿）。
+> 修复进度（2026-10-05）：§1 的 3 条严重级（`CACHE-1` = `3171d664`、`CACHE-2` = `0e3d70d6`、`CACHE-3` = `14733baf`）已修复并并入 `sts/1.3.x`（`0448df98` 把主线拉进分支、`4a01a26f` 合入主分支，合并后主工作区复跑 6/6 PASSED）；**§2.1 `CACHE-4` 已按方案 C 修复并并入 `sts/1.3.x`**（callable 移出段写锁 + `removeIf` 两阶段，见 §2.1；`302bd9f2` 拉齐主线进分支、`e131fa7f` 合入主分支）；**§2.2 `CACHE-5` 已修复并并入 `sts/1.3.x`**（实现 `Resource` + `close()` 取消内部线程；按指示删除 `destroy`、`atExit` 注册与用例统一改 `close()`，原 `testDestroyStopsEvictionThread` 更名 `testCloseStopsEvictionThread`，见 §2.2；`2b49dfc1` 拉齐主线进分支、`eb8363c8` 合入主分支）；**§2.3 `CACHE-6` 已修复并并入 `sts/1.3.x`**（`once`/`prolong` 拒绝过期条目，见 §2.3；`8dbe2fc8` 拉齐主线进分支、`5fbe5e5f` 合入主分支）；**§2.4 `CACHE-7` 已修复并并入 `sts/1.3.x`**（`close` 主动清空并等内部线程结束后再返回 + 关闭后一切操作抛 `IllegalStateException`，见 §2.4）；**§2.5 `CACHE-8` 已修复**（① 比较基线字段的读写纳入 `p.lock`；② 年龄门对称化 + `cmp()` 的两条 recency 判据按「保护新生」修正；④⑤ 两级 tie-break 亦已同向统一，见 §2.5）；**§2.2 的 ②（`atExit` 注册持强引用）已修复**（改为 `WeakRef<HeapCache<V>>` + `CleanupPolicy.EAGER` 的弱引用闭包 ⇒ 关闭后实例可被 GC 回收，退出时自动 `close()` 的语义不变，见 §2.2 ②；分支 `review/f_cache` 上待并入）；**已并入 `sts/1.3.x`**（`862eaf15` 拉齐主线进分支、`681f5156` 合入主分支，冲突标记清理 `7b69364e`/`f7711fc2`）；**§3 低危 8 条已全清**（`L4`+`L2` 修复 ⇒ 编译警告 2 → 0；`L1`/`L3` 修复并补用例、`L8` 补齐用例、`L5`~`L7` 命名与文档，均见 §3.1）；**§5 的基准与堆/RSS 采样已补做**（`cjpm bench` 4 条 + `cjprof heap`/`/proc` 探针，逐条确认 `CACHE-8`/`CACHE-4`/`CACHE-5`/`CACHE-2`/`CACHE-3`，见 §5「基准与采样」），仅 `V2` 观测项与「长稳压力」未做。用例 1 → 27 条（全绿）。
 
 ---
 
@@ -441,7 +441,50 @@ println('P2a size=${c.size}')                       // 0（期望 5）
 c.removeIf { k, _ => if (k == 'victim') { sleep(Duration.millisecond * 400) }; false }
 ```
 
-**未做**：基准（`cjpm bench`）、堆/RSS 采样（`cjprof heap`）、长稳压力（线程/实例累积速率）。**已补做（2026-10-05）**：真实业务路径的端到端复现 —— 在四个使用模块各跑一遍全量用例：`f_data` **104/104 PASSED**、`f_regex` **3/3**、`f_jwt` 3/14（11 条 HMAC/密钥类 ERROR，主线同样复现，属原有问题）、`f_orm` 32/33（1 条 `ORMConfigTest.testPoolMaxWaiting`，主线基线同样 32/33 同一条，属原有问题）⇒ `CACHE-1`/`CACHE-2` 的业务影响不再只有静态推断，端到端一层已补；`WeakRef` 压测项按 `CACHE-V2` 的决策取消（改为观测项）。日志 `/tmp/cache_e2e.log`、`/tmp/jwt_branch.log`、`/tmp/orm_branch.log`。
+### 基准与采样（2026-10-05：`cjpm bench` + 探针 + `cjprof heap`）
+
+**基准**（`f_cache/src/HeapCache_bench.cj`，`cjpm bench`，WSL / SDK 1.3.0-alpha.20261001001050；单次运行中位数，Err% ≤ 11%，日志 `/tmp/cache_bench.log`）：
+
+| 用例 | 覆盖点 | Median | Mean |
+|---|---|---|---|
+| `benchGetHit` | 命中：分段读锁 → `Priority.load`（含 `CACHE-8` ① 新增的 `p.lock`） | **2.561 µs** | 2.658 µs |
+| `benchSetSameKey` | 同键写：段写锁 + 覆盖 | **2.578 µs** | 2.751 µs |
+| `benchSetDistinctKeys` | 不同键写：新建 `Priority` + size 记账 + 淘汰压力（键空间 2×`maxSize`） | **5.317 µs** | 5.395 µs |
+| `benchSetUnderEvictionPressure` | `maxSize=1` 两键交替写，定时淘汰持续竞争（`compare` 路径） | **3.925 µs** | 4.062 µs |
+
+⇒ **`CACHE-8` 确认**：①新增的两处加锁没有给命中路径带来可见代价（2.56 µs，与「同键写」同量级）；②重写后的 `compare`/淘汰路径在持续竞争下无病态成本（3.9 µs）。`cjpm bench` = `PASSED: 4, FAILED: 0, ERROR: 0`、`cjpm bench success`。
+（过程说明：`benchSetDistinctKeys` 首版用无界键空间 `k${i}`，38 s 灌入数百万条导致 OOM 崩溃 —— 属**基准设计问题**，改 `i % 2000` 有界后通过；崩溃不是产品缺陷。）
+
+**探针 1（`CACHE-4`）—— 同段读不再被用户代码阻塞**（复现本表 P10；`concurrencyLevel=4` 精确挑同段键，谓词内 `sleep(400ms)`）：
+
+| | 修复前（§5 P10 记录） | 本次实测（修复后） |
+|---|---|---|
+| 同段 `get` 延迟 | 292.87 ms | **55 µs 613 ns**（≈5300×） |
+| 异段 `get` 延迟 | 0.0228 ms | 2.7 µs |
+
+⇒ 同段与异段回到同一量级 ⇒ 谓词确实在段写锁之外执行 ✓ **`CACHE-4` 确认**。
+
+**探针 2（`CACHE-5`）—— create+close 不泄漏线程**：连续 50 轮 `HeapCache` + `WeakHeapCache` 各建一个并 `close()`：
+
+| 采样点 | `Threads:` | `VmRSS:` |
+|---|---|---|
+| 基线 | **10** | 38 700 kB |
+| 50 轮 create+close 后 | **10** | 51 724 kB |
+| 静置 3 s | **10** | 51 980 kB |
+
+⇒ 线程数**持平**（修复前每实例泄漏 1~2 个线程，50 轮至少 +75）✓；RSS +13 MB 属「未触发 GC 的分配」而非泄漏证据（同点线程数不变；`cjprof heap -t` 快照里线程栈全是 unittest 框架自己的 —— `testRunnerEntryMain`/`ProgressReporter`/`parallelOrderedMap`，**没有**缓存的定时器/消费线程/清扫线程）⇒ **`CACHE-5` 确认**。
+
+**探针 3（`CACHE-2`/`CACHE-3`）—— size 记账真实、上限生效**：`maxSize=1000` 的缓存经 `getOrCompute` 灌 20 000 个不同键：
+
+| 采样点 | `size` | `VmRSS:` |
+|---|---|---|
+| 灌入前 | — | 52 236 kB |
+| 灌 20 000 键后 | **20 000**（记账跟得上真实条目数；修复前恒为 0） | 95 696 kB |
+| 静置 3 s（定时淘汰跑过） | **1 000**（= `maxSize`，上限生效；修复前完全失效） | 80 948 kB |
+
+⇒ **`CACHE-2`/`CACHE-3` 确认**（记账真实 + 上限收口 + 淘汰后 RSS 回落）。
+
+**剩余未做**：长稳压力（线程/实例累积速率）。**已补做（2026-10-05）**：基准与堆/RSS 采样（见上）；真实业务路径的端到端复现 —— 四个使用模块各跑一遍全量用例：`f_data` **104/104 PASSED**、`f_regex` **3/3**、`f_jwt` 3/14（11 条 HMAC/密钥类 ERROR，主线同样复现，属原有问题，见 `bug-cross.md` `X-3`）、`f_orm` 32/33（1 条 `ORMConfigTest.testPoolMaxWaiting`，主线基线同一条，属原有问题，见 `bug-cross.md` `X-2`）；`WeakRef` 压测项按 `CACHE-V2` 的决策取消（改为观测项）。日志 `/tmp/cache_e2e.log`、`/tmp/cache_bench.log`、`/tmp/cache_probe_run.log`、`/tmp/cache_heap.data`。
 
 ---
 
