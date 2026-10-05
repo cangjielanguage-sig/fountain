@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 25 条**：严重 4（§1.9 `MVC-4`、§1.10 `MVC-1`、§1.11 `MVC-3`、§1.12 `MVC-2`）、中 8（§2.2 `MVC-C3`、§2.3 `MVC-C5`、§2.5 `MVC-C2`、§2.6 `MVC-8`、§2.7 `MVC-6`、§2.19 `MVC-5`、§2.20 `MVC-7`、§2.21 `MVC-9`）、低危+待验证 13（§3）。
-- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；`MVC-8` ✅已修复（§2.6，`fix/mvc-rest`）；`MVC-6` ❌误判（§2.7，用户判定非缺陷：WS 消息总长上限属端点/部署侧策略，不设硬上限是设计选择）；**待修** §2 的 3 条中危（§2.19–§2.21）、§3 的 13 条低危/待验证（**本模块严重级已清零**）。
+- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；`MVC-8` ✅已修复（§2.6，`fix/mvc-rest`）；`MVC-6` ❌误判（§2.7，用户判定非缺陷：WS 消息总长上限属端点/部署侧策略，不设硬上限是设计选择）；`MVC-5` ❌不改（§2.19，用户判定「不值得改」：全仓 `@PathVariable` 均为单变量、暴露面为零）；**待修** §2 的 2 条中危（§2.20、§2.21）、§3 的 13 条低危/待验证（**本模块严重级已清零**）。
 
 ## 1. 严重（本模块 4 条）
 
@@ -160,7 +160,15 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 
 **以下为审查时的原始判断（留档对照）**：`src/WSMeta.cj:169-173`：`bytes.add(all: payload)`，只有 fin 才清空 ⇒ 客户端持续发 continuation 不发 fin 即可打爆单连接内存。修法：累积时校验总长上限（可配置），超限直接关连接。
 
-### 2.19 [中｜性能] `MVC-5` 每个 `@PathVariable` 参数都做一次全路径解析 + 全量 `HashMap` 构造（f_mvc）
+### 2.19 [中｜性能] `MVC-5` 每个 `@PathVariable` 参数都做一次全路径解析 + 全量 `HashMap` 构造（f_mvc）→ ❌不改（2026-10-05：用户判定「不值得改」）
+
+**❌ 不改标记（2026-10-05）**：用户 2026-10-05 判定本条**不值得改**，不进入修复队列。核对过的事实与账目：
+
+1. **暴露面为零**：全仓只有 2 个控制器函数用 `@PathVariable`，且都是**单个**变量（`fdemo/user/src/controller/UserController.cj:33, 69` 的 `queryUser`/`deleteUser`）⇒ 「N 次重复解析」的实际浪费 = 0（单变量本来也必须解析一次）；解析入口也只有 `ControllerFuncParam.cj:125` 与 `HttpRequestDistributorImpl.cj:22` 两处。
+2. **每次调用的成本构成**（留档，供日后评估）：`PathPattern.parts`（`trimExt` + `split("/")`，`f_util/src/PathPattern.cj:52-64`）→ `get(parts, EXTRACTION)`（模式树下行 + `HashMap<Int64, Any>`，`:241-249`）→ `extractVariablesInPath` 再建 `HashMap<String, String>` 并取**全部**变量值（`:179-196`），而调用方只取一个 key。
+3. **备选方案与代价**：A「`f_util` 加轻量单变量查找」只省一张表与全量取值，解决不了 N 次切分/树查找，且给不出 RED；B「按请求缓存变量表」收益最大，但要引入新的请求级缓存状态（与 §2.6 的请求出口清理耦合），改动面大于收益。
+
+> 触发条件：出现「一个控制器函数声明 ≥2 个 `@PathVariable`」的端点时再回头评估（届时 B 值得做）。
 
 `ControllerFuncParam.cj:125` → `f_util/src/PathPattern.cj:173-195`：N 个 path 变量就重复 N 次切分（`f_util` 属跨模块，可加单变量轻量查找）。
 
