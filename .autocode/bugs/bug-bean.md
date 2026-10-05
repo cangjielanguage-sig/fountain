@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 14 条**：严重 1（§1.8 `BEAN-1`）、中 4（§2.15 `BEAN-2`、§2.16 `BEAN-3`、§2.17 `BEAN-4`、§2.18 `BEAN-5`）、低危+待验证 9（§3）。
-- **状态（截至 2026-10-05）**：`BEAN-1` ✅已修复（§1.8）、`BEAN-2` ✅已修复（§2.15）、`BEAN-3` ✅已修复（§2.16，含同族的 `getFirstTuple`）、`BEAN-4` ✅已修复（§2.17）、`BEAN-5` ✅已修复（§2.18）⇒ **本模块中危清零**；§3 的 9 条里 `BEAN-L9` ❌判为**不成立**、`BEAN-L2` ❌判为**不成立（设计）**、`BEAN-L3` ⏸保持现状、`BEAN-L6` ⏸保持现状（注解是**面向应用项目**的特性，不删）；**待修 2 条**：`BEAN-L1`（启动期 `check()` 近似 O(n²)）与待验证的 `BEAN-L8`（`BEAN-L7`/`BEAN-L5` 已修复；`BEAN-L4` 按作者决定保持现状）。另：§3.1 `BEAN-L6` 记录了一条**新发现待作者确认** —— `annotationMap` 只写不读，README:5 的「按（父）类型注解获取 bean」当前没有可用查询入口。
+- **状态（截至 2026-10-05）**：`BEAN-1` ✅已修复（§1.8）、`BEAN-2` ✅已修复（§2.15）、`BEAN-3` ✅已修复（§2.16，含同族的 `getFirstTuple`）、`BEAN-4` ✅已修复（§2.17）、`BEAN-5` ✅已修复（§2.18）⇒ **本模块中危清零**；§3 的 9 条里 `BEAN-L9` ❌判为**不成立**、`BEAN-L2` ❌判为**不成立（设计）**、`BEAN-L3` ⏸保持现状、`BEAN-L6` ⏸保持现状（注解是**面向应用项目**的特性，不删）；**待修 2 条**：`BEAN-L1`（启动期 `check()` 近似 O(n²)）与待验证的 `BEAN-L8`（`BEAN-L7`/`BEAN-L5`/`BEAN-L10` 已修复；`BEAN-L4` 按作者决定保持现状）。另：§3.1 `BEAN-L6` 记录了一条**新发现待作者确认** —— `annotationMap` 只写不读，README:5 的「按（父）类型注解获取 bean」当前没有可用查询入口。
 
 ## 1. 严重（本模块 1 条）
 
@@ -107,7 +107,7 @@
 
 ## 3. 低危 / 待验证（本模块 9 条）
 
-### 3.1 低危（8 条；其中 `BEAN-L9` 判为**不成立**；另附 API 卫生记录，见节末）
+### 3.1 低危（9 条；其中 `BEAN-L9` 判为**不成立**；另附 API 卫生记录，见节末）
 
 **健壮性 / 正确性**
 
@@ -132,6 +132,13 @@
   **用例**：`f_bean/src/test/bean_lookup_test.cj`（新增，永久）—— 自带 12 个实现同一接口（`Hashable & Comparable`）的 `@Bean`；断言 `lookupHashSet`/`lookupTreeSet` 与 `lookupList` 的元素集合一致、`TreeSet` 按 `Comparable` 严格升序、`cond` 全匹配 / 无匹配、无匹配 ⇒ 空集合。
   **回归**：`f_bean` 全套 **TOTAL 19 / PASSED 19 / ERROR 0 / FAILED 0**；`cjpm build` exit 0（9 条既有警告，未新增）。探针已删、未入库；日志 `/tmp/bean_l5_before3.log`、`/tmp/bean_l5_after.log`。
   **未覆盖（按决定保持现状）**：`lookupLabels`/`lookupWeights`（同族中间 `ArrayList`）随 `BEAN-L4` 冻结；`lookupList` 自身的 `ArrayList` 从 0 容量扩容未动（需容量提示、会引入内部 API 依赖）。
+- `BEAN-L10` ✅**已修复（2026-10-05）** — ~~`BeanFactory.cj:246-254`（私有收集器 `getAll<T>(cond, put: (BeanManager) -> Unit)`，含单参/双参两个重载）+ `:258-266`（`getList`）+ `:270-278`（`getMap`）+ `:317-326`（`getAllTuples`）：收集走 **per-element `put` 闭包** ⇒ 每次调用付 1 次捕获闭包分配，每个元素付 1 次间接调用。~~
+  **修复记录**：删掉私有 `getAll` 的两个重载，三处调用方改为**循环内直接收集**：新增 `getListByType` / `getMapByType`（与文件既有 `getFirstByType` / `iteratorByType` 同款「已校验」内部路径 —— 单参重载传 `TypeInfo.of<T>()`、双参重载先 `beanTypeIs<T>(beanType)` 再走内部路径 ⇒ **校验次数与原先一致**）；`getAllTuples` 同步改为直接循环（否则 `getAll` 删不掉）。内部遍历统一走 `iteratorByType`（免掉单参路径里恒真的 `beanTypeIs<T>(TypeInfo.of<T>())`，恒真性见 `BEAN-L9`）⇒ 遍历结果、`if (let b: T <- m.bean)` 判定、**逐元素 `beanLog('getAll', …)`**、元素集合与顺序、`getMap` 的 `m.name` 键、实例化次数（含 prototype）全部不变。
+  **口径更正（诚实记录）**：立项时列了五笔开销，本次实际只消掉**两笔** —— 「每次调用的捕获闭包分配」与「每元素的间接调用」；`ArrayList` 从 0 容量扩容、逐元素 `beanLog`、结果容器本身都**保留** ⇒ 收益是 2.5% 量级，而非立项描述可能暗示的更大值。
+  **测量证据（同进程、同遍历源、同目标结构、无日志混杂；n = 5 万、min-of-4、12 个同类型 bean；日志 `/tmp/bean_l10_mech.log`）**：旧形状（经收集器 + 闭包）**9495.48 → 新形状（循环内直收集）9261.68 ns/op** ⇒ 省 **233.80 ns/次（-2.46%），≈19.5 ns/bean**。端到端（跨运行、按不变路径 `lookupHashSet` 对照归一）`lookupList` ~-2~3%、`lookupHashMap` ~-2~14%（后者落在跑间抖动内，以机制值为准）。容量预留（`ArrayList(12)`）**无收益** ⇒ 不做。
+  **顺带测出的更大一笔（本会话新发现，未立条、待作者定）**：修后真身与「无日志直循环」之差 —— `lookupList` **+3903 ns/次（+42%）**、`lookupHashMap` **+4183 ns/次（+32%）** ⇒ **逐元素 `beanLog` ≈ 325~349 ns/元素**（且本环境 debug 关闭、`BeanFactory.getAll` 日志 0 行！）⇒ 同一循环里这笔比 `BEAN-L10` 大 ~15 倍。候选修法（都需先定日志口径）：① 去掉逐元素日志；② 用 `f_log` 已有的级别查询（`Logger.debugEnabled`，`f_log/src/base/Logger.cj`）把 `log.debug { … }` 包起来，让「关闭时」不构造闭包、不进 `append`；③ 保持现状。
+  **用例**：`f_bean/src/test/bean_lookup_test.cj` 新增 `BeanCollectLookup_test`（3 条）—— 样本 bean 加 `@BeanMeta[order: n]` 定序 ⇒ 断言 `lookupList` 的 code 序列逐位 == 1..12、连续两次调用顺序一致、`lookupHashMap` 的每个 key 都能用 `lookupOption(Exactly(key))` 查回同一 bean、`cond` 全匹配/无匹配 ⇒ 空集合。
+  **回归**：`f_bean` 全套 **TOTAL 22 / PASSED 22 / ERROR 0 / FAILED 0**；`cjpm build` exit 0（9 条既有警告，未新增）。探针已删、未入库；日志 `/tmp/bean_l10_before2.log`、`/tmp/bean_l10_after.log`、`/tmp/bean_l10_mech.log`、`/tmp/bean_l10_final2.log`。
 - `BEAN-L6` `BeanFactory.cj:63-121`：类型表 `Any`/`Object` 键使每个 bean 都入表；std 过滤只作用于 `isClass` 分支，注解分支仍展开 `superInterfaces/superClass`（注册期内存与遍历量放大）。
   **判定（2026-10-05 更正）**：**不删** —— `annotationMap` 与注解展开是**面向应用项目**的特性（`f_bean/README.md:5`：「使用修饰bean的类型的注解，以及父类型的注解获取bean」）；fountain 是工具库，**本仓（fountain 自身）没有调用方不等于死代码**。（我先前据「全仓零读方」提出的「整条注解分支删除」方案已撤回。）本条的成本事实保留作记录：注册期每个类型节点做一次 `klass.annotations` 反射展开 + 15 项 std 前缀/名字比较 + `annotationMap` 的 TreeSet 维护 —— **只在注册期一次**。
   **⚠️ 核实中发现的另一件事（比本条原文更值得跟进）**：`annotationMap` 全仓**只写不读** —— 写入 `:72`、`check()` 维护 `:163/:171/:172`，而 `beanManagers`/`getFirst`/`getList`/`getMap`/`iterator`/`getFirstTuple`/`getAll` **全部只查 `beanTypeMap`** ⇒ 按 README:5 的描述，「用（父）类型注解获取 bean」目前**没有可用的查询入口**（拿注解类型当 `T` 去查会落到 `beanTypeMap.get` 而得到 `None`）。**待作者确认**：读入口是待实现、在别处，还是文档超前。

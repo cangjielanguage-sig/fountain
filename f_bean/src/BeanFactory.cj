@@ -243,33 +243,46 @@ public class BeanFactory {
         }
         None
     }
-    private func getAll<T>(cond: StringCond, put: (BeanManager) -> Unit) {
-        getAll<T>(TypeInfo.of<T>(), cond, put)
-    }
-    private func getAll<T>(beanType: TypeInfo, cond: StringCond, put: (BeanManager) -> Unit) {
-        for (m in iterator<T>(beanType, cond: cond)) {
-            beanLog('getAll', beanType, cond, m)
-            put(m)
-        }
-    }
     public func getList<T>(cond!: StringCond = IgnoreCond): ArrayList<T> {
-        getList<T>(TypeInfo.of<T>(), cond: cond)
+        // §3.1 / BEAN-L10：单参重载的 beanType 就是 T 自己的 TypeInfo ⇒ 直走无校验内部路径
+        getListByType<T>(TypeInfo.of<T>(), cond)
     }
     public func getList<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): ArrayList<T> {
+        beanTypeIs<T>(beanType)
+        getListByType<T>(beanType, cond)
+    }
+    /**
+     * `getList` 的内部实现：调用方已完成 `beanTypeIs` 校验（或 `beanType` 就是 `T` 自己的 `TypeInfo`）。
+     *
+     * §3.1 / `BEAN-L10`：不再经私有 `getAll(cond, put)` —— 那条路每个元素都要付一次间接闭包调用
+     * （外加 `beanLog` 的捕获闭包，以及中间 `ArrayList` 从 0 容量扩容）。改为在循环内直接收集；
+     * 遍历源、类型判定与 `beanLog` 均与原先一致 ⇒ 元素集合、顺序、实例化次数、日志一字不变。
+     */
+    private func getListByType<T>(beanType: TypeInfo, cond: StringCond): ArrayList<T> {
         let list = ArrayList<T>()
-        getAll<T>(beanType, cond){bm: BeanManager =>
-            if (let b: T <- bm.bean) {
+        for (m in iteratorByType<T>(beanType, cond)) {
+            beanLog('getAll', beanType, cond, m)
+            if (let b: T <- m.bean) {
                 list.add(b)
             }
         }
         list
     }
     public func getMap<T>(cond!: StringCond = IgnoreCond): HashMap<String, T> {
-        getMap<T>(TypeInfo.of<T>(), cond: cond)
+        // §3.1 / BEAN-L10：同 `getList` 的单参重载
+        getMapByType<T>(TypeInfo.of<T>(), cond)
     }
     public func getMap<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): HashMap<String, T> {
+        beanTypeIs<T>(beanType)
+        getMapByType<T>(beanType, cond)
+    }
+    /**
+     * `getMap` 的内部实现（说明同 `getListByType`）。
+     */
+    private func getMapByType<T>(beanType: TypeInfo, cond: StringCond): HashMap<String, T> {
         let map = HashMap<String, T>()
-        getAll<T>(beanType, cond){m: BeanManager => 
+        for (m in iteratorByType<T>(beanType, cond)) {
+            beanLog('getAll', beanType, cond, m)
             if (let b: T <- m.bean) {
                 map[m.name] = b
             }
@@ -316,12 +329,14 @@ public class BeanFactory {
      */
     public func getAllTuples<T>(cond!: StringCond = IgnoreCond): Collection<(String, T, () -> Unit)> {
         let list = ArrayList<(String, T, () -> Unit)>()
-        func put(m: BeanManager) {
+        // §3.1 / BEAN-L10：`getAll(cond, put)` 删除后，这里也改为循环内直接收集（行为与原先一致）
+        let beanType = TypeInfo.of<T>()
+        for (m in iteratorByType<T>(beanType, cond)) {
+            beanLog('getAll', beanType, cond, m)
             if (let bean <- m.bean && let b: T <- bean) {
                 list.add((m.name, b, m.generateDestroy(bean)))
             }
         }
-        getAll<T>(cond, put)
         list
     }
     public func get<T>(name: String): ?T {
