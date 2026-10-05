@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 14 条**：严重 1（§1.8 `BEAN-1`）、中 4（§2.15 `BEAN-2`、§2.16 `BEAN-3`、§2.17 `BEAN-4`、§2.18 `BEAN-5`）、低危+待验证 9（§3）。
-- **状态（截至 2026-10-05）**：`BEAN-1` ✅已修复（§1.8）、`BEAN-2` ✅已修复（§2.15）、`BEAN-3` ✅已修复（§2.16，含同族的 `getFirstTuple`）、`BEAN-4` ✅已修复（§2.17）、`BEAN-5` ✅已修复（§2.18）⇒ **本模块中危清零**；§3 的 9 条里 `BEAN-L9` ❌判为**不成立**、`BEAN-L2` ❌判为**不成立（设计）**、`BEAN-L3` ⏸保持现状、`BEAN-L6` ⏸保持现状（注解是**面向应用项目**的特性，不删）；**待修 4 条**：`BEAN-L1`、`BEAN-L4`、`BEAN-L5` 与待验证的 `BEAN-L8`（`BEAN-L7` 已修复）。另：§3.1 `BEAN-L6` 记录了一条**新发现待作者确认** —— `annotationMap` 只写不读，README:5 的「按（父）类型注解获取 bean」当前没有可用查询入口。
+- **状态（截至 2026-10-05）**：`BEAN-1` ✅已修复（§1.8）、`BEAN-2` ✅已修复（§2.15）、`BEAN-3` ✅已修复（§2.16，含同族的 `getFirstTuple`）、`BEAN-4` ✅已修复（§2.17）、`BEAN-5` ✅已修复（§2.18）⇒ **本模块中危清零**；§3 的 9 条里 `BEAN-L9` ❌判为**不成立**、`BEAN-L2` ❌判为**不成立（设计）**、`BEAN-L3` ⏸保持现状、`BEAN-L6` ⏸保持现状（注解是**面向应用项目**的特性，不删）；**待修 3 条**：`BEAN-L1`、`BEAN-L5` 与待验证的 `BEAN-L8`（`BEAN-L7` 已修复；`BEAN-L4` 按作者决定保持现状）。另：§3.1 `BEAN-L6` 记录了一条**新发现待作者确认** —— `annotationMap` 只写不读，README:5 的「按（父）类型注解获取 bean」当前没有可用查询入口。
 
 ## 1. 严重（本模块 1 条）
 
@@ -123,7 +123,9 @@
 **性能微项**
 
 - `BEAN-L1` `BeanFactory.cj:148-175` + `BeanDefCondition.cj:128-140`：启动期条件筛选近似 O(n²)（逐 bean 求条件、条件内再遍历该类型全部 manager；清理阶段对每个被丢弃 bean 全量遍历两张表，`161/165` 还无条件 `typeRemoved.add(t)`）。仅 `afterRegistered()` 一次。
-- `BEAN-L4` `lookup.cj:104-109`（同 `80-86`）：按 label 查单个 bean 却先全量物化 `ArrayList` 再线性扫描；改用 `iterator<T>(cond)` 惰性遍历，首个命中即返回。
+- `BEAN-L4` ⏸**保持现状（2026-10-05，作者决定）** — `lookup.cj:104-109`（6 个公开入口 `lookupLabel(label:)`/`lookupLabel(name:,label:)`/`lookupLabel(cond:,label:)`/`lookupLabelOption(label:)`/`lookupOptionLable(name:,label:)`/`lookupLabelOption(cond:,label:)` 全汇于此）：按 label 查**一个** bean 却先 `lookupList<T>(cond)`（`:48-50` → `getList`）全量物化 `ArrayList<T>`，再 `for … where` 扫描。
+  **权衡记录（供再评估）**：改为惰性（`for (m in BeanFactory.instance.iterator<T>(cond: cond))` + `if (let bean: T <- m.bean && bean.label == label) { return bean }`）可省掉「N 元 `ArrayList` 的分配 + N 次 `add`（含扩容）+ 命中之后那些 bean 的访问」，**但会减少 prototype scope bean 的实例化次数** —— 现状会对该类型下**所有** prototype bean 各调一次 `new()`（连带 `PostConstruct`/`FactoryBean` 判定），改后只到「第一个 label 命中」为止 ⇒ 属**可见行为差异**。作者按「行为不变优先」决定保持现状。
+  **附带留档（不改）**：同库「取一个」的接口 `lookup<T>`/`lookupOption<T>`（→ `getFirst`）本就是惰性、只实例化命中的那个 bean，与本条路径口径不一致；`:101` 的公开函数名 `lookupOptionLable` 拼写有误（`Lable`→`Label`），改名属破坏性 API 变更。
 - `BEAN-L5` `lookup.cj:56-58, 64-66`：`lookupHashSet/lookupTreeSet` 双重物化（先 `ArrayList` 再目标集合，均从 0 容量扩容）。
 - `BEAN-L6` `BeanFactory.cj:63-121`：类型表 `Any`/`Object` 键使每个 bean 都入表；std 过滤只作用于 `isClass` 分支，注解分支仍展开 `superInterfaces/superClass`（注册期内存与遍历量放大）。
   **判定（2026-10-05 更正）**：**不删** —— `annotationMap` 与注解展开是**面向应用项目**的特性（`f_bean/README.md:5`：「使用修饰bean的类型的注解，以及父类型的注解获取bean」）；fountain 是工具库，**本仓（fountain 自身）没有调用方不等于死代码**。（我先前据「全仓零读方」提出的「整条注解分支删除」方案已撤回。）本条的成本事实保留作记录：注册期每个类型节点做一次 `klass.annotations` 反射展开 + 15 项 std 前缀/名字比较 + `annotationMap` 的 TreeSet 维护 —— **只在注册期一次**。
