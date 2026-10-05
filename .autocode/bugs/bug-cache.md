@@ -27,7 +27,6 @@
 8. `CACHE-8`（§2.5）`Priority` 比较基线的无锁竞争 + `compare` 的“保护新生”分支写反　**✅ 已修复（2026-10-05，①+②：② 按「保护新生」语义对称化年龄门并修正两条 recency 判据，④⑤ 两级 tie-break 亦已同向统一，见 §2.5）**
 9. 其余低危/待验证见 §3
 
-<<<<<<< HEAD
 > 修复进度（2026-10-05）：§1 的 3 条严重级（`CACHE-1` = `3171d664`、`CACHE-2` = `0e3d70d6`、`CACHE-3` = `14733baf`）已修复并并入 `sts/1.3.x`（`0448df98` 把主线拉进分支、`4a01a26f` 合入主分支，合并后主工作区复跑 6/6 PASSED）；**§2.1 `CACHE-4` 已按方案 C 修复并并入 `sts/1.3.x`**（callable 移出段写锁 + `removeIf` 两阶段，见 §2.1；`302bd9f2` 拉齐主线进分支、`e131fa7f` 合入主分支）；**§2.2 `CACHE-5` 已修复并并入 `sts/1.3.x`**（实现 `Resource` + `close()` 取消内部线程；按指示删除 `destroy`、`atExit` 注册与用例统一改 `close()`，原 `testDestroyStopsEvictionThread` 更名 `testCloseStopsEvictionThread`，见 §2.2；`2b49dfc1` 拉齐主线进分支、`eb8363c8` 合入主分支）；**§2.3 `CACHE-6` 已修复并并入 `sts/1.3.x`**（`once`/`prolong` 拒绝过期条目，见 §2.3；`8dbe2fc8` 拉齐主线进分支、`5fbe5e5f` 合入主分支）；**§2.4 `CACHE-7` 已修复并并入 `sts/1.3.x`**（`close` 主动清空并等内部线程结束后再返回 + 关闭后一切操作抛 `IllegalStateException`，见 §2.4）；**§2.5 `CACHE-8` 已修复**（① 比较基线字段的读写纳入 `p.lock`；② 年龄门对称化 + `cmp()` 的两条 recency 判据按「保护新生」修正；④⑤ 两级 tie-break 亦已同向统一，见 §2.5，分支 `review/f_cache` 上待并入）；§3 的低危/待验证未动。用例 1 → 20 条（全绿）。
 
 ---
