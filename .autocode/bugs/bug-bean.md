@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 14 条**：严重 1（§1.8 `BEAN-1`）、中 4（§2.15 `BEAN-2`、§2.16 `BEAN-3`、§2.17 `BEAN-4`、§2.18 `BEAN-5`）、低危+待验证 9（§3）。
-- **状态（截至 2026-10-05）**：`BEAN-1` ✅已修复（§1.8）；**待修** §2.15–§2.18（性能中危，其中 `BEAN-5` 待验证）、§3 的 9 条低危/待验证。
+- **状态（截至 2026-10-05）**：`BEAN-1` ✅已修复（§1.8）、`BEAN-2` ✅已修复（§2.15）；**待修** §2.16–§2.18（性能中危，其中 `BEAN-5` 待验证）、§3 的 9 条低危/待验证。
 
 ## 1. 严重（本模块 1 条）
 
@@ -28,7 +28,18 @@
 
 ## 2. 中（本模块 4 条）
 
-### 2.15 [中｜性能] `BEAN-2` 每请求 `getFirst<T>()` 重复 2 次 `TypeInfo.of<T>()` + 2 次 `isSubtypeOf` + 1 次 `as T`（f_bean）
+### 2.15 [中｜性能] `BEAN-2` 每请求 `getFirst<T>()` 重复 2 次 `TypeInfo.of<T>()` + 2 次 `isSubtypeOf` + 1 次 `as T`（f_bean）→ ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：分支 `fix/bean`（worktree `.worktrees/bean`，基线 `7be7225d`），代码、用例、本标记在**同一提交**。
+
+- 改动（`f_bean/src/BeanFactory.cj`）：① 抽出私有 `getFirstByType<T>(beanType, cond)` 作为唯一实现；`getFirst<T>()`（单参重载）直接走它 —— 原先它把 `TypeInfo.of<T>()` 交给 `getFirst<T>(beanType:, cond:)`，后者再调 `beanTypeIs<T>` 做 `beanType.isSubtypeOf(TypeInfo.of<T>())`，而此处 `beanType` 就是 `T` 自己 ⇒ 该校验**恒真**（每次白付 1 次 `TypeInfo.of<T>()` + 1 次 `isSubtypeOf`）；② `case _` 分支的循环条件由 `matches(beanType, cond, m)`（子类型复检 + `cond.on(name)`）换成 `cond.on(m.name)` —— `beanTypeMap[beanType]` 的桶由注册期按「beanType 的超类型闭包」填充（`doRegister`），桶内每个 manager 的 `beanType` 必是该 key 的子类型 ⇒ 复检**恒真**；③ `beanType:` 重载仍走 `beanTypeIs`（非法 `beanType` 依旧抛 `BeanException`），`Exactly` 分支仍做类型复检（`beans` 是名字表，必须校验）。
+- 用例：`f_bean/src/test/bean_getfirst_test.cj`（新增）—— 类键 / 接口键 / 父类键 / `Any`·`Object` 桶 / `Exactly(名字)`（同类名字命中、**异类名字必须 `None`**）/ `beanType:` 重载 / 非法 `beanType` 抛 `BeanException` / 重复查询结果一致；另有基准用例打印 `getFirst<T>()` × N 的 ns/op。
+- 测量证据（同机、同一套用例）：**修前** `TOTAL 7 / PASSED 7 / ERROR 0 / FAILED 0`、`BENCH getFirst<BeanTestDog> x300000: total=1185.505060ms, ns/op=3951.68`；**修后** `TOTAL 7 / PASSED 7 / ERROR 0 / FAILED 0`、`BENCH ... total=675.955489ms, ns/op=2253.18` ⇒ **快 1.75×（-43%）**；`cjpm build` 两次都 **exit 0**（9 条既有警告，未新增）。
+- 行为不变的理由（不只靠用例）：去掉的两处分别是「自反子类型校验」与「按注册不变量恒真的桶内复检」，都不涉及可见语义；用例特意覆盖接口 / 父类 / `Any` / `Object` / `Exactly` 这些最可能暴露差异的路径。
+- 未覆盖：`f_mvc` 侧调用方（`RequestMeta.cj:191`）未改 —— 「调用方缓存 `TypeInfo`」属跨模块优化，本次不做；`getAll`/`iterator` 的同类复检留给 §2.16 `BEAN-3`。
+- 注：未跑 `cjfmt` —— `BeanFactory.cj` 全文都不是 cjfmt 风格，整文件格式化会产生大量与本次修复无关的 diff；本次只按周边风格对齐了改动行。
+
+**以下为审查时的原始描述**：
 
 `BeanFactory.cj:201, 203-206, 226, 228`；调用方 `f_mvc/src/RequestMeta.cj:191` 每请求一次。修法：`T` 的 `TypeInfo` 提到调用方缓存，并去掉「表 key 已保证类型」后的 `matches` 复检。
 

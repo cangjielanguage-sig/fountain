@@ -198,11 +198,14 @@ public class BeanFactory {
         matches(beanType, m) && cond.on(m.name)
     }
     public func getFirst<T>(cond!: StringCond = IgnoreCond): ?T {
-        getFirst<T>(TypeInfo.of<T>(), cond: cond)
+        // §2.15 / BEAN-2：这里的 beanType 就是 T 自己的 TypeInfo，beanTypeIs 恒真 ⇒ 走内部路径，
+        // 省掉一次 TypeInfo.of<T>() 与一次 isSubtypeOf（f_mvc/src/RequestMeta.cj 每请求调一次）。
+        getFirstByType<T>(TypeInfo.of<T>(), cond)
     }
     private func beanTypeIs<T>(beanType: TypeInfo) {
-        if (!beanType.isSubtypeOf(TypeInfo.of<T>())) {
-            throw BeanException('${beanType} is not sub type of ${TypeInfo.of<T>()}')
+        let requiredType = TypeInfo.of<T>()
+        if (!beanType.isSubtypeOf(requiredType)) {
+            throw BeanException('${beanType} is not sub type of ${requiredType}')
         }
     }
     private func beanLog(logPrefix: String, requiredType: TypeInfo, cond: StringCond, manager: BeanManager){
@@ -212,6 +215,12 @@ public class BeanFactory {
     }
     public func getFirst<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): ?T {
         beanTypeIs<T>(beanType)
+        getFirstByType<T>(beanType, cond)
+    }
+    /**
+     * `getFirst` 的内部实现：调用方已完成 `beanTypeIs` 校验（或 `beanType` 就是 `T` 自己的 `TypeInfo`）。
+     */
+    private func getFirstByType<T>(beanType: TypeInfo, cond: StringCond): ?T {
         match (cond) {
             case Exactly(n) => 
             match (beans.get(n)) {
@@ -223,10 +232,12 @@ public class BeanFactory {
             case _ => 
                 match (beanTypeMap.get(beanType)) {
                 case Some(tree) => 
-                for (m in tree where matches(beanType, cond, m)) {
-                    beanLog('getFirst', beanType, cond, m)
-                    return m.bean as T
-                }
+                    // §2.15 / BEAN-2：桶由注册期按「beanType 的超类型闭包」填充（见 doRegister），
+                    // 桶内每个 manager 的 beanType 必是该 key 的子类型 ⇒ 子类型复检恒真，只留名字条件。
+                    for (m in tree where cond.on(m.name)) {
+                        beanLog('getFirst', beanType, cond, m)
+                        return m.bean as T
+                    }
                 case _ => ()
             }
         }
