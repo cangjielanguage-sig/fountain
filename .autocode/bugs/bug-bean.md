@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 14 条**：严重 1（§1.8 `BEAN-1`）、中 4（§2.15 `BEAN-2`、§2.16 `BEAN-3`、§2.17 `BEAN-4`、§2.18 `BEAN-5`）、低危+待验证 9（§3）。
-- **状态（截至 2026-10-05）**：`BEAN-1` ✅已修复（§1.8）、`BEAN-2` ✅已修复（§2.15）、`BEAN-3` ✅已修复（§2.16，含同族的 `getFirstTuple`）、`BEAN-4` ✅已修复（§2.17）、`BEAN-5` ✅已修复（§2.18）⇒ **本模块中危清零**；**待修**：§3 的 9 条低危/待验证（`BEAN-L9`/`L2`/`L3`/`L1`/`L4`/`L5`/`L6`/`L7` 与待验证的 `BEAN-L8`）。
+- **状态（截至 2026-10-05）**：`BEAN-1` ✅已修复（§1.8）、`BEAN-2` ✅已修复（§2.15）、`BEAN-3` ✅已修复（§2.16，含同族的 `getFirstTuple`）、`BEAN-4` ✅已修复（§2.17）、`BEAN-5` ✅已修复（§2.18）⇒ **本模块中危清零**；§3 的 9 条里 `BEAN-L9` ❌判为**不成立**（见 §3.1）；**待修 8 条**：`BEAN-L2`/`L3`/`L1`/`L4`/`L5`/`L6`/`L7` 与待验证的 `BEAN-L8`。
 
 ## 1. 严重（本模块 1 条）
 
@@ -107,11 +107,12 @@
 
 ## 3. 低危 / 待验证（本模块 9 条）
 
-### 3.1 低危（8 条）
+### 3.1 低危（8 条；其中 `BEAN-L9` 判为**不成立**）
 
 **健壮性 / 正确性**
 
-- `BEAN-L9` `BeanFactory.cj:287-300`：`getFirstTuple<T>` 缺 `beanTypeIs<T>` 前置校验（`getFirst`/`iterator` 都有）⇒ 装配错误被静默吞成 `None`。
+- `BEAN-L9` ❌**不成立（2026-10-05）** — ~~`BeanFactory.cj:287-300`：`getFirstTuple<T>` 缺 `beanTypeIs<T>` 前置校验（`getFirst`/`iterator` 都有）⇒ 装配错误被静默吞成 `None`。~~
+  **判定（2026-10-05）**：非缺陷。`beanTypeMap.get(TypeInfo.of<T>())` 返回的桶**只含 `T` 的子类型**（注册期 `doRegister` 按 `beanType` 的超类型闭包入桶，见 `BeanFactory.cj:63-124`）⇒ 「缺前置校验」没有对象：`T` 未注册时 `beanTypeMap.get` 本身就返回 `None`；有注册时桶内每个 manager 的 `beanType` 必是 `T` 的子类型 ⇒ `if (let bean: T <- m.bean)` 恒成立。同理，`getFirst`/`iterator` 单参重载里的 `beanTypeIs<T>(TypeInfo.of<T>())` 也是**恒真**的（§2.15 已证并去掉）。语义已被用例钉住：`BeanGetFirst_test.testBeanTypeOverloadAndExactly`（`Exactly(异类型名字)` ⇒ `None`）与 `BeanIterator_test.testFirstTupleEquivalence`（`Regexp(异类型模式)` ⇒ `None`）。
 
 **内存 / 清理**
 
