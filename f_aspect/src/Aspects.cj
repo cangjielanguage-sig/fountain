@@ -22,6 +22,17 @@ import fountain::f_collection.*
 import fountain::f_macros.*
 import fountain::f_aspect.exception.AspectException
 
+/**
+ * 织入中的线程本地状态（`Aspects.proceed` 用）：`state` 为 true 表示当前线程已在某次织入调用内
+ * （嵌套调用不再织入，见 README「嵌套调用与递归（设计）」）。
+ * 用按线程的可变对象而不是 `ThreadLocal<Bool>`：每调用只读一次引用 + 读写一个 Bool 字段，
+ * 省掉 `?Bool` 装箱与第二次 ThreadLocal 访问；对象每线程只在首次调用时创建一次，之后不再产生垃圾
+ * （旧写法每次最外层调用都会把 `true` 装箱进 ThreadLocal、`remove()` 再 `set(None)`）。
+ */
+private class RecursionState {
+    var state = false
+}
+
 public class Aspects {
     /**
      * 切面链缓存：按「(类型, 函数)」只在切点函数首次被调用时构建一次，之后一直复用，这是刻意的设计。
@@ -85,20 +96,23 @@ public class Aspects {
             }
         }
     }
-    private static let recursiveInvocationFlag = ThreadLocal<Bool>()
+    /** 每线程一份的可变状态，说明见文件顶部 `RecursionState` */
+    private static let recursion = ThreadLocal<RecursionState>()
     /**本函数不是给开发者用的，是给工具库生成切点使用的*/
     public static func proceed<T>(funcInfo: InvocationFuncInfo, fn: (Array<Any>) -> T): T {
+        let st = recursion.getOrCompute({=> RecursionState()})
         func setRecursiveSerial() {
             try { //避免递归调用切点函数时切面也被重复执行
-                recursiveInvocationFlag.set(true)
+                st.state = true
                 doProceed<T>(funcInfo, fn)
             } finally {
-                recursiveInvocationFlag.remove()
+                st.state = false
             }
         }
-        match (recursiveInvocationFlag.get()) {
-            case Some(_) => fn(funcInfo.args)
-            case _ => setRecursiveSerial()
+        if (st.state) {
+            fn(funcInfo.args)
+        } else {
+            setRecursiveSerial()
         }
     }
 }

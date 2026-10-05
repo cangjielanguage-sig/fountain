@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 17 条**：严重 5（§1.3 `ASP-1`、§1.4 `ASP-2`、§1.6 `ASP-4`、§1.7 `ASP-5`、§1.14 `ASP-3`）、中 4（§2.4 `ASP-9`、§2.9 `ASP-8`、§2.22 `ASP-6`、§2.23 `ASP-7`）、低危+待验证 8（§3）。
-- **状态（截至 2026-10-05）**：`ASP-1` ❌误判（§1.3，设计目的）、`ASP-2` ✅已修复（§1.4）、`ASP-4` ✅已修复（§1.6）、`ASP-5` ✅已修复（§1.7）、`ASP-3` ✅已修复（§1.14）、`ASP-9` ❌误判（§2.4，设计目的，README 已说明）、`ASP-8` ❌误判（§2.9，设计目的：切面集合与可织入关系编译期确定、首次调用即固定，README 已说明）、`ASP-6` ❌不修（§2.22，设计/取舍：一线程完成织入、其余等待性价比最高）、`ASP-7` ❌不修（§2.23，设计：prototype 切面可能并发不安全，必须每次调用从 BeanFactory 取实例）、`ASP-L8` ❌不成立（§3.2，概率性假设已实测排除）、`ASP-L1`/`ASP-L2`/`ASP-L3` ❌不改（§3.1，只在首次建链时执行一次）、`ASP-L6` ❌不改（§3.1，`+=` 为惰性拼接非平方级；`append` 有历史风险）、`ASP-L7` ✅已修复（§3.1，空链快路径，含语义变化说明）；**待审** §3.1 的 `ASP-L4`/`ASP-L5`（方案与改后代码已提交用户审阅）。
+- **状态（截至 2026-10-05）**：`ASP-1` ❌误判（§1.3，设计目的）、`ASP-2` ✅已修复（§1.4）、`ASP-4` ✅已修复（§1.6）、`ASP-5` ✅已修复（§1.7）、`ASP-3` ✅已修复（§1.14）、`ASP-9` ❌误判（§2.4，设计目的，README 已说明）、`ASP-8` ❌误判（§2.9，设计目的：切面集合与可织入关系编译期确定、首次调用即固定，README 已说明）、`ASP-6` ❌不修（§2.22，设计/取舍：一线程完成织入、其余等待性价比最高）、`ASP-7` ❌不修（§2.23，设计：prototype 切面可能并发不安全，必须每次调用从 BeanFactory 取实例）、`ASP-L8` ❌不成立（§3.2，概率性假设已实测排除）、`ASP-L1`/`ASP-L2`/`ASP-L3` ❌不改（§3.1，只在首次建链时执行一次）、`ASP-L6` ❌不改（§3.1，`+=` 为惰性拼接非平方级；`append` 有历史风险）、`ASP-L7` ✅已修复（§3.1，空链快路径，含语义变化说明）、`ASP-L4` ✅已修复（§3.1，按线程状态对象去装箱）、`ASP-L5` ✅已修复（§3.1，默认模板不丢异常）；**待修：无** —— §1–§3 全部了结（✅已修复 7、❌误判/设计 5、❌不成立 1、❌不改 4，合计 17 条）。
 
 ## 1. 严重（本模块 5 条）
 
@@ -172,14 +172,14 @@ for (i in 0..params.size) {
 
 **内存 / 清理**
 
-- `ASP-L4` `Aspects.cj:52-66`：每次调用两次 ThreadLocal 访问（`get` + `set/remove`）并伴随 `?Bool` 装箱；`remove()` 实为 `set(None)`（`f_base/src/ExtendThreadLocal.cj:33-35`）。→ **待审（2026-10-05）**：方案与改后代码已提交用户审阅（`ThreadLocal<Bool>` → 按线程的可变状态对象，用 `f_base` 的 `getOrCompute` 惰性建一次，去掉每调用的 `?Bool` 装箱与第二次 ThreadLocal 访问；`> 0` 语义不变），确认后再改。
+- `ASP-L4` `Aspects.cj:52-66`：每次调用两次 ThreadLocal 访问（`get` + `set/remove`）并伴随 `?Bool` 装箱；`remove()` 实为 `set(None)`（`f_base/src/ExtendThreadLocal.cj:33-35`）。→ **✅已修复（2026-10-05）**：换成每线程一份的 `RecursionState { var state = false }`（文件顶层私有类）+ `f_base` 的 `getOrCompute` 惰性建一次；语义不变。见下方修复标记。
 
 **性能微项**
 
 - `ASP-L1` `AspectRoute.cj:85, 139, 162, 344`：每次匹配现构造正则（`Regex.wildcard` = 6 次 `replace` + 键串 + TTL 缓存查找；`Regex('^.+::')` 每次新建）；规则实例无状态，可缓存编译结果。→ **❌不改（2026-10-05）**：只在切点函数**首次调用建链**时执行一次，不在热路径。
 - `ASP-L2` `ConfigAspectRouteRule.cj:56, 72-242`（多处）：每次匹配重新 `Config.getString` + `split` + 构造新规则对象 + 传闭包；规则内可惰性解析一次并 memo。→ **❌不改（2026-10-05）**：同上（只执行一次）。
 - `ASP-L3` `AspectRoute.cj:189-213, 230, 245, 260, 282, 291`：匹配辅助函数每次分配临时 `HashSet`/`ArrayList` 并对每个注解做 `ClassTypeInfo.of`（集合选型本身是哈希，没问题）。→ **❌不改（2026-10-05）**：同上（只执行一次）。
-- `ASP-L5` `Aspect.cj:54-65`：默认模板 `proceed` 的 try/catch/finally；`finally` 里 `final()` 抛异常会覆盖原异常。→ **待审（2026-10-05）**：方案与改后代码已提交用户审阅（保持「原异常优先」：先跑 `final()`，若原本有异常则抛原异常、否则抛 `final()` 的异常；try/catch 本身在异常表模型下不构成性能问题），确认后再改。
+- `ASP-L5` `Aspect.cj:54-65`：默认模板 `proceed` 的 try/catch/finally；`finally` 里 `final()` 抛异常会覆盖原异常。→ **✅已修复（2026-10-05）**：默认模板改为**不丢弃任何异常**（`final()` 抛异常时把它作为主异常、把之前的失败挂到 `suppressed`；`throwing` 自身抛异常同样保留原异常）。见下方修复标记。
 - `ASP-L6` `macros/PointCut.cj:52-56, 86-94`：宏展开期用 `+=` 在循环里累积 Tokens（编译期平方级拼接，大函数/多参数时明显）。→ **❌不改（2026-10-05）**：核对本机 SDK 源码 `std/ast/tokens.cj` —— `+`/`concat` 是惰性 `ConcatTokens`（O(1) 建节点，**不是**平方级拼接）；`append` 在普通 `Tokens` 上是逐元素 `add`，但在 **`ConcatTokens` 重载**里写成 `rightChild = rightChild + tks` 并单独维护 `cachedSize`（与「历史上出现大量重复/丢失 Token」的描述吻合，风险仍在，且与 `+=` 混用会走到该重载）⇒ 不为编译期微项冒险。
 - `ASP-L7` `Aspects.cj:38, 64-67`：结果统一走 `Any` 链，值类型返回值每次调用装箱（架构取舍，优先级最低）。→ **✅已修复（2026-10-05，空链快路径）**：见下方修复标记。
 
@@ -190,6 +190,15 @@ for (i in 0..params.size) {
 - 用例 `f_aspect/src/test/empty_chain_fastpath_test.cj`：两个实例各调一次「无切面命中」的织入函数，断言各自读到自己实例的状态。**RED**：`Assert Failed: (b.who() == 2)`、`left: 1 / right: 2`（第二个实例上执行了第一个实例的函数体），`PASSED: 13, FAILED: 1`、EXIT=1；**GREEN**：`[ PASSED ] testTargetRunsOnCurrentReceiver`、`PASSED: 14, FAILED: 0, ERROR: 0`、`cjpm test success`（`cjfmt` 后复跑仍 14/14）。
 - 计时（`pointcut_meta_cost_test` 的空链路径，1e6 次）：修前 2034 ns/次、修后 1917 ns/次，但同一版本不同轮次波动 1867–2439 ns ⇒ **差值落在噪声内，不作为确证**；结构性收益 = 省掉一次包装闭包调用 + 一次值类型装箱/解箱。
 - 宏消费方构建：`f_orm` `cjpm build success`（EXIT=0）、`f_mvc` `cjpm build success`（EXIT=0）。
+
+**`ASP-L4`/`ASP-L5` 修复标记（2026-10-05）**：分支 `fix/aspect`（worktree `.worktrees/aspect`，基线 `7be7225d`），代码、用例、本标记在**同一提交**（提交信息 `perf(f_aspect): ASP-L4 织入状态改按线程对象（去 ?Bool 装箱/二次 ThreadLocal 访问）；fix(f_aspect): ASP-L5 默认模板不丢异常（§3.1）`）。
+
+- `ASP-L4`（`f_aspect/src/Aspects.cj`）：`ThreadLocal<Bool> recursiveInvocationFlag` → 文件顶层 `private class RecursionState { var state = false }` + `ThreadLocal<RecursionState>`（用 `f_base` 的 `getOrCompute` 惰性建一次）；`proceed` 每调用只读一次引用、读写一个 `Bool` 字段；语义不变（`state == true` 即已在织入中，嵌套调用仍不织入）。
+  - **GC/CPU 口径**（回答用户疑问）：旧写法**每次最外层调用**都 `set(true)`（把 `Bool` 装箱进 ThreadLocal）、`finally remove()`（`set(None)`，又一次装箱）；新写法每线程只创建一次状态对象、之后**零分配** ⇒ **GC 压力是降低的**，CPU 也不会更高（少了装箱与一次 ThreadLocal 访问）。计时与之相符：修前 2034 ns/次、修后 2441 ns/次，但同版本多轮波动 1867–2449 ns ⇒ **差值在噪声内，不作确证**（短命小对象在 TLAB 上分配只有几 ns 量级）；如需硬证据可提高轮数或用 `@Bench` 单独测。
+  - 用例 `f_aspect/src/test/recursion_guard_test.cj`：自递归 `r(3)` ⇒ 结果 6、切面只进入最外层一次（`entries.size == 1`、参数 3），通过（该语义在改动前后都必须成立，属守卫用例）。
+- `ASP-L5`（`f_aspect/src/Aspect.cj` 默认 `proceed` 模板）：改为**不丢弃任何异常** —— `throwing` 自身抛异常时用 `AspectException(ee)` 包住并把原 `e` 挂 `suppressed`；`final()` 抛异常时把它作为主异常（`AspectException(e)`）、把之前的 `failure` 挂 `suppressed`；`final()` 正常时原 `failure` 照常抛出（catch 分支以 `throw failure.getOrThrow()` 收尾，异常统一由 `finally` 合并后抛出）。
+  - 用例 `f_aspect/src/test/aspect_template_suppress_test.cj`（两个目标函数 `t`/`u` + 两个切面）：**RED（修前）**：`主异常：fountain::f_aspect.test.L5ErrB:B; 抑制异常数：0`、`Assert Failed: (be.suppressed.size == 1)`、`left: 0 / right: 1`、`PASSED: 16, FAILED: 1`、EXIT=1（`final` 的 B 覆盖了 `before` 的 A）；**GREEN（修后）**：`主异常：fountain::f_aspect.exception.AspectException:; 抑制异常数：1`（`causedBy` = B、`suppressed[0]` = A）、两条用例 `[ PASSED ]`、`PASSED: 17, FAILED: 0, ERROR: 0`、EXIT=0。
+  - 行为差异（已实现）：`final()` 抛异常时修前报 `final()` 的异常（前面的失败丢失），修后报包装后的 `final()` 异常且前者可见于 `suppressed`；`throwing` 自身抛异常的情形同样不再丢原异常。try/catch/finally 本身不构成性能问题（异常表模型）。
 
 ### 3.2 待验证（1 条）→ ❌不成立（2026-10-05）
 
