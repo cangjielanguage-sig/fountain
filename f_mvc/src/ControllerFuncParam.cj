@@ -171,9 +171,25 @@ public class RequestBody <: ControllerFuncParam {
     protected func extract<T>(name: String, _: ?AbstractDateTimeConverter, ctx: HttpContext,
         pattern: HttpRequestPathPatterns, _: Validator): ?T where T <: DataFields<T> {
         let body = ctx.request.body
-        let size = ctx.request.bodySize
-        let contentType = ctx.request.headers.getFirst("Content-Type").getOrThrow()
-        let mediaType = MediaTypes.parse(contentType)
+        let mediaType = requestBodyMediaType(ctx.request.headers.getFirst("Content-Type"))
         mediaType.toDataFields<T>(body)
+    }
+}
+
+/**
+ * 包内接缝（§2.2 / `MVC-C3`）：`@RequestBody` 的媒体类型解析。
+ * Content-Type 缺失 / 空串 / 未注册时不再 getOrThrow（原先抛 NoneValueException /
+ * MediaTypeException ⇒ 500），而是 perform `MVCBreakingCommand(415)`：由请求链上
+ * `RequestMeta.setHandle` 里既有的 `handle (cmd: MVCBreakingCommand)` 分支直接回
+ * 「Unsupported Media Type」，与路由层对未知 Content-Type 的 415 约定一致
+ * （`MultiRequestMethodHandler.cj:22,80`）。未被 handler 接住时由 Command.defaultImpl()
+ * 抛 UnhandledCommandException，退化为原先的 500，不会静默放行。
+ */
+func requestBodyMediaType(contentType: ?String): MediaType {
+    match (MediaTypes.tryParse(contentType ?? '')) {
+        case Some(ct) => ct
+        case _ =>
+            perform MVCBreakingCommand(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+            throw UnreachableException('MVC-C3: no Content-Type, request should have ended with 415')
     }
 }

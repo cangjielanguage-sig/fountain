@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 25 条**：严重 4（§1.9 `MVC-4`、§1.10 `MVC-1`、§1.11 `MVC-3`、§1.12 `MVC-2`）、中 8（§2.2 `MVC-C3`、§2.3 `MVC-C5`、§2.5 `MVC-C2`、§2.6 `MVC-8`、§2.7 `MVC-6`、§2.19 `MVC-5`、§2.20 `MVC-7`、§2.21 `MVC-9`）、低危+待验证 13（§3）。
-- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；**待修** §2 的 8 条中危、§3 的 13 条低危/待验证（**本模块严重级已清零**）。
+- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；**待修** §2 的 7 条中危（§2.3、§2.5、§2.6、§2.7、§2.19–§2.21）、§3 的 13 条低危/待验证（**本模块严重级已清零**）。
 
 ## 1. 严重（本模块 4 条）
 
@@ -95,7 +95,15 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 
 ## 2. 中（本模块 8 条）
 
-### 2.2 [中｜正确性] `MVC-C3` 无 `Content-Type` 的请求直接 500（f_mvc）✓已复核
+### 2.2 [中｜正确性] `MVC-C3` 无 `Content-Type` 的请求直接 500（f_mvc）✓已复核 → ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：分支 `fix/mvc-rest`（worktree `.worktrees/mvc-rest`，基线 `sts/1.3.x` 的 `7be7225d`），代码、用例与本标记在**同一提交**（提交信息 `fix(f_mvc): MVC-C3 缺/未注册 Content-Type 的 @RequestBody 请求改回 415（§2.2）`）。
+
+- 改动：`f_mvc/src/ControllerFuncParam.cj` —— `RequestBody.extract`（原 `:171-178`）不再 `getFirst("Content-Type").getOrThrow()`，改调包内接缝 `requestBodyMediaType(contentType: ?String): MediaType`（顺带删掉同函数里未使用的 `let size`，编译器原就在报 `unused variable:'size'`）。接缝用 `MediaTypes.tryParse`（未知串返回 `None`，不抛，`f_http/src/MediaTypes.cj:82`）：缺失 / 空串 / **未注册类型**（如 `application/xml`，今天同样 500）统一 `perform MVCBreakingCommand(HttpStatus.UNSUPPORTED_MEDIA_TYPE)`，由 `RequestMeta.setHandle` 里既有的 `handle (cmd: MVCBreakingCommand)`（`RequestMeta.cj:205-208`；`f_mvc/cjpm.toml` 已开 `--enable-eh --experimental`）直接回 415。未被 handler 接住时 `stdx.effect.Command.defaultImpl()` 抛 `UnhandledCommandException` ⇒ 退化成原先的 500，不会静默放行。
+- 为什么不是「缺失时按 `application/x-www-form-urlencoded` 处理」：`MediaTypes` 只注册了 `application/json`、`multipart/form-data`、`multipart/mixed`、`text/plain`（`f_http/src/MediaTypes.cj:28-33`，另有 bean 注册），**没有 form 类型** ⇒ `parse` 抛 `MediaTypeException`，仍是 500。为什么是 415 而不是 400：路由层对「Content-Type 不匹配任何 consumes」已回 415（`MultiRequestMethodHandler.cj:22,80`），同一语义保持同一个码。
+- 用例：`f_mvc/src/ControllerFuncParam_test.cj`（新增）—— 直接驱动接缝、用 `try { ... } handle (cmd: MVCBreakingCommand) { ... }` 接住 415（`HttpContext` 造不出来，绕开它）：`testMissingContentTypeIs415`、`testEmptyContentTypeIs415`、`testUnregisteredContentTypeIs415`（三者在修前都落「没有 415」的哨兵 OK=200）、`testJsonContentTypeParsed`（已注册类型回归保护）。注：`handle` 分支不能捕获 `var`，用例里用 `Box<Option<HttpStatus>>` 兜。
+- RED/GREEN 实测：接缝先按修前行为实现（`MediaTypes.parse(contentType.getOrThrow())`）复跑 ⇒ 3 条失败，`Assert Failed: (HttpStatus.UNSUPPORTED_MEDIA_TYPE.value == breakStatus(None).value)`、**left: 415、right: 200**（空串与 `application/xml` 同型），`TOTAL 10 / PASSED 7 / FAILED 3`、`TEST EXIT=1`；改成 `perform` 415 后复跑 ⇒ **PASSED 10 / FAILED 0 / ERROR 0**、`TEST EXIT=0`；同轮 `cjpm build` **exit 0**。
+- 未覆盖 / 已知边界：①**真端到端未跑**（`@RequestBody` 端点的 HTTP 往返）—— 建议在 fdemo 上验一次：`curl -i -X POST http://127.0.0.1:8080/api/user/echo3`（不带 Content-Type / body）应回 415，带 `-H 'Content-Type: application/json' -d '{...}'` 仍正常；②`perform` 最终走 `respond(status, data, ctx)`，而它对「空结果 + `Accept` 不含 `*/*`」会回 406（`RequestMeta.cj:313-319`）—— 这是 §3.2 `MVC-L11` 的既有语义，本条未动；③同样未动（待端到端观察）：`perform` 是否绕过宏生成闭包里的 `finally { accessLog }`，即这类被 415 快速失败的请求是否进访问日志。
 
 `src/ControllerFuncParam.cj:175`：`ctx.request.headers.getFirst("Content-Type").getOrThrow()` —— 空 body 的 POST/PUT、只带查询参数的调用会抛 `NoneValueException` ⇒ 500，而应 415/400。修法：缺失时按 `application/x-www-form-urlencoded` 或明确报错处理。
 
