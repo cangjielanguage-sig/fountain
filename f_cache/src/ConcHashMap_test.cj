@@ -40,4 +40,40 @@ public class ConcHashMap_test {
         @Assert(2, keys.size)
         @Assert(false, keys.isEmpty())
     }
+
+    @TestCase
+    public func testSizeAccountingIterationAndRemoval(): Unit {
+        let map = ConcHashMap<Int64>.create(concurrencyLevel: 4)
+        //新增：记账 size；覆盖同键：返回旧值、size 不重复计
+        @Assert(true, map.add('a', 1).isNone())
+        @Assert(1, map.size)
+        if (let Some(old) <- map.add('a', 2)) {
+            @Assert(1, old)
+        } else {
+            @Assert(false)
+        }
+        @Assert(1, map.size)
+        //computeIfAbsent：缺失才计算并记账，命中直接返回旧值
+        @Assert(3, map.computeIfAbsent('b') {3})
+        @Assert(3, map.computeIfAbsent('b') {99})
+        @Assert(2, map.size)
+        //get / contains / containsAll（后者要求全部命中）
+        @Assert(2, map.get('a') ?? -1)
+        @Assert(true, map.contains('b'))
+        @Assert(true, map.containsAll(['a', 'b']))
+        @Assert(false, map.containsAll(['a', 'missing']))
+        //迭代能取到全部条目
+        var seen = 0
+        for (_ in map) {
+            seen++
+        }
+        @Assert(2, seen)
+        //remove 记账、removeIf 批量删、clear 归零
+        @Assert(2, map.remove('a') ?? -1)
+        @Assert(1, map.size)
+        map.removeIf {_, v => v == 3}
+        @Assert(0, map.size)
+        @Assert(true, map.isEmpty())
+        @Assert(false, map.contains('b'))
+    }
 }
