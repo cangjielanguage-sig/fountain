@@ -21,6 +21,7 @@
 > 三次修正（2026-10-05）：§1.3 `POOL-3` 已修复 ⇒ 待修严重级 **1** 条（`POOL-4`），中危 **7** 条。
 > 四次修正（2026-10-05）：§1.4 `POOL-4` 判定为**误判**（设计目的，不修改）⇒ 待修严重级 **0** 条，中危 **7** 条；上表保留审查当时的原始计数。
 > 五次修正（2026-10-05）：§2.2 `POOL-7` 已修复 ⇒ 待修中危 **6** 条（`POOL-8`~`POOL-13`）。
+> 六次修正（2026-10-05）：§2.3 `POOL-8` 已修复 ⇒ 待修中危 **5** 条（`POOL-9`~`POOL-13`）。
 
 **建议修复顺序**：
 
@@ -29,7 +30,7 @@
 3. `POOL-3`（§1.3）巡检把**满载 key** 的空闲项当「校验不过」摘掉，并整轮跳过用户 checker → 稳态抖动、`connectionLife`/`idleTimeout` 判定被绕过（实测满载空闲池 idle 2→1）　**✅已修复（2026-10-05，见 §1.3 修复标记：size&lt;max 只约束补建）**
 4. `POOL-4`（§1.4）creator/checker 持续失败时**无退避紧重试** → 对下游的重连风暴 + 每轮一条 WARN（实测 300ms 内 75,976 次尝试）　**❌误判（2026-10-05：设计目的，不修改；见 §1.4 误判标记）**
 5. `POOL-5`（§1.5）`maxWaiting = Duration.Max` 的「真无限等待」实际只等 1s 就**静默放弃**（实测 1008ms 返回 `None`，对照 30s 档 2016ms 返回项）；同一分支还会吞掉丢失的唤醒　**✅已修复（2026-10-05，随 §1.2 的统一等待重写一并解决，见 §1.5 修复标记）**
-6. 其后按 §2 顺序：`POOL-6`（关停不唤醒/归还竞态）**✅已修复（2026-10-05，见 §2.1 修复标记）** → `POOL-7`（关池泄漏线程）**✅已修复（2026-10-05，见 §2.2 修复标记：线程句柄 + cancel + 每轮判状态 + 带超时出队）** → `POOL-8`（队列按 `totalSize` 预分配 + 两个池默认 `maxSize=Int64.Max` 构造即 OOM）→ `POOL-9`（`release` 后仍可写，实测污染池项）→ `POOL-10`~`POOL-13`
+6. 其后按 §2 顺序：`POOL-6`（关停不唤醒/归还竞态）**✅已修复（2026-10-05，见 §2.1 修复标记）** → `POOL-7`（关池泄漏线程）**✅已修复（2026-10-05，见 §2.2 修复标记：线程句柄 + cancel + 每轮判状态 + 带超时出队）** → `POOL-8`（队列按 `totalSize` 预分配 + 两个池默认 `maxSize=Int64.Max` 构造即 OOM）**✅已修复（2026-10-05，见 §2.3 修复标记：队列容量解耦、夹取 [1,1024]）** → `POOL-9`（`release` 后仍可写，实测污染池项）→ `POOL-10`~`POOL-13`
 
 ---
 
@@ -334,11 +335,26 @@ threads: threads 7->27->27, blocking 6->26->26
 
 **修法**：用「入队元素即关闭哨兵」或 `remove(timeout:)` 轮询（如 500ms）替代无超时阻塞出队。
 
-### 2.3 [中｜内存+API 契约] `POOL-8` `tasks` 队列按 `totalSize` 预分配；`ArrayPool`/`ArrayListPool` 的默认 `maxSize = Int64.Max` 直接构造失败
+### 2.3 [中｜内存+API 契约] `POOL-8` `tasks` 队列按 `totalSize` 预分配；`ArrayPool`/`ArrayListPool` 的默认 `maxSize = Int64.Max` 直接构造失败 ✓已复核 → ✅已修复（2026-10-05）
 
-```209:209:f_pool/src/KeyPool.cj
-        tasks = ArrayBlockingQueue<PoolTask<K>>(totalSize)
+**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、本标记在**同一提交**（提交信息 `fix(f_pool): POOL-8 任务队列容量与池容量解耦（夹取 [1,1024]）`）。
+
+- 改动：`f_pool/src/KeyPool.cj:28-41` 新增 `CREATE_TASK_QUEUE_CAP = 1024` 与 `createTaskQueueCapacity(total)`（把池容量夹进 `[1, 1024]`，顺带兜住 `totalSize <= 0` 时 `ArrayBlockingQueue` 直接抛 `IllegalArgumentException` 的边界）；构造处 `:250-251` 改为 `ArrayBlockingQueue<K>(createTaskQueueCapacity(totalSize))`。
+  为什么这样就够：任务队列只是给创建线程传「给某键建一个池项」的纸条，槽位不必等于池容量；队列满时 `tryAddTask` 返回 false、等待者下一轮再试 —— `get` 的等待是「条件变量通知 + 预算」，不依赖任务必达。
+- 用例：`f_pool/src/KeyPool_test.cj` → `arrayPoolDefaultsMustConstruct`（`ArrayPool<Int64>()` / `ArrayListPool<Int64>()` 在默认参数下能构造、能 get/giveBack）。
+- 测量证据：
+  - **修前**：该用例 `[ ERROR ]` —— `ArrayPool<Int64>()` 构造即 `Out of memory`、测试进程 EXIT=1（与探针 `main arraypool_default` 一致）；探针 `main queue_alloc` 另量到 `maxSize=5_000_000` 时构造白付 **+80,004,832 B** 堆；
+  - **修后**：`[ PASSED ]`（`FILTERED_EXIT=0`）；全量 **`PASSED: 46, SKIPPED: 0, ERROR: 0, FAILED: 0`**（`FULL_EXIT=0`，日志 `.autocode/tmp/pool_fix8_{pre,post}.log`）。
+- 未覆盖/说明：
+  - **没有**改 `ArrayPool`/`ArrayListPool` 的公开默认值 `maxSize = Int64.Max`（「不限制」是 README 口径，属公开 API 行为，按约定不擅动）：解耦之后它只表示「池不设上限」，不再引发构造 OOM。
+  - **试过又删掉**一条用 `getAllocatedHeapSize()` 增量断言「不得预分配」的用例：`--filter` 单跑时修前也通过（该计数在单进程里分不出这 80MB）⇒ 预分配这件事以探针 `queue_alloc` 的读数（修前 +80MB）＋现在的结构上限（夹取到 1024）为准，判别用例用「默认参数构造即 OOM」这条硬信号。
+
+```250:251:f_pool/src/KeyPool.cj
+        // 任务队列容量与池容量解耦（夹在 [1, 1024]）：见 createTaskQueueCapacity 的说明（§2.3 POOL-8）
+        tasks = ArrayBlockingQueue<K>(createTaskQueueCapacity(totalSize))
 ```
+
+> 修前（问题现场）：`tasks = ArrayBlockingQueue<PoolTask<K>>(totalSize)` —— 队列容量直接等于池容量。
 
 `std.collection.concurrent.ArrayBlockingQueue` 的 `init(capacity)` 会**立即** `Array(capacity, repeat: ...)` 并按容量 malloc 状态数组（`cangjie_runtime/std/libs/std/collection/concurrent/array_blocking_queue.cj:68-78`）—— 队列容量直接等于池容量。
 
@@ -461,6 +477,8 @@ useafterrelease: second_is_empty=false second_bytes=5
 > `POOL-3` 修复后的复测：探针 `churn` 的场景改由单测钉住 —— `checkMustNotDropIdleItemWhenAtCap`（满载空闲跑 ~10 轮巡检后仍可借 2 件、creator 仍只调 2 次；修前 `held.size == 2` 断言失败）与 `checkerMustRunWhenAtCap`（满载时用户 checker 必须被调用；修前 `calls.load() > 0` 断言失败）。全量 `cjpm test` = **`PASSED: 44, SKIPPED: 0, ERROR: 0, FAILED: 0`**（日志 `.autocode/tmp/pool_fix3_{pre,post}.log`）。
 
 > `POOL-7` 修复后的复测：`closeMustReclaimInternalThread`（建/关 20 个池后线程数回落到基线；修前 `after <= before + 5` 断言失败）与探针 `main threads` 的同一读数（修前 `7->27->27 / blocking 6->26->26`）。全量 `cjpm test` = **`PASSED: 45, SKIPPED: 0, ERROR: 0, FAILED: 0`**（日志 `.autocode/tmp/pool_fix7_{pre,post}.log`）。
+
+> `POOL-8` 修复后的复测：`arrayPoolDefaultsMustConstruct`（默认参数下的 `ArrayPool`/`ArrayListPool` 能构造 + 借还；修前该用例直接 OOM、进程 EXIT=1）。全量 `cjpm test` = **`PASSED: 46, SKIPPED: 0, ERROR: 0, FAILED: 0`**（日志 `.autocode/tmp/pool_fix8_{pre,post}.log`）；探针 `queue_alloc` 的 +80MB 是**修前基线**（修后队列固定 ≤1024 槽）。
 
 复跑方式（WSL Ubuntu-24.04）：`source /mnt/d/docs/work/cangjie/cangjie.sh` → `cd .autocode/tmp/pool_probe && cjpm build` → 按脚本里的 `LD_LIBRARY_PATH`（各 `target/release/*@*` 目录**排在 `installed/libs/fboot` 之前**）直接跑 `target/release/bin/main <mode>`，用 `time -p` 量 CPU。
 

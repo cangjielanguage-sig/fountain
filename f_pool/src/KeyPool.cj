@@ -21,6 +21,25 @@ import fountain::f_base.ExitCallbacks
 import fountain::f_pool.diagnostics.PoolDiagnostics
 import fountain::f_pool.exception.PoolException
 
+/**
+ * 「创建任务」队列的容量上限：它只是给创建线程传「给某键建一个池项」的纸条，槽位数**不必**等于池容量 ——
+ * `ArrayBlockingQueue.init(capacity)` 会**立即**按容量分配数组与状态位（std 源码 `array_blocking_queue.cj:68-78`），
+ * 拿池容量当容量时：`maxSize = Int64.Max`（`ArrayPool`/`ArrayListPool` 的默认值）直接 OOM、
+ * 5e6 时白付 80MB 堆。队列满时 `tryAddTask` 返回 false、等待者下一轮再试，不影响正确性
+ * （见 .autocode/bugs/bug-pool.md §2.3 `POOL-8`）。
+ */
+private const CREATE_TASK_QUEUE_CAP: Int64 = 1024
+
+/** 池容量 → 任务队列容量：夹在 `[1, CREATE_TASK_QUEUE_CAP]`（`ArrayBlockingQueue` 的容量必须为正）。 */
+private func createTaskQueueCapacity(total: Int64): Int64 {
+    if (total < 1) {
+        1
+    } else if (total > CREATE_TASK_QUEUE_CAP) {
+        CREATE_TASK_QUEUE_CAP
+    } else {
+        total
+    }
+}
 public interface KeyedObjectManager<K, V> {
     func create(key: K): V
     func check(key: K, value: V): Bool
@@ -228,7 +247,8 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             case _: ?Unit => UnitKeyPool<K, Ref<V>>(mode, maxSize)
             case _ => BaseKeyPool<K, Ref<V>>(mode, maxSize)
         }
-        tasks = ArrayBlockingQueue<K>(totalSize)
+        // 任务队列容量与池容量解耦（夹在 [1, 1024]）：见 createTaskQueueCapacity 的说明（§2.3 POOL-8）
+        tasks = ArrayBlockingQueue<K>(createTaskQueueCapacity(totalSize))
         PoolDiagnostics.onPoolCreated()
         // 把池内的常规告警接到 f_log（幂等：应用若已用 redirectWarningsTo 接管，这里不会覆盖）
         PoolDiagnostics.installDefaultHooks(

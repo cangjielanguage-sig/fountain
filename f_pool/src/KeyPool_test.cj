@@ -618,6 +618,26 @@ public class KeyPoolTest {
         let after = getThreadCount()
         @Assert(after <= before + 5)                 // 修前：before + 20
     }
+    /**
+     * `POOL-8`（`.autocode/bugs/bug-pool.md` §2.3）：`ArrayPool` / `ArrayListPool` 的默认
+     * `maxSize = Int64.Max` 不得让构造失败。修前任务队列按池容量预分配 ⇒ `ArrayPool<Int64>()`
+     * 直接 `Out of memory`（整个测试进程挂掉），这里连构造都过不去。
+     */
+    @TestCase
+    public func arrayPoolDefaultsMustConstruct(): Unit {
+        let bytes = ArrayPool<Int64>()
+        let list = ArrayListPool<Int64>()
+        if (let Some(x) <- bytes.get(timeout: Duration.second)) {
+            bytes.giveBack(x)
+        } else {
+            @Assert(false)
+        }
+        if (let Some(x) <- list.get(timeout: Duration.second)) {
+            list.giveBack(x)
+        } else {
+            @Assert(false)
+        }
+    }
 }
 
 @Test
