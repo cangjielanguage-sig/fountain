@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 25 条**：严重 4（§1.9 `MVC-4`、§1.10 `MVC-1`、§1.11 `MVC-3`、§1.12 `MVC-2`）、中 8（§2.2 `MVC-C3`、§2.3 `MVC-C5`、§2.5 `MVC-C2`、§2.6 `MVC-8`、§2.7 `MVC-6`、§2.19 `MVC-5`、§2.20 `MVC-7`、§2.21 `MVC-9`）、低危+待验证 13（§3）。
-- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；`MVC-8` ✅已修复（§2.6，`fix/mvc-rest`）；`MVC-6` ❌误判（§2.7，用户判定非缺陷：WS 消息总长上限属端点/部署侧策略，不设硬上限是设计选择）；`MVC-5` ❌不改（§2.19，用户判定「不值得改」：全仓 `@PathVariable` 均为单变量、暴露面为零）；`MVC-7` ✅已修复（§2.20，`fix/mvc-rest`，范围：只改 `RequestMethod.hashCode()`）；`MVC-9` ❌不改（§2.21，用户判定：每请求从 IoC 取 controller 实例是设计语义 —— 允许 controller 定义为 `prototype`，缓存实例会破坏它）；`MVC-L8`/`MVC-L1`/`MVC-C6`(a)/`MVC-L5` ✅已加固（§3.1，`fix/mvc-rest`；`MVC-C6`(b) 待拍板）；**待修** §3.1 的 7 条低危 + §3.2 的 2 条待验证（**§1 严重级、§2 中危均已清零**）。
+- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；`MVC-8` ✅已修复（§2.6，`fix/mvc-rest`）；`MVC-6` ❌误判（§2.7，用户判定非缺陷：WS 消息总长上限属端点/部署侧策略，不设硬上限是设计选择）；`MVC-5` ❌不改（§2.19，用户判定「不值得改」：全仓 `@PathVariable` 均为单变量、暴露面为零）；`MVC-7` ✅已修复（§2.20，`fix/mvc-rest`，范围：只改 `RequestMethod.hashCode()`）；`MVC-9` ❌不改（§2.21，用户判定：每请求从 IoC 取 controller 实例是设计语义 —— 允许 controller 定义为 `prototype`，缓存实例会破坏它）；`MVC-L8`/`MVC-L1`/`MVC-C6`(a)/`MVC-L5` ✅已加固（§3.1，`fix/mvc-rest`）；`MVC-L7` ❌不改（§3.1，用户判定 C：成本仅注册期毫秒级，且源头是只写不读的 `RequestMetas`）；**待处理** §3.1 的 `MVC-C6`(b) 与 `MVC-L2`/`L3`/`L4`/`L6`/`L9`/`L10`（共 7 条）+ §3.2 的 `MVC-L11`/`L12` 两条待验证（**§1 严重级、§2 中危均已清零**）。
 
 ## 1. 严重（本模块 4 条）
 
@@ -216,7 +216,7 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 - `MVC-L4` `RequestCondition.cj:154-170`：每次条件检查新建 `HashSet<String>(currentValues)`。
 - `MVC-L5` `HttpRequestDistributorImpl.cj:57-63`：未命中路径每请求新建 `RequestMeta`（含闭包）⇒ 建议复用单例 404 handler。→ ✅**已修复（2026-10-05，见 §3.1 加固标记（二））**
 - `MVC-L6` `global_func.cj:69-147`：数组参数解析用 `split`（无逗号也会切出 1 元素数组），可先判 `indexOf(',')` 或 `lazySplit`。
-- `MVC-L7` `RequestMeta.cj:76-92`：比较器内构造两个 `TreeSet`（注册期 O(N log N) 次，可预算排序键）。
+- `MVC-L7` `RequestMeta.cj:76-92`：比较器内构造两个 `TreeSet`（注册期 O(N log N) 次，可预算排序键）。→ ❌**不改（2026-10-06，用户判定 C，见 §3.1 判定标记（L7））**
 - `MVC-L8` `RequestMeta.cj:71`：404 日志用非惰性插值（`'...${path}'`），改 `log.warn{...}`。→ ✅**已修复（2026-10-05，见 §3.1 加固标记）**
 - `MVC-L10` `RequestArgMeta.cj:21, 39`：同一次写入用 `[]` + `get` 双查表，可合并为一次 `get`。
 
@@ -246,6 +246,16 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
   - **GREEN**：`distribute` 切到轻量 handler 后复跑 ⇒ **`PASSED 25 / FAILED 0 / ERROR 0`、`TEST EXIT=0`**；同轮 `cjpm build` **exit 0**。
 - 用例：`f_mvc/src/HttpRequestDistributorImpl_test.cj`（新增）`testUnmatchedPathReturnsLightweightHandler` —— `HttpRequestDistributorImpl.instance.distribute('/__mvc_l5_unregistered_path__')` 的结果必须 `is StaticResourceOrNotFoundHandler`。**它钉的是结构契约（分发结果的类型），不是用户可见行为**（`handle(ctx)` 需要 `HttpContext`，f_mvc 测试造不出）——行为侧证据为「逻辑逐字搬运核对 + 既有 25 条用例全绿」。
 - 未覆盖 / 已知边界：①`handle(ctx)` 的静态资源/404 行为无单测（同 `MVC-L8`/`MVC-C6(a)` 的限制）；②`RequestMeta` 构造器的默认处理器如今只被「手工 `RequestMeta(path, method)` 且不调 `setHandle`」这类用法走到（生产路径已无），保留委托以不改变该语义；③本次未动 `MVC-L2`/`L3`/`L4`/`L6`/`L7`/`L9`/`L10` 与 §3.2 两条。
+
+**❌ 判定标记（L7）（2026-10-06，用户判定 C：不改）**
+
+报告原文：`MVC-L7` `RequestMeta.cj:76-92`：「比较器内构造两个 `TreeSet`（注册期 O(N log N) 次，可预算排序键）」。
+
+- **现状**：`RequestMeta.compare`（当前 `:87-103`）—— `path` → `method` → 两侧 `consumes` 各建一个 `TreeSet<String>` 升序逐元素比较 → `consumes.size` 兜底。唯一调用方是 `RequestMetas` 的全局 `TreeSet<RequestMeta>`（`RequestMetas.cj:21`），插入点仅 `RequestMeta.cj:527`（`RequestMeta.generate` 内），全部发生在**注册期**且串行（`RequestMetas.add` 持锁，`RequestMetas.cj:23-27`）。
+- **对报告表述的修正（成本远小于原文）**：建 `TreeSet` 那段只在**前两步都为 EQ（`path` 与 `method` 都相同）**时才执行 ⇒ 一次 `TreeSet.add` 的 O(log N) 次比较里，绝大多数只做两次字符串比较；只有与「同 path + 同 method」的 meta 比较（该组常态只有 1 个成员，约 1–2 次）才进该分支。⇒ 真实成本 ≈ 注册期 N·log N 次短字符串比较 + 极少数小 `TreeSet` 构造，量级在毫秒以下（N=200 路由约上千次比较）。
+- **顺带发现（未立项）**：`RequestMetas` 是**只写不读**的容器 —— 全仓（排除 `.git`/`target`）只有定义（`RequestMetas.cj:18-28`）与 `RequestMeta.cj:527` 的 `instance.add(meta)`，`metas` 为 `private` 且无访问器 ⇒ 连外部 App 也读不出。即 `compare`（本条的全部成本）目前在为一个无消费者的有序表服务；该表持有的 meta 引用在 `MultiRequestMethodHandler.metas` 与 `PathPattern` 树中已持有 ⇒ 功能上是纯负担。将来若要做，可选「`TreeSet<RequestMeta>` → `ArrayList<RequestMeta>`」（成本归零、可观察行为不变，因其无读者），但那是动 `public class RequestMetas` 的内部结构，需单独立项与拍板。
+- **未采纳的方案（一并记录）**：**A** 缓存排序键（`private var consumesOrder_ = None<Array<String>>`，首次比较时把 `consumes` 排好序存下，`compare` 改为两次 `Array<String>` 逐元素 + size 兜底）——收益与 B 同级，但要处理缓存失效（写入点仅 `addConsumes`（`:460`，private）与 `setHandle(wsmeta:)`（`:283-284`）两处）；**B** 换掉有序容器。用户在 2026-10-06 选择 **C（不改）**。
+- **可验证性（若将来改）**：本条属「同一语义的缓存化」，**无真 RED**；证据应为「等价性守卫用例（`compare` 为 `public`，测试内可用 `@GetMapping` 注解类 + `RequestMeta.generate<T>` 造出带不同 `consumes` 的同 path+method meta，覆盖相等 / 前缀（`{'a'}` vs `{'a','b'}`，靠 size 兜底）/ 非前缀（`{'ab'}` vs `{'a','b'}`）/ `'*'`、`'*/*'` 特例）+ 代码核对」，必要时补基准。
 
 ### 3.2 待验证（2 条）
 
