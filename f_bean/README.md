@@ -39,6 +39,24 @@ IOC框架有一系列名字lookup开头的函数，用来获取受管理的bean�
 import fountain::f_bean.*
 ```
 
+### 形参风格（两层约定）
+
+这套 API 分两层，**条件类形参的写法不同**，调用时按所在层写：
+
+| 层 | 条件／名字／label | 类型实参 | 默认值的承接方式 | 调用示例 |
+|---|---|---|---|---|
+| 上层 `lookup*`（本文件以下各节） | **位置形参** | 位置（泛型实参） | 同名的 0 参重载 | `lookupList<MyBean>(myCond)` ✓；`lookupList<MyBean>(cond: myCond)` ✗ |
+| 低层 `BeanFactory.instance` 的 `getFirst`／`getList`／`getMap`／`iterator`／`getFirstTuple`／`getAllTuples` | **命名形参** `cond!` | **位置形参** `beanType` | 形参默认值 | `getList<MyBean>(TypeInfo.of<MyBean>(), cond: myCond)` ✓；`getList<MyBean>(TypeInfo.of<MyBean>(), myCond)` ✗；`getList<MyBean>(beanType: ti, cond: myCond)` ✗ |
+
+```cj
+let all = lookupList<MyBean>()                      // 上层：位置形参
+let named = lookupList<MyBean>(Exactly('beanName')) // 上层：位置形参
+// 低层：beanType 是位置形参、cond 是命名形参
+let low = BeanFactory.instance.getList<MyBean>(TypeInfo.of<MyBean>(), cond: Exactly('beanName'))
+```
+
+**新增 API 的约定**：统一采用**上层风格** —— 条件类形参用位置形参，默认值由同名的 0 参重载承接。
+
 ### 获取单个bean
 #### `lookup<T>(): T`
 获取第一个指定泛型实参的bean，如果没找到会抛出异常

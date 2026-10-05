@@ -107,7 +107,7 @@
 
 ## 3. 低危 / 待验证（本模块 9 条）
 
-### 3.1 低危（8 条；其中 `BEAN-L9` 判为**不成立**）
+### 3.1 低危（8 条；其中 `BEAN-L9` 判为**不成立**；另附 API 卫生记录，见节末）
 
 **健壮性 / 正确性**
 
@@ -140,6 +140,14 @@
   **测量证据**（最小对照探针：同一循环骨架两形态、每节点包装 2 次、min-of-6、n = 30 万；生产里的 `BeanType`/`ClassType`/`AnnotationType` 是文件私有类型，测试包拿不到 ⇒ 载荷换成探针自有 enum）：**闭包版 51.97 ns/节点 → 静态函数版 37.12 ns/节点，每节点省 14.85 ns（-28.6%）**；折算：一个 bean 的类型闭包通常 3~6 个可展开节点 ⇒ **每 bean 省 ~45~90 ns**（注册期一次性）。探针已删、未入库；日志 `/tmp/bean_l7_probe.log`。
   **回归**：`f_bean` 全套 **TOTAL 17 / PASSED 17 / ERROR 0 / FAILED 0**；`cjpm build` exit 0（9 条既有警告，未新增）。
   **未实测**：端到端启动时间（需要真实应用的启动度量，如 fdemo），同 `BEAN-L6`。
+
+**API 卫生（2026-10-05，无 L 号；按用户决定「只文档化、不改签名」）**
+
+- **形参风格不一致**：低层 `BeanFactory`（`BeanFactory.cj:200`、`:216`、`:255`、`:258`、`:267`、`:270`、`:298`、`:317`、`:330`、`:335`）的 `cond` 是**命名形参**（`cond!: StringCond = IgnoreCond`，默认值即由此承接），而 `beanType` 是**位置形参** ⇒ **同一签名内混用**：`getFirst<T>(beanType: ti)` ✗ 编译不过、`getFirst<T>(ti, cond: c)` ✓、`getFirst<T>(ti, c)` ✗ 也编译不过。上层 `lookup*`（`lookup.cj:26`、`:40`、`:48`、`:56`、`:72`、`:87`、`:95`、`:108`、`:119`、`:130`）条件类形参一律**位置**、默认值由同名 0 参重载承接；宏侧参数类 `BeanDef`（`BeanDefCondition.cj:108-113`）则全命名。
+  **代价（实证）**：使用者每次需回查签名 —— 本会话两次被编译期拦下，报错原文 `error: invalid named arguments prefix 'cond:', target is not a named parameter`（`lookupHashSet<T>(cond: all)` ✗）与同类（`getFirst<T>(beanType: ti)` ✗）。
+  **决定与落地**：**只文档化**（改任一侧都是破坏性公开 API 变更；位置／命名两版同名并存是否为合法重载亦未验证）⇒ 已在 `f_bean/README.md`「lookup函数」下新增「形参风格（两层约定）」小节：两层实参写法表 + 反例 + 约定「**新增 API 一律走上层风格**（位置形参 + 0 参重载承接默认值）」。代码零改动。
+- **公开函数名拼写**：`lookup.cj:116` `lookupOptionLable`（`Lable` → `Label`，应为 `lookupLabelOption`，同族见 `:113`、`:119`）。全仓 grep `Lable` **只此一处且零调用者** ⇒ 改名不破坏仓库内任何代码，仅外部使用者有理论风险。**按本次决定不改**（留档备查；`BEAN-L4` 条目内亦有此一句）。
+- **`f_bean/README.md` 待修文档错误**（本次顺带发现，**未改**）：`:77`／`:80` `lookupTreeSet` 的签名写成返回 `HashSet<T>`（应为 `TreeSet<T>`）；`:91`／`:94` `lookupLables` 应为 `lookupLabels`；`:105` `ComparableW>` 应为 `Comparable<W>`；`:60` `lookupOption<T>(cond)` 的「如果没找到返回异常」应为「返回 `None<T>`」。
 
 ### 3.2 待验证（1 条）
 
