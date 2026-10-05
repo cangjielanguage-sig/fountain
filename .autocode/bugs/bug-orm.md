@@ -2,8 +2,8 @@
 
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
-- **本模块条目 24 条**：严重 3（§1.1 `ORM-1`、§1.5 `ORM-C1`、§1.13 `ORM-2`）、中 7（§2.1 `ORM-C2`、§2.8 `ORM-C5`、§2.10 `ORM-3`、§2.11 `ORM-4`、§2.12 `ORM-5`、§2.13 `ORM-6`、§2.14 `ORM-7`）、低危+待验证 14（§3）。
-- **状态（截至 2026-10-05）**：`ORM-1` ✅已修复（§1.1）、`ORM-C1` ✅已修复（§1.5）、`ORM-C2` ✅已修复（§2.1）、`ORM-2` ✅已修复（§1.13，严重｜性能，分支 `fix/orm`）；`ORM-C5` ❌误判（§2.8，非缺陷：`argInSql` 是设计目的，已补 README §11.5 说明与口径用例）；`ORM-3` ⏸决定不修（§2.10，已知开销保留：否决「加静态集合」与「就地复位」两方案）；`ORM-4` ⏸决定不修（§2.11，借连接校验与默认值均不改、语句复用经四家驱动源码调研后判定不值得在 f_orm 层做）、`ORM-5` ✅已修复（§2.12，正则预编译）；**待修** §2.13–§2.14（性能中危 2 条）、§3 的 14 条低危/待验证（`ORM-L3` 已随 §1.13 一并消掉；`ORM-C3`：`SqlArgs.clone()` 仍共享同一 `ArrayList`，未随 §1.1 一并处理）。
+- **本模块条目 26 条**：严重 3（§1.1 `ORM-1`、§1.5 `ORM-C1`、§1.13 `ORM-2`）、中 7（§2.1 `ORM-C2`、§2.8 `ORM-C5`、§2.10 `ORM-3`、§2.11 `ORM-4`、§2.12 `ORM-5`、§2.13 `ORM-6`、§2.14 `ORM-7`）、低危+待验证 14（§3.1/§3.2）、本会话新增 2（§3.3 `ORM-N1` 性能、`ORM-N2` 正确性）。
+- **状态（截至 2026-10-05）**：`ORM-1` ✅已修复（§1.1）、`ORM-C1` ✅已修复（§1.5）、`ORM-C2` ✅已修复（§2.1）、`ORM-2` ✅已修复（§1.13，严重｜性能，分支 `fix/orm`）；`ORM-C5` ❌误判（§2.8，非缺陷：`argInSql` 是设计目的，已补 README §11.5 说明与口径用例）；`ORM-3` ⏸决定不修（§2.10，已知开销保留：否决「加静态集合」与「就地复位」两方案）；`ORM-4` ⏸决定不修（§2.11，借连接校验与默认值均不改、语句复用经四家驱动源码调研后判定不值得在 f_orm 层做）、`ORM-5` ✅已修复（§2.12，正则预编译）；`ORM-6` ◐部分修复（§2.13，逐元素分派按频率重排；实测批量路径大头在拼串/闭包/装箱，剩余转 §3.3 `ORM-N1`）、`ORM-7` ◐部分修复（§2.14，同批重排三处 match）；**待修** §3 的 14 条低危/待验证（`ORM-L3` 已随 §1.13 一并消掉；`ORM-C3`：`SqlArgs.clone()` 仍共享同一 `ArrayList`，未随 §1.1 一并处理）、§3.3 新增 2 条（`ORM-N1` 性能，待评估；`ORM-N2` 正确性，待修：`Float32` 经绑定路径静默丢参）。
 
 ## 1. 严重（本模块 3 条）
 
@@ -203,13 +203,29 @@
 
 位置：`Condition.trim`（`Condition.cj:70-82`，原 `:65-67`）、`TableClause.appendPartial`（`TableClause.cj:44-62`，原 `:39-49`）、`emptyLogicalExpr`（`imports.cj:34-42`，原 `:35-37`）。
 
-### 2.13 [中｜性能] `ORM-6` 批量条件 DSL 循环体里逐元素大 `match` + `SqlArg` 分配（f_orm）
+### 2.13 [中｜性能] `ORM-6` 批量条件 DSL 循环体里逐元素大 `match` + `SqlArg` 分配（f_orm）◐部分修复（2026-10-05：分派重排；剩余转 §3.3 `ORM-N1`）
 
 `LoopCondition.cj:85-113`、`MeetCondition.cj:41-111`、`ChooseCondition.cj:76-116`：`IN`/批量 insert 的参数规模就是业务集合大小（可上千）。修法：固定类型走参数化（`?`），把类型判定收敛。
 
-### 2.14 [中｜性能] `ORM-7` `RootDAO.arg<I,T>(value)` 逐元素进入 40+ 分支 `match`（f_orm）
+**◐ 修复记录（2026-10-05，分派部分）**
+
+- **先量后改**（探针 `ORM67Probe_test.cj`，N=1000 元素、每轮先 `clearSql` 复位、取最优）：批量路径逐元素进的是 `SqlExecutor.add<T>`（当绑定值为 `Any` 时），其成本随**分支位次**增长：`add(Any=Int64)`（原第 8 支）**86ns/元素**、`add(Any=String)`（原第 16 支）**264ns/元素**；同轮地板 `add(Int64)`（类型化、无分派）**49ns/元素**、首支命中 `add(Any=Bool)` **62ns/元素** ⇒ 每个失败的类型检查 ≈13ns。
+- **改动**：三处 40+ 分支 `match` 按「绑定频率」重排（`Int64/String/DateTime/Bool/Decimal/UInt64 → 其余标量 → ?T 组 → 兜底`）：`SqlExecutor.add<T>`（`SqlExecutor.cj:575-618`）、`RootDAO.arg<I,T>`（`RootDAO.cj:321-373`）、`RootDAO.arg(Any)`（`RootDAO.cj:252-304`）。分支运行时类型互斥，顺序不影响语义；两侧顺序保持一致以便后续统一维护。
+- **计时对照**（相邻两轮、同机；各自地板 49/51ns 说明环境可比）：`add(Any=Int64)` **86 → 62ns/元素（−28%）**、`add(Any=String)` **264 → 89ns/元素（−66%）**、`arg<I,T>(ArrayList<Int64>)` **380 → 355ns/元素（−7%）**；代价：`add(Any=Bool)` **62 → 77ns/元素**（Bool 由第 1 支降至第 4 支，若业务大量绑 Bool 可再调顺序）。
+- **但批量路径总成本几乎没动**：`MeetCondition.IN(ArrayList<Int64>)` 212 → 190ns、`LoopCondition.done()` 844 → 861ns（同轮噪声量级）⇒ **分派只占小部分**，大头在拼串/闭包/装箱，另立 §3.3 `ORM-N1`。
+- **用例**：`f_orm/src/base/SqlExecutorArgBranches_test.cj` —— 21 个类型逐一走 `arg(Any)`/`add(Any)`：`arg(Any)` 必须命中具体分支返回 `'?'`（兜底是 `throw`，故不抛即证明分支在）；`add(Any)` 必须绑定恰好 1 个参数且非 `toString()` 兜底（用 mock 夹具捕获参数）；反向例用 `TransactionStatus.Unknown` 钉住两侧兜底语义。`Float32` 因 `ORM-N2`（静默丢参）暂摘出，修复后加回。
+- **验证**：`cjpm build` exit 0；`cjpm test` **TOTAL 53 / PASSED 52 / FAILED 0 / ERROR 1**（唯一 ERROR 仍是既有环境相关 `ORMConfigTest.testPoolMaxWaiting`），与改前同状态一致（重排后跑过 52/51/1，加入本用例后 53/52/1）。
+
+### 2.14 [中｜性能] `ORM-7` `RootDAO.arg<I,T>(value)` 逐元素进入 40+ 分支 `match`（f_orm）◐部分修复（2026-10-05：分派重排；异常成本待单独立条）
 
 `RootDAO.cj:319-377`（`IN`/`NOT_IN` 于 `435-448`，`LogicalExpr.InExpr` 于 `175-181`）：上千 id 的 `IN` 就是上千次大 `match` + 两次对象分配。修法：把类型判定收敛为一次（或按静态类型分派）。
+
+**◐ 修复记录（2026-10-05，分派部分）**
+
+- **改动**：`RootDAO.arg<I,T>`（`RootDAO.cj:321-373`，`IN`/`NOT_IN` 的批量入口）与 `RootDAO.arg(value: Any)`（`RootDAO.cj:252-304`，单值入口）按与 `SqlExecutor.add<T>` 相同的频率顺序重排（三处同序，见 §2.13）。`arg(Any)` 原位序里 `Float16/?Float16` 各出现两次、第二次恒不可达，本次一并去掉（改后 `case` 行多重集 = 改前 −2 行）。
+- **计时对照**：`arg<I,T>(ArrayList<Int64>)` **380 → 355ns/元素**——与 `add(Any=Int64)` 实测的 24ns/元素位次效应一致；`arg` 里另有 ≈290ns/元素 不在分派上（§3.3 `ORM-N1`）。
+- **单值入口 `arg(value: Any)` 的实测（同批发现，未定级）**：`arg(Any=Int64)` **≈10.4µs/元素**、`arg(Any=String)` **≈1.0µs/元素**（HEAD 版本，8 轮稳定），而同轮类型化 `arg(Int64)` 仅 **38ns/元素** ⇒ 慢 2–3 个数量级，明显另有根因，重排对它无可辨识改善（重排后同口径 14.6µs/1.3µs，同轮类型化对照 59ns，比值 1.4≈1.55 属环境缩放）。详见 §3.3 备注。
+- **验证**：同 §2.13。
 
 ## 3. 低危 / 待验证（本模块 14 条）
 
@@ -243,6 +259,17 @@
 - `ORM-L8` `DatabasePool.cj:210-228`（配合 `f_pool/BasePool.cj:44-46`）：`PooledConnection.close()` 不校验 `assigned`，无条件 `returnFn(this)`。**验证**：池是否有身份去重（若无，重复 close 会让两个借用者拿到同一连接）。修法：`close()` 首行 `if(!assigned){ return }`。
 - `ORM-L9` `SqlExecutor.cj:366-385`：`connection` getter 在 `Connecting` 状态用 `while ... continue` 忙等（无 sleep/yield/超时）。**验证**：驱动是否会出现长时间异步建连。
 - `ORM-C6` `SqlArg.cj:426-448`（`InputStreamSqlArg` 把流交给驱动后模块内不关闭）、`QueryMapperConverter.cj:48-50`（`StringReader(x).readToEnd()` 未关闭）。**验证**：所有权约定（驱动/调用方是否负责关闭），否则是句柄泄漏路径。
+
+### 3.3 本会话新增（2 条 + 1 条未定级观测，2026-10-05）
+
+- `ORM-N1`（**中｜性能，新增**）批量条件/参数构造的每元素成本大头不在**类型分派**，而在**拼串 + 闭包 + 装箱**——`ORM-6`/`ORM-7` 重排分派后批量路径总成本几乎未动（§2.13），据此判定本条是本族问题的剩余主体。**读数**（探针 `ORM67Probe_test.cj`，N=1000 元素取最优）：
+  - `MeetCondition.IN(ArrayList<Int64>)` **190–212ns/元素**：走的是静态类型化 `add(v)`（无大 `match`，分派 ≈0）、类型化地板 49ns ⇒ ≈140ns 落在 `frag{}` 闭包 + `StringBuilder` 逐元素 `append(',')/append('?')` 与循环开销。
+  - `RootDAO.arg<I,T>(ArrayList<Int64>)` **355–380ns/元素**：分派 24ns + 类型化地板 49ns ⇒ ≈290ns 落在逐元素 `frag.append(',')`、`frag.append('?')` 与 `arg(x)` 调用本身。
+  - `LoopCondition.done()`（`partial{v,i=>v}`）**844–861ns/元素**：`partial` 闭包链每元素要 `('', partial(v, i))` 构造元组 + 把值装箱成 `Any`，再加 `builder.append(frag)` 与 `add(Any)` 分派。
+  - **修法（待评估，未动手）**：①`IN`/`arg` 用带容量的 `StringBuilder`，并把每元素的 `append(',')`+`append('?')` 合并成一次常量 append；②`LoopCondition` 去掉中间元组/装箱（`_partial` 直接给 `(String, SqlArg)`，或按静态类型分派），`argInSql=false` 时不必逐元素装箱；③`arg`/`IN` 走「固定类型参数化」时可直接调类型化 `add` 重载，跳过 `Any` 分支。
+  - **探针**：`.autocode/tmp/ORM67Probe_test.cj`（复跑需拷回 `f_orm/src/base/`；**跑全量套件前必须移出 `src/`**——探针若不 `clearSql` 复位，会把绑定值留在共享执行器上，令 `QueryResultIteratorTest.testIteratorReadsRowsAfterReturnAndClosesOnExhaustion` 报 `parameter index 0 is out of range`）。
+- `ORM-N2`（**中｜正确性，新增**）`Float32` 经参数绑定路径**静默丢参**：`Float32SqlArg.set`（`wrap/SqlArg.cj:294`）调 `setValue<Float64>(statement, value)`，而 `value` 是 `Float32` ⇒ `setValue` 的分支（`T` = `Float64`、`Option<Float64>`）都匹配不上，落到兜底；该兜底只**构造**异常却没有 `throw`（`SqlArg.cj:27-28`）⇒ 什么都不绑定、也不报错。**实测**（本批新用例 `base/SqlExecutorArgBranches_test.cj`）：`Float32(1.5)` 经 `add(Any)` 执行 `select ? as t_float32` 时，mock 夹具**确认已执行**（`execs=1`、SQL 就是该串）却收到 **0 个参数**（同一用例里其余 20 个类型均为 1 个）⇒ 真驱动下该 `?` 会表现为「未设置/NULL 绑定」，查询与写入语义都错。**修法（两处，未动手）**：①`Float32SqlArg.set` 改 `setValue<Float64>(statement, Float64(value))`（`Float16SqlArg` 是正确写法：`setValue<Float32>(statement, Float32(value))`，`SqlArg.cj:270`）；②`setValue` 兜底补 `throw`——否则任何类型不匹配都退化成静默丢参；②会把既有的静默不匹配变成抛异常，需跑全量套件评估影响面。用例中 `Float32` 暂从矩阵摘出，修复后加回。
+- **未定级观测（`ORM-7` 同批发现，待定是否单独立条）**：`RootDAO.arg(value: Any)`（`RootDAO.cj:252-304`）单值入口实测 **`Int64` ≈10.4µs/元素、`String` ≈1.0µs/元素**（HEAD 版本、8 轮稳定；同轮类型化 `arg(Int64)` 仅 **38ns/元素**）⇒ 比类型化路径慢 2–3 个数量级，且与分支位次无关（重排后同口径 14.6µs/1.3µs，同轮类型化对照 59ns 说明只是环境缩放 1.4≈1.55×）。可疑方向：首支 `case x: Data` 的运行时检查、45 分支 `match` 在有非标量类型参与时的代码生成。凡按值命中该路径的绑定（如 `MeetCondition.value(Any)`、`LogicalExpr` 单值绑定）都会被放大，建议单独立条并单独定位。
 
 ## 4. 逐模块覆盖面（原 §4.1）
 
