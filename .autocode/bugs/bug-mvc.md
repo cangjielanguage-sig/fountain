@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 25 条**：严重 4（§1.9 `MVC-4`、§1.10 `MVC-1`、§1.11 `MVC-3`、§1.12 `MVC-2`）、中 8（§2.2 `MVC-C3`、§2.3 `MVC-C5`、§2.5 `MVC-C2`、§2.6 `MVC-8`、§2.7 `MVC-6`、§2.19 `MVC-5`、§2.20 `MVC-7`、§2.21 `MVC-9`）、低危+待验证 13（§3）。
-- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；`MVC-8` ✅已修复（§2.6，`fix/mvc-rest`）；`MVC-6` ❌误判（§2.7，用户判定非缺陷：WS 消息总长上限属端点/部署侧策略，不设硬上限是设计选择）；`MVC-5` ❌不改（§2.19，用户判定「不值得改」：全仓 `@PathVariable` 均为单变量、暴露面为零）；`MVC-7` ✅已修复（§2.20，`fix/mvc-rest`，范围：只改 `RequestMethod.hashCode()`）；**待修** §2 的 1 条中危（§2.21）+ §3 的 13 条低危/待验证（**本模块严重级已清零**）。
+- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；`MVC-8` ✅已修复（§2.6，`fix/mvc-rest`）；`MVC-6` ❌误判（§2.7，用户判定非缺陷：WS 消息总长上限属端点/部署侧策略，不设硬上限是设计选择）；`MVC-5` ❌不改（§2.19，用户判定「不值得改」：全仓 `@PathVariable` 均为单变量、暴露面为零）；`MVC-7` ✅已修复（§2.20，`fix/mvc-rest`，范围：只改 `RequestMethod.hashCode()`）；`MVC-9` ❌不改（§2.21，用户判定：每请求从 IoC 取 controller 实例是设计语义 —— 允许 controller 定义为 `prototype`，缓存实例会破坏它）；**待修** 仅 §3 的 13 条低危/待验证（**§1 严重级、§2 中危均已清零**）。
 
 ## 1. 严重（本模块 4 条）
 
@@ -185,7 +185,14 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 
 `MultiRequestMethodHandler.cj:60` + `RequestMethod.cj:28-30, 55, 67-69`（`hashCode = toString().hashCode()`、`compare` 也走 `toString`）。修法：用 enum ordinal/常量名做哈希与比较。
 
-### 2.21 [中｜性能] `MVC-9` 每请求一次反射式 bean 查找（f_mvc）
+### 2.21 [中｜性能] `MVC-9` 每请求一次反射式 bean 查找（f_mvc）→ ❌不改（2026-10-05，用户判定：这是设计语义，不是缺陷）
+
+**❌ 不改标记（2026-10-05）**：用户判定 —— **每次 HTTP 访问都从 IoC 取一次 controller 实例，目的就是允许把 controller 定义为 `prototype`**，因此不做「注册期解析一次并缓存实例」。
+
+- 设计语义核对（支撑该判定）：`@Controller` 本身就是 `@Bean` 的包装（`f_mvc/src/macros/Controller.cj:29-37`：`macro Controller(attr:)` → `@Bean[$attr]`），scope 由 `@BeanMeta[scope: …]` 决定；`RequestMeta.cj:224`（审查基线为 `:191`）每请求 `BeanFactory.instance.getFirst<T>().getOrThrow()` → `BeanManager.bean`（`f_bean/src/BeanManager.cj:88-108`）在 **`singleton`** 下走原子读、在 **`prototype`** 下每次 `new()`。fdemo 里就有活生生的 prototype 控制器：`fdemo/user/src/controller/CurrentUserController.cj:30-36`（`@BeanMeta[scope: BeanScope.prototype]`，其 `init()` 里 println 注明「多次访问本类的 controller 映射这一行每次都会输出」）。缓存实例会把它静默变成单例 ⇒ 语义破坏。
+- 报告建议「注册期解析一次并缓存实例」另有一处时序问题（即便不考虑 prototype 也不成立）：`@Controller` 的注册代码经 `topMacroAnonymousClosure`（`f_macros/src/topMacroAnonymousClosure.cj:20-30`）展开为**模块级静态初始化** `private let _ = {=> … }()`，早于 `InitializerCollection.initialize()` → `BeanInitializer.initialize()` → `BeanFactory.afterRegistered()`（`f_bean/src/BeanInitializer.cj:28-30`）；后者才执行 `check()`（按 `@Conditional` 丢弃 bean）与 `initBeansIfNeed()`（创建单例、调 `@PostConstruct`）。注册期解析会提前造出实例 ⇒ 绕过条件过滤、打乱 `@PostConstruct` 顺序。
+- 与 `BEAN-2`/`BEAN-3`（`bug-bean.md` §2.15/§2.16）的关系：那两条针对 `getFirst<T>()` **内部**的重复 `TypeInfo.of`/`isSubtypeOf`（影响所有 `lookup<T>()`/`getFirst` 调用方），属 f_bean 侧的独立条目；本条按设计**保留每请求调用**。若将来修 `BEAN-2`，本模块**无需再动**（收益自动落到这条路径上）。
+- 附带核对（不改也留档）：该查找的三条路径为 `RequestMeta.cj:224`（HTTP，每请求）、`RequestMeta.cj:302`（WS，每**连接**一次，`WSMeta.exec` 内跑会话循环 `WSMeta.cj:198-227`）、`MultiRequestMethodHandler.cj:135`（异常响应冷路径，`cond: Exactly(message)` 直查 `beans`）。另注：`prototype` 控制器每请求 `new()` 会重跑字段初始化，其中的 `lookup<T>()`（`f_bean/src/lookup.cj:18-30`）也随之为每请求成本 —— 这是 prototype 的固有代价，非本条缺陷。
 
 `RequestMeta.cj:191`（`BeanFactory.instance.getFirst<T>().getOrThrow()`）——与 `BEAN-2`/`BEAN-3` 是同一成本的两端，建议注册期解析一次并缓存实例。
 
