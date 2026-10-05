@@ -143,7 +143,7 @@ double_destroy: after_close=1 after_gc=2
 
 ### 1.3 [严重｜正确性+资源抖动] `POOL-3` 巡检把「满载 key」的空闲项当「校验不过」摘掉，并整轮跳过用户 checker ✓已复核 → ✅已修复（2026-10-05）
 
-**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、本标记在**同一提交**（提交信息 `fix(f_pool): POOL-3 巡检的 size<max 只约束补建，checker 照常执行`）。
+**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、本标记在**同一提交**（提交 `a1f5decc`，提交信息 `fix(f_pool): POOL-3 巡检的 size<max 只约束补建，checker 照常执行`）。
 
 - 改动（把 `p.size < max` 从 checker 挪到「补建」上）：
   1. `f_pool/src/BaseKeyPool.cj:55-61`：`{v => p.size < max && checker(k, v)}` → `{v => checker(k, v)}`，守卫移到 taskPusher：`{if (p.size < max) { taskPusher(k) }}`（注释里写明「checker 返回 false = 摘节点」这一语义）；
