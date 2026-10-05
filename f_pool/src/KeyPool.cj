@@ -19,7 +19,7 @@ import std.collection.concurrent.ArrayBlockingQueue
 import std.sync.{AtomicBool, AtomicInt64, Mutex, Condition}
 import fountain::f_base.ExitCallbacks
 import fountain::f_pool.diagnostics.PoolDiagnostics
-import fountain::f_pool.exception.PoolException
+import fountain::f_pool.exception.{ClearFailedException, PoolException}
 
 /**
  * 「创建任务」队列的容量上限：它只是给创建线程传「给某键建一个池项」的纸条，槽位数**不必**等于池容量 ——
@@ -639,7 +639,18 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             this.keyedCheck(checkOnReturning, key, ref)
         }
         if(clearOnReturning){
-            clear(key, object)
+            try {
+                clear(key, object)
+            } catch (e: Exception) {
+                // `clear` 抛异常 = 应用层回调的 BUG：**这次归还没有发生** —— 不销毁、不结清记账、不进池，
+                // 池项状态与调用 giveBack 之前完全一样，对象所有权仍在调用方手里（可以修好之后重试 giveBack）。
+                // 抛 `ClearFailedException`（`f_base.BaseException` 子类）并把被顶掉的回调异常挂到 suppressed 上
+                // （见 .autocode/bugs/bug-pool.md §2.7 POOL-12）。
+                PoolDiagnostics.onCallbackError()
+                let failure = ClearFailedException(key)
+                failure.addSuppressed(e)
+                throw failure
+            }
         }
         pool.giveBack(key, ref(key, object), keyedCheck, keyedDestroy)
         // 与 close() / remove(key) 交错的情形现在由底层兜住：

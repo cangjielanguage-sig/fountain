@@ -25,6 +25,7 @@
 > 七次修正（2026-10-05）：§2.4 `POOL-9` 已修复 ⇒ 待修中危 **4** 条（`POOL-10`~`POOL-13`）。
 > 八次修正（2026-10-05）：§2.5 `POOL-10` 已修复（**口径改为抛 `UnknownKeyException`**，池不销毁、不建池；原「未命中就销毁」的修法已否决）⇒ 待修中危 **3** 条（`POOL-11`~`POOL-13`）。
 > 九次修正（2026-10-05）：§2.6 `POOL-11` 已修复（`KeyPool.remove(key)` 摘键 + `close()` 清空键表 + **删除 `destroy`**：池这一层唯一的销毁入口是 `close`）⇒ 待修中危 **2** 条（`POOL-12`、`POOL-13`）。
+> 十次修正（2026-10-05）：§2.7 `POOL-12` 已修复（`clear` 回调失败抛 `ClearFailedException`：**`giveBack` 抛异常 = 这次归还没有发生**，不销毁 / 不结清 / 不进池，可重试）⇒ 待修中危 **1** 条（`POOL-13`）。
 
 **建议修复顺序**：
 
@@ -33,7 +34,7 @@
 3. `POOL-3`（§1.3）巡检把**满载 key** 的空闲项当「校验不过」摘掉，并整轮跳过用户 checker → 稳态抖动、`connectionLife`/`idleTimeout` 判定被绕过（实测满载空闲池 idle 2→1）　**✅已修复（2026-10-05，见 §1.3 修复标记：size&lt;max 只约束补建）**
 4. `POOL-4`（§1.4）creator/checker 持续失败时**无退避紧重试** → 对下游的重连风暴 + 每轮一条 WARN（实测 300ms 内 75,976 次尝试）　**❌误判（2026-10-05：设计目的，不修改；见 §1.4 误判标记）**
 5. `POOL-5`（§1.5）`maxWaiting = Duration.Max` 的「真无限等待」实际只等 1s 就**静默放弃**（实测 1008ms 返回 `None`，对照 30s 档 2016ms 返回项）；同一分支还会吞掉丢失的唤醒　**✅已修复（2026-10-05，随 §1.2 的统一等待重写一并解决，见 §1.5 修复标记）**
-6. 其后按 §2 顺序：`POOL-6`（关停不唤醒/归还竞态）**✅已修复（2026-10-05，见 §2.1 修复标记）** → `POOL-7`（关池泄漏线程）**✅已修复（2026-10-05，见 §2.2 修复标记：线程句柄 + cancel + 每轮判状态 + 带超时出队）** → `POOL-8`（队列按 `totalSize` 预分配 + 两个池默认 `maxSize=Int64.Max` 构造即 OOM）**✅已修复（2026-10-05，见 §2.3 修复标记：队列容量解耦、夹取 [1,1024]）** → `POOL-9`（`release` 后仍可写，实测污染池项）**✅已修复（2026-10-05，见 §2.4 修复标记：释放后读写一律抛）** → `POOL-10`（`giveBack` 还错键，抛 `UnknownKeyException`）**✅已修复（2026-10-05，见 §2.5 修复标记）** → `POOL-11`（key 表只增不减）**✅已修复（2026-10-05，见 §2.6 修复标记：`KeyPool.remove(key)` 摘键、`close()` 清空键表、池这一层删除 `destroy`）** → `POOL-12`、`POOL-13`
+6. 其后按 §2 顺序：`POOL-6`（关停不唤醒/归还竞态）**✅已修复（2026-10-05，见 §2.1 修复标记）** → `POOL-7`（关池泄漏线程）**✅已修复（2026-10-05，见 §2.2 修复标记：线程句柄 + cancel + 每轮判状态 + 带超时出队）** → `POOL-8`（队列按 `totalSize` 预分配 + 两个池默认 `maxSize=Int64.Max` 构造即 OOM）**✅已修复（2026-10-05，见 §2.3 修复标记：队列容量解耦、夹取 [1,1024]）** → `POOL-9`（`release` 后仍可写，实测污染池项）**✅已修复（2026-10-05，见 §2.4 修复标记：释放后读写一律抛）** → `POOL-10`（`giveBack` 还错键，抛 `UnknownKeyException`）**✅已修复（2026-10-05，见 §2.5 修复标记）** → `POOL-11`（key 表只增不减）**✅已修复（2026-10-05，见 §2.6 修复标记：`KeyPool.remove(key)` 摘键、`close()` 清空键表、池这一层删除 `destroy`）** → `POOL-12`（归还路径上 `clear` 抛异常）**✅已修复（2026-10-05，见 §2.7 修复标记：抛 `ClearFailedException`，这次归还不算发生）** → `POOL-13`
 
 ---
 
@@ -461,11 +462,27 @@ useafterrelease: second_is_empty=false second_bytes=5
 
 **修法（已被上面的口径取代）**：~~提供 `removeKey`/`evictEmptyKeys`（空闲且 `size == 0` 的 key 在巡检里回收），或在文档里明确「key 基数必须有界」。~~ ⇒ 改为 `KeyPool.remove(key)` 主动摘键 + `close()` 清空键表。
 
-### 2.7 [中｜正确性] `POOL-12` 归还路径上 `clear` 抛异常会丢池项
+### 2.7 [中｜契约/正确性] `POOL-12` 归还路径上 `clear` 抛异常会丢池项 ✓已复核 → ✅已修复（2026-10-05）
 
-`KeyPool.giveBack` 的 `clear(key, object)` 没有 try（`642:642`），异常直接抛给调用方，而对象既不在池里也没被销毁 ⇒ 池项凭空消失（与 `checker`/`destroier` 都有 `doCheck`/`doDestroy` 包裹的处理不一致）。`ArrayPool` 的 `clear` 会写整个数组、`ArrayListPool`/`BytesListOutputStream` 走 `list.clear()`，正常不抛；但这是公开可注入的回调，契约上不该由它决定池项生死。
+**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、`f_pool/README.md` 与标记在**同一提交**（提交 `xxxx`，提交信息 `fix(f_pool): POOL-12 clear 回调失败抛 ClearFailedException，这次归还不算发生`）。
 
-**修法**：`clear` 包 try（失败记 `PoolDiagnostics.onCallbackError()`，仍把池项放回），或按 `POOL-1` 的建议改为「返回前 `take()`」。
+- 口径（2026-10-05 拍板，与 §2.5 `POOL-10` 同一套）：`clear` 抛异常是**应用层回调的 BUG**；**`giveBack` 抛异常 ⇒ 对象没有归还** —— 不销毁、不结清记账、不进池，池项状态与调用 `giveBack` 之前完全一样，所有权仍在调用方；应用层修好条件后可以**重试** `giveBack`（重试成功额度照常结清），或者自己销毁它。
+- 改动：
+  - 新增 `f_pool/src/exception/ClearFailedException.cj`：`public class ClearFailedException <: fountain::f_base.BaseException`，字段 `public let key: Any`（同 `UnknownKeyException`：键类型只有 `Hashable & Equatable` 约束、没有 `ToString`，消息里不插键），类注释给出 `suppressed` 的用法。
+  - `f_pool/src/KeyPool.cj:641-655`：`clear(key, object)` 包 try —— 捕获后记 `PoolDiagnostics.onCallbackError()`（异常必留痕，与 checker / destroier / creator 同口径）⇒ `ClearFailedException(key)` ⇒ `addSuppressed(回调异常)` ⇒ 抛出。**除此之外什么都不做**：不动 `running`、不动记账、不建池。
+  - `f_pool/README.md`：`KeyPool.giveBack` 那段补「`clear` 失败 ⇒ 抛 `ClearFailedException`，这次归还没发生」。
+- 用例：`KeyPoolTest.clearFailureMustNotCountAsReturned`：`maxSize: 1 / totalSize: 1 / clearOnReturning: true`，`clear` 用 `AtomicBool` 做到「只抛一次」⇒ 断言抛的是 `ClearFailedException`、`destroyed == 0`（没归还 ⇒ 不销毁）、`size` 未变（记账没结清）、`suppressed.size == 1`（回调异常挂着）；随后**重试 `giveBack`** ⇒ 成功、项回到池里、`get` 拿得到。
+- 测量证据：
+  - **修前**（`KeyPool.cj` 回退到 `review/f_pool` 已提交版、clear 仍是裸调，异常类与用例保留）：`clearFailureMustNotCountAsReturned` `[ FAILED ]` —— `Assert Failed: (caught.isSome() == true)`（抛出的是回调自己的裸异常，不是 `ClearFailedException`）⇒ `PRE_EXIT=1`；
+  - **修后**：该用例 `[ PASSED ]`（`FILTERED_EXIT=0`）；`f_pool` 全量 **`PASSED: 57, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（既有 `ORMConfig_test.testPoolMaxWaiting`，与本改动无关，见 §5）。
+  - 日志：`.autocode/tmp/pool_fix12_{pre2,all}.log`（第一次 `pre` 误用主仓库 `HEAD`（= 更早的基线）回退、编译期即失败，已在 `pool_fix11_*` 那套脚本里同样踩过 —— 改用主仓库的分支引用 `review/f_pool:…` 取文件）。
+- 残量 / 边界：① 「没归还」= 那一项继续记在 `out` 上（与 §2.5 `POOL-10` 的残量同机制），但这里**可恢复**：调用方重试 `giveBack` 成功后额度照常结清；② `clear` 的调用时机（checker 之前、锁外）与开关语义（`checkOnReturning = false` 时 `clear` 照旧生效）不变；③ 另一处回调异常的处理**刻意保持不同**：`checker` 抛异常时 `checkedBeforeReturn` 按「校验不过」销毁 + 结清（`SyncDeque.cj:150-162`，归档报告 7.12 的口径）—— 那里池**已经拒收**该项、对象状态未知，销毁是安全的收尾；而 `clear` 失败发生在池**尚未接收**这一项之前，所以按「没归还」处理。
+
+**原始诊断（保留）**
+
+`KeyPool.giveBack` 的 `clear(key, object)` 没有 try（当时 `642:642`），异常直接抛给调用方，而对象既不在池里也没被销毁 ⇒ 池项凭空消失（与 `checker`/`destroier` 都有 `doCheck`/`doDestroy` 包裹的处理不一致）。`ArrayPool` 的 `clear` 会写整个数组、`ArrayListPool`/`BytesListOutputStream` 走 `list.clear()`，正常不抛；但这是公开可注入的回调，契约上不该由它决定池项生死。
+
+**修法（已被上面的口径取代）**：~~`clear` 包 try（失败记 `PoolDiagnostics.onCallbackError()`，仍把池项放回），或按 `POOL-1` 的建议改为「返回前 `take()`」。~~ ⇒ 改为「抛 `ClearFailedException`（不销毁、不结清、不进池）」，与 `POOL-10` 同口径。
 
 ### 2.8 [中｜内存] `POOL-13` `ExitCallbacks.atExit(254, close)` 每次建池一条且不可注销
 
@@ -543,6 +560,8 @@ useafterrelease: second_is_empty=false second_bytes=5
 > `POOL-10` 修复后的复测（口径：抛 `UnknownKeyException`，池不销毁、不建池）：三条新用例修前全 `[ FAILED ]`（`threw.isSome() == true` / `caught.isSome() == true` / `thrown == true`，左侧都是 `false`）⇒ `PRE_FILTERED_EXIT=1`，修后 `[ PASSED ]`；全量 `cjpm test` = **`PASSED: 51, SKIPPED: 0, ERROR: 0, FAILED: 0`**。探针 `unknownkey`：修前 `thrown=false destroyed_immediate=0 borrow_again=false key_alive=true`，修后 `thrown=true key=k2 destroyed_immediate=0 borrow_again=false`；两次 `gc()`×3 后 `destroyed_after_gc=1`（应用层丢掉不管时仍由 `Ref` 终结器兜底 —— 与修前的区别是应用层**已经收到通知**）。下游 `f_codec` 16/16、`f_protocol` 62/62 全绿；`f_orm` `PASSED: 32, ERROR: 1`，唯一 ERROR 是 `ORMConfig_test.testPoolMaxWaiting`（`Config` 里 `orm_databasePoolMaxWaiting='abc'`，按该用例注释应「非法值退回默认 30s」，实际 `f_data.base.Duration.tryParse` 抛 `DataParsableException`）—— 栈里没有 `f_pool`，与本次改动无调用关系，属 f_orm / f_config 侧既有问题，在此登记备查（日志 `.autocode/tmp/pool_fix10_{pre,all,post2}.log`）。
 
 > `POOL-11` 修复后的复测（口径：`KeyPool.remove(key)` 摘键 + `close()` 销毁全部并清空键表 + 删除 `destroy`）：**修前** ① 新用例**编译不过**（`error: 'remove' is not a member of class 'KeyPool<Struct-String, Class-Object>'`、`error: 'keyCount' is not a member of …`、`error: extra argument given for parameter list '(Enum-Mode, Int64)'`）；② 源码回 HEAD 后用临时用例 `headDestroyLeavesKeyTableBehind` 钉住「键表不清空」：`[ FAILED ]`（`Assert Failed: (keys == 0)` —— `BaseKeyPool.destroy` 跑完 k1/k2 还在键表里）。**修后**：新/改动用例 `PASSED: 9, SKIPPED: 47, ERROR: 0, FAILED: 0`；全量 **`PASSED: 56, SKIPPED: 0, ERROR: 0, FAILED: 0`**（含原 `giveBackRacingCloseMustNotStrandItem` 的 100 轮「归还 ‖ 关池」—— 归还竞态的兜底已从 `KeyPool.giveBack` 移到底层，见 §2.1 的后续修订）；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（同上的既有 `ORMConfig_test`）。日志 `.autocode/tmp/pool_fix11_{pre,pre2,all,post}.log`。
+
+> `POOL-12` 修复后的复测（口径：`clear` 失败 ⇒ 抛 `ClearFailedException`，**这次归还没有发生**）：**修前**（`KeyPool.cj` 回退到 `review/f_pool` 已提交版）`clearFailureMustNotCountAsReturned` `[ FAILED ]`（`Assert Failed: (caught.isSome() == true)` —— 抛的是回调自己的裸异常）⇒ `PRE_EXIT=1`；**修后**该用例 `[ PASSED ]`，全量 **`PASSED: 57, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（同上的既有 `ORMConfig_test`）。日志 `.autocode/tmp/pool_fix12_{pre2,all}.log`。
 
 复跑方式（WSL Ubuntu-24.04）：`source /mnt/d/docs/work/cangjie/cangjie.sh` → `cd .autocode/tmp/pool_probe && cjpm build` → 按脚本里的 `LD_LIBRARY_PATH`（各 `target/release/*@*` 目录**排在 `installed/libs/fboot` 之前**）直接跑 `target/release/bin/main <mode>`，用 `time -p` 量 CPU。
 

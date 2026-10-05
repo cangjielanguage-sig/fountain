@@ -19,9 +19,9 @@ import std.collection.ArrayList
 import std.convert.*
 import std.fs.File
 import std.runtime.{gc, getThreadCount}
-import std.sync.AtomicInt64
+import std.sync.{AtomicBool, AtomicInt64}
 import fountain::f_pool.diagnostics.PoolDiagnostics
-import fountain::f_pool.exception.UnknownKeyException
+import fountain::f_pool.exception.{ClearFailedException, UnknownKeyException}
 
 /**
  * 读 `/proc/self/stat` 的 utime+stime（时钟 tick，USER_HZ=100 ⇒ 1 tick ≈ 10ms）。
@@ -791,6 +791,59 @@ public class KeyPoolTest {
         @Assert(pool.keyCount(), 0)
         pool.close()                                         // 幂等：不再销毁、不再计数
         @Assert(destroyed.load(), 3)
+    }
+    /**
+     * `POOL-12`（`.autocode/bugs/bug-pool.md` §2.7）：归还前的 `clear` 回调抛异常 = 应用层 BUG ⇒
+     * `giveBack` 抛 `ClearFailedException`（原始回调异常挂在 `suppressed` 上），并且**这次归还没有发生**：
+     * 不销毁、不结清记账、不进池 —— 对象所有权仍在调用方，修好之后可以**重试** `giveBack`。
+     * 修前：抛的是回调自己的裸异常（不是 `ClearFailedException`）⇒ 本用例的 catch 接不住。
+     */
+    @TestCase
+    public func clearFailureMustNotCountAsReturned(): Unit {
+        let destroyed = AtomicInt64(0)
+        let failFirst = AtomicBool(true)                     // 第一次 clear 抛，之后成功（模拟「修好了再来还」）
+        let pool = KeyPool<String, Object>(
+            mode: Fifo,
+            initKeys: ['k'].iterator().next,
+            minSize: 0,
+            maxSize: 1,
+            totalSize: 1,
+            idleTimeout: Duration.hour,
+            checkOnCreation: false,
+            checkOnBorrowing: false,
+            checkOnReturning: false,
+            clearOnReturning: true,
+            checkInterval: Duration.Zero,
+            maxWaiting: Duration.second,
+            creator: {_ => Object()},
+            checker: {_, _ => true},
+            destroier: {_, _ => destroyed.fetchAdd(1)},
+            clear: {_, _ =>
+                if (failFirst.compareAndSwap(true, false)) {
+                    throw Exception('clear failed')
+                }
+            }
+        )
+        let obj = pool.get('k', timeout: Duration.second).getOrThrow()
+        @Assert(pool.size, 1)
+        var caught = None<ClearFailedException>
+        try {
+            pool.giveBack('k', obj)
+        } catch (e: ClearFailedException) {
+            caught = Some(e)
+        } catch (_: Exception) {
+            // 修前（裸照抛）：回调异常直接溜到调用方 ⇒ 这里接住，让下面的断言干净地失败
+        }
+        @Assert(caught.isSome(), true)                       // 修前：抛的是裸 Exception ⇒ 这里不是它
+        @Assert(destroyed.load(), 0)                         // 没归还 ⇒ 不销毁（所有权仍归调用方）
+        @Assert(pool.size, 1)                                // 记账也没结清（这一项仍记在「借出」上，不是丢了）
+        @Assert(caught.getOrThrow().suppressed.size, 1)      // 被顶掉的那个回调异常挂着，现场没丢
+        // 修好之后重试归还：成功 ⇒ 项回到池里、额度照常结清
+        pool.giveBack('k', obj)
+        @Assert(destroyed.load(), 0)
+        @Assert(pool.get('k', timeout: Duration.Zero).isSome())
+        @Assert(pool.size, 1)
+        pool.close()
     }
 }
 

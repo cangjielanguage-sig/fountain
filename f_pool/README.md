@@ -208,6 +208,11 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
 > 仓库内使用的池都是 `Pool<V>`（键为 `Unit`，键永远只有一个），不会走到这条路径。详见
 > `.autocode/bugs/bug-pool.md` §2.5 `POOL-10`。
 >
+> 同一口径：**`giveBack` 抛异常 ⇒ 对象没有归还**。`clearOnReturning = true` 时 `clear` 回调抛异常，
+> `giveBack` 抛 `ClearFailedException`（同为 `f_base.BaseException` 子类、带 `key` 字段，原始回调异常挂在
+> `suppressed` 上）—— 不销毁、不结清记账、不进池，池项状态与调用 `giveBack` 之前一样，所有权仍在调用方：
+> 修好条件后可以**重试** `giveBack`（重试成功额度照常结清），或者自己销毁它。见 §2.7 `POOL-12`。
+>
 > `remove(key)` 用于**主动回收键**：键的基数由应用控制时（用户 / 会话 / 文件 …），不回收的话键表、
 > 空池条目与巡检每轮 O(#keys) 的遍历都是永久成本（§2.6 `POOL-11`）。摘键只销毁**池内**的项；借用中的
 > 对象仍在应用手里，而且摘掉之后 `giveBack(key, …)` 会抛 `UnknownKeyException` —— 那些对象要应用层自己销毁。
