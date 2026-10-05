@@ -307,7 +307,7 @@ slowcreate(maxWaiting=30s):          got_some=true  elapsed_ms=2016
 
 ### 2.2 [中｜资源泄漏] `POOL-7` `close()` 之后创建线程可能永久阻塞在 `tasks.remove()` ✓已复核 → ✅已修复（2026-10-05）
 
-**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、本标记在**同一提交**（提交信息 `fix(f_pool): POOL-7 内部线程句柄 + close 发取消 + 每轮判 hasPendingCancellation + 带超时出队`）。
+**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、本标记在**同一提交**（提交 `36615817`，提交信息 `fix(f_pool): POOL-7 内部线程句柄 + close 发取消 + 每轮判 hasPendingCancellation + 带超时出队`）。
 
 - 改动（按指定方案：**保留线程句柄 → 关闭时发取消 → 线程每轮判状态 → 出队带超时**）：
   1. `f_pool/src/KeyPool.cj:183-184`：新增成员 `creationThread` / `checkingThread: ?Future<Unit>`（两个内部维护线程的句柄）；
