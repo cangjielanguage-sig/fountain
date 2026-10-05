@@ -487,7 +487,7 @@ useafterrelease: second_is_empty=false second_bytes=5
 
 ### 2.8 [中｜内存] `POOL-13` `ExitCallbacks.atExit(254, close)` 每次建池一条且不可注销 ✓已复核 → ✅已修复（2026-10-05，含一条残量登记）
 
-**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、标记在**同一提交**（提交 `xxxx`，提交信息 `fix(f_pool): POOL-13 atExit 回调只持弱引用，不再把池钉在注册表里`）。
+**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、标记在**同一提交**（提交 `9120fcd0`，提交信息 `fix(f_pool): POOL-13 atExit 回调只持弱引用（不再把池钉在注册表里），并登记线程闭包残量`）。
 
 - 口径（2026-10-05 拍板）：`ExitCallbacks.atExit` 收到的那个闭包**只用弱引用**引用池 —— 闭包本身只持有弱引用。
 - 改动（`f_pool/src/KeyPool.cj:268-279`）：
