@@ -30,10 +30,14 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
     private static let accessControlAllowOrigin: String = MVCConfig.accessControlAllowOrigin
     private static let accessControlMaxAge: Int64 = MVCConfig.accessControlMaxAge
 
-    MultiRequestMethodHandler(private let patterns: HttpRequestPathPatterns) {}
+    MultiRequestMethodHandler(private let patterns: HttpRequestPathPatterns) {
+        this.allowsCache = AllowsCache(this.metas)
+    }
 
     private let metas = HashMap<RequestMethod, HashMap<String, RequestMeta>>() //注册时已使用Mutex同步，不必使用ConcurrentHashMap
     private static let mutex = Mutex()
+    // §3.1 / MVC-L1：Allow 串构建一次后缓存（注册结束后 metas 不再变化）
+    private let allowsCache: AllowsCache
     func register(meta: RequestMeta): Unit {
         synchronized(mutex) {
             meta.pattern = patterns
@@ -87,14 +91,7 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
         match ((metas.get(method), method)) {
             case (Some(ms), OPTIONS) => check(ms).`handle`(ctx)
             case (_, OPTIONS) =>
-                let allow = StringGenerator()
-                allow.append(method)
-                let last = metas.size
-                for ((method, _) in metas) {
-                    allow.append(", ")
-                    allow.append(method)
-                }
-                let allows = allow.toString()
+                let allows = allowsCache.get()
                 let resp = ctx.responseBuilder
                 resp.header("Access-Control-Allow-Method", allows).header("Allow", allows)
                 if (!accessControlAllowHeaders.isEmpty()) {
@@ -183,4 +180,45 @@ class HttpStatusOnlyHandler <: HttpRequestHandler {
             }
         }
     }
+}
+
+/**
+ * 包内接缝（§3.1 / `MVC-L1`）：`Allow` 串（`"OPTIONS, GET, POST, …"`）的线程安全缓存。
+ * 所有路由注册都发生在服务启动前（`@Controller` / `@WSEndPoint` 宏的注册代码在模块静态初始化期执行，
+ * `MVCStarter.generateAndRegister*` 在 `MVCStarter.initialize()` 之后调用会抛异常），
+ * 因此首次 OPTIONS 请求时 `metas` 已是最终集合、此后不再变化。
+ * 单测用可变 `metas` 钉住「构建一次后不再随 metas 重建」这条不变量。
+ * 修前形态：`get()` 每次调用都重建（与改造前行为一致，用于测出 RED）；
+ * 修后：全程持锁读缓存（不搞双检读，避免对普通 `var` 的跨线程可见性争议 —— OPTIONS 本身极少）。
+ */
+class AllowsCache {
+    private let mutex = Mutex()
+    private var cached = None<String>
+    AllowsCache(private let metas: HashMap<RequestMethod, HashMap<String, RequestMeta>>) {}
+    func get(): String {
+        synchronized(mutex) {
+            match (cached) {
+                case Some(a) => a
+                case _ =>
+                    let a = allowsOf(metas)
+                    cached = a
+                    a
+            }
+        }
+    }
+}
+
+/**
+ * 包内接缝（§3.1 / `MVC-L1`）：拼出 `Allow` 串。
+ * 首项固定为 OPTIONS（`MultiRequestMethodHandler.handle` 只在路径未注册 OPTIONS 映射时进入该分支），
+ * 其余为已注册方法；方法顺序取自 `HashMap` 遍历 —— 本就不保证顺序（见 §2.20 / `MVC-7` 标记）。
+ */
+func allowsOf(metas: HashMap<RequestMethod, HashMap<String, RequestMeta>>): String {
+    let allow = StringGenerator()
+    allow.append(RequestMethod.OPTIONS)
+    for ((method, _) in metas) {
+        allow.append(", ")
+        allow.append(method)
+    }
+    allow.toString()
 }

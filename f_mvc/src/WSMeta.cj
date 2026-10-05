@@ -274,16 +274,16 @@ public class WSMeta<T> where T <: Object {
                                     ws.write(CloseWebFrame, frame.payload)
                                 }
                             }catch(e: Exception){
-                                log.error('error on handling close ${toBase64String(frame.payload)}', e)
+                                log.error(e){'error on handling close ${toBase64String(frame.payload)}'}
                             }
                             ws.closeConn()
                             return true
                         case _ =>
-                            log.error('unsupport frame ${frame.frameType}')
+                            log.error{'unsupport frame ${frame.frameType}'}
                             ws.closeConn()
                     }
                 }catch(e: Exception){
-                    log.error('error on handling ${frame.frameType}; frame: ${toBase64String(frame.payload)}', e)
+                    log.error(e){'error on handling ${frame.frameType}; frame: ${toBase64String(frame.payload)}'}
                 }
                 false
             },

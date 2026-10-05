@@ -96,7 +96,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                     builder.body(bytes)
                     return
                 }
-                log.warn('RequestMeta.handle.Not Found:${path} ${ctx.request.headers.getFirst('Accept')}')
+                log.warn{'RequestMeta.handle.Not Found:${path} ${ctx.request.headers.getFirst('Accept')}'}
                 NOT_FOUND.`handle`(ctx)
             } finally {
                 // §2.6 / MVC-8：404 / 静态资源这条路径同样要清请求级 ThreadLocal

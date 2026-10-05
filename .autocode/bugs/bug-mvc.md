@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 25 条**：严重 4（§1.9 `MVC-4`、§1.10 `MVC-1`、§1.11 `MVC-3`、§1.12 `MVC-2`）、中 8（§2.2 `MVC-C3`、§2.3 `MVC-C5`、§2.5 `MVC-C2`、§2.6 `MVC-8`、§2.7 `MVC-6`、§2.19 `MVC-5`、§2.20 `MVC-7`、§2.21 `MVC-9`）、低危+待验证 13（§3）。
-- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；`MVC-8` ✅已修复（§2.6，`fix/mvc-rest`）；`MVC-6` ❌误判（§2.7，用户判定非缺陷：WS 消息总长上限属端点/部署侧策略，不设硬上限是设计选择）；`MVC-5` ❌不改（§2.19，用户判定「不值得改」：全仓 `@PathVariable` 均为单变量、暴露面为零）；`MVC-7` ✅已修复（§2.20，`fix/mvc-rest`，范围：只改 `RequestMethod.hashCode()`）；`MVC-9` ❌不改（§2.21，用户判定：每请求从 IoC 取 controller 实例是设计语义 —— 允许 controller 定义为 `prototype`，缓存实例会破坏它）；**待修** 仅 §3 的 13 条低危/待验证（**§1 严重级、§2 中危均已清零**）。
+- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；`MVC-8` ✅已修复（§2.6，`fix/mvc-rest`）；`MVC-6` ❌误判（§2.7，用户判定非缺陷：WS 消息总长上限属端点/部署侧策略，不设硬上限是设计选择）；`MVC-5` ❌不改（§2.19，用户判定「不值得改」：全仓 `@PathVariable` 均为单变量、暴露面为零）；`MVC-7` ✅已修复（§2.20，`fix/mvc-rest`，范围：只改 `RequestMethod.hashCode()`）；`MVC-9` ❌不改（§2.21，用户判定：每请求从 IoC 取 controller 实例是设计语义 —— 允许 controller 定义为 `prototype`，缓存实例会破坏它）；`MVC-L8`/`MVC-L1`/`MVC-C6`(a) ✅已加固（§3.1，`fix/mvc-rest`；`MVC-C6`(b) 待拍板）；**待修** §3.1 的 8 条低危 + §3.2 的 2 条待验证（**§1 严重级、§2 中危均已清零**）。
 
 ## 1. 严重（本模块 4 条）
 
@@ -202,7 +202,7 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 
 **健壮性 / 正确性**
 
-- `MVC-C6` `WSMeta.cj:176, 238-240`：文本/二进制帧到达但未配置对应 meta 时每条消息抛一次 `WSException`，并在 catch 里 `toBase64String(frame.payload)`（O(payload)）⇒ 异常驱动控制流 + 编码放大。
+- `MVC-C6` `WSMeta.cj:176, 238-240`：文本/二进制帧到达但未配置对应 meta 时每条消息抛一次 `WSException`，并在 catch 里 `toBase64String(frame.payload)`（O(payload)）⇒ 异常驱动控制流 + 编码放大。→ ✅**(a) 已加固（2026-10-05，见 §3.1 加固标记）**；(b) 待用户拍板
 
 **内存 / 清理**
 
@@ -210,15 +210,28 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 
 **性能微项**
 
-- `MVC-L1` `MultiRequestMethodHandler.cj:90-97`：OPTIONS 每次重建 Allow 字符串（`metas` 注册后不变，可预生成）；另有死变量 `let last = metas.size`。
+- `MVC-L1` `MultiRequestMethodHandler.cj:90-97`：OPTIONS 每次重建 Allow 字符串（`metas` 注册后不变，可预生成）；另有死变量 `let last = metas.size`。→ ✅**已修复（2026-10-05，见 §3.1 加固标记）**
 - `MVC-L2` `FileDownload.cj:56` / `ResponseDownload.cj:44, 62`：每次下载重新分配缓冲并每次读配置（`MVCConfig.cj:257-261`）。
 - `MVC-L3` `RequestMeta.cj:161-175, 298-302`：多值 `Accept` 每请求构造 `AcceptQueue`（内含 `PriorityQueue` + 比较闭包），浏览器默认多值 Accept 命中率极高。
 - `MVC-L4` `RequestCondition.cj:154-170`：每次条件检查新建 `HashSet<String>(currentValues)`。
 - `MVC-L5` `HttpRequestDistributorImpl.cj:57-63`：未命中路径每请求新建 `RequestMeta`（含闭包）⇒ 建议复用单例 404 handler。
 - `MVC-L6` `global_func.cj:69-147`：数组参数解析用 `split`（无逗号也会切出 1 元素数组），可先判 `indexOf(',')` 或 `lazySplit`。
 - `MVC-L7` `RequestMeta.cj:76-92`：比较器内构造两个 `TreeSet`（注册期 O(N log N) 次，可预算排序键）。
-- `MVC-L8` `RequestMeta.cj:71`：404 日志用非惰性插值（`'...${path}'`），改 `log.warn{...}`。
+- `MVC-L8` `RequestMeta.cj:71`：404 日志用非惰性插值（`'...${path}'`），改 `log.warn{...}`。→ ✅**已修复（2026-10-05，见 §3.1 加固标记）**
 - `MVC-L10` `RequestArgMeta.cj:21, 39`：同一次写入用 `[]` + `get` 双查表，可合并为一次 `get`。
+
+**✅ 加固标记（2026-10-05，`fix/mvc-rest`，代码/用例/本标记同一提交）**
+
+提交信息 `perf(f_mvc): MVC-L8 / MVC-L1 / MVC-C6(a) 微项加固——日志惰性化 + OPTIONS Allow 串缓存（§3.1）`。
+
+- **`MVC-L8`（404 日志惰性化）**：`RequestMeta.cj:99`（原基线记录为 `:71`）—— `log.warn('RequestMeta.handle.Not Found:${path} ${ctx.request.headers.getFirst('Accept')}')` → `log.warn{'…'}`。⇒ WARN 关闭时不再拼字符串、也不再做一次 `headers.getFirst('Accept')`（未命中/静态资源未命中的每条请求都付）。惰性依据：`Logger.warn(message: () -> String)`（`f_log/src/base/Logger.cj:523`）→ `AbstractLogger.append`（`f_log/src/base/AbstractLogger.cj:131-137`）**先判 `logLevelEnabled` 再调 `message()`**（同一契约已在 §1.12 `MVC-2` 标记中验证）。WARN 开启时输出逐字不变。
+- **`MVC-L1`（OPTIONS 的 `Allow` 串构建一次缓存）**：`MultiRequestMethodHandler.cj` —— OPTIONS 分支（`:93-96`）改为取 `allowsCache.get()`；新增包内接缝 `AllowsCache`（`:194-209`：Mutex 保护的「构建一次」缓存）与 `allowsOf(metas)`（`:216-224`：原拼串逻辑原样搬入，首项固定 `RequestMethod.OPTIONS`）；**删除死变量 `let last = metas.size`**。缓存安全性：路由注册只发生在模块静态初始化期（`MVCStarter.generateAndRegister*` 在 `MVCStarter.initialize()` 之后调用会抛异常；`HttpRequestDistributorImpl` 的两个公开 `register` 直接抛「not implemented」）⇒ 首次 OPTIONS 请求时 `metas` 已是最终集合、此后不变。`Allow` / `Access-Control-Allow-Method` 的方法顺序取自 `HashMap` 遍历（本就不保证顺序，§2.20 已记录），缓存后同进程内稳定。
+- **`MVC-C6`(a)（WS 帧错误日志惰性化，未改控制流）**：`WSMeta.cj:277`（close 帧 catch）、`:286`（帧处理 catch）—— `log.error('…${toBase64String(frame.payload)}', e)` → `log.error(e){'…'}`（惰性重载 `Logger.cj:444`/`:447`，调用形式同 `RequestMeta.cj:354` 的 `log.warn(e){…}`）；`:282` 的 `log.error('unsupport frame …')` 一并改惰性。⇒ **ERROR 关闭时不再为每条消息 base64 整个 payload**（该路径正是「帧到了但没配 meta ⇒ 每条消息抛一次」最贵的地方）。异常仍在 catch 内消化、会话继续，与修前一致；**(b)**「未配置 meta 的帧是否改为首帧即 `closeConn()`」属行为变更，**待用户拍板**。
+- **RED/GREEN 实测**（同一套用例两次运行，`f_mvc`）：
+  - **RED**：先落接缝的**急切形态**（`AllowsCache.get()` 每次重建，行为与改造前一致）+ 新增用例文件 `f_mvc/src/MultiRequestMethodHandler_test.cj` ⇒ `[ FAILED ] testAllowsIsBuiltOnce`，`Assert Failed: first != cache.get()`（第二次调用前向 `metas` 加了一个 PUT，重建即产生不同串）⇒ **`TOTAL 24 / PASSED 23 / FAILED 1`、`TEST EXIT=1`**；同轮 `testAllowsContent` PASSED（内容不变量成立）。
+  - **GREEN**：给 `AllowsCache` 加上 Mutex + 一次性缓存后复跑 ⇒ **`PASSED 24 / FAILED 0 / ERROR 0`、`TEST EXIT=0`**；同轮 `cjpm build` **exit 0**。
+- 用例内容：`testAllowsContent`（`"OPTIONS, GET, POST, WS"` 按**集合**断言：首项 `OPTIONS`、集合 == 已注册方法集合，不绑顺序）、`testAllowsIsBuiltOnce`（可变 `metas` 钉住「构建一次后不再重建」）。
+- 未覆盖 / 保留项：①`MVC-L8` 与 `MVC-C6(a)` 的「惰性」依赖 f_log 契约，无 f_mvc 侧单测（`HttpContext`/日志级别在 f_mvc 测试里造不出、注入不了），证据为契约核对 + 既有 24 条用例全绿；②`MVC-C6`(b) 未做；③本次未动 `MVC-L2`/`L3`/`L4`/`L5`/`L6`/`L7`/`L9`/`L10` 与 §3.2 两条。
 
 ### 3.2 待验证（2 条）
 

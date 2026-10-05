@@ -35,6 +35,7 @@
 > 十六次修正（2026-10-05）：§2.3 `MVC-C5` 的异常形态按用户指定改为 `throw ex`（收尾也失败时抛包装后的 `MVCException`：cause = 收尾失败、suppressed = 原任务异常；实测 std `Exception(caused)` 不复制 message ⇒ `ex.message` 为空），用例同步钉该形态。
 > 十七次修正（2026-10-05）：§2.20 `MVC-7` 已修复（范围：`RequestMethod.hashCode()` 由 `toString().hashCode()` 改为声明序常量表；`compare` 经核对只在注册期、`tryParse` 分配净收益不确定，按用户决定不动。唯一可观察变化是 OPTIONS 的 `Allow`/`Access-Control-Allow-Method` 头方法顺序可能不同）⇒ f_mvc 中危待修 1 条（§2.21）。
 > 十八次修正（2026-10-05）：§2.21 `MVC-9` 判定为 ❌**不改**（用户判定：每次 HTTP 访问都从 IoC 取一次 controller 实例是**设计语义** —— 允许把 controller 定义为 `prototype`，缓存实例会把它静默变成单例；`@Controller` 即 `@Bean` 包装，fdemo 有 prototype 控制器实例 `CurrentUserController`。报告原建议「注册期解析」另有时序问题：注册在模块静态初始化期，早于 `BeanFactory.afterRegistered()` 的 `check()`/`initBeansIfNeed()`）⇒ **§1 严重级、§2 中危全部清零**，f_mvc 仅剩 §3 的 13 条低危/待验证。
+> 十九次修正（2026-10-05）：§3.1 三条微项加固（`fix/mvc-rest`，同一提交）：`MVC-L8` 404 日志改惰性插值；`MVC-L1` OPTIONS 的 `Allow` 串改为「构建一次缓存」（新增包内接缝 `AllowsCache` / `allowsOf`，删死变量）——RED/GREEN 实测 `testAllowsIsBuiltOnce` 由失败转通过，`TOTAL 24 / PASSED 24`；`MVC-C6`(a) WS 帧错误日志改惰性（`log.error(e){…}`），ERROR 关闭时不再为每条消息 base64 整个 payload（控制流未动；(b) 待用户拍板）⇒ f_mvc 剩 §3.1 低危 8 条 + §3.2 待验证 2 条。
 
 **建议修复顺序**（即严重级内部的落地顺序）：
 
