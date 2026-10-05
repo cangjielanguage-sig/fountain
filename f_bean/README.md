@@ -261,7 +261,7 @@ public enum ConfCond <: BeanCondition {
 }
 ```
 
-#### BeanBef
+#### BeanDef
 ```cj
 /**
  * beanType是全限定类型名，指定类型有bean定义则on返回true

@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 14 条**：严重 1（§1.8 `BEAN-1`）、中 4（§2.15 `BEAN-2`、§2.16 `BEAN-3`、§2.17 `BEAN-4`、§2.18 `BEAN-5`）、低危+待验证 9（§3）。
-- **状态（截至 2026-10-05）**：`BEAN-1` ✅已修复（§1.8）、`BEAN-2` ✅已修复（§2.15）、`BEAN-3` ✅已修复（§2.16，含同族的 `getFirstTuple`）、`BEAN-4` ✅已修复（§2.17）、`BEAN-5` ✅已修复（§2.18）⇒ **本模块中危清零**；§3 的 9 条里 `BEAN-L9` ❌判为**不成立**、`BEAN-L2` ❌判为**不成立（设计）**、`BEAN-L3` ⏸保持现状、`BEAN-L6` ⏸保持现状（注解是**面向应用项目**的特性，不删）；**待修 2 条**：`BEAN-L1`（启动期 `check()` 近似 O(n²)）与待验证的 `BEAN-L8`（`BEAN-L7`/`BEAN-L5`/`BEAN-L10` 已修复；`BEAN-L4`/`BEAN-L11` 按作者决定保持现状）。另：§3.1 `BEAN-L6` 记录了一条**新发现待作者确认** —— `annotationMap` 只写不读，README:5 的「按（父）类型注解获取 bean」当前没有可用查询入口。
+- **状态（截至 2026-10-05）**：`BEAN-1` ✅已修复（§1.8）、`BEAN-2` ✅已修复（§2.15）、`BEAN-3` ✅已修复（§2.16，含同族的 `getFirstTuple`）、`BEAN-4` ✅已修复（§2.17）、`BEAN-5` ✅已修复（§2.18）⇒ **本模块中危清零**；§3 的 9 条里 `BEAN-L9` ❌判为**不成立**、`BEAN-L2` ❌判为**不成立（设计）**、`BEAN-L3` ⏸保持现状、`BEAN-L6` ⏸保持现状（注解是**面向应用项目**的特性，不删）；**待修 1 条**：`BEAN-L1`（启动期 `check()` 近似 O(n²)）；`BEAN-L8` 已由部署方事实判为 ❌**不成立**（`BEAN-L7`/`BEAN-L5`/`BEAN-L10` 已修复；`BEAN-L4`/`BEAN-L11` 按作者决定保持现状）。另：§3.1 `BEAN-L6` 记录了一条**新发现待作者确认** —— `annotationMap` 只写不读，README:5 的「按（父）类型注解获取 bean」当前没有可用查询入口。
 
 ## 1. 严重（本模块 1 条）
 
@@ -105,7 +105,7 @@
 
 `BeanScope.cj:31, 38-42, 59-63` + `BeanManager.cj:90`。**待验证** `TypeInfo.of` 是否有运行时缓存（`f_base/src/TypeInfos.cj:32-36` 注释显示作者也想用静态 `INSTANCE`）。修法：`BeanManager` 构造时预存 `Bool` 字段。
 
-## 3. 低危 / 待验证（本模块 9 条）
+## 3. 低危 / 待验证（本模块 11 条）
 
 ### 3.1 低危（10 条；其中 `BEAN-L9` 判为**不成立**；另附 API 卫生记录，见节末）
 
@@ -160,9 +160,11 @@
 - **公开函数名拼写**：`lookup.cj:116` `lookupOptionLable`（`Lable` → `Label`，应为 `lookupLabelOption`，同族见 `:113`、`:119`）。全仓 grep `Lable` **只此一处且零调用者** ⇒ 改名不破坏仓库内任何代码，仅外部使用者有理论风险。**按本次决定不改**（留档备查；`BEAN-L4` 条目内亦有此一句）。
 - **`f_bean/README.md` 待修文档错误**（本次顺带发现，**未改**）：`:77`／`:80` `lookupTreeSet` 的签名写成返回 `HashSet<T>`（应为 `TreeSet<T>`）；`:91`／`:94` `lookupLables` 应为 `lookupLabels`；`:105` `ComparableW>` 应为 `Comparable<W>`；`:60` `lookupOption<T>(cond)` 的「如果没找到返回异常」应为「返回 `None<T>`」。
 
-### 3.2 待验证（1 条）
+### 3.2 待验证（1 条；`BEAN-L8` 判为**不成立**）
 
-- `BEAN-L8` `BeanManager.cj:59-66` vs `:88-107`：`initIfNeed()` 无条件 `_bean.store(new())` 而 `bean` getter 用双检 ⇒ 若启动初始化与首次请求并发，非 lazy 单例可能被二次创建覆盖。**验证**：部署方是否保证请求晚于 initializer（正常启动流程下不触发）。
+- `BEAN-L8` ❌**不成立（2026-10-05，部署方约定）** — ~~`BeanManager.cj:59-66` vs `:88-107`：`initIfNeed()` 无条件 `_bean.store(new())` 而 `bean` getter 用双检 ⇒ 若启动初始化与首次请求并发，非 lazy 单例可能被二次创建覆盖。~~
+  **判定**：部署契约保证「请求晚于 initializer」——启动期的 `BeanFactory.afterRegistered()`（含 `check()` 与 `initBeansIfNeed()`）在应用开始接受请求**之前**完成 ⇒ 该路径与首次请求**不会并发**，故「双检 + 无条件 `store`」不构成竞态；`initIfNeed` 的 `store` 发生在单线程启动期，`bean` getter 的双检只在运行期（此时 `_bean` 已就位）生效。原条目的触发前提（启动初始化与首次请求并发）在部署约定下不成立。
+  **顺带记录**：`registered` 在 `afterRegistered()` 后为真、`doRegister` 会拒绝注册（`BeanFactory.cj:58-59`）⇒ 注册与初始化都在启动期封口，与上述约定同源。
 
 ## 4. 逐模块覆盖面（原 §4.3）
 
