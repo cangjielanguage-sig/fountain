@@ -26,6 +26,7 @@
 > 八次修正（2026-10-05）：§2.5 `POOL-10` 已修复（**口径改为抛 `UnknownKeyException`**，池不销毁、不建池；原「未命中就销毁」的修法已否决）⇒ 待修中危 **3** 条（`POOL-11`~`POOL-13`）。
 > 九次修正（2026-10-05）：§2.6 `POOL-11` 已修复（`KeyPool.remove(key)` 摘键 + `close()` 清空键表 + **删除 `destroy`**：池这一层唯一的销毁入口是 `close`）⇒ 待修中危 **2** 条（`POOL-12`、`POOL-13`）。
 > 十次修正（2026-10-05）：§2.7 `POOL-12` 已修复（`clear` 回调失败抛 `ClearFailedException`：**`giveBack` 抛异常 = 这次归还没有发生**，不销毁 / 不结清 / 不进池，可重试）⇒ 待修中危 **1** 条（`POOL-13`）。
+> 十一次修正（2026-10-05）：§2.8 `POOL-13` 已修复（`atExit` 回调只持弱引用）⇒ 待修中危 **0** 条：§1（5 条严重）与 §2（8 条中危）**全部处理完**；§2.8 另登记一条**运行时残量**（已结束线程的闭包被运行时保留 ⇒ 池本体仍回收不掉，见该节）。剩下的是 §3 的 9 条低危 / 待验证（登记，未动）。
 
 **建议修复顺序**：
 
@@ -34,7 +35,7 @@
 3. `POOL-3`（§1.3）巡检把**满载 key** 的空闲项当「校验不过」摘掉，并整轮跳过用户 checker → 稳态抖动、`connectionLife`/`idleTimeout` 判定被绕过（实测满载空闲池 idle 2→1）　**✅已修复（2026-10-05，见 §1.3 修复标记：size&lt;max 只约束补建）**
 4. `POOL-4`（§1.4）creator/checker 持续失败时**无退避紧重试** → 对下游的重连风暴 + 每轮一条 WARN（实测 300ms 内 75,976 次尝试）　**❌误判（2026-10-05：设计目的，不修改；见 §1.4 误判标记）**
 5. `POOL-5`（§1.5）`maxWaiting = Duration.Max` 的「真无限等待」实际只等 1s 就**静默放弃**（实测 1008ms 返回 `None`，对照 30s 档 2016ms 返回项）；同一分支还会吞掉丢失的唤醒　**✅已修复（2026-10-05，随 §1.2 的统一等待重写一并解决，见 §1.5 修复标记）**
-6. 其后按 §2 顺序：`POOL-6`（关停不唤醒/归还竞态）**✅已修复（2026-10-05，见 §2.1 修复标记）** → `POOL-7`（关池泄漏线程）**✅已修复（2026-10-05，见 §2.2 修复标记：线程句柄 + cancel + 每轮判状态 + 带超时出队）** → `POOL-8`（队列按 `totalSize` 预分配 + 两个池默认 `maxSize=Int64.Max` 构造即 OOM）**✅已修复（2026-10-05，见 §2.3 修复标记：队列容量解耦、夹取 [1,1024]）** → `POOL-9`（`release` 后仍可写，实测污染池项）**✅已修复（2026-10-05，见 §2.4 修复标记：释放后读写一律抛）** → `POOL-10`（`giveBack` 还错键，抛 `UnknownKeyException`）**✅已修复（2026-10-05，见 §2.5 修复标记）** → `POOL-11`（key 表只增不减）**✅已修复（2026-10-05，见 §2.6 修复标记：`KeyPool.remove(key)` 摘键、`close()` 清空键表、池这一层删除 `destroy`）** → `POOL-12`（归还路径上 `clear` 抛异常）**✅已修复（2026-10-05，见 §2.7 修复标记：抛 `ClearFailedException`，这次归还不算发生）** → `POOL-13`
+6. 其后按 §2 顺序：`POOL-6`（关停不唤醒/归还竞态）**✅已修复（2026-10-05，见 §2.1 修复标记）** → `POOL-7`（关池泄漏线程）**✅已修复（2026-10-05，见 §2.2 修复标记：线程句柄 + cancel + 每轮判状态 + 带超时出队）** → `POOL-8`（队列按 `totalSize` 预分配 + 两个池默认 `maxSize=Int64.Max` 构造即 OOM）**✅已修复（2026-10-05，见 §2.3 修复标记：队列容量解耦、夹取 [1,1024]）** → `POOL-9`（`release` 后仍可写，实测污染池项）**✅已修复（2026-10-05，见 §2.4 修复标记：释放后读写一律抛）** → `POOL-10`（`giveBack` 还错键，抛 `UnknownKeyException`）**✅已修复（2026-10-05，见 §2.5 修复标记）** → `POOL-11`（key 表只增不减）**✅已修复（2026-10-05，见 §2.6 修复标记：`KeyPool.remove(key)` 摘键、`close()` 清空键表、池这一层删除 `destroy`）** → `POOL-12`（归还路径上 `clear` 抛异常）**✅已修复（2026-10-05，见 §2.7 修复标记：抛 `ClearFailedException`，这次归还不算发生）** → `POOL-13`（`atExit` 每次建池一条且不可注销）**✅已修复（2026-10-05，见 §2.8 修复标记：闭包只持弱引用；另有一条运行时残量登记）**
 
 ---
 
@@ -484,11 +485,37 @@ useafterrelease: second_is_empty=false second_bytes=5
 
 **修法（已被上面的口径取代）**：~~`clear` 包 try（失败记 `PoolDiagnostics.onCallbackError()`，仍把池项放回），或按 `POOL-1` 的建议改为「返回前 `take()`」。~~ ⇒ 改为「抛 `ClearFailedException`（不销毁、不结清、不进池）」，与 `POOL-10` 同口径。
 
-### 2.8 [中｜内存] `POOL-13` `ExitCallbacks.atExit(254, close)` 每次建池一条且不可注销
+### 2.8 [中｜内存] `POOL-13` `ExitCallbacks.atExit(254, close)` 每次建池一条且不可注销 ✓已复核 → ✅已修复（2026-10-05，含一条残量登记）
 
-`KeyPool` 构造末尾注册 `ExitCallbacks.atExit(254, close)`（`268:268`），而 `ExitCallbacks`（`f_base/src/signal.cj:36-69`）只有 `atExit`、没有 `remove`：每建一个池就永久多一条回调，回调闭包持有 `KeyPool` 实例 ⇒ 已 `close()` 的池对象无法回收（`POOL-11` 之后 `close()` 会清空键表，所以留下的只是一个空壳 `KeyPool` + 它的两个队列对象；本次 `POOL-11` 改动只让回调变**幂等**，注册项本身仍然不可注销）。
+**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、标记在**同一提交**（提交 `xxxx`，提交信息 `fix(f_pool): POOL-13 atExit 回调只持弱引用，不再把池钉在注册表里`）。
 
-**修法**：给 `ExitCallbacks` 加 `remove`（返回句柄）并在 `close()` 里注销；或改为「只注册一次静态钩子，遍历活池集合」。
+- 口径（2026-10-05 拍板）：`ExitCallbacks.atExit` 收到的那个闭包**只用弱引用**引用池 —— 闭包本身只持有弱引用。
+- 改动（`f_pool/src/KeyPool.cj:268-279`）：
+  ```cj
+  let weakSelf = WeakRef<KeyPool<K, V>>(this, CleanupPolicy.EAGER)
+  ExitCallbacks.atExit(254){=>
+      if (let Some(p) <- weakSelf.value) {
+          p.close()
+      }
+  }
+  ```
+  用 `CleanupPolicy.EAGER`（`DEFERRED` 的语义是「尽可能保证弱引用对象存活、内存不足才回收」，对这里没用）。退出语义不变：未 `close()` 的池被自己的维护线程强引用 ⇒ 闭包照样拿到它并 `close()`；而 `close()` 幂等（§2.6 `POOL-11`）⇒ 应用已经关过、这里再关一次也没有副作用。
+- 测量证据：
+  - **机制面（正向）**：探针 `weakclosure` 证明「注册进全局表的闭包只要只引用弱引用，就不会钉住对象」成立 —— 构造函数里建闭包、静态函数里建闭包两种写法都 `collected=true`（`.autocode/tmp/pool_fix13_probe3.log`）；
+  - **修前**：探针 `exitweak`，`KeyPool.cj` 回退到 `review/f_pool` 版（atExit 强持有 `close`）时，池 `close()` + `gc()`×8（每轮另造 8MB 垃圾逼 GC）后 `weak.value` 一直是 `Some`（`collected=false`）；
+  - **修后**：同一个探针**仍然 `collected=false`** —— 持有者不是（也不再是）atExit 闭包，见下面的残量。
+- **残量（本次修不掉，登记 + 后续方案）**：`close()` 之后池**仍然回收不掉**，持有者换成了**维护线程的闭包**：
+  - 探针 `threadhold`（`.autocode/tmp/pool_fix13_probe4.log`）：一个对象只要 `spawn` 过引用自己的线程（`while (this.running) { … }` 这种形状，正是 `KeyPool` 两个维护线程的写法），**线程退出之后（不问是否 `join`）对象都回收不掉** ⇒ 这套运行时保留了已结束线程的闭包，捕获的 `this` 一直被钉住；
+  - 用例 `KeyPoolTest.closedPoolStillPinnedByWorkerThreadClosure` 把这个残量**钉成一条明确断言**（现在断言「还活着」；等哪天不成立，就把它反过来断言可回收）；
+  - 后续方案（二选一，都不在本次范围内）：① `f_pool` 侧：把两个维护线程改成只捕获一个「**可清空的上下文**」（`close()` 时把上下文里对池 / 任务队列 / 回调的引用清掉）⇒ 池本体可回收，只剩一个被运行时留着的空壳上下文；② 上游 `cangjie_runtime`：已结束线程的闭包应当可释放（可上报）；
+  - 另：`ExitCallbacks` 的注册表本身仍是「每次建池一条、不可注销」（`f_base/src/signal.cj:36-69` 没有 `remove`）—— 只持弱引用之后，每条只剩「闭包 + `WeakRef`」几十字节，所以不再单列。
+- 日志：`.autocode/tmp/pool_fix13_{probe,probe2,probe3,probe4,final}.log`。
+
+**原始诊断（保留）**
+
+`KeyPool` 构造末尾注册 `ExitCallbacks.atExit(254, close)`，而 `ExitCallbacks` 只有 `atExit`、没有 `remove`：每建一个池就永久多一条回调，回调闭包持有 `KeyPool` 实例 ⇒ 已 `close()` 的池对象无法回收（`POOL-11` 之后 `close()` 会清空键表，所以留下的只是一个空壳 `KeyPool` + 它的两个队列对象；`POOL-11` 那次改动只让回调变**幂等**，注册项本身仍然不可注销）。
+
+**修法（已被上面的口径取代）**：~~给 `ExitCallbacks` 加 `remove`（返回句柄）并在 `close()` 里注销；或改为「只注册一次静态钩子，遍历活池集合」。~~ ⇒ 改为「闭包只持弱引用」（注册项不再钉住池）。
 
 ---
 
@@ -562,6 +589,8 @@ useafterrelease: second_is_empty=false second_bytes=5
 > `POOL-11` 修复后的复测（口径：`KeyPool.remove(key)` 摘键 + `close()` 销毁全部并清空键表 + 删除 `destroy`）：**修前** ① 新用例**编译不过**（`error: 'remove' is not a member of class 'KeyPool<Struct-String, Class-Object>'`、`error: 'keyCount' is not a member of …`、`error: extra argument given for parameter list '(Enum-Mode, Int64)'`）；② 源码回 HEAD 后用临时用例 `headDestroyLeavesKeyTableBehind` 钉住「键表不清空」：`[ FAILED ]`（`Assert Failed: (keys == 0)` —— `BaseKeyPool.destroy` 跑完 k1/k2 还在键表里）。**修后**：新/改动用例 `PASSED: 9, SKIPPED: 47, ERROR: 0, FAILED: 0`；全量 **`PASSED: 56, SKIPPED: 0, ERROR: 0, FAILED: 0`**（含原 `giveBackRacingCloseMustNotStrandItem` 的 100 轮「归还 ‖ 关池」—— 归还竞态的兜底已从 `KeyPool.giveBack` 移到底层，见 §2.1 的后续修订）；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（同上的既有 `ORMConfig_test`）。日志 `.autocode/tmp/pool_fix11_{pre,pre2,all,post}.log`。
 
 > `POOL-12` 修复后的复测（口径：`clear` 失败 ⇒ 抛 `ClearFailedException`，**这次归还没有发生**）：**修前**（`KeyPool.cj` 回退到 `review/f_pool` 已提交版）`clearFailureMustNotCountAsReturned` `[ FAILED ]`（`Assert Failed: (caught.isSome() == true)` —— 抛的是回调自己的裸异常）⇒ `PRE_EXIT=1`；**修后**该用例 `[ PASSED ]`，全量 **`PASSED: 57, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（同上的既有 `ORMConfig_test`）。日志 `.autocode/tmp/pool_fix12_{pre2,all}.log`。
+
+> `POOL-13` 修复后的复测（口径：`atExit` 闭包只持弱引用）：**修前**探针 `exitweak`（`KeyPool.cj` 回退到 `review/f_pool` 版）`collected=false`（池回收不掉 —— atExit 强持有）；**修后**同一探针**仍 `collected=false`**，因为持有者变成了维护线程的闭包（运行时保留已结束线程的闭包，探针 `threadhold`：不 join / join 都一样），**这一条是运行时行为、本次修不掉**，已在 §2.8 登记为残量；机制面用探针 `weakclosure` 正向验证（全局表里的弱引用闭包不钉住对象）。用例侧：`closedPoolStillPinnedByWorkerThreadClosure` 把残量钉成断言（现在断言「还活着」），全量 **`PASSED: 58, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR。日志 `.autocode/tmp/pool_fix13_{probe..probe4,final}.log`。
 
 复跑方式（WSL Ubuntu-24.04）：`source /mnt/d/docs/work/cangjie/cangjie.sh` → `cd .autocode/tmp/pool_probe && cjpm build` → 按脚本里的 `LD_LIBRARY_PATH`（各 `target/release/*@*` 目录**排在 `installed/libs/fboot` 之前**）直接跑 `target/release/bin/main <mode>`，用 `time -p` 量 CPU。
 

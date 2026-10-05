@@ -19,6 +19,7 @@ import std.collection.ArrayList
 import std.convert.*
 import std.fs.File
 import std.runtime.{gc, getThreadCount}
+import std.ref.{CleanupPolicy, WeakRef}
 import std.sync.{AtomicBool, AtomicInt64}
 import fountain::f_pool.diagnostics.PoolDiagnostics
 import fountain::f_pool.exception.{ClearFailedException, UnknownKeyException}
@@ -844,6 +845,50 @@ public class KeyPoolTest {
         @Assert(pool.get('k', timeout: Duration.Zero).isSome())
         @Assert(pool.size, 1)
         pool.close()
+    }
+    /**
+     * `POOL-13`（`.autocode/bugs/bug-pool.md` §2.8）**残量守卫**。
+     *
+     * 本次修复：`ExitCallbacks.atExit` 注册的回调**只持有弱引用**（`WeakRef`），不再把 `KeyPool` 实例钉在
+     * `atExit` 注册表里 —— 修前它是绑定 `this` 的 `close` 方法引用（强引用），每建一个池就多一条永不注销的回调。
+     *
+     * 但池 `close()` 之后**仍然回收不掉**，原因换成了另一个：探针 `threadhold`（`.autocode/tmp/pool_fix13_probe4.log`）
+     * 证明这套运行时**保留已结束线程的闭包** —— 一个对象只要 `spawn` 过引用自己的线程，就永远回收不掉
+     * （线程退出不 join、join 之后都一样）；而 `KeyPool` 的两个维护线程正是这种形状。
+     *
+     * 所以这条用例现在钉的是「**还活着**」这个已知残量：等它不再成立（运行时释放已结束线程的闭包，
+     * 或把两个维护线程改成只捕获「可清空的上下文」），应把这条断言反过来（改成断言可回收）。
+     */
+    @TestCase
+    public func closedPoolStillPinnedByWorkerThreadClosure(): Unit {
+        let weak = makeClosedPoolWeak()
+        for (_ in 0 .. 4) {
+            gc()
+            sleep(Duration.millisecond * 200)
+        }
+        @Assert(weak.value.isSome(), true)           // 残量：线程闭包（运行时保留）仍持有池
+    }
+    /** 建一个池、关掉它，只把弱引用返回（池的强引用随本栈帧消失）。 */
+    private func makeClosedPoolWeak(): WeakRef<KeyPool<String, Object>> {
+        let pool = KeyPool<String, Object>(
+            mode: Fifo,
+            initKeys: ['k'].iterator().next,
+            minSize: 0,
+            maxSize: 1,
+            totalSize: 1,
+            idleTimeout: Duration.hour,
+            checkOnCreation: false,
+            checkOnBorrowing: false,
+            checkOnReturning: false,
+            checkInterval: Duration.Zero,
+            maxWaiting: Duration.second,
+            creator: {_ => Object()},
+            checker: {_, _ => true},
+            destroier: {_, _ => ()}
+        )
+        let weak = WeakRef<KeyPool<String, Object>>(pool, CleanupPolicy.EAGER)
+        pool.close()
+        weak
     }
 }
 

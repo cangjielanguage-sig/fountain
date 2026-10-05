@@ -17,6 +17,7 @@ package fountain::f_pool
 
 import std.collection.concurrent.ArrayBlockingQueue
 import std.sync.{AtomicBool, AtomicInt64, Mutex, Condition}
+import std.ref.{CleanupPolicy, WeakRef}
 import fountain::f_base.ExitCallbacks
 import fountain::f_pool.diagnostics.PoolDiagnostics
 import fountain::f_pool.exception.{ClearFailedException, PoolException}
@@ -265,7 +266,17 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         while(let Some(k) <- initKeys()){
             tryAddTask(k)
         }
-        ExitCallbacks.atExit(254, close)
+        // 退出回调**只持有弱引用**（`EAGER`）：池被 `close()`（两个维护线程退出）且调用方不再引用它之后，
+        // 就不会再被 `atExit` 的注册表钉在内存里 —— 否则每建一个池就多一条永不注销的回调，
+        // 已关闭的池对象一直活到进程退出（见 .autocode/bugs/bug-pool.md §2.8 `POOL-13`）。
+        // 未 `close()` 的池仍被它自己的维护线程强引用 ⇒ 退出时这里照样能拿到它并 `close()`，语义不变；
+        // 而 `close()` 是幂等的（§2.6 `POOL-11`），所以「应用已关过、这里又关一次」也没有副作用。
+        let weakSelf = WeakRef<KeyPool<K, V>>(this, CleanupPolicy.EAGER)
+        ExitCallbacks.atExit(254){=>
+            if (let Some(p) <- weakSelf.value) {
+                p.close()
+            }
+        }
         // 必须是构造函数的最后一步：放行两个后台线程（见 constructed 的说明）
         synchronized(barrierMutex){
             constructed.store(true)
