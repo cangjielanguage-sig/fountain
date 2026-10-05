@@ -168,7 +168,7 @@ store.add(key, Priority<V>(key, value, life, checkDuration, once))
 
 ### 2.1 [中｜并发/契约] `CACHE-4` 用户代码在**段写锁内**执行：`removeIf` 谓词与 `getOrCompute` 的 callable 都会阻塞同段全部操作 → ✅已修复（2026-10-05，方案 C）
 
-**✅ 修复标记（2026-10-05，方案 C：callable 移出锁 + `removeIf` 两阶段）**：分支 `review/f_cache`，**代码、用例、README、本标记在同一提交**（提交信息 `fix(f_cache): CACHE-4 用户代码移出段写锁（callable 锁外计算 + removeIf 两阶段）（bug-cache §2.1 修复标记）`；提交哈希由下一次标记同步补录）。
+**✅ 修复标记（2026-10-05，方案 C：callable 移出锁 + `removeIf` 两阶段）**：分支 `review/f_cache`，**代码、用例、README、本标记在同一提交**（提交 `b772f1a5`：`fix(f_cache): CACHE-4 用户代码移出段写锁（callable 锁外计算 + removeIf 两阶段）（bug-cache §2.1 修复标记）`）。
 
 - 改动：
   - `src/SyncLinkedHashMap.cj`：`computeIfAbsentCounted` 把 `callable()` 移到段写锁**之外**（锁内只做「查 → 二次判定 → 写」，重复计算的结果被丢弃）；新增 `removeIfOutside`（读锁取快照 → 锁外跑谓词 → 写锁按 key 删，返回实际删除数）；原 `removeIf` 改名 `removeIfLocked`（谓词在写锁内，保留给定时清扫）。
@@ -212,7 +212,7 @@ store.add(key, Priority<V>(key, value, life, checkDuration, once))
 
 ### 2.2 [中｜资源] `CACHE-5` 线程与实例泄漏：每实例 1 个阻塞淘汰线程 + 1 条全局强引用；`WeakHeapCache` 另加 1 个 `while(true)` 线程 → ✅已修复（2026-10-05，实现 `Resource` + 协作取消）
 
-**✅ 修复标记（2026-10-05，方案：两个缓存实现 `Resource`，用线程句柄 + `Future.cancel()` + `hasPendingCancellation` 协作取消）**：分支 `review/f_cache`，**代码、用例、README、本标记在同一提交**（提交信息 `feat(f_cache): HeapCache/WeakHeapCache 实现 Resource，close() 取消内部线程（bug-cache §2.2 修复标记）`；提交哈希由下一次标记同步补录）。
+**✅ 修复标记（2026-10-05，方案：两个缓存实现 `Resource`，用线程句柄 + `Future.cancel()` + `hasPendingCancellation` 协作取消）**：分支 `review/f_cache`，**代码、用例、README、本标记在同一提交**（提交 `981e1005`：`feat(f_cache): HeapCache/WeakHeapCache 实现 Resource，close() 取消内部线程（bug-cache §2.2 修复标记）`；按指示删除 `destroy` 并统一 `close()` 的补做为 `0b9d3240`）。
 
 - 改动：
   - `src/HeapCache.cj`：类改为 `<: Resource`；`alive` 换成 `closedFlag`；新增两个**内部线程/定时器句柄字段** `evictionTask: ?Future<Unit>`、`timerHandle: ?Timer`（另有轮询常量 `EVICTION_POLL_INTERVAL = 100 ms`）；淘汰消费线程改为「`q.remove(轮询间隔)` + 每轮检查 `Thread.currentThread.hasPendingCancellation`」，收到取消后把**已入队**的淘汰回调投递完再退出；新增 `close()`（置位 + `Timer.cancel()` + `Future.cancel()` + `store.clear()`，可重复调用）与 `isClosed()`；`destroy()` 保留为 `close()` 的别名。
@@ -283,7 +283,7 @@ std 契约（`std.collection.concurrent.LinkedBlockingQueue.remove()`）：**阻
 
 ### 2.4 [中｜内存] `CACHE-7` `close()` 之后再 `set` 的条目永不被清理（定时器已停、仍可写） → ✅已修复（2026-10-05，方案 A2 + 主动清空/join）
 
-**✅ 修复标记（2026-10-05，方案 A2：close 主动清空并等线程结束 + 关闭后一切操作抛异常）**：分支 `review/f_cache`，**代码、用例、README、本标记在同一提交**（提交信息 `fix(f_cache): CACHE-7 close 主动清空并等线程结束，关闭后一切操作抛异常（bug-cache §2.4 修复标记）`；提交哈希由下一次标记同步补录）。
+**✅ 修复标记（2026-10-05，方案 A2：close 主动清空并等线程结束 + 关闭后一切操作抛异常）**：分支 `review/f_cache`，**代码、用例、README、本标记在同一提交**（提交 `65e5bc8d`：`fix(f_cache): CACHE-7 close 主动清空并等线程结束，关闭后一切操作抛异常（bug-cache §2.4 修复标记）`）。
 
 - 改动：
   - `src/HeapCache.cj`：新增 `private func ensureOpen()`（关闭后抛 `IllegalStateException('heap cache is closed')`），`get`/`contains`/`once`/`prolong`×2/`set`×2/`getOrDefault`/`getOrStore`/`getOrCompute`×3/`remove`/`removeIf`/`size`/`clear` 共 16 个公开入口全部先校验；`close()` 改为「置位 → `Timer.cancel()` → **主动 `store.clear()`** → `Future.cancel()` → **`f.get()` 等消费线程结束**」⇒ close 返回即「清理完成」；回调投递抽出 `notifyEviction`（吞掉用户回调异常：否则消费线程会被杀死、之后淘汰全部静默失效，且 close 的 join 会把异常重抛）。
@@ -309,7 +309,7 @@ std 契约（`std.collection.concurrent.LinkedBlockingQueue.remove()`）：**阻
 
 ### 2.5 [中｜并发] `CACHE-8` `Priority` 比较基线字段无锁读写竞争；`compare` 的“保护新生”分支写反且含不可达分支 → ✅ 已修复（2026-10-05：① 无锁竞争、②「保护新生」重写，④⑤ 口径同向统一）
 
-**✅ 修复标记（2026-10-05，①+② 一次完成）**：分支 `review/f_cache`，**代码、用例、README 与本标记在同一提交**（提交信息 `fix(f_cache): CACHE-8 ② compare 年龄门对称化并修正 recency 判据（保护新生，bug-cache §2.5）`；提交哈希由下一次标记同步补录）。语义按作者指示定为**保护新生**。
+**✅ 修复标记（2026-10-05，①+② 一次完成）**：分支 `review/f_cache`，**代码、用例、README 与本标记在同一提交**（三次提交：`00ff79a5` = ① 比较基线字段纳入 `p.lock`；`21c9cf65` = ② 年龄门对称化 + `cmp()` 两条 recency 判据；`db3b55f6` = ④⑤ 口径统一）。语义按作者指示定为**保护新生**。
 
 **① 比较基线字段纳入 `p.lock`（无锁竞争）**：
 
