@@ -516,6 +516,50 @@ public class KeyPoolTest {
         pool.close()
     }
     /**
+     * `POOL-L6`（`.autocode/bugs/bug-pool.md` §3）防回归：`maxWaiting` 取 `Duration.Max` **附近的有限值**
+     * （最容易被当成「几乎无限」的写法）时，等待里算剩余时间**不得**做 `MonoTime + Duration`。
+     *
+     * 基线 `waitChunk` 的 `waitStart + maxWaiting - MonoTime.now()` 在这里会抛
+     * `ArithmeticException: Arithmetic overflow: result exceeds MonoTime range`
+     * （`std.time::MonoTime::+`，探针 `pool_probe hugearn` 实测），而 `get` 没有 try ⇒ 异常直接抛给调用方。
+     * 其余量已实测排除：巨值有限 `remain` 交给 `Condition.wait(timeout:)` 是**睡下去**而不是溢出
+     * （探针 `condwait`）。所以本用例通过 = 「纯减法 + 无限档不做算术」这个写法还在。
+     */
+    @TestCase
+    public func hugeFiniteMaxWaitingMustNotOverflow(): Unit {
+        let created = AtomicInt64(0)
+        let pool = KeyPool<String, Object>(
+            mode: Fifo,
+            initKeys: ['k'].iterator().next,
+            minSize: 0,
+            maxSize: 1,
+            totalSize: 1,
+            idleTimeout: Duration.hour,
+            checkOnCreation: false,
+            checkOnBorrowing: false,
+            checkOnReturning: false,
+            checkInterval: Duration.Max,
+            maxWaiting: Duration.Max - Duration.nanosecond,   // 有限但巨值：走 `limit - elapsed` 那条路
+            creator: {_ =>
+                created.fetchAdd(1)
+                sleep(Duration.millisecond * 1500)
+                Object()
+            },
+            checker: {_, _ => true},
+            destroier: {_, _ => ()}
+        )
+        let t0 = MonoTime.now()
+        let got = pool.get('k', timeout: Duration.Max)         // ⇒ limit = maxWaiting（巨值有限）
+        let elapsed = MonoTime.now() - t0
+        @Assert(got.isSome())                                  // 基线写法：这里会先抛 ArithmeticException
+        @Assert(created.load() >= 1)
+        @Assert(elapsed >= Duration.millisecond * 1400)        // 真的等到了慢创建，而不是早退/立即返回
+        if (let Some(v) <- got) {
+            pool.giveBack('k', v)
+        }
+        pool.close()
+    }
+    /**
      * `POOL-3`（`.autocode/bugs/bug-pool.md` §1.3）：满载（= 稳态）时巡检**不得**摘掉空闲项、也不得反复补建。
      * 修前 `BaseKeyPool.check` 把 `p.size < max` 写成了 checker 的与条件，而 checker 返回 false 表示
      * 「这一项失效 ⇒ 摘节点」⇒ 每轮巡检丢一个空闲项（探针实测 idle 2→1），补建还和计数更新赛跑。
