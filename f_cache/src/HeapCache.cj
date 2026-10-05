@@ -17,7 +17,6 @@ package fountain::f_cache
 
 import std.collection.{HashMap, ArrayList}
 import std.collection.concurrent.LinkedBlockingQueue
-import std.env.atExit
 import std.ref.{WeakRef, CleanupPolicy}
 import std.time.DateTime
 import std.sync.{Timer, AtomicBool}

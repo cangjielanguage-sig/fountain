@@ -99,19 +99,18 @@ public class WeakHeapCache<T> <: Resource where T <: Object {
         }
         handles
     }
-    private func weakRef(value: T) {
-        WeakRef(value, DEFERRED)
+    private func weakRef(value: T): WeakRef<T> {
+        WeakRef<T>(value, DEFERRED)
     }
     public func set(key: String, value: T): ?T {
         ensureOpen()
-        try {
-            if (let Some(r) <- cache.get(WeakKey.deferred(key)) && let Some(v) <- r.value) {
-                return v
-            }
-            None<T>
-        } finally {
-            cache[WeakKey.deferred(key)] = weakRef(value)
+        //先取出旧值（仅当它仍存活），再写入新值；返回旧值（无则 None）
+        var previous: ?T = None<T>
+        if (let Some(r) <- cache.get(WeakKey.deferred(key))) {
+            previous = r.value
         }
+        cache[WeakKey.deferred(key)] = weakRef(value)
+        previous
     }
     public func getOrCompute(key: String, fn: () -> ?T): ?T {
         ensureOpen()
@@ -128,13 +127,11 @@ public class WeakHeapCache<T> <: Resource where T <: Object {
     }
     public func get(key: String): ?T {
         ensureOpen()
-        cache.entryView(WeakKey.deferred(key)){view => 
-            if(let Some(r) <- view.value && let Some(v) <- r.value){
-                r
-            }else{
-                None<WeakRef<T>>
-            }
-        }?.value ?? None
+        //纯读取：不创建条目（原实现走 entryView，miss 时会插入空条目），也没有被丢弃的 lambda 返回值
+        if (let Some(r) <- cache.get(WeakKey.deferred(key))) {
+            return r.value
+        }
+        None<T>
     }
     public func getOrDefault(key: String, default: T): T {
         ensureOpen()
