@@ -30,6 +30,7 @@
 > 十一次修正（2026-10-05）：§2.16 `BEAN-3` 已修复（`iterator<T>()` 的 IgnoreCond 快路径不建闭包 + 单参重载去掉恒真校验；按用户指示一并修 `getFirstTuple` 的逐元素重算；基准 `iterator<Animal>()` ns/op **3262 → 2349 / 3174 → 2586**，见 `bug-bean.md` §2.16）⇒ f_bean 中危待修仅剩 §2.18 `BEAN-5`（待验证）。
 > 十二次修正（2026-10-05）：§2.18 `BEAN-5` 已修复（`BeanManager` 构造期预存 `_singleton`，不再每次取 bean 都算 `scope.isSingleton`；`bean` ns/op **72.50 → 57.09（-21%）**、自定义 scope 实例 **329.33 → 60.62（-82%）**，见 `bug-bean.md` §2.18）⇒ **f_bean 中危清零**，剩 §3 的 9 条低危/待验证。
 > 十三次修正（2026-10-05）：§3.1 `BEAN-L9` 判为 ❌**不成立**（`beanTypeMap.get(TypeInfo.of<T>())` 的桶只含 `T` 的子类型 ⇒ 「缺前置校验」无对象），见 `bug-bean.md` §3.1 ⇒ f_bean 待修 9 → 8 条。
+> 十四次修正（2026-10-05）：§3.1 `BEAN-L2` 判为 ❌**不成立（设计）**（只有 singleton 由 BeanFactory 管全生命周期并调 destroy；永不清理 BeanFactory 的集合）、`BEAN-L3` ⏸保持现状（同族设计）；`BEAN-L6` 修法确定为「整条注解分支删除」（`annotationMap` 无任何读方 + 不开放注解 bean 功能），顺带覆盖 `BEAN-L7` ⇒ f_bean 待修 8 → 6 条，见 `bug-bean.md` §3.1。
 
 **建议修复顺序**（即严重级内部的落地顺序）：
 

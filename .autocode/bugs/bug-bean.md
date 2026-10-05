@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 14 条**：严重 1（§1.8 `BEAN-1`）、中 4（§2.15 `BEAN-2`、§2.16 `BEAN-3`、§2.17 `BEAN-4`、§2.18 `BEAN-5`）、低危+待验证 9（§3）。
-- **状态（截至 2026-10-05）**：`BEAN-1` ✅已修复（§1.8）、`BEAN-2` ✅已修复（§2.15）、`BEAN-3` ✅已修复（§2.16，含同族的 `getFirstTuple`）、`BEAN-4` ✅已修复（§2.17）、`BEAN-5` ✅已修复（§2.18）⇒ **本模块中危清零**；§3 的 9 条里 `BEAN-L9` ❌判为**不成立**（见 §3.1）；**待修 8 条**：`BEAN-L2`/`L3`/`L1`/`L4`/`L5`/`L6`/`L7` 与待验证的 `BEAN-L8`。
+- **状态（截至 2026-10-05）**：`BEAN-1` ✅已修复（§1.8）、`BEAN-2` ✅已修复（§2.15）、`BEAN-3` ✅已修复（§2.16，含同族的 `getFirstTuple`）、`BEAN-4` ✅已修复（§2.17）、`BEAN-5` ✅已修复（§2.18）⇒ **本模块中危清零**；§3 的 9 条里 `BEAN-L9` ❌判为**不成立**、`BEAN-L2` ❌判为**不成立（设计）**、`BEAN-L3` ⏸保持现状（记录不改，见 §3.1）；**待修 6 条**：`BEAN-L1`、`BEAN-L4`、`BEAN-L5`、`BEAN-L6`（含 `BEAN-L7`）、`BEAN-L7`、`BEAN-L8`（待验证）。
 
 ## 1. 严重（本模块 1 条）
 
@@ -116,8 +116,9 @@
 
 **内存 / 清理**
 
-- `BEAN-L2` `BeanManager.cj:40-44, 88-107` + `BeanFactory.cj:36-40`：容器与单例引用只增不减（`doDestroy()` 只调 `destroy()` 不清 `_bean`；三张表与 `registered` 无 reset/unregister）⇒ 已 destroy 的 bean 仍被强引用。修法：`doDestroy` 后 `_bean.store(None)`，补 `reset()/unregister()`。
-- `BEAN-L3` `BeanFactory.cj:34` + `BeanInitializer.cj:19-21`：`ExitCallbacks.atExit` 与 `InitializerCollection.register` 只注册不注销（进程级单例，构建次数 1，不构成重复泄漏）。
+- `BEAN-L2` ❌**不成立（2026-10-05，设计）** — ~~`BeanManager.cj:40-44, 88-107` + `BeanFactory.cj:36-40`：容器与单例引用只增不减（`doDestroy()` 只调 `destroy()` 不清 `_bean`；三张表与 `registered` 无 reset/unregister）⇒ 已 destroy 的 bean 仍被强引用。修法：`doDestroy` 后 `_bean.store(None)`，补 `reset()/unregister()`。~~
+  **判定（2026-10-05，用户拍板）**：两条都是**设计**——① 只有 **singleton** 的 bean 全生命周期由 `BeanFactory` 管理，因此也只有它由 `BeanFactory` 调 `destroy`（`shutdown` → `doDestroy`，只在进程退出路径）；prototype / 自定义 scope 的销毁时机由开发者或应用层决定（经 `generateDestroy` 拿到闭包自行调用），销毁之后 `BeanManager._bean` 是否还持有、还能不能再访问 `bean`，不在框架职责内；② **永不清理 `BeanFactory` 的集合**（`beans`/`beanTypeMap`/`annotationMap`/`registered`）同样是设计 ⇒ 不加 `reset()`/`unregister()`。
+- `BEAN-L3` ⏸**保持现状（2026-10-05，记录不改）** — `BeanFactory.cj:34` + `BeanInitializer.cj:20`：`ExitCallbacks.atExit` 与 `InitializerCollection.register` 只注册不注销。进程级单例、注册次数 1（原文即判「不构成重复泄漏」），与上条同属「注册表只增不减」的设计 ⇒ 留档，不动代码。
 
 **性能微项**
 
@@ -125,6 +126,7 @@
 - `BEAN-L4` `lookup.cj:104-109`（同 `80-86`）：按 label 查单个 bean 却先全量物化 `ArrayList` 再线性扫描；改用 `iterator<T>(cond)` 惰性遍历，首个命中即返回。
 - `BEAN-L5` `lookup.cj:56-58, 64-66`：`lookupHashSet/lookupTreeSet` 双重物化（先 `ArrayList` 再目标集合，均从 0 容量扩容）。
 - `BEAN-L6` `BeanFactory.cj:63-121`：类型表 `Any`/`Object` 键使每个 bean 都入表；std 过滤只作用于 `isClass` 分支，注解分支仍展开 `superInterfaces/superClass`（注册期内存与遍历量放大）。
+  **修法（2026-10-05 定：依据「不开放注解 bean 的功能」+ 实测无读方）**：**整条注解分支删除** —— `annotationMap`（`:30`）全仓**只有写方、没有任何读方**（`:72` 写入、`:163/:171/:172` 在 `check()` 里维护；`beanManagers`/`getFirst`/`iterator`/`getFirstTuple`/`getAll` 全部只查 `beanTypeMap`），`AnnotationType` 也只在 `BeanFactory.cj` 内部出现、外部模块（f_aspect/f_mvc/f_orm/f_rpc）零引用 ⇒ 删掉 `BeanType` 枚举的注解档与注解入队（`:105-107`）、`annotationMap` 及其在 `check()` 的清理，注册期不再对每个类型节点做 `klass.annotations` 反射展开。**顺带覆盖 `BEAN-L7`**（`:109-115` 的局部闭包 `beanType` 正是这条分支的产物，随之一并消失）。
 - `BEAN-L7` `BeanFactory.cj:109-115`：注册循环体内定义局部函数并捕获 `isClass`（每类型节点一次闭包分配，注册期）。
 
 ### 3.2 待验证（1 条）
