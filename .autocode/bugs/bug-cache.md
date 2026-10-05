@@ -327,7 +327,7 @@ std 契约（`std.collection.concurrent.LinkedBlockingQueue.remove()`）：**阻
 | P-d | 年龄差 0.2 个周期、用量相同 | **first（更老）存活、second（更新）被淘汰** ✗ 第③级 tie-break 同样偏老 |
 
 - 改动（`src/Priority.cj` 的 `compare`）：**年龄门对称化** —— `ageSub > 1.0`（本对象更老）⇒ `LT`（老的先淘汰）；其余（本对象更新、且差超过一个生命周期）⇒ `GT`（留下）；**删掉不可达的 `age < -1.0` 分支**（`age` = 距今时长/周期，正常时钟下恒 ≥ 0）。**`cmp()` 第②③级改成「更新者更大」**：`duration.compare(otherDuration)`、`lastUsed.compare(otherLastUsed)`（原为 `otherX.compare(x)`，两处都偏老）。
-- **未动、待示意**：第④级 `other.ref.load().compare(this.ref.load())`（历史访问总量**少**者更大）与第⑤级 `this.birth.compare(other.birth)`（出生**早**者更大）同样与「保护新生」反号，只在①②③全部同分时才参与；本次不在 ①+② 范围，如需一并按新口径统一请示意。
+- **第④⑤级一并统一（2026-10-05，按指示；提交 `db3b55f6`）**：④ 改为 `ref.load().compare(other.ref.load())`（历史访问总量**多**者更大，与①同向）、⑤ 改为 `birth.compare(other.birth)`（出生**更晚**者更大）⇒ `cmp()` 的 ②~⑤ 四级 tie-break 已全部与「保护新生」同向。**这两级在现有实现下几乎不可达**：要 ①②③ 全部同分，意味着两个候选的 `lastUsed` 必须纳秒级完全相同（`lastUsed` 只在 `load`/`store` 里取 `DateTime.now()`）⇒ 属**口径统一**而非行为修复，**无法用确定性用例钉住**（同①「同步型」的标注方式）。
 - 用例（`src/HeapCache_test.cj`，新增 3 条）：`testCompareProtectsNewEntryBeyondOneLifecycle`（直接驱动 `PriorityQueue`，年龄差 1.5 个周期 ⇒ 淘汰更老的；不依赖分段布局）、`testCompareProtectsRecentlyUsedEntryWithinOneLifecycle`（年龄差 0.2 个周期、用量同分 ⇒ 淘汰更老的）、`testEvictionInAgeGapProtectsNewEntry`（端到端 `maxSize=1`，老的/新的各占一个分段 ⇒ 新的留下、老的被淘汰）。
 - **既有用例 `test()` 的期望按新语义修正（重要，属语义变更）**：原断言「`test2` 存活、`test3`（最新）被淘汰」——`test2`/`test3` 在「周期内使用次数」与「新鲜度」上都同分，实际由第③级 tie-break 决出 ⇒ **旧断言锁定的正是「偏老」行为**。修正为：`test1` 存活（周期内读多次）、`test3` 存活（更新的留下）、`test2` 被淘汰（更老的先走）。
 - 测量证据：修复前 **17 PASSED / 3 FAILED**（恰好 3 条新用例红、`test()` 仍绿）⇒ 修复 + 同步 `test()` 期望后 **20/20 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**；f_cache 自身编译警告仍 2 条。日志 `/tmp/cache8b_before.log`、`/tmp/cache8b_after.log`、`/tmp/cache8b_final.log`。
@@ -369,15 +369,15 @@ std 契约（`std.collection.concurrent.LinkedBlockingQueue.remove()`）：**阻
 - **`CACHE-L1` `ConcHashMapKeys.contains(all!)` 是「任一包含」而非「全部包含」**：`src/ConcHashMap.cj:75-80` 在循环里 `return true` 命中即返回 ⇒ 与 std `contains(all:)` 语义相反；且 `ConcHashMapKeys`/`ConcHashMapValues`/两个 Iterator（`src/ConcHashMap.cj:22-133`）在本仓库**无任何使用点**（死代码，只有 `ConcHashMapKeysIterator` 经 `keys()`… 实际 `ConcHashMap` 也没有 `keys()`/`values()` 成员）。修法：改成「全部命中才 true」，或直接删除这 4 个类。**实测（P4）**：`contains(all: ['b','a'])` 在只有 `'a'` 时返回 `true`。
 - **`CACHE-L2` `WeakHeapCache.get` 的 lambda 返回值被丢弃**（`src/WeakHeapCache.cj:81-89`，编译警告 `unused expression` 指向 `:86`）：`entryView` 的回调返回 `Unit`，真正取值靠 `entryView` 自身返回 `?V`；写法容易误导（看起来像回调在产出结果）。`set` 里的 `try/finally`（`:59-68`）同样绕。修法：把回调体写成纯副作用（显式 `()`），或直接换成「`get` 未命中就用 `add`」的两步写法并注释原子性理由。
 - **`CACHE-L3` `WeakKey` 把「键」放进弱引用**（`src/WeakHeapCache.cj:22-45`）：键是每次调用新构造的 `Box<String>`，只被 `WeakRef` 弱引用 ⇒ 在 `CleanupPolicy.DEFERRED`（GC 尽量保活、内存不足才回收）下平时可用（**实测 P5 通过**），但内存紧张时键会被回收 ⇒ 值仍被强引用时条目也会静默消失、且 `get` 期间键可能失效导致 miss。弱引用缓存的常规做法是**键强、值弱**。修法：`WeakKey` 持强引用（`Box<String>`/`String`），只让值 `WeakRef`。顺带：每次 `get`/`set` 都新分配 `Box<String>+WeakRef`（热路径额外分配），键强引用后也可缓存键对象。
-- **`CACHE-L4` 两处编译警告**（本次构建中 f_cache 自身仅 2 条）：`src/HeapCache.cj:20` `unused import 'std.env.atExit'`（实际用的是 `f_base` 的 `ExitCallbacks.atExit`）；`src/WeakHeapCache.cj:86` `unused expression`（见 L2）。
+- **`CACHE-L4` 两处编译警告**（现在仍 2 条，行号随 `CACHE-5`/`CACHE-7` 的改动后移）：`src/HeapCache.cj:20` `unused import 'std.env.atExit'`（实际用的是 `f_base` 的 `ExitCallbacks.atExit`）；`src/WeakHeapCache.cj:135` `unused expression`（见 L2）。
 - **`CACHE-L5` 命名/文档细节**：`HeapCache.evicated`（`src/HeapCache.cj:131-133`）应为 expired 语义；`README.md:102`「弱引用堆缓存」一节把 `WeakHeapCache` 的 `remove`/`removeIf`/`size` 等成员列全了，但没有说明**清扫有 1 s 延迟**（`size` 含未被清扫的失效条目，实测 `P5` 的 `size` 与 `contains` 口径差 ≤ 1 s）。
 - **`CACHE-L6` 迭代一致性未文档化**：`SyncLinkedHashMap.iterator()`（`src/SyncLinkedHashMap.cj:26-28`）在**锁外**创建底层迭代器、每次 `next()` 才取读锁；`ConcHashMapIterator.next()`（`src/ConcHashMap.cj:146-155`）跨段无快照，`doNextSegment` 的越界分支与循环条件 `cur <= m.concurrency`（`:147`）冗余。定时淘汰与业务读并发时迭代结果不保证包含本轮新增——可接受，但应写进 README。
 - **`CACHE-L7` 惰性过期与口径差**：`get` 对已过期条目只返回 `None`，不摘除（`src/HeapCache.cj:135-140`）⇒ `size` 会包含「已过期未清扫」的条目（最长 `checkDuration`）。属常见惰性过期设计，但与 `contains` 的口径差异未文档化（叠加 `CACHE-7` 后会变成永驻）。
-- **`CACHE-L8` 用例覆盖极薄**：整个模块只有 1 个用例（`src/HeapCache_test.cj`，8.02 s，绝大部分是 `sleep`），且只覆盖 `set`/`get`/`contains`/`getOrDefault` 与「maxSize=2 时最新的先被淘汰」；`WeakHeapCache`、`ConcHashMap`、`Priority`、`getOrCompute` 系列、`once`/`prolong`、`removeIf`、`destroy`、`evictionCallback` 全部无用例。建议补测（可直接采用本报告各条的 DT）。
+- **`CACHE-L8` 用例覆盖极薄**　**🟡 部分改善（2026-10-05）**：审查时整个模块只有 1 个用例（`src/HeapCache_test.cj`，8.02 s，绝大部分是 `sleep`）；`CACHE-1`~`CACHE-8` 的修复过程中补到 **20 条** —— `getOrCompute` 系列（含「不持段锁」）、`once`/`prolong` 拒绝过期、`removeIf` 不持段锁、`Priority`/`compare` 的年龄差与 tie-break、`close`/`Resource`/关闭后抛异常、`set(life:)`、`clear`、`set` 覆盖计数、`maxSize` 淘汰用量维度（原 `destroy` 相关用例随接口删除改为 `close()`）。**仍缺**：`WeakHeapCache` 的缓存语义（目前只测了它的 `Resource` 行为）、`ConcHashMap`/`SyncLinkedHashMap` 本身、`evictionCallback` 的正式用例 —— 可直接采用本报告各条的 DT 补。
 
 ### 3.2 待验证（2 条，需与作者确认或压测）
 
-- **`CACHE-V1` `Priority.compare` 的淘汰顺序是否符合设计**（见 `CACHE-8`）：需作者确认「保护新生」的期望方向，再构造仅一维差异的用例（使用次数 / 最后使用时间 / 出生时间）逐一固定；当前唯一用例靠使用次数决定结果，覆盖不到分支。
+- **`CACHE-V1` `Priority.compare` 的淘汰顺序是否符合设计**（见 `CACHE-8`）　**✅ 已了结（2026-10-05）**：作者确认期望方向为**保护新生**，`CACHE-8` ② 已按此重写 `compare`（年龄门对称化 + `cmp()` ②~⑤ 级判据全部同向），并新增 3 条仅一维差异的用例逐一固定（周期内使用次数 / 最后使用时间 / 年龄差）；`test()` 的旧断言（锁定「偏老」行为）已按新语义修正 —— 见 §2.5。
 - **`CACHE-V2` `WeakRef` 键在真实内存压力下的丢失率**：`CACHE-L3` 的后果需要压测（持续分配 + 观察 `WeakHeapCache` 命中率/条目数）才能量化；本次未做（无 GC 触发入口，且 `DEFERRED` 策略下小规模压测不必然触发）。
 
 ---
