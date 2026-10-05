@@ -370,9 +370,9 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         }
     }
     private func respond(meta: FileDownloadMeta, ctx: HttpContext): Unit {
-        respond(ctx.request.method) {
-            meta.execute()
-        }
+        // §2.3 / MVC-C5：下载任务是异步的（spawn 后本函数立即返回），
+        // 计时搬进下载任务本身（FileDownload.exec），此处不再统计「派发」耗时。
+        meta.execute()
     }
 
     public func isMultipart(name: String) {

@@ -30,6 +30,7 @@ public struct FileDownloadMeta {
 
 public class FileDownload {
     private static let random = RandomString()
+    private static let log = LoggerFactory.getLogger<FileDownload>()
     private let responseBuilder: HttpResponseBuilder
     private let built = AtomicBool(false)
     private let pipe = SyncByteBuffer()
@@ -67,10 +68,27 @@ public class FileDownload {
     }
     /**
      * 务必在本函数实参内部调用其它函数
+     * 任务在 spawn 里执行、本函数立即返回（§2.3 / MVC-C5）：
+     * 任务失败时由 `runDownloadTask` 收尾（记录 + 结束响应体），耗时在任务线程里统计
+     * （起点在请求线程取走，见 `OverallStopwatch.takeStart/elapsedFrom`）。
      */
     public func exec(fn: (FileDownload) -> Unit): Unit {
+        let started = OverallStopwatch.takeStart()
         spawn{
-            fn(this)
+            try {
+                runDownloadTask(
+                    {=> fn(this)},
+                    {e => log.error(e){'FileDownload.exec: download task failed; multi: ${multi}; contentType: ${contentType}'}},
+                    {=>
+                        if (built.load()) {
+                            end()       // 已开始传输（start 里 build 过）：补 multi 的收尾 boundary
+                        }
+                        pipe.end()      // 两种下载都结束缓冲，读取端不再悬着
+                    }
+                )
+            } finally {
+                OverallStopwatch.elapsedFrom(started, ctx.request.method)
+            }
         }
     }
     public func start(filename: String, length!: Int64 = -1): FileDownload {
@@ -119,5 +137,27 @@ public class FileDownload {
     }
     private func attachment(filename: String) {
         "attachment, filename=\"${filename}\""
+    }
+}
+
+/**
+ * 包内接缝（§2.3 / `MVC-C5`）：执行一次下载任务。
+ * 任务抛异常时必须自己收尾 —— `onFailure` 记录、`finish` 结束响应体（补 multi 的收尾 boundary +
+ * `pipe.end()`），否则响应体永不结束、客户端一直等；收尾自身再失败时，把 finish 的异常包成
+ * `MVCException` 并把原任务异常挂为其 suppressed，然后抛出**原任务异常**（交给 spawn 的线程级兜底），
+ * 不再静默吞掉。
+ */
+func runDownloadTask(task: () -> Unit, onFailure: (Exception) -> Unit, finish: () -> Unit): Unit {
+    try {
+        task()
+    } catch (e: Exception) {
+        onFailure(e)
+        try {
+            finish()
+        } catch (ee: Exception) {
+            let ex = MVCException(ee)
+            ex.addSuppressed(e)
+            throw e
+        }
     }
 }

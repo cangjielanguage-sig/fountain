@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 25 条**：严重 4（§1.9 `MVC-4`、§1.10 `MVC-1`、§1.11 `MVC-3`、§1.12 `MVC-2`）、中 8（§2.2 `MVC-C3`、§2.3 `MVC-C5`、§2.5 `MVC-C2`、§2.6 `MVC-8`、§2.7 `MVC-6`、§2.19 `MVC-5`、§2.20 `MVC-7`、§2.21 `MVC-9`）、低危+待验证 13（§3）。
-- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；**待修** §2 的 7 条中危（§2.3、§2.5、§2.6、§2.7、§2.19–§2.21）、§3 的 13 条低危/待验证（**本模块严重级已清零**）。
+- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；**待修** §2 的 6 条中危（§2.5、§2.6、§2.7、§2.19–§2.21）、§3 的 13 条低危/待验证（**本模块严重级已清零**）。
 
 ## 1. 严重（本模块 4 条）
 
@@ -107,7 +107,16 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 
 `src/ControllerFuncParam.cj:175`：`ctx.request.headers.getFirst("Content-Type").getOrThrow()` —— 空 body 的 POST/PUT、只带查询参数的调用会抛 `NoneValueException` ⇒ 500，而应 415/400。修法：缺失时按 `application/x-www-form-urlencoded` 或明确报错处理。
 
-### 2.3 [中｜正确性] `MVC-C5` `FileDownload` 在 `spawn` 内执行后立即返回（f_mvc）
+### 2.3 [中｜正确性] `MVC-C5` `FileDownload` 在 `spawn` 内执行后立即返回（f_mvc）→ ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：分支 `fix/mvc-rest`（worktree `.worktrees/mvc-rest`，基线 `sts/1.3.x` 的 `7be7225d`），代码、用例与本标记在**同一提交**（提交信息 `fix(f_mvc): MVC-C5 下载任务失败自收尾 + 计时搬进任务（§2.3）`）。
+
+- 改动（两处，异常出口形态按用户 2026-10-05 指定）：
+  ①**异常出口 + 收尾**：`f_mvc/src/FileDownload.cj` —— `exec`（原 `:71-75`）的 `spawn{ fn(this) }` 改为 `spawn{ runDownloadTask(...) }`；新增包内接缝 `runDownloadTask(task, onFailure, finish)`：任务抛异常时先 `onFailure`（`log.error(e){'FileDownload.exec: download task failed; …'}`）再 `finish`（`built.load()` 时补 multi 的收尾 boundary `end()`，两种下载都 `pipe.end()` 结束响应体 ⇒ 客户端不再悬挂）；收尾自身失败时把 `finish` 的异常包成 `MVCException(ee)` 并把原任务异常挂为其 suppressed，然后**抛出原任务异常**（交给 spawn 的线程级兜底记录），不再是「无人接收」。
+  ②**计时搬进任务**：`f_mvc/src/OverallStopwatch.cj` 新增 `takeStart()`（请求线程取走起点 `(MonoTime, path)` 并清空 ThreadLocal）与 `elapsedFrom(started, method)`（任意线程打印、不读 ThreadLocal）；`FileDownload.exec` 在任务 `finally` 里用它记真实传输耗时；`RequestMeta.respond(meta: FileDownloadMeta, ctx)`（`:372-375`）不再走 `respond(method, fn)`，去掉原来恒为 ~0 的「派发」计时。
+- 用例：`f_mvc/src/FileDownload_test.cj`（新增）—— 驱动接缝（`FileDownload` 构造要读 `CurrentHttpContext.instance`，测试里造不出来）：`testFailedTaskIsReportedAndFinished`（任务失败 ⇒ `onFailure` 1 次 + `finish` 1 次）、`testSuccessfulTaskIsNotFinishedTwice`（成功路径不重复收尾）、`testFinishFailureRethrowsTaskException`（收尾也失败 ⇒ 抛出的是原任务异常 `task boom`，而非收尾的 `close boom`）。
+- RED/GREEN 实测：接缝先按修前形态实现（`{ task() }`，行为与修前一致）复跑 ⇒ `testFailedTaskIsReportedAndFinished` 与 `testFinishFailureRethrowsTaskException` 失败（`Assert Failed: (1 == failures.value)`、**left: 1、right: 0**），`testSuccessfulTaskIsNotFinishedTwice` 通过，`TOTAL 13 / PASSED 11 / FAILED 2`、`TEST EXIT=1`；改成 `runDownloadTask` 正式形态后复跑 ⇒ **PASSED 13 / FAILED 0 / ERROR 0**、`TEST EXIT=0`；同轮 `cjpm build` **exit 0**。
+- 未覆盖 / 已知边界：①**真端到端未跑** —— fdemo 里没有任何下载路由（grep 0 处 `download(`），要 e2e 需先加一个最小下载端点，判据是「下载中途失败时客户端拿到被截断/结束的响应而不是一直挂住」；②计时（改动 ②）**无法单测**：`OverallStopwatch.switch`/`log` 在 static init 时按 `mvc_overallElapsedSwitch`（默认 false）绑定，测试里改配置拿不到可用 logger ⇒ 只有代码级论证，若要端到端观察需开 `mvc_overallElapsedSwitch=true` 后看 `MVC.overall` 的 debug 行是否出现真实传输耗时；③保留项：`finish` 失败时抛出的仍是**原任务异常**（用户指定形态），`finish` 自身异常只挂在未被抛出的 `ex` 的 suppressed 上、不随异常抛出。
 
 `src/FileDownload.cj:71-75` + `src/RequestMeta.cj:372-376`：`respond` 的 `finally` 立刻调 `OverallStopwatch.elapsed` ⇒ 下载耗时统计恒为 ~0；且 `spawn` 内异常无人接收（`Future` 被丢弃），`pipe.end()` 可能永不执行 ⇒ 客户端悬挂。修法：把耗时统计移进下载任务，或明确分离响应与传输阶段；`spawn` 的异常要有出口。
 

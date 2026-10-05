@@ -37,4 +37,24 @@ struct OverallStopwatch{
             log.debug{'${method}: ${path}; elapsed: ${MonoTime.now() - s}'}
         }
     }
+    /**
+     * 在请求线程取走起点（含 path）并清空，供异步响应（如下载任务）把计时搬到自己线程用（§2.3 / MVC-C5）。
+     */
+    static func takeStart(): ?(MonoTime, String){
+        if(switch){
+            let started = start.get()
+            start.set(None)
+            started
+        }else{
+            None<(MonoTime, String)>
+        }
+    }
+    /**
+     * 计时打印：起点来自 takeStart()，可在任意线程调用（不读 ThreadLocal）。
+     */
+    static func elapsedFrom(started: ?(MonoTime, String), method: String){
+        if(switch && let Some((s, path)) <- started){
+            log.debug{'${method}: ${path}; elapsed: ${MonoTime.now() - s}'}
+        }
+    }
 }
