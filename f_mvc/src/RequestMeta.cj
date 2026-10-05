@@ -17,6 +17,26 @@ package fountain::f_mvc
 
 import fountain::f_data
 
+/**
+ * 包内接缝（§2.5 / `MVC-C2`）：`respond<R>`（`R <: ToData`）按「结果是否为空 + Accept」选出的响应形态。
+ * 修后：非空结果 + 缺 Accept 走 `Render`（修前是 `NotAcceptable` ⇒ 406）；空结果三分支不变。
+ */
+enum RespondKind <: ToString {
+    | Render
+    | EmptyWithContentType
+    | EmptyWithoutContentType
+    | NotAcceptable
+
+    public func toString(): String {
+        match (this) {
+            case Render => 'Render'
+            case EmptyWithContentType => 'EmptyWithContentType'
+            case EmptyWithoutContentType => 'EmptyWithoutContentType'
+            case NotAcceptable => 'NotAcceptable'
+        }
+    }
+}
+
 public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMeta> {
     private static let log = LoggerFactory.getLogger<RequestMeta>()
     private static let NOT_FOUND = NotFoundHandler()
@@ -280,42 +300,43 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         respond(ctx.request.method) {
             let emptyResult = result is Unit || result is DataUnit || result is DataNone
             let accept = ctx.request.headers.getFirst('Accept')
-            if (!emptyResult && let Some(accept) <- accept) {
-                func genBody(accept: String): Bool {
-                    if (let Some(mediaType) <- MediaTypes.tryParse(accept)) {
-                        let bytes = mediaType.fromData(result.toData())
-                        ctx.responseBuilder.status(status.value).header('Content-Type', accept).body(bytes)
-                        return true
-                    } else if (accept == '*/*') {
-                        let acc = this.produces.iterator().next() ?? 'application/json'
-                        let mt = MediaTypes.parse(acc)
-                        let bytes = mt.fromData(result.toData())
-                        ctx.responseBuilder.status(status.value).header('Content-Type', acc).body(bytes)
-                        return true
-                    }
-                    false
+            try {
+                match (respondKind(emptyResult, accept)) {
+                    case Render =>
+                        let renderAccept = accept ?? '*/*'
+                        func genBody(accept: String): Bool {
+                            if (let Some(mediaType) <- MediaTypes.tryParse(accept)) {
+                                let bytes = mediaType.fromData(result.toData())
+                                ctx.responseBuilder.status(status.value).header('Content-Type', accept).body(bytes)
+                                return true
+                            } else if (accept == '*/*') {
+                                let acc = this.produces.iterator().next() ?? 'application/json'
+                                let mt = MediaTypes.parse(acc)
+                                let bytes = mt.fromData(result.toData())
+                                ctx.responseBuilder.status(status.value).header('Content-Type', acc).body(bytes)
+                                return true
+                            }
+                            false
+                        }
+                        let accepted = if(renderAccept.indexOf(',').isSome()){
+                            AcceptQueue(renderAccept).first() ?? '*/*'
+                        } else {
+                            renderAccept
+                        } |> genBody
+                        if(!accepted){
+                            MultiRequestMethodHandler.NOT_ACCEPTABLE.`handle`(ctx)
+                        }
+                    case EmptyWithContentType =>
+                        ctx.responseBuilder.status(status.value).header('Content-Type', accept.getOrThrow()).body('')
+                    case EmptyWithoutContentType =>
+                        ctx.responseBuilder.status(status.value).body('')
+                    case NotAcceptable =>
+                        MultiRequestMethodHandler.NOT_ACCEPTABLE.`handle`(ctx)
                 }
-                let accepted = if(accept.indexOf(',').isSome()){
-                    AcceptQueue(accept).first() ?? '*/*'
-                } else {
-                    accept
-                } |> genBody
-                if (let r: Resource <- result) {
-                    try {
-                        r.close()
-                    } catch (e: Exception) {
-                        log.warn(e){'Error occurred on closing ${TypeInfo.of(result)}; path: ${path}; accept: ${accept}'}
-                    }
+            } finally {
+                if (let Some(e) <- closeResultIfResource(result)) {
+                    log.warn(e){'Error occurred on closing ${TypeInfo.of(result)}; path: ${path}; accept: ${accept}'}
                 }
-                if(!accepted){
-                    MultiRequestMethodHandler.NOT_ACCEPTABLE.`handle`(ctx)
-                }
-            } else if (emptyResult && let Some(accept) <- accept && accept.contains('*/*')) {
-                ctx.responseBuilder.status(status.value).header('Content-Type', accept).body('')
-            } else if (emptyResult && accept.isNone()) {
-                ctx.responseBuilder.status(status.value).body('')
-            } else {
-                MultiRequestMethodHandler.NOT_ACCEPTABLE.`handle`(ctx)
             }
         }
     }
@@ -582,4 +603,35 @@ func lazyAccessLogFields(args: ArrayList<Any>, returned: ?Any): () -> (String, S
         }
         (argGen.toString(), result)
     }
+}
+
+/**
+ * 包内接缝（§2.5 / `MVC-C2`）：`respond<R>`（`R <: ToData`）的分支决策。
+ * 修后：非空结果一律走 `Render`（缺 Accept 时按星号通配处理，与 `JsonValue` 响应、
+ * `populateResponseContentType` 的默认一致）；空结果三分支与修前一致。
+ */
+func respondKind(emptyResult: Bool, accept: ?String): RespondKind {
+    if (!emptyResult) {
+        return RespondKind.Render
+    }
+    match (accept) {
+        case None => RespondKind.EmptyWithoutContentType
+        case Some(a) where a.contains('*/*') => RespondKind.EmptyWithContentType
+        case _ => RespondKind.NotAcceptable
+    }
+}
+
+/**
+ * 包内接缝（§2.5 / `MVC-C2`）：结果实现 `Resource` 时关闭它；关闭失败不抛，回传异常由调用方记录。
+ * `respond<R>` 在 `finally` 里调用它 ⇒ 无论走 body 渲染、406 还是空结果分支都会关闭。
+ */
+func closeResultIfResource(result: Any): ?Exception {
+    if (let r: Resource <- result) {
+        try {
+            r.close()
+        } catch (e: Exception) {
+            return e
+        }
+    }
+    None<Exception>
 }

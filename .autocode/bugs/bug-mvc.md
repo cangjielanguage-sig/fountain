@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 25 条**：严重 4（§1.9 `MVC-4`、§1.10 `MVC-1`、§1.11 `MVC-3`、§1.12 `MVC-2`）、中 8（§2.2 `MVC-C3`、§2.3 `MVC-C5`、§2.5 `MVC-C2`、§2.6 `MVC-8`、§2.7 `MVC-6`、§2.19 `MVC-5`、§2.20 `MVC-7`、§2.21 `MVC-9`）、低危+待验证 13（§3）。
-- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；**待修** §2 的 6 条中危（§2.5、§2.6、§2.7、§2.19–§2.21）、§3 的 13 条低危/待验证（**本模块严重级已清零**）。
+- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；**待修** §2 的 5 条中危（§2.6、§2.7、§2.19–§2.21）、§3 的 13 条低危/待验证（**本模块严重级已清零**）。
 
 ## 1. 严重（本模块 4 条）
 
@@ -120,7 +120,17 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 
 `src/FileDownload.cj:71-75` + `src/RequestMeta.cj:372-376`：`respond` 的 `finally` 立刻调 `OverallStopwatch.elapsed` ⇒ 下载耗时统计恒为 ~0；且 `spawn` 内异常无人接收（`Future` 被丢弃），`pipe.end()` 可能永不执行 ⇒ 客户端悬挂。修法：把耗时统计移进下载任务，或明确分离响应与传输阶段；`spawn` 的异常要有出口。
 
-### 2.5 [中｜内存｜待验证] `MVC-C2` `Resource` 在无 `Accept` 的路径上不关闭（f_mvc）
+### 2.5 [中｜内存｜待验证] `MVC-C2` `Resource` 在无 `Accept` 的路径上不关闭（f_mvc）→ ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：分支 `fix/mvc-rest`（worktree `.worktrees/mvc-rest`，基线 `sts/1.3.x` 的 `7be7225d`），代码、用例与本标记在**同一提交**（提交信息 `fix(f_mvc): MVC-C2 Resource 全分支关闭 + 缺 Accept 按通配渲染（§2.5）`）。
+
+- **「待验证」的答案**：本仓库唯一同时实现 `ToData & Resource` 的类型是 `MultipartFile`（`f_http/src/MultipartFile.cj:18`：`Multipart & InputStream & Resource & DataFields<MultipartFile> & Data`，而 `Data <: FromToData <: ToData`，见 `f_data/src/base/Data.cj:18` + `DataFields.cj:31`）；但它作为控制器返回值会被 `setHandle` 里更靠前的 `case x: InputStream => respond(x, ctx)`（`RequestMeta.cj:194`）拦走，根本走不到 `respond<R>` 的 close；fdemo 里 `MultipartFile` 也只作入参（`UploadRequest.file`）。⇒ 本条是**潜在**问题（只对用户自定义的「`ToData + Resource` 且非 `InputStream`」返回类型生效），本仓库暂无触达路径，修复按防御性处理。
+- 改动（两处，用户 2026-10-05 决定 ①close 全覆盖 + ②缺 Accept 不再 406）：
+  ①**close 覆盖所有分支**：`f_mvc/src/RequestMeta.cj` 的 `respond<R>(status, result, ctx)` 把原先只写在「非空结果 + 有 Accept」分支里的关闭逻辑（原 `:303-309`）抽成包内接缝 `closeResultIfResource(result): ?Exception`（关闭失败不抛、回传异常由调用方 `log.warn` 记录），并挪进 `try/finally` ⇒ 渲染分支、两个空结果分支、`NotAcceptable` 分支都会关闭。
+  ②**分支决策抽出 + 缺 Accept 按星号通配渲染**：新增包内接缝 `respondKind(emptyResult, accept): RespondKind`（枚举 `Render` / `EmptyWithContentType` / `EmptyWithoutContentType` / `NotAcceptable`），`respond<R>` 改为按它 `match`；修后「非空结果 + 缺 `Accept`」走 `Render`（用该 meta 的 `produces` 首选类型渲染），与 `JsonValue` 响应（`:328-347`）和 `populateResponseContentType`（`:132-139`）缺 Accept 时的默认一致；**空结果三分支行为不变**（无 Accept ⇒ 不带 Content-Type 的空体；含星号通配 ⇒ 带 Content-Type 的空体；其余 406）。
+- 用例：`f_mvc/src/RequestMeta_test.cj`（追加 `RequestMeta_respond_test` + `CountingResource`）：`testNoAcceptRendersBody`、`testAcceptRendersBody`、`testEmptyResultBranches`、`testResourceIsClosed`（关闭恰好一次）、`testCloseFailureIsReturnedNotThrown`（关闭失败回传异常、不抛）、`testNonResourceIsUntouched`。
+- RED/GREEN 实测：`respondKind` 先按修前逻辑落地（缺 Accept ⇒ `NotAcceptable`）复跑 ⇒ `[ FAILED ] testNoAcceptRendersBody`，`Assert Failed: 'Render' != respondKind(false, None).toString()`，`TOTAL 19 / PASSED 18 / FAILED 1`、`TEST EXIT=1`；改成修后逻辑后复跑 ⇒ **PASSED 19 / FAILED 0 / ERROR 0**、`TEST EXIT=0`；同轮 `cjpm build` **exit 0**。
+- 未覆盖 / 已知边界：①close 的**路径覆盖**无法单测（`respond<R>` 需要 `HttpContext`），只有「接缝调用点唯一且在 `finally` 内」的代码事实 + 上文对 `setHandle` 分发链的核对；②改动 ② 是**行为变更**（无 `Accept` 的 `ToData` 请求由 406 改为正常渲染），已按用户决定执行；③顺带发现、本条未动：当控制器声明 `produces: '*'` 一类通配时，渲染分支里 `produces.iterator().next()` 可能取到星号通配串再 `MediaTypes.parse` 抛异常（`RequestMeta.cj:310-314` 既有隐患，待确认后另行登记）。
 
 `src/RequestMeta.cj:303-309`：`Resource` 只在「非空结果 + 有 Accept + `genBody`」这条路上 `close()`；`accept` 缺失时直接落到 `313-318`，`InputStream`/`Resource` 结果不会被关闭 ⇒ 句柄泄漏。**待验证**：哪些返回类型同时实现 `ToData & Resource`。
 

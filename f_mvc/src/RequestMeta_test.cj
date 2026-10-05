@@ -72,3 +72,73 @@ class RequestMeta_test {
         @Assert('None', result)
     }
 }
+
+/** 计数 + 可控抛错的 `Resource`，用于 §2.5 / `MVC-C2` 的关闭语义用例 */
+class CountingResource <: Resource {
+    private let closes: Box<Int64>
+    private let closeFails: Bool
+    CountingResource(closes: Box<Int64>, closeFails!: Bool) {
+        this.closes = closes
+        this.closeFails = closeFails
+    }
+    public func isClosed(): Bool {
+        false
+    }
+    public func close(): Unit {
+        closes.value++
+        if (closeFails) {
+            throw Exception('close boom')
+        }
+    }
+}
+
+/**
+ * §2.5 / `MVC-C2`：`respond<R>`（`R <: ToData`）的分支决策与 `Resource` 关闭。
+ * `HttpContext` 造不出来，故直接驱动两个包内接缝 `respondKind` / `closeResultIfResource`。
+ */
+@Test
+class RequestMeta_respond_test {
+    /** 非空结果 + 缺 Accept ⇒ 渲染（缺 Accept 按星号通配处理），而不是 406（修前形态：NotAcceptable） */
+    @TestCase
+    public func testNoAcceptRendersBody(): Unit {
+        @Assert('Render', respondKind(false, None).toString())
+    }
+
+    /** 非空结果 + 有 Accept ⇒ 渲染 */
+    @TestCase
+    public func testAcceptRendersBody(): Unit {
+        @Assert('Render', respondKind(false, Some('application/json')).toString())
+    }
+
+    /** 空结果三分支不变：无 Accept ⇒ 不带 Content-Type 的空体；Accept 含星号通配 ⇒ 带 Content-Type 的空体；其余 406 */
+    @TestCase
+    public func testEmptyResultBranches(): Unit {
+        @Assert('EmptyWithoutContentType', respondKind(true, None).toString())
+        @Assert('EmptyWithContentType', respondKind(true, Some('*/*')).toString())
+        @Assert('NotAcceptable', respondKind(true, Some('application/json')).toString())
+    }
+
+    /** `Resource` 结果被关闭（恰好一次） */
+    @TestCase
+    public func testResourceIsClosed(): Unit {
+        let closes = Box<Int64>(0)
+        let res = CountingResource(closes, closeFails: false)
+        @Assert(true, closeResultIfResource(res).isNone())
+        @Assert(1, closes.value)
+    }
+
+    /** 关闭失败：回传异常而不抛（由调用方记录日志） */
+    @TestCase
+    public func testCloseFailureIsReturnedNotThrown(): Unit {
+        let res = CountingResource(Box<Int64>(0), closeFails: true)
+        let e = closeResultIfResource(res)
+        @Assert(true, e.isSome())
+        @Assert('close boom', e.getOrThrow().message)
+    }
+
+    /** 非 `Resource` 结果：无动作、不抛 */
+    @TestCase
+    public func testNonResourceIsUntouched(): Unit {
+        @Assert(true, closeResultIfResource(42).isNone())
+    }
+}
