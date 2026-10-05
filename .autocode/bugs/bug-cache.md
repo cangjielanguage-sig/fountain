@@ -24,10 +24,10 @@
 5. `CACHE-5`（§2.2）每个 `HeapCache` 实例泄漏 1 个阻塞线程 + 1 条全局 `atExit` 强引用；`WeakHeapCache` 另泄漏 1 个 `while(true)` 清扫线程　**✅已修复（2026-10-05，实现 `Resource` + `close()` 取消线程，见 §2.2；② 的 `atExit` 注册仍待定）**
 6. `CACHE-6`（§2.3）`once()` / `prolong()` 不判过期 ⇒ 可“复活”已过期条目（实测复现）　**✅已修复（2026-10-05，方案 A，见 §2.3 修复标记）**
 7. `CACHE-7`（§2.4）缓存关闭（原 `destroy()`，现 `close()`）之后再写入的条目**永不被清理**（实测复现）　**✅已修复（2026-10-05，方案 A2 + 主动清空/join，见 §2.4 修复标记）**
-8. `CACHE-8`（§2.5）`Priority` 比较基线的无锁竞争 + `compare` 的“保护新生”分支疑似写反
+8. `CACHE-8`（§2.5）`Priority` 比较基线的无锁竞争 + `compare` 的“保护新生”分支疑似写反　**🟡 ① 已修复（2026-10-05，基线字段纳入 `p.lock`）；② 方向待定（见 §2.5）**
 9. 其余低危/待验证见 §3
 
-> 修复进度（2026-10-05）：§1 的 3 条严重级（`CACHE-1` = `3171d664`、`CACHE-2` = `0e3d70d6`、`CACHE-3` = `14733baf`）已修复并并入 `sts/1.3.x`（`0448df98` 把主线拉进分支、`4a01a26f` 合入主分支，合并后主工作区复跑 6/6 PASSED）；**§2.1 `CACHE-4` 已按方案 C 修复并并入 `sts/1.3.x`**（callable 移出段写锁 + `removeIf` 两阶段，见 §2.1；`302bd9f2` 拉齐主线进分支、`e131fa7f` 合入主分支）；**§2.2 `CACHE-5` 已修复并并入 `sts/1.3.x`**（实现 `Resource` + `close()` 取消内部线程；按指示删除 `destroy`、`atExit` 注册与用例统一改 `close()`，原 `testDestroyStopsEvictionThread` 更名 `testCloseStopsEvictionThread`，见 §2.2；`2b49dfc1` 拉齐主线进分支、`eb8363c8` 合入主分支）；**§2.3 `CACHE-6` 已修复**（`once`/`prolong` 拒绝过期条目，见 §2.3）；**§2.4 `CACHE-7` 已修复**（`close` 主动清空并等内部线程结束后再返回 + 关闭后一切操作抛 `IllegalStateException`，见 §2.4）；§2 其余 1 条（`CACHE-8`）与 §3 的低危/待验证未动（`CACHE-6`/`CACHE-7` 在分支 `review/f_cache` 上待并入）。用例 1 → 16 条（全绿）。
+> 修复进度（2026-10-05）：§1 的 3 条严重级（`CACHE-1` = `3171d664`、`CACHE-2` = `0e3d70d6`、`CACHE-3` = `14733baf`）已修复并并入 `sts/1.3.x`（`0448df98` 把主线拉进分支、`4a01a26f` 合入主分支，合并后主工作区复跑 6/6 PASSED）；**§2.1 `CACHE-4` 已按方案 C 修复并并入 `sts/1.3.x`**（callable 移出段写锁 + `removeIf` 两阶段，见 §2.1；`302bd9f2` 拉齐主线进分支、`e131fa7f` 合入主分支）；**§2.2 `CACHE-5` 已修复并并入 `sts/1.3.x`**（实现 `Resource` + `close()` 取消内部线程；按指示删除 `destroy`、`atExit` 注册与用例统一改 `close()`，原 `testDestroyStopsEvictionThread` 更名 `testCloseStopsEvictionThread`，见 §2.2；`2b49dfc1` 拉齐主线进分支、`eb8363c8` 合入主分支）；**§2.3 `CACHE-6` 已修复**（`once`/`prolong` 拒绝过期条目，见 §2.3）；**§2.4 `CACHE-7` 已修复并并入 `sts/1.3.x`**（`close` 主动清空并等内部线程结束后再返回 + 关闭后一切操作抛 `IllegalStateException`，见 §2.4；`8dbe2fc8` 拉齐主线进分支、`5fbe5e5f` 合入主分支）；**§2.5 `CACHE-8` ① 已修复**（`Priority` 比较基线字段的读写纳入 `p.lock`）、**② 待定方向**（「保护新生」分支实测「偏留老条目」，见 §2.5，分支 `review/f_cache` 上待并入）；§3 的低危/待验证未动。用例 1 → 17 条（全绿）。
 
 ---
 
@@ -307,7 +307,27 @@ std 契约（`std.collection.concurrent.LinkedBlockingQueue.remove()`）：**阻
 
 **实测（探针 P7/P8，当时走 `destroy()`）**：关闭后 `set` 两次、等 1 s（`maxLife=300ms`、`maxSize=1`）：`d1=false d2=false`（按寿命已过期）但 **`size=2` 且此后不降** ⇒ 过期条目永驻。
 
-### 2.5 [中｜并发] `CACHE-8` `Priority` 比较基线字段无锁读写竞争；`compare` 的“保护新生”分支疑似写反且含不可达分支
+### 2.5 [中｜并发] `CACHE-8` `Priority` 比较基线字段无锁读写竞争；`compare` 的“保护新生”分支疑似写反且含不可达分支 → 🟡 ①（无锁竞争）已修复；② 待定方向
+
+**🟡 部分修复（2026-10-05，仅 ①：比较基线字段的读写纳入 `p.lock`；②「保护新生」分支方向待确认）**：分支 `review/f_cache`，**代码、用例、本标记在同一提交**（提交信息 `fix(f_cache): CACHE-8 比较基线字段读写纳入 p.lock（bug-cache §2.5，②待定）`；提交哈希由下一次标记同步补录）。
+
+- 改动（`src/Priority.cj`）：`lastCheckedTime`、`usedCountUtilLastChecked` 两个 getter 与 `updateLastChecked(current)` 都包进 `synchronized(lock)` ⇒ 定时线程的批量写入与业务线程（`compare` 路径）的读取互斥。`usedCount` 本就是 `AtomicInt64`、`once` 原子、`birth` 不可变、`lastUsed`/`maxLife_` 已有锁 ⇒ `Priority` 的字段访问现在全部受锁或原子保护（`Mutex` 可重入；`compare` 内逐个取锁、不嵌套两把锁 ⇒ 无死锁面）。
+- 用例（`src/HeapCache_test.cj`）：新增 `testEvictionKeepsMoreUsedEntry`（`maxSize=1`：`hot` 在本次检查周期内被访问 3 次、`cold` 0 次 ⇒ 断言 `hot` 存活、`cold` 被淘汰），冻结「用量是 `compare` 第一层依据」这条不变量，防后续改动把淘汰判据弄反。
+- 测量：`cjpm test --no-capture-output` = **17/17 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**；f_cache 自身编译警告仍 2 条。日志 `/tmp/cache8_after.log`。
+- 诚实标注：这是**可见性/一致性**问题（普通字段被定时线程写、被业务线程读），给不出确定性失败证据（依赖并发时序）⇒ 本条属「同步型」：只有代码层证明 + 回归用例。带探针那次实测（21/21）里用量维度的淘汰结果**是对的**（探针 P-b）⇒ 该竞争在实测中未显形，但按内存模型此前是未定义行为。
+
+**② 待定（需确认设计意图）——「保护新生」分支的实测走向**：用 4 条临时探针（已删除、未入库）把「堆顶方向」与「三种仅一维差异」下的淘汰走向钉死：
+
+| 探针 | 构造 | 实测 |
+|---|---|---|
+| P-a | `PriorityQueue<Int64>` 依次 `add(3,1,2)` 后 `remove()` | **1** ⇒ 堆顶是**最小**元素 ⇒ 在 `compare` 里 `GT` = **被保留** |
+| P-b | `maxSize=1`、年龄接近、用量 hot=3 / cold=0 | hot 存活、cold 淘汰 ✓（用量主键方向正确） |
+| P-c | `checkDuration=1s`、年龄差 1.5 个周期、用量相同 | **old（更老）存活、new（更新）被淘汰** ✗ 与注释「保护新生」相反 |
+| P-d | 年龄差 0.2 个周期、用量相同 | **first（更老）存活、second（更新）被淘汰** ✗ 同样是老条目留下 |
+
+⇒ `ageSub > 1.0 ⇒ GT`（本对象更老 ⇒ 被保留）这一支与注释相反，实测确认它把更新的那个挤掉；「更新」的一侧落到最后的 `cmp()`，而 `cmp()` 的 `otherLastUsed.compare(lastUsed)` tie-break 也偏向「最后使用时间更早的一方」⇒ **两种插入顺序结果一致：更新的被淘汰**。`age < -1.0` 在正常时钟下不可达（`age` 是「距今时长/生命周期」，恒 ≥ 0）。影响面：候选中同时有「很久未用」与「刚用过」且用量相同时，淘汰会扔掉刚用过的 ⇒ 与「保护新生/保频繁」的设计目标相反，命中率受损（第一层用量比较不受影响，见 P-b）。
+
+**可选修法（待定）**：①两支对称写对（`ageSub > 1.0 ⇒ LT`、`ageSub < -1.0 ⇒ GT`）并删掉不可达分支；②顺带把 `cmp()` 的 lastUsed tie-break 改成「更新的更大」（`lastUsed.compare(otherLastUsed)`）——**可能**影响现有用例 `HeapCache_test.test`（它断言「最新的 test3 被淘汰」，需先确认那条断言实际由哪一层决定）；③只删不可达分支 + 文档写明「年龄差超过一个周期时偏留老条目」；④保持现状 + 文档。
 
 **位置**：`src/Priority.cj:127-141`（`lastCheckedTime` / `usedCountUtilLastChecked` 无锁读取）、`:167-170`（`updateLastChecked` 无锁写入，由定时线程经 `HeapCache.cj:126-128` 调用）、`:48-88`（`compare`）
 

@@ -126,7 +126,10 @@ public open class Priority<V> <: Comparable<Priority<V>> where V <: Object {
     }
     protected prop lastCheckedTime: DateTime {
         get() {
-            lastChecked
+            //lastChecked 由定时线程的 updateLastChecked 写入、被 compare 读取：读写都走 lock
+            synchronized(lock) {
+                lastChecked
+            }
         }
     }
     protected prop usedCount: Int64 {
@@ -136,7 +139,10 @@ public open class Priority<V> <: Comparable<Priority<V>> where V <: Object {
     }
     protected prop usedCountUtilLastChecked: Int64 {
         get() {
-            usedUtilLastChecked
+            //同上：与 updateLastChecked 的写入互斥
+            synchronized(lock) {
+                usedUtilLastChecked
+            }
         }
     }
     protected prop birthTime: DateTime {
@@ -165,8 +171,11 @@ public open class Priority<V> <: Comparable<Priority<V>> where V <: Object {
         }
     }
     protected func updateLastChecked(current: DateTime) {
-        lastChecked = current
-        usedUtilLastChecked = ref.load()
+        //由定时线程调用；与上面的两个 getter（业务线程的 compare 路径）互斥
+        synchronized(lock) {
+            lastChecked = current
+            usedUtilLastChecked = ref.load()
+        }
     }
     protected open func incr() {
         ref.fetchAdd(1)

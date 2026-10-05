@@ -321,6 +321,21 @@ public class HeapCache_test {
     }
 
     @TestCase
+    public func testEvictionKeepsMoreUsedEntry(): Unit {
+        //用量是 compare 的第一层依据：本次检查周期内被访问更多的条目应当活下来
+        let cache = HeapCache<Test>(maxSize: 1, maxLife: Duration.second * 30,
+            checkDuration: Duration.millisecond * 200)
+        cache.set('hot', Test(1))
+        cache.set('cold', Test(2))
+        for (_ in 0..3) {
+            let _ = cache.get('hot')
+        }
+        sleep(Duration.second)
+        @Assert(true, cache.contains('hot'))
+        @Assert(false, cache.contains('cold'))
+    }
+
+    @TestCase
     public func testWeakHeapCacheIsResource(): Unit {
         let cache = WeakHeapCache<Test>()
         @Assert(1, cache.threadHandles().size)
