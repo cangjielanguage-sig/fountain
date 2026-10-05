@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 25 条**：严重 4（§1.9 `MVC-4`、§1.10 `MVC-1`、§1.11 `MVC-3`、§1.12 `MVC-2`）、中 8（§2.2 `MVC-C3`、§2.3 `MVC-C5`、§2.5 `MVC-C2`、§2.6 `MVC-8`、§2.7 `MVC-6`、§2.19 `MVC-5`、§2.20 `MVC-7`、§2.21 `MVC-9`）、低危+待验证 13（§3）。
-- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；**待修** §2 的 5 条中危（§2.6、§2.7、§2.19–§2.21）、§3 的 13 条低危/待验证（**本模块严重级已清零**）。
+- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；`MVC-8` ✅已修复（§2.6，`fix/mvc-rest`）；**待修** §2 的 4 条中危（§2.7、§2.19–§2.21）、§3 的 13 条低危/待验证（**本模块严重级已清零**）。
 
 ## 1. 严重（本模块 4 条）
 
@@ -134,7 +134,17 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 
 `src/RequestMeta.cj:303-309`：`Resource` 只在「非空结果 + 有 Accept + `genBody`」这条路上 `close()`；`accept` 缺失时直接落到 `313-318`，`InputStream`/`Resource` 结果不会被关闭 ⇒ 句柄泄漏。**待验证**：哪些返回类型同时实现 `ToData & Resource`。
 
-### 2.6 [中｜内存+正确性] `MVC-8` 请求级 ThreadLocal 不清理（f_mvc）
+### 2.6 [中｜内存+正确性] `MVC-8` 请求级 ThreadLocal 不清理（f_mvc）→ ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：分支 `fix/mvc-rest`（worktree `.worktrees/mvc-rest`，基线 `sts/1.3.x` 的 `7be7225d`），代码、用例与本标记在**同一提交**（提交信息 `fix(f_mvc): MVC-8 请求出口清理请求级 ThreadLocal + status 改在请求线程读（§2.6）`）。
+
+- 改动（①清理 + ②读取位置，用户 2026-10-05 决定两件都做）：
+  ①**请求出口统一清理**：`f_mvc/src/RequestMeta.cj` 新增 `clearResponseStatus()`（`currentResponseStatus.set(None)`）；`f_mvc/src/OverallStopwatch.cj` 新增 `clearStart()`（`switch` 开时清 `start` 的 ThreadLocal）。两处请求出口都调用：`setHandle<T>` 闭包的 finally（原先只有 `CurrentHttpContext.clear()`）与 404/静态资源路径（构造器里的 `handle_` 闭包，改为 `try/finally`）。
+  ②**status 改在请求线程读**：`accessLog` 在闭包之外先读一次 `getResponseStatus()`，日志文本改用该值 —— f_log 的 message 闭包由异步 appender 在**消费线程**执行（`LoggerAppenderFacade`/`AsyncLogger`），原来在闭包里读会恒取默认值。日志关闭时这里只是一次 ThreadLocal 读，成本可忽略（MVC-2 的惰性化不受影响）。
+- 顺带：`getResponseStatus()` 由 `private static` 放宽为包内 `static`（供用例断言）。
+- 用例：`f_mvc/src/RequestMeta_test.cj`（追加 `RequestMeta_locals_test`）：`testResponseStatusIsCleared`（set 401 → 读得到 401 → clear 之后回落到默认 200）。
+- RED/GREEN 实测：`clearResponseStatus` 先按修前形态实现（空实现）复跑 ⇒ `[ FAILED ] testResponseStatusIsCleared`，`Assert Failed: (HttpStatus.OK.value == RequestMeta.getResponseStatus())`、**left: 200、right: 401**（泄漏复现），`TOTAL 20 / PASSED 19 / FAILED 1`、`TEST EXIT=1`；改为真实清理后复跑 ⇒ **PASSED 20 / FAILED 0 / ERROR 0**、`TEST EXIT=0`；同轮 `cjpm build` **exit 0**。
+- 未覆盖 / 已知边界：①`OverallStopwatch.clearStart()` **无法单测**（`switch = MVCConfig.mvcOverallElapsedSwitch` 在 static init 时绑定、默认 false），只有「两处请求出口都调用它」的代码事实；②改动 ②（读取位置）**无法单测**（需要 `HttpContext`），需端到端观察（开日志后看 `MVC.accessLog` 的 status 是否为 401 等真实状态）；③WS 连接（`setHandle(wsmeta:)`）是长连接、不按请求清理，未纳入；④既有缺口、本条未动：`respond<R>(status, ...)` 没有把 `status` 喂给 `setResponseStatus`（只有 auth 失败 / 500 / `HttpStatusOnlyHandler` 路径会 set）⇒ 命令式 4xx（如 §2.2 的 415）的 access log status 字段仍是默认值，待确认后另行登记。
 
 `src/RequestMeta.cj:25-35, 552`：`currentResponseStatus` 只 set 不清 ⇒ `accessLog` 的 status 会沿用上一个请求（如前一个 401，本请求 200 也记 401）；`src/OverallStopwatch.cj:29-39`：`start` 在 404/405/OPTIONS 路径不调用 `elapsed` ⇒ 线程继续持有上个请求的 path 字符串。修法：请求 `finally` 统一清理。
 

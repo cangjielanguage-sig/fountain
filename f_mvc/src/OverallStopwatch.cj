@@ -57,4 +57,13 @@ struct OverallStopwatch{
             log.debug{'${method}: ${path}; elapsed: ${MonoTime.now() - s}'}
         }
     }
+    /**
+     * 请求出口清理（§2.6 / `MVC-8`）：清掉本线程残留的起点（404/405/OPTIONS 这类不走
+     * `respond(method, fn)` 的请求不会调 elapsed），避免线程继续持有上个请求的 path。
+     */
+    static func clearStart(){
+        if(switch){
+            start.set(None)
+        }
+    }
 }

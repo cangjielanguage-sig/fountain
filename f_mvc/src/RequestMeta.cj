@@ -47,11 +47,18 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
     static func setResponseStatus(status: HttpStatus) {
         currentResponseStatus.set(status.value)
     }
-    private static func getResponseStatus(): UInt16 {
+    static func getResponseStatus(): UInt16 {
         match (currentResponseStatus.get()) {
             case Some(c) => c
             case _ => HttpStatus.OK.value
         }
+    }
+    /**
+     * 请求出口清理（§2.6 / `MVC-8`）：status 的 ThreadLocal 只 set 不清会串到同线程的下一个请求，
+     * 由 `setHandle` 与 404/静态资源路径的 finally 调用。
+     */
+    static func clearResponseStatus() {
+        currentResponseStatus.set(None)
     }
     private var ignoreAuth_ = false
     private var ignorePrivilege_ = false
@@ -70,26 +77,32 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         private let headers!: RequestCondition = DummyRequestCondition.instance
     ) {
         this.handle_ = {ctx =>
-            if(let Some(bytes) <- loadStaticResource(path)){
-                let builder = ctx.responseBuilder.status(HttpStatus.OK.value)
-                if(let Some(dotIdx) <- path.lastIndexOf('.')){
-                    let ext = path[dotIdx + 1 ..]
-                    builder.header('Content-Type', match(ext){
-                        case 'html' | 'css' | 'xml' | 'txt' => 'text/${ext}'
-                        case 'json' => 'application/json'
-                        case 'js' => 'application/javascript'
-                        case 'htm' => 'text/html'
-                        case 'jpg' | 'jpeg' | 'png' | 'gif' | 'bmp' | 'ico' | 'webp' | 'tif' | 'tiff' | 'avif' | 'ico' => 'image/${ext}'
-                        case 'svg' => 'image/svg+xml'
-                        case 'ttf' | 'otf' | 'woff' | 'woff2' => 'font/${ext}'
-                        case _ => 'application/${ext}'
-                    })
+            try {
+                if(let Some(bytes) <- loadStaticResource(path)){
+                    let builder = ctx.responseBuilder.status(HttpStatus.OK.value)
+                    if(let Some(dotIdx) <- path.lastIndexOf('.')){
+                        let ext = path[dotIdx + 1 ..]
+                        builder.header('Content-Type', match(ext){
+                            case 'html' | 'css' | 'xml' | 'txt' => 'text/${ext}'
+                            case 'json' => 'application/json'
+                            case 'js' => 'application/javascript'
+                            case 'htm' => 'text/html'
+                            case 'jpg' | 'jpeg' | 'png' | 'gif' | 'bmp' | 'ico' | 'webp' | 'tif' | 'tiff' | 'avif' | 'ico' => 'image/${ext}'
+                            case 'svg' => 'image/svg+xml'
+                            case 'ttf' | 'otf' | 'woff' | 'woff2' => 'font/${ext}'
+                            case _ => 'application/${ext}'
+                        })
+                    }
+                    builder.body(bytes)
+                    return
                 }
-                builder.body(bytes)
-                return
+                log.warn('RequestMeta.handle.Not Found:${path} ${ctx.request.headers.getFirst('Accept')}')
+                NOT_FOUND.`handle`(ctx)
+            } finally {
+                // §2.6 / MVC-8：404 / 静态资源这条路径同样要清请求级 ThreadLocal
+                clearResponseStatus()
+                OverallStopwatch.clearStart()
             }
-            log.warn('RequestMeta.handle.Not Found:${path} ${ctx.request.headers.getFirst('Accept')}')
-            NOT_FOUND.`handle`(ctx)
         }
     }
 
@@ -228,6 +241,9 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                     respond(MVCBreakingCommand(cmd.data), ctx)
                 } finally {
                     CurrentHttpContext.clear()
+                    // §2.6 / MVC-8：请求出口统一清请求级 ThreadLocal，避免串到同线程的下一个请求
+                    clearResponseStatus()
+                    OverallStopwatch.clearStart()
                 }
         }
     }
@@ -538,10 +554,13 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
     }
     public func accessLog<T>(start: MonoTime, ctx: HttpContext, args: ArrayList<Any>, returned: ?Any, e: ?Exception) where T <: Object {
         let request = ctx.request
+        // §2.6 / MVC-8：status 在请求线程读（f_log 的 message 闭包由异步 appender 在消费线程执行，
+        // 在闭包里读会恒取默认值）。日志关闭时这里也只是一次 ThreadLocal 读，成本可忽略。
+        let responseStatus = getResponseStatus()
         let fields = lazyAccessLogFields(args, returned)
         func logContent(): String {
             let (params, result) = fields()
-            'MVC.accessLog:${request.method}:${request.url}?${request.form.toEncodeString()}; consumes:${request.headers.getFirst('Content-Type')}; params:${params}; returned:${result}; status:${getResponseStatus()}; elapsed:${MonoTime.now() - start}'
+            'MVC.accessLog:${request.method}:${request.url}?${request.form.toEncodeString()}; consumes:${request.headers.getFirst('Content-Type')}; params:${params}; returned:${result}; status:${responseStatus}; elapsed:${MonoTime.now() - start}'
         }
         let log = LoggerFactory.getLogger<T>()
         if (let Some(ex) <- e) {

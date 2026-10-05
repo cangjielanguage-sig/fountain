@@ -142,3 +142,19 @@ class RequestMeta_respond_test {
         @Assert(true, closeResultIfResource(42).isNone())
     }
 }
+
+/**
+ * §2.6 / `MVC-8`：请求级 ThreadLocal 必须随请求结束清掉，否则会串到同线程的下一个请求
+ * （如前一个 401，本请求 200 也记 401）。
+ */
+@Test
+class RequestMeta_locals_test {
+    /** status：clear 之后必须回落到默认 200（修前形态：clear 为空实现 ⇒ 仍读到上一个请求的 401） */
+    @TestCase
+    public func testResponseStatusIsCleared(): Unit {
+        RequestMeta.setResponseStatus(HttpStatus.UNAUTHORIZED)
+        @Assert(HttpStatus.UNAUTHORIZED.value, RequestMeta.getResponseStatus())
+        RequestMeta.clearResponseStatus()
+        @Assert(HttpStatus.OK.value, RequestMeta.getResponseStatus())
+    }
+}
