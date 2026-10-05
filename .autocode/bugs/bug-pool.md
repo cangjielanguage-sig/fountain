@@ -523,7 +523,7 @@ useafterrelease: second_is_empty=false second_bytes=5
 ## 3. 低危 / 待验证（9 条，其中 `POOL-L2` 已修复）
 
 - `POOL-L1` **告警钩子在 `head.globalLock` 临界区内被调用**：`selfCheck` 的 `error`/`warn`（`SyncDeque.cj:63-73`）与 `reconcileIfWedge` 的 `warn`（`250`）都在 `synchronized` 块内，默认钩子写 stderr、应用可重定向到日志框架 —— 慢钩子会阻塞所有取还操作，钩子若重入池则死锁。建议：把消息攒到锁外再发。
-- `POOL-L2` **`checkInterval = Duration.Max` 使巡检形同虚设** ✓已复核 → **✅已修复（2026-10-05，提交 `xxxx`）**
+- `POOL-L2` **`checkInterval = Duration.Max` 使巡检形同虚设** ✓已复核 → **✅已修复（2026-10-05，提交 `fd175da6`）**
   - **改法**（两处，`f_pool/src/KeyPool.cj`）：① `startCheckingSchedule` 把 `Duration.Max` 与 `<= Duration.Zero` 同等对待 —— **不启用巡检就不起线程**（`Duration.Max` 的实际效果本来就是「永不巡检」，却白养一个 `sleep(Duration.Max)` 永不醒来、关池也叫不醒的线程；`BytesListOutputStream.builder` 的默认值正是它）；② 巡检「睡到下一轮」从 `sleep(checkInterval)` 换成**条件变量**（新增 `checkMutex`/`checkCond` + `waitNextRound()`），`close()` 里加一次 `notifyAll` ⇒ 关池后**立刻**醒来退出，不再 park 满一个周期（默认 1 分钟；`Duration.hour` 就得睡满一小时）。剩余时间按 `MonoTime` 计算（同 `POOL-L6` 的写法，不会溢出），虚假唤醒不会把周期拖长。
   - **证据**：新用例 `maxIntervalMustNotStartCheckingThread`（20 个 `Duration.Max` 池，建/关之后线程数回基线）与 `closeMustInterruptCheckingSleep`（20 个 `Duration.hour` 池，`close()` 后 1.6s 线程数回基线）—— **修前两条都 `[ FAILED ]`**（`Assert Failed: (getThreadCount() <= before + 5 == true)`，都停在 `+20`），**修后两条 `[ PASSED ]`**；探针 `checkinterval`：修前 `max: 7→47→27`、`hour: 27→67→47`（第一批滞留 20 个巡检线程，第二批在此基础上再 +20），修后 `max: 7→27→7`、`hour: 7→47→7`（关池后全部回落 ✓）。全量 `f_pool` = **`PASSED: 60, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1（既有 `ORMConfig_test`）。日志 `.autocode/tmp/pool_l2_{all,post}.log`。
   - **文档**：`KeyPool` 构造参数 / `KeyPoolBuilder.setCheckInterval` 的注释 + README 写明「`<= Duration.Zero` 或 `Duration.Max` = 不启用巡检（不占线程）」，「很慢但仍要巡检」请给很大的**有限**值。
