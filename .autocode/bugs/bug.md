@@ -33,6 +33,7 @@
 > 十四次修正（2026-10-05）：§2.7 `MVC-6` 判定为 ❌**误判**（用户判定：WS 消息总长上限属端点/部署侧策略，框架不设硬上限是设计选择；帧上限已由 `mvc_maxFrameSize` 可配）⇒ f_mvc 中危待修 3 条（§2.19–§2.21）。
 > 十五次修正（2026-10-05）：§2.19 `MVC-5` 判定为 ❌**不值得改**（用户判定；全仓 `@PathVariable` 均为单变量、暴露面为零；触发条件「出现 ≥2 个 `@PathVariable` 的端点」时再评估）⇒ f_mvc 中危待修 2 条（§2.20、§2.21）。
 > 十六次修正（2026-10-05）：§2.3 `MVC-C5` 的异常形态按用户指定改为 `throw ex`（收尾也失败时抛包装后的 `MVCException`：cause = 收尾失败、suppressed = 原任务异常；实测 std `Exception(caused)` 不复制 message ⇒ `ex.message` 为空），用例同步钉该形态。
+> 十七次修正（2026-10-05）：§2.20 `MVC-7` 已修复（范围：`RequestMethod.hashCode()` 由 `toString().hashCode()` 改为声明序常量表；`compare` 经核对只在注册期、`tryParse` 分配净收益不确定，按用户决定不动。唯一可观察变化是 OPTIONS 的 `Allow`/`Access-Control-Allow-Method` 头方法顺序可能不同）⇒ f_mvc 中危待修 1 条（§2.21）。
 
 **建议修复顺序**（即严重级内部的落地顺序）：
 

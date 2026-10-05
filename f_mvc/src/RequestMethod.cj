@@ -25,8 +25,22 @@ public enum RequestMethod <: Hashable & Equatable<RequestMethod> & ToString & Pa
     | HEAD
     | WS
 
+    /**
+     * §2.20 / `MVC-7`：返回固定常量（声明序），不再走 `toString().hashCode()`。
+     * 路由热路径每请求会做 1–2 次 `metas.get(method)`（`MultiRequestMethodHandler.cj:87,109`），
+     * 原实现每次都重算一遍短串哈希。
+     */
     public func hashCode(): Int64 {
-        toString().hashCode()
+        match (this) {
+            case GET => 1
+            case POST => 2
+            case PUT => 3
+            case DELETE => 4
+            case PATCH => 5
+            case OPTIONS => 6
+            case HEAD => 7
+            case WS => 8
+        }
     }
 
     public operator func ==(other: RequestMethod) {

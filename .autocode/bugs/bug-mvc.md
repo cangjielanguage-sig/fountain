@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 25 条**：严重 4（§1.9 `MVC-4`、§1.10 `MVC-1`、§1.11 `MVC-3`、§1.12 `MVC-2`）、中 8（§2.2 `MVC-C3`、§2.3 `MVC-C5`、§2.5 `MVC-C2`、§2.6 `MVC-8`、§2.7 `MVC-6`、§2.19 `MVC-5`、§2.20 `MVC-7`、§2.21 `MVC-9`）、低危+待验证 13（§3）。
-- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；`MVC-8` ✅已修复（§2.6，`fix/mvc-rest`）；`MVC-6` ❌误判（§2.7，用户判定非缺陷：WS 消息总长上限属端点/部署侧策略，不设硬上限是设计选择）；`MVC-5` ❌不改（§2.19，用户判定「不值得改」：全仓 `@PathVariable` 均为单变量、暴露面为零）；**待修** §2 的 2 条中危（§2.20、§2.21）、§3 的 13 条低危/待验证（**本模块严重级已清零**）。
+- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；`MVC-8` ✅已修复（§2.6，`fix/mvc-rest`）；`MVC-6` ❌误判（§2.7，用户判定非缺陷：WS 消息总长上限属端点/部署侧策略，不设硬上限是设计选择）；`MVC-5` ❌不改（§2.19，用户判定「不值得改」：全仓 `@PathVariable` 均为单变量、暴露面为零）；`MVC-7` ✅已修复（§2.20，`fix/mvc-rest`，范围：只改 `RequestMethod.hashCode()`）；**待修** §2 的 1 条中危（§2.21）+ §3 的 13 条低危/待验证（**本模块严重级已清零**）。
 
 ## 1. 严重（本模块 4 条）
 
@@ -173,7 +173,15 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 
 `ControllerFuncParam.cj:125` → `f_util/src/PathPattern.cj:173-195`：N 个 path 变量就重复 N 次切分（`f_util` 属跨模块，可加单变量轻量查找）。
 
-### 2.20 [中｜性能] `MVC-7` 路由热路径每请求多次字符串分配（f_mvc）
+### 2.20 [中｜性能] `MVC-7` 路由热路径每请求多次字符串分配（f_mvc）→ ✅已修复（2026-10-05，范围：只改 `RequestMethod.hashCode()`）
+
+**✅ 修复标记（2026-10-05）**：分支 `fix/mvc-rest`（worktree `.worktrees/mvc-rest`，基线 `sts/1.3.x` 的 `7be7225d`），代码、用例与本标记在**同一提交**（提交信息 `fix(f_mvc): MVC-7 RequestMethod.hashCode 改常量表（§2.20）`）。
+
+- **核对结论（修正审查表述）**：请求路径上的实际开销是 —— ①`RequestMethod.parse(request.method)` 每请求 1 次（`MultiRequestMethodHandler.cj:60`）：`toAsciiUpper()` 1 个 String 分配 + `getOrThrow{}` 1 个闭包分配；②`metas.get(method)` 每请求 1 次（`:87`，HEAD 请求再 1 次查 GET，`:109`）→ `hashCode()` = `toString().hashCode()`，`toString()` 返回字面量**不分配**，但每次都要**重算短串哈希**；③`RequestMethod.compare`（`RequestMethod.cj:67-69`）**不在请求路径上** —— 只经 `RequestMeta.compare`（`RequestMeta.cj:110-123`）在**注册期**被 `RequestMetas` 的 `TreeSet<RequestMeta>`（`RequestMetas.cj:21`，仓库内只写不读）插入时调用。
+- 改动（**按用户 2026-10-05 决定：只改 `hashCode()`**）：`f_mvc/src/RequestMethod.cj` —— `hashCode()` 由 `toString().hashCode()` 改为**声明序常量表**（`GET→1` … `WS→8`），零分配、零字符串哈希。`tryParse` 的 `toAsciiUpper()` 分配（改用 `equalsIgnoreAsciiCase` 要最多 8 次逐字符忽略大小写比较，对 3–6 字符短串**净收益不确定**）、`parse` 的 `getOrThrow` 闭包、`compare`（注册期；改成声明序会改变排序语义）三项按用户决定**不动**。
+- 用例：`f_mvc/src/RequestMethod_test.cj`（新增）：`testHashCodeIsDistinct`（8 个方法哈希两两不同，用 `HashSet.add` 的 `Bool` 返回判定）、`testHashCodeFollowsDeclarationOrder`（哈希随声明序递增，把「不再依赖字符串哈希」钉住）。
+- RED/GREEN 实测：先落用例、`hashCode` 保持原实现复跑 ⇒ `[ FAILED ] testHashCodeFollowsDeclarationOrder`，`Assert Failed: (true == RequestMethod.OPTIONS.hashCode() < RequestMethod.HEAD.hashCode())`、**left: true、right: false**（字符串哈希与声明序无关），`TOTAL 22 / PASSED 21 / FAILED 1`、`TEST EXIT=1`；改成常量表后复跑 ⇒ **PASSED 22 / FAILED 0 / ERROR 0**、`TEST EXIT=0`；同轮 `cjpm build` **exit 0**。
+- 未覆盖 / 已知边界：①**唯一可观察的行为变化**：哈希值变了 ⇒ `MultiRequestMethodHandler.metas`（`HashMap<RequestMethod, …>`）的**遍历顺序**可能变化，而 OPTIONS 分支用它拼 `Allow` / `Access-Control-Allow-Method`（`:89-99`）⇒ 这两个头里的**方法顺序**可能不同（HTTP 对该头顺序无要求；全仓无用例/脚本断言该头内容，已核对）;②`tryParse`/`parse`/`compare`/`operator ==`（后者缺 `WS` 分支，属 §3.2 `MVC-L12`）均未动。
 
 `MultiRequestMethodHandler.cj:60` + `RequestMethod.cj:28-30, 55, 67-69`（`hashCode = toString().hashCode()`、`compare` 也走 `toString`）。修法：用 enum ordinal/常量名做哈希与比较。
 
