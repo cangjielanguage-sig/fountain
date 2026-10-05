@@ -37,6 +37,7 @@
 > 十八次修正（2026-10-05）：§3.1 `BEAN-L5` 已修复（`lookupHashSet`/`lookupTreeSet` 改为直接向目标集合填充，去掉中间 `ArrayList`；同进程对照归一后 **hashSet -18.3%、treeSet -27.2%**，实例化次数与语义不变、仅 debug 日志少 N 行），见 `bug-bean.md` §3.1 ⇒ f_bean 待修 2 条（`L1` + 待验证的 `L8`）。
 > 十九次修正（2026-10-05）：f_bean **API 卫生**按用户决定「只文档化、不改签名」落地 —— `f_bean/README.md` 新增「形参风格（两层约定）」小节（低层 `BeanFactory` 的 `cond` 命名 + `beanType` 位置、上层 `lookup*` 全位置 + 0 参重载；约定新增 API 走上层风格），公开函数名拼写（`lookupOptionLable`）与 4 处 README 文档错误留档不改，见 `bug-bean.md` §3.1 节末「API 卫生」（代码零改动）。
 > 二十次修正（2026-10-05）：§3.1 `BEAN-L10` 已修复（`getList`/`getMap`/`getAllTuples` 去掉私有收集器 `getAll(cond, put)` 的 per-element 闭包，改为循环内直接收集；**同结构对照 9495.48 → 9261.68 ns/op，省 233.80 ns/次（-2.46%）**；口径更正：本次只消掉「闭包分配 + 间接调用」两笔，`ArrayList` 扩容、逐元素 `beanLog`、结果容器均保留），并顺带修 `f_bean/README.md` 4 处文档错误（`lookupTreeSet` 签名写成 `HashSet`、`lookupLables` 拼写、`ComparableW>`、`lookupOption<T>(cond)` 的描述）⇒ f_bean 待修仍 2 条（`L1` + 待验证的 `L8`）。**另记一条新发现（未立条、待作者定）**：逐元素 `beanLog` ≈ **325~349 ns/元素**（本环境 debug 关闭、日志 0 行）⇒ `lookupList` +42%、`lookupHashMap` +32%，比本条大 ~15 倍；候选修法见 `bug-bean.md` §3.1 `BEAN-L10` 条目末。
+> 二十一次修正（2026-10-05）：§3.1 新增 **`BEAN-L11`**（逐元素 `beanLog` ≈ 325~349 ns/元素，debug 关闭时仍付；`lookupList` +42%、`lookupHashMap` +32%）—— 按作者决定 ⏸**保持现状**（候选修法已留档：去掉逐元素日志 / 用 `log.debugEnabled` 前置判定），见 `bug-bean.md` §3.1 ⇒ f_bean 待修仍 2 条（`L1` + 待验证的 `L8`）。
 
 **建议修复顺序**（即严重级内部的落地顺序）：
 
@@ -55,7 +56,7 @@
 |---|---|---|---|---|---|
 | §1.1、§1.5、§1.13；§2.1、§2.8、§2.10–§2.14；§3（`ORM-*`）；§4.1 | f_orm（`ORM-x`） | 3 | 7 | 14 | `bug-orm.md` |
 | §1.9–§1.12；§2.2、§2.3、§2.5–§2.7、§2.19–§2.21；§3（`MVC-*`）；§4.2 | f_mvc（`MVC-x`） | 4 | 8 | 13 | `bug-mvc.md` |
-| §1.8；§2.15–§2.18；§3（`BEAN-*`，含新增 `BEAN-L10`）；§4.3 | f_bean（`BEAN-x`） | 1 | 4 | 10 | `bug-bean.md` |
+| §1.8；§2.15–§2.18；§3（`BEAN-*`，含新增 `BEAN-L10`/`BEAN-L11`）；§4.3 | f_bean（`BEAN-x`） | 1 | 4 | 11 | `bug-bean.md` |
 | §1.3、§1.4、§1.6、§1.7、§1.14；§2.4、§2.9、§2.22、§2.23；§3（`ASP-*`）；§4.4 | f_aspect（`ASP-x`） | 5 | 4 | 8 | `bug-aspect.md` |
 | §1.2、§2.24 | 跨模块（`X-x`；f_base / f_data+f_config） | 1 | 1 | 0 | `bug-cross.md` |
 

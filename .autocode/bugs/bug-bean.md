@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 14 条**：严重 1（§1.8 `BEAN-1`）、中 4（§2.15 `BEAN-2`、§2.16 `BEAN-3`、§2.17 `BEAN-4`、§2.18 `BEAN-5`）、低危+待验证 9（§3）。
-- **状态（截至 2026-10-05）**：`BEAN-1` ✅已修复（§1.8）、`BEAN-2` ✅已修复（§2.15）、`BEAN-3` ✅已修复（§2.16，含同族的 `getFirstTuple`）、`BEAN-4` ✅已修复（§2.17）、`BEAN-5` ✅已修复（§2.18）⇒ **本模块中危清零**；§3 的 9 条里 `BEAN-L9` ❌判为**不成立**、`BEAN-L2` ❌判为**不成立（设计）**、`BEAN-L3` ⏸保持现状、`BEAN-L6` ⏸保持现状（注解是**面向应用项目**的特性，不删）；**待修 2 条**：`BEAN-L1`（启动期 `check()` 近似 O(n²)）与待验证的 `BEAN-L8`（`BEAN-L7`/`BEAN-L5`/`BEAN-L10` 已修复；`BEAN-L4` 按作者决定保持现状）。另：§3.1 `BEAN-L6` 记录了一条**新发现待作者确认** —— `annotationMap` 只写不读，README:5 的「按（父）类型注解获取 bean」当前没有可用查询入口。
+- **状态（截至 2026-10-05）**：`BEAN-1` ✅已修复（§1.8）、`BEAN-2` ✅已修复（§2.15）、`BEAN-3` ✅已修复（§2.16，含同族的 `getFirstTuple`）、`BEAN-4` ✅已修复（§2.17）、`BEAN-5` ✅已修复（§2.18）⇒ **本模块中危清零**；§3 的 9 条里 `BEAN-L9` ❌判为**不成立**、`BEAN-L2` ❌判为**不成立（设计）**、`BEAN-L3` ⏸保持现状、`BEAN-L6` ⏸保持现状（注解是**面向应用项目**的特性，不删）；**待修 2 条**：`BEAN-L1`（启动期 `check()` 近似 O(n²)）与待验证的 `BEAN-L8`（`BEAN-L7`/`BEAN-L5`/`BEAN-L10` 已修复；`BEAN-L4`/`BEAN-L11` 按作者决定保持现状）。另：§3.1 `BEAN-L6` 记录了一条**新发现待作者确认** —— `annotationMap` 只写不读，README:5 的「按（父）类型注解获取 bean」当前没有可用查询入口。
 
 ## 1. 严重（本模块 1 条）
 
@@ -107,7 +107,7 @@
 
 ## 3. 低危 / 待验证（本模块 9 条）
 
-### 3.1 低危（9 条；其中 `BEAN-L9` 判为**不成立**；另附 API 卫生记录，见节末）
+### 3.1 低危（10 条；其中 `BEAN-L9` 判为**不成立**；另附 API 卫生记录，见节末）
 
 **健壮性 / 正确性**
 
@@ -139,6 +139,10 @@
   **顺带测出的更大一笔（本会话新发现，未立条、待作者定）**：修后真身与「无日志直循环」之差 —— `lookupList` **+3903 ns/次（+42%）**、`lookupHashMap` **+4183 ns/次（+32%）** ⇒ **逐元素 `beanLog` ≈ 325~349 ns/元素**（且本环境 debug 关闭、`BeanFactory.getAll` 日志 0 行！）⇒ 同一循环里这笔比 `BEAN-L10` 大 ~15 倍。候选修法（都需先定日志口径）：① 去掉逐元素日志；② 用 `f_log` 已有的级别查询（`Logger.debugEnabled`，`f_log/src/base/Logger.cj`）把 `log.debug { … }` 包起来，让「关闭时」不构造闭包、不进 `append`；③ 保持现状。
   **用例**：`f_bean/src/test/bean_lookup_test.cj` 新增 `BeanCollectLookup_test`（3 条）—— 样本 bean 加 `@BeanMeta[order: n]` 定序 ⇒ 断言 `lookupList` 的 code 序列逐位 == 1..12、连续两次调用顺序一致、`lookupHashMap` 的每个 key 都能用 `lookupOption(Exactly(key))` 查回同一 bean、`cond` 全匹配/无匹配 ⇒ 空集合。
   **回归**：`f_bean` 全套 **TOTAL 22 / PASSED 22 / ERROR 0 / FAILED 0**；`cjpm build` exit 0（9 条既有警告，未新增）。探针已删、未入库；日志 `/tmp/bean_l10_before2.log`、`/tmp/bean_l10_after.log`、`/tmp/bean_l10_mech.log`、`/tmp/bean_l10_final2.log`。
+- `BEAN-L11` ⏸**保持现状（2026-10-05，作者决定；记录不改）** — `BeanFactory.cj:264`、`:285`、`:335`（`getListByType`/`getMapByType`/`getAllTuples` 的**逐元素**位置）：`beanLog('getAll', …)` 是 `log.debug { … }`（`:211-215`，闭包捕获 4 个变量）⇒ **每个元素**付一次「闭包分配 + `Logger.append` 的级别判定」。（另：`getFirstByType` 的命中点 `:228`/`:238` 每次调用一次，非逐元素。）
+  **测量（2026-10-05，`BEAN-L10` 顺带；同进程同结构、n = 5 万、min-of-4、12 个同类型 bean；日志 `/tmp/bean_l10_mech.log`）**：修后真身与「无日志直循环」之差 —— `lookupList` **+3903 ns/次（+42%）**、`lookupHashMap` **+4183 ns/次（+32%）** ⇒ **≈325~349 ns/元素**；**且本环境 debug 关闭、`BeanFactory.getAll:` 日志实测 0 行** ⇒ 这笔开销与「是否真的输出日志」无关，同一循环里比 `BEAN-L10` 大 ~15 倍。
+  **候选修法（供再评估）**：① 去掉这四处逐元素日志（可见行为：debug 级别下少 N 行）；② 用 `f_log` 已有的级别查询把闭包包起来 —— `if (log.debugEnabled) { log.debug { … } }`（`Logger.debugEnabled` → `logLevelEnabled(LogLevel.DEBUG)`，`f_log/src/base/Logger.cj`）⇒ 关闭时不构造闭包、不进 `append`，**日志内容不变**；③ 保持现状。
+  **决定（用户，2026-10-05）**：**保持现状**（不修）。本条只作成本记录 + 未来可评估的修法留档。
 - `BEAN-L6` `BeanFactory.cj:63-121`：类型表 `Any`/`Object` 键使每个 bean 都入表；std 过滤只作用于 `isClass` 分支，注解分支仍展开 `superInterfaces/superClass`（注册期内存与遍历量放大）。
   **判定（2026-10-05 更正）**：**不删** —— `annotationMap` 与注解展开是**面向应用项目**的特性（`f_bean/README.md:5`：「使用修饰bean的类型的注解，以及父类型的注解获取bean」）；fountain 是工具库，**本仓（fountain 自身）没有调用方不等于死代码**。（我先前据「全仓零读方」提出的「整条注解分支删除」方案已撤回。）本条的成本事实保留作记录：注册期每个类型节点做一次 `klass.annotations` 反射展开 + 15 项 std 前缀/名字比较 + `annotationMap` 的 TreeSet 维护 —— **只在注册期一次**。
   **⚠️ 核实中发现的另一件事（比本条原文更值得跟进）**：`annotationMap` 全仓**只写不读** —— 写入 `:72`、`check()` 维护 `:163/:171/:172`，而 `beanManagers`/`getFirst`/`getList`/`getMap`/`iterator`/`getFirstTuple`/`getAll` **全部只查 `beanTypeMap`** ⇒ 按 README:5 的描述，「用（父）类型注解获取 bean」目前**没有可用的查询入口**（拿注解类型当 `T` 去查会落到 `beanTypeMap.get` 而得到 `None`）。**待作者确认**：读入口是待实现、在别处，还是文档超前。
