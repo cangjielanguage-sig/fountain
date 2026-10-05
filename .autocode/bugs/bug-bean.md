@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 14 条**：严重 1（§1.8 `BEAN-1`）、中 4（§2.15 `BEAN-2`、§2.16 `BEAN-3`、§2.17 `BEAN-4`、§2.18 `BEAN-5`）、低危+待验证 9（§3）。
-- **状态（截至 2026-10-05）**：`BEAN-1` ✅已修复（§1.8）、`BEAN-2` ✅已修复（§2.15）；**待修** §2.16–§2.18（性能中危，其中 `BEAN-5` 待验证）、§3 的 9 条低危/待验证。
+- **状态（截至 2026-10-05）**：`BEAN-1` ✅已修复（§1.8）、`BEAN-2` ✅已修复（§2.15）、`BEAN-4` ✅已修复（§2.17）；**待修** §2.16 `BEAN-3`、§2.18 `BEAN-5`（待验证）、§3 的 9 条低危/待验证。
 
 ## 1. 严重（本模块 1 条）
 
@@ -47,7 +47,17 @@
 
 `BeanFactory.cj:328`（`getList/getMap/lookupHashSet/lookupTreeSet` 全走它）。`IgnoreCond` 恒真时应直接返回 `tree.iterator()`。
 
-### 2.17 [中｜性能] `BEAN-4` 条件求值里每次现场构造通配/正则（f_bean）
+### 2.17 [中｜性能] `BEAN-4` 条件求值里每次现场构造通配/正则（f_bean）→ ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：分支 `fix/bean`（worktree `.worktrees/bean`，基线 `7be7225d`），代码、用例、本标记在**同一提交**。
+
+- 改动（`f_bean/src/BeanStringCondition.cj`）：① 顶部加两个模块私有 memo `WILDCARD_REGEX` / `REGEX_CACHE`（`ConcurrentHashMap<String, Regex>`，键 = 模式串）；② `StringCond.on` 的两个分支改为 `WILDCARD_REGEX.computeIfAbsent(v){Regex.wildcard(v)}.matches(s)` 与 `REGEX_CACHE.computeIfAbsent(v){v.regex()}.matches(s)`。公开 API（`Wildcard(String)`/`Regexp(String)` 构造器、`on`/`==`/`ignored` 语义）不变；`Regex` 不可变、可安全共享；键空间 = 代码里声明的条件模式数（有界）。
+- **现状核对（修正报告里一处含糊）**：`String.regex()` **本身已有缓存**（`f_regex/src/RegexFromString.cj:28-65`：`SOLID` map + `HeapCache<Regex>(maxLife: 1 day, maxSize: 10000)`）⇒ `Regexp` 路径的浪费不是「每次编译正则」，而是**每次现构造键串** `"/${this}/${flagsstr()}"`（`flagsstr()` 建 `HashSet` + `StringGenerator`）；`Wildcard` 路径才是每次真的 6 次 `String.replace`（`f_regex/src/ExtendRegex.cj:76-85`，库侧无缓存）。两条本次一并消掉。
+- 用例：`f_bean/src/test/bean_string_cond_test.cj`（新增）—— `Wildcard('fountain::f_bean.test.*')` / `Regexp('.*BeanTestDog.*')` 的命中与不命中、重复求值一致、接口键 + 条件的 `getList`（= 2 个）与 `getFirst`（命中 / 不命中）结果；另有基准用例打印两种条件各 N 次 `on` 的 ns/op。
+- 测量证据（同机连续两轮、同一套用例；`getFirst` 基准作**对照组**）：**修前** `TOTAL 9 / PASSED 9 / ERROR 0 / FAILED 0`、`Wildcard 4342.47 ns/op`、`Regexp 3886.54 ns/op`（对照组 `getFirst` 1796.75 ns/op）；**修后** `TOTAL 9 / PASSED 9 / ERROR 0 / FAILED 0`、`Wildcard **1508.23** ns/op`（**2.88×**）、`Regexp **1747.54** ns/op`（**2.22×**）、对照组 1759.38 ns/op（几乎不动 ⇒ 不是机器变快）；`cjpm build` **exit 0**（9 条既有警告，未新增）。
+- 未覆盖：`f_regex` 未改 —— `Regex.wildcard` 的展开在库侧仍无缓存，别的模块调它还是付 6 次 `replace`（本次只解决 f_bean 自己的条件求值路径）；`BEAN-3`（§2.16）的「逐元素调用」结构见该条。
+
+**以下为审查时的原始描述**：
 
 `BeanStringCondition.cj:74-75`（`Regex.wildcard(v).matches(s)` / `v.regex().matches(s)`；前者是 6 次 `replace` + 缓存查表，见 `f_regex/src/ExtendRegex.cj:76-85`、`RegexFromString.cj:40-64`）。它又被 `BEAN-3` 逐元素调用 ⇒ 每元素 ~7 次字符串分配。修法：`StringCond` 内缓存编译好的 `Regex`。
 
