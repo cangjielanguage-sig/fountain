@@ -87,6 +87,16 @@ public class WeavedClass {
 ```
 
 
+## 嵌套调用与递归（设计）
+
+- **同一次织入调用链内不再织入**：切点函数 A 的织入方法内部再调用切点函数 B（或 A 递归调用自己）时，**内层调用直接执行原函数体，不再执行切面**。
+  这是刻意的设计：避免递归调用切点函数时切面被重复执行（也避免切面里再调用织入函数造成无限递归）。
+- 实现位于 `src/Aspects.cj` 的 `recursiveInvocationFlag`（`private static let ... = ThreadLocal<Bool>`）：最外层织入期间被置为 `true`（`Aspects.proceed` 里 `try { ... } finally { remove() }`），
+  内层织入调用读到该标志就直接 `fn(funcInfo.args)`，因此 A 调 B 时 B 的切面**不会**执行。
+- **如果希望 A 调 B 时 A、B 都织入切面**，就需要让该标志在内层调用时为 `false`（即最外层不把它置 `true`）。
+  注意：该标志当前是框架内部实现，没有公开开关；需要这种语义时请与维护者确认改法。
+
+
 ## 织入规则
 
 ### 织入规则的父类
