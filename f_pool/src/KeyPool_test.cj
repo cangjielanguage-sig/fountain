@@ -18,7 +18,7 @@ package fountain::f_pool
 import std.collection.ArrayList
 import std.convert.*
 import std.fs.File
-import std.runtime.gc
+import std.runtime.{gc, getThreadCount}
 import std.sync.AtomicInt64
 import fountain::f_pool.diagnostics.PoolDiagnostics
 
@@ -586,6 +586,37 @@ public class KeyPoolTest {
         @Assert(calls.load() > 0)                    // 修前：checker 一次都没跑（恒 0）
         @Assert(destroyed.load() >= 1)               // 判失效的项必须被销毁
         pool.close()
+    }
+    /**
+     * `POOL-7`（`.autocode/bugs/bug-pool.md` §2.2）：`close()` 之后**内部维护线程必须退出**。
+     * 建/关 20 个池（`checkInterval = Duration.Zero` ⇒ 每个池只有创建线程），线程数必须回落到基线附近；
+     * 修前创建线程永久 park 在无超时出队上，`close()` 唤不醒（实测 7→27、关池后仍 27）。
+     */
+    @TestCase
+    public func closeMustReclaimInternalThread(): Unit {
+        let pools = ArrayList<Pool<Object>>()
+        let before = getThreadCount()
+        for (_ in 0 .. 20) {
+            pools.add(Pool<Object>(
+                mode: Fifo,
+                initSize: 0,
+                minSize: 0,
+                maxSize: 1,
+                idleTimeout: Duration.hour,
+                checkInterval: Duration.Zero,
+                maxWaiting: Duration.second,
+                creator: {=> Object()},
+                checker: {_ => true},
+                destroier: {_ => ()}
+            ))
+        }
+        sleep(Duration.millisecond * 300)
+        for (p in pools) {
+            p.close()
+        }
+        sleep(Duration.millisecond * 1600)           // 带超时出队最多 1s 才醒来 + 退出
+        let after = getThreadCount()
+        @Assert(after <= before + 5)                 // 修前：before + 20
     }
 }
 

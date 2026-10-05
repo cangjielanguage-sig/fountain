@@ -173,6 +173,16 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
     private let tasks: ArrayBlockingQueue<K>
     private let running = AtomicBool(true)
     /**
+     * 内部维护线程的句柄：`close()` 用 `cancel()` 向它们发取消请求（协作式，不强制停线程）。
+     * 线程自己的循环每轮判 `Thread.currentThread.hasPendingCancellation`，配合
+     * `tasks.remove(timeout: Duration.second)` 这种**带超时**的出队 ⇒ 关池后最迟 1s 内退出
+     * （见 .autocode/bugs/bug-pool.md §2.2 `POOL-7`：原来是无超时 `remove()`，线程永久 park）。
+     * 注：`ArrayBlockingQueue` 只有 `tryRemove()`（非阻塞）与 `remove(timeout: Duration)`（带超时）两个重载，
+     * 没有 `tryRemove(timeout:)` —— 这里用的是后者。
+     */
+    private var creationThread: ?Future<Unit> = None
+    private var checkingThread: ?Future<Unit> = None
+    /**
      * 「等待池项」的通道：池耗尽时 `get` park 在这里，由**创建完成 / 归还 / 关停**三处唤醒 ——
      * 不再有 1ms 轮询（见 .autocode/bugs/bug-pool.md §1.2 `POOL-2`、§2.1 `POOL-6`）。
      * `available` 是「池状态可能变好」的纪元号：`wakeWaiters()` 先加它再通知，
@@ -302,17 +312,21 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         if(checkInterval <= Duration.Zero){
             return
         }
-        spawn {
+        checkingThread = spawn {
             waitConstructed()
             // 看护循环：巡检线程**不允许**静默退出 —— 一旦退出，空闲回收、minSize 补足、审计自愈
             // 都会永久停摆（见 .autocode/bugs/bug-archived-on-20261004.md 7.12）。异常或意外退出都记 WARN 并重开。
-            while(running.load()){
+            // 每轮判「取消请求 + running」：`close()` 之后静默退出，而不是被当成异常重开（见 §2.2 POOL-7）。
+            while(!Thread.currentThread.hasPendingCancellation && running.load()){
                 try{
                     checkingLoop()
                 }catch(e: Exception){
+                    if (Thread.currentThread.hasPendingCancellation || !running.load()) {
+                        break
+                    }
                     logger.warn('error on pool checking schedule', e)
                 }
-                if(running.load()){
+                if(!Thread.currentThread.hasPendingCancellation && running.load()){
                     PoolDiagnostics.onScheduleRestart()
                     logger.warn('pool checking schedule exited unexpectedly, restarting it')
                     sleep(Duration.second)
@@ -322,9 +336,9 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
     }
     /** 巡检的一轮循环（拆出来便于看护重开）。 */
     private func checkingLoop(): Unit {
-        while(running.load()){
+        while(!Thread.currentThread.hasPendingCancellation && running.load()){
             sleep(checkInterval)
-            if(!running.load()){
+            if(Thread.currentThread.hasPendingCancellation || !running.load()){
                 return
             }
             pool.check({=> running.load()}, {k, r => 
@@ -378,17 +392,21 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         tasks.tryAdd(key)
     }
     private func startCreationSchedule() {
-        spawn {
+        creationThread = spawn {
             waitConstructed()
             // 看护循环：创建线程一旦退出，池就再也补不回池项（`get` 只会等到 maxWaiting 超时），
             // 所以同样不许静默退出（见 .autocode/bugs/bug-archived-on-20261004.md 7.12）。
-            while(running.load()){
+            // 每轮判「取消请求 + running」：`close()` 之后静默退出（见 §2.2 POOL-7）。
+            while(!Thread.currentThread.hasPendingCancellation && running.load()){
                 try{
                     creationLoop()
                 }catch(e: Exception){
+                    if (Thread.currentThread.hasPendingCancellation || !running.load()) {
+                        break
+                    }
                     logger.warn('error on pool creation schedule', e)
                 }
-                if(running.load()){
+                if(!Thread.currentThread.hasPendingCancellation && running.load()){
                     PoolDiagnostics.onScheduleRestart()
                     logger.warn('pool creation schedule exited unexpectedly, restarting it')
                     sleep(Duration.second)
@@ -398,25 +416,32 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
     }
     /** 创建线程的一轮循环（拆出来便于看护重开）。 */
     private func creationLoop(): Unit {
-        while(running.load() && let k <- tasks.remove()){
-            while(running.load() && pool.size < totalSize && pool.keyedSize(k) < maxSize){
-                try {
-                    let object = creator(k)
-                    if (checkOnCreation && !doCheck(k, object, checker)){
-                        doDestroy(k, object, destroier)
-                    } else {
-                        pool.add(k, ref(k, object))
-                        break
+        // 每轮判「取消请求」，出队用**带超时**的 `remove(Duration.second)`（`ArrayBlockingQueue` 只有
+        // `tryRemove()` 非阻塞版与 `remove(timeout: Duration)` 带超时版，没有 `tryRemove(timeout:)`）。
+        // 池一关（`close()` 发取消请求）本线程最迟 1s 内退出；原来是无超时 `remove()`，
+        // 空队列上永久 park，`close()` 唤不醒它（见 .autocode/bugs/bug-pool.md §2.2 POOL-7）。
+        // 超时返回 None 只是「这一秒没任务」⇒ 回到循环顶再判一次取消/关停，不是异常退出。
+        while(!Thread.currentThread.hasPendingCancellation && running.load()){
+            if (let Some(k) <- tasks.remove(Duration.second)) {
+                while(!Thread.currentThread.hasPendingCancellation && pool.size < totalSize && pool.keyedSize(k) < maxSize){
+                    try {
+                        let object = creator(k)
+                        if (checkOnCreation && !doCheck(k, object, checker)){
+                            doDestroy(k, object, destroier)
+                        } else {
+                            pool.add(k, ref(k, object))
+                            break
+                        }
+                    }catch(e: Exception){
+                        PoolDiagnostics.onCallbackError()
+                        logger.warn('error on creating', e)
                     }
-                }catch(e: Exception){
-                    PoolDiagnostics.onCallbackError()
-                    logger.warn('error on creating', e)
+                    sleep(Duration.Zero)
+                    continue
                 }
-                sleep(Duration.Zero)
-                continue
+                // 处理完一条任务就唤醒等待者：建成了他要立刻来取，没建成（额度满）他也要复查一次（见 §1.2 POOL-2）
+                wakeWaiters()
             }
-            // 处理完一条任务就唤醒等待者：建成了他要立刻来取，没建成（额度满）他也要复查一次（见 §1.2 POOL-2）
-            wakeWaiters()
         }
     }
     private func ref(key: K, object: V){
@@ -427,6 +452,14 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
     }
     public func close(): Unit {
         running.store(false)
+        // 给两个内部维护线程发取消请求（协作式）：它们的循环每轮判 `hasPendingCancellation`
+        // + 带超时出队 ⇒ 最迟 1s 内退出，不再永久 park（见 §2.2 POOL-7）
+        if (let Some(t) <- creationThread) {
+            t.cancel()
+        }
+        if (let Some(t) <- checkingThread) {
+            t.cancel()
+        }
         // 等待者必须立刻看到 running=false 并返回 None，不能让他们 park 到预算耗尽（见 §2.1 POOL-6）
         wakeWaiters()
         while(let Some(_) <- tasks.tryRemove()){}

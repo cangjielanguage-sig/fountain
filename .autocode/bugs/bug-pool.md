@@ -20,6 +20,7 @@
 > 二次修正（2026-10-05）：§1.2 `POOL-2`、§1.5 `POOL-5`、§2.1 `POOL-6` 已修复（同一次提交）⇒ 待修严重级 **2** 条（`POOL-3`、`POOL-4`），中危 **7** 条。
 > 三次修正（2026-10-05）：§1.3 `POOL-3` 已修复 ⇒ 待修严重级 **1** 条（`POOL-4`），中危 **7** 条。
 > 四次修正（2026-10-05）：§1.4 `POOL-4` 判定为**误判**（设计目的，不修改）⇒ 待修严重级 **0** 条，中危 **7** 条；上表保留审查当时的原始计数。
+> 五次修正（2026-10-05）：§2.2 `POOL-7` 已修复 ⇒ 待修中危 **6** 条（`POOL-8`~`POOL-13`）。
 
 **建议修复顺序**：
 
@@ -28,7 +29,7 @@
 3. `POOL-3`（§1.3）巡检把**满载 key** 的空闲项当「校验不过」摘掉，并整轮跳过用户 checker → 稳态抖动、`connectionLife`/`idleTimeout` 判定被绕过（实测满载空闲池 idle 2→1）　**✅已修复（2026-10-05，见 §1.3 修复标记：size&lt;max 只约束补建）**
 4. `POOL-4`（§1.4）creator/checker 持续失败时**无退避紧重试** → 对下游的重连风暴 + 每轮一条 WARN（实测 300ms 内 75,976 次尝试）　**❌误判（2026-10-05：设计目的，不修改；见 §1.4 误判标记）**
 5. `POOL-5`（§1.5）`maxWaiting = Duration.Max` 的「真无限等待」实际只等 1s 就**静默放弃**（实测 1008ms 返回 `None`，对照 30s 档 2016ms 返回项）；同一分支还会吞掉丢失的唤醒　**✅已修复（2026-10-05，随 §1.2 的统一等待重写一并解决，见 §1.5 修复标记）**
-6. 其后按 §2 顺序：`POOL-6`（关停不唤醒/归还竞态）**✅已修复（2026-10-05，见 §2.1 修复标记）** → `POOL-7`（关池泄漏线程）→ `POOL-8`（队列按 `totalSize` 预分配 + 两个池默认 `maxSize=Int64.Max` 构造即 OOM）→ `POOL-9`（`release` 后仍可写，实测污染池项）→ `POOL-10`~`POOL-13`
+6. 其后按 §2 顺序：`POOL-6`（关停不唤醒/归还竞态）**✅已修复（2026-10-05，见 §2.1 修复标记）** → `POOL-7`（关池泄漏线程）**✅已修复（2026-10-05，见 §2.2 修复标记：线程句柄 + cancel + 每轮判状态 + 带超时出队）** → `POOL-8`（队列按 `totalSize` 预分配 + 两个池默认 `maxSize=Int64.Max` 构造即 OOM）→ `POOL-9`（`release` 后仍可写，实测污染池项）→ `POOL-10`~`POOL-13`
 
 ---
 
@@ -304,9 +305,24 @@ slowcreate(maxWaiting=30s):          got_some=true  elapsed_ms=2016
 
 **修法**：`close()` 在置位后 `notifyAll` 所有在等的 `PoolTask`（或用「关闭哨兵」唤醒创建线程）；`giveBack` 入池后补一次 `running` 复检，已关闭就把刚入池的项取出销毁。
 
-### 2.2 [中｜资源泄漏] `POOL-7` `close()` 之后创建线程可能永久阻塞在 `tasks.remove()`
+### 2.2 [中｜资源泄漏] `POOL-7` `close()` 之后创建线程可能永久阻塞在 `tasks.remove()` ✓已复核 → ✅已修复（2026-10-05）
 
-`while(running.load() && let task <- tasks.remove())`（`376:377`）的 `running` 检查在**阻塞出队之前**：线程一旦 park 在空队列的 `remove()` 上，`close()`（`403-412`）的 `tryRemove` 排空与 `running=false` 都**不会唤醒**它（`ArrayBlockingQueue` 只提供阻塞出队/超时出队，没有 close/中断）。
+**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、本标记在**同一提交**（提交信息 `fix(f_pool): POOL-7 内部线程句柄 + close 发取消 + 每轮判 hasPendingCancellation + 带超时出队`）。
+
+- 改动（按指定方案：**保留线程句柄 → 关闭时发取消 → 线程每轮判状态 → 出队带超时**）：
+  1. `f_pool/src/KeyPool.cj:183-184`：新增成员 `creationThread` / `checkingThread: ?Future<Unit>`（两个内部维护线程的句柄）；
+  2. `close()`（`:453-462`）：`running=false` 之后对两个句柄调 `cancel()`（协作式取消请求：`Future.cancel()` 只发请求、不强制停线程）；
+  3. `startCreationSchedule`（`:395`）/ `startCheckingSchedule`（`:315`）：把 `spawn` 的返回值存进成员；看护循环每轮判 `!Thread.currentThread.hasPendingCancellation && running.load()`（`:320`、`:400`），并把「取消/关停导致的异常」静默 `break`（不再记 WARN + 重开）；
+  4. `creationLoop`（`:418-442`）：外层 `while(!hasPendingCancellation && running)`，出队用**带超时**的 `tasks.remove(Duration.second)`（`:425`）——超时拿到的 `None` 只表示「这一秒没任务」，回到循环顶再判一次取消/关停，**不算意外退出**（否则看护循环会每秒打一条「意外退出」WARN）；出队超时带 1s，`close()` 之后线程最迟 1s 内退出；
+  5. `checkingLoop`（`:338-339`）：同样每轮判取消状态。
+  说明：`ArrayBlockingQueue` 只有 `tryRemove()`（非阻塞）与 `remove(timeout: Duration)`（带超时、**位置参数**）两个重载，没有 `tryRemove(Duration)` —— 所以写的是 `tasks.remove(Duration.second)`。
+- 用例：`f_pool/src/KeyPool_test.cj` → `KeyPoolTest.closeMustReclaimInternalThread`（建/关 20 个 `checkInterval = Duration.Zero` 的池 ⇒ 每池只有创建线程；关池后等 1.6s，线程数必须回到基线 +5 以内）。
+- 测量证据：
+  - **修前**：`[ FAILED ] Assert Failed: (after <= before + 5)`（线程 7→27、关池后仍 27；探针 `main threads` 同读数 `7->27->27`、`blocking 6->26->26`）；
+  - **修后**：`[ PASSED ]`（`FILTERED_EXIT=0`）；全量 **`PASSED: 45, SKIPPED: 0, ERROR: 0, FAILED: 0`**（`FULL_EXIT=0`，日志 `.autocode/tmp/pool_fix7_{pre,post}.log`）。
+- 未覆盖：`checkingLoop` 的 `sleep(checkInterval)` 本身不可取消 ⇒ `checkInterval` 很大（或 `Duration.Max`）时巡检线程仍要睡到点才醒；「每轮判状态」对它是同一套机制，但要真生效得把睡眠改成分片（`POOL-L2` §3，未修）。`tasks` 容量 = `totalSize` 的预分配问题（`POOL-8` §2.3）也未动。
+
+**原分析（保留）**：`while(running.load() && let task <- tasks.remove())` 的 `running` 检查在**阻塞出队之前**：线程一旦 park 在空队列的 `remove()` 上，`close()` 的 `tryRemove` 排空与 `running=false` 都**不会唤醒**它（`ArrayBlockingQueue` 只提供阻塞出队/超时出队，没有 close/中断）。
 
 **实测（`main threads`）**：连续建/关 20 个池（`checkInterval=Duration.Zero`，每池只有创建线程），关池后 500ms：
 
@@ -443,6 +459,8 @@ useafterrelease: second_is_empty=false second_bytes=5
 > `POOL-2`/`POOL-5`/`POOL-6` 修复后的复测：等待改成条件变量通知后，上表里 `spin_finite`/`slowcreate` 的旧读数不再适用，改由单测钉住 —— `finiteTimeoutWaitMustNotBurnCpu`（`/proc/self/stat` 的 utime+stime tick 断言，修前 ≈30 tick 失败、修后通过）与 `infiniteWaitMustWaitForSlowCreation`（修前 1008ms 返回 `None` 失败、修后 ≥1.8s 拿到项）；`giveBackRacingCloseMustNotStrandItem`（100 轮「归还 ‖ 关池」）修前失败、修后通过。全量 `cjpm test` = **`PASSED: 42, SKIPPED: 0, ERROR: 0, FAILED: 0`**（日志 `.autocode/tmp/pool_fix2_{pre,post}.log`）。
 
 > `POOL-3` 修复后的复测：探针 `churn` 的场景改由单测钉住 —— `checkMustNotDropIdleItemWhenAtCap`（满载空闲跑 ~10 轮巡检后仍可借 2 件、creator 仍只调 2 次；修前 `held.size == 2` 断言失败）与 `checkerMustRunWhenAtCap`（满载时用户 checker 必须被调用；修前 `calls.load() > 0` 断言失败）。全量 `cjpm test` = **`PASSED: 44, SKIPPED: 0, ERROR: 0, FAILED: 0`**（日志 `.autocode/tmp/pool_fix3_{pre,post}.log`）。
+
+> `POOL-7` 修复后的复测：`closeMustReclaimInternalThread`（建/关 20 个池后线程数回落到基线；修前 `after <= before + 5` 断言失败）与探针 `main threads` 的同一读数（修前 `7->27->27 / blocking 6->26->26`）。全量 `cjpm test` = **`PASSED: 45, SKIPPED: 0, ERROR: 0, FAILED: 0`**（日志 `.autocode/tmp/pool_fix7_{pre,post}.log`）。
 
 复跑方式（WSL Ubuntu-24.04）：`source /mnt/d/docs/work/cangjie/cangjie.sh` → `cd .autocode/tmp/pool_probe && cjpm build` → 按脚本里的 `LD_LIBRARY_PATH`（各 `target/release/*@*` 目录**排在 `installed/libs/fboot` 之前**）直接跑 `target/release/bin/main <mode>`，用 `time -p` 量 CPU。
 
