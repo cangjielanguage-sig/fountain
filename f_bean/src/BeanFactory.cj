@@ -191,12 +191,6 @@ public class BeanFactory {
     private func matches(beanType: TypeInfo, m: BeanManager) {
         m.beanType.isSubtypeOf(beanType)
     }
-    private func matches<T>(cond: StringCond, m: BeanManager) {
-        matches(TypeInfo.of<T>(), cond, m)
-    }
-    private func matches(beanType: TypeInfo, cond: StringCond, m: BeanManager) {
-        matches(beanType, m) && cond.on(m.name)
-    }
     public func getFirst<T>(cond!: StringCond = IgnoreCond): ?T {
         // §2.15 / BEAN-2：这里的 beanType 就是 T 自己的 TypeInfo，beanTypeIs 恒真 ⇒ 走内部路径，
         // 省掉一次 TypeInfo.of<T>() 与一次 isSubtypeOf（f_mvc/src/RequestMeta.cj 每请求调一次）。
@@ -299,7 +293,9 @@ public class BeanFactory {
         match (cond) {
             case Exactly(n) => return generateTuple<T>(beans.get(n))
             case _ => match (beanTypeMap.get(TypeInfo.of<T>())) {
-                case Some(tree) => for (m in tree where matches<T>(cond, m)) {
+                // §2.16 / BEAN-3（同族）：桶 key 就是 TypeInfo.of<T>()，子类型复检恒真；
+                // 原先 matches<T>(cond, m) 还会逐元素重算 TypeInfo.of<T>() + isSubtypeOf。
+                case Some(tree) => for (m in tree where cond.on(m.name)) {
                     if (let bean: T <- m.bean) {
                         return (m.name, bean, m.generateDestroy(bean))
                     }
@@ -326,17 +322,32 @@ public class BeanFactory {
         getFirst<T>(cond: Exactly(name))
     }
     public func iterator<T>(cond!: StringCond = IgnoreCond): Iterator<BeanManager> {
-        iterator<T>(TypeInfo.of<T>(), cond: cond)
+        // §2.16 / BEAN-3（同族，与 §2.15 同一处理）：beanType 就是 T 自己的 TypeInfo，beanTypeIs 恒真
+        // ⇒ 直接走内部路径，省掉一次 TypeInfo.of<T>() 与一次 isSubtypeOf；getList/getMap/lookup* 都经此。
+        iteratorByType<T>(TypeInfo.of<T>(), cond)
     }
     public func iterator<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): Iterator<BeanManager> {
         beanTypeIs<T>(beanType)
+        iteratorByType<T>(beanType, cond)
+    }
+    /**
+     * `iterator` 的内部实现：调用方已完成 `beanTypeIs` 校验（或 `beanType` 就是 `T` 自己的 `TypeInfo`）。
+     */
+    private func iteratorByType<T>(beanType: TypeInfo, cond: StringCond): Iterator<BeanManager> {
         match (cond) {
             case Exactly(n) => match (beans.get(n)) {
                 case Some(m) where matches(beanType, m) => [m].iterator()
                 case _ => EmptyIterator<BeanManager>.instance()
             }
             case _ => match (beanTypeMap.get(beanType)) {
-                case Some(tree) => tree.iterator().filter {m => matches(beanType, cond, m)}
+                case Some(tree) =>
+                    // §2.16 / BEAN-3：IgnoreCond 无需过滤（子类型由注册期入桶保证，见 §2.15）⇒ 不建闭包、
+                    // 不做逐元素判定；有名字条件时也只留 cond.on（原先 matches 里的子类型复检恒真）。
+                    if (cond.ignored) {
+                        tree.iterator()
+                    } else {
+                        tree.iterator().filter {m => cond.on(m.name)}
+                    }
                 case _ => EmptyIterator<BeanManager>.instance()
             }
         }

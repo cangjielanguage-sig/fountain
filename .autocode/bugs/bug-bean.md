@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 14 条**：严重 1（§1.8 `BEAN-1`）、中 4（§2.15 `BEAN-2`、§2.16 `BEAN-3`、§2.17 `BEAN-4`、§2.18 `BEAN-5`）、低危+待验证 9（§3）。
-- **状态（截至 2026-10-05）**：`BEAN-1` ✅已修复（§1.8）、`BEAN-2` ✅已修复（§2.15）、`BEAN-4` ✅已修复（§2.17）；**待修** §2.16 `BEAN-3`、§2.18 `BEAN-5`（待验证）、§3 的 9 条低危/待验证。
+- **状态（截至 2026-10-05）**：`BEAN-1` ✅已修复（§1.8）、`BEAN-2` ✅已修复（§2.15）、`BEAN-3` ✅已修复（§2.16，含同族的 `getFirstTuple`）、`BEAN-4` ✅已修复（§2.17）；**待修** §2.18 `BEAN-5`（待验证）、§3 的 9 条低危/待验证。
 
 ## 1. 严重（本模块 1 条）
 
@@ -43,7 +43,24 @@
 
 `BeanFactory.cj:201, 203-206, 226, 228`；调用方 `f_mvc/src/RequestMeta.cj:191` 每请求一次。修法：`T` 的 `TypeInfo` 提到调用方缓存，并去掉「表 key 已保证类型」后的 `matches` 复检。
 
-### 2.16 [中｜性能] `BEAN-3` `iterator<T>` 每次调用新建 filter 闭包并逐元素重跑判断（f_bean）
+### 2.16 [中｜性能] `BEAN-3` `iterator<T>` 每次调用新建 filter 闭包并逐元素重跑判断（f_bean）→ ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：分支 `fix/bean`（worktree `.worktrees/bean`，基线 `7be7225d`），代码、用例、本标记在**同一提交**（含用户指示「一并修复 `getFirstTuple`」）。
+
+- 改动（`f_bean/src/BeanFactory.cj`）：
+  1. `iterator<T>(beanType:, cond:)` 的 `case _` 分支：`cond.ignored`（`IgnoreCond`，也正是 `getList`/`getMap`/`getAllTuples`/`lookup*` 的默认形态）时**直接 `tree.iterator()`** —— 不建闭包、不做逐元素判定；有名字条件时也只留 `cond.on(m.name)`（原先 `matches` 里的子类型复检按「桶由注册期超类型闭包填充」恒真，见 §2.15）。
+  2. 同族（与 §2.15 同一处理，§2.15 记录里承诺留给本条）：`iterator<T>()` 单参重载不再走 `beanTypeIs`（`beanType` 就是 `T` 自己的 `TypeInfo`，校验恒真）⇒ 新增私有 `iteratorByType<T>` 作唯一实现，`beanType:` 重载仍保留校验。
+  3. 同族（用户指示一并修）：`getFirstTuple<T>` 的循环 `where matches<T>(cond, m)` → `where cond.on(m.name)` —— 桶 key 就是 `TypeInfo.of<T>()`，子类型复检恒真，原先每元素还要重算 `TypeInfo.of<T>()` + `isSubtypeOf`。
+  4. 顺带删除因此失去调用方的 `matches<T>(cond, m)` / `matches(beanType, cond, m)` 两个私有重载（不留死代码）。
+- 用例：`f_bean/src/test/bean_iterator_test.cj`（新增）—— `iterator<T>()`（IgnoreCond）取到的名字集合 = {狗, 猫}、带条件只取狗、`getList`/`getMap`/`getAllTuples` 口径一致；`getFirstTuple` 重复取一致 / 条件命中（`T=Cat` + 猫模式 ⇒ 猫，狗模式 ⇒ `None`）/ `Exactly` 同类命中、异类 `None`；另有分相位基准（**进程内多轮取最快**）。
+- 测量证据（这台机器上有并行会话，单次数字会被调度干扰 ⇒ 过滤单类 + after/before 交替取样 + 进程内 min-of-N）：
+  - `iterator<BeanTestAnimal>()`（IgnoreCond，本条目标）：**3262.36 → 2349.22 ns/op（1.39×）**，第二轮 **3174.12 → 2586.30 ns/op（1.23×）**；
+  - `iterator<BeanTestAnimal>(cond: Regexp('.*'))`：6980.23 → 7069.29、7591.24 → 8889.05 ⇒ **无可靠变化**（该路径成本由正则匹配本身主导，被去掉的逐元素子类型复检只占小头，符合预期）；
+  - `getFirstTuple<BeanTestDog>()`（同族改动）：1467.32 → 1457.03、1664.46 → 1412.70 ⇒ 一致偏低但幅度弱（约 1.04–1.18×）。**原因已定位**：被去掉的 `m.beanType.isSubtypeOf(beanType)` 对**接口键**（`iterator<Animal>`）要遍历接口层级、对**叶子类键**（`getFirstTuple<Dog>`）几乎是最便宜路径 ⇒ 同一处代码在两条路径上收益不同；且 `getFirstTuple` 单次成本被 `generateDestroy` 闭包 + 元组分配主导。
+  - 全套：**TOTAL 12 / PASSED 12 / ERROR 0 / FAILED 0**（修前同一套用例也是 12/12）；`cjpm build` **exit 0**（9 条既有警告，未新增）。
+- 未覆盖：`iterator<T>(beanType:, cond:)` 的非 IgnoreCond 路径仍在用 `Iterator.filter`（不改公开签名就避不开那个闭包，除非自建迭代器类）；`getFirstTuple` 的 `generateDestroy` 闭包/元组分配属另一话题，本次不动。
+
+**以下为审查时的原始描述**：
 
 `BeanFactory.cj:328`（`getList/getMap/lookupHashSet/lookupTreeSet` 全走它）。`IgnoreCond` 恒真时应直接返回 `tree.iterator()`。
 
