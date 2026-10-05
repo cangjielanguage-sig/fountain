@@ -54,7 +54,11 @@ struct BaseKeyPool<K, V> <: IKeyPool<K, V> where K <: Hashable & Equatable<K> {
     }
     public func check(running: () -> Bool, checker: (K, V) -> Bool, taskPusher: (K) -> Unit): Unit {
         for ((k, p) in map){
-            p.check(running, {v => p.size < max && checker(k, v)}){taskPusher(k)} |> 
+            // checker **必须照常执行**：`p.size < max` 不能写成它的与条件 —— checker 返回 false 在
+            // `SyncDeque.check` 里的语义是「这一项失效 ⇒ 摘节点」，满载（= 稳态）时那样写会
+            // 每轮巡检丢一个空闲项、而且整轮**跳过用户 checker**（idleTimeout/connectionLife 判定被绕过）。
+            // 它本来要约束的是「补建」，所以挪到 taskPusher 上（见 .autocode/bugs/bug-pool.md §1.3 POOL-3）。
+            p.check(running, {v => checker(k, v)}){if (p.size < max) { taskPusher(k) }} |> 
             s.fetchSub
             if(!running()){
                 return

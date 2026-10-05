@@ -61,16 +61,32 @@ public class WeakHeapCache<T> <: Resource where T <: Object {
             }
         })
     }
-    /**停止内部清扫线程并清空缓存；可重复调用*/
+    /**关闭校验：关闭后调用任何公开操作都抛 IllegalStateException（isClosed/close 除外）*/
+    private func ensureOpen(): Unit {
+        if (closedFlag.load()) {
+            throw IllegalStateException('weak heap cache is closed')
+        }
+    }
+    /**
+     * 停止内部清扫线程并主动清空缓存；**清空且清扫线程结束后才返回**，可重复调用。
+     * 关闭之后再调用任何操作（`get`/`set`/`size`/…）都会抛 `IllegalStateException`。
+     */
     public func close(): Unit {
         if (closedFlag.load()) {
             return
         }
         closedFlag.store(true)
+        //主动清空：不再依赖清扫线程的下一轮
+        cache.removeIf {_, _ => true}
         if (let Some(f) <- cleanerTask) {
             f.cancel()
+            //等清扫线程退出（最长一个 CLEAN_INTERVAL）：close 返回即「清理完成」
+            try {
+                f.get()
+            } catch (e: Exception) {
+                //兜底：close 不应因内部线程而失败
+            }
         }
-        cache.removeIf {_, _ => true}
     }
     public func isClosed(): Bool {
         closedFlag.load()
@@ -87,6 +103,7 @@ public class WeakHeapCache<T> <: Resource where T <: Object {
         WeakRef(value, DEFERRED)
     }
     public func set(key: String, value: T): ?T {
+        ensureOpen()
         try {
             if (let Some(r) <- cache.get(WeakKey.deferred(key)) && let Some(v) <- r.value) {
                 return v
@@ -97,6 +114,7 @@ public class WeakHeapCache<T> <: Resource where T <: Object {
         }
     }
     public func getOrCompute(key: String, fn: () -> ?T): ?T {
+        ensureOpen()
         cache.entryView(WeakKey.deferred(key)) {
             entry => if (let Some(r) <- entry.value && let Some(v) <- r.value) {
             } else {
@@ -109,6 +127,7 @@ public class WeakHeapCache<T> <: Resource where T <: Object {
         }?.value ?? None<T>
     }
     public func get(key: String): ?T {
+        ensureOpen()
         cache.entryView(WeakKey.deferred(key)){view => 
             if(let Some(r) <- view.value && let Some(v) <- r.value){
                 r
@@ -118,15 +137,19 @@ public class WeakHeapCache<T> <: Resource where T <: Object {
         }?.value ?? None
     }
     public func getOrDefault(key: String, default: T): T {
+        ensureOpen()
         get(key) ?? default
     }
     public func getOrStore(key: String, value: T): T {
+        ensureOpen()
         getOrCompute(key) {value} ?? value
     }
     public func remove(key: String): ?T {
+        ensureOpen()
         cache.remove(WeakKey.deferred(key))?.value ?? None<T>
     }
     public func removeIf(predicate: (String, T) -> Bool): Unit {
+        ensureOpen()
         cache.removeIf {
             k, r => if (let (Some(k), Some(v)) <- (k.getKey(), r.value)) {
                 predicate(k, v)
@@ -137,10 +160,12 @@ public class WeakHeapCache<T> <: Resource where T <: Object {
     }
     public prop size: Int64 {
         get() {
+            ensureOpen()
             cache.size
         }
     }
     public func clear(): Unit {
+        ensureOpen()
         cache.removeIf {_, _ => true}
     }
 }

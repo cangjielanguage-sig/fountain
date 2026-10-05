@@ -22,12 +22,12 @@
 3. `CACHE-3`（§1.3）`ConcHashMap.add` 覆盖已存在键多计、`clear()` 不归零 —— `size`/`isEmpty` 失真（实测复现）　**✅已修复（2026-10-05，见 §1.3 修复标记）**
 4. `CACHE-4`（§2.1）用户代码（`removeIf` 谓词 / `getOrCompute` 的 callable）在**段写锁内**执行 —— 同段操作被串行阻塞（实测：同段 292.87 ms vs 异段 0.0228 ms）　**✅已修复（2026-10-05，方案 C，见 §2.1 修复标记）**
 5. `CACHE-5`（§2.2）每个 `HeapCache` 实例泄漏 1 个阻塞线程 + 1 条全局 `atExit` 强引用；`WeakHeapCache` 另泄漏 1 个 `while(true)` 清扫线程　**✅已修复（2026-10-05，实现 `Resource` + `close()` 取消线程，见 §2.2；② 的 `atExit` 注册仍待定）**
-6. `CACHE-6`（§2.3）`once()` / `prolong()` 不判过期 ⇒ 可“复活”已过期条目（实测复现）
-7. `CACHE-7`（§2.4）`destroy()` 之后再写入的条目**永不被清理**（实测复现）
-8. `CACHE-8`（§2.5）`Priority` 比较基线的无锁竞争 + `compare` 的“保护新生”分支疑似写反
+6. `CACHE-6`（§2.3）`once()` / `prolong()` 不判过期 ⇒ 可“复活”已过期条目（实测复现）　**✅已修复（2026-10-05，方案 A，见 §2.3 修复标记）**
+7. `CACHE-7`（§2.4）缓存关闭（原 `destroy()`，现 `close()`）之后再写入的条目**永不被清理**（实测复现）　**✅已修复（2026-10-05，方案 A2 + 主动清空/join，见 §2.4 修复标记）**
+8. `CACHE-8`（§2.5）`Priority` 比较基线的无锁竞争 + `compare` 的“保护新生”分支写反　**✅ 已修复（2026-10-05，①+②：② 按「保护新生」语义对称化年龄门并修正两条 recency 判据，④⑤ 两级 tie-break 亦已同向统一，见 §2.5）**
 9. 其余低危/待验证见 §3
 
-> 修复进度（2026-10-05）：§1 的 3 条严重级（`CACHE-1` = `3171d664`、`CACHE-2` = `0e3d70d6`、`CACHE-3` = `14733baf`）已修复并并入 `sts/1.3.x`（`0448df98` 把主线拉进分支、`4a01a26f` 合入主分支，合并后主工作区复跑 6/6 PASSED）；**§2.1 `CACHE-4` 已按方案 C 修复并并入 `sts/1.3.x`**（callable 移出段写锁 + `removeIf` 两阶段，见 §2.1；`302bd9f2` 拉齐主线进分支、`e131fa7f` 合入主分支）；**§2.2 `CACHE-5` 已修复并并入 `sts/1.3.x`**（实现 `Resource` + `close()` 取消内部线程；按指示删除 `destroy`、`atExit` 注册与用例统一改 `close()`，原 `testDestroyStopsEvictionThread` 更名 `testCloseStopsEvictionThread`，见 §2.2；`2b49dfc1` 拉齐主线进分支、`eb8363c8` 合入主分支）；**§2.3 `CACHE-6` 已修复**（`once`/`prolong` 拒绝过期条目，见 §2.3，分支 `review/f_cache` 上待并入）；§2 其余 2 条（`CACHE-7`/`CACHE-8`）与 §3 的低危/待验证未动。用例 1 → 14 条（全绿）。
+> 修复进度（2026-10-05）：§1 的 3 条严重级（`CACHE-1` = `3171d664`、`CACHE-2` = `0e3d70d6`、`CACHE-3` = `14733baf`）已修复并并入 `sts/1.3.x`（`0448df98` 把主线拉进分支、`4a01a26f` 合入主分支，合并后主工作区复跑 6/6 PASSED）；**§2.1 `CACHE-4` 已按方案 C 修复并并入 `sts/1.3.x`**（callable 移出段写锁 + `removeIf` 两阶段，见 §2.1；`302bd9f2` 拉齐主线进分支、`e131fa7f` 合入主分支）；**§2.2 `CACHE-5` 已修复并并入 `sts/1.3.x`**（实现 `Resource` + `close()` 取消内部线程；按指示删除 `destroy`、`atExit` 注册与用例统一改 `close()`，原 `testDestroyStopsEvictionThread` 更名 `testCloseStopsEvictionThread`，见 §2.2；`2b49dfc1` 拉齐主线进分支、`eb8363c8` 合入主分支）；**§2.3 `CACHE-6` 已修复并并入 `sts/1.3.x`**（`once`/`prolong` 拒绝过期条目，见 §2.3；`8dbe2fc8` 拉齐主线进分支、`5fbe5e5f` 合入主分支）；**§2.4 `CACHE-7` 已修复并并入 `sts/1.3.x`**（`close` 主动清空并等内部线程结束后再返回 + 关闭后一切操作抛 `IllegalStateException`，见 §2.4）；**§2.5 `CACHE-8` 已修复**（① 比较基线字段的读写纳入 `p.lock`；② 年龄门对称化 + `cmp()` 的两条 recency 判据按「保护新生」修正；④⑤ 两级 tie-break 亦已同向统一，见 §2.5）；**已并入 `sts/1.3.x`**（`862eaf15` 拉齐主线进分支、`681f5156` 合入主分支，冲突标记清理 `7b69364e`/`f7711fc2`）；§3 的低危/待验证未动。用例 1 → 20 条（全绿）。
 
 ---
 
@@ -168,7 +168,7 @@ store.add(key, Priority<V>(key, value, life, checkDuration, once))
 
 ### 2.1 [中｜并发/契约] `CACHE-4` 用户代码在**段写锁内**执行：`removeIf` 谓词与 `getOrCompute` 的 callable 都会阻塞同段全部操作 → ✅已修复（2026-10-05，方案 C）
 
-**✅ 修复标记（2026-10-05，方案 C：callable 移出锁 + `removeIf` 两阶段）**：分支 `review/f_cache`，**代码、用例、README、本标记在同一提交**（提交信息 `fix(f_cache): CACHE-4 用户代码移出段写锁（callable 锁外计算 + removeIf 两阶段）（bug-cache §2.1 修复标记）`；提交哈希由下一次标记同步补录）。
+**✅ 修复标记（2026-10-05，方案 C：callable 移出锁 + `removeIf` 两阶段）**：分支 `review/f_cache`，**代码、用例、README、本标记在同一提交**（提交 `b772f1a5`：`fix(f_cache): CACHE-4 用户代码移出段写锁（callable 锁外计算 + removeIf 两阶段）（bug-cache §2.1 修复标记）`）。
 
 - 改动：
   - `src/SyncLinkedHashMap.cj`：`computeIfAbsentCounted` 把 `callable()` 移到段写锁**之外**（锁内只做「查 → 二次判定 → 写」，重复计算的结果被丢弃）；新增 `removeIfOutside`（读锁取快照 → 锁外跑谓词 → 写锁按 key 删，返回实际删除数）；原 `removeIf` 改名 `removeIfLocked`（谓词在写锁内，保留给定时清扫）。
@@ -212,7 +212,7 @@ store.add(key, Priority<V>(key, value, life, checkDuration, once))
 
 ### 2.2 [中｜资源] `CACHE-5` 线程与实例泄漏：每实例 1 个阻塞淘汰线程 + 1 条全局强引用；`WeakHeapCache` 另加 1 个 `while(true)` 线程 → ✅已修复（2026-10-05，实现 `Resource` + 协作取消）
 
-**✅ 修复标记（2026-10-05，方案：两个缓存实现 `Resource`，用线程句柄 + `Future.cancel()` + `hasPendingCancellation` 协作取消）**：分支 `review/f_cache`，**代码、用例、README、本标记在同一提交**（提交信息 `feat(f_cache): HeapCache/WeakHeapCache 实现 Resource，close() 取消内部线程（bug-cache §2.2 修复标记）`；提交哈希由下一次标记同步补录）。
+**✅ 修复标记（2026-10-05，方案：两个缓存实现 `Resource`，用线程句柄 + `Future.cancel()` + `hasPendingCancellation` 协作取消）**：分支 `review/f_cache`，**代码、用例、README、本标记在同一提交**（提交 `981e1005`：`feat(f_cache): HeapCache/WeakHeapCache 实现 Resource，close() 取消内部线程（bug-cache §2.2 修复标记）`；按指示删除 `destroy` 并统一 `close()` 的补做为 `0b9d3240`）。
 
 - 改动：
   - `src/HeapCache.cj`：类改为 `<: Resource`；`alive` 换成 `closedFlag`；新增两个**内部线程/定时器句柄字段** `evictionTask: ?Future<Unit>`、`timerHandle: ?Timer`（另有轮询常量 `EVICTION_POLL_INTERVAL = 100 ms`）；淘汰消费线程改为「`q.remove(轮询间隔)` + 每轮检查 `Thread.currentThread.hasPendingCancellation`」，收到取消后把**已入队**的淘汰回调投递完再退出；新增 `close()`（置位 + `Timer.cancel()` + `Future.cancel()` + `store.clear()`，可重复调用）与 `isClosed()`；`destroy()` 保留为 `close()` 的别名。
@@ -249,7 +249,14 @@ std 契约（`std.collection.concurrent.LinkedBlockingQueue.remove()`）：**阻
 
 **DT**：创建 N 个缓存实例并 `destroy()`，断言消费线程数回落（可用线程计数或队列可关闭性间接断言）；`WeakHeapCache.close()` 后清扫线程退出。
 
-### 2.3 [中｜正确性] `CACHE-6` `once()` / `prolong()` 不做过期判定 ⇒ 可“复活”已过期但未被清扫的条目
+### 2.3 [中｜正确性] `CACHE-6` `once()` / `prolong()` 不做过期判定 ⇒ 可“复活”已过期但未被清扫的条目 → ✅已修复（2026-10-05，方案 A）
+
+**✅ 修复标记（2026-10-05，方案 A：与 `get`/`contains` 同口径）**：分支 `review/f_cache`，**代码、用例、README、本标记在同一提交**（提交 `2e642b0b`：`fix(f_cache): CACHE-6 once/prolong 拒绝已过期条目（bug-cache §2.3 修复标记）`）。
+
+- 改动（`src/HeapCache.cj`）：`once`、`prolong(key, life!, once!)`、`prolong(key, deathTime)` 三个入口的 `case Some(p)` 加上 `where !evicated(p)` 守卫 ⇒ 已过期（即使尚未被定时清扫）的条目一律按「不存在」处理，与 `get`/`contains` 一致；不能再把过期条目「复活」。
+- 用例（`src/HeapCache_test.cj`）：`testOnceRejectsExpiredEntry`、`testProlongRejectsExpiredEntry` —— 都是「`set` → `set(life: 100ms)`（更新路径）→ 等 300 ms（< checkDuration，保证未被定时清扫）」后断言 `contains`、`once`、两个 `prolong` 全为 `false`，且续期被拒后 `contains` 仍为 `false`。
+- 测量证据：**修复前** PASSED 12 / **FAILED 2**（`Assert Failed: (false == cache.once('k'))` 实测 `true`；`(false == cache.prolong('k', Duration.second * 5))` 实测 `true`；EXIT=1）→ **修复后** = **14/14 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**；f_cache 自身编译警告仍 2 条。日志 `/tmp/cache6_before.log`、`/tmp/cache6_after.log`。
+- 契约变化（有意，已写入 `f_cache/README.md`「并发与约定」）：过期条目不再能通过 `once`/`prolong` 续期/复活 ⇒ 调用方要「续期已过期条目」请改用 `set` 重建。仓库内目前**没有** `once`/`prolong` 的调用方（grep 确认），故无下游影响。
 
 **位置**：`src/HeapCache.cj:144-175`（对比 `get`/`contains` 在 `:135-140` 会先判 `evicated(p)`）
 
@@ -274,23 +281,57 @@ std 契约（`std.collection.concurrent.LinkedBlockingQueue.remove()`）：**阻
 
 **实测（探针 P3a/P3b/P3c）**：`contains=false` ✓（已过期）、`once=true` ✗、`prolong=true` ✗ 且随后 `contains=true`（被复活）✗。
 
-### 2.4 [中｜内存] `CACHE-7` `close()` 之后再 `set` 的条目永不被清理（定时器已停、仍可写）
+### 2.4 [中｜内存] `CACHE-7` `close()` 之后再 `set` 的条目永不被清理（定时器已停、仍可写） → ✅已修复（2026-10-05，方案 A2 + 主动清空/join）
 
-> 原标题基于 `destroy()`；2026-10-05 按指示删除 `HeapCache.destroy()`、统一 `close()`（该关闭路径的语义不变）。
+**✅ 修复标记（2026-10-05，方案 A2：close 主动清空并等线程结束 + 关闭后一切操作抛异常）**：分支 `review/f_cache`，**代码、用例、README、本标记在同一提交**（提交 `65e5bc8d`：`fix(f_cache): CACHE-7 close 主动清空并等线程结束，关闭后一切操作抛异常（bug-cache §2.4 修复标记）`）。
+
+- 改动：
+  - `src/HeapCache.cj`：新增 `private func ensureOpen()`（关闭后抛 `IllegalStateException('heap cache is closed')`），`get`/`contains`/`once`/`prolong`×2/`set`×2/`getOrDefault`/`getOrStore`/`getOrCompute`×3/`remove`/`removeIf`/`size`/`clear` 共 16 个公开入口全部先校验；`close()` 改为「置位 → `Timer.cancel()` → **主动 `store.clear()`** → `Future.cancel()` → **`f.get()` 等消费线程结束**」⇒ close 返回即「清理完成」；回调投递抽出 `notifyEviction`（吞掉用户回调异常：否则消费线程会被杀死、之后淘汰全部静默失效，且 close 的 join 会把异常重抛）。
+  - `src/WeakHeapCache.cj`：同样的 `ensureOpen()` + 9 个公开入口校验；`close()` 改为「置位 → 主动清空 → `Future.cancel()` → `f.get()` 等清扫线程结束」。
+  - `f_cache/README.md`「并发与约定」：关闭语义改写为「close 主动清空全部条目、等内部线程结束才返回；此后一切操作抛 `IllegalStateException`（仅 `isClosed`/`close` 例外，close 可重复调用）」。
+- 用例（`src/HeapCache_test.cj`）：新增 `testOperationsAfterCloseThrow`（16 个入口逐一断言抛 `IllegalStateException`，并验证 `isClosed`/`close` 幂等不抛）、`testCloseClearsAndJoinsBeforeReturn`（close 返回后 `f.get(1 ms)` 必须立即成功）；`testWeakHeapCacheIsResource` 扩充为「清扫线程 join + 9 个入口全抛」；`testClearResetsSize` 与 `testHeapCacheIsResource` 中「close 之后读 `size`」的断言按新语义移除。
+- 测量证据（`git stash` 把两个源文件回退到改动前、测试保持新版运行）：**修复前** PASSED 14 / **FAILED 2**（`testOperationsAfterCloseThrow`：关闭后 `get` 未抛异常；`testWeakHeapCacheIsResource`：清扫线程未 join、入口未抛；EXIT=1）→ **修复后** = **16/16 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**；f_cache 自身编译警告仍 2 条。日志 `/tmp/cache7_before.log`、`/tmp/cache7_after.log`。
+  - 诚实标注：`testCloseClearsAndJoinsBeforeReturn` 在「修复前」那次运行是**通过**的（1 ms 窗口偶合上 100 ms 轮询边界，属运气）⇒ 它**不是**可靠的修复前失败证据，作为**修复后的保证性用例**保留（修复后为确定性通过）。
+- 契约变化（有意）：关闭后不再允许任何读写/清理操作（此前是「可继续写入且永不清理」）⇒ 已写入 README；仓库内使用方（f_data / f_orm / f_regex / f_jwt / f_security / fdemo）都不调用 `close()`、也不会关闭后复用实例 ⇒ **无下游影响**。
+- 相关但未做（`CACHE-5` 的 ②）：`ExitCallbacks.atExit(254, close)` 仍是每实例一条全局强引用注册 ⇒ 关闭后实例本身仍被全局表引用（条目与线程已释放，但对象无法回收）。
 
 **位置**：`src/HeapCache.cj` 的 `close()` 与 `startTimer()` 回调
 
-`close()`（原 `destroy()`）置 `closedFlag=true` 并 `store.clear()` ⇒ `checkTimeout` 的谓词对**所有**条目返回 true（清空），随后定时器已 `cancel()` ⇒ **不再有清扫**。但 `set`/`get`/`getOrCompute` 都没有 `isClosed()` 守卫 ⇒ 关闭之后写入的条目：既没有过期清扫，也没有 maxSize 淘汰。
+`close()`（原 `destroy()`）置 `closedFlag=true` 并清空 ⇒ 定时器已 `cancel()` ⇒ **不再有清扫**；而修复前 `set`/`get`/`getOrCompute` 都没有 `isClosed()` 守卫 ⇒ 关闭之后写入的条目既没有过期清扫、也没有 maxSize 淘汰。
 
-**影响**：关闭后复用同一实例（或忘记关闭后又被继续写入）会得到只增不减的 map；`size` 也随之永久虚高（叠加 `CACHE-3`）。当前该行为**已文档化**（`README.md`「并发与约定」写明「关闭后 `set`/`get` 仍可调用，但写入的条目不会再被自动清理」）⇒ 剩下的是「要不要改成禁用写入」的语义决定。
+**影响（修复前）**：关闭后复用同一实例（或忘记关闭后又被继续写入）会得到只增不减的 map；`size` 也随之永久虚高（叠加 `CACHE-3`）。
 
-**修法（待定方向）**：①`set`/`getOrCompute` 在 `isClosed()` 时抛 `IllegalStateException`（关闭即不可用，语义更硬）；②保持可写 + 文档化（现状，已在 README 写明）。
+**修法（已采纳）**：`close()` 主动清空并在返回前等内部线程结束；全部公开入口在 `isClosed()` 时抛 `IllegalStateException`（关闭即不可用）。
 
-**DT**：`close()` → 等 1 个检查周期 → `set(k1)/set(k2)` → 再等 1 个周期 ⇒ 按选定语义断言「抛异常」或「`size==2` 且不再变化」。
+**DT**：`close()` → 等 1 个检查周期 → `set(k1)/set(k2)` ⇒ 断言抛 `IllegalStateException`。
 
 **实测（探针 P7/P8，当时走 `destroy()`）**：关闭后 `set` 两次、等 1 s（`maxLife=300ms`、`maxSize=1`）：`d1=false d2=false`（按寿命已过期）但 **`size=2` 且此后不降** ⇒ 过期条目永驻。
 
-### 2.5 [中｜并发] `CACHE-8` `Priority` 比较基线字段无锁读写竞争；`compare` 的“保护新生”分支疑似写反且含不可达分支
+### 2.5 [中｜并发] `CACHE-8` `Priority` 比较基线字段无锁读写竞争；`compare` 的“保护新生”分支写反且含不可达分支 → ✅ 已修复（2026-10-05：① 无锁竞争、②「保护新生」重写，④⑤ 口径同向统一）
+
+**✅ 修复标记（2026-10-05，①+② 一次完成）**：分支 `review/f_cache`，**代码、用例、README 与本标记在同一提交**（三次提交：`00ff79a5` = ① 比较基线字段纳入 `p.lock`；`21c9cf65` = ② 年龄门对称化 + `cmp()` 两条 recency 判据；`db3b55f6` = ④⑤ 口径统一）。语义按作者指示定为**保护新生**。
+
+**① 比较基线字段纳入 `p.lock`（无锁竞争）**：
+
+- 改动（`src/Priority.cj`）：`lastCheckedTime`、`usedCountUtilLastChecked` 两个 getter 与 `updateLastChecked(current)` 都包进 `synchronized(lock)` ⇒ 定时线程的批量写入与业务线程（`compare` 路径）的读取互斥。`usedCount` 本就是 `AtomicInt64`、`once` 原子、`birth` 不可变、`lastUsed`/`maxLife_` 已有锁 ⇒ `Priority` 的字段访问现在全部受锁或原子保护（`Mutex` 可重入；`compare` 内逐个取锁、不嵌套两把锁 ⇒ 无死锁面）。
+- 用例（`src/HeapCache_test.cj`）：`testEvictionKeepsMoreUsedEntry`（`maxSize=1`：`hot` 在本次检查周期内被访问 3 次、`cold` 0 次 ⇒ 断言 `hot` 存活、`cold` 被淘汰），冻结「用量是 `compare` 第一层依据」这条不变量。
+- 诚实标注：这是**可见性/一致性**问题（普通字段被定时线程写、被业务线程读），给不出确定性失败证据（依赖并发时序）⇒ 属「同步型」：只有代码层证明 + 回归用例。带探针那次实测（21/21）里用量维度的淘汰结果**是对的**（探针 P-b）⇒ 该竞争在实测中未显形，但按内存模型此前是未定义行为。
+
+**② 「保护新生」年龄门对称化 + `cmp()` 两条 recency 判据修正**：先把「谁被淘汰」的判定链钉死 —— **P-a** `PriorityQueue` 是最小堆（`add(3,1,2)` 后 `remove()` = **1**）⇒ `compare` 返回 `GT` = **被保留**、`LT` = 先淘汰；`checkOverSize` 用 `topVals.remove()` 的结果当淘汰对象（`HeapCache.cj:141-147`）。**P-b** 反向验证：年龄接近、用量 hot=3 / cold=0 ⇒ hot 存活 ✓（用量主键方向本来就是对的）。修复前实测（4 条临时探针，跑完即删）：
+
+| 探针 | 构造 | 修复前实测 |
+|---|---|---|
+| P-a | `PriorityQueue<Int64>` 依次 `add(3,1,2)` 后 `remove()` | **1** ⇒ 堆顶是最小元素 ⇒ `GT` = 保留 |
+| P-b | `maxSize=1`、年龄接近、用量 hot=3 / cold=0 | hot 存活、cold 淘汰 ✓（用量主键方向正确） |
+| P-c | `checkDuration=1s`、年龄差 1.5 个周期、用量相同 | **old（更老）存活、new（更新）被淘汰** ✗ 与注释「保护新生」相反 |
+| P-d | 年龄差 0.2 个周期、用量相同 | **first（更老）存活、second（更新）被淘汰** ✗ 第③级 tie-break 同样偏老 |
+
+- 改动（`src/Priority.cj` 的 `compare`）：**年龄门对称化** —— `ageSub > 1.0`（本对象更老）⇒ `LT`（老的先淘汰）；其余（本对象更新、且差超过一个生命周期）⇒ `GT`（留下）；**删掉不可达的 `age < -1.0` 分支**（`age` = 距今时长/周期，正常时钟下恒 ≥ 0）。**`cmp()` 第②③级改成「更新者更大」**：`duration.compare(otherDuration)`、`lastUsed.compare(otherLastUsed)`（原为 `otherX.compare(x)`，两处都偏老）。
+- **第④⑤级一并统一（2026-10-05，按指示；提交 `db3b55f6`）**：④ 改为 `ref.load().compare(other.ref.load())`（历史访问总量**多**者更大，与①同向）、⑤ 改为 `birth.compare(other.birth)`（出生**更晚**者更大）⇒ `cmp()` 的 ②~⑤ 四级 tie-break 已全部与「保护新生」同向。**这两级在现有实现下几乎不可达**：要 ①②③ 全部同分，意味着两个候选的 `lastUsed` 必须纳秒级完全相同（`lastUsed` 只在 `load`/`store` 里取 `DateTime.now()`）⇒ 属**口径统一**而非行为修复，**无法用确定性用例钉住**（同①「同步型」的标注方式）。
+- 用例（`src/HeapCache_test.cj`，新增 3 条）：`testCompareProtectsNewEntryBeyondOneLifecycle`（直接驱动 `PriorityQueue`，年龄差 1.5 个周期 ⇒ 淘汰更老的；不依赖分段布局）、`testCompareProtectsRecentlyUsedEntryWithinOneLifecycle`（年龄差 0.2 个周期、用量同分 ⇒ 淘汰更老的）、`testEvictionInAgeGapProtectsNewEntry`（端到端 `maxSize=1`，老的/新的各占一个分段 ⇒ 新的留下、老的被淘汰）。
+- **既有用例 `test()` 的期望按新语义修正（重要，属语义变更）**：原断言「`test2` 存活、`test3`（最新）被淘汰」——`test2`/`test3` 在「周期内使用次数」与「新鲜度」上都同分，实际由第③级 tie-break 决出 ⇒ **旧断言锁定的正是「偏老」行为**。修正为：`test1` 存活（周期内读多次）、`test3` 存活（更新的留下）、`test2` 被淘汰（更老的先走）。
+- 测量证据：修复前 **17 PASSED / 3 FAILED**（恰好 3 条新用例红、`test()` 仍绿）⇒ 修复 + 同步 `test()` 期望后 **20/20 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**；f_cache 自身编译警告仍 2 条。日志 `/tmp/cache8b_before.log`、`/tmp/cache8b_after.log`、`/tmp/cache8b_final.log`。
+- README 同步：「并发与约定」新增一条 `maxSize` 超限时的淘汰顺序（更老者先淘汰；一个周期内则按使用次数、最后使用时间，更多/更晚者优先保留）。
 
 **位置**：`src/Priority.cj:127-141`（`lastCheckedTime` / `usedCountUtilLastChecked` 无锁读取）、`:167-170`（`updateLastChecked` 无锁写入，由定时线程经 `HeapCache.cj:126-128` 调用）、`:48-88`（`compare`）
 
@@ -313,11 +354,11 @@ std 契约（`std.collection.concurrent.LinkedBlockingQueue.remove()`）：**阻
 - `age = (现在 - 最后使用时间)/checkDuration` 在正常时钟下 **≥ 0** ⇒ `age < -1.0` 分支不可达（除非时钟回拨）；
 - 注释说「保护新生」，但只对 `ageSub > 1.0`（本对象**更老**）返回 `GT`；本对象**更新**的一侧落到最后一个 `cmp()` 分支 ⇒ 保护逻辑不对称、疑似写反（按 `PriorityQueue` 默认取堆顶最小元素理解）。
 
-**影响**：淘汰顺序在高并发下不稳定（基线字段读到的可能是旧值），且“新生保护”是否生效不可判定；现有用例（`HeapCache_test.test`）的淘汰结果由「使用次数」主键决定（`cmp()` 的第一项），**覆盖不到**这条分支 ⇒ 需要作者确认意图后再补用例。
+**影响（修复前）**：①基线字段的读写竞争使淘汰顺序在高并发下不稳定（读到的可能是旧值）；②「保护新生」失效 —— 候选中同时有「很久未用」与「刚用过」的条目时，淘汰扔掉刚用过的 ⇒ 与「保频繁/护新生」的设计目标相反，命中率受损。
 
-**修法**：①`lastChecked`/`usedUtilLastChecked` 读写纳入 `p.lock`（或改原子类型）；②按设计意图厘清 `ageSub`/`age` 两侧的分支并删除不可达分支。
+**补充更正（审查结论的一处修正）**：审查时判断「现有用例覆盖不到这条分支」只对**年龄门**成立；`test()` 里 `test2`/`test3` 这对候选是由第③级 tie-break 决出的，旧断言 `!contains('test3')` 实际锁定了「偏老」的行为（修复时已按新语义改写，见上）。
 
-**DT（待作者确认后再定）**：构造两个仅「最后使用时间」不同的条目（`checkDuration` 取 1 s），断言淘汰的是更老的一个。
+**DT（已落地）**：`testCompareProtectsNewEntryBeyondOneLifecycle`、`testCompareProtectsRecentlyUsedEntryWithinOneLifecycle`、`testEvictionInAgeGapProtectsNewEntry` —— 构造仅「最后使用时间」不同的条目（`checkDuration` 取 1 s），断言淘汰的是更老的一个。
 
 ---
 
@@ -328,15 +369,15 @@ std 契约（`std.collection.concurrent.LinkedBlockingQueue.remove()`）：**阻
 - **`CACHE-L1` `ConcHashMapKeys.contains(all!)` 是「任一包含」而非「全部包含」**：`src/ConcHashMap.cj:75-80` 在循环里 `return true` 命中即返回 ⇒ 与 std `contains(all:)` 语义相反；且 `ConcHashMapKeys`/`ConcHashMapValues`/两个 Iterator（`src/ConcHashMap.cj:22-133`）在本仓库**无任何使用点**（死代码，只有 `ConcHashMapKeysIterator` 经 `keys()`… 实际 `ConcHashMap` 也没有 `keys()`/`values()` 成员）。修法：改成「全部命中才 true」，或直接删除这 4 个类。**实测（P4）**：`contains(all: ['b','a'])` 在只有 `'a'` 时返回 `true`。
 - **`CACHE-L2` `WeakHeapCache.get` 的 lambda 返回值被丢弃**（`src/WeakHeapCache.cj:81-89`，编译警告 `unused expression` 指向 `:86`）：`entryView` 的回调返回 `Unit`，真正取值靠 `entryView` 自身返回 `?V`；写法容易误导（看起来像回调在产出结果）。`set` 里的 `try/finally`（`:59-68`）同样绕。修法：把回调体写成纯副作用（显式 `()`），或直接换成「`get` 未命中就用 `add`」的两步写法并注释原子性理由。
 - **`CACHE-L3` `WeakKey` 把「键」放进弱引用**（`src/WeakHeapCache.cj:22-45`）：键是每次调用新构造的 `Box<String>`，只被 `WeakRef` 弱引用 ⇒ 在 `CleanupPolicy.DEFERRED`（GC 尽量保活、内存不足才回收）下平时可用（**实测 P5 通过**），但内存紧张时键会被回收 ⇒ 值仍被强引用时条目也会静默消失、且 `get` 期间键可能失效导致 miss。弱引用缓存的常规做法是**键强、值弱**。修法：`WeakKey` 持强引用（`Box<String>`/`String`），只让值 `WeakRef`。顺带：每次 `get`/`set` 都新分配 `Box<String>+WeakRef`（热路径额外分配），键强引用后也可缓存键对象。
-- **`CACHE-L4` 两处编译警告**（本次构建中 f_cache 自身仅 2 条）：`src/HeapCache.cj:20` `unused import 'std.env.atExit'`（实际用的是 `f_base` 的 `ExitCallbacks.atExit`）；`src/WeakHeapCache.cj:86` `unused expression`（见 L2）。
+- **`CACHE-L4` 两处编译警告**（现在仍 2 条，行号随 `CACHE-5`/`CACHE-7` 的改动后移）：`src/HeapCache.cj:20` `unused import 'std.env.atExit'`（实际用的是 `f_base` 的 `ExitCallbacks.atExit`）；`src/WeakHeapCache.cj:135` `unused expression`（见 L2）。
 - **`CACHE-L5` 命名/文档细节**：`HeapCache.evicated`（`src/HeapCache.cj:131-133`）应为 expired 语义；`README.md:102`「弱引用堆缓存」一节把 `WeakHeapCache` 的 `remove`/`removeIf`/`size` 等成员列全了，但没有说明**清扫有 1 s 延迟**（`size` 含未被清扫的失效条目，实测 `P5` 的 `size` 与 `contains` 口径差 ≤ 1 s）。
 - **`CACHE-L6` 迭代一致性未文档化**：`SyncLinkedHashMap.iterator()`（`src/SyncLinkedHashMap.cj:26-28`）在**锁外**创建底层迭代器、每次 `next()` 才取读锁；`ConcHashMapIterator.next()`（`src/ConcHashMap.cj:146-155`）跨段无快照，`doNextSegment` 的越界分支与循环条件 `cur <= m.concurrency`（`:147`）冗余。定时淘汰与业务读并发时迭代结果不保证包含本轮新增——可接受，但应写进 README。
 - **`CACHE-L7` 惰性过期与口径差**：`get` 对已过期条目只返回 `None`，不摘除（`src/HeapCache.cj:135-140`）⇒ `size` 会包含「已过期未清扫」的条目（最长 `checkDuration`）。属常见惰性过期设计，但与 `contains` 的口径差异未文档化（叠加 `CACHE-7` 后会变成永驻）。
-- **`CACHE-L8` 用例覆盖极薄**：整个模块只有 1 个用例（`src/HeapCache_test.cj`，8.02 s，绝大部分是 `sleep`），且只覆盖 `set`/`get`/`contains`/`getOrDefault` 与「maxSize=2 时最新的先被淘汰」；`WeakHeapCache`、`ConcHashMap`、`Priority`、`getOrCompute` 系列、`once`/`prolong`、`removeIf`、`destroy`、`evictionCallback` 全部无用例。建议补测（可直接采用本报告各条的 DT）。
+- **`CACHE-L8` 用例覆盖极薄**　**🟡 部分改善（2026-10-05）**：审查时整个模块只有 1 个用例（`src/HeapCache_test.cj`，8.02 s，绝大部分是 `sleep`）；`CACHE-1`~`CACHE-8` 的修复过程中补到 **20 条** —— `getOrCompute` 系列（含「不持段锁」）、`once`/`prolong` 拒绝过期、`removeIf` 不持段锁、`Priority`/`compare` 的年龄差与 tie-break、`close`/`Resource`/关闭后抛异常、`set(life:)`、`clear`、`set` 覆盖计数、`maxSize` 淘汰用量维度（原 `destroy` 相关用例随接口删除改为 `close()`）。**仍缺**：`WeakHeapCache` 的缓存语义（目前只测了它的 `Resource` 行为）、`ConcHashMap`/`SyncLinkedHashMap` 本身、`evictionCallback` 的正式用例 —— 可直接采用本报告各条的 DT 补。
 
 ### 3.2 待验证（2 条，需与作者确认或压测）
 
-- **`CACHE-V1` `Priority.compare` 的淘汰顺序是否符合设计**（见 `CACHE-8`）：需作者确认「保护新生」的期望方向，再构造仅一维差异的用例（使用次数 / 最后使用时间 / 出生时间）逐一固定；当前唯一用例靠使用次数决定结果，覆盖不到分支。
+- **`CACHE-V1` `Priority.compare` 的淘汰顺序是否符合设计**（见 `CACHE-8`）　**✅ 已了结（2026-10-05）**：作者确认期望方向为**保护新生**，`CACHE-8` ② 已按此重写 `compare`（年龄门对称化 + `cmp()` ②~⑤ 级判据全部同向），并新增 3 条仅一维差异的用例逐一固定（周期内使用次数 / 最后使用时间 / 年龄差）；`test()` 的旧断言（锁定「偏老」行为）已按新语义修正 —— 见 §2.5。
 - **`CACHE-V2` `WeakRef` 键在真实内存压力下的丢失率**：`CACHE-L3` 的后果需要压测（持续分配 + 观察 `WeakHeapCache` 命中率/条目数）才能量化；本次未做（无 GC 触发入口，且 `DEFERRED` 策略下小规模压测不必然触发）。
 
 ---
