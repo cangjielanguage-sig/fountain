@@ -533,7 +533,7 @@ useafterrelease: second_is_empty=false second_bytes=5
 - `POOL-L3` **`HeadNode.nextForGet` 递归扫描**（`LinkedNode.cj:95-111`）：队首连续非 idle 节点时按节点数递归（`ValueNode.nextForGet` 自身是迭代的，递归只发生在「队首非 idle」这一步）。极端情况（大量滞留 CHECKING 项）可加深调用栈，建议改迭代。
 - `POOL-L4` **`selfCheck`/`audit` 的全队列遍历在锁内**：每 1e4 次操作一次 `countNodes()`（O(队列长度)，`SyncDeque.cj:59-74`、`227-254`）；长队列 + 高并发时是周期性长临界区。可只统计计数，或在锁外做快照核对。
 - `POOL-L5` **`get` 内定义局部函数** `keyedCheck`（`KeyPool.cj:638-640`、`KeyPool.cj:593-595`）：每次调用建闭包并走闭包调用（借用/归还是热路径）。可提到成员函数/用 `checkOnBorrowing` 直接分派。
-- `POOL-L6` **`waitChunk` 溢出** ✓已复核 → **✅已修复（2026-10-05，随 `315ada9e` 的等待重写一并消除；提交 `xxxx`）**
+- `POOL-L6` **`waitChunk` 溢出** ✓已复核 → **✅已修复（2026-10-05，随 `315ada9e` 的等待重写一并消除；证据与防回归用例见提交 `37653f89`）**
   - **诊断修正（2026-10-05 实测）**：不是「溢出成负 ⇒ 立即放弃」，而是**直接抛**
     `ArithmeticException: Arithmetic overflow: result exceeds MonoTime range`（`std.time::MonoTime::+`，
     `mono_time.cj:54` —— 内部带溢出检查、不回绕）。基线（`315ada9e^:f_pool/src/KeyPool.cj:446-456`）：
