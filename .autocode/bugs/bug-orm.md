@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 24 条**：严重 3（§1.1 `ORM-1`、§1.5 `ORM-C1`、§1.13 `ORM-2`）、中 7（§2.1 `ORM-C2`、§2.8 `ORM-C5`、§2.10 `ORM-3`、§2.11 `ORM-4`、§2.12 `ORM-5`、§2.13 `ORM-6`、§2.14 `ORM-7`）、低危+待验证 14（§3）。
-- **状态（截至 2026-10-05）**：`ORM-1` ✅已修复（§1.1）、`ORM-C1` ✅已修复（§1.5）、`ORM-C2` ✅已修复（§2.1）、`ORM-2` ✅已修复（§1.13，严重｜性能，分支 `fix/orm`）；`ORM-C5` ❌误判（§2.8，非缺陷：`argInSql` 是设计目的，已补 README §11.5 说明与口径用例）；**待修** §2.10–§2.14（性能中危 5 条）、§3 的 14 条低危/待验证（`ORM-L3` 已随 §1.13 一并消掉；`ORM-C3`：`SqlArgs.clone()` 仍共享同一 `ArrayList`，未随 §1.1 一并处理）。
+- **状态（截至 2026-10-05）**：`ORM-1` ✅已修复（§1.1）、`ORM-C1` ✅已修复（§1.5）、`ORM-C2` ✅已修复（§2.1）、`ORM-2` ✅已修复（§1.13，严重｜性能，分支 `fix/orm`）；`ORM-C5` ❌误判（§2.8，非缺陷：`argInSql` 是设计目的，已补 README §11.5 说明与口径用例）；`ORM-3` ⏸决定不修（§2.10，已知开销保留：否决「加静态集合」与「就地复位」两方案）；**待修** §2.11–§2.14（性能中危 4 条）、§3 的 14 条低危/待验证（`ORM-L3` 已随 §1.13 一并消掉；`ORM-C3`：`SqlArgs.clone()` 仍共享同一 `ArrayList`，未随 §1.1 一并处理）。
 
 ## 1. 严重（本模块 3 条）
 
@@ -153,9 +153,15 @@
 
 位置：`src/base/LoopCondition.cj:97-107`、`src/base/MeetCondition.cj:52/63/80/100/124-130`、`src/base/ChooseCondition.cj:83/95`（报告原文写 `LoopCondition.cj:99`、`MeetCondition.cj:80-81/100-101/124-127`、`ChooseCondition.cj:86/97`，行号有小幅漂移）。修法（**不再执行**）：仅允许列名并做白名单校验，或加类型限制。
 
-### 2.10 [中｜性能] `ORM-3` 每条非事务 SQL 的 `close()` 都全量清扫脏字段注册表（f_orm）
+### 2.10 [保留｜已知开销] `ORM-3` 每条非事务 SQL 的 `close()` 都全量清扫脏字段注册表（f_orm）✓已复核 → ⏸决定不修（2026-10-05：保留现状）
 
-`SqlExecutor.cj:153` → `DirtyTag.clearAll()`（`DirtyTag.cj:66-79`）遍历**所有已注册 PO 类型**并逐个新建 `DirtyTag` 写回 `ConcurrentHashMap`；`SqlExecutor.cj:836` 每次执行都走 `close()` ⇒ 成本 = O(已注册类型数) 次哈希查找 + 等量分配。修法：只清「本轮被标记过」的类型，或把 `clearAll` 移出每条 SQL 的执行路径。
+**⏸ 不修决定（2026-10-05）**：维持现状、不进修复队列，已知开销登记在案。用户口径与两轮方案评估：
+
+- **方案 A（加静态集合，只清「曾置过 `beforeDirty`」的类型）→ 否决**：`setBeforeDirty<T>()` 是每条加载 PO 的查询都要走的热路径，加集合等于给它加一次写；而 `clearAll` 无论是否用集合都要逐个类型复位（`beforeDirty` 标志就存在 `DIRTY_TAGS` 的条目里），且会多出一份**必须与 `beforeDirty` 永远同步**的状态——一旦漂移，`setDirtyField` 会静默漏记脏字段（`UPDATE(dirty: true)` 少更新列），代价大于省下的开销。
+- **方案 C（把 `beforeDirty` 挪到引用型 holder、`clear` 就地复位，省掉每类型一次结构体分配 + 一次 `ConcurrentHashMap` 写；遍历次数不变）→ 同样不做**：收益不足以动这段代码。
+- 报告原文的「成本 = O(已注册类型数) 次哈希查找 + 等量分配」**仍成立**，作为**已知开销**保留。`ORM-L7`（`clearAll()` 只清调用线程 + ThreadLocal 长期持有字段名集合）是独立的低危条目，不随本条处理。
+
+位置：`SqlExecutor.cj:157` → `DirtyTag.clearAll()`（`DirtyTag.cj:66-79`，遍历**所有已注册 PO 类型**并逐个新建 `DirtyTag` 写回 `ConcurrentHashMap`）；`SqlExecutor.close()` 在每条非事务执行（含迭代器 `releaseActiveQueryResult()`）后都会走到。
 
 ### 2.11 [中｜性能] `ORM-4` 每次执行都重新 `prepareStatement`，借连接还额外 `select 1`（f_orm）
 
