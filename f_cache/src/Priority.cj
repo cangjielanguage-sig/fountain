@@ -52,14 +52,17 @@ public open class Priority<V> <: Comparable<Priority<V>> where V <: Object {
             let duration = (lastUsed - lastCheckedTime)
             let otherDuration = (otherLastUsed - other.lastCheckedTime)
 
+            //①本次检查周期内的使用次数：用得多 ⇒ 更大 ⇒ 在最小堆里更晚被淘汰
             var ordering: Ordering = (usedCount - usedCountUtilLastChecked).compare(
                 other.usedCount - other.usedCountUtilLastChecked)
+            //②都没被用过（或一样新鲜）：最后使用时间越晚 ⇒ 越大
             ordering = match (ordering) {
-                case EQ => otherDuration.compare(duration)
+                case EQ => duration.compare(otherDuration)
                 case _ => return ordering
             }
+            //③最后使用时间一维差异：更晚被使用的更大
             ordering = match (ordering) {
-                case EQ => otherLastUsed.compare(lastUsed)
+                case EQ => lastUsed.compare(otherLastUsed)
                 case _ => return ordering
             }
             ordering = match (ordering) {
@@ -71,19 +74,19 @@ public open class Priority<V> <: Comparable<Priority<V>> where V <: Object {
                 case _ => ordering
             }
         }
+        //age 越大 = 越久没被使用；ageSub = 本对象年龄 - 对方年龄
+        //|ageSub| ≤ 1：两个候选年龄接近 ⇒ 交给 cmp() 常规比较
+        //ageSub > 1：本对象更老 ⇒ 更小 ⇒ 在最小堆里先被淘汰（保护新生）
+        //其余：本对象更新、且年龄差超过一个生命周期 ⇒ 更大 ⇒ 保留（保护新生）
         let age = this.age
         let otherAge = other.age
         let ageSub = age - otherAge
-        //参与比较的都是在数据段头的，
-        //在数据段头同时最后访问时间还在最近一个生命周期之内，要么是整个数据段都是刚刚出生，要么是整个数据段使用都很频繁
         if (ageSub >= -1.0 && ageSub <= 1.0) {
             cmp() //两个待比较数据都在最近一个生命周期内刚访问过
-        } else if (ageSub > 1.0) { //两个待比较数据的最后访问时间距今的时间差超过一个生命周期，保护新生
-            GT
-        } else if (age < -1.0) {
+        } else if (ageSub > 1.0) { //两个待比较数据的最后访问时间距今的时间差超过一个生命周期：老的先淘汰
             LT
-        } else { //两个待比较数据的最后访问时间距今都超过了一个生命周期，成年了不需要保护了
-            cmp()
+        } else { //本对象更新：留下
+            GT
         }
     }
     protected prop age: Float64 {

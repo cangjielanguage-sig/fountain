@@ -18,6 +18,7 @@ package fountain::f_cache
 import std.unittest.*
 import std.unittest.testmacro.*
 import std.time.DateTime
+import fountain::f_collection.PriorityQueue
 
 @Test
 public class HeapCache_test {
@@ -34,9 +35,9 @@ public class HeapCache_test {
         @Assert(cache.getOrDefault("test99999999", Test(8888888)).value, 8888888)
         cache.set("test3", Test())
         sleep(2 * Duration.second)
-        @Assert(cache.contains("test2"))
-        @Assert(cache.contains("test1"))
-        @Assert(!cache.contains("test3"))
+        @Assert(cache.contains("test1"))//test1 在本次检查周期内被读多次 ⇒ 保留
+        @Assert(cache.contains("test3"))//test2 与 test3 同分（都未被使用）⇒ 更新的 test3 留下（保护新生）
+        @Assert(!cache.contains("test2"))//⇒ 更老的 test2 被淘汰
         sleep(5 * Duration.second)
         @Assert(!cache.contains("test1"))
         @Assert(!cache.contains("test3"))
@@ -333,6 +334,45 @@ public class HeapCache_test {
         sleep(Duration.second)
         @Assert(true, cache.contains('hot'))
         @Assert(false, cache.contains('cold'))
+    }
+
+    @TestCase
+    public func testCompareProtectsNewEntryBeyondOneLifecycle(): Unit {
+        //只让「最后使用时间」一维不同、且相差超过一个生命周期：更老的应当「更小」⇒ 在最小堆里先被淘汰
+        let checkDuration = Duration.second
+        let oldP = Priority<Test>('old', Test(1), Duration.second * 30, checkDuration, false)
+        sleep(Duration.millisecond * 1500)
+        let newP = Priority<Test>('new', Test(2), Duration.second * 30, checkDuration, false)
+        let q = PriorityQueue<Priority<Test>>.create<Priority<Test>>(capacity: 8)
+        q.add(newP)
+        q.add(oldP)
+        @Assert('old', q.remove().getOrThrow().key)
+    }
+
+    @TestCase
+    public func testCompareProtectsRecentlyUsedEntryWithinOneLifecycle(): Unit {
+        //年龄接近（差 0.2 个周期）、用量与检查基线都相同：由「最后使用时间」这一层决出，更新的留下
+        let checkDuration = Duration.second
+        let first = Priority<Test>('first', Test(1), Duration.second * 30, checkDuration, false)
+        sleep(Duration.millisecond * 200)
+        let second = Priority<Test>('second', Test(2), Duration.second * 30, checkDuration, false)
+        let q = PriorityQueue<Priority<Test>>.create<Priority<Test>>(capacity: 8)
+        q.add(second)
+        q.add(first)
+        @Assert('first', q.remove().getOrThrow().key)
+    }
+
+    @TestCase
+    public func testEvictionInAgeGapProtectsNewEntry(): Unit {
+        //端到端：老的与新的同时成为候选（两个键各自落在不同分段）时，被淘汰的应是更老的那个
+        let cache = HeapCache<Test>(maxSize: 1, maxLife: Duration.second * 30,
+            checkDuration: Duration.second)
+        cache.set('old', Test(1))
+        sleep(Duration.millisecond * 1500)
+        cache.set('new', Test(2))
+        sleep(Duration.millisecond * 2500)
+        @Assert(true, cache.contains('new'))
+        @Assert(false, cache.contains('old'))
     }
 
     @TestCase
