@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 17 条**：严重 5（§1.3 `ASP-1`、§1.4 `ASP-2`、§1.6 `ASP-4`、§1.7 `ASP-5`、§1.14 `ASP-3`）、中 4（§2.4 `ASP-9`、§2.9 `ASP-8`、§2.22 `ASP-6`、§2.23 `ASP-7`）、低危+待验证 8（§3）。
-- **状态（截至 2026-10-05）**：`ASP-1` ❌误判（§1.3，设计目的）、`ASP-2` ✅已修复（§1.4）、`ASP-4` ✅已修复（§1.6）、`ASP-5` ✅已修复（§1.7）；**待修** `ASP-3`（§1.14，严重｜性能）、§2 的 4 条中危、§3 的 8 条低危/待验证。
+- **状态（截至 2026-10-05）**：`ASP-1` ❌误判（§1.3，设计目的）、`ASP-2` ✅已修复（§1.4）、`ASP-4` ✅已修复（§1.6）、`ASP-5` ✅已修复（§1.7）、`ASP-L8` ❌不成立（§3.2，概率性假设已实测排除）；**待修** `ASP-3`（§1.14，严重｜性能）、§2 的 4 条中危、§3 的 7 条低危。
 
 ## 1. 严重（本模块 5 条）
 
@@ -143,7 +143,16 @@ for (i in 0..params.size) {
 - `ASP-L6` `macros/PointCut.cj:52-56, 86-94`：宏展开期用 `+=` 在循环里累积 Tokens（编译期平方级拼接，大函数/多参数时明显）。
 - `ASP-L7` `Aspects.cj:47-50`：结果统一走 `Any` 链，值类型返回值每次调用装箱（架构取舍，优先级最低）。
 
-### 3.2 待验证（1 条）
+### 3.2 待验证（1 条）→ ❌不成立（2026-10-05）
+
+**❌ 不成立标记（2026-10-05）**：分支 `fix/aspect`（worktree `.worktrees/aspect`，基线 `7be7225d`），用例与本标记在**同一提交**（提交信息 `test(f_aspect): ASP-L8 前提不成立（键按值稳定），新增键稳定性用例；bug-aspect.md §3.2 判不成立`）。
+
+- 判定理由：链缓存的键由 (类型, 函数) 唯一确定，且 `QualifiedFuncInfo` 的哈希/相等是**按值**的：`hash = HashBuilder().append(typeInfo).append(funcInfo).build()` 在构造时算一次并存下（`QualifiedFuncInfo.cj:60-84`），`==` 为 `refEq(this, other) || (typeInfo == other.typeInfo && funcInfo == other.funcInfo)`；`TypeInfo` 与 `InstanceFunctionInfo` 都实现 `Equatable`/`Hashable`（`reflect_package_classes.md:1244-1247` 明确 `InstanceFunctionInfo <: Equatable<InstanceFunctionInfo> & Hashable & ToString`，含 `hashCode(): Int64`），不是语言默认的对象身份哈希。报告担心的失效需**同时**满足「每次 `getInstanceFunction` 返回新对象」+「哈希按对象身份」两条，实测两条都不成立。
+- 用例：`f_aspect/src/test/qualified_func_info_key_test.cj` —— `testTypeInfoStableAcrossLookups`（两次 `TypeInfo.of<T>()` 值/哈希相等）、`testMemberInfoStableAcrossResolutions`（两次 `getInstanceFunction('probe', [TypeInfo.of<Int64>()])` 结果值/哈希相等）、`testQualifiedFuncInfoKeyHashStable`（两次分别构造的 `QualifiedFuncInfo` 相等且哈希相同）、`testKeyUsedAsMapKeyHitsAcrossCalls`（分别构造的键命中同一 map 条目、`size == 1`，即 `aspects` 的用法）。
+- 测量证据：`cjpm test`（f_aspect）→ `PASSED: 11, FAILED: 0, ERROR: 0`、`cjpm test success`（EXIT=0），四条新用例 `[ PASSED ]`（29.8µs / 29.8µs / 16.5µs / 34.0µs；`cjfmt` 后复跑 46.6µs / 34.4µs / 36.3µs / 40.7µs，仍 11/11 绿）；同轮既有用例（§1.4 的并发/链捕获、§1.6/§1.7 的路由规则）全绿。
+- 结论：`ASP-L8` 从本模块待修清单移除；`§1.14 ASP-3` 的修法**不需要**为「缓存永不命中 / `aspects` 无界增长」加保底（但 ASP-3 自身「每调用重建元信息」的成本不受此结论影响）。
+
+**以下为审查时的原始判断（留档对照）**：
 
 - `ASP-L8` `Aspects.cj:27`：链缓存命中依赖 `QualifiedFuncInfo.hashCode`（`QualifiedFuncInfo.cj:63, 72-80`，由 `typeInfo.hashCode()` + `funcInfo.hashCode()` 预处理）。**验证（关键假设）**：若 std.reflect 在不同调用间返回不同/非结构化哈希的 `InstanceFunctionInfo`，则缓存**永不命中** ⇒ 切点匹配、正则、建链每次调用重做，且 `aspects` 会**以每次调用一个 key 的速度无界增长**。建议加一条「同一函数多次调用命中同一链」的测试把该假设钉死。
 
