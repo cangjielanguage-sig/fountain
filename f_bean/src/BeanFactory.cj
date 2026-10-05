@@ -162,13 +162,16 @@ public class BeanFactory {
             let annotationRemoved = HashSet<TypeInfo>()
             for (d in discarded) {
                 beans.remove(d.name)
+                // §3.1 / BEAN-L1(b)：只在确实移除成功时记账 —— 键变空 ⇔ 其最后一个元素被本次移除 ⇒ 收尾不会漏删
                 for ((t, set) in beanTypeMap) {
-                    set.remove(d)
-                    typeRemoved.add(t)
+                    if (set.remove(d)) {
+                        typeRemoved.add(t)
+                    }
                 }
-                for((t, set) in annotationMap){
-                    set.remove(d)
-                    annotationRemoved.add(t)
+                for ((t, set) in annotationMap) {
+                    if (set.remove(d)) {
+                        annotationRemoved.add(t)
+                    }
                 }
             }
             for (t in typeRemoved where beanTypeMap[t].isEmpty()) {

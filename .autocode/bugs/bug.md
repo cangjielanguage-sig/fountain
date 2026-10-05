@@ -39,6 +39,7 @@
 > 二十次修正（2026-10-05）：§3.1 `BEAN-L10` 已修复（`getList`/`getMap`/`getAllTuples` 去掉私有收集器 `getAll(cond, put)` 的 per-element 闭包，改为循环内直接收集；**同结构对照 9495.48 → 9261.68 ns/op，省 233.80 ns/次（-2.46%）**；口径更正：本次只消掉「闭包分配 + 间接调用」两笔，`ArrayList` 扩容、逐元素 `beanLog`、结果容器均保留），并顺带修 `f_bean/README.md` 4 处文档错误（`lookupTreeSet` 签名写成 `HashSet`、`lookupLables` 拼写、`ComparableW>`、`lookupOption<T>(cond)` 的描述）⇒ f_bean 待修仍 2 条（`L1` + 待验证的 `L8`）。**另记一条新发现（未立条、待作者定）**：逐元素 `beanLog` ≈ **325~349 ns/元素**（本环境 debug 关闭、日志 0 行）⇒ `lookupList` +42%、`lookupHashMap` +32%，比本条大 ~15 倍；候选修法见 `bug-bean.md` §3.1 `BEAN-L10` 条目末。
 > 二十一次修正（2026-10-05）：§3.1 新增 **`BEAN-L11`**（逐元素 `beanLog` ≈ 325~349 ns/元素，debug 关闭时仍付；`lookupList` +42%、`lookupHashMap` +32%）—— 按作者决定 ⏸**保持现状**（候选修法已留档：去掉逐元素日志 / 用 `log.debugEnabled` 前置判定），见 `bug-bean.md` §3.1 ⇒ f_bean 待修仍 2 条（`L1` + 待验证的 `L8`）。
 > 二十二次修正（2026-10-05）：§3.2 `BEAN-L8` 判为 ❌**不成立**（部署方约定：请求晚于 initializer ⇒ 启动初始化与首次请求不并发，`initIfNeed` 的无条件 `store` 与 `bean` getter 的双检不构成竞态），见 `bug-bean.md` §3.2 ⇒ f_bean 待修 1 条（`BEAN-L1`）。顺带修 `f_bean/README.md:264` 小节标题拼写（`BeanBef` → `BeanDef`）。
+> 二十三次修正（2026-10-05）：§3.1 `BEAN-L1` 收口 —— **(a) 判为不可达并已回滚**（`case (IgnoreType, IgnoreName)` 的 `IgnoreName` 是模式变量绑定 ⇒ catch-all ⇒ `IgnoreType` 组合一律 `return true`，快路径落不到；实测去掉恒真判定收益 -38.6 ns ≈ 0），**(b) 已实施**（清理阶段只在移除成功时记账；定向运行：`afterRegistered()` 前 1 → 后 0，两张表清理且不留空键）；**同时新发现缺陷 `BEAN-L12`**（`IgnoreType` 组合的名条件/count/scope 被静默忽略 ⇒ 属行为变更、待作者拍板），见 `bug-bean.md` §3.1 ⇒ f_bean 待修 1 条（`BEAN-L12`）。
 
 **建议修复顺序**（即严重级内部的落地顺序）：
 
@@ -57,7 +58,7 @@
 |---|---|---|---|---|---|
 | §1.1、§1.5、§1.13；§2.1、§2.8、§2.10–§2.14；§3（`ORM-*`）；§4.1 | f_orm（`ORM-x`） | 3 | 7 | 14 | `bug-orm.md` |
 | §1.9–§1.12；§2.2、§2.3、§2.5–§2.7、§2.19–§2.21；§3（`MVC-*`）；§4.2 | f_mvc（`MVC-x`） | 4 | 8 | 13 | `bug-mvc.md` |
-| §1.8；§2.15–§2.18；§3（`BEAN-*`，含新增 `BEAN-L10`/`BEAN-L11`）；§4.3 | f_bean（`BEAN-x`） | 1 | 4 | 11 | `bug-bean.md` |
+| §1.8；§2.15–§2.18；§3（`BEAN-*`，含新增 `BEAN-L10`/`BEAN-L11`/`BEAN-L12`）；§4.3 | f_bean（`BEAN-x`） | 1 | 4 | 12 | `bug-bean.md` |
 | §1.3、§1.4、§1.6、§1.7、§1.14；§2.4、§2.9、§2.22、§2.23；§3（`ASP-*`）；§4.4 | f_aspect（`ASP-x`） | 5 | 4 | 8 | `bug-aspect.md` |
 | §1.2、§2.24 | 跨模块（`X-x`；f_base / f_data+f_config） | 1 | 1 | 0 | `bug-cross.md` |
 

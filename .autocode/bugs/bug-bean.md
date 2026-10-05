@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 14 条**：严重 1（§1.8 `BEAN-1`）、中 4（§2.15 `BEAN-2`、§2.16 `BEAN-3`、§2.17 `BEAN-4`、§2.18 `BEAN-5`）、低危+待验证 9（§3）。
-- **状态（截至 2026-10-05）**：`BEAN-1` ✅已修复（§1.8）、`BEAN-2` ✅已修复（§2.15）、`BEAN-3` ✅已修复（§2.16，含同族的 `getFirstTuple`）、`BEAN-4` ✅已修复（§2.17）、`BEAN-5` ✅已修复（§2.18）⇒ **本模块中危清零**；§3 的 11 条里 `BEAN-L9` ❌判为**不成立**、`BEAN-L2` ❌判为**不成立（设计）**、`BEAN-L3` ⏸保持现状、`BEAN-L6` ⏸保持现状（注解是**面向应用项目**的特性，不删）；**待修 1 条**：`BEAN-L1`（启动期 `check()` 近似 O(n²)）；`BEAN-L8` 已由部署方事实判为 ❌**不成立**（`BEAN-L7`/`BEAN-L5`/`BEAN-L10` 已修复；`BEAN-L4`/`BEAN-L11` 按作者决定保持现状）。另：§3.1 `BEAN-L6` 记录了一条**新发现待作者确认** —— `annotationMap` 只写不读，README:5 的「按（父）类型注解获取 bean」当前没有可用查询入口。
+- **状态（截至 2026-10-05）**：`BEAN-1` ✅已修复（§1.8）、`BEAN-2` ✅已修复（§2.15）、`BEAN-3` ✅已修复（§2.16，含同族的 `getFirstTuple`）、`BEAN-4` ✅已修复（§2.17）、`BEAN-5` ✅已修复（§2.18）⇒ **本模块中危清零**；§3 的 11 条里 `BEAN-L9` ❌判为**不成立**、`BEAN-L2` ❌判为**不成立（设计）**、`BEAN-L3` ⏸保持现状、`BEAN-L6` ⏸保持现状（注解是**面向应用项目**的特性，不删）；**待修 1 条**：`BEAN-L12`（`IgnoreType` 组合的名条件/count/scope 被静默忽略，属行为变更 ⇒ 待作者拍板）；`BEAN-L1` (b) 已实施、(a) 判为不可达已回滚，`BEAN-L8` 已由部署方事实判为 ❌**不成立**（`BEAN-L7`/`BEAN-L5`/`BEAN-L10` 已修复；`BEAN-L4`/`BEAN-L11` 按作者决定保持现状）。另：§3.1 `BEAN-L6` 记录了一条**新发现待作者确认** —— `annotationMap` 只写不读，README:5 的「按（父）类型注解获取 bean」当前没有可用查询入口。
 
 ## 1. 严重（本模块 1 条）
 
@@ -105,14 +105,21 @@
 
 `BeanScope.cj:31, 38-42, 59-63` + `BeanManager.cj:90`。**待验证** `TypeInfo.of` 是否有运行时缓存（`f_base/src/TypeInfos.cj:32-36` 注释显示作者也想用静态 `INSTANCE`）。修法：`BeanManager` 构造时预存 `Bool` 字段。
 
-## 3. 低危 / 待验证（本模块 11 条）
+## 3. 低危 / 待验证（本模块 12 条）
 
-### 3.1 低危（10 条；其中 `BEAN-L9` 判为**不成立**；另附 API 卫生记录，见节末）
+### 3.1 低危（11 条；其中 `BEAN-L9` 判为**不成立**；另附 API 卫生记录，见节末）
 
 **健壮性 / 正确性**
 
 - `BEAN-L9` ❌**不成立（2026-10-05）** — ~~`BeanFactory.cj:287-300`：`getFirstTuple<T>` 缺 `beanTypeIs<T>` 前置校验（`getFirst`/`iterator` 都有）⇒ 装配错误被静默吞成 `None`。~~
   **判定（2026-10-05）**：非缺陷。`beanTypeMap.get(TypeInfo.of<T>())` 返回的桶**只含 `T` 的子类型**（注册期 `doRegister` 按 `beanType` 的超类型闭包入桶，见 `BeanFactory.cj:63-124`）⇒ 「缺前置校验」没有对象：`T` 未注册时 `beanTypeMap.get` 本身就返回 `None`；有注册时桶内每个 manager 的 `beanType` 必是 `T` 的子类型 ⇒ `if (let bean: T <- m.bean)` 恒成立。同理，`getFirst`/`iterator` 单参重载里的 `beanTypeIs<T>(TypeInfo.of<T>())` 也是**恒真**的（§2.15 已证并去掉）。语义已被用例钉住：`BeanGetFirst_test.testBeanTypeOverloadAndExactly`（`Exactly(异类型名字)` ⇒ `None`）与 `BeanIterator_test.testFirstTupleEquivalence`（`Regexp(异类型模式)` ⇒ `None`）。
+
+- `BEAN-L12` ⚠️**新发现（2026-10-05，待作者定）** — `BeanDefCondition.cj:121`：`case (IgnoreType, IgnoreName)` 里的 **`IgnoreName` 是模式变量绑定**（`StringCond` 没有这个 case；全仓除本行外无任何定义或引用）⇒ 该 case 实际是 `(IgnoreType, _)` 的 **catch-all**，直接 `return true`。
+  **后果**：`BeanDef(beanType: IgnoreType, …)` 的**名条件 / `count` / `scope` 全被静默忽略** —— 凡是只写 `IgnoreType` 的条件恒判真。域内实测（2026-10-05）：`Exactly('definitely.no.such.bean')` ⇒ **true**；叠加 `count: Zero`／`OnlyOne` ⇒ **true**；叠加 `scope: prototype` ⇒ **true**；`Wildcard(仅匹配 1 个 bean)` + `count: MoreThanOne` ⇒ **true**。（对照：类型条件分支一切正常 —— `Current(A)`／`CurrentOrSuperOf(A)`／`SubOfOnly(接口)` ⇒ true，`CurrentOrSuperOf(接口)` ⇒ false，名条件与 `scope` 在该分支上照常生效。）
+  **影响面**：`IgnoreType` 是 `BeanDefType` 的默认值 ⇒ 应用侧只要写 `BeanDef(count: …)`／`BeanDef(beanName: …)` 就会踩到；本仓无使用（同 `BEAN-L6`，属面向应用侧的能力）。
+  **候选修法**：把该 case 改为**精确匹配**「类型与名字都忽略」的组合（例如 `(IgnoreType, IgnoreCond)`，或先判定 `beanName` 确为忽略语义），让其余 `IgnoreType` 组合落到 `_` 分支，走 `Object` 桶 + 名条件/count/scope 过滤。
+  **性质提示**：这是**行为变更**（原先恒真的条件会开始判假 ⇒ 可能开始丢弃 bean），不是纯修复 ⇒ **需作者拍板**；修掉之后，`BEAN-L1(a)` 那条「名条件路径」的快路径才真正有对象（届时可复活 ①+②）。
+  **现状已由用例钉住**：`f_bean/src/test/bean_def_condition_test.cj` 的 `testIgnoreTypeCurrentlyMatchesAll`。
 
 **内存 / 清理**
 
@@ -122,7 +129,13 @@
 
 **性能微项**
 
-- `BEAN-L1` `BeanFactory.cj:148-175` + `BeanDefCondition.cj:128-140`：启动期条件筛选近似 O(n²)（逐 bean 求条件、条件内再遍历该类型全部 manager；清理阶段对每个被丢弃 bean 全量遍历两张表，`161/165` 还无条件 `typeRemoved.add(t)`）。仅 `afterRegistered()` 一次。
+- `BEAN-L1` ✅**已处理（2026-10-05）：(b) 实施，(a) 判为不可达并已回滚** — ~~`BeanFactory.cj:148-175` + `BeanDefCondition.cj:128-140`：启动期条件筛选近似 O(n²)（逐 bean 求条件、条件内再遍历该类型全部 manager；清理阶段对每个被丢弃 bean 全量遍历两张表，`:161/:165` 还无条件 `typeRemoved.add(t)`）。仅 `afterRegistered()` 一次。~~
+  **(a) 判为不可达（已回滚）**：原文设想「`(IgnoreType, 名条件)` 落 `Object` 桶逐候选判定」，但 `BeanDefCondition.cj:121` 的 `case (IgnoreType, IgnoreName)` 里 **`IgnoreName` 是模式变量绑定**（不是 `StringCond` 的 case）⇒ 该 case 即 catch-all，`IgnoreType` 的任何组合都直接 `return true` ⇒ 只有 `CurrentOrSuperOf`/`SuperOfOnly` 会落到 `_` 分支，而它们本来就必须扫全表做真实类型判定、无从优化。实测（同进程同结构探针、n = 2 万、min-of-7、`/tmp/bean_l1_diag.log`）：去掉恒真的 `BeanDefType.IgnoreType.on(m.beanType)` 收益 **-38.6 ns/次（旧/新 0.9985 ≈ 0）** ⇒ 已实施的 `(IgnoreType, _)` 快路径与配套的 `checkBeanType` 形参**双双回滚**，`BeanDefCondition.cj` 保持原状。
+  **⚠️ 由该不可达性引出的真实缺陷**：`IgnoreType` 组合的名条件／`count`／`scope` 全被静默忽略 ⇒ 另立 `BEAN-L12`（待作者定）。
+  **(b) 已实施**：`BeanFactory.cj` 清理阶段改为「只在 `set.remove(d)` 成功时记账」——键变空 ⇔ 其最后一个元素被本次移除 ⇒ 记账不漏，收尾 `beanTypeMap.remove` / `annotationMap.remove` 的行为不变；省掉的是「每个被丢弃 bean × 每个键」一次 `HashSet<TypeInfo>.add`。
+  **验证（(b)）**：测试进程从不调用 `afterRegistered()`（`check()` 不跑、本进程没有 bean 被丢弃）⇒ 用**定向运行**显式调用一次：`check()` 前 `BeanDefDiscarded = 1`、`BeanDefSample = 2` ⇒ `afterRegistered()` 后 **`BeanDefDiscarded = 0`**、样本仍 2、`lookupList<BeanDefSampleA>() = 1`、`lookupOption<BeanDefDiscarded>()` 为 `None`（日志 `/tmp/bean_l1b_probe.log`，探针已删）⇒「条件恒假的 bean 被丢弃 + 两张类型表清理且不留空键」端到端跑通。
+  **用例**：`f_bean/src/test/bean_def_condition_test.cj`（新增，保留）—— 类型条件分支钉住（`Current`／`CurrentOrSuperOf`／`SubOfOnly`／`SuperOfOnly`，以及名条件与 `scope` 在该分支上照常生效）+ `IgnoreType` 组合的**现状**钉住（一律 true，标注 `BEAN-L12`）+ 「本进程不调用 `afterRegistered()`」的事实。
+  **回归**：`f_bean` 全套 **TOTAL 25 / PASSED 25 / ERROR 0 / FAILED 0**；`cjpm build` exit 0（9 条既有警告，未新增）。
 - `BEAN-L4` ⏸**保持现状（2026-10-05，作者决定）** — `lookup.cj:104-109`（6 个公开入口 `lookupLabel(label:)`/`lookupLabel(name:,label:)`/`lookupLabel(cond:,label:)`/`lookupLabelOption(label:)`/`lookupOptionLable(name:,label:)`/`lookupLabelOption(cond:,label:)` 全汇于此）：按 label 查**一个** bean 却先 `lookupList<T>(cond)`（`:48-50` → `getList`）全量物化 `ArrayList<T>`，再 `for … where` 扫描。
   **权衡记录（供再评估）**：改为惰性（`for (m in BeanFactory.instance.iterator<T>(cond: cond))` + `if (let bean: T <- m.bean && bean.label == label) { return bean }`）可省掉「N 元 `ArrayList` 的分配 + N 次 `add`（含扩容）+ 命中之后那些 bean 的访问」，**但会减少 prototype scope bean 的实例化次数** —— 现状会对该类型下**所有** prototype bean 各调一次 `new()`（连带 `PostConstruct`/`FactoryBean` 判定），改后只到「第一个 label 命中」为止 ⇒ 属**可见行为差异**。作者按「行为不变优先」决定保持现状。
   **附带留档（不改）**：同库「取一个」的接口 `lookup<T>`/`lookupOption<T>`（→ `getFirst`）本就是惰性、只实例化命中的那个 bean，与本条路径口径不一致；`:101` 的公开函数名 `lookupOptionLable` 拼写有误（`Lable`→`Label`），改名属破坏性 API 变更。
