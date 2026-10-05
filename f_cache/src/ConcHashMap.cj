@@ -148,7 +148,8 @@ class ConcHashMapIterator<V> <: Iterator<(String, V)> {
      * 返回值 Option<E> - 迭代过程中的下一个元素
      */
     public func next(): Option<(String, V)> {
-        while (cur <= m.concurrency) {
+        //只遍历 0..concurrency-1 这些分段（原条件 cur <= m.concurrency 会多跑一轮空迭代）
+        while (cur < m.concurrency) {
             if (let Some(x) <- itr.next()) {
                 return x
             } else {

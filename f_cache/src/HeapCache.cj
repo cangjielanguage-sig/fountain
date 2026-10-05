@@ -109,7 +109,7 @@ public class HeapCache<V> <: Resource where V <: Object {
     private func checkTimeout(evictionQueue: LinkedBlockingQueue<(String, V)>): Unit {
         removeIfLocked {
             k, p => if (!closedFlag.load()) {
-                if (evicated(p)) {
+                if (expired(p)) {
                     evictionQueue.add((k, p.load()))
                     true
                 } else {
@@ -164,7 +164,7 @@ public class HeapCache<V> <: Resource where V <: Object {
         }
         tops.clear()
     }
-    private func evicated(p: Priority<V>): Bool {
+    private func expired(p: Priority<V>): Bool {
         DateTime.now() >= p.deathTime
     }
 
@@ -177,7 +177,7 @@ public class HeapCache<V> <: Resource where V <: Object {
     public func get(key: String): Option<V> {
         ensureOpen()
         match (store.get(key)) {
-            case Some(p) where !evicated(p) => p.load()
+            case Some(p) where !expired(p) => p.load()
             case _ => None<V>
         }
     }
@@ -189,7 +189,7 @@ public class HeapCache<V> <: Resource where V <: Object {
         ensureOpen()
         match (store.get(key)) {
             //与 get/contains 同口径：已过期（即使尚未被定时清扫）视为不存在
-            case Some(p) where !evicated(p) => synchronized(p.lock) {
+            case Some(p) where !expired(p) => synchronized(p.lock) {
                 p.load()
                 p.once = true
                 true
@@ -201,7 +201,7 @@ public class HeapCache<V> <: Resource where V <: Object {
         ensureOpen()
         match (store.get(key)) {
             //已过期条目不允许通过续期“复活”，调用方应改用 set 重建
-            case Some(p) where !evicated(p) => synchronized(p.lock) {
+            case Some(p) where !expired(p) => synchronized(p.lock) {
                 p.load()
                 p.maxLife = life
                 p.once = once
@@ -213,7 +213,7 @@ public class HeapCache<V> <: Resource where V <: Object {
     public func prolong(key: String, deathTime: DateTime): Bool {
         ensureOpen()
         match (store.get(key)) {
-            case Some(p) where !evicated(p) => synchronized(p.lock) {
+            case Some(p) where !expired(p) => synchronized(p.lock) {
                 p.load()
                 p.deathTime = deathTime
                 p.once = true
