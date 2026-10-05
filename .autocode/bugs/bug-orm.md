@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 24 条**：严重 3（§1.1 `ORM-1`、§1.5 `ORM-C1`、§1.13 `ORM-2`）、中 7（§2.1 `ORM-C2`、§2.8 `ORM-C5`、§2.10 `ORM-3`、§2.11 `ORM-4`、§2.12 `ORM-5`、§2.13 `ORM-6`、§2.14 `ORM-7`）、低危+待验证 14（§3）。
-- **状态（截至 2026-10-05）**：`ORM-1` ✅已修复（§1.1）、`ORM-C1` ✅已修复（§1.5）、`ORM-C2` ✅已修复（§2.1）；**待修** `ORM-2`（§1.13，严重｜性能）、`ORM-C5`（§2.8，安全）、§2.10–§2.14（性能中危）、§3 的 14 条低危/待验证全部未动（含 `ORM-C3`：`SqlArgs.clone()` 仍共享同一 `ArrayList`，未随 §1.1 一并处理）。
+- **状态（截至 2026-10-05）**：`ORM-1` ✅已修复（§1.1）、`ORM-C1` ✅已修复（§1.5）、`ORM-C2` ✅已修复（§2.1）、`ORM-2` ✅已修复（§1.13，严重｜性能，分支 `fix/orm`）；**待修** `ORM-C5`（§2.8，安全）、§2.10–§2.14（性能中危）、§3 的 14 条低危/待验证（`ORM-L3` 已随 §1.13 一并消掉；`ORM-C3`：`SqlArgs.clone()` 仍共享同一 `ArrayList`，未随 §1.1 一并处理）。
 
 ## 1. 严重（本模块 3 条）
 
@@ -100,9 +100,24 @@
 
 影响：`iterator`/`singleIterator` 把迭代器包在 `execute<T>` 里返回，而该重载的 `finally` 是 `r?.close()` ⇒ 方法一返回底层结果集已关闭；`activeQueryResult` 也随之复位（后续查询不会报「上一个结果集还活着」）。`f_mockdb` 的 `QueryResult.close()` 是空实现（`f_mockdb/src/QueryResult.cj:53-56`）所以单测看不出来；**待验证**：真实驱动（postgres/mysql）下 `close()` 后 `next()` 的行为。修法：`iterator*` 路径不走 `finally close`，把资源所有权交给返回的迭代器。
 
-### 1.13 [严重｜性能] `ORM-2` 逐单元格做运行时类型分派 + 字符串 `typeName` 匹配（f_orm）
+### 1.13 [严重｜性能] `ORM-2` 逐单元格做运行时类型分派 + 字符串 `typeName` 匹配（f_orm）✅已修复（2026-10-05）
 
-位置：`src/wrap/QueryResultWrap.cj:46-107`（配合 `base/QueryMappers.cj:76-82`）
+**✅ 修复记录（2026-10-05，分支 `fix/orm`）**
+
+- **改动**：`f_orm/src/wrap/QueryResultWrap.cj`（1 文件，33+/29-）：
+  1. 新增 `private let columns: Array<ColumnInfo>`：构造期取一次 `result.columnInfos`，复用于 `columnInfoMap` 构建、`columnInfos` 属性与取值路径 ⇒ 每格的 `result.columnInfos` 穿透与 `toMap()` 的重复访问（`ORM-L3`）一并消掉；
+  2. 把「列类型 → 取值」的 18 分支 `match(typeName)` 从 `getOrNull<T>(index)` 的逐单元格内联闭包抽成 `private static func makeReader(result: QueryResult, typeName: String): (Int64) -> Any`，取值器**按需构造**（不预先为每列建表），行内循环改为 `i + indexStartsWith |> makeReader(result, columns[i].typeName) |> list.add`；
+  3. 第二级 `match(list[index])`（类型窄化 / `convertFromString` 兜底 / 报错口径）一行未动，语义不变。
+- **为什么 `makeReader` 必须是 `static`**：仓颉不允许构造期调用实例方法（探针实测报 `'x' is not allowed to be accessed before all member variables are initialized`）；闭包体里 `result.getOrNull<?T>`（`?String` 等）向上转 `Any` 可编译（`Array<(Int64) -> Any>` + 分支闭包，最小探针 `EXIT=0`）。
+- **用例**：`f_orm/src/wrap/QueryResultWrap_test.cj`（5 条）—— ①按索引/按列名取值同源、未知列名与越界索引 → `None`、列信息顺序；②18 个取值器分支与别名全覆盖（String / Clob·Blob（最小 `InputStream` 实现，按 tag 断言取回同一实例）/ Binary / Decimal / Bool / Int8…UInt64 / Float32 / Float64 / DateTime / 空 `typeName` / Duration / 未知 typeName 走 String 兜底）；③`indexStartsWith` 非 0 的驱动（`Config.set` 把探针驱动的 `…_indexStartsWithZero` 置 false）逻辑列 i ↔ 物理列 i+1；④驱动给 String、请求数值类型走转换兜底，不可解析抛 `ORMException`；⑤`next()` 按行重置取值缓存。
+- **前后对照（同一套用例、同一台机器）**：把 `QueryResultWrap.cj` 临时还原为 HEAD 再跑 —— 新用例 **5/5 PASSED**（钉的是语义不变，故两边都必须过）；修复前全项目 **TOTAL 40 / PASSED 39 / ERROR 1 / FAILED 0**，修复后一致（唯一 ERROR 仍是既有环境相关 `ORMConfigTest.testPoolMaxWaiting`）。
+- **计时对照**（探针 `.autocode/tmp/orm2_mapList_bench.cj`，20 列 × 2000 行 × 3 轮取最优；拷回 `f_orm/src/base/` 可复跑）：
+  - `SqlExecutor.mapList()`（端到端，含夹具 / 每行 HashMap / 执行器与池开销）：前 **58.8ms** → 后 **76.9ms**（同期各轮读数在 58–115ms 间漂移，机器上有并行会话在构建 ⇒ 差异在噪声内）；
+  - `QueryResultWrap.toMap()` 循环（纯 wrap 逐列取值）：前 **54.5ms** → 后 **54.8ms**（无差异）。
+  ⇒ **mockdb 口径下前后无可辨差异**：mock 的 `columnInfos` 本就是缓存数组，省掉的每格属性访问本来就很便宜。本条的实际收益是「不再逐格穿透 `result.columnInfos`」+ 列信息只取一次 + 判定收敛到每列一次；**真实驱动下是否显著取决于各驱动 `columnInfos` 是否每次分配** —— 即 `ORM-L3` 的验证项（`columnInfos` 是否已缓存数组），未实测。
+- **注意（既有口径，未改）**：`toMap()` 自己的 `match(typeName)` 只认一小组别名，`text`/`money`/`int4`/`UInt16` 等会抛 `SqlException: Unsupported typeName …`（探针初版因此报错）；属 `toMap()` 的既有行为，不在本条整改面。
+
+位置（修复前形态）：`src/wrap/QueryResultWrap.cj:46-107`（配合 `base/QueryMappers.cj:76-82`）
 
 ```cangjie
 // QueryResultWrap.cj:47    let columns = result.columnInfos
