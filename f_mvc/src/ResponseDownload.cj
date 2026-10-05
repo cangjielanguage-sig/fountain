@@ -33,37 +33,44 @@ public func download(data: Array<Byte>, filename: String): Unit {
 
 public func download<C>(data: C): Unit where C <: Iterable<(InputStream, String)> {
     let started = Box<Bool>(false)
-    FileDownload(multi: true).exec{fd =>
-        for (d in data) {
-            if(started.value){
-                fd.next(d[1], '')
-            }else{
-                fd.start(d[1])
-                started.value = true
+    FileDownload(multi: true).exec {
+        fd =>
+            for (d in data) {
+                if (started.value) {
+                    fd.next(d[1], '')
+                } else {
+                    fd.start(d[1])
+                    started.value = true
+                }
+                copy(d[0], {bytes => fd.write(bytes)})
             }
-            let buf = Array<Byte>(1024, repeat: 0)
-            while(let bytes <- d[0].read(buf) && bytes > 0){
-                fd.write(buf)
-            }
-        }
-        fd.end()
+            fd.end()
     }
 }
 
 public func download(data: Array<File>): Unit {
-    FileDownload(multi: true).exec{fd =>
-        for(i in 0 .. data.size){
-            let f = data[i]
-            if(i == 0){
-                fd.start(f.info.name, length: f.info.size)
-            }else{
-                fd.next(f.info.name, '', length: f.info.size)
+    FileDownload(multi: true).exec {
+        fd =>
+            for (i in 0..data.size) {
+                let f = data[i]
+                if (i == 0) {
+                    fd.start(f.info.name, length: f.info.size)
+                } else {
+                    fd.next(f.info.name, '', length: f.info.size)
+                }
+                copy(f, {bytes => fd.write(bytes)})
             }
-            let buf = Array<Byte>(1024, repeat: 0)
-            while(let bytes <- f.read(buf) && bytes > 0){
-                fd.write(buf)
-            }
-        }
-        fd.end()
+            fd.end()
+    }
+}
+
+/**
+ * 把 input 的内容复制给 write：每次最多读一个下载缓冲，只写出实际读到的长度。
+ * §1.9 / `MVC-4`：原先两处循环直接 `write(buf)`，会把缓冲里超出 read 返回值的脏尾部一起写出。
+ */
+func copy(input: InputStream, write: (Array<Byte>) -> Unit): Unit {
+    let buf = Array<Byte>(MVCConfig.downloadBufferSize, repeat: 0)
+    while (let bytes <- input.read(buf) && bytes > 0) {
+        write(buf[0..bytes])
     }
 }
