@@ -169,7 +169,7 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         private let checkOnBorrowing!: Bool = true, // 借出时检查
         private let checkOnReturning!: Bool = true, // 归还时检查
         private let clearOnReturning!: Bool = false, // 归还时清除
-        private let checkInterval!: Duration = Duration.minute, // 池对象检查周期
+        private let checkInterval!: Duration = Duration.minute, // 池对象检查周期（<= Duration.Zero 或 Duration.Max = 不启用巡检，见下）
         private let creator!: (K) -> V, // 创建对象函数
         private let checker!: (K, V) -> Bool, // 检查函数
         private let destroier!: (K, V) -> Unit, // 销毁函数
@@ -207,6 +207,13 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
 > `catch (e: UnknownKeyException) { if (let Some(p) <- inFlight) { e.addSuppressed(p) }; throw e }`。
 > 仓库内使用的池都是 `Pool<V>`（键为 `Unit`，键永远只有一个），不会走到这条路径。详见
 > `.autocode/bugs/bug-pool.md` §2.5 `POOL-10`。
+>
+> `checkInterval` 的一档特殊值：**`<= Duration.Zero`（含 `Duration.Zero`）或 `Duration.Max` 表示不启用巡检**
+> —— 不起巡检线程，池也就不做 `minSize` 补足、空闲回收（`idleTimeout`）与 `audit()` 自愈。
+> `Duration.Max` 与「永不巡检」等价（原来它只是起一个 `sleep(Duration.Max)`、永不醒来、关池都叫不醒的线程）。
+> 想要「很慢但仍要巡检」请给一个很大的**有限**值（如 `Duration.hour`）；这类池在 `close()` 时会立刻
+> 被叫醒退出，不会 park 满一个周期。`ArrayPool` / `ArrayListPool` 的默认值 `Duration.Zero`、
+> `BytesListOutputStream.builder` 的默认值 `Duration.Max` 都落在这一档。详见 §3 `POOL-L2`。
 >
 > 同一口径：**`giveBack` 抛异常 ⇒ 对象没有归还**。`clearOnReturning = true` 时 `clear` 回调抛异常，
 > `giveBack` 抛 `ClearFailedException`（同为 `f_base.BaseException` 子类、带 `key` 字段，原始回调异常挂在

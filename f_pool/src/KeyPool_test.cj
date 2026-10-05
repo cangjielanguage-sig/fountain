@@ -890,6 +890,67 @@ public class KeyPoolTest {
         pool.close()
         weak
     }
+    /**
+     * `POOL-L2`（`.autocode/bugs/bug-pool.md` §3）正面一：`checkInterval = Duration.Max` = **不启用巡检** ——
+     * 不许再起巡检线程。修前它会起一个 `sleep(Duration.Max)`（实测不抛异常、永不醒来、关池也叫不醒）的线程：
+     * 建/关 20 个池后线程数停在基线 +20。`BytesListOutputStream.builder` 的默认值就是 `Duration.Max`，
+     * 所以这条直接决定那些编码缓冲池的线程开销。
+     */
+    @TestCase
+    public func maxIntervalMustNotStartCheckingThread(): Unit {
+        let before = getThreadCount()
+        let pools = ArrayList<Pool<Object>>()
+        for (_ in 0 .. 20) {
+            pools.add(Pool<Object>(
+                mode: Fifo,
+                initSize: 0,
+                minSize: 0,
+                maxSize: 1,
+                idleTimeout: Duration.hour,
+                checkInterval: Duration.Max,
+                maxWaiting: Duration.second,
+                creator: {=> Object()},
+                checker: {_ => true},
+                destroier: {_ => ()}
+            ))
+        }
+        sleep(Duration.millisecond * 300)
+        for (p in pools) {
+            p.close()
+        }
+        sleep(Duration.millisecond * 1600)               // 创建线程带超时出队最多 1s 后才醒 + 退出
+        @Assert(getThreadCount() <= before + 5, true)    // 修前：+20（巡检线程停在 sleep(Duration.Max)）
+    }
+    /**
+     * `POOL-L2`（§3）正面二，同时补上 `POOL-7` 的漏网（那条用例用 `checkInterval = Duration.Zero`，
+     * 只覆盖了创建线程）：`close()` 之后**巡检线程也必须及时退出**，不能 park 满一个巡检周期。
+     * 修前：`sleep(Duration.hour)` 叫不醒 ⇒ 20 个池的巡检线程要睡满一小时（关池后仍停在基线 +20）。
+     */
+    @TestCase
+    public func closeMustInterruptCheckingSleep(): Unit {
+        let before = getThreadCount()
+        let pools = ArrayList<Pool<Object>>()
+        for (_ in 0 .. 20) {
+            pools.add(Pool<Object>(
+                mode: Fifo,
+                initSize: 0,
+                minSize: 0,
+                maxSize: 1,
+                idleTimeout: Duration.hour,
+                checkInterval: Duration.hour,            // 很长但有限：语义上仍然要巡检
+                maxWaiting: Duration.second,
+                creator: {=> Object()},
+                checker: {_ => true},
+                destroier: {_ => ()}
+            ))
+        }
+        sleep(Duration.millisecond * 300)
+        for (p in pools) {
+            p.close()
+        }
+        sleep(Duration.millisecond * 1600)
+        @Assert(getThreadCount() <= before + 5, true)    // 修前：+20（巡检线程睡在 1 小时上）
+    }
 }
 
 @Test

@@ -129,6 +129,11 @@ public class KeyPoolBuilder<K, V> where K <: Hashable & Equatable<K> {
         this.clearOnReturning = clearOnReturning
         this
     }
+    /**
+     * 巡检周期：`minSize` 补足、空闲回收（`idleTimeout`）、`audit()` 自愈都挂在它上面。
+     * `<= Duration.Zero`（含 `Duration.Zero`）或 `Duration.Max` 表示**不启用巡检** —— 不起巡检线程，
+     * 池也就不会做这些维护（见 `.autocode/bugs/bug-pool.md` §3 `POOL-L2`）。
+     */
     public func setCheckInterval(checkInterval: Duration): This {
         this.checkInterval = checkInterval
         this
@@ -214,6 +219,13 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
     private let available = AtomicInt64(0)
     private let waiters = AtomicInt64(0)
     /**
+     * 巡检线程「睡到下一轮」的条件变量：原来它是 `sleep(checkInterval)` —— 关池后**叫不醒**：
+     * 默认 `Duration.minute` 要 park 满 1 分钟、`Duration.Max` 时**永不退出**（先例见 §3 POOL-L2）。
+     * 现在 `close()` 会 `notifyAll` 它，关池后立刻醒来退出（与 `POOL-2` 把「等池项」从轮询改通知同一个思路）。
+     */
+    private let checkMutex = Mutex()
+    private let checkCond = synchronized(checkMutex){ checkMutex.condition() }
+    /**
      * 构造完成标志：后台维护线程在构造函数返回前**不许碰 `this`**。
      * 归档报告 7.12（`.autocode/bugs/bug-archived-on-20261004.md`）那次 SIGSEGV 的栈顶是 `UnitKeyPool.size`（运行时泛型 MTable 空指针），
      * 一种可能是后台线程在对象尚未构造完（类型信息未就绪）时就开始使用它 ⇒ 这里加一道栅栏兜住这类风险。
@@ -233,6 +245,11 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         private let checkOnBorrowing!: Bool = true,
         private let checkOnReturning!: Bool = true,
         private let clearOnReturning!: Bool = false,
+        /**
+         * 巡检周期：`minSize` 补足、空闲回收（`idleTimeout`）、`audit()` 自愈都挂在它上面。
+         * `<= Duration.Zero`（含 `Duration.Zero`）或 `Duration.Max` = **不启用巡检**（不起巡检线程，
+         * 池也就不做这些维护）—— `Duration.Max` 与「永不巡检」等价，但不再白养一个线程（见 §3 POOL-L2）。
+         */
         private let checkInterval!: Duration = Duration.minute,
         /**
          * 池耗尽且 `get(timeout: Duration.Max)` 时的等待上限：超过它记 WARN 并返回 None；
@@ -305,6 +322,7 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         checkOnBorrowing!: Bool = true,
         checkOnReturning!: Bool = true,
         clearOnReturning!: Bool = false,
+        /** 巡检周期：`<= Duration.Zero` 或 `Duration.Max` = 不启用巡检（不起巡检线程，见 §3 POOL-L2）。 */
         checkInterval!: Duration = Duration.minute,
         maxWaiting!: Duration = Duration.second * 30,
         manager!: KeyedObjectManager<K, V>
@@ -340,7 +358,11 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         }
     }
     private func startCheckingSchedule() {
-        if(checkInterval <= Duration.Zero){
+        // `Duration.Zero`（含负数）= 不巡检；`Duration.Max` 同样是「不启用巡检」——
+        // 它今天的实际效果就是「永不巡检」（`sleep(Duration.Max)` 实测不抛异常、也永不醒来），
+        // 代价却是一个永久 park 且关池叫不醒的线程（`BytesListOutputStream.builder` 的默认值就是它）。
+        // 明确成同义词之后这类池不再占线程（见 .autocode/bugs/bug-pool.md §3 POOL-L2）。
+        if(checkInterval <= Duration.Zero || checkInterval == Duration.Max){
             return
         }
         checkingThread = spawn {
@@ -365,11 +387,34 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             }
         }
     }
+    /**
+     * 睡到下一轮巡检：**可被 `close()` 叫醒**（`POOL-L2`）。返回 `false` = 该退出了。
+     *
+     * 按 `MonoTime` 算剩余时间（同 `POOL-L6` 的写法，`checkInterval - 已经过去的时间` 不会溢出），
+     * 所以即使被虚假唤醒也不会把巡检周期拖长；`checkInterval == Duration.Max` 的池根本不会起这条线程
+     * （`startCheckingSchedule` 已经挡掉），这里不必单独处理。
+     */
+    private func waitNextRound(): Bool {
+        let start = MonoTime.now()
+        var remain = checkInterval
+        while (remain > Duration.Zero) {
+            synchronized(checkMutex){
+                if (Thread.currentThread.hasPendingCancellation || !running.load()) {
+                    return false
+                }
+                checkCond.wait(timeout: remain)
+            }
+            if (Thread.currentThread.hasPendingCancellation || !running.load()) {
+                return false
+            }
+            remain = checkInterval - (MonoTime.now() - start)
+        }
+        true
+    }
     /** 巡检的一轮循环（拆出来便于看护重开）。 */
     private func checkingLoop(): Unit {
         while(!Thread.currentThread.hasPendingCancellation && running.load()){
-            sleep(checkInterval)
-            if(Thread.currentThread.hasPendingCancellation || !running.load()){
+            if (!waitNextRound()) {
                 return
             }
             pool.check({=> running.load()}, {k, r => 
@@ -515,6 +560,11 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         }
         // 等待者必须立刻看到 running=false 并返回 None，不能让他们 park 到预算耗尽（见 §2.1 POOL-6）
         wakeWaiters()
+        // 巡检线程可能正睡在 `checkInterval` 上（默认 1 分钟）：敲一下让它立刻醒来退出
+        // —— 不再 park 满一个巡检周期（见 §3 POOL-L2）
+        synchronized(checkMutex){
+            checkCond.notifyAll()
+        }
         while(let Some(_) <- tasks.tryRemove()){}
         // 销毁所有键的池并清空键表（见 §2.6 POOL-11）：`BaseKeyPool.close` 内部逐个键
         // 「先关闭 + 销毁池项 + 摘键」，最后把全局计数清零。
