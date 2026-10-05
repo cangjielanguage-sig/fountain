@@ -144,8 +144,8 @@ public class FileDownload {
  * 包内接缝（§2.3 / `MVC-C5`）：执行一次下载任务。
  * 任务抛异常时必须自己收尾 —— `onFailure` 记录、`finish` 结束响应体（补 multi 的收尾 boundary +
  * `pipe.end()`），否则响应体永不结束、客户端一直等；收尾自身再失败时，把 finish 的异常包成
- * `MVCException` 并把原任务异常挂为其 suppressed，然后抛出**原任务异常**（交给 spawn 的线程级兜底），
- * 不再静默吞掉。
+ * `MVCException`（cause 链指向它）并把原任务异常挂为其 suppressed，然后抛出该 `MVCException`
+ * （交给 spawn 的线程级默认处理打印，cause 与 suppressed 都会打出来），不再静默吞掉。
  */
 func runDownloadTask(task: () -> Unit, onFailure: (Exception) -> Unit, finish: () -> Unit): Unit {
     try {
@@ -157,7 +157,7 @@ func runDownloadTask(task: () -> Unit, onFailure: (Exception) -> Unit, finish: (
         } catch (ee: Exception) {
             let ex = MVCException(ee)
             ex.addSuppressed(e)
-            throw e
+            throw ex
         }
     }
 }

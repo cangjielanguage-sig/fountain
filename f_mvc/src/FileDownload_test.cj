@@ -61,21 +61,41 @@ class FileDownload_test {
         @Assert(0, finishes.value)
     }
 
-    /** 收尾自身失败 ⇒ 抛出的应是原任务异常（finish 的异常挂在其 suppressed 上，不静默吞掉） */
+    /**
+     * 收尾自身失败 ⇒ 抛出包装后的 `MVCException`（用户 2026-10-05 指定 `throw ex`）：
+     * `causedBy` 是收尾失败、`suppressed` 里保留原任务异常。
+     * 注：std 的 `Exception(caused)` 不复制 cause 的 message ⇒ `ex.message` 为空（实测）。
+     */
     @TestCase
-    public func testFinishFailureRethrowsTaskException(): Unit {
+    public func testFinishFailureRethrowsWrappedException(): Unit {
         let failures = Box<Int64>(0)
+        let caughtMvc = Box<Bool>(false)
         let message = Box<String>('')
+        let causedBy = Box<String>('')
+        let suppressedTaskBoom = Box<Bool>(false)
         try {
             runDownloadTask(
                 {=> throw Exception('task boom')},
                 {_ => failures.value++},
                 {=> throw Exception('close boom')}
             )
-        } catch (e: Exception) {
+        } catch (e: MVCException) {
+            caughtMvc.value = true
             message.value = e.message
+            if (let Some(c) <- e.causedBy) {
+                causedBy.value = c.message
+            }
+            for (s in e.suppressed) {
+                if (s.message == 'task boom') {
+                    suppressedTaskBoom.value = true
+                }
+            }
+        } catch (_: Exception) {
         }
         @Assert(1, failures.value)
-        @Assert('task boom', message.value)
+        @Assert(true, caughtMvc.value)              // 修前：抛出的是 plain 原任务异常 ⇒ 命不中 MVCException 分支
+        @Assert('', message.value)
+        @Assert('close boom', causedBy.value)
+        @Assert(true, suppressedTaskBoom.value)
     }
 }
