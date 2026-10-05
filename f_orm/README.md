@@ -1199,7 +1199,7 @@ public class Condition {   // 私有构造，静态使用
 
 ```cangjie
 public class MeetCondition {
-    public prop argInSql: MeetCondition                       // 值直接写进 SQL（不绑定参数），谨慎使用
+    public prop argInSql: MeetCondition                       // 值直接拼进 SQL（不转义、不绑定参数）—— 见 11.5，谨慎使用
     public func value(value: Any): MeetCondition
     public func value(value: () -> Any): MeetCondition
     public func frag(frag: String): String                    // 拼接 '<partial> <frag> <delimiter>'
@@ -1244,7 +1244,7 @@ executor.setSql(
 
 ```cangjie
 public class ChooseCondition {
-    public prop argInSql: ChooseCondition
+    public prop argInSql: ChooseCondition                              // 同上：值直接拼进 SQL —— 见 11.5，谨慎使用
     public func condition(condition: () -> Bool): ChooseCondition      // 开始一个分支
     public func partial(partial: () -> (String, Any)): ChooseCondition // 分支的片段与值
     public func partial(partial: () -> String): ChooseCondition
@@ -1279,7 +1279,7 @@ public class LoopCondition<I, T> where I <: Iterable<T> {
     public func trimLeft(left: String): LoopCondition<I, T>
     public func trimRight(right: String): LoopCondition<I, T>
     public func delimiter(d: String): LoopCondition<I, T>                 // 元素间连接符
-    public prop argInSql: LoopCondition<I, T>
+    public prop argInSql: LoopCondition<I, T>                             // 同上：值直接拼进 SQL —— 见 11.5，谨慎使用
     public func condition(cond: (T, Int64) -> Bool): LoopCondition<I, T>   // 过滤元素（第二参为下标）
     public func partial(partial: (T, Int64) -> (String, Any)): LoopCondition<I, T>
     public func partial(partial: (T, Int64) -> Any): LoopCondition<I, T>
@@ -1292,6 +1292,28 @@ executor.setSql(
     'select * from user_info where id in ${executor.loop(ids).wrap('(', ')').delimiter(',').partial{v, i => v}.done()}'
 )
 ```
+
+### 11.5 `argInSql`：把值直接拼进 SQL（谨慎使用）
+
+`MeetCondition` / `ChooseCondition` / `LoopCondition` 共有这个开关：**打开后值不再作为绑定参数传给驱动，而是经 `ToString` 直接拼进 SQL 文本**——不转义、不加引号、不做任何校验。这是刻意的设计，给「必须内联进 SQL 文本」的受控内容用（固定列名、`now()` 之类的表达式、驱动认得的关键字）。
+
+调用时实际会发生什么（按值的类型分派）：
+
+| 情形 | SQL 里出现什么 | 是否绑定参数 |
+|---|---|---|
+| 值满足 `ToString`（`String`、`Int64`、`DateTime`…） | 该值的 `toString()` 原样出现（`name = bob`、`id = 7`） | 否（该位置没有 `?`） |
+| 值不满足 `ToString`（未实现 `ToString` 的类实例） | `?` | 走绑定通道：`InputStream`（含 `?InputStream`）能绑；**其它类型会在拼 SQL 阶段抛 `SqlException: Unsupported data type`** |
+| `ChooseCondition` 且值是 `()` | 只出现分支片段、不出现值（`otherwise` 传「只有片段、没有值」的实参时走这一条；不配 `argInSql` 会为该片段留下一个多余的 `?`） | 否 |
+
+`IN` / `NOT_IN` 按**元素**逐个判定，同一个列表里可以一部分内联、一部分绑定（如 `in (1,?)`）。
+
+后果与边界：
+
+* **不要再拼接不受控的内容**：值不做转义/校验，把用户输入交给 `argInSql` 等于把注入口开在 SQL 文本里；只有内容完全受控时才打开它。
+* **字符串要自带引号**：`toString()` 不加引号，`value('bob')` 拼出的是 `name = bob`（不是 `name = 'bob'`）；需要引号时自己写，并自行转义。
+* **非 `ToString` 的值只有 `InputStream` 绑得上**：其余类型在拼 SQL 阶段抛 `SqlException: Unsupported data type`（绑定口径见 `SqlExecutor.add(Any)`：`ToString` → 按运行时类型绑定 / 转文本，`InputStream` → 绑定，其它 → 抛错）。
+* **别把 `?` 当值传**：值里含 `?` 会被驱动当成占位符，参数个数与位置都会错。
+* 默认（不调用 `argInSql`）就是安全的参数化路径：值走 `?` + 绑定参数；本文件其余示例都按这个口径写。
 
 ---
 

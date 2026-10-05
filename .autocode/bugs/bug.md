@@ -26,6 +26,7 @@
 > 七次修正（2026-10-05）：§1.5 `ORM-C1` 已修复（迭代器持有结果集/语句所有权、事务感知关闭），§2.1 `ORM-C2` 一并修复 ⇒ 严重级待修再减 1（**f_orm 严重级清零**）。**核对**：把此前已修复的 `X-1`、`ORM-1`、§1.9 `MVC-4` 一并计入后，实际剩余严重级 **5** 条 —— §1.10 `MVC-1`、§1.11 `MVC-3`、§1.12 `MVC-2`、§1.13 `ORM-2`、§1.14 `ASP-3`（前述逐次递减的「8/9 条」未扣减 `X-1`、`ORM-1` 与 `MVC-4`）。
 > 八次修正（2026-10-05）：§1.10 `MVC-1` 判定为 ❌**误判**（「无上限」是设计目的、静态文件本就要求常驻内存；「负缓存」不成立）；§1.11 `MVC-3` 已修复 ⇒ 剩余严重级 **3** 条 —— §1.12 `MVC-2`、§1.13 `ORM-2`、§1.14 `ASP-3`。
 > 九次修正（2026-10-05）：§1.13 `ORM-2` 已修复（列信息构造期缓存 + 取值判定收敛为按列构造的取值器；mock 口径前后计时无差异，真实驱动的收益待 `ORM-L3` 验证）⇒ 剩余严重级 **2** 条 —— §1.12 `MVC-2`、§1.14 `ASP-3`。
+> 十次修正（2026-10-05）：§2.8 `ORM-C5` 判定为 ❌**误判**（`argInSql` 是显式打开的「值内联进 SQL」开关，设计目的；已补 README §11.5 说明 + 口径用例）⇒ f_orm 中危待修 **5** 条（§2.10–§2.14）。
 
 **建议修复顺序**（即严重级内部的落地顺序）：
 
@@ -57,6 +58,7 @@
 - 已完成：`f_bean` 的 `cjpm build` **exit 0**（0 条 error）。`f_bean` 的 `cjpm test` 长时间停留在**测试编译阶段**（编译 f_util 等测试依赖，非卡死），`f_aspect/f_mvc/f_orm` 尚未开始 ⇒ 本次审查未拿到 `cjpm test` 结果；本报告结论均来自代码阅读，不依赖该基线。
 - 修复期验证（2026-10-04，本分支上的修复提交）：`f_orm` 的 `cjpm build` **exit 0**；`cjpm test` **TOTAL 33 / PASSED 32 / ERROR 1 / FAILED 0**。唯一 ERROR 是既有环境相关用例 `f_orm.wrap / ORMConfigTest.testPoolMaxWaiting`（用例先 `Config.set(key, '45s')` 再断言读出 45s，本机 `left: 4s` ⇒ 环境里该配置项已存在并压过内存设置；该用例不执行 SQL，与修复路径无交集）。本次修复新增的 5 条用例 **5/5 PASSED**（同一套用例在修复前对照跑为 **5/5 FAILED**），逐条记录见 §1.5 / §2.1。
 - 修复期验证（2026-10-05，`fix/orm` 分支，§1.13 `ORM-2`）：`f_orm` 的 `cjpm build` **exit 0**；`cjpm test` **TOTAL 38 / PASSED 37 / ERROR 1 / FAILED 0**（新增 `QueryResultWrap_test.cj` 5 条 **5/5 PASSED**；把 `QueryResultWrap.cj` 临时还原为 HEAD 后同一套用例仍 **5/5 PASSED** —— 本条是性能整改，语义必须不变）。唯一 ERROR 仍是既有环境相关 `ORMConfigTest.testPoolMaxWaiting`。该条的计时前后对照与「mock 口径无差异、真实驱动收益待 `ORM-L3` 验证」的结论记在 §1.13 修复记录里（探针 `.autocode/tmp/orm2_mapList_bench.cj`，拷回 `f_orm/src/base/` 可复跑）。
+- 误判/文档期验证（2026-10-05，`fix/orm` 分支，§2.8 `ORM-C5`）：`cjpm test` **TOTAL 45 / PASSED 44 / ERROR 1 / FAILED 0**（新增 `ArgInSql_test.cj` 7 条 **7/7 PASSED**；唯一 ERROR 仍是既有环境相关 `ORMConfigTest.testPoolMaxWaiting`）。README 新增 §11.5 并按真实绑定口径写明 `argInSql` 的三种结果与边界。
 - 本报告未做**运行时实测**（无 benchmark、无 heap profile）。凡标「**待验证**」的条目都给出了验证方法（见 §3.2），另补几条高危项的复现方式：
   - `ORM-1`：同一 executor 上「同 SQL、不同参数」两次查询，断言结果不同（✅ 已由 `SqlResultCache_test.cj` 落地，见 §1.1）；
   - `ORM-C1`：真实驱动（postgres/mysql）下取回 `iterator` 后逐行读，观察 `close()` 后行为（✅ 所有权/关闭语义已由 `QueryResultIterator_test.cj` 在 mock 上钉死，见 §1.5；真实驱动的 `next()` 仍未实测）；

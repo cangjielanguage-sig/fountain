@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 24 条**：严重 3（§1.1 `ORM-1`、§1.5 `ORM-C1`、§1.13 `ORM-2`）、中 7（§2.1 `ORM-C2`、§2.8 `ORM-C5`、§2.10 `ORM-3`、§2.11 `ORM-4`、§2.12 `ORM-5`、§2.13 `ORM-6`、§2.14 `ORM-7`）、低危+待验证 14（§3）。
-- **状态（截至 2026-10-05）**：`ORM-1` ✅已修复（§1.1）、`ORM-C1` ✅已修复（§1.5）、`ORM-C2` ✅已修复（§2.1）、`ORM-2` ✅已修复（§1.13，严重｜性能，分支 `fix/orm`）；**待修** `ORM-C5`（§2.8，安全）、§2.10–§2.14（性能中危）、§3 的 14 条低危/待验证（`ORM-L3` 已随 §1.13 一并消掉；`ORM-C3`：`SqlArgs.clone()` 仍共享同一 `ArrayList`，未随 §1.1 一并处理）。
+- **状态（截至 2026-10-05）**：`ORM-1` ✅已修复（§1.1）、`ORM-C1` ✅已修复（§1.5）、`ORM-C2` ✅已修复（§2.1）、`ORM-2` ✅已修复（§1.13，严重｜性能，分支 `fix/orm`）；`ORM-C5` ❌误判（§2.8，非缺陷：`argInSql` 是设计目的，已补 README §11.5 说明与口径用例）；**待修** §2.10–§2.14（性能中危 5 条）、§3 的 14 条低危/待验证（`ORM-L3` 已随 §1.13 一并消掉；`ORM-C3`：`SqlArgs.clone()` 仍共享同一 `ArrayList`，未随 §1.1 一并处理）。
 
 ## 1. 严重（本模块 3 条）
 
@@ -139,9 +139,19 @@
 
 `src/base/QueryResultIterator.cj:34-46`（修复前）的 `next()` 只用 `index`，而 `SqlExecutor.cj:478-482` 的 `singleIterator<T>(column:)` 把 `column` 传了进来 ⇒ `singleIterator<String>('name')` 实际读第 0 列（静默读错列）。
 
-### 2.8 [中｜安全] `ORM-C5` `argInSql` 把任意 `ToString` 值原样拼进 SQL（f_orm）
+### 2.8 [误判｜非缺陷] `ORM-C5` `argInSql` 把任意 `ToString` 值原样拼进 SQL（f_orm）✓已复核 → ❌误判（2026-10-05：设计目的，非缺陷）
 
-`src/base/LoopCondition.cj:99`、`src/base/MeetCondition.cj:80-81/100-101/124-127`、`src/base/ChooseCondition.cj:86/97`：传入 `String` 时绕过参数化（`executor.add`）⇒ 注入/语义错误面。修法：仅允许列名并做白名单校验，或加类型限制。
+**❌ 误判标记（2026-10-05）**：**判定为设计目的，不修改行为**（用户口径）。`argInSql` 是显式打开的「把值内联进 SQL 文本」开关，用于固定列名 / 表达式 / 驱动认得的关键字这类**必须内联的受控内容**；「绕过参数化」正是它的定义，不是缺陷。本轮只做文档与用例，代码与标记在同一提交：
+
+- **README**：§11.2 / §11.3 / §11.4 的 `argInSql` 条目均标注「见 11.5，谨慎使用」；新增 **§11.5「`argInSql`：把值直接拼进 SQL（谨慎使用）」**，写明**调用时实际会发生什么**（`ToString` 值按 `toString()` 原样拼接、不转义、不加引号、不绑定；非 `ToString` 值回落参数绑定；`IN`/`NOT_IN` 逐元素判定、可内联与绑定混用；`ChooseCondition` 的 `()` 只写片段）与后果边界（注入面、字符串要自带引号、值里别含 `?`、默认路径仍是参数化）。
+- **用例**：`f_orm/src/base/ArgInSql_test.cj`（7 条，借 `MOCKDB.execution` 观察实际发给驱动的 SQL 与绑定参数）：默认参数化 / `argInSql`+`ToString` 内联（String 与 Int64）/ `argInSql`+`InputStream` 仍走 `?` 绑定 / `argInSql`+不可绑定的非 `ToString` 值抛 `SqlException: Unsupported data type` / `IN` 混用（`in (1,?)`）/ `LoopCondition` 内联 / `ChooseCondition` 的命中分支与 `()` 分支。
+- **口径补正（写用例时实测）**：`argInSql` 下「非 `ToString` 值回落绑定」并非对所有类型成立 —— 绑定走 `SqlExecutor.add(Any)`（`SqlExecutor.cj:821-828`）：`ToString` → 按运行时类型绑定或转 `toString()` 文本、`InputStream` → 绑定、**其它类型直接 `throw SqlException("Unsupported data type")`**。README §11.5 的表格与边界已按这个真实口径写。
+- **来源**：用户 2026-10-05 指示「这是设计。在 README 说明调用时会发生的结果，标注谨慎使用」。
+- **顺带发现（未修，待定）**：核对 README 示例时发现 **§11.3 的 `executor.choose` 示例按当前 SDK（1.3.0-alpha）编译不过** —— ① `{ ('username like', '%${name}%') }` 这类字面 lambda 在 `() -> (String, Any)` / `() -> String` / `() -> Any` 三个重载之间**歧义**；② 元组 lambda 需显式写 `{=> ...}`（`{ (tuple) }` 直接报语法错）；③「只有片段、没有值」的分支（如 `1 = 1`）不配 `argInSql` 会为该片段留下一个多余 `?`。已验证的可用写法：实参先赋给带类型的局部变量（如 `let likeBranch: () -> (String, Any) = {=> ('username like', '%${name}%')}`）再传（探针 `.autocode/tmp/ormc5_overload_probe.sh`、`ormc5_choose_probe.cj`、`ormc5_tuple2_probe.cj`）。本轮只做 §11.5 与 `argInSql` 标注，**未改 §11.3 示例**——是否另立条目或顺手修由用户定。
+
+**以下为审查时的原始判断（留档对照；其中「传入 `String` 时」的说法不准确——实际按 `ToString` 分派，数字/时间等绝大多数类型同样内联）**：
+
+位置：`src/base/LoopCondition.cj:97-107`、`src/base/MeetCondition.cj:52/63/80/100/124-130`、`src/base/ChooseCondition.cj:83/95`（报告原文写 `LoopCondition.cj:99`、`MeetCondition.cj:80-81/100-101/124-127`、`ChooseCondition.cj:86/97`，行号有小幅漂移）。修法（**不再执行**）：仅允许列名并做白名单校验，或加类型限制。
 
 ### 2.10 [中｜性能] `ORM-3` 每条非事务 SQL 的 `close()` 都全量清扫脏字段注册表（f_orm）
 
