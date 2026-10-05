@@ -65,12 +65,14 @@ public open class Priority<V> <: Comparable<Priority<V>> where V <: Object {
                 case EQ => lastUsed.compare(otherLastUsed)
                 case _ => return ordering
             }
+            //④历史访问总量：用得多 ⇒ 更大（与①同向）
             ordering = match (ordering) {
-                case EQ => other.ref.load().compare(this.ref.load())
+                case EQ => ref.load().compare(other.ref.load())
                 case _ => ordering
             }
+            //⑤出生时间：出生更晚 ⇒ 更大（保护新生）
             match (ordering) {
-                case EQ => this.birth.compare(other.birth)
+                case EQ => birth.compare(other.birth)
                 case _ => ordering
             }
         }

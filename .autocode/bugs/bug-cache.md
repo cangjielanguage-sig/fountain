@@ -24,7 +24,7 @@
 5. `CACHE-5`（§2.2）每个 `HeapCache` 实例泄漏 1 个阻塞线程 + 1 条全局 `atExit` 强引用；`WeakHeapCache` 另泄漏 1 个 `while(true)` 清扫线程　**✅已修复（2026-10-05，实现 `Resource` + `close()` 取消线程，见 §2.2；② 的 `atExit` 注册仍待定）**
 6. `CACHE-6`（§2.3）`once()` / `prolong()` 不判过期 ⇒ 可“复活”已过期条目（实测复现）　**✅已修复（2026-10-05，方案 A，见 §2.3 修复标记）**
 7. `CACHE-7`（§2.4）缓存关闭（原 `destroy()`，现 `close()`）之后再写入的条目**永不被清理**（实测复现）　**✅已修复（2026-10-05，方案 A2 + 主动清空/join，见 §2.4 修复标记）**
-8. `CACHE-8`（§2.5）`Priority` 比较基线的无锁竞争 + `compare` 的“保护新生”分支写反　**✅ 已修复（2026-10-05，①+②：② 按「保护新生」语义对称化年龄门并修正两条 recency 判据，见 §2.5）**
+8. `CACHE-8`（§2.5）`Priority` 比较基线的无锁竞争 + `compare` 的“保护新生”分支写反　**✅ 已修复（2026-10-05，①+②：② 按「保护新生」语义对称化年龄门并修正两条 recency 判据，④⑤ 两级 tie-break 亦已同向统一，见 §2.5）**
 9. 其余低危/待验证见 §3
 
 > 修复进度（2026-10-05）：§1 的 3 条严重级（`CACHE-1` = `3171d664`、`CACHE-2` = `0e3d70d6`、`CACHE-3` = `14733baf`）已修复并并入 `sts/1.3.x`（`0448df98` 把主线拉进分支、`4a01a26f` 合入主分支，合并后主工作区复跑 6/6 PASSED）；**§2.1 `CACHE-4` 已按方案 C 修复并并入 `sts/1.3.x`**（callable 移出段写锁 + `removeIf` 两阶段，见 §2.1；`302bd9f2` 拉齐主线进分支、`e131fa7f` 合入主分支）；**§2.2 `CACHE-5` 已修复并并入 `sts/1.3.x`**（实现 `Resource` + `close()` 取消内部线程；按指示删除 `destroy`、`atExit` 注册与用例统一改 `close()`，原 `testDestroyStopsEvictionThread` 更名 `testCloseStopsEvictionThread`，见 §2.2；`2b49dfc1` 拉齐主线进分支、`eb8363c8` 合入主分支）；**§2.3 `CACHE-6` 已修复**（`once`/`prolong` 拒绝过期条目，见 §2.3）；**§2.4 `CACHE-7` 已修复并并入 `sts/1.3.x`**（`close` 主动清空并等内部线程结束后再返回 + 关闭后一切操作抛 `IllegalStateException`，见 §2.4；`8dbe2fc8` 拉齐主线进分支、`5fbe5e5f` 合入主分支）；**§2.5 `CACHE-8` 已修复**（① 比较基线字段的读写纳入 `p.lock`；② 年龄门对称化 + `cmp()` 两条 recency 判据按「保护新生」修正，见 §2.5，分支 `review/f_cache` 上待并入）；§3 的低危/待验证未动。用例 1 → 20 条（全绿）。
@@ -307,7 +307,7 @@ std 契约（`std.collection.concurrent.LinkedBlockingQueue.remove()`）：**阻
 
 **实测（探针 P7/P8，当时走 `destroy()`）**：关闭后 `set` 两次、等 1 s（`maxLife=300ms`、`maxSize=1`）：`d1=false d2=false`（按寿命已过期）但 **`size=2` 且此后不降** ⇒ 过期条目永驻。
 
-### 2.5 [中｜并发] `CACHE-8` `Priority` 比较基线字段无锁读写竞争；`compare` 的“保护新生”分支写反且含不可达分支 → ✅ 已修复（①+②，2026-10-05，按「保护新生」语义）
+### 2.5 [中｜并发] `CACHE-8` `Priority` 比较基线字段无锁读写竞争；`compare` 的“保护新生”分支写反且含不可达分支 → ✅ 已修复（2026-10-05：① 无锁竞争、②「保护新生」重写，④⑤ 口径同向统一）
 
 **✅ 修复标记（2026-10-05，①+② 一次完成）**：分支 `review/f_cache`，**代码、用例、README 与本标记在同一提交**（提交信息 `fix(f_cache): CACHE-8 ② compare 年龄门对称化并修正 recency 判据（保护新生，bug-cache §2.5）`；提交哈希由下一次标记同步补录）。语义按作者指示定为**保护新生**。
 
