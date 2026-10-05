@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 24 条**：严重 3（§1.1 `ORM-1`、§1.5 `ORM-C1`、§1.13 `ORM-2`）、中 7（§2.1 `ORM-C2`、§2.8 `ORM-C5`、§2.10 `ORM-3`、§2.11 `ORM-4`、§2.12 `ORM-5`、§2.13 `ORM-6`、§2.14 `ORM-7`）、低危+待验证 14（§3）。
-- **状态（截至 2026-10-05）**：`ORM-1` ✅已修复（§1.1）、`ORM-C1` ✅已修复（§1.5）、`ORM-C2` ✅已修复（§2.1）、`ORM-2` ✅已修复（§1.13，严重｜性能，分支 `fix/orm`）；`ORM-C5` ❌误判（§2.8，非缺陷：`argInSql` 是设计目的，已补 README §11.5 说明与口径用例）；`ORM-3` ⏸决定不修（§2.10，已知开销保留：否决「加静态集合」与「就地复位」两方案）；**待修** §2.11–§2.14（性能中危 4 条）、§3 的 14 条低危/待验证（`ORM-L3` 已随 §1.13 一并消掉；`ORM-C3`：`SqlArgs.clone()` 仍共享同一 `ArrayList`，未随 §1.1 一并处理）。
+- **状态（截至 2026-10-05）**：`ORM-1` ✅已修复（§1.1）、`ORM-C1` ✅已修复（§1.5）、`ORM-C2` ✅已修复（§2.1）、`ORM-2` ✅已修复（§1.13，严重｜性能，分支 `fix/orm`）；`ORM-C5` ❌误判（§2.8，非缺陷：`argInSql` 是设计目的，已补 README §11.5 说明与口径用例）；`ORM-3` ⏸决定不修（§2.10，已知开销保留：否决「加静态集合」与「就地复位」两方案）；`ORM-4` ⏸决定不修（§2.11，借连接校验与默认值均不改、语句复用经四家驱动源码调研后判定不值得在 f_orm 层做）；**待修** §2.12–§2.14（性能中危 3 条）、§3 的 14 条低危/待验证（`ORM-L3` 已随 §1.13 一并消掉；`ORM-C3`：`SqlArgs.clone()` 仍共享同一 `ArrayList`，未随 §1.1 一并处理）。
 
 ## 1. 严重（本模块 3 条）
 
@@ -163,9 +163,28 @@
 
 位置：`SqlExecutor.cj:157` → `DirtyTag.clearAll()`（`DirtyTag.cj:66-79`，遍历**所有已注册 PO 类型**并逐个新建 `DirtyTag` 写回 `ConcurrentHashMap`）；`SqlExecutor.close()` 在每条非事务执行（含迭代器 `releaseActiveQueryResult()`）后都会走到。
 
-### 2.11 [中｜性能] `ORM-4` 每次执行都重新 `prepareStatement`，借连接还额外 `select 1`（f_orm）
+### 2.11 [保留｜已知开销] `ORM-4` 每次执行都重新 `prepareStatement`，借连接还额外 `select 1`（f_orm）✓已复核 → ⏸决定不修（2026-10-05：保留现状）
 
-`SqlExecutor.cj:398`（`stmt.close()` 见 `878`，无语句复用）、`DatabasePool.cj:111-125` + `ORMConfig.cj:201-203`（`getCheckOnBorrowing` 默认 `true`）。修法：按 SQL 文本缓存 `Statement`；文档推荐 `orm_databasePoolCheckOnBorrowing=false`。
+**⏸ 不修决定（2026-10-05）**：三个子项都维持现状、不进修复队列（用户逐项拍板）：
+
+1. **借连接校验**（`checkOnBorrowing` 默认 true ⇒ 每次借出多打一条 `orm_databasePoolCheckSql`，默认 `select 1`）→ **不改**：不改默认值，也不加文档说明（README §3.3 配置表已列出该开关与 `checkSql`）。
+2. **把 `checkOnBorrowing` 默认值改成 false** → **不改**：属行为变更，用户明确不做。
+3. **语句复用**（按 SQL 文本缓存 `Statement`）→ **不做**：技术可行（见下方驱动调研），工程上不值得在 f_orm 层做——理由见「结论」。
+
+**驱动调研（2026-10-05，读源码确认「Statement 能否缓存」；本机路径 + 版本 tip）**：
+
+| 驱动 | 可复用？ | 关键证据（文件:行） | 对 f_orm 层缓存的意义 |
+|---|---|---|---|
+| `ZhaoJun-zfh/postgres-driver`（`D:\docs\work\cangjie\projects\postgres-driver`，tip `b9b4cca`，2026-09-28） | 是 | `pg_statement.cj:53-142`：`execute` 结果一次性读完、`close()` 幂等；**驱动自带 LRU 语句缓存** `PgStatementCache`（`pg_statement.cj:158-260`），容量 `PgDsn.statementCacheSize` 默认 **32**（`pg_conn.cj:20`；DSN `statement_cache_size`，0=关，负值报错 `pg_dsn.cj:321-322`）；命中不发 Parse（`pg_conn_query.cj:427-441`，批量 `pg_conn_batch.cj:31-33`）；DDL 后必须 `clearStatementCache()`（`pg_conn_statement.cj:102-135`），`drain()` 供连接关闭/**回滚**整体丢弃（`pg_conn.cj:415`）；cdbc 适配器 `cdbc_statement.cj:56-74` 的 `query()/update()` 自动走该缓存、`close()` 只置标志 | **零收益且重复**：f_orm 再加一层只是多一份缓存（f_orm 现在的 `prepareStatement` 对它只是廉价对象构造） |
+| `aibrary/pgsql-driver`（`…\pgsql-driver`，tip `64d9fc1`，2026-06-23） | 是 | `statement.cj:25-159`：构造即 Parse + Describe（服务端命名语句）；执行后 `resetParams()`（`:142-146`）⇒ 每次必须全量重绑，否则 `no value specified for parameter N`；结果为缓冲的 `PgQueryResult(…, rows)`（无游标）；`close()` → `closePreparedStatement`（`:115-121`，幂等）；**全仓无语句缓存** | 缓存有**真实收益**（省每次 Parse/Describe 往返），但需 f_orm 自建服务端命名语句的生命周期管理 |
+| `Cangjie-SIG/mysql-driver`（`…\mysql-driver`，tip `da987f2`） | 是 | `cdbc/connection.cj:59-71`：CRUD 首关键字 → `ServerPrepareStatement`（真服务端 prepare），其余 → 客户端拼串；`prepare_statement_server.cj:44-57/121-160`：构造即 `sendPrepare`、**执行后参数重置为全 None**（漏绑会**静默发 NULL**）、`close()` **二次调用抛 `SqlException`**；`prepare_statement_client.cj:104-150`：每次拼 SQL 文本执行、参数不随执行清空 | CRUD 走 server 模式 ⇒ 缓存能省每次 `COM_STMT_PREPARE`；但需 `isClosed()` 守卫 + 全量重绑不变量 |
+| `Cangjie-SIG/mariadb-driver`（克隆在 `.autocode/tmp/drivers/mariadb-driver`，tip `f21a83a`，2026-07-02） | 是 | 与 mysql 版同源：`src/cdbc/prepare_statement_server.cj` 与 mysql 版差异仅包名/导入/一处方法拼写（`…WithCursor` vs `…WithCurosr`）；客户端版多一个拼好 SQL 的文本缓存（`cachedSql`，`set()` 时失效） | 同 mysql 的结论 |
+
+**四家共同前提**（决定能否安全复用）：①结果集都一次性缓冲（除 mysql/mariadb 显式 `fetchSize` 走游标路径）；②语句是**服务端会话资源**（postgres 命名语句 / mysql·mariadb stmt id）⇒ 缓存必须有上限与淘汰，且连接销毁、DDL、回滚时失效；③参数必须每次全量重绑（f_orm 现有 `args.set(stmt)` 即全量 ✓）；④二次 `close()` 在 postgres 两家幂等、在 mysql/mariadb 抛错 ⇒ 关闭前一律 `isClosed()` 守卫（f_orm 现有守卫 ✓）。
+
+**结论**：技术上四个驱动的 Statement **都可缓存**；但 f_orm 层做等于「对 ZhaoJun postgres 是重复实现（该驱动已内建 32 条 LRU + DDL/回滚失效处理）、对其余三家是把驱动已有的生命周期语义（按连接的缓存 + 上限淘汰 + 连接销毁/DDL/回滚失效 + 参数重绑不变量 + `StatementWrap` 所有权改动）在 f_orm 里重写一遍」，且真机验证缺位 ⇒ **不做**。将来若要做，依据本调研直接照 ZhaoJun 驱动那套（LRU + `clearStatementCache` 语义）移植即可。
+
+位置：`SqlExecutor.statement`（`SqlExecutor.cj:409-417`，每次 `prepareStatement`）、`close()`（`:143-149` 关语句）、`DatabasePool.cj:111-125` + `ORMConfig.cj:201-203`（借连接校验开关）。
 
 ### 2.12 [中｜性能] `ORM-5` 每次拼条件片段都「动态构造正则 key + 查缓存 + 临时串」（f_orm）
 
