@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_aspect
 
 public import fountain::f_aspect.exception.AspectBeforeException
+import fountain::f_aspect.exception.AspectException
 
 /**
  * 所有切面必须实现本接口，且必须被@AspectRoute修饰。
@@ -49,18 +50,39 @@ public interface Aspect {
      */
     func final(funcInfo: InvocationFuncInfo): Unit {}
     /**
-     * 开发者可以覆盖这个函数自由定义切面，默认是执行before around 原函数体 after throwing final
+     * 开发者可以覆盖这个函数自由定义切面，默认是执行before around 原函数体 after throwing final。
+     * 默认实现**不丢弃任何异常**：`final` 抛异常时把它作为主异常、把之前的失败挂到 `suppressed` 上（见 `f_base.BaseException`）。
      */
     func proceed(funcInfo: InvocationFuncInfo, point: (Array<Any>) -> Any): Any {
+        var failure = None<Exception>
         try {
             before(funcInfo)
             var result = around(funcInfo, point)
             result = after(funcInfo, result)
             result
         } catch (e: Exception) {
-            throw throwing(funcInfo, e)
+            failure = try {
+                throwing(funcInfo, e)
+            } catch (ee: Exception) {
+                let ex = AspectException(ee)
+                ex.addSuppressed(e)
+                ex
+            }
+            // 让 catch 分支以 Never 收尾：异常统一由 finally 合并后抛出
+            //（final 也抛时把 failure 挂到 suppressed；final 正常时此处抛出的就是 failure）
+            throw failure.getOrThrow()
         } finally {
-            final(funcInfo)
+            try {
+                final(funcInfo)
+            } catch (e: Exception) {
+                match (failure) {
+                    case Some(ex) =>
+                        let ee = AspectException(e)
+                        ee.addSuppressed(ex)
+                        throw ee
+                    case _ => throw e
+                }
+            }
         }
     }
 }
