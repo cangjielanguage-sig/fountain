@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 25 条**：严重 4（§1.9 `MVC-4`、§1.10 `MVC-1`、§1.11 `MVC-3`、§1.12 `MVC-2`）、中 8（§2.2 `MVC-C3`、§2.3 `MVC-C5`、§2.5 `MVC-C2`、§2.6 `MVC-8`、§2.7 `MVC-6`、§2.19 `MVC-5`、§2.20 `MVC-7`、§2.21 `MVC-9`）、低危+待验证 13（§3）。
-- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；`MVC-8` ✅已修复（§2.6，`fix/mvc-rest`）；`MVC-6` ❌误判（§2.7，用户判定非缺陷：WS 消息总长上限属端点/部署侧策略，不设硬上限是设计选择）；`MVC-5` ❌不改（§2.19，用户判定「不值得改」：全仓 `@PathVariable` 均为单变量、暴露面为零）；`MVC-7` ✅已修复（§2.20，`fix/mvc-rest`，范围：只改 `RequestMethod.hashCode()`）；`MVC-9` ❌不改（§2.21，用户判定：每请求从 IoC 取 controller 实例是设计语义 —— 允许 controller 定义为 `prototype`，缓存实例会破坏它）；`MVC-L8`/`MVC-L1`/`MVC-C6`(a) ✅已加固（§3.1，`fix/mvc-rest`；`MVC-C6`(b) 待拍板）；**待修** §3.1 的 8 条低危 + §3.2 的 2 条待验证（**§1 严重级、§2 中危均已清零**）。
+- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；`MVC-8` ✅已修复（§2.6，`fix/mvc-rest`）；`MVC-6` ❌误判（§2.7，用户判定非缺陷：WS 消息总长上限属端点/部署侧策略，不设硬上限是设计选择）；`MVC-5` ❌不改（§2.19，用户判定「不值得改」：全仓 `@PathVariable` 均为单变量、暴露面为零）；`MVC-7` ✅已修复（§2.20，`fix/mvc-rest`，范围：只改 `RequestMethod.hashCode()`）；`MVC-9` ❌不改（§2.21，用户判定：每请求从 IoC 取 controller 实例是设计语义 —— 允许 controller 定义为 `prototype`，缓存实例会破坏它）；`MVC-L8`/`MVC-L1`/`MVC-C6`(a)/`MVC-L5` ✅已加固（§3.1，`fix/mvc-rest`；`MVC-C6`(b) 待拍板）；**待修** §3.1 的 7 条低危 + §3.2 的 2 条待验证（**§1 严重级、§2 中危均已清零**）。
 
 ## 1. 严重（本模块 4 条）
 
@@ -214,7 +214,7 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 - `MVC-L2` `FileDownload.cj:56` / `ResponseDownload.cj:44, 62`：每次下载重新分配缓冲并每次读配置（`MVCConfig.cj:257-261`）。
 - `MVC-L3` `RequestMeta.cj:161-175, 298-302`：多值 `Accept` 每请求构造 `AcceptQueue`（内含 `PriorityQueue` + 比较闭包），浏览器默认多值 Accept 命中率极高。
 - `MVC-L4` `RequestCondition.cj:154-170`：每次条件检查新建 `HashSet<String>(currentValues)`。
-- `MVC-L5` `HttpRequestDistributorImpl.cj:57-63`：未命中路径每请求新建 `RequestMeta`（含闭包）⇒ 建议复用单例 404 handler。
+- `MVC-L5` `HttpRequestDistributorImpl.cj:57-63`：未命中路径每请求新建 `RequestMeta`（含闭包）⇒ 建议复用单例 404 handler。→ ✅**已修复（2026-10-05，见 §3.1 加固标记（二））**
 - `MVC-L6` `global_func.cj:69-147`：数组参数解析用 `split`（无逗号也会切出 1 元素数组），可先判 `indexOf(',')` 或 `lazySplit`。
 - `MVC-L7` `RequestMeta.cj:76-92`：比较器内构造两个 `TreeSet`（注册期 O(N log N) 次，可预算排序键）。
 - `MVC-L8` `RequestMeta.cj:71`：404 日志用非惰性插值（`'...${path}'`），改 `log.warn{...}`。→ ✅**已修复（2026-10-05，见 §3.1 加固标记）**
@@ -231,7 +231,21 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
   - **RED**：先落接缝的**急切形态**（`AllowsCache.get()` 每次重建，行为与改造前一致）+ 新增用例文件 `f_mvc/src/MultiRequestMethodHandler_test.cj` ⇒ `[ FAILED ] testAllowsIsBuiltOnce`，`Assert Failed: first != cache.get()`（第二次调用前向 `metas` 加了一个 PUT，重建即产生不同串）⇒ **`TOTAL 24 / PASSED 23 / FAILED 1`、`TEST EXIT=1`**；同轮 `testAllowsContent` PASSED（内容不变量成立）。
   - **GREEN**：给 `AllowsCache` 加上 Mutex + 一次性缓存后复跑 ⇒ **`PASSED 24 / FAILED 0 / ERROR 0`、`TEST EXIT=0`**；同轮 `cjpm build` **exit 0**。
 - 用例内容：`testAllowsContent`（`"OPTIONS, GET, POST, WS"` 按**集合**断言：首项 `OPTIONS`、集合 == 已注册方法集合，不绑顺序）、`testAllowsIsBuiltOnce`（可变 `metas` 钉住「构建一次后不再重建」）。
-- 未覆盖 / 保留项：①`MVC-L8` 与 `MVC-C6(a)` 的「惰性」依赖 f_log 契约，无 f_mvc 侧单测（`HttpContext`/日志级别在 f_mvc 测试里造不出、注入不了），证据为契约核对 + 既有 24 条用例全绿；②`MVC-C6`(b) 未做；③本次未动 `MVC-L2`/`L3`/`L4`/`L5`/`L6`/`L7`/`L9`/`L10` 与 §3.2 两条。
+- 未覆盖 / 保留项：①`MVC-L8` 与 `MVC-C6(a)` 的「惰性」依赖 f_log 契约，无 f_mvc 侧单测（`HttpContext`/日志级别在 f_mvc 测试里造不出、注入不了），证据为契约核对 + 既有 24 条用例全绿；②`MVC-C6`(b) 未做；③本次未动 `MVC-L2`/`L3`/`L4`/`L6`/`L7`/`L9`/`L10` 与 §3.2 两条（`MVC-L5` 见下一个标记）。
+
+**✅ 加固标记（二）（2026-10-05，`fix/mvc-rest`，代码/用例/本标记同一提交）**
+
+提交信息 `perf(f_mvc): MVC-L5 未命中路径改轻量 handler——静态资源/404 不再每请求构造 RequestMeta（§3.1）`。
+
+- **改动**：新增包内类 `StaticResourceOrNotFoundHandler <: HttpRequestHandler`（`RequestMeta.cj` 文件末尾）——只持一个 `path`，逻辑与原 `RequestMeta` 默认处理器**逐字一致**（读静态资源 → 按扩展名设 `Content-Type` → body；否则记 `Not Found` + 404；`finally` 里 `RequestMeta.clearResponseStatus()` + `OverallStopwatch.clearStart()`）；`HttpRequestDistributorImpl.distribute` 的未命中分支（`:60-63`）由 `RequestMeta(path, RequestMethod.GET)` 改为返回该 handler；`RequestMeta` 构造器里的默认 `handle_` 改为**委托**给它（单一事实来源，避免两份静态资源逻辑）。
+- **为复用而放宽的可见性**（均只到包内，公开 API 不变）：`RequestMeta.log`（`private static let` → `static`；**复用同一日志类别 ⇒ 日志 name 与文本都不变**）、`RequestMeta.NOT_FOUND`（→ `static`；仍复用 stdx 的 `NotFoundHandler`——`stdx.net.http` 的 `HttpRequestDistributor.distribute` 文档明确「未找到对应请求处理器时返回 `NotFoundHandler` 以返回 404」，即未命中返回轻量 handler 是该接口既定用法）、`RequestMeta.loadStaticResource`（`private static func` → `static`）。`STATIC_RESOURCE_ROOT` / `staticResourceBytes` 保持 `private`。
+- **收益**：未命中/静态资源请求的分配从 ≈6 次（`RequestMeta` 本体 + 闭包 + `produces`/`consumes` 两个 `HashSet` + `RequestArgMeta` 及其内部 `HashMap`）降到 **1 次**（handler 本体）。**不做按路径缓存**：路径集合无界（扫描器可制造任意路径），按请求构造只多一个对象。
+- **触发面**（说明这不是冷路径）：任何未注册为路由的路径都走它——404（爬虫/扫描器/旧链接）**以及静态资源**（`/index.html`、`/app.js`…；命中静态资源时旧实现同样先付整套分配）。
+- **RED/GREEN 实测**：
+  - **RED**：接缝先落、`distribute` 未切（仍返回 `RequestMeta`）⇒ `[ FAILED ] testUnmatchedPathReturnsLightweightHandler`，`Assert Failed: (true == handler is StaticResourceOrNotFoundHandler)`、**left: true、right: false** ⇒ `TOTAL 25 / PASSED 24 / FAILED 1`、`TEST EXIT=1`；同轮 `cjpm build` **exit 0**。
+  - **GREEN**：`distribute` 切到轻量 handler 后复跑 ⇒ **`PASSED 25 / FAILED 0 / ERROR 0`、`TEST EXIT=0`**；同轮 `cjpm build` **exit 0**。
+- 用例：`f_mvc/src/HttpRequestDistributorImpl_test.cj`（新增）`testUnmatchedPathReturnsLightweightHandler` —— `HttpRequestDistributorImpl.instance.distribute('/__mvc_l5_unregistered_path__')` 的结果必须 `is StaticResourceOrNotFoundHandler`。**它钉的是结构契约（分发结果的类型），不是用户可见行为**（`handle(ctx)` 需要 `HttpContext`，f_mvc 测试造不出）——行为侧证据为「逻辑逐字搬运核对 + 既有 25 条用例全绿」。
+- 未覆盖 / 已知边界：①`handle(ctx)` 的静态资源/404 行为无单测（同 `MVC-L8`/`MVC-C6(a)` 的限制）；②`RequestMeta` 构造器的默认处理器如今只被「手工 `RequestMeta(path, method)` 且不调 `setHandle`」这类用法走到（生产路径已无），保留委托以不改变该语义；③本次未动 `MVC-L2`/`L3`/`L4`/`L6`/`L7`/`L9`/`L10` 与 §3.2 两条。
 
 ### 3.2 待验证（2 条）
 

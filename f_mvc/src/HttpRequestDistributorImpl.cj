@@ -59,7 +59,8 @@ class HttpRequestDistributorImpl <: HttpRequestPathPatterns {
         let handler = getHandler(path)
         match (handler) {
             case Some(h) => h
-            case _ => RequestMeta(path, RequestMethod.GET)
+            // §3.1 / MVC-L5：未命中路径（静态资源 → 404）返回轻量 handler，不再每请求构造 RequestMeta
+            case _ => StaticResourceOrNotFoundHandler(path)
         }
     }
 

@@ -38,8 +38,10 @@ enum RespondKind <: ToString {
 }
 
 public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMeta> {
-    private static let log = LoggerFactory.getLogger<RequestMeta>()
-    private static let NOT_FOUND = NotFoundHandler()
+    // 包内可见（§3.1 / MVC-L5）：`StaticResourceOrNotFoundHandler` 复用同一日志类别（不改变日志 name 字段）
+    static let log = LoggerFactory.getLogger<RequestMeta>()
+    // 包内可见（§3.1 / MVC-L5）：未命中路径的 404 输出由 `StaticResourceOrNotFoundHandler` 复用
+    static let NOT_FOUND = NotFoundHandler()
     private static let STATIC_RESOURCE_ROOT = MVCConfig.mvcStaticResourceRoot
     private static let staticResourceBytes = ConcurrentHashMap<String, (DateTime, Array<Byte>)>()
     static let currentResponseStatus = ThreadLocal<UInt16>()
@@ -76,34 +78,10 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         private let params!: RequestCondition = DummyRequestCondition.instance,
         private let headers!: RequestCondition = DummyRequestCondition.instance
     ) {
-        this.handle_ = {ctx =>
-            try {
-                if(let Some(bytes) <- loadStaticResource(path)){
-                    let builder = ctx.responseBuilder.status(HttpStatus.OK.value)
-                    if(let Some(dotIdx) <- path.lastIndexOf('.')){
-                        let ext = path[dotIdx + 1 ..]
-                        builder.header('Content-Type', match(ext){
-                            case 'html' | 'css' | 'xml' | 'txt' => 'text/${ext}'
-                            case 'json' => 'application/json'
-                            case 'js' => 'application/javascript'
-                            case 'htm' => 'text/html'
-                            case 'jpg' | 'jpeg' | 'png' | 'gif' | 'bmp' | 'ico' | 'webp' | 'tif' | 'tiff' | 'avif' | 'ico' => 'image/${ext}'
-                            case 'svg' => 'image/svg+xml'
-                            case 'ttf' | 'otf' | 'woff' | 'woff2' => 'font/${ext}'
-                            case _ => 'application/${ext}'
-                        })
-                    }
-                    builder.body(bytes)
-                    return
-                }
-                log.warn{'RequestMeta.handle.Not Found:${path} ${ctx.request.headers.getFirst('Accept')}'}
-                NOT_FOUND.`handle`(ctx)
-            } finally {
-                // §2.6 / MVC-8：404 / 静态资源这条路径同样要清请求级 ThreadLocal
-                clearResponseStatus()
-                OverallStopwatch.clearStart()
-            }
-        }
+        // §3.1 / MVC-L5：默认处理器（静态资源 → 404）的逻辑已抽到 StaticResourceOrNotFoundHandler，
+        // 这里委托给它以保持单一事实来源。生产路径上的未命中请求由 distribute 直接返回该 handler，
+        // 不再构造 RequestMeta（`generate` 与 WS 注册随后都会用 setHandle 覆盖 handle_）。
+        this.handle_ = {ctx => StaticResourceOrNotFoundHandler(path).`handle`(ctx)}
     }
 
     public func compare(other: RequestMeta): Ordering {
@@ -126,7 +104,8 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
     public func toString(): String {
         'path: ${path}; method: ${method}; consumes: ${consumes}; consumesSize: ${consumes.size}'
     }
-    private static func loadStaticResource(path: String): ?Array<Byte> {
+    // 包内可见（§3.1 / MVC-L5）：`StaticResourceOrNotFoundHandler` 复用静态资源读取
+    static func loadStaticResource(path: String): ?Array<Byte> {
         staticResourceBytes.entryView(path){view =>
             var p = if(path.startsWith('/')){
                 path[1..]
@@ -653,4 +632,45 @@ func closeResultIfResource(result: Any): ?Exception {
         }
     }
     None<Exception>
+}
+
+/**
+ * §3.1 / `MVC-L5`：未命中路由（静态资源 → 404）的轻量处理器。
+ *
+ * 替代原先「每请求构造一个 `RequestMeta`」——后者会连带分配 2 个 `HashSet`、`RequestArgMeta`（内含 `HashMap`）
+ * 与闭包；本类只持一个 `path` 引用。逻辑与 `RequestMeta` 原默认处理器逐字一致（含 §2.6 / `MVC-8` 的
+ * 请求级 ThreadLocal 清理），静态资源读取与 404 输出复用 `RequestMeta.loadStaticResource` / `RequestMeta.NOT_FOUND`。
+ *
+ * 不做按路径缓存：路径集合无界（扫描器可制造任意路径），按请求构造只多一个对象。
+ */
+class StaticResourceOrNotFoundHandler <: HttpRequestHandler {
+    StaticResourceOrNotFoundHandler(private let path: String) {}
+    public func `handle`(ctx: HttpContext): Unit {
+        try {
+            if (let Some(bytes) <- RequestMeta.loadStaticResource(path)) {
+                let builder = ctx.responseBuilder.status(HttpStatus.OK.value)
+                if (let Some(dotIdx) <- path.lastIndexOf('.')) {
+                    let ext = path[dotIdx + 1 ..]
+                    builder.header('Content-Type', match (ext) {
+                        case 'html' | 'css' | 'xml' | 'txt' => 'text/${ext}'
+                        case 'json' => 'application/json'
+                        case 'js' => 'application/javascript'
+                        case 'htm' => 'text/html'
+                        case 'jpg' | 'jpeg' | 'png' | 'gif' | 'bmp' | 'ico' | 'webp' | 'tif' | 'tiff' | 'avif' | 'ico' => 'image/${ext}'
+                        case 'svg' => 'image/svg+xml'
+                        case 'ttf' | 'otf' | 'woff' | 'woff2' => 'font/${ext}'
+                        case _ => 'application/${ext}'
+                    })
+                }
+                builder.body(bytes)
+                return
+            }
+            RequestMeta.log.warn{'RequestMeta.handle.Not Found:${path} ${ctx.request.headers.getFirst('Accept')}'}
+            RequestMeta.NOT_FOUND.`handle`(ctx)
+        } finally {
+            // §2.6 / MVC-8：404 / 静态资源这条路径同样要清请求级 ThreadLocal
+            RequestMeta.clearResponseStatus()
+            OverallStopwatch.clearStart()
+        }
+    }
 }
