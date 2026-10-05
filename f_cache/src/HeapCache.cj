@@ -58,15 +58,27 @@ public class HeapCache<V> <: Resource where V <: Object {
             //按固定间隔取元素，并每轮检查一次取消请求（close() 会 future.cancel()）
             while (!Thread.currentThread.hasPendingCancellation) {
                 if (let Some((k, v)) <- q.remove(EVICTION_POLL_INTERVAL)) {
-                    evictionCallback(k, v)
+                    notifyEviction(k, v)
                 }
             }
             //收到取消请求后，把已入队的淘汰回调投递完再退出
             while (let Some((k, v)) <- q.tryRemove()) {
-                evictionCallback(k, v)
+                notifyEviction(k, v)
             }
         })
         q
+    }
+    /**
+     * 投递一次淘汰回调。回调抛出的异常在这里吞掉：
+     * 否则消费线程会直接结束（之后所有淘汰回调静默失效），并且 close() 的 join（`f.get()`）会把异常重抛出来。
+     * 需要上报的调用方请在回调内部自行捕获处理。
+     */
+    private func notifyEviction(k: String, v: V): Unit {
+        try {
+            evictionCallback(k, v)
+        } catch (e: Exception) {
+            ()
+        }
     }
     /**仅供同包用例使用：内部线程句柄（HeapCache = 1 个淘汰消费线程），用来等待它结束*/
     func threadHandles(): ArrayList<Future<Unit>> {
@@ -153,16 +165,25 @@ public class HeapCache<V> <: Resource where V <: Object {
         DateTime.now() >= p.deathTime
     }
 
+    /**关闭校验：关闭后调用任何公开操作都抛 IllegalStateException（isClosed/close 除外）*/
+    private func ensureOpen(): Unit {
+        if (closedFlag.load()) {
+            throw IllegalStateException('heap cache is closed')
+        }
+    }
     public func get(key: String): Option<V> {
+        ensureOpen()
         match (store.get(key)) {
             case Some(p) where !evicated(p) => p.load()
             case _ => None<V>
         }
     }
     public func contains(key: String): Bool {
+        ensureOpen()
         get(key).isSome()
     }
     public func once(key: String): Bool {
+        ensureOpen()
         match (store.get(key)) {
             //与 get/contains 同口径：已过期（即使尚未被定时清扫）视为不存在
             case Some(p) where !evicated(p) => synchronized(p.lock) {
@@ -174,6 +195,7 @@ public class HeapCache<V> <: Resource where V <: Object {
         }
     }
     public func prolong(key: String, life: Duration, once!: Bool = false): Bool {
+        ensureOpen()
         match (store.get(key)) {
             //已过期条目不允许通过续期“复活”，调用方应改用 set 重建
             case Some(p) where !evicated(p) => synchronized(p.lock) {
@@ -186,6 +208,7 @@ public class HeapCache<V> <: Resource where V <: Object {
         }
     }
     public func prolong(key: String, deathTime: DateTime): Bool {
+        ensureOpen()
         match (store.get(key)) {
             case Some(p) where !evicated(p) => synchronized(p.lock) {
                 p.load()
@@ -197,6 +220,7 @@ public class HeapCache<V> <: Resource where V <: Object {
         }
     }
     public func set(key: String, value: V, life!: Duration = this.maxLife, once!: Bool = false): ?V {
+        ensureOpen()
         if (let Some(p) <- store.get(key)) {
             synchronized(p.lock) {
                 let old = p.load()
@@ -212,32 +236,39 @@ public class HeapCache<V> <: Resource where V <: Object {
         }
     }
     public func set(key: String, value: V, dieAt: DateTime): ?V {
+        ensureOpen()
         set(key, value, life: dieAt - DateTime.now(), once: true)
     }
     public func getOrDefault(key: String, default: V): V {
+        ensureOpen()
         return get(key) ?? default
     }
     public func getOrStore(key: String, value: V): V {
+        ensureOpen()
         getOrCompute(key) {value}
     }
     public func getOrCompute(key: String, callable: () -> V): V {
+        ensureOpen()
         getOrCompute(key) {
             (callable(), this.maxLife, false)
         }
     }
     public func getOrCompute(key: String, callable: () -> (V, DateTime)): V {
+        ensureOpen()
         store.computeIfAbsent(key) {
             let data = callable()
             Priority<V>(key, data[0], data[1] - DateTime.now(), checkDuration, true)
         }.load()
     }
     public func getOrCompute(key: String, callable: () -> (V, Duration, Bool)): V {
+        ensureOpen()
         store.computeIfAbsent(key) {
             let data = callable()
             Priority<V>(key, data[0], data[1], checkDuration, data[2])
         }.load()
     }
     public func remove(key: String): Option<V> {
+        ensureOpen()
         store.remove(key)?.load()
     }
     /**
@@ -245,6 +276,7 @@ public class HeapCache<V> <: Resource where V <: Object {
      * 不会阻塞同段读写；代价是谓词看到的是快照，两阶段之间新写入的条目也可能被删除。
      */
     public func removeIf(predicate: (String, V) -> Bool): Unit {
+        ensureOpen()
         store.removeIf {k: String, p: Priority<V> => predicate(k, p.load())}
     }
     /**锁内版本：谓词廉价且需要「判定—删除」原子（定时清扫用）*/
@@ -253,13 +285,18 @@ public class HeapCache<V> <: Resource where V <: Object {
     }
     public prop size: Int64 {
         get() {
+            ensureOpen()
             store.size
         }
     }
     public func clear(): Unit {
+        ensureOpen()
         store.clear()
     }
-    /**停止内部线程（定时器 + 淘汰消费线程）并清空缓存；可重复调用*/
+    /**
+     * 停止内部线程（定时器 + 淘汰消费线程）并主动清空全部条目；**清空且内部线程结束后才返回**，可重复调用。
+     * 关闭之后再调用任何操作（`get`/`set`/`size`/…）都会抛 `IllegalStateException`。
+     */
     public func close(): Unit {
         if (closedFlag.load()) {
             return
@@ -268,10 +305,17 @@ public class HeapCache<V> <: Resource where V <: Object {
         if (let Some(t) <- timerHandle) {
             t.cancel()
         }
+        //主动清空：不依赖定时器那一次 tick
+        store.clear()
         if (let Some(f) <- evictionTask) {
             f.cancel()
+            //等消费线程把已入队的淘汰回调投递完并退出：close 返回即「清理完成」
+            try {
+                f.get()
+            } catch (e: Exception) {
+                //兜底：回调异常已在 notifyEviction 里吞掉，close 不应因内部线程而失败
+            }
         }
-        store.clear()
     }
     public func isClosed(): Bool {
         closedFlag.load()

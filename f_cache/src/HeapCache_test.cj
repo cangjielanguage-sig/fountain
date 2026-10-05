@@ -116,8 +116,61 @@ public class HeapCache_test {
         //clear 之后重新计数：幻影计数会让真实条目被提前淘汰
         cache.set('c0', Test(0))
         @Assert(1, cache.size)
+    }
+
+    /**断言 body 抛出 IllegalStateException（关闭后的统一行为）*/
+    private func expectClosed(body: () -> Unit): Unit {
+        try {
+            body()
+            @Assert(false)
+        } catch (e: IllegalStateException) {
+            @Assert(true)
+        }
+    }
+
+    @TestCase
+    public func testOperationsAfterCloseThrow(): Unit {
+        let cache = HeapCache<Test>(maxLife: Duration.second * 30, checkDuration: Duration.second * 30)
+        cache.set('a', Test(1))
         cache.close()
-        @Assert(0, cache.size)
+        @Assert(true, cache.isClosed())
+        cache.close()//close 幂等
+        @Assert(true, cache.isClosed())
+        //关闭后一切操作都抛异常（只有 isClosed/close 例外）
+        expectClosed {let _ = cache.get('a')}
+        expectClosed {let _ = cache.contains('a')}
+        expectClosed {let _ = cache.once('a')}
+        expectClosed {let _ = cache.prolong('a', Duration.second)}
+        expectClosed {let _ = cache.prolong('a', DateTime.now())}
+        expectClosed {let _ = cache.set('a', Test(2))}
+        expectClosed {let _ = cache.set('a', Test(2), life: Duration.second)}
+        expectClosed {let _ = cache.getOrDefault('a', Test(0))}
+        expectClosed {let _ = cache.getOrStore('a', Test(0))}
+        expectClosed {let _ = cache.getOrCompute('a') {Test(0)}}
+        expectClosed {let _ = cache.remove('a')}
+        expectClosed {cache.removeIf {_, _ => true}}
+        expectClosed {let _ = cache.size}
+        expectClosed {cache.clear()}
+    }
+
+    @TestCase
+    public func testCloseClearsAndJoinsBeforeReturn(): Unit {
+        let cache = HeapCache<Test>(maxLife: Duration.second * 30,
+            checkDuration: Duration.millisecond * 200)
+        for (i in 0..5) {
+            let _ = cache.set('j${i}', Test(i))
+        }
+        @Assert(5, cache.size)
+        cache.close()
+        //close 返回时内部线程必须已经结束（而不是“还要等下一次轮询”）
+        for (f in cache.threadHandles()) {
+            try {
+                f.get(Duration.millisecond * 1)
+                @Assert(true)
+            } catch (e: TimeoutException) {
+                @Assert(false)
+            }
+        }
     }
 
     /**找一个与 key0 落在同一分段的键（concurrencyLevel=4 ⇒ 掩码 3），用于「同段操作是否被阻塞」的对照*/
@@ -256,7 +309,7 @@ public class HeapCache_test {
         @Assert(true, cache.isClosed())
         cache.close()//close 可重复调用
         @Assert(true, cache.isClosed())
-        //close 之后内部线程结束、定时器已取消、缓存已清空
+        //close 之后内部线程结束、定时器已取消、缓存已清空（清空后 size 不可读：会抛异常）
         for (f in cache.threadHandles()) {
             try {
                 f.get(Duration.second * 3)
@@ -265,7 +318,6 @@ public class HeapCache_test {
                 @Assert(false)
             }
         }
-        @Assert(0, cache.size)
     }
 
     @TestCase
@@ -278,16 +330,25 @@ public class HeapCache_test {
         @Assert(true, cache.isClosed())
         cache.close()//close 可重复调用
         @Assert(true, cache.isClosed())
-        //清扫线程最多一个清扫周期（1s）后退出
+        //close 返回时清扫线程已经结束（最多等一个清扫周期），而不是“还要再等一轮”
         for (f in cache.threadHandles()) {
             try {
-                f.get(Duration.second * 3)
+                f.get(Duration.millisecond * 1)
                 @Assert(true)
             } catch (e: TimeoutException) {
                 @Assert(false)
             }
         }
-        @Assert(0, cache.size)
+        //关闭后一切操作都抛异常（只有 isClosed/close 例外）
+        expectClosed {let _ = cache.get('wk')}
+        expectClosed {let _ = cache.getOrDefault('wk', Test(0))}
+        expectClosed {let _ = cache.getOrStore('wk', Test(0))}
+        expectClosed {let _ = cache.getOrCompute('wk') {None<Test>}}
+        expectClosed {let _ = cache.set('wk', Test(2))}
+        expectClosed {let _ = cache.remove('wk')}
+        expectClosed {cache.removeIf {_, _ => true}}
+        expectClosed {let _ = cache.size}
+        expectClosed {cache.clear()}
     }
 }
 
