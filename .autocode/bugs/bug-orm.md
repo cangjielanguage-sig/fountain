@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 24 条**：严重 3（§1.1 `ORM-1`、§1.5 `ORM-C1`、§1.13 `ORM-2`）、中 7（§2.1 `ORM-C2`、§2.8 `ORM-C5`、§2.10 `ORM-3`、§2.11 `ORM-4`、§2.12 `ORM-5`、§2.13 `ORM-6`、§2.14 `ORM-7`）、低危+待验证 14（§3）。
-- **状态（截至 2026-10-05）**：`ORM-1` ✅已修复（§1.1）、`ORM-C1` ✅已修复（§1.5）、`ORM-C2` ✅已修复（§2.1）、`ORM-2` ✅已修复（§1.13，严重｜性能，分支 `fix/orm`）；`ORM-C5` ❌误判（§2.8，非缺陷：`argInSql` 是设计目的，已补 README §11.5 说明与口径用例）；`ORM-3` ⏸决定不修（§2.10，已知开销保留：否决「加静态集合」与「就地复位」两方案）；`ORM-4` ⏸决定不修（§2.11，借连接校验与默认值均不改、语句复用经四家驱动源码调研后判定不值得在 f_orm 层做）；**待修** §2.12–§2.14（性能中危 3 条）、§3 的 14 条低危/待验证（`ORM-L3` 已随 §1.13 一并消掉；`ORM-C3`：`SqlArgs.clone()` 仍共享同一 `ArrayList`，未随 §1.1 一并处理）。
+- **状态（截至 2026-10-05）**：`ORM-1` ✅已修复（§1.1）、`ORM-C1` ✅已修复（§1.5）、`ORM-C2` ✅已修复（§2.1）、`ORM-2` ✅已修复（§1.13，严重｜性能，分支 `fix/orm`）；`ORM-C5` ❌误判（§2.8，非缺陷：`argInSql` 是设计目的，已补 README §11.5 说明与口径用例）；`ORM-3` ⏸决定不修（§2.10，已知开销保留：否决「加静态集合」与「就地复位」两方案）；`ORM-4` ⏸决定不修（§2.11，借连接校验与默认值均不改、语句复用经四家驱动源码调研后判定不值得在 f_orm 层做）、`ORM-5` ✅已修复（§2.12，正则预编译）；**待修** §2.13–§2.14（性能中危 2 条）、§3 的 14 条低危/待验证（`ORM-L3` 已随 §1.13 一并消掉；`ORM-C3`：`SqlArgs.clone()` 仍共享同一 `ArrayList`，未随 §1.1 一并处理）。
 
 ## 1. 严重（本模块 3 条）
 
@@ -186,9 +186,22 @@
 
 位置：`SqlExecutor.statement`（`SqlExecutor.cj:409-417`，每次 `prepareStatement`）、`close()`（`:143-149` 关语句）、`DatabasePool.cj:111-125` + `ORMConfig.cj:201-203`（借连接校验开关）。
 
-### 2.12 [中｜性能] `ORM-5` 每次拼条件片段都「动态构造正则 key + 查缓存 + 临时串」（f_orm）
+### 2.12 [中｜性能] `ORM-5` 每次拼条件片段都「动态构造正则 key + 查缓存 + 临时串」（f_orm）✅已修复（2026-10-05）
 
-`Condition.cj:65-67`、`TableClause.cj:39-49`、`imports.cj:35-37`：这些函数被 `WHERE/AND/OR/NOT/HAVING/ORDER_BY/GROUP_BY/SET` 每次调用 ⇒ 每构造一次动态 SQL 触发数次。修法：固定模式用 `static let` 的 `Regex` 常量；`trim` 用 `trimAscii` 手工裁剪。
+**✅ 修复记录（2026-10-05，分支 `fix/orm`）**
+
+- **改动**（3 文件 36+/3-，公开 API 不变）：
+  1. `imports.cj`：`emptyLogicalExpr` 的字面模式提为顶层 `private let EMPTY_LOGICAL_EXPR = #'^[\s()]*$'#.regex(solid: true)`（模块加载时编译一次；顶层 `let` 必须先定义后使用，故放在函数之前，`@ORMEmbedSensitive()` 仍贴函数）；
+  2. `Condition.cj`：新增 3 个 `private static let`（`('and|or','and|or')` / `(',',',')` / `('','')`，均 `[IgnoreCase]`），`trim` 内按 `(prefix, suffix)` 选常量；
+  3. `TableClause.cj`：新增 2 个顶层 `private let`（`appendPartial` 实际只用 `'and|or'` 与 `','`；空串走早退分支），`appendPartial` 命中即用常量。
+  - **模式文本与原先插值结果逐字一致**（含 `^(\s*and|or\s*)` 那个未分组 alternation 的既有写法）、flags 仍 `[IgnoreCase]`、替换串仍 `' '` / `''`；未列出的自定义组合仍走原动态构造（`Condition.trim` 的 `.regex(flags:)` 与 `appendPartial` 的 `solid: true` 路径都保留）。
+- **用例**：`f_orm/src/base/ConditionTrim_test.cj`（7 条）：三组内部组合 + 自定义组合（`x|y`）的逐字符期望值、`SET`/`WHERE` 输出、`emptyLogicalExpr` 的空/非空判定（含 `'()'`）。
+- **前后对照**（探针 `.autocode/tmp/orm5_probe_test.cj`，拷回 `f_orm/src/base/` 可复跑）：同一矩阵（trim 4 组合 × 17 输入 + `SET`/`WHERE`/`emptyLogicalExpr`）在**修复前**（三个文件用文件备份法还原为 HEAD 后跑，未用 stash）与**修复后**各 118 行输出，规范化后**逐字符一致**（日志 `.autocode/tmp/orm5-probe-{before,after}.log`）；`appendPartial` 的预编译模式与动态模式在同一批输入上输出一致（`APPEND_EQUIV_MISMATCH and_or=0 comma=0`）。
+- **计时对照**（同机同轮取最优）：`Condition.trim` 循环（20000 × 17 输入 × 2 组合）**5.28s → 3.04s（≈1.7×）**；`emptyLogicalExpr` 循环（100000 × 2 次）**613ms → 41.5ms（≈14.8×）**。
+- **验证**：`cjpm build` **exit 0**；`cjpm test` **TOTAL 52 / PASSED 51 / ERROR 1 / FAILED 0**（唯一 ERROR 仍是既有环境相关 `ORMConfigTest.testPoolMaxWaiting`）。
+- **说明**：报告原文建议的「`trim` 用 `trimAscii` 手工裁剪」**未采用**——手工裁剪要复刻「正则替换成单个空格 + alternation 未分组」的边界语义，风险高于收益；改为「原模式文本 + 预编译常量」，把开销从「每调用插值构造 + 查缓存」降为一次常量替换。
+
+位置：`Condition.trim`（`Condition.cj:70-82`，原 `:65-67`）、`TableClause.appendPartial`（`TableClause.cj:44-62`，原 `:39-49`）、`emptyLogicalExpr`（`imports.cj:34-42`，原 `:35-37`）。
 
 ### 2.13 [中｜性能] `ORM-6` 批量条件 DSL 循环体里逐元素大 `match` + `SqlArg` 分配（f_orm）
 

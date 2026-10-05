@@ -29,6 +29,7 @@
 > 十次修正（2026-10-05）：§2.8 `ORM-C5` 判定为 ❌**误判**（`argInSql` 是显式打开的「值内联进 SQL」开关，设计目的；已补 README §11.5 说明 + 口径用例）⇒ f_orm 中危待修 **5** 条（§2.10–§2.14）。
 > 十一次修正（2026-10-05）：§2.10 `ORM-3` 判定为 ⏸**决定不修**（保留现状：否决「加静态集合只清标记过的类型」与「`beforeDirty` 挪到引用型 holder 就地复位」两个方案，报告原文的成本仍作已知开销登记在案）⇒ f_orm 中危待修 **4** 条（§2.11–§2.14）。
 > 十二次修正（2026-10-05）：§2.11 `ORM-4` 判定为 ⏸**决定不修**（借连接校验 `checkOnBorrowing` 与默认值均不改；语句复用读了四家驱动源码——ZhaoJun postgres 驱动自带 32 条 LRU 语句缓存、aibrary pgsql 无缓存、mysql/mariadb CRUD 走 server 模式——判定在 f_orm 层重做不值得，依据见 §2.11）⇒ f_orm 中危待修 **3** 条（§2.12–§2.14）。
+> 十三次修正（2026-10-05）：§2.12 `ORM-5` 已修复（`emptyLogicalExpr` / `Condition.trim` / `TableClause.appendPartial` 三处改为预编译正则常量；前后各 118 行输出逐字符一致，`trim` 计时 ≈1.7×、`emptyLogicalExpr` ≈14.8×）⇒ f_orm 中危待修 **2** 条（§2.13–§2.14）。
 
 **建议修复顺序**（即严重级内部的落地顺序）：
 
@@ -60,6 +61,7 @@
 - 已完成：`f_bean` 的 `cjpm build` **exit 0**（0 条 error）。`f_bean` 的 `cjpm test` 长时间停留在**测试编译阶段**（编译 f_util 等测试依赖，非卡死），`f_aspect/f_mvc/f_orm` 尚未开始 ⇒ 本次审查未拿到 `cjpm test` 结果；本报告结论均来自代码阅读，不依赖该基线。
 - 修复期验证（2026-10-04，本分支上的修复提交）：`f_orm` 的 `cjpm build` **exit 0**；`cjpm test` **TOTAL 33 / PASSED 32 / ERROR 1 / FAILED 0**。唯一 ERROR 是既有环境相关用例 `f_orm.wrap / ORMConfigTest.testPoolMaxWaiting`（用例先 `Config.set(key, '45s')` 再断言读出 45s，本机 `left: 4s` ⇒ 环境里该配置项已存在并压过内存设置；该用例不执行 SQL，与修复路径无交集）。本次修复新增的 5 条用例 **5/5 PASSED**（同一套用例在修复前对照跑为 **5/5 FAILED**），逐条记录见 §1.5 / §2.1。
 - 修复期验证（2026-10-05，`fix/orm` 分支，§1.13 `ORM-2`）：`f_orm` 的 `cjpm build` **exit 0**；`cjpm test` **TOTAL 38 / PASSED 37 / ERROR 1 / FAILED 0**（新增 `QueryResultWrap_test.cj` 5 条 **5/5 PASSED**；把 `QueryResultWrap.cj` 临时还原为 HEAD 后同一套用例仍 **5/5 PASSED** —— 本条是性能整改，语义必须不变）。唯一 ERROR 仍是既有环境相关 `ORMConfigTest.testPoolMaxWaiting`。该条的计时前后对照与「mock 口径无差异、真实驱动收益待 `ORM-L3` 验证」的结论记在 §1.13 修复记录里（探针 `.autocode/tmp/orm2_mapList_bench.cj`，拷回 `f_orm/src/base/` 可复跑）。
+- 修复期验证（2026-10-05，`fix/orm` 分支，§2.12 `ORM-5`）：`cjpm build` **exit 0**；`cjpm test` **TOTAL 52 / PASSED 51 / ERROR 1 / FAILED 0**（新增 `ConditionTrim_test.cj` 7 条 **7/7 PASSED**；唯一 ERROR 仍是既有环境相关 `ORMConfigTest.testPoolMaxWaiting`）。前后对照（同一 118 行输出矩阵逐字符一致）与计时（trim ≈1.7×、`emptyLogicalExpr` ≈14.8×）记在 §2.12 修复记录里，探针 `.autocode/tmp/orm5_probe_test.cj` 可复跑。
 - 误判/文档期验证（2026-10-05，`fix/orm` 分支，§2.8 `ORM-C5`）：`cjpm test` **TOTAL 45 / PASSED 44 / ERROR 1 / FAILED 0**（新增 `ArgInSql_test.cj` 7 条 **7/7 PASSED**；唯一 ERROR 仍是既有环境相关 `ORMConfigTest.testPoolMaxWaiting`）。README 新增 §11.5 并按真实绑定口径写明 `argInSql` 的三种结果与边界。
 - 本报告未做**运行时实测**（无 benchmark、无 heap profile）。凡标「**待验证**」的条目都给出了验证方法（见 §3.2），另补几条高危项的复现方式：
   - `ORM-1`：同一 executor 上「同 SQL、不同参数」两次查询，断言结果不同（✅ 已由 `SqlResultCache_test.cj` 落地，见 §1.1）；

@@ -15,6 +15,11 @@ limitations under the License.
  */
 package fountain::f_orm.base
 
+// bug.md §2.12（ORM-5）：appendPartial 的 trim 只有 'and|or' 与 ',' 两种取值（空串走早退分支），
+// 预编译为常量；模式文本与原先每次插值出的完全一致，免掉每片段一次的构造 + 查缓存
+private let APPEND_TRIM_AND_OR = Regex(#"^(\s*and|or\s*)|(\s*and|or\s*)$"#, [IgnoreCase])
+private let APPEND_TRIM_COMMA = Regex(#"^(\s*,\s*)|(\s*,\s*)$"#, [IgnoreCase])
+
 abstract sealed class TableClause<T> <: ToString where T <: QueryMappersInit<T> {
     let sqlgen = StringGenerator()
     private var idType_ = None<DataType>
@@ -40,7 +45,15 @@ abstract sealed class TableClause<T> <: ToString where T <: QueryMappersInit<T> 
         let sql = if(trim.isEmpty()){
             partial
         }else{
-            '^(\\s*${trim}\\s*)|(\\s*${trim}\\s*)$'.regex(flags: [IgnoreCase], solid: true).replaceAll(partial, '')
+            // bug.md §2.12（ORM-5）：两个常用取值走预编译常量；自定义 trim 仍走原动态构造（含 solid 语义）
+            let pattern = if (trim == 'and|or') {
+                APPEND_TRIM_AND_OR
+            } else if (trim == ',') {
+                APPEND_TRIM_COMMA
+            } else {
+                '^(\\s*${trim}\\s*)|(\\s*${trim}\\s*)$'.regex(flags: [IgnoreCase], solid: true)
+            }
+            pattern.replaceAll(partial, '')
         }
         if(!emptyLogicalExpr(sql)){
             sqlgen.append(' ').append(keyword).append(' ').append(sql).append(' ')

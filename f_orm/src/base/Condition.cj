@@ -28,6 +28,11 @@ public class Condition {
             _delimiter.set(value)
         }
     }
+    // bug.md §2.12（ORM-5）：内部只用三种 (prefix, suffix) 组合（SET/WHERE 与 LoopCondition 默认），
+    // 预编译为常量；模式文本与原先每次插值出的完全一致（含 IgnoreCase），语义不变
+    private static let TRIM_AND_OR = Regex(#"^\s*(and|or)\s*|\s*(and|or)\s*$"#, [IgnoreCase])
+    private static let TRIM_COMMA = Regex(#"^\s*(,)\s*|\s*(,)\s*$"#, [IgnoreCase])
+    private static let TRIM_SPACES = Regex(#"^\s*()\s*|\s*()\s*$"#, [IgnoreCase])
     public static func loop<I, T>(values: I, executor: SqlExecutor): LoopCondition<I, T> where I <: Iterable<T> {
         LoopCondition<I, T>(values, executor)
     }
@@ -63,6 +68,16 @@ public class Condition {
         }
     }
     public static func trim(prefix!: String = '', suffix!: String = '', partial!: () -> String): String {
-        '^\\s*(${prefix})\\s*|\\s*(${suffix})\\s*$'.regex(flags: [IgnoreCase]).replaceAll(partial(), " ")
+        // bug.md §2.12（ORM-5）：内部组合走预编译常量；自定义 prefix/suffix 仍按原样动态构造
+        let pattern = if (prefix == 'and|or' && suffix == 'and|or') {
+            TRIM_AND_OR
+        } else if (prefix == ',' && suffix == ',') {
+            TRIM_COMMA
+        } else if (prefix.isEmpty() && suffix.isEmpty()) {
+            TRIM_SPACES
+        } else {
+            '^\\s*(${prefix})\\s*|\\s*(${suffix})\\s*$'.regex(flags: [IgnoreCase])
+        }
+        pattern.replaceAll(partial(), " ")
     }
 }
