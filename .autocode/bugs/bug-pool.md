@@ -337,7 +337,7 @@ threads: threads 7->27->27, blocking 6->26->26
 
 ### 2.3 [中｜内存+API 契约] `POOL-8` `tasks` 队列按 `totalSize` 预分配；`ArrayPool`/`ArrayListPool` 的默认 `maxSize = Int64.Max` 直接构造失败 ✓已复核 → ✅已修复（2026-10-05）
 
-**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、本标记在**同一提交**（提交信息 `fix(f_pool): POOL-8 任务队列容量与池容量解耦（夹取 [1,1024]）`）。
+**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、本标记在**同一提交**（提交 `84bcceb7`，提交信息 `fix(f_pool): POOL-8 任务队列容量与池容量解耦（夹取 [1,1024]）`）。
 
 - 改动：`f_pool/src/KeyPool.cj:28-41` 新增 `CREATE_TASK_QUEUE_CAP = 1024` 与 `createTaskQueueCapacity(total)`（把池容量夹进 `[1, 1024]`，顺带兜住 `totalSize <= 0` 时 `ArrayBlockingQueue` 直接抛 `IllegalArgumentException` 的边界）；构造处 `:250-251` 改为 `ArrayBlockingQueue<K>(createTaskQueueCapacity(totalSize))`。
   为什么这样就够：任务队列只是给创建线程传「给某键建一个池项」的纸条，槽位不必等于池容量；队列满时 `tryAddTask` 返回 false、等待者下一轮再试 —— `get` 的等待是「条件变量通知 + 预算」，不依赖任务必达。
