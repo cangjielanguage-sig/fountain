@@ -464,7 +464,7 @@ useafterrelease: second_is_empty=false second_bytes=5
 
 ### 2.7 [中｜契约/正确性] `POOL-12` 归还路径上 `clear` 抛异常会丢池项 ✓已复核 → ✅已修复（2026-10-05）
 
-**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、`f_pool/README.md` 与标记在**同一提交**（提交 `xxxx`，提交信息 `fix(f_pool): POOL-12 clear 回调失败抛 ClearFailedException，这次归还不算发生`）。
+**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、`f_pool/README.md` 与标记在**同一提交**（提交 `408e5181`，提交信息 `fix(f_pool): POOL-12 clear 回调失败抛 ClearFailedException，这次归还不算发生（不销毁/不结清/可重试）`）。
 
 - 口径（2026-10-05 拍板，与 §2.5 `POOL-10` 同一套）：`clear` 抛异常是**应用层回调的 BUG**；**`giveBack` 抛异常 ⇒ 对象没有归还** —— 不销毁、不结清记账、不进池，池项状态与调用 `giveBack` 之前完全一样，所有权仍在调用方；应用层修好条件后可以**重试** `giveBack`（重试成功额度照常结清），或者自己销毁它。
 - 改动：
