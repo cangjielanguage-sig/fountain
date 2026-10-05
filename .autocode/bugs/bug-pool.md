@@ -368,7 +368,7 @@ threads: threads 7->27->27, blocking 6->26->26
 
 ### 2.4 [中｜正确性] `POOL-9` `BytesListOutputStream.release()` 之后仍可写：下一个借用者拿到脏缓冲 ✓已复核 → ✅已修复（2026-10-05）
 
-**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、本标记在**同一提交**（提交信息 `fix(f_pool): POOL-9 release 之后禁止再写/读/复位/写出（IllegalStateException）`）。
+**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、本标记在**同一提交**（提交 `4d56fc50`，提交信息 `fix(f_pool): POOL-9 release 之后禁止再写/读/复位/写出（IllegalStateException）`）。
 
 - 改动（`f_pool/src/BytesListOutputStream.cj`）：新增私有 `checkNotReleased()`（抛 `IllegalStateException('bytes list output stream is released')`，与 `f_cache` 的「关闭后统一抛 IllegalStateException」口径一致），在 `write`（`:34`）、`asBytes`（`:47`）、`reset`（`:79`）、`copy`（`:101`）首行调用；`release()` **仍保持幂等**（`copy` 的 `finally` 依赖它，不能加守卫），`isEmpty`/`byteSize` 保持只读不动。顺带把原来错挂在 `byteSize` 上的那条「归还…幂等」文档注释挪回 `release`。
 - 用例（`f_pool/src/releasable_test.cj`）：`writeAfterReleaseMustThrow`（释放后 `write` 必须抛 `IllegalStateException`；再借出的一件 `byteSize() == Some(3)` —— 只应剩 release **之前**写的 3 字节，修前是 5）、`readOrCopyAfterReleaseMustThrow`（`asBytes`/`reset`/`copy` 各抛；`release()` 仍幂等不抛）。
