@@ -161,7 +161,12 @@ public class WSMeta<T> where T <: Object {
             let duration = f.duration
             let h = f.`handle`
             Timer.repeat(duration, duration, {=>
-                ws.writePingFrame(h(endpoint, ctx, pattern, ws, []))
+                // 加固（§1.11 / MVC-3）：在途 ping 撞上已关闭的连接时，异常不能抛进定时器线程；
+                // 连接真正结束时由下面读循环的 finally 取消该定时器。
+                try {
+                    ws.writePingFrame(h(endpoint, ctx, pattern, ws, []))
+                } catch (_: Exception) {
+                }
             })
         }else{
             None<Timer>
