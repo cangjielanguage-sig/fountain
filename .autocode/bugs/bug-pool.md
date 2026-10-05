@@ -23,6 +23,7 @@
 > 五次修正（2026-10-05）：§2.2 `POOL-7` 已修复 ⇒ 待修中危 **6** 条（`POOL-8`~`POOL-13`）。
 > 六次修正（2026-10-05）：§2.3 `POOL-8` 已修复 ⇒ 待修中危 **5** 条（`POOL-9`~`POOL-13`）。
 > 七次修正（2026-10-05）：§2.4 `POOL-9` 已修复 ⇒ 待修中危 **4** 条（`POOL-10`~`POOL-13`）。
+> 八次修正（2026-10-05）：§2.5 `POOL-10` 已修复（**口径改为抛 `UnknownKeyException`**，池不销毁、不建池；原「未命中就销毁」的修法已否决）⇒ 待修中危 **3** 条（`POOL-11`~`POOL-13`）。
 
 **建议修复顺序**：
 
@@ -31,7 +32,7 @@
 3. `POOL-3`（§1.3）巡检把**满载 key** 的空闲项当「校验不过」摘掉，并整轮跳过用户 checker → 稳态抖动、`connectionLife`/`idleTimeout` 判定被绕过（实测满载空闲池 idle 2→1）　**✅已修复（2026-10-05，见 §1.3 修复标记：size&lt;max 只约束补建）**
 4. `POOL-4`（§1.4）creator/checker 持续失败时**无退避紧重试** → 对下游的重连风暴 + 每轮一条 WARN（实测 300ms 内 75,976 次尝试）　**❌误判（2026-10-05：设计目的，不修改；见 §1.4 误判标记）**
 5. `POOL-5`（§1.5）`maxWaiting = Duration.Max` 的「真无限等待」实际只等 1s 就**静默放弃**（实测 1008ms 返回 `None`，对照 30s 档 2016ms 返回项）；同一分支还会吞掉丢失的唤醒　**✅已修复（2026-10-05，随 §1.2 的统一等待重写一并解决，见 §1.5 修复标记）**
-6. 其后按 §2 顺序：`POOL-6`（关停不唤醒/归还竞态）**✅已修复（2026-10-05，见 §2.1 修复标记）** → `POOL-7`（关池泄漏线程）**✅已修复（2026-10-05，见 §2.2 修复标记：线程句柄 + cancel + 每轮判状态 + 带超时出队）** → `POOL-8`（队列按 `totalSize` 预分配 + 两个池默认 `maxSize=Int64.Max` 构造即 OOM）**✅已修复（2026-10-05，见 §2.3 修复标记：队列容量解耦、夹取 [1,1024]）** → `POOL-9`（`release` 后仍可写，实测污染池项）**✅已修复（2026-10-05，见 §2.4 修复标记：释放后读写一律抛）** → `POOL-10`~`POOL-13`
+6. 其后按 §2 顺序：`POOL-6`（关停不唤醒/归还竞态）**✅已修复（2026-10-05，见 §2.1 修复标记）** → `POOL-7`（关池泄漏线程）**✅已修复（2026-10-05，见 §2.2 修复标记：线程句柄 + cancel + 每轮判状态 + 带超时出队）** → `POOL-8`（队列按 `totalSize` 预分配 + 两个池默认 `maxSize=Int64.Max` 构造即 OOM）**✅已修复（2026-10-05，见 §2.3 修复标记：队列容量解耦、夹取 [1,1024]）** → `POOL-9`（`release` 后仍可写，实测污染池项）**✅已修复（2026-10-05，见 §2.4 修复标记：释放后读写一律抛）** → `POOL-10`（`giveBack` 还错键，抛 `UnknownKeyException`）**✅已修复（2026-10-05，见 §2.5 修复标记）** → `POOL-11`~`POOL-13`
 
 ---
 
@@ -398,7 +399,29 @@ useafterrelease: second_is_empty=false second_bytes=5
 
 **修法**：`write`/`asBytes` 首行 `if (released) { throw IllegalStateException('released') }`；`copy` 自带 `release`，可在 released 时直接返回或抛。
 
-### 2.5 [中｜资源泄漏] `POOL-10` `BaseKeyPool.giveBack` 对「键对应的池不存在」静默丢弃对象
+### 2.5 [中｜契约/正确性] `POOL-10` `BaseKeyPool.giveBack` 对「键对应的池不存在」静默丢弃对象 ✓已复核 → ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、`f_pool/README.md` 与标记在**同一提交**（提交 `xxxx`，提交信息 `fix(f_pool): POOL-10 还给未建池的键改为抛 UnknownKeyException`）。
+
+- **口径修正（2026-10-05，用户拍板）**：本节原来写的「未命中就按 `!running` 分支直接 `destroier` 销毁」**已否决** —— 还错键是**应用层的 BUG**，池不替它决定怎么处置。改为**抛异常**：池**不销毁、不归还、也不替这个键建池**，把处置权（重试 / 销毁 / 上报）交回调用方。
+- 改动：
+  - 新增 `f_pool/src/exception/UnknownKeyException.cj`：`public class UnknownKeyException <: fountain::f_base.BaseException`（仓库的异常根，自带 `addSuppressed` / `suppressed` / 带 `Suppressed:` 的 `printStackTrace`），字段 `public let key: Any`；类注释给出 `addSuppressed` 的用法 —— 应用层在 `finally` / `release()` 里归还、顶掉了正在传播的业务异常时，`e.addSuppressed(被顶掉的那个)` 再 `throw e`。
+    - `key` 用 `Any` 而不是 `String`：`BaseKeyPool` 对键的约束只有 `Hashable & Equatable<K>`（没有 `ToString`），消息里插不进键。**实测**：`throw UnknownKeyException('${key}')` 编译报 `error: the type 'Generics-K' should implement interface 'ToString'`。应用层要文本自己 `match (e.key) { case k: ToString => ... }`（用例与 README 都给了这段）。
+  - `f_pool/src/BaseKeyPool.cj:35-44`：`map.get(key)?.giveBack(...)` → 显式 if/else，未命中 `throw UnknownKeyException(key)`；注释写明「键一旦被 `get`/`add` 用过就一定有池，且没有淘汰入口 ⇒ 只可能是还错键」。
+  - `f_pool/README.md`（`KeyPool` 一节末尾）：补契约说明 —— 抛 `UnknownKeyException`、池不销毁、用 `addSuppressed` 保现场、仓库内的 `Pool<V>` 永不触发。
+- 用例：
+  - `BaseKeyPoolTest.giveBackToUnknownKeyMustThrow`：未命中 ⇒ 抛；`destroyed == 0`；`entries()` 里仍只有 `k1`（**没有**偷偷建池 —— 否则巡检会按 `p.size < max` 把幽灵池填满）。
+  - `BaseKeyPoolTest.unknownKeyExceptionCarriesKeyAndSuppressed`：`key` 带出 `'k2'`、`is BaseException`、`addSuppressed` 后 `suppressed.size == 1`。
+  - `KeyPoolTest.giveBackToUnknownKeyMustThrow`（端到端）：`get('k1')` → `giveBack('k2', obj)` ⇒ 抛；`destroyed == 0`；`get('k1', timeout: Duration.Zero)` 仍为 `None`（残量，见下）。
+- 测量证据：
+  - **修前**（`BaseKeyPool.cj` 换回 HEAD 版、异常类与用例保留）：3 条用例全 `[ FAILED ]`（断言 `threw.isSome() == true` / `caught.isSome() == true` / `thrown == true`，左侧都是 `false`）⇒ `PRE_FILTERED_EXIT=1`；
+  - **探针 `unknownkey`（修前）**：`thrown=false destroyed_immediate=0 borrow_again=false key_alive=true`；`gc()`×3 后 `destroyed_after_gc=1` —— 静默丢弃、销毁只能等 GC 终结器（`Ref.~init`）、来源键 `k1` 那份额度再也拿不回来；
+  - **修后**：3 条用例 `[ PASSED ]`（`FILTERED_EXIT=0`）；`f_pool` 全量 **`PASSED: 51, SKIPPED: 0, ERROR: 0, FAILED: 0`**（`POOL_EXIT=0`）；探针 `thrown=true destroyed_immediate=0 key=k2 borrow_again=false`；
+  - 下游回归：`f_codec` **`PASSED: 16, FAILED: 0`**（`CODEC_EXIT=0`）、`f_protocol` **`PASSED: 62, FAILED: 0`**（`PROTOCOL_EXIT=0`）、`f_orm` `PASSED: 32, ERROR: 1`（唯一 ERROR 是 `ORMConfig_test.testPoolMaxWaiting`，与本改动无调用关系，见 §5）；日志 `.autocode/tmp/pool_fix10_{pre,all,post2}.log`。
+- **`fountain` 仓库内不会触发**（用户口径 + 复核）：仓库里的池都是 `Pool<V>` ⇒ `KeyPool<Unit, V>` ⇒ `UnitKeyPool`（`KeyPool.cj:246-249`，单池、无 map），键永远只有 `Unit` 一个；`git grep "KeyPool<"` 在 `f_pool` 源码与测试之外**没有任何调用方**（`f_orm/src/wrap/DatabasePool.cj:29` 是 `Pool<PooledConnection>`）。所以这条改动对仓库内既有调用面零风险。
+- **残量（不修，登记）**：还错键的那一刻已无法知道对象属于哪个池 ⇒ 来源键池里那份「已借出」额度（`out`）永久留在原地（自检不变量 `s ≡ 节点数 + out` 仍成立 ⇒ 不告警、不自愈）。本次只保证「不静默吞掉 + 通知应用层」。另：修后若应用层把对象丢掉不管，`Ref` 终结器仍会在某次 GC 后兜底销毁（探针 `destroyed_after_gc=1`）—— 区别是应用层**已经收到通知**，可以自己决定处置。
+
+**原始诊断（保留）**
 
 ```34:36:f_pool/src/BaseKeyPool.cj
     public func giveBack(key: K, value: V, checker: (K, V) -> Bool, destroier: (K, V) -> Unit): Unit {
@@ -406,9 +429,9 @@ useafterrelease: second_is_empty=false second_bytes=5
     }
 ```
 
-`get` 会按需建池（`keyedPool`，`100-110`），`giveBack` 不会：键上没有池时 `?.` 静默跳过 —— 对象**既不归还也不销毁**，调用方（`KeyPool.giveBack`）返回 `Unit` 无任何反馈。典型触发：把 A 键借出的对象还到 B 键、或关闭后清理路径上按旧键归还。
+`get` 会按需建池（`keyedPool`，`112-122`），`giveBack` 不会：键上没有池时 `?.` 静默跳过 —— 对象**既不归还也不销毁**，调用方（`KeyPool.giveBack`）返回 `Unit` 无任何反馈。典型触发：把 A 键借出的对象还到 B 键、或关闭后清理路径上按旧键归还。
 
-**修法**：`giveBack` 未命中池时按 `!running` 分支处理（直接 `destroier(key, value)`），或至少 `PoolDiagnostics` 记一条告警。
+**修法（已被上面的口径取代）**：~~`giveBack` 未命中池时按 `!running` 分支处理（直接 `destroier(key, value)`），或至少 `PoolDiagnostics` 记一条告警。~~ ⇒ 改为抛 `UnknownKeyException`（不销毁、不建池、不归还）。
 
 ### 2.6 [中｜内存] `POOL-11` key 表只增不减，巡检每轮 O(#keys)
 
@@ -494,6 +517,8 @@ useafterrelease: second_is_empty=false second_bytes=5
 > `POOL-8` 修复后的复测：`arrayPoolDefaultsMustConstruct`（默认参数下的 `ArrayPool`/`ArrayListPool` 能构造 + 借还；修前该用例直接 OOM、进程 EXIT=1）。全量 `cjpm test` = **`PASSED: 46, SKIPPED: 0, ERROR: 0, FAILED: 0`**（日志 `.autocode/tmp/pool_fix8_{pre,post}.log`）；探针 `queue_alloc` 的 +80MB 是**修前基线**（修后队列固定 ≤1024 槽）。
 
 > `POOL-9` 修复后的复测：`writeAfterReleaseMustThrow` / `readOrCopyAfterReleaseMustThrow`（修前分别断言 `threw == true`、`asBytesThrew == true` 失败）。全量 `cjpm test` = **`PASSED: 48, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62 全绿（日志 `.autocode/tmp/pool_fix9_{pre,post,post2}.log`）。
+
+> `POOL-10` 修复后的复测（口径：抛 `UnknownKeyException`，池不销毁、不建池）：三条新用例修前全 `[ FAILED ]`（`threw.isSome() == true` / `caught.isSome() == true` / `thrown == true`，左侧都是 `false`）⇒ `PRE_FILTERED_EXIT=1`，修后 `[ PASSED ]`；全量 `cjpm test` = **`PASSED: 51, SKIPPED: 0, ERROR: 0, FAILED: 0`**。探针 `unknownkey`：修前 `thrown=false destroyed_immediate=0 borrow_again=false key_alive=true`，修后 `thrown=true key=k2 destroyed_immediate=0 borrow_again=false`；两次 `gc()`×3 后 `destroyed_after_gc=1`（应用层丢掉不管时仍由 `Ref` 终结器兜底 —— 与修前的区别是应用层**已经收到通知**）。下游 `f_codec` 16/16、`f_protocol` 62/62 全绿；`f_orm` `PASSED: 32, ERROR: 1`，唯一 ERROR 是 `ORMConfig_test.testPoolMaxWaiting`（`Config` 里 `orm_databasePoolMaxWaiting='abc'`，按该用例注释应「非法值退回默认 30s」，实际 `f_data.base.Duration.tryParse` 抛 `DataParsableException`）—— 栈里没有 `f_pool`，与本次改动无调用关系，属 f_orm / f_config 侧既有问题，在此登记备查（日志 `.autocode/tmp/pool_fix10_{pre,all,post2}.log`）。
 
 复跑方式（WSL Ubuntu-24.04）：`source /mnt/d/docs/work/cangjie/cangjie.sh` → `cd .autocode/tmp/pool_probe && cjpm build` → 按脚本里的 `LD_LIBRARY_PATH`（各 `target/release/*@*` 目录**排在 `installed/libs/fboot` 之前**）直接跑 `target/release/bin/main <mode>`，用 `time -p` 量 CPU。
 

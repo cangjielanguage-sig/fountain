@@ -18,6 +18,7 @@ package fountain::f_pool
 import std.collection.concurrent.ConcurrentHashMap
 import std.sync.AtomicInt64
 import fountain::f_pool.diagnostics.PoolDiagnostics
+import fountain::f_pool.exception.UnknownKeyException
 
 
 struct BaseKeyPool<K, V> <: IKeyPool<K, V> where K <: Hashable & Equatable<K> {
@@ -32,7 +33,14 @@ struct BaseKeyPool<K, V> <: IKeyPool<K, V> where K <: Hashable & Equatable<K> {
         s.fetchAdd(1)
     }
     public func giveBack(key: K, value: V, checker: (K, V) -> Bool, destroier: (K, V) -> Unit): Unit {
-        map.get(key)?.giveBack(value, keyedChecker(key, checker), keyedDestroier(key, destroier))
+        if (let Some(p) <- map.get(key)) {
+            p.giveBack(value, keyedChecker(key, checker), keyedDestroier(key, destroier))
+        } else {
+            // 这个键从来没有过池 ⇒ 调用方**还错了键**（键一旦被 get/add 用过就一定有池，且没有淘汰入口）。
+            // 这是应用层的错，池不替它决定：不归还、不销毁、也不替它建一个池 —— 池项所有权仍归调用方，
+            // 抛出来让它自己处置；被顶掉的异常可用 `addSuppressed` 挂上（见 .autocode/bugs/bug-pool.md §2.5 POOL-10）。
+            throw UnknownKeyException(key)
+        }
     }
     private func keyedChecker(key: K, checker: (K, V) -> Bool) {
         {v: V => 

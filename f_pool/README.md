@@ -198,6 +198,14 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
 }
 ```
 
+> `giveBack(key: K, object: V)` 在「这个键从来没有过池」（写错键、把 A 键借出的对象还给 B 键）时抛
+> `UnknownKeyException`（`fountain::f_pool.exception`，`f_base.BaseException` 的子类，带 `key` 字段）：
+> 池**不归还也不销毁**，对象所有权仍在调用方，由应用层决定处置。在 `finally` / `release()` 这类清理路径里
+> 归还时，用 `addSuppressed` 把被顶掉的异常挂上（别丢现场）：
+> `catch (e: UnknownKeyException) { if (let Some(p) <- inFlight) { e.addSuppressed(p) }; throw e }`。
+> 仓库内使用的池都是 `Pool<V>`（键为 `Unit`，键永远只有一个），不会走到这条路径。详见
+> `.autocode/bugs/bug-pool.md` §2.5 `POOL-10`。
+
 ## ArrayListPool
 
 `ArrayListPool<T>` 是「池项类型固定为 `ArrayList<T>`」的池：`creator` 固定为 `{=> ArrayList<T>()}`，

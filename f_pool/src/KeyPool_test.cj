@@ -21,6 +21,7 @@ import std.fs.File
 import std.runtime.{gc, getThreadCount}
 import std.sync.AtomicInt64
 import fountain::f_pool.diagnostics.PoolDiagnostics
+import fountain::f_pool.exception.UnknownKeyException
 
 /**
  * 读 `/proc/self/stat` 的 utime+stime（时钟 tick，USER_HZ=100 ⇒ 1 tick ≈ 10ms）。
@@ -637,6 +638,57 @@ public class KeyPoolTest {
         } else {
             @Assert(false)
         }
+    }
+    /**
+     * `POOL-10`（`.autocode/bugs/bug-pool.md` §2.5）端到端：把从 `k1` 借出的对象还到 `k2`（没有池的键）
+     * ⇒ `giveBack` 抛 `UnknownKeyException`，且**什么都不做**（不归还、不销毁）。
+     * 修前这里静默跳过：对象被丢掉、`k1` 那份额度留在 `out` 上再也回不来（见用例末尾的残量断言）。
+     */
+    @TestCase
+    public func giveBackToUnknownKeyMustThrow(): Unit {
+        let destroyed = AtomicInt64(0)
+        let pool = KeyPool<String, Object>(
+            mode: Fifo,
+            initKeys: ['k1'].iterator().next,
+            minSize: 0,
+            maxSize: 1,
+            totalSize: 1,
+            idleTimeout: Duration.hour,
+            checkOnCreation: false,
+            checkOnBorrowing: false,
+            checkOnReturning: false,
+            checkInterval: Duration.Zero,
+            maxWaiting: Duration.second,
+            creator: {_ => Object()},
+            checker: {_, _ => true},
+            destroier: {_, _ => destroyed.fetchAdd(1)}
+        )
+        var held = None<Object>
+        for (_ in 0 .. 300) {
+            if (let Some(v) <- pool.get('k1', timeout: Duration.Zero)) {
+                held = Some(v)
+                break
+            }
+            sleep(Duration.millisecond * 2)
+        }
+        @Assert(held.isSome())
+        let obj = held.getOrThrow()
+        var thrown = false
+        try {
+            pool.giveBack('k2', obj)                     // 还错键
+        } catch (e: UnknownKeyException) {
+            thrown = true
+            match (e.key) {                              // key 是 Any：键类型只有 Hashable & Equatable 约束
+                case k: String => @Assert(k, 'k2')
+                case _ => @Assert(false)
+            }
+        }
+        @Assert(thrown)                                  // 修前：不抛，对象静默消失（只剩 GC 终结器那条路）
+        @Assert(destroyed.load(), 0)                     // 池不替应用层销毁：所有权仍在调用方
+        // 残量（已知、非期望）：来源键 `k1` 的这份额度记在 `out` 上永远回不来 ⇒ 唯一一项借不回来，
+        // 也不补建（`keyedSize(k1) == maxSize`）。自检不变量 s ≡ 节点数 + out 仍成立，所以不会告警、不会自愈。
+        @Assert(pool.get('k1', timeout: Duration.Zero).isNone())
+        pool.close()                                     // 关池后 remaining 的项由 close 销毁
     }
 }
 
