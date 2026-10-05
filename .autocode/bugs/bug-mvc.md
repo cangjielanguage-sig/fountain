@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 25 条**：严重 4（§1.9 `MVC-4`、§1.10 `MVC-1`、§1.11 `MVC-3`、§1.12 `MVC-2`）、中 8（§2.2 `MVC-C3`、§2.3 `MVC-C5`、§2.5 `MVC-C2`、§2.6 `MVC-8`、§2.7 `MVC-6`、§2.19 `MVC-5`、§2.20 `MVC-7`、§2.21 `MVC-9`）、低危+待验证 13（§3）。
-- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；**待修** `MVC-2`（§1.12，严重｜性能）、§2 的 8 条中危、§3 的 13 条低危/待验证。
+- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；**待修** §2 的 8 条中危、§3 的 13 条低危/待验证（**本模块严重级已清零**）。
 
 ## 1. 严重（本模块 4 条）
 
@@ -72,7 +72,15 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 
 影响：客户端断网/直接断 socket（不发 Close 帧）时循环退出，定时器永久存活并持续向已关闭连接写帧；闭包捕获 `endpoint/ctx/pattern/ws` ⇒ 每断一条连接泄漏一个周期任务 + 一整条请求上下文。修法：把 `pingTimer?.cancel()` 放进该函数的 `finally`（或 `while` 外层的 `try/finally`）。
 
-### 1.12 [严重｜性能] `MVC-2` `accessLog` 每请求无条件序列化全部参数与返回值（f_mvc）✓已复核
+### 1.12 [严重｜性能] `MVC-2` `accessLog` 每请求无条件序列化全部参数与返回值（f_mvc）✓已复核 → ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：分支 `fix/mvc-rest`（worktree `.worktrees/mvc-rest`，基线 `sts/1.3.x` 的 `7be7225d`），代码、用例与本标记在**同一提交**（提交信息 `fix(f_mvc): MVC-2 accessLog 惰性化——日志级别关闭时不序列化参数与返回值（§1.12）`）。
+
+- 改动：`f_mvc/src/RequestMeta.cj` —— 把「参数文本 + 返回值文本」的构造（原 `:537-549` 的 `argGen` 循环与 `result`，加上局部函数 `anyToString`）整体搬出 `accessLog` 函数体，抽成包内接缝 `lazyAccessLogFields(args, returned): () -> (String, String)`：**构造这个闭包不序列化任何东西**，调用它才遍历参数、做 `toString()`/`toData()`+JSON/base64；`accessLog` 的 `logContent` 里才调用它。签名、日志文本格式、调用点 `src/macros/Controller.cj:97` 均未变。**`if (let Some(ex) <- e)` 里的 500 响应处理（`INTERNAL_SERVER_ERROR.handle(ctx, ex)`、`setResponseStatus`）没进闭包** —— 它属于响应、与日志级别无关，必须无条件执行。
+- 惰性成立的依据：f_log 的 `Logger.info(message: () -> String)` 经 `AbstractLogger.append`（`f_log/src/base/AbstractLogger.cj:131-137`）先判 `logLevelEnabled(level)`、为假时不调 `message()`；`LoggerWrapper`（`:39-41`）→ `LoggerAppenderFacade`（`:49-55`）→ 各 appender 同样先判级别 ⇒ 级别关闭时 `logContent` 整个不执行。`request.form.toEncodeString()`、`getResponseStatus()`、`MonoTime.now()` 的求值位置与修前一致（仍在 `logContent` 内），未把 §2.6 `MVC-8` 的 ThreadLocal 问题牵扯进来。
+- 用例：`f_mvc/src/RequestMeta_test.cj`（新增）—— 用「只实现 `ToString`、`toString()` 每次 +1」的计数 spy 直接驱动接缝：`testFieldsAreLazy`（构造闭包后计数必须 0；调用闭包后参数 + 返回值各 1 次 = 2；文本 `[counted]` / `counted`）、`testNoneResult`（返回 `None` ⇒ `'None'`、只序列化参数）。
+- RED/GREEN 实测：先把 `anyToString` 与两段构造搬进接缝但**保持急切**（行为与修前一致）复跑 ⇒ `[ FAILED ] testFieldsAreLazy`，`Assert Failed: (0 == counter.value)`、**left: 0、right: 2**（构造闭包时参数与返回值就都已序列化，缺陷复现 ✓），`TOTAL 6 / PASSED 5 / FAILED 1`、`TEST EXIT=1`；改成在闭包内构造后复跑 ⇒ **PASSED 6 / FAILED 0 / ERROR 0**、`TEST EXIT=0`；同轮 `cjpm build` **exit 0**（`*_test.cj` 不进正常构建）。
+- 未覆盖 / 保留项：①真端到端（HTTP 请求经 `@Controller` 走到 `accessLog`）未跑 —— `accessLog` 需要 `HttpContext`，测试里造不出来（stdx 类、全仓 0 处构造/实现），本条缺陷所在的重活已由接缝用例覆盖；②`LoggerFactory.getLogger<T>()` 的每请求查表按用户 2026-10-05 决定**保留（方案 B0）**，未改用 `RequestMeta.cj:21` 的静态 `log`；③日志**开启**且配了多个 appender 时，f_log 是「每个启用的 appender 各调一次 `message()`」（`LoggerAppenderFacade.cj:49-55`）⇒ 文本拼接与序列化各 ×N（修前拼接本就 ×N、序列化 ×1），N=1 时无差异。
 
 位置：`src/RequestMeta.cj:519-553`（调用点 `macros/Controller.cj:97` 的 `finally`）
 

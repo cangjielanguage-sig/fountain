@@ -516,41 +516,13 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         metas
     }
     public func accessLog<T>(start: MonoTime, ctx: HttpContext, args: ArrayList<Any>, returned: ?Any, e: ?Exception) where T <: Object {
-        func anyToString(any: Any) {
-            let arg = match (any) {
-                case x: HttpContext => x
-                case x: HttpRequest => x
-                case x: HttpHeaders => x
-                case x: HttpResponseBuilder => x
-                case x: Form => return x.toEncodeString()
-                case x: String => return x
-                case x: ToString => return x.toString()
-                case x: Array<Byte> => return toBase64String(x)
-                case x: MultipartFile => return JsonString(x.toString()).toString()
-                case x: ToData => return f_data.convert<JsonValue>(x.toData()).getOrThrow().toString()
-                case x: Data => return f_data.convert<JsonValue>(x).getOrThrow().toString()
-                case x => x
-            }
-            TypeInfo.of(arg).toString()
-        }
         let request = ctx.request
-        let argGen = StringGenerator().append('[')
-        for (arg in args) {
-            if (argGen.size > 1) {
-                argGen.append(',')
-            }
-            let s = anyToString(arg)
-            argGen.append(s)
-        }
-        argGen.append(']')
-        let result = match (returned) {
-            case Some(x) => anyToString(x)
-            case _ => 'None'
+        let fields = lazyAccessLogFields(args, returned)
+        func logContent(): String {
+            let (params, result) = fields()
+            'MVC.accessLog:${request.method}:${request.url}?${request.form.toEncodeString()}; consumes:${request.headers.getFirst('Content-Type')}; params:${params}; returned:${result}; status:${getResponseStatus()}; elapsed:${MonoTime.now() - start}'
         }
         let log = LoggerFactory.getLogger<T>()
-        func logContent(){
-            'MVC.accessLog:${request.method}:${request.url}?${request.form.toEncodeString()}; consumes:${request.headers.getFirst('Content-Type')}; params:${argGen}; returned:${result}; status:${getResponseStatus()}; elapsed:${MonoTime.now() - start}'
-        }
         if (let Some(ex) <- e) {
             let exce = try {
                 MultiRequestMethodHandler.INTERNAL_SERVER_ERROR.`handle`(ctx, ex)
@@ -569,5 +541,45 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         } else {
             log.info(logContent)
         }
+    }
+}
+
+/**
+ * 包内接缝（§1.12 / `MVC-2`）：返回「惰性」参数/返回值文本构造器，文本格式 `([参数,参数...], 返回值)`。
+ * 构造这个闭包不做任何序列化；只有调用它（`accessLog.logContent` 真正要拼日志文本时）才遍历参数、
+ * 做 toString()/toData()+JSON/base64 等重活。单测用计数 spy 钉住这条不变量。
+ */
+func lazyAccessLogFields(args: ArrayList<Any>, returned: ?Any): () -> (String, String) {
+    {=>
+        func anyToString(any: Any) {
+            let arg = match (any) {
+                case x: HttpContext => x
+                case x: HttpRequest => x
+                case x: HttpHeaders => x
+                case x: HttpResponseBuilder => x
+                case x: Form => return x.toEncodeString()
+                case x: String => return x
+                case x: ToString => return x.toString()
+                case x: Array<Byte> => return toBase64String(x)
+                case x: MultipartFile => return JsonString(x.toString()).toString()
+                case x: ToData => return f_data.convert<JsonValue>(x.toData()).getOrThrow().toString()
+                case x: Data => return f_data.convert<JsonValue>(x).getOrThrow().toString()
+                case x => x
+            }
+            TypeInfo.of(arg).toString()
+        }
+        let argGen = StringGenerator().append('[')
+        for (arg in args) {
+            if (argGen.size > 1) {
+                argGen.append(',')
+            }
+            argGen.append(anyToString(arg))
+        }
+        argGen.append(']')
+        let result = match (returned) {
+            case Some(x) => anyToString(x)
+            case _ => 'None'
+        }
+        (argGen.toString(), result)
     }
 }
