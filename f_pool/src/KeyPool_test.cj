@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_pool
 
+import std.collection.ArrayList
 import std.convert.*
 import std.fs.File
 import std.runtime.gc
@@ -509,6 +510,81 @@ public class KeyPoolTest {
         if (let Some(v) <- got) {
             pool.giveBack('k', v)
         }
+        pool.close()
+    }
+    /**
+     * `POOL-3`（`.autocode/bugs/bug-pool.md` §1.3）：满载（= 稳态）时巡检**不得**摘掉空闲项、也不得反复补建。
+     * 修前 `BaseKeyPool.check` 把 `p.size < max` 写成了 checker 的与条件，而 checker 返回 false 表示
+     * 「这一项失效 ⇒ 摘节点」⇒ 每轮巡检丢一个空闲项（探针实测 idle 2→1），补建还和计数更新赛跑。
+     */
+    @TestCase
+    public func checkMustNotDropIdleItemWhenAtCap(): Unit {
+        let created = AtomicInt64(0)
+        let destroyed = AtomicInt64(0)
+        let pool = KeyPool<String, Object>(
+            mode: Fifo,
+            initKeys: ['k', 'k'].iterator().next,
+            minSize: 0,
+            maxSize: 2,
+            totalSize: 2,
+            idleTimeout: Duration.hour,
+            checkOnCreation: false,
+            checkOnBorrowing: false,
+            checkOnReturning: false,
+            checkInterval: Duration.millisecond * 50,
+            maxWaiting: Duration.second,
+            creator: {_ =>
+                created.fetchAdd(1)
+                Object()
+            },
+            checker: {_, _ => true},
+            destroier: {_, _ => destroyed.fetchAdd(1)}
+        )
+        sleep(Duration.millisecond * 300)            // 等两件都建好
+        @Assert(created.load() == 2)
+        sleep(Duration.millisecond * 500)            // 满载空闲跑 ~10 轮巡检
+        let held = ArrayList<Object>()
+        while (let Some(v) <- pool.get('k', timeout: Duration.Zero)) {
+            held.add(v)
+        }
+        @Assert(held.size == 2)                      // 修前：掉到 1
+        @Assert(created.load() == 2)                 // 修前：可能是 3（掉落 + 补建）
+        @Assert(destroyed.load() == 0)               // 巡检不该销毁任何有效项
+        for (v in held) {
+            pool.giveBack('k', v)
+        }
+        pool.close()
+    }
+    /**
+     * `POOL-3`（§1.3）第二面：满载时巡检必须**照常调用用户 checker**（否则 `idleTimeout` / `connectionLife`
+     * 这类「按时间判失效」的业务判定会被整轮绕过）。这里 checker 恒判失效 ⇒ 该项必须被摘掉并销毁。
+     */
+    @TestCase
+    public func checkerMustRunWhenAtCap(): Unit {
+        let calls = AtomicInt64(0)
+        let destroyed = AtomicInt64(0)
+        let pool = KeyPool<String, Object>(
+            mode: Fifo,
+            initKeys: ['k'].iterator().next,
+            minSize: 0,
+            maxSize: 1,
+            totalSize: 1,
+            idleTimeout: Duration.hour,
+            checkOnCreation: false,
+            checkOnBorrowing: false,
+            checkOnReturning: false,
+            checkInterval: Duration.millisecond * 50,
+            maxWaiting: Duration.second,
+            creator: {_ => Object()},
+            checker: {_, _ =>
+                calls.fetchAdd(1)
+                false
+            },
+            destroier: {_, _ => destroyed.fetchAdd(1)}
+        )
+        sleep(Duration.millisecond * 400)            // 建好 + 跑几轮巡检
+        @Assert(calls.load() > 0)                    // 修前：checker 一次都没跑（恒 0）
+        @Assert(destroyed.load() >= 1)               // 判失效的项必须被销毁
         pool.close()
     }
 }

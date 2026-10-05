@@ -18,12 +18,13 @@
 
 > 计数修正（2026-10-05）：§1.1 `POOL-1` 已修复 ⇒ 待修严重级 **4** 条（`POOL-2`~`POOL-5`）；上表保留审查当时的原始计数。
 > 二次修正（2026-10-05）：§1.2 `POOL-2`、§1.5 `POOL-5`、§2.1 `POOL-6` 已修复（同一次提交）⇒ 待修严重级 **2** 条（`POOL-3`、`POOL-4`），中危 **7** 条。
+> 三次修正（2026-10-05）：§1.3 `POOL-3` 已修复 ⇒ 待修严重级 **1** 条（`POOL-4`），中危 **7** 条。
 
 **建议修复顺序**：
 
 1. `POOL-1`（§1.1）借出中的池项被 GC 终结器销毁 → 池的「借出期所有权」契约不成立（实测借出对象被打上已销毁标记）　**✅已修复（2026-10-05，见 §1.1 修复标记）**
 2. `POOL-2`（§1.2）`KeyPool.get` 有限超时分支在池耗尽时**无让步忙等** → 编码热路径（`DefaultCodec` 的 `build(timeout: 5s)`）整核空转（实测 2s 等待烧 2.25s 用户态 CPU）　**✅已修复（2026-10-05，见 §1.2 修复标记：等待改条件变量通知）**
-3. `POOL-3`（§1.3）巡检把**满载 key** 的空闲项当「校验不过」摘掉，并整轮跳过用户 checker → 稳态抖动、`connectionLife`/`idleTimeout` 判定被绕过（实测满载空闲池 idle 2→1）
+3. `POOL-3`（§1.3）巡检把**满载 key** 的空闲项当「校验不过」摘掉，并整轮跳过用户 checker → 稳态抖动、`connectionLife`/`idleTimeout` 判定被绕过（实测满载空闲池 idle 2→1）　**✅已修复（2026-10-05，见 §1.3 修复标记：size&lt;max 只约束补建）**
 4. `POOL-4`（§1.4）creator/checker 持续失败时**无退避紧重试** → 对下游的重连风暴 + 每轮一条 WARN（实测 300ms 内 75,976 次尝试）
 5. `POOL-5`（§1.5）`maxWaiting = Duration.Max` 的「真无限等待」实际只等 1s 就**静默放弃**（实测 1008ms 返回 `None`，对照 30s 档 2016ms 返回项）；同一分支还会吞掉丢失的唤醒　**✅已修复（2026-10-05，随 §1.2 的统一等待重写一并解决，见 §1.5 修复标记）**
 6. 其后按 §2 顺序：`POOL-6`（关停不唤醒/归还竞态）**✅已修复（2026-10-05，见 §2.1 修复标记）** → `POOL-7`（关池泄漏线程）→ `POOL-8`（队列按 `totalSize` 预分配 + 两个池默认 `maxSize=Int64.Max` 构造即 OOM）→ `POOL-9`（`release` 后仍可写，实测污染池项）→ `POOL-10`~`POOL-13`
@@ -140,7 +141,18 @@ double_destroy: after_close=1 after_gc=2
 
 **建议修法**：有限分支与 `Duration.Max` 分支共用「等待步」——最省事的是把 `sleep(Duration.millisecond)` 也放到有限分支的循环末尾（等待语义不变，最坏多睡 1ms）；更好的做法是：池满时改为「按剩余预算等一次 `PoolTask`」，或直接复用一段公共等待实现。
 
-### 1.3 [严重｜正确性+资源抖动] `POOL-3` 巡检把「满载 key」的空闲项当「校验不过」摘掉，并整轮跳过用户 checker
+### 1.3 [严重｜正确性+资源抖动] `POOL-3` 巡检把「满载 key」的空闲项当「校验不过」摘掉，并整轮跳过用户 checker ✓已复核 → ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、本标记在**同一提交**（提交信息 `fix(f_pool): POOL-3 巡检的 size<max 只约束补建，checker 照常执行`）。
+
+- 改动（把 `p.size < max` 从 checker 挪到「补建」上）：
+  1. `f_pool/src/BaseKeyPool.cj:55-61`：`{v => p.size < max && checker(k, v)}` → `{v => checker(k, v)}`，守卫移到 taskPusher：`{if (p.size < max) { taskPusher(k) }}`（注释里写明「checker 返回 false = 摘节点」这一语义）；
+  2. `f_pool/src/UnitKeyPool.cj:41-44`：同样处理 → `{v => checker(eternity, v)}` + `{if (size < max) { taskPusher(eternity) }}`。
+- 用例：`f_pool/src/KeyPool_test.cj` → `checkMustNotDropIdleItemWhenAtCap`（满载 + `checkInterval=50ms` 跑 ~10 轮巡检：可借数仍为 2、creator 仍只调用 2 次、destroyed 仍为 0）、`checkerMustRunWhenAtCap`（满载且 checker 恒判失效：checker 调用数 > 0 且该项被销毁）。
+- 测量证据：
+  - **修前**：两条都 `[ FAILED ]`（`Assert Failed: (held.size == 2)`、`(calls.load() > 0)`；与探针 `churn` 的 `created 2->2 / destroyed 0->0 / idle 2→1` 一致）；
+  - **修后**：两条 `[ PASSED ]`（`FILTERED_EXIT=0`）；全量 **`PASSED: 44, SKIPPED: 0, ERROR: 0, FAILED: 0`**（`FULL_EXIT=0`，日志 `.autocode/tmp/pool_fix3_{pre,post}.log`）。
+- 未覆盖：`p.size < max` 这个补建守卫在「刚摘完节点」的调用序下几乎恒真（`SyncDeque.check` 只在摘节点之后才调 taskPusher），保留它只为保住原意、不改变行为；`minSize` 补足路径（`checkingLoop`）不受影响。
 
 **现象**：`BaseKeyPool.check` 把「池满就不再校验」写成了 checker 的**与条件**：
 
@@ -423,6 +435,8 @@ useafterrelease: second_is_empty=false second_bytes=5
 > `POOL-1` 修复后的复测：把探针的 path 依赖指向 worktree 的 `f_pool`（工程 `.autocode/tmp/pool_probe_fixed`，其余同）—— `finalizer` → `after_gc=0 / borrowed_is_destroyed=false`、`double_destroy` → `after_close=1 after_gc=1`（修前分别是 `1/true` 与 `2`）。即上表中这两行是**修前基线**，修复记录见 §1.1。
 
 > `POOL-2`/`POOL-5`/`POOL-6` 修复后的复测：等待改成条件变量通知后，上表里 `spin_finite`/`slowcreate` 的旧读数不再适用，改由单测钉住 —— `finiteTimeoutWaitMustNotBurnCpu`（`/proc/self/stat` 的 utime+stime tick 断言，修前 ≈30 tick 失败、修后通过）与 `infiniteWaitMustWaitForSlowCreation`（修前 1008ms 返回 `None` 失败、修后 ≥1.8s 拿到项）；`giveBackRacingCloseMustNotStrandItem`（100 轮「归还 ‖ 关池」）修前失败、修后通过。全量 `cjpm test` = **`PASSED: 42, SKIPPED: 0, ERROR: 0, FAILED: 0`**（日志 `.autocode/tmp/pool_fix2_{pre,post}.log`）。
+
+> `POOL-3` 修复后的复测：探针 `churn` 的场景改由单测钉住 —— `checkMustNotDropIdleItemWhenAtCap`（满载空闲跑 ~10 轮巡检后仍可借 2 件、creator 仍只调 2 次；修前 `held.size == 2` 断言失败）与 `checkerMustRunWhenAtCap`（满载时用户 checker 必须被调用；修前 `calls.load() > 0` 断言失败）。全量 `cjpm test` = **`PASSED: 44, SKIPPED: 0, ERROR: 0, FAILED: 0`**（日志 `.autocode/tmp/pool_fix3_{pre,post}.log`）。
 
 复跑方式（WSL Ubuntu-24.04）：`source /mnt/d/docs/work/cangjie/cangjie.sh` → `cd .autocode/tmp/pool_probe && cjpm build` → 按脚本里的 `LD_LIBRARY_PATH`（各 `target/release/*@*` 目录**排在 `installed/libs/fboot` 之前**）直接跑 `target/release/bin/main <mode>`，用 `time -p` 量 CPU。
 

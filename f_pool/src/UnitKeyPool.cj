@@ -39,7 +39,9 @@ struct UnitKeyPool<K, V> <: IKeyPool<K, V> {
         pool.get(keyedChecker(checker), keyedDestroier(destroier))
     }
     public func check(running: () -> Bool, checker: (K, V) -> Bool, taskPusher: (K) -> Unit): Unit{
-        pool.check(running, {v => size < max && checker(eternity, v)}){taskPusher(eternity)}
+        // 同 `BaseKeyPool.check`：`size < max` 只约束「补建」，不能当 checker 的与条件
+        // （见 .autocode/bugs/bug-pool.md §1.3 POOL-3）
+        pool.check(running, {v => checker(eternity, v)}){if (size < max) { taskPusher(eternity) }}
     }
     public func destroy(fn: (K, V) -> Unit): Unit {
         pool.destroy{v => fn(eternity, v)}
