@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 17 条**：严重 5（§1.3 `ASP-1`、§1.4 `ASP-2`、§1.6 `ASP-4`、§1.7 `ASP-5`、§1.14 `ASP-3`）、中 4（§2.4 `ASP-9`、§2.9 `ASP-8`、§2.22 `ASP-6`、§2.23 `ASP-7`）、低危+待验证 8（§3）。
-- **状态（截至 2026-10-05）**：`ASP-1` ❌误判（§1.3，设计目的）、`ASP-2` ✅已修复（§1.4）、`ASP-4` ✅已修复（§1.6）、`ASP-5` ✅已修复（§1.7）、`ASP-L8` ❌不成立（§3.2，概率性假设已实测排除）；**待修** `ASP-3`（§1.14，严重｜性能）、§2 的 4 条中危、§3 的 7 条低危。
+- **状态（截至 2026-10-05）**：`ASP-1` ❌误判（§1.3，设计目的）、`ASP-2` ✅已修复（§1.4）、`ASP-4` ✅已修复（§1.6）、`ASP-5` ✅已修复（§1.7）、`ASP-3` ✅已修复（§1.14）、`ASP-L8` ❌不成立（§3.2，概率性假设已实测排除）；**待修** §2 的 4 条中危（`ASP-9`/`ASP-8`/`ASP-6`/`ASP-7`）、§3 的 7 条低危。
 
 ## 1. 严重（本模块 5 条）
 
@@ -96,7 +96,24 @@ for (i in 0..params.size) {
 
 影响：内层 `for ... where` 无论命中与否都正常结束，随后必然执行 `return false` ⇒ 只要规则里写了非 `*` 的注解，该规则**永不匹配**（静默失效、无任何提示）；全部写成 `*` 才会返回 `true`（`272`）。修法：命中置标志，循环结束后 `if (matched) { continue }` 再继续外层。
 
-### 1.14 [严重｜性能] `ASP-3` 每次调用都重建函数元信息（反射解析 + 2 个数组 + 参数装箱）（f_aspect）
+### 1.14 [严重｜性能] `ASP-3` 每次调用都重建函数元信息（反射解析 + 2 个数组 + 参数装箱）（f_aspect）→ ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：分支 `fix/aspect`（worktree `.worktrees/aspect`，基线 `7be7225d`），代码、用例、本标记在**同一提交**（提交信息 `perf(f_aspect): ASP-3 类级织入改用静态元信息，不再每次调用重建 QualifiedFuncInfo（§1.14）`）。
+
+- 改动（**路线 1**：宏生成静态元信息，命名按用户指定 `__pOIntcUt_<函数>`）：
+  - `f_aspect/src/macros/PointCut.cj`：`pointcut(decl: FuncDecl, metaName!: ?Token = None)` —— 有 `metaName` 时生成 `let info = InvocationFuncInfo(__pOIntcUt_x, $args)`（走现成的 `InvocationFuncInfo(qualifiedFuncInfo, args)` 构造），否则维持原 `InvocationFuncInfo(TypeInfo.of(this), name, argTypes, args)`；类级 `pointcut(decl: ClassDecl)` 为每个被织入函数在类体追加 `private static let __pOIntcUt_x = QualifiedFuncInfo(TypeInfo.of<类>(), '函数', [TypeInfo.of<参数类型>…])`。辅助函数：`weaveOne`（两个类级入口共用）、`metaTokens`、`nextMetaName`（首个 `__pOIntcUt_<名>`，同名重载依次 `_2/_3`，名字被占则放弃静态化）、`isSimpleName`（AST `IDENTIFIER`，运算符名不做）、`hasTypeParams`（`func f<T>` 不做）、`isGenericClass`（`class Foo<T>` 整体不做）。
+  - `f_aspect/src/macros/WeavedBean.cj`：类级织入循环改为共用 `weaveOne`/`nextMetaName` 并收集静态元信息追加到类体。
+  - **回退面**（保持原行为，不退化为错误）：函数级 `@Pointcut`、运算符名、函数自身带泛型参数、形参是宏展开声明、泛型类、生成名冲突。
+- 用例（`f_aspect/src/test/`，新建）：
+  - `pointcut_meta_reuse_test.cj`：`@WeavedBean` 目标 + 记录 `qualifiedFuncInfo` 的切面，断言两次调用切面拿到的元数据是**同一对象**（`refEq`）。注意这条只验证「链里捕获的元数据复用」（切面看到的就是链上首次那份）；**每次调用是否重建**对切面不可见，故另加计时用例。
+  - `pointcut_meta_cost_test.cj`：无规则命中的 `@WeavedBean` 目标 + 同体 `static` 方法作未织入基线，1e6 次调用打印每调用耗时（量化报告里标注的「倍数待验证」）。
+- 测量证据（同机、同用例，用 `git stash push -- <宏文件>` 得到修前版本做 A/B）：
+  - **修前**：`每调用耗时：被织入 3931 ns，未织入(static 同体) 2 ns，差 3929 ns（1000000 次）`；
+  - **修后**：`被织入 1867 ns，差 1865 ns`（复跑 2209 ns / 2207 ns，含运行间噪声）⇒ 每调用 **≈1.8–2.1×**，即省掉「`TypeInfo.of(this)` + `[TypeInfo.of<T>()…]` 数组 + `getInstanceFunction` 反射解析 + `HashBuilder` + 一次 `QualifiedFuncInfo` 分配」的实测收益。
+  - 结构性佐证：修后日志里 `warning: function 'of' is deprecated` 计数 **0**（修前每个被织入类一条），即每调用的 `TypeInfo.of(this)` 确已消失。
+  - 行为回归：`cjpm test`（f_aspect）`PASSED: 13, FAILED: 0, ERROR: 0`、`cjpm test success`（含 §1.4 并发/链捕获、§1.6/§1.7 路由规则、§3.2 键稳定性、本次两条新用例）；`cjfmt` 后复跑仍 13/13 绿。
+  - 宏消费方构建：`f_orm` `cjpm build success`（EXIT=0）、`f_mvc` `cjpm build success`（EXIT=0，其 `macros/Controller.cj` 会生成 `@Pointcut`）。
+- 未覆盖：真实 `@TransactionalService` 消费方（`fcoder` 5 个 impl、`fdemo/user` 2 个 impl）未构建（依赖重）；同类级路径由测试里的 `@WeavedBean` 目标覆盖（与 `@TransactionalService` 走同一 `weave` 实现）。`ASP-6`/`ASP-7` 与本次同处 `Aspects.doProceed`，按用户指示单独处理、未含在本次。
 
 位置：`src/macros/PointCut.cj:115`、`QualifiedFuncInfo.cj:70`、`PointCut.cj:87-94`
 
