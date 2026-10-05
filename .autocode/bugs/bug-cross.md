@@ -1,9 +1,9 @@
-# 跨模块审查条目（`X-*`；拆分自 bug.md）
+# 跨模块审查条目（`X-*`；§1/§2 拆分自 bug.md，§3 为后续新增）
 
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
-- **本模块条目 2 条**：严重 1（§1.2 `X-1`，f_base `TypeInfos.get(String)` 无限递归）、中 1（§2.24 `X-2`，f_data/f_config 的 `Duration` 配置解析，定级待复核）。
-- **状态（截至 2026-10-05）**：`X-1` ✅已修复（§1.2，`fix/x-1-typeinfos-get`，已并入 `sts/1.3.x`）；**待修/待复核** `X-2`（§2.24）。
+- **本模块条目 3 条**：严重 1（§1.2 `X-1`，f_base `TypeInfos.get(String)` 无限递归）、中 1（§2.24 `X-2`，f_data 的 `Duration` 配置解析 —— **触发原因已定位**：数字分支多余的 `i++` + `tryParse` 抛异常）、低危 1（§3.1 `X-3`，f_jwt 11 条 ERROR —— **触发原因已定位**：①用例漏给 verifier 接线 ②空密钥构造即抛）。
+- **状态（截至 2026-10-05）**：`X-1` ✅已修复（§1.2，已并入 `sts/1.3.x`）；**待修** `X-2`（§2.24：影响所有 `xxx=30s` 风格配置 —— 会被静默解析成 `3s`；已附实测表与四处修法）、`X-3`（§3.1：①「测试待修」②产品侧健壮性待定；f_security/fdemo 的生产路径不受影响）。
 
 ## 1. 严重（本模块 1 条）
 
@@ -60,3 +60,80 @@ Summary: TOTAL: 28   PASSED: 27, SKIPPED: 0, ERROR: 1, FAILED: 0
 与 §1.1 的关系：调用链（`f_config`/`f_data`）与 `ORM-1` 的改动（`SqlArgs`/`SqlExecutor`）无交集；其余 27 例全过（含新增的 3 例）⇒ 属**既有缺陷**。
 
 修法方向：先补 `f_data` 层 `Duration.tryParse` 的用例钉住约定（`45s`/`1m`/`0s`/`abc` 各自的期望），再决定是改解析规则还是改调用方（`Config.getData`）的回退分支。
+
+**触发原因（2026-10-05 定位，含实测）**：`f_data/src/base/DataParsable.cj:30-65` 的 `Duration.tryParse` 里，**数字分支多了一次 `i++`**：
+
+```cangjie
+        while (i < s.size) {
+            let r = s[i]
+            i++                                  // ← 外层已推进
+            duration += match (r) {
+                case x where x == b'-' || (x >= b'0' && x <= b'9') =>
+                    bytes.add(x)
+                    i++                          // ← 又推进一次：吃掉数字后面的那个字符
+                    continue
+```
+
+⇒ **单位字符被跳过**：`45s` 读到 `4` 后 `i` 直接跳到 `s`，只把 `4` 累加（单位 `s` 被跳掉）⇒ 结果 `4s`；`1m`/`1d2h` 这类「数字紧跟单位」的输入连单位都读不到，`duration` 停在 `Duration.Zero` ⇒ 上游按「≤0 = 真无限等待」映射成 `Duration.Max`。另有 `case _ => throw` 与两处 `getOrThrow`（`:58`、`:62`）让**非法输入直接抛异常**，而 `tryParse` 的语义应返回 `None` ⇒ `Config.getData` 的回退分支永远走不到。
+
+实测（探针，直接调 `Duration.tryParse`，日志 `/tmp/cross_probe.log`）：
+
+| 输入 | 实测 | 期望（用例/文档） |
+|---|---|---|
+| `45s` | **4s** | 45s |
+| `30s` | **3s** | 30s |
+| `1m` | **0s**（上游映射成 `Duration.Max`） | 1m |
+| `1d2h` | **0s** | 1d2h |
+| `0s` | 0s（巧合对上「≤0 ⇒ Max」） | 0s |
+| `abc` | **抛 `DataParsableException`** | `None` ⇒ 回退 30s |
+| `""` | `Some(0s)` | `None`（待定） |
+
+**影响要比用例大**：这是 `f_data` 的通用 `DataParsable` 实现，任何 `xxx=30s` 风格配置都会被静默解析成 `3s`（少一位）⇒ 连接池等待、超时类配置全部按 1/10、甚至按「无限等待」生效。
+
+修法（四处，缺一不可）：①删掉数字分支那次多余的 `i++`；②`case _` 与 `Int64.tryParse` 失败改为返回 `None`；③读到单位后要**清空 `bytes`**（否则多段输入 `1d2h` 会把前段数字带进下一段）；④`case b'm'/b'u'/b'n'` 里的 `s[i]` **没有边界检查** —— 修掉 ① 之后 `1m` 会走到 `if (s[i] == b's')` 而越界（现在正好被 ① 掩盖着，两个缺陷互相遮蔽），必须同时补。
+
+**2026-10-05 复现与归属（来源：`f_cache` 审查的「四个使用模块端到端验证」）**：`f_orm` 全量 `cjpm test` = `TOTAL: 33, PASSED: 32, ERROR: 1`（同一条 `testPoolMaxWaiting`，失败读数与上表一致）；把同一份用例在 **`sts/1.3.x`（不含任何 f_cache 审查改动）** 上复跑得到**完全相同**的结果（32/33、同一条）⇒ 确认为本条目（既有缺陷），与 `f_cache` 审查改动无关：`f_config`/`ORMConfig` 的依赖里**没有** `f_cache`，也不使用本次被改动的 `ConcHashMap`/`SyncLinkedHashMap`。日志 `/tmp/orm_branch.log`（分支侧）、`/tmp/orm_main.log`（主线基线）。
+
+## 3. 低危（本模块 1 条，2026-10-05 由 `f_cache` 审查的端到端验证新增）
+
+### 3.1 [低危｜测试红｜定级待复核] `X-3` `f_jwt` 全量用例 11 条 ERROR（HMAC 类；跨模块：f_jwt / stdx.crypto）
+
+> 2026-10-05 在 `f_cache` 审查的「四个使用模块端到端验证」里发现；**追加为新章节以保持既有编号不变**（同 `X-2` 的先例）；定级待复核 —— 若同一现象能在生产路径复现（签名算法/密钥解析为空），应升为**严重**（JWT 签名与校验失效）。
+
+位置：`f_jwt/src/JWT_test.cj`（11 条用例）；异常栈落在 `f_jwt/src/SignAlgo.cj:181`（`NoneSignAlgo.verify`）与 `f_jwt/src/HMACDigest.cj:24`（← `stdx.crypto.digest.HMAC.init`）← `f_jwt/src/JWT.cj:46/475`。
+
+证据（`cjpm test` 全量，f_jwt；日志 `/tmp/jwt_branch.log`）：
+
+```
+Summary: TOTAL: 14
+    PASSED: 3, SKIPPED: 0, ERROR: 11
+    FAILED: 0
+
+[ ERROR  ] CASE: testBasicHmacSHA1
+    REASON: An exception has occurred:fountain::f_jwt.exception.JWTException:sign algo was not be specified
+    at fountain::f_jwt.NoneSignAlgo.verify(...)(f_jwt/src/SignAlgo.cj:181)
+    at fountain::f_jwt.JWTVerifier.verifySign()(f_jwt/src/JWT.cj:475)
+    at fountain::f_jwt/test.JWTTest.testBasicHmacSHA1()(f_jwt/src/JWT_test.cj:37)
+
+[ ERROR  ] CASE: testHmacMD5ByHexKeyEdgeCases
+    REASON: An exception has occurred:CryptoException: Key is empty.
+    at stdx.crypto.digest.HMAC.init(...)
+    at fountain::f_jwt.HMACDigest.init(...)(f_jwt/src/HMACDigest.cj:24)
+    at fountain::f_jwt.JWT.hmacMD5(...)(f_jwt/src/JWT.cj:46)
+```
+
+- **11 条 ERROR**：`testBasicHmacSHA1`、`testHmacMD5ByHexKey`、`testHmacMD5ByHexKeyEdgeCases`、`testHmacMD5ByBase64Key`、`testAllHmacAlgorithms`、`testVerificationFunctionality`、`testErrorHandling`、`testChainedCalls`、`testKeyFormatCompatibility`、`testBoundaryValues`、`testLargePayload`；仅 3 条 PASSED：`testHeaderFunctionality`、`testPayloadFunctionality`、`testTimeFunctionality`。
+- **归属**：同一份用例在 **`sts/1.3.x`** 上复跑得到**完全相同**的 3 PASSED / 11 ERROR ⇒ **既有缺陷**，与 `f_cache` 审查改动无关（f_jwt 与 f_cache 的接触面只有 `JwtIdCache` 的 `set(life:)`/`set(dieAt:)`；失败栈全在 `SignAlgo`/`HMACDigest`）。日志 `/tmp/jwt_main.log`。
+- **两种症状都指向「输入没到位」**：① `NoneSignAlgo.verify` ⇒ 校验时拿到的签名算法是**空/None**；② `HMACDigest.init` 拿到的**密钥数组为空** ⇒ `Key is empty.`。**已定位（2026-10-05，见下）**：①不是「解析被破坏」，而是**用例漏了给 verifier 接线算法与密钥**（产品侧写法是对的）；②空密钥在**构造 HMAC 时**就抛，库内无守卫。先前猜的三个候选提交（`unsafe String` 重构 / JSON 解析改动）**已排除**。
+
+**触发原因（2026-10-05 定位，含实测；日志 `/tmp/cross_probe.log`）**：两类，彼此独立。
+
+1. **用例没给 verifier 接线算法与密钥**（9 条用例的写法）。`JWT` 是 `sealed abstract class`（`f_jwt/src/JWT.cj:31`），`var signAlgo: SignAlgo = NoneSignAlgo.INSTANCE`（`:34`）**只在编码器方法里被赋值**（`hmacMD5`/`hmacSHA1`/… `:46-224`）；`JWT.verifier(data)`（`:316`）只解析 token，**不会**从 header 的 `alg` 反解算法 —— 实测 header 里确实有 `alg=Some("HS1")`，但实现不使用它 ⇒ `signAlgo` 落到默认的 `NoneSignAlgo` ⇒ `verifySign()`（`:474`）必抛 `sign algo was not be specified`（`SignAlgo.cj:181`）。
+   实测：`JWT.verifier(token).verifySign()` ⇒ **抛异常**；`JWT.verifier(token).hmacSHA1(key).verifySign()` ⇒ **true**。
+   ⇒ **属用例与 API 约定不一致，不是产品缺陷**：产品侧的正确用法在 `f_security/src/JWTSecurityContext.cj:36-39`（`let verifier = JWT.verifier(jwt); … keySetter(verifier, principal).verify()`）与 `fdemo/user/src/util/UserSessionCache.cj:29-30`（`{verifier, principal => hmacKey(verifier, principal)}`）—— 都是用回调把算法/密钥配到 verifier 上，这 9 条用例漏了这一步。
+   ⇒ 修法二选一：①改用例（补 `.hmacSHA1(key)` 之类的接线，最省事）；②若希望 verifier 支持「按 header 的 `alg` + 调用方提供的密钥」自动解析，则需在 `JWTVerifier` 侧实现解析（属 API 设计变更，需作者确认）。
+
+2. **空/非法密钥在构造阶段就抛异常**（`testHmacMD5ByHexKeyEdgeCases` 等）。`HMACDigest.init(key:algorithm:)`（`f_jwt/src/HMACDigest.cj:23-25`）直接 `HMAC(key, algorithm)`，**没有空密钥守卫** ⇒ `hmacMD5ByHexKey("")`（`fromHex("")` ⇒ 空数组）在**编码阶段**就抛 `CryptoException: Key is empty.`（来自 `stdx.crypto.digest.HMAC`）。用例的意图（注释：「验证空密钥和无效十六进制字符串的处理」）是优雅处理 ⇒ 契约不一致。
+   ⇒ 修法：在 `HMACDigest.init`（或 `hmac*ByHexKey`/`ByBase64Key`）加显式守卫 —— 抛库自己的 `JWTException` 明确报「空密钥」，或让 `verifySign()` 捕获该异常返回 `false`（「快速失败」还是「校验不通过」由作者定）。
+
+**定级建议**：第 1 条应改记为「测试待修」而非产品缺陷；第 2 条属产品侧健壮性/契约问题（低危）。生产路径（f_security / fdemo 的 `keySetter` 用法）不受影响。
