@@ -437,7 +437,7 @@ useafterrelease: second_is_empty=false second_bytes=5
 
 ### 2.6 [中｜内存] `POOL-11` key 表只增不减，巡检每轮 O(#keys) ✓已复核 → ✅已修复（2026-10-05）
 
-**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、`f_pool/README.md` 与标记在**同一提交**（提交 `xxxx`，提交信息 `fix(f_pool): POOL-11 键表可回收：KeyPool.remove 摘键、close 清空键表，销毁只留 close`）。
+**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、`f_pool/README.md` 与标记在**同一提交**（提交 `944c5b02`，提交信息 `fix(f_pool): POOL-11 键表可回收：KeyPool.remove 摘键、close 清空键表，池这一层销毁只留 close`）。
 
 - 口径（2026-10-05 拍板）：① `KeyPool` 新增 `remove(key: K)` —— **先关闭 + 销毁**该键的池，再把它从键表里删掉（键不存在 = 空操作）；② **删除 `destroy`**：池这一层唯一的销毁入口是 `close`；③ `KeyPool.close()` 返回前**销毁所有键的池并清空键表**（幂等）。
 - 改动：
