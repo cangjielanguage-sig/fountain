@@ -73,10 +73,14 @@ class ConcHashMapKeys<V> <: EquatableCollection<String> {
     }
 
     public func contains(all!: Collection<String>): Bool {
-        for (e in all where contains(e)) {
-            return true
+        //「全部命中」才算包含：与 std Collection.contains(all:) 以及本 map 的 containsAll 语义一致
+        //（原实现写成「任一命中」即 return true，语义相反）
+        for (e in all) {
+            if (!contains(e)) {
+                return false
+            }
         }
-        false
+        true
     }
 }
 
