@@ -15,8 +15,9 @@ limitations under the License.
 */
 package fountain::f_pool
 
+import std.collection.ArrayList
 import std.collection.concurrent.ConcurrentHashMap
-import std.sync.AtomicInt64
+import std.sync.{AtomicBool, AtomicInt64}
 import fountain::f_pool.diagnostics.PoolDiagnostics
 import fountain::f_pool.exception.UnknownKeyException
 
@@ -25,22 +26,47 @@ struct BaseKeyPool<K, V> <: IKeyPool<K, V> where K <: Hashable & Equatable<K> {
     private let map = ConcurrentHashMap<K, BasePool<V>>()
     private let poolCreator: (K) -> BasePool<V>
     private let s = AtomicInt64(0)
-    BaseKeyPool(mode: Mode, private let max: Int64){
+    /**
+     * `running` 是所属 `KeyPool` 的运行标志（同一个 `AtomicBool`，**成员参数**）：
+     * 关停之后不再按需建池 —— 否则 `close()` 清空键表之后，一个交错的 `get` / `keyedSize`
+     * 又会把键表长回来（见 `POOL-11`）。
+     */
+    BaseKeyPool(mode: Mode, private let max: Int64, private let running: AtomicBool){
         poolCreator = mode.poolCreator()
     }
     public func add(key: K, value: V): Unit {
-        keyedPool(key).add(value) 
-        s.fetchAdd(1)
+        if (!running.load()) {
+            // 关停窗口：不再建池、不再入池（这个值由调用方的 `Ref` 终结器兜底销毁）
+            return
+        }
+        if (keyedPool(key).add(value)) {
+            s.fetchAdd(1)
+        }
     }
     public func giveBack(key: K, value: V, checker: (K, V) -> Bool, destroier: (K, V) -> Unit): Unit {
         if (let Some(p) <- map.get(key)) {
             p.giveBack(value, keyedChecker(key, checker), keyedDestroier(key, destroier))
-        } else {
-            // 这个键从来没有过池 ⇒ 调用方**还错了键**（键一旦被 get/add 用过就一定有池，且没有淘汰入口）。
-            // 这是应用层的错，池不替它决定：不归还、不销毁、也不替它建一个池 —— 池项所有权仍归调用方，
-            // 抛出来让它自己处置；被顶掉的异常可用 `addSuppressed` 挂上（见 .autocode/bugs/bug-pool.md §2.5 POOL-10）。
-            throw UnknownKeyException(key)
+            return
         }
+        if (!running.load()) {
+            // 关停与归还交错（`close()` 已经清空了键表）：归还无门 ⇒ 直接销毁，不抛
+            // （口径同 `KeyPool.giveBack` 的 `!running` 分支）。
+            unreturnable(key, value, destroier)
+            return
+        }
+        // 这个键从来没有过池 ⇒ 调用方**还错了键**（键一旦被 get/add 用过就一定有池）。
+        // 这是应用层的错，池不替它决定：不归还、不销毁、也不替它建一个池 —— 池项所有权仍归调用方，
+        // 抛出来让它自己处置；被顶掉的异常可用 `addSuppressed` 挂上（见 .autocode/bugs/bug-pool.md §2.5 POOL-10）。
+        throw UnknownKeyException(key)
+    }
+    /** 归还无门时的销毁（关停窗口）：回调异常只记数，销毁计数照记。 */
+    private func unreturnable(key: K, value: V, destroier: (K, V) -> Unit): Unit {
+        try {
+            destroier(key, value)
+        } catch (e: Exception) {
+            PoolDiagnostics.onCallbackError()
+        }
+        PoolDiagnostics.onItemDestroyed()
     }
     private func keyedChecker(key: K, checker: (K, V) -> Bool) {
         {v: V => 
@@ -58,6 +84,9 @@ struct BaseKeyPool<K, V> <: IKeyPool<K, V> where K <: Hashable & Equatable<K> {
         }
     }
     public func get(key: K, checker: (K, V) -> Bool, destroier: (K, V) -> Unit): ?V {
+        if (!running.load()) {
+            return None<V>    // 关停之后不再按需建池（否则键表会从 close() 之后长回来，见 POOL-11）
+        }
         keyedPool(key).get(keyedChecker(key, checker), keyedDestroier(key, destroier))
     }
     public func check(running: () -> Bool, checker: (K, V) -> Bool, taskPusher: (K) -> Unit): Unit {
@@ -97,12 +126,38 @@ struct BaseKeyPool<K, V> <: IKeyPool<K, V> where K <: Hashable & Equatable<K> {
         }
         healed
     }
-    public func destroy(fn: (K, V) -> Unit): Unit {
-        for((k, p) in map){
-            // 队列自己的计数由 check/onRemoved 维护；这里的全局计数 s 也必须同步减掉，
-            // 否则 destroy 之后 size 仍报旧值、后续 get 会以为池已满而不再新建池项（见 .autocode/bugs/bug-archived-on-20261004.md 7.2）
-            s.fetchSub(p.destroy{v => fn(k, v)})
+    /**
+     * 摘掉 `key` 的池：**先关闭并销毁**它的池项（逐个交给 `fn`），再从键表里删掉它。
+     *
+     * 先 `map.remove(key)` 再关闭：这样并发的 `giveBack` 要么在删之前拿到池（由池的关闭标志拦住，
+     * 见 `BasePool.close`），要么在删之后拿到 `None`（走关停/还错键的处理），不会把项塞进死池。
+     * 键不存在时是空操作（`close()` 清空键表之后再调用也安全）。
+     *
+     * `s` 扣掉的是这个池**名下全部**（空闲 + 借出）：池一旦出表，它名下的东西就不再进账本了
+     * （还在借用方手里的项，其账目由借用方自己负责 —— `giveBack` 会抛 `UnknownKeyException`）。
+     */
+    public func remove(key: K, fn: (K, V) -> Unit): Unit {
+        if (let Some(p) <- map.remove(key)) {
+            // 队列自己的计数由池的 close 维护；这里的全局计数 s 也要同步减掉，
+            // 否则摘掉键之后 size 仍报旧值、后续 get 会以为池已满而不再新建池项（见 .autocode/bugs/bug-archived-on-20261004.md 7.2）
+            s.fetchSub(p.size)
+            p.close{v => fn(key, v)}
         }
+    }
+    /**
+     * 关闭并销毁**全部**键的池，然后清空键表（`ConcurrentHashMap` 没有 `clear` ⇒ 先快照键再逐个摘）。
+     * 关停之后不会再有键被建出来（`add` / `get` / `keyedSize` 都判 `running`），所以快照就是全集。
+     * 最后一件事是把 `s` 清零：借出中的项随池一起出账（它们在借用方手里，由借用方自己处置）。
+     */
+    public func close(fn: (K, V) -> Unit): Unit {
+        let keys = ArrayList<K>()
+        for ((k, _) in map) {
+            keys.add(k)
+        }
+        for (k in keys) {
+            remove(k, fn)
+        }
+        s.store(0)
     }
     public prop size: Int64 {
         get(){
@@ -121,9 +176,15 @@ struct BaseKeyPool<K, V> <: IKeyPool<K, V> where K <: Hashable & Equatable<K> {
         }.getOrThrow()
     }
     public func keyedSize(key: K): Int64 {
+        if (!running.load()) {
+            return 0        // 关停后不再按需建池（否则键表会从 close 之后长回来）
+        }
         keyedPool(key).size
     }
     public func entries(): Iterator<(K, Int64)> {
         map.iterator().map{tpl => (tpl[0], tpl[1].size)}
+    }
+    public func keyCount(): Int64 {
+        map.size
     }
 }

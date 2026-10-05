@@ -690,6 +690,108 @@ public class KeyPoolTest {
         @Assert(pool.get('k1', timeout: Duration.Zero).isNone())
         pool.close()                                     // 关池后 remaining 的项由 close 销毁
     }
+    /**
+     * `POOL-11`（`.autocode/bugs/bug-pool.md` §2.6）：`remove(key)` 先关闭 + 销毁该键的池，再把键从键表里摘掉
+     * （`keyCount` 归位、`size` 只减去该键名下的）。修前**没有这个入口**：键表只增不减，空池条目、
+     * 队列对象与巡检每轮 O(#keys) 的遍历都是永久成本。
+     */
+    @TestCase
+    public func removeMustDestroyKeyPoolAndForgetKey(): Unit {
+        let destroyed = AtomicInt64(0)
+        let pool = KeyPool<String, Object>(
+            mode: Fifo,
+            initKeys: ['k1', 'k1', 'k2'].iterator().next,    // k1 建两项、k2 建一项（maxSize 限住 k1 的第三项）
+            minSize: 0,
+            maxSize: 2,
+            totalSize: 3,
+            idleTimeout: Duration.hour,
+            checkOnCreation: false,
+            checkOnBorrowing: false,
+            checkOnReturning: false,
+            checkInterval: Duration.Zero,
+            maxWaiting: Duration.second,
+            creator: {_ => Object()},
+            checker: {_, _ => true},
+            destroier: {_, _ => destroyed.fetchAdd(1)}
+        )
+        for (_ in 0 .. 500) {
+            if (pool.size >= 3) {
+                break
+            }
+            sleep(Duration.millisecond * 2)
+        }
+        @Assert(pool.size, 3)
+        @Assert(pool.keyCount(), 2)
+        // 借走 k1 的一项：它会留在调用方手里 —— remove 只销毁池里的，不碰借出的
+        let held = pool.get('k1', timeout: Duration.second)
+        @Assert(held.isSome())
+        pool.remove('k1')
+        @Assert(destroyed.load(), 1)                         // k1 池里那 1 项被销毁（借出的那项不动）
+        @Assert(pool.keyCount(), 1)                          // k1 从键表里消失
+        @Assert(pool.size, 1)                                // 账本只剩 k2 的那一项
+        // 摘掉之后，借出的那一项回不来了：`giveBack` 抛 `UnknownKeyException`（见 §2.5 POOL-10），
+        // 需要应用层自己销毁 —— 这里断言抛，且**不**销毁（销毁计数不变）
+        var thrown = false
+        try {
+            pool.giveBack('k1', held.getOrThrow())
+        } catch (e: UnknownKeyException) {
+            thrown = true
+        }
+        @Assert(thrown)
+        @Assert(destroyed.load(), 1)
+        // 键可以重新用起来：get 会按需重建它的池，之后借还正常（不是「废键」）
+        let again = pool.get('k1', timeout: Duration.second)
+        @Assert(again.isSome())
+        @Assert(pool.keyCount(), 2)
+        pool.giveBack('k1', again.getOrThrow())              // 重建后的池认得这个键：不抛
+        @Assert(destroyed.load(), 1)
+        pool.close()
+        @Assert(pool.keyCount(), 0)
+    }
+    /**
+     * `POOL-11`（§2.6）第二面：`close()` 返回前必须销毁所有键的池并清空键表；关停之后 `get` 直接 `None`、
+     * `giveBack` 直接销毁、都不许把键表长回来。修前：键表留着（`BaseKeyPool.destroy` 只清池项、不删 map 项），
+     * 而且 `giveBack` 要靠「取回来再销毁」的兜底 —— 那条兜底会重新建池，把「清空键表」破坏掉。
+     */
+    @TestCase
+    public func closeMustDestroyAllKeysAndClearKeyTable(): Unit {
+        let destroyed = AtomicInt64(0)
+        let pool = KeyPool<String, Object>(
+            mode: Fifo,
+            initKeys: ['k1', 'k2'].iterator().next,
+            minSize: 0,
+            maxSize: 2,
+            totalSize: 4,
+            idleTimeout: Duration.hour,
+            checkOnCreation: false,
+            checkOnBorrowing: false,
+            checkOnReturning: false,
+            checkInterval: Duration.Zero,
+            maxWaiting: Duration.second,
+            creator: {_ => Object()},
+            checker: {_, _ => true},
+            destroier: {_, _ => destroyed.fetchAdd(1)}
+        )
+        for (_ in 0 .. 500) {
+            if (pool.size >= 2) {
+                break
+            }
+            sleep(Duration.millisecond * 2)
+        }
+        @Assert(pool.size, 2)
+        @Assert(pool.keyCount(), 2)
+        pool.close()
+        @Assert(destroyed.load(), 2)                         // 两个键的池项都被销毁
+        @Assert(pool.keyCount(), 0)                          // 键表清空
+        @Assert(pool.size, 0)
+        @Assert(pool.get('k1', timeout: Duration.Zero).isNone())
+        @Assert(pool.keyCount(), 0)                          // get 不许把键表长回来
+        pool.giveBack('k1', Object())                        // 关停后归还：直接销毁，不抛
+        @Assert(destroyed.load(), 3)
+        @Assert(pool.keyCount(), 0)
+        pool.close()                                         // 幂等：不再销毁、不再计数
+        @Assert(destroyed.load(), 3)
+    }
 }
 
 @Test

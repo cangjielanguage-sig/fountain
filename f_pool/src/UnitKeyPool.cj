@@ -24,6 +24,7 @@ struct UnitKeyPool<K, V> <: IKeyPool<K, V> {
         pool = mode.createPool()
     }
     public func add(_: K, value: V): Unit {
+        // 单键池：入池失败（池已关闭）时这个值由调用方的 `Ref` 终结器兜底销毁
         pool.add(value)
     }
     public func giveBack(_: K, value: V, checker: (K, V) -> Bool, destroier: (K, V) -> Unit): Unit{
@@ -43,8 +44,16 @@ struct UnitKeyPool<K, V> <: IKeyPool<K, V> {
         // （见 .autocode/bugs/bug-pool.md §1.3 POOL-3）
         pool.check(running, {v => checker(eternity, v)}){if (size < max) { taskPusher(eternity) }}
     }
-    public func destroy(fn: (K, V) -> Unit): Unit {
-        pool.destroy{v => fn(eternity, v)}
+    /**
+     * 单键池的 `remove` 等价于「关掉这唯一的池」：关闭 + 销毁池项之后，`get` 一直返回 `None`
+     * （这个接口只为 `IKeyPool` 完整性存在 —— `Pool<V>` 不暴露 `remove`）。
+     */
+    public func remove(_: K, fn: (K, V) -> Unit): Unit {
+        pool.close{v => fn(eternity, v)}
+    }
+    /** 关闭并销毁这唯一的池（`IKeyPool.close`）。 */
+    public func close(fn: (K, V) -> Unit): Unit {
+        pool.close{v => fn(eternity, v)}
     }
     public func audit(): Int64 {
         pool.audit()
@@ -59,5 +68,9 @@ struct UnitKeyPool<K, V> <: IKeyPool<K, V> {
     }
     public func entries(): Iterator<(K, Int64)>{
         [(eternity, pool.size)].iterator()
+    }
+    /** 单键池：键数恒为 1（哪怕是已关闭的池）。 */
+    public func keyCount(): Int64 {
+        1
     }
 }

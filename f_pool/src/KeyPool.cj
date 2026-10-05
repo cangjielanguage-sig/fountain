@@ -245,7 +245,7 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
     ){
         this.pool = match(None<K>){
             case _: ?Unit => UnitKeyPool<K, Ref<V>>(mode, maxSize)
-            case _ => BaseKeyPool<K, Ref<V>>(mode, maxSize)
+            case _ => BaseKeyPool<K, Ref<V>>(mode, maxSize, running)
         }
         // 任务队列容量与池容量解耦（夹在 [1, 1024]）：见 createTaskQueueCapacity 的说明（§2.3 POOL-8）
         tasks = ArrayBlockingQueue<K>(createTaskQueueCapacity(totalSize))
@@ -446,6 +446,12 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
                 while(!Thread.currentThread.hasPendingCancellation && pool.size < totalSize && pool.keyedSize(k) < maxSize){
                     try {
                         let object = creator(k)
+                        if (!running.load()) {
+                            // 关停窗口（`close()` 与 `creator` 返回之间）：别把刚建出来的池项塞进已关停的池。
+                            // `BaseKeyPool.add` 也会挡一道，但在这里销毁才是确定的（见 §2.6 POOL-11）。
+                            doDestroy(k, object, destroier)
+                            break
+                        }
                         if (checkOnCreation && !doCheck(k, object, checker)){
                             doDestroy(k, object, destroier)
                         } else {
@@ -470,8 +476,24 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
     public func isClosed(): Bool {
         !running.load()
     }
+    /**
+     * 键表里当前的键数（诊断 / 测试用）：`POOL-11` 的观测点 —— 键的基数该由应用用 `remove(key)`
+     * 控制，`close()` 之后必须回到 0。
+     */
+    func keyCount(): Int64 {
+        pool.keyCount()
+    }
+    /**
+     * 关闭并**销毁全部键的池**，然后清空键表（`POOL-11`）。**幂等**：重复调用直接返回。
+     *
+     * 顺序：先置 `running=false`（此后 `BaseKeyPool` 不再按需建池、`BasePool` 不再收项），
+     * 再取消两个内部维护线程、唤醒等待者、清掉待建任务，最后逐个键「关闭 + 销毁 + 摘键」。
+     * 关停之后 `get` 返回 `None`、`giveBack` 直接销毁、键表保持空 —— 不会再有键从 close 之后长回来。
+     */
     public func close(): Unit {
-        running.store(false)
+        if (!running.compareAndSwap(true, false)) {
+            return               // 已经关过了（键表已清空、池项已销毁）
+        }
         // 给两个内部维护线程发取消请求（协作式）：它们的循环每轮判 `hasPendingCancellation`
         // + 带超时出队 ⇒ 最迟 1s 内退出，不再永久 park（见 §2.2 POOL-7）
         if (let Some(t) <- creationThread) {
@@ -483,13 +505,33 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         // 等待者必须立刻看到 running=false 并返回 None，不能让他们 park 到预算耗尽（见 §2.1 POOL-6）
         wakeWaiters()
         while(let Some(_) <- tasks.tryRemove()){}
-        pool.destroy{k, r => 
+        // 销毁所有键的池并清空键表（见 §2.6 POOL-11）：`BaseKeyPool.close` 内部逐个键
+        // 「先关闭 + 销毁池项 + 摘键」，最后把全局计数清零。
+        pool.close{k, r => 
             // take()：显式销毁过的池项其 Ref 已空，终结器不会再销毁第二次（见 .autocode/bugs/bug-pool.md §1.1）
             if(let Some(v) <- r.take()){
                 doDestroy(k, v, destroier)
             }
         }
         PoolDiagnostics.onPoolClosed()
+    }
+    /**
+     * 摘掉 `key` 对应的池：**先关闭并销毁**它的池项（池内空闲项逐个交给 `destroier`），再把键从键表里删掉。
+     *
+     * 用途：键的基数由应用控制时（用户 / 会话 / 文件 …）主动回收 —— 不回收的话，键表、空池条目
+     * 与巡检每轮 O(#keys) 的遍历都是**永久**成本（见 .autocode/bugs/bug-pool.md §2.6 `POOL-11`）。
+     *
+     * 注意：调用前请确认这个键的池项都已归还 —— 摘掉之后 `giveBack(key, …)` 会因为「这个键没有池」
+     * 抛 `UnknownKeyException`（见 §2.5 `POOL-10`），仍在借用方手里的对象需要应用层自己销毁。
+     * 键不存在、或池已关停（`close()` 清空键表之后）时都是**空操作**。
+     */
+    public func remove(key: K): Unit {
+        pool.remove(key, {_, r => 
+            // take()：显式销毁过的池项其 Ref 已空，终结器不会再销毁第二次（见 .autocode/bugs/bug-pool.md §1.1）
+            if(let Some(v) <- r.take()){
+                doDestroy(key, v, destroier)
+            }
+        })
     }
     private func doDestroy(k: K, v: V, destroier: (K, V) -> Unit){
         try{
@@ -600,13 +642,11 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             clear(key, object)
         }
         pool.giveBack(key, ref(key, object), keyedCheck, keyedDestroy)
-        // 与 close() 交错时本项可能是在「清池」之后才入池的 ⇒ 取出来销毁，不让它留在一个已关闭的池里
-        // （既没人取也没人销毁；池对象还被 atExit 回调长期持有，见 §2.1 POOL-6 / §2.8 POOL-13）
-        if(!running.load()){
-            if (let Some(r) <- pool.get(key, {_, _ => true}, keyedDestroy) && let Some(v) <- r.take()) {
-                doDestroy(key, v, destroier)
-            }
-        }
+        // 与 close() / remove(key) 交错的情形现在由底层兜住：
+        // - `BaseKeyPool.giveBack` 在关停（`!running`）或键已被摘掉时直接销毁；
+        // - `BasePool` 的关闭标志让「晚于清空才入队」的那一项当场销毁（见 §2.6 POOL-11）。
+        // 原来在这里「取回来再销毁」的兜底必须调 `pool.get(key, …)`，而它会在键表被清空后**又建一个池**，
+        // 把 close() 的「清空键表」重新破坏掉，所以删掉。
         // 唤醒等池项的 get（见 §1.2 POOL-2）
         wakeWaiters()
     }

@@ -195,6 +195,8 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
     public func get(key: K, timeout!: Duration = Duration.Max): ?V
     // 归还对象
     public func giveBack(key: K, object: V): Unit
+    // 摘掉某个键的池：先关闭 + 销毁它的池项，再把键从键表里删掉（键不存在 = 空操作）
+    public func remove(key: K): Unit
 }
 ```
 
@@ -205,6 +207,12 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
 > `catch (e: UnknownKeyException) { if (let Some(p) <- inFlight) { e.addSuppressed(p) }; throw e }`。
 > 仓库内使用的池都是 `Pool<V>`（键为 `Unit`，键永远只有一个），不会走到这条路径。详见
 > `.autocode/bugs/bug-pool.md` §2.5 `POOL-10`。
+>
+> `remove(key)` 用于**主动回收键**：键的基数由应用控制时（用户 / 会话 / 文件 …），不回收的话键表、
+> 空池条目与巡检每轮 O(#keys) 的遍历都是永久成本（§2.6 `POOL-11`）。摘键只销毁**池内**的项；借用中的
+> 对象仍在应用手里，而且摘掉之后 `giveBack(key, …)` 会抛 `UnknownKeyException` —— 那些对象要应用层自己销毁。
+> `close()` **幂等**，返回前会销毁所有键的池并清空键表；关停之后 `get` 返回 `None`、`giveBack` 直接销毁，
+> 键表不会重新长回来。池这一层不再有 `destroy`（唯一的销毁入口是 `close`）。
 
 ## ArrayListPool
 
@@ -266,20 +274,26 @@ public func giveBack(value: T): Bool
 这两层是 `Pool` / `KeyPool` 的底座（`BasePool` 在 `fountain::f_pool.base` 且为 `protected package`；
 `BaseKeyPool` 无 `public`），列出来便于排查问题：
 
-- **`BasePool<T>`**：`add` / `giveBack` / `get(checker, destroier)` / `check(running, checker, taskPusher)` /
-  `audit(): Int64`（主动审计自愈，返回校正动作数）/ `destroy(fn): Int64`（清空池并返回处理掉的数量，
-  调用方据此同步全局计数）/ `prop size`；四个实现是 `FifoPool`（`insertTail` + `append`）、
+- **`BasePool<T>`**：`add(value): Bool`（返回是否入池；池已关闭时 `false`）/ `giveBack` / `get(checker, destroier)` /
+  `check(running, checker, taskPusher)` / `audit(): Int64`（主动审计自愈，返回校正动作数）/
+  `close(destroier): Int64`（**关闭并清空**：先置关闭标志，再把池项逐个销毁、返回销毁数，调用方据此同步全局计数；
+  `destroy` 已删除，见 `.autocode/bugs/bug-pool.md` §2.6 `POOL-11`）/ `prop size`；
+  四个实现是 `FifoPool`（`insertTail` + `append`）、
   `LifoPool`（`insertHead` + `prepend`）、`WeakFifoPool` / `WeakLifoPool`（弱引用队列）。
   **`maxWaiting` 不在这里**：它只决定「取不到池项时上层等多久」，由 `Pool` / `KeyPool` 的 `get` 负责。
 - **`BaseKeyPool<K, V>`**：`map: ConcurrentHashMap<K, BasePool<V>>` + 全局计数 `s`。
   `s` 里**既有空闲项也有借出项**（借出不会从队列计数里减掉），所以 `s` 与「各 key 队列 `size` 之和」**任何时刻都该相等**，
   不等就是真脱钩：
-  - `add` / `giveBack` / `get(key, checker, destroier)` / `keyedSize(key)` / `entries()` / `size`；
+  - `add` / `giveBack` / `get(key, checker, destroier)` / `keyedSize(key)` / `entries()` / `size` / `keyCount()`；
   - `check(running, checker, taskPusher)`：逐 key 巡检（条件为 `p.size < max && checker(...)`）；
   - `audit()`：先让每个 key 的队列自愈，再把 `s` 校正为各队列之和（校正的日志由 `KeyPool` 巡检统一 WARN，
     避免同一处校正被打印两次）；
-  - `destroy(fn)`：逐 key 清空，并按销毁数量 `s.fetchSub(...)` —— 不同步的话，destroy 之后 `size` 仍报旧值，
-    后续 `get` 会以为池已满而不再新建池项。
+  - `remove(key, fn)`：摘掉一个键的池（先 `map.remove` 再关闭 + 销毁池项），按该池**名下全部**
+    `s.fetchSub(...)`；键不存在时是空操作（`POOL-11`）；
+  - `close(fn)`：逐个键 `remove`，最后把 `s` 清零 —— 只有这样才能让键表真正清空（`ConcurrentHashMap`
+    没有 `clear`，且 `running=false` 之后 `add` / `get` / `keyedSize` 都不再按需建池）；
+  - 记账：`s` 与「各 key 队列 `size` 之和」任何时刻都该相等，不同步的话 `size` 会报旧值、
+    后续 `get` 会以为池已满而不再新建池项（见归档报告 7.2）。
 - `Mode` 到实现的映射：`Fifo` → `FifoPool`，`Lifo` → `LifoPool`，`WeakFifo` / `WeakLifo` → 对应弱引用实现
   （当前无调用方）；`KeyPool` 在 `K` 为 `Unit` 时改用特化的 `UnitKeyPool`（见 `KeyPool.cj` 构造处），
   `IKeyPool<K, V>` 是它们的共同接口。
