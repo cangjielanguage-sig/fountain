@@ -251,7 +251,7 @@ std 契约（`std.collection.concurrent.LinkedBlockingQueue.remove()`）：**阻
 
 ### 2.3 [中｜正确性] `CACHE-6` `once()` / `prolong()` 不做过期判定 ⇒ 可“复活”已过期但未被清扫的条目 → ✅已修复（2026-10-05，方案 A）
 
-**✅ 修复标记（2026-10-05，方案 A：与 `get`/`contains` 同口径）**：分支 `review/f_cache`，**代码、用例、README、本标记在同一提交**（提交信息 `fix(f_cache): CACHE-6 once/prolong 拒绝已过期条目（bug-cache §2.3 修复标记）`；提交哈希由下一次标记同步补录）。
+**✅ 修复标记（2026-10-05，方案 A：与 `get`/`contains` 同口径）**：分支 `review/f_cache`，**代码、用例、README、本标记在同一提交**（提交 `2e642b0b`：`fix(f_cache): CACHE-6 once/prolong 拒绝已过期条目（bug-cache §2.3 修复标记）`）。
 
 - 改动（`src/HeapCache.cj`）：`once`、`prolong(key, life!, once!)`、`prolong(key, deathTime)` 三个入口的 `case Some(p)` 加上 `where !evicated(p)` 守卫 ⇒ 已过期（即使尚未被定时清扫）的条目一律按「不存在」处理，与 `get`/`contains` 一致；不能再把过期条目「复活」。
 - 用例（`src/HeapCache_test.cj`）：`testOnceRejectsExpiredEntry`、`testProlongRejectsExpiredEntry` —— 都是「`set` → `set(life: 100ms)`（更新路径）→ 等 300 ms（< checkDuration，保证未被定时清扫）」后断言 `contains`、`once`、两个 `prolong` 全为 `false`，且续期被拒后 `contains` 仍为 `false`。
