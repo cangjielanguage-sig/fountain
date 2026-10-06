@@ -1,6 +1,6 @@
 # f_rpc
 
-远程过程调用（RPC）模块。
+远程过程调用（RPC）模块。用法可以参考<https://gitcode.com/Cangjie-SIG/fountain/tree/master/frpcdemo>
 
 `fountain::f_rpc` 基于 `fountain::f_net`（事件驱动 TCP 网络模块）与 `fountain::f_protocol`（网络通讯协议）实现，提供：
 
