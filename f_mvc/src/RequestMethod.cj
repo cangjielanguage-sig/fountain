@@ -43,10 +43,16 @@ public enum RequestMethod <: Hashable & Equatable<RequestMethod> & ToString & Pa
         }
     }
 
+    /**
+     * §3.2 / `MVC-L12`：补上 `(WS, WS)` 分支 —— 原实现漏了它，导致 `WS == WS` 为 `false`，
+     * 违反 `Equatable` 的自反性。std 的哈希容器匹配是 `hash == 记录.hash && key == 记录.key`
+     * （无引用短路），而 `WS` 正是 WS 端点的注册键（`HttpRequestDistributorImpl.cj:36`）
+     * ⇒ 缺该分支会让 `metas.get/contains/WS`、`computeIfAbsent(WS)` 全部失效。
+     */
     public operator func ==(other: RequestMethod) {
         match ((this, other)) {
             case (GET, GET) | (POST, POST) | (PUT, PUT) | (DELETE, DELETE) | (PATCH, PATCH) | (OPTIONS, OPTIONS)
-                | (HEAD, HEAD) => true
+                | (HEAD, HEAD) | (WS, WS) => true
             case _ => false
         }
     }

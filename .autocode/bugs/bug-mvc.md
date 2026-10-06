@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 25 条**：严重 4（§1.9 `MVC-4`、§1.10 `MVC-1`、§1.11 `MVC-3`、§1.12 `MVC-2`）、中 8（§2.2 `MVC-C3`、§2.3 `MVC-C5`、§2.5 `MVC-C2`、§2.6 `MVC-8`、§2.7 `MVC-6`、§2.19 `MVC-5`、§2.20 `MVC-7`、§2.21 `MVC-9`）、低危+待验证 13（§3）。
-- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；`MVC-8` ✅已修复（§2.6，`fix/mvc-rest`）；`MVC-6` ❌误判（§2.7，用户判定非缺陷：WS 消息总长上限属端点/部署侧策略，不设硬上限是设计选择）；`MVC-5` ❌不改（§2.19，用户判定「不值得改」：全仓 `@PathVariable` 均为单变量、暴露面为零）；`MVC-7` ✅已修复（§2.20，`fix/mvc-rest`，范围：只改 `RequestMethod.hashCode()`）；`MVC-9` ❌不改（§2.21，用户判定：每请求从 IoC 取 controller 实例是设计语义 —— 允许 controller 定义为 `prototype`，缓存实例会破坏它）；`MVC-L8`/`MVC-L1`/`MVC-C6`(a)/`MVC-L5` ✅已加固（§3.1，`fix/mvc-rest`）；`MVC-L7` ❌不改（§3.1，用户判定 C：成本仅注册期毫秒级，且源头是只写不读的 `RequestMetas`）；**待处理** §3.1 的 `MVC-C6`(b) 与 `MVC-L2`/`L3`/`L4`/`L6`/`L9`/`L10`（共 7 条）+ §3.2 的 `MVC-L11`/`L12` 两条待验证（**§1 严重级、§2 中危均已清零**）。
+- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；`MVC-8` ✅已修复（§2.6，`fix/mvc-rest`）；`MVC-6` ❌误判（§2.7，用户判定非缺陷：WS 消息总长上限属端点/部署侧策略，不设硬上限是设计选择）；`MVC-5` ❌不改（§2.19，用户判定「不值得改」：全仓 `@PathVariable` 均为单变量、暴露面为零）；`MVC-7` ✅已修复（§2.20，`fix/mvc-rest`，范围：只改 `RequestMethod.hashCode()`）；`MVC-9` ❌不改（§2.21，用户判定：每请求从 IoC 取 controller 实例是设计语义 —— 允许 controller 定义为 `prototype`，缓存实例会破坏它）；`MVC-L8`/`MVC-L1`/`MVC-C6`(a)/`MVC-L5` ✅已加固（§3.1，`fix/mvc-rest`）；`MVC-L7` ❌不改（§3.1，用户判定 C：成本仅注册期毫秒级，且源头是只写不读的 `RequestMetas`）；`MVC-L12` ✅已修复（§3.2，`fix/mvc-rest`）；**待处理** §3.1 的 `MVC-C6`(b) 与 `MVC-L2`/`L3`/`L4`/`L6`/`L9`/`L10`（共 7 条）+ §3.2 的 `MVC-L11`（1 条待验证）（**§1 严重级、§2 中危均已清零**）。
 
 ## 1. 严重（本模块 4 条）
 
@@ -260,7 +260,20 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 ### 3.2 待验证（2 条）
 
 - `MVC-L11` `RequestMeta.cj:303-318`：空结果的控制器函数在 `Accept` 不含 `*/*` 时被判为 406 而非 200 空体。**验证**：设计意图。
-- `MVC-L12` `RequestMethod.cj:32-38`：`operator ==` 的分支里没有 `WS`，`(WS, WS)` 落到 `case _ => false`，而 `hashCode` 由 `toString` 生成。**验证**：若 `HashMap` 不做引用短路，WS 路由查不到（`RequestMethod.WS` 正是 WS 端点的注册键，见 `HttpRequestDistributorImpl.cj:36`）。
+- `MVC-L12` `RequestMethod.cj:32-38`：`operator ==` 的分支里没有 `WS`，`(WS, WS)` 落到 `case _ => false`，而 `hashCode` 由 `toString` 生成。**验证**：若 `HashMap` 不做引用短路，WS 路由查不到（`RequestMethod.WS` 正是 WS 端点的注册键，见 `HttpRequestDistributorImpl.cj:36`）。→ ✅**已修复（2026-10-06，见 §3.2 修复标记）**（注：`hashCode` 自 `MVC-7` 起已是声明序常量表，不再是 `toString` 哈希）
+
+**✅ 修复标记（L12）（2026-10-06，`fix/mvc-rest`，代码/用例/本标记同一提交）**
+
+提交信息 `fix(f_mvc): MVC-L12 RequestMethod.== 补 WS 分支——修 Equatable 自反性，WS 可作哈希容器键（§3.2）`。
+
+- **「待验证」问题的定论（读本机 std 源码 + 实测）**：`HashMap.get` 的桶内匹配是 `hash == entries[i].hash && key == entries[i].key`（`cangjie_runtime/std/libs/std/collection/hash_map.cj:480-492`，匹配行 `:485`）⇒ **没有「同一引用即命中」的短路**；`HashSet.contains/add` 委托 `HashMap`（`hash_set.cj:107-110`、`:151-156`），fountain 自有的 `computeIfAbsent` 走 `entryView`（`f_collection/src/ExtendCollection.cj:61-69`）同族。⇒ 报告的假设前半句成立：只要真拿 `WS` 当键去查就会查不到（RED 实测 `map.get(RequestMethod.WS)` = `None`）。
+- **改动**：`RequestMethod.cj` 的 `operator ==` 补一个分支 `| (WS, WS)`（`!=` 由 `==` 派生，自动修好）。`hashCode`（`MVC-7` 后为声明序常量表，`WS→8`）、`toString`、`compare`、`parse`/`tryParse` 均未动。
+- **RED/GREEN 实测**（同一套用例两次运行，`f_mvc`）：
+  - **RED**：两条用例先落、`==` 未改 ⇒ `[ FAILED ] testWsIsEqualToItself`（`Assert Failed: (true == RequestMethod.WS == RequestMethod.WS)`、left: true / right: false）与 `[ FAILED ] testWsIsUsableAsHashContainerKey`（`Assert Failed: Some(1) != map.get(RequestMethod.WS)`、left: 1 / **right: None**）⇒ `TOTAL 27 / PASSED 25 / FAILED 2`、`TEST EXIT=1`。
+  - **GREEN**：补 `| (WS, WS)` 后复跑 ⇒ **`PASSED 27 / FAILED 0 / ERROR 0`、`TEST EXIT=0`**；同轮 `cjpm build` **exit 0**。
+- 用例：`f_mvc/src/RequestMethod_test.cj` 新增 `testWsIsEqualToItself`（自反性 + `!=` + 路由侧形态 `parse('WS') == WS`）、`testWsIsUsableAsHashContainerKey`（`HashMap<RequestMethod, Int64>` 写 `WS` 后 `get(WS)` 命中、`HashSet.add(WS)` 后 `contains(WS)`）。
+- **修后影响面**：①拿 `WS` 当键的 `get`/`contains`/`add`/`computeIfAbsent` 开始正常工作；②debug 日志里 WS 的 `methodRegistered`（`MultiRequestMethodHandler.cj:44`/`:48`）由误报 `false` 变为 `true`。请求期无其它变化 —— `handle` 只用 `RequestMethod.parse(request.method)`（`:64`）与 HEAD 分支的 `metas.get(RequestMethod.GET)`（`:106`）查键，**从不查 `WS`**（全仓 `RequestMethod.WS` 仅出现在 `HttpRequestDistributorImpl.cj:36` 的注册点与本测试）。
+- **关联（新发现，建议单独立项，本次未做）**：WS 端点路由可达性存疑 —— WS meta 只注册在 `WS` 键下（`HttpRequestDistributorImpl.cj:36`），而握手请求是 `GET` ⇒ `metas.get(GET)` 落空 ⇒ 落到 `MultiRequestMethodHandler.cj:111` 的 405；全仓亦无 `@WSEndPoint` 使用/文档/端到端用例。修 `==` 是 WS 可用的**必要不充分**条件。
 
 ## 4. 逐模块覆盖面（原 §4.2）
 

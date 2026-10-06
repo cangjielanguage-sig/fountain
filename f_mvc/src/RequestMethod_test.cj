@@ -52,4 +52,32 @@ class RequestMethod_test {
         @Assert(true, RequestMethod.OPTIONS.hashCode() < RequestMethod.HEAD.hashCode())
         @Assert(true, RequestMethod.HEAD.hashCode() < RequestMethod.WS.hashCode())
     }
+
+    /**
+     * §3.2 / `MVC-L12`：`operator ==` 缺 `WS` 分支 ⇒ `(WS, WS)` 落到 `case _ => false`，
+     * 违反 `Equatable` 的自反性（`!=` 由 `==` 派生 ⇒ `WS != WS` 为 true）。修前本用例失败。
+     */
+    @TestCase
+    public func testWsIsEqualToItself(): Unit {
+        @Assert(true, RequestMethod.WS == RequestMethod.WS)
+        @Assert(false, RequestMethod.WS != RequestMethod.WS)
+        // 路由侧的真实形态：parse 出来的方法与常量比较
+        @Assert(true, RequestMethod.parse('WS') == RequestMethod.WS)
+    }
+
+    /**
+     * §3.2 / `MVC-L12`：`RequestMethod.WS` 作为哈希容器键必须可命中。
+     * std 的匹配是 `hash == 记录.hash && key == 记录.key`（无引用短路，
+     * `cangjie_runtime/std/libs/std/collection/hash_map.cj:485`），而 `WS` 正是 WS 端点的注册键
+     * （`HttpRequestDistributorImpl.cj:36`）⇒ `==` 不自反会让该键查不到。修前本用例失败。
+     */
+    @TestCase
+    public func testWsIsUsableAsHashContainerKey(): Unit {
+        let map = HashMap<RequestMethod, Int64>()
+        map[RequestMethod.WS] = 1
+        @Assert(Some(1), map.get(RequestMethod.WS))
+        let set = HashSet<RequestMethod>()
+        set.add(RequestMethod.WS)
+        @Assert(true, set.contains(RequestMethod.WS))
+    }
 }
