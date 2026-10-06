@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 25 条**：严重 4（§1.9 `MVC-4`、§1.10 `MVC-1`、§1.11 `MVC-3`、§1.12 `MVC-2`）、中 8（§2.2 `MVC-C3`、§2.3 `MVC-C5`、§2.5 `MVC-C2`、§2.6 `MVC-8`、§2.7 `MVC-6`、§2.19 `MVC-5`、§2.20 `MVC-7`、§2.21 `MVC-9`）、低危+待验证 13（§3）。
-- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；`MVC-8` ✅已修复（§2.6，`fix/mvc-rest`）；`MVC-6` ❌误判（§2.7，用户判定非缺陷：WS 消息总长上限属端点/部署侧策略，不设硬上限是设计选择）；`MVC-5` ❌不改（§2.19，用户判定「不值得改」：全仓 `@PathVariable` 均为单变量、暴露面为零）；`MVC-7` ✅已修复（§2.20，`fix/mvc-rest`，范围：只改 `RequestMethod.hashCode()`）；`MVC-9` ❌不改（§2.21，用户判定：每请求从 IoC 取 controller 实例是设计语义 —— 允许 controller 定义为 `prototype`，缓存实例会破坏它）；`MVC-L8`/`MVC-L1`/`MVC-C6`(a)/`MVC-L5` ✅已加固（§3.1，`fix/mvc-rest`）；`MVC-L7` ❌不改（§3.1，用户判定 C：成本仅注册期毫秒级，且源头是只写不读的 `RequestMetas`）；`MVC-L12` ✅已修复（§3.2，`fix/mvc-rest`）；`MVC-C6`(b)（§3.1）与 `MVC-L11`（§3.2）✅已修复（同一提交，`fix/mvc-rest`）；**待处理** §3.1 的 `MVC-L2`/`L3`/`L4`/`L6`/`L9`/`L10`（6 条，按分诊为不改，待用户口径）（**§1 严重级、§2 中危均已清零**）。
+- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；`MVC-8` ✅已修复（§2.6，`fix/mvc-rest`）；`MVC-6` ❌误判（§2.7，用户判定非缺陷：WS 消息总长上限属端点/部署侧策略，不设硬上限是设计选择）；`MVC-5` ❌不改（§2.19，用户判定「不值得改」：全仓 `@PathVariable` 均为单变量、暴露面为零）；`MVC-7` ✅已修复（§2.20，`fix/mvc-rest`，范围：只改 `RequestMethod.hashCode()`）；`MVC-9` ❌不改（§2.21，用户判定：每请求从 IoC 取 controller 实例是设计语义 —— 允许 controller 定义为 `prototype`，缓存实例会破坏它）；`MVC-L8`/`MVC-L1`/`MVC-C6`(a)/`MVC-L5` ✅已加固（§3.1，`fix/mvc-rest`）；`MVC-L7` ❌不改（§3.1，用户判定 C：成本仅注册期毫秒级，且源头是只写不读的 `RequestMetas`）；`MVC-L12` ✅已修复（§3.2，`fix/mvc-rest`）；`MVC-C6`(b)（§3.1）与 `MVC-L11`（§3.2）✅已修复（同一提交）；§3.1 剩余 6 条（`MVC-L9`/`L2`/`L3`/`L4`/`L6`/`L10`）❌不改（用户 2026-10-06 判定，见 §3.1 判定标记（C 桶））；**§3.2 新增待验证项 `MVC-13`**（WS 端点路由可达性存疑，新发现）（**§1 严重级、§2 中危均已清零；§3.1 已全部结清**）。
 
 ## 1. 严重（本模块 4 条）
 
@@ -207,19 +207,19 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 
 **内存 / 清理**
 
-- `MVC-L9` `HttpStatus.cj:806-878` / `Series.cj:38-42`：`values` 属性每次访问重建数组（模块内只用于 `static init`，影响为 0，但属公开 API 易误用）。
+- `MVC-L9` `HttpStatus.cj:806-878` / `Series.cj:38-42`：`values` 属性每次访问重建数组（模块内只用于 `static init`，影响为 0，但属公开 API 易误用）。→ ❌**不改（2026-10-06，用户判定，见 §3.1 判定标记（C 桶））**
 
 **性能微项**
 
 - `MVC-L1` `MultiRequestMethodHandler.cj:90-97`：OPTIONS 每次重建 Allow 字符串（`metas` 注册后不变，可预生成）；另有死变量 `let last = metas.size`。→ ✅**已修复（2026-10-05，见 §3.1 加固标记）**
-- `MVC-L2` `FileDownload.cj:56` / `ResponseDownload.cj:44, 62`：每次下载重新分配缓冲并每次读配置（`MVCConfig.cj:257-261`）。
-- `MVC-L3` `RequestMeta.cj:161-175, 298-302`：多值 `Accept` 每请求构造 `AcceptQueue`（内含 `PriorityQueue` + 比较闭包），浏览器默认多值 Accept 命中率极高。
-- `MVC-L4` `RequestCondition.cj:154-170`：每次条件检查新建 `HashSet<String>(currentValues)`。
+- `MVC-L2` `FileDownload.cj:56` / `ResponseDownload.cj:44, 62`：每次下载重新分配缓冲并每次读配置（`MVCConfig.cj:257-261`）。→ ❌**不改（2026-10-06，用户判定，见 §3.1 判定标记（C 桶）；现状位置：`FileDownload.cj:57`、`ResponseDownload.cj:72`）**
+- `MVC-L3` `RequestMeta.cj:161-175, 298-302`：多值 `Accept` 每请求构造 `AcceptQueue`（内含 `PriorityQueue` + 比较闭包），浏览器默认多值 Accept 命中率极高。→ ❌**不改（2026-10-06，用户判定，见 §3.1 判定标记（C 桶）；现状 5 处：`RequestMeta.cj:197`/`:272`/`:338`/`:369`、`MultiRequestMethodHandler.cj:156`）**
+- `MVC-L4` `RequestCondition.cj:154-170`：每次条件检查新建 `HashSet<String>(currentValues)`。→ ❌**不改（2026-10-06，用户判定，见 §3.1 判定标记（C 桶）；现状 `RequestCondition.cj:164-170`）**
 - `MVC-L5` `HttpRequestDistributorImpl.cj:57-63`：未命中路径每请求新建 `RequestMeta`（含闭包）⇒ 建议复用单例 404 handler。→ ✅**已修复（2026-10-05，见 §3.1 加固标记（二））**
-- `MVC-L6` `global_func.cj:69-147`：数组参数解析用 `split`（无逗号也会切出 1 元素数组），可先判 `indexOf(',')` 或 `lazySplit`。
+- `MVC-L6` `global_func.cj:69-147`：数组参数解析用 `split`（无逗号也会切出 1 元素数组），可先判 `indexOf(',')` 或 `lazySplit`。→ ❌**不改（2026-10-06，用户判定，见 §3.1 判定标记（C 桶））**
 - `MVC-L7` `RequestMeta.cj:76-92`：比较器内构造两个 `TreeSet`（注册期 O(N log N) 次，可预算排序键）。→ ❌**不改（2026-10-06，用户判定 C，见 §3.1 判定标记（L7））**
 - `MVC-L8` `RequestMeta.cj:71`：404 日志用非惰性插值（`'...${path}'`），改 `log.warn{...}`。→ ✅**已修复（2026-10-05，见 §3.1 加固标记）**
-- `MVC-L10` `RequestArgMeta.cj:21, 39`：同一次写入用 `[]` + `get` 双查表，可合并为一次 `get`。
+- `MVC-L10` `RequestArgMeta.cj:21, 39`：同一次写入用 `[]` + `get` 双查表，可合并为一次 `get`。→ ❌**不改（2026-10-06，用户判定，见 §3.1 判定标记（C 桶）；现状：setter 在 `RequestArgMeta.cj:38-44`）**
 
 **✅ 加固标记（2026-10-05，`fix/mvc-rest`，代码/用例/本标记同一提交）**
 
@@ -258,10 +258,27 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 - **未采纳的方案（一并记录）**：**A** 缓存排序键（`private var consumesOrder_ = None<Array<String>>`，首次比较时把 `consumes` 排好序存下，`compare` 改为两次 `Array<String>` 逐元素 + size 兜底）——收益与 B 同级，但要处理缓存失效（写入点仅 `addConsumes`（`:460`，private）与 `setHandle(wsmeta:)`（`:283-284`）两处）；**B** 换掉有序容器。用户在 2026-10-06 选择 **C（不改）**。
 - **可验证性（若将来改）**：本条属「同一语义的缓存化」，**无真 RED**；证据应为「等价性守卫用例（`compare` 为 `public`，测试内可用 `@GetMapping` 注解类 + `RequestMeta.generate<T>` 造出带不同 `consumes` 的同 path+method meta，覆盖相等 / 前缀（`{'a'}` vs `{'a','b'}`，靠 size 兜底）/ 非前缀（`{'ab'}` vs `{'a','b'}`）/ `'*'`、`'*/*'` 特例）+ 代码核对」，必要时补基准。
 
-### 3.2 待验证（2 条）
+**❌ 判定标记（C 桶）（2026-10-06，6 条：`MVC-L9`/`L2`/`L3`/`L4`/`L6`/`L10`，用户判定「不改」）**
+
+用户 2026-10-06 采纳分诊结论：以下 6 条**不改**，逐条理由（行号为核对后的现状）：
+
+- **`MVC-L9`**（`HttpStatus.cj:806` 的 `values`、`Series.cj:38` 的 `values` 每次访问重建数组）：**全仓零调用** —— `grep 'HttpStatus.values\|Series.values'` 无任何命中（`Series` 的 `static init` 也用的是字面量数组 `Series.cj:31`）⇒ 真实影响 0；「公开 API 易误用」应由文档/命名解决，改成缓存反而改 API 语义。
+- **`MVC-L2`**（每次下载一次 `Array<Byte>(MVCConfig.downloadBufferSize)` + 一次配置查表；`FileDownload.cj:57`、`ResponseDownload.cj:72`）：相对一次下载的 I/O 与响应写出可忽略；池化缓冲会引入生命周期与线程安全复杂度；把 `downloadBufferSize` 改启动期缓存会改变「配置何时生效」的语义（虽有 `MultiRequestMethodHandler.cj:29-31` 的先例）。另注：`MVC-4`/`MVC-C5` 已把缓冲从「每次 `read`」提到「每次 `copy`/下载」，本条剩余收益更小。
+- **`MVC-L3`**（多值 `Accept` 每请求构造 `AcceptQueue`，现状 5 处：`RequestMeta.cj:197`/`:272`/`:338`/`:369`、`MultiRequestMethodHandler.cj:156`）：每请求仅数个临时小对象；想省掉 `PriorityQueue` 只能改成「顺序扫描取首个命中」，会改变「按 q 选优」的语义 ⇒ 风险 > 收益；除非基准显示它是热点。
+- **`MVC-L4`**（`RequestCondition.cj:164-170` 每次条件检查建 `HashSet`）：全仓无 `headers:`/`params:` 条件用例（grep 无命中），未声明条件时 `DummyRequestCondition`（`:70-79`）短路 ⇒ 请求期不进入该分支；真被用到时 `HashSet` 也只有 0–1 个元素。
+- **`MVC-L6`**（`global_func.cj:69-147` 的 `val.split(",")`）：`indexOf(',')` 预判只省一个 1 元素 `ArrayList`，与 `split` 自身的扫描同级成本。
+- **`MVC-L10`**（`RequestArgMeta.cj:38-44` setter 的 `[]` + `get` 双查表）：写入只发生在**注册期**（`RequestMeta.generate` / 宏注册），请求期无影响。
+
+⇒ 本模块 §3.1 低危 11 条全部结清：**修复 4**（`MVC-L1`、`MVC-L5`、`MVC-L8`、`MVC-C6`（a)(b)）＋**判定不改 7**（`MVC-L7`、`MVC-L9`、`MVC-L2`、`MVC-L3`、`MVC-L4`、`MVC-L6`、`MVC-L10`）。
+
+### 3.2 待验证（3 条）
 
 - `MVC-L11` `RequestMeta.cj:303-318`：空结果的控制器函数在 `Accept` 不含 `*/*` 时被判为 406 而非 200 空体。**验证**：设计意图。→ ✅**已修复（2026-10-06，见修复标记（L11））** —— 判定为**不是设计意图**：会把 `MVCBreakingCommand(status)`（默认 `DataUnit.UNIT`，如 `ControllerFuncParam` 的 415）的状态码吞成 406
 - `MVC-L12` `RequestMethod.cj:32-38`：`operator ==` 的分支里没有 `WS`，`(WS, WS)` 落到 `case _ => false`，而 `hashCode` 由 `toString` 生成。**验证**：若 `HashMap` 不做引用短路，WS 路由查不到（`RequestMethod.WS` 正是 WS 端点的注册键，见 `HttpRequestDistributorImpl.cj:36`）。→ ✅**已修复（2026-10-06，见 §3.2 修复标记）**（注：`hashCode` 自 `MVC-7` 起已是声明序常量表，不再是 `toString` 哈希）
+- **`MVC-13`**（**新发现**，2026-10-06，记于 `WSMeta` / `MultiRequestMethodHandler`）：**WS 端点的路由可达性存疑** —— WS meta 只注册在 `WS` 键下（`HttpRequestDistributorImpl.cj:36` 的 `RequestMeta(path, RequestMethod.WS)` → `MultiRequestMethodHandler.register` 的 `metas.computeIfAbsent(meta.method)`，`:45`），而请求期只用 **HTTP 方法**查表：`handle` 里 `RequestMethod.parse(request.method)`（`:64`）→ `metas.get(method)`（`:91`），HEAD 分支再查一次 `metas.get(RequestMethod.GET)`（`:106`）⇒ **WS 握手请求（`GET`，RFC 6455；升级由 handler 自己调 `WebSocket.upgradeFromServer`）会落空，最终走 `:111` 的 405 Method Not Allowed**。旁证：全仓无任何 `@WSEndPoint` 使用、无 WS 文档/示例、无端到端用例（grep 均无命中）⇒ 与「该功能尚未打通」一致。
+  - **与 `MVC-L12` 的关系**：`MVC-L12`（`operator ==` 缺 `(WS, WS)`）已修（见 §3.2 修复标记（L12））—— 它只是 WS 可用的**必要不充分**条件；即便 `==` 修好，只要请求期没有以 `WS` 为键的查询，该键仍是死的。
+  - **验证方式（需用户拍板后执行）**：①**最小验证**：注册一个 WS 端点后，用 WS 客户端连该路径，断言「收到 101 升级」而不是 405（需要能起服务 + WS 客户端，成本较高，建议放 fdemo 的端到端脚本里）；②**设计确认**：若 WS 属**未完成的实验特性**，先把它标注为实验（文档 + 代码注释），本条目降级为「已知限制」，不改代码；③**若确认要打通**：需在 `handle` 里按 `Upgrade: websocket` 头（或改用独立 handler 类型承载 WS 路径）分流到 `WS` 键 —— 属**设计/行为变更**，须单独立项实施。
+  - **现状影响**：全仓无使用方 ⇒ 当前无实际影响；但「对外宣称支持 WS」时属功能不可用，至少需要一条「已知限制」记录。
 
 **✅ 修复标记（L12）（2026-10-06，`fix/mvc-rest`，代码/用例/本标记同一提交）**
 
