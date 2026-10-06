@@ -142,6 +142,12 @@ public struct PoolDiagnostics {
     /**
      * 接管本模块的告警输出（幂等；应用可以在启动早期调用它把告警接进自己的 logger/采集器，
      * 之后 `KeyPool` 首次建池时的默认接线不会再覆盖它）。
+     *
+     * 约定（见 .autocode/bugs/bug-pool.md §3 `POOL-L1`）：钩子是在**发起操作的那根线程上同步调用**的
+     * （不是专用告警线程），所以
+     * - 别在钩子里做重 I/O / 阻塞操作（网络上报、同步落盘、等锁…都会拖住调用者本身）；
+     * - 别在钩子里再操作池：`std.sync.Mutex` 是可重入的 ⇒ 不会自死锁，但会在告警路径上再跑一遍池逻辑
+     *   （可能递归告警）。库内已经保证：钩子**不在** deque 的全局锁临界区内被调用。
      */
     public static func redirectWarningsTo(warn!: (String) -> Unit, error!: (String) -> Unit): Unit {
         warnHook = warn

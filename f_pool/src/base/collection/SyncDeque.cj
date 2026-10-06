@@ -60,16 +60,27 @@ public class SyncDeque<T> <: Deque<T> {
         if (opCount.fetchAdd(1) % 10000 != 0) {
             return
         }
+        // 锁内只**拼消息**，钩子统一在锁外调：钩子是应用可替换的（`redirectWarningsTo`），
+        // 可能很慢、也可能再操作池 —— 不能在 `head.globalLock` 里跑（会挡住这个 deque 的所有取还，
+        // 见 .autocode/bugs/bug-pool.md §3 `POOL-L1`）。
+        var errorMsg: ?String = None
+        var warnMsg: ?String = None
         synchronized(head.globalLock){
             let (total, idles, checkings) = countNodes()
             let o = out.load()
             let sa = s.load()
             if (sa != total + o) {
-                PoolDiagnostics.error("DEQUE-SELFCHECK] invariant broken: size=${sa} nodes=${total} out=${o}, lastOp=${DEQUE_OP_NAMES[lastOp.load()]}")
+                errorMsg = "DEQUE-SELFCHECK] invariant broken: size=${sa} nodes=${total} out=${o}, lastOp=${DEQUE_OP_NAMES[lastOp.load()]}"
             }
             if (o == 0 && sa > 0 && idles == 0) {
-                PoolDiagnostics.warn("DEQUE-SELFCHECK] no takeable element: size=${sa} nodes=${total} idle=${idles} checking=${checkings} inFlightChecks=${checkers.load()}, lastOp=${DEQUE_OP_NAMES[lastOp.load()]}")
+                warnMsg = "DEQUE-SELFCHECK] no takeable element: size=${sa} nodes=${total} idle=${idles} checking=${checkings} inFlightChecks=${checkers.load()}, lastOp=${DEQUE_OP_NAMES[lastOp.load()]}"
             }
+        }
+        if (let Some(m) <- errorMsg) {
+            PoolDiagnostics.error(m)
+        }
+        if (let Some(m) <- warnMsg) {
+            PoolDiagnostics.warn(m)
         }
     }
 
@@ -226,7 +237,9 @@ public class SyncDeque<T> <: Deque<T> {
      */
     private func reconcileIfWedge(): Int64 {
         lastOp.store(6)
-        synchronized(head.globalLock){
+        // 锁内只做自愈 + 拼消息，告警在锁外发（同 `selfCheck`，见 §3 `POOL-L1`）
+        var healMsg: ?String = None
+        let actions = synchronized(head.globalLock){
             if (checkers.load() != 0) {
                 return 0                // 有 check 在飞：非 idle 节点是合法中间态，不动手
             }
@@ -247,10 +260,14 @@ public class SyncDeque<T> <: Deque<T> {
                 actions += 1
             }
             if (healed.size > 0) {
-                PoolDiagnostics.warn("WEDGE-HEAL]${healed}, out=${o}, lastOp=${DEQUE_OP_NAMES[lastOp.load()]}")
+                healMsg = "WEDGE-HEAL]${healed}, out=${o}, lastOp=${DEQUE_OP_NAMES[lastOp.load()]}"
             }
             actions
         }
+        if (let Some(m) <- healMsg) {
+            PoolDiagnostics.warn(m)
+        }
+        actions
     }
 
     /**

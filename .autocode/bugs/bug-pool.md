@@ -31,6 +31,7 @@
 > 十三次修正（2026-10-05）：§3 `POOL-L7` 已修复（`ArrayPool.giveBack` 尺寸不符 ⇒ 抛 `IllegalSizeException`，签名 `Bool` → `Unit`；「giveBack 抛异常 = 没归还」）⇒ §3 待处理 **7** 条（`POOL-L1`、`POOL-L3`~`POOL-L6`、`POOL-L8`、`POOL-L9`）。
 > 十四次修正（2026-10-05）：§3 `POOL-L6` 结案 —— 它其实**已随 `315ada9e` 的等待重写消除**（本次只补证据 + 防回归用例），且**诊断修正为实测口径**：`MonoTime + Duration` 是抛 `ArithmeticException` 而不是「溢出成负」（仅 `Duration.Max` 附近的有限值可触发；巨值 `Condition.wait(timeout:)` 实测是饱和睡着，无残量）⇒ §3 待处理 **6** 条（`POOL-L1`、`POOL-L3`~`POOL-L5`、`POOL-L8`、`POOL-L9`；其中 `POOL-L8`/`POOL-L9` 是已拍板「登记不改」）。同时清掉 3 处过时注记（§1.2 的 `tasks` 容量、§2.2 的 `sleep(checkInterval)`、§2.6 残量③的 `POOL-13`）。
 > 十五次修正（2026-10-06）：§3 `POOL-L5` 已修（口径：`get`/`giveBack` 的局部函数 `keyedCheck` 提成**实例成员函数** `checkOnBorrow`/`checkOnReturn`，方法值在构造期取一次缓存到字段）⇒ §3 待处理 **5** 条（`POOL-L1`、`POOL-L3`、`POOL-L4`、`POOL-L8`、`POOL-L9`）。**注意**：这条属于**等价重构 + 微优化**，端到端性能在噪声里测不出（见 §3 该条的实测说明与 §5 复测）。
+> 十六次修正（2026-10-06）：§3 `POOL-L1` 已修复（告警钩子移出 `head.globalLock`：锁内只拼消息、锁外发；判别用例用「钩子执行期间另一根线程抢同一把锁」实测 **2.01 s/FAILED → 5.7 ms/PASSED**）⇒ §3 待处理 **4** 条（`POOL-L3`、`POOL-L4`、`POOL-L8`、`POOL-L9`；后两条是已拍板「登记不改」）。同时**订正**了三处诊断：调用点是 4 个（1 个在锁外）、「钩子重入池 ⇒ 死锁」不成立（`Mutex` 可重入）、这条**可以**确定性测。
 
 **建议修复顺序**：
 
@@ -523,9 +524,36 @@ useafterrelease: second_is_empty=false second_bytes=5
 
 ---
 
-## 3. 低危 / 待验证（9 条，其中 `POOL-L2`、`POOL-L5`、`POOL-L6`、`POOL-L7` 已修复）
+## 3. 低危 / 待验证（9 条，其中 `POOL-L1`、`POOL-L2`、`POOL-L5`、`POOL-L6`、`POOL-L7` 已修复）
 
-- `POOL-L1` **告警钩子在 `head.globalLock` 临界区内被调用**：`selfCheck` 的 `error`/`warn`（`SyncDeque.cj:63-73`）与 `reconcileIfWedge` 的 `warn`（`250`）都在 `synchronized` 块内，默认钩子写 stderr、应用可重定向到日志框架 —— 慢钩子会阻塞所有取还操作，钩子若重入池则死锁。建议：把消息攒到锁外再发。
+- `POOL-L1` **告警钩子在 `head.globalLock` 临界区内被调用** ✓已复核 → **✅已修复（2026-10-06，提交 `xxxx`）**
+  - **诊断订正（2026-10-06）**：
+    1. 调用点其实是 **4** 个：`SyncDeque.selfCheck` 的 `error`/`warn`（`:68`/`:71`，锁内）、`reconcileIfWedge`
+       的 warn（`:250`，锁内），以及 **`PoolDiagnostics.reportIfChanged`（`:182-190`，锁外）** ——
+       巡检 `audit` 之后与进程退出时各一次。最后那个「锁外」的形状就是本次修复的样板。
+    2. **「钩子重入池 ⇒ 死锁」不成立**：`std.sync.Mutex` 文档写明是**可重入互斥锁**，探针 `mutexreentry`
+       实测「同线程对同一把 Mutex 套两层 `synchronized`」能进入 ⇒ 钩子里再操作池不会自死锁，只会递归/放大。
+    3. 真正剩下的是 ① **慢/阻塞钩子把这个 deque 的所有取还挡住**（默认链路 = `logger.warn`，实测 **7.2 µs/条**，
+       探针 `warncost` ⇒ 默认无感；应用用 `redirectWarningsTo` 换上的钩子则无上限，而告警恰恰出现在异常态）、
+       ② **锁序 AB-BA**（钩子持 deque 锁 → f_log/应用自己的锁；应用若有「先持自己的锁、再操作池」的路径就成环）。
+  - **改法**（`f_pool/src/base/collection/SyncDeque.cj`）：锁内只**拼消息**，`PoolDiagnostics.warn/error` 一律移出
+    锁外发；用 `?String` 局部量而不是 `ArrayList`（健康路径零额外分配 —— `selfCheck` 每 1e4 次操作才进锁一次）。
+    `reconcileIfWedge` 只把那条 warn 挪出去，`reviveNonIdle()`/`s.store(total)`/计数仍留在锁内（必须在锁内），
+    `checkers != 0` 的 `return 0` 保持原样。**行为零变化**：消息内容、级别、触发条件都不变。
+    另给 `PoolDiagnostics.redirectWarningsTo` 补了约定注释：钩子在**发起操作的那根线程**上同步调用 ⇒
+    别做重 I/O / 别在钩子里再操作池（可重入、不会死锁，但会放大）；库内保证**不在 deque 全局锁临界区**里调用。
+  - **判别用例（这次找到了确定性触发方式，「没有便宜判别法」的说法订正）**：
+    `SyncDequeTest.testWarningHookMustRunOutsideDequeLock`（`SyncDeque_test.cj`）—— 沿用现成测试缝
+    `strandHeadForTest()` + `audit()` 逼出 `WEDGE-HEAL` 告警（现成用例 `testWarningHookCanBeRedirected` 就是这么触发的），
+    钩子体内 `spawn { deque.insertTail(...) }` 让**另一根线程去抢同一把锁**，最多等 400 ms：等不到 ⇒ 钩子在锁内。
+    - **修前**：`[ FAILED ]` —— `Assert Failed: (blockedWhileHookRan.load() == false)`，用例耗时 **2.01 s**
+      （钩子占着锁 400 ms，之后那根线程才拿到锁）；`PIN_EXIT=1`。
+    - **修后**：`[ PASSED ]`（耗时 **5.7 ms**，≈350×）；`FILTERED_EXIT=0`。
+    - **覆盖边界**：`selfCheck` 的两个告警点造不出确定性状态（warn 要求「有项、无人借出、且**所有**节点非 idle」，
+      而能顶采样计数的公开操作要么补一个 idle 节点、要么会走 `reconcileIfWedge` 把滞留项救回来）⇒
+      这两处只做**结构核对**（3 个调用点都不在 `synchronized` 块内）。
+  - 回归：`f_pool` 全量 **`PASSED: 63, SKIPPED: 0, ERROR: 0, FAILED: 0`**（含新用例）；下游见 §5。日志
+    `.autocode/tmp/pool_l1_verify.log`。
 - `POOL-L2` **`checkInterval = Duration.Max` 使巡检形同虚设** ✓已复核 → **✅已修复（2026-10-05，提交 `fd175da6`）**
   - **改法**（两处，`f_pool/src/KeyPool.cj`）：① `startCheckingSchedule` 把 `Duration.Max` 与 `<= Duration.Zero` 同等对待 —— **不启用巡检就不起线程**（`Duration.Max` 的实际效果本来就是「永不巡检」，却白养一个 `sleep(Duration.Max)` 永不醒来、关池也叫不醒的线程；`BytesListOutputStream.builder` 的默认值正是它）；② 巡检「睡到下一轮」从 `sleep(checkInterval)` 换成**条件变量**（新增 `checkMutex`/`checkCond` + `waitNextRound()`），`close()` 里加一次 `notifyAll` ⇒ 关池后**立刻**醒来退出，不再 park 满一个周期（默认 1 分钟；`Duration.hour` 就得睡满一小时）。剩余时间按 `MonoTime` 计算（同 `POOL-L6` 的写法，不会溢出），虚假唤醒不会把周期拖长。
   - **证据**：新用例 `maxIntervalMustNotStartCheckingThread`（20 个 `Duration.Max` 池，建/关之后线程数回基线）与 `closeMustInterruptCheckingSleep`（20 个 `Duration.hour` 池，`close()` 后 1.6s 线程数回基线）—— **修前两条都 `[ FAILED ]`**（`Assert Failed: (getThreadCount() <= before + 5 == true)`，都停在 `+20`），**修后两条 `[ PASSED ]`**；探针 `checkinterval`：修前 `max: 7→47→27`、`hour: 27→67→47`（第一批滞留 20 个巡检线程，第二批在此基础上再 +20），修后 `max: 7→27→7`、`hour: 7→47→7`（关池后全部回落 ✓）。全量 `f_pool` = **`PASSED: 60, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1（既有 `ORMConfig_test`）。日志 `.autocode/tmp/pool_l2_{all,post}.log`。
@@ -678,6 +706,8 @@ useafterrelease: second_is_empty=false second_bytes=5
 > `POOL-L7` 修复后的复测（§3；口径：`ArrayPool.giveBack` 尺寸不符 ⇒ 抛 `IllegalSizeException`，这次不算归还）：**修前** `arrayPoolWrongSizeReturnMustThrow` `[ FAILED ]`（`Assert Failed: (before >= 0 == true)` —— 旧快照里没有 `returnRejected` 这个计数，旧实现静默 `return false`）；探针 `arraymismatch` 修前 `threw=false`。**修后**该用例 `[ PASSED ]`；探针 `threw=true msg=…expected an array of 1024, got 64…` + `returnRejected=1`（快照 `borrow=1 return=0`）；全量 **`PASSED: 61, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（同上的既有 `ORMConfig_test`）。日志 `.autocode/tmp/pool_l7_{all,probe}.log`。
 
 > `POOL-L2` 修复后的复测（§3；口径：`Duration.Max` = 不启用巡检 ⇒ 不起线程；巡检睡眠改条件变量）：**修前**两条新用例 `maxIntervalMustNotStartCheckingThread` / `closeMustInterruptCheckingSleep` 都 `[ FAILED ]`（`getThreadCount() <= before + 5`，各停在 `+20`）⇒ `PRE_EXIT=1`；探针 `checkinterval` 修前 `max: 7→47→27`、`hour: 27→67→47`。**修后**两条 `[ PASSED ]`；探针 `max: 7→27→7`、`hour: 7→47→7`（关池后全部回落）；全量 **`PASSED: 60, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（同上的既有 `ORMConfig_test`）。日志 `.autocode/tmp/pool_l2_{all,post}.log`。
+
+> `POOL-L1` 修复后的复测（§3；口径：告警钩子移出 `head.globalLock` —— 锁内只拼消息、锁外发）：判别用例 `SyncDequeTest.testWarningHookMustRunOutsideDequeLock`（钩子执行期间让另一根线程抢同一把锁，等不到 ⇒ 钩子在锁内）—— **修前** `[ FAILED ]`（`Assert Failed: (blockedWhileHookRan.load() == false)`，用例耗时 **2.01 s**）⇒ `PIN_EXIT=1`；**修后** `[ PASSED ]`（**5.7 ms**，≈350×）⇒ `FILTERED_EXIT=0`。`f_pool` 全量 **`PASSED: 63, SKIPPED: 0, ERROR: 0, FAILED: 0`**（`POOL_EXIT=0`）；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（既有的 `ORMConfig_test`）。日志 `.autocode/tmp/pool_l1_verify.log`。
 
 > `POOL-L5` 修复后的复测（§3；口径：局部函数 → 实例成员函数 `checkOnBorrow`/`checkOnReturn` + 构造期方法值缓存）：**无判别用例**（纯性能/结构），证据是探针 —— 形态微基准 `closureshape`：现场取闭包 39 ns + 45 B vs 复用 15 ns + 0 B（同进程、各 100 万次）；端到端 `closurecost` 的 per-op/bytes_per_op 被本机噪声淹没（3.0–3.7 µs、3–350 B/op 波动），**且中途一次「回归」读数经查是负载 + A/B 脚本 WSL 侧 `git checkout` 失败所致，作废**。回归：全量 **`PASSED: 62, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（既有）。日志 `.autocode/tmp/pool_l5_{probe,verify,ab}.log`。
 
