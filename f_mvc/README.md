@@ -27,6 +27,32 @@
     export mvc_accessControlAllowOrigin='*' # 指定响应头Access-Control-Allow-Origin，默认就是* 
     export mvc_accessControlAllowHeaders='*' # 指定响应头Access-Control-Allow-Headers，默认就是*
     export mvc_accessControlMaxAge=0 # 指定响应头Access-Control-Max-Age，默认是0
+
+    # 监听地址与调试开关
+    export mvc_host=0.0.0.0 # 监听地址，默认是0.0.0.0
+    export mvc_debugging=false # 调试开关，默认false
+    
+    # HTTP/2 参数，不指定都按stdx.net.http的默认值
+    export mvc_headerTableSize=4096
+    export mvc_maxConcurrentSteams=100 # 注意：键名里的Steams是源码拼写
+    export mvc_initialWindowSize=65535
+    export mvc_maxFrameSize=16384
+    export mvc_maxHeaderListSize=16384
+    
+    # 静态资源根目录
+    export mvc_staticResourceRoot=/path/to/static
+    
+    # 业务线程池：三个键必须同时指定才会生效
+    export mvc_servicePoolCapacity=64
+    export mvc_servicePoolQueueCapacity=1024
+    export mvc_servicePoolPreheat=8
+    
+    # TLS：mvc_tlsPath 是「证书文件|私钥文件」，两段用|分隔
+    export mvc_tlsPath=/path/to/cert.pem|/path/to/key.pem
+    export mvc_tlsVerifyMode=trustAll # trustAll（也接受trust_all/trust-all）| 其它取值走stdx的默认校验 | customCA | customVerify
+    export mvc_tlsVerifyPem=/path/to/ca.pem # 仅verifyMode=customCA时使用
+    export mvc_tlsVerifyBean=myVerifier # 仅verifyMode=customVerify时使用，值是实现CertificateVerifier的bean名
+    export mvc_tlsSupportedAlpnProtocols=h2|http/1.1 # 多个协议用|分隔
 ```
 
 ### mvc_internalServerErrorMessageKind 的取值
@@ -1051,22 +1077,73 @@ public struct Series <: Equatable<Series> {
 
 ## 当前数据不足以完成业务要求时
 
-当前数据不足以完成业务时可以执行`perform BreakingCommand(...)`跳出当前业务线程栈立即到达栈底。
+当前数据不足以完成业务时可以执行`perform MVCBreakingCommand(...)`跳出当前业务线程栈立即到达栈底。
 本次perform会被mvc框架处理，但是不会有resume。
 不必担心业务逻辑有未释放的资源，运行时会按照函数调用倒序执行整个线程栈中出现的finally块。
 status是希望本次响应的HTTP状态码，data是希望返回的数据，Data是`fountain::f_data.Data`。
 所有基本类型、字符串、Duration、DateTime的实例，以及所有使用`fountain::f_data.macros.DataAssist`修饰的类的实例都可以调用`toData()`函数转换成`Data`实例。
 ```cj
-public class BreakingCommand <: Command<Unit>{
-    private BreakingCommand(public let status: HttpStatus, public let data: Data){}
+public class MVCBreakingCommand <: BreakingCommand {
+    public MVCBreakingCommand(data: Data, public let status: HttpStatus)
+    public init(status: HttpStatus)
+    public init(data: Data)
+    public init()
 
-    public static func new<T>(status: HttpStatus, data: T): BreakingCommand where T <: ToData 
-    public static func new(status: HttpStatus): BreakingCommand 
-    public static func new(): BreakingCommand 
-    public static func new<T>(data: T): BreakingCommand where T <: ToData 
+    public static func new<T>(data: T): MVCBreakingCommand where T <: ToData 
+    public static func new<T>(data: T, status: HttpStatus): MVCBreakingCommand where T <: ToData 
+}
+```
+不带status的通用基类`BreakingCommand`定义在`fountain::f_data.base`，业务/框架可以继承它来表达「跳出当前栈」的语义；`MVCBreakingCommand`在此之上增加了`status`，由mvc框架负责把它转成HTTP响应。
+
+
+## WebSocket
+
+`@WSEndPoint`修饰的类会自动注册为bean，并把「`GET` + `Upgrade: websocket`」的请求升级为WebSocket连接（响应`101 Switching Protocols`）。
+
+### `@WSEndPoint` 的可选项
+
+```cj
+@WSEndPoint['/ws/echo', subProtocols: ['chat'], origins: ['example.com'], userFunc: {req => HttpHeaders()}]
+public class EchoEndPoint {
+    // 只能声明被 @OnWS* 或 @WSPing 修饰的公共实例成员函数，且函数名在当前类中唯一
 }
 ```
 
+- `'.....'`：URL路径，必须指定且必须是attr开头第一个，必须是字符串类型
+- `subProtocols: [....]`
+- `origins: [....]`
+- `userFunc: ...`：任意正确的闭包，或者使用本宏的当前作用域内可见的函数标识，函数类型是`(HttpRequest) -> HttpHeaders`
+
+本宏修饰的类型必须是类。被修饰类中**有且只有**被`@OnWS*`开头的注解修饰的函数和被`@WSPing`修饰的函数才是公共实例成员函数，且函数名在当前类中唯一。
+
+### 注解清单
+
+| 注解 | 目标 | 说明 |
+|---|---|---|
+| `@OnWSOpen` | 实例函数 | 连接建立。需要主动向客户端写时应声明WebSocket参数并设法保持此WebSocket实例（`WSMeta`提供了若干静态写函数辅助） |
+| `@OnWSText` | 实例函数 | 收到文本帧 |
+| `@OnWSBinary` | 实例函数 | 收到二进制帧 |
+| `@OnWSClose` | 实例函数 | 连接关闭 |
+| `@OnWSPing` / `@OnWSPong` | 实例函数 | 收到ping帧 / pong帧 |
+| `@WSPing(duration!: String = '30s', mediaType!: String = '')` | 实例函数 | 由服务端按周期主动发ping |
+| `@WSTextFrame` / `@WSBinaryFrame` | 函数参数 | 把帧数据注入该参数 |
+
+### 元数据与参数提取
+
+`fountain::f_mvc.WSMeta<T>`描述端点的各个处理函数（`openMeta`/`closeMeta`/`textMeta`/`binaryMeta`/`pingMeta`/`pongMeta`/`pingFunc`），并提供参数提取帮助函数：`extractOpenArg`、`extractCloseArg`、`extractTextArg`、`extractBinaryArg`、`extractPingArg`、`extractPongArg`（每个都有「带默认值」重载）。
+
+帧类型`WSCloseFrame`表示关闭帧；异常类是`WSException`。
+
+### 最小示例
+
+```cj
+import fountain::f_mvc.*
+import fountain::f_mvc.macros.*
+
+// 只升级、不声明任何@OnWS*处理器（合法：等价于一个空meta，可用于验证握手路由）
+@WSEndPoint['/ws/smoke']
+public class SmokeWSEndPoint {}
+```
 
 ## FileDownload 
 

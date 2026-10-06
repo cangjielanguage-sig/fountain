@@ -43,6 +43,17 @@ public interface Aspect {
 }
 ```
 
+## 并发与线程安全
+
+切面（`Aspect` 的实现类）在 IoC 中是**单例 bean**：同一类型的所有切点函数、所有线程共享同一个切面实例，
+框架不会对切面的调用做同步。因此：
+
+  - 切面实现**必须自身线程安全**：不要在实例字段等跨调用共享的位置保存每次调用的状态
+    （计数器、缓存、上一次的 `funcInfo`/参数等），需要跨步骤传递时用局部变量或参数；
+  - 切点函数被并发调用时，`before`/`after`/`around`/`throwing`/`final` 会并发进入同一个切面实例，
+    切面内访问的共享资源（文件、连接、容器等）要自行加锁或使用并发容器；
+  - 同一类型的多个实例共享同一条切面链，链只在切点函数首次调用时构建一次（见 `Aspects`），
+    "切面实例的并发安全"由切面实现自己负责。
 
 ## `@Pointcut`
 
@@ -74,6 +85,25 @@ public class WeavedClass {
   }
 }
 ```
+
+
+## 嵌套调用与递归（设计）
+
+- **同一次织入调用链内不再织入**：切点函数 A 的织入方法内部再调用切点函数 B（或 A 递归调用自己）时，**内层调用直接执行原函数体，不再执行切面**。
+  这是刻意的设计：避免递归调用切点函数时切面被重复执行（也避免切面里再调用织入函数造成无限递归）。
+- 实现位于 `src/Aspects.cj` 的 `recursiveInvocationFlag`（`private static let ... = ThreadLocal<Bool>`）：最外层织入期间被置为 `true`（`Aspects.proceed` 里 `try { ... } finally { remove() }`），
+  内层织入调用读到该标志就直接 `fn(funcInfo.args)`，因此 A 调 B 时 B 的切面**不会**执行。
+- **如果希望 A 调 B 时 A、B 都织入切面**，就需要让该标志在内层调用时为 `false`（即最外层不把它置 `true`）。
+  注意：该标志当前是框架内部实现，没有公开开关；需要这种语义时请与维护者确认改法。
+
+
+## 切面集合与建链时机（设计）
+
+- 有哪些切面（被 `@AspectRoute` 注解修饰的 `Aspect` bean）、以及「哪些切面可以织入哪些函数」，都是**编译期**由注解给出的；运行期只做「判定 + 建链」，并且**只在切点函数首次被调用时做一次**（链按「(类型, 函数)」缓存在 `Aspects` 的静态 map 里，之后一直复用）。
+- 因此，某个函数**首次调用时**织入了哪些切面（或者没有切面），此刻就**固定**了，以后不会变化：
+  - 切面 bean 必须在织入函数**首次调用之前**注册完成（框架启动/自动装配阶段即可，`f_orm`/`f_mvc` 的自动装配就是这样）；之后再注册的切面**不会**影响已经调用过的函数；
+  - 以注解给出的规则是编译期确定的；`Config*RouteRule`（如 `ConfigAspectRouteRule`）匹配时才读配置 —— 也是在**首次调用**时读那一次，之后改配置同样只对未调用过的函数生效；
+  - 改注解/规则需要重新编译并重启进程，已调用过的函数不会重新建链。
 
 
 ## 织入规则
@@ -119,11 +149,12 @@ public class AspectRoute <: RouteRule {
 ```
 
 #### `InvocationFuncInfo`
+  - 值类型（`struct`）：不可变、按值传递，每次调用（每层）各一个实例 —— 并发调用之间不共享参数
 ```cj
-public class InvocationFuncInfo {
+public struct InvocationFuncInfo {
     public InvocationFuncInfo(
         private let _funcInfo: QualifiedFuncInfo, //函数元数据
-        private var _args: Array<Any>//函数实参
+        private let _args: Array<Any>//函数实参
     ) {}
     /**
      * typeInfo funcName argTypes 构成函数元数据
@@ -289,10 +320,10 @@ public class FuncAnnotationRouteRule <: RouteRule {
 ```cj
 /**
  * 目标函数参数都有指定类型注解将被织入，本规则不适用通配符
- * 参数是注解类型的全限定名，多个注解类型用&分割，每个注解类型依次对应一个参数。
+ * 参数是注解类型的全限定名，多个注解类型用&分割，每个注解类型依次对应一个参数（个数必须与参数个数一致）。
  * 忽略某个参数的注解需要使用*占位，
- * 比如*,a.b.c.AnnotationType表示目标函数有两个参数，忽略第一个参数的注解，第二个参数必须有a.b.c.AnnotationType注解
- * a.Annotation1,*,b.Annotation2表示目标函数有三个参数，忽略第二个参数的注解，第一第三个参数必须有a.Annotation1和b.Annotation2
+ * 比如*&a.b.c.AnnotationType表示目标函数有两个参数，忽略第一个参数的注解，第二个参数必须有a.b.c.AnnotationType注解
+ * a.Annotation1&*&b.Annotation2表示目标函数有三个参数，忽略第二个参数的注解，第一第三个参数必须有a.Annotation1和b.Annotation2
  */
 public class ArgAnnotationsRouteRule <: RouteRule {
     public const ArgAnnotationsRouteRule(public let annotationTypes: String) {}

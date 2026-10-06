@@ -250,54 +250,58 @@ public interface RootDAO {
         }
     }
     func arg(value: Any): String {
+        // bug.md §2.14（ORM-7）：分支按绑定频率排序（与 arg<I,T>、SqlExecutor.add<T> 同序）。
+        // bug-orm.md ORM-N3：`case x: Data` 必须排在标量/可空分支之后——该接口模式的运行时检查对「非 Data 值」
+        // 极贵（实测 Any 持 Int64 时 ≈12µs/次、持 String 时 ≈1.2µs/次，且并不匹配它们，纯白付），
+        // 排在首位会让每个标量绑定都先付这笔钱；Data 是包装类型（DataString/DataReal…），不会命中标量分支。
+        // 原位序里 Float16/?Float16 各出现两次，第二次恒不可达，本次重排一并去掉。
         match(value){
-            case x: Data => arg(x)
-            case x: Bool => arg(x)
-            case x: ?Bool => arg(x)
-            case x: Int8 => arg(x)
-            case x: ?Int8 => arg(x)
-            case x: UInt8 => arg(x)
-            case x: ?UInt8 => arg(x)
-            case x: Int16 => arg(x)
-            case x: ?Int16 => arg(x)
-            case x: UInt16 => arg(x)
-            case x: ?UInt16 => arg(x)
-            case x: Int32 => arg(x)
-            case x: ?Int32 => arg(x)
-            case x: UInt32 => arg(x)
-            case x: ?UInt32 => arg(x)
             case x: Int64 => arg(x)
-            case x: ?Int64 => arg(x)
-            case x: UInt64 => arg(x)
-            case x: ?UInt64 => arg(x)
-            case x: Float16 => arg(x)
-            case x: ?Float16 => arg(x)
-            case x: Float32 => arg(x)
-            case x: ?Float32 => arg(x)
-            case x: Float64 => arg(x)
-            case x: ?Float64 => arg(x)
-            case x: BigInt => arg(x)
-            case x: ?BigInt => arg(x)
-            case x: Decimal => arg(x)
-            case x: ?Decimal => arg(x)
-            case x: Float16 => arg(x)
-            case x: ?Float16 => arg(x)
-            case x: Rune => arg(x)
-            case x: ?Rune => arg(x)
             case x: String => arg(x)
-            case x: ?String => arg(x)
-            case x: InputStream => arg(x)
-            case x: ?InputStream => arg(x)
-            case x: Duration => arg(x)
-            case x: ?Duration => arg(x)
             case x: DateTime => arg(x)
-            case x: ?DateTime => arg(x)
+            case x: Bool => arg(x)
+            case x: Decimal => arg(x)
+            case x: UInt64 => arg(x)
+            case x: Int32 => arg(x)
+            case x: Int16 => arg(x)
+            case x: Int8 => arg(x)
+            case x: UInt32 => arg(x)
+            case x: UInt16 => arg(x)
+            case x: UInt8 => arg(x)
+            case x: Float64 => arg(x)
+            case x: Float32 => arg(x)
+            case x: Float16 => arg(x)
+            case x: BigInt => arg(x)
+            case x: Duration => arg(x)
+            case x: Rune => arg(x)
             case x: Array<Byte> => arg(x)
+            case x: InputStream => arg(x)
+
+            case x: ?Int64 => arg(x)
+            case x: ?String => arg(x)
+            case x: ?DateTime => arg(x)
+            case x: ?Bool => arg(x)
+            case x: ?Decimal => arg(x)
+            case x: ?UInt64 => arg(x)
+            case x: ?Int32 => arg(x)
+            case x: ?Int16 => arg(x)
+            case x: ?Int8 => arg(x)
+            case x: ?UInt32 => arg(x)
+            case x: ?UInt16 => arg(x)
+            case x: ?UInt8 => arg(x)
+            case x: ?Float64 => arg(x)
+            case x: ?Float32 => arg(x)
+            case x: ?Float16 => arg(x)
+            case x: ?BigInt => arg(x)
+            case x: ?Duration => arg(x)
+            case x: ?Rune => arg(x)
             case x: ?Array<Byte> => arg(x)
+            case x: ?InputStream => arg(x)
             case x: ?Any => match(x){
                 case Some(y) => arg(y)
                 case _ => argNull()
             }
+            case x: Data => arg(x)
             case x => throw SqlArgException('${TypeInfo.of(x)} does not support for sql arg')
         }
     }
@@ -317,63 +321,71 @@ public interface RootDAO {
         frag.toString()
     }
     func arg<I, T>(value: I): String where I <: Iterable<T> {
-        let frag = StringGenerator(' (')
-        let s = frag.size
+        var n = 0
         for(v in value){
-            if(frag.size > s){
-                frag.append(',')
-            }
+            n++
+            // bug.md §2.14（ORM-7）：分支按绑定频率排序（同 SqlExecutor.add<T>），逐个元素减少失败的类型检查。
+            // 各分支运行时类型互斥，顺序不影响语义。
+            //
+            // 注意（bug-orm.md ORM-N1 / B）：这些分支**只做绑定**——`arg(x)` 内部是 `executor.add(x)` 并
+            // 返回 `'?'`，这里必须丢弃该返回值；占位符由函数尾统一拼一次。若改成 `frag.append(arg(x))`
+            // 就会双重添加（二维变体 arg<I1,I2,T> 才是"每元素 append 内层文本"的形态）。
             match(v){
-                case x: Int8 => arg(x)
-                case x: Int16 => arg(x)
-                case x: Int32 => arg(x)
                 case x: Int64 => arg(x)
-                case x: UInt8 => arg(x)
-                case x: UInt16 => arg(x)
-                case x: UInt32 => arg(x)
-                case x: UInt64 => arg(x)
-                case x: Float16 => arg(x)
-                case x: Float32 => arg(x)
-                case x: Float64 => arg(x)
-                case x: BigInt => arg(x)
-                case x: Decimal => arg(x)
                 case x: String => arg(x)
-                case x: Duration => arg(x)
                 case x: DateTime => arg(x)
-                case x: InputStream => arg(x)
-                case x: Array<Byte> => arg(x)
-                case x: Rune => arg(x)
                 case x: Bool => arg(x)
+                case x: Decimal => arg(x)
+                case x: UInt64 => arg(x)
+                case x: Int32 => arg(x)
+                case x: Int16 => arg(x)
+                case x: Int8 => arg(x)
+                case x: UInt32 => arg(x)
+                case x: UInt16 => arg(x)
+                case x: UInt8 => arg(x)
+                case x: Float64 => arg(x)
+                case x: Float32 => arg(x)
+                case x: Float16 => arg(x)
+                case x: BigInt => arg(x)
+                case x: Duration => arg(x)
+                case x: Rune => arg(x)
+                case x: Array<Byte> => arg(x)
+                case x: InputStream => arg(x)
 
-                case x: ?Int8 => arg(x)
-                case x: ?Int16 => arg(x)
-                case x: ?Int32 => arg(x)
                 case x: ?Int64 => arg(x)
-                case x: ?UInt8 => arg(x)
-                case x: ?UInt16 => arg(x)
-                case x: ?UInt32 => arg(x)
-                case x: ?UInt64 => arg(x)
-                case x: ?Float16 => arg(x)
-                case x: ?Float32 => arg(x)
-                case x: ?Float64 => arg(x)
-                case x: ?BigInt => arg(x)
-                case x: ?Decimal => arg(x)
                 case x: ?String => arg(x)
-                case x: ?Duration => arg(x)
                 case x: ?DateTime => arg(x)
-                case x: ?InputStream => arg(x)
-                case x: ?Array<Byte> => arg(x)
-                case x: ?Rune => arg(x)
                 case x: ?Bool => arg(x)
+                case x: ?Decimal => arg(x)
+                case x: ?UInt64 => arg(x)
+                case x: ?Int32 => arg(x)
+                case x: ?Int16 => arg(x)
+                case x: ?Int8 => arg(x)
+                case x: ?UInt32 => arg(x)
+                case x: ?UInt16 => arg(x)
+                case x: ?UInt8 => arg(x)
+                case x: ?Float64 => arg(x)
+                case x: ?Float32 => arg(x)
+                case x: ?Float16 => arg(x)
+                case x: ?BigInt => arg(x)
+                case x: ?Duration => arg(x)
+                case x: ?Rune => arg(x)
+                case x: ?Array<Byte> => arg(x)
+                case x: ?InputStream => arg(x)
                 case _ => throw ORMException('type does not support')
             }
-            frag.append('?')
         }
-        if(frag.size == s){
+        // bug-orm.md ORM-N1（B）：占位符整段 = ' (' + '?' + ',?'×(n-1) + ')'，只由元素个数决定，
+        // 故循环里只计数、拼接改为一次字符串重复（每元素省掉一次 StringGenerator.append）。
+        // n == 1 单独返回：避免依赖 `* 0` 的实现行为（仓内 Array 的 `*` 在 repeat=0 时会因"缩小"而抛错）。
+        // 注意：文本末尾**不带空格**——与 N1a 一致，`ArgSqlText_test` 逐字节钉着 `' (?,?,?)'`。
+        if(n == 0){
             return ''
+        }else if(n == 1){
+            ' (?)'
+        }else{
+            ' (?${",?" * (n - 1)})'
         }
-        frag.append(')')
-        frag.toString()
     }
     func argNull(): String {
         executor.addNull()

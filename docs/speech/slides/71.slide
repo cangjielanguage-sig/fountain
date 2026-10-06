@@ -1,0 +1,59 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`内置的三种实现和注册表。
+
+三个实现：PlainTextMediaType 对应 text/plain；JsonMediaType 对应 application/json；MultipartMediaType 对应 multipart/form-data 和 multipart/mixed。前两个的父类是 TextMediaType，也就是带字符集的文本格式父类——它处理分号 charset 后缀，toString 会输出「媒体类型分号 charset 等于编码」。JsonMediaType 的 toData 就是把字符串先解析成 JsonValue 再转 Data；fromData 反过来，先 tryFromData 再按 charset 编码。
+
+MultipartMediaType 不一样：它带 boundary，toString 形如 multipart/form-data 分号 boundary 等于 xxx；它的 fromData 和 toData 字节版直接抛异常，只支持 toData 输入流这一种形式，因为它是用来解析上传流的。
+
+然后是 MediaTypes 注册表，这一段是重点，解释「为什么加个 @Bean 就多了一种数据格式」。
+
+MediaTypes 内部是一张并发 HashMap，它有两个注册来源。第一，static init 里内置注册那四个：JsonMediaType 的单例、MultipartMediaType 的 formData 和 mixed、PlainTextMediaType 的单例。第二，首次 tryParse 时从 IOC 拉取：它会调 BeanFactory 的 getList 把所有 @Bean 修饰的 MediaType 一并注册，而且用一个原子计数加条件变量保证只做一次、且并发安全。
+
+所以 fdemo 的 LogTextMediaType 只要加个 @Bean，application/json+log 就自动可用了——不需要任何注册代码。
+
+解析时还有一个宽容处理：tryParse 先按完整的媒体类型字符串查找，找不到就截掉分号之后的参数再找一次，比如 application/json 分号 charset 等于 utf-8 会退化成 application/json；找到之后再调用它的 make 函数把参数带回去。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 11 章 · HTTP 数据格式 f_http · 11.3 / 11.4</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>内置的三种实现与 MediaTypes 注册表</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>加个 @Bean 就多一种格式</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ width: 480, flexDirection: 'column', gap: 14 }}>
+      <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>内置实现</Text>
+        <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public class PlainTextMediaType <: TextMediaType   // text/plain"}</Text>
+        <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public class JsonMediaType      <: TextMediaType   // application/json"}</Text>
+        <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public class MultipartMediaType <: MediaType       // multipart/form-data, /mixed"}</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.7, marginTop: 10 }}>TextMediaType 是带字符集的文本格式父类，处理 ; charset= 后缀，toString 输出「类型; charset=编码」。</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.7, marginTop: 8 }}>JsonMediaType：toData(String) = JsonValue.fromStr 再 toData；fromData(Data) = tryFromData 再按 charset 编码。</Text>
+        <Text style={{ fontSize: 13, color: '#F59E0B', lineHeight: 1.7, marginTop: 'auto' }}>MultipartMediaType 带 boundary，fromData(Data) 与 toData(Array&lt;Byte&gt;) 直接抛异常，只支持 toData(input: InputStream)（解析上传流）。</Text>
+      </Box>
+      <Box style={{ height: 108, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>MediaTypes 注册表</Text>
+        <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>MediaTypes.register(mediaType)</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>MediaTypes.parse(mediaType)　　　// 找不到抛 MediaTypeException</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>MediaTypes.tryParse(mediaType)　 // 找不到返回 None</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 20, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#38BDF8' }}>两个注册来源</Text>
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.75, marginTop: 12 }}>内部是一张 ConcurrentHashMap。</Text>
+      <Text style={{ fontSize: 15, color: '#E2E8F0', lineHeight: 1.75, marginTop: 12 }}>① static init 里内置注册：JsonMediaType.instance、MultipartMediaType.formData、MultipartMediaType.mixed、PlainTextMediaType.instance</Text>
+      <Text style={{ fontSize: 15, color: '#E2E8F0', lineHeight: 1.75, marginTop: 10 }}>② 首次 tryParse 时从 IOC 拉取：registerFromBeanFactory() 会取 BeanFactory 里所有 MediaType 一并注册，用 AtomicInt8 加条件变量保证只做一次且并发安全</Text>
+      <Text style={{ fontSize: 15, color: '#F59E0B', lineHeight: 1.75, marginTop: 14 }}>所以 fdemo 的 LogTextMediaType 只要加个 @Bean，application/json+log 就自动可用了 —— 不需要任何注册代码。</Text>
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.75, marginTop: 'auto' }}>宽容处理：tryParse 先按完整串查找，找不到就截掉 ; 之后的参数再找一次（application/json; charset=utf-8 → application/json），找到后再用 make() 把参数带回去。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>71 / 116</Text>
+  </Box>
+</Slide>

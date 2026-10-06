@@ -84,6 +84,14 @@ protected class HeadNode<T> <: AbstractNode<T> {
             this.next_.store(value)
         }
     }
+    /** 只读后继访问器（不改变任何状态），供队列统计节点数使用。 */
+    protected func nextForCount(): ?Node<T> {
+        match(next){
+            case x: TailNode<T> => None
+            case x: ValueNode<T> => x
+            case _ => None
+        }
+    }
     protected func nextForGet(): ?T {
         match(next){
             case x: TailNode<T> => None
@@ -218,6 +226,13 @@ protected class ValueNode<T> <: AbstractNode<T> {
         }
         None
     }
+    /** 只读后继访问器（不改状态）。 */
+    protected func nextForCount(): ?Node<T> {
+        match(next){
+            case x: ValueNode<T> => x
+            case _ => None
+        }
+    }
     protected func nextForGet(): ?T {
         var node: Node<T> = this.next
         while(let x: ValueNode<T> <- node){
@@ -226,16 +241,21 @@ protected class ValueNode<T> <: AbstractNode<T> {
                 sleep(Duration.Zero)
                 continue
             }
+            var taken = None<T>
             synchronized(globalLock){
-                if(!x.idle){
-                    node = x.next
-                    sleep(Duration.Zero)
-                    continue
+                if(x.idle){
+                    x.setBusy()
+                    x.doRemove()
+                    taken = Some(x.value)
                 }
-                x.setBusy()
-                x.doRemove()
-                x.value
             }
+            // 摘到的项必须**返回**给调用方。原来这里写的是 `synchronized(...){ ... x.value }`，
+            // 但块的值被后面的 sleep 丢掉 ⇒ 项被摘掉却没人拿到：池项凭空消失、`size` 还记着它，
+            // 累积到 `size` 顶满就再也没有可用项（历史症状，见 .autocode/bugs/bug-archived-on-20261004.md 7.2）。
+            if (let Some(v) <- taken) {
+                return v
+            }
+            node = x.next
             sleep(Duration.Zero)
         }
         None
@@ -272,12 +292,32 @@ protected class ValueNode<T> <: AbstractNode<T> {
     func setChecking(): Unit {
         status.store(VALUE_NODE_CHECKING)
     }
-    protected func check(fn: (T) -> Bool): Bool {
-        if(fn(value)){
+    /**
+     * 校验池项：`fn` 为 false 时摘除该节点。
+     * `onRemoved` 在**摘节点的同一临界区**内执行，供调用方把「队列计数 `s` 递减」并进来
+     * —— 否则「节点已摘、计数未减」的中间态会被并发的不变量校验当成记账脱钩（见 .autocode/bugs/bug-archived-on-20261004.md 7.4）。
+     *
+     * `fn` 抛异常时**先把节点还原成 idle 再往外抛**：调用方 `SyncDeque.check` 的遍历会因异常退出，
+     * 而本节点此刻停在「正在校验」的中间状态（CHECKING）—— 既不会被 `nextForGet` 取走，
+     * 也不会再被 `prevForChecking` 挑中清理 ⇒ 等于永久丢一个池项，池会「记着有项、却一个也取不出来」
+     * （历史症状见 .autocode/bugs/bug-archived-on-20261004.md 7.2）。
+     */
+    protected func check(fn: (T) -> Bool, onRemoved!: () -> Unit = {=>}): Bool {
+        var valid = false
+        try {
+            valid = fn(value)
+        } catch (e: Exception) {
+            this.setIdle()
+            throw e
+        }
+        if(valid){
             this.setIdle()
             true
         }else{
-            remove()
+            synchronized(globalLock){
+                doRemove()
+                onRemoved()
+            }
             false
         }
     }

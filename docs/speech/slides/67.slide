@@ -1,0 +1,60 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`统一异常响应是 MVC 里很实用的一块。
+
+mvc_internalServerErrorMessageKind 等于 BEAN 的时候，mvc_internalServerErrorMessage 填的是「bean 的名字」，也就是右边这个 NameOf500Handler。这个 bean 必须实现 ErrorHttpRequestHandler。
+
+看右边这段代码：类上加 @Bean 和 @BeanMeta 指定名字叫 NameOf500Handler，然后实现 handle 方法，参数是 HttpContext 和可选的异常，返回值是一个二元组——HTTP 状态码和任意类型的响应体。
+
+注意返回值里那个 Any 可以是五种：String、ToString、InputStream、字节数组，或者实现了 ToData 的对象，框架会按 Accept 协商格式。所以你可以直接返回一个 PO，框架自动把它序列化成 JSON。
+
+另两种取值：TEXT 是直接把配置值当响应体，适合返回一段固定的错误文案；BASE64BINARY 是把配置值当 BASE64 解码后作为响应体，适合返回一段二进制内容。
+
+看右边的 handle：如果异常是 ValidationException，就用 500 状态码加统一的错误响应体；否则用 200 加一个通用的 error。演示方式是访问 /api/error，ErrorController 里直接抛异常，看响应是不是统一格式。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 10 章 · MVC f_mvc · 10.6</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>统一异常响应</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fdemo/boot/src/error/ErrorHandler.cj</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ width: 460, flexDirection: 'column', gap: 14 }}>
+      <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 20, flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#38BDF8' }}>三种 ErrorMessageKind</Text>
+        <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.75, marginTop: 12 }}>BEAN —— 配置值是 bean 的名字，该 bean 必须实现 ErrorHttpRequestHandler</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.75, marginTop: 10 }}>TEXT —— 直接把配置值当响应体</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.75, marginTop: 10 }}>BASE64BINARY —— 配置值按 BASE64 解码后作为响应体</Text>
+      </Box>
+      <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#E2E8F0' }}>返回值支持的类型</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.75, marginTop: 10 }}>String　·　ToString　·　InputStream　·　字节数组　·　f_data.ToData</Text>
+        <Text style={{ fontSize: 14, color: '#64748B', lineHeight: 1.75, marginTop: 10 }}>按 Accept 协商格式 —— 直接返回 PO 就能自动序列化成 JSON。</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 10 }}>fdemo/boot/src/error/ErrorHandler.cj</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>@Bean</Text>
+      <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"@BeanMeta[name: 'NameOf500Handler']"}</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public class Http500Handler <: ErrorHttpRequestHandler {"}</Text>
+      <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    public func handle(_: HttpContext, ex: ?Exception): (HttpStatus, Any) {"}</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        if (let Some(e: ValidationException) <- ex) {"}</Text>
+      <Text style={{ fontSize: 13, color: '#F59E0B', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"            (HttpStatus.INTERNAL_SERVER_ERROR, BaseResponse.error(e.message))"}</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        } else {"}</Text>
+      <Text style={{ fontSize: 13, color: '#F59E0B', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"            (HttpStatus.OK, BaseResponse.error('error'))"}</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        }"}</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    }"}</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"}"}</Text>
+      <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.7, marginTop: 12 }}>演示：访问 /api/error（ErrorController 里直接 throw Exception()），看响应是不是 BaseResponse.error('error')。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>67 / 116</Text>
+  </Box>
+</Slide>

@@ -16,14 +16,35 @@ limitations under the License.
 package fountain::f_mockdb
 
 public class MockDatasource <: Datasource {
-    public func isClosed(): Bool {
-        false
+    private var closed_ = false
+    private var connectionString_ = ''
+    private let options_ = HashMap<String, String>()
+    /**open 时收到的连接串（供用例断言驱动确实收到了参数）*/
+    public prop connectionString: String {
+        get(){
+            connectionString_
+        }
     }
-    public func close(): Unit {}
+    /**setOption 累积的连接选项，返回副本*/
+    public prop options: Map<String, String> {
+        get(){
+            copyMap(options_)
+        }
+    }
+    func setConnectionString(value: String): Unit {
+        connectionString_ = value
+    }
+    public func isClosed(): Bool {
+        closed_
+    }
+    public func close(): Unit {
+        closed_ = true
+    }
     public func connect(): Connection {
         MockConnection()
     }
     public func setOption(key: String, value: String): Unit {
-        output.writeln('Datasource option: key: ${key}; value: ${value}; threadID: ${MOCKDB.currentThreadId}')
+        MOCKDB.log('Datasource option: key: ${key}; value: ${value}; threadID: ${MOCKDB.currentThreadId}')
+        options_[key] = value
     }
 }

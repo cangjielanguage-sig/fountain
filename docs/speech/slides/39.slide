@@ -1,0 +1,66 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`生命周期和构造注入这一节，四个东西。
+
+第一，@Constructor。它修饰构造函数或者静态函数，让 IOC 用你自己写的构造逻辑来创建 bean。
+
+第二，@Value。它把配置项直接注入构造参数，支持 name、default、dateFormat、delim 四个属性。dateFormat 是为了把配置里的时间字符串直接转成 DateTime，delim 是数组配置项的分隔符。
+
+第三，@BeanParam。它按 StringCond 匹配 bean 名，把另一个 bean 注入进来。看右边这个例子，Prefix('user.') 就是取 bean 名以 user 点开头的那个 UserService。
+
+注意这两者只能修饰被 @Constructor 修饰的函数形参，修饰在别的地方编译期就报错。
+
+第四，工厂 bean。实现 FactoryBean 接口以后，get() 的返回值才是真正的 bean，接口本身返回的是 typeInfo。
+
+最后两个回调接口：PostConstruct 是初始化后回调，Destroy 是销毁回调。差别在于 prototype 需要你自己调 destroy，singleton 由 IOC 调。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 6 章 · IOC f_bean · 6.3</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>生命周期与构造注入</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>@Constructor / @Value / @BeanParam</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ width: 700, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 14, color: '#64748B', marginBottom: 10 }}>自定义构造 + 注入</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>@Bean</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>public class MyBean {"{"}</Text>
+      <Text style={{ fontSize: 14, color: '#22D3EE', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    @Constructor"}</Text>
+      <Text style={{ fontSize: 14, color: '#22D3EE', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    public init(@Value[name: 'mvc_port', default: 8080] port: Int64,"}</Text>
+      <Text style={{ fontSize: 14, color: '#22D3EE', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"                @BeanParam[Prefix('user.')] svc: UserService) {}"}</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"}"}</Text>
+      <Box style={{ height: 1, background: '#1E293B', marginTop: 12, marginBottom: 12 }} />
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"// 工厂 bean：get() 的返回值才是真正的 bean"}</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public interface FactoryBean {"}</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    static prop typeInfo: TypeInfo"}</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    func get(): Object"}</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"}"}</Text>
+      <Box style={{ height: 1, background: '#1E293B', marginTop: 12, marginBottom: 12 }} />
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"// 初始化后回调 / 销毁回调"}</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public interface PostConstruct { func postConstruct(): Unit }"}</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public interface Destroy { func destroy(): Unit }"}</Text>
+    </Box>
+
+    <Box style={{ width: 400, flexDirection: 'column', gap: 14 }}>
+      <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 20, flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#38BDF8' }}>@Value 的四个属性</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 10 }}>name　default　dateFormat　delim</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 10 }}>dateFormat 把配置里的时间字符串直接转成 DateTime；delim 是数组配置项的分隔符。</Text>
+        <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.8, marginTop: 'auto' }}>@Value 与 @BeanParam 只能修饰被 @Constructor 修饰的函数形参，否则编译期报错。</Text>
+      </Box>
+      <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#E2E8F0' }}>两个回调的差别</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 10 }}>prototype 需要自己调 destroy。</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 6 }}>singleton 由 IOC 在退出时统一调。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>39 / 116</Text>
+  </Box>
+</Slide>

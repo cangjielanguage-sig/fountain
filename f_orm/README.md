@@ -268,7 +268,6 @@ public class ORMConfig {
     // 敏感信息（编译期由 @EmbedSensitive 写入 sensitiveMap，运行时读取；见第 18 节）
     public static func genKey(driverName: String, suffix: String): String          // '<driverName>_<suffix>'
     public static func registerSensitive(key: String, value: Array<Byte>): Unit
-    public static func getSM4(): ?SM4                                              // 未配置 orm_sm4Key 时返回 None
     public static func getOption(option: String, driverName!: String = String.empty): ?String
     public static func getUsername(driverName!: String = String.empty): ?String
     public static func getPassword(driverName!: String = String.empty): ?String
@@ -445,9 +444,9 @@ public func singleList<T>(): ArrayList<T>
 public func singleList<T>(index: Int64): ArrayList<T>
 public func singleList<T>(column: String): ArrayList<T>
 
-public func singleIterator<T>(): Iterator<T>
-public func singleIterator<T>(index: Int64): Iterator<T>
-public func singleIterator<T>(column: String): Iterator<T>
+public func singleIterator<T>(): SingleColumnIterator<T>
+public func singleIterator<T>(index: Int64): SingleColumnIterator<T>
+public func singleIterator<T>(column: String): SingleColumnIterator<T>
 ```
 
 **对象映射**（依赖 `QueryMappers`）：
@@ -458,7 +457,7 @@ public func first<T>(): Option<T> where T <: QueryMappersInit<T>
 public func list<T>(mappers: QueryMappers<T>): ArrayList<T>  // 全部行
 public func list<T>(): ArrayList<T> where T <: QueryMappersInit<T>
 public func iterator<T>(mappers: QueryMappers<T>): QueryResultIterator<T>
-public func iterator<T>(): Iterator<T> where T <: QueryMappersInit<T>
+public func iterator<T>(): AbstractQueryResultIterator<T> where T <: QueryMappersInit<T>
 public func one<T>(mappers: QueryMappers<T>): Option<T>      // 与 first 类似，用于 grouped 映射
 public func one<T>(): Option<T> where T <: QueryMappersInit<T>
 ```
@@ -471,7 +470,7 @@ public func mapList(): ArrayList<HashMap<String, Any>>  // 全部行 → Map 列
 ```
 
 > `T.isSimpleData()` 为 `true` 时（基础类型等），`first<T>()` / `list<T>()` / `iterator<T>()` / `one<T>()` 自动退化为对应的 `singleXxx` 版本。
-> `singleIterator<T>()`（含 `index` / `column` 重载）的**静态返回类型是 `Iterator<T>`**，拿不到 `Resource` 接口；需要 `close()` 语义时用 `iterator<T>(mappers)`（返回 `QueryResultIterator<T>`）。
+> 三个迭代器入口（`singleIterator<T>()` 含 `index` / `column` 重载、`iterator<T>(mappers)`、`iterator<T>()`）返回的静态类型都是 `Resource`：可用 `try (it = ...)` 自动关闭，也可显式 `close()`；`next()` 读尽时同样会自动关闭。
 
 ### 5.3 更新 / 删除 / 插入
 
@@ -1200,7 +1199,7 @@ public class Condition {   // 私有构造，静态使用
 
 ```cangjie
 public class MeetCondition {
-    public prop argInSql: MeetCondition                       // 值直接写进 SQL（不绑定参数），谨慎使用
+    public prop argInSql: MeetCondition                       // 值直接拼进 SQL（不转义、不绑定参数）—— 见 11.5，谨慎使用
     public func value(value: Any): MeetCondition
     public func value(value: () -> Any): MeetCondition
     public func frag(frag: String): String                    // 拼接 '<partial> <frag> <delimiter>'
@@ -1245,7 +1244,7 @@ executor.setSql(
 
 ```cangjie
 public class ChooseCondition {
-    public prop argInSql: ChooseCondition
+    public prop argInSql: ChooseCondition                              // 同上：值直接拼进 SQL —— 见 11.5，谨慎使用
     public func condition(condition: () -> Bool): ChooseCondition      // 开始一个分支
     public func partial(partial: () -> (String, Any)): ChooseCondition // 分支的片段与值
     public func partial(partial: () -> String): ChooseCondition
@@ -1280,7 +1279,7 @@ public class LoopCondition<I, T> where I <: Iterable<T> {
     public func trimLeft(left: String): LoopCondition<I, T>
     public func trimRight(right: String): LoopCondition<I, T>
     public func delimiter(d: String): LoopCondition<I, T>                 // 元素间连接符
-    public prop argInSql: LoopCondition<I, T>
+    public prop argInSql: LoopCondition<I, T>                             // 同上：值直接拼进 SQL —— 见 11.5，谨慎使用
     public func condition(cond: (T, Int64) -> Bool): LoopCondition<I, T>   // 过滤元素（第二参为下标）
     public func partial(partial: (T, Int64) -> (String, Any)): LoopCondition<I, T>
     public func partial(partial: (T, Int64) -> Any): LoopCondition<I, T>
@@ -1293,6 +1292,28 @@ executor.setSql(
     'select * from user_info where id in ${executor.loop(ids).wrap('(', ')').delimiter(',').partial{v, i => v}.done()}'
 )
 ```
+
+### 11.5 `argInSql`：把值直接拼进 SQL（谨慎使用）
+
+`MeetCondition` / `ChooseCondition` / `LoopCondition` 共有这个开关：**打开后值不再作为绑定参数传给驱动，而是经 `ToString` 直接拼进 SQL 文本**——不转义、不加引号、不做任何校验。这是刻意的设计，给「必须内联进 SQL 文本」的受控内容用（固定列名、`now()` 之类的表达式、驱动认得的关键字）。
+
+调用时实际会发生什么（按值的类型分派）：
+
+| 情形 | SQL 里出现什么 | 是否绑定参数 |
+|---|---|---|
+| 值满足 `ToString`（`String`、`Int64`、`DateTime`…） | 该值的 `toString()` 原样出现（`name = bob`、`id = 7`） | 否（该位置没有 `?`） |
+| 值不满足 `ToString`（未实现 `ToString` 的类实例） | `?` | 走绑定通道：`InputStream`（含 `?InputStream`）能绑；**其它类型会在拼 SQL 阶段抛 `SqlException: Unsupported data type`** |
+| `ChooseCondition` 且值是 `()` | 只出现分支片段、不出现值（`otherwise` 传「只有片段、没有值」的实参时走这一条；不配 `argInSql` 会为该片段留下一个多余的 `?`） | 否 |
+
+`IN` / `NOT_IN` 按**元素**逐个判定，同一个列表里可以一部分内联、一部分绑定（如 `in (1,?)`）。
+
+后果与边界：
+
+* **不要再拼接不受控的内容**：值不做转义/校验，把用户输入交给 `argInSql` 等于把注入口开在 SQL 文本里；只有内容完全受控时才打开它。
+* **字符串要自带引号**：`toString()` 不加引号，`value('bob')` 拼出的是 `name = bob`（不是 `name = 'bob'`）；需要引号时自己写，并自行转义。
+* **非 `ToString` 的值只有 `InputStream` 绑得上**：其余类型在拼 SQL 阶段抛 `SqlException: Unsupported data type`（绑定口径见 `SqlExecutor.add(Any)`：`ToString` → 按运行时类型绑定 / 转文本，`InputStream` → 绑定，其它 → 抛错）。
+* **别把 `?` 当值传**：值里含 `?` 会被驱动当成占位符，参数个数与位置都会错。
+* 默认（不调用 `argInSql`）就是安全的参数化路径：值走 `?` + 绑定参数；本文件其余示例都按这个口径写。
 
 ---
 
@@ -1369,7 +1390,7 @@ public class QueryMappers<O> {
 
     public func list(result: QueryResultWrap): ArrayList<O>
     public func groupedList<ID>(result: QueryResultWrap): ArrayList<O> where ID <: Hashable & Equatable<ID>
-    public func iterator(result: QueryResultWrap): QueryResultIterator<O>
+    public func iterator(result: QueryResultWrap, statement: Statement, executor: SqlExecutor): QueryResultIterator<O>
     public func one(result: QueryResultWrap): Option<O>
 
     protected prop idName: ?String       // 主键列名（无主键为 None）
@@ -1435,22 +1456,23 @@ public class NullableGroupedQueryMapper<T, O> <: QueryMapper<O> {
 ### 13.4 迭代器
 
 ```cangjie
-public class QueryResultIterator<T> <: Iterator<T> & Resource {
-    public func next(): ?T
+public abstract class AbstractQueryResultIterator<T> <: Iterator<T> & Resource {
     public func isClosed(): Bool
     public func close(): Unit
 }
 
-public class SingleColumnIterator<T> <: Iterator<T> & Resource {
+public class QueryResultIterator<T> <: AbstractQueryResultIterator<T> {
     public func next(): ?T
-    public func isClosed(): Bool
-    public func close(): Unit
+}
+
+public class SingleColumnIterator<T> <: AbstractQueryResultIterator<T> {
+    public func next(): ?T
 }
 ```
 
-两者的构造函数均为 internal，只能由框架创建；`next()` 在结果集耗尽时返回 `Option<T>.None`。`executor.iterator<T>(mappers)` 返回的 `QueryResultIterator<T>`（同时是 `Resource`）可用 `try (it = executor.iterator<UserPO>()) { ... }` 自动关闭，也可显式 `close()`；而 `executor.iterator<T>()` / `executor.singleIterator<T>()` 的**静态返回类型是 `Iterator<T>`**，`Resource` 语义不可用（只用 `try` 无法自动关闭），需要显式关闭时请用带 `mappers` 的重载。
+三者的构造函数均为 internal，只能由框架创建；迭代器持有本次查询的 QueryResult、Statement 与 executor，`next()` 在结果集耗尽时返回 `Option<T>.None` 并自动释放。父类 `AbstractQueryResultIterator` 实现 `Resource`，所以 `try (it = executor.iterator<UserPO>()) { ... }` 可自动关闭，也可显式 `close()`。`close()` 的顺序是 **结果集 → 语句 → executor 收尾**：不在事务中时由 `SqlExecutor.close()` 一并归还连接，在事务中只复位「活动结果集」标记、连接留给事务结束后的 `close()`，因此事务内 `close()` 迭代器之后，同一事务仍可继续执行 SQL。
 
-> `SingleColumnIterator` 的 `column` 形参目前不参与取值——无论是否指定 `column`，都由 `index`（默认 0）决定读取哪一列，见 [19.6](#196-已知问题与复核记录)。
+> `SingleColumnIterator` 的 `column` 非空时按列名取值，否则按 `index`（默认 0）取值。
 
 ### 13.5 自定义类型转换：`QueryMapperConverter`
 
@@ -1481,7 +1503,51 @@ public static func convertNullable<T>(value: Any): ?T
 
 ---
 
+### 13.6 `InputStream`（BLOB/CLOB）：所有权、生命周期与大对象
+
+`InputStream` 只在两处出现：**写入**（参数绑定）与**读回**（结果取值）。两处所有权不同：
+
+**写入：流是调用方的**
+
+- 入口：`SqlArgs.add(InputStream)`、`RootDAO.arg(value: InputStream)` / `arg(?InputStream)`。
+- ORM **只转交、不关闭**（`wrap/SqlArg.cj` 的 `InputStreamSqlArg`），调用方负责关闭。
+- 约定：流必须**活到本次 SQL 真正执行完**——驱动多在 `execute` 时才读它，提前关会读到空或报错。
+- 反向提醒：不要在 ORM 侧"顺手补 `close()`"（`wrap/InputStreamOwnership_test.cj` 会把这种行为判红）。
+
+**读回：流来自驱动，当前四个驱动给的都是内存副本**
+
+实测（2026-10-06）：
+
+| 驱动 | `get<InputStream>` 给出什么 |
+|---|---|
+| `mariadb-driver`、`opengauss-driver` | 行数据 `copyTo` 成 `ByteBuffer`（内存副本） |
+| `mysqlclient-ffi` | BLOB 映射为 `Array<Byte>`；以流请求会抛 `data type error` |
+| `pgsql-driver`、`postgres-driver` | 不支持 `get<InputStream>`，直接抛 `SqlException` |
+
+⇒ 这些驱动交出的 `InputStream` 与结果集生命周期**无关**，可以放进 PO 字段、传给 `toMap()` 或长期持有。
+
+**大对象（BLOB 的真实用法）**
+
+数据库允许 4GB 级 BLOB，而"整块转储成内存副本"扛不住——这是**驱动实现的问题**，ORM 侧改不了。当前出路：
+
+1. **别把大对象放 BLOB 列**（推荐）：放对象存储/文件系统，库里存 key / sha256；
+2. **服务端按块查**：`substring(col, off, len)` / `substr(col, off, len)` 分块取，内存 O(块大小)，代价是多次往返；
+3. 读回后立刻转储（`copyTo` 到文件/网络）：省"同时两份"，峰值仍是整块，对超大对象无效；
+4. 换支持流式大对象能力的驱动/API（PG `lo_*`；`postgres-driver` 内部的 `PgRowStream` 目前不外泄）。
+
+判断口径：BLOB 只用于"有界对象"（阈值由业务定），超过就走 1 或 2。
+
+**结果缓存**
+
+含流的结果**不写结果缓存**（`SqlExecutor` 依 `QueryResultWrap.hadStream` 判断）：一旦接入"交出真流式句柄"的驱动，缓存会把流留到结果集关闭之后，变成失效值。
+
+**接第三方驱动前**：请重跑上面这张表的核查——本节的结论依赖"驱动给内存副本"这一实测。
+
 ## 14. 事务
+
+### 14.0 敏感配置脱敏宏 `ORMEmbedSensitive`
+
+`@ORMEmbedSensitive`（`src/ProtectedMacros/EmbedSensitive.cj`）是`f_config`的`@EmbedSensitive`在ORM上的专用形态：把ORM的连接串/用户名/密码以及各驱动的前缀变体一次性声明为敏感配置项，使它们在输出/日志中按敏感配置处理。
 
 ### 14.1 传播行为 `Propagation`
 
@@ -1553,6 +1619,7 @@ public func transfer(from: Int64, to: Int64, amount: Decimal): Unit { ... }
 ```cangjie
 public interface TransactionHook {
     func beforeTx(): Unit {}
+    func inTx(): Unit {}
     func beforeCommit(readOnly: Bool): Unit {}
     func afterCommit(): Unit {}
     func afterThrowing(e: Exception): Unit {}
@@ -2046,8 +2113,8 @@ init(message: String, caused: Exception)
 # 这些加密配置项也会作为敏感信息嵌入编译产物
 export orm_sm4Operation='CBC' # CBC CFB CTR GCM OFB，默认CBC。ECB被文档标记为不安全，没有给予支持
 export orm_sm4Padding='PKCS7Padding' # PKCS7Padding NoPadding，默认是PKCS7Padding
-export orm_sm4Key='1234567812345678' # 16字节，没有默认值，以长度为32的16进制字符串表示；缺失或长度不符抛 IllegalArgumentException
-export orm_sm4Iv='1234567812345678' # 没有默认值，以 16 进制字符串表示；CBC/OFB/CFB 要求 16 字节，GCM 要求 12 字节，缺失或长度不符抛 IllegalArgumentException
+export sm4Key='1234567812345678' # 16字节，没有默认值，以长度为32的16进制字符串表示；缺失或长度不符抛 IllegalArgumentException
+export sm4Iv='1234567812345678' # 没有默认值，以 16 进制字符串表示；CBC/OFB/CFB 要求 16 字节，GCM 要求 12 字节，缺失或长度不符抛 IllegalArgumentException
 export orm_sm4Aad='1234567812345678' # 附加认证数据，默认是空字节数组，以长度为32的16进制字符串表示
 export orm_sm4TagSize=16 # Int64，默认16
 ```
@@ -2142,6 +2209,6 @@ public abstract class SqlDialect {
 
 ### 19.5 相关文档
 
-* `f_orm/doc/*.md`：按主题拆分的补充文档——`配置.md`、`数据映射.md`、`声明DAO接口.md`、`事务.md`、`动态SQL的高级API.md`、`数据库表变更.md`、`ChooseCondition.md`、`LoopCondition.md`、`RootDAO.md`、`RootService.md`、`SqlExcutor.md`、`优化方案.md`、`导入.md`、`STDX依赖.md`。
+* `f_orm/doc/优化方案.md`：优化方案（原按主题拆分的 API 摘录已删除，接口以本 README 与 `src/**` 为准）。
 * `f_orm/src/**/*.cj`：源码即最权威的参考；本文档未覆盖的行为以源码为准。
 * 示例工程 `fdemo`：`fdemo/boot.sh`（配置）、`fdemo/user/src/dao/*DAO.cj`（DAO 定义）、`fdemo/user/src/service/impl/UserServiceImpl.cj`（事务服务）。

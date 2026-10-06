@@ -244,26 +244,9 @@ extend File <: ToMMap
 
 接口，std.fs.File 扩展此接口以创建 MMapFile。
 
-### QueueInputStream / NonblockingQueueStream / BlockingQueueStream
+### NonblockingQueueStream / BlockingQueueStream
 
-## QueueInputStream
-
-```cj
-sealed abstract class QueueInputStream <: InputStream
-```
-
-队列式输入流，支持添加多个 InputStream 顺序读取。
-
-### 构造函数
-
-`init(size: Int64, closeOnEnd!: Bool = true)`
-
-### 方法
-
-| 方法 | 签名 | 说明 |
-|------|------|------|
-| add | `func add(stream: InputStream): Unit` | 添加输入流 |
-| add | `func add(bytes: Array<Byte>): Unit` | 添加字节（包装为 ByteBuffer） |
+两者的基类 `QueueInputStream` 是 `sealed abstract class`（包内类型，**不是公开 API**），它提供 `init(size: Int64, closeOnEnd!: Bool = true)` 与两个 `add`：`add(stream: InputStream)`、`add(bytes: Array<Byte>)`。
 
 ## NonblockingQueueStream
 
@@ -271,7 +254,7 @@ sealed abstract class QueueInputStream <: InputStream
 public class NonblockingQueueStream <: QueueInputStream
 ```
 
-非阻塞读取，无数据时返回 0。
+队列式输入流，支持添加多个 InputStream 顺序读取；非阻塞读取，无数据时返回 0。
 
 ## BlockingQueueStream
 
@@ -279,10 +262,7 @@ public class NonblockingQueueStream <: QueueInputStream
 public class BlockingQueueStream <: QueueInputStream
 ```
 
-阻塞读取，等待数据可用。
-
-
-队列式输入流，支持添加多个 InputStream 顺序读取。
+队列式输入流，支持添加多个 InputStream 顺序读取；阻塞读取，等待数据可用。
 
 ### RotatableBuffer
 

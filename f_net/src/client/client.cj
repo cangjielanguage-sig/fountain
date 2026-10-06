@@ -35,6 +35,9 @@ public class Client<T> <: Resource where T <: DataFields<T> {
     private var checkTimer: Timer = unsafeZeroValue<Timer>()
     private let closed = AtomicInt64(0)
     private let closeLock = Mutex()
+    /** 连续心跳失败容忍次数：达到后才拆链重建（对齐服务端 unavailableChecked 的语义）。 */
+    private static let CHECK_FAILURE_TOLERANCE = 3
+    private var checkFailures = Array<Int64>()
     
     Client(queueSize: Int64, 
         let checkDuration: Duration, 
@@ -49,7 +52,10 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                 var mid = None<MessageID>
                 var cmd = None<Command>
                 try {
-                    let message: Message = Message.decode<T>(buffer)
+                    // 用 DataAny 中性解码：客户端的响应载荷类型是多样的（Array<String>、Array<ServiceMeta>…），
+                    // 若按 T（RPCMessage）解码，会把这类载荷“宽松转换”成字段为空的 RPCMessage，
+                    // 调用方随后据其转换会在 f_data 里段错误（见 .autocode/bugs/bug-archived-on-20261004.md 7.10）。原始 Data 交给调用方自行转换。
+                    let message: Message = Message.decode<DataAny>(buffer)
                     let id = message.id
                     mid = id
                     cmd = message.command
@@ -59,6 +65,9 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                     }else if (let Some(fut) <- futures.remove(id)) {
                         var f = fut
                         f.set(message)
+                    }else{
+                        // 响应到了但该id上没有等待者（id不匹配/已被超时移除）：此前完全静默，是排查时的盲区
+                        log.debug{'Client reader: no future for id ${id}, command ${message.command}'}
                     }
                 } catch(e: InputClosedException){
                     log.warn('Client reader closed', e)
@@ -71,7 +80,14 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                 } catch (e: Exception) {
                     let mid = mid
                     let cmd = cmd
-                    log.error(e){'Client reader error ${cmd}:${mid} ${buffer.isClosed()}'}
+                    if (buffer.isClosed()) {
+                        // 连接是我们自己关的（发现循环每轮重建、checkTimer 拆链、close()），读到“socket 已关闭”
+                        // 属于正常收尾；记 ERROR 会在每次正常关闭时刷一整条栈（实测一次 70s 运行 138 条），
+                        // 把真正的读取失败淹没在噪音里（见 .autocode/bugs/bug-archived-on-20261004.md 7.5）。
+                        log.debug{'Client reader closed ${cmd}:${mid}'}
+                    } else {
+                        log.error(e){'Client reader error ${cmd}:${mid} ${buffer.isClosed()}'}
+                    }
                     // 解码失败 = 字节流已错位，必须断链（不能继续在错位的流上解析）
                     if(!buffer.isClosed()){
                         try{
@@ -91,6 +107,7 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                 buffer
         }
         this.buffers = buffers
+        this.checkFailures = Array<Int64>(sockets.size, repeat: 0)
         checkTimer = Timer.repeat(checkDuration, checkDuration, {
             => for (i in 0..sockets.size) {
                 func new() {
@@ -113,26 +130,41 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                         new()
                         continue
                     }else if (let Some(m) <- checker() && let Some(res) <- transfer(buffer, m).tryGet(pingTimeout) && res.id == m.id && res.command == Command.ACK) {
-                        //do nothing
+                        checkFailures[i] = 0
                     }else{
-                        if(!buffer.isClosed()){
-                            buffer.close()
+                        // 单次心跳失败不立刻拆链：先容忍 N 次，避免把一次调度抖动放大成重连风暴
+                        checkFailures[i] = checkFailures[i] + 1
+                        if (checkFailures[i] < CHECK_FAILURE_TOLERANCE) {
+                            log.warn('client ping timeout ${checkFailures[i]}/${CHECK_FAILURE_TOLERANCE}, keep connection')
+                        } else {
+                            checkFailures[i] = 0
+                            log.warn('client ping failed ${CHECK_FAILURE_TOLERANCE} times in a row, rebuild connection')
+                            if(!buffer.isClosed()){
+                                buffer.close()
+                            }
+                            new()
                         }
-                        new()
                     }
                 } catch (e: Exception) {
-                    log.error('SocketBuffer.checker', e)
-                    try {
-                        if (!buffer.isClosed()) {
-                            buffer.close()
+                    checkFailures[i] = checkFailures[i] + 1
+                    if (checkFailures[i] < CHECK_FAILURE_TOLERANCE) {
+                        log.warn(
+                            'SocketBuffer.checker error ${checkFailures[i]}/${CHECK_FAILURE_TOLERANCE}, keep connection', e)
+                    } else {
+                        checkFailures[i] = 0
+                        log.error('SocketBuffer.checker', e)
+                        try {
+                            if (!buffer.isClosed()) {
+                                buffer.close()
+                            }
+                        } catch (e: Exception) {
+                            log.error('SocketBuffer.close', e)
                         }
-                    } catch (e: Exception) {
-                        log.error('SocketBuffer.close', e)
-                    }
-                    try{
-                        new()
-                    }catch(e: Exception){
-                        log.error('SocketBuffer.new', e)
+                        try{
+                            new()
+                        }catch(e: Exception){
+                            log.error('SocketBuffer.new', e)
+                        }
                     }
                 }
             }
@@ -269,7 +301,9 @@ public class Client<T> <: Resource where T <: DataFields<T> {
 }
 
 public class ClientBuilder<T> where T <: DataFields<T>{
-    private var pingTimeout_ = Duration.millisecond * 10
+    // 10ms 对一次 PING 往返（4 次线程唤醒 + 2 次编解码）过紧：调度稍有抖动即超时 → 拆链重连风暴。
+    // 这里放宽到 1s（可用 ClientBuilder.pingTimeout 覆盖）。
+    private var pingTimeout_ = Duration.second
     ClientBuilder(let queueSize!: Int64 = 1024, private let socketCount!: Int64 = 1, private let address!: IPSocketAddress, 
                   private let checkDuration!: Duration, private let checker!: () -> ?Message){}
     init(queueSize!: Int64 = 1024, socketCount!: Int64 = 1, 

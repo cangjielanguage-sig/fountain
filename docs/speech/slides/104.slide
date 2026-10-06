@@ -1,0 +1,61 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`第十七章运行时基础设施。前面讲的 IOC、AOP、MVC、ORM、安全、定时任务、日志，这些是你能直接感知到的框架能力；但它们是站在另一层之上的。这一章讲的就是那一层。
+
+看这张表，九个模块，每个都有一句话和「在 fountain 里被谁用了」。
+
+f_base 是所有模块的公共底座：进程优雅退出、Result 和 Option 与集合迭代器扩展、Comparator、StringGenerator、FutureTask。全部模块都用它；f_app 启动时会调 toExitGracefully，f_mvc、f_pool、f_cache、f_orm、f_bean、f_rpc 都用 atExit 登记清理。
+
+f_io 是 IO 工具库，这一节讲它的 ByteBuffer 和 SyncByteBuffer——读写双偏移的字节缓冲，以及加锁版。f_rpc 用它把异常堆栈打成字符串，fleet 用它接住 codec 编码结果，f_mvc 的 FileDownload 用 SyncByteBuffer 当下载管道。
+
+f_cache 是堆缓存，强引用和弱引用两版，可以设寿命和容量。f_security 的 JWTHeapCacheStore、f_data 的 DataPath.cache、f_orm 的结果缓存都用它。
+
+f_pool 是通用对象池、键池、数组池。f_orm 的 DatabasePool 就是它。
+
+f_collection 是标准库没有的集合加集合扩展。f_store 的 LSM-Tree、f_concurrent、ORM 分页都用它。
+
+f_time 是 std.time 的扩展，TimeUnit 加 Int64 的时间 DSL。所有用 Duration 作配置项的地方都用它。
+
+f_regex 是正则扩展加正则缓存。f_util 的 PathPattern、f_data 的校验器都用它。
+
+f_rx 是反应式编程，Observable、Observer、背压，主要用于流式数据处理场景。
+
+f_random 是随机数扩展。f_app 的 fboot randhex、fdemo 的 UserSessionCache 会话密钥都用它。
+
+这九个模块的共同特点：零配置、可以单独引入、不绑架你的架构。就算你不用 fountain 的框架部分，把它们当工具库用也完全没问题。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 17 章 · 运行时基础设施 · 17.1</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>框架之下的那一层</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>当零部件手册单独翻也可以</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 12 }}>
+    <Table
+      style={{ width: '100%', height: 494 }}
+      defaultTextStyle={{ fontSize: 13, textAlign: 'left', color: '#E2E8F0' }}
+      defaultCellStyle={{ border: { left: { width: 1, color: '#1E293B' }, right: { width: 1, color: '#1E293B' }, top: { width: 1, color: '#1E293B' }, bottom: { width: 1, color: '#1E293B' } } }}
+      cells={[
+        [ { text: '模块', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } }, { text: '一句话', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } }, { text: '在 fountain 里被谁用了', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } } ],
+        [ { text: 'f_base', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", Consolas, monospace' } }, '所有模块的公共底座：进程优雅退出、Result / Option 与集合迭代器扩展、Comparator、StringGenerator、FutureTask', '全部模块；f_app 启动时调 ExitCallbacks.toExitGracefully()，f_mvc / f_pool / f_cache / f_orm / f_bean / f_rpc 用 atExit 登记清理' ],
+        [ { text: 'f_io', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", Consolas, monospace' } }, 'I/O 工具库；本节讲 ByteBuffer / SyncByteBuffer —— 读写双偏移的字节缓冲，以及加锁版', 'f_rpc 打异常堆栈、fleet 接编码结果、f_mvc 的 FileDownload 用 SyncByteBuffer 当下载管道' ],
+        [ { text: 'f_cache', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", Consolas, monospace' } }, '堆缓存（强引用 / 弱引用），可设寿命与容量', 'f_security 的 JWTHeapCacheStore、f_data 的 DataPath.cache、f_orm 的结果缓存' ],
+        [ { text: 'f_pool', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", Consolas, monospace' } }, '通用对象池、键池、数组池', 'f_orm 的 DatabasePool（orm_databasePool* 那批配置项）' ],
+        [ { text: 'f_collection', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", Consolas, monospace' } }, '标准库没有的集合 + 集合扩展', 'f_store（LSM-Tree）、f_concurrent、ORM 分页' ],
+        [ { text: 'f_time', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", Consolas, monospace' } }, 'std.time 扩展：TimeUnit + Int64 时间 DSL', '所有用 Duration 作配置项的地方（mvc_readTimeout 等）' ],
+        [ { text: 'f_regex', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", Consolas, monospace' } }, '正则扩展 + 正则缓存', 'f_util 的 PathPattern、f_data 的校验器' ],
+        [ { text: 'f_rx', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", Consolas, monospace' } }, '反应式编程（Observable / Observer / 背压）', '流式数据处理场景' ],
+        [ { text: 'f_random', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", Consolas, monospace' } }, '随机数扩展：区间随机、随机流、随机字符串、蓄水池抽样', 'f_app 的 fboot randhex、fdemo 的 UserSessionCache 会话密钥' ],
+      ]}
+    />
+    <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.7 }}>共同特点：零配置、可以单独引入、不绑架你的架构 —— 就算不用 fountain 的框架部分，把它们当工具库用也完全没问题。</Text>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>104 / 116</Text>
+  </Box>
+</Slide>

@@ -57,6 +57,12 @@ public class DriverTest <: Driver {
 }
 
 public class DatasourceCreatorImpl <: DatasourceCreator {
+    /** 接口要求实现 driverName（原来缺这个成员，导致本文件编译不过） */
+    public prop driverName: String {
+        get() {
+            DriverTest().name
+        }
+    }
     public func create(): NamedDatasource {
         let driver = DriverTest()
         NamedDatasource(true, driver.name, driver.open(""))

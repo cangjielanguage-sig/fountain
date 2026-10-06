@@ -3,7 +3,7 @@
   name = "f_protocol"
   organization="fountain"
   description = "一个网络通讯协议实现"
-  version = "1.3.7"
+  version = "1.3.8"
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"
@@ -13,7 +13,7 @@
   package-configuration = {}
   category = ["Utility", "Data Encapsulation and Transfer", "Developer Tools"]
   license = ["Apache-2.0"]
-  include = ["src", "doc"]
+  include = ["src"]
   exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
   authors = ["吴京润"]
   repository = "https://gitcode.com/Cangjie-SIG/fountain/tree/master/f_protocol"
@@ -25,6 +25,7 @@
   "fountain::f_data" = {path = "../f_data"}
   "fountain::f_exception" = {path = "../f_exception"}
   "fountain::f_pool" = {path = "../f_pool"}
+  "fountain::f_util" = {path = "../f_util"}
 
 [profile.build]
   incremental = true

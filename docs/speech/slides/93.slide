@@ -1,0 +1,36 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: 0, position: 'relative', overflow: 'hidden' }}
+  notes={`进入第四个板块，日志、串讲与底座。
+
+第十五章讲日志 f_log，这是整场讲稿里我建议不要跳的一章——因为一个服务上线前，第一件要配好的事就是日志。这一章会讲三条纪律、配置全表、一条日志的完整旅程、文件切割与压缩、运行期刷新，还有八个坑。
+
+第十六章是串讲：用一次 POST 请求，从配置装载开始，穿过 MVC、bean、aspect、ORM，最后落进日志文件，把整个框架串成一条线。
+
+第十七章是运行时基础设施：f_base、f_io、f_cache、f_pool、f_collection、f_time、f_regex、f_rx、f_random 九个模块。它们零配置、可以单独引入、不绑架你的架构——就算不用 fountain 的框架部分，把它们当工具库用也完全没问题。这一章可按受众深浅整章跳过或挑讲。
+
+第十八章收尾：二十二个高频坑和预设问答。
+
+最后附录是三张速查表：命令、配置、关键 API。`}
+>
+  <Text style={{ position: 'absolute', right: 40, top: 120, fontSize: 320, fontWeight: 'bold', color: '#16233A', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>04</Text>
+  <Box style={{ position: 'absolute', left: 0, top: 0, width: 8, height: 720, background: 'linear-gradient(135deg, #38BDF8 0%, #22D3EE 100%)' }} />
+
+  <Text style={{ position: 'absolute', left: 120, top: 218, fontSize: 16, color: '#38BDF8', letterSpacing: 6 }}>PART 04</Text>
+  <Text style={{ position: 'absolute', left: 120, top: 254, fontSize: 56, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.15 }}>日志、串讲与底座</Text>
+  <Box style={{ position: 'absolute', left: 120, top: 344, width: 160, height: 6, background: 'linear-gradient(135deg, #38BDF8 0%, #22D3EE 100%)' }} />
+
+  <Text style={{ position: 'absolute', left: 120, top: 392, fontSize: 18, color: '#94A3B8', lineHeight: 1.9 }}>
+    <>f_log 三条纪律与一条日志的旅程　·　一次请求穿过整个框架　·　运行时基础设施九个模块</>
+  </Text>
+  <Text style={{ position: 'absolute', left: 120, top: 428, fontSize: 18, color: '#94A3B8', lineHeight: 1.9 }}>
+    <>二十二个高频坑与预设 Q&A　·　三张速查表</>
+  </Text>
+
+  <Box style={{ position: 'absolute', left: 120, top: 512, flexDirection: 'row', alignItems: 'center', gap: 24 }}>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>第 15–18 章 + 附录</Text>
+    <Box style={{ width: 1, height: 16, background: '#1E293B' }} />
+    <Text style={{ fontSize: 14, color: '#64748B' }}>对应第 94–115 页</Text>
+    <Box style={{ width: 1, height: 16, background: '#1E293B' }} />
+    <Text style={{ fontSize: 14, color: '#64748B' }}>建议 60 分钟</Text>
+  </Box>
+</Slide>

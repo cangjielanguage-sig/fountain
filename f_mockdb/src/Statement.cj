@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_mockdb
 
 public class MockStatement <: Statement {
+    private var closed_ = false
     private let args = ArrayList<Any>()
     MockStatement(private let sql: String){}
     public prop parameterColumnInfos: Array<ColumnInfo> {
@@ -27,18 +28,40 @@ public class MockStatement <: Statement {
         throw MockDbException('not supported')
     }
     public func setOption(key: String, value: String): Unit {
-        output.writeln('Statement option: (key: ${key}, value: ${value})')
+        MOCKDB.log('Statement option: (key: ${key}, value: ${value})')
     }
     public func update(params: Array<SqlDbType>): UpdateResult {
         throw MockDbException('not supported')
     }
+    /**SQL 里的占位符（?）个数：真驱动按语句参数个数判定越界，mock 用同一口径定上界，避免大索引补出天量占位符*/
+    private func placeholderCount(): Int64 {
+        let questionMark: Byte = 63//'?'
+        var count = 0
+        for (b in sql.toArray()) {
+            if (b == questionMark) {
+                count++
+            }
+        }
+        count
+    }
+    private func checkIndex(index: Int, parameters: Int64): Unit {
+        if(index < 0){
+            //按 std 契约：参数索引越界抛 SqlException
+            throw SqlException('parameter index ${index} is negative')
+        }
+        if(index >= parameters){
+            throw SqlException('parameter index ${index} is out of range, the sql has ${parameters} parameters')
+        }
+    }
     public func set<T>(index: Int, value: T): Unit {
+        checkIndex(index, placeholderCount())
         for(_ in args.size ..= index) {
             args.add(None<Any>)
         }
         args[index] = value
     }
     public func setNull(index: Int): Unit {
+        checkIndex(index, placeholderCount())
         for(_ in args.size ..= index) {
             args.add(None<Any>)
         }
@@ -47,23 +70,40 @@ public class MockStatement <: Statement {
         }
     }
     public func update(): UpdateResult {
-        MOCKDB.execution(sql, args)
+        //每次执行前清掉上一次的结果，保证本次只看到本次夹具写入的行与列信息
+        MOCKDB.clearQueryResult()
+        //声明抛异常时直接失败：不执行夹具、不产生结果（与真驱动一致）
         if(MOCKDB.toThrowOnExecuting){
-            throw MockDbException()
+            throw MockDbException('failed to execute sql: ${sql}')
         }
-        MockUpdateResult()
+        try {
+            MOCKDB.execution(sql, args)
+        } finally {
+            //本次执行结束即清空参数槽：语句复用时不再带上一次绑定的参数
+            args.clear()
+        }
+        //取快照：本次执行写入的 lastInsertId / rowCount 就是本对象的值
+        MockUpdateResult(MOCKDB.lastInsertId, MOCKDB.rowCount)
     }
     public func query(): QueryResult {
-        MOCKDB.execution(sql, args)
+        //每次执行前清掉上一次的结果，保证本次只看到本次夹具写入的行与列信息
+        MOCKDB.clearQueryResult()
+        //声明抛异常时直接失败：不执行夹具、不产生结果（与真驱动一致）
         if(MOCKDB.toThrowOnExecuting){
-            throw MockDbException()
+            throw MockDbException('failed to execute sql: ${sql}')
+        }
+        try {
+            MOCKDB.execution(sql, args)
+        } finally {
+            //本次执行结束即清空参数槽：语句复用时不再带上一次绑定的参数
+            args.clear()
         }
         MockQueryResult()
     }
     public func isClosed(): Bool {
-        false
+        closed_
     }
     public func close(): Unit {
-
+        closed_ = true
     }
 }

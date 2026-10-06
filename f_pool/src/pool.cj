@@ -34,6 +34,8 @@ public class PoolBuilder<V> {
     private var checkOnReturning: Bool = true
     private var clearOnReturning: Bool = false
     private var checkInterval: Duration = Duration.minute
+    /** 池耗尽时 `get(timeout: Duration.Max)` 的等待上限；`Duration.Max` = 真无限等待。 */
+    private var maxWaiting: Duration = Duration.second * 30
     private var creator: ?() -> V = None
     private var checker: ?(V) -> Bool = None
     private var destroier: ?(V) -> Unit = None
@@ -80,6 +82,14 @@ public class PoolBuilder<V> {
         this.checkInterval = checkInterval
         this
     }
+    /**
+     * 池耗尽时 `get(timeout: Duration.Max)` 的等待上限：超过就 WARN 并返回 None。
+     * 传 `Duration.Max` 表示真无限等待（实现每轮仍让出 CPU）。
+     */
+    public func setMaxWaiting(maxWaiting: Duration): This {
+        this.maxWaiting = maxWaiting
+        this
+    }
     public func setCreator(creator: () -> V): This {
         this.creator = creator
         this
@@ -118,6 +128,7 @@ public class PoolBuilder<V> {
             checkOnReturning: checkOnReturning,
             clearOnReturning: clearOnReturning,
             checkInterval: checkInterval,
+            maxWaiting: maxWaiting,
             creator: creator ?? toThrow(),
             checker: checker ?? toThrow(),
             destroier: destroier ?? toThrow(),
@@ -138,6 +149,11 @@ public struct Pool<V> <: Resource {
         checkOnReturning!: Bool = true,
         clearOnReturning!: Bool = false,
         checkInterval!: Duration = Duration.minute,
+        /**
+         * 池耗尽且 `get(timeout: Duration.Max)` 时的等待上限：超过它记 WARN 并返回 None；
+         * 传 `Duration.Max` 表示真无限等待（实现仍每轮让出 CPU）。
+         */
+        maxWaiting!: Duration = Duration.second * 30,
         creator!: () -> V,
         checker!: (V) -> Bool,
         destroier!: (V) -> Unit,
@@ -155,9 +171,14 @@ public struct Pool<V> <: Resource {
             checkOnReturning: checkOnReturning,
             clearOnReturning: clearOnReturning,
             checkInterval: checkInterval,
+            maxWaiting: maxWaiting,
             creator: {_ => creator()},
             checker: {_, v => checker(v)},
-            destroier: {_, v => destroier(v)}
+            destroier: {_, v => destroier(v)},
+            // 必须把 clear 传下去：clearOnReturning 只有在 clear 非空时才真正清空池项。
+            // 漏传 = 归还的池项保留旧内容（表现为“编码结果里混进上一条消息的字节、消息缺命令字节、
+            // 对端解码错位 → 拆链风暴”，见 .autocode/bugs/bug-archived-on-20261004.md 六）。
+            clear: {_, v => clear(v)}
         )
     }
     public init(
@@ -171,6 +192,7 @@ public struct Pool<V> <: Resource {
         checkOnReturning!: Bool = true,
         clearOnReturning!: Bool = false,
         checkInterval!: Duration = Duration.minute,
+        maxWaiting!: Duration = Duration.second * 30,
         manager!: ObjectManager<V>
     ){
         this(
@@ -184,6 +206,7 @@ public struct Pool<V> <: Resource {
             checkOnReturning: checkOnReturning,
             clearOnReturning: clearOnReturning,
             checkInterval: checkInterval,
+            maxWaiting: maxWaiting,
             creator: manager.create,
             checker: manager.check,
             destroier: manager.destroy,

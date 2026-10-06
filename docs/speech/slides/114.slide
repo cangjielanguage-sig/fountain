@@ -1,0 +1,70 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`第二张速查表是配置。
+
+最上面是优先级规则：命令行参数大于环境变量，大于编译期内嵌值；fountain 前缀是等价的回退写法。还有一个关键提示：命令行参数对「任何链接了 f_config 的仓颉进程」都生效，不限于 fboot。
+
+然后是命令行参数的四种写法：双横线等号赋值、双横线单独出现、单横线加空格加值、单横线单独出现。
+
+SM4 那一组：sm4Key 必须是十六字节，也就是 randhex 32；GCM 的 IV 用 randhex 24；工作模式支持 CBC、CFB、CTR、GCM、OFB，注意 ECB 明确不支持；填充支持 NoPadding 和 PKCS7Padding。
+
+然后是 Config 的 API，单数读取失败返回 None，复数读取失败抛异常，bufferSize 向上取到二的幂。
+
+日志那段是重头，注意三件事：默认静默，不配 appender 就没有任何输出；级别挂在「你起的名字」上，不是挂在 console 或 file 这种类型名上；rotateDuration 别用亚秒级。
+
+最后四个异步相关的配置我注释掉了：loggerAsyncBufsize 既是队列容量也是缓冲区池大小；loggerAsyncTimeout 默认是死等；policy 默认 discard；logger_asyncWaitTimeout 默认五毫秒，借不到缓冲区就丢弃本条并打印 EmptyPool。
+
+这张表的左半边可以直接抄进你自己的启动脚本。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>附录 A · 一页速查表</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>配置速查</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>可以直接抄进启动脚本</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #38BDF8', padding: 20, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 12, color: '#64748B', lineHeight: 1.55, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"# 优先级：命令行参数 > 环境变量 > 编译期内嵌（fountain_ 前缀为等价回退）"}</Text>
+      <Text style={{ fontSize: 12, color: '#64748B', lineHeight: 1.55, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}># 命令行参数对「任何链接了 f_config 的仓颉进程」都生效（不限于 fboot）</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.55, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>--argName=argValue | --argName | -argName argVal | -argName</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.7, marginTop: 8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export sm4Key=$(fboot randhex 32)   # 16 字节；GCM 的 IV 用 fboot randhex 24</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.55, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export sm4Iv=$(fboot randhex 32)</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.55, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export sm4Operation=CBC             # CBC CFB CTR GCM OFB（ECB 明确不支持）</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.55, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export sm4Padding=PKCS7Padding      # NoPadding PKCS7Padding</Text>
+      <Box style={{ height: 1, background: '#1E293B', marginTop: 12, marginBottom: 10 }} />
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.55, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"Config.getString(key) / getValue<T>(key) / getData<T>(key)   // 单数：失败返回 None"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.55, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"Config.getValues<T>(key, delim:) / getDatas<T>(key, delim:)  // 复数：失败抛异常"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.55, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"Config.getStringArray(key, delim:) / getDuration(key) / getDateTime(key, format:)"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.55, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"Config.bufferSize(key, default:, debugging:)   // 向上取到 2 的幂"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.55, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"Config.getAll(prefix) / getAll() / set<T>(tuples, ifAbsent:) / refresher(prefix, fn)"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.55, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>Config.getSM4() / Config.registerSensitive(key, value)</Text>
+      <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, marginTop: 6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>@EmbedSensitive(paySecretKey pushToken)   // 编译期把敏感值嵌入产物</Text>
+      <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.55, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>@DateTimeConfConverter[myDateFormat]      // 时间格式本身也可配置</Text>
+    </Box>
+
+    <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.55, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}># 日志（f_log）：默认静默 —— 不配 appender 就没有任何输出</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.55, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export logger_appender_console=MyConsole      # 值 = 你起的 appender 名，逗号分隔可多个</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.55, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export logger_appender_MyConsole_level=INFO   # OFF/ERROR/WARN/INFO/DEBUG/TRACE/ALL（无 FATAL）</Text>
+      <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.55, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"export logger_appender_MyConsole_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%tid;%m'"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.55, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export logger_appender_file=MyFile</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.55, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export logger_appender_MyFile_level=INFO</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.55, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{'export logger_appender_MyFile_path=./log/app.log   # 默认 工作目录/logs/命令名.log'}</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.55, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export logger_appender_MyFile_rotateDuration=DAY   # NANOSECOND..YEAR，别用亚秒级</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.55, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export logger_appender_MyFile_rotateSize=100M      # 可选，支持 100k/100M/1G</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.55, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export logger_appender_MyFile_compressFormat=GZip  # 可选：Deflate / GZip</Text>
+      <Text style={{ fontSize: 12, color: '#64748B', lineHeight: 1.55, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}># export loggerAsyncBufsize=1024      # 异步队列容量 & 缓冲区池大小</Text>
+      <Box style={{ flex: 1, background: 'rgba(245,158,11,0.07)', borderRadius: 10, border: '1px solid #F59E0B', padding: 14, marginTop: 14, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.75 }}>三件事：默认静默；级别挂在「你起的名字」上（不是 console / file 这种类型名）；rotateDuration 别用亚秒级。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>114 / 116</Text>
+  </Box>
+</Slide>

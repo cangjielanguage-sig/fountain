@@ -1,0 +1,62 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`查询结果和分页。
+
+结果的读取函数分四类。单列：singleFirst 取第一个单值，可以带列下标或者 Column 对象；singleList 和 singleIterator 是列表和迭代器版本。对象：first、list、iterator、one，这四个都依赖 QueryMappers 生成的映射。无类型：firstToMap 和 mapList，返回 Map 而不是对象。
+
+分页是本节重点。看右边：FROM 加 page 泛型，传每页大小和页码。
+
+分页对象的五个成员：page 是当前页，从 1 开始；size 是每页大小；rows 是总记录数；pages 是总页数；list 是当前页数据。
+
+分页的实现原理很重要：它先执行 select count 星号 from 括号里包住原始 SQL 作为一个临时表，算出总数；然后再执行 select 星号 from 同一个子树，加上 limit 和 offset。
+
+而 limit 和 offset 是由方言生成的——所以换数据库不用改代码，这一点很实用。
+
+最后一个细节：Pagination 本身实现了 ObjectData，所以它可以直接作为 PO 的字段被序列化。fdemo 的 UserList 里 fields 就是 Pagination 泛型 UserPO。也就是说分页结果可以像普通对象一样被 MVC 序列化成 JSON 返回给前端。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 12 章 · ORM f_orm · 12.4</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>查询结果与分页</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>limit / offset 由方言生成</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 16 }}>
+    <Box style={{ height: 256, flexDirection: 'row', gap: 16 }}>
+      <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>读取结果的四类函数</Text>
+        <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"// 单列"}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"singleFirst<T>() / singleFirst<T>(index) / singleFirst<T>(column)"}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"singleList<T>() / singleIterator<T>()"}</Text>
+        <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.75, marginTop: 6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"// 对象（依赖 QueryMappers）"}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"first<T>() / list<T>() / iterator<T>() / one<T>()"}</Text>
+        <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.75, marginTop: 6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"// 无类型"}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"firstToMap() / mapList()"}</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #38BDF8', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#38BDF8', marginBottom: 8 }}>分页</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"let p = executor.FROM<UserPO>().page<UserPO>(10, page: 1)"}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.75, marginTop: 8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"p.page    // 当前页（从 1 开始）"}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"p.size    // 每页大小"}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"p.rows    // 总记录数"}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"p.pages   // 总页数"}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"p.list    // 当前页数据"}</Text>
+        <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.75, marginTop: 'auto' }}>page 系列要求 SQL 以 select 开头，否则抛 ORMException。</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, background: 'rgba(56,189,248,0.06)', borderRadius: 12, border: '1px solid #38BDF8', padding: 20, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#38BDF8' }}>分页是怎么实现的</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.75, marginTop: 10 }}>① 先 select count(*) from (原始 SQL) as __tmp___ 算总数；② 再 select * from (原始 SQL) as __tmp___ 加上 limit / offset。</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.75, marginTop: 8 }}>limit / offset 由方言（Dialect）生成 —— 换数据库不用改代码。</Text>
+      <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.75, marginTop: 8 }}>Pagination&lt;T&gt; 本身实现了 ObjectData，可以直接作为 PO 的字段被序列化（fdemo 的 UserList.fields 就是 Pagination&lt;UserPO&gt;）。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>82 / 116</Text>
+  </Box>
+</Slide>

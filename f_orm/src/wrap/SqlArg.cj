@@ -24,7 +24,9 @@ public abstract class SqlArg <: Hashable & Equatable<SqlArg> & ToString {
                 case Some(x) => statement.set<T>(index, x)
                 case _ => statement.setNull(index)
             }
-            case _ => SqlArgException(
+            // bug-orm.md ORM-N2：这里必须 throw——它是「T 与 value 类型不匹配」的唯一防线。
+            // 只构造异常会让「参数根本没交给驱动」变成静默行为（Float32 曾因此静默丢参）。
+            case _ => throw SqlArgException(
                 'sql index ${index}, requires ${TypeInfo.of<T>()}, actually ${TypeInfo.of(value)}')
         }
     }
@@ -291,7 +293,10 @@ public class Float32SqlArg <: SqlArg {
         super(index)
     }
     public func set(statement: Statement): Unit {
-        setValue<Float64>(statement, value)
+        // bug-orm.md ORM-N2：泛型实参必须是 Float32。写成 <Float64> 时，Float32 值命不中
+        // setValue 的 `case x: T` / `case x: Option<T>`（类型模式不做隐式数值转换），
+        // 参数根本不会交给驱动（修复前表现为静默丢参）。
+        setValue<Float32>(statement, value)
     }
     public func toString() {
         toString(value)
@@ -423,6 +428,15 @@ public class StringSqlArg <: SqlArg {
     }
 }
 
+/**
+ * 把**调用方**的 `InputStream` 转交驱动（bug-orm.md §3.2 `ORM-C6`）。
+ *
+ * **不要在本类里补 `close()`**：流来自 `SqlArgs.add(InputStream)` / `RootDAO.arg(InputStream)`，
+ * 所有权在调用方，本模块只负责转交——代关会关掉调用方还要用的资源。
+ * 所有权约定：①调用方负责关闭；②流必须活到本次 SQL 真正执行完（驱动多在 execute 时才读）。
+ * 驱动给出的流（结果集方向）同样不由本模块关闭，见 `QueryMapperConverter` 的同类注释。
+ * 反向风险护栏：`wrap/InputStreamOwnership_test.cj`（断言这里不会关调用方的流）。
+ */
 public class InputStreamSqlArg <: SqlArg {
     public InputStreamSqlArg(index: Int64, private let value: InputStream) {
         super(index)

@@ -147,7 +147,6 @@ internal func parseSqlFromMap(exe: SqlExecutor, dsl: String, arg: Map<String, An
 }
 internal func parseSqlFromObject<T>(exe: SqlExecutor, dsl: String, arg: T): String where T <: ObjectData<T> {
     let sqlgen = StringGenerator()
-    let fields = T.dataFields()
     for(part in compile(dsl)){
         match(part){
             case x: StringSqlDSLPart => sqlgen.append(x.partial)

@@ -178,7 +178,7 @@ public class Mediator<N, C, A, R> where C <: Colleague<N, A, R>, A <: ColleagueA
  * A 是执行策略的参数
  * R 是执行策略的结果
  */
-public interface Resposibility<C, A, R> {
+public interface Responsibility<C, A, R> {
     /**
      * 检查指定条件是否满足执行当前策略的要求
      */
@@ -192,25 +192,25 @@ public interface Resposibility<C, A, R> {
 /**
  * 责任策略
  */
-public interface ValidationResposibility<C, A> <: Resposibility<C, A, Unit> {
+public interface ValidationResponsibility<C, A> <: Responsibility<C, A, Unit> {
     func execute(arg: A): Unit {}
 }
 /**
  * 责任链
  */ 
-public class ResposibilityChain<C, A, R> {
+public class ResponsibilityChain<C, A, R> {
     public init() {}
-    public init(resposibilities: Iterable<Resposibility<C, A, R>>)
+    public init(resposibilities: Iterable<Responsibility<C, A, R>>)
     /**
      * 注册一个策略
      */
-    public func register(resposibility: Resposibility<C, A, R>): ResposibilityChain<C, A, R>
+    public func register(resposibility: Responsibility<C, A, R>): ResponsibilityChain<C, A, R>
     /**
      * 注册一批策略
      */
-    public func register<S>(resposibilities: Iterable<S>): Unit where S <: Resposibility<C, A, R>
+    public func register<S>(resposibilities: Iterable<S>): Unit where S <: Responsibility<C, A, R>
     /**  
-     * 执行一个策略，遍历策略集合，直到遇到一个Resposibility.check(condition)返回true的策略，并执行这个策略。
+     * 执行一个策略，遍历策略集合，直到遇到一个Responsibility.check(condition)返回true的策略，并执行这个策略。
      * 如果没有策略满足条件，就抛出IllegalAccessException
      */
     public func execute(condition: C, arg: A): R
@@ -582,6 +582,35 @@ public class TimestampSequenceBuilder <: Resource {
 
 ```
 
+
+## 单位换算
+
+```cj
+/**把"123KB"、"24M"这类带单位的字符串转成字节数；格式不匹配时抛异常（内部getOrThrow）*/
+public func computeBytes(size: String): Option<Int64>
+/**把数值按指定单位转成字节数；单位不识别时抛IllegalArgumentException*/
+public func computeBytes(n: Int64, unit: String): Option<Int64>
+```
+
+支持的单位（不区分大小写，可带尾字母B）：`b`、`k/kb`、`m/mb`、`g/gb`、`t/tb`、`p/pb`、`e/eb`、`z/zb`、`y/yb`，按1024进制换算。
+
+## 树结构转换
+
+```cj
+/**树节点契约：提供子节点列表与addChild*/
+public interface TreeNode<ID, T> where ID <: Hashable & Equatable<ID>, T <: Object & TreeNode<ID, T> {
+    prop children: ArrayList<T>
+    func addChild(child: T): Unit
+}
+```
+
+`TreeNode.transform`把「父ID + 自身ID」的扁平集合装配成树（`emptyId`表示根节点；`ignoreDuplicate = false`时重复ID会抛`IllegalArgumentException`），有「只传transferFn」「只传ignoreDuplicate」等多个重载。
+
+## 配套类型与异常
+
+- 文本模板配套：`TextTemplateKey`、`TextTemplateObject`、`ObjectTextTemplateArgs`、`SimpleDataObjectTextTemplateArgs`（`src/TextTemplate.cj`）。
+- UUID配套：`SequenceResource`（`src/uuid.cj`）。
+- 异常族（`src/exception/`）：`UUIDException`、`TextTemplateException`、`IdException`、`HashException`、`GeoHashException`。
 
 ## 密钥交换协议
 

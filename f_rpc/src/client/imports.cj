@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_rpc.client
 
+internal import std.env.{exit}
 internal import fountain::f_base.*
 internal import fountain::f_net.client.*
 public import std.reflect.*

@@ -17,6 +17,7 @@ package fountain::f_orm.base
 
 public interface TransactionHook {
     func beforeTx(): Unit {}
+    func inTx(): Unit {}
     func beforeCommit(readOnly: Bool): Unit {}
     func afterCommit(): Unit {}
     func afterThrowing(e: Exception): Unit {}

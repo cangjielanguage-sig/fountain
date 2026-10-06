@@ -50,7 +50,7 @@ public enum AuthStatus {
 }
 /**
  * 这个接口的实现类用fountain.bean.macros.@Bean修饰可以实现登录状态与权限检查。
- * 如果应用项目，登录状态和权限都需要检查，务必在一个类中实现，一次调用就都检查了。
+ * 如果应用项目，登录状态和权限都需要检查，最好在一个类中实现，一次调用就都检查了。
  */
 public interface AuthHandler {
     /**
@@ -122,10 +122,14 @@ class AuthHandlerProxy <: AuthHandler {
             AuthStatus.OK
         } else if (let Some(x) <- authHandler) {
             x.check(param)
-        } else if (!param.ignoreAuth && let Some(h) <- sessionHandler && let s <- h.check(param) && s.isOK) {
-            s
-        } else if (!param.ignorePrivilege && let Some(h) <- privilegeHandler) {
-            h.check(param)
+        } else if (!param.ignoreAuth && let Some(h) <- sessionHandler && let s <- h.check(param)) {
+            if (!s.isOK) {
+                s
+            } else if (!param.ignorePrivilege && let Some(h) <- privilegeHandler) {
+                h.check(param)
+            } else {
+                AuthStatus.OK
+            }
         } else {
             AuthStatus.OK
         }

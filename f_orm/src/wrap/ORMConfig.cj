@@ -24,6 +24,8 @@ public class ORMConfig {
     public static const defaultDriver = confPrefix + "_defaultDriver"
     public static const drivers = confPrefix + "_drivers"
     public static const connectionUrl = confPrefix + "_connectionUrl"
+    /** 驱动把连接停在 `ConnectionState.Connecting` 时的等待上限（毫秒，bug-orm.md §3.2 `ORM-L9`）。 */
+    public static const connectingTimeout = confPrefix + "_connectingTimeout"
     public static const transactionIncluding = confPrefix + "_transactionIncluding"
     public static const transactionExcluding = confPrefix + "_transactionExcluding"
     public static const transactionPropagation = confPrefix + "_transactionPropagation"
@@ -46,6 +48,7 @@ public class ORMConfig {
     public static const databasePoolCheckOnCreation = confPrefix + "_databasePoolCheckOnCreation"
     public static const databasePoolCheckOnBorrowing = confPrefix + "_databasePoolCheckOnBorrowing"
     public static const databasePoolCheckOnReturning = confPrefix + "_databasePoolCheckOnReturning"
+    public static const databasePoolMaxWaiting = confPrefix + "_databasePoolMaxWaiting"
     public static const databasePoolCheckSql = confPrefix + "_databasePoolCheckSql"
     public static const stdPoolIdleTimeout = confPrefix + "_stdPoolIdleTimeout"
     public static const stdPoolMaxLifeTime = confPrefix + "_pooledDatasourceMaxLifeTime"
@@ -172,9 +175,18 @@ public class ORMConfig {
             throw ORMException("connection url for ${driverName} is not be configed, config which key is ${genKey(driverName, connectionUrl)} or ${connectionUrl} must be specified")
         }
     }
+    /**
+     * 读一个配置项并转成 `T`。**解析失败退回 `default`**（用 `tryParse` 而不是 `parse`）：
+     * 配置里写错值不该让进程在读取时抛异常——`ORMConfigTest.testPoolMaxWaiting` 钉的就是这条
+     * （非法值 `abc` 应按默认值 30s 处理）。注意这里的 fallback 是"静默用默认值"，
+     * 若将来想改成"配置错了就报错"，应集中在这里改。
+     */
     private static func get<T>(driverName!: String = String.empty, key!: String, default!: T): T where T <: Parsable<T> {
         match (getConf(driverName: driverName, key: key)) {
-            case Some(x) => T.parse(x)
+            case Some(x) => match (T.tryParse(x)) {
+                case Some(v) => v
+                case _ => default
+            }
             case _ => default
         }
     }
@@ -214,6 +226,31 @@ public class ORMConfig {
     }
     public static func getConnectTimeout(driverName!: String = String.empty): Duration {
         Duration.millisecond * get<Int64>(driverName: driverName, key: databasePoolConnectTimeout, default: 50)
+    }
+    /**
+     * 单位是毫秒。驱动异步建连（`ConnectionState.Connecting`）时的等待上限，超时抛 `ConnectionException`
+     * （bug-orm.md §3.2 `ORM-L9`：原来这个等待没有上限、且是纯空转）。
+     *
+     * 默认 5 秒：正常建连远快于此；该值只影响「驱动把状态停在 Connecting」这一非常规路径，宁松勿误伤，
+     * 但必须有上限。单独一个键（不复用 `databasePoolConnectTimeout`，后者 50 毫秒是"池取连接排队"的口径）。
+     */
+    public static func getConnectingTimeout(driverName!: String = String.empty): Duration {
+        Duration.millisecond * get<Int64>(driverName: driverName, key: connectingTimeout, default: 5000)
+    }
+    /**
+     * 池耗尽时 `get(timeout: Duration.Max)` 的等待上限：超过它就返回 None 而不是无限挂住调用方。
+     *
+     * **单位是毫秒**（与 `getConnectTimeout`、`getConnectingTimeout` 等其它时长键统一）：
+     * `orm_databasePoolMaxWaiting=30000` 即 30 秒，默认 30000；配成 ≤ 0（如 `0`）表示真无限等待
+     * （仍每轮让出 CPU），也支持驱动级覆盖（`postgres_orm_databasePoolMaxWaiting`）。
+     */
+    public static func getPoolMaxWaiting(driverName!: String = String.empty): Duration {
+        let millis = get<Int64>(driverName: driverName, key: databasePoolMaxWaiting, default: 30000)
+        if (millis <= 0) {
+            Duration.Max
+        } else {
+            Duration.millisecond * millis
+        }
     }
     public static func getPoolCheckSql(driverName!: String = String.empty, default!: String = 'select 1'): String {
         getConf(driverName: driverName, key: databasePoolCheckSql) ?? default

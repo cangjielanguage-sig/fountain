@@ -1,0 +1,52 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`这里先把边界划清：不是「fboot 支持命令行参数」，而是「任何用了 f_config 的仓颉进程都支持」。
+
+只要一个仓颉进程链接了 f_config 模块，它的 static init 就会去读自己的命令行参数，把 --key=value 装载成配置项。这跟 fboot 没什么特殊关系，fboot 只是恰好也用了 f_config 的一个仓颉进程而已。
+
+同样适用的还有：fboot run 启动的应用进程（应用就是被加载进这个进程的）；你自己写的任何带 main 的可执行程序，只要 import 了 f_config；任何用 cjpm run 跑起来、依赖了 f_config 的二进制；以及任何间接依赖了 f_config 的程序，比如你引了 f_orm，它依赖 f_config。
+
+所以 --key=value 是 f_config 这个模块的能力，不是某个命令的开关。
+
+同一个写法在两个舞台上走的路径不一样。编译期，命令行参数在 fboot build 进程的 argv 里，被 fboot 进程里的 f_config 读到，转成 cjpm build 子进程的环境变量，宏在编译期读到它们并把连接串、口令加密嵌入产物。运行期，参数在 fboot run 进程的 argv 里，同一个 f_config、同一套 static init，装载进 ARGS 并覆盖同名环境变量。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 4 章 · 配置 f_config · 4.2 续</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>同一个写法，两个舞台</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>编译期 vs 运行期</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 16 }}>
+    <Box style={{ flex: 1, flexDirection: 'row', gap: 16 }}>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 22, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#38BDF8' }}>编译期</Text>
+        <Text style={{ fontSize: 14, color: '#64748B', marginTop: 6 }}>在 fboot build 进程自己的 argv 里</Text>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 16 }}>· 由 fboot 进程里的 f_config 读到</Text>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 8 }}>· 转成 cjpm build 子进程的环境变量</Text>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 8 }}>· 宏（@EmbedSensitive、ORMConfig）在编译期读到它们，把连接串 / 口令加密嵌入产物</Text>
+        <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.7, marginTop: 'auto' }}>效果：写进产物，成为编译期内嵌值</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 22, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#E2E8F0' }}>运行期</Text>
+        <Text style={{ fontSize: 14, color: '#64748B', marginTop: 6 }}>在 fboot run 进程的 argv 里（应用就加载在这个进程里）</Text>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 16 }}>· 同一个 f_config，同一套 static init</Text>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 8 }}>· 装载进 ARGS</Text>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 8 }}>· 覆盖同名环境变量，也覆盖编译期内嵌值</Text>
+        <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.7, marginTop: 'auto' }}>效果：一份产物跑多套环境</Text>
+      </Box>
+    </Box>
+    <Box style={{ height: 168, background: 'rgba(56,189,248,0.06)', borderRadius: 12, border: '1px solid #38BDF8', padding: 20, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#38BDF8' }}>两边都是同一条规则</Text>
+      <Text style={{ fontSize: 15, color: '#E2E8F0', lineHeight: 1.7, marginTop: 6 }}>谁的命令行里有 --k=v，且那个进程链了 f_config，谁就把它读成配置项。</Text>
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 8 }}>对照 fdemo：boot.sh 的 build() 把 --k=v 交给 fboot build → 编译期；boot.sh 的 run() 用 export → 运行期；boot-win-gitbash.sh 的 run() 直接把 --k=v 拼在 fboot run 后面 → 运行期。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>25 / 116</Text>
+  </Box>
+</Slide>

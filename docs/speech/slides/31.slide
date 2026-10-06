@@ -1,0 +1,59 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`这一组三步演示就是 f_config 的全部价值：编译期可内嵌、运行期可覆盖、全程无配置文件。
+
+第一步，看一眼 fdemo 到底有多少配置：grep 一下 boot.sh 里 export 的行数，你会看到几十行。
+
+第二步，用 fboot build 把敏感配置在编译期注入。这些 --k=v 会变成 cjpm build 子进程的环境变量，也就是编译期宏能读到的环境变量。内部会带上 sm4Key 和 sm4Iv，所以连接串和口令是加密嵌入的。
+
+第三步演示运行期覆盖，两种写法。写法一是环境变量，export mvc_port=8080 然后 ./boot.sh run。写法二是命令行参数，直接把 --mvc_port=9090 拼在 fboot run 后面。两种写法完全等价。
+
+预期：编译成功，连接串与口令被加密嵌入产物；运行日志里出现 9090 端口，Config.getString('mvc_port') 拿到的是命令行参数的值，覆盖了环境变量值。
+
+请注意第三步的两种写法——同一个配置项 mvc_port，既可以 export，也可以写成 --mvc_port=9090。这就是「f_config 支持命令行参数」最直观的证明。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 4 章 · 配置 f_config · 4.9</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>现场演示：内嵌、覆盖、无配置文件</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>3 步</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 16 }}>
+    <Box style={{ flexDirection: 'row', gap: 16, background: '#111C2E', borderRadius: 12, padding: 16 }}>
+      <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 36 }}>1</Text>
+      <Box style={{ flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#E2E8F0' }}>数一下 fdemo 有多少配置</Text>
+        <Text style={{ fontSize: 14, color: '#22D3EE', lineHeight: 1.7, marginTop: 6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>grep -c 'export' fdemo/boot.sh</Text>
+      </Box>
+    </Box>
+    <Box style={{ flexDirection: 'row', gap: 16, background: '#111C2E', borderRadius: 12, padding: 16 }}>
+      <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 36 }}>2</Text>
+      <Box style={{ flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#E2E8F0' }}>编译期注入：--k=v 变成 cjpm build 子进程的环境变量</Text>
+        <Text style={{ fontSize: 14, color: '#22D3EE', lineHeight: 1.7, marginTop: 6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>cd fdemo；export POSTGRES=...；./boot.sh build</Text>
+        <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6, marginTop: 4 }}>内部：--sm4Key=$(fboot randhex 32) --sm4Iv=$(fboot randhex 32)</Text>
+      </Box>
+    </Box>
+    <Box style={{ flexDirection: 'row', gap: 16, background: '#111C2E', borderRadius: 12, padding: 16 }}>
+      <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#F59E0B', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 36 }}>3</Text>
+      <Box style={{ flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#E2E8F0' }}>运行期覆盖：两种写法完全等价</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>写法一（环境变量）：export mvc_port=8080 → ./boot.sh run</Text>
+        <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.7, marginTop: 4, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>写法二（命令行参数）：fboot run ./fdemo --mvc_port=9090 --orm_drivers=postgres</Text>
+      </Box>
+    </Box>
+    <Box style={{ flex: 1, background: 'rgba(56,189,248,0.06)', borderRadius: 12, border: '1px solid #38BDF8', padding: 20, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#38BDF8' }}>预期</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.7, marginTop: 8 }}>编译成功，连接串与口令被加密嵌入产物；日志里出现 9090 端口，Config.getString('mvc_port') 取到命令行参数的值，覆盖了环境变量值；两种写法效果完全一致。</Text>
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 'auto' }}>这就是「环境变量与 --key=value 平级，后者覆盖前者」最直观的证明。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>31 / 116</Text>
+  </Box>
+</Slide>

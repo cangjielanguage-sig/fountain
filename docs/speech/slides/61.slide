@@ -1,0 +1,50 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`f_util 里还有一批一句话工具，快速过。
+
+crc16、crc32、crc64 是循环冗余校验，做数据完整性校验和短摘要。CityHash、MurmurHash3X128、wyhash 是高性能非加密哈希，做分库分表路由、布隆过滤器。UInt128 是 128 位无符号整数，也是 MurmurHash3X128 的返回值类型。geohash 做经纬度编码，用来实现「附近的人」和网格聚合。DiffieHellmanKeyExchanger 是密钥交换协议，细节在工具模块的文档里有。prime 是素数判定与生成。
+
+最后是现场演示，建议临时建一个小模块跑起来，或者直接用仓库里的测试文件。左边这段代码是一条链路串起四个工具：用 UUID 的 v7 给订单发号，时间有序；用 IdMaker 拿一个趋势递增的序号；用 CaseFormat 把驼峰成员名转成下划线列名；用 PathPattern 做网关规则匹配并抽出路径变量；最后用 TextTemplate 拼一条通知文案。
+
+这四个东西看起来零碎，但每一个都对应一类你迟早会写的需求。它们的共同点是：零依赖、零配置、拿来即用——这也是 f_util 的设计原则：不绑架你的架构，只消灭重复劳动。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 9 章 · 工具箱 f_util · 9.10 / 9.11</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>其余工具与现场演示</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>零依赖 · 零配置</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 14 }}>
+    <Table
+      style={{ width: '100%', height: 200 }}
+      defaultTextStyle={{ fontSize: 13, textAlign: 'left', color: '#E2E8F0' }}
+      defaultCellStyle={{ border: { left: { width: 1, color: '#1E293B' }, right: { width: 1, color: '#1E293B' }, top: { width: 1, color: '#1E293B' }, bottom: { width: 1, color: '#1E293B' } } }}
+      cells={[
+        [ { text: '工具', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } }, { text: '一句话', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } } ],
+        [ 'crc16 / crc32 / crc64', '循环冗余校验，做数据完整性校验、短摘要' ],
+        [ 'CityHash / MurmurHash3X128 / wyhash', '高性能非加密哈希，做分库分表路由、布隆过滤器' ],
+        [ 'UInt128', '128 位无符号整数（MurmurHash3X128 的返回值类型）' ],
+        [ 'geohash', '经纬度编码，做「附近的人」、网格聚合' ],
+        [ 'DiffieHellmanKeyExchanger', '密钥交换协议（详见 f_util/doc/密钥交换协议.md）' ],
+        [ 'prime', '素数判定与生成' ],
+      ]}
+    />
+    <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #38BDF8', padding: 18, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>现场演示：一条链路串起 4 个工具</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"let orderId = UUID.unixTimeBased().toHexString()    // ① ID：时间有序"}</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"let seqId   = IdMaker().nextInt64()                 // ② 趋势递增"}</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{'let column  = CaseFormat.Camel.convert("userName", to: CaseFormat.LowerUnderScore)   // ③ user_name'}</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{'rules.compileIfAbsent("/api/{version}/user/{id}"){"user-service"}'}</Text>
+      <Text style={{ fontSize: 13, color: '#22D3EE', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{'TextTemplate.compile("订单 ${orderId} 已创建").format(["orderId": orderId])   // ④ 通知文案'}</Text>
+      <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.65, marginTop: 'auto' }}>它们的共同点：零依赖、零配置、拿来即用 —— f_util 不绑架你的架构，只消灭重复劳动。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>61 / 116</Text>
+  </Box>
+</Slide>

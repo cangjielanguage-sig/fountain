@@ -17,10 +17,11 @@ package fountain::f_orm.wrap
 
 public import std.database.sql.*
 import std.collection.Map
-import std.sync.AtomicUInt64
+import std.sync.{AtomicBool, AtomicUInt64}
 import std.unicode.UnicodeStringExtension
 import fountain::f_log.impl.LoggerFactory
 import fountain::f_pool.Pool
+import fountain::f_orm.exception.*
 
 public class DatabasePool <: Resource & Datasource {
     private static let logger = LoggerFactory.getLogger<DatabasePool>()
@@ -41,6 +42,8 @@ public class DatabasePool <: Resource & Datasource {
         idleTimeout!: Duration = Duration.Zero,
         checkInterval!: Duration = Duration.minute * 5,
         connectTimeout!: Duration = Duration.Max,
+        /** 池耗尽且 `get(timeout: Duration.Max)` 时的等待上限（池初始化参数）；`Duration.Max` = 真无限等待。 */
+        maxWaiting!: Duration = Duration.second * 30,
         checker!: (Connection) -> Bool
     ) {
         this.ds = ds
@@ -54,6 +57,7 @@ public class DatabasePool <: Resource & Datasource {
             checkOnReturning: checkOnReturning,
             idleTimeout: idleTimeout,
             checkInterval: checkInterval,
+            maxWaiting: maxWaiting,
             creator:  {=> PooledConnection(ds.connect())},
             checker: {
                 c => try {
@@ -90,6 +94,7 @@ public class DatabasePool <: Resource & Datasource {
         idleTimeout!: Duration = Duration.Zero,
         checkInterval!: Duration = Duration.minute * 5,
         connectTimeout!: Duration = Duration.Max,
+        maxWaiting!: Duration = Duration.second * 30,
         checkSql!: String = "select 1"
     ) {
         this(ds,
@@ -103,8 +108,13 @@ public class DatabasePool <: Resource & Datasource {
             idleTimeout: idleTimeout,
             checkInterval: checkInterval,
             connectTimeout: connectTimeout,
+            maxWaiting: maxWaiting,
             checker: {
-                c => if (checkSql[0..6].toLower() == "select") {
+                c => if (checkSql.size < 6) {
+                    // bug-orm.md §3.1 ORM-C4：短于 6 个字符的 checkSql 不可能是合法语句——原实现直接做
+                    // `checkSql[0..6]`，会在借连接校验时抛 IndexOutOfBoundsException；改为显式报 ORMException。
+                    throw ORMException('checkSql is too short to be a valid statement: [${checkSql}]')
+                } else if (checkSql[0..6].toLower() == "select") {
                     try (stmt = c.prepareStatement(checkSql)) {
                         try (r = stmt.query()) {
                             return r.next()
@@ -133,6 +143,7 @@ public class DatabasePool <: Resource & Datasource {
         idleTimeout!: Duration = Duration.Zero,
         checkInterval!: Duration = Duration.minute * 5,
         connectTimeout!: Duration = Duration.Max,
+        maxWaiting!: Duration = Duration.second * 30,
         checkSql!: String = "select 1"
     ) {
         this(open(driver, options), 
@@ -146,6 +157,7 @@ public class DatabasePool <: Resource & Datasource {
              idleTimeout: idleTimeout,
              checkInterval: checkInterval,
              connectTimeout: connectTimeout,
+             maxWaiting: maxWaiting,
              checkSql: checkSql)
     }
     
@@ -162,6 +174,7 @@ public class DatabasePool <: Resource & Datasource {
             idleTimeout: ORMConfig.getIdleTimeout(driverName: driver.name),
             checkInterval: ORMConfig.getPoolCheckInterval(driverName: driver.name),
             connectTimeout: ORMConfig.getConnectTimeout(driverName: driver.name),
+            maxWaiting: ORMConfig.getPoolMaxWaiting(driverName: driver.name),
             checkSql: ORMConfig.getPoolCheckSql(driverName: driver.name)
         )
     }
@@ -202,17 +215,28 @@ class PooledConnection <: Connection {
     private var returnFn = {c: PooledConnection => ()}
 
     private var assigned = false
+    // bug-orm.md §3.2 ORM-L8：`true` = 未借出/已归还。借出时在 `activate` 里 store(false)，`close()` 用 CAS 幂等。
+    // 池侧没有身份去重（`SyncDeque` 只对「重复归还」告警、不拦），所以重复归还要在这一步就挡住：
+    // 否则池里会出现两个指向同一连接的节点，两个借用者可能同时拿到同一条连接。
+    private let returned = AtomicBool(true)
 
     public func isClosed(): Bool {
         !assigned
     }
     public func close(): Unit {
+        // bug-orm.md §3.2 ORM-L8：CAS 失败 = 这条连接已经被归还过（或从未借出）
+        if (!returned.compareAndSwap(false, true)) {
+            throw ConnectionException('The database connection was returned multiple times.')
+        }
         assigned = false
         logger.debug {"database Connection ${serial} is returning"}
         returnFn(this)
         logger.debug {"database Connection ${serial} is returned"}
     }
     func activate(returnFn: (PooledConnection) -> Unit): Connection {
+        // 借出即复位「已归还」标记（close 的 CAS 依赖它）；放在 activate 里而不是调用方，
+        // 是为了让"借出"只有一个入口，也不用到 DatabasePool 去碰这里的 private 成员
+        returned.store(false)
         assigned = true
         this.returnFn = returnFn
         logger.debug {"database Connection ${serial} is assigned"}

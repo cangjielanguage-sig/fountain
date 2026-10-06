@@ -41,6 +41,7 @@ public class ClientConfig {
     private static const RPC_CLIENT_PING_TIMEOUT = RPC_CLIENT_PREFIX + '_pingTimeout'
     private static const RPC_CLIENT_RETRY_COUNT = RPC_CLIENT_PREFIX + '_retryCount'
     private static const RPC_CLIENT_REFRESH_INTERVAL_SECONDS = RPC_CLIENT_PREFIX + '_refreshIntervalSeconds'
+    private static const RPC_CLIENT_DISCOVERY_TIMEOUT = RPC_CLIENT_PREFIX + '_discoveryTimeout'
     private static const RPC_CURRENT_SKELETON = 'rpc_currentSkeleton'
 
     public static prop currentSkeleton: String {
@@ -170,6 +171,15 @@ public class ClientConfig {
             Duration.second * (Config.getValue<Int64>(RPC_CLIENT_REFRESH_INTERVAL_SECONDS) ?? 1)
         }
     }
+    /**
+     * 等待服务发现完成的上限。后台线程按 refreshIntervalSeconds 周期刷新服务列表，
+     * 首个 RPC 调用可能需要等它把服务名与地址对上。
+     */
+    internal static prop discoveryTimeout: Duration {
+        get(){
+            Config.getDuration(RPC_CLIENT_DISCOVERY_TIMEOUT) ?? Duration.second * 5
+        }
+    }
     internal static func createClient(addresses: Array<(Float64, String)>): MultiClient<Float64, RPCMessage>{
         func checker(): ?Message {
             Message.ping()
@@ -209,19 +219,23 @@ public class ClientConfig {
         if(let Some(pt) <- pingTimeout){
             builder.pingTimeout(pt)
         }
-        var min = 0.0f64
-        var max = 0.0f64
+        // 传给算法的取值区间不是「权重的范围」，而是「累计权重的区间」：
+        // LoadBalance 的 TreeMap 以各节点的累计权重为键（K_i = w_1 + ... + w_i），
+        // 取节点 = 第一个键 >= v ⇒ 节点 i 的桶是 (K_{i-1}, K_i]，v 落在桶内的概率就是权重占比。
+        // 原来传的是权重最小值/最大值 ⇒ 等权 [1.0,1.0] 时区间是 [0,1]，两个节点都只会命中前一个
+        //（实测 A=100/B=0，见 .autocode/bugs/bug-archived-20261004-2.md）。
+        var sum = 0.0f64
         for((w, _) in addresses){
-            if(min > w){
-                min = w
-            }
-            if(max < w){
-                max = w
-            }
+            sum += w
         }
         match(loadbalance){
-            case 'random' => builder.random(min, max)
-            case 'roundrobin' => builder.roundRobin(1.0f64, min, max)
+            // 随机：在 (0, Σw) 上均匀取值，落进各桶的概率与权重成正比
+            case 'random' => builder.random(0.0f64, sum)
+            // 轮询：step 固定 1.0，从「桶中点」0.5 起步（起点落在桶边界上会永远归前一个节点）；
+            // 累计键原点必须是 0（= origin），不能与取值起点 0.5 混用 ——
+            // 否则桶边界变成 1.5/2.5，取值 0.5/1.5/2.5 正好踩在边界上，永远命中第一个节点
+            // （实测 A=100/B=0，见 .autocode/bugs/bug-archived-20261004-2.md）。整数权重下比例精确。
+            case 'roundrobin' => builder.roundRobin(1.0f64, 0.5f64, sum, origin: 0.0f64)
             case x => throw LoadBalanceException("unsupported loadbalance algorithm: ${x}")
         }
         builder.add(addresses)
@@ -231,6 +245,23 @@ public class ClientConfig {
         createClient(Array<(Float64, String)>(hosts.size){i => (1.0f64, hosts[i])})
     }
     internal static func createClient(): MultiClient<Float64, RPCMessage> {
-        createClient(serverAddresses)
+        createClient(requireServerAddresses())
+    }
+    /**
+     * 取客户端要连接的服务节点地址。未配置 rpcClient_serverAddress 时记录 ERROR 说明原因并结束进程：
+     * 空地址表继续往下走只会得到难以诊断的 NoneValueException（键不存在、下标越界），
+     * 若发生在包初始化阶段，还会把“配置缺失”升级成“包加载失败 + 段错误”。
+     */
+    private static func requireServerAddresses(): Array<(Float64, String)> {
+        let addresses = serverAddresses
+        if (addresses.isEmpty()) {
+            rpclog.error('未配置 ${RPC_SERVER_ADDRESS}：RPC 客户端不知道要连接哪个服务节点，无法完成服务发现。' +
+                '请设置该配置项，格式为“权重,主机:端口”，多个地址用 | 分隔，' +
+                '例如 ${RPC_SERVER_ADDRESS}=1.0,127.0.0.1:1203。进程将退出。')
+            // 异步日志由后台线程落盘，立刻 exit 会丢掉这条 ERROR，先给它一点时间
+            sleep(Duration.millisecond * 200)
+            exit(1)
+        }
+        addresses
     }
 }

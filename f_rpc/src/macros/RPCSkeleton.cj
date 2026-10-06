@@ -48,10 +48,18 @@ private func expand(attr: Tokens, input: Decl): Tokens {
     }
     match(input){
         case x: ClassDecl => 
+            // 服务实现类的公开实例方法：参数与返回类型同样要能跨网络传输，在展开处自动登记（.autocode/bugs/bug-archived-on-20261004.md 7.11）
+            let types = ArrayList<Tokens>()
+            for (d in x.body.decls) {
+                if (let f: FuncDecl <- d && isPublic(f) && !isStatic(f)) {
+                    collectRPCTypes(types, f)
+                }
+            }
             quote(
                 @Bean[$beanAttr]
                 $input
                 private let _ = {=>
+                    $(rpcTypeRegistrations(types))
                     $(extractFuncs(weight, x))
                 }()
             )

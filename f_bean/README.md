@@ -39,6 +39,24 @@ IOC框架有一系列名字lookup开头的函数，用来获取受管理的bean�
 import fountain::f_bean.*
 ```
 
+### 形参风格（两层约定）
+
+这套 API 分两层，**条件类形参的写法不同**，调用时按所在层写：
+
+| 层 | 条件／名字／label | 类型实参 | 默认值的承接方式 | 调用示例 |
+|---|---|---|---|---|
+| 上层 `lookup*`（本文件以下各节） | **位置形参** | 位置（泛型实参） | 同名的 0 参重载 | `lookupList<MyBean>(myCond)` ✓；`lookupList<MyBean>(cond: myCond)` ✗ |
+| 低层 `BeanFactory.instance` 的 `getFirst`／`getList`／`getMap`／`iterator`／`getFirstTuple`／`getAllTuples` | **命名形参** `cond!` | **位置形参** `beanType` | 形参默认值 | `getList<MyBean>(TypeInfo.of<MyBean>(), cond: myCond)` ✓；`getList<MyBean>(TypeInfo.of<MyBean>(), myCond)` ✗；`getList<MyBean>(beanType: ti, cond: myCond)` ✗ |
+
+```cj
+let all = lookupList<MyBean>()                      // 上层：位置形参
+let named = lookupList<MyBean>(Exactly('beanName')) // 上层：位置形参
+// 低层：beanType 是位置形参、cond 是命名形参
+let low = BeanFactory.instance.getList<MyBean>(TypeInfo.of<MyBean>(), cond: Exactly('beanName'))
+```
+
+**新增 API 的约定**：统一采用**上层风格** —— 条件类形参用位置形参，默认值由同名的 0 参重载承接。
+
 ### 获取单个bean
 #### `lookup<T>(): T`
 获取第一个指定泛型实参的bean，如果没找到会抛出异常
@@ -57,7 +75,7 @@ import fountain::f_bean.*
 获取指定类型且名称是name的bean，如果没找到返回`None<T>`
 
 #### `lookupOption<T>(cond: StringCond): ?T`
-获取指定类型且名称符合cond指定条件的第一个bean，如果没找到会抛出异常
+获取指定类型且名称符合cond指定条件的第一个bean，如果没找到返回`None<T>`
 
 ### 获取bean的`ArrayList<T>`
 #### `lookupList<T>(): ArrayList<T>`
@@ -74,10 +92,10 @@ import fountain::f_bean.*
 获取类型是指定泛型实参且名称符合指定条件的全部bean
 
 ### 获取bean的`TreeSet<T>`
-#### `lookupTreeSet<T>(): HashSet<T> where T <: Comparable<T>`
+#### `lookupTreeSet<T>(): TreeSet<T> where T <: Comparable<T>`
 获取类型是指定泛型实参的全部bean
 
-#### `lookupTreeSet<T>(cond: StringCond): HashSet<T> where T <: Comparable<T>`
+#### `lookupTreeSet<T>(cond: StringCond): TreeSet<T> where T <: Comparable<T>`
 获取类型是指定泛型实参且名称符合指定条件的全部bean
 
 ### 获取bean的HashMap`<String, T>`
@@ -88,10 +106,10 @@ import fountain::f_bean.*
 获取类型是指定泛型实参且名称符合cond条件的全部bean，返回的HashMap用bean的名称作为KEY
 
 ### 获取bean的`HashMap<L, T>`
-#### `lookupLables<L, T>(): HashMap<L, T> where L <: Hashable & Equatable<L>, T <: BeanLabel<L>`
+#### `lookupLabels<L, T>(): HashMap<L, T> where L <: Hashable & Equatable<L>, T <: BeanLabel<L>`
 获取类型是指定泛型实参的全部bean，泛型实参需要实现接口`BeanLabel<L>`。
 
-#### `lookupLables<L, T>(cond: StringCond): HashMap<L, T> where L <: Hashable & Equatable<L>, T <: BeanLabel<L>`
+#### `lookupLabels<L, T>(cond: StringCond): HashMap<L, T> where L <: Hashable & Equatable<L>, T <: BeanLabel<L>`
 获取类型是指定泛型实参且名称符合cond条件的全部bean。
 
 #### `BeanLabel<L>`
@@ -102,7 +120,7 @@ public interface BeanLabel<L> where L <: Hashable & Equatable<L> {
 ```
 
 ### 获取带权重的bean `TreeMap<W, T>`
-#### `lookupWeights<W, T>(): TreeMap<W, T> where W <: ComparableW> & Addable<W>, T <: BeanWeight<W>`
+#### `lookupWeights<W, T>(): TreeMap<W, T> where W <: Comparable<W> & Addable<W>, T <: BeanWeight<W>`
 获取类型是指定泛型实参的全部bean，泛型实参需要实现接口`BeanWeight<W>`
 
 #### `lookupWeights<W, T>(cond: StringCond): TreeMap<W, T> where W <: Comparable<W> & Addable<W>, T <: BeanWeight<W>`
@@ -114,6 +132,70 @@ public interface BeanWeight<W> where W <: Comparable<W> & Addable<W> {
     prop weight: W
 }
 ```
+
+### 按注解获取bean
+
+匹配范围：被注解`A`修饰的类型，以及**其父类、实现的接口、元注解链**上的注解（即注册期类型队列展开的全部节点）。
+`T`是bean类型的过滤条件，**必须是类**（`where T <: Object`；仓颉里接口不是`Object`的子类型）。
+顺序与其它查询一致（`@BeanMeta`的`primary`优先，再按`order`，再按名字）。
+
+#### `lookupByAnnotation<T, A>(): T`
+获取第一个满足条件的bean，没找到抛异常
+
+#### `lookupByAnnotation<T, A>(cond: StringCond): T`
+获取第一个满足条件的bean，且bean名称符合`cond`指定条件，没找到抛异常
+
+#### `lookupOptionByAnnotation<T, A>(): ?T`
+获取第一个满足条件的bean，没找到返回`None<T>`
+
+#### `lookupOptionByAnnotation<T, A>(cond: StringCond): ?T`
+获取第一个满足条件的bean，且bean名称符合`cond`指定条件，没找到返回`None<T>`
+
+#### `lookupListByAnnotation<T, A>(): ArrayList<T>`
+获取全部满足条件的bean
+
+#### `lookupListByAnnotation<T, A>(cond: StringCond): ArrayList<T>`
+获取全部满足条件的bean，且bean名称符合`cond`指定条件
+
+#### `lookupMapByAnnotation<T, A>(): HashMap<String, T>`
+获取全部满足条件的bean，返回的HashMap用bean的名称作为KEY
+
+#### `lookupMapByAnnotation<T, A>(cond: StringCond): HashMap<String, T>`
+获取全部满足条件的bean，且bean名称符合`cond`指定条件，返回的HashMap用bean的名称作为KEY
+
+#### 只限制注解、不限制bean类型
+
+上面各节用`T`过滤bean类型；只按注解查（不看类型）时用下面这组 —— 语义等价于`T = Object`（所有bean的类型都是类），但不必写类型实参，返回元素是`Object`：
+
+#### `lookupByAnnotationOnly<A>(): Object`
+获取第一个满足条件的bean，没找到抛异常
+
+#### `lookupByAnnotationOnly<A>(cond: StringCond): Object`
+获取第一个满足条件的bean，且bean名称符合`cond`指定条件，没找到抛异常
+
+#### `lookupOptionByAnnotationOnly<A>(): ?Object`
+获取第一个满足条件的bean，没找到返回`None<Object>`
+
+#### `lookupOptionByAnnotationOnly<A>(cond: StringCond): ?Object`
+获取第一个满足条件的bean，且bean名称符合`cond`指定条件，没找到返回`None<Object>`
+
+#### `lookupListByAnnotationOnly<A>(): ArrayList<Object>`
+获取全部满足条件的bean
+
+#### `lookupListByAnnotationOnly<A>(cond: StringCond): ArrayList<Object>`
+获取全部满足条件的bean，且bean名称符合`cond`指定条件
+
+#### `lookupMapByAnnotationOnly<A>(): HashMap<String, Object>`
+获取全部满足条件的bean，返回的HashMap用bean的名称作为KEY
+
+#### `lookupMapByAnnotationOnly<A>(cond: StringCond): HashMap<String, Object>`
+获取全部满足条件的bean，且bean名称符合`cond`指定条件，返回的HashMap用bean的名称作为KEY
+
+#### 低层对应（只限注解版，`BeanFactory.instance`）
+`getFirstByAnnotationOnly<A>(cond!: StringCond = IgnoreCond): ?Object`、`getListByAnnotationOnly<A>(…): ArrayList<Object>`、`getMapByAnnotationOnly<A>(…): HashMap<String, Object>`（均`where A <: Annotation`）。
+
+#### 低层对应（`BeanFactory.instance`）
+`getFirstByAnnotation<T, A>(cond!: StringCond = IgnoreCond): ?T`、`getListByAnnotation<T, A>(cond!: StringCond = IgnoreCond): ArrayList<T>`、`getMapByAnnotation<T, A>(cond!: StringCond = IgnoreCond): HashMap<String, T>`（均`where T <: Object, A <: Annotation`）。语义与上面的`lookup*`一致，只是没找到时返回`None`/空集合而不抛异常；`cond`按低层约定是**命名形参**（见上文「形参风格（两层约定）」）。
 
 ### StringCond
 ```cj
@@ -243,7 +325,7 @@ public enum ConfCond <: BeanCondition {
 }
 ```
 
-#### BeanBef
+#### BeanDef
 ```cj
 /**
  * beanType是全限定类型名，指定类型有bean定义则on返回true

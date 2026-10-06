@@ -1,0 +1,56 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`三条纪律是本章最容易踩的坑，先记住它们，后面都是细节。
+
+纪律一：默认什么都不输出。内置六种 appender——console、file、tcp、udp、unix、unixDatagram，但一个都不会自动启用。logger_appender_console 这类配置项没配，这类 appender 就不存在。所以你至少得写一行 export logger_appender_console 等于你起的名字，才会有第一条日志。这也是为什么 fdemo 的 boot.sh 里必须有那几行 logger 配置。
+
+纪律二：级别和格式挂在 appender 上，不挂在 logger 名字上。命名规则是两段式的：先用 logger_appender_kind 给这类 appender 挂上若干个具名实例；再用 logger_appender_实例名_level 和 _pattern 逐个配级别和格式。
+
+所以 fountain 没有 log4j 那种「logger 名字树」的概念——你没法说「只给 fountain.orm 开 DEBUG」。级别是这个 appender 全局的，要区分来源就靠格式里的百分号 name。
+
+纪律三：业务线程只入队，渲染在后台；但默认「队列满就等」。调 log.info 的时候，业务线程做的事只有两件：采集时间戳和线程 ID，然后把闭包投进队列。级别判断、字符串渲染、落盘都在后台线程。而 loggerAsyncTimeout 的默认值是 Duration.Max，意味着队列满时入队方会一直等，而不是丢日志。想丢就显式配 timeout 加 policy。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 15 章 · 日志 f_log · 15.2</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>三条纪律（先记这个）</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>后面都是细节</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 14 }}>
+    <Box style={{ height: 168, background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 20, flexDirection: 'row', gap: 20 }}>
+      <Text style={{ fontSize: 48, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>01</Text>
+      <Box style={{ flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#E2E8F0' }}>默认什么都不输出</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.75, marginTop: 8 }}>内置 6 种 appender：console / file / tcp / udp / unix / unixDatagram。但一个都不会自动启用 —— 没配就不存在。</Text>
+        <Text style={{ fontSize: 13, color: '#F59E0B', lineHeight: 1.75, marginTop: 'auto', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>export logger_appender_console=【你给这个 appender 起的名字】</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ height: 168, background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 20, flexDirection: 'row', gap: 20 }}>
+      <Text style={{ fontSize: 48, fontWeight: 'bold', color: '#22D3EE', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>02</Text>
+      <Box style={{ flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#E2E8F0' }}>级别和格式挂在 appender 上，不挂在 logger 名字上</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.75, marginTop: 8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>logger_appender_【kind】=【AppenderName】[,【AppenderName2】...]　先挂具名实例</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>logger_appender_【AppenderName】_level=DEBUG　logger_appender_【AppenderName】_pattern='...'</Text>
+        <Text style={{ fontSize: 13, color: '#F59E0B', lineHeight: 1.75, marginTop: 'auto' }}>没有 logger 名字树 —— 无法「只给某个包开 DEBUG」；级别是 appender 全局的，要区分来源靠 %name。</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #F59E0B', padding: 20, flexDirection: 'row', gap: 20 }}>
+      <Text style={{ fontSize: 48, fontWeight: 'bold', color: '#F59E0B', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>03</Text>
+      <Box style={{ flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#E2E8F0' }}>业务线程只入队，渲染在后台；但默认「队列满就等」</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.75, marginTop: 8 }}>业务线程只做两件事：采集时间戳 / 线程 ID，把闭包投进队列。级别判断、字符串渲染、落盘都在后台线程。</Text>
+        <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.75, marginTop: 8 }}>loggerAsyncTimeout 默认 Duration.Max —— 队列满时入队方一直等，而不是丢日志。想丢就显式配 timeout + policy。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>95 / 116</Text>
+  </Box>
+</Slide>

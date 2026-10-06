@@ -1,0 +1,58 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`条件装配解决的是「按环境装配」：这个 bean 在什么条件下才存在。
+
+BeanCondition 是一个接口，只有一个 on 方法，参数是 BeanFactory，返回 Bool。它最重要的设计是：& 、| 、! 三个操作符都重载了，所以条件可以直接用操作符组合，比字符串拼表达式舒服得多。
+
+内置实现有四组。NoneBeanCondition 永远返回 true，是默认值。AndCond、OrCond、NotCond 是组合器。ConfCond 看配置，有 IgnoreConf、Exists、NotExists、Value 四种，Value 还能带一个 StringCond 来匹配配置值。BeanDef 看 bean 定义，可以用 beanType、beanName、scope、count 组合。
+
+看右边的示例：条件是「配置项 orm_drivers 包含 postgres」并且「存在一个 Dialect 的子类实现」。两个都满足，这个 PostgresOnlyBean 才存在；否则在 afterRegistered 阶段被从 BeanFactory 里删掉。
+
+比 Spring 的 @Conditional 更灵活的地方就是 &、|、! 可以直接用操作符组合。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 6 章 · IOC f_bean · 6.4</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>条件装配：BeanCondition</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>& | ! 可直接组合</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 16 }}>
+    <Box style={{ height: 348, flexDirection: 'row', gap: 20 }}>
+      <Box style={{ width: 520, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 14, color: '#64748B', marginBottom: 10 }}>接口</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public interface BeanCondition <: ToString {"}</Text>
+        <Text style={{ fontSize: 13, color: '#22D3EE', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    func on(factory: BeanFactory): Bool"}</Text>
+        <Text style={{ fontSize: 13, color: '#22D3EE', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    operator const func &(right: BeanCondition): BeanCondition"}</Text>
+        <Text style={{ fontSize: 13, color: '#22D3EE', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    operator const func |(right: BeanCondition): BeanCondition"}</Text>
+        <Text style={{ fontSize: 13, color: '#22D3EE', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    operator const func !(): BeanCondition"}</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"}"}</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.9, marginTop: 'auto' }}>条件对象可直接用 & | ! 组合，不需要字符串表达式。</Text>
+      </Box>
+
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#E2E8F0' }}>内置实现</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 10 }}>· NoneBeanCondition —— 永远 true（默认）</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 6 }}>· AndCond / OrCond / NotCond —— 组合器</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 6 }}>· ConfCond —— IgnoreConf | Exists(key) | NotExists(key) | Value(key, StringCond)</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 6 }}>· BeanDef —— 存在满足条件的 bean 定义才成立，可用 beanType / beanName / scope / count 组合</Text>
+        <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.8, marginTop: 'auto' }}>不满足条件的 bean 在 afterRegistered() 阶段被从 BeanFactory 删除。</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ height: 164, background: '#0B1220', borderRadius: 12, border: '1px solid #38BDF8', padding: 16, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 14, color: '#64748B', marginBottom: 8 }}>示例：配置里有 postgres，且有 Dialect 实现，这个 bean 才存在</Text>
+      <Text style={{ fontSize: 13, color: '#22D3EE', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>@Bean</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"@BeanMeta[condition: ConfCond.Value('orm_drivers', StringCond.Contains('postgres'))"}</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"                   & BeanDef(beanType: BeanDefType.SubOfOnly('fountain::f_orm.base.Dialect'))]"}</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public class PostgresOnlyBean {}"}</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>40 / 116</Text>
+  </Box>
+</Slide>

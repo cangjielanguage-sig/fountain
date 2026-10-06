@@ -1,0 +1,71 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`第二个角色是 DAO，这是 ORM 最反直觉也最爽的一点。
+
+看右边这段代码：@DAO 修饰一个接口，接口继承 RootDAO，里面三个函数都有函数体——findUser 用 DSL 查询，register 用插入并返回自增主键，deleteUser 用模板 SQL 删除。
+
+@DAO 宏展开的结果是「原接口后面跟着一个 extend SqlExecutor 实现了这个接口」。也就是说：没有 DAO 实现类，SqlExecutor 本身就是实现，接口里写的函数体就是方法实现。
+
+为什么能做到？因为 SqlExecutor 是所有 DAO 的公共载体，宏把接口的方法挂到它身上。所以约束是这么来的：
+
+第一，DAO 必须声明为接口，而且所有函数都要有默认实现——没有实现类，函数体不写就没人写了。
+
+第二，建议 public 修饰、不要泛型形参、继承 RootDAO。
+
+第三，一个持久化对象对应一个 DAO 接口。
+
+第四，同一模块内所有 DAO 的函数名最好不要重名——因为它们都挂在同一个 SqlExecutor 上。这一条很容易踩，两个 DAO 都写 findById 就冲突了。
+
+理解了这四条，DAO 就没有坑了。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 12 章 · ORM f_orm · 12.1 续</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>三个角色之二：DAO 就是接口</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>没有 DAO 实现类</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #38BDF8', padding: 18, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>fdemo/user/src/dao/UserDAO.cj</Text>
+      <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>@DAO</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public interface UserDAO <: RootDAO {"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    func findUser(id: Int64): UserPO {"}</Text>
+      <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        executor.FROM<UserPO>().WHERE(UserPO.tableColumns().id.eq(id))"}</Text>
+      <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"                .first<UserPO>().getOrThrow()"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    }"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    func register(username: String, password: String): Int64 {"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        let user = UserPO()"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        user.username = username"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        user.password = password"}</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        executor.INSERT_INTO<UserPO>(user)   // 返回自增主键"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    }"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    func deleteUser(id: Int64): Int64 {"}</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        executor.setSql('delete from user_info where id = ${arg(id)}').delete"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    }"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"}"}</Text>
+    </Box>
+
+    <Box style={{ flex: 1, flexDirection: 'column', gap: 14 }}>
+      <Box style={{ height: 116, background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#38BDF8' }}>@DAO 展开成什么</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, marginTop: 8 }}>原接口 + extend SqlExecutor 实现该接口。所以没有 DAO 实现类，SqlExecutor 本身就是实现。</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#E2E8F0' }}>四条约束（都来自上面那句话）</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.75, marginTop: 10 }}>1　DAO 必须声明为接口，且所有函数都要有默认实现</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.75, marginTop: 6 }}>2　建议 public、不要泛型形参、继承 RootDAO</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.75, marginTop: 6 }}>3　一个持久化对象对应一个 DAO 接口</Text>
+        <Text style={{ fontSize: 13, color: '#F59E0B', lineHeight: 1.75, marginTop: 6 }}>4　同一模块内所有 DAO 的函数名最好不要重名 —— 它们都挂在同一个 SqlExecutor 上</Text>
+        <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.75, marginTop: 'auto' }}>两个 DAO 都写 findById 就会冲突，这是最容易踩的一条。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>77 / 116</Text>
+  </Box>
+</Slide>

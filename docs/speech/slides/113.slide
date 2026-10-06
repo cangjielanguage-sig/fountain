@@ -1,0 +1,41 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`附录是三张速查表。第一张是命令。
+
+fboot workspace 加可选目录和版本号，初始化 workspace 并重写 cjpm.toml。fboot module 加可选名字，初始化或新增 dynamic 模块并挂进 members。fboot build 加路径和若干 --k=v，编译并把配置在编译期注入产物。fboot cleanUpdate 加路径，等价于 clean 加删 lock 加 update。fboot run 加路径和 --dylibPattern，启动并永久阻塞。fboot randhex 加位数，生成随机小写十六进制——SM4 的 key 用三十二。fboot count 统计代码。fboot test 用 test 目录的 cjpm.toml 覆盖后 build 加 run。fboot pub 加版本号发布模块。fboot shutdown 和 restart 按 PID 操作。fboot version 可以只用来看版本，也可以加版本号、消息、tag 来管理 fountain 自身。fboot help 看命令列表。
+
+这张表建议打印出来贴在显示器边上——日常开发真正会反复敲的就是这几条。
+
+一个提醒：这些命令里所有方括号包起来的部分都是占位符，需要替换成实际值。特别是 --dylibPattern 后面的正则，它决定了哪些动态链接库会被加载，是 fountain 里最容易出错的一个参数。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>附录 A · 一页速查表</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>命令速查</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>建议贴显示器边上</Text>
+  </Box>
+
+  <Box style={{ height: 540, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 24, flexDirection: 'column' }}>
+    <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 2.05, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"fboot workspace [【dir】] [x.y.z]　　　　 # 初始化 workspace（重写 cjpm.toml）"}</Text>
+    <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 2.05, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"fboot module [【name】]　　　　　　　　　# 初始化 / 新增 dynamic 模块并挂进 members"}</Text>
+    <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 2.05, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"fboot build [PATH] [--k=v ...]　　　　　# 编译；--k=v 作为编译期环境变量注入产物"}</Text>
+    <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 2.05, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"fboot cleanUpdate [PATH]　　　　　　　　# cjpm clean + 删 cjpm.lock + cjpm update"}</Text>
+    <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 2.05, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"fboot run [PATH] --dylibPattern=【正则】 # 启动（永久阻塞）"}</Text>
+    <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 2.05, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"fboot randhex 【n】　　　　　　　　　　　# n 位随机小写 16 进制（SM4 key 用 32）"}</Text>
+    <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 2.05, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"fboot count [PATH]　　　　　　　　　　　# 代码统计"}</Text>
+    <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 2.05, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"fboot test [PATH] --dylibPattern=【正则】# test/cjpm.toml 覆盖后 build + run"}</Text>
+    <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 2.05, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"fboot pub 【x.y.z】 [--skip-lint] [--skip-test]　# 批量发布模块"}</Text>
+    <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 2.05, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"fboot shutdown 【PID】 / fboot restart 【PID】 [PATH] --dylibPattern=【正则】"}</Text>
+    <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 2.05, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"fboot version [【x.y.z】 [msg] [tag [tagmsg]]]　# 不带参数＝打印版本；带参数会动 git"}</Text>
+    <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 2.05, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>fboot help</Text>
+    <Box style={{ height: 1, background: '#1E293B', marginTop: 18, marginBottom: 14 }} />
+    <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8 }}>所有方括号里的部分都是占位符，需要替换成实际值。特别是 --dylibPattern 后面的正则 —— 它决定哪些动态链接库会被加载，是 fountain 里最容易出错的一个参数。</Text>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>113 / 116</Text>
+  </Box>
+</Slide>

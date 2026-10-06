@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# 默认目标目录取**脚本自身所在目录**（fdemo/）：在工作区根目录执行、或 cd 进 fdemo/ 之后再执行，
+# 都不会建/跑出 fdemo/fdemo 这种嵌套产物（历史踩过：嵌套目录里那份库随后会跑不起来）。
 target_path=$2
 target_path=${target_path:-"./fdemo"}
 echo "target-dir=$target_path"
@@ -49,6 +51,7 @@ exports(){
     export orm_databasePoolConnectionLife=86400 # 连接存活时间，默认是3600，单位是秒
     export orm_databasePoolCheckInterval=300 # 连接有效性检查周期，默认是300，单位是秒
     export orm_databasePoolConnectTimeout=50 # 默认是50，单位是毫秒，从fountain.orm.DatabasePool获取连接的超时时间
+    export orm_databasePoolMaxWaiting=30000 # 默认是30000（单位毫秒，即30秒）。池耗尽且调用方用无限等待（Duration.Max）取连接时的等待上限；超过上限就记WARN并返回None，避免无日志挂死；配成0表示真无限等待
     export orm_databasePoolCheckSql='select 1' # 检查连接有效性的SQL，默认是select 1
     # orm_stdPool开头的是std.datasource.sql.PooledDatasource的配置项
     export orm_stdPoolMaxSize=10 # 连接池最大连接数
@@ -71,7 +74,17 @@ exports(){
     export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*.userSession(**): *"
     # export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*.sayHello(**): *"
     # export postgres_orm_connectionUrl=$POSTGRES # 如果在build函数配置，就会把URL嵌入编译产物，在此配置则不会，详细见build函数
-    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`find $target_path/release/* -type d|grep -a -v -P '\.build-logs|bin|_stAtIc__|boot'|tr '\n' ':'`
+    # 注意：本工程自建的库目录必须放在 $LD_LIBRARY_PATH **前面**，否则会命中
+    # /mnt/d/docs/work/cangjie/installed/libs/fboot 下的旧副本（该目录里的 .so 没有 SONAME，
+    # 链接器按文件名先在 LD_LIBRARY_PATH 里找），表现为“新符号明明在自建库里有，却报 undefined symbol”。
+    # fdemo 实测：libboot.error@fountain.so 加载期找不到 fountain/f_data.base:DataTypeRegistry.ti。
+    #
+    # 还要注意：从 registry 拉下来的驱动（如 postgres_driver）**不一定**在 release/* 一级目录下 ——
+    # fboot 可能把产物建在 <target>/<名字>/release/ 这种嵌套目录里（`fboot run` 用的是哪份，就得去哪份里找库）。
+    # 所以这里再按「目录里有 .so」扫一遍 $target_path 兜底，避免出现
+    # `libpostgres_driver.so: cannot open shared object file`（实测：驱动只存在于嵌套产物里时就会这样）。
+    extra_libs=`find $target_path/release -name 'lib*.so' -printf '%h\n' 2>/dev/null|sort -u|grep -a -v -P '\.build-logs'|tr '\n' ':'`
+    export LD_LIBRARY_PATH=$extra_libs$LD_LIBRARY_PATH
     echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
 }
 run(){
@@ -98,8 +111,8 @@ build(){
     # export postgres_orm_connectionUrl=$POSTGRES
     # export postgres_orm_option_username=$POSTGRES_USERNAME # 用户名密码可以放到connectionUrl中，POSTGRES是环境变量，已包含用户名和密码
     # export postgres_orm_option_password=$POSTGRES_PASSWORD
-    # export orm_sm4Key=$(fboot randhex 32) # 每次加密用不同的KEY，嵌入不同的加密产物
-    # export orm_sm4Iv=$(fboot randhex 32)
+    # export sm4Key=$(fboot randhex 32) # 每次加密用不同的KEY，嵌入不同的加密产物
+    # export sm4Iv=$(fboot randhex 32)
     # # 以上是敏感信息
 
     # fboot build $target_path

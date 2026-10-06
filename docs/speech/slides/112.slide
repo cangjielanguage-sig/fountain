@@ -1,0 +1,50 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`再看三个问答。
+
+第一，没有配置文件，本地开发怎么管理几十个配置项？答案是写进启动脚本。fdemo/boot.sh 的 exports 函数就是标准答案——所有 export 集中在一个地方，fboot run 之前 source 一下。容器化时这些 export 换成 ConfigMap 或 Secret，f_config 的读取逻辑一行不用改。
+
+第二，--key=value 是 fboot 的功能吗？我自己写的程序能用吗？能用，而且不需要做任何事。这不是 fboot 的开关，而是 f_config 模块的能力：任何链接了 f_config 的仓颉进程，在 static init 时都会读 env.getCommandLine 并装载 --key=value。fboot 只是恰好也用了 f_config 而已——fboot build、fboot run、你自己 import f_config 的 main、甚至只是间接依赖，比如引了 f_orm，都一视同仁。
+
+第三，fboot build 带 --k=v 和 fboot run 带 --k=v 有什么区别？在配置的解析方式上没有任何区别——都是 f_config 读当前进程的 argv。区别在这个进程要拿配置干什么：fboot build 是把它转成 cjpm build 子进程的环境变量，供编译期宏读取并嵌入产物；fboot run 是让应用运行期直接读到。
+
+后面还有几个常问的：f_data 的复制能替代手写 DTO 转换吗？绝大多数场景可以，只有字段名不一致或需要计算逻辑时才需要手写几行。f_rx 和直接用 spawn 加 Channel 怎么选？要背压、错误恢复、重放、多观察者这些语义时用 f_rx，只是「扔个任务到后台」用 spawn 就够了。Strategies 和 IOC 的 lookupList 怎么选？要 bean 的完整生命周期用 IOC，只是把「一段按 key 分派的逻辑」集中管理用 Strategies 更轻。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 18 章 · 常见坑与 Q&A · 18.2 续</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>预设 Q&A（二）</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>与第四章呼应</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 16 }}>
+    <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 22, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#38BDF8' }}>Q：没有配置文件，本地开发怎么管理几十个配置项？</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.8, marginTop: 14 }}>写进启动脚本。fdemo/boot.sh 的 exports() 函数就是标准答案 —— 所有 export 集中在一个地方，fboot run 之前 source 一下。</Text>
+      <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.8, marginTop: 'auto' }}>容器化时这些 export 换成 ConfigMap / Secret 即可，f_config 的读取逻辑一行不用改。</Text>
+    </Box>
+
+    <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 22, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#E2E8F0' }}>Q：--key=value 是 fboot 的功能吗？我自己写的程序能用吗？</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.8, marginTop: 14 }}>能用，而且不需要做任何事。这不是 fboot 的开关，而是 f_config 模块的能力：任何链接了 f_config 的仓颉进程，在 static init 时都会读 env.getCommandLine() 并装载 --key=value。</Text>
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 10 }}>fboot 只是恰好也用了 f_config 而已 —— fboot build / fboot run、你自己 import f_config 的 main、甚至只是间接依赖（比如引了 f_orm）都一视同仁。</Text>
+      <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.8, marginTop: 'auto' }}>所以它是 f_config 的能力，不是某个命令的开关。</Text>
+    </Box>
+
+    <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 22, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#E2E8F0' }}>Q：fboot build --k=v 和 fboot run --k=v 有什么区别？</Text>
+      <Text style={{ fontSize: 14, color: '#38BDF8', lineHeight: 1.8, marginTop: 14 }}>在配置的解析方式上没有任何区别 —— 都是 f_config 读当前进程的 argv。</Text>
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 10 }}>区别在这个进程要拿配置干什么：</Text>
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 8 }}>· fboot build 把它转成 cjpm build 子进程的环境变量，供编译期宏（@EmbedSensitive、ORMConfig）读取并嵌入产物</Text>
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 8 }}>· fboot run 让应用运行期直接读到</Text>
+      <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.8, marginTop: 'auto' }}>一个影响产物，一个影响运行。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>112 / 116</Text>
+  </Box>
+</Slide>

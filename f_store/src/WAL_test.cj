@@ -43,7 +43,11 @@ public class WALTest {
         }
     }
 
-    /// 读取 WAL 文件并解码所有记录
+    /// 读取 WAL 文件并解码所有记录。
+    ///
+    /// 注意：WAL 底层是 `SegmentedLog`，文件按 `maxFileSize` **预分配**（默认 64MB）。
+    /// 这里只读**有界前缀**（本文件各用例的记录都在几百字节内），**不要**把整个文件读进内存 ——
+    /// 并行跑用例时每次 64MB 的分配会把堆打爆，表现为 `[ ERROR ] CASE:`（原因排查见 .autocode/bugs/bug-archived-on-20261004.md 7.13）。
     static func readRecords(path: String): ArrayList<WALRecord> {
         let file = File(path, OpenMode.Read)
         let fileSize = file.info.size
@@ -51,7 +55,9 @@ public class WALTest {
             file.close()
             return ArrayList<WALRecord>()
         }
-        let bytes = Array<Byte>(fileSize, repeat: 0u8)
+        let readLimit: Int64 = 64 * 1024
+        let readSize = if (fileSize < readLimit) { fileSize } else { readLimit }
+        let bytes = Array<Byte>(readSize, repeat: 0u8)
         file.read(bytes)
         file.close()
 

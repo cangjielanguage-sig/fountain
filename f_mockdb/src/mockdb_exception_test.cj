@@ -65,4 +65,20 @@ public class MockDBExceptionTest {
             @Assert('test error', e.message)
         }
     }
+
+    @TestCase
+    public func testExecutingExceptionMessage(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> => ()}
+        MOCKDB.toThrowOnExecuting = true
+        let conn = MockConnection()
+        let stmt = conn.prepareStatement('SELECT 1')
+        try {
+            let _ = stmt.query()
+            @Assert(false)
+        } catch (e: MockDbException) {
+            //异常信息里应能看出是哪条 SQL（修复前 message 为空）
+            @Assert(true, e.message.contains('SELECT 1'))
+        }
+    }
 }

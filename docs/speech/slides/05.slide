@@ -1,0 +1,32 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: 0, position: 'relative', overflow: 'hidden' }}
+  notes={`进入第一个板块。这个板块解决的是「为什么用、怎么启动」这两件事。
+
+我会先用五个例子把非业务复杂度摆出来，然后给出 fountain 的模块全景，接着讲它三个反直觉的设计决策，也就是：应用项目没有 main 函数、宏为主注解为辅、一切配置都是环境变量或命令行参数。再坦白讲清楚什么场景不适合用它。
+
+然后是环境准备和 fboot 的整套命令行。这一章要特别强调一句话，它是整个 fountain 世界的第一公理：应用项目只需要编译成动态链接库。后面所有命令都围绕这一条展开。
+
+最后用 f_config 把「没有配置文件」这件事说透，并现场跑通示例工程 fdemo。`}
+>
+  <Text style={{ position: 'absolute', right: 40, top: 120, fontSize: 320, fontWeight: 'bold', color: '#16233A', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>01</Text>
+  <Box style={{ position: 'absolute', left: 0, top: 0, width: 8, height: 720, background: 'linear-gradient(135deg, #38BDF8 0%, #22D3EE 100%)' }} />
+
+  <Text style={{ position: 'absolute', left: 120, top: 218, fontSize: 16, color: '#38BDF8', letterSpacing: 6 }}>PART 01</Text>
+  <Text style={{ position: 'absolute', left: 120, top: 254, fontSize: 56, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.15 }}>总览与启动</Text>
+  <Box style={{ position: 'absolute', left: 120, top: 344, width: 160, height: 6, background: 'linear-gradient(135deg, #38BDF8 0%, #22D3EE 100%)' }} />
+
+  <Text style={{ position: 'absolute', left: 120, top: 392, fontSize: 18, color: '#94A3B8', lineHeight: 1.9 }}>
+    <>为什么用 fountain　·　三个反直觉的设计决策　·　环境准备</>
+  </Text>
+  <Text style={{ position: 'absolute', left: 120, top: 428, fontSize: 18, color: '#94A3B8', lineHeight: 1.9 }}>
+    <>fboot 整套命令行　·　f_config 四级配置　·　跑通 fdemo</>
+  </Text>
+
+  <Box style={{ position: 'absolute', left: 120, top: 512, flexDirection: 'row', alignItems: 'center', gap: 24 }}>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>第 1–5 章</Text>
+    <Box style={{ width: 1, height: 16, background: '#1E293B' }} />
+    <Text style={{ fontSize: 14, color: '#64748B' }}>对应第 06–35 页</Text>
+    <Box style={{ width: 1, height: 16, background: '#1E293B' }} />
+    <Text style={{ fontSize: 14, color: '#64748B' }}>建议 90 分钟</Text>
+  </Box>
+</Slide>

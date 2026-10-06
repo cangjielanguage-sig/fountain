@@ -1,0 +1,64 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`实例复制是 f_data 最高频的用法，仓库里 boot.cj 就有现成可运行的演示。
+
+第一种，不同类之间复制。DataObject 点 populate，把 data2 复制成 TestData3。注意它只复制同名字段，TestData3 和 TestData2 只有部分字段同名，其余不动。
+
+第二种，忽略校验或者忽略校验失败。populate 的 flag 参数可以加上 IGNORE_VALIDATION 跳过校验，或者加 IGNORE_NOT_MATCHED_VALIDATION，校验不通过也继续。
+
+第三种，对象和 JSON 互转。JsonValue 点 from 把对象转成 JSON，json 点 toData 转回 Data；toJson 和 fromJson 是对象和 JSON 串之间的快捷方法。
+
+第四种，Map 也能当数据源。先 toData 转成 Data，再 populate 到目标对象。所以「Map 到对象」「对象到 Map」都不用写胶水代码。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 8 章 · 数据 f_data · 8.4</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>实例复制：DataObject.populate</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>仓库里现成的可运行演示</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 14, color: '#64748B', marginBottom: 10 }}>fdemo/boot/src/boot.cj</Text>
+      <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.5, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"@DataAssist[equal hash tostring props fields]"}</Text>
+      <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.5, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public class TestData2 <: TestData1 { ... }"}</Text>
+      <Box style={{ height: 1, background: '#1E293B', marginTop: 10, marginBottom: 10 }} />
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.5 }}>① 不同类之间复制（只复制同名字段）</Text>
+      <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.5, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"var data3 = DataObject<TestData3>.populate(data2).getOrThrow()"}</Text>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.5, marginTop: 8 }}>② 忽略验证 / 忽略验证失败</Text>
+      <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.5, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"data3 = DataObject<TestData3>.populate(data2,"}</Text>
+      <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.5, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"            flag: DEFAULT_DATA_FLAG | IGNORE_VALIDATION).getOrThrow()"}</Text>
+      <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.5, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"// 或 | IGNORE_NOT_MATCHED_VALIDATION"}</Text>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.5, marginTop: 8 }}>③ 对象 ↔ JSON</Text>
+      <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.5, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"let json = JsonValue.from(DataObject<TestData2>(data2))"}</Text>
+      <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.5, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"let back = json.toData()"}</Text>
+      <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.5, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"let s = toJson(data2)      // 对象 → JSON 串"}</Text>
+      <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.5, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"let d = fromJson<TestData2>(s)   // JSON 串 → 对象"}</Text>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.5, marginTop: 8 }}>④ Map 也能当数据源（先转 Data 再复制）</Text>
+      <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.5, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"let data4 = map.toData()"}</Text>
+      <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.5, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"data2 = DataObject<TestData2>.populate(data4).getOrThrow()"}</Text>
+    </Box>
+
+    <Box style={{ width: 360, flexDirection: 'column', gap: 14 }}>
+      <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 20, flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#38BDF8' }}>四条路</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 12 }}>对象 → 对象：按同名字段复制</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 8 }}>对象 → JSON → 对象</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 8 }}>JSON 串 → 对象</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 8 }}>Map → Data → 对象</Text>
+        <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.8, marginTop: 'auto' }}>DTO 少几个字段、多几个字段都不会炸 —— 默认 SILENCE。</Text>
+      </Box>
+      <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#E2E8F0' }}>这些代码不用你写</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 10 }}>全部是 @DataAssist 的 fields 属性生成的。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>49 / 116</Text>
+  </Box>
+</Slide>

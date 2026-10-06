@@ -1,0 +1,63 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`Config 的 API 挑几个最有辨识度的讲。
+
+第一，getValue 和 getData 是单例读取，解析失败返回 None，不抛异常。
+
+第二，getValues 和 getDatas 是数组读取，解析失败会抛异常，配置项不存在则返回空数组。这个「单数不抛、复数抛」的不对称一定要记住，写容错代码时别搞混。
+
+第三，bufferSize 更贴心：配置项不存在、解析失败或者小于等于零，就用默认值；调试模式下原样返回；非调试模式下会向上取整到 2 的幂，而且恒不小于默认值。环形缓冲区直接拿它就行。
+
+另外几个常用的：getStringArray 按分隔符切字符串数组；getDateTime 带自己的时间格式；getDuration 解析 Duration 字符串；getAll 按前缀取一批；set 是运行期写入；refresher 是注册刷新回调。
+
+最后两个是敏感配置用的：getSM4 拿到 SM4 实例，registerSensitive 在进程内注册一项敏感值——@EmbedSensitive 展开后调的就是它。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 4 章 · 配置 f_config · 4.4</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>Config API</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>挑重点讲</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ width: 430, flexDirection: 'column', gap: 14 }}>
+      <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#E2E8F0' }}>单数不抛，复数抛</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 10 }}>getValue / getData：解析失败返回 None，不抛异常。</Text>
+        <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.8, marginTop: 8 }}>getValues / getDatas：解析失败抛异常；配置项不存在返回空数组。</Text>
+        <Text style={{ fontSize: 14, color: '#64748B', lineHeight: 1.7, marginTop: 'auto' }}>这个不对称是故意的，写容错代码时别搞混。</Text>
+      </Box>
+      <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#E2E8F0' }}>bufferSize 最贴心</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 10 }}>配置项不存在 / 解析失败 / x ≤ 0 → 返回默认值。</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 8 }}>调试模式且 x 大于 0 → 原样返回 x。</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 8 }}>非调试模式 → 向上取整到 2 的幂，且恒不小于默认值。</Text>
+        <Text style={{ fontSize: 14, color: '#64748B', lineHeight: 1.7, marginTop: 'auto' }}>环形缓冲区直接拿它当容量。</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 22, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 15, color: '#64748B', marginBottom: 12 }}>package fountain::f_config · 节选</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.9, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>getString(key)　　　　　　　　　// ?String</Text>
+      <Text style={{ fontSize: 14, color: '#38BDF8', lineHeight: 1.9, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"getValue<T>(key)　　　　　　　　// ?T，失败返回 None"}</Text>
+      <Text style={{ fontSize: 14, color: '#38BDF8', lineHeight: 1.9, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"getValues<T>(key, delim!)　　　// Array<T>，失败抛异常"}</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.9, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"getStringArray(key, delim!)　　// Array<String>"}</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.9, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"getData<T>(key) / getDatas<T>()"}</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.9, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>getDateTime(key, format!)　　·　getDateTimes(...)</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.9, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>getDuration(key)　·　getDurations(key)</Text>
+      <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.9, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>bufferSize(bufferKey, default, debugging)</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.9, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>getAll(prefix) / getAll()</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.9, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"set<T>(tuples, ifAbsent!)"}</Text>
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.9, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>refresher(prefix, fn)</Text>
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.9, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>getSM4()　·　registerSensitive(key, value)</Text>
+      <Text style={{ fontSize: 14, color: '#64748B', lineHeight: 1.9, marginTop: 10 }}>还定义了 sm4Operation / sm4Padding / sm4Key / sm4Iv / sm4Aad / sm4TagSize 六个常量。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>27 / 116</Text>
+  </Box>
+</Slide>

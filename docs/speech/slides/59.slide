@@ -1,0 +1,58 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`TreeTransformer 解决的是平铺列表变树。
+
+菜单树、组织树、分类树、评论楼层——数据库查出来永远是平铺的 List，前端永远要树。这段代码你大概写过十遍，TreeTransformer 把它变成一个静态函数调用。
+
+用法两步。第一步，让你的树节点类实现 TreeNode，泛型是 ID 和自身类型，需要提供 children、id、parentId 三个成员，addChild 有默认实现。第二步，一行把 DAO 查出来的平铺列表变成森林：调用静态 transform，传平铺列表、传 emptyId，再传一个转换函数把 PO 转成树节点。
+
+参数含义：emptyId 是「根节点的 parentId 值」，通常是零或者负一；ignoreDuplicate 为 true 时，遇到重复 id 会跳过而不是抛异常；transferFn 负责把源元素转成树节点，返回 None 会抛 IllegalArgumentException。
+
+不带 transferFn 的重载等价于直接把源元素当作树节点转换。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 9 章 · 工具箱 f_util · 9.8</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>TreeTransformer：平铺列表 → 树</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>这段代码你写过十遍</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 16 }}>
+    <Box style={{ height: 246, flexDirection: 'row', gap: 16 }}>
+      <Box style={{ width: 520, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>接口关键签名</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public interface TreeNode<ID, T> where ID <: Hashable & Equatable<ID>,"}</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"                                            T <: Object & TreeNode<ID, T> {"}</Text>
+        <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    prop children: ArrayList<T>"}</Text>
+        <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    prop id: ID　·　prop parentId: ID"}</Text>
+        <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    func addChild(child: T): Unit { children.add(child) }"}</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    static func transform<S>(iterable: Iterable<S>, emptyId: ID,"}</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"                             ignoreDuplicate: Bool, transferFn: (S) -> ?T): ArrayList<T>"}</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"}"}</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#38BDF8' }}>用法就两步</Text>
+        <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.7, marginTop: 10 }}>① 让你的树节点类实现 TreeNode&lt;ID, T&gt;，提供 id / parentId / children。</Text>
+        <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.7, marginTop: 8 }}>② 一行把 DAO 查出来的平铺列表变成森林。</Text>
+        <Text style={{ fontSize: 14, color: '#64748B', lineHeight: 1.7, marginTop: 'auto' }}>菜单树、组织树、分类树、评论楼层 —— 都是这个场景。</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 18, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>示例</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public class MenuNode <: TreeNode<Int64, MenuNode> {"}</Text>
+      <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    public let id: Int64　·　public let parentId: Int64　·　public let children = ArrayList<MenuNode>()"}</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.65, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"}"}</Text>
+      <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.65, marginTop: 8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"let roots = MenuNode.transform<MenuPO>(poList, emptyId: 0){ po => MenuNode(po) }"}</Text>
+      <Text style={{ fontSize: 13, color: '#F59E0B', lineHeight: 1.65, marginTop: 8 }}>emptyId 是「根节点的 parentId 值」（通常 0 或 -1）；ignoreDuplicate 为 true 时遇到重复 id 跳过而不是抛异常；transferFn 返回 None 会抛 IllegalArgumentException。</Text>
+      <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.65, marginTop: 'auto' }}>不带 transferFn 的重载等价于直接把源元素当作树节点。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>59 / 116</Text>
+  </Box>
+</Slide>

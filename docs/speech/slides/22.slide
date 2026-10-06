@@ -1,0 +1,45 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`剩下的命令快速过一遍。
+
+fboot count 统计项目的模块数、包数、文件数和行数，还能按扩展名过滤、忽略括号和注释。fboot test 用 test 目录下的 cjpm.toml 覆盖根目录那份，先 build 再 run，缺 --dylibPattern 会抛 BootException。fboot pub 批量发布模块，自动按依赖排序、改版本号、探测制品仓库，范围由 .modules 文件的 include、exclude、detention 控制。fboot version 不带参数是打印版本号，带版本号是用来管理 fountain 自身的，会做 git 提交、推送、打 tag，演示要谨慎。
+
+最后一行是自定义子命令。pub 和 randhex 本身就是最好的例子。你只要写一个实现 SubCommand 的类，在 static init 里调 SubCommandMediator.register，把它编译成动态链接库，就可以用 fboot 加子命令名的方式来执行。
+
+未命中时框架会扫描并加载动态链接库、让 static init 完成注册，然后重试一次；仍然没有才抛异常并列出可用命令。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 3 章 · fboot 命令行 · 3.8</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>其余命令与自定义子命令</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>快速过一遍</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 16 }}>
+    <Table
+      style={{ width: '100%', height: 300 }}
+      defaultTextStyle={{ fontSize: 14, textAlign: 'left', color: '#E2E8F0' }}
+      defaultCellStyle={{ border: { left: { width: 1, color: '#1E293B' }, right: { width: 1, color: '#1E293B' }, top: { width: 1, color: '#1E293B' }, bottom: { width: 1, color: '#1E293B' } } }}
+      cells={[
+        [ { text: '命令', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } }, { text: '作用', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } }, { text: '演示', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } } ],
+        [ { text: 'fboot count [PATH] [--ext=cj] [--ignoreBrackets] [--ignoreComments]', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", Consolas, monospace', fontSize: 13 } }, '统计项目模块数 / 包数 / 文件数 / 行数与耗时', { text: 'fboot count ./fdemo', fontFamily: '"JetBrains Mono", Consolas, monospace', fontSize: 13 } ],
+        [ { text: 'fboot test [PATH] [args...] --dylibPattern=【正则】', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", Consolas, monospace', fontSize: 13 } }, '用 PATH/test/cjpm.toml 覆盖 PATH/cjpm.toml，先 build 再 run', { text: '缺 --dylibPattern 会抛 BootException', fontSize: 13 } ],
+        [ { text: 'fboot pub 【x.y.z】 [--skip-lint] [--skip-test]', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", Consolas, monospace', fontSize: 13 } }, '批量发布模块，自动按依赖排序、改版本号、探测制品仓库', { text: '用 .modules 文件的 [include] / [exclude] / [detention] 控制范围', fontSize: 13 } ],
+        [ { text: 'fboot version', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", Consolas, monospace', fontSize: 13 } }, '打印 fountain 版本（不带参数）；管理 fountain 自身版本（带 x.y.z）', { text: '谨慎演示，它会动 git', textStyle: { color: '#F59E0B' }, fontSize: 13 } ],
+        [ { text: 'fboot 【自定义子命令】', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", Consolas, monospace', fontSize: 13 } }, '执行实现了 fountain::f_app.SubCommand 的类', { text: '见下', fontSize: 13 } ],
+      ]}
+    />
+    <Box style={{ flex: 1, background: 'rgba(56,189,248,0.06)', borderRadius: 12, border: '1px solid #38BDF8', padding: 22, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#38BDF8' }}>自定义子命令：30 秒带过</Text>
+      <Text style={{ fontSize: 15, color: '#E2E8F0', lineHeight: 1.8, marginTop: 10 }}>pub 和 randhex 本身就是最好的例子：写一个实现 SubCommand 的类，在 static init() 里 SubCommandMediator.register(...)，编译成动态链接库即可。</Text>
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 'auto' }}>未命中时框架会扫描并加载动态链接库、让 static init() 完成注册，然后重试一次；仍然没有才抛异常并列出可用命令。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>22 / 116</Text>
+  </Box>
+</Slide>

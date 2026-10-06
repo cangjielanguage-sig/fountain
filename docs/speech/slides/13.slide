@@ -1,0 +1,60 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`上台之前先把环境说清楚，后面所有演示都建立在这上面。
+
+第一步是环境变量，建议直接写进 ~/.bashrc。需要设的有五个：CANGJIE_STDX_DYNAMIC_PATH 指向 stdx 的动态链接库目录；CANGJIE_STDX_PATH 等于它；FOUNTAIN_HOME 指向 fboot 的 libs 目录；LD_LIBRARY_PATH 把 FOUNTAIN_HOME 加进去；PATH 加上 cjpm 的 bin 目录。
+
+第二步安装 fboot，一条 cjpm install，把版本号换成实际版本，root 指向 cjpm 目录。
+
+第三步验证，fboot version。屏幕上应该打印出当前的 fountain 版本号，比如 1.3.x。
+
+提醒一句：讲稿里所有出现「版本号」占位的地方，都要替换成实际版本。fountain 各模块版本一致，可以在仓库 README 或者 f_version 模块里查。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 2 章 · 上台准备</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>环境：三个变量、一次安装、一条验证</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>终端</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 16 }}>
+    <Box style={{ flex: 1, flexDirection: 'row', gap: 16 }}>
+      <Box style={{ width: 420, flexDirection: 'column', gap: 14 }}>
+        <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column', flex: 1 }}>
+          <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#E2E8F0' }}>① 环境变量</Text>
+          <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 8 }}>建议直接写进 ~/.bashrc，一次配好长期有效</Text>
+          <Text style={{ fontSize: 14, color: '#64748B', lineHeight: 1.7, marginTop: 8 }}>stdx 路径 × 2　·　fboot 动态链接库路径　·　PATH</Text>
+        </Box>
+        <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column', flex: 1 }}>
+          <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#E2E8F0' }}>② 安装 fboot</Text>
+          <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 8 }}>把版本号换成实际版本；各模块版本一致，可在仓库 README 或 f_version 查看。</Text>
+        </Box>
+        <Box style={{ background: 'rgba(56,189,248,0.06)', borderRadius: 12, border: '1px solid #38BDF8', padding: 20, flexDirection: 'column', flex: 1 }}>
+          <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#38BDF8' }}>③ 验证</Text>
+          <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 8 }}>预期：打印出当前 fountain 版本号，例如 1.3.x。</Text>
+        </Box>
+      </Box>
+
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 24, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 14, color: '#64748B', marginBottom: 12 }}>可选：直接复制执行</Text>
+        <Box style={{ background: '#0B1220', borderRadius: 8, border: '1px solid #1E293B', padding: 20, flexDirection: 'column', flex: 1 }}>
+          <Text style={{ fontSize: 15, color: '#64748B', lineHeight: 1.8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}># 环境变量（建议写进 ~/.bashrc）</Text>
+          <Text style={{ fontSize: 15, color: '#E2E8F0', lineHeight: 1.9, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>
+            <>export CANGJIE_STDX_DYNAMIC_PATH=/path/to/dynamic_stdx<br />export CANGJIE_STDX_PATH=$CANGJIE_STDX_DYNAMIC_PATH<br />export FOUNTAIN_HOME=~/.cjpm/libs/fboot<br />export LD_LIBRARY_PATH=$FOUNTAIN_HOME:$LD_LIBRARY_PATH<br />export PATH=$PATH:~/.cjpm/bin</>
+          </Text>
+          <Text style={{ fontSize: 15, color: '#64748B', lineHeight: 1.8, marginTop: 16, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}># 安装 fboot</Text>
+          <Text style={{ fontSize: 15, color: '#E2E8F0', lineHeight: 1.9, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>cjpm install "fountain::fboot"="【版本号】" --root ~/.cjpm</Text>
+          <Text style={{ fontSize: 15, color: '#64748B', lineHeight: 1.8, marginTop: 16, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}># 验证</Text>
+          <Text style={{ fontSize: 15, color: '#F59E0B', lineHeight: 1.9, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>fboot version</Text>
+        </Box>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>13 / 116</Text>
+  </Box>
+</Slide>

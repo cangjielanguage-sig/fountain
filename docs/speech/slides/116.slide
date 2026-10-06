@@ -1,0 +1,44 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: 0, position: 'relative', overflow: 'hidden' }}
+  notes={`最后收个尾。
+
+把这一讲的核心再说一遍：f_config 负责配置、f_bean 负责装配、f_aspect 负责横切、f_data 负责流动、f_util 提供工具箱、f_http 负责格式、f_mvc 负责协议、f_orm 负责数据库、f_security 加 f_jwt 负责身份、f_ticktock 负责定时器、f_random 负责随机性、f_log 负责日志，f_cache、f_pool、f_collection、f_time、f_regex、f_rx 加 f_base 和 f_io 构成运行时底座。
+
+而从头到尾，你没写过一个配置文件、没写过一行 main。业务代码里你只写了 UserController、UserService、UserDAO、UserPO 四个东西，加起来不到两百行。
+
+如果你只记住一句话，我希望是这句：fountain 的目标不是给你一个框架，而是把服务端的「非业务复杂度」整体收进工具库，让你的代码里只剩业务。
+
+完整的代码、示例工程和每一条命令都在文档里。感谢观看。`}
+>
+  <Box style={{ position: 'absolute', top: 0, right: 0, width: 360, height: 720, background: 'linear-gradient(135deg, #38BDF8 0%, #22D3EE 100%)', opacity: 0.09 }} />
+  <Box style={{ position: 'absolute', top: 0, left: 0, width: 6, height: 720, background: 'linear-gradient(135deg, #38BDF8 0%, #22D3EE 100%)' }} />
+
+  <Text style={{ position: 'absolute', left: 120, top: 128, fontSize: 15, color: '#38BDF8', letterSpacing: 5 }}>THANK YOU</Text>
+  <Text style={{ position: 'absolute', left: 120, top: 168, fontSize: 52, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.2 }}>让业务代码只剩业务</Text>
+  <Box style={{ position: 'absolute', left: 120, top: 254, width: 160, height: 6, background: 'linear-gradient(135deg, #38BDF8 0%, #22D3EE 100%)' }} />
+
+  <Text style={{ position: 'absolute', left: 120, top: 300, fontSize: 17, color: '#94A3B8', lineHeight: 2 }}>f_config 配置　·　f_bean 装配　·　f_aspect 横切　·　f_data 流动　·　f_util 工具箱　·　f_http 格式</Text>
+  <Text style={{ position: 'absolute', left: 120, top: 338, fontSize: 17, color: '#94A3B8', lineHeight: 2 }}>f_mvc 协议　·　f_orm 数据库　·　f_security + f_jwt 身份　·　f_ticktock 定时　·　f_random 随机　·　f_log 日志</Text>
+  <Text style={{ position: 'absolute', left: 120, top: 376, fontSize: 17, color: '#64748B', lineHeight: 2 }}>f_cache · f_pool · f_collection · f_time · f_regex · f_rx · f_base · f_io —— 运行时底座</Text>
+
+  <Box style={{ position: 'absolute', left: 120, top: 452, flexDirection: 'row', alignItems: 'flex-end', gap: 56 }}>
+    <Box style={{ flexDirection: 'column' }}>
+      <Text style={{ fontSize: 48, fontWeight: 'bold', color: '#F59E0B', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>0</Text>
+      <Text style={{ fontSize: 13, color: '#94A3B8', marginTop: 8 }}>配置文件</Text>
+    </Box>
+    <Box style={{ flexDirection: 'column' }}>
+      <Text style={{ fontSize: 48, fontWeight: 'bold', color: '#F59E0B', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>0</Text>
+      <Text style={{ fontSize: 13, color: '#94A3B8', marginTop: 8 }}>行 main 函数</Text>
+    </Box>
+    <Box style={{ flexDirection: 'column' }}>
+      <Text style={{ fontSize: 48, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>4</Text>
+      <Text style={{ fontSize: 13, color: '#94A3B8', marginTop: 8 }}>个业务类</Text>
+    </Box>
+    <Box style={{ flexDirection: 'column' }}>
+      <Text style={{ fontSize: 48, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>200</Text>
+      <Text style={{ fontSize: 13, color: '#94A3B8', marginTop: 8 }}>行业务代码</Text>
+    </Box>
+  </Box>
+
+  <Text style={{ position: 'absolute', left: 120, top: 596, fontSize: 15, color: '#64748B' }}>仓库与示例工程 fdemo · 配套文档 docs/speech.md · 三张速查表见附录</Text>
+</Slide>

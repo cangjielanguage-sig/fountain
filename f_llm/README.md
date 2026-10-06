@@ -393,7 +393,7 @@ public interface IndividualityFinder <: MemorySummaryFinder {}
 ```
 
 
-## 上下文策略：`fountain::f_llm.llm.ConsextPrunerName`
+## 上下文策略：`fountain::f_llm.llm.ContextPrunerName`
 
 对上下文执行裁剪、压缩等
 ```cj
@@ -831,7 +831,7 @@ public class LLMContextMediator {
 
 ## 搜索
 
-- [搜索](doc/搜索.md)
+- 搜索（原 `doc/搜索.md` 已删除，接口见 `src/**`）
 
 ## 函数调用
 

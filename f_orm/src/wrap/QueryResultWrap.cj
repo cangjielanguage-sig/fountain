@@ -21,14 +21,62 @@ import fountain::f_base.*
 
 public class QueryResultWrap <: QueryResult {
     private let columnInfoMap = HashMap<String, Int64>()
+    // bug.md §1.13（ORM-2）：列信息在构造期取一次，不再让每个单元格都穿透到 result.columnInfos
+    private let columns: Array<ColumnInfo>
     private var list = unsafeZeroValue<ArrayList<Any>>()
     private let indexStartsWith: Int64
+    // bug-orm.md §3.2 ORM-C6（陷阱 1 / B）：本结果是否交出过流（BLOB/CLOB）。含流的结果**不进** `SqlExecutor`
+    // 的结果缓存——缓存会把值留到结果集关闭之后，一旦驱动交出的是"绑定结果集/句柄的流"，缓存里就是失效值。
+    // 判据按"实际读出的单元格"置位（没读的 BLOB 列不影响缓存），所以置位点在取数路径上（`getOrNull`）。
+    private var hadStream_ = false
+
+    /** 本结果是否交出过 `InputStream`（BLOB/CLOB）；供 `SqlExecutor` 决定要不要写结果缓存 */
+    public prop hadStream: Bool {
+        get() {
+            hadStream_
+        }
+    }
+    /** 取数路径上标记"这一格是流"（`InputStream` 与 `?InputStream` 的 `Some` 都算；`None` 不算） */
+    private func noteStreamCell(cell: Any): Unit {
+        if (let x: ?InputStream <- cell) {
+            match (x) {
+                case Some(_) => hadStream_ = true
+                case _ => ()
+            }
+        }
+    }
     public QueryResultWrap(private let driverName: String, private let result: QueryResult) {
         indexStartsWith = ORMConfig.getIndexStartsWith(driverName: driverName)
-        for (i in 0..columnInfos.size) {
-            columnInfoMap[columnInfos[i].name] = i
+        columns = result.columnInfos
+        for (i in 0..columns.size) {
+            columnInfoMap[columns[i].name] = i
         }
-        list = ArrayList<Any>(columnInfos.size)
+        list = ArrayList<Any>(columns.size)
+    }
+    // bug.md §1.13（ORM-2）：把「列类型 -> 取值」的判定收进按需构造的取值器，避免在每个单元格上重写这段 match。
+    // 取值器按需构造（不预先为每列建表）：一列最多只在被读到时构造一次闭包。
+    // 必须是 static：构造期不允许调用实例方法。
+    private static func makeReader(result: QueryResult, typeName: String): (Int64) -> Any {
+        match(typeName){
+            case 'SqlChar' | 'SqlVarchar' | 'String' | 'string' | 'char' | 'text' | 'varchar' | 'name' | 'bpchar' | 'json' | 'jsonb' | 'xml' | 'uuid' => { i => result.getOrNull<String>(i) }
+            case 'SqlClob' | 'SqlBlob' | 'std.io.InputStream' | 'InputStream' => { i => result.getOrNull<InputStream>(i) }
+            case 'SqlBinary' | 'SqlVarBinary' | 'Array<Byte>' | 'Array<UInt8>' | 'bytea' => { i => result.getOrNull<Array<Byte>>(i) }
+            case 'SqlDecimal' | 'Decimal' | 'std.math.numeric.Decimal' | 'numeric' | 'money' => { i => result.getOrNull<Decimal>(i) }
+            case 'SqlBool' | 'Bool' | 'bool' => { i => result.getOrNull<Bool>(i) }
+            case 'SqlByte' | 'Int8' => { i => result.getOrNull<Int8>(i) }
+            case 'UInt8' | 'Byte' => { i => result.getOrNull<UInt8>(i) }
+            case 'SqlSmallInt' | 'Int16' => { i => result.getOrNull<Int16>(i) }
+            case 'UInt16' => { i => result.getOrNull<UInt16>(i) }
+            case 'SqlInteger' | 'Int32' => { i => result.getOrNull<Int32>(i) }
+            case 'UInt32' | 'int2' | 'int4' => { i => result.getOrNull<UInt32>(i) }
+            case 'SqlBigInt' | 'Int64' | 'int8' => { i => result.getOrNull<Int64>(i) }
+            case 'UInt64' => { i => result.getOrNull<UInt64>(i) }
+            case 'SqlReal' | 'Float32' | 'float4' => { i => result.getOrNull<Float32>(i) }
+            case 'SqlDouble' | 'Float64' | 'float8' => { i => result.getOrNull<Float64>(i) }
+            case 'SqlDate' | 'SqlTime' | 'SqlTimeTz' | 'SqlTimestamp' | 'DateTime' | 'std.time.DateTime' | 'date' | 'time' | 'timetz' | 'timestamptz' | '' => { i => result.getOrNull<DateTime>(i) }
+            case 'SqlInterval' | 'Duration' | 'interval' => { i => result.getOrNull<Duration>(i) }
+            case _ => { i => result.getOrNull<String>(i) }
+        }
     }
     public func next(): Bool {
         list.clear()
@@ -37,44 +85,23 @@ public class QueryResultWrap <: QueryResult {
 
     public prop columnInfos: Array<ColumnInfo> {
         get() {
-            result.columnInfos
+            columns
         }
     }
     public func get<T>(index: Int64): T {
         getOrNull<T>(index).getOrThrow()
     }
     public func getOrNull<T>(index: Int64): ?T {
-        let columns = result.columnInfos
         if(columns.size <= index){
             return None<T>
         }
         try{
             if (index >= list.size) {
                 for (i in list.size..=index) {
-                    let column = columns[i]
-                    func get(i: Int64): Any {
-                        match(column.typeName){
-                            case 'SqlChar' | 'SqlVarchar' | 'String' | 'string' | 'char' | 'text' | 'varchar' | 'name' | 'bpchar' | 'json' | 'jsonb' | 'xml' | 'uuid' => result.getOrNull<String>(i)
-                            case 'SqlClob' | 'SqlBlob' | 'std.io.InputStream' | 'InputStream' => result.getOrNull<InputStream>(i)
-                            case 'SqlBinary' | 'SqlVarBinary' | 'Array<Byte>' | 'Array<UInt8>' | 'bytea' => result.getOrNull<Array<Byte>>(i)
-                            case 'SqlDecimal' | 'Decimal' | 'std.math.numeric.Decimal' | 'numeric' | 'money' => result.getOrNull<Decimal>(i)
-                            case 'SqlBool' | 'Bool' | 'bool' => result.getOrNull<Bool>(i)
-                            case 'SqlByte' | 'Int8' => result.getOrNull<Int8>(i)
-                            case 'UInt8' | 'Byte' => result.getOrNull<UInt8>(i)
-                            case 'SqlSmallInt' | 'Int16' => result.getOrNull<Int16>(i)
-                            case 'UInt16' => result.getOrNull<UInt16>(i)
-                            case 'SqlInteger' | 'Int32' => result.getOrNull<Int32>(i)
-                            case 'UInt32' | 'int2' | 'int4' => result.getOrNull<UInt32>(i)
-                            case 'SqlBigInt' | 'Int64' | 'int8' => result.getOrNull<Int64>(i)
-                            case 'UInt64' => result.getOrNull<UInt64>(i)
-                            case 'SqlReal' | 'Float32' | 'float4' => result.getOrNull<Float32>(i)
-                            case 'SqlDouble' | 'Float64' | 'float8' => result.getOrNull<Float64>(i)
-                            case 'SqlDate' | 'SqlTime' | 'SqlTimeTz' | 'SqlTimestamp' | 'DateTime' | 'std.time.DateTime' | 'date' | 'time' | 'timetz' | 'timestamptz' | '' => result.getOrNull<DateTime>(i)
-                            case 'SqlInterval' | 'Duration' | 'interval' => result.getOrNull<Duration>(i)
-                            case _ => result.getOrNull<String>(i)
-                        }
-                    }
-                    i + indexStartsWith |> get |> list.add
+                    let cell = makeReader(result, columns[i].typeName)(i + indexStartsWith)
+                    // bug-orm.md §3.2 ORM-C6（陷阱 1 / B）：守住"这一格是流"，供 SqlExecutor 决定是否进结果缓存
+                    noteStreamCell(cell)
+                    list.add(cell)
                 }
                 // list.add(result.getOrNull<T>(index))
             }

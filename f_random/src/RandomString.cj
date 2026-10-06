@@ -71,7 +71,7 @@ public class RandomString {
         return builder.toString()
     }
     public func randomAscii(min: Int64, max: Int64): String {
-        randomAscii(rand.nextInt64(min, max, closed: true))
+        randomAscii(rand.nextInt64(min, max))
     }
     public func random(count: Int64, source: String): String {
         random(count, source.toRuneArray())
@@ -84,7 +84,7 @@ public class RandomString {
         return builder.toString()
     }
     public func random(min: Int64, max: Int64, source: String): String {
-        random(rand.nextInt64(min, max, closed: true), source)
+        random(rand.nextInt64(min, max), source)
     }
     public func randomLowerLetters(count: Int64): String {
         random(count, LOWER_LETTERS)

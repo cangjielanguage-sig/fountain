@@ -1,0 +1,73 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`第十五章的速查卡，左边是代码，右边是配置，可以抄。
+
+拿 logger 两种方式：泛型传类名，名字就是完整限定名，推荐；或者传一个字符串字面量，起任意名字。
+
+写日志三种：惰性 lambda，级别不够零成本；模板占位，位置和具名都支持；异常，栈一起写出。
+
+脱敏和附带属性：LoggerConfig.filter 设一个 LogFilter，可以做脱敏或改键；log.withAttrs 可以附加属性，输出成 k 和 v 的形式。
+
+运行期刷新：LoggerFactory.refresh()，记得 f_config 的 refresher 目前不会自动触发，要手动调。
+
+右边是配置，一类 appender 挂若干具名实例，实例各自配级别和格式。
+
+最后收个尾，这一章的核心其实就两句话。
+
+第一，f_log 是 stdx.log 的实现，而且默认静默——它不是「又一个日志框架」，而是「把你的日志统一收进同一条异步管道」的那一层。业务日志、MVC access log、ORM 的 SQL、第三方库日志、数据库驱动日志，全在一个文件里、同一套格式、同一个进程号。
+
+第二，调试靠 %name 加级别，落盘靠 appender。级别挂在 appender 上，所以没有「只给某个包开 DEBUG」；来源靠 %name 认，所以排查时 grep fountain 双冒号 f_orm 加上你的日志文件路径就行了。
+
+下一章我们把这些东西串起来：一次 POST 请求，从 f_config 装载配置开始，穿过 MVC、bean、aspect、ORM，最后落进日志文件。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 15 章 · 日志 f_log · 15.10</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>速查卡</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>左边可以直接抄</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #38BDF8', padding: 18, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 13, color: '#38BDF8', marginBottom: 8 }}>代码</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"// 拿 logger：名字 = 完整限定名（推荐）/ 或任意字面量"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"private static let log = LoggerFactory.getLogger<UserServiceImpl>()"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"private static let log2 = LoggerFactory.getLogger('my.business')"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 10, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"// 写日志：惰性 lambda / 模板 / 异常"}</Text>
+      <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"log.info{'start create user: ${name}'}"}</Text>
+      <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"log.info('user {} login from {}', [name, ip])"}</Text>
+      <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"log.info('user {name} is {age}', userPo)   // @DataAssist[fields] 对象"}</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"log.error(e){'query user failed: ${id}'}　·　log.error('...', e)"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 10, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"// 脱敏 / 附带属性"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"LoggerConfig.filter = MyLogFilter()   // LogFilter 接口"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"log.withAttrs([Attr('traceId', LogValue('...'))])"}</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.7, marginTop: 10, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"LoggerFactory.refresh()   // f_config 的 refresher 目前不会自动触发，要手动调"}</Text>
+      <Text style={{ fontSize: 12, color: '#64748B', lineHeight: 1.7, marginTop: 'auto' }}>六个 enabled 属性（debugEnabled / infoEnabled / warnEnabled / errorEnabled / fatalEnabled / logLevelEnabled）用于热路径前置判断。</Text>
+    </Box>
+
+    <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 18, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>配置：一类 appender 挂若干具名实例，实例各自配级别 / 格式</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"export logger_appender_console=FDemoConsole"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"export logger_appender_FDemoConsole_level=DEBUG"}</Text>
+      <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"export logger_appender_FDemoConsole_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%tid;%m'"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, marginTop: 8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"export logger_appender_file=FDemoFile"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"export logger_appender_FDemoFile_level=INFO"}</Text>
+      <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"export logger_appender_FDemoFile_path=./log/fdemo.log"}</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"export logger_appender_FDemoFile_rotateDuration=DAY    # 别用亚秒级"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"export logger_appender_FDemoFile_rotateSize=100M      # 可选，支持 100k/100M/1G"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"export logger_appender_FDemoFile_compressFormat=GZip  # 可选：Deflate / GZip"}</Text>
+      <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"export logger_asyncWaitTimeout=5ms   # 借不到缓冲区 → 丢弃本条"}</Text>
+      <Text style={{ fontSize: 12, color: '#64748B', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"# export loggerAsyncBufsize=1024      # 队列容量 & 缓冲区池大小"}</Text>
+      <Text style={{ fontSize: 12, color: '#64748B', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"# export loggerAsyncTimeout=10ms      # 队列满时的等待（默认 Duration.Max＝死等）"}</Text>
+      <Text style={{ fontSize: 12, color: '#64748B', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"# export loggerAsyncTimeoutPolicy=discard   # discard / abort / alwaysWaiting"}</Text>
+      <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.7, marginTop: 'auto' }}>核心两句话：f_log 是 stdx.log 的实现且默认静默；调试靠 %name + 级别，落盘靠 appender。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>102 / 116</Text>
+  </Box>
+</Slide>

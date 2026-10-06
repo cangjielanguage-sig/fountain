@@ -119,7 +119,7 @@ public class MockDBCoreTest {
     }
 
     @TestCase
-    public func testGetOrNullReturnsNone(): Unit {
+    public func testGetOrNullOutOfRangeThrows(): Unit {
         MOCKDB.clear()
         MOCKDB.execution = {_: String, _: ArrayList<Any> =>
             MOCKDB.addQueryResultColumnInfo(name: 'val', nullable: true, typeName: 'SqlVarchar')
@@ -129,9 +129,75 @@ public class MockDBCoreTest {
         let stmt = conn.prepareStatement('SELECT val FROM t')
         let rs = stmt.query()
         @Assert(true, rs.next())
-        // getOrNull with wrong index returns None
-        let r = rs.getOrNull<String>(99)
-        @Assert(true, r.isNone())
+        //按 std 契约：索引超出列范围抛 SqlException（修复前返回 None）
+        try {
+            let _ = rs.getOrNull<String>(99)
+            @Assert(false)
+        } catch (e: SqlException) {
+            @Assert(true)
+        }
+        try {
+            let _ = rs.getOrNull<String>(-1)
+            @Assert(false)
+        } catch (e: SqlException) {
+            @Assert(true)
+        }
+    }
+
+    @TestCase
+    public func testGetOrNullBeforeNextThrows(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'val', nullable: false, typeName: 'SqlInteger')
+            MOCKDB.addQueryResultRow([1])
+        }
+        let conn = MockConnection()
+        let stmt = conn.prepareStatement('SELECT val FROM t')
+        let rs = stmt.query()
+        //还没调用 next()：行数据未准备好 ⇒ 按 std 契约抛 SqlException（修复前返回 None）
+        try {
+            let _ = rs.getOrNull<Int64>(0)
+            @Assert(false)
+        } catch (e: SqlException) {
+            @Assert(true)
+        }
+    }
+
+    @TestCase
+    public func testGetOrNullTypeMismatchThrows(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'val', nullable: false, typeName: 'SqlInteger')
+            MOCKDB.addQueryResultRow([1])
+        }
+        let conn = MockConnection()
+        let stmt = conn.prepareStatement('SELECT val FROM t')
+        let rs = stmt.query()
+        @Assert(true, rs.next())
+        //列值是 Int64，却按 String 取：这不是 SQL NULL，应抛异常而不是静默 None（修复前返回 None）
+        try {
+            let _ = rs.getOrNull<String>(0)
+            @Assert(false)
+        } catch (e: SqlException) {
+            @Assert(true)
+        }
+    }
+
+    @TestCase
+    public func testGetOrNullNullValueReturnsNone(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'val', nullable: true, typeName: 'SqlInteger')
+            let nullRow = ArrayList<Any>()
+            nullRow.add(None<Any>)
+            MOCKDB.addQueryResultRow(nullRow.toArray())
+        }
+        let conn = MockConnection()
+        let stmt = conn.prepareStatement('SELECT val FROM t')
+        let rs = stmt.query()
+        @Assert(true, rs.next())
+        //真正的 SQL NULL 仍返回 None —— None 的唯一含义
+        @Assert(true, rs.getOrNull<Int64>(0).isNone())
     }
 
     @TestCase
@@ -213,5 +279,458 @@ public class MockDBCoreTest {
         let stmt = conn.prepareStatement('SELECT 1')
         let _ = stmt.query()
         @Assert('SELECT 1', capturedSql[0])
+    }
+
+    @TestCase
+    public func testQueryResultRowsIsolatedPerExecution(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {sql: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'v', nullable: false, typeName: 'SqlInteger')
+            if (sql == 'SELECT 1') {
+                MOCKDB.addQueryResultRow([1])
+            } else {
+                MOCKDB.addQueryResultRow([2])
+            }
+        }
+        let conn = MockConnection()
+        let rs1 = conn.prepareStatement('SELECT 1').query()
+        @Assert(true, rs1.next())
+        @Assert(1, rs1.get<Int64>(0))
+        @Assert(false, rs1.next())
+        let rs2 = conn.prepareStatement('SELECT 2').query()
+        @Assert(true, rs2.next())
+        @Assert(2, rs2.get<Int64>(0))
+        @Assert(false, rs2.next())
+    }
+
+    @TestCase
+    public func testClearQueryResultKeepsFlagsAndExecution(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'v', nullable: false, typeName: 'SqlInteger')
+            MOCKDB.addQueryResultRow([1])
+        }
+        let conn = MockConnection()
+        let _ = conn.prepareStatement('SELECT 1').query()
+        @Assert(1, MOCKDB.getQueryResultRows().size)
+        @Assert(1, MOCKDB.queryResultColumnInfos.size)
+        MOCKDB.toThrowOnExecuting = true
+        MOCKDB.clearQueryResult()
+        @Assert(0, MOCKDB.getQueryResultRows().size)
+        @Assert(0, MOCKDB.queryResultColumnInfos.size)
+        @Assert(true, MOCKDB.toThrowOnExecuting)
+        MOCKDB.toThrowOnExecuting = false
+        let rs = conn.prepareStatement('SELECT 2').query()
+        @Assert(true, rs.next())
+        @Assert(1, rs.get<Int64>(0))
+    }
+
+    @TestCase
+    public func testQueryResultRowIsSnapshot(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {sql: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'v', nullable: false, typeName: 'SqlInteger')
+            if (sql == 'SELECT 1') {
+                MOCKDB.addQueryResultRow([1])
+            } else {
+                MOCKDB.addQueryResultRow([2])
+            }
+        }
+        let conn = MockConnection()
+        let rs1 = conn.prepareStatement('SELECT 1').query()
+        let _ = conn.prepareStatement('SELECT 2').query()
+        @Assert(true, rs1.next())
+        @Assert(1, rs1.get<Int64>(0))
+        @Assert(false, rs1.next())
+    }
+
+    @TestCase
+    public func testUpdateResultIsSnapshot(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {sql: String, _: ArrayList<Any> =>
+            if (sql == 'INSERT 1') {
+                MOCKDB.lastInsertId = 11
+                MOCKDB.rowCount = 1
+            } else {
+                MOCKDB.lastInsertId = 22
+                MOCKDB.rowCount = 2
+            }
+        }
+        let conn = MockConnection()
+        let ur1 = conn.prepareStatement('INSERT 1').update()
+        let ur2 = conn.prepareStatement('INSERT 2').update()
+        @Assert(11, ur1.lastInsertId)
+        @Assert(1, ur1.rowCount)
+        @Assert(22, ur2.lastInsertId)
+        @Assert(2, ur2.rowCount)
+    }
+
+    @TestCase
+    public func testUpdateResultSurvivesLaterReset(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.lastInsertId = 11
+            MOCKDB.rowCount = 1
+        }
+        let conn = MockConnection()
+        let ur = conn.prepareStatement('INSERT 1').update()
+        MOCKDB.clear()
+        @Assert(11, ur.lastInsertId)
+        @Assert(1, ur.rowCount)
+    }
+
+    @TestCase
+    public func testConnectionCloseState(): Unit {
+        MOCKDB.clear()
+        let conn = MockConnection()
+        @Assert(false, conn.isClosed())
+        @Assert(Connected, conn.state)
+        conn.close()
+        //关闭后必须能看出来（修复前 isClosed 恒 false、state 恒 Connected）
+        @Assert(true, conn.isClosed())
+        @Assert(Closed, conn.state)
+        //重复关闭幂等
+        conn.close()
+        @Assert(true, conn.isClosed())
+        @Assert(Closed, conn.state)
+    }
+
+    @TestCase
+    public func testStatementAndQueryResultCloseState(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'v', nullable: false, typeName: 'SqlInteger')
+            MOCKDB.addQueryResultRow([1])
+        }
+        let conn = MockConnection()
+        let stmt = conn.prepareStatement('SELECT v FROM t')
+        @Assert(false, stmt.isClosed())
+        let rs = stmt.query()
+        @Assert(false, rs.isClosed())
+        rs.close()
+        @Assert(true, rs.isClosed())
+        stmt.close()
+        @Assert(true, stmt.isClosed())
+    }
+
+    @TestCase
+    public func testDatasourceCloseState(): Unit {
+        let ds = MockDatasource()
+        @Assert(false, ds.isClosed())
+        ds.close()
+        @Assert(true, ds.isClosed())
+        ds.close()
+        @Assert(true, ds.isClosed())
+    }
+
+    @TestCase
+    public func testCloseKeepsFixture(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'v', nullable: false, typeName: 'SqlInteger')
+            MOCKDB.addQueryResultRow([1])
+        }
+        MOCKDB.toThrowOnExecuting = false
+        let meta = HashMap<String, String>()
+        meta['version'] = '1.0'
+        MOCKDB.metadata = meta
+        let conn = MockConnection()
+        let _ = conn.prepareStatement('SELECT v FROM t').query()
+        @Assert(1, MOCKDB.getQueryResultRows().size)
+        conn.close()
+        //关连接只应改变连接自身状态，不应动夹具（修复前 close() 会 MOCKDB.clear()）
+        @Assert(1, MOCKDB.getQueryResultRows().size)
+        @Assert(1, MOCKDB.queryResultColumnInfos.size)
+        @Assert(false, MOCKDB.toThrowOnExecuting)
+        @Assert('1.0', conn.getMetaData().get('version').getOrThrow())
+        @Assert(true, conn.isClosed())
+    }
+
+    @TestCase
+    public func testClearResetsFixture(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'v', nullable: false, typeName: 'SqlInteger')
+            MOCKDB.addQueryResultRow([1])
+            MOCKDB.lastInsertId = 7
+            MOCKDB.rowCount = 3
+        }
+        let meta = HashMap<String, String>()
+        meta['k'] = 'v'
+        MOCKDB.metadata = meta
+        let conn = MockConnection()
+        let _ = conn.prepareStatement('SELECT v FROM t').query()
+        MOCKDB.toThrowOnExecuting = true
+        @Assert(1, MOCKDB.getQueryResultRows().size)
+        @Assert(3, MOCKDB.rowCount)
+        //显式清夹具（提升为 public 后包外也能调）后一切回默认值
+        MOCKDB.clear()
+        @Assert(0, MOCKDB.getQueryResultRows().size)
+        @Assert(0, MOCKDB.queryResultColumnInfos.size)
+        @Assert(false, MOCKDB.toThrowOnExecuting)
+        @Assert(0, MOCKDB.lastInsertId)
+        @Assert(0, MOCKDB.rowCount)
+        @Assert(true, MOCKDB.metadata.get('k').isNone())
+    }
+
+    @TestCase
+    public func testColumnInfoContractValues(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'v', nullable: false, typeName: 'SqlInteger')
+            MOCKDB.addQueryResultRow([1])
+        }
+        let conn = MockConnection()
+        let rs = conn.prepareStatement('SELECT v FROM t').query()
+        let info = rs.columnInfos[0]
+        //按 std 契约：无限制返回 Int64.Max、列大小不适用返回 0、无小数部分返回 0（修复前三个都抛 MockDbException）
+        @Assert(Int64.Max, info.displaySize)
+        @Assert(0, info.length)
+        @Assert(0, info.scale)
+    }
+
+    @TestCase
+    public func testStatementReuseDoesNotKeepArgs(): Unit {
+        MOCKDB.clear()
+        let argSizes = ArrayList<Int64>()
+        MOCKDB.execution = {_: String, args: ArrayList<Any> =>
+            argSizes.add(args.size)
+        }
+        let conn = MockConnection()
+        let stmt = conn.prepareStatement('UPDATE t SET a = ?, b = ?')
+        stmt.set<String>(0, 'a')
+        stmt.set<String>(1, 'b')
+        let _ = stmt.update()
+        stmt.set<String>(0, 'c')
+        let _ = stmt.update()
+        @Assert(2, argSizes.size)
+        @Assert(2, argSizes[0])
+        //第二次只绑定了 0 号参数：不应再带上第一次的 1 号参数（修复前这里读到 2）
+        @Assert(1, argSizes[1])
+    }
+
+    @TestCase
+    public func testSetNegativeIndexThrows(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> => ()}
+        let conn = MockConnection()
+        let stmt = conn.prepareStatement('SELECT v FROM t WHERE v = ?')
+        //按 std 契约：参数索引越界抛 SqlException（修复前抛 IndexOutOfBoundsException）
+        try {
+            stmt.set<String>(-1, 'x')
+            @Assert(false)
+        } catch (e: SqlException) {
+            @Assert(true)
+        }
+        try {
+            stmt.setNull(-1)
+            @Assert(false)
+        } catch (e: SqlException) {
+            @Assert(true)
+        }
+    }
+
+    @TestCase
+    public func testThrowOnExecutingSkipsFixture(): Unit {
+        MOCKDB.clear()
+        let executed = ArrayList<Bool>()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            executed.add(true)
+            MOCKDB.addQueryResultColumnInfo(name: 'v', nullable: false, typeName: 'SqlInteger')
+            MOCKDB.addQueryResultRow([1])
+        }
+        MOCKDB.toThrowOnExecuting = true
+        let conn = MockConnection()
+        let stmt = conn.prepareStatement('SELECT v FROM t')
+        try {
+            let _ = stmt.query()
+            @Assert(false)
+        } catch (e: MockDbException) {
+            @Assert(true)
+        }
+        //声明抛异常的语句不应执行夹具、不应留下结果（修复前夹具已执行且行已写入结果集）
+        @Assert(0, executed.size)
+        @Assert(0, MOCKDB.getQueryResultRows().size)
+    }
+
+    @TestCase
+    public func testMetadataReturnsCopy(): Unit {
+        MOCKDB.clear()
+        let meta = HashMap<String, String>()
+        meta['version'] = '1.0'
+        MOCKDB.metadata = meta
+        let conn = MockConnection()
+        let first = (conn.getMetaData() as HashMap<String, String>).getOrThrow()
+        //改动拿到的元数据不应影响夹具与后续读取（修复前返回的是夹具本体，改一下就串了）
+        first['version'] = 'changed'
+        @Assert('1.0', conn.getMetaData().get('version').getOrThrow())
+        @Assert('1.0', MOCKDB.metadata.get('version').getOrThrow())
+    }
+
+    @TestCase
+    public func testVerboseSwitch(): Unit {
+        //默认关闭（静默本身无法在进程内断言，用例覆盖开关语义与两种取值下的功能等价）
+        @Assert(false, MOCKDB.verbose)
+        MOCKDB.verbose = true
+        @Assert(true, MOCKDB.verbose)
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'v', nullable: false, typeName: 'SqlInteger')
+            MOCKDB.addQueryResultRow([1])
+        }
+        let conn = MockConnection()
+        let stmt = conn.prepareStatement('SELECT v FROM t')
+        //verbose=true 时 mock 内部动作会输出（测试日志里可看到这一条 'Statement option'）
+        stmt.setOption('k', 'v')
+        let _ = stmt.query()
+        MOCKDB.verbose = false
+        let rs = conn.prepareStatement('SELECT v FROM t').query()
+        @Assert(true, rs.next())
+        @Assert(1, rs.get<Int64>(0))
+    }
+
+    @TestCase
+    public func testDriverOpenRecordsArguments(): Unit {
+        MOCKDB.clear()
+        let driver: Driver = DriverManager.getDriver('mockdb').getOrThrow()
+        let ds = driver.open('mockdb://localhost', [('cachePrepStmts', 'true'), ('prepStmtCacheSize', '250')])
+        let mock = (ds as MockDatasource).getOrThrow()
+        //open 的连接串与选项都应能从 mock 数据源读回（修复前只打印、不记录）
+        @Assert('mockdb://localhost', mock.connectionString)
+        @Assert('true', mock.options.get('cachePrepStmts').getOrThrow())
+        @Assert('250', mock.options.get('prepStmtCacheSize').getOrThrow())
+        //读到的选项是副本：改它不影响 mock
+        let opts = (mock.options as HashMap<String, String>).getOrThrow()
+        opts['cachePrepStmts'] = 'false'
+        @Assert('true', mock.options.get('cachePrepStmts').getOrThrow())
+    }
+
+    @TestCase
+    public func testSetIndexBeyondSqlParametersThrows(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'v', nullable: false, typeName: 'SqlVarchar')
+            MOCKDB.addQueryResultRow(['ok'])
+        }
+        let conn = MockConnection()
+        let stmt = conn.prepareStatement('SELECT v FROM t WHERE v = ?')
+        //SQL 只有 1 个占位符：大索引必须在 set 阶段就失败，不能真的补出上百万个占位符（修复前会分配）
+        try {
+            stmt.set<String>(1000000, 'x')
+            @Assert(false)
+        } catch (e: SqlException) {
+            @Assert(true)
+        }
+        try {
+            stmt.setNull(5)
+            @Assert(false)
+        } catch (e: SqlException) {
+            @Assert(true)
+        }
+        //合法索引照常
+        stmt.set<String>(0, 'ok')
+        let rs = stmt.query()
+        @Assert(true, rs.next())
+        @Assert('ok', rs.get<String>(0))
+    }
+
+    @TestCase
+    public func testDeprecatedOverloadsThrowNotSupported(): Unit {
+        MOCKDB.clear()
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'v', nullable: false, typeName: 'SqlInteger')
+            MOCKDB.addQueryResultRow([1])
+        }
+        let conn = MockConnection()
+        let stmt = conn.prepareStatement('SELECT v FROM t')
+        let noParams = ArrayList<SqlDbType>().toArray()
+        //std 里带 params / values 的重载：mock 一律不支持，抛 MockDbException('not supported')
+        try {
+            let _ = stmt.query(noParams)
+            @Assert(false)
+        } catch (e: MockDbException) {
+            @Assert('not supported', e.message)
+        }
+        try {
+            let _ = stmt.update(noParams)
+            @Assert(false)
+        } catch (e: MockDbException) {
+            @Assert('not supported', e.message)
+        }
+        let rs = stmt.query()
+        try {
+            let _ = rs.next(noParams)
+            @Assert(false)
+        } catch (e: MockDbException) {
+            @Assert('not supported', e.message)
+        }
+    }
+
+    @TestCase
+    public func testDefaultExecutionPath(): Unit {
+        MOCKDB.clear()
+        MOCKDB.clearExecution()//回到「未设置 execution」的初态：走缺省夹具 EMPTY_EXECUTION
+        let conn = MockConnection()
+        let rs = conn.prepareStatement('SELECT v FROM t').query()
+        //缺省夹具不产生任何行
+        @Assert(false, rs.next())
+        //也不产生列信息：访问 columnInfos 抛 MockDbException
+        try {
+            let _ = rs.columnInfos
+            @Assert(false)
+        } catch (e: MockDbException) {
+            @Assert(true)
+        }
+        //设为自定义夹具后恢复常规行为
+        MOCKDB.execution = {_: String, _: ArrayList<Any> =>
+            MOCKDB.addQueryResultColumnInfo(name: 'v', nullable: false, typeName: 'SqlInteger')
+            MOCKDB.addQueryResultRow([7])
+        }
+        let rs2 = conn.prepareStatement('SELECT v FROM t').query()
+        @Assert(true, rs2.next())
+        @Assert(7, rs2.get<Int64>(0))
+    }
+
+    @TestCase
+    public func testUnsetParameterIsNullInFixture(): Unit {
+        MOCKDB.clear()
+        let capturedArgs = ArrayList<Any>()
+        MOCKDB.execution = {_: String, args: ArrayList<Any> =>
+            for (a in args) {
+                capturedArgs.add(a)
+            }
+        }
+        let conn = MockConnection()
+        let stmt = conn.prepareStatement('INSERT INTO t(a, b, c) VALUES(?, ?, ?)')
+        //只绑 2 号位：0、1 两个空位由 set 补出
+        stmt.set<Int64>(2, 42)
+        let _ = stmt.update()
+        //口径（README「参数槽」）：空位与 setNull 一样都是 None<Any>，夹具一律按 SQL NULL 处理；
+        //mock 不做「参数未设置」校验 ⇒ 上面这次带空位的执行照常成功
+        @Assert(3, capturedArgs.size)
+        if (let x: Option<Any> <- capturedArgs[0]) {
+            @Assert(true, x.isNone())
+        } else {
+            @Assert(false)
+        }
+        if (let x: Option<Any> <- capturedArgs[1]) {
+            @Assert(true, x.isNone())
+        } else {
+            @Assert(false)
+        }
+        if (let x: Int64 <- capturedArgs[2]) {
+            @Assert(42, x)
+        } else {
+            @Assert(false)
+        }
+        //setNull 写出的值同样按 NULL 处理
+        let stmt2 = conn.prepareStatement('INSERT INTO t(a) VALUES(?)')
+        stmt2.setNull(0)
+        let _ = stmt2.update()
+        @Assert(4, capturedArgs.size)
+        if (let x: Option<Any> <- capturedArgs[3]) {
+            @Assert(true, x.isNone())
+        } else {
+            @Assert(false)
+        }
     }
 }

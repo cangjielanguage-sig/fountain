@@ -1,0 +1,67 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`第三个角色是 Service。
+
+右边是 fdemo 的写法。接口 UserService 继承 RootService，里面声明业务方法。实现类 UserServiceImpl 上是 @TransactionalService，而不是 @Bean。
+
+RootService 提供四个东西：executor()、executor 带驱动名、dao 泛型、dao 泛型带驱动名。
+
+@TransactionalService 其实是 f_aspect 的 WeavedBean 的再导出——它把 Service 织进切面链，事务切面才能生效。所以如果你用了 @Bean，事务不会生效。这是第十八章的一个高频坑：事务没生效，第一个要查的就是这里。
+
+现在念两条铁律，这是最常见的线上事故来源。
+
+第一条：每次调用 DAO 函数都必须从 executor() 开始，不要试图声明 SqlExecutor 或者 DAO 接口类型的变量。原因是 SqlExecutor 缓存在 ThreadLocal 里按驱动名区分，你把它存成字段，线程切换后就拿到别的连接了。
+
+第二条：一个 DAO 函数只执行一个 SQL，或者一次分页查询——一次 count 加一次列表。因为同一个 SqlExecutor 上不允许并发，上一次结果没关闭时再执行会抛异常。
+
+这两条记住，ORM 基本不会出事故。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 12 章 · ORM f_orm · 12.1 续</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>三个角色之三：Service 与两条铁律</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>最常见的线上事故来源</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 16 }}>
+    <Box style={{ height: 250, flexDirection: 'row', gap: 16 }}>
+      <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>接口</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public interface UserService <: RootService {"}</Text>
+        <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    func queryUser(id: Int64): UserPO"}</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    ..."}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"}"}</Text>
+        <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.7, marginTop: 'auto' }}>RootService 提供：executor() / executor(name) / dao 泛型 / dao 泛型带驱动</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #38BDF8', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#38BDF8', marginBottom: 8 }}>实现</Text>
+        <Text style={{ fontSize: 12, color: '#F59E0B', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"@TransactionalService   // 不需要事务时用 @Bean"}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public class UserServiceImpl <: UserService {"}</Text>
+        <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    public func queryUser(id: Int64): UserPO {"}</Text>
+        <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"        executor().findUser(id)   // 可直接当 UserDAO 用"}</Text>
+        <Text style={{ fontSize: 12, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    }"}</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"}"}</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, flexDirection: 'row', gap: 16 }}>
+      <Box style={{ flex: 1, background: 'rgba(245,158,11,0.07)', borderRadius: 12, border: '1px solid #F59E0B', padding: 20, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#F59E0B' }}>铁律一</Text>
+        <Text style={{ fontSize: 15, color: '#E2E8F0', lineHeight: 1.75, marginTop: 10 }}>每次调用 DAO 函数都必须从 executor() 开始。</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.75, marginTop: 10 }}>不要试图声明 SqlExecutor 或 DAO 接口类型的变量 —— 它缓存在 ThreadLocal 里按驱动名区分，存成字段会拿到别的线程的连接。</Text>
+      </Box>
+      <Box style={{ flex: 1, background: 'rgba(245,158,11,0.07)', borderRadius: 12, border: '1px solid #F59E0B', padding: 20, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#F59E0B' }}>铁律二</Text>
+        <Text style={{ fontSize: 15, color: '#E2E8F0', lineHeight: 1.75, marginTop: 10 }}>一个 DAO 函数只执行一个 SQL（或一次分页查询：一次 count 加一次列表）。</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.75, marginTop: 10 }}>同一个 SqlExecutor 上不允许并发：上一次查询结果未关闭时再执行会抛 ORMException。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>78 / 116</Text>
+  </Box>
+</Slide>

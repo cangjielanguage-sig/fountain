@@ -1,0 +1,62 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`第六章讲 IOC，f_bean。
+
+最小可用是这样的：一个 @Bean 加一个可选的 @BeanMeta。BeanMeta 里有六个属性：name 是 bean 名，默认是类型全限定名加序号；scope 是单例还是原型，默认 singleton；lazy 是单例懒加载；primary 是同类型排最前；order 是同类型排序；condition 是条件装配。
+
+全是默认值的时候，BeanMeta 可以省略，只写 @Bean 就够了。
+
+泛型类要多一步：@Bean 后面跟上泛型实参，用竖线分隔多组，比如 String、Duration 或 Int64、String 这样两组。
+
+@Bean 展开后做的是三件事：把「构造函数闭包、TypeInfo、BeanMeta」注册到 BeanFactory，并用三张 HashMap 建索引——按 bean 名、按类或父类或接口的 TypeInfo、按类上的注解。所以你可以用名字、用类型、用注解三种方式取 bean。
+
+还有一个重要取舍：IOC 只管理 class，不管理 struct。因为 struct 是值类型，取出来就会复制。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 6 章 · IOC f_bean · 6.1</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>最小可用：@Bean + @BeanMeta</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>三张 HashMap 建索引</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 14, color: '#64748B', marginBottom: 10 }}>import fountain::f_bean.* / fountain::f_bean.macros.*</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.85, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>@Bean</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.85, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"@BeanMeta[                       // 全是默认值时可省略"}</Text>
+      <Text style={{ fontSize: 14, color: '#22D3EE', lineHeight: 1.85, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    name: '',                    // 默认「类型全限定名 + 序号」"}</Text>
+      <Text style={{ fontSize: 14, color: '#22D3EE', lineHeight: 1.85, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    scope: BeanScope.singleton,  // singleton | prototype"}</Text>
+      <Text style={{ fontSize: 14, color: '#22D3EE', lineHeight: 1.85, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    lazy: true,                  // singleton 懒加载；prototype 下不生效"}</Text>
+      <Text style={{ fontSize: 14, color: '#22D3EE', lineHeight: 1.85, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    primary: false,              // 同类型排最前"}</Text>
+      <Text style={{ fontSize: 14, color: '#22D3EE', lineHeight: 1.85, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    order: 0,                    // 同类型排序"}</Text>
+      <Text style={{ fontSize: 14, color: '#22D3EE', lineHeight: 1.85, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    condition: NoneBeanCondition.instance"}</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.85, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>]</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.85, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public class ClassName{}"}</Text>
+      <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.85, marginTop: 10, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"@Bean[String, Duration|Int64, String]   // 泛型类：| 分隔多组泛型实参"}</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.85, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public class GenericClass<T, E>{"}</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.85, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    private let bean = lookup<ClassName>()"}</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.85, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"}"}</Text>
+    </Box>
+
+    <Box style={{ width: 400, flexDirection: 'column', gap: 14 }}>
+      <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 20, flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#38BDF8' }}>三张索引表</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 12 }}>KEY = bean 名</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 6 }}>KEY = 类 / 父类 / 实现接口的 TypeInfo</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 6 }}>KEY = 类上注解 / 注解父类型的 TypeInfo</Text>
+        <Text style={{ fontSize: 14, color: '#F59E0B', lineHeight: 1.8, marginTop: 'auto' }}>所以你可以用名字、用类型、用注解三种方式取 bean。</Text>
+      </Box>
+      <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#E2E8F0' }}>只管理 class</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 10 }}>不管理 struct：值类型取出来就会复制，得不偿失，这是作者明确的取舍。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>37 / 116</Text>
+  </Box>
+</Slide>

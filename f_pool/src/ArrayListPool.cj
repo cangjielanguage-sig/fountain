@@ -25,7 +25,9 @@ public struct ArrayListPool<T> {
         maxSize!: Int64 = Int64.Max,
         elementLife!: Duration = Duration.Max, 
         checkInterval!: Duration = Duration.Zero,
-        clearOnReturning!: Bool = false) {
+        clearOnReturning!: Bool = false,
+        /** 池耗尽且 `get(timeout: Duration.Max)` 时的等待上限；`Duration.Max` = 真无限等待。 */
+        maxWaiting!: Duration = Duration.second * 30) {
         pool = Pool<ArrayList<T>>(
             initSize: initSize,
             minSize: minSize,
@@ -36,6 +38,7 @@ public struct ArrayListPool<T> {
             checkOnReturning: false,
             checkInterval: checkInterval,
             clearOnReturning: clearOnReturning,
+            maxWaiting: maxWaiting,
             checker: {_ => true},
             creator: {=> ArrayList<T>()},
             clear: {o => o.clear()},

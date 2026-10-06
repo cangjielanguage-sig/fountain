@@ -464,7 +464,7 @@ public class IoUringException <: Exception
 
 ---
 
-# fountain::f_io.uring.lockfree
+# fountain::f_uring.lockfree
 
 无锁并发 io_uring 封装，基于 CAS + 原子操作。
 

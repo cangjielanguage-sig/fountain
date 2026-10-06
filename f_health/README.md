@@ -66,6 +66,19 @@ public struct HealthMonitorHub {
 }
 ```
 
+### 初始化器
+```cj
+/**
+ * 随应用启动注册到f_app的初始化器：按HealthConfig.logMonitorPeriod的周期采集HealthData，
+ * 并按HealthConfig.enabled里列出的监控器名逐个分发
+ */
+public struct HealthInitializer <: Initializer {
+    public prop name: String            // 空字符串
+    public prop dependencies: Array<String>  // 空数组
+    public func initialize(): Unit
+}
+```
+
 ### 日志监控器
 ```cj
 public struct HealthLogMonitor <: HealthMonitor {

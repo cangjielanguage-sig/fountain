@@ -15,10 +15,15 @@ limitations under the License.
  */
 package fountain::f_aspect
 
-public class InvocationFuncInfo {
+/**
+ * 一次调用（一层）的调用信息：不可变的函数元数据（`QualifiedFuncInfo`）+ 本次调用的实参。
+ * 值类型（`struct`）：不可变、按值传递，每次调用各一个实例，
+ * 因此并发调用之间不可能共享同一个参数槽（见 `Aspects.doProceed` 的层闭包）。
+ */
+public struct InvocationFuncInfo {
     public InvocationFuncInfo(
         private let _funcInfo: QualifiedFuncInfo,
-        private var _args: Array<Any>
+        private let _args: Array<Any>
     ) {
     }
     public init(
@@ -27,9 +32,7 @@ public class InvocationFuncInfo {
         argTypes: Array<TypeInfo>,
         args: Array<Any>
     ) {
-        this(QualifiedFuncInfo(typeInfo, funcName, argTypes), args)
-    }
-    func setArgs(args: Array<Any>) {
+        this._funcInfo = QualifiedFuncInfo(typeInfo, funcName, argTypes)
         this._args = args
     }
     public prop args: Array<Any> {

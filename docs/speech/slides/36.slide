@@ -1,0 +1,32 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: 0, position: 'relative', overflow: 'hidden' }}
+  notes={`进入第二个板块，框架核心。
+
+这六章是日常写代码时碰得最多的：f_bean 负责对象怎么来，f_aspect 负责横切逻辑放哪，f_data 负责数据怎么流动，f_util 是随手可用的工具箱，f_mvc 负责 HTTP 协议这一层，f_http 负责数据格式。
+
+顺序上我按依赖关系排：先讲 IOC 和 AOP，因为后面所有模块都建立在它们之上；然后讲 f_data，它是 MVC 参数绑定、ORM 结果映射、JWT 负载填充的共同底座；接着是工具箱 f_util；最后是 MVC 和 HTTP 数据格式。
+
+这六章加起来差不多一百分钟，是整场占比最大的部分。`}
+>
+  <Text style={{ position: 'absolute', right: 40, top: 120, fontSize: 320, fontWeight: 'bold', color: '#16233A', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1 }}>02</Text>
+  <Box style={{ position: 'absolute', left: 0, top: 0, width: 8, height: 720, background: 'linear-gradient(135deg, #38BDF8 0%, #22D3EE 100%)' }} />
+
+  <Text style={{ position: 'absolute', left: 120, top: 218, fontSize: 16, color: '#38BDF8', letterSpacing: 6 }}>PART 02</Text>
+  <Text style={{ position: 'absolute', left: 120, top: 254, fontSize: 56, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.15 }}>框架核心</Text>
+  <Box style={{ position: 'absolute', left: 120, top: 344, width: 160, height: 6, background: 'linear-gradient(135deg, #38BDF8 0%, #22D3EE 100%)' }} />
+
+  <Text style={{ position: 'absolute', left: 120, top: 392, fontSize: 18, color: '#94A3B8', lineHeight: 1.9 }}>
+    <>f_bean 对象怎么来　·　f_aspect 横切逻辑放哪　·　f_data 数据怎么流动</>
+  </Text>
+  <Text style={{ position: 'absolute', left: 120, top: 428, fontSize: 18, color: '#94A3B8', lineHeight: 1.9 }}>
+    <>f_util 工具箱　·　f_mvc 协议层　·　f_http 数据格式</>
+  </Text>
+
+  <Box style={{ position: 'absolute', left: 120, top: 512, flexDirection: 'row', alignItems: 'center', gap: 24 }}>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>第 6–11 章</Text>
+    <Box style={{ width: 1, height: 16, background: '#1E293B' }} />
+    <Text style={{ fontSize: 14, color: '#64748B' }}>对应第 37–74 页</Text>
+    <Box style={{ width: 1, height: 16, background: '#1E293B' }} />
+    <Text style={{ fontSize: 14, color: '#64748B' }}>建议 100 分钟</Text>
+  </Box>
+</Slide>

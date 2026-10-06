@@ -15,11 +15,11 @@
   override-compile-option = "--dy-std"
 
   organization = "fountain"
-  version = "1.3.7"
+  version = "1.3.8"
   package-configuration = {}
   category = ["Utility"]
   license = ["Apache-2.0"]
-  include = ["src", "doc"]
+  include = ["src"]
   exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
   authors = ["吴京润"]
   repository = "https://gitcode.com/Cangjie-SIG/fountain/tree/master/fboot"

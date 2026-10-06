@@ -1,0 +1,49 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`f_http 的异常只有三个，但每一个都很有用。
+
+MediaTypeException，提示「x 不是一个合法的 MediaType 字符串」——这是 MediaTypes 解析时遇到没注册的格式报的。
+
+MediaTypeException，「x 里的 charset 不被支持」——这是文本格式的字符集不支持时报的。
+
+MediaTypeException，「x 不支持当前访问方式」——这是对 multipart 调用了 fromData(Data) 或者 toData(Array<Byte>) 时报的。前面讲过 multipart 只支持从输入流解析。
+
+排错这一条最重要：遇到「is an illegal MediaType string」，百分之九十九是自定义 MediaType 的 @Bean 没生效。回到第三章那条规则——它所在的动态链接库必须被 --dylibPattern 匹配到。
+
+fdemo 的 LogTextMediaType 在 boot 包里，而 boot.sh 的正则里有 boot 这一段，所以它能在启动时被加载、被 MediaTypes 发现、被注册进那张并发表。如果你的自定义格式放在一个没被正则覆盖的包里，它就会静默失效——症状就是这条异常。
+
+所以自定义格式不生效时，先查 @Bean 有没有加，再查它所在的包有没有被 --dylibPattern 覆盖，最后才怀疑框架。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 11 章 · HTTP 数据格式 f_http · 11.7</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>异常与排错</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>99% 是 @Bean 没生效</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 14 }}>
+    <Table
+      style={{ width: '100%', height: 240 }}
+      defaultTextStyle={{ fontSize: 14, textAlign: 'left', color: '#E2E8F0' }}
+      defaultCellStyle={{ border: { left: { width: 1, color: '#1E293B' }, right: { width: 1, color: '#1E293B' }, top: { width: 1, color: '#1E293B' }, bottom: { width: 1, color: '#1E293B' } } }}
+      cells={[
+        [ { text: '异常', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } }, { text: '场景', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } } ],
+        [ { text: "MediaTypeException('<x> is an illegal MediaType string')", textStyle: { color: '#F59E0B', fontFamily: '"JetBrains Mono", Consolas, monospace', fontSize: 13 } }, 'MediaTypes.parse() 遇到没注册的格式' ],
+        [ { text: "MediaTypeException('charset in <x> is not be supported')", textStyle: { fontFamily: '"JetBrains Mono", Consolas, monospace', fontSize: 13 } }, '文本格式的 charset 不支持' ],
+        [ { text: "MediaTypeException('<x> does not support current access')", textStyle: { fontFamily: '"JetBrains Mono", Consolas, monospace', fontSize: 13 } }, '对 multipart 调用了 fromData(Data) / toData(Array<Byte>)' ],
+      ]}
+    />
+    <Box style={{ flex: 1, background: 'rgba(245,158,11,0.07)', borderRadius: 12, border: '1px solid #F59E0B', padding: 20, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#F59E0B' }}>遇到 is an illegal MediaType string，99% 是自定义 MediaType 的 @Bean 没生效</Text>
+      <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.75, marginTop: 10 }}>回到第三章那条规则：它所在的动态链接库必须被 --dylibPattern 匹配到。fdemo 的 LogTextMediaType 在 boot 包里，而正则里有 boot 这一段，所以能被加载、被发现、被注册。</Text>
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.75, marginTop: 10 }}>自定义格式不生效时的排查顺序：① @Bean 有没有加；② 它所在的包有没有被 --dylibPattern 覆盖；③ 才是怀疑框架。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>74 / 116</Text>
+  </Box>
+</Slide>

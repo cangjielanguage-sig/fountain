@@ -1,0 +1,56 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`这一段是编译期注入配置，就是 fdemo/boot.sh 里 build 函数在干的事。
+
+右边这几行就是真实写法。orm_drivers 指定驱动，postgres_orm_connectionUrl 给连接串，username 和 password 给账号口令，最后两行给 SM4 的密钥和 IV，值由 fboot randhex 32 现场生成。
+
+这些 --xxx=yyy 会变成 fboot build 执行时的配置项，也可以把前面的横线去掉改成环境变量，效果一样。
+
+于是有三件事成立。第一，数据库连接串、用户名密码在编译期就被写进产物。第二，因为同时给了 sm4Key 和 sm4Iv，这些敏感信息是以 SM4 加密后的字节数组嵌入的，不是明文。第三，运行期同名配置优先级更高，一份产物跑多套环境。
+
+顺带提醒：真实项目不要把密码写进 boot.sh，这里只是演示。这套「编译期内嵌加运行期覆盖」的完整机制，第四章会展开。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 3 章 · fboot 命令行 · 3.4 续</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>编译期注入配置（重要）</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fdemo/boot.sh 的 build()</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ width: 420, flexDirection: 'column', gap: 14 }}>
+      <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 22, flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#E2E8F0' }}>这些参数做了什么</Text>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 14 }}>数据库连接串、用户名密码在编译期就被写进产物。</Text>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 10 }}>因为同时给了 sm4Key / sm4Iv，这些敏感信息是 SM4 加密后的字节数组嵌入的，不是明文。</Text>
+        <Text style={{ fontSize: 15, color: '#38BDF8', lineHeight: 1.8, marginTop: 10 }}>运行期同名环境变量或命令行参数优先级更高 —— 一份产物跑多套环境。</Text>
+        <Text style={{ fontSize: 14, color: '#64748B', lineHeight: 1.7, marginTop: 'auto' }}>也可以把 -- 去掉改成环境变量，效果一样。</Text>
+      </Box>
+      <Box style={{ background: 'rgba(245,158,11,0.07)', borderRadius: 12, border: '1px solid #F59E0B', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#F59E0B' }}>真实项目不要把密码写进 boot.sh</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.6, marginTop: 4 }}>这里只是演示用法。</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 24, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 15, color: '#64748B', marginBottom: 14 }}>fdemo/boot.sh · build()</Text>
+      <Text style={{ fontSize: 15, color: '#E2E8F0', lineHeight: 2, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>fboot build ./fdemo \</Text>
+      <Text style={{ fontSize: 15, color: '#22D3EE', lineHeight: 2, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>　--orm_drivers=postgres \</Text>
+      <Text style={{ fontSize: 15, color: '#22D3EE', lineHeight: 2, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>　--postgres_orm_connectionUrl=$POSTGRES \</Text>
+      <Text style={{ fontSize: 15, color: '#22D3EE', lineHeight: 2, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>　--postgres_orm_option_username=$POSTGRES_USERNAME \</Text>
+      <Text style={{ fontSize: 15, color: '#22D3EE', lineHeight: 2, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>　--postgres_orm_option_password=$POSTGRES_PASSWORD \</Text>
+      <Text style={{ fontSize: 15, color: '#F59E0B', lineHeight: 2, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>　--sm4Key=$(fboot randhex 32) \</Text>
+      <Text style={{ fontSize: 15, color: '#F59E0B', lineHeight: 2, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>　--sm4Iv=$(fboot randhex 32)</Text>
+      <Box style={{ height: 1, background: '#1E293B', marginTop: 18, marginBottom: 18 }} />
+      <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8 }}>每次编译换一对 KEY / IV，嵌入的密文就不一样 —— 一个很轻量的「产物级」防护。</Text>
+      <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 'auto' }}>完整机制见第四章 f_config。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>18 / 116</Text>
+  </Box>
+</Slide>

@@ -83,17 +83,20 @@ public class LoopCondition<I, T> where I <: Iterable<T> {
         this.partial(callee)
     }
     public func done(): String {
+        // bug-orm.md ORM-N1（N1a）：分隔符循环外预拼一次（原为每元素 3 次 append）
+        let sep = ' ${_delimiter} '
         let sqlFrag = Condition.trim(prefix: _trimLeft, suffix: _trimRight) {
             let builder = StringGenerator()
             var i = 0
             for (v in values where _condition(v, i)) {
                 if (builder.size > 0) {
-                    builder.append(' ')
-                    builder.append(_delimiter)
-                    builder.append(' ')
+                    builder.append(sep)
                 }
                 let (frag, arg) = _partial(v, i)
-                builder.append(frag)
+                if (frag.size > 0) {
+                    // bug-orm.md ORM-N1（N1a）：原无条件 append(frag)；partial 返回 '' 时白付一次按字节拷贝
+                    builder.append(frag)
+                }
                 if (_argInSql) {
                     match (arg) {
                         case x: ToString => builder.append(x)

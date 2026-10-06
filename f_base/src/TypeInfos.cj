@@ -42,7 +42,9 @@ public class TypeInfos {
                 if (let Some(x) <- INFOS.get(qualifiedName)) {
                     x
                 } else {
-                    let info = TypeInfos.get(qualifiedName)
+                    // 按名称查 std.reflect 类型注册表；未注册类型抛 InfoNotFoundException。
+                    // 原来这里写的是 TypeInfos.get(qualifiedName)（自调用同一重载）⇒ 缓存未命中即无限递归。
+                    let info = TypeInfo.get(qualifiedName)
                     INFOS[qualifiedName] = info
                     info
                 }
@@ -58,7 +60,7 @@ public class TypeInfos {
     public static func getGenericTypes(qualifiedName: String): Array<TypeInfo> {
         let idx = qualifiedName.indexOf("<")
         if (let Some(i) <- idx) {
-            let generics = qualifiedName[i + 1 .. qualifiedName.size - 1]
+            let generics = qualifiedName[i + 1..qualifiedName.size - 1]
             let types = parseParameterTypes(generics)
             types
         } else {

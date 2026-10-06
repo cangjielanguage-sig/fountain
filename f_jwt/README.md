@@ -398,7 +398,7 @@ public class JWTEncoder <: JWT {
 }
 ```
 
-### JWT解码器 `JWTDecoder`
+### JWT解码器 `JWTVerifier`
 ```cj
 public class JWTVerifier <: JWT {
     /**

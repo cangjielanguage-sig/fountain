@@ -1,0 +1,356 @@
+=== boot pid=44024 ts=2026-10-02 20:37:04.845 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js create D:/docs/work/cangjie/projects/fountain/docs/speech.pptx ===
+[2026-10-02 20:37:04.844] [INFO ] [pid=44024] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+=== boot pid=6032 ts=2026-10-02 20:37:39.503 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/01.slide ===
+[2026-10-02 20:37:39.503] [INFO ] [pid=6032] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:37:39.538] [INFO ] [pid=6032] [slide-version] fileId=sid_muqy version=0 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=43680 ts=2026-10-02 20:37:43.593 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js screenshot D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --page-index 0 --out assets/preview01.png ===
+[2026-10-02 20:37:43.589] [INFO ] [pid=43680] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:37:43.630] [INFO ] [pid=43680] [slide-version] fileId=sid_muqy version=1 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=5564 ts=2026-10-02 20:39:29.309 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/02.slide ===
+[2026-10-02 20:39:29.308] [INFO ] [pid=5564] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:39:29.342] [INFO ] [pid=5564] [slide-version] fileId=sid_muqy version=1 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=44552 ts=2026-10-02 20:39:34.316 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/03.slide ===
+[2026-10-02 20:39:34.315] [INFO ] [pid=44552] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:39:34.347] [INFO ] [pid=44552] [slide-version] fileId=sid_muqy version=2 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=45276 ts=2026-10-02 20:39:39.587 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/04.slide ===
+[2026-10-02 20:39:39.586] [INFO ] [pid=45276] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:39:39.621] [INFO ] [pid=45276] [slide-version] fileId=sid_muqy version=3 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=34316 ts=2026-10-02 20:39:45.053 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/05.slide ===
+[2026-10-02 20:39:45.052] [INFO ] [pid=34316] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:39:45.090] [INFO ] [pid=34316] [slide-version] fileId=sid_muqy version=4 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=23520 ts=2026-10-02 20:39:50.276 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/06.slide ===
+[2026-10-02 20:39:50.275] [INFO ] [pid=23520] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:39:50.305] [INFO ] [pid=23520] [slide-version] fileId=sid_muqy version=5 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=7672 ts=2026-10-02 20:39:55.598 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/07.slide ===
+[2026-10-02 20:39:55.597] [INFO ] [pid=7672] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:39:55.636] [INFO ] [pid=7672] [slide-version] fileId=sid_muqy version=6 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=38220 ts=2026-10-02 20:42:03.257 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/04.slide --page-index 3 ===
+[2026-10-02 20:42:03.256] [INFO ] [pid=38220] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:42:03.291] [INFO ] [pid=38220] [slide-version] fileId=sid_muqy version=7 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=30236 ts=2026-10-02 20:42:08.333 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/08.slide --page-index 7 ===
+[2026-10-02 20:42:08.331] [INFO ] [pid=30236] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:42:08.368] [INFO ] [pid=30236] [slide-version] fileId=sid_muqy version=8 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=33708 ts=2026-10-02 20:42:13.463 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/09.slide --page-index 8 ===
+[2026-10-02 20:42:13.462] [INFO ] [pid=33708] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:42:13.495] [INFO ] [pid=33708] [slide-version] fileId=sid_muqy version=9 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=45492 ts=2026-10-02 20:42:18.678 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/10.slide --page-index 9 ===
+[2026-10-02 20:42:18.677] [INFO ] [pid=45492] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:42:18.710] [INFO ] [pid=45492] [slide-version] fileId=sid_muqy version=10 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=43648 ts=2026-10-02 20:42:23.842 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/11.slide --page-index 10 ===
+[2026-10-02 20:42:23.841] [INFO ] [pid=43648] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:42:23.873] [INFO ] [pid=43648] [slide-version] fileId=sid_muqy version=11 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=25412 ts=2026-10-02 20:42:29.057 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/12.slide --page-index 11 ===
+[2026-10-02 20:42:29.056] [INFO ] [pid=25412] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:42:29.090] [INFO ] [pid=25412] [slide-version] fileId=sid_muqy version=12 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=39536 ts=2026-10-02 20:42:34.226 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/13.slide --page-index 12 ===
+[2026-10-02 20:42:34.225] [INFO ] [pid=39536] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:42:34.259] [INFO ] [pid=39536] [slide-version] fileId=sid_muqy version=13 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=42284 ts=2026-10-02 20:44:24.710 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/14.slide --page-index 13 ===
+[2026-10-02 20:44:24.710] [INFO ] [pid=42284] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:44:24.741] [INFO ] [pid=42284] [slide-version] fileId=sid_muqy version=14 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=7876 ts=2026-10-02 20:44:29.879 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/15.slide --page-index 14 ===
+[2026-10-02 20:44:29.878] [INFO ] [pid=7876] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:44:29.912] [INFO ] [pid=7876] [slide-version] fileId=sid_muqy version=15 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=43132 ts=2026-10-02 20:44:35.029 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/16.slide --page-index 15 ===
+[2026-10-02 20:44:35.028] [INFO ] [pid=43132] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:44:35.060] [INFO ] [pid=43132] [slide-version] fileId=sid_muqy version=16 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=7492 ts=2026-10-02 20:44:40.309 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/17.slide --page-index 16 ===
+[2026-10-02 20:44:40.308] [INFO ] [pid=7492] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:44:40.341] [INFO ] [pid=7492] [slide-version] fileId=sid_muqy version=17 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=11972 ts=2026-10-02 20:44:45.387 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/18.slide --page-index 17 ===
+[2026-10-02 20:44:45.386] [INFO ] [pid=11972] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:44:45.418] [INFO ] [pid=11972] [slide-version] fileId=sid_muqy version=18 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=43996 ts=2026-10-02 20:44:50.325 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/19.slide --page-index 18 ===
+[2026-10-02 20:44:50.324] [INFO ] [pid=43996] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:44:50.359] [INFO ] [pid=43996] [slide-version] fileId=sid_muqy version=19 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=42924 ts=2026-10-02 20:46:24.622 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/20.slide --page-index 19 ===
+[2026-10-02 20:46:24.621] [INFO ] [pid=42924] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:46:24.655] [INFO ] [pid=42924] [slide-version] fileId=sid_muqy version=20 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=24004 ts=2026-10-02 20:46:29.669 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/21.slide --page-index 20 ===
+[2026-10-02 20:46:29.668] [INFO ] [pid=24004] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:46:29.701] [INFO ] [pid=24004] [slide-version] fileId=sid_muqy version=21 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=3980 ts=2026-10-02 20:46:34.779 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/22.slide --page-index 21 ===
+[2026-10-02 20:46:34.778] [INFO ] [pid=3980] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:46:34.810] [INFO ] [pid=3980] [slide-version] fileId=sid_muqy version=22 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=42976 ts=2026-10-02 20:46:39.994 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/23.slide --page-index 22 ===
+[2026-10-02 20:46:39.993] [INFO ] [pid=42976] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:46:40.027] [INFO ] [pid=42976] [slide-version] fileId=sid_muqy version=23 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=10884 ts=2026-10-02 20:46:45.149 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/24.slide --page-index 23 ===
+[2026-10-02 20:46:45.148] [INFO ] [pid=10884] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:46:45.181] [INFO ] [pid=10884] [slide-version] fileId=sid_muqy version=24 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=8464 ts=2026-10-02 20:51:07.367 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/25.slide --page-index 24 ===
+[2026-10-02 20:51:07.367] [INFO ] [pid=8464] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:51:07.401] [INFO ] [pid=8464] [slide-version] fileId=sid_muqy version=25 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=41480 ts=2026-10-02 20:51:12.433 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/26.slide --page-index 25 ===
+[2026-10-02 20:51:12.432] [INFO ] [pid=41480] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:51:12.466] [INFO ] [pid=41480] [slide-version] fileId=sid_muqy version=26 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=24724 ts=2026-10-02 20:51:17.666 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/27.slide --page-index 26 ===
+[2026-10-02 20:51:17.664] [INFO ] [pid=24724] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:51:17.698] [INFO ] [pid=24724] [slide-version] fileId=sid_muqy version=27 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=43992 ts=2026-10-02 20:51:22.884 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/28.slide --page-index 27 ===
+[2026-10-02 20:51:22.883] [INFO ] [pid=43992] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:51:22.915] [INFO ] [pid=43992] [slide-version] fileId=sid_muqy version=28 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=46476 ts=2026-10-02 20:51:28.085 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/29.slide --page-index 28 ===
+[2026-10-02 20:51:28.084] [INFO ] [pid=46476] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:51:28.117] [INFO ] [pid=46476] [slide-version] fileId=sid_muqy version=29 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=6288 ts=2026-10-02 20:51:33.371 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/30.slide --page-index 29 ===
+[2026-10-02 20:51:33.370] [INFO ] [pid=6288] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:51:33.403] [INFO ] [pid=6288] [slide-version] fileId=sid_muqy version=30 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=39136 ts=2026-10-02 20:53:48.156 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/31.slide --page-index 30 ===
+[2026-10-02 20:53:48.155] [INFO ] [pid=39136] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:53:48.189] [INFO ] [pid=39136] [slide-version] fileId=sid_muqy version=31 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=10860 ts=2026-10-02 20:53:53.296 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/32.slide --page-index 31 ===
+[2026-10-02 20:53:53.295] [INFO ] [pid=10860] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:53:53.326] [INFO ] [pid=10860] [slide-version] fileId=sid_muqy version=32 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=20920 ts=2026-10-02 20:53:58.657 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/33.slide --page-index 32 ===
+[2026-10-02 20:53:58.656] [INFO ] [pid=20920] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:53:58.690] [INFO ] [pid=20920] [slide-version] fileId=sid_muqy version=33 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=5028 ts=2026-10-02 20:54:03.894 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/34.slide --page-index 33 ===
+[2026-10-02 20:54:03.894] [INFO ] [pid=5028] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:54:03.932] [INFO ] [pid=5028] [slide-version] fileId=sid_muqy version=34 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=46908 ts=2026-10-02 20:54:09.404 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/35.slide --page-index 34 ===
+[2026-10-02 20:54:09.403] [INFO ] [pid=46908] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:54:09.439] [INFO ] [pid=46908] [slide-version] fileId=sid_muqy version=35 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=26728 ts=2026-10-02 20:54:14.891 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/36.slide --page-index 35 ===
+[2026-10-02 20:54:14.890] [INFO ] [pid=26728] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:54:14.923] [INFO ] [pid=26728] [slide-version] fileId=sid_muqy version=36 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=40576 ts=2026-10-02 20:56:31.640 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/37.slide --page-index 36 ===
+[2026-10-02 20:56:31.640] [INFO ] [pid=40576] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:56:31.673] [INFO ] [pid=40576] [slide-version] fileId=sid_muqy version=37 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=23968 ts=2026-10-02 20:56:36.860 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/38.slide --page-index 37 ===
+[2026-10-02 20:56:36.860] [INFO ] [pid=23968] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:56:36.893] [INFO ] [pid=23968] [slide-version] fileId=sid_muqy version=38 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=36908 ts=2026-10-02 20:56:42.033 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/39.slide --page-index 38 ===
+[2026-10-02 20:56:42.032] [INFO ] [pid=36908] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:56:42.070] [INFO ] [pid=36908] [slide-version] fileId=sid_muqy version=39 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=3272 ts=2026-10-02 20:56:47.317 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/40.slide --page-index 39 ===
+[2026-10-02 20:56:47.317] [INFO ] [pid=3272] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:56:47.351] [INFO ] [pid=3272] [slide-version] fileId=sid_muqy version=40 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=22576 ts=2026-10-02 20:56:52.560 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/41.slide --page-index 40 ===
+[2026-10-02 20:56:52.560] [INFO ] [pid=22576] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:56:52.592] [INFO ] [pid=22576] [slide-version] fileId=sid_muqy version=41 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=18784 ts=2026-10-02 20:56:58.032 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/42.slide --page-index 41 ===
+[2026-10-02 20:56:58.031] [INFO ] [pid=18784] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:56:58.066] [INFO ] [pid=18784] [slide-version] fileId=sid_muqy version=42 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=38172 ts=2026-10-02 20:59:09.903 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/43.slide --page-index 42 ===
+[2026-10-02 20:59:09.902] [INFO ] [pid=38172] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:59:09.935] [INFO ] [pid=38172] [slide-version] fileId=sid_muqy version=43 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=5868 ts=2026-10-02 20:59:15.163 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/44.slide --page-index 43 ===
+[2026-10-02 20:59:15.162] [INFO ] [pid=5868] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:59:15.199] [INFO ] [pid=5868] [slide-version] fileId=sid_muqy version=44 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=44108 ts=2026-10-02 20:59:20.551 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/45.slide --page-index 44 ===
+[2026-10-02 20:59:20.550] [INFO ] [pid=44108] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:59:20.582] [INFO ] [pid=44108] [slide-version] fileId=sid_muqy version=45 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=3736 ts=2026-10-02 20:59:26.014 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/46.slide --page-index 45 ===
+[2026-10-02 20:59:26.013] [INFO ] [pid=3736] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:59:26.048] [INFO ] [pid=3736] [slide-version] fileId=sid_muqy version=46 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=9460 ts=2026-10-02 20:59:31.567 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/47.slide --page-index 46 ===
+[2026-10-02 20:59:31.566] [INFO ] [pid=9460] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:59:31.599] [INFO ] [pid=9460] [slide-version] fileId=sid_muqy version=47 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=46704 ts=2026-10-02 20:59:36.952 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/48.slide --page-index 47 ===
+[2026-10-02 20:59:36.951] [INFO ] [pid=46704] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 20:59:36.985] [INFO ] [pid=46704] [slide-version] fileId=sid_muqy version=48 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=40400 ts=2026-10-02 21:02:49.687 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/49.slide --page-index 48 ===
+[2026-10-02 21:02:49.686] [INFO ] [pid=40400] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:02:49.717] [INFO ] [pid=40400] [slide-version] fileId=sid_muqy version=49 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=38440 ts=2026-10-02 21:02:55.179 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/50.slide --page-index 49 ===
+[2026-10-02 21:02:55.178] [INFO ] [pid=38440] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:02:55.212] [INFO ] [pid=38440] [slide-version] fileId=sid_muqy version=50 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=31392 ts=2026-10-02 21:03:00.594 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/51.slide --page-index 50 ===
+[2026-10-02 21:03:00.594] [INFO ] [pid=31392] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:03:00.627] [INFO ] [pid=31392] [slide-version] fileId=sid_muqy version=51 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=46184 ts=2026-10-02 21:03:06.110 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/52.slide --page-index 51 ===
+[2026-10-02 21:03:06.109] [INFO ] [pid=46184] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:03:06.143] [INFO ] [pid=46184] [slide-version] fileId=sid_muqy version=52 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=41964 ts=2026-10-02 21:03:11.533 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/53.slide --page-index 52 ===
+[2026-10-02 21:03:11.532] [INFO ] [pid=41964] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:03:11.566] [INFO ] [pid=41964] [slide-version] fileId=sid_muqy version=53 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=43168 ts=2026-10-02 21:03:17.108 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/54.slide --page-index 53 ===
+[2026-10-02 21:03:17.107] [INFO ] [pid=43168] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:03:17.141] [INFO ] [pid=43168] [slide-version] fileId=sid_muqy version=54 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=25420 ts=2026-10-02 21:07:01.828 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/55.slide --page-index 54 ===
+[2026-10-02 21:07:01.827] [INFO ] [pid=25420] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:07:01.861] [INFO ] [pid=25420] [slide-version] fileId=sid_muqy version=55 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=39508 ts=2026-10-02 21:07:07.505 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/56.slide --page-index 55 ===
+[2026-10-02 21:07:07.504] [INFO ] [pid=39508] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:07:07.538] [INFO ] [pid=39508] [slide-version] fileId=sid_muqy version=56 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=23508 ts=2026-10-02 21:07:13.073 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/57.slide --page-index 56 ===
+[2026-10-02 21:07:13.072] [INFO ] [pid=23508] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:07:13.104] [INFO ] [pid=23508] [slide-version] fileId=sid_muqy version=57 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=34612 ts=2026-10-02 21:09:34.184 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/58.slide --page-index 57 ===
+[2026-10-02 21:09:34.183] [INFO ] [pid=34612] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:09:34.219] [INFO ] [pid=34612] [slide-version] fileId=sid_muqy version=58 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=29264 ts=2026-10-02 21:09:42.266 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/59.slide --page-index 58 ===
+[2026-10-02 21:09:42.265] [INFO ] [pid=29264] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:09:42.297] [INFO ] [pid=29264] [slide-version] fileId=sid_muqy version=59 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=39016 ts=2026-10-02 21:09:49.575 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/60.slide --page-index 59 ===
+[2026-10-02 21:09:49.574] [INFO ] [pid=39016] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:09:49.607] [INFO ] [pid=39016] [slide-version] fileId=sid_muqy version=60 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=45620 ts=2026-10-02 21:09:56.889 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/61.slide --page-index 60 ===
+[2026-10-02 21:09:56.888] [INFO ] [pid=45620] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:09:56.923] [INFO ] [pid=45620] [slide-version] fileId=sid_muqy version=61 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=43904 ts=2026-10-02 21:10:02.779 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/62.slide --page-index 61 ===
+[2026-10-02 21:10:02.778] [INFO ] [pid=43904] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:10:02.814] [INFO ] [pid=43904] [slide-version] fileId=sid_muqy version=62 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=17680 ts=2026-10-02 21:10:08.762 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/63.slide --page-index 62 ===
+[2026-10-02 21:10:08.761] [INFO ] [pid=17680] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:10:08.796] [INFO ] [pid=17680] [slide-version] fileId=sid_muqy version=63 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=4564 ts=2026-10-02 21:12:03.799 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/64.slide --page-index 63 ===
+[2026-10-02 21:12:03.798] [INFO ] [pid=4564] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:12:03.833] [INFO ] [pid=4564] [slide-version] fileId=sid_muqy version=64 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=30996 ts=2026-10-02 21:12:09.603 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/65.slide --page-index 64 ===
+[2026-10-02 21:12:09.602] [INFO ] [pid=30996] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:12:09.636] [INFO ] [pid=30996] [slide-version] fileId=sid_muqy version=65 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=43300 ts=2026-10-02 21:12:15.313 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/66.slide --page-index 65 ===
+[2026-10-02 21:12:15.312] [INFO ] [pid=43300] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:12:15.345] [INFO ] [pid=43300] [slide-version] fileId=sid_muqy version=66 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=39408 ts=2026-10-02 21:12:20.916 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/67.slide --page-index 66 ===
+[2026-10-02 21:12:20.915] [INFO ] [pid=39408] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:12:20.948] [INFO ] [pid=39408] [slide-version] fileId=sid_muqy version=67 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=27960 ts=2026-10-02 21:14:21.285 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/68.slide --page-index 67 ===
+[2026-10-02 21:14:21.284] [INFO ] [pid=27960] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:14:21.316] [INFO ] [pid=27960] [slide-version] fileId=sid_muqy version=68 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=37220 ts=2026-10-02 21:14:26.877 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/69.slide --page-index 68 ===
+[2026-10-02 21:14:26.876] [INFO ] [pid=37220] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:14:26.911] [INFO ] [pid=37220] [slide-version] fileId=sid_muqy version=69 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=29992 ts=2026-10-02 21:14:32.553 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/70.slide --page-index 69 ===
+[2026-10-02 21:14:32.552] [INFO ] [pid=29992] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:14:32.585] [INFO ] [pid=29992] [slide-version] fileId=sid_muqy version=70 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=33084 ts=2026-10-02 21:14:38.249 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/71.slide --page-index 70 ===
+[2026-10-02 21:14:38.248] [INFO ] [pid=33084] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:14:38.281] [INFO ] [pid=33084] [slide-version] fileId=sid_muqy version=71 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=22944 ts=2026-10-02 21:14:43.958 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/72.slide --page-index 71 ===
+[2026-10-02 21:14:43.957] [INFO ] [pid=22944] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:14:43.991] [INFO ] [pid=22944] [slide-version] fileId=sid_muqy version=72 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=47004 ts=2026-10-02 21:14:49.646 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/73.slide --page-index 72 ===
+[2026-10-02 21:14:49.645] [INFO ] [pid=47004] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:14:49.678] [INFO ] [pid=47004] [slide-version] fileId=sid_muqy version=73 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=11244 ts=2026-10-02 21:16:44.000 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/74.slide --page-index 73 ===
+[2026-10-02 21:16:44.000] [INFO ] [pid=11244] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:16:44.033] [INFO ] [pid=11244] [slide-version] fileId=sid_muqy version=74 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=26504 ts=2026-10-02 21:16:49.586 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/75.slide --page-index 74 ===
+[2026-10-02 21:16:49.585] [INFO ] [pid=26504] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:16:49.620] [INFO ] [pid=26504] [slide-version] fileId=sid_muqy version=75 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=22808 ts=2026-10-02 21:16:55.252 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/76.slide --page-index 75 ===
+[2026-10-02 21:16:55.251] [INFO ] [pid=22808] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:16:55.284] [INFO ] [pid=22808] [slide-version] fileId=sid_muqy version=76 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=9680 ts=2026-10-02 21:17:01.176 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/77.slide --page-index 76 ===
+[2026-10-02 21:17:01.175] [INFO ] [pid=9680] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:17:01.208] [INFO ] [pid=9680] [slide-version] fileId=sid_muqy version=77 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=14440 ts=2026-10-02 21:17:06.976 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/78.slide --page-index 77 ===
+[2026-10-02 21:17:06.975] [INFO ] [pid=14440] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:17:07.011] [INFO ] [pid=14440] [slide-version] fileId=sid_muqy version=78 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=37832 ts=2026-10-02 21:17:12.771 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/79.slide --page-index 78 ===
+[2026-10-02 21:17:12.770] [INFO ] [pid=37832] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:17:12.808] [INFO ] [pid=37832] [slide-version] fileId=sid_muqy version=79 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=39464 ts=2026-10-02 21:20:55.721 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/80.slide --page-index 79 ===
+[2026-10-02 21:20:55.720] [INFO ] [pid=39464] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:20:55.759] [INFO ] [pid=39464] [slide-version] fileId=sid_muqy version=80 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=15976 ts=2026-10-02 21:21:02.115 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/81.slide --page-index 80 ===
+[2026-10-02 21:21:02.114] [INFO ] [pid=15976] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:21:02.159] [INFO ] [pid=15976] [slide-version] fileId=sid_muqy version=81 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=22844 ts=2026-10-02 21:21:08.053 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/82.slide --page-index 81 ===
+[2026-10-02 21:21:08.052] [INFO ] [pid=22844] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:21:08.088] [INFO ] [pid=22844] [slide-version] fileId=sid_muqy version=82 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=40552 ts=2026-10-02 21:21:14.154 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/83.slide --page-index 82 ===
+[2026-10-02 21:21:14.153] [INFO ] [pid=40552] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:21:14.188] [INFO ] [pid=40552] [slide-version] fileId=sid_muqy version=83 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=39996 ts=2026-10-02 21:21:20.243 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/84.slide --page-index 83 ===
+[2026-10-02 21:21:20.242] [INFO ] [pid=39996] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:21:20.277] [INFO ] [pid=39996] [slide-version] fileId=sid_muqy version=84 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=37332 ts=2026-10-02 21:21:26.287 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/85.slide --page-index 84 ===
+[2026-10-02 21:21:26.286] [INFO ] [pid=37332] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:21:26.319] [INFO ] [pid=37332] [slide-version] fileId=sid_muqy version=85 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=23968 ts=2026-10-02 21:23:57.876 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/86.slide --page-index 85 ===
+[2026-10-02 21:23:57.875] [INFO ] [pid=23968] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:23:57.907] [INFO ] [pid=23968] [slide-version] fileId=sid_muqy version=86 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=39168 ts=2026-10-02 21:24:03.665 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/87.slide --page-index 86 ===
+[2026-10-02 21:24:03.664] [INFO ] [pid=39168] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:24:03.696] [INFO ] [pid=39168] [slide-version] fileId=sid_muqy version=87 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=3248 ts=2026-10-02 21:24:09.554 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/88.slide --page-index 87 ===
+[2026-10-02 21:24:09.553] [INFO ] [pid=3248] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:24:09.585] [INFO ] [pid=3248] [slide-version] fileId=sid_muqy version=88 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=15492 ts=2026-10-02 21:24:15.343 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/89.slide --page-index 88 ===
+[2026-10-02 21:24:15.342] [INFO ] [pid=15492] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:24:15.376] [INFO ] [pid=15492] [slide-version] fileId=sid_muqy version=89 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=15652 ts=2026-10-02 21:24:21.371 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/90.slide --page-index 89 ===
+[2026-10-02 21:24:21.370] [INFO ] [pid=15652] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:24:21.402] [INFO ] [pid=15652] [slide-version] fileId=sid_muqy version=90 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=40040 ts=2026-10-02 21:24:27.304 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/91.slide --page-index 90 ===
+[2026-10-02 21:24:27.303] [INFO ] [pid=40040] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:24:27.337] [INFO ] [pid=40040] [slide-version] fileId=sid_muqy version=91 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=15692 ts=2026-10-02 21:27:14.983 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/92.slide --page-index 91 ===
+[2026-10-02 21:27:14.982] [INFO ] [pid=15692] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:27:15.015] [INFO ] [pid=15692] [slide-version] fileId=sid_muqy version=92 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=17796 ts=2026-10-02 21:27:20.991 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/93.slide --page-index 92 ===
+[2026-10-02 21:27:20.990] [INFO ] [pid=17796] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:27:21.023] [INFO ] [pid=17796] [slide-version] fileId=sid_muqy version=93 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=33436 ts=2026-10-02 21:27:26.864 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/94.slide --page-index 93 ===
+[2026-10-02 21:27:26.863] [INFO ] [pid=33436] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:27:26.896] [INFO ] [pid=33436] [slide-version] fileId=sid_muqy version=94 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=30372 ts=2026-10-02 21:27:32.697 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/95.slide --page-index 94 ===
+[2026-10-02 21:27:32.696] [INFO ] [pid=30372] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:27:32.733] [INFO ] [pid=30372] [slide-version] fileId=sid_muqy version=95 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=19516 ts=2026-10-02 21:27:38.665 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/96.slide --page-index 95 ===
+[2026-10-02 21:27:38.664] [INFO ] [pid=19516] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:27:38.700] [INFO ] [pid=19516] [slide-version] fileId=sid_muqy version=96 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=27860 ts=2026-10-02 21:27:44.645 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/97.slide --page-index 96 ===
+[2026-10-02 21:27:44.644] [INFO ] [pid=27860] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:27:44.675] [INFO ] [pid=27860] [slide-version] fileId=sid_muqy version=97 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=43960 ts=2026-10-02 21:29:48.144 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/98.slide --page-index 97 ===
+[2026-10-02 21:29:48.143] [INFO ] [pid=43960] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:29:48.177] [INFO ] [pid=43960] [slide-version] fileId=sid_muqy version=98 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=31032 ts=2026-10-02 21:29:53.847 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/99.slide --page-index 98 ===
+[2026-10-02 21:29:53.847] [INFO ] [pid=31032] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:29:53.879] [INFO ] [pid=31032] [slide-version] fileId=sid_muqy version=99 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=37984 ts=2026-10-02 21:29:59.662 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/100.slide --page-index 99 ===
+[2026-10-02 21:29:59.662] [INFO ] [pid=37984] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:29:59.695] [INFO ] [pid=37984] [slide-version] fileId=sid_muqy version=100 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=39328 ts=2026-10-02 21:30:05.411 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/101.slide --page-index 100 ===
+[2026-10-02 21:30:05.410] [INFO ] [pid=39328] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:30:05.446] [INFO ] [pid=39328] [slide-version] fileId=sid_muqy version=101 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=46916 ts=2026-10-02 21:31:15.703 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/102.slide --page-index 101 ===
+[2026-10-02 21:31:15.702] [INFO ] [pid=46916] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:31:15.734] [INFO ] [pid=46916] [slide-version] fileId=sid_muqy version=102 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=8736 ts=2026-10-02 21:31:21.618 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/103.slide --page-index 102 ===
+[2026-10-02 21:31:21.617] [INFO ] [pid=8736] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:31:21.651] [INFO ] [pid=8736] [slide-version] fileId=sid_muqy version=103 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=2444 ts=2026-10-02 21:31:27.508 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/104.slide --page-index 103 ===
+[2026-10-02 21:31:27.507] [INFO ] [pid=2444] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:31:27.539] [INFO ] [pid=2444] [slide-version] fileId=sid_muqy version=104 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=45788 ts=2026-10-02 21:33:36.000 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/105.slide --page-index 104 ===
+[2026-10-02 21:33:35.999] [INFO ] [pid=45788] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:33:36.032] [INFO ] [pid=45788] [slide-version] fileId=sid_muqy version=105 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=24252 ts=2026-10-02 21:33:42.091 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/106.slide --page-index 105 ===
+[2026-10-02 21:33:42.091] [INFO ] [pid=24252] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:33:42.124] [INFO ] [pid=24252] [slide-version] fileId=sid_muqy version=106 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=16596 ts=2026-10-02 21:33:48.080 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/107.slide --page-index 106 ===
+[2026-10-02 21:33:48.079] [INFO ] [pid=16596] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:33:48.111] [INFO ] [pid=16596] [slide-version] fileId=sid_muqy version=107 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=42436 ts=2026-10-02 21:33:54.267 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/108.slide --page-index 107 ===
+[2026-10-02 21:33:54.266] [INFO ] [pid=42436] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:33:54.300] [INFO ] [pid=42436] [slide-version] fileId=sid_muqy version=108 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=21896 ts=2026-10-02 21:34:00.504 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/109.slide --page-index 108 ===
+[2026-10-02 21:34:00.502] [INFO ] [pid=21896] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:34:00.539] [INFO ] [pid=21896] [slide-version] fileId=sid_muqy version=109 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=31624 ts=2026-10-02 21:34:06.554 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/110.slide --page-index 109 ===
+[2026-10-02 21:34:06.553] [INFO ] [pid=31624] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:34:06.587] [INFO ] [pid=31624] [slide-version] fileId=sid_muqy version=110 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=31024 ts=2026-10-02 21:36:52.216 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/111.slide --page-index 110 ===
+[2026-10-02 21:36:52.215] [INFO ] [pid=31024] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:36:52.246] [INFO ] [pid=31024] [slide-version] fileId=sid_muqy version=111 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=4748 ts=2026-10-02 21:36:58.412 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/112.slide --page-index 111 ===
+[2026-10-02 21:36:58.411] [INFO ] [pid=4748] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:36:58.443] [INFO ] [pid=4748] [slide-version] fileId=sid_muqy version=112 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=7372 ts=2026-10-02 21:37:04.446 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/113.slide --page-index 112 ===
+[2026-10-02 21:37:04.445] [INFO ] [pid=7372] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:37:04.478] [INFO ] [pid=7372] [slide-version] fileId=sid_muqy version=113 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=39060 ts=2026-10-02 21:37:10.549 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/114.slide --page-index 113 ===
+[2026-10-02 21:37:10.548] [INFO ] [pid=39060] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:37:10.580] [INFO ] [pid=39060] [slide-version] fileId=sid_muqy version=114 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=31804 ts=2026-10-02 21:37:16.760 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/115.slide --page-index 114 ===
+[2026-10-02 21:37:16.759] [INFO ] [pid=31804] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:37:16.791] [INFO ] [pid=31804] [slide-version] fileId=sid_muqy version=115 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx
+=== boot pid=32060 ts=2026-10-02 21:37:23.016 cwd=D:\docs\work\cangjie\projects\fountain\docs\speech argv=C:\Users\74414\.workbuddy\binaries\node\versions\22.22.2-3\node_modules\@tencent\slidep\dist\index.js upsert-dsl D:/docs/work/cangjie/projects/fountain/docs/speech.pptx --dsl-file slides/116.slide --page-index 115 ===
+[2026-10-02 21:37:23.015] [INFO ] [pid=32060] [server-url] baseUrl=http://127.0.0.1:39103 source=env
+[2026-10-02 21:37:23.048] [INFO ] [pid=32060] [slide-version] fileId=sid_muqy version=116 filePath=D:\docs\work\cangjie\projects\fountain\docs\speech.pptx

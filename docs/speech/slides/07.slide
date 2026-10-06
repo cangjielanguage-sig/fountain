@@ -1,0 +1,51 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`fountain 是仓颉生态里的一站式服务器应用开发工具库，由四十多个模块组成。核心的那一层我列在这张表里。
+
+配置是 f_config，特色是「没有配置文件」：环境变量、命令行参数、Config.set、编译期 SM4 内嵌，四级优先级。IOC 容器是 f_bean，写法和 Spring 很像，@Bean 加 lookup。AOP 是 f_aspect，一个 Aspect 接口加织入规则。数据层是 f_data，一个 @DataAssist 宏搞定对象复制、JSON 互转、校验和 JSONPath。MVC 是 f_mvc，@Controller 加 @GetMapping 就能起 HTTP 服务。HTTP 数据格式单独拆成了 f_http。
+
+ORM 是 f_orm，它最反直觉的一点是 DAO 就是接口，加了 @DAO 以后 SqlExecutor 本身就是实现。安全是 f_security，JWT 是 f_jwt，定时任务是 f_ticktock，随机数是 f_random，工具箱是 f_util，日志是 f_log。
+
+最下面两行：f_cache、f_pool、f_collection、f_time、f_regex、f_rx 构成基础设施；启动器是 fboot 和 f_app——注意，没有 main 也能启动应用。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 1 章 · 为什么使用 fountain · 1.2</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>fountain 是什么</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>核心层 15 项能力</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 12 }}>
+    <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.6 }}>40+ 模块，核心的那一层如下；外围模块既能被框架使用，也能单独当工具库引入。</Text>
+    <Table
+      style={{ width: '100%', height: 494 }}
+      defaultTextStyle={{ fontSize: 14, textAlign: 'left', color: '#E2E8F0' }}
+      defaultCellStyle={{ border: { left: { width: 1, color: '#1E293B' }, right: { width: 1, color: '#1E293B' }, top: { width: 1, color: '#1E293B' }, bottom: { width: 1, color: '#1E293B' } } }}
+      cells={[
+        [ { text: '能力', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } }, { text: '模块', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } }, { text: '一句话', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } } ],
+        ['配置', { text: 'f_config', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' } }, '没有配置文件：环境变量 / 命令行 / Config.set / 编译期 SM4 内嵌，四级优先级'],
+        ['IOC 容器', { text: 'f_bean', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' } }, '@Bean + lookup<T>()，宏在编译期完成注册'],
+        ['AOP', { text: 'f_aspect', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' } }, 'Aspect 接口 + 织入规则，横切逻辑集中一处'],
+        ['数据', { text: 'f_data', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' } }, '@DataAssist 一把宏搞定对象复制、JSON 互转、校验、JSONPath'],
+        ['MVC', { text: 'f_mvc', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' } }, '@Controller + @GetMapping，HTTP 服务开箱即用'],
+        ['HTTP 数据格式', { text: 'f_http', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' } }, 'MediaType 抽象（json / text / multipart）+ 文件上传，可扩展私有协议'],
+        ['ORM', { text: 'f_orm', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' } }, 'DAO 就是接口，@DAO 以后 SqlExecutor 就是实现'],
+        ['安全', { text: 'f_security', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' } }, '登录状态、鉴权、权限检查的统一抽象'],
+        ['JWT', { text: 'f_jwt', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' } }, '完整的 JWT 编码 / 验签 API'],
+        ['CRON', { text: 'f_ticktock', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' } }, '@Bean + cron 表达式即可定时执行'],
+        ['随机', { text: 'f_random', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' } }, '区间随机数、随机数流、随机字符串、蓄水池抽样'],
+        ['工具箱', { text: 'f_util', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' } }, 'UUID(v1~v8) / IdMaker / TextTemplate / PathPattern / TreeTransformer / CaseFormat / 设计模式骨架'],
+        ['日志', { text: 'f_log', textStyle: { color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' } }, 'stdx.log 的实现：默认静默、appender 即输出通道、全程异步、模板化消息'],
+        ['基础设施', { text: 'f_cache f_pool f_collection f_time f_regex f_rx', textStyle: { color: '#94A3B8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', fontSize: 13 } }, '堆缓存 / 对象池 / 集合补位 / 时间 DSL / 正则缓存 / 反应式编程'],
+        ['启动器', { text: 'fboot / f_app', textStyle: { color: '#F59E0B', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' } }, '没有 main 也能启动应用'],
+      ]}
+    />
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>07 / 116</Text>
+  </Box>
+</Slide>

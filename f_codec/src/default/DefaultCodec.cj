@@ -44,17 +44,33 @@ public class DefaultCodec <: Codec & Releasable {
     private static let TEN_POW_NINE = BigInt(10 ** 9)
     private static let typeMurmurHashs = ConcurrentHashMap<TypeInfo, UInt128>()
     private static let typeMurmurCreators = ConcurrentHashMap<UInt128, () -> SimpleDataObject>()
-    private static var byteListOutputBuilder = BytesListOutputStream.builder(initSize: 1024, minSize: 1024, maxSize: 1024)
+    // 取池项的等待上限是**池初始化参数**（.autocode/bugs/bug-archived-on-20261004.md 7.6）：池耗尽超过它就 WARN 并返回 None，由调用方失败可见。
+    // 需要"无限等待"的部署把它设成 Duration.Max（实现仍每轮让出 CPU）。
+    private static var byteListOutputBuilder = BytesListOutputStream.builder(
+        initSize: 1024, minSize: 1024, maxSize: 1024, maxWaiting: Duration.second * 30)
     private static var fileThreshold = 4096
-    private static var bytesPool = ArrayPool<Byte>(initSize: 0, minSize: 1, maxSize: 1024, arraySize: 4096)
+    private static var bytesPool = ArrayPool<Byte>(
+        initSize: 0, minSize: 1, maxSize: 1024, arraySize: 4096, maxWaiting: Duration.second * 30)
     private var size = 0
     private let inputs = ArrayList<BytesCopyTo>()
 
     public static func setBytesPool(output: BytesListOutputStreamBuilder): Unit {
         byteListOutputBuilder = output
     }
-    public static func setBytesPool(initSize!: Int64 = 0, minSize!: Int64 = 1, maxSize!: Int64 = 1024, arraySize!: Int64 = 4096): Unit {
-        bytesPool = ArrayPool<Byte>(initSize: initSize, minSize: minSize, maxSize: maxSize, arraySize: arraySize)
+    /**
+     * 按参数重建「编码缓冲池」（`byteListOutputBuilder` 内部的 ArrayListPool），
+     * 与下面 `setBytesPool(initSize:…)` 对称 —— 两者的参数都带默认值（默认值与包初始化时用的值一致）。
+     * 不要求调用方 import f_pool（f_rpc 就是这样按配置初始化的，见 .autocode/bugs/bug-archived-on-20261004.md 7.6）。
+     */
+    public static func setBufferPool(initSize!: Int64 = 1024, minSize!: Int64 = 1024, maxSize!: Int64 = 1024,
+        maxWaiting!: Duration = Duration.second * 30): Unit {
+        byteListOutputBuilder = BytesListOutputStream.builder(
+            initSize: initSize, minSize: minSize, maxSize: maxSize, maxWaiting: maxWaiting)
+    }
+    public static func setBytesPool(initSize!: Int64 = 0, minSize!: Int64 = 1, maxSize!: Int64 = 1024, arraySize!: Int64 = 4096,
+        maxWaiting!: Duration = Duration.second * 30): Unit {
+        bytesPool = ArrayPool<Byte>(initSize: initSize, minSize: minSize, maxSize: maxSize, arraySize: arraySize,
+            maxWaiting: maxWaiting)
         fileThreshold = arraySize
     }
     public static func registerType<T>(): UInt128 where T <: Object & ObjectData<T> & DataFields<T> {
@@ -69,10 +85,48 @@ public class DefaultCodec <: Codec & Releasable {
         })
         typeMurmur
     }
+    /** 上次从 `DataTypeRegistry` 拉取时它的大小（只增不减），用来避免每次未命中都遍历全表。 */
+    private static var pulledTypeCount = 0
+    /**
+     * 把 f_data 侧「`@DataAssist` 自登记」的类型补进本表：注册表存的是「限定名 + 创建者」，
+     * 这里用与编码侧相同的规则补算 murmur（`murmurHash(限定名)`）。
+     */
+    private static func pullRegisteredTypes(): Unit {
+        let total = DataTypeRegistry.size
+        if (total == pulledTypeCount) {
+            return
+        }
+        for ((name, creator) in DataTypeRegistry.snapshot()) {
+            typeMurmurCreators.addIfAbsent(murmurHash(name), creator)
+        }
+        pulledTypeCount = total
+    }
+    /**
+     * 按「限定名 + 创建者」登记对象类型：与 `registerType<T>()` 等价，但**不要求调用方静态满足 T 的约束**。
+     *
+     * 供框架在宏展开处自动登记跨网络传输的类型（见 .autocode/bugs/bug-archived-on-20261004.md 7.11）：宏是 token 级的、给不出类型约束，
+     * 无法对任意参数/返回类型生成 `registerType<T>()` 直调，只能把「运行时探测到的限定名与创建者」交给这里。
+     * 键与 `registerType<T>()` 完全一致（都是 murmurHash(限定名)），两种登记方式可混用。
+     */
+    public static func registerType(qualifiedName: String, creator: () -> SimpleDataObject): Unit {
+        typeMurmurCreators.addIfAbsent(murmurHash(qualifiedName), creator)
+    }
 
     private func lastBuffer(): BytesListOutputStream {
         func getBuf(){
-            let buf = byteListOutputBuilder.build().getOrThrow()
+            // 有限超时取池项：取不到就抛，由调用方（写线程）记录可见失败，
+            // 而不是无限等待（原实现是 build() 默认 Duration.Max）。
+            let buf = byteListOutputBuilder.build(timeout: Duration.second * 5).getOrThrow()
+            if (!buf.isEmpty) {
+                // 池项应当是干净的：这里非空说明池的归还清理/记账出了问题（见 .autocode/bugs/bug-archived-on-20261004.md 六）。
+                // 直接抛：编码期失败，绝不会把脏字节写到线上；调用方（写线程）会记录可见错误。
+                let dirtyBytes = if (let Some(n) <- buf.byteSize()) {
+                    '${n}'
+                } else {
+                    'unknown'
+                }
+                throw CodecException('borrowed a non-empty buffer from pool: dirtyBytes=${dirtyBytes}')
+            }
             inputs.add(buf)
             buf
         }
@@ -464,7 +518,9 @@ public class DefaultCodec <: Codec & Releasable {
         encode(value, lastBuffer())
     }
     private func encode(value: DateTime, buffer: BytesListOutputStream): Encoder {
-        let duration = value - DateTime.UnixEpoch
+        // 必须用绝对时刻：`value - DateTime.UnixEpoch` 与时区相关（本地时间会多算一个UTC偏移），
+        // 解码端再做 `UnixEpoch + duration` 就得到另一个时刻，响应里的消息id与请求对不上（.autocode/bugs/bug-archived-on-20261004.md 7.10）
+        let duration = value.toUnixTimeStamp()
         let int = BigInt(duration.toSeconds()) * TEN_POW_NINE + BigInt(
             (duration - Duration.second * duration.toSeconds()).toNanoseconds())
         if (int >= MIN_INT && int < ZERO_BIGINT) {
@@ -485,7 +541,7 @@ public class DefaultCodec <: Codec & Releasable {
         let buffer = lastBuffer()
         buffer.write(sizeBuf)
         buffer.write(value)
-        this.size += size + sizeBuf.size
+        this.size += value.size + sizeBuf.size
         this
     }
     public func encode(data: InputStream, size: Int64): Encoder {
@@ -495,7 +551,7 @@ public class DefaultCodec <: Codec & Releasable {
         let sizeBuf = encodeSizeOfValue(INPUTSTREAM, !isFile, size, forInt: true)
         let buffer = lastBuffer()
         buffer.write(sizeBuf)
-        inputs.add(PooledBufferBytesCopyTo(data, bytesPool))
+        inputs.add(PooledBufferBytesCopyTo(data, bytesPool, declaredSize: size))
         this.size += size + sizeBuf.size //+sizeBuf.size是类型头的1字节 + size序列化后的字节数
         this
     }
@@ -664,11 +720,31 @@ public class DefaultCodec <: Codec & Releasable {
         }
         v
     }
+    /**
+     * 按线上声明的长度准备字节缓冲。**分配之前**先确认它不超过输入的剩余字节数：
+     * 帧的 len 只限住“可读字节数”，挡不住 `Array<Byte>(声明长度)` —— 载荷里一个损坏/恶意的长度字段
+     * 就足以让这里尝试分配 TB 级内存（见 .autocode/bugs/bug-archived-on-20261004.md 7.1）。输入不支持报剩余量（非帧内解码）时退化为原行为。
+     */
+    private func checkedBuffer(input: InputStream, declared: Int64, what: String): Array<Byte> {
+        if (declared < 0) {
+            throw CodecException('${what} declares negative size ${declared}')
+        }
+        if (let bounded: SizeBoundedInput <- input) {
+            let remaining = bounded.remainingBytes
+            if (declared > remaining) {
+                throw CodecException('${what} declares ${declared} bytes but only ${remaining} bytes left in frame')
+            }
+        }
+        Array<Byte>(declared, repeat: 0)
+    }
     public func decodeData(input: InputStream): Data {
         // decodeSizeOfEncoded(input)
         var bytes = [0u8]
         var size = input.read(bytes)
-        if (size == 0 || bytes[0] == 0) {
+        if (size <= 0) {
+            // 读到 0（或 -1）字节 = 写端已关闭，而这里正处在“装配中” ⇒ 消息不完整，必须抛
+            throw CodecException('input closed while decoding data: message is incomplete')
+        } else if (bytes[0] == 0) {
             return DataNone.INSTANCE
         } else if (bytes[0] <= 0x0f) {
             throw CodecException('Illegal serialization header ${toHex(bytes[0])}')
@@ -686,7 +762,7 @@ public class DefaultCodec <: Codec & Releasable {
                 throw CodecException('current data head is ${toHex(head)} but read ${size} bytes')
             }
             size = parseInt64(head, true, bytes)
-            bytes = Array<Byte>(size, repeat: 0)
+            bytes = checkedBuffer(input, size, 'string')
             size = input.read(bytes)
             if (size < bytes.size) {
                 throw CodecException('size of string is less than encoded ${size}')
@@ -796,40 +872,70 @@ public class DefaultCodec <: Codec & Releasable {
         } else if (dataType == DataType.DURATION2.value) {
             readDuration2(head, input).toData()
         } else if (dataType == DataType.DATETIME1.value) {
-            (DateTime.UnixEpoch + readDuration1(head, input)).toData()
+            // 与 encode(DateTime) 对称：按绝对时刻还原
+            DateTime.fromUnixTimeStamp(readDuration1(head, input)).toData()
         } else if (dataType == DataType.DATETIME2.value) {
-            (DateTime.UnixEpoch + readDuration2(head, input)).toData()
+            DateTime.fromUnixTimeStamp(readDuration2(head, input)).toData()
         } else if (dataType == DataType.COLLECTION.value) {
-            let list = DataList()
+            // 空集合：编码侧只写一个 head 字节、低半字节 0（不写长度字节，见 `encode` 的 `x.isEmpty()` 分支），
+            // 与字符串分支的 `ss == 0` 是同一约定 —— 这里必须直接返回空集合，
+            // 否则会去读长度字节、`parseInt64` 拿到长度 0 的数组后在 else 分支索引 bytes[0] 越界
+            // （实测表现：RPC 客户端用 DataAny 中性解码，收到"params 为空"的响应就断链，
+            // 见 .autocode/bugs/bug-archived-on-20261004.md）
             let s = Int64(head & 0x0f)
-            bytes = Array<Byte>(s, repeat: 0)
-            size = input.read(bytes)
-            if (size < s) {
-                throw CodecException('current data head is ${toHex(head)}, but read ${size} bytes')
+            if (s == 0) {
+                DataList()
+            } else {
+                let list = DataList()
+                bytes = Array<Byte>(s, repeat: 0)
+                size = input.read(bytes)
+                if (size < s) {
+                    throw CodecException('current data head is ${toHex(head)}, but read ${size} bytes')
+                }
+                size = parseInt64(head, true, bytes)
+                for (_ in 0..size) {
+                    list.add(decodeData(input))
+                }
+                list
             }
-            size = parseInt64(head, true, bytes)
-            for (_ in 0..size) {
-                list.add(decodeData(input))
-            }
-            list
         } else if (dataType == DataType.MAP.value) {
-            let tuples = DataTuples()
+            // 空映射：同空集合（低半字节 0 = 没有长度字节）
             let s = Int64(head & 0x0f)
-            bytes = Array<Byte>(s, repeat: 0)
-            size = input.read(bytes)
-            if (size < s) {
-                throw CodecException('current data head is ${toHex(head)}, but read ${size} bytes')
+            if (s == 0) {
+                DataTuples()
+            } else {
+                let tuples = DataTuples()
+                bytes = Array<Byte>(s, repeat: 0)
+                size = input.read(bytes)
+                if (size < s) {
+                    throw CodecException('current data head is ${toHex(head)}, but read ${size} bytes')
+                }
+                size = parseInt64(head, true, bytes)
+                for (_ in 0..size) {
+                    let key = decodeData(input)
+                    let value = decodeData(input)
+                    tuples.add(key, value)
+                }
+                tuples
             }
-            size = parseInt64(head, true, bytes)
-            for (_ in 0..size) {
-                let key = decodeData(input)
-                let value = decodeData(input)
-                tuples.add(key, value)
-            }
-            tuples
         } else if (dataType == DataType.OBJECT.value) {
             let murmur = UInt128.fromBytes(readBytes(head, input))
-            let object = typeMurmurCreators[murmur]()
+            // 类型创建者只在本进程“编码过该类型”时才登记；只解码不编码的一侧（客户端第一次收响应、
+            // 服务端第一次收请求）会走到这里。用下标取值会抛 NoneValueException，上层再一包装就成了
+            // 难以定位的错误（曾表现为消息id格式化时的空指针），这里显式报出哈希与补救办法。
+            var registered = typeMurmurCreators.get(murmur)
+            if (registered.isNone()) {
+                // 本进程可能只解码不编码（客户端第一次收响应 / 服务端第一次收请求 / 嵌套对象字段）：
+                // f_data 侧的注册表里由 @DataAssist 生成的类在包初始化时自行登记过，这里补登记再重试（.autocode/bugs/bug-archived-on-20261004.md 7.11）
+                pullRegisteredTypes()
+                registered = typeMurmurCreators.get(murmur)
+            }
+            let creator = match (registered) {
+                case Some(c) => c
+                case _ => throw CodecException(
+                    'object type murmur ${murmur} is not registered in this process; encode it here once, or call DefaultCodec.registerType<T>() on this side')
+            }
+            let object = creator()
             size = decodeSizeOfEncoded(input)
             for (_ in 0..size) {
                 let name = match (decodeData(input)) {
@@ -857,16 +963,18 @@ public class DefaultCodec <: Codec & Releasable {
                 if (size == 0) {
                     return (Array<Byte>()).toData()
                 }
-                let array = Array<Byte>(size, repeat: 0)
-                size = input.read(array)
-                if (size < s) {
-                    throw CodecException('current data head is ${toHex(head)}, but read size is ${size}')
+                let declared = size
+                let array = checkedBuffer(input, declared, 'inputstream payload')
+                let read = input.read(array)
+                if (read != declared) {
+                    // 没读满 = 消息不完整（截断）；绝不能零填充后当成完整消息返回
+                    throw CodecException('payload is incomplete: declared ${declared} bytes, but read ${read}')
                 }
                 return if (f == 0) {
                     array.toData()
                 } else {
                     let fileNameSize = decodeSizeOfEncoded(input)
-                    bytes = Array<Byte>(fileNameSize, repeat: 0)
+                    bytes = checkedBuffer(input, fileNameSize, 'file name')
                     size = input.read(bytes)
                     if (size < fileNameSize) {
                         throw CodecException(
@@ -888,25 +996,30 @@ public class DefaultCodec <: Codec & Releasable {
                 Directory.create(dir)
             }
             let file = File.createTemp(dir)
-            if(let Some(buffer) <- bytesPool.get()){
-                try{
-                    while (true) {
-                        let readSize = input.read(buffer)
-                        if (readSize == size) {
-                            file.write(buffer)
-                        } else if (readSize < buffer.size) {
-                            let buf = buffer[0..size - readSize]
-                            file.write(buf)
-                            break
-                        }
+            let buffer = match (bytesPool.get()) {
+                case Some(b) => b
+                // 池耗尽（超过该池的 maxWaiting）时不能"静默跳过写文件"：那会把内容缺失的 File 交给上层。
+                case _ => throw CodecException(
+                    'cannot borrow a buffer to write the received file payload (${size} bytes): bytes pool is exhausted')
+            }
+            try{
+                var remain = size
+                while (remain > 0) {
+                    let readSize = input.read(buffer)
+                    if (readSize <= 0) {
+                        // 读到 0（或 -1）字节 = 写端已关闭，而载荷还差 remain 字节 ⇒ 不完整
+                        throw CodecException('payload is incomplete: ${remain} bytes unread')
                     }
-                }finally{
-                    bytesPool.giveBack(buffer)
+                    let take = if (readSize < remain) { readSize } else { remain }
+                    file.write(buffer[0..take])
+                    remain -= take
                 }
+            }finally{
+                bytesPool.giveBack(buffer)
             }
             if (f != 0) {
                 let fileNameSize = decodeSizeOfEncoded(input)
-                bytes = Array<Byte>(fileNameSize, repeat: 0)
+                bytes = checkedBuffer(input, fileNameSize, 'file name')
                 size = input.read(bytes)
                 if (size < fileNameSize) {
                     throw CodecException(

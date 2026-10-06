@@ -47,6 +47,9 @@ public class HashBuilder <: Hashable {
     public func append<T>(arg: T): This where T <: Hashable {
         append(arg.hashCode())
     }
+    // 注：无法用重载覆盖集合字段 —— `Array<T>`/`ArrayList<T>` 自身满足 `Hashable`，
+    // 于是 `append<T>(arg: T) where T <: Hashable`（身份哈希）比 `append<T>(arg: Array<T>)` 更容易被选中。
+    // 集合按内容参与哈希这件事由 `@DataAssist` 生成 hashCode 时处理（见 f_data/src/macros/DataAssist.cj）。
     public func append(arg: Int8): This {
         append(arg.hashCode())
     }
@@ -89,11 +92,8 @@ public class HashBuilder <: Hashable {
             append(x.hashCode())
             return this
         }
-        match (args) {
-            case x: Hashable => append(x.hashCode())
-            case _ => for (arg in args) {
-                append(arg.hashCode())
-            }
+        for (arg in args) {
+            append(arg.hashCode())
         }
         this
     }
@@ -111,7 +111,12 @@ public class HashBuilder <: Hashable {
             match ((k, v)) {
                 case (x: Hashable, y: Hashable) => append(x.hashCode()).append(y.hashCode())
                 case (x: Hashable, y: ToString) => append(x.hashCode()).append(y.toString())
+                case (x: ToString, y: Hashable) => append(x.toString()).append(y.hashCode())
+                case (x: ToString, y: ToString) => append(x.toString()).append(y.toString())
                 case (x: Hashable, _) => append(x.hashCode()).append('_')
+                case (x: ToString, _) => append(x.toString()).append('_')
+                case (_, y: Hashable) => append('_').append(y.hashCode())
+                case (_, y: ToString) => append('_').append(y.toString())
                 case _ => append('_').append('_')
             }
         }

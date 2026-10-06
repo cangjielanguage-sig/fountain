@@ -1,0 +1,64 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`文件切割与压缩，一句话概括：「默认按天切，切完的文件加时间后缀，配了压缩就压」。
+
+切割时机有两个条件，满足任一即切。第一，跨周期：文件创建时间早于当前时间单位的起点——按天切就是今天凌晨之前创建的。第二，超大小：当前大小加上本批字节数大于等于 rotateSize，这是写在文件里的预判，不是事后检查。
+
+切割动作是四步：关掉当前文件；rename 成「原路径加一个点和上一个周期的时间戳」；如果配了 compressFormat，在独立线程里压缩，Deflate 出来是 lz，GZip 出来是 gz，然后原文件被删掉；最后重新以 Append 模式打开原路径。
+
+所以按天切、不压缩时，你会看到 fdemo.log 是当前正在写的，fdemo.log 点 20261001 是昨天那份。
+
+url 写法是一个字符串替代四个配置项，而且 url 里的参数优先于独立配置项。rotateSize 支持人类可读写法，一百 k、十 M、一 G。
+
+最后两个要注意的地方。第一，rotateDuration 不要配亚秒级——毫秒、微秒、纳秒都不行。因为切割后文件名的后缀粒度只到秒，而「跨周期」判断几乎每一次写入都会成立，结果是每次写日志都 rename 一次加重开文件。按分钟起步，常用小时和天。
+
+第二，压缩失败也会删掉原文件：压缩那段的 finally 里直接删原路径，压缩过程中出的错只打印栈。所以日志是重要证据的场景，比如审计、计费，建议先不压缩，或者自测一遍压缩路径。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 15 章 · 日志 f_log · 15.6</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>文件切割与压缩</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>默认按天切</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ width: 620, flexDirection: 'column', gap: 14 }}>
+      <Box style={{ height: 196, background: '#0B1220', borderRadius: 12, border: '1px solid #38BDF8', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#38BDF8', marginBottom: 8 }}>切割时机与动作</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7 }}>跨周期：文件创建时间早于当前时间单位的起点（按天切 = 今天凌晨之前创建的）</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.7, marginTop: 6 }}>超大小：size + 本批字节数 ≥ rotateSize（写在文件里的预判，不是事后检查）</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.7, marginTop: 10 }}>动作：关掉当前文件 → rename 成「原路径.【上一周期时间戳】」→ 配了 compressFormat 就在独立线程里压缩（Deflate → .lz，GZip → .gz）→ 删掉原文件 → 重新以 Append 模式打开原路径</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>按天切、不压缩时看到的样子</Text>
+        <Text style={{ fontSize: 12, color: '#E2E8F0', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>
+          <>log/fdemo.log　　　　　← 当前正在写<br />log/fdemo.log.20261001　← 昨天那份（后缀是「上一个周期」）</>
+        </Text>
+        <Text style={{ fontSize: 11, color: '#22D3EE', lineHeight: 1.7, marginTop: 8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{'export logger_appender_myfile_url='}</Text>
+        <Text style={{ fontSize: 11, color: '#22D3EE', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{'　\'file://./log/app.log?rotateSize=100M&rotateDuration=HOUR&compressFormat=GZip\''}</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.75, marginTop: 'auto' }}>_url 是一个字符串替代四个配置项，url 参数优先于独立配置项；rotateSize 支持 100k / 10M / 1G。</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, flexDirection: 'column', gap: 14 }}>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #F59E0B', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#F59E0B' }}>⚠ rotateDuration 不要配亚秒级</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.75, marginTop: 10 }}>MILLISECOND / MICROSECOND / NANOSECOND 都不要用。</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.75, marginTop: 10 }}>切割后文件名的后缀粒度只到秒，而「跨周期」判断几乎每次写入都会成立 —— 结果是每次写日志都 rename 一次加重开文件。</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.75, marginTop: 10 }}>按 MINUTE 起步，常用 HOUR / DAY。</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #F59E0B', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#F59E0B' }}>⚠ 压缩失败也会删掉原文件</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.75, marginTop: 10 }}>压缩那段的 finally 里直接 removeIfExists(原路径)，压缩过程中出的错只打印栈。</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.75, marginTop: 'auto' }}>日志是重要证据的场景（审计、计费）建议先不压缩，或者自测一遍压缩路径。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>99 / 116</Text>
+  </Box>
+</Slide>

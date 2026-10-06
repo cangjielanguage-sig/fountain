@@ -24,7 +24,8 @@ public class MessageID <: Hashable & Equatable<MessageID> & ToString {
         public let tid!: Int64 = Thread.currentThread.id,
         public let hostId!: Int64 = ProtocolConfig.getProtocolHostId()
     ){
-        hash = HashBuilder().append(pid).append(tid).append(time).build()
+        // 用绝对时刻算hash：同一时刻不管在哪一侧以什么时区表示（本地/UTC），都必须是同一个id
+        hash = HashBuilder().append(pid).append(tid).append(time.toUnixTimeStamp().toNanoseconds()).build()
     }
     public func hashCode(): Int64 {
         hash
@@ -33,7 +34,7 @@ public class MessageID <: Hashable & Equatable<MessageID> & ToString {
         this.hash == other.hash && 
         this.pid == other.pid && 
         this.tid == other.tid &&
-        this.time == other.time
+        this.time.toUnixTimeStamp() == other.time.toUnixTimeStamp()
     }
     public func toString(): String {
         '${pid}_${tid}_${hostId}_${time.format("yyyyMMddHHmmssSSS")}'

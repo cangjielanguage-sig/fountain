@@ -1,0 +1,61 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`统一数据模型这一节，是理解 f_data 的关键。
+
+f_data 定义了一棵统一的「数据树」，一切转换都先落到这棵树上，再从树上长出来。这就是为什么任意两个类之间都能互相复制——它们都先变成 Data，再从 Data 变回去。
+
+树上的节点有十种：Data 是所有数据值的根接口；DataReal 是数值，底层是 Decimal；DataString 是字符串；DataBool 是布尔，有 TRUE 和 FALSE 两个常量；DataNone 是空值，单例是 INSTANCE；DataList 是有序列表；DataDict 是键值映射；DataDateTime 和 DataDuration 管时间和时间间隔；DataAny 是任意值的包装。
+
+转换接口有三个：ToData 只有一个 toData 方法，负责对象变成 Data；FromData 有 fromData 和 tryFromData 两个静态方法，负责 Data 变成对象；FromToData 是前两者的交集。
+
+操作入口是 DataObject，它把任意对象包成「可读写字段的容器」。你可以按名字读、按名字写、按名字读并转成指定类型、遍历字段、取字段上的全部注解、取指定注解——校验就是靠注解实现的。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 8 章 · 数据 f_data · 8.3</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>统一数据模型：Data</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>一切转换先落到这棵树上</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 16 }}>
+    <Box style={{ flex: 1, flexDirection: 'row', gap: 16 }}>
+      <Box style={{ width: 520, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#E2E8F0' }}>数据树的节点</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.9, marginTop: 10 }}>
+          <>Data　　　　　　所有数据值的根接口<br />DataReal(Decimal)　数值<br />DataString(String)　字符串<br />DataBool　　　　 布尔（TRUE / FALSE）<br />DataNone　　　　 空值（INSTANCE）<br />DataList　　　　 有序列表<br />DataDict　　　　 键值映射<br />DataDateTime / DataDuration　时间 / 时间间隔<br />DataAny　　　　　任意值的包装</>
+        </Text>
+      </Box>
+      <Box style={{ flex: 1, flexDirection: 'column', gap: 14 }}>
+        <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 18, flexDirection: 'column' }}>
+          <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>转换接口</Text>
+          <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public interface ToData   { func toData(): Data }"}</Text>
+          <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public interface FromData {"}</Text>
+          <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    static func fromData(data: Data, flag: DataConversionFlag): Any"}</Text>
+          <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    static func tryFromData(data: Data, flag: DataConversionFlag): Any"}</Text>
+          <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"}"}</Text>
+          <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.7, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public interface FromToData <: FromData & ToData {}"}</Text>
+        </Box>
+        <Box style={{ flex: 1, background: 'rgba(56,189,248,0.06)', borderRadius: 12, border: '1px solid #38BDF8', padding: 18, flexDirection: 'column' }}>
+          <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#38BDF8' }}>所以任意两个类都能互转</Text>
+          <Text style={{ fontSize: 14, color: '#E2E8F0', lineHeight: 1.8, marginTop: 8 }}>它们都先变成 Data，再从 Data 变回去 —— 中间那棵树是共通的。</Text>
+        </Box>
+      </Box>
+    </Box>
+
+    <Box style={{ height: 186, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 18, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>{"DataObject<T> —— 操作入口，把任意对象包成"}「可读写字段的容器」</Text>
+      <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"let dobj = DataObject<TestData2>(data2)"}</Text>
+      <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"dobj['b']                              // 按名字读（返回 Data）"}</Text>
+      <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"dobj['b'] = 'x'.toData()               // 按名字写"}</Text>
+      <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"dobj.get<Int64>('a', DEFAULT_DATA_FLAG) // 按名字读并转成指定类型"}</Text>
+      <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"dobj.annotations('b')                   // 取字段上的全部注解（校验就靠它）"}</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>48 / 116</Text>
+  </Box>
+</Slide>

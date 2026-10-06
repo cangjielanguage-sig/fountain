@@ -30,8 +30,13 @@ public import fountain::f_data.*
 public import fountain::f_orm.wrap.ORMConfig
 
 import fountain::f_orm.ProtectedMacros.*
+
+// bug.md §2.12（ORM-5）：字面模式预编译为常量——原来每次调用都要插值构造 key、收集 flags、再查一次正则缓存
+// （顶层 let 必须先定义后使用，故放在函数之前；注解仍贴在函数上）
+private let EMPTY_LOGICAL_EXPR = #'^[\s()]*$'#.regex(solid: true)
+
 @ORMEmbedSensitive()
 
 func emptyLogicalExpr(cond: String): Bool {
-    #'^[\s()]*$'#.regex(solid: true).matches(cond)
+    EMPTY_LOGICAL_EXPR.matches(cond)
 }

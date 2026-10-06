@@ -1,0 +1,77 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`PathPattern 是 MVC 路由的引擎。
+
+你在 MVC 里写的 /api/user/{id}，能匹配到 /api/user/1 并抽出 id 等于 1——干这件事的就是 PathPattern。按作者的说法，它是「从生产环境用过的 Java 实现移植而来」。不只 MVC 能用，任何「按路径找数据」的场景都能用：静态资源路由、网关转发规则、日志文件路径归集。
+
+核心 API 看一眼：compile 注册路径并可以挂任意数据，handler、配置、元数据都行；compileIfAbsent 是不存在才注册；data 和 dataByPrefix 按路径取出挂的数据；matches 和 matchesPrefix 判断是否匹配；extractVariableInPath 取单个路径变量；extractVariablesInPath 取全部；extractTimeVariableInPath 直接把路径变量解析成 DateTime；还有两个按 Parsable 和 DataParsable 解析的版本。各函数都有 withExtName 重载，决定是否把扩展名当作路径的一部分。
+
+匹配优先级从高到低：字符串相等最高；然后是单级多字符的星号、单级单字符的问号、单级正则，这三个同级；再是独占一整级的单星；然后是占位符和带星占位符，这两个同级；最低是跨多级的双星。
+
+规则补充：只能匹配绝对路径，不以斜杠开头也按斜杠开头处理；连续多个斜杠会合并成一个；带正则的占位符自带约束；正则那一节不会作为路径变量。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 9 章 · 工具箱 f_util · 9.7</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>PathPattern：MVC 路由的引擎</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>从生产环境的 Java 实现移植</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 16 }}>
+    <Box style={{ width: 560, flexDirection: 'column', gap: 14 }}>
+      <Box style={{ background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"let patterns = PathPattern()"}</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"patterns.compileIfAbsent('/api/user/{id}'){ handler }"}</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"patterns.data<Handler>('/api/user/1')"}</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.6, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"patterns.extractVariableInPath('/api/user/1', 'id')"}</Text>
+      </Box>
+      <Table
+        style={{ flex: 1, width: '100%' }}
+        defaultTextStyle={{ fontSize: 13, textAlign: 'left', color: '#E2E8F0' }}
+        defaultCellStyle={{ border: { left: { width: 1, color: '#1E293B' }, right: { width: 1, color: '#1E293B' }, top: { width: 1, color: '#1E293B' }, bottom: { width: 1, color: '#1E293B' } } }}
+        cells={[
+          [ { text: '函数', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } }, { text: '作用', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } } ],
+          [ 'compile(path) / compile(path, data)', '注册路径（可挂任意数据：handler / 配置 / 元数据）' ],
+          [ 'compileIfAbsent(path, supplier)', '不存在才注册，返回已存在 / 新建的数据' ],
+          [ 'data<T>(path) / dataByPrefix<T>(path)', '按路径取出挂的数据' ],
+          [ 'matches(path) / matchesPrefix(path)', '是否匹配 / 是否前缀匹配' ],
+          [ 'extractVariableInPath(path, name)', '取单个路径变量' ],
+          [ 'extractVariablesInPath(path)', '取全部路径变量（Map）' ],
+          [ 'extractTimeVariableInPath(path, name, format)', '把路径变量直接解析成 DateTime' ],
+          [ 'extractParsable / extractDataParsable…', '解析成 Parsable / DataParsable 类型' ],
+        ]}
+      />
+    </Box>
+
+    <Box style={{ flex: 1, flexDirection: 'column', gap: 14 }}>
+      <Table
+        style={{ flex: 1, width: '100%' }}
+        defaultTextStyle={{ fontSize: 13, textAlign: 'left', color: '#E2E8F0' }}
+        defaultCellStyle={{ border: { left: { width: 1, color: '#1E293B' }, right: { width: 1, color: '#1E293B' }, top: { width: 1, color: '#1E293B' }, bottom: { width: 1, color: '#1E293B' } } }}
+        cells={[
+          [ { text: '优先级', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } }, { text: '模式', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } }, { text: '例子', textStyle: { bold: true, color: '#22D3EE', fontSize: 13 }, cellStyle: { background: { color: '#16233A' } } } ],
+          [ { text: 'a（最高）', textStyle: { color: '#F59E0B' } }, '字符串相等', '/api/user/list' ],
+          [ 'b = c = d', '单级多字符 * / 单级单字符 ? / 单级正则', '/api/*.json　/api/user/?　/api/{#regex:\\d+}' ],
+          [ 'e', '单 * （独占一整级）', '/api/*/detail' ],
+          [ 'f = g', '{name} 占位符 / {*name}', '/api/user/{id}' ],
+          [ { text: 'h（最低）', textStyle: { color: '#64748B' } }, '** （跨多级）', '/static/**' ],
+        ]}
+      />
+      <Box style={{ height: 208, background: 'rgba(56,189,248,0.06)', borderRadius: 12, border: '1px solid #38BDF8', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#38BDF8' }}>规则补充</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, marginTop: 8 }}>· 只能匹配绝对路径（不以 / 开头也按 / 开头处理）</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, marginTop: 6 }}>· 连续多个 / 会合并成一个</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, marginTop: 6 }}>{"· {name:regex} 形式的占位符自带正则约束"}</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.7, marginTop: 6 }}>· #regex: 形式的那一节不作为路径变量</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.7, marginTop: 'auto' }}>各函数都有 withExtName 重载：是否把扩展名当作路径的一部分。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>58 / 116</Text>
+  </Box>
+</Slide>

@@ -73,16 +73,35 @@ public class SqlExecutor <: Resource & RootDAO {
             sql_
         }
         set(value) {
-            sql_ = blankRegex.replaceAll(value, " ").trimAsciiBlanks()
-            if (sql_.trimAscii()[0..6].toAsciiLower() == 'select') {
+            let normalized = blankRegex.replaceAll(value, " ").trimAsciiBlanks()
+            // bug-orm.md §3.1 ORM-C4/ORM-L1：短于 6 个字符的 SQL 不可能是合法语句——原实现直接做
+            // `sql_.trimAscii()[0..6]`，会抛 IndexOutOfBoundsException；改为显式报 ORMException。
+            // 另：`normalized` 已由 trimAsciiBlanks() 去掉首尾空白，前缀判断不再需要第二次 trimAscii()。
+            if (normalized.size < 6) {
+                throw ORMException('sql is too short to be a valid statement: [${value}]')
+            }
+            sql_ = normalized
+            if (isSelectStatement(normalized)) {
                 readOnly = true
             }
         }
     }
+
+    /**
+     * 当前 SQL 是不是 select 语句（bug-orm.md §3.1 ORM-C4/L1 的前缀判断；长度不足 6 由 `sql` 的 setter
+     * 显式报错，这里做防御性判断）。用于 ORM-L6：只缓存 SELECT 的结果。
+     */
+    private static func isSelectStatement(sql: String): Bool {
+        sql.size >= 6 && sql[0..6].toAsciiLower() == 'select'
+    }
     protected func clearSql(clearArgsAfterExec!: Bool = clearArgsAfterExec_){
         sql_ = ''
         if(clearArgsAfterExec){
-            args.clear()
+            // 换新实例，而不是原地清空列表（bug.md §1.1 / ORM-1）：
+            // 原地清空时，同一个 SqlArgs 实例会被后续查询继续复用，而 SqlCacheKey 持的就是这个实例——
+            // 两个 key 因 SqlArgs.== 的 refEq 短路而恒等，导致同一 SQL 文本、不同参数的查询互相命中缓存。
+            // 换实例后旧实例冻结（只被缓存 key 引用），key 之间退化为参数内容比较，误命中消失。
+            this.args = SqlArgs()
         }
     }
     public prop isReadOnly: Bool {
@@ -152,6 +171,16 @@ public class SqlExecutor <: Resource & RootDAO {
             _connection_ = NoneConnection.instance
             DirtyTag.clearAll()
         }
+    }
+    /**
+     * 迭代器按「结果集 → 语句」关闭后的收尾（由 AbstractQueryResultIterator.close() 调用）：
+     * 1）解除「活动结果集」保护，使同一 executor 可以继续执行 SQL；
+     * 2）走 close() 归还连接——不在事务中时关闭连接，在事务中不动它（留给事务结束后的 close()）。
+     * 语句由迭代器自己关闭（它就是该语句的唯一持有者），这里不再碰语句。
+     */
+    internal func releaseActiveQueryResult(): Unit {
+        activeQueryResult = false
+        close()
     }
     private func createTransaction(
         propagation!: Propagation = ORMConfig.getTransactionPropagation(driverName: driverName),
@@ -363,11 +392,28 @@ public class SqlExecutor <: Resource & RootDAO {
     public func release(savepoint: String): Unit {
         tx?.release(savepoint)
     }
+    /**
+     * 等驱动把状态从 `Connecting` 推进过去（bug-orm.md §3.2 ORM-L9）：原先是无 sleep、无超时的死转，
+     * 驱动永不推进就永远烧一核；现在按 `ORMConfig.getConnectingTimeout()` 设上限，超时抛 `ConnectionException`。
+     * 起算点与上限只取一次（不能每轮重算，否则永远等不到超时）；配置读取只在真进入该分支时发生。
+     */
+    private func waitConnecting(): Unit {
+        let connectingStart = MonoTime.now()
+        let connectingTimeout = ORMConfig.getConnectingTimeout(driverName: driverName)
+        while (this._connection_.state == Connecting) {
+            if (MonoTime.now() - connectingStart >= connectingTimeout) {
+                throw ConnectionException('connecting is timeout')
+            }
+        }
+    }
     private prop connection: Connection {
         get() {
             while (!(this._connection_ is NoneConnection)) {
                 match (this._connection_.state) {
-                    case Connecting => continue
+                    case Connecting =>
+                        // 等完（或超时抛出）后回到循环头重新判状态：可能已 Connected，也可能转成 Closed/Broken
+                        waitConnecting()
+                        continue
                     case Connected => return this._connection_
                     case Closed => throw ORMException("connection is closed")
                     case Broken =>
@@ -386,7 +432,10 @@ public class SqlExecutor <: Resource & RootDAO {
     private func logMsg(now: DateTime): () -> String {
         let duration = now - start
         let sql = this.sql_
-        let args = this.args.clone()
+        // bug-orm.md §3.1 ORM-C3/ORM-L2：原来调 `this.args.clone()`（实为共享同一 ArrayList 的"假副本"），
+        // 现直接引用原对象；闭包只在真要输出时才插值，且 `clearSql()` 是换新实例（§1.1 / ORM-1），
+        // 因此读到的是本次执行当时的参数。
+        let args = this.args
         {=>
             "${driverName} is executing a sql: ${sql}, args: ${args}, consumed: ${duration}"
         }
@@ -467,17 +516,17 @@ public class SqlExecutor <: Resource & RootDAO {
             return list
         }
     }
-    public func singleIterator<T>(): Iterator<T> {
+    public func singleIterator<T>(): SingleColumnIterator<T> {
         singleIterator<T>(0)
     }
-    public func singleIterator<T>(index: Int64): Iterator<T> {
-        execute<Iterator<T>> {r =>
-            SingleColumnIterator<T>(r, index: index)
+    public func singleIterator<T>(index: Int64): SingleColumnIterator<T> {
+        executeIterator<SingleColumnIterator<T>> {r, stmt =>
+            SingleColumnIterator<T>(r, stmt, this, index: index)
         }
     }
-    public func singleIterator<T>(column: String): Iterator<T> {
-        execute<Iterator<T>> {r =>
-            SingleColumnIterator<T>(r, column: column)
+    public func singleIterator<T>(column: String): SingleColumnIterator<T> {
+        executeIterator<SingleColumnIterator<T>> {r, stmt =>
+            SingleColumnIterator<T>(r, stmt, this, column: column)
         }
     }
     public func first<T>(mappers: QueryMappers<T>): Option<T> {
@@ -531,11 +580,11 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
     public func iterator<T>(mappers: QueryMappers<T>): QueryResultIterator<T> {
-        execute<QueryResultIterator<T>> {r =>
-            mappers.iterator(r)
+        executeIterator<QueryResultIterator<T>> {r, stmt =>
+            mappers.iterator(r, stmt, this)
         }
     }
-    public func iterator<T>(): Iterator<T> where T <: QueryMappersInit<T> {
+    public func iterator<T>(): AbstractQueryResultIterator<T> where T <: QueryMappersInit<T> {
         if (T.isSimpleData()) {
             singleIterator<T>()
         } else {
@@ -555,46 +604,49 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
 
+    // bug.md §2.13（ORM-6）/§2.14（ORM-7）：分支按绑定频率排序——常用类型在前、可空（?T）组在后。
+    // 逐元素走这里时，失败的类型检查次数从「位次」降到「常数」，实测 Int64 8→1、String 16→2。
+    // 各分支运行时类型互斥，顺序不影响语义；与 RootDAO.arg 的分支顺序保持同步。
     public func add<T>(arg: T): SqlExecutor where T <: ToString {
         match (arg) {
-            case x: Bool => add(x)
-            case x: Int8 => add(x)
-            case x: UInt8 => add(x)
-            case x: Int16 => add(x)
-            case x: UInt16 => add(x)
-            case x: Int32 => add(x)
-            case x: UInt32 => add(x)
             case x: Int64 => add(x)
-            case x: UInt64 => add(x)
-            case x: BigInt => add(x)
-            case x: Decimal => add(x)
-            case x: Float16 => add(x)
-            case x: Float32 => add(x)
-            case x: Float64 => add(x)
-            case x: Rune => add(x)
             case x: String => add(x)
-            case x: Duration => add(x)
             case x: DateTime => add(x)
+            case x: Bool => add(x)
+            case x: Decimal => add(x)
+            case x: UInt64 => add(x)
+            case x: Int32 => add(x)
+            case x: Int16 => add(x)
+            case x: Int8 => add(x)
+            case x: UInt32 => add(x)
+            case x: UInt16 => add(x)
+            case x: UInt8 => add(x)
+            case x: Float64 => add(x)
+            case x: Float32 => add(x)
+            case x: Float16 => add(x)
+            case x: BigInt => add(x)
+            case x: Duration => add(x)
+            case x: Rune => add(x)
             case x: Array<Byte> => add(x)
 
-            case x: ?Bool => add(x)
-            case x: ?Int8 => add(x)
-            case x: ?UInt8 => add(x)
-            case x: ?Int16 => add(x)
-            case x: ?UInt16 => add(x)
-            case x: ?Int32 => add(x)
-            case x: ?UInt32 => add(x)
             case x: ?Int64 => add(x)
-            case x: ?UInt64 => add(x)
-            case x: ?BigInt => add(x)
-            case x: ?Decimal => add(x)
-            case x: ?Float16 => add(x)
-            case x: ?Float32 => add(x)
-            case x: ?Float64 => add(x)
-            case x: ?Rune => add(x)
             case x: ?String => add(x)
-            case x: ?Duration => add(x)
             case x: ?DateTime => add(x)
+            case x: ?Bool => add(x)
+            case x: ?Decimal => add(x)
+            case x: ?UInt64 => add(x)
+            case x: ?Int32 => add(x)
+            case x: ?Int16 => add(x)
+            case x: ?Int8 => add(x)
+            case x: ?UInt32 => add(x)
+            case x: ?UInt16 => add(x)
+            case x: ?UInt8 => add(x)
+            case x: ?Float64 => add(x)
+            case x: ?Float32 => add(x)
+            case x: ?Float16 => add(x)
+            case x: ?BigInt => add(x)
+            case x: ?Duration => add(x)
+            case x: ?Rune => add(x)
             case x: ?Array<Byte> => add(x)
 
             case x => add(x.toString())
@@ -825,6 +877,12 @@ public class SqlExecutor <: Resource & RootDAO {
         setSql(sql)
     }
     
+    /**
+     * bug-orm.md §3.2 ORM-C6（陷阱 1 / B）：本次执行的结果是否交出过流（BLOB/CLOB）。含流的结果**不写结果缓存**
+     * ——缓存会把值留到结果集关闭之后，一旦驱动交出的是"绑定结果集/句柄的流"，缓存里留下的就是失效值。
+     * 由 `execute<T>(closeBeforeReturning:extract:)` 在取数完成后写入（取 `QueryResultWrap.hadStream`）。
+     */
+    private var lastResultHadStream = false
     private func execute<T>(executor: () -> T): T {
         func exec() {
             if (tx.isSome()) {
@@ -833,18 +891,30 @@ public class SqlExecutor <: Resource & RootDAO {
             try { 
                 return executor()
             } finally {
-                this.close()
+                // 结果集已移交迭代器（executeIterator 通道）时不能在这里归还连接：
+                // Statement/Connection 由迭代器关闭时经 releaseActiveQueryResult()/close() 收尾
+                if (!activeQueryResult) {
+                    this.close()
+                }
             }
         }
         try {
-            let v = if (useCache && !clearCache) {
+            // bug-orm.md §3.1 ORM-L6：只缓存 SELECT 的结果。UPDATE/INSERT 等本来就走 `clearCache = true`
+            // 的分支（不建 key、只清一次缓存）；这里再按当前 SQL 前缀确认一次：非 SELECT 连 cache key 都不构造
+            // ——key 会对 SqlArgs 求哈希，BLOB 参数在旧实现里会被整体格式化成字符串（等大内存峰值）。
+            let v = if (useCache && !clearCache && isSelectStatement(sql)) {
                 let key = SqlCacheKey(sql, args)
                 match (cache.get(key)) {
                     case Some(v: T) => v
                     case Some(_) => throw ORMException("type of cached data with key '${key}' does not match")
                     case _ =>
                         let v = exec()
-                        cache[key] = v
+                        // 迭代器有状态：移交结果集的查询不写缓存，否则同一「SQL + 参数」会拿到同一个已被消费的迭代器
+                        // bug-orm.md §3.2 ORM-C6（陷阱 1 / B）：含流（BLOB/CLOB）的结果同样不写缓存——判定只能在
+                        // 取数之后（`lastResultHadStream` 由本次执行的内层 execute 写入，见字段注释）。
+                        if (!activeQueryResult && !lastResultHadStream) {
+                            cache[key] = v
+                        }
                         v
                 }
             } else {
@@ -869,41 +939,57 @@ public class SqlExecutor <: Resource & RootDAO {
             }
         }
     }
-    private func execute<T>(executor: (Statement) -> T): T {
+    private func execute<T>(closeBeforeReturning: Bool, executor: (Statement) -> T): T {
         execute<T>{
             let stmt = statement
             try{
                 executor(stmt)
             }finally{
-                stmt.close()
-                this.stmt = None<Statement>
+                // 结果集已移交迭代器时不在此关闭语句：Statement 留给 SqlExecutor.close() 统一关闭
+                if (closeBeforeReturning) {
+                    stmt.close()
+                    this.stmt = None<Statement>
+                }
             }
         }
     }
     private func execute<T>(extract: (UpdateResult) -> T): T {
         clearCache = true
-        execute<T> {stmt =>
+        execute<T>(true) {stmt: Statement =>
             let result = stmt.update()
             extract(result)
         }
     }
-    private func execute<T>(extract: (QueryResultWrap) -> T): T {
+    private func execute<T>(closeBeforeReturning: Bool, extract: (QueryResultWrap, Statement) -> T): T {
         if (activeQueryResult) {
             throw ORMException("cannot execute SQL while a previous query result is still active")
         }
-        execute<T> {stmt: Statement =>
+        execute<T>(closeBeforeReturning) {stmt: Statement =>
             var r = None<QueryResultWrap>
             var ex = None<Exception>
+            var handedOver = false
             try{
                 activeQueryResult = true
+                lastResultHadStream = false
                 r = Some((stmt.query() as QueryResultWrap).getOrThrow())
-                extract(r.getOrThrow())
+                let value = extract(r.getOrThrow(), stmt)
+                // bug-orm.md §3.2 ORM-C6（陷阱 1 / B）：取数完成后再定"本次结果有没有交出流"——含流的结果不写缓存
+                // （缓存会把流留到结果集关闭之后）。必须晚于 extract：流是取数（读单元格）时才读出来的。
+                lastResultHadStream = r.getOrThrow().hadStream
+                // 走到这里说明迭代器已构造成功：结果集所有权移交，本次调用不再关闭它
+                handedOver = !closeBeforeReturning
+                value
             } catch (e: Exception) {
                 ex = Some(e)
                 throw e
             } finally {
+                // 消费型路径（closeBeforeReturning = true）与「构造中途抛异常」仍在此关闭，避免泄漏；
+                // 移交成功则由迭代器 close()/读尽时经 releaseActiveQueryResult() 收尾
+                let mustClose = closeBeforeReturning || !handedOver
                 try{
-                    r?.close()
+                    if (mustClose) {
+                        r?.close()
+                    }
                 }catch(e: Exception){
                     logger.error(e)
                     if (let ei: BaseException <- e && let Some(eo) <- ex) {
@@ -916,10 +1002,20 @@ public class SqlExecutor <: Resource & RootDAO {
                     }
                     throw e
                 } finally {
-                    activeQueryResult = false
+                    if (mustClose) {
+                        activeQueryResult = false
+                    }
                 }
             }
         }
+    }
+    /** 消费型查询：返回前关闭结果集与语句（first/singleFirst/list/... 走这条） */
+    private func execute<T>(extract: (QueryResultWrap) -> T): T {
+        execute<T>(true) {r, _ => extract(r)}
+    }
+    /** 迭代器型查询：返回前不关闭结果集/语句，把「结果集 + 语句 + executor」一并交给返回的迭代器 */
+    private func executeIterator<T>(extract: (QueryResultWrap, Statement) -> T): T {
+        execute<T>(false, extract)
     }
     public func execute<T>(executor: (SqlExecutor) -> T): T {
         execute<T> {

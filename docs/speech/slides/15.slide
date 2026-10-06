@@ -1,0 +1,64 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`fboot workspace 是把目录变成仓颉 workspace 的命令，有三种用法。
+
+第一种，直接在目标目录执行 fboot workspace，把当前目录初始化成 workspace。第二种，fboot workspace 加一个名字，比如 fdemo，它会在当前目录下新建这个子目录并初始化。第三种，直接给一个绝对或相对路径，把那个路径初始化成 workspace。
+
+它底层其实做了两件事。第一，在目标目录执行 cjpm init --workspace。第二，重写 cjpm.toml：把 workspace 的 version 定成 1.0.0，写入 f_base 和 f_version 依赖，把空的 compile-option 换成 --dy-std 和 -Woff all，再补齐 Linux、macOS、Windows、OHOS 各平台的 target 段和 path-option。
+
+换句话说，它替你写好了那六十行跨平台配置，你不用再手抄。
+
+一句话总结：workspace 是「装模块的盒子」，每个模块都必须编译为动态链接库。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 3 章 · fboot 命令行 · 3.2</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>fboot workspace：把目录变成仓颉 workspace</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>三种用法</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'column', gap: 16 }}>
+    <Box style={{ flex: 1, flexDirection: 'row', gap: 20 }}>
+      <Box style={{ width: 480, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 22, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#E2E8F0' }}>三种用法</Text>
+        <Text style={{ fontSize: 15, color: '#22D3EE', lineHeight: 1.9, marginTop: 14, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>fboot workspace</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.6 }}>把「当前目录」初始化为 workspace</Text>
+        <Text style={{ fontSize: 15, color: '#22D3EE', lineHeight: 1.9, marginTop: 14, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>fboot workspace fdemo</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.6 }}>在当前目录下新建 fdemo 子目录并初始化</Text>
+        <Text style={{ fontSize: 15, color: '#22D3EE', lineHeight: 1.9, marginTop: 14, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>fboot workspace /path/to/project</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.6 }}>指定绝对 / 相对路径，把该路径初始化为 workspace</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 22, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#E2E8F0' }}>它到底做了什么</Text>
+        <Box style={{ marginTop: 14, flexDirection: 'column', gap: 14 }}>
+          <Box style={{ flexDirection: 'row', gap: 14 }}>
+            <Text style={{ fontSize: 16, color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>1</Text>
+            <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.7, flex: 1 }}>在目标目录执行 cjpm init --workspace</Text>
+          </Box>
+          <Box style={{ flexDirection: 'row', gap: 14 }}>
+            <Text style={{ fontSize: 16, color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>2</Text>
+            <Box style={{ flexDirection: 'column', flex: 1 }}>
+              <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.7 }}>重写 cjpm.toml：</Text>
+              <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 4 }}>· [workspace] version 定为 1.0.0</Text>
+              <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7 }}>· 写入 f_base / f_version 依赖</Text>
+              <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7 }}>· 空的 compile-option 换成 --dy-std -Woff all</Text>
+              <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7 }}>· 补齐 Linux / macOS / Windows / OHOS 的 [target.*] 与 path-option</Text>
+            </Box>
+          </Box>
+        </Box>
+        <Text style={{ fontSize: 15, color: '#F59E0B', lineHeight: 1.7, marginTop: 'auto' }}>它替你写好了那 60 行跨平台配置，你不用再手抄。</Text>
+      </Box>
+    </Box>
+    <Box style={{ height: 96, background: 'rgba(56,189,248,0.06)', borderRadius: 12, border: '1px solid #38BDF8', padding: 20, flexDirection: 'row', alignItems: 'center', gap: 20 }}>
+      <Box style={{ width: 4, height: 48, background: '#38BDF8' }} />
+      <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#E2E8F0', flex: 1 }}>workspace 是「装模块的盒子」，每个模块都必须编译为动态链接库。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>15 / 116</Text>
+  </Box>
+</Slide>

@@ -37,17 +37,19 @@ public abstract class SecurityContext<ID, U, P, S> where ID <: Hashable & Equata
     public func checkAndGet(s: S): ?P
 }
 ```
-### 用户http请求头传递的登录状态
+### 用户token的登录状态
+凭据是`(ID, String)`（用户标识+令牌），由调用方从请求参数等位置取出后传入。
 ```cj
 public class UserTokenSecurityContext<ID, U> <: SecurityContext<ID, U, UserTokenPrincipal<ID>, (ID, String)> where ID <: Hashable & Equatable<ID>, U <: BaseUserData<U>
+```
+### HTTP请求头里的用户token
+凭据是`Unit`，用户标识与令牌都来自HTTP请求头。
+```cj
+public class HttpHeaderUserTokenSecurityContext<U> <: SecurityContext<String, U, UserTokenPrincipal<String>, Unit> where U <: BaseUserData<U>
 ```
 ### 用http Authorization传递JWT的登录状态
 ```cj
 public class JWTSecurityContext<U> <: SecurityContext<String, U, JWTPrincipal<String>, Unit> where U <: BaseUserData<U>
-```
-### 用请求参数传递的登录状态
-```cj
-public class UserTokenSecurityContext<ID, U> <: SecurityContext<ID, U, UserTokenPrincipal<ID>, (ID, String)> where ID <: Hashable & Equatable<ID>, U <: BaseUserData<U>
 ```
 
 ### 登录状态

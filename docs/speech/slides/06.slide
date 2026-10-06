@@ -1,0 +1,78 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`先说痛点。我们写一个普通的后端服务，真正属于「业务」的代码其实很少，大量时间在重复这几件事。
+
+第一，谁来创建对象、谁来装配依赖。于是我们手搓工厂、手搓单例、手搓 getInstance。
+
+第二，每个接口都要做登录校验、权限校验、参数校验、异常处理、耗时统计。于是每个函数开头都是同样的十几行。
+
+第三，每张表都要写一遍 insert、update、select、page。SQL 拼接、参数绑定、结果集到对象的映射，全是体力活。
+
+第四，事务边界靠人肉保证。try 提交、catch 回滚，复制粘贴，传播行为全靠约定。
+
+第五，定时任务、JWT、连接池、日志、配置，每个项目都重新选型、重新封装一遍。
+
+这五类东西有个共同的名字，叫「非业务复杂度」。fountain 的目标很直接：把它们全部收进工具库，让业务代码只剩下业务。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 1 章 · 为什么使用 fountain · 1.1</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>写一个服务端应用，我们到底在重复什么</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 24 }}>
+    <Box style={{ width: 300, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 28, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 14, color: '#64748B' }}>非业务复杂度</Text>
+      <Text style={{ fontSize: 96, fontWeight: 'bold', color: '#F59E0B', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', lineHeight: 1, marginTop: 8 }}>5</Text>
+      <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#E2E8F0', marginTop: 12 }}>类重复劳动</Text>
+      <Box style={{ width: 40, height: 3, background: '#38BDF8', marginTop: 18 }} />
+      <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 18 }}>它们与业务无关，却在每个项目里被重写一遍。</Text>
+      <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 'auto' }}>fountain 的目标：把这些全部收进工具库。</Text>
+    </Box>
+
+    <Box style={{ flex: 1, flexDirection: 'column', gap: 10 }}>
+      <Box style={{ flexDirection: 'row', gap: 16, background: '#111C2E', borderRadius: 10, padding: 16, alignItems: 'flex-start', flex: 1 }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 32 }}>1</Text>
+        <Box style={{ flexDirection: 'column', flex: 1 }}>
+          <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#E2E8F0' }}>对象创建与依赖装配</Text>
+          <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.6, marginTop: 4 }}>手搓工厂、手搓单例、手搓 getInstance()</Text>
+        </Box>
+      </Box>
+      <Box style={{ flexDirection: 'row', gap: 16, background: '#111C2E', borderRadius: 10, padding: 16, alignItems: 'flex-start', flex: 1 }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 32 }}>2</Text>
+        <Box style={{ flexDirection: 'column', flex: 1 }}>
+          <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#E2E8F0' }}>每个接口开头同样的十几行</Text>
+          <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.6, marginTop: 4 }}>登录校验、权限校验、参数校验、异常处理、耗时统计</Text>
+        </Box>
+      </Box>
+      <Box style={{ flexDirection: 'row', gap: 16, background: '#111C2E', borderRadius: 10, padding: 16, alignItems: 'flex-start', flex: 1 }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 32 }}>3</Text>
+        <Box style={{ flexDirection: 'column', flex: 1 }}>
+          <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#E2E8F0' }}>每张表重写一遍 CRUD</Text>
+          <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.6, marginTop: 4 }}>insert / update / select / page，SQL 拼接、参数绑定、结果集映射</Text>
+        </Box>
+      </Box>
+      <Box style={{ flexDirection: 'row', gap: 16, background: '#111C2E', borderRadius: 10, padding: 16, alignItems: 'flex-start', flex: 1 }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 32 }}>4</Text>
+        <Box style={{ flexDirection: 'column', flex: 1 }}>
+          <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#E2E8F0' }}>事务边界靠人肉保证</Text>
+          <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.6, marginTop: 4 }}>try / commit / catch / rollback 复制粘贴，传播行为全靠约定</Text>
+        </Box>
+      </Box>
+      <Box style={{ flexDirection: 'row', gap: 16, background: '#111C2E', borderRadius: 10, padding: 16, alignItems: 'flex-start', flex: 1 }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#38BDF8', fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace', width: 32 }}>5</Text>
+        <Box style={{ flexDirection: 'column', flex: 1 }}>
+          <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#E2E8F0' }}>每个项目重新选型、重新封装</Text>
+          <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.6, marginTop: 4 }}>定时任务、JWT、连接池、日志、配置</Text>
+        </Box>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>06 / 116</Text>
+  </Box>
+</Slide>

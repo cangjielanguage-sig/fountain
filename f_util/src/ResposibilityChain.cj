@@ -25,7 +25,7 @@ import fountain::f_exception.IllegalAccessException
  * A 是执行策略的参数
  * R 是执行策略的结果
  */
-public interface Resposibility<C, A, R> {
+public interface Responsibility<C, A, R> {
     /**
      * 检查指定条件是否满足执行当前策略的要求
      */
@@ -37,14 +37,14 @@ public interface Resposibility<C, A, R> {
     func execute(arg: A): R
 }
 
-public interface ValidationResposibility<C, A> <: Resposibility<C, A, Unit> {
+public interface ValidationResponsibility<C, A> <: Responsibility<C, A, Unit> {
     func execute(arg: A): Unit {}
 }
 
-public class ResposibilityChain<C, A, R> {
-    private let resposibilities = ArrayList<Resposibility<C, A, R>>()
+public class ResponsibilityChain<C, A, R> {
+    private let resposibilities = ArrayList<Responsibility<C, A, R>>()
     public init() {}
-    public init(resposibilities: Iterable<Resposibility<C, A, R>>) {
+    public init(resposibilities: Iterable<Responsibility<C, A, R>>) {
         for (r in resposibilities) {
             this.resposibilities.add(r)
         }
@@ -53,18 +53,18 @@ public class ResposibilityChain<C, A, R> {
     /**
      * 注册一个策略
      */
-    public func register(resposibility: Resposibility<C, A, R>): ResposibilityChain<C, A, R> {
+    public func register(resposibility: Responsibility<C, A, R>): ResponsibilityChain<C, A, R> {
         resposibilities.add(resposibility)
         this
     }
-    public func register<S>(resposibilities: Iterable<S>): Unit where S <: Resposibility<C, A, R> {
+    public func register<S>(resposibilities: Iterable<S>): Unit where S <: Responsibility<C, A, R> {
         for (r in resposibilities) {
             this.resposibilities.add(r)
         }
     }
 
     /**
-     * 执行一个策略，遍历策略集合，直到遇到一个Resposibility.check(condition)返回true的策略，并执行这个策略。
+     * 执行一个策略，遍历策略集合，直到遇到一个Responsibility.check(condition)返回true的策略，并执行这个策略。
      * 如果没有策略满足条件，就抛出IllegalAccessException
      */
     public func execute(condition: C, arg: A): R {

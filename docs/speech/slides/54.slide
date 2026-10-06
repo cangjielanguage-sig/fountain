@@ -1,0 +1,57 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`最后是快速失败和现场演示。
+
+先说 BreakingCommand。当你在很深的调用栈里需要「立刻返回，别再往下走」的时候，用它比一层层 return 干净得多。写法是在业务执行过程中 perform 一个 BreakingCommand，参数是返回给客户端的数据；MVC 会把它携带的 Data 直接作为响应体。还有一个便捷入口，参数只要是实现了 ToData 的类型就行。
+
+这一章的现场演示，直接跑 fdemo 就行——启动日志里会打出这一屏：八行字母标号，从 A 到 H，走完了「对象到对象」「对象到 JSON」「JSON 到对象」「Map 到对象」四条路。最后两行是表名演示，一个是 user_info，一个是带前缀的 t_user_info。
+
+这一屏就是 f_data 的全部能力。而且这些代码不需要你写，全部是宏生成的。
+
+下一章我们接着讲 f_util 工具箱——UUID、IdMaker、TextTemplate、PathPattern、TreeTransformer 以及几个设计模式的现成骨架，它们大多也是站在 f_data 肩膀上的。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 8 章 · 数据 f_data · 8.9 / 8.10</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>快速失败与现场演示</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>8 行字母标号</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 20 }}>
+    <Box style={{ width: 470, flexDirection: 'column', gap: 14 }}>
+      <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 20, flexDirection: 'column', flex: 1 }}>
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#38BDF8' }}>快速失败：BreakingCommand</Text>
+        <Box style={{ background: '#0B1220', borderRadius: 8, border: '1px solid #1E293B', padding: 14, marginTop: 12 }}>
+          <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>import fountain::f_data.BreakingCommand</Text>
+          <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.8, marginTop: 8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>perform BreakingCommand(someValue.toData())</Text>
+          <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>perform BreakingCommand.new(someValue)</Text>
+          <Text style={{ fontSize: 12, color: '#64748B', lineHeight: 1.7 }}>{"// .new(...) 是 T <: ToData 的便捷入口"}</Text>
+        </Box>
+        <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 16 }}>在很深的调用栈里需要「立刻返回，别再往下走」时用它，比一层层 return 干净得多。</Text>
+        <Text style={{ fontSize: 15, color: '#F59E0B', lineHeight: 1.8, marginTop: 'auto' }}>MVC 会把它携带的 Data 直接作为响应体返回。</Text>
+      </Box>
+      <Box style={{ background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 18, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#E2E8F0' }}>本章小结</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.7, marginTop: 6 }}>f_data 解决的是「数据怎么流动」——它同时是 MVC、ORM、JWT 的共同底座。</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, background: '#0B1220', borderRadius: 12, border: '1px solid #1E293B', padding: 20, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 14, color: '#64748B', marginBottom: 10 }}>启动日志里会打出这一组输出（boot.cj 的 static init）</Text>
+      <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.85, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>
+        <>AAAAA…　{"{TestData2 的 toString}"}<br />BBBBB…　{"{TestData3：从 TestData2 复制而来}"}<br />CCCCC…　{"{TestData2 转成的 JSON}"}<br />DDDDD…　{"{JSON → Data → TestData3}"}<br />EEEEE…　{"{反向复制回来，b 字段被改空}"}<br />FFFFF…　{"{HashMap 转成的 JSON}"}<br />GGGGG…　{"{toJson(TestData2)}"}<br />HHHHH…　{"{fromJson 回来后的 Data}"}</>
+      </Text>
+      <Text style={{ fontSize: 13, color: '#F59E0B', lineHeight: 1.85, marginTop: 10, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>
+        <>@@@@@…　user_info　　　← UserPO.tableName()<br />@@@@@…　t_user_info　　← UserInfoPO.tableName()（前缀演示）</>
+      </Text>
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 'auto' }}>8 行字母标号，走完了「对象→对象」「对象→JSON」「JSON→对象」「Map→对象」四条路。这些代码不需要你写，全部是宏生成的。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>54 / 116</Text>
+  </Box>
+</Slide>

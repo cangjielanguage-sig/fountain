@@ -17,7 +17,9 @@ package fountain::f_rpc.server
 
 import fountain::f_data.macros.*
 
-private let EMPTY_DATA_ANY = unsafeZeroValue<DataAny>()
+// 不能用 unsafeZeroValue<DataAny>()：它是零值对象，JsonValue.from这样的反射式遍历会直接段错误，
+// 而这里正是错误响应路径（ErrorMessage）要用的“空数据”
+private let EMPTY_DATA_ANY = DataAny(DataNone.INSTANCE)
 @DataAssist[props fields]
 public class LogMessage {
     public LogMessage(
@@ -48,9 +50,12 @@ public class ErrorMessage {
         return ErrorMessage(DataAny.new(param), error)
     }
     protected static func new<T>(param: T, e: Exception): ErrorMessage where T <: ToData {
-        let buffer = ByteBuffer()
-        printStackTrace(e, buffer)
-        let errmsg = unsafe{buffer.bytes() |> String.fromUtf8Unchecked}
+        // 堆栈长度不可预期，不能写进固定容量缓冲（曾把875B堆栈写进80B缓冲抛IndexOutOfBoundsException，
+        // 结果错误响应本身失败、连接被重置，真正的异常原因反而丢失）
+        var errmsg = 'An exception has occured:\n${e}\n'
+        for (stack in e.getStackTrace()) {
+            errmsg = errmsg + '        at ${stack.declaringClass}.${stack.methodName}(${stack.fileName}: ${stack.lineNumber})\n'
+        }
         return ErrorMessage(DataAny.new(param), errmsg)
     }
 }

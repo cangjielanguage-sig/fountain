@@ -19,6 +19,14 @@ import std.io.{InputStream, OutputStream}
 
 public interface BytesCopyTo {
     func copy(to!: OutputStream, closeFromOnEnd!: Bool, closeToOnEnd!: Bool): Unit
+    /** 待写字节数；未知（含流式内容）返回 None。 */
+    func byteSize(): ?Int64 {
+        None<Int64>
+    }
+    /** 把待写内容整体取出；不支持（含流式内容）返回 None。 */
+    func asBytes(): ?Array<Byte> {
+        None<Array<Byte>>
+    }
 }
 public interface BytesCopyFrom {
     func copy(from!: InputStream, closeFromOnEnd!: Bool, closeToOnEnd!: Bool): Unit
@@ -33,7 +41,16 @@ public interface Releasable {
 
 public struct PooledBufferBytesCopyTo <: BytesCopyTo { 
     public PooledBufferBytesCopyTo(private let input: InputStream,
-                                    private let pool: ArrayPool<Byte>){}
+                                    private let pool: ArrayPool<Byte>,
+                                    private let declaredSize!: Int64 = -1){}
+    /** 待写字节数：流式内容本身不可数，但调用方声明过长度时可知（帧的 len 字段需要它）。 */
+    public func byteSize(): ?Int64 {
+        if (declaredSize >= 0) {
+            declaredSize
+        } else {
+            None<Int64>
+        }
+    }
     public func copy(to!: OutputStream, closeFromOnEnd!: Bool = true, closeToOnEnd!: Bool = false): Unit {
         func copyTo(buf: Array<Byte>){
             try{
@@ -99,6 +116,38 @@ public struct ChainedBytesCopyTo <: BytesCopyTo & Releasable {
         }
         if(closeToOnEnd && let r: Resource <- to && !r.isClosed()){
             r.close()
+        }
+    }
+    /** 待写字节数：任一子项未知则整体未知。 */
+    public func byteSize(): ?Int64 {
+        var total = 0i64
+        for (b in bytes) {
+            if (let Some(n) <- b.byteSize()) {
+                total += n
+            } else {
+                return None<Int64>
+            }
+        }
+        total
+    }
+    /** 整体取出：任一子项不支持则整体不支持。 */
+    public func asBytes(): ?Array<Byte> {
+        if (let Some(n) <- byteSize()) {
+            let out = Array<Byte>(n, repeat: 0u8)
+            var off = 0i64
+            for (b in bytes) {
+                if (let Some(part) <- b.asBytes()) {
+                    for (i in 0..part.size) {
+                        out[off + i] = part[i]
+                    }
+                    off += part.size
+                } else {
+                    return None<Array<Byte>>
+                }
+            }
+            out
+        } else {
+            None<Array<Byte>>
         }
     }
     /** 释放所有子项占用的池项（幂等）。 */

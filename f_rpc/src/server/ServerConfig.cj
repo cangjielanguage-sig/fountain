@@ -56,7 +56,7 @@ internal class ServerConfig {
     }
     internal static prop bufferQueueSize: Int64 {
         get(){
-            Config.getValue<Int64>(RPC_SERVER_BUFFER_QUEUE_SIZE) ?? 1000000
+            Config.getValue<Int64>(RPC_SERVER_BUFFER_QUEUE_SIZE) ?? 1024
         }
     }
     internal static prop connectionCheckDuration: Duration {

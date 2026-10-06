@@ -1,0 +1,58 @@
+<Slide
+  style={{ width: 1280, height: 720, background: '#0B1220', padding: '20px 64px', flexDirection: 'column' }}
+  notes={`这一节两个延伸能力：数据转换扩展和 JSON Schema。
+
+先说转换扩展。默认转换搞不定的时候——最典型的就是字符串转 DateTime——你就实现 DataConverter。抽象基类是 DataConverter 泛型，有一个 convert 方法；针对时间又细分了两层：AbstractDateTimeConverter 提供 doConvert，DateTimeConverter 是最常用的实现，构造时传一个格式串，比如 yyyy-MM-dd HH:mm:ss。
+
+这也就是 f_mvc 的 @RequestParam 能把 ?createTime=2026-10-01 12:00:00 这样的字符串直接转成 DateTime 的原因——转换器在链路里被自动调用，你不用手动 parse。
+
+再说 JSON Schema。f_data 提供了 ToJsonSchema 接口，给 JsonObject 做了扩展。你只要给字段打上 @JsonStringSchema、@JsonIntSchema、@JsonFloatSchema、@JsonBoolSchema、@JsonArraySchema、@JsonObjectSchema 这些注解，就能直接产出 JSON Schema。
+
+做前后端契约、做低代码表单，这个能力很好用——接口文档不用手写，Schema 直接从数据类生成。`}
+>
+  <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+    <Box style={{ width: 4, height: 40, background: '#38BDF8' }} />
+    <Box style={{ flexDirection: 'column', flex: 1 }}>
+      <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 1.4 }}>第 8 章 · 数据 f_data · 8.6 / 8.7</Text>
+      <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#E2E8F0', lineHeight: 1.3 }}>数据转换扩展与 JSON Schema</Text>
+    </Box>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>两个延伸能力</Text>
+  </Box>
+
+  <Box style={{ height: 540, flexDirection: 'row', gap: 16 }}>
+    <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #38BDF8', padding: 22, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#38BDF8' }}>DataConverter</Text>
+      <Text style={{ fontSize: 14, color: '#64748B', marginTop: 6 }}>默认转换搞不定时自己实现</Text>
+      <Box style={{ background: '#0B1220', borderRadius: 8, border: '1px solid #1E293B', padding: 14, marginTop: 14 }}>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public abstract class DataConverter<T> {"}</Text>
+        <Text style={{ fontSize: 13, color: '#22D3EE', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    public func convert(data: Data, flag!: DataConversionFlag): ?T"}</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"}"}</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.75, marginTop: 8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public class DateTimeConverter <: AbstractDateTimeConverter {"}</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    // 'yyyy-MM-dd HH:mm:ss'"}</Text>
+        <Text style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"}"}</Text>
+      </Box>
+      <Text style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.8, marginTop: 16 }}>最典型的场景：字符串 → DateTime。</Text>
+      <Text style={{ fontSize: 15, color: '#F59E0B', lineHeight: 1.8, marginTop: 'auto' }}>这就是 @RequestParam 能把 ?createTime=… 直接转成 DateTime 的原因 —— 转换器在链路里被自动调用。</Text>
+    </Box>
+
+    <Box style={{ flex: 1, background: '#111C2E', borderRadius: 12, border: '1px solid #1E293B', padding: 22, flexDirection: 'column' }}>
+      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#E2E8F0' }}>JSON Schema</Text>
+      <Text style={{ fontSize: 14, color: '#64748B', marginTop: 6 }}>接口契约与低代码表单</Text>
+      <Box style={{ background: '#0B1220', borderRadius: 8, border: '1px solid #1E293B', padding: 14, marginTop: 14 }}>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"package fountain::f_data.json"}</Text>
+        <Text style={{ fontSize: 13, color: '#22D3EE', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"public interface ToJsonSchema {"}</Text>
+        <Text style={{ fontSize: 13, color: '#22D3EE', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"    static func toJsonSchema<T>(): String where T <: ObjectData<T>"}</Text>
+        <Text style={{ fontSize: 13, color: '#E2E8F0', lineHeight: 1.75, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"}"}</Text>
+      </Box>
+      <Text style={{ fontSize: 14, color: '#94A3B8', lineHeight: 1.8, marginTop: 16 }}>给字段打注解即可产出 Schema：</Text>
+      <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"@JsonStringSchema[minLength: 6, maxLength: 50, title: '用户名']"}</Text>
+      <Text style={{ fontSize: 13, color: '#38BDF8', lineHeight: 1.8, fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace' }}>{"@JsonIntSchema[minimum: 0, maximum: 150]"}</Text>
+      <Text style={{ fontSize: 14, color: '#64748B', lineHeight: 1.8, marginTop: 'auto' }}>还有 @JsonFloatSchema / @JsonBoolSchema / @JsonArraySchema / @JsonObjectSchema。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B' }}>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>fountain · 一站式服务器应用开发工具库</Text>
+    <Text style={{ fontSize: 13, color: '#64748B' }}>52 / 116</Text>
+  </Box>
+</Slide>

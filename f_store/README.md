@@ -337,6 +337,30 @@ store2.close()
 
 ---
 
+## 其他公开类型与函数
+
+### `func startsWith(key: ByteArray, prefix: ByteArray): Bool`
+
+判断`key`是否以`prefix`开头（`prefix`为空时恒为`true`）。前缀遍历就是用它做判据，也可以自己拿来做过滤。
+
+### `ByteArray`
+
+`public struct ByteArray`：Store 的键都以此承载，可用字节数组构造（`ByteArray(bytes)`），用 `bytes` 取回原始字节；可比较、可哈希。
+
+### `EntryValue`
+
+`public class EntryValue`：MemTable/SSTable/WAL 中的一条记录，承载值字节、`sequence` 与过期时间；构造时传入`None`表示 tombstone（删除标记）。
+
+### 异常
+
+| 异常 | 抛出场景 |
+|---|---|
+| `StoreClosedException` | 对已关闭的 Store 执行操作 |
+| `PrefixIteratorException` | 前缀迭代器读取过程中失败（原始异常挂在`suppressed`上） |
+| `SSTableWritingException` | 写 SSTable 失败（构造时携带被包装的异常） |
+
+---
+
 ## 并发安全
 
 Store 的所有操作均为无锁或原子操作：

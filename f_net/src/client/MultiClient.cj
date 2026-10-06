@@ -90,9 +90,19 @@ public class MultiClientBuilder<W, T> where W <: Addable<W> & Comparable<W>, T <
         this
     }
     private var balance = None<LoadBalance<W, Unit, Client<T>>>
-    public func roundRobin(step: W, min: W, max: W): This {
+    /**
+     * 轮询：`step` 是取值步长，`min`/`max` 是算法给出的取值区间（含 `min` 本身），
+     * `origin` 是**累计权重键的起点**（缺省与 `min` 相同，保持旧行为）。
+     *
+     * 权重场景（`add(weight, address)`）下 TreeMap 的键是各节点的累计权重：
+     * 节点 i 的桶是 (origin + K_{i-1}, origin + K_i]，取节点 = 第一个键 >= v ⇒ 应当传
+     * `origin = 0`、`min` 落在第一个桶**内部**（例如 step/2）、`max = Σw`。
+     * 若 `origin` 与 `min` 相同，取值序列会与桶边界对齐（0.5/1.5/2.5 正对 1.5/2.5 这样的边界），
+     * 从而永远命中第一个节点（实测 A=100/B=0，见 .autocode/bugs/bug-archived-20261004-2.md）。
+     */
+    public func roundRobin(step: W, min: W, max: W, origin!: ?W = None): This {
         let algo = RoundRobin<W>(step, min, max)
-        balance = LoadBalance<W, Unit, Client<T>>(min, algo)
+        balance = LoadBalance<W, Unit, Client<T>>(origin ?? min, algo)
         this
     }
     public func random(min: W, max: W): This {
