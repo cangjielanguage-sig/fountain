@@ -1545,6 +1545,10 @@ public static func convertNullable<T>(value: Any): ?T
 
 ## 14. 事务
 
+### 14.0 敏感配置脱敏宏 `ORMEmbedSensitive`
+
+`@ORMEmbedSensitive`（`src/ProtectedMacros/EmbedSensitive.cj`）是`f_config`的`@EmbedSensitive`在ORM上的专用形态：把ORM的连接串/用户名/密码以及各驱动的前缀变体一次性声明为敏感配置项，使它们在输出/日志中按敏感配置处理。
+
 ### 14.1 传播行为 `Propagation`
 
 ```cangjie

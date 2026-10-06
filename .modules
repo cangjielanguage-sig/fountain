@@ -34,6 +34,7 @@ f_net
 f_orm
 f_security
 f_ticktock
+f_rpc
 f_egraph
 f_bloom
 f_store
@@ -44,6 +45,5 @@ fboot
 [exclude]
 
 [detention]
-f_rpc
 f_llm
 fleet

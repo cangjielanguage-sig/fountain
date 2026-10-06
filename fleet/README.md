@@ -35,7 +35,19 @@ fboot fleet --dylibPattern='fountain|f_.*|fleet'
 
 
 ## 客户端
-客户的配置只有fleet_hosts
+客户的配置只有`fleet_hosts`（同名常量在`FleetConfig.FLEET_SERVER_HOSTS`）。
+
+```cj
+public struct FleetConfig {
+    public static const FLEET_SERVER_HOSTS = 'fleet_hosts'
+    /**客户端要连接的fleet服务端地址列表，按逗号分隔*/
+    public static prop hosts: Array<String>
+}
+```
+
+客户端按`path`做分片路由（`clients[path.hashCode() % clients.size]`），不是负载均衡：同一个`path`总是落到同一个服务端。因此`fleet_hosts`的**顺序改变会改变 path 到服务端的映射**，扩缩容时需要评估存量数据的归属。
+
+`FleetClientException <: BaseException`是客户端失败信号；`fleet.base`还提供两个常量：`ERROR_HOST_FOR_PATH = 'ErrorHost'`、`UNSUPPORTED_COMMAND = 'UnsupportedCommand'`。
 
 ### API
 ```cj

@@ -165,7 +165,7 @@ public class CombinedValidator <: Validator {
 }
 ```
 
-### 以下注解都是`fountain::f_data.validation.Validator`的子类
+### 以下注解都是`fountain::f_data.base.Validator`的子类（注解本身定义在`fountain::f_data.validation`包）
 #### @IsNotEmpty 
 数据必须非空
 

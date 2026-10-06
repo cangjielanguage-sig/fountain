@@ -316,7 +316,7 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
 }
 ```
 
-## `ValueEqualMapKK, V>` 与 `ValueContainsMap<K, V>`
+## `ValueEqualMap<K, V>` 与 `ValueContainsMap<K, V>`
 
 这是两个接口，所有Map实现和ConcurrentHashMap都可以增加这两个接口的扩展
 ```cj
@@ -365,6 +365,15 @@ public class LinkedHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
 }
 ```
 
+
+## 扩展接口与节点类型
+
+| 类型 | 说明 |
+|---|---|
+| `ExtendCollection` / `ExtendList` / `ExtendMap` / `ExtendNonConcurrentMap` | 集合扩展的公共契约（`src/ExtendCollection.cj`） |
+| `Values` | 值集合接口（`src/ValueEqualMap.cj`） |
+| `Growable` | 可增长契约（`src/Growable.cj`） |
+| `LinkedNode`家族：`LinkedNodeIterator`、`Node`、`NoneNode`、`HeadNode`、`TailNode`、`ValueNode` | 链表节点与迭代器（`src/LinkedNode.cj`） |
 
 ## PriorityQueue
 

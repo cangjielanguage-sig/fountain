@@ -173,6 +173,14 @@ public class MultipartFileInputStream <: InputStream {
 - multipart/form-data
 
 
+### 其他公开类型
+
+- 媒体类型实现：`PlainTextMediaType`、`JsonMediaType`（`src/TextMediaType.cj`）、`MultipartMediaType`（`src/MultipartMediaType.cj`）。
+- multipart 解析：`MultipartFormDataParser`、`DataMultiparts`、`DataMultipartTuples`、`DataMultipartList`（`src/MultipartFormDataParser.cj`）。
+- 头部构造：`ContentDisposition`、`ContentDispositionType`、`ContentDispositionBuilder`。
+- 时间格式：`rfc1123`、`parseRfc1123`（`src/rfc.cj`）。
+- 配置：`HttpConfig`（`src/HttpConfig.cj`）。
+
 ## 安全
 
 ```cj

@@ -49,3 +49,20 @@ private let _ = {=>
 - **`MOCKDB` 公开成员**：`clear()`（清全部夹具）、`clearQueryResult()`（只清行与列信息）、`verbose`、`currentThreadId`、`execution`、`addQueryResultRow`、`addQueryResultColumnInfo`、`getQueryResultRows`、`queryResultColumnInfos`、`metadata`、`lastInsertId`、`rowCount`、`toThrowOn*` 系列。
 - **事务**：`MockTransaction` 有最小状态机 —— 未 `begin()` 就 `commit` / `rollback` / `save` / `release`、重复 `begin()`、事务已结束后再 `commit` / `rollback`，都抛 `SqlException`。失败模拟仍用 `toThrowOnBeginning` / `toThrowOnCommitting` / `toThrowOnReleasing(sp)` / `toThrowOnRollbacking` / `toThrowOnRollbackingSavePoint(sp)` / `toThrowOnSavingSavePoint(sp)`（读写成对），抛出的 `MockDbException` 带出错步骤（含 SQL 文本或 savepoint 名）。
 - **驱动入口参数**：`MockDriver.open(connectionString, opts)` 把连接串记在 `MockDatasource.connectionString`，`setOption` 累积到 `MockDatasource.options`（读取返回副本）⇒ 用例可以断言参数确实传到了驱动。
+
+## 公开类型
+
+| 类型 | 说明 |
+|---|---|
+| `MOCKDB` | 静态门面，夹具（行、列信息、lastInsertId/rowCount、toThrowOn*、metadata）都按线程隔离 |
+| `MockDriver <: Driver` | 注册名为`mockdb`的驱动，`version`为`1.0.0`、`preferredPooling`为`false` |
+| `MockDatasource <: Datasource` | 连接串与选项的载体 |
+| `MockConnection <: Connection` | `state`在`Connected`/`Closed`之间；`createTransaction()`、`getMetaData()`、`prepareStatement(sql)` |
+| `MockStatement <: Statement` | `set<T>`/`setNull`/`query()`/`update()`；`query(params)`/`update(params)`是unsupported |
+| `MockTransaction <: Transaction` | `accessMode`/`deferrableMode`/`isoLevel` + `begin`/`commit`/`rollback`/`save`/`release` |
+| `MockQueryResult <: QueryResult` | `columnInfos`、`next()`、`get<T>(index)`、`getOrNull<T>(index)` |
+| `MockUpdateResult <: UpdateResult` | 公开构造`MockUpdateResult(lastInsertId, rowCount)`，构造时快照 |
+| `MockColumnInfo <: ColumnInfo` | 公开构造`MockColumnInfo(name, nullable, typeName)`；`displaySize`为`Int64.Max`、`length`/`scale`为`0` |
+| `MockDbException <: Exception` | mock自己的失败信号 |
+
+另外 `public import std.database.sql.*` 会把 `Driver`/`Connection`/`Statement`/`QueryResult`/`UpdateResult`/`ColumnInfo`/`SqlDbType`/`SqlException`/`DriverManager`/`TransactionAccessMode` 等std类型一并转出。

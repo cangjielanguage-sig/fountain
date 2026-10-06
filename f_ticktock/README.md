@@ -40,19 +40,15 @@ public class TickTockTask <: CronTicktockTask {
         }
     }
     /**
-     * 当前任务是否正在执行
-     *
-     * @return true表示正在执行，false表示没有执行。开发者可以实现新的判断逻辑。可以不实现这个函数，有默认判断逻辑
+     * 当前任务是否正在执行。可以不实现，默认按「任务名+时间戳」记账判断；
+     * 开发者可以覆盖这个方法实现自己的判断逻辑
      */
-    public func executing(stamp: Int64): Bool {
-        return DefaultTicktockTaskExecuting.executing(name, stamp)
-    }
+    public func executing(stamp: Int64): Bool
     /**
-     * 重置执行状态。开发者可以实现新的判断逻辑。可以不实现这个函数，有默认判断逻辑
+     * 重置执行状态。可以不实现，默认按「任务名+时间戳」记账重置；
+     * 开发者可以覆盖这个方法实现自己的逻辑
      */
-    public func reset(stamp: Int64): Unit {
-        DefaultTicktockTaskExecuting.reset(name, stamp)
-    }
+    public func reset(stamp: Int64): Unit
     /**
      * 任务名称。默认是定时任务实现类型的全限定名
      */
@@ -107,3 +103,18 @@ public abstract class DelayedTicktockTask <: CronTicktockTask {
     public func execute(): Unit 
 }
 ```
+
+## 公开API一览
+
+| 类型 | 说明 |
+|---|---|
+| `TicktockTaskDef` / `TicktockTask` / `CronTicktockTask` / `DelayedTicktockTask` | 任务契约与三种任务基类 |
+| `FuncCronTicktockTask` / `FuncInvocationTask` / `FuncInvocationCronTask` | 用函数/闭包表达的任务 |
+| `DelayedPeriodic` | 延迟任务的执行模式（`FixedRate` 固定频率 / `FixedDelay` 固定间隔） |
+| `TicktockUnit` 及 `SecondlyTicktockUnit`、`MinutelyTicktockUnit`、`HourlyTicktockUnit`、`MonthDailyTicktockUnit`、`MonthlyTicktockUnit`、`WeekDailyTicktockUnit`、`YearlyTicktockUnit` | CRON 各时间单位的解析单元 |
+| `CronCompiler` / `CronData` / `CronDataCollection` | CRON 表达式的编译与数据载体 |
+| `Ticktock` | 定时器本体，驱动任务执行 |
+| `TicktockInitializer` | 随应用启动注册到`f_app`的初始化器 |
+| `TicktockException` | 模块异常 |
+
+约定：`concurrentable`为`false`（默认）时，上次任务未结束就跳过本次；`once`为`true`的任务只执行一次；`executing`/`reset`默认按「任务名+时间戳」记账，可以覆盖。

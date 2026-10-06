@@ -393,7 +393,7 @@ public interface IndividualityFinder <: MemorySummaryFinder {}
 ```
 
 
-## 上下文策略：`fountain::f_llm.llm.ConsextPrunerName`
+## 上下文策略：`fountain::f_llm.llm.ContextPrunerName`
 
 对上下文执行裁剪、压缩等
 ```cj
