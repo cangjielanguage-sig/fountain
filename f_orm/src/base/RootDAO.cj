@@ -323,7 +323,11 @@ public interface RootDAO {
         let s = frag.size
         for(v in value){
             if(frag.size > s){
-                frag.append(',')
+                // bug-orm.md ORM-N1（N1a）：原为 append(',') + 循环尾 append('?')，合并成一次 append
+                // （StringGenerator.append 每次都要按字节搬进 ArrayList<Byte>，减少调用次数是直接收益）
+                frag.append(',?')
+            }else{
+                frag.append('?')
             }
             // bug.md §2.14（ORM-7）：分支按绑定频率排序（同 SqlExecutor.add<T>），逐个元素减少失败的类型检查。
             // 各分支运行时类型互斥，顺序不影响语义。
@@ -371,7 +375,6 @@ public interface RootDAO {
                 case x: ?InputStream => arg(x)
                 case _ => throw ORMException('type does not support')
             }
-            frag.append('?')
         }
         if(frag.size == s){
             return ''
