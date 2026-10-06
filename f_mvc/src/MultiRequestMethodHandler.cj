@@ -80,6 +80,13 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
             }
             if (let Some(m) <- metas.get(c) && let h <- check(m)) {
                 h
+            } else if (let Some(m) <- metas.get('*')) {
+                // §3.2 / MVC-13：通配 consumes 兜底。控制器侧的 consumes 不允许 `'*'`
+                // （`addMediaTypes(..., allowAny: false)` 会对 `'*'` 抛异常），所以这里的 `'*'`
+                // 只可能来自 WS 端点（`RequestMeta.setHandle(wsmeta:)` 把 consumes/produces 设为 `'*'`）。
+                // WS 握手请求没有 Content-Type（`c == ''`）⇒ 原先在这里被判 415；端到端实测确认了这一点
+                // （`WebSocketRouting_test`：修前握手得到 `HTTP/1.1 415 Unsupported Media Type`）。
+                check(m)
             } else {
                 UNSUPPORTED_MEDIA_TYPE
             }
