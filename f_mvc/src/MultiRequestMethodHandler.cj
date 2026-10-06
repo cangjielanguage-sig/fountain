@@ -88,6 +88,14 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
             check(ms).`handle`(ctx)
         }
         log.debug{'fountain mvc ${request.method}: ${request.url}'}
+        // §3.2 / MVC-13：WS 握手（GET + `Upgrade: websocket`）走 `WS` 键。握手请求没有 Content-Type，
+        // 所以直接用单参 `check(meta)`（WS 注册时 consumes/produces 都是 `'*'`），跳过那层 consumes 查表。
+        if (method == RequestMethod.GET && isWebSocketUpgrade(headers)) {
+            if (let Some(wsMeta) <- metas.get(RequestMethod.WS)) {
+                check(wsMeta).`handle`(ctx)
+                return
+            }
+        }
         match ((metas.get(method), method)) {
             case (Some(ms), OPTIONS) => check(ms).`handle`(ctx)
             case (_, OPTIONS) =>
@@ -221,4 +229,20 @@ func allowsOf(metas: HashMap<RequestMethod, HashMap<String, RequestMeta>>): Stri
         allow.append(method)
     }
     allow.toString()
+}
+
+/**
+ * 包内接缝（§3.2 / `MVC-13`）：判断请求是否为 WebSocket 握手。
+ * 依据 RFC 6455 的 `Upgrade: websocket`（忽略大小写）；真正的握手校验仍由 stdx 的
+ * `WebSocket.upgradeFromServer`（经 `WSMeta.upgrade`）完成，本函数只负责**路由**。
+ *
+ * 修前形态：一律返回 `false`（不把请求当 WS 握手，行为与改造前一致 —— WS 端点因此永远匹配不到，
+ * 请求落到 `handle` 的 405 分支）。修后：`Upgrade` 头含 `websocket` ⇒ `true`。
+ * 单测：`MultiRequestMethodHandler_test.testIsWebSocketUpgrade`。
+ */
+func isWebSocketUpgrade(headers: HttpHeaders): Bool {
+    match (headers.getFirst('Upgrade')) {
+        case Some(v) => v.toAsciiLower().contains('websocket')
+        case _ => false
+    }
 }

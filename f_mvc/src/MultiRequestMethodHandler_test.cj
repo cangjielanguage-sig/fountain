@@ -57,4 +57,21 @@ class MultiRequestMethodHandler_test {
         metas[RequestMethod.PUT] = HashMap<String, RequestMeta>()
         @Assert(first, cache.get())
     }
+
+    /**
+     * §3.2 / `MVC-13`：WS 握手识别 —— `Upgrade: websocket`（忽略大小写）为真，其它/缺失为假。
+     * 修前形态（接缝一律返回 `false`）：前两条断言失败。
+     */
+    @TestCase
+    public func testIsWebSocketUpgrade(): Unit {
+        func withUpgrade(value: String): HttpHeaders {
+            let h = HttpHeaders()
+            h.set('Upgrade', value)
+            h
+        }
+        @Assert(true, isWebSocketUpgrade(withUpgrade('websocket')))
+        @Assert(true, isWebSocketUpgrade(withUpgrade('WebSocket')))
+        @Assert(false, isWebSocketUpgrade(withUpgrade('h2c')))
+        @Assert(false, isWebSocketUpgrade(HttpHeaders()))
+    }
 }
