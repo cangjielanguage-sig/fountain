@@ -118,7 +118,12 @@ public class BeanDef <: BeanCondition {
 
     public func on(factory: BeanFactory): Bool {
         match ((beanType, beanName)) {
-            case (IgnoreType, IgnoreName) => return true //相当于没有指定bean初始化条件
+            // §3.1 / BEAN-L12：原先写的 `IgnoreName` 不是 `StringCond` 的 case（该枚举只有
+            // IgnoreCond/Exactly/Prefix/Suffix/Wildcard/Regexp/Contains/In）⇒ 它退化成**模式变量绑定**，
+            // 使本 case 成了 `(IgnoreType, _)` 的 catch-all：名条件、count、scope 全被吃掉。
+            // 本意（见下注释）：类型与名字**都是 Ignore** 时，其余条件（count/scope）一并忽略 ⇒ 无条件真；
+            // 其余组合一律走真实筛选路径（`_` 分支：Object 桶 + 名条件 + count + scope）。
+            case (IgnoreType, IgnoreCond) => return true //相当于没有指定bean初始化条件
             case (CurrentOrSubOf(t), _) => on(factory, TypeInfos.get(t))
             case (Current(t), _) => on(factory, TypeInfos.get(t))
             case (SubOfOnly(t), _) => on(factory, TypeInfos.get(t))

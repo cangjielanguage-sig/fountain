@@ -117,6 +117,24 @@ func pumpFrames(
     }
 }
 
+/**
+ * 包内接缝（§3.1 / `MVC-C6(b)`）：数据帧（Text/Binary）到达时的处置 —— 需要结束会话时返回日志用原因，否则 `None`。
+ * 触发条件：①`pendingPayload`（上一条载荷未消费完又来数据帧）；②`!hasMeta`（该帧类型没配 meta）。
+ * 修前形态：一律返回 `None`（不关连接），行为与改造前一致 —— 由 `doExec` 抛 `WSException` 走 catch-and-continue，
+ * 会话继续、每条这样的消息各付一次异常 + 一条 ERROR 日志。修后：返回原因 ⇒ 记一条日志、`ws.closeConn()`、
+ * `return true` 停止读帧（与同文件「未知帧类型」的既有处置一致）。
+ * 单测：`WSMeta_test.testDataFrameCloseReason` 钉住这两条「该关」的判定。
+ */
+func dataFrameCloseReason(metaType: String, pendingPayload: Bool, hasMeta: Bool): ?String {
+    if (pendingPayload) {
+        return 'current payload is not empty'
+    }
+    if (!hasMeta) {
+        return '${metaType} meta for ws is not specified'
+    }
+    None<String>
+}
+
 public class WSMeta<T> where T <: Object {
     private let log = LoggerFactory.getLogger<WSMeta<T>>()
     var pattern = None<HttpRequestPathPatterns>
@@ -245,8 +263,15 @@ public class WSMeta<T> where T <: Object {
                 try{
                     match(frame.frameType){
                         case TextWebFrame | BinaryWebFrame =>
-                            if(!bytes.value.isEmpty()){
-                                throw WSException('current payload is not empty')
+                            let (metaType, hasMeta) = match (frame.frameType) {
+                                case TextWebFrame => ('text', textMeta_.isSome())
+                                case _ => ('binary', binaryMeta_.isSome())
+                            }
+                            if (let Some(reason) <- dataFrameCloseReason(metaType, !bytes.value.isEmpty(), hasMeta)) {
+                                // §3.1 / MVC-C6(b)：该关就关 —— 不再「抛异常 → catch → 会话继续」（每条消息一次异常 + 一条日志）
+                                log.error{'${reason}'}
+                                ws.closeConn()
+                                return true
                             }
                             frameType.value = frame.frameType
                             bytes.value = doExec(frame.payload, frame.fin, frameType.value, bytes.value)
@@ -274,16 +299,16 @@ public class WSMeta<T> where T <: Object {
                                     ws.write(CloseWebFrame, frame.payload)
                                 }
                             }catch(e: Exception){
-                                log.error('error on handling close ${toBase64String(frame.payload)}', e)
+                                log.error(e){'error on handling close ${toBase64String(frame.payload)}'}
                             }
                             ws.closeConn()
                             return true
                         case _ =>
-                            log.error('unsupport frame ${frame.frameType}')
+                            log.error{'unsupport frame ${frame.frameType}'}
                             ws.closeConn()
                     }
                 }catch(e: Exception){
-                    log.error('error on handling ${frame.frameType}; frame: ${toBase64String(frame.payload)}', e)
+                    log.error(e){'error on handling ${frame.frameType}; frame: ${toBase64String(frame.payload)}'}
                 }
                 false
             },

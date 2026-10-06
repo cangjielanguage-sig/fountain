@@ -17,7 +17,7 @@ package fountain::f_pool.base.collection
 
 import std.collection.ArrayList
 import std.env.getStdErr
-import std.sync.AtomicInt64
+import std.sync.{AtomicBool, AtomicInt64}
 import fountain::f_pool.diagnostics.PoolDiagnostics
 
 @Test
@@ -286,6 +286,54 @@ public class SyncDequeTest {
                 ()
             })
     }
+    /**
+     * `POOL-L1`（.autocode/bugs/bug-pool.md §3）：告警钩子**不得在 `head.globalLock` 临界区内**被调用。
+     *
+     * 判别方式：钩子执行期间让**另一根线程**去抢同一把锁（`insertTail` 内部就是
+     * `synchronized(head.globalLock)`）——修前钩子在锁内，那根线程会被挡到钩子返回（`blocked=true`）；
+     * 修后钩子跑在锁外，它应当立刻完成。触发沿用现成路径：`strandHeadForTest()` + `audit()` ⇒ `WEDGE-HEAL`。
+     */
+    @TestCase
+    public func testWarningHookMustRunOutsideDequeLock(){
+        let deque = SyncDeque<Object>()
+        deque.insertTail(Object())
+        @Assert(deque.strandHeadForTest())                   // 制造滞留项，逼出 WEDGE-HEAL
+        let hookEntered = AtomicBool(false)
+        let blockedWhileHookRan = AtomicBool(false)
+        PoolDiagnostics.redirectWarningsTo(
+            warn: {message =>
+                if (message.contains('WEDGE-HEAL')) {
+                    hookEntered.store(true)
+                    let done = AtomicBool(false)
+                    spawn {
+                        deque.insertTail(Object())           // 另一根线程要同一把锁
+                        done.store(true)
+                    }
+                    for (_ in 0 .. 200) {                    // 最多等 400ms：等到了 = 钩子没占着锁
+                        if (done.load()) {
+                            return
+                        }
+                        sleep(Duration.millisecond * 2)
+                    }
+                    blockedWhileHookRan.store(true)          // 钩子返回前它一直拿不到锁 ⇒ 钩子在锁内
+                }
+                ()
+            },
+            error: {message => ()})
+        @Assert(deque.audit() > 0)                           // 触发 WEDGE-HEAL 告警
+        @Assert(hookEntered.load())                          // 告警确实被逼出来了
+        @Assert(blockedWhileHookRan.load(), false)            // 修前：true（钩子占着 deque 全局锁）
+        // 收尾：恢复成"默认通道"的样子（stderr），避免影响后续用例（与 testWarningHookCanBeRedirected 一致）
+        PoolDiagnostics.redirectWarningsTo(
+            warn: {message =>
+                getStdErr().writeln(message)
+                ()
+            },
+            error: {message =>
+                getStdErr().writeln(message)
+                ()
+            })
+    }
     @TestCase
     public func testWeakDequeRemoveMustReturnElement(){
         // 弱引用池（Mode.WeakFifo/WeakLifo）走的是同一条"摘节点"路径：引用类型的池项包的是对象本身，
@@ -297,6 +345,36 @@ public class SyncDequeTest {
         @Assert(taken.isSome())
         @Assert(refEq(taken.getOrThrow(), o))
         @Assert(deque.remove({_=>true}){_=>}.isNone())
+    }
+    /**
+     * `POOL-L4`：`nodes`（锁内维护的 O(1) 计数，供 `selfCheck` 用）在混合操作之后必须与实际节点数一致 ——
+     * 判据就是「`audit()`（实走对账）返回 0」= 没有需要修正的记账。
+     * 覆盖：插入（insertHead/insertTail）、取走、归还（prepend/append）、校验不过丢弃（checker=false）、
+     * 滞留项救回（`strandHeadForTest` + `audit`）。
+     */
+    @TestCase
+    public func testNodeCountMustNotDrift(){
+        let deque = SyncDeque<Int64>()
+        for (i in 0 .. 50) {
+            deque.insertHead(i)
+            deque.insertTail(i)
+        }
+        for (_ in 0 .. 10) {
+            if (deque.remove({_=>true}){_=>}.isNone()) {
+                @Assert(false)
+            }
+        }
+        deque.prepend(7, {_=>true}){_=>}             // 归还：节点 +1、out −1
+        deque.append(8, {_=>true}){_=>}
+        if (let Some(v) <- deque.remove({_=>true}){_=>}) {
+            deque.prepend(v, {_=>false}){_=>}        // 校验不过 ⇒ 销毁 + 结清（节点数不变）
+        } else {
+            @Assert(false)
+        }
+        @Assert(deque.audit(), 0)                    // 实走对账：`nodes`/`s` 都一致 ⇒ 0
+        @Assert(deque.strandHeadForTest())
+        @Assert(deque.audit() > 0)                   // 救回滞留项
+        @Assert(deque.audit(), 0)                    // 再对账一次：仍然一致
     }
     @TestCase
     public func testStrandedCheckingMustBeHealed(){

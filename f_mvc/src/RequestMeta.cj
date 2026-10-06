@@ -17,9 +17,31 @@ package fountain::f_mvc
 
 import fountain::f_data
 
+/**
+ * 包内接缝（§2.5 / `MVC-C2`）：`respond<R>`（`R <: ToData`）按「结果是否为空 + Accept」选出的响应形态。
+ * 修后：非空结果 + 缺 Accept 走 `Render`（修前是 `NotAcceptable` ⇒ 406）；空结果三分支不变。
+ */
+enum RespondKind <: ToString {
+    | Render
+    | EmptyWithContentType
+    | EmptyWithoutContentType
+    | NotAcceptable
+
+    public func toString(): String {
+        match (this) {
+            case Render => 'Render'
+            case EmptyWithContentType => 'EmptyWithContentType'
+            case EmptyWithoutContentType => 'EmptyWithoutContentType'
+            case NotAcceptable => 'NotAcceptable'
+        }
+    }
+}
+
 public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMeta> {
-    private static let log = LoggerFactory.getLogger<RequestMeta>()
-    private static let NOT_FOUND = NotFoundHandler()
+    // 包内可见（§3.1 / MVC-L5）：`StaticResourceOrNotFoundHandler` 复用同一日志类别（不改变日志 name 字段）
+    static let log = LoggerFactory.getLogger<RequestMeta>()
+    // 包内可见（§3.1 / MVC-L5）：未命中路径的 404 输出由 `StaticResourceOrNotFoundHandler` 复用
+    static let NOT_FOUND = NotFoundHandler()
     private static let STATIC_RESOURCE_ROOT = MVCConfig.mvcStaticResourceRoot
     private static let staticResourceBytes = ConcurrentHashMap<String, (DateTime, Array<Byte>)>()
     static let currentResponseStatus = ThreadLocal<UInt16>()
@@ -27,11 +49,18 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
     static func setResponseStatus(status: HttpStatus) {
         currentResponseStatus.set(status.value)
     }
-    private static func getResponseStatus(): UInt16 {
+    static func getResponseStatus(): UInt16 {
         match (currentResponseStatus.get()) {
             case Some(c) => c
             case _ => HttpStatus.OK.value
         }
+    }
+    /**
+     * 请求出口清理（§2.6 / `MVC-8`）：status 的 ThreadLocal 只 set 不清会串到同线程的下一个请求，
+     * 由 `setHandle` 与 404/静态资源路径的 finally 调用。
+     */
+    static func clearResponseStatus() {
+        currentResponseStatus.set(None)
     }
     private var ignoreAuth_ = false
     private var ignorePrivilege_ = false
@@ -49,28 +78,10 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         private let params!: RequestCondition = DummyRequestCondition.instance,
         private let headers!: RequestCondition = DummyRequestCondition.instance
     ) {
-        this.handle_ = {ctx =>
-            if(let Some(bytes) <- loadStaticResource(path)){
-                let builder = ctx.responseBuilder.status(HttpStatus.OK.value)
-                if(let Some(dotIdx) <- path.lastIndexOf('.')){
-                    let ext = path[dotIdx + 1 ..]
-                    builder.header('Content-Type', match(ext){
-                        case 'html' | 'css' | 'xml' | 'txt' => 'text/${ext}'
-                        case 'json' => 'application/json'
-                        case 'js' => 'application/javascript'
-                        case 'htm' => 'text/html'
-                        case 'jpg' | 'jpeg' | 'png' | 'gif' | 'bmp' | 'ico' | 'webp' | 'tif' | 'tiff' | 'avif' | 'ico' => 'image/${ext}'
-                        case 'svg' => 'image/svg+xml'
-                        case 'ttf' | 'otf' | 'woff' | 'woff2' => 'font/${ext}'
-                        case _ => 'application/${ext}'
-                    })
-                }
-                builder.body(bytes)
-                return
-            }
-            log.warn('RequestMeta.handle.Not Found:${path} ${ctx.request.headers.getFirst('Accept')}')
-            NOT_FOUND.`handle`(ctx)
-        }
+        // §3.1 / MVC-L5：默认处理器（静态资源 → 404）的逻辑已抽到 StaticResourceOrNotFoundHandler，
+        // 这里委托给它以保持单一事实来源。生产路径上的未命中请求由 distribute 直接返回该 handler，
+        // 不再构造 RequestMeta（`generate` 与 WS 注册随后都会用 setHandle 覆盖 handle_）。
+        this.handle_ = {ctx => StaticResourceOrNotFoundHandler(path).`handle`(ctx)}
     }
 
     public func compare(other: RequestMeta): Ordering {
@@ -93,7 +104,8 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
     public func toString(): String {
         'path: ${path}; method: ${method}; consumes: ${consumes}; consumesSize: ${consumes.size}'
     }
-    private static func loadStaticResource(path: String): ?Array<Byte> {
+    // 包内可见（§3.1 / MVC-L5）：`StaticResourceOrNotFoundHandler` 复用静态资源读取
+    static func loadStaticResource(path: String): ?Array<Byte> {
         staticResourceBytes.entryView(path){view =>
             var p = if(path.startsWith('/')){
                 path[1..]
@@ -207,7 +219,8 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                 } handle (cmd: BreakingCommand) {
                     respond(MVCBreakingCommand(cmd.data), ctx)
                 } finally {
-                    CurrentHttpContext.clear()
+                    // §2.6 / MVC-8 + §3.2 / MVC-14：请求出口统一清请求级 ThreadLocal（三条路径共用同一接缝）
+                    finishRequest()
                 }
         }
     }
@@ -263,7 +276,14 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
     }
     func setHandle<T>(wsmeta: WSMeta<T>) where T <: Object {
         this.handle_ = {
-            ctx => wsmeta.`handle`(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern.getOrThrow())
+            ctx =>
+                try {
+                    CurrentHttpContext.set(ctx)
+                    wsmeta.`handle`(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern.getOrThrow())
+                } finally {
+                    // §3.2 / MVC-14：WS 出口与 HTTP / 404 出口对齐 —— 会话期（或握手被拒后立即返回）结束时清请求级状态
+                    finishRequest()
+                }
         }
         produces.add('*')
         consumes.add('*')
@@ -280,42 +300,43 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         respond(ctx.request.method) {
             let emptyResult = result is Unit || result is DataUnit || result is DataNone
             let accept = ctx.request.headers.getFirst('Accept')
-            if (!emptyResult && let Some(accept) <- accept) {
-                func genBody(accept: String): Bool {
-                    if (let Some(mediaType) <- MediaTypes.tryParse(accept)) {
-                        let bytes = mediaType.fromData(result.toData())
-                        ctx.responseBuilder.status(status.value).header('Content-Type', accept).body(bytes)
-                        return true
-                    } else if (accept == '*/*') {
-                        let acc = this.produces.iterator().next() ?? 'application/json'
-                        let mt = MediaTypes.parse(acc)
-                        let bytes = mt.fromData(result.toData())
-                        ctx.responseBuilder.status(status.value).header('Content-Type', acc).body(bytes)
-                        return true
-                    }
-                    false
+            try {
+                match (respondKind(emptyResult, accept)) {
+                    case Render =>
+                        let renderAccept = accept ?? '*/*'
+                        func genBody(accept: String): Bool {
+                            if (let Some(mediaType) <- MediaTypes.tryParse(accept)) {
+                                let bytes = mediaType.fromData(result.toData())
+                                ctx.responseBuilder.status(status.value).header('Content-Type', accept).body(bytes)
+                                return true
+                            } else if (accept == '*/*') {
+                                let acc = this.produces.iterator().next() ?? 'application/json'
+                                let mt = MediaTypes.parse(acc)
+                                let bytes = mt.fromData(result.toData())
+                                ctx.responseBuilder.status(status.value).header('Content-Type', acc).body(bytes)
+                                return true
+                            }
+                            false
+                        }
+                        let accepted = if(renderAccept.indexOf(',').isSome()){
+                            AcceptQueue(renderAccept).first() ?? '*/*'
+                        } else {
+                            renderAccept
+                        } |> genBody
+                        if(!accepted){
+                            MultiRequestMethodHandler.NOT_ACCEPTABLE.`handle`(ctx)
+                        }
+                    case EmptyWithContentType =>
+                        ctx.responseBuilder.status(status.value).header('Content-Type', accept.getOrThrow()).body('')
+                    case EmptyWithoutContentType =>
+                        ctx.responseBuilder.status(status.value).body('')
+                    case NotAcceptable =>
+                        MultiRequestMethodHandler.NOT_ACCEPTABLE.`handle`(ctx)
                 }
-                let accepted = if(accept.indexOf(',').isSome()){
-                    AcceptQueue(accept).first() ?? '*/*'
-                } else {
-                    accept
-                } |> genBody
-                if (let r: Resource <- result) {
-                    try {
-                        r.close()
-                    } catch (e: Exception) {
-                        log.warn(e){'Error occurred on closing ${TypeInfo.of(result)}; path: ${path}; accept: ${accept}'}
-                    }
+            } finally {
+                if (let Some(e) <- closeResultIfResource(result)) {
+                    log.warn(e){'Error occurred on closing ${TypeInfo.of(result)}; path: ${path}; accept: ${accept}'}
                 }
-                if(!accepted){
-                    MultiRequestMethodHandler.NOT_ACCEPTABLE.`handle`(ctx)
-                }
-            } else if (emptyResult && let Some(accept) <- accept && accept.contains('*/*')) {
-                ctx.responseBuilder.status(status.value).header('Content-Type', accept).body('')
-            } else if (emptyResult && accept.isNone()) {
-                ctx.responseBuilder.status(status.value).body('')
-            } else {
-                MultiRequestMethodHandler.NOT_ACCEPTABLE.`handle`(ctx)
             }
         }
     }
@@ -370,9 +391,9 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         }
     }
     private func respond(meta: FileDownloadMeta, ctx: HttpContext): Unit {
-        respond(ctx.request.method) {
-            meta.execute()
-        }
+        // §2.3 / MVC-C5：下载任务是异步的（spawn 后本函数立即返回），
+        // 计时搬进下载任务本身（FileDownload.exec），此处不再统计「派发」耗时。
+        meta.execute()
     }
 
     public func isMultipart(name: String) {
@@ -516,41 +537,16 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         metas
     }
     public func accessLog<T>(start: MonoTime, ctx: HttpContext, args: ArrayList<Any>, returned: ?Any, e: ?Exception) where T <: Object {
-        func anyToString(any: Any) {
-            let arg = match (any) {
-                case x: HttpContext => x
-                case x: HttpRequest => x
-                case x: HttpHeaders => x
-                case x: HttpResponseBuilder => x
-                case x: Form => return x.toEncodeString()
-                case x: String => return x
-                case x: ToString => return x.toString()
-                case x: Array<Byte> => return toBase64String(x)
-                case x: MultipartFile => return JsonString(x.toString()).toString()
-                case x: ToData => return f_data.convert<JsonValue>(x.toData()).getOrThrow().toString()
-                case x: Data => return f_data.convert<JsonValue>(x).getOrThrow().toString()
-                case x => x
-            }
-            TypeInfo.of(arg).toString()
-        }
         let request = ctx.request
-        let argGen = StringGenerator().append('[')
-        for (arg in args) {
-            if (argGen.size > 1) {
-                argGen.append(',')
-            }
-            let s = anyToString(arg)
-            argGen.append(s)
-        }
-        argGen.append(']')
-        let result = match (returned) {
-            case Some(x) => anyToString(x)
-            case _ => 'None'
+        // §2.6 / MVC-8：status 在请求线程读（f_log 的 message 闭包由异步 appender 在消费线程执行，
+        // 在闭包里读会恒取默认值）。日志关闭时这里也只是一次 ThreadLocal 读，成本可忽略。
+        let responseStatus = getResponseStatus()
+        let fields = lazyAccessLogFields(args, returned)
+        func logContent(): String {
+            let (params, result) = fields()
+            'MVC.accessLog:${request.method}:${request.url}?${request.form.toEncodeString()}; consumes:${request.headers.getFirst('Content-Type')}; params:${params}; returned:${result}; status:${responseStatus}; elapsed:${MonoTime.now() - start}'
         }
         let log = LoggerFactory.getLogger<T>()
-        func logContent(){
-            'MVC.accessLog:${request.method}:${request.url}?${request.form.toEncodeString()}; consumes:${request.headers.getFirst('Content-Type')}; params:${argGen}; returned:${result}; status:${getResponseStatus()}; elapsed:${MonoTime.now() - start}'
-        }
         if (let Some(ex) <- e) {
             let exce = try {
                 MultiRequestMethodHandler.INTERNAL_SERVER_ERROR.`handle`(ctx, ex)
@@ -568,6 +564,134 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             log.error(exce, logContent)
         } else {
             log.info(logContent)
+        }
+    }
+}
+
+/**
+ * 包内接缝（§1.12 / `MVC-2`）：返回「惰性」参数/返回值文本构造器，文本格式 `([参数,参数...], 返回值)`。
+ * 构造这个闭包不做任何序列化；只有调用它（`accessLog.logContent` 真正要拼日志文本时）才遍历参数、
+ * 做 toString()/toData()+JSON/base64 等重活。单测用计数 spy 钉住这条不变量。
+ */
+func lazyAccessLogFields(args: ArrayList<Any>, returned: ?Any): () -> (String, String) {
+    {=>
+        func anyToString(any: Any) {
+            let arg = match (any) {
+                case x: HttpContext => x
+                case x: HttpRequest => x
+                case x: HttpHeaders => x
+                case x: HttpResponseBuilder => x
+                case x: Form => return x.toEncodeString()
+                case x: String => return x
+                case x: ToString => return x.toString()
+                case x: Array<Byte> => return toBase64String(x)
+                case x: MultipartFile => return JsonString(x.toString()).toString()
+                case x: ToData => return f_data.convert<JsonValue>(x.toData()).getOrThrow().toString()
+                case x: Data => return f_data.convert<JsonValue>(x).getOrThrow().toString()
+                case x => x
+            }
+            TypeInfo.of(arg).toString()
+        }
+        let argGen = StringGenerator().append('[')
+        for (arg in args) {
+            if (argGen.size > 1) {
+                argGen.append(',')
+            }
+            argGen.append(anyToString(arg))
+        }
+        argGen.append(']')
+        let result = match (returned) {
+            case Some(x) => anyToString(x)
+            case _ => 'None'
+        }
+        (argGen.toString(), result)
+    }
+}
+
+/**
+ * 包内接缝（§2.5 / `MVC-C2` + §3.2 / `MVC-L11`）：`respond<R>`（`R <: ToData`）的分支决策。
+ * 非空结果一律走 `Render`（缺 Accept 时按星号通配处理，与 `JsonValue` 响应、
+ * `populateResponseContentType` 的默认一致）。
+ * 空结果（`DataUnit`/`DataNone`）：缺 Accept ⇒ 空体不带 Content-Type；有 Accept ⇒ 空体 + 按 Accept 声明 Content-Type。
+ * **`MVC-L11` 修后**：具体 Accept（如 `application/json`）也走空体分支 —— 修前判 406，会把
+ * `MVCBreakingCommand(status)`（默认 data 为 `DataUnit.UNIT`，例如 `ControllerFuncParam` 的 415）
+ * 的状态码吞成 406；只有 `Accept: ''` 这类异常值仍返回 `NotAcceptable`。
+ */
+func respondKind(emptyResult: Bool, accept: ?String): RespondKind {
+    if (!emptyResult) {
+        return RespondKind.Render
+    }
+    match (accept) {
+        case None => RespondKind.EmptyWithoutContentType
+        case Some(a) where !a.isEmpty() => RespondKind.EmptyWithContentType
+        case _ => RespondKind.NotAcceptable
+    }
+}
+
+/**
+ * 包内接缝（§2.5 / `MVC-C2`）：结果实现 `Resource` 时关闭它；关闭失败不抛，回传异常由调用方记录。
+ * `respond<R>` 在 `finally` 里调用它 ⇒ 无论走 body 渲染、406 还是空结果分支都会关闭。
+ */
+/**
+ * 包内接缝（§2.6 / `MVC-8` + §3.2 / `MVC-14`）：**请求出口清理** —— 三条请求出口路径
+ * （HTTP 闭包、404/静态资源轻量 handler、WS 闭包）共用，避免任一条漏清而把请求级状态
+ * （`CurrentHttpContext` / `currentResponseStatus` / `OverallStopwatch` 起点）串给同线程的下一个请求。
+ * 背景：`MVC-13` 打通 WS 路由后，WS 闭包成了唯一不收尾的出口（详见 §3.2 `MVC-14`）。
+ * 单测：`RequestMeta_test.testFinishRequestClearsRequestState`。
+ */
+func finishRequest(): Unit {
+    CurrentHttpContext.clear()
+    RequestMeta.clearResponseStatus()
+    OverallStopwatch.clearStart()
+}
+
+func closeResultIfResource(result: Any): ?Exception {
+    if (let r: Resource <- result) {
+        try {
+            r.close()
+        } catch (e: Exception) {
+            return e
+        }
+    }
+    None<Exception>
+}
+
+/**
+ * §3.1 / `MVC-L5`：未命中路由（静态资源 → 404）的轻量处理器。
+ *
+ * 替代原先「每请求构造一个 `RequestMeta`」——后者会连带分配 2 个 `HashSet`、`RequestArgMeta`（内含 `HashMap`）
+ * 与闭包；本类只持一个 `path` 引用。逻辑与 `RequestMeta` 原默认处理器逐字一致（含 §2.6 / `MVC-8` 的
+ * 请求级 ThreadLocal 清理），静态资源读取与 404 输出复用 `RequestMeta.loadStaticResource` / `RequestMeta.NOT_FOUND`。
+ *
+ * 不做按路径缓存：路径集合无界（扫描器可制造任意路径），按请求构造只多一个对象。
+ */
+class StaticResourceOrNotFoundHandler <: HttpRequestHandler {
+    StaticResourceOrNotFoundHandler(private let path: String) {}
+    public func `handle`(ctx: HttpContext): Unit {
+        try {
+            if (let Some(bytes) <- RequestMeta.loadStaticResource(path)) {
+                let builder = ctx.responseBuilder.status(HttpStatus.OK.value)
+                if (let Some(dotIdx) <- path.lastIndexOf('.')) {
+                    let ext = path[dotIdx + 1 ..]
+                    builder.header('Content-Type', match (ext) {
+                        case 'html' | 'css' | 'xml' | 'txt' => 'text/${ext}'
+                        case 'json' => 'application/json'
+                        case 'js' => 'application/javascript'
+                        case 'htm' => 'text/html'
+                        case 'jpg' | 'jpeg' | 'png' | 'gif' | 'bmp' | 'ico' | 'webp' | 'tif' | 'tiff' | 'avif' | 'ico' => 'image/${ext}'
+                        case 'svg' => 'image/svg+xml'
+                        case 'ttf' | 'otf' | 'woff' | 'woff2' => 'font/${ext}'
+                        case _ => 'application/${ext}'
+                    })
+                }
+                builder.body(bytes)
+                return
+            }
+            RequestMeta.log.warn{'RequestMeta.handle.Not Found:${path} ${ctx.request.headers.getFirst('Accept')}'}
+            RequestMeta.NOT_FOUND.`handle`(ctx)
+        } finally {
+            // §2.6 / MVC-8 + §3.2 / MVC-14：404 / 静态资源这条路径同样清请求级 ThreadLocal（与另两条出口共用接缝）
+            finishRequest()
         }
     }
 }

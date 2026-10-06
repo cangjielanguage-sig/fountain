@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 17 条**：严重 5（§1.3 `ASP-1`、§1.4 `ASP-2`、§1.6 `ASP-4`、§1.7 `ASP-5`、§1.14 `ASP-3`）、中 4（§2.4 `ASP-9`、§2.9 `ASP-8`、§2.22 `ASP-6`、§2.23 `ASP-7`）、低危+待验证 8（§3）。
-- **状态（截至 2026-10-05）**：`ASP-1` ❌误判（§1.3，设计目的）、`ASP-2` ✅已修复（§1.4）、`ASP-4` ✅已修复（§1.6）、`ASP-5` ✅已修复（§1.7）；**待修** `ASP-3`（§1.14，严重｜性能）、§2 的 4 条中危、§3 的 8 条低危/待验证。
+- **状态（截至 2026-10-05）**：`ASP-1` ❌误判（§1.3，设计目的）、`ASP-2` ✅已修复（§1.4）、`ASP-4` ✅已修复（§1.6）、`ASP-5` ✅已修复（§1.7）、`ASP-3` ✅已修复（§1.14）、`ASP-9` ❌误判（§2.4，设计目的，README 已说明）、`ASP-8` ❌误判（§2.9，设计目的：切面集合与可织入关系编译期确定、首次调用即固定，README 已说明）、`ASP-6` ❌不修（§2.22，设计/取舍：一线程完成织入、其余等待性价比最高）、`ASP-7` ❌不修（§2.23，设计：prototype 切面可能并发不安全，必须每次调用从 BeanFactory 取实例）、`ASP-L8` ❌不成立（§3.2，概率性假设已实测排除）、`ASP-L1`/`ASP-L2`/`ASP-L3` ❌不改（§3.1，只在首次建链时执行一次）、`ASP-L6` ❌不改（§3.1，`+=` 为惰性拼接非平方级；`append` 有历史风险）、`ASP-L7` ✅已修复（§3.1，空链快路径，含语义变化说明）、`ASP-L4` ✅已修复（§3.1，按线程状态对象去装箱）、`ASP-L5` ✅已修复（§3.1，默认模板不丢异常）；**待修：无** —— §1–§3 全部了结（✅已修复 7、❌误判/设计 5、❌不成立 1、❌不改 4，合计 17 条）。
 
 ## 1. 严重（本模块 5 条）
 
@@ -96,7 +96,24 @@ for (i in 0..params.size) {
 
 影响：内层 `for ... where` 无论命中与否都正常结束，随后必然执行 `return false` ⇒ 只要规则里写了非 `*` 的注解，该规则**永不匹配**（静默失效、无任何提示）；全部写成 `*` 才会返回 `true`（`272`）。修法：命中置标志，循环结束后 `if (matched) { continue }` 再继续外层。
 
-### 1.14 [严重｜性能] `ASP-3` 每次调用都重建函数元信息（反射解析 + 2 个数组 + 参数装箱）（f_aspect）
+### 1.14 [严重｜性能] `ASP-3` 每次调用都重建函数元信息（反射解析 + 2 个数组 + 参数装箱）（f_aspect）→ ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：分支 `fix/aspect`（worktree `.worktrees/aspect`，基线 `7be7225d`），代码、用例、本标记在**同一提交**（提交信息 `perf(f_aspect): ASP-3 类级织入改用静态元信息，不再每次调用重建 QualifiedFuncInfo（§1.14）`）。
+
+- 改动（**路线 1**：宏生成静态元信息，命名按用户指定 `__pOIntcUt_<函数>`）：
+  - `f_aspect/src/macros/PointCut.cj`：`pointcut(decl: FuncDecl, metaName!: ?Token = None)` —— 有 `metaName` 时生成 `let info = InvocationFuncInfo(__pOIntcUt_x, $args)`（走现成的 `InvocationFuncInfo(qualifiedFuncInfo, args)` 构造），否则维持原 `InvocationFuncInfo(TypeInfo.of(this), name, argTypes, args)`；类级 `pointcut(decl: ClassDecl)` 为每个被织入函数在类体追加 `private static let __pOIntcUt_x = QualifiedFuncInfo(TypeInfo.of<类>(), '函数', [TypeInfo.of<参数类型>…])`。辅助函数：`weaveOne`（两个类级入口共用）、`metaTokens`、`nextMetaName`（首个 `__pOIntcUt_<名>`，同名重载依次 `_2/_3`，名字被占则放弃静态化）、`isSimpleName`（AST `IDENTIFIER`，运算符名不做）、`hasTypeParams`（`func f<T>` 不做）、`isGenericClass`（`class Foo<T>` 整体不做）。
+  - `f_aspect/src/macros/WeavedBean.cj`：类级织入循环改为共用 `weaveOne`/`nextMetaName` 并收集静态元信息追加到类体。
+  - **回退面**（保持原行为，不退化为错误）：函数级 `@Pointcut`、运算符名、函数自身带泛型参数、形参是宏展开声明、泛型类、生成名冲突。
+- 用例（`f_aspect/src/test/`，新建）：
+  - `pointcut_meta_reuse_test.cj`：`@WeavedBean` 目标 + 记录 `qualifiedFuncInfo` 的切面，断言两次调用切面拿到的元数据是**同一对象**（`refEq`）。注意这条只验证「链里捕获的元数据复用」（切面看到的就是链上首次那份）；**每次调用是否重建**对切面不可见，故另加计时用例。
+  - `pointcut_meta_cost_test.cj`：无规则命中的 `@WeavedBean` 目标 + 同体 `static` 方法作未织入基线，1e6 次调用打印每调用耗时（量化报告里标注的「倍数待验证」）。
+- 测量证据（同机、同用例，用 `git stash push -- <宏文件>` 得到修前版本做 A/B）：
+  - **修前**：`每调用耗时：被织入 3931 ns，未织入(static 同体) 2 ns，差 3929 ns（1000000 次）`；
+  - **修后**：`被织入 1867 ns，差 1865 ns`（复跑 2209 ns / 2207 ns，含运行间噪声）⇒ 每调用 **≈1.8–2.1×**，即省掉「`TypeInfo.of(this)` + `[TypeInfo.of<T>()…]` 数组 + `getInstanceFunction` 反射解析 + `HashBuilder` + 一次 `QualifiedFuncInfo` 分配」的实测收益。
+  - 结构性佐证：修后日志里 `warning: function 'of' is deprecated` 计数 **0**（修前每个被织入类一条），即每调用的 `TypeInfo.of(this)` 确已消失。
+  - 行为回归：`cjpm test`（f_aspect）`PASSED: 13, FAILED: 0, ERROR: 0`、`cjpm test success`（含 §1.4 并发/链捕获、§1.6/§1.7 路由规则、§3.2 键稳定性、本次两条新用例）；`cjfmt` 后复跑仍 13/13 绿。
+  - 宏消费方构建：`f_orm` `cjpm build success`（EXIT=0）、`f_mvc` `cjpm build success`（EXIT=0，其 `macros/Controller.cj` 会生成 `@Pointcut`）。
+- 未覆盖：真实 `@TransactionalService` 消费方（`fcoder` 5 个 impl、`fdemo/user` 2 个 impl）未构建（依赖重）；同类级路径由测试里的 `@WeavedBean` 目标覆盖（与 `@TransactionalService` 走同一 `weave` 实现）。`ASP-6`/`ASP-7` 与本次同处 `Aspects.doProceed`，按用户指示单独处理、未含在本次。
 
 位置：`src/macros/PointCut.cj:115`、`QualifiedFuncInfo.cj:70`、`PointCut.cj:87-94`
 
@@ -110,19 +127,42 @@ for (i in 0..params.size) {
 
 ## 2. 中（本模块 4 条）
 
-### 2.4 [中｜正确性] `ASP-9` 嵌套的织入方法调用整体跳过切面（f_aspect）
+### 2.4 [中｜正确性] `ASP-9` 嵌套的织入方法调用整体跳过切面（f_aspect）→ ❌误判（2026-10-05：设计目的，非缺陷）
+
+**❌ 误判标记（2026-10-05）**：用户判定为**设计**，非缺陷 —— 同一次织入调用链内不再织入（A 的织入方法调 B 的织入方法时，整个内层调用直接执行原函数体、不执行切面），目的就是 `src/Aspects.cj:73` 注释所写的「避免递归调用切点函数时切面也被重复执行」。分支 `fix/aspect`（worktree `.worktrees/aspect`，基线 `7be7225d`），README 说明与本标记在**同一提交**（提交信息 `docs(f_aspect): ASP-9 嵌套织入跳过为设计，README 说明；bug-aspect.md §2.4 判为设计`）。
+
+- 语义澄清（用户）：**如果希望 A 调 B 时 A、B 都织入切面，`recursiveInvocationFlag` 就应该指定为 false** —— 该标志当前是 `Aspects` 的私有 `ThreadLocal<Bool>`（最外层织入期间被置 `true`、`finally` 里 `remove()`），没有公开开关。
+- 文档：`f_aspect/README.md` 新增「嵌套调用与递归（设计）」一节（行为、实现位置与「想要另一种语义」的说明）。
+- 本条目不再进入修复队列。
+
+**以下为审查时的原始判断（留档对照）**：
 
 `src/Aspects.cj:63-65`：`recursiveInvocationFlag` 一旦为真就直接 `fn(funcInfo.args)`，A 的织入方法调 B 的织入方法时 B 的事务/日志切面完全不生效（静默语义缺失）。修法：按 `QualifiedFuncInfo` 记调用深度，只对同一函数判定递归。
 
-### 2.9 [中｜内存] `ASP-8` 切面链缓存只增不减、无失效接口（f_aspect）
+### 2.9 [中｜内存] `ASP-8` 切面链缓存只增不减、无失效接口（f_aspect）→ ❌误判（2026-10-05：设计目的，非缺陷）
+
+**❌ 误判标记（2026-10-05）**：用户判定为**设计**，非缺陷 —— 有哪些切面（带 `@AspectRoute` 的 `Aspect` bean）以及「哪些切面可以织入某个函数」都是**编译期**就确定的（规则由注解给出），运行期只做「判定 + 建链」；因此某个函数**首次调用时**织入了哪些切面、或者有没有发生织入，此刻就**固定**了，以后不会变化。切面链缓存按进程静态存在、不提供 `clear/refresh` 正是这一语义的体现（条目上界 = 织入函数数，每条持有首次调用传入的原函数体，见 §1.3 的设计说明）。分支 `fix/aspect`（worktree `.worktrees/aspect`，基线 `7be7225d`），README 说明与本标记在**同一提交**（提交信息 `docs(f_aspect): ASP-8 链缓存固定语义为设计，README 说明；bug-aspect.md §2.9 判为设计`）。
+
+- 前提（使用契约）：**切面 bean 必须在织入函数首次调用之前注册完成**（框架启动/自动装配阶段）；之后再注册的切面不会影响已调用过的函数（这正是 §2.9 描述的「空链固化」现象，属预期语义，不是缺陷）——README「嵌套调用与递归（设计）」一节已补相应的「切面集合的固定语义」说明。
+- 本条目不再进入修复队列。
+
+**以下为审查时的原始判断（留档对照）**：
 
 `src/Aspects.cj:25`（全文无 `remove/clear`）：若某织入函数在切面 bean 注册完成前被调用过一次，**空链会被永久固化**（切面静默失效）；条目上界是织入函数数，但每条会持有首次调用传入的原函数体（`ASP-1` 的设计如此，非缺陷）。修法：暴露 `clear()/refresh()`，并在 bean 注册变更时清理。
 
-### 2.22 [中｜性能] `ASP-6` 切点匹配在 `ConcurrentHashMap.computeIfAbsent` 的桶锁内执行（f_aspect）
+### 2.22 [中｜性能] `ASP-6` 切点匹配在 `ConcurrentHashMap.computeIfAbsent` 的桶锁内执行（f_aspect）→ ❌不修（2026-10-05：设计/取舍）
+
+**❌ 不修标记（2026-10-05）**：用户判定**不改** —— 审查提出的「锁外算链 + `putIfAbsent`」方案**不原子**，重复建链没有必要，只是减轻了锁粒度却让 CPU 做更多工作、产生无用功；让**一个线程完成全部织入工作、其他线程等待这个结果**（即现在的 `computeIfAbsent` 语义）是性价比最高的做法。桶锁内完成「遍历切面 bean + 规则匹配 + 建链」正是这一取舍的实现；且匹配只在切点函数**首次调用**时发生一次（README「切面集合与建链时机（设计）」），不在每次调用的热路径上。本条目不再进入修复队列。
+
+**以下为审查时的原始判断（留档对照）**：
 
 `src/Aspects.cj:27-34`：锁内做「遍历全部切面 bean + 注解 + 正则匹配 + 建链」，同桶其它函数首次调用会被阻塞。修法：锁外算好链，再 `putIfAbsent` 写入。
 
-### 2.23 [中｜性能] `ASP-7` 链里存切面**名字字符串**，每次调用重做查找（f_aspect）
+### 2.23 [中｜性能] `ASP-7` 链里存切面**名字字符串**，每次调用重做查找（f_aspect）→ ❌不修（2026-10-05：设计目的，非缺陷）
+
+**❌ 不修标记（2026-10-05）**：用户判定**不改** —— 这是**故意**的实现（`f_mvc`、`f_ticktock` 同样如此）：有些 bean 的 scope 可能是 `prototype`，它们**很可能是并发不安全的**，因此**每次调用某个切面时都必须从 `BeanFactory` 取该切面的实例**，不能在链里缓存 `Aspect` 实例（链是按「(类型, 函数)」跨调用复用的，缓存实例会让 prototype 切面退化成事实上的单例）。本条目不再进入修复队列。
+
+**以下为审查时的原始判断（留档对照）**：
 
 `src/Aspects.cj:42`（`f_bean/src/BeanFactory.cj:208-234, 314-316`：`beans.get` + `isSubtypeOf` + 日志闭包）。修法：建链时解析成 `Aspect` 实例并缓存。
 
@@ -132,18 +172,44 @@ for (i in 0..params.size) {
 
 **内存 / 清理**
 
-- `ASP-L4` `Aspects.cj:52-66`：每次调用两次 ThreadLocal 访问（`get` + `set/remove`）并伴随 `?Bool` 装箱；`remove()` 实为 `set(None)`（`f_base/src/ExtendThreadLocal.cj:33-35`）。
+- `ASP-L4` `Aspects.cj:52-66`：每次调用两次 ThreadLocal 访问（`get` + `set/remove`）并伴随 `?Bool` 装箱；`remove()` 实为 `set(None)`（`f_base/src/ExtendThreadLocal.cj:33-35`）。→ **✅已修复（2026-10-05）**：换成每线程一份的 `RecursionState { var state = false }`（文件顶层私有类）+ `f_base` 的 `getOrCompute` 惰性建一次；语义不变。见下方修复标记。
 
 **性能微项**
 
-- `ASP-L1` `AspectRoute.cj:85, 139, 162, 344`：每次匹配现构造正则（`Regex.wildcard` = 6 次 `replace` + 键串 + TTL 缓存查找；`Regex('^.+::')` 每次新建）；规则实例无状态，可缓存编译结果。
-- `ASP-L2` `ConfigAspectRouteRule.cj:56, 72-242`（多处）：每次匹配重新 `Config.getString` + `split` + 构造新规则对象 + 传闭包；规则内可惰性解析一次并 memo。
-- `ASP-L3` `AspectRoute.cj:189-213, 230, 245, 260, 282, 291`：匹配辅助函数每次分配临时 `HashSet`/`ArrayList` 并对每个注解做 `ClassTypeInfo.of`（集合选型本身是哈希，没问题）。
-- `ASP-L5` `Aspect.cj:55-64`：每次回调包一层 try/catch/finally；`catch (e: Exception)` 包住全部步骤，默认 `throwing` 新建异常链，`finally` 里 `final()` 抛异常会覆盖原异常。
-- `ASP-L6` `macros/PointCut.cj:52-56, 86-94`：宏展开期用 `+=` 在循环里累积 Tokens（编译期平方级拼接，大函数/多参数时明显）。
-- `ASP-L7` `Aspects.cj:47-50`：结果统一走 `Any` 链，值类型返回值每次调用装箱（架构取舍，优先级最低）。
+- `ASP-L1` `AspectRoute.cj:85, 139, 162, 344`：每次匹配现构造正则（`Regex.wildcard` = 6 次 `replace` + 键串 + TTL 缓存查找；`Regex('^.+::')` 每次新建）；规则实例无状态，可缓存编译结果。→ **❌不改（2026-10-05）**：只在切点函数**首次调用建链**时执行一次，不在热路径。
+- `ASP-L2` `ConfigAspectRouteRule.cj:56, 72-242`（多处）：每次匹配重新 `Config.getString` + `split` + 构造新规则对象 + 传闭包；规则内可惰性解析一次并 memo。→ **❌不改（2026-10-05）**：同上（只执行一次）。
+- `ASP-L3` `AspectRoute.cj:189-213, 230, 245, 260, 282, 291`：匹配辅助函数每次分配临时 `HashSet`/`ArrayList` 并对每个注解做 `ClassTypeInfo.of`（集合选型本身是哈希，没问题）。→ **❌不改（2026-10-05）**：同上（只执行一次）。
+- `ASP-L5` `Aspect.cj:54-65`：默认模板 `proceed` 的 try/catch/finally；`finally` 里 `final()` 抛异常会覆盖原异常。→ **✅已修复（2026-10-05）**：默认模板改为**不丢弃任何异常**（`final()` 抛异常时把它作为主异常、把之前的失败挂到 `suppressed`；`throwing` 自身抛异常同样保留原异常）。见下方修复标记。
+- `ASP-L6` `macros/PointCut.cj:52-56, 86-94`：宏展开期用 `+=` 在循环里累积 Tokens（编译期平方级拼接，大函数/多参数时明显）。→ **❌不改（2026-10-05）**：核对本机 SDK 源码 `std/ast/tokens.cj` —— `+`/`concat` 是惰性 `ConcatTokens`（O(1) 建节点，**不是**平方级拼接）；`append` 在普通 `Tokens` 上是逐元素 `add`，但在 **`ConcatTokens` 重载**里写成 `rightChild = rightChild + tks` 并单独维护 `cachedSize`（与「历史上出现大量重复/丢失 Token」的描述吻合，风险仍在，且与 `+=` 混用会走到该重载）⇒ 不为编译期微项冒险。
+- `ASP-L7` `Aspects.cj:38, 64-67`：结果统一走 `Any` 链，值类型返回值每次调用装箱（架构取舍，优先级最低）。→ **✅已修复（2026-10-05，空链快路径）**：见下方修复标记。
 
-### 3.2 待验证（1 条）
+**`ASP-L7` 空链快路径修复标记（2026-10-05）**：分支 `fix/aspect`（worktree `.worktrees/aspect`，基线 `7be7225d`），代码、用例、本标记在**同一提交**（提交信息 `perf(f_aspect): ASP-L7 空链快路径（无切面命中时不经 Any 链），方法体在当前接收者上执行（§3.1）`）。
+
+- 改动 `f_aspect/src/Aspects.cj`：链缓存值类型 `(Array<Any>) -> Any` → `(Bool, (Array<Any>) -> Any)`（首元素 = 是否空链）；建链时 `list.isEmpty()` ⇒ 存 `(true, emptyChain)`，**不包装 lambda、不捕获首次 `fn`**；`doProceed` 命中空链标记就直接 `fn(funcInfo.args)`（类型 `T`，不经 `Any`）；**有切面命中的路径一字未改**；新增静态占位 `emptyChain` 与 `AspectException` import。
+- **语义变化（用户确认接受）**：空链（没有任何切面命中）时方法体在**本次调用的接收者**上执行，不再「固化首次 `callee`」；有切面命中的链保持原设计（§1.3）。
+- 用例 `f_aspect/src/test/empty_chain_fastpath_test.cj`：两个实例各调一次「无切面命中」的织入函数，断言各自读到自己实例的状态。**RED**：`Assert Failed: (b.who() == 2)`、`left: 1 / right: 2`（第二个实例上执行了第一个实例的函数体），`PASSED: 13, FAILED: 1`、EXIT=1；**GREEN**：`[ PASSED ] testTargetRunsOnCurrentReceiver`、`PASSED: 14, FAILED: 0, ERROR: 0`、`cjpm test success`（`cjfmt` 后复跑仍 14/14）。
+- 计时（`pointcut_meta_cost_test` 的空链路径，1e6 次）：修前 2034 ns/次、修后 1917 ns/次，但同一版本不同轮次波动 1867–2439 ns ⇒ **差值落在噪声内，不作为确证**；结构性收益 = 省掉一次包装闭包调用 + 一次值类型装箱/解箱。
+- 宏消费方构建：`f_orm` `cjpm build success`（EXIT=0）、`f_mvc` `cjpm build success`（EXIT=0）。
+
+**`ASP-L4`/`ASP-L5` 修复标记（2026-10-05）**：分支 `fix/aspect`（worktree `.worktrees/aspect`，基线 `7be7225d`），代码、用例、本标记在**同一提交**（提交信息 `perf(f_aspect): ASP-L4 织入状态改按线程对象（去 ?Bool 装箱/二次 ThreadLocal 访问）；fix(f_aspect): ASP-L5 默认模板不丢异常（§3.1）`）。
+
+- `ASP-L4`（`f_aspect/src/Aspects.cj`）：`ThreadLocal<Bool> recursiveInvocationFlag` → 文件顶层 `private class RecursionState { var state = false }` + `ThreadLocal<RecursionState>`（用 `f_base` 的 `getOrCompute` 惰性建一次）；`proceed` 每调用只读一次引用、读写一个 `Bool` 字段；语义不变（`state == true` 即已在织入中，嵌套调用仍不织入）。
+  - **GC/CPU 口径**（回答用户疑问）：旧写法**每次最外层调用**都 `set(true)`（把 `Bool` 装箱进 ThreadLocal）、`finally remove()`（`set(None)`，又一次装箱）；新写法每线程只创建一次状态对象、之后**零分配** ⇒ **GC 压力是降低的**，CPU 也不会更高（少了装箱与一次 ThreadLocal 访问）。计时与之相符：修前 2034 ns/次、修后 2441 ns/次，但同版本多轮波动 1867–2449 ns ⇒ **差值在噪声内，不作确证**（短命小对象在 TLAB 上分配只有几 ns 量级）；如需硬证据可提高轮数或用 `@Bench` 单独测。
+  - 用例 `f_aspect/src/test/recursion_guard_test.cj`：自递归 `r(3)` ⇒ 结果 6、切面只进入最外层一次（`entries.size == 1`、参数 3），通过（该语义在改动前后都必须成立，属守卫用例）。
+- `ASP-L5`（`f_aspect/src/Aspect.cj` 默认 `proceed` 模板）：改为**不丢弃任何异常** —— `throwing` 自身抛异常时用 `AspectException(ee)` 包住并把原 `e` 挂 `suppressed`；`final()` 抛异常时把它作为主异常（`AspectException(e)`）、把之前的 `failure` 挂 `suppressed`；`final()` 正常时原 `failure` 照常抛出（catch 分支以 `throw failure.getOrThrow()` 收尾，异常统一由 `finally` 合并后抛出）。
+  - 用例 `f_aspect/src/test/aspect_template_suppress_test.cj`（两个目标函数 `t`/`u` + 两个切面）：**RED（修前）**：`主异常：fountain::f_aspect.test.L5ErrB:B; 抑制异常数：0`、`Assert Failed: (be.suppressed.size == 1)`、`left: 0 / right: 1`、`PASSED: 16, FAILED: 1`、EXIT=1（`final` 的 B 覆盖了 `before` 的 A）；**GREEN（修后）**：`主异常：fountain::f_aspect.exception.AspectException:; 抑制异常数：1`（`causedBy` = B、`suppressed[0]` = A）、两条用例 `[ PASSED ]`、`PASSED: 17, FAILED: 0, ERROR: 0`、EXIT=0。
+  - 行为差异（已实现）：`final()` 抛异常时修前报 `final()` 的异常（前面的失败丢失），修后报包装后的 `final()` 异常且前者可见于 `suppressed`；`throwing` 自身抛异常的情形同样不再丢原异常。try/catch/finally 本身不构成性能问题（异常表模型）。
+
+### 3.2 待验证（1 条）→ ❌不成立（2026-10-05）
+
+**❌ 不成立标记（2026-10-05）**：分支 `fix/aspect`（worktree `.worktrees/aspect`，基线 `7be7225d`），用例与本标记在**同一提交**（提交信息 `test(f_aspect): ASP-L8 前提不成立（键按值稳定），新增键稳定性用例；bug-aspect.md §3.2 判不成立`）。
+
+- 判定理由：链缓存的键由 (类型, 函数) 唯一确定，且 `QualifiedFuncInfo` 的哈希/相等是**按值**的：`hash = HashBuilder().append(typeInfo).append(funcInfo).build()` 在构造时算一次并存下（`QualifiedFuncInfo.cj:60-84`），`==` 为 `refEq(this, other) || (typeInfo == other.typeInfo && funcInfo == other.funcInfo)`；`TypeInfo` 与 `InstanceFunctionInfo` 都实现 `Equatable`/`Hashable`（`reflect_package_classes.md:1244-1247` 明确 `InstanceFunctionInfo <: Equatable<InstanceFunctionInfo> & Hashable & ToString`，含 `hashCode(): Int64`），不是语言默认的对象身份哈希。报告担心的失效需**同时**满足「每次 `getInstanceFunction` 返回新对象」+「哈希按对象身份」两条，实测两条都不成立。
+- 用例：`f_aspect/src/test/qualified_func_info_key_test.cj` —— `testTypeInfoStableAcrossLookups`（两次 `TypeInfo.of<T>()` 值/哈希相等）、`testMemberInfoStableAcrossResolutions`（两次 `getInstanceFunction('probe', [TypeInfo.of<Int64>()])` 结果值/哈希相等）、`testQualifiedFuncInfoKeyHashStable`（两次分别构造的 `QualifiedFuncInfo` 相等且哈希相同）、`testKeyUsedAsMapKeyHitsAcrossCalls`（分别构造的键命中同一 map 条目、`size == 1`，即 `aspects` 的用法）。
+- 测量证据：`cjpm test`（f_aspect）→ `PASSED: 11, FAILED: 0, ERROR: 0`、`cjpm test success`（EXIT=0），四条新用例 `[ PASSED ]`（29.8µs / 29.8µs / 16.5µs / 34.0µs；`cjfmt` 后复跑 46.6µs / 34.4µs / 36.3µs / 40.7µs，仍 11/11 绿）；同轮既有用例（§1.4 的并发/链捕获、§1.6/§1.7 的路由规则）全绿。
+- 结论：`ASP-L8` 从本模块待修清单移除；`§1.14 ASP-3` 的修法**不需要**为「缓存永不命中 / `aspects` 无界增长」加保底（但 ASP-3 自身「每调用重建元信息」的成本不受此结论影响）。
+
+**以下为审查时的原始判断（留档对照）**：
 
 - `ASP-L8` `Aspects.cj:27`：链缓存命中依赖 `QualifiedFuncInfo.hashCode`（`QualifiedFuncInfo.cj:63, 72-80`，由 `typeInfo.hashCode()` + `funcInfo.hashCode()` 预处理）。**验证（关键假设）**：若 std.reflect 在不同调用间返回不同/非结构化哈希的 `InstanceFunctionInfo`，则缓存**永不命中** ⇒ 切点匹配、正则、建链每次调用重做，且 `aspects` 会**以每次调用一个 key 的速度无界增长**。建议加一条「同一函数多次调用命中同一链」的测试把该假设钉死。
 

@@ -37,4 +37,33 @@ struct OverallStopwatch{
             log.debug{'${method}: ${path}; elapsed: ${MonoTime.now() - s}'}
         }
     }
+    /**
+     * 在请求线程取走起点（含 path）并清空，供异步响应（如下载任务）把计时搬到自己线程用（§2.3 / MVC-C5）。
+     */
+    static func takeStart(): ?(MonoTime, String){
+        if(switch){
+            let started = start.get()
+            start.set(None)
+            started
+        }else{
+            None<(MonoTime, String)>
+        }
+    }
+    /**
+     * 计时打印：起点来自 takeStart()，可在任意线程调用（不读 ThreadLocal）。
+     */
+    static func elapsedFrom(started: ?(MonoTime, String), method: String){
+        if(switch && let Some((s, path)) <- started){
+            log.debug{'${method}: ${path}; elapsed: ${MonoTime.now() - s}'}
+        }
+    }
+    /**
+     * 请求出口清理（§2.6 / `MVC-8`）：清掉本线程残留的起点（404/405/OPTIONS 这类不走
+     * `respond(method, fn)` 的请求不会调 elapsed），避免线程继续持有上个请求的 path。
+     */
+    static func clearStart(){
+        if(switch){
+            start.set(None)
+        }
+    }
 }
