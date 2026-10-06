@@ -17,7 +17,7 @@ package fountain::f_orm.wrap
 
 public import std.database.sql.*
 import std.collection.Map
-import std.sync.AtomicUInt64
+import std.sync.{AtomicBool, AtomicUInt64}
 import std.unicode.UnicodeStringExtension
 import fountain::f_log.impl.LoggerFactory
 import fountain::f_pool.Pool
@@ -215,17 +215,28 @@ class PooledConnection <: Connection {
     private var returnFn = {c: PooledConnection => ()}
 
     private var assigned = false
+    // bug-orm.md §3.2 ORM-L8：`true` = 未借出/已归还。借出时在 `activate` 里 store(false)，`close()` 用 CAS 幂等。
+    // 池侧没有身份去重（`SyncDeque` 只对「重复归还」告警、不拦），所以重复归还要在这一步就挡住：
+    // 否则池里会出现两个指向同一连接的节点，两个借用者可能同时拿到同一条连接。
+    private let returned = AtomicBool(true)
 
     public func isClosed(): Bool {
         !assigned
     }
     public func close(): Unit {
+        // bug-orm.md §3.2 ORM-L8：CAS 失败 = 这条连接已经被归还过（或从未借出）
+        if (!returned.compareAndSwap(false, true)) {
+            throw ConnectionException('The database connection was returned multiple times.')
+        }
         assigned = false
         logger.debug {"database Connection ${serial} is returning"}
         returnFn(this)
         logger.debug {"database Connection ${serial} is returned"}
     }
     func activate(returnFn: (PooledConnection) -> Unit): Connection {
+        // 借出即复位「已归还」标记（close 的 CAS 依赖它）；放在 activate 里而不是调用方，
+        // 是为了让"借出"只有一个入口，也不用到 DatabasePool 去碰这里的 private 成员
+        returned.store(false)
         assigned = true
         this.returnFn = returnFn
         logger.debug {"database Connection ${serial} is assigned"}

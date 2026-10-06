@@ -392,11 +392,28 @@ public class SqlExecutor <: Resource & RootDAO {
     public func release(savepoint: String): Unit {
         tx?.release(savepoint)
     }
+    /**
+     * 等驱动把状态从 `Connecting` 推进过去（bug-orm.md §3.2 ORM-L9）：原先是无 sleep、无超时的死转，
+     * 驱动永不推进就永远烧一核；现在按 `ORMConfig.getConnectingTimeout()` 设上限，超时抛 `ConnectionException`。
+     * 起算点与上限只取一次（不能每轮重算，否则永远等不到超时）；配置读取只在真进入该分支时发生。
+     */
+    private func waitConnecting(): Unit {
+        let connectingStart = MonoTime.now()
+        let connectingTimeout = ORMConfig.getConnectingTimeout(driverName: driverName)
+        while (this._connection_.state == Connecting) {
+            if (MonoTime.now() - connectingStart >= connectingTimeout) {
+                throw ConnectionException('connecting is timeout')
+            }
+        }
+    }
     private prop connection: Connection {
         get() {
             while (!(this._connection_ is NoneConnection)) {
                 match (this._connection_.state) {
-                    case Connecting => continue
+                    case Connecting =>
+                        // 等完（或超时抛出）后回到循环头重新判状态：可能已 Connected，也可能转成 Closed/Broken
+                        waitConnecting()
+                        continue
                     case Connected => return this._connection_
                     case Closed => throw ORMException("connection is closed")
                     case Broken =>

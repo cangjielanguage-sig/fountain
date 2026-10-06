@@ -24,6 +24,8 @@ public class ORMConfig {
     public static const defaultDriver = confPrefix + "_defaultDriver"
     public static const drivers = confPrefix + "_drivers"
     public static const connectionUrl = confPrefix + "_connectionUrl"
+    /** 驱动把连接停在 `ConnectionState.Connecting` 时的等待上限（毫秒，bug-orm.md §3.2 `ORM-L9`）。 */
+    public static const connectingTimeout = confPrefix + "_connectingTimeout"
     public static const transactionIncluding = confPrefix + "_transactionIncluding"
     public static const transactionExcluding = confPrefix + "_transactionExcluding"
     public static const transactionPropagation = confPrefix + "_transactionPropagation"
@@ -215,6 +217,16 @@ public class ORMConfig {
     }
     public static func getConnectTimeout(driverName!: String = String.empty): Duration {
         Duration.millisecond * get<Int64>(driverName: driverName, key: databasePoolConnectTimeout, default: 50)
+    }
+    /**
+     * 单位是毫秒。驱动异步建连（`ConnectionState.Connecting`）时的等待上限，超时抛 `ConnectionException`
+     * （bug-orm.md §3.2 `ORM-L9`：原来这个等待没有上限、且是纯空转）。
+     *
+     * 默认 5 秒：正常建连远快于此；该值只影响「驱动把状态停在 Connecting」这一非常规路径，宁松勿误伤，
+     * 但必须有上限。单独一个键（不复用 `databasePoolConnectTimeout`，后者 50 毫秒是"池取连接排队"的口径）。
+     */
+    public static func getConnectingTimeout(driverName!: String = String.empty): Duration {
+        Duration.millisecond * get<Int64>(driverName: driverName, key: connectingTimeout, default: 5000)
     }
     /**
      * 池耗尽时 `get(timeout: Duration.Max)` 的等待上限：超过它就返回 None 而不是无限挂住调用方；
