@@ -20,14 +20,14 @@ public struct Fleet {
     private static let clients = {
         =>
             let hosts = FleetConfig.hosts
-            Array<Client>(hosts.size) {
+            Array<Client<FleetDataMessage>>(hosts.size) {
                 i =>
-                    Client
+                    Client<FleetDataMessage>
                         .builder(address: hosts[i], checkDuration: Duration.second, checker: {=> Message.ping()})
                         .build()
             }
     }()
-    private static func confirmClient(path: String): Client {
+    private static func confirmClient(path: String): Client<FleetDataMessage> {
         clients[path.hashCode() % clients.size]
     }
     public static func get<T>(path: String): ?T where T <: DataFields<T> {
