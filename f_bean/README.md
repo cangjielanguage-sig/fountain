@@ -163,6 +163,37 @@ public interface BeanWeight<W> where W <: Comparable<W> & Addable<W> {
 #### `lookupMapByAnnotation<T, A>(cond: StringCond): HashMap<String, T>`
 获取全部满足条件的bean，且bean名称符合`cond`指定条件，返回的HashMap用bean的名称作为KEY
 
+#### 只限制注解、不限制bean类型
+
+上面各节用`T`过滤bean类型；只按注解查（不看类型）时用下面这组 —— 语义等价于`T = Object`（所有bean的类型都是类），但不必写类型实参，返回元素是`Object`：
+
+#### `lookupByAnnotationOnly<A>(): Object`
+获取第一个满足条件的bean，没找到抛异常
+
+#### `lookupByAnnotationOnly<A>(cond: StringCond): Object`
+获取第一个满足条件的bean，且bean名称符合`cond`指定条件，没找到抛异常
+
+#### `lookupOptionByAnnotationOnly<A>(): ?Object`
+获取第一个满足条件的bean，没找到返回`None<Object>`
+
+#### `lookupOptionByAnnotationOnly<A>(cond: StringCond): ?Object`
+获取第一个满足条件的bean，且bean名称符合`cond`指定条件，没找到返回`None<Object>`
+
+#### `lookupListByAnnotationOnly<A>(): ArrayList<Object>`
+获取全部满足条件的bean
+
+#### `lookupListByAnnotationOnly<A>(cond: StringCond): ArrayList<Object>`
+获取全部满足条件的bean，且bean名称符合`cond`指定条件
+
+#### `lookupMapByAnnotationOnly<A>(): HashMap<String, Object>`
+获取全部满足条件的bean，返回的HashMap用bean的名称作为KEY
+
+#### `lookupMapByAnnotationOnly<A>(cond: StringCond): HashMap<String, Object>`
+获取全部满足条件的bean，且bean名称符合`cond`指定条件，返回的HashMap用bean的名称作为KEY
+
+#### 低层对应（只限注解版，`BeanFactory.instance`）
+`getFirstByAnnotationOnly<A>(cond!: StringCond = IgnoreCond): ?Object`、`getListByAnnotationOnly<A>(…): ArrayList<Object>`、`getMapByAnnotationOnly<A>(…): HashMap<String, Object>`（均`where A <: Annotation`）。
+
 #### 低层对应（`BeanFactory.instance`）
 `getFirstByAnnotation<T, A>(cond!: StringCond = IgnoreCond): ?T`、`getListByAnnotation<T, A>(cond!: StringCond = IgnoreCond): ArrayList<T>`、`getMapByAnnotation<T, A>(cond!: StringCond = IgnoreCond): HashMap<String, T>`（均`where T <: Object, A <: Annotation`）。语义与上面的`lookup*`一致，只是没找到时返回`None`/空集合而不抛异常；`cond`按低层约定是**命名形参**（见上文「形参风格（两层约定）」）。
 

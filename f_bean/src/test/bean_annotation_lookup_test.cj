@@ -195,6 +195,50 @@ public class BeanAnnotationLookup_test {
     }
 
     @TestCase
+    public func testAnnotationOnlyVersions(): Unit {
+        // 只限注解、不限制 bean 类型 ⇒ 与 T = Object 的结果一致（AnnMark 的全部 bean = 7）
+        let only = lookupListByAnnotationOnly<AnnMark>()
+        @Assert(only.size, 7)
+        @Assert(only.size, factory.getListByAnnotation<Object, AnnMark>().size)
+        @Assert(factory.getListByAnnotationOnly<AnnMark>().size, 7)
+        @Assert(factory.getMapByAnnotationOnly<AnnMark>().size, 7)
+        @Assert(lookupMapByAnnotationOnly<AnnMark>().size, 7)
+        // cond 过滤 / 无 bean 的注解 ⇒ 空
+        @Assert(lookupListByAnnotationOnly<AnnMark>(Wildcard('fountain::f_bean.test.AnnSelf*')).size, 3)
+        @Assert(lookupListByAnnotationOnly<AnnUnused>().size, 0)
+        @Assert(factory.getFirstByAnnotationOnly<AnnUnused>().isNone(), true)
+        @Assert(lookupOptionByAnnotationOnly<AnnUnused>().isNone(), true)
+        // 命中并取回同一 bean：限定 AnnSelf* ⇒ 桶内 order 最小的是 AnnSelf1（code = 1）
+        let one = lookupOptionByAnnotationOnly<AnnMark>(Wildcard('fountain::f_bean.test.AnnSelf*'))
+        if (let Some(o) <- one) {
+            if (let v: AnnSelf1 <- o) {
+                @Assert(v.code, 1)
+            } else {
+                @Assert(false, true)
+            }
+        } else {
+            @Assert(false, true)
+        }
+        // 抛异常版：命中不抛、未命中抛 BeanException
+        var notThrown = false
+        try {
+            let o = lookupByAnnotationOnly<AnnMark>(Wildcard('fountain::f_bean.test.AnnSelf1*'))
+            notThrown = true
+        } catch (e: BeanException) {
+            notThrown = false
+        }
+        @Assert(notThrown, true)
+        var thrown = false
+        try {
+            let o = lookupByAnnotationOnly<AnnMark>(Exactly('no.such.bean'))
+            thrown = false
+        } catch (e: BeanException) {
+            thrown = true
+        }
+        @Assert(thrown, true)
+    }
+
+    @TestCase
     public func testPrototypeNotInstantiatedWhenTypeMismatched(): Unit {
         let before = AnnPrototypeBean.created.load()
         // 查询 AnnSelfItem：AnnPrototypeBean 不是它的子类型 ⇒ 不应实例化那个 prototype bean

@@ -203,3 +203,63 @@ public func lookupMapByAnnotation<T, A>(): HashMap<String, T> where T <: Object,
 public func lookupMapByAnnotation<T, A>(cond: StringCond): HashMap<String, T> where T <: Object, A <: Annotation {
     BeanFactory.instance.getMapByAnnotation<T, A>(cond: cond)
 }
+
+// ── 只限制注解、不限制 bean 类型的版本（等价于 `T = Object`，免写类型实参） ──
+
+/**
+ * 取「类型被注解 `A` 修饰」的第一个 bean（**不限制 bean 类型**），没有则抛 `BeanException`。
+ */
+public func lookupByAnnotationOnly<A>(): Object where A <: Annotation {
+    lookupByAnnotationOnly<A>(StringCond.IgnoreCond)
+}
+
+/**
+ * 同 `lookupByAnnotationOnly<A>`，带名字条件。
+ */
+public func lookupByAnnotationOnly<A>(cond: StringCond): Object where A <: Annotation {
+    BeanFactory.instance.getFirstByAnnotationOnly<A>(cond: cond).getOrThrow {
+        BeanException('bean annotated with ${TypeInfo.of<A>()} with bean name condition ${cond} does not exist.')
+    }
+}
+
+/**
+ * 取「类型被注解 `A` 修饰」的第一个 bean（**不限制 bean 类型**），没有则返回 `None`。
+ */
+public func lookupOptionByAnnotationOnly<A>(): ?Object where A <: Annotation {
+    lookupOptionByAnnotationOnly<A>(StringCond.IgnoreCond)
+}
+
+/**
+ * 同 `lookupOptionByAnnotationOnly<A>`，带名字条件。
+ */
+public func lookupOptionByAnnotationOnly<A>(cond: StringCond): ?Object where A <: Annotation {
+    BeanFactory.instance.getFirstByAnnotationOnly<A>(cond: cond)
+}
+
+/**
+ * 取全部「类型被注解 `A` 修饰」的 bean（**不限制 bean 类型**）。
+ */
+public func lookupListByAnnotationOnly<A>(): ArrayList<Object> where A <: Annotation {
+    lookupListByAnnotationOnly<A>(IgnoreCond)
+}
+
+/**
+ * 同 `lookupListByAnnotationOnly<A>`，带名字条件。
+ */
+public func lookupListByAnnotationOnly<A>(cond: StringCond): ArrayList<Object> where A <: Annotation {
+    BeanFactory.instance.getListByAnnotationOnly<A>(cond: cond)
+}
+
+/**
+ * 取全部「类型被注解 `A` 修饰」的 bean（**不限制 bean 类型**），返回的 `HashMap` 以 bean 名为 KEY。
+ */
+public func lookupMapByAnnotationOnly<A>(): HashMap<String, Object> where A <: Annotation {
+    lookupMapByAnnotationOnly<A>(IgnoreCond)
+}
+
+/**
+ * 同 `lookupMapByAnnotationOnly<A>`，带名字条件。
+ */
+public func lookupMapByAnnotationOnly<A>(cond: StringCond): HashMap<String, Object> where A <: Annotation {
+    BeanFactory.instance.getMapByAnnotationOnly<A>(cond: cond)
+}

@@ -371,6 +371,25 @@ public class BeanFactory {
         }
         map
     }
+    /**
+     * §3.1 / `BEAN-L6`：**只限制注解、不限制 bean 类型**的版本 —— 等价于 `T = Object`
+     * （所有 bean 的类型都是类 ⇒ 类型判定恒真），但调用方不必写类型实参。
+     */
+    public func getFirstByAnnotationOnly<A>(cond!: StringCond = IgnoreCond): ?Object where A <: Annotation {
+        getFirstByAnnotation<Object>(TypeInfo.of<A>(), cond)
+    }
+    /**
+     * 同 `getFirstByAnnotationOnly<A>`，取全部。
+     */
+    public func getListByAnnotationOnly<A>(cond!: StringCond = IgnoreCond): ArrayList<Object> where A <: Annotation {
+        getListByAnnotation<Object>(TypeInfo.of<A>(), cond)
+    }
+    /**
+     * 同 `getFirstByAnnotationOnly<A>`，返回的 `HashMap` 以 `BeanManager.name`（bean 名）为 KEY。
+     */
+    public func getMapByAnnotationOnly<A>(cond!: StringCond = IgnoreCond): HashMap<String, Object> where A <: Annotation {
+        getMapByAnnotation<Object>(TypeInfo.of<A>(), cond)
+    }
 
     private func generateTuple<T>(manager: BeanManager): ?(String, T, () -> Unit) {
         if (matches<T>(manager)) {
