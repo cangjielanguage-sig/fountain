@@ -21,6 +21,19 @@
 > 三次修正（2026-10-05）：§1.3 `POOL-3` 已修复 ⇒ 待修严重级 **1** 条（`POOL-4`），中危 **7** 条。
 > 四次修正（2026-10-05）：§1.4 `POOL-4` 判定为**误判**（设计目的，不修改）⇒ 待修严重级 **0** 条，中危 **7** 条；上表保留审查当时的原始计数。
 > 五次修正（2026-10-05）：§2.2 `POOL-7` 已修复 ⇒ 待修中危 **6** 条（`POOL-8`~`POOL-13`）。
+> 六次修正（2026-10-05）：§2.3 `POOL-8` 已修复 ⇒ 待修中危 **5** 条（`POOL-9`~`POOL-13`）。
+> 七次修正（2026-10-05）：§2.4 `POOL-9` 已修复 ⇒ 待修中危 **4** 条（`POOL-10`~`POOL-13`）。
+> 八次修正（2026-10-05）：§2.5 `POOL-10` 已修复（**口径改为抛 `UnknownKeyException`**，池不销毁、不建池；原「未命中就销毁」的修法已否决）⇒ 待修中危 **3** 条（`POOL-11`~`POOL-13`）。
+> 九次修正（2026-10-05）：§2.6 `POOL-11` 已修复（`KeyPool.remove(key)` 摘键 + `close()` 清空键表 + **删除 `destroy`**：池这一层唯一的销毁入口是 `close`）⇒ 待修中危 **2** 条（`POOL-12`、`POOL-13`）。
+> 十次修正（2026-10-05）：§2.7 `POOL-12` 已修复（`clear` 回调失败抛 `ClearFailedException`：**`giveBack` 抛异常 = 这次归还没有发生**，不销毁 / 不结清 / 不进池，可重试）⇒ 待修中危 **1** 条（`POOL-13`）。
+> 十一次修正（2026-10-05）：§2.8 `POOL-13` 已修复（`atExit` 回调只持弱引用）⇒ 待修中危 **0** 条：§1（5 条严重）与 §2（8 条中危）**全部处理完**；§2.8 另登记一条**运行时残量**（已结束线程的闭包被运行时保留 ⇒ 池本体仍回收不掉，见该节）。剩下的是 §3 的 9 条低危 / 待验证（登记，未动）。
+> 十二次修正（2026-10-05）：§3 `POOL-L2` 已修复（`Duration.Max` = 不启用巡检 ⇒ 不再起线程；巡检睡眠改成条件变量，`close()` 立刻叫醒）⇒ §3 待处理 **8** 条（`POOL-L1`、`POOL-L3`~`POOL-L9`）。
+> 十三次修正（2026-10-05）：§3 `POOL-L7` 已修复（`ArrayPool.giveBack` 尺寸不符 ⇒ 抛 `IllegalSizeException`，签名 `Bool` → `Unit`；「giveBack 抛异常 = 没归还」）⇒ §3 待处理 **7** 条（`POOL-L1`、`POOL-L3`~`POOL-L6`、`POOL-L8`、`POOL-L9`）。
+> 十四次修正（2026-10-05）：§3 `POOL-L6` 结案 —— 它其实**已随 `315ada9e` 的等待重写消除**（本次只补证据 + 防回归用例），且**诊断修正为实测口径**：`MonoTime + Duration` 是抛 `ArithmeticException` 而不是「溢出成负」（仅 `Duration.Max` 附近的有限值可触发；巨值 `Condition.wait(timeout:)` 实测是饱和睡着，无残量）⇒ §3 待处理 **6** 条（`POOL-L1`、`POOL-L3`~`POOL-L5`、`POOL-L8`、`POOL-L9`；其中 `POOL-L8`/`POOL-L9` 是已拍板「登记不改」）。同时清掉 3 处过时注记（§1.2 的 `tasks` 容量、§2.2 的 `sleep(checkInterval)`、§2.6 残量③的 `POOL-13`）。
+> 十五次修正（2026-10-06）：§3 `POOL-L5` 已修（口径：`get`/`giveBack` 的局部函数 `keyedCheck` 提成**实例成员函数** `checkOnBorrow`/`checkOnReturn`，方法值在构造期取一次缓存到字段）⇒ §3 待处理 **5** 条（`POOL-L1`、`POOL-L3`、`POOL-L4`、`POOL-L8`、`POOL-L9`）。**注意**：这条属于**等价重构 + 微优化**，端到端性能在噪声里测不出（见 §3 该条的实测说明与 §5 复测）。
+> 十六次修正（2026-10-06）：§3 `POOL-L1` 已修复（告警钩子移出 `head.globalLock`：锁内只拼消息、锁外发；判别用例用「钩子执行期间另一根线程抢同一把锁」实测 **2.01 s/FAILED → 5.7 ms/PASSED**）⇒ §3 待处理 **4** 条（`POOL-L3`、`POOL-L4`、`POOL-L8`、`POOL-L9`；后两条是已拍板「登记不改」）。同时**订正**了三处诊断：调用点是 4 个（1 个在锁外）、「钩子重入池 ⇒ 死锁」不成立（`Mutex` 可重入）、这条**可以**确定性测。
+> 十七次修正（2026-10-06）：§3 `POOL-L3` 判定为**误判**（源码是「一跳委派 + `while` 循环」，全文件无自递归；临时用例实测 200 万个非 idle 节点走完整条链无栈问题；对照组「200 万帧手写递归」也没爆栈）⇒ §3 待处理 **3** 条（`POOL-L4` 待修 + `POOL-L8`/`POOL-L9` 登记不改）。
+> 十八次修正（2026-10-06）：§3 `POOL-L4` 已修复（`nodes` 计数 + `selfCheck` O(1) + 全遍历降级为低频 ground truth；实测 50 万节点队列：**11.714 → 2.036 µs/op**，长度带来的额外开销 −92%）⇒ §3 只剩 `POOL-L8`/`POOL-L9` 两条**已拍板登记不改**。
 
 **建议修复顺序**：
 
@@ -29,7 +42,7 @@
 3. `POOL-3`（§1.3）巡检把**满载 key** 的空闲项当「校验不过」摘掉，并整轮跳过用户 checker → 稳态抖动、`connectionLife`/`idleTimeout` 判定被绕过（实测满载空闲池 idle 2→1）　**✅已修复（2026-10-05，见 §1.3 修复标记：size&lt;max 只约束补建）**
 4. `POOL-4`（§1.4）creator/checker 持续失败时**无退避紧重试** → 对下游的重连风暴 + 每轮一条 WARN（实测 300ms 内 75,976 次尝试）　**❌误判（2026-10-05：设计目的，不修改；见 §1.4 误判标记）**
 5. `POOL-5`（§1.5）`maxWaiting = Duration.Max` 的「真无限等待」实际只等 1s 就**静默放弃**（实测 1008ms 返回 `None`，对照 30s 档 2016ms 返回项）；同一分支还会吞掉丢失的唤醒　**✅已修复（2026-10-05，随 §1.2 的统一等待重写一并解决，见 §1.5 修复标记）**
-6. 其后按 §2 顺序：`POOL-6`（关停不唤醒/归还竞态）**✅已修复（2026-10-05，见 §2.1 修复标记）** → `POOL-7`（关池泄漏线程）**✅已修复（2026-10-05，见 §2.2 修复标记：线程句柄 + cancel + 每轮判状态 + 带超时出队）** → `POOL-8`（队列按 `totalSize` 预分配 + 两个池默认 `maxSize=Int64.Max` 构造即 OOM）→ `POOL-9`（`release` 后仍可写，实测污染池项）→ `POOL-10`~`POOL-13`
+6. 其后按 §2 顺序：`POOL-6`（关停不唤醒/归还竞态）**✅已修复（2026-10-05，见 §2.1 修复标记）** → `POOL-7`（关池泄漏线程）**✅已修复（2026-10-05，见 §2.2 修复标记：线程句柄 + cancel + 每轮判状态 + 带超时出队）** → `POOL-8`（队列按 `totalSize` 预分配 + 两个池默认 `maxSize=Int64.Max` 构造即 OOM）**✅已修复（2026-10-05，见 §2.3 修复标记：队列容量解耦、夹取 [1,1024]）** → `POOL-9`（`release` 后仍可写，实测污染池项）**✅已修复（2026-10-05，见 §2.4 修复标记：释放后读写一律抛）** → `POOL-10`（`giveBack` 还错键，抛 `UnknownKeyException`）**✅已修复（2026-10-05，见 §2.5 修复标记）** → `POOL-11`（key 表只增不减）**✅已修复（2026-10-05，见 §2.6 修复标记：`KeyPool.remove(key)` 摘键、`close()` 清空键表、池这一层删除 `destroy`）** → `POOL-12`（归还路径上 `clear` 抛异常）**✅已修复（2026-10-05，见 §2.7 修复标记：抛 `ClearFailedException`，这次归还不算发生）** → `POOL-13`（`atExit` 每次建池一条且不可注销）**✅已修复（2026-10-05，见 §2.8 修复标记：闭包只持弱引用；另有一条运行时残量登记）**
 
 ---
 
@@ -109,7 +122,7 @@ double_destroy: after_close=1 after_gc=2
 - 测量证据：
   - **修前**：`[ FAILED ] Assert Failed: (a - b < 10)`（≈30 tick 的忙等；探针 `spin_finite` 里 2s 等待烧 user 2.25s）；
   - **修后**：`[ PASSED ]`（`FILTERED_EXIT=0`）；`f_pool` 全量 **`PASSED: 42, SKIPPED: 0, ERROR: 0, FAILED: 0`**（`FULL_EXIT=0`，日志 `.autocode/tmp/pool_fix2_{pre,post}.log`）。
-- 未覆盖：`PoolTask` 的去留顺带把「每次取项都新建一个等待者对象」也去掉了（原来是每等待者一个 `PoolTask` + 一个 `Mutex`+`Condition`）；`tasks` 队列容量仍是 `totalSize`（`POOL-8` §2.3 未动，仍待修）。
+- 未覆盖：`PoolTask` 的去留顺带把「每次取项都新建一个等待者对象」也去掉了（原来是每等待者一个 `PoolTask` + 一个 `Mutex`+`Condition`）；~~`tasks` 队列容量仍是 `totalSize`（`POOL-8` §2.3 未动，仍待修）~~ ⇒ **已随 §2.3 `POOL-8` 解耦**（`createTaskQueueCapacity` 夹取到 `[1, 1024]`，见 `KeyPool.cj:24-35`）—— 本条注记已过时。
 
 **现象**：`timeout == Duration.Max` 分支每轮 `sleep(1ms)`（注释里专门写了「不是忙等」），但**有限超时分支没有任何 `sleep`/让出**：一旦 `pool.size >= totalSize` 或 `keyedSize(key) >= maxSize`，`else if` 的整个链短路，循环变成「查一次池 → 立刻再查一次池」的热自旋，直到超时。
 
@@ -299,6 +312,7 @@ slowcreate(maxWaiting=30s):          got_some=true  elapsed_ms=2016
   - **修前**：`giveBackRacingCloseMustNotStrandItem` **`[ FAILED ]`**（`Assert Failed: (destroyed.load() == i + 1)` —— 100 轮里竞态确实命中，有项没被销毁）；`closeMustWakeWaitingGetter` 修前**也通过**（修前等待者靠 1ms 轮询看到 `running`，延迟 ~1ms）⇒ 它的作用是**重写后的不变量守卫**（若通知漏了 `close` 这条就会挂住），不是失败复现；
   - **修后**：两条都 `[ PASSED ]`，全量 `PASSED: 42, SKIPPED: 0, ERROR: 0, FAILED: 0`。
 - 未覆盖：`POOL-7`（`close()` 后**创建线程**仍可能永久阻塞在 `tasks.remove()`，与等待者无关）未动，仍待修。
+- **后续修订（2026-10-05，`POOL-11`）**：上面第 2 条的「归还竞态」兜底**已从 `KeyPool.giveBack` 移走** —— 它当时要调 `pool.get(key, …)` 把项取回来，而 `POOL-11` 之后键表会被 `close()` 清空，这个调用反而会**重新建池**（把「清空键表」破坏掉）。现在的兜底在底层：`BasePool` 的关闭标志（入队晚于清空 ⇒ 当场销毁）+ `BaseKeyPool.giveBack` 的「键已摘掉 / 已关停 ⇒ 直接销毁」。`giveBackRacingCloseMustNotStrandItem`（100 轮「归还 ‖ 关池」，每轮恰好销毁 1 次）在 `POOL-11` 之后仍然通过（见 §2.6 修复标记的测量证据）。
 
 - **关停延迟**：`close()`（`f_pool/src/KeyPool.cj:403-412`）只置 `running=false` + 排空任务队列 + `pool.destroy`，**不通知**正阻塞在 `PoolTask.condition` 上的等待者。等待者是按 `waitChunk` 给的预算 park 的（默认 `maxWaiting=30s`，即最长 30s）⇒ `get()` 可能在 `close()` 之后最长 30s 才返回。巡检线程同理（`sleep(checkInterval)` 在 `running` 复检之前，最坏睡到 `checkInterval`）。
 - **归还竞态**：`giveBack` 先查 `running` 再入池（`497:498-507`），两步之间 `close()` 若已完成 destroy，这一项就会被加进**已关闭**的池的队列：既不会被销毁（没有 drain 了），也不会有人取走 —— 而池对象被 `atExit` 回调长期持有（见 `POOL-13`），于是这一项连同其资源**永久泄漏**。
@@ -320,7 +334,7 @@ slowcreate(maxWaiting=30s):          got_some=true  elapsed_ms=2016
 - 测量证据：
   - **修前**：`[ FAILED ] Assert Failed: (after <= before + 5)`（线程 7→27、关池后仍 27；探针 `main threads` 同读数 `7->27->27`、`blocking 6->26->26`）；
   - **修后**：`[ PASSED ]`（`FILTERED_EXIT=0`）；全量 **`PASSED: 45, SKIPPED: 0, ERROR: 0, FAILED: 0`**（`FULL_EXIT=0`，日志 `.autocode/tmp/pool_fix7_{pre,post}.log`）。
-- 未覆盖：`checkingLoop` 的 `sleep(checkInterval)` 本身不可取消 ⇒ `checkInterval` 很大（或 `Duration.Max`）时巡检线程仍要睡到点才醒；「每轮判状态」对它是同一套机制，但要真生效得把睡眠改成分片（`POOL-L2` §3，未修）。`tasks` 容量 = `totalSize` 的预分配问题（`POOL-8` §2.3）也未动。
+- 未覆盖：~~`checkingLoop` 的 `sleep(checkInterval)` 本身不可取消 ⇒ `checkInterval` 很大（或 `Duration.Max`）时巡检线程仍要睡到点才醒；「每轮判状态」对它是同一套机制，但要真生效得把睡眠改成分片（`POOL-L2` §3，未修）。~~ ⇒ **`POOL-L2` 已修**：睡眠换成条件变量（`waitNextRound`）+ `close()` 里 `notifyAll` ⇒ 关池立刻醒；`checkInterval` 为 `Duration.Max` 时**根本不起巡检线程**。~~`tasks` 容量 = `totalSize` 的预分配问题（`POOL-8` §2.3）也未动~~ ⇒ 同样**已随 `POOL-8` 解耦**。本条注记已过时。
 
 **原分析（保留）**：`while(running.load() && let task <- tasks.remove())` 的 `running` 检查在**阻塞出队之前**：线程一旦 park 在空队列的 `remove()` 上，`close()` 的 `tryRemove` 排空与 `running=false` 都**不会唤醒**它（`ArrayBlockingQueue` 只提供阻塞出队/超时出队，没有 close/中断）。
 
@@ -334,11 +348,26 @@ threads: threads 7->27->27, blocking 6->26->26
 
 **修法**：用「入队元素即关闭哨兵」或 `remove(timeout:)` 轮询（如 500ms）替代无超时阻塞出队。
 
-### 2.3 [中｜内存+API 契约] `POOL-8` `tasks` 队列按 `totalSize` 预分配；`ArrayPool`/`ArrayListPool` 的默认 `maxSize = Int64.Max` 直接构造失败
+### 2.3 [中｜内存+API 契约] `POOL-8` `tasks` 队列按 `totalSize` 预分配；`ArrayPool`/`ArrayListPool` 的默认 `maxSize = Int64.Max` 直接构造失败 ✓已复核 → ✅已修复（2026-10-05）
 
-```209:209:f_pool/src/KeyPool.cj
-        tasks = ArrayBlockingQueue<PoolTask<K>>(totalSize)
+**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、本标记在**同一提交**（提交 `84bcceb7`，提交信息 `fix(f_pool): POOL-8 任务队列容量与池容量解耦（夹取 [1,1024]）`）。
+
+- 改动：`f_pool/src/KeyPool.cj:28-41` 新增 `CREATE_TASK_QUEUE_CAP = 1024` 与 `createTaskQueueCapacity(total)`（把池容量夹进 `[1, 1024]`，顺带兜住 `totalSize <= 0` 时 `ArrayBlockingQueue` 直接抛 `IllegalArgumentException` 的边界）；构造处 `:250-251` 改为 `ArrayBlockingQueue<K>(createTaskQueueCapacity(totalSize))`。
+  为什么这样就够：任务队列只是给创建线程传「给某键建一个池项」的纸条，槽位不必等于池容量；队列满时 `tryAddTask` 返回 false、等待者下一轮再试 —— `get` 的等待是「条件变量通知 + 预算」，不依赖任务必达。
+- 用例：`f_pool/src/KeyPool_test.cj` → `arrayPoolDefaultsMustConstruct`（`ArrayPool<Int64>()` / `ArrayListPool<Int64>()` 在默认参数下能构造、能 get/giveBack）。
+- 测量证据：
+  - **修前**：该用例 `[ ERROR ]` —— `ArrayPool<Int64>()` 构造即 `Out of memory`、测试进程 EXIT=1（与探针 `main arraypool_default` 一致）；探针 `main queue_alloc` 另量到 `maxSize=5_000_000` 时构造白付 **+80,004,832 B** 堆；
+  - **修后**：`[ PASSED ]`（`FILTERED_EXIT=0`）；全量 **`PASSED: 46, SKIPPED: 0, ERROR: 0, FAILED: 0`**（`FULL_EXIT=0`，日志 `.autocode/tmp/pool_fix8_{pre,post}.log`）。
+- 未覆盖/说明：
+  - **没有**改 `ArrayPool`/`ArrayListPool` 的公开默认值 `maxSize = Int64.Max`（「不限制」是 README 口径，属公开 API 行为，按约定不擅动）：解耦之后它只表示「池不设上限」，不再引发构造 OOM。
+  - **试过又删掉**一条用 `getAllocatedHeapSize()` 增量断言「不得预分配」的用例：`--filter` 单跑时修前也通过（该计数在单进程里分不出这 80MB）⇒ 预分配这件事以探针 `queue_alloc` 的读数（修前 +80MB）＋现在的结构上限（夹取到 1024）为准，判别用例用「默认参数构造即 OOM」这条硬信号。
+
+```250:251:f_pool/src/KeyPool.cj
+        // 任务队列容量与池容量解耦（夹在 [1, 1024]）：见 createTaskQueueCapacity 的说明（§2.3 POOL-8）
+        tasks = ArrayBlockingQueue<K>(createTaskQueueCapacity(totalSize))
 ```
+
+> 修前（问题现场）：`tasks = ArrayBlockingQueue<PoolTask<K>>(totalSize)` —— 队列容量直接等于池容量。
 
 `std.collection.concurrent.ArrayBlockingQueue` 的 `init(capacity)` 会**立即** `Array(capacity, repeat: ...)` 并按容量 malloc 状态数组（`cangjie_runtime/std/libs/std/collection/concurrent/array_blocking_queue.cj:68-78`）—— 队列容量直接等于池容量。
 
@@ -349,7 +378,19 @@ threads: threads 7->27->27, blocking 6->26->26
 
 **修法**：任务队列容量与池容量解耦（固定小容量如 1024，或换成 `ArrayDeque` + 条件变量）；`ArrayPool`/`ArrayListPool` 的默认 `maxSize` 换成一个真实可用的上界（如 `10`/`1024`），或把 `Int64.Max` 当作「不限制」在构造队列时降级。
 
-### 2.4 [中｜正确性] `POOL-9` `BytesListOutputStream.release()` 之后仍可写：下一个借用者拿到脏缓冲
+### 2.4 [中｜正确性] `POOL-9` `BytesListOutputStream.release()` 之后仍可写：下一个借用者拿到脏缓冲 ✓已复核 → ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、本标记在**同一提交**（提交 `4d56fc50`，提交信息 `fix(f_pool): POOL-9 release 之后禁止再写/读/复位/写出（IllegalStateException）`）。
+
+- 改动（`f_pool/src/BytesListOutputStream.cj`）：新增私有 `checkNotReleased()`（抛 `IllegalStateException('bytes list output stream is released')`，与 `f_cache` 的「关闭后统一抛 IllegalStateException」口径一致），在 `write`（`:34`）、`asBytes`（`:47`）、`reset`（`:79`）、`copy`（`:101`）首行调用；`release()` **仍保持幂等**（`copy` 的 `finally` 依赖它，不能加守卫），`isEmpty`/`byteSize` 保持只读不动。顺带把原来错挂在 `byteSize` 上的那条「归还…幂等」文档注释挪回 `release`。
+- 用例（`f_pool/src/releasable_test.cj`）：`writeAfterReleaseMustThrow`（释放后 `write` 必须抛 `IllegalStateException`；再借出的一件 `byteSize() == Some(3)` —— 只应剩 release **之前**写的 3 字节，修前是 5）、`readOrCopyAfterReleaseMustThrow`（`asBytes`/`reset`/`copy` 各抛；`release()` 仍幂等不抛）。
+  > 口径说明：`clearOnReturning: false` 时「归还前写的内容」留在池项上是池的既定语义（借用方自己 `reset`）；本条修的是**释放之后**的写/读 —— 修前它让池项多出 2 字节（探针 `useafterrelease` 的 `5 字节` = 3 + 2）。
+- 测量证据：
+  - **修前**：两条新用例 `[ FAILED ]`（`Assert Failed: (threw == true)` / `(asBytesThrew == true)` —— 一个异常都没抛）；
+  - **修后**：两条 `[ PASSED ]`（`FILTERED_EXIT=0`）；`f_pool` 全量 **`PASSED: 48, SKIPPED: 0, ERROR: 0, FAILED: 0`**（`POOL_EXIT=0`）；
+  - **下游回归**（确认守卫不会打断合法流程）：`f_codec` **`PASSED: 16, FAILED: 0`**（`CODEC_EXIT=0`）、`f_protocol` **`PASSED: 62, FAILED: 0`**（`PROTOCOL_EXIT=0`），后者覆盖 `Message.asOneSmallFrame()` 的 `byteSize()`+`asBytes()` 路径（发生在归还**之前**）。
+  - 日志：`.autocode/tmp/pool_fix9_pre.log`、`pool_fix9_post.log`、`pool_fix9_post2.log`。
+- 未覆盖：`isEmpty`/`byteSize` 不抛（只读视图，`DefaultCodec.lastBuffer()` 借出后立刻要用它们）；`clearOnReturning` 的语义未动。
 
 `released` 只在 `release()` 里用（幂等保护），`write` / `asBytes` / `copy` **都不检查**：
 
@@ -369,7 +410,29 @@ useafterrelease: second_is_empty=false second_bytes=5
 
 **修法**：`write`/`asBytes` 首行 `if (released) { throw IllegalStateException('released') }`；`copy` 自带 `release`，可在 released 时直接返回或抛。
 
-### 2.5 [中｜资源泄漏] `POOL-10` `BaseKeyPool.giveBack` 对「键对应的池不存在」静默丢弃对象
+### 2.5 [中｜契约/正确性] `POOL-10` `BaseKeyPool.giveBack` 对「键对应的池不存在」静默丢弃对象 ✓已复核 → ✅已修复（2026-10-05）
+
+**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、`f_pool/README.md` 与标记在**同一提交**（提交 `a53ea3a8`，提交信息 `fix(f_pool): POOL-10 还给未建池的键改为抛 UnknownKeyException（不销毁、不建池、不归还）`）。
+
+- **口径修正（2026-10-05，用户拍板）**：本节原来写的「未命中就按 `!running` 分支直接 `destroier` 销毁」**已否决** —— 还错键是**应用层的 BUG**，池不替它决定怎么处置。改为**抛异常**：池**不销毁、不归还、也不替这个键建池**，把处置权（重试 / 销毁 / 上报）交回调用方。
+- 改动：
+  - 新增 `f_pool/src/exception/UnknownKeyException.cj`：`public class UnknownKeyException <: fountain::f_base.BaseException`（仓库的异常根，自带 `addSuppressed` / `suppressed` / 带 `Suppressed:` 的 `printStackTrace`），字段 `public let key: Any`；类注释给出 `addSuppressed` 的用法 —— 应用层在 `finally` / `release()` 里归还、顶掉了正在传播的业务异常时，`e.addSuppressed(被顶掉的那个)` 再 `throw e`。
+    - `key` 用 `Any` 而不是 `String`：`BaseKeyPool` 对键的约束只有 `Hashable & Equatable<K>`（没有 `ToString`），消息里插不进键。**实测**：`throw UnknownKeyException('${key}')` 编译报 `error: the type 'Generics-K' should implement interface 'ToString'`。应用层要文本自己 `match (e.key) { case k: ToString => ... }`（用例与 README 都给了这段）。
+  - `f_pool/src/BaseKeyPool.cj:35-44`：`map.get(key)?.giveBack(...)` → 显式 if/else，未命中 `throw UnknownKeyException(key)`；注释写明「键一旦被 `get`/`add` 用过就一定有池，且没有淘汰入口 ⇒ 只可能是还错键」。
+  - `f_pool/README.md`（`KeyPool` 一节末尾）：补契约说明 —— 抛 `UnknownKeyException`、池不销毁、用 `addSuppressed` 保现场、仓库内的 `Pool<V>` 永不触发。
+- 用例：
+  - `BaseKeyPoolTest.giveBackToUnknownKeyMustThrow`：未命中 ⇒ 抛；`destroyed == 0`；`entries()` 里仍只有 `k1`（**没有**偷偷建池 —— 否则巡检会按 `p.size < max` 把幽灵池填满）。
+  - `BaseKeyPoolTest.unknownKeyExceptionCarriesKeyAndSuppressed`：`key` 带出 `'k2'`、`is BaseException`、`addSuppressed` 后 `suppressed.size == 1`。
+  - `KeyPoolTest.giveBackToUnknownKeyMustThrow`（端到端）：`get('k1')` → `giveBack('k2', obj)` ⇒ 抛；`destroyed == 0`；`get('k1', timeout: Duration.Zero)` 仍为 `None`（残量，见下）。
+- 测量证据：
+  - **修前**（`BaseKeyPool.cj` 换回 HEAD 版、异常类与用例保留）：3 条用例全 `[ FAILED ]`（断言 `threw.isSome() == true` / `caught.isSome() == true` / `thrown == true`，左侧都是 `false`）⇒ `PRE_FILTERED_EXIT=1`；
+  - **探针 `unknownkey`（修前）**：`thrown=false destroyed_immediate=0 borrow_again=false key_alive=true`；`gc()`×3 后 `destroyed_after_gc=1` —— 静默丢弃、销毁只能等 GC 终结器（`Ref.~init`）、来源键 `k1` 那份额度再也拿不回来；
+  - **修后**：3 条用例 `[ PASSED ]`（`FILTERED_EXIT=0`）；`f_pool` 全量 **`PASSED: 51, SKIPPED: 0, ERROR: 0, FAILED: 0`**（`POOL_EXIT=0`）；探针 `thrown=true destroyed_immediate=0 key=k2 borrow_again=false`；
+  - 下游回归：`f_codec` **`PASSED: 16, FAILED: 0`**（`CODEC_EXIT=0`）、`f_protocol` **`PASSED: 62, FAILED: 0`**（`PROTOCOL_EXIT=0`）、`f_orm` `PASSED: 32, ERROR: 1`（唯一 ERROR 是 `ORMConfig_test.testPoolMaxWaiting`，与本改动无调用关系，见 §5）；日志 `.autocode/tmp/pool_fix10_{pre,all,post2}.log`。
+- **`fountain` 仓库内不会触发**（用户口径 + 复核）：仓库里的池都是 `Pool<V>` ⇒ `KeyPool<Unit, V>` ⇒ `UnitKeyPool`（`KeyPool.cj:246-249`，单池、无 map），键永远只有 `Unit` 一个；`git grep "KeyPool<"` 在 `f_pool` 源码与测试之外**没有任何调用方**（`f_orm/src/wrap/DatabasePool.cj:29` 是 `Pool<PooledConnection>`）。所以这条改动对仓库内既有调用面零风险。
+- **残量（不修，登记）**：还错键的那一刻已无法知道对象属于哪个池 ⇒ 来源键池里那份「已借出」额度（`out`）永久留在原地（自检不变量 `s ≡ 节点数 + out` 仍成立 ⇒ 不告警、不自愈）。本次只保证「不静默吞掉 + 通知应用层」。另：修后若应用层把对象丢掉不管，`Ref` 终结器仍会在某次 GC 后兜底销毁（探针 `destroyed_after_gc=1`）—— 区别是应用层**已经收到通知**，可以自己决定处置。
+
+**原始诊断（保留）**
 
 ```34:36:f_pool/src/BaseKeyPool.cj
     public func giveBack(key: K, value: V, checker: (K, V) -> Bool, destroier: (K, V) -> Unit): Unit {
@@ -377,39 +440,246 @@ useafterrelease: second_is_empty=false second_bytes=5
     }
 ```
 
-`get` 会按需建池（`keyedPool`，`100-110`），`giveBack` 不会：键上没有池时 `?.` 静默跳过 —— 对象**既不归还也不销毁**，调用方（`KeyPool.giveBack`）返回 `Unit` 无任何反馈。典型触发：把 A 键借出的对象还到 B 键、或关闭后清理路径上按旧键归还。
+`get` 会按需建池（`keyedPool`，`112-122`），`giveBack` 不会：键上没有池时 `?.` 静默跳过 —— 对象**既不归还也不销毁**，调用方（`KeyPool.giveBack`）返回 `Unit` 无任何反馈。典型触发：把 A 键借出的对象还到 B 键、或关闭后清理路径上按旧键归还。
 
-**修法**：`giveBack` 未命中池时按 `!running` 分支处理（直接 `destroier(key, value)`），或至少 `PoolDiagnostics` 记一条告警。
+**修法（已被上面的口径取代）**：~~`giveBack` 未命中池时按 `!running` 分支处理（直接 `destroier(key, value)`），或至少 `PoolDiagnostics` 记一条告警。~~ ⇒ 改为抛 `UnknownKeyException`（不销毁、不建池、不归还）。
 
-### 2.6 [中｜内存] `POOL-11` key 表只增不减，巡检每轮 O(#keys)
+### 2.6 [中｜内存] `POOL-11` key 表只增不减，巡检每轮 O(#keys) ✓已复核 → ✅已修复（2026-10-05）
 
-`BaseKeyPool.map`（`24:24`）没有任何 key 淘汰/移除入口（`destroy` 只清空各池的项，**不删 map 项**，`88-94`），`audit()`/`check()` 每轮都 `for(( _, p) in map)`（`70-87`、`55-64`）。按高基数键（用户/会话/文件）建池时：空池条目、队列对象、以及巡检的 O(#keys) 遍历都是永久成本。
+**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、`f_pool/README.md` 与标记在**同一提交**（提交 `944c5b02`，提交信息 `fix(f_pool): POOL-11 键表可回收：KeyPool.remove 摘键、close 清空键表，池这一层销毁只留 close`）。
 
-**修法**：提供 `removeKey`/`evictEmptyKeys`（空闲且 `size == 0` 的 key 在巡检里回收），或在文档里明确「key 基数必须有界」。
+- 口径（2026-10-05 拍板）：① `KeyPool` 新增 `remove(key: K)` —— **先关闭 + 销毁**该键的池，再把它从键表里删掉（键不存在 = 空操作）；② **删除 `destroy`**：池这一层唯一的销毁入口是 `close`；③ `KeyPool.close()` 返回前**销毁所有键的池并清空键表**（幂等）。
+- 改动：
+  - `f_pool/src/base/BasePool.cj`：`destroy(fn): Int64` → `close(destroier): Int64`（**先置关闭标志**，再沿 `check({=> true}, {v => 销毁; false}){}` 清空）；四个实现各加 `closed: AtomicBool`，`add` 改回 `Bool`（关闭后不入池）、`get`（关闭后 `None`）、`giveBack`（关闭后当场销毁；若是入队之后才关，则把队列里剩下的死项一并销毁）都判它；新增 `closeDestroyed`（销毁一项的记账：回调异常只记 `callbackError`，销毁计数照记）。
+  - `f_pool/src/IKeyPool.cj`：`destroy` → `remove(key, fn)` + `close(fn)`，并加 `keyCount()`（诊断 / 测试用）。
+  - `f_pool/src/BaseKeyPool.cj`：构造参数加 `running: AtomicBool`（与 `KeyPool` **共用同一个标志**）⇒ 关停后不再按需建池（`add` / `get` / `keyedSize` 都判它；否则 `close()` 清空键表之后，一个交错的 `get` / `keyedSize` 又会把键表长回来）；`giveBack` 在「键已摘掉 / 已关停」时直接销毁（不抛）；新增 `remove(key, fn)`（先 `map.remove` 再关闭 + 销毁，按该池**名下全部** `s.fetchSub`）与 `close(fn)`（快照键 → 逐个 `remove` → `s.store(0)`）。
+  - `f_pool/src/UnitKeyPool.cj`：`destroy` → `close(fn)` + `remove(key, fn)`（单键池 = 关掉唯一的池）。
+  - `f_pool/src/KeyPool.cj`：新增 `public func remove(key: K)`；`close()` 改幂等（`running.compareAndSwap(true, false)`），末尾 `pool.close{...}` 销毁所有键的池并清空键表；删掉 `giveBack` 里「取回来再销毁」的兜底（它要调 `pool.get(key, …)`，而那会**重新建池** —— 正是「键表长回来」的入口；现在由 `BaseKeyPool.giveBack` 的关停分支 + `BasePool` 的关闭标志兜住）；创建线程在 `creator` 返回后补一道 `running` 判断（关停窗口里刚建出来的项当场销毁）。
+  - `f_pool/README.md`：`KeyPool` 公开面补 `remove(key)` 与上述语义；内部层一节 `destroy(fn)` → `close(destroier)` + `remove(key, fn)` + `keyCount()`。
+- 用例：`closeMustSyncSize`（原 `destroyMustSyncSize` 改写）、`removeMustDestroyAndForgetKey`、`closeMustClearKeyTableAndDestroyAll`、`giveBackAfterCloseMustDestroy`（以上 `BaseKeyPoolTest`）、`KeyPoolTest.removeMustDestroyKeyPoolAndForgetKey`（端到端：借出 1 件 → `remove` 只销毁池内那 1 件、`keyCount` 归位 → 借出的那件 `giveBack` 抛 `UnknownKeyException` → 该键还能重新用起来）、`KeyPoolTest.closeMustDestroyAllKeysAndClearKeyTable`（close 销毁全部 + 键表归零 + 关停后 `get` 立即 `None`、`giveBack` 直接销毁、重复 close 幂等）。
+- 测量证据：
+  - **修前**（源码回 HEAD）：① 新用例**编译不过** —— `error: 'remove' is not a member of class 'KeyPool<Struct-String, Class-Object>'`、`error: 'keyCount' is not a member of ...`、`error: extra argument given for parameter list '(Enum-Mode, Int64)'`（能力本身不存在）；② HEAD 上唯一的销毁入口 `BaseKeyPool.destroy` 跑完，**键表里 k1/k2 还在**：临时取证用例 `headDestroyLeavesKeyTableBehind` `[ FAILED ]`（`Assert Failed: (keys == 0)`）。
+  - **修后**：新 / 改动用例 `PASSED: 9, SKIPPED: 47, ERROR: 0, FAILED: 0`；`f_pool` 全量 **`PASSED: 56, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（既有 `ORMConfig_test.testPoolMaxWaiting`，与本改动无调用关系，见 §5）。
+  - 日志：`.autocode/tmp/pool_fix11_{pre,pre2,all,post}.log`（`pre2` 是①的完整留档）。
+- 语义（已写进 README）：`remove` 只销毁**池内**的项；借用中的对象仍在应用手里，摘键之后 `giveBack` 抛 `UnknownKeyException`（§2.5 `POOL-10`），要应用层自己销毁。`fountain` 仓库内的池都是 `Pool<V>`（`Unit` 键 ⇒ `UnitKeyPool`）且 `remove` 不暴露在 `Pool<V>` 上 ⇒ 对既有调用面零影响。
+- 残量（登记）：① `remove`/`close` 与 `creator` 返回之间的窗口里建出来的项，`BaseKeyPool.add` 会挡住（不入池），该值由 `Ref` 终结器兜底销毁（GC 时机，不确定）；② `close()` 之后仍在借用方手里的项不再计入任何账本（`s` 清零），由应用层收尾；③ ~~`ExitCallbacks.atExit(254, close)` 仍然每次建池一条、不可注销（§2.8 `POOL-13` 未修，本次只让回调变幂等）~~ ⇒ **§2.8 `POOL-13` 已修**：注册项仍然不可注销（`f_base/src/signal.cj` 没有 `remove`），但回调闭包改成只持**弱引用** ⇒ 不再钉住池（每条只剩「闭包 + `WeakRef`」几十字节），见该节残量②。本条③已过时。
 
-### 2.7 [中｜正确性] `POOL-12` 归还路径上 `clear` 抛异常会丢池项
+**原始诊断（保留）**
 
-`KeyPool.giveBack` 的 `clear(key, object)` 没有 try（`504-506`），异常直接抛给调用方，而对象既不在池里也没被销毁 ⇒ 池项凭空消失（与 `checker`/`destroier` 都有 `doCheck`/`doDestroy` 包裹的处理不一致）。`ArrayPool` 的 `clear` 会写整个数组、`ArrayListPool`/`BytesListOutputStream` 走 `list.clear()`，正常不抛；但这是公开可注入的回调，契约上不该由它决定池项生死。
+`BaseKeyPool.map`（`25:25`）没有任何 key 淘汰/移除入口（当时唯一的销毁入口 `destroy` 只清空各池的项、**不删 map 项**），`audit()`/`check()` 每轮都 `for(( _, p) in map)`。按高基数键（用户/会话/文件）建池时：空池条目、队列对象、以及巡检的 O(#keys) 遍历都是永久成本。
 
-**修法**：`clear` 包 try（失败记 `PoolDiagnostics.onCallbackError()`，仍把池项放回），或按 `POOL-1` 的建议改为「返回前 `take()`」。
+**修法（已被上面的口径取代）**：~~提供 `removeKey`/`evictEmptyKeys`（空闲且 `size == 0` 的 key 在巡检里回收），或在文档里明确「key 基数必须有界」。~~ ⇒ 改为 `KeyPool.remove(key)` 主动摘键 + `close()` 清空键表。
 
-### 2.8 [中｜内存] `POOL-13` `ExitCallbacks.atExit(254, close)` 每次建池一条且不可注销
+### 2.7 [中｜契约/正确性] `POOL-12` 归还路径上 `clear` 抛异常会丢池项 ✓已复核 → ✅已修复（2026-10-05）
 
-`KeyPool` 构造末尾注册 `ExitCallbacks.atExit(254, close)`（`226:226`），而 `ExitCallbacks`（`f_base/src/signal.cj:36-69`）只有 `atExit`、没有 `remove`：每建一个池就永久多一条回调，回调闭包持有 `KeyPool` 实例 ⇒ 已 `close()` 的池及其 `map`/`Ref` 图无法回收（配合 `POOL-11`，高基数键时期的对象会一直留到进程退出）。
+**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、`f_pool/README.md` 与标记在**同一提交**（提交 `408e5181`，提交信息 `fix(f_pool): POOL-12 clear 回调失败抛 ClearFailedException，这次归还不算发生（不销毁/不结清/可重试）`）。
 
-**修法**：给 `ExitCallbacks` 加 `remove`（返回句柄）并在 `close()` 里注销；或改为「只注册一次静态钩子，遍历活池集合」。
+- 口径（2026-10-05 拍板，与 §2.5 `POOL-10` 同一套）：`clear` 抛异常是**应用层回调的 BUG**；**`giveBack` 抛异常 ⇒ 对象没有归还** —— 不销毁、不结清记账、不进池，池项状态与调用 `giveBack` 之前完全一样，所有权仍在调用方；应用层修好条件后可以**重试** `giveBack`（重试成功额度照常结清），或者自己销毁它。
+- 改动：
+  - 新增 `f_pool/src/exception/ClearFailedException.cj`：`public class ClearFailedException <: fountain::f_base.BaseException`，字段 `public let key: Any`（同 `UnknownKeyException`：键类型只有 `Hashable & Equatable` 约束、没有 `ToString`，消息里不插键），类注释给出 `suppressed` 的用法。
+  - `f_pool/src/KeyPool.cj:641-655`：`clear(key, object)` 包 try —— 捕获后记 `PoolDiagnostics.onCallbackError()`（异常必留痕，与 checker / destroier / creator 同口径）⇒ `ClearFailedException(key)` ⇒ `addSuppressed(回调异常)` ⇒ 抛出。**除此之外什么都不做**：不动 `running`、不动记账、不建池。
+  - `f_pool/README.md`：`KeyPool.giveBack` 那段补「`clear` 失败 ⇒ 抛 `ClearFailedException`，这次归还没发生」。
+- 用例：`KeyPoolTest.clearFailureMustNotCountAsReturned`：`maxSize: 1 / totalSize: 1 / clearOnReturning: true`，`clear` 用 `AtomicBool` 做到「只抛一次」⇒ 断言抛的是 `ClearFailedException`、`destroyed == 0`（没归还 ⇒ 不销毁）、`size` 未变（记账没结清）、`suppressed.size == 1`（回调异常挂着）；随后**重试 `giveBack`** ⇒ 成功、项回到池里、`get` 拿得到。
+- 测量证据：
+  - **修前**（`KeyPool.cj` 回退到 `review/f_pool` 已提交版、clear 仍是裸调，异常类与用例保留）：`clearFailureMustNotCountAsReturned` `[ FAILED ]` —— `Assert Failed: (caught.isSome() == true)`（抛出的是回调自己的裸异常，不是 `ClearFailedException`）⇒ `PRE_EXIT=1`；
+  - **修后**：该用例 `[ PASSED ]`（`FILTERED_EXIT=0`）；`f_pool` 全量 **`PASSED: 57, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（既有 `ORMConfig_test.testPoolMaxWaiting`，与本改动无关，见 §5）。
+  - 日志：`.autocode/tmp/pool_fix12_{pre2,all}.log`（第一次 `pre` 误用主仓库 `HEAD`（= 更早的基线）回退、编译期即失败，已在 `pool_fix11_*` 那套脚本里同样踩过 —— 改用主仓库的分支引用 `review/f_pool:…` 取文件）。
+- 残量 / 边界：① 「没归还」= 那一项继续记在 `out` 上（与 §2.5 `POOL-10` 的残量同机制），但这里**可恢复**：调用方重试 `giveBack` 成功后额度照常结清；② `clear` 的调用时机（checker 之前、锁外）与开关语义（`checkOnReturning = false` 时 `clear` 照旧生效）不变；③ 另一处回调异常的处理**刻意保持不同**：`checker` 抛异常时 `checkedBeforeReturn` 按「校验不过」销毁 + 结清（`SyncDeque.cj:150-162`，归档报告 7.12 的口径）—— 那里池**已经拒收**该项、对象状态未知，销毁是安全的收尾；而 `clear` 失败发生在池**尚未接收**这一项之前，所以按「没归还」处理。
+
+**原始诊断（保留）**
+
+`KeyPool.giveBack` 的 `clear(key, object)` 没有 try（当时 `642:642`），异常直接抛给调用方，而对象既不在池里也没被销毁 ⇒ 池项凭空消失（与 `checker`/`destroier` 都有 `doCheck`/`doDestroy` 包裹的处理不一致）。`ArrayPool` 的 `clear` 会写整个数组、`ArrayListPool`/`BytesListOutputStream` 走 `list.clear()`，正常不抛；但这是公开可注入的回调，契约上不该由它决定池项生死。
+
+**修法（已被上面的口径取代）**：~~`clear` 包 try（失败记 `PoolDiagnostics.onCallbackError()`，仍把池项放回），或按 `POOL-1` 的建议改为「返回前 `take()`」。~~ ⇒ 改为「抛 `ClearFailedException`（不销毁、不结清、不进池）」，与 `POOL-10` 同口径。
+
+### 2.8 [中｜内存] `POOL-13` `ExitCallbacks.atExit(254, close)` 每次建池一条且不可注销 ✓已复核 → ✅已修复（2026-10-05，含一条残量登记）
+
+**✅ 修复标记（2026-10-05）**：分支 `review/f_pool`，代码、用例、标记在**同一提交**（提交 `9120fcd0`，提交信息 `fix(f_pool): POOL-13 atExit 回调只持弱引用（不再把池钉在注册表里），并登记线程闭包残量`）。
+
+- 口径（2026-10-05 拍板）：`ExitCallbacks.atExit` 收到的那个闭包**只用弱引用**引用池 —— 闭包本身只持有弱引用。
+- 改动（`f_pool/src/KeyPool.cj:268-279`）：
+  ```cj
+  let weakSelf = WeakRef<KeyPool<K, V>>(this, CleanupPolicy.EAGER)
+  ExitCallbacks.atExit(254){=>
+      if (let Some(p) <- weakSelf.value) {
+          p.close()
+      }
+  }
+  ```
+  用 `CleanupPolicy.EAGER`（`DEFERRED` 的语义是「尽可能保证弱引用对象存活、内存不足才回收」，对这里没用）。退出语义不变：未 `close()` 的池被自己的维护线程强引用 ⇒ 闭包照样拿到它并 `close()`；而 `close()` 幂等（§2.6 `POOL-11`）⇒ 应用已经关过、这里再关一次也没有副作用。
+- 测量证据：
+  - **机制面（正向）**：探针 `weakclosure` 证明「注册进全局表的闭包只要只引用弱引用，就不会钉住对象」成立 —— 构造函数里建闭包、静态函数里建闭包两种写法都 `collected=true`（`.autocode/tmp/pool_fix13_probe3.log`）；
+  - **修前**：探针 `exitweak`，`KeyPool.cj` 回退到 `review/f_pool` 版（atExit 强持有 `close`）时，池 `close()` + `gc()`×8（每轮另造 8MB 垃圾逼 GC）后 `weak.value` 一直是 `Some`（`collected=false`）；
+  - **修后**：同一个探针**仍然 `collected=false`** —— 持有者不是（也不再是）atExit 闭包，见下面的残量。
+- **残量（本次修不掉，登记 + 后续方案）**：`close()` 之后池**仍然回收不掉**，持有者换成了**维护线程的闭包**：
+  - 探针 `threadhold`（`.autocode/tmp/pool_fix13_probe4.log`）：一个对象只要 `spawn` 过引用自己的线程（`while (this.running) { … }` 这种形状，正是 `KeyPool` 两个维护线程的写法），**线程退出之后（不问是否 `join`）对象都回收不掉** ⇒ 这套运行时保留了已结束线程的闭包，捕获的 `this` 一直被钉住；
+  - 用例 `KeyPoolTest.closedPoolStillPinnedByWorkerThreadClosure` 把这个残量**钉成一条明确断言**（现在断言「还活着」；等哪天不成立，就把它反过来断言可回收）；
+  - 后续方案（二选一，都不在本次范围内）：① `f_pool` 侧：把两个维护线程改成只捕获一个「**可清空的上下文**」（`close()` 时把上下文里对池 / 任务队列 / 回调的引用清掉）⇒ 池本体可回收，只剩一个被运行时留着的空壳上下文；② 上游 `cangjie_runtime`：已结束线程的闭包应当可释放（可上报）；
+  - 另：`ExitCallbacks` 的注册表本身仍是「每次建池一条、不可注销」（`f_base/src/signal.cj:36-69` 没有 `remove`）—— 只持弱引用之后，每条只剩「闭包 + `WeakRef`」几十字节，所以不再单列。
+- 日志：`.autocode/tmp/pool_fix13_{probe,probe2,probe3,probe4,final}.log`。
+
+**原始诊断（保留）**
+
+`KeyPool` 构造末尾注册 `ExitCallbacks.atExit(254, close)`，而 `ExitCallbacks` 只有 `atExit`、没有 `remove`：每建一个池就永久多一条回调，回调闭包持有 `KeyPool` 实例 ⇒ 已 `close()` 的池对象无法回收（`POOL-11` 之后 `close()` 会清空键表，所以留下的只是一个空壳 `KeyPool` + 它的两个队列对象；`POOL-11` 那次改动只让回调变**幂等**，注册项本身仍然不可注销）。
+
+**修法（已被上面的口径取代）**：~~给 `ExitCallbacks` 加 `remove`（返回句柄）并在 `close()` 里注销；或改为「只注册一次静态钩子，遍历活池集合」。~~ ⇒ 改为「闭包只持弱引用」（注册项不再钉住池）。
 
 ---
 
-## 3. 低危 / 待验证（9 条）
+## 3. 低危 / 待验证（9 条：`POOL-L1`/`L2`/`L4`/`L5`/`L6`/`L7` 已修复、`POOL-L3` 误判、`POOL-L8`/`L9` 登记不改）
 
-- `POOL-L1` **告警钩子在 `head.globalLock` 临界区内被调用**：`selfCheck` 的 `error`/`warn`（`SyncDeque.cj:63-73`）与 `reconcileIfWedge` 的 `warn`（`250`）都在 `synchronized` 块内，默认钩子写 stderr、应用可重定向到日志框架 —— 慢钩子会阻塞所有取还操作，钩子若重入池则死锁。建议：把消息攒到锁外再发。
-- `POOL-L2` **`checkInterval = Duration.Max` 使巡检形同虚设**：`BytesListOutputStream.builder` 的默认 `checkInterval=Duration.Max`（`f_pool/src/BytesListOutputStream.cj:89`）通过 `if(checkInterval <= Duration.Zero) return`（`290:290`）后仍然起线程，随后 `sleep(checkInterval)`（`314`）实测**不抛异常**（`main sleep_max: threw=false`）⇒ 该线程此后永不醒来：`minSize` 补足、空闲回收、`audit()` 自愈对这类池全部失效，且关池后也不会退出（与 `POOL-7` 同类的线程滞留）。建议：`Duration.Max`（或 > 某上界）时不起巡检线程，或改成分片睡眠（如每次 ≤1s 并复检 `running`）。
-- `POOL-L3` **`HeadNode.nextForGet` 递归扫描**（`LinkedNode.cj:95-111`）：队首连续非 idle 节点时按节点数递归（`ValueNode.nextForGet` 自身是迭代的，递归只发生在「队首非 idle」这一步）。极端情况（大量滞留 CHECKING 项）可加深调用栈，建议改迭代。
-- `POOL-L4` **`selfCheck`/`audit` 的全队列遍历在锁内**：每 1e4 次操作一次 `countNodes()`（O(队列长度)，`SyncDeque.cj:59-74`、`227-254`）；长队列 + 高并发时是周期性长临界区。可只统计计数，或在锁外做快照核对。
-- `POOL-L5` **`get` 内定义局部函数** `keyedCheck`（`455-457`、`501-503`）：每次调用建闭包并走闭包调用（借用/归还是热路径）。可提到成员函数/用 `checkOnBorrowing` 直接分派。
-- `POOL-L6` **`waitChunk` 溢出**：`waitStart + maxWaiting - MonoTime.now()`（`443-453`）在 `maxWaiting` 取很大的有限值（如 `Duration.Max - 1`）时可能溢出成负 ⇒ 立即放弃；建议写成 `maxWaiting - (now - waitStart)` 并夹取。
-- `POOL-L7` **`ArrayPool.giveBack` 拒绝尺寸不符的数组时既不销毁也不告警**（`f_pool/src/ArrayPool.cj:60-67`）：调用方漏判返回值就是泄漏；至少在 `PoolDiagnostics` 记一条。
+- `POOL-L1` **告警钩子在 `head.globalLock` 临界区内被调用** ✓已复核 → **✅已修复（2026-10-06，提交 `e9433511`）**
+  - **诊断订正（2026-10-06）**：
+    1. 调用点其实是 **4** 个：`SyncDeque.selfCheck` 的 `error`/`warn`（`:68`/`:71`，锁内）、`reconcileIfWedge`
+       的 warn（`:250`，锁内），以及 **`PoolDiagnostics.reportIfChanged`（`:182-190`，锁外）** ——
+       巡检 `audit` 之后与进程退出时各一次。最后那个「锁外」的形状就是本次修复的样板。
+    2. **「钩子重入池 ⇒ 死锁」不成立**：`std.sync.Mutex` 文档写明是**可重入互斥锁**，探针 `mutexreentry`
+       实测「同线程对同一把 Mutex 套两层 `synchronized`」能进入 ⇒ 钩子里再操作池不会自死锁，只会递归/放大。
+    3. 真正剩下的是 ① **慢/阻塞钩子把这个 deque 的所有取还挡住**（默认链路 = `logger.warn`，实测 **7.2 µs/条**，
+       探针 `warncost` ⇒ 默认无感；应用用 `redirectWarningsTo` 换上的钩子则无上限，而告警恰恰出现在异常态）、
+       ② **锁序 AB-BA**（钩子持 deque 锁 → f_log/应用自己的锁；应用若有「先持自己的锁、再操作池」的路径就成环）。
+  - **改法**（`f_pool/src/base/collection/SyncDeque.cj`）：锁内只**拼消息**，`PoolDiagnostics.warn/error` 一律移出
+    锁外发；用 `?String` 局部量而不是 `ArrayList`（健康路径零额外分配 —— `selfCheck` 每 1e4 次操作才进锁一次）。
+    `reconcileIfWedge` 只把那条 warn 挪出去，`reviveNonIdle()`/`s.store(total)`/计数仍留在锁内（必须在锁内），
+    `checkers != 0` 的 `return 0` 保持原样。**行为零变化**：消息内容、级别、触发条件都不变。
+    另给 `PoolDiagnostics.redirectWarningsTo` 补了约定注释：钩子在**发起操作的那根线程**上同步调用 ⇒
+    别做重 I/O / 别在钩子里再操作池（可重入、不会死锁，但会放大）；库内保证**不在 deque 全局锁临界区**里调用。
+  - **判别用例（这次找到了确定性触发方式，「没有便宜判别法」的说法订正）**：
+    `SyncDequeTest.testWarningHookMustRunOutsideDequeLock`（`SyncDeque_test.cj`）—— 沿用现成测试缝
+    `strandHeadForTest()` + `audit()` 逼出 `WEDGE-HEAL` 告警（现成用例 `testWarningHookCanBeRedirected` 就是这么触发的），
+    钩子体内 `spawn { deque.insertTail(...) }` 让**另一根线程去抢同一把锁**，最多等 400 ms：等不到 ⇒ 钩子在锁内。
+    - **修前**：`[ FAILED ]` —— `Assert Failed: (blockedWhileHookRan.load() == false)`，用例耗时 **2.01 s**
+      （钩子占着锁 400 ms，之后那根线程才拿到锁）；`PIN_EXIT=1`。
+    - **修后**：`[ PASSED ]`（耗时 **5.7 ms**，≈350×）；`FILTERED_EXIT=0`。
+    - **覆盖边界**：`selfCheck` 的两个告警点造不出确定性状态（warn 要求「有项、无人借出、且**所有**节点非 idle」，
+      而能顶采样计数的公开操作要么补一个 idle 节点、要么会走 `reconcileIfWedge` 把滞留项救回来）⇒
+      这两处只做**结构核对**（3 个调用点都不在 `synchronized` 块内）。
+  - 回归：`f_pool` 全量 **`PASSED: 63, SKIPPED: 0, ERROR: 0, FAILED: 0`**（含新用例）；下游见 §5。日志
+    `.autocode/tmp/pool_l1_verify.log`。
+- `POOL-L2` **`checkInterval = Duration.Max` 使巡检形同虚设** ✓已复核 → **✅已修复（2026-10-05，提交 `fd175da6`）**
+  - **改法**（两处，`f_pool/src/KeyPool.cj`）：① `startCheckingSchedule` 把 `Duration.Max` 与 `<= Duration.Zero` 同等对待 —— **不启用巡检就不起线程**（`Duration.Max` 的实际效果本来就是「永不巡检」，却白养一个 `sleep(Duration.Max)` 永不醒来、关池也叫不醒的线程；`BytesListOutputStream.builder` 的默认值正是它）；② 巡检「睡到下一轮」从 `sleep(checkInterval)` 换成**条件变量**（新增 `checkMutex`/`checkCond` + `waitNextRound()`），`close()` 里加一次 `notifyAll` ⇒ 关池后**立刻**醒来退出，不再 park 满一个周期（默认 1 分钟；`Duration.hour` 就得睡满一小时）。剩余时间按 `MonoTime` 计算（同 `POOL-L6` 的写法，不会溢出），虚假唤醒不会把周期拖长。
+  - **证据**：新用例 `maxIntervalMustNotStartCheckingThread`（20 个 `Duration.Max` 池，建/关之后线程数回基线）与 `closeMustInterruptCheckingSleep`（20 个 `Duration.hour` 池，`close()` 后 1.6s 线程数回基线）—— **修前两条都 `[ FAILED ]`**（`Assert Failed: (getThreadCount() <= before + 5 == true)`，都停在 `+20`），**修后两条 `[ PASSED ]`**；探针 `checkinterval`：修前 `max: 7→47→27`、`hour: 27→67→47`（第一批滞留 20 个巡检线程，第二批在此基础上再 +20），修后 `max: 7→27→7`、`hour: 7→47→7`（关池后全部回落 ✓）。全量 `f_pool` = **`PASSED: 60, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1（既有 `ORMConfig_test`）。日志 `.autocode/tmp/pool_l2_{all,post}.log`。
+  - **文档**：`KeyPool` 构造参数 / `KeyPoolBuilder.setCheckInterval` 的注释 + README 写明「`<= Duration.Zero` 或 `Duration.Max` = 不启用巡检（不占线程）」，「很慢但仍要巡检」请给很大的**有限**值。
+  - **残留 / 边界**：`Duration.Max` 的池本来就没有巡检 ⇒ 语义零回归（只是不再白养线程）；`POOL-7` 的「关池后最迟 1s 退出」对巡检线程升级成「立刻」，创建线程仍是 ≤1s。
+- `POOL-L3` **`HeadNode.nextForGet` 递归扫描**（`LinkedNode.cj:95-111`）✓已复核 → **❌误判（2026-10-06：不是递归，是「一跳委派 + 循环」）**
+  - **源码核对**：`HeadNode.nextForGet`（`:95-111`）遇到队首非 idle 的节点时只做**一次** `x.nextForGet()` 委派，
+    而接住这一跳的 `ValueNode.nextForGet`（`:236-262`）是 **`while` 循环**：
+    `var node = this.next; while(let x: ValueNode<T> <- node){ …; node = x.next; sleep(Duration.Zero) }`
+    ⇒ **调用栈深度恒为 1**，与「队首连续非 idle 的节点数」无关。报告那句「按节点数递归」与它自己的括号备注
+    （「`ValueNode.nextForGet` 自身是迭代的」）自相矛盾 —— 审计把「`x.nextForGet()` 这一跳」误读成了自递归。
+    反向的 `TailNode.prevForChecking`（`:129-144`）+ `ValueNode.prevForChecking`（`:208-228`）同型（一跳 + 循环）；
+    `countNodes()`（`:90-105`）也是循环。全文件没有自递归调用点。
+  - **实测（临时用例，跑完已删）**：`insertHead` + `strandHeadForTest()` 交替把 **200 万**个节点全变成非 idle（CHECKING），
+    再 `remove` 一次走完整条链 —— `l3depth: walked 2000000 non-idle nodes without stack overflow`（`[ PASSED ]`，
+    87 s —— 绝大部分是构造那 200 万个节点的开销）⇒ 与「迭代」的源码结论一致。
+  - **对照组（反向支持）**：同样 **200 万帧**的**手写非尾递归**也没爆栈（`[ PASSED ]`，1.6 s）⇒ 这个运行时的线程栈
+    对深调用并不敏感（可增长/很大）⇒ 即便真是递归，报告里「极端情况可加深调用栈」的严重度也远不到要改的程度。
+  - **结论**：不改代码（循环里每跳一次的 `sleep(Duration.Zero)` 是刻意的让出 CPU，不是问题）。日志
+    `.autocode/tmp/pool_l3_probe.log`。
+- `POOL-L4` **`selfCheck`/`audit` 的全队列遍历在锁内**：每 1e4 次操作一次 `countNodes()`（O(队列长度)，`SyncDeque.cj:59-74`、`227-254`）；长队列 + 高并发时是周期性长临界区。可只统计计数，或在锁外做快照核对。✓已复核 → **✅已修复（2026-10-06，提交 `7031a641`；按候选修法 ①）**
+  - **改法**（`f_pool/src/base/collection/SyncDeque.cj`）：
+    1. 新增 `nodes` 计数（挂在队列上的 `ValueNode` 数），**只在 `head.globalLock` 临界区里**与 `s`/`out` 一起维护 —— 插入 4 处（`insertHead`/`insertTail` `+s` 的同时 `+nodes`；`prepend`/`append` 只 `+nodes`，因为归还时 `s` 不变）＋被取走（`remove` 的 `nextForGet` 命中处）与校验不过摘掉（`check` 的 `onRemoved` 里，与 `s.fetchSub(1)` 同一临界区）各 −1。
+    2. `selfCheck` 改 **O(1)**：`s == nodes + out`（读三个原子量，仍在该锁内读，保证一致的快照）；原来那条「记着有项却一个也取不出来（`idle == 0`）」的告警**移除** —— 它的判据要数 idle 节点（O(n)），现在由同一条低频路径承担（取不到项时 `reconcileIfWedge()` 救回滞留项并打 `WEDGE-HEAL`）；巡检被关掉的池要等下一次取不到项才报，已写进 `selfCheck` 的文档注释。
+    3. `reconcileIfWedge()` 增加第 3 种对账（**原第 1/2 种不动**）：实走的 `total` 与 `nodes` 不符 ⇒ 记入 `healed`、`nodes.store(total)`、`onBookkeepingHealed()`、`actions += 1` ⇒ **全遍历成了低频 ground truth**（每次取不到项 + 每分钟的 `audit()`），计数的漂移会被报告并以实走为准修正。
+  - **实测（同参数：队列长度 10 / 500000，各 40 万次 insert+remove ⇒ 约 40 次采样）**：
+    | 队列长度 | 修前 | 修后 |
+    |---|---|---|
+    | 10 | 1.046 µs/op | 1.218 µs/op（噪声/多读一个原子量，可忽略） |
+    | 500 000 | **11.714 µs/op** | **2.036 µs/op** |
+    ⇒ 「长度带来的额外开销」从 ≈10.67 µs/op 降到 ≈0.82 µs/op（**−92%**）；单次采样不再握着锁走 50 万节点（原来 ~107 ms）。
+  - **用例**：`SyncDequeTest.testNodeCountMustNotDrift`（覆盖插入/取走/归还/校验不过丢弃/滞留救回之后，`audit()` 必须返回 0 = `nodes`/`s` 无需修正；随后 `strandHeadForTest()` + `audit() > 0` + 再 `audit() == 0`）。
+  - **回归**：`SyncDequeTest` 全 22 例 `[ PASSED ]`；`f_pool` 全量 **`PASSED: 64, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（既有 `ORMConfigTest`）。日志 `.autocode/tmp/pool_l4_{probe,verify,filter}.log`。
+  - **与 `POOL-L8` 的交互**：重复归还（同一对象还两次）依然是「节点 +1、`out` 不再减」⇒ `s != nodes + out` **照样被这条 O(1) 判据抓到**（判据从"每 1e4 次走一遍队列"变成"每 1e4 次读三个原子量"，检测能力不变）；随后 `reconcileIfWedge()` 仍会把 `s` 拉到含重复节点的值（= `POOL-L8` 的现状，未变）。
+  - **量化（2026-10-06，临时用例，跑完已删）**：固定 40 万次操作（insert+remove ⇒ 约 40 次采样），只改队列长度：
+    | 队列长度 | 总耗时 | 单操作 |
+    |---|---|---|
+    | 10 | 418.6 ms | **1.046 µs/op** |
+    | 500 000 | 4685.6 ms | **11.714 µs/op**（×11.2） |
+    ⇒ 差值 4267 ms / 40 次采样 ≈ **每次采样 ~107 ms**（`countNodes()` 走 50 万节点，分散访问 ≈ 200 ns/节点，主要是 cache/TLB miss）——
+    这 107 ms 是**握着 `head.globalLock`** 的：期间该 deque 的所有取还全部停摆，而且它跑在**发起操作的那根应用线程**上（不是后台线程）。
+  - **规模曲线（按 N × 213 ns / 1e4 摊销）**：N=1024（`DefaultCodec` 档）≈ 0.02 µs/op（相对 1 µs 基数 ≈ 2%，可忽略）；N=10 万 ≈ 2.1 µs/op（×3）；N=50 万 ≈ 10.7 µs/op（×11）⇒ **只有大池才明显**，但一旦明显就是"每次采样一次百毫秒级卡顿"。
+  - **触发点核对**：`selfCheck` 是**每个操作**都会累加 `opCount`（原子自增）⇒ 与流量成正比；`reconcileIfWedge` 只在「一个也取不到」时被调（列表为空 ⇒ O(1)；只有**全节点非 idle 的异常态**才会走 O(n) 的 `countNodes`+`reviveNonIdle`）；`audit()` 每分钟一次。⇒ 主要成本在 `selfCheck` 那条。
+  - **候选修法**（未实施）：① **O(1) 化**：新增「在锁内维护」的节点计数/空闲计数（`nodeCount`/`idleCount`），`selfCheck` 的两个判据都变成 O(1)，全遍历降级成"低频兜底"（`audit()` 每分钟一次 + 判据可疑时才走）；② **seqlock 式锁外快照**：锁外走一遍、再核对 `s`/`out`/结构纪元是否变过，变了就丢弃（或可疑时再进锁重做）—— 注意锁外走撕裂链可能**漏检/重复计数**，只能当"可疑信号"用，不能当结论。倾向 ①（简单、语义不退：全遍历仍是 ground truth，只是降频）。
+- `POOL-L5` **`get` 内定义局部函数** `keyedCheck`（基线 `KeyPool.cj:638-640`、`:593-595`；现在 `:684-690` 一版的局部函数）✓已复核 → **✅已修复（2026-10-06，提交 `aa64053c`；等价重构 + 微优化）**
+  - **改法（2026-10-06 拍板）**：把 `get`/`giveBack` 里的局部函数 `keyedCheck` 分别提成**实例成员函数**
+    `checkOnBorrow` / `checkOnReturn`（`KeyPool.cj:673-679`）。两个细节：
+    1. **返回类型必须是 `Bool`**：下层 `BaseKeyPool.get/giveBack` 的形参是 `(K, Ref<V>) -> Bool`，
+       写成 `Unit` 编译不过（实测 `error: mismatched types … expected '(…)-> Bool', found '(…)-> Unit'`）；
+    2. **方法值缓存**：直接写成 `pool.get(key, checkOnBorrow, …)` 会让每次调用现取一次绑定方法值 ⇒
+       在构造体里取一次存进 `checkOnBorrowFn`/`checkOnReturnFn`（`KeyPool.cj:244-245`、`:281-282`）。
+       仓颉限制：**不允许在「还有成员未初始化」时访问 `this`（含取方法值）** ⇒ 只能「字段先给哑值 →
+       所有成员就绪后再赋值」（`tasks = …` 之后那一行）。
+    3. 语义不变：`checkOnBorrowing`/`checkOnReturning` 仍在**调用时**读取（不是建方法值时固化）。
+  - **测量（诚实版）**：
+    - **闭包形态微基准**（探针 `closureshape`，同一进程内背靠背各 100 万次）：
+      **现场取 39 ns + 45 B / 复用 15 ns + 0 B** ⇒ 每借还两处各一次，量级 ≈ **48 ns + 90 B**；
+    - **端到端测不出差异**：`closurecost` 的 per-op 在 3.0–3.7 µs、`bytes_per_op` 在 3–350 B 之间大幅波动 ——
+      本机（WSL 上同时有其它 worktree 的构建）**噪声 ±10%，远大于 ≈2% 的信号**；
+    - **一次中间结论作废（记录以免误用）**：中途读到过「3.75 µs/op、348 B/op」的“回归”，事后查明是
+      机器负载（同批 wall 时间 605 ms → 873 ms）+ A/B 脚本在 WSL 里 `git checkout` **失败**（worktree 的 `.git`
+      指针是 Windows 路径，WSL 侧 git 认不出来）导致「A 组（改动前）」跑的其实是**同一份改动后代码** ⇒
+      那批对照数字不可用。**后续做性能对照必须：同进程微基准，或从 Windows 侧切换代码版本 + 取 user CPU 最小值。**
+    - ⇒ 结论：这条的价值是「**严格不更差** + 去掉热路径上每次现建的闭包/方法值」，**不是**可测的性能提升；
+      保留即可，不值得再花时间挖。
+  - 回归：`f_pool` 全量 **`PASSED: 62, SKIPPED: 0, ERROR: 0, FAILED: 0`**（`POOL_EXIT=0`）；下游 `f_codec` 16/16、
+    `f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（同上的既有 `ORMConfig_test`）。日志
+    `.autocode/tmp/pool_l5_{probe,verify,ab}.log`。
+  - **未做（登记为下一步）**：`BaseKeyPool.keyedChecker/keyedDestroier` 的柯里化闭包（每次 `get`/`giveBack`
+    各一个）与 `giveBack` 里的 `ref(key, object)` 同样每调用一次；`keyedDestroy` 的方法值也没进缓存
+    —— 要彻底去掉得改 `BasePool`/`SyncDeque` 的参数形状（把 key + 原回调直接传下去），改动面大。
+- `POOL-L6` **`waitChunk` 溢出** ✓已复核 → **✅已修复（2026-10-05，随 `315ada9e` 的等待重写一并消除；证据与防回归用例见提交 `37653f89`）**
+  - **诊断修正（2026-10-05 实测）**：不是「溢出成负 ⇒ 立即放弃」，而是**直接抛**
+    `ArithmeticException: Arithmetic overflow: result exceeds MonoTime range`（`std.time::MonoTime::+`，
+    `mono_time.cj:54` —— 内部带溢出检查、不回绕）。基线（`315ada9e^:f_pool/src/KeyPool.cj:446-456`）：
+
+    ```cj
+    private func waitChunk(waitStart: MonoTime): Duration {
+        if (maxWaiting == Duration.Max) {
+            return Duration.second                              // 精确 Max 档：1s 固定分片
+        }
+        let remain = waitStart + maxWaiting - MonoTime.now()    // ← 这里抛
+        if (remain <= Duration.Zero) { Duration.Zero } else { remain }
+    }
+    ```
+    调用点 `:478` 是 `waitChunk(...) && (remain <= Duration.Zero || !x.wait(remain))` ⇒ `break`；而 `get`
+    **没有 try** ⇒ 异常直接抛给调用方（`DefaultCodec.build()` 会吃到 `ArithmeticException` 而不是拿到 `None`）。
+  - **触发窗口（实测阈值）**：`MonoTime` 也是「秒 + 纳秒」结构、范围 ≈ `Int64.Max` 秒（≈2920 亿年）
+    ⇒ 只有「秒级分量接近 `Int64.Max`」才爆。探针 `hugearn`（同一条表达式，不涉及池）：
+
+    | `maxWaiting` | 基线加法式 | 现在的减法式 |
+    |---|---|---|
+    | 30s | ✓ | ✓ |
+    | `1e12 s`（~3.17 万年） | ✓ | ✓ |
+    | `1e15 s`（~3170 万年） | ✓ | ✓ |
+    | `Duration.Max - 1ns` | **抛 `ArithmeticException`**（进程 exit 1） | ✓ |
+
+    精确 `maxWaiting == Duration.Max` 被 `:447` 挡掉（走 1s 分片），所以那时能踩的只有「`Duration.Max` 附近
+    的**有限**值」= 最容易被当成「几乎无限」的写法。**仓库内不触发**：`DefaultCodec` 30s（两处）、`f_orm`
+    配置默认 30s、测试用 `Duration.hour` / 精确 `Duration.Max`。
+  - **现在为什么安全**（`315ada9e` 起，`KeyPool.cj:670-685`）：只做**减法** `limit - (MonoTime.now() - waitStart)`，
+    且 `infinite`（`limit == Duration.Max`）档**根本不做算术**（`remain = Duration.Max` ⇒ `waitItem` 走无超时
+    `wait()`）；每轮重算 + 不再分片 ⇒ `POOL-5`「分片被当成截止」也一并消失。`waitNextRound`（`POOL-L2` 新增）
+    用的是同一套减法式（其注释就引用本条）。
+  - **残量已排查（实测排除）**：巨值有限 `remain` 会原样进 `Condition.wait(timeout: remain)` —— 探针 `condwait`：
+    `wait(timeout: Duration.Max - 1ns)` 线程**一直睡着、不抛**（std 对巨值时长是饱和而非溢出；对照
+    `wait(timeout: 50ms)` = 60ms 返回）。语义正确：「几乎无限睡、靠 `notify` 醒」，而 `close()` / `giveBack` /
+    建项完成都会 `notifyAll`。
+  - **防回归用例**：`KeyPoolTest.hugeFiniteMaxWaitingMustNotOverflow`（`maxWaiting: Duration.Max - Duration.nanosecond`
+    + creator 睡 1.5s + `get(timeout: Duration.Max)` 必须 `Some` 且 `elapsed >= 1.4s`）——
+    **钉失败**：把 `remain` 算式换回基线加法式 ⇒ `[ ERROR ]`（`REASON: An exception has occurred: ArithmeticException:
+    Arithmetic overflow: result exceeds MonoTime range.`，`PIN_EXIT=1`）；**现在的代码**：`[ PASSED ]`（1.51s），
+    `f_pool` 全量 **`PASSED: 62, SKIPPED: 0, ERROR: 0, FAILED: 0`**（`POOL_EXIT=0`）。这条用例的价值 = 把
+    「不许再对 `MonoTime` 做加法」钉死。
+  - 日志：`.autocode/tmp/pool_l6_hugearn.log`、`pool_l6_condwait.log`、`pool_l6_regress.log`。
+- `POOL-L7` **`ArrayPool.giveBack` 拒绝尺寸不符的数组时既不销毁也不告警**（`f_pool/src/ArrayPool.cj:60-67`）✓已复核 → **✅已修复（2026-10-05，提交 `81476d9a`）**
+  - **口径（2026-10-05 拍板）**：尺寸不符 = 应用层 BUG ⇒ **抛异常**（不是「记一条计数就算」）。抛出即表示**这次没有归还**：数组仍在调用方手里（池无权销毁它），借出它的那个池的那份额度也不会结清 —— 与 `POOL-10`/`POOL-12` 同一套口径（`giveBack` 抛异常 = 没归还）。
+  - **改法**：`ArrayPool.giveBack` 的签名 `Bool` → `Unit`（一旦不符就抛，`Bool` 只可能是 `true`，留着是误导；顺带与 `ArrayListPool.giveBack(list): Unit` 对齐），不符时抛 `f_exception.IllegalSizeException`（现成的 `f_base.BaseException` 子类；`f_io/src/f_io.cj:55` 有同类「尺寸不符」先例），消息带期望/实际尺寸；另记一条 `PoolDiagnostics.onReturnRejected()`（新计数 `returnRejected`，进 `snapshot()` 与 `anomalySignature()`）—— 应用层即便把异常吞了，下一次 `reportIfChanged`/退出报告也会带出这个计数。
+  - **调用方零改动**：仓库内两个归还点（`f_codec/src/default/DefaultCodec.cj:1018`、`f_pool/src/BytesCopier.cj:73`）都是 `finally { pool.giveBack(buf) }` 的语句用法、**本来就忽略返回值** ⇒ 改成 `Unit` 不影响它们；`git grep` 确认全仓没有把返回值用在条件/表达式里的地方。
+  - **证据**：新用例 `KeyPoolTest.arrayPoolWrongSizeReturnMustThrow`（借 128 的数组 → 归还 64 的 ⇒ 断言抛 `IllegalSizeException`、`returnRejected` +1、那一项确实没回来（`get` 为 `None`）、尺寸正确的归还照常工作）—— **修前** `[ FAILED ]`（`Assert Failed: (before >= 0 == true)`：那一刻的快照里根本没有这个计数；旧实现静默 `return false`）⇒ `PRE_EXIT=1`；**修后** `[ PASSED ]`，`f_pool` 全量 **`PASSED: 61, SKIPPED: 0, ERROR: 0, FAILED: 0`**。
+  - **探针 `arraymismatch`**（`ArrayPool<Byte>(arraySize: 1024, maxSize: 1)`）：**修前** `threw=false`、快照里没有 `returnRejected`；**修后** `threw=true msg=ArrayPool.giveBack: expected an array of 1024, got 64 — the array was NOT returned (it is still yours)`，快照 `… borrow=1 return=0 destroy=0 … returnRejected=1 …`，`borrow_again=false`（那份额度确实被占住）。
+  - **残量（登记）**：与 `POOL-10`/`POOL-12` 同机制 —— 「没归还」= 那一项继续记在 `out` 上；这里**可恢复**：调用方把**真正借出的**那个数组还回来即可（用例里演示了）。尺寸不符的那个外来数组由调用方自己处置（池不销毁）。
+  - 下游回归：`f_codec` 16/16（`ArrayPool` 的直接使用方）、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（既有、无关）；日志 `.autocode/tmp/pool_l7_{all,probe}.log`。
+  - **顺带登记的耦合**（不在本条范围）：`BytesCopier.cj:76` 池借不到时的回退缓冲把 `4096` 写死了，而 `ArrayPool.arraySize` 是可配的（`DefaultCodec.setBufferPool` 会改它）—— 那条路径不归还所以不触发本条，但「4096」这个耦合值得单独一条。
 - `POOL-L8` **重复归还的记账补充**（§7.3 的延续）：`markReturned` 的 `if (out.load() > 0)` 守卫（`SyncDeque.cj:80-84`）让「多还一次」只扣 `out`、不扣节点数 ⇒ `s` 与 `节点数+out` 双向脱钩（`out` 变小、节点数变大），自愈会把 `s` 拉高到含重复节点的值，重复节点此后可能被两个借用者同时持有。维持 §7.3 的「不改，靠自检告警 + `Releasable.release()` 幂等 + 调用方纪律」即可，这里只补记账侧的证据。
 - `POOL-L9` **`WeakFifo/WeakLifo` 的值类型路径**：值类型会被 `Box<T>` 包一层再交给 `WeakRef<Object>(box, DEFERRED)`（`SyncDeque.cj:331-338`），而 `box` 只被弱引用持有 ⇒ 池项可能立刻被回收（`refChecker` 返回 false ⇒ 当作失效项销毁）。当前仓库无调用方（README 已注明），仅登记。
 
@@ -461,6 +731,32 @@ useafterrelease: second_is_empty=false second_bytes=5
 > `POOL-3` 修复后的复测：探针 `churn` 的场景改由单测钉住 —— `checkMustNotDropIdleItemWhenAtCap`（满载空闲跑 ~10 轮巡检后仍可借 2 件、creator 仍只调 2 次；修前 `held.size == 2` 断言失败）与 `checkerMustRunWhenAtCap`（满载时用户 checker 必须被调用；修前 `calls.load() > 0` 断言失败）。全量 `cjpm test` = **`PASSED: 44, SKIPPED: 0, ERROR: 0, FAILED: 0`**（日志 `.autocode/tmp/pool_fix3_{pre,post}.log`）。
 
 > `POOL-7` 修复后的复测：`closeMustReclaimInternalThread`（建/关 20 个池后线程数回落到基线；修前 `after <= before + 5` 断言失败）与探针 `main threads` 的同一读数（修前 `7->27->27 / blocking 6->26->26`）。全量 `cjpm test` = **`PASSED: 45, SKIPPED: 0, ERROR: 0, FAILED: 0`**（日志 `.autocode/tmp/pool_fix7_{pre,post}.log`）。
+
+> `POOL-8` 修复后的复测：`arrayPoolDefaultsMustConstruct`（默认参数下的 `ArrayPool`/`ArrayListPool` 能构造 + 借还；修前该用例直接 OOM、进程 EXIT=1）。全量 `cjpm test` = **`PASSED: 46, SKIPPED: 0, ERROR: 0, FAILED: 0`**（日志 `.autocode/tmp/pool_fix8_{pre,post}.log`）；探针 `queue_alloc` 的 +80MB 是**修前基线**（修后队列固定 ≤1024 槽）。
+
+> `POOL-9` 修复后的复测：`writeAfterReleaseMustThrow` / `readOrCopyAfterReleaseMustThrow`（修前分别断言 `threw == true`、`asBytesThrew == true` 失败）。全量 `cjpm test` = **`PASSED: 48, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62 全绿（日志 `.autocode/tmp/pool_fix9_{pre,post,post2}.log`）。
+
+> `POOL-10` 修复后的复测（口径：抛 `UnknownKeyException`，池不销毁、不建池）：三条新用例修前全 `[ FAILED ]`（`threw.isSome() == true` / `caught.isSome() == true` / `thrown == true`，左侧都是 `false`）⇒ `PRE_FILTERED_EXIT=1`，修后 `[ PASSED ]`；全量 `cjpm test` = **`PASSED: 51, SKIPPED: 0, ERROR: 0, FAILED: 0`**。探针 `unknownkey`：修前 `thrown=false destroyed_immediate=0 borrow_again=false key_alive=true`，修后 `thrown=true key=k2 destroyed_immediate=0 borrow_again=false`；两次 `gc()`×3 后 `destroyed_after_gc=1`（应用层丢掉不管时仍由 `Ref` 终结器兜底 —— 与修前的区别是应用层**已经收到通知**）。下游 `f_codec` 16/16、`f_protocol` 62/62 全绿；`f_orm` `PASSED: 32, ERROR: 1`，唯一 ERROR 是 `ORMConfig_test.testPoolMaxWaiting`（`Config` 里 `orm_databasePoolMaxWaiting='abc'`，按该用例注释应「非法值退回默认 30s」，实际 `f_data.base.Duration.tryParse` 抛 `DataParsableException`）—— 栈里没有 `f_pool`，与本次改动无调用关系，属 f_orm / f_config 侧既有问题，在此登记备查（日志 `.autocode/tmp/pool_fix10_{pre,all,post2}.log`）。
+
+> `POOL-11` 修复后的复测（口径：`KeyPool.remove(key)` 摘键 + `close()` 销毁全部并清空键表 + 删除 `destroy`）：**修前** ① 新用例**编译不过**（`error: 'remove' is not a member of class 'KeyPool<Struct-String, Class-Object>'`、`error: 'keyCount' is not a member of …`、`error: extra argument given for parameter list '(Enum-Mode, Int64)'`）；② 源码回 HEAD 后用临时用例 `headDestroyLeavesKeyTableBehind` 钉住「键表不清空」：`[ FAILED ]`（`Assert Failed: (keys == 0)` —— `BaseKeyPool.destroy` 跑完 k1/k2 还在键表里）。**修后**：新/改动用例 `PASSED: 9, SKIPPED: 47, ERROR: 0, FAILED: 0`；全量 **`PASSED: 56, SKIPPED: 0, ERROR: 0, FAILED: 0`**（含原 `giveBackRacingCloseMustNotStrandItem` 的 100 轮「归还 ‖ 关池」—— 归还竞态的兜底已从 `KeyPool.giveBack` 移到底层，见 §2.1 的后续修订）；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（同上的既有 `ORMConfig_test`）。日志 `.autocode/tmp/pool_fix11_{pre,pre2,all,post}.log`。
+
+> `POOL-12` 修复后的复测（口径：`clear` 失败 ⇒ 抛 `ClearFailedException`，**这次归还没有发生**）：**修前**（`KeyPool.cj` 回退到 `review/f_pool` 已提交版）`clearFailureMustNotCountAsReturned` `[ FAILED ]`（`Assert Failed: (caught.isSome() == true)` —— 抛的是回调自己的裸异常）⇒ `PRE_EXIT=1`；**修后**该用例 `[ PASSED ]`，全量 **`PASSED: 57, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（同上的既有 `ORMConfig_test`）。日志 `.autocode/tmp/pool_fix12_{pre2,all}.log`。
+
+> `POOL-L7` 修复后的复测（§3；口径：`ArrayPool.giveBack` 尺寸不符 ⇒ 抛 `IllegalSizeException`，这次不算归还）：**修前** `arrayPoolWrongSizeReturnMustThrow` `[ FAILED ]`（`Assert Failed: (before >= 0 == true)` —— 旧快照里没有 `returnRejected` 这个计数，旧实现静默 `return false`）；探针 `arraymismatch` 修前 `threw=false`。**修后**该用例 `[ PASSED ]`；探针 `threw=true msg=…expected an array of 1024, got 64…` + `returnRejected=1`（快照 `borrow=1 return=0`）；全量 **`PASSED: 61, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（同上的既有 `ORMConfig_test`）。日志 `.autocode/tmp/pool_l7_{all,probe}.log`。
+
+> `POOL-L2` 修复后的复测（§3；口径：`Duration.Max` = 不启用巡检 ⇒ 不起线程；巡检睡眠改条件变量）：**修前**两条新用例 `maxIntervalMustNotStartCheckingThread` / `closeMustInterruptCheckingSleep` 都 `[ FAILED ]`（`getThreadCount() <= before + 5`，各停在 `+20`）⇒ `PRE_EXIT=1`；探针 `checkinterval` 修前 `max: 7→47→27`、`hour: 27→67→47`。**修后**两条 `[ PASSED ]`；探针 `max: 7→27→7`、`hour: 7→47→7`（关池后全部回落）；全量 **`PASSED: 60, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（同上的既有 `ORMConfig_test`）。日志 `.autocode/tmp/pool_l2_{all,post}.log`。
+
+> `POOL-L4` 修复后的复测（§3；口径：`nodes` O(1) 计数 + `selfCheck` 改 O(1) + 全遍历降级为低频 ground truth）：同参数（队列 10 / 500000，各 40 万次 insert+remove）**修前** 1.046 / **11.714** µs/op ⇒ **修后** 1.218 / **2.036** µs/op（长度带来的额外开销 −92%，单次采样不再持锁走 50 万节点）；新用例 `testNodeCountMustNotDrift`（`audit()` 对账必须为 0）`[ PASSED ]`；`SyncDequeTest` 22 例全绿；`f_pool` 全量 **`PASSED: 64, SKIPPED: 0, ERROR: 0, FAILED: 0`**（`POOL_EXIT=0`）；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（既有）。日志 `.autocode/tmp/pool_l4_{probe,verify,filter}.log`。
+
+> `POOL-L3` 误判取证（§3；结论：**不是递归**）：源码核对 —— `HeadNode.nextForGet` 对非 idle 的队首只做一次委派，`ValueNode.nextForGet`（`LinkedNode.cj:236-262`）是 `while` 循环（反向的 `prevForChecking` 同型）⇒ 栈深恒为 1。临时用例（跑完已删）：`insertHead` + `strandHeadForTest()` 交替造 **200 万个**非 idle 节点后 `remove` 走完整链 ⇒ `l3depth: walked 2000000 non-idle nodes without stack overflow`（`[ PASSED ]`，87 s）；对照组「200 万帧手写非尾递归」同样 `[ PASSED ]`（1.6 s，说明这个运行时的线程栈对深调用不敏感）。日志 `.autocode/tmp/pool_l3_probe.log`。
+
+> `POOL-L1` 修复后的复测（§3；口径：告警钩子移出 `head.globalLock` —— 锁内只拼消息、锁外发）：判别用例 `SyncDequeTest.testWarningHookMustRunOutsideDequeLock`（钩子执行期间让另一根线程抢同一把锁，等不到 ⇒ 钩子在锁内）—— **修前** `[ FAILED ]`（`Assert Failed: (blockedWhileHookRan.load() == false)`，用例耗时 **2.01 s**）⇒ `PIN_EXIT=1`；**修后** `[ PASSED ]`（**5.7 ms**，≈350×）⇒ `FILTERED_EXIT=0`。`f_pool` 全量 **`PASSED: 63, SKIPPED: 0, ERROR: 0, FAILED: 0`**（`POOL_EXIT=0`）；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（既有的 `ORMConfig_test`）。日志 `.autocode/tmp/pool_l1_verify.log`。
+
+> `POOL-L5` 修复后的复测（§3；口径：局部函数 → 实例成员函数 `checkOnBorrow`/`checkOnReturn` + 构造期方法值缓存）：**无判别用例**（纯性能/结构），证据是探针 —— 形态微基准 `closureshape`：现场取闭包 39 ns + 45 B vs 复用 15 ns + 0 B（同进程、各 100 万次）；端到端 `closurecost` 的 per-op/bytes_per_op 被本机噪声淹没（3.0–3.7 µs、3–350 B/op 波动），**且中途一次「回归」读数经查是负载 + A/B 脚本 WSL 侧 `git checkout` 失败所致，作废**。回归：全量 **`PASSED: 62, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（既有）。日志 `.autocode/tmp/pool_l5_{probe,verify,ab}.log`。
+
+> `POOL-L6` 结案（§3；诊断修正：**不是「溢出成负」，是抛 `ArithmeticException`**）：基线 `waitChunk` 的 `waitStart + maxWaiting - MonoTime.now()` 在 `maxWaiting` 取 `Duration.Max` 附近的**有限**值时抛 `std.time::MonoTime::+` 的溢出异常（探针 `hugearn`：`30s` / `1e12s` / `1e15s` 都正常，`Duration.Max - 1ns` 抛 `ArithmeticException: Arithmetic overflow: result exceeds MonoTime range` 并 exit 1）；这条路在 `315ada9e` 的等待重写里已经变成**纯减法** `limit - (now - waitStart)` + 无限档不做算术，`waitNextRound` 同理 ⇒ 代码无需再改。残量也实测排除：巨值有限 `remain` 交给 `Condition.wait(timeout:)` 是**睡着**不是溢出（探针 `condwait`）。新增防回归用例 `hugeFiniteMaxWaitingMustNotOverflow`：算式换回加法式 ⇒ `[ ERROR ]`（`ArithmeticException`，`PIN_EXIT=1`）；现有代码 ⇒ `[ PASSED ]`（1.51s），全量 **`PASSED: 62, SKIPPED: 0, ERROR: 0, FAILED: 0`**（`POOL_EXIT=0`）。日志 `.autocode/tmp/pool_l6_{hugearn,condwait,regress}.log`。
+
+> `POOL-13` 修复后的复测（口径：`atExit` 闭包只持弱引用）：**修前**探针 `exitweak`（`KeyPool.cj` 回退到 `review/f_pool` 版）`collected=false`（池回收不掉 —— atExit 强持有）；**修后**同一探针**仍 `collected=false`**，因为持有者变成了维护线程的闭包（运行时保留已结束线程的闭包，探针 `threadhold`：不 join / join 都一样），**这一条是运行时行为、本次修不掉**，已在 §2.8 登记为残量；机制面用探针 `weakclosure` 正向验证（全局表里的弱引用闭包不钉住对象）。用例侧：`closedPoolStillPinnedByWorkerThreadClosure` 把残量钉成断言（现在断言「还活着」），全量 **`PASSED: 58, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR。日志 `.autocode/tmp/pool_fix13_{probe..probe4,final}.log`。
 
 复跑方式（WSL Ubuntu-24.04）：`source /mnt/d/docs/work/cangjie/cangjie.sh` → `cd .autocode/tmp/pool_probe && cjpm build` → 按脚本里的 `LD_LIBRARY_PATH`（各 `target/release/*@*` 目录**排在 `installed/libs/fboot` 之前**）直接跑 `target/release/bin/main <mode>`，用 `time -p` 量 CPU。
 

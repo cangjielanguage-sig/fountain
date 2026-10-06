@@ -21,13 +21,20 @@ import std.io.OutputStream
 public class BytesListOutputStream <: OutputStream & BytesCopyTo & Releasable {
     private var released = false
     BytesListOutputStream(private let list: ArrayList<Array<Byte>>, private let pool: ArrayListPool<Array<Byte>>){}
+    /**
+     * 归还之后的缓冲**不得再用**：`release()` 已经把底层 list 还进池里，再写就会把内容留在池项上，
+     * 被下一个借用者当成自己的字节（见 .autocode/bugs/bug-pool.md §2.4 `POOL-9`）。
+     * 读/复位同理 —— 读到的是别人的数据、清掉的是别人的数据。
+     */
+    private func checkNotReleased(): Unit {
+        if(released){
+            throw IllegalStateException('bytes list output stream is released')
+        }
+    }
     public func write(bytes: Array<Byte>): Unit {
+        checkNotReleased()
         list.add(bytes)
     }
-    /**
-     * 归还从池中借出的 list。**幂等**：重复调用无副作用。
-     * 注意：无论是否写出，都必须调用（或调用 copy），否则池项泄漏。
-     */
     /** 待写字节数。 */
     public func byteSize(): ?Int64 {
         var n = 0i64
@@ -38,6 +45,7 @@ public class BytesListOutputStream <: OutputStream & BytesCopyTo & Releasable {
     }
     /** 把待写内容拼接成一个数组（不改变/不释放本缓冲）。 */
     public func asBytes(): ?Array<Byte> {
+        checkNotReleased()
         if (let Some(n) <- byteSize()) {
             let out = Array<Byte>(n, repeat: 0u8)
             var off = 0i64
@@ -60,8 +68,14 @@ public class BytesListOutputStream <: OutputStream & BytesCopyTo & Releasable {
     }
     /** 复位：丢弃待写内容。仅供池的借用方在检出脏缓冲时兜底使用。 */
     public func reset(): Unit {
+        checkNotReleased()
         list.clear()
     }
+    /**
+     * 归还从池中借出的 list。**幂等**：重复调用无副作用（`copy` 的 `finally` 也靠它兜底），
+     * 所以它自己**不**受 `checkNotReleased` 约束。
+     * 注意：无论是否写出，都必须调用（或调用 copy），否则池项泄漏。
+     */
     public func release(): Unit {
         if(released){
             return
@@ -70,6 +84,7 @@ public class BytesListOutputStream <: OutputStream & BytesCopyTo & Releasable {
         pool.giveBack(list)
     }
     public func copy(to!: OutputStream, closeFromOnEnd!: Bool = true, closeToOnEnd!: Bool = false): Unit {
+        checkNotReleased()
         try{
             for(bytes in list){
                 to.write(bytes)
