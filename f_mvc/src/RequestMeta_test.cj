@@ -123,6 +123,18 @@ class RequestMeta_respond_test {
         @Assert('NotAcceptable', respondKind(true, Some('')).toString())
     }
 
+    /**
+     * §3.2 / `MVC-14`：请求出口清理接缝（HTTP / 404·静态资源 / WS 三条出口共用）确实把请求级 status 清掉 ——
+     * WS 闭包接上它之后，「握手被拒」留下的 406 不会再串给同线程的下一个请求的 accessLog。
+     */
+    @TestCase
+    public func testFinishRequestClearsRequestState(): Unit {
+        RequestMeta.setResponseStatus(HttpStatus.NOT_ACCEPTABLE)
+        @Assert(HttpStatus.NOT_ACCEPTABLE.value, RequestMeta.getResponseStatus())
+        finishRequest()
+        @Assert(HttpStatus.OK.value, RequestMeta.getResponseStatus())
+    }
+
     /** `Resource` 结果被关闭（恰好一次） */
     @TestCase
     public func testResourceIsClosed(): Unit {

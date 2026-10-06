@@ -219,10 +219,8 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                 } handle (cmd: BreakingCommand) {
                     respond(MVCBreakingCommand(cmd.data), ctx)
                 } finally {
-                    CurrentHttpContext.clear()
-                    // §2.6 / MVC-8：请求出口统一清请求级 ThreadLocal，避免串到同线程的下一个请求
-                    clearResponseStatus()
-                    OverallStopwatch.clearStart()
+                    // §2.6 / MVC-8 + §3.2 / MVC-14：请求出口统一清请求级 ThreadLocal（三条路径共用同一接缝）
+                    finishRequest()
                 }
         }
     }
@@ -278,7 +276,14 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
     }
     func setHandle<T>(wsmeta: WSMeta<T>) where T <: Object {
         this.handle_ = {
-            ctx => wsmeta.`handle`(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern.getOrThrow())
+            ctx =>
+                try {
+                    CurrentHttpContext.set(ctx)
+                    wsmeta.`handle`(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern.getOrThrow())
+                } finally {
+                    // §3.2 / MVC-14：WS 出口与 HTTP / 404 出口对齐 —— 会话期（或握手被拒后立即返回）结束时清请求级状态
+                    finishRequest()
+                }
         }
         produces.add('*')
         consumes.add('*')
@@ -627,6 +632,19 @@ func respondKind(emptyResult: Bool, accept: ?String): RespondKind {
  * 包内接缝（§2.5 / `MVC-C2`）：结果实现 `Resource` 时关闭它；关闭失败不抛，回传异常由调用方记录。
  * `respond<R>` 在 `finally` 里调用它 ⇒ 无论走 body 渲染、406 还是空结果分支都会关闭。
  */
+/**
+ * 包内接缝（§2.6 / `MVC-8` + §3.2 / `MVC-14`）：**请求出口清理** —— 三条请求出口路径
+ * （HTTP 闭包、404/静态资源轻量 handler、WS 闭包）共用，避免任一条漏清而把请求级状态
+ * （`CurrentHttpContext` / `currentResponseStatus` / `OverallStopwatch` 起点）串给同线程的下一个请求。
+ * 背景：`MVC-13` 打通 WS 路由后，WS 闭包成了唯一不收尾的出口（详见 §3.2 `MVC-14`）。
+ * 单测：`RequestMeta_test.testFinishRequestClearsRequestState`。
+ */
+func finishRequest(): Unit {
+    CurrentHttpContext.clear()
+    RequestMeta.clearResponseStatus()
+    OverallStopwatch.clearStart()
+}
+
 func closeResultIfResource(result: Any): ?Exception {
     if (let r: Resource <- result) {
         try {
@@ -672,9 +690,8 @@ class StaticResourceOrNotFoundHandler <: HttpRequestHandler {
             RequestMeta.log.warn{'RequestMeta.handle.Not Found:${path} ${ctx.request.headers.getFirst('Accept')}'}
             RequestMeta.NOT_FOUND.`handle`(ctx)
         } finally {
-            // §2.6 / MVC-8：404 / 静态资源这条路径同样要清请求级 ThreadLocal
-            RequestMeta.clearResponseStatus()
-            OverallStopwatch.clearStart()
+            // §2.6 / MVC-8 + §3.2 / MVC-14：404 / 静态资源这条路径同样清请求级 ThreadLocal（与另两条出口共用接缝）
+            finishRequest()
         }
     }
 }
