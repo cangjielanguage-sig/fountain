@@ -250,11 +250,12 @@ public interface RootDAO {
         }
     }
     func arg(value: Any): String {
-        // bug.md §2.14（ORM-7）：分支按绑定频率排序（与 arg<I,T>、SqlExecutor.add<T> 同序）；
-        // Data 是包装类型（DataString/DataReal… 不与非标量类型重叠），保持置首。
+        // bug.md §2.14（ORM-7）：分支按绑定频率排序（与 arg<I,T>、SqlExecutor.add<T> 同序）。
+        // bug-orm.md ORM-N3：`case x: Data` 必须排在标量/可空分支之后——该接口模式的运行时检查对「非 Data 值」
+        // 极贵（实测 Any 持 Int64 时 ≈12µs/次、持 String 时 ≈1.2µs/次，且并不匹配它们，纯白付），
+        // 排在首位会让每个标量绑定都先付这笔钱；Data 是包装类型（DataString/DataReal…），不会命中标量分支。
         // 原位序里 Float16/?Float16 各出现两次，第二次恒不可达，本次重排一并去掉。
         match(value){
-            case x: Data => arg(x)
             case x: Int64 => arg(x)
             case x: String => arg(x)
             case x: DateTime => arg(x)
@@ -300,6 +301,7 @@ public interface RootDAO {
                 case Some(y) => arg(y)
                 case _ => argNull()
             }
+            case x: Data => arg(x)
             case x => throw SqlArgException('${TypeInfo.of(x)} does not support for sql arg')
         }
     }

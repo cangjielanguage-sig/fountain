@@ -2,7 +2,7 @@
 
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
-- **本模块条目 26 条**：严重 3（§1.1 `ORM-1`、§1.5 `ORM-C1`、§1.13 `ORM-2`）、中 7（§2.1 `ORM-C2`、§2.8 `ORM-C5`、§2.10 `ORM-3`、§2.11 `ORM-4`、§2.12 `ORM-5`、§2.13 `ORM-6`、§2.14 `ORM-7`）、低危+待验证 14（§3.1/§3.2）、本会话新增 2（§3.3 `ORM-N1` 性能、`ORM-N2` 正确性）。
+- **本模块条目 27 条**：严重 3（§1.1 `ORM-1`、§1.5 `ORM-C1`、§1.13 `ORM-2`）、中 7（§2.1 `ORM-C2`、§2.8 `ORM-C5`、§2.10 `ORM-3`、§2.11 `ORM-4`、§2.12 `ORM-5`、§2.13 `ORM-6`、§2.14 `ORM-7`）、低危+待验证 14（§3.1/§3.2）、本会话新增 3（§3.3 `ORM-N1` 性能、`ORM-N2` 正确性、`ORM-N3` 性能）。
 - **状态（截至 2026-10-05）**：`ORM-1` ✅已修复（§1.1）、`ORM-C1` ✅已修复（§1.5）、`ORM-C2` ✅已修复（§2.1）、`ORM-2` ✅已修复（§1.13，严重｜性能，分支 `fix/orm`）；`ORM-C5` ❌误判（§2.8，非缺陷：`argInSql` 是设计目的，已补 README §11.5 说明与口径用例）；`ORM-3` ⏸决定不修（§2.10，已知开销保留：否决「加静态集合」与「就地复位」两方案）；`ORM-4` ⏸决定不修（§2.11，借连接校验与默认值均不改、语句复用经四家驱动源码调研后判定不值得在 f_orm 层做）、`ORM-5` ✅已修复（§2.12，正则预编译）；`ORM-6` ◐部分修复（§2.13，逐元素分派按频率重排；实测批量路径大头在拼串/闭包/装箱，剩余转 §3.3 `ORM-N1`）、`ORM-7` ◐部分修复（§2.14，同批重排三处 match）；**待修** §3 的 14 条低危/待验证（`ORM-L3` 已随 §1.13 一并消掉；`ORM-C3`：`SqlArgs.clone()` 仍共享同一 `ArrayList`，未随 §1.1 一并处理）、§3.3 新增 2 条（`ORM-N1` ◐部分修复（2026-10-06：N1a 拼接次数已修；N1b/N1c 待定）；`ORM-N2` ✅已修复（2026-10-06）：`Float32` 静默丢参已修、`setValue` 兜底补 `throw`）。
 
 ## 1. 严重（本模块 3 条）
@@ -260,7 +260,7 @@
 - `ORM-L9` `SqlExecutor.cj:366-385`：`connection` getter 在 `Connecting` 状态用 `while ... continue` 忙等（无 sleep/yield/超时）。**验证**：驱动是否会出现长时间异步建连。
 - `ORM-C6` `SqlArg.cj:426-448`（`InputStreamSqlArg` 把流交给驱动后模块内不关闭）、`QueryMapperConverter.cj:48-50`（`StringReader(x).readToEnd()` 未关闭）。**验证**：所有权约定（驱动/调用方是否负责关闭），否则是句柄泄漏路径。
 
-### 3.3 本会话新增（2 条 + 1 条未定级观测，2026-10-05；`ORM-N1` ◐N1a 于 10-06 已修、`ORM-N2` ✅已于 10-06 修复）
+### 3.3 本会话新增（3 条，2026-10-05/06；`ORM-N1` ◐N1a 已修、`ORM-N2`/`ORM-N3` ✅已修）
 
 - `ORM-N1`（**中｜性能，新增**）批量条件/参数构造的每元素成本大头不在**类型分派**（§2.13 重排后批量路径总成本几乎未动即证），而在**拼接**（`StringGenerator.append`）+ 泛型迭代 + `add(Any)` 分派。**修正**：原判断里「`IN` 的拼串是大头」不成立——`IN` 用的是 std `StringBuilder`（每次 append 仅 ≈8ns），它的成本是「泛型 `add(Any)` 大 match ≈86ns + 泛型迭代 ≈82ns」；真正被拼接拖住的是 `arg<I,T>` 与 `LoopCondition.done()`。
   - **构件微基准**（`.autocode/tmp/orm_n1_micro_probe.cj`，N=200000，`cjc` 默认优化 / `-O2`）：std `StringBuilder.append` 8/9ns；`StringGenerator.append` 的配方（`ArrayList<Byte>.add(all: 1字节)`）**78/25ns**、再加 `'?'.toArray()` 后 **102/47ns**；`ArrayList<Int64>.add` 33/11ns；元组+装箱 12/~0；闭包调用 11/~0 ⇒ **每次 `StringGenerator.append` 比 std `StringBuilder.append` 贵 5–12 倍**，根因是它用 `ArrayList<Byte>` 当缓冲、逐次按字节搬运（`f_base/src/StringGenerator.cj:49-52`）。
@@ -280,7 +280,15 @@
   - **证据（自制 `Statement` 记录器，不依赖 MOCKDB：直接 `SqlArgs.set(recorder)` 后数 set/setNull 调用）**：修复前 `SqlArgs.add(Float32)`→`calls=0 []`、`Float32SqlArg(0, f32)`→`calls=0 []`、`SqlArg.new(Float32)`→`calls=0 []`；对照 `add(Float16)`→`set<Float32>(0)`、`add(Float64)`→`set<Float64>(0)`、`add(String)`→`set<String>(0)` 各 1 次。修复后 Float32 三项均为 1 次 `set<Float32>(0)`。
   - **用例**：`wrap/SqlArgBinding_test.cj`（wrap 层，被测对象即 `SqlArgs`/`SqlArg`）：18 个类型逐一断言「恰好一次 `Statement.set<T>`」+ `addNull`→`setNull`；负例 `MismatchSqlArg`（故意让 `T` 与值类型不符）断言必须抛 `SqlArgException`。`base/SqlExecutorArgBranches_test.cj` 的 `Float32` 已加回矩阵。
   - **验证**：`cjpm build` exit 0；`cjpm test` **TOTAL 55 / PASSED 54 / FAILED 0 / ERROR 1**（唯一 ERROR 仍是既有环境相关 `ORMConfigTest.testPoolMaxWaiting`）。
-- **未定级观测（`ORM-7` 同批发现，待定是否单独立条）**：`RootDAO.arg(value: Any)`（`RootDAO.cj:252-304`）单值入口实测 **`Int64` ≈10.4µs/元素、`String` ≈1.0µs/元素**（HEAD 版本、8 轮稳定；同轮类型化 `arg(Int64)` 仅 **38ns/元素**）⇒ 比类型化路径慢 2–3 个数量级，且与分支位次无关（重排后同口径 14.6µs/1.3µs，同轮类型化对照 59ns 说明只是环境缩放 1.4≈1.55×）。可疑方向：首支 `case x: Data` 的运行时检查、45 分支 `match` 在有非标量类型参与时的代码生成。凡按值命中该路径的绑定（如 `MeetCondition.value(Any)`、`LogicalExpr` 单值绑定）都会被放大，建议单独立条并单独定位。
+- `ORM-N3`（**中｜性能，新增**）`RootDAO.arg(value: Any)` 单值入口被**首支 `case x: Data`** 拖慢两个数量级 ✅已修复（2026-10-06）。
+  - **现象**：`arg(Any=Int64)` 实测 **12.1–13.4µs/元素**（`arg(Any=String)` 1.27µs），而同轮同形的 `add(Any=Int64)` 只 75ns、类型化 `arg(Int64)` 45–56ns、`SqlArgs.add(Int64)` 39ns ⇒ 既不是 `Any` 入口的通病，也不是绑定路径的问题。
+  - **定位链**（探针 `ArgAnyProbe{,2,3,4}_test.cj`，均在 `.autocode/tmp/`）：①**与 args 增长无关**——首 10 元素 11.8µs ≈ 末 10 元素 11.5µs，每次 `clearSql` 后仍是 12.2µs；②**单分支 match 不慢**——`Any→Int64` 命中 57ns、不命中 4ns、`Any→String` 45ns、`Any→ToString` 44ns，且 plain `Int64` 不会命中 `?Int64`（值类型模式与接口模式本身都正常）；③**同形复刻（41 分支，省略首支 Data）只要 48ns**，而真实函数 9.8µs ⇒ 锁定在某个**具体分支**；④**复刻对照**——`case x: Data` 在首位 12.45µs、挪到标量之后 **79ns**（差 158×），String 口径 1.24µs 与真实 12.12µs 吻合；⑤**命中分支检查**——`Int64`/`String`/`true` 都不落 Data 分支 ⇒ 纯检查开销。
+  - **根因**：`case x: Data`（`f_data` 的接口模式，`Data <: FromToData & ToString & DataParsable<Data>`）在 `Any` 上的运行时检查本身极贵（对 Int64 值 ≈12µs/次、String ≈1.2µs/次），而它排在 `arg(value: Any)` 的**第一支** ⇒ 每个非 Data 值都要先白付这笔钱。看形态像仓颉运行时「值类型 → 大接口层次」conformance 检查的性能问题，**建议向编译/运行时团队反馈**。
+  - **改动（一行）**：把 `case x: Data => arg(x)` 从首位挪到 `?T`/`?Any` 之后、兜底 `throw` 之前。语义安全的依据：Data 包装类（`DataString`/`DataReal`/`DataDict`/`DataList`/`DataTuples`/`DataInputStream`…）都不是标量类型，标量分支的 pattern 不可能命中它们（移动前后 Data 值走的是同一个 `arg(value: Data)` 分支）。
+  - **计时对照**：`arg(Any=Int64)` **13407 → 92ns/元素**（−99.3%，146×）、`arg(Any=String)` **1268 → 110ns**；对照口径（`add(Any)`/`arg(Int64)`/`SqlArgs.add`）在噪声内未变。
+  - **用例**：`base/ArgAnyBinding_test.cj` —— ①21 个类型（含 `DataString('x')`/`DataReal(Int8(1))` 两个包装值）经 `arg(Any)` 必须命中具体分支返回 `'?'`（兜底是 `throw`，故「不抛且为 `'?'`」即证明分支仍在，也钉住 Data 分支移到末尾后仍可达）；②相对计时护栏：`arg(Any=Int64)` ≤ 10×`arg(Int64)`+1µs（修复前 ≈270× 必被拦住，修复后实测 **1.02×**：`arg(Int64)=55ns/元素 arg(Any=Int64)=56ns/元素`）。
+  - **验证**：`cjpm build` exit 0；`cjpm test` **TOTAL 58 / PASSED 57 / FAILED 0 / ERROR 1**（唯一 ERROR 仍是既有环境相关 `ORMConfigTest.testPoolMaxWaiting`）。
+  - **同模式另一处（另立条目，本次未动）**：`f_mvc/src/RequestMeta.cj` 也有一处 `case x: Data`，可能同样白付；待 f_orm 这条验证完再评估。
 
 ## 4. 逐模块覆盖面（原 §4.1）
 
