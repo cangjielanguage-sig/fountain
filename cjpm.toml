@@ -45,13 +45,14 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.3.7"
+  version = "1.3.8"
   package-configuration = {}
   category = ["Utility"]
   license = ["Apache-2.0"]
-  include = ["src", "doc", ".assets"]
+  include = ["src"]
   exclude = ["cjpm.toml.bak", "cangjie.sh", ".gitignore", ".gitatributes", "CHANGELOG", "cjpm.lock", "target", ".modules", "f_*", "fboot", "fdemo", "fcoder", "docs"]
   authors = ["吴京润"] 
+  repository = "https://gitcode.com/Cangjie-SIG/fountain"
 
 [target]
 [target.x86_64-unknown-linux-gnu]

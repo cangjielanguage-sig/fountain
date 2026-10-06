@@ -3,7 +3,7 @@
   name = "f_version"
   organization = "fountain"
   description = "应用与fountain的版本信息和应用BANNER"
-  version = "1.3.7"
+  version = "1.3.8"
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"
@@ -16,6 +16,7 @@
   include = ["src"]
   exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
   authors = ["吴京润"]
+  repository = "https://gitcode.com/Cangjie-SIG/fountain/tree/master/f_version"
 
 [target]
 [target.x86_64-unknown-linux-gnu]
