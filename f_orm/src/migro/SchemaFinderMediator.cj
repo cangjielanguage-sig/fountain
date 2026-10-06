@@ -30,10 +30,6 @@ public struct SchemaFinderMediator {
         let sqls = metasByDriver.iterator().flatMap{tuple: (String, ArrayList<TableMeta>) => 
             let (driver, metas) = tuple
             let first = Box<Bool>(true)
-            let existingTableNames = HashSet<String>()
-            for(t in metas){
-                existingTableNames.add(t.tableName.toAsciiLower())
-            }
             metas.iterator().flatMap{m: TableMeta => 
                 let finder = finders[driver]
                 let columns = finder.findTableSchema(m.database, m.tableName)

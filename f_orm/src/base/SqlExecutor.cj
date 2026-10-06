@@ -73,11 +73,26 @@ public class SqlExecutor <: Resource & RootDAO {
             sql_
         }
         set(value) {
-            sql_ = blankRegex.replaceAll(value, " ").trimAsciiBlanks()
-            if (sql_.trimAscii()[0..6].toAsciiLower() == 'select') {
+            let normalized = blankRegex.replaceAll(value, " ").trimAsciiBlanks()
+            // bug-orm.md §3.1 ORM-C4/ORM-L1：短于 6 个字符的 SQL 不可能是合法语句——原实现直接做
+            // `sql_.trimAscii()[0..6]`，会抛 IndexOutOfBoundsException；改为显式报 ORMException。
+            // 另：`normalized` 已由 trimAsciiBlanks() 去掉首尾空白，前缀判断不再需要第二次 trimAscii()。
+            if (normalized.size < 6) {
+                throw ORMException('sql is too short to be a valid statement: [${value}]')
+            }
+            sql_ = normalized
+            if (isSelectStatement(normalized)) {
                 readOnly = true
             }
         }
+    }
+
+    /**
+     * 当前 SQL 是不是 select 语句（bug-orm.md §3.1 ORM-C4/L1 的前缀判断；长度不足 6 由 `sql` 的 setter
+     * 显式报错，这里做防御性判断）。用于 ORM-L6：只缓存 SELECT 的结果。
+     */
+    private static func isSelectStatement(sql: String): Bool {
+        sql.size >= 6 && sql[0..6].toAsciiLower() == 'select'
     }
     protected func clearSql(clearArgsAfterExec!: Bool = clearArgsAfterExec_){
         sql_ = ''
@@ -400,7 +415,10 @@ public class SqlExecutor <: Resource & RootDAO {
     private func logMsg(now: DateTime): () -> String {
         let duration = now - start
         let sql = this.sql_
-        let args = this.args.clone()
+        // bug-orm.md §3.1 ORM-C3/ORM-L2：原来调 `this.args.clone()`（实为共享同一 ArrayList 的"假副本"），
+        // 现直接引用原对象；闭包只在真要输出时才插值，且 `clearSql()` 是换新实例（§1.1 / ORM-1），
+        // 因此读到的是本次执行当时的参数。
+        let args = this.args
         {=>
             "${driverName} is executing a sql: ${sql}, args: ${args}, consumed: ${duration}"
         }
@@ -858,7 +876,10 @@ public class SqlExecutor <: Resource & RootDAO {
             }
         }
         try {
-            let v = if (useCache && !clearCache) {
+            // bug-orm.md §3.1 ORM-L6：只缓存 SELECT 的结果。UPDATE/INSERT 等本来就走 `clearCache = true`
+            // 的分支（不建 key、只清一次缓存）；这里再按当前 SQL 前缀确认一次：非 SELECT 连 cache key 都不构造
+            // ——key 会对 SqlArgs 求哈希，BLOB 参数在旧实现里会被整体格式化成字符串（等大内存峰值）。
+            let v = if (useCache && !clearCache && isSelectStatement(sql)) {
                 let key = SqlCacheKey(sql, args)
                 match (cache.get(key)) {
                     case Some(v: T) => v

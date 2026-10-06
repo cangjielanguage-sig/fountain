@@ -21,6 +21,7 @@ import std.sync.AtomicUInt64
 import std.unicode.UnicodeStringExtension
 import fountain::f_log.impl.LoggerFactory
 import fountain::f_pool.Pool
+import fountain::f_orm.exception.*
 
 public class DatabasePool <: Resource & Datasource {
     private static let logger = LoggerFactory.getLogger<DatabasePool>()
@@ -109,7 +110,11 @@ public class DatabasePool <: Resource & Datasource {
             connectTimeout: connectTimeout,
             maxWaiting: maxWaiting,
             checker: {
-                c => if (checkSql[0..6].toLower() == "select") {
+                c => if (checkSql.size < 6) {
+                    // bug-orm.md §3.1 ORM-C4：短于 6 个字符的 checkSql 不可能是合法语句——原实现直接做
+                    // `checkSql[0..6]`，会在借连接校验时抛 IndexOutOfBoundsException；改为显式报 ORMException。
+                    throw ORMException('checkSql is too short to be a valid statement: [${checkSql}]')
+                } else if (checkSql[0..6].toLower() == "select") {
                     try (stmt = c.prepareStatement(checkSql)) {
                         try (r = stmt.query()) {
                             return r.next()

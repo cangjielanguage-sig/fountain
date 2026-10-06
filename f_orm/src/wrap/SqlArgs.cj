@@ -20,9 +20,9 @@ public class SqlArgs <: Hashable & Equatable<SqlArgs> & ToString {
     public init(){
         this.args = ArrayList<SqlArg>()
     }
-    protected func clone(){
-        SqlArgs(args)
-    }
+    // bug-orm.md §3.1 ORM-C3/ORM-L2：原来的 `clone()` 只是换了个壳、与本体共享同一个 ArrayList（不是快照，
+    // 日志路径之后再 `add` 会污染已传出的"副本"）。唯一调用点（`SqlExecutor.logMsg`）已改为直接引用原对象，
+    // 故删除；需要真快照时应显式复制列表，别再用这个名字。
     protected func set(statement: Statement) {
         for (arg in args) {
             arg.set(statement)

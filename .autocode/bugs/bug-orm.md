@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 27 条**：严重 3（§1.1 `ORM-1`、§1.5 `ORM-C1`、§1.13 `ORM-2`）、中 7（§2.1 `ORM-C2`、§2.8 `ORM-C5`、§2.10 `ORM-3`、§2.11 `ORM-4`、§2.12 `ORM-5`、§2.13 `ORM-6`、§2.14 `ORM-7`）、低危+待验证 14（§3.1/§3.2）、本会话新增 3（§3.3 `ORM-N1` 性能、`ORM-N2` 正确性、`ORM-N3` 性能）。
-- **状态（截至 2026-10-05）**：`ORM-1` ✅已修复（§1.1）、`ORM-C1` ✅已修复（§1.5）、`ORM-C2` ✅已修复（§2.1）、`ORM-2` ✅已修复（§1.13，严重｜性能，分支 `fix/orm`）；`ORM-C5` ❌误判（§2.8，非缺陷：`argInSql` 是设计目的，已补 README §11.5 说明与口径用例）；`ORM-3` ⏸决定不修（§2.10，已知开销保留：否决「加静态集合」与「就地复位」两方案）；`ORM-4` ⏸决定不修（§2.11，借连接校验与默认值均不改、语句复用经四家驱动源码调研后判定不值得在 f_orm 层做）、`ORM-5` ✅已修复（§2.12，正则预编译）；`ORM-6` ◐部分修复（§2.13，逐元素分派按频率重排；实测批量路径大头在拼串/闭包/装箱，剩余转 §3.3 `ORM-N1`）、`ORM-7` ◐部分修复（§2.14，同批重排三处 match）；**待修** §3 的 14 条低危/待验证（`ORM-L3` 已随 §1.13 一并消掉；`ORM-C3`：`SqlArgs.clone()` 仍共享同一 `ArrayList`，未随 §1.1 一并处理）、§3.3 新增 2 条（`ORM-N1` ◐部分修复（2026-10-06：N1a 拼接次数已修；N1b 待定、方案改为自管字节缓冲；N1c ⏸决定不做）；`ORM-N2` ✅已修复（2026-10-06）：`Float32` 静默丢参已修、`setValue` 兜底补 `throw`）。
+- **状态（截至 2026-10-06）**：`ORM-1` ✅已修复（§1.1）、`ORM-C1` ✅已修复（§1.5）、`ORM-C2` ✅已修复（§2.1）、`ORM-2` ✅已修复（§1.13，严重｜性能，分支 `fix/orm`）；`ORM-C5` ❌误判（§2.8，非缺陷：`argInSql` 是设计目的，已补 README §11.5 说明与口径用例）；`ORM-3` ⏸决定不修（§2.10，已知开销保留：否决「加静态集合」与「就地复位」两方案）；`ORM-4` ⏸决定不修（§2.11，借连接校验与默认值均不改、语句复用经四家驱动源码调研后判定不值得在 f_orm 层做）、`ORM-5` ✅已修复（§2.12，正则预编译）；`ORM-6` ◐部分修复（§2.13，逐元素分派按频率重排；实测批量路径大头在拼串/闭包/装箱，剩余转 §3.3 `ORM-N1`）、`ORM-7` ◐部分修复（§2.14，同批重排三处 match）；**待修** §3.2 待验证 3 条（`ORM-L8`/`ORM-L9`/`ORM-C6`；`ORM-L3` 已随 §1.13 一并消掉）、§3.3 新增 3 条（`ORM-N1` ◐部分修复（2026-10-06：N1a 拼接次数已修；N1b 待定、方案改为自管字节缓冲；N1c ⏸决定不做）；`ORM-N2` ✅已修复（2026-10-06）：`Float32` 静默丢参 + `setValue` 兜底补 `throw`；`ORM-N3` ✅已修复（2026-10-06）：`arg(Any)` 首支 `case x: Data` 挪到末尾，12.1µs → 56ns/元素）。§3.1 的 10 条已全部处置（2026-10-06）：`ORM-C3`/`ORM-C4`/`ORM-L6`/`ORM-L4`/`ORM-L5` ✅已修、`ORM-L1`/`ORM-L2` ◐部分修复、`ORM-L7`/`ORM-L10`/`ORM-L11` ⏸决定不修，详见 §3.1 处置记录。
 
 ## 1. 严重（本模块 3 条）
 
@@ -252,6 +252,24 @@
 
 - `ORM-L4` `SchemaFinderMediator.cj:30-36`：构造了从未使用的 `existingTableNames`（`67-70` 又建了 `knownNames`）。
 - `ORM-L5` `SqlDSL.cj:148-151`：`let fields = T.dataFields()` 求值后未使用。
+
+**处置记录（2026-10-06）**
+
+| 编号 | 处置 | 说明 |
+|---|---|---|
+| `ORM-C3` | ✅已修 | 删除 `SqlArgs.clone()`（它只是换个壳、与本体共享同一个 `ArrayList`，不是快照）；唯一调用点 `SqlExecutor.logMsg` 改为直接引用原对象。 |
+| `ORM-C4` | ✅已修 | `SqlExecutor.sql` 的 setter：先规范化再做长度判断，短于 6 个字符显式抛 `ORMException`（原来直接 `[0..6]` ⇒ `IndexOutOfBoundsException`）；`DatabasePool` 的 `checkSql` 同口径（借连接校验时显式报 `ORMException`）。 |
+| `ORM-L1` | ◐部分修 | 前缀判断不再做第二次 `trimAscii()`（`sql_` 已由 `trimAsciiBlanks()` 去掉首尾空白）——注：`startsWithIgnoreAscii` 在 `String` 上**并不存在**，原报告建议的写法不可用。`blankRegex` 的全串规范化**保留**：缓存键用的就是规范化后的 `sql_`，去掉会改变缓存命中语义。 |
+| `ORM-L2` | ◐部分修 | `args.clone()` 已随 `ORM-C3` 去掉（原来是每次执行的共享视图；若改成真拷贝反而会变成 O(参数个数)）。日志闭包保留——它是「只在真要输出时才插值」的惰性形态，每次执行只多一次闭包分配。 |
+| `ORM-L6` | ✅已修 | 结果缓存改为**只缓存 SELECT**：`execute` 的缓存分支加 `isSelectStatement(sql)` 判断，非 SELECT 连 cache key 都不构造（key 会对 `SqlArgs` 求哈希，BLOB 参数在旧实现里被整体格式化成字符串 ⇒ 等大内存峰值）。BLOB 只出现在 INSERT/UPDATE 的 SET 子句（不走查询通道）⇒ 该峰值消除；`ByteArraySqlArg.hashCode` 本身未改。 |
+| `ORM-L7` | ⏸决定不修 | 每线程一份 `dirtyFields` 是 `ThreadLocal` 的有意设计；线程池下的驻留量级是「每线程 × 每 PO 类型一个字段名 `HashSet`」，属可接受卫生问题，与 `ORM-3` 同口径。 |
+| `ORM-L10` | ⏸决定不修 | 事务钩子注册只在初始化时执行一次。 |
+| `ORM-L11` | ⏸决定不修 | `getOption/getAllOptions` 只在初始化时执行一次。 |
+| `ORM-L4` | ✅已修 | 删除 `SchemaFinderMediator.generate()` 里构造后从未使用的 `existingTableNames`（4 行；真正使用的是下半段的 `knownNames`）。 |
+| `ORM-L5` | ✅已修 | 删除 `parseSqlFromObject` 里求值后未使用的 `T.dataFields()`（1 行）。已确认 `ObjectFields.getObjectFields` 只是 `allFields` 的 `computeIfAbsent` 记忆化，其唯一「副作用」是重复字段校验，而仓里没有任何测试依赖「在此处被触发」。 |
+
+- **用例**：`base/SqlExecutorStatement_test.cj` —— ①短 SQL（`'sel'`、`''`）必须抛 `ORMException`、正常 SQL 不受影响；②只缓存 SELECT（mock 夹具计执行次数：两次相同非 SELECT ⇒ 执行 2 次、两次相同 SELECT ⇒ 执行 1 次）。②的断言在旧实现下应为 1 次（旧条件只有 `useCache && !clearCache`，非 SELECT 走查询通道会写缓存）⇒ 该用例能拦住回退。
+- **验证**：`cjpm build` exit 0；`cjpm test` **TOTAL 60 / PASSED 59 / FAILED 0 / ERROR 1**（唯一 ERROR 仍是既有环境相关 `ORMConfigTest.testPoolMaxWaiting`）。
 
 ### 3.2 待验证（4 条）
 
