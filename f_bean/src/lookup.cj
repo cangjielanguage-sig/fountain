@@ -54,7 +54,15 @@ public func lookupHashSet<T>(): HashSet<T> where T <: Hashable & Equatable<T> {
 }
 
 public func lookupHashSet<T>(cond: StringCond): HashSet<T> where T <: Hashable & Equatable<T> {
-    HashSet<T>(lookupList<T>(cond))
+    // §3.1 / BEAN-L5：直接向目标集合填充（遍历与过滤同 `getList`：同一个 `iterator<T>(cond:)` + 同一个类型判定），
+    // 不再先把该类型的全部 bean 物化成中间 `ArrayList` 再重建一次。
+    let set = HashSet<T>()
+    for (m in BeanFactory.instance.iterator<T>(cond: cond)) {
+        if (let bean: T <- m.bean) {
+            set.add(bean)
+        }
+    }
+    set
 }
 
 public func lookupTreeSet<T>(): TreeSet<T> where T <: Comparable<T> {
@@ -62,7 +70,14 @@ public func lookupTreeSet<T>(): TreeSet<T> where T <: Comparable<T> {
 }
 
 public func lookupTreeSet<T>(cond: StringCond): TreeSet<T> where T <: Comparable<T> {
-    TreeSet<T>(lookupList<T>(cond))
+    // §3.1 / BEAN-L5：同 `lookupHashSet`，直接建树、不再经过中间 `ArrayList`
+    let tree = TreeSet<T>()
+    for (m in BeanFactory.instance.iterator<T>(cond: cond)) {
+        if (let bean: T <- m.bean) {
+            tree.add(bean)
+        }
+    }
+    tree
 }
 
 public func lookupHashMap<T>(): HashMap<String, T> {

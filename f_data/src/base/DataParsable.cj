@@ -28,40 +28,62 @@ extend Duration <: DataParsable<Duration> {
         tryParse(s).getOrThrow {DataParsableException('${s} cannot be parsed to ${TypeInfo.of<Duration>()}')}
     }
     public static func tryParse(s: String): ?Duration {
+        //约定（bug-cross.md 的 X-2）：单位链 d/h/m/s/ms/us/ns；数字段可带负号、可多段拼接（1d2h）；
+        //非法输入返回 None（由调用方回退默认值），不抛异常。
+        //修复要点：原实现数字分支多了一次 i++（吃掉数字后面的字符 ⇒ "45s"→4s、"1m"→0），
+        //且非法输入直接抛异常、读到单位后未清空 bytes、单位分支取 s[i] 无边界检查。
+        if (s.isEmpty()) {
+            return None<Duration>
+        }
         let bytes = ArrayList<Byte>()
         var duration = Duration.Zero
         var i = 0
         while (i < s.size) {
             let r = s[i]
             i++
-            duration += match (r) {
-                case x where x == b'-' || (x >= b'0' && x <= b'9') =>
-                    bytes.add(x)
-                    i++
-                    continue
+            if (r == b'-' || (r >= b'0' && r <= b'9')) {
+                //数字（含负号）先攒着，读到单位时再结算
+                bytes.add(r)
+                continue
+            }
+            let unit = match (r) {
                 case b'd' => Duration.day
                 case b'h' => Duration.hour
-                case b'm' =>
-                    if (s[i] == b's') {
-                        i++
-                        Duration.millisecond
-                    } else {
-                        Duration.minute
-                    }
+                case b'm' => if (i < s.size && s[i] == b's') {
+                    i++
+                    Duration.millisecond
+                } else {
+                    Duration.minute
+                }
                 case b's' => Duration.second
-                case b'u' where s[i] == b's' =>
+                case b'u' => if (i < s.size && s[i] == b's') {
                     i++
                     Duration.microsecond
-                case b'n' where s[i] == b's' =>
+                } else {
+                    return None<Duration>
+                }
+                case b'n' => if (i < s.size && s[i] == b's') {
                     i++
                     Duration.nanosecond
-                case _ => throw DataParsableException('${s} cannot be parsed to Duration')
-            } *
-                Int64
-                .tryParse(String.unsafeUtf8(bytes.unsafeData()))
-                .getOrThrow {DataParsableException('${s} cannot be parsed to Duration')}
+                } else {
+                    return None<Duration>
+                }
+                case _ => return None<Duration>
+            }
+            if (let Some(n) <- Int64.tryParse(String.unsafeUtf8(bytes.unsafeData()))) {
+                duration += unit * n
+            } else {
+                return None<Duration>
+            }
+            //结算完清空，供下一段使用（如 1d2h）
+            bytes.clear()
         }
-        duration
+        if (bytes.isEmpty()) {
+            duration
+        } else {
+            //只有数字、没给单位
+            None<Duration>
+        }
     }
 }
 

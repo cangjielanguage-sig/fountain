@@ -21,6 +21,19 @@ private enum BeanType{
     | AnnotationType(TypeInfo)
     | ClassType(TypeInfo)
 }
+
+/**
+ * §3.1 / BEAN-L7：把「类节点 / 注解节点」的包装提成**无捕获**的静态函数。
+ * 原先是 `doRegister` 循环体内现定义、捕获循环局部量 `isClass` 的局部函数 ⇒
+ * 每个被展开的类型节点都要新建一个闭包对象（探针实测 ~52 → ~37 ns/节点，每节点省 ~15 ns）。
+ */
+private func wrapType(isClass: Bool, typeInfo: TypeInfo): BeanType {
+    if (isClass) {
+        ClassType(typeInfo)
+    } else {
+        AnnotationType(typeInfo)
+    }
+}
 public class BeanFactory {
     private static let log = LoggerFactory.getLogger<BeanFactory>()
     public static let instance = BeanFactory()
@@ -106,18 +119,11 @@ public class BeanFactory {
                         typeQueue.addLast(AnnotationType(ClassTypeInfo.of(annotation)))
                     }
                 }
-                func beanType(typeInfo: TypeInfo) {
-                    if (isClass) {
-                        ClassType(typeInfo)
-                    } else {
-                        AnnotationType(typeInfo)
-                    }
-                }
                 for (superInterface in klass.superInterfaces where superInterface != any && superInterface != klass) {
-                    typeQueue.addLast(beanType(superInterface))
+                    typeQueue.addLast(wrapType(isClass, superInterface))
                 }
                 if (let s: ClassTypeInfo <- klass && let Some(sc) <- s.superClass && sc != object) {
-                    typeQueue.addLast(beanType(sc))
+                    typeQueue.addLast(wrapType(isClass, sc))
                 }
             }
         }
@@ -156,13 +162,16 @@ public class BeanFactory {
             let annotationRemoved = HashSet<TypeInfo>()
             for (d in discarded) {
                 beans.remove(d.name)
+                // §3.1 / BEAN-L1(b)：只在确实移除成功时记账 —— 键变空 ⇔ 其最后一个元素被本次移除 ⇒ 收尾不会漏删
                 for ((t, set) in beanTypeMap) {
-                    set.remove(d)
-                    typeRemoved.add(t)
+                    if (set.remove(d)) {
+                        typeRemoved.add(t)
+                    }
                 }
-                for((t, set) in annotationMap){
-                    set.remove(d)
-                    annotationRemoved.add(t)
+                for ((t, set) in annotationMap) {
+                    if (set.remove(d)) {
+                        annotationRemoved.add(t)
+                    }
                 }
             }
             for (t in typeRemoved where beanTypeMap[t].isEmpty()) {
@@ -191,18 +200,15 @@ public class BeanFactory {
     private func matches(beanType: TypeInfo, m: BeanManager) {
         m.beanType.isSubtypeOf(beanType)
     }
-    private func matches<T>(cond: StringCond, m: BeanManager) {
-        matches(TypeInfo.of<T>(), cond, m)
-    }
-    private func matches(beanType: TypeInfo, cond: StringCond, m: BeanManager) {
-        matches(beanType, m) && cond.on(m.name)
-    }
     public func getFirst<T>(cond!: StringCond = IgnoreCond): ?T {
-        getFirst<T>(TypeInfo.of<T>(), cond: cond)
+        // §2.15 / BEAN-2：这里的 beanType 就是 T 自己的 TypeInfo，beanTypeIs 恒真 ⇒ 走内部路径，
+        // 省掉一次 TypeInfo.of<T>() 与一次 isSubtypeOf（f_mvc/src/RequestMeta.cj 每请求调一次）。
+        getFirstByType<T>(TypeInfo.of<T>(), cond)
     }
     private func beanTypeIs<T>(beanType: TypeInfo) {
-        if (!beanType.isSubtypeOf(TypeInfo.of<T>())) {
-            throw BeanException('${beanType} is not sub type of ${TypeInfo.of<T>()}')
+        let requiredType = TypeInfo.of<T>()
+        if (!beanType.isSubtypeOf(requiredType)) {
+            throw BeanException('${beanType} is not sub type of ${requiredType}')
         }
     }
     private func beanLog(logPrefix: String, requiredType: TypeInfo, cond: StringCond, manager: BeanManager){
@@ -212,6 +218,12 @@ public class BeanFactory {
     }
     public func getFirst<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): ?T {
         beanTypeIs<T>(beanType)
+        getFirstByType<T>(beanType, cond)
+    }
+    /**
+     * `getFirst` 的内部实现：调用方已完成 `beanTypeIs` 校验（或 `beanType` 就是 `T` 自己的 `TypeInfo`）。
+     */
+    private func getFirstByType<T>(beanType: TypeInfo, cond: StringCond): ?T {
         match (cond) {
             case Exactly(n) => 
             match (beans.get(n)) {
@@ -223,42 +235,57 @@ public class BeanFactory {
             case _ => 
                 match (beanTypeMap.get(beanType)) {
                 case Some(tree) => 
-                for (m in tree where matches(beanType, cond, m)) {
-                    beanLog('getFirst', beanType, cond, m)
-                    return m.bean as T
-                }
+                    // §2.15 / BEAN-2：桶由注册期按「beanType 的超类型闭包」填充（见 doRegister），
+                    // 桶内每个 manager 的 beanType 必是该 key 的子类型 ⇒ 子类型复检恒真，只留名字条件。
+                    for (m in tree where cond.on(m.name)) {
+                        beanLog('getFirst', beanType, cond, m)
+                        return m.bean as T
+                    }
                 case _ => ()
             }
         }
         None
     }
-    private func getAll<T>(cond: StringCond, put: (BeanManager) -> Unit) {
-        getAll<T>(TypeInfo.of<T>(), cond, put)
-    }
-    private func getAll<T>(beanType: TypeInfo, cond: StringCond, put: (BeanManager) -> Unit) {
-        for (m in iterator<T>(beanType, cond: cond)) {
-            beanLog('getAll', beanType, cond, m)
-            put(m)
-        }
-    }
     public func getList<T>(cond!: StringCond = IgnoreCond): ArrayList<T> {
-        getList<T>(TypeInfo.of<T>(), cond: cond)
+        // §3.1 / BEAN-L10：单参重载的 beanType 就是 T 自己的 TypeInfo ⇒ 直走无校验内部路径
+        getListByType<T>(TypeInfo.of<T>(), cond)
     }
     public func getList<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): ArrayList<T> {
+        beanTypeIs<T>(beanType)
+        getListByType<T>(beanType, cond)
+    }
+    /**
+     * `getList` 的内部实现：调用方已完成 `beanTypeIs` 校验（或 `beanType` 就是 `T` 自己的 `TypeInfo`）。
+     *
+     * §3.1 / `BEAN-L10`：不再经私有 `getAll(cond, put)` —— 那条路每个元素都要付一次间接闭包调用
+     * （外加 `beanLog` 的捕获闭包，以及中间 `ArrayList` 从 0 容量扩容）。改为在循环内直接收集；
+     * 遍历源、类型判定与 `beanLog` 均与原先一致 ⇒ 元素集合、顺序、实例化次数、日志一字不变。
+     */
+    private func getListByType<T>(beanType: TypeInfo, cond: StringCond): ArrayList<T> {
         let list = ArrayList<T>()
-        getAll<T>(beanType, cond){bm: BeanManager =>
-            if (let b: T <- bm.bean) {
+        for (m in iteratorByType<T>(beanType, cond)) {
+            beanLog('getAll', beanType, cond, m)
+            if (let b: T <- m.bean) {
                 list.add(b)
             }
         }
         list
     }
     public func getMap<T>(cond!: StringCond = IgnoreCond): HashMap<String, T> {
-        getMap<T>(TypeInfo.of<T>(), cond: cond)
+        // §3.1 / BEAN-L10：同 `getList` 的单参重载
+        getMapByType<T>(TypeInfo.of<T>(), cond)
     }
     public func getMap<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): HashMap<String, T> {
+        beanTypeIs<T>(beanType)
+        getMapByType<T>(beanType, cond)
+    }
+    /**
+     * `getMap` 的内部实现（说明同 `getListByType`）。
+     */
+    private func getMapByType<T>(beanType: TypeInfo, cond: StringCond): HashMap<String, T> {
         let map = HashMap<String, T>()
-        getAll<T>(beanType, cond){m: BeanManager => 
+        for (m in iteratorByType<T>(beanType, cond)) {
+            beanLog('getAll', beanType, cond, m)
             if (let b: T <- m.bean) {
                 map[m.name] = b
             }
@@ -288,7 +315,9 @@ public class BeanFactory {
         match (cond) {
             case Exactly(n) => return generateTuple<T>(beans.get(n))
             case _ => match (beanTypeMap.get(TypeInfo.of<T>())) {
-                case Some(tree) => for (m in tree where matches<T>(cond, m)) {
+                // §2.16 / BEAN-3（同族）：桶 key 就是 TypeInfo.of<T>()，子类型复检恒真；
+                // 原先 matches<T>(cond, m) 还会逐元素重算 TypeInfo.of<T>() + isSubtypeOf。
+                case Some(tree) => for (m in tree where cond.on(m.name)) {
                     if (let bean: T <- m.bean) {
                         return (m.name, bean, m.generateDestroy(bean))
                     }
@@ -303,29 +332,46 @@ public class BeanFactory {
      */
     public func getAllTuples<T>(cond!: StringCond = IgnoreCond): Collection<(String, T, () -> Unit)> {
         let list = ArrayList<(String, T, () -> Unit)>()
-        func put(m: BeanManager) {
+        // §3.1 / BEAN-L10：`getAll(cond, put)` 删除后，这里也改为循环内直接收集（行为与原先一致）
+        let beanType = TypeInfo.of<T>()
+        for (m in iteratorByType<T>(beanType, cond)) {
+            beanLog('getAll', beanType, cond, m)
             if (let bean <- m.bean && let b: T <- bean) {
                 list.add((m.name, b, m.generateDestroy(bean)))
             }
         }
-        getAll<T>(cond, put)
         list
     }
     public func get<T>(name: String): ?T {
         getFirst<T>(cond: Exactly(name))
     }
     public func iterator<T>(cond!: StringCond = IgnoreCond): Iterator<BeanManager> {
-        iterator<T>(TypeInfo.of<T>(), cond: cond)
+        // §2.16 / BEAN-3（同族，与 §2.15 同一处理）：beanType 就是 T 自己的 TypeInfo，beanTypeIs 恒真
+        // ⇒ 直接走内部路径，省掉一次 TypeInfo.of<T>() 与一次 isSubtypeOf；getList/getMap/lookup* 都经此。
+        iteratorByType<T>(TypeInfo.of<T>(), cond)
     }
     public func iterator<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): Iterator<BeanManager> {
         beanTypeIs<T>(beanType)
+        iteratorByType<T>(beanType, cond)
+    }
+    /**
+     * `iterator` 的内部实现：调用方已完成 `beanTypeIs` 校验（或 `beanType` 就是 `T` 自己的 `TypeInfo`）。
+     */
+    private func iteratorByType<T>(beanType: TypeInfo, cond: StringCond): Iterator<BeanManager> {
         match (cond) {
             case Exactly(n) => match (beans.get(n)) {
                 case Some(m) where matches(beanType, m) => [m].iterator()
                 case _ => EmptyIterator<BeanManager>.instance()
             }
             case _ => match (beanTypeMap.get(beanType)) {
-                case Some(tree) => tree.iterator().filter {m => matches(beanType, cond, m)}
+                case Some(tree) =>
+                    // §2.16 / BEAN-3：IgnoreCond 无需过滤（子类型由注册期入桶保证，见 §2.15）⇒ 不建闭包、
+                    // 不做逐元素判定；有名字条件时也只留 cond.on（原先 matches 里的子类型复检恒真）。
+                    if (cond.ignored) {
+                        tree.iterator()
+                    } else {
+                        tree.iterator().filter {m => cond.on(m.name)}
+                    }
                 case _ => EmptyIterator<BeanManager>.instance()
             }
         }
