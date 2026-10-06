@@ -321,18 +321,15 @@ public interface RootDAO {
         frag.toString()
     }
     func arg<I, T>(value: I): String where I <: Iterable<T> {
-        let frag = StringGenerator(' (')
-        let s = frag.size
+        var n = 0
         for(v in value){
-            if(frag.size > s){
-                // bug-orm.md ORM-N1（N1a）：原为 append(',') + 循环尾 append('?')，合并成一次 append
-                // （StringGenerator.append 每次都要按字节搬进 ArrayList<Byte>，减少调用次数是直接收益）
-                frag.append(',?')
-            }else{
-                frag.append('?')
-            }
+            n++
             // bug.md §2.14（ORM-7）：分支按绑定频率排序（同 SqlExecutor.add<T>），逐个元素减少失败的类型检查。
             // 各分支运行时类型互斥，顺序不影响语义。
+            //
+            // 注意（bug-orm.md ORM-N1 / B）：这些分支**只做绑定**——`arg(x)` 内部是 `executor.add(x)` 并
+            // 返回 `'?'`，这里必须丢弃该返回值；占位符由函数尾统一拼一次。若改成 `frag.append(arg(x))`
+            // 就会双重添加（二维变体 arg<I1,I2,T> 才是"每元素 append 内层文本"的形态）。
             match(v){
                 case x: Int64 => arg(x)
                 case x: String => arg(x)
@@ -378,11 +375,17 @@ public interface RootDAO {
                 case _ => throw ORMException('type does not support')
             }
         }
-        if(frag.size == s){
+        // bug-orm.md ORM-N1（B）：占位符整段 = ' (' + '?' + ',?'×(n-1) + ')'，只由元素个数决定，
+        // 故循环里只计数、拼接改为一次字符串重复（每元素省掉一次 StringGenerator.append）。
+        // n == 1 单独返回：避免依赖 `* 0` 的实现行为（仓内 Array 的 `*` 在 repeat=0 时会因"缩小"而抛错）。
+        // 注意：文本末尾**不带空格**——与 N1a 一致，`ArgSqlText_test` 逐字节钉着 `' (?,?,?)'`。
+        if(n == 0){
             return ''
+        }else if(n == 1){
+            ' (?)'
+        }else{
+            ' (?${",?" * (n - 1)})'
         }
-        frag.append(')')
-        frag.toString()
     }
     func argNull(): String {
         executor.addNull()

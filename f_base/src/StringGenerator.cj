@@ -50,6 +50,29 @@ public class StringGenerator <: ToString {
         utf8.add(all: content.toString().unsafeBytes())
         this
     }
+    /**
+     * 追加一个字符（bug-orm.md `ORM-N1` 的 P0 项）。
+     *
+     * 原路径走 `append<T>`：`r.toString()` 会为**每个字符**分配一个 String，再 `unsafeBytes()` 后按字节
+     * 搬进 `ArrayList<Byte>`。这里把热路径（ASCII：`IN (...)`/`VALUES (...)` 里的 `?`、`,`、`(`、`)` 等）
+     * 改成"码点即字节"的直接写入——不分配、不建暂存区，并走单元素 `add` 而不是 `add(all:)`。
+     * 输出与 `append<String>(r.toString())` 逐字节一致（ASCII 的 UTF-8 编码就是码点本身；非 ASCII 仍用
+     * `Rune.intoUtf8Array` 这一份 std 编码）。
+     *
+     * 实测教训：**无条件**先建 4 字节局部数组的版本反而更慢（M7 `done()` +286ns/元素）——
+     * 每个字符一次小对象分配把收益吃光是负的。所以暂存区只留给很少见的非 ASCII 路径。
+     */
+    public func append(r: Rune): This {
+        let cp = r.position()
+        if (cp < 0x80) {
+            utf8.add(UInt8(cp))
+        } else {
+            let runeBytes: Array<Byte> = [0, 0, 0, 0]
+            let n = Rune.intoUtf8Array(r, runeBytes, 0)
+            utf8.add(all: runeBytes[0 .. n])
+        }
+        this
+    }
     public func appendln(gen: StringGenerator, nextLine!: String = OS.current.nextLine): This {
         append(gen)
         append(nextLine: nextLine)
