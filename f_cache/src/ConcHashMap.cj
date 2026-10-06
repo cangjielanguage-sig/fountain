@@ -73,10 +73,14 @@ class ConcHashMapKeys<V> <: EquatableCollection<String> {
     }
 
     public func contains(all!: Collection<String>): Bool {
-        for (e in all where contains(e)) {
-            return true
+        //「全部命中」才算包含：与 std Collection.contains(all:) 以及本 map 的 containsAll 语义一致
+        //（原实现写成「任一命中」即 return true，语义相反）
+        for (e in all) {
+            if (!contains(e)) {
+                return false
+            }
         }
-        false
+        true
     }
 }
 
@@ -144,7 +148,8 @@ class ConcHashMapIterator<V> <: Iterator<(String, V)> {
      * 返回值 Option<E> - 迭代过程中的下一个元素
      */
     public func next(): Option<(String, V)> {
-        while (cur <= m.concurrency) {
+        //只遍历 0..concurrency-1 这些分段（原条件 cur <= m.concurrency 会多跑一轮空迭代）
+        while (cur < m.concurrency) {
             if (let Some(x) <- itr.next()) {
                 return x
             } else {

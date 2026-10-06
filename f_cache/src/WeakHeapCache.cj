@@ -22,27 +22,21 @@ import std.ref.*
 import fountain::f_collection.*
 
 private struct WeakKey <: Hashable & Equatable<WeakKey> {
-    private let key: WeakRef<Box<String>>
-    private init(key: String, policy: CleanupPolicy){
-        this.key = WeakRef<Box<String>>(Box<String>(key), policy)
-    }
-    static func deferred(key: String){
-        WeakKey(key, DEFERRED)
+    //键持强引用：弱引用缓存只该弱「值」。原实现把键放进 WeakRef<Box<String>>，
+    //内存紧张时键会被 GC ⇒ 值仍被强引用时条目也会静默消失，且 get 期间键可能失效导致 miss；
+    //改强引用后顺带省掉每次 get/set 的 Box<String> + WeakRef 两次分配
+    private let key: String
+    init(key: String) {
+        this.key = key
     }
     public func hashCode(): Int64 {
-        key.value?.hashCode() ?? 0
+        key.hashCode()
     }
-    public operator func ==(other: WeakKey){
-        match((key.value, other.key.value)){
-            case (Some(x), Some(y)) => x.value == y.value
-            case _ => false
-        }
+    public operator func ==(other: WeakKey): Bool {
+        key == other.key
     }
-    func isNone(){
-        key.value.isNone()
-    }
-    func getKey(): ?String {
-        key.value?.value
+    func getKey(): String {
+        key
     }
 }
 public class WeakHeapCache<T> <: Resource where T <: Object {
@@ -56,7 +50,8 @@ public class WeakHeapCache<T> <: Resource where T <: Object {
         cleanerTask = Some(spawn {
             //每轮检查一次取消请求：close() 发 cancel 后最多一个 CLEAN_INTERVAL 内退出
             while (!Thread.currentThread.hasPendingCancellation) {
-                cache.removeIf{k, v => k.isNone() || v.value.isNone()}
+                //键是强引用 ⇒ 只需清「值已被 GC 回收」的条目
+                cache.removeIf{_, v => v.value.isNone()}
                 sleep(CLEAN_INTERVAL)
             }
         })
@@ -99,23 +94,22 @@ public class WeakHeapCache<T> <: Resource where T <: Object {
         }
         handles
     }
-    private func weakRef(value: T) {
-        WeakRef(value, DEFERRED)
+    private func weakRef(value: T): WeakRef<T> {
+        WeakRef<T>(value, DEFERRED)
     }
     public func set(key: String, value: T): ?T {
         ensureOpen()
-        try {
-            if (let Some(r) <- cache.get(WeakKey.deferred(key)) && let Some(v) <- r.value) {
-                return v
-            }
-            None<T>
-        } finally {
-            cache[WeakKey.deferred(key)] = weakRef(value)
+        //先取出旧值（仅当它仍存活），再写入新值；返回旧值（无则 None）
+        var previous: ?T = None<T>
+        if (let Some(r) <- cache.get(WeakKey(key))) {
+            previous = r.value
         }
+        cache[WeakKey(key)] = weakRef(value)
+        previous
     }
     public func getOrCompute(key: String, fn: () -> ?T): ?T {
         ensureOpen()
-        cache.entryView(WeakKey.deferred(key)) {
+        cache.entryView(WeakKey(key)) {
             entry => if (let Some(r) <- entry.value && let Some(v) <- r.value) {
             } else {
                 entry.value = if (let Some(v) <- fn()) {
@@ -128,13 +122,12 @@ public class WeakHeapCache<T> <: Resource where T <: Object {
     }
     public func get(key: String): ?T {
         ensureOpen()
-        cache.entryView(WeakKey.deferred(key)){view => 
-            if(let Some(r) <- view.value && let Some(v) <- r.value){
-                r
-            }else{
-                None<WeakRef<T>>
-            }
-        }?.value ?? None
+        //纯读取：直接用 map.get，不再经由 entryView + 被丢弃的 lambda 返回值
+        //（查证：entryView 只在回调把 value 置为非 None 时才新增条目 ⇒ 行为本就等价，这里只是写法更直白）
+        if (let Some(r) <- cache.get(WeakKey(key))) {
+            return r.value
+        }
+        None<T>
     }
     public func getOrDefault(key: String, default: T): T {
         ensureOpen()
@@ -146,14 +139,15 @@ public class WeakHeapCache<T> <: Resource where T <: Object {
     }
     public func remove(key: String): ?T {
         ensureOpen()
-        cache.remove(WeakKey.deferred(key))?.value ?? None<T>
+        cache.remove(WeakKey(key))?.value ?? None<T>
     }
     public func removeIf(predicate: (String, T) -> Bool): Unit {
         ensureOpen()
         cache.removeIf {
-            k, r => if (let (Some(k), Some(v)) <- (k.getKey(), r.value)) {
-                predicate(k, v)
+            k, r => if (let Some(v) <- r.value) {
+                predicate(k.getKey(), v)
             } else {
+                //值已被 GC 回收 ⇒ 顺手清掉
                 true
             }
         }

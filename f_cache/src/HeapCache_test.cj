@@ -18,6 +18,8 @@ package fountain::f_cache
 import std.unittest.*
 import std.unittest.testmacro.*
 import std.time.DateTime
+import std.collection.ArrayList
+import std.sync.Mutex
 import fountain::f_collection.PriorityQueue
 
 @Test
@@ -373,6 +375,25 @@ public class HeapCache_test {
         sleep(Duration.millisecond * 2500)
         @Assert(true, cache.contains('new'))
         @Assert(false, cache.contains('old'))
+    }
+
+    @TestCase
+    public func testEvictionCallbackReceivesEvictedEntries(): Unit {
+        //淘汰回调在内部消费线程上执行：用锁保护收集器，等 close()（会把已入队的回调投递完）后再断言
+        let delivered = ArrayList<String>()
+        let mtx = Mutex()
+        let cache = HeapCache<Test>(maxSize: 1, maxLife: Duration.second * 30,
+            checkDuration: Duration.millisecond * 200,
+            evictionCallback: {k, _ => synchronized(mtx) {
+                delivered.add(k)
+            }})
+        cache.set('a', Test(1))
+        cache.set('b', Test(2))
+        sleep(Duration.second)
+        cache.close()
+        //同分候选（都没被用过、都新鲜）里淘汰更老的 'a'（保护新生），回调应拿到它的键
+        @Assert(1, delivered.size)
+        @Assert('a', delivered[0])
     }
 
     @TestCase

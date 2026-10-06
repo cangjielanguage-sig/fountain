@@ -21,13 +21,13 @@
 2. `CACHE-2`（§1.2）`ConcHashMap.computeIfAbsent` 不记账 size —— `getOrCompute` 建的条目不计入 `size`，**`maxSize` 上限完全失效**（f_data/f_orm/f_regex 三处真实使用，实测复现）　**✅已修复（2026-10-05，见 §1.2 修复标记）**
 3. `CACHE-3`（§1.3）`ConcHashMap.add` 覆盖已存在键多计、`clear()` 不归零 —— `size`/`isEmpty` 失真（实测复现）　**✅已修复（2026-10-05，见 §1.3 修复标记）**
 4. `CACHE-4`（§2.1）用户代码（`removeIf` 谓词 / `getOrCompute` 的 callable）在**段写锁内**执行 —— 同段操作被串行阻塞（实测：同段 292.87 ms vs 异段 0.0228 ms）　**✅已修复（2026-10-05，方案 C，见 §2.1 修复标记）**
-5. `CACHE-5`（§2.2）每个 `HeapCache` 实例泄漏 1 个阻塞线程 + 1 条全局 `atExit` 强引用；`WeakHeapCache` 另泄漏 1 个 `while(true)` 清扫线程　**✅已修复（2026-10-05，实现 `Resource` + `close()` 取消线程，见 §2.2；② 的 `atExit` 注册仍待定）**
+5. `CACHE-5`（§2.2）每个 `HeapCache` 实例泄漏 1 个阻塞线程 + 1 条全局 `atExit` 强引用；`WeakHeapCache` 另泄漏 1 个 `while(true)` 清扫线程　**✅已修复（2026-10-05：实现 `Resource` + `close()` 取消线程；② 的 `atExit` 注册已改为持弱引用，`close()` 后实例可回收，见 §2.2）**
 6. `CACHE-6`（§2.3）`once()` / `prolong()` 不判过期 ⇒ 可“复活”已过期条目（实测复现）　**✅已修复（2026-10-05，方案 A，见 §2.3 修复标记）**
 7. `CACHE-7`（§2.4）缓存关闭（原 `destroy()`，现 `close()`）之后再写入的条目**永不被清理**（实测复现）　**✅已修复（2026-10-05，方案 A2 + 主动清空/join，见 §2.4 修复标记）**
 8. `CACHE-8`（§2.5）`Priority` 比较基线的无锁竞争 + `compare` 的“保护新生”分支写反　**✅ 已修复（2026-10-05，①+②：② 按「保护新生」语义对称化年龄门并修正两条 recency 判据，④⑤ 两级 tie-break 亦已同向统一，见 §2.5）**
-9. 其余低危/待验证见 §3
+9. §3 低危 8 条已全清（见 §3.1）；待验证：`V1` 已了结；`V2` 已降级为**观测项**（不单造压测，随四个使用模块的端到端验证一起看，见 §3.2）
 
-> 修复进度（2026-10-05）：§1 的 3 条严重级（`CACHE-1` = `3171d664`、`CACHE-2` = `0e3d70d6`、`CACHE-3` = `14733baf`）已修复并并入 `sts/1.3.x`（`0448df98` 把主线拉进分支、`4a01a26f` 合入主分支，合并后主工作区复跑 6/6 PASSED）；**§2.1 `CACHE-4` 已按方案 C 修复并并入 `sts/1.3.x`**（callable 移出段写锁 + `removeIf` 两阶段，见 §2.1；`302bd9f2` 拉齐主线进分支、`e131fa7f` 合入主分支）；**§2.2 `CACHE-5` 已修复并并入 `sts/1.3.x`**（实现 `Resource` + `close()` 取消内部线程；按指示删除 `destroy`、`atExit` 注册与用例统一改 `close()`，原 `testDestroyStopsEvictionThread` 更名 `testCloseStopsEvictionThread`，见 §2.2；`2b49dfc1` 拉齐主线进分支、`eb8363c8` 合入主分支）；**§2.3 `CACHE-6` 已修复并并入 `sts/1.3.x`**（`once`/`prolong` 拒绝过期条目，见 §2.3；`8dbe2fc8` 拉齐主线进分支、`5fbe5e5f` 合入主分支）；**§2.4 `CACHE-7` 已修复并并入 `sts/1.3.x`**（`close` 主动清空并等内部线程结束后再返回 + 关闭后一切操作抛 `IllegalStateException`，见 §2.4）；**§2.5 `CACHE-8` 已修复**（① 比较基线字段的读写纳入 `p.lock`；② 年龄门对称化 + `cmp()` 的两条 recency 判据按「保护新生」修正；④⑤ 两级 tie-break 亦已同向统一，见 §2.5）；**已并入 `sts/1.3.x`**（`862eaf15` 拉齐主线进分支、`681f5156` 合入主分支，冲突标记清理 `7b69364e`/`f7711fc2`）；§3 的低危/待验证未动。用例 1 → 20 条（全绿）。
+> 修复进度（2026-10-05）：§1 的 3 条严重级（`CACHE-1` = `3171d664`、`CACHE-2` = `0e3d70d6`、`CACHE-3` = `14733baf`）已修复并并入 `sts/1.3.x`（`0448df98` 把主线拉进分支、`4a01a26f` 合入主分支，合并后主工作区复跑 6/6 PASSED）；**§2.1 `CACHE-4` 已按方案 C 修复并并入 `sts/1.3.x`**（callable 移出段写锁 + `removeIf` 两阶段，见 §2.1；`302bd9f2` 拉齐主线进分支、`e131fa7f` 合入主分支）；**§2.2 `CACHE-5` 已修复并并入 `sts/1.3.x`**（实现 `Resource` + `close()` 取消内部线程；按指示删除 `destroy`、`atExit` 注册与用例统一改 `close()`，原 `testDestroyStopsEvictionThread` 更名 `testCloseStopsEvictionThread`，见 §2.2；`2b49dfc1` 拉齐主线进分支、`eb8363c8` 合入主分支）；**§2.3 `CACHE-6` 已修复并并入 `sts/1.3.x`**（`once`/`prolong` 拒绝过期条目，见 §2.3；`8dbe2fc8` 拉齐主线进分支、`5fbe5e5f` 合入主分支）；**§2.4 `CACHE-7` 已修复并并入 `sts/1.3.x`**（`close` 主动清空并等内部线程结束后再返回 + 关闭后一切操作抛 `IllegalStateException`，见 §2.4）；**§2.5 `CACHE-8` 已修复**（① 比较基线字段的读写纳入 `p.lock`；② 年龄门对称化 + `cmp()` 的两条 recency 判据按「保护新生」修正；④⑤ 两级 tie-break 亦已同向统一，见 §2.5）；**§2.2 的 ②（`atExit` 注册持强引用）已修复**（改为 `WeakRef<HeapCache<V>>` + `CleanupPolicy.EAGER` 的弱引用闭包 ⇒ 关闭后实例可被 GC 回收，退出时自动 `close()` 的语义不变，见 §2.2 ②；分支 `review/f_cache` 上待并入）；**已并入 `sts/1.3.x`**（`862eaf15` 拉齐主线进分支、`681f5156` 合入主分支，冲突标记清理 `7b69364e`/`f7711fc2`）；**§3 低危 8 条已全清**（`L4`+`L2` 修复 ⇒ 编译警告 2 → 0；`L1`/`L3` 修复并补用例、`L8` 补齐用例、`L5`~`L7` 命名与文档，均见 §3.1）；**§5 的基准与堆/RSS 采样已补做**（`cjpm bench` 4 条 + `cjprof heap`/`/proc` 探针，逐条确认 `CACHE-8`/`CACHE-4`/`CACHE-5`/`CACHE-2`/`CACHE-3`，见 §5「基准与采样」），仅 `V2` 观测项与「长稳压力」未做。用例 1 → 27 条（全绿）。
 
 ---
 
@@ -221,7 +221,10 @@ store.add(key, Priority<V>(key, value, life, checkDuration, once))
 - 用例（`src/HeapCache_test.cj`）：`testDestroyStopsEvictionThread`（**钉住用例**，只用修复前已存在的 `destroy()` + 内部句柄）、`testHeapCacheIsResource`、`testWeakHeapCacheIsResource`（这两条属**接口补齐型**：`close()`/`isClosed()` 修复前不存在、断言写不出来 ⇒ 没有「修复前失败」证据，与 `MOCK-L6` 同类）。
 - 测量证据：**修复前** PASSED 9 / **FAILED 1**（`testDestroyStopsEvictionThread` 卡满 3 006 740 863 ns ≈ 3.01 s —— `f.get(3 s)` 抛 `TimeoutException`，即 `destroy()` 后消费线程永不退出；EXIT=1）→ **修复后** = **12/12 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**：`testDestroyStopsEvictionThread` **421 729 ns（≈0.42 ms，线程立即退出）**、`testHeapCacheIsResource` ≈100.8 ms、`testWeakHeapCacheIsResource` ≈1.01 s（分别对应两个线程的轮询周期）；f_cache 自身编译警告仍 2 条。日志 `/tmp/cache5_before.log`、`/tmp/cache5_after.log`。
 - 附带说明（2026-10-05 按指示补做）：`HeapCache.destroy()` **已删除**，全部调用点改为 `close()`（`atExit` 注册、用例；原 `testDestroyStopsEvictionThread` 更名 `testCloseStopsEvictionThread`，README 成员表同步）；`close()` 只负责线程/内存的释放，**关闭后 `set`/`get` 仍可调用**（`CACHE-7` 的语义另议，见 §2.4）。
-- **未做（本条目 ②，仍待定）**：`ExitCallbacks.atExit(254, destroy)` 仍是每实例一条注册，注册表是 `f_base` 的全局静态强引用 ⇒ 被应用丢弃的实例仍不会被 GC 回收。`close()` 已给出释放手段，但这条注册本身未改（方案可选项：改为「只注册一次」的静态入口，或直接去掉）。
+- **✅ 已修复（本条目 ②，2026-10-05，方案 A：弱引用间接层）**：`ExitCallbacks.atExit(254, close)` 改为注册**只捕弱引用**的闭包（`src/HeapCache.cj` 构造函数：`let selfRef = WeakRef<HeapCache<V>>(this, CleanupPolicy.EAGER)` + `ExitCallbacks.atExit(254, {=> if (let Some(cache) <- selfRef.value) { cache.close() }})`）⇒ `f_base` 的全局注册表（`TreeMap<UInt16, ArrayList<() -> Unit>>`，**无注销 API**）不再是实例的强根，**`close()` 之后对象可被 GC 回收**；「进程退出时若实例仍在 ⇒ 自动 `close()`（把已入队的淘汰回调投递完）」的语义保持不变。`EAGER` 不会误伤未 close 的实例：那种实例被自己的定时器/消费线程闭包强引用着（不满足「不可达」），弱引用不会提前清掉它 —— 本条目真正解决的就是「已 close 的实例仍被钉住」。提交 `fae91596`：`fix(f_cache): CACHE-5 ② atExit 注册改持弱引用（bug-cache §2.2 ②）`。
+  - 平台相关：`ExitCallbacks` 整体被 `@When[os != "Windows"]` 包着，Windows 上 `atExit` 是空实现 ⇒ 该泄漏只在非 Windows 平台存在（本改动在 Windows 上也无副作用）。
+  - 诚实标注：**无确定性用例可钉**（仓颉没有公开的 GC 触发入口，用例里无法断言「对象被回收」）⇒ 验收 = 代码层论证（修复前强根 = 注册闭包捕获 `this`；现改为捕 `WeakRef`）+ 20 条用例全绿。注册表仍随实例数线性增长（每实例一条小闭包，与修复前相同）——若将来实例数很大，再考虑「进程级只注册一次」或给 `f_base` 加注销能力。
+  - 相邻的独立条目：`HeapCache.cj:20` 的 `unused import 'std.env.atExit'` 当时未动，**已随 `CACHE-L4` 修复（2026-10-05）**。
 
 **位置**：`src/HeapCache.cj:49-57`、`:43`；`src/WeakHeapCache.cj:48-55`
 
@@ -293,7 +296,7 @@ std 契约（`std.collection.concurrent.LinkedBlockingQueue.remove()`）：**阻
 - 测量证据（`git stash` 把两个源文件回退到改动前、测试保持新版运行）：**修复前** PASSED 14 / **FAILED 2**（`testOperationsAfterCloseThrow`：关闭后 `get` 未抛异常；`testWeakHeapCacheIsResource`：清扫线程未 join、入口未抛；EXIT=1）→ **修复后** = **16/16 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**；f_cache 自身编译警告仍 2 条。日志 `/tmp/cache7_before.log`、`/tmp/cache7_after.log`。
   - 诚实标注：`testCloseClearsAndJoinsBeforeReturn` 在「修复前」那次运行是**通过**的（1 ms 窗口偶合上 100 ms 轮询边界，属运气）⇒ 它**不是**可靠的修复前失败证据，作为**修复后的保证性用例**保留（修复后为确定性通过）。
 - 契约变化（有意）：关闭后不再允许任何读写/清理操作（此前是「可继续写入且永不清理」）⇒ 已写入 README；仓库内使用方（f_data / f_orm / f_regex / f_jwt / f_security / fdemo）都不调用 `close()`、也不会关闭后复用实例 ⇒ **无下游影响**。
-- 相关但未做（`CACHE-5` 的 ②）：`ExitCallbacks.atExit(254, close)` 仍是每实例一条全局强引用注册 ⇒ 关闭后实例本身仍被全局表引用（条目与线程已释放，但对象无法回收）。
+- 相关（`CACHE-5` 的 ②）：`ExitCallbacks.atExit(254, close)` 曾是每实例一条全局**强引用**注册 ⇒ 关闭后实例本身仍被全局表引用（条目与线程已释放，但对象无法回收）。**✅ 2026-10-05 已修复**：注册改持弱引用（`WeakRef` + `CleanupPolicy.EAGER`），关闭后实例可被 GC 回收，退出时自动 `close()` 的语义不变 —— 见 §2.2 ②。
 
 **位置**：`src/HeapCache.cj` 的 `close()` 与 `startTimer()` 回调
 
@@ -366,19 +369,22 @@ std 契约（`std.collection.concurrent.LinkedBlockingQueue.remove()`）：**阻
 
 ### 3.1 低危（8 条）
 
-- **`CACHE-L1` `ConcHashMapKeys.contains(all!)` 是「任一包含」而非「全部包含」**：`src/ConcHashMap.cj:75-80` 在循环里 `return true` 命中即返回 ⇒ 与 std `contains(all:)` 语义相反；且 `ConcHashMapKeys`/`ConcHashMapValues`/两个 Iterator（`src/ConcHashMap.cj:22-133`）在本仓库**无任何使用点**（死代码，只有 `ConcHashMapKeysIterator` 经 `keys()`… 实际 `ConcHashMap` 也没有 `keys()`/`values()` 成员）。修法：改成「全部命中才 true」，或直接删除这 4 个类。**实测（P4）**：`contains(all: ['b','a'])` 在只有 `'a'` 时返回 `true`。
-- **`CACHE-L2` `WeakHeapCache.get` 的 lambda 返回值被丢弃**（`src/WeakHeapCache.cj:81-89`，编译警告 `unused expression` 指向 `:86`）：`entryView` 的回调返回 `Unit`，真正取值靠 `entryView` 自身返回 `?V`；写法容易误导（看起来像回调在产出结果）。`set` 里的 `try/finally`（`:59-68`）同样绕。修法：把回调体写成纯副作用（显式 `()`），或直接换成「`get` 未命中就用 `add`」的两步写法并注释原子性理由。
-- **`CACHE-L3` `WeakKey` 把「键」放进弱引用**（`src/WeakHeapCache.cj:22-45`）：键是每次调用新构造的 `Box<String>`，只被 `WeakRef` 弱引用 ⇒ 在 `CleanupPolicy.DEFERRED`（GC 尽量保活、内存不足才回收）下平时可用（**实测 P5 通过**），但内存紧张时键会被回收 ⇒ 值仍被强引用时条目也会静默消失、且 `get` 期间键可能失效导致 miss。弱引用缓存的常规做法是**键强、值弱**。修法：`WeakKey` 持强引用（`Box<String>`/`String`），只让值 `WeakRef`。顺带：每次 `get`/`set` 都新分配 `Box<String>+WeakRef`（热路径额外分配），键强引用后也可缓存键对象。
-- **`CACHE-L4` 两处编译警告**（现在仍 2 条，行号随 `CACHE-5`/`CACHE-7` 的改动后移）：`src/HeapCache.cj:20` `unused import 'std.env.atExit'`（实际用的是 `f_base` 的 `ExitCallbacks.atExit`）；`src/WeakHeapCache.cj:135` `unused expression`（见 L2）。
-- **`CACHE-L5` 命名/文档细节**：`HeapCache.evicated`（`src/HeapCache.cj:131-133`）应为 expired 语义；`README.md:102`「弱引用堆缓存」一节把 `WeakHeapCache` 的 `remove`/`removeIf`/`size` 等成员列全了，但没有说明**清扫有 1 s 延迟**（`size` 含未被清扫的失效条目，实测 `P5` 的 `size` 与 `contains` 口径差 ≤ 1 s）。
-- **`CACHE-L6` 迭代一致性未文档化**：`SyncLinkedHashMap.iterator()`（`src/SyncLinkedHashMap.cj:26-28`）在**锁外**创建底层迭代器、每次 `next()` 才取读锁；`ConcHashMapIterator.next()`（`src/ConcHashMap.cj:146-155`）跨段无快照，`doNextSegment` 的越界分支与循环条件 `cur <= m.concurrency`（`:147`）冗余。定时淘汰与业务读并发时迭代结果不保证包含本轮新增——可接受，但应写进 README。
-- **`CACHE-L7` 惰性过期与口径差**：`get` 对已过期条目只返回 `None`，不摘除（`src/HeapCache.cj:135-140`）⇒ `size` 会包含「已过期未清扫」的条目（最长 `checkDuration`）。属常见惰性过期设计，但与 `contains` 的口径差异未文档化（叠加 `CACHE-7` 后会变成永驻）。
-- **`CACHE-L8` 用例覆盖极薄**　**🟡 部分改善（2026-10-05）**：审查时整个模块只有 1 个用例（`src/HeapCache_test.cj`，8.02 s，绝大部分是 `sleep`）；`CACHE-1`~`CACHE-8` 的修复过程中补到 **20 条** —— `getOrCompute` 系列（含「不持段锁」）、`once`/`prolong` 拒绝过期、`removeIf` 不持段锁、`Priority`/`compare` 的年龄差与 tie-break、`close`/`Resource`/关闭后抛异常、`set(life:)`、`clear`、`set` 覆盖计数、`maxSize` 淘汰用量维度（原 `destroy` 相关用例随接口删除改为 `close()`）。**仍缺**：`WeakHeapCache` 的缓存语义（目前只测了它的 `Resource` 行为）、`ConcHashMap`/`SyncLinkedHashMap` 本身、`evictionCallback` 的正式用例 —— 可直接采用本报告各条的 DT 补。
+- **`CACHE-L1` `ConcHashMapKeys.contains(all!)` 是「任一包含」而非「全部包含」**：`src/ConcHashMap.cj:75-80` 在循环里 `return true` 命中即返回 ⇒ 与 std `contains(all:)` 语义相反；且 `ConcHashMapKeys`/`ConcHashMapValues`/两个 Iterator（`src/ConcHashMap.cj:22-133`）在本仓库**无任何使用点**（死代码，只有 `ConcHashMapKeysIterator` 经 `keys()`… 实际 `ConcHashMap` 也没有 `keys()`/`values()` 成员）。修法：改成「全部命中才 true」，或直接删除这 4 个类。**实测（P4）**：`contains(all: ['b','a'])` 在只有 `'a'` 时返回 `true`。　**✅ 已修复（2026-10-05，改法取「修正语义」而非「删类」）**：`contains(all:)` 改为「全部命中才 true」（与 std `Collection.contains(all:)` 及本 map 的 `containsAll` 一致；空集合按 vacuous truth 返回 true）。取此路线的原因：这 4 个类是**包内可见**（`class …` 无修饰符、构造器也不收 `public`）⇒ 改语义**不涉及公开 API**、零破坏；删类族虽然更彻底，但留待单独决定。用例：新建 `src/ConcHashMap_test.cj` 的 `testKeysContainsAllRequiresEveryElement`（单键 / 全命中 / 有一个缺失 / 全缺失 / 空集合 / size / isEmpty）—— 修复前 **20 PASSED / 1 FAILED**，修复后 **21/21 PASSED、FAILED 0、ERROR 0、EXIT=0**，编译警告仍 0 条。日志 `/tmp/cache_l1_before.log`、`/tmp/cache_l1_after.log`。
+- **`CACHE-L2` `WeakHeapCache.get` 的 lambda 返回值被丢弃**（`src/WeakHeapCache.cj:81-89`，编译警告 `unused expression` 指向 `:86`）：`entryView` 的回调返回 `Unit`，真正取值靠 `entryView` 自身返回 `?V`；写法容易误导（看起来像回调在产出结果）。`set` 里的 `try/finally`（`:59-68`）同样绕。修法：把回调体写成纯副作用（显式 `()`），或直接换成「`get` 未命中就用 `add`」的两步写法并注释原子性理由。　**✅ 已修复（2026-10-05，与 `L4` 同一提交）**：`get` 改为直接 `cache.get(...)` 纯读取，不再有被丢弃的 lambda 返回值。**更正一处过度声明**：查证 std 文档 —— `entryView` **只有当回调把 value 置为非 `None` 时才新增条目**，原实现只读不写 ⇒ **不会虚增 `size`**，所以本条是**写法/警告**问题（那条 `unused expression` 警告的来源），**行为不变**；先前「miss 会插入空条目 ⇒ size 虚增」的说法已作废（代码注释、用例注释、`§0` 与 `L4` 标记同步更正）。`set` 去掉 `try/finally` 绕写法，改为「先取旧值（仅当仍存活）→ 写入 → 返回旧值」，`weakRef()` 补显式返回类型 `WeakRef<T>`。`getOrCompute` 保留 `entryView`（它的 lambda 本就是语句体、需要原子「查-算-写」）不动。
+- **`CACHE-L3` `WeakKey` 把「键」放进弱引用**（`src/WeakHeapCache.cj:22-45`）：键是每次调用新构造的 `Box<String>`，只被 `WeakRef` 弱引用 ⇒ 在 `CleanupPolicy.DEFERRED`（GC 尽量保活、内存不足才回收）下平时可用（**实测 P5 通过**），但内存紧张时键会被回收 ⇒ 值仍被强引用时条目也会静默消失、且 `get` 期间键可能失效导致 miss。弱引用缓存的常规做法是**键强、值弱**。修法：`WeakKey` 持强引用（`Box<String>`/`String`），只让值 `WeakRef`。顺带：每次 `get`/`set` 都新分配 `Box<String>+WeakRef`（热路径额外分配），键强引用后也可缓存键对象。　**✅ 已修复（2026-10-05）**：`WeakKey` 改为**持强引用**（`private let key: String`，去掉 `WeakRef<Box<String>>` 与 `deferred()` 工厂，构造点统一改 `WeakKey(key)`），只让值保持 `WeakRef<T>`（`CleanupPolicy.DEFERRED` 不变）⇒ 「值仍被强引用、条目却因键被回收而静默消失 / `get` 期间键失效导致 miss」的隐患消除；顺带省掉每次 `get`/`set` 的 `Box<String>` + `WeakRef` 两次分配。连带改动：清扫线程条件由 `k.isNone() || v.value.isNone()` 简化为 `v.value.isNone()`（键已不可能失效），`removeIf` 的谓词直接取强引用键。用例：新建 `src/WeakHeapCache_test.cj`（4 条：`set`/`get`/`getOrDefault`/`remove` 语义；`getOrCompute`/`getOrStore`；`get` 未命中不建条目 + `removeIf`/`clear`；关闭后抛异常与可重复 `close`）⇒ 全量 **25/25 PASSED、FAILED 0、ERROR 0、EXIT=0**，编译警告 0 条（`/tmp/cache_l3b.log`）。
+  - 诚实标注：**键被 GC 回收导致条目消失**这一后果取决真实 GC 时机，用例里无法确定性复现（无 GC 触发入口，`DEFERRED` 下小规模压测也不必然触发）⇒ 本条验收 = 代码层论证（键已不是弱引用）+ 上述语义用例；丢失率量化属 `CACHE-V2`，该条已按作者决策降级为**观测项**（2026-10-05，见 §3.2）。
+- **`CACHE-L4` 两处编译警告**（原有 2 条，行号随 `CACHE-5`/`CACHE-7` 的改动后移）：`src/HeapCache.cj:20` `unused import 'std.env.atExit'`（实际用的是 `f_base` 的 `ExitCallbacks.atExit`）；`src/WeakHeapCache.cj:135` `unused expression`（见 L2）。　**✅ 已修复（2026-10-05，与 `L2` 同一提交）**：删掉未用的 `import std.env.atExit`；`unused expression` 由 `L2` 的 `get` 改写消除 ⇒ **f_cache 自身编译警告 2 → 0**（强制全量重编验证，`/tmp/cache_l4l2.log`）。
+- **`CACHE-L5` 命名/文档细节**：`HeapCache.evicated`（`src/HeapCache.cj:131-133`）应为 expired 语义；`README.md:102`「弱引用堆缓存」一节把 `WeakHeapCache` 的 `remove`/`removeIf`/`size` 等成员列全了，但没有说明**清扫有 1 s 延迟**（`size` 含未被清扫的失效条目，实测 `P5` 的 `size` 与 `contains` 口径差 ≤ 1 s）。　**✅ 已修复（2026-10-05）**：`evicated` → `expired`（`private` 方法，改名不涉公开 API；定义 + 6 处调用点一并改）；README「并发与约定」新增 `WeakHeapCache` 条目（键强值弱、清扫线程 1 s 一轮、`size` 与 `get`/`contains` 的口径差最长 1 s、`close()` 主动清空并等线程结束）。
+- **`CACHE-L6` 迭代一致性未文档化**：`SyncLinkedHashMap.iterator()`（`src/SyncLinkedHashMap.cj:26-28`）在**锁外**创建底层迭代器、每次 `next()` 才取读锁；`ConcHashMapIterator.next()`（`src/ConcHashMap.cj:146-155`）跨段无快照，`doNextSegment` 的越界分支与循环条件 `cur <= m.concurrency`（`:147`）冗余。定时淘汰与业务读并发时迭代结果不保证包含本轮新增——可接受，但应写进 README。　**✅ 已修复（2026-10-05）**：README「并发与约定」新增「迭代一致性」条目（弱一致：锁外创建、逐段/逐项取锁、跨段无快照 ⇒ 不保证看到本轮写入、不保证顺序）；顺带把 `ConcHashMapIterator.next()` 的循环条件由 `cur <= m.concurrency` 收紧为 `cur < m.concurrency`（原条件会多跑一轮空迭代）；`doNextSegment` 的越界分支保留（防御式）。新增的 `ConcHashMap` 迭代用例（见 `L8`）覆盖该路径。
+- **`CACHE-L7` 惰性过期与口径差**：`get` 对已过期条目只返回 `None`，不摘除（`src/HeapCache.cj:135-140`）⇒ `size` 会包含「已过期未清扫」的条目（最长 `checkDuration`）。属常见惰性过期设计，但与 `contains` 的口径差异未文档化（叠加 `CACHE-7` 后会变成永驻）。　**✅ 已修复（2026-10-05，文档路线）**：`HeapCache` 一侧的口径差**审查前已在 README「并发与约定」写明**（`size` 与 `get`/`contains` 的口径差条目）；本次补上 `WeakHeapCache` 一侧（值失效后最长 1 s 仍计入 `size`）⇒ 两个缓存的口径差现在都在 README。**行为不变**：惰性过期保留（`get` 对已过期条目只返回 `None`、不摘除，摘除交给定时清扫/`removeIf`），与 `CACHE-7` 的「关闭后清空」互不影响。
+- **`CACHE-L8` 用例覆盖极薄**　**✅ 已补齐（2026-10-05）**：审查时整个模块只有 1 个用例（`src/HeapCache_test.cj`，8.02 s，绝大部分是 `sleep`）；`CACHE-1`~`CACHE-8` 的修复过程中补到 **20 条** —— `getOrCompute` 系列（含「不持段锁」）、`once`/`prolong` 拒绝过期、`removeIf` 不持段锁、`Priority`/`compare` 的年龄差与 tie-break、`close`/`Resource`/关闭后抛异常、`set(life:)`、`clear`、`set` 覆盖计数、`maxSize` 淘汰用量维度（原 `destroy` 相关用例随接口删除改为 `close()`）。**已补齐（2026-10-05，随 `L1`~`L3` 与本条一并）**：再补 7 条 ⇒ 全模块 **27 条**（`ConcHashMap` 直接用例 2 条：`contains(all:)` 语义、`size` 记账/覆盖/`computeIfAbsent`/迭代/`remove`/`removeIf`；`WeakHeapCache` 语义 4 条：`set`/`get`/`getOrDefault`/`remove`、`getOrCompute`/`getOrStore`、`get` 未命中不建条目 + `removeIf`/`clear`、关闭后抛异常；`evictionCallback` 1 条）。**唯一未单独立用例的是 `SyncLinkedHashMap`**：它是 `ConcHashMap` 的分段实现，`add`/`get`/`remove`/`removeIf`/迭代均通过 `ConcHashMap` 直接用例与 `HeapCache`/`WeakHeapCache` 全链路用例覆盖 ⇒ 如需直接用例请示意。测量：**27/27 PASSED、FAILED 0、ERROR 0、EXIT=0**，编译警告 0 条（`/tmp/cache_l8b.log`）。
 
-### 3.2 待验证（2 条，需与作者确认或压测）
+### 3.2 待验证（`V1` 已了结；`V2` 定为观测项）
 
 - **`CACHE-V1` `Priority.compare` 的淘汰顺序是否符合设计**（见 `CACHE-8`）　**✅ 已了结（2026-10-05）**：作者确认期望方向为**保护新生**，`CACHE-8` ② 已按此重写 `compare`（年龄门对称化 + `cmp()` ②~⑤ 级判据全部同向），并新增 3 条仅一维差异的用例逐一固定（周期内使用次数 / 最后使用时间 / 年龄差）；`test()` 的旧断言（锁定「偏老」行为）已按新语义修正 —— 见 §2.5。
-- **`CACHE-V2` `WeakRef` 键在真实内存压力下的丢失率**：`CACHE-L3` 的后果需要压测（持续分配 + 观察 `WeakHeapCache` 命中率/条目数）才能量化；本次未做（无 GC 触发入口，且 `DEFERRED` 策略下小规模压测不必然触发）。
+- **`CACHE-V2` `WeakRef` 条目在真实内存压力下的失效率**　**已降级为观测项（2026-10-05，作者决策：不单造压测）**。理由：① `CACHE-L3` 修复后「键被 GC 回收 ⇒ 条目静默消失」的**前提已不存在**（键改强引用）；② 剩下的只有**值**被 GC 回收一种情形，而值被回收本就是弱引用缓存的正常语义（值活多久由调用方决定）；③ 仓颉无 GC 触发入口、`DEFERRED` 策略下小规模压测不必然触发 ⇒ 库内做不出可信数字。
+  - **观测结果（2026-10-05，四个使用模块各跑一遍全量用例）**：`f_data` **104/104 PASSED**、`f_regex` **3/3**、`f_jwt` 14 条中 3 PASSED / **11 ERROR**（全是 HMAC/密钥类用例，主线同版本**同样 11 ERROR** ⇒ 原有问题，与缓存无关）、`f_orm` 33 条中 **32 PASSED / 1 ERROR**（`ORMConfigTest.testPoolMaxWaiting`：`Config.getData<Duration>` 的配置解析/默认值问题；`f_config`/`ORMConfig` 依赖里**没有** `f_cache`，也不使用本次改动的 `ConcHashMap`/`SyncLinkedHashMap`；**主线基线复跑同一结果（32/33、同一条 ERROR）** ⇒ 确认为原有问题）。
+  - **结论**：没有任何一条端到端失败与缓存行为相关，也没有观测到条目异常消失 ⇒ 观测项在本轮以「无异常」结项；量的丢失率仍只能在真实长跑里看（不单独立项）。日志 `/tmp/cache_e2e.log`、`/tmp/jwt_branch.log`、`/tmp/orm_branch.log`。
 
 ---
 
@@ -392,7 +398,7 @@ std 契约（`std.collection.concurrent.LinkedBlockingQueue.remove()`）：**阻
 - 无 `ThreadLocal`、无对象池；唯一的进程级静态可变状态是 `f_base` 的 `ExitCallbacks` 注册表（被 `HeapCache` 用来注册 `destroy`）与各模块里的静态缓存实例（`f_data`/`f_orm`/`f_regex` 各一个）。
 - 无持久化/序列化；无「键过期通知」以外的副作用（`evictionCallback` 是唯一对外回调，且**实测通路正常**，见 §5 P6）。
 
-**仓库内使用面**：`f_data/src/path/CacheDataPath.cj:21,24`（`getOrCompute`）、`f_orm/src/base/SqlDSL.cj:45,47`（`getOrCompute`）、`f_regex/src/RegexFromString.cj:28,61`（`getOrCompute`）、`f_jwt/src/JwtIdCache.cj:40-63`（`set(life:)`/`set(dieAt:)`）、`f_security/src/HeapCacheStore.cj:19-24`（`set` 默认寿命 ✓ 不受 `CACHE-1` 影响）、`fdemo/user/src/util/UserSessionCache.cj:27`（经 f_security）、`src/cache/cache.cj:18`（对外 re-export）。`WeakHeapCache` **无任何使用者**、也无用例（其缺陷目前只在库内暴露）。
+**仓库内使用面**：`f_data/src/path/CacheDataPath.cj:21,24`（`getOrCompute`）、`f_orm/src/base/SqlDSL.cj:45,47`（`getOrCompute`）、`f_regex/src/RegexFromString.cj:28,61`（`getOrCompute`）、`f_jwt/src/JwtIdCache.cj:40-63`（`set(life:)`/`set(dieAt:)`）、`f_security/src/HeapCacheStore.cj:19-24`（`set` 默认寿命 ✓ 不受 `CACHE-1` 影响）、`fdemo/user/src/util/UserSessionCache.cj:27`（经 f_security）、`src/cache/cache.cj:18`（对外 re-export）。`WeakHeapCache` **无任何使用者**（包外）；用例：审查后已有 5 条（4 条语义 + 1 条 `Resource`，见 `L3`/`L8`）。
 
 ---
 
@@ -402,6 +408,7 @@ std 契约（`std.collection.concurrent.LinkedBlockingQueue.remove()`）：**阻
 |---|---|---|
 | 既有用例 | `cjpm test --no-capture-output`（WSL Ubuntu-24.04，SDK 1.3.0-alpha.20261001001050） | **1/1 PASSED，ERROR 0，FAILED 0，`cjpm test success`（EXIT=0）**；唯一用例 `test` 耗时 8 024 104 487 ns（≈ 8.02 s，主要是 `sleep`）。日志 `/tmp/cache_base.log` |
 | 编译警告 | 同一构建 | 构建过程共 30 条 warning（含依赖模块 f_base/f_collection），**f_cache 自身 2 条**：`HeapCache.cj:20` unused import、`WeakHeapCache.cj:86` unused expression（见 `CACHE-L4`） |
+| **修复完成后**（2026-10-05，分支 `review/f_cache`；本轮多次强制全量重编 f_cache） | `cjpm test --no-capture-output`（同一 SDK/WSL） | **27/27 PASSED、FAILED 0、ERROR 0、`cjpm test success`（EXIT=0）**；**f_cache 自身编译警告 2 → 0 条**。用例 1 → 27；§1 严重 3 条 + §2 中危 5 条 + §3 低危 8 条全部了结（`V1` 已了结、`V2` 未做）。提交范围 `00ff79a5`…`3a8a01cc`（详见 §0）。末次全量日志 `/tmp/cache_l567.log` |
 
 **探针实测**（临时用例，跑完即删，未入库）：
 
@@ -434,7 +441,50 @@ println('P2a size=${c.size}')                       // 0（期望 5）
 c.removeIf { k, _ => if (k == 'victim') { sleep(Duration.millisecond * 400) }; false }
 ```
 
-**未做**：基准（`cjpm bench`）、堆/RSS 采样（`cjprof heap`）、长稳压力（线程/实例累积速率）、`WeakRef` 键丢失率的压测、真实业务路径（f_data 编译 / f_regex 编译 / f_jwt 过期语义）的端到端复现。`CACHE-1`/`CACHE-2` 的业务影响是按调用点静态推断 + 库内探针实测，**未**在四个使用模块里端到端验证。
+### 基准与采样（2026-10-05：`cjpm bench` + 探针 + `cjprof heap`）
+
+**基准**（`f_cache/src/HeapCache_bench.cj`，`cjpm bench`，WSL / SDK 1.3.0-alpha.20261001001050；单次运行中位数，Err% ≤ 11%，日志 `/tmp/cache_bench.log`）：
+
+| 用例 | 覆盖点 | Median | Mean |
+|---|---|---|---|
+| `benchGetHit` | 命中：分段读锁 → `Priority.load`（含 `CACHE-8` ① 新增的 `p.lock`） | **2.561 µs** | 2.658 µs |
+| `benchSetSameKey` | 同键写：段写锁 + 覆盖 | **2.578 µs** | 2.751 µs |
+| `benchSetDistinctKeys` | 不同键写：新建 `Priority` + size 记账 + 淘汰压力（键空间 2×`maxSize`） | **5.317 µs** | 5.395 µs |
+| `benchSetUnderEvictionPressure` | `maxSize=1` 两键交替写，定时淘汰持续竞争（`compare` 路径） | **3.925 µs** | 4.062 µs |
+
+⇒ **`CACHE-8` 确认**：①新增的两处加锁没有给命中路径带来可见代价（2.56 µs，与「同键写」同量级）；②重写后的 `compare`/淘汰路径在持续竞争下无病态成本（3.9 µs）。`cjpm bench` = `PASSED: 4, FAILED: 0, ERROR: 0`、`cjpm bench success`。
+（过程说明：`benchSetDistinctKeys` 首版用无界键空间 `k${i}`，38 s 灌入数百万条导致 OOM 崩溃 —— 属**基准设计问题**，改 `i % 2000` 有界后通过；崩溃不是产品缺陷。）
+
+**探针 1（`CACHE-4`）—— 同段读不再被用户代码阻塞**（复现本表 P10；`concurrencyLevel=4` 精确挑同段键，谓词内 `sleep(400ms)`）：
+
+| | 修复前（§5 P10 记录） | 本次实测（修复后） |
+|---|---|---|
+| 同段 `get` 延迟 | 292.87 ms | **55 µs 613 ns**（≈5300×） |
+| 异段 `get` 延迟 | 0.0228 ms | 2.7 µs |
+
+⇒ 同段与异段回到同一量级 ⇒ 谓词确实在段写锁之外执行 ✓ **`CACHE-4` 确认**。
+
+**探针 2（`CACHE-5`）—— create+close 不泄漏线程**：连续 50 轮 `HeapCache` + `WeakHeapCache` 各建一个并 `close()`：
+
+| 采样点 | `Threads:` | `VmRSS:` |
+|---|---|---|
+| 基线 | **10** | 38 700 kB |
+| 50 轮 create+close 后 | **10** | 51 724 kB |
+| 静置 3 s | **10** | 51 980 kB |
+
+⇒ 线程数**持平**（修复前每实例泄漏 1~2 个线程，50 轮至少 +75）✓；RSS +13 MB 属「未触发 GC 的分配」而非泄漏证据（同点线程数不变；`cjprof heap -t` 快照里线程栈全是 unittest 框架自己的 —— `testRunnerEntryMain`/`ProgressReporter`/`parallelOrderedMap`，**没有**缓存的定时器/消费线程/清扫线程）⇒ **`CACHE-5` 确认**。
+
+**探针 3（`CACHE-2`/`CACHE-3`）—— size 记账真实、上限生效**：`maxSize=1000` 的缓存经 `getOrCompute` 灌 20 000 个不同键：
+
+| 采样点 | `size` | `VmRSS:` |
+|---|---|---|
+| 灌入前 | — | 52 236 kB |
+| 灌 20 000 键后 | **20 000**（记账跟得上真实条目数；修复前恒为 0） | 95 696 kB |
+| 静置 3 s（定时淘汰跑过） | **1 000**（= `maxSize`，上限生效；修复前完全失效） | 80 948 kB |
+
+⇒ **`CACHE-2`/`CACHE-3` 确认**（记账真实 + 上限收口 + 淘汰后 RSS 回落）。
+
+**剩余未做**：长稳压力（线程/实例累积速率）。**已补做（2026-10-05）**：基准与堆/RSS 采样（见上）；真实业务路径的端到端复现 —— 四个使用模块各跑一遍全量用例：`f_data` **104/104 PASSED**、`f_regex` **3/3**、`f_jwt` 3/14（11 条 HMAC/密钥类 ERROR，主线同样复现，属原有问题，见 `bug-cross.md` `X-3`）、`f_orm` 32/33（1 条 `ORMConfigTest.testPoolMaxWaiting`，主线基线同一条，属原有问题，见 `bug-cross.md` `X-2`）；`WeakRef` 压测项按 `CACHE-V2` 的决策取消（改为观测项）。日志 `/tmp/cache_e2e.log`、`/tmp/cache_bench.log`、`/tmp/cache_probe_run.log`、`/tmp/cache_heap.data`。
 
 ---
 
