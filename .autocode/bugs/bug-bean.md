@@ -166,6 +166,9 @@
   **约束提示**：`T <: Object` ⇒ `T` 只能用**类**（仓颉里 interface 不是 `Class-Object` 的子类型；接口可作被注解的类型，但不能作 `T`）。
   **用例**：`f_bean/src/test/bean_annotation_lookup_test.cj`（6 条）—— 注解在自身／父类／接口三种位置、`T`／`A`／`cond` 过滤、`order` 顺序（code 1..3）、map 键可用 `Exactly(name)` 查回同一 bean、空结果、无命中即抛 `BeanException`、未命中 prototype 不被实例化（计数对照）。
   **回归**：全套 **TOTAL 31 / PASSED 31 / ERROR 0 / FAILED 0**；`cjpm build` exit 0。README 同步新增「按注解获取bean」小节。
+  **补记（2026-10-06 同日，第二轮）**：① 加 `lookupOptionByAnnotation`（`?T` 变体，0 参 + `cond` 重载）；② **更正上一轮一处不实描述** —— 上文与 README 原先写的「含元注解链」当时**并不成立**：`doRegister` 的类型队列被 `if (isClass && …)` 挡住，**注解节点不展开自身的注解** ⇒ 元注解（注解的注解）根本没进 `annotationMap`。本次一并修掉：条件改为 `!isClass || !(std/基础接口白名单)`（注解节点也展开自身注解），并加**节点去重**（`HashSet<TypeInfo> visited`）—— 去重不改变两张表的最终内容（插入幂等），但避免共享节点反复展开、并防止「A 注解 B、B 注解 A」这类元注解环在注册期死循环 ⇒ 「元注解链」**从不实变为属实**。
+  **补记用例**：`f_bean/src/test/bean_annotation_meta_test.cj`（1 条）—— `@AnnMeta` 修饰注解 `@AnnComposed`、bean 只标 `@AnnComposed` ⇒ 按 `@AnnMeta` 查得到（`getList`/`getMap` 同理）、按 `@AnnComposed` 也查得到、`lookupOptionByAnnotation` 命中并取回同一 bean、无关注解查为空。
+  **补记回归**：全套 **TOTAL 32 / PASSED 32 / ERROR 0 / FAILED 0**；`cjpm build` exit 0（9 条既有警告）。
 - `BEAN-L7` ✅**已修复（2026-10-05）** — ~~`BeanFactory.cj:109-115`：注册循环体内定义局部函数并捕获 `isClass`（每类型节点一次闭包分配，注册期）。~~
   **修复记录**：新增**无捕获**的私有静态函数 `wrapType(isClass, typeInfo)`（`BeanFactory.cj:25-36`）；`doRegister` 里删掉循环体内的局部函数，两处调用点（`superInterfaces` 循环、`superClass` 链）改走它 ⇒ **每个类型节点的闭包分配次数 = 0**（原先 = 类型闭包大小 − 2：`Any`/`Object` 两个节点在被 pop 后就 `continue` 了，不建闭包）。入队的 `ClassType`/`AnnotationType` 与顺序一字不差，**不触碰 `annotationMap` 与注解展开能力**（见 `BEAN-L6` 更正）。
   **测量证据**（最小对照探针：同一循环骨架两形态、每节点包装 2 次、min-of-6、n = 30 万；生产里的 `BeanType`/`ClassType`/`AnnotationType` 是文件私有类型，测试包拿不到 ⇒ 载荷换成探针自有 enum）：**闭包版 51.97 ns/节点 → 静态函数版 37.12 ns/节点，每节点省 14.85 ns（-28.6%）**；折算：一个 bean 的类型闭包通常 3~6 个可展开节点 ⇒ **每 bean 省 ~45~90 ns**（注册期一次性）。探针已删、未入库；日志 `/tmp/bean_l7_probe.log`。

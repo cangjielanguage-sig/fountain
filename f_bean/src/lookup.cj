@@ -162,6 +162,20 @@ public func lookupByAnnotation<T, A>(cond: StringCond): T where T <: Object, A <
 }
 
 /**
+ * 取「类型被注解 `A` 修饰且类型是 `T` 的子类型、名字满足 `cond`」的第一个 bean，没找到返回 `None`。
+ */
+public func lookupOptionByAnnotation<T, A>(): ?T where T <: Object, A <: Annotation {
+    lookupOptionByAnnotation<T, A>(StringCond.IgnoreCond)
+}
+
+/**
+ * 同 `lookupOptionByAnnotation`，带名字条件。
+ */
+public func lookupOptionByAnnotation<T, A>(cond: StringCond): ?T where T <: Object, A <: Annotation {
+    BeanFactory.instance.getFirstByAnnotation<T, A>(cond: cond)
+}
+
+/**
  * 取全部「类型被注解 `A` 修饰且类型是 `T` 的子类型、名字满足 `cond`」的 bean（顺序同注解桶）。
  */
 public func lookupListByAnnotation<T, A>(): ArrayList<T> where T <: Object, A <: Annotation {

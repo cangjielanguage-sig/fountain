@@ -79,11 +79,18 @@ public class BeanFactory {
             let object = TypeInfo.of<Object>()
             typeQueue.addLast(ClassType(any))
             typeQueue.addLast(ClassType(object))
+            // §3.1 / BEAN-L6：同一类型节点只展开一次。插入本身幂等 ⇒ 去重不改变两张表的最终内容，
+            // 但能避免共享节点被反复展开，并防止「注解元链成环」（A 注解 B、B 注解 A）时死循环。
+            let visited = HashSet<TypeInfo>()
             while (let Some(bt) <- typeQueue.removeFirst()) {
                 let (klass, map, isClass) = match(bt){
                     case ClassType(klass) => (klass, beanTypeMap, true)
                     case AnnotationType(klass) => (klass, annotationMap, false)
                 }
+                if (visited.contains(klass)) {
+                    continue
+                }
+                visited.add(klass)
                 if (let Some(set) <- map.get(klass)) {
                     set
                 } else {
@@ -94,8 +101,11 @@ public class BeanFactory {
                 if(klass == any || klass == object){
                     continue
                 }
-                if (isClass && 
-                    !(klass.qualifiedName.startsWith('std.') || 
+                // §3.1 / BEAN-L6：注解节点也展开自身的注解（**元注解链**）—— 原先只有类节点展开
+                // `annotations`，于是「`@Meta` 修饰注解 `@A`、bean 被 `@A` 修饰」时按 `@Meta` 查不到该 bean。
+                // 类节点仍沿用 std/基础接口白名单（避免给每个 bean 都挂上 std 侧注解）。
+                if (!isClass ||
+                    !(klass.qualifiedName.startsWith('std.') ||
                       klass.qualifiedName.startsWith('stdx.') || 
                       klass.qualifiedName.startsWith('Equatable<') ||
                       klass.qualifiedName == 'Hashable' ||

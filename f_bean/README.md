@@ -145,6 +145,12 @@ public interface BeanWeight<W> where W <: Comparable<W> & Addable<W> {
 #### `lookupByAnnotation<T, A>(cond: StringCond): T`
 获取第一个满足条件的bean，且bean名称符合`cond`指定条件，没找到抛异常
 
+#### `lookupOptionByAnnotation<T, A>(): ?T`
+获取第一个满足条件的bean，没找到返回`None<T>`
+
+#### `lookupOptionByAnnotation<T, A>(cond: StringCond): ?T`
+获取第一个满足条件的bean，且bean名称符合`cond`指定条件，没找到返回`None<T>`
+
 #### `lookupListByAnnotation<T, A>(): ArrayList<T>`
 获取全部满足条件的bean
 
