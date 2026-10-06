@@ -877,6 +877,12 @@ public class SqlExecutor <: Resource & RootDAO {
         setSql(sql)
     }
     
+    /**
+     * bug-orm.md §3.2 ORM-C6（陷阱 1 / B）：本次执行的结果是否交出过流（BLOB/CLOB）。含流的结果**不写结果缓存**
+     * ——缓存会把值留到结果集关闭之后，一旦驱动交出的是"绑定结果集/句柄的流"，缓存里留下的就是失效值。
+     * 由 `execute<T>(closeBeforeReturning:extract:)` 在取数完成后写入（取 `QueryResultWrap.hadStream`）。
+     */
+    private var lastResultHadStream = false
     private func execute<T>(executor: () -> T): T {
         func exec() {
             if (tx.isSome()) {
@@ -904,7 +910,9 @@ public class SqlExecutor <: Resource & RootDAO {
                     case _ =>
                         let v = exec()
                         // 迭代器有状态：移交结果集的查询不写缓存，否则同一「SQL + 参数」会拿到同一个已被消费的迭代器
-                        if (!activeQueryResult) {
+                        // bug-orm.md §3.2 ORM-C6（陷阱 1 / B）：含流（BLOB/CLOB）的结果同样不写缓存——判定只能在
+                        // 取数之后（`lastResultHadStream` 由本次执行的内层 execute 写入，见字段注释）。
+                        if (!activeQueryResult && !lastResultHadStream) {
                             cache[key] = v
                         }
                         v
@@ -962,8 +970,12 @@ public class SqlExecutor <: Resource & RootDAO {
             var handedOver = false
             try{
                 activeQueryResult = true
+                lastResultHadStream = false
                 r = Some((stmt.query() as QueryResultWrap).getOrThrow())
                 let value = extract(r.getOrThrow(), stmt)
+                // bug-orm.md §3.2 ORM-C6（陷阱 1 / B）：取数完成后再定"本次结果有没有交出流"——含流的结果不写缓存
+                // （缓存会把流留到结果集关闭之后）。必须晚于 extract：流是取数（读单元格）时才读出来的。
+                lastResultHadStream = r.getOrThrow().hadStream
                 // 走到这里说明迭代器已构造成功：结果集所有权移交，本次调用不再关闭它
                 handedOver = !closeBeforeReturning
                 value

@@ -25,6 +25,26 @@ public class QueryResultWrap <: QueryResult {
     private let columns: Array<ColumnInfo>
     private var list = unsafeZeroValue<ArrayList<Any>>()
     private let indexStartsWith: Int64
+    // bug-orm.md §3.2 ORM-C6（陷阱 1 / B）：本结果是否交出过流（BLOB/CLOB）。含流的结果**不进** `SqlExecutor`
+    // 的结果缓存——缓存会把值留到结果集关闭之后，一旦驱动交出的是"绑定结果集/句柄的流"，缓存里就是失效值。
+    // 判据按"实际读出的单元格"置位（没读的 BLOB 列不影响缓存），所以置位点在取数路径上（`getOrNull`）。
+    private var hadStream_ = false
+
+    /** 本结果是否交出过 `InputStream`（BLOB/CLOB）；供 `SqlExecutor` 决定要不要写结果缓存 */
+    public prop hadStream: Bool {
+        get() {
+            hadStream_
+        }
+    }
+    /** 取数路径上标记"这一格是流"（`InputStream` 与 `?InputStream` 的 `Some` 都算；`None` 不算） */
+    private func noteStreamCell(cell: Any): Unit {
+        if (let x: ?InputStream <- cell) {
+            match (x) {
+                case Some(_) => hadStream_ = true
+                case _ => ()
+            }
+        }
+    }
     public QueryResultWrap(private let driverName: String, private let result: QueryResult) {
         indexStartsWith = ORMConfig.getIndexStartsWith(driverName: driverName)
         columns = result.columnInfos
@@ -78,7 +98,10 @@ public class QueryResultWrap <: QueryResult {
         try{
             if (index >= list.size) {
                 for (i in list.size..=index) {
-                    i + indexStartsWith |> makeReader(result, columns[i].typeName) |> list.add
+                    let cell = makeReader(result, columns[i].typeName)(i + indexStartsWith)
+                    // bug-orm.md §3.2 ORM-C6（陷阱 1 / B）：守住"这一格是流"，供 SqlExecutor 决定是否进结果缓存
+                    noteStreamCell(cell)
+                    list.add(cell)
                 }
                 // list.add(result.getOrNull<T>(index))
             }

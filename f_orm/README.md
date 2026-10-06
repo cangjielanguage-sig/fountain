@@ -1503,6 +1503,46 @@ public static func convertNullable<T>(value: Any): ?T
 
 ---
 
+### 13.6 `InputStream`（BLOB/CLOB）：所有权、生命周期与大对象
+
+`InputStream` 只在两处出现：**写入**（参数绑定）与**读回**（结果取值）。两处所有权不同：
+
+**写入：流是调用方的**
+
+- 入口：`SqlArgs.add(InputStream)`、`RootDAO.arg(value: InputStream)` / `arg(?InputStream)`。
+- ORM **只转交、不关闭**（`wrap/SqlArg.cj` 的 `InputStreamSqlArg`），调用方负责关闭。
+- 约定：流必须**活到本次 SQL 真正执行完**——驱动多在 `execute` 时才读它，提前关会读到空或报错。
+- 反向提醒：不要在 ORM 侧"顺手补 `close()`"（`wrap/InputStreamOwnership_test.cj` 会把这种行为判红）。
+
+**读回：流来自驱动，当前四个驱动给的都是内存副本**
+
+实测（2026-10-06）：
+
+| 驱动 | `get<InputStream>` 给出什么 |
+|---|---|
+| `mariadb-driver`、`opengauss-driver` | 行数据 `copyTo` 成 `ByteBuffer`（内存副本） |
+| `mysqlclient-ffi` | BLOB 映射为 `Array<Byte>`；以流请求会抛 `data type error` |
+| `pgsql-driver`、`postgres-driver` | 不支持 `get<InputStream>`，直接抛 `SqlException` |
+
+⇒ 这些驱动交出的 `InputStream` 与结果集生命周期**无关**，可以放进 PO 字段、传给 `toMap()` 或长期持有。
+
+**大对象（BLOB 的真实用法）**
+
+数据库允许 4GB 级 BLOB，而"整块转储成内存副本"扛不住——这是**驱动实现的问题**，ORM 侧改不了。当前出路：
+
+1. **别把大对象放 BLOB 列**（推荐）：放对象存储/文件系统，库里存 key / sha256；
+2. **服务端按块查**：`substring(col, off, len)` / `substr(col, off, len)` 分块取，内存 O(块大小)，代价是多次往返；
+3. 读回后立刻转储（`copyTo` 到文件/网络）：省"同时两份"，峰值仍是整块，对超大对象无效；
+4. 换支持流式大对象能力的驱动/API（PG `lo_*`；`postgres-driver` 内部的 `PgRowStream` 目前不外泄）。
+
+判断口径：BLOB 只用于"有界对象"（阈值由业务定），超过就走 1 或 2。
+
+**结果缓存**
+
+含流的结果**不写结果缓存**（`SqlExecutor` 依 `QueryResultWrap.hadStream` 判断）：一旦接入"交出真流式句柄"的驱动，缓存会把流留到结果集关闭之后，变成失效值。
+
+**接第三方驱动前**：请重跑上面这张表的核查——本节的结论依赖"驱动给内存副本"这一实测。
+
 ## 14. 事务
 
 ### 14.1 传播行为 `Propagation`

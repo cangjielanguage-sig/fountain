@@ -302,6 +302,20 @@
   - **读路径（流是驱动的）**：`wrap/QueryResultWrap.cj:42`（`result.getOrNull<InputStream>(i)`；`QueryResult <: Resource`）、`:980/984`（`toMap()` 直接把流交给调用方）、`wrap/DataType.cj:183-190`（`InputStreamDataType`）；`base/QueryMapperConverter.cj:48-49` 与 `:62-63` 两处 `StringReader(x).readToEnd()` 只是读它。`StringReader` 自身不持有 fd（std 文档：内部 4096 字节缓冲；仅在 `T <: Resource` 时经扩展获得 `Resource`/`close()`，而该 `close()` 会**关底层流**，见 `io_package_classes.md:1990-2012`）⇒ **不关 reader 不会泄漏 ORM 自己的句柄；关它反而会误关驱动/调用方的流**。
   - **仍未证的一条**：驱动是否在结果集关闭时释放它给出的 `InputStream`（std 文档没有所有权口径）。若驱动不释放，才需要在 ORM 侧登记并在结果集/迭代器 close 时收口；若释放，本条降级为「补一段所有权文档」。
   - **验证方式**：读一个 BLOB 列（`typeName` 命中 `SqlClob|SqlBlob|std.io.InputStream`），关结果集/连接后再读该流（仓内可用假结果集钉住，不依赖真驱动）。
+  - **V2 驱动调研结论（2026-10-06，五个仓只读检索）**：逐个查了 `get<InputStream>` 值的实际来源——
+    - `mariadb-driver`：`src/connection/result_set_text.cj:241-249`（`getInputStream` 把行数据 `copyTo` 成 `ByteBuffer` 副本；`result_set_binary.cj:115-123` 同款）；驱动侧无自己的流类，`close()` 只翻标志位（`cdbc/query_result.cj:95-98`）；
+    - `mysqlclient-ffi`：BLOB 的 `typeName` 映射为 `SqlArrayByte`（`src/mysql_statement.cj:844`），数据是 native 缓冲 → 每次 `next()` 拷成 `?Array<Byte>`（`src/mysql_query_result.cj:92-94/298-312`），以 `getOrNull<InputStream>` 请求会抛 `data type error`（`:118-127`）；
+    - `pgsql-driver`：没有 InputStream 分支，直接抛 `SqlException("unsupported requested type for get<T>")`（`src/value.cj:271-272`）；
+    - `postgres-driver`（`postgres_driver/`）：同样抛异常（`src/cdbc_value.cj:117`）；驱动内部的 `PgRowStream` 只交给自己的流式结果集、且结果集 `close()` 会关它（`src/cdbc_result.cj:107-117`）；
+    - `opengauss-driver`（顺带）：`src/driver/query_result.cj:240-243` 也是新建 `ByteBuffer` 拷贝。
+    ⇒ **没有任何一个驱动交出"绑定结果集/C 句柄的流"**：`InputStream` 值实际是**内存副本**。
+  - **据此的定性修正**：①"模块内句柄泄漏"**不成立**（没有可泄漏的 fd）✓；②三个生命周期陷阱（结果缓存留住流 / PO 字段跨行持有流 / `toMap()` 交出流）在现有驱动上**均无风险**——内存副本与结果集无关 ✓；③**真正的问题是大对象内存**，而且峰值发生在**驱动读行时**（整块 BLOB 已在内存里，`Array<Byte>` 与 `ByteBuffer` 一样）⇒ ORM 侧无解，出路只有：不入库（对象存储/文件 + 库里存引用）、服务端按块查（`substring(col, off, len)`/`substr`）、或换支持流式大对象（PG `lo_*`/流式结果集）的驱动。
+  - **前提提醒**：以上结论依赖"驱动给内存副本"这一实测 ⇒ **接入第三方驱动时应重跑 V2**；反向风险（不得代关调用方的流）已用注释 + `wrap/InputStreamOwnership_test.cj` 钉死 ✓。
+  - **处置（2026-10-06，按作者决定）**：
+    - **陷阱 1 → B 方案已落地**：`QueryResultWrap` 增 `hadStream`（在**取数路径**上按"实际读出的单元格"置位，`InputStream` / `?InputStream` 两种形态都算 ⇒ 没读 BLOB 列的查询照旧命中缓存）；`SqlExecutor.execute` 在取数完成后写入 `lastResultHadStream`（每次执行先复位），缓存写入多一个条件 ⇒ **含流的结果不进结果缓存**。护栏：`base/SqlResultCacheStream_test.cj`（含流查询两次各执行一次 vs 不含流查询第二次命中缓存）。理由：现有驱动虽给副本（零风险），但一旦接入"交出绑定结果集/句柄的流"的驱动，缓存会把流留到结果集关闭之后 ⇒ 属防御性正确性改动。
+    - **陷阱 2 → A 方案已落地**：README 新增 **§13.6 `InputStream`（BLOB/CLOB）：所有权、生命周期与大对象** —— 写入侧（流是调用方的：只转交不关闭 + 必须活到 SQL 执行完 + 不得补 close）、读回侧（五驱动实测表：`mariadb`/`opengauss` 为 `ByteBuffer` 副本、`mysqlclient-ffi` 是 `Array<Byte>` 且流请求抛错、`pgsql`/`postgres` 抛 `SqlException`）、大对象四条出路、含流不进缓存、接第三方驱动前重跑核查。
+    - **陷阱 3** 由陷阱 1 的机制 + §13.6 覆盖 ✓（`toMap()` 的 BLOB/CLOB 值同样随"含流不入缓存"受益）。
+    - **驱动侧问题（作者判断，2026-10-06）**：数据库允许 4GB 级 BLOB，而四个驱动都把它**整块转储成内存副本**（`ByteBuffer`/`Array<Byte>`）⇒ **属驱动实现问题**，ORM 侧无解；建议向驱动仓反馈或单独立条登记。用户侧出路见 README §13.6（①不入库/对象存储 ②服务端按块查 ③立即转储 ④换流式能力）。
 
 ### 3.3 本会话新增（3 条，2026-10-05/06；`ORM-N1` ◐N1a 已修、`ORM-N2`/`ORM-N3` ✅已修）
 
