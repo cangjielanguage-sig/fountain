@@ -38,6 +38,13 @@ public class SyncDeque<T> <: Deque<T> {
     private var s = AtomicInt64(0)
     /** 已借出（不在队列里）的数量。不变量：s ≡ 队列节点数 + out。 */
     private let out = AtomicInt64(0)
+    /**
+     * 挂在队列上的 `ValueNode` 数。**只在 `head.globalLock` 临界区里**与 `s`/`out` 一起维护
+     * （插入 4 处 +1、被取走/校验不过摘掉 2 处 −1），供 `selfCheck` 用 **O(1)** 判据核对
+     * `s ≡ nodes + out` —— 原来那里每 1e4 次操作就在锁里实走一遍全队列，队列 50 万时单次采样 ~107 ms
+     * （见 .autocode/bugs/bug-pool.md §3 `POOL-L4`）。计数的漂移由 `reconcileIfWedge()` 的实走对账并修正。
+     */
+    private let nodes = AtomicInt64(0)
 
     private let opCount = AtomicInt64(0)
     /** 最近一次进入的操作代号（诊断用，见 .autocode/bugs/bug-archived-on-20261004.md 7.2）。 */
@@ -49,12 +56,18 @@ public class SyncDeque<T> <: Deque<T> {
     private let checkers = AtomicInt64(0)
 
     /**
-     * 低频自检：不变量 s ≡ 队列节点数 + out，**在 head.globalLock 临界区内**核对
+     * 低频自检：不变量 `s ≡ 挂着的节点数 + out`，**在 `head.globalLock` 临界区内**核对
      * （临界区外采集分不清「真丢项」与「并发中间态」，见 .autocode/bugs/bug-archived-on-20261004.md 7.2）。
-     * 额外报「记着有项却一个也取不出来」的形态（滞留 CHECKING / check 卡在 checker 里），
-     * 两种告警都带上现场：idle / checking / 在飞 check 数 / 最近一次操作。
-     * 重复归还（同一对象两次）会让队列里出现重复节点，从而在此暴露；
-     * 这里只告警（不改变行为），取不到项时的自愈在 reconcileIfWedge() 里做。
+     *
+     * **O(1)**：节点数读锁内维护的 `nodes` 计数，不再实走全队列 —— 原来这里每 1e4 次操作就在锁里走一遍，
+     * 队列 50 万时单次采样要 ~107 ms（见 .autocode/bugs/bug-pool.md §3 `POOL-L4`）。全遍历没有消失，
+     * 只是**降级成低频 ground truth**：`reconcileIfWedge()`（每次取不到项 + 每分钟的 `audit()`）实走一遍，
+     * 与 `nodes` 对账并顺手修正计数。
+     *
+     * 原来这里还有一条「记着有项却一个也取不出来（`idle == 0`）」的告警 —— 它的判据要数 idle 节点（O(n)），
+     * 现在由同一条低频路径覆盖：取不到项时 `reconcileIfWedge()` 会救回滞留项并打 `WEDGE-HEAL`
+     * （巡检被关掉的池 —— `checkInterval` 为 `Duration.Max`/`<= 0` —— 要等下一次取不到项才报）。
+     * 这里只告警（不改变行为）。
      */
     private func selfCheck(): Unit {
         if (opCount.fetchAdd(1) % 10000 != 0) {
@@ -64,23 +77,16 @@ public class SyncDeque<T> <: Deque<T> {
         // 可能很慢、也可能再操作池 —— 不能在 `head.globalLock` 里跑（会挡住这个 deque 的所有取还，
         // 见 .autocode/bugs/bug-pool.md §3 `POOL-L1`）。
         var errorMsg: ?String = None
-        var warnMsg: ?String = None
         synchronized(head.globalLock){
-            let (total, idles, checkings) = countNodes()
+            let total = nodes.load()
             let o = out.load()
             let sa = s.load()
             if (sa != total + o) {
                 errorMsg = "DEQUE-SELFCHECK] invariant broken: size=${sa} nodes=${total} out=${o}, lastOp=${DEQUE_OP_NAMES[lastOp.load()]}"
             }
-            if (o == 0 && sa > 0 && idles == 0) {
-                warnMsg = "DEQUE-SELFCHECK] no takeable element: size=${sa} nodes=${total} idle=${idles} checking=${checkings} inFlightChecks=${checkers.load()}, lastOp=${DEQUE_OP_NAMES[lastOp.load()]}"
-            }
         }
         if (let Some(m) <- errorMsg) {
             PoolDiagnostics.error(m)
-        }
-        if (let Some(m) <- warnMsg) {
-            PoolDiagnostics.warn(m)
         }
     }
 
@@ -119,6 +125,7 @@ public class SyncDeque<T> <: Deque<T> {
         synchronized(head.globalLock){
             head.insertNext(value)
             s.fetchAdd(1)
+            nodes.fetchAdd(1)
         }
         PoolDiagnostics.onItemAdded()
         selfCheck()
@@ -128,6 +135,7 @@ public class SyncDeque<T> <: Deque<T> {
         synchronized(head.globalLock){
             head.tail.insertPrev(value)
             s.fetchAdd(1)
+            nodes.fetchAdd(1)
         }
         PoolDiagnostics.onItemAdded()
         selfCheck()
@@ -137,6 +145,7 @@ public class SyncDeque<T> <: Deque<T> {
         if(checkedBeforeReturn(value, checker, destroier)){
             synchronized(head.globalLock){
                 head.insertNext(value)
+                nodes.fetchAdd(1)         // 归还：节点 +1、out −1（`s` 不变，见 §3 POOL-L4 的计数说明）
                 markReturned()
                 PoolDiagnostics.onItemReturned()
             }
@@ -148,6 +157,7 @@ public class SyncDeque<T> <: Deque<T> {
         if(checkedBeforeReturn(value, checker, destroier)){
             synchronized(head.globalLock){
                 head.tail.insertPrev(value)
+                nodes.fetchAdd(1)         // 同上
                 markReturned()
                 PoolDiagnostics.onItemReturned()
             }
@@ -193,6 +203,7 @@ public class SyncDeque<T> <: Deque<T> {
             var taken = None<T>
             synchronized(head.globalLock){
                 if(let Some(x) <- head.nextForGet()){
+                    nodes.fetchSub(1)         // 取走一个节点（`s` 不变、`out` +1，见 §3 POOL-L4 的计数说明）
                     markBorrowed()
                     PoolDiagnostics.onItemBorrowed()
                     taken = Some(x)
@@ -234,6 +245,8 @@ public class SyncDeque<T> <: Deque<T> {
      * 2. **计数脱钩**：`s` 与实际节点数不符（历史形态：「`s` 记着 1024 已满、队列里 0 个节点、
      *    也没有借出项」）。只在**没有借出项**时判：借出项本来就该「不在队列里」，
      *    有借出在途时 `s != nodes` 是正常的。
+     * 3. **节点计数对账**：`nodes`（锁内维护的 O(1) 计数，供 `selfCheck` 用）与本轮实走的 `total` 不符 ⇒
+     *    以实走为准修正并记数（§3 `POOL-L4` 把全遍历降级成低频之后，这里就是那个 ground truth）。
      */
     private func reconcileIfWedge(): Int64 {
         lastOp.store(6)
@@ -256,6 +269,15 @@ public class SyncDeque<T> <: Deque<T> {
             if (o == 0 && s.load() != total) {
                 healed += ' bookkeeping: size=${s.load()} -> ${total}'
                 s.store(total)
+                PoolDiagnostics.onBookkeepingHealed()
+                actions += 1
+            }
+            let seenNodes = nodes.load()
+            if (seenNodes != total) {
+                // O(1) 计数与实走对不上 = 计数漂移：`POOL-L4` 之后全遍历只在这条低频路径上做，
+                // 这里就是 ground truth ⇒ 报告 + 以实走为准修正
+                healed += ' nodeCount: ${seenNodes} -> ${total}'
+                nodes.store(total)
                 PoolDiagnostics.onBookkeepingHealed()
                 actions += 1
             }
@@ -305,7 +327,10 @@ public class SyncDeque<T> <: Deque<T> {
                 pending = n.prevForChecking()
                 // 摘节点与 s 递减必须在同一临界区（见 .autocode/bugs/bug-archived-on-20261004.md 7.4）：分属两处时会留下
                 // 「节点已摘、s 未减」的中间态，被并发的不变量校验误判成记账脱钩。
-                if(!n.check(checker, onRemoved: {=> s.fetchSub(1)})){
+                if(!n.check(checker, onRemoved: {=>
+                    s.fetchSub(1)
+                    nodes.fetchSub(1)         // 校验不过 ⇒ 摘节点（与 s 递减同一临界区，见 §3 POOL-L4）
+                })){
                     taskPusher()
                     rm++
                 }

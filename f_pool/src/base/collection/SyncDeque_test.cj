@@ -346,6 +346,36 @@ public class SyncDequeTest {
         @Assert(refEq(taken.getOrThrow(), o))
         @Assert(deque.remove({_=>true}){_=>}.isNone())
     }
+    /**
+     * `POOL-L4`：`nodes`（锁内维护的 O(1) 计数，供 `selfCheck` 用）在混合操作之后必须与实际节点数一致 ——
+     * 判据就是「`audit()`（实走对账）返回 0」= 没有需要修正的记账。
+     * 覆盖：插入（insertHead/insertTail）、取走、归还（prepend/append）、校验不过丢弃（checker=false）、
+     * 滞留项救回（`strandHeadForTest` + `audit`）。
+     */
+    @TestCase
+    public func testNodeCountMustNotDrift(){
+        let deque = SyncDeque<Int64>()
+        for (i in 0 .. 50) {
+            deque.insertHead(i)
+            deque.insertTail(i)
+        }
+        for (_ in 0 .. 10) {
+            if (deque.remove({_=>true}){_=>}.isNone()) {
+                @Assert(false)
+            }
+        }
+        deque.prepend(7, {_=>true}){_=>}             // 归还：节点 +1、out −1
+        deque.append(8, {_=>true}){_=>}
+        if (let Some(v) <- deque.remove({_=>true}){_=>}) {
+            deque.prepend(v, {_=>false}){_=>}        // 校验不过 ⇒ 销毁 + 结清（节点数不变）
+        } else {
+            @Assert(false)
+        }
+        @Assert(deque.audit(), 0)                    // 实走对账：`nodes`/`s` 都一致 ⇒ 0
+        @Assert(deque.strandHeadForTest())
+        @Assert(deque.audit() > 0)                   // 救回滞留项
+        @Assert(deque.audit(), 0)                    // 再对账一次：仍然一致
+    }
     @TestCase
     public func testStrandedCheckingMustBeHealed(){
         // 人为制造历史现场：节点还在队列里、但停在 CHECKING（模拟 check 线程抛异常/被阻塞），

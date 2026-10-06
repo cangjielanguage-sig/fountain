@@ -33,6 +33,7 @@
 > 十五次修正（2026-10-06）：§3 `POOL-L5` 已修（口径：`get`/`giveBack` 的局部函数 `keyedCheck` 提成**实例成员函数** `checkOnBorrow`/`checkOnReturn`，方法值在构造期取一次缓存到字段）⇒ §3 待处理 **5** 条（`POOL-L1`、`POOL-L3`、`POOL-L4`、`POOL-L8`、`POOL-L9`）。**注意**：这条属于**等价重构 + 微优化**，端到端性能在噪声里测不出（见 §3 该条的实测说明与 §5 复测）。
 > 十六次修正（2026-10-06）：§3 `POOL-L1` 已修复（告警钩子移出 `head.globalLock`：锁内只拼消息、锁外发；判别用例用「钩子执行期间另一根线程抢同一把锁」实测 **2.01 s/FAILED → 5.7 ms/PASSED**）⇒ §3 待处理 **4** 条（`POOL-L3`、`POOL-L4`、`POOL-L8`、`POOL-L9`；后两条是已拍板「登记不改」）。同时**订正**了三处诊断：调用点是 4 个（1 个在锁外）、「钩子重入池 ⇒ 死锁」不成立（`Mutex` 可重入）、这条**可以**确定性测。
 > 十七次修正（2026-10-06）：§3 `POOL-L3` 判定为**误判**（源码是「一跳委派 + `while` 循环」，全文件无自递归；临时用例实测 200 万个非 idle 节点走完整条链无栈问题；对照组「200 万帧手写递归」也没爆栈）⇒ §3 待处理 **3** 条（`POOL-L4` 待修 + `POOL-L8`/`POOL-L9` 登记不改）。
+> 十八次修正（2026-10-06）：§3 `POOL-L4` 已修复（`nodes` 计数 + `selfCheck` O(1) + 全遍历降级为低频 ground truth；实测 50 万节点队列：**11.714 → 2.036 µs/op**，长度带来的额外开销 −92%）⇒ §3 只剩 `POOL-L8`/`POOL-L9` 两条**已拍板登记不改**。
 
 **建议修复顺序**：
 
@@ -525,7 +526,7 @@ useafterrelease: second_is_empty=false second_bytes=5
 
 ---
 
-## 3. 低危 / 待验证（9 条：`POOL-L1`/`L2`/`L5`/`L6`/`L7` 已修复、`POOL-L3` 误判、`POOL-L4` 待修、`POOL-L8`/`L9` 登记不改）
+## 3. 低危 / 待验证（9 条：`POOL-L1`/`L2`/`L4`/`L5`/`L6`/`L7` 已修复、`POOL-L3` 误判、`POOL-L8`/`L9` 登记不改）
 
 - `POOL-L1` **告警钩子在 `head.globalLock` 临界区内被调用** ✓已复核 → **✅已修复（2026-10-06，提交 `e9433511`）**
   - **诊断订正（2026-10-06）**：
@@ -575,7 +576,20 @@ useafterrelease: second_is_empty=false second_bytes=5
     对深调用并不敏感（可增长/很大）⇒ 即便真是递归，报告里「极端情况可加深调用栈」的严重度也远不到要改的程度。
   - **结论**：不改代码（循环里每跳一次的 `sleep(Duration.Zero)` 是刻意的让出 CPU，不是问题）。日志
     `.autocode/tmp/pool_l3_probe.log`。
-- `POOL-L4` **`selfCheck`/`audit` 的全队列遍历在锁内**：每 1e4 次操作一次 `countNodes()`（O(队列长度)，`SyncDeque.cj:59-74`、`227-254`）；长队列 + 高并发时是周期性长临界区。可只统计计数，或在锁外做快照核对。✓已复核 → **待修（2026-10-06 已量化，见下）**
+- `POOL-L4` **`selfCheck`/`audit` 的全队列遍历在锁内**：每 1e4 次操作一次 `countNodes()`（O(队列长度)，`SyncDeque.cj:59-74`、`227-254`）；长队列 + 高并发时是周期性长临界区。可只统计计数，或在锁外做快照核对。✓已复核 → **✅已修复（2026-10-06，提交 `xxxx`；按候选修法 ①）**
+  - **改法**（`f_pool/src/base/collection/SyncDeque.cj`）：
+    1. 新增 `nodes` 计数（挂在队列上的 `ValueNode` 数），**只在 `head.globalLock` 临界区里**与 `s`/`out` 一起维护 —— 插入 4 处（`insertHead`/`insertTail` `+s` 的同时 `+nodes`；`prepend`/`append` 只 `+nodes`，因为归还时 `s` 不变）＋被取走（`remove` 的 `nextForGet` 命中处）与校验不过摘掉（`check` 的 `onRemoved` 里，与 `s.fetchSub(1)` 同一临界区）各 −1。
+    2. `selfCheck` 改 **O(1)**：`s == nodes + out`（读三个原子量，仍在该锁内读，保证一致的快照）；原来那条「记着有项却一个也取不出来（`idle == 0`）」的告警**移除** —— 它的判据要数 idle 节点（O(n)），现在由同一条低频路径承担（取不到项时 `reconcileIfWedge()` 救回滞留项并打 `WEDGE-HEAL`）；巡检被关掉的池要等下一次取不到项才报，已写进 `selfCheck` 的文档注释。
+    3. `reconcileIfWedge()` 增加第 3 种对账（**原第 1/2 种不动**）：实走的 `total` 与 `nodes` 不符 ⇒ 记入 `healed`、`nodes.store(total)`、`onBookkeepingHealed()`、`actions += 1` ⇒ **全遍历成了低频 ground truth**（每次取不到项 + 每分钟的 `audit()`），计数的漂移会被报告并以实走为准修正。
+  - **实测（同参数：队列长度 10 / 500000，各 40 万次 insert+remove ⇒ 约 40 次采样）**：
+    | 队列长度 | 修前 | 修后 |
+    |---|---|---|
+    | 10 | 1.046 µs/op | 1.218 µs/op（噪声/多读一个原子量，可忽略） |
+    | 500 000 | **11.714 µs/op** | **2.036 µs/op** |
+    ⇒ 「长度带来的额外开销」从 ≈10.67 µs/op 降到 ≈0.82 µs/op（**−92%**）；单次采样不再握着锁走 50 万节点（原来 ~107 ms）。
+  - **用例**：`SyncDequeTest.testNodeCountMustNotDrift`（覆盖插入/取走/归还/校验不过丢弃/滞留救回之后，`audit()` 必须返回 0 = `nodes`/`s` 无需修正；随后 `strandHeadForTest()` + `audit() > 0` + 再 `audit() == 0`）。
+  - **回归**：`SyncDequeTest` 全 22 例 `[ PASSED ]`；`f_pool` 全量 **`PASSED: 64, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（既有 `ORMConfigTest`）。日志 `.autocode/tmp/pool_l4_{probe,verify,filter}.log`。
+  - **与 `POOL-L8` 的交互**：重复归还（同一对象还两次）依然是「节点 +1、`out` 不再减」⇒ `s != nodes + out` **照样被这条 O(1) 判据抓到**（判据从"每 1e4 次走一遍队列"变成"每 1e4 次读三个原子量"，检测能力不变）；随后 `reconcileIfWedge()` 仍会把 `s` 拉到含重复节点的值（= `POOL-L8` 的现状，未变）。
   - **量化（2026-10-06，临时用例，跑完已删）**：固定 40 万次操作（insert+remove ⇒ 约 40 次采样），只改队列长度：
     | 队列长度 | 总耗时 | 单操作 |
     |---|---|---|
@@ -731,6 +745,8 @@ useafterrelease: second_is_empty=false second_bytes=5
 > `POOL-L7` 修复后的复测（§3；口径：`ArrayPool.giveBack` 尺寸不符 ⇒ 抛 `IllegalSizeException`，这次不算归还）：**修前** `arrayPoolWrongSizeReturnMustThrow` `[ FAILED ]`（`Assert Failed: (before >= 0 == true)` —— 旧快照里没有 `returnRejected` 这个计数，旧实现静默 `return false`）；探针 `arraymismatch` 修前 `threw=false`。**修后**该用例 `[ PASSED ]`；探针 `threw=true msg=…expected an array of 1024, got 64…` + `returnRejected=1`（快照 `borrow=1 return=0`）；全量 **`PASSED: 61, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（同上的既有 `ORMConfig_test`）。日志 `.autocode/tmp/pool_l7_{all,probe}.log`。
 
 > `POOL-L2` 修复后的复测（§3；口径：`Duration.Max` = 不启用巡检 ⇒ 不起线程；巡检睡眠改条件变量）：**修前**两条新用例 `maxIntervalMustNotStartCheckingThread` / `closeMustInterruptCheckingSleep` 都 `[ FAILED ]`（`getThreadCount() <= before + 5`，各停在 `+20`）⇒ `PRE_EXIT=1`；探针 `checkinterval` 修前 `max: 7→47→27`、`hour: 27→67→47`。**修后**两条 `[ PASSED ]`；探针 `max: 7→27→7`、`hour: 7→47→7`（关池后全部回落）；全量 **`PASSED: 60, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（同上的既有 `ORMConfig_test`）。日志 `.autocode/tmp/pool_l2_{all,post}.log`。
+
+> `POOL-L4` 修复后的复测（§3；口径：`nodes` O(1) 计数 + `selfCheck` 改 O(1) + 全遍历降级为低频 ground truth）：同参数（队列 10 / 500000，各 40 万次 insert+remove）**修前** 1.046 / **11.714** µs/op ⇒ **修后** 1.218 / **2.036** µs/op（长度带来的额外开销 −92%，单次采样不再持锁走 50 万节点）；新用例 `testNodeCountMustNotDrift`（`audit()` 对账必须为 0）`[ PASSED ]`；`SyncDequeTest` 22 例全绿；`f_pool` 全量 **`PASSED: 64, SKIPPED: 0, ERROR: 0, FAILED: 0`**（`POOL_EXIT=0`）；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（既有）。日志 `.autocode/tmp/pool_l4_{probe,verify,filter}.log`。
 
 > `POOL-L3` 误判取证（§3；结论：**不是递归**）：源码核对 —— `HeadNode.nextForGet` 对非 idle 的队首只做一次委派，`ValueNode.nextForGet`（`LinkedNode.cj:236-262`）是 `while` 循环（反向的 `prevForChecking` 同型）⇒ 栈深恒为 1。临时用例（跑完已删）：`insertHead` + `strandHeadForTest()` 交替造 **200 万个**非 idle 节点后 `remove` 走完整链 ⇒ `l3depth: walked 2000000 non-idle nodes without stack overflow`（`[ PASSED ]`，87 s）；对照组「200 万帧手写非尾递归」同样 `[ PASSED ]`（1.6 s，说明这个运行时的线程栈对深调用不敏感）。日志 `.autocode/tmp/pool_l3_probe.log`。
 
