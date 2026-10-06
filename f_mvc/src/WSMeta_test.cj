@@ -75,4 +75,21 @@ class WSMeta_test {
         sleep(interval * 3)
         @Assert(baseline, pings.value)
     }
+
+    /**
+     * §3.1 / `MVC-C6(b)`：数据帧（Text/Binary）到达时的处置判定接缝 ——
+     * 该帧类型没配 meta、或上一条载荷未消费完时，必须结束会话（`ws.closeConn()` + `return true`）。
+     * 修前形态（接缝一律返回 `None`、由 `doExec` 抛 `WSException` 走 catch-and-continue）：后两条断言失败。
+     */
+    @TestCase
+    public func testDataFrameCloseReason(): Unit {
+        // 正常：无待处理载荷、且该类型配了 meta ⇒ 不关
+        @Assert(None<String>, dataFrameCloseReason('text', false, true))
+        @Assert(None<String>, dataFrameCloseReason('binary', false, true))
+        // 上一条载荷未消费完又来数据帧 ⇒ 关（协议层异常）
+        @Assert(Some('current payload is not empty'), dataFrameCloseReason('text', true, true))
+        // 该帧类型没有配置 meta ⇒ 关
+        @Assert(Some('text meta for ws is not specified'), dataFrameCloseReason('text', false, false))
+        @Assert(Some('binary meta for ws is not specified'), dataFrameCloseReason('binary', false, false))
+    }
 }

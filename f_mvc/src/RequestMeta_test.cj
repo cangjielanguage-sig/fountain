@@ -115,7 +115,12 @@ class RequestMeta_respond_test {
     public func testEmptyResultBranches(): Unit {
         @Assert('EmptyWithoutContentType', respondKind(true, None).toString())
         @Assert('EmptyWithContentType', respondKind(true, Some('*/*')).toString())
-        @Assert('NotAcceptable', respondKind(true, Some('application/json')).toString())
+        // §3.2 / MVC-L11：空结果 + 具体 Accept 不再判 406（现状会把 MVCBreakingCommand 的状态码吞成 406），
+        // 改为「原状态码 + 按 Accept 声明 Content-Type + 空体」（与 `*/*` 分支行为一致）
+        @Assert('EmptyWithContentType', respondKind(true, Some('application/json')).toString())
+        @Assert('EmptyWithContentType', respondKind(true, Some('text/html')).toString())
+        // 唯一的例外：Accept 是空串（异常值）⇒ 仍不渲染
+        @Assert('NotAcceptable', respondKind(true, Some('')).toString())
     }
 
     /** `Resource` 结果被关闭（恰好一次） */

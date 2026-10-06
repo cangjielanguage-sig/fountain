@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 25 条**：严重 4（§1.9 `MVC-4`、§1.10 `MVC-1`、§1.11 `MVC-3`、§1.12 `MVC-2`）、中 8（§2.2 `MVC-C3`、§2.3 `MVC-C5`、§2.5 `MVC-C2`、§2.6 `MVC-8`、§2.7 `MVC-6`、§2.19 `MVC-5`、§2.20 `MVC-7`、§2.21 `MVC-9`）、低危+待验证 13（§3）。
-- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；`MVC-8` ✅已修复（§2.6，`fix/mvc-rest`）；`MVC-6` ❌误判（§2.7，用户判定非缺陷：WS 消息总长上限属端点/部署侧策略，不设硬上限是设计选择）；`MVC-5` ❌不改（§2.19，用户判定「不值得改」：全仓 `@PathVariable` 均为单变量、暴露面为零）；`MVC-7` ✅已修复（§2.20，`fix/mvc-rest`，范围：只改 `RequestMethod.hashCode()`）；`MVC-9` ❌不改（§2.21，用户判定：每请求从 IoC 取 controller 实例是设计语义 —— 允许 controller 定义为 `prototype`，缓存实例会破坏它）；`MVC-L8`/`MVC-L1`/`MVC-C6`(a)/`MVC-L5` ✅已加固（§3.1，`fix/mvc-rest`）；`MVC-L7` ❌不改（§3.1，用户判定 C：成本仅注册期毫秒级，且源头是只写不读的 `RequestMetas`）；`MVC-L12` ✅已修复（§3.2，`fix/mvc-rest`）；**待处理** §3.1 的 `MVC-C6`(b) 与 `MVC-L2`/`L3`/`L4`/`L6`/`L9`/`L10`（共 7 条）+ §3.2 的 `MVC-L11`（1 条待验证）（**§1 严重级、§2 中危均已清零**）。
+- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；`MVC-8` ✅已修复（§2.6，`fix/mvc-rest`）；`MVC-6` ❌误判（§2.7，用户判定非缺陷：WS 消息总长上限属端点/部署侧策略，不设硬上限是设计选择）；`MVC-5` ❌不改（§2.19，用户判定「不值得改」：全仓 `@PathVariable` 均为单变量、暴露面为零）；`MVC-7` ✅已修复（§2.20，`fix/mvc-rest`，范围：只改 `RequestMethod.hashCode()`）；`MVC-9` ❌不改（§2.21，用户判定：每请求从 IoC 取 controller 实例是设计语义 —— 允许 controller 定义为 `prototype`，缓存实例会破坏它）；`MVC-L8`/`MVC-L1`/`MVC-C6`(a)/`MVC-L5` ✅已加固（§3.1，`fix/mvc-rest`）；`MVC-L7` ❌不改（§3.1，用户判定 C：成本仅注册期毫秒级，且源头是只写不读的 `RequestMetas`）；`MVC-L12` ✅已修复（§3.2，`fix/mvc-rest`）；`MVC-C6`(b)（§3.1）与 `MVC-L11`（§3.2）✅已修复（同一提交，`fix/mvc-rest`）；**待处理** §3.1 的 `MVC-L2`/`L3`/`L4`/`L6`/`L9`/`L10`（6 条，按分诊为不改，待用户口径）（**§1 严重级、§2 中危均已清零**）。
 
 ## 1. 严重（本模块 4 条）
 
@@ -202,7 +202,8 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 
 **健壮性 / 正确性**
 
-- `MVC-C6` `WSMeta.cj:176, 238-240`：文本/二进制帧到达但未配置对应 meta 时每条消息抛一次 `WSException`，并在 catch 里 `toBase64String(frame.payload)`（O(payload)）⇒ 异常驱动控制流 + 编码放大。→ ✅**(a) 已加固（2026-10-05，见 §3.1 加固标记）**；(b) 待用户拍板
+- `MVC-C6` `WSMeta.cj:176, 238-240`：文本/二进制帧到达但未配置对应 meta 时每条消息抛一次 `WSException`，并在 catch 里 `toBase64String(frame.payload)`（O(payload)）⇒ 异常驱动控制流 + 编码放大。→ ✅**(a) 已加固（2026-10-05，见 §3.1 加固标记）**；✅**(b) 已修复（2026-10-06，见下）**
+  - **(b) 修复（2026-10-06，`fix/mvc-rest`，与 `MVC-L11` 同一提交）**：把「数据帧到达但该类型没配 meta / 上一条载荷未消费完」从「抛 `WSException` → catch → 记日志 → 会话继续」改为**首帧即关**：新增包内接缝 `dataFrameCloseReason(metaType, pendingPayload, hasMeta): ?String`（`WSMeta.cj`，紧接 `pumpFrames`），`exec` 的 `onFrame` 在 Text/Binary 分支先问接缝，拿到原因就 `log.error{'${reason}'}` + `ws.closeConn()` + `return true`（与同文件「未知帧类型」的既有处置一致）⇒ 每条这样的消息不再付一次异常构造 + 栈展开 + 一条 ERROR 日志（`(a)` 去掉的是 base64 成本）。原 `throw WSException('current payload is not empty')` 已被接缝取代而删除；`doExec<M>` 内的 `meta.getOrThrow{…not specified…}` 保留为防御性断言（泛型助手，另有可能的调用方）。用例 `WSMeta_test.testDataFrameCloseReason` 钉住两条「该关」判定与两条「不该关」判定；RED 实测（接缝先落「一律 `None`」的修前形态）`Assert Failed: Some('current payload is not empty') != dataFrameCloseReason('text', true, true)`、left 原因 / **right None** ⇒ 同一轮 `TOTAL 28 / PASSED 26 / FAILED 2`、`TEST EXIT=1`；GREEN 后 28/28、`cjpm build` exit 0。
 
 **内存 / 清理**
 
@@ -259,7 +260,7 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 
 ### 3.2 待验证（2 条）
 
-- `MVC-L11` `RequestMeta.cj:303-318`：空结果的控制器函数在 `Accept` 不含 `*/*` 时被判为 406 而非 200 空体。**验证**：设计意图。
+- `MVC-L11` `RequestMeta.cj:303-318`：空结果的控制器函数在 `Accept` 不含 `*/*` 时被判为 406 而非 200 空体。**验证**：设计意图。→ ✅**已修复（2026-10-06，见修复标记（L11））** —— 判定为**不是设计意图**：会把 `MVCBreakingCommand(status)`（默认 `DataUnit.UNIT`，如 `ControllerFuncParam` 的 415）的状态码吞成 406
 - `MVC-L12` `RequestMethod.cj:32-38`：`operator ==` 的分支里没有 `WS`，`(WS, WS)` 落到 `case _ => false`，而 `hashCode` 由 `toString` 生成。**验证**：若 `HashMap` 不做引用短路，WS 路由查不到（`RequestMethod.WS` 正是 WS 端点的注册键，见 `HttpRequestDistributorImpl.cj:36`）。→ ✅**已修复（2026-10-06，见 §3.2 修复标记）**（注：`hashCode` 自 `MVC-7` 起已是声明序常量表，不再是 `toString` 哈希）
 
 **✅ 修复标记（L12）（2026-10-06，`fix/mvc-rest`，代码/用例/本标记同一提交）**
@@ -274,6 +275,19 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 - 用例：`f_mvc/src/RequestMethod_test.cj` 新增 `testWsIsEqualToItself`（自反性 + `!=` + 路由侧形态 `parse('WS') == WS`）、`testWsIsUsableAsHashContainerKey`（`HashMap<RequestMethod, Int64>` 写 `WS` 后 `get(WS)` 命中、`HashSet.add(WS)` 后 `contains(WS)`）。
 - **修后影响面**：①拿 `WS` 当键的 `get`/`contains`/`add`/`computeIfAbsent` 开始正常工作；②debug 日志里 WS 的 `methodRegistered`（`MultiRequestMethodHandler.cj:44`/`:48`）由误报 `false` 变为 `true`。请求期无其它变化 —— `handle` 只用 `RequestMethod.parse(request.method)`（`:64`）与 HEAD 分支的 `metas.get(RequestMethod.GET)`（`:106`）查键，**从不查 `WS`**（全仓 `RequestMethod.WS` 仅出现在 `HttpRequestDistributorImpl.cj:36` 的注册点与本测试）。
 - **关联（新发现，建议单独立项，本次未做）**：WS 端点路由可达性存疑 —— WS meta 只注册在 `WS` 键下（`HttpRequestDistributorImpl.cj:36`），而握手请求是 `GET` ⇒ `metas.get(GET)` 落空 ⇒ 落到 `MultiRequestMethodHandler.cj:111` 的 405；全仓亦无 `@WSEndPoint` 使用/文档/端到端用例。修 `==` 是 WS 可用的**必要不充分**条件。
+
+**✅ 修复标记（L11）（2026-10-06，`fix/mvc-rest`，与 `MVC-C6(b)` 同一提交）**
+
+提交信息 `fix(f_mvc): MVC-L11 空结果不再判 406（具体 Accept 走空体）+ MVC-C6(b) 无 meta 的数据帧首帧即关（§3.1/§3.2）`。
+
+- **判定：不是设计意图，而是会吞掉状态码的缺陷**（用户 2026-10-06 采纳建议）：`respondKind(emptyResult, accept)` 在「空结果 + 具体 Accept（不含 `*/*`）」时返回 `NotAcceptable` ⇒ `respond<R>` 调 `MultiRequestMethodHandler.NOT_ACCEPTABLE`（406）。
+- **真实触发链（关键证据）**：`ControllerFuncParam.cj:192` 的 `perform MVCBreakingCommand(HttpStatus.UNSUPPORTED_MEDIA_TYPE)`（`MVC-C3` 修的 415）→ `BreakingCommand.cj:23` 的 data 默认 `DataUnit.UNIT` → `RequestMeta.cj:220` `respond(MVCBreakingCommand(cmd.data), ctx)` → `respond<Data>(status, DataUnit, ctx)` ⇒ `emptyResult = true` ⇒ 客户端带 `Accept: application/json` 时 **415 被 406 顶掉** ✗；同类场景：任何 `MVCBreakingCommand(status)`、且客户端只接受具体媒体类型时，原状态码都会被吞。`MVC-C3` 的用例只断言到 `MVCBreakingCommand` 的状态/类型、没走到 HTTP 响应层，所以此前没暴露。
+- **改动**（`RequestMeta.cj` 的 `respondKind`）：缺 Accept ⇒ `EmptyWithoutContentType`；**非空 Accept（含 `*/*` 与具体类型）⇒ `EmptyWithContentType`**（原状态码 + 按 Accept 声明 Content-Type + 空体）；仅 `Accept: ''` 这类异常值仍 `NotAcceptable`（保持 406 可达，避免写出空 `Content-Type`）。`RespondKind` 与 `respond<R>` 的其它分支未动；**非空结果**的 406 路径（`Render` + `genBody` 失败 ⇒ `:322`）不受影响。
+- **RED/GREEN 实测**（同一套用例两次运行，`f_mvc`）：
+  - **RED**：断言先改（`testEmptyResultBranches` 把 `Some('application/json')` 的期望由 `NotAcceptable` 改为 `EmptyWithContentType`，另加 `Some('text/html')`、`Some('')`）⇒ `[ FAILED ] testEmptyResultBranches`，`Assert Failed: 'EmptyWithContentType' != respondKind(true, Some('application/json')).toString()` ⇒ 同一轮 `TOTAL 28 / PASSED 26 / FAILED 2`（另一条属 `MVC-C6(b)`）、`TEST EXIT=1`。
+  - **GREEN**：改实现后复跑 ⇒ **`PASSED 28 / FAILED 0 / ERROR 0`、`TEST EXIT=0`**；同轮 `cjpm build` **exit 0**。
+- 用例：`RequestMeta_test.cj` 的 `testEmptyResultBranches` —— `None` ⇒ `EmptyWithoutContentType`；`Some('*/*')` / `Some('application/json')` / `Some('text/html')` ⇒ `EmptyWithContentType`；`Some('')` ⇒ `NotAcceptable`。
+- 未覆盖 / 已知边界：①`respond<R>` 需要 `HttpContext`，端到端（415 链路在 `Accept: application/json` 下不再变 406）无法单测 —— 证据为上面的调用链 + `respondKind` 用例；②空体 + `Content-Type: <Accept>` 对「严格解析 JSON 的客户端」可能仍需容忍空体，但 `*/*` 分支修前一直如此，本次只是把行为统一。
 
 ## 4. 逐模块覆盖面（原 §4.2）
 

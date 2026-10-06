@@ -604,9 +604,13 @@ func lazyAccessLogFields(args: ArrayList<Any>, returned: ?Any): () -> (String, S
 }
 
 /**
- * 包内接缝（§2.5 / `MVC-C2`）：`respond<R>`（`R <: ToData`）的分支决策。
- * 修后：非空结果一律走 `Render`（缺 Accept 时按星号通配处理，与 `JsonValue` 响应、
- * `populateResponseContentType` 的默认一致）；空结果三分支与修前一致。
+ * 包内接缝（§2.5 / `MVC-C2` + §3.2 / `MVC-L11`）：`respond<R>`（`R <: ToData`）的分支决策。
+ * 非空结果一律走 `Render`（缺 Accept 时按星号通配处理，与 `JsonValue` 响应、
+ * `populateResponseContentType` 的默认一致）。
+ * 空结果（`DataUnit`/`DataNone`）：缺 Accept ⇒ 空体不带 Content-Type；有 Accept ⇒ 空体 + 按 Accept 声明 Content-Type。
+ * **`MVC-L11` 修后**：具体 Accept（如 `application/json`）也走空体分支 —— 修前判 406，会把
+ * `MVCBreakingCommand(status)`（默认 data 为 `DataUnit.UNIT`，例如 `ControllerFuncParam` 的 415）
+ * 的状态码吞成 406；只有 `Accept: ''` 这类异常值仍返回 `NotAcceptable`。
  */
 func respondKind(emptyResult: Bool, accept: ?String): RespondKind {
     if (!emptyResult) {
@@ -614,7 +618,7 @@ func respondKind(emptyResult: Bool, accept: ?String): RespondKind {
     }
     match (accept) {
         case None => RespondKind.EmptyWithoutContentType
-        case Some(a) where a.contains('*/*') => RespondKind.EmptyWithContentType
+        case Some(a) where !a.isEmpty() => RespondKind.EmptyWithContentType
         case _ => RespondKind.NotAcceptable
     }
 }
