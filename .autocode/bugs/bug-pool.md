@@ -34,6 +34,7 @@
 > 十六次修正（2026-10-06）：§3 `POOL-L1` 已修复（告警钩子移出 `head.globalLock`：锁内只拼消息、锁外发；判别用例用「钩子执行期间另一根线程抢同一把锁」实测 **2.01 s/FAILED → 5.7 ms/PASSED**）⇒ §3 待处理 **4** 条（`POOL-L3`、`POOL-L4`、`POOL-L8`、`POOL-L9`；后两条是已拍板「登记不改」）。同时**订正**了三处诊断：调用点是 4 个（1 个在锁外）、「钩子重入池 ⇒ 死锁」不成立（`Mutex` 可重入）、这条**可以**确定性测。
 > 十七次修正（2026-10-06）：§3 `POOL-L3` 判定为**误判**（源码是「一跳委派 + `while` 循环」，全文件无自递归；临时用例实测 200 万个非 idle 节点走完整条链无栈问题；对照组「200 万帧手写递归」也没爆栈）⇒ §3 待处理 **3** 条（`POOL-L4` 待修 + `POOL-L8`/`POOL-L9` 登记不改）。
 > 十八次修正（2026-10-06）：§3 `POOL-L4` 已修复（`nodes` 计数 + `selfCheck` O(1) + 全遍历降级为低频 ground truth；实测 50 万节点队列：**11.714 → 2.036 µs/op**，长度带来的额外开销 −92%）⇒ §3 只剩 `POOL-L8`/`POOL-L9` 两条**已拍板登记不改**。
+> 分支收尾（2026-10-06）：`review/f_pool` 与 `sts/1.3.x` **双向合并** —— ① `55383e38`（`sts/1.3.x` → review 分支）；② `6697d5f5`（review 分支 → `sts/1.3.x`，其间 `sts/1.3.x` 被 f_bean 任务推进到 `73221fdf`，故走真合并而非快进）。合并后回归：`f_pool` **`PASSED: 64`**、`f_codec` 16/16、`f_protocol` 62/62、`f_orm` **`PASSED: 33, ERROR: 0`**（合并进来的 `f_data/DataParsable` 修复顺带消掉了此前那条既有 ERROR）；合并后 `f_pool/**` 与已验证的 review tip（`55383e38`）**逐字节一致** ⇒ 上述结果直接沿用。随后删除 worktree `.worktrees/review-f_pool` 与分支 `review/f_pool`（见提交 `xxxx`）。日志 `.autocode/tmp/pool_merge_verify.log`。
 
 **建议修复顺序**：
 
