@@ -51,7 +51,7 @@ exports(){
     export orm_databasePoolConnectionLife=86400 # 连接存活时间，默认是3600，单位是秒
     export orm_databasePoolCheckInterval=300 # 连接有效性检查周期，默认是300，单位是秒
     export orm_databasePoolConnectTimeout=50 # 默认是50，单位是毫秒，从fountain.orm.DatabasePool获取连接的超时时间
-    export orm_databasePoolMaxWaiting=30s # 默认是30s。池耗尽且调用方用无限等待（Duration.Max）取连接时的等待上限，格式同Duration.toString()（如30s、1m）；超过上限就记WARN并返回None，避免无日志挂死；配成0s表示真无限等待
+    export orm_databasePoolMaxWaiting=30000 # 默认是30000（单位毫秒，即30秒）。池耗尽且调用方用无限等待（Duration.Max）取连接时的等待上限；超过上限就记WARN并返回None，避免无日志挂死；配成0表示真无限等待
     export orm_databasePoolCheckSql='select 1' # 检查连接有效性的SQL，默认是select 1
     # orm_stdPool开头的是std.datasource.sql.PooledDatasource的配置项
     export orm_stdPoolMaxSize=10 # 连接池最大连接数

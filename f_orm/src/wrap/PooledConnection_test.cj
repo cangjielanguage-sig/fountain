@@ -29,8 +29,8 @@ import fountain::f_orm.exception.*
  * 的节点，两个借用者可能同时拿到同一条连接。
  *
  * 这里直接压 `activate()`（借出）+ `close()`（归还）这对动作，不经过 `DatabasePool`：
- * 一是这两步就是缺陷所在，二是建池会读一批全局 ORM 配置，容易被其它用例写脏的键波及
- * （如 `ORMConfigTest` 往 Duration 键里写 `abc`）。
+ * 一是这两步就是缺陷所在，二是建池会连带读一批全局 ORM 配置（其它用例会写这些键），
+ * 用例只想钉住归还语义。
  */
 @Test
 public class PooledConnectionReturn_test {

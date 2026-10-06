@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 27 条**：严重 3（§1.1 `ORM-1`、§1.5 `ORM-C1`、§1.13 `ORM-2`）、中 7（§2.1 `ORM-C2`、§2.8 `ORM-C5`、§2.10 `ORM-3`、§2.11 `ORM-4`、§2.12 `ORM-5`、§2.13 `ORM-6`、§2.14 `ORM-7`）、低危+待验证 14（§3.1/§3.2）、本会话新增 3（§3.3 `ORM-N1` 性能、`ORM-N2` 正确性、`ORM-N3` 性能）。
-- **状态（截至 2026-10-06）**：`ORM-1` ✅已修复（§1.1）、`ORM-C1` ✅已修复（§1.5）、`ORM-C2` ✅已修复（§2.1）、`ORM-2` ✅已修复（§1.13，严重｜性能，分支 `fix/orm`）；`ORM-C5` ❌误判（§2.8，非缺陷：`argInSql` 是设计目的，已补 README §11.5 说明与口径用例）；`ORM-3` ⏸决定不修（§2.10，已知开销保留：否决「加静态集合」与「就地复位」两方案）；`ORM-4` ⏸决定不修（§2.11，借连接校验与默认值均不改、语句复用经四家驱动源码调研后判定不值得在 f_orm 层做）、`ORM-5` ✅已修复（§2.12，正则预编译）；`ORM-6` ◐部分修复（§2.13，逐元素分派按频率重排；实测批量路径大头在拼串/闭包/装箱，剩余转 §3.3 `ORM-N1`）、`ORM-7` ◐部分修复（§2.14，同批重排三处 match）；§3.2 共 4 条已处置 3 条（`ORM-L3` 已随 §1.13 消掉、`ORM-L8`/`ORM-L9` ✅已修（2026-10-06，见 §3.2 处置记录）），**待处置仅 `ORM-C6`** ⏳待验证（已补现状梳理）、§3.3 新增 3 条（`ORM-N1` ◐部分修复（2026-10-06：N1a 拼接次数已修；N1b 待定、方案改为自管字节缓冲；N1c ⏸决定不做）；`ORM-N2` ✅已修复（2026-10-06）：`Float32` 静默丢参 + `setValue` 兜底补 `throw`；`ORM-N3` ✅已修复（2026-10-06）：`arg(Any)` 首支 `case x: Data` 挪到末尾，12.1µs → 56ns/元素）。§3.1 的 10 条已全部处置（2026-10-06）：`ORM-C3`/`ORM-C4`/`ORM-L6`/`ORM-L4`/`ORM-L5` ✅已修、`ORM-L1`/`ORM-L2` ◐部分修复、`ORM-L7`/`ORM-L10`/`ORM-L11` ⏸决定不修，详见 §3.1 处置记录。
+- **状态（截至 2026-10-06）**：`ORM-1` ✅已修复（§1.1）、`ORM-C1` ✅已修复（§1.5）、`ORM-C2` ✅已修复（§2.1）、`ORM-2` ✅已修复（§1.13，严重｜性能，分支 `fix/orm`）；`ORM-C5` ❌误判（§2.8，非缺陷：`argInSql` 是设计目的，已补 README §11.5 说明与口径用例）；`ORM-3` ⏸决定不修（§2.10，已知开销保留：否决「加静态集合」与「就地复位」两方案）；`ORM-4` ⏸决定不修（§2.11，借连接校验与默认值均不改、语句复用经四家驱动源码调研后判定不值得在 f_orm 层做）、`ORM-5` ✅已修复（§2.12，正则预编译）；`ORM-6` ◐部分修复（§2.13，逐元素分派按频率重排；实测批量路径大头在拼串/闭包/装箱，剩余转 §3.3 `ORM-N1`）、`ORM-7` ◐部分修复（§2.14，同批重排三处 match）；§3.2 共 4 条已处置 3 条（`ORM-L3` 已随 §1.13 消掉、`ORM-L8`/`ORM-L9` ✅已修（2026-10-06，见 §3.2 处置记录）），**待处置仅 `ORM-C6`** ⏳待验证（已补现状梳理）。**另（2026-10-06）**：`orm_databasePoolMaxWaiting` 改毫秒整数口径、`ORMConfig.get<T>` 改 `tryParse` ⇒ 长期红色的 `ORMConfigTest.testPoolMaxWaiting` 转绿，全量基线**首次全绿（62/62/0/0）**，见 §3.2「配置口径调整」；§3.3 新增 3 条（`ORM-N1` ◐部分修复（2026-10-06：N1a 拼接次数已修；N1b 待定、方案改为自管字节缓冲；N1c ⏸决定不做）；`ORM-N2` ✅已修复（2026-10-06）：`Float32` 静默丢参 + `setValue` 兜底补 `throw`；`ORM-N3` ✅已修复（2026-10-06）：`arg(Any)` 首支 `case x: Data` 挪到末尾，12.1µs → 56ns/元素）。§3.1 的 10 条已全部处置（2026-10-06）：`ORM-C3`/`ORM-C4`/`ORM-L6`/`ORM-L4`/`ORM-L5` ✅已修、`ORM-L1`/`ORM-L2` ◐部分修复、`ORM-L7`/`ORM-L10`/`ORM-L11` ⏸决定不修，详见 §3.1 处置记录。
 
 ## 1. 严重（本模块 3 条）
 
@@ -277,6 +277,31 @@
 - `ORM-L8` `DatabasePool.cj:210-228`（配合 `f_pool/BasePool.cj:44-46`）：`PooledConnection.close()` 不校验 `assigned`，无条件 `returnFn(this)`。**验证**：池是否有身份去重（若无，重复 close 会让两个借用者拿到同一连接）。修法：`close()` 首行 `if(!assigned){ return }`。
 - `ORM-L9` `SqlExecutor.cj:366-385`：`connection` getter 在 `Connecting` 状态用 `while ... continue` 忙等（无 sleep/yield/超时）。**验证**：驱动是否会出现长时间异步建连。
 - `ORM-C6` `SqlArg.cj:426-448`（`InputStreamSqlArg` 把流交给驱动后模块内不关闭）、`QueryMapperConverter.cj:48-50`（`StringReader(x).readToEnd()` 未关闭）。**验证**：所有权约定（驱动/调用方是否负责关闭），否则是句柄泄漏路径。
+
+**处置记录（2026-10-06）**
+
+| 编号 | 处置 | 说明 |
+|---|---|---|
+| `ORM-L3` | ✅已消掉（随 §1.13） | `QueryResultWrap.cj:24-35` 已把 `result.columnInfos` 收成构造期取一次的 `private let columns`，取值路径不再逐格穿透、`toMap()` 不再重复访问。只余一条观测项：真实驱动的 `columnInfos` 是否每次新分配（§1.13 已记）。 |
+| `ORM-L8` | ✅已修 | `PooledConnection` 增 `private let returned = AtomicBool(true)`：借出时 `activate()` 里 `store(false)`，`close()` 首行 `returned.compareAndSwap(false, true)`，CAS 失败（已归还过/从未借出）抛 `ConnectionException('The database connection was returned multiple times.')`。池侧没有身份去重（`SyncDeque` 只对「重复归还」告警、不拦）⇒ 必须在归还这一步拦住，否则池里会出现两个指向同一连接的节点、两个借用者可能同时拿到它。`store(false)` 放进 `activate()` 而非 `DatabasePool.getConnection()`：借出只有这一个入口，效果等价且不必跨类访问 `private` 成员。 |
+| `ORM-L9` | ✅已修 | 新键 `orm_connectingTimeout`（毫秒；按驱动覆盖 `<driver>_orm_connectingTimeout`），`getConnectingTimeout()` 默认 **5000ms**；`SqlExecutor` 增 `waitConnecting()`，`case Connecting` 从「无 sleep、无超时的死转」改为有上限的等待，超时抛 `ConnectionException('connecting is timeout')`。起算点与上限只取一次（每轮重算就永远等不到超时）；配置读取只在真进入该分支时发生，不落在每次执行 SQL 的热路径上。等待本身仍是纯空转（按决定保留 `continue`），只是有上限。默认 5 秒的理由：正常建连远快于此，而该值只影响「驱动把状态停在 Connecting」这一非常规路径，宁松勿误伤。 |
+| `ORM-C6` | ⏳待验证（本轮只梳理） | 见下「现状梳理」。 |
+
+- **用例**：`wrap/PooledConnection_test.cj`（二次 close 抛 `ConnectionException`、归还回调只收到 1 次、**再次借出后归还仍合法**；不经过 `DatabasePool` 以免依赖一批全局配置）；`base/SqlExecutorConnectingTimeout_test.cj`（假驱动状态永停 `Connecting`，`stuck_orm_connectingTimeout=50ms` ⇒ 抛 `connecting is timeout` 且耗时 ≥40ms）。
+- **验证（L8/L9）**：`cjpm test` TOTAL 62 / PASSED 61 / FAILED 0 / ERROR 1（当时唯一 ERROR 仍是 `ORMConfigTest.testPoolMaxWaiting`；该用例同日转绿，见下）。
+
+**配置口径调整（2026-10-06：含长期红色用例转绿）**
+
+- `orm_databasePoolMaxWaiting` 由「`Duration.toString()` 文本（`30s`/`1m`）」改为**毫秒整数**（`30000`），与同族时长键统一；默认值不变（30 秒），`≤0`（如 `0`）仍是"真无限等待"（映射 `Duration.Max`）。`fdemo/boot.sh` 的示例值同步为 `30000`。
+- `ORMConfig.get<T>` 由 `T.parse` 改为 `T.tryParse`：配置写错值**退回 `default`**，不再抛 `DataParsableException`（`Parsable<T>` 本就提供 parse/tryParse 两套）。取舍记在这里：这是"静默用默认值"，若将来要改成"配置错了就报错"，集中改 `get<T>` 一处。
+- 效果：**长期红色的 `ORMConfigTest.testPoolMaxWaiting` 转绿**（它钉的就是 `45s→45s`、`1m`、`0s→Duration.Max`、`abc→默认 30s`；此前 `parse` 抛异常直接 ERROR）⇒ 全量基线**首次全绿**：`cjpm test` **TOTAL 62 / PASSED 62 / FAILED 0 / ERROR 0**。用例同时改为毫秒取值并在末尾清键（`Config.set` 是全局状态，写脏会串到后续用例）。
+- **兼容性提醒**：老配置里 `orm_databasePoolMaxWaiting=30s` 会 `tryParse` 失败而**静默退回默认 30 秒**（不再是解析崩溃）⇒ 部署时需改成毫秒。
+
+- `ORM-C6` 现状梳理（2026-10-06，只读，未改代码）：
+  - **写路径（流是调用方的）**：`wrap/SqlArg.cj:431-437`（`InputStreamSqlArg.set` → `setValue<InputStream>` → `Statement.set<InputStream>(index, value)`），值来自 `SqlArgs.cj:86-88` / `SqlArg.cj:55` 的 `InputStream` 参数——ORM 只是转交驱动，**代关是错的**；缺的是一句约定：流必须活到本次 SQL 真正执行完（驱动多在 execute 时才读），并由调用方关闭。
+  - **读路径（流是驱动的）**：`wrap/QueryResultWrap.cj:42`（`result.getOrNull<InputStream>(i)`；`QueryResult <: Resource`）、`:980/984`（`toMap()` 直接把流交给调用方）、`wrap/DataType.cj:183-190`（`InputStreamDataType`）；`base/QueryMapperConverter.cj:48-49` 与 `:62-63` 两处 `StringReader(x).readToEnd()` 只是读它。`StringReader` 自身不持有 fd（std 文档：内部 4096 字节缓冲；仅在 `T <: Resource` 时经扩展获得 `Resource`/`close()`，而该 `close()` 会**关底层流**，见 `io_package_classes.md:1990-2012`）⇒ **不关 reader 不会泄漏 ORM 自己的句柄；关它反而会误关驱动/调用方的流**。
+  - **仍未证的一条**：驱动是否在结果集关闭时释放它给出的 `InputStream`（std 文档没有所有权口径）。若驱动不释放，才需要在 ORM 侧登记并在结果集/迭代器 close 时收口；若释放，本条降级为「补一段所有权文档」。
+  - **验证方式**：读一个 BLOB 列（`typeName` 命中 `SqlClob|SqlBlob|std.io.InputStream`），关结果集/连接后再读该流（仓内可用假结果集钉住，不依赖真驱动）。
 
 ### 3.3 本会话新增（3 条，2026-10-05/06；`ORM-N1` ◐N1a 已修、`ORM-N2`/`ORM-N3` ✅已修）
 

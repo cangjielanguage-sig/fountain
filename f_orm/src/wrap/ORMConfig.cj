@@ -175,9 +175,18 @@ public class ORMConfig {
             throw ORMException("connection url for ${driverName} is not be configed, config which key is ${genKey(driverName, connectionUrl)} or ${connectionUrl} must be specified")
         }
     }
+    /**
+     * 读一个配置项并转成 `T`。**解析失败退回 `default`**（用 `tryParse` 而不是 `parse`）：
+     * 配置里写错值不该让进程在读取时抛异常——`ORMConfigTest.testPoolMaxWaiting` 钉的就是这条
+     * （非法值 `abc` 应按默认值 30s 处理）。注意这里的 fallback 是"静默用默认值"，
+     * 若将来想改成"配置错了就报错"，应集中在这里改。
+     */
     private static func get<T>(driverName!: String = String.empty, key!: String, default!: T): T where T <: Parsable<T> {
         match (getConf(driverName: driverName, key: key)) {
-            case Some(x) => T.parse(x)
+            case Some(x) => match (T.tryParse(x)) {
+                case Some(v) => v
+                case _ => default
+            }
             case _ => default
         }
     }
@@ -229,17 +238,18 @@ public class ORMConfig {
         Duration.millisecond * get<Int64>(driverName: driverName, key: connectingTimeout, default: 5000)
     }
     /**
-     * 池耗尽时 `get(timeout: Duration.Max)` 的等待上限：超过它就返回 None 而不是无限挂住调用方；
-     * 配成 ≤ 0（如 `0s`）表示真无限等待（仍每轮让出 CPU）。默认 30s，与池自身的默认值一致。
-     * 配置值按 `Duration.toString()` 的格式书写，例如 `orm_databasePoolMaxWaiting=30s`；
-     * 也支持驱动级覆盖（`postgres_orm_databasePoolMaxWaiting`），与其它 orm_ 配置项一致。
+     * 池耗尽时 `get(timeout: Duration.Max)` 的等待上限：超过它就返回 None 而不是无限挂住调用方。
+     *
+     * **单位是毫秒**（与 `getConnectTimeout`、`getConnectingTimeout` 等其它时长键统一）：
+     * `orm_databasePoolMaxWaiting=30000` 即 30 秒，默认 30000；配成 ≤ 0（如 `0`）表示真无限等待
+     * （仍每轮让出 CPU），也支持驱动级覆盖（`postgres_orm_databasePoolMaxWaiting`）。
      */
     public static func getPoolMaxWaiting(driverName!: String = String.empty): Duration {
-        let duration = Config.getData<Duration>(genKey(driverName, databasePoolMaxWaiting)) ?? Config.getData<Duration>(databasePoolMaxWaiting) ?? Duration.second * 30
-        if (duration <= Duration.Zero) {
+        let millis = get<Int64>(driverName: driverName, key: databasePoolMaxWaiting, default: 30000)
+        if (millis <= 0) {
             Duration.Max
         } else {
-            duration
+            Duration.millisecond * millis
         }
     }
     public static func getPoolCheckSql(driverName!: String = String.empty, default!: String = 'select 1'): String {
