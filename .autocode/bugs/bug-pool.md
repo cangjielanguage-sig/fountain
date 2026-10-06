@@ -526,7 +526,7 @@ useafterrelease: second_is_empty=false second_bytes=5
 
 ## 3. 低危 / 待验证（9 条，其中 `POOL-L1`、`POOL-L2`、`POOL-L5`、`POOL-L6`、`POOL-L7` 已修复）
 
-- `POOL-L1` **告警钩子在 `head.globalLock` 临界区内被调用** ✓已复核 → **✅已修复（2026-10-06，提交 `xxxx`）**
+- `POOL-L1` **告警钩子在 `head.globalLock` 临界区内被调用** ✓已复核 → **✅已修复（2026-10-06，提交 `e9433511`）**
   - **诊断订正（2026-10-06）**：
     1. 调用点其实是 **4** 个：`SyncDeque.selfCheck` 的 `error`/`warn`（`:68`/`:71`，锁内）、`reconcileIfWedge`
        的 warn（`:250`，锁内），以及 **`PoolDiagnostics.reportIfChanged`（`:182-190`，锁外）** ——
