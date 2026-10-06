@@ -533,7 +533,7 @@ useafterrelease: second_is_empty=false second_bytes=5
   - **残留 / 边界**：`Duration.Max` 的池本来就没有巡检 ⇒ 语义零回归（只是不再白养线程）；`POOL-7` 的「关池后最迟 1s 退出」对巡检线程升级成「立刻」，创建线程仍是 ≤1s。
 - `POOL-L3` **`HeadNode.nextForGet` 递归扫描**（`LinkedNode.cj:95-111`）：队首连续非 idle 节点时按节点数递归（`ValueNode.nextForGet` 自身是迭代的，递归只发生在「队首非 idle」这一步）。极端情况（大量滞留 CHECKING 项）可加深调用栈，建议改迭代。
 - `POOL-L4` **`selfCheck`/`audit` 的全队列遍历在锁内**：每 1e4 次操作一次 `countNodes()`（O(队列长度)，`SyncDeque.cj:59-74`、`227-254`）；长队列 + 高并发时是周期性长临界区。可只统计计数，或在锁外做快照核对。
-- `POOL-L5` **`get` 内定义局部函数** `keyedCheck`（基线 `KeyPool.cj:638-640`、`:593-595`；现在 `:684-690` 一版的局部函数）✓已复核 → **✅已修复（2026-10-06，提交 `xxxx`；等价重构 + 微优化）**
+- `POOL-L5` **`get` 内定义局部函数** `keyedCheck`（基线 `KeyPool.cj:638-640`、`:593-595`；现在 `:684-690` 一版的局部函数）✓已复核 → **✅已修复（2026-10-06，提交 `aa64053c`；等价重构 + 微优化）**
   - **改法（2026-10-06 拍板）**：把 `get`/`giveBack` 里的局部函数 `keyedCheck` 分别提成**实例成员函数**
     `checkOnBorrow` / `checkOnReturn`（`KeyPool.cj:673-679`）。两个细节：
     1. **返回类型必须是 `Bool`**：下层 `BaseKeyPool.get/giveBack` 的形参是 `(K, Ref<V>) -> Bool`，
