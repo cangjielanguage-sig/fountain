@@ -15,6 +15,13 @@ limitations under the License.
  */
 package fountain::f_bean
 
+// §2.17 / BEAN-4：`Wildcard` / `Regexp` 的编译结果按模式串 memo。
+// 原先每次求值都要重做：`Regex.wildcard(v)` 的 6 次 `String.replace`（f_regex/src/ExtendRegex.cj:76-85），
+// 以及 `v.regex()` 的键串构造 `"/${this}/${flagsstr()}"`（内部建 HashSet + StringGenerator）。
+// 键空间 = 代码里声明的条件模式数（有界）；`Regex` 不可变，可安全共享。
+private let WILDCARD_REGEX = ConcurrentHashMap<String, Regex>()
+private let REGEX_CACHE = ConcurrentHashMap<String, Regex>()
+
 /**
  * 字符串满足指定条件返回true
  */
@@ -71,8 +78,8 @@ public enum StringCond <: Equatable<StringCond> & Equatable<String> & ToString {
             case Exactly(v) => s == v
             case Prefix(v) => s.startsWith(v)
             case Suffix(v) => s.endsWith(v)
-            case Wildcard(v) => Regex.wildcard(v).matches(s)
-            case Regexp(v) => v.regex().matches(s)
+            case Wildcard(v) => WILDCARD_REGEX.computeIfAbsent(v){Regex.wildcard(v)}.matches(s)
+            case Regexp(v) => REGEX_CACHE.computeIfAbsent(v){v.regex()}.matches(s)
             case Contains(v) => s.contains(v)
             case In(v) => v.contains(s)
         }

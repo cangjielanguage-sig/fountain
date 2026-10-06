@@ -81,6 +81,8 @@ public struct PoolDiagnostics {
     private static let scheduleRestarts = AtomicInt64(0)
     /** 已完成的巡检审计轮数。 */
     private static let auditRounds = AtomicInt64(0)
+    /** 归还被拒的次数（尺寸不符等，见 .autocode/bugs/bug-pool.md §3 POOL-L7）。 */
+    private static let returnRejected = AtomicInt64(0)
 
     // === 记账钩子：module 级可见（`protected`），供 f_pool 内部的各层调用 ===
     protected static func onPoolCreated(): Unit {
@@ -116,6 +118,9 @@ public struct PoolDiagnostics {
     protected static func onAuditRound(): Unit {
         auditRounds.fetchAdd(1)
     }
+    protected static func onReturnRejected(): Unit {
+        returnRejected.fetchAdd(1)
+    }
 
     /**
      * 诊断/告警的唯一落点：**stderr + 立刻 flush**。
@@ -137,6 +142,12 @@ public struct PoolDiagnostics {
     /**
      * 接管本模块的告警输出（幂等；应用可以在启动早期调用它把告警接进自己的 logger/采集器，
      * 之后 `KeyPool` 首次建池时的默认接线不会再覆盖它）。
+     *
+     * 约定（见 .autocode/bugs/bug-pool.md §3 `POOL-L1`）：钩子是在**发起操作的那根线程上同步调用**的
+     * （不是专用告警线程），所以
+     * - 别在钩子里做重 I/O / 阻塞操作（网络上报、同步落盘、等锁…都会拖住调用者本身）；
+     * - 别在钩子里再操作池：`std.sync.Mutex` 是可重入的 ⇒ 不会自死锁，但会在告警路径上再跑一遍池逻辑
+     *   （可能递归告警）。库内已经保证：钩子**不在** deque 的全局锁临界区内被调用。
      */
     public static func redirectWarningsTo(warn!: (String) -> Unit, error!: (String) -> Unit): Unit {
         warnHook = warn
@@ -162,9 +173,9 @@ public struct PoolDiagnostics {
         errorHook(message)
     }
 
-    /** 异常计数之和（回调异常 + 滞留救回 + 记账校正 + 线程重开）：用作"是否有异常发生"的签名。 */
+    /** 异常计数之和（回调异常 + 滞留救回 + 记账校正 + 线程重开 + 归还被拒）：用作"是否有异常发生"的签名。 */
     private static func anomalySignature(): Int64 {
-        callbackErrors.load() + strandedRevived.load() + bookkeepingHealed.load() + scheduleRestarts.load()
+        callbackErrors.load() + strandedRevived.load() + bookkeepingHealed.load() + scheduleRestarts.load() + returnRejected.load()
     }
     private static let lastReportedSignature = AtomicInt64(-1)
     private static let shutdownReportInstalled = AtomicBool(false)
@@ -197,7 +208,7 @@ public struct PoolDiagnostics {
 
     /** 统计快照（单行，便于直接塞进日志/崩溃输出）。 */
     public static func snapshot(): String {
-        'pools=${createdPools.load()}/${closedPools.load()} items=+${addedItems.load()} borrow=${borrowedItems.load()} return=${returnedItems.load()} destroy=${destroyedItems.load()} callbackErr=${callbackErrors.load()} strandedRevived=${strandedRevived.load()} bookkeepingHealed=${bookkeepingHealed.load()} scheduleRestarts=${scheduleRestarts.load()} audits=${auditRounds.load()}'
+        'pools=${createdPools.load()}/${closedPools.load()} items=+${addedItems.load()} borrow=${borrowedItems.load()} return=${returnedItems.load()} destroy=${destroyedItems.load()} callbackErr=${callbackErrors.load()} returnRejected=${returnRejected.load()} strandedRevived=${strandedRevived.load()} bookkeepingHealed=${bookkeepingHealed.load()} scheduleRestarts=${scheduleRestarts.load()} audits=${auditRounds.load()}'
     }
 
     /**

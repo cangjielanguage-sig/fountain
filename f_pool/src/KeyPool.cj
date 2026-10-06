@@ -17,10 +17,30 @@ package fountain::f_pool
 
 import std.collection.concurrent.ArrayBlockingQueue
 import std.sync.{AtomicBool, AtomicInt64, Mutex, Condition}
+import std.ref.{CleanupPolicy, WeakRef}
 import fountain::f_base.ExitCallbacks
 import fountain::f_pool.diagnostics.PoolDiagnostics
-import fountain::f_pool.exception.PoolException
+import fountain::f_pool.exception.{ClearFailedException, PoolException}
 
+/**
+ * 「创建任务」队列的容量上限：它只是给创建线程传「给某键建一个池项」的纸条，槽位数**不必**等于池容量 ——
+ * `ArrayBlockingQueue.init(capacity)` 会**立即**按容量分配数组与状态位（std 源码 `array_blocking_queue.cj:68-78`），
+ * 拿池容量当容量时：`maxSize = Int64.Max`（`ArrayPool`/`ArrayListPool` 的默认值）直接 OOM、
+ * 5e6 时白付 80MB 堆。队列满时 `tryAddTask` 返回 false、等待者下一轮再试，不影响正确性
+ * （见 .autocode/bugs/bug-pool.md §2.3 `POOL-8`）。
+ */
+private const CREATE_TASK_QUEUE_CAP: Int64 = 1024
+
+/** 池容量 → 任务队列容量：夹在 `[1, CREATE_TASK_QUEUE_CAP]`（`ArrayBlockingQueue` 的容量必须为正）。 */
+private func createTaskQueueCapacity(total: Int64): Int64 {
+    if (total < 1) {
+        1
+    } else if (total > CREATE_TASK_QUEUE_CAP) {
+        CREATE_TASK_QUEUE_CAP
+    } else {
+        total
+    }
+}
 public interface KeyedObjectManager<K, V> {
     func create(key: K): V
     func check(key: K, value: V): Bool
@@ -109,6 +129,11 @@ public class KeyPoolBuilder<K, V> where K <: Hashable & Equatable<K> {
         this.clearOnReturning = clearOnReturning
         this
     }
+    /**
+     * 巡检周期：`minSize` 补足、空闲回收（`idleTimeout`）、`audit()` 自愈都挂在它上面。
+     * `<= Duration.Zero`（含 `Duration.Zero`）或 `Duration.Max` 表示**不启用巡检** —— 不起巡检线程，
+     * 池也就不会做这些维护（见 `.autocode/bugs/bug-pool.md` §3 `POOL-L2`）。
+     */
     public func setCheckInterval(checkInterval: Duration): This {
         this.checkInterval = checkInterval
         this
@@ -194,6 +219,13 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
     private let available = AtomicInt64(0)
     private let waiters = AtomicInt64(0)
     /**
+     * 巡检线程「睡到下一轮」的条件变量：原来它是 `sleep(checkInterval)` —— 关池后**叫不醒**：
+     * 默认 `Duration.minute` 要 park 满 1 分钟、`Duration.Max` 时**永不退出**（先例见 §3 POOL-L2）。
+     * 现在 `close()` 会 `notifyAll` 它，关池后立刻醒来退出（与 `POOL-2` 把「等池项」从轮询改通知同一个思路）。
+     */
+    private let checkMutex = Mutex()
+    private let checkCond = synchronized(checkMutex){ checkMutex.condition() }
+    /**
      * 构造完成标志：后台维护线程在构造函数返回前**不许碰 `this`**。
      * 归档报告 7.12（`.autocode/bugs/bug-archived-on-20261004.md`）那次 SIGSEGV 的栈顶是 `UnitKeyPool.size`（运行时泛型 MTable 空指针），
      * 一种可能是后台线程在对象尚未构造完（类型信息未就绪）时就开始使用它 ⇒ 这里加一道栅栏兜住这类风险。
@@ -201,6 +233,16 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
     private let constructed = AtomicBool(false)
     private let barrierMutex = Mutex()
     private let barrier = synchronized(barrierMutex){ barrierMutex.condition() }
+    /**
+     * `get`/`giveBack` 的校验转接器**方法值缓存**（见 .autocode/bugs/bug-pool.md §3 `POOL-L5`）。
+     * `checkOnBorrow`/`checkOnReturn` 是实例成员函数；直接写成 `pool.get(key, checkOnBorrow, …)`
+     * 会**每次调用**现取一次方法值（闭包形态微基准 `closureshape`：现场取 39 ns + 45 B vs 复用 15 ns + 0 B），
+     * 这里构造期取一次、之后复用。
+     *
+     * 先给哑值、再在构造体里赋值：仓颉不允许在「还有成员未初始化」时访问 `this`（含取方法值）。
+     */
+    private var checkOnBorrowFn: (K, Ref<V>) -> Bool = {_, _ => false}
+    private var checkOnReturnFn: (K, Ref<V>) -> Bool = {_, _ => false}
 
     public KeyPool(
         mode!: Mode = Mode.Fifo,
@@ -213,6 +255,11 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         private let checkOnBorrowing!: Bool = true,
         private let checkOnReturning!: Bool = true,
         private let clearOnReturning!: Bool = false,
+        /**
+         * 巡检周期：`minSize` 补足、空闲回收（`idleTimeout`）、`audit()` 自愈都挂在它上面。
+         * `<= Duration.Zero`（含 `Duration.Zero`）或 `Duration.Max` = **不启用巡检**（不起巡检线程，
+         * 池也就不做这些维护）—— `Duration.Max` 与「永不巡检」等价，但不再白养一个线程（见 §3 POOL-L2）。
+         */
         private let checkInterval!: Duration = Duration.minute,
         /**
          * 池耗尽且 `get(timeout: Duration.Max)` 时的等待上限：超过它记 WARN 并返回 None；
@@ -226,9 +273,13 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
     ){
         this.pool = match(None<K>){
             case _: ?Unit => UnitKeyPool<K, Ref<V>>(mode, maxSize)
-            case _ => BaseKeyPool<K, Ref<V>>(mode, maxSize)
+            case _ => BaseKeyPool<K, Ref<V>>(mode, maxSize, running)
         }
-        tasks = ArrayBlockingQueue<K>(totalSize)
+        // 任务队列容量与池容量解耦（夹在 [1, 1024]）：见 createTaskQueueCapacity 的说明（§2.3 POOL-8）
+        tasks = ArrayBlockingQueue<K>(createTaskQueueCapacity(totalSize))
+        // 所有成员已有值 ⇒ 这里才允许取方法值（`POOL-L5` 的方法值缓存）
+        checkOnBorrowFn = checkOnBorrow
+        checkOnReturnFn = checkOnReturn
         PoolDiagnostics.onPoolCreated()
         // 把池内的常规告警接到 f_log（幂等：应用若已用 redirectWarningsTo 接管，这里不会覆盖）
         PoolDiagnostics.installDefaultHooks(
@@ -245,7 +296,17 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         while(let Some(k) <- initKeys()){
             tryAddTask(k)
         }
-        ExitCallbacks.atExit(254, close)
+        // 退出回调**只持有弱引用**（`EAGER`）：池被 `close()`（两个维护线程退出）且调用方不再引用它之后，
+        // 就不会再被 `atExit` 的注册表钉在内存里 —— 否则每建一个池就多一条永不注销的回调，
+        // 已关闭的池对象一直活到进程退出（见 .autocode/bugs/bug-pool.md §2.8 `POOL-13`）。
+        // 未 `close()` 的池仍被它自己的维护线程强引用 ⇒ 退出时这里照样能拿到它并 `close()`，语义不变；
+        // 而 `close()` 是幂等的（§2.6 `POOL-11`），所以「应用已关过、这里又关一次」也没有副作用。
+        let weakSelf = WeakRef<KeyPool<K, V>>(this, CleanupPolicy.EAGER)
+        ExitCallbacks.atExit(254){=>
+            if (let Some(p) <- weakSelf.value) {
+                p.close()
+            }
+        }
         // 必须是构造函数的最后一步：放行两个后台线程（见 constructed 的说明）
         synchronized(barrierMutex){
             constructed.store(true)
@@ -274,6 +335,7 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         checkOnBorrowing!: Bool = true,
         checkOnReturning!: Bool = true,
         clearOnReturning!: Bool = false,
+        /** 巡检周期：`<= Duration.Zero` 或 `Duration.Max` = 不启用巡检（不起巡检线程，见 §3 POOL-L2）。 */
         checkInterval!: Duration = Duration.minute,
         maxWaiting!: Duration = Duration.second * 30,
         manager!: KeyedObjectManager<K, V>
@@ -309,7 +371,11 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         }
     }
     private func startCheckingSchedule() {
-        if(checkInterval <= Duration.Zero){
+        // `Duration.Zero`（含负数）= 不巡检；`Duration.Max` 同样是「不启用巡检」——
+        // 它今天的实际效果就是「永不巡检」（`sleep(Duration.Max)` 实测不抛异常、也永不醒来），
+        // 代价却是一个永久 park 且关池叫不醒的线程（`BytesListOutputStream.builder` 的默认值就是它）。
+        // 明确成同义词之后这类池不再占线程（见 .autocode/bugs/bug-pool.md §3 POOL-L2）。
+        if(checkInterval <= Duration.Zero || checkInterval == Duration.Max){
             return
         }
         checkingThread = spawn {
@@ -334,11 +400,34 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             }
         }
     }
+    /**
+     * 睡到下一轮巡检：**可被 `close()` 叫醒**（`POOL-L2`）。返回 `false` = 该退出了。
+     *
+     * 按 `MonoTime` 算剩余时间（同 `POOL-L6` 的写法，`checkInterval - 已经过去的时间` 不会溢出），
+     * 所以即使被虚假唤醒也不会把巡检周期拖长；`checkInterval == Duration.Max` 的池根本不会起这条线程
+     * （`startCheckingSchedule` 已经挡掉），这里不必单独处理。
+     */
+    private func waitNextRound(): Bool {
+        let start = MonoTime.now()
+        var remain = checkInterval
+        while (remain > Duration.Zero) {
+            synchronized(checkMutex){
+                if (Thread.currentThread.hasPendingCancellation || !running.load()) {
+                    return false
+                }
+                checkCond.wait(timeout: remain)
+            }
+            if (Thread.currentThread.hasPendingCancellation || !running.load()) {
+                return false
+            }
+            remain = checkInterval - (MonoTime.now() - start)
+        }
+        true
+    }
     /** 巡检的一轮循环（拆出来便于看护重开）。 */
     private func checkingLoop(): Unit {
         while(!Thread.currentThread.hasPendingCancellation && running.load()){
-            sleep(checkInterval)
-            if(Thread.currentThread.hasPendingCancellation || !running.load()){
+            if (!waitNextRound()) {
                 return
             }
             pool.check({=> running.load()}, {k, r => 
@@ -426,6 +515,12 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
                 while(!Thread.currentThread.hasPendingCancellation && pool.size < totalSize && pool.keyedSize(k) < maxSize){
                     try {
                         let object = creator(k)
+                        if (!running.load()) {
+                            // 关停窗口（`close()` 与 `creator` 返回之间）：别把刚建出来的池项塞进已关停的池。
+                            // `BaseKeyPool.add` 也会挡一道，但在这里销毁才是确定的（见 §2.6 POOL-11）。
+                            doDestroy(k, object, destroier)
+                            break
+                        }
                         if (checkOnCreation && !doCheck(k, object, checker)){
                             doDestroy(k, object, destroier)
                         } else {
@@ -450,8 +545,24 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
     public func isClosed(): Bool {
         !running.load()
     }
+    /**
+     * 键表里当前的键数（诊断 / 测试用）：`POOL-11` 的观测点 —— 键的基数该由应用用 `remove(key)`
+     * 控制，`close()` 之后必须回到 0。
+     */
+    func keyCount(): Int64 {
+        pool.keyCount()
+    }
+    /**
+     * 关闭并**销毁全部键的池**，然后清空键表（`POOL-11`）。**幂等**：重复调用直接返回。
+     *
+     * 顺序：先置 `running=false`（此后 `BaseKeyPool` 不再按需建池、`BasePool` 不再收项），
+     * 再取消两个内部维护线程、唤醒等待者、清掉待建任务，最后逐个键「关闭 + 销毁 + 摘键」。
+     * 关停之后 `get` 返回 `None`、`giveBack` 直接销毁、键表保持空 —— 不会再有键从 close 之后长回来。
+     */
     public func close(): Unit {
-        running.store(false)
+        if (!running.compareAndSwap(true, false)) {
+            return               // 已经关过了（键表已清空、池项已销毁）
+        }
         // 给两个内部维护线程发取消请求（协作式）：它们的循环每轮判 `hasPendingCancellation`
         // + 带超时出队 ⇒ 最迟 1s 内退出，不再永久 park（见 §2.2 POOL-7）
         if (let Some(t) <- creationThread) {
@@ -462,14 +573,39 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         }
         // 等待者必须立刻看到 running=false 并返回 None，不能让他们 park 到预算耗尽（见 §2.1 POOL-6）
         wakeWaiters()
+        // 巡检线程可能正睡在 `checkInterval` 上（默认 1 分钟）：敲一下让它立刻醒来退出
+        // —— 不再 park 满一个巡检周期（见 §3 POOL-L2）
+        synchronized(checkMutex){
+            checkCond.notifyAll()
+        }
         while(let Some(_) <- tasks.tryRemove()){}
-        pool.destroy{k, r => 
+        // 销毁所有键的池并清空键表（见 §2.6 POOL-11）：`BaseKeyPool.close` 内部逐个键
+        // 「先关闭 + 销毁池项 + 摘键」，最后把全局计数清零。
+        pool.close{k, r => 
             // take()：显式销毁过的池项其 Ref 已空，终结器不会再销毁第二次（见 .autocode/bugs/bug-pool.md §1.1）
             if(let Some(v) <- r.take()){
                 doDestroy(k, v, destroier)
             }
         }
         PoolDiagnostics.onPoolClosed()
+    }
+    /**
+     * 摘掉 `key` 对应的池：**先关闭并销毁**它的池项（池内空闲项逐个交给 `destroier`），再把键从键表里删掉。
+     *
+     * 用途：键的基数由应用控制时（用户 / 会话 / 文件 …）主动回收 —— 不回收的话，键表、空池条目
+     * 与巡检每轮 O(#keys) 的遍历都是**永久**成本（见 .autocode/bugs/bug-pool.md §2.6 `POOL-11`）。
+     *
+     * 注意：调用前请确认这个键的池项都已归还 —— 摘掉之后 `giveBack(key, …)` 会因为「这个键没有池」
+     * 抛 `UnknownKeyException`（见 §2.5 `POOL-10`），仍在借用方手里的对象需要应用层自己销毁。
+     * 键不存在、或池已关停（`close()` 清空键表之后）时都是**空操作**。
+     */
+    public func remove(key: K): Unit {
+        pool.remove(key, {_, r => 
+            // take()：显式销毁过的池项其 Ref 已空，终结器不会再销毁第二次（见 .autocode/bugs/bug-pool.md §1.1）
+            if(let Some(v) <- r.take()){
+                doDestroy(key, v, destroier)
+            }
+        })
     }
     private func doDestroy(k: K, v: V, destroier: (K, V) -> Unit){
         try{
@@ -527,14 +663,25 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             waiters.fetchSub(1)
         }
     }
+    /**
+     * `get` 的借用校验转接器。原来是 `get` 里的**局部函数** `keyedCheck` —— 每次借用都现场建一个
+     * 捕获闭包（借用/归还是热路径，见 .autocode/bugs/bug-pool.md §3 `POOL-L5`）；改成实例成员函数后
+     * 每轮循环只取一次方法值。
+     *
+     * 开关 `checkOnBorrowing` 在**调用时**读取（不是建方法值时固化）⇒ 与原来的语义完全一致。
+     */
+    private func checkOnBorrow(key: K, ref: Ref<V>): Bool {
+        this.keyedCheck(checkOnBorrowing, key, ref)
+    }
+    /** `giveBack` 的归还校验转接器（原来是 `giveBack` 里的局部函数 `keyedCheck`，同 `checkOnBorrow`）。 */
+    private func checkOnReturn(key: K, ref: Ref<V>): Bool {
+        this.keyedCheck(checkOnReturning, key, ref)
+    }
     public func get(key: K, timeout!: Duration = Duration.Max): ?V {
-        func keyedCheck(key: K, ref: Ref<V>){
-            this.keyedCheck(checkOnBorrowing, key, ref)
-        }
         if(timeout <= Duration.Zero){
             // 借出从 Ref 里 take()：借出即把值取空，终结器就不会在借用方手里销毁这一项
             // （见 .autocode/bugs/bug-pool.md §1.1）。
-            if(running.load() && let Some(r) <- pool.get(key, keyedCheck, keyedDestroy) && let Some(v) <- r.take()){
+            if(running.load() && let Some(r) <- pool.get(key, checkOnBorrowFn, keyedDestroy) && let Some(v) <- r.take()){
                 return v
             }
         }else{
@@ -548,7 +695,7 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             let limit = if (timeout == Duration.Max) { maxWaiting } else { timeout }
             let infinite = limit == Duration.Max
             while(running.load()) {
-                if (let Some(r) <- pool.get(key, keyedCheck, keyedDestroy) && let Some(v) <- r.take()) {
+                if (let Some(r) <- pool.get(key, checkOnBorrowFn, keyedDestroy) && let Some(v) <- r.take()) {
                     return v
                 }
                 // 还有额度就把「建一个」入队；建好由创建线程 wakeWaiters 唤醒（被别的键/线程唤醒也会重试）
@@ -573,20 +720,26 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         if(!running.load()){
             return doDestroy(key, object, destroier)
         }
-        func keyedCheck(key: K, ref: Ref<V>){
-            this.keyedCheck(checkOnReturning, key, ref)
-        }
         if(clearOnReturning){
-            clear(key, object)
-        }
-        pool.giveBack(key, ref(key, object), keyedCheck, keyedDestroy)
-        // 与 close() 交错时本项可能是在「清池」之后才入池的 ⇒ 取出来销毁，不让它留在一个已关闭的池里
-        // （既没人取也没人销毁；池对象还被 atExit 回调长期持有，见 §2.1 POOL-6 / §2.8 POOL-13）
-        if(!running.load()){
-            if (let Some(r) <- pool.get(key, {_, _ => true}, keyedDestroy) && let Some(v) <- r.take()) {
-                doDestroy(key, v, destroier)
+            try {
+                clear(key, object)
+            } catch (e: Exception) {
+                // `clear` 抛异常 = 应用层回调的 BUG：**这次归还没有发生** —— 不销毁、不结清记账、不进池，
+                // 池项状态与调用 giveBack 之前完全一样，对象所有权仍在调用方手里（可以修好之后重试 giveBack）。
+                // 抛 `ClearFailedException`（`f_base.BaseException` 子类）并把被顶掉的回调异常挂到 suppressed 上
+                // （见 .autocode/bugs/bug-pool.md §2.7 POOL-12）。
+                PoolDiagnostics.onCallbackError()
+                let failure = ClearFailedException(key)
+                failure.addSuppressed(e)
+                throw failure
             }
         }
+        pool.giveBack(key, ref(key, object), checkOnReturnFn, keyedDestroy)
+        // 与 close() / remove(key) 交错的情形现在由底层兜住：
+        // - `BaseKeyPool.giveBack` 在关停（`!running`）或键已被摘掉时直接销毁；
+        // - `BasePool` 的关闭标志让「晚于清空才入队」的那一项当场销毁（见 §2.6 POOL-11）。
+        // 原来在这里「取回来再销毁」的兜底必须调 `pool.get(key, …)`，而它会在键表被清空后**又建一个池**，
+        // 把 close() 的「清空键表」重新破坏掉，所以删掉。
         // 唤醒等池项的 get（见 §1.2 POOL-2）
         wakeWaiters()
     }
