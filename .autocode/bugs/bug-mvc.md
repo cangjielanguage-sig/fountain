@@ -3,7 +3,7 @@
 - **来源**：`.autocode/bugs/bug.md` 按模块拆分（原报告《代码审查报告：f_orm / f_mvc / f_bean / f_aspect》，审查分支 `review/orm-mvc-bean-aspect`，基线 `5a5d6cf3`；拆分日期 2026-10-05）。
 - **编号**：条目编号沿用原报告（§x.y 不变），便于与代码注释、其他报告交叉引用；编号不连续属正常（其余编号属其他模块）。总索引见 `bug.md` §0 的「编号索引」。
 - **本模块条目 25 条**：严重 4（§1.9 `MVC-4`、§1.10 `MVC-1`、§1.11 `MVC-3`、§1.12 `MVC-2`）、中 8（§2.2 `MVC-C3`、§2.3 `MVC-C5`、§2.5 `MVC-C2`、§2.6 `MVC-8`、§2.7 `MVC-6`、§2.19 `MVC-5`、§2.20 `MVC-7`、§2.21 `MVC-9`）、低危+待验证 13（§3）。
-- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；`MVC-8` ✅已修复（§2.6，`fix/mvc-rest`）；`MVC-6` ❌误判（§2.7，用户判定非缺陷：WS 消息总长上限属端点/部署侧策略，不设硬上限是设计选择）；`MVC-5` ❌不改（§2.19，用户判定「不值得改」：全仓 `@PathVariable` 均为单变量、暴露面为零）；`MVC-7` ✅已修复（§2.20，`fix/mvc-rest`，范围：只改 `RequestMethod.hashCode()`）；`MVC-9` ❌不改（§2.21，用户判定：每请求从 IoC 取 controller 实例是设计语义 —— 允许 controller 定义为 `prototype`，缓存实例会破坏它）；`MVC-L8`/`MVC-L1`/`MVC-C6`(a)/`MVC-L5` ✅已加固（§3.1，`fix/mvc-rest`）；`MVC-L7` ❌不改（§3.1，用户判定 C：成本仅注册期毫秒级，且源头是只写不读的 `RequestMetas`）；`MVC-L12` ✅已修复（§3.2，`fix/mvc-rest`）；`MVC-C6`(b)（§3.1）与 `MVC-L11`（§3.2）✅已修复（同一提交）；§3.1 剩余 6 条（`MVC-L9`/`L2`/`L3`/`L4`/`L6`/`L10`）❌不改（用户 2026-10-06 判定，见 §3.1 判定标记（C 桶））；`MVC-13` ✅已修复（§3.2，`fix/mvc-rest`：按 `Upgrade: websocket` 分流到 `WS` 键；端到端验证仍待外部环境）（**§1 严重级、§2 中危均已清零；§3.1 与 §3.2 全部结清**）。
+- **状态（截至 2026-10-05）**：`MVC-4` ✅已修复（§1.9，`fix/mvc-4`，已并入 `sts/1.3.x`）；`MVC-1` ❌误判（§1.10，非缺陷：静态资源常驻是设计目的、`view.value = None` 实为删除条目）；`MVC-3` ✅已修复（§1.11，`fix/mvc-3`，已并入 `sts/1.3.x`）；`MVC-2` ✅已修复（§1.12，`fix/mvc-rest`）；`MVC-C3` ✅已修复（§2.2，`fix/mvc-rest`）；`MVC-C5` ✅已修复（§2.3，`fix/mvc-rest`）；`MVC-C2` ✅已修复（§2.5，`fix/mvc-rest`，潜在问题、防御性修复）；`MVC-8` ✅已修复（§2.6，`fix/mvc-rest`）；`MVC-6` ❌误判（§2.7，用户判定非缺陷：WS 消息总长上限属端点/部署侧策略，不设硬上限是设计选择）；`MVC-5` ❌不改（§2.19，用户判定「不值得改」：全仓 `@PathVariable` 均为单变量、暴露面为零）；`MVC-7` ✅已修复（§2.20，`fix/mvc-rest`，范围：只改 `RequestMethod.hashCode()`）；`MVC-9` ❌不改（§2.21，用户判定：每请求从 IoC 取 controller 实例是设计语义 —— 允许 controller 定义为 `prototype`，缓存实例会破坏它）；`MVC-L8`/`MVC-L1`/`MVC-C6`(a)/`MVC-L5` ✅已加固（§3.1，`fix/mvc-rest`）；`MVC-L7` ❌不改（§3.1，用户判定 C：成本仅注册期毫秒级，且源头是只写不读的 `RequestMetas`）；`MVC-L12` ✅已修复（§3.2，`fix/mvc-rest`）；`MVC-C6`(b)（§3.1）与 `MVC-L11`（§3.2）✅已修复（同一提交）；§3.1 剩余 6 条（`MVC-L9`/`L2`/`L3`/`L4`/`L6`/`L10`）❌不改（用户 2026-10-06 判定，见 §3.1 判定标记（C 桶））；`MVC-13` ✅已修复（§3.2，`fix/mvc-rest`：按 `Upgrade: websocket` 分流到 `WS` 键；端到端验证见 §3.2 标记）；**新立待验证 `MVC-14`**（WS 路径缺请求级 ThreadLocal 收尾，§3.2）（**§1 严重级、§2 中危均已清零；§3.1 全部结清**）。
 
 ## 1. 严重（本模块 4 条）
 
@@ -271,7 +271,7 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
 
 ⇒ 本模块 §3.1 低危 11 条全部结清：**修复 4**（`MVC-L1`、`MVC-L5`、`MVC-L8`、`MVC-C6`（a)(b)）＋**判定不改 7**（`MVC-L7`、`MVC-L9`、`MVC-L2`、`MVC-L3`、`MVC-L4`、`MVC-L6`、`MVC-L10`）。
 
-### 3.2 待验证（3 条）
+### 3.2 待验证（4 条）
 
 - `MVC-L11` `RequestMeta.cj:303-318`：空结果的控制器函数在 `Accept` 不含 `*/*` 时被判为 406 而非 200 空体。**验证**：设计意图。→ ✅**已修复（2026-10-06，见修复标记（L11））** —— 判定为**不是设计意图**：会把 `MVCBreakingCommand(status)`（默认 `DataUnit.UNIT`，如 `ControllerFuncParam` 的 415）的状态码吞成 406
 - `MVC-L12` `RequestMethod.cj:32-38`：`operator ==` 的分支里没有 `WS`，`(WS, WS)` 落到 `case _ => false`，而 `hashCode` 由 `toString` 生成。**验证**：若 `HashMap` 不做引用短路，WS 路由查不到（`RequestMethod.WS` 正是 WS 端点的注册键，见 `HttpRequestDistributorImpl.cj:36`）。→ ✅**已修复（2026-10-06，见 §3.2 修复标记）**（注：`hashCode` 自 `MVC-7` 起已是声明序常量表，不再是 `toString` 哈希）
@@ -279,6 +279,13 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
   - **与 `MVC-L12` 的关系**：`MVC-L12`（`operator ==` 缺 `(WS, WS)`）已修（见 §3.2 修复标记（L12））—— 它只是 WS 可用的**必要不充分**条件；即便 `==` 修好，只要请求期没有以 `WS` 为键的查询，该键仍是死的。
   - **验证方式（需用户拍板后执行）**：①**最小验证**：注册一个 WS 端点后，用 WS 客户端连该路径，断言「收到 101 升级」而不是 405（需要能起服务 + WS 客户端，成本较高，建议放 fdemo 的端到端脚本里）；②**设计确认**：若 WS 属**未完成的实验特性**，先把它标注为实验（文档 + 代码注释），本条目降级为「已知限制」，不改代码；③**若确认要打通**：需在 `handle` 里按 `Upgrade: websocket` 头（或改用独立 handler 类型承载 WS 路径）分流到 `WS` 键 —— 属**设计/行为变更**，须单独立项实施。
   - **现状影响**：全仓无使用方 ⇒ 当前无实际影响；但「对外宣称支持 WS」时属功能不可用，至少需要一条「已知限制」记录。
+- **`MVC-14`**（**新立条目**，2026-10-06，记于 `RequestMeta.setHandle(wsmeta:)`）：**WS 路径缺请求级 ThreadLocal 收尾**。`RequestMeta.setHandle(wsmeta:)` 的闭包是
+  `ctx => wsmeta.handle(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern.getOrThrow())`
+  —— 没有 HTTP 路径那样的 `CurrentHttpContext.set(ctx)` 与 `finally { CurrentHttpContext.clear(); clearResponseStatus(); OverallStopwatch.clearStart() }`（对比 `setHandle<T>(fn:)`：`RequestMeta.cj:202` 与 `:222-224`）。
+  - **影响（三条，机制均可从代码确证）**：①`CurrentHttpContext.instance` 是 `context.get().getOrThrow()`（`CurrentHttpContext.cj:30-34`）⇒ WS 处理链里若用到 `download(...)` / `FileDownload`（后者构造期即读 `CurrentHttpContext.instance`，`FileDownload.cj:38`）会抛 `NoneValueException`；②`check(wsMeta)` 命中 `NOT_ACCEPTABLE`/`NOT_IMPLEMENTED` 时，`HttpStatusOnlyHandler` 会 `setResponseStatus`（`MultiRequestMethodHandler.cj:133`/`:145`，例如握手带非通配 `Accept`），而 WS 路径不是请求出口 ⇒ **不清该 ThreadLocal** ⇒ 该线程后续 HTTP 请求的 `accessLog`（`RequestMeta.cj:538` 读 `getResponseStatus()`）可能取到陈旧状态；③`OverallStopwatch` 起点残留（下次 `doStart` 会覆盖，仅短暂持有上一个 path 引用，影响轻微）。
+  - **相关性**：`MVC-13` 刚把 WS 路径打通（此前 WS 端点不可达 ⇒ 本条影响面为 0），故现在值得记录。
+  - **建议修法（小改动，与 HTTP 路径对齐）**：把 WS 闭包改成 `try { CurrentHttpContext.set(ctx); wsmeta.handle(...) } finally { CurrentHttpContext.clear(); clearResponseStatus(); OverallStopwatch.clearStart() }`（注意 WS 会话在闭包内阻塞整个会话期，ThreadLocal 会持有 ctx 至会话结束 —— 与 HTTP 请求期语义一致）。
+  - **验证方式**：ThreadLocal 是线程内状态、外部不可断言 ⇒ 无单测方案；可作为 `MVC-13` 端到端观察项之一，或抽包内接缝（如把「请求出口清理」抽成一个函数，HTTP/WS 两条路径共用）后再测。
 
 **✅ 修复标记（L12）（2026-10-06，`fix/mvc-rest`，代码/用例/本标记同一提交）**
 
