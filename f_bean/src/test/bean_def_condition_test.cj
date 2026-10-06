@@ -40,13 +40,14 @@ public class BeanDefSampleA <: BeanDefSample {}
 public class BeanDefSampleB <: BeanDefSample {}
 
 /**
- * 条件恒假（配置键不存在）的 bean。
+ * 条件恒假（名字条件永不命中）的 bean —— 走 `BeanDef(IgnoreType, 名条件)` 这条路径。
  *
- * ⚠️ 测试进程**从不调用** `BeanFactory.afterRegistered()` ⇒ `check()` 不跑 ⇒ 本 bean 不会被丢弃，
- * 因此本文件不对它做「已被丢弃」的断言；被丢弃时的清理路径（§3.1 / `BEAN-L1(b)`）由定向验证覆盖。
+ * ⚠️ 测试进程**从不调用** `BeanFactory.afterRegistered()` ⇒ `check()` 不跑 ⇒ 它在普通测试里不会被丢弃，
+ * 因此本文件不对它做「已被丢弃」的断言；丢弃 + 两张类型表清理的端到端路径由定向验证
+ * （显式调用 `afterRegistered()`）覆盖，见 `bug-bean.md` §3.1 `BEAN-L12` 与 `BEAN-L1(b)`。
  */
 @Bean
-@BeanMeta[condition: ConfCond.Exists('definitely.no.such.config.key')]
+@BeanMeta[condition: BeanDef(beanType: BeanDefType.IgnoreType, beanName: Exactly('definitely.no.such.bean'))]
 public class BeanDefDiscarded {}
 
 @Test
@@ -58,17 +59,30 @@ public class BeanDefCondition_test {
     private let sampleName: StringCond = Wildcard('fountain::f_bean.test.BeanDefSample*')
 
     @TestCase
-    public func testIgnoreTypeCurrentlyMatchesAll(): Unit {
-        // ⚠️ 现状（缺陷）：`IgnoreType` 组合一律 true，名条件/count/scope 均不生效 ⇒ 见 §3.1 `BEAN-L12`
-        @Assert(BeanDef(beanType: BeanDefType.IgnoreType, beanName: neverName).on(factory), true)
+    public func testIgnoreTypeNameCondFilters(): Unit {
+        // ① 两个都是 Ignore ⇒ 无条件真，且**其余条件（count/scope）一并忽略**（本意，§3.1 / `BEAN-L12`）
+        @Assert(BeanDef(beanType: BeanDefType.IgnoreType, beanName: IgnoreCond).on(factory), true)
+        @Assert(BeanDef(count: BeanDefCount.Zero).on(factory), true) // 默认 beanType/beanName 就是两个 Ignore
+        @Assert(BeanDef(beanType: BeanDefType.IgnoreType, beanName: IgnoreCond, count: BeanDefCount.Zero).on(factory),
+            true)
+        @Assert(BeanDef(beanType: BeanDefType.IgnoreType, beanName: IgnoreCond, scope: BeanScope.prototype).on(factory),
+            true)
+        @Assert(BeanDef(beanType: BeanDefType.IgnoreType, beanName: IgnoreCond, count: BeanDefCount.OnlyOne,
+            scope: BeanScope.prototype).on(factory), true)
+        // ② 名条件不再被吞掉：它与 count、scope 一起真正生效
+        @Assert(BeanDef(beanType: BeanDefType.IgnoreType, beanName: neverName).on(factory), false)
         @Assert(BeanDef(beanType: BeanDefType.IgnoreType, beanName: neverName, count: BeanDefCount.Zero).on(factory),
             true)
-        @Assert(BeanDef(beanType: BeanDefType.IgnoreType, beanName: neverName, count: BeanDefCount.OnlyOne).on(factory),
-            true)
-        @Assert(BeanDef(beanType: BeanDefType.IgnoreType, beanName: neverName, scope: BeanScope.prototype).on(factory),
-            true)
+        @Assert(BeanDef(beanType: BeanDefType.IgnoreType, beanName: sampleName).on(factory), true)
         @Assert(BeanDef(beanType: BeanDefType.IgnoreType, beanName: sampleName, count: BeanDefCount.MoreThanOne).on(
             factory), true)
+        @Assert(BeanDef(beanType: BeanDefType.IgnoreType, beanName: sampleName, count: BeanDefCount.OnlyOne).on(factory),
+            false)
+        // 样本里只有 B 是 prototype ⇒ scope 过滤后可数出 1 个
+        @Assert(BeanDef(beanType: BeanDefType.IgnoreType, beanName: sampleName, count: BeanDefCount.OnlyOne,
+            scope: BeanScope.prototype).on(factory), true)
+        @Assert(BeanDef(beanType: BeanDefType.IgnoreType, beanName: sampleName, count: BeanDefCount.MoreThanOne,
+            scope: BeanScope.prototype).on(factory), false)
     }
 
     @TestCase

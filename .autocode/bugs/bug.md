@@ -40,6 +40,7 @@
 > 二十一次修正（2026-10-05）：§3.1 新增 **`BEAN-L11`**（逐元素 `beanLog` ≈ 325~349 ns/元素，debug 关闭时仍付；`lookupList` +42%、`lookupHashMap` +32%）—— 按作者决定 ⏸**保持现状**（候选修法已留档：去掉逐元素日志 / 用 `log.debugEnabled` 前置判定），见 `bug-bean.md` §3.1 ⇒ f_bean 待修仍 2 条（`L1` + 待验证的 `L8`）。
 > 二十二次修正（2026-10-05）：§3.2 `BEAN-L8` 判为 ❌**不成立**（部署方约定：请求晚于 initializer ⇒ 启动初始化与首次请求不并发，`initIfNeed` 的无条件 `store` 与 `bean` getter 的双检不构成竞态），见 `bug-bean.md` §3.2 ⇒ f_bean 待修 1 条（`BEAN-L1`）。顺带修 `f_bean/README.md:264` 小节标题拼写（`BeanBef` → `BeanDef`）。
 > 二十三次修正（2026-10-05）：§3.1 `BEAN-L1` 收口 —— **(a) 判为不可达并已回滚**（`case (IgnoreType, IgnoreName)` 的 `IgnoreName` 是模式变量绑定 ⇒ catch-all ⇒ `IgnoreType` 组合一律 `return true`，快路径落不到；实测去掉恒真判定收益 -38.6 ns ≈ 0），**(b) 已实施**（清理阶段只在移除成功时记账；定向运行：`afterRegistered()` 前 1 → 后 0，两张表清理且不留空键）；**同时新发现缺陷 `BEAN-L12`**（`IgnoreType` 组合的名条件/count/scope 被静默忽略 ⇒ 属行为变更、待作者拍板），见 `bug-bean.md` §3.1 ⇒ f_bean 待修 1 条（`BEAN-L12`）。
+> 二十四次修正（2026-10-06）：§3.1 `BEAN-L12` 已修复（**方案 F1**：`case (IgnoreType, IgnoreName)` → `case (IgnoreType, IgnoreCond)`；`IgnoreName` 曾是模式变量绑定 ⇒ catch-all 吃掉名条件/count/scope。本意经作者确认：**类型与名字都是 Ignore 时其余条件一并忽略** ⇒ 无条件真；其余组合走真实筛选）。RED→GREEN：谓词 **true → false**；端到端（真 `BeanDef` 条件 + 显式 `afterRegistered()`）`BeanDefDiscarded` **1 → 0**、样本未被误删；全套 **TOTAL 25 / PASSED 25 / ERROR 0 / FAILED 0**、`cjpm build` exit 0。`BEAN-L1(a)` 快路径已可达但收益 ≈ 0 ⇒ 不复活；同类模式绑定嗅探仅此一处（其余为外部枚举 case 误报）。见 `bug-bean.md` §3.1 ⇒ **f_bean 待修 0 条**。
 
 **建议修复顺序**（即严重级内部的落地顺序）：
 
