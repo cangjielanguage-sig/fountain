@@ -576,7 +576,7 @@ useafterrelease: second_is_empty=false second_bytes=5
     对深调用并不敏感（可增长/很大）⇒ 即便真是递归，报告里「极端情况可加深调用栈」的严重度也远不到要改的程度。
   - **结论**：不改代码（循环里每跳一次的 `sleep(Duration.Zero)` 是刻意的让出 CPU，不是问题）。日志
     `.autocode/tmp/pool_l3_probe.log`。
-- `POOL-L4` **`selfCheck`/`audit` 的全队列遍历在锁内**：每 1e4 次操作一次 `countNodes()`（O(队列长度)，`SyncDeque.cj:59-74`、`227-254`）；长队列 + 高并发时是周期性长临界区。可只统计计数，或在锁外做快照核对。✓已复核 → **✅已修复（2026-10-06，提交 `xxxx`；按候选修法 ①）**
+- `POOL-L4` **`selfCheck`/`audit` 的全队列遍历在锁内**：每 1e4 次操作一次 `countNodes()`（O(队列长度)，`SyncDeque.cj:59-74`、`227-254`）；长队列 + 高并发时是周期性长临界区。可只统计计数，或在锁外做快照核对。✓已复核 → **✅已修复（2026-10-06，提交 `7031a641`；按候选修法 ①）**
   - **改法**（`f_pool/src/base/collection/SyncDeque.cj`）：
     1. 新增 `nodes` 计数（挂在队列上的 `ValueNode` 数），**只在 `head.globalLock` 临界区里**与 `s`/`out` 一起维护 —— 插入 4 处（`insertHead`/`insertTail` `+s` 的同时 `+nodes`；`prepend`/`append` 只 `+nodes`，因为归还时 `s` 不变）＋被取走（`remove` 的 `nextForGet` 命中处）与校验不过摘掉（`check` 的 `onRemoved` 里，与 `s.fetchSub(1)` 同一临界区）各 −1。
     2. `selfCheck` 改 **O(1)**：`s == nodes + out`（读三个原子量，仍在该锁内读，保证一致的快照）；原来那条「记着有项却一个也取不出来（`idle == 0`）」的告警**移除** —— 它的判据要数 idle 节点（O(n)），现在由同一条低频路径承担（取不到项时 `reconcileIfWedge()` 救回滞留项并打 `WEDGE-HEAL`）；巡检被关掉的池要等下一次取不到项才报，已写进 `selfCheck` 的文档注释。
