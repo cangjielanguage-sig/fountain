@@ -292,6 +292,75 @@ public class BeanFactory {
         }
         map
     }
+    /**
+     * §3.1 / `BEAN-L6`：`annotationMap` 的取桶入口 —— 补齐 README 声明过的「按注解取 bean」能力
+     * （此前该表只写不读）。注解桶与类型桶同为 `TreeSet<BeanManager>`、同一比较器（`primary` 优先、
+     * 再 `order`、再名字）⇒ 结果顺序与既有查询一致。
+     */
+    private func annotationManagers(annotation: TypeInfo): Collection<BeanManager> {
+        annotationMap.get(annotation) ?? []
+    }
+    /**
+     * 取「类型被注解 `A` 修饰（含父类/接口/元注解链，见 `doRegister` 的类型队列）且类型是 `T` 的子类型、
+     * 名字满足 `cond`」的第一个 bean；没有则 `None`。
+     */
+    public func getFirstByAnnotation<T, A>(cond!: StringCond = IgnoreCond): ?T where T <: Object, A <: Annotation {
+        getFirstByAnnotation<T>(TypeInfo.of<A>(), cond)
+    }
+    /**
+     * `getFirstByAnnotation` 的内部实现。注意：桶是按**注解**建立的 ⇒ 桶内子类型判定**不**恒真，
+     * 故逐元素做真实类型判定（也因此只对命中的 bean 取 `.bean`，不会实例化未命中的 prototype）。
+     */
+    private func getFirstByAnnotation<T>(annotation: TypeInfo, cond: StringCond): ?T where T <: Object {
+        let requiredType = TypeInfo.of<T>()
+        for (m in annotationManagers(annotation) where m.beanType.isSubtypeOf(requiredType) && cond.on(m.name)) {
+            beanLog('getFirstByAnnotation', requiredType, cond, m)
+            return m.bean as T
+        }
+        None
+    }
+    /**
+     * 取全部「类型被注解 `A` 修饰且类型是 `T` 的子类型、名字满足 `cond`」的 bean（顺序同注解桶）。
+     */
+    public func getListByAnnotation<T, A>(cond!: StringCond = IgnoreCond): ArrayList<T> where T <: Object,
+        A <: Annotation {
+        getListByAnnotation<T>(TypeInfo.of<A>(), cond)
+    }
+    /**
+     * `getListByAnnotation` 的内部实现（说明同 `getFirstByAnnotation`）。
+     */
+    private func getListByAnnotation<T>(annotation: TypeInfo, cond: StringCond): ArrayList<T> where T <: Object {
+        let requiredType = TypeInfo.of<T>()
+        let list = ArrayList<T>()
+        for (m in annotationManagers(annotation) where m.beanType.isSubtypeOf(requiredType) && cond.on(m.name)) {
+            beanLog('getListByAnnotation', requiredType, cond, m)
+            if (let b: T <- m.bean) {
+                list.add(b)
+            }
+        }
+        list
+    }
+    /**
+     * 同 `getListByAnnotation`，返回的 `HashMap` 以 `BeanManager.name`（bean 名）为 KEY。
+     */
+    public func getMapByAnnotation<T, A>(cond!: StringCond = IgnoreCond): HashMap<String, T> where T <: Object,
+        A <: Annotation {
+        getMapByAnnotation<T>(TypeInfo.of<A>(), cond)
+    }
+    /**
+     * `getMapByAnnotation` 的内部实现（说明同 `getFirstByAnnotation`）。
+     */
+    private func getMapByAnnotation<T>(annotation: TypeInfo, cond: StringCond): HashMap<String, T> where T <: Object {
+        let requiredType = TypeInfo.of<T>()
+        let map = HashMap<String, T>()
+        for (m in annotationManagers(annotation) where m.beanType.isSubtypeOf(requiredType) && cond.on(m.name)) {
+            beanLog('getMapByAnnotation', requiredType, cond, m)
+            if (let b: T <- m.bean) {
+                map[m.name] = b
+            }
+        }
+        map
+    }
 
     private func generateTuple<T>(manager: BeanManager): ?(String, T, () -> Unit) {
         if (matches<T>(manager)) {

@@ -142,3 +142,50 @@ public func lookupWeights<W, T>(cond: StringCond): TreeMap<W, T> where W <: Comp
     }
     map
 }
+
+/**
+ * §3.1 / `BEAN-L6`：按注解取 bean（补上 README 声明过、此前缺失的查询入口）。
+ * `A` 是注解类型（`@Annotation` 标记的类）；匹配范围含**父类/接口/元注解**链上的注解（见 `doRegister`）。
+ */
+public func lookupByAnnotation<T, A>(): T where T <: Object, A <: Annotation {
+    lookupByAnnotation<T, A>(StringCond.IgnoreCond)
+}
+
+/**
+ * 取「类型被注解 `A` 修饰且类型是 `T` 的子类型、名字满足 `cond`」的第一个 bean，没有则抛 `BeanException`。
+ */
+public func lookupByAnnotation<T, A>(cond: StringCond): T where T <: Object, A <: Annotation {
+    BeanFactory.instance.getFirstByAnnotation<T, A>(cond: cond).getOrThrow {
+        BeanException(
+            'bean type ${TypeInfo.of<T>()} annotated with ${TypeInfo.of<A>()} with bean name condition ${cond} does not exist.')
+    }
+}
+
+/**
+ * 取全部「类型被注解 `A` 修饰且类型是 `T` 的子类型、名字满足 `cond`」的 bean（顺序同注解桶）。
+ */
+public func lookupListByAnnotation<T, A>(): ArrayList<T> where T <: Object, A <: Annotation {
+    lookupListByAnnotation<T, A>(IgnoreCond)
+}
+
+/**
+ * 同 `lookupListByAnnotation`，带名字条件。
+ */
+public func lookupListByAnnotation<T, A>(cond: StringCond): ArrayList<T> where T <: Object, A <: Annotation {
+    BeanFactory.instance.getListByAnnotation<T, A>(cond: cond)
+}
+
+/**
+ * 取全部「类型被注解 `A` 修饰且类型是 `T` 的子类型、名字满足 `cond`」的 bean，返回的 `HashMap`
+ * 以 bean 名（`BeanManager.name`）为 KEY。
+ */
+public func lookupMapByAnnotation<T, A>(): HashMap<String, T> where T <: Object, A <: Annotation {
+    lookupMapByAnnotation<T, A>(IgnoreCond)
+}
+
+/**
+ * 同 `lookupMapByAnnotation`，带名字条件。
+ */
+public func lookupMapByAnnotation<T, A>(cond: StringCond): HashMap<String, T> where T <: Object, A <: Annotation {
+    BeanFactory.instance.getMapByAnnotation<T, A>(cond: cond)
+}
