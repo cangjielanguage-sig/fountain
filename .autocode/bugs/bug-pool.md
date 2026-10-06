@@ -30,6 +30,7 @@
 > 十二次修正（2026-10-05）：§3 `POOL-L2` 已修复（`Duration.Max` = 不启用巡检 ⇒ 不再起线程；巡检睡眠改成条件变量，`close()` 立刻叫醒）⇒ §3 待处理 **8** 条（`POOL-L1`、`POOL-L3`~`POOL-L9`）。
 > 十三次修正（2026-10-05）：§3 `POOL-L7` 已修复（`ArrayPool.giveBack` 尺寸不符 ⇒ 抛 `IllegalSizeException`，签名 `Bool` → `Unit`；「giveBack 抛异常 = 没归还」）⇒ §3 待处理 **7** 条（`POOL-L1`、`POOL-L3`~`POOL-L6`、`POOL-L8`、`POOL-L9`）。
 > 十四次修正（2026-10-05）：§3 `POOL-L6` 结案 —— 它其实**已随 `315ada9e` 的等待重写消除**（本次只补证据 + 防回归用例），且**诊断修正为实测口径**：`MonoTime + Duration` 是抛 `ArithmeticException` 而不是「溢出成负」（仅 `Duration.Max` 附近的有限值可触发；巨值 `Condition.wait(timeout:)` 实测是饱和睡着，无残量）⇒ §3 待处理 **6** 条（`POOL-L1`、`POOL-L3`~`POOL-L5`、`POOL-L8`、`POOL-L9`；其中 `POOL-L8`/`POOL-L9` 是已拍板「登记不改」）。同时清掉 3 处过时注记（§1.2 的 `tasks` 容量、§2.2 的 `sleep(checkInterval)`、§2.6 残量③的 `POOL-13`）。
+> 十五次修正（2026-10-06）：§3 `POOL-L5` 已修（口径：`get`/`giveBack` 的局部函数 `keyedCheck` 提成**实例成员函数** `checkOnBorrow`/`checkOnReturn`，方法值在构造期取一次缓存到字段）⇒ §3 待处理 **5** 条（`POOL-L1`、`POOL-L3`、`POOL-L4`、`POOL-L8`、`POOL-L9`）。**注意**：这条属于**等价重构 + 微优化**，端到端性能在噪声里测不出（见 §3 该条的实测说明与 §5 复测）。
 
 **建议修复顺序**：
 
@@ -522,7 +523,7 @@ useafterrelease: second_is_empty=false second_bytes=5
 
 ---
 
-## 3. 低危 / 待验证（9 条，其中 `POOL-L2`、`POOL-L6`、`POOL-L7` 已修复）
+## 3. 低危 / 待验证（9 条，其中 `POOL-L2`、`POOL-L5`、`POOL-L6`、`POOL-L7` 已修复）
 
 - `POOL-L1` **告警钩子在 `head.globalLock` 临界区内被调用**：`selfCheck` 的 `error`/`warn`（`SyncDeque.cj:63-73`）与 `reconcileIfWedge` 的 `warn`（`250`）都在 `synchronized` 块内，默认钩子写 stderr、应用可重定向到日志框架 —— 慢钩子会阻塞所有取还操作，钩子若重入池则死锁。建议：把消息攒到锁外再发。
 - `POOL-L2` **`checkInterval = Duration.Max` 使巡检形同虚设** ✓已复核 → **✅已修复（2026-10-05，提交 `fd175da6`）**
@@ -532,7 +533,33 @@ useafterrelease: second_is_empty=false second_bytes=5
   - **残留 / 边界**：`Duration.Max` 的池本来就没有巡检 ⇒ 语义零回归（只是不再白养线程）；`POOL-7` 的「关池后最迟 1s 退出」对巡检线程升级成「立刻」，创建线程仍是 ≤1s。
 - `POOL-L3` **`HeadNode.nextForGet` 递归扫描**（`LinkedNode.cj:95-111`）：队首连续非 idle 节点时按节点数递归（`ValueNode.nextForGet` 自身是迭代的，递归只发生在「队首非 idle」这一步）。极端情况（大量滞留 CHECKING 项）可加深调用栈，建议改迭代。
 - `POOL-L4` **`selfCheck`/`audit` 的全队列遍历在锁内**：每 1e4 次操作一次 `countNodes()`（O(队列长度)，`SyncDeque.cj:59-74`、`227-254`）；长队列 + 高并发时是周期性长临界区。可只统计计数，或在锁外做快照核对。
-- `POOL-L5` **`get` 内定义局部函数** `keyedCheck`（`KeyPool.cj:638-640`、`KeyPool.cj:593-595`）：每次调用建闭包并走闭包调用（借用/归还是热路径）。可提到成员函数/用 `checkOnBorrowing` 直接分派。
+- `POOL-L5` **`get` 内定义局部函数** `keyedCheck`（基线 `KeyPool.cj:638-640`、`:593-595`；现在 `:684-690` 一版的局部函数）✓已复核 → **✅已修复（2026-10-06，提交 `xxxx`；等价重构 + 微优化）**
+  - **改法（2026-10-06 拍板）**：把 `get`/`giveBack` 里的局部函数 `keyedCheck` 分别提成**实例成员函数**
+    `checkOnBorrow` / `checkOnReturn`（`KeyPool.cj:673-679`）。两个细节：
+    1. **返回类型必须是 `Bool`**：下层 `BaseKeyPool.get/giveBack` 的形参是 `(K, Ref<V>) -> Bool`，
+       写成 `Unit` 编译不过（实测 `error: mismatched types … expected '(…)-> Bool', found '(…)-> Unit'`）；
+    2. **方法值缓存**：直接写成 `pool.get(key, checkOnBorrow, …)` 会让每次调用现取一次绑定方法值 ⇒
+       在构造体里取一次存进 `checkOnBorrowFn`/`checkOnReturnFn`（`KeyPool.cj:244-245`、`:281-282`）。
+       仓颉限制：**不允许在「还有成员未初始化」时访问 `this`（含取方法值）** ⇒ 只能「字段先给哑值 →
+       所有成员就绪后再赋值」（`tasks = …` 之后那一行）。
+    3. 语义不变：`checkOnBorrowing`/`checkOnReturning` 仍在**调用时**读取（不是建方法值时固化）。
+  - **测量（诚实版）**：
+    - **闭包形态微基准**（探针 `closureshape`，同一进程内背靠背各 100 万次）：
+      **现场取 39 ns + 45 B / 复用 15 ns + 0 B** ⇒ 每借还两处各一次，量级 ≈ **48 ns + 90 B**；
+    - **端到端测不出差异**：`closurecost` 的 per-op 在 3.0–3.7 µs、`bytes_per_op` 在 3–350 B 之间大幅波动 ——
+      本机（WSL 上同时有其它 worktree 的构建）**噪声 ±10%，远大于 ≈2% 的信号**；
+    - **一次中间结论作废（记录以免误用）**：中途读到过「3.75 µs/op、348 B/op」的“回归”，事后查明是
+      机器负载（同批 wall 时间 605 ms → 873 ms）+ A/B 脚本在 WSL 里 `git checkout` **失败**（worktree 的 `.git`
+      指针是 Windows 路径，WSL 侧 git 认不出来）导致「A 组（改动前）」跑的其实是**同一份改动后代码** ⇒
+      那批对照数字不可用。**后续做性能对照必须：同进程微基准，或从 Windows 侧切换代码版本 + 取 user CPU 最小值。**
+    - ⇒ 结论：这条的价值是「**严格不更差** + 去掉热路径上每次现建的闭包/方法值」，**不是**可测的性能提升；
+      保留即可，不值得再花时间挖。
+  - 回归：`f_pool` 全量 **`PASSED: 62, SKIPPED: 0, ERROR: 0, FAILED: 0`**（`POOL_EXIT=0`）；下游 `f_codec` 16/16、
+    `f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（同上的既有 `ORMConfig_test`）。日志
+    `.autocode/tmp/pool_l5_{probe,verify,ab}.log`。
+  - **未做（登记为下一步）**：`BaseKeyPool.keyedChecker/keyedDestroier` 的柯里化闭包（每次 `get`/`giveBack`
+    各一个）与 `giveBack` 里的 `ref(key, object)` 同样每调用一次；`keyedDestroy` 的方法值也没进缓存
+    —— 要彻底去掉得改 `BasePool`/`SyncDeque` 的参数形状（把 key + 原回调直接传下去），改动面大。
 - `POOL-L6` **`waitChunk` 溢出** ✓已复核 → **✅已修复（2026-10-05，随 `315ada9e` 的等待重写一并消除；证据与防回归用例见提交 `37653f89`）**
   - **诊断修正（2026-10-05 实测）**：不是「溢出成负 ⇒ 立即放弃」，而是**直接抛**
     `ArithmeticException: Arithmetic overflow: result exceeds MonoTime range`（`std.time::MonoTime::+`，
@@ -651,6 +678,8 @@ useafterrelease: second_is_empty=false second_bytes=5
 > `POOL-L7` 修复后的复测（§3；口径：`ArrayPool.giveBack` 尺寸不符 ⇒ 抛 `IllegalSizeException`，这次不算归还）：**修前** `arrayPoolWrongSizeReturnMustThrow` `[ FAILED ]`（`Assert Failed: (before >= 0 == true)` —— 旧快照里没有 `returnRejected` 这个计数，旧实现静默 `return false`）；探针 `arraymismatch` 修前 `threw=false`。**修后**该用例 `[ PASSED ]`；探针 `threw=true msg=…expected an array of 1024, got 64…` + `returnRejected=1`（快照 `borrow=1 return=0`）；全量 **`PASSED: 61, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（同上的既有 `ORMConfig_test`）。日志 `.autocode/tmp/pool_l7_{all,probe}.log`。
 
 > `POOL-L2` 修复后的复测（§3；口径：`Duration.Max` = 不启用巡检 ⇒ 不起线程；巡检睡眠改条件变量）：**修前**两条新用例 `maxIntervalMustNotStartCheckingThread` / `closeMustInterruptCheckingSleep` 都 `[ FAILED ]`（`getThreadCount() <= before + 5`，各停在 `+20`）⇒ `PRE_EXIT=1`；探针 `checkinterval` 修前 `max: 7→47→27`、`hour: 27→67→47`。**修后**两条 `[ PASSED ]`；探针 `max: 7→27→7`、`hour: 7→47→7`（关池后全部回落）；全量 **`PASSED: 60, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（同上的既有 `ORMConfig_test`）。日志 `.autocode/tmp/pool_l2_{all,post}.log`。
+
+> `POOL-L5` 修复后的复测（§3；口径：局部函数 → 实例成员函数 `checkOnBorrow`/`checkOnReturn` + 构造期方法值缓存）：**无判别用例**（纯性能/结构），证据是探针 —— 形态微基准 `closureshape`：现场取闭包 39 ns + 45 B vs 复用 15 ns + 0 B（同进程、各 100 万次）；端到端 `closurecost` 的 per-op/bytes_per_op 被本机噪声淹没（3.0–3.7 µs、3–350 B/op 波动），**且中途一次「回归」读数经查是负载 + A/B 脚本 WSL 侧 `git checkout` 失败所致，作废**。回归：全量 **`PASSED: 62, SKIPPED: 0, ERROR: 0, FAILED: 0`**；下游 `f_codec` 16/16、`f_protocol` 62/62、`f_orm` 32 passed / 1 ERROR（既有）。日志 `.autocode/tmp/pool_l5_{probe,verify,ab}.log`。
 
 > `POOL-L6` 结案（§3；诊断修正：**不是「溢出成负」，是抛 `ArithmeticException`**）：基线 `waitChunk` 的 `waitStart + maxWaiting - MonoTime.now()` 在 `maxWaiting` 取 `Duration.Max` 附近的**有限**值时抛 `std.time::MonoTime::+` 的溢出异常（探针 `hugearn`：`30s` / `1e12s` / `1e15s` 都正常，`Duration.Max - 1ns` 抛 `ArithmeticException: Arithmetic overflow: result exceeds MonoTime range` 并 exit 1）；这条路在 `315ada9e` 的等待重写里已经变成**纯减法** `limit - (now - waitStart)` + 无限档不做算术，`waitNextRound` 同理 ⇒ 代码无需再改。残量也实测排除：巨值有限 `remain` 交给 `Condition.wait(timeout:)` 是**睡着**不是溢出（探针 `condwait`）。新增防回归用例 `hugeFiniteMaxWaitingMustNotOverflow`：算式换回加法式 ⇒ `[ ERROR ]`（`ArithmeticException`，`PIN_EXIT=1`）；现有代码 ⇒ `[ PASSED ]`（1.51s），全量 **`PASSED: 62, SKIPPED: 0, ERROR: 0, FAILED: 0`**（`POOL_EXIT=0`）。日志 `.autocode/tmp/pool_l6_{hugearn,condwait,regress}.log`。
 

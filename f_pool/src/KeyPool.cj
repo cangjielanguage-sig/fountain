@@ -233,6 +233,16 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
     private let constructed = AtomicBool(false)
     private let barrierMutex = Mutex()
     private let barrier = synchronized(barrierMutex){ barrierMutex.condition() }
+    /**
+     * `get`/`giveBack` 的校验转接器**方法值缓存**（见 .autocode/bugs/bug-pool.md §3 `POOL-L5`）。
+     * `checkOnBorrow`/`checkOnReturn` 是实例成员函数；直接写成 `pool.get(key, checkOnBorrow, …)`
+     * 会**每次调用**现取一次方法值（闭包形态微基准 `closureshape`：现场取 39 ns + 45 B vs 复用 15 ns + 0 B），
+     * 这里构造期取一次、之后复用。
+     *
+     * 先给哑值、再在构造体里赋值：仓颉不允许在「还有成员未初始化」时访问 `this`（含取方法值）。
+     */
+    private var checkOnBorrowFn: (K, Ref<V>) -> Bool = {_, _ => false}
+    private var checkOnReturnFn: (K, Ref<V>) -> Bool = {_, _ => false}
 
     public KeyPool(
         mode!: Mode = Mode.Fifo,
@@ -267,6 +277,9 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         }
         // 任务队列容量与池容量解耦（夹在 [1, 1024]）：见 createTaskQueueCapacity 的说明（§2.3 POOL-8）
         tasks = ArrayBlockingQueue<K>(createTaskQueueCapacity(totalSize))
+        // 所有成员已有值 ⇒ 这里才允许取方法值（`POOL-L5` 的方法值缓存）
+        checkOnBorrowFn = checkOnBorrow
+        checkOnReturnFn = checkOnReturn
         PoolDiagnostics.onPoolCreated()
         // 把池内的常规告警接到 f_log（幂等：应用若已用 redirectWarningsTo 接管，这里不会覆盖）
         PoolDiagnostics.installDefaultHooks(
@@ -650,14 +663,25 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             waiters.fetchSub(1)
         }
     }
+    /**
+     * `get` 的借用校验转接器。原来是 `get` 里的**局部函数** `keyedCheck` —— 每次借用都现场建一个
+     * 捕获闭包（借用/归还是热路径，见 .autocode/bugs/bug-pool.md §3 `POOL-L5`）；改成实例成员函数后
+     * 每轮循环只取一次方法值。
+     *
+     * 开关 `checkOnBorrowing` 在**调用时**读取（不是建方法值时固化）⇒ 与原来的语义完全一致。
+     */
+    private func checkOnBorrow(key: K, ref: Ref<V>): Bool {
+        this.keyedCheck(checkOnBorrowing, key, ref)
+    }
+    /** `giveBack` 的归还校验转接器（原来是 `giveBack` 里的局部函数 `keyedCheck`，同 `checkOnBorrow`）。 */
+    private func checkOnReturn(key: K, ref: Ref<V>): Bool {
+        this.keyedCheck(checkOnReturning, key, ref)
+    }
     public func get(key: K, timeout!: Duration = Duration.Max): ?V {
-        func keyedCheck(key: K, ref: Ref<V>){
-            this.keyedCheck(checkOnBorrowing, key, ref)
-        }
         if(timeout <= Duration.Zero){
             // 借出从 Ref 里 take()：借出即把值取空，终结器就不会在借用方手里销毁这一项
             // （见 .autocode/bugs/bug-pool.md §1.1）。
-            if(running.load() && let Some(r) <- pool.get(key, keyedCheck, keyedDestroy) && let Some(v) <- r.take()){
+            if(running.load() && let Some(r) <- pool.get(key, checkOnBorrowFn, keyedDestroy) && let Some(v) <- r.take()){
                 return v
             }
         }else{
@@ -671,7 +695,7 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             let limit = if (timeout == Duration.Max) { maxWaiting } else { timeout }
             let infinite = limit == Duration.Max
             while(running.load()) {
-                if (let Some(r) <- pool.get(key, keyedCheck, keyedDestroy) && let Some(v) <- r.take()) {
+                if (let Some(r) <- pool.get(key, checkOnBorrowFn, keyedDestroy) && let Some(v) <- r.take()) {
                     return v
                 }
                 // 还有额度就把「建一个」入队；建好由创建线程 wakeWaiters 唤醒（被别的键/线程唤醒也会重试）
@@ -696,9 +720,6 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         if(!running.load()){
             return doDestroy(key, object, destroier)
         }
-        func keyedCheck(key: K, ref: Ref<V>){
-            this.keyedCheck(checkOnReturning, key, ref)
-        }
         if(clearOnReturning){
             try {
                 clear(key, object)
@@ -713,7 +734,7 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
                 throw failure
             }
         }
-        pool.giveBack(key, ref(key, object), keyedCheck, keyedDestroy)
+        pool.giveBack(key, ref(key, object), checkOnReturnFn, keyedDestroy)
         // 与 close() / remove(key) 交错的情形现在由底层兜住：
         // - `BaseKeyPool.giveBack` 在关停（`!running`）或键已被摘掉时直接销毁；
         // - `BasePool` 的关闭标志让「晚于清空才入队」的那一项当场销毁（见 §2.6 POOL-11）。
