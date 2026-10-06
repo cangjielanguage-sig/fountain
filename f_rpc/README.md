@@ -253,7 +253,7 @@ public interface HealthRPC {
 // }
 ```
 
-**`rpc_currentSkeleton`防回环机制**：当存在配置项/环境变量`rpc_currentSkeleton`，且其值与当前项目拥有相同的组织名和顶级包名时，存根类**不会**注册到 IOC。用于服务端模块同时依赖接口定义时，避免本模块误用远程存根替代本地实现。可通过 `ClientConfig.currentSkeleton` 读取该值。
+**`rpc_currentSkeleton`防回环机制**：当存在配置项/环境变量`rpc_currentSkeleton`（它的值是一个正则表达式），且当前项目匹配这个正则表达式，存根类**不会**注册到 IOC。用于服务端模块同时依赖接口定义时，避免本模块误用远程存根替代本地实现。可通过 `ClientConfig.currentSkeleton` 读取该值。
 
 ## 核心 API
 
