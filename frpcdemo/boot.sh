@@ -57,7 +57,7 @@ runServer(){
         base="$addr"
     fi
     exports rpcserver "frpcdemoserver-$addr" "$base" # rpcserver是包名
-    export rpc_currentSkeleton='fountain::rpcserver'
+    export rpc_currentSkeleton='^(fountain::rpcserver).+$'
     export rpcServer_port=$port
     export rpcServer_weight=$weight
     echo "rpcServer_port=$rpcServer_port rpcServer_baseAddresses=$rpcServer_baseAddresses rpcServer_weight=$rpcServer_weight"

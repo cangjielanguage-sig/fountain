@@ -119,9 +119,8 @@ private func genStub(exactlyVersion: Bool, version: String, name: String, decl: 
             let skeleton = ClientConfig.currentSkeleton
             let klass = TypeInfo.of<$(className)>()
             let qualified = klass.qualifiedName
-            // 取限定名里类名前的包名部分；限定名不含'.'时退回整名，避免在包初始化阶段抛 NoneValueException
-            let modEnd = qualified.indexOf('.') ?? qualified.size
-            if(skeleton == '' || skeleton != qualified[0 .. modEnd]) {
+            // 限定名不符合skeleton这个正则表达式才注册为服务，否则认为客户端和服务端在同一个进程内，如此就不必注册桩，可以直接得到服务的具体实现实例
+            if(skeleton == '' || !Regex(skeleton).matches(qualified)) {
                 BeanFactory.instance.register<$(className)>{$(className)()}
             }
         }()
