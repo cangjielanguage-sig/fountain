@@ -332,6 +332,14 @@ while(let bytes <- d[0].read(buf) && bytes > 0){
   1. **stdx 对 WS 握手上报的 `request.method` 是 `"WS"`（不是 `GET`）** ⇒ `RequestMethod.parse` → `WS` ⇒ `metas.get(RequestMethod.WS)` **本来就是请求期的真实查表**。因此原条目「握手是 `GET` ⇒ 落到 405」与 `MVC-L12` 标记里「请求期从不查 `WS`」的表述**不准确**：`MVC-L12` 修前该查表返回 `None`（⇒ 405），修后才能命中（⇒ 继续走到 `check(metas)`，暴露出真正的拦路虎 415）。`MVC-L12` 标记已同步更正。
   2. **真正的拦路虎是 consumes 查表**：握手请求没有 `Content-Type` ⇒ `c == ''`，而 WS meta 的 consumes 键是 `'*'` ⇒ 双参 `check(metas)` 落空 ⇒ **`HTTP/1.1 415 Unsupported Media Type`**（第二次运行的诊断输出实测到该行）。**修复 = `check(metas)` 增加 `'*'` 通配兜底**（`MultiRequestMethodHandler.cj:82-94` 附近）：控制器侧 consumes 不允许 `'*'`（`addMediaTypes(..., allowAny: false)` 对 `'*'`/`'*/*'` 抛异常）⇒ 该键只可能来自 WS 端点（`RequestMeta.setHandle(wsmeta:)`），行为面等价于「WS 专用」；修后握手拿到 101 ✔。
   3. 因此 `handle` 里新增的 `GET + isWebSocketUpgrade(headers)` 分支**在本栈不可达**（stdx 上报 `WS`）—— 保留为对「握手按 `GET` 上报」的其它 server 实现的防御，其判定逻辑仍有单测（`testIsWebSocketUpgrade`）钉住。
+- **fdemo 冒烟（资产已就位，本环境被构建/启动封装阻塞）**：新增 `fdemo/user/src/controller/SmokeWSEndPoint.cj`（`@WSEndPoint['/ws/smoke']`，故意无任何 `@OnWS*` 处理器 ⇒ 只有握手、无业务逻辑）与 `fdemo/ws_smoke.sh`（`bash ws_smoke.sh`：build → launch（`timeout 180`）→ 等 8080 → 用 `/dev/tcp` 发原始握手断言 101、普通 GET 断言 405 → 收尾）。
+
+  PostgreSQL 侧已确认可用（用户提示后核对：5432 在监听；凭据取自 `~/.bashrc` 的 `POSTGRES_USERNAME=fountain` / `POSTGRES_PASSWORD=…` / `POSTGRES=postgres://172.27.34.60:5432/fountain`，`psql` 实测可连 ✔）。但本轮实际运行**卡在 fdemo 自身的构建/启动封装**（与 WS 路由无关）：
+
+  - build 段：`fboot: error while loading shared libraries: libf_app@fountain.so: cannot open shared object file: No such file or directory`（fboot 的库搜索路径问题，boot.sh 里注释也提到过 `LD_LIBRARY_PATH`/嵌套产物目录的坑）；
+  - launch 段：`./boot.sh: line 161: launch: command not found`（本 checkout 的 Linux `boot.sh` 里 `launch)` 分支调用的 `launch` 在该脚本中未定义，macos/gitbash 版本才有）。
+
+  ⇒ 结论：**路由验证以 f_mvc 内端到端为准**（上述 101/405 实测）；fdemo 冒烟脚本保留给能正常 `boot.sh build/launch` 的环境使用（命令：`cd fdemo && bash ws_smoke.sh`），待 env 修好后可直接跑。
 
 ## 4. 逐模块覆盖面（原 §4.2）
 
