@@ -24,7 +24,9 @@ public abstract class SqlArg <: Hashable & Equatable<SqlArg> & ToString {
                 case Some(x) => statement.set<T>(index, x)
                 case _ => statement.setNull(index)
             }
-            case _ => SqlArgException(
+            // bug-orm.md ORM-N2：这里必须 throw——它是「T 与 value 类型不匹配」的唯一防线。
+            // 只构造异常会让「参数根本没交给驱动」变成静默行为（Float32 曾因此静默丢参）。
+            case _ => throw SqlArgException(
                 'sql index ${index}, requires ${TypeInfo.of<T>()}, actually ${TypeInfo.of(value)}')
         }
     }
@@ -291,7 +293,10 @@ public class Float32SqlArg <: SqlArg {
         super(index)
     }
     public func set(statement: Statement): Unit {
-        setValue<Float64>(statement, value)
+        // bug-orm.md ORM-N2：泛型实参必须是 Float32。写成 <Float64> 时，Float32 值命不中
+        // setValue 的 `case x: T` / `case x: Option<T>`（类型模式不做隐式数值转换），
+        // 参数根本不会交给驱动（修复前表现为静默丢参）。
+        setValue<Float32>(statement, value)
     }
     public func toString() {
         toString(value)

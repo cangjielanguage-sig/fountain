@@ -47,7 +47,7 @@ private func isStringArg(a: Any): Bool {
  * 覆盖范围：Bool/Int8/UInt8/Int16/UInt16/Int32/UInt32/Int64/UInt64/Float64/Rune/String/
  * Duration/DateTime/Array<Byte> 及 `?Bool/?Int64/?String/?DateTime`（含 `None`）。BigInt/Decimal/Float16
  * 等其余分支的「仍在」由同一机制的机械核对保证（`case` 行多重集：改动前后一致，仅去掉 2 行恒不可达的重复）。
- * Float32 因既有的「静默丢参」缺陷单独摘出（见 ORM-N2，修复后加回）。
+ * Float32 原本因 ORM-N2（静默丢参）摘出，修复后已加回；绑出口的一次性调用由 wrap 层 `SqlArgBindingTest` 钉住。
  *
  * 每个类型用各自 SQL 文本：executor 与结果缓存按线程复用，共用文本会互相命中缓存。
  */
@@ -84,9 +84,7 @@ public class SqlExecutorArgBranchesTest {
             ('uint32', UInt32(1)),
             ('int64', Int64(1)),
             ('uint64', UInt64(1)),
-            // Float32 暂不入矩阵：经这条路径会「静默丢参」——`Float32SqlArg.set` 用
-            // `setValue<Float64>(statement, value)` 传进一个 Float32，`setValue` 匹配不上后
-            // 只构造异常却没有 throw（`SqlArg.cj:27-28`）⇒ 什么都不绑定。已另行登记 ORM-N2，修复后加回。
+            ('float32', Float32(1.5)),
             ('float64', 1.5),
             ('rune', r'a'),
             ('string', 'x'),
