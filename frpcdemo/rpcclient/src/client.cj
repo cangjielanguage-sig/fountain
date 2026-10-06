@@ -49,6 +49,9 @@ public struct ClientInitializer <: Initializer {
         //todo nothing
     }
     /**
+     * 真实的业务就不用声明这样一个Initializer实现了。
+     * 这个实现纯粹是为了进程启动时自动调用而实现的。
+     * 
      * 非阻塞启动函数：连续调用 echo {@link rounds} 次，每次调用失败只记日志、继续下一次，
      * 最后打印成功次数与最后一次响应的 JSON（服务端每处理一次都会打印收到的 JSON，
      * 因此各服务节点被调用的次数可以直接从服务端输出里数出来）。

@@ -34,21 +34,11 @@ internal func load(args: Array<String>, dynamic: Bool): (Path, ArrayList<() -> U
         case _ => (".so", 'LD_LIBRARY_PATH', ':')
     }
     func extractPattern() {
-        var idx = 0
-        for (i in 1..args.size where !args[i].startsWith("--dylibPattern=")) {
-            idx = i
-            break
+        let p = Config.getDylibPattern() ?? ''
+        if ((p.startsWith("'") && p.endsWith("'")) || (p.startsWith('"') && p.endsWith('"'))) {
+            return p[1..p.size - 1]
         }
-        idx++
-        if (idx > 0) {
-            let p = args[idx]['--dylibPattern='.size..]
-            if ((p.startsWith("'") && p.endsWith("'")) || (p.startsWith('"') && p.endsWith('"'))) {
-                return p[1..p.size - 1]
-            }
-            p
-        } else {
-            ''
-        }
+        p
     }
     func load(path: Path, pattern: Regex): Unit {
         Directory.walk(path) {

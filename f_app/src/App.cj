@@ -15,6 +15,8 @@ limitations under the License.
  */
 package fountain::f_app
 
+import fountain::f_config.Config
+
 /**
  * App不会发生传参赋值，用命令行参数实例化后只调用boot函数。所以用struct比较合适，不会占用堆空间。
  */
@@ -488,11 +490,7 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
         if(code != 0){
             return code
         }
-        var dylibPattern = ''
-        for(arg in this.args where arg.startsWith('--dylibPattern=')){
-            dylibPattern = arg
-            break
-        }
+        var dylibPattern = Config.getDylibPattern()
         if(dylibPattern.isEmpty()){
             throw BootException("arg --dylibPattern='...' in command line is required")
         }
@@ -570,29 +568,29 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
 '''
 1.  应用项目只需要编译为动态链接库，把应用的动态链接库加入LD_LIBRARY_PATH
 2.  fboot run [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>
-3.  fboot shutdown <PID>
-4.  fboot restart <PID> [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>
-5.  fboot workspace <dir_path> 将当前目录初始化为仓颉workspace，
+    - dylibPattern是一个正则表达式，用于匹配待加载的动态链接库文件名
+    - dylibPattern可以用--开头的命令行参数指定，也可以用环境变量指定
+3.  fboot workspace <dir_path> 将当前目录初始化为仓颉workspace，
     - <dir_path>是要创建workspace的路径，可以是绝对路径或相对路径，缺省是当前工作路径
-6.  fboot module 将当前目录初始化为仓颉dynamic项目
-7.  fboot module <module_name> 在当前目录创建名为<module_name>的子目录，并初始化为仓颉dynamic模块，并把模块加入当前目录的cjpm.toml
-8.  fboot cleanUpdate 其实是为当前仓颉项目执行了cjpm clean && rm ./cjpm.lock && cjpm update
-9.  fboot build [<path>] [--cfgkey=cfgval[,...]]编译使用fountain开发的应用项目
+4.  fboot module 将当前目录初始化为仓颉dynamic项目
+5.  fboot module <module_name> 在当前目录创建名为<module_name>的子目录，并初始化为仓颉dynamic模块，并把模块加入当前目录的cjpm.toml
+6.  fboot cleanUpdate 其实是为当前仓颉项目执行了cjpm clean && rm ./cjpm.lock && cjpm update
+7.  fboot build [<path>] [--cfgkey=cfgval[,...]]编译使用fountain开发的应用项目
     - 如果要指定编译产物保存路径，必须是build后的第一个参数，这个参数只有路径本身
     - 其他参数将分为两类，--开头且包含=的参数作为cjpm build子进程的环境变量传入子进程，其他参数作为cjpm build的命令行参数
-10. fboot count 数当前目录的仓颉代码模块数、包数、文件数、行数、计数耗时
-11. fboot pub <version> 发布当前路径下的仓颉模块
-12. fboot randhex n 生成n位随机16进制数，eg. fboot randhex 16
+8.  fboot count 数当前目录的仓颉代码模块数、包数、文件数、行数、计数耗时
+9.  fboot pub <version> 发布当前路径下的仓颉模块
+10. fboot randhex n 生成n位随机16进制数，eg. fboot randhex 16
 ==============下面的命令用来管理fountain本身===================
-13. fboot version x.y.z 用指定版本号替换cjpm.toml和App.cj的版本号，并提交且推送当前全部修改
+11. fboot version x.y.z 用指定版本号替换cjpm.toml和App.cj的版本号，并提交且推送当前全部修改
     - fboot version x.y.z
     - fboot version x.y.z '提交的内容'，以指定内容执行git commit
     - fboot version x.y.z tag，除了替换版本号，还会用指定的版本号创建tag：release-x.y.z
     - fboot version x.y.z tag '版本消息'，除了替换版本号，还会以'版本消息'创建附注tag
     - fboot version x.y.z '提交的内容' tag
     - fboot version x.y.z '提交的内容' tag '版本消息'
-14. fboot version 显示当前fountain版本号
-15. fboot help 显示命令列表
+12. fboot version 显示当前fountain版本号
+13. fboot help 显示命令列表
 '''
         stdOut.writeln(content)
         0

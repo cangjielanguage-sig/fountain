@@ -55,6 +55,8 @@ public class Config {
     public static const sm4Aad = 'sm4Aad'
     public static const sm4TagSize = 'sm4TagSize'
 
+    public static const dylibPattern = 'dylibPattern'
+
     private static let sensitiveMap = ConcurrentHashMap<String, Array<Byte>>()
 
     static init() {
@@ -276,6 +278,9 @@ public class Config {
         get(){
             SM4Conf(sensitiveMap)
         }
+    }
+    public static func getDylibPattern(): String {
+        getString(dylibPattern) ?? ''
     }
 }
 
