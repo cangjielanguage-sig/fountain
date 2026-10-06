@@ -428,6 +428,15 @@ public class StringSqlArg <: SqlArg {
     }
 }
 
+/**
+ * 把**调用方**的 `InputStream` 转交驱动（bug-orm.md §3.2 `ORM-C6`）。
+ *
+ * **不要在本类里补 `close()`**：流来自 `SqlArgs.add(InputStream)` / `RootDAO.arg(InputStream)`，
+ * 所有权在调用方，本模块只负责转交——代关会关掉调用方还要用的资源。
+ * 所有权约定：①调用方负责关闭；②流必须活到本次 SQL 真正执行完（驱动多在 execute 时才读）。
+ * 驱动给出的流（结果集方向）同样不由本模块关闭，见 `QueryMapperConverter` 的同类注释。
+ * 反向风险护栏：`wrap/InputStreamOwnership_test.cj`（断言这里不会关调用方的流）。
+ */
 public class InputStreamSqlArg <: SqlArg {
     public InputStreamSqlArg(index: Int64, private let value: InputStream) {
         super(index)

@@ -46,6 +46,9 @@ public class QueryMapperJsonConverter <: QueryMapperConverter {
         }else if(let x: Array<Byte> <- data){
             String.fromUtf8(x)
         }else if (let x: InputStream <- data) {
+            // bug-orm.md §3.2 ORM-C6：这里**只读不关**。`StringReader` 自身不持有 fd（std：内部 4096 字节缓冲），
+            // 但它的 `close()` 会关**底层流**（io_package_classes.md:1990-2012）⇒ 补 close 等于误关驱动/调用方的流。
+            // 流的所有权随结果集/调用方，见 InputStreamSqlArg 与 wrap/SqlArg.cj 的同类注释。
             StringReader(x).readToEnd()
         }else{
             throw ORMException("QueryMapperJsonConverter: ${TypeInfo.of(data)} does not support")
@@ -60,6 +63,7 @@ public class QueryMapperWithTypeNameJsonConverter <: QueryMapperConverter {
         }else if(let x: Array<Byte> <- data){
             String.fromUtf8(x)
         }else if (let x: InputStream <- data) {
+            // bug-orm.md §3.2 ORM-C6：同上——只读不关（`StringReader.close()` 会关底层流）
             StringReader(x).readToEnd()
         }else{
             throw ORMException("QueryMapperJsonConverter: ${TypeInfo.of(data)} does not support")
