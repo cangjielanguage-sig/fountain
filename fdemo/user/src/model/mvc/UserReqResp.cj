@@ -20,7 +20,7 @@ import fountain::f_data.macros.*
 import fountain::f_orm.Pagination
 import fountain::user.model.po.UserPO
 
-@DataAssist[props fields]
+@DataAssist[props fields]//props fields tostring hash equal compare
 public class UserRequest {
     @CombinedValidator[IsNotBlank(messageIfNotMatch: '请输入用户名') & StringSize(min: 6, max: 50)]
     private var username: String = ''

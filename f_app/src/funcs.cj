@@ -15,6 +15,8 @@ limitations under the License.
 */
 package fountain::f_app
 
+import fountain::f_config.Config
+
 internal func confirmTargetPath(args: Array<String>){
     let path = if(args.size > 1 && !args[1].startsWith('-')){
         Path(args[1])
@@ -34,7 +36,7 @@ internal func load(args: Array<String>, dynamic: Bool): (Path, ArrayList<() -> U
         case _ => (".so", 'LD_LIBRARY_PATH', ':')
     }
     func extractPattern() {
-        let p = Config.getDylibPattern() ?? ''
+        let p = Config.getDylibPattern()
         if ((p.startsWith("'") && p.endsWith("'")) || (p.startsWith('"') && p.endsWith('"'))) {
             return p[1..p.size - 1]
         }

@@ -39,3 +39,4 @@ public class AuthCheckerImpl <: AuthHandler {
         }
     }
 }
+//UserSessionHandler PrivilegeHandler

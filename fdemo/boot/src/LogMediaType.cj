@@ -26,7 +26,7 @@ import fountain::f_log.*
 public class LogTextMediaType <: MediaType {
     private static let log = LoggerFactory.getLogger<LogTextMediaType>()
     public init() {
-        super('application/json+log')
+        super('application/json+log')//application/json+log; charset=utf-8
     }
     public func make(mediaType: String): MediaType {
         this

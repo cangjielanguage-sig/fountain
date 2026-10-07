@@ -19,6 +19,9 @@ _/ ____\____  __ __  _____/  |______  |__| ____
 ## Stargazers over time
 ![Stargazers over time](https://gitcode.com/Cangjie-SIG/fountain/starcharts.svg?variant=adaptive)
 
+## 视频
+![fountain介绍](https://www.bilibili.com/video/BV1rtpT62Eaz/?vd_source=29618d9ddd46963c9eabd64d9e362fb4)
+
 ## STDX依赖
 配置环境变量：`export CANGJIE_STDX_DYNAMIC_PATH=/path/to/dynamic_stdx`
 
@@ -26,6 +29,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
 依赖fountain的应用项目启动程序，应用项目只需要编译为动态链接库，fboot会调用`fountain::f_app`完成应用启动。
 
 **详情请见：**<https://pkg.cangjie-lang.cn/package/fountain::fboot/1.3.8/readme>
+
 
 #### 安装
 ```bash
@@ -36,13 +40,26 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/path/to/install/libs/fboot
 #### 启动
 ```bash
 fboot run --dylibPattern=<REGEX_OF_PROJECT_DYLIB_FILENAMES> # 具体查看项目的fdemo模块的boot.sh脚本
+# dylibPattern也可以定义为环境变量，eg.
+# export dylibPattern=<REGEX_OF_PROJECT_DYLIB_FILENAMES>
 ```
 #### 创建项目与添加依赖
 安装`fboot`之后，可以执行`fboot workspace`将当前目录初始化为仓颉workspace项目，详细见`fboot`文档。
 项目需要的任何模块都在项目根目录的cjpm.toml添加。以`f_base`为例：
+```bash
+fboot workspace <workspace_name> # 省略<workspace_name>，就是以当前工作路径创建workspace，此时工作路径必须是空的
+# 自动添加版本号为1.0.0和fountain::f_base fountain::f_version的依赖
+# 自动添加的依赖与fboot版本一致
+# 自动添加stdx依赖，请自行定义环境变量CAGNJIE_STDX_DYNAMIC_PATH
+cd <workspace_name>
+fboot module <module_name> # 创建动态链接库模块
+fboot help # 显示fboot的其他功能
+```
 ```toml
 [dependencies]
-"fountain::f_base" = "a.b.c" # 把a.b.c换成具体的版本号
+# 把a.b.c与`fboot version`相同
+"fountain::f_base" = "a.b.c" 
+"fountain::f_version" = "a.b.c"
 ```
 
 ## 各模块详细文档

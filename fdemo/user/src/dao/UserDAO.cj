@@ -131,7 +131,7 @@ public interface UserDAO <: RootDAO {
         executor.FROM<UserPO>()
                 .WHERE(AND(UserPO.tableColumns().username.eq(username), 
                            UserPO.tableColumns().password.eq(password)))
-                .singleFirst<Int64>(UserPO.tableColumns().id)
+                .singleFirst<Int64>(UserPO.tableColumns().id)//AND([LogicExpr]) OR(() -> Array<LogicExpr>) NOT 
         // executor.setSql('''
         //     select id 
         //     from user_info
