@@ -59,12 +59,12 @@ public class Aspects {
     private static func doProceed<T>(funcInfo: InvocationFuncInfo, fn: (Array<Any>) -> T): T {
         let qualifiedFuncInfo = funcInfo.qualifiedFuncInfo // 链只依赖这个不可变的函数元数据
         let entry = aspects.computeIfAbsent(qualifiedFuncInfo) {
-            let list = ArrayList<String>()
+            let list = ArrayList<BeanManager>()
             for (m in BeanFactory.instance.iterator<Aspect>() where m
                 .beanType
                 .findAnnotation<AspectRoute>()?
                 .matches(funcInfo) ?? false) {
-                list.add(m.name)
+                list.add(m)
             }
             if (list.isEmpty()) {
                 // 没有任何切面命中：不建链、不捕获本次调用的 fn（快路径在下面）
@@ -74,13 +74,17 @@ public class Aspects {
                 var f: (Array<Any>) -> Any = {args => fn(args)}
                 for (i in list.size - 1..=0 : -1) {
                     let aspected = f
-                    let aspectName = list[i]
+                    let aspectBeanManager = list[i]
                     f = {
                         args =>
                             // 实参逐调用传递：用本次调用的 args 新建 InvocationFuncInfo，切面与后续层只持有它，
                             // 不再改写链上首个实例（见 bug.md §1.4：原来 setArgs 写共享槽，并发下参数互串）
-                            let info = InvocationFuncInfo(qualifiedFuncInfo, args)
-                            BeanFactory.instance.get<Aspect>(aspectName).getOrThrow().proceed(info, aspected)
+                            match(aspectBeanManager.bean){
+                                case x: Aspect => 
+                                    let info = InvocationFuncInfo(qualifiedFuncInfo, args)
+                                    x.proceed(info, aspected)
+                                case _ => throw AspectException('Aspect bean is not an Aspect')
+                            }
                     }
                 }
                 (false, f)
