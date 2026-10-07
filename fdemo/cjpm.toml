@@ -15,7 +15,7 @@
   "postgres_driver" = {version = "0.0.3", output-type="dynamic"} # 这个驱动支持从option传入用户名密码，orm配置为orm_option_username/orm_option_password/postgres_orm_option_username/postgres_orm_option_password
 
 [workspace]
-  version = "1.3.10"
+  version = "1.3.11"
   organization = "fountain"
   description = "demo for how to develop by fountain "
   members=["./boot", "./user"]
