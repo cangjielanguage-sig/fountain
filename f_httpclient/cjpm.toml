@@ -15,7 +15,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.3.10"
+  version = "1.3.11"
   package-configuration = {}
   category = ["Utility", "Network", "Developer Tools"]
   license = ["Apache-2.0"]
