@@ -195,12 +195,19 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         this.headers.check(request.headers) && this.params.check(request.form, request.url)
     }
     public func setHandle<T>(fn: (T, HttpContext, HttpRequestPathPatterns) -> Any): Unit where T <: Object {
+        let controllerBeanManager = BeanFactory.instance.iterator<T>().next().getOrThrow()
+        let controllerGetter = if(controllerBeanManager.meta.scope.isSingleton){
+            let controller = (controllerBeanManager.bean as T).getOrThrow()
+            {=> controller}
+        }else{
+            {=> (controllerBeanManager.bean as T).getOrThrow()}
+        }
         let pattern = this.pattern.getOrThrow()
         this.handle_ = {
             ctx =>
                 try {
                     CurrentHttpContext.set(ctx)
-                    let result = fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
+                    let result = fn(controllerGetter(), ctx, pattern)
                     match (result) {
                         case x: JsonValue => respond(x, ctx)
                         case x: InputStream => respond(x, ctx)

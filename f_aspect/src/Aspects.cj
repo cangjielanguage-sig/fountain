@@ -75,16 +75,24 @@ public class Aspects {
                 for (i in list.size - 1..=0 : -1) {
                     let aspected = f
                     let aspectBeanManager = list[i]
+                    let aspectGetter = if(aspectBeanManager.meta.scope.isSingleton){
+                        match(aspectBeanManager.bean){
+                            case x: Aspect => {=> x}
+                            case x => throw AspectException('${TypeInfo.of(x)} is not an Aspect')
+                        }
+                    }else{
+                        {=>
+                            match(aspectBeanManager.bean){
+                                case x: Aspect => x
+                                case x => throw AspectException('${TypeInfo.of(x)} is not an Aspect')
+                            }
+                        }
+                    }
                     f = {
                         args =>
                             // 实参逐调用传递：用本次调用的 args 新建 InvocationFuncInfo，切面与后续层只持有它，
                             // 不再改写链上首个实例（见 bug.md §1.4：原来 setArgs 写共享槽，并发下参数互串）
-                            match(aspectBeanManager.bean){
-                                case x: Aspect => 
-                                    let info = InvocationFuncInfo(qualifiedFuncInfo, args)
-                                    x.proceed(info, aspected)
-                                case _ => throw AspectException('Aspect bean is not an Aspect')
-                            }
+                            aspectGetter().proceed(InvocationFuncInfo(qualifiedFuncInfo, args), aspected)
                     }
                 }
                 (false, f)

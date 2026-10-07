@@ -38,6 +38,7 @@ internal import stdx.crypto.x509.*
 internal import cangjie_tpc::charset4cj.charset.encoding.Charset
 internal import cangjie_tpc::charset4cj.charset.{Charsets, TextReader, TextWriter}
 internal import fountain::f_app.{Initializer, InitializerCollection}
+internal import fountain::f_bean.BeanFactory
 internal import fountain::f_collection.*
 internal import fountain::f_concurrent.ConcurrentHashSet
 internal import fountain::f_crypto.*
