@@ -24,6 +24,7 @@ OUT = os.path.abspath(os.path.join(HERE, '..', '..', '.assets', 'README', 'modul
 
 CELL, PITCH = 16, 18                                   # 格子尺寸 / 格距
 LEFT, TOP = 116, 132                                   # 行标签宽 / 列标签高
+COLNAME_DY, COLDEG_DY = 26, 10                         # 列名底端距网格 / 被依赖数距网格（数字紧贴列名下边）
 HEAD = 168                                             # 页眉高（标题 + 3 组双语说明）
 MARGIN = 26
 LEVELS = 6                                             # API 引用量的深浅档数（与连线图一致）
@@ -79,7 +80,7 @@ hue = extract_deps.hues(order)                         # 与连线图同一套�
 
 GW = GH = len(order) * PITCH
 W = MARGIN + LEFT + GW + MARGIN
-H = HEAD + TOP + GH + MARGIN + 8
+H = HEAD + TOP + GH + 14                                # 网格下方留 14px（底行数字已移到列名下方）
 
 F = "font-family=\"'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif\""
 o = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W:.0f} {H:.0f}" width="100%" '
@@ -112,9 +113,9 @@ yy = note(yy,
           f'{len(unused_edges)} declared-but-unused edges are not drawn; demo apps excluded')
 yy = note(yy,
           f'彩色格 = 该行 API 引用量前三的依赖（{main_edges} 格；色相 = 依赖方、深浅 = 引用量）；'
-          f'浅灰格 = 其余依赖（{edges - main_edges} 格）；底行数字 = 被依赖次数',
+          f'浅灰格 = 其余依赖（{edges - main_edges} 格）；列名下边的数字 = 该模块被依赖次数',
           f'Colored cells = the 3 most-called deps of that row ({main_edges}); pale = the rest '
-          f'({edges - main_edges}); bottom numbers = in-degree')
+          f'({edges - main_edges}); the number under each column name = in-degree')
 
 # 左下三角（结构上不可能有依赖）铺一层浅底
 gx0, gy0 = MARGIN + LEFT, HEAD + TOP
@@ -146,15 +147,15 @@ for n in order:
                  f'<title>{n} 依赖 {d}（直接依赖，源码里已引用对方 API，{note_zh}）\n'
                  f'{n} depends on {d} (direct dependency, {note_en})</title></rect>')
 
-# 行标签（左）+ 列标签（上，竖排）
+# 行标签（左）+ 列标签（上，竖排；被依赖次数紧贴列名下边，在列名与网格之间）
 for n in order:
     bold = ' font-weight="700"' if indeg[n] >= 10 else ''
     o.append(f'<text x="{gx0 - 8}" y="{gy0 + idx[n] * PITCH + CELL / 2 + 4:.1f}" {F} font-size="11.5" '
              f'fill="#334155" text-anchor="end"{bold}>{n}</text>')
-    o.append(f'<text x="{gx0 + idx[n] * PITCH + CELL / 2 + 4:.1f}" y="{gy0 - 10}" {F} font-size="11.5" '
+    o.append(f'<text x="{gx0 + idx[n] * PITCH + CELL / 2 + 4:.1f}" y="{gy0 - COLNAME_DY}" {F} font-size="11.5" '
              f'fill="#334155" text-anchor="start" transform="rotate(-90 {gx0 + idx[n] * PITCH + CELL / 2 + 4:.1f} '
-             f'{gy0 - 10})"{bold}>{n}</text>')
-    o.append(f'<text x="{gx0 + idx[n] * PITCH + CELL / 2:.1f}" y="{gy0 + GH + 16}" {F} font-size="10" '
+             f'{gy0 - COLNAME_DY})"{bold}>{n}</text>')
+    o.append(f'<text x="{gx0 + idx[n] * PITCH + CELL / 2:.1f}" y="{gy0 - COLDEG_DY}" {F} font-size="10" '
              f'fill="#94a3b8" text-anchor="middle">{indeg[n]}</text>')
 
 o.append('</svg>')
