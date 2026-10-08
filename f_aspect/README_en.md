@@ -47,13 +47,23 @@ public interface Aspect {
 
 ## Concurrency and thread safety
 
-An aspect (an implementation class of `Aspect`) is a **singleton bean** in the IoC: all pointcut functions of the same type and all threads share
-the same aspect instance, and the framework does not synchronize aspect calls. Therefore:
+An aspect (an implementation class of `Aspect`) is a bean in the IoC, and **how its instance is fetched depends on the scope of that bean**
+(`Aspects` branches on `scope.isSingleton`):
 
-  - The aspect implementation **must be thread safe itself**: do not keep per-call state in positions shared across calls, such as instance
-    fields (counters, caches, the previous `funcInfo`/arguments, etc.); pass state between steps through local variables or arguments;
-  - When a pointcut function is called concurrently, `before`/`after`/`around`/`throwing`/`final` enter the same aspect instance concurrently,
-    so shared resources accessed inside the aspect (files, connections, containers, etc.) must be locked or built from concurrent containers;
+  - **singleton** (`BeanScope.singleton`, the default): the chain is built on the first call of the pointcut function, and the instance
+    obtained while building it is captured by the whole chain; afterwards all pointcut functions of the same type and all threads share it;
+  - **prototype** (`BeanScope.prototype`): a fresh instance is fetched from the IoC on every call (for every layer of the chain), so
+    instances are not shared across calls.
+
+The framework does not synchronize aspect calls, therefore:
+
+  - The aspect implementation **must be thread safe itself**: the same singleton aspect instance is entered concurrently, so do not keep
+    per-call state in positions shared across calls, such as instance fields (counters, caches, the previous `funcInfo`/arguments, etc.);
+    pass state between steps through local variables or arguments;
+  - When a pointcut function is called concurrently, `before`/`after`/`around`/`throwing`/`final` of a singleton aspect enter the same
+    instance concurrently, so shared resources accessed inside the aspect (files, connections, containers, etc.) must be locked or built
+    from concurrent containers; a prototype aspect gets a new instance per call, but must still keep the state of a single instance
+    consistent **within one invocation**;
   - Several instances of the same type share the same aspect chain, and the chain is built only once, on the first call of the pointcut function
     (see `Aspects`); "the concurrency safety of the aspect instance" is the aspect implementation's own responsibility.
 
