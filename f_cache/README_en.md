@@ -156,3 +156,12 @@ Internally the cache is divided into segments according to `concurrencyLevel`, e
 - **Closing latency**: the consumer thread of `HeapCache` polls every 100 ms and the sweeping period of `WeakHeapCache` is 1 s, so `close()` may block for that long at most (it waits for the internal thread to end before returning); `isClosed()` becomes true immediately.
 - **After closing**: `close()` **actively empties all entries** and returns only after the internal thread has ended; afterwards any operation (`get`/`set`/`contains`/`once`/`prolong`/`getOrCompute`/`remove`/`removeIf`/`size`/`clear`/…) throws `IllegalStateException` —— the only exceptions are `isClosed()` and `close()` (which may be called repeatedly).
 - **`once` / `prolong` use the same rules as `get` / `contains`**: an expired entry (even if not yet swept by the timer) counts as absent —— `once`/`prolong` return `false` and **do not "revive" an expired entry**; use `set` to renew or rebuild it.
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `public let DEFAULT_HEAP_CACHE_CONCURRENCY_LEVEL = 128`, `DEFAULT_HEAP_CACHE_MAX_LIFE` (let), `public let DEFAULT_HEAP_CACHE_MAX_SIZE = Int64.Max`, `public let DEFAULT_HEAP_CHECK_CHECK_DURATION = Duration.second`, `Priority` (class), `public func hashCode(): Int64`
+- `Priority`: `open func compare(other: Priority<V>): Ordering`

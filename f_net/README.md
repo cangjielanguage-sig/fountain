@@ -160,3 +160,12 @@ public class Server<T> where T <: DataFields<T> {
 
 - `doc/审查报告.md`：2026-05-03 的静态审查快照（当时的文件数/用例数，已与现状不符，仅供历史参考）；
 - 原 `doc/` 下的 API 摘录（基本类型 / 客户端 / 服务端）已删除，**以本 README 与源码为准**。
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- `MultiClient`：`func iterator(): Iterator<Client<T>>`
+- `ServerBuilder`：`func setSocketOptionBool(level: Int32, option: Int32, value: Bool): This`、`func setSocketOptionIntNative(level: Int32, option: Int32, value: IntNative): This`、`socketBindToDevice`（func）、`func socketQuickAcknowledge(quickAcknowledge: Bool): This`、`func socketReadTimeout(readTimeout: ?Duration): This`、`func socketReceiveBufferSize(receiveBufferSize: Int64): This`、`func socketSendBufferSize(sendBufferSize: Int64): This`、`func socketWriteTimeout(writeTimeout: ?Duration): This`

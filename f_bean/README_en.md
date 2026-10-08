@@ -484,3 +484,19 @@ public class BeanInit{
     public init(){}
 }
 ```
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `AndCond` (class), `BeanDef` (class), `BeanDefCount` (enum), `BeanDefType` (enum), `BeanException` (class), `BeanInitializer` (struct), `BeanManager` (class), `BeanScope` (class), `ConfCond` (enum), `Destroy` (interface), `FactoryBean` (interface), `NoneBeanCondition` (class), `NotCond` (class), `OrCond` (class), `PostConstruct` (interface), `PrototypeBeanScope` (class), `SingletonBeanScope` (class), `public func lookupLabel<L, T>(label: L): T where L <: Hashable & Equatable<L>, T <: BeanLabel<L>`, `public func lookupLabelOption<L, T>(label: L): ?T where L <: Hashable & Equatable<L>, T <: BeanLabel<L>`, `public func lookupOptionLable<L, T>(name: String, label: L): ?T where L <: Hashable & Equatable<L>, T <: BeanLabel<L>`, `setShouldInitBean` (func)
+- `BeanDef`: `let beanName!: StringCond = IgnoreCond`, `let count!: BeanDefCount = AtLeastOne`
+- `BeanFactory`: `func afterRegistered()`, `func get<T>(name: String): ?T`, `func register<T>(creator: () -> T): Unit where T <: Object`, `func registerByInstanceFunction<T>(fnName: String, creator: () -> T): Unit where T <: Object`, `func registerByStaticFunction<T>(fnName: String, creator: () -> T): Unit where T <: Object`
+- `BeanInitializer`: `func initialize(): Unit`
+- `BeanManager`: `func compare(manager: BeanManager)`, `let index = serialGen.fetchAdd(1)`, `let meta: BeanMeta`
+- `BeanMeta`: `compare` (func)
+- `BeanScope`: `prop isPrototype: Bool`, `prop isSingleton: Bool`, `typeInfo` (prop)
+- `PrototypeBeanScope`: `prop typeInfo: TypeInfo`
+- `SingletonBeanScope`: `prop typeInfo: TypeInfo`

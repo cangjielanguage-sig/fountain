@@ -668,3 +668,16 @@ abstract sealed class DiffieHellmanKeyExchanger {
 }
 
 ```
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`Crc16`（class）、`Crc32`（class）、`Crc64`（class）、`public class IsUUID <: Validator`、`public func crc32Finish(crc: UInt32): UInt32`、`public func crc32Init(): UInt32`、`public func crc32Update(crc: UInt32, data: Array<Byte>): UInt32`、`millerRabin`（func）、`qpow`（func）
+- `Crc16`：`all`（let）、`arc`（let）、`buypass`（let）、`ccittFalse`（let）、`cdma2000`（let）、`checkValue`（let）、`cms`（let）、`func compute(data: Array<Byte>): UInt16`、`dectR`（let）、`dectX`（let）、`dnp`（let）、`en13757`（let）、`genibus`（let）、`gsm`（let）、`func initRegister(): UInt16`、`kermit`（let）、`maximDow`（let）、`mcrf4xx`（let）、`modbus`（let）、`profibus`（let）、`riello`（let）、`spiFujitsu`（let）、`t10Dif`（let）、`teledisk`（let）、`tms37157`（let）、`func update(crc: UInt16, data: Array<Byte>): UInt16`、`usb`（let）、`x25`（let）、`xmodem`（let）
+- `Crc32`：`all`（let）、`autosar`（let）、`base91D`（let）、`bzip2`（let）、`checkValue`（let）、`func compute(data: Array<Byte>): UInt32`、`crc32c`（let）、`func initRegister(): UInt32`、`isoHdlc`（let）、`jamcrc`（let）、`koopman`（let）、`mpeg2`（let）、`posix`（let）、`q`（let）、`func update(crc: UInt32, data: Array<Byte>): UInt32`、`xfer`（let）
+- `Crc64`：`all`（let）、`checkValue`（let）、`func compute(data: Array<Byte>): UInt64`、`ecma182`（let）、`func initRegister(): UInt64`、`iso`（let）、`jones`（let）、`redis`（let）、`func update(crc: UInt64, data: Array<Byte>): UInt64`、`we`（let）、`xz`（let）
+- `IsUUID`：`prop description: String`、`func validate(value: ?String): Bool`
+- `PathPattern`：`dataByPrefix`（func）、`func extractDataParsableVariableInPath<T>(path: String, name: String): Option<T> where T <: DataParsable<T>`、`func extractParsableVariableInPath<T>(path: String, name: String): Option<T> where T <: Parsable<T>`、`func extractTimeVariableInPath(path: String, name: String, format: String): Option<DateTime>`、`func extractVariablesInPath(path: String): Map<String, String>`、`matches`（func）、`func matchesPrefix(path: String): Bool`

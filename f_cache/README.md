@@ -157,3 +157,12 @@ public class WeakHeapCache<T> where T <: Object {
 - **关闭之后**：`close()` 会**主动清空全部条目**，并在内部线程结束后才返回；此后调用任何操作（`get`/`set`/`contains`/`once`/`prolong`/`getOrCompute`/`remove`/`removeIf`/`size`/`clear`/…）都会抛 `IllegalStateException` —— 只有 `isClosed()` 与 `close()`（可重复调用）例外。
 - **`once` / `prolong` 与 `get` / `contains` 同口径**：已过期（即使尚未被定时清扫）的条目视为不存在 —— `once`/`prolong` 返回 `false`，**不会把过期条目「复活」**；要续期或重建请用 `set`。
 
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`public let DEFAULT_HEAP_CACHE_CONCURRENCY_LEVEL = 128`、`DEFAULT_HEAP_CACHE_MAX_LIFE`（let）、`public let DEFAULT_HEAP_CACHE_MAX_SIZE = Int64.Max`、`public let DEFAULT_HEAP_CHECK_CHECK_DURATION = Duration.second`、`Priority`（class）、`public func hashCode(): Int64`
+- `Priority`：`open func compare(other: Priority<V>): Ordering`

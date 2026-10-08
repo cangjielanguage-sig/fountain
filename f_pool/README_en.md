@@ -349,3 +349,15 @@ These two layers are the foundation of `Pool` / `KeyPool` (`BasePool` is in `fou
   borrowed items`, the `DEQUE-SELFCHECK` check every 10000 operations, the `WEDGE-HEAL` self-healing when no pool item can be
   obtained (including restoring items stuck in CHECKING), the exception safety of `LinkedNode.check` and the value-taking path of
   `nextForGet` —— see the source code and `.autocode/bugs/bug-archived-on-20261004.md` (§7.2 / §7.3 / §7.4) for details.
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `public func next(): ?Unit`
+- `BytesListOutputStream`: `func copy(to!: OutputStream, closeFromOnEnd!: Bool = true, closeToOnEnd!: Bool = false): Unit`, `func write(bytes: Array<Byte>): Unit`
+- `ChainedBytesCopyTo`: `func copy(to!: OutputStream, closeFromOnEnd!: Bool = true, closeToOnEnd!: Bool = false): Unit`
+- `PooledBufferBytesCopyTo`: `func copy(to!: OutputStream, closeFromOnEnd!: Bool = true, closeToOnEnd!: Bool = false): Unit`
+- `PooledBufferedBytesCopyFrom`: `func copy(from!: InputStream, closeFromOnEnd!: Bool = false, closeToOnEnd!: Bool = true): Unit`

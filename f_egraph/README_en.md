@@ -694,3 +694,12 @@ public interface FlowLoader {
     func load(): ArrayList<String>
 }
 ```
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `BarrierKey` (class), `ConcurrentEndExecutor` (class), `FlowInitializer` (interface), `public struct ProducingDef`, `TaskDef` (struct)
+- `BarrierKey`: `let eventName: String`

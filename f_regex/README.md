@@ -83,3 +83,11 @@ re.matches('a123')  // true
 - `regex(flags:, solid: true)`的实例常驻进程（每次访问静态prop都会编译），`solid: false`走`HeapCache`缓存（上限10000、寿命一天，`Regex`对象被回收后缓存可能失效）。
 - `doReplace`/`doReplaceAll`的`index`是**字节下标**（`String[index..]`），中文等多字节字符需要自己换算。
 - `RegexBuilder`的每个prop/func都返回新实例，可以安全地分叉复用。
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- `RegexBuilder`：`prop alpha: RegexBuilder`、`prop alphaDigit: RegexBuilder`、`prop any: RegexBuilder`、`prop blank: RegexBuilder`、`prop boundary: RegexBuilder`、`prop decimal: RegexBuilder`、`greedy`（prop）、`prop headBlanks: RegexBuilder`、`prop headOrTailBlanks: RegexBuilder`、`prop lookAhead: RegexBuilder`、`prop lookBehind: RegexBuilder`、`prop lowerAlpha: RegexBuilder`、`prop lowerAlphaDigit: RegexBuilder`、`prop lparan: RegexBuilder`、`prop lsquare: RegexBuilder`、`prop notAlpha: RegexBuilder`、`prop notAlphaDigit: RegexBuilder`、`prop notBlank: RegexBuilder`、`prop notCapture: RegexBuilder`、`prop notDigit: RegexBuilder`、`prop notGreedy: RegexBuilder`、`prop notLookAhead: RegexBuilder`、`prop notLookBehind: RegexBuilder`、`prop notLowerAlpha: RegexBuilder`、`prop notLowerAlphaDigit: RegexBuilder`、`func notOneOf<T>(parts: Iterable<T>): RegexBuilder where T <: ToString`、`prop notUpperAlpha: RegexBuilder`、`prop notUpperAlphaDigit: RegexBuilder`、`prop notWhitespace: RegexBuilder`、`prop notWordChar: RegexBuilder`、`prop or: RegexBuilder`、`prop rparan: RegexBuilder`、`prop rsquare: RegexBuilder`、`prop tailBlanks: RegexBuilder`、`prop upperAlpha: RegexBuilder`、`prop upperAlphaDigit: RegexBuilder`、`version`（prop）、`prop whitespace: RegexBuilder`、`prop wordChar: RegexBuilder`、`prop zeroOrMore: RegexBuilder`、`prop zeroOrOne: RegexBuilder`

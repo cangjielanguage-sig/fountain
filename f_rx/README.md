@@ -148,3 +148,18 @@ observable.pause()//暂停产生新数据
 ## 重放
 `Observable.replaySize(capacity)`
 启动后如果继续注册观察者会异步重放缓存的数据，缓存数据的数量最大是capacity
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`Cache`（interface）、`CombinedObserver`（class）、`CombinedObserverPolicy`（enum）、`public class EmptyCache<T> <: Cache<T>`、`FullSchedulerException`（class）、`ObserverRegistrationException`（class）、`public class QueuedCache<T> <: Cache<T>`、`RateLimited`（class）、`Scheduler`（class）、`SingleScheduler`（class）、`SingleSchedulerState`（enum）
+- `CombinedObserver`：`add`（func）、`clear`（func）、`remove`（func）、`size`（prop）
+- `EmptyCache`：`func iterator(): Iterator<T>`、`func new(): Cache<T>`、`func replay(observer: Observer<T>, fn: () -> Unit): Unit`、`func set(value: T): Unit`
+- `Observable`：`concat`（func）、`emitter`（func）、`empty`（func）、`isDisposed`（prop）、`maybe`（func）、`single`（func）
+- `QueuedCache`：`func iterator(): Iterator<T>`、`func new(): Cache<T>`、`func replay(observer: Observer<T>, fn: () -> Unit): Unit`、`func set(value: T): Unit`
+- `RateLimited`：`static func anyMoment(scheduler: SingleScheduler<T>, maxTokens!: Int64, timeout!: Duration`、`static func leakingBucket(scheduler: SingleScheduler<T>, timeout!: Duration, maxWaitings!: Int64, leakingPerDuration!: Int64, leakingDuration!: Duration`、`static func slidingWindow(scheduler: SingleScheduler<T>, window!: Duration, timeout!: Duration, limit!: Int64`、`static func tokenBucket(scheduler: SingleScheduler<T>, tokens!: Int64, timeout!: Duration, populationPeriod!: Duration`
+- `Scheduler`：`alwaysNew`（func）、`current`（func）、`fixed`（func）、`schedule`（func）、`single`（func）
+- `SingleScheduler`：`func add(state: SingleSchedulerState<T>)`、`func doSchedule(state: SingleSchedulerState<T>): Unit`、`func schedule(item: ?T): Unit`、`func tryRemove()`

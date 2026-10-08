@@ -673,3 +673,12 @@ public interface FlowLoader {
 ```
 
 
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`BarrierKey`（class）、`ConcurrentEndExecutor`（class）、`FlowInitializer`（interface）、`public struct ProducingDef`、`TaskDef`（struct）
+- `BarrierKey`：`let eventName: String`

@@ -123,6 +123,31 @@ public interface BaseUserData<U> where U <: BaseUserData<U> {
 }
 ```
 
+`UserNamePasswordUserData` and `UserTokenPrincipal<ID>` are the two implementations:
+
+```cj
+public struct UserNamePasswordUserData <: BaseUserData<UserNamePasswordUserData> {
+    public UserNamePasswordUserData(
+        private let name: String,
+        public let password: String
+    )
+    public prop username: String
+}
+
+public open class UserTokenPrincipal<ID> <: Principal<ID, UserTokenPrincipal<ID>> where ID <: Hashable & Equatable<ID> {
+    public UserTokenPrincipal(
+        private let uid: ID,
+        private let name: String,
+        public let token: String
+    )
+    public prop id: ID
+    public prop username: String
+}
+```
+
+- `UserNamePasswordUserData.password`: the password given to the constructor, exposed directly as a `public let` (the user name is read through `username`);
+- `UserTokenPrincipal.token`: the token given to the constructor, exposed directly as a `public let` (`id` / `username` return the user ID and the user name).
+
 
 ## Example
 

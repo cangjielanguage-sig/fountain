@@ -148,3 +148,18 @@ observable.pause()//Pause the generation of new data
 ## Replay
 `Observable.replaySize(capacity)`
 After startup, observers registered later replay the cached data asynchronously; the cached data is at most capacity items
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `Cache` (interface), `CombinedObserver` (class), `CombinedObserverPolicy` (enum), `public class EmptyCache<T> <: Cache<T>`, `FullSchedulerException` (class), `ObserverRegistrationException` (class), `public class QueuedCache<T> <: Cache<T>`, `RateLimited` (class), `Scheduler` (class), `SingleScheduler` (class), `SingleSchedulerState` (enum)
+- `CombinedObserver`: `add` (func), `clear` (func), `remove` (func), `size` (prop)
+- `EmptyCache`: `func iterator(): Iterator<T>`, `func new(): Cache<T>`, `func replay(observer: Observer<T>, fn: () -> Unit): Unit`, `func set(value: T): Unit`
+- `Observable`: `concat` (func), `emitter` (func), `empty` (func), `isDisposed` (prop), `maybe` (func), `single` (func)
+- `QueuedCache`: `func iterator(): Iterator<T>`, `func new(): Cache<T>`, `func replay(observer: Observer<T>, fn: () -> Unit): Unit`, `func set(value: T): Unit`
+- `RateLimited`: `static func anyMoment(scheduler: SingleScheduler<T>, maxTokens!: Int64, timeout!: Duration`, `static func leakingBucket(scheduler: SingleScheduler<T>, timeout!: Duration, maxWaitings!: Int64, leakingPerDuration!: Int64, leakingDuration!: Duration`, `static func slidingWindow(scheduler: SingleScheduler<T>, window!: Duration, timeout!: Duration, limit!: Int64`, `static func tokenBucket(scheduler: SingleScheduler<T>, tokens!: Int64, timeout!: Duration, populationPeriod!: Duration`
+- `Scheduler`: `alwaysNew` (func), `current` (func), `fixed` (func), `schedule` (func), `single` (func)
+- `SingleScheduler`: `func add(state: SingleSchedulerState<T>)`, `func doSchedule(state: SingleSchedulerState<T>): Unit`, `func schedule(item: ?T): Unit`, `func tryRemove()`

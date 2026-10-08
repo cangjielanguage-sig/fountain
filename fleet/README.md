@@ -68,3 +68,12 @@ public struct Fleet {
 // 仅开放isClosed() close()两个函数，关闭时会取消监听
 public struct ListeningFleet <: Resource
 ```
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`public class FleetDataMessage`、`bufferQueueSize`（prop）、`command`（prop）、`connectionCheckDuration`（prop）、`public func exec(args: Array<String>): Int64`、`port`（prop）、`storePath`（prop）
+- `FleetDataMessage`：`new`（func）

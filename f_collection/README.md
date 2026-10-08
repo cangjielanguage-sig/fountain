@@ -476,3 +476,24 @@ public interface SetOp<T> {
 ## `UnionSetView<T> <: Set<T>`
 
 只读的并集视图
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`BitSet`（class）、`ComparableKey`（struct）、`ConcurrentHashMapValues`（class）、`GrowSizePolicy`（class）、`HashKey`（struct）、`public class HashKeyMapEntryView<K, V> <: MapEntryView<K, V>`、`public class LinkedHashKeyMapEntryView<K, V> <: MapEntryView<K, V>`、`LinkedHashMapEntryView`（class）、`public func retain(set: Set<T>): Unit`
+- `ComparableKey`：`func compare(that: K): Ordering`
+- `DifferenceSetView`：`clone`（func）、`retain`（func）、`subsetOf`（func）
+- `GrowSizePolicy`：`func reject(o: C, fn: () -> Unit): Unit`
+- `HashKey`：`func hashCode(): Int64`
+- `HeadNode`：`func insertNext(value: T): ValueNode<T>`、`func removeNext(): Option<T>`、`func reset(tail: TailNode<T>): Unit`
+- `IntersectionSetView`：`clone`（func）、`retain`（func）、`subsetOf`（func）
+- `LinkedHashMap`：`clone`（func）、`func firstEntry(): Option<(K, V)>`、`func lastEntry(): Option<(K, V)>`、`func pollFirstEntry(): Option<(K, V)>`、`func pollLastEntry(): Option<(K, V)>`
+- `LinkedHashSet`：`func clone(): Set<T>`、`prop first: ?T`、`prop last: ?T`、`func removeFirst(): ?T`、`func removeLast(): ?T`、`func retain(all!: Set<T>): Unit`、`func retainAll(elements: Set<T>): Unit`、`func subsetOf(other: ReadOnlySet<T>): Bool`
+- `LinkedNodeIterator`：`next`（func）
+- `TailNode`：`func insertPrev(value: T): ValueNode<T>`、`func removePrev(): Option<T>`
+- `TreeDict`：`prop first: ?(K, V)`、`func forward(mark: K, inclusive!: Bool = true): Iterator<(K, V)>`、`prop last: ?(K, V)`、`func removeFirst(): ?(K, V)`、`func removeLast(): ?(K, V)`
+- `UnionSetView`：`clone`（func）、`retain`（func）、`subsetOf`（func）
+- `ValueNode`：`func removeNext(): Option<T>`、`func removePrev(): Option<T>`、`func turnTo(node: HeadNode<T>): Unit`

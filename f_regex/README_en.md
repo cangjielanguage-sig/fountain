@@ -84,3 +84,11 @@ re.matches('a123')  // true
 - Instances from `regex(flags:, solid: true)` live for the whole process (compiled on every access to the static prop), while `solid: false` goes through the `HeapCache` (limit 10000, lifetime one day; the cache entry may become invalid once the `Regex` object is collected).
 - The `index` of `doReplace`/`doReplaceAll` is a **byte index** (`String[index..]`), so multi-byte characters such as Chinese must be converted by the caller.
 - Every prop/func of `RegexBuilder` returns a new instance, so it can be safely forked and reused.
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- `RegexBuilder`: `prop alpha: RegexBuilder`, `prop alphaDigit: RegexBuilder`, `prop any: RegexBuilder`, `prop blank: RegexBuilder`, `prop boundary: RegexBuilder`, `prop decimal: RegexBuilder`, `greedy` (prop), `prop headBlanks: RegexBuilder`, `prop headOrTailBlanks: RegexBuilder`, `prop lookAhead: RegexBuilder`, `prop lookBehind: RegexBuilder`, `prop lowerAlpha: RegexBuilder`, `prop lowerAlphaDigit: RegexBuilder`, `prop lparan: RegexBuilder`, `prop lsquare: RegexBuilder`, `prop notAlpha: RegexBuilder`, `prop notAlphaDigit: RegexBuilder`, `prop notBlank: RegexBuilder`, `prop notCapture: RegexBuilder`, `prop notDigit: RegexBuilder`, `prop notGreedy: RegexBuilder`, `prop notLookAhead: RegexBuilder`, `prop notLookBehind: RegexBuilder`, `prop notLowerAlpha: RegexBuilder`, `prop notLowerAlphaDigit: RegexBuilder`, `func notOneOf<T>(parts: Iterable<T>): RegexBuilder where T <: ToString`, `prop notUpperAlpha: RegexBuilder`, `prop notUpperAlphaDigit: RegexBuilder`, `prop notWhitespace: RegexBuilder`, `prop notWordChar: RegexBuilder`, `prop or: RegexBuilder`, `prop rparan: RegexBuilder`, `prop rsquare: RegexBuilder`, `prop tailBlanks: RegexBuilder`, `prop upperAlpha: RegexBuilder`, `prop upperAlphaDigit: RegexBuilder`, `version` (prop), `prop whitespace: RegexBuilder`, `prop wordChar: RegexBuilder`, `prop zeroOrMore: RegexBuilder`, `prop zeroOrOne: RegexBuilder`

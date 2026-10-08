@@ -808,3 +808,20 @@ During the execution of server business logic, executing `BreakingCommand.new(va
 - The 8 test files under `src/path/` are published with the package (`include = ["src","doc"]` in `cjpm.toml`).
 - **Outdated document**: many "Missing" items in `doc/RFC9535_GAPS.md` are actually implemented (`count/value` comparison inside filters,
   I-JSON validation, object/array structural equality, `in [null]`); `doc/RFC9535_COVERAGE.md` and the source code are authoritative.
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `CollectionRawType` (interface), `DummyDataFields` (interface), `ExtendJsonValue` (interface), `public class IsBool <: Validator`, `public class IsChineseCellPhone <: Validator`, `public class IsDecimal <: Validator`, `public class IsDuration <: Validator`, `public class IsEmail <: Validator`, `public class IsInteger <: Validator`, `public class IsNotBlank <: Validator`, `public class IsNotEmpty <: Validator`, `JSON_NULL` (let), `public class JsonArray <: JsonValue & Collection<JsonValue>`, `public class JsonBool <: JsonValue`, `public class JsonDecimal <: JsonValue`, `public class JsonInt <: JsonValue`, `public enum JsonKind <: Equatable<JsonKind>`, `JsonNull` (class), `JsonString` (class), `JsonValue` (class), `MapRawType` (interface), `SimpleDataObject` (interface), `public static func isSimple(): Bool`, `public func next(): ?Data`, `public static func tryParse(s: String): ?Data`
+- `DateTime`: `static func setCurrentThreadDateFormat(format: String)`, `static func setDefaultDateFormat(format: String)`
+- `Duration`: `static func tryParse(s: String): ?Duration`
+- `JsonArray`: `func addNull(): Unit`, `func getItem(index: Int64): JsonValue`, `func getItems(): ArrayList<JsonValue>`, `func isEmpty(): Bool`, `func remove(index: Int64): Unit`, `func removeIf(predicate: (JsonValue) -> Bool): Unit`, `func setItem(index: Int64, value: JsonValue): Unit`
+- `JsonKind`: `prop isArray: Bool`, `prop isBool: Bool`, `prop isDecimal: Bool`, `prop isInt: Bool`, `prop isNull: Bool`, `prop isObject: Bool`, `prop isString: Bool`
+- `JsonObject`: `func addNull(name: String): Unit`, `func contains(name: String): Bool`, `func getFields(): HashMap<String, JsonValue>`, `func isEmpty(): Bool`, `func remove(name: String): ?JsonValue`, `func removeIf(predicate: (String, JsonValue) -> Bool): Unit`
+- `JsonValue`: `static func from(data: Data, flag: DataConversionFlag): JsonValue`, `prop kind: JsonKind`, `func write(output: OutputStream): Unit`
+- `ObjectFields`: `func create(): Object`, `static func getObjectFields<T>(metas: () -> (Array<ReadableField>, ()->Object)): ObjectFields`, `func isEmpty()`, `func mutableField(name: String): ?MutableField`, `func mutableFields(): Iterator<MutableField>`, `func readableField(name: String): ?ReadableField`
+- `String`: `static func tryParse(s: String): ?String`
+- `JsonNull`: `static let instance = JsonNull()` (the singleton for JSON null; the module-level `JSON_NULL` is this value)

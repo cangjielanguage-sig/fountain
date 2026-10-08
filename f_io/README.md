@@ -723,3 +723,15 @@ public interface ExtendPath{
 }
 extend Path <: ExtendPath
 ```
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`ChainedSegmentStream`（class）、`LogClosedException`（class）、`public interface MMapProtArray`、`SeekException`（class）
+- `Array`：`func combine(): IntNative`
+- `MMapFlag`：`prop isPrivate: Bool`、`prop isShared: Bool`、`value`（prop）
+- `MMapProt`：`value`（prop）
+- `MSyncFlag`：`value`（prop）

@@ -718,3 +718,35 @@ public func resetAndRegisterSignalHandler(signals: Array<Signal>, handler: () ->
 public func resetAndRegisterSignalHandler(signals: Array<Signal>, handler: (Int32) -> Bool): Unit {}
 public func resetAndRegisterSignalHandler(signal: Signal, handler: () -> Bool): Unit {}
 ```
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `ExtendAddableOption` (interface), `ExtendBigInt` (interface), `ExtendBitAndableOption` (interface), `ExtendBitNotableOption` (interface), `ExtendBitOrableOption` (interface), `ExtendBitXorableOption` (interface), `ExtendDecimal` (interface), `ExtendDivableOption` (interface), `ExtendExpableOption` (interface), `ExtendFloat16` (interface), `ExtendFloat32` (interface), `ExtendFloat64` (interface), `ExtendInt16` (interface), `ExtendInt32` (interface), `ExtendInt64` (interface), `ExtendInt8` (interface), `ExtendIterator` (interface), `ExtendLeftShiftableOption` (interface), `ExtendModableOption` (interface), `ExtendMulableOption` (interface), `ExtendRange` (interface), `ExtendRightShiftableOption` (interface), `ExtendRune` (interface), `ExtendString` (interface), `ExtendSubableOption` (interface), `ExtendThreadLocal` (interface), `ExtendUInt16` (interface), `ExtendUInt32` (interface), `ExtendUInt64` (interface), `ExtendUInt8` (interface), `Powerable` (interface), `public func resetSignalHandler(_: Array<Signal>): Unit{}`
+- `BigInt`: `static prop one: BigInt`, `static prop oneHundred: BigInt`, `static prop ten: BigInt`, `static prop zero: BigInt`
+- `Decimal`: `static prop E: Decimal`, `static prop PI: Decimal`, `static prop one: Decimal`, `static prop oneHundred: Decimal`, `static prop ten: Decimal`, `static prop zero: Decimal`
+- `EmptyCollection`: `isEmpty` (func)
+- `EmptyEquatableCollection`: `isEmpty` (func)
+- `EmptyList`: `func add(_: T): Unit {}`, `func capacity(): Int64`, `func count(_: T): Int64`, `prop first: ?T`, `func isEmpty(): Bool`, `prop last: ?T`, `func removeIf(_: (T) -> Bool): Unit {}`, `func reserve(_: Int64): Unit {}`, `func sortBy(_: (T, T) -> Ordering, stable!: Bool): Unit {}`
+- `EmptyMap`: `add` (func), `func addIfAbsent(_: K, _: V): ?V`, `clone` (func), `func entryView(k: K): MapEntryView<K, V>`, `isEmpty` (func), `keys` (func), `removeIf` (func), `values` (func)
+- `EmptySet`: `add` (func), `clone` (func), `func isEmpty(): Bool`, `removeIf` (func), `retain` (func), `subsetOf` (func)
+- `Float16`: `static prop BYTES: Int64`, `static prop E: Float16`, `PI` (prop)
+- `Float32`: `static prop BYTES: Int64`, `static prop E: Float32`, `static prop PI: Float32`
+- `Float64`: `static prop BYTES: Int64`, `static prop E: Float64`, `static prop PI: Float64`
+- `Int16`: `static prop BYTES: Int64`
+- `Int32`: `static prop BYTES: Int64`
+- `Int64`: `static prop BYTES: Int64`
+- `Int8`: `static prop BYTES: Int64`
+- `NoneOrder`: `prop isGreatest: Bool`, `prop isLeast: Bool`
+- `Options`: `isEmpty` (func), `static func isEmptyOrUnit(current: Option<T>): Bool`, `static func isEmptyOrZero(current: Option<T>): Bool`, `static func isEmptyOrZeroOrBlank(current: Option<T>): Bool`, `static func isNotEmpty(current: Option<T>): Bool`, `static func isNotEmptyOrBlank(current: Option<T>): Bool`, `static func isNotEmptyOrUnit(current: Option<T>): Bool`, `static func isNotEmptyOrZeroOrBlank(current: Option<T>): Bool`
+- `ResultMapper`: `func error(f: (E) -> Result<U, E>): ResultMapper<T, U, E>`, `func map(): Result<U, E>`, `func ok(f: () -> Result<U, E>): ResultMapper<T, U, E>`
+- `TypeInfo`: `func isSubtypeOf<S>(): Bool`
+- `TypeInfos`: `static func getGenericTypes<T>(): Array<TypeInfo>`, `static func isInstanceOf<T>(instance: Any): Bool`, `static func withAnnotation<T, A>(funcName: String, argTypes: Array<TypeInfo>): Bool where A <: Annotation`
+- `TypeMemberInfos`: `static func instanceFunction<T>(name: String, paramTypes: Array<TypeInfo>): ?InstanceFunctionInfo`, `static func instanceFunctions<T>(): Collection<InstanceFunctionInfo>`, `static func instanceProperties<T>(): Collection<InstancePropertyInfo>`, `static func instanceProperty<T>(name: String): ?InstancePropertyInfo`, `static func instanceVariable<T>(name: String): ?InstanceVariableInfo`, `static func instanceVariables<T>(): Collection<InstanceVariableInfo>`, `static func staticFunction<T>(name: String, paramTypes: Array<TypeInfo>): ?StaticFunctionInfo`, `static func staticFunctions<T>(): Collection<StaticFunctionInfo>`, `static func staticProperties<T>(): Collection<StaticPropertyInfo>`, `static func staticProperty<T>(name: String): ?StaticPropertyInfo`, `static func staticVariable<T>(name: String): ?StaticVariableInfo`, `static func staticVariables<T>(): Collection<StaticVariableInfo>`
+- `UInt16`: `static prop BYTES: Int64`
+- `UInt32`: `static prop BYTES: Int64`
+- `UInt64`: `static prop BYTES: Int64`
+- `UInt8`: `static prop BYTES: Int64`

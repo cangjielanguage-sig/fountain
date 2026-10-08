@@ -156,6 +156,31 @@ if (let Some(v) <- store.get("k1".unsafeBytes())) {
 
 ---
 
+### `func contains(key: Array<Byte>): Bool`
+
+判断键是否存在，已考虑过期与 tombstone。
+
+**参数**：
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `key` | `Array<Byte>` | 键 |
+
+**返回值**：`Bool` — 键存在、未过期且未被 `remove()` 时为 `true`，否则 `false`。
+
+**查询优先级**：与 `get` 相同 —— active MemTable > immutable MemTable > L0 SSTable > L1 SSTable > ... > Ln SSTable
+**并发安全**：无锁读。
+
+**示例**：
+
+```cj
+if (store.contains("k1".unsafeBytes())) {
+    println("k1 exists")
+}
+```
+
+---
+
 ### `func remove(key: Array<Byte>): ?Array<Byte>`
 
 删除键。写入 tombstone（删除标记），不物理删除，返回被删除的值。

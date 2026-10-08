@@ -156,6 +156,31 @@ if (let Some(v) <- store.get("k1".unsafeBytes())) {
 
 ---
 
+### `func contains(key: Array<Byte>): Bool`
+
+Check whether a key exists, taking expiry and tombstones into account.
+
+**Parameters**:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `key` | `Array<Byte>` | The key |
+
+**Returns**: `Bool` — `true` when the key exists, has not expired and was not `remove()`d, otherwise `false`.
+
+**Query priority**: same as `get` — active MemTable > immutable MemTable > L0 SSTable > L1 SSTable > ... > Ln SSTable
+**Concurrency**: lock-free reads.
+
+**Example**:
+
+```cj
+if (store.contains("k1".unsafeBytes())) {
+    println("k1 exists")
+}
+```
+
+---
+
 ### `func remove(key: Array<Byte>): ?Array<Byte>`
 
 Remove a key. A tombstone (deletion marker) is written instead of a physical deletion; the removed value is returned.

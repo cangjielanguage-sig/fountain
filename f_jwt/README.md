@@ -79,6 +79,20 @@ public class SM2SignAlgo <: AsymmetricSignAlgo {
 }
 ```
 
+### 未指定签名算法`NoneSignAlgo`
+```cj
+public class NoneSignAlgo <: SignAlgo {
+    private init() {
+        super(NoneDigest.INSTANCE)
+    }
+    public static let INSTANCE = NoneSignAlgo()
+    protected func sign(data: Array<Byte>): Array<Byte>
+    protected func verify(data: Array<Byte>, sign: Array<Byte>): Bool
+}
+```
+- 单例（`NoneSignAlgo.INSTANCE`）、构造函数私有；`sign` / `verify` 都直接抛 `JWTException("sign algo was not be specified")`。
+- `JWT` 里 `signAlgo` 的默认值就是它（见 `src/JWT.cj`）：没有显式指定签名算法时，签名与校验会立刻失败并给出明确原因，而不是静默通过。
+
 ### HMAC签名`HMACDigest`
 ```cj
 public class HMACDigest <: Digest {
@@ -527,5 +541,10 @@ public interface JwtIdCache<T> where T <: Equatable<T> {
 - `HeapJwtIdCache<T>`
     - `public class HeapJwtIdCache<T> <: JwtIdCache<T> where T <: ToString & Equatable<T>`
     - 基于`fountain::f_cache.HeapCache`
+
+## 异常
+
+`JWTException`（`fountain::f_jwt.exception`，`<: fountain::f_exception.BaseException`）是本模块的异常类型，构造函数与基类一致：
+`()`、`(message: String)`、`(caused: Exception)`、`(message: String, caused: Exception)`；`NoneSignAlgo` 的 `sign` / `verify` 抛的就是它。
 
 

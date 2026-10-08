@@ -354,3 +354,27 @@ public class DelayQueue<T> <: Queue<T> where T <: Delayed<T> {
   `ReadWriteSyncerException`, `TimeoutException`; `RateLimiter` throws `RateLimiterException` when `timeout <= 0`, and
   `UnlimitedRateLimiter` uses `Duration.Max` internally.
 - **Load balancing test cases**: `src/LoadBalance_test.cj` (equal weights 50/50, 2:1 → 67/33, 4:1 → 80/20, and two random modes).
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `ExtendAtomicInt16` (interface), `ExtendAtomicInt32` (interface), `ExtendAtomicInt64` (interface), `ExtendAtomicInt8` (interface), `ExtendAtomicUInt16` (interface), `ExtendAtomicUInt32` (interface), `ExtendAtomicUInt64` (interface), `ExtendAtomicUInt8` (interface)
+- `AtomicInt16`: `func andFetch(val: Int16): Int16`, `func decrFetch(): Int16`, `func fetchDecr(): Int16`, `func orFetch(val: Int16): Int16`, `func subFetch(val: Int16): Int16`, `func xorFetch(val: Int16): Int16`
+- `AtomicInt32`: `func andFetch(val: Int32): Int32`, `func decrFetch(): Int32`, `func fetchDecr(): Int32`, `func orFetch(val: Int32): Int32`, `func subFetch(val: Int32): Int32`, `func xorFetch(val: Int32): Int32`
+- `AtomicInt64`: `func andFetch(val: Int64): Int64`, `func decrFetch(): Int64`, `func fetchDecr(): Int64`, `func orFetch(val: Int64): Int64`, `func subFetch(val: Int64): Int64`, `func xorFetch(val: Int64): Int64`
+- `AtomicInt8`: `func andFetch(val: Int8): Int8`, `func decrFetch(): Int8`, `func fetchDecr(): Int8`, `func orFetch(val: Int8): Int8`, `func subFetch(val: Int8): Int8`, `func xorFetch(val: Int8): Int8`
+- `AtomicUInt16`: `func andFetch(val: UInt16): UInt16`, `func decrFetch(): UInt16`, `func fetchDecr(): UInt16`, `func orFetch(val: UInt16): UInt16`, `func subFetch(val: UInt16): UInt16`, `func xorFetch(val: UInt16): UInt16`
+- `AtomicUInt32`: `func andFetch(val: UInt32): UInt32`, `func decrFetch(): UInt32`, `func fetchDecr(): UInt32`, `func orFetch(val: UInt32): UInt32`, `func subFetch(val: UInt32): UInt32`, `func xorFetch(val: UInt32): UInt32`
+- `AtomicUInt64`: `func andFetch(val: UInt64): UInt64`, `func decrFetch(): UInt64`, `func fetchDecr(): UInt64`, `func orFetch(val: UInt64): UInt64`, `func subFetch(val: UInt64): UInt64`, `func xorFetch(val: UInt64): UInt64`
+- `AtomicUInt8`: `func andFetch(val: UInt8): UInt8`, `func decrFetch(): UInt8`, `func fetchDecr(): UInt8`, `func orFetch(val: UInt8): UInt8`, `func subFetch(val: UInt8): UInt8`, `func xorFetch(val: UInt8): UInt8`
+- `ConcurrentHashSet`: `func retain(all!: Set<T>): Unit`, `func subsetOf(other: ReadOnlySet<T>): Bool`
+- `Event`: `open func hashCode(): Int64`, `let ordinal = ORDINAL_GEN.fetchAdd(1)`, `func setNoneData()`, `open prop startEvent: Bool`
+- `EventBus`: `arrange` (func), `arrangeAndGet` (func), `func register(event: Event, ability: (Event) -> Event): Unit`, `retireAll` (func)
+- `Executor`: `func shutdown()`
+- `ExecutorFuture`: `func tryGet(): ?T`
+- `Executors`: `func shutdown(): Unit`
+- `SyncPriorityQueue`: `func grow(): Unit`
+- `Worker`: `retire` (func)

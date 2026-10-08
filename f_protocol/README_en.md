@@ -201,3 +201,11 @@ The configuration is read and cached **only on first use** (it must not be read 
 ## Related documents
 
 The old excerpts in `doc/接口.md` and `doc/默认实现.md` have been deleted —— **this README and `src/**` are the only source**.
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `CommandException` (class), `CurrentProcessID` (struct), `public func read(buffer: Array<Byte>): Int64`, `public func write(bytes: Array<Byte>): Unit`

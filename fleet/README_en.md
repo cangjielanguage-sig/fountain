@@ -70,3 +70,12 @@ public struct Fleet {
 // Only isClosed() and close() are exposed; closing cancels the listening
 public struct ListeningFleet <: Resource
 ```
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `public class FleetDataMessage`, `bufferQueueSize` (prop), `command` (prop), `connectionCheckDuration` (prop), `public func exec(args: Array<String>): Int64`, `port` (prop), `storePath` (prop)
+- `FleetDataMessage`: `new` (func)

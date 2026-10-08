@@ -477,3 +477,24 @@ Read-only intersection view
 ## `UnionSetView<T> <: Set<T>`
 
 Read-only union view
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `BitSet` (class), `ComparableKey` (struct), `ConcurrentHashMapValues` (class), `GrowSizePolicy` (class), `HashKey` (struct), `public class HashKeyMapEntryView<K, V> <: MapEntryView<K, V>`, `public class LinkedHashKeyMapEntryView<K, V> <: MapEntryView<K, V>`, `LinkedHashMapEntryView` (class), `public func retain(set: Set<T>): Unit`
+- `ComparableKey`: `func compare(that: K): Ordering`
+- `DifferenceSetView`: `clone` (func), `retain` (func), `subsetOf` (func)
+- `GrowSizePolicy`: `func reject(o: C, fn: () -> Unit): Unit`
+- `HashKey`: `func hashCode(): Int64`
+- `HeadNode`: `func insertNext(value: T): ValueNode<T>`, `func removeNext(): Option<T>`, `func reset(tail: TailNode<T>): Unit`
+- `IntersectionSetView`: `clone` (func), `retain` (func), `subsetOf` (func)
+- `LinkedHashMap`: `clone` (func), `func firstEntry(): Option<(K, V)>`, `func lastEntry(): Option<(K, V)>`, `func pollFirstEntry(): Option<(K, V)>`, `func pollLastEntry(): Option<(K, V)>`
+- `LinkedHashSet`: `func clone(): Set<T>`, `prop first: ?T`, `prop last: ?T`, `func removeFirst(): ?T`, `func removeLast(): ?T`, `func retain(all!: Set<T>): Unit`, `func retainAll(elements: Set<T>): Unit`, `func subsetOf(other: ReadOnlySet<T>): Bool`
+- `LinkedNodeIterator`: `next` (func)
+- `TailNode`: `func insertPrev(value: T): ValueNode<T>`, `func removePrev(): Option<T>`
+- `TreeDict`: `prop first: ?(K, V)`, `func forward(mark: K, inclusive!: Bool = true): Iterator<(K, V)>`, `prop last: ?(K, V)`, `func removeFirst(): ?(K, V)`, `func removeLast(): ?(K, V)`
+- `UnionSetView`: `clone` (func), `retain` (func), `subsetOf` (func)
+- `ValueNode`: `func removeNext(): Option<T>`, `func removePrev(): Option<T>`, `func turnTo(node: HeadNode<T>): Unit`

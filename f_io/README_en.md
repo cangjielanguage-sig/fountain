@@ -727,3 +727,15 @@ public interface ExtendPath{
 }
 extend Path <: ExtendPath
 ```
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `ChainedSegmentStream` (class), `LogClosedException` (class), `public interface MMapProtArray`, `SeekException` (class)
+- `Array`: `func combine(): IntNative`
+- `MMapFlag`: `prop isPrivate: Bool`, `prop isShared: Bool`, `value` (prop)
+- `MMapProt`: `value` (prop)
+- `MSyncFlag`: `value` (prop)
