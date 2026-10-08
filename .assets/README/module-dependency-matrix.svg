@@ -8,10 +8,10 @@ rect.c:hover{stroke:#0f172a;stroke-width:1.6}
 <text x="26" y="32" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="18" font-weight="600" fill="#0f172a">fountain 模块依赖矩阵 / Module dependency matrix</text>
 <text x="26" y="56" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" fill="#475569">行 = 依赖方，列 = 被依赖方；两轴同一顺序（按依赖层级：基础层在左上）⇒ 依赖只落在对角线右上侧</text>
 <text x="26" y="72" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#94a3b8">Rows are dependents, columns are dependencies; both axes share one order (foundation top-left) ⇒ all cells sit above the diagonal</text>
-<text x="26" y="94" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" fill="#475569">43 个模块 / 234 条直连（结构性 61、冗余直达 173）；实心格 = 结构性依赖，浅色格 = 冗余直达</text>
-<text x="26" y="110" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#94a3b8">43 modules / 234 direct dependencies (61 structural, 173 redundant); solid cell = structural, pale cell = redundant</text>
-<text x="26" y="132" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" fill="#475569">格子颜色 = 依赖方的颜色（与连线图一致）；底行数字 = 被依赖次数；悬停格子显示「依赖方 → 被依赖方」；不含示例应用</text>
-<text x="26" y="148" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#94a3b8">Cell color = the dependent's color (same as the diagram); bottom numbers = in-degree; hover a cell for the pair; demo apps excluded</text>
+<text x="26" y="94" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" fill="#475569">43 个模块 / 216 条依赖（都是「已声明且源码里 import 了对方 API」）；声明了但未引用对方 API 的 18 条、间接可达关系都不画；不含示例应用</text>
+<text x="26" y="110" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#94a3b8">43 modules / 216 dependencies (each imports the required API); 18 declared-but-unused edges are not drawn; demo apps excluded</text>
+<text x="26" y="132" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" fill="#475569">彩色格 = 该行 API 引用量前三的依赖（97 格；色相 = 依赖方、深浅 = 引用量）；浅灰格 = 其余依赖（119 格）；底行数字 = 被依赖次数</text>
+<text x="26" y="148" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#94a3b8">Colored cells = the 3 most-called deps of that row (97); pale = the rest (119); bottom numbers = in-degree</text>
 <path d="M142,1074 L916,1074 L916,300 Z" fill="#f1f5f9" stroke="none"/>
 <path d="M142,300 v774" stroke="#cbd5e1" stroke-width="1.2"/>
 <path d="M142,300 h774" stroke="#cbd5e1" stroke-width="1.2"/>
@@ -101,525 +101,489 @@ rect.c:hover{stroke:#0f172a;stroke-width:1.6}
 <path d="M142,1056 h774" stroke="#e2e8f0" stroke-width="0.6"/>
 <path d="M916,300 v774" stroke="#e2e8f0" stroke-width="0.6"/>
 <path d="M142,1074 h774" stroke="#e2e8f0" stroke-width="0.6"/>
-<rect class="c" x="143" y="391" width="16" height="16" rx="3" fill="#0891b2" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_collection 依赖 f_base（f_collection 的冗余直达：可由其它依赖间接到达）
-f_collection depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="409" width="16" height="16" rx="3" fill="#ca8a04" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_macros 依赖 f_base（f_macros 的冗余直达：可由其它依赖间接到达）
-f_macros depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="445" width="16" height="16" rx="3" fill="#4f46e5" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_uring 依赖 f_base（f_uring 的冗余直达：可由其它依赖间接到达）
-f_uring depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="463" width="16" height="16" rx="3" fill="#16a34a" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_cache 依赖 f_base（f_cache 的冗余直达：可由其它依赖间接到达）
-f_cache depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="197" y="463" width="16" height="16" rx="3" fill="#16a34a" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_cache 依赖 f_exception（f_cache 的冗余直达：可由其它依赖间接到达）
-f_cache depends on f_exception (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="481" width="16" height="16" rx="3" fill="#c026d3" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_concurrent 依赖 f_base（f_concurrent 的冗余直达：可由其它依赖间接到达）
-f_concurrent depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="197" y="481" width="16" height="16" rx="3" fill="#c026d3" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_concurrent 依赖 f_exception（f_concurrent 的冗余直达：可由其它依赖间接到达）
-f_concurrent depends on f_exception (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="499" width="16" height="16" rx="3" fill="#0d9488" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_regex 依赖 f_base（f_regex 的冗余直达：可由其它依赖间接到达）
-f_regex depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="233" y="499" width="16" height="16" rx="3" fill="#0d9488" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_regex 依赖 f_collection（f_regex 的冗余直达：可由其它依赖间接到达）
-f_regex depends on f_collection (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="197" y="499" width="16" height="16" rx="3" fill="#0d9488" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_regex 依赖 f_exception（f_regex 的冗余直达：可由其它依赖间接到达）
-f_regex depends on f_exception (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="517" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_rx 依赖 f_base（f_rx 的冗余直达：可由其它依赖间接到达）
-f_rx depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="535" width="16" height="16" rx="3" fill="#db2777" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_cmd 依赖 f_base（f_cmd 的冗余直达：可由其它依赖间接到达）
-f_cmd depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="197" y="535" width="16" height="16" rx="3" fill="#db2777" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_cmd 依赖 f_exception（f_cmd 的冗余直达：可由其它依赖间接到达）
-f_cmd depends on f_exception (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="553" width="16" height="16" rx="3" fill="#ea580c" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_io 依赖 f_base（f_io 的冗余直达：可由其它依赖间接到达）
-f_io depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="197" y="553" width="16" height="16" rx="3" fill="#ea580c" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_io 依赖 f_exception（f_io 的冗余直达：可由其它依赖间接到达）
-f_io depends on f_exception (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="571" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_data 依赖 f_base（f_data 的冗余直达：可由其它依赖间接到达）
-f_data depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="305" y="571" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_data 依赖 f_cache（f_data 的冗余直达：可由其它依赖间接到达）
-f_data depends on f_cache (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="233" y="571" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_data 依赖 f_collection（f_data 的冗余直达：可由其它依赖间接到达）
-f_data depends on f_collection (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="197" y="571" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_data 依赖 f_exception（f_data 的冗余直达：可由其它依赖间接到达）
-f_data depends on f_exception (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="341" y="571" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_data 依赖 f_regex（f_data 的冗余直达：可由其它依赖间接到达）
-f_data depends on f_regex (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="341" y="589" width="16" height="16" rx="3" fill="#7c3aed" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_process 依赖 f_regex（f_process 的冗余直达：可由其它依赖间接到达）
-f_process depends on f_regex (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="625" width="16" height="16" rx="3" fill="#ca8a04" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_jwt 依赖 f_base（f_jwt 的冗余直达：可由其它依赖间接到达）
-f_jwt depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="305" y="625" width="16" height="16" rx="3" fill="#ca8a04" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_jwt 依赖 f_cache（f_jwt 的冗余直达：可由其它依赖间接到达）
-f_jwt depends on f_cache (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="197" y="625" width="16" height="16" rx="3" fill="#ca8a04" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_jwt 依赖 f_exception（f_jwt 的冗余直达：可由其它依赖间接到达）
-f_jwt depends on f_exception (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="269" y="625" width="16" height="16" rx="3" fill="#ca8a04" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_jwt 依赖 f_time（f_jwt 的冗余直达：可由其它依赖间接到达）
-f_jwt depends on f_time (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="643" width="16" height="16" rx="3" fill="#dc2626" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_util 依赖 f_base（f_util 的冗余直达：可由其它依赖间接到达）
-f_util depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="233" y="643" width="16" height="16" rx="3" fill="#dc2626" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_util 依赖 f_collection（f_util 的冗余直达：可由其它依赖间接到达）
-f_util depends on f_collection (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="413" y="643" width="16" height="16" rx="3" fill="#dc2626" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_util 依赖 f_data（f_util 的冗余直达：可由其它依赖间接到达）
-f_util depends on f_data (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="197" y="643" width="16" height="16" rx="3" fill="#dc2626" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_util 依赖 f_exception（f_util 的冗余直达：可由其它依赖间接到达）
-f_util depends on f_exception (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="215" y="643" width="16" height="16" rx="3" fill="#dc2626" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_util 依赖 f_random（f_util 的冗余直达：可由其它依赖间接到达）
-f_util depends on f_random (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="341" y="643" width="16" height="16" rx="3" fill="#dc2626" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_util 依赖 f_regex（f_util 的冗余直达：可由其它依赖间接到达）
-f_util depends on f_regex (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="269" y="643" width="16" height="16" rx="3" fill="#dc2626" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_util 依赖 f_time（f_util 的冗余直达：可由其它依赖间接到达）
-f_util depends on f_time (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="661" width="16" height="16" rx="3" fill="#4f46e5" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_bloom 依赖 f_base（f_bloom 的冗余直达：可由其它依赖间接到达）
-f_bloom depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="215" y="661" width="16" height="16" rx="3" fill="#4f46e5" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_bloom 依赖 f_random（f_bloom 的冗余直达：可由其它依赖间接到达）
-f_bloom depends on f_random (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="679" width="16" height="16" rx="3" fill="#16a34a" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_log 依赖 f_base（f_log 的冗余直达：可由其它依赖间接到达）
-f_log depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="233" y="679" width="16" height="16" rx="3" fill="#16a34a" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_log 依赖 f_collection（f_log 的冗余直达：可由其它依赖间接到达）
-f_log depends on f_collection (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="449" y="679" width="16" height="16" rx="3" fill="#16a34a" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_log 依赖 f_config（f_log 的冗余直达：可由其它依赖间接到达）
-f_log depends on f_config (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="413" y="679" width="16" height="16" rx="3" fill="#16a34a" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_log 依赖 f_data（f_log 的冗余直达：可由其它依赖间接到达）
-f_log depends on f_data (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="197" y="679" width="16" height="16" rx="3" fill="#16a34a" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_log 依赖 f_exception（f_log 的冗余直达：可由其它依赖间接到达）
-f_log depends on f_exception (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="395" y="679" width="16" height="16" rx="3" fill="#16a34a" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_log 依赖 f_io（f_log 的冗余直达：可由其它依赖间接到达）
-f_log depends on f_io (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="269" y="679" width="16" height="16" rx="3" fill="#16a34a" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_log 依赖 f_time（f_log 的冗余直达：可由其它依赖间接到达）
-f_log depends on f_time (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="697" width="16" height="16" rx="3" fill="#c026d3" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_app 依赖 f_base（f_app 的冗余直达：可由其它依赖间接到达）
-f_app depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="323" y="697" width="16" height="16" rx="3" fill="#c026d3" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_app 依赖 f_concurrent（f_app 的冗余直达：可由其它依赖间接到达）
-f_app depends on f_concurrent (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="449" y="697" width="16" height="16" rx="3" fill="#c026d3" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_app 依赖 f_config（f_app 的冗余直达：可由其它依赖间接到达）
-f_app depends on f_config (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="413" y="697" width="16" height="16" rx="3" fill="#c026d3" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_app 依赖 f_data（f_app 的冗余直达：可由其它依赖间接到达）
-f_app depends on f_data (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="215" y="697" width="16" height="16" rx="3" fill="#c026d3" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_app 依赖 f_random（f_app 的冗余直达：可由其它依赖间接到达）
-f_app depends on f_random (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="179" y="697" width="16" height="16" rx="3" fill="#c026d3" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_app 依赖 f_version（f_app 的冗余直达：可由其它依赖间接到达）
-f_app depends on f_version (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="715" width="16" height="16" rx="3" fill="#0d9488" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_pool 依赖 f_base（f_pool 的冗余直达：可由其它依赖间接到达）
-f_pool depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="197" y="715" width="16" height="16" rx="3" fill="#0d9488" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_pool 依赖 f_exception（f_pool 的冗余直达：可由其它依赖间接到达）
-f_pool depends on f_exception (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="733" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_store 依赖 f_base（f_store 的冗余直达：可由其它依赖间接到达）
-f_store depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="233" y="733" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_store 依赖 f_collection（f_store 的冗余直达：可由其它依赖间接到达）
-f_store depends on f_collection (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="323" y="733" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_store 依赖 f_concurrent（f_store 的冗余直达：可由其它依赖间接到达）
-f_store depends on f_concurrent (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="395" y="733" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_store 依赖 f_io（f_store 的冗余直达：可由其它依赖间接到达）
-f_store depends on f_io (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="485" y="733" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_store 依赖 f_util（f_store 的冗余直达：可由其它依赖间接到达）
-f_store depends on f_util (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="751" width="16" height="16" rx="3" fill="#db2777" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_bean 依赖 f_base（f_bean 的冗余直达：可由其它依赖间接到达）
-f_bean depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="233" y="751" width="16" height="16" rx="3" fill="#db2777" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_bean 依赖 f_collection（f_bean 的冗余直达：可由其它依赖间接到达）
-f_bean depends on f_collection (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="449" y="751" width="16" height="16" rx="3" fill="#db2777" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_bean 依赖 f_config（f_bean 的冗余直达：可由其它依赖间接到达）
-f_bean depends on f_config (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="413" y="751" width="16" height="16" rx="3" fill="#db2777" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_bean 依赖 f_data（f_bean 的冗余直达：可由其它依赖间接到达）
-f_bean depends on f_data (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="197" y="751" width="16" height="16" rx="3" fill="#db2777" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_bean 依赖 f_exception（f_bean 的冗余直达：可由其它依赖间接到达）
-f_bean depends on f_exception (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="521" y="751" width="16" height="16" rx="3" fill="#db2777" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_bean 依赖 f_log（f_bean 的冗余直达：可由其它依赖间接到达）
-f_bean depends on f_log (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="251" y="751" width="16" height="16" rx="3" fill="#db2777" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_bean 依赖 f_macros（f_bean 的冗余直达：可由其它依赖间接到达）
-f_bean depends on f_macros (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="341" y="751" width="16" height="16" rx="3" fill="#db2777" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_bean 依赖 f_regex（f_bean 的冗余直达：可由其它依赖间接到达）
-f_bean depends on f_regex (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="769" width="16" height="16" rx="3" fill="#ea580c" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_codec 依赖 f_base（f_codec 的冗余直达：可由其它依赖间接到达）
-f_codec depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="233" y="769" width="16" height="16" rx="3" fill="#ea580c" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_codec 依赖 f_collection（f_codec 的冗余直达：可由其它依赖间接到达）
-f_codec depends on f_collection (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="413" y="769" width="16" height="16" rx="3" fill="#ea580c" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_codec 依赖 f_data（f_codec 的冗余直达：可由其它依赖间接到达）
-f_codec depends on f_data (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="197" y="769" width="16" height="16" rx="3" fill="#ea580c" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_codec 依赖 f_exception（f_codec 的冗余直达：可由其它依赖间接到达）
-f_codec depends on f_exception (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="485" y="769" width="16" height="16" rx="3" fill="#ea580c" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_codec 依赖 f_util（f_codec 的冗余直达：可由其它依赖间接到达）
-f_codec depends on f_util (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="449" y="787" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_health 依赖 f_config（f_health 的冗余直达：可由其它依赖间接到达）
-f_health depends on f_config (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="413" y="787" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_health 依赖 f_data（f_health 的冗余直达：可由其它依赖间接到达）
-f_health depends on f_data (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="521" y="787" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_health 依赖 f_log（f_health 的冗余直达：可由其它依赖间接到达）
-f_health depends on f_log (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="823" width="16" height="16" rx="3" fill="#0891b2" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_aspect 依赖 f_base（f_aspect 的冗余直达：可由其它依赖间接到达）
-f_aspect depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="233" y="823" width="16" height="16" rx="3" fill="#0891b2" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_aspect 依赖 f_collection（f_aspect 的冗余直达：可由其它依赖间接到达）
-f_aspect depends on f_collection (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="449" y="823" width="16" height="16" rx="3" fill="#0891b2" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_aspect 依赖 f_config（f_aspect 的冗余直达：可由其它依赖间接到达）
-f_aspect depends on f_config (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="197" y="823" width="16" height="16" rx="3" fill="#0891b2" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_aspect 依赖 f_exception（f_aspect 的冗余直达：可由其它依赖间接到达）
-f_aspect depends on f_exception (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="251" y="823" width="16" height="16" rx="3" fill="#0891b2" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_aspect 依赖 f_macros（f_aspect 的冗余直达：可由其它依赖间接到达）
-f_aspect depends on f_macros (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="341" y="823" width="16" height="16" rx="3" fill="#0891b2" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_aspect 依赖 f_regex（f_aspect 的冗余直达：可由其它依赖间接到达）
-f_aspect depends on f_regex (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="539" y="859" width="16" height="16" rx="3" fill="#dc2626" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_egraph 依赖 f_app（f_egraph 的冗余直达：可由其它依赖间接到达）
-f_egraph depends on f_app (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="859" width="16" height="16" rx="3" fill="#dc2626" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_egraph 依赖 f_base（f_egraph 的冗余直达：可由其它依赖间接到达）
-f_egraph depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="233" y="859" width="16" height="16" rx="3" fill="#dc2626" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_egraph 依赖 f_collection（f_egraph 的冗余直达：可由其它依赖间接到达）
-f_egraph depends on f_collection (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="323" y="859" width="16" height="16" rx="3" fill="#dc2626" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_egraph 依赖 f_concurrent（f_egraph 的冗余直达：可由其它依赖间接到达）
-f_egraph depends on f_concurrent (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="413" y="859" width="16" height="16" rx="3" fill="#dc2626" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_egraph 依赖 f_data（f_egraph 的冗余直达：可由其它依赖间接到达）
-f_egraph depends on f_data (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="521" y="859" width="16" height="16" rx="3" fill="#dc2626" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_egraph 依赖 f_log（f_egraph 的冗余直达：可由其它依赖间接到达）
-f_egraph depends on f_log (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="485" y="859" width="16" height="16" rx="3" fill="#dc2626" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_egraph 依赖 f_util（f_egraph 的冗余直达：可由其它依赖间接到达）
-f_egraph depends on f_util (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="877" width="16" height="16" rx="3" fill="#4f46e5" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_http 依赖 f_base（f_http 的冗余直达：可由其它依赖间接到达）
-f_http depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="233" y="877" width="16" height="16" rx="3" fill="#4f46e5" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_http 依赖 f_collection（f_http 的冗余直达：可由其它依赖间接到达）
-f_http depends on f_collection (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="449" y="877" width="16" height="16" rx="3" fill="#4f46e5" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_http 依赖 f_config（f_http 的冗余直达：可由其它依赖间接到达）
-f_http depends on f_config (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="413" y="877" width="16" height="16" rx="3" fill="#4f46e5" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_http 依赖 f_data（f_http 的冗余直达：可由其它依赖间接到达）
-f_http depends on f_data (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="197" y="877" width="16" height="16" rx="3" fill="#4f46e5" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_http 依赖 f_exception（f_http 的冗余直达：可由其它依赖间接到达）
-f_http depends on f_exception (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="395" y="877" width="16" height="16" rx="3" fill="#4f46e5" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_http 依赖 f_io（f_http 的冗余直达：可由其它依赖间接到达）
-f_http depends on f_io (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="521" y="877" width="16" height="16" rx="3" fill="#4f46e5" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_http 依赖 f_log（f_http 的冗余直达：可由其它依赖间接到达）
-f_http depends on f_log (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="215" y="877" width="16" height="16" rx="3" fill="#4f46e5" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_http 依赖 f_random（f_http 的冗余直达：可由其它依赖间接到达）
-f_http depends on f_random (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="341" y="877" width="16" height="16" rx="3" fill="#4f46e5" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_http 依赖 f_regex（f_http 的冗余直达：可由其它依赖间接到达）
-f_http depends on f_regex (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="485" y="877" width="16" height="16" rx="3" fill="#4f46e5" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_http 依赖 f_util（f_http 的冗余直达：可由其它依赖间接到达）
-f_http depends on f_util (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="895" width="16" height="16" rx="3" fill="#16a34a" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_protocol 依赖 f_base（f_protocol 的冗余直达：可由其它依赖间接到达）
-f_protocol depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="449" y="895" width="16" height="16" rx="3" fill="#16a34a" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_protocol 依赖 f_config（f_protocol 的冗余直达：可由其它依赖间接到达）
-f_protocol depends on f_config (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="413" y="895" width="16" height="16" rx="3" fill="#16a34a" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_protocol 依赖 f_data（f_protocol 的冗余直达：可由其它依赖间接到达）
-f_protocol depends on f_data (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="197" y="895" width="16" height="16" rx="3" fill="#16a34a" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_protocol 依赖 f_exception（f_protocol 的冗余直达：可由其它依赖间接到达）
-f_protocol depends on f_exception (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="557" y="895" width="16" height="16" rx="3" fill="#16a34a" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_protocol 依赖 f_pool（f_protocol 的冗余直达：可由其它依赖间接到达）
-f_protocol depends on f_pool (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="485" y="895" width="16" height="16" rx="3" fill="#16a34a" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_protocol 依赖 f_util（f_protocol 的冗余直达：可由其它依赖间接到达）
-f_protocol depends on f_util (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="539" y="913" width="16" height="16" rx="3" fill="#c026d3" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_ticktock 依赖 f_app（f_ticktock 的冗余直达：可由其它依赖间接到达）
-f_ticktock depends on f_app (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="913" width="16" height="16" rx="3" fill="#c026d3" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_ticktock 依赖 f_base（f_ticktock 的冗余直达：可由其它依赖间接到达）
-f_ticktock depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="233" y="913" width="16" height="16" rx="3" fill="#c026d3" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_ticktock 依赖 f_collection（f_ticktock 的冗余直达：可由其它依赖间接到达）
-f_ticktock depends on f_collection (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="197" y="913" width="16" height="16" rx="3" fill="#c026d3" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_ticktock 依赖 f_exception（f_ticktock 的冗余直达：可由其它依赖间接到达）
-f_ticktock depends on f_exception (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="521" y="913" width="16" height="16" rx="3" fill="#c026d3" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_ticktock 依赖 f_log（f_ticktock 的冗余直达：可由其它依赖间接到达）
-f_ticktock depends on f_log (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="341" y="913" width="16" height="16" rx="3" fill="#c026d3" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_ticktock 依赖 f_regex（f_ticktock 的冗余直达：可由其它依赖间接到达）
-f_ticktock depends on f_regex (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="269" y="913" width="16" height="16" rx="3" fill="#c026d3" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_ticktock 依赖 f_time（f_ticktock 的冗余直达：可由其它依赖间接到达）
-f_ticktock depends on f_time (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="931" width="16" height="16" rx="3" fill="#0d9488" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_httpclient 依赖 f_base（f_httpclient 的冗余直达：可由其它依赖间接到达）
-f_httpclient depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="413" y="931" width="16" height="16" rx="3" fill="#0d9488" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_httpclient 依赖 f_data（f_httpclient 的冗余直达：可由其它依赖间接到达）
-f_httpclient depends on f_data (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="539" y="949" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_app（f_mvc 的冗余直达：可由其它依赖间接到达）
-f_mvc depends on f_app (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="949" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_base（f_mvc 的冗余直达：可由其它依赖间接到达）
-f_mvc depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="593" y="949" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_bean（f_mvc 的冗余直达：可由其它依赖间接到达）
-f_mvc depends on f_bean (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="233" y="949" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_collection（f_mvc 的冗余直达：可由其它依赖间接到达）
-f_mvc depends on f_collection (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="323" y="949" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_concurrent（f_mvc 的冗余直达：可由其它依赖间接到达）
-f_mvc depends on f_concurrent (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="449" y="949" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_config（f_mvc 的冗余直达：可由其它依赖间接到达）
-f_mvc depends on f_config (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="413" y="949" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_data（f_mvc 的冗余直达：可由其它依赖间接到达）
-f_mvc depends on f_data (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="197" y="949" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_exception（f_mvc 的冗余直达：可由其它依赖间接到达）
-f_mvc depends on f_exception (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="395" y="949" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_io（f_mvc 的冗余直达：可由其它依赖间接到达）
-f_mvc depends on f_io (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="521" y="949" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_log（f_mvc 的冗余直达：可由其它依赖间接到达）
-f_mvc depends on f_log (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="251" y="949" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_macros（f_mvc 的冗余直达：可由其它依赖间接到达）
-f_mvc depends on f_macros (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="215" y="949" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_random（f_mvc 的冗余直达：可由其它依赖间接到达）
-f_mvc depends on f_random (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="341" y="949" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_regex（f_mvc 的冗余直达：可由其它依赖间接到达）
-f_mvc depends on f_regex (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="485" y="949" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_util（f_mvc 的冗余直达：可由其它依赖间接到达）
-f_mvc depends on f_util (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="967" width="16" height="16" rx="3" fill="#db2777" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_net 依赖 f_base（f_net 的冗余直达：可由其它依赖间接到达）
-f_net depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="323" y="967" width="16" height="16" rx="3" fill="#db2777" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_net 依赖 f_concurrent（f_net 的冗余直达：可由其它依赖间接到达）
-f_net depends on f_concurrent (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="413" y="967" width="16" height="16" rx="3" fill="#db2777" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_net 依赖 f_data（f_net 的冗余直达：可由其它依赖间接到达）
-f_net depends on f_data (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="521" y="967" width="16" height="16" rx="3" fill="#db2777" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_net 依赖 f_log（f_net 的冗余直达：可由其它依赖间接到达）
-f_net depends on f_log (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="215" y="967" width="16" height="16" rx="3" fill="#db2777" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_net 依赖 f_random（f_net 的冗余直达：可由其它依赖间接到达）
-f_net depends on f_random (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="539" y="985" width="16" height="16" rx="3" fill="#ea580c" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_app（f_orm 的冗余直达：可由其它依赖间接到达）
-f_orm depends on f_app (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="985" width="16" height="16" rx="3" fill="#ea580c" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_base（f_orm 的冗余直达：可由其它依赖间接到达）
-f_orm depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="593" y="985" width="16" height="16" rx="3" fill="#ea580c" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_bean（f_orm 的冗余直达：可由其它依赖间接到达）
-f_orm depends on f_bean (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="305" y="985" width="16" height="16" rx="3" fill="#ea580c" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_cache（f_orm 的冗余直达：可由其它依赖间接到达）
-f_orm depends on f_cache (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="233" y="985" width="16" height="16" rx="3" fill="#ea580c" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_collection（f_orm 的冗余直达：可由其它依赖间接到达）
-f_orm depends on f_collection (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="449" y="985" width="16" height="16" rx="3" fill="#ea580c" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_config（f_orm 的冗余直达：可由其它依赖间接到达）
-f_orm depends on f_config (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="413" y="985" width="16" height="16" rx="3" fill="#ea580c" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_data（f_orm 的冗余直达：可由其它依赖间接到达）
-f_orm depends on f_data (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="197" y="985" width="16" height="16" rx="3" fill="#ea580c" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_exception（f_orm 的冗余直达：可由其它依赖间接到达）
-f_orm depends on f_exception (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="521" y="985" width="16" height="16" rx="3" fill="#ea580c" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_log（f_orm 的冗余直达：可由其它依赖间接到达）
-f_orm depends on f_log (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="251" y="985" width="16" height="16" rx="3" fill="#ea580c" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_macros（f_orm 的冗余直达：可由其它依赖间接到达）
-f_orm depends on f_macros (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="341" y="985" width="16" height="16" rx="3" fill="#ea580c" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_regex（f_orm 的冗余直达：可由其它依赖间接到达）
-f_orm depends on f_regex (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="485" y="985" width="16" height="16" rx="3" fill="#ea580c" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_util（f_orm 的冗余直达：可由其它依赖间接到达）
-f_orm depends on f_util (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="665" y="1003" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_aspect（f_llm 的冗余直达：可由其它依赖间接到达）
-f_llm depends on f_aspect (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="1003" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_base（f_llm 的冗余直达：可由其它依赖间接到达）
-f_llm depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="593" y="1003" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_bean（f_llm 的冗余直达：可由其它依赖间接到达）
-f_llm depends on f_bean (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="449" y="1003" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_config（f_llm 的冗余直达：可由其它依赖间接到达）
-f_llm depends on f_config (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="413" y="1003" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_data（f_llm 的冗余直达：可由其它依赖间接到达）
-f_llm depends on f_data (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="521" y="1003" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_log（f_llm 的冗余直达：可由其它依赖间接到达）
-f_llm depends on f_log (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="251" y="1003" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_macros（f_llm 的冗余直达：可由其它依赖间接到达）
-f_llm depends on f_macros (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="341" y="1003" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_regex（f_llm 的冗余直达：可由其它依赖间接到达）
-f_llm depends on f_regex (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="269" y="1003" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_time（f_llm 的冗余直达：可由其它依赖间接到达）
-f_llm depends on f_time (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="485" y="1003" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_util（f_llm 的冗余直达：可由其它依赖间接到达）
-f_llm depends on f_util (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="539" y="1021" width="16" height="16" rx="3" fill="#7c3aed" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_app（f_rpc 的冗余直达：可由其它依赖间接到达）
-f_rpc depends on f_app (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="1021" width="16" height="16" rx="3" fill="#7c3aed" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_base（f_rpc 的冗余直达：可由其它依赖间接到达）
-f_rpc depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="593" y="1021" width="16" height="16" rx="3" fill="#7c3aed" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_bean（f_rpc 的冗余直达：可由其它依赖间接到达）
-f_rpc depends on f_bean (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="611" y="1021" width="16" height="16" rx="3" fill="#7c3aed" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_codec（f_rpc 的冗余直达：可由其它依赖间接到达）
-f_rpc depends on f_codec (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="233" y="1021" width="16" height="16" rx="3" fill="#7c3aed" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_collection（f_rpc 的冗余直达：可由其它依赖间接到达）
-f_rpc depends on f_collection (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="323" y="1021" width="16" height="16" rx="3" fill="#7c3aed" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_concurrent（f_rpc 的冗余直达：可由其它依赖间接到达）
-f_rpc depends on f_concurrent (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="449" y="1021" width="16" height="16" rx="3" fill="#7c3aed" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_config（f_rpc 的冗余直达：可由其它依赖间接到达）
-f_rpc depends on f_config (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="413" y="1021" width="16" height="16" rx="3" fill="#7c3aed" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_data（f_rpc 的冗余直达：可由其它依赖间接到达）
-f_rpc depends on f_data (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="395" y="1021" width="16" height="16" rx="3" fill="#7c3aed" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_io（f_rpc 的冗余直达：可由其它依赖间接到达）
-f_rpc depends on f_io (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="521" y="1021" width="16" height="16" rx="3" fill="#7c3aed" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_log（f_rpc 的冗余直达：可由其它依赖间接到达）
-f_rpc depends on f_log (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="251" y="1021" width="16" height="16" rx="3" fill="#7c3aed" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_macros（f_rpc 的冗余直达：可由其它依赖间接到达）
-f_rpc depends on f_macros (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="737" y="1021" width="16" height="16" rx="3" fill="#7c3aed" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_protocol（f_rpc 的冗余直达：可由其它依赖间接到达）
-f_rpc depends on f_protocol (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="485" y="1021" width="16" height="16" rx="3" fill="#7c3aed" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_util（f_rpc 的冗余直达：可由其它依赖间接到达）
-f_rpc depends on f_util (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="1039" width="16" height="16" rx="3" fill="#0891b2" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_security 依赖 f_base（f_security 的冗余直达：可由其它依赖间接到达）
-f_security depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="305" y="1039" width="16" height="16" rx="3" fill="#0891b2" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>f_security 依赖 f_cache（f_security 的冗余直达：可由其它依赖间接到达）
-f_security depends on f_cache (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="1057" width="16" height="16" rx="3" fill="#ca8a04" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_base（fleet 的冗余直达：可由其它依赖间接到达）
-fleet depends on f_base (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="611" y="1057" width="16" height="16" rx="3" fill="#ca8a04" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_codec（fleet 的冗余直达：可由其它依赖间接到达）
-fleet depends on f_codec (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="233" y="1057" width="16" height="16" rx="3" fill="#ca8a04" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_collection（fleet 的冗余直达：可由其它依赖间接到达）
-fleet depends on f_collection (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="449" y="1057" width="16" height="16" rx="3" fill="#ca8a04" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_config（fleet 的冗余直达：可由其它依赖间接到达）
-fleet depends on f_config (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="413" y="1057" width="16" height="16" rx="3" fill="#ca8a04" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_data（fleet 的冗余直达：可由其它依赖间接到达）
-fleet depends on f_data (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="395" y="1057" width="16" height="16" rx="3" fill="#ca8a04" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_io（fleet 的冗余直达：可由其它依赖间接到达）
-fleet depends on f_io (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="521" y="1057" width="16" height="16" rx="3" fill="#ca8a04" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_log（fleet 的冗余直达：可由其它依赖间接到达）
-fleet depends on f_log (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="737" y="1057" width="16" height="16" rx="3" fill="#ca8a04" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_protocol（fleet 的冗余直达：可由其它依赖间接到达）
-fleet depends on f_protocol (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="485" y="1057" width="16" height="16" rx="3" fill="#ca8a04" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_util（fleet 的冗余直达：可由其它依赖间接到达）
-fleet depends on f_util (redundant direct dependency, reachable through other dependencies)</title></rect>
-<rect class="c" x="143" y="355" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_exception 依赖 f_base（f_exception 的结构性依赖）
-f_exception depends on f_base (structural dependency)</title></rect>
-<rect class="c" x="143" y="373" width="16" height="16" rx="3" fill="#7c3aed" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_random 依赖 f_base（f_random 的结构性依赖）
-f_random depends on f_base (structural dependency)</title></rect>
-<rect class="c" x="197" y="391" width="16" height="16" rx="3" fill="#0891b2" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_collection 依赖 f_exception（f_collection 的结构性依赖）
-f_collection depends on f_exception (structural dependency)</title></rect>
-<rect class="c" x="197" y="409" width="16" height="16" rx="3" fill="#ca8a04" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_macros 依赖 f_exception（f_macros 的结构性依赖）
-f_macros depends on f_exception (structural dependency)</title></rect>
-<rect class="c" x="197" y="427" width="16" height="16" rx="3" fill="#dc2626" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_time 依赖 f_exception（f_time 的结构性依赖）
-f_time depends on f_exception (structural dependency)</title></rect>
-<rect class="c" x="197" y="445" width="16" height="16" rx="3" fill="#4f46e5" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_uring 依赖 f_exception（f_uring 的结构性依赖）
-f_uring depends on f_exception (structural dependency)</title></rect>
-<rect class="c" x="233" y="463" width="16" height="16" rx="3" fill="#16a34a" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_cache 依赖 f_collection（f_cache 的结构性依赖）
-f_cache depends on f_collection (structural dependency)</title></rect>
-<rect class="c" x="233" y="481" width="16" height="16" rx="3" fill="#c026d3" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_concurrent 依赖 f_collection（f_concurrent 的结构性依赖）
-f_concurrent depends on f_collection (structural dependency)</title></rect>
-<rect class="c" x="215" y="481" width="16" height="16" rx="3" fill="#c026d3" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_concurrent 依赖 f_random（f_concurrent 的结构性依赖）
-f_concurrent depends on f_random (structural dependency)</title></rect>
-<rect class="c" x="305" y="499" width="16" height="16" rx="3" fill="#0d9488" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_regex 依赖 f_cache（f_regex 的结构性依赖）
-f_regex depends on f_cache (structural dependency)</title></rect>
-<rect class="c" x="323" y="517" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_rx 依赖 f_concurrent（f_rx 的结构性依赖）
-f_rx depends on f_concurrent (structural dependency)</title></rect>
-<rect class="c" x="341" y="535" width="16" height="16" rx="3" fill="#db2777" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_cmd 依赖 f_regex（f_cmd 的结构性依赖）
-f_cmd depends on f_regex (structural dependency)</title></rect>
-<rect class="c" x="341" y="553" width="16" height="16" rx="3" fill="#ea580c" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_io 依赖 f_regex（f_io 的结构性依赖）
-f_io depends on f_regex (structural dependency)</title></rect>
-<rect class="c" x="323" y="571" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_data 依赖 f_concurrent（f_data 的结构性依赖）
-f_data depends on f_concurrent (structural dependency)</title></rect>
-<rect class="c" x="395" y="571" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_data 依赖 f_io（f_data 的结构性依赖）
-f_data depends on f_io (structural dependency)</title></rect>
-<rect class="c" x="251" y="571" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_data 依赖 f_macros（f_data 的结构性依赖）
-f_data depends on f_macros (structural dependency)</title></rect>
-<rect class="c" x="269" y="571" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_data 依赖 f_time（f_data 的结构性依赖）
-f_data depends on f_time (structural dependency)</title></rect>
-<rect class="c" x="395" y="589" width="16" height="16" rx="3" fill="#7c3aed" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_process 依赖 f_io（f_process 的结构性依赖）
-f_process depends on f_io (structural dependency)</title></rect>
-<rect class="c" x="413" y="607" width="16" height="16" rx="3" fill="#0891b2" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_config 依赖 f_data（f_config 的结构性依赖）
-f_config depends on f_data (structural dependency)</title></rect>
-<rect class="c" x="413" y="625" width="16" height="16" rx="3" fill="#ca8a04" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_jwt 依赖 f_data（f_jwt 的结构性依赖）
-f_jwt depends on f_data (structural dependency)</title></rect>
-<rect class="c" x="449" y="643" width="16" height="16" rx="3" fill="#dc2626" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_util 依赖 f_config（f_util 的结构性依赖）
-f_util depends on f_config (structural dependency)</title></rect>
-<rect class="c" x="485" y="661" width="16" height="16" rx="3" fill="#4f46e5" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_bloom 依赖 f_util（f_bloom 的结构性依赖）
-f_bloom depends on f_util (structural dependency)</title></rect>
-<rect class="c" x="485" y="679" width="16" height="16" rx="3" fill="#16a34a" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_log 依赖 f_util（f_log 的结构性依赖）
-f_log depends on f_util (structural dependency)</title></rect>
-<rect class="c" x="179" y="679" width="16" height="16" rx="3" fill="#16a34a" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_log 依赖 f_version（f_log 的结构性依赖）
-f_log depends on f_version (structural dependency)</title></rect>
-<rect class="c" x="521" y="697" width="16" height="16" rx="3" fill="#c026d3" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_app 依赖 f_log（f_app 的结构性依赖）
-f_app depends on f_log (structural dependency)</title></rect>
-<rect class="c" x="521" y="715" width="16" height="16" rx="3" fill="#0d9488" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_pool 依赖 f_log（f_pool 的结构性依赖）
-f_pool depends on f_log (structural dependency)</title></rect>
-<rect class="c" x="503" y="733" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_store 依赖 f_bloom（f_store 的结构性依赖）
-f_store depends on f_bloom (structural dependency)</title></rect>
-<rect class="c" x="539" y="751" width="16" height="16" rx="3" fill="#db2777" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_bean 依赖 f_app（f_bean 的结构性依赖）
-f_bean depends on f_app (structural dependency)</title></rect>
-<rect class="c" x="377" y="751" width="16" height="16" rx="3" fill="#db2777" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_bean 依赖 f_cmd（f_bean 的结构性依赖）
-f_bean depends on f_cmd (structural dependency)</title></rect>
-<rect class="c" x="557" y="769" width="16" height="16" rx="3" fill="#ea580c" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_codec 依赖 f_pool（f_codec 的结构性依赖）
-f_codec depends on f_pool (structural dependency)</title></rect>
-<rect class="c" x="539" y="787" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_health 依赖 f_app（f_health 的结构性依赖）
-f_health depends on f_app (structural dependency)</title></rect>
-<rect class="c" x="539" y="805" width="16" height="16" rx="3" fill="#7c3aed" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>fboot 依赖 f_app（fboot 的结构性依赖）
-fboot depends on f_app (structural dependency)</title></rect>
-<rect class="c" x="593" y="823" width="16" height="16" rx="3" fill="#0891b2" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_aspect 依赖 f_bean（f_aspect 的结构性依赖）
-f_aspect depends on f_bean (structural dependency)</title></rect>
-<rect class="c" x="593" y="841" width="16" height="16" rx="3" fill="#ca8a04" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_crypto 依赖 f_bean（f_crypto 的结构性依赖）
-f_crypto depends on f_bean (structural dependency)</title></rect>
-<rect class="c" x="593" y="859" width="16" height="16" rx="3" fill="#dc2626" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_egraph 依赖 f_bean（f_egraph 的结构性依赖）
-f_egraph depends on f_bean (structural dependency)</title></rect>
-<rect class="c" x="593" y="877" width="16" height="16" rx="3" fill="#4f46e5" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_http 依赖 f_bean（f_http 的结构性依赖）
-f_http depends on f_bean (structural dependency)</title></rect>
-<rect class="c" x="611" y="895" width="16" height="16" rx="3" fill="#16a34a" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_protocol 依赖 f_codec（f_protocol 的结构性依赖）
-f_protocol depends on f_codec (structural dependency)</title></rect>
-<rect class="c" x="593" y="913" width="16" height="16" rx="3" fill="#c026d3" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_ticktock 依赖 f_bean（f_ticktock 的结构性依赖）
-f_ticktock depends on f_bean (structural dependency)</title></rect>
-<rect class="c" x="719" y="931" width="16" height="16" rx="3" fill="#0d9488" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_httpclient 依赖 f_http（f_httpclient 的结构性依赖）
-f_httpclient depends on f_http (structural dependency)</title></rect>
-<rect class="c" x="665" y="949" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_aspect（f_mvc 的结构性依赖）
-f_mvc depends on f_aspect (structural dependency)</title></rect>
-<rect class="c" x="683" y="949" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_crypto（f_mvc 的结构性依赖）
-f_mvc depends on f_crypto (structural dependency)</title></rect>
-<rect class="c" x="629" y="949" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_health（f_mvc 的结构性依赖）
-f_mvc depends on f_health (structural dependency)</title></rect>
-<rect class="c" x="719" y="949" width="16" height="16" rx="3" fill="#2563eb" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_http（f_mvc 的结构性依赖）
-f_mvc depends on f_http (structural dependency)</title></rect>
-<rect class="c" x="737" y="967" width="16" height="16" rx="3" fill="#db2777" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_net 依赖 f_protocol（f_net 的结构性依赖）
-f_net depends on f_protocol (structural dependency)</title></rect>
-<rect class="c" x="665" y="985" width="16" height="16" rx="3" fill="#ea580c" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_aspect（f_orm 的结构性依赖）
-f_orm depends on f_aspect (structural dependency)</title></rect>
-<rect class="c" x="557" y="985" width="16" height="16" rx="3" fill="#ea580c" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_pool（f_orm 的结构性依赖）
-f_orm depends on f_pool (structural dependency)</title></rect>
-<rect class="c" x="701" y="1003" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_egraph（f_llm 的结构性依赖）
-f_llm depends on f_egraph (structural dependency)</title></rect>
-<rect class="c" x="773" y="1003" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_httpclient（f_llm 的结构性依赖）
-f_llm depends on f_httpclient (structural dependency)</title></rect>
-<rect class="c" x="827" y="1003" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_orm（f_llm 的结构性依赖）
-f_llm depends on f_orm (structural dependency)</title></rect>
-<rect class="c" x="575" y="1003" width="16" height="16" rx="3" fill="#059669" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_store（f_llm 的结构性依赖）
-f_llm depends on f_store (structural dependency)</title></rect>
-<rect class="c" x="665" y="1021" width="16" height="16" rx="3" fill="#7c3aed" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_aspect（f_rpc 的结构性依赖）
-f_rpc depends on f_aspect (structural dependency)</title></rect>
-<rect class="c" x="629" y="1021" width="16" height="16" rx="3" fill="#7c3aed" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_health（f_rpc 的结构性依赖）
-f_rpc depends on f_health (structural dependency)</title></rect>
-<rect class="c" x="809" y="1021" width="16" height="16" rx="3" fill="#7c3aed" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_net（f_rpc 的结构性依赖）
-f_rpc depends on f_net (structural dependency)</title></rect>
-<rect class="c" x="431" y="1021" width="16" height="16" rx="3" fill="#7c3aed" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_process（f_rpc 的结构性依赖）
-f_rpc depends on f_process (structural dependency)</title></rect>
-<rect class="c" x="575" y="1021" width="16" height="16" rx="3" fill="#7c3aed" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_store（f_rpc 的结构性依赖）
-f_rpc depends on f_store (structural dependency)</title></rect>
-<rect class="c" x="467" y="1039" width="16" height="16" rx="3" fill="#0891b2" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_security 依赖 f_jwt（f_security 的结构性依赖）
-f_security depends on f_jwt (structural dependency)</title></rect>
-<rect class="c" x="791" y="1039" width="16" height="16" rx="3" fill="#0891b2" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>f_security 依赖 f_mvc（f_security 的结构性依赖）
-f_security depends on f_mvc (structural dependency)</title></rect>
-<rect class="c" x="539" y="1057" width="16" height="16" rx="3" fill="#ca8a04" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_app（fleet 的结构性依赖）
-fleet depends on f_app (structural dependency)</title></rect>
-<rect class="c" x="809" y="1057" width="16" height="16" rx="3" fill="#ca8a04" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_net（fleet 的结构性依赖）
-fleet depends on f_net (structural dependency)</title></rect>
-<rect class="c" x="431" y="1057" width="16" height="16" rx="3" fill="#ca8a04" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_process（fleet 的结构性依赖）
-fleet depends on f_process (structural dependency)</title></rect>
-<rect class="c" x="575" y="1057" width="16" height="16" rx="3" fill="#ca8a04" fill-opacity="0.95" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_store（fleet 的结构性依赖）
-fleet depends on f_store (structural dependency)</title></rect>
+<rect class="c" x="143" y="373" width="16" height="16" rx="3" fill="#5dc4d9" stroke="#ffffff" stroke-width="0.5"><title>f_exception 依赖 f_base（直接依赖，源码里已引用对方 API，引用 20 次（前三））
+f_exception depends on f_base (direct dependency, 20 API references (top 3))</title></rect>
+<rect class="c" x="143" y="391" width="16" height="16" rx="3" fill="#9c2565" stroke="#ffffff" stroke-width="0.5"><title>f_random 依赖 f_base（直接依赖，源码里已引用对方 API，引用 344 次（前三））
+f_random depends on f_base (direct dependency, 344 API references (top 3))</title></rect>
+<rect class="c" x="143" y="409" width="16" height="16" rx="3" fill="#429c25" stroke="#ffffff" stroke-width="0.5"><title>f_uring 依赖 f_base（直接依赖，源码里已引用对方 API，引用 318 次（前三））
+f_uring depends on f_base (direct dependency, 318 API references (top 3))</title></rect>
+<rect class="c" x="143" y="427" width="16" height="16" rx="3" fill="#443ed2" stroke="#ffffff" stroke-width="0.5"><title>f_cmd 依赖 f_base（直接依赖，源码里已引用对方 API，引用 32 次（前三））
+f_cmd depends on f_base (direct dependency, 32 API references (top 3))</title></rect>
+<rect class="c" x="215" y="427" width="16" height="16" rx="3" fill="#a09de8" stroke="#ffffff" stroke-width="0.5"><title>f_cmd 依赖 f_exception（直接依赖，源码里已引用对方 API，引用 1 次（前三））
+f_cmd depends on f_exception (direct dependency, 1 API references (top 3))</title></rect>
+<rect class="c" x="143" y="445" width="16" height="16" rx="3" fill="#9c4d25" stroke="#ffffff" stroke-width="0.5"><title>f_collection 依赖 f_base（直接依赖，源码里已引用对方 API，引用 240 次（前三））
+f_collection depends on f_base (direct dependency, 240 API references (top 3))</title></rect>
+<rect class="c" x="215" y="445" width="16" height="16" rx="3" fill="#d9875d" stroke="#ffffff" stroke-width="0.5"><title>f_collection 依赖 f_exception（直接依赖，源码里已引用对方 API，引用 19 次（前三））
+f_collection depends on f_exception (direct dependency, 19 API references (top 3))</title></rect>
+<rect class="c" x="143" y="463" width="16" height="16" rx="3" fill="#3ed29a" stroke="#ffffff" stroke-width="0.5"><title>f_macros 依赖 f_base（直接依赖，源码里已引用对方 API，引用 50 次（前三））
+f_macros depends on f_base (direct dependency, 50 API references (top 3))</title></rect>
+<rect class="c" x="215" y="463" width="16" height="16" rx="3" fill="#9de8cc" stroke="#ffffff" stroke-width="0.5"><title>f_macros 依赖 f_exception（直接依赖，源码里已引用对方 API，引用 1 次（前三））
+f_macros depends on f_exception (direct dependency, 1 API references (top 3))</title></rect>
+<rect class="c" x="143" y="481" width="16" height="16" rx="3" fill="#b02cbc" stroke="#ffffff" stroke-width="0.5"><title>f_cache 依赖 f_base（直接依赖，源码里已引用对方 API，引用 95 次（前三））
+f_cache depends on f_base (direct dependency, 95 API references (top 3))</title></rect>
+<rect class="c" x="287" y="481" width="16" height="16" rx="3" fill="#c53ed2" stroke="#ffffff" stroke-width="0.5"><title>f_cache 依赖 f_collection（直接依赖，源码里已引用对方 API，引用 56 次（前三））
+f_cache depends on f_collection (direct dependency, 56 API references (top 3))</title></rect>
+<rect class="c" x="143" y="499" width="16" height="16" rx="3" fill="#839c25" stroke="#ffffff" stroke-width="0.5"><title>f_concurrent 依赖 f_base（直接依赖，源码里已引用对方 API，引用 247 次（前三））
+f_concurrent depends on f_base (direct dependency, 247 API references (top 3))</title></rect>
+<rect class="c" x="287" y="499" width="16" height="16" rx="3" fill="#9ebc2c" stroke="#ffffff" stroke-width="0.5"><title>f_concurrent 依赖 f_collection（直接依赖，源码里已引用对方 API，引用 80 次（前三））
+f_concurrent depends on f_collection (direct dependency, 80 API references (top 3))</title></rect>
+<rect class="c" x="215" y="499" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_concurrent 依赖 f_exception（直接依赖，源码里已引用对方 API，引用 1 次（未进前三））
+f_concurrent depends on f_exception (direct dependency, 1 API references (not in top 3))</title></rect>
+<rect class="c" x="233" y="499" width="16" height="16" rx="3" fill="#bfd95d" stroke="#ffffff" stroke-width="0.5"><title>f_concurrent 依赖 f_random（直接依赖，源码里已引用对方 API，引用 19 次（前三））
+f_concurrent depends on f_random (direct dependency, 19 API references (top 3))</title></rect>
+<rect class="c" x="143" y="517" width="16" height="16" rx="3" fill="#2c74bc" stroke="#ffffff" stroke-width="0.5"><title>f_regex 依赖 f_base（直接依赖，源码里已引用对方 API，引用 124 次（前三））
+f_regex depends on f_base (direct dependency, 124 API references (top 3))</title></rect>
+<rect class="c" x="323" y="517" width="16" height="16" rx="3" fill="#3e87d2" stroke="#ffffff" stroke-width="0.5"><title>f_regex 依赖 f_cache（直接依赖，源码里已引用对方 API，引用 26.5 次（前三））
+f_regex depends on f_cache (direct dependency, 26.5 API references (top 3))</title></rect>
+<rect class="c" x="287" y="517" width="16" height="16" rx="3" fill="#3e87d2" stroke="#ffffff" stroke-width="0.5"><title>f_regex 依赖 f_collection（直接依赖，源码里已引用对方 API，引用 31.5 次（前三））
+f_regex depends on f_collection (direct dependency, 31.5 API references (top 3))</title></rect>
+<rect class="c" x="215" y="517" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_regex 依赖 f_exception（直接依赖，源码里已引用对方 API，引用 1 次（未进前三））
+f_regex depends on f_exception (direct dependency, 1 API references (not in top 3))</title></rect>
+<rect class="c" x="341" y="535" width="16" height="16" rx="3" fill="#9c253d" stroke="#ffffff" stroke-width="0.5"><title>f_rx 依赖 f_concurrent（直接依赖，源码里已引用对方 API，引用 266 次（前三））
+f_rx depends on f_concurrent (direct dependency, 266 API references (top 3))</title></rect>
+<rect class="c" x="143" y="553" width="16" height="16" rx="3" fill="#259c2f" stroke="#ffffff" stroke-width="0.5"><title>f_io 依赖 f_base（直接依赖，源码里已引用对方 API，引用 224.5 次（前三））
+f_io depends on f_base (direct dependency, 224.5 API references (top 3))</title></rect>
+<rect class="c" x="215" y="553" width="16" height="16" rx="3" fill="#9de8a3" stroke="#ffffff" stroke-width="0.5"><title>f_io 依赖 f_exception（直接依赖，源码里已引用对方 API，引用 1 次（前三））
+f_io depends on f_exception (direct dependency, 1 API references (top 3))</title></rect>
+<rect class="c" x="359" y="553" width="16" height="16" rx="3" fill="#5dd968" stroke="#ffffff" stroke-width="0.5"><title>f_io 依赖 f_regex（直接依赖，源码里已引用对方 API，引用 9.5 次（前三））
+f_io depends on f_regex (direct dependency, 9.5 API references (top 3))</title></rect>
+<rect class="c" x="143" y="571" width="16" height="16" rx="3" fill="#52259c" stroke="#ffffff" stroke-width="0.5"><title>f_data 依赖 f_base（直接依赖，源码里已引用对方 API，引用 331.6 次（前三））
+f_data depends on f_base (direct dependency, 331.6 API references (top 3))</title></rect>
+<rect class="c" x="323" y="571" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_data 依赖 f_cache（直接依赖，源码里已引用对方 API，引用 34.9 次（未进前三））
+f_data depends on f_cache (direct dependency, 34.9 API references (not in top 3))</title></rect>
+<rect class="c" x="287" y="571" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_data 依赖 f_collection（直接依赖，源码里已引用对方 API，引用 28.1 次（未进前三））
+f_data depends on f_collection (direct dependency, 28.1 API references (not in top 3))</title></rect>
+<rect class="c" x="341" y="571" width="16" height="16" rx="3" fill="#52259c" stroke="#ffffff" stroke-width="0.5"><title>f_data 依赖 f_concurrent（直接依赖，源码里已引用对方 API，引用 412.2 次（前三））
+f_data depends on f_concurrent (direct dependency, 412.2 API references (top 3))</title></rect>
+<rect class="c" x="215" y="571" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_data 依赖 f_exception（直接依赖，源码里已引用对方 API，引用 3 次（未进前三））
+f_data depends on f_exception (direct dependency, 3 API references (not in top 3))</title></rect>
+<rect class="c" x="395" y="571" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_data 依赖 f_io（直接依赖，源码里已引用对方 API，引用 204.9 次（未进前三））
+f_data depends on f_io (direct dependency, 204.9 API references (not in top 3))</title></rect>
+<rect class="c" x="305" y="571" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_data 依赖 f_macros（直接依赖，源码里已引用对方 API，引用 46 次（未进前三））
+f_data depends on f_macros (direct dependency, 46 API references (not in top 3))</title></rect>
+<rect class="c" x="359" y="571" width="16" height="16" rx="3" fill="#52259c" stroke="#ffffff" stroke-width="0.5"><title>f_data 依赖 f_regex（直接依赖，源码里已引用对方 API，引用 286.2 次（前三））
+f_data depends on f_regex (direct dependency, 286.2 API references (top 3))</title></rect>
+<rect class="c" x="179" y="571" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_data 依赖 f_time（直接依赖，源码里已引用对方 API，引用 170.2 次（未进前三））
+f_data depends on f_time (direct dependency, 170.2 API references (not in top 3))</title></rect>
+<rect class="c" x="395" y="589" width="16" height="16" rx="3" fill="#e0bf7d" stroke="#ffffff" stroke-width="0.5"><title>f_process 依赖 f_io（直接依赖，源码里已引用对方 API，引用 3 次（前三））
+f_process depends on f_io (direct dependency, 3 API references (top 3))</title></rect>
+<rect class="c" x="413" y="607" width="16" height="16" rx="3" fill="#2cbcb6" stroke="#ffffff" stroke-width="0.5"><title>f_config 依赖 f_data（直接依赖，源码里已引用对方 API，引用 100 次（前三））
+f_config depends on f_data (direct dependency, 100 API references (top 3))</title></rect>
+<rect class="c" x="143" y="625" width="16" height="16" rx="3" fill="#bc2c98" stroke="#ffffff" stroke-width="0.5"><title>f_jwt 依赖 f_base（直接依赖，源码里已引用对方 API，引用 134.3 次（前三））
+f_jwt depends on f_base (direct dependency, 134.3 API references (top 3))</title></rect>
+<rect class="c" x="323" y="625" width="16" height="16" rx="3" fill="#bc2c98" stroke="#ffffff" stroke-width="0.5"><title>f_jwt 依赖 f_cache（直接依赖，源码里已引用对方 API，引用 60.3 次（前三））
+f_jwt depends on f_cache (direct dependency, 60.3 API references (top 3))</title></rect>
+<rect class="c" x="413" y="625" width="16" height="16" rx="3" fill="#bc2c98" stroke="#ffffff" stroke-width="0.5"><title>f_jwt 依赖 f_data（直接依赖，源码里已引用对方 API，引用 148.3 次（前三））
+f_jwt depends on f_data (direct dependency, 148.3 API references (top 3))</title></rect>
+<rect class="c" x="215" y="625" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_jwt 依赖 f_exception（直接依赖，源码里已引用对方 API，引用 1 次（未进前三））
+f_jwt depends on f_exception (direct dependency, 1 API references (not in top 3))</title></rect>
+<rect class="c" x="143" y="643" width="16" height="16" rx="3" fill="#5b9c25" stroke="#ffffff" stroke-width="0.5"><title>f_util 依赖 f_base（直接依赖，源码里已引用对方 API，引用 227.2 次（前三））
+f_util depends on f_base (direct dependency, 227.2 API references (top 3))</title></rect>
+<rect class="c" x="287" y="643" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_util 依赖 f_collection（直接依赖，源码里已引用对方 API，引用 92.5 次（未进前三））
+f_util depends on f_collection (direct dependency, 92.5 API references (not in top 3))</title></rect>
+<rect class="c" x="449" y="643" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_util 依赖 f_config（直接依赖，源码里已引用对方 API，引用 2.2 次（未进前三））
+f_util depends on f_config (direct dependency, 2.2 API references (not in top 3))</title></rect>
+<rect class="c" x="413" y="643" width="16" height="16" rx="3" fill="#5b9c25" stroke="#ffffff" stroke-width="0.5"><title>f_util 依赖 f_data（直接依赖，源码里已引用对方 API，引用 212.6 次（前三））
+f_util depends on f_data (direct dependency, 212.6 API references (top 3))</title></rect>
+<rect class="c" x="215" y="643" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_util 依赖 f_exception（直接依赖，源码里已引用对方 API，引用 13 次（未进前三））
+f_util depends on f_exception (direct dependency, 13 API references (not in top 3))</title></rect>
+<rect class="c" x="233" y="643" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_util 依赖 f_random（直接依赖，源码里已引用对方 API，引用 19.5 次（未进前三））
+f_util depends on f_random (direct dependency, 19.5 API references (not in top 3))</title></rect>
+<rect class="c" x="359" y="643" width="16" height="16" rx="3" fill="#6ebc2c" stroke="#ffffff" stroke-width="0.5"><title>f_util 依赖 f_regex（直接依赖，源码里已引用对方 API，引用 142.5 次（前三））
+f_util depends on f_regex (direct dependency, 142.5 API references (top 3))</title></rect>
+<rect class="c" x="179" y="643" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_util 依赖 f_time（直接依赖，源码里已引用对方 API，引用 89.5 次（未进前三））
+f_util depends on f_time (direct dependency, 89.5 API references (not in top 3))</title></rect>
+<rect class="c" x="143" y="661" width="16" height="16" rx="3" fill="#3e56d2" stroke="#ffffff" stroke-width="0.5"><title>f_bloom 依赖 f_base（直接依赖，源码里已引用对方 API，引用 41.5 次（前三））
+f_bloom depends on f_base (direct dependency, 41.5 API references (top 3))</title></rect>
+<rect class="c" x="233" y="661" width="16" height="16" rx="3" fill="#7d8de0" stroke="#ffffff" stroke-width="0.5"><title>f_bloom 依赖 f_random（直接依赖，源码里已引用对方 API，引用 2.5 次（前三））
+f_bloom depends on f_random (direct dependency, 2.5 API references (top 3))</title></rect>
+<rect class="c" x="485" y="661" width="16" height="16" rx="3" fill="#5d72d9" stroke="#ffffff" stroke-width="0.5"><title>f_bloom 依赖 f_util（直接依赖，源码里已引用对方 API，引用 14 次（前三））
+f_bloom depends on f_util (direct dependency, 14 API references (top 3))</title></rect>
+<rect class="c" x="143" y="679" width="16" height="16" rx="3" fill="#bc3e2c" stroke="#ffffff" stroke-width="0.5"><title>f_log 依赖 f_base（直接依赖，源码里已引用对方 API，引用 114.2 次（前三））
+f_log depends on f_base (direct dependency, 114.2 API references (top 3))</title></rect>
+<rect class="c" x="287" y="679" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_log 依赖 f_collection（直接依赖，源码里已引用对方 API，引用 49.2 次（未进前三））
+f_log depends on f_collection (direct dependency, 49.2 API references (not in top 3))</title></rect>
+<rect class="c" x="449" y="679" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_log 依赖 f_config（直接依赖，源码里已引用对方 API，引用 10.5 次（未进前三））
+f_log depends on f_config (direct dependency, 10.5 API references (not in top 3))</title></rect>
+<rect class="c" x="413" y="679" width="16" height="16" rx="3" fill="#9c3425" stroke="#ffffff" stroke-width="0.5"><title>f_log 依赖 f_data（直接依赖，源码里已引用对方 API，引用 230.1 次（前三））
+f_log depends on f_data (direct dependency, 230.1 API references (top 3))</title></rect>
+<rect class="c" x="215" y="679" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_log 依赖 f_exception（直接依赖，源码里已引用对方 API，引用 1 次（未进前三））
+f_log depends on f_exception (direct dependency, 1 API references (not in top 3))</title></rect>
+<rect class="c" x="395" y="679" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_log 依赖 f_io（直接依赖，源码里已引用对方 API，引用 29.3 次（未进前三））
+f_log depends on f_io (direct dependency, 29.3 API references (not in top 3))</title></rect>
+<rect class="c" x="179" y="679" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_log 依赖 f_time（直接依赖，源码里已引用对方 API，引用 47.6 次（未进前三））
+f_log depends on f_time (direct dependency, 47.6 API references (not in top 3))</title></rect>
+<rect class="c" x="485" y="679" width="16" height="16" rx="3" fill="#bc3e2c" stroke="#ffffff" stroke-width="0.5"><title>f_log 依赖 f_util（直接依赖，源码里已引用对方 API，引用 99.6 次（前三））
+f_log depends on f_util (direct dependency, 99.6 API references (top 3))</title></rect>
+<rect class="c" x="197" y="679" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_log 依赖 f_version（直接依赖，源码里已引用对方 API，引用 31.5 次（未进前三））
+f_log depends on f_version (direct dependency, 31.5 API references (not in top 3))</title></rect>
+<rect class="c" x="143" y="697" width="16" height="16" rx="3" fill="#259c57" stroke="#ffffff" stroke-width="0.5"><title>f_app 依赖 f_base（直接依赖，源码里已引用对方 API，引用 183.8 次（前三））
+f_app depends on f_base (direct dependency, 183.8 API references (top 3))</title></rect>
+<rect class="c" x="449" y="697" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_app 依赖 f_config（直接依赖，源码里已引用对方 API，引用 9 次（未进前三））
+f_app depends on f_config (direct dependency, 9 API references (not in top 3))</title></rect>
+<rect class="c" x="413" y="697" width="16" height="16" rx="3" fill="#2cbc68" stroke="#ffffff" stroke-width="0.5"><title>f_app 依赖 f_data（直接依赖，源码里已引用对方 API，引用 87.3 次（前三））
+f_app depends on f_data (direct dependency, 87.3 API references (top 3))</title></rect>
+<rect class="c" x="521" y="697" width="16" height="16" rx="3" fill="#2cbc68" stroke="#ffffff" stroke-width="0.5"><title>f_app 依赖 f_log（直接依赖，源码里已引用对方 API，引用 138.3 次（前三））
+f_app depends on f_log (direct dependency, 138.3 API references (top 3))</title></rect>
+<rect class="c" x="233" y="697" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_app 依赖 f_random（直接依赖，源码里已引用对方 API，引用 4.5 次（未进前三））
+f_app depends on f_random (direct dependency, 4.5 API references (not in top 3))</title></rect>
+<rect class="c" x="197" y="697" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_app 依赖 f_version（直接依赖，源码里已引用对方 API，引用 74 次（未进前三））
+f_app depends on f_version (direct dependency, 74 API references (not in top 3))</title></rect>
+<rect class="c" x="143" y="715" width="16" height="16" rx="3" fill="#7a259c" stroke="#ffffff" stroke-width="0.5"><title>f_pool 依赖 f_base（直接依赖，源码里已引用对方 API，引用 246 次（前三））
+f_pool depends on f_base (direct dependency, 246 API references (top 3))</title></rect>
+<rect class="c" x="215" y="715" width="16" height="16" rx="3" fill="#b55dd9" stroke="#ffffff" stroke-width="0.5"><title>f_pool 依赖 f_exception（直接依赖，源码里已引用对方 API，引用 16 次（前三））
+f_pool depends on f_exception (direct dependency, 16 API references (top 3))</title></rect>
+<rect class="c" x="521" y="715" width="16" height="16" rx="3" fill="#922cbc" stroke="#ffffff" stroke-width="0.5"><title>f_pool 依赖 f_log（直接依赖，源码里已引用对方 API，引用 158 次（前三））
+f_pool depends on f_log (direct dependency, 158 API references (top 3))</title></rect>
+<rect class="c" x="143" y="733" width="16" height="16" rx="3" fill="#9c9c25" stroke="#ffffff" stroke-width="0.5"><title>f_store 依赖 f_base（直接依赖，源码里已引用对方 API，引用 207.6 次（前三））
+f_store depends on f_base (direct dependency, 207.6 API references (top 3))</title></rect>
+<rect class="c" x="503" y="733" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_store 依赖 f_bloom（直接依赖，源码里已引用对方 API，引用 26 次（未进前三））
+f_store depends on f_bloom (direct dependency, 26 API references (not in top 3))</title></rect>
+<rect class="c" x="287" y="733" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_store 依赖 f_collection（直接依赖，源码里已引用对方 API，引用 89.1 次（未进前三））
+f_store depends on f_collection (direct dependency, 89.1 API references (not in top 3))</title></rect>
+<rect class="c" x="341" y="733" width="16" height="16" rx="3" fill="#9c9c25" stroke="#ffffff" stroke-width="0.5"><title>f_store 依赖 f_concurrent（直接依赖，源码里已引用对方 API，引用 191.6 次（前三））
+f_store depends on f_concurrent (direct dependency, 191.6 API references (top 3))</title></rect>
+<rect class="c" x="395" y="733" width="16" height="16" rx="3" fill="#9c9c25" stroke="#ffffff" stroke-width="0.5"><title>f_store 依赖 f_io（直接依赖，源码里已引用对方 API，引用 227.1 次（前三））
+f_store depends on f_io (direct dependency, 227.1 API references (top 3))</title></rect>
+<rect class="c" x="485" y="733" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_store 依赖 f_util（直接依赖，源码里已引用对方 API，引用 98.6 次（未进前三））
+f_store depends on f_util (direct dependency, 98.6 API references (not in top 3))</title></rect>
+<rect class="c" x="539" y="751" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_bean 依赖 f_app（直接依赖，源码里已引用对方 API，引用 2 次（未进前三））
+f_bean depends on f_app (direct dependency, 2 API references (not in top 3))</title></rect>
+<rect class="c" x="143" y="751" width="16" height="16" rx="3" fill="#2c92bc" stroke="#ffffff" stroke-width="0.5"><title>f_bean 依赖 f_base（直接依赖，源码里已引用对方 API，引用 127.3 次（前三））
+f_bean depends on f_base (direct dependency, 127.3 API references (top 3))</title></rect>
+<rect class="c" x="449" y="751" width="16" height="16" rx="3" fill="#3ea6d2" stroke="#ffffff" stroke-width="0.5"><title>f_bean 依赖 f_config（直接依赖，源码里已引用对方 API，引用 55.8 次（前三））
+f_bean depends on f_config (direct dependency, 55.8 API references (top 3))</title></rect>
+<rect class="c" x="413" y="751" width="16" height="16" rx="3" fill="#2c92bc" stroke="#ffffff" stroke-width="0.5"><title>f_bean 依赖 f_data（直接依赖，源码里已引用对方 API，引用 125.3 次（前三））
+f_bean depends on f_data (direct dependency, 125.3 API references (top 3))</title></rect>
+<rect class="c" x="215" y="751" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_bean 依赖 f_exception（直接依赖，源码里已引用对方 API，引用 1 次（未进前三））
+f_bean depends on f_exception (direct dependency, 1 API references (not in top 3))</title></rect>
+<rect class="c" x="521" y="751" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_bean 依赖 f_log（直接依赖，源码里已引用对方 API，引用 34.5 次（未进前三））
+f_bean depends on f_log (direct dependency, 34.5 API references (not in top 3))</title></rect>
+<rect class="c" x="305" y="751" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_bean 依赖 f_macros（直接依赖，源码里已引用对方 API，引用 13 次（未进前三））
+f_bean depends on f_macros (direct dependency, 13 API references (not in top 3))</title></rect>
+<rect class="c" x="359" y="751" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_bean 依赖 f_regex（直接依赖，源码里已引用对方 API，引用 27 次（未进前三））
+f_bean depends on f_regex (direct dependency, 27 API references (not in top 3))</title></rect>
+<rect class="c" x="143" y="769" width="16" height="16" rx="3" fill="#9c2556" stroke="#ffffff" stroke-width="0.5"><title>f_codec 依赖 f_base（直接依赖，源码里已引用对方 API，引用 172.2 次（前三））
+f_codec depends on f_base (direct dependency, 172.2 API references (top 3))</title></rect>
+<rect class="c" x="287" y="769" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_codec 依赖 f_collection（直接依赖，源码里已引用对方 API，引用 80.4 次（未进前三））
+f_codec depends on f_collection (direct dependency, 80.4 API references (not in top 3))</title></rect>
+<rect class="c" x="413" y="769" width="16" height="16" rx="3" fill="#9c2556" stroke="#ffffff" stroke-width="0.5"><title>f_codec 依赖 f_data（直接依赖，源码里已引用对方 API，引用 178.9 次（前三））
+f_codec depends on f_data (direct dependency, 178.9 API references (top 3))</title></rect>
+<rect class="c" x="215" y="769" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_codec 依赖 f_exception（直接依赖，源码里已引用对方 API，引用 5 次（未进前三））
+f_codec depends on f_exception (direct dependency, 5 API references (not in top 3))</title></rect>
+<rect class="c" x="557" y="769" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_codec 依赖 f_pool（直接依赖，源码里已引用对方 API，引用 104.1 次（未进前三））
+f_codec depends on f_pool (direct dependency, 104.1 API references (not in top 3))</title></rect>
+<rect class="c" x="485" y="769" width="16" height="16" rx="3" fill="#bc2c68" stroke="#ffffff" stroke-width="0.5"><title>f_codec 依赖 f_util（直接依赖，源码里已引用对方 API，引用 109.3 次（前三））
+f_codec depends on f_util (direct dependency, 109.3 API references (top 3))</title></rect>
+<rect class="c" x="539" y="787" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_health 依赖 f_app（直接依赖，源码里已引用对方 API，引用 2 次（未进前三））
+f_health depends on f_app (direct dependency, 2 API references (not in top 3))</title></rect>
+<rect class="c" x="449" y="787" width="16" height="16" rx="3" fill="#89e07d" stroke="#ffffff" stroke-width="0.5"><title>f_health 依赖 f_config（直接依赖，源码里已引用对方 API，引用 4 次（前三））
+f_health depends on f_config (direct dependency, 4 API references (top 3))</title></rect>
+<rect class="c" x="413" y="787" width="16" height="16" rx="3" fill="#50d23e" stroke="#ffffff" stroke-width="0.5"><title>f_health 依赖 f_data（直接依赖，源码里已引用对方 API，引用 25.5 次（前三））
+f_health depends on f_data (direct dependency, 25.5 API references (top 3))</title></rect>
+<rect class="c" x="521" y="787" width="16" height="16" rx="3" fill="#6cd95d" stroke="#ffffff" stroke-width="0.5"><title>f_health 依赖 f_log（直接依赖，源码里已引用对方 API，引用 8.5 次（前三））
+f_health depends on f_log (direct dependency, 8.5 API references (top 3))</title></rect>
+<rect class="c" x="539" y="805" width="16" height="16" rx="3" fill="#8e7de0" stroke="#ffffff" stroke-width="0.5"><title>fboot 依赖 f_app（直接依赖，源码里已引用对方 API，引用 2 次（前三））
+fboot depends on f_app (direct dependency, 2 API references (top 3))</title></rect>
+<rect class="c" x="143" y="823" width="16" height="16" rx="3" fill="#bc6f2c" stroke="#ffffff" stroke-width="0.5"><title>f_aspect 依赖 f_base（直接依赖，源码里已引用对方 API，引用 69.8 次（前三））
+f_aspect depends on f_base (direct dependency, 69.8 API references (top 3))</title></rect>
+<rect class="c" x="593" y="823" width="16" height="16" rx="3" fill="#d2823e" stroke="#ffffff" stroke-width="0.5"><title>f_aspect 依赖 f_bean（直接依赖，源码里已引用对方 API，引用 52.3 次（前三））
+f_aspect depends on f_bean (direct dependency, 52.3 API references (top 3))</title></rect>
+<rect class="c" x="287" y="823" width="16" height="16" rx="3" fill="#d2823e" stroke="#ffffff" stroke-width="0.5"><title>f_aspect 依赖 f_collection（直接依赖，源码里已引用对方 API，引用 27.3 次（前三））
+f_aspect depends on f_collection (direct dependency, 27.3 API references (top 3))</title></rect>
+<rect class="c" x="449" y="823" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_aspect 依赖 f_config（直接依赖，源码里已引用对方 API，引用 3 次（未进前三））
+f_aspect depends on f_config (direct dependency, 3 API references (not in top 3))</title></rect>
+<rect class="c" x="215" y="823" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_aspect 依赖 f_exception（直接依赖，源码里已引用对方 API，引用 1 次（未进前三））
+f_aspect depends on f_exception (direct dependency, 1 API references (not in top 3))</title></rect>
+<rect class="c" x="305" y="823" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_aspect 依赖 f_macros（直接依赖，源码里已引用对方 API，引用 11 次（未进前三））
+f_aspect depends on f_macros (direct dependency, 11 API references (not in top 3))</title></rect>
+<rect class="c" x="359" y="823" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_aspect 依赖 f_regex（直接依赖，源码里已引用对方 API，引用 17.5 次（未进前三））
+f_aspect depends on f_regex (direct dependency, 17.5 API references (not in top 3))</title></rect>
+<rect class="c" x="593" y="841" width="16" height="16" rx="3" fill="#7de0c8" stroke="#ffffff" stroke-width="0.5"><title>f_crypto 依赖 f_bean（直接依赖，源码里已引用对方 API，引用 3 次（前三））
+f_crypto depends on f_bean (direct dependency, 3 API references (top 3))</title></rect>
+<rect class="c" x="539" y="859" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_egraph 依赖 f_app（直接依赖，源码里已引用对方 API，引用 1 次（未进前三））
+f_egraph depends on f_app (direct dependency, 1 API references (not in top 3))</title></rect>
+<rect class="c" x="143" y="859" width="16" height="16" rx="3" fill="#d23ecb" stroke="#ffffff" stroke-width="0.5"><title>f_egraph 依赖 f_base（直接依赖，源码里已引用对方 API，引用 46.4 次（前三））
+f_egraph depends on f_base (direct dependency, 46.4 API references (top 3))</title></rect>
+<rect class="c" x="593" y="859" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_egraph 依赖 f_bean（直接依赖，源码里已引用对方 API，引用 20.5 次（未进前三））
+f_egraph depends on f_bean (direct dependency, 20.5 API references (not in top 3))</title></rect>
+<rect class="c" x="287" y="859" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_egraph 依赖 f_collection（直接依赖，源码里已引用对方 API，引用 16.4 次（未进前三））
+f_egraph depends on f_collection (direct dependency, 16.4 API references (not in top 3))</title></rect>
+<rect class="c" x="341" y="859" width="16" height="16" rx="3" fill="#d23ecb" stroke="#ffffff" stroke-width="0.5"><title>f_egraph 依赖 f_concurrent（直接依赖，源码里已引用对方 API，引用 39.4 次（前三））
+f_egraph depends on f_concurrent (direct dependency, 39.4 API references (top 3))</title></rect>
+<rect class="c" x="521" y="859" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_egraph 依赖 f_log（直接依赖，源码里已引用对方 API，引用 14 次（未进前三））
+f_egraph depends on f_log (direct dependency, 14 API references (not in top 3))</title></rect>
+<rect class="c" x="485" y="859" width="16" height="16" rx="3" fill="#d23ecb" stroke="#ffffff" stroke-width="0.5"><title>f_egraph 依赖 f_util（直接依赖，源码里已引用对方 API，引用 33.2 次（前三））
+f_egraph depends on f_util (direct dependency, 33.2 API references (top 3))</title></rect>
+<rect class="c" x="143" y="877" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_http 依赖 f_base（直接依赖，源码里已引用对方 API，引用 67.5 次（未进前三））
+f_http depends on f_base (direct dependency, 67.5 API references (not in top 3))</title></rect>
+<rect class="c" x="593" y="877" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_http 依赖 f_bean（直接依赖，源码里已引用对方 API，引用 19.7 次（未进前三））
+f_http depends on f_bean (direct dependency, 19.7 API references (not in top 3))</title></rect>
+<rect class="c" x="287" y="877" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_http 依赖 f_collection（直接依赖，源码里已引用对方 API，引用 3.2 次（未进前三））
+f_http depends on f_collection (direct dependency, 3.2 API references (not in top 3))</title></rect>
+<rect class="c" x="449" y="877" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_http 依赖 f_config（直接依赖，源码里已引用对方 API，引用 9.5 次（未进前三））
+f_http depends on f_config (direct dependency, 9.5 API references (not in top 3))</title></rect>
+<rect class="c" x="413" y="877" width="16" height="16" rx="3" fill="#8bbc2c" stroke="#ffffff" stroke-width="0.5"><title>f_http 依赖 f_data（直接依赖，源码里已引用对方 API，引用 118.7 次（前三））
+f_http depends on f_data (direct dependency, 118.7 API references (top 3))</title></rect>
+<rect class="c" x="215" y="877" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_http 依赖 f_exception（直接依赖，源码里已引用对方 API，引用 9 次（未进前三））
+f_http depends on f_exception (direct dependency, 9 API references (not in top 3))</title></rect>
+<rect class="c" x="395" y="877" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_http 依赖 f_io（直接依赖，源码里已引用对方 API，引用 58.2 次（未进前三））
+f_http depends on f_io (direct dependency, 58.2 API references (not in top 3))</title></rect>
+<rect class="c" x="521" y="877" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_http 依赖 f_log（直接依赖，源码里已引用对方 API，引用 33.5 次（未进前三））
+f_http depends on f_log (direct dependency, 33.5 API references (not in top 3))</title></rect>
+<rect class="c" x="233" y="877" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_http 依赖 f_random（直接依赖，源码里已引用对方 API，引用 2.5 次（未进前三））
+f_http depends on f_random (direct dependency, 2.5 API references (not in top 3))</title></rect>
+<rect class="c" x="359" y="877" width="16" height="16" rx="3" fill="#8bbc2c" stroke="#ffffff" stroke-width="0.5"><title>f_http 依赖 f_regex（直接依赖，源码里已引用对方 API，引用 72 次（前三））
+f_http depends on f_regex (direct dependency, 72 API references (top 3))</title></rect>
+<rect class="c" x="485" y="877" width="16" height="16" rx="3" fill="#8bbc2c" stroke="#ffffff" stroke-width="0.5"><title>f_http 依赖 f_util（直接依赖，源码里已引用对方 API，引用 84.2 次（前三））
+f_http depends on f_util (direct dependency, 84.2 API references (top 3))</title></rect>
+<rect class="c" x="143" y="895" width="16" height="16" rx="3" fill="#3e74d2" stroke="#ffffff" stroke-width="0.5"><title>f_protocol 依赖 f_base（直接依赖，源码里已引用对方 API，引用 42 次（前三））
+f_protocol depends on f_base (direct dependency, 42 API references (top 3))</title></rect>
+<rect class="c" x="611" y="895" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_protocol 依赖 f_codec（直接依赖，源码里已引用对方 API，引用 12.5 次（未进前三））
+f_protocol depends on f_codec (direct dependency, 12.5 API references (not in top 3))</title></rect>
+<rect class="c" x="449" y="895" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_protocol 依赖 f_config（直接依赖，源码里已引用对方 API，引用 4 次（未进前三））
+f_protocol depends on f_config (direct dependency, 4 API references (not in top 3))</title></rect>
+<rect class="c" x="413" y="895" width="16" height="16" rx="3" fill="#3e74d2" stroke="#ffffff" stroke-width="0.5"><title>f_protocol 依赖 f_data（直接依赖，源码里已引用对方 API，引用 51.2 次（前三））
+f_protocol depends on f_data (direct dependency, 51.2 API references (top 3))</title></rect>
+<rect class="c" x="557" y="895" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_protocol 依赖 f_pool（直接依赖，源码里已引用对方 API，引用 14 次（未进前三））
+f_protocol depends on f_pool (direct dependency, 14 API references (not in top 3))</title></rect>
+<rect class="c" x="485" y="895" width="16" height="16" rx="3" fill="#3e74d2" stroke="#ffffff" stroke-width="0.5"><title>f_protocol 依赖 f_util（直接依赖，源码里已引用对方 API，引用 23.3 次（前三））
+f_protocol depends on f_util (direct dependency, 23.3 API references (top 3))</title></rect>
+<rect class="c" x="539" y="913" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_ticktock 依赖 f_app（直接依赖，源码里已引用对方 API，引用 3 次（未进前三））
+f_ticktock depends on f_app (direct dependency, 3 API references (not in top 3))</title></rect>
+<rect class="c" x="143" y="913" width="16" height="16" rx="3" fill="#d23e49" stroke="#ffffff" stroke-width="0.5"><title>f_ticktock 依赖 f_base（直接依赖，源码里已引用对方 API，引用 42.5 次（前三））
+f_ticktock depends on f_base (direct dependency, 42.5 API references (top 3))</title></rect>
+<rect class="c" x="593" y="913" width="16" height="16" rx="3" fill="#d23e49" stroke="#ffffff" stroke-width="0.5"><title>f_ticktock 依赖 f_bean（直接依赖，源码里已引用对方 API，引用 34 次（前三））
+f_ticktock depends on f_bean (direct dependency, 34 API references (top 3))</title></rect>
+<rect class="c" x="287" y="913" width="16" height="16" rx="3" fill="#d23e49" stroke="#ffffff" stroke-width="0.5"><title>f_ticktock 依赖 f_collection（直接依赖，源码里已引用对方 API，引用 24.5 次（前三））
+f_ticktock depends on f_collection (direct dependency, 24.5 API references (top 3))</title></rect>
+<rect class="c" x="215" y="913" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_ticktock 依赖 f_exception（直接依赖，源码里已引用对方 API，引用 1 次（未进前三））
+f_ticktock depends on f_exception (direct dependency, 1 API references (not in top 3))</title></rect>
+<rect class="c" x="521" y="913" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_ticktock 依赖 f_log（直接依赖，源码里已引用对方 API，引用 6.5 次（未进前三））
+f_ticktock depends on f_log (direct dependency, 6.5 API references (not in top 3))</title></rect>
+<rect class="c" x="359" y="913" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_ticktock 依赖 f_regex（直接依赖，源码里已引用对方 API，引用 4.5 次（未进前三））
+f_ticktock depends on f_regex (direct dependency, 4.5 API references (not in top 3))</title></rect>
+<rect class="c" x="179" y="913" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_ticktock 依赖 f_time（直接依赖，源码里已引用对方 API，引用 21 次（未进前三））
+f_ticktock depends on f_time (direct dependency, 21 API references (not in top 3))</title></rect>
+<rect class="c" x="143" y="931" width="16" height="16" rx="3" fill="#3ed25d" stroke="#ffffff" stroke-width="0.5"><title>f_httpclient 依赖 f_base（直接依赖，源码里已引用对方 API，引用 43.7 次（前三））
+f_httpclient depends on f_base (direct dependency, 43.7 API references (top 3))</title></rect>
+<rect class="c" x="413" y="931" width="16" height="16" rx="3" fill="#3ed25d" stroke="#ffffff" stroke-width="0.5"><title>f_httpclient 依赖 f_data（直接依赖，源码里已引用对方 API，引用 43.2 次（前三））
+f_httpclient depends on f_data (direct dependency, 43.2 API references (top 3))</title></rect>
+<rect class="c" x="719" y="931" width="16" height="16" rx="3" fill="#2cbc4b" stroke="#ffffff" stroke-width="0.5"><title>f_httpclient 依赖 f_http（直接依赖，源码里已引用对方 API，引用 71.2 次（前三））
+f_httpclient depends on f_http (direct dependency, 71.2 API references (top 3))</title></rect>
+<rect class="c" x="539" y="949" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_app（直接依赖，源码里已引用对方 API，引用 2 次（未进前三））
+f_mvc depends on f_app (direct dependency, 2 API references (not in top 3))</title></rect>
+<rect class="c" x="665" y="949" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_aspect（直接依赖，源码里已引用对方 API，引用 6.2 次（未进前三））
+f_mvc depends on f_aspect (direct dependency, 6.2 API references (not in top 3))</title></rect>
+<rect class="c" x="143" y="949" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_base（直接依赖，源码里已引用对方 API，引用 112.9 次（未进前三））
+f_mvc depends on f_base (direct dependency, 112.9 API references (not in top 3))</title></rect>
+<rect class="c" x="593" y="949" width="16" height="16" rx="3" fill="#752cbc" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_bean（直接依赖，源码里已引用对方 API，引用 124.7 次（前三））
+f_mvc depends on f_bean (direct dependency, 124.7 API references (top 3))</title></rect>
+<rect class="c" x="287" y="949" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_collection（直接依赖，源码里已引用对方 API，引用 51.8 次（未进前三））
+f_mvc depends on f_collection (direct dependency, 51.8 API references (not in top 3))</title></rect>
+<rect class="c" x="341" y="949" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_concurrent（直接依赖，源码里已引用对方 API，引用 68 次（未进前三））
+f_mvc depends on f_concurrent (direct dependency, 68 API references (not in top 3))</title></rect>
+<rect class="c" x="449" y="949" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_config（直接依赖，源码里已引用对方 API，引用 53.8 次（未进前三））
+f_mvc depends on f_config (direct dependency, 53.8 API references (not in top 3))</title></rect>
+<rect class="c" x="683" y="949" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_crypto（直接依赖，源码里已引用对方 API，引用 2 次（未进前三））
+f_mvc depends on f_crypto (direct dependency, 2 API references (not in top 3))</title></rect>
+<rect class="c" x="413" y="949" width="16" height="16" rx="3" fill="#61259c" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_data（直接依赖，源码里已引用对方 API，引用 249 次（前三））
+f_mvc depends on f_data (direct dependency, 249 API references (top 3))</title></rect>
+<rect class="c" x="215" y="949" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_exception（直接依赖，源码里已引用对方 API，引用 2 次（未进前三））
+f_mvc depends on f_exception (direct dependency, 2 API references (not in top 3))</title></rect>
+<rect class="c" x="629" y="949" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_health（直接依赖，源码里已引用对方 API，引用 2 次（未进前三））
+f_mvc depends on f_health (direct dependency, 2 API references (not in top 3))</title></rect>
+<rect class="c" x="719" y="949" width="16" height="16" rx="3" fill="#61259c" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_http（直接依赖，源码里已引用对方 API，引用 171.9 次（前三））
+f_mvc depends on f_http (direct dependency, 171.9 API references (top 3))</title></rect>
+<rect class="c" x="395" y="949" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_io（直接依赖，源码里已引用对方 API，引用 58.2 次（未进前三））
+f_mvc depends on f_io (direct dependency, 58.2 API references (not in top 3))</title></rect>
+<rect class="c" x="521" y="949" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_log（直接依赖，源码里已引用对方 API，引用 100 次（未进前三））
+f_mvc depends on f_log (direct dependency, 100 API references (not in top 3))</title></rect>
+<rect class="c" x="305" y="949" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_macros（直接依赖，源码里已引用对方 API，引用 6 次（未进前三））
+f_mvc depends on f_macros (direct dependency, 6 API references (not in top 3))</title></rect>
+<rect class="c" x="233" y="949" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_random（直接依赖，源码里已引用对方 API，引用 3 次（未进前三））
+f_mvc depends on f_random (direct dependency, 3 API references (not in top 3))</title></rect>
+<rect class="c" x="359" y="949" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_regex（直接依赖，源码里已引用对方 API，引用 37.8 次（未进前三））
+f_mvc depends on f_regex (direct dependency, 37.8 API references (not in top 3))</title></rect>
+<rect class="c" x="485" y="949" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_util（直接依赖，源码里已引用对方 API，引用 76.8 次（未进前三））
+f_mvc depends on f_util (direct dependency, 76.8 API references (not in top 3))</title></rect>
+<rect class="c" x="143" y="967" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_net 依赖 f_base（直接依赖，源码里已引用对方 API，引用 66.7 次（未进前三））
+f_net depends on f_base (direct dependency, 66.7 API references (not in top 3))</title></rect>
+<rect class="c" x="341" y="967" width="16" height="16" rx="3" fill="#bc9f2c" stroke="#ffffff" stroke-width="0.5"><title>f_net 依赖 f_concurrent（直接依赖，源码里已引用对方 API，引用 106.5 次（前三））
+f_net depends on f_concurrent (direct dependency, 106.5 API references (top 3))</title></rect>
+<rect class="c" x="413" y="967" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_net 依赖 f_data（直接依赖，源码里已引用对方 API，引用 58.5 次（未进前三））
+f_net depends on f_data (direct dependency, 58.5 API references (not in top 3))</title></rect>
+<rect class="c" x="521" y="967" width="16" height="16" rx="3" fill="#bc9f2c" stroke="#ffffff" stroke-width="0.5"><title>f_net 依赖 f_log（直接依赖，源码里已引用对方 API，引用 79.9 次（前三））
+f_net depends on f_log (direct dependency, 79.9 API references (top 3))</title></rect>
+<rect class="c" x="737" y="967" width="16" height="16" rx="3" fill="#bc9f2c" stroke="#ffffff" stroke-width="0.5"><title>f_net 依赖 f_protocol（直接依赖，源码里已引用对方 API，引用 150.9 次（前三））
+f_net depends on f_protocol (direct dependency, 150.9 API references (top 3))</title></rect>
+<rect class="c" x="233" y="967" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_net 依赖 f_random（直接依赖，源码里已引用对方 API，引用 2.5 次（未进前三））
+f_net depends on f_random (direct dependency, 2.5 API references (not in top 3))</title></rect>
+<rect class="c" x="539" y="985" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_app（直接依赖，源码里已引用对方 API，引用 7.5 次（未进前三））
+f_orm depends on f_app (direct dependency, 7.5 API references (not in top 3))</title></rect>
+<rect class="c" x="665" y="985" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_aspect（直接依赖，源码里已引用对方 API，引用 148.7 次（未进前三））
+f_orm depends on f_aspect (direct dependency, 148.7 API references (not in top 3))</title></rect>
+<rect class="c" x="143" y="985" width="16" height="16" rx="3" fill="#25929c" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_base（直接依赖，源码里已引用对方 API，引用 473.3 次（前三））
+f_orm depends on f_base (direct dependency, 473.3 API references (top 3))</title></rect>
+<rect class="c" x="593" y="985" width="16" height="16" rx="3" fill="#25929c" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_bean（直接依赖，源码里已引用对方 API，引用 311.7 次（前三））
+f_orm depends on f_bean (direct dependency, 311.7 API references (top 3))</title></rect>
+<rect class="c" x="323" y="985" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_cache（直接依赖，源码里已引用对方 API，引用 31.7 次（未进前三））
+f_orm depends on f_cache (direct dependency, 31.7 API references (not in top 3))</title></rect>
+<rect class="c" x="287" y="985" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_collection（直接依赖，源码里已引用对方 API，引用 69.8 次（未进前三））
+f_orm depends on f_collection (direct dependency, 69.8 API references (not in top 3))</title></rect>
+<rect class="c" x="449" y="985" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_config（直接依赖，源码里已引用对方 API，引用 39.5 次（未进前三））
+f_orm depends on f_config (direct dependency, 39.5 API references (not in top 3))</title></rect>
+<rect class="c" x="413" y="985" width="16" height="16" rx="3" fill="#25929c" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_data（直接依赖，源码里已引用对方 API，引用 330.9 次（前三））
+f_orm depends on f_data (direct dependency, 330.9 API references (top 3))</title></rect>
+<rect class="c" x="215" y="985" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_exception（直接依赖，源码里已引用对方 API，引用 11 次（未进前三））
+f_orm depends on f_exception (direct dependency, 11 API references (not in top 3))</title></rect>
+<rect class="c" x="521" y="985" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_log（直接依赖，源码里已引用对方 API，引用 125.8 次（未进前三））
+f_orm depends on f_log (direct dependency, 125.8 API references (not in top 3))</title></rect>
+<rect class="c" x="305" y="985" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_macros（直接依赖，源码里已引用对方 API，引用 24 次（未进前三））
+f_orm depends on f_macros (direct dependency, 24 API references (not in top 3))</title></rect>
+<rect class="c" x="557" y="985" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_pool（直接依赖，源码里已引用对方 API，引用 89.1 次（未进前三））
+f_orm depends on f_pool (direct dependency, 89.1 API references (not in top 3))</title></rect>
+<rect class="c" x="359" y="985" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_regex（直接依赖，源码里已引用对方 API，引用 81.1 次（未进前三））
+f_orm depends on f_regex (direct dependency, 81.1 API references (not in top 3))</title></rect>
+<rect class="c" x="485" y="985" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_orm 依赖 f_util（直接依赖，源码里已引用对方 API，引用 151 次（未进前三））
+f_orm depends on f_util (direct dependency, 151 API references (not in top 3))</title></rect>
+<rect class="c" x="143" y="1003" width="16" height="16" rx="3" fill="#bc2c85" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_base（直接依赖，源码里已引用对方 API，引用 159.3 次（前三））
+f_llm depends on f_base (direct dependency, 159.3 API references (top 3))</title></rect>
+<rect class="c" x="593" y="1003" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_bean（直接依赖，源码里已引用对方 API，引用 102.8 次（未进前三））
+f_llm depends on f_bean (direct dependency, 102.8 API references (not in top 3))</title></rect>
+<rect class="c" x="449" y="1003" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_config（直接依赖，源码里已引用对方 API，引用 19.9 次（未进前三））
+f_llm depends on f_config (direct dependency, 19.9 API references (not in top 3))</title></rect>
+<rect class="c" x="413" y="1003" width="16" height="16" rx="3" fill="#9c256f" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_data（直接依赖，源码里已引用对方 API，引用 344.3 次（前三））
+f_llm depends on f_data (direct dependency, 344.3 API references (top 3))</title></rect>
+<rect class="c" x="701" y="1003" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_egraph（直接依赖，源码里已引用对方 API，引用 98.8 次（未进前三））
+f_llm depends on f_egraph (direct dependency, 98.8 API references (not in top 3))</title></rect>
+<rect class="c" x="773" y="1003" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_httpclient（直接依赖，源码里已引用对方 API，引用 30.1 次（未进前三））
+f_llm depends on f_httpclient (direct dependency, 30.1 API references (not in top 3))</title></rect>
+<rect class="c" x="521" y="1003" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_log（直接依赖，源码里已引用对方 API，引用 92.8 次（未进前三））
+f_llm depends on f_log (direct dependency, 92.8 API references (not in top 3))</title></rect>
+<rect class="c" x="305" y="1003" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_macros（直接依赖，源码里已引用对方 API，引用 2 次（未进前三））
+f_llm depends on f_macros (direct dependency, 2 API references (not in top 3))</title></rect>
+<rect class="c" x="827" y="1003" width="16" height="16" rx="3" fill="#9c256f" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_orm（直接依赖，源码里已引用对方 API，引用 201.9 次（前三））
+f_llm depends on f_orm (direct dependency, 201.9 API references (top 3))</title></rect>
+<rect class="c" x="359" y="1003" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_regex（直接依赖，源码里已引用对方 API，引用 47.8 次（未进前三））
+f_llm depends on f_regex (direct dependency, 47.8 API references (not in top 3))</title></rect>
+<rect class="c" x="575" y="1003" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_store（直接依赖，源码里已引用对方 API，引用 23.7 次（未进前三））
+f_llm depends on f_store (direct dependency, 23.7 API references (not in top 3))</title></rect>
+<rect class="c" x="485" y="1003" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_llm 依赖 f_util（直接依赖，源码里已引用对方 API，引用 106.5 次（未进前三））
+f_llm depends on f_util (direct dependency, 106.5 API references (not in top 3))</title></rect>
+<rect class="c" x="539" y="1021" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_app（直接依赖，源码里已引用对方 API，引用 21 次（未进前三））
+f_rpc depends on f_app (direct dependency, 21 API references (not in top 3))</title></rect>
+<rect class="c" x="665" y="1021" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_aspect（直接依赖，源码里已引用对方 API，引用 48.3 次（未进前三））
+f_rpc depends on f_aspect (direct dependency, 48.3 API references (not in top 3))</title></rect>
+<rect class="c" x="143" y="1021" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_base（直接依赖，源码里已引用对方 API，引用 85.1 次（未进前三））
+f_rpc depends on f_base (direct dependency, 85.1 API references (not in top 3))</title></rect>
+<rect class="c" x="593" y="1021" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_bean（直接依赖，源码里已引用对方 API，引用 87.5 次（未进前三））
+f_rpc depends on f_bean (direct dependency, 87.5 API references (not in top 3))</title></rect>
+<rect class="c" x="611" y="1021" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_codec（直接依赖，源码里已引用对方 API，引用 13.5 次（未进前三））
+f_rpc depends on f_codec (direct dependency, 13.5 API references (not in top 3))</title></rect>
+<rect class="c" x="341" y="1021" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_concurrent（直接依赖，源码里已引用对方 API，引用 55.8 次（未进前三））
+f_rpc depends on f_concurrent (direct dependency, 55.8 API references (not in top 3))</title></rect>
+<rect class="c" x="449" y="1021" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_config（直接依赖，源码里已引用对方 API，引用 108.5 次（未进前三））
+f_rpc depends on f_config (direct dependency, 108.5 API references (not in top 3))</title></rect>
+<rect class="c" x="413" y="1021" width="16" height="16" rx="3" fill="#5bbc2c" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_data（直接依赖，源码里已引用对方 API，引用 158.2 次（前三））
+f_rpc depends on f_data (direct dependency, 158.2 API references (top 3))</title></rect>
+<rect class="c" x="629" y="1021" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_health（直接依赖，源码里已引用对方 API，引用 3 次（未进前三））
+f_rpc depends on f_health (direct dependency, 3 API references (not in top 3))</title></rect>
+<rect class="c" x="395" y="1021" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_io（直接依赖，源码里已引用对方 API，引用 24 次（未进前三））
+f_rpc depends on f_io (direct dependency, 24 API references (not in top 3))</title></rect>
+<rect class="c" x="521" y="1021" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_log（直接依赖，源码里已引用对方 API，引用 49.9 次（未进前三））
+f_rpc depends on f_log (direct dependency, 49.9 API references (not in top 3))</title></rect>
+<rect class="c" x="305" y="1021" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_macros（直接依赖，源码里已引用对方 API，引用 17 次（未进前三））
+f_rpc depends on f_macros (direct dependency, 17 API references (not in top 3))</title></rect>
+<rect class="c" x="809" y="1021" width="16" height="16" rx="3" fill="#5bbc2c" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_net（直接依赖，源码里已引用对方 API，引用 133.2 次（前三））
+f_rpc depends on f_net (direct dependency, 133.2 API references (top 3))</title></rect>
+<rect class="c" x="737" y="1021" width="16" height="16" rx="3" fill="#4c9c25" stroke="#ffffff" stroke-width="0.5"><title>f_rpc 依赖 f_protocol（直接依赖，源码里已引用对方 API，引用 232.9 次（前三））
+f_rpc depends on f_protocol (direct dependency, 232.9 API references (top 3))</title></rect>
+<rect class="c" x="143" y="1039" width="16" height="16" rx="3" fill="#5d62d9" stroke="#ffffff" stroke-width="0.5"><title>f_security 依赖 f_base（直接依赖，源码里已引用对方 API，引用 16.7 次（前三））
+f_security depends on f_base (direct dependency, 16.7 API references (top 3))</title></rect>
+<rect class="c" x="323" y="1039" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_security 依赖 f_cache（直接依赖，源码里已引用对方 API，引用 11.2 次（未进前三））
+f_security depends on f_cache (direct dependency, 11.2 API references (not in top 3))</title></rect>
+<rect class="c" x="467" y="1039" width="16" height="16" rx="3" fill="#3e43d2" stroke="#ffffff" stroke-width="0.5"><title>f_security 依赖 f_jwt（直接依赖，源码里已引用对方 API，引用 22 次（前三））
+f_security depends on f_jwt (direct dependency, 22 API references (top 3))</title></rect>
+<rect class="c" x="791" y="1039" width="16" height="16" rx="3" fill="#3e43d2" stroke="#ffffff" stroke-width="0.5"><title>f_security 依赖 f_mvc（直接依赖，源码里已引用对方 API，引用 47.2 次（前三））
+f_security depends on f_mvc (direct dependency, 47.2 API references (top 3))</title></rect>
+<rect class="c" x="539" y="1057" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_app（直接依赖，源码里已引用对方 API，引用 5 次（未进前三））
+fleet depends on f_app (direct dependency, 5 API references (not in top 3))</title></rect>
+<rect class="c" x="143" y="1057" width="16" height="16" rx="3" fill="#d2633e" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_base（直接依赖，源码里已引用对方 API，引用 35 次（前三））
+fleet depends on f_base (direct dependency, 35 API references (top 3))</title></rect>
+<rect class="c" x="611" y="1057" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_codec（直接依赖，源码里已引用对方 API，引用 7.8 次（未进前三））
+fleet depends on f_codec (direct dependency, 7.8 API references (not in top 3))</title></rect>
+<rect class="c" x="287" y="1057" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_collection（直接依赖，源码里已引用对方 API，引用 8 次（未进前三））
+fleet depends on f_collection (direct dependency, 8 API references (not in top 3))</title></rect>
+<rect class="c" x="449" y="1057" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_config（直接依赖，源码里已引用对方 API，引用 9.5 次（未进前三））
+fleet depends on f_config (direct dependency, 9.5 API references (not in top 3))</title></rect>
+<rect class="c" x="413" y="1057" width="16" height="16" rx="3" fill="#bc512c" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_data（直接依赖，源码里已引用对方 API，引用 64.2 次（前三））
+fleet depends on f_data (direct dependency, 64.2 API references (top 3))</title></rect>
+<rect class="c" x="395" y="1057" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_io（直接依赖，源码里已引用对方 API，引用 11.5 次（未进前三））
+fleet depends on f_io (direct dependency, 11.5 API references (not in top 3))</title></rect>
+<rect class="c" x="521" y="1057" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_log（直接依赖，源码里已引用对方 API，引用 7.7 次（未进前三））
+fleet depends on f_log (direct dependency, 7.7 API references (not in top 3))</title></rect>
+<rect class="c" x="809" y="1057" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_net（直接依赖，源码里已引用对方 API，引用 26.8 次（未进前三））
+fleet depends on f_net (direct dependency, 26.8 API references (not in top 3))</title></rect>
+<rect class="c" x="431" y="1057" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_process（直接依赖，源码里已引用对方 API，引用 5.5 次（未进前三））
+fleet depends on f_process (direct dependency, 5.5 API references (not in top 3))</title></rect>
+<rect class="c" x="737" y="1057" width="16" height="16" rx="3" fill="#bc512c" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_protocol（直接依赖，源码里已引用对方 API，引用 132.8 次（前三））
+fleet depends on f_protocol (direct dependency, 132.8 API references (top 3))</title></rect>
+<rect class="c" x="575" y="1057" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_store（直接依赖，源码里已引用对方 API，引用 11.8 次（未进前三））
+fleet depends on f_store (direct dependency, 11.8 API references (not in top 3))</title></rect>
+<rect class="c" x="485" y="1057" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>fleet 依赖 f_util（直接依赖，源码里已引用对方 API，引用 26.3 次（未进前三））
+fleet depends on f_util (direct dependency, 26.3 API references (not in top 3))</title></rect>
 <text x="134" y="312.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end" font-weight="700">f_base</text>
 <text x="154.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 154.0 290)" font-weight="700">f_base</text>
-<text x="150.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">34</text>
+<text x="150.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">33</text>
 <text x="134" y="330.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_mockdb</text>
 <text x="172.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 172.0 290)">f_mockdb</text>
 <text x="168.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">0</text>
-<text x="134" y="348.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_version</text>
-<text x="190.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 190.0 290)">f_version</text>
-<text x="186.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">2</text>
-<text x="134" y="366.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end" font-weight="700">f_exception</text>
-<text x="208.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 208.0 290)" font-weight="700">f_exception</text>
-<text x="204.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">22</text>
-<text x="134" y="384.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_random</text>
-<text x="226.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 226.0 290)">f_random</text>
-<text x="222.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">7</text>
-<text x="134" y="402.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end" font-weight="700">f_collection</text>
-<text x="244.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 244.0 290)" font-weight="700">f_collection</text>
-<text x="240.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">17</text>
-<text x="134" y="420.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_macros</text>
-<text x="262.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 262.0 290)">f_macros</text>
-<text x="258.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">7</text>
-<text x="134" y="438.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_time</text>
-<text x="280.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 280.0 290)">f_time</text>
-<text x="276.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">6</text>
-<text x="134" y="456.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_uring</text>
-<text x="298.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 298.0 290)">f_uring</text>
-<text x="294.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">0</text>
-<text x="134" y="474.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_cache</text>
-<text x="316.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 316.0 290)">f_cache</text>
-<text x="312.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">5</text>
-<text x="134" y="492.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_concurrent</text>
-<text x="334.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 334.0 290)">f_concurrent</text>
-<text x="330.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">8</text>
-<text x="134" y="510.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end" font-weight="700">f_regex</text>
-<text x="352.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 352.0 290)" font-weight="700">f_regex</text>
-<text x="348.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">12</text>
-<text x="134" y="528.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_rx</text>
-<text x="370.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 370.0 290)">f_rx</text>
-<text x="366.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">0</text>
-<text x="134" y="546.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_cmd</text>
-<text x="388.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 388.0 290)">f_cmd</text>
-<text x="384.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">1</text>
+<text x="134" y="348.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_time</text>
+<text x="190.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 190.0 290)">f_time</text>
+<text x="186.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">4</text>
+<text x="134" y="366.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_version</text>
+<text x="208.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 208.0 290)">f_version</text>
+<text x="204.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">2</text>
+<text x="134" y="384.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end" font-weight="700">f_exception</text>
+<text x="226.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 226.0 290)" font-weight="700">f_exception</text>
+<text x="222.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">18</text>
+<text x="134" y="402.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_random</text>
+<text x="244.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 244.0 290)">f_random</text>
+<text x="240.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">7</text>
+<text x="134" y="420.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_uring</text>
+<text x="262.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 262.0 290)">f_uring</text>
+<text x="258.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">0</text>
+<text x="134" y="438.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_cmd</text>
+<text x="280.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 280.0 290)">f_cmd</text>
+<text x="276.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">0</text>
+<text x="134" y="456.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end" font-weight="700">f_collection</text>
+<text x="298.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 298.0 290)" font-weight="700">f_collection</text>
+<text x="294.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">15</text>
+<text x="134" y="474.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_macros</text>
+<text x="316.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 316.0 290)">f_macros</text>
+<text x="312.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">7</text>
+<text x="134" y="492.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_cache</text>
+<text x="334.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 334.0 290)">f_cache</text>
+<text x="330.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">5</text>
+<text x="134" y="510.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_concurrent</text>
+<text x="352.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 352.0 290)">f_concurrent</text>
+<text x="348.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">7</text>
+<text x="134" y="528.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end" font-weight="700">f_regex</text>
+<text x="370.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 370.0 290)" font-weight="700">f_regex</text>
+<text x="366.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">10</text>
+<text x="134" y="546.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_rx</text>
+<text x="388.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 388.0 290)">f_rx</text>
+<text x="384.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">0</text>
 <text x="134" y="564.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_io</text>
 <text x="406.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 406.0 290)">f_io</text>
 <text x="402.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">8</text>
 <text x="134" y="582.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end" font-weight="700">f_data</text>
 <text x="424.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 424.0 290)" font-weight="700">f_data</text>
-<text x="420.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">18</text>
+<text x="420.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">17</text>
 <text x="134" y="600.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_process</text>
 <text x="442.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 442.0 290)">f_process</text>
-<text x="438.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">2</text>
+<text x="438.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">1</text>
 <text x="134" y="618.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end" font-weight="700">f_config</text>
 <text x="460.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 460.0 290)" font-weight="700">f_config</text>
 <text x="456.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">13</text>
@@ -628,7 +592,7 @@ fleet depends on f_store (structural dependency)</title></rect>
 <text x="474.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">1</text>
 <text x="134" y="654.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end" font-weight="700">f_util</text>
 <text x="496.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 496.0 290)" font-weight="700">f_util</text>
-<text x="492.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">12</text>
+<text x="492.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">11</text>
 <text x="134" y="672.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_bloom</text>
 <text x="514.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 514.0 290)">f_bloom</text>
 <text x="510.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">1</text>
@@ -643,7 +607,7 @@ fleet depends on f_store (structural dependency)</title></rect>
 <text x="564.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">3</text>
 <text x="134" y="744.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_store</text>
 <text x="586.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 586.0 290)">f_store</text>
-<text x="582.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">3</text>
+<text x="582.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">2</text>
 <text x="134" y="762.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_bean</text>
 <text x="604.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 604.0 290)">f_bean</text>
 <text x="600.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">9</text>
@@ -658,7 +622,7 @@ fleet depends on f_store (structural dependency)</title></rect>
 <text x="654.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">0</text>
 <text x="134" y="834.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_aspect</text>
 <text x="676.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 676.0 290)">f_aspect</text>
-<text x="672.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">4</text>
+<text x="672.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">3</text>
 <text x="134" y="852.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_crypto</text>
 <text x="694.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 694.0 290)">f_crypto</text>
 <text x="690.0" y="1090" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">1</text>
