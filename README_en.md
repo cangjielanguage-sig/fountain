@@ -27,26 +27,26 @@ _/ ____\____  __ __  _____/  |______  |__| ____
 ## STDX dependency
 Configure the environment variable: `export CANGJIE_STDX_DYNAMIC_PATH=/path/to/dynamic_stdx`
 
-### `fountain::fboot`
+## `fountain::fboot`
 The launcher for application projects that depend on fountain. An application project only needs to be compiled into a dynamic
 library, and fboot calls `fountain::f_app` to start the application.
 
 **See details:**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/fboot/README_en.md>
 
 
-#### Installation
+### Installation
 ```bash
 cjpm install fountain::fboot-a.b.c --root /path/to/install # replace a.b.c with the actual version number
 export PATH=$PATH:/path/to/install/bin
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/path/to/install/libs/fboot
 ```
-#### Startup
+### Startup
 ```bash
 fboot run --dylibPattern=<REGEX_OF_PROJECT_DYLIB_FILENAMES> # see the boot.sh script of the project's fdemo module for details
 # dylibPattern can also be defined as an environment variable, eg.
 # export dylibPattern=<REGEX_OF_PROJECT_DYLIB_FILENAMES>
 ```
-#### Creating a project and adding dependencies
+### Creating a project and adding dependencies
 After installing `fboot`, you can run `fboot workspace` to initialize the current directory as a Cangjie workspace project; see the `fboot` documentation for details.
 Any module the project needs is added to the cjpm.toml in the project root directory. Take `f_base` as an example:
 ```bash
