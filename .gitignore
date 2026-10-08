@@ -54,3 +54,7 @@ frpcdemo/log/
 .worktrees/
 .autocode/tmp/
 .dep-cache
+
+# python 工具脚本（如 docs/模块依赖图）的字节码缓存
+__pycache__/
+*.pyc

@@ -62,6 +62,18 @@ fboot help # 显示fboot的其他功能
 "fountain::f_version" = "a.b.c"
 ```
 
+## 模块依赖关系
+
+下图是 fountain 各模块之间的依赖关系（箭头 `A → B` 表示 A 依赖 B；基础层为不依赖任何模块的模块，蓝框为被依赖次数最多的模块；图中不含 `fdemo`、`fcoder`、`frpcdemo` 等示例应用）：
+
+![fountain 模块依赖关系](.assets/README/module-dependencies.svg)
+
+下面这张矩阵图是同一份数据的另一种读法，适合按模块查「它依赖了谁 / 谁依赖了它」（行 = 依赖方，列 = 被依赖方，两轴按同一顺序排列，实心格 = 结构性依赖，浅色格 = 冗余直达）：
+
+![fountain 模块依赖矩阵](.assets/README/module-dependency-matrix.svg)
+
+依赖图的生成脚本与重画方式见 [`docs/模块依赖图`](docs/模块依赖图/README.md)。
+
 ## 各模块详细文档
 ### `fountain::f_app`
 应用进程管理模块，可以用本模块加载使用fountain开发的应用项目动态链接库。

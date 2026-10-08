@@ -62,28 +62,7 @@ func pointcut(decl: FuncDecl, metaName!: ?Token = None): Tokens {
     var args = `lsquare`
     var argTypes = `lsquare`
     for (i in 0..params.size) {
-        let param = match (params[i]) {
-            case x: MacroExpandParam =>
-                var mp: MacroExpandParam = x
-                while (let m: MacroExpandParam <- mp.macroInputDecl) {
-                    mp = m
-                }
-                match (mp.macroInputDecl) {
-                    case x: FuncParam => x
-                    case x: MacroExpandDecl =>
-                        var md: MacroExpandDecl = x
-                        while (let m: MacroExpandDecl <- md.macroInputDecl) {
-                            md = m
-                        }
-                        match (md.macroInputDecl) {
-                            case x: FuncParam => x
-                            case x => FuncParam(x.toTokens())
-                        }
-                    case x => throw AspectException('unexpected decl ${x.toTokens()} ${ClassTypeInfo.of(x)}')
-                }
-            case x: FuncParam => x
-            case x => throw AspectException('unexpected decl ${x.toTokens()} ${ClassTypeInfo.of(x)}')
-        }
+        let param = unwrapParam(params[i])
         let paramName = param.identifier
         argVars += quote(
             let $paramName = (args[$(i)] as $(param.paramType)).getOrThrow()
@@ -110,7 +89,7 @@ func pointcut(decl: FuncDecl, metaName!: ?Token = None): Tokens {
     }
     // ASP-3（§1.14）：类级织入时用「静态元信息」（见 metaTokens）复用 QualifiedFuncInfo，
     // 不再每次调用重建（含反射解析 getInstanceFunction 与哈希）；拿不到静态元信息时
-    // （函数级织入、运算符名、函数自身带泛型参数、形参是宏展开声明等）退回原来的每调用构造写法。
+    // （函数级织入、运算符名、函数自身带泛型参数等）退回原来的每调用构造写法。
     let infoExpr = match (metaName) {
         case Some(m) => quote(InvocationFuncInfo($m, $args))
         case _ => quote(InvocationFuncInfo(TypeInfo.of(this), $funcName, $argTypes, $args))
@@ -173,6 +152,36 @@ private func pointcut(decl: ClassDecl): Tokens {
 }
 
 /**
+ * 形参剥壳：把宏展开形参逐层剥到里面真实的 `FuncParam`（`@RequestParam username: String` ⇒ `username: String`）。
+ * 宏注解可以叠多层，内层还可能包着宏展开声明，都一直剥到底。
+ * 函数级织入（`pointcut(FuncDecl)`）与静态元信息（`metaTokens`）共用本函数，
+ * 保证「函数体里的参数类型」与「元信息里的参数类型」取自同一来源、不会各自漂移。
+ */
+func unwrapParam(p: FuncParam): FuncParam {
+    match (p) {
+        case x: MacroExpandParam =>
+            var mp: MacroExpandParam = x
+            while (let m: MacroExpandParam <- mp.macroInputDecl) {
+                mp = m
+            }
+            match (mp.macroInputDecl) {
+                case x: FuncParam => x
+                case x: MacroExpandDecl =>
+                    var md: MacroExpandDecl = x
+                    while (let m: MacroExpandDecl <- md.macroInputDecl) {
+                        md = m
+                    }
+                    match (md.macroInputDecl) {
+                        case x: FuncParam => x
+                        case x => FuncParam(x.toTokens())
+                    }
+                case x => throw AspectException('unexpected decl ${x.toTokens()} ${ClassTypeInfo.of(x)}')
+            }
+        case _ => p
+    }
+}
+
+/**
  * 类级织入的公共半段：改写一个被织入的函数；`metaName` 非空时同时让它复用静态元信息。
  * 返回（改写后的函数 tokens, ?静态元信息声明 tokens）。`@Pointcut` 的类级路径与 `@WeavedBean` 共用。
  */
@@ -188,7 +197,8 @@ func weaveOne(f: FuncDecl, classIdent: Token, metaName: ?String): (Tokens, ?Toke
 
 /**
  * 生成 `private static let __pOIntcUt_x = QualifiedFuncInfo(TypeInfo.of<类>(), '函数', [TypeInfo.of<参数类型>…])`。
- * 不适用时返回 None（退回每调用构造）：构造函数、运算符名等非普通标识符、函数自身带泛型参数、形参是宏展开声明。
+ * 参数类型走 `unwrapParam`（与函数级织入同一处），元信息与函数体里的类型不会各自漂移。
+ * 不适用时返回 None（退回每调用构造）：构造函数、运算符名等非普通标识符、函数自身带泛型参数。
  */
 func metaTokens(f: FuncDecl, classIdent: Token, metaName: String): ?Tokens {
     if (f.identifier.value == 'init' || !isSimpleName(f.identifier) || hasTypeParams(f)) {
@@ -200,10 +210,8 @@ func metaTokens(f: FuncDecl, classIdent: Token, metaName: String): ?Tokens {
         if (i > 0) {
             argTypes += `comma`
         }
-        match (ps[i]) {
-            case p: FuncParam => argTypes += quote(TypeInfo.of<$(p.paramType)>())
-            case _ => return None
-        }
+        let p = unwrapParam(ps[i])
+        argTypes += quote(TypeInfo.of<$(p.paramType)>())
     }
     argTypes += `rsquare`
     let funcName = f.identifier.value
