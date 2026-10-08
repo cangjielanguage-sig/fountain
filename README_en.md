@@ -65,6 +65,22 @@ fboot help # Display the other features of fboot
 "fountain::f_version" = "a.b.c"
 ```
 
+## Module dependencies
+
+The diagram below shows the dependencies between fountain modules (the arrow `A → B` means A depends on B;
+green boxes are the foundation modules that depend on nothing, blue boxes are the most depended-upon modules.
+The demo applications `fdemo`, `fcoder` and `frpcdemo` are not included):
+
+![fountain module dependencies](.assets/README/module-dependencies.svg)
+
+The matrix below is the same data in another reading — handy for lookups such as "what does X depend on / who depends on X"
+(rows are dependents, columns are dependencies, both axes share the same order; solid cells are structural dependencies,
+pale cells are the redundant direct ones):
+
+![fountain module dependency matrix](.assets/README/module-dependency-matrix.svg)
+
+The generators and how to redraw the diagrams: see [`docs/模块依赖图`](docs/模块依赖图/README.md).
+
 ## Detailed documentation of each module
 ### `fountain::f_app`
 Application process management module; this module can load application projects developed with fountain as dynamic libraries.
