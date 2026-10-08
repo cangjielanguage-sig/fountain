@@ -123,6 +123,31 @@ public interface BaseUserData<U> where U <: BaseUserData<U> {
 }
 ```
 
+`UserNamePasswordUserData` 与 `UserTokenPrincipal<ID>` 是两个实现：
+
+```cj
+public struct UserNamePasswordUserData <: BaseUserData<UserNamePasswordUserData> {
+    public UserNamePasswordUserData(
+        private let name: String,
+        public let password: String
+    )
+    public prop username: String
+}
+
+public open class UserTokenPrincipal<ID> <: Principal<ID, UserTokenPrincipal<ID>> where ID <: Hashable & Equatable<ID> {
+    public UserTokenPrincipal(
+        private let uid: ID,
+        private let name: String,
+        public let token: String
+    )
+    public prop id: ID
+    public prop username: String
+}
+```
+
+- `UserNamePasswordUserData.password`：构造时传入的密码，`public let` 直接公开（用户名通过 `username` 取）；
+- `UserTokenPrincipal.token`：构造时传入的 token，`public let` 直接公开（`id` / `username` 分别取用户 ID 与用户名）。
+
 
 ## 例子
 

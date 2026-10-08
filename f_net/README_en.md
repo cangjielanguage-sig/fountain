@@ -161,3 +161,12 @@ Rate limiting applies only to step 3 (the executor path); PING/ACK are not limit
 
 - `doc/审查报告.md`: a static review snapshot from 2026-05-03 (file and case counts of that time, no longer matching the present, kept for historical reference only);
 - The API excerpts formerly under `doc/` (basic types / client / server) have been deleted; **this README and the source code are authoritative**.
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- `MultiClient`: `func iterator(): Iterator<Client<T>>`
+- `ServerBuilder`: `func setSocketOptionBool(level: Int32, option: Int32, value: Bool): This`, `func setSocketOptionIntNative(level: Int32, option: Int32, value: IntNative): This`, `socketBindToDevice` (func), `func socketQuickAcknowledge(quickAcknowledge: Bool): This`, `func socketReadTimeout(readTimeout: ?Duration): This`, `func socketReceiveBufferSize(receiveBufferSize: Int64): This`, `func socketSendBufferSize(sendBufferSize: Int64): This`, `func socketWriteTimeout(writeTimeout: ?Duration): This`

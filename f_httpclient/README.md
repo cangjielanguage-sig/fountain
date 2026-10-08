@@ -202,3 +202,12 @@ public interface ExtendHttpResponse {
 }
 extend HttpResponse <: ExtendHttpResponse
 ```
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- `HttpClient`：`func enablePush(enable: Bool): This`、`func headerTableSize(size: UInt32): This`、`func httpProxy(addr: String): This`、`func httpsProxy(addr: String): This`、`func initialWindowSize(size: UInt32): This`、`func logger(logger: Logger): This`、`func maxConcurrentStreams(size: UInt32): This`、`func maxFrameSize(size: UInt32): This`、`func maxHeaderListSize(size: UInt32): This`、`func noProxy(): This`
+- `HttpResponse`：`func readEntire(): String`、`func readJson(): JsonValue`、`func readToEnd(): Array<Byte>`、`func reader(): StringReader<InputStream>`、`func tryParse<T>(): ?T where T <: DataFields<T>`

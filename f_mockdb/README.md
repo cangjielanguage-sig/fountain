@@ -56,9 +56,9 @@ private let _ = {=>
 |---|---|
 | `MOCKDB` | 静态门面，夹具（行、列信息、lastInsertId/rowCount、toThrowOn*、metadata）都按线程隔离 |
 | `MockDriver <: Driver` | 注册名为`mockdb`的驱动，`version`为`1.0.0`、`preferredPooling`为`false` |
-| `MockDatasource <: Datasource` | 连接串与选项的载体 |
+| `MockDatasource <: Datasource` | 连接串与选项的载体；`connect()` 返回 `MockConnection` |
 | `MockConnection <: Connection` | `state`在`Connected`/`Closed`之间；`createTransaction()`、`getMetaData()`、`prepareStatement(sql)` |
-| `MockStatement <: Statement` | `set<T>`/`setNull`/`query()`/`update()`；`query(params)`/`update(params)`是unsupported |
+| `MockStatement <: Statement` | `set<T>`/`setNull`/`query()`/`update()`；`query(params)`/`update(params)`是unsupported；`parameterColumnInfos` 返回空数组 |
 | `MockTransaction <: Transaction` | `accessMode`/`deferrableMode`/`isoLevel` + `begin`/`commit`/`rollback`/`save`/`release` |
 | `MockQueryResult <: QueryResult` | `columnInfos`、`next()`、`get<T>(index)`、`getOrNull<T>(index)` |
 | `MockUpdateResult <: UpdateResult` | 公开构造`MockUpdateResult(lastInsertId, rowCount)`，构造时快照 |

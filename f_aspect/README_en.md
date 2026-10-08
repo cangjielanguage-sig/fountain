@@ -120,6 +120,19 @@ public class WeavedClass {
   - Changing annotations/rules requires recompiling and restarting the process; functions already called do not rebuild their chain.
 
 
+## Exceptions
+
+Both exceptions live in `fountain::f_aspect.exception` and extend `fountain::f_exception.BaseException`:
+
+- `AspectException`: an exception raised while aspects run. It is thrown when a pointcut function matches no aspect, when a
+  registered bean is not an implementation of `Aspect`, or when the string of a configuration-based route rule
+  (`Config*RouteRule`) is malformed; the default `proceed` also wraps an exception thrown by `throwing` or `final` itself into
+  an `AspectException` and attaches the original one as `suppressed` (see `src/Aspect.cj`).
+- `AspectBeforeException`: the exception type for the `before` stage of an aspect. The module exports it with a `public import`
+  so that user code can throw or catch it; the framework itself does not throw it currently.
+
+Both types provide the same constructors: `()`, `(message: String)`, `(caused: Exception)` and `(message: String, caused: Exception)`.
+
 ## Weaving rules
 
 ### Parent class of the weaving rules
@@ -180,9 +193,15 @@ public struct InvocationFuncInfo {
         funcName: String, //Pointcut function name
         argTypes: Array<TypeInfo>, //List of the parameter types of the pointcut function
         args: Array<Any>//Pointcut function arguments
-    ) 
+    )
 }
 ```
+Read-only instance properties:
+
+- `args: Array<Any>`: the arguments of this call;
+- `typeInfo: TypeInfo`: the type containing the pointcut function;
+- `funcInfo: InstanceFunctionInfo`: the reflection info of the pointcut function;
+- `qualifiedFuncInfo: QualifiedFuncInfo`: the whole function metadata (type + function name + parameter type list).
 ```cj
 public class QualifiedFuncInfo <: Hashable & Equatable<QualifiedFuncInfo> {
     private let hash: Int64
@@ -293,6 +312,18 @@ public class FuncTypeRouteRule <: AndRouteRule {
 public class FuncNameRouteRule <: RouteRule {
     public const FuncNameRouteRule(public let name: String) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool 
+}
+```
+
+#### `FuncRouteRule`
+  - All public instance functions whose name and type both match are weaved (a combination of `FuncNameRouteRule` and `FuncTypeRouteRule`)
+```cj
+public class FuncRouteRule <: AndRouteRule {
+    public const init(
+        name: FuncNameRouteRule,
+        funcType: FuncTypeRouteRule
+    )
+    public const init(name: String, argTypes: String, returnType: String)
 }
 ```
 

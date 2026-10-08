@@ -2404,3 +2404,12 @@ Built-in implementations (all assembled conditionally from `orm_drivers` and dis
 * `f_orm/src/**/*.cj`: the source code is the most authoritative reference; behavior not covered by this document follows the source code.
 * The example project `fdemo`: `fdemo/boot.sh` (configuration), `fdemo/user/src/dao/*DAO.cj` (DAO definitions),
   `fdemo/user/src/service/impl/UserServiceImpl.cj` (transactional service).
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `public class MysqlIndexSchemaPO`, `public class MysqlTableSchemaPO`, `public class PostgresIndexSchemaPO`, `public class PostgresTableSchemaPO`
+- `ORMInitializer`: `prop dependencies: Array<String>`

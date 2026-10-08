@@ -10,6 +10,8 @@
 
 ## String扩展
 
+`ExtendProcess` / `ExtendSubProcess` 是本模块声明的扩展接口（`public interface`，见 `src/process.cj`）：前者声明给 `String` 加的命令行方法与管道运算符，后者声明给 `SubProcess` 加的管道运算符；下面的 `extend String <: ExtendProcess` / `extend SubProcess <: ExtendSubProcess` 是它们在本模块内的实现。
+
 ```cj
 extend String <: ExtendProcess {
     /**按空格切分命令行并启动子进程，默认stdIn/stdOut为Pipe、stdErr为Inherit*/

@@ -10,6 +10,8 @@ This module adds process extensions to `String` and `std.process.SubProcess`: st
 
 ## String extension
 
+`ExtendProcess` / `ExtendSubProcess` are the extension interfaces declared by this module (`public interface`, see `src/process.cj`): the former declares the command-line methods and pipe operators added to `String`, the latter declares the pipe operators added to `SubProcess`; the `extend String <: ExtendProcess` / `extend SubProcess <: ExtendSubProcess` blocks below are their implementations inside this module.
+
 ```cj
 extend String <: ExtendProcess {
     /**Split the command line on spaces and start a child process; stdIn/stdOut default to Pipe and stdErr to Inherit*/

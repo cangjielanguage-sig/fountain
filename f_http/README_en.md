@@ -259,3 +259,23 @@ public interface UserSessionHandler <: AuthHandler {}
  */
 public interface PrivilegeHandler <: AuthHandler {}
 ```
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `HttpRequestHeaderException` (class), `MultipartException` (class), `MultipartFile` (class), `MultipartMedia` (class)
+- `ContentDisposition`: `attachment` (prop), `empty` (prop), `formData` (prop), `getCharset` (func), `func getCreationDate()`, `getFilename` (func), `getModificationDate` (func), `getName` (func), `func getReadDate()`, `getSize` (func), `getType` (func), `inline` (prop), `isAttachment` (prop), `isFormData` (prop), `isInline` (prop), `func setCharset(charset: Charset): ContentDisposition`, `func setCreationDate(creationDate: DateTime)`, `func setFilename(filename: String): ContentDisposition`, `func setModificationDate(modificationDate: String)`, `func setName(name: String): ContentDisposition`, `func setReadDate(readDate: String)`, `func setSize(size: Int64): ContentDisposition`, `func setType(`type`: ContentDispositionType): ContentDisposition`
+- `ContentDispositionBuilder`: `attachment` (prop), `func creationDate(value: DateTime): ContentDispositionBuilder`, `func filename(value: String): ContentDispositionBuilder`, `prop formData: ContentDispositionBuilder`, `prop inline: ContentDispositionBuilder`, `func modificationDate(value: String): ContentDispositionBuilder`, `func readDate(value: String): ContentDispositionBuilder`, `func size(value: Int64): ContentDispositionBuilder`
+- `ContentDispositionType`: `prop isAttachment: Bool`, `prop isFormData: Bool`, `prop isInline: Bool`, `prop isNone: Bool`
+- `DataMultipartList`: `add` (func), `func iterator(): Iterator<Data>`
+- `DataMultipartTuples`: `add` (func), `func iterator(): Iterator<(String, Data)>`
+- `JsonMediaType`: `static let instance = JsonMediaType()`
+- `MultipartFile`: `func bytes(): Array<Byte>`, `func close(): Unit`, `func copyTo(output: OutputStream): Unit`, `prop empty: Bool`, `prop filename: String`, `func getType(): ContentDispositionType`, `prop isAttachment: Bool`, `func isClosed(): Bool`, `prop isFormData: Bool`, `prop isInline: Bool`, `prop reader: TextReader`, `prop size: Int64`
+- `MultipartFormDataParser`: `static func new(ctx: HttpContext)`
+- `MultipartMedia`: `let bytes: Array<Byte>`
+- `MultipartMediaType`: `static let formData = MultipartMediaType(FORM_DATA)`, `static let mixed = MultipartMediaType(MIXED)`
+- `PlainTextMediaType`: `static let instance = PlainTextMediaType()`
+- `TextMediaType`: `let charset!: Charset = Charsets.UTF8`

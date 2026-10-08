@@ -334,3 +334,15 @@ public func giveBack(array: Array<T>): Unit
   `LinkedNode.check` 的异常安全与 `nextForGet` 的取值路径 —— 细节见源码与
   `.autocode/bugs/bug-archived-on-20261004.md`（§7.2 / §7.3 / §7.4）。
 
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`public func next(): ?Unit`
+- `BytesListOutputStream`：`func copy(to!: OutputStream, closeFromOnEnd!: Bool = true, closeToOnEnd!: Bool = false): Unit`、`func write(bytes: Array<Byte>): Unit`
+- `ChainedBytesCopyTo`：`func copy(to!: OutputStream, closeFromOnEnd!: Bool = true, closeToOnEnd!: Bool = false): Unit`
+- `PooledBufferBytesCopyTo`：`func copy(to!: OutputStream, closeFromOnEnd!: Bool = true, closeToOnEnd!: Bool = false): Unit`
+- `PooledBufferedBytesCopyFrom`：`func copy(from!: InputStream, closeFromOnEnd!: Bool = false, closeToOnEnd!: Bool = true): Unit`

@@ -199,3 +199,11 @@ public class MessageID <: Hashable & Equatable<MessageID> & ToString {
 ## 相关文档
 
 原 `doc/接口.md`、`doc/默认实现.md` 的旧摘录已删除 —— **本 README 与 `src/**` 是唯一出处**。
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`CommandException`（class）、`CurrentProcessID`（struct）、`public func read(buffer: Array<Byte>): Int64`、`public func write(bytes: Array<Byte>): Unit`

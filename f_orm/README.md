@@ -2212,3 +2212,12 @@ public abstract class SqlDialect {
 * `f_orm/doc/优化方案.md`：优化方案（原按主题拆分的 API 摘录已删除，接口以本 README 与 `src/**` 为准）。
 * `f_orm/src/**/*.cj`：源码即最权威的参考；本文档未覆盖的行为以源码为准。
 * 示例工程 `fdemo`：`fdemo/boot.sh`（配置）、`fdemo/user/src/dao/*DAO.cj`（DAO 定义）、`fdemo/user/src/service/impl/UserServiceImpl.cj`（事务服务）。
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`public class MysqlIndexSchemaPO`、`public class MysqlTableSchemaPO`、`public class PostgresIndexSchemaPO`、`public class PostgresTableSchemaPO`
+- `ORMInitializer`：`prop dependencies: Array<String>`

@@ -79,6 +79,20 @@ public class SM2SignAlgo <: AsymmetricSignAlgo {
 }
 ```
 
+### No signature algorithm `NoneSignAlgo`
+```cj
+public class NoneSignAlgo <: SignAlgo {
+    private init() {
+        super(NoneDigest.INSTANCE)
+    }
+    public static let INSTANCE = NoneSignAlgo()
+    protected func sign(data: Array<Byte>): Array<Byte>
+    protected func verify(data: Array<Byte>, sign: Array<Byte>): Bool
+}
+```
+- A singleton (`NoneSignAlgo.INSTANCE`) with a private constructor; both `sign` and `verify` throw `JWTException("sign algo was not be specified")` right away.
+- It is the default value of `signAlgo` in `JWT` (see `src/JWT.cj`): when no signature algorithm is specified explicitly, signing and verification fail immediately with a clear reason instead of silently passing.
+
 ### HMAC signature `HMACDigest`
 ```cj
 public class HMACDigest <: Digest {
@@ -528,3 +542,9 @@ public interface JwtIdCache<T> where T <: Equatable<T> {
 - `HeapJwtIdCache<T>`
     - `public class HeapJwtIdCache<T> <: JwtIdCache<T> where T <: ToString & Equatable<T>`
     - Based on `fountain::f_cache.HeapCache`
+
+## Exceptions
+
+`JWTException` (`fountain::f_jwt.exception`, `<: fountain::f_exception.BaseException`) is the exception type of this module;
+its constructors match the base class: `()`, `(message: String)`, `(caused: Exception)` and `(message: String, caused: Exception)`.
+`NoneSignAlgo.sign` / `NoneSignAlgo.verify` throw it.

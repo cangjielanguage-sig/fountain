@@ -112,6 +112,18 @@ public class WeavedClass {
   - 改注解/规则需要重新编译并重启进程，已调用过的函数不会重新建链。
 
 
+## 异常
+
+两个异常都在 `fountain::f_aspect.exception` 包内，父类都是 `fountain::f_exception.BaseException`：
+
+- `AspectException`：切面执行期异常。抛出场景——切点函数没有匹配到任何切面、织入时注册的 bean 不是 `Aspect` 实现、
+  配置式路由规则（`Config*RouteRule`）的字符串不合法；此外默认实现的 `proceed` 在 `throwing` 或 `final` 自身抛异常时，
+  会把原异常包装成 `AspectException` 并挂到 `suppressed` 上（见 `src/Aspect.cj`）。
+- `AspectBeforeException`：切面前置（`before`）阶段的异常类型，模块通过 `public import` 导出，
+  供使用方在自定义切面里抛出或捕获；当前版本框架内部不主动抛出它。
+
+两个类型的构造形式相同：`()`、`(message: String)`、`(caused: Exception)`、`(message: String, caused: Exception)`。
+
 ## 织入规则
 
 ### 织入规则的父类
@@ -170,9 +182,16 @@ public struct InvocationFuncInfo {
         funcName: String, //切点函数名
         argTypes: Array<TypeInfo>, //切点函数形参类型列表
         args: Array<Any>//切点函数实参
-    ) 
+    )
 }
 ```
+实例属性（只读）：
+
+- `args: Array<Any>`：本次调用的实参；
+- `typeInfo: TypeInfo`：切点函数所在类型；
+- `funcInfo: InstanceFunctionInfo`：切点函数的反射信息；
+- `qualifiedFuncInfo: QualifiedFuncInfo`：完整函数元数据（所在类型 + 函数名 + 形参类型列表）。
+
 ```cj
 public class QualifiedFuncInfo <: Hashable & Equatable<QualifiedFuncInfo> {
     private let hash: Int64
@@ -276,6 +295,18 @@ public class FuncTypeRouteRule <: AndRouteRule {
 public class FuncNameRouteRule <: RouteRule {
     public const FuncNameRouteRule(public let name: String) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool 
+}
+```
+
+#### `FuncRouteRule`
+  - 函数名与函数类型都匹配的公共实例函数将被织入（`FuncNameRouteRule` 与 `FuncTypeRouteRule` 的组合）
+```cj
+public class FuncRouteRule <: AndRouteRule {
+    public const init(
+        name: FuncNameRouteRule,
+        funcType: FuncTypeRouteRule
+    )
+    public const init(name: String, argTypes: String, returnType: String)
 }
 ```
 

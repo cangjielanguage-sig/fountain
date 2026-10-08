@@ -202,3 +202,12 @@ public interface ExtendHttpResponse {
 }
 extend HttpResponse <: ExtendHttpResponse
 ```
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- `HttpClient`: `func enablePush(enable: Bool): This`, `func headerTableSize(size: UInt32): This`, `func httpProxy(addr: String): This`, `func httpsProxy(addr: String): This`, `func initialWindowSize(size: UInt32): This`, `func logger(logger: Logger): This`, `func maxConcurrentStreams(size: UInt32): This`, `func maxFrameSize(size: UInt32): This`, `func maxHeaderListSize(size: UInt32): This`, `func noProxy(): This`
+- `HttpResponse`: `func readEntire(): String`, `func readJson(): JsonValue`, `func readToEnd(): Array<Byte>`, `func reader(): StringReader<InputStream>`, `func tryParse<T>(): ?T where T <: DataFields<T>`

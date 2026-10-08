@@ -56,9 +56,9 @@ private let _ = {=>
 |---|---|
 | `MOCKDB` | Static facade; the fixtures (rows, column info, lastInsertId/rowCount, toThrowOn*, metadata) are isolated per thread |
 | `MockDriver <: Driver` | Registers a driver named `mockdb`, with `version` `1.0.0` and `preferredPooling` `false` |
-| `MockDatasource <: Datasource` | Carrier of the connection string and options |
+| `MockDatasource <: Datasource` | Carrier of the connection string and options; `connect()` returns a `MockConnection` |
 | `MockConnection <: Connection` | `state` toggles between `Connected`/`Closed`; `createTransaction()`, `getMetaData()`, `prepareStatement(sql)` |
-| `MockStatement <: Statement` | `set<T>`/`setNull`/`query()`/`update()`; `query(params)`/`update(params)` are unsupported |
+| `MockStatement <: Statement` | `set<T>`/`setNull`/`query()`/`update()`; `query(params)`/`update(params)` are unsupported; `parameterColumnInfos` returns an empty array |
 | `MockTransaction <: Transaction` | `accessMode`/`deferrableMode`/`isoLevel` + `begin`/`commit`/`rollback`/`save`/`release` |
 | `MockQueryResult <: QueryResult` | `columnInfos`, `next()`, `get<T>(index)`, `getOrNull<T>(index)` |
 | `MockUpdateResult <: UpdateResult` | Public constructor `MockUpdateResult(lastInsertId, rowCount)`; snapshotted at construction |
