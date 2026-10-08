@@ -561,7 +561,7 @@ RPC 基于 `fountain::f_protocol` 的 `Command` 枚举：
 ## 快速失败
 `import fountain::f_data.BreakingCommand`
 服务端业执行过程中执行perform BreakingCommand(toDataValue)立即结束当前业务，快速失败
-data是返回给客户端的数据
+data是返回给客户端的数据，**data必须能够转换为RPC函数的返回类型**
 
 ## ControllerTraceAspect
 
