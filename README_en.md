@@ -69,13 +69,16 @@ fboot help # Display the other features of fboot
 
 The diagram below shows the dependencies between fountain modules (the arrow `A → B` means A depends on B;
 green boxes are the foundation modules that depend on nothing, blue boxes are the most depended-upon modules.
+Only dependencies that are both declared in `cjpm.toml` and actually imported in the source are drawn; for each
+module its three most-called dependencies are drawn as solid colored lines and the rest as dashed grey lines.
 The demo applications `fdemo`, `fcoder` and `frpcdemo` are not included):
 
 ![fountain module dependencies](.assets/README/module-dependencies.svg)
 
 The matrix below is the same data in another reading — handy for lookups such as "what does X depend on / who depends on X"
-(rows are dependents, columns are dependencies, both axes share the same order; solid cells are structural dependencies,
-pale cells are the redundant direct ones):
+(rows are dependents, columns are dependencies, both axes share the same order; a cell takes the dependent's color,
+its shade follows how many times that module calls the dependency's API — the three most-called dependencies of each
+row are colored cells, the rest are pale grey):
 
 ![fountain module dependency matrix](.assets/README/module-dependency-matrix.svg)
 
