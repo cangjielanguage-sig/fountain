@@ -315,3 +315,18 @@ It can be used for service registration, configuration centers, metadata registr
 RPC implementation with service self-registration and discovery, implementing load balancing, service node weights, heartbeat keep-alive, etc.
 
 **See details:**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_rpc/README_en.md>
+
+### `fountain::f_bloom`
+Bloom Filter implementation
+
+**See details:**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_bloom/README_en.md>
+
+### `fountain::f_health`
+Process health check
+
+**See details:**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_health/README_en.md>
+
+### `fountain::f_uring`
+FFI bindings for liburing; all APIs are available on Linux only
+
+**See details:**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_uring/README_en.md>
