@@ -305,3 +305,18 @@ crc16/密钥交换协议/命名风格转换/常用设计模式/geohash/snowflake
 RPC实现，服务自注册与发现，实现负载均衡、服务节点权重、心跳保活等
 
 **详情请见：**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_rpc/README.md>
+
+### `fountain::f_bloom`
+布隆过滤器（Bloom Filter）实现
+
+**详情请见：**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_bloom/README.md>
+
+### `fountain::f_health`
+进程健康检查
+
+**详情请见：**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_health/README.md>
+
+### `fountain::f_uring`
+liburing 的 FFI 封装，所有 API 仅 Linux 可用
+
+**详情请见：**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_uring/README.md>
