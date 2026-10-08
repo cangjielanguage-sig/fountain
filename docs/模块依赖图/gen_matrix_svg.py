@@ -20,7 +20,7 @@ OUT = os.path.abspath(os.path.join(HERE, '..', '..', '.assets', 'README', 'modul
 
 CELL, PITCH = 16, 18                                   # 格子尺寸 / 格距
 LEFT, TOP = 116, 132                                   # 行标签宽 / 列标签高
-HEAD = 122                                             # 页眉高
+HEAD = 168                                             # 页眉高（标题 + 3 组双语说明）
 MARGIN = 26
 PALETTE = ['#2563eb', '#db2777', '#ea580c', '#059669', '#7c3aed', '#0891b2',
            '#ca8a04', '#dc2626', '#4f46e5', '#16a34a', '#c026d3', '#0d9488']
@@ -74,25 +74,37 @@ H = HEAD + TOP + GH + MARGIN + 8
 F = "font-family=\"'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif\""
 o = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W:.0f} {H:.0f}" width="100%" '
      'role="img" aria-label="fountain module dependency matrix">',
-     '<title>fountain 模块依赖矩阵 / module dependency matrix</title>',
+     '<title>fountain 模块依赖矩阵 / Module dependency matrix</title>',
      '<style>',
      'text{user-select:none}',
      'rect.c:hover{stroke:#0f172a;stroke-width:1.6}',
      '</style>',
      f'<rect x="0" y="0" width="{W:.0f}" height="{H:.0f}" fill="#ffffff"/>',
      f'<text x="{MARGIN}" y="32" {F} font-size="18" font-weight="600" fill="#0f172a">'
-     'fountain 模块依赖矩阵 / module dependency matrix</text>',
-     f'<text x="{MARGIN}" y="56" {F} font-size="12.5" fill="#64748b">'
-     f'行 = 依赖方（行依赖列），列 = 被依赖方；两轴同一顺序：按依赖层级从基础（左上）到上层（右下）。'
-     f'依赖只出现在对角线右上侧</text>',
-     f'<text x="{MARGIN}" y="76" {F} font-size="12.5" fill="#64748b">'
-     f'{len(nodes)} 个模块 / {edges} 条直连（结构性 {len(structural)}、冗余直达 {redundant}）；'
-     '格子的颜色 = 依赖方的颜色，与连线图一致</text>',
-     f'<text x="{MARGIN}" y="96" {F} font-size="12.5" fill="#64748b">'
-     '实心格 = 结构性依赖；浅色格 = 冗余直达（可由其它依赖间接到达，cjpm.toml 仍声明了它）；'
-     '不含 fdemo、fcoder、frpcdemo 等示例应用</text>',
-     f'<text x="{MARGIN}" y="116" {F} font-size="12.5" fill="#64748b">'
-     '底行数字 = 被依赖次数；加粗标签 = 被依赖 ≥ 10 次；悬停格子显示「依赖方 → 被依赖方」</text>']
+     'fountain 模块依赖矩阵 / Module dependency matrix</text>']
+
+
+def note(y, zh, en):
+    """一组双语说明：中文一行（深）、英文一行（浅），返回下一组的 y。"""
+    o.append(f'<text x="{MARGIN}" y="{y}" {F} font-size="12.5" fill="#475569">{zh}</text>')
+    o.append(f'<text x="{MARGIN}" y="{y + 16}" {F} font-size="11.5" fill="#94a3b8">{en}</text>')
+    return y + 38
+
+
+yy = note(56,
+          '行 = 依赖方，列 = 被依赖方；两轴同一顺序（按依赖层级：基础层在左上）⇒ 依赖只落在对角线右上侧',
+          'Rows are dependents, columns are dependencies; both axes share one order (foundation top-left) '
+          '⇒ all cells sit above the diagonal')
+yy = note(yy,
+          f'{len(nodes)} 个模块 / {edges} 条直连（结构性 {len(structural)}、冗余直达 {redundant}）；'
+          '实心格 = 结构性依赖，浅色格 = 冗余直达',
+          f'{len(nodes)} modules / {edges} direct dependencies ({len(structural)} structural, '
+          f'{redundant} redundant); solid cell = structural, pale cell = redundant')
+yy = note(yy,
+          '格子颜色 = 依赖方的颜色（与连线图一致）；底行数字 = 被依赖次数；悬停格子显示「依赖方 → 被依赖方」；'
+          '不含示例应用',
+          "Cell color = the dependent's color (same as the diagram); bottom numbers = in-degree; "
+          'hover a cell for the pair; demo apps excluded')
 
 # 左下三角（结构上不可能有依赖）铺一层浅底
 gx0, gy0 = MARGIN + LEFT, HEAD + TOP
@@ -117,10 +129,13 @@ for kind in (0, 1):
             y = gy0 + r * PITCH + 1
             is_s = (n, d) in structural
             op = '0.95' if is_s else '0.22'
+            kind_zh = '结构性依赖' if is_s else '冗余直达：可由其它依赖间接到达'
+            kind_en = ('structural dependency' if is_s else
+                       'redundant direct dependency, reachable through other dependencies')
             o.append(f'<rect class="c" x="{x}" y="{y}" width="{CELL}" height="{CELL}" rx="3" '
                      f'fill="{color[n]}" fill-opacity="{op}" stroke="#ffffff" stroke-width="0.5">'
-                     f'<title>{n} 依赖 {d}（{d} 是 {n} 的'
-                     f'{"结构性依赖" if is_s else "冗余直达：可由其它依赖间接到达"}）</title></rect>')
+                     f'<title>{n} 依赖 {d}（{n} 的{kind_zh}）\n'
+                     f'{n} depends on {d} ({kind_en})</title></rect>')
 
 # 行标签（左）+ 列标签（上，竖排）
 for n in order:
@@ -139,12 +154,16 @@ root = ET.parse(OUT).getroot()
 NS = '{http://www.w3.org/2000/svg}'
 over = []
 for t in root.iter(NS + 'text'):
-    if not t.text or float(t.get('y', '0')) > HEAD:
+    if not t.text:
         continue
+    ty, tx = float(t.get('y', '0')), float(t.get('x', '0'))
     fs = float(t.get('font-size', '12.5'))
-    w = sum(fs * (1.04 if ord(c) > 0x2E80 else 0.55) for c in t.text)
-    if float(t.get('x', '0')) + w > W - 8:
-        over.append((t.text[:36], round(float(t.get('x', '0')) + w)))
+    if ty <= HEAD:                                   # 页眉里的文字：横向不能超出画布、纵向不能压进标签区
+        w = sum(fs * (1.04 if ord(c) > 0x2E80 else 0.55) for c in t.text)
+        if tx + w > W - 8:
+            over.append(('宽 ' + t.text[:30], round(tx + w)))
+        if ty > HEAD - 12:
+            over.append(('低 ' + t.text[:30], round(ty)))
 
 print(f'matrix: {len(order)}x{len(order)} direct={edges} structural={len(structural)} '
       f'redundant={redundant} canvas={W:.0f}x{H:.0f} size={os.path.getsize(OUT)} out={OUT}')

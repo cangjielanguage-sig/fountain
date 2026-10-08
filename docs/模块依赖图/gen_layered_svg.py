@@ -24,7 +24,9 @@ OUT = os.path.abspath(os.path.join(HERE, '..', '..', '.assets', 'README', 'modul
 HUB = 10                                               # 入度达到该值 → 高亮
 NW, NH = 132, 34                                       # 节点尺寸
 HGAP, VGAP = 36, 102                                   # 行内间隙 / 层间距
-MARGIN_X, HEAD = 30, 158
+MARGIN_X = 30
+NOTE_TOP, NOTE_STEP, N_NOTES = 58, 38, 4            # 页眉：双语说明的起始 y、每组占高、组数
+HEAD = NOTE_TOP + N_NOTES * NOTE_STEP + 48          # 页眉总高：标题 + N 组说明 + 两行图例
 PALETTE = ['#2563eb', '#db2777', '#ea580c', '#059669', '#7c3aed', '#0891b2',
            '#ca8a04', '#dc2626', '#4f46e5', '#16a34a', '#c026d3', '#0d9488']
 
@@ -143,7 +145,7 @@ cross = sum(crossings(rows[L + 1], rows[L]) for L in range(maxl))
 F = "font-family=\"'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif\""
 o = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W:.0f} {H:.0f}" width="100%" '
      'role="img" aria-label="fountain module dependencies">',
-     '<title>fountain 模块依赖关系 / module dependencies</title>',
+     '<title>fountain 模块依赖关系 / Module dependencies</title>',
      '<defs>' + ''.join(
          f'<marker id="a{i}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="3.8" markerHeight="3.8" '
          f'orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="{c}"/></marker>'
@@ -164,14 +166,31 @@ o.append('</style>')
 
 o.append(f'<rect x="0" y="0" width="{W:.0f}" height="{H:.0f}" fill="#ffffff"/>')
 o.append(f'<text x="{MARGIN_X}" y="32" {F} font-size="18" font-weight="600" fill="#0f172a">'
-         'fountain 模块依赖关系 / module dependencies</text>')
-o.append(f'<text x="{MARGIN_X}" y="56" {F} font-size="12.5" fill="#64748b">'
-         f'箭头 A → B：A 依赖 B（A depends on B）｜{len(nodes)} 个模块 / {edges} 条直连'
-         f'（结构性 {len(structural)} 条、冗余直达 {redundant} 条）｜不含 fdemo、fcoder、frpcdemo 等示例应用</text>')
-o.append(f'<text x="{MARGIN_X}" y="76" {F} font-size="12.5" fill="#64748b">'
-         '实线＝结构性依赖（无法由其它依赖间接到达），按来源模块配色：同色 = 同一模块的依赖</text>')
-o.append(f'<text x="{MARGIN_X}" y="96" {F} font-size="12.5" fill="#64748b">'
-         '虚线＝冗余直达（可由其它依赖间接到达，cjpm.toml 仍声明了它）；悬停节点可高亮它的全部直连</text>')
+         'fountain 模块依赖关系 / Module dependencies</text>')
+
+
+def note(y, zh, en):
+    """一组双语说明：中文一行（深）、英文一行（浅），返回下一组的 y。"""
+    o.append(f'<text x="{MARGIN_X}" y="{y}" {F} font-size="12.5" fill="#475569">{zh}</text>')
+    o.append(f'<text x="{MARGIN_X}" y="{y + 16}" {F} font-size="11.5" fill="#94a3b8">{en}</text>')
+    return y + 38
+
+
+yy = note(NOTE_TOP,
+          f'箭头 A → B：A 依赖 B｜{len(nodes)} 个模块 / {edges} 条直连（结构性 {len(structural)}、冗余直达 {redundant}）',
+          f'Arrow A → B: A depends on B | {len(nodes)} modules / {edges} direct dependencies '
+          f'({len(structural)} structural, {redundant} redundant)')
+yy = note(yy,
+          '实线＝结构性依赖（无法由其它依赖间接到达），按来源模块配色：同色 = 同一模块的依赖',
+          'Solid = structural dependency (not reachable through other dependencies), colored by its source module '
+          '(same color = same module)')
+yy = note(yy,
+          '虚线＝冗余直达（可由其它依赖间接到达，cjpm.toml 仍声明了它）；悬停节点可高亮它的全部直连',
+          'Dashed = redundant direct dependency (reachable through other dependencies, still in cjpm.toml); '
+          'hover a node to highlight its edges')
+yy = note(yy, '不含 fdemo、fcoder、frpcdemo 等示例应用',
+          'Demo applications (fdemo, fcoder, frpcdemo) are not included')
+LEGEND_Y = yy + 4
 
 legend = [('#dbeafe', '#60a5fa', '被依赖 ≥ 10 次 (hub)'), ('#dcfce7', '#86efac', '基础层：无依赖 (foundation)'),
           ('#f8fafc', '#cbd5e1', '其它模块 (others)')]
@@ -183,17 +202,19 @@ def tw(s):
 
 lx = MARGIN_X
 for fill, stroke, label in legend:
-    o.append(f'<rect x="{lx:.0f}" y="112" width="13" height="13" rx="3" fill="{fill}" stroke="{stroke}"/>')
-    o.append(f'<text x="{lx + 19:.0f}" y="123" {F} font-size="12.5" fill="#475569">{label}</text>')
+    o.append(f'<rect x="{lx:.0f}" y="{LEGEND_Y}" width="13" height="13" rx="3" fill="{fill}" '
+             f'stroke="{stroke}"/>')
+    o.append(f'<text x="{lx + 19:.0f}" y="{LEGEND_Y + 11}" {F} font-size="12.5" fill="#475569">{label}</text>')
     lx += 19 + tw(label) + 28
-o.append(f'<path d="M{MARGIN_X},{136} h34" stroke="#2563eb" stroke-width="1.7" fill="none" '
+LY = LEGEND_Y + 24
+o.append(f'<path d="M{MARGIN_X},{LY} h34" stroke="#2563eb" stroke-width="1.7" fill="none" '
          'marker-end="url(#a0)"/>')
-o.append(f'<text x="{MARGIN_X + 42}" y="140" {F} font-size="12.5" fill="#475569">'
-         f'结构性依赖 {len(structural)} 条</text>')
-o.append(f'<path d="M{MARGIN_X + 152},{136} h34" stroke="#94a3b8" stroke-width="1" fill="none" '
+o.append(f'<text x="{MARGIN_X + 42}" y="{LY + 4}" {F} font-size="12.5" fill="#475569">'
+         f'结构性依赖 {len(structural)} 条 / structural</text>')
+o.append(f'<path d="M{MARGIN_X + 240},{LY} h34" stroke="#94a3b8" stroke-width="1" fill="none" '
          'stroke-dasharray="2 3" stroke-opacity="0.5"/>')
-o.append(f'<text x="{MARGIN_X + 194}" y="140" {F} font-size="12.5" fill="#475569">'
-         f'冗余直达 {redundant} 条</text>')
+o.append(f'<text x="{MARGIN_X + 282}" y="{LY + 4}" {F} font-size="12.5" fill="#475569">'
+         f'冗余直达 {redundant} 条 / redundant</text>')
 
 # 边：先画冗余直达（背景），再画结构性依赖（前景）
 for kind in (0, 1):
@@ -207,8 +228,10 @@ for kind in (0, 1):
             else:
                 my = (sy + ty) / 2
                 path = f'M{sx:.1f},{sy:.1f} C{sx:.1f},{my:.1f} {tx:.1f},{my:.1f} {tx:.1f},{ty:.1f}'
-            title = (f'<title>{n} → {d}（{n} 依赖 {d} / {n} depends on {d}）'
-                     + ('' if (n, d) in structural else '；冗余直达：也可由其它依赖间接到达') + '</title>')
+            title = (f'<title>{n} → {d}｜{n} 依赖 {d} / {n} depends on {d}'
+                     + ('' if (n, d) in structural else
+                        '；冗余直达（也可由其它依赖间接到达）/ redundant direct dependency '
+                        '(also reachable through other dependencies)') + '</title>')
             if (n, d) in structural:
                 span = level[n] - level[d]
                 op = 0.8 if span <= 3 else (0.55 if span <= 6 else 0.35)
@@ -230,8 +253,10 @@ for n in nodes:
     else:
         fill, stroke, tcolor, weight = '#f8fafc', '#cbd5e1', '#334155', '500'
     n_struct = sum(1 for d in deps[n] if (n, d) in structural)
-    o.append(f'<g class="n" id="nd-{n}"><title>{n}：被 {indeg[n]} 个模块依赖；自身直连 {len(deps[n])} 个'
-             f'（结构性 {n_struct} 个、冗余 {len(deps[n]) - n_struct} 个）</title>'
+    o.append(f'<g class="n" id="nd-{n}"><title>{n}｜被 {indeg[n]} 个模块依赖；自身直连 {len(deps[n])} 个'
+             f'（结构性 {n_struct}、冗余 {len(deps[n]) - n_struct}）\n'
+             f'{n} — depended on by {indeg[n]}; depends on {len(deps[n])} '
+             f'({n_struct} structural, {len(deps[n]) - n_struct} redundant)</title>'
              f'<rect x="{x:.1f}" y="{y:.1f}" width="{NW}" height="{NH}" rx="8" fill="{fill}" '
              f'stroke="{stroke}" stroke-width="1.3"/>'
              f'<rect x="{x + 6:.1f}" y="{y + NH - 5:.1f}" width="{NW - 12}" height="4" rx="2" '
@@ -245,12 +270,16 @@ root = ET.parse(OUT).getroot()
 NS = '{http://www.w3.org/2000/svg}'
 over = []
 for t in root.iter(NS + 'text'):
-    if not t.text or float(t.get('y', '0')) > HEAD:
+    if not t.text:
         continue
+    ty, tx = float(t.get('y', '0')), float(t.get('x', '0'))
     fs = float(t.get('font-size', '12.5'))
-    w = sum(fs * (1.04 if ord(c) > 0x2E80 else 0.55) for c in t.text)
-    if float(t.get('x', '0')) + w > W - 8:
-        over.append((t.text[:36], round(float(t.get('x', '0')) + w)))
+    if ty <= HEAD:                                   # 页眉里的文字：横向不能超出画布、纵向不能压进节点区
+        w = sum(fs * (1.04 if ord(c) > 0x2E80 else 0.55) for c in t.text)
+        if tx + w > W - 8:
+            over.append(('宽 ' + t.text[:30], round(tx + w)))
+        if ty > HEAD - 12:
+            over.append(('低 ' + t.text[:30], round(ty)))
 
 print(f'layered: nodes={len(nodes)} direct={edges} structural={len(structural)} redundant={redundant} '
       f'levels={maxl + 1} canvas={W:.0f}x{H:.0f} crossings={cross} size={os.path.getsize(OUT)} out={OUT}')
