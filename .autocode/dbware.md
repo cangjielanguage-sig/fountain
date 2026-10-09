@@ -5,7 +5,7 @@
 在fountain项目下面创建两个新的文件夹`f_dbd`和`fdbm`作为本项目新的仓颉模块。
 `f_dbd` 的编译目标是动态链接库，`fdbm`的编译目标是可执行文件。
 `fdbm` 是一个数据库中间件。
-`f_dbd`是`fdbm`的驱动，同时还提供`f_dbd`和`fdbm`的共用代码，`fdbm`要依赖`f_dbd`，比如承载sql和SQL参数的类就是共用代码，此类可做以下声明：
+`f_dbd`是`fdbm`的驱动，同时还提供`f_dbd`和`fdbm`的共用代码，`fdbm`要依赖`f_dbd`，比如承载sql和SQL参数的类以及驱动数据类型的实现就是共用代码，它们类可做以下声明：
 ```cj
 import std.database.sql.*
 
