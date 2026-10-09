@@ -13,13 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_orm.wrap
+package fountain::f_dbpool
 
 import std.unittest.*
 import std.unittest.testmacro.*
 import std.collection.ArrayList
 import fountain::f_mockdb.*
-import fountain::f_orm.exception.*
 
 /**
  * bug-orm.md §3.2 `ORM-L8`：同一条池化连接被归还两次必须被拦下。
@@ -31,6 +30,9 @@ import fountain::f_orm.exception.*
  * 这里直接压 `activate()`（借出）+ `close()`（归还）这对动作，不经过 `DatabasePool`：
  * 一是这两步就是缺陷所在，二是建池会连带读一批全局 ORM 配置（其它用例会写这些键），
  * 用例只想钉住归还语义。
+ *
+ * 随 `DatabasePool` / `PooledConnection` 从 `fountain::f_orm.wrap` 迁到 `fountain::f_dbpool`：
+ * 两者与本模块同名包，`ConnectionException` 也改用 f_dbpool 自己的那份。
  */
 @Test
 public class PooledConnectionReturn_test {

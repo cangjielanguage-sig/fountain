@@ -174,6 +174,11 @@ You can also use the same-named APIs of this module through the `fountain::fount
 
 **See details:**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_data/README_en.md>
 
+### `fountain::f_dbpool`
+Database connection pool built on f_pool, providing a Datasource connection pool (`DatabasePool` moved out of f_orm and re-exported by it)
+
+**See details:**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_dbpool/README_en.md>
+
 ### `fountain::f_exception`
 Exception module
 You can also use the same-named APIs of this module through the `fountain::fountain.exception` package.

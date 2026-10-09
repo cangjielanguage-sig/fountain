@@ -84,7 +84,23 @@ public class NamedDatasource <: Datasource & Resource {
                     }
                     p
                 } else {
-                    DatabasePool(driver, x)
+                    // DatabasePool 已迁到 fountain::f_dbpool（本模块重导出），不再有读 ORMConfig 的
+                    // `init(driver, ds)` 构造器：池参数在这里显式读取后传给 `init(ds, ...)`。
+                    DatabasePool(
+                        x,
+                        initSize: ORMConfig.getPoolInitSize(driverName: driver.name),
+                        minSize: ORMConfig.getPoolMinSize(driverName: driver.name),
+                        maxSize: ORMConfig.getPoolMaxSize(driverName: driver.name),
+                        checkOnCreation: ORMConfig.getCheckOnCreation(driverName: driver.name),
+                        checkOnBorrowing: ORMConfig.getCheckOnBorrowing(driverName: driver.name),
+                        checkOnReturning: ORMConfig.getCheckOnReturning(driverName: driver.name),
+                        connectionLife: ORMConfig.getConnectionLife(driverName: driver.name),
+                        idleTimeout: ORMConfig.getIdleTimeout(driverName: driver.name),
+                        checkInterval: ORMConfig.getPoolCheckInterval(driverName: driver.name),
+                        connectTimeout: ORMConfig.getConnectTimeout(driverName: driver.name),
+                        maxWaiting: ORMConfig.getPoolMaxWaiting(driverName: driver.name),
+                        checkSql: ORMConfig.getPoolCheckSql(driverName: driver.name)
+                    )
                 }
             case x => x
         }
