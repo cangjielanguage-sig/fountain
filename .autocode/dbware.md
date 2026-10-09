@@ -7,11 +7,46 @@
 `fdbm` 是一个数据库中间件。
 `f_dbd`是`fdbm`的驱动，同时还提供`f_dbd`和`fdbm`的共用代码，`fdbm`要依赖`f_dbd`，比如承载sql和SQL参数的类就是共用代码，此类可做以下声明：
 ```cj
+import std.database.sql.*
+
 //此类的实例转换为`fountain::f_data.Data`，作为`fountain::f_protocol.default.Message`的`data`成员变量
 @DataAssist[fields props]
 public class SqlPayload {
     private var sql: String = ''
     private var params: Array<DataAny> = []
+}
+
+@DataAssist[fields props]
+public class UpdateResultPayload <: UpdateResult{
+    private var rowCount: Int64
+    private var lastInsertId: Int64
+}
+
+//fdbm编码，f_dbd解码
+@DataAssist[fields props]
+public class QueryResultServerPayload{
+    private var columnInfos: Array<ColumnInfo>
+    private var hasData: Bool//本次查询是否有数据，
+    //如果有数据读取数据时就以QueryResultColumnPayload作为请求负载，以具体数据值作为响应负载。
+    //f_dbd以ColumnInfo的索引发起列读请求，fdbm以ColumnInfo的typeName决定以什么类型从物理数据库的驱动读取并编码。
+    //f_dbd收到数据以ColumnInfo决定以读取类型。
+}
+@DataAssist[fields props]
+public class QueryResultColumnPayload {
+    //从0开始
+    private var index: Int64
+    //仅对列类型是InputStream时有效，列类型是InputStream时返回的是最长bufSize的字节数组
+    private var bufSize: Int64
+}
+
+@DataAssist[fields props]
+public class ColumnInfoImpl <: ColumnInfo{
+    private var name: String
+    private var typeName: String
+    private var length: Int64
+    private var scale: Int64
+    private var nullable: Bool
+    private var displaySize: Int64
 }
 ```
 这两个模块依赖`f_codec`实现编解码，使用`f_protocol`作为二者之间的通讯协议，使用`f_net`完成二者之间的网络通讯，使用`f_log`记录日志，使用`f_config`进行配置管理。
