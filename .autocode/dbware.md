@@ -196,6 +196,8 @@ UPDATE 也要支持JOIN。
 采用f_store缓存分库列值和物理库的关系，默认开启，且永久保存。
 缓存KEY是`'<logical_database_name>.<table_name>.<column_name>:<value_string>'.unsafeBytes()`，值是`<physical_database_name>.unsafeBytes()`
 unsafeBytes 是fountain::f_base对字符串的扩展。
+执行DELETE时，要先把受影响的数据行的分库键都查出来，然后删除记录，再删除缓存。
+UPDATE/SELECT时，如果缓存中存在，但是数据库不存在，则从缓存中删除。**注意**，可能只有一部分缓存在数据库中存在，有一部分不存在。
 ```
 export fdbm_cache=true # 是否开启缓存
 export fdbm_cache_expire=1d # 缓存过期时间，不填则永久保存，采用Duration.toString()的字符串格式
