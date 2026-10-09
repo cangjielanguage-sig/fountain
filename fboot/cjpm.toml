@@ -11,8 +11,8 @@
   target-dir = ""
   # compile-option = "--static --static-std"
 
-  compile-option = "--dy-std"
-  override-compile-option = "--dy-std"
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
 
   organization = "fountain"
   version = "1.3.14"
@@ -29,27 +29,27 @@
 
 [target]
 [target.x86_64-unknown-linux-gnu]
-  compile-option = "--lto=full --dy-std -ldl -O2"
-  override-compile-option = "--lto=full --dy-std -ldl -O2"
+  compile-option = "-O2 --lto=full --dy-std -ldl -O2"
+  override-compile-option = "-O2 --lto=full --dy-std -ldl -O2"
 
-  # compile-option = "--lto=full -ldl -O2"
-  # override-compile-option = "--lto=full -ldl -O2"
+  # compile-option = "-O2 --lto=full -ldl -O2"
+  # override-compile-option = "-O2 --lto=full -ldl -O2"
 [target.aarch64-unknown-linux-gnu]
-  compile-option = "--lto=full --dy-std -ldl -O2"
-  override-compile-option = "--lto=full --dy-std -ldl -O2"
+  compile-option = "-O2 --lto=full --dy-std -ldl -O2"
+  override-compile-option = "-O2 --lto=full --dy-std -ldl -O2"
 [target.x86_64-w64-mingw32]
-  compile-option = "--dy-std -lcrypt32"
-  override-compile-option = "--dy-std -lcrypt32"
+  compile-option = "-O2 --dy-std -lcrypt32"
+  override-compile-option = "-O2 --dy-std -lcrypt32"
 [target.x86_64-apple-darwin]
-  compile-option = "--dy-std"
-  override-compile-option = "--dy-std"
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
 [target.aarch64-apple-darwin]
-  compile-option = "--dy-std"
-  override-compile-option = "--dy-std"
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
 [target.aarch64-linux-ohos]
-  compile-option = "--dy-std -ldl"
-  override-compile-option = "--dy-std -ldl"
+  compile-option = "-O2 --dy-std -ldl"
+  override-compile-option = "-O2 --dy-std -ldl"
 [target.x86_64-linux-ohos]
-  compile-option = "--dy-std -ldl"
-  override-compile-option = "--dy-std -ldl"
+  compile-option = "-O2 --dy-std -ldl"
+  override-compile-option = "-O2 --dy-std -ldl"
 
