@@ -1,6 +1,6 @@
 # 启动脚本生成指南（boot.sh / boot-macos.sh / boot-win-gitbash.sh）
 
-工作流 E / F 的「搭骨架」阶段要为项目生成三平台启动脚本，模板取自 `fdemo`（Web/MVC 型）与
+工作流 F / G / H 的「搭骨架」阶段要为项目生成三平台启动脚本，模板取自 `fdemo`（Web/MVC 型）与
 `frpcdemo`（RPC 型）。本文件是选用、合并与校验规则；**模板源码永远以仓库里的两份 demo 为准**
 （先用 `fountain_lookup.py root` 定位仓库根，再 read 对应文件）。
 

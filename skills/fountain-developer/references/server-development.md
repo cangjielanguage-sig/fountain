@@ -1,6 +1,6 @@
 # 服务器应用开发指南（fountain）
 
-本文是工作流 E 的展开。所有 API 细节以 `fdemo/` 实际代码与各模块 README 为准；语法与标准库问题用
+本文是工作流 F 的展开。所有 API 细节以 `fdemo/` 实际代码与各模块 README 为准；语法与标准库问题用
 `cangjie-coding` / `cangjie-doc-lookup` 技能查证，不要凭记忆写。
 
 ## 1. 应用模型
@@ -151,9 +151,11 @@ fboot cleanUpdate [PATH]
    在项目内自行实现完整功能和要求的基础设施代码、工具代码），并明确说明缺口是什么、影响哪些需求点。
 4. 禁止项：把缺失能力写成空实现或假数据；引用没核对过的第三方库；把「标准库/其它语言有」当成「fountain 有」。
 
-## 6. 验收
+## 6. 测试与验收
 
-- 构建通过（`fboot build` 无错误）。
-- 启动后按需求逐条验证接口（`curl` 冒烟优先，必要时写单元测试）。
-- 检查日志（`logger_*` 配置的输出）无异常堆栈。
+三类测试的分工与门禁见 `references/delivery-workflow.md`（第 3–5 节）：
+
+- **单元测试（TDD）**：每个功能点先写测试再实现（Red-Green-Refactor）；`cjpm test` / `fboot test`。
+- **回归测试**：每批功能完成后跑全量测试（含既有用例）；交付节点（提交前 / 打 tag 前）必须再跑一次。
+- **冒烟测试**：起服务后验证关键路径（HTTP 项目 curl 核心接口；RPC 项目 runServer + runClient 打通一次），并检查日志（`logger_*`）无异常堆栈。
 - 数据库相关：先用 `f_mockdb` 或真实库跑通最小 DAO 用例再铺开。
