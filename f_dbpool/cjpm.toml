@@ -1,5 +1,5 @@
 [dependencies]
-  "fountain::f_exception" = {path = "../f_exception"}
+  "fountain::f_base" = {path = "../f_base"}
   "fountain::f_log" = {path = "../f_log"}
   "fountain::f_pool" = {path = "../f_pool"}
 

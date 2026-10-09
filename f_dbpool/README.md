@@ -2,13 +2,13 @@
 
 数据库连接池模块：用 `fountain::f_pool.Pool` 池化 `std.database.sql` 的连接，对上层暴露 `Datasource` / `Resource`。
 
-本模块从 `fountain::f_orm.wrap` 迁出（`DatabasePool` / `PooledConnection`），只依赖 `f_pool`、`f_log`、`f_exception`，**不读任何配置项**：池参数与连接串一律由调用方给出。`f_orm` 依赖本模块，并在 `f_orm/src/wrap/DatabasePool.cj` 重导出 `fountain::f_dbpool.DatabasePool`。
+本模块从 `fountain::f_orm.wrap` 迁出（`DatabasePool` / `PooledConnection`），只依赖 `f_base`、`f_log`、`f_pool`，**不读任何配置项**：池参数与连接串一律由调用方给出。`f_orm` 依赖本模块，并在 `f_orm/src/wrap/DatabasePool.cj` 重导出 `fountain::f_dbpool.DatabasePool`。
 
 ## 包结构
 
 | 包 | 内容 |
 | --- | --- |
-| `fountain::f_dbpool` | `DatabasePool`、`PooledConnection`（包内，不导出）、`ORMException`、`ConnectionException` |
+| `fountain::f_dbpool` | `DatabasePool`、`PooledConnection`（包内，不导出）、`ConnectionException` |
 
 ## `DatabasePool`
 
@@ -47,15 +47,20 @@ public class DatabasePool <: Resource & Datasource {
 - `connect()`：`getConnection()` 取不到时抛 `ConnectionException()`。
 - `close()` 幂等：先关 `Datasource`，再关池（池内连接由 `Pool` 的销毁回调逐个关闭）。
 - 借出的是 `PooledConnection`（`Connection` 实现），它的 `close()` 即归还；重复归还抛 `ConnectionException('The database connection was returned multiple times.')`。
-- `checkSql` 以 `select`（忽略大小写）开头时走 `query()` 取 `next()`，否则走 `update()` 取 `rowCount > 0`；**短于 6 个字符**时抛 `ORMException`（不可能是合法语句）。
+- `checkSql` 以 `select`（忽略大小写）开头时走 `query()` 取 `next()`，否则走 `update()` 取 `rowCount > 0`；**短于 6 个字符**时抛 `ConnectionException`（不可能是合法语句）。
 - `connectionLife` / `idleTimeout` / `checkInterval` 由 `Pool` 负责：超过 `connectionLife` 的连接在借出校验时被判为无效并重建；`<= Duration.Zero` 或 `Duration.Max` 的 `checkInterval` 表示不启用巡检。
+
+## 异常
+
+本模块只定义 `ConnectionException`（`<: fountain::f_base.BaseException`，带 `message` / `caused` 的四种构造）：连接池相关的报错（池已关闭、取不到连接、重复归还、`checkSql` 非法）统一抛它。**不定义 `ORMException`**——要按异常根统一捕获时用 `f_base.BaseException`。
+
+注意它与 `fountain::f_orm.exception.ConnectionException` 是**两个独立声明**（f_orm 保留自己那份，仍挂在 `ORMException` 下）：捕获连接池抛出的异常要用 `fountain::f_dbpool.ConnectionException`。
 
 ## 与 `f_orm` 的关系
 
 - `fountain::f_orm.wrap.DatabasePool` 是**重导出**，与 `fountain::f_dbpool.DatabasePool` 是同一个类型。
 - 原 `init(driver: Driver, ds: Datasource)`（12 个参数取自 `ORMConfig` 的 `orm_databasePool*` 配置项）已删除：`f_orm` 的 `NamedDatasource` 自己读 `ORMConfig` 后调用上面的构造器 2，其它调用方按同样办法显式传参。
 - 原 `init(driver: Driver, options!)` 改为构造器 3，`url` 显式传入（不再从 `ORMConfig.getUrl` 取）。
-- 本模块的 `ORMException` / `ConnectionException` 是从 `fountain::f_orm.exception` 同名类**复制**过来的独立声明（f_orm 保留自己的那份）：两者都继承 `f_exception.BaseException`，但彼此没有继承关系。捕获连接池抛出的异常要用 `fountain::f_dbpool` 下的类型。
 
 ## 测试
 

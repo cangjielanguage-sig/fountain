@@ -24,7 +24,7 @@ package fountain::f_orm.wrap
  *   自己读（本模块 `NamedDatasource` 就是这么做的）；
  * - `init(driver: Driver, options!)` 改为 `init(driver: Driver, url: String, options!)`，
  *   连接串不再从 `ORMConfig.getUrl` 取。
- * 抛出的 `ConnectionException` / `ORMException` 也是 `fountain::f_dbpool` 里的那一份，
- * 与 `fountain::f_orm.exception` 下的同名类型不是同一个声明。
+ * 抛出的 `ConnectionException` 是 `fountain::f_dbpool.ConnectionException`（直接继承 `f_base.BaseException`，
+ * f_dbpool 不提供 `ORMException`），与 `fountain::f_orm.exception.ConnectionException` 不是同一个声明。
  */
 public import fountain::f_dbpool.DatabasePool

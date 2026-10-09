@@ -15,7 +15,9 @@ limitations under the License.
 */
 package fountain::f_dbpool
 
-public open class ConnectionException <: ORMException {
+import fountain::f_base.BaseException
+
+public open class ConnectionException <: BaseException {
     public init() {}
 
     public init(message: String) {

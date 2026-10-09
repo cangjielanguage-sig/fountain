@@ -277,12 +277,12 @@ f_codec depends on f_exception (direct dependency, 5 API references (not in top 
 f_codec depends on f_pool (direct dependency, 104.1 API references (not in top 3))</title></rect>
 <rect class="c" x="485" y="769" width="16" height="16" rx="3" fill="#bc2c68" stroke="#ffffff" stroke-width="0.5"><title>f_codec 依赖 f_util（直接依赖，源码里已引用对方 API，引用 109.3 次（前三））
 f_codec depends on f_util (direct dependency, 109.3 API references (top 3))</title></rect>
-<rect class="c" x="215" y="787" width="16" height="16" rx="3" fill="#a6e89d" stroke="#ffffff" stroke-width="0.5"><title>f_dbpool 依赖 f_exception（直接依赖，源码里已引用对方 API，引用 1 次（前三））
-f_dbpool depends on f_exception (direct dependency, 1 API references (top 3))</title></rect>
-<rect class="c" x="521" y="787" width="16" height="16" rx="3" fill="#50d23e" stroke="#ffffff" stroke-width="0.5"><title>f_dbpool 依赖 f_log（直接依赖，源码里已引用对方 API，引用 30 次（前三））
-f_dbpool depends on f_log (direct dependency, 30 API references (top 3))</title></rect>
-<rect class="c" x="557" y="787" width="16" height="16" rx="3" fill="#6cd95d" stroke="#ffffff" stroke-width="0.5"><title>f_dbpool 依赖 f_pool（直接依赖，源码里已引用对方 API，引用 9 次（前三））
-f_dbpool depends on f_pool (direct dependency, 9 API references (top 3))</title></rect>
+<rect class="c" x="143" y="787" width="16" height="16" rx="3" fill="#6cd95d" stroke="#ffffff" stroke-width="0.5"><title>f_dbpool 依赖 f_base（直接依赖，源码里已引用对方 API，引用 13.5 次（前三））
+f_dbpool depends on f_base (direct dependency, 13.5 API references (top 3))</title></rect>
+<rect class="c" x="521" y="787" width="16" height="16" rx="3" fill="#50d23e" stroke="#ffffff" stroke-width="0.5"><title>f_dbpool 依赖 f_log（直接依赖，源码里已引用对方 API，引用 22.5 次（前三））
+f_dbpool depends on f_log (direct dependency, 22.5 API references (top 3))</title></rect>
+<rect class="c" x="557" y="787" width="16" height="16" rx="3" fill="#89e07d" stroke="#ffffff" stroke-width="0.5"><title>f_dbpool 依赖 f_pool（直接依赖，源码里已引用对方 API，引用 6 次（前三））
+f_dbpool depends on f_pool (direct dependency, 6 API references (top 3))</title></rect>
 <rect class="c" x="539" y="805" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_health 依赖 f_app（直接依赖，源码里已引用对方 API，引用 2 次（未进前三））
 f_health depends on f_app (direct dependency, 2 API references (not in top 3))</title></rect>
 <rect class="c" x="449" y="805" width="16" height="16" rx="3" fill="#8e7de0" stroke="#ffffff" stroke-width="0.5"><title>f_health 依赖 f_config（直接依赖，源码里已引用对方 API，引用 4 次（前三））
@@ -543,7 +543,7 @@ fleet depends on f_store (direct dependency, 11.8 API references (not in top 3))
 fleet depends on f_util (direct dependency, 26.3 API references (not in top 3))</title></rect>
 <text x="134" y="312.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end" font-weight="700">f_base</text>
 <text x="154.0" y="274" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 154.0 274)" font-weight="700">f_base</text>
-<text x="150.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">33</text>
+<text x="150.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">34</text>
 <text x="134" y="330.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_mockdb</text>
 <text x="172.0" y="274" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 172.0 274)">f_mockdb</text>
 <text x="168.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">0</text>
@@ -555,7 +555,7 @@ fleet depends on f_util (direct dependency, 26.3 API references (not in top 3))<
 <text x="204.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">2</text>
 <text x="134" y="384.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end" font-weight="700">f_exception</text>
 <text x="226.0" y="274" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 226.0 274)" font-weight="700">f_exception</text>
-<text x="222.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">19</text>
+<text x="222.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">18</text>
 <text x="134" y="402.0" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="end">f_random</text>
 <text x="244.0" y="274" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#334155" text-anchor="start" transform="rotate(-90 244.0 274)">f_random</text>
 <text x="240.0" y="290" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">7</text>

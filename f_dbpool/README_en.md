@@ -2,13 +2,13 @@
 
 Database connection pool module: pools `std.database.sql` connections with `fountain::f_pool.Pool`, and exposes `Datasource` / `Resource` to callers.
 
-It was moved out of `fountain::f_orm.wrap` (`DatabasePool` / `PooledConnection`). It only depends on `f_pool`, `f_log` and `f_exception`, and **reads no configuration**: pool options and the connection URL always come from the caller. `f_orm` depends on this module and re-exports `fountain::f_dbpool.DatabasePool` in `f_orm/src/wrap/DatabasePool.cj`.
+It was moved out of `fountain::f_orm.wrap` (`DatabasePool` / `PooledConnection`). It only depends on `f_base`, `f_log` and `f_pool`, and **reads no configuration**: pool options and the connection URL always come from the caller. `f_orm` depends on this module and re-exports `fountain::f_dbpool.DatabasePool` in `f_orm/src/wrap/DatabasePool.cj`.
 
 ## Package layout
 
 | Package | Contents |
 | --- | --- |
-| `fountain::f_dbpool` | `DatabasePool`, `PooledConnection` (package-internal, not exported), `ORMException`, `ConnectionException` |
+| `fountain::f_dbpool` | `DatabasePool`, `PooledConnection` (package-internal, not exported), `ConnectionException` |
 
 ## `DatabasePool`
 
@@ -47,15 +47,20 @@ Behavior notes:
 - `connect()`: throws `ConnectionException()` when `getConnection()` returns `None`.
 - `close()` is idempotent: it closes the `Datasource` first, then the pool (pooled connections are closed by `Pool`'s destroy callback one by one).
 - Borrowed connections are `PooledConnection` (a `Connection` implementation); its `close()` returns the connection to the pool, and returning the same connection twice throws `ConnectionException('The database connection was returned multiple times.')`.
-- `checkSql` starting with `select` (case-insensitive) is executed via `query()` and `next()`; otherwise via `update()` with `rowCount > 0`. A statement **shorter than 6 characters** throws `ORMException` (it cannot be a valid statement).
+- `checkSql` starting with `select` (case-insensitive) is executed via `query()` and `next()`; otherwise via `update()` with `rowCount > 0`. A statement **shorter than 6 characters** throws `ConnectionException` (it cannot be a valid statement).
 - `connectionLife` / `idleTimeout` / `checkInterval` are handled by `Pool`: a connection older than `connectionLife` is treated as invalid on the borrow check and recreated; a `checkInterval` of `<= Duration.Zero` or `Duration.Max` disables the inspection thread.
+
+## Exceptions
+
+This module defines only `ConnectionException` (`<: fountain::f_base.BaseException`, with the four `message` / `caused` constructors): every pool-related failure (pool already closed, no connection available, double return, invalid `checkSql`) throws it. **There is no `ORMException` here** — to catch by exception root, use `f_base.BaseException`.
+
+Note that it is a **separate declaration** from `fountain::f_orm.exception.ConnectionException` (f_orm keeps its own, still under `ORMException`): to catch exceptions thrown by the pool, use `fountain::f_dbpool.ConnectionException`.
 
 ## Relationship with `f_orm`
 
 - `fountain::f_orm.wrap.DatabasePool` is a **re-export**; it is the very same type as `fountain::f_dbpool.DatabasePool`.
 - The former `init(driver: Driver, ds: Datasource)` (whose 12 arguments came from the `orm_databasePool*` configuration read by `ORMConfig`) has been removed: `f_orm`'s `NamedDatasource` reads `ORMConfig` itself and calls constructor 2 above; other callers pass the values explicitly the same way.
 - The former `init(driver: Driver, options!)` became constructor 3, with an explicit `url` (no longer taken from `ORMConfig.getUrl`).
-- `ORMException` / `ConnectionException` here are **copies** of the same-named classes in `fountain::f_orm.exception` (f_orm keeps its own): both extend `f_exception.BaseException`, but they have no inheritance relationship with each other. To catch exceptions thrown by the pool, use the types from `fountain::f_dbpool`.
 
 ## Tests
 

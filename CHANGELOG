@@ -83,4 +83,4 @@ release-1.3.1.alpha
 
 2026-10-09
     新增 f_dbpool 模块（数据库连接池）：DatabasePool、PooledConnection 从 fountain::f_orm.wrap 迁入，f_orm 依赖该模块并在原 DatabasePool.cj 内重导出 fountain::f_dbpool.DatabasePool
-    ORMException、ConnectionException 从 f_orm 原样复制到 f_dbpool（f_orm 保留原有声明）；DatabasePool 的 init(driver: Driver, ds: Datasource) 删除（f_orm 侧改为显式读 ORMConfig 后传参），init(driver, options) 改为显式传 url
+    ConnectionException 复制到 f_dbpool（直接继承 f_base.BaseException，f_dbpool 不提供 ORMException；f_orm 保留自己那份）；DatabasePool 的 init(driver: Driver, ds: Datasource) 删除（f_orm 侧改为显式读 ORMConfig 后传参），init(driver, options) 改为显式传 url

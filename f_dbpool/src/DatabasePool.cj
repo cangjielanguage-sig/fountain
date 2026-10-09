@@ -119,8 +119,9 @@ public class DatabasePool <: Resource & Datasource {
             checker: {
                 c => if (checkSql.size < 6) {
                     // bug-orm.md §3.1 ORM-C4：短于 6 个字符的 checkSql 不可能是合法语句——原实现直接做
-                    // `checkSql[0..6]`，会在借连接校验时抛 IndexOutOfBoundsException；改为显式报 ORMException。
-                    throw ORMException('checkSql is too short to be a valid statement: [${checkSql}]')
+                    // `checkSql[0..6]`，会在借连接校验时抛 IndexOutOfBoundsException；改为显式抛 ConnectionException
+                    // （f_dbpool 不引入 ORMException，本模块的异常只有 ConnectionException 一种）。
+                    throw ConnectionException('checkSql is too short to be a valid statement: [${checkSql}]')
                 } else if (checkSql[0..6].toLower() == "select") {
                     try (stmt = c.prepareStatement(checkSql)) {
                         try (r = stmt.query()) {
