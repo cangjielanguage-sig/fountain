@@ -7,13 +7,14 @@
 `fdbm` 是一个数据库中间件。
 `f_dbd`是`fdbm`的驱动，同时还提供`f_dbd`和`fdbm`的共用代码，`fdbm`要依赖`f_dbd`，比如承载sql和SQL参数的类以及驱动数据类型的实现就是共用代码，它们类可做以下声明：
 ```cj
+import std.collection.ArrayList
 import std.database.sql.*
 
 //此类的实例转换为`fountain::f_data.Data`，作为`fountain::f_protocol.default.Message`的`data`成员变量
 @DataAssist[fields props]
 public class SqlPayload {
     private var sql: String = ''
-    private var params: Array<DataAny> = []
+    private var params: ArrayList<DataAny> = []
 }
 
 @DataAssist[fields props]
