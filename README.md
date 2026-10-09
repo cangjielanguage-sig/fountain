@@ -74,6 +74,18 @@ fboot help # 显示fboot的其他功能
 
 依赖图的生成脚本与重画方式见 [`docs/模块依赖图`](docs/模块依赖图/README.md)。
 
+## `fountain-developer`
+
+`skills/fountain-developer` 是面向 AI 编程智能体的技能（标准 Agent Skills 布局，不绑定特定工具），把「用 fountain 开发一个应用」的完整流程固化下来，让智能体按同一套流程完成下面这些事：
+
+- 安装 `fboot`、初始化 workspace、用 `fboot module` 创建模块、为项目添加中心仓模块依赖；
+- 按需求文档开发服务器应用（MVC / ORM / Bean / AOP / 认证 / 定时任务等），遇到 fountain 尚未覆盖的能力时先与开发者确认方案再继续；
+- 把其他语言（Python / Java / Go / Node 等）的项目转换为仓颉项目。
+
+技能的 API 依据**始终来自本仓库的代码与 README**：内置的 `scripts/fountain_lookup.py` 会定位本仓库并提供模块清单、关键词检索（同时覆盖 README 与源码）与模块公开声明清单；本机没有本仓库源码时会自动克隆一份文档副本（仅用于查询）。它还会联动仓颉知识库技能（`cangjie-coding` / `cangjie-doc-lookup`）查证语法与 std/stdx API，并在创建项目时参考 `fdemo` / `frpcdemo` 生成三平台启动脚本（`boot.sh` / `boot-macos.sh` / `boot-win-gitbash.sh`）。
+
+使用方式：把 `skills/fountain-developer` 放进你所用编程智能体的技能目录（如 CodeBuddy 的 `~/.codebuddy/skills/`、Claude Code 的 `~/.claude/skills/`，或项目内的技能目录）；不支持技能机制的智能体，直接让它阅读 `skills/fountain-developer/SKILL.md` 即可。
+
 ## 各模块详细文档
 ### `fountain::f_app`
 应用进程管理模块，可以用本模块加载使用fountain开发的应用项目动态链接库。

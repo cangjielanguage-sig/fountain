@@ -84,6 +84,18 @@ row are colored cells, the rest are pale grey):
 
 The generators and how to redraw the diagrams: see [`docs/模块依赖图`](docs/模块依赖图/README.md).
 
+## `fountain-developer`
+
+`skills/fountain-developer` is a skill for AI coding agents (a standard Agent Skills layout, not tied to any specific tool); it captures the complete workflow of building an application with fountain, so the agent can follow one single procedure to:
+
+- install `fboot`, initialize a workspace, create modules with `fboot module`, and add central-repository module dependencies to a project;
+- develop a server application from a requirements document (MVC / ORM / Bean / AOP / security / scheduled tasks), and confirm the plan with the developer first whenever fountain does not cover a required capability;
+- port projects written in other languages (Python / Java / Go / Node, etc.) to Cangjie.
+
+The skill always takes its API facts **from this repository's code and READMEs**: the bundled `scripts/fountain_lookup.py` locates this repository and provides module lists, keyword search (covering both READMEs and sources) and per-module public declaration listings; when no local checkout exists it clones a documentation copy automatically (for lookup only). It also links the Cangjie knowledge skills (`cangjie-coding` / `cangjie-doc-lookup`) to verify language and std/stdx APIs, and follows `fdemo` / `frpcdemo` to generate three-platform launch scripts (`boot.sh` / `boot-macos.sh` / `boot-win-gitbash.sh`) for new projects.
+
+Usage: copy `skills/fountain-developer` into your coding agent's skills directory (e.g. CodeBuddy's `~/.codebuddy/skills/`, Claude Code's `~/.claude/skills/`, or a project-local skills directory); agents without a skill mechanism can simply read `skills/fountain-developer/SKILL.md`.
+
 ## Detailed documentation of each module
 ### `fountain::f_app`
 Application process management module; this module can load application projects developed with fountain as dynamic libraries.
