@@ -9,12 +9,22 @@
 ```cj
 import std.collection.ArrayList
 import std.database.sql.*
+import fountain::f_data.*
 
 //此类的实例转换为`fountain::f_data.Data`，作为`fountain::f_protocol.default.Message`的`data`成员变量
+//在f_dbd的Statement实现内部创建SqlPayload，Statement的set<T>函数和setNull()调用它的add<T>(...)和addNull()填充参数
+//f_dbd编码，fdbm解码
 @DataAssist[fields props]
 public class SqlPayload {
     private var sql: String = ''
-    private var params: ArrayList<DataAny> = []
+    private let params = ArrayList<DataAny>()
+
+    func add<T>(param: T): Unit where T <: ToData {
+         params.add(DataAny(param.toData()))
+    }
+    func addNull(): Unit {
+        params.add(DataAny(DataNone.INSTANCE))
+    }
 }
 
 @DataAssist[fields props]
