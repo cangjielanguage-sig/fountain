@@ -204,5 +204,16 @@ export fdbm_cache_expire=1d # 缓存过期时间，不填则永久保存，采�
 export fdbm_cache_size=10000000 # 缓存KEY的数量，默认不限制
 ```
 
+### 与f_dbd交互
+通讯协议和编解码格式前面已经介绍过。
+允许定义多个逻辑数据库，并且f_dbd要能够用`show databases`查看，能够用`show tables [logical_database_name] [like '...']`查看指定逻辑数据库的表，如果没有指定逻辑数据库，就是查看当前数据库。
+可以通过f_dbd执行`create table` `alter table`。
+可以通过f_dbd执行`export <config_item>=<value>` 修改配置项，并把配置项落到启动脚本中。
+
+### 启动脚本
+在fdbm定义boot.sh，里面要包含各种配置项和启动与停止命令。
+### 优雅停止
+响应kill -15，停止接收新的访问，等待执行完成并响应已接收到的访问，自动关闭所有连接，然后结束进程
+
 ## `f_dbd`
 完整实现`std.database.sql`的全部API。采用仓颉侧的数据类型，不是`std.database.sql`的数据类型。
