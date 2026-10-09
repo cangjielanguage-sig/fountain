@@ -172,7 +172,7 @@ export fdbm_idmaker=uuid,1
 ```
 ```sql
 create table fountain_sequence(
-    table_name varchar(64) not null comment '值是`logical_database_name`.`table_name`',
+    table_name varchar(64) not null comment '值是<logical_database_name>.<table_name>',
     current_value bigint not null comment '从1开始',
     increment bigint not null comment '每次递增的步长值',
     primary key(table_name)
@@ -183,6 +183,24 @@ create table fountain_sequence(
 ### 数据库兼容性
 可以提供mysql和postgres的支持，但是`/path/to/fdbm/driver`下面只能有一个驱动。如果有两个驱动要**错误**并**结束进程**。
 fdbm不负责SQL方言的转换，`f_dbd`的SQL方言要与`/path/to/fdbm/driver`保持一致。
+
+### SQL兼容性
+尽量使用简单SQL，复杂SQL会影响性能。
+fdbm负责解析INSERT UPDATE DELETE SELECT，及JOIN等各种语法。
+INSERT INTO ... SELECT，拆成INSERT INTO ... VALUES ...和SELECT。如果SELECT 出多行，逐行INSERT。
+INSERT INTO <table_name> SET <column_name>=<value>, <column_name>=<value> ... 也要支持
+UPDATE 也要支持JOIN。
+不支持存储过程和函数。
+
+### 缓存
+采用f_store缓存分库列值和物理库的关系，默认开启，且永久保存。
+缓存KEY是`'<logical_database_name>.<table_name>.<column_name>:<value_string>'.unsafeBytes()`，值是`<physical_database_name>.unsafeBytes()`
+unsafeBytes 是fountain::f_base对字符串的扩展。
+```
+export fdbm_cache=true # 是否开启缓存
+export fdbm_cache_expire=1d # 缓存过期时间，不填则永久保存，采用Duration.toString()的字符串格式
+export fdbm_cache_size=10000000 # 缓存KEY的数量，默认不限制
+```
 
 ## `f_dbd`
 完整实现`std.database.sql`的全部API。采用仓颉侧的数据类型，不是`std.database.sql`的数据类型。
