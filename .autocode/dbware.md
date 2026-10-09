@@ -62,7 +62,7 @@ public class ColumnInfoImpl <: ColumnInfo{
 ```
 这两个模块依赖`f_codec`实现编解码，使用`f_protocol`作为二者之间的通讯协议，使用`f_net`完成二者之间的网络通讯，使用`f_log`记录日志，使用`f_config`进行配置管理。
 对于`f_codec`、`f_protocol`、`f_net`的使用可参考`f_rpc`模块。
-使用`f_fdbm`的PooledDatasource连接物理数据库。
+使用`f_dbpool`的DatabasePool连接物理数据库。
 
 从`f_dbd`访问`fdbm`使用`f_protocol`的*CONSUME*命令，从`fdbm`响应`f_dbd`使用`f_protocol`的*RESP*命令。
 
@@ -262,4 +262,60 @@ export fdbm_cache_size=10000000 # 缓存KEY的数量，默认不限制
 响应kill -15，停止接收新的访问，等待执行完成并响应已接收到的访问，自动关闭所有连接，然后结束进程
 
 ## `f_dbd`
-完整实现`std.database.sql`的全部API。采用仓颉侧的数据类型，不是`std.database.sql`的数据类型。
+1. 完整实现`std.database.sql`的全部API。采用仓颉侧的数据类型，不是`std.database.sql`的数据类型。
+   - url: `fdbm://username:password@host:port/database_name`
+     - username password支持%编码
+   - 同样支持从open函数的opts参数传递username和password
+2. 提供多fdbm负载均衡。
+- 实现`public class MultiD <: Driver`
+```cj
+import std.database.sql.*
+import fountain::f_version.Version
+public class MultiD <: Driver {
+    public prop name: String {
+        get(){
+            'multidbd
+        }
+    }
+    public prop preferredPooling: Bool {
+        get(){
+            false//内部已使用连接池，不必再池化
+        }
+    }
+    public prop version: String {
+        get(){
+            Version
+        }
+    }
+    public func open(connectionString: String, opts: Array<(String, String)>): Datasource {
+        //connectionString: multidbm://username1:password1@host1:port1,username1:password1@host2:port2/database_name
+        //用户名密码支持%编码
+    }
+}
+public class MultiDatasource <: Datasource {
+    private let loadbalance: LoadBalance<Int64, DatabasePool, Connection>
+    public init(url: String){
+        //从fountain::f_config.Config读取连接池参数、负载均衡算法、权重配置
+    }
+}
+```
+- MultiD的连接池配置
+```
+export multidbm_loadbalance=random # 随机负载均衡
+export multidbm_loadbalance=roundrobin # 轮询负载均衡
+export multidbm_loadbalance=1,2,3 # 权重值，英文逗号分隔，如果不指定则各个fdbm的权重一致，权重值的顺序与url中节点顺序一致
+
+# 下面是连接池配置
+export multidbm_databasePoolInitSize=1 # 初始连接数
+export multidbm_databasePoolMinSize=1 # 最小连接数
+export multidbm_databasePoolMaxSize=1 # 最大连接数
+export multidbm_databasePoolCheckOnCreation=true # 创建连接时是否检查连接有效性，默认是false
+export multidbm_databasePoolCheckOnBorrowing=true # 获取连接时是否检查连接有效性，默认是true
+export multidbm_databasePoolCheckOnReturning=false # 归还连接时是否检查连接有效性，默认是true
+export multidbm_databasePoolIdleTimeout=0 # 连接闲置时间，默认是0，表示闲置不过期
+export multidbm_databasePoolConnectionLife=86400 # 连接存活时间，默认是3600，单位是秒
+export multidbm_databasePoolCheckInterval=300 # 连接有效性检查周期，默认是300，单位是秒
+export multidbm_databasePoolConnectTimeout=50 # 默认是50，单位是毫秒，从fountain.fdbm.DatabasePool获取连接的超时时间
+export multidbm_databasePoolMaxWaiting=30000 # 默认是30000（单位毫秒，即30秒）。池耗尽且调用方用无限等待（Duration.Max）取连接时的等待上限；超过上限就记WARN并返回None，避免无日志挂死；配成0表示真无限等待
+export multidbm_databasePoolCheckSql='select 1' # 检查连接有效性的SQL，默认是select 1
+```
