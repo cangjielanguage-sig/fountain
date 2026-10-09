@@ -295,8 +295,16 @@ public class MultiD <: Driver {
 public class MultiDatasource <: Datasource {
     private let loadbalance: LoadBalance<Int64, DatabasePool, Connection>
     public init(url: String){
-        //从fountain::f_config.Config读取连接池参数、负载均衡算法、权重配置
+        //从MultiDConfig读取连接池参数、负载均衡算法、权重配置
+        //解析url，构造fdbm的url，实例化fountain::f_dbd实现的Datasource，结合从MultiConfig得到的连接池参数，为每个fdbm节点构造一个DatabasePool
+        //利用从MultiConfig得到的权重配置，构造一个LoadBalance实例
     }
+    public func connect(): Connection {
+        //返回fountaion::f_dbd实现的Connection实例
+    }
+}
+struct MultiDConfig{
+    //为每个配置项添加一个get开头的静态函数
 }
 ```
 - MultiD的连接池配置
