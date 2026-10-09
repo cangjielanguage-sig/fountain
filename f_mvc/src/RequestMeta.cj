@@ -195,8 +195,17 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         this.headers.check(request.headers) && this.params.check(request.form, request.url)
     }
     public func setHandle<T>(fn: (T, HttpContext, HttpRequestPathPatterns) -> Any): Unit where T <: Object {
-        let controllerBeanManager = BeanFactory.instance.iterator<T>().next().getOrThrow()
-        let controllerGetter = if(controllerBeanManager.meta.scope.isSingleton){
+        let controllerBeanManager = match(BeanFactory.instance.iterator<T>().next()){
+            case Some(x) => x
+            case _ => throw UnreachableException()
+        }
+        var controllerGetter = {=> 
+            match(controllerBeanManager.bean){
+                case x: T => x
+                case _ => throw UnreachableException()
+            }
+        }
+        controllerGetter = if(controllerBeanManager.meta.scope.isSingleton){
             // 单例仍是「取一次」，但推迟到首次请求再取：setHandle 是 @Controller 宏在模块初始化期
             // 执行的注册代码，此刻其它库的 bean 可能尚未注册（fdemo 实测 lookup<UserService>() 抛
             // BeanException ⇒ libuser.controller 加载失败、应用起不来），注册期不能取 bean。
@@ -205,13 +214,13 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                 match (cached.value) {
                     case Some(x) => x
                     case _ =>
-                        let controller = (controllerBeanManager.bean as T).getOrThrow()
+                        let controller = controllerGetter()
                         cached.value = controller
                         controller
                 }
             }
         }else{
-            {=> (controllerBeanManager.bean as T).getOrThrow()}
+            controllerGetter
         }
         let pattern = this.pattern.getOrThrow()
         this.handle_ = {
