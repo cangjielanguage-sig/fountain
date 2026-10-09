@@ -96,7 +96,7 @@ export fdbm_db_logicalDatabase_<logical_database_name>='database_name_0,database
 # fdbm启动时自动从这里加载驱动（调用std.reflect.PackageInfo.load(dylibPath)），逐个加载。
 # 调用std.database.sql.DriverManager.drivers()获得所有驱动名，用驱动名逐个调用std.database.sql.Driver.getDriver(driverName)得到驱动实例
 # 使用前面配置的每一个host:port和数据库名、用户名、密码构造出数据库连接url，结合以下配置完成连接池初始化（每个host:port+database_name对应一个fountain::f_dbpool.DatabasePool实例）。
-# 注：现在DatabasePool还在fountain::f_orm.wrap，后面会创建新模块f_dbpool，将DatabasePool移动到新模块中，f_orm原DatabasePool的文件内重导出这个声明。
+# 注：DatabasePool 已迁到新模块 fountain::f_dbpool（只依赖 f_pool/f_log/f_exception），f_orm 在 f_orm/src/wrap/DatabasePool.cj 内重导出这个声明（fountain::f_orm.wrap.DatabasePool 即 fountain::f_dbpool.DatabasePool）。f_dbpool 不读任何配置项，池参数与连接串由调用方给出。
 export fdbm_databasePoolInitSize=1 # 初始连接数
 export fdbm_databasePoolMinSize=1 # 最小连接数
 export fdbm_databasePoolMaxSize=1 # 最大连接数

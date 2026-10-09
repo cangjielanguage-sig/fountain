@@ -162,6 +162,11 @@ IOC
 
 **详情请见：**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_data/README.md>
 
+### `fountain::f_dbpool`
+数据库连接池，基于f_pool实现Datasource连接池（`DatabasePool` 从 f_orm 迁出，由 f_orm 重导出）
+
+**详情请见：**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_dbpool/README.md>
+
 ### `fountain::f_exception`
 异常模块
 也可以使用`fountain::fountain.exception`包使用本模块的同名API。

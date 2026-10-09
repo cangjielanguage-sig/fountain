@@ -42,7 +42,7 @@
 | --- | --- |
 | `fountain::f_orm` | 模块入口，`public import fountain::f_orm.base.*`；`base` 包再重导出 `std.convert`、`std.database.sql`、`std.reflect`、`f_base.ExitCallbacks`、`f_bean`、`f_exception.{BaseException, UnreachableException}`、`f_orm.wrap`、`f_orm.exception` |
 | `fountain::f_orm.base` | 核心：`ORM`、`SqlExecutor`、`RootDAO`、`SqlPartial`、`SqlDSL`、DSL 子句、逻辑表达式、条件构造器、`QueryMappers`、`Pagination`、`DirtyTag`、事务钩子等 |
-| `fountain::f_orm.wrap` | 包装层：`ORMConfig`、`NamedDatasource`、`DatabasePool`、`SqlArg`/`SqlArgs`、`QueryResultWrap`、`StatementWrap`、`TransactionWrap`、`Propagation`、`DataType` 等 |
+| `fountain::f_orm.wrap` | 包装层：`ORMConfig`、`NamedDatasource`、`DatabasePool`（重导出 `fountain::f_dbpool.DatabasePool`）、`SqlArg`/`SqlArgs`、`QueryResultWrap`、`StatementWrap`、`TransactionWrap`、`Propagation`、`DataType` 等 |
 | `fountain::f_orm.macros` | 宏：`@DAO`、`@ORMField`、`@QueryMappersGenerator`、`@TransactionalService`、`@EmbedSensitive` |
 | `fountain::f_orm.exception` | `ORMException`、`SqlArgException`、`NoIdException`、`TransactionException`、`MandatoryTransactionException`、`NeverTransactionException` 等 |
 | `fountain::f_orm.migro` | 表结构比对与 DDL 生成（`SchemaFinder`、`SchemaFinderMediator`、`MysqlSchema`、`PostgresSchema`、`SubCommand`） |
@@ -210,6 +210,10 @@ let user = dao.findUser(1)
 **Deferrable**：`Default` / `Unspecified`、`Deferrable`、`NotDeferrable`。
 
 ### 3.3 `DatabasePool`（fountain 连接池）
+
+> 实现已迁到 `fountain::f_dbpool` 模块（本模块只重导出，类型不变），类本身不再读配置：下表的配置项由
+> `NamedDatasource` 读出后传给 `DatabasePool(ds, ...)`，其它调用方也要显式传参（原 `init(driver: Driver, ds: Datasource)`
+> 已删除，原 `init(driver, options!)` 改为显式传 `url`）。详见 `f_dbpool/README.md`。
 
 | 环境变量 | 默认值 | 单位 / 说明 |
 | --- | --- | --- |
@@ -2181,7 +2185,7 @@ public abstract class SqlDialect {
 | `ORMConfig` | 配置读取入口——第 3 节所有环境变量的解析实现。 | `getDrivers()`、`getDriverNames()`、`getDefaultDriver()`（`orm_defaultDriver` ?? `orm_drivers` 首个 ?? `''`）、`isDefaultDriver(driver: String / Driver)`、`getUrl(driverName)`、`getConf(driverName, key)`、连接池各参数 getter（`getPoolMaxSize`、`getPoolCheckSql` 等）、`registerConverter` / `getConverter`（见 [13. 结果映射](#13-结果映射)）、`transactionable(funcName)`、`getTransactionPropagation()`、`mockdb` |
 | `NamedDatasource` | 具名数据源（`<: Datasource & Resource`）：将 `Datasource` 与驱动名绑定，供 `ORM.register` 使用。 | `init(driver)` / `init(driver, url)` / `init(driver, options)` / `init(driver, url, options)`、主构造函数 `NamedDatasource(optionSpecified, driverName, datasource)`、`driverName`、`connect()`、`setOption(key, value)`、`isClosed()`、`close()` |
 | `DatasourceCreator` | 数据源工厂接口：`ORM.register(creator)` 在注册时调用它创建 `NamedDatasource`。 | `create(): NamedDatasource`、`driverName: String`（供 `default` 默认值判定） |
-| `DatabasePool` | 内置连接池（`<: Resource & Datasource`），由 `orm_databasePool*` 系列环境变量驱动。 | `init(driver: Driver, ds: Datasource)`（各参数取自 `ORMConfig`）、`init(ds: Datasource, ..., checker!: (Connection) -> Bool)`、`init(ds: Datasource, ..., checkSql!: String = "select 1")`、`init(driver: Driver, options!: Array<(String, String)> = [], ..., checkSql!: String)`（直接 `driver.open`）、`getConnection(timeout!: Duration = connectTimeout): Option<Connection>`（池已关闭时抛 `ConnectionException('database pool is closed')`）、`isClosed()`、`close()` |
+| `DatabasePool` | 连接池（`<: Resource & Datasource`），实现已迁到 `fountain::f_dbpool`，本模块只重导出（`fountain::f_orm.wrap.DatabasePool` 即 `fountain::f_dbpool.DatabasePool`）；`orm_databasePool*` 系列配置项由 `NamedDatasource` 读出后显式传给构造器，类本身不读配置。 | `init(ds: Datasource, ..., checker!: (Connection) -> Bool)`、`init(ds: Datasource, ..., checkSql!: String = "select 1")`、`init(driver: Driver, url: String, options!: Array<(String, String)> = [], ..., checkSql!: String)`（显式 `driver.open(url, options)`）、`getConnection(timeout!: Duration = connectTimeout): Option<Connection>`（池已关闭时抛 `fountain::f_dbpool.ConnectionException('database pool is closed')`）、`isClosed()`、`close()` |
 | `SqlArg`（抽象） | 单个绑定参数（`index` + `set(statement)`）。 | 工厂 `SqlArg.new<T>(index, value)`；每种支持类型对应一个实现子类；`hashCode` / `==` / `toString` |
 | `SqlArgs` | 参数集合（`<: Hashable & Equatable<SqlArgs> & ToString`）：占位符索引自增。 | public：`init()`、`add(...)` 全类型重载、`addNull()`、`toString()`、`hashCode` / `==`；protected：`clone()`、`set(statement)`、`clear()`、`add(all!: SqlArgs)` |
 | `QueryResultWrap` | `std.database.sql.QueryResult` 的包装：按列读取并安全转型，是结果映射的底层。 | `columnInfos`、`get<T>(...)` / `get<T>(columnName)` / `getOrNull<T>(...)` / `getOrNull<T>(columnName)`、`next()` / `next(values)`、`toMap()`、`close()` 等 |
