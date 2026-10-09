@@ -114,4 +114,10 @@ public class BeanManager <: Comparable<BeanManager> & ToString {
             }
         }
     }
+    public func getBean<T>(): T{
+        match(this.bean){
+            case x: T => x
+            case _ => throw BeanException('bean ${name} is not a ${TypeInfo.of<T>()}')
+        }
+    }
 }
