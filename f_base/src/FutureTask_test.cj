@@ -276,6 +276,67 @@ public class FutureTask_test {
         @Expect(box.get("count"), Some("0"))
         @Expect(box.get("owner"), Some("7"))
     }
+
+    /*
+     * FT-3 遗留收口：类型无关的 AbstractFutureTask.current() 与按 T 取的那个指向同一个任务，
+     * 且拿到的句柄可直接 newLocal 使用。
+     */
+    @TestCase
+    public func testCurrentTypeAgnosticHandleMatchesTypedHandle(): Unit {
+        let box = ConcurrentHashMap<String, String>()
+        let t = FutureTask<Int64>({ => futureTaskTestCurrentInTask(box) })
+        let _ = t.get()
+        @Expect(box.get("same"), Some("true"))
+        @Expect(box.get("roundTrip"), Some("5"))
+    }
+
+    /*
+     * FT-3 遗留收口：泛型实参不一致时抛的异常必须能说明"实参问题"（旧消息是误导性的
+     * "No task found in current thread"），且可按 FutureTaskException 类型捕获。
+     */
+    @TestCase
+    public func testCurrentWithWrongTypeArgumentThrowsWithPreciseMessage(): Unit {
+        let box = ConcurrentHashMap<String, String>()
+        let t = FutureTask<Int64>({ => futureTaskTestCurrentWrongType(box) })
+        let _ = t.get()
+        @Expect(box.get("messageMentionsType"), Some("true"))
+        @Expect(box.get("caughtTyped"), Some("true"))
+    }
+
+    /*
+     * FT-3 遗留收口：不在任务里（测试线程）时 currentOrNone() 得 None、current() 抛 FutureTaskException。
+     */
+    @TestCase
+    public func testCurrentOrNoneOutsideTaskIsNone(): Unit {
+        let n = AbstractFutureTask.currentOrNone()
+        var isNone = false
+        match (n) {
+            case Some(_) => ()
+            case None => isNone = true
+        }
+        @Expect(isNone, true)
+        var threw = false
+        try {
+            let _ = AbstractFutureTask.current()
+        } catch (e: FutureTaskException) {
+            threw = true
+        }
+        @Expect(threw, true)
+    }
+
+    /*
+     * 守卫：不在任务里调 FutureTask<T>.current() 仍须抛异常（既有行为不变）。
+     */
+    @TestCase
+    public func testCurrentOutsideTaskThrows(): Unit {
+        var threw = false
+        try {
+            let _ = FutureTask<Unit>.current()
+        } catch (e: FutureTaskException) {
+            threw = true
+        }
+        @Expect(threw, true)
+    }
 }
 
 private func futureTaskTestReadLocal(ready: AtomicBool, slot: ArrayList<InheritedTaskLocal<Int64>>): Int64 {
@@ -475,6 +536,36 @@ private func futureTaskTestGetOrComputeExisting(box: ConcurrentHashMap<String, S
     let c = FutureTask<Unit>({ => futureTaskTestGetOrComputeExistingChild(local, AtomicInt64(0), box) })
     let _ = c.get()
     box.add("owner", futureTaskTestReadStr(local))
+}
+
+// ===== current() 收口的辅助函数 =====
+
+private func futureTaskTestCurrentInTask(box: ConcurrentHashMap<String, String>): Int64 {
+    let agnostic = AbstractFutureTask.current()
+    let typed = FutureTask<Int64>.current()
+    box.add("same", "${agnostic == typed}")
+    let local = agnostic.newLocal<Int64>() // 类型无关的句柄也能建 local
+    local.set(5)
+    box.add("roundTrip", futureTaskTestReadStr(local))
+    0
+}
+
+private func futureTaskTestCurrentWrongType(box: ConcurrentHashMap<String, String>): Int64 {
+    var mentions = false
+    try {
+        let _ = FutureTask<Unit>.current() // 当前线程跑的是 FutureTask<Int64>
+    } catch (e: Exception) {
+        mentions = e.message.contains("type argument")
+    }
+    box.add("messageMentionsType", "${mentions}")
+    var caughtTyped = false
+    try {
+        let _ = FutureTask<Unit>.current()
+    } catch (e: FutureTaskException) {
+        caughtTyped = true
+    }
+    box.add("caughtTyped", "${caughtTyped}")
+    0
 }
 
 // ===== FT-4 辅助函数结束 =====

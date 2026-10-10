@@ -622,6 +622,10 @@ public sealed abstract class AbstractFutureTask <: Hashable & Equatable<Abstract
     public operator func ==(other: AbstractFutureTask): Bool 
     //Create a new InheritedTaskLocal
     public func newLocal<T>(): InheritedTaskLocal<T> 
+    //Return the task currently running in this thread, regardless of the type argument; throws when not inside a task
+    public static func current(): AbstractFutureTask 
+    //Return None when not inside a task
+    public static func currentOrNone(): ?AbstractFutureTask 
 }
 public class FutureTask<T> <: AbstractFutureTask {
     //Create a new FutureTask
@@ -630,7 +634,7 @@ public class FutureTask<T> <: AbstractFutureTask {
     public init(shutdownSubOnFinish: Bool, fn: () -> T)
     //Create a new FutureTask; in this case shutdownSubOnFinish is true
     public init(fn: () -> T)
-    //Return the FutureTask corresponding to the current thread ID; this function is only valid when called inside a FutureTask, otherwise it throws
+    //Return the FutureTask<T> currently running in this thread; requires that task's type argument to be exactly T, otherwise it throws (use AbstractFutureTask.current() for a type-agnostic handle)
     public static func current(): FutureTask<T> 
     //Return the result after the current FutureTask has finished, that is, the return value of the constructor argument fn
     public func get(): T 

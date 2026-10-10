@@ -23,7 +23,7 @@
 
 1. `FT-1`（§1.1）`InheritedTaskLocal` 在 owner 线程启动前写入的值 99.6% 读不到（hashCode 取可变的 `tid`）——静默丢值，且是"构造任务后预置上下文"这条最自然的用法　**✅已修复（2026-10-11，见 §1.1 修复标记）**
 2. `FT-2`（§1.2）`shutdownSubOnFinish` 承诺不成立（父任务先结束时 96% 子任务不被取消）＋ `subTasks` 无互斥（`HashSet` 共享无共同锁）　**✅已修复（2026-10-11，见 §1.2 修复标记）**
-3. `FT-3`（§2.1）`shutdownCurrentSubThreads`/`current()` 按 `FutureTask<T>` 过滤，异类型子任务被静默跳过（100% 复现）　**✅已修复（2026-10-11，见 §2.1 修复标记；`current()` 那半属 API 变更，登记待拍板）**
+3. `FT-3`（§2.1）`shutdownCurrentSubThreads`/`current()` 按 `FutureTask<T>` 过滤，异类型子任务被静默跳过（100% 复现）　**✅已修复（2026-10-11，见 §2.1 修复标记；`current()` 那半见 §2.1 补充修复）**
 4. `FT-4`（§2.2）`InheritedTaskLocal` 的写入目标固定为 owner（四个出口，含"owner 已结束时 `set` 后自读 `None`"）—— **已拍板：路线 2（`set`/`remove` 写当前任务）；`getOrSet`/`getOrCompute` 二次决策改为二段检查锁**　**✅已修复（2026-10-11，见 §2.2 修复标记与二次修正）**
 5. `FT-5`（§2.3）父任务先结束后子任务继承不到值（返回 None）——需确认是设计使然还是缺陷，并补文档口径　**待处理**
 6. `FT-6`（§2.4）性能：构造+get ≈ 13× 裸 `spawn`、`local.get` ≈ 8.9× 标准库 `ThreadLocal` —— 按"先有量化依据"逐项立项　**待处理**
@@ -41,7 +41,7 @@
 | `c89cb7cf` | `fix(f_base): FT-4 set/remove 写当前任务（路线 2），getOrSet/getOrCompute 保持 owner 共享槽` |
 | `83b55f87` | `fix(f_base): FT-4 二次决策：getOrSet/getOrCompute 改用二段检查锁（只算一次）` |
 
-**修后总验证（最终代码）**：worktree 内 `cjpm test` = `TOTAL: 19, PASSED: 19, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`；修前基线为 6 条既有用例全绿，本次累计新增 13 条用例）。探针（`.autocode/tmp/ftask_probe`，按 worktree 的 `f_base` 副本构建）：`EXP4B diff=true`、`EXP5 50/50`、`EXP10 500/500`、`EXP11` 父任务由 `Some(2)` 变 **`Some(1)`**、`EXP13 a==b 0/500`、`EXP15` 与 `EXP16` 均 100/100 轮整组取消、`EXP17` 由 `None` 变 **`Some(9)`**；`EXP6` 的 FT/spawn 比值为 12.9x / 13.4x（修前区间 12.9x ~ 13.9x）。未修的 `FT-5`/`FT-6`/`FT-L*`，以及 `FutureTask<T>.current()` 的 API 取舍（方案已详述，待拍板）见对应条目。
+**修后总验证（最终代码）**：worktree 内 `cjpm test` = `TOTAL: 23, PASSED: 23, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`；修前基线为 6 条既有用例全绿，本次累计新增 17 条用例）。探针（`.autocode/tmp/ftask_probe`，按 worktree 的 `f_base` 副本构建）：`EXP4B diff=true`、`EXP5 50/50`、`EXP10 500/500`、`EXP11` 父任务由 `Some(2)` 变 **`Some(1)`**、`EXP12` 消息由"没有任务"变为**说明泛型实参问题**、`EXP13 a==b 0/500`、`EXP15` 与 `EXP16` 均 100/100 轮整组取消、`EXP17` 由 `None` 变 **`Some(9)`**；`EXP6` 的 FT/spawn 比值为 12.9x / 13.4x（修前区间 12.9x ~ 13.9x）。未修的 `FT-5`/`FT-6`/`FT-L*` 见对应条目。
 
 ---
 
@@ -161,7 +161,22 @@ private let mutex = Mutex()
   - **修前**：`FAILED 1` —— `(notCancelled == 0)` left: **3**（3 轮各丢一个 `Int64` 子任务；同轮的 `Unit` 子任务正常取消）。
   - **修后**：`TOTAL: 12, PASSED: 12, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`）。
   - 独立探针 exp4B：修前 `same=true, diff=false` → 修后 **`same=true, diff=true`**。
-- 未覆盖 / 待拍板：`FutureTask<T>.current()` 仍是带泛型实参的模式匹配，`T` 不匹配时照旧抛 `No task found in current thread`（EXP12：在 `FutureTask<Int64>` 体内调 `FutureTask<Unit>.current()`）。**修它属公开 API 变更**（返回类型 `FutureTask<T>` 决定了"当前任务是别的 `T`"时无法返回，可选：改返回 `AbstractFutureTask`，或另加类型无关的新入口），按项目约定登记待作者拍板，本次不动。
+- 未覆盖 / 待拍板：`FutureTask<T>.current()` 的泛型实参问题（EXP12）—— 见下面的"补充修复"。
+
+**✅ 补充修复（2026-10-11，作者拍板后实施）**：`FutureTask<T>.current()` 类型无关化。
+
+- 拍板口径（作者）：`AbstractFutureTask` 只有 `FutureTask<T>` 一个子类，因此 `current()` 里没必要区分"其它形状的任务"——模式匹配收成单点判断；其余按原方案做。
+- 改动（`f_base/src/FutureTask.cj`）：
+  1. `AbstractFutureTask` 新增 `public static func current(): AbstractFutureTask`（不在任务里抛 `FutureTaskException`）与 `public static func currentOrNone(): ?AbstractFutureTask`（不在任务里返回 `None`，便于分支处理而不是拿异常当控制流）；
+  2. `FutureTask<T>.current()` **签名不变**（返回类型仍是 `FutureTask<T>` ⇒ 非破坏性），实现改为单点 `if(let Some(t: FutureTask<T>) <- AbstractFutureTask.currentOrNone())`；取不到时抛出的消息改为**说明实参问题**（旧消息 `No task found in current thread` 把 API 限制误报成"没有任务"）；
+  3. `FutureTaskException` 由 `private` 改 `public` ⇒ 调用方可以按类型捕获；
+  4. `InheritedTaskLocal.writeTarget()` 改用 `currentOrNone()`（"当前任务"只剩一个定义点，不再直接访问 `taskMap`）。
+- 文档：`f_base/README.md` 与 `README_en.md` 同批（`AbstractFutureTask` 代码块补两个入口；`current()` 注释改为"要求该任务的泛型实参恰好为 T"）。
+- 用例（`f_base/src/FutureTask_test.cj`，4 条）：`testCurrentTypeAgnosticHandleMatchesTypedHandle`（类型无关句柄与按 `T` 取的是同一任务，且可直接 `newLocal`）、`testCurrentWithWrongTypeArgumentThrowsWithPreciseMessage`（消息须含类型实参信息 + 可按 `FutureTaskException` 捕获）、`testCurrentOrNoneOutsideTaskIsNone`、`testCurrentOutsideTaskThrows`（守卫：既有行为不变）。
+- 测量证据：
+  - 单测：`TOTAL: 23, PASSED: 23, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`）。**说明**：这 4 条依赖新增 API 与公开异常类型，修前是**编译不过**而不是断言红，因此本条没有"修前 FAILED"数字。
+  - 探针 EXP12（独立复测）：在 `FutureTask<Int64>` 体内调 `FutureTask<Unit>.current()`，消息由 `No task found in current thread` 变为 **`No FutureTask with the requested type argument found in current thread (a task of another type argument may be running); use AbstractFutureTask.current() instead`**；同批复测 EXP10 `500/500`、EXP11 父任务 `Some(1)`、EXP17 `Some(9)` 均未变（`writeTarget()` 收口无副作用）。
+- 未覆盖：**未删除 `FutureTask<T>.current()`**（保留签名以免破坏外部调用方）。若作者希望只留类型无关入口，删它是"5 行代码 + README 两处"的小改动。
 
 **位置**：`f_base/src/FutureTask.cj:153-155`（`shutdownCurrentSubThreads` 的模式匹配）、`:129-135`（`current()`）
 

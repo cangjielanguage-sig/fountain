@@ -19,7 +19,7 @@ import std.collection.concurrent.ConcurrentHashMap
 import std.collection.HashSet
 import std.sync.{Mutex, AtomicInt64}
 
-private class FutureTaskException <: BaseException {
+public class FutureTaskException <: BaseException {
     public init() {}
 
     public init(message: String) {
@@ -130,6 +130,19 @@ public sealed abstract class AbstractFutureTask <: Hashable & Equatable<Abstract
             case None => ()
         }
     }
+    // FT-3 遗留收口：类型无关地取「当前线程正在执行的任务」。
+    // FutureTask<T>.current() 只在该任务的泛型实参恰好是 T 时可用；下面两个入口不受实参限制。
+    public static func current(): AbstractFutureTask {
+        if(let Some(running) <- currentOrNone()){
+            running
+        }else{
+            throw FutureTaskException("No task found in current thread")
+        }
+    }
+    // 不在任务里（main 线程、普通 spawn 线程等）返回 None —— 便于分支处理，不必用 try/catch 当控制流
+    public static func currentOrNone(): ?AbstractFutureTask {
+        taskMap.get(Thread.currentThread.id)
+    }
 }
 
 public class FutureTask<T> <: AbstractFutureTask {
@@ -176,11 +189,14 @@ public class FutureTask<T> <: AbstractFutureTask {
     public init(fn: () -> T){
         this(true, fn)
     }
+    // 返回当前线程正在执行的 FutureTask<T>：要求该任务的泛型实参恰好为 T。
+    // AbstractFutureTask 只有本类一个子类，所以"取不到"只有两种情况——不在任务里、或实参不一致，
+    // 合并成一条消息即可；要类型无关的句柄用 AbstractFutureTask.current() / currentOrNone()。
     public static func current(): FutureTask<T> {
-        if(let Some(t: FutureTask<T>) <- taskMap.get(Thread.currentThread.id)){
+        if(let Some(t: FutureTask<T>) <- AbstractFutureTask.currentOrNone()){
             t
         }else{
-            throw FutureTaskException("No task found in current thread")
+            throw FutureTaskException("No FutureTask with the requested type argument found in current thread (a task of another type argument may be running); use AbstractFutureTask.current() instead")
         }
     }
     public func get(): T {
@@ -220,9 +236,10 @@ public class InheritedTaskLocal<T> <: AbstractInheritedTaskLocal {
     // FT-4（bug-f_base.md §2.2，路线 2）：写/删的目标 = 当前线程所属的任务（"当前任务"）；
     // 调用方不在任务里（创建线程、main 线程等）时回退到 owner —— 即创建这个 local 的任务。
     private func writeTarget(): AbstractFutureTask {
-        match (AbstractFutureTask.taskMap.get(Thread.currentThread.id)) {
-            case Some(running) => running
-            case None => task
+        if(let Some(running) <- AbstractFutureTask.currentOrNone()){
+            running
+        }else{
+            task
         }
     }
 

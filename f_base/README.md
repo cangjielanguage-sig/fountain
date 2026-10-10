@@ -620,6 +620,10 @@ public sealed abstract class AbstractFutureTask <: Hashable & Equatable<Abstract
     public operator func ==(other: AbstractFutureTask): Bool 
     //创建新的InheritedTaskLocal
     public func newLocal<T>(): InheritedTaskLocal<T> 
+    //类型无关地返回当前线程正在执行的任务；不在任务里则抛异常
+    public static func current(): AbstractFutureTask 
+    //不在任务里返回 None
+    public static func currentOrNone(): ?AbstractFutureTask 
 }
 public class FutureTask<T> <: AbstractFutureTask {
     //创建新的FutureTask
@@ -628,7 +632,7 @@ public class FutureTask<T> <: AbstractFutureTask {
     public init(shutdownSubOnFinish: Bool, fn: () -> T)
     //创建新的FutureTask，此时shutdownSubOnFinish为true
     public init(fn: () -> T)
-    //返回当前线程ID对应的FutureTask，只有在FutureTask内部调用此函数才有效，否则将抛出异常
+    //返回当前线程正在执行的FutureTask<T>；要求该任务的泛型实参恰好为 T，否则抛异常（要类型无关的句柄用 AbstractFutureTask.current()）
     public static func current(): FutureTask<T> 
     //返回当前FutureTask执行结束后的结果，即构造函数参数fn的返回结果
     public func get(): T 
