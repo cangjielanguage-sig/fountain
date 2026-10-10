@@ -24,7 +24,7 @@
 1. `FT-1`（§1.1）`InheritedTaskLocal` 在 owner 线程启动前写入的值 99.6% 读不到（hashCode 取可变的 `tid`）——静默丢值，且是"构造任务后预置上下文"这条最自然的用法　**✅已修复（2026-10-11，见 §1.1 修复标记）**
 2. `FT-2`（§1.2）`shutdownSubOnFinish` 承诺不成立（父任务先结束时 96% 子任务不被取消）＋ `subTasks` 无互斥（`HashSet` 共享无共同锁）　**✅已修复（2026-10-11，见 §1.2 修复标记）**
 3. `FT-3`（§2.1）`shutdownCurrentSubThreads`/`current()` 按 `FutureTask<T>` 过滤，异类型子任务被静默跳过（100% 复现）　**✅已修复（2026-10-11，见 §2.1 修复标记；`current()` 那半属 API 变更，登记待拍板）**
-4. `FT-4`（§2.2）子任务 `set` 覆盖父任务的值 —— **公开 API 语义，先摆候选路线由作者拍板**　**待处理**
+4. `FT-4`（§2.2）`InheritedTaskLocal` 的写入目标固定为 owner（四个出口，含"owner 已结束时 `set` 后自读 `None`"）—— **已拍板：路线 2（`set`/`remove` 写当前任务）；`getOrSet`/`getOrCompute` 保持现状**　**方案已定，实施中**
 5. `FT-5`（§2.3）父任务先结束后子任务继承不到值（返回 None）——需确认是设计使然还是缺陷，并补文档口径　**待处理**
 6. `FT-6`（§2.4）性能：构造+get ≈ 13× 裸 `spawn`、`local.get` ≈ 8.9× 标准库 `ThreadLocal` —— 按"先有量化依据"逐项立项　**待处理**
 7. `FT-L1` ~ `FT-L4`（§3）低危/契约/文档项　**登记**
@@ -177,19 +177,35 @@ while(let Some(f: FutureTask<T>) <- itr.next()){
 
 **验证方法**：`run.sh exp4`（期望 `diff=true`）、`run.sh exp12`（期望不再抛异常）。
 
-### 2.2 [中｜语义·需作者拍板] `FT-4` 子任务的 `set` 会覆盖父任务的值
+### 2.2 [中｜语义·需作者拍板] `FT-4` `InheritedTaskLocal` 的"写入目标固定为 owner"（四个出口）
 
-**位置**：`f_base/src/FutureTask.cj:49-51`（`setLocal` 写的是 `this.local` —— 即**创建该 local 的任务**）、`:52-61`（`getLocal` 先查自己再查父）、`:173-175`（`InheritedTaskLocal.set`）
+**位置（当前行号，已含 FT-1~FT-3 改动）**：`f_base/src/FutureTask.cj:59-61`（`setLocal` 写 `this.local`）、`:62-71`（`getLocal` 链式上溯）、`:72-78`（`removeLocal` 写 `this.local`）、`:79-86`（`getOrSetLocal` 未命中时 `setLocal` 到 `this`）、`:87-95`（`getOrComputeLocal` 同）、`:189`（`AbstractInheritedTaskLocal(let task:)` —— owner 构造期绑定）、`:202-218`（`InheritedTaskLocal` 的 `set/get/remove/getOrSet/getOrCompute` 全部以 owner 为 `this`）；`:41`（`local` 表）、`:144`/`:148`（`taskMap` 的登记与摘除）。
 
-**实测**（EXP11）：父 `set(1)` → 子 `set(2)` ⇒ 子任务读到 `Some(2)`，**父任务随后也读到 `Some(2)`**（父任务自己的值被覆盖）。
+**机制**：**读**是链式上溯（从「当前线程所属任务」沿 `parentTID` 逐级查）；**写/删**却恒落在**创建该 local 的 owner 任务**的表上 ⇒ 写目标与读目标不同步。owner 一结束，`taskMap.remove(tid)`（`:148`）剪断链，写进 owner 表的值对任何人（含写者自己）都不可达。
 
-**影响**：与"可继承的 ThreadLocal"（Java `InheritableThreadLocal`：子线程 `set` 只影响子线程）的直觉相反；嵌套/并发子任务会互相覆盖同一 local。
+**四个出口的实测/读码结论**：
 
-**候选路线（公开 API 语义变更，按项目约定先拍板再动）**：
+| 出口 | 现象 | 证据 |
+|---|---|---|
+| `set` | 子任务 `set` 覆盖 owner 的值，且对整个子树（owner + 兄弟）可见 | EXP11：父 `set(1)` → 子 `set(2)` ⇒ 子读 `Some(2)`、**父随后也读到 `Some(2)`** |
+| `set`（owner 已结束） | 子任务 `set` 完立刻 `get` → **`None`**（写进不可达的表） | EXP17：owner 已结束 = `None`；owner 存活 = `Some(9)` |
+| `remove` | 子任务 `remove` 会清掉 owner 的值（同一代码路径，未单独实测） | 读码（`:72-78` + `:210-212`） |
+| `getOrSet`/`getOrCompute` | 未命中时写 owner；**非原子**（两个并发调用方可能各算一次、各返回自己那份，槽里最后写入者胜） | 读码（`:79-95`），且本轮决策为"保持现状" |
 
-1. 保持现状，文档明确写"单值、owner 拥有、子任务 set 即改 owner"——零风险；
-2. `set` 改为写"当前任务"（`taskMap[Thread.currentThread.id]`，当前线程不是任务时退回 owner），并补一个显式的 `setOnOwner`——行为更符合直觉，属语义破坏性变更；
-3. 拆成两个类型（继承读 / 写隔离）——改动最大。
+**影响面与兼容事实**：本仓零调用方；但该类**已随发布版本存在**（`git tag --contains 254ef066` 首个即 `release-1.2.0.alpha`；`release-1.3.8.alpha` 内含 `f_base/src/FutureTask.cj`；f_base 属 1.3.8 已入库模块）⇒ 外部应用**可能**已按当前语义写代码。不过"写落到哪"**从未被文档化**（`f_base/README.md:647-648` 只写"无值时从父任务查""任务结束时移除"，`docs/speech/speech.md:3751` 只写"本任务没值就去父任务找"），因此行为变更可按**语义明确化**处理；版本号又全为 `.alpha`。
+
+**候选路线**：
+
+1. 只写文档 + 钉口径用例（非破坏性）：把"`set`/`remove` 作用在 owner"写进 README(zh+en) 与源码注释，并用例钉住现状（含 EXP17 的 `None`）。代价≈0.5h、零代码风险；**形态 2（`set` 后自读 `None`）作为已知坑长期存在**。
+2. **写"当前任务"（语义修正）**：`set`/`remove` 的目标改为「当前线程所属任务」，调用方不在任务里（创建线程 / main 线程）时回退 owner。实现只动 `InheritedTaskLocal`（约 10 行，不碰存储层）。修好形态 1/2/3；对齐 Java `InheritableThreadLocal`。代价=行为变更（语义未文档化 + 全 alpha，按明确化处理）。
+3. 保留现语义 + 新增显式入口（`setOnCurrent`/`removeOnCurrent`）：非破坏性，但 `set` 默认行为仍反直觉，形态 1/2 仍会被踩。
+4. `newLocal(inherit: Bool)` 或拆成两个类型：最彻底，改动与长期维护成本最大。
+
+**✅ 路线决策（2026-10-11，作者拍板）**：
+
+- **采用路线 2**：`set`/`remove` 的写入目标改为「当前任务」，不在任务里时回退 owner（该回退同时保住 FT-1 的既有语义：构造后由创建线程预置上下文）；
+- **`getOrSet`/`getOrCompute` 保持现状**（仍写 owner 的共享槽、不加锁）：即这两个入口的语义是"为**整条链都没有值**时，给 local 所属任务的共享槽做懒初始化（子树共享）"，与 `set` 的"覆盖本层"分工并列，两者都要在文档里写清；
+- 实现与用例见 §2.2 的修复标记（实施后补）。
 
 ### 2.3 [中｜行为边界·文档缺失] `FT-5` 父任务先结束后，子任务继承不到值
 
