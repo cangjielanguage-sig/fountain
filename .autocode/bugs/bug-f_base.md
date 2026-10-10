@@ -40,6 +40,8 @@
 | `0fa1852b` | `docs(f_base): FT-4 详述（四个出口 + EXP17）与路线决策：采用路线 2` |
 | `c89cb7cf` | `fix(f_base): FT-4 set/remove 写当前任务（路线 2），getOrSet/getOrCompute 保持 owner 共享槽` |
 | `83b55f87` | `fix(f_base): FT-4 二次决策：getOrSet/getOrCompute 改用二段检查锁（只算一次）` |
+| `77488c97` | `docs(f_base): 回填 FT-4 的三个提交号与 19/19 总验证` |
+| `b7226c17` | `fix(f_base): FT-3 遗留收口：current() 类型无关化，异常可捕获` |
 
 **修后总验证（最终代码）**：worktree 内 `cjpm test` = `TOTAL: 23, PASSED: 23, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`；修前基线为 6 条既有用例全绿，本次累计新增 17 条用例）。探针（`.autocode/tmp/ftask_probe`，按 worktree 的 `f_base` 副本构建）：`EXP4B diff=true`、`EXP5 50/50`、`EXP10 500/500`、`EXP11` 父任务由 `Some(2)` 变 **`Some(1)`**、`EXP12` 消息由"没有任务"变为**说明泛型实参问题**、`EXP13 a==b 0/500`、`EXP15` 与 `EXP16` 均 100/100 轮整组取消、`EXP17` 由 `None` 变 **`Some(9)`**；`EXP6` 的 FT/spawn 比值为 12.9x / 13.4x（修前区间 12.9x ~ 13.9x）。未修的 `FT-5`/`FT-6`/`FT-L*` 见对应条目。
 
