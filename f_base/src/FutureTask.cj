@@ -93,6 +93,30 @@ public sealed abstract class AbstractFutureTask <: Hashable & Equatable<Abstract
             value
         }
     }
+    // FT-3（bug-f_base.md §2.1）：取消/关闭能力落在 AbstractFutureTask 上，子任务表的迭代才不必
+    // 按 `FutureTask<T>` 匹配（T 取调用方的泛型实参）——否则与调用方实参不同的子任务会被静默跳过：
+    // 父任务 FutureTask<Unit> 关不掉它自己的 FutureTask<Int64> 子任务。
+    public func shutdown(): Unit {
+        cancelSelf()
+        shutdownCurrentSubThreads()
+    }
+    // 子类在这里挂各自的取消手段（FutureTask<T> 走 future.cancel()）
+    protected open func cancelSelf(): Unit {}
+    public static func shutdownCurrentSubThreads(): Unit {
+        // FT-2：先在锁内把整张子任务表**取走**，再在锁外逐个发取消信号：
+        // 迭代因此不会与并发的 add/remove 打架，用户可见的取消动作也不在锁里做。
+        let mine = synchronized(subTasksLock){
+            subTasks.remove(Thread.currentThread.id)
+        }
+        match (mine) {
+            case Some(set) =>
+                let itr = set.iterator()
+                while(let Some(f: AbstractFutureTask) <- itr.next()){
+                    f.shutdown()
+                }
+            case None => ()
+        }
+    }
 }
 
 public class FutureTask<T> <: AbstractFutureTask {
@@ -156,24 +180,9 @@ public class FutureTask<T> <: AbstractFutureTask {
         future.getOrThrow().tryGet()
     }
 
-    public func shutdown(): Unit {
+    // FT-3：shutdown()/shutdownCurrentSubThreads() 由 AbstractFutureTask 提供（对 `FutureTask<T>.xxx` 的调用照旧可用）
+    protected override func cancelSelf(): Unit {
         future?.cancel()
-        shutdownCurrentSubThreads()
-    }
-    public static func shutdownCurrentSubThreads(): Unit {
-        // FT-2：先在锁内把整张子任务表**取走**，再在锁外逐个发取消信号：
-        // 迭代因此不会与并发的 add/remove 打架，用户可见的取消动作也不在锁里做。
-        let mine = synchronized(subTasksLock){
-            subTasks.remove(Thread.currentThread.id)
-        }
-        match (mine) {
-            case Some(set) =>
-                let itr = set.iterator()
-                while(let Some(f: FutureTask<T>) <- itr.next()){
-                    f.shutdown()
-                }
-            case None => ()
-        }
     }
 }
 public sealed abstract class AbstractInheritedTaskLocal <: Hashable & Equatable<AbstractInheritedTaskLocal> {

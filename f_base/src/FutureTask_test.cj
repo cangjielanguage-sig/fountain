@@ -141,6 +141,34 @@ public class FutureTask_test {
         }
         @Expect(cancelled, 0)
     }
+
+    /*
+     * FT-3（bug-f_base.md §2.1）：父任务结束时，子任务不因**泛型实参不同**而被跳过。
+     * 修前：shutdownCurrentSubThreads 按 `FutureTask<T>` 模式匹配（T = 调用方实参），
+     * 父任务 FutureTask<Unit> 的 FutureTask<Int64> 子任务被静默跳过（登记正常，只是不被取消）。
+     */
+    @TestCase
+    public func testMixedTypeChildrenAreCancelledToo(): Unit {
+        // 编译期 API 检查：README 记录的两个静态/实例入口仍能经 FutureTask<T> 调用
+        // （FT-3 把实现移到了 AbstractFutureTask，这里确认继承解析没断）
+        FutureTask<Unit>.shutdownCurrentSubThreads()
+        var notCancelled = 0
+        for (_ in 0..3) {
+            let box = ConcurrentHashMap<String, Bool>()
+            let root = FutureTask<Unit>({ => futureTaskTestMixedTypeParent(box) })
+            let _ = root.get()
+            sleep(400 * Duration.millisecond)
+            for (k in ["same", "diff"]) {
+                match (box.get(k)) {
+                    case Some(b) => if (!b) {
+                        notCancelled++
+                    }
+                    case None => notCancelled++
+                }
+            }
+        }
+        @Expect(notCancelled, 0)
+    }
 }
 
 private func futureTaskTestReadLocal(ready: AtomicBool, slot: ArrayList<InheritedTaskLocal<Int64>>): Int64 {
@@ -179,5 +207,29 @@ private func futureTaskTestFourChildrenParent(box: ConcurrentHashMap<Int64, Bool
     let _ = FutureTask<Unit>({ => futureTaskTestSleepThenRecord(box, 1) })
     let _ = FutureTask<Unit>({ => futureTaskTestSleepThenRecord(box, 2) })
     let _ = FutureTask<Unit>({ => futureTaskTestSleepThenRecord(box, 3) })
+    sleep(150 * Duration.millisecond)
+}
+
+private func futureTaskTestPollCancelStr(box: ConcurrentHashMap<String, Bool>, key: String): Unit {
+    var i = 0
+    while (i < 60) {
+        if (Thread.currentThread.hasPendingCancellation) {
+            break
+        }
+        sleep(5 * Duration.millisecond)
+        i++
+    }
+    box.add(key, Thread.currentThread.hasPendingCancellation)
+}
+
+private func futureTaskTestPollCancelStrI64(box: ConcurrentHashMap<String, Bool>, key: String): Int64 {
+    futureTaskTestPollCancelStr(box, key)
+    0
+}
+
+// 父任务：泛型实参为 Unit，同时创建 Unit 与 Int64 两种子任务
+private func futureTaskTestMixedTypeParent(box: ConcurrentHashMap<String, Bool>): Unit {
+    let _ = FutureTask<Unit>({ => futureTaskTestPollCancelStr(box, "same") })
+    let _ = FutureTask<Int64>({ => futureTaskTestPollCancelStrI64(box, "diff") })
     sleep(150 * Duration.millisecond)
 }

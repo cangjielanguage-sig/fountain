@@ -23,7 +23,7 @@
 
 1. `FT-1`（§1.1）`InheritedTaskLocal` 在 owner 线程启动前写入的值 99.6% 读不到（hashCode 取可变的 `tid`）——静默丢值，且是"构造任务后预置上下文"这条最自然的用法　**✅已修复（2026-10-11，见 §1.1 修复标记）**
 2. `FT-2`（§1.2）`shutdownSubOnFinish` 承诺不成立（父任务先结束时 96% 子任务不被取消）＋ `subTasks` 无互斥（`HashSet` 共享无共同锁）　**✅已修复（2026-10-11，见 §1.2 修复标记）**
-3. `FT-3`（§2.1）`shutdownCurrentSubThreads`/`current()` 按 `FutureTask<T>` 过滤，异类型子任务被静默跳过（100% 复现）　**待处理**
+3. `FT-3`（§2.1）`shutdownCurrentSubThreads`/`current()` 按 `FutureTask<T>` 过滤，异类型子任务被静默跳过（100% 复现）　**✅已修复（2026-10-11，见 §2.1 修复标记；`current()` 那半属 API 变更，登记待拍板）**
 4. `FT-4`（§2.2）子任务 `set` 覆盖父任务的值 —— **公开 API 语义，先摆候选路线由作者拍板**　**待处理**
 5. `FT-5`（§2.3）父任务先结束后子任务继承不到值（返回 None）——需确认是设计使然还是缺陷，并补文档口径　**待处理**
 6. `FT-6`（§2.4）性能：构造+get ≈ 13× 裸 `spawn`、`local.get` ≈ 8.9× 标准库 `ThreadLocal` —— 按"先有量化依据"逐项立项　**待处理**
@@ -80,15 +80,17 @@ public func hashCode(): Int64 {
 **✅ 修复标记（2026-10-11）**：分支 `fix/futuretask`（worktree `.worktrees/futuretask`，基线 `fe8a1886`）。代码、用例、本标记在同一提交（提交信息 `fix(f_base): FT-2 子任务登记前移到创建线程并纳入共享锁，shutdown 不再漏取消`；提交号见 §0 时间线回填）。
 
 - 改动（`f_base/src/FutureTask.cj`）：
-  1. `:43-47`：`subTasks` 从 `FutureTask<T>` 移到 `AbstractFutureTask`（泛型类静态成员本来就共享，移上去后语义直白），并新增 `static let subTasksLock`；
-  2. `:101-136`（`init`）：子任务**登记改由创建线程在构造期同步完成**，且顺序保证"先取到 `future`、再登记"——父任务在表里看到子任务时 `child.future` 必然已就绪（否则父任务的 `shutdown` 会因 `future` 仍是 `None` 而漏掉这次取消）；登记与注销/整体取走全部走 `subTasksLock`；
-  3. `:115-122`（finally 注销）：`get → set.remove → 空则删外层表项` 全部放进同一把锁 ⇒ 原先的 check-then-act 竞争消失；
-  4. `:161-175`（`shutdownCurrentSubThreads`）：锁内**整体取走**该父任务的子任务表，锁外再逐个 `shutdown()` ⇒ 迭代不再与并发 `add/remove` 打架，用户可见的取消动作也不在锁里做；
+  1. `:46-47`：`subTasks` 从 `FutureTask<T>` 移到 `AbstractFutureTask`（泛型类静态成员本来就共享，移上去后语义直白），并新增 `static let subTasksLock`；
+  2. `:125-161`（`init`）：子任务**登记改由创建线程在起线程之前同步完成**——登记先于 `spawn` ⇒ 子任务开始运行时必然已在表里；能对该任务调 `shutdown` 的只有它的创建线程（此刻正忙于本构造函数），因此"登记完成、`future` 尚未赋值"这段窗口不会造成漏取消；登记与注销/整体取走全部走 `subTasksLock`；
+  3. `:149-156`（finally 注销）：`get → set.remove → 空则删外层表项` 全部放进同一把锁 ⇒ 原先的 check-then-act 竞争消失；
+  4. `:105-121`（`shutdownCurrentSubThreads`）：锁内**整体取走**该父任务的子任务表，锁外再逐个 `shutdown()` ⇒ 迭代不再与并发 `add/remove` 打架，用户可见的取消动作也不在锁里做；
   5. 删除已无用途的 per-instance `private let mutex = Mutex()`（原代码里它保护不了任何东西，还平白多一次分配）。
 - 用例：`f_base/src/FutureTask_test.cj` → `testChildCancelledWhenParentFinishesImmediately`（20 轮 fire-and-forget，子任务必须收到取消）、`testConcurrentChildrenAllCancelled`（30 轮 × 4 个同类型子任务并发登记，必须全部被取消）、`testShutdownSubOnFinishFalseKeepsChildRunning`（行为保持：`shutdownSubOnFinish = false` 时不得取消子任务）。
 - 测量证据（`cjpm test --no-color`，日志 `/tmp/ftask_test.log`）：
   - **修前**：`FAILED 2` —— `(notCancelled == 0)` left: **20** / right: 0；`(partial == 0)` left: **7**（30 轮）/ right: 0；行为保持用例 PASSED。
   - **修后**：`TOTAL: 11, PASSED: 11, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`）。
+- **复测驱动的细化（同一天的第二笔独立提交）**：性能复测发现第一版把 `spawn` 也包进了 `subTasksLock` 的临界区，子任务拆除时会抢同一把锁 ⇒ 构造+get 由 28826 升到 **32792 ns/op**（探针 exp6，同进程 FT/spawn 比值 12.9x → **14.9x**）。改为"登记仍在起线程之前，但临界区只包住登记本身"后复测 **30684 / 31974 ns/op**、比值 **12.9x / 13.4x**，回到修复前区间（12.9x ~ 13.9x），单测行为不变（提交信息 `perf(f_base): FT-2 细化：登记不包住 spawn，消除构造路径上的锁竞争`）。
+- 独立探针复测（`exp15`、`exp16`，取自本 worktree 的最终代码）：**100/100 轮全部 4/4 被取消**（修前 79~83 与 85，另有 17~21 / 15 轮部分丢失）。
 - 未覆盖 / 新边界：
   - 迭代仍按 `FutureTask<T>` 匹配（异类型子任务照旧被跳过）—— 属 `FT-3` 范围，本条刻意不动，便于单独归因；
   - 登记提前到构造期后，若 `shutdownSubOnFinish = false` 且某个子任务**始终未被调度运行**，它的表项会留到进程结束（极端边界；正常调度下子任务跑完即自行注销）；
@@ -132,7 +134,20 @@ private let mutex = Mutex()
 
 ## 2. 中（4 条）
 
-### 2.1 [中｜静默跳过·确定性复现] `FT-3` 泛型实参过滤使异类型子任务不被取消
+### 2.1 [中｜静默跳过·确定性复现] `FT-3` 泛型实参过滤使异类型子任务不被取消 ✓已复核 → ✅已修复（2026-10-11）
+
+**✅ 修复标记（2026-10-11）**：分支 `fix/futuretask`（worktree `.worktrees/futuretask`，基线 `fe8a1886`）。代码、用例、本标记在同一提交（提交信息 `fix(f_base): FT-3 取消能力上移到 AbstractFutureTask，异类型子任务不再被跳过`；提交号见 §0 时间线回填）。
+
+- 改动（`f_base/src/FutureTask.cj`）：
+  1. `AbstractFutureTask:99-121`：新增 `public func shutdown()`（= `cancelSelf()` + `shutdownCurrentSubThreads()`）、`protected open func cancelSelf(): Unit {}`、`public static func shutdownCurrentSubThreads()`——迭代元素类型改为 **`AbstractFutureTask`**，不再按 `FutureTask<T>` 过滤；
+  2. `FutureTask<T>:184-186`：删除同名的 `shutdown()` / `shutdownCurrentSubThreads()`，改为覆写 `cancelSelf()`（`future?.cancel()`）。
+- 兼容性：`FutureTask<T>.shutdown()` 与 `FutureTask<T>.shutdownCurrentSubThreads()` 照旧可用（成员继承；`AbstractFutureTask` 是 `sealed`，子类仅本包内），用例里加了一处**编译期调用点**确认解析没断；公开签名集合只增不减（`AbstractFutureTask` 多了 `shutdown()`）。
+- 用例：`f_base/src/FutureTask_test.cj` → `testMixedTypeChildrenAreCancelledToo`（3 轮；父任务 `FutureTask<Unit>` 同时创建 `FutureTask<Unit>` 与 `FutureTask<Int64>` 两个子任务，父任务结束时**两个都必须收到取消信号**）。
+- 测量证据：
+  - **修前**：`FAILED 1` —— `(notCancelled == 0)` left: **3**（3 轮各丢一个 `Int64` 子任务；同轮的 `Unit` 子任务正常取消）。
+  - **修后**：`TOTAL: 12, PASSED: 12, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`）。
+  - 独立探针 exp4B：修前 `same=true, diff=false` → 修后 **`same=true, diff=true`**。
+- 未覆盖 / 待拍板：`FutureTask<T>.current()` 仍是带泛型实参的模式匹配，`T` 不匹配时照旧抛 `No task found in current thread`（EXP12：在 `FutureTask<Int64>` 体内调 `FutureTask<Unit>.current()`）。**修它属公开 API 变更**（返回类型 `FutureTask<T>` 决定了"当前任务是别的 `T`"时无法返回，可选：改返回 `AbstractFutureTask`，或另加类型无关的新入口），按项目约定登记待作者拍板，本次不动。
 
 **位置**：`f_base/src/FutureTask.cj:153-155`（`shutdownCurrentSubThreads` 的模式匹配）、`:129-135`（`current()`）
 
