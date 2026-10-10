@@ -76,21 +76,34 @@ public sealed abstract class AbstractFutureTask <: Hashable & Equatable<Abstract
             None<T>
         }
     }
+    // FT-4 二次决策：二段检查锁 —— 第一段无锁快路径；未命中才进锁，锁内复查后只有一个调用方写入
     func getOrSetLocal<T>(local: AbstractInheritedTaskLocal, value: T): T {
         if(let Some(x: T) <- getLocal<T>(local)){
             x
         }else{
-            setLocal<T>(local, value)
-            value
+            synchronized(local.initLock){
+                if(let Some(x: T) <- getLocal<T>(local)){
+                    x
+                }else{
+                    setLocal<T>(local, value)
+                    value
+                }
+            }
         }
     }
     func getOrComputeLocal<T>(local: AbstractInheritedTaskLocal, fn: () -> T): T {
         if(let Some(x: T) <- getLocal<T>(local)){
             x
         }else{
-            let value = fn()
-            setLocal<T>(local, value)
-            value
+            synchronized(local.initLock){
+                if(let Some(x: T) <- getLocal<T>(local)){
+                    x
+                }else{
+                    let value = fn()
+                    setLocal<T>(local, value)
+                    value
+                }
+            }
         }
     }
     // FT-3（bug-f_base.md §2.1）：取消/关闭能力落在 AbstractFutureTask 上，子任务表的迭代才不必
@@ -186,6 +199,11 @@ public class FutureTask<T> <: AbstractFutureTask {
     }
 }
 public sealed abstract class AbstractInheritedTaskLocal <: Hashable & Equatable<AbstractInheritedTaskLocal> {
+    // FT-4 二次决策（bug-f_base.md §2.2）：getOrSet/getOrCompute 用的二段检查锁。
+    // 粒度 = 每个 local —— 一个 local 只对应"某个任务表里的一个槽"，正好覆盖该槽的全部写入者；
+    // fn() 在锁内执行（保证只算一次），Cangjie 的 Mutex 可重入 ⇒ fn 内再对同一 local 调
+    // getOrCompute 不会死锁（那次会再算一次并覆盖，属已文档化的例外）。
+    let initLock = Mutex()
     AbstractInheritedTaskLocal(let task: AbstractFutureTask){}
     public func hashCode(): Int64 {
         task.hashCode()

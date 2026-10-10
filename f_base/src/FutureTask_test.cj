@@ -19,7 +19,7 @@ import std.unittest.*
 import std.unittest.testmacro.*
 import std.collection.ArrayList
 import std.collection.concurrent.ConcurrentHashMap
-import std.sync.AtomicBool
+import std.sync.{AtomicBool, AtomicInt64}
 
 @Test
 public class FutureTask_test {
@@ -234,6 +234,48 @@ public class FutureTask_test {
         @Expect(box.get("childOwn"), Some("2"))
         @Expect(box.get("ownerOwn"), Some("1")) // 而 set 只写当前任务 ⇒ owner 不受影响
     }
+
+    /*
+     * FT-4 二次决策（bug-f_base.md §2.2）：getOrSet/getOrCompute 改用**二段检查锁** ——
+     * 并发调用方里只有一个会执行 fn 并写入，其余在锁内复查后拿到同一个值。
+     * 修前：所有调用方都在第一次（无锁）检查时未命中 ⇒ 各自算一次、各自返回自己那份。
+     */
+    @TestCase
+    public func testGetOrComputeComputesOnceUnderConcurrency(): Unit {
+        let n = 8
+        let computeCount = AtomicInt64(0)
+        let got = ConcurrentHashMap<Int64, Int64>()
+        let root = FutureTask<Unit>({ => futureTaskTestDclParent(n, computeCount, got) })
+        let _ = root.get()
+        @Expect(computeCount.load(), 1) // 修前为 8
+        var first = -1
+        var allSame = true
+        for (i in 0..n) {
+            match (got.get(i)) {
+                case Some(v) => if (first < 0) {
+                    first = v
+                } else if (v != first) {
+                    allSame = false
+                }
+                case None => allSame = false
+            }
+        }
+        @Expect(allSame, true) // 修前各拿到自己那份（值不同）
+        @Expect(first >= 1, true)
+    }
+
+    /*
+     * 守卫：链上已有值时 getOrCompute 不得再算、也不得覆盖（修前修后都应通过）。
+     */
+    @TestCase
+    public func testGetOrComputeDoesNotComputeWhenValueExists(): Unit {
+        let box = ConcurrentHashMap<String, String>()
+        let root = FutureTask<Unit>({ => futureTaskTestGetOrComputeExisting(box) })
+        let _ = root.get()
+        @Expect(box.get("child"), Some("7"))
+        @Expect(box.get("count"), Some("0"))
+        @Expect(box.get("owner"), Some("7"))
+    }
 }
 
 private func futureTaskTestReadLocal(ready: AtomicBool, slot: ArrayList<InheritedTaskLocal<Int64>>): Int64 {
@@ -385,6 +427,54 @@ private func futureTaskTestChildSharedAndOwn(box: ConcurrentHashMap<String, Stri
     box.add("childShared", "${shared.getOrCompute({ => 42 })}")
     ownSet.set(2)
     box.add("childOwn", futureTaskTestReadStr(ownSet))
+}
+
+// ===== 二段检查锁的辅助函数 =====
+
+private func futureTaskTestDclCompute(count: AtomicInt64): Int64 {
+    let n = count.fetchAdd(1) + 1
+    sleep(20 * Duration.millisecond) // 放大"检查 → 写入"的窗口，让并发各算一次暴露出来
+    n
+}
+
+private func futureTaskTestDclChild(i: Int64, local: InheritedTaskLocal<Int64>, count: AtomicInt64,
+                                    got: ConcurrentHashMap<Int64, Int64>, arrived: AtomicInt64, gate: AtomicBool): Unit {
+    arrived.fetchAdd(1)
+    while (!gate.load()) {} // 等所有兄弟就位后一起抢
+    got.add(i, local.getOrCompute({ => futureTaskTestDclCompute(count) }))
+}
+
+// 父任务保持存活（等所有子任务结束）：这样 owner 的共享槽在链上可达，DCL 才能让其余调用方复查命中
+private func futureTaskTestDclParent(n: Int64, count: AtomicInt64, got: ConcurrentHashMap<Int64, Int64>): Unit {
+    let me = FutureTask<Unit>.current()
+    let local = me.newLocal<Int64>()
+    let arrived = AtomicInt64(0)
+    let gate = AtomicBool(false)
+    let kids = ArrayList<FutureTask<Unit>>()
+    for (i in 0..n) {
+        kids.add(FutureTask<Unit>({ => futureTaskTestDclChild(i, local, count, got, arrived, gate) }))
+    }
+    while (arrived.load() < n) {
+        sleep(1 * Duration.millisecond)
+    }
+    gate.store(true)
+    for (k in kids) {
+        let _ = k.get()
+    }
+}
+
+private func futureTaskTestGetOrComputeExistingChild(local: InheritedTaskLocal<Int64>, count: AtomicInt64, box: ConcurrentHashMap<String, String>): Unit {
+    box.add("child", "${local.getOrCompute({ => futureTaskTestDclCompute(count) })}")
+    box.add("count", "${count.load()}")
+}
+
+private func futureTaskTestGetOrComputeExisting(box: ConcurrentHashMap<String, String>): Unit {
+    let me = FutureTask<Unit>.current()
+    let local = me.newLocal<Int64>()
+    local.set(7)
+    let c = FutureTask<Unit>({ => futureTaskTestGetOrComputeExistingChild(local, AtomicInt64(0), box) })
+    let _ = c.get()
+    box.add("owner", futureTaskTestReadStr(local))
 }
 
 // ===== FT-4 辅助函数结束 =====
