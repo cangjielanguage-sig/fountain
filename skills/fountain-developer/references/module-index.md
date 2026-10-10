@@ -1,7 +1,7 @@
 # fountain 模块索引与选型
 
 索引快照时间：2026-10，取自根 `README.md`「各模块详细文档」。
-**可能滞后**：以 `fountain_lookup.py modules` 的现场输出与各模块 README 为准。
+**可能滞后**：以 `fountain_lookup.py modules` 的现场输出与各模块 README 为准；现场查询按**在用版本**（脚本会把文档副本切到该版本，输出头部标注版本，见 SKILL.md「定位 fountain 仓库与查询版本」）。
 每个模块的详细用法读 `<模块>/README.md`（英文镜像 `<模块>/README_en.md`），细节核对 `<模块>/src/`。
 
 ## 1. 模块表
@@ -83,6 +83,8 @@
 
 - 想知道某关键词在哪些模块出现：`python scripts/fountain_lookup.py search "关键词"`（可加 `--in code` 只搜源码）。
 - 想知道某模块的顶层公开声明清单：`python scripts/fountain_lookup.py api f_mvc`。
+- 想查某个具体版本（而非项目在用版本）：加 `--version 1.3.9`（或 `--version release-1.3.9.alpha`）；
+  脚本会先把技能目录下的文档副本切到该版本再检索，输出头部标注实际版本。
 - 模块 README 的「其他公开 API」小节是自动生成的签名清单，适合快速扫 API 面；配置项（环境变量）一般在 README 的配置表中。
 - 依赖关系与分层：根 `README.md` 的两张依赖图；生成脚本在 `docs/模块依赖图/`。
 - 模块是否发布：根 `.modules` 的 `[include]` / `[detention]`。

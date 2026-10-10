@@ -28,16 +28,33 @@ wsl -d Ubuntu-24.04 bash -lc "<命令>"
 
 版本号是活的：依赖要用的版本以 `f_version/src/FountainVersion.cj` 的 `Version` 或 `fboot version` 现场读取为准。
 
-### 2.1 本机没有 fountain 源码时（文档副本）
+### 2.1 本机没有 fountain 源码时（文档副本 + 按版本切换）
 
 `fountain_lookup.py` 找不到仓库根时会自动执行：
 `git clone --depth 1 https://gitcode.com/Cangjie-SIG/fountain.git <skill-root>/fountain`，
 该副本**仅用于查询文档**（README / 源码 API 参考，查询结果里会标注），不要用于构建或安装：
 
 - 查询：`python <skill-root>/scripts/fountain_lookup.py modules`（第二次起直接用副本，不会重复克隆）；
+- **按版本查询（默认行为）**：查询前先定目标版本——`--version X.Y.Z`（也可给 tag 名）> `$FOUNTAIN_VERSION`
+  > 当前项目 cjpm.toml 里 `"fountain::f_*"` 的依赖版本（从当前目录向上找最近的）。定了版本后脚本把副本切到
+  对应 tag（`git fetch --depth 1 origin tag <tag>` + `git checkout --detach`，只取该版本快照，实测约 30MB / 几秒；
+  命中本地已有 tag 时不联网），再检索；**输出头部标注实际版本**；
+- 只切副本 / 看状态：`python <skill-root>/scripts/fountain_lookup.py switch 1.3.9`（`switch latest` 回默认分支）、
+  `python <skill-root>/scripts/fountain_lookup.py version`；
+- **切版本只动技能目录下的副本**：`--root` / `$FOUNTAIN_ROOT` 指定的源码目录不会被改动（版本不符时输出警告）；
+  自动发现的源码目录版本不符时，脚本改用文档副本并在 stderr 说明；
 - 构建 / 安装：用用户自己的 fountain 源码（`install_fboot.sh install` / path 依赖），或从中心仓装 fboot（3.2 节）；
-- 换镜像 / 禁用克隆：`--repo-url <URL>` / `--no-clone`（禁用后找不到仓库直接报错）；
-- 副本过时：`git -C <skill-root>/fountain pull --ff-only`；脚本在副本已存在时也会先尝试更新。
+- 换镜像 / 断开网络：`--repo-url <URL>` / `--no-clone`（禁用克隆、`fetch`、`ls-remote` 与 `pull`；
+  副本里已有目标 tag 时仍可本地 checkout）；
+- 副本过时或损坏：直接删掉 `<skill-root>/fountain` 重新克隆（副本会随切换累积多个版本的快照，约 30MB/版本）；
+  副本停在分支上时脚本会先 `pull --ff-only`，停在 tag 上（detached）时不做拉取。
+
+实测（2026-10-10，gitcode）：`ls-remote --tags --refs`（76 个 tag）约 1s；首次浅克隆（1.3.14 快照 1547 个文件）
+约 5s / 31MB；`fetch --depth 1 origin tag <tag>` 切版本约 2s。
+
+**没有对应 tag 时**：版本号会按 `release-<版本>` → `release-<版本>.alpha` → `v<版本>` → `<版本>`
+依次找 tag（仓库历史用过 `release-1.0.5` 与 `release-1.3.14.alpha` 两种形态），也接受直接给 tag 名；
+都找不到时脚本给出警告并沿用副本现状态，此时**不要把结果当作目标版本**。
 
 ## 3. 安装 fboot
 
