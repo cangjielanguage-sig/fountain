@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "note": "本文件是 cangjie-doc-lookup 技能固化的文档源路径；用 scripts/skill_paths.py set <源> <路径> 修改，不要手工改路径以外的字段。",
+  "sources": {
+    "lang": {
+      "path": "D:\\docs\\work\\cangjie\\cangjie-doc\\cangjie_docs",
+      "origin": "default",
+      "updated": "2026-10-10"
+    },
+    "std": {
+      "path": "D:\\docs\\work\\cangjie\\projects\\cangjie_runtime\\std\\doc\\libs\\std",
+      "origin": "default",
+      "updated": "2026-10-10"
+    },
+    "stdx": {
+      "path": "D:\\docs\\work\\cangjie\\projects\\cangjie_stdx\\doc\\libs_stdx",
+      "origin": "default",
+      "updated": "2026-10-10"
+    }
+  }
+}
