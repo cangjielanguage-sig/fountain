@@ -100,37 +100,39 @@ public class FutureTask<T> <: AbstractFutureTask {
 
     public init(shutdownSubOnFinish: Bool, fn: () -> T){
         let task = this
-        // FT-2：登记改由**创建线程**（父任务）同步完成，并与注销/整体取走共用 subTasksLock。
-        // 顺序保证：先拿到 future，再登记 ⇒ 父任务在 subTasks 里看到子任务时，child.future 一定已就绪
-        // （否则父任务的 shutdown 会因为 future 仍为 None 而漏掉这次取消）。
+        // FT-2：登记由**创建线程**（父任务）在起线程之前同步完成，并与注销/整体取走共用 subTasksLock。
+        // 登记先于 spawn ⇒ 子任务开始运行时必然已在表里，父任务的 shutdown 不会漏掉它；
+        // 反过来，能对该任务调 shutdown 的只有它的创建线程（此刻正忙于本构造函数），
+        // 因此"登记已完成、future 尚未赋值"这段窗口不会造成漏取消，却让临界区不再包住 spawn
+        // （临界区包住 spawn 会让子任务拆除时抢锁、把构造路径的延迟推高 ~4µs/任务）。
         synchronized(subTasksLock){
-            this.future = spawn{
-                let tid = Thread.currentThread.id
-                task.tid.store(tid)
-                taskMap.add(tid, task)
-                try{
-                    fn()
-                }finally{
-                    taskMap.remove(tid)
-                    synchronized(subTasksLock){
-                        if(let Some(set) <- subTasks.get(parentTID)){
-                            set.remove(task)
-                            if(set.isEmpty()){
-                                subTasks.remove(parentTID)
-                            }
-                        }
-                    }
-                    if(shutdownSubOnFinish){
-                        shutdownCurrentSubThreads()
-                    }
-                }
-            }
             if(let Some(set) <- subTasks.get(parentTID)){
                 set.add(task)
             }else{
                 let set = HashSet<AbstractFutureTask>()
                 set.add(task)
                 subTasks.add(parentTID, set)
+            }
+        }
+        this.future = spawn{
+            let tid = Thread.currentThread.id
+            task.tid.store(tid)
+            taskMap.add(tid, task)
+            try{
+                fn()
+            }finally{
+                taskMap.remove(tid)
+                synchronized(subTasksLock){
+                    if(let Some(set) <- subTasks.get(parentTID)){
+                        set.remove(task)
+                        if(set.isEmpty()){
+                            subTasks.remove(parentTID)
+                        }
+                    }
+                }
+                if(shutdownSubOnFinish){
+                    shutdownCurrentSubThreads()
+                }
             }
         }
     }
