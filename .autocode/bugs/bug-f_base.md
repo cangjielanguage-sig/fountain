@@ -24,7 +24,7 @@
 1. `FT-1`（§1.1）`InheritedTaskLocal` 在 owner 线程启动前写入的值 99.6% 读不到（hashCode 取可变的 `tid`）——静默丢值，且是"构造任务后预置上下文"这条最自然的用法　**✅已修复（2026-10-11，见 §1.1 修复标记）**
 2. `FT-2`（§1.2）`shutdownSubOnFinish` 承诺不成立（父任务先结束时 96% 子任务不被取消）＋ `subTasks` 无互斥（`HashSet` 共享无共同锁）　**✅已修复（2026-10-11，见 §1.2 修复标记）**
 3. `FT-3`（§2.1）`shutdownCurrentSubThreads`/`current()` 按 `FutureTask<T>` 过滤，异类型子任务被静默跳过（100% 复现）　**✅已修复（2026-10-11，见 §2.1 修复标记；`current()` 那半属 API 变更，登记待拍板）**
-4. `FT-4`（§2.2）`InheritedTaskLocal` 的写入目标固定为 owner（四个出口，含"owner 已结束时 `set` 后自读 `None`"）—— **已拍板：路线 2（`set`/`remove` 写当前任务）；`getOrSet`/`getOrCompute` 保持现状**　**方案已定，实施中**
+4. `FT-4`（§2.2）`InheritedTaskLocal` 的写入目标固定为 owner（四个出口，含"owner 已结束时 `set` 后自读 `None`"）—— **已拍板：路线 2（`set`/`remove` 写当前任务）；`getOrSet`/`getOrCompute` 保持现状**　**✅已修复（2026-10-11，见 §2.2 修复标记）**
 5. `FT-5`（§2.3）父任务先结束后子任务继承不到值（返回 None）——需确认是设计使然还是缺陷，并补文档口径　**待处理**
 6. `FT-6`（§2.4）性能：构造+get ≈ 13× 裸 `spawn`、`local.get` ≈ 8.9× 标准库 `ThreadLocal` —— 按"先有量化依据"逐项立项　**待处理**
 7. `FT-L1` ~ `FT-L4`（§3）低危/契约/文档项　**登记**
@@ -205,7 +205,21 @@ while(let Some(f: FutureTask<T>) <- itr.next()){
 
 - **采用路线 2**：`set`/`remove` 的写入目标改为「当前任务」，不在任务里时回退 owner（该回退同时保住 FT-1 的既有语义：构造后由创建线程预置上下文）；
 - **`getOrSet`/`getOrCompute` 保持现状**（仍写 owner 的共享槽、不加锁）：即这两个入口的语义是"为**整条链都没有值**时，给 local 所属任务的共享槽做懒初始化（子树共享）"，与 `set` 的"覆盖本层"分工并列，两者都要在文档里写清；
-- 实现与用例见 §2.2 的修复标记（实施后补）。
+- 实现与用例见下面的修复标记。
+
+**✅ 修复标记（2026-10-11）**：分支 `fix/futuretask`（worktree `.worktrees/futuretask`，基线 `fe8a1886`）。代码、用例、README(zh+en)、本标记在同一提交（提交信息 `fix(f_base): FT-4 set/remove 写当前任务（路线 2），getOrSet/getOrCompute 保持 owner 共享槽`；提交号见 §0 时间线回填）。
+
+- 改动（`f_base/src/FutureTask.cj`）：
+  1. `:204-209`：`InheritedTaskLocal` 新增私有 `writeTarget()` —— `AbstractFutureTask.taskMap.get(Thread.currentThread.id)`，取到就是「当前任务」，取不到（创建线程 / main 线程等）回退 owner；
+  2. `:211-213`：`set` → `writeTarget().setLocal(...)`；`:219-221`：`remove` → `writeTarget().removeLocal(...)`；
+  3. `:215-217`：`get`（链式上溯）、`:223-228`：`getOrSet`/`getOrCompute`（未命中写 owner 共享槽）**未改动** —— 按决策第 3 条保留现状。
+- 文档：`f_base/README.md` 与 `f_base/README_en.md` 同批更新（FutureTask 章节的第 2 条说明 + `InheritedTaskLocal` 代码块注释），写明三条分工：`get` 链式上溯 / `set`·`remove` 只动当前任务这一层 / `getOrSet`·`getOrCompute` 未命中写创建该 local 的任务（子树共享槽、不加锁）。
+- 用例（`f_base/src/FutureTask_test.cj`，5 条）：`testChildSetDoesNotAffectOwner`、`testChildSetVisibleToOwnDescendant`（守卫：子任务的写必须能被自己的后代读到）、`testSetThenGetInTaskWorksAfterOwnerFinished`、`testChildRemoveDoesNotClearOwner`、`testGetOrComputeStillPopulatesOwnerSlot`（钉住第 3 条决策）。
+- 测量证据（`cjpm test --no-color`，日志 `/tmp/ftask_test.log`）：
+  - **修前**：`TOTAL: 17, PASSED: 13, FAILED: 4` —— `box["owner"]=="2"`（期望 `"1"`）、`box["sibling"]=="2"`（期望 `"1"`）；`box["self"]=="None"`（期望 `"9"`，即 EXP17）；`box["childAfterRemove"]=="None"`、`box["owner"]=="None"`；`box["ownerOwn"]=="2"`（期望 `"1"`）。守卫用例与 `getOrCompute` 的 `ownerShared/childShared=="42"` 修前即通过。
+  - **修后**：`TOTAL: 17, PASSED: 17, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`）。
+- 独立探针复测（按 worktree 的 f_base 副本构建）：`EXP11` 父任务由 `Some(2)` 变为 **`Some(1)`**、子任务仍 `Some(2)`；`EXP17` owner 已结束由 `None` 变为 **`Some(9)`**（owner 存活同样 `Some(9)`）；`EXP10` 仍 **500/500**（"构造后由创建线程 `set`"这条回退路径未被破坏，FT-1 语义保持）。
+- 未覆盖 / 影响面：**行为变更** —— 依赖"子任务 `set` 改到父任务""子任务 `remove` 清掉父任务"的外部代码需改（语义此前未文档化、版本全为 `.alpha`，按"语义明确化"处理并在 README 写明）；`getOrSet`/`getOrCompute` 仍是"未命中写 owner + 不加锁（非原子，并发调用方可能各算一次、各返回自己那份）"，属本次**刻意保留**的口径。
 
 ### 2.3 [中｜行为边界·文档缺失] `FT-5` 父任务先结束后，子任务继承不到值
 

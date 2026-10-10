@@ -611,7 +611,9 @@ public interface RightShiftable<T> where T <: RightShiftable<T> {
 
 ## `FutureTask<T>`
 1. 父任务结束时可以选择是否结束子任务
-2. 支持InheritedTaskLocal，类似ThreadLocal，不过有继承关系，如果当然FutureTask未找到值，则从父任务中获取
+2. 支持InheritedTaskLocal，类似ThreadLocal，不过有继承关系：`get` 从当前任务沿父任务逐级查找，本任务没有就找父任务；
+   `set`/`remove` 只作用于**当前任务**这一层（只影响本任务及其后代；父任务与兄弟任务看不到；不在任务内部调用时回退到创建该 local 的任务）；
+   `getOrSet`/`getOrCompute` 在整条链都没有值时写**创建该 local 的任务**（该任务及其整个子树的共享槽）——它们不加锁、不保证"只计算一次"，并发调用方可能各自计算一次并各自返回自己那份值
 ```cj
 public sealed abstract class AbstractFutureTask <: Hashable & Equatable<AbstractFutureTask>{
     public func hashCode(): Int64 
@@ -644,7 +646,9 @@ public sealed abstract class AbstractInheritedTaskLocal <: Hashable & Equatable<
     public func hashCode(): Int64 
     public operator func ==(other: AbstractInheritedTaskLocal): Bool 
 }
-//可从父线程继承的ThreadLocal，当前FutureTask的InheritedTaskLocal无值时，会从父FutureTask查询
+//可从父线程继承的ThreadLocal：get 从当前任务沿父任务逐级查找，本任务没有就找父任务
+//set/remove 作用于当前任务这一层（不在任务内部调用时回退到创建该 local 的任务）
+//getOrSet/getOrCompute 未命中时写创建该 local 的任务（该任务及其子树的共享槽，不加锁）
 //FutureTask初始化时的任务结束时，相应的InheritedTaskLocal会被移除
 public class InheritedTaskLocal<T> <: AbstractInheritedTaskLocal {
     init(task: AbstractFutureTask)

@@ -199,8 +199,17 @@ public class InheritedTaskLocal<T> <: AbstractInheritedTaskLocal {
         super(task)
     }
 
+    // FT-4（bug-f_base.md §2.2，路线 2）：写/删的目标 = 当前线程所属的任务（"当前任务"）；
+    // 调用方不在任务里（创建线程、main 线程等）时回退到 owner —— 即创建这个 local 的任务。
+    private func writeTarget(): AbstractFutureTask {
+        match (AbstractFutureTask.taskMap.get(Thread.currentThread.id)) {
+            case Some(running) => running
+            case None => task
+        }
+    }
+
     public func set(value: T): Unit {
-        task.setLocal<T>(this, value)
+        writeTarget().setLocal<T>(this, value)
     }
 
     public func get(): ?T {
@@ -208,8 +217,9 @@ public class InheritedTaskLocal<T> <: AbstractInheritedTaskLocal {
     }
 
     public func remove(): Unit {
-        task.removeLocal<T>(this)
+        writeTarget().removeLocal<T>(this)
     }
+    // 决策：getOrSet/getOrCompute 保持现状 —— 未命中时写 owner 的共享槽（该任务与整个子树可见），不加锁
     public func getOrSet(value: T): T {
         task.getOrSetLocal<T>(this, value)
     }

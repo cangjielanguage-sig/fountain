@@ -169,6 +169,71 @@ public class FutureTask_test {
         }
         @Expect(notCancelled, 0)
     }
+
+    /*
+     * FT-4（bug-f_base.md §2.2，路线 2）：`set` 只写"当前任务"这一层 —— 子任务的写不得改动 owner 的值，
+     * 之后读取 owner 值的兄弟任务也看不到子任务的写。
+     */
+    @TestCase
+    public func testChildSetDoesNotAffectOwner(): Unit {
+        let box = ConcurrentHashMap<String, String>()
+        let root = FutureTask<Unit>({ => futureTaskTestChildSetScope(box) })
+        let _ = root.get()
+        @Expect(box.get("child"), Some("2"))
+        @Expect(box.get("owner"), Some("1")) // 修前会被子任务的写覆盖成 "2"
+        @Expect(box.get("sibling"), Some("1")) // 修前同样是 "2"
+    }
+
+    /*
+     * FT-4（路线 2）守卫：子任务写入的值必须能被它自己的后代读到（继承链不能因为"写当前任务"而断）。
+     */
+    @TestCase
+    public func testChildSetVisibleToOwnDescendant(): Unit {
+        let box = ConcurrentHashMap<String, String>()
+        let root = FutureTask<Unit>({ => futureTaskTestChildSetForGrandChild(box) })
+        let _ = root.get()
+        @Expect(box.get("grand"), Some("2"))
+    }
+
+    /*
+     * FT-4（路线 2）：owner 任务已结束（fire-and-forget）时，子任务 set 之后再 get 必须读回自己写的值。
+     * 修前：写进 owner 的表（该任务已不在 taskMap 里）⇒ 自读为 None（EXP17）。
+     */
+    @TestCase
+    public func testSetThenGetInTaskWorksAfterOwnerFinished(): Unit {
+        let box = ConcurrentHashMap<String, String>()
+        let root = FutureTask<Unit>({ => futureTaskTestSetAfterOwnerGone(box) })
+        let _ = root.get()
+        sleep(400 * Duration.millisecond)
+        @Expect(box.get("self"), Some("9"))
+    }
+
+    /*
+     * FT-4（路线 2）：`remove` 也只作用于当前任务这一层 —— 子任务 remove 不得清掉 owner 的值。
+     */
+    @TestCase
+    public func testChildRemoveDoesNotClearOwner(): Unit {
+        let box = ConcurrentHashMap<String, String>()
+        let root = FutureTask<Unit>({ => futureTaskTestChildRemoveScope(box) })
+        let _ = root.get()
+        @Expect(box.get("childAfterRemove"), Some("1")) // 子任务 remove 后回退读到 owner 的 1
+        @Expect(box.get("owner"), Some("1")) // 修前 owner 的槽会被子任务清掉 ⇒ None
+    }
+
+    /*
+     * FT-4 口径钉住（决策第 3 条：getOrSet/getOrCompute 保持现状）：
+     * 它们未命中时仍写"创建该 local 的任务"（子树共享槽），与 set 的"写当前任务"分工不同。
+     */
+    @TestCase
+    public func testGetOrComputeStillPopulatesOwnerSlot(): Unit {
+        let box = ConcurrentHashMap<String, String>()
+        let root = FutureTask<Unit>({ => futureTaskTestGetOrComputeScope(box) })
+        let _ = root.get()
+        @Expect(box.get("childShared"), Some("42"))
+        @Expect(box.get("ownerShared"), Some("42")) // getOrCompute 仍落 owner 共享槽
+        @Expect(box.get("childOwn"), Some("2"))
+        @Expect(box.get("ownerOwn"), Some("1")) // 而 set 只写当前任务 ⇒ owner 不受影响
+    }
 }
 
 private func futureTaskTestReadLocal(ready: AtomicBool, slot: ArrayList<InheritedTaskLocal<Int64>>): Int64 {
@@ -233,3 +298,93 @@ private func futureTaskTestMixedTypeParent(box: ConcurrentHashMap<String, Bool>)
     let _ = FutureTask<Int64>({ => futureTaskTestPollCancelStrI64(box, "diff") })
     sleep(150 * Duration.millisecond)
 }
+
+// ===== FT-4（路线 2）的辅助函数 =====
+
+private func futureTaskTestReadStr(local: InheritedTaskLocal<Int64>): String {
+    match (local.get()) {
+        case Some(x) => "${x}"
+        case None => "None"
+    }
+}
+
+// 子任务 set(2) 后自读；随后父任务、以及"子任务结束之后才创建的兄弟"各读一次
+private func futureTaskTestChildSetScope(box: ConcurrentHashMap<String, String>): Unit {
+    let me = FutureTask<Unit>.current()
+    let local = me.newLocal<Int64>()
+    local.set(1)
+    let child = FutureTask<Unit>({ => futureTaskTestChildSetSelf(box, local) })
+    let _ = child.get()
+    let sibling = FutureTask<Unit>({ => box.add("sibling", futureTaskTestReadStr(local)) })
+    let _ = sibling.get()
+    box.add("owner", futureTaskTestReadStr(local))
+}
+
+private func futureTaskTestChildSetSelf(box: ConcurrentHashMap<String, String>, local: InheritedTaskLocal<Int64>): Unit {
+    local.set(2)
+    box.add("child", futureTaskTestReadStr(local))
+}
+
+// 子任务 set(2)，再由它的子任务（孙）读
+private func futureTaskTestChildSetForGrandChild(box: ConcurrentHashMap<String, String>): Unit {
+    let me = FutureTask<Unit>.current()
+    let local = me.newLocal<Int64>()
+    local.set(1)
+    let child = FutureTask<Unit>({ => futureTaskTestChildSetThenSpawnGrand(box, local) })
+    let _ = child.get()
+}
+
+private func futureTaskTestChildSetThenSpawnGrand(box: ConcurrentHashMap<String, String>, local: InheritedTaskLocal<Int64>): Unit {
+    local.set(2)
+    let grand = FutureTask<Unit>({ => box.add("grand", futureTaskTestReadStr(local)) })
+    let _ = grand.get()
+}
+
+// 父任务不等待子任务，直接结束（owner 已结束）；子任务 set(9) 后自读
+private func futureTaskTestSetAfterOwnerGone(box: ConcurrentHashMap<String, String>): Unit {
+    let me = FutureTask<Unit>.current()
+    let local = me.newLocal<Int64>()
+    local.set(1)
+    let _ = FutureTask<Unit>({ => futureTaskTestSetThenReadSelf(box, local) })
+}
+
+private func futureTaskTestSetThenReadSelf(box: ConcurrentHashMap<String, String>, local: InheritedTaskLocal<Int64>): Unit {
+    sleep(50 * Duration.millisecond) // 确保 owner 的 finally 已经摘掉 taskMap 登记
+    local.set(9)
+    box.add("self", futureTaskTestReadStr(local))
+}
+
+// 子任务 remove 之后再读；父任务随后读
+private func futureTaskTestChildRemoveScope(box: ConcurrentHashMap<String, String>): Unit {
+    let me = FutureTask<Unit>.current()
+    let local = me.newLocal<Int64>()
+    local.set(1)
+    let child = FutureTask<Unit>({ => futureTaskTestRemoveThenRead(box, local) })
+    let _ = child.get()
+    box.add("owner", futureTaskTestReadStr(local))
+}
+
+private func futureTaskTestRemoveThenRead(box: ConcurrentHashMap<String, String>, local: InheritedTaskLocal<Int64>): Unit {
+    local.remove()
+    box.add("childAfterRemove", futureTaskTestReadStr(local))
+}
+
+// getOrCompute（子树共享槽，保持现状）与 set（当前任务）的分工对照
+private func futureTaskTestGetOrComputeScope(box: ConcurrentHashMap<String, String>): Unit {
+    let me = FutureTask<Unit>.current()
+    let shared = me.newLocal<Int64>()
+    let ownSet = me.newLocal<Int64>()
+    ownSet.set(1)
+    let child = FutureTask<Unit>({ => futureTaskTestChildSharedAndOwn(box, shared, ownSet) })
+    let _ = child.get()
+    box.add("ownerShared", futureTaskTestReadStr(shared))
+    box.add("ownerOwn", futureTaskTestReadStr(ownSet))
+}
+
+private func futureTaskTestChildSharedAndOwn(box: ConcurrentHashMap<String, String>, shared: InheritedTaskLocal<Int64>, ownSet: InheritedTaskLocal<Int64>): Unit {
+    box.add("childShared", "${shared.getOrCompute({ => 42 })}")
+    ownSet.set(2)
+    box.add("childOwn", futureTaskTestReadStr(ownSet))
+}
+
+// ===== FT-4 辅助函数结束 =====

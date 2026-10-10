@@ -613,7 +613,9 @@ public interface RightShiftable<T> where T <: RightShiftable<T> {
 
 ## `FutureTask<T>`
 1. When a parent task ends it can decide whether to end its child tasks
-2. It supports InheritedTaskLocal, similar to ThreadLocal but with inheritance: if the current FutureTask has no value, it is taken from the parent task
+2. It supports InheritedTaskLocal, similar to ThreadLocal but with inheritance: `get` walks up from the current task to its parents (if the current task has no value, the parent task is consulted);
+   `set`/`remove` only affect the **current task** layer (visible to that task and its descendants, not to the parent or siblings; when called outside a task they fall back to the task that created the local);
+   `getOrSet`/`getOrCompute` write the **task that created the local** (a slot shared by that task and its whole subtree) when no value is found in the chain — they are not locked and do not guarantee "compute once": concurrent callers may each compute once and each return its own value
 ```cj
 public sealed abstract class AbstractFutureTask <: Hashable & Equatable<AbstractFutureTask>{
     public func hashCode(): Int64 
@@ -646,7 +648,9 @@ public sealed abstract class AbstractInheritedTaskLocal <: Hashable & Equatable<
     public func hashCode(): Int64 
     public operator func ==(other: AbstractInheritedTaskLocal): Bool 
 }
-//A ThreadLocal that can be inherited from the parent thread; when the InheritedTaskLocal of the current FutureTask has no value it is looked up in the parent FutureTask
+//A ThreadLocal that can be inherited from the parent thread: get walks up from the current task to its parents
+//set/remove act on the current task layer (they fall back to the task that created the local when called outside a task)
+//getOrSet/getOrCompute write the task that created the local on a miss (a slot shared by that task and its subtree, not locked)
 //When the task of the FutureTask initialization ends, the corresponding InheritedTaskLocal is removed
 public class InheritedTaskLocal<T> <: AbstractInheritedTaskLocal {
     init(task: AbstractFutureTask)
