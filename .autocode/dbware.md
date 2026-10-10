@@ -67,7 +67,10 @@ public class ColumnInfoImpl <: ColumnInfo{
 从`f_dbd`访问`fdbm`使用`f_protocol`的*CONSUME*命令，从`fdbm`响应`f_dbd`使用`f_protocol`的*RESP*命令。
 
 ## `fdbm`
-
+```toml
+[package]
+category = ["Data Encapsulation and Transfer", "Database Driver", "Database Framework", "Infrastructure", 'Database Middleware']
+```
 ### 功能
 #### 数据库节点配置
 ```
@@ -262,6 +265,10 @@ export fdbm_cache_size=10000000 # 缓存KEY的数量，默认不限制
 响应kill -15，停止接收新的访问，等待执行完成并响应已接收到的访问，自动关闭所有连接，然后结束进程
 
 ## `f_dbd`
+```toml
+[package]
+category = ["Data Encapsulation and Transfer", "Database Driver", "Database Framework", "Infrastructure", 'Database Middleware']
+```
 1. 完整实现`std.database.sql`的全部API。采用仓颉侧的数据类型，不是`std.database.sql`的数据类型。
    - url: `fdbm://username:password@host:port/database_name`
      - username password支持%编码

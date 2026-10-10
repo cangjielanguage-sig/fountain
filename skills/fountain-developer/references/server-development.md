@@ -146,7 +146,8 @@ fboot cleanUpdate [PATH]
 ## 5. 需求覆盖检查与缺口处理
 
 1. 功能点 → 模块初筛：`references/module-index.md` 的选型速查。
-2. 命中核对：`python scripts/fountain_lookup.py search "<能力关键词>"`（必要时 `--in code`），再读该模块 README 与 `src/`。
+2. 命中核对：`python scripts/fountain_lookup.py search "<能力关键词>"`（必要时 `--in code`），再读该模块 README 与 `src/`
+   （脚本按项目在用版本切文档副本，读到的即该版本；输出头部有版本标注，换版本用 `--version`）。
 3. 有缺口时的固定动作（不得跳过）：**停下来问用户**，给出四选一（继续用简单方案 / 用户提供第三方依赖 / 缩减范围 /
    在项目内自行实现完整功能和要求的基础设施代码、工具代码），并明确说明缺口是什么、影响哪些需求点。
 4. 禁止项：把缺失能力写成空实现或假数据；引用没核对过的第三方库；把「标准库/其它语言有」当成「fountain 有」。

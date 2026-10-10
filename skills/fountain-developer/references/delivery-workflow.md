@@ -1,6 +1,8 @@
 # 交付全流程（初始化 → 配置 → TDD → 提交 → 建 tag）
 
 工作流 F / G / H / I 共用。原则：能用工具就先用工具（`fboot` 建骨架、`fountain_lookup.py` 查 API、`install_fboot.sh` 查版本）。
+查 API 时按**在用版本**：`fountain_lookup.py` 默认取当前项目 cjpm.toml 的 fountain 依赖版本并先把文档副本切到该版本
+（输出头部标注版本；换版本 `--version X.Y.Z` / `switch X.Y.Z`，见 SKILL.md「定位 fountain 仓库与查询版本」）。
 
 ## 1. 初始化
 
