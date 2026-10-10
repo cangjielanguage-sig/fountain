@@ -18,6 +18,7 @@ package fountain::f_base
 import std.unittest.*
 import std.unittest.testmacro.*
 import std.collection.ArrayList
+import std.collection.concurrent.ConcurrentHashMap
 import std.sync.AtomicBool
 
 @Test
@@ -64,6 +65,82 @@ public class FutureTask_test {
         }
         @Expect(equalCount, 0)
     }
+
+    /*
+     * FT-2（bug-f_base.md §1.2）：父任务创建子任务后立即结束（fire-and-forget，shutdownSubOnFinish 默认 true），
+     * 子任务必须收到取消信号。
+     * 修前：子任务只在"自己开始运行"时才登记进 subTasks，父任务的 finally 看不到它 ⇒ 漏取消。
+     */
+    @TestCase
+    public func testChildCancelledWhenParentFinishesImmediately(): Unit {
+        let rounds = 20
+        var notCancelled = 0
+        for (i in 0..rounds) {
+            let box = ConcurrentHashMap<Int64, Bool>()
+            let root = FutureTask<Unit>({ => futureTaskTestFireAndForgetParent(box, i) })
+            let _ = root.get()
+            sleep(400 * Duration.millisecond)
+            match (box.get(i)) {
+                case Some(b) => if (!b) {
+                    notCancelled++
+                }
+                case None => notCancelled++
+            }
+        }
+        @Expect(notCancelled, 0)
+    }
+
+    /*
+     * FT-2（bug-f_base.md §1.2）：同一父任务的 4 个同类型子任务并发登记，父任务结束时必须**全部**被取消。
+     * 修前：不同子任务各持一把自己的 mutex（互不互斥）+ 非线程安全 HashSet ⇒ 登记/迭代会丢（exp16 实测 15% 轮次部分丢失）。
+     */
+    @TestCase
+    public func testConcurrentChildrenAllCancelled(): Unit {
+        let rounds = 30
+        var partial = 0
+        let keys = [0, 1, 2, 3]
+        for (_ in 0..rounds) {
+            let box = ConcurrentHashMap<Int64, Bool>()
+            let root = FutureTask<Unit>({ => futureTaskTestFourChildrenParent(box) })
+            let _ = root.get()
+            sleep(450 * Duration.millisecond)
+            var cancelled = 0
+            for (k in keys) {
+                match (box.get(k)) {
+                    case Some(b) => if (b) {
+                        cancelled++
+                    }
+                    case None => ()
+                }
+            }
+            if (cancelled != 4) {
+                partial++
+            }
+        }
+        @Expect(partial, 0)
+    }
+
+    /*
+     * FT-2 的行为保持用例：shutdownSubOnFinish = false 时，父任务结束**不得**取消子任务。
+     * （修前修后都应通过，用来防止"登记提前"的改动变成无条件取消。）
+     */
+    @TestCase
+    public func testShutdownSubOnFinishFalseKeepsChildRunning(): Unit {
+        var cancelled = 0
+        for (i in 0..3) {
+            let box = ConcurrentHashMap<Int64, Bool>()
+            let root = FutureTask<Unit>(false, { => futureTaskTestFireAndForgetParent(box, i) })
+            let _ = root.get()
+            sleep(400 * Duration.millisecond)
+            match (box.get(i)) {
+                case Some(b) => if (b) {
+                    cancelled++
+                }
+                case None => ()
+            }
+        }
+        @Expect(cancelled, 0)
+    }
 }
 
 private func futureTaskTestReadLocal(ready: AtomicBool, slot: ArrayList<InheritedTaskLocal<Int64>>): Int64 {
@@ -72,4 +149,35 @@ private func futureTaskTestReadLocal(ready: AtomicBool, slot: ArrayList<Inherite
         case Some(x) => x
         case None => -1
     }
+}
+
+private func futureTaskTestPollCancel(box: ConcurrentHashMap<Int64, Bool>, key: Int64): Unit {
+    var i = 0
+    while (i < 60) {
+        if (Thread.currentThread.hasPendingCancellation) {
+            break
+        }
+        sleep(5 * Duration.millisecond)
+        i++
+    }
+    box.add(key, Thread.currentThread.hasPendingCancellation)
+}
+
+// 父任务：创建子任务后不等待，直接结束
+private func futureTaskTestFireAndForgetParent(box: ConcurrentHashMap<Int64, Bool>, key: Int64): Unit {
+    let _ = FutureTask<Unit>({ => futureTaskTestPollCancel(box, key) })
+}
+
+private func futureTaskTestSleepThenRecord(box: ConcurrentHashMap<Int64, Bool>, key: Int64): Unit {
+    sleep(300 * Duration.millisecond)
+    box.add(key, Thread.currentThread.hasPendingCancellation)
+}
+
+// 父任务：一次并发创建 4 个同类型子任务，等它们登记完再结束
+private func futureTaskTestFourChildrenParent(box: ConcurrentHashMap<Int64, Bool>): Unit {
+    let _ = FutureTask<Unit>({ => futureTaskTestSleepThenRecord(box, 0) })
+    let _ = FutureTask<Unit>({ => futureTaskTestSleepThenRecord(box, 1) })
+    let _ = FutureTask<Unit>({ => futureTaskTestSleepThenRecord(box, 2) })
+    let _ = FutureTask<Unit>({ => futureTaskTestSleepThenRecord(box, 3) })
+    sleep(150 * Duration.millisecond)
 }

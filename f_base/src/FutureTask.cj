@@ -40,6 +40,11 @@ public sealed abstract class AbstractFutureTask <: Hashable & Equatable<Abstract
     private let taskId = nextTaskId.fetchAdd(1)
     private let local = ConcurrentHashMap<AbstractInheritedTaskLocal, Any>()
     static let taskMap = ConcurrentHashMap<Int64, AbstractFutureTask>()
+    // FT-2（bug-f_base.md §1.2）：子任务登记表的**全部**访问（登记/注销/整体取走）共用这一把锁。
+    // 原来保护它的是每个 FutureTask 实例自己的 mutex ⇒ 同一父任务的多个子任务之间毫无互斥，
+    // 而 HashSet 不是线程安全的，父任务还会在迭代时被子任务并发 add/remove。
+    static let subTasksLock = Mutex()
+    static let subTasks = ConcurrentHashMap<Int64, HashSet<AbstractFutureTask>>()
     protected let tid = AtomicInt64(0)
     let parentTID = Thread.currentThread.id
     public func hashCode(): Int64 {
@@ -91,40 +96,41 @@ public sealed abstract class AbstractFutureTask <: Hashable & Equatable<Abstract
 }
 
 public class FutureTask<T> <: AbstractFutureTask {
-    private static let subTasks = ConcurrentHashMap<Int64, HashSet<AbstractFutureTask>>()
-    private let mutex = Mutex()
     private var future = None<Future<T>>
-    
+
     public init(shutdownSubOnFinish: Bool, fn: () -> T){
         let task = this
-        this.future = spawn{
-            let tid = Thread.currentThread.id
-            task.tid.store(tid)
-            taskMap.add(tid, task)
-            synchronized(mutex){
-                if(let Some(set) <- subTasks.get(parentTID)){
-                    set
-                }else{
-                    let set = HashSet<AbstractFutureTask>()
-                    subTasks.add(parentTID, set)
-                    set
-                }.add(task)
-            }
-            try{
-                fn()
-            }finally{
-                taskMap.remove(tid)
-                synchronized(mutex){
-                    if(let Some(set) <- subTasks.get(parentTID)){
-                        set.remove(task)
-                        if(set.isEmpty()){
-                            subTasks.remove(parentTID)
+        // FT-2：登记改由**创建线程**（父任务）同步完成，并与注销/整体取走共用 subTasksLock。
+        // 顺序保证：先拿到 future，再登记 ⇒ 父任务在 subTasks 里看到子任务时，child.future 一定已就绪
+        // （否则父任务的 shutdown 会因为 future 仍为 None 而漏掉这次取消）。
+        synchronized(subTasksLock){
+            this.future = spawn{
+                let tid = Thread.currentThread.id
+                task.tid.store(tid)
+                taskMap.add(tid, task)
+                try{
+                    fn()
+                }finally{
+                    taskMap.remove(tid)
+                    synchronized(subTasksLock){
+                        if(let Some(set) <- subTasks.get(parentTID)){
+                            set.remove(task)
+                            if(set.isEmpty()){
+                                subTasks.remove(parentTID)
+                            }
                         }
                     }
+                    if(shutdownSubOnFinish){
+                        shutdownCurrentSubThreads()
+                    }
                 }
-                if(shutdownSubOnFinish){
-                    shutdownCurrentSubThreads()
-                }
+            }
+            if(let Some(set) <- subTasks.get(parentTID)){
+                set.add(task)
+            }else{
+                let set = HashSet<AbstractFutureTask>()
+                set.add(task)
+                subTasks.add(parentTID, set)
             }
         }
     }
@@ -153,11 +159,18 @@ public class FutureTask<T> <: AbstractFutureTask {
         shutdownCurrentSubThreads()
     }
     public static func shutdownCurrentSubThreads(): Unit {
-        if(let Some(set) <- subTasks.remove(Thread.currentThread.id)){
-            let itr = set .iterator()
-            while(let Some(f: FutureTask<T>) <- itr.next()){
-                f.shutdown()
-            }
+        // FT-2：先在锁内把整张子任务表**取走**，再在锁外逐个发取消信号：
+        // 迭代因此不会与并发的 add/remove 打架，用户可见的取消动作也不在锁里做。
+        let mine = synchronized(subTasksLock){
+            subTasks.remove(Thread.currentThread.id)
+        }
+        match (mine) {
+            case Some(set) =>
+                let itr = set.iterator()
+                while(let Some(f: FutureTask<T>) <- itr.next()){
+                    f.shutdown()
+                }
+            case None => ()
         }
     }
 }

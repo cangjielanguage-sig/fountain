@@ -22,7 +22,7 @@
 **建议修复顺序**：
 
 1. `FT-1`（§1.1）`InheritedTaskLocal` 在 owner 线程启动前写入的值 99.6% 读不到（hashCode 取可变的 `tid`）——静默丢值，且是"构造任务后预置上下文"这条最自然的用法　**✅已修复（2026-10-11，见 §1.1 修复标记）**
-2. `FT-2`（§1.2）`shutdownSubOnFinish` 承诺不成立（父任务先结束时 96% 子任务不被取消）＋ `subTasks` 无互斥（`HashSet` 共享无共同锁）　**待处理**
+2. `FT-2`（§1.2）`shutdownSubOnFinish` 承诺不成立（父任务先结束时 96% 子任务不被取消）＋ `subTasks` 无互斥（`HashSet` 共享无共同锁）　**✅已修复（2026-10-11，见 §1.2 修复标记）**
 3. `FT-3`（§2.1）`shutdownCurrentSubThreads`/`current()` 按 `FutureTask<T>` 过滤，异类型子任务被静默跳过（100% 复现）　**待处理**
 4. `FT-4`（§2.2）子任务 `set` 覆盖父任务的值 —— **公开 API 语义，先摆候选路线由作者拍板**　**待处理**
 5. `FT-5`（§2.3）父任务先结束后子任务继承不到值（返回 None）——需确认是设计使然还是缺陷，并补文档口径　**待处理**
@@ -75,7 +75,25 @@ public func hashCode(): Int64 {
 
 **验证方法**：`run.sh exp10`（丢值）与 `run.sh exp10b`（对照，应 0 丢失）；修后两者都应为 `Some(5)=500 / None=0`。
 
-### 1.2 [严重｜承诺不成立＋数据竞争] `FT-2` 父任务结束时子任务经常不会被取消
+### 1.2 [严重｜承诺不成立＋数据竞争] `FT-2` 父任务结束时子任务经常不会被取消 ✓已复核 → ✅已修复（2026-10-11）
+
+**✅ 修复标记（2026-10-11）**：分支 `fix/futuretask`（worktree `.worktrees/futuretask`，基线 `fe8a1886`）。代码、用例、本标记在同一提交（提交信息 `fix(f_base): FT-2 子任务登记前移到创建线程并纳入共享锁，shutdown 不再漏取消`；提交号见 §0 时间线回填）。
+
+- 改动（`f_base/src/FutureTask.cj`）：
+  1. `:43-47`：`subTasks` 从 `FutureTask<T>` 移到 `AbstractFutureTask`（泛型类静态成员本来就共享，移上去后语义直白），并新增 `static let subTasksLock`；
+  2. `:101-136`（`init`）：子任务**登记改由创建线程在构造期同步完成**，且顺序保证"先取到 `future`、再登记"——父任务在表里看到子任务时 `child.future` 必然已就绪（否则父任务的 `shutdown` 会因 `future` 仍是 `None` 而漏掉这次取消）；登记与注销/整体取走全部走 `subTasksLock`；
+  3. `:115-122`（finally 注销）：`get → set.remove → 空则删外层表项` 全部放进同一把锁 ⇒ 原先的 check-then-act 竞争消失；
+  4. `:161-175`（`shutdownCurrentSubThreads`）：锁内**整体取走**该父任务的子任务表，锁外再逐个 `shutdown()` ⇒ 迭代不再与并发 `add/remove` 打架，用户可见的取消动作也不在锁里做；
+  5. 删除已无用途的 per-instance `private let mutex = Mutex()`（原代码里它保护不了任何东西，还平白多一次分配）。
+- 用例：`f_base/src/FutureTask_test.cj` → `testChildCancelledWhenParentFinishesImmediately`（20 轮 fire-and-forget，子任务必须收到取消）、`testConcurrentChildrenAllCancelled`（30 轮 × 4 个同类型子任务并发登记，必须全部被取消）、`testShutdownSubOnFinishFalseKeepsChildRunning`（行为保持：`shutdownSubOnFinish = false` 时不得取消子任务）。
+- 测量证据（`cjpm test --no-color`，日志 `/tmp/ftask_test.log`）：
+  - **修前**：`FAILED 2` —— `(notCancelled == 0)` left: **20** / right: 0；`(partial == 0)` left: **7**（30 轮）/ right: 0；行为保持用例 PASSED。
+  - **修后**：`TOTAL: 11, PASSED: 11, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`）。
+- 未覆盖 / 新边界：
+  - 迭代仍按 `FutureTask<T>` 匹配（异类型子任务照旧被跳过）—— 属 `FT-3` 范围，本条刻意不动，便于单独归因；
+  - 登记提前到构造期后，若 `shutdownSubOnFinish = false` 且某个子任务**始终未被调度运行**，它的表项会留到进程结束（极端边界；正常调度下子任务跑完即自行注销）；
+  - `cancel()` 仍是协作信号、不终止线程（std 语义，未改，见本节"现象"段的说明）。
+- 验证方法：worktree 内 `f_base` 跑 `cjpm test` 应为 11/11；探针 `run.sh exp5 / exp15 / exp16` 应为 100%（见 §5）。
 
 **位置**：`f_base/src/FutureTask.cj:89-90`（`subTasks` + 每实例 `mutex`）、`:99-107`（子任务线程体内的登记）、`:110-123`（finally 的注销 + `shutdownSubOnFinish`）、`:150-157`（`shutdownCurrentSubThreads`）
 
