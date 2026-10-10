@@ -289,7 +289,7 @@ while(let Some(f: FutureTask<T>) <- itr.next()){
 
 ## 3. 低危 / 登记（4 条）
 
-- **`FT-L1`｜异常契约**：`current()` 抛出的 `FutureTaskException` 是 `private`（`:22`）⇒ 应用侧无法按类型捕获，只能 catch `Exception`/`BaseException`；`get()`/`get(timeout:)`/`tryGet()` 走 `future.getOrThrow()`（`:137/:140/:143`），而 `future` 是可变 `var`（`:91`），极端时序下会抛 Option 的异常而非本模块异常。建议异常类型改为 `protected`/`public`。
+- **`FT-L1`｜异常契约**：~~`current()` 抛出的 `FutureTaskException` 是 `private` ⇒ 应用侧无法按类型捕获~~ **✅ 前半已修（2026-10-11，随 `b7226c17`：`FutureTaskException` 改 `public`，用例 `testCurrentWithWrongTypeArgumentThrowsWithPreciseMessage` / `testCurrentOrNoneOutsideTaskIsNone` 按类型捕获）**；余下：`get()`/`get(timeout:)`/`tryGet()` 走 `future.getOrThrow()`，而 `future` 是可变 `var`，极端时序下会抛 Option 的异常而非本模块异常 —— 待处理。
 - **`FT-L2`｜API 不对称**：`removeLocal` 返回 `?T`（`:62-68`）但 `InheritedTaskLocal.remove()` 丢弃返回值（`:181-183`）；`getOrSet`/`getOrCompute` 只挂在 `InheritedTaskLocal`，`AbstractFutureTask` 上没有对应公开入口。
 - **`FT-L3`｜内存口径**：任务结束时 finally 只摘 `taskMap` 与 `subTasks`，**不清理 `local`**（`:110-123`）。`f_base/README.md:648` 写"FutureTask 初始化时的任务结束时，相应的 InheritedTaskLocal 会被移除"，实现上只是"查不到"（`taskMap` 已摘除）；只要用户还持有 `FutureTask` 引用，值与键仍被持有。需确认文档口径（若要真清理，finally 里加 `local.clear()`）。
 - **`FT-L4`｜防御性建议**：`parentTID` 依赖"线程 id 在存活期内唯一、且不重用"（`:39`），当前 runtime 实测成立（见 §4），但代码无任何防御。建议给 `getLocal` 的 `while` 加跳数上限/已访问标记，或改成显式父子引用链，避免将来 runtime 语义变化时退化成死循环。
