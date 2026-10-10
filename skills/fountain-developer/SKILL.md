@@ -27,13 +27,33 @@ fountain 是仓颉语言的服务器应用框架：应用**没有 main 函数**�
 
 - 支持技能机制的 Agent：把 `skills/fountain-developer/` 放进它的技能目录即可（如 CodeBuddy 的 `~/.codebuddy/skills/`、Claude Code 的 `~/.claude/skills/`，或项目内的技能目录）；
 - 不支持技能机制的 Agent：直接让它阅读本文件（`SKILL.md`）并按流程执行，效果相同；
-- `scripts/` 下的 `fountain_lookup.py`（纯 Python 3 标准库）与 `install_fboot.sh`（bash）可独立运行，与 Agent 平台无关。
+- `scripts/` 下的 `fountain_lookup.py`、`install_skill.py`（纯 Python 3 标准库）与 `install_fboot.sh`（bash）可独立运行，与 Agent 平台无关。
 
 下文提到「加载技能」（如 `cangjie-coding` / `cangjie-doc-lookup`）时一律指：按当前 Agent 的能力加载——支持技能机制的按其机制加载，不支持的直接读该技能目录下的 `SKILL.md`。
 
+## 联动技能的加载与自动安装
+
+`cangjie-coding`（仓颉知识库 / 构建测试规范）与 `cangjie-doc-lookup`（本地官方文档查阅）**加载失败（技能没装）时不要中断任务、也不要停下来问用户**：直接用下面的脚本从权威来源装进当前 Agent 的技能目录，然后按正常方式加载。
+
+```bash
+python <skill-root>/scripts/install_skill.py list                # 先看两个技能装没装、来源在哪
+python <skill-root>/scripts/install_skill.py cangjie-doc-lookup  # 从已克隆的 fountain 项目 skills/ 子目录装
+python <skill-root>/scripts/install_skill.py cangjie-coding      # 从 CangjieSkills 仓装
+python <skill-root>/scripts/install_skill.py all                 # 两个都装
+```
+
+| 加载失败的是 | 安装来源 | 说明 |
+| --- | --- | --- |
+| `cangjie-doc-lookup` | **已克隆的 fountain 项目**的 `<fountain-root>/skills/cangjie-doc-lookup` | fountain 仓库根按 `fountain_lookup.py` 同一套规则定位（`--root` > `$FOUNTAIN_ROOT` > 当前目录上溯 > 技能相对位置 > 技能目录下的克隆副本；都没有会先克隆文档副本）。若那份源码停在还没有该技能的旧版本，脚本会给出提示：切到较新的版本（文档副本用 `python <skill-root>/scripts/fountain_lookup.py switch latest`）或 `--fountain-root` 指到含它的源码 |
+| `cangjie-coding` | `https://gitcode.com/Cangjie-SIG/CangjieSkills.git` | 默认**稀疏克隆**到 `~/.cangjie-skills/CangjieSkills`（只取 `.agents/skills`，`--repo-dir` 可改；已存在则 `git pull --ff-only`），再从 `.agents/skills/cangjie-coding` 复制进技能目录 |
+
+- 安装目标目录默认自动探测：优先**当前放着 `fountain-developer` 的那个技能目录**（`~/.codebuddy/skills`、`~/.claude/skills`、`~/.agents/skills` 等），也可 `--skills-root DIR` 指定；已装过的技能默认不覆盖，要升级加 `--force`。
+- 装完**复验**：`install_skill.py list` 两个都显示 `[已装]`。装好 `cangjie-doc-lookup` 后**必须**再跑它自己的执行前检查（`python <skills>/cangjie-doc-lookup/scripts/skill_paths.py check`），文档源路径对不上时按它 SKILL.md「执行前检查」的四选一处理。
+- 不支持的技能机制的 Agent 不需要「安装」这一步：直接按上面的来源读该技能的 `SKILL.md` 即可（脚本也能用，只是把文件放到一个目录）。
+
 ## 必须遵守
 
-- **联动两个技能（自动执行，无需询问用户）**：进入开发/转换任务（工作流 F、G）先加载 `cangjie-coding` 技能（仓颉知识库与构建/测试规范）；遇到语法、关键字、编译器行为、std/stdx API 问题即加载 `cangjie-doc-lookup` 查本地官方文档（加载方式按「技能格式与通用性」小节的约定）。不凭记忆猜 API 与语法。
+- **联动两个技能（自动执行，无需询问用户）**：进入开发/转换任务（工作流 F、G）先加载 `cangjie-coding` 技能（仓颉知识库与构建/测试规范）；遇到语法、关键字、编译器行为、std/stdx API 问题即加载 `cangjie-doc-lookup` 查本地官方文档（加载方式按「技能格式与通用性」小节的约定）。**加载失败（技能没装）时不要中断任务、也不要问用户**：先按「联动技能的加载与自动安装」用 `scripts/install_skill.py` 装上再加载。不凭记忆猜 API 与语法。
 - **API 以 fountain 仓库为准**：模块能力、签名、配置项都要在仓库的 README 与 `src/` 里核对；fountain 没有的能力不许硬编，走缺口处理（工作流 F 第 3 步）。
 - **查询按「在用版本」**：查 fountain 能力 / API / 配置前先定版本——用户指定（`--version`）优先，其次当前项目 cjpm.toml 的 `"fountain::f_*"` 依赖版本；`fountain_lookup.py` 会先把技能目录下的文档副本切到该版本再检索。回答时以输出头部标注的版本为准；输出里出现 `⚠ 版本不一致` 时必须先说明，或按提示切到目标版本重查。
 - **workspace 与模块一律用 fboot 创建**（`fboot workspace` / `fboot module`）：不得用 `cjpm init` 或手工写 cjpm.toml 代替；fboot 不可用时先按工作流 A 安装。
@@ -259,3 +279,4 @@ fboot 自动完成：生成模块 `cjpm.toml`（`output-type = "dynamic"`）、�
 - `references/cangjie-to-fountain.md` — 非 fountain 的仓颉项目改造为 fountain 风格（工作流 H 展开）
 - `scripts/install_fboot.sh` — fboot 环境检查与安装
 - `scripts/fountain_lookup.py` — fountain 仓库检索（按在用版本切文档副本：`root` / `modules` / `search` / `api` / `version` / `switch`）
+- `scripts/install_skill.py` — 联动技能（cangjie-coding / cangjie-doc-lookup）加载失败时的自动安装（`list` / 技能名 / `all`）
