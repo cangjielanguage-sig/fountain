@@ -33,15 +33,20 @@ private class FutureTaskException <: BaseException {
     }
 }
 public sealed abstract class AbstractFutureTask <: Hashable & Equatable<AbstractFutureTask>{
+    // FT-1（bug-f_base.md §1.1）：任务身份必须是构造期分配、终生不变的 id。
+    // 不能用 tid（线程 id）：构造期它恒为 0、任务线程启动后才写入真实值，
+    // 这会让 InheritedTaskLocal 的键（哈希取自 hashCode）在写入与读取时进不同的桶 ⇒ 值丢失。
+    private static let nextTaskId = AtomicInt64(0)
+    private let taskId = nextTaskId.fetchAdd(1)
     private let local = ConcurrentHashMap<AbstractInheritedTaskLocal, Any>()
     static let taskMap = ConcurrentHashMap<Int64, AbstractFutureTask>()
     protected let tid = AtomicInt64(0)
     let parentTID = Thread.currentThread.id
     public func hashCode(): Int64 {
-        tid.load()
+        taskId
     }
     public operator func ==(other: AbstractFutureTask): Bool {
-        tid.load() == other.tid.load()
+        taskId == other.taskId
     }
     public func newLocal<T>(): InheritedTaskLocal<T> {
         InheritedTaskLocal(this)
