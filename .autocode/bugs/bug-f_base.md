@@ -29,6 +29,17 @@
 6. `FT-6`（§2.4）性能：构造+get ≈ 13× 裸 `spawn`、`local.get` ≈ 8.9× 标准库 `ThreadLocal` —— 按"先有量化依据"逐项立项　**待处理**
 7. `FT-L1` ~ `FT-L4`（§3）低危/契约/文档项　**登记**
 
+**修复时间线（2026-10-11，分支 `fix/futuretask`，worktree `.worktrees/futuretask`，基线 `fe8a1886`）**：
+
+| 提交 | 内容 |
+|---|---|
+| `0fcdbd23` | `fix(f_base): FT-1 任务身份改用构造期固定 id，hashCode/== 不再取可变 tid` |
+| `07bed369` | `fix(f_base): FT-2 子任务登记前移到创建线程并纳入共享锁，shutdown 不再漏取消` |
+| `471ed6dc` | `perf(f_base): FT-2 细化：登记不包住 spawn，消除构造路径上的锁竞争`（性能复测驱动） |
+| `59055200` | `fix(f_base): FT-3 取消能力上移到 AbstractFutureTask，异类型子任务不再被跳过` |
+
+**修后总验证（最终代码）**：worktree 内 `cjpm test` = `TOTAL: 12, PASSED: 12, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`；修前基线为 6 条既有用例全绿，本次新增 6 条用例）。探针（`.autocode/tmp/ftask_probe`，按 worktree 的 `f_base` 副本构建）：`EXP4B diff=true`、`EXP5 50/50`、`EXP10 500/500`、`EXP13 a==b 0/500`、`EXP15` 与 `EXP16` 均 100/100 轮整组取消；`EXP6` 的 FT/spawn 比值为 12.9x / 13.4x（修前区间 12.9x ~ 13.9x）。未修的 `FT-4`/`FT-5`/`FT-6`/`FT-L*` 与 `current()` 的 API 取舍见对应条目。
+
 ---
 
 ## 1. 严重（2 条）
@@ -274,6 +285,25 @@ wsl -d Ubuntu-24.04 -e bash -lc "cd /mnt/d/docs/work/cangjie/projects/fountain/.
 | EXP14 | `shutdown()` 是否终止任务 | `get()` 仍返回 42，任务照常跑完 |
 | EXP15 | 4 个同类型子任务并发登记的取消完整性（100 轮） | 全取消 79/83，**部分 21/17** |
 | EXP16 | 同上但子任务不提前结束（消除迭代期自摘） | 0/1/2/3/4 = **0/3/8/4/85** |
+
+**修后复测（2026-10-11，探针改为复制 worktree 的 f_base 构建）**：
+
+| 实验 | 修前 | 修后 |
+|---|---|---|
+| EXP3（fire-and-forget 继承） | `done:None` 10/10 | `done:None` 10/10（**未变**，属 `FT-5` 未修范围） |
+| EXP4B（混合类型子任务） | same=true, **diff=false** | **same=true, diff=true** |
+| EXP5（父任务先结束） | 2 / 50 被取消 | **50 / 50** |
+| EXP10（delay 0 丢值） | 2 / 500 读到 | **500 / 500** |
+| EXP10b（delay 20ms） | 500 / 500 | 500 / 500 |
+| EXP13（`a == b` 误判） | 474 / 500 | **0 / 500**（`hashCode==0` 1/500 是首个任务的合法 id） |
+| EXP15（4 子任务并发登记） | 全取消 79 ~ 83 / 100 | **100 / 100** |
+| EXP16（消除迭代期自摘） | 0/3/8/4/85 | **0/0/0/0/100** |
+| EXP6-1（构造+get） | 28826 ~ 30304 ns/op（比值 12.9x ~ 13.9x） | 30684 ~ 31974 ns/op（比值 12.9x ~ 13.4x） |
+| EXP6-2（任务内 `InheritedTaskLocal.get`） | 747 ns/op | 654 ~ 710 ns/op |
+| EXP6-3（未命中走链） | 860 ns/op | 783 ~ 828 ns/op |
+| EXP12（`current()` 泛型不匹配） | 抛异常 | 抛异常（**未变**，登记待拍板） |
+
+复测命令与 §5 上文相同，只是 `setup.sh` 多一个可选参数：`bash setup.sh <worktree>/f_base`（不传则复制仓库主检出）。
 
 **审查过程中踩到的两个工具坑（供后续复用探针时参考）**：
 
