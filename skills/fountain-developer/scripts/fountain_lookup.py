@@ -35,8 +35,10 @@
 --repo-url 可换镜像地址）。
 
 **按版本切副本**：定了查询版本而副本不在该版本上时，脚本先 `git fetch --depth 1 origin tag <tag>`
-再 `checkout --detach <tag>`（只取该版本快照，不拉整仓历史）。切版本只作用于技能目录下的
-文档副本：`--root` / `$FOUNTAIN_ROOT` 指定的源码目录只读不改（版本不符时输出警告），
+再 `checkout --detach <tag>`（只取该版本快照，不拉整仓历史）。tag 按**tag 名里的数字版本号**定位：
+cjpm 只接受 a.b.c 形式的数字版本号，而数字版本号在 tag 名里唯一，所以 `release-1.3.14.alpha` /
+`release-1.0.13` / `release-1.0.13.1` / `v1.3.9` 这类形态都能对上，不必猜后缀（也支持直接给 tag 名）。
+切版本只作用于技能目录下的文档副本：`--root` / `$FOUNTAIN_ROOT` 指定的源码目录只读不改（版本不符时输出警告），
 自动发现的源码目录版本不符时改用文档副本。
 """
 
@@ -59,6 +61,7 @@ SERVICE_MODULES = {"fleet": "服务"}
 CLONE_HINT = "（自动克隆的文档副本，仅用于查询文档；构建/安装请用用户自己的 fountain 源码或中心仓）"
 
 VERSION_MARKER_RE = re.compile(r'public\s+const\s+Version\s*(?::\s*String\s*)?=\s*"([^"]+)"')
+TAG_VERSION_RE = re.compile(r"\d+(?:\.\d+)+")
 DEP_VERSION_RE = re.compile(
     r'^\s*"fountain::([A-Za-z0-9_]+)"\s*=\s*(?:"([^"]+)"|\{[^}]*?version\s*=\s*"([^"]+)")',
     re.M,
@@ -193,24 +196,39 @@ def target_version(a: argparse.Namespace) -> "tuple[str | None, str]":
     return None, "未定（可用 --version 指定；不切副本）"
 
 
+def tag_version(tag: str) -> "str | None":
+    """tag 名里的数字版本号：release-1.3.14.alpha → 1.3.14，release-1.0.13.1 → 1.0.13.1。"""
+    m = TAG_VERSION_RE.search(tag)
+    return m.group(0) if m else None
+
+
 def tag_candidates(version: str) -> list[str]:
-    """版本号 → 候选 tag；本仓历史用过 release-x.y.z 与 release-x.y.z.alpha 两种形态。"""
+    """取不到 tag 名单（离线 / 镜像不支持）时直接试取的常见形态。"""
     if not re.match(r"^[0-9]", version):
         return [version]  # 用户直接给了 tag 名
     return [f"release-{version}", f"release-{version}.alpha", f"v{version}", version]
 
 
-def pick_tag(available, version: str) -> "str | None":
-    cands = tag_candidates(version)
-    for c in cands:
-        if c in available:
-            return c
-    low = {t.lower(): t for t in available}
-    for c in cands:
-        if c.lower() in low:
-            return low[c.lower()]
-    hits = sorted(t for t in available if t.lower().startswith(f"release-{version}.".lower()))
-    return hits[0] if hits else None
+def pick_tag(available, version: str) -> "tuple[str | None, str]":
+    """按版本号挑 tag，返回 (tag, 附注)。
+
+    两种输入：**数字版本号**（cjpm.toml 只接受 a.b.c 形式，用户给的通常就是它）按 tag 名里的数字
+    版本号精确匹配——数字版本号在各 tag 名里唯一（实测本仓 76 个 tag 无重复），所以不必猜后缀形态：
+    release-1.3.14.alpha / release-1.0.13.1 / release-1.1.2.BETA / v2.0.0 都能对上；
+    **其它输入**只按 tag 名精确匹配，不做数字兜底（`release-1.3.9.alpha` 就是它本身）。
+    """
+    if version in available:
+        return version, ""
+    if not re.fullmatch(r"\d+(?:\.\d+)+", version):
+        return None, ""
+    hits = sorted(t for t in available if tag_version(t) == version)
+    if not hits:
+        return None, ""
+    if len(hits) == 1:
+        return hits[0], ""
+    plain = f"release-{version}"
+    pick = plain if plain in hits else hits[0]
+    return pick, f"该版本号对应多个 tag（{'、'.join(hits)}），取 {pick}"
 
 
 def local_tags(repo: Path) -> set:
@@ -246,16 +264,16 @@ def switch_clone(
 ) -> "tuple[bool, str]":
     """把文档副本切到 version（版本号或 tag 名）对应的 tag。"""
     cur = git_tag_at_head(repo)
-    if cur and pick_tag({cur}, version) == cur:
+    if cur and pick_tag({cur}, version)[0] == cur:
         return True, f"已在 {cur}"
     known = local_tags(repo)
-    tag = pick_tag(known, version)
+    tag, note = pick_tag(known, version)
     if tag is None:
         if not allow_net:
             return False, f"副本里没有 {version} 对应的 tag（--no-clone：不做网络操作，取不到新版）"
         avail = remote_tags(repo)
         if avail:
-            tag = pick_tag(avail, version)
+            tag, note = pick_tag(avail, version)
         else:
             for c in tag_candidates(version):
                 if fetch_tag(repo, c, timeout):
@@ -264,7 +282,7 @@ def switch_clone(
         if tag is None:
             tried = "、".join(tag_candidates(version))
             why = (
-                f"origin 的 tag 里没有匹配（试过 {tried}）"
+                f"origin 的 tag 里没有版本号为 {version} 的 tag（试过 {tried}）"
                 if avail
                 else f"读不到 origin 的 tag 列表，直接试取也没成功（试过 {tried}）"
             )
@@ -276,7 +294,7 @@ def switch_clone(
         r = git_run(["checkout", "-q", "-f", "--detach", tag], repo, 300)
         if r.returncode != 0:
             return False, f"checkout {tag} 失败：" + (r.stderr or r.stdout or "").strip()[-300:]
-    return True, f"已切到 {tag}"
+    return True, f"已切到 {tag}" + (f"（{note}）" if note else "")
 
 
 def switch_latest(repo: Path, allow_net: bool = True, timeout: int = 900) -> "tuple[bool, str]":

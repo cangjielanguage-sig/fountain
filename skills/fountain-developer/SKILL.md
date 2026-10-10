@@ -57,7 +57,7 @@ git clone --depth 1 https://gitcode.com/Cangjie-SIG/fountain.git <skill-root>/fo
 每次查询先定**目标版本**，优先级：`--version X.Y.Z`（也可直接给 tag 名）> `$FOUNTAIN_VERSION` > **当前项目**根 cjpm.toml 里 `"fountain::f_*"` 的依赖版本（从当前目录向上找最近的）。定了版本后，脚本会先把**技能目录下的文档副本**切到对应 tag（`git fetch --depth 1 origin tag <tag>` + `checkout --detach`，只取该版本快照，约 30MB / 几秒；命中本地已有 tag 时不再联网），再执行检索：
 
 - 项目在用 1.3.9 时查询即为 1.3.9：`python <skill-root>/scripts/fountain_lookup.py search "orm_databasePoolMaxSize" --module f_orm`；
-- 查别的版本：加 `--version 1.3.9`（或 `--version release-1.3.9.alpha`）；
+- 查别的版本：加 `--version 1.3.9`（用项目依赖那种数字版本号即可，脚本按 tag 名里的数字版本号定位，不用管后缀；也可直接给 tag 名 `release-1.3.9.alpha`）；
 - 只切副本不查询：`python <skill-root>/scripts/fountain_lookup.py switch 1.3.9`（`switch latest` 回默认分支最新）；看当前状态：`python <skill-root>/scripts/fountain_lookup.py version`；
 - **切版本只动技能目录下的副本**：`--root` / `$FOUNTAIN_ROOT` 指定的源码目录只读不改（版本不符时输出警告）；自动发现的源码目录版本不符时，脚本会自动改用文档副本并在 stderr 说明；
 - **输出头部标注实际版本**（`fountain 仓库: <路径>（版本 x.y.z，tag ...）`）。看到 `⚠ 版本不一致` 先按提示切版本再回答，别把 master（或副本现状态）的结论当作在用版本的行为。
