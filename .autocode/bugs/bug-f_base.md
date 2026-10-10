@@ -37,8 +37,11 @@
 | `07bed369` | `fix(f_base): FT-2 子任务登记前移到创建线程并纳入共享锁，shutdown 不再漏取消` |
 | `471ed6dc` | `perf(f_base): FT-2 细化：登记不包住 spawn，消除构造路径上的锁竞争`（性能复测驱动） |
 | `59055200` | `fix(f_base): FT-3 取消能力上移到 AbstractFutureTask，异类型子任务不再被跳过` |
+| `0fa1852b` | `docs(f_base): FT-4 详述（四个出口 + EXP17）与路线决策：采用路线 2` |
+| `c89cb7cf` | `fix(f_base): FT-4 set/remove 写当前任务（路线 2），getOrSet/getOrCompute 保持 owner 共享槽` |
+| `83b55f87` | `fix(f_base): FT-4 二次决策：getOrSet/getOrCompute 改用二段检查锁（只算一次）` |
 
-**修后总验证（最终代码）**：worktree 内 `cjpm test` = `TOTAL: 12, PASSED: 12, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`；修前基线为 6 条既有用例全绿，本次新增 6 条用例）。探针（`.autocode/tmp/ftask_probe`，按 worktree 的 `f_base` 副本构建）：`EXP4B diff=true`、`EXP5 50/50`、`EXP10 500/500`、`EXP13 a==b 0/500`、`EXP15` 与 `EXP16` 均 100/100 轮整组取消；`EXP6` 的 FT/spawn 比值为 12.9x / 13.4x（修前区间 12.9x ~ 13.9x）。未修的 `FT-4`/`FT-5`/`FT-6`/`FT-L*` 与 `current()` 的 API 取舍见对应条目。
+**修后总验证（最终代码）**：worktree 内 `cjpm test` = `TOTAL: 19, PASSED: 19, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`；修前基线为 6 条既有用例全绿，本次累计新增 13 条用例）。探针（`.autocode/tmp/ftask_probe`，按 worktree 的 `f_base` 副本构建）：`EXP4B diff=true`、`EXP5 50/50`、`EXP10 500/500`、`EXP11` 父任务由 `Some(2)` 变 **`Some(1)`**、`EXP13 a==b 0/500`、`EXP15` 与 `EXP16` 均 100/100 轮整组取消、`EXP17` 由 `None` 变 **`Some(9)`**；`EXP6` 的 FT/spawn 比值为 12.9x / 13.4x（修前区间 12.9x ~ 13.9x）。未修的 `FT-5`/`FT-6`/`FT-L*`，以及 `FutureTask<T>.current()` 的 API 取舍（方案已详述，待拍板）见对应条目。
 
 ---
 
@@ -341,6 +344,8 @@ wsl -d Ubuntu-24.04 -e bash -lc "cd /mnt/d/docs/work/cangjie/projects/fountain/.
 | EXP13（`a == b` 误判） | 474 / 500 | **0 / 500**（`hashCode==0` 1/500 是首个任务的合法 id） |
 | EXP15（4 子任务并发登记） | 全取消 79 ~ 83 / 100 | **100 / 100** |
 | EXP16（消除迭代期自摘） | 0/3/8/4/85 | **0/0/0/0/100** |
+| EXP11（子任务 set 是否覆盖父任务） | 父任务读到 `Some(2)` | **`Some(1)`**（子任务仍 `Some(2)`） |
+| EXP17（owner 已结束时子任务 set 后自读） | `None` | **`Some(9)`**（owner 存活同样 `Some(9)`） |
 | EXP6-1（构造+get） | 28826 ~ 30304 ns/op（比值 12.9x ~ 13.9x） | 30684 ~ 31974 ns/op（比值 12.9x ~ 13.4x） |
 | EXP6-2（任务内 `InheritedTaskLocal.get`） | 747 ns/op | 654 ~ 710 ns/op |
 | EXP6-3（未命中走链） | 860 ns/op | 783 ~ 828 ns/op |
