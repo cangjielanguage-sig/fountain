@@ -1760,12 +1760,13 @@ off  size 字段        说明
 24   4    siteLen     站点表（偏移 → 源位置）长度
 28   4    entryFn     入口函数 id
 32   4    nameLen     变量名表（name 段）长度（v0.18.25 新增；≥ 4）
-36   4    crc32       code + const + site + name
+36   4    crc32       code + const + site + name（CRC-32/ISO-HDLC；f_util `Crc32.isoHdlc`）
 40   ...  code / const / site / name 四段依次存放
 ```
 
 - `flags.bit1`（需要 JIT）**必须恒为 0**（冻结决策，§9 附则 10）：字节码不得要求 JIT 存在。某优化只有 JIT 能做时，唯一允许的表现是"解释器跑得慢"。`flags.bit2`（值运算/分配/变更类指令）自 v0.4 启用（v0.5 纳入 A1/A3/AB–AF；v0.6 纳入 0xB8–BB）：置 1 时加载器按需预扩句柄表；置 0 的单元出现此类指令 → 加载期拒绝（与汇编器校验双保险）。
 - 未知 `flags` 位或更高 `verMajor` → 加载期拒绝（桥抛 `JitException(code=18, ERR_NOT_IMPL 语义)`）。
+- **`crc32` 口径（冻结）**：CRC-32/ISO-HDLC（反射、poly=0x04C11DB7、init/xorout 全 1——zlib/gzip/PNG/以太网同款），覆盖 code + const + site + name 四段字节；**实现直接用 `fountain::f_util.Crc32.isoHdlc`（不自行实现）**——与 f_protocol 帧校验、f_store WAL 校验同款。基准向量：`crc32(空) = 0`、`crc32("123456789") = 0xCBF43926`。写方与读方（含 M2/M3 加载器与分发入口）必须同一口径。
 - 站点表（site table）是**平台无关的偏移 → 源位置映射**，三引擎的错误报告都从这里取源位置；**JIT 产物（JitFunction）保留同一站点表**——机器码 `SET_SITE` 立即数即查询 key（§9.16）。**名字表（name 段，v0.18.25）与站点表并列随产物走**——JIT 产物保留同一名字表，运行期报告据此解析变量名（§9.16）。
 - **site 段序列化（v0.18.23 冻结）**：`SiteTable { count: u32, entries: [SiteEntry] }`，`SiteEntry = (off: u32, line: u32, column: u32)`（恒 12 B）——`off` = site 生效位置在 **code 段的绝对字节偏移**（含函数 `codeOff` 基准），**升序、唯一**；`line` / `column` 1 起（列按 Unicode 码点，与 §8.2 `SourcePos` 同定义）。
 - **覆盖率与校验**：条目集合必须覆盖**全部 `SET_SITE` 位置**（前端义务）；汇编器校验每条 `SET_SITE` 立即数命中条目，否则拒绝；加载器校验 `count > 0` 时严格升序、`off < codeLen`、`line ≥ 1`、`column ≥ 1`；纳入 `crc32`（容器头 `siteLen`，上文）。查询 = 取 `off ≤ site` 的最大条目；无命中 → `sourcePos=None`（§9.16）。

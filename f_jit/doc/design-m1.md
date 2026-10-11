@@ -58,7 +58,7 @@
 | 包 | 意义（职责边界） | 依赖（模块内） | 外部依赖（模块级） | 规格锚点 |
 |---|---|---|---|---|
 | `fountain::f_jit.base` | 共享契约：类型编码、错误码、公共值类型与异常、诊断接口 | 无（叶子包） | std.core、std.time、**f_base**（`BaseException` 基类） | §3.2、§8、§9.16 |
-| `fountain::f_jit.bytecode` | 字节码静态模型与 `.fbc` 编解码/加载校验 | base | std.collection、std.math.numeric、std.time、std.regex、f_regex（Regex 常量构造链） | §10、§11、§13.3 |
+| `fountain::f_jit.bytecode` | 字节码静态模型与 `.fbc` 编解码/加载校验 | base | std.collection、std.math.numeric、std.time、std.regex、f_regex（Regex 常量构造链）、f_util（crc32：`Crc32.isoHdlc`） | §10、§11、§13.3 |
 | `fountain::f_jit.compiler` | 源入口前端与汇编（源码 → `.fbc`），编译期诊断 | base、bytecode | std.core、f_regex（String.regex 扩展的静态检查） | §8.0、§8.5、§8.8、§11.7、§11.9 |
 | `fountain::f_jit.runtime` | ctx/句柄表/迭代器表/helper 集/诊断转储/解释器 | base、bytecode | std.collection、std.math.numeric、std.time、std.regex | §1、§4、§6、§9.6、§9.16、§12.6 |
 | `fountain::f_jit.backend` | JIT 后端（x86_64 / AArch64）与代码内存 | base、bytecode | std.core、std.env（OS/Arch 判定经 f_base） | §12 |
@@ -285,7 +285,7 @@
 | `NameEntry` / `NameTable` | struct / class | 变量名表（稀疏，仅源码级命名槽） | — | §11.6 |
 | `FbcFlags` | class（常量） | bit0 UTF-8 / bit1 NEED_JIT（恒 0）/ bit2 值运算类 | — | §11.6 |
 | `FbcHeader` | struct | 容器头（40 B payload 起点；旧布局分支） | Version | §11.6 |
-| `FbcWriter` | class | 组装容器（含 crc32 计算） | FbcHeader、各表 | §11.6 |
+| `FbcWriter` | class | 组装容器（含 crc32 计算——`f_util.Crc32.isoHdlc`） | FbcHeader、各表 | §11.6 |
 | `FbcReader` | class | 加载校验 + verMajor/verMinor 分派 + 段解析 | 各表、ConstRegistry | §11.6、§11.7、§13.3 |
 | `LoadedUnit` | class | 加载产物（header/code/consts/site/name/dir/localTypes） | 各表 | §11.6–11.7 |
 
@@ -374,6 +374,8 @@
 | `FbcReader.load(raw: Array<UInt8>): LoadedUnit` | 加载校验全流程（magic/版本分派/未知 flags 拒绝/段长/nameLen 布局/常量 DAG 环检测与载荷合法性/kind10 Regex 实例化/kind 3–9 实例化/FuncDir/LocalTypes/site 覆盖与升序/name 键合法/crc32） | 根包 `compile(unit)`、测试 T1/T50 |
 | `FbcReader.supportedMajor` / `minVerMinorOf(major)` | 兼容矩阵（M1 加载器仅接受 verMajor 1；M2/M3 加载器按 major 分派规则集） | 版本演进（§13.3） |
 | `LoadedUnit.header: FbcHeader` / `.code: Array<UInt8>` / `.consts: ConstRegistry` / `.site: SiteTable` / `.name: NameTable` / `.dir: FuncDir` / `.types: Array<LocalTypes>` | 加载产物 | runtime/backend/桥共用 |
+
+**`crc32` 口径（冻结）**：CRC-32/ISO-HDLC（反射、poly=0x04C11DB7、init/xorout 全 1——zlib/gzip/PNG/以太网同款），覆盖 code + const + site + name 四段字节；**实现直接用 `fountain::f_util.Crc32.isoHdlc`（不自实现）**——与 f_protocol 帧校验、f_store WAL 校验同款（仓库一致）。基准向量：`crc32(空) = 0`、`crc32("123456789") = 0xCBF43926`。写方（汇编器 `FbcWriter`）与读方（M1/M2/M3 加载器、分发入口）必须同一口径。
 
 ---
 

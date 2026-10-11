@@ -49,7 +49,7 @@ f_jit/
   doc/                     # 本目录（规格 + 设计 + 计划）
 ```
 
-- 依赖声明（`cjpm.toml [dependencies]`）：`fountain::f_base`（OS/Arch + `BaseException` 基类）、`fountain::f_regex`（`String.regex()` 扩展）；M3 追加 `fountain::f_data`（JSON）。
+- 依赖声明（`cjpm.toml [dependencies]`）：`fountain::f_base`（OS/Arch + `BaseException` 基类）、`fountain::f_regex`（`String.regex()` 扩展）、`fountain::f_util`（crc32：`Crc32.isoHdlc`）；M3 追加 `fountain::f_data`（JSON）。
 - 构建/测试：`cjpm build` / `cjpm test`；差分测试用独立入口脚本（同进程内跑三引擎，见 S0.2）。
 
 ### 0.5 步骤表头约定
@@ -116,9 +116,9 @@ f_jit/
 | S2.9 | `SiteEntry`、`SiteTable.add/freeze/lookup/validate` | `lookup`：取 `off ≤ site` 最大条目；无命中 → None；校验：严格升序、off<codeLen、line/column≥1；覆盖率=全部 SET_SITE（与 S3.19 联测） | 升序数组 + 二分 | §11.6/§9.16 |
 | S2.10 | `NameEntry`、`NameTable.add/freeze/lookup/validate` | `lookup(fnId,slot)` 命中/未命中（→None=省略名字）；校验：fnId 命中目录、slot<nLocals、升序唯一、strLen≥1、strOff+strLen 在界、UTF-8 合法 | 段内相对偏移 | §11.6 |
 | S2.11 | `FbcFlags`、`FbcHeader.read/write` | 新布局字段偏移断言（0/4/6/8/12/16/20/24/28/32/36）；旧布局（verMinor≤13）读入时无 nameLen、payload=36、hdrSize=32 | 结构体 + 分支 | 旧单元兼容（T9 前置） |
-| S2.12 | `FbcWriter`：`setEntryFn/setCode/setConst/setSite/setName/setFlags/build` | build 产物：magic/verMajor/minor/lengths 正确；crc32 覆盖 code+const+site+name（改任一字节 crc32 变） | 缓冲拼接 + crc32 | §11.6 |
+| S2.12 | `FbcWriter`：`setEntryFn/setCode/setConst/setSite/setName/setFlags/build` | build 产物：magic/verMajor/minor/lengths 正确；crc32 覆盖 code+const+site+name（改任一字节 crc32 变）；基准向量 `crc32(空)=0`、`crc32("123456789")=0xCBF43926` | 缓冲拼接 + `f_util.Crc32.isoHdlc`（CRC-32/ISO-HDLC） | §11.6 |
 | S2.13 | `FbcReader.load`（正向） | 手工构造最小合法单元 → 全字段解出（header/code/consts/site/name/dir/types）；`entryFn` 命中目录 | 分派 + 各表解析 | T1 基础 |
-| S2.14 | `FbcReader.load`（拒绝面，逐条） | ① magic 错；② verMajor 2/3 → 18 语义；③ 未知 flags 位/`bit1=1` → 拒绝；④ 段长不符；⑤ 常量 DAG 环；⑥ 坏载荷（非 canonical F64、非法 kind）；⑦ 目录越界；⑧ 类型表非法；⑨ site 未覆盖/乱序；⑩ name 坏键；⑪ crc32 不符 —— 每条独立用例断言拒绝与错误码 | 校验集中 `validate`；拒绝=抛 JitException(14/18) | 每拒绝面一条用例（T9/T13/T50 前置） |
+| S2.14 | `FbcReader.load`（拒绝面，逐条） | ① magic 错；② verMajor 2/3 → 18 语义；③ 未知 flags 位/`bit1=1` → 拒绝；④ 段长不符；⑤ 常量 DAG 环；⑥ 坏载荷（非 canonical F64、非法 kind）；⑦ 目录越界；⑧ 类型表非法；⑨ site 未覆盖/乱序；⑩ name 坏键；⑪ crc32 不符 —— 每条独立用例断言拒绝与错误码 | 校验集中 `validate`；拒绝=抛 JitException(14/18)；crc32 用同一 `f_util.Crc32.isoHdlc` | 每拒绝面一条用例（T9/T13/T50 前置） |
 | S2.15 | `ConstRegistry` 加载期实例化（kind 3–10） | kind 3/4/5/6/7/8/9 往返（对象等值、DAG 共享子结构同一对象）；kind 10：合法 pattern 构造 Regex 一次（编译次数断言）、非法/空 pattern → 14（加载期）；`PUSH_KH idx < size` | 实例化经 std（Regex/Decimal/…）；f_regex 依赖就绪 | T20 前置 |
 
 ### P3 包 `compiler`
