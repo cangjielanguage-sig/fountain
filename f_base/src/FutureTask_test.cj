@@ -451,6 +451,19 @@ public class FutureTask_test {
     }
 
     /*
+     * FT-L1 后半：任务体内对自己的 tryGet() 必须按语义返回 None —— 修前走 future.getOrThrow()，
+     * 若恰好落在"构造尚未把 future 赋值完"的窗口里会抛 std 的 NoneValueException（见 §3 与 EXP20）。
+     * 说明：该窗口实测不可达（EXP20-A = 0/2000），所以这是守卫用例，不是红用例。
+     */
+    @TestCase
+    public func testTryGetOnSelfInsideTaskReturnsNone(): Unit {
+        let box = ConcurrentHashMap<String, String>()
+        let t = FutureTask<Int64>({ => futureTaskTestSelfTryGet(box) })
+        let _ = t.get()
+        @Expect(box.get("result"), Some("None"))
+    }
+
+    /*
      * FT-6 ③ 守卫：叶子任务（不创建子任务）不会在自己的 tid 下留下桶 ——
      * "没登记过 ⇒ 没有桶"正是 teardown 短路清理（`hasChildren`）的正确性前提。
      */
@@ -474,6 +487,17 @@ private func futureTaskTestReadLocal(ready: AtomicBool, slot: ArrayList<Inherite
         case Some(x) => x
         case None => -1
     }
+}
+
+// ===== FT-L1 后半（任务体内对自己 tryGet）的辅助函数 =====
+
+private func futureTaskTestSelfTryGet(box: ConcurrentHashMap<String, String>): Int64 {
+    let me = FutureTask<Int64>.current()
+    match (me.tryGet()) {
+        case Some(v) => box.add("result", "Some(${v})")
+        case None => box.add("result", "None")
+    }
+    1
 }
 
 // ===== FT-6 ⑤（桶的收尾与剪枝）的辅助函数 =====

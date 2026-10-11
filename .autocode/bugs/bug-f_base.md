@@ -401,7 +401,14 @@ while(let Some(f: FutureTask<T>) <- itr.next()){
 
 ## 3. 低危 / 登记（4 条）
 
-- **`FT-L1`｜异常契约**：~~`current()` 抛出的 `FutureTaskException` 是 `private` ⇒ 应用侧无法按类型捕获~~ **✅ 前半已修（2026-10-11，随 `b7226c17`：`FutureTaskException` 改 `public`，用例 `testCurrentWithWrongTypeArgumentThrowsWithPreciseMessage` / `testCurrentOrNoneOutsideTaskIsNone` 按类型捕获）**；余下：`get()`/`get(timeout:)`/`tryGet()` 走 `future.getOrThrow()`，而 `future` 是可变 `var`，极端时序下会抛 Option 的异常而非本模块异常 —— 待处理。
+- **`FT-L1`｜异常契约｜✅ 全部已修（2026-10-11）**：
+  - **前半**（已修，随 `b7226c17`）：~~`current()` 抛出的 `FutureTaskException` 是 `private` ⇒ 应用侧无法按类型捕获~~ → 异常类型改 `public`，用例 `testCurrentWithWrongTypeArgumentThrowsWithPreciseMessage` / `testCurrentOrNoneOutsideTaskIsNone` 按类型捕获。
+  - **后半**（本次修）：`get()`/`get(timeout:)`/`tryGet()` 原先直接 `future.getOrThrow()`，而 `future` 是构造**期末尾**才赋值的 `?Future<T>` ⇒ 落在"构造窗口"内时会抛 **std 的 `NoneValueException`**（不是本模块异常）；对 `tryGet()` 更是**语义违反**（其契约是"没完成就返回 `None`"）。
+  - **窗口与可达性**：`future` 的赋值在 `FutureTask.cj:252`，而对象早在 `:235-247` 就登记进 `subTasks`。窗口内能拿到该对象引用的只有三条路：创建线程（✗ 构造尚未返回）、父任务（✓ 但只走 `shutdown()` → `cancelSelf()` = `future?.cancel()`，`:311-313`，安全）、**任务自己**（✓ 经 `currentOrNone()` / `FutureTask<T>.current()` —— 唯一真可达的调用方，任务体内第一条语句即可）。
+  - **实测（新增探针 `EXP20`，2026-10-11）**：A 组"任务体内第一件事就对自己 `tryGet()`"2000 轮 = **0 / 2000 撞上窗口**（无 `NoneValueException`、无 `FutureTaskException`）；B 组（主线程侧对构造已完成的任务 `tryGet()`，对照）= **0 / 2000 非 `None`**。⇒ 定性：**契约级瑕疵、实测不可达**，上界 < 1/2000 每任务（窗口宽度只有"父线程从 `spawn` 返回到执行一次字段赋值"这几条指令）。
+  - **修法（已实施）**：三处改显式分支 —— `get()`/`get(timeout:)` 经新增的私有 `publishedFuture()`（`None` 时抛 `FutureTaskException("FutureTask is not fully constructed yet: its underlying Future has not been published")`），`tryGet()` 遇 `None` 返回 `None<T>`。未采用"换 `SyncFuture` 让窗口消失"的方案：取消通道就是 `future?.cancel()`，换掉它等于重做取消机制。
+  - **用例**：`testTryGetOnSelfInsideTaskReturnsNone`（**守卫型**：窗口实测不可达 ⇒ 修前也是绿的，故无"修前 FAILED"数字；`EXP20` 是它的证据来源）。单测 `TOTAL: 32, PASSED: 32, SKIPPED: 0, ERROR: 0, FAILED: 0`。
+  - **未修的部分**：无。
 - **`FT-L2`｜API 不对称**：`removeLocal` 返回 `?T`（`:62-68`）但 `InheritedTaskLocal.remove()` 丢弃返回值（`:181-183`）；`getOrSet`/`getOrCompute` 只挂在 `InheritedTaskLocal`，`AbstractFutureTask` 上没有对应公开入口。
 - **`FT-L3`｜内存口径（结论修正，2026-10-11）**：**不应清理** `local`。父任务的值必须在其结束后仍能被已创建的后代读到（`FT-5` 已定性为缺陷并修复，见 §2.3），因此"任务结束时清空 `local`"会直接破坏继承；实现无需改动。README 里那句"FutureTask 初始化时的任务结束时，相应的 InheritedTaskLocal 会被移除"与实现从来不符，已随 FT-5 改为"值随任务对象一起被回收"（中英文同批）。
 - **`FT-L4`｜防御性建议：✅ 已随 FT-5 实现（2026-10-11）**。`getLocal` 的读路径不再依赖"线程 id 在存活期内唯一、且不重用"的假设，改为**显式父子引用链**（`AbstractFutureTask.parent`，构造期固定 ⇒ 链必然无环，不需要跳数上限）；`parentTID` 仅剩 FT-2 的登记/注销用途。
@@ -463,6 +470,7 @@ wsl -d Ubuntu-24.04 -e bash -lc "cd /mnt/d/docs/work/cangjie/projects/fountain/.
 | EXP17 | 子任务 `set(9)` 后自读（owner 已结束 vs 存活） | `None` / `Some(9)` |
 | EXP18 | FT-6 分项量化（端到端 / 组件单价 / 任务内读路径） | 见 §2.4 量化表（4 次运行区间） |
 | EXP19 | 对已结束任务 `cancel()` 是否误伤同线程后续任务 | **0 / 300**（未观察到误伤） |
+| EXP20 | FT-L1 后半："`future` 尚未赋值"窗口的可达性 | A（体内立即 `tryGet()`）**0 / 2000**；B（主线程侧对照）**0 / 2000** 非 `None` |
 
 **修后复测（2026-10-11，探针改为复制 worktree 的 f_base 构建）**：
 

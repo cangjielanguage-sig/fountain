@@ -297,14 +297,27 @@ public class FutureTask<T> <: AbstractFutureTask {
             throw FutureTaskException("No FutureTask with the requested type argument found in current thread (a task of another type argument may be running); use AbstractFutureTask.current() instead")
         }
     }
+    // FT-L1 后半（bug-f_base.md §3）：`future` 只有构造**完全结束**时才是 Some，在那之前
+    // （窗口与可达性见 §3 的 FT-L1 条目：任务体内第一条语句就能经 current() 触达自己）
+    // 不能再走 `future.getOrThrow()`：那会把 std 的 NoneValueException 抛给调用方，破坏本模块的异常契约。
+    private func publishedFuture(): Future<T> {
+        match (future) {
+            case Some(f) => f
+            case None => throw FutureTaskException("FutureTask is not fully constructed yet: its underlying Future has not been published")
+        }
+    }
     public func get(): T {
-        future.getOrThrow().get()
+        publishedFuture().get()
     }
     public func get(timeout: Duration): T{
-        future.getOrThrow().get(timeout)
+        publishedFuture().get(timeout)
     }
     public func tryGet(): ?T {
-        future.getOrThrow().tryGet()
+        // FT-L1 后半：tryGet 的语义是"没完成就返回 None"，构造窗口内更不该抛异常
+        match (future) {
+            case Some(f) => f.tryGet()
+            case None => None<T>
+        }
     }
 
     // FT-3：shutdown()/shutdownCurrentSubThreads() 由 AbstractFutureTask 提供（对 `FutureTask<T>.xxx` 的调用照旧可用）
