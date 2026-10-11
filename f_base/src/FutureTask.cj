@@ -362,7 +362,11 @@ public class InheritedTaskLocal<T> <: AbstractInheritedTaskLocal {
         task.getLocal<T>(this)
     }
 
-    public func remove(): Unit {
+    // FT-L2(a)（bug-f_base.md §3）：把删掉的值带回来 —— 内部 removeLocal 一直返回 ?T，公开出口原先丢弃，
+    // 应用侧"取出并删除"只能 get() + remove() 两次调用（两步之间还可能被别处改掉/删掉）。
+    // 源码兼容：写 `local.remove()`（忽略返回值）照旧编译。
+    // 返回的是"从**当前任务那一层**删掉的值"（目标同 set/remove，见 writeTarget）。
+    public func remove(): ?T {
         writeTarget().removeLocal<T>(this)
     }
     // 决策：getOrSet/getOrCompute 保持现状 —— 未命中时写 owner 的共享槽（该任务与整个子树可见），不加锁

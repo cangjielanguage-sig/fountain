@@ -409,7 +409,9 @@ while(let Some(f: FutureTask<T>) <- itr.next()){
   - **修法（已实施）**：三处改显式分支 —— `get()`/`get(timeout:)` 经新增的私有 `publishedFuture()`（`None` 时抛 `FutureTaskException("FutureTask is not fully constructed yet: its underlying Future has not been published")`），`tryGet()` 遇 `None` 返回 `None<T>`。未采用"换 `SyncFuture` 让窗口消失"的方案：取消通道就是 `future?.cancel()`，换掉它等于重做取消机制。
   - **用例**：`testTryGetOnSelfInsideTaskReturnsNone`（**守卫型**：窗口实测不可达 ⇒ 修前也是绿的，故无"修前 FAILED"数字；`EXP20` 是它的证据来源）。单测 `TOTAL: 32, PASSED: 32, SKIPPED: 0, ERROR: 0, FAILED: 0`。
   - **未修的部分**：无。
-- **`FT-L2`｜API 不对称**：`removeLocal` 返回 `?T`（`:62-68`）但 `InheritedTaskLocal.remove()` 丢弃返回值（`:181-183`）；`getOrSet`/`getOrCompute` 只挂在 `InheritedTaskLocal`，`AbstractFutureTask` 上没有对应公开入口。
+- **`FT-L2`｜API 不对称｜(a) ✅ 已修（2026-10-11）；(b) 作者决定保持现状（2026-10-11）**：
+  - **(a) `remove()` 丢弃返回值 —— 已修**：内部 `removeLocal<T>(...): ?T`（`FutureTask.cj:131-137`）有返回值，公开出口 `InheritedTaskLocal.remove(): Unit` 却丢弃 ⇒ 应用侧"取出并删除"只能 `get()` + `remove()` 两次调用（两步之间别处还可能改值/删掉）。改为 `remove(): ?T`（**源码兼容**：Cangjie 允许忽略返回值 —— 本文件里 `set.add(task)`、`map.add(...)` 都这么用）。返回值的语义 = "从**当前任务那一层**删掉的值"（FT-4 路线 2 后 `remove` 的目标是 `writeTarget()`）。用例 `testRemoveReturnsRemovedValue`（有值⇒`Some(7)`、删后 `get()` 为 `None`）与 `testRemoveWithoutValueReturnsNone`（无值⇒`None`）；**修前是编译不过而非断言红**（`remove()` 返回 `Unit`，`match` 不成立）。
+  - **(b) task 一侧没有 local 操作的公开入口 —— 决定不动**：`AbstractFutureTask` 的公开面 = `hashCode`/`==`/`newLocal`/`shutdown`/三个静态入口；任务级 local 原语（`setLocal:115`/`getLocal:118`/`removeLocal:131`/`getOrSetLocal:139`/`getOrComputeLocal:153`）是**包内可见**的刻意实现细节，对外只暴露 handle `InheritedTaskLocal`（`set`/`get`/`remove`/`getOrSet`/`getOrCompute`）。经核对四种用法（创建线程预置值、任务内读写、子任务读祖先、`getOrSet`/`getOrCompute`）都能用 handle 表达 ⇒ **不是能力缺口**，属形状/文档问题，按作者决定保持现状。
 - **`FT-L3`｜内存口径（结论修正，2026-10-11）**：**不应清理** `local`。父任务的值必须在其结束后仍能被已创建的后代读到（`FT-5` 已定性为缺陷并修复，见 §2.3），因此"任务结束时清空 `local`"会直接破坏继承；实现无需改动。README 里那句"FutureTask 初始化时的任务结束时，相应的 InheritedTaskLocal 会被移除"与实现从来不符，已随 FT-5 改为"值随任务对象一起被回收"（中英文同批）。
 - **`FT-L4`｜防御性建议：✅ 已随 FT-5 实现（2026-10-11）**。`getLocal` 的读路径不再依赖"线程 id 在存活期内唯一、且不重用"的假设，改为**显式父子引用链**（`AbstractFutureTask.parent`，构造期固定 ⇒ 链必然无环，不需要跳数上限）；`parentTID` 仅剩 FT-2 的登记/注销用途。
 

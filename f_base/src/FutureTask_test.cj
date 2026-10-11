@@ -416,6 +416,30 @@ public class FutureTask_test {
     }
 
     /*
+     * FT-L2(a)：remove() 要把删掉的值带回来（内部 removeLocal 一直返回 ?T，公开出口此前丢弃）。
+     * 修前是**编译不过**（remove() 返回 Unit，match 不成立），不是断言红。
+     */
+    @TestCase
+    public func testRemoveReturnsRemovedValue(): Unit {
+        let box = ConcurrentHashMap<String, String>()
+        let root = FutureTask<Unit>({ => futureTaskTestRemoveReturns(box) })
+        let _ = root.get()
+        @Expect(box.get("removed"), Some("Some(7)"))
+        @Expect(box.get("after"), Some("None"))
+    }
+
+    /*
+     * FT-L2(a) 守卫：那一层没有值时 remove() 返回 None（不抛异常、不返回错值）。
+     */
+    @TestCase
+    public func testRemoveWithoutValueReturnsNone(): Unit {
+        let box = ConcurrentHashMap<String, String>()
+        let root = FutureTask<Unit>({ => futureTaskTestRemoveMissing(box) })
+        let _ = root.get()
+        @Expect(box.get("removed"), Some("None"))
+    }
+
+    /*
      * FT-6 ⑤：父任务结束时必须把自己的桶整体摘掉 —— 即使 shutdownSubOnFinish = false
      * （那时不取消子任务，但登记表不能留到进程结束）。
      * 修前：flag=false 走不到 shutdownCurrentSubThreads，而新实现里子任务已不再自行注销，
@@ -486,6 +510,31 @@ private func futureTaskTestReadLocal(ready: AtomicBool, slot: ArrayList<Inherite
     match (slot[0].get()) {
         case Some(x) => x
         case None => -1
+    }
+}
+
+// ===== FT-L2(a)（remove 返回值）的辅助函数 =====
+
+private func futureTaskTestRemoveReturns(box: ConcurrentHashMap<String, String>): Unit {
+    let me = FutureTask<Unit>.current()
+    let local = me.newLocal<Int64>()
+    local.set(7)
+    match (local.remove()) {
+        case Some(v) => box.add("removed", "Some(${v})")
+        case None => box.add("removed", "None")
+    }
+    match (local.get()) {
+        case Some(v) => box.add("after", "Some(${v})")
+        case None => box.add("after", "None")
+    }
+}
+
+private func futureTaskTestRemoveMissing(box: ConcurrentHashMap<String, String>): Unit {
+    let me = FutureTask<Unit>.current()
+    let local = me.newLocal<Int64>()
+    match (local.remove()) {
+        case Some(v) => box.add("removed", "Some(${v})")
+        case None => box.add("removed", "None")
     }
 }
 
