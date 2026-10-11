@@ -397,22 +397,30 @@
 
 ### 4.2 顶级声明清单
 
-| 声明 | 形态 | 意义 | 依赖 | 锚点 |
-|---|---|---|---|---|
-| `TokenKind` / `Token` | enum / struct | 词法单元 | — | §8.0、§8.5、§8.8 |
-| `Lexer` | class | 词法分析（三形态字符串、嵌套注释、正则字面量、词法保护顺序） | Token | §8.5、§8.8 |
-| `AstExpr` / `AstStmt` | enum / enum | 语法树（表达式 / 语句节点；载荷可递归） | Token | §8.0 |
-| `LambdaAst` / `ParamAst` | struct / struct | lambda 与形参骨架（记录型纯数据、值语义） | Token、TypeRef | §8.0 |
-| `TypeRef` | enum（M1 仅 `Builtin`） | 类型注解节点（M1 内建/容器类型名；M2 追加 `HostClosureT`/`HostObjectT`、M3 追加 `AnyT`） | — | §11.7、m2 §3、m3 §3 |
-| `Parser` | class | lambda 源入口语法 | Ast* | §8.0 |
-| `NameResolver` | class | 调用点解析（recursive → user helper → 未注册错误） | Token、注册表快照 | §8.4 |
-| `ResolvedCall` | enum | 调用点解析结果：`Recursive`（自递归）/ `UserHelper(UInt16)`（槽号） | — | §8.0、§8.4、§8.5 |
-| `DefiniteAssignment` | class | 明确赋值与空安全数据流（回边不动点） | Ast*、LocalTypes | §7 校验 10、§5 |
-| `Lowerer` | class | AST → 字节码（全部规范降低模式） | BytecodeBuilder、ConstRegistry、NameResolver | §5、§8.5–8.6、§11.9 |
-| `BytecodeBuilder` | class | 单函数发射器（label/fixup、site 记录、自动 CHECK_ERR） | ByteWriter、OpInfo | §7、§5 |
-| `Assembler` | class | 汇编期校验 1–11 + 组装 `.fbc`（目录/类型表/site/name） | BytecodeBuilder、各表、FbcWriter | §7、§11.6–11.7 |
-| `SourceCompiler` | class | 管线编排：compile(source) → 单元产物（或抛 SourceCompileException） | Lexer→Parser→…→Assembler | §8、§8.4 |
-| `DiagKind` | class（常量） | 编译期错误分类常量（**词法族 + 解析/名字/校验族**，清单与策略见 §4.3.1/§4.3.8） | — | §8.4、§8.8、§9.16 |
+| 声明 | 形态 | 可见性 | 意义 | 依赖 | 锚点 |
+|---|---|---|---|---|---|
+| `TokenKind` / `Token` | enum / struct | internal | 词法单元 | — | §8.0、§8.5、§8.8 |
+| `Lexer` | class | internal | 词法分析（三形态字符串、嵌套注释、正则字面量、词法保护顺序） | Token | §8.5、§8.8 |
+| `AstExpr` / `AstStmt` | enum / enum | internal | 语法树（表达式 / 语句节点；载荷可递归） | Token | §8.0 |
+| `LambdaAst` / `ParamAst` | struct / struct | internal | lambda 与形参骨架（记录型纯数据、值语义） | Token、TypeRef | §8.0 |
+| `TypeRef` | enum（M1 仅 `Builtin`） | internal | 类型注解节点（M1 内建/容器类型名；M2 追加 `HostClosureT`/`HostObjectT`、M3 追加 `AnyT`） | — | §11.7、m2 §3、m3 §3 |
+| `Parser` | class | internal | lambda 源入口语法 | Ast* | §8.0 |
+| `NameResolver` | class | internal | 调用点解析（recursive → user helper → 未注册错误） | Token、注册表快照 | §8.4 |
+| `ResolvedCall` | enum | internal | 调用点解析结果：`Recursive`（自递归）/ `UserHelper(UInt16)`（槽号） | — | §8.0、§8.4、§8.5 |
+| `DefiniteAssignment` | class | internal | 明确赋值与空安全数据流（回边不动点） | Ast*、LocalTypes | §7 校验 10、§5 |
+| `Lowerer` | class | internal | AST → 字节码（全部规范降低模式） | BytecodeBuilder、ConstRegistry、NameResolver | §5、§8.5–8.6、§11.9 |
+| `BytecodeBuilder` | class | internal | 单函数发射器（label/fixup、site 记录、自动 CHECK_ERR） | ByteWriter、OpInfo | §7、§5 |
+| `Assembler` | class | internal | 汇编期校验 1–11 + 组装 `.fbc`（目录/类型表/site/name） | BytecodeBuilder、各表、FbcWriter | §7、§11.6–11.7 |
+| `CompileSession` / `FuncBody` | class / struct | internal | 降低会话 / 单函数体（`FuncBody` = code 段片段 + maxStack + flags；**包内流水线传递**） | — | §8.4、§7 |
+| `DiagKind` | class（常量） | internal | 编译期错误分类常量（**词法族 + 解析/名字/校验族**，清单与策略见 §4.3.1/§4.3.8） | — | §8.4、§8.8、§9.16 |
+| `SourceCompiler` | class | **protected** | 管线编排：compile(source) → 单元产物（或抛 SourceCompileException） | Lexer→Parser→…→Assembler | §8、§8.4 |
+| `CompiledSourceUnit` | struct | **protected** | 源编译产物：`.fbc` 字节 + funcCount + entryFn + 单元指纹（源码指纹） | — | §8.4、§8.7 |
+
+**可见性（本包落地）**：本包**没有任何 `public` 声明**——用户面 API 一律由根包再导出。规则按 §1.2 逐条落地：
+
+- **`protected`（仅两个）**：`SourceCompiler` 与 `CompiledSourceUnit`——根包管线（`CompilePipeline.runSource`）调用前者、消费后者（§8.7 清单）；
+- **`internal`（其余全部）**：词法 / 语法 / 名字解析 / 数据流 / 降低 / 发射 / 汇编 / 诊断常量，以及 `CompileSession`、`FuncBody`——它们只在本包（及子包）内使用，外部不需要、也不应看见（最小暴露）；
+- **测试可及性**：包内单元测试放本包（或子包）的 `*_test.cj` 中——`internal` 对本包及子包可见；跨包测试（如 `src/test/diff` 差分层）只经 `protected`/`public` 面测试，不依赖本包内部声明。
 
 ### 4.3 各声明的公共成员
 
@@ -834,7 +842,7 @@ Ready --CAS--> Unloading（拒绝新调用；活跃调用照常完成）--active
 | `LoadedUnit/FuncDir/LocalTypes/ConstRegistry/SiteTable/NameTable` | bytecode | runtime、backend、根包 |
 | `FuncEntry/FuncFlags/OpInfo`（含静态成员 `CAT_*`/`OPCODE_TABLE`） | bytecode | compiler、runtime、backend |
 | `JitContext/HandleTable/IterTable/DbgDump/HelperId` | runtime | 根包（+backend 仅经 artifact ABI） |
-| `CompileSession/CompiledSourceUnit/FuncBody` | compiler | 根包 |
+| `SourceCompiler` / `CompiledSourceUnit` | compiler | 根包 |
 | `JitArtifacts/FnTable/ConstMirror/CodeBuffer` | backend | 根包 |
 | `Engine`（引擎选择结果）/`JitValue`（桥内执行结果） | base | backend、根包 |
 
