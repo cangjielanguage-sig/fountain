@@ -182,8 +182,8 @@ public sealed abstract class AbstractFutureTask <: Hashable & Equatable<Abstract
         }
         match (mine) {
             case Some(set) =>
-                let itr = set.iterator()
-                while(let Some(f: AbstractFutureTask) <- itr.next()){
+                // set 的元素类型本身就是 AbstractFutureTask，直接 for-in 遍历（不必再 iterator + 模式匹配）
+                for (f in set) {
                     // FT-6 ⑤：已结束的子任务不必再发取消 —— 它自己的子树早在它自己的 teardown
                     // （shutdownSubOnFinish 为 true 时）处理过了；这与"子任务自行注销"时代的语义一致。
                     if(!f.finished.load()){
@@ -197,8 +197,7 @@ public sealed abstract class AbstractFutureTask <: Hashable & Equatable<Abstract
     // 摊还到每次登记约 1 个元素 —— 这样"子任务不再自行注销"不会让长命父任务的桶无界增长。
     static func pruneFinishedChildren(set: HashSet<AbstractFutureTask>): Unit {
         let dead = ArrayList<AbstractFutureTask>()
-        let itr = set.iterator()
-        while(let Some(f) <- itr.next()){
+        for (f in set) {
             if(f.finished.load()){
                 dead.add(f)
             }
