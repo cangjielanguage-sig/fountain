@@ -57,7 +57,7 @@
 
 | 包 | 意义（职责边界） | 依赖（模块内） | 外部依赖（模块级） | 规格锚点 |
 |---|---|---|---|---|
-| `fountain::f_jit.base` | 共享契约：类型编码、错误码、公共值类型与异常、诊断接口 | 无（叶子包） | std.core、std.time | §3.2、§8、§9.16 |
+| `fountain::f_jit.base` | 共享契约：类型编码、错误码、公共值类型与异常、诊断接口 | 无（叶子包） | std.core、std.time、**f_base**（`BaseException` 基类） | §3.2、§8、§9.16 |
 | `fountain::f_jit.bytecode` | 字节码静态模型与 `.fbc` 编解码/加载校验 | base | std.collection、std.math.numeric、std.time、std.regex、f_regex（Regex 常量构造链） | §10、§11、§13.3 |
 | `fountain::f_jit.compiler` | 源入口前端与汇编（源码 → `.fbc`），编译期诊断 | base、bytecode | std.core、f_regex（String.regex 扩展的静态检查） | §8.0、§8.5、§8.8、§11.7、§11.9 |
 | `fountain::f_jit.runtime` | ctx/句柄表/迭代器表/helper 集/诊断转储/解释器 | base、bytecode | std.collection、std.math.numeric、std.time、std.regex | §1、§4、§6、§9.6、§9.16、§12.6 |
@@ -110,8 +110,8 @@
 
 | 声明 | 形态 | 意义 | 依赖 | 锚点 |
 |---|---|---|---|---|
-| `JitException` | class <: Exception | 运行期错误载体（错误码 + site + 报告文本） | SourcePos、ErrCode | §2、§8 |
-| `SourceCompileException` | class <: Exception | 编译期错误载体（不占运行期错误码） | DiagKind | §8.4、§9.16 |
+| `JitException` | class <: `f_base.BaseException` | 运行期错误载体（错误码 + site + 报告文本） | SourcePos、ErrCode、f_base | §2、§8 |
+| `SourceCompileException` | class <: `f_base.BaseException` | 编译期错误载体（不占运行期错误码） | DiagKind、f_base | §8.4、§9.16 |
 | `SourcePos` | struct | 源位置（站点表条目值） | — | §9.16 |
 | `CallContext` | struct | 桥侧调用参数（含 strictFp/deadline/literalCopy） | — | §8 |
 | `SourceUnit` | struct | 分发入口输入（`.fbc` 字节 + 入口函数号） | — | §8、§11.6 |
@@ -132,7 +132,7 @@
 
 | 成员（草图） | 意义 | 调用关系 |
 |---|---|---|
-| `init(code: Int64, site: Int64, fnId: Int64, sourcePos: ?SourcePos, message: String, cause: ?String = None)` | 由桥在报告组装完成后构造 | 被根包 `Report.throwJit` 调用 |
+| `init(code: Int64, site: Int64, fnId: Int64, sourcePos: ?SourcePos, message: String, cause: ?String = None)` | 由桥在报告组装完成后构造（报告文本经 `super(message)` 转发给基类） | 被根包 `Report.throwJit` 调用 |
 | `let code: Int64` | §2 错误码 | 宿主处置分派；T6/T15 断言 |
 | `let site: Int64` | code 段绝对字节偏移；-1 未知 | 与 sourcePos 互证（§9.16） |
 | `let fnId: Int64` | 出错函数 id | 深帧归因（最深失败帧获胜） |
@@ -140,16 +140,20 @@
 | `let message: String` | 按 code + site 静态表组装 + 源码行与变量（名/值/类型）报告 | 三类异常文本（① 无行号 ② 有行号 ③ 完整报告） |
 | `let cause: ?String` | code=99 时 helper 原始描述（M2 起 21 含完整仓颉栈） | 诊断打印 |
 
+**继承**：`JitException <: fountain::f_base.BaseException`（`public open class BaseException <: Exception`，定义见 `f_base/src/BaseException.cj`）——① 宿主可 `catch (e: BaseException)` 与其它 fountain 模块统一处理；② 报告文本即基类 `message` 语义（构造时 `super(message)` 转发），`code/site/fnId/sourcePos/cause` 为本类自有字段；③ 基类另提供 `init(caused: Exception)` / `init(message: String, caused: Exception)` 变体，本期不需要（M2 若要挂接原始仓颉异常再取用）。
+
 #### 2.3.2 `SourceCompileException`
 
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
-| `init(kind: String, position: Int64, line: Int64, column: Int64, lineText: String, hint: String)` | 编译期失败统一抛出类型 | 前端/汇编各检查点抛 |
+| `init(kind: String, position: Int64, line: Int64, column: Int64, lineText: String, hint: String)` | 编译期失败统一抛出类型（组装后的文本经 `super(message)` 转发） | 前端/汇编各检查点抛 |
 | `let kind: String` | 错误分类（`DiagKind` 常量：UnregisteredFunction / UndefinedIdentifier / BadParameterList / MissingArrow / DuplicateRegistration / NotImpl / UnterminatedComment / MultilineHeadContent / UnterminatedMultilineString / UnterminatedRawString …） | 测试断言 kind；消息含名字/位置/已注册清单（§8.4 需求 4） |
 | `let position: Int64` | 源码字节位置 | 定位 |
 | `let line: Int64` / `let column: Int64` | 行/列（1 起，列按 Unicode 码点） | 报告 |
 | `let lineText: String` | 错误所在源码行原文（不含换行） | 「错误信息包含源码行文本」的兑现 |
 | `let hint: String` | 修复提示（含已注册函数清单） | 用户可读性（T50） |
+
+**继承**：`SourceCompileException <: fountain::f_base.BaseException`——编译期错误的统一类型；`message` 由 `kind/position/line/column/lineText/hint` 组装后经 `super(message)` 转发，宿主可 `catch (e: BaseException)` 统一处理。
 
 #### 2.3.3 `SourcePos`（struct）
 
@@ -778,6 +782,7 @@ Ready --CAS--> Unloading（拒绝新调用；活跃调用照常完成）--active
 | ctx 用 `CPointer<Int64>` 访问器承载 | `struct` 直映射 | 机器码要求 64 B 且不得移动（§4）；Cangjie 布局不承诺逐字节 ⇒ 显式访问器 + 非托管分配 |
 | ctx/转储缓冲的非托管内存用 `std.core.LibC.malloc<T>` / `LibC.free<T>` | ① `foreign func malloc/free`；② `acquireArrayRawData` 钉住 `Array<UInt8>` | ① std.core 原生 API、免自声明 FFI；② 钉住方案被 std 文档窗口约束排除（获取与释放之间不得构造仓颉对象，而 ctx 跨整个调用、helper 必分配并触发 GC）；③ malloc 满足 16 B 对齐；释放仍走桥 finally（T27 计数断言）——详见 §5.3.1 |
 | helper 以顶层 `@C` 函数实现 | 集中在一个 class | 与机器码 trampoline 静态链接（符号可见性简单）；三引擎共用同一实现（I7） |
+| 异常基类用 `fountain::f_base.BaseException` | 直承 `std.core.Exception` | 仓库统一基类——宿主可跨模块统一 `catch (e: BaseException)`，并复用 f_base 的 `printStackTrace`/抑制异常等能力；报告文本经 `super(message)` 转发，本类自有字段（`code/site/fnId/sourcePos`、`kind/position/…`）不变 |
 | `JitFunction` 不拆「Interp 版 / JIT 版」子类 | 两个子类 | 引擎是运行时状态（卸载/诊断/测试都按同一句柄）；单类 + 可选 artifacts 最简 |
 | 编译缓存/适配器注册表放根包 | 放 runtime | 它们是「桥的进程级资产」（宿主侧锁、与卸载/缓存语义耦合），非执行期机制 |
 
@@ -793,3 +798,4 @@ Ready --CAS--> Unloading（拒绝新调用；活跃调用照常完成）--active
 | D4 | `CompileCache` 的进程级宿主 | 规格为「进程级编译缓存」；设计放根包（static 单例），卸载与去重协议同一处维护 |
 | D5 | 指纹算法 | 源码指纹/字节码指纹算法与常量 `constFingerprint`（FNV-1a）分开：前者用于去重键，规格未固化算法——建议 FNV-1a 同款，实施时裁定 |
 | D6 | `Engine` 公开性 | 规格未列；为测试/诊断需要（T7/T9 断言）设为 public |
+| D7 | **异常基类**：规格 §8 声明 `public class JitException <: Exception`（行 792）与 `public class SourceCompileException <: Exception`（行 1075）；本设计改为 `<: fountain::f_base.BaseException`（统一基类，2026-10-11 裁定） | 规格是否同步（改 2 处声明 + 受其影响的 §8/§9 文本）由用户定；设计与计划已按 `BaseException` 表述，`base` 包外部依赖已补 f_base |

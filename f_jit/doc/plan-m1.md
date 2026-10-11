@@ -49,7 +49,7 @@ f_jit/
   doc/                     # 本目录（规格 + 设计 + 计划）
 ```
 
-- 依赖声明（`cjpm.toml [dependencies]`）：`fountain::f_base`（OS/Arch）、`fountain::f_regex`（`String.regex()` 扩展）；M3 追加 `fountain::f_data`（JSON）。
+- 依赖声明（`cjpm.toml [dependencies]`）：`fountain::f_base`（OS/Arch + `BaseException` 基类）、`fountain::f_regex`（`String.regex()` 扩展）；M3 追加 `fountain::f_data`（JSON）。
 - 构建/测试：`cjpm build` / `cjpm test`；差分测试用独立入口脚本（同进程内跑三引擎，见 S0.2）。
 
 ### 0.5 步骤表头约定
@@ -96,8 +96,8 @@ f_jit/
 | S1.5 | `SourcePos`、`JitMode`、`Engine`、`JitValue` | 构造/字段读；`match` 穷尽性（四个 JitValue 构造器）；`==` 语义 | struct/enum | 10 分钟内可写完（最小成员） |
 | S1.6 | `CallContext` | 默认值断言（`literalCopy=false`、`strictFp=false`、`deadline=None`）；`strictFp=true` 经 `invoke` 写 ctx.flags（后置步骤联测） | struct + 默认值 | 默认值契约正确 |
 | S1.7 | `SourceUnit` | 构造与字段读；entryFn 与容器头不一致的拒绝路径（在 S2.15 联测） | struct | — |
-| S1.8 | `JitException`：`init(code,site,fnId,sourcePos,message,cause)`、`code/site/fnId/sourcePos/message/cause` | 字段保真；`sourcePos=None` 分支；`cause=None`；可 `catch (e: JitException)` 并读回全部字段 | class <: Exception | 全部字段可用 |
-| S1.9 | `SourceCompileException`：`kind/position/line/column/lineText/hint` | 字段保真；`lineText` 等于对应源码行原文 | class <: Exception | T50 编译期分组前置 |
+| S1.8 | `JitException`：`init(code,site,fnId,sourcePos,message,cause)`、`code/site/fnId/sourcePos/message/cause` | 字段保真；`sourcePos=None` 分支；`cause=None`；可 `catch (e: JitException)` 并读回全部字段；**`is fountain::f_base.BaseException` 断言**（统一基类，宿主可统一 catch） | class <: `f_base.BaseException`（`super(message)` 转发报告文本） | 全部字段可用 |
+| S1.9 | `SourceCompileException`：`kind/position/line/column/lineText/hint` | 字段保真；`lineText` 等于对应源码行原文；**`is fountain::f_base.BaseException` 断言** | class <: `f_base.BaseException` | T50 编译期分组前置 |
 | S1.10 | `DiagnosticsSink`/`DiagnosticLevel` | 桩实现记录调用（level+message）；`JitMode` 降级路径注入（在 S5.3 联测） | interface + enum | 桩可复用 |
 | S1.11 | `base` 包整体可见性检查 | 用户代码 `import fountain::f_jit.base.*` 可用；`internal` 不外泄的编译期断言（负向用例不可编译——人工核对） | 可见性标注 | 与 §1.2 规则一致 |
 
