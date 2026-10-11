@@ -146,3 +146,14 @@ fmq manager [--server=<host>:<port>] listSubscribeGroups </path/of/topic>
 ```
 export mqClient_hosts=host1:port1,host2:port2
 ```
+
+
+==========
+## 任务
+0. 加载技能 using-superpowers、cangjie-doc-lookup、cangjie-architecture-design-harness、
+1. 分别为`f_mq`和`fmq`的模块添加详细设计文档
+   - 在文档中添加包级定义、各包的意义与依赖关系
+   - 每个包的顶级声明与各顶级声明的意义和依赖关系
+   - 添加每个顶级声明的公共成员声明与它们的意义和调用关系
+3. 为每篇详细设计文档各生成一篇详细开发计划
+   - 以每个公共成员声明为粒度，生成详细的 TDD 开发计划

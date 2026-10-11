@@ -339,3 +339,13 @@ export multidbm_databasePoolConnectTimeout=50 # 默认是50，单位是毫秒，
 export multidbm_databasePoolMaxWaiting=30000 # 默认是30000（单位毫秒，即30秒）。池耗尽且调用方用无限等待（Duration.Max）取连接时的等待上限；超过上限就记WARN并返回None，避免无日志挂死；配成0表示真无限等待
 export multidbm_databasePoolCheckSql='select 1' # 检查连接有效性的SQL，默认是select 1
 ```
+
+==========
+## 任务
+0. 加载技能 using-superpowers、cangjie-doc-lookup、cangjie-architecture-design-harness、
+1. 分别为`f_dbd`和`fdbm`的模块添加详细设计文档
+   - 在文档中添加包级定义、各包的意义与依赖关系
+   - 每个包的顶级声明与各顶级声明的意义和依赖关系
+   - 添加每个顶级声明的公共成员声明与它们的意义和调用关系
+3. 为每篇详细设计文档各生成一篇详细开发计划
+   - 以每个公共成员声明为粒度，生成详细的 TDD 开发计划
