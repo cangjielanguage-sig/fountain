@@ -7,6 +7,7 @@
 > - 顶级声明 = 包内顶层声明（class / interface / struct / enum / const / let / func）；
 > - 公共成员 = 该声明的 public / protected 成员（字段、属性、构造函数、函数、静态成员、枚举构造器、常量）；
 > - 签名以**草图**给出（个别类型随后续设计微调），语义以规格文档为准，每条附规格锚点。
+> - **记法约定**：可选类型一律**前缀** `?T`（仓颉没有 `T?` / `x?` 写法）；数组与容器一律 `Array<T>` / `ArrayList<T>`（描述性文字里的 `x[]` 仅表示「逐个元素」）。
 > 语言事实前提：仓颉禁止包间循环依赖 ⇒ 包依赖必须是 DAG；`internal` 只到「本包及子包」，**跨兄弟包共享一律用 `protected`**（module 级），用户面 API 由根包 `public import` 再导出（仓库既有惯例，见 `f_data`）。
 
 ---
@@ -444,15 +445,16 @@
 - **`KwNull`（`null` 字面值）**：语法层可用（降低为 `PUSH_NULL`，0x15），但 **M1 没有任何合法落点**——句柄型局部恒非空（§3.1 空安全），`PUSH_NULL` 直存句柄型局部被 §7 校验 10 拒绝，值型槽/实参/返回值处则类型不符。保留该关键字的收益：① 报**准确诊断**（「保留关键字；M1 空安全下句柄型局部无空值」）而不是误报 `UndefinedIdentifier`；② 为未来语言级 null 语义预留——**M2/M3 都不需要它**：M3 的 JSON null 由 `JsonNull` **单例**（`fountain::f_data.json.JsonNull.instance`）承载，M2 宿主对象通道明确 **null 拒绝**（m2 §11）。
 - **类型名不作独立 kind**：`Int64`/`String`/`List<Int64>` 等一律按 `Ident` 走，类型解析在解析期（与仓颉一致）。
 
-#### 4.3.2 `AstExpr` / `AstStmt` / `LambdaAst`
+#### 4.3.2 `AstExpr`（enum） / `AstStmt`（enum） / `LambdaAst`（struct） / `ParamAst`（struct）
 
 | 成员 | 意义 |
 |---|---|
 | `LambdaAst.params: Array<ParamAst>`（name + 类型注解 + 槽位 + `pos`）、`body: Array<AstStmt>`、`retExpr: ?AstExpr` | 源入口顶层 lambda（隐式返回 = 尾表达式） |
 | `AstExpr.pos` / `AstStmt.pos` / `ParamAst.pos: SourcePos` | **行信息不丢**：节点位置取自**首 Token**（解析器填），驱动 `BytecodeBuilder.setSite`/`bail(code, pos)` 与编译期诊断（`SourceCompileException.line/column/lineText`） |
 | 位置链（贯穿到运行期） | `Token.pos/line/column` → `Ast*.pos` → `setSite` 发射 `SET_SITE` → `SiteTable`（随 `.fbc` 与 JIT 产物走）→ 运行期报告按 `ctx.site` 反查行号 + `NameTable` 补变量名（§9.16、T50） |
-| `AstExpr` 构造器（设计归并） | `Lit(常量或字面值形状) / Var(name) / Binary(op,l,r) / Unary(op,x) / IfExpr(c,t,e) / Call(target,args) / Closure(lambda) / IIFE(closure,args) / Interp(parts) / StrAdd(l,r) / RegexOp(kind,re,s,r?,n?,m?) / RangeLit(start,end,step?,isClosed) / ListLit(elems, isEmpty) / MapLit(pairs, isEmpty) / TupleLit(elems) / RecursiveValue / MemberName?（M2 糖预留）` |
-| `AstStmt` 构造器 | `Decl(name, type?, init) / Assign(lhs, rhs) / MultiAssign(lhs[], rhs[]) / If(stmt 用法) / While(c,t) / ForIn(pattern, iterable, where?, body) / Return(e?) / ExprStmt(e) / Block(stmts)` |
+| `AstExpr` 构造器（enum；**载荷递归合法**——语言文档 `enum.md` 明确 enum 支持递归定义） | `Lit(tok: Token)`（字面值原样携带 token，数值/Decimal 判定留到降低期） / `Var(name: String)` / `Binary(op: TokenKind, l: AstExpr, r: AstExpr)` / `Unary(op: TokenKind, x: AstExpr)` / `IfExpr(cond: AstExpr, thenE: AstExpr, elseE: AstExpr)`（值用法，else 必需） / `Call(target: AstExpr, args: Array<AstExpr>)` / `Closure(lambda: LambdaAst)` / `IIFE(closure: AstExpr, args: Array<AstExpr>)` / `Interp(parts: Array<AstExpr>)` / `StrAdd(l: AstExpr, r: AstExpr)` / `RegexOp(kind: TokenKind, re: AstExpr, s: AstExpr, r: ?AstExpr, n: ?Int64, m: ?Int64)` / `RangeLit(start: AstExpr, end: AstExpr, step: ?AstExpr, isClosed: Bool)` / `ListLit(elems: Array<AstExpr>, isEmpty: Bool)` / `MapLit(pairs: Array<(AstExpr, AstExpr)>, isEmpty: Bool)` / `TupleLit(elems: Array<AstExpr>)` / `RecursiveValue` / `MemberName`（M2 糖预留——M1 解析器不生成该构造器） |
+| `AstStmt` 构造器（enum） | `Decl(name: String, typeAnn: ?TypeRef, init: AstExpr)` / `Assign(lhs: AstExpr, rhs: AstExpr)` / `MultiAssign(lhs: Array<AstExpr>, rhs: Array<AstExpr>)` / `If(cond: AstExpr, thenS: AstStmt, elseS: ?AstStmt)` / `While(cond: AstExpr, body: AstStmt)` / `ForIn(binding: Array<String>, iterable: AstExpr, where: ?AstExpr, body: AstStmt)`（`for (x in …)` = 1 个绑定名；`for ((k, v) in map)` = 2 个） / `Return(value: ?AstExpr)` / `ExprStmt(e: AstExpr)` / `Block(stmts: Array<AstStmt>)` |
+| **形态与记法**（设计约定） | ① AST 是**纯数据**：`AstExpr`/`AstStmt` 用 **enum**（只带载荷构造器、做穷尽 `match`，可递归定义）、`LambdaAst`/`ParamAst` 用 **struct**（记录型骨架、值语义、无身份）；② **可选类型一律前缀 `?T`**（`?AstExpr`、`?Int64`、`?TypeRef`）——仓颉**没有** `T?` 后缀写法、也没有 `标识符?`（表示「可缺省」）的记法，原稿的 `step?`/`where?`/`e?`/`type?`/`r?`/`n?`/`m?`/`MemberName?` 属简写，已按合法写法改写；③ 数组一律写 `Array<T>`（原稿 `lhs[]` = `Array<AstExpr>`）；④ 构造器字段名与顺序即解析器填值顺序，`pos` 见上表。 |
 
 #### 4.3.3 `NameResolver`（class）
 
@@ -746,7 +748,7 @@
 
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
-| `CompileCache.lookupOrClaim(fingerprint): CacheEntry` / `awaitReady(entry)` / `finish(entry, ok: JitFunction?)` / `remove(fingerprint)` | 状态机 Idle→Compiling→Ready/Failed；命中 Ready 复用、Compiling 阻塞等待、失败共享异常 | `Compiler.compile`；T16 |
+| `CompileCache.lookupOrClaim(fingerprint): CacheEntry` / `awaitReady(entry)` / `finish(entry, ok: ?JitFunction)` / `remove(fingerprint)` | 状态机 Idle→Compiling→Ready/Failed；命中 Ready 复用、Compiling 阻塞等待、失败共享异常 | `Compiler.compile`；T16 |
 | `AdapterRegistry.register(key, adapters)` / `lookup(key): ?Adapters` / `removeUnit(fingerprint)` | 单态化适配器注册表（宿主侧锁保护） | call 第 5 步；卸载 |
 | `CompilePipeline.runSource(source): JitFunction` / `runUnit(unit): JitFunction` | 四步管线编排（编译/装载 → 去重 → 引擎选择 → 产物） | `Compiler.compile` |
 | `Report.throwJit(code, site, fnId, dump, tables)` | 组装并经内部统一抛出 JitException（19 的桥层契约错误 site=-1 走此路） | 三态收尾第 3 步 |
