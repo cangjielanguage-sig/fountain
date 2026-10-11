@@ -419,7 +419,7 @@
 | `init(source: String, diagnostics: DiagnosticsSink)` | `Lexer` | 绑定源码与诊断；**构造时对整串做一次换行规范化** | `SourceCompiler` |
 | `next(): Token` | `Lexer` | 取下一 token（EOF 终止） | `Parser` |
 | `position(): Int64` / `line(): Int64` / `column(): Int64` | `Lexer` | 当前位置（诊断用；基于**规范化后**的源码） | `Parser`/错误构造 |
-| `kind: TokenKind` / `text: String` / `pos: Int64` / `line: Int64` / `column: Int64` | `Token`（struct） | 词法单元（只读、按值传递；`text` = 归一化后的字面文本/原文拼写） | 全前端 |
+| `kind: TokenKind` / `text: String` / `pos: Int64` / `line: Int64` / `column: Int64` / `nlBefore: Bool` | `Token`（struct） | 词法单元（只读、按值传递；`text` = 归一化后的字面文本/原文拼写；`nlBefore` = **本 token 之前（跳过空白与注释时）跨过了换行**） | 全前端 |
 | 构造器全表见下 | `TokenKind`（enum） | 无载荷枚举（拼写差异由 `Token.text` 承载）；解析器按 kind 穷尽 `match` | `Parser` |
 | 词法职责（实现约束） | `Lexer` | ① 字符串保护（三形态全跨度）→ ② 注释剥离（`/* */` 嵌套配平）→ ③ 解析；**换行规范化**（`CRLF`/`CR` → `\n`，先于保护阶段对整串一次——多行/原始串常量字节与 `line`/`column` 计数跨平台一致）；`>\|` 锚定（多行串） | §8.5 冻结顺序、§8.8 |
 
@@ -435,17 +435,22 @@
 
 **归属与约定**：
 
-- `Lexer` 的全部成员 = **构造 + `next` + `position`/`line`/`column`**（有状态扫描器 → class）；`Token` = **只读 struct**（5 字段，值语义）；`TokenKind` = **无载荷 enum**（做穷尽 `match`）。
+- `Lexer` 的全部成员 = **构造 + `next` + `position`/`line`/`column`**（有状态扫描器 → class）；`Token` = **只读 struct**（**6 字段**：kind/text/pos/line/column/nlBefore，值语义）；`TokenKind` = **无载荷 enum**（做穷尽 `match`）。
 - **无 `Char`/Rune**：M1 类型集（§11.7）不含 Char——`'…'` 是**单行字符串的第二种定界符**（异种引号 = 内容，§8.8/T42），不是独立 token 类别。
 - **插值不引入独立 kind**：`StrLit.text` 保留 `${…}` 原文，切分与降低在前端糖阶段完成（S3.12）。
-- **`Semi` 容忍写法**：`;` 被识别但解析器一律跳过（等价于空白分隔），避免把合法仓颉写法判成词法错。
+- **语句终结 = `;` 或换行**（两者等价、均可省略）：仓颉规则为「一条语句独占一行时可省略 `;`，一行存在多条语句必须用 `;` 分隔」（语言文档 `basic_programming_concepts/expression.md`）——因此**换行必须可判定**，否则 `a = 1` ⏎ `-2` 会被并成 `1 - 2`、`f` ⏎ `(1)` 会被并成调用、`x` ⏎ `[0]` 会被并成下标。
+- **为什么不设 `NewLine` kind**：换行不是词法单元而是**语句终结信号**，且它替代不了解析器自身的「表达式是否已自然结束」判定——`1 +` ⏎ `2` 这类**跨行续写**必须忽略换行；多行/原始串内部的换行是**字面内容**，更不该产 token。故改为由 `Token.nlBefore` 承载（见下条）。
+- **用 `nlBefore` 而不是比较 `line`**：`"""…"""` 这类**跨行 token** 结束之后同行紧跟 `-` 时，两个 token 的 `line` 不同却并无换行——只有词法阶段记录「本 token 之前是否跨过换行」才可靠（同法支撑 `>|` 的行首判定）。
+- **`KwNull`（`null` 字面值）**：语法层可用（降低为 `PUSH_NULL`，0x15），但 **M1 没有任何合法落点**——句柄型局部恒非空（§3.1 空安全），`PUSH_NULL` 直存句柄型局部被 §7 校验 10 拒绝，值型槽/实参/返回值处则类型不符。保留该关键字的收益：① 报**准确诊断**（「保留关键字；M1 空安全下句柄型局部无空值」）而不是误报 `UndefinedIdentifier`；② 为 M2/M3 前瞻（M3 JSON null 经 `json_get` 出空值、M2 宿主对象空通道）。
 - **类型名不作独立 kind**：`Int64`/`String`/`List<Int64>` 等一律按 `Ident` 走，类型解析在解析期（与仓颉一致）。
 
 #### 4.3.2 `AstExpr` / `AstStmt` / `LambdaAst`
 
 | 成员 | 意义 |
 |---|---|
-| `LambdaAst.params: Array<ParamAst>`（name + 类型注解 + 槽位）、`body: Array<AstStmt>`、`retExpr: ?AstExpr` | 源入口顶层 lambda（隐式返回 = 尾表达式） |
+| `LambdaAst.params: Array<ParamAst>`（name + 类型注解 + 槽位 + `pos`）、`body: Array<AstStmt>`、`retExpr: ?AstExpr` | 源入口顶层 lambda（隐式返回 = 尾表达式） |
+| `AstExpr.pos` / `AstStmt.pos` / `ParamAst.pos: SourcePos` | **行信息不丢**：节点位置取自**首 Token**（解析器填），驱动 `BytecodeBuilder.setSite`/`bail(code, pos)` 与编译期诊断（`SourceCompileException.line/column/lineText`） |
+| 位置链（贯穿到运行期） | `Token.pos/line/column` → `Ast*.pos` → `setSite` 发射 `SET_SITE` → `SiteTable`（随 `.fbc` 与 JIT 产物走）→ 运行期报告按 `ctx.site` 反查行号 + `NameTable` 补变量名（§9.16、T50） |
 | `AstExpr` 构造器（设计归并） | `Lit(常量或字面值形状) / Var(name) / Binary(op,l,r) / Unary(op,x) / IfExpr(c,t,e) / Call(target,args) / Closure(lambda) / IIFE(closure,args) / Interp(parts) / StrAdd(l,r) / RegexOp(kind,re,s,r?,n?,m?) / RangeLit(start,end,step?,isClosed) / ListLit(elems, isEmpty) / MapLit(pairs, isEmpty) / TupleLit(elems) / RecursiveValue / MemberName?（M2 糖预留）` |
 | `AstStmt` 构造器 | `Decl(name, type?, init) / Assign(lhs, rhs) / MultiAssign(lhs[], rhs[]) / If(stmt 用法) / While(c,t) / ForIn(pattern, iterable, where?, body) / Return(e?) / ExprStmt(e) / Block(stmts)` |
 
