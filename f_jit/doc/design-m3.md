@@ -15,7 +15,7 @@
 | 专项 | 支点 | 增量 |
 |---|---|---|
 | Any | **Any = 装箱搬运类型**：句柄条目直存原生 Cangjie `Any`；唯一算子 = `is` / `as`（延用仓颉 Any 语义本体；无动态调用/计算/等值） | LocalType 15 / token 12；H66–H68；错误码 22 |
-| JSON | **字面量本体零世界内新机制**：kind 11（原始 JSON 字节）+ HostObject 通道（14）+ 预定义函数通道的组合；**世界内可变 API**（H72–H74）为 M3 内追加 | kind 11；词法两形态；H72/H73/H74；frozen 传播 |
+| JSON | **字面量本体零世界内新机制**：kind 11（原始 JSON 字节）+ HostObject 通道（14）+ 预定义函数通道的组合；**世界内可变 API**（H73–H75）为 M3 内追加 | kind 11；词法两形态；H73/H74/H75；frozen 传播 |
 | 特化 | **分层特化**：签名级（身份无关）+ 条目级 per-call；**纯加速**（不改语义/格式/错误面） | `SignatureTable`/`SignaturePlan`（桥内部运行时物） |
 
 **新增概念一览**：
@@ -27,7 +27,7 @@
 | 类型问答 | M2 验签（边界一次性核对） | H67 `any_is` / H68 `any_as`（运行期、可反复） |
 | 错误码 22 | 7 = 值转型（静态） | 22 = **动态转型失败**（`as` 未命中；site = `any_as` 调用点） |
 | JSON 常量 | kind 3 String | **kind 11 = Json**（原始字节；加载期一次解析） |
-| JSON 世界内可变 | 非空字面值 = 常量（只读） | 空形态构造（H74）+ `[]` 读写（H72/H73）+ **frozen 标记与传播** |
+| JSON 世界内可变 | 非空字面值 = 常量（只读） | 空形态构造（H75）+ `[]` 读写（H73/H74）+ **frozen 标记与传播** |
 | 转发特化 | H63 通用流程（逐参描述符遍历） | `SignatureTable`（签名级）+ 条目 `plan` 绑定（零签名查找） |
 
 ---
@@ -39,7 +39,7 @@
 | `base` | — | `LocalType`（+15）、`TypeToken`（+12）、`ErrCode`（+22 与描述） | 其余全部 |
 | `bytecode` | — | `ConstKind`（+11）、`ConstPayload`（+`PJson`）、`ConstRegistry`（+`addJson`）、`FbcReader`（kind 11 解析/校验 + verMajor 3 规则集） | 容器头、段模型（kind 11 载荷 = u32 长度 + UTF-8 字节，与 kind 3 同构） |
 | `compiler` | — | `AstExpr`（+ JSON 字面/下标读写/`is`/`as`/`any_box` 形态）、`Lowerer`（装箱插入点/拆箱问答/JSON 发射）、`Lexer`（反引号段与直写段保护）、`TypeRef`（`AnyT`） | 其余降低模式 |
-| `runtime` | `SignatureTable`、`SignaturePlan` | `HandleTable`（条目 +`frozen` 标记）、H66/H67/H68/H72/H73/H74（顶层 @C func）、`HostCallback`（+`plan`）、`IterTable`（不变） | ctx、迭代器、既有 helper |
+| `runtime` | `SignatureTable`、`SignaturePlan` | `HandleTable`（条目 +`frozen` 标记）、H66/H67/H68/H73/H74/H75（顶层 @C func）、`HostCallback`（+`plan`）、`IterTable`（不变） | ctx、迭代器、既有 helper |
 | 根包 | — | `CallMarshal`（+Any 参数/返回行）、`CompilePipeline`（特化表接入）、`JitFunction`（无新公共成员） | 六步/卸载/去重 |
 
 ---
@@ -65,8 +65,8 @@
 | `ConstPayload` | `+ PJson(raw: String)` | payload = 规范化后的原始 JSON 字节串（与 kind 3 同构；原始字节即 payload，解析在加载期） | m3 §11 |
 | `ConstRegistry` | `+ addJson(raw: String): Int64` | 注册 JSON 常量 → hid（**拼装期仅登记原始字节**，不解析） | m3 §11 |
 | `FbcReader` | kind 11 分支 | ① 载荷校验（u32 长度 + UTF-8）；② **实例化一次**：调 `fountain::f_data.json` 解析器构建 `JsonObject`/`JsonArray` → 登记 ConstTable（路径 A：跨调用同 ID、单元生命周期、不可变）；③ 防御性再校验失败 → 加载期拒绝 | m3 §11 |
-| `FbcReader` | verMajor 3 规则集 | LocalType 0–15；含 H66–H68/H72–H74 的 helper 值域；kind 11 合法 | m3 §2、§9.2 |
-| `ConstRegistry` | （无独立 frozen 成员） | 「实例化登记」动作把 **frozen 标记写入句柄条目**（唯一所有者 = `HandleTable`，见 §5.4）；供 H73 写保护判定 | m3 §11 |
+| `FbcReader` | verMajor 3 规则集 | LocalType 0–15；含 H66–H68/H73–H75 的 helper 值域；kind 11 合法 | m3 §2、§9.2 |
+| `ConstRegistry` | （无独立 frozen 成员） | 「实例化登记」动作把 **frozen 标记写入句柄条目**（唯一所有者 = `HandleTable`，见 §5.4）；供 H74 写保护判定 | m3 §11 |
 
 ---
 
@@ -84,7 +84,7 @@
 | `Lowerer` | **装箱插入点**（类型驱动，全部静态可知） | ① 赋值/初始化 Any 槽；② Any 参数实参；③ Any 返回；④ 容器元素类型为 Any 的写入前（`LIST_APPEND/LIST_SET/LIST_INSERT/MAP_PUT`）——异构容器的实现基础 | m3 §3 |
 | `Lowerer` | **拆箱与问答** | `expr is T` / `expr as T`（T ∈ 可转集，程序 15）：左 15 → H67/H68；左非 15 → 按静态类型关系（上行零操作；不相容 → 编译错误）；`as T` 结果类型 = T（可继续参与 T 的既有运算——「先 as 后算」唯一计算路径）；`as <宿主类>` 携类身份（typecode=14 + aux=typeRef） | m3 §3 |
 | `Lowerer` | **禁止面（编译错误）** | 15 型上的运算/比较/等值/成员访问/调用；二次装箱（`any_box(15,…)` 不可发射）；非可转集目标（含 `as Closure`）；闭包存入集合（含 Any 盒间接路径） | m3 §3/§12-1/§12-3 |
-| `Lowerer` | **JSON 发射** | 非空字面值 → `PUSH_KH`（kind 11 常量）；**JSON 上下文下的空 `{}`/`[]` → H74 `json_new`**（世界内构造，可变、非常量）；`j[i]` → H72 `json_get`；`j[i] = v` → H73 `json_set`（v ∈ 值型 0–3（除 Unit）/String/14/null）；索引类型不符 → 编译错误 | m3 §11 |
+| `Lowerer` | **JSON 发射** | 非空字面值 → `PUSH_KH`（kind 11 常量）；**JSON 上下文下的空 `{}`/`[]` → H75 `json_new`**（世界内构造，可变、非常量）；`j[i]` → H73 `json_get`；`j[i] = v` → H74 `json_set`（v ∈ 值型 0–3（除 Unit）/String/14/null）；索引类型不符 → 编译错误 | m3 §11 |
 | `NameResolver` / 静态检查 | `fountain::f_data.path` 访问 | 经预定义函数通道注册（宿主库提供类型化 getter）；"从 Any 取 JSON 节点"（`as JsonObject`）自 v0.3.12 可用 | m3 §11 |
 
 ---
@@ -103,17 +103,17 @@
 
 **容器转型与 P2**：`as List<Any>` / `as Map<Int64,Any>` 的运行期检查依赖仓颉泛型 **reified** 信息；不可用时退化为**不校验元素/键值类型 + 宿主契约**（行为差异必须显式、不允许静默）。
 
-### 5.2 H72–H74（JSON 世界内可变 API）
+### 5.2 H73–H75（JSON 世界内可变 API）
 
 | hid | 函数 | 语义 | 失败码 | 锚点 |
 |---|---|---|---|---|
-| H72 | `json_get(h, key, mode: u8) → h15` | 读：结果 = **Any(15) 盒**（对象/数组元素 → 节点盒；标量 → 宿主值盒；JSON null → 空值）；**条件分配型** | 4, 5, 6, 8, 16 | m3 §11 |
-| H73 | `json_set(h, key, typecode: u8, v) → 0` | 写（**变更型**）：对象 upsert（沿 `MAP_PUT`）；数组仅既有下标（越界 → 4，不自动扩展）；**目标 frozen → 20** | 4, 6, 8, 19, 20, 99 | m3 §11 |
-| H74 | `json_new(mode: u8) → h14` | 世界内构造空 JSON 值（`{}`/`[]`，可变、非常量）；**分配型** | 16 | m3 §11 |
+| H73 | `json_get(h, key, mode: u8) → h15` | 读：结果 = **Any(15) 盒**（对象/数组元素 → 节点盒；标量 → 宿主值盒；JSON null → 空值）；**条件分配型** | 4, 5, 6, 8, 16 | m3 §11 |
+| H74 | `json_set(h, key, typecode: u8, v) → 0` | 写（**变更型**）：对象 upsert（沿 `MAP_PUT`）；数组仅既有下标（越界 → 4，不自动扩展）；**目标 frozen → 20** | 4, 6, 8, 19, 20, 99 | m3 §11 |
+| H75 | `json_new(mode: u8) → h14` | 世界内构造空 JSON 值（`{}`/`[]`，可变、非常量）；**分配型** | 16 | m3 §11 |
 
 **JSON 类界谱系（v0.3.13）**：`JsonObject`/`JsonArray` 均为类、同属 `abstract class JsonValue` 子类——`is/as JsonValue` 命中子类；`as JsonObject` 对数组实例 → 22；抽象类不作实例（世界内构造仅 `JsonObject`/`JsonArray`）。
 
-**frozen 标记与传播**：常量实例化登记时置 frozen；**frozen 经读（H72）与拆箱（H68）传播**（从常量取出的子节点保持只读——无需树遍历）。
+**frozen 标记与传播**：常量实例化登记时置 frozen；**frozen 经读（H73）与拆箱（H68）传播**（从常量取出的子节点保持只读——无需树遍历）。
 
 ### 5.3 `SignatureTable` / `SignaturePlan`（CALL_HOST 转发特化）
 
@@ -130,11 +130,11 @@
 
 | 声明 | 增量 | 说明 | 锚点 |
 |---|---|---|---|
-| `HandleTable` | 条目 `frozen: Bool` | 可常量化宿主类（JSON）的写保护标记；H73 判定 | m3 §11 |
-| `HelperId` | `H_ANY_BOX=66`、`H_ANY_IS=67`、`H_ANY_AS=68`、`H_JSON_GET=72`、`H_JSON_SET=73`、`H_JSON_NEW=74` | 编号接 H65 之后 | m3 §5/§11 |
-| `Interp` | H66–H68/H72–H74 路由 | M3 规则集单元可含这些 helper 调用 | m3 §5 |
-| 分配型清单 | +H66、H68（句柄型命中时）、H72（命中时）、H74 | 每次登记 1 槽（§9.6 扩容兜底照旧） | m3 §5/§11 |
-| 变更型清单 | +H73 `json_set` | §9.15 三条规则（常量禁写 20 / deopt 禁令 / 兜底 99） | m3 §11 |
+| `HandleTable` | 条目 `frozen: Bool` | 可常量化宿主类（JSON）的写保护标记；H74 判定 | m3 §11 |
+| `HelperId` | `H_ANY_BOX=66`、`H_ANY_IS=67`、`H_ANY_AS=68`、`H_JSON_GET=73`、`H_JSON_SET=74`、`H_JSON_NEW=75` | 编号接 H65 之后（JSON 面 v0.3.15 顺延 H73–H75） | m3 §5/§11 |
+| `Interp` | H66–H68/H73–H75 路由 | M3 规则集单元可含这些 helper 调用 | m3 §5 |
+| 分配型清单 | +H66、H68（句柄型命中时）、H73（命中时）、H75 | 每次登记 1 槽（§9.6 扩容兜底照旧） | m3 §5/§11 |
+| 变更型清单 | +H74 `json_set` | §9.15 三条规则（常量禁写 20 / deopt 禁令 / 兜底 99） | m3 §11 |
 
 ---
 
@@ -168,7 +168,7 @@
   → 词法保护段（JSON 字符串感知 + 括号配平）→ 换行规范化
   → 编译期按 JSON 语法解析一遍（非法 → 源编译错误，含位置）
   → 静态类型：{→JsonObject / [→JsonArray（标量顶层 → 编译错误）
-  → 发射：非空字面值 → kind 11 常量（PUSH_KH）；空形态（JSON 上下文）→ H74 json_new
+  → 发射：非空字面值 → kind 11 常量（PUSH_KH）；空形态（JSON 上下文）→ H75 json_new
 加载期: kind 11 → f_data.json 解析器实例化一次 → ConstTable（路径 A、不可变、frozen）
 访问: f_data.path 类型化 getter（预定义通道）；异构取值 → Any 盒 + is/as
 ```
@@ -176,9 +176,9 @@
 ### 7.3 JSON 世界内可变流
 
 ```
-j[i]   → json_get(h, key, mode)  [H72；结果 = Any 盒；越界 4 / 缺键 5；frozen 经读传播]
-j[i]=v → json_set(h, key, 码, v) [H73；变更型 → flags.bit0 + deopt 禁令；frozen → 20；对象 upsert / 数组仅既有下标]
-{}、[] → json_new(mode)          [H74；分配型；可变新值，非常量]
+j[i]   → json_get(h, key, mode)  [H73；结果 = Any 盒；越界 4 / 缺键 5；frozen 经读传播]
+j[i]=v → json_set(h, key, 码, v) [H74；变更型 → flags.bit0 + deopt 禁令；frozen → 20；对象 upsert / 数组仅既有下标]
+{}、[] → json_new(mode)          [H75；分配型；可变新值，非常量]
 ```
 
 ### 7.4 CALL_HOST 转发特化流
@@ -224,11 +224,11 @@ H63: fetch → entry.plan（Layer B，验签时绑定）
 
 | # | 项 | 处置 |
 |---|---|---|
-| M3-1 | **T59 重号**：m2 §10 的 T59（HostClosure 签名含 14）与 m3 §10 的 T59（JSON 世界内可变 API + Any↔14）重号 | 登记；实施前请用户裁定统一（建议 m3 侧改 T61，未裁定前文档按「T59(m2) / T59(m3)」并列引用） |
+| M3-1 | **T59 重号**：m2 §10 的 T59（HostClosure 签名含 14）与 m3 §10 的 T59（JSON 世界内可变 API + Any↔14）重号 | **已裁定并实施（2026-10-11）**：m3 侧改 **T61**（m2 侧保持 T59）；m3 规格、本文与 plan-m3 已同步 |
 | M3-2 | P2（泛型 reified）可用性 | 容器转型元素校验的退化路径（不校验 + 宿主契约）——行为差异必须显式、不允许静默 |
 | M3-3 | §13.5 开放钉子：plan 构建时点（默认倾向「验签即建」）、argc 展开阈值、Layer C 是否引入 | 实施时裁定（Layer C 须过门禁三条 + 收益门槛） |
 | M3-4 | 已裁定（记录）：Any 等值/哈希永久排除；盒套盒不实现；struct 不考虑；HostObject 字段不扩展至 15；12 转型不开放；JSON 标量顶层不开放 | 无重议通道（等值）/维持裁定 |
 | M3-5 | JSON 常量实例化依赖 `fountain::f_data.json` | f_jit 的 `cjpm.toml` 需增 `fountain::f_data` 依赖（M3 起点）；加载器对解析失败的防御拒绝 |
 
-| M3-6 | **JSON helper 编号冲突**：m3 §11 写 H72/H73/H74（「编号接 H71」），但 M1 v0.18.19 已占用 **H72 = `regex_replace_range`**（m1 §6 行 609）| 已登记；**实施前请用户裁定**（推荐 JSON 面顺延为 **H73/H74/H75**，m3 规格「接 H71」措辞一并订正）；未裁定前本文/计划按规格原文（H72–H74）引用 |
+| M3-6 | **JSON helper 编号冲突**：m3 §11 写 H72/H73/H74（「编号接 H71」），但 M1 v0.18.19 已占用 **H72 = `regex_replace_range`**（m1 §6 行 609）| **已裁定并实施（2026-10-11）**：JSON 面顺延 **H73/H74/H75**；m3 规格「编号接 H71」已订正为「编号顺延」；本文与 plan-m3 已同步 |
 | M3-7 | 错误码 22 与 7 的边界实施复核（m3 §12-6："若实现中 7 的覆盖面实际重叠，实施时复核"） | 复核钩；本设计维持**分列**裁定 |
