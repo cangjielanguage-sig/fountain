@@ -401,7 +401,9 @@
 |---|---|---|---|---|
 | `TokenKind` / `Token` | enum / struct | 词法单元 | — | §8.0、§8.5、§8.8 |
 | `Lexer` | class | 词法分析（三形态字符串、嵌套注释、正则字面量、词法保护顺序） | Token | §8.5、§8.8 |
-| `AstExpr` / `AstStmt` / `LambdaAst` | enum / enum / class | 语法树 | Token | §8.0 |
+| `AstExpr` / `AstStmt` | enum / enum | 语法树（表达式 / 语句节点；载荷可递归） | Token | §8.0 |
+| `LambdaAst` / `ParamAst` | struct / struct | lambda 与形参骨架（记录型纯数据、值语义） | Token、TypeRef | §8.0 |
+| `TypeRef` | enum（M1 仅 `Builtin`） | 类型注解节点（M1 内建/容器类型名；M2 追加 `HostClosureT`/`HostObjectT`、M3 追加 `AnyT`） | — | §11.7、m2 §3、m3 §3 |
 | `Parser` | class | lambda 源入口语法 | Ast* | §8.0 |
 | `NameResolver` | class | 调用点解析（recursive → user helper → 未注册错误） | Token、注册表快照 | §8.4 |
 | `DefiniteAssignment` | class | 明确赋值与空安全数据流（回边不动点） | Ast*、LocalTypes | §7 校验 10、§5 |
@@ -452,6 +454,8 @@
 | `LambdaAst.params: Array<ParamAst>`（name + 类型注解 + 槽位 + `pos`）、`body: Array<AstStmt>`、`retExpr: ?AstExpr` | 源入口顶层 lambda（隐式返回 = 尾表达式） |
 | `AstExpr.pos` / `AstStmt.pos` / `ParamAst.pos: SourcePos` | **行信息不丢**：节点位置取自**首 Token**（解析器填），驱动 `BytecodeBuilder.setSite`/`bail(code, pos)` 与编译期诊断（`SourceCompileException.line/column/lineText`） |
 | 位置链（贯穿到运行期） | `Token.pos/line/column` → `Ast*.pos` → `setSite` 发射 `SET_SITE` → `SiteTable`（随 `.fbc` 与 JIT 产物走）→ 运行期报告按 `ctx.site` 反查行号 + `NameTable` 补变量名（§9.16、T50） |
+| `ParamAst`（struct） | 形参：`name: String`、`typeAnn: TypeRef`、`slot: Int64`（参数槽序，`locals[slot]`）、`pos: SourcePos` |
+| `TypeRef`（enum；M1 仅 `Builtin(name: String)`） | 类型注解节点（`Decl.typeAnn` 与形参的载体）：M1 只解析内建类型名与容器名（`Int64` / `String` / `List<Int64>`…——元素类型是前端静态知识，§11.7）；M2 追加 `HostClosureT`/`HostObjectT`、M3 追加 `AnyT`（m2 §3、m3 §3/R3.1） |
 | `AstExpr` 构造器（enum；**载荷递归合法**——语言文档 `enum.md` 明确 enum 支持递归定义） | `Lit(tok: Token)`（字面值原样携带 token，数值/Decimal 判定留到降低期） / `Var(name: String)` / `Binary(op: TokenKind, l: AstExpr, r: AstExpr)` / `Unary(op: TokenKind, x: AstExpr)` / `IfExpr(cond: AstExpr, thenE: AstExpr, elseE: AstExpr)`（值用法，else 必需） / `Call(target: AstExpr, args: Array<AstExpr>)` / `Closure(lambda: LambdaAst)` / `IIFE(closure: AstExpr, args: Array<AstExpr>)` / `Interp(parts: Array<AstExpr>)` / `StrAdd(l: AstExpr, r: AstExpr)` / `RegexOp(kind: TokenKind, re: AstExpr, s: AstExpr, r: ?AstExpr, n: ?Int64, m: ?Int64)` / `RangeLit(start: AstExpr, end: AstExpr, step: ?AstExpr, isClosed: Bool)` / `ListLit(elems: Array<AstExpr>, isEmpty: Bool)` / `MapLit(pairs: Array<(AstExpr, AstExpr)>, isEmpty: Bool)` / `TupleLit(elems: Array<AstExpr>)` / `RecursiveValue` / `MemberName`（M2 糖预留——M1 解析器不生成该构造器） |
 | `AstStmt` 构造器（enum） | `Decl(name: String, typeAnn: ?TypeRef, init: AstExpr)` / `Assign(lhs: AstExpr, rhs: AstExpr)` / `MultiAssign(lhs: Array<AstExpr>, rhs: Array<AstExpr>)` / `If(cond: AstExpr, thenS: AstStmt, elseS: ?AstStmt)` / `While(cond: AstExpr, body: AstStmt)` / `ForIn(binding: Array<String>, iterable: AstExpr, where: ?AstExpr, body: AstStmt)`（`for (x in …)` = 1 个绑定名；`for ((k, v) in map)` = 2 个） / `Return(value: ?AstExpr)` / `ExprStmt(e: AstExpr)` / `Block(stmts: Array<AstStmt>)` |
 | **形态与记法**（设计约定） | ① AST 是**纯数据**：`AstExpr`/`AstStmt` 用 **enum**（只带载荷构造器、做穷尽 `match`，可递归定义）、`LambdaAst`/`ParamAst` 用 **struct**（记录型骨架、值语义、无身份）；② **可选类型一律前缀 `?T`**（`?AstExpr`、`?Int64`、`?TypeRef`）——仓颉**没有** `T?` 后缀写法、也没有 `标识符?`（表示「可缺省」）的记法，原稿的 `step?`/`where?`/`e?`/`type?`/`r?`/`n?`/`m?`/`MemberName?` 属简写，已按合法写法改写；③ 数组一律写 `Array<T>`（原稿 `lhs[]` = `Array<AstExpr>`）；④ 构造器字段名与顺序即解析器填值顺序，`pos` 见上表。 |
