@@ -1,5 +1,7 @@
 数据库中间件
 ---
+## 前置任务
+加载技能using-git-worktrees，创建新的worktree
 
 ## 模块定义
 在fountain项目下面创建两个新的文件夹`f_dbd`和`fdbm`作为本项目新的仓颉模块。
@@ -74,6 +76,7 @@ category = ["Data Encapsulation and Transfer", "Database Driver", "Database Fram
 ### 功能
 #### 数据库节点配置
 ```
+export fdbm_port=8112 # fdbm进程监听的端口号，默认是8112
 export fdbm_db='name0@host1:port;name2@host2:port;name3@host3:port;...' 
 # 这是各个数据库节点，各个节点用分号隔开
 # @前面的是中间件为节点名，不是数据库名
@@ -274,6 +277,7 @@ category = ["Data Encapsulation and Transfer", "Database Driver", "Database Fram
      - username password支持%编码
    - 同样支持从open函数的opts参数传递username和password
 2. 提供多fdbm负载均衡。
+- 
 - 实现`public class MultiD <: Driver`
 ```cj
 import std.database.sql.*
@@ -295,8 +299,9 @@ public class MultiD <: Driver {
         }
     }
     public func open(connectionString: String, opts: Array<(String, String)>): Datasource {
-        //connectionString: multidbm://username1:password1@host1:port1,username1:password1@host2:port2/database_name
+        //connectionString: multidbm://username1:password1@host1:port1,username2:password2@host2:port2/database_name
         //用户名密码支持%编码
+        //也支持使用opts参数传递用户名和密码，此时每个fdbm服务节点的用户名和密码必须都是一样的
     }
 }
 public class MultiDatasource <: Datasource {
