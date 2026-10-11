@@ -1,6 +1,6 @@
 # f_jit 详细设计 · M3 增量（verMajor 3：Any 通道 · JSON 字面量 · CALL_HOST 转发特化）
 
-> 依据：`jit-bytecode-m3.md` v0.3.14（同目录）。本文只写 **M3 的增量与受影响面**；未提及的包、声明、成员一律沿用 `design-m1.md` / `design-m2.md`。
+> 依据：`jit-bytecode-m3.md` v0.3.16（同目录）。本文只写 **M3 的增量与受影响面**；未提及的包、声明、成员一律沿用 `design-m1.md` / `design-m2.md`。
 > 版本口径：`.fbc` **verMajor 3**（verMinor 0）；M1/M2 产物按各自规则集运行，语义**完全不变**。
 > 三个专项：① **Any 通道**（§0–§10）；② **JSON 字面量**（§11，含世界内可变 API）；③ **CALL_HOST 转发特化**（§13，纯加速、语义零变更）。
 > 附录（文末）：**M3 增量三表**（附 A 语法 → 字节码 · 附 B 指令定义增量 · 附 C 字节码 ↔ 机器码增量）；M1 全量三表见 `design-m1.md` 附录。
@@ -39,7 +39,7 @@
 |---|---|---|---|
 | `base` | — | `LocalType`（+15）、`TypeToken`（+12）、`ErrCode`（+22 与描述） | 其余全部 |
 | `bytecode` | — | `ConstKind`（+11）、`ConstPayload`（+`PJson`）、`ConstRegistry`（+`addJson`）、`FbcReader`（kind 11 解析/校验 + verMajor 3 规则集） | 容器头、段模型（kind 11 载荷 = u32 长度 + UTF-8 字节，与 kind 3 同构） |
-| `compiler` | — | `AstExpr`（+ JSON 字面/下标读写/`is`/`as`/`any_box` 形态）、`Lowerer`（装箱插入点/拆箱问答/JSON 发射）、`Lexer`（反引号段与直写段保护）、`TypeRef`（`AnyT`） | 其余降低模式 |
+| `compiler` | — | `AstExpr`（+ JSON 字面/下标读写/`is`/`as`/`any_box` 形态）、`Lowerer`（装箱插入点/拆箱问答/JSON 发射）、`Lexer`（反引号 JSON 段保护）、`TypeRef`（`AnyT`） | 其余降低模式 |
 | `runtime` | `SignatureTable`、`SignaturePlan` | `HandleTable`（条目 +`frozen` 标记）、H66/H67/H68/H73/H74/H75（顶层 @C func）、`HostCallback`（+`plan`）、`IterTable`（不变） | ctx、迭代器、既有 helper |
 | 根包 | — | `CallMarshal`（+Any 参数/返回行）、`CompilePipeline`（特化表接入）、`JitFunction`（无新公共成员） | 六步/卸载/去重 |
 
@@ -79,8 +79,8 @@
 |---|---|---|---|
 | `TypeRef` | `+ AnyT` | `Any` 可声明为局部/参数/返回（15）；HostObject 字段**不扩展**至 15 | m3 §3/§12-4 |
 | `AstExpr` | `+ AnyBox(e, typecode)`、`AnyIs(e, target)`、`AnyAs(e, target)`、`JsonLit(raw, shape)`、`JsonIndexGet(obj, key)`、`JsonIndexSet(obj, key, v)` | 装箱/问答/JSON 字面与下标读写的 AST 形态 | m3 §3/§11 |
-| `Lexer` | 反引号 JSON 段与直写 JSON 段的**词法保护** | 段取界 = JSON 字符串感知 + 括号配平（`{"a":"}"}`、`["]"]`、嵌套 `[{…}]` 正确取界）；段内 `//`、`/*`、引号、`{`、`}`、**行首锚定标记**（§8.8）不参与注释识别与配对；换行规范化 CRLF/CR→`\n`（两形态统一） | m3 §11 |
-| `Lexer` / `Parser` | 直写形态消歧 | `{`：首个非空白字符为 `"`/`}` → JSON 对象；否则闭包字面量（`{` 与首个成员间不允许注释）；`[`：表达式起始 → JSON 数组，操作数之后 → 下标语法；**空形态重叠以静态类型上下文定夺**（期望 `Map`/`List` → M1 空构造；期望 JSON 类型 → 空 JSON 对象/数组） | m3 §11 v0.3.3 |
+| `Lexer` | **反引号 JSON 段**的**词法保护** | 段取界 = JSON 字符串感知 + 括号配平（`{"a":"}"}`、`["]"]`、嵌套 `[{…}]` 正确取界）；段内 `//`、`/*`、引号、`{`、`}`、**行首锚定标记**（§8.8）不参与注释识别与配对；换行规范化 CRLF/CR→`\n` | m3 §11 |
+| `Lexer` / `Parser` | `{` / `[` **原义保持（无消歧）**——**订正（2026-10-12）**：撤销 v0.3「直写形态」，JSON 只能经反引号书写 | `{ args => body }` = 闭包字面量；`{}` = M1 空 Map 构造；`[…]`（表达式起始）= 列表字面值；`list[i]`/`map[k]` = 下标语法——**不存在「闭包 vs JSON」判定与空形态上下文定夺**；负向：非闭包形态的 `{ "a" : 1 }` → 语法错误 | m3 §11 v0.3.16 |
 | `Parser` / `Lowerer` | 顶层结构静态类型 | `{`→`JsonObject`、`[`→`JsonArray`（编译期标注；子类名 = 前端静态知识）；**标量顶层 → 编译错误**（仅作元素） | m3 §11/§12-8① |
 | `Lowerer` | **装箱插入点**（类型驱动，全部静态可知） | ① 赋值/初始化 Any 槽；② Any 参数实参；③ Any 返回；④ 容器元素类型为 Any 的写入前（`LIST_APPEND/LIST_SET/LIST_INSERT/MAP_PUT`）——异构容器的实现基础 | m3 §3 |
 | `Lowerer` | **拆箱与问答** | `expr is T` / `expr as T`（T ∈ 可转集，程序 15）：左 15 → H67/H68；左非 15 → 按静态类型关系（上行零操作；不相容 → 编译错误）；`as T` 结果类型 = T（可继续参与 T 的既有运算——「先 as 后算」唯一计算路径）；`as <宿主类>` 携类身份（typecode=14 + aux=typeRef） | m3 §3 |
@@ -165,11 +165,11 @@
 ### 7.2 JSON 字面量编译/加载流
 
 ```
-词法（两形态等价）: 反引号 `…`  /  直写 {…}、[…]
+词法（唯一形态）: 反引号 `…`
   → 词法保护段（JSON 字符串感知 + 括号配平）→ 换行规范化
   → 编译期按 JSON 语法解析一遍（非法 → 源编译错误，含位置）
-  → 静态类型：{→JsonObject / [→JsonArray（标量顶层 → 编译错误）
-  → 发射：非空字面值 → kind 11 常量（PUSH_KH）；空形态（JSON 上下文）→ H75 json_new
+  → 静态类型：体首 {→JsonObject / [→JsonArray（标量顶层 → 编译错误）
+  → 发射：非空字面值 → kind 11 常量（PUSH_KH）；空字面量（`` `{}` `` / `` `[]` ``）→ H75 json_new
 加载期: kind 11 → f_data.json 解析器实例化一次 → ConstTable（路径 A、不可变、frozen）
 访问: f_data.path 类型化 getter（预定义通道）；异构取值 → Any 盒 + is/as
 ```
@@ -234,6 +234,7 @@ H63: fetch → entry.plan（Layer B，验签时绑定）
 
 | M3-6 | **JSON helper 编号冲突**：m3 §11 写 H72/H73/H74（「编号接 H71」），但 M1 v0.18.19 已占用 **H72 = `regex_replace_range`**（m1 §6 行 609）| **已裁定并实施（2026-10-11）**：JSON 面顺延 **H73/H74/H75**；m3 规格「编号接 H71」已订正为「编号顺延」；本文与 plan-m3 已同步 |
 | M3-7 | 错误码 22 与 7 的边界实施复核（m3 §12-6："若实现中 7 的覆盖面实际重叠，实施时复核"） | 复核钩；本设计维持**分列**裁定 |
+| M3-8 | **JSON「直写形态」撤销（2026-10-12，用户订正）** | **已实施**：规格升 **v0.3.16**——JSON 只能经**反引号**书写（唯一形态）；`{`/`[` 保持 M1 原义（闭包字面量 / 空 Map / 列表字面值 / 下标），**不存在消歧与空形态上下文定夺**；v0.3.12 的「空形态 = 运行期构造（H75）」改锚到**反引号空字面量**（`` `{}` `` / `` `[]` ``），非空仍为常量。落点：本文 §1/§2/§7.2/附 A；plan-m3 R3.6/R3.7/R3.8/R4.8/R6.5；design-m1 附 A/附 C |
 
 ---
 
@@ -253,8 +254,7 @@ H63: fetch → entry.plan（Layer B，验签时绑定）
 | 类型描述符（H67/H68 的 2/3 实参） | — | `typecode` = 主类型码（LocalType）；`aux` = 容器附加码：List → 元素类型码、Map → `(键码 << 8) \| 值码`、其余 `0xFFFF`；**以 cell 形式压栈传递**（helper ABI 无立即数，同既有模式） | — | §5 |
 | 失败可继续的写法 | `if (a is T) { … a as T … }` | 先 `is` 后 `as`（盒不可变 ⇒ 两次判定一致）；`as` 自身即 fail-fast 单步路径 | H67/H68 | §3 |
 | JSON 字面量（反引号形态） | `` `{"k":1}` `` | 常量注册 **kind 11**（payload = u32 长度 + UTF-8 原始 JSON 字节，**同 kind 3 编码同构**）→ `PUSH_KH idx`；**加载期一次解析**为 `JsonObject` / `JsonArray`（路径 A 常量、**不可变**） | `0x16` | §11 |
-| JSON 字面量（直写形态） | `{…}` / `[…]`（多行常见） | **等价并存**（同一 kind 11 模型、无格式变更）；**词法消歧**：`{` 后首个非空白 ∈ {`"`, `}`} → JSON 对象、`[` 位于**表达式起始** → JSON 数组（否则按闭包字面量 / 下标原义——重叠形态以**静态类型上下文**定夺）；段内 `//`、`/*` 是 JSON 文本、**不识别源语言注释**；非法/未闭合 → **源编译错误** | `0x16` | §11 |
-| JSON 空形态（JSON 上下文类型） | `let o: JsonObject = {}`、`let a: JsonArray = []` | **运行期构造**（`json_new`，分配型；可变新值、**非常量**）——对齐 M1 空容器先例；非空字面值维持常量（只读） | H75 | §11 |
+| JSON 空字面量 | `` let o: JsonObject = `{}` ``、`` let a: JsonArray = `[]` `` | **运行期构造**（`json_new`，分配型；可变新值、**非常量**）——对齐 M1 空容器先例；非空字面值维持常量（只读） | H75 | §11 |
 | JSON 下标读 | `j[i]`（`JsonArray`: Int64 / `JsonObject`: String） | `json_get(h, key, mode)`——**条件分配型**；结果 = **Any 盒**：对象/数组元素 → 节点盒，标量元素 → 宿主值盒，JSON `null` → **`JsonNull.instance` 盒**（单例，非语言 `null`）；数组越界 **4** / 对象缺键 **5**；索引类型不符 / 对标量节点下标 → **编译错误** | H73 | §11 |
 | JSON 下标写 | `j[i] = v` | `json_set(h, key, typecode, v)`——**变更型**（对象 = upsert；数组 = 仅既有下标、越界 **4** 不自动扩展）；`v` ∈ 值型 0–3（除 Unit）/ String / 14 节点；**frozen 目标（从常量取出的子节点）→ 20**（frozen 经 H73 读与 H68 拆箱**传播**） | H74 | §11 |
 | JSON 标量顶层 | `123` / `"s"` / `true` / `null` 作字面量顶层 | **编译错误（不开放）**——标量仅作元素存在（顶层恒为对象/数组） | — | §11 |
