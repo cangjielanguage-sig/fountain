@@ -786,10 +786,10 @@ extend JitFunction {
 }
 ```
 
-**支撑类型**：
+**支撑类型**（本模块异常统一继承仓库基类 `fountain::f_base.BaseException`；按 `import fountain::f_base.BaseException` 引入）：
 
 ```cangjie
-public class JitException <: Exception {
+public class JitException <: BaseException {
     public let code: Int64          // §2 错误码
     public let site: Int64          // 字节码偏移，-1 表示未知
     public let fnId: Int64
@@ -1072,7 +1072,7 @@ public class PredefinedFunction {
 }
 
 /// 编译期诊断异常（不占用 §2 运行期错误码——compile 失败"不涉及运行期错误槽"，§8）
-public class SourceCompileException <: Exception {
+public class SourceCompileException <: BaseException {
     public let kind: String      // UnregisteredFunction | UndefinedIdentifier |
                                  // BadParameterList | MissingArrow | DuplicateRegistration | ...
     public let position: Int64   // 源码字节位置

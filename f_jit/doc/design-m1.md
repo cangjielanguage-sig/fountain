@@ -140,7 +140,7 @@
 | `let message: String` | 按 code + site 静态表组装 + 源码行与变量（名/值/类型）报告 | 三类异常文本（① 无行号 ② 有行号 ③ 完整报告） |
 | `let cause: ?String` | code=99 时 helper 原始描述（M2 起 21 含完整仓颉栈） | 诊断打印 |
 
-**继承**：`JitException <: fountain::f_base.BaseException`（`public open class BaseException <: Exception`，定义见 `f_base/src/BaseException.cj`）——① 宿主可 `catch (e: BaseException)` 与其它 fountain 模块统一处理；② 报告文本即基类 `message` 语义（构造时 `super(message)` 转发），`code/site/fnId/sourcePos/cause` 为本类自有字段；③ 基类另提供 `init(caused: Exception)` / `init(message: String, caused: Exception)` 变体，本期不需要（M2 若要挂接原始仓颉异常再取用）。
+**继承**：`JitException <: fountain::f_base.BaseException`（`public open class BaseException <: Exception`，定义见 `f_base/src/BaseException.cj`）——① 宿主可 `catch (e: BaseException)` 与其它 fountain 模块统一处理（`fountain::f_exception` 对该基类有 `public import` 再导出，两种 import 路径等价；本模块统一用 `f_base`）；② 报告文本即基类 `message` 语义（构造时 `super(message)` 转发），`code/site/fnId/sourcePos/cause` 为本类自有字段；③ 基类另提供 `init(caused: Exception)` / `init(message: String, caused: Exception)` 变体，本期不需要（M2 若要挂接原始仓颉异常再取用）。
 
 #### 2.3.2 `SourceCompileException`
 
@@ -798,4 +798,4 @@ Ready --CAS--> Unloading（拒绝新调用；活跃调用照常完成）--active
 | D4 | `CompileCache` 的进程级宿主 | 规格为「进程级编译缓存」；设计放根包（static 单例），卸载与去重协议同一处维护 |
 | D5 | 指纹算法 | 源码指纹/字节码指纹算法与常量 `constFingerprint`（FNV-1a）分开：前者用于去重键，规格未固化算法——建议 FNV-1a 同款，实施时裁定 |
 | D6 | `Engine` 公开性 | 规格未列；为测试/诊断需要（T7/T9 断言）设为 public |
-| D7 | **异常基类**：规格 §8 声明 `public class JitException <: Exception`（行 792）与 `public class SourceCompileException <: Exception`（行 1075）；本设计改为 `<: fountain::f_base.BaseException`（统一基类，2026-10-11 裁定） | 规格是否同步（改 2 处声明 + 受其影响的 §8/§9 文本）由用户定；设计与计划已按 `BaseException` 表述，`base` 包外部依赖已补 f_base |
+| D7 | **异常基类（已结案）**：规格 §8 原声明 `<: Exception`（行 792/1075），2026-10-11 裁定统一改用仓库基类 `fountain::f_base.BaseException`——**规格已同步落笔**（`<: BaseException` + 支撑类型段说明），设计与计划同步 | 无需再裁定；`base` 包外部依赖补 f_base；`fountain::f_exception` 对该基类有 `public import` 再导出，两种 import 路径等价 |
