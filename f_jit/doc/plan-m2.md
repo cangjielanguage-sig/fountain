@@ -80,7 +80,7 @@
 | Q4.3 | `SignatureVerifier.cached` | 同对象二次验证复用（幂等计数断言） | 条目缓存 | T30 |
 | Q4.4 | `HostCallback`（fn/sig） | 条目构造/字段保真；pin 同对象同 ID | class | T30 |
 | Q4.5 | H63 `host_call_trampoline`（基础） | 栈底 fetch（tag≠10 → 8）；逐参转换（值型/句柄型/14）；调用 fn；值型返回原值、引用型登记 1 槽（hwTop 断言）；**含 CALL_HOST → `flags.bit0` + deopt 源汇编期禁令（拒绝用例）+ 防御 -1 → 99 联测** | helper 实现 | T31 |
-| Q4.6 | H63 异常与重入 | fn 抛异常 → 21 + cause（完整栈、桥打印）+ site=CALL_HOST 偏移；重入（闭包内再调 JIT，深度 ≥3）：独立事务（独立 errCode/site/窗口），内层错误不影响外层 | catch-all + 新 ctx | T31/T60 |
+| Q4.6 | H63 异常与重入 | fn 抛异常 → 21 + cause（完整栈、桥打印）+ site=CALL_HOST 偏移；重入（闭包内再调 JIT，深度 ≥3）：独立事务（独立 errCode/site/窗口），内层错误不影响外层；**新 ctx 的分配/释放沿用 design-m1 §5.3.1 选型（`LibC.malloc/free`）** | catch-all + 新 ctx | T31/T60 |
 | Q4.7 | H64 `host_get_field` | 值型直取零登记、句柄型登记 1 槽；obj tag≠11 → 8；index 防御 → 99 | 字段表访问 | T35 |
 | Q4.8 | H65 `host_set_field` | 值型/句柄型写；宿主侧可见（同一对象）；`mutable=false` → 19；obj tag≠11 → 8；**不登记槽**；变更型标记（含其函数 flags.bit0 联测） | 变更型 helper | T35 |
 | Q4.9 | `PromotionGroup` | `add` 幂等计数（双闭包共享捕获 → 计数 2）；`release` 归零释放（gen+1）；`contains`；常量不入组；try/finally 豁免（清单判定） | 组清单 | T49 |

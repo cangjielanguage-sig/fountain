@@ -234,7 +234,7 @@
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
 | `init(f: JitFunction, cf: CFunc)` | 绑定单元 + 闭包 ID（单元弱语义：不阻止卸载） | `CallMarshal` 解包 retType=12 时产出 |
-| `func call<T>(args: Array<Any>): T` | 调用 = 新桥调用（新 ctx + `locals[0]` = 闭包句柄 → 闭包帧格式）；结果/错误码/site 与直接 `CALL_CLOSURE` 逐位一致；卸载后调用 → 19（site=-1） | m2 §14.3/§14.4 |
+| `func call<T>(args: Array<Any>): T` | 调用 = 新桥调用（新 ctx + `locals[0]` = 闭包句柄 → 闭包帧格式）；结果/错误码/site 与直接 `CALL_CLOSURE` 逐位一致；卸载后调用 → 19（site=-1）；**新 ctx 的分配/释放沿用 M1 选型 `std.core.LibC.malloc<T>` / `LibC.free<T>`**（design-m1 §5.3.1） | m2 §14.3/§14.4 |
 | `func close(): Unit` | **必须显式调用**：提升组计数 −1、归零释放（gen+1 可复用）；幂等 | m2 §14.2/§14.3 |
 | `prop isClosed: Bool` | 状态（close 后调用 → 19） | — |
 

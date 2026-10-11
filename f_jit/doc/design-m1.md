@@ -46,7 +46,7 @@
 2. **共享契约沉到 `base`**：避免根包与子包之间的循环依赖（仓颉禁止）——所有被 ≥2 个包引用的类型放 `base`/`bytecode`，上层包只向下依赖。
 3. **根包只做门面与桥**：`fountain::f_jit` 不承载执行逻辑，仅编排（管线/缓存/Marshal/卸载）并 `public import` 再导出用户面声明。
 4. **`LocalType` / `ErrCode` / `TypeToken` 用「命名空间类 + static const」**：规格示例即 `LocalType.I64`（§8.4）；同时提供 `name()`/`isHandle()`/`describe()` 查询函数，避免散落魔法数字。
-5. **ctx 用非托管内存承载、以访问器类包装**：ctx 必须 64 B 且不得移动（§4），Cangjie struct 布局不承诺逐字节映射 ⇒ `JitContext` 内部持 `CPointer<Int64>`，按规范偏移读写。
+5. **ctx 用非托管内存承载、以访问器类包装**：ctx 必须 64 B 且不得移动（§4），Cangjie struct 布局不承诺逐字节映射 ⇒ `JitContext` 内部持 `CPointer<Int64>`，按规范偏移读写。非托管内存的分配/释放选型与理由（`std.core.LibC.malloc<T>` / `LibC.free<T>`；`acquireArrayRawData` 钉住方案不适用于跨整个调用的 ctx）见 §5.3.1 与 §9。
 6. **helper 一律「`@C` 薄入口 + 普通 Cangjie 实现」**：三引擎共用同一实现（I7 结构性成立），失败一律写错误码、绝不抛异常（I4）。
 
 ---
@@ -475,11 +475,18 @@
 
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
-| `static func create(hwBase: Int64, hwCap: Int64, fnId: Int64, dbgBase: Int64): JitContext` | 分配 64 B 非托管内存（malloc / acquireArrayRawData 配对）并初始化 | 桥三态收尾第 1 步 |
-| `static func free(ctx: JitContext): Unit` | 配对释放（finally 义务，T27） | 桥 finally |
+| `static func create(hwBase: Int64, hwCap: Int64, fnId: Int64, dbgBase: Int64): JitContext` | 分配 64 B 非托管内存（`LibC.malloc<Int64>(count: 8)`；实现选型与理由见下注）并初始化 | 桥三态收尾第 1 步 |
+| `static func free(ctx: JitContext): Unit` | 配对释放（`LibC.free<Int64>`；finally 义务，T27） | 桥 finally |
 | `var errCode: Int64`（off 0）/`site`（8）/`hwBase`（16）/`hwCap`（24）/`hwTop`（32）/`fnId`（40）/`flags`（48）/`dbgBase`（56） | 规范偏移访问器（机器码按同一偏移直接读写） | 全运行时 |
 | `func resetForCall()` / `func hwTop()` / `func dbgDumpOnce(fnId, locals)` | 复位 / 记账 / 单次转储触发 | 桥、BAIL 块降级实现 |
 | `func cp(): CPointer<Int64>` | 传给机器码的裸指针（rdi / x0） | 桥入口 |
+
+**实现选型与理由（ctx 与转储缓冲是全过程仅有的两块 GC 管辖外内存）**：
+
+- **用 `std.core.LibC.malloc<T>` / `LibC.free<T>`**（`public static func malloc<T>(count!: Int64 = 1): CPointer<T> where T <: CType`，std.core 隐式可用）：ctx = `LibC.malloc<Int64>(count: 8)`（8 × 8 B = 64 B，与 `cp(): CPointer<Int64>` 同型；等价写法 `LibC.malloc<UInt8>(count: 64)`）；转储缓冲 = `LibC.malloc<Int64>(count: 2 + maxNLocals)`。**免自声明 `foreign func malloc/free`**；malloc 返回块满足 ≥ 16 B 对齐（满足 §1 对 ctx 的对齐要求）。
+- **不采用 `acquireArrayRawData` / `releaseArrayRawData` 钉住 `Array<UInt8>`**：std.core 文档明确「指针的获取和释放之间**仅可包含简单的 foreign C 函数调用等逻辑，不构造例如 `CString` 等的仓颉对象**，否则可能造成不可预期现象」——ctx/转储缓冲的生命周期跨**整个调用事务**，其间全部 helper 都是普通仓颉实现、必然构造对象并触发 GC，直接违反该窗口约束。仓库内 `acquireArrayRawData` 的既有用法也都是「短窗口 + 立即释放」（如 `f_io` 的 `BytePointerStream.access` 用 try/finally 包住一次指针操作），与本场景不匹配。
+- **释放点不变**：仍在桥的 `finally`（`call<T>` 第 6 步；与 B pin / C 窗口 / D 逃逸槽同一次收尾），正常/错误码/DEOPT/-2/Marshal 失败全路径必须配对（T27 的 malloc/free 计数断言）。std.core 的 `CPointerResource`（`try (r = …)`）可把释放做成块级，语义与 finally 等价，实施时二选一。
+- **失败面**：入参为负 → `IllegalArgumentException`（本设计为编译期常量，不会触发）；其余以 std 文档为准（实施时补一条诊断测试）。
 
 #### 5.3.2 `HandleTable`（class，用户可见）
 
@@ -538,7 +545,7 @@
 |---|---|---|
 | `static func writeOnce(ctx: JitContext, fnId: Int64, nLocals: Int64, locals: CPointer<Int64>): Unit` | fail-fast 收敛点单次转储（首格哨兵；最深失败帧获胜；DEOPT 不转储；`dbgBase=0` 跳过） | `BAIL`/`CHECK_ERR` 降级块（backend 生成） |
 | `static func report(code: Int64, site: Int64, fnId: Int64, dir: FuncDir, types: LocalTypes, siteTable: SiteTable, nameTable: NameTable, dump: CPointer<Int64>): String` | 组装报告：源码行 + 变量清单（名/类型/值：值型按 §11.9 文本化、句柄型 `<类型名>#idx`、无名槽省略名字） | 桥抛出前 |
-| `static func allocateDump(maxNLocals: Int64): CPointer<Int64>` / `freeDump(p)` | `(2+maxNLocals)×8` 非托管缓冲（首格清零） | 桥三态收尾第 1 步 / finally |
+| `static func allocateDump(maxNLocals: Int64): CPointer<Int64>` / `freeDump(p)` | `(2+maxNLocals)×8` 非托管缓冲（首格清零）；分配/释放同 §5.3.1 选型（`LibC.malloc<Int64>` / `LibC.free<Int64>`） | 桥三态收尾第 1 步 / finally |
 
 #### 5.3.6 `Interp`（class）
 
@@ -769,6 +776,7 @@ Ready --CAS--> Unloading（拒绝新调用；活跃调用照常完成）--active
 | 6 个包（base/bytecode/compiler/runtime/backend/根） | 单包 / 按对象分（loader/assembler/interp/jit/marshal 各一包） | 按「正确性论证方式」分包：格式（bytecode）、编译期诊断（compiler）、解释语义（runtime）、差分（backend）——测试与回归边界清晰；再细则共享契约会散落 |
 | `LocalType/ErrCode/TypeToken/HelperId/Version` 用类+`static const` | 顶层常量 / enum | 规格示例 `LocalType.I64` 与 §10.3 顶层 `CAT_*` 并存：命名空间类给出可点号访问的常量，且可挂 `name()/isHandle()` 查询；避免 250+ 顶层常量污染导入 |
 | ctx 用 `CPointer<Int64>` 访问器承载 | `struct` 直映射 | 机器码要求 64 B 且不得移动（§4）；Cangjie 布局不承诺逐字节 ⇒ 显式访问器 + 非托管分配 |
+| ctx/转储缓冲的非托管内存用 `std.core.LibC.malloc<T>` / `LibC.free<T>` | ① `foreign func malloc/free`；② `acquireArrayRawData` 钉住 `Array<UInt8>` | ① std.core 原生 API、免自声明 FFI；② 钉住方案被 std 文档窗口约束排除（获取与释放之间不得构造仓颉对象，而 ctx 跨整个调用、helper 必分配并触发 GC）；③ malloc 满足 16 B 对齐；释放仍走桥 finally（T27 计数断言）——详见 §5.3.1 |
 | helper 以顶层 `@C` 函数实现 | 集中在一个 class | 与机器码 trampoline 静态链接（符号可见性简单）；三引擎共用同一实现（I7） |
 | `JitFunction` 不拆「Interp 版 / JIT 版」子类 | 两个子类 | 引擎是运行时状态（卸载/诊断/测试都按同一句柄）；单类 + 可选 artifacts 最简 |
 | 编译缓存/适配器注册表放根包 | 放 runtime | 它们是「桥的进程级资产」（宿主侧锁、与卸载/缓存语义耦合），非执行期机制 |
