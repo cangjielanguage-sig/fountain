@@ -42,6 +42,8 @@
 | `83b55f87` | `fix(f_base): FT-4 二次决策：getOrSet/getOrCompute 改用二段检查锁（只算一次）` |
 | `77488c97` | `docs(f_base): 回填 FT-4 的三个提交号与 19/19 总验证` |
 | `b7226c17` | `fix(f_base): FT-3 遗留收口：current() 类型无关化，异常可捕获` |
+| `a776708d` | `docs(f_base): FT-L1 前半（异常可见性）标记为随 b7226c17 已修` |
+| `e905ca9c` | `fix(f_base): FT-5 继承改走构造期固定的父链，父任务先结束不再切断继承` |
 
 **修后总验证（最终代码）**：worktree 内 `cjpm test` = `TOTAL: 26, PASSED: 26, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`；修前基线为 6 条既有用例全绿，本次累计新增 20 条用例）。探针（`.autocode/tmp/ftask_probe`，按 worktree 的 `f_base` 副本构建）：`EXP3`（父任务先结束的继承）由 `done:None` 10/10 变 **`done:Some` 10/10**、`EXP4B diff=true`、`EXP5 50/50`、`EXP9` 仍 `Some(7)`、`EXP10 500/500`、`EXP11` 父任务由 `Some(2)` 变 **`Some(1)`**、`EXP12` 消息由"没有任务"变为**说明泛型实参问题**、`EXP13 a==b 0/500`、`EXP15` 与 `EXP16` 均 100/100 轮整组取消、`EXP17` 由 `None` 变 **`Some(9)`**；`EXP6` 的 FT/spawn 比值为 12.9x / 13.4x（修前区间 12.9x ~ 13.9x）。未修的 `FT-6`（性能机会）与 `FT-L1` 后半、`FT-L2` 见对应条目。
 
