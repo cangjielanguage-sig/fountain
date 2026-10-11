@@ -48,13 +48,17 @@ public sealed abstract class AbstractFutureTask <: Hashable & Equatable<Abstract
     // 锁序固定为 local.initLock → task.localLock（无反向；Mutex 本身可重入）。
     private let localLock = Mutex()
     private var local: ?HashMap<AbstractInheritedTaskLocal, Any> = None
-    static let taskMap = ConcurrentHashMap<Int64, AbstractFutureTask>()
+    // FT-6 ④（bug-f_base.md §2.4 量化）："当前线程正在执行的任务"改由每线程缓存提供。
+    // 原实现是 taskMap[Thread.currentThread.id]（一次线程 id 读 + 一次并发 map 查，EXP18 实测 ~330ns/次），
+    // 换成本缓存后 ThreadLocal.get() 约 88~100ns（省 ~230ns/次）；同时任务线程在启动/结束时
+    // 也不必再各做一次并发 map 的 add/remove（子任务拆除路径上的两次共享结构写）。
+    // 由任务线程自己在启动时 set(task)、结束时 set(None) 清理；不在任务里的线程（main、普通 spawn）读到 None。
+    static let currentTask = ThreadLocal<AbstractFutureTask>()
     // FT-2（bug-f_base.md §1.2）：子任务登记表的**全部**访问（登记/注销/整体取走）共用这一把锁。
     // 原来保护它的是每个 FutureTask 实例自己的 mutex ⇒ 同一父任务的多个子任务之间毫无互斥，
     // 而 HashSet 不是线程安全的，父任务还会在迭代时被子任务并发 add/remove。
     static let subTasksLock = Mutex()
     static let subTasks = ConcurrentHashMap<Int64, HashSet<AbstractFutureTask>>()
-    protected let tid = AtomicInt64(0)
     // FT-6 ③（bug-f_base.md §2.4 量化）：本任务是否**登记过**子任务。
     // 没有子任务 ⇒ 自己的 tid 下不可能有桶（桶只由登记创建），结束时那次
     // shutdownCurrentSubThreads()（取锁 + 摘桶）可以整体短路 —— EXP18 实测该调用 ~3µs/任务，
@@ -65,7 +69,7 @@ public sealed abstract class AbstractFutureTask <: Hashable & Equatable<Abstract
     // FT-5（bug-f_base.md §2.3）：父任务是**构造期固定的树事实**，不随父任务结束而消失。
     // getLocal 的链式查找改走这条父链，于是"父任务先结束"不再切断继承；
     // 创建线程不是任务时（main 线程、普通 spawn 线程）为 None。
-    let parent: ?AbstractFutureTask = taskMap.get(Thread.currentThread.id)
+    let parent: ?AbstractFutureTask = currentTask.get()
     public func hashCode(): Int64 {
         taskId
     }
@@ -108,8 +112,9 @@ public sealed abstract class AbstractFutureTask <: Hashable & Equatable<Abstract
     }
     func getLocal<T>(local: AbstractInheritedTaskLocal): ?T {
         // FT-5：从「当前线程正在执行的任务」出发，沿构造期固定的父链上溯 ——
-        // 不再依赖父任务是否还在 taskMap 里，因此父任务先结束也能继承到它的值。
-        var current = taskMap.get(Thread.currentThread.id)
+        // 不依赖父任务是否还"在册"，因此父任务先结束也能继承到它的值。
+        // FT-6 ④：这一步取"当前任务"改读每线程缓存（原为 taskMap 查表，~330ns → ~90ns）
+        var current = currentTask.get()
         while(let Some(task) <- current){
             if(let Some(x: T) <- task.readLocalRaw(local)){
                 return x
@@ -190,7 +195,8 @@ public sealed abstract class AbstractFutureTask <: Hashable & Equatable<Abstract
     }
     // 不在任务里（main 线程、普通 spawn 线程等）返回 None —— 便于分支处理，不必用 try/catch 当控制流
     public static func currentOrNone(): ?AbstractFutureTask {
-        taskMap.get(Thread.currentThread.id)
+        // FT-6 ④：读每线程缓存（任务线程在启动/结束时维护，见 currentTask 字段）
+        currentTask.get()
     }
 }
 
@@ -218,13 +224,11 @@ public class FutureTask<T> <: AbstractFutureTask {
             creator.hasChildren = true
         }
         this.future = spawn{
-            let tid = Thread.currentThread.id
-            task.tid.store(tid)
-            taskMap.add(tid, task)
+            currentTask.set(task) // FT-6 ④：本线程的"当前任务"
             try{
                 fn()
             }finally{
-                taskMap.remove(tid)
+                currentTask.set(None<AbstractFutureTask>) // FT-6 ④：先摘掉本线程的"当前任务"，再清理登记
                 synchronized(subTasksLock){
                     if(let Some(set) <- subTasks.get(parentTID)){
                         set.remove(task)

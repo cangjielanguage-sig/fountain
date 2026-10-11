@@ -338,7 +338,7 @@ while(let Some(f: FutureTask<T>) <- itr.next()){
 |---|---|---|---|
 | ① `local` 惰性分配 | **3.6 ~ 5.2 µs/任务（11~16%）** | 必须定"懒建表"的并发方案（两线程同时建表会丢一侧写入 ⇒ 一次性发布，不能裸判空后 `add`） | **✅已修复（2026-10-11，与 ⑥ 一并实施，见下）** |
 | ③ 短路 `shutdownCurrentSubThreads()` | **~3 µs/任务（~9%）** | 只需一个"本任务是否登记过子任务"的线程局部标志/计数 | **✅已修复（2026-10-11，见下；实测 −1.6µs）** |
-| ④ 读路径缓存"当前任务" | **~300 ns/次读（~40%）** | 每任务 2 次 `ThreadLocal` 写（~0.2µs） | 读多场景做 |
+| ④ 读路径缓存"当前任务" | **~300 ns/次读（~40%）** | 每任务 2 次 `ThreadLocal` 写（~0.2µs） | **✅已修复（2026-10-11，见下；实测 −3.1µs/任务，读路径累计降到 ~300ns）** |
 | ⑤ 压缩记账 | **3 ~ 9.5 µs/任务** | 要把"子任务 teardown 动共享结构"改成"父任务收尾整体清理"，牵动 `FT-2`/`FT-5` 的边界与泄漏口径 | **单独立项**（改动面/风险最大） |
 | ⑥ `local` 换 `Mutex`+`HashMap` | 构造 ~4µs + 单次 op ~0.9µs | 读要从"无锁并发读"变成"加锁读"（并发语义变化） | **✅已修复（2026-10-11，与 ① 一并实施，见下）** |
 | ② 键哈希稳定 id / ⑦ 删 `mutex` | — | — | **✅ 已随 `FT-1` / `FT-2` 完成** |
@@ -364,6 +364,14 @@ while(let Some(f: FutureTask<T>) <- itr.next()){
 - 测量证据（EXP18，同进程）：端到端 `FutureTask<Int64>{1}` + `get()` **26.6 µs → 25.0 µs（−1.6 µs/任务）**（同批裸基线 2.6 ~ 2.7 µs）。
 - 行为探针复测（同一构建）：`EXP5` 50/50 被取消、`EXP15` 100 轮 4/4、`EXP16` 0/0/0/0/100、`EXP3` 10/10 `Some`、`EXP9` `Some(7)` —— 取消完整性与继承口径均未变。
 - 单测：`TOTAL: 28, PASSED: 28, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`）。
+
+**✅ 修复标记（2026-10-11，④ 读路径缓存"当前任务"，并移除 `taskMap`）**
+
+- 改动：`f_base/src/FutureTask.cj` —— 新增 `static let currentTask = ThreadLocal<AbstractFutureTask>()`（**包内可见**：`FutureTask<T>` 的构造与拆除要维护它；`private static` 在子类里不可见，编译期报 `can not access field 'currentTask'`）；`getLocal` 的起点、`currentOrNone()`、构造期的 `parent` 三处由 `taskMap.get(Thread.currentThread.id)` 改为 `currentTask.get()`；任务线程在 `spawn` 体内用 `set(task)` / `set(None)` 取代 `taskMap.add/remove`；**删除 `taskMap` 与只服务于它的 `protected let tid`**（`AbstractFutureTask` 是 `sealed`，删除不破坏外部子类）。
+- 用例：`f_base/src/FutureTask_test.cj` 新增 `testCurrentTaskCacheClearedForReusedThreads` —— 200 轮"先跑一个 `FutureTask`，再在同一线程池上跑普通 `spawn`"，后者必须读不到**已结束**的任务（钉住缓存清理；原 taskMap 版本靠 `remove` 保证同一点）。
+- 测量证据（EXP18，同进程）：端到端 `FutureTask<Int64>{1}` + `get()` **25.0 µs → 21.9 µs（−3.1 µs/任务）**；`currentOrNone()` **~330 ns → ~88 ns**；命中 `InheritedTaskLocal.get()` **~505 ns → ~298 ns**（累计 700~870 → ~300 ns）。−3.1µs 里除"省掉 ~240ns 的查表"外，还包含**移除 `taskMap` 带来的两次并发 map 写**（子任务启动/拆除各一次），故远大于单项预估的 ~0.3µs。
+- 行为探针复测（同一构建）：`EXP3` 10/10 `Some`、`EXP9` `Some(7)`、`EXP10` **500/500**（FT-1 语义保持）、`EXP11` 子 `Some(2)` / 父 `Some(1)`（FT-4 路线 2，判定依赖"当前任务"）、`EXP12` 异类型实参消息不变、`EXP17` `Some(9)`、`EXP5` 50/50 —— 全数不变。
+- 单测：`TOTAL: 29, PASSED: 29, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`）。
 
 ---
 

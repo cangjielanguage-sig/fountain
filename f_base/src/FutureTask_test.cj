@@ -394,6 +394,28 @@ public class FutureTask_test {
     }
 
     /*
+     * FT-6 ④ 守卫：任务结束后必须清掉本线程的"当前任务"缓存 ——
+     * 否则线程池复用的线程上，后续普通 spawn 的代码会读到**已结束**的任务
+     * （原 taskMap 版本靠 remove 保证这一点；换成每线程缓存后必须显式 set(None)）。
+     */
+    @TestCase
+    public func testCurrentTaskCacheClearedForReusedThreads(): Unit {
+        let stale = AtomicInt64(0)
+        for (_ in 0..200) {
+            let t = FutureTask<Int64>({ => 1 })
+            let _ = t.get()
+            let f = spawn { =>
+                if (AbstractFutureTask.currentOrNone().isSome()) {
+                    stale.fetchAdd(1)
+                }
+                0
+            }
+            let _ = f.get()
+        }
+        @Expect(stale.load(), 0)
+    }
+
+    /*
      * FT-6 ③ 守卫：叶子任务（不创建子任务）不会在自己的 tid 下留下桶 ——
      * "没登记过 ⇒ 没有桶"正是 teardown 短路清理（`hasChildren`）的正确性前提。
      */
