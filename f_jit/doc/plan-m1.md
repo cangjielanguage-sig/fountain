@@ -128,8 +128,8 @@ f_jit/
 | S3.1 | `TokenKind`、`Token`（kind/text/pos/line/column） | 各 kind 构造；位置字段正确（含多字节字符列号按码点） | enum + struct | 词法基座 |
 | S3.2 | `Lexer` 基础：`next/position/line/column` | 标识符/关键字（`recursive/let/var/if/else/while/for/in/where/break/continue/return/true/false/null`）/数字（含小数、指数、超 Int64 → 标记为 Decimal 候选）/标点/运算符（含 `!~` 单 token）；`=>`；EOF | 扫描器 + 关键字表 | 逐 token 断言 |
 | S3.3 | `Lexer` 字符串三形态 | 单行（`'…'`/`"…"`、转义、异种引号=内容）；多行（首行换行/首个非转义三连终止/单独 `\` → 错误 kind）；原始串（`#`×n 定界、verbatim、可跨行、未闭合 → 错误）；`'''` 最长匹配消歧；CRLF/CR→LF | 三形态合并扫描 + kind 错误 | T42 词法组 |
-| S3.4 | `Lexer` `>|` 锚定 | 进入判定（仅首个非空白位置标记触发）；无标记行整行保留；标记不进入产物（单独 `>|` → 空串）；`>>|`/`a>|b`/`|>|` 为内容；处理顺序（标记消耗→转义→插值） | 多行串后处理 | T42 锚定组 |
-| S3.5 | `Lexer` 注释与词法保护 | 单行/多行注释；`/* */` 嵌套配平；未闭合 → `UnterminatedComment`；字符串跨度内 `//`/`/*`/引号/`{`/`}`/`>|` 不参与；注释不影响 site 语义 | 保护 → 剥离 → 解析三阶段 | T24 注释组 |
+| S3.4 | `Lexer` `>\|` 锚定 | 进入判定（仅首个非空白位置标记触发）；无标记行整行保留；标记不进入产物（单独 `>\|` → 空串）；`>>\|`/`a>\|b`/`\|>\|` 为内容；处理顺序（标记消耗→转义→插值） | 多行串后处理 | T42 锚定组 |
+| S3.5 | `Lexer` 注释与词法保护 | 单行/多行注释；`/* */` 嵌套配平；未闭合 → `UnterminatedComment`；字符串跨度内 `//`/`/*`/引号/`{`/`}`/`>\|` 不参与；注释不影响 site 语义 | 保护 → 剥离 → 解析三阶段 | T24 注释组 |
 | S3.6 | `Lexer` 正则字面量 | `/pattern/flags`（flags 顺序无关、重复幂等、非法 flags → 14 语义的编译错误？否——非法 flags 加载期 14，前端词法仅切分）；字面量后紧贴 `/` 优先于注释识别（三书写形态）；`/` 除法消歧 | 正则段扫描 | T20/T26 词法组 |
 | S3.7 | `LambdaAst/AstExpr/AstStmt/Parser.parseLambda` | 全 AstExpr 构造器各一用例；形参（`name: Type`，不支持具名/默认；`=>` 必需，缺失 → `MissingArrow`）；尾表达式；嵌套闭包与 IIFE；`recursive` 调用表达式 | 递归下降 | T22 前置 |
 | S3.8 | `NameResolver`：`resolve` | `recursive` 优先；命中注册表 → `UserHelper(slot)`；未注册 → `UnregisteredFunction`（消息含名字/位置/已注册清单）；非调用未定义标识符 → `UndefinedIdentifier` | 名字表 + 冲突拒绝 | T23 前置 |
@@ -157,7 +157,7 @@ f_jit/
 | S4.3 | `HandleTable` 窗口：`append`、`hwTop==hwCap` 扩容、`capacityLimit` 封顶 | 扩容倍增（`hwCap ≤ 2*hwTop`）；容量上限触顶 → 16；`initialCapacity` 可调（调用前生效，进行中不追溯）；T10 前置 | 追加 + 倍增 | T10 |
 | S4.4 | `HandleTable.fetch`、`idxOf/tagOf/genOf` | null → 6；tag 不符 → 8；坏 idx → 6/99 防御 | 槽解析 | helper 公共前置 |
 | S4.5 | `HandleTable.escape/resetWindow/promote` + `EscapeArea` | 逃逸槽 ID 不变、重置不回收；非逃逸槽随重置失效；规则 6① 自动回收（窗口区间判定）；`gen+1` 可复用 | 逃逸区登记 | T14 |
-| S4.6 | `IterTable`：`open/next/key/value/close/clearAll` | 游标 `(gen<<32)|idx`；`next` 0/1 唯一终止来源；未推进取件 → 99；close 幂等；`clearAll` 后旧游标 → 99（gen 失效）；条目 ≤ 嵌套深度；不登记窗口槽 | 宿主侧调用级表 | T45 |
+| S4.6 | `IterTable`：`open/next/key/value/close/clearAll` | 游标 `(gen<<32)\|idx`；`next` 0/1 唯一终止来源；未推进取件 → 99；close 幂等；`clearAll` 后旧游标 → 99（gen 失效）；条目 ≤ 嵌套深度；不登记窗口槽 | 宿主侧调用级表 | T45 |
 | S4.7 | `HelperId`（常量+name） | 1–62、69–72 逐值；63–68 保留；name 非空 | 常量 | §8.4 hid 编码 |
 | S4.8 | H01–H08（容器/字符串读） | 逐 helper 正常值 + 失败码（越界 4、缺键 5、null 6、tag 8）；不登记槽（`hwTop` 不变断言） | 模板 helper | T18 前置 |
 | S4.9 | H09–H20（比较/判定） | 逐 helper：字符串/Decimal/DateTime/Duration 比较（禁止浮点中间值）；`h_ref_eq` 恒不失败；`h_guard` 6/8；`h_is_type` null→false | std 调用 + 转码 | — |

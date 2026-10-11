@@ -215,7 +215,7 @@
 | 成员 | 意义 |
 |---|---|
 | `func diag(level: DiagnosticLevel, message: String): Unit` | 降级/告警接收（Auto 降级、后端不可用、注册跳过等） |
-| `DiagnosticLevel` | `Info | Warn | Error`（规格「接口从略」处的细化） |
+| `DiagnosticLevel` | `Info \| Warn \| Error`（规格「接口从略」处的细化） |
 
 #### 2.3.8 `LocalType`（常量命名空间类）
 
@@ -410,7 +410,7 @@
 | `func position(): Int64` / `line(): Int64` / `column(): Int64` | 当前位置（诊断用） | `Parser`/错误构造 |
 | `Token.kind: TokenKind` / `.text: String` / `.pos: Int64` / `.line: Int64` / `.column: Int64` | 词法单元 | 全前端 |
 | `TokenKind` 关键构造器 | `Ident / IntLit / DecLit / F64Lit / StrLit(三形态归一) / RegexLit / Char? / KwRecursive / KwLet / KwVar / KwIf / KwElse / KwWhile / KwFor / KwIn / KwWhere / KwBreak / KwContinue / KwReturn / KwTrue / KwFalse / KwNull / Punct(…) / Operator(…) / EOF` 等 | 解析 |
-| 词法职责（实现约束） | ① 字符串保护（三形态全跨度）→ ② 注释剥离（`/* */` 嵌套配平）→ ③ 解析；换行规范化 CRLF/CR→LF；`>|` 锚定（多行串） | §8.5 冻结顺序、§8.8 |
+| 词法职责（实现约束） | ① 字符串保护（三形态全跨度）→ ② 注释剥离（`/* */` 嵌套配平）→ ③ 解析；换行规范化 CRLF/CR→LF；`>\|` 锚定（多行串） | §8.5 冻结顺序、§8.8 |
 
 #### 4.3.2 `AstExpr` / `AstStmt` / `LambdaAst`
 
@@ -426,7 +426,7 @@
 |---|---|---|
 | `init(snapshot: PredefinedSnapshot)` | 持注册表快照（快照语义 §8.4） | `SourceCompiler` |
 | `func resolve(name: String, pos: Token): ResolvedCall` | 顺序：`recursive` → 注册表（user helper）→ 未命中 `SourceCompileException(UnregisteredFunction)`；非调用未定义标识符 → `UndefinedIdentifier` | `Lowerer` |
-| `ResolvedCall` = `Recursive | UserHelper(slot: UInt16)` | 解析结果 | `Lowerer` 发射 `CALL_HELPER`（hid = slot + 0x0100） |
+| `ResolvedCall` = `Recursive \| UserHelper(slot: UInt16)` | 解析结果 | `Lowerer` 发射 `CALL_HELPER`（hid = slot + 0x0100） |
 
 #### 4.3.4 `DefiniteAssignment`（class）
 
@@ -533,7 +533,7 @@
 
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
-| `static func open(h: Int64, elementKind: UInt8): Int64` | 建立迭代器（游标 = `(gen<<32)|idx`），返回游标 | H49 `map_iter_begin` |
+| `static func open(h: Int64, elementKind: UInt8): Int64` | 建立迭代器（游标 = `(gen<<32)\|idx`），返回游标 | H49 `map_iter_begin` |
 | `static func next(cur: Int64): Bool` | 推进（0/1 为终止唯一判定来源） | H62 mode=0 |
 | `static func key(cur: Int64): Int64` / `value(cur: Int64): Int64` | 已推进后取键/值（相位校验：未推进取件 → 99） | H62 mode=1/2 |
 | `static func close(cur: Int64): Unit` | 关闭（幂等；出口发射） | H62 mode=3 |
@@ -620,9 +620,9 @@
 
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
-| `static func alloc(size: Int64): ?CodeBuffer` | `mmap(PROT_READ|PROT_WRITE)`；失败 → None（桥降级解释器，不报错） | `JitCompiler` |
+| `static func alloc(size: Int64): ?CodeBuffer` | `mmap(PROT_READ\|PROT_WRITE)`；失败 → None（桥降级解释器，不报错） | `JitCompiler` |
 | `func write(bytes: Array<UInt8>, off: Int64)` / `func patch(pos: Int64, bytes: Array<UInt8>)` | 写入/重定位补丁（布局期） | 后端 |
-| `func seal(): Bool` | `mprotect(PROT_READ|PROT_EXEC)`（W^X）+ I-cache 清理（aarch64 必需；x86 同接口） | `JitCompiler` |
+| `func seal(): Bool` | `mprotect(PROT_READ\|PROT_EXEC)`（W^X）+ I-cache 清理（aarch64 必需；x86 同接口） | `JitCompiler` |
 | `func flushICache()` / `func free()` | 缓存一致性 / `munmap`（T27/T4） | 卸载 |
 | `prop base: Int64` / `prop size: Int64` | 基址/长度 | 镜像烘焙、thunk |
 
