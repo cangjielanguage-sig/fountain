@@ -21,6 +21,7 @@
 | `f_config` | 配置模块 | 读环境变量/配置项 |
 | `f_crypto` | 加密模块 | 对称/非对称加密 |
 | `f_data` | 数据复制、字段验证注解、反射读写 | DTO 映射、参数校验 |
+| `f_dbpool` | 数据库连接池：`DatabasePool` / `PooledConnection`（自 `f_orm.wrap` 迁出，不读配置项，池参数显式传入） | 自己管理连接池参数、不经 f_orm 直接用池 |
 | `f_egraph` | 事件驱动的流程库 | 流程编排（f_llm 的基础） |
 | `f_exception` | 异常模块 | 自定义异常体系 |
 | `f_health` | 进程健康检查 | 健康检查接口 |
@@ -59,7 +60,7 @@
 | --- | --- | --- |
 | HTTP 接口 / REST / 路由 / 参数绑定 | `f_mvc` | `f_http`（底层格式）、`f_data`（参数校验） |
 | 依赖注入 | `f_bean` | — |
-| 数据库（连接池 / DAO / 事务） | `f_orm` | 驱动包（如 `postgres_driver`，第三方） |
+| 数据库（连接池 / DAO / 事务） | `f_orm` | 驱动包（如 `postgres_driver`，第三方）；只用连接池、要自己控参数时可直接用 `f_dbpool`（`DatabasePool` / `PooledConnection`，不读配置项） |
 | 日志 | `f_log` | — |
 | 配置读取 | `f_config` | — |
 | 登录认证 / 权限 | `f_jwt` + `f_security` | `f_mvc` 的 `@IgnoreSecurity` 等注解 |

@@ -397,8 +397,8 @@ f_mvc depends on f_config (direct dependency, 53.8 API references (not in top 3)
 f_mvc depends on f_crypto (direct dependency, 2 API references (not in top 3))</title></rect>
 <rect class="c" x="413" y="967" width="16" height="16" rx="3" fill="#9c8425" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_data（直接依赖，源码里已引用对方 API，引用 249 次（前三））
 f_mvc depends on f_data (direct dependency, 249 API references (top 3))</title></rect>
-<rect class="c" x="215" y="967" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_exception（直接依赖，源码里已引用对方 API，引用 2 次（未进前三））
-f_mvc depends on f_exception (direct dependency, 2 API references (not in top 3))</title></rect>
+<rect class="c" x="215" y="967" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_exception（直接依赖，源码里已引用对方 API，引用 3 次（未进前三））
+f_mvc depends on f_exception (direct dependency, 3 API references (not in top 3))</title></rect>
 <rect class="c" x="647" y="967" width="16" height="16" rx="3" fill="#e2e8f0" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_health（直接依赖，源码里已引用对方 API，引用 2 次（未进前三））
 f_mvc depends on f_health (direct dependency, 2 API references (not in top 3))</title></rect>
 <rect class="c" x="737" y="967" width="16" height="16" rx="3" fill="#bc9f2c" stroke="#ffffff" stroke-width="0.5"><title>f_mvc 依赖 f_http（直接依赖，源码里已引用对方 API，引用 171.9 次（前三））

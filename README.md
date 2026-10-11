@@ -339,3 +339,8 @@ RPC实现，服务自注册与发现，实现负载均衡、服务节点权重�
 liburing 的 FFI 封装，所有 API 仅 Linux 可用
 
 **详情请见：**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_uring/README.md>
+
+### `fountain::fboot`
+依赖fountain的应用项目启动程序
+
+**详情请见：**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/fboot/README.md>

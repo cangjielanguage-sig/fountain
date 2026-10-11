@@ -615,6 +615,14 @@ public interface RightShiftable<T> where T <: RightShiftable<T> {
    `set`/`remove` 只作用于**当前任务**这一层（只影响本任务及其后代；父任务与兄弟任务看不到；不在任务内部调用时回退到创建该 local 的任务）；
    `getOrSet`/`getOrCompute` 在整条链都没有值时写**创建该 local 的任务**（该任务及其整个子树的共享槽），并用**二段检查锁**（粒度 = 每个 local）保证并发调用方中只有一个会计算并写入、其余拿到同一个值；`fn` 在锁内执行（`Mutex` 可重入，`fn` 内再对同一 local 调用不会死锁）
 ```cj
+//FutureTask 相关异常：任务未被完全构造时调用 get/get(timeout)（少见：只能在任务体内第一时间触达），
+//以及 current()/FutureTask<T>.current() 取不到匹配任务时（不在任务里，或泛型实参不一致）抛出
+public class FutureTaskException <: BaseException {
+    public init()
+    public init(message: String)
+    public init(caused: Exception)
+    public init(message: String, caused: Exception)
+}
 public sealed abstract class AbstractFutureTask <: Hashable & Equatable<AbstractFutureTask>{
     public func hashCode(): Int64 
     public operator func ==(other: AbstractFutureTask): Bool 
@@ -660,7 +668,8 @@ public class InheritedTaskLocal<T> <: AbstractInheritedTaskLocal {
 
     public func get(): ?T 
 
-    public func remove(): Unit 
+    //删除当前任务这一层的值并返回它；那一层没有值则返回 None
+    public func remove(): ?T 
     public func getOrSet(value: T): T 
     public func getOrCompute(fn: () -> T): T 
 }

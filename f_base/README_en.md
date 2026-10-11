@@ -617,6 +617,15 @@ public interface RightShiftable<T> where T <: RightShiftable<T> {
    `set`/`remove` only affect the **current task** layer (visible to that task and its descendants, not to the parent or siblings; when called outside a task they fall back to the task that created the local);
    `getOrSet`/`getOrCompute` write the **task that created the local** (a slot shared by that task and its whole subtree) when no value is found in the chain, using **double-checked locking** (one lock per local) so that only one concurrent caller computes and writes while the others receive the same value; `fn` runs inside the lock (the `Mutex` is reentrant, so calling the same local again from `fn` does not deadlock)
 ```cj
+//FutureTask-related exception: thrown when get/get(timeout) is called before the task is fully constructed
+//(rare: only reachable from the very first statement inside the task body), and when current()/FutureTask<T>.current()
+//cannot find a matching task (not inside a task, or the type argument does not match)
+public class FutureTaskException <: BaseException {
+    public init()
+    public init(message: String)
+    public init(caused: Exception)
+    public init(message: String, caused: Exception)
+}
 public sealed abstract class AbstractFutureTask <: Hashable & Equatable<AbstractFutureTask>{
     public func hashCode(): Int64 
     public operator func ==(other: AbstractFutureTask): Bool 
@@ -662,7 +671,8 @@ public class InheritedTaskLocal<T> <: AbstractInheritedTaskLocal {
 
     public func get(): ?T 
 
-    public func remove(): Unit 
+    //Remove and return the value of the current task layer; returns None when that layer has no value
+    public func remove(): ?T 
     public func getOrSet(value: T): T 
     public func getOrCompute(fn: () -> T): T 
 }

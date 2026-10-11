@@ -352,3 +352,8 @@ Process health check
 FFI bindings for liburing; all APIs are available on Linux only
 
 **See details:**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_uring/README_en.md>
+
+### `fountain::fboot`
+Application project launcher depending on fountain
+
+**See details:**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/fboot/README_en.md>

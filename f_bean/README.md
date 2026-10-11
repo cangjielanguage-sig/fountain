@@ -491,7 +491,7 @@ public class BeanInit{
 - `BeanDef`：`let beanName!: StringCond = IgnoreCond`、`let count!: BeanDefCount = AtLeastOne`
 - `BeanFactory`：`func afterRegistered()`、`func get<T>(name: String): ?T`、`func register<T>(creator: () -> T): Unit where T <: Object`、`func registerByInstanceFunction<T>(fnName: String, creator: () -> T): Unit where T <: Object`、`func registerByStaticFunction<T>(fnName: String, creator: () -> T): Unit where T <: Object`
 - `BeanInitializer`：`func initialize(): Unit`
-- `BeanManager`：`func compare(manager: BeanManager)`、`let index = serialGen.fetchAdd(1)`、`let meta: BeanMeta`
+- `BeanManager`：`func compare(manager: BeanManager)`、`func getBean<T>(): T`（按泛型实参取出该 bean，运行时类型不匹配抛 `BeanException`）、`let index = serialGen.fetchAdd(1)`、`let meta: BeanMeta`
 - `BeanMeta`：`compare`（func）
 - `BeanScope`：`prop isPrototype: Bool`、`prop isSingleton: Bool`、`typeInfo`（prop）
 - `PrototypeBeanScope`：`prop typeInfo: TypeInfo`
