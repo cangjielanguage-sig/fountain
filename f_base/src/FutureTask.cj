@@ -55,6 +55,12 @@ public sealed abstract class AbstractFutureTask <: Hashable & Equatable<Abstract
     static let subTasksLock = Mutex()
     static let subTasks = ConcurrentHashMap<Int64, HashSet<AbstractFutureTask>>()
     protected let tid = AtomicInt64(0)
+    // FT-6 ③（bug-f_base.md §2.4 量化）：本任务是否**登记过**子任务。
+    // 没有子任务 ⇒ 自己的 tid 下不可能有桶（桶只由登记创建），结束时那次
+    // shutdownCurrentSubThreads()（取锁 + 摘桶）可以整体短路 —— EXP18 实测该调用 ~3µs/任务，
+    // 而叶子任务是最常见形态，等于每个叶子都在为空清理付钱。
+    // 只由创建线程自己写（登记在它自己的构造函数里）、由它自己读（teardown 在同一个线程），故无需原子。
+    var hasChildren = false
     let parentTID = Thread.currentThread.id
     // FT-5（bug-f_base.md §2.3）：父任务是**构造期固定的树事实**，不随父任务结束而消失。
     // getLocal 的链式查找改走这条父链，于是"父任务先结束"不再切断继承；
@@ -207,6 +213,10 @@ public class FutureTask<T> <: AbstractFutureTask {
                 subTasks.add(parentTID, set)
             }
         }
+        // FT-6 ③：登记成功即给"创建者任务"打上 hasChildren（创建者是普通线程时为 None，无需标记）
+        if(let Some(creator) <- task.parent){
+            creator.hasChildren = true
+        }
         this.future = spawn{
             let tid = Thread.currentThread.id
             task.tid.store(tid)
@@ -223,7 +233,8 @@ public class FutureTask<T> <: AbstractFutureTask {
                         }
                     }
                 }
-                if(shutdownSubOnFinish){
+                // FT-6 ③：没登记过子任务就没有桶要摘，直接短路（叶子任务不再为空清理付钱）
+                if(shutdownSubOnFinish && task.hasChildren){
                     shutdownCurrentSubThreads()
                 }
             }

@@ -18,6 +18,7 @@ package fountain::f_base
 import std.unittest.*
 import std.unittest.testmacro.*
 import std.collection.ArrayList
+import std.collection.HashSet
 import std.collection.concurrent.ConcurrentHashMap
 import std.sync.{AtomicBool, AtomicInt64}
 
@@ -391,6 +392,23 @@ public class FutureTask_test {
         @Expect(box.get("owner2"), Some("30"))
         @Expect(box.get("later"), Some("10,20,30"))
     }
+
+    /*
+     * FT-6 ③ 守卫：叶子任务（不创建子任务）不会在自己的 tid 下留下桶 ——
+     * "没登记过 ⇒ 没有桶"正是 teardown 短路清理（`hasChildren`）的正确性前提。
+     */
+    @TestCase
+    public func testLeafTaskCreatesNoSubTaskBucket(): Unit {
+        let box = ConcurrentHashMap<String, Int64>()
+        let leaf = FutureTask<Int64>({ => futureTaskTestLeafTid(box) })
+        let _ = leaf.get()
+        let tid = box.get("tid")
+        @Expect(tid.isSome(), true)
+        match (tid) {
+            case Some(t) => @Expect(AbstractFutureTask.subTasks.get(t).isNone(), true)
+            case None => ()
+        }
+    }
 }
 
 private func futureTaskTestReadLocal(ready: AtomicBool, slot: ArrayList<InheritedTaskLocal<Int64>>): Int64 {
@@ -399,6 +417,13 @@ private func futureTaskTestReadLocal(ready: AtomicBool, slot: ArrayList<Inherite
         case Some(x) => x
         case None => -1
     }
+}
+
+// ===== FT-6 ③（叶子任务不建桶）的辅助函数 =====
+
+private func futureTaskTestLeafTid(box: ConcurrentHashMap<String, Int64>): Int64 {
+    box.add("tid", Thread.currentThread.id)
+    1
 }
 
 // ===== FT-6 ⑥+①（并发懒建 owner 的 local 表）的辅助函数 =====

@@ -337,7 +337,7 @@ while(let Some(f: FutureTask<T>) <- itr.next()){
 | 候选 | 可省 | 风险 / 前置条件 | 建议 |
 |---|---|---|---|
 | ① `local` 惰性分配 | **3.6 ~ 5.2 µs/任务（11~16%）** | 必须定"懒建表"的并发方案（两线程同时建表会丢一侧写入 ⇒ 一次性发布，不能裸判空后 `add`） | **✅已修复（2026-10-11，与 ⑥ 一并实施，见下）** |
-| ③ 短路 `shutdownCurrentSubThreads()` | **~3 µs/任务（~9%）** | 只需一个"本任务是否登记过子任务"的线程局部标志/计数 | **先做**（实现最简单） |
+| ③ 短路 `shutdownCurrentSubThreads()` | **~3 µs/任务（~9%）** | 只需一个"本任务是否登记过子任务"的线程局部标志/计数 | **✅已修复（2026-10-11，见下；实测 −1.6µs）** |
 | ④ 读路径缓存"当前任务" | **~300 ns/次读（~40%）** | 每任务 2 次 `ThreadLocal` 写（~0.2µs） | 读多场景做 |
 | ⑤ 压缩记账 | **3 ~ 9.5 µs/任务** | 要把"子任务 teardown 动共享结构"改成"父任务收尾整体清理"，牵动 `FT-2`/`FT-5` 的边界与泄漏口径 | **单独立项**（改动面/风险最大） |
 | ⑥ `local` 换 `Mutex`+`HashMap` | 构造 ~4µs + 单次 op ~0.9µs | 读要从"无锁并发读"变成"加锁读"（并发语义变化） | **✅已修复（2026-10-11，与 ① 一并实施，见下）** |
@@ -356,6 +356,14 @@ while(let Some(f: FutureTask<T>) <- itr.next()){
   - 组件对照（未变，说明收益来自 ⑥+① 本身）：空 `ConcurrentHashMap` 构造 4.6 ~ 4.8 µs、`Mutex`+`HashMap` 的 add+remove 295 ~ 320 ns、`ThreadLocal.get()` 91 ~ 92 ns。
 - 单测：`TOTAL: 27, PASSED: 27, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`）。
 - 行为变化 / 未覆盖：`local` 的读由"无锁并发读"变为"加锁读"（并发语义变化：大量并发读同一个 owner 的 local 会串行化；本结构的实际形态是"少数写、少量读"，故按收益取舍）。既有 26 条用例（含并发 DCL 用例 `testGetOrComputeComputesOnceUnderConcurrency`）全绿。
+
+**✅ 修复标记（2026-10-11，③ 短路叶子任务的 teardown 清理）**
+
+- 改动：`f_base/src/FutureTask.cj` —— 新增 `var hasChildren`（登记成功时给**创建者任务**打标：`if(let Some(creator) <- task.parent){ creator.hasChildren = true }`）；teardown 的 `if(shutdownSubOnFinish)` 改为 `if(shutdownSubOnFinish && task.hasChildren)`。字段只由创建线程自己写、自己读（登记在它自己的构造函数里，teardown 在同一个线程），无需原子。
+- 用例：`f_base/src/FutureTask_test.cj` 新增 `testLeafTaskCreatesNoSubTaskBucket`（叶子任务不在自己 tid 下留桶 —— 短路的正确性前提）。**本项无用户可见行为变化**（叶子任务本来就没有桶要摘），因此没有"修前 FAILED"的数字，由既有 FT-2 用例（`testChildCancelledWhenParentFinishesImmediately`、`testConcurrentChildrenAllCancelled`、`testMixedTypeChildrenAreCancelledToo`）守卫。
+- 测量证据（EXP18，同进程）：端到端 `FutureTask<Int64>{1}` + `get()` **26.6 µs → 25.0 µs（−1.6 µs/任务）**（同批裸基线 2.6 ~ 2.7 µs）。
+- 行为探针复测（同一构建）：`EXP5` 50/50 被取消、`EXP15` 100 轮 4/4、`EXP16` 0/0/0/0/100、`EXP3` 10/10 `Some`、`EXP9` `Some(7)` —— 取消完整性与继承口径均未变。
+- 单测：`TOTAL: 28, PASSED: 28, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`）。
 
 ---
 
