@@ -128,8 +128,8 @@ f_jit/
 | S3.1 | `TokenKind`（§4.3.1 全表：58 = 5 字面量 + 16 标识符/关键字 + 12 标点 + 24 运算符 + `EOF`）、`Token`（kind/text/pos/line/column/`nlBefore`） | 每个 kind 各一条构造用例；位置字段正确（含多字节字符列号按码点）；**`nlBefore` 正确性**（跨行 token 之后同行紧跟者 → false；空白/注释跨行 → true）；`match` 穷尽性 | `TokenKind` = 无载荷 enum；`Token` = 只读 struct（6 字段） | 词法基座 |
 | S3.2 | `Lexer` 基础：`next/position/line/column`、`nlBefore` | 标识符/关键字（`recursive/let/var/if/else/while/for/in/where/break/continue/return/true/false/null`）/数字（含小数、指数、超 Int64 → 标记为 Decimal 候选）/标点/运算符（含 `!~` 单 token）；`=>`；EOF；**换行与 `;` 的 `nlBefore` 标记**；**词法错误族逐 kind 一条用例**（`IllegalCharacter`/`UnterminatedString`/`BadEscape`/`BadNumber`/`UnterminatedRegex`——fail-fast 抛出、**无 error token**） | 扫描器 + 关键字表；`null` 报「保留关键字、M1 无 null 字面值」专门诊断 | 逐 token 断言 |
 | S3.3 | `Lexer` 字符串三形态 | 单行（`'…'`/`"…"`、转义、异种引号=内容）；多行（首行换行/首个非转义三连终止/单独 `\` → 错误 kind）；原始串（`#`×n 定界、verbatim、可跨行、未闭合 → 错误）；`'''` 最长匹配消歧；CRLF/CR→LF | 三形态合并扫描 + kind 错误 | T42 词法组 |
-| S3.4 | `Lexer` `>\|` 锚定 | 进入判定（仅首个非空白位置标记触发）；无标记行整行保留；标记不进入产物（单独 `>\|` → 空串）；`>>\|`/`a>\|b`/`\|>\|` 为内容；处理顺序（标记消耗→转义→插值） | 多行串后处理 | T42 锚定组 |
-| S3.5 | `Lexer` 注释与词法保护 | 单行/多行注释；`/* */` 嵌套配平；未闭合 → `UnterminatedComment`；字符串跨度内 `//`/`/*`/引号/`{`/`}`/`>\|` 不参与；注释不影响 site 语义 | 保护 → 剥离 → 解析三阶段 | T24 注释组 |
+| S3.4 | `Lexer` **行首锚定标记**（多行串；字面量与逐例见 §8.8） | 进入判定（仅首个非空白位置标记触发）；无标记行整行保留；标记不进入产物（单独标记行 → 空串）；标记前含非空白字符的同类序列为内容；处理顺序（标记消耗→转义→插值） | 多行串后处理 | T42 锚定组 |
+| S3.5 | `Lexer` 注释与词法保护 | 单行/多行注释；`/* */` 嵌套配平；未闭合 → `UnterminatedComment`；字符串跨度内 `//`/`/*`/引号/`{`/`}`/**行首锚定标记**不参与；注释不影响 site 语义 | 保护 → 剥离 → 解析三阶段 | T24 注释组 |
 | S3.6 | `Lexer` 正则字面量 | `/pattern/flags`（flags 顺序无关、重复幂等、非法 flags → 14 语义的编译错误？否——非法 flags 加载期 14，前端词法仅切分）；字面量后紧贴 `/` 优先于注释识别（三书写形态）；`/` 除法消歧 | 正则段扫描 | T20/T26 词法组 |
 | S3.7 | `LambdaAst/AstExpr/AstStmt/Parser.parseLambda` | 全 AstExpr 构造器各一用例；形参（`name: Type`，不支持具名/默认；`=>` 必需，缺失 → `MissingArrow`）；尾表达式；嵌套闭包与 IIFE；`recursive` 调用表达式；**语句终结判定（`;` 或换行；一行多条必须 `;`）**；**AST 节点携带 `pos`**（供 `setSite`/诊断） | 递归下降；`pos` 取自首 Token | T22 前置 |
 | S3.8 | `NameResolver`：`resolve` | `recursive` 优先；命中注册表 → `UserHelper(slot)`；未注册 → `UnregisteredFunction`（消息含名字/位置/已注册清单）；非调用未定义标识符 → `UndefinedIdentifier` | 名字表 + 冲突拒绝 | T23 前置 |
