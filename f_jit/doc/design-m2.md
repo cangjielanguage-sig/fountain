@@ -167,8 +167,12 @@
 |---|---|---|
 | `SignatureDescriptor(params: Array<UInt16>, ret: UInt16)` / `params` / `ret` | 签名编码（参数 LocalType 序列 + 返回；禁高阶 ⇒ 深度恒 1） | m2 §1/§4 |
 | `SignatureDescriptor.validate(): Bool` | 合法性（T/R ∈ 0–8、10–11、14；12/13 拒） | — |
-| `SignatureVerifier.verify(value: Any, declared: SignatureDescriptor): ?SignatureDescriptor` | 验签五步：① 函数类型判定（`is`，P1）→ ② 参数个数 → ③ 逐参类型 → ④ 返回类型 → ⑤ 禁高阶复检；失败返回 None（→ 19） | m2 §4 |
-| `SignatureVerifier.cached(value: Any): ?SignatureDescriptor` | 条目内缓存复用（同一对象幂等） | m2 §4 |
+| `static func SignatureVerifier.verify(value: Any, declared: SignatureDescriptor): ?SignatureDescriptor` | 验签五步：① 函数类型判定（`is`，P1）→ ② 参数个数 → ③ 逐参类型 → ④ 返回类型 → ⑤ 禁高阶复检；失败返回 None（→ 19）；成功产出描述符（由调用方存入句柄条目） | m2 §4 |
+| `static func SignatureVerifier.cached(value: Any): ?SignatureDescriptor` | 复用既有验签结果（同一对象幂等——命中即返回、不重复验签）；缓存落点 = 句柄条目 `HostCallback.sig`（§5.1.1） | m2 §4 |
+
+**归属**：`SignatureVerifier` 是**纯静态工具类**——只有静态函数、**无实例、无构造**（因此也不持任何状态，缓存一律落在条目上）；`SignatureDescriptor` 是**值语义的签名编码**（构造 + 两个只读字段 + `validate()`），两者不要混读。
+
+**待裁定（`cached` 的定位方式）**：缓存落在句柄条目（`HostCallback.sig`），而 `cached(value: Any)` 收的是**对象**——「对象 → 条目」的定位需二选一：① 经 `HandleTable.pin` 的「同表同对象复用同 ID」（§8.1 路径 B）反查条目；② 改为**收条目**（调用方在 H63 转发器里已持有）。实施前定，择一写回本节。
 
 #### 5.1.3 `PromotionGroup`（class，逃逸闭包回桥的提升组）
 
