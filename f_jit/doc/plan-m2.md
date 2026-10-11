@@ -77,7 +77,7 @@
 |---|---|---|---|---|
 | Q4.1 | `SignatureDescriptor`（params/ret/validate） | 编码断言；`validate`：12/13 在 T/R → false；14 合法 | class | m2 §1 |
 | Q4.2 | `SignatureVerifier.verify`（static；类无实例） | 五步逐条：非函数值 → None；参数个数不符 → None；逐参类型不符 → None；返回类型不符 → None；高阶复检 → None；合法 → 描述符产出 | P1 `is` 判定 + 核对 | T30 |
-| Q4.3 | `SignatureVerifier.cached`（static） | 同对象二次验证复用（幂等计数断言） | 条目缓存（`HostCallback.sig`）；**`cached` 的定位方式待裁定**（design-m2 §5.1.2） | T30 |
+| Q4.3 | `SignatureVerifier.cached(entry: HostCallback)`（static） | 幂等复用（幂等计数断言）：条目已验签 → 返回 `entry.sig`；未验签 → `None` | 条目缓存（`HostCallback.sig`）；**收条目**、不做「对象 → 条目」定位（design-m2 §5.1.2 裁定，2026-10-11） | T30 |
 | Q4.4 | `HostCallback`（fn/sig） | 条目构造/字段保真；pin 同对象同 ID | class | T30 |
 | Q4.5 | H63 `host_call_trampoline`（基础） | 栈底 fetch（tag≠10 → 8）；逐参转换（值型/句柄型/14）；调用 fn；值型返回原值、引用型登记 1 槽（hwTop 断言）；**含 CALL_HOST → `flags.bit0` + deopt 源汇编期禁令（拒绝用例）+ 防御 -1 → 99 联测** | helper 实现 | T31 |
 | Q4.6 | H63 异常与重入 | fn 抛异常 → 21 + cause（完整栈、桥打印）+ site=CALL_HOST 偏移；重入（闭包内再调 JIT，深度 ≥3）：独立事务（独立 errCode/site/窗口），内层错误不影响外层；**新 ctx 的分配/释放沿用 design-m1 §5.3.1 选型（`LibC.malloc/free`）** | catch-all + 新 ctx | T31/T60 |
