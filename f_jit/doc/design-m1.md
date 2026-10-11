@@ -148,7 +148,7 @@
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
 | `init(kind: String, position: Int64, line: Int64, column: Int64, lineText: String, hint: String)` | 编译期失败统一抛出类型（组装后的文本经 `super(message)` 转发） | 前端/汇编各检查点抛 |
-| `let kind: String` | 错误分类（`DiagKind` 常量：UnregisteredFunction / UndefinedIdentifier / BadParameterList / MissingArrow / DuplicateRegistration / NotImpl / UnterminatedComment / MultilineHeadContent / UnterminatedMultilineString / UnterminatedRawString …） | 测试断言 kind；消息含名字/位置/已注册清单（§8.4 需求 4） |
+| `let kind: String` | 错误分类（`DiagKind` 常量，**清单见 §4.3.8**：词法族 `IllegalCharacter`/`UnterminatedString`/`BadEscape`/`BadNumber`/`UnterminatedRegex`/`UnterminatedComment`/`MultilineHeadContent`/`UnterminatedMultilineString`/`UnterminatedRawString` + 解析/名字/校验族 `UnregisteredFunction`/`UndefinedIdentifier`/`BadParameterList`/`MissingArrow`/`DuplicateRegistration`/`NotImpl`） | 测试断言 kind；消息含名字/位置/已注册清单（§8.4 需求 4） |
 | `let position: Int64` | 源码字节位置 | 定位 |
 | `let line: Int64` / `let column: Int64` | 行/列（1 起，列按 Unicode 码点） | 报告 |
 | `let lineText: String` | 错误所在源码行原文（不含换行） | 「错误信息包含源码行文本」的兑现 |
@@ -411,7 +411,7 @@
 | `BytecodeBuilder` | class | 单函数发射器（label/fixup、site 记录、自动 CHECK_ERR） | ByteWriter、OpInfo | §7、§5 |
 | `Assembler` | class | 汇编期校验 1–11 + 组装 `.fbc`（目录/类型表/site/name） | BytecodeBuilder、各表、FbcWriter | §7、§11.6–11.7 |
 | `SourceCompiler` | class | 管线编排：compile(source) → 单元产物（或抛 SourceCompileException） | Lexer→Parser→…→Assembler | §8、§8.4 |
-| `DiagKind` | class（常量） | 编译期错误分类常量 | — | §8.4、§8.8、§9.16 |
+| `DiagKind` | class（常量） | 编译期错误分类常量（**词法族 + 解析/名字/校验族**，清单与策略见 §4.3.1/§4.3.8） | — | §8.4、§8.8、§9.16 |
 
 ### 4.3 各声明的公共成员
 
@@ -446,6 +446,7 @@
 - **用 `nlBefore` 而不是比较 `line`**：`"""…"""` 这类**跨行 token** 结束之后同行紧跟 `-` 时，两个 token 的 `line` 不同却并无换行——只有词法阶段记录「本 token 之前是否跨过换行」才可靠（同法支撑 `>|` 的行首判定）。
 - **`KwNull`（`null` 字面值）**：语法层可用（降低为 `PUSH_NULL`，0x15），但 **M1 没有任何合法落点**——句柄型局部恒非空（§3.1 空安全），`PUSH_NULL` 直存句柄型局部被 §7 校验 10 拒绝，值型槽/实参/返回值处则类型不符。保留该关键字的收益：① 报**准确诊断**（「保留关键字；M1 空安全下句柄型局部无空值」）而不是误报 `UndefinedIdentifier`；② 为未来语言级 null 语义预留——**M2/M3 都不需要它**：M3 的 JSON null 由 `JsonNull` **单例**（`fountain::f_data.json.JsonNull.instance`）承载，M2 宿主对象通道明确 **null 拒绝**（m2 §11）。
 - **类型名不作独立 kind**：`Int64`/`String`/`List<Int64>` 等一律按 `Ident` 走，类型解析在解析期（与仓颉一致）。
+- **词法错误策略：没有 error token，非法输入一律抛 `SourceCompileException`**——`TokenKind` 只描述**合法**词法单元，`Lexer.next()` 的契约是「返回已判定合法的 token 或 `EOF`」；遇到非法输入即抛（fail-fast、**不续跑、不做错误恢复/多错报告**），kind 取词法族：① `IllegalCharacter`（不属于任何合法词法单元的字符——`@`、插值外的 `$`、反引号等）；② `UnterminatedString`（单行串或 `${…}` 未闭合）；③ `BadEscape`（非法转义；多行串中单独 `\`）；④ `BadNumber`（数字字形畸形，如 `1.2.3`/`3e`——**超 Int64 域是合法输入**，落 Decimal）；⑤ `UnterminatedRegex`（正则段缺闭合 `/`）；⑥ 既定成员 `UnterminatedComment`/`MultilineHeadContent`/`UnterminatedMultilineString`/`UnterminatedRawString`（§8.8）。**为什么不做 error token**：本模块是单次编译（非 IDE/LSP），一个错误即终止——若返回 `Error` token，**每条语法规则**都得处理它（要么向上扩散、要么在 parser 里重做恢复），成本远大于收益；同时保持「编译期错误只有一个出口」：`DiagnosticsSink` 只收降级/告警，**不承担错误通道**。**边界**：正则的非法 pattern/flags 不算词法错误（前端仅切分，非法性在加载期 → `JitException(14)`）。
 
 #### 4.3.2 `AstExpr`（enum） / `AstStmt`（enum） / `LambdaAst`（struct） / `ParamAst`（struct）
 
@@ -510,7 +511,7 @@
 | `init(opts: CompileOptions, registry: PredefinedSnapshot, diagnostics: DiagnosticsSink)` | 会话绑定（配置 + 注册表快照） | 根包 `Compiler.compile(source)` |
 | `func compile(source: String): CompiledSourceUnit` | 全管线：lex→parse→resolve→DA→lower→assemble→（build FbcWriter 字节） | 根包管线第 1 步 |
 | `CompiledSourceUnit`（产物） | `.fbc 字节 + funcCount + entryFn + 单元指纹（源码指纹）` | 加载校验与缓存键 |
-| `DiagKind` 常量清单 | `UnregisteredFunction / UndefinedIdentifier / BadParameterList / MissingArrow / DuplicateRegistration / NotImpl / UnterminatedComment / MultilineHeadContent / UnterminatedMultilineString / UnterminatedRawString / …` | 测试断言（T42/T50） |
+| `DiagKind` 常量清单 | **词法族**（fail-fast，见 §4.3.1）：`IllegalCharacter / UnterminatedString / BadEscape / BadNumber / UnterminatedRegex / UnterminatedComment / MultilineHeadContent / UnterminatedMultilineString / UnterminatedRawString`；**解析 / 名字 / 校验族**：`UnregisteredFunction / UndefinedIdentifier / BadParameterList / MissingArrow / DuplicateRegistration / NotImpl`；M2/M3 增量追加（如 m3 的 JSON 段错误） | 测试断言（T42/T50）；**词法族逐 kind 一条用例** |
 
 ---
 
