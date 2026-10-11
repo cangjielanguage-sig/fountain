@@ -500,7 +500,7 @@ PublicMethod { name: String, bind: PredefinedFunction }  // 首参固定为该�
 ### §14.3 宿主承接与包装器
 
 - **返回解包表（M1 §8.2.2）开放 Closure 行**——解包为宿主值 **`JitClosureId`**（承接逃逸闭包 ID；**更名注**：原名 `CFunc`，与仓颉内建 C 函数指针类型 `CFunc<F>` 同名，2026-10-11 更名）；**参数 Marshal 表（M1 §8.2.1）不加行**——实参方向不开放；
-- **包装器**：`JitFunction` 包装实例（或独立包装类）= 绑定闭包句柄的 **partial application**——调用 = 新桥调用（ctx + `locals[0]` = 闭包句柄 → 闭包帧格式，同 M1 §8.0 隐藏适配器先例）；**必须显式 `close`**（ID 无引用计数、GC 不通知桥——M1 §8.1 规则 6② 同理）；
+- **包装器（M2-8 裁定：统一 `JitFunction`，不另设包装类）**：`JitFunction` 包装实例 = 绑定闭包句柄的 **partial application**——调用 = 新桥调用（ctx + `locals[0]` = 闭包句柄 → 闭包帧格式，同 M1 §8.0 隐藏适配器先例）；**必须显式 `close`**（ID 无引用计数、GC 不通知桥——M1 §8.1 规则 6② 同理）；`close`/`isClosed` 为 `JitFunction` 的 M2 增量（**非闭包包装实例：`close` → 19、`isClosed` = false**；`unload` 仍为单元级，闭包逃逸不阻止卸载）；
 - **备选路线留档**：(b) 真引用重挂（闭包对象持捕获对象强引用 + `LOAD_CAP` 句柄型项改 pin-on-read——内存全自动、读捕获成分配点）；(区间 + 改址)（闭包自有区间槽 + captured 数组改址——读路径纯、需条目所有权/共享计数 + 改址）。**存容器维持禁止**（"谁 release"无解——同 M1 §8.1 规则 6② 之源）。
 
 ### §14.4 单元耦合（弱语义）

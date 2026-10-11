@@ -39,7 +39,7 @@
 | `bytecode` | — | `OPCODE_TABLE`（0x79 行）、`FbcReader`（verMajor 分派）、`LocalTypes.validate`（按 verMajor 合法集） | 容器头字段、段模型、crc32、kind 1–10 |
 | `compiler` | `TypeRef`、`ClassRegistryView` | `NameResolver`（解析顺序 + 冲突拒绝）、`Lowerer`（CALL_HOST/成员访问/构造/14 槽）、`AstExpr`（+4 构造器）、`DefiniteAssignment`（14/13 槽规则同型） | 词法、语法基座、既有降低模式 |
 | `runtime` | `HostCallback`、`SignatureDescriptor`、`SignatureVerifier`、`PromotionGroup`、H63/H64/H65（顶层 @C func） | `HandleTable`（条目标签 10/11）、`IterTable`（不变）、`DbgDump`（报告值型扩展：14 记 `<类名>#idx`） | ctx、迭代器、既有 helper 语义 |
-| `fountain::f_jit`（根） | `ClassRegistry`、`JitClosureId`、`JitClosure`、`ReflectRegistrar` | `Compiler`（+2 成员）、`CallMarshal`（+行）、`JitFunction`（+`callWith<Fn>` 退化变体） | 执行六步、卸载状态机、去重缓存 |
+| `fountain::f_jit`（根） | `ClassRegistry`、`JitClosureId`、`ReflectRegistrar` | `Compiler`（+2 成员）、`CallMarshal`（+行）、**`JitFunction`（+`callWith<Fn>`、闭包包装的 `close`/`isClosed`——M2-8 裁定：不另设包装类）** | 执行六步、卸载状态机、去重缓存 |
 
 ---
 
@@ -235,21 +235,24 @@
 
 #### 6.1.3 `JitClosureId`（public struct，逃逸闭包 ID 的宿主值类型）
 
-**更名（2026-10-11）**：本类型原名 `CFunc`——与仓颉**内建**的 C 函数指针类型 `CFunc<F>`（FFI：`foreign func` / `@C` / `CPointer` 互转、调用需 `unsafe`）**同名**，在本模块满是 `@C` helper 的语境下极易误读。现名 **`JitClosureId`** 直述语义：承接逃逸闭包句柄 ID 的宿主值类型，与包装器 `JitClosure` 成对。
+**更名（2026-10-11）**：本类型原名 `CFunc`——与仓颉**内建**的 C 函数指针类型 `CFunc<F>`（FFI：`foreign func` / `@C` / `CPointer` 互转、调用需 `unsafe`）**同名**，在本模块满是 `@C` helper 的语境下极易误读。现名 **`JitClosureId`** 直述语义：承接逃逸闭包句柄 ID 的宿主值类型，与闭包包装（`JitFunction.callWith` / `close`，M2-8）成对。
 
 | 成员 | 意义 | 锚点 |
 |---|---|---|
 | `let id: Int64` | 承接逃逸闭包句柄 ID（已提升出窗口；ID 稳定至 `close`） | m2 §14.3 |
 | `static const INVALID: Int64 = 0` | 无效值（防御） | — |
 
-#### 6.1.4 `JitClosure`（public class，闭包包装器 = partial application）
+#### 6.1.4 `JitFunction` 的**闭包包装**增量（M2-8 裁定：不另设包装类）
 
-| 成员 | 意义 | 调用关系 |
+**裁定（2026-10-11）**：逃逸闭包的宿主承接**统一用 `JitFunction` 包装**——桥从 JIT **取回**的闭包与 JIT **产出**的闭包是**同一种东西、同一个表示**（`JitClosureId` 承载，见 §6.1.3），因此**一个类型足够**，**原 `JitClosure` 定义撤销**。包装实例由**桥内部构造**（宿主不直接构造），内部持「单元 + `JitClosureId`」（**单元弱语义**：不阻止卸载，§14.4）。
+
+| 成员（`JitFunction` 增量） | 意义 | 调用关系 |
 |---|---|---|
-| `init(f: JitFunction, cid: JitClosureId)` | 绑定单元 + 闭包 ID（单元弱语义：不阻止卸载） | `CallMarshal` 解包 retType=12 时产出 |
-| `func call<T>(args: Array<Any>): T` | 调用 = 新桥调用（新 ctx + `locals[0]` = 闭包句柄 → 闭包帧格式）；结果/错误码/site 与直接 `CALL_CLOSURE` 逐位一致；卸载后调用 → 19（site=-1）；**新 ctx 的分配/释放沿用 M1 选型 `std.core.LibC.malloc<T>` / `LibC.free<T>`**（design-m1 §5.3.1） | m2 §14.3/§14.4 |
-| `func close(): Unit` | **必须显式调用**：提升组计数 −1、归零释放（gen+1 可复用）；幂等 | m2 §14.2/§14.3 |
-| `prop isClosed: Bool` | 状态（close 后调用 → 19） | — |
+| （桥内部）包装构造 | 绑定单元 + 闭包 ID | `CallMarshal` 解包 `retType=12` 与 `callWith<Fn>` 两条路径产出——**产物类型一致** |
+| `func call<T>(args: Array<Any>): T` | **闭包包装实例上**：新桥调用（新 ctx + `locals[0]` = 闭包句柄 → **闭包帧格式**）；结果/错误码/site 与直接 `CALL_CLOSURE` 逐位一致；卸载后调用 → 19（site=-1）；**新 ctx 的分配/释放沿用 M1 选型 `std.core.LibC.malloc<T>` / `LibC.free<T>`**（design-m1 §5.3.1）。**入口实例上语义不变**（M1 §8.2 六步，M1 零回归）——**帧格式由实例的绑定内容决定** | m2 §14.3/§14.4 |
+| `func close(): Unit` | **必须显式调用**（唯一释放路径）：提升组计数 −1、归零释放（`gen+1` 可复用）；幂等。**非闭包包装实例 → 19（site=-1）**（fail-loud，避免"以为已释放"） | m2 §14.2/§14.3 |
+| `prop isClosed: Bool` | 闭包包装：是否已 `close`；**非闭包包装实例恒 `false`** | — |
+| `unload` / `isUnloaded` | 不变（M1 §8.7，**单元级**）：包装实例与入口实例共享同一单元——`unload` 卸的是**单元**（闭包逃逸**不阻止**卸载，§14.4） | m1 §8.7 |
 
 #### 6.1.5 `JitFunction.callWith<Fn>`（返回闭包的强类型入口，条件启用）
 
@@ -259,7 +262,7 @@
 |---|---|---|
 | `func callWith<Fn>(args: Array<Any>): JitFunction` | `Fn` = **返回闭包的函数类型**（编译期已知）；调用单元并返回承接该闭包的 `JitFunction`（其 `call<T>` 路径照旧）；签名/解包零运行期判定；与 `call<T>` 并存 | m2 §9.1/§14 |
 
-**释放协议不变**：返回闭包属逃逸提升组，其计数释放仍走 `close`（M1 §8.1 规则 6②、§14.2）——无论包装载体取何形态。
+**释放协议**：返回闭包属逃逸提升组，其计数释放走 **`JitFunction.close()`**（M1 §8.1 规则 6②、§14.2；M2-8 裁定：包装统一为 `JitFunction`，不另设包装类）。
 
 **实参面与 `call<T>` 一致（2026-10-11 补充）**：`args` 的元素按 §4 Marshal 表处理——值型 / 句柄型（含 §11 注册类实例）/ **宿主闭包**（声明为 HostClosure 形参 → §4 验签 → 回调表登记 tag=10 → ID）**均允许**。本入口只改"**返回闭包的承接形态**"（交宿主 `JitFunction` 而非原生函数值），**不改实参面**。
 
@@ -275,7 +278,7 @@
 |---|---|---|
 | `Compiler` | `func registerClass(desc: ClassDescriptor): Unit`；`func registerType<T>(): Unit where T <: Object`（内部转 `ReflectRegistrar`） | m2 §12.4/§12.5 |
 | `CallMarshal` | ① **参数 Marshal 表** + 行：声明类型 = 注册类 C → `is C`（含子类、opaque 视图）→ `pin`（tag=11）；null → 19；HostClosure 声明 → 验签（**单次 `is (T1..Tn) -> R`**，§4）→ 回调表登记（tag=10）；② **解包表** + 行：`retType=12 → JitClosureId`、`retType=13 → 原样带回宿主闭包引用`、`retType=14 → get 宿主类实例引用`；③ Closure 行**仅返回方向**（参数方向不加行） | m2 §4/§14.3/§16.2 |
-| `JitFunction` | 内部状态扩展：`ClassRegistry` 快照、`PromotionGroup` 表（per-call 逃逸闭包）、`JitClosureId` 登记；`callWith<Fn>` 公开变体 | m2 §9.1/§14 |
+| `JitFunction` | 内部状态扩展：`ClassRegistry` 快照、`PromotionGroup` 表（per-call 逃逸闭包）、`JitClosureId` 登记；`callWith<Fn>` 公开变体；**`close`/`isClosed`（闭包包装，M2-8 裁定并入）** | m2 §9.1/§14 |
 | `CompileOptions` | `cpuFeatures` 启用（显式 ISA 开关：如 SSE4.1/4.2 优化；默认 0） | m1 §12.1（`CompileOptions.cpuFeatures` 定义处）+ m2 §2 |
 
 ---
@@ -316,7 +319,7 @@ C(args…) → 实参左→右入栈 → CALL_HELPER <ctor-hid>（构造器 = �
 桥 unbox（执行完成之后、窗口重置之前）：
   retType=12 → 提升「闭包自身槽 + 全部句柄型捕获」= 原地迁出（ID/gen 不变、不重用）
              → 解包为 JitClosureId（宿主值）
-宿主: JitClosure(f, cid).call<T>(args) → 新桥调用（新 ctx；locals[0]=闭包句柄 → 闭包帧）
+宿主: 闭包包装实例（`JitFunction`）.call<T>(args) → 新桥调用（新 ctx；locals[0]=闭包句柄 → 闭包帧）
       卸载后调用 → 19（site=-1）；close() → 计数 −1、归零释放
 豁免：调用 try/finally 清理不释放提升槽（唯一释放路径 = close）；路径 A 常量不入组
 捕获描述符：前端静态给出（不入 .fbc、无格式变更）；**级联：无**（容器内部表示 = 宿主对象 ⇒ 槽级提升，m2 §14.6 已裁定）
@@ -369,7 +372,8 @@ Compiler.registerType<User>() → ReflectRegistrar：枚举 public 成员（字�
 | `static var` / `static mut prop` **永久排除** | 隐藏全局态破坏可重复性/差分/并发纪律（附 B 四条论证） |
 | **验签口径 = 单次 `is (T1..Tn) -> R`**（语言子类型语义） | 运行期取不出函数类型的分量（`is` 只给 bool），"参数个数/逐参/返回"分步核对既冗余又**不可实现**；单次判定与仓颉语义（入参逆变/返回协变）一致，且**禁高阶**由 `R` 取具体非函数类型自然承接（2026-10-11 裁定方案 a，已实测） |
 | 桥侧包装（`JitFunction`）**不作实参**——闭包往返由**宿主侧包一层闭包**表达 | 包装是类实例、非函数值（§4 只接受仓颉函数值 ⇒ 直接传 → 19）；为此新增 Marshal 行等于绕开验签并引入签名归属/生命周期复杂度；宿主一层 lambda 已能表达，其体内调用 JIT 产物属 §5 已冻结的重入语义（2026-10-11 裁定） |
-| 逃逸闭包 ID 的宿主值类型命名 **`JitClosureId`**（原名 `CFunc`） | 避免与仓颉**内建** C 函数指针类型 `CFunc<F>`（FFI）同名遮蔽；`JitClosureId` 直述语义（承接逃逸闭包句柄 ID），与 `JitClosure`（包装器）成对 |
+| 逃逸闭包 ID 的宿主值类型命名 **`JitClosureId`**（原名 `CFunc`） | 避免与仓颉**内建** C 函数指针类型 `CFunc<F>`（FFI）同名遮蔽；`JitClosureId` 直述语义（承接逃逸闭包句柄 ID），与闭包包装（`JitFunction`，§6.1.4）成对 |
+| 逃逸闭包的宿主承接**统一用 `JitFunction` 包装**（撤销 `JitClosure`） | 桥从 JIT **取回**的闭包与 JIT **产出**的闭包是同一表示（`JitClosureId` 承载）⇒ **一个类型足够**；`close`/`isClosed` 作为 `JitFunction` 的 M2 增量（非闭包实例：`close` → 19、`isClosed` = false）；`unload` 保持**单元级**不变（M1 零回归）；避免「两个包装类型 + 语义重叠」（2026-10-11 裁定，M2-8 结案） |
 
 ---
 
@@ -383,5 +387,5 @@ Compiler.registerType<User>() → ReflectRegistrar：枚举 public 成员（字�
 | M2-4 | 类注册表的「注册期冲突」边界（类名 vs 内建类型名/关键字/已注册函数名/类名） | 规格已定「拒绝」；拒绝消息体例实施时定 |
 | M2-5 | 第三档（高阶 + 异常对象回译） | **冻结**（实现时机无限期推迟；重议条件见 m2 §13-2） |
 | M2-6 | 跨进程回调注册协议 | **永久排除**（m2 §13-3） |
-| M2-8 | **`callWith<Fn>` 返回的 `JitFunction` 与 §6.1.4 `JitClosure` 的关系** | 待澄清：① 同一载体（`JitClosure` 并入/更名 `JitFunction` 的闭包视图，含 `close`）；② `JitFunction` 为载体、`JitClosure` 持之（`close` 归属需定）；③ 两者并存（语义重叠，不建议）。**无论取何形态，释放协议不变**（提升组计数 −1 = close）；实施前定 |
 | M2-7 | **规格内部张力对账**：m2 §12.4「继承成员不解析（仅本类声明成员）」vs §12.5/§13-5②「继承成员访问器经反射按继承关系逐级向上解析（v0.8.25，已定位）」 | 设计口径：**糖按本类声明解析**（前端只认注册的字段/方法表）；宿主侧访问器（反射生成）可覆盖继承成员——两者不矛盾（**解析点不同**：前端 vs 宿主反射）；建议规格在 §12.4 行 369 补限定说明 |
+| M2-8 | **`callWith<Fn>` 返回的 `JitFunction` 与 §6.1.4 `JitClosure` 的关系** | **已结案（2026-10-11）**：**统一用 `JitFunction` 包装，撤销 `JitClosure` 定义**——从 JIT 取回的闭包与 JIT 产出的闭包是**同一表示**（`JitClosureId`），一个类型足够；`close`/`isClosed` 并入 `JitFunction`（非闭包实例：`close` → 19、`isClosed` = false）；`unload` 保持单元级（M1 零回归）；两条产出路径（`CallMarshal` 解包 / `callWith`）产物类型一致。落点：§1 / §6.1.4 / §6.1.5 / §6.2 / §7.4 / §9 / §10；规格 §14.3；plan-m2 Q5.6/Q5.7/Q5.11 |
