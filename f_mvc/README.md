@@ -103,6 +103,16 @@ public class HelloworldController {
 }
 ```
 
+### `@Controller` 宏
+
+`@Controller` 把一个 **class** 声明为控制器，展开结果 = `@Bean`（IOC 注册）+ 为每个"Mapping 结尾注解修饰的公共实例函数"生成注册代码：
+
+- **只能修饰 class**；控制器类里**只允许**出现 Mapping 结尾注解修饰的公共实例函数——出现其它公共函数、或请求处理函数用了宏不支持的参数类型，都会在宏展开时**编译报错**。
+- 两种写法都支持：`@Controller` 与 `@Controller[名字]`；后者会把属性原样传给展开出来的 `@Bean`（即 `@Bean[名字]`），属性含义见 `f_bean` 的 `@Bean`。
+- 请求处理函数的参数只能是：实现了 `fountain.data.DataFields<T>` 的类型（`String` / `Duration` / `DateTime` 等基本类型已实现，`@DataAssist[fields]` 标注的类也算），以及 `HttpContext` / `HttpHeaders` / `HttpRequest` / `HttpResponseBuilder`。
+- 每个注册函数生成的处理流程：按**参数名**从请求里提取参数（取不到时用函数默认值，没有默认值则是 `None<类型>`）→ 登录状态 / 权限检查（`RequestMeta.checkAuth`，见「安全注解」与「登录状态与权限检查」）→ 调用控制器函数 → 按返回类型写响应（`JsonValue` / `InputStream` / `Array<Byte>` / `ToData` / `Redirect` / `FileDownloadMeta` 各有对应写法，`Unit` 表示函数已自行响应，其余类型回 `406`（`MultiRequestMethodHandler.NOT_ACCEPTABLE`））→ 记访问日志（含本次耗时）。
+- 需要给控制器函数织入切面时用 **`@WeavedController`**：除拥有 `@Controller` 的完整功能外，还会展开切点宏 `@Pointcut`（织入规则由切面开发者定义），同样支持属性写法。
+
 ### controller函数注解
 此类注解名称都是Mapping结尾，并且都有一样的初始化参数，初始化参数定义如下：
 - path 请求路径，支持{}包含的路径参数，比如/api/user/{id}这个路径就定义了一个名为id的路径参数
@@ -137,6 +147,71 @@ public class HelloworldController {
 - `@IgnorePrivilege` 忽略权限检查
 - `@IgnoreSecurity` 同时忽略登录状态和权限检查
 
+
+## 登录状态与权限检查（`AuthHandler`）
+
+实现 `AuthHandler` 并用 `fountain::f_bean` 的 `@Bean` 注册，MVC 就会在每个请求**调用控制器函数之前**做登录状态 / 权限检查：`OK` 才继续调用，其它取值直接写响应、**不再调用**控制器函数。
+
+```cj
+/**
+ * 登录状态与权限检查接口：实现类用 @Bean 修饰即可生效。
+ * 登录状态与权限都要检查时，最好在同一个类里一次做完（一次调用即可）。
+ */
+public interface AuthHandler {
+    /**
+     * 检查当前用户登录状态及权限
+     * @param param 请求上下文、命中的控制器映射路径、已提取的参数、两个忽略标记
+     * @return 检查结果
+     */
+    func check(param: AuthParam): AuthStatus
+}
+/** 只做登录检查的接口（<: AuthHandler，登录状态和权限分别实现时用它） */
+public interface UserSessionHandler <: AuthHandler {}
+/** 只做权限检查的接口（<: AuthHandler，登录状态和权限分别实现时用它） */
+public interface PrivilegeHandler <: AuthHandler {}
+
+/** 检查入参 */
+public struct AuthParam {
+    public AuthParam(
+        public let ctx: HttpContext,        // 当前请求上下文
+        public let path: String,            // 命中的 controller 映射路径（控制器函数上定义的路径，不是请求 URL）
+        public let args: ArrayList<Any>,    // 本次调用已提取出的参数
+        public let ignoreAuth: Bool,        // 是否忽略登录检查（@IgnoreAuth / @IgnoreSecurity）
+        public let ignorePrivilege: Bool    // 是否忽略权限检查（@IgnorePrivilege / @IgnoreSecurity）
+    ){}
+}
+```
+
+**注册了多个实现类时的选择规则**：存在**直接**实现 `AuthHandler` 的实现类时只用它（一切判断交给它，两个忽略标记从 `AuthParam` 里读）；否则分别取一个 `UserSessionHandler` 与一个 `PrivilegeHandler`，先做登录检查、通过后再做权限检查。两个忽略标记会原样传给实现类，由实现类决定如何对待。
+
+### `AuthStatus`
+
+检查结果，共 6 类取值；`prop isOK: Bool` 仅在 `OK` 时为 `true`：
+
+| 取值 | 含义 |
+|---|---|
+| `OK` | 当前用户登录状态有效且权限正确 |
+| `SessionNotFound(HttpStatus, Any)` / `SessionNotFound(Any)` | 未找到当前用户的登录状态（未登录，或登录状态已过期） |
+| `InvalidSession(HttpStatus, Any)` / `InvalidSession(Any)` | 找到了登录状态，但本次访问携带的登录信息无效 |
+| `SessionError(HttpStatus, Any)` / `SessionError(Any)` | 检查登录状态时发生错误（可能是服务器内部错误） |
+| `PrivilegeError(HttpStatus, Any)` / `PrivilegeError(Any)` | 检查权限时发生错误（可能是服务器内部错误） |
+| `NoPrivilege(HttpStatus, Any)` / `NoPrivilege(Any)` | 当前用户没有权限访问该资源 |
+
+- **状态码**：带 `HttpStatus` 的构造器用它作为响应状态码；不带 `HttpStatus` 的构造器表示状态码 **200**。
+- **响应体**：取第二个参数（`Any`），实际只支持 `String` / `ToString` / `InputStream` / `Array<Byte>` / `f_data.ToData` 这几种类型；其它类型会被忽略，改用上述 `HttpStatus` 的 `reasonPhrase` 作为响应体。
+
+## 获取当前请求上下文（`CurrentHttpContext`）
+
+```cj
+public struct CurrentHttpContext {
+    //服务器处理 http 访问时，返回当前线程正在处理的 HttpContext；不在请求处理线程里取值会抛异常
+    public static prop instance: HttpContext
+}
+```
+
+- **时机**：MVC 在进入控制器函数之前把它设到当前线程上；请求出口统一清理——HTTP 闭包、404/静态资源的轻量 handler、WebSocket 闭包三条出口共用同一段清理代码，不会把请求级状态留给同线程的下一个请求。
+- **线程口径**：它存在**当前线程**上，控制器函数及其同步调用链里可以取用；自己 `spawn` 出来的线程里取不到（会抛异常），这种情况要把 `HttpContext` 当参数传过去。
+- **例子**：`fountain::f_mvc.FileDownload` 就在构造时取 `CurrentHttpContext.instance`，再用 `ctx.responseBuilder` 写响应。
 
 ## 重定向
 
@@ -1247,10 +1322,7 @@ public func download(data: Array<File>): Unit
 
 以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
 
-- 模块级：`AuthHandler`（interface）、`AuthParam`（struct）、`AuthStatus`（enum）、`Controller`（macro）、`CurrentHttpContext`（struct）、`ExtendHttpResponsePusher`（interface）、`FailureMessageKind`（enum）、`HttpRequestException`（class）、`HttpResponseException`（class）、`MVCConfig`（class）、`MVCException`（class）、`public class MVCHealthController`、`MVCInitializer`（struct）、`MVCStarter`（class）、`MultiRequestMethodHandler`（class）、`public class PathVariable <: ControllerFuncParam`、`PrivilegeHandler`（interface）、`public class RequestBody <: ControllerFuncParam`、`public class RequestHeader <: ControllerFuncParam`、`RequestMapping`（class）、`RequestMeta`（class）、`RequestMetas`（class）、`RequestMethod`（enum）、`public class RequestParam <: AbstractRequestParam`、`public class RequestParamObject <: AbstractRequestParam`、`UserSessionHandler`（interface）、`public class WSBinaryMeta<T> <: WSFuncMeta<T>`、`public class WSCloseMeta<T> <: WSFuncMeta<T>`、`public class WSOpenMeta<T> <: WSFuncMeta<T>`、`public class WSPingFunc<T> <: WSFuncMeta<T>`、`public class WSPingMeta<T> <: WSFuncMeta<T>`、`public class WSPongMeta<T> <: WSFuncMeta<T>`、`public class WSTextMeta<T> <: WSFuncMeta<T>`、`public macro WeavedController(input: Tokens): Tokens`
-- `AuthParam`：`let args: ArrayList<Any>`、`let ignoreAuth: Bool`、`let ignorePrivilege: Bool`
-- `AuthStatus`：`isOK`（prop）
-- `CurrentHttpContext`：`public static prop instance: HttpContext`（当前 http 访问的 HttpContext；不在请求处理线程里取值会抛异常）
+- 模块级：`ExtendHttpResponsePusher`（interface）、`FailureMessageKind`（enum）、`HttpRequestException`（class）、`HttpResponseException`（class）、`MVCConfig`（class）、`MVCException`（class）、`public class MVCHealthController`、`MVCInitializer`（struct）、`MVCStarter`（class）、`MultiRequestMethodHandler`（class）、`public class PathVariable <: ControllerFuncParam`、`public class RequestBody <: ControllerFuncParam`、`public class RequestHeader <: ControllerFuncParam`、`RequestMapping`（class）、`RequestMeta`（class）、`RequestMetas`（class）、`RequestMethod`（enum）、`public class RequestParam <: AbstractRequestParam`、`public class RequestParamObject <: AbstractRequestParam`、`public class WSBinaryMeta<T> <: WSFuncMeta<T>`、`public class WSCloseMeta<T> <: WSFuncMeta<T>`、`public class WSOpenMeta<T> <: WSFuncMeta<T>`、`public class WSPingFunc<T> <: WSFuncMeta<T>`、`public class WSPingMeta<T> <: WSFuncMeta<T>`、`public class WSPongMeta<T> <: WSFuncMeta<T>`、`public class WSTextMeta<T> <: WSFuncMeta<T>`
 - `FailureMessageKind`：`static func parse(kind: String): FailureMessageKind`、`static func tryParse(kind: String): ?FailureMessageKind`
 - `HttpResponsePusher`：`func push(path: String, method: RequestMethod, header: HttpHeaders): Unit`
 - `MVCConfig`：`ACCESS_CONTROL_ALLOW_HEADERS`（let）、`ACCESS_CONTROL_ALLOW_ORIGIN`（let）、`ACCESS_CONTROL_MAX_AGE`（let）、`static let DOWNLOAD_BUFFER_SIZE =`、`static let HEADER_TABLE_SIZE =`、`HOST`（let）、`static let INITITAL_WINDOW_SIZE =`、`static let INTERNAL_SERVER_ERROR_MESSAGE =`、`INTERNAL_SERVER_ERROR_MESSAGE_KIND`（let）、`static let KEEP_ALIVE_TIMEOUT =`、`static let MAX_CONCURRENT_STREAMS =`、`static let MAX_FRAME_SIZE =`、`static let MAX_HEADER_LIST_SIZE =`、`static let MAX_REQUEST_BODY_SIZE =`、`static let MAX_REQUEST_HEADER_SIZE =`、`MVC_DEBUGGING`（let）、`MVC_OVERALL_ELAPSED_SWITCH`（let）、`MVC_STATIC_RESOURCE_ROOT`（let）、`static let PORT =`、`static let READ_HEADER_TIMEOUT =`、`static let READ_TIMEOUT =`、`SERVICE_POOL_CAPACITY`（let）、`static let SERVICE_POOL_PREHEAT =`、`static let SERVICE_POOL_QUEUE_CAPACITY =`、`TLS_PATH`（let）、`static let TLS_SUPPORTED_ALPN_PROTOCOLS =`、`static let TLS_VERIFY_BEAN =`、`static let TLS_VERIFY_MODE =`、`static let TLS_VERIFY_PEM =`、`static let WRITE_TIMEOUT =`、`static prop accessControlAllowHeaders: String`、`accessControlAllowOrigin`（prop）、`static prop accessControlMaxAge: Int64`、`static prop downloadBufferSize: Int64`、`static func getInternalServerErrorMessage()`、`getInternalServerErrorMessageKind`（func）、`static prop headerTableSize: ?UInt32`、`static prop host: String`、`static prop initialWindowSize: ?UInt32`、`static prop keepAliveTimeout: ?Duration`、`static prop maxConcurrentStreams: ?UInt32`、`static prop maxFrameSize: ?UInt32`、`static prop maxHeaderListSize: ?UInt32`、`static prop maxRequestBodySize: ?Int64`、`static prop maxRequestHeaderSize: ?Int64`、`static prop mvcOverallElapsedSwitch: Bool`、`static prop mvcStaticResourceRoot: Path`、`static prop port: UInt16`、`static prop readHeaderTimeout: ?Duration`、`readTimeout`（prop）、`static prop servicePoolConfig: ?ServicePoolConfig`、`tlsConfig`（prop）、`static prop writeTimeout: ?Duration`

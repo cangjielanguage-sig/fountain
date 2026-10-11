@@ -107,6 +107,16 @@ public class HelloworldController {
 }
 ```
 
+### The `@Controller` macro
+
+`@Controller` declares a **class** as a controller; it expands to `@Bean` (IOC registration) plus registration code for every public instance function decorated with an annotation ending in Mapping:
+
+- It may **only decorate a class**; inside a controller class **only** public instance functions decorated with an annotation ending in Mapping are allowed — any other public function, or a request-handling function whose parameter types the macro does not support, is a **compile error at macro expansion**.
+- Both forms are supported: `@Controller` and `@Controller[name]`; the latter passes the attribute through to the expanded `@Bean` (that is, `@Bean[name]`) — see `@Bean` in `f_bean` for the meaning of the attribute.
+- Parameter types of a request-handling function are limited to implementations of `fountain.data.DataFields<T>` (`String` / `Duration` / `DateTime` and other basic types already implement it; classes decorated with `@DataAssist[fields]` count as well) plus `HttpContext` / `HttpHeaders` / `HttpRequest` / `HttpResponseBuilder`.
+- The handler generated for each registered function: extracts parameters from the request **by parameter name** (falling back to the function default, or `None<type>` when there is none) → login state / privilege check (`RequestMeta.checkAuth`, see "Security annotations" and "Login state and privilege check") → invokes the controller function → writes the response according to the return type (`JsonValue` / `InputStream` / `Array<Byte>` / `ToData` / `Redirect` / `FileDownloadMeta` each have their own way, `Unit` means the function responded itself, anything else returns `406` (`MultiRequestMethodHandler.NOT_ACCEPTABLE`)) → writes an access log entry (including the elapsed time).
+- Use **`@WeavedController`** when aspects must be weaved into controller functions: besides the full functionality of `@Controller`, it also expands the pointcut macro `@Pointcut` (the weaving rules are defined by the aspect developer), and it supports the attribute form as well.
+
 ### Controller function annotations
 The names of these annotations all end in Mapping, and they all take the same initialization arguments, defined as follows:
 - path the request path; path parameters contained in {} are supported, for example the path /api/user/{id} defines a path parameter named id
@@ -141,6 +151,71 @@ They may only decorate public instance functions of a controller class; decorati
 - `@IgnorePrivilege` ignores the privilege check
 - `@IgnoreSecurity` ignores both the login state and the privilege checks
 
+
+## Login state and privilege check (`AuthHandler`)
+
+Implement `AuthHandler` and register the implementation with `@Bean` from `fountain::f_bean`; MVC will then check the login state / privilege **before calling the controller function** on every request: only `OK` proceeds, any other value writes the response directly and the controller function is **not called**.
+
+```cj
+/**
+ * Login state and privilege check interface: the implementation takes effect as soon as it is decorated with @Bean.
+ * When both the login state and the privilege must be checked, it is best to do both in a single class (one call does it all).
+ */
+public interface AuthHandler {
+    /**
+     * Check the login state and privilege of the current user
+     * @param param request context, matched controller mapping path, extracted arguments, the two ignore flags
+     * @return the check result
+     */
+    func check(param: AuthParam): AuthStatus
+}
+/** Session-only check ( <: AuthHandler ); use it when the login state and the privilege are implemented separately */
+public interface UserSessionHandler <: AuthHandler {}
+/** Privilege-only check ( <: AuthHandler ); use it when the login state and the privilege are implemented separately */
+public interface PrivilegeHandler <: AuthHandler {}
+
+/** Check arguments */
+public struct AuthParam {
+    public AuthParam(
+        public let ctx: HttpContext,        // the current request context
+        public let path: String,            // the matched controller mapping path (the path defined on the controller function, not the request URL)
+        public let args: ArrayList<Any>,    // the arguments already extracted for this call
+        public let ignoreAuth: Bool,        // whether the login check is ignored (@IgnoreAuth / @IgnoreSecurity)
+        public let ignorePrivilege: Bool    // whether the privilege check is ignored (@IgnorePrivilege / @IgnoreSecurity)
+    ){}
+}
+```
+
+**Selection rule when several implementations are registered**: if any implementation **directly** implements `AuthHandler`, only that one is used (every decision is left to it; the two ignore flags are read from `AuthParam`); otherwise one `UserSessionHandler` and one `PrivilegeHandler` are picked, and the login check runs first, followed by the privilege check once it passes. The two ignore flags are passed to the implementation as they are, and the implementation decides how to treat them.
+
+### `AuthStatus`
+
+The check result, six kinds of values; `prop isOK: Bool` is `true` only for `OK`:
+
+| Value | Meaning |
+|---|---|
+| `OK` | the current user's login state is valid and the privilege is correct |
+| `SessionNotFound(HttpStatus, Any)` / `SessionNotFound(Any)` | the login state of the current user was not found (not logged in, or the login state has expired) |
+| `InvalidSession(HttpStatus, Any)` / `InvalidSession(Any)` | the login state was found, but the login information carried by this access is invalid |
+| `SessionError(HttpStatus, Any)` / `SessionError(Any)` | an error occurred while checking the login state (possibly an internal server error) |
+| `PrivilegeError(HttpStatus, Any)` / `PrivilegeError(Any)` | an error occurred while checking the privilege (possibly an internal server error) |
+| `NoPrivilege(HttpStatus, Any)` / `NoPrivilege(Any)` | the current user has no privilege to access this resource |
+
+- **Status code**: the constructors taking a `HttpStatus` use it as the response status code; the constructors without it mean status code **200**.
+- **Response body**: taken from the second argument (`Any`); only `String` / `ToString` / `InputStream` / `Array<Byte>` / `f_data.ToData` are actually supported — any other type is ignored and the `reasonPhrase` of that `HttpStatus` is used as the response body instead.
+
+## Getting the current request context (`CurrentHttpContext`)
+
+```cj
+public struct CurrentHttpContext {
+    //When the server is handling an http access, returns the HttpContext being handled by the current thread; reading it outside a request-handling thread throws
+    public static prop instance: HttpContext
+}
+```
+
+- **When it is set**: MVC sets it on the current thread before entering the controller function, and cleans it up at the request exit — the HTTP closure, the lightweight handler for 404/static resources and the WebSocket closure all share the same cleanup code, so request-level state is never left behind for the next request on the same thread.
+- **Thread scope**: it lives on the **current thread**, so it can be read inside the controller function and its synchronous call chain; it cannot be read from a thread you `spawn` yourself (that throws) — pass the `HttpContext` as an argument in that case.
+- **Example**: `fountain::f_mvc.FileDownload` reads `CurrentHttpContext.instance` in its constructor and then uses `ctx.responseBuilder` to write the response.
 
 ## Redirect
 
@@ -1262,10 +1337,7 @@ public func download(data: Array<File>): Unit
 
 The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
 
-- Module level: `AuthHandler` (interface), `AuthParam` (struct), `AuthStatus` (enum), `Controller` (macro), `CurrentHttpContext` (struct), `ExtendHttpResponsePusher` (interface), `FailureMessageKind` (enum), `HttpRequestException` (class), `HttpResponseException` (class), `MVCConfig` (class), `MVCException` (class), `public class MVCHealthController`, `MVCInitializer` (struct), `MVCStarter` (class), `MultiRequestMethodHandler` (class), `public class PathVariable <: ControllerFuncParam`, `PrivilegeHandler` (interface), `public class RequestBody <: ControllerFuncParam`, `public class RequestHeader <: ControllerFuncParam`, `RequestMapping` (class), `RequestMeta` (class), `RequestMetas` (class), `RequestMethod` (enum), `public class RequestParam <: AbstractRequestParam`, `public class RequestParamObject <: AbstractRequestParam`, `UserSessionHandler` (interface), `public class WSBinaryMeta<T> <: WSFuncMeta<T>`, `public class WSCloseMeta<T> <: WSFuncMeta<T>`, `public class WSOpenMeta<T> <: WSFuncMeta<T>`, `public class WSPingFunc<T> <: WSFuncMeta<T>`, `public class WSPingMeta<T> <: WSFuncMeta<T>`, `public class WSPongMeta<T> <: WSFuncMeta<T>`, `public class WSTextMeta<T> <: WSFuncMeta<T>`, `public macro WeavedController(input: Tokens): Tokens`
-- `AuthParam`: `let args: ArrayList<Any>`, `let ignoreAuth: Bool`, `let ignorePrivilege: Bool`
-- `AuthStatus`: `isOK` (prop)
-- `CurrentHttpContext`: `public static prop instance: HttpContext` (the HttpContext of the current http access; reading it outside a request-handling thread throws)
+- Module level: `ExtendHttpResponsePusher` (interface), `FailureMessageKind` (enum), `HttpRequestException` (class), `HttpResponseException` (class), `MVCConfig` (class), `MVCException` (class), `public class MVCHealthController`, `MVCInitializer` (struct), `MVCStarter` (class), `MultiRequestMethodHandler` (class), `public class PathVariable <: ControllerFuncParam`, `public class RequestBody <: ControllerFuncParam`, `public class RequestHeader <: ControllerFuncParam`, `RequestMapping` (class), `RequestMeta` (class), `RequestMetas` (class), `RequestMethod` (enum), `public class RequestParam <: AbstractRequestParam`, `public class RequestParamObject <: AbstractRequestParam`, `public class WSBinaryMeta<T> <: WSFuncMeta<T>`, `public class WSCloseMeta<T> <: WSFuncMeta<T>`, `public class WSOpenMeta<T> <: WSFuncMeta<T>`, `public class WSPingFunc<T> <: WSFuncMeta<T>`, `public class WSPingMeta<T> <: WSFuncMeta<T>`, `public class WSPongMeta<T> <: WSFuncMeta<T>`, `public class WSTextMeta<T> <: WSFuncMeta<T>`
 - `FailureMessageKind`: `static func parse(kind: String): FailureMessageKind`, `static func tryParse(kind: String): ?FailureMessageKind`
 - `HttpResponsePusher`: `func push(path: String, method: RequestMethod, header: HttpHeaders): Unit`
 - `MVCConfig`: `ACCESS_CONTROL_ALLOW_HEADERS` (let), `ACCESS_CONTROL_ALLOW_ORIGIN` (let), `ACCESS_CONTROL_MAX_AGE` (let), `static let DOWNLOAD_BUFFER_SIZE =`, `static let HEADER_TABLE_SIZE =`, `HOST` (let), `static let INITITAL_WINDOW_SIZE =`, `static let INTERNAL_SERVER_ERROR_MESSAGE =`, `INTERNAL_SERVER_ERROR_MESSAGE_KIND` (let), `static let KEEP_ALIVE_TIMEOUT =`, `static let MAX_CONCURRENT_STREAMS =`, `static let MAX_FRAME_SIZE =`, `static let MAX_HEADER_LIST_SIZE =`, `static let MAX_REQUEST_BODY_SIZE =`, `static let MAX_REQUEST_HEADER_SIZE =`, `MVC_DEBUGGING` (let), `MVC_OVERALL_ELAPSED_SWITCH` (let), `MVC_STATIC_RESOURCE_ROOT` (let), `static let PORT =`, `static let READ_HEADER_TIMEOUT =`, `static let READ_TIMEOUT =`, `SERVICE_POOL_CAPACITY` (let), `static let SERVICE_POOL_PREHEAT =`, `static let SERVICE_POOL_QUEUE_CAPACITY =`, `TLS_PATH` (let), `static let TLS_SUPPORTED_ALPN_PROTOCOLS =`, `static let TLS_VERIFY_BEAN =`, `static let TLS_VERIFY_MODE =`, `static let TLS_VERIFY_PEM =`, `static let WRITE_TIMEOUT =`, `static prop accessControlAllowHeaders: String`, `accessControlAllowOrigin` (prop), `static prop accessControlMaxAge: Int64`, `static prop downloadBufferSize: Int64`, `static func getInternalServerErrorMessage()`, `getInternalServerErrorMessageKind` (func), `static prop headerTableSize: ?UInt32`, `static prop host: String`, `static prop initialWindowSize: ?UInt32`, `static prop keepAliveTimeout: ?Duration`, `static prop maxConcurrentStreams: ?UInt32`, `static prop maxFrameSize: ?UInt32`, `static prop maxHeaderListSize: ?UInt32`, `static prop maxRequestBodySize: ?Int64`, `static prop maxRequestHeaderSize: ?Int64`, `static prop mvcOverallElapsedSwitch: Bool`, `static prop mvcStaticResourceRoot: Path`, `static prop port: UInt16`, `static prop readHeaderTimeout: ?Duration`, `readTimeout` (prop), `static prop servicePoolConfig: ?ServicePoolConfig`, `tlsConfig` (prop), `static prop writeTimeout: ?Duration`
