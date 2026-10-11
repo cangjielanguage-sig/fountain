@@ -2,6 +2,7 @@
 
 > 依据：`jit-bytecode-m1.md` v0.18.35（同目录）。
 > 本文把 M1 规格落到 `f_jit` 模块的**包级 / 顶级声明 / 公共成员**三级设计；M2、M3 增量见 `design-m2.md`、`design-m3.md`。
+> 附录（文末）：**附 A** 语法元素 → 字节码 · **附 B** 字节码指令定义（M1 ISA 全表）· **附 C** 字节码 ↔ 机器码（JIT 后端）——同源摘录自规格 §5/§10/§12，冲突以规格为准；M2/M3 增量三表见各增量设计附录。
 > 粒度约定：
 > - 包 = `fountain::f_jit` 模块下的一个 Cangjie 包；
 > - 顶级声明 = 包内顶层声明（class / interface / struct / enum / const / let / func）；
@@ -988,3 +989,585 @@ Ready --CAS--> Unloading（拒绝新调用；活跃调用照常完成）--active
 | D5 | 指纹算法 | 源码指纹/字节码指纹算法与常量 `constFingerprint`（FNV-1a）分开：前者用于去重键，规格未固化算法——建议 FNV-1a 同款，实施时裁定 |
 | D6 | `Engine` 公开性（已结案） | 2026-10-11 裁定：**`protected`**（原「为测试/诊断设为 public」作废）——诊断与测试均在本模块内（`src/test/...`，protected 可见）；规格 §8 支撑类型已补 `protected enum Engine`，§8.7 清单同步 |
 | D7 | **异常基类（已结案）**：规格 §8 原声明 `<: Exception`（行 792/1075），2026-10-11 裁定统一改用仓库基类 `fountain::f_base.BaseException`——**规格已同步落笔**（`<: BaseException` + 支撑类型段说明），设计与计划同步 | 无需再裁定；`base` 包外部依赖补 f_base；`fountain::f_exception` 对该基类有 `public import` 再导出，两种 import 路径等价 |
+
+---
+
+## 附录：语法 → 字节码 · 指令定义 · 机器码对照（实现用）
+
+**三张表**：**附 A** 语法元素 → 字节码（降低对照）；**附 B** 字节码指令定义（ISA 明细）；**附 C** 字节码 ↔ 机器码（JIT 后端发射）。
+
+**口径**：三表的**权威文本是规格 `jit-bytecode-m1.md`**（逐条附锚点）；本附录为同源摘录/整理（附 B、附 C 的表格由规格 §5 / §12.4 抽取），**冲突以规格为准**，规格改动须同步本附录。锚点列的 `§x.y` 均指规格章节（design 内部章节写作 `design §x.y`）。
+
+**范围**：M1 全量；**M2 / M3 增量**（宿主闭包 / 宿主对象 / Any / JSON 等）在各自增量设计中给出同类三表——见 `design-m2.md`、`design-m3.md` 附录。
+
+## 附 A 语法元素 → 字节码（M1）
+
+**读法**：「降低产物」列给**指令序列要点**（栈效应/操作数逐条见附 B）；「关键指令」列的十六进制为该组首编号。一个源结构对应多条指令时按**从左到右求值**展开（§5 各降低模式）。
+
+### A.1 字面量与常量
+
+| 语法元素 | 源形式（示例） | 降低产物（要点） | 关键指令 | 锚点 |
+|---|---|---|---|---|
+| 整数字面量（含窄化） | `42`、`70000` | 按值选**最短形式**：i8 域 → `PUSH_I8`、i32 域 → `PUSH_I32`、其余 → `PUSH_I64`；**超 Int64 域不报错**——编译为 Decimal 常量（scale 0，精确构造） | `0x10`–`0x12` | §5、§11.9 |
+| 小数字面量 | `1.5`、`3e2`、`1e-3` | **自动编译为 Decimal 常量**（kind 6；按字面文本精确构造，`3e2` → scale=-3，**不经 Float64**）；显式 `1.5f64`（语法形式由前端定义）→ Float64 常量 | `PUSH_KH` | §11.9、§11.5 |
+| 布尔字面量 | `true` / `false` | `PUSH_BOOL` | `0x14` | §5 |
+| `null` 字面值 | `null` | `PUSH_NULL`——**M1 无合法落点**（句柄型局部恒非空、直存被校验 10 拒绝）；保留关键字仅为准确诊断 | `0x15` | §7 校验 10 |
+| 字符串字面量（三形态） | `'…'` / `"…"` / `'''…'''` / `#…#` | 常量注册（kind 3）→ `PUSH_KH idx`；**定界扫描取串体 → 锚定截取 → 转义解码 → 插值切分**（顺序冻结） | `0x16` | §8.8、design §4.4 |
+| 字符串插值 | `"a${e}b"` | 各片段：非 String 片段 → `TO_STR t`（Value 标签见 §11.9），String 片段原样；片段间 `STR_CAT` 左折叠；`${}` 为空 → 编译错误 | `0xB7`/`0xA4` | §11.9、S3.12 |
+| 正则字面量 | `/[a-z]/iu` | 常量注册（kind 10）→ `PUSH_KH idx`；**空 pattern 加载期拒绝** | `0x16` | §3.3、§11.9 |
+| 空 List / 空 Map 字面量 | `[]` / `{}` | `MAKE_LIST` / `MAKE_MAP`（分配型；v0.18 起**运行期构造**、非常量） | `0xA0`/`0xA2` | §3.3 |
+| Range 字面量 | `a..b : s`、`a..=b` | `RANGE_NEW`（isClosed 由 `..`/`..=` 决定；**step=0 → 14**，常量 step=0 前端即拒） | `0x9A` | §11.9 |
+| JSON 字面量 | `` `{…}` `` / 直写 `{…}` `[…]` | **M3 起**：常量 kind 11（非空）+ HostObject 通道；M1 无此形态 | — | m3 §11 → design-m3 附 A |
+
+### A.2 变量与赋值
+
+| 语法元素 | 源形式（示例） | 降低产物（要点） | 关键指令 | 锚点 |
+|---|---|---|---|---|
+| 变量引用 | `x` | 普通局部：`LOADL i`（i<4 可用压缩形式 `LOADL0`–`LOADL3`）；**闭包捕获**：`LOAD_CAP idx`（H56，读闭包句柄捕获第 idx 项） | `0x20`–`0x26` | §8.0、§8.6 |
+| 声明 / 赋值 | `let x = e`、`var x`、`x = e` | 求值 `e` → `STOREL i`；**声明即首写**（明确赋值起点；声明后未写即读 = 编译错误） | `0x21` | §7 校验 10 |
+| 多重赋值 / 交换 | `(a, b) = (b, a)` | 每个 RHS → **隐藏局部**（类型 = 各 RHS 静态类型，声明即首写）→ 依序 `STOREL` 回 LHS（**先读后写**，交换天然正确）；`_` 槽对应 RHS **仍求值**、结果 `POP`；RHS 仅一维元组字面量、从左到右求值 | `0x21`/`0x19` | §5 降低模式 |
+
+### A.3 运算与转换
+
+| 语法元素 | 源形式（示例） | 降低产物（要点） | 关键指令 | 锚点 |
+|---|---|---|---|---|
+| 整型算术 | `+` `-` `*` `/` `%` | `IADD`/`ISUB`/`IMUL`/`IDIV`/`IMOD`（溢出 → 3、÷0 → 1、`%` 除以 0 → 2）；**`%` 仅 (Int64, Int64)**，不参与提升 | `0x30`–`0x34` | §5、§11.9 |
+| 整型一元 / 位运算 | `-x`、`&`、`\|`、`^`、`~`、`<<`、`>>`、`>>>` | `INEG`/`IABS`/`IMIN`/`IMAX`/`BAND_I`/`BOR_I`/`BXOR_I`/`BNOT_I`/`SHL_I`/`SHR_I`/`USHR_I`；位计数 `ICLZ`/`IPOPCNT`；显式无检查加 `IADD_WRAP` | `0x35`–`0x3B`、`0x62`–`0x68` | §5 |
+| 浮点算术 | `+` `-` `*` `/`（F64 域） | `FADD`/`FSUB`/`FMUL`/`FDIV`（IEEE，除零得 ±Inf **不报错**）；strictFp 形态 → `FDIV_CHK`（÷0 → 1）；**全程 NaN 规范化** | `0x40`–`0x44` | §5、§11.3 |
+| 浮点一元 / 取整 | `-x`、`abs`、`min`/`max`、开方、取整族 | `FNEG`/`FABS`/`FMIN`/`FMAX`/`FSQRT`/`FFLOOR`/`FCEIL`/`FTRUNC`/`FROUND`（NaN → canonical NaN） | `0x45`–`0x4D` | §5、§11.3 |
+| 数值比较 | `==` `!=` `<` `<=` `>` `>=` | 整型 → `EQ_I`–`GE_I`；浮点 → `EQ_F`–`GE_F`（NaN 语义冻结）；文本/时间 → `CMP_STR`/`CMP_DEC`/`CMP_DT`/`CMP_DUR`（helper；6/8/11/12） | `0x52`–`0x5D`、`0x6B`–`0x6E` | §5、§11.3 |
+| 句柄等值 | `h == h2`、`h == null` | `EQ_H`/`NE_H`——**同一性比较、不解引用** | `0x69`/`0x6A` | §5 |
+| 逻辑（短路） | `a && b`、`a \|\| b` | `JZ`/`JNZ` **短路链**；`AND_B`/`OR_B`/`XOR_B` 仅用于两侧均已求值的场景（无短路） | `0x71`/`0x72`、`0x5F`–`0x61` | §5 降低模式 |
+| 逻辑非 | `!x` | `NOT_B` | `0x5E` | §5 |
+| 隐式提升（混合运算/比较） | `i64 op f64`、`i64 op dec`、`f64 op dec`（含反序） | 窄侧自动插 `TO_F64` / `TO_DEC(src=0/1)`；宽度序 **Decimal > Float64 > Int64**；字节码层无隐式行为（I6） | `0x82`/`0x9C` | §11.9 |
+| 显式数值转换 | 形式由前端定义（如 `x as Int64`） | 6 方向互转指令；**窄化方向（F64→I64、DEC→I64、DEC→F64）仅经显式形式可达**；失败按 mode 选报错（13/9）或 DEOPT | `0x81`/`0x82`/`0x9C`–`0x9E` | §11.9 |
+| n 位置自动窄化 | `s * n`、`d * n`、`d / n` 的 n 位置 | n 为非 Int64 时前端插 `TO_I64(mode=0)` / `DEC_TO_I64(mode=0)`；**仅限这三处** | `0x81`/`0x9D` | §11.9 |
+
+### A.4 控制流
+
+| 语法元素 | 源形式（示例） | 降低产物（要点） | 关键指令 | 锚点 |
+|---|---|---|---|---|
+| `if`（**语句形式**） | `if (c) { … }` | 条件 → `JZ else`；各分支栈净深 0（末值 `POP`）；**分支类型不受限**；裸 `if`（无 else 收尾）允许 | `0x71`/`0x19` | §5 降低模式 |
+| `if`（**表达式形式**） | `let x = if (c) { a } else { b }` | 各分支恰留 1 cell、**类型逐位一致**（同一 LocalType，否则编译错误）；`JZ`/`JMP` 汇合；**必须有最终 else** | `0x71`/`0x70` | §5 降低模式 |
+| `if-else if-else` | 逐级 | `else if` = else 分支内嵌套 if，每级各自 `JMP end` 汇合 | `0x71`/`0x70` | §5 降低模式 |
+| `while` | `while (c) { … }` | `header:` 条件 → `JZ end`；体；回边 `LOOP_BACK header`（= `STACK_GUARD` + `interrupt_poll` H22 安全点 + `jmp`） | `0x74` | §5、§12.6 |
+| `while (true)` | 无限循环 | 省略头部 `JZ`，**回边安全点必须保留**（deadline → -2 可中断） | `0x74` | §12.6 |
+| `for-in`（Range） | `for (i in a..b : s) { … }` | 隐藏计数局部（Int64，计入 nLocals）：初始化起点 → 按 s 符号与端点比较 → 体 → `i = i ± s` → 回边；空区间首轮即假 | `0x71`/`0x74` | §5 降低模式、§11.9 |
+| `for-in`（List） | `for (x in list) { … }` | **长度快照** `n = LEN(h)` + 索引循环 + `GET_IDX`（迭代中越界 → 4） | `0x90`/`0x91` | §11.9 |
+| `for-in`（Map） | `for ((k, v) in map) { … }` | `cur = MAP_ITER_BEGIN(m)` → `has = MAP_ITER_STEP(cur, 0)`（**0 → 跳出口**）→ `STEP(cur, 1)` / `STEP(cur, 2)` 取键值 → 体 → 回跳；**出口标签处发一次 `STEP(cur, 3)`（close，幂等，覆盖条件出口与 break）**；**不登记窗口槽**；迭代中修改同一 map → 23 | `0xAF`/`0xBE` | §11.9（v0.16.1） |
+| `for-in`（String） | `for (ch in s) { … }` | 索引 + `STR_AT`（**码点序**） | `0x95` | §11.9 |
+| `where` 谓词 | `for (i in it where c) { … }` | 体内首条：条件不满足 → **跳至 continue 点** | `0x71` | §5 降低模式 |
+| `break` / `continue` | | `break` = `JMP end`；`continue` = `JMP` 至**回边指令之前**（保证每轮都过安全点）；**无专用指令** | `0x70` | §5 降低模式 |
+| `return e` / `return` | | `RET` / `RET_VOID`（引用位返回另用 `RET_NULL`）——全部 `jmp .epilogue`，**唯一返回路径** | `0x7C`–`0x7E` | §5、§12.3 |
+| 明确赋值与回边 | 循环内赋值 | 数据流**不动点迭代**；循环不保证执行一轮 ⇒ **仅在循环体内 STOREL 的局部，出口后不视为已赋值**（读 = 编译错误） | —（前端分析） | §7 校验 10 |
+| `recursive(…)` 调用 | 自递归 | 顶层：`CALL_FUNC <entryFn>`（fid=自身）；闭包层：`LOADL 0` + `CALL_CLOSURE`；**尾位置 → 实参逆序 `STOREL` + `LOOP_BACK <函数入口>`（帧复用，v0.17，不发射 RET）** | `0x78`/`0x7F`/`0x74` | §8.0、§5 降低模式 |
+| `recursive` 作右值 | `let f = recursive` | 闭包层 = `LOADL 0`（零成本自引用）；顶层 = `closure_new <adapterFn>`（0 捕获隐藏适配器，体 = 转发 `CALL_FUNC entryFn`） | `CALL_HELPER` H54 | §8.0、§8.6 |
+
+### A.5 闭包与调用
+
+| 语法元素 | 源形式（示例） | 降低产物（要点） | 关键指令 | 锚点 |
+|---|---|---|---|---|
+| 闭包声明 | `{x => …}`、`let f = {…}` | 独立 FuncEntry（**帧 locals[0] = 闭包句柄、locals[1..] = 形参**）+ 捕获快照打包 `closure_new`（H54，分配型） | `CALL_HELPER` H54 | §8.5、§8.6 |
+| 闭包体内捕获读取 | 捕获变量引用 | `LOAD_CAP idx`（H56；仅闭包函数体） | `0x26` | §8.6 |
+| 闭包调用 | `f(a1, a2)` | 实参**从左到右**入栈 → `LOADL f`（句柄压栈底）→ `CALL_CLOSURE 2`；fnId 由前端烘焙并经 `closure_new` 双重校验 | `0x7F` | §8.6 |
+| IIFE | `{…}(a)` | 同闭包调用（匿名 FuncEntry 立即调用） | `0x7F` | §8.5 |
+| first-class 闭包值（12 型） | 传参 / 返回 / 存局部 | 句柄型 cell；**逃逸 = M1 编译错误**（M2 起经提升组回桥：design-m2 附 A） | — | §8.6、m2 §14 |
+
+### A.6 容器 / 字符串 / 时间 / 正则
+
+| 语法元素 | 源形式（示例） | 降低产物（要点） | 关键指令 | 锚点 |
+|---|---|---|---|---|
+| 容器索引读 | `list[i]`、`map[k]`（含缺省、存在性） | `GET_IDX`（越界 4）/ `GET_KEY`（缺键 5）/ `GET_KEY_OR`（缺键取默认）/ `HAS_KEY` | `0x91`–`0x94` | §5 |
+| 容器变更 | `add` / `[i] = v` / `insert` / `remove` / `map[k] = v` / `map.remove(k)` | `LIST_APPEND`/`LIST_SET`/`LIST_INSERT`/`LIST_REMOVE`/`MAP_PUT`/`MAP_REMOVE`——**变更型**（§9.15 全规则：常量禁写 20、deopt 禁令、兜底） | `0xA1`/`0xA3`/`0xAB`–`0xAE` | §9.15 |
+| 容器 / 字符串长度 | `len(x)` | `LEN`（按**静态类型**分派 helper H01/H03/H07） | `0x90` | §5 |
+| 字符串切片 | `s[a..b]`、`s[a..=b]` | `STR_SUB`（**码点索引半开区间**；`..=` 由前端折算；越界/逆序 → 4） | `0xB8` | §11.4、§11.9 |
+| 字符串重复 | `s * n`（反序前端换序） | `STR_REPEAT`（`n ≤ 0` → 空串；`n × len_utf8` 溢出 → 3；分配型） | `0xBC` | §11.9（v0.15） |
+| 字符串替换 | `s.replace(old, new)` | `STR_REPLACE`（old 为空串 → 14；分配型） | `0xB9` | §5 |
+| 字符串混合加法 | `s + x`、`x + s` | 非 String 侧 `TO_STR(t_x)` → `STR_CAT`；可文本化类型 = TO_STR 标签集（**Closure / List / Map / Unit → 编译错误**）；`x` 恰好求值一次 | `0xB7`/`0xA4` | §11.9（v0.18.15） |
+| 正则匹配操作符 | `re ~ s`、`re !~ s` | `REGEX_IS_MATCH`（`!~` 追加 `NOT_B`）；优先级：高于加法、低于乘除 | `0xBA` | §11.9（v0.11） |
+| 正则替换操作符 | `re/s/r/g`、`re/s/r/n`、`re/s/r/n,m` | **helper 直呼**（无专用 opcode）：`CALL_HELPER` H58 / H59 / H72 | `0x75` | §11.9（v0.18.19） |
+| 正则查找 | `re.find(s)` | `REGEX_FIND`（首个匹配；无匹配 → 0；分配型） | `0xBB` | §5 |
+| Regex 构造 | `s.regex()` | `STR_TO_REGEX`（H69；非法/空 pattern → 14；分配型） | `0xBF` | §3.3 |
+| 时间 / 时长算术 | `dt ± dur`、`dur ± dur`、`dur * n`、`dur / n`、`-dur`、`dt1 - dt2` | `DT_ADD`/`DT_SUB`/`DUR_ADD`/`DUR_SUB`/`DUR_MUL`/`DUR_DIV`/`DUR_NEG`/`DT_DIFF`（`×`/`÷` 的 n 位置可按 n 位置规则自动窄化；量纲面封闭） | `0xB0`–`0xB6`/`0xBD` | §11.9 |
+| 时间字段读取 | 源形式由前端定义 | `DT_FIELD f`（f 编号见 §6 H14 行） | `0x96` | §5、§6 |
+| 时长取纳秒 | 源形式由前端定义 | `DUR_TICKS` | `0x97` | §5 |
+| Decimal ↔ 整型问答 | 源形式由前端定义 | `DEC_IS_INT` | `0x98` | §5 |
+| 区间包含判定 | 源形式由前端定义 | `RANGE_CONTAINS`（`..=` 含 end；空区间恒 false） | `0x9B` | §11.9 |
+
+### A.7 守卫 / 错误 / 调试（前端发射点）
+
+| 语法元素 | 源形式（示例） | 降低产物（要点） | 关键指令 | 锚点 |
+|---|---|---|---|---|
+| 句柄空安全守卫 | 隐式（句柄型解引用前） | `GUARD_NNZ mode`（null → 6 / DEOPT）；静态可证非空则省略 | `0x88` | §5、§3.2 |
+| 类型断言/守卫 | 类型注解驱动的边界检查 | `GUARD_TYPE tok mode`（8 / DEOPT）、`IS_TYPE`（纯判定，永不失败）、`CAST tok mode`（7 / DEOPT） | `0x80`/`0x83`/`0x84` | §5 |
+| 显式抛出 / 断言 | 前端语法面提供时 | `THROW code`（写 17 + 站点附加表记源语言码）/ `ASSERT code` / `ABORT code` | `0x85`–`0x87` | §5 |
+| 调试陷阱 | 调试模式 | `TRAP`（发布版不发射） | `0x01` | §5 |
+| 站点与错误检查 | 隐式（可能失败的指令前） | `SET_SITE i32`（伪指令展开）+ 各 `CALL_HELPER` **自动尾随 `CHECK_ERR`** | `0x03`/`0x04` | §7、I3 |
+| 栈防守与安全点 | 隐式（回边/进入） | `STACK_GUARD need`（不足 → DEOPT）、`LOOP_BACK` 内 `call H22`（-2 仅此产生） | `0x07`/`0x74` | §5、§12.6 |
+| **M2 / M3 增量** | 成员访问糖、`C(args…)`、宿主闭包调用、Any 装箱/转型、JSON 字面量与 `j[i]` | 见 `design-m2.md` 附 A、`design-m3.md` 附 A | — | — |
+
+## 附 B 字节码指令定义（M1 ISA）
+
+**编码与命名（§10.1）**：
+
+- 常量名 `OP_<助记符>`（大写下划线，如 `OP_PUSH_I8`、`OP_CALL_HELPER`）。
+- 指令编码 `[op:u8][operands…]`，**小端**；`rel` 为相对**下一条指令**的有符号 32 位偏移；**M1 指令全部定长**。
+- 保留区（未分配槽 + 0xC0–0xFF）与禁用区（0xA9–0xAA 时间构造）在 M1 **发射即 `ERR_NOT_IMPL`**。
+- 实现侧以 `OpInfo.OPCODE_TABLE`（256 项、`table[i].code == i`）为唯一索引源，供**反汇编 / 汇编期校验 / 调试器共用**（§10.3）。
+
+**操作数编码种类（§10.2）**：
+
+| 记法 | 长度（B） | 含义 |
+|---|---|---|
+| `-` | 0 | 无操作数 |
+| `u8` / `i8` | 1 | 无符号 / 有符号 8 位 |
+| `u16` | 2 | 无符号 16 位（局部索引、常量索引、helper id、类型 token） |
+| `i32` | 4 | 有符号 32 位（site 值、立即数） |
+| `rel32` | 4 | 相对偏移（跳转目标） |
+| `i64` | 8 | 64 位立即数（整数值或 Float64 位模式） |
+| `u16 u8` | 3 | 双操作数（如 helper id + argc） |
+
+**类别码（`OpInfo.CAT_*`，§10.3）**：
+
+| 码 | 类别 | 说明 |
+|---|---|---|
+| 0 | `CAT_MISC` | 控制 / 杂项 |
+| 1 | `CAT_CONST` | 常量 / 栈 |
+| 2 | `CAT_LOCAL` | 局部变量 |
+| 3 | `CAT_I64` | 整型算术 |
+| 4 | `CAT_F64` | 浮点算术 |
+| 5 | `CAT_CMP` | 比较 / 逻辑 / 位 |
+| 6 | `CAT_CTRL` | 控制流 |
+| 7 | `CAT_CALL` | 调用 |
+| 8 | `CAT_TYPE` | 类型 / 转换 / 错误 |
+| 9 | `CAT_BOX` | 容器 / 值运算 / 转换（helper 路由，含分配型） |
+| 10 | `CAT_FORBID` | 禁用（容器 / 时间构造，M2 启用） |
+| 11 | `CAT_RSVD` | 保留 |
+
+**全表**（按 opcode 分组；栈作用列 `… a b → c` 表示**先弹 b 再弹 a**；逐条同源摘录自规格 §5）：
+
+#### B.1 0x00–0x0F 控制 / 杂项
+
+| Hex | 名称 | 操作数 | 语义 | 失败码 |
+|---|---|---|---|---|
+| 00 | `NOP` | — | 无操作 | — |
+| 01 | `TRAP` | u8 | 调试陷阱 | — |
+| 02 | `BREAKPOINT` | — | 保留，发布版空操作 | — |
+| 03 | `SET_SITE` | i32 | 写 `ctx.site`；伪指令展开目标 | — |
+| 04 | `CHECK_ERR` | rel32 | `errCode != 0` → 跳 bail | — |
+| 05 | `BAIL` | i8 k | 写错误槽=k，`eax=0`，跳 epilogue | — |
+| 06 | `CHECK_ERR_NC` | — | 仅断言（发布版空操作），调试期校验 | — |
+| 07 | `STACK_GUARD` | u16 need | 剩余栈 < need → `BAIL -1`（DEOPT） | DEOPT |
+| 08–0F | 保留 | | | |
+
+#### B.2 0x10–0x1F 常量 / 栈
+
+| Hex | 名称 | 操作数 | 语义 | 失败码 |
+|---|---|---|---|---|
+| 10 | `PUSH_I8` | i8 | `→ sext(v)` | — |
+| 11 | `PUSH_I32` | i32 | `→ sext(v)` | — |
+| 12 | `PUSH_I64` | i64 | `→ v` | — |
+| 13 | `PUSH_F64` | i64(bits) | `→ v`（位模式原样） | — |
+| 14 | `PUSH_BOOL` | u8 | `→ 0/1` | — |
+| 15 | `PUSH_NULL` | — | `→ 0`（不得直存句柄型局部，§7 校验 10） | — |
+| 16 | `PUSH_KH` | u16 idx | 压常量句柄 | — |
+| 17 | `DUP` | — | `a → a a` | — |
+| 18 | `DUP2` | — | `a b → a b a b` | — |
+| 19 | `POP` | — | `a →` | — |
+| 1A | `POP2` | — | `a b →` | — |
+| 1B | `SWAP` | — | `a b → b a` | — |
+| 1C | `PICK` | u8 n | `… v → … v v`（n=0 等价 DUP） | — |
+| 1D–1F | 保留 | | | |
+
+#### B.3 0x20–0x2F 局部变量
+
+| Hex | 名称 | 操作数 | 语义 | 失败码 |
+|---|---|---|---|---|
+| 20 | `LOADL` | u16 i | `→ locals[i]` | 越界=编译错误 |
+| 21 | `STOREL` | u16 i | `v → locals[i]=v` | 越界=编译错误 |
+| 22 | `LOADL0` | — | `→ locals[0]`（压缩形式，可选） | — |
+| 23 | `LOADL1` | — | `→ locals[1]` | — |
+| 24 | `LOADL2` | — | `→ locals[2]` | — |
+| 25 | `LOADL3` | — | `→ locals[3]` | — |
+| 26 | `LOAD_CAP` | u16 idx | 闭包句柄（locals[0]）→ 捕获第 idx 个 cell（H56；仅闭包函数 prologue/体内使用，§8.6） | 6, 8 |
+| 27–2F | 保留 | | | |
+
+#### B.4 0x30–0x3F 整型算术（IADD–IMOD 检查溢出 / 除零；IADD_WRAP 显式无检查）
+
+| Hex | 名称 | 语义（`a b → r`） | 失败码 |
+|---|---|---|---|
+| 30 | `IADD` | a+b | 3 |
+| 31 | `ISUB` | a-b | 3 |
+| 32 | `IMUL` | a*b | 3 |
+| 33 | `IDIV` | a/b（向零截断） | 1, 3（INT_MIN/-1） |
+| 34 | `IMOD` | a%b（余数符号随被除数；`INT_MIN % -1 → 0`，不报溢出）；源语言 `%` 仅 `(Int64, Int64)` 定义（§11.9） | 2 |
+| 35 | `INEG` | -a | 3 |
+| 36 | `IABS` | \|a\| | 3 |
+| 37 | `IMIN` | min(a,b) | — |
+| 38 | `IMAX` | max(a,b) | — |
+| 39 | `IADD_WRAP` | a+b 无检查（显式选择） | — |
+| 3A | `ICLZ` | 前导零计数 | — |
+| 3B | `IPOPCNT` | 位中 1 的个数 | — |
+| 3C–3F | 保留 | | |
+
+#### B.5 0x40–0x4F 浮点运算
+
+| Hex | 名称 | 语义（`a b → r`） | 失败码 |
+|---|---|---|---|
+| 40 | `FADD` | a+b（IEEE） | — |
+| 41 | `FSUB` | a-b | — |
+| 42 | `FMUL` | a*b | — |
+| 43 | `FDIV` | a/b，IEEE（得 ±Inf/NaN，**不报错**） | — |
+| 44 | `FDIV_CHK` | a/b，÷0 报错（strictFp） | 1 |
+| 45 | `FNEG` | -a | — |
+| 46 | `FABS` | \|a\| | — |
+| 47 | `FMIN` | min（任一操作数为 NaN → canonical NaN，§11.3） | — |
+| 48 | `FMAX` | max（同上） | — |
+| 49 | `FSQRT` | √a（负数 → NaN） | — |
+| 4A | `FFLOOR` | 向下取整（保留 NaN/±Inf） | — |
+| 4B | `FCEIL` | 向上取整 | — |
+| 4C | `FTRUNC` | 向零取整 | — |
+| 4D | `FROUND` | 四舍六入五成双 | — |
+| 4E–4F | 保留 | | |
+
+#### B.6 0x50–0x6F 比较 / 逻辑 / 位运算
+
+| Hex | 名称 | 语义（`a b → r`） | 备注 |
+|---|---|---|---|
+| 50 | `CMP_I` | -1/0/1 | 整型三路比较 |
+| 51 | `CMP_F` | -1/0/1 | **NaN → 结果未定义**，汇编器禁止对其发射 |
+| 52 | `EQ_I` | 0/1 | |
+| 53 | `NE_I` | 0/1 | |
+| 54 | `LT_I` | 0/1 | |
+| 55 | `LE_I` | 0/1 | |
+| 56 | `GT_I` | 0/1 | |
+| 57 | `GE_I` | 0/1 | |
+| 58 | `EQ_F` | 0/1 | NaN 比较恒 false |
+| 59 | `NE_F` | 0/1 | NaN ≠ 任意 → true |
+| 5A | `LT_F` | 0/1 | |
+| 5B | `LE_F` | 0/1 | |
+| 5C | `GT_F` | 0/1 | |
+| 5D | `GE_F` | 0/1 | |
+| 5E | `NOT_B` | `a → !a` | |
+| 5F | `AND_B` | a&&b（0/1） | 无短路；短路用跳转 |
+| 60 | `OR_B` | a\|\|b | |
+| 61 | `XOR_B` | a^b（bool） | |
+| 62 | `BAND_I` | a&b | |
+| 63 | `BOR_I` | a\|b | |
+| 64 | `BXOR_I` | a^b | |
+| 65 | `BNOT_I` | ~a | |
+| 66 | `SHL_I` | a<<b（b 取低 6 位） | 与硬件一致 |
+| 67 | `SHR_I` | a>>b 算术 | |
+| 68 | `USHR_I` | a>>>b 逻辑 | |
+| 69 | `EQ_H` | 句柄同一性（== null 亦用此） | 不解引用 |
+| 6A | `NE_H` | 句柄不同一 | |
+| 6B | `CMP_STR` | 字符串序（helper H09） | 6 |
+| 6C | `CMP_DEC` | Decimal 序（helper H11） | 6, 8 |
+| 6D | `CMP_DT` | DateTime 序（helper H13） | 6, 11 |
+| 6E | `CMP_DUR` | Duration 序（helper H15） | 6, 12 |
+| 6F | 保留 | | |
+
+#### B.7 0x70–0x7F 控制流与调用
+
+| Hex | 名称 | 操作数 | 语义 | 失败码 |
+|---|---|---|---|---|
+| 70 | `JMP` | rel32 | 无条件跳 | — |
+| 71 | `JZ` | rel32 | `c==0` 跳（弹 c） | — |
+| 72 | `JNZ` | rel32 | `c!=0` 跳 | — |
+| 73 | 保留 | | | |
+| 74 | `LOOP_BACK` | rel32 | 回边：`STACK_GUARD` + 安全点 → 跳 | DEOPT / -2 |
+| 75 | `CALL_HELPER` | u16 hid, u8 argc | 调 helper，压结果；**汇编器自动尾随 CHECK_ERR**（hid：1–62、69–72 = 固定 helper §6；[0x0100,0xFFFF] = 单元私有预定义 helper §8.4，仅源入口产物） | helper 码 |
+| 76 | `CALL_HELPER_NC` | u16 hid, u8 argc | 同上但不做错误检查（仅永不失败的纯函数允许） | — |
+| 77 | `CALL_HELPER_V` | u16 hid, u8 argc | 返回 Unit，不压栈；**自动尾随 CHECK_ERR**（与 CALL_HELPER 同） | helper 码 |
+| 78 | `CALL_FUNC` | u16 fid, u8 argc | 内部 JIT 函数调用（共窗口） | 传播 + 14 |
+| 79 | `CALL_HOST` | u16 fid, u8 argc | 经薄 @C 包装调宿主回调（**M1 汇编期报 `ERR_NOT_IMPL`**，M2 启用；八项困难与三档演进路径见 §6 议题清单） | 传播 |
+| 7A | `HW_OPEN` | u16 cap | 打开分配区块（M1 汇编期报 `ERR_NOT_IMPL`） | 16 |
+| 7B | `HW_CLOSE` | — | 关闭区块 | — |
+| 7C | `RET` | — | `t=[rsp]`；`rax=t`；跳 epilogue | — |
+| 7D | `RET_VOID` | — | `rax=0`；跳 epilogue | — |
+| 7E | `RET_NULL` | — | `rax=0`（引用返回位） | — |
+| 7F | `CALL_CLOSURE` | u8 argc | 栈 [闭包句柄, a1…argc] → 间接调用闭包（§8.6；被调帧 locals[0]=句柄） | 传播 + 6, 8, 19 |
+
+#### B.8 0x80–0x8F 类型 / 转换 / 显式错误
+
+| Hex | 名称 | 操作数 | 语义 | 失败码 |
+|---|---|---|---|---|
+| 80 | `CAST` | u16 tok, u8 mode | 值/句柄转型；mode 0=报错 1=deopt | 7 / DEOPT |
+| 81 | `TO_I64` | u8 mode | F64→I64（NaN/越界按 mode） | 13 / DEOPT |
+| 82 | `TO_F64` | — | I64→F64（可能丢精度，不报错） | — |
+| 83 | `IS_TYPE` | u16 tok | 句柄类型判定 `→ 0/1`（null→false） | — |
+| 84 | `GUARD_TYPE` | u16 tok, u8 mode | 类型不符按 mode 处理 | 8 / DEOPT |
+| 85 | `THROW` | u8 code | 写错误槽=17，site 附加表记源语言码 | — |
+| 86 | `ASSERT` | u8 code | 弹 bool，false → BAIL(code) | code |
+| 87 | `ABORT` | u8 code | 无条件 BAIL(code) | code |
+| 88 | `GUARD_NNZ` | u8 mode | 栈顶句柄为 0 时按 mode 处理 | 6 / DEOPT |
+| 89 | `TYPE_OF` | — | 句柄 → 类型 token（调试用） | 6 |
+| 8A–8F | 保留 | | | |
+
+#### B.9 0x90–0x9F 容器 / 值提取 / 数值转换（走 helper）
+
+| Hex | 名称 | 操作数 | 语义 | 失败码 |
+|---|---|---|---|---|
+| 90 | `LEN` | — | 句柄 → 元素数（List/Map/String 通用） | 6, 8 |
+| 91 | `GET_IDX` | — | `h i → 元素` | 4, 6 |
+| 92 | `GET_KEY` | — | `h k → 值`（缺键报错） | 5, 6 |
+| 93 | `GET_KEY_OR` | — | `h k d → 值`（缺键取 d） | 6 |
+| 94 | `HAS_KEY` | — | `h k → 0/1` | 6 |
+| 95 | `STR_AT` | — | `h i → Rune(Int64)` | 4, 6 |
+| 96 | `DT_FIELD` | u8 f | `h → 字段值`（f 见 §6 H14） | 6, 11 |
+| 97 | `DUR_TICKS` | — | `h → 纳秒 Int64` | 6, 12 |
+| 98 | `DEC_IS_INT` | — | `h → 0/1` | 6, 8 |
+| 99 | `HANDLE_TAG` | — | 调试：取 tag | 6 |
+| 9A | `RANGE_NEW` | — | `start end step isClosed → h`（H41；isClosed 对应仓颉 `..` / `..=`；step=0 或 isClosed∉{0,1} → 14；空区间规则见 §11.9） | 14, 16 |
+| 9B | `RANGE_CONTAINS` | — | `h v → 0/1`（H42；语义见 §11.9） | 6, 8 |
+| 9C | `TO_DEC` | u8 src | src=0：Int64→Decimal（精确，scale 0，H28）；src=1：Float64→Decimal（最短往返，H29） | 13, 16 |
+| 9D | `DEC_TO_I64` | u8 mode | mode=0：向零截断、越界 → 9（H30）；mode=1：越界 → DEOPT | 9 / DEOPT |
+| 9E | `DEC_TO_F64` | — | IEEE 最近偶数，溢出 → ±Inf 不报错（H31） | 6, 8 |
+| 9F | 保留 | | | |
+
+#### B.10 0xA0–0xAF 分配/变更区（v0.5 起大部分启用；分配 = 登记新槽，变更 = 修改容器，§9.15）
+
+| Hex | 名称 | 操作数 | 语义 | 失败码 |
+|---|---|---|---|---|
+| A0 | `MAKE_LIST` | — | `→ h` 新建空 List（H70，v0.18；分配型；对应源语言空字面值 `[]`，§3.3） | 16 |
+| A1 | `LIST_APPEND` | — | `list cell → 0` 追加尾部（H43；ArrayList.add） | 6, 8, 20 |
+| A2 | `MAKE_MAP` | — | `→ h` 新建空 Map（H71，v0.18；分配型；对应源语言空字面值 `{}`，§3.3） | 16 |
+| A3 | `MAP_PUT` | — | `h k v → 0` 写键（H44；`map[k] = v` 语义） | 6, 8, 20 |
+| A4 | `STR_CAT` | — | `h1 h2 → h` 字符串拼接（H32；插值串与混合 String 加法原语，不可变结果） | 6, 16 |
+| A5 | `DEC_ADD` | — | `h1 h2 → h`（H24；decimal128 语义，§9.12/§11.9） | 9, 16 |
+| A6 | `DEC_SUB` | — | `h1 h2 → h`（H25） | 9, 16 |
+| A7 | `DEC_MUL` | — | `h1 h2 → h`（H26） | 9, 16 |
+| A8 | `DEC_DIV` | — | `h1 h2 → h`（H27；÷0 → 10） | 9, 10, 16 |
+| A9 | `DT_NEW` | — | 禁用（M2；M1 的 DateTime 来自常量/桥/DT±DUR） | — |
+| AA | `DUR_NEW` | — | 禁用（M2） | — |
+| AB | `LIST_INSERT` | — | `h i cell → 0` 定点插入（H45；add(T, at!)；i 越界 → 4） | 4, 6, 8, 20 |
+| AC | `LIST_SET` | — | `h i cell → 0` 下标写（H46；`list[i] = v`；越界 → 4） | 4, 6, 8, 20 |
+| AD | `LIST_REMOVE` | — | `h i → cell` 下标删除并返回被删元素（H47；remove(at!)；越界 → 4） | 4, 6, 8, 20 |
+| AE | `MAP_REMOVE` | — | `h k → 0/1` 删键（H48；1=已删 0=本无此键，不报 5） | 6, 8, 20 |
+| AF | `MAP_ITER_BEGIN` | — | `h → i64` 建立宿主侧 Map 迭代器并返回**游标**（H49，v0.16.1 重定义；**不登记窗口槽**——状态在宿主侧调用级迭代器表，随调用销毁；for-in 降级专用，§11.9） | 6, 8 |
+| BE | `MAP_ITER_STEP` | u8 mode | `cur → cell` 迭代推进/取件/关闭（H62，v0.16.1 重定义；mode：**0=推进→0/1**、1=键、2=值、**3=close**（出口发射、幂等）；坏游标/未推进取件 → 99（防御）；**迭代中修改同一 map → 23**） | 23, 99 |
+
+#### B.11 0xB0–0xBF 时间运算 / 文本化 / 字符串切片替换 / 正则 / 字符串建 Regex（v0.4–v0.17，走 helper）
+
+| Hex | 名称 | 操作数 | 语义 | 失败码 |
+|---|---|---|---|---|
+| B0 | `DT_ADD` | — | `dt dur → dt`（H34） | 11, 16 |
+| B1 | `DT_SUB` | — | `dt dur → dt`（H35） | 11, 16 |
+| B2 | `DUR_ADD` | — | `d1 d2 → d`（H36） | 12, 16 |
+| B3 | `DUR_SUB` | — | `d1 d2 → d`（H37） | 12, 16 |
+| B4 | `DUR_MUL` | — | `d i64 → d`（H38；Int64×Duration 由前端换序） | 12, 16 |
+| B5 | `DUR_DIV` | — | `d i64 → d`（H39；i64=0 → 1） | 1, 12, 16 |
+| B6 | `DUR_NEG` | — | `d → d`（H40） | 12, 16 |
+| B7 | `TO_STR` | u8 t | 值 → 字符串（H33；t=静态类型标签，格式冻结于 §11.9；插值/混合加法共用） | 6, 8, 16 |
+| B8 | `STR_SUB` | — | `h a b → h` 子串（H50；**码点索引**半开区间 `[a, b)`，与 `STR_AT` 同一索引域（§11.4）；`a<0 / b>码点数 / a>b` → 4，`a==b` → 空串；源语言 `s[a..=b]` 由前端折算为半开形式） | 4, 6, 8, 16 |
+| B9 | `STR_REPLACE` | — | `h old new → h` 全部子串替换（H51；old 为空串 → 14） | 6, 8, 14, 16 |
+| BA | `REGEX_IS_MATCH` | — | `h_re h_s → 0/1`（H52；h_re 为任意 Regex 句柄——常量/局部/构造结果） | 6, 8 |
+| BB | `REGEX_FIND` | — | `h_re h_s → h` 首个匹配子串（H53；返回整个匹配 group-0 的新 String，无匹配 → 0；捕获组提取属 M2） | 6, 8, 16 |
+| BC | `STR_REPEAT` | — | `h i64 → h` 字符串重复（H60，v0.15；n ≤ 0 → 空串；`n × len_utf8` 溢出 → 3；见 §11.9） | 3, 6, 8, 16 |
+| BD | `DT_DIFF` | — | `dt1 dt2 → h` 日期差 `dt1 − dt2 → Duration`（H61，v0.15；可为负；差分溢出 Duration 值域 → 12；见 §11.9） | 6, 8, 12, 16 |
+| BF | `STR_TO_REGEX` | — | `h_s → h_re` 字符串构造 Regex（H69，v0.17；非法/空 pattern → 14；分配型；见 §3.3） | 6, 8, 14, 16 |
+
+### B.12 0xC0–0xFF 预留区
+
+`0xC0–0xFF` 为 **M2 规划预留**（`HW_OPEN` 区块内批量分配、`CALL_HOST` 等）；**M1 发射即 `ERR_NOT_IMPL`**（§5、§7 校验 2/8）。M2 对 `0x79 CALL_HOST` 的启用与操作数重定义见 `design-m2.md` 附 B。
+
+## 附 C 字节码 ↔ 机器码对照（JIT 后端 · x86_64 / AArch64）
+
+**口径**：机器码**只加速、不改语义**（I7）——解释器与两个 JIT 后端对同一 `.fbc` 必须给出逐位一致的（结果、`errCode`、`site`）。本附 C 的对照表**同源摘录自规格 §12.4**（`§` 均为规格章节号；冲突以规格为准）。
+
+**通用栈机映射（§12.4 约定）**：`push v` = `sub rsp,8; mov [rsp],v`（a64 `str v,[sp,#-8]!`）；`pop r` = `mov r,[rsp]; add rsp,8`（a64 `ldr r,[sp],#8`）；二元 `a b → r` 中 `b`@`[rsp]`、`a`@`[rsp+8]`，结果写回 `[rsp+8]` 后收栈；`locals[i]` = `[rbp-32-8i]`（a64 `[x29,#-32-8i]`）。
+
+### C.1 后端抽象与 ABI 映射（§12.2）
+
+| 抽象名 | x86_64（SysV） | AArch64（AAPCS64） | 角色 |
+|---|---|---|---|
+| `CTX` | `r15` | `x19` | **callee-saved**，全程持 ctx；helper 调用不失效 |
+| `FP` | `rbp` | `x29` | 帧基址 |
+| `SP` | `rsp` | `sp` | 操作数栈 + 局部槽 |
+| `RETV` | `rax` | `x0` | 返回值 cell |
+| `TMP` | `r10`、`r11` | `x9`、`x10` | 立即数/中间结果（caller-saved，**跨 helper 调用不可存活**） |
+| helper 入参 | `rdi=ctx, rsi=&args, rdx=n` | `x0=ctx, x1=&args, x2=n` | §6 helper ABI 的抽象签名 `(ctx, &args, nargs)` |
+| helper 返回 | `rax` | `x0` | cell |
+| 返回地址 | `call` 压栈 | `x30`(lr) | a64 必须由 prologue 保存 `x29/x30` |
+
+**对齐**：两平台栈均**16 字节对齐**，`frameSize` 按 16 取整、两后端共用同一计算式（§3.1、§12.2）。
+
+### C.2 入口 / 出口序列（§12.3）
+
+- **入口**：`endbr64` / `bti c`（"可用即发射"）→ 保存帧与 callee-saved `CTX` 寄存器 → `sub rsp/sp, FRAME` → 逐条展开「拷 args 进 locals + 内存卫生填充（`0` 填充不可观察）」（§4 prologue）。
+- **thunk**：入口第一参数位置不同（`rdi` vs `x0`），**桥为每个后端各生成一个 5 行 thunk**，其后是同一份序言模式（§12.3）。
+- **出口唯一**（`.epilogue`）：`RET`/`RET_VOID`/`BAIL` 全部 `jmp .epilogue`（`BAIL` 前置 `eax/x0 = 0` 哑值）；`errCode > 0` 的错误收敛另按 §9.16 做**单次转储**（两后端同规则）。
+- **错误归因**：prologue 写 `ctx.fnId = 自身`；`CALL_FUNC` 返回后调用方**立即重写自身 fnId**（一条 mov，§4）。
+
+### C.3 通用约定（§12.4）
+
+**通用约定（全表共用）**：
+
+- 栈机模型：`push v` = `sub rsp,8; mov [rsp],v`（a64 `str v,[sp,#-8]!`）；`pop r` = `mov r,[rsp]; add rsp,8`（a64 `ldr r,[sp],#8`）。二元 `a b → r`：`b`@`[rsp]`、`a`@`[rsp+8]`，结果写回 `[rsp+8]` 后 `add rsp,8`（a64：先弹 `b` 至 `x10`，结果写回 `[sp]`）。`locals[i]` = `[rbp-32-8i]`（a64 `[x29,#-32-8i]`）。`FRAME`/`nLocals`/`need` 均为编译期立即数。
+- **失败收敛块**：`<bail:k>` = 写槽 k（`mov qword [r15],k`／`movz x11,k; str x11,[x19]`）→ `k>0` 时**单次转储序**（§9.16：`dbgBase≠0` 且首格 0 → 写 fnId/nLocals、拷贝 `locals[0..nLocals)`——按 nLocals 展开；首个收敛点获胜）→ `RETV=0` → `jmp/b .epilogue`；`<deopt>` = 写 `-1` → `RETV=0` → 跳 epilogue（**不转储**，§9.16）。
+- `CHECK_ERR`：`cmp qword [r15],0; jne <最近 bail>`（a64 `ldr x11,[x19]; cbnz x11,<bail>`）。
+- **NaN 规范化尾**（§11.3 的机器层兑现；`CANON=0x7FF8000000000000`）：x86 对一切可产 NaN 的浮点指令尾接 `ucomisd xmm0,xmm0; jnp .n; movabs rax,CANON; movq xmm0,rax; .n:`；a64 依赖 **FPCR.DN=1**（引擎初始化显式置位）天然产出 canonical NaN——**不尾接**（DN=0 的宿主必须补尾）。FMIN/FMAX 行内强制（见行）。
+- 保留槽（08–0F、1D–1F、27–2F、3C–3F、4E–4F、6F、73、8A–8F、9F、A9–AA）与 0xC0–0xFF：不发射，出现即 `ERR_NOT_IMPL`（§7 校验 2）。
+
+### C.4 分组对照表（§12.4）
+
+**0x00–0x0F 控制 / 杂项**
+
+| 字节码 | x86_64 | AArch64 | 备注 |
+|---|---|---|---|
+| `NOP` | `nop` | `nop` | |
+| `TRAP` | `int3` | `brk #0` | 调试面（前端仅调试模式发射） |
+| `BREAKPOINT` | `nop` | `nop` | 保留，发布版空操作 |
+| `SET_SITE` | `mov qword [r15+8],imm32` | `movz/movk x11,imm32; str x11,[x19,#8]` | 仅在可能失败指令前发射（§7） |
+| `CHECK_ERR` | 通用模板 | 同 | 自动尾随/显式 |
+| `BAIL k` | `<bail:k>` 块 | 同 | 每函数 ≥1 块（§7） |
+| `CHECK_ERR_NC` | 空（发布）/调试断言 | 同 | 发布版空操作 |
+| `STACK_GUARD need` | `mov rax,rbp; sub rax,FRAME; sub rax,rsp; cmp rax,need; jb <deopt>` | `sub x11,x29,#FRAME; sub x11,x11,sp; cmp x11,#need; b.lo <deopt>` | 剩余栈 = `(rbp−FRAME)−rsp`（**帧内操作数栈余量**——防御：静态栈深恒满足；触发即上界低估，回解释器重跑，解释器余量亦不足 → 桥写 15） |
+
+**0x10–0x1F 常量 / 栈**
+
+| 字节码 | x86_64 | AArch64 |
+|---|---|---|
+| `PUSH_I8`/`PUSH_I32` | `push imm`（x86 自动符号扩展） | `mov x11,#imm; str x11,[sp,#-8]!` |
+| `PUSH_I64` | `movabs rax,imm64; push rax`（或常量池） | `movz/movk ×4; str x11,[sp,#-8]!`（或文字池 `ldr`） |
+| `PUSH_F64` | 同 I64（位模式原样；或 `movsd` 常量池） | 同 I64 |
+| `PUSH_BOOL` | `push 0/1` | `mov x11,#0/1; str x11,[sp,#-8]!` |
+| `PUSH_NULL` | `xor eax,eax; push rax` | `str xzr,[sp,#-8]!` |
+| `PUSH_KH n` | `mov rax,[<常量句柄镜像+8n>]; push rax` | 文字池载镜像基址 → `ldr x11,[…]; str x11,[sp,#-8]!` |
+| `DUP` | `mov rax,[rsp]; push rax` | `ldr x11,[sp]; str x11,[sp,#-8]!` |
+| `DUP2` | `mov rax,[rsp]; mov rcx,[rsp+8]; push rcx; push rax` | `ldr x9,[sp]; ldr x10,[sp,#8]; stp x10,x9,[sp,#-16]!` |
+| `POP` / `POP2` | `add rsp,8` / `add rsp,16` | `add sp,sp,#8` / `#16` |
+| `SWAP` | `mov rax,[rsp]; mov rcx,[rsp+8]; mov [rsp],rcx; mov [rsp+8],rax` | `ldr x9,[sp]; ldr x10,[sp,#8]; str x10,[sp]; str x9,[sp,#8]` |
+| `PICK n` | `mov rax,[rsp+8n]; push rax` | `ldr x11,[sp,#8n]; str x11,[sp,#-8]!` |
+
+**常量句柄镜像（v0.18.33 明确）**：桥在装载后把该单元 k 个常量句柄（路径 A）写成**连续 8 字节数组**（非托管、单元生命周期）——`PUSH_KH n` 的机器码在 JIT 编译期把镜像基址**烘焙为立即数**；镜像与 `JitFunction`/编译缓存条目同生命周期（单元卸载一并回收，§8.7）。
+
+**0x20–0x2F 局部变量**
+
+| 字节码 | x86_64 | AArch64 |
+|---|---|---|
+| `LOADL i` / `LOADL0–3` | `mov rax,[rbp-32-8i]; push rax` | `ldr x11,[x29,#-32-8i]; str x11,[sp,#-8]!` |
+| `STOREL i` | `pop rax; mov [rbp-32-8i],rax` | `ldr x11,[sp],#8; str x11,[x29,#-32-8i]` |
+| `LOAD_CAP idx` | `CALL_HELPER H56`（argc=2——句柄+idx） | 同 |
+
+**0x30–0x3F 整型算术**
+
+| 字节码 | x86_64 | AArch64 |
+|---|---|---|
+| `IADD`/`ISUB` | `mov rax,[rsp+8]; add/sub rax,[rsp]; jo <bail:3>; mov [rsp+8],rax; add rsp,8` | `ldr x10,[sp],#8; ldr x9,[sp]; adds/subs x9,x9,x10; b.vs <bail:3>; str x9,[sp]` |
+| `IMUL` | `mov rax,[rsp+8]; imul rax,[rsp]; jo <bail:3>; …写回` | `ldr x10,[sp],#8; ldr x9,[sp]; smulh x11,x9,x10; mul x9,x9,x10; cmp x11,x9,asr #63; b.ne <bail:3>; str x9,[sp]` |
+| `IDIV` | 除数判定 `test r10,r10; jz <bail:1>`；`INT64_MIN/-1 → <bail:3>`；`cqo; idiv`（商写回） | `cbz x10,<bail:1>`；INT64_MIN 与 −1 预判 `→ <bail:3>`；`sdiv`（a64 不陷入——**必须预判**） |
+| `IMOD` | 除数判定（÷0 →`<bail:2>`）；除数为 −1 → 直接 0（硬件 `idiv` 对 `INT64_MIN/-1` 会 `#DE`；数学余数恒 0，**不报溢出**）；否则 `cqo; idiv` 取 `rdx` | `cbz x10,<bail:2>`；`sdiv`+`msub` 天然正确（含 `INT64_MIN/-1` → 0） |
+| `INEG` | `mov rax,[rsp]; neg rax; jo <bail:3>; mov [rsp],rax` | `ldr x9,[sp]; negs x9,x9; b.vs <bail:3>; str x9,[sp]` |
+| `IABS` | `pop rax; test rax,rax; jns .ok; neg rax; jo <bail:3>; .ok: push rax` | `ldr x9,[sp],#8; cmp x9,#0; b.ge .ok; negs x9,x9; b.vs <bail:3>; .ok: str x9,[sp,#-8]!` |
+| `IMIN`/`IMAX` | `mov rcx,[rsp]; mov rax,[rsp+8]; add rsp,8; cmp rax,rcx; cmovge/cmovl rax,rcx; mov [rsp],rax` | `ldr x10,[sp],#8; ldr x9,[sp]; cmp x9,x10; csel x9,x9,x10,lt/gt; str x9,[sp]` |
+| `IADD_WRAP` | 同 IADD（不发射 `jo`） | 同（不发射 `b.vs`） |
+| `ICLZ` | `mov rcx,[rsp]; mov rax,64; test rcx,rcx; jz .st; bsr rax,rcx; xor rax,63; .st: mov [rsp],rax`（SSE2 基线无 `lzcnt`） | `ldr x9,[sp]; clz x9,x9; str x9,[sp]`（0 → 64 天然正确） |
+| `IPOPCNT` | SWAR 序列（移位/掩码/`imul` 归并；掩码经 `movabs` 或常量池；SSE4.2 显式开启时 `popcnt`） | `ldr x9,[sp]; fmov d0,x9; cnt v0.8b,v0.8b; addv b0,v0.8b; umov w11,v0.b[0]; str x11,[sp]` |
+
+**0x40–0x4F 浮点**（`xmm0/xmm1` ↔ `d0/d1`；NaN 尾按通用约定）
+
+| 字节码 | x86_64 | AArch64 |
+|---|---|---|
+| `FADD`/`FMUL` | `movsd xmm0,[rsp]; addsd/mulsd xmm0,[rsp+8]; <NaN 尾>; movsd [rsp+8],xmm0; add rsp,8` | `ldr d0,[sp],#8; ldr d1,[sp]; fadd/fmul d0,d0,d1; str d0,[sp]` |
+| `FSUB`/`FDIV` | `movsd xmm0,[rsp+8]; subsd/divsd xmm0,[rsp]; <NaN 尾>; …写回` | `ldr d1,[sp],#8; ldr d0,[sp]; fsub/fdiv d0,d0,d1; str d0,[sp]` |
+| `FDIV_CHK` | 前置除数判定：`xorpd xmm1,xmm1; ucomisd 除数,xmm1（jp 继续；je <bail:1>）`；后接 FDIV | `ldr d1,[sp]; fcmp d1,#0.0; b.eq <bail:1>;` 后接 FDIV |
+| `FNEG`/`FABS` | 符号域：`xorpd/andpd`（掩码 `0x8000…`/`0x7FFF…`，`movq` 装填或常量池）；`<NaN 尾>` | `fneg d0,d0` / `fabs d0,d0` |
+| `FMIN`/`FMAX` | 先自检：任一操作数 NaN（`ucomisd x,x; jp`）→ 直接产 `CANON`；否则 `minsd/maxsd`（x86 的 NaN 取第二操作数语义已由前置分支规避） | `fmin/fmax d0,d1,d0`（FPCR.DN=1 → NaN 即 canonical） |
+| `FSQRT` | `sqrtsd xmm0,[rsp]; <NaN 尾>; movsd [rsp],xmm0` | `ldr d0,[sp]; fsqrt d0,d0; str d0,[sp]` |
+| `FFLOOR`/`FCEIL`/`FTRUNC`/`FROUND` | 基线（SSE2）软件序列：`cvttsd2si`（截断）+ `cvtsi2sd` 回装 + `ucomisd` 比较修正 ±1；`\|x\|≥2^63` 直通、NaN 走 `<NaN 尾>`；SSE4.1 显式开启时 `roundsd imm=1/2/3/0` | `frintm`/`frintp`/`frintz`/`frintn`（原生；含直通与 NaN 语义） |
+
+**0x50–0x6F 比较 / 逻辑 / 位**
+
+| 字节码 | x86_64 | AArch64 |
+|---|---|---|
+| `CMP_I` | `cmp` + `setg/setl` 组合 `sub` 出 -1/0/1 | `cmp x9,x10; cset x11,lt; cset x12,gt; sub x11,x12` |
+| `EQ_I`–`GE_I` | `cmp` + `sete/ne/l/le/g/ge` + `movzx` | `cmp` + `cset eq/ne/lt/le/gt/ge` |
+| `EQ_F`–`GE_F` | `cmpsd` 谓词：EQ=0、LT=1、LE=2、NE=4；GT/GE = **交换操作数**后 1/2（无序 → 0，§11.3）；结果取低位 `& 1` | `fcmp d0,d1; cset eq/ne/mi/ls/gt/ge`（无序语义同 §11.3——`gt/ge/mi/ls` 对 NaN 恒 false、`ne` 恒 true） |
+| `CMP_F` | ——**汇编器禁发**（§11.3） | 同 |
+| `NOT_B` | `xor qword [rsp],1` | `ldr x11,[sp]; eor x11,x11,#1; str x11,[sp]` |
+| `AND_B`/`OR_B`/`XOR_B` | `mov rax,[rsp]; add rsp,8; and/or/xor [rsp],rax` | `ldr x10,[sp],#8; ldr x9,[sp]; and/orr/eor x9,x9,x10; str x9,[sp]` |
+| `BAND_I`/`BOR_I`/`BXOR_I` | 同上 | 同上（`and/orr/eor`） |
+| `BNOT_I` | `not qword [rsp]` | `ldr x9,[sp]; mvn x9,x9; str x9,[sp]` |
+| `SHL_I`/`SHR_I`/`USHR_I` | `mov rcx,[rsp]; add rsp,8; shl/sar/shr qword [rsp],cl`（x86 自动掩码 63） | `ldr x10,[sp],#8; ldr x9,[sp]; lsl/asr/lsr x9,x9,x10; str x9,[sp]`（a64 自动取低 6 位——语义天然一致） |
+| `EQ_H`/`NE_H` | 整数 `cmp` + `sete/setne`（句柄即整数；`== null` 亦此） | `cmp` + `cset eq/ne` |
+| `CMP_STR`/`CMP_DEC`/`CMP_DT`/`CMP_DUR` | `CALL_HELPER` H09/H11/H13/H15 | 同 |
+
+**0x70–0x7F 控制流与调用**
+
+| 字节码 | x86_64 | AArch64 | 备注 |
+|---|---|---|---|
+| `JMP` | `jmp rel32` | `b` | 范围差异见下 |
+| `JZ`/`JNZ` | `pop rax; test rax,rax; je/jne target` | `ldr x9,[sp],#8; cbz/cbnz x9,target` | |
+| `LOOP_BACK` | `STACK_GUARD <回边 need>` + `call H22` + `jmp target` | 同（`bl H22`） | 安全点 + 栈防守（§7） |
+| `CALL_HELPER`/`_NC`/`_V` | 模板（下） | 同 | 自动尾随 CHECK_ERR（_NC 除外） |
+| `CALL_FUNC fid` | 模板（下） | 同 | 共窗口；返回后重写 fnId |
+| `CALL_HOST` | ——M1 汇编期 `ERR_NOT_IMPL`；**M2 起 = `call H63` 转发器**（CALL_HELPER 同款） | 同 | §6 议题清单 |
+| `HW_OPEN`/`HW_CLOSE` | ——M1 `ERR_NOT_IMPL`；**后档专项**（批量分配） | 同 | §7 校验 2/8 |
+| `RET` | `mov rax,[rsp]; jmp .epilogue` | `ldr x0,[sp]; b .epilogue` | 唯一返回路径 |
+| `RET_VOID`/`RET_NULL` | `xor eax,eax; jmp .epilogue` | `mov x0,#0; b .epilogue` | |
+| `CALL_CLOSURE argc` | 模板（下） | 同 | §8.6 |
+
+**0x80–0x8F 类型 / 转换 / 显式错误**
+
+| 字节码 | x86_64 | AArch64 | 备注 |
+|---|---|---|---|
+| `CAST tok mode` | `call H17; test eax,eax; jz .m;` 命中继续；`.m:` mode0 → `<bail:7>` / mode1 → `<deopt>` | `bl H17; cbz x0,.m;` 同 | 值型恒等/静态相容 = 空操作 |
+| `TO_I64 mode` | `ucomisd` 自检 NaN（jp → 失败块）→ `cvttsd2si`；结果 = INT64_MIN 时与 `−2^63` 双精度比较区分（合法 −2^63 vs 越界哨兵）→ 否则 mode0 `<bail:13>` / mode1 `<deopt>` | **`fcvtzs` 饱和不代表错误**——须前置 `fcmp` 判 NaN 与 ±2^63 界外（界常量经 `movz` 装 double 位型）→ `fcvtzs` | |
+| `TO_F64` | `cvtsi2sd xmm0,[rsp]; movsd [rsp],xmm0` | `ldr x9,[sp]; scvtf d0,x9; str d0,[sp]` | 可能丢精度、不报错 |
+| `IS_TYPE` | `call H17`（0/1，**永不失败**） | 同 | null → false |
+| `GUARD_TYPE mode` | mode0 → `call H19` + `CHECK_ERR`（失败 8）；mode1 → `call H17` + 分支 → `<deopt>` | 同 | |
+| `THROW code` | `<bail:17>` 块（源语言码经站点附加表在桥侧解析） | 同 | |
+| `ASSERT code` | `pop rax; test rax,rax; jnz .ok; <bail:code>; .ok:` | `ldr x9,[sp],#8; cbnz x9,.ok; <bail:code>; .ok:` | |
+| `ABORT code` | 无条件 `<bail:code>` | 同 | |
+| `GUARD_NNZ mode` | `mov rax,[rsp]; test rax,rax; jnz .ok;`（mode0 → `<bail:6>` / mode1 → `<deopt>`）；`.ok:` | `ldr x9,[sp]; cbnz x9,.ok;` 同 | |
+| `TYPE_OF` | `call H18` + `CHECK_ERR` | 同 | 调试用 |
+
+**分支可达范围差异（必须处理）**：
+
+| 后端 | 条件分支范围 | 无条件分支范围 | 处理 |
+|---|---|---|---|
+| x86_64 | `jcc rel32` ≈ ±2 GB | `jmp rel32` ≈ ±2 GB | 通常无需 trampoline |
+| aarch64 | `b.cond` ≈ **±1 MB** | `b` ≈ ±128 MB | 越界时插入跳板（trampoline）或跳板表 |
+
+由于 aarch64 条件分支范围小，汇编器/后端需做**两遍布局**：先按短分支编码，越界则升级为"取反条件 + 无条件 `b`"跳板。此逻辑必须在两个后端共享的布局阶段实现，而非各自硬编码。
+
+**0x90–0xBF：全量 `CALL_HELPER` 路由表**（模板见本区末；一律自动尾随 `CHECK_ERR`；"登记" = 分配型 +1 槽）
+
+| 字节码 | helper | 登记 |
+|---|---|---|
+| `LEN` | H01/H03/H07（按静态类型分派 List/Map/String） | — |
+| `GET_IDX` H02 · `GET_KEY` H04 · `GET_KEY_OR` H05 · `HAS_KEY` H06 · `STR_AT` H08 · `DT_FIELD` H14 · `DUR_TICKS` H16 · `DEC_IS_INT` H12 · `HANDLE_TAG` H18 · `RANGE_CONTAINS` H42 · `REGEX_IS_MATCH` H52 · `DEC_TO_I64` H30 | 见左 | 不登记 |
+| `RANGE_NEW` H41 · `TO_DEC` H28/H29 · `DEC_TO_F64` H31 · `STR_CAT` H32 · `TO_STR` H33 · `DT_ADD` H34 · `DT_SUB` H35 · `DUR_ADD` H36 · `DUR_SUB` H37 · `DUR_MUL` H38 · `DUR_DIV` H39 · `DUR_NEG` H40 · `STR_SUB` H50 · `STR_REPLACE` H51 · `REGEX_FIND` H53 · `STR_REPEAT` H60 · `DT_DIFF` H61 · `STR_TO_REGEX` H69 · `MAKE_LIST` H70 · `MAKE_MAP` H71 | 见左 | **分配型**（+1 槽） |
+| `LIST_APPEND` H43 · `MAP_PUT` H44 · `LIST_INSERT` H45 · `LIST_SET` H46 · `LIST_REMOVE` H47 · `MAP_REMOVE` H48 | 见左 | **变更型**（§9.15 全规则：常量禁写 20 / deopt 禁令 / 兜底） |
+| `MAP_ITER_BEGIN` H49 · `MAP_ITER_STEP` H62 | — | 不登记（游标在宿主侧调用级迭代器表） |
+
+### C.5 调用模板（§12.4）
+
+**模板 A：`CALL_HELPER hid argc`**（`_V` 变体不回压结果；`_NC` 不尾随 `CHECK_ERR`）
+
+- x86：`lea rsi,[rsp+8*(argc-1)]`（`args[0]` 最深——§6 ABI）；`mov rdi,r15; mov rdx,argc; call <helper 入口>`（固定 helper = 引擎符号；user helper = 注册期确定的 trampoline）；结果写回 `args[0]` 槽后收参：`mov [rsp+8*(argc-1)],rax; add rsp,8*(argc-1)`；自动尾随 `CHECK_ERR`。`argc=0` → `rsi` 可用 0。
+- a64：`add x1,sp,#8*(argc-1); mov x0,x19; mov x2,#argc; bl <入口>; str x0,[sp,#8*(argc-1)]; add sp,sp,#8*(argc-1)`。
+
+**模板 B：`CALL_FUNC fid argc`**（内部调用，共窗口）
+
+- x86：`mov rdi,r15; lea rsi,[rsp+8*(argc-1)]; mov rdx,argc; call [<fnTable 基址+8*fid>]`（单元函数机器入口表——桥执行前填充，非 GC 内存）；返回后：`CHECK_ERR`（错误仅传播）、`mov qword [r15+40],<自身 fnId>`（重写归因，§4）、结果压栈、`add rsp,8*argc` 收参。
+- a64：`add x1,sp,#8*(argc-1); mov x0,x19; mov x2,#argc; ldr x10,[<fnTable+8*fid>]; blr x10` 同构。
+
+**模板 C：`CALL_CLOSURE argc`**（§8.6）
+
+- 栈 `[闭包句柄, a1…a(argc)]`（句柄最深）；被调帧 `locals[0]`=句柄、`locals[1..]`=实参（同 §8.0 隐藏适配器帧约定）：
+  1. `call H55`（句柄 → fnId；`rsi=&句柄槽, rdx=1`）→ **溢出保存**（TMP 跨 helper 调用不可存活）；
+  2. `call H57`（→ fnTable 基址）；
+  3. 间接调用 `call [fnTable + 8*fnId]`（x86 直接 `[r10+r11*8]` 寻址；a64 `add x10,x10,x11,lsl #3; blr x10`——各入口带 `endbr64`/`bti c`，IBT 安全，§12.3）；
+  4. 返回后：`CHECK_ERR` + 结果压栈 + 收参（含句柄槽）；fnId 由前端烘焙并经 §7 校验 7 + `closure_new` 双重校验。
+
+**通用注记**：各类机器码均无新增模式，I8 自动满足；分配型在宿主 helper 内分配并登记窗口槽（结果 = 新句柄 ID）；变更型的重放安全性由 §9.15② 的静态禁令保证。`hwCap` 初值取自宿主参数 `initialCapacity`（默认 128，§9.6），JIT 与解释器共用同一窗口机制。
+
+**闭包值指令（v0.10，§8.6）**：`closure_new`（前端直接发射 CALL_HELPER H54——无独立 opcode）/`LOAD_CAP`（H56）与 helper 调用同款（+ 自动 `CHECK_ERR`）；`CALL_CLOSURE` 全序列见**模板 C**。含 `CALL_CLOSURE` 的函数按 §7 校验 11 标记 `flags.bit0`（黑盒，deopt 禁令）。
+
+### C.6 与解释器的关系（I7）
+
+- **解释器**（`Interp.run`，design §5.3.6）逐指令执行**同一** `.fbc` 字节码，是**语义基准**；两个 JIT 后端由本附 C 的对照表发射机器码，**唯一可观察差异是性能**。
+- **差分测试**（规格 §13.2 T2）断言 `interp(args) == jit_x86_64(args) == jit_aarch64(args)`：结果、`errCode`、`site` 三者全等——I7 的可测定义。
+- 分配型/变更型语义（窗口登记、§9.15 规则、`frozen`）全在 **helper 内**实现，机器码侧无新增模式（I8 自动满足）。
