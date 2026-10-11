@@ -483,7 +483,7 @@
 
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
-| `func analyze(lambda: LambdaAst, types: LocalTypes): Boolean` | 数据流不动点：非参数局部在所有可达路径先写后读；循环出口不视为已赋值；`PUSH_NULL` 不得直存句柄型槽 | `SourceCompiler`（违规 → 编译错误）；T13 |
+| `func analyze(lambda: LambdaAst, types: LocalTypes): Bool` | 数据流不动点：非参数局部在所有可达路径先写后读；循环出口不视为已赋值；`PUSH_NULL` 不得直存句柄型槽 | `SourceCompiler`（违规 → 编译错误）；T13 |
 
 #### 4.3.5 `Lowerer`（class）
 
