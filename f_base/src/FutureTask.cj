@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_base
 
 import std.collection.concurrent.ConcurrentHashMap
-import std.collection.HashSet
+import std.collection.{HashMap, HashSet}
 import std.sync.{Mutex, AtomicInt64}
 
 public class FutureTaskException <: BaseException {
@@ -38,7 +38,16 @@ public sealed abstract class AbstractFutureTask <: Hashable & Equatable<Abstract
     // 这会让 InheritedTaskLocal 的键（哈希取自 hashCode）在写入与读取时进不同的桶 ⇒ 值丢失。
     private static let nextTaskId = AtomicInt64(0)
     private let taskId = nextTaskId.fetchAdd(1)
-    private let local = ConcurrentHashMap<AbstractInheritedTaskLocal, Any>()
+    // FT-6 ⑥+①（bug-f_base.md §2.4 量化）：local 由「每任务一张 ConcurrentHashMap」改为
+    // 「Mutex + HashMap，且首次写入才建表」。
+    // 依据（EXP18，同进程实测）：空 ConcurrentHashMap 的构造就要 3.6~5.2µs/次
+    // （同尺寸 HashMap 0.42~0.55µs、纯数组 0.27µs），单次操作 ≈0.6µs（Mutex+HashMap ≈0.19µs 读 / 0.34µs 写）；
+    // 本结构读多写少、并发度低（写入方只有当前任务或 owner 的子树），Mutex 足够。
+    // 并发口径：local 的**全部**访问（读也在内）都在 localLock 内完成 —— 于是"首次写入才建表"
+    // 不需要额外的原子发布协议，也没有跨线程可见性问题；锁不跨越用户代码，
+    // 锁序固定为 local.initLock → task.localLock（无反向；Mutex 本身可重入）。
+    private let localLock = Mutex()
+    private var local: ?HashMap<AbstractInheritedTaskLocal, Any> = None
     static let taskMap = ConcurrentHashMap<Int64, AbstractFutureTask>()
     // FT-2（bug-f_base.md §1.2）：子任务登记表的**全部**访问（登记/注销/整体取走）共用这一把锁。
     // 原来保护它的是每个 FutureTask 实例自己的 mutex ⇒ 同一父任务的多个子任务之间毫无互斥，
@@ -60,15 +69,43 @@ public sealed abstract class AbstractFutureTask <: Hashable & Equatable<Abstract
     public func newLocal<T>(): InheritedTaskLocal<T> {
         InheritedTaskLocal(this)
     }
+    // FT-6 ⑥+①：读/写/删各自在 localLock 内完成；写路径首次调用时建表（懒分配）。
+    private func readLocalRaw(local: AbstractInheritedTaskLocal): ?Any {
+        synchronized(this.localLock){
+            match(this.local){
+                case Some(map) => map.get(local)
+                case None => None<Any>
+            }
+        }
+    }
+    private func writeLocalRaw(local: AbstractInheritedTaskLocal, value: Any): Unit {
+        synchronized(this.localLock){
+            match(this.local){
+                case Some(map) => map.add(local, value)
+                case None =>
+                    let map = HashMap<AbstractInheritedTaskLocal, Any>()
+                    map.add(local, value)
+                    this.local = map
+            }
+        }
+    }
+    private func removeLocalRaw(local: AbstractInheritedTaskLocal): ?Any {
+        synchronized(this.localLock){
+            match(this.local){
+                case Some(map) => map.remove(local)
+                case None => None<Any>
+            }
+        }
+    }
     func setLocal<T>(local: AbstractInheritedTaskLocal, value: T): Unit {
-        this.local.add(local, value)
+        writeLocalRaw(local, value)
     }
     func getLocal<T>(local: AbstractInheritedTaskLocal): ?T {
         // FT-5：从「当前线程正在执行的任务」出发，沿构造期固定的父链上溯 ——
         // 不再依赖父任务是否还在 taskMap 里，因此父任务先结束也能继承到它的值。
         var current = taskMap.get(Thread.currentThread.id)
         while(let Some(task) <- current){
-            if(let Some(x: T) <- task.local.get(local)){
+            if(let Some(x: T) <- task.readLocalRaw(local)){
                 return x
             }
             current = task.parent
@@ -76,7 +113,7 @@ public sealed abstract class AbstractFutureTask <: Hashable & Equatable<Abstract
         None<T>
     }
     func removeLocal<T>(local: AbstractInheritedTaskLocal): ?T {
-        if(let Some(x: T) <- this.local.remove(local)){
+        if(let Some(x: T) <- removeLocalRaw(local)){
             x
         }else{
             None<T>

@@ -336,12 +336,26 @@ while(let Some(f: FutureTask<T>) <- itr.next()){
 
 | 候选 | 可省 | 风险 / 前置条件 | 建议 |
 |---|---|---|---|
-| ① `local` 惰性分配 | **3.6 ~ 5.2 µs/任务（11~16%）** | 必须定"懒建表"的并发方案（两线程同时建表会丢一侧写入 ⇒ 一次性发布，不能裸判空后 `add`） | **先做**（收益最大、改动局部） |
+| ① `local` 惰性分配 | **3.6 ~ 5.2 µs/任务（11~16%）** | 必须定"懒建表"的并发方案（两线程同时建表会丢一侧写入 ⇒ 一次性发布，不能裸判空后 `add`） | **✅已修复（2026-10-11，与 ⑥ 一并实施，见下）** |
 | ③ 短路 `shutdownCurrentSubThreads()` | **~3 µs/任务（~9%）** | 只需一个"本任务是否登记过子任务"的线程局部标志/计数 | **先做**（实现最简单） |
 | ④ 读路径缓存"当前任务" | **~300 ns/次读（~40%）** | 每任务 2 次 `ThreadLocal` 写（~0.2µs） | 读多场景做 |
 | ⑤ 压缩记账 | **3 ~ 9.5 µs/任务** | 要把"子任务 teardown 动共享结构"改成"父任务收尾整体清理"，牵动 `FT-2`/`FT-5` 的边界与泄漏口径 | **单独立项**（改动面/风险最大） |
-| ⑥ `local` 换 `Mutex`+`HashMap` | 构造 ~4µs + 单次 op ~0.9µs | 读要从"无锁并发读"变成"加锁读"（并发语义变化） | 与 ① 一起评估 |
+| ⑥ `local` 换 `Mutex`+`HashMap` | 构造 ~4µs + 单次 op ~0.9µs | 读要从"无锁并发读"变成"加锁读"（并发语义变化） | **✅已修复（2026-10-11，与 ① 一并实施，见下）** |
 | ② 键哈希稳定 id / ⑦ 删 `mutex` | — | — | **✅ 已随 `FT-1` / `FT-2` 完成** |
+
+**✅ 修复标记（2026-10-11，⑥+① 一并实施：`local` 改 `Mutex` + `HashMap`，且首次写入才建表）**
+
+分支 `fix/futuretask`（worktree `.worktrees/futuretask`）。代码、用例、本标记、量化复测同一次提交。
+
+- 改动：`f_base/src/FutureTask.cj` —— `local` 由 `ConcurrentHashMap<AbstractInheritedTaskLocal, Any>()`（eager）改为 `private var local: ?HashMap<…> = None` + `private let localLock = Mutex()`；新增 `readLocalRaw`/`writeLocalRaw`/`removeLocalRaw` 三个私有原语（各自在 `localLock` 内完成，**写路径首次调用时建表**），`setLocal`/`getLocal`/`removeLocal` 改为调用它们。
+  - 并发口径：**读也加锁** ⇒ "懒建表"不需要额外的原子发布协议，也没有跨线程可见性问题；锁不跨越用户代码；锁序固定为 `local.initLock` → `task.localLock`（无反向；`Mutex` 本身可重入）。
+- 用例（`f_base/src/FutureTask_test.cj`，新增 1 条）：`testConcurrentChildrenCreateOwnerMapLazily` —— owner 一张表都没有时，3 个子任务并发向 owner 写**不同**的 local，之后 owner 与"之后创建的后代"都要读回这三个值（钉住"并发懒建表不丢一侧写入"）。
+- 测量证据（同进程，探针 `EXP18`；改前 4 次运行区间 → 改后）：
+  - 端到端 `FutureTask<Int64>{1}` + `get()`：**33.9 ~ 36.2 µs → 25.5 ~ 27.7 µs**（同批裸 `spawn{1}`+`get()` 2.6 ~ 2.7 µs ⇒ 增量 **~31 µs → ~24 µs，−7.4 µs/任务（−22%）**）；
+  - 读路径：命中 `InheritedTaskLocal.get()` **700 ~ 870 ns → 505 ~ 508 ns**；
+  - 组件对照（未变，说明收益来自 ⑥+① 本身）：空 `ConcurrentHashMap` 构造 4.6 ~ 4.8 µs、`Mutex`+`HashMap` 的 add+remove 295 ~ 320 ns、`ThreadLocal.get()` 91 ~ 92 ns。
+- 单测：`TOTAL: 27, PASSED: 27, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`）。
+- 行为变化 / 未覆盖：`local` 的读由"无锁并发读"变为"加锁读"（并发语义变化：大量并发读同一个 owner 的 local 会串行化；本结构的实际形态是"少数写、少量读"，故按收益取舍）。既有 26 条用例（含并发 DCL 用例 `testGetOrComputeComputesOnceUnderConcurrency`）全绿。
 
 ---
 

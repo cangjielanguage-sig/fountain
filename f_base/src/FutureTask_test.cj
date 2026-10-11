@@ -375,6 +375,22 @@ public class FutureTask_test {
         let _ = root.get()
         @Expect(box.get("child"), Some("7"))
     }
+
+    /*
+     * FT-6 ⑥+①（bug-f_base.md §2.4 量化）：owner 一张 local 表都没有时，多个子任务并发向它
+     * 写**不同的** local —— 表是懒建的，且建在 owner 身上，必须只建一张、不丢任何一侧的写入
+     * （否则"不建表就不花那 3.6~5.2µs"这条优化会变成静默丢值）。
+     */
+    @TestCase
+    public func testConcurrentChildrenCreateOwnerMapLazily(): Unit {
+        let box = ConcurrentHashMap<String, String>()
+        let root = FutureTask<Unit>({ => futureTaskTestLazyOwner(box) })
+        let _ = root.get()
+        @Expect(box.get("owner0"), Some("10"))
+        @Expect(box.get("owner1"), Some("20"))
+        @Expect(box.get("owner2"), Some("30"))
+        @Expect(box.get("later"), Some("10,20,30"))
+    }
 }
 
 private func futureTaskTestReadLocal(ready: AtomicBool, slot: ArrayList<InheritedTaskLocal<Int64>>): Int64 {
@@ -383,6 +399,45 @@ private func futureTaskTestReadLocal(ready: AtomicBool, slot: ArrayList<Inherite
         case Some(x) => x
         case None => -1
     }
+}
+
+// ===== FT-6 ⑥+①（并发懒建 owner 的 local 表）的辅助函数 =====
+
+private func futureTaskTestLazyWriteChild(local: InheritedTaskLocal<Int64>, value: Int64): Unit {
+    sleep(30 * Duration.millisecond) // 对齐起跑线，让三个子任务尽量同时走到"首次建表"
+    local.getOrSet(value) // 未命中 ⇒ 进 initLock 复查后写入 owner 的表（首次会建表）
+}
+
+private func futureTaskTestLocalStr(local: InheritedTaskLocal<Int64>): String {
+    match (local.get()) {
+        case Some(v) => "${v}"
+        case None => "None"
+    }
+}
+
+private func futureTaskTestReadThree(box: ConcurrentHashMap<String, String>, l0: InheritedTaskLocal<Int64>, l1: InheritedTaskLocal<Int64>, l2: InheritedTaskLocal<Int64>): Unit {
+    box.add("later", futureTaskTestLocalStr(l0) + "," + futureTaskTestLocalStr(l1) + "," + futureTaskTestLocalStr(l2))
+}
+
+private func futureTaskTestLazyOwner(box: ConcurrentHashMap<String, String>): Unit {
+    let me = FutureTask<Unit>.current()
+    let l0 = me.newLocal<Int64>()
+    let l1 = me.newLocal<Int64>()
+    let l2 = me.newLocal<Int64>()
+    let c0 = FutureTask<Unit>({ => futureTaskTestLazyWriteChild(l0, 10) })
+    let c1 = FutureTask<Unit>({ => futureTaskTestLazyWriteChild(l1, 20) })
+    let c2 = FutureTask<Unit>({ => futureTaskTestLazyWriteChild(l2, 30) })
+    let _ = c0.get()
+    let _ = c1.get()
+    let _ = c2.get()
+    // 从 owner 自己这一层读回（三个值都应落在 owner 的那张表里）
+    box.add("owner0", futureTaskTestLocalStr(l0))
+    box.add("owner1", futureTaskTestLocalStr(l1))
+    box.add("owner2", futureTaskTestLocalStr(l2))
+    // 注意：本函数返回后 owner 结束，届时会取消 c0/c1/c2（都已 get 过，取消对已完成任务无副作用）；
+    // 所以"之后创建的后代"要在这里创建 —— 它同样应读到 owner 表里的这三个值。
+    let later = FutureTask<Unit>({ => futureTaskTestReadThree(box, l0, l1, l2) })
+    let _ = later.get()
 }
 
 private func futureTaskTestPollCancel(box: ConcurrentHashMap<Int64, Bool>, key: Int64): Unit {
