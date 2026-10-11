@@ -412,16 +412,34 @@
 
 ### 4.3 各声明的公共成员
 
-#### 4.3.1 `Lexer`（class）与 `Token`/`TokenKind`
+#### 4.3.1 `Lexer`（class）与 `Token`（struct）/ `TokenKind`（enum）
 
-| 成员 | 意义 | 调用关系 |
-|---|---|---|
-| `init(source: String, diagnostics: DiagnosticsSink)` | 绑定源码与诊断 | `SourceCompiler` |
-| `func next(): Token` | 取下一 token（EOF 终止） | `Parser` |
-| `func position(): Int64` / `line(): Int64` / `column(): Int64` | 当前位置（诊断用） | `Parser`/错误构造 |
-| `Token.kind: TokenKind` / `.text: String` / `.pos: Int64` / `.line: Int64` / `.column: Int64` | 词法单元 | 全前端 |
-| `TokenKind` 关键构造器 | `Ident / IntLit / DecLit / F64Lit / StrLit(三形态归一) / RegexLit / Char? / KwRecursive / KwLet / KwVar / KwIf / KwElse / KwWhile / KwFor / KwIn / KwWhere / KwBreak / KwContinue / KwReturn / KwTrue / KwFalse / KwNull / Punct(…) / Operator(…) / EOF` 等 | 解析 |
-| 词法职责（实现约束） | ① 字符串保护（三形态全跨度）→ ② 注释剥离（`/* */` 嵌套配平）→ ③ 解析；换行规范化 CRLF/CR→LF；`>\|` 锚定（多行串） | §8.5 冻结顺序、§8.8 |
+| 成员 | 归属 | 意义 | 调用关系 |
+|---|---|---|---|
+| `init(source: String, diagnostics: DiagnosticsSink)` | `Lexer` | 绑定源码与诊断；**构造时对整串做一次换行规范化** | `SourceCompiler` |
+| `next(): Token` | `Lexer` | 取下一 token（EOF 终止） | `Parser` |
+| `position(): Int64` / `line(): Int64` / `column(): Int64` | `Lexer` | 当前位置（诊断用；基于**规范化后**的源码） | `Parser`/错误构造 |
+| `kind: TokenKind` / `text: String` / `pos: Int64` / `line: Int64` / `column: Int64` | `Token`（struct） | 词法单元（只读、按值传递；`text` = 归一化后的字面文本/原文拼写） | 全前端 |
+| 构造器全表见下 | `TokenKind`（enum） | 无载荷枚举（拼写差异由 `Token.text` 承载）；解析器按 kind 穷尽 `match` | `Parser` |
+| 词法职责（实现约束） | `Lexer` | ① 字符串保护（三形态全跨度）→ ② 注释剥离（`/* */` 嵌套配平）→ ③ 解析；**换行规范化**（`CRLF`/`CR` → `\n`，先于保护阶段对整串一次——多行/原始串常量字节与 `line`/`column` 计数跨平台一致）；`>\|` 锚定（多行串） | §8.5 冻结顺序、§8.8 |
+
+**`TokenKind` 构造器全表（58 个）**：
+
+| 类别 | 构造器 |
+|---|---|
+| 字面量（5） | `IntLit`、`DecLit`、`F64Lit`、`StrLit`（三形态归一）、`RegexLit` |
+| 标识符/关键字（16） | `Ident`、`KwRecursive`、`KwLet`、`KwVar`、`KwIf`、`KwElse`、`KwWhile`、`KwFor`、`KwIn`、`KwWhere`、`KwBreak`、`KwContinue`、`KwReturn`、`KwTrue`、`KwFalse`、`KwNull` |
+| 标点（12） | `LParen`(`(`)、`RParen`(`)`)、`LBrace`(`{`)、`RBrace`(`}`)、`LBracket`(`[`)、`RBracket`(`]`)、`Comma`(`,`)、`Colon`(`:`)、`Arrow`(`=>`)、`Dot`(`.`)、`Underscore`(`_`)、`Semi`(`;`) |
+| 运算符（24） | `Plus`(`+`)、`Minus`(`-`)、`Star`(`*`)、`Slash`(`/`)、`Percent`(`%`)、`Assign`(`=`)、`EqEq`(`==`)、`NotEq`(`!=`)、`Lt`(`<`)、`Le`(`<=`)、`Gt`(`>`)、`Ge`(`>=`)、`AndAnd`(`&&`)、`OrOr`(`\|\|`)、`Bang`(`!`)、`Amp`(`&`)、`Pipe`(`\|`)、`Caret`(`^`)、`Shl`(`<<`)、`Shr`(`>>`)、`Tilde`(`~`)、`BangTilde`(`!~`)、`DotDot`(`..`)、`DotDotEq`(`..=`) |
+| 终止（1） | `EOF` |
+
+**归属与约定**：
+
+- `Lexer` 的全部成员 = **构造 + `next` + `position`/`line`/`column`**（有状态扫描器 → class）；`Token` = **只读 struct**（5 字段，值语义）；`TokenKind` = **无载荷 enum**（做穷尽 `match`）。
+- **无 `Char`/Rune**：M1 类型集（§11.7）不含 Char——`'…'` 是**单行字符串的第二种定界符**（异种引号 = 内容，§8.8/T42），不是独立 token 类别。
+- **插值不引入独立 kind**：`StrLit.text` 保留 `${…}` 原文，切分与降低在前端糖阶段完成（S3.12）。
+- **`Semi` 容忍写法**：`;` 被识别但解析器一律跳过（等价于空白分隔），避免把合法仓颉写法判成词法错。
+- **类型名不作独立 kind**：`Int64`/`String`/`List<Int64>` 等一律按 `Ident` 走，类型解析在解析期（与仓颉一致）。
 
 #### 4.3.2 `AstExpr` / `AstStmt` / `LambdaAst`
 
