@@ -118,9 +118,11 @@
 
 | 构造器 | 意义 | 锚点 |
 |---|---|---|
-| `Builtin(code: UInt16)` | 内建类型（LocalType 0–11） | m2 §3 |
-| `HostClosureT(params: Array<UInt16>, ret: UInt16)` | 函数类型记法 `name: (T1, T2) -> R`（T/R ∈ 0–8、10–11、14；**禁高阶**：T/R 不得为 12/13） | m2 §3 |
-| `HostObjectT(className: String)` | 注册类名（opaque 形参/局部/返回） | m2 §16.1 |
+| `Builtin(UInt16)` | 参数序 = code：内建类型（LocalType 0–11） | m2 §3 |
+| `HostClosureT(Array<UInt16>, UInt16)` | 参数序 = params, ret：函数类型记法 `name: (T1, T2) -> R`（T/R ∈ 0–8、10–11、14；**禁高阶**：T/R 不得为 12/13） | m2 §3 |
+| `HostObjectT(String)` | 参数序 = className：注册类名（opaque 形参/局部/返回） | m2 §16.1 |
+
+注：**enum 构造器只写参数类型、不带参数名**（仓颉语法），参数含义如上以「参数序」标注。
 
 #### 4.1.2 `ClassRegistryView`（class，编译期只读快照）
 
