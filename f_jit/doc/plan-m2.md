@@ -86,7 +86,7 @@
 | Q4.9 | `PromotionGroup` | `add` 幂等计数（双闭包共享捕获 → 计数 2）；`release` 归零释放（gen+1）；`contains`；常量不入组；try/finally 豁免（清单判定） | 组清单 | T49 |
 | Q4.10 | `HandleTable` 条目标签扩展 + 提升协作 | HostCallback(tag=10)/宿主类实例(tag=11) 的 pin/fetch/get 往返；`moveOutGroup` 原地提升（ID/gen 不变、不重用） | 条目类型扩展 | T49/T57 |
 | Q4.11 | `Interp` CALL_HOST 语义 | 解释器路径与 H63 转发逐位一致（同用例对拍）；v2 单元含 0x79 可执行 | 解释循环扩展 | T33 |
-| Q4.12 | `DbgDump` 报告扩展 | 13/14 句柄呈现 `<类型名>#idx`（14 取注册类名）；其余模板不变 | 呈现更新 | T60 |
+| Q4.12 | `DbgDump` 报告扩展 | 13/14 句柄呈现 `<类型名>#idx`；其余**逐条沿用** M1 §9.16（三行模板、条目格式、槽位序号为键、site=-1/dbgBase=0 边界、-1/-2 不转储、最深帧获胜）——13 固定 `<HostClosure>#idx`；**14 的类型名来源待裁定**（design-m2 §5.2） | 呈现更新 | T60 |
 
 ### Q5 根包增量
 
