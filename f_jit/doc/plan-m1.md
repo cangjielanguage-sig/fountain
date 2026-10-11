@@ -111,7 +111,7 @@ f_jit/
 | S2.4 | `FuncEntry`（10 字段 + `SIZE`） | 26 字节编解码往返、字段保真 | struct + SIZE 常量 | §11.7 恒 26 B |
 | S2.5 | `FuncDir`：`add/get/find/size/validate` | 增查；重复 fnId 拒绝；`validate`：off/len 越界拒绝、`entryFn` 不命中拒绝 | 数组 + 索引 | 加载期校验前置 |
 | S2.6 | `LocalTypes`：`init/get/set/size/validate/isHandleSlot` | 读写与越界；`validate`：长度≠nLocals 拒绝、13–255 拒绝；`isHandleSlot(4..12)=true` | 每槽 1 B | §11.7 校验 |
-| S2.7 | `ConstKind`、`ConstPayload`（10 个构造器） | 各 kind 载荷构造/匹配；DAG 引用（PList/PMap 引用子索引） | enum | 与 §11.5 载荷编码一一对应 |
+| S2.7 | `ConstKind`（class，常量命名空间：`static const` 线上 kind 码）、`ConstPayload`（enum：10 个构造器） | 各 kind 载荷构造/匹配；DAG 引用（PList/PMap 引用子索引） | `ConstKind` = 常量命名空间；`ConstPayload` = enum + `match` | 与 §11.5 载荷编码一一对应 |
 | S2.8 | `ConstRegistry` 拼装 API：`addList/addMap/addStr/addValue/addRange/addRegex/freeze/size/get/isFrozen` | ① 各 add 返回递增 hid；② `addRegex` 去重（同 pattern+flags 同 hid）、flags 归一（`im`≡`mi`≡`ii`）；③ `freeze` 后写操作拒绝；④ `get(i)` 载荷保真 | 数组表 + 去重键表 | §3.3/§11.5 |
 | S2.9 | `SiteEntry`、`SiteTable.add/freeze/lookup/validate` | `lookup`：取 `off ≤ site` 最大条目；无命中 → None；校验：严格升序、off<codeLen、line/column≥1；覆盖率=全部 SET_SITE（与 S3.19 联测） | 升序数组 + 二分 | §11.6/§9.16 |
 | S2.10 | `NameEntry`、`NameTable.add/freeze/lookup/validate` | `lookup(fnId,slot)` 命中/未命中（→None=省略名字）；校验：fnId 命中目录、slot<nLocals、升序唯一、strLen≥1、strOff+strLen 在界、UTF-8 合法 | 段内相对偏移 | §11.6 |

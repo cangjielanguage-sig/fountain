@@ -276,12 +276,12 @@
 | `FuncFlags` | class（常量命名空间） | `static const MUTATION = bit0`（含变更型调用） | — | §9.15、§11.7 |
 | `FuncDir` | class | 函数目录（增/查/校验） | FuncEntry | §11.7 |
 | `LocalTypes` | class | 每函数局部类型表（每槽 1 B） | LocalType | §11.7 |
-| `ConstKind` | class（常量） | 常量 kind 1–10（M1） | — | §11.5 |
-| `ConstPayload` | enum | 常量载荷（与 kind 一一对应） | — | §11.5 |
+| `ConstKind` | class（常量命名空间） | `static const` 线上 kind 码 1–10（M1；M3 +11=Json） | — | §11.5 |
+| `ConstPayload` | enum（带载荷构造器） | 常量载荷（与 kind 一一对应；实例化/编解码 `match` 分派） | — | §11.5 |
 | `ConstRegistry` | class | 常量表：拼装期注册 + 加载期实例化 + freeze | ConstPayload | §3.3、§6、§11.5 |
 | `SiteEntry` / `SiteTable` | struct / class | 站点表（off→line/column；升序唯一） | SourcePos | §11.6、§9.16 |
 | `NameEntry` / `NameTable` | struct / class | 变量名表（稀疏，仅源码级命名槽） | — | §11.6 |
-| `FbcFlags` | class（常量） | bit0 UTF-8 / bit1 NEED_JIT（恒 0）/ bit2 值运算类 | — | §11.6 |
+| `FbcFlags` | class（常量命名空间） | `static const` bit0 UTF-8 / bit1 NEED_JIT（恒 0）/ bit2 值运算类 | — | §11.6 |
 | `FbcHeader` | struct | 容器头（40 B payload 起点；旧布局分支） | Version | §11.6 |
 | `FbcWriter` | class | 组装容器（含 crc32 计算——`f_util.Crc32.isoHdlc`） | FbcHeader、各表 | §11.6 |
 | `FbcReader` | class | 加载校验 + verMajor/verMinor 分派 + 段解析 | 各表、ConstRegistry | §11.6、§11.7、§13.3 |
@@ -300,7 +300,7 @@
 
 **为何 `OpInfo` 是 struct 而非 class**：它是**只读元信息**（5 字段全 `let`、无身份、无行为），访问模式是「按下标取一条 → 读字段」——值语义复制是**浅拷贝约 5 个字**（`String` 字段只复制引用，不复制字符数据），全程无堆分配、无 GC 扫描、无指针追逐；`Array<OpInfo>` 对 struct 元素**内联连续存储**（256 项紧排、缓存友好），而 `Array<class>` 是引用数组（指针追逐 + 静态期 256 次堆分配 + 别名风险）。`DecodedInsn` 持有 `OpInfo` 副本也不会与表项共享可变状态。
 
-#### 3.3.2 `ByteReader` / `ByteWriter`
+#### 3.3.2 `ByteReader`（class） / `ByteWriter`（class）
 
 | 成员 | 意义 |
 |---|---|
@@ -323,7 +323,7 @@
 
 **归属**：**解码与操作数读取全在 `InsnDecoder`**（该类只放 `static` 函数、无实例状态；操作数读取的首参即解码产物 `insn`）；**`DecodedInsn` 只持数据**（struct：值语义、按值传递，不与产物表或调用方共享可变状态）。
 
-#### 3.3.4 `FuncEntry`（struct） / `FuncFlags` / `FuncDir`（class）
+#### 3.3.4 `FuncEntry`（struct） / `FuncFlags`（class，常量命名空间） / `FuncDir`（class）
 
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
@@ -345,7 +345,7 @@
 | `validate(dir: FuncDir, fnId: UInt32)` | 长度恰为 nLocals、类型值合法（加载器拒绝 13–255） | `FbcReader` |
 | `isHandleSlot(slot: Int64): Bool` | 空安全/写保护共用判定 | 前端明确赋值、PUSH_NULL 校验 |
 
-#### 3.3.6 `ConstKind` / `ConstPayload` / `ConstRegistry`
+#### 3.3.6 `ConstKind`（class，常量命名空间） / `ConstPayload`（enum） / `ConstRegistry`（class）
 
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
@@ -361,7 +361,9 @@
 | `ConstRegistry.size: Int64` / `get(i: Int64): ConstPayload` | 查询 | 序列化/加载 |
 | `ConstRegistry.isFrozen: Bool` | 状态 | 校验 |
 
-#### 3.3.7 `SiteTable` / `NameTable`
+**归属**：`ConstKind` = **常量命名空间类**（`static const I64…REGEX`；不用 enum 的原因：枚举构造器**不携带数值**，而 kind 是 §11.5 的**线上码**，序列化与分派都要确定数值）；`ConstPayload` = **enum**（闭合变体集，与 kind 一一对应，实例化/编解码一律 `match` 分派）；`ConstRegistry` = **可变容器**（class：注册/去重/冻结/查询；持有状态且必须共享同一实例——若用 struct，赋值处会被静默浅拷贝成两份表）。
+
+#### 3.3.7 `SiteEntry`（struct） / `SiteTable`（class） / `NameEntry`（struct） / `NameTable`（class）
 
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
@@ -371,7 +373,7 @@
 | `NameTable.add(fnId: UInt32, slot: UInt32, name: String)` / `freeze()` / `lookup(fnId: UInt32, slot: UInt32): ?String` | 稀疏名字查询（未命中 → 报告省略名字） | 前端登记源码级命名槽；桥报告读 |
 | `NameTable.validate(dir, types)` | 键命中目录、slot < nLocals、升序唯一、UTF-8、`strLen ≥ 1`、范围合法 | `FbcReader` |
 
-#### 3.3.8 `FbcHeader` / `FbcWriter` / `FbcReader` / `LoadedUnit`
+#### 3.3.8 `FbcHeader`（struct） / `FbcWriter`（class） / `FbcReader`（class） / `LoadedUnit`（class）
 
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
@@ -811,7 +813,7 @@ Ready --CAS--> Unloading（拒绝新调用；活跃调用照常完成）--active
 | 决策 | 备选 | 选择理由 |
 |---|---|---|
 | 6 个包（base/bytecode/compiler/runtime/backend/根） | 单包 / 按对象分（loader/assembler/interp/jit/marshal 各一包） | 按「正确性论证方式」分包：格式（bytecode）、编译期诊断（compiler）、解释语义（runtime）、差分（backend）——测试与回归边界清晰；再细则共享契约会散落 |
-| `LocalType/ErrCode/TypeToken/HelperId/Version` 用类+`static const` | 顶层常量 / enum | 规格示例 `LocalType.I64` 与 §10.3 的 `OpInfo.CAT_*`（static const 成员）并存：命名空间类给出可点号访问的常量，且可挂 `name()/isHandle()` 查询；避免 250+ 顶层常量污染导入 |
+| `LocalType/ErrCode/TypeToken/HelperId/Version` 用类+`static const`（同族：`ConstKind`/`FuncFlags`/`FbcFlags`、`OpInfo.CAT_*`） | 顶层常量 / enum | 规格示例 `LocalType.I64` 与 §10.3 的 `OpInfo.CAT_*`（static const 成员）并存：命名空间类给出可点号访问的常量，且可挂 `name()/isHandle()` 查询；避免 250+ 顶层常量污染导入；**线上码族**（编码进 `.fbc` 的数值）必须用 `static const`——枚举构造器不携带数值，序列化与分派需要确定数值码 |
 | `OpInfo` 用 **struct**（+ `static const CAT_*` / `static let OPCODE_TABLE`） | 用 class / 顶层常量 | 只读元信息、无身份无行为；值语义浅拷贝约 5 字，无堆分配/GC/指针追逐；`Array<OpInfo>` 内联连续（256 项缓存友好）；类别码用 `static const` 保持编译期可用（可进 `const` 上下文），表用 `static let`（同类静态成员互引，见 `f_util.Crc32.all` 先例） |
 | ctx 用 `CPointer<Int64>` 访问器承载 | `struct` 直映射 | 机器码要求 64 B 且不得移动（§4）；Cangjie 布局不承诺逐字节 ⇒ 显式访问器 + 非托管分配 |
 | ctx/转储缓冲的非托管内存用 `std.core.LibC.malloc<T>` / `LibC.free<T>` | ① `foreign func malloc/free`；② `acquireArrayRawData` 钉住 `Array<UInt8>` | ① std.core 原生 API、免自声明 FFI；② 钉住方案被 std 文档窗口约束排除（获取与释放之间不得构造仓颉对象，而 ctx 跨整个调用、helper 必分配并触发 GC）；③ malloc 满足 16 B 对齐；释放仍走桥 finally（T27 计数断言）——详见 §5.3.1 |
