@@ -128,7 +128,7 @@ bash <skill-root>/scripts/install_fboot.sh version [--root DIR]   # 环境未配
 2. 检查环境：`bash <skill-root>/scripts/install_fboot.sh check`（探测 cjc / cjpm / stdx / fountain 源码）。
 3. 安装（二选一）：
    - **有 fountain 源码（推荐）**：`bash <skill-root>/scripts/install_fboot.sh install [--root DIR]`；等价于 `cd <fountain>/fboot && cjpm install --root DIR`。
-   - **只有中心仓**：`cjpm install fountain::fboot-<版本> --root DIR`（如 `cjpm install fountain::fboot-1.3.14 --root ~/.cjpm`；省略 `--root` 时装到 `~/.cjpm`）。
+   - **只有中心仓**：`cjpm install fountain::fboot-<版本> --root DIR`（如 `cjpm install fountain::fboot-1.3.16 --root ~/.cjpm`；省略 `--root` 时装到 `~/.cjpm`）。
 4. 配置环境变量（每个新 shell 都要）：
 
    ```bash
@@ -184,8 +184,8 @@ fboot 自动完成：生成模块 `cjpm.toml`（`output-type = "dynamic"`）、�
 
    ```toml
    [dependencies]
-     "fountain::f_base" = "1.3.14"
-     "fountain::f_mvc" = "1.3.14"
+     "fountain::f_base" = "1.3.16"
+     "fountain::f_mvc" = "1.3.16"
    ```
 
 4. 核对是否发布：`.modules` 的 `[detention]` 段列出的模块（当前为 `f_llm`、`fleet`）不发布中心仓，不能用版本依赖——需要时改 path/git 依赖，或与用户确认替代方案。
