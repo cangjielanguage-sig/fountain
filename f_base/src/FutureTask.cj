@@ -16,8 +16,8 @@ limitations under the License.
 package fountain::f_base
 
 import std.collection.concurrent.ConcurrentHashMap
-import std.collection.{HashMap, HashSet}
-import std.sync.{Mutex, AtomicInt64}
+import std.collection.{ArrayList, HashMap, HashSet}
+import std.sync.{AtomicBool, Mutex, AtomicInt64}
 
 public class FutureTaskException <: BaseException {
     public init() {}
@@ -65,6 +65,11 @@ public sealed abstract class AbstractFutureTask <: Hashable & Equatable<Abstract
     // 而叶子任务是最常见形态，等于每个叶子都在为空清理付钱。
     // 只由创建线程自己写（登记在它自己的构造函数里）、由它自己读（teardown 在同一个线程），故无需原子。
     var hasChildren = false
+    // FT-6 ⑤（bug-f_base.md §2.4 量化）：本任务是否已经结束（teardown 一开始就置位）。
+    // 用途一：父任务整体清桶时跳过已结束的子任务（与"子任务自行注销"时代的语义等价 ——
+    //   那时已结束的子任务根本不在桶里，父任务同样够不到它的子树）；
+    // 用途二：登记路径按需剪枝已结束项，保证"子任务不再自行注销"不会变成长期内存增长。
+    let finished = AtomicBool(false)
     let parentTID = Thread.currentThread.id
     // FT-5（bug-f_base.md §2.3）：父任务是**构造期固定的树事实**，不随父任务结束而消失。
     // getLocal 的链式查找改走这条父链，于是"父任务先结束"不再切断继承；
@@ -179,9 +184,27 @@ public sealed abstract class AbstractFutureTask <: Hashable & Equatable<Abstract
             case Some(set) =>
                 let itr = set.iterator()
                 while(let Some(f: AbstractFutureTask) <- itr.next()){
-                    f.shutdown()
+                    // FT-6 ⑤：已结束的子任务不必再发取消 —— 它自己的子树早在它自己的 teardown
+                    // （shutdownSubOnFinish 为 true 时）处理过了；这与"子任务自行注销"时代的语义一致。
+                    if(!f.finished.load()){
+                        f.shutdown()
+                    }
                 }
             case None => ()
+        }
+    }
+    // FT-6 ⑤：把已经结束的子任务从桶里剪掉。只在登记路径上、桶达到阈值时做，
+    // 摊还到每次登记约 1 个元素 —— 这样"子任务不再自行注销"不会让长命父任务的桶无界增长。
+    static func pruneFinishedChildren(set: HashSet<AbstractFutureTask>): Unit {
+        let dead = ArrayList<AbstractFutureTask>()
+        let itr = set.iterator()
+        while(let Some(f) <- itr.next()){
+            if(f.finished.load()){
+                dead.add(f)
+            }
+        }
+        for (f in dead) {
+            set.remove(f)
         }
     }
     // FT-3 遗留收口：类型无关地取「当前线程正在执行的任务」。
@@ -212,6 +235,10 @@ public class FutureTask<T> <: AbstractFutureTask {
         // （临界区包住 spawn 会让子任务拆除时抢锁、把构造路径的延迟推高 ~4µs/任务）。
         synchronized(subTasksLock){
             if(let Some(set) <- subTasks.get(parentTID)){
+                // FT-6 ⑤：桶达到阈值时先剪掉已结束的子任务（子任务不再自行注销，桶得有界）
+                if(set.size >= 64){
+                    pruneFinishedChildren(set)
+                }
                 set.add(task)
             }else{
                 let set = HashSet<AbstractFutureTask>()
@@ -229,17 +256,31 @@ public class FutureTask<T> <: AbstractFutureTask {
                 fn()
             }finally{
                 currentTask.set(None<AbstractFutureTask>) // FT-6 ④：先摘掉本线程的"当前任务"，再清理登记
-                synchronized(subTasksLock){
-                    if(let Some(set) <- subTasks.get(parentTID)){
-                        set.remove(task)
-                        if(set.isEmpty()){
-                            subTasks.remove(parentTID)
+                task.finished.store(true) // FT-6 ⑤：宣布完成态（父任务据此跳过取消它 / 剪枝）
+                // FT-6 ③⑤：没登记过子任务 ⇒ 没有任何桶要清，整段短路（叶子任务不再为空清理付钱）。
+                // 有子任务时：默认（shutdownSubOnFinish）在锁内把整个桶取走、锁外逐个取消（与 FT-2 相同），
+                // 不取消也要把桶摘掉（否则会留到进程结束）；两种情况都只做一次 map 操作。
+                if(task.hasChildren){
+                    if(shutdownSubOnFinish){
+                        shutdownCurrentSubThreads()
+                    }else{
+                        synchronized(subTasksLock){
+                            let _ = subTasks.remove(Thread.currentThread.id)
                         }
                     }
                 }
-                // FT-6 ③：没登记过子任务就没有桶要摘，直接短路（叶子任务不再为空清理付钱）
-                if(shutdownSubOnFinish && task.hasChildren){
-                    shutdownCurrentSubThreads()
+                // FT-6 ⑤：创建者是**任务**时不必自行注销 —— 它的桶由创建者在收尾时整体摘除
+                // （旧实现里"子任务自行注销 + 桶空则删表项"是 3~4 次共享结构操作）；
+                // 创建者不是任务（main、普通 spawn）时没人替它整体清理，仍按旧路径注销，避免表项堆积。
+                if(task.parent.isNone()){
+                    synchronized(subTasksLock){
+                        if(let Some(set) <- subTasks.get(parentTID)){
+                            set.remove(task)
+                            if(set.isEmpty()){
+                                subTasks.remove(parentTID)
+                            }
+                        }
+                    }
                 }
             }
         }

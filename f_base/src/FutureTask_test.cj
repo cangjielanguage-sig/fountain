@@ -416,6 +416,41 @@ public class FutureTask_test {
     }
 
     /*
+     * FT-6 ⑤：父任务结束时必须把自己的桶整体摘掉 —— 即使 shutdownSubOnFinish = false
+     * （那时不取消子任务，但登记表不能留到进程结束）。
+     * 修前：flag=false 走不到 shutdownCurrentSubThreads，而新实现里子任务已不再自行注销，
+     * 两个还睡着的子任务会一直挂在桶里 ⇒ 桶留到进程结束。
+     */
+    @TestCase
+    public func testParentTeardownRemovesItsSubTaskBucket(): Unit {
+        let box = ConcurrentHashMap<String, Int64>()
+        let root = FutureTask<Unit>(false, { => futureTaskTestBucketParent(box) })
+        let _ = root.get()
+        let tid = box.get("tid")
+        @Expect(tid.isSome(), true)
+        match (tid) {
+            case Some(t) => @Expect(AbstractFutureTask.subTasks.get(t).isNone(), true)
+            case None => ()
+        }
+    }
+
+    /*
+     * FT-6 ⑤：长命父任务连续创建 1000 个子任务时桶必须有界（已完成项在登记路径上被剪掉）——
+     * "子任务不再自行注销"不能变成长期内存增长。
+     */
+    @TestCase
+    public func testLongLivedParentBucketStaysBounded(): Unit {
+        let box = ConcurrentHashMap<String, Int64>()
+        let root = FutureTask<Unit>({ => futureTaskTestLongLivedParent(box) })
+        let _ = root.get()
+        @Expect(box.get("maxBucket").isSome(), true)
+        match (box.get("maxBucket")) {
+            case Some(n) => @Expect(n <= 200, true)
+            case None => ()
+        }
+    }
+
+    /*
      * FT-6 ③ 守卫：叶子任务（不创建子任务）不会在自己的 tid 下留下桶 ——
      * "没登记过 ⇒ 没有桶"正是 teardown 短路清理（`hasChildren`）的正确性前提。
      */
@@ -439,6 +474,34 @@ private func futureTaskTestReadLocal(ready: AtomicBool, slot: ArrayList<Inherite
         case Some(x) => x
         case None => -1
     }
+}
+
+// ===== FT-6 ⑤（桶的收尾与剪枝）的辅助函数 =====
+
+private func futureTaskTestBucketParent(box: ConcurrentHashMap<String, Int64>): Unit {
+    box.add("tid", Thread.currentThread.id)
+    // 两个子任务都在睡觉（不会自己结束）⇒ 父任务结束时桶里必然还挂着它们
+    let _ = FutureTask<Unit>({ => sleep(300 * Duration.millisecond) })
+    let _ = FutureTask<Unit>({ => sleep(300 * Duration.millisecond) })
+}
+
+private func futureTaskTestLongLivedParent(box: ConcurrentHashMap<String, Int64>): Unit {
+    var maxSeen = 0
+    let tid = Thread.currentThread.id
+    for (_ in 0..1000) {
+        let c = FutureTask<Int64>({ => 1 })
+        let _ = c.get() // 建一个、跑完一个 ⇒ 桶里不断积累"已完成"的登记，靠剪枝收敛
+        let size = synchronized(AbstractFutureTask.subTasksLock){
+            match (AbstractFutureTask.subTasks.get(tid)) {
+                case Some(set) => set.size
+                case None => 0
+            }
+        }
+        if (size > maxSeen) {
+            maxSeen = size
+        }
+    }
+    box.add("maxBucket", maxSeen)
 }
 
 // ===== FT-6 ③（叶子任务不建桶）的辅助函数 =====
