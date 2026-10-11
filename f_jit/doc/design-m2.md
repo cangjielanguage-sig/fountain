@@ -167,7 +167,7 @@
 |---|---|---|
 | `SignatureDescriptor(params: Array<UInt16>, ret: UInt16)` / `params` / `ret` | 签名编码（参数 LocalType 序列 + 返回；禁高阶 ⇒ 深度恒 1） | m2 §1/§4 |
 | `SignatureDescriptor.validate(): Bool` | 合法性（T/R ∈ 0–8、10–11、14；12/13 拒） | — |
-| `static func SignatureVerifier.verify(value: Any, declared: SignatureDescriptor): ?SignatureDescriptor` | 验签五步：① 函数类型判定（`is`，P1）→ ② 参数个数 → ③ 逐参类型 → ④ 返回类型 → ⑤ 禁高阶复检；失败返回 None（→ 19）；成功产出描述符（由调用方存入句柄条目） | m2 §4 |
+| `static func SignatureVerifier.verify(value: Any, declared: SignatureDescriptor): ?SignatureDescriptor` | 验签 = **单次 `is (T1..Tn) -> R`**（声明签名取自前端/桥静态知识；语言**子类型语义** ⇒ 一并覆盖参数个数/逐参/返回，**不另设分步核对**；P1）；失败 None（→ 19）；成功产出描述符（由调用方存入句柄条目）。**禁高阶**由 `R` 取具体非函数类型承接（2026-10-11 裁定：方案 a） | m2 §4 |
 | `static func SignatureVerifier.cached(entry: HostCallback): ?SignatureDescriptor` | 复用既有验签结果：**条目已验签 → 返回 `entry.sig`；否则 `None`**（由调用方走 `verify` 并把结果写回条目）。**缓存 = 条目字段的存在性**，不做「对象 → 条目」定位 | m2 §4 |
 
 **归属**：`SignatureVerifier` 是**纯静态工具类**——只有静态函数、**无实例、无构造**（因此也不持任何状态，缓存一律落在条目上）；`SignatureDescriptor` 是**值语义的签名编码**（构造 + 两个只读字段 + `validate()`），两者不要混读。
@@ -251,18 +251,22 @@
 | `func close(): Unit` | **必须显式调用**：提升组计数 −1、归零释放（gen+1 可复用）；幂等 | m2 §14.2/§14.3 |
 | `prop isClosed: Bool` | 状态（close 后调用 → 19） | — |
 
-#### 6.1.5 `JitFunction.callWith<Fn>`（退化 API，条件启用）
+#### 6.1.5 `JitFunction.callWith<Fn>`（返回闭包的强类型入口，条件启用）
+
+**语义（2026-10-11 澄清）**：**调用 JIT 单元 → 取回它返回的闭包 → 交给宿主**（返回方向，§14 / retType=12）；**不是**"调用一个闭包并取值"。宿主拿到的是**可继续调用的 `JitFunction`**，而不是原生函数值——因此不需要 `Any → Fn` 这类**运行期函数类型判定**，这才是它在 P1 不可用时的兜底价值。
 
 | 成员 | 意义 | 锚点 |
 |---|---|---|
-| `func callWith<Fn>(args: Array<Any>): Fn` | P1（函数类型运行期判定）不可用时的强类型变体：`Fn` 为具体仓颉函数类型，验签退化为编译期；与 `call<T>` 并存 | m2 §9.1 |
+| `func callWith<Fn>(args: Array<Any>): JitFunction` | `Fn` = **返回闭包的函数类型**（编译期已知）；调用单元并返回承接该闭包的 `JitFunction`（其 `call<T>` 路径照旧）；签名/解包零运行期判定；与 `call<T>` 并存 | m2 §9.1/§14 |
+
+**释放协议不变**：返回闭包属逃逸提升组，其计数释放仍走 `close`（M1 §8.1 规则 6②、§14.2）——无论包装载体取何形态。
 
 ### 6.2 既有声明的新增/变更成员
 
 | 声明 | 增量 | 锚点 |
 |---|---|---|
 | `Compiler` | `func registerClass(desc: ClassDescriptor): Unit`；`func registerType<T>(): Unit where T <: Object`（内部转 `ReflectRegistrar`） | m2 §12.4/§12.5 |
-| `CallMarshal` | ① **参数 Marshal 表** + 行：声明类型 = 注册类 C → `is C`（含子类、opaque 视图）→ `pin`（tag=11）；null → 19；HostClosure 声明 → 验签 → 回调表登记（tag=10）；② **解包表** + 行：`retType=12 → JitClosureId`、`retType=13 → 原样带回宿主闭包引用`、`retType=14 → get 宿主类实例引用`；③ Closure 行**仅返回方向**（参数方向不加行） | m2 §4/§14.3/§16.2 |
+| `CallMarshal` | ① **参数 Marshal 表** + 行：声明类型 = 注册类 C → `is C`（含子类、opaque 视图）→ `pin`（tag=11）；null → 19；HostClosure 声明 → 验签（**单次 `is (T1..Tn) -> R`**，§4）→ 回调表登记（tag=10）；② **解包表** + 行：`retType=12 → JitClosureId`、`retType=13 → 原样带回宿主闭包引用`、`retType=14 → get 宿主类实例引用`；③ Closure 行**仅返回方向**（参数方向不加行） | m2 §4/§14.3/§16.2 |
 | `JitFunction` | 内部状态扩展：`ClassRegistry` 快照、`PromotionGroup` 表（per-call 逃逸闭包）、`JitClosureId` 登记；`callWith<Fn>` 公开变体 | m2 §9.1/§14 |
 | `CompileOptions` | `cpuFeatures` 启用（显式 ISA 开关：如 SSE4.1/4.2 优化；默认 0） | m1 §12.1（`CompileOptions.cpuFeatures` 定义处）+ m2 §2 |
 
@@ -355,6 +359,7 @@ Compiler.registerType<User>() → ReflectRegistrar：枚举 public 成员（字�
 | 构造经**预定义函数通道**（user helper） | 零新指令/helper/格式；构造执行体恒在宿主侧（I2 不变） |
 | 反射仅在注册期 | 字节码/JIT 路径零反射；访问器是宿主黑盒（`flags.bit0` 保守判定） |
 | `static var` / `static mut prop` **永久排除** | 隐藏全局态破坏可重复性/差分/并发纪律（附 B 四条论证） |
+| **验签口径 = 单次 `is (T1..Tn) -> R`**（语言子类型语义） | 运行期取不出函数类型的分量（`is` 只给 bool），"参数个数/逐参/返回"分步核对既冗余又**不可实现**；单次判定与仓颉语义（入参逆变/返回协变）一致，且**禁高阶**由 `R` 取具体非函数类型自然承接（2026-10-11 裁定方案 a，已实测） |
 | 逃逸闭包 ID 的宿主值类型命名 **`JitClosureId`**（原名 `CFunc`） | 避免与仓颉**内建** C 函数指针类型 `CFunc<F>`（FFI）同名遮蔽；`JitClosureId` 直述语义（承接逃逸闭包句柄 ID），与 `JitClosure`（包装器）成对 |
 
 ---
@@ -363,10 +368,11 @@ Compiler.registerType<User>() → ReflectRegistrar：枚举 public 成员（字�
 
 | # | 项 | 状态 |
 |---|---|---|
-| M2-1 | P1（`is` 对函数类型的运行期判定）落地确认 | 实现前以最小用例确认环境行为；不可用 → `callWith<Fn>` 退化（§6.1.5） |
+| M2-1 | P1（`is` 对函数类型的运行期判定）落地确认 | **已实测确认（2026-10-11）**：WSL Ubuntu-24.04 + SDK 1.3.0-alpha，`is` 支持函数类型（入参逆变/返回协变成立、捕获闭包命中、非函数值不命中），动态调用经类型模式绑定；**结案**——主线验签成立，§6.1.5 强类型入口降为备用 |
 | M2-2 | 逃逸闭包回桥的**容器内部表示**（句柄型 cell ⇒ 提升需级联图遍历；对象引用 ⇒ 免级联） | 与 M1 v0.18「容器构造 + 逃逸返回」元素寿命表述一并裁定（m2 §14.6） |
 | M2-3 | 逃逸闭包回桥渐进交付：第 0 步（值型捕获 + 路径 A 常量捕获，免提升）→ 第 1 步（句柄型捕获 = 提升组） | 按 §14.7 两步走 |
 | M2-4 | 类注册表的「注册期冲突」边界（类名 vs 内建类型名/关键字/已注册函数名/类名） | 规格已定「拒绝」；拒绝消息体例实施时定 |
 | M2-5 | 第三档（高阶 + 异常对象回译） | **冻结**（实现时机无限期推迟；重议条件见 m2 §13-2） |
 | M2-6 | 跨进程回调注册协议 | **永久排除**（m2 §13-3） |
+| M2-8 | **`callWith<Fn>` 返回的 `JitFunction` 与 §6.1.4 `JitClosure` 的关系** | 待澄清：① 同一载体（`JitClosure` 并入/更名 `JitFunction` 的闭包视图，含 `close`）；② `JitFunction` 为载体、`JitClosure` 持之（`close` 归属需定）；③ 两者并存（语义重叠，不建议）。**无论取何形态，释放协议不变**（提升组计数 −1 = close）；实施前定 |
 | M2-7 | **规格内部张力对账**：m2 §12.4「继承成员不解析（仅本类声明成员）」vs §12.5/§13-5②「继承成员访问器经反射按继承关系逐级向上解析（v0.8.25，已定位）」 | 设计口径：**糖按本类声明解析**（前端只认注册的字段/方法表）；宿主侧访问器（反射生成）可覆盖继承成员——两者不矛盾（**解析点不同**：前端 vs 宿主反射）；建议规格在 §12.4 行 369 补限定说明 |

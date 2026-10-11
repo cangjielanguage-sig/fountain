@@ -76,7 +76,7 @@
 | 步骤 | 目标成员 | 先写测试（红） | 实现要点（绿） | 验收（回归） |
 |---|---|---|---|---|
 | Q4.1 | `SignatureDescriptor`（params/ret/validate） | 编码断言；`validate`：12/13 在 T/R → false；14 合法 | class | m2 §1 |
-| Q4.2 | `SignatureVerifier.verify`（static；类无实例） | 五步逐条：非函数值 → None；参数个数不符 → None；逐参类型不符 → None；返回类型不符 → None；高阶复检 → None；合法 → 描述符产出 | P1 `is` 判定 + 核对 | T30 |
+| Q4.2 | `SignatureVerifier.verify`（static；类无实例） | **单次 `is (T1..Tn) -> R`**（声明签名取自静态知识；语言子类型语义 ⇒ 一并覆盖参数个数/逐参/返回）：不符 → None；合法 → 描述符产出；禁高阶由 `R` 取具体非函数类型承接 | 一次 `is` 判定（P1） | T30 |
 | Q4.3 | `SignatureVerifier.cached(entry: HostCallback)`（static） | 幂等复用（幂等计数断言）：条目已验签 → 返回 `entry.sig`；未验签 → `None` | 条目缓存（`HostCallback.sig`）；**收条目**、不做「对象 → 条目」定位（design-m2 §5.1.2 裁定，2026-10-11） | T30 |
 | Q4.4 | `HostCallback`（fn/sig） | 条目构造/字段保真；pin 同对象同 ID | class | T30 |
 | Q4.5 | H63 `host_call_trampoline`（基础） | 栈底 fetch（tag≠10 → 8）；逐参转换（值型/句柄型/14）；调用 fn；值型返回原值、引用型登记 1 槽（hwTop 断言）；**含 CALL_HOST → `flags.bit0` + deopt 源汇编期禁令（拒绝用例）+ 防御 -1 → 99 联测** | helper 实现 | T31 |
@@ -102,7 +102,7 @@
 | Q5.8 | `CallMarshal` 参数 Marshal + 行 | 源入口实参：`is C`（含**子类**实例）→ pin（tag=11）；null → 19；多参混排（值型/句柄型/14）；同一对象身份（实参 ≡ 闭包内引用 ≡ 返回值带回） | Marshal 扩展 | T57 |
 | Q5.9 | `CallMarshal` 解包表 + 行 | `retType=12→JitClosureId`（提升组已登记）；`retType=13→原样带回宿主闭包引用`；`retType=14→get 实例引用`；T 校验 | 解包扩展 | T49/T57 |
 | Q5.10 | `CallMarshal` 验签 + HostClosure 参数行 | 声明 HostClosure 参数 → 验签 → pin(tag=10)；失败 → 19（site=-1）；⑤ 禁高阶复检 | 参数行 | T30 |
-| Q5.11 | `JitFunction` 状态扩展 + `callWith<Fn>` | 单元持有 ClassRegistry 快照/提升组表；`callWith<Fn>` 强类型变体（P1 可用时与 `call<T>` 等价；不可用时编译期验签） | 状态 + API | M2-1 裁定后启用 |
+| Q5.11 | `JitFunction` 状态扩展 + `callWith<Fn>` | 单元持有 ClassRegistry 快照/提升组表；`callWith<Fn>(args): JitFunction`（**返回闭包入口**：`Fn` = 返回闭包的函数类型，宿主所得为可继续调用的 `JitFunction`，桥内零运行期判定） | 状态 + API | T30（并入验签组；形态受 M2-8 约束） |
 | Q5.12 | 槽 14 链内传参与 HostClosure 签名含 14 | 14 形参/局部/返回声明；跨 CALL_FUNC 传递 × 深度 ≥3；链内返回；嵌套闭包捕获 14（快照 = ID 拷贝）；HostClosure 签名含 14 的验签/执行（R=14 → 登记 1 槽） | 前端 + H63 扩展 | T58/T59 |
 
 ### Q6 验收（T 系列）
@@ -124,5 +124,5 @@
 1. **H63 先行**：Q4.5/Q4.6 是 M2 的地基（T31 通过前不做成员访问/构造）；`ReflectRegistrar`（Q5.2）最后做——它只批量生成手工条目。
 2. **提升组与 close 配对**（Q4.9/Q5.7）是逃逸回桥的最大风险点——用「双闭包共享捕获 + 幂等计数 + 归零释放」构造性用例钉住；容器内部表示裁定（M2-2）前，只交付白名单版（值型 + 路径 A 常量捕获）。
 3. **M1 零回归**：每步跑 plan-m1 §7 全量；任何 M1 产物差异按阻塞缺陷处理。
-4. **P1 依赖**（M2-1）：Q4.2 先以最小用例确认环境行为；不可用则 Q5.11 的 `callWith<Fn>` 转为必选通道。
+4. **P1 依赖**（M2-1）：**已实测确认（2026-10-11，WSL SDK 1.3.0-alpha）**——`is` 支持函数类型（含入参逆变/返回协变），动态调用经类型模式绑定；⇒ Q5.11 的 `callWith<Fn>` **非必选**（备用通道，形态待 M2-8 澄清）。
 5. **编号说明**：T59 在 m2（HostClosure 签名含 14）与 m3（JSON 世界内可变 API + Any↔14）曾重号——**已裁定（2026-10-11）：m3 侧改 T61，m2 侧保持 T59**；本计划按 m2 语义使用 T59。
