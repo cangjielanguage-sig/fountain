@@ -47,6 +47,10 @@ public sealed abstract class AbstractFutureTask <: Hashable & Equatable<Abstract
     static let subTasks = ConcurrentHashMap<Int64, HashSet<AbstractFutureTask>>()
     protected let tid = AtomicInt64(0)
     let parentTID = Thread.currentThread.id
+    // FT-5（bug-f_base.md §2.3）：父任务是**构造期固定的树事实**，不随父任务结束而消失。
+    // getLocal 的链式查找改走这条父链，于是"父任务先结束"不再切断继承；
+    // 创建线程不是任务时（main 线程、普通 spawn 线程）为 None。
+    let parent: ?AbstractFutureTask = taskMap.get(Thread.currentThread.id)
     public func hashCode(): Int64 {
         taskId
     }
@@ -60,12 +64,14 @@ public sealed abstract class AbstractFutureTask <: Hashable & Equatable<Abstract
         this.local.add(local, value)
     }
     func getLocal<T>(local: AbstractInheritedTaskLocal): ?T {
-        var tid = Thread.currentThread.id
-        while(let Some(current: AbstractFutureTask) <- taskMap.get(tid)){
-            if(let Some(x: T) <- current.local.get(local)){
+        // FT-5：从「当前线程正在执行的任务」出发，沿构造期固定的父链上溯 ——
+        // 不再依赖父任务是否还在 taskMap 里，因此父任务先结束也能继承到它的值。
+        var current = taskMap.get(Thread.currentThread.id)
+        while(let Some(task) <- current){
+            if(let Some(x: T) <- task.local.get(local)){
                 return x
             }
-            tid = current.parentTID
+            current = task.parent
         }
         None<T>
     }

@@ -25,7 +25,7 @@
 2. `FT-2`（§1.2）`shutdownSubOnFinish` 承诺不成立（父任务先结束时 96% 子任务不被取消）＋ `subTasks` 无互斥（`HashSet` 共享无共同锁）　**✅已修复（2026-10-11，见 §1.2 修复标记）**
 3. `FT-3`（§2.1）`shutdownCurrentSubThreads`/`current()` 按 `FutureTask<T>` 过滤，异类型子任务被静默跳过（100% 复现）　**✅已修复（2026-10-11，见 §2.1 修复标记；`current()` 那半见 §2.1 补充修复）**
 4. `FT-4`（§2.2）`InheritedTaskLocal` 的写入目标固定为 owner（四个出口，含"owner 已结束时 `set` 后自读 `None`"）—— **已拍板：路线 2（`set`/`remove` 写当前任务）；`getOrSet`/`getOrCompute` 二次决策改为二段检查锁**　**✅已修复（2026-10-11，见 §2.2 修复标记与二次修正）**
-5. `FT-5`（§2.3）父任务先结束后子任务继承不到值（返回 None）——需确认是设计使然还是缺陷，并补文档口径　**待处理**
+5. `FT-5`（§2.3）父任务先结束后子任务继承不到值（返回 None）——**作者定性为缺陷**，继承改走构造期固定的父链　**✅已修复（2026-10-11，见 §2.3 修复标记）**
 6. `FT-6`（§2.4）性能：构造+get ≈ 13× 裸 `spawn`、`local.get` ≈ 8.9× 标准库 `ThreadLocal` —— 按"先有量化依据"逐项立项　**待处理**
 7. `FT-L1` ~ `FT-L4`（§3）低危/契约/文档项　**登记**
 
@@ -43,7 +43,7 @@
 | `77488c97` | `docs(f_base): 回填 FT-4 的三个提交号与 19/19 总验证` |
 | `b7226c17` | `fix(f_base): FT-3 遗留收口：current() 类型无关化，异常可捕获` |
 
-**修后总验证（最终代码）**：worktree 内 `cjpm test` = `TOTAL: 23, PASSED: 23, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`；修前基线为 6 条既有用例全绿，本次累计新增 17 条用例）。探针（`.autocode/tmp/ftask_probe`，按 worktree 的 `f_base` 副本构建）：`EXP4B diff=true`、`EXP5 50/50`、`EXP10 500/500`、`EXP11` 父任务由 `Some(2)` 变 **`Some(1)`**、`EXP12` 消息由"没有任务"变为**说明泛型实参问题**、`EXP13 a==b 0/500`、`EXP15` 与 `EXP16` 均 100/100 轮整组取消、`EXP17` 由 `None` 变 **`Some(9)`**；`EXP6` 的 FT/spawn 比值为 12.9x / 13.4x（修前区间 12.9x ~ 13.9x）。未修的 `FT-5`/`FT-6`/`FT-L*` 见对应条目。
+**修后总验证（最终代码）**：worktree 内 `cjpm test` = `TOTAL: 26, PASSED: 26, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`；修前基线为 6 条既有用例全绿，本次累计新增 20 条用例）。探针（`.autocode/tmp/ftask_probe`，按 worktree 的 `f_base` 副本构建）：`EXP3`（父任务先结束的继承）由 `done:None` 10/10 变 **`done:Some` 10/10**、`EXP4B diff=true`、`EXP5 50/50`、`EXP9` 仍 `Some(7)`、`EXP10 500/500`、`EXP11` 父任务由 `Some(2)` 变 **`Some(1)`**、`EXP12` 消息由"没有任务"变为**说明泛型实参问题**、`EXP13 a==b 0/500`、`EXP15` 与 `EXP16` 均 100/100 轮整组取消、`EXP17` 由 `None` 变 **`Some(9)`**；`EXP6` 的 FT/spawn 比值为 12.9x / 13.4x（修前区间 12.9x ~ 13.9x）。未修的 `FT-6`（性能机会）与 `FT-L1` 后半、`FT-L2` 见对应条目。
 
 ---
 
@@ -254,13 +254,21 @@ while(let Some(f: FutureTask<T>) <- itr.next()){
   - **修后**：`TOTAL: 19, PASSED: 19, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`）。
 - 未覆盖：`set`/`remove` 仍不加锁（它们按路线 2 写"当前任务"；只有调用方恰好是 owner 时才会与并发的 `getOrCompute` 撞同一个槽 ⇒ 那一种情况是"最后写入者胜"，DCL 的"只算一次"保证不受影响）。锁序只有 `initLock` → `subTasksLock`（`fn` 内建任务时才取后者），反向不存在，无环。
 
-### 2.3 [中｜行为边界·文档缺失] `FT-5` 父任务先结束后，子任务继承不到值
+### 2.3 [中｜缺陷] `FT-5` 父任务先结束后，子任务继承不到值 ✓已复核 → ✅已修复（2026-10-11）
 
-**位置**：`f_base/src/FutureTask.cj:52-61`（链式查找依赖 `taskMap`）、`:111`（父任务结束时 `taskMap.remove(tid)`）
+**✅ 修复标记（2026-10-11）**：分支 `fix/futuretask`（worktree `.worktrees/futuretask`，基线 `fe8a1886`）。作者定性为**缺陷**（不是"设计使然"）。代码、用例、README(zh+en)、本标记在同一提交（提交信息 `fix(f_base): FT-5 继承改走构造期固定的父链，父任务先结束不再切断继承`；提交号见 §0 时间线回填）。
 
-**实测**：EXP3（fire-and-forget）⇒ 10/10 子任务读到 `None`；EXP9（父任务阻塞等子任务，父任务存活）⇒ 读到 `Some(7)`（正例）。
-
-**说明**：这可能是"任务结束即从线程局部链上摘除"的设计使然，但 `f_base/README.md:647-648` 未写明"只有父任务存活期间才可继承"，且它与 `FT-2` 同属 fire-and-forget 场景的两个后果。**待作者确认**：设计使然则补文档（中英文 README 同步），否则与 `FT-2` 一并修。
+- 根因：`getLocal` 的链式查找靠 `taskMap.get(父线程id)` 逐级上溯，而 `taskMap` 只登记**正在运行**的任务（父任务结束时摘除）⇒ "父任务已结束"会把继承链剪断 —— 但父子关系是**任务树的静态事实**，不该随存活状态消失。
+- 改动（`f_base/src/FutureTask.cj`）：
+  1. `AbstractFutureTask` 新增构造期固定的 `let parent: ?AbstractFutureTask = taskMap.get(Thread.currentThread.id)`（`:50-53`；创建线程不是任务时为 `None`）；
+  2. `getLocal`（`:66-77`）改为：起点仍是"当前线程正在执行的任务"，之后沿 `task.parent` 上溯，不再查 `taskMap`。正向副作用：读路径不再依赖"线程 id 唯一且不重用"，也不会因线程 id 复用而走到无关任务上（即 `FT-L4` 的建议）。
+- 生命周期口径：子任务因此**持有父任务（及其祖先）的强引用** —— 这是继承语义所要求的（父任务的值必须在其结束后仍能被已创建的后代读到）；父任务对象与它的值随最后一个引用它的后代一起被回收。原 README 那句"任务结束时相应的 InheritedTaskLocal 会被移除"与实现从来不符，本次连同 `FT-L3` 一起改为准确表述（`README.md` / `README_en.md` 同批）。
+- 用例（`f_base/src/FutureTask_test.cj`，3 条）：`testChildInheritsAfterParentFinished`（父 `set(7)` 后立即结束，子任务在父任务结束之后读）、`testGrandChildInheritsAcrossFinishedAncestors`（两级祖先都已结束时，孙任务仍读到根的值）、`testChildSeesParentValueWrittenAfterCreation`（守卫：继承是活引用而非构造期快照 —— 父任务在子任务创建**之后**写的值也要能被读到）。
+- 测量证据：
+  - **修前**：`TOTAL: 26, PASSED: 24, FAILED: 2` —— `box["child"]=="None"`（期望 `"7"`）、`box["grand"]=="None"`（期望 `"7"`）；守卫用例 PASSED。
+  - **修后**：`TOTAL: 26, PASSED: 26, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`）。
+  - 独立探针复测：`EXP3` 由 `done:None` 10/10 变为 **`done:Some` 10/10**；`EXP9`（父任务存活）仍 `Some(7)`；同批 `EXP10 500/500`、`EXP11` 父任务 `Some(1)`、`EXP17` `Some(9)` 均未变。
+- 注意：`parentTID` 仍保留（`subTasks` 的登记/注销与 `shutdownCurrentSubThreads` 按"创建线程 id"索引，属 FT-2 的机制），只有**读路径**改走父链。
 
 ### 2.4 [中｜性能机会] `FT-6` 每任务固定开销 ≈ 13 倍裸 `spawn`；`local` 读 ≈ 8.9 倍标准库
 
@@ -291,8 +299,8 @@ while(let Some(f: FutureTask<T>) <- itr.next()){
 
 - **`FT-L1`｜异常契约**：~~`current()` 抛出的 `FutureTaskException` 是 `private` ⇒ 应用侧无法按类型捕获~~ **✅ 前半已修（2026-10-11，随 `b7226c17`：`FutureTaskException` 改 `public`，用例 `testCurrentWithWrongTypeArgumentThrowsWithPreciseMessage` / `testCurrentOrNoneOutsideTaskIsNone` 按类型捕获）**；余下：`get()`/`get(timeout:)`/`tryGet()` 走 `future.getOrThrow()`，而 `future` 是可变 `var`，极端时序下会抛 Option 的异常而非本模块异常 —— 待处理。
 - **`FT-L2`｜API 不对称**：`removeLocal` 返回 `?T`（`:62-68`）但 `InheritedTaskLocal.remove()` 丢弃返回值（`:181-183`）；`getOrSet`/`getOrCompute` 只挂在 `InheritedTaskLocal`，`AbstractFutureTask` 上没有对应公开入口。
-- **`FT-L3`｜内存口径**：任务结束时 finally 只摘 `taskMap` 与 `subTasks`，**不清理 `local`**（`:110-123`）。`f_base/README.md:648` 写"FutureTask 初始化时的任务结束时，相应的 InheritedTaskLocal 会被移除"，实现上只是"查不到"（`taskMap` 已摘除）；只要用户还持有 `FutureTask` 引用，值与键仍被持有。需确认文档口径（若要真清理，finally 里加 `local.clear()`）。
-- **`FT-L4`｜防御性建议**：`parentTID` 依赖"线程 id 在存活期内唯一、且不重用"（`:39`），当前 runtime 实测成立（见 §4），但代码无任何防御。建议给 `getLocal` 的 `while` 加跳数上限/已访问标记，或改成显式父子引用链，避免将来 runtime 语义变化时退化成死循环。
+- **`FT-L3`｜内存口径（结论修正，2026-10-11）**：**不应清理** `local`。父任务的值必须在其结束后仍能被已创建的后代读到（`FT-5` 已定性为缺陷并修复，见 §2.3），因此"任务结束时清空 `local`"会直接破坏继承；实现无需改动。README 里那句"FutureTask 初始化时的任务结束时，相应的 InheritedTaskLocal 会被移除"与实现从来不符，已随 FT-5 改为"值随任务对象一起被回收"（中英文同批）。
+- **`FT-L4`｜防御性建议：✅ 已随 FT-5 实现（2026-10-11）**。`getLocal` 的读路径不再依赖"线程 id 在存活期内唯一、且不重用"的假设，改为**显式父子引用链**（`AbstractFutureTask.parent`，构造期固定 ⇒ 链必然无环，不需要跳数上限）；`parentTID` 仅剩 FT-2 的登记/注销用途。
 
 ---
 
@@ -353,7 +361,7 @@ wsl -d Ubuntu-24.04 -e bash -lc "cd /mnt/d/docs/work/cangjie/projects/fountain/.
 
 | 实验 | 修前 | 修后 |
 |---|---|---|
-| EXP3（fire-and-forget 继承） | `done:None` 10/10 | `done:None` 10/10（**未变**，属 `FT-5` 未修范围） |
+| EXP3（fire-and-forget 继承） | `done:None` 10/10 | **`done:Some` 10/10**（随 `FT-5` 修复） |
 | EXP4B（混合类型子任务） | same=true, **diff=false** | **same=true, diff=true** |
 | EXP5（父任务先结束） | 2 / 50 被取消 | **50 / 50** |
 | EXP10（delay 0 丢值） | 2 / 500 读到 | **500 / 500** |

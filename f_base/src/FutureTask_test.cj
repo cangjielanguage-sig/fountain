@@ -337,6 +337,44 @@ public class FutureTask_test {
         }
         @Expect(threw, true)
     }
+
+    /*
+     * FT-5（bug-f_base.md §2.3，作者定性为缺陷）：父任务先结束（fire-and-forget）后，
+     * 已创建的子任务仍应沿父链继承到它的值。
+     * 修前：链式查找依赖 taskMap（父任务结束即摘除）⇒ 读到 None。
+     */
+    @TestCase
+    public func testChildInheritsAfterParentFinished(): Unit {
+        let box = ConcurrentHashMap<String, String>()
+        let root = FutureTask<Unit>({ => futureTaskTestInheritAfterParentGone(box) })
+        let _ = root.get()
+        sleep(400 * Duration.millisecond)
+        @Expect(box.get("child"), Some("7"))
+    }
+
+    /*
+     * FT-5 强化：**两级祖先都已结束**时，孙任务仍能读到根任务的值（沿父链跨过两个已结束的节点）。
+     */
+    @TestCase
+    public func testGrandChildInheritsAcrossFinishedAncestors(): Unit {
+        let box = ConcurrentHashMap<String, String>()
+        let root = FutureTask<Unit>({ => futureTaskTestInheritAcrossTwoGone(box) })
+        let _ = root.get()
+        sleep(600 * Duration.millisecond)
+        @Expect(box.get("grand"), Some("7"))
+    }
+
+    /*
+     * FT-5 守卫：父任务存活时，**它之后**写入的值也必须能被已创建的子任务读到
+     * （继承是活的引用，不是"构造期快照/拷贝"）。
+     */
+    @TestCase
+    public func testChildSeesParentValueWrittenAfterCreation(): Unit {
+        let box = ConcurrentHashMap<String, String>()
+        let root = FutureTask<Unit>({ => futureTaskTestLateParentWrite(box) })
+        let _ = root.get()
+        @Expect(box.get("child"), Some("7"))
+    }
 }
 
 private func futureTaskTestReadLocal(ready: AtomicBool, slot: ArrayList<InheritedTaskLocal<Int64>>): Int64 {
@@ -566,6 +604,56 @@ private func futureTaskTestCurrentWrongType(box: ConcurrentHashMap<String, Strin
     }
     box.add("caughtTyped", "${caughtTyped}")
     0
+}
+
+// ===== FT-5（父任务先结束仍可继承）的辅助函数 =====
+
+// 父任务 set(7) 后立即结束；子任务等父任务的 finally 摘掉 taskMap 项之后再读
+private func futureTaskTestInheritAfterParentGone(box: ConcurrentHashMap<String, String>): Unit {
+    let me = FutureTask<Unit>.current()
+    let local = me.newLocal<Int64>()
+    local.set(7)
+    let _ = FutureTask<Unit>({ => futureTaskTestReadAfterOwnerGone(box, local) })
+}
+
+private func futureTaskTestReadAfterOwnerGone(box: ConcurrentHashMap<String, String>, local: InheritedTaskLocal<Int64>): Unit {
+    sleep(50 * Duration.millisecond)
+    box.add("child", futureTaskTestReadStr(local))
+}
+
+// 根 set(7) → 中间层结束 → 孙任务在两个祖先都结束之后读
+private func futureTaskTestInheritAcrossTwoGone(box: ConcurrentHashMap<String, String>): Unit {
+    let me = FutureTask<Unit>.current()
+    let local = me.newLocal<Int64>()
+    local.set(7)
+    let child = FutureTask<Unit>({ => futureTaskTestMiddleAndGrand(box, local) })
+    let _ = child.get() // 只等中间层结束；根任务随之结束
+}
+
+private func futureTaskTestMiddleAndGrand(box: ConcurrentHashMap<String, String>, local: InheritedTaskLocal<Int64>): Unit {
+    let _ = FutureTask<Unit>({ => futureTaskTestGrandReadAfterDelay(box, local) })
+    // 中间层不等待孙任务，直接结束
+}
+
+private func futureTaskTestGrandReadAfterDelay(box: ConcurrentHashMap<String, String>, local: InheritedTaskLocal<Int64>): Unit {
+    sleep(100 * Duration.millisecond)
+    box.add("grand", futureTaskTestReadStr(local))
+}
+
+// 守卫：子任务创建**之后**父任务才写值，子任务（经闸门同步）应当读到
+private func futureTaskTestLateParentWrite(box: ConcurrentHashMap<String, String>): Unit {
+    let me = FutureTask<Unit>.current()
+    let local = me.newLocal<Int64>()
+    let gate = AtomicBool(false)
+    let child = FutureTask<Unit>({ => futureTaskTestReadAfterGate(box, local, gate) })
+    local.set(7)
+    gate.store(true)
+    let _ = child.get()
+}
+
+private func futureTaskTestReadAfterGate(box: ConcurrentHashMap<String, String>, local: InheritedTaskLocal<Int64>, gate: AtomicBool): Unit {
+    while (!gate.load()) {}
+    box.add("child", futureTaskTestReadStr(local))
 }
 
 // ===== FT-4 辅助函数结束 =====

@@ -613,7 +613,7 @@ public interface RightShiftable<T> where T <: RightShiftable<T> {
 
 ## `FutureTask<T>`
 1. When a parent task ends it can decide whether to end its child tasks
-2. It supports InheritedTaskLocal, similar to ThreadLocal but with inheritance: `get` walks up from the current task to its parents (if the current task has no value, the parent task is consulted);
+2. It supports InheritedTaskLocal, similar to ThreadLocal but with inheritance: `get` walks up from the current task to its parents (if the current task has no value, the parent task is consulted; children created earlier still read the parent's values after the parent has finished);
    `set`/`remove` only affect the **current task** layer (visible to that task and its descendants, not to the parent or siblings; when called outside a task they fall back to the task that created the local);
    `getOrSet`/`getOrCompute` write the **task that created the local** (a slot shared by that task and its whole subtree) when no value is found in the chain, using **double-checked locking** (one lock per local) so that only one concurrent caller computes and writes while the others receive the same value; `fn` runs inside the lock (the `Mutex` is reentrant, so calling the same local again from `fn` does not deadlock)
 ```cj
@@ -655,7 +655,7 @@ public sealed abstract class AbstractInheritedTaskLocal <: Hashable & Equatable<
 //A ThreadLocal that can be inherited from the parent thread: get walks up from the current task to its parents
 //set/remove act on the current task layer (they fall back to the task that created the local when called outside a task)
 //getOrSet/getOrCompute write the task that created the local on a miss (subtree-shared slot; double-checked locking, computed once)
-//When the task of the FutureTask initialization ends, the corresponding InheritedTaskLocal is removed
+//After a parent task ends, its already-created child tasks and their descendants can still read its values along the parent chain; values are reclaimed together with the task object
 public class InheritedTaskLocal<T> <: AbstractInheritedTaskLocal {
     init(task: AbstractFutureTask)
     public func set(value: T): Unit 
