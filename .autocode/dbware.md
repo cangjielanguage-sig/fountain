@@ -1,5 +1,7 @@
 数据库中间件
 ---
+## 前置任务
+加载技能using-git-worktrees，创建新的worktree
 
 ## 模块定义
 在fountain项目下面创建两个新的文件夹`f_dbd`和`fdbm`作为本项目新的仓颉模块。
@@ -74,6 +76,7 @@ category = ["Data Encapsulation and Transfer", "Database Driver", "Database Fram
 ### 功能
 #### 数据库节点配置
 ```
+export fdbm_port=8112 # fdbm进程监听的端口号，默认是8112
 export fdbm_db='name0@host1:port;name2@host2:port;name3@host3:port;...' 
 # 这是各个数据库节点，各个节点用分号隔开
 # @前面的是中间件为节点名，不是数据库名
@@ -274,6 +277,7 @@ category = ["Data Encapsulation and Transfer", "Database Driver", "Database Fram
      - username password支持%编码
    - 同样支持从open函数的opts参数传递username和password
 2. 提供多fdbm负载均衡。
+- 
 - 实现`public class MultiD <: Driver`
 ```cj
 import std.database.sql.*
@@ -295,8 +299,9 @@ public class MultiD <: Driver {
         }
     }
     public func open(connectionString: String, opts: Array<(String, String)>): Datasource {
-        //connectionString: multidbm://username1:password1@host1:port1,username1:password1@host2:port2/database_name
+        //connectionString: multidbm://username1:password1@host1:port1,username2:password2@host2:port2/database_name
         //用户名密码支持%编码
+        //也支持使用opts参数传递用户名和密码，此时每个fdbm服务节点的用户名和密码必须都是一样的
     }
 }
 public class MultiDatasource <: Datasource {
@@ -334,3 +339,13 @@ export multidbm_databasePoolConnectTimeout=50 # 默认是50，单位是毫秒，
 export multidbm_databasePoolMaxWaiting=30000 # 默认是30000（单位毫秒，即30秒）。池耗尽且调用方用无限等待（Duration.Max）取连接时的等待上限；超过上限就记WARN并返回None，避免无日志挂死；配成0表示真无限等待
 export multidbm_databasePoolCheckSql='select 1' # 检查连接有效性的SQL，默认是select 1
 ```
+
+==========
+## 任务
+0. 加载技能 using-superpowers、cangjie-doc-lookup、cangjie-architecture-design-harness、
+1. 分别为`f_dbd`和`fdbm`的模块添加详细设计文档
+   - 在文档中添加包级定义、各包的意义与依赖关系
+   - 每个包的顶级声明与各顶级声明的意义和依赖关系
+   - 添加每个顶级声明的公共成员声明与它们的意义和调用关系
+3. 为每篇详细设计文档各生成一篇详细开发计划
+   - 以每个公共成员声明为粒度，生成详细的**TDD**开发计划
