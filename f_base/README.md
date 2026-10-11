@@ -611,13 +611,19 @@ public interface RightShiftable<T> where T <: RightShiftable<T> {
 
 ## `FutureTask<T>`
 1. 父任务结束时可以选择是否结束子任务
-2. 支持InheritedTaskLocal，类似ThreadLocal，不过有继承关系，如果当然FutureTask未找到值，则从父任务中获取
+2. 支持InheritedTaskLocal，类似ThreadLocal，不过有继承关系：`get` 从当前任务沿父任务逐级查找，本任务没有就找父任务（父任务结束后，已创建的子任务及其后代仍能读到它的值）；
+   `set`/`remove` 只作用于**当前任务**这一层（只影响本任务及其后代；父任务与兄弟任务看不到；不在任务内部调用时回退到创建该 local 的任务）；
+   `getOrSet`/`getOrCompute` 在整条链都没有值时写**创建该 local 的任务**（该任务及其整个子树的共享槽），并用**二段检查锁**（粒度 = 每个 local）保证并发调用方中只有一个会计算并写入、其余拿到同一个值；`fn` 在锁内执行（`Mutex` 可重入，`fn` 内再对同一 local 调用不会死锁）
 ```cj
 public sealed abstract class AbstractFutureTask <: Hashable & Equatable<AbstractFutureTask>{
     public func hashCode(): Int64 
     public operator func ==(other: AbstractFutureTask): Bool 
     //创建新的InheritedTaskLocal
     public func newLocal<T>(): InheritedTaskLocal<T> 
+    //类型无关地返回当前线程正在执行的任务；不在任务里则抛异常
+    public static func current(): AbstractFutureTask 
+    //不在任务里返回 None
+    public static func currentOrNone(): ?AbstractFutureTask 
 }
 public class FutureTask<T> <: AbstractFutureTask {
     //创建新的FutureTask
@@ -626,7 +632,7 @@ public class FutureTask<T> <: AbstractFutureTask {
     public init(shutdownSubOnFinish: Bool, fn: () -> T)
     //创建新的FutureTask，此时shutdownSubOnFinish为true
     public init(fn: () -> T)
-    //返回当前线程ID对应的FutureTask，只有在FutureTask内部调用此函数才有效，否则将抛出异常
+    //返回当前线程正在执行的FutureTask<T>；要求该任务的泛型实参恰好为 T，否则抛异常（要类型无关的句柄用 AbstractFutureTask.current()）
     public static func current(): FutureTask<T> 
     //返回当前FutureTask执行结束后的结果，即构造函数参数fn的返回结果
     public func get(): T 
@@ -644,8 +650,10 @@ public sealed abstract class AbstractInheritedTaskLocal <: Hashable & Equatable<
     public func hashCode(): Int64 
     public operator func ==(other: AbstractInheritedTaskLocal): Bool 
 }
-//可从父线程继承的ThreadLocal，当前FutureTask的InheritedTaskLocal无值时，会从父FutureTask查询
-//FutureTask初始化时的任务结束时，相应的InheritedTaskLocal会被移除
+//可从父线程继承的ThreadLocal：get 从当前任务沿父任务逐级查找，本任务没有就找父任务
+//set/remove 作用于当前任务这一层（不在任务内部调用时回退到创建该 local 的任务）
+//getOrSet/getOrCompute 未命中时写创建该 local 的任务（子树共享槽；二段检查锁，只算一次）
+//父任务结束后，已创建的子任务及其后代仍能沿父链读到它的值；值随任务对象一起被回收
 public class InheritedTaskLocal<T> <: AbstractInheritedTaskLocal {
     init(task: AbstractFutureTask)
     public func set(value: T): Unit 
