@@ -227,12 +227,12 @@
 1. **不承担错误通道**：`diag` 只收降级/告警；编译/调用失败一律异常（与 §4.3.1「编译期错误只有一个出口」一致）。
 2. **不承诺串行化**：`diag` 可能在并发 `compile` 的不同线程上被调用；**线程安全由实现方（仓颉侧）负责**——本模块不加锁、不排队。
 3. **sink 异常由引擎吞掉、挂 Suppressed（2026-10-11 裁定，D1）**：引擎在 `diag` 调用处 `catch (e: Exception)` 吞掉 sink 抛出的异常，**绝不因诊断失败改变可观察语义**：
-   - **有在途异常**（错误路径 / 编译失败）：把 sink 异常挂到**在途异常**上（`在途.addSuppressed(sinkEx)`）——在途的那个才是要传播的，与本节「新异常不得遮盖原异常」同一目标（谁传播、谁被挂）；
+   - **有在途异常**（错误路径 / 编译失败）：把 sink 异常挂到**在途异常**上（`在途.addSuppressed(sinkEx)`）——**在途的那个才是要传播的**。**方向说明**：`addSuppressed` 挂在**接收者**身上（`A.addSuppressed(B)` ⇒ B 进 A 的 `suppressed` 列表）；本情形接收者是「在途异常」，与「**新异常**必须传播、原异常挂它」（包装场景：`新.addSuppressed(原)`）**方向相反**——两者的共同不变量是「**信息不丢 + 不让次要异常遮盖真正要传播的那个**」。（API 由 `fountain::f_base.BaseException` 提供：`suppressed` 属性 + `printStackTrace` 的 `Suppressed:` 段；仓库既有先例：`f_pool`/`f_mvc`/`f_aspect` 的收尾合并。）
    - **无在途异常**（降级通知等正常路径）：**仅吞掉**，不抛出、不降级失败（T7「`Force` 在非 Linux 上不报错」据此成立）；
    - **`Error`（灾难性，如 OOM/栈溢出）不捕、不吞**；
    - **不重入 diag**：sink 自身的失败不得再触发诊断（避免递归）。
 
-   sink 抛出的异常**建议**为 `fountain::f_base.BaseException` 的子类（便于宿主统一 `catch` 与 `addSuppressed` 记录），但**类型不是引擎正确性的前提**（引擎按 `Exception` 兜捕）。
+   sink 抛出的异常**建议**为 `fountain::f_base.BaseException` 的子类（便于宿主统一 `catch`）；**挂载只要求参数是 `Exception`**（`addSuppressed(suppressed: Exception)`），而**接收者**（在途的 `JitException`/`SourceCompileException`）均为 `BaseException` 子类、自带 `suppressed` 设施 ⇒ 类型不是引擎正确性的前提（引擎按 `Exception` 兜捕）。
 
 `message` 是**自由文本、不冻结**（改文案不算破坏兼容）；供断言/匹配的是 **`level` + `code`**（T7 断言 = 存在 `(Warn, JitFallback)`，**不匹配 message 文本**）。
 
