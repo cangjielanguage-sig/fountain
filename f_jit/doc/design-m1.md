@@ -590,7 +590,7 @@
 
 - **用 `std.core.LibC.malloc<T>` / `LibC.free<T>`**（`public static func malloc<T>(count!: Int64 = 1): CPointer<T> where T <: CType`，std.core 隐式可用）：ctx = `LibC.malloc<Int64>(count: 8)`（8 × 8 B = 64 B，与 `cp(): CPointer<Int64>` 同型；等价写法 `LibC.malloc<UInt8>(count: 64)`）；转储缓冲 = `LibC.malloc<Int64>(count: 2 + maxNLocals)`。**免自声明 `foreign func malloc/free`**；malloc 返回块满足 ≥ 16 B 对齐（满足 §1 对 ctx 的对齐要求）。
 - **不采用 `acquireArrayRawData` / `releaseArrayRawData` 钉住 `Array<UInt8>`**：std.core 文档明确「指针的获取和释放之间**仅可包含简单的 foreign C 函数调用等逻辑，不构造例如 `CString` 等的仓颉对象**，否则可能造成不可预期现象」——ctx/转储缓冲的生命周期跨**整个调用事务**，其间全部 helper 都是普通仓颉实现、必然构造对象并触发 GC，直接违反该窗口约束。仓库内 `acquireArrayRawData` 的既有用法也都是「短窗口 + 立即释放」（如 `f_io` 的 `BytePointerStream.access` 用 try/finally 包住一次指针操作），与本场景不匹配。
-- **释放点不变**：仍在桥的 `finally`（`call<T>` 第 6 步；与 B pin / C 窗口 / D 逃逸槽同一次收尾），正常/错误码/DEOPT/-2/Marshal 失败全路径必须配对（T27 的 malloc/free 计数断言）。std.core 的 `CPointerResource`（`try (r = …)`）可把释放做成块级，语义与 finally 等价，实施时二选一。
+- **释放点不变**：仍在桥的 `finally`（`call<T>` 第 6 步；与 B pin / C 窗口 / D 逃逸槽同一次收尾），正常/错误码/DEOPT/-2/Marshal 失败全路径必须配对（T27 的 malloc/free 计数断言）。**释放机制裁定（2026-10-11）：一律用 `finally`，不使用 `std.core.CPointerResource`（`try (r = …)`）**——① 释放常与**同一次收尾里的其他动作**绑定（重置窗口 `hwTop=hwBase`、清 `DbgDump` 缓冲、迭代器表 `clearAll`），顺序写在 `finally` 里最直接，资源块只能表达"释放"这一件事；② 全链路只保留**一种**收尾机制（规格 §8.1 已把 call 清理冻结为 `try/finally` 化），避免两套等价语义并存；③ 少一层 `Resource` 接口/泛型包装及其**隐式**释放时机的认知负担——释放点必须能与 pin/窗口/逃逸槽收尾排在同一条**显式**时间线上。
 - **失败面**：入参为负 → `IllegalArgumentException`（本设计为编译期常量，不会触发）；其余以 std 文档为准（实施时补一条诊断测试）。
 
 #### 5.3.2 `HandleTable`（class，用户可见）
@@ -883,7 +883,7 @@ Ready --CAS--> Unloading（拒绝新调用；活跃调用照常完成）--active
 | `LocalType/ErrCode/TypeToken/HelperId/Version` 用类+`static const`（同族：`ConstKind`/`FuncFlags`/`FbcFlags`、`OpInfo.CAT_*`） | 顶层常量 / enum | 规格示例 `LocalType.I64` 与 §10.3 的 `OpInfo.CAT_*`（static const 成员）并存：命名空间类给出可点号访问的常量，且可挂 `name()/isHandle()` 查询；避免 250+ 顶层常量污染导入；**线上码族**（编码进 `.fbc` 的数值）必须用 `static const`——枚举构造器不携带数值，序列化与分派需要确定数值码 |
 | `OpInfo` 用 **struct**（+ `static const CAT_*` / `static let OPCODE_TABLE`） | 用 class / 顶层常量 | 只读元信息、无身份无行为；值语义浅拷贝约 5 字，无堆分配/GC/指针追逐；`Array<OpInfo>` 内联连续（256 项缓存友好）；类别码用 `static const` 保持编译期可用（可进 `const` 上下文），表用 `static let`（同类静态成员互引，见 `f_util.Crc32.all` 先例） |
 | ctx 用 `CPointer<Int64>` 访问器承载 | `struct` 直映射 | 机器码要求 64 B 且不得移动（§4）；Cangjie 布局不承诺逐字节 ⇒ 显式访问器 + 非托管分配 |
-| ctx/转储缓冲的非托管内存用 `std.core.LibC.malloc<T>` / `LibC.free<T>` | ① `foreign func malloc/free`；② `acquireArrayRawData` 钉住 `Array<UInt8>` | ① std.core 原生 API、免自声明 FFI；② 钉住方案被 std 文档窗口约束排除（获取与释放之间不得构造仓颉对象，而 ctx 跨整个调用、helper 必分配并触发 GC）；③ malloc 满足 16 B 对齐；释放仍走桥 finally（T27 计数断言）——详见 §5.3.1 |
+| ctx/转储缓冲的非托管内存用 `std.core.LibC.malloc<T>` / `LibC.free<T>` | ① `foreign func malloc/free`；② `acquireArrayRawData` 钉住 `Array<UInt8>` | ① std.core 原生 API、免自声明 FFI；② 钉住方案被 std 文档窗口约束排除（获取与释放之间不得构造仓颉对象，而 ctx 跨整个调用、helper 必分配并触发 GC）；③ malloc 满足 16 B 对齐；**释放一律走桥 `finally`、不使用 `std.core.CPointerResource`**（2026-10-11 裁定，理由见 §5.3.1；T27 计数断言）——详见 §5.3.1 |
 | helper 以顶层 `@C` 函数实现 | 集中在一个 class | 与机器码 trampoline 静态链接（符号可见性简单）；三引擎共用同一实现（I7） |
 | 异常基类用 `fountain::f_base.BaseException` | 直承 `std.core.Exception` | 仓库统一基类——宿主可跨模块统一 `catch (e: BaseException)`，并复用 f_base 的 `printStackTrace`/抑制异常等能力；报告文本经 `super(message)` 转发，本类自有字段（`code/site/fnId/sourcePos`、`kind/position/…`）不变 |
 | `JitFunction` 不拆「Interp 版 / JIT 版」子类 | 两个子类 | 引擎是运行时状态（卸载/诊断/测试都按同一句柄）；单类 + 可选 artifacts 最简 |

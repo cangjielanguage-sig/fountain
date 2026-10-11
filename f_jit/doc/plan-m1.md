@@ -152,7 +152,7 @@ f_jit/
 
 | 步骤 | 目标成员 | 先写测试（红） | 实现要点（绿） | 验收（回归） |
 |---|---|---|---|---|
-| S4.1 | `JitContext`：`create/free/errCode/site/hwBase/hwCap/hwTop/fnId/flags/dbgBase/resetForCall/cp` | 偏移断言（0/8/16/24/32/40/48/56）；`resetForCall` 归零（errCode=0/site=-1/hwTop=hwBase）；`create/free` 配对（`LibC.malloc/free` 计数断言，T27 基础）；跨线程独立 | 非托管分配：`std.core.LibC.malloc<Int64>(count: 8)` / `LibC.free<Int64>`（选型理由见 design-m1 §5.3.1；**不用 acquireArrayRawData 钉住**）；转储缓冲同选型 `(count: 2 + maxNLocals)` | T27 基础 |
+| S4.1 | `JitContext`：`create/free/errCode/site/hwBase/hwCap/hwTop/fnId/flags/dbgBase/resetForCall/cp` | 偏移断言（0/8/16/24/32/40/48/56）；`resetForCall` 归零（errCode=0/site=-1/hwTop=hwBase）；`create/free` 配对（`LibC.malloc/free` 计数断言，T27 基础）；跨线程独立 | 非托管分配：`std.core.LibC.malloc<Int64>(count: 8)` / `LibC.free<Int64>`（选型理由见 design-m1 §5.3.1；**不用 acquireArrayRawData 钉住**；**释放一律 `finally`、不用 `CPointerResource`**）；转储缓冲同选型 `(count: 2 + maxNLocals)` | T27 基础 |
 | S4.2 | `HandleTable.pin/get/release` | 同对象复用同 ID；不同类型对象不同 ID；`get` 类型不符 → None；`release` 后 `get` → None 且表项不重用（gen 校验）；null 拒绝 | 托管容器 + 槽三元组 | T14 基础 |
 | S4.3 | `HandleTable` 窗口：`append`、`hwTop==hwCap` 扩容、`capacityLimit` 封顶 | 扩容倍增（`hwCap ≤ 2*hwTop`）；容量上限触顶 → 16；`initialCapacity` 可调（调用前生效，进行中不追溯）；T10 前置 | 追加 + 倍增 | T10 |
 | S4.4 | `HandleTable.fetch`、`idxOf/tagOf/genOf` | null → 6；tag 不符 → 8；坏 idx → 6/99 防御 | 槽解析 | helper 公共前置 |
