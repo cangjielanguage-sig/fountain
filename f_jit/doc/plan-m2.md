@@ -96,11 +96,11 @@
 | Q5.2 | `ReflectRegistrar.registerType<T>` | 全成员枚举（`let/var/prop/mut prop/func/static let/static prop/static func/constructors`）；`static var`/`static mut prop` 跳过（附 B）；支撑面外类型跳过；命名冲突跳过——逐项 diagnostics 断言；**自动 ≡ 手工**逐项对拍（字段表/方法表/类型码） | std.reflect | T55 |
 | Q5.3 | `ReflectRegistrar.mapType/buildCtor` | 值型直映；std 句柄类型名映射（4–11）；其余类 → 14 + typeRef；不可映射 → 跳过 + 诊断；构造器 `apply` 适配；泛型类按具体实例化 | 映射表 | T55/T54 |
 | Q5.4 | `Compiler.registerClass` / `registerType<T>` | 端到端：注册后 `u.f`/`u.m()`/`User(…)` 可用；快照语义；关闭反射构建 → 明确报错 | 门面转发 | T54/T55 |
-| Q5.5 | `CFunc`（值类型） | 构造/`INVALID`；值语义（拷贝后 ID 相同） | struct | T49 |
+| Q5.5 | `JitClosureId`（值类型） | 构造/`INVALID`；值语义（拷贝后 ID 相同） | struct | T49 |
 | Q5.6 | `JitClosure.init/call<T>` | 调用 = 新桥调用（闭包帧 `locals[0]`）；结果/错误码/site 与直接 `CALL_CLOSURE` 逐位一致；重入 ≥3；卸载后调用 → 19（site=-1） | 包装器 | T49 |
 | Q5.7 | `JitClosure.close/isClosed` | close 幂等；计数 −1/归零释放；close 后调用 → 19；旧 ID 校验拦截 | close 协议 | T49 |
 | Q5.8 | `CallMarshal` 参数 Marshal + 行 | 源入口实参：`is C`（含**子类**实例）→ pin（tag=11）；null → 19；多参混排（值型/句柄型/14）；同一对象身份（实参 ≡ 闭包内引用 ≡ 返回值带回） | Marshal 扩展 | T57 |
-| Q5.9 | `CallMarshal` 解包表 + 行 | `retType=12→CFunc`（提升组已登记）；`retType=13→原样带回宿主闭包引用`；`retType=14→get 实例引用`；T 校验 | 解包扩展 | T49/T57 |
+| Q5.9 | `CallMarshal` 解包表 + 行 | `retType=12→JitClosureId`（提升组已登记）；`retType=13→原样带回宿主闭包引用`；`retType=14→get 实例引用`；T 校验 | 解包扩展 | T49/T57 |
 | Q5.10 | `CallMarshal` 验签 + HostClosure 参数行 | 声明 HostClosure 参数 → 验签 → pin(tag=10)；失败 → 19（site=-1）；⑤ 禁高阶复检 | 参数行 | T30 |
 | Q5.11 | `JitFunction` 状态扩展 + `callWith<Fn>` | 单元持有 ClassRegistry 快照/提升组表；`callWith<Fn>` 强类型变体（P1 可用时与 `call<T>` 等价；不可用时编译期验签） | 状态 + API | M2-1 裁定后启用 |
 | Q5.12 | 槽 14 链内传参与 HostClosure 签名含 14 | 14 形参/局部/返回声明；跨 CALL_FUNC 传递 × 深度 ≥3；链内返回；嵌套闭包捕获 14（快照 = ID 拷贝）；HostClosure 签名含 14 的验签/执行（R=14 → 登记 1 槽） | 前端 + H63 扩展 | T58/T59 |

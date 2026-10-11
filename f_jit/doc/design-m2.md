@@ -25,7 +25,7 @@
 | CALL_HOST（0x79） | 汇编期 `ERR_NOT_IMPL` | 激活，操作数重定义为 `u8 argc`；栈 `[h_fn, a1..an]` |
 | 错误码 21 | 99 = 实现缺陷兜底 | 21 `ERR_HOST_EXCEPTION`（**全部宿主侧调用面**；cause 含完整仓颉栈） |
 | 成员访问 | 不透明（零字段访问） | H64/H65 字段读写 + 包装调用 + `u.f/u.f=v/u.m()` 语法糖 |
-| 逃逸闭包回桥 | 内部闭包 12 禁跨桥 | 仅「跨桥返回」开放：提升组 + `CFunc` + 包装器 close |
+| 逃逸闭包回桥 | 内部闭包 12 禁跨桥 | 仅「跨桥返回」开放：提升组 + `JitClosureId` + 包装器 close |
 | 字节码侧构造 | 无路径 | `C(args…)` → 注册构造器（user helper 通道，零新指令/helper/格式） |
 | 反射自动注册 | 手工逐成员注册 | `Compiler.registerType<T>()` 经 `std.reflect` 批量生成注册项 |
 
@@ -39,7 +39,7 @@
 | `bytecode` | — | `OPCODE_TABLE`（0x79 行）、`FbcReader`（verMajor 分派）、`LocalTypes.validate`（按 verMajor 合法集） | 容器头字段、段模型、crc32、kind 1–10 |
 | `compiler` | `TypeRef`、`ClassRegistryView` | `NameResolver`（解析顺序 + 冲突拒绝）、`Lowerer`（CALL_HOST/成员访问/构造/14 槽）、`AstExpr`（+4 构造器）、`DefiniteAssignment`（14/13 槽规则同型） | 词法、语法基座、既有降低模式 |
 | `runtime` | `HostCallback`、`SignatureDescriptor`、`SignatureVerifier`、`PromotionGroup`、H63/H64/H65（顶层 @C func） | `HandleTable`（条目标签 10/11）、`IterTable`（不变）、`DbgDump`（报告值型扩展：14 记 `<类名>#idx`） | ctx、迭代器、既有 helper 语义 |
-| `fountain::f_jit`（根） | `ClassRegistry`、`CFunc`、`JitClosure`、`ReflectRegistrar` | `Compiler`（+2 成员）、`CallMarshal`（+行）、`JitFunction`（+`callWith<Fn>` 退化变体） | 执行六步、卸载状态机、去重缓存 |
+| `fountain::f_jit`（根） | `ClassRegistry`、`JitClosureId`、`JitClosure`、`ReflectRegistrar` | `Compiler`（+2 成员）、`CallMarshal`（+行）、`JitFunction`（+`callWith<Fn>` 退化变体） | 执行六步、卸载状态机、去重缓存 |
 
 ---
 
@@ -233,7 +233,9 @@
 | `func buildCtor(info: ConstructorInfo): ?PublicCtor` | 构造器自动适配器（`ConstructorInfo.apply` 为后盾；参数不可映射 → 跳过 + 诊断；泛型类按具体实例化） | m2 §12.5/§15 |
 | （生成物命名约定） | 实例 prop getter 名 = 成员名；`mut prop` setter 名 = `set` + 首字母大写；静态包装名 = 成员名；方法 bind 内部名含 `.`（源不可直呼）；命名冲突 → 跳过 + 诊断 | m2 §12.5 |
 
-#### 6.1.3 `CFunc`（public struct，逃逸闭包 ID 的宿主值类型）
+#### 6.1.3 `JitClosureId`（public struct，逃逸闭包 ID 的宿主值类型）
+
+**更名（2026-10-11）**：本类型原名 `CFunc`——与仓颉**内建**的 C 函数指针类型 `CFunc<F>`（FFI：`foreign func` / `@C` / `CPointer` 互转、调用需 `unsafe`）**同名**，在本模块满是 `@C` helper 的语境下极易误读。现名 **`JitClosureId`** 直述语义：承接逃逸闭包句柄 ID 的宿主值类型，与包装器 `JitClosure` 成对。
 
 | 成员 | 意义 | 锚点 |
 |---|---|---|
@@ -244,7 +246,7 @@
 
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
-| `init(f: JitFunction, cf: CFunc)` | 绑定单元 + 闭包 ID（单元弱语义：不阻止卸载） | `CallMarshal` 解包 retType=12 时产出 |
+| `init(f: JitFunction, cid: JitClosureId)` | 绑定单元 + 闭包 ID（单元弱语义：不阻止卸载） | `CallMarshal` 解包 retType=12 时产出 |
 | `func call<T>(args: Array<Any>): T` | 调用 = 新桥调用（新 ctx + `locals[0]` = 闭包句柄 → 闭包帧格式）；结果/错误码/site 与直接 `CALL_CLOSURE` 逐位一致；卸载后调用 → 19（site=-1）；**新 ctx 的分配/释放沿用 M1 选型 `std.core.LibC.malloc<T>` / `LibC.free<T>`**（design-m1 §5.3.1） | m2 §14.3/§14.4 |
 | `func close(): Unit` | **必须显式调用**：提升组计数 −1、归零释放（gen+1 可复用）；幂等 | m2 §14.2/§14.3 |
 | `prop isClosed: Bool` | 状态（close 后调用 → 19） | — |
@@ -260,8 +262,8 @@
 | 声明 | 增量 | 锚点 |
 |---|---|---|
 | `Compiler` | `func registerClass(desc: ClassDescriptor): Unit`；`func registerType<T>(): Unit where T <: Object`（内部转 `ReflectRegistrar`） | m2 §12.4/§12.5 |
-| `CallMarshal` | ① **参数 Marshal 表** + 行：声明类型 = 注册类 C → `is C`（含子类、opaque 视图）→ `pin`（tag=11）；null → 19；HostClosure 声明 → 验签 → 回调表登记（tag=10）；② **解包表** + 行：`retType=12 → CFunc`、`retType=13 → 原样带回宿主闭包引用`、`retType=14 → get 宿主类实例引用`；③ Closure 行**仅返回方向**（参数方向不加行） | m2 §4/§14.3/§16.2 |
-| `JitFunction` | 内部状态扩展：`ClassRegistry` 快照、`PromotionGroup` 表（per-call 逃逸闭包）、`CFunc` 登记；`callWith<Fn>` 公开变体 | m2 §9.1/§14 |
+| `CallMarshal` | ① **参数 Marshal 表** + 行：声明类型 = 注册类 C → `is C`（含子类、opaque 视图）→ `pin`（tag=11）；null → 19；HostClosure 声明 → 验签 → 回调表登记（tag=10）；② **解包表** + 行：`retType=12 → JitClosureId`、`retType=13 → 原样带回宿主闭包引用`、`retType=14 → get 宿主类实例引用`；③ Closure 行**仅返回方向**（参数方向不加行） | m2 §4/§14.3/§16.2 |
+| `JitFunction` | 内部状态扩展：`ClassRegistry` 快照、`PromotionGroup` 表（per-call 逃逸闭包）、`JitClosureId` 登记；`callWith<Fn>` 公开变体 | m2 §9.1/§14 |
 | `CompileOptions` | `cpuFeatures` 启用（显式 ISA 开关：如 SSE4.1/4.2 优化；默认 0） | m1 §12.1（`CompileOptions.cpuFeatures` 定义处）+ m2 §2 |
 
 ---
@@ -301,8 +303,8 @@ C(args…) → 实参左→右入栈 → CALL_HELPER <ctor-hid>（构造器 = �
 ```
 桥 unbox（执行完成之后、窗口重置之前）：
   retType=12 → 提升「闭包自身槽 + 全部句柄型捕获」= 原地迁出（ID/gen 不变、不重用）
-             → 解包为 CFunc（宿主值）
-宿主: JitClosure(f, cf).call<T>(args) → 新桥调用（新 ctx；locals[0]=闭包句柄 → 闭包帧）
+             → 解包为 JitClosureId（宿主值）
+宿主: JitClosure(f, cid).call<T>(args) → 新桥调用（新 ctx；locals[0]=闭包句柄 → 闭包帧）
       卸载后调用 → 19（site=-1）；close() → 计数 −1、归零释放
 豁免：调用 try/finally 清理不释放提升槽（唯一释放路径 = close）；路径 A 常量不入组
 捕获描述符：前端静态给出（不入 .fbc、无格式变更）
@@ -353,6 +355,7 @@ Compiler.registerType<User>() → ReflectRegistrar：枚举 public 成员（字�
 | 构造经**预定义函数通道**（user helper） | 零新指令/helper/格式；构造执行体恒在宿主侧（I2 不变） |
 | 反射仅在注册期 | 字节码/JIT 路径零反射；访问器是宿主黑盒（`flags.bit0` 保守判定） |
 | `static var` / `static mut prop` **永久排除** | 隐藏全局态破坏可重复性/差分/并发纪律（附 B 四条论证） |
+| 逃逸闭包 ID 的宿主值类型命名 **`JitClosureId`**（原名 `CFunc`） | 避免与仓颉**内建** C 函数指针类型 `CFunc<F>`（FFI）同名遮蔽；`JitClosureId` 直述语义（承接逃逸闭包句柄 ID），与 `JitClosure`（包装器）成对 |
 
 ---
 
