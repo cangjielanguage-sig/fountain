@@ -81,7 +81,7 @@ f_jit/
 
 | 步骤 | 目标成员 | 先写测试（红） | 实现要点（绿） | 验收（回归） |
 |---|---|---|---|---|
-| S0.1 | 模块骨架：`cjpm.toml`、六个包目录、空包文件 | `cjpm build` 通过；`cjpm test` 0 用例通过 | 按 §0.4 建目录与 package 声明；`public import` 占位 | 构建基线（全绿）记录进仓库 CHANGELOG/计划勾选 |
+| S0.1 | 模块骨架：`cjpm.toml`、六个包目录、空包文件 | `cjpm build` 通过；`cjpm test` 0 用例通过 | 按 §0.4 建目录与 package 声明；`public import` 占位；**`cjpm.toml` 依赖含 `fountain::f_base`、`fountain::f_util`（`Crc32`/`Fnv`，见 S2.16）** | 构建基线（全绿）记录进仓库 CHANGELOG/计划勾选 |
 | S0.2 | 差分测试 harness（`src/test/diff`）：同一单元跑 `Interp`/`BackendX86_64`/`BackendAArch64` 并逐位对比 | 用「常量 1+1」用例验证 harness 自身（先只挂 Interp；两后端以 mock 桩） | 统一输出三元组（结果/errCode/site+报告文本）；对拍函数 `assertTripleEqual` | harness 自测通过；后续每步自动接入 |
 | S0.3 | T 编号映射表（§3）与用例命名规范 | 空跑：映射表每项指到某步骤某用例名 | 建立 `T# → 用例路径` 对照（可脚本校验） | 映射覆盖 M1 §13.2 全集（T1–T29、T42–T48、T50–T53；T30–T41/T49 属 M2/M3 序列） |
 
@@ -119,6 +119,7 @@ f_jit/
 | S2.12 | `FbcWriter`：`setEntryFn/setCode/setConst/setSite/setName/setFlags/build` | build 产物：magic/verMajor/minor/lengths 正确；crc32 覆盖 code+const+site+name（改任一字节 crc32 变）；基准向量 `crc32(空)=0`、`crc32("123456789")=0xCBF43926` | 缓冲拼接 + `f_util.Crc32.isoHdlc`（CRC-32/ISO-HDLC） | §11.6 |
 | S2.13 | `FbcReader.load`（正向） | 手工构造最小合法单元 → 全字段解出（header/code/consts/site/name/dir/types）；`entryFn` 命中目录 | 分派 + 各表解析 | T1 基础 |
 | S2.14 | `FbcReader.load`（拒绝面，逐条） | ① magic 错；② verMajor 2/3 → 18 语义；③ 未知 flags 位/`bit1=1` → 拒绝；④ 段长不符；⑤ 常量 DAG 环；⑥ 坏载荷（非 canonical F64、非法 kind）；⑦ 目录越界；⑧ 类型表非法；⑨ site 未覆盖/乱序；⑩ name 坏键；⑪ crc32 不符 —— 每条独立用例断言拒绝与错误码 | 校验集中 `validate`；拒绝=抛 JitException(14/18)；crc32 用同一 `f_util.Crc32.isoHdlc` | 每拒绝面一条用例（T9/T13/T50 前置） |
+| S2.16 | 指纹接入（**D5**）：`constFingerprint`（FNV-1a-64）· 源码/字节码指纹（FNV-1a-128）· 缓存键二次校验原语 | `f_util.Fnv` 可用（模块侧 `Fnv32/Fnv64/Fnv128/Fnv256` × {fnv1, fnv1a} + `Fnv_test` 黄金值全绿）；基准向量断言（空串 → `0xCBF29CE484222325`、`123456789` → `0x06D5573923C6CDFC`）；长度 + 字节二次校验：等长不同源 → 不命中 | **经 `fountain::f_util` 调用（不自实现哈希）**；`crc32`（四段）/ `constFingerprint`（64 位）/ 去重键（128 位）**三者分工不混用** | §11.5、§12.6；design-m1 §3.3.8 |
 | S2.15 | `ConstRegistry` 加载期实例化（kind 3–10） | kind 3/4/5/6/7/8/9 往返（对象等值、DAG 共享子结构同一对象）；kind 10：合法 pattern 构造 Regex 一次（编译次数断言）、非法/空 pattern → 14（加载期）；`PUSH_KH idx < size` | 实例化经 std（Regex/Decimal/…）；f_regex 依赖就绪 | T20 前置 |
 
 ### P3 包 `compiler`
@@ -202,11 +203,11 @@ f_jit/
 | S6.2 | `Compiler`：`init/registerFunction/unregisterFunction/hasFunction/registeredNames` | 注册/查询/注销；重名 → DuplicateRegistration；超 `maxPredefined` → 编译期错误；快照语义（注册变更不影响已编译产物——S6.8 联测） | 注册表 + 锁 | T23 需求 2 |
 | S6.3 | `CallMarshal`：`makeArgMarshalers/marshalArg/makeRetUnboxer/escapeAndGet/cleanup` | §8.2.1 表全行（Int64/F64/Bool/句柄型；不符 → 19）；不接受 Option/null、不做宽化；解包表全行；`escapeAndGet` 自动回收（T14/T15）；try/finally 全路径清理（含异常路径） | Marshal/解包生成 | T15 |
 | S6.4 | 三态收尾 + `Report.throwJit` | 0→unbox；-1→`Interp.run` 重跑（对调用方透明）；-2→InterruptedException；>0→JitException（原码原 site+报告）；19 契约错误 site=-1；非两类异常不逃逸（兜 99） | 收敛逻辑 | T6/T15 |
-| S6.5 | `JitFunction.call<T>` 六步 | 长度不符 → 19；Marshal 失败 → 19；T 与 retType 一致性（编译期校验 + 运行期注册表 → 19）；`site=-1/sourcePos=None` 契约错误；返回正确 T | 单态化适配器 | T15/T52 |
+| S6.5 | `JitFunction.call<T>` 六步 | 长度不符 → 19；Marshal 失败 → 19；T 与 retType 一致性（编译期校验 + 运行期注册表 → 19）；`site=-1/sourcePos=None` 契约错误；返回正确 T；**两形态（JIT / 纯字节码）同接口同行为**（同源同参逐位一致） | 单态化适配器 | T15/T52 |
 | S6.6 | `AdapterRegistry`：`register/lookup/removeUnit` | 键 `(单元指纹, fnId, T)`；查无 → 19；卸载按维度移除；并发注册 | 宿主侧锁 | T15/T29 |
-| S6.7 | `CompileCache`：`lookupOrClaim/awaitReady/finish/remove` | 同键并发：恰好执行一次管线（计数断言）、全线程同一 `JitFunction`；失败共享等价异常；不同键互不阻塞；Miss→CAS 占位 | 状态机 Idle→Compiling→Ready/Failed | T16 |
+| S6.7 | `CompileCache`：`lookupOrClaim(sourceCode)/awaitReady/finish/remove`（**D4**） | 同键并发：恰好执行一次管线（计数断言）、全线程同一 `JitFunction`；失败共享等价异常；不同键互不阻塞；Miss→CAS 占位；**键 = FNV-1a-128 源码指纹且命中后二次校验原字节**（等长不同源 → 不误命中）；**每次编译新建 `Compiler` 实例仍复用同一产物**（跨实例复用断言） | **进程级**（根包 static）；状态机 Idle→Compiling→Ready/Failed；**claim 内**先编译字节码、Linux + x86_64/aarch64 再 JIT | T16 |
 | S6.8 | `CompilePipeline.runSource` + `Compiler.compile(source)` | 端到端：示例源码编译/调用；失败在 compile 时刻抛出（不涉及运行期槽）；同源码复用；user helper 全链路（注册→调用→返回 marshal→异常 21） | 四步管线 | T22/T23 |
-| S6.9 | `CompilePipeline.runUnit` + `Compiler.compile(unit)` | 装载 `.fbc` 全路径；含 user hid 的单元 → 加载期拒绝（18 语义）；字节码指纹去重；`SourceUnit.entryFn` 校验 | — | T1 |
+| S6.9 | `CompilePipeline.runUnit` + `Compiler.compile(unit)` | 装载 `.fbc` 全路径；含 user hid 的单元 → 加载期拒绝（18 语义）；**字节码指纹（FNV-1a-128，整份 raw）去重 + 二次校验**；`SourceUnit.entryFn` 校验 | 复用 S6.7 状态机（键换为字节码指纹） | T1 |
 | S6.10 | `JitFunction.unload/isUnloaded` | 未卸载 → Ready 可调用；卸载后调用 → 19（site=-1）；活跃调用排空（timeout 恢复 Ready）；双 unload 幂等；Unloading 期间 compile 阻塞后按 Miss 重编（并发=序贯）；资产释放顺序与计数（code buffer 最后） | 状态机 + 资产清点 | T29 |
 | S6.11 | 再导出与用户面冒烟 | `import fountain::f_jit.*` 后可见全部用户面声明（编译期）；最小宿主示例（编译+调用+卸载） | `public import` 清单 | 用户面 API 冻结 |
 | S6.12 | 端到端金样回归 | S3.22 金样单元 + 差分三引擎 + 错误报告逐位 | — | P7 前置 |

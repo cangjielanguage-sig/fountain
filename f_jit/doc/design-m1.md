@@ -37,7 +37,7 @@
 | JIT 后端（等价加速器） | `backend.Backend` 接口 + 两实现类 | 后续扩架构 = 「新增一张 lowering 表 + 一个 ABI 映射」（§13.3 演进约束） |
 | 句柄表（宿主对象 ↔ 整数 ID） | `runtime.HandleTable`（class + 静态入口） | 冻结决策 ④：ID 形态；桥独占职责；仓颉 GC region 式搬移 ⇒ 裸指针不可行 |
 | 错误通道 | ctx 错误槽 + `ErrCode` + `JitException` | fail-fast（I3/I4）；异常只存在于宿主边界 |
-| 编译器门面 | `Compiler` 实例（class） | 一个实例 = 一个编译上下文（配置 + 注册表 + 缓存视图，§8.4 快照语义） |
+| 编译器门面 | `Compiler` 实例（class） | **每次编译新建实例**（配置 + 注册表快照，§8.4 快照语义）；编译缓存为**进程级**（根包 `CompileCache`，键 = 源码指纹）——D4 结案 |
 | 源编译单元 | `JitFunction`（class） | 生命周期/卸载/并发调用的载体；`call<T>` 是唯一对外执行成员 |
 
 **关键协作场景**（详见 §8）：compile 管线（§8.1/8.2）、call\<T\> 六步（§8.3）、三态收尾（§8.4）、错误报告（§8.5）、卸载（§8.6）。
@@ -60,11 +60,11 @@
 | 包 | 意义（职责边界） | 依赖（模块内） | 外部依赖（模块级） | 规格锚点 |
 |---|---|---|---|---|
 | `fountain::f_jit.base` | 共享契约：类型编码、错误码、公共值类型与异常、诊断接口 | 无（叶子包） | std.core、std.time、**f_base**（`BaseException` 基类） | §3.2、§8、§9.16 |
-| `fountain::f_jit.bytecode` | 字节码静态模型与 `.fbc` 编解码/加载校验 | base | std.collection、std.math.numeric、std.time、std.regex、f_regex（Regex 常量构造链）、f_util（crc32：`Crc32.isoHdlc`） | §10、§11、§13.3 |
+| `fountain::f_jit.bytecode` | 字节码静态模型与 `.fbc` 编解码/加载校验 | base | std.collection、std.math.numeric、std.time、std.regex、f_regex（Regex 常量构造链）、f_util（`Crc32.isoHdlc`；常量表指纹 `constFingerprint` 经 `Fnv64`） | §10、§11、§13.3 |
 | `fountain::f_jit.compiler` | 源入口前端与汇编（源码 → `.fbc`），编译期诊断 | base、bytecode | std.core、f_regex（String.regex 扩展的静态检查） | §8.0、§8.5、§8.8、§11.7、§11.9 |
 | `fountain::f_jit.runtime` | ctx/句柄表/迭代器表/helper 集/诊断转储/解释器 | base、bytecode | std.collection、std.math.numeric、std.time、std.regex | §1、§4、§6、§9.6、§9.16、§12.6 |
 | `fountain::f_jit.backend` | JIT 后端（x86_64 / AArch64）与代码内存 | base、bytecode | std.core、std.env（OS/Arch 判定经 f_base） | §12 |
-| `fountain::f_jit` | 用户 API 与桥：Compile 门面、JitFunction、Marshal、去重、卸载 | base、bytecode、compiler、runtime、backend | f_base（OS/Arch）、f_log（可选诊断） | §8、§8.1–§8.7 |
+| `fountain::f_jit` | 用户 API 与桥：Compile 门面、JitFunction、Marshal、去重、卸载 | base、bytecode、compiler、runtime、backend | f_base（OS/Arch）、**f_util（FNV-1a-128 指纹：`Fnv128.fnv1a`）**、f_log（可选诊断） | §8、§8.1–§8.7 |
 
 ### 1.2 依赖图（DAG，禁止反向与跨层环）
 
@@ -121,7 +121,7 @@
 | `Engine` | enum（protected） | 实际引擎（解释器/JIT） | — | §12.1 |
 | `JitValue` | enum（protected） | 桥内部执行结果（invoke 路径） | — | §8 |
 | `JitContext`（类型契约） | 见 runtime | ctx 的规范布局以常量/访问器暴露 | — | §1 |
-| `DiagnosticsSink` | interface | 降级/告警接收器 | DiagnosticLevel | §8.4、§12.1 |
+| `DiagnosticsSink` / `DiagCode` / `DummyDiagnosticsSink` | interface / enum / class | 降级/告警接收器（(b)+(c) 双入口）、稳定事件码、空实现 | DiagnosticLevel | §8.4、§12.1（D1 结案） |
 | `DiagnosticLevel` | enum | 诊断级别 | — | §12.1（规格从略处细化） |
 | `LocalType` | class（常量命名空间） | LocalType 编码 0–12（M1） | — | §11.7 |
 | `TypeToken` | class（常量命名空间） | 句柄类型 token 1–9（M1） | LocalType | §6 |
@@ -212,12 +212,23 @@
 - **分派提醒**：`Handle` 与 `Int` 的载荷同型（Int64）——**按构造器标签分派，不得按载荷类型判断**。
 - 可见性：**`protected`**（唯一消费者 `invoke`/`tryInvoke` 为 private，无用户面路径；规格 §8 行 827 的 `public` 已同步为 `protected`——**D3 结案**，见 §8.7）。
 
-#### 2.3.7 `DiagnosticsSink`（interface） / `DiagnosticLevel`（enum）
+#### 2.3.7 `DiagnosticsSink`（interface） / `DiagnosticLevel`（enum） / `DiagCode`（enum） / `DummyDiagnosticsSink`（class）
 
 | 成员 | 意义 |
 |---|---|
-| `func diag(level: DiagnosticLevel, message: String): Unit` | 降级/告警接收（Auto 降级、后端不可用、注册跳过等） |
-| `DiagnosticLevel` | `Info \| Warn \| Error`（规格「接口从略」处的细化） |
+| `func diag(level: DiagnosticLevel, code: DiagCode, message: String): Unit` | **结构化入口（主签名）**：降级/告警 + **稳定事件码** |
+| `func diag(level: DiagnosticLevel, message: String): Unit` | 便捷入口（默认实现：`code = Unspecified` 转发主签名） |
+| `DiagnosticLevel` | `Info \| Warn`——**只有两档**（D1 结案）：错误一律走**异常**（`SourceCompileException` / `JitException`），**走不到 diag** |
+| `DiagCode` | 稳定事件码（可断言、可 `match`）：`JitFallback`（引擎降级：非 Linux / 架构不支持）· `MmapFailed`（§12.5 分配失败降级）· `RegistrationSkipped`（M2/M3 注册跳过）· `PredefinedLimit`（注册上限）· `PlanFallback`（M3 特化冷路径）· `Unspecified` |
+| `DummyDiagnosticsSink` | **空实现**（两个入口皆空操作）：`CompileOptions` 未显式传入时的默认值，兼测试用 |
+
+**契约（D1 结案，2026-10-11）**：
+
+1. **不承担错误通道**：`diag` 只收降级/告警；编译/调用失败一律异常（与 §4.3.1「编译期错误只有一个出口」一致）。
+2. **不承诺串行化**：`diag` 可能在并发 `compile` 的不同线程上被调用；**线程安全由实现方（仓颉侧）负责**——本模块不加锁、不排队。
+3. **异常只向上传播**：sink 抛出的异常须是 `fountain::f_base.BaseException` 的子类，**不被吞**；若此时已有在途异常（错误路径 / 编译失败），新异常须 `addSuppressed(原异常)`，以免遮盖原异常（`JitException` / `SourceCompileException` 同规则）。
+
+`message` 是**自由文本、不冻结**（改文案不算破坏兼容）；供断言/匹配的是 **`level` + `code`**（T7 断言 = 存在 `(Warn, JitFallback)`，**不匹配 message 文本**）。
 
 #### 2.3.8 `LocalType`（常量命名空间类）
 
@@ -385,6 +396,18 @@
 | `FbcReader.load(raw: Array<UInt8>): LoadedUnit` | 加载校验全流程（magic/版本分派/未知 flags 拒绝/段长/nameLen 布局/常量 DAG 环检测与载荷合法性/kind10 Regex 实例化/kind 3–9 实例化/FuncDir/LocalTypes/site 覆盖与升序/name 键合法/crc32） | 根包 `compile(unit)`、测试 T1/T50 |
 | `FbcReader.supportedMajor` / `minVerMinorOf(major)` | 兼容矩阵（M1 加载器仅接受 verMajor 1；M2/M3 加载器按 major 分派规则集） | 版本演进（§13.3） |
 | `LoadedUnit.header: FbcHeader` / `.code: Array<UInt8>` / `.consts: ConstRegistry` / `.site: SiteTable` / `.name: NameTable` / `.dir: FuncDir` / `.types: Array<LocalTypes>` | 加载产物 | runtime/backend/桥共用 |
+
+**指纹口径（D5 结案，2026-10-11；实现一律经 `fountain::f_util` 的 FNV 实现——`f_jit` 不自实现哈希）**：
+
+| 指纹 | 算法 / 输入 | 用途 | 落盘 |
+|---|---|---|---|
+| 源码指纹 | **FNV-1a-128**（**换行规范化之后**的源码 UTF-8 字节） | `compile(source)` 去重键（§7.3.5、§8.1） | 不进 `.fbc` |
+| 字节码指纹 | **FNV-1a-128**（**整份** raw `.fbc`：头 + 目录 + 类型表 + 四段） | `compile(unit)` 去重键（§8.2）+ JIT 产物缓存键 `(arch, cpuFeatures, 字节码指纹)`（§12.5） | 不进 `.fbc` |
+| `constFingerprint` | FNV-1a-**64**（常量表内容） | 缓存键辅助 / 诊断 | **落盘**（§11.5） |
+
+- **碰撞 = 语义错误**（去重键撞车 ⇒ 返回**别的** `JitFunction`）⇒ 缓存条目**保存原始输入字节**，命中后做**长度 + 字节二次校验**（不符按 Miss 重编）。
+- **不得用 `crc32` 代替**：它只覆盖 code+const+site+name 四段（头/目录/类型表不在内），且仅 32 位。
+- 三者**互不混用**（D5 已点明「分开」）；调用点：`Fnv128.fnv1a`（去重键）、`Fnv64.fnv1a`（`constFingerprint`）、`Crc32.isoHdlc`（`crc32` 字段）。
 
 **`crc32` 口径（冻结）**：CRC-32/ISO-HDLC（反射、poly=0x04C11DB7、init/xorout 全 1——zlib/gzip/PNG/以太网同款），覆盖 code + const + site + name 四段字节；**实现直接用 `fountain::f_util.Crc32.isoHdlc`（不自实现）**——与 f_protocol 帧校验、f_store WAL 校验同款（仓库一致）。基准向量：`crc32(空) = 0`、`crc32("123456789") = 0xCBF43926`。写方（汇编器 `FbcWriter`）与读方（M1/M2/M3 加载器、分发入口）必须同一口径。
 
@@ -627,7 +650,7 @@
 
 | 声明 | 形态 | 意义 | 依赖 | 锚点 |
 |---|---|---|---|---|
-| `JitContext` | class | ctx 非托管承载 + 字段访问器（偏移固定） | — | §1、§4 |
+| `JitContext` | class（**protected**） | ctx 非托管承载 + 字段访问器（偏移固定）；仅桥/测试可见（D2 结案） | — | §1、§4 |
 | `CtxFlags` | class（常量） | ctx.flags 位定义（strictFp/trace/hasLoop…） | — | §1 |
 | `HandleTable` | class | 句柄表：pin/get/release + 窗口/逃逸/世代 + 全局上限 | LocalType/TypeToken | §8.1、§9.6 |
 | `EscapeArea` | class（内部） | 逃逸槽登记（per-call 逃逸区/宿主持有） | HandleTable | §8.1 规则 6 |
@@ -642,7 +665,9 @@
 
 ### 5.3 各声明的公共成员
 
-#### 5.3.1 `JitContext`（class，非托管承载）
+#### 5.3.1 `JitContext`（class，非托管承载；**protected**）
+
+**可见性（D2 结案，2026-10-11）**：**`protected`**（模块级）——① ctx 布局是**机器码 ABI 契约**（§1/§4）：公开即成半公开 API，用户写坏 `errCode`/`hwTop` 会破坏不变量（桥按 `errCode` 判失败、按 `hwTop` 记账）；② 用户面**无消费路径**：预定义函数 `impl` 收到的是**已解包的仓颉值**，helper 只见裸 `CPointer<Unit>`；③ `cp()` 只经 artifact ABI 交给 backend；④ 与 `Engine`/`JitValue` 先例一致；⑤ **不随 §7.6 再导出**。注意：`HandleTable` 是用户面（宿主需 pin/release 逃逸句柄）——用户能管句柄 ≠ 能碰 ctx。
 
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
@@ -856,7 +881,7 @@
 
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
-| `func call<T>(args: Array<Any>): T` | **唯一对外执行成员**：参数长度/元素类型 → Marshal → 三态收尾执行 → 解包 → T 校验（编译期/运行期）→ 返回；执行异常原样转换抛出 | 宿主；T15 |
+| `func call<T>(args: Array<Any>): T` | **唯一对外执行成员**（**两形态同接口**：JIT 产物与纯字节码/解释器产物**同为 `JitFunction`**、同签名、行为逐位一致——D4/D5 结案）：参数长度/元素类型 → Marshal → 三态收尾执行 → 解包 → T 校验（编译期/运行期）→ 返回；执行异常原样转换抛出 | 宿主；T15 |
 | `func unload(timeout!: ?Duration = None): Bool` | 卸载单元：CAS Ready→Unloading→排空活跃调用→Unloaded；超时恢复 Ready 可重试；幂等返回 true | 宿主；T29 |
 | `prop isUnloaded: Bool` | 状态查询 | 宿主 |
 | （私有）`invoke(ctx: CallContext): JitValue` | 桥内部执行入口（三态收尾；errCode → 异常/DEOPT 重放） | `call<T>` |
@@ -877,7 +902,7 @@
 
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
-| `CompileCache.lookupOrClaim(fingerprint): CacheEntry` / `awaitReady(entry)` / `finish(entry, ok: ?JitFunction)` / `remove(fingerprint)` | 状态机 Idle→Compiling→Ready/Failed；命中 Ready 复用、Compiling 阻塞等待、失败共享异常 | `Compiler.compile`；T16 |
+| `CompileCache.lookupOrClaim(sourceCode: String): CacheEntry` / `awaitReady(entry)` / `finish(entry, ok: ?JitFunction)` / `remove(fingerprint)` | **进程级**缓存（根包 static；**D4 结案**）：**内部以 `FNV-1a-128(规范化源码)` 为键**；占位后在 **claim 内**先编译为字节码、Linux + x86_64/aarch64 再 JIT；状态机 Idle→Compiling→Ready/Failed；命中 Ready 复用（**一份源码只出一份字节码与 JIT 产物**）、Compiling 阻塞等待、失败共享异常；分发入口以**字节码指纹**（`FNV-1a-128(整份 raw)`）走同一状态机；命中后**二次校验原字节** | `Compiler.compile`；T16 |
 | `AdapterRegistry.register(key, adapters)` / `lookup(key): ?Adapters` / `removeUnit(fingerprint)` | 单态化适配器注册表（宿主侧锁保护） | call 第 5 步；卸载 |
 | `CompilePipeline.runSource(source): JitFunction` / `runUnit(unit): JitFunction` | 四步管线编排（编译/装载 → 去重 → 引擎选择 → 产物） | `Compiler.compile` |
 | `Report.throwJit(code, site, fnId, dump, tables)` | 组装并经内部统一抛出 JitException（19 的桥层契约错误 site=-1 走此路） | 三态收尾第 3 步 |
@@ -898,22 +923,24 @@
 ### 8.1 `Compiler.compile(source: String)`（管线四步）
 
 ```
-Compiler.compile(source)
+Compiler.compile(source)                    // 每次编译新建 Compiler 实例（D4 结案）
  └─ CompilePipeline.runSource
-     ├─ ① SourceCompiler.compile(source)
+     ├─ ① CompileCache.lookupOrClaim(source)  // 键 = FNV-1a-128(规范化源码)
+     │    命中 Ready → 复用同一 JitFunction（零重编译：源码 → 字节码 → JIT 全不重跑）
+     │    Miss → CAS 占位（Idle → Compiling）后继续：
+     ├─ ② SourceCompiler.compile(source)
      │    Lexer → Parser → NameResolver → DefiniteAssignment → Lowerer → BytecodeBuilder → Assembler
      │    （预定义函数调用编译为 user helper：hid = slot+0x0100）
-     ├─ ② CompileCache.lookupOrClaim(源码指纹)
-     │    Ready → 复用同一 JitFunction；Compiling → 等待（成功共享/失败共享异常）；Miss → CAS 占位
      ├─ ③ BackendSelector.select(opts.jit, diagnostics)
      │    Linux + SDK 指令集 → JitCompiler.compileUnit(LoadedUnit, handleIds) → JitArtifacts
-     │    否则 → 仅解释器（diagnostics 记录；不报错）
-     └─ ④ new JitFunction(fnId=entryFn, 单元资产…) → 返回
+     │    否则 → 纯字节码/解释器形态（diagnostics 记 (Warn, JitFallback)；不报错）
+     └─ ④ new JitFunction(fnId=entryFn, 单元资产…, ?JitArtifacts) → 写回 Ready → 返回
+          （两形态同为 JitFunction、同一 call<T> —— D4/D5 结案）
 ```
 
 ### 8.2 `Compiler.compile(unit: SourceUnit)`（分发入口）
 
-同上，替换 ① 为 `FbcReader.load(raw)`（加载期校验；含 user hid 的 `.fbc` → 拒绝，JitException(18) 语义），② 去重键换为字节码指纹。
+同上，替换 ② 为 `FbcReader.load(raw)`（加载期校验；含 user hid 的 `.fbc` → 拒绝，JitException(18) 语义）；去重键换为**字节码指纹 = FNV-1a-128（整份 raw，含头/目录/类型表）**。该入口**无注册表上下文** ⇒ 键天然进程级共享（D4 结案）；命中后同样**二次校验** raw 字节。
 
 ### 8.3 `JitFunction.call<T>(args)`（固定六步）
 
@@ -975,6 +1002,10 @@ Ready --CAS--> Unloading（拒绝新调用；活跃调用照常完成）--active
 | 异常基类用 `fountain::f_base.BaseException` | 直承 `std.core.Exception` | 仓库统一基类——宿主可跨模块统一 `catch (e: BaseException)`，并复用 f_base 的 `printStackTrace`/抑制异常等能力；报告文本经 `super(message)` 转发，本类自有字段（`code/site/fnId/sourcePos`、`kind/position/…`）不变 |
 | `JitFunction` 不拆「Interp 版 / JIT 版」子类 | 两个子类 | 引擎是运行时状态（卸载/诊断/测试都按同一句柄）；单类 + 可选 artifacts 最简 |
 | 编译缓存/适配器注册表放根包 | 放 runtime | 它们是「桥的进程级资产」（宿主侧锁、与卸载/缓存语义耦合），非执行期机制 |
+| 编译缓存 = **进程级**、键 = 源码指纹（**FNV-1a-128**）；**每次编译新建 `Compiler` 实例**（D4 结案） | ① 缓存按实例隔离（「视图」读法）；② 键附加注册表快照身份 | 用户裁定：**一份源码只出一份字节码与 JIT 产物**（跨实例复用是目标）；`Compiler` 实例只作「一次编译的配置载体」；`compile(unit)` 无注册表 ⇒ 键天然进程级共享 |
+| 两形态产物**同一接口**（`JitFunction.call<T>(args: Array<Any>): T`，D4/D5 结案） | 拆「JIT 版 / 字节码版」两个子类或第二用户面类型 | 调用方无需感知引擎（§0「单类 + 可选 artifacts」的强化）；差异只在内部 `?JitArtifacts`，行为逐位一致 |
+| 诊断接口 = `(level, code, message)` + 便捷 `(level, message)`；等级仅 `Info\|Warn`；提供 `DummyDiagnosticsSink`（D1 结案） | ① 极简 `diag(String)`；② 保留 `Error` 档 | 结构化 `code` 可断言（T7 不依赖文案）；`Error` 情形一律异常、走不到 diag；空实现免去用户样板 |
+| `JitContext` 为 `protected`（D2 结案） | `public` | ctx 是机器码 ABI 契约（用户写坏即破坏不变量）；用户面无消费路径（`impl` 收已解包值、helper 只见裸指针）；与 `Engine`/`JitValue` 先例一致 |
 
 ---
 
@@ -982,11 +1013,11 @@ Ready --CAS--> Unloading（拒绝新调用；活跃调用照常完成）--active
 
 | # | 项 | 说明 |
 |---|---|---|
-| D1 | `DiagnosticsSink` 细化 | 规格「接口从略」；本文细化为 `diag(level, message)`（含 Info/Warn/Error）——如需极简可退化为 `diag(String)` |
-| D2 | `JitContext` 公开粒度 | ctx 布局是内部契约；`JitContext` 建议 `protected`（用户不见），仅测试与桥使用 |
+| D1 | `DiagnosticsSink` 细化（**已结案**） | 2026-10-11 裁定：**结构化 + 便捷双入口**——主签名 `diag(level, code, message)` + 便捷重载 `diag(level, message)`（默认实现转发，`code = Unspecified`）；等级**仅 `Info\|Warn`**（错误直接抛异常，走不到 diag）；事件码 `DiagCode`；空实现 **`DummyDiagnosticsSink`**；三条契约：不承担错误通道 / 不承诺串行化（线程安全由仓颉侧负责）/ sink 异常 = `BaseException` 子类且向上传播、遮盖时用 `addSuppressed(原异常)`。落点：§2.3.7、§9 |
+| D2 | `JitContext` 公开粒度（**已结案**） | 2026-10-11 裁定：**`protected`**——ctx 布局是机器码 ABI 契约、用户面无消费路径（详见 §5.3.1 可见性段）；`cp()` 仅经 artifact ABI；不随 §7.6 再导出 |
 | D3 | `JitValue` 可见性（已结案） | 2026-10-11 裁定：**`protected`**——唯一消费者 `invoke`/`tryInvoke` 为 private，无用户面路径；规格 §8 行 827 已同步 `protected`，§8.7 清单同步 |
-| D4 | `CompileCache` 的进程级宿主 | 规格为「进程级编译缓存」；设计放根包（static 单例），卸载与去重协议同一处维护 |
-| D5 | 指纹算法 | 源码指纹/字节码指纹算法与常量 `constFingerprint`（FNV-1a）分开：前者用于去重键，规格未固化算法——建议 FNV-1a 同款，实施时裁定 |
+| D4 | `CompileCache` 的进程级宿主（**已结案**） | 2026-10-11 裁定：**根包 static 单例（进程级，§9 既有决策）**；`lookupOrClaim(sourceCode)` **内部以源码指纹作键**；状态机 Idle→Compiling→Ready/Failed 不变；**claim 内先编译为字节码、Linux + x86_64/aarch64 再 JIT**；**每次编译新建 `Compiler` 实例**，但**一份源码只出一份字节码与 JIT 产物**（跨实例复用）；**字节码产物与 JIT 产物实现同一接口、对外开放同一 `call<T>(args: Array<Any>): T`**；分发入口键 = 字节码指纹。落点：§0、§7.3.3、§7.3.5、§8.1、§8.2、§9；规格 §8.4/§12.6 同步 |
+| D5 | 指纹算法（**已结案**） | 2026-10-11 裁定：**去重键指纹 = FNV-1a-128**（源码指纹 = 规范化源码；字节码指纹 = 整份 raw）；`constFingerprint` 保持 **FNV-1a-64** 落盘；实现**经 `fountain::f_util`**（`Fnv`，32/64/128/256 全宽；f_jit 不自实现）；**命中后二次校验原字节**（碰撞 = 语义错误，不靠概率兜底）。落点：§3.3.8、§7.3.5、§8.1、§8.2；规格 §11.5/§12.5/§12.6 同步 |
 | D6 | `Engine` 公开性（已结案） | 2026-10-11 裁定：**`protected`**（原「为测试/诊断设为 public」作废）——诊断与测试均在本模块内（`src/test/...`，protected 可见）；规格 §8 支撑类型已补 `protected enum Engine`，§8.7 清单同步 |
 | D7 | **异常基类（已结案）**：规格 §8 原声明 `<: Exception`（行 792/1075），2026-10-11 裁定统一改用仓库基类 `fountain::f_base.BaseException`——**规格已同步落笔**（`<: BaseException` + 支撑类型段说明），设计与计划同步 | 无需再裁定；`base` 包外部依赖补 f_base；`fountain::f_exception` 对该基类有 `public import` 再导出，两种 import 路径等价 |
 
