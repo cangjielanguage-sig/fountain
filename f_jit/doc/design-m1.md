@@ -269,9 +269,7 @@
 
 | 声明 | 形态 | 意义 | 依赖 | 锚点 |
 |---|---|---|---|---|
-| `CAT_*`（12 个） | const | opcode 类别码 | — | §10.3 |
-| `OpInfo` | struct | 单条 opcode 元信息（code/name/fmt/len/cat） | — | §10.2–10.3 |
-| `OPCODE_TABLE` | let Array\<OpInfo\>（256 项） | 全量 opcode 表（反汇编/汇编校验/调试器共用） | OpInfo、CAT_* | §10.3 |
+| `OpInfo` | struct（含 static 成员：`static const CAT_*` 12 个、`static let OPCODE_TABLE`） | 单条 opcode 元信息（code/name/fmt/len/cat）+ 类别码常量 + 全量 256 项表（反汇编/汇编校验/调试器共用） | — | §10.2–10.3 |
 | `ByteReader` / `ByteWriter` | class | 显式 LE 编解码原语（禁 memcpy） | — | §11.2 |
 | `DecodedInsn` / `InsnDecoder` | struct / class | 单指令解码（按 fmt/len）与操作数读取 | OpInfo、ByteReader | §10.2、§11.2 |
 | `FuncEntry` | struct | 函数目录条目（26 B） | — | §11.7 |
@@ -291,14 +289,16 @@
 
 ### 3.3 各声明的公共成员
 
-#### 3.3.1 `OpInfo`（struct） / `CAT_*` / `OPCODE_TABLE`
+#### 3.3.1 `OpInfo`（struct；static 成员 `CAT_*` / `OPCODE_TABLE`）
 
 | 成员 | 意义 |
 |---|---|
 | `let code: UInt8` / `let name: String` / `let fmt: String` / `let len: Int64` / `let cat: UInt8` | 元信息五元组（len 平台无关） |
 | `const init(code, name, fmt, len, cat)` | 表项构造 |
-| `CAT_MISC/CONST/LOCAL/I64/F64/CMP/CTRL/CALL/TYPE/BOX/FORBID/RSVD`（0–11） | 类别码 |
-| `let OPCODE_TABLE: Array<OpInfo>` | 256 项全量（未分配槽 = OP_RSVD；0xA9–AA = CAT_FORBID；0xC0–FF = RSVD 预留 M2） |
+| `static const CAT_MISC/CONST/LOCAL/I64/F64/CMP/CTRL/CALL/TYPE/BOX/FORBID/RSVD: UInt8`（0–11） | 类别码（访问形式 `OpInfo.CAT_CALL`；编译期常量，可用于 `const` 上下文） |
+| `static let OPCODE_TABLE: Array<OpInfo>` | 256 项全量（未分配槽 = `OP_RSVD`/`CAT_RSVD`；0xA9–AA = `CAT_FORBID`；0xC0–FF = RSVD 预留 M2） |
+
+**为何 `OpInfo` 是 struct 而非 class**：它是**只读元信息**（5 字段全 `let`、无身份、无行为），访问模式是「按下标取一条 → 读字段」——值语义复制是**浅拷贝约 5 个字**（`String` 字段只复制引用，不复制字符数据），全程无堆分配、无 GC 扫描、无指针追逐；`Array<OpInfo>` 对 struct 元素**内联连续存储**（256 项紧排、缓存友好），而 `Array<class>` 是引用数组（指针追逐 + 静态期 256 次堆分配 + 别名风险）。`DecodedInsn` 持有 `OpInfo` 副本也不会与表项共享可变状态。
 
 #### 3.3.2 `ByteReader` / `ByteWriter`
 
@@ -314,7 +314,7 @@
 
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
-| `static func decode(code: Array<UInt8>, off: Int64): DecodedInsn` | 按 OPCODE_TABLE 解出 op 与操作数 | 解释器取指、汇编校验、反汇编 |
+| `static func decode(code: Array<UInt8>, off: Int64): DecodedInsn` | 按 `OpInfo.OPCODE_TABLE` 解出 op 与操作数 | 解释器取指、汇编校验、反汇编 |
 | `DecodedInsn.op: UInt8` / `.size: Int64` / `.operands: Array<UInt8>` | 解码产物 | — |
 | `static func u16(insn, i)` / `i32` / `i64` / `rel32(insn, insnOff)` | 操作数读取（rel32 相对下一条指令） | §5 编码约定 |
 
@@ -724,7 +724,7 @@
 | 再导出 | 内容 |
 |---|---|
 | `public import fountain::f_jit.base.*` | JitException、SourceCompileException、SourcePos、CallContext、SourceUnit、JitMode、LocalType、TypeToken、ErrCode、DiagnosticsSink、DiagnosticLevel、Version（`Engine`/`JitValue` 为 `protected`，不随再导出对外可见） |
-| `public import fountain::f_jit.bytecode.*` | OPCODE_TABLE/OpInfo/CAT_*、FuncDir/FuncEntry/LocalTypes、ConstRegistry/ConstKind/ConstPayload、SiteTable/NameTable、FbcReader/FbcWriter/FbcHeader/LoadedUnit |
+| `public import fountain::f_jit.bytecode.*` | OpInfo（含 static 成员 `CAT_*`/`OPCODE_TABLE`）、FuncDir/FuncEntry/LocalTypes、ConstRegistry/ConstKind/ConstPayload、SiteTable/NameTable、FbcReader/FbcWriter/FbcHeader/LoadedUnit |
 | `public import fountain::f_jit.runtime.*`（仅用户面） | HandleTable、（@C helper 符号不导出到用户面） |
 | 自定义声明 | Compiler、CompileOptions、PredefinedFunction、JitFunction |
 
@@ -791,7 +791,7 @@ Ready --CAS--> Unloading（拒绝新调用；活跃调用照常完成）--active
 | 声明 | 定义包 | 消费包 |
 |---|---|---|
 | `LoadedUnit/FuncDir/LocalTypes/ConstRegistry/SiteTable/NameTable` | bytecode | runtime、backend、根包 |
-| `FuncEntry/FuncFlags/OpInfo/OPCODE_TABLE` | bytecode | compiler、runtime、backend |
+| `FuncEntry/FuncFlags/OpInfo`（含静态成员 `CAT_*`/`OPCODE_TABLE`） | bytecode | compiler、runtime、backend |
 | `JitContext/HandleTable/IterTable/DbgDump/HelperId` | runtime | 根包（+backend 仅经 artifact ABI） |
 | `CompileSession/CompiledSourceUnit/FuncBody` | compiler | 根包 |
 | `JitArtifacts/FnTable/ConstMirror/CodeBuffer` | backend | 根包 |
@@ -804,7 +804,8 @@ Ready --CAS--> Unloading（拒绝新调用；活跃调用照常完成）--active
 | 决策 | 备选 | 选择理由 |
 |---|---|---|
 | 6 个包（base/bytecode/compiler/runtime/backend/根） | 单包 / 按对象分（loader/assembler/interp/jit/marshal 各一包） | 按「正确性论证方式」分包：格式（bytecode）、编译期诊断（compiler）、解释语义（runtime）、差分（backend）——测试与回归边界清晰；再细则共享契约会散落 |
-| `LocalType/ErrCode/TypeToken/HelperId/Version` 用类+`static const` | 顶层常量 / enum | 规格示例 `LocalType.I64` 与 §10.3 顶层 `CAT_*` 并存：命名空间类给出可点号访问的常量，且可挂 `name()/isHandle()` 查询；避免 250+ 顶层常量污染导入 |
+| `LocalType/ErrCode/TypeToken/HelperId/Version` 用类+`static const` | 顶层常量 / enum | 规格示例 `LocalType.I64` 与 §10.3 的 `OpInfo.CAT_*`（static const 成员）并存：命名空间类给出可点号访问的常量，且可挂 `name()/isHandle()` 查询；避免 250+ 顶层常量污染导入 |
+| `OpInfo` 用 **struct**（+ `static const CAT_*` / `static let OPCODE_TABLE`） | 用 class / 顶层常量 | 只读元信息、无身份无行为；值语义浅拷贝约 5 字，无堆分配/GC/指针追逐；`Array<OpInfo>` 内联连续（256 项缓存友好）；类别码用 `static const` 保持编译期可用（可进 `const` 上下文），表用 `static let`（同类静态成员互引，见 `f_util.Crc32.all` 先例） |
 | ctx 用 `CPointer<Int64>` 访问器承载 | `struct` 直映射 | 机器码要求 64 B 且不得移动（§4）；Cangjie 布局不承诺逐字节 ⇒ 显式访问器 + 非托管分配 |
 | ctx/转储缓冲的非托管内存用 `std.core.LibC.malloc<T>` / `LibC.free<T>` | ① `foreign func malloc/free`；② `acquireArrayRawData` 钉住 `Array<UInt8>` | ① std.core 原生 API、免自声明 FFI；② 钉住方案被 std 文档窗口约束排除（获取与释放之间不得构造仓颉对象，而 ctx 跨整个调用、helper 必分配并触发 GC）；③ malloc 满足 16 B 对齐；释放仍走桥 finally（T27 计数断言）——详见 §5.3.1 |
 | helper 以顶层 `@C` 函数实现 | 集中在一个 class | 与机器码 trampoline 静态链接（符号可见性简单）；三引擎共用同一实现（I7） |

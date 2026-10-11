@@ -105,7 +105,7 @@ f_jit/
 
 | 步骤 | 目标成员 | 先写测试（红） | 实现要点（绿） | 验收（回归） |
 |---|---|---|---|---|
-| S2.1 | `CAT_*`（12 个）、`OpInfo`（5 字段 + const init）、`OPCODE_TABLE`（256 项） | ① `table.size == 256` 且 `table[i].code == i`；② 已分配项与 §10.3 逐条核对（名称/len/fmt/cat）：`SET_SITE=5`、`CALL_HELPER="u16 u8"=4`、`CALL_CLOSURE=u8=2`、`MAP_ITER_STEP=u8=2`…；③ 未分配 = `OP_RSVD/CAT_RSVD`；④ `0xA9/0xAA = CAT_FORBID`；⑤ `0xC0–0xFF` 全 RSVD | 按 §10.3 骨架逐项录入（可脚本生成后人工校对） | 与 §10.3 全等（T1 基础） |
+| S2.1 | `OpInfo`：5 字段 + `const init` + `static const CAT_*`（12 个）+ `static let OPCODE_TABLE`（256 项） | ① `OpInfo.OPCODE_TABLE.size == 256` 且 `table[i].code == i`；② 已分配项与 §10.3 逐条核对（名称/len/fmt/cat）：`SET_SITE=5`、`CALL_HELPER="u16 u8"=4`、`CALL_CLOSURE=u8=2`、`MAP_ITER_STEP=u8=2`…；③ 未分配 = `OP_RSVD/CAT_RSVD`；④ `0xA9/0xAA = CAT_FORBID`；⑤ `0xC0–0xFF` 全 RSVD | 按 §10.3 骨架逐项录入（可脚本生成后人工校对）；`CAT_*` 须为 `static const`（编译期常量） | 与 §10.3 全等（T1 基础） |
 | S2.2 | `ByteReader`/`ByteWriter`：`u8/u16/u32/i32/i64/f64bits/bytes/remaining`、`wU8→`、`take` | LE 往返（含非对齐与跨缓冲区边界、`0x0102` 字节序断言）；越界读抛/返回错误；T3 显式解码用例 | 逐字节显式读写（禁 memcpy/指针强转） | T3 通过（主机端序无关） |
 | S2.3 | `DecodedInsn`、`InsnDecoder.decode/u16/i32/i64/rel32` | 按 fmt 解码各类指令（`-`/`u8`/`u16`/`i32`/`rel32`/`i64`/`u16 u8`）；`rel32` 目标 = 下一条指令 + offset；RSVD/FORBID 解码 → 语义拒绝（`ERR_NOT_IMPL`） | 查表 + 游标推进 | 解码器是解释器取指唯一入口 |
 | S2.4 | `FuncEntry`（10 字段 + `SIZE`） | 26 字节编解码往返、字段保真 | struct + SIZE 常量 | §11.7 恒 26 B |

@@ -1354,7 +1354,7 @@ Ready ──unload() CAS──▶ Unloading ──activeCalls == 0──▶ Unlo
 - 常量名规则：`OP_<助记符>`（大写下划线），例如 `OP_PUSH_I8`、`OP_CALL_HELPER`。
 - 指令编码：`[op:u8][operands…]` 小端；`rel` 为相对**下一条指令**的有符号 32 位偏移。
 - 保留区（RSVD：表中未分配槽 + 0xC0–FF——后者为 M2 规划预留区〔HW_OPEN 区块内批量分配、CALL_HOST〕，见 §5）在 M1 中发射即 `ERR_NOT_IMPL`；禁用区（FORBID：0xA9–AA——时间**构造**，M2 启用）同样发射即报错。v0.5 起 A1/A3/AB–AF（容器变更/快照）、v0.6 起 0xB8–BB（字符串切片替换/正则）、v0.15 起 0xBC–BD（字符串重复/日期差）、v0.16.1 起 0xBE（Map 迭代步进）、v0.17 起 0xBF（字符串建 Regex）、v0.18 起 A0/A2（空容器构造）已启用，归入 BOX。
-- 实现侧应构建 `OPCODE_TABLE: Array<OpInfo>` 并以 opcode 为下标索引，供反汇编、汇编期校验、调试器共用。
+- 实现侧应构建 `OpInfo.OPCODE_TABLE`（`OpInfo` 的 `static let` 成员；类别码为 `OpInfo.CAT_*` 的 `static const` 成员）并以 opcode 为下标索引，供反汇编、汇编期校验、调试器共用。
 
 ### §10.2 操作数编码种类（OperandFormat）
 
@@ -1373,20 +1373,6 @@ Ready ──unload() CAS──▶ Unloading ──activeCalls == 0──▶ Unlo
 **全量 256 项显式列出**（`table[i].code == i`）；未分配槽统一 `OP_RSVD`（CAT_RSVD）——M1 发射即 `ERR_NOT_IMPL`。
 
 ```cangjie
-// 类别
-public const CAT_MISC:   UInt8 = 0   // 控制/杂项
-public const CAT_CONST:  UInt8 = 1   // 常量/栈
-public const CAT_LOCAL:  UInt8 = 2   // 局部变量
-public const CAT_I64:    UInt8 = 3   // 整型算术
-public const CAT_F64:    UInt8 = 4   // 浮点算术
-public const CAT_CMP:    UInt8 = 5   // 比较/逻辑/位
-public const CAT_CTRL:   UInt8 = 6   // 控制流
-public const CAT_CALL:   UInt8 = 7   // 调用
-public const CAT_TYPE:   UInt8 = 8   // 类型/转换/错误
-public const CAT_BOX:    UInt8 = 9   // 容器/值运算/转换（helper 路由，含分配型）
-public const CAT_FORBID: UInt8 = 10  // 禁用（容器/时间构造，M2 启用）
-public const CAT_RSVD:   UInt8 = 11  // 保留
-
 public struct OpInfo {
     public let code: UInt8
     public let name: String
@@ -1394,9 +1380,23 @@ public struct OpInfo {
     public let len: Int64         // 指令总长（1 + 操作数字节）；M1 全部指令定长
     public let cat: UInt8
     public const init(code: UInt8, name: String, fmt: String, len: Int64, cat: UInt8) { ... }
-}
 
-public let OPCODE_TABLE: Array<OpInfo> = [
+    // ---- 类别码：static const 成员（访问形式 OpInfo.CAT_*）----
+    public static const CAT_MISC:   UInt8 = 0   // 控制/杂项
+    public static const CAT_CONST:  UInt8 = 1   // 常量/栈
+    public static const CAT_LOCAL:  UInt8 = 2   // 局部变量
+    public static const CAT_I64:    UInt8 = 3   // 整型算术
+    public static const CAT_F64:    UInt8 = 4   // 浮点算术
+    public static const CAT_CMP:    UInt8 = 5   // 比较/逻辑/位
+    public static const CAT_CTRL:   UInt8 = 6   // 控制流
+    public static const CAT_CALL:   UInt8 = 7   // 调用
+    public static const CAT_TYPE:   UInt8 = 8   // 类型/转换/错误
+    public static const CAT_BOX:    UInt8 = 9   // 容器/值运算/转换（helper 路由，含分配型）
+    public static const CAT_FORBID: UInt8 = 10  // 禁用（容器/时间构造，M2 启用）
+    public static const CAT_RSVD:   UInt8 = 11  // 保留
+
+    // ---- 全量 256 项：static let 成员（表项 = OpInfo(code, name, fmt, len, cat)）----
+    public static let OPCODE_TABLE: Array<OpInfo> = [
   // ---- 0x00–0x0F 控制/杂项 ----
   OpInfo(0x00, "OP_NOP",          "-",   1, CAT_MISC),
   OpInfo(0x01, "OP_TRAP",         "u8",  2, CAT_MISC),
@@ -1676,9 +1676,10 @@ public let OPCODE_TABLE: Array<OpInfo> = [
   OpInfo(0xFE, "OP_RSVD", "-", 1, CAT_RSVD),
   OpInfo(0xFF, "OP_RSVD", "-", 1, CAT_RSVD),
 ]
+}   // struct OpInfo 结束
 ```
 
-**表构建时的一致性校验（建议放在 `OpcodeTable.build()` 的调试断言里）**：
+**表的一致性校验（建议放在 `bytecode` 包的表自检函数中，由模块初始化或测试调用）**：
 
 1. 数组长度 == 256，且 `table[i].code == i`（0x00–0xFF **全量显式列出**；未分配槽统一为 `OP_RSVD`（CAT_RSVD））。
 2. `len != 0` 时，`len == 1 + Σ operandSize(fmt)`。
