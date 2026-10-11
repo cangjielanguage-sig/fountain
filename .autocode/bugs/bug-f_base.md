@@ -27,7 +27,7 @@
 4. `FT-4`（§2.2）`InheritedTaskLocal` 的写入目标固定为 owner（四个出口，含"owner 已结束时 `set` 后自读 `None`"）—— **已拍板：路线 2（`set`/`remove` 写当前任务）；`getOrSet`/`getOrCompute` 二次决策改为二段检查锁**　**✅已修复（2026-10-11，见 §2.2 修复标记与二次修正）**
 5. `FT-5`（§2.3）父任务先结束后子任务继承不到值（返回 None）——**作者定性为缺陷**，继承改走构造期固定的父链　**✅已修复（2026-10-11，见 §2.3 修复标记）**
 6. `FT-6`（§2.4）性能：**全部候选已实施（2026-10-11，⑥+①③④⑤ 四笔提交）** —— 端到端 `FutureTask<Int64>{1}` + `get()` **33.9 ~ 36.2 µs → 21.0 µs**（同批裸 `spawn{1}`+`get()` ~2.9 µs ⇒ 比值 **13× → ~7.2×**）、命中 `InheritedTaskLocal.get()` **700 ~ 870 ns → ~300 ns**；量化数据与逐项标记见 §2.4　**✅已修复**
-7. `FT-L1` ~ `FT-L4`（§3）低危/契约/文档项　**登记**
+7. `FT-L1` ~ `FT-L4`（§3）低危/契约/文档项：`FT-L1`（异常契约）**✅全部已修**（前半随 `b7226c17`；后半 2026-10-11，见 §3 与 `EXP20`）；`FT-L2`（API 不对称）**(a) ✅已修** 、**(b) 作者决定保持现状**；`FT-L3`（内存口径）结论修正为"不应清理"、实现无需改动；`FT-L4`（防御性建议）**✅已随 `FT-5` 实现**
 
 **修复时间线（2026-10-11，分支 `fix/futuretask`，worktree `.worktrees/futuretask`，基线 `fe8a1886`）**：
 
@@ -50,10 +50,14 @@
 | `118dc494` | `perf(f_base): FT-6 ④ 读路径缓存当前任务并移除 taskMap（-3.1us/任务，读 505->298ns）` |
 | `569aa503` | `perf(f_base): FT-6 ⑤ 压缩登记注销（创建者整体清桶 + 完成态剪枝，-0.9us/任务）` |
 | `40d64573` | `style(f_base): 子任务集合与剪枝遍历改用 for-in（元素类型已是 AbstractFutureTask）` |
+| `7318aa95` | `fix(f_base): FT-L1 后半 get/tryGet 不再漏 std 异常（窗口内 tryGet 返回 None，新增 EXP20 与守卫用例）` |
+| `d1617c6c` | `fix(f_base): FT-L2(a) remove() 返回被删掉的值（源码兼容的签名放宽；L2(b) 按作者决定不动）` |
 
 **修后总验证（FT-1~FT-5 阶段）**：worktree 内 `cjpm test` = `TOTAL: 26, PASSED: 26, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`；修前基线为 6 条既有用例全绿，本次累计新增 20 条用例）。探针（`.autocode/tmp/ftask_probe`，按 worktree 的 `f_base` 副本构建）：`EXP3`（父任务先结束的继承）由 `done:None` 10/10 变 **`done:Some` 10/10**、`EXP4B diff=true`、`EXP5 50/50`、`EXP9` 仍 `Some(7)`、`EXP10 500/500`、`EXP11` 父任务由 `Some(2)` 变 **`Some(1)`**、`EXP12` 消息由"没有任务"变为**说明泛型实参问题**、`EXP13 a==b 0/500`、`EXP15` 与 `EXP16` 均 100/100 轮整组取消、`EXP17` 由 `None` 变 **`Some(9)`**；`EXP6` 的 FT/spawn 比值为 12.9x / 13.4x（修前区间 12.9x ~ 13.9x）。未修的 `FT-6`（性能机会）与 `FT-L1` 后半、`FT-L2` 见对应条目。
 
-**修后总验证（FT-6 阶段，2026-10-11）**：worktree 内 `cjpm test` = `TOTAL: 31, PASSED: 31, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`；本阶段新增 5 条用例：⑥+① 1 条、③ 1 条、④ 1 条、⑤ 2 条）。探针（EXP18，同进程，按 worktree 的 `f_base` 副本构建）：端到端 `FutureTask<Int64>{1}` + `get()` **33.9 ~ 36.2 µs → 21.0 µs**（同批裸 `spawn{1}` + `get()` ~2.9 µs ⇒ **13× → ~7.2×**）；`currentOrNone()` ~330 → **~88 ns**；命中 `InheritedTaskLocal.get()` 700 ~ 870 → **~300 ns**（对照 `ThreadLocal.get()` 88~100 ns ⇒ 约 3.2×）。行为探针：`EXP3` 10/10 `Some`、`EXP5` 50/50、`EXP9` `Some(7)`、`EXP10` 500/500、`EXP11` 子 `Some(2)`/父 `Some(1)`、`EXP12` 消息不变、`EXP15` 100 轮 4/4、`EXP16` 0/0/0/0/100、`EXP17` `Some(9)`、`EXP19` 0/300 —— 全部保持。剩余未修的只有 `FT-L1` 后半与 `FT-L2`。
+**修后总验证（FT-6 阶段，2026-10-11）**：worktree 内 `cjpm test` = `TOTAL: 31, PASSED: 31, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`；本阶段新增 5 条用例：⑥+① 1 条、③ 1 条、④ 1 条、⑤ 2 条）。探针（EXP18，同进程，按 worktree 的 `f_base` 副本构建）：端到端 `FutureTask<Int64>{1}` + `get()` **33.9 ~ 36.2 µs → 21.0 µs**（同批裸 `spawn{1}` + `get()` ~2.9 µs ⇒ **13× → ~7.2×**）；`currentOrNone()` ~330 → **~88 ns**；命中 `InheritedTaskLocal.get()` 700 ~ 870 → **~300 ns**（对照 `ThreadLocal.get()` 88~100 ns ⇒ 约 3.2×）。行为探针：`EXP3` 10/10 `Some`、`EXP5` 50/50、`EXP9` `Some(7)`、`EXP10` 500/500、`EXP11` 子 `Some(2)`/父 `Some(1)`、`EXP12` 消息不变、`EXP15` 100 轮 4/4、`EXP16` 0/0/0/0/100、`EXP17` `Some(9)`、`EXP19` 0/300 —— 全部保持。
+
+**全部条目结清（2026-10-11）**：`FT-L1` 后半与 `FT-L2(a)` 当日修完（`7318aa95`、`d1617c6c`，新增 `EXP20`），`FT-L2(b)` 按作者决定保持现状，`FT-L3`/`FT-L4` 此前已定。收尾全量单测 **`TOTAL: 34, PASSED: 34, SKIPPED: 0, ERROR: 0, FAILED: 0`**（`TEST_EXIT=0`）；本报告已无待处理条目。
 
 ---
 
