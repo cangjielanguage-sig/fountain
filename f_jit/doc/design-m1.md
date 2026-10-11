@@ -181,11 +181,34 @@
 
 #### 2.3.6 `JitMode`（enum） / `Engine`（enum） / `JitValue`（enum）
 
-| 类型 | 构造器 | 意义 |
-|---|---|---|
-| `JitMode` | `Off | Auto | Force` | 引擎选择开关；非 Linux / SDK 未支持指令集一律静默降级解释器（§12.1） |
-| `Engine` | `Interp | Jit` | 实际引擎（diagnostics 记录；测试可断言） |
-| `JitValue` | `Int(Int64) | Float(Float64) | Handle(Int64) | Unit` | 桥内部 `invoke` 结果；`Handle`=已按 §8.1 逃逸的句柄 ID |
+三者合并成节：都是**纯值枚举**（无方法、无模块内依赖，随 base 包被三个引擎共享），且串成同一条链路——**用户意图（`JitMode`）→ 实际事实（`Engine`）→ 桥内执行结果（`JitValue`）**；这是 I7（三引擎语义一致）在类型层的落点。
+
+| 类型 | 构造器 | 意义 | 锚点 |
+|---|---|---|---|
+| `JitMode` | `Off` \| `Auto` \| `Force` | 引擎选择开关（`CompileOptions.jit`，默认 `Auto`） | §12.1 |
+| `Engine` | `Interp` \| `Jit` | 实际引擎（diagnostics 记录；测试可断言） | §12.1 |
+| `JitValue` | `Int(Int64)` \| `Float(Float64)` \| `Handle(Int64)` \| `Unit` | 桥内部 `invoke` 结果；`Handle` = 已按 §8.1 逃逸的句柄 ID | §8、§8.1 |
+
+**`JitMode`（输入侧「用户意图」）**
+
+- 三档：`Off` → 不产生机器码，直接走解释器；`Auto` → 平台可用则 JIT（另以字节码指纹为缓存键）；`Force` → 期望 JIT。
+- **不可用一律静默降级**：非 Linux 平台（Windows/macOS/HarmonyOS）与 SDK 未支持指令集下，`Force` 亦降级为解释器——**接口与语义完全一致，只记 diagnostics，不报错、不改语义**（§12.1 冻结决策、§9 附则 10；判定链见 §12.1 引擎选择伪码）。
+- **边界（不可混同的两种处置）**：**32 位宿主不是降级，而是构建期/装载期明确拒绝**（cell 64 位、ctx 64 字节是硬前提，§12.1 表、§9 附则 9）。
+
+**`Engine`（输出侧「实际事实」）**
+
+- **与 `JitMode` 的分离是刻意的**：`Force` 成功时二者同为 JIT；失败时 `Engine = Interp` 而用户传入的 `JitMode` 不被改写——「配置」与「事实」是两条信息，缺后者就无法断言降级是否真的发生。
+- **产出者**：`BackendSelector.select(mode, diag): (Engine, ?Backend)`（§6.3.4），由桥管线第 3 步调用（§8.1）。
+- **消费者**：`diagnostics` 记录（§2.3.7）、测试断言（T7/T9）、`JitFunction` 内部状态（§7.3.3）。
+- 公开性：规格未列出，为可测性设为 `public`（**D6**）。
+
+**`JitValue`（桥内执行结果）**
+
+- **产生点唯一**：`invoke`/`tryInvoke`（private，§7.3.3）三态收尾第 3 步的 `errCode == 0` 分支（§8.4）；`-1`（DEOPT 重跑，对调用方透明）/`-2`（中断）/`>0`（报告）三条路径**不产生** `JitValue`，`tryInvoke` 把其中的 `throw` 收进 `Result.Err`。
+- **构造器 ↔ cell 载荷一一对应**（§3.2）：`Int` = i64 直值、`Float` = f64 位型、`Handle` = 句柄 ID（**已按 §8.1 逃逸**，宿主经 `HandleTable.get(id)` 取回对象）、`Unit` = 无返回值（同样是 errCode = 0）。
+- **选 enum 而非 `Any`**：① 与 cell 1:1、零装箱——该入口定位是热路径/批量调用；② **显式区分值型与句柄型**，因为两者回收规则不同：`call<T>` 路径解包后**自动回收**窗口逃逸槽，而 `invoke` 路径的 `Handle` **只能显式 `release`**（§8.1 规则 6②③：ID 是可复制的普通整数、无引用计数回调、GC 不通知桥、`JitValue` 为值类型；错误 16 亦不做批量清理，否则会作废宿主仍在使用的 ID）。
+- **分派提醒**：`Handle` 与 `Int` 的载荷同型（Int64）——**按构造器标签分派，不得按载荷类型判断**。
+- 可见性：规格列为 `public`，但唯一消费者 `invoke/tryInvoke` 为 private——保持 public（预留 invoke 路径）或降为 protected（最小暴露），**D3 待裁定**。
 
 #### 2.3.7 `DiagnosticsSink`（interface） / `DiagnosticLevel`（enum）
 
