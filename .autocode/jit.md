@@ -9,7 +9,7 @@
 
 ## 任务
 0. 加载技能 using-superpowers、cangjie-doc-lookup、cangjie-architecture-design-harness、
-1. 把`./docs/jit/*.md`复制到`f_jit/doc`
+1. 把`./docs/jit/*.md`移到`f_jit/doc`
 2. 为m1 m2 m3三篇文档生成三份详细设计文档：`f_jit/doc/design-m1.md` `f_jit/doc/design-m2.md` `f_jit/doc/design-m3.md`。
    - 在文档中添加包级定义、各包的意义与依赖关系
    - 每个包的顶级声明与各顶级声明的意义和依赖关系
