@@ -273,7 +273,7 @@
 | `ByteReader` / `ByteWriter` | class | 显式 LE 编解码原语（禁 memcpy） | — | §11.2 |
 | `DecodedInsn` / `InsnDecoder` | struct / class | 单指令解码（按 fmt/len）与操作数读取 | OpInfo、ByteReader | §10.2、§11.2 |
 | `FuncEntry` | struct | 函数目录条目（26 B） | — | §11.7 |
-| `FuncFlags` | class（常量） | `MUTATION = bit0`（含变更型调用） | — | §9.15、§11.7 |
+| `FuncFlags` | class（常量命名空间） | `static const MUTATION = bit0`（含变更型调用） | — | §9.15、§11.7 |
 | `FuncDir` | class | 函数目录（增/查/校验） | FuncEntry | §11.7 |
 | `LocalTypes` | class | 每函数局部类型表（每槽 1 B） | LocalType | §11.7 |
 | `ConstKind` | class（常量） | 常量 kind 1–10（M1） | — | §11.5 |
@@ -304,29 +304,36 @@
 
 | 成员 | 意义 |
 |---|---|
-| `init(data: Array<UInt8>, off: Int64 = 0)` / `init()` | 读游标 / 写缓冲 |
-| `func u8(): UInt8` / `u16(): UInt16` / `u32(): UInt32` / `i32(): Int32` / `i64(): Int64` / `f64bits(): UInt64` | 显式小端解码（跨端序主机一致） |
-| `func bytes(n: Int64): Array<UInt8>` / `func remaining(): Int64` | 段读取/长度 |
-| `func wU8(v: UInt8)` / `wU16` / `wU32` / `wI32` / `wI64` / `wBytes(Array<UInt8>)` | 显式小端写出 |
-| `func take(): Array<UInt8>` | 取出产物 |
+| `ByteReader.init(data: Array<UInt8>, off: Int64 = 0)` | 读游标（起点 `off`） |
+| `ByteReader.u8(): UInt8` / `u16(): UInt16` / `u32(): UInt32` / `i32(): Int32` / `i64(): Int64` / `f64bits(): UInt64` | 显式小端解码（跨端序主机一致） |
+| `ByteReader.bytes(n: Int64): Array<UInt8>` / `remaining(): Int64` | 段读取 / 剩余长度 |
+| `ByteWriter.init()` | 空写缓冲 |
+| `ByteWriter.wU8(v: UInt8)` / `wU16` / `wU32` / `wI32` / `wI64` / `wBytes(Array<UInt8>)` | 显式小端写出 |
+| `ByteWriter.take(): Array<UInt8>` | 取出产物 |
+
+**归属**：**读侧全部在 `ByteReader`、写侧全部在 `ByteWriter`**（两者都是**有状态游标**——读位置 / 写缓冲——故用 class）。`FbcHeader.read(r)/write(w)`、`FbcReader`、`BytecodeBuilder` 都直接复用这一对类型；除它们之外不再有第二套字节读写原语。
 
 #### 3.3.3 `InsnDecoder`（class） / `DecodedInsn`（struct）
 
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
-| `static func decode(code: Array<UInt8>, off: Int64): DecodedInsn` | 按 `OpInfo.OPCODE_TABLE` 解出 op 与操作数 | 解释器取指、汇编校验、反汇编 |
-| `DecodedInsn.op: UInt8` / `.size: Int64` / `.operands: Array<UInt8>` | 解码产物 | — |
-| `static func u16(insn, i)` / `i32` / `i64` / `rel32(insn, insnOff)` | 操作数读取（rel32 相对下一条指令） | §5 编码约定 |
+| `InsnDecoder.decode(code: Array<UInt8>, off: Int64): DecodedInsn`（`static`） | 按 `OpInfo.OPCODE_TABLE` 解出 op 与操作数 | 解释器取指、汇编校验、反汇编 |
+| `InsnDecoder.u16(insn, i): UInt16` / `i32(insn, i): Int32` / `i64(insn, i): Int64` / `rel32(insn, insnOff): Int64`（`static`） | 操作数读取（rel32 目标 = 下一条指令 + offset） | §5 编码约定 |
+| `DecodedInsn.op: UInt8` / `.size: Int64` / `.operands: Array<UInt8>` | 解码产物（**纯数据 struct**，不带行为） | — |
+
+**归属**：**解码与操作数读取全在 `InsnDecoder`**（该类只放 `static` 函数、无实例状态；操作数读取的首参即解码产物 `insn`）；**`DecodedInsn` 只持数据**（struct：值语义、按值传递，不与产物表或调用方共享可变状态）。
 
 #### 3.3.4 `FuncEntry`（struct） / `FuncFlags` / `FuncDir`（class）
 
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
-| `let fnId/codeOff/codeLen/localTypesOff: UInt32`、`let nargs/nLocals/maxStack/retType/flags: UInt16` | 目录字段（恒 26 B） | 加载校验；`CALL_FUNC` 解析；帧计算 |
-| `static const SIZE: Int64 = 26` | 定长 | 编解码 |
-| `FuncFlags.MUTATION: UInt16 = 1` | 含变更型调用（H43–H48 / user helper / CALL_CLOSURE）→ deopt 禁令 + 防御兜底依据 | §9.15、§7 校验 11 |
+| `FuncEntry.fnId/codeOff/codeLen/localTypesOff: UInt32`、`.nargs/nLocals/maxStack/retType/flags: UInt16` | 目录字段（恒 26 B） | 加载校验；`CALL_FUNC` 解析；帧计算 |
+| `FuncEntry.SIZE: Int64 = 26`（`static const`） | 定长 | 编解码 |
+| `FuncFlags.MUTATION: UInt16 = 1`（`static const`） | 含变更型调用（H43–H48 / user helper / CALL_CLOSURE）→ deopt 禁令 + 防御兜底依据 | §9.15、§7 校验 11 |
 | `FuncDir.add(e: FuncEntry)` / `get(fnId: UInt32): FuncEntry` / `find(fnId): ?FuncEntry` / `size: Int64` | 目录维护与解析 | 汇编器建目录；`CALL_FUNC` 校验（§7 校验 7） |
 | `FuncDir.validate(codeLen: UInt32, entryFn: UInt32)` | 加载期校验（off/len 落在 code 段、entryFn 命中） | `FbcReader` |
+
+**归属**：`FuncEntry` = **定长只读目录项**（struct：值语义、无身份，目录内连续存储）；`FuncFlags` = 只放**常量**（`static const MUTATION` = bit0，即 `FuncEntry.flags` 的取值域）；`FuncDir` = **可变目录容器**（class：`add/get/find/size/validate`）。
 
 #### 3.3.5 `LocalTypes`（class）
 
@@ -362,7 +369,7 @@
 | `SiteTable.add(off: UInt32, pos: SourcePos)` / `freeze()` / `lookup(site: Int64): ?SourcePos` | 维护与查询（取 off ≤ site 的最大条目） | 前端写；桥报告读；加载器校验覆盖/升序 |
 | `NameEntry.fnId/slot/strOff/strLen: UInt32`（恒 16 B） | 名字条目 | 序列化 |
 | `NameTable.add(fnId: UInt32, slot: UInt32, name: String)` / `freeze()` / `lookup(fnId: UInt32, slot: UInt32): ?String` | 稀疏名字查询（未命中 → 报告省略名字） | 前端登记源码级命名槽；桥报告读 |
-| `validate(dir, types)` | 键命中目录、slot < nLocals、升序唯一、UTF-8、`strLen ≥ 1`、范围合法 | `FbcReader` |
+| `NameTable.validate(dir, types)` | 键命中目录、slot < nLocals、升序唯一、UTF-8、`strLen ≥ 1`、范围合法 | `FbcReader` |
 
 #### 3.3.8 `FbcHeader` / `FbcWriter` / `FbcReader` / `LoadedUnit`
 
