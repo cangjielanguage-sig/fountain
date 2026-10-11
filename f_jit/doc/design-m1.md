@@ -406,6 +406,7 @@
 | `TypeRef` | enum（M1 仅 `Builtin`） | 类型注解节点（M1 内建/容器类型名；M2 追加 `HostClosureT`/`HostObjectT`、M3 追加 `AnyT`） | — | §11.7、m2 §3、m3 §3 |
 | `Parser` | class | lambda 源入口语法 | Ast* | §8.0 |
 | `NameResolver` | class | 调用点解析（recursive → user helper → 未注册错误） | Token、注册表快照 | §8.4 |
+| `ResolvedCall` | enum | 调用点解析结果：`Recursive`（自递归）/ `UserHelper(UInt16)`（槽号） | — | §8.0、§8.4、§8.5 |
 | `DefiniteAssignment` | class | 明确赋值与空安全数据流（回边不动点） | Ast*、LocalTypes | §7 校验 10、§5 |
 | `Lowerer` | class | AST → 字节码（全部规范降低模式） | BytecodeBuilder、ConstRegistry、NameResolver | §5、§8.5–8.6、§11.9 |
 | `BytecodeBuilder` | class | 单函数发射器（label/fixup、site 记录、自动 CHECK_ERR） | ByteWriter、OpInfo | §7、§5 |
@@ -468,7 +469,7 @@
 |---|---|---|
 | `init(snapshot: PredefinedSnapshot)` | 持注册表快照（快照语义 §8.4） | `SourceCompiler` |
 | `func resolve(name: String, pos: Token): ResolvedCall` | 顺序：`recursive` → 注册表（user helper）→ 未命中 `SourceCompileException(UnregisteredFunction)`；非调用未定义标识符 → `UndefinedIdentifier` | `Lowerer` |
-| `ResolvedCall` = `Recursive \| UserHelper(UInt16)`（参数序 = slot） | 解析结果 | `Lowerer` 发射 `CALL_HELPER`（hid = slot + 0x0100） |
+| `ResolvedCall`（**enum**） | 两个构造器：**`Recursive`**（无载荷——命中 `recursive` 关键字，自递归）与 **`UserHelper(UInt16)`**（参数序 = slot：注册表 user helper 的槽号） | `Lowerer` 按构造器**穷尽分派**：`Recursive` → 顶层 `CALL_FUNC <自身>` / 闭包层 `LOADL 0` + `CALL_CLOSURE`（§8.0、§8.5）；`UserHelper(slot)` → `CALL_HELPER`（hid = slot + 0x0100） |
 
 #### 4.3.4 `DefiniteAssignment`（class）
 
