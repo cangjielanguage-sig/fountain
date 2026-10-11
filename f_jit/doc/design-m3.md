@@ -84,7 +84,7 @@
 | `Lowerer` | **装箱插入点**（类型驱动，全部静态可知） | ① 赋值/初始化 Any 槽；② Any 参数实参；③ Any 返回；④ 容器元素类型为 Any 的写入前（`LIST_APPEND/LIST_SET/LIST_INSERT/MAP_PUT`）——异构容器的实现基础 | m3 §3 |
 | `Lowerer` | **拆箱与问答** | `expr is T` / `expr as T`（T ∈ 可转集，程序 15）：左 15 → H67/H68；左非 15 → 按静态类型关系（上行零操作；不相容 → 编译错误）；`as T` 结果类型 = T（可继续参与 T 的既有运算——「先 as 后算」唯一计算路径）；`as <宿主类>` 携类身份（typecode=14 + aux=typeRef） | m3 §3 |
 | `Lowerer` | **禁止面（编译错误）** | 15 型上的运算/比较/等值/成员访问/调用；二次装箱（`any_box(15,…)` 不可发射）；非可转集目标（含 `as Closure`）；闭包存入集合（含 Any 盒间接路径） | m3 §3/§12-1/§12-3 |
-| `Lowerer` | **JSON 发射** | 非空字面值 → `PUSH_KH`（kind 11 常量）；**JSON 上下文下的空 `{}`/`[]` → H75 `json_new`**（世界内构造，可变、非常量）；`j[i]` → H73 `json_get`；`j[i] = v` → H74 `json_set`（v ∈ 值型 0–3（除 Unit）/String/14/null）；索引类型不符 → 编译错误 | m3 §11 |
+| `Lowerer` | **JSON 发射** | 非空字面值 → `PUSH_KH`（kind 11 常量）；**JSON 上下文下的空 `{}`/`[]` → H75 `json_new`**（世界内构造，可变、非常量）；`j[i]` → H73 `json_get`；`j[i] = v` → H74 `json_set`（v ∈ 值型 0–3（除 Unit）/String/14——**JSON null 由 `JsonNull.instance` 承载**，非语言 null）；索引类型不符 → 编译错误 | m3 §11 |
 | `NameResolver` / 静态检查 | `fountain::f_data.path` 访问 | 经预定义函数通道注册（宿主库提供类型化 getter）；"从 Any 取 JSON 节点"（`as JsonObject`）自 v0.3.12 可用 | m3 §11 |
 
 ---
@@ -107,7 +107,7 @@
 
 | hid | 函数 | 语义 | 失败码 | 锚点 |
 |---|---|---|---|---|
-| H73 | `json_get(h, key, mode: u8) → h15` | 读：结果 = **Any(15) 盒**（对象/数组元素 → 节点盒；标量 → 宿主值盒；JSON null → 空值）；**条件分配型** | 4, 5, 6, 8, 16 | m3 §11 |
+| H73 | `json_get(h, key, mode: u8) → h15` | 读：结果 = **Any(15) 盒**（对象/数组元素 → 节点盒；标量 → 宿主值盒；**JSON null → 节点盒装 `JsonNull.instance`——单例，非语言 null**）；**条件分配型** | 4, 5, 6, 8, 16 | m3 §11 |
 | H74 | `json_set(h, key, typecode: u8, v) → 0` | 写（**变更型**）：对象 upsert（沿 `MAP_PUT`）；数组仅既有下标（越界 → 4，不自动扩展）；**目标 frozen → 20** | 4, 6, 8, 19, 20, 99 | m3 §11 |
 | H75 | `json_new(mode: u8) → h14` | 世界内构造空 JSON 值（`{}`/`[]`，可变、非常量）；**分配型** | 16 | m3 §11 |
 

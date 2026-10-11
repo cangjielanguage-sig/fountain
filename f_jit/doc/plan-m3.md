@@ -80,8 +80,8 @@
 | R4.3 | H68 `any_as` | 命中 → 值型直返（零登记）/句柄型 pin（登记 1 槽）；未命中 → 22（site=调用点）；14 + typeRef 类界核对（**JSON 谱系：`as JsonValue` 命中子类、`as JsonObject` 对数组 → 22**） | 条件分配型 | T38/T61 |
 | R4.4 | H66–H68 描述符 | `typecode/aux` 编码（List aux=元素码；Map aux=(键<<8)\|值码；其余 `0xFFFF`）；以 cell 压栈传递 | 编码 | T39 |
 | R4.5 | 容器转型与 P2 | `as List<Any>`/`as Map<…,Any>`：reified 命中 → 元素/键值校验；退化 → 不校验 + 宿主契约（行为显式）；两态可测 | reified 探测 | T39 |
-| R4.6 | H73 `json_get` | 对象/数组元素 → 节点盒；标量 → 值盒；JSON null → 空值；越界 4/缺键 5；**条件分配型**（hwTop 断言）；frozen 经读传播 | helper 实现 | T61/T41 |
-| R4.7 | H74 `json_set` | 对象 upsert / 数组仅既有下标（越界 4）；值域（值型/String/14/null → JSON 元素）；**frozen → 20**；变更型标记（**登记 §7 校验 11 触发清单** + flags.bit0 + deopt 禁令 + 兜底 99）；不登记槽 | 变更型 helper | T61 |
+| R4.6 | H73 `json_get` | 对象/数组元素 → 节点盒；标量 → 值盒；**JSON null → 节点盒装 `JsonNull.instance`**（**身份断言：与 `JsonNull.instance` 同一对象、非语言 null**）；越界 4/缺键 5；**条件分配型**（hwTop 断言）；frozen 经读传播 | helper 实现 | T61/T41 |
+| R4.7 | H74 `json_set` | 对象 upsert / 数组仅既有下标（越界 4）；值域（值型/String/14 → JSON 元素；**JSON null = 写 `JsonNull.instance`**，无 `null` 关键字）；**frozen → 20**；变更型标记（**登记 §7 校验 11 触发清单** + flags.bit0 + deopt 禁令 + 兜底 99）；不登记槽 | 变更型 helper | T61 |
 | R4.8 | H75 `json_new` | `{}`/`[]` → 新空可变值（登记 1 槽、非常量、非 frozen）；与常量路径对拍 | 分配型 helper | T61 |
 | R4.9 | frozen 传播 | 常量 → 读（H73）→ 子节点盒 frozen；**拆箱（H68）传播**；`(c["a"] as JsonObject)["x"] = 1` → 20；frozen 无逃逸（构造性用例） | 标记传播 | T61 |
 | R4.10 | `SignatureTable` | `plan(sig)` 首次构建/复用；签名键 = 类型码序列（身份无关）；条目数有界；并发首建（锁 + 双检；竞争无害） | 表实现 | T56 |
