@@ -704,16 +704,37 @@
 | `func flushICache()` / `func free()` | 缓存一致性 / `munmap`（T27/T4） | 卸载 |
 | `prop base: Int64` / `prop size: Int64` | 基址/长度 | 镜像烘焙、thunk |
 
-#### 6.3.3 `JitCompiler`（class） / `JitArtifacts`
+#### 6.3.3 `JitCompiler`（class） / `JitArtifacts`（class） / `FnTable`（class） / `ConstMirror`（class）
+
+**`JitCompiler`**（单元编译编排器）：
 
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
-| `init(backend: Backend, diagnostics: DiagnosticsSink)` | 绑定后端 | 桥管线第 3 步 |
-| `func compileUnit(unit: LoadedUnit, handleIds: Array<Int64>): ?JitArtifacts` | 编排：常量镜像 → 两遍布局（aarch64 条件分支 ±1 MB 需跳板） → 降低全函数 → seal；失败 → None（降级） | 桥 |
-| `JitArtifacts.code: CodeBuffer` / `.fnTable: FnTable` / `.mirror: ConstMirror` / `.rawEntry(fnId): Int64` | 执行入口（桥 `rdi/x0 = ctx`） | 三态收尾第 2 步 |
-| `func free()` | 资产释放（最后释放，§8.7） | 卸载 |
-| `FnTable.alloc(n)` / `set(fid, entry)` / `entry(fid): Int64` / `free()` | 入口表维护（`CALL_FUNC`/`CALL_CLOSURE` 间接调用目标） | 模板 B/C |
-| `ConstMirror.build(ids: Array<Int64>): ConstMirror` / `base(): Int64` / `free()` | 常量句柄镜像（`PUSH_KH`） | 单元生命周期（与 JitFunction 同生共死） |
+| `init(backend: Backend, diagnostics: DiagnosticsSink)` | 绑定后端（双后端由 `BackendSelector` 选定，§6.3.4）与诊断 | 桥管线第 3 步 |
+| `func compileUnit(unit: LoadedUnit, handleIds: Array<Int64>): ?JitArtifacts` | 编排：常量镜像 → 两遍布局（aarch64 条件分支 ±1 MB 需跳板） → 降低全函数 → `seal`；失败 → None（**降级解释器，不报错**） | 桥管线第 3 步 |
+
+**`JitArtifacts`**（JIT 产物束；仅 JIT 路径存在——解释器路径不构造本对象）：
+
+| 成员 | 意义 | 调用关系 |
+|---|---|---|
+| `code: CodeBuffer` / `fnTable: FnTable` / `mirror: ConstMirror` | 三件资产：机器码 / 函数入口表 / 常量句柄镜像 | 桥、卸载 |
+| `func rawEntry(fnId: UInt32): Int64` | 执行入口地址（桥按 `rdi/x0 = ctx` 调用；入口 thunk 出自 `Backend.entryThunkFor`） | 三态收尾第 2 步 |
+| `func free()` | **资产释放**（§8.7 收尾顺序的**最末一步**；幂等） | 卸载（§8.7） |
+
+**`FnTable`**（函数入口表：**非 GC 内存**，桥填充；`CALL_FUNC`/`CALL_CLOSURE` 的间接调用目标）：
+
+| 成员 | 意义 | 调用关系 |
+|---|---|---|
+| `alloc(n)` / `set(fid, entry)` / `entry(fid): Int64` / `free()` | 入口表维护（模板 B/C：转移器入表 → 机器码按 fid 间接跳转） | 后端、桥 |
+
+**`ConstMirror`**（常量句柄镜像：连续 8 B 数组，**基址烘焙进机器码**）：
+
+| 成员 | 意义 | 调用关系 |
+|---|---|---|
+| `static func build(ids: Array<Int64>): ConstMirror` | 单元编译期按 `handleIds` 建镜像（`PUSH_KH` 的取数处） | `JitCompiler.compileUnit` |
+| `base(): Int64` / `free()` | 镜像基址（烘焙用） / 释放 | 后端、卸载 |
+
+**归属**：`JitCompiler` = **编排器**（有状态，注入某一后端）；`JitArtifacts` = **产物束**（JIT 路径的可空内部状态——`JitFunction` 持有 `?JitArtifacts`，§7.3.3）；`FnTable` / `ConstMirror` = 产物束内的**两块非 GC 内存资产**（与 `CodeBuffer` 并列）——三者生命周期与 `JitFunction` 同生共死，释放顺序见 §8.7（`code buffer`+`fnTable` 最后释放，可能有活跃调用在执行）。
 
 #### 6.3.4 `BackendSelector`（class）
 
