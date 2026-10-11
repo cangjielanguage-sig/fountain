@@ -411,7 +411,7 @@
 | `Lowerer` | class | internal | AST → 字节码（全部规范降低模式） | BytecodeBuilder、ConstRegistry、NameResolver | §5、§8.5–8.6、§11.9 |
 | `BytecodeBuilder` | class | internal | 单函数发射器（label/fixup、site 记录、自动 CHECK_ERR） | ByteWriter、OpInfo | §7、§5 |
 | `Assembler` | class | internal | 汇编期校验 1–11 + 组装 `.fbc`（目录/类型表/site/name） | BytecodeBuilder、各表、FbcWriter | §7、§11.6–11.7 |
-| `CompileSession` / `FuncBody` | class / struct | internal | 降低会话 / 单函数体（`FuncBody` = code 段片段 + maxStack + flags；**包内流水线传递**） | — | §8.4、§7 |
+| `CompileSession` / `FuncBody` | class / struct | internal | 一次 `compile` 的**单元级累加器**（fnId 分配 + 常量/站点/名字/目录/类型表/函数体）/ 单函数体（code 片段 + maxStack + flags） | — | §4.3.10、§8.4 |
 | `DiagKind` | class（常量命名空间） | internal | 编译期错误分类常量（**词法族 + 解析/名字/校验族**，清单与策略见 §4.3.1/§4.3.9） | — | §8.4、§8.8、§9.16 |
 | `SourceCompiler` | class | **protected** | 管线编排：compile(source) → 单元产物（或抛 SourceCompileException） | Lexer→Parser→…→Assembler | §8、§8.4 |
 | `CompiledSourceUnit` | struct | **protected** | 源编译产物：`.fbc` 字节 + funcCount + entryFn + 单元指纹（源码指纹） | — | §8.4、§8.7 |
@@ -529,6 +529,25 @@
 |---|---|---|---|
 | 字段：`raw: Array<UInt8>`（`.fbc` 字节）/ `funcCount: UInt32` / `entryFn: UInt32` / `fingerprint: UInt64`（源码指纹） | `CompiledSourceUnit`（只读 struct） | 源编译产物（值语义、不可变） | 根包：`FbcReader.load(raw)` 加载校验 + 缓存键（§8.1） |
 | `DiagKind` 常量清单 | `DiagKind`（`static const` 家族） | **词法族**（fail-fast，见 §4.3.1）：`IllegalCharacter / UnterminatedString / BadEscape / BadNumber / UnterminatedRegex / UnterminatedComment / MultilineHeadContent / UnterminatedMultilineString / UnterminatedRawString`；**解析 / 名字 / 校验族**：`UnregisteredFunction / UndefinedIdentifier / BadParameterList / MissingArrow / DuplicateRegistration / NotImpl`；M2/M3 增量追加（如 m3 的 JSON 段错误） | 测试断言（T42/T50）；**词法族逐 kind 一条用例** |
+
+#### 4.3.10 `CompileSession`（class，internal） / `FuncBody`（struct，internal）
+
+`CompileSession` = **一次 `compile` 的单元级累加器**（由 `SourceCompiler.compile` 自建、随调用销毁——因此实例天然无跨调用共享，并发去重交给根包 `CompileCache`，§8.1/§12.6）：
+
+| 成员 | 归属 | 意义 | 消费方 |
+|---|---|---|---|
+| `func newFnId(): UInt32` / `entryFn: UInt32` | `CompileSession` | fnId 分配器：顶层 lambda = `entryFn`，其后是每个嵌套闭包，按需再给 `recursive` 值化适配器（§8.0 单元形态） | `Lowerer` |
+| `consts: ConstRegistry` | 同上 | 常量注册（拼装期）→ 汇编期 `freeze` | `Lowerer` 写、`Assembler` 冻结 |
+| `sites: SiteTable` | 同上 | 站点表（code 偏移 → 源位置） | 前端写；随产物走 |
+| `names: NameTable` | 同上 | 名字表（稀疏，仅源码级命名槽） | 前端写；随产物走 |
+| `dir: FuncDir` | 同上 | 函数目录（`FuncEntry` 逐个加入） | `Assembler` 校验 |
+| `types: ArrayList<LocalTypes>`（按 fnId 序） | 同上 | 每函数的局部类型表 | `Assembler` → 产物 |
+| `bodies: ArrayList<FuncBody>` | 同上 | 待汇编函数体（`BytecodeBuilder.finish()` 逐个产出） | `Assembler.assemble(bodies)` |
+| `source: String`（**规范化后**）/ `fingerprint: UInt64` | 同上 | 源码与源码指纹（产物字段、缓存键） | `CompiledSourceUnit`、根包 `CompileCache` |
+| `opts: CompileOptions` / `diagnostics: DiagnosticsSink` / `registry: PredefinedSnapshot` | 同上 | 由 `SourceCompiler` 注入转交（`NameResolver` 从 `registry` 取快照） | 各阶段 |
+| `code: Array<UInt8>` / `maxStack: Int64` / `flags: UInt16` | `FuncBody` | 单函数的 code 段片段 + 栈上界 + flags（§7 校验 3/9；`flags.bit0` → `FuncEntry.flags` 依据） | `Assembler` |
+
+**归属**：`CompileSession` 是**可变累加器**（class：多阶段共享同一实例、边跑边填）；`FuncBody` 是**只读结果**（struct：`finish()` 产出、`Assembler` 消费；按 fnId 序入列，目录与 code 偏移据此定位）。`types` / `bodies` 与 `dir` 的项数必须一致（汇编期校验的隐含前提）。M2/M3 增量（类注册表快照、Any 相关表）在 `CompileSession` 上追加即可。
 
 ---
 
