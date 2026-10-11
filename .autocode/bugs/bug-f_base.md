@@ -26,7 +26,7 @@
 3. `FT-3`（§2.1）`shutdownCurrentSubThreads`/`current()` 按 `FutureTask<T>` 过滤，异类型子任务被静默跳过（100% 复现）　**✅已修复（2026-10-11，见 §2.1 修复标记；`current()` 那半见 §2.1 补充修复）**
 4. `FT-4`（§2.2）`InheritedTaskLocal` 的写入目标固定为 owner（四个出口，含"owner 已结束时 `set` 后自读 `None`"）—— **已拍板：路线 2（`set`/`remove` 写当前任务）；`getOrSet`/`getOrCompute` 二次决策改为二段检查锁**　**✅已修复（2026-10-11，见 §2.2 修复标记与二次修正）**
 5. `FT-5`（§2.3）父任务先结束后子任务继承不到值（返回 None）——**作者定性为缺陷**，继承改走构造期固定的父链　**✅已修复（2026-10-11，见 §2.3 修复标记）**
-6. `FT-6`（§2.4）性能：构造+get ≈ **10.5×** 裸 `spawn`（修前 13×）、`local.get` ≈ 8× 标准库 `ThreadLocal` —— **已量化（2026-10-11，探针 EXP18）**：可归因项为 `local` 空表构造 3.6~5.2µs、teardown 的 `shutdownCurrentSubThreads` ~3µs、子线程侧记账 3~9.5µs（共享锁争用 ≈ 0），全做完的可省上限 **33µs → 16~23µs（1.5~2×）**；候选 ①（惰性分配）/③（短路 shutdown）/④（读路径缓存）/⑤（压缩记账，建议单独立项）待拍板　**待处理（未实施）**
+6. `FT-6`（§2.4）性能：**全部候选已实施（2026-10-11，⑥+①③④⑤ 四笔提交）** —— 端到端 `FutureTask<Int64>{1}` + `get()` **33.9 ~ 36.2 µs → 21.0 µs**（同批裸 `spawn{1}`+`get()` ~2.9 µs ⇒ 比值 **13× → ~7.2×**）、命中 `InheritedTaskLocal.get()` **700 ~ 870 ns → ~300 ns**；量化数据与逐项标记见 §2.4　**✅已修复**
 7. `FT-L1` ~ `FT-L4`（§3）低危/契约/文档项　**登记**
 
 **修复时间线（2026-10-11，分支 `fix/futuretask`，worktree `.worktrees/futuretask`，基线 `fe8a1886`）**：
@@ -44,8 +44,15 @@
 | `b7226c17` | `fix(f_base): FT-3 遗留收口：current() 类型无关化，异常可捕获` |
 | `a776708d` | `docs(f_base): FT-L1 前半（异常可见性）标记为随 b7226c17 已修` |
 | `e905ca9c` | `fix(f_base): FT-5 继承改走构造期固定的父链，父任务先结束不再切断继承` |
+| `8f7d2ff5` | `docs(f_base): FT-6 分项量化（EXP18：端到端 10.5x、可归因项与可省上限 1.5~2x）` |
+| `d90e338e` | `perf(f_base): FT-6 ⑥+① local 改 Mutex+HashMap 并首次写入才建表（-7.4us/任务，命中读 700->507ns）` |
+| `0287d2b8` | `perf(f_base): FT-6 ③ 叶子任务短路 teardown 清理（hasChildren，-1.6us/任务）` |
+| `118dc494` | `perf(f_base): FT-6 ④ 读路径缓存当前任务并移除 taskMap（-3.1us/任务，读 505->298ns）` |
+| `569aa503` | `perf(f_base): FT-6 ⑤ 压缩登记注销（创建者整体清桶 + 完成态剪枝，-0.9us/任务）` |
 
-**修后总验证（最终代码）**：worktree 内 `cjpm test` = `TOTAL: 26, PASSED: 26, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`；修前基线为 6 条既有用例全绿，本次累计新增 20 条用例）。探针（`.autocode/tmp/ftask_probe`，按 worktree 的 `f_base` 副本构建）：`EXP3`（父任务先结束的继承）由 `done:None` 10/10 变 **`done:Some` 10/10**、`EXP4B diff=true`、`EXP5 50/50`、`EXP9` 仍 `Some(7)`、`EXP10 500/500`、`EXP11` 父任务由 `Some(2)` 变 **`Some(1)`**、`EXP12` 消息由"没有任务"变为**说明泛型实参问题**、`EXP13 a==b 0/500`、`EXP15` 与 `EXP16` 均 100/100 轮整组取消、`EXP17` 由 `None` 变 **`Some(9)`**；`EXP6` 的 FT/spawn 比值为 12.9x / 13.4x（修前区间 12.9x ~ 13.9x）。未修的 `FT-6`（性能机会）与 `FT-L1` 后半、`FT-L2` 见对应条目。
+**修后总验证（FT-1~FT-5 阶段）**：worktree 内 `cjpm test` = `TOTAL: 26, PASSED: 26, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`；修前基线为 6 条既有用例全绿，本次累计新增 20 条用例）。探针（`.autocode/tmp/ftask_probe`，按 worktree 的 `f_base` 副本构建）：`EXP3`（父任务先结束的继承）由 `done:None` 10/10 变 **`done:Some` 10/10**、`EXP4B diff=true`、`EXP5 50/50`、`EXP9` 仍 `Some(7)`、`EXP10 500/500`、`EXP11` 父任务由 `Some(2)` 变 **`Some(1)`**、`EXP12` 消息由"没有任务"变为**说明泛型实参问题**、`EXP13 a==b 0/500`、`EXP15` 与 `EXP16` 均 100/100 轮整组取消、`EXP17` 由 `None` 变 **`Some(9)`**；`EXP6` 的 FT/spawn 比值为 12.9x / 13.4x（修前区间 12.9x ~ 13.9x）。未修的 `FT-6`（性能机会）与 `FT-L1` 后半、`FT-L2` 见对应条目。
+
+**修后总验证（FT-6 阶段，2026-10-11）**：worktree 内 `cjpm test` = `TOTAL: 31, PASSED: 31, SKIPPED: 0, ERROR: 0, FAILED: 0`（`TEST_EXIT=0`；本阶段新增 5 条用例：⑥+① 1 条、③ 1 条、④ 1 条、⑤ 2 条）。探针（EXP18，同进程，按 worktree 的 `f_base` 副本构建）：端到端 `FutureTask<Int64>{1}` + `get()` **33.9 ~ 36.2 µs → 21.0 µs**（同批裸 `spawn{1}` + `get()` ~2.9 µs ⇒ **13× → ~7.2×**）；`currentOrNone()` ~330 → **~88 ns**；命中 `InheritedTaskLocal.get()` 700 ~ 870 → **~300 ns**（对照 `ThreadLocal.get()` 88~100 ns ⇒ 约 3.2×）。行为探针：`EXP3` 10/10 `Some`、`EXP5` 50/50、`EXP9` `Some(7)`、`EXP10` 500/500、`EXP11` 子 `Some(2)`/父 `Some(1)`、`EXP12` 消息不变、`EXP15` 100 轮 4/4、`EXP16` 0/0/0/0/100、`EXP17` `Some(9)`、`EXP19` 0/300 —— 全部保持。剩余未修的只有 `FT-L1` 后半与 `FT-L2`。
 
 ---
 
@@ -272,7 +279,7 @@ while(let Some(f: FutureTask<T>) <- itr.next()){
   - 独立探针复测：`EXP3` 由 `done:None` 10/10 变为 **`done:Some` 10/10**；`EXP9`（父任务存活）仍 `Some(7)`；同批 `EXP10 500/500`、`EXP11` 父任务 `Some(1)`、`EXP17` `Some(9)` 均未变。
 - 注意：`parentTID` 仍保留（`subTasks` 的登记/注销与 `shutdownCurrentSubThreads` 按"创建线程 id"索引，属 FT-2 的机制），只有**读路径**改走父链。
 
-### 2.4 [中｜性能机会] `FT-6` 每任务固定开销 ≈ 10.5 倍裸 `spawn`（修前 13 倍）；`local` 读 ≈ 8 倍标准库　**已量化（2026-10-11，见下），未实施**
+### 2.4 [中｜性能机会] `FT-6` 每任务固定开销 ≈ 7.2 倍裸 `spawn`（修前 13 倍）；`local` 读 ≈ 3.2 倍标准库（修前 8 倍）　**已量化 + 全部候选已实施（2026-10-11，见下）**
 
 **实测**（EXP6，同进程内两轮对照，取第 2 轮为主证据）：
 
@@ -454,6 +461,7 @@ wsl -d Ubuntu-24.04 -e bash -lc "cd /mnt/d/docs/work/cangjie/projects/fountain/.
 | EXP16 | 同上但子任务不提前结束（消除迭代期自摘） | 0/1/2/3/4 = **0/3/8/4/85** |
 | EXP17 | 子任务 `set(9)` 后自读（owner 已结束 vs 存活） | `None` / `Some(9)` |
 | EXP18 | FT-6 分项量化（端到端 / 组件单价 / 任务内读路径） | 见 §2.4 量化表（4 次运行区间） |
+| EXP19 | 对已结束任务 `cancel()` 是否误伤同线程后续任务 | **0 / 300**（未观察到误伤） |
 
 **修后复测（2026-10-11，探针改为复制 worktree 的 f_base 构建）**：
 
