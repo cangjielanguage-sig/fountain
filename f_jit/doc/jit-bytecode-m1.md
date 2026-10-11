@@ -812,6 +812,8 @@ public struct CallContext {
 
 public enum JitMode { Off | Auto | Force }
 
+protected enum Engine { Interp | Jit }   // 实际引擎（模块内可见；§12.1）
+
 public class CompileOptions {
     public var jit: JitMode = JitMode.Auto
     public var cpuFeatures: UInt64 = 0        // M2：显式 ISA 开关
@@ -824,7 +826,7 @@ public struct SourceUnit {
     public let entryFn: UInt32       // §11.6 容器头；函数目录见 §11.7
 }                                 // 分发入口 compile(unit) 的输入（§8 ①b）
 
-public enum JitValue {
+protected enum JitValue {
     | Int(Int64) | Float(Float64) | Handle(Int64) | Unit  // Handle=句柄 ID（已按 §8.1 逃逸，经 HandleTable.get 取回对象）
 }
 ```
@@ -1964,6 +1966,8 @@ let engine = if (opts.jit == JitMode.Off) {
     }
 }
 ```
+
+- `Engine`（`Interp`/`Jit`）与 `JitValue`（桥内结果）为模块内 **`protected`** 类型：选择结果经 `diagnostics` 记录（§8）、模块内测试可断言，**不在用户面 API 暴露**；`JitMode` 保持 `public`（`CompileOptions.jit` 的字段类型）。
 
 ### §12.2 后端抽象与 ABI 映射（两后端必须等价）
 

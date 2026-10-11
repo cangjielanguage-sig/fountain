@@ -116,8 +116,8 @@
 | `CallContext` | struct | 桥侧调用参数（含 strictFp/deadline/literalCopy） | — | §8 |
 | `SourceUnit` | struct | 分发入口输入（`.fbc` 字节 + 入口函数号） | — | §8、§11.6 |
 | `JitMode` | enum | 引擎选择开关 | — | §12.1 |
-| `Engine` | enum | 实际引擎（解释器/JIT） | — | §12.1 |
-| `JitValue` | enum | 桥内部执行结果（invoke 路径） | — | §8 |
+| `Engine` | enum（protected） | 实际引擎（解释器/JIT） | — | §12.1 |
+| `JitValue` | enum（protected） | 桥内部执行结果（invoke 路径） | — | §8 |
 | `JitContext`（类型契约） | 见 runtime | ctx 的规范布局以常量/访问器暴露 | — | §1 |
 | `DiagnosticsSink` | interface | 降级/告警接收器 | DiagnosticLevel | §8.4、§12.1 |
 | `DiagnosticLevel` | enum | 诊断级别 | — | §12.1（规格从略处细化） |
@@ -179,7 +179,7 @@
 | `let raw: Array<UInt8>` | 已加载 `.fbc` 容器字节（v0.18.25 起四段：code/const/site/name；§8.2 注释里的「三段」为旧版遗留，以 §11.6 为准） |
 | `let entryFn: UInt32` | 期望入口函数 id（须与容器头 `entryFn` 一致，否则加载期拒绝） |
 
-#### 2.3.6 `JitMode`（enum） / `Engine`（enum） / `JitValue`（enum）
+#### 2.3.6 `JitMode`（enum） / `Engine`（enum，protected） / `JitValue`（enum，protected）
 
 三者合并成节：都是**纯值枚举**（无方法、无模块内依赖，随 base 包被三个引擎共享），且串成同一条链路——**用户意图（`JitMode`）→ 实际事实（`Engine`）→ 桥内执行结果（`JitValue`）**；这是 I7（三引擎语义一致）在类型层的落点。
 
@@ -200,7 +200,7 @@
 - **与 `JitMode` 的分离是刻意的**：`Force` 成功时二者同为 JIT；失败时 `Engine = Interp` 而用户传入的 `JitMode` 不被改写——「配置」与「事实」是两条信息，缺后者就无法断言降级是否真的发生。
 - **产出者**：`BackendSelector.select(mode, diag): (Engine, ?Backend)`（§6.3.4），由桥管线第 3 步调用（§8.1）。
 - **消费者**：`diagnostics` 记录（§2.3.7）、测试断言（T7/T9）、`JitFunction` 内部状态（§7.3.3）。
-- 公开性：规格未列出，为可测性设为 `public`（**D6**）。
+- 可见性：**`protected`**（模块内共享，不对用户开放；选择结果经 diagnostics 记录、模块内测试（`src/test/...`）可直接断言——**D6 结案**，见 §8.7）。
 
 **`JitValue`（桥内执行结果）**
 
@@ -208,7 +208,7 @@
 - **构造器 ↔ cell 载荷一一对应**（§3.2）：`Int` = i64 直值、`Float` = f64 位型、`Handle` = 句柄 ID（**已按 §8.1 逃逸**，宿主经 `HandleTable.get(id)` 取回对象）、`Unit` = 无返回值（同样是 errCode = 0）。
 - **选 enum 而非 `Any`**：① 与 cell 1:1、零装箱——该入口定位是热路径/批量调用；② **显式区分值型与句柄型**，因为两者回收规则不同：`call<T>` 路径解包后**自动回收**窗口逃逸槽，而 `invoke` 路径的 `Handle` **只能显式 `release`**（§8.1 规则 6②③：ID 是可复制的普通整数、无引用计数回调、GC 不通知桥、`JitValue` 为值类型；错误 16 亦不做批量清理，否则会作废宿主仍在使用的 ID）。
 - **分派提醒**：`Handle` 与 `Int` 的载荷同型（Int64）——**按构造器标签分派，不得按载荷类型判断**。
-- 可见性：规格列为 `public`，但唯一消费者 `invoke/tryInvoke` 为 private——保持 public（预留 invoke 路径）或降为 protected（最小暴露），**D3 待裁定**。
+- 可见性：**`protected`**（唯一消费者 `invoke`/`tryInvoke` 为 private，无用户面路径；规格 §8 行 827 的 `public` 已同步为 `protected`——**D3 结案**，见 §8.7）。
 
 #### 2.3.7 `DiagnosticsSink`（interface） / `DiagnosticLevel`（enum）
 
@@ -721,7 +721,7 @@
 
 | 再导出 | 内容 |
 |---|---|
-| `public import fountain::f_jit.base.*` | JitException、SourceCompileException、SourcePos、CallContext、SourceUnit、JitMode、Engine、JitValue、LocalType、TypeToken、ErrCode、DiagnosticsSink、DiagnosticLevel、Version |
+| `public import fountain::f_jit.base.*` | JitException、SourceCompileException、SourcePos、CallContext、SourceUnit、JitMode、LocalType、TypeToken、ErrCode、DiagnosticsSink、DiagnosticLevel、Version（`Engine`/`JitValue` 为 `protected`，不随再导出对外可见） |
 | `public import fountain::f_jit.bytecode.*` | OPCODE_TABLE/OpInfo/CAT_*、FuncDir/FuncEntry/LocalTypes、ConstRegistry/ConstKind/ConstPayload、SiteTable/NameTable、FbcReader/FbcWriter/FbcHeader/LoadedUnit |
 | `public import fountain::f_jit.runtime.*`（仅用户面） | HandleTable、（@C helper 符号不导出到用户面） |
 | 自定义声明 | Compiler、CompileOptions、PredefinedFunction、JitFunction |
@@ -793,6 +793,7 @@ Ready --CAS--> Unloading（拒绝新调用；活跃调用照常完成）--active
 | `JitContext/HandleTable/IterTable/DbgDump/HelperId` | runtime | 根包（+backend 仅经 artifact ABI） |
 | `CompileSession/CompiledSourceUnit/FuncBody` | compiler | 根包 |
 | `JitArtifacts/FnTable/ConstMirror/CodeBuffer` | backend | 根包 |
+| `Engine`（引擎选择结果）/`JitValue`（桥内执行结果） | base | backend、根包 |
 
 ---
 
@@ -817,8 +818,8 @@ Ready --CAS--> Unloading（拒绝新调用；活跃调用照常完成）--active
 |---|---|---|
 | D1 | `DiagnosticsSink` 细化 | 规格「接口从略」；本文细化为 `diag(level, message)`（含 Info/Warn/Error）——如需极简可退化为 `diag(String)` |
 | D2 | `JitContext` 公开粒度 | ctx 布局是内部契约；`JitContext` 建议 `protected`（用户不见），仅测试与桥使用 |
-| D3 | `JitValue` 可见性 | 规格列为 public；但唯一消费者 `invoke/tryInvoke` 为 private——建议随 §8 保持 public（便于未来开放 invoke 路径），或按最小暴露降为 protected；**待用户裁定** |
+| D3 | `JitValue` 可见性（已结案） | 2026-10-11 裁定：**`protected`**——唯一消费者 `invoke`/`tryInvoke` 为 private，无用户面路径；规格 §8 行 827 已同步 `protected`，§8.7 清单同步 |
 | D4 | `CompileCache` 的进程级宿主 | 规格为「进程级编译缓存」；设计放根包（static 单例），卸载与去重协议同一处维护 |
 | D5 | 指纹算法 | 源码指纹/字节码指纹算法与常量 `constFingerprint`（FNV-1a）分开：前者用于去重键，规格未固化算法——建议 FNV-1a 同款，实施时裁定 |
-| D6 | `Engine` 公开性 | 规格未列；为测试/诊断需要（T7/T9 断言）设为 public |
+| D6 | `Engine` 公开性（已结案） | 2026-10-11 裁定：**`protected`**（原「为测试/诊断设为 public」作废）——诊断与测试均在本模块内（`src/test/...`，protected 可见）；规格 §8 支撑类型已补 `protected enum Engine`，§8.7 清单同步 |
 | D7 | **异常基类（已结案）**：规格 §8 原声明 `<: Exception`（行 792/1075），2026-10-11 裁定统一改用仓库基类 `fountain::f_base.BaseException`——**规格已同步落笔**（`<: BaseException` + 支撑类型段说明），设计与计划同步 | 无需再裁定；`base` 包外部依赖补 f_base；`fountain::f_exception` 对该基类有 `public import` 再导出，两种 import 路径等价 |
