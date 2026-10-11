@@ -10,7 +10,7 @@
 > 见 SKILL.md 工作流 B / C）。
 
 fboot 先执行 `cjpm init --workspace`，再对生成的 cjpm.toml 做四次替换并追加 `[profile.build]` 与 `[target]`。
-等价产物形态（`${FVersion}` 是 fboot 自身携带的版本号，如 `1.3.14`）：
+等价产物形态（`${FVersion}` 是 fboot 自身携带的版本号，如 `1.3.15`）：
 
 ```toml
 [package]
@@ -21,8 +21,8 @@ fboot 先执行 `cjpm init --workspace`，再对生成的 cjpm.toml 做四次替
   ...
 
 [dependencies]
-  "fountain::f_base" = "1.3.14"
-  "fountain::f_version" = "1.3.14"
+  "fountain::f_base" = "1.3.15"
+  "fountain::f_version" = "1.3.15"
 
 [workspace]
   version = "1.0.0"
@@ -85,7 +85,7 @@ fdemo 则统一用 `fountain::` 前缀（模块目录 `user` 里是 `fountain::u
 ```toml
 [dependencies]
   # 1) 中心仓版本依赖（默认选择）
-  "fountain::f_mvc" = "1.3.14"
+  "fountain::f_mvc" = "1.3.15"
   # 2) 本地路径依赖（fountain 源码在本地、或模块未发布时）
   "fountain::f_mvc" = {path = "../fountain/f_mvc"}
   # 3) git 依赖（引用仓库）
