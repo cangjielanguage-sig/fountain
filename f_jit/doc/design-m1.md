@@ -148,7 +148,7 @@
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
 | `init(kind: String, position: Int64, line: Int64, column: Int64, lineText: String, hint: String)` | 编译期失败统一抛出类型（组装后的文本经 `super(message)` 转发） | 前端/汇编各检查点抛 |
-| `let kind: String` | 错误分类（`DiagKind` 常量，**清单见 §4.3.8**：词法族 `IllegalCharacter`/`UnterminatedString`/`BadEscape`/`BadNumber`/`UnterminatedRegex`/`UnterminatedComment`/`MultilineHeadContent`/`UnterminatedMultilineString`/`UnterminatedRawString` + 解析/名字/校验族 `UnregisteredFunction`/`UndefinedIdentifier`/`BadParameterList`/`MissingArrow`/`DuplicateRegistration`/`NotImpl`） | 测试断言 kind；消息含名字/位置/已注册清单（§8.4 需求 4） |
+| `let kind: String` | 错误分类（`DiagKind` 常量，**清单见 §4.3.9**：词法族 `IllegalCharacter`/`UnterminatedString`/`BadEscape`/`BadNumber`/`UnterminatedRegex`/`UnterminatedComment`/`MultilineHeadContent`/`UnterminatedMultilineString`/`UnterminatedRawString` + 解析/名字/校验族 `UnregisteredFunction`/`UndefinedIdentifier`/`BadParameterList`/`MissingArrow`/`DuplicateRegistration`/`NotImpl`） | 测试断言 kind；消息含名字/位置/已注册清单（§8.4 需求 4） |
 | `let position: Int64` | 源码字节位置 | 定位 |
 | `let line: Int64` / `let column: Int64` | 行/列（1 起，列按 Unicode 码点） | 报告 |
 | `let lineText: String` | 错误所在源码行原文（不含换行） | 「错误信息包含源码行文本」的兑现 |
@@ -412,7 +412,7 @@
 | `BytecodeBuilder` | class | internal | 单函数发射器（label/fixup、site 记录、自动 CHECK_ERR） | ByteWriter、OpInfo | §7、§5 |
 | `Assembler` | class | internal | 汇编期校验 1–11 + 组装 `.fbc`（目录/类型表/site/name） | BytecodeBuilder、各表、FbcWriter | §7、§11.6–11.7 |
 | `CompileSession` / `FuncBody` | class / struct | internal | 降低会话 / 单函数体（`FuncBody` = code 段片段 + maxStack + flags；**包内流水线传递**） | — | §8.4、§7 |
-| `DiagKind` | class（常量） | internal | 编译期错误分类常量（**词法族 + 解析/名字/校验族**，清单与策略见 §4.3.1/§4.3.8） | — | §8.4、§8.8、§9.16 |
+| `DiagKind` | class（常量命名空间） | internal | 编译期错误分类常量（**词法族 + 解析/名字/校验族**，清单与策略见 §4.3.1/§4.3.9） | — | §8.4、§8.8、§9.16 |
 | `SourceCompiler` | class | **protected** | 管线编排：compile(source) → 单元产物（或抛 SourceCompileException） | Lexer→Parser→…→Assembler | §8、§8.4 |
 | `CompiledSourceUnit` | struct | **protected** | 源编译产物：`.fbc` 字节 + funcCount + entryFn + 单元指纹（源码指纹） | — | §8.4、§8.7 |
 
@@ -513,14 +513,22 @@
 | `func assemble(bodies: Array<FuncBody>): Array<UInt8>` | 拼接 code 段（目录 + 各函数体）、定长偏移、产出 `.fbc`（FbcWriter） | `SourceCompiler` → 根包管线 |
 | 校验职责（§7 校验 1–11，逐条） | ① 每条 `CALL_HELPER` 后有可达 CHECK_ERR（除 `_NC`）；② 0xA9–AA 与 0xC0–FF 发射即 `ERR_NOT_IMPL`；③ 每个 sink 前 rsp 回帧基线（栈平衡）；④ `PUSH_KH` idx < 常量表长度且已 freeze；⑤ `LOADL/STOREL i < nLocals`；⑥ 有 `LOOP_BACK` 的函数不得跨回边优化掉错误检查；⑦ `CALL_FUNC fid` 在目录内且 argc == nargs（`closure_new` fnId 同规则）；⑧ M2 专属指令（CALL_HOST/HW_OPEN/HW_CLOSE）M1 一律 `ERR_NOT_IMPL`；⑨ 每函数带类型表（长度= nLocals、值合法；前端保证槽类型一致）；⑩ 明确赋值与空安全（数据流）；⑪ 变更型函数的 deopt 源禁令（H43–H48/user helper/CALL_CLOSURE → 禁 `DEC_TO_I64 mode=1` 与 `TO_I64` deopt 模式） | 违规 → `SourceCompileException`（kind=NotImpl 等） |
 
-#### 4.3.8 `SourceCompiler`（class）
+#### 4.3.8 `SourceCompiler`（class，protected）
 
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
-| `init(opts: CompileOptions, registry: PredefinedSnapshot, diagnostics: DiagnosticsSink)` | 会话绑定（配置 + 注册表快照） | 根包 `Compiler.compile(source)` |
-| `func compile(source: String): CompiledSourceUnit` | 全管线：lex→parse→resolve→DA→lower→assemble→（build FbcWriter 字节） | 根包管线第 1 步 |
-| `CompiledSourceUnit`（产物） | `.fbc 字节 + funcCount + entryFn + 单元指纹（源码指纹）` | 加载校验与缓存键 |
-| `DiagKind` 常量清单 | **词法族**（fail-fast，见 §4.3.1）：`IllegalCharacter / UnterminatedString / BadEscape / BadNumber / UnterminatedRegex / UnterminatedComment / MultilineHeadContent / UnterminatedMultilineString / UnterminatedRawString`；**解析 / 名字 / 校验族**：`UnregisteredFunction / UndefinedIdentifier / BadParameterList / MissingArrow / DuplicateRegistration / NotImpl`；M2/M3 增量追加（如 m3 的 JSON 段错误） | 测试断言（T42/T50）；**词法族逐 kind 一条用例** |
+| `init(opts: CompileOptions, registry: PredefinedSnapshot, diagnostics: DiagnosticsSink)` | 依赖注入（配置 + 注册表快照 + 诊断） | 根包 `Compiler.compile(source)` |
+| `func compile(source: String): CompiledSourceUnit` | 全管线：lex → parse → resolve → DA → lower → assemble →（FbcWriter 字节） | 根包管线第 1 步 |
+| 内部状态（设计） | 只需构造注入的三项；**每次 `compile` 自建 `CompileSession`**（词法/语法/降低的中间态都在会话里）——实例本身无跨调用可变状态 | 并发去重由根包 `CompileCache` 承担（§8.1、§12.6） |
+
+**归属**：`SourceCompiler` 的成员就是**一个构造 + 一个方法**（状态仅注入三项）；下面 §4.3.9 的 `CompiledSourceUnit`（它返回的**产物类型**）与 `DiagKind`（包内**常量命名空间**）**不是**它的成员。
+
+#### 4.3.9 `CompiledSourceUnit`（struct，protected） / `DiagKind`（class，常量命名空间，internal）
+
+| 成员 | 归属 | 意义 | 调用关系 |
+|---|---|---|---|
+| 字段：`raw: Array<UInt8>`（`.fbc` 字节）/ `funcCount: UInt32` / `entryFn: UInt32` / `fingerprint: UInt64`（源码指纹） | `CompiledSourceUnit`（只读 struct） | 源编译产物（值语义、不可变） | 根包：`FbcReader.load(raw)` 加载校验 + 缓存键（§8.1） |
+| `DiagKind` 常量清单 | `DiagKind`（`static const` 家族） | **词法族**（fail-fast，见 §4.3.1）：`IllegalCharacter / UnterminatedString / BadEscape / BadNumber / UnterminatedRegex / UnterminatedComment / MultilineHeadContent / UnterminatedMultilineString / UnterminatedRawString`；**解析 / 名字 / 校验族**：`UnregisteredFunction / UndefinedIdentifier / BadParameterList / MissingArrow / DuplicateRegistration / NotImpl`；M2/M3 增量追加（如 m3 的 JSON 段错误） | 测试断言（T42/T50）；**词法族逐 kind 一条用例** |
 
 ---
 
