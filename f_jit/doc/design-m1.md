@@ -226,7 +226,13 @@
 
 1. **不承担错误通道**：`diag` 只收降级/告警；编译/调用失败一律异常（与 §4.3.1「编译期错误只有一个出口」一致）。
 2. **不承诺串行化**：`diag` 可能在并发 `compile` 的不同线程上被调用；**线程安全由实现方（仓颉侧）负责**——本模块不加锁、不排队。
-3. **异常只向上传播**：sink 抛出的异常须是 `fountain::f_base.BaseException` 的子类，**不被吞**；若此时已有在途异常（错误路径 / 编译失败），新异常须 `addSuppressed(原异常)`，以免遮盖原异常（`JitException` / `SourceCompileException` 同规则）。
+3. **sink 异常由引擎吞掉、挂 Suppressed（2026-10-11 裁定，D1）**：引擎在 `diag` 调用处 `catch (e: Exception)` 吞掉 sink 抛出的异常，**绝不因诊断失败改变可观察语义**：
+   - **有在途异常**（错误路径 / 编译失败）：把 sink 异常挂到**在途异常**上（`在途.addSuppressed(sinkEx)`）——在途的那个才是要传播的，与本节「新异常不得遮盖原异常」同一目标（谁传播、谁被挂）；
+   - **无在途异常**（降级通知等正常路径）：**仅吞掉**，不抛出、不降级失败（T7「`Force` 在非 Linux 上不报错」据此成立）；
+   - **`Error`（灾难性，如 OOM/栈溢出）不捕、不吞**；
+   - **不重入 diag**：sink 自身的失败不得再触发诊断（避免递归）。
+
+   sink 抛出的异常**建议**为 `fountain::f_base.BaseException` 的子类（便于宿主统一 `catch` 与 `addSuppressed` 记录），但**类型不是引擎正确性的前提**（引擎按 `Exception` 兜捕）。
 
 `message` 是**自由文本、不冻结**（改文案不算破坏兼容）；供断言/匹配的是 **`level` + `code`**（T7 断言 = 存在 `(Warn, JitFallback)`，**不匹配 message 文本**）。
 
@@ -902,7 +908,7 @@
 
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
-| `CompileCache.lookupOrClaim(sourceCode: String): CacheEntry` / `awaitReady(entry)` / `finish(entry, ok: ?JitFunction)` / `remove(fingerprint)` | **进程级**缓存（根包 static；**D4 结案**）：**内部以 `FNV-1a-128(规范化源码)` 为键**；占位后在 **claim 内**先编译为字节码、Linux + x86_64/aarch64 再 JIT；状态机 Idle→Compiling→Ready/Failed；命中 Ready 复用（**一份源码只出一份字节码与 JIT 产物**）、Compiling 阻塞等待、失败共享异常；分发入口以**字节码指纹**（`FNV-1a-128(整份 raw)`）走同一状态机；命中后**二次校验原字节** | `Compiler.compile`；T16 |
+| `CompileCache.lookupOrClaim(sourceCode: String): CacheEntry` / `awaitReady(entry)` / `finish(entry, ok: ?JitFunction)` / `remove(fingerprint)` | **进程级**缓存（根包 static；**D4 结案**）：**内部以 `FNV-1a-128(规范化源码)` 为键**；占位后在 **claim 内**先编译为字节码、Linux + x86_64/aarch64 再 JIT；状态机 Idle→Compiling→Ready/Failed；命中 Ready 复用（**一份源码只出一份字节码与 JIT 产物**）、Compiling 阻塞等待、失败共享异常；分发入口以**字节码指纹**（`FNV-1a-128(整份 raw)`）走同一状态机；命中后**二次校验原字节**；**键不含注册表快照**（推论见 §9：未注册实例命中缓存即成功，属预期语义） | `Compiler.compile`；T16 |
 | `AdapterRegistry.register(key, adapters)` / `lookup(key): ?Adapters` / `removeUnit(fingerprint)` | 单态化适配器注册表（宿主侧锁保护） | call 第 5 步；卸载 |
 | `CompilePipeline.runSource(source): JitFunction` / `runUnit(unit): JitFunction` | 四步管线编排（编译/装载 → 去重 → 引擎选择 → 产物） | `Compiler.compile` |
 | `Report.throwJit(code, site, fnId, dump, tables)` | 组装并经内部统一抛出 JitException（19 的桥层契约错误 site=-1 走此路） | 三态收尾第 3 步 |
@@ -1002,9 +1008,9 @@ Ready --CAS--> Unloading（拒绝新调用；活跃调用照常完成）--active
 | 异常基类用 `fountain::f_base.BaseException` | 直承 `std.core.Exception` | 仓库统一基类——宿主可跨模块统一 `catch (e: BaseException)`，并复用 f_base 的 `printStackTrace`/抑制异常等能力；报告文本经 `super(message)` 转发，本类自有字段（`code/site/fnId/sourcePos`、`kind/position/…`）不变 |
 | `JitFunction` 不拆「Interp 版 / JIT 版」子类 | 两个子类 | 引擎是运行时状态（卸载/诊断/测试都按同一句柄）；单类 + 可选 artifacts 最简 |
 | 编译缓存/适配器注册表放根包 | 放 runtime | 它们是「桥的进程级资产」（宿主侧锁、与卸载/缓存语义耦合），非执行期机制 |
-| 编译缓存 = **进程级**、键 = 源码指纹（**FNV-1a-128**）；**每次编译新建 `Compiler` 实例**（D4 结案） | ① 缓存按实例隔离（「视图」读法）；② 键附加注册表快照身份 | 用户裁定：**一份源码只出一份字节码与 JIT 产物**（跨实例复用是目标）；`Compiler` 实例只作「一次编译的配置载体」；`compile(unit)` 无注册表 ⇒ 键天然进程级共享 |
+| 编译缓存 = **进程级**、键 = 源码指纹（**FNV-1a-128**）；**每次编译新建 `Compiler` 实例**（D4 结案） | ① 缓存按实例隔离（「视图」读法）；② 键附加注册表快照身份 | 用户裁定：**一份源码只出一份字节码与 JIT 产物**（跨实例复用是目标）；`Compiler` 实例只作「一次编译的配置载体」；`compile(unit)` 无注册表 ⇒ 键天然进程级共享。**推论（已确认，是预期语义不是缺陷）**：A 实例编译过源码 S 后，**未注册 S 中所用函数**的 B 实例再 `compile(S)` 会**命中缓存并成功**（不再报 `UnregisteredFunction`）——「一份源码只出一份产物」优先于「未注册即报错」 |
 | 两形态产物**同一接口**（`JitFunction.call<T>(args: Array<Any>): T`，D4/D5 结案） | 拆「JIT 版 / 字节码版」两个子类或第二用户面类型 | 调用方无需感知引擎（§0「单类 + 可选 artifacts」的强化）；差异只在内部 `?JitArtifacts`，行为逐位一致 |
-| 诊断接口 = `(level, code, message)` + 便捷 `(level, message)`；等级仅 `Info\|Warn`；提供 `DummyDiagnosticsSink`（D1 结案） | ① 极简 `diag(String)`；② 保留 `Error` 档 | 结构化 `code` 可断言（T7 不依赖文案）；`Error` 情形一律异常、走不到 diag；空实现免去用户样板 |
+| 诊断接口 = `(level, code, message)` + 便捷 `(level, message)`；等级仅 `Info\|Warn`；提供 `DummyDiagnosticsSink`（D1 结案） | ① 极简 `diag(String)`；② 保留 `Error` 档；③ sink 异常向上传播 | 结构化 `code` 可断言（T7 不依赖文案）；`Error` 情形一律异常、走不到 diag；空实现免去用户样板；**sink 异常由引擎吞掉并挂 Suppressed**——降级路径**绝不因诊断失败而报错**（`Error` 不捕、不重入 diag） |
 | `JitContext` 为 `protected`（D2 结案） | `public` | ctx 是机器码 ABI 契约（用户写坏即破坏不变量）；用户面无消费路径（`impl` 收已解包值、helper 只见裸指针）；与 `Engine`/`JitValue` 先例一致 |
 
 ---
@@ -1013,7 +1019,7 @@ Ready --CAS--> Unloading（拒绝新调用；活跃调用照常完成）--active
 
 | # | 项 | 说明 |
 |---|---|---|
-| D1 | `DiagnosticsSink` 细化（**已结案**） | 2026-10-11 裁定：**结构化 + 便捷双入口**——主签名 `diag(level, code, message)` + 便捷重载 `diag(level, message)`（默认实现转发，`code = Unspecified`）；等级**仅 `Info\|Warn`**（错误直接抛异常，走不到 diag）；事件码 `DiagCode`；空实现 **`DummyDiagnosticsSink`**；三条契约：不承担错误通道 / 不承诺串行化（线程安全由仓颉侧负责）/ sink 异常 = `BaseException` 子类且向上传播、遮盖时用 `addSuppressed(原异常)`。落点：§2.3.7、§9 |
+| D1 | `DiagnosticsSink` 细化（**已结案**） | 2026-10-11 裁定：**结构化 + 便捷双入口**——主签名 `diag(level, code, message)` + 便捷重载 `diag(level, message)`（默认实现转发，`code = Unspecified`）；等级**仅 `Info\|Warn`**（错误直接抛异常，走不到 diag）；事件码 `DiagCode`；空实现 **`DummyDiagnosticsSink`**；三条契约：不承担错误通道 / 不承诺串行化（线程安全由仓颉侧负责）/ **sink 异常由引擎吞掉并挂 Suppressed**（有在途异常 → `在途.addSuppressed(sinkEx)`；无在途 → 仅吞掉、不改语义；`Error` 不捕；不重入 diag；类型建议 `BaseException` 子类但非前提）。落点：§2.3.7、§9 |
 | D2 | `JitContext` 公开粒度（**已结案**） | 2026-10-11 裁定：**`protected`**——ctx 布局是机器码 ABI 契约、用户面无消费路径（详见 §5.3.1 可见性段）；`cp()` 仅经 artifact ABI；不随 §7.6 再导出 |
 | D3 | `JitValue` 可见性（已结案） | 2026-10-11 裁定：**`protected`**——唯一消费者 `invoke`/`tryInvoke` 为 private，无用户面路径；规格 §8 行 827 已同步 `protected`，§8.7 清单同步 |
 | D4 | `CompileCache` 的进程级宿主（**已结案**） | 2026-10-11 裁定：**根包 static 单例（进程级，§9 既有决策）**；`lookupOrClaim(sourceCode)` **内部以源码指纹作键**；状态机 Idle→Compiling→Ready/Failed 不变；**claim 内先编译为字节码、Linux + x86_64/aarch64 再 JIT**；**每次编译新建 `Compiler` 实例**，但**一份源码只出一份字节码与 JIT 产物**（跨实例复用）；**字节码产物与 JIT 产物实现同一接口、对外开放同一 `call<T>(args: Array<Any>): T`**；分发入口键 = 字节码指纹。落点：§0、§7.3.3、§7.3.5、§8.1、§8.2、§9；规格 §8.4/§12.6 同步 |
