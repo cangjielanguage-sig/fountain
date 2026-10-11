@@ -102,7 +102,7 @@
 | Q5.8 | `CallMarshal` 参数 Marshal + 行 | 源入口实参：`is C`（含**子类**实例）→ pin（tag=11）；null → 19；多参混排（值型/句柄型/14）；同一对象身份（实参 ≡ 闭包内引用 ≡ 返回值带回） | Marshal 扩展 | T57 |
 | Q5.9 | `CallMarshal` 解包表 + 行 | `retType=12→JitClosureId`（提升组已登记）；`retType=13→原样带回宿主闭包引用`；`retType=14→get 实例引用`；T 校验 | 解包扩展 | T49/T57 |
 | Q5.10 | `CallMarshal` 验签 + HostClosure 参数行 | 声明 HostClosure 参数 → 验签 → pin(tag=10)；失败 → 19（site=-1）；⑤ 禁高阶复检 | 参数行 | T30 |
-| Q5.11 | `JitFunction` 状态扩展 + `callWith<Fn>` | 单元持有 ClassRegistry 快照/提升组表；`callWith<Fn>(args): JitFunction`（**返回闭包入口**：`Fn` = 返回闭包的函数类型，宿主所得为可继续调用的 `JitFunction`，桥内零运行期判定） | 状态 + API | T30（并入验签组；形态受 M2-8 约束） |
+| Q5.11 | `JitFunction` 状态扩展 + `callWith<Fn>` | 单元持有 ClassRegistry 快照/提升组表；`callWith<Fn>(args): JitFunction`（**返回闭包入口**：`Fn` = 返回闭包的函数类型，宿主所得为可继续调用的 `JitFunction`，桥内零运行期判定；**实参面与 `call<T>` 一致——允许宿主闭包做实参**，走 §4 验签） | 状态 + API | T30（并入验签组；形态受 M2-8 约束） |
 | Q5.12 | 槽 14 链内传参与 HostClosure 签名含 14 | 14 形参/局部/返回声明；跨 CALL_FUNC 传递 × 深度 ≥3；链内返回；嵌套闭包捕获 14（快照 = ID 拷贝）；HostClosure 签名含 14 的验签/执行（R=14 → 登记 1 槽） | 前端 + H63 扩展 | T58/T59 |
 
 ### Q6 验收（T 系列）
