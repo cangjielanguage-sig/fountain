@@ -229,7 +229,7 @@
 
 | 成员 | 意义 | 锚点 |
 |---|---|---|
-| `func registerType<T>(into: ClassRegistry, diag: DiagnosticsSink): Unit where T <: Object` | 经 `std.reflect` 枚举 public 成员（`let/var`、`prop/mut prop`、`func`、`static let/prop/func`、**constructors**）批量生成 `ClassDescriptor`；逐成员尽力注册（`static var`/`static mut prop` 跳过（附 B）、支撑面外类型跳过、命名冲突跳过），跳过项记 diagnostics；**反射仅在注册期——字节码/JIT 路径零反射**；关闭反射的构建 → 明确报错 | m2 §12.5 |
+| `func registerType<T>(into: ClassRegistry, diag: DiagnosticsSink): Unit where T <: Object` | 经 `std.reflect` 枚举 public 成员（`let/var`、`prop/mut prop`、`func`、`static let/prop/func`、**constructors**）批量生成 `ClassDescriptor`；逐成员尽力注册（`static var`/`static mut prop` 跳过（附 B）、支撑面外类型跳过、命名冲突跳过），跳过项记 diagnostics；**反射仅在注册期——字节码/JIT 路径零反射**；关闭反射的构建 → 明确报错；**JSON 谱系类（`JsonValue`/`JsonObject`/`JsonArray`/`JsonNull`）拒绝注册** → **明确报错**（v0.8.29；成员面经 m3 §11 预定义函数通道，避免「成员 vs 键」二义） | m2 §12.5 |
 | `func mapType(info: TypeInfo): ?UInt16` | 反射类型 → LocalType（值型 0–3 直映；std 句柄类型按 §3.2 名映射 4–11；其余类 → 14 + typeRef；不可映射 → 跳过） | m2 §12.5 |
 | `func buildCtor(info: ConstructorInfo): ?PublicCtor` | 构造器自动适配器（`ConstructorInfo.apply` 为后盾；参数不可映射 → 跳过 + 诊断；泛型类按具体实例化） | m2 §12.5/§15 |
 | （生成物命名约定） | 实例 prop getter 名 = 成员名；`mut prop` setter 名 = `set` + 首字母大写；静态包装名 = 成员名；方法 bind 内部名含 `.`（源不可直呼）；命名冲突 → 跳过 + 诊断 | m2 §12.5 |
@@ -308,7 +308,7 @@ u.f = v    → set_field(u, idx, v)     [H65；变更型 → flags.bit0 + deopt 
 u.m(a…)    → 预定义调用 m(u, a…)       [方法表 bind；与手写包装路径逐位一致]
 ```
 
-**边界（2026-10-12）**：接收者静态类型为 **JSON 谱系**（`JsonObject`）时，点号**不走本表**——由 m3 §11 接管为 **JSON 键访问**（`o.k` ≡ `o['k']`）；`JsonArray`/`JsonValue`/`JsonNull`/`Any`(15)/标量上点号 → **编译错误**。同一 `MemberAccess` 节点、**按静态类型分派**，互不重叠。**待确认**：`registerType<T>()` 对 JSON 谱系类拒绝 + 诊断（避免 `o.size` 的"键 vs 成员"二义）。
+**边界（2026-10-12；v0.3.18 裁定）**：接收者静态类型为 **JSON 谱系**时，点号**不查本表**——由 m3 §11 接管，**成员优先 → 键兜底**（成员表 = 宿主库**预定义函数通道**〔首参 = 接收类〕，**非**本注册表）：命中成员 ⇒ M2 §12.4 糖；未命中 ⇒ JSON 键访问（`o.k` ≡ `o['k']`）。**`Any`(15) 盒**上点号 = 成员命中（按成员所属类插 `as`）否则键访问（自动 `as JsonObject`，失败 **22**）；`JsonValue`/`JsonArray`/`JsonNull`/标量上取键 → **编译错误**。**已裁定**：`registerType<T>()` 对 JSON 谱系类 **明确报错**（m2 §12.5 v0.8.29）——`o.size` 无二义（点号取成员、`o['size']` 取键）。同一 `MemberAccess` 节点、**按静态类型分派**，互不重叠。
 
 ### 7.3 字节码侧构造 `C(args…)`
 
@@ -394,6 +394,7 @@ Compiler.registerType<User>() → ReflectRegistrar：枚举 public 成员（字�
 | M2-6 | 跨进程回调注册协议 | **永久排除**（m2 §13-3） |
 | M2-7 | **规格内部张力对账**：m2 §12.4「继承成员不解析（仅本类声明成员）」vs §12.5/§13-5②「继承成员访问器经反射按继承关系逐级向上解析（v0.8.25，已定位）」 | 设计口径：**糖按本类声明解析**（前端只认注册的字段/方法表）；宿主侧访问器（反射生成）可覆盖继承成员——两者不矛盾（**解析点不同**：前端 vs 宿主反射）；建议规格在 §12.4 行 369 补限定说明 |
 | M2-8 | **`callFor<Fn>` 返回的 `JitFunction` 与 §6.1.4 `JitClosure` 的关系** | **已结案（2026-10-11）**：**统一用 `JitFunction` 包装，撤销 `JitClosure` 定义**——从 JIT 取回的闭包与 JIT 产出的闭包是**同一表示**（`JitClosureId`），一个类型足够；`close`/`isClosed` 并入 `JitFunction`（非闭包实例：`close` → 19、`isClosed` = false）；`unload` 保持单元级（M1 零回归）；两条产出路径（`CallMarshal` 解包 / `callFor`）产物类型一致。落点：§1 / §6.1.4 / §6.1.5 / §6.2 / §7.4 / §9 / §10；规格 §14.3；plan-m2 Q5.6/Q5.7/Q5.11 |
+| M2-9 | **JSON 谱系类拒绝 `registerType<T>()`（2026-10-12，跨篇裁定，用户要求）** | **已实施**（m2 规格升 **v0.8.29**）：`registerType<JsonValue`/`JsonObject`/`JsonArray`/`JsonNull>()` → **明确报错**（沿 §12.5「关闭反射的构建 → 明确报错」同型形态：宿主侧编译期可判优先、运行期路径则注册期报错且**不登记**）。理由：① JSON 成员面唯一来源 = 宿主库**预定义函数通道**（首参 = 接收类 ⇒ 成员归属，m3 §11）；② 反射注册会与之形成 `o.size` 的「成员 vs 键」二义；③ JSON 类无公有字段 / 构造器可注册（连带：`JsonObject(…)` 类构造写法 → 编译错误）。落点：m2 §12.4/§12.5、本文 §2/§7.2、plan-m2 Q5.2/Q5.4；配套点号分派见 design-m3 §10 **M3-10** |
 
 ---
 

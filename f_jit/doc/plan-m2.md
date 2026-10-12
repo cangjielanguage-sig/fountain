@@ -95,9 +95,9 @@
 | 步骤 | 目标成员 | 先写测试（红） | 实现要点（绿） | 验收（回归） |
 |---|---|---|---|---|
 | Q5.1 | `ClassRegistry.register/snapshot/resolve` | 注册/查询；同名类重复注册 → 注册期拒绝；类名与已注册函数名冲突 → 拒绝；快照（注册后变更不影响已编译单元） | 注册表 + 锁 | T55 |
-| Q5.2 | `ReflectRegistrar.registerType<T>` | 全成员枚举（`let/var/prop/mut prop/func/static let/static prop/static func/constructors`）；`static var`/`static mut prop` 跳过（附 B）；支撑面外类型跳过；命名冲突跳过——逐项 diagnostics 断言；**自动 ≡ 手工**逐项对拍（字段表/方法表/类型码） | std.reflect | T55 |
+| Q5.2 | `ReflectRegistrar.registerType<T>` | 全成员枚举（`let/var/prop/mut prop/func/static let/static prop/static func/constructors`）；`static var`/`static mut prop` 跳过（附 B）；支撑面外类型跳过；命名冲突跳过——逐项 diagnostics 断言；**自动 ≡ 手工**逐项对拍（字段表/方法表/类型码）；**JSON 谱系类拒绝**（`JsonValue`/`JsonObject`/`JsonArray`/`JsonNull` → 明确报错；负向断言，v0.8.29 跨篇裁定） | std.reflect | T55 |
 | Q5.3 | `ReflectRegistrar.mapType/buildCtor` | 值型直映；std 句柄类型名映射（4–11）；其余类 → 14 + typeRef；不可映射 → 跳过 + 诊断；构造器 `apply` 适配；泛型类按具体实例化 | 映射表 | T55/T54 |
-| Q5.4 | `Compiler.registerClass` / `registerType<T>` | 端到端：注册后 `u.f`/`u.m()`/`User(…)` 可用；快照语义；关闭反射构建 → 明确报错 | 门面转发 | T54/T55 |
+| Q5.4 | `Compiler.registerClass` / `registerType<T>` | 端到端：注册后 `u.f`/`u.m()`/`User(…)` 可用；快照语义；关闭反射构建 → 明确报错；**JSON 谱系类 `registerType` → 明确报错**（不登记、注册表不变） | 门面转发 | T54/T55 |
 | Q5.5 | `JitClosureId`（值类型） | 构造/`INVALID`；值语义（拷贝后 ID 相同） | struct | T49 |
 | Q5.6 | `JitFunction` **闭包包装实例**的 `call<T>`（桥内部构造：单元 + `JitClosureId`） | 调用 = 新桥调用（闭包帧 `locals[0]`）；结果/错误码/site 与直接 `CALL_CLOSURE` 逐位一致；重入 ≥3；卸载后调用 → 19（site=-1）；**入口实例帧格式不变（M1 零回归）** | 包装（M2-8：并入 `JitFunction`） | T49 |
 | Q5.7 | `JitFunction.close/isClosed`（闭包包装） | close 幂等；计数 −1/归零释放；close 后调用 → 19；旧 ID 校验拦截；**非闭包包装实例：`close` → 19、`isClosed` = false** | close 协议 | T49 |
