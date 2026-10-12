@@ -1057,7 +1057,7 @@ Ready --CAS--> Unloading（拒绝新调用；活跃调用照常完成）--active
 | 正则字面量 | `/[a-z]/iu` | 常量注册（kind 10）→ `PUSH_KH idx`；**空 pattern 加载期拒绝** | `0x16` | §3.3、§11.9 |
 | 空 List / 空 Map 字面量 | `[]` / `{}` | `MAKE_LIST` / `MAKE_MAP`（分配型；v0.18 起**运行期构造**、非常量） | `0xA0`/`0xA2` | §3.3 |
 | Range 字面量 | `a..b : s`、`a..=b` | `RANGE_NEW`（isClosed 由 `..`/`..=` 决定；**step=0 → 14**，常量 step=0 前端即拒） | `0x9A` | §11.9 |
-| JSON 字面量 | `` `{…}` ``（**唯一形态**） | **M3 起**：常量 kind 11（非空）+ HostObject 通道；M1 无此形态 | — | m3 §11 → design-m3 附 A |
+| JSON 字面量 | `` `{…}` ``（**唯一形态**） | **M3 起**：常量 kind 11（非空）+ **JSON 内建句柄码 16–19**（v0.3.20）；M1 无此形态 | — | m3 §11 → design-m3 附 A |
 
 ### A.2 变量与赋值
 

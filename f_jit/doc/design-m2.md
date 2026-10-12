@@ -21,7 +21,7 @@
 | 概念 | M1 状态 | M2 增量 |
 |---|---|---|
 | HostClosure | 内部闭包值 token 9 / LocalType 12 | token 10 / LocalType 13（宿主闭包句柄；B pin 进入、`CALL_FUNC` 链内可传） |
-| HostObject | 宿主自定义类一律 19 | token 11 / LocalType 14（不透明引用；持有/转发/返回/字段读写/构造） |
+| HostObject | 宿主自定义类一律 19 | token 11 / LocalType 14（不透明引用；持有/转发/返回/字段读写/构造）；**JSON 谱系（M3 §11，v0.8.30）：内建码 16–19、零注册、不适用本节** |
 | 验签 | 无（M1 闭包不跨桥） | Marshal 运行期签名核对（一次性、缓存于条目） |
 | CALL_HOST（0x79） | 汇编期 `ERR_NOT_IMPL` | 激活，操作数重定义为 `u8 argc`；栈 `[h_fn, a1..an]` |
 | 错误码 21 | 99 = 实现缺陷兜底 | 21 `ERR_HOST_EXCEPTION`（**全部宿主侧调用面**；cause 含完整仓颉栈） |
@@ -76,7 +76,7 @@
 |---|---|---|
 | `init(name!, type!, index!, mutable!, typeRef!)` | 字段项构造 | m2 §12.2 |
 | `let name: String` | 字段名（前端解析用） | — |
-| `let type: UInt16` | LocalType 编码 0–14（v0.8.20：9=Regex 并入） | — |
+| `let type: UInt16` | LocalType 编码 0–14（v0.8.20：9=Regex 并入）；**M3 起扩至 0–19**（15=Any、16–19=JSON——见 design-m3 附 B） | — |
 | `let index: UInt16` | H64/H65 的 index 实参（字节码只见 index 与类型码） | — |
 | `let mutable: Bool` | `var`/`let` 标志（`let` 写 → 编译错误；裸 H65 防御 → 19） | 双防线 |
 | `let typeRef: ?String` | 14 型字段的目标类名（链式解析 `u.a.b`） | — |
@@ -104,8 +104,8 @@
 |---|---|---|
 | `OPCODE_TABLE[0x79]` 行更新 | `OP_CALL_HOST`：`fmt="u8"`、`len=2`、`cat=CAT_CALL`（M1 预留的 `u16 fid` 编码废弃；M1 从未产出该 opcode，重定义不破坏任何 M1 产物） | m2 §2 |
 | `Version.MAJOR` 扩展 | `M1=1 / M2=2`（M3=3）；`FbcReader.load` 按 `verMajor` 分派校验规则集 | m2 §2、§9.2 |
-| `FbcReader` 加载规则集分派 | ① `verMajor=1` → M1 规则集（LocalType 0–12、无 CALL_HOST）；② `verMajor=2` → LocalType 0–14、CALL_HOST 合法；③ M1 加载器遇 verMajor 2 → 18 | m2 §9.2 |
-| `LocalTypes.validate` | 合法集按该单元的 verMajor 取（1：0–12；2：0–14；15–255 恒拒绝） | m2 §2 |
+| `FbcReader` 加载规则集分派 | ① `verMajor=1` → M1 规则集（LocalType 0–12、无 CALL_HOST）；② `verMajor=2` → LocalType 0–14、CALL_HOST 合法；③ M1 加载器遇 verMajor 2 → 18；**M3（verMajor 3）：合法集 0–19**（15=Any、16–19=JSON——见 design-m3 附 B） | m2 §9.2 |
+| `LocalTypes.validate` | 合法集按该单元的 verMajor 取（1：0–12；2：0–14；**3（M3）：0–19——15=Any、16–19=JSON**；**20–255 恒拒绝**） | m2 §2 |
 | `CALL_HOST` 汇编语义 | 栈 `[h_fn, a1..an]`；自动尾随 CHECK_ERR | m2 §2 |
 | 常量段 | **无新增 kind**：HostClosure 不可常量化（不可序列化）；kind 11 由 M3 JSON 使用 | m2 §1、m3 §11 |
 
@@ -229,8 +229,8 @@
 
 | 成员 | 意义 | 锚点 |
 |---|---|---|
-| `func registerType<T>(into: ClassRegistry, diag: DiagnosticsSink): Unit where T <: Object` | 经 `std.reflect` 枚举 public 成员（`let/var`、`prop/mut prop`、`func`、`static let/prop/func`、**constructors**）批量生成 `ClassDescriptor`；逐成员尽力注册（`static var`/`static mut prop` 跳过（附 B）、支撑面外类型跳过、命名冲突跳过），跳过项记 diagnostics；**反射仅在注册期——字节码/JIT 路径零反射**；关闭反射的构建 → 明确报错；**JSON 谱系类（`JsonValue`/`JsonObject`/`JsonArray`/`JsonNull`）拒绝注册** → **明确报错**（v0.8.29；成员面经 m3 §11 预定义函数通道，避免「成员 vs 键」二义） | m2 §12.5 |
-| `func mapType(info: TypeInfo): ?UInt16` | 反射类型 → LocalType（值型 0–3 直映；std 句柄类型按 §3.2 名映射 4–11；其余类 → 14 + typeRef；不可映射 → 跳过） | m2 §12.5 |
+| `func registerType<T>(into: ClassRegistry, diag: DiagnosticsSink): Unit where T <: Object` | 经 `std.reflect` 枚举 public 成员（`let/var`、`prop/mut prop`、`func`、`static let/prop/func`、**constructors**）批量生成 `ClassDescriptor`；逐成员尽力注册（`static var`/`static mut prop` 跳过（附 B）、支撑面外类型跳过、命名冲突跳过），跳过项记 diagnostics；**反射仅在注册期——字节码/JIT 路径零反射**；关闭反射的构建 → 明确报错；**JSON 谱系类（`JsonValue`/`JsonObject`/`JsonArray`/`JsonNull`）拒绝注册** → **明确报错**（v0.8.29；成员面经 m3 §11 预定义函数通道，避免「成员 vs 键」二义）；**v0.8.30 补**：JSON 为 M3 **内建码 16–19**（零注册、可作形参/返回/局部），注册条目对其**永不匹配**（哑火） | m2 §12.5 |
+| `func mapType(info: TypeInfo): ?UInt16` | 反射类型 → LocalType（值型 0–3 直映；std 句柄类型按 §3.2 名映射 4–11；其余类 → 14 + typeRef（**JSON 谱系类除外：不映射 14，且 `registerType` 明确报错**——v0.8.30）；不可映射 → 跳过） | m2 §12.5 |
 | `func buildCtor(info: ConstructorInfo): ?PublicCtor` | 构造器自动适配器（`ConstructorInfo.apply` 为后盾；参数不可映射 → 跳过 + 诊断；泛型类按具体实例化） | m2 §12.5/§15 |
 | （生成物命名约定） | 实例 prop getter 名 = 成员名；`mut prop` setter 名 = `set` + 首字母大写；静态包装名 = 成员名；方法 bind 内部名含 `.`（源不可直呼）；命名冲突 → 跳过 + 诊断 | m2 §12.5 |
 
@@ -308,7 +308,7 @@ u.f = v    → set_field(u, idx, v)     [H65；变更型 → flags.bit0 + deopt 
 u.m(a…)    → 预定义调用 m(u, a…)       [方法表 bind；与手写包装路径逐位一致]
 ```
 
-**边界（2026-10-12；v0.3.18 裁定）**：接收者静态类型为 **JSON 谱系**时，点号**不查本表**——由 m3 §11 接管，**成员优先 → 键兜底**（成员表 = 宿主库**预定义函数通道**〔首参 = 接收类〕，**非**本注册表）：命中成员 ⇒ M2 §12.4 糖；未命中 ⇒ JSON 键访问（`o.k` ≡ `o['k']`）。**`Any`(15) 盒**上点号 = 成员命中（按成员所属类插 `as`）否则键访问（自动 `as JsonObject`，失败 **22**）；`JsonValue`/`JsonArray`/`JsonNull`/标量上取键 → **编译错误**。**已裁定**：`registerType<T>()` 对 JSON 谱系类 **明确报错**（m2 §12.5 v0.8.29）——`o.size` 无二义（点号取成员、`o['size']` 取键）。同一 `MemberAccess` 节点、**按静态类型分派**，互不重叠。
+**边界（2026-10-12；v0.3.18 裁定）**：接收者静态类型为 **JSON 谱系**时，点号**不查本表**——由 m3 §11 接管，**成员优先 → 键兜底**（成员表 = 宿主库**预定义函数通道**〔首参 = **JSON 码 16–19**〕，**非**本注册表）：命中成员 ⇒ M2 §12.4 糖；未命中 ⇒ JSON 键访问（`o.k` ≡ `o['k']`）。**`Any`(15) 盒**上点号 = 成员命中（按成员所属类插 `as`）否则键访问（自动 `as JsonObject`，失败 **22**）；`JsonValue`/`JsonArray`/`JsonNull`/标量上取键 → **编译错误**。**已裁定**：`registerType<T>()` 对 JSON 谱系类 **明确报错**（m2 §12.5 v0.8.29/30；v0.8.30 起 JSON = **M3 内建码 16–19**——与 14 面结构性无关、零注册）——`o.size` 无二义（点号取成员、`o['size']` 取键）。同一 `MemberAccess` 节点、**按静态类型分派**，互不重叠。
 
 ### 7.3 字节码侧构造 `C(args…)`
 
@@ -356,7 +356,7 @@ Compiler.registerType<User>() → ReflectRegistrar：枚举 public 成员（字�
 | verMajor 1 产物 | ✓ 全语义 | ✓（按 M1 规则集校验；CALL_HOST 未启用 ⇒ 不可能出现） |
 | verMajor 2 产物 | ✗ 加载期拒绝（18） | ✓ |
 
-- LocalType 合法集按 verMajor 分派：M1=0–12；M2=0–14；15–255 恒拒。
+- LocalType 合法集按 verMajor 分派：M1=0–12；M2=0–14；**M3=0–19**（15=Any、16–19=JSON）；**20–255 恒拒**。
 - 不变项：ctx 布局、帧布局、全部 M1 指令语义、fail-fast、窗口/逃逸机制、W^X/IBT、卸载状态机。
 - M2 零格式变更面：§14 捕获描述符不入 `.fbc`、§15 构造不新增指令/helper、§16 不新增指令/helper、§12.5 注册项不入 `.fbc`（注册快照属宿主侧资产；含 14 形参/成员访问/构造的单元经**无注册表分发入口** → 加载期拒绝）。
 
@@ -394,7 +394,7 @@ Compiler.registerType<User>() → ReflectRegistrar：枚举 public 成员（字�
 | M2-6 | 跨进程回调注册协议 | **永久排除**（m2 §13-3） |
 | M2-7 | **规格内部张力对账**：m2 §12.4「继承成员不解析（仅本类声明成员）」vs §12.5/§13-5②「继承成员访问器经反射按继承关系逐级向上解析（v0.8.25，已定位）」 | 设计口径：**糖按本类声明解析**（前端只认注册的字段/方法表）；宿主侧访问器（反射生成）可覆盖继承成员——两者不矛盾（**解析点不同**：前端 vs 宿主反射）；建议规格在 §12.4 行 369 补限定说明 |
 | M2-8 | **`callFor<Fn>` 返回的 `JitFunction` 与 §6.1.4 `JitClosure` 的关系** | **已结案（2026-10-11）**：**统一用 `JitFunction` 包装，撤销 `JitClosure` 定义**——从 JIT 取回的闭包与 JIT 产出的闭包是**同一表示**（`JitClosureId`），一个类型足够；`close`/`isClosed` 并入 `JitFunction`（非闭包实例：`close` → 19、`isClosed` = false）；`unload` 保持单元级（M1 零回归）；两条产出路径（`CallMarshal` 解包 / `callFor`）产物类型一致。落点：§1 / §6.1.4 / §6.1.5 / §6.2 / §7.4 / §9 / §10；规格 §14.3；plan-m2 Q5.6/Q5.7/Q5.11 |
-| M2-9 | **JSON 谱系类拒绝 `registerType<T>()`（2026-10-12，跨篇裁定，用户要求）** | **已实施**（m2 规格升 **v0.8.29**）：`registerType<JsonValue`/`JsonObject`/`JsonArray`/`JsonNull>()` → **明确报错**（沿 §12.5「关闭反射的构建 → 明确报错」同型形态：宿主侧编译期可判优先、运行期路径则注册期报错且**不登记**）。理由：① JSON 成员面唯一来源 = 宿主库**预定义函数通道**（首参 = 接收类 ⇒ 成员归属，m3 §11）；② 反射注册会与之形成 `o.size` 的「成员 vs 键」二义；③ JSON 类无公有字段 / 构造器可注册（连带：`JsonObject(…)` 类构造写法 → 编译错误）。落点：m2 §12.4/§12.5、本文 §2/§7.2、plan-m2 Q5.2/Q5.4；配套点号分派见 design-m3 §10 **M3-10** |
+| M2-9 | **JSON 谱系类拒绝 `registerType<T>()`（2026-10-12，跨篇裁定，用户要求）** | **已实施**（m2 规格升 **v0.8.29**）：`registerType<JsonValue`/`JsonObject`/`JsonArray`/`JsonNull>()` → **明确报错**（沿 §12.5「关闭反射的构建 → 明确报错」同型形态：宿主侧编译期可判优先、运行期路径则注册期报错且**不登记**）。理由：① JSON 成员面唯一来源 = 宿主库**预定义函数通道**（首参 = 接收类 ⇒ 成员归属，m3 §11）；② 反射注册会与之形成 `o.size` 的「成员 vs 键」二义；③ JSON 类无公有字段 / 构造器可注册（连带：`JsonObject(…)` 类构造写法 → 编译错误）。落点：m2 §12.4/§12.5、本文 §2/§7.2、plan-m2 Q5.2/Q5.4；配套点号分派见 design-m3 §10 **M3-10**。**更新（v0.8.30，跨篇 m3 §11 用户裁定）**：JSON 谱系已升格为 **M3 内建句柄码 16–19**——零注册（可作参数 / 返回 / 局部 / 签名），不经注册表、**不触发**无注册表分发拒绝面（该面限定 14）⇒ 本条理由升级为「结构性无关 + 防哑火」 |
 
 ---
 
@@ -429,7 +429,7 @@ Compiler.registerType<User>() → ReflectRegistrar：枚举 public 成员（字�
 | 项 | M1 | M2 增量 | 锚点 |
 |---|---|---|---|
 | `CALL_HOST`（0x79） | 汇编期 `ERR_NOT_IMPL`（M1 从未产出该 opcode） | **启用**：操作数 = **`u8 argc`**（M1 预留的 `u16 fid` 编码**废弃**）；栈布局 `[h_fn, a1..an]`；类别 `CAT_CALL`；汇编器自动尾随 `CHECK_ERR` | §2、§5 |
-| LocalType | 0–12 | **+13 = HostClosure、+14 = HostObject**（均句柄型；15–255 仍拒绝） | §2 |
+| LocalType | 0–12 | **+13 = HostClosure、+14 = HostObject**（均句柄型；15–255 仍拒绝）；**（M3 续：+15=Any、+16–19=JSON——见 design-m3 附 B）** | §2 |
 | 类型 token | 1–9 | **+10 = HostClosure、+11 = HostObject**（`IS_TYPE`/`GUARD_TYPE`/H19 与句柄槽 `tag` 可用） | §2 |
 | 错误码 | 0–20、23 / -1 / -2 / 99 | **+21 `ERR_HOST_EXCEPTION`**：宿主侧调用面执行期异常且未回译（闭包 §5 / 预定义与包装 §8.4、§12.1 / 构造适配器 §15 / 成员访问器 §12.2、§12.5）；`cause` = 原始异常全文（含完整仓颉栈，桥打印）；`site` = 调用指令偏移；`99` 收窄为**引擎侧**兜底 | §2 |
 | 19 语义 | 参数长度 / 元素类型 / 返回 T 不符 / 调用已卸载单元 | **+验签失败**（site=-1） | §2、§4 |
