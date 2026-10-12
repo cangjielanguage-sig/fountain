@@ -58,23 +58,23 @@ public class QueryResultWrap <: QueryResult {
     // 必须是 static：构造期不允许调用实例方法。
     private static func makeReader(result: QueryResult, typeName: String): (Int64) -> Any {
         match(typeName){
-            case 'SqlChar' | 'SqlVarchar' | 'String' | 'string' | 'char' | 'text' | 'varchar' | 'name' | 'bpchar' | 'json' | 'jsonb' | 'xml' | 'uuid' => { i => result.getOrNull<String>(i) }
+            case 'SqlChar' | 'SqlVarchar' | 'String' | 'string' | 'char' | 'text' | 'varchar' => { i => result.getOrNull<String>(i) }
             case 'SqlClob' | 'SqlBlob' | 'std.io.InputStream' | 'InputStream' => { i => result.getOrNull<InputStream>(i) }
-            case 'SqlBinary' | 'SqlVarBinary' | 'Array<Byte>' | 'Array<UInt8>' | 'bytea' => { i => result.getOrNull<Array<Byte>>(i) }
-            case 'SqlDecimal' | 'Decimal' | 'std.math.numeric.Decimal' | 'numeric' | 'money' => { i => result.getOrNull<Decimal>(i) }
+            case 'SqlBinary' | 'SqlVarBinary' | 'Array<Byte>' | 'Array<UInt8>' => { i => result.getOrNull<Array<Byte>>(i) }
+            case 'SqlDecimal' | 'Decimal' | 'std.math.numeric.Decimal' | 'numeric' => { i => result.getOrNull<Decimal>(i) }
             case 'SqlBool' | 'Bool' | 'bool' => { i => result.getOrNull<Bool>(i) }
             case 'SqlByte' | 'Int8' => { i => result.getOrNull<Int8>(i) }
             case 'UInt8' | 'Byte' => { i => result.getOrNull<UInt8>(i) }
             case 'SqlSmallInt' | 'Int16' => { i => result.getOrNull<Int16>(i) }
             case 'UInt16' => { i => result.getOrNull<UInt16>(i) }
             case 'SqlInteger' | 'Int32' => { i => result.getOrNull<Int32>(i) }
-            case 'UInt32' | 'int2' | 'int4' => { i => result.getOrNull<UInt32>(i) }
-            case 'SqlBigInt' | 'Int64' | 'int8' => { i => result.getOrNull<Int64>(i) }
+            case 'UInt32' => { i => result.getOrNull<UInt32>(i) }
+            case 'SqlBigInt' | 'Int64' => { i => result.getOrNull<Int64>(i) }
             case 'UInt64' => { i => result.getOrNull<UInt64>(i) }
-            case 'SqlReal' | 'Float32' | 'float4' => { i => result.getOrNull<Float32>(i) }
-            case 'SqlDouble' | 'Float64' | 'float8' => { i => result.getOrNull<Float64>(i) }
-            case 'SqlDate' | 'SqlTime' | 'SqlTimeTz' | 'SqlTimestamp' | 'DateTime' | 'std.time.DateTime' | 'date' | 'time' | 'timetz' | 'timestamptz' | '' => { i => result.getOrNull<DateTime>(i) }
-            case 'SqlInterval' | 'Duration' | 'interval' => { i => result.getOrNull<Duration>(i) }
+            case 'SqlReal' | 'Float32' => { i => result.getOrNull<Float32>(i) }
+            case 'SqlDouble' | 'Float64' => { i => result.getOrNull<Float64>(i) }
+            case 'SqlDate' | 'SqlTime' | 'SqlTimeTz' | 'SqlTimestamp' | 'DateTime' | 'std.time.DateTime' => { i => result.getOrNull<DateTime>(i) }
+            case 'SqlInterval' | 'Duration' => { i => result.getOrNull<Duration>(i) }
             case _ => { i => result.getOrNull<String>(i) }
         }
     }
