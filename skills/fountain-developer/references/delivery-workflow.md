@@ -1,6 +1,6 @@
 # 交付全流程（初始化 → 配置 → TDD → 提交 → 建 tag）
 
-工作流 F / G / H / I 共用。原则：能用工具就先用工具（`fboot` 建骨架、`fountain_lookup.py` 查 API、`install_fboot.sh` 查版本）。
+工作流 F / G / H / I / K 共用；工作流 J（在 fountain 仓库内开发）复用其中第 3–7 节（TDD / 回归 / 冒烟 / 提交 / 建 tag）。原则：能用工具就先用工具（`fboot` 建骨架、`fountain_lookup.py` 查 API、`install_fboot.sh` 查版本）。
 查 API 时按**在用版本**：`fountain_lookup.py` 默认取当前项目 cjpm.toml 的 fountain 依赖版本并先把文档副本切到该版本
 （输出头部标注版本；换版本 `--version X.Y.Z` / `switch X.Y.Z`，见 SKILL.md「定位 fountain 仓库与查询版本」）。
 
@@ -9,10 +9,11 @@
 - 新项目 / 新功能骨架：工作流 A（装 fboot）→ B（workspace）→ C（模块）→ D（依赖）。
 - 已有项目：确认它是 fountain workspace（根 cjpm.toml 含 `[workspace]` 与 `"fountain::f_*"`），记录 fboot 版本
   （`install_fboot.sh version`）。
+- 旧版本项目（SDK 1.0.x + fountain 1.0.x）：先按工作流 I 完成升级（环境 → 依赖 → 包名 → API → 脚本），再回到本流程做功能改动。
 
 ## 2. 配置（含随功能演进补充依赖）
 
-三类配置载体（模块依赖 / 运行期环境变量 / 编译期 `--key=value`）的改法见工作流 I。其中**依赖必须随功能演进同步**：
+三类配置载体（模块依赖 / 运行期环境变量 / 编译期 `--key=value`）的改法见工作流 K。其中**依赖必须随功能演进同步**：
 
 - 每完成一批功能，核对代码里实际用到的 `fountain::f_*` 是否都已在**workspace 根 cjpm.toml** 声明：
   - 缺 → 补 `"fountain::f_xxx" = "<fboot 版本>"`（只加直接依赖，传递依赖交给 cjpm；`.modules` 的 `[detention]` 模块不能版本依赖）；
@@ -23,7 +24,7 @@
 
 ## 3. TDD（严格 Red-Green-Refactor）
 
-F / G / H / I 的功能开发一律按 TDD 循环推进，**先写测试再写实现**，不许先实现后补测试：
+F / G / H / I / J / K 的功能开发与适配一律按 TDD 循环推进，**先写测试再写实现**，不许先实现后补测试：
 
 1. **Red**：先写该功能点的仓颉单元测试（`*_test.cj`，与实现同目录结构），跑一次确认它**失败**；
    失败原因必须是「功能未实现 / 断言不满足」，不是编译错误或用例本身写错——这一步是测试有效性的证明。
@@ -42,6 +43,7 @@ F / G / H / I 的功能开发一律按 TDD 循环推进，**先写测试再写�
 - 回归失败 = 门禁不通过：先定位是本次改动破坏的（优先修实现）还是用例本身过时（与用户确认后改用例）。
 - **交付节点（提交前、打 tag 前）必须再跑一次全量回归**。
 - 高风险改动（依赖升级、公共 API 变更、配置语义变化）做针对性回归：受影响的模块与调用方都要覆盖。
+  工作流 I 的版本升级即属此类，差异逐条对照 `references/legacy-upgrade.md` 的差异表。
 
 ## 5. 冒烟测试
 
