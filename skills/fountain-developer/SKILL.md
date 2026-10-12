@@ -1,11 +1,11 @@
 ---
 name: fountain-developer
-description: 当用户要求用 fountain 框架（仓颉）从零开发服务器应用、安装 fboot、初始化 fountain workspace 或模块、为项目添加 fountain 模块的中心仓依赖、按需求文档开发服务端功能、把其他语言（Python/Java/Go/Node/TS 等）项目转换/迁移为仓颉项目，或把使用旧版 SDK 1.0.x / fountain 1.0.x 的既有项目升级到与当前 fboot 同版 fountain 时使用本技能。技能以 fountain 仓库的代码与 README 为 API 依据，并联动 cangjie-doc-lookup 与 cangjie-coding 技能。
+description: 当用户要求用 fountain 框架（仓颉）从零开发服务器应用、安装 fboot、初始化 fountain workspace 或模块、为项目添加 fountain 模块的中心仓依赖、按需求文档开发服务端功能、把其他语言（Python/Java/Go/Node/TS 等）项目转换/迁移为仓颉项目，把使用旧版 SDK 1.0.x / fountain 1.0.x 的既有项目升级到与当前 fboot 同版 fountain，或在 fountain 仓库内开发框架自身（修改 `f_*` 模块、加功能、修缺陷、新建模块）时使用本技能。技能以 fountain 仓库的代码与 README 为 API 依据，并联动 cangjie-doc-lookup 与 cangjie-coding 技能。
 ---
 
 # fountain-developer
 
-fountain 是仓颉语言的服务器应用框架：应用**没有 main 函数**，每个模块编译为动态链接库，由 `fboot` 加载启动。本技能以 fountain 仓库自身的代码与 README 为唯一事实来源，完成十类任务：
+fountain 是仓颉语言的服务器应用框架：应用**没有 main 函数**，每个模块编译为动态链接库，由 `fboot` 加载启动。本技能以 fountain 仓库自身的代码与 README 为唯一事实来源，完成十一类任务：
 
 | 任务 | 工作流 |
 | --- | --- |
@@ -18,9 +18,10 @@ fountain 是仓颉语言的服务器应用框架：应用**没有 main 函数**�
 | 其他语言项目 → 仓颉项目 | G（依赖 A→B→C→D） |
 | 非 fountain 的仓颉项目 → fountain 风格 | H（依赖 A→B→C→D，细节见 `references/cangjie-to-fountain.md`） |
 | 旧版本项目升级（SDK 1.0.x + fountain 1.0.x → 与当前 fboot 同版） | I（细节见 `references/legacy-upgrade.md`） |
-| 为现有项目添加 / 修改模块配置 | J |
+| 在 fountain 仓库内开发（框架自身：加功能 / 修缺陷 / 新建模块） | J |
+| 为现有项目添加 / 修改模块配置 | K |
 
-**工作流 F / G / H / I / J 覆盖完整交付流程**：初始化 → 配置（依赖随功能演进补充）→ 严格 TDD（Red-Green-Refactor + 回归测试 + 冒烟测试）→ 提交 → 建 tag，统一见 `references/delivery-workflow.md`。
+**工作流 F / G / H / I / K 覆盖完整交付流程**：初始化 → 配置（依赖随功能演进补充）→ 严格 TDD（Red-Green-Refactor + 回归测试 + 冒烟测试）→ 提交 → 建 tag，统一见 `references/delivery-workflow.md`；**工作流 J**（在 fountain 仓库内开发）复用其中的 TDD / 回归 / 冒烟 / 提交 / 建 tag 门禁。
 
 ## 技能格式与通用性
 
@@ -54,7 +55,7 @@ python <skill-root>/scripts/install_skill.py all                 # 两个都装
 
 ## 必须遵守
 
-- **联动两个技能（自动执行，无需询问用户）**：进入开发 / 转换 / 升级任务（工作流 F、G、I）先加载 `cangjie-coding` 技能（仓颉知识库与构建/测试规范）；遇到语法、关键字、编译器行为、std/stdx API 问题即加载 `cangjie-doc-lookup` 查本地官方文档（加载方式按「技能格式与通用性」小节的约定）。**加载失败（技能没装）时不要中断任务、也不要问用户**：先按「联动技能的加载与自动安装」用 `scripts/install_skill.py` 装上再加载。不凭记忆猜 API 与语法。
+- **联动两个技能（自动执行，无需询问用户）**：进入开发 / 转换 / 升级任务（工作流 F、G、I、J）先加载 `cangjie-coding` 技能（仓颉知识库与构建/测试规范）；遇到语法、关键字、编译器行为、std/stdx API 问题即加载 `cangjie-doc-lookup` 查本地官方文档（加载方式按「技能格式与通用性」小节的约定）。**加载失败（技能没装）时不要中断任务、也不要问用户**：先按「联动技能的加载与自动安装」用 `scripts/install_skill.py` 装上再加载。不凭记忆猜 API 与语法。
 - **API 以 fountain 仓库为准**：模块能力、签名、配置项都要在仓库的 README 与 `src/` 里核对；fountain 没有的能力不许硬编，走缺口处理（工作流 F 第 3 步）。
 - **查询按「在用版本」**：查 fountain 能力 / API / 配置前先定版本——用户指定（`--version`）优先，其次当前项目 cjpm.toml 的 `"fountain::f_*"` 依赖版本；`fountain_lookup.py` 会先把技能目录下的文档副本切到该版本再检索。回答时以输出头部标注的版本为准；输出里出现 `⚠ 版本不一致` 时必须先说明，或按提示切到目标版本重查。
 - **workspace 与模块一律用 fboot 创建**（`fboot workspace` / `fboot module`）：不得用 `cjpm init` 或手工写 cjpm.toml 代替；fboot 不可用时先按工作流 A 安装。
@@ -205,7 +206,7 @@ fboot 自动完成：生成模块 `cjpm.toml`（`output-type = "dynamic"`）、�
    - 先说明版本：结论来自哪个 fountain 版本（输出头部的版本标注），版本不一致警告照实转达；
    - 配置类：给出配置项名、取值 / 默认值、生效方式（环境变量 / `fboot build --key=value` 编译期 / 运行期优先于编译期）以及该写在哪里（启动脚本 `exports()` 或 build 参数）；
    - API 类：给出包名 + 签名 + 最小示例，示例优先取自 `fdemo` / `frpcdemo` 的真实用法，并注明出处（`<模块>/README.md`、`<模块>/src/xxx.cj:行号`）。
-5. **查不到就说不确定**：仓库里没有的，明确回答「仓库中没有找到」并给出下一步（读哪个文件 / 问用户），**不许猜 API 与配置项**。用户顺势要求改动时转入工作流 J。
+5. **查不到就说不确定**：仓库里没有的，明确回答「仓库中没有找到」并给出下一步（读哪个文件 / 问用户），**不许猜 API 与配置项**。用户顺势要求改动时转入工作流 K。
 
 ## 工作流 F — 按需求文档开发服务器应用
 
@@ -234,7 +235,7 @@ fboot 自动完成：生成模块 `cjpm.toml`（`output-type = "dynamic"`）、�
 
 输入：用户当前的仓颉项目（cjpm 项目、不依赖 fountain，可能带 `main()` / executable）。
 先判断：改造目标是服务端应用才适合 fountain 风格；纯 CLI / 库项目先与用户确认必要性。
-与工作流 F / G / I / J 一样，本工作流覆盖**完整交付流程**（初始化 → 配置 → 严格 TDD → 回归 + 冒烟 → 提交 → 建 tag），通用门禁见 `references/delivery-workflow.md`。
+与工作流 F / G / I / K 一样，本工作流覆盖**完整交付流程**（初始化 → 配置 → 严格 TDD → 回归 + 冒烟 → 提交 → 建 tag），通用门禁见 `references/delivery-workflow.md`。
 
 1. **评估现状（只读）**：cjpm.toml（`output-type`、dependencies）、src 布局、`main()` 入口、现有能力（HTTP / DB / 日志 / 配置 / 定时）来自 stdx 还是手写。
 2. **映射与缺口**：原能力 → fountain 模块（`references/module-index.md` 速查，映射参考 `references/cangjie-to-fountain.md`）；缺口按工作流 F 第 3 步处理（a–d 选项）。
@@ -269,7 +270,22 @@ fboot 自动完成：生成模块 `cjpm.toml`（`output-type = "dynamic"`）、�
    冒烟（起服务 + 关键路径 + 日志）；提交按「依赖 / 机械 import / API 适配」分粒度；最后按 delivery-workflow 第 6 / 7 节
    提交与建 tag，并交付升级报告（旧 → 新对照表 + 行为变化 + 未适配项）。
 
-## 工作流 J — 为现有 fountain 项目添加 / 修改模块配置
+## 工作流 J — 在 fountain 仓库内开发（框架自身）
+
+**适用**：当前正在开发的项目就是 fountain 仓库——根 cjpm.toml 的包名是 `fountain`、`fountain::f_*` 依赖全是 `{path = "./f_xxx"}` 形态，仓库里有 `.modules` 与各 `f_*` 模块目录；此时被开发的对象就是框架自身（加功能 / 修缺陷 / 新建模块），产出是框架源码的改动。**仓库内查询不加 `--version` 即读工作区源码**（path 依赖没有版本号、脚本不需要切文档副本；输出头部标注源码版本与分支 / tag）。
+
+1. **先复用，再实现——优先使用 fountain 自身的 API**：动手写代码前，把要用到的能力逐条在仓库里查证有没有现成实现，命中即用：
+   - 查证链路：`fountain_lookup.py modules` → `search "<能力关键词>"` → 模块 README → `api <模块>` → 读 `src/` 核对签名；
+   - 现有模块能满足的**不重复造轮子**（异常体系、日志、工具函数、集合扩展、时间换算、编解码等，先按 `references/module-index.md` 对号入座再现场核对，不按记忆猜）；
+   - 新增代码遵守仓库既有约定：包与目录结构、可见性、测试布局都参照同层既有代码；README 中英成对同步。
+2. **缺口处理（硬性门禁）**：fountain 现有 API 不能满足需求时**停下来问用户**，给出几个建议并询问接下来如何做，等用户拍板再动手——**不擅自新造公开 API、不硬编假实现、不悄悄引入第三方依赖**：
+   - 每条建议写清代价与影响面（是否动公开 API、是否破坏兼容、影响哪些调用方、测试与文档成本）；公开 API 变更宁保守（能加参数 / 重载就不改既有签名）；
+   - 典型候选：a) 扩展现有模块（哪个模块、加什么 API 的签名草案）；b) 新建模块（职责边界与发布登记；聚合根包与 `src/<模块>` shim 已冻结，新模块不登记进去）；c) 改用仓颉标准库 / stdx 的现成能力（不新增 fountain API）；d) 在目标模块内部实现（不公开，仅本次需求用）；e) 缩减范围或调整需求；
+   - 未拍板前不写实现代码。
+3. **按拍板方案实现（严格 TDD）**：先写失败用例（Red）→ 最小实现（Green）→ 重构（Refactor）；用例放语义所属的层 / 包；公开 API 变化同步该模块 README（中英成对）。
+4. **回归 + 交付**：受影响模块 + 全量 `cjpm test` 全绿再提交；涉及 fboot / 应用启动链的改动按 `references/delivery-workflow.md` 第 5 节做冒烟；提交与建 tag 按该文件第 6 / 7 节。fountain 自身的升版（各 `cjpm.toml` + `f_version/src/FountainVersion.cj`）与发布文档同步按仓库既有发布流程；仓库里可能有其他会话的并行工作线（`.worktrees/` 工作树与分支）——只操作自己的，不 prune、不删除任何工作树与分支。
+
+## 工作流 K — 为现有 fountain 项目添加 / 修改模块配置
 
 1. **定位项目与版本**：确认目标目录是 fountain workspace（根 cjpm.toml 有 `[workspace]` 与 `"fountain::f_*"` 依赖），记录 fboot 版本（`install_fboot.sh version`）——依赖版本必须与它一致。
 2. **先判类别再动手**（三类载体，改法不同）：
@@ -299,10 +315,10 @@ fboot 自动完成：生成模块 `cjpm.toml`（`output-type = "dynamic"`）、�
 
 - `references/environment.md` — 环境准备、fboot 安装、平台差异与已知坑；文档副本的克隆与按版本切换（工作流 A / 查询前置）
 - `references/project-setup.md` — workspace / 模块 / 依赖的产物样例与校验（工作流 B / C / D）
-- `references/module-index.md` — fountain 模块索引与选型（工作流 F / G / H / I / J 的能力映射）
+- `references/module-index.md` — fountain 模块索引与选型（工作流 F / G / H / I / J / K 的能力映射）
 - `references/server-development.md` — 服务器应用开发指南（工作流 F 展开：MVC / ORM / Bean / AOP / 认证 / 配置 / 运行）
 - `references/launch-scripts.md` — 启动脚本（boot.sh / boot-macos.sh / boot-win-gitbash.sh）的模板选用与合并（工作流 F / G / H 搭骨架、工作流 I 升级脚本时）
-- `references/delivery-workflow.md` — 交付全流程（工作流 F / G / H / I / J 共用：初始化 / 配置演进 / TDD / 提交 / 建 tag）
+- `references/delivery-workflow.md` — 交付全流程（工作流 F / G / H / I / K 共用：初始化 / 配置演进 / TDD / 提交 / 建 tag；工作流 J 复用第 3–7 节）
 - `references/porting-guide.md` — 跨语言项目转换流程（工作流 G 展开）
 - `references/cangjie-to-fountain.md` — 非 fountain 的仓颉项目改造为 fountain 风格（工作流 H 展开）
 - `references/legacy-upgrade.md` — 旧版本项目升级（工作流 I 展开：SDK 1.0.x + fountain 1.0.x → 与当前 fboot 同版）
