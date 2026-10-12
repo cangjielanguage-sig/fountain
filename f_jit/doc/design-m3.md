@@ -78,14 +78,14 @@
 | 声明 | 增量 | 说明 | 锚点 |
 |---|---|---|---|
 | `TypeRef` | `+ AnyT` | `Any` 可声明为局部/参数/返回（15）；HostObject 字段**不扩展**至 15 | m3 §3/§12-4 |
-| `AstExpr` | `+ AnyBox(e, typecode)`、`AnyIs(e, target)`、`AnyAs(e, target)`、`JsonLit(raw, shape)`、`JsonIndexGet(obj, key)`、`JsonIndexSet(obj, key, v)` | 装箱/问答/JSON 字面与下标读写的 AST 形态 | m3 §3/§11 |
+| `AstExpr` | `+ AnyBox(e, typecode)`、`AnyIs(e, target)`、`AnyAs(e, target)`、`JsonLit(raw, shape)`、`JsonIndexGet(obj, key)`、`JsonIndexSet(obj, key, v)` | 装箱/问答/JSON 字面与下标读写的 AST 形态；**点号键访问复用既有 `MemberAccess` 节点**（按接收者静态类型分派，v0.3.17） | m3 §3/§11 |
 | `Lexer` | **反引号 JSON 段**的**词法保护** | 段取界 = JSON 字符串感知 + 括号配平（`{"a":"}"}`、`["]"]`、嵌套 `[{…}]` 正确取界）；段内 `//`、`/*`、引号、`{`、`}`、**行首锚定标记**（§8.8）不参与注释识别与配对；换行规范化 CRLF/CR→`\n` | m3 §11 |
 | `Lexer` / `Parser` | `{` / `[` **原义保持（无消歧）**——**订正（2026-10-12）**：撤销 v0.3「直写形态」，JSON 只能经反引号书写 | `{ args => body }` = 闭包字面量；`{}` = M1 空 Map 构造；`[…]`（表达式起始）= 列表字面值；`list[i]`/`map[k]` = 下标语法——**不存在「闭包 vs JSON」判定与空形态上下文定夺**；负向：非闭包形态的 `{ "a" : 1 }` → 语法错误 | m3 §11 v0.3.16 |
 | `Parser` / `Lowerer` | 顶层结构静态类型 | `{`→`JsonObject`、`[`→`JsonArray`（编译期标注；子类名 = 前端静态知识）；**标量顶层 → 编译错误**（仅作元素） | m3 §11/§12-8① |
 | `Lowerer` | **装箱插入点**（类型驱动，全部静态可知） | ① 赋值/初始化 Any 槽；② Any 参数实参；③ Any 返回；④ 容器元素类型为 Any 的写入前（`LIST_APPEND/LIST_SET/LIST_INSERT/MAP_PUT`）——异构容器的实现基础 | m3 §3 |
 | `Lowerer` | **拆箱与问答** | `expr is T` / `expr as T`（T ∈ 可转集，程序 15）：左 15 → H67/H68；左非 15 → 按静态类型关系（上行零操作；不相容 → 编译错误）；`as T` 结果类型 = T（可继续参与 T 的既有运算——「先 as 后算」唯一计算路径）；`as <宿主类>` 携类身份（typecode=14 + aux=typeRef） | m3 §3 |
 | `Lowerer` | **禁止面（编译错误）** | 15 型上的运算/比较/等值/成员访问/调用；二次装箱（`any_box(15,…)` 不可发射）；非可转集目标（含 `as Closure`）；闭包存入集合（含 Any 盒间接路径） | m3 §3/§12-1/§12-3 |
-| `Lowerer` | **JSON 发射** | 非空字面值 → `PUSH_KH`（kind 11 常量）；**JSON 上下文下的空 `{}`/`[]` → H75 `json_new`**（世界内构造，可变、非常量）；`j[i]` → H73 `json_get`；`j[i] = v` → H74 `json_set`（v ∈ 值型 0–3（除 Unit）/String/14——**JSON null 由 `JsonNull.instance` 承载**，非语言 null）；索引类型不符 → 编译错误 | m3 §11 |
+| `Lowerer` | **JSON 发射** | 非空字面值 → `PUSH_KH`（kind 11 常量）；**空字面量 `` `{}` ``/`` `[]` `` → H75 `json_new`**（世界内构造，可变、非常量）；`j[i]` → H73 `json_get`；`j[i] = v` → H74 `json_set`（v ∈ 值型 0–3（除 Unit）/String/14——**JSON null 由 `JsonNull.instance` 承载**，非语言 null）；**点号键糖（v0.3.17）**：`o.k` / `o.k = v`（`o` 静态类型必须为 `JsonObject`）与下标**同 helper 同语义**，键 = 标识符常量（kind 3）；链式需显式 `as`（`o.a.b` → 编译错误）；索引类型不符 / 非 `JsonObject` 上点号 → 编译错误 | m3 §11 |
 | `NameResolver` / 静态检查 | `fountain::f_data.path` 访问 | 经预定义函数通道注册（宿主库提供类型化 getter）；"从 Any 取 JSON 节点"（`as JsonObject`）自 v0.3.12 可用 | m3 §11 |
 
 ---
@@ -178,8 +178,10 @@
 
 ```
 j[i]   → json_get(h, key, mode)  [H73；结果 = Any 盒；越界 4 / 缺键 5；frozen 经读传播]
+o.k    → 同上（key = 标识符常量；仅 o: JsonObject）        [v0.3.17 点号键糖；与 j['k'] 逐位等价]
 j[i]=v → json_set(h, key, 码, v) [H74；变更型 → flags.bit0 + deopt 禁令；frozen → 20；对象 upsert / 数组仅既有下标]
-{}、[] → json_new(mode)          [H75；分配型；可变新值，非常量]
+o.k=v  → 同上（键同上；值域/纪律逐位一致）
+`{}`、`[]` → json_new(mode)      [H75；分配型；可变新值，非常量]
 ```
 
 ### 7.4 CALL_HOST 转发特化流
@@ -234,6 +236,7 @@ H63: fetch → entry.plan（Layer B，验签时绑定）
 
 | M3-6 | **JSON helper 编号冲突**：m3 §11 写 H72/H73/H74（「编号接 H71」），但 M1 v0.18.19 已占用 **H72 = `regex_replace_range`**（m1 §6 行 609）| **已裁定并实施（2026-10-11）**：JSON 面顺延 **H73/H74/H75**；m3 规格「编号接 H71」已订正为「编号顺延」；本文与 plan-m3 已同步 |
 | M3-7 | 错误码 22 与 7 的边界实施复核（m3 §12-6："若实现中 7 的覆盖面实际重叠，实施时复核"） | 复核钩；本设计维持**分列**裁定 |
+| M3-9 | **JSON 点号键访问糖（2026-10-12 用户要求）** | **已实施**（规格升 **v0.3.17**）：`o.k` ≡ `o['k']`、`o.k = v` ≡ `o['k'] = v`——同 H73/H74、键 = 标识符常量、零新指令与格式变更；**分派边界**：`JsonObject` ⇒ JSON 键访问；其余 14 类 ⇒ M2 §12.4 注册成员；`JsonArray`/`JsonValue`/`JsonNull`/`Any`/标量 ⇒ 编译错误；链式需显式 `as`（`o.a.b` 编译错误）。**待确认**：JSON 谱系类拒绝 `registerType<T>()`（避免 `o.size` 的键/成员二义）。落点：本文 §2/§7.3/附 A；plan-m3 R3.9/R6.6；design-m2 §7.2 边界行 |
 | M3-8 | **JSON「直写形态」撤销（2026-10-12，用户订正）** | **已实施**：规格升 **v0.3.16**——JSON 只能经**反引号**书写（唯一形态）；`{`/`[` 保持 M1 原义（闭包字面量 / 空 Map / 列表字面值 / 下标），**不存在消歧与空形态上下文定夺**；v0.3.12 的「空形态 = 运行期构造（H75）」改锚到**反引号空字面量**（`` `{}` `` / `` `[]` ``），非空仍为常量。落点：本文 §1/§2/§7.2/附 A；plan-m3 R3.6/R3.7/R3.8/R4.8/R6.5；design-m1 附 A/附 C |
 
 ---
@@ -256,6 +259,7 @@ H63: fetch → entry.plan（Layer B，验签时绑定）
 | JSON 字面量（反引号形态） | `` `{"k":1}` `` | 常量注册 **kind 11**（payload = u32 长度 + UTF-8 原始 JSON 字节，**同 kind 3 编码同构**）→ `PUSH_KH idx`；**加载期一次解析**为 `JsonObject` / `JsonArray`（路径 A 常量、**不可变**） | `0x16` | §11 |
 | JSON 空字面量 | `` let o: JsonObject = `{}` ``、`` let a: JsonArray = `[]` `` | **运行期构造**（`json_new`，分配型；可变新值、**非常量**）——对齐 M1 空容器先例；非空字面值维持常量（只读） | H75 | §11 |
 | JSON 下标读 | `j[i]`（`JsonArray`: Int64 / `JsonObject`: String） | `json_get(h, key, mode)`——**条件分配型**；结果 = **Any 盒**：对象/数组元素 → 节点盒，标量元素 → 宿主值盒，JSON `null` → **`JsonNull.instance` 盒**（单例，非语言 `null`）；数组越界 **4** / 对象缺键 **5**；索引类型不符 / 对标量节点下标 → **编译错误** | H73 | §11 |
+| JSON 点号键访问（v0.3.17） | `o.k`（读）/ `o.k = v`（写），`o` 静态类型 = `JsonObject` | 与 `o['k']` **逐位等价**（键 = 标识符文本，编译期常量 String）；`JsonArray`/`JsonValue`/`JsonNull`/`Any`(15)/标量上点号 → **编译错误**；链式 `o.a.b` → 编译错误（须 `(o.a as JsonObject).b`）；值域 / `frozen → 20` / 变更型纪律同下标写 | H73/H74 | §11 |
 | JSON 下标写 | `j[i] = v` | `json_set(h, key, typecode, v)`——**变更型**（对象 = upsert；数组 = 仅既有下标、越界 **4** 不自动扩展）；`v` ∈ 值型 0–3（除 Unit）/ String / 14 节点；**frozen 目标（从常量取出的子节点）→ 20**（frozen 经 H73 读与 H68 拆箱**传播**） | H74 | §11 |
 | JSON 标量顶层 | `123` / `"s"` / `true` / `null` 作字面量顶层 | **编译错误（不开放）**——标量仅作元素存在（顶层恒为对象/数组） | — | §11 |
 | JSON 访问 API | `fountain::f_data.path` 的类型化 getter | 纯宿主库 → 经 **M2 §8.4 预定义函数通道**注册（`CALL_HELPER <user hid>`）；JSON 句柄（14）作参数直接可传；成员访问语法糖与本篇**无交互** | `0x75` | §11、m2 §8.4 |

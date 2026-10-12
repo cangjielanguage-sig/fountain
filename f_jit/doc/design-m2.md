@@ -308,6 +308,8 @@ u.f = v    → set_field(u, idx, v)     [H65；变更型 → flags.bit0 + deopt 
 u.m(a…)    → 预定义调用 m(u, a…)       [方法表 bind；与手写包装路径逐位一致]
 ```
 
+**边界（2026-10-12）**：接收者静态类型为 **JSON 谱系**（`JsonObject`）时，点号**不走本表**——由 m3 §11 接管为 **JSON 键访问**（`o.k` ≡ `o['k']`）；`JsonArray`/`JsonValue`/`JsonNull`/`Any`(15)/标量上点号 → **编译错误**。同一 `MemberAccess` 节点、**按静态类型分派**，互不重叠。**待确认**：`registerType<T>()` 对 JSON 谱系类拒绝 + 诊断（避免 `o.size` 的"键 vs 成员"二义）。
+
 ### 7.3 字节码侧构造 `C(args…)`
 
 ```
