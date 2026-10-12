@@ -27,7 +27,8 @@ def validate_skill(skill_path):
         return False, "SKILL.md not found"
     
     # Read and validate frontmatter
-    content = skill_md.read_text(encoding='utf-8')
+    # utf-8-sig also accepts files with a UTF-8 BOM (PowerShell 5.1 -Encoding UTF8 writes one)
+    content = skill_md.read_text(encoding='utf-8-sig')
     if not content.startswith('---'):
         return False, "No YAML frontmatter found"
     

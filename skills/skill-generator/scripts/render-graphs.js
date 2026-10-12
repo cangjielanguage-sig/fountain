@@ -10,12 +10,15 @@
  * Extracts all ```dot blocks from SKILL.md and renders to SVG.
  * Useful for helping your human partner visualize the process flows.
  *
- * Requires: graphviz (dot) installed on system
+ * Requires: graphviz (dot) installed on system.
+ * Adapted from the writing-skills skill; converted to CommonJS so it runs on
+ * any Node.js (the original ESM imports fail on Node < 20.10 without a
+ * package.json declaring "type": "module").
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import { execFileSync } from 'child_process';
+const fs = require('fs');
+const path = require('path');
+const { execFileSync } = require('child_process');
 
 function extractDotBlocks(markdown) {
   const blocks = [];
