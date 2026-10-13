@@ -36,7 +36,7 @@
 
 | 包 | 新增声明 | 受影响的既有声明 | 不变面 |
 |---|---|---|---|
-| `base` | `ClassDescriptor`、`PublicField`、`PublicMethod`、`PublicCtor` | `LocalType`（+2 常量）、`TypeToken`（+2）、`ErrCode`（+21 与描述）、`Version`（+M2 版本常量） | 全部值/异常类型（JitException 构造语义不变） |
+| `base` | `ClassDescriptor`、`PublicField`、`PublicMethod`、`PublicCtor`、**`RegistrationException` + `RegistrationRejectKind`（v0.8.32）** | `LocalType`（+2 常量）、`TypeToken`（+2）、`ErrCode`（+21 与描述）、`Version`（+M2 版本常量） | 全部值/异常类型（JitException 构造语义不变）；**注册期拒绝异常不占 ErrCode**（宿主侧，见 m2 §12.5） |
 | `bytecode` | — | `OPCODE_TABLE`（0x79 行）、`FbcReader`（verMajor 分派）、`LocalTypes.validate`（按 verMajor 合法集） | 容器头字段、段模型、crc32、kind 1–10 |
 | `compiler` | `TypeRef`、`ClassRegistryView` | `NameResolver`（解析顺序 + 冲突拒绝）、`Lowerer`（CALL_HOST/成员访问/构造/14 槽）、`AstExpr`（+4 构造器）、`DefiniteAssignment`（14/13 槽规则同型） | 词法、语法基座、既有降低模式 |
 | `runtime` | `HostCallback`、`SignatureDescriptor`、`SignatureVerifier`、`PromotionGroup`、H63/H64/H65（顶层 @C func） | `HandleTable`（条目标签 10/11）、`IterTable`（不变）、`DbgDump`（报告值型扩展：14 记 `<类名>#idx`） | ctx、迭代器、既有 helper 语义 |
@@ -234,6 +234,8 @@
 | `func buildCtor(info: ConstructorInfo): ?PublicCtor` | 构造器自动适配器（`ConstructorInfo.apply` 为后盾；参数不可映射 → 跳过 + 诊断；泛型类按具体实例化） | m2 §12.5/§15 |
 | （生成物命名约定） | 实例 prop getter 名 = 成员名；`mut prop` setter 名 = `set` + 首字母大写；静态包装名 = 成员名；方法 bind 内部名含 `.`（源不可直呼）；命名冲突 → 跳过 + 诊断 | m2 §12.5 |
 
+**注册期拒绝（v0.8.32，M2-4 结案）**：`public class RegistrationException <: fountain::f_base.BaseException`——`init(kind: RegistrationRejectKind, name: String, occupiedBy: ?String)`、字段 `kind` / `name` / `occupiedBy`、`super(message)` 转发三段消息（kind 说明 + occupiedBy + 固定 hint）；`public enum RegistrationRejectKind { | DuplicateClass | FunctionNameClash | BuiltinTypeName | Keyword | JsonFamily | ReflectionUnavailable }`。**只在宿主侧**：在注册调用栈内抛出（不经字节码 / JIT / 解释器、**不占 `ErrCode`**、不入 `.fbc`、不进三引擎差分）；抛出点 = `ClassRegistry.register` / `Compiler.registerClass` / `ReflectRegistrar.registerType`；**不登记**（注册表不变、快照语义不受影响）。体例见 m2 §12.5。
+
 #### 6.1.3 `JitClosureId`（public struct，逃逸闭包 ID 的宿主值类型）
 
 **更名（2026-10-11）**：本类型原名 `CFunc`——与仓颉**内建**的 C 函数指针类型 `CFunc<F>`（FFI：`foreign func` / `@C` / `CPointer` 互转、调用需 `unsafe`）**同名**，在本模块满是 `@C` helper 的语境下极易误读。现名 **`JitClosureId`** 直述语义：承接逃逸闭包句柄 ID 的宿主值类型，与闭包包装（`JitFunction.callFor` / `close`，M2-8）成对。
@@ -389,7 +391,7 @@ Compiler.registerType<User>() → ReflectRegistrar：枚举 public 成员（字�
 | M2-1 | P1（`is` 对函数类型的运行期判定）落地确认 | **已实测确认（2026-10-11）**：WSL Ubuntu-24.04 + SDK 1.3.0-alpha，`is` 支持函数类型（入参逆变/返回协变成立、捕获闭包命中、非函数值不命中），动态调用经类型模式绑定；**结案**——主线验签成立，§6.1.5 强类型入口降为备用 |
 | M2-2 | 逃逸闭包回桥的**容器内部表示**（句柄型 cell ⇒ 提升需级联图遍历；对象引用 ⇒ 免级联） | **已结案（2026-10-11）**：容器内部表示 = **宿主对象**、元素 = **原生值/对象引用**（非世界 ID；12/13 禁存容器已移除"容器内驻留世界 ID"这一前提）⇒ 提升组是**槽级**动作、**免级联**；**与 M1 v0.18 元素寿命表述的捆绑已解除**（m1 §3.3/§8.1 随动句已补）。级联的再触发条件见 m2 §14.6 |
 | M2-3 | 逃逸闭包回桥渐进交付：第 0 步（值型捕获 + 路径 A 常量捕获，免提升）→ 第 1 步（句柄型捕获 = 提升组） | **已定稿（2026-10-11，设计结案）**；实施按 §14.7 两步走（**第 0 步先行**）。两步的边界 / 交付面 / 逐步验收见 m2 §14.7（捕获项按 §8.1 路径分为"恒有效"（值型 / 路径 A）与"窗口失效"（路径 B / C）两类；第 0 步 = 免**提升组**而非免"迁出"，`close` 协议与白名单拒绝面均属第 0 步；第 1 步增量 = 整组提升 + `PromotionGroup` + 唯一释放路径 = `close`；级联已结案 ⇒ 无额外成本）。**实施清单映射**：第 0 步 → plan-m2 `Q3.9`（前端捕获描述符 + 白名单拒绝）/`Q5.5`–`Q5.7`（`JitClosureId`、包装器 `call`/`close`）/`Q5.9`（解包行 `retType=12`）/`Q6.6`（T49 第 0 步面）；第 1 步 → `Q4.9`（`PromotionGroup`）/`Q4.10`（`moveOutGroup` 协作）/`Q3.10`（放开拒绝面） |
-| M2-4 | 类注册表的「注册期冲突」边界（类名 vs 内建类型名/关键字/已注册函数名/类名） | 规格已定「拒绝」；拒绝消息体例实施时定 |
+| M2-4 | 类注册表的「注册期冲突」边界（类名 vs 内建类型名/关键字/已注册函数名/类名） | **已结案（2026-10-13，规格升 v0.8.32）**：**载体 = 宿主侧独立异常 `RegistrationException <: f_base.BaseException`（public）**——理由：① **只在宿主侧**（注册调用栈内抛出，不经字节码 / JIT / 解释器、不跨桥、世界内无注册面）⇒ 天然不进 `.fbc` / 三引擎差分；② **不占运行期 `ErrCode`**（0–23 是「世界内执行」的码，注册期不属该路径）；③ diag 不承担错误通道（D1）⇒ 硬失败必须走异常。**体例**：`kind`（`DuplicateClass`/`FunctionNameClash`/`BuiltinTypeName`/`Keyword`/`JsonFamily`/`ReflectionUnavailable`）+ `name` + `occupiedBy`；消息三段 + 按 kind 固定 hint；**编译期可判优先**、否则注册期抛且**不登记**；**拒绝 ≠ 跳过**（成员名冲突仍走「跳过 + `RegistrationSkipped`」）。落点：m2 §12.4（指针）/§12.5（体例段）/§15/§16、本文 §2/§6.1.2、`plan-m2` Q5.2/Q5.4 |
 | M2-5 | 第三档（高阶 + 异常对象回译） | **冻结**（实现时机无限期推迟；重议条件见 m2 §13-2） |
 | M2-6 | 跨进程回调注册协议 | **永久排除**（m2 §13-3） |
 | M2-7 | **规格内部张力对账**：m2 §12.4「继承成员不解析（仅本类声明成员）」vs §12.5/§13-5②「继承成员访问器经反射按继承关系逐级向上解析（v0.8.25，已定位）」 | **已结案（2026-10-13，规格升 v0.8.31）**：设计口径不变——**前端**按**注册表内容**解析（不按继承谱系上溯、不维护类继承图）；**宿主侧**访问器/反射**可**按继承关系逐级向上（v0.8.25）——**解析点不同，不矛盾**。**规格已落**：§12.4 行 386 补「继承成员（限定说明）」+ §12.5 继承行加前端回指；用例把关见 plan-m2 Q3.3/Q3.6/Q6.5。**口径要点**：入表（含反射覆盖面）→ 糖可绑定；未入表 → **编译错误** |
