@@ -82,7 +82,15 @@ private func expandQueryMappers(attr: Tokens, declParam: Decl): Tokens {
     }
     let name = quote($(decl.identifier))
     let body = decl.body.decls
-    let props = extractMutProps(body)
+    // Inspect annotated declarations without removing their original annotations.
+    let mappingBody = ArrayList<Decl>()
+    for (member in body) {
+        match (member) {
+            case annotated: MacroExpandDecl => mappingBody.add(extract(annotated))
+            case _ => mappingBody.add(member)
+        }
+    }
+    let props = extractMutProps(mappingBody)
     let map = HashMap<String, (Bool, String, String)>()
     for (m in getChildMessages("ORMField")) {
         let name = m.getString("field")
@@ -116,7 +124,7 @@ private func expandQueryMappers(attr: Tokens, declParam: Decl): Tokens {
         break
     }
     var mappers = quote([$(generateMappers(name, props, dirty, mapperMetaFn)))
-    let varMappers = generateMappers(name, extractVars(body), mapperMetaFn)//这里不能去掉，对于级联映射会用到
+    let varMappers = generateMappers(name, extractVars(mappingBody), mapperMetaFn)//这里不能去掉，对于级联映射会用到
     if (varMappers.size > 0) {
         mappers += `comma` + varMappers
     }
@@ -137,7 +145,7 @@ private func expandQueryMappers(attr: Tokens, declParam: Decl): Tokens {
     if (superTypes.isEmpty()) {
         decl.upperBound = `upperbound`[0]
     }
-    let (tableColumns, tableColumnsClass) = generateColumns(name, extractMutProps(body), extractVars(body), mapperMetaFn)
+    let (tableColumns, tableColumnsClass) = generateColumns(name, extractMutProps(mappingBody), extractVars(mappingBody), mapperMetaFn)
     decl.superTypes.add(RefType(quote(QueryMappersObject<$name, $tableColumns>)))
     let tableName = transformTableName(attr, decl)
     body.add(parseDecl(

@@ -17,7 +17,7 @@ package fountain::f_dbpool
 
 public import std.database.sql.*
 import std.collection.Map
-import std.sync.{AtomicBool, AtomicUInt64}
+import std.sync.{AtomicBool, AtomicUInt64, Mutex}
 import std.time.MonoTime
 import std.unicode.UnicodeStringExtension
 import fountain::f_log.impl.LoggerFactory
@@ -36,6 +36,8 @@ public class DatabasePool <: Resource & Datasource {
     private let ds: Datasource
     private let pool: Pool<PooledConnection>
     private var connectTimeout: Duration
+    private let datasourceCloseLock = Mutex()
+    private var datasourceClosed = false
 
     public init(
         ds: Datasource,
@@ -182,9 +184,25 @@ public class DatabasePool <: Resource & Datasource {
         pool.isClosed()
     }
     public func close(): Unit {
-        if (!isClosed()) {
-            this.ds.close()
-            pool.close()
+        pool.close()
+        closeDatasource()
+    }
+    // The owner must finish its borrowers before waiting for the pool's internal tasks.
+    public func closeAndAwait(timeout!: Duration): Bool {
+        if (timeout <= Duration.Zero || timeout == Duration.Max) {
+            throw IllegalArgumentException('pool termination requires a positive finite timeout')
+        }
+        pool.close()
+        if (!pool.awaitTermination(timeout: timeout)) { return false }
+        closeDatasource()
+        true
+    }
+    private func closeDatasource(): Unit {
+        synchronized(datasourceCloseLock) {
+            if (!datasourceClosed) {
+                ds.close()
+                datasourceClosed = true
+            }
         }
     }
 

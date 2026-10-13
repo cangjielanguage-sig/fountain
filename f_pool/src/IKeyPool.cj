@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_pool
 
 interface IKeyPool<K, V> {
-    func add(key: K, value: V): Unit
+    func add(key: K, value: V): Bool
     func giveBack(key: K, value: V, checker: (K, V) -> Bool, destroier: (K, V) -> Unit): Unit
     func get(key: K, checker: (K, V) -> Bool, destroier: (K, V) -> Unit): ?V
     func check(running: () -> Bool, checker: (K, V) -> Bool, taskPusher: (K) -> Unit): Unit

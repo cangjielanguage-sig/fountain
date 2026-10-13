@@ -23,67 +23,59 @@ public interface DataParsable<T> where T <: DataParsable<T> {
     static func tryParse(s: String): ?T
 }
 
+/**
+ * 各个“整数 + 单位”片段分别带符号，再按顺序相加。
+ * 例如 `1m-2s` 为 58 秒，`-1m2s` 为 -58 秒；首段的负号不作用于整串。
+ */
 extend Duration <: DataParsable<Duration> {
     public static func parse(s: String): Duration {
         tryParse(s).getOrThrow {DataParsableException('${s} cannot be parsed to ${TypeInfo.of<Duration>()}')}
     }
     public static func tryParse(s: String): ?Duration {
-        //约定（bug-cross.md 的 X-2）：单位链 d/h/m/s/ms/us/ns；数字段可带负号、可多段拼接（1d2h）；
-        //非法输入返回 None（由调用方回退默认值），不抛异常。
-        //修复要点：原实现数字分支多了一次 i++（吃掉数字后面的字符 ⇒ "45s"→4s、"1m"→0），
-        //且非法输入直接抛异常、读到单位后未清空 bytes、单位分支取 s[i] 无边界检查。
-        if (s.isEmpty()) {
-            return None<Duration>
-        }
-        let bytes = ArrayList<Byte>()
+        if (s.isEmpty()) { return None }
         var duration = Duration.Zero
         var i = 0
         while (i < s.size) {
-            let r = s[i]
-            i++
-            if (r == b'-' || (r >= b'0' && r <= b'9')) {
-                //数字（含负号）先攒着，读到单位时再结算
-                bytes.add(r)
-                continue
+            let start = i
+            if (s[i] == b'-' || s[i] == b'+') { i++ }
+            let digits = i
+            while (i < s.size && s[i] >= b'0' && s[i] <= b'9') { i++ }
+            if (i == digits || i == s.size) { return None }
+            let numberStart = if (s[start] == b'+') { start + 1 } else { start }
+            let value = match (Int64.tryParse(s[numberStart..i])) {
+                case Some(number) => number
+                case None => return None
             }
-            let unit = match (r) {
+            let unit = s[i]
+            i++
+            let scale = match (unit) {
                 case b'd' => Duration.day
                 case b'h' => Duration.hour
-                case b'm' => if (i < s.size && s[i] == b's') {
-                    i++
-                    Duration.millisecond
-                } else {
-                    Duration.minute
-                }
+                case b'm' =>
+                    if (i < s.size && s[i] == b's') {
+                        i++
+                        Duration.millisecond
+                    } else {
+                        Duration.minute
+                    }
                 case b's' => Duration.second
-                case b'u' => if (i < s.size && s[i] == b's') {
+                case b'u' =>
+                    if (i >= s.size || s[i] != b's') { return None }
                     i++
                     Duration.microsecond
-                } else {
-                    return None<Duration>
-                }
-                case b'n' => if (i < s.size && s[i] == b's') {
+                case b'n' =>
+                    if (i >= s.size || s[i] != b's') { return None }
                     i++
                     Duration.nanosecond
-                } else {
-                    return None<Duration>
-                }
-                case _ => return None<Duration>
+                case _ => return None
             }
-            if (let Some(n) <- Int64.tryParse(String.unsafeUtf8(bytes.unsafeData()))) {
-                duration += unit * n
-            } else {
-                return None<Duration>
+            try {
+                duration += scale * value
+            } catch (_: ArithmeticException) {
+                return None
             }
-            //结算完清空，供下一段使用（如 1d2h）
-            bytes.clear()
         }
-        if (bytes.isEmpty()) {
-            duration
-        } else {
-            //只有数字、没给单位
-            None<Duration>
-        }
+        duration
     }
 }
 

@@ -32,22 +32,18 @@ wsl -d Ubuntu-24.04 bash -lc "<命令>"
 
 `fountain_lookup.py` 找不到仓库根时会自动执行：
 `git clone --depth 1 https://gitcode.com/Cangjie-SIG/fountain.git <skill-root>/fountain`，
-该副本**仅用于查询文档**（README / 源码 API 参考，查询结果里会标注），不要用于构建或安装：
+该副本**仅用于查询文档**（README / 源码 API 参考，查询结果里会标注），不要用于构建或安装。
+定位规则、版本优先级（`--version` > `$FOUNTAIN_VERSION` > 项目依赖）、切 tag 机制、`switch` / `version`
+命令与「切版本只动副本」的约定见 SKILL.md「定位 fountain 仓库与查询版本」；本节只补该小节没有的细节：
 
-- 查询：`python <skill-root>/scripts/fountain_lookup.py modules`（第二次起直接用副本，不会重复克隆）；
-- **按版本查询（默认行为）**：查询前先定目标版本——`--version X.Y.Z`（也可给 tag 名）> `$FOUNTAIN_VERSION`
-  > 当前项目 cjpm.toml 里 `"fountain::f_*"` 的依赖版本（从当前目录向上找最近的）。定了版本后脚本把副本切到
-  对应 tag（`git fetch --depth 1 origin tag <tag>` + `git checkout --detach`，只取该版本快照，实测约 30MB / 几秒；
-  命中本地已有 tag 时不联网），再检索；**输出头部标注实际版本**；
-- 只切副本 / 看状态：`python <skill-root>/scripts/fountain_lookup.py switch 1.3.9`（`switch latest` 回默认分支）、
-  `python <skill-root>/scripts/fountain_lookup.py version`；
-- **切版本只动技能目录下的副本**：`--root` / `$FOUNTAIN_ROOT` 指定的源码目录不会被改动（版本不符时输出警告）；
-  自动发现的源码目录版本不符时，脚本改用文档副本并在 stderr 说明；
-- 构建 / 安装：用用户自己的 fountain 源码（`install_fboot.sh install` / path 依赖），或从中心仓装 fboot（3.2 节）；
-- 换镜像 / 断开网络：`--repo-url <URL>` / `--no-clone`（禁用克隆、`fetch`、`ls-remote` 与 `pull`；
+- **换镜像 / 断开网络**：`--repo-url <URL>` / `--no-clone`（禁用克隆、`fetch`、`ls-remote` 与 `pull`；
   副本里已有目标 tag 时仍可本地 checkout）；
-- 副本过时或损坏：直接删掉 `<skill-root>/fountain` 重新克隆（副本会随切换累积多个版本的快照，约 30MB/版本）；
-  副本停在分支上时脚本会先 `pull --ff-only`，停在 tag 上（detached）时不做拉取。
+- **副本维护**：停在分支上时脚本会先 `pull --ff-only`，停在 tag 上（detached）时不做拉取；过时或损坏直接删掉
+  `<skill-root>/fountain` 重新克隆（副本会随切换累积多个版本的快照，约 30MB/版本）；
+- 构建 / 安装：用用户自己的 fountain 源码（`install_fboot.sh install` / path 依赖），或从中心仓装 fboot（3.2 节）。
+
+实测（2026-10-10，gitcode）：`ls-remote --tags --refs`（76 个 tag）约 1s；首次浅克隆（1.3.14 快照 1547 个文件）
+约 5s / 31MB；`fetch --depth 1 origin tag <tag>` 切版本约 2s。
 
 实测（2026-10-10，gitcode）：`ls-remote --tags --refs`（76 个 tag）约 1s；首次浅克隆（1.3.14 快照 1547 个文件）
 约 5s / 31MB；`fetch --depth 1 origin tag <tag>` 切版本约 2s。
@@ -104,14 +100,9 @@ fboot version                                                      # 返回 fboo
 bash <skill-root>/scripts/install_fboot.sh version [--root DIR]   # 环境未配置时的查法：一次列出 PATH / 安装目录 / 源码三处
 ```
 
-- **`fboot version` 返回的就是 fboot 的版本**（`fountain(x.y.z)`）；这个 `x.y.z` 也是 `fboot workspace` 自动写入 workspace 根 cjpm.toml 的
-  `"fountain::f_base"` / `"fountain::f_version"` 版本号（fboot 的版本与其内置的 fountain 版本一致），工作流 D 添加其它模块也用它。
-- fboot 不在 PATH 时（新 shell 未配置环境，直接跑会报 `libf_app@fountain.so` 打不开）用脚本的 `version` 子命令：它会自动 source 仓颉环境、
-  从 fboot 位置推断安装目录，并用同级 `libs/fboot` 重试，无需手工配 PATH / LD_LIBRARY_PATH。
-- **已安装 fboot 与源码版本不一致是常态**（本机实测：PATH 中 1.3.9、源码 1.3.14）。应用依赖版本以 fboot 版本为准；
-  想用源码版本就先重装 fboot（工作流 A）再建 workspace。
-- 带参数形式 `fboot version x.y.z [msg] [tag [tagmsg]]` 是**升版 / 打 tag 的管理命令**（会 git pull / commit / push），
-  不是查询命令，别误用。
+版本口径（它 = workspace 依赖版本 = 默认查询版本）、`install_fboot.sh version` 的自动装配行为（source 仓颉环境、
+推断安装目录、同级 `libs/fboot` 重试）、「已安装版本与源码版本不一致属常态」与「别误用带参数形式」等，
+见 SKILL.md「查看 fboot 版本」。
 
 ## 4. 在 WSL 里执行命令的规范
 

@@ -226,6 +226,17 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
 > `close()` **幂等**，返回前会销毁所有键的池并清空键表；关停之后 `get` 返回 `None`、`giveBack` 直接销毁，
 > 键表不会重新长回来。池这一层不再有 `destroy`（唯一的销毁入口是 `close`）。
 
+`idleTimeout <= Duration.Zero` 表示关闭按闲置时间回收；巡检启用时，健康检查和 `minSize` 补足仍可执行。
+正的 `idleTimeout` 保持闲置过期语义。
+
+`Pool` 和 `KeyPool` 提供 `public func awaitTermination(timeout!: Duration): Bool`。先调用 `close()`，再用正且有限的
+`timeout` 等待创建与巡检两个后台任务结束；两任务共用一个总期限。超时返回 `false`，之后可以再次等待；
+池未关闭、期限不大于零或为 `Duration.Max` 时抛 `PoolException`。`close()` 只请求取消并唤醒内部等待，
+不能强制停止用户的 `creator`／`checker`；借用者须由应用先收尾。等待成功后，关闭期间晚返回的创建结果也已处理完毕。
+
+创建抛异常或创建校验不通过时，后台重试间隔从100ms递增到最多1s；成功创建后复位。借用者的等待期限独立计算，
+额外的创建请求不会绕过退避，关闭会唤醒退避中的创建任务。
+
 ## ArrayListPool
 
 `ArrayListPool<T>` 是「池项类型固定为 `ArrayList<T>`」的池：`creator` 固定为 `{=> ArrayList<T>()}`，
@@ -267,11 +278,11 @@ public func giveBack(array: Array<T>): Unit
 | 调用方传的 `timeout` | 行为 |
 | --- | --- |
 | `<= Duration.Zero` | 不等待：取不到空闲项立即返回 `None` |
-| `Duration.Max`（默认） | 循环等待（每轮 `sleep(1ms)`，**不忙等**）。到达 `maxWaiting` 上限时记 WARN `key pool exhausted but no idle element: size=…/…, keyedSize=…/…, waited …, give up` 并返回 `None`，由调用方决定重试还是失败 |
+| `Duration.Max`（默认） | 等待资源状态通知。到达 `maxWaiting` 上限时记 WARN `key pool exhausted but no idle element: size=…/…, keyedSize=…/…, waited …, give up` 并返回 `None`，由调用方决定重试还是失败 |
 | 其它有限值 | 等待该时长，等不到返回 `None`（实现见 `KeyPool.get` 的第三个分支） |
 
-`maxWaiting` 自身传 `Duration.Max` 表示**真无限等待**：实现按固定分片等待（既避免 `MonoTime + Duration.Max` 溢出，
-也保证能及时看见 `running` 变化）。
+`maxWaiting` 自身传 `Duration.Max` 表示**真无限等待**：等待归还、创建、移除或关闭的状态通知，不计算无限截止时间。
+归还资源可直接唤醒借用者，无需等待另一个尚未完成的创建任务；有限等待被通知后继续使用原来的总期限。
 
 > 这条约束的由来：原实现在「池已满但取不到空闲项」时是 `while(running)` 无 sleep 忙等，既占满一个核又会**无日志地永久挂住**
 > 调用者（见 `.autocode/bugs/bug-archived-on-20261004.md` 六 / §7.6）。用例
