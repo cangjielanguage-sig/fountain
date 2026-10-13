@@ -199,14 +199,15 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
     private let running = AtomicBool(true)
     /**
      * 内部维护线程的句柄：`close()` 用 `cancel()` 向它们发取消请求（协作式，不强制停线程）。
-     * 线程自己的循环每轮判 `Thread.currentThread.hasPendingCancellation`，配合
-     * `tasks.remove(timeout: Duration.second)` 这种**带超时**的出队 ⇒ 关池后最迟 1s 内退出
-     * （见 .autocode/bugs/bug-pool.md §2.2 `POOL-7`：原来是无超时 `remove()`，线程永久 park）。
-     * 注：`ArrayBlockingQueue` 只有 `tryRemove()`（非阻塞）与 `remove(timeout: Duration)`（带超时）两个重载，
-     * 没有 `tryRemove(timeout:)` —— 这里用的是后者。
+     * Each loop checks cancellation and running. Queue waits are notified by enqueue/close;
+     * cancellation is only a request, while awaitTermination observes actual task completion.
      */
     private var creationThread: ?Future<Unit> = None
     private var checkingThread: ?Future<Unit> = None
+    // Serialize the admission decision with close; no creation/check/destruction callback is held here.
+    private let admission = Mutex()
+    private let creationMutex = Mutex()
+    private let creationReady = synchronized(creationMutex){ creationMutex.condition() }
     /**
      * 「等待池项」的通道：池耗尽时 `get` park 在这里，由**创建完成 / 归还 / 关停**三处唤醒 ——
      * 不再有 1ms 轮询（见 .autocode/bugs/bug-pool.md §1.2 `POOL-2`、§2.1 `POOL-6`）。
@@ -431,11 +432,12 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
                 return
             }
             pool.check({=> running.load()}, {k, r => 
-                var valid = !r.isIdleTimeout() && if(let Some(v) <- r.get()){
+                var valid = running.load() && !r.isIdleTimeout() && if(let Some(v) <- r.get()){
                     doCheck(k, v, checker)
                 }else{
                     false
                 }
+                valid = valid && running.load()
                 if(!valid){
                     // take()：显式销毁过的池项其 Ref 已空，终结器不会再销毁第二次（见 .autocode/bugs/bug-pool.md §1.1）
                     if(let Some(v) <- r.take()){
@@ -444,6 +446,7 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
                 }
                 valid
             }){k => tryAddTask(k)}
+            if (!running.load()) { return }
             for ((k, s) in pool.entries() where s < minSize) {
                 sleep(Duration.Zero)
                 tryAddTask(k)
@@ -478,7 +481,21 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
     }
     /** 把「给某键建一个池项」的任务入队；队列满/已关停返回 false（调用方下一轮再试）。 */
     private func tryAddTask(key: K): Bool {
-        tasks.tryAdd(key)
+        synchronized(creationMutex){
+            if (!running.load()) { return false }
+            if (!tasks.tryAdd(key)) { return false }
+            creationReady.notifyAll()
+            true
+        }
+    }
+    private func takeCreationTask(): ?K {
+        synchronized(creationMutex){
+            while (running.load() && !Thread.currentThread.hasPendingCancellation) {
+                if (let Some(key) <- tasks.tryRemove()) { return key }
+                creationReady.wait()
+            }
+            None
+        }
     }
     private func startCreationSchedule() {
         creationThread = spawn {
@@ -503,16 +520,28 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             }
         }
     }
+    // A failed creation waits independently of borrowers' deadlines. Enqueue notifications
+    // may wake this condition, but only close/cancellation may shorten the delay.
+    private func waitCreationRetry(delay: Duration): Bool {
+        let started = MonoTime.now()
+        var remain = delay
+        while (remain > Duration.Zero) {
+            synchronized(creationMutex){
+                if (!running.load() || Thread.currentThread.hasPendingCancellation) { return false }
+                creationReady.wait(timeout: remain)
+            }
+            if (!running.load() || Thread.currentThread.hasPendingCancellation) { return false }
+            remain = delay - (MonoTime.now() - started)
+        }
+        running.load() && !Thread.currentThread.hasPendingCancellation
+    }
     /** 创建线程的一轮循环（拆出来便于看护重开）。 */
     private func creationLoop(): Unit {
-        // 每轮判「取消请求」，出队用**带超时**的 `remove(Duration.second)`（`ArrayBlockingQueue` 只有
-        // `tryRemove()` 非阻塞版与 `remove(timeout: Duration)` 带超时版，没有 `tryRemove(timeout:)`）。
-        // 池一关（`close()` 发取消请求）本线程最迟 1s 内退出；原来是无超时 `remove()`，
-        // 空队列上永久 park，`close()` 唤不醒它（见 .autocode/bugs/bug-pool.md §2.2 POOL-7）。
-        // 超时返回 None 只是「这一秒没任务」⇒ 回到循环顶再判一次取消/关停，不是异常退出。
+        // The empty queue waits on enqueue/close notifications, not a periodic timeout.
+        var retryDelay = Duration.millisecond * 100
         while(!Thread.currentThread.hasPendingCancellation && running.load()){
-            if (let Some(k) <- tasks.remove(Duration.second)) {
-                while(!Thread.currentThread.hasPendingCancellation && pool.size < totalSize && pool.keyedSize(k) < maxSize){
+            if (let Some(k) <- takeCreationTask()) {
+                while(!Thread.currentThread.hasPendingCancellation && running.load() && pool.size < totalSize && pool.keyedSize(k) < maxSize){
                     try {
                         let object = creator(k)
                         if (!running.load()) {
@@ -524,15 +553,24 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
                         if (checkOnCreation && !doCheck(k, object, checker)){
                             doDestroy(k, object, destroier)
                         } else {
-                            pool.add(k, ref(k, object))
+                            let resource = ref(k, object)
+                            let accepted = synchronized(admission){
+                                running.load() && pool.add(k, resource)
+                            }
+                            if (!accepted) {
+                                keyedDestroy(k, resource)
+                            } else {
+                                retryDelay = Duration.millisecond * 100
+                            }
                             break
                         }
                     }catch(e: Exception){
                         PoolDiagnostics.onCallbackError()
                         logger.warn('error on creating', e)
                     }
-                    sleep(Duration.Zero)
-                    continue
+                    if (!waitCreationRetry(retryDelay)) { return }
+                    let increased = retryDelay * 2
+                    retryDelay = if (increased > Duration.second) { Duration.second } else { increased }
                 }
                 // 处理完一条任务就唤醒等待者：建成了他要立刻来取，没建成（额度满）他也要复查一次（见 §1.2 POOL-2）
                 wakeWaiters()
@@ -560,11 +598,11 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
      * 关停之后 `get` 返回 `None`、`giveBack` 直接销毁、键表保持空 —— 不会再有键从 close 之后长回来。
      */
     public func close(): Unit {
-        if (!running.compareAndSwap(true, false)) {
+        let closing = synchronized(admission){ running.compareAndSwap(true, false) }
+        if (!closing) {
             return               // 已经关过了（键表已清空、池项已销毁）
         }
-        // 给两个内部维护线程发取消请求（协作式）：它们的循环每轮判 `hasPendingCancellation`
-        // + 带超时出队 ⇒ 最迟 1s 内退出，不再永久 park（见 §2.2 POOL-7）
+        // Cancellation is cooperative; wake both internal waits and join only through awaitTermination.
         if (let Some(t) <- creationThread) {
             t.cancel()
         }
@@ -578,7 +616,10 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         synchronized(checkMutex){
             checkCond.notifyAll()
         }
-        while(let Some(_) <- tasks.tryRemove()){}
+        synchronized(creationMutex){
+            while(let Some(_) <- tasks.tryRemove()){}
+            creationReady.notifyAll()
+        }
         // 销毁所有键的池并清空键表（见 §2.6 POOL-11）：`BaseKeyPool.close` 内部逐个键
         // 「先关闭 + 销毁池项 + 摘键」，最后把全局计数清零。
         pool.close{k, r => 
@@ -588,6 +629,32 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             }
         }
         PoolDiagnostics.onPoolClosed()
+    }
+    public func awaitTermination(timeout!: Duration): Bool {
+        if (timeout <= Duration.Zero || timeout == Duration.Max) {
+            throw PoolException('termination timeout must be finite and positive.')
+        }
+        if (running.load()) {
+            throw PoolException('pool must be closed before awaiting termination.')
+        }
+        let start = MonoTime.now()
+        let creationFinished = awaitTask(creationThread, start, timeout)
+        let checkingFinished = awaitTask(checkingThread, start, timeout)
+        creationFinished && checkingFinished
+    }
+    private func awaitTask(task: ?Future<Unit>, start: MonoTime, timeout: Duration): Bool {
+        if (let Some(future) <- task) {
+            if (future.tryGet().isSome()) { return true }
+            let elapsed = MonoTime.now() - start
+            if (elapsed >= timeout) { return false }
+            try {
+                future.get(timeout - elapsed)
+                true
+            } catch (e: TimeoutException) {
+                // A task may itself throw TimeoutException; tryGet preserves that failure.
+                future.tryGet().isSome()
+            }
+        } else { true }
     }
     /**
      * 摘掉 `key` 对应的池：**先关闭并销毁**它的池项（池内空闲项逐个交给 `destroier`），再把键从键表里删掉。
@@ -600,12 +667,15 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
      * 键不存在、或池已关停（`close()` 清空键表之后）时都是**空操作**。
      */
     public func remove(key: K): Unit {
-        pool.remove(key, {_, r => 
-            // take()：显式销毁过的池项其 Ref 已空，终结器不会再销毁第二次（见 .autocode/bugs/bug-pool.md §1.1）
-            if(let Some(v) <- r.take()){
-                doDestroy(key, v, destroier)
-            }
-        })
+        try {
+            pool.remove(key, {_, r =>
+                if(let Some(v) <- r.take()){
+                    doDestroy(key, v, destroier)
+                }
+            })
+        } finally {
+            wakeWaiters()
+        }
     }
     private func doDestroy(k: K, v: V, destroier: (K, V) -> Unit){
         try{
@@ -637,20 +707,19 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
      * 调用前调用方已把自己要的池项任务入队；创建完成、`giveBack`、`close`、巡检腾出额度四处都会 `wakeWaiters`。
      * 被唤醒不代表一定有事发生（可能归还的项被别人抢走）—— 调用方醒来后必须自己复查池与 `running`。
      *
-     * 丢唤醒说明：`wakeWaiters` 先推进 `available` 纪元再通知；等待者「登记 `waiters` → 读纪元 →
-     * 持 `waitMutex` 再确认」——纪元已变就直接返回不 park，因此「通知发生在 park 之前」不会丢。
+     * The caller captures the generation before checking the pool. A notification between
+     * that check and this wait changes the generation, so it cannot be lost.
      */
-    private func waitItem(remain: Duration): Unit {
+    private func waitItem(remain: Duration, seen: Int64): Unit {
         waiters.fetchAdd(1)
-        let seen = available.load()
         try {
-            if (available.load() != seen) {
+            if (!running.load() || available.load() != seen) {
                 return
             }
             synchronized(waitMutex){
                 // 同一把锁下再确认一次：纪元推进是无锁的，但通知必须拿这把锁
                 // ⇒ 只要纪元没变，park 之后的那个通知一定能拿到锁把我们叫醒。
-                if (available.load() != seen) {
+                if (!running.load() || available.load() != seen) {
                     return
                 }
                 if (remain == Duration.Max) {
@@ -695,6 +764,7 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
             let limit = if (timeout == Duration.Max) { maxWaiting } else { timeout }
             let infinite = limit == Duration.Max
             while(running.load()) {
+                let seen = available.load()
                 if (let Some(r) <- pool.get(key, checkOnBorrowFn, keyedDestroy) && let Some(v) <- r.take()) {
                     return v
                 }
@@ -706,7 +776,7 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
                 if (remain != Duration.Max && remain <= Duration.Zero) {
                     break
                 }
-                waitItem(remain)
+                waitItem(remain, seen)
             }
             if (running.load() && !infinite && timeout == Duration.Max) {
                 // 只有「Duration.Max + 有限 maxWaiting」档告警放弃（与原实现/README 口径一致）
