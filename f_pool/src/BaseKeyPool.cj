@@ -34,14 +34,13 @@ struct BaseKeyPool<K, V> <: IKeyPool<K, V> where K <: Hashable & Equatable<K> {
     BaseKeyPool(mode: Mode, private let max: Int64, private let running: AtomicBool){
         poolCreator = mode.poolCreator()
     }
-    public func add(key: K, value: V): Unit {
-        if (!running.load()) {
-            // 关停窗口：不再建池、不再入池（这个值由调用方的 `Ref` 终结器兜底销毁）
-            return
-        }
+    public func add(key: K, value: V): Bool {
+        if (!running.load()) { return false }
         if (keyedPool(key).add(value)) {
             s.fetchAdd(1)
+            return true
         }
+        false
     }
     public func giveBack(key: K, value: V, checker: (K, V) -> Bool, destroier: (K, V) -> Unit): Unit {
         if (let Some(p) <- map.get(key)) {
@@ -98,6 +97,8 @@ struct BaseKeyPool<K, V> <: IKeyPool<K, V> where K <: Hashable & Equatable<K> {
             p.check(running, {v => checker(k, v)}){if (p.size < max) { taskPusher(k) }} |> 
             s.fetchSub
             if(!running()){
+                p.check({=> true}, {v => checker(k, v)}){}
+                s.store(0)
                 return
             }
             sleep(Duration.Zero)
