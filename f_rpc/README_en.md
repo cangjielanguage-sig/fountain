@@ -17,7 +17,7 @@ protocol) and provides:
 
 ## Module dependencies
 
-`f_app` `f_aspect` `f_base` `f_bean` `f_codec` `f_collection` `f_concurrent` `f_config` `f_data` `f_health` `f_io` `f_log` `f_macros` `f_net` `f_process` `f_protocol` `f_store` `f_util`
+`f_app` `f_aspect` `f_base` `f_bean` `f_codec` `f_collection` `f_concurrent` `f_config` `f_data` `f_health` `f_io` `f_log` `f_macros` `f_net` `f_process` `f_protocol` `f_util`
 
 ## Package structure
 

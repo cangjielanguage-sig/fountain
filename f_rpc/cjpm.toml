@@ -33,7 +33,6 @@
   "fountain::f_net" = {path = "../f_net"}
   "fountain::f_process" = {path = "../f_process"}
   "fountain::f_protocol" = {path = "../f_protocol"}
-  "fountain::f_store" = {path = "../f_store"}
   "fountain::f_util" = {path = "../f_util"}
 
 [target]
