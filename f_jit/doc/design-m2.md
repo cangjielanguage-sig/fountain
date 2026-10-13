@@ -39,7 +39,7 @@
 | `base` | `ClassDescriptor`、`PublicField`、`PublicMethod`、`PublicCtor`、**`RegistrationException` + `RegistrationRejectKind`（v0.8.32）** | `LocalType`（+2 常量）、`TypeToken`（+2）、`ErrCode`（+21 与描述）、`Version`（+M2 版本常量） | 全部值/异常类型（JitException 构造语义不变）；**注册期拒绝异常不占 ErrCode**（宿主侧，见 m2 §12.5） |
 | `bytecode` | — | `OPCODE_TABLE`（0x79 行）、`FbcReader`（verMajor 分派）、`LocalTypes.validate`（按 verMajor 合法集） | 容器头字段、段模型、crc32、kind 1–10 |
 | `compiler` | `TypeRef`、`ClassRegistryView` | `NameResolver`（解析顺序 + 冲突拒绝）、`Lowerer`（CALL_HOST/成员访问/构造/14 槽）、`AstExpr`（+4 构造器）、`DefiniteAssignment`（14/13 槽规则同型） | 词法、语法基座、既有降低模式 |
-| `runtime` | `HostCallback`、`SignatureDescriptor`、`SignatureVerifier`、`PromotionGroup`、H63/H64/H65（顶层 @C func） | `HandleTable`（条目标签 10/11）、`IterTable`（不变）、`DbgDump`（报告值型扩展：14 记 `<类名>#idx`） | ctx、迭代器、既有 helper 语义 |
+| `runtime` | `HostCallback`、`SignatureDescriptor`、`SignatureVerifier`、`PromotionGroup`、H63/H64/H65（顶层 @C func） | `HandleTable`（条目标签 10/11）、`IterTable`（不变）、`DbgDump`（**大类名呈现**：13 记 `<HostClosure>#idx`、14 记 `<HostObject>#idx`——2026-10-11 裁定） | ctx、迭代器、既有 helper 语义 |
 | `fountain::f_jit`（根） | `ClassRegistry`、`JitClosureId`、`ReflectRegistrar` | `Compiler`（+2 成员）、`CallMarshal`（+行）、**`JitFunction`（+`callFor<Fn>`、闭包包装的 `close`/`isClosed`——M2-8 裁定：不另设包装类）** | 执行六步、卸载状态机、去重缓存 |
 
 ---

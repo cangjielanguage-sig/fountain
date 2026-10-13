@@ -1,6 +1,6 @@
 # f_jit 详细设计 · M3 增量（verMajor 3：Any 通道 · JSON 字面量 · CALL_HOST 转发特化）
 
-> 依据：`jit-bytecode-m3.md` v0.3.16（同目录）。本文只写 **M3 的增量与受影响面**；未提及的包、声明、成员一律沿用 `design-m1.md` / `design-m2.md`。
+> 依据：`jit-bytecode-m3.md` v0.3.24（同目录）。本文只写 **M3 的增量与受影响面**；未提及的包、声明、成员一律沿用 `design-m1.md` / `design-m2.md`。
 > 版本口径：`.fbc` **verMajor 3**（verMinor 0）；M1/M2 产物按各自规则集运行，语义**完全不变**。
 > 三个专项：① **Any 通道**（§0–§10）；② **JSON 字面量**（§11，含世界内可变 API）；③ **CALL_HOST 转发特化**（§13，纯加速、语义零变更）。
 > 附录（文末）：**M3 增量三表**（附 A 语法 → 字节码 · 附 B 指令定义增量 · 附 C 字节码 ↔ 机器码增量）；M1 全量三表见 `design-m1.md` 附录。
@@ -54,7 +54,7 @@
 | `ErrCode` | `static const ANY_CAST = 22` | `as` 动态转型失败（盒内容与目标类型不符；site=`any_as` 调用点）；与 7 分列 | m3 §2、§12-6 |
 | `ErrCode describe` | 映射范围扩至 1–22、23 | 21/22 行入桥静态表 | m3 §12-6 |
 
-**可转集（冻结，实施依据）**：LocalType `0–8、9–11` + `14`（v0.3.12：`Any ⇄ 14` 双方向开放；类界按仓颉继承语义）；其中 `3=Unit` 前端不发射装箱点；`12=Closure` 不开放转型（且**闭包禁止存入集合——含经 Any 盒的间接路径**）；`13=HostClosure` 二期候选（约束已定：转型目标必须为明确函数类型）；`15` 不在可转集（**盒不套盒**，最终形态）。
+**可转集（冻结，实施依据）**：LocalType `0–8、9–11` + `14`（v0.3.12：`Any ⇄ 14` 双方向开放；类界按仓颉继承语义）+ **`16–19`**（v0.3.20：内建 JSON 码——零注册、码级继承 `17/18/19 <: 16`、`aux=0xFFFF`）；其中 `3=Unit` 前端不发射装箱点；`12=Closure` 不开放转型（且**闭包禁止存入集合——含经 Any 盒的间接路径**）；`13=HostClosure` 二期候选（约束已定：转型目标必须为明确函数类型）；`15` 不在可转集（**盒不套盒**，最终形态）。
 
 ---
 
@@ -66,7 +66,7 @@
 | `ConstPayload` | `+ PJson(raw: String)` | payload = 规范化后的原始 JSON 字节串（与 kind 3 同构；原始字节即 payload，解析在加载期） | m3 §11 |
 | `ConstRegistry` | `+ addJson(raw: String): Int64` | 注册 JSON 常量 → hid（**拼装期仅登记原始字节**，不解析） | m3 §11 |
 | `FbcReader` | kind 11 分支 | ① 载荷校验（u32 长度 + UTF-8）；② **实例化一次**：调 `fountain::f_data.json` 解析器构建 `JsonObject`/`JsonArray` → 登记 ConstTable（路径 A：跨调用同 ID、单元生命周期、不可变）；③ 防御性再校验失败 → 加载期拒绝 | m3 §11 |
-| `FbcReader` | verMajor 3 规则集 | LocalType 0–15；含 H66–H68/H73–H75 的 helper 值域；kind 11 合法 | m3 §2、§9.2 |
+| `FbcReader` | verMajor 3 规则集 | LocalType **0–19**（**15=Any、16–19=JSON 内建码**，v0.3.20）；含 H66–H68/H73–H75 的 helper 值域；kind 11 合法 | m3 §2、§9.2 |
 | `ConstRegistry` | （无独立 frozen 成员） | 「实例化登记」动作把 **frozen 标记写入句柄条目**（唯一所有者 = `HandleTable`，见 §5.4）；供 H74 写保护判定 | m3 §11 |
 
 ---
@@ -210,7 +210,7 @@ H63: fetch → entry.plan（Layer B，验签时绑定；Layer A `SignatureTable`
 | verMajor 1/2 产物 | ✓ | ✓ | ✓（按各自规则集） |
 | verMajor 3 产物 | ✗（18） | ✗（18） | ✓ |
 
-- LocalType 合法集按 verMajor 分派：M1=0–12；M2=0–14；M3=0–15；16–255 恒拒。
+- LocalType 合法集按 verMajor 分派：M1=0–12；M2=0–14；**M3=0–19**（15=Any、16–19=JSON——内建码）；**20–255 恒拒**。
 - 不变项：ctx、帧布局、全部 M1/M2 指令语义、fail-fast、窗口/逃逸机制、§9.15 规则集（变更型**无新增来源**——M3 的 json_set 为显式新来源）。
 
 ---

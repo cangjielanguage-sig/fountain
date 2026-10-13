@@ -1,6 +1,7 @@
 # f_jit TDD 开发计划 · M1
 
-> 依据：`design-m1.md`（本目录）与 `jit-bytecode-m1.md` v0.18.35。
+> 依据：`design-m1.md`（本目录）与 `jit-bytecode-m1.md` v0.18.36。
+> 实现对照：**附 A（语法→字节码）/ 附 B（指令定义）/ 附 C（字节码↔机器码）** 为同源速查（权威 = 规格 §5/§10/§12，冲突以规格为准）。
 > 粒度：**每个公共成员一份 TDD 单元**（步骤内逐成员列出）；步骤按依赖顺序排列，每步可独立提交。
 > 配套：M2/M3 增量另见 `plan-m2.md`、`plan-m3.md`。
 
@@ -89,7 +90,7 @@ f_jit/
 
 | 步骤 | 目标成员 | 先写测试（红） | 实现要点（绿） | 验收（回归） |
 |---|---|---|---|---|
-| S1.1 | `LocalType`：`I64/F64/BOOL/UNIT/STRING/DECIMAL/DATETIME/DURATION/RANGE/REGEX/LIST/MAP/CLOSURE`、`name`、`isHandle`、`fromToken` | 13 个常量逐值断言（0–12）；`isHandle(4..12)=true`、`isHandle(0..3)=false`；`fromToken` 与 §11.7 对应表全等 | 静态常量 + 查询函数；与 TypeToken 的映射表集中一处 | 与 §11.7 表逐项一致 |
+| S1.1 | `LocalType`：`I64/F64/BOOL/UNIT/STRING/DECIMAL/DATETIME/DURATION/RANGE/REGEX/LIST/MAP/CLOSURE`、`name`、`isHandle`、`fromToken` | 13 个常量逐值断言（0–12）；`isHandle(4..12)=true`、`isHandle(0..3)=false`；`fromToken` 与 §11.7 对应表全等；**合法集按 verMajor 分派**（1:0–12〔本步〕/ 2:0–14 / 3:0–19——15=Any、16–19=JSON；M2/M3 追加码的登记位本步预留） | 静态常量 + 查询函数；与 TypeToken 的映射表集中一处；**`name` 表与合法集按码全表（0–19）**登记（供 DbgDump/诊断；本步填 0–12） | 与 §11.7 表逐项一致 |
 | S1.2 | `TypeToken`：`RESERVED/LIST/MAP/STRING/DECIMAL/DATETIME/DURATION/RANGE/REGEX/CLOSURE`、`name` | 常量逐值断言（0–9）；name 非空 | 常量 + 描述表 | 与 §6 类型 token 表一致 |
 | S1.3 | `ErrCode`：`OK/DEOPT/INTERRUPT`、`DIV_ZERO…READONLY`（1–20）、`CONCURRENT_MOD`(23)、`HELPER_PANIC`(99)、`describe`、`isHostSide` | 全码值断言；`describe(-2..99)` 非空且含语义关键词；未知码描述兜底 | 静态表（无宏，硬编码映射） | §2 表逐项一致 |
 | S1.4 | `Version`：`MAJOR/MINOR/HDR_SIZE/MAGIC` | 常量断言（1/14/36/"FBC1"） | 常量 | 与 §11.6 一致 |
@@ -98,7 +99,7 @@ f_jit/
 | S1.7 | `SourceUnit` | 构造与字段读；entryFn 与容器头不一致的拒绝路径（在 S2.15 联测） | struct | — |
 | S1.8 | `JitException`：`init(code,site,fnId,sourcePos,message,cause)`、`code/site/fnId/sourcePos/message/cause` | 字段保真；`sourcePos=None` 分支；`cause=None`；可 `catch (e: JitException)` 并读回全部字段；**`is fountain::f_base.BaseException` 断言**（统一基类，宿主可统一 catch） | class <: `f_base.BaseException`（`super(message)` 转发报告文本） | 全部字段可用 |
 | S1.9 | `SourceCompileException`：`kind/position/line/column/lineText/hint` | 字段保真；`lineText` 等于对应源码行原文；**`is fountain::f_base.BaseException` 断言** | class <: `f_base.BaseException` | T50 编译期分组前置 |
-| S1.10 | `DiagnosticsSink`/`DiagnosticLevel` | 桩实现记录调用（level+message）；`JitMode` 降级路径注入（在 S5.3 联测） | interface + enum | 桩可复用 |
+| S1.10 | `DiagnosticsSink`/`DiagnosticLevel`/**`DiagCode`**/**`DummyDiagnosticsSink`**（**D1**） | 桩实现记录调用（level+message）；**`DiagCode` 六值逐值**（`JitFallback`/`MmapFailed`/`RegistrationSkipped`/`PredefinedLimit`/`PlanFallback`/`Unspecified`）；**便捷重载 `diag(level, message)` 默认转发（`Unspecified`）**；`JitMode` 降级路径注入（在 S5.3 联测） | interface + enum + 空实现；主签名 `diag(level, code, message)`；**等级仅 `Info｜Warn`**（错误一律异常） | 桩可复用；**sink 异常由引擎吞掉**（有在途异常 → `addSuppressed`；无在途 → 仅吞掉、不改语义；`Error` 不捕；不重入 diag）——S6.4/S5.12 联测 |
 | S1.11 | `base` 包整体可见性检查 | 用户代码 `import fountain::f_jit.base.*` 可用；`internal` 不外泄的编译期断言（负向用例不可编译——人工核对）；**`Engine`/`JitValue`（protected）用户面不可见**（同法核对） | 可见性标注 | 与 §1.2 规则一致；D3/D6 结案 |
 
 ### P2 包 `bytecode`
@@ -110,7 +111,7 @@ f_jit/
 | S2.3 | `DecodedInsn`、`InsnDecoder.decode/u16/i32/i64/rel32` | 按 fmt 解码各类指令（`-`/`u8`/`u16`/`i32`/`rel32`/`i64`/`u16 u8`）；`rel32` 目标 = 下一条指令 + offset；RSVD/FORBID 解码 → 语义拒绝（`ERR_NOT_IMPL`） | 查表 + 游标推进 | 解码器是解释器取指唯一入口 |
 | S2.4 | `FuncEntry`（10 字段 + `SIZE`） | 26 字节编解码往返、字段保真 | struct + SIZE 常量 | §11.7 恒 26 B |
 | S2.5 | `FuncDir`：`add/get/find/size/validate` | 增查；重复 fnId 拒绝；`validate`：off/len 越界拒绝、`entryFn` 不命中拒绝 | 数组 + 索引 | 加载期校验前置 |
-| S2.6 | `LocalTypes`：`init/get/set/size/validate/isHandleSlot` | 读写与越界；`validate`：长度≠nLocals 拒绝、13–255 拒绝；`isHandleSlot(4..12)=true` | 每槽 1 B | §11.7 校验 |
+| S2.6 | `LocalTypes`：`init/get/set/size/validate/isHandleSlot` | 读写与越界；长度≠nLocals 拒绝；`validate` **按该单元 verMajor 的合法集**：v1 → 13–255 拒；**v2 → 15–255 拒（13/14 放行）**；**v3 → 20–255 拒（15–19 放行——15=Any、16–19=JSON）**；`isHandleSlot(4..12)=true`（M2/M3 追加码的句柄位判定随版本） | 每槽 1 B | §11.7 校验 |
 | S2.7 | `ConstKind`（class，常量命名空间：`static const` 线上 kind 码）、`ConstPayload`（enum：10 个构造器） | 各 kind 载荷构造/匹配；DAG 引用（PList/PMap 引用子索引） | `ConstKind` = 常量命名空间；`ConstPayload` = enum + `match` | 与 §11.5 载荷编码一一对应 |
 | S2.8 | `ConstRegistry` 拼装 API：`addList/addMap/addStr/addValue/addRange/addRegex/freeze/size/get/isFrozen` | ① 各 add 返回递增 hid；② `addRegex` 去重（同 pattern+flags 同 hid）、flags 归一（`im`≡`mi`≡`ii`）；③ `freeze` 后写操作拒绝；④ `get(i)` 载荷保真 | 数组表 + 去重键表 | §3.3/§11.5 |
 | S2.9 | `SiteEntry`、`SiteTable.add/freeze/lookup/validate` | `lookup`：取 `off ≤ site` 最大条目；无命中 → None；校验：严格升序、off<codeLen、line/column≥1；覆盖率=全部 SET_SITE（与 S3.19 联测） | 升序数组 + 二分 | §11.6/§9.16 |
@@ -118,7 +119,7 @@ f_jit/
 | S2.11 | `FbcFlags`、`FbcHeader.read/write` | 新布局字段偏移断言（0/4/6/8/12/16/20/24/28/32/36）；旧布局（verMinor≤13）读入时无 nameLen、payload=36、hdrSize=32 | 结构体 + 分支 | 旧单元兼容（T9 前置） |
 | S2.12 | `FbcWriter`：`setEntryFn/setCode/setConst/setSite/setName/setFlags/build` | build 产物：magic/verMajor/minor/lengths 正确；crc32 覆盖 code+const+site+name（改任一字节 crc32 变）；基准向量 `crc32(空)=0`、`crc32("123456789")=0xCBF43926` | 缓冲拼接 + `f_util.Crc32.isoHdlc`（CRC-32/ISO-HDLC） | §11.6 |
 | S2.13 | `FbcReader.load`（正向） | 手工构造最小合法单元 → 全字段解出（header/code/consts/site/name/dir/types）；`entryFn` 命中目录 | 分派 + 各表解析 | T1 基础 |
-| S2.14 | `FbcReader.load`（拒绝面，逐条） | ① magic 错；② verMajor 2/3 → 18 语义；③ 未知 flags 位/`bit1=1` → 拒绝；④ 段长不符；⑤ 常量 DAG 环；⑥ 坏载荷（非 canonical F64、非法 kind）；⑦ 目录越界；⑧ 类型表非法；⑨ site 未覆盖/乱序；⑩ name 坏键；⑪ crc32 不符 —— 每条独立用例断言拒绝与错误码 | 校验集中 `validate`；拒绝=抛 JitException(14/18)；crc32 用同一 `f_util.Crc32.isoHdlc` | 每拒绝面一条用例（T9/T13/T50 前置） |
+| S2.14 | `FbcReader.load`（拒绝面，逐条） | ① magic 错；② verMajor 2/3 → 18 语义（**本加载器只到 v1**；`supportedMajor` / `minVerMinorOf(major)` 组合成**兼容矩阵**，M2/M3 步进按 major 分派规则集）；③ 未知 flags 位/`bit1=1` → 拒绝；④ 段长不符；⑤ 常量 DAG 环；⑥ 坏载荷（非 canonical F64、非法 kind）；⑦ 目录越界；⑧ 类型表非法；⑨ site 未覆盖/乱序；⑩ name 坏键；⑪ crc32 不符 —— 每条独立用例断言拒绝与错误码 | 校验集中 `validate`；拒绝=抛 JitException(14/18)；crc32 用同一 `f_util.Crc32.isoHdlc` | 每拒绝面一条用例（T9/T13/T50 前置） |
 | S2.16 | 指纹接入（**D5**）：`constFingerprint`（FNV-1a-64）· 源码/字节码指纹（FNV-1a-128）· 缓存键二次校验原语 | `f_util.Fnv` 可用（模块侧 `Fnv32/Fnv64/Fnv128/Fnv256` × {fnv1, fnv1a} + `Fnv_test` 黄金值全绿）；基准向量断言（空串 → `0xCBF29CE484222325`、`123456789` → `0x06D5573923C6CDFC`）；长度 + 字节二次校验：等长不同源 → 不命中 | **经 `fountain::f_util` 调用（不自实现哈希）**；`crc32`（四段）/ `constFingerprint`（64 位）/ 去重键（128 位）**三者分工不混用** | §11.5、§12.6；design-m1 §3.3.8 |
 | S2.15 | `ConstRegistry` 加载期实例化（kind 3–10） | kind 3/4/5/6/7/8/9 往返（对象等值、DAG 共享子结构同一对象）；kind 10：合法 pattern 构造 Regex 一次（编译次数断言）、非法/空 pattern → 14（加载期）；`PUSH_KH idx < size` | 实例化经 std（Regex/Decimal/…）；f_regex 依赖就绪 | T20 前置 |
 
@@ -129,8 +130,8 @@ f_jit/
 | S3.1 | `TokenKind`（§4.3.1 全表：58 = 5 字面量 + 16 标识符/关键字 + 12 标点 + 24 运算符 + `EOF`）、`Token`（kind/text/pos/line/column/`nlBefore`） | 每个 kind 各一条构造用例；位置字段正确（含多字节字符列号按码点）；**`nlBefore` 正确性**（跨行 token 之后同行紧跟者 → false；空白/注释跨行 → true）；`match` 穷尽性 | `TokenKind` = 无载荷 enum；`Token` = 只读 struct（6 字段） | 词法基座 |
 | S3.2 | `Lexer` 基础：`next/position/line/column`、`nlBefore` | 标识符/关键字（`recursive/let/var/if/else/while/for/in/where/break/continue/return/true/false/null`）/数字（含小数、指数、超 Int64 → 标记为 Decimal 候选）/标点/运算符（含 `!~` 单 token）；`=>`；EOF；**换行与 `;` 的 `nlBefore` 标记**；**词法错误族逐 kind 一条用例**（`IllegalCharacter`/`UnterminatedString`/`BadEscape`/`BadNumber`/`UnterminatedRegex`——fail-fast 抛出、**无 error token**） | 扫描器 + 关键字表；`null` 报「保留关键字、M1 无 null 字面值」专门诊断 | 逐 token 断言 |
 | S3.3 | `Lexer` 字符串三形态 | 单行（`'…'`/`"…"`、转义、异种引号=内容）；多行（首行换行/首个非转义三连终止/单独 `\` → 错误 kind）；原始串（`#`×n 定界、verbatim、可跨行、未闭合 → 错误）；`'''` 最长匹配消歧；CRLF/CR→LF | 三形态合并扫描 + kind 错误 | T42 词法组 |
-| S3.4 | `Lexer` **行首锚定标记**（多行串；字面量与逐例见 §8.8） | 进入判定（仅首个非空白位置标记触发）；无标记行整行保留；标记不进入产物（单独标记行 → 空串）；标记前含非空白字符的同类序列为内容；处理顺序（标记消耗→转义→插值） | 多行串后处理 | T42 锚定组 |
-| S3.5 | `Lexer` 注释与词法保护 | 单行/多行注释；`/* */` 嵌套配平；未闭合 → `UnterminatedComment`；字符串跨度内 `//`/`/*`/引号/`{`/`}`/**行首锚定标记**不参与；注释不影响 site 语义 | 保护 → 剥离 → 解析三阶段 | T24 注释组 |
+| S3.4 | `Lexer` **行首锚定标记**（多行串；字面量与逐例见 §8.8） | 进入判定（仅首个非空白位置标记触发）；无标记行整行保留；标记不进入产物（单独标记行 → 空串）；标记前含非空白字符的同类序列为内容；**非标记情形三例**（`>>|`/`a>|b`/`|>|` → 全为字面内容）；**首现语义**（`>|>|abc` → `>|abc`；`>|    >|` → `    >|`）；**行连接以 `\n`**；处理顺序（标记消耗→转义→插值）；**纯函数 `dedentAnchored(body): String`**（无状态、可单测）；**诊断列号取字面量 token 起点**；**失败面为零**（写错位置不是错误）；与 `nlBefore` 无耦合 | 多行串后处理 | T42 锚定组 |
+| S3.5 | `Lexer` 注释与词法保护 | 单行/多行注释；`/* */` 嵌套配平；未闭合 → `UnterminatedComment`；字符串跨度内 `//`/`/*`/引号/`{`/`}`/**行首锚定标记**不参与；注释不影响 site 语义；**M3 反引号 JSON 段沿用同一保护口径**（交叉引用 plan-m3 R3.6） | 保护 → 剥离 → 解析三阶段 | T24 注释组 |
 | S3.6 | `Lexer` 正则字面量 | `/pattern/flags`（flags 顺序无关、重复幂等、非法 flags → 14 语义的编译错误？否——非法 flags 加载期 14，前端词法仅切分）；字面量后紧贴 `/` 优先于注释识别（三书写形态）；`/` 除法消歧 | 正则段扫描 | T20/T26 词法组 |
 | S3.7 | `LambdaAst/AstExpr/AstStmt/Parser.parseLambda` | 全 AstExpr 构造器各一用例；形参（`name: Type`，不支持具名/默认；`=>` 必需，缺失 → `MissingArrow`）；尾表达式；嵌套闭包与 IIFE；`recursive` 调用表达式；**语句终结判定（`;` 或换行；一行多条必须 `;`）**；**AST 节点携带 `pos`**（供 `setSite`/诊断） | 递归下降；`pos` 取自首 Token | T22 前置 |
 | S3.8 | `NameResolver`：`resolve` | `recursive` 优先；命中注册表 → `UserHelper(slot)`；未注册 → `UnregisteredFunction`（消息含名字/位置/已注册清单）；非调用未定义标识符 → `UndefinedIdentifier` | 名字表 + 冲突拒绝 | T23 前置 |
@@ -153,7 +154,7 @@ f_jit/
 
 | 步骤 | 目标成员 | 先写测试（红） | 实现要点（绿） | 验收（回归） |
 |---|---|---|---|---|
-| S4.1 | `JitContext`：`create/free/errCode/site/hwBase/hwCap/hwTop/fnId/flags/dbgBase/resetForCall/cp` | 偏移断言（0/8/16/24/32/40/48/56）；`resetForCall` 归零（errCode=0/site=-1/hwTop=hwBase）；`create/free` 配对（`LibC.malloc/free` 计数断言，T27 基础）；跨线程独立 | 非托管分配：`std.core.LibC.malloc<Int64>(count: 8)` / `LibC.free<Int64>`（选型理由见 design-m1 §5.3.1；**不用 acquireArrayRawData 钉住**；**释放一律 `finally`、不用 `CPointerResource`**）；转储缓冲同选型 `(count: 2 + maxNLocals)` | T27 基础 |
+| S4.1 | `JitContext`：`create/free/errCode/site/hwBase/hwCap/hwTop/fnId/flags/dbgBase/resetForCall/cp` | 偏移断言（0/8/16/24/32/40/48/56）；`resetForCall` 归零（errCode=0/site=-1/hwTop=hwBase）；`create/free` 配对（`LibC.malloc/free` 计数断言，T27 基础）；跨线程独立 | 非托管分配：`std.core.LibC.malloc<Int64>(count: 8)` / `LibC.free<Int64>`（选型理由见 design-m1 §5.3.1；**不用 acquireArrayRawData 钉住**；**释放一律 `finally`、不用 `CPointerResource`**）；转储缓冲同选型 `(count: 2 + maxNLocals)` | T27 基础；**`JitContext` = `protected`（D2 结案）且不随 S6.11 再导出** |
 | S4.2 | `HandleTable.pin/get/release` | 同对象复用同 ID；不同类型对象不同 ID；`get` 类型不符 → None；`release` 后 `get` → None 且表项不重用（gen 校验）；null 拒绝 | 托管容器 + 槽三元组 | T14 基础 |
 | S4.3 | `HandleTable` 窗口：`append`、`hwTop==hwCap` 扩容、`capacityLimit` 封顶 | 扩容倍增（`hwCap ≤ 2*hwTop`）；容量上限触顶 → 16；`initialCapacity` 可调（调用前生效，进行中不追溯）；T10 前置 | 追加 + 倍增 | T10 |
 | S4.4 | `HandleTable.fetch`、`idxOf/tagOf/genOf` | null → 6；tag 不符 → 8；坏 idx → 6/99 防御 | 槽解析 | helper 公共前置 |
@@ -171,7 +172,7 @@ f_jit/
 | S4.16 | H52/H53/H58/H59/H69/H72（正则族） | `is_match/find`（无匹配 → 0）；替换 g/n/n,m（越位 → 原串、剩余不足 → 到末尾、n=0,m=1 ≡ /0）；`str_to_regex` 非法/空 → 14（运行期、每次新对象不去重）；替换结果为新串（分配型） | std regex | T20/T26/T46 |
 | S4.17 | H54–H57（闭包族） | `closure_new`（fnId+捕获快照，登记 1 槽）；`closure_fnid/closure_cap`（越界 6/8）；`fn_table` 基址（非 GC 内存） | 闭包对象 | T25 |
 | S4.18 | `ctxWriteCode` 多级写码 | 内层已写码时外层仅在新异常覆盖；catch-all 末尾兜 99；任何 helper 异常不逃逸 | 写码规则 | §9.5 |
-| S4.19 | `DbgDump.writeOnce/report/allocateDump/freeDump` | 首格哨兵（首个收敛点获胜）；DEOPT 不转储；`dbgBase=0` 跳过；报告模板逐字节（`（code=N，site=OFF）`/`源码行 L:C · fnId=F`/`变量: [0] a: Int64 = 42; [1] s: String#7;`）；无名槽省略名字；句柄型 `#idx` 不取对象；值型按 §11.9 文本化 | 报告组装 | T50 |
+| S4.19 | `DbgDump.writeOnce/report/allocateDump/freeDump` | 首格哨兵（首个收敛点获胜）；DEOPT 不转储；`dbgBase=0` 跳过；报告模板逐字节（`（code=N，site=OFF）`/`源码行 L:C · fnId=F`/`变量: [0] a: Int64 = 42; [1] s: String#7;`）；无名槽省略名字；句柄型按**类型名**呈现 `<类型名>#idx`（M1 为句柄码原名；**M2：13 → `<HostClosure>`、14 → `<HostObject>`；M3：16–19 → `<JsonValue>`/`<JsonObject>`/`<JsonArray>`/`<JsonNull>`**）——**不取对象 / 不解析具体类**；值型按 §11.9 文本化 | 报告组装 | T50 |
 | S4.20 | `Interp` 框架：帧/local 载入/操作数栈/指令循环/返回 | 帧尺寸公式（16 对齐）；`LOADL/STOREL`；`RET/RET_VOID` 唯一出口；结束即销毁 | 解释循环 | — |
 | S4.21 | `Interp` 全指令语义（分组） | 逐组：控制/常量栈/局部/整型（检查溢出、IDIV 边界、IMOD 四象限）/浮点（NaN 规范化 canonical）/比较逻辑位/控制流（JMP/JZ/JNZ/LOOP_BACK）/调用（CALL_FUNC 共窗口、CALL_CLOSURE、user helper 路由、fnId 重写）/类型（CAST/TO_I64/TO_F64/IS_TYPE/GUARD/THROW/ASSERT/ABORT/GUARD_NNZ）/容器与值提取（LEN/GET_IDX/……/TO_DEC/DEC_TO_I64/DEC_TO_F64）；fail-fast（错误后不再执行）；`CALL_HELPER` 自动 CHECK_ERR 语义 | 逐指令 | T2/T6 |
 | S4.22 | `Interp` §11.9 语义组 | List/Map/Range/String 迭代（含 23）；`s[a..=b]` 折算；插值；范围/正则操作；TO_STR 契约与 JIT 一致（先自证） | 语义实现 | T19/T45 |
@@ -199,7 +200,7 @@ f_jit/
 
 | 步骤 | 目标成员 | 先写测试（红） | 实现要点（绿） | 验收（回归） |
 |---|---|---|---|---|
-| S6.1 | `CompileOptions`、`PredefinedFunction` | 默认值；构造校验（paramTypes 合法集 0–8/10–11）；impl 返回值与 retType 匹配（契约） | class | — |
+| S6.1 | `CompileOptions`、`PredefinedFunction` | 默认值；构造校验（paramTypes 合法集**按版本分派**：M1 0–8/10–11；M2 续 13/14；M3 续 15、16–19——见 design-m2/m3 §2）；impl 返回值与 retType 匹配（契约） | class | — |
 | S6.2 | `Compiler`：`init/registerFunction/unregisterFunction/hasFunction/registeredNames` | 注册/查询/注销；重名 → DuplicateRegistration；超 `maxPredefined` → 编译期错误；快照语义（注册变更不影响已编译产物——S6.8 联测） | 注册表 + 锁 | T23 需求 2 |
 | S6.3 | `CallMarshal`：`makeArgMarshalers/marshalArg/makeRetUnboxer/escapeAndGet/cleanup` | §8.2.1 表全行（Int64/F64/Bool/句柄型；不符 → 19）；不接受 Option/null、不做宽化；解包表全行；`escapeAndGet` 自动回收（T14/T15）；try/finally 全路径清理（含异常路径） | Marshal/解包生成 | T15 |
 | S6.4 | 三态收尾 + `Report.throwJit` | 0→unbox；-1→`Interp.run` 重跑（对调用方透明）；-2→InterruptedException；>0→JitException（原码原 site+报告）；19 契约错误 site=-1；非两类异常不逃逸（兜 99） | 收敛逻辑 | T6/T15 |
@@ -223,7 +224,7 @@ f_jit/
 | S7.5 | T22–T29 | 源入口格式与递归；Compiler 门面与预定义；闭包族；跨指令/机制交互（闭包/值化/卸载/内存安全） | — | T22–T29 通过 |
 | S7.6 | T42–T48、T50–T53 | 字符串形态；重复与日期差；if 双用法；Map 惰性迭代；Regex 互操作；尾递归；容器自建；源位置与诊断；容器/类型矩阵 | — | 对应项全绿 |
 | S7.7 | 容量与性能基线 | 窗口扩容深度用例（显式调小 initialCapacity 复现）、大循环分配 16 边界；JIT 相对解释器吞吐基线（同结构同副作用对照） | 记录实测数字 | 性能证据留档 |
-| S7.8 | 文档同步 | 设计/计划与实现偏差回写（design-m1.md/plan-m1.md 修订记录） | — | 文档与产物一致 |
+| S7.8 | 文档同步 | 设计/计划与实现偏差回写（design-m1.md/plan-m1.md 修订记录）；**附录同源一致性抽查**（design-m1 附 A/B/C 各抽 3 行与规格 §5/§10/§12 比对） | — | 文档与产物一致 |
 
 ---
 
