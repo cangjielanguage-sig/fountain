@@ -410,12 +410,17 @@ let config = LogConfig(
 ### Creating an instance
 
 ```cj
-// Option one: generate the initial file name automatically, "{dir}/{filePrefix}_{startSeq}{fileExt}"
+// Option one: generate the initial file name automatically, "{dir}/{filePrefix}_{index}{fileExt}"
+// index = the largest number already in the directory + 1 (startSeq when the directory is empty)
 let log = SegmentedLog(config)
 
-// Option two: specify the initial file path. rotate() still uses config to generate the following file names
+// Option two: specify the initial file path. rotate() still uses config to generate the following file names,
+// and the numbering starts no lower than the largest number already in the directory
 let log = SegmentedLog(config, initPath: "/tmp/custom/path_1.log")
 ```
+
+Segment numbers only grow: even when a segment file is deleted, its number is never reused by a later segment
+(a new segment always takes the current largest number + 1).
 
 ### Appending data
 
@@ -452,15 +457,72 @@ let oldFiles = log.takeOldFiles()
 
 The outside is responsible for deleting or archiving the returned old files.
 
-### Reading the written segments sequentially
+### Segment metadata
+
+```cj
+let metas: ArrayList<SegmentedMeta> = log.logMetas()
+// The log files in the directory, in ascending number order
+// metas[i].index        — segment number (the number in the file name)
+// metas[i].size         — valid data size: the truncated file size for a sealed segment, the written byte count for the current one
+// metas[i].creationTime — creation time (from std.fs FileInfo.creationTime; on Linux this is the inode ctime, second precision)
+// metas[i].updateTime   — last modification time (from std.fs FileInfo.lastModificationTime, second precision)
+// metas[i].last         — whether it is the segment currently being written
+```
+
+```cj
+public class SegmentedMeta {
+    public SegmentedMeta(
+        public let index: Int64, // segment number of the log file
+        public let size: Int64, // valid data size of the log file (bytes)
+        public let creationTime: DateTime, // creation time of the log file
+        public let updateTime: DateTime, // last modification time of the log file
+        public let last: Bool // whether it is the last one at the moment
+    ) {}
+}
+```
+
+Files that do not follow the `{filePrefix}_{index}{fileExt}` naming rule are not listed; the custom file name given through
+`initPath` is the exception — as long as it is still the current segment, it shows up as the current one.
+
+Note: sealing (rotate / close) truncates the file to the actually written length, which refreshes the modification time, so for a sealed
+segment `creationTime` / `updateTime` reflect the sealing moment (on Linux the ctime is refreshed by writes as well).
+
+### Removing segment files
+
+```cj
+log.removeById(3)             // by number
+log.removeBetween(1..3)       // by number range, [1, 3)
+log.removeBetween(3..=5)      // closed range, [3, 5]
+log.removeCreatedBefore(t)    // created before t
+log.removeCreatedAfter(t)     // created after t
+log.removeUpdatedBefore(t)    // last modified before t
+log.removeUpdatedAfter(t)     // last modified after t
+log.removeBetween(start, end) // created in [start, end) (inclusive start, exclusive end)
+```
+
+Rules:
+
+- **The segment currently being written is never removed**: bulk removals (by time/range) skip it; `removeById` throws
+  `IllegalArgumentException` when the current segment is named explicitly (this avoids appending into an already unlinked inode)
+- A nonexistent number is a no-op; failing to remove a file (for example due to permissions) throws
+- Removal does not affect number allocation: a later new segment still takes the largest number + 1, and a deleted number is never reused
+- Removal also takes the file out of the pending list of `takeOldFiles()`, so external cleanup does not process it twice
+
+### Reading sequentially from a given position
 
 ```cj
 /**
- * Returns an InputStream that reads the data already written in all segments in order.
- * It closes itself when the reading is done. The caller can use DefaultCodec to stream-decode each entry.
+ * Returns an InputStream that starts at offset of the log file numbered index
+ * and reads through to the last valid byte of the last file. It closes itself when the reading is done.
+ * The caller can use DefaultCodec to stream-decode each entry.
+ * Throws IllegalArgumentException when the number does not exist (including already deleted) or offset is negative.
  */
-public func openEntryStream(): InputStream
+public func openEntryStream(index: Int64, offset: Int64): InputStream
 ```
+
+The read walks the segments that currently exist in the directory (it does not rely on the in-memory `oldFiles` list), and each file is read
+at most up to its valid length (the file size of a sealed segment / the written byte count of the current one), so the holes of the
+preallocated area are never read.
 
 ### Closing the log
 
@@ -476,7 +538,7 @@ log.close()  // Implements the Resource interface, so try-with-resource can be u
 
 The core requirements of SegmentedLog:
 
-1. **Sequential appending** — write only, never read; written data hits disk immediately and no read API is provided
+1. **Sequential appending** — append only, never modify; written data hits disk immediately, and reads are located by segment, from any `(number, offset)` through to the end
 2. **Fixed-size segments** — a single file does not grow without bound and rotates automatically once the threshold is reached
 3. **High performance** — minimize the number of user-space to kernel-space switches
 4. **Cross-platform** — on Linux use mmap for zero-copy writes, elsewhere fall back to `file.write()`
@@ -530,6 +592,7 @@ Triggered automatically when `currentSize + data.size > maxFileSize`; it can als
 doRotate()
   ├─ syncImpl()                          // Flush the current segment
   ├─ munmap(mmapPtr, maxFileSize)        // Unmap (Linux)
+  ├─ setLength(currentSize)              // Truncate to the written length, so the size of a sealed segment is its valid data size
   ├─ file.close()                        // Close the current file
   ├─ oldFiles.add(curPath)               // Record the old path
   ├─ seq += 1
@@ -538,7 +601,8 @@ doRotate()
   └─ currentSize = 0, appendCount = 0
 ```
 
-`startSeq` starts at 1 by default, and the file name format is `{prefix}_{seq}.{ext}`, such as `wal_1.log`, `wal_2.log`.
+`startSeq` starts at 1 by default, and the file name format is `{prefix}_{seq}{fileExt}`, such as `wal_1.log`, `wal_2.log`. The number of a
+new segment is the largest number in the directory + 1, and a deleted number is never reused.
 
 ### Flush strategy
 
@@ -567,8 +631,11 @@ public func close(): Unit {
     if (!closed.compareAndSwap(false, true)) { return }
     synchronized (appendLock) {
         syncImpl()
-        unmapFile(mmapPtr, maxFileSize)   // Linux
-        if (!file.isClosed()) { file.close() }
+        unmapFile(mmapPtr, maxFileSize)          // Linux
+        if (!file.isClosed()) {
+            truncateFile(file, currentSize.load()) // Truncate to the written length
+            file.close()
+        }
     }
 }
 ```
@@ -588,6 +655,9 @@ Double-safety design:
 | `writeImpl` | `memcpy(mmapPtr + pos, data)` — zero syscalls | `file.write(data)` |
 | `syncImpl` | `file.flush()` — actually triggers `msync + fsync` | `file.flush()` |
 
+`truncateFile` (which goes through `file.setLength` internally) is a unified path and does not differ per platform: on Linux it truncates the
+preallocated file to the actually written length, while on non-Linux the file length already equals the written length, so the call has no effect.
+
 ### Relation to WAL
 
 SegmentedLog was originally extracted as a general-purpose layer for `f_store::WAL` (Write-Ahead Log). The core constraints of a WAL match the
@@ -606,12 +676,14 @@ A typical lifecycle:
 1. Create the SegmentedLog
 2. Loop append(data) ← rotates automatically
 3. Checkpoint periodically
-4. takeOldFiles() → delete the old files that have been checkpointed
-5. close()
+4. takeOldFiles() → delete the old files that have been checkpointed (or remove* to delete precisely by number/time)
+5. logMetas() → inspect the segments currently in the directory
+6. openEntryStream(index, offset) → read from the given position to the end
+7. close()
 ```
 
-No read API is provided; reading is done by upper-layer modules (such as the recovery of WAL) which walk the old files by file name rule and
-perform `pread` themselves.
+Reading can go through `openEntryStream(index, offset)`, or be done by upper-layer modules (such as the recovery of WAL) which walk the
+files by file name rule and perform `pread` themselves.
 
 
 A write log with fixed-size segments and purely sequential appending. On Linux it uses mmap for zero-syscall writes and elsewhere falls back to file.write(). Reused by modules such as WAL.
