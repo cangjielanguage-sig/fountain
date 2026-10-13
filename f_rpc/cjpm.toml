@@ -11,7 +11,7 @@
   override-compile-option = "--dy-std --debug-macro"
   link-option = ""
   package-configuration = {}
-  category = ["Utility", "Developer Tools", "Distributed", "Infrastructure", "Programming Framework", "RPC", "Middleware", "Network"]
+  category = ["Utility", "Developer Tools", "Infrastructure", "Programming Framework", "RPC", "Middleware"]
 
   include = ["src"]
   authors = ["吴京润"]
