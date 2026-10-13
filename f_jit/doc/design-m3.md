@@ -109,7 +109,7 @@
 
 | hid | 函数 | 语义 | 失败码 | 锚点 |
 |---|---|---|---|---|
-| H73 | `json_get(h16, key, mode: u8) → h15` | 读：结果 = **Any(15) 盒**（对象/数组元素 → 节点盒；标量 → 宿主值盒；**JSON null → 节点盒装 `JsonNull.instance`——单例，非语言 null**）；**条件分配型** | 4, 5, 6, 8, 16 | m3 §11 |
+| H73 | `json_get(h16, key, mode: u8) → h15` | 读：结果 = **Any(15) 盒**（对象/数组元素 → 节点盒；标量 → 宿主值盒——**出口解包（v0.3.21）**：`JsonInt` 域内 → `Int64` / **超域 → `Decimal`**、`JsonString` → `String`、`JsonBool` → `Bool`、`JsonDecimal` → `Decimal`；世界内身份仍是节点；**JSON null → 节点盒装 `JsonNull.instance`——单例，非语言 null**）；**条件分配型** | 4, 5, 6, 8, 16 | m3 §11 |
 | H74 | `json_set(h16, key, typecode: u8, v) → 0` | 写（**变更型**）：对象 upsert（沿 `MAP_PUT`）；数组仅既有下标（越界 → 4，不自动扩展）；**目标 frozen → 20** | 4, 6, 8, 19, 20, 99 | m3 §11 |
 | H75 | `json_new(mode: u8) → h16`（实际码 17/18） | 世界内构造空 JSON 值（`{}`/`[]`，可变、非常量）；**分配型** | 16 | m3 §11 |
 
@@ -261,6 +261,8 @@ Any 等值 / 哈希**永久排除** · 盒套盒不实现 · `struct` 不考虑 
 
 - `f_jit/cjpm.toml` 增 `fountain::f_data` 依赖。
 - 加载器对解析失败**防御拒绝**。
+- **现状核查（2026-10-13）**：`f_data/src/json/` 已备——`JsonValue.cj`（`JsonObject` / `JsonArray` / `JsonNull`（含 `public static let instance`）/ 标量节点 `JsonInt`（BigInt）/ `JsonDecimal` / `JsonBool` / `JsonString`，及 `JsonValue.fromJson(String)` 解析入口）、`DataJson.cj` / `ExtendJson.cj`（`JSON_NULL` 别名）/ `JsonConverter.cj` / `JsonSchema.cj`。
+- **口径缺口已裁**：标量节点与出口解包 → **M3-13**（剩余仅"cjpm 依赖 + 防御拒绝"两项待办）。
 
 ### M3-6 · JSON helper 编号冲突 —— 已结案（2026-10-11）
 
@@ -268,11 +270,12 @@ Any 等值 / 哈希**永久排除** · 盒套盒不实现 · `struct` 不考虑 
 - **裁定**：JSON 面顺延 **H73 / H74 / H75**；m3 规格「编号接 H71」订正为「编号顺延」。
 - **落点**：m3 规格 §11、本文、`plan-m3`。
 
-### M3-7 · 错误码 22 与 7 的边界 —— 复核钩（本设计维持分列）
+### M3-7 · 错误码 22 与 7 的边界 —— 已结案（2026-10-13；规格 v0.3.21）
 
-- **原钩子**：m3 §12-6 留「若实现中 7 的覆盖面实际重叠，实施时复核」。
-- **当前裁定**：**分列**（22 = `as` 强制转型未命中；7 = 值转型 / 静态转换语义）。
-- **何时动它**：实现期实测确认两者覆盖面重叠时再复核。
+- **裁定**：**分列**——**22 = `ERR_ANY_CAST`**（`as` 动态转型未命中，site = `any_as` 调用点）；**7 = `ERR_BAD_CAST`**（m1 §2 表注：「7 仅用于 `CAST` 值转型」——静态转换语义）。
+- **为什么分列站得住**：`as` 在**左值静态类型非 15** 时不经 helper（上行零操作 / 不相容 = 编译错误）⇒ 22 只出自盒面；7 只出自 `CAST`——**结构性不重叠**。
+- **钩子转用例（用户裁定）**：T38 补负向对拍「`as` 失败 = **22** / `CAST` 失败 = **7**、**互不串号**」——从"文本承诺"变为"用例把关"。
+- **再启条件**：实现期实测若真出现串号（如把 `as` 的非盒路径接去 `CAST`）再启本条。
 
 ### M3-8 · JSON「直写形态」撤销 —— 已实施（2026-10-12，用户订正；规格 v0.3.16）
 
@@ -314,6 +317,13 @@ Any 等值 / 哈希**永久排除** · 盒套盒不实现 · `struct` 不考虑 
 - **配套**：类型 token / 句柄条目 tag **复用 11**（零格式新增）；**码级继承 17/18/19 <: 16**；`as` 目标按码（`aux = 0xFFFF`）；H73/H74 形参 = 16、H75 返回 16（实际码 17/18）；DbgDump 呈现 `<JsonObject>#idx` 等。
 - **撤销的旧表述**：「经 HostObject 通道（14）承载」；`registerType` 拒绝理由升级为「结构性无关 + 防哑火」。
 - **落点**：m3 §1/§3/§11/§12/§10(T61)、m2 §2/§11/§12.4/§12.5/§16、本文 §1/§2/§7.3/附 A/附 B、`plan-m3` R3.8/R3.10/R4.3/R4.4/R6.6、`design-m2` §2/§6/§7.2/§10/附 B。
+
+### M3-13 · JSON 标量节点与出口解包口径 + 22/7 边界用例化 —— 已裁（2026-10-13 用户裁定；规格 v0.3.21）
+
+- **标量节点**：`fountain::f_data.json` 的 `JsonValue` 谱系含标量节点类 `JsonInt`（底层 **BigInt**）/ `JsonDecimal` / `JsonBool` / `JsonString`——句柄码一律 **16（JsonValue）**；`is JsonValue` / `as JsonValue` **一律命中**（它们本就是 `JsonValue` 子类）。
+- **出口解包（只在 `json_get` 出口发生；世界内身份仍是节点）**：`JsonString` → `String` 盒 · `JsonBool` → `Bool` 盒 · `JsonInt` → 能落 Int64 域 ⇒ **`Int64` 盒**、超域 ⇒ **`Decimal` 盒**（沿 m1 §11.9 同款）· `JsonDecimal` → `Decimal` 盒 · `JsonNull` → `JsonNull.instance` 盒。
+- **22 / 7 用例化**：T38 补负向对拍——`as` 失败必须 **22**、`CAST` 失败必须 **7**、**互不串号**（M3-7 的复核钩随之结案）。
+- **落点**：m3 §11（读 / 类型与句柄）· §12-6 · §10(T38)；本文 §5.2 / 附 A / §10（M3-5 交叉引用）；`plan-m3` R3.3/R4.3/R4.6/R6.2。
 ---
 
 ## 附录：M3 增量三表（语法 → 字节码 · 指令定义 · 机器码对照）
@@ -333,7 +343,7 @@ Any 等值 / 哈希**永久排除** · 盒套盒不实现 · `struct` 不考虑 
 | 失败可继续的写法 | `if (a is T) { … a as T … }` | 先 `is` 后 `as`（盒不可变 ⇒ 两次判定一致）；`as` 自身即 fail-fast 单步路径 | H67/H68 | §3 |
 | JSON 字面量（反引号形态） | `` `{"k":1}` `` | 常量注册 **kind 11**（payload = u32 长度 + UTF-8 原始 JSON 字节，**同 kind 3 编码同构**）→ `PUSH_KH idx`；**加载期一次解析**为 `JsonObject` / `JsonArray`（路径 A 常量、**不可变**；句柄码 **17/18**） | `0x16` | §11 |
 | JSON 空字面量 | `` let o: JsonObject = `{}` ``、`` let a: JsonArray = `[]` `` | **运行期构造**（`json_new`，分配型；可变新值、**非常量**）——对齐 M1 空容器先例；非空字面值维持常量（只读） | H75 | §11 |
-| JSON 下标读 | `j[i]`（`JsonArray`: Int64 / `JsonObject`: String） | `json_get(h, key, mode)`——**条件分配型**；结果 = **Any 盒**：对象/数组元素 → 节点盒，标量元素 → 宿主值盒，JSON `null` → **`JsonNull.instance` 盒**（单例，非语言 `null`）；数组越界 **4** / 对象缺键 **5**；索引类型不符 / 对标量节点下标 → **编译错误** | H73 | §11 |
+| JSON 下标读 | `j[i]`（`JsonArray`: Int64 / `JsonObject`: String） | `json_get(h, key, mode)`——**条件分配型**；结果 = **Any 盒**：对象/数组元素 → 节点盒，标量元素 → **宿主值盒（出口解包，v0.3.21）**：`JsonInt` 域内 → `Int64` / 超域 → `Decimal`、`JsonString` → `String`、`JsonBool` → `Bool`、`JsonDecimal` → `Decimal`，JSON `null` → **`JsonNull.instance` 盒**（单例，非语言 `null`）；数组越界 **4** / 对象缺键 **5**；索引类型不符 / 对标量节点下标 → **编译错误** | H73 | §11 |
 | JSON 点号 / 下标访问（v0.3.17 增，v0.3.18/19 裁定） | `o.k`（读）/ `o.k = v`（写）；链式 `o.a.b`、`o.a[0]` | **成员优先 → 键兜底**：命中 JSON 成员表（宿主库预定义函数通道，首参 = JSON 码 16–19）⇒ M2 §12.4 糖（`o.k(a…)`）；未命中 ⇒ 与 `o['k']` **逐位等价**（键 = 标识符常量 String）；同名键用 `o['size']` 取；**自动收窄（按用法）**——点号 ⇒ `as JsonObject`、下标 ⇒ `Int64` `as JsonArray` / `String` `as JsonObject`（接收者 = `Any`(15) 盒 或 `JsonValue`；失败 **22**）；`JsonArray`/`JsonNull`/标量上取键、索引类型判不出/不符 → **编译错误**；值域 / `frozen → 20` / 变更型纪律同下标写 | H73/H74 | §11 |
 | JSON 下标写 | `j[i] = v` | `json_set(h, key, typecode, v)`——**变更型**（对象 = upsert；数组 = 仅既有下标、越界 **4** 不自动扩展）；`v` ∈ 值型 0–3（除 Unit）/ String / **JSON 节点（码 16–19）**；**frozen 目标（从常量取出的子节点）→ 20**（frozen 经 H73 读与 H68 拆箱**传播**） | H74 | §11 |
 | JSON 标量顶层 | `123` / `"s"` / `true` / `null` 作字面量顶层 | **编译错误（不开放）**——标量仅作元素存在（顶层恒为对象/数组） | — | §11 |
