@@ -23,6 +23,10 @@ public interface DataParsable<T> where T <: DataParsable<T> {
     static func tryParse(s: String): ?T
 }
 
+/**
+ * 各个“整数 + 单位”片段分别带符号，再按顺序相加。
+ * 例如 `1m-2s` 为 58 秒，`-1m2s` 为 -58 秒；首段的负号不作用于整串。
+ */
 extend Duration <: DataParsable<Duration> {
     public static func parse(s: String): Duration {
         tryParse(s).getOrThrow {DataParsableException('${s} cannot be parsed to ${TypeInfo.of<Duration>()}')}

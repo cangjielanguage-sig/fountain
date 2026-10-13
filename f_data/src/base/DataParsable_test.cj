@@ -20,7 +20,7 @@ import std.unittest.testmacro.*
 import fountain::f_data.exception.DataParsableException
 
 /**
- * `Duration.tryParse` 的约定（对应 `bug-cross.md` 的 `X-2`）：
+ * `Duration.tryParse` 的候选解析约定：
  * 单位链 `d/h/m/s/ms/us/ns`；数字段可带正负号、可多段拼接（`1d2h`）；
  * **非法输入返回 `None`**（调用方据此回退默认值），不抛异常。
  */
@@ -57,6 +57,30 @@ public class DataParsableTest {
     public func testMultiSegment(): Unit {
         expect('1d2h', Duration.day + Duration.hour * 2)
         expect('1h30m', Duration.hour + Duration.minute * 30)
+    }
+
+    @TestCase
+    public func testSignedSegments(): Unit {
+        // 符号只属于紧随的数字段，两种解析入口都按各段的值相加。
+        for ((s, expected) in [
+            ('1m-2s', Duration.second * 58),
+            ('-1m2s', Duration.second * -58),
+            ('-1m-2s', Duration.second * -62),
+            ('1s-1000ms', Duration.Zero)
+        ]) {
+            expect(s, expected)
+            @Assert(expected, Duration.parse(s))
+        }
+        for (s in ['1m-', '1m--2s', '1m-2']) {
+            expectNone(s)
+            var rejected = false
+            try {
+                Duration.parse(s)
+            } catch (_: DataParsableException) {
+                rejected = true
+            }
+            @Assert(rejected)
+        }
     }
 
     @TestCase
