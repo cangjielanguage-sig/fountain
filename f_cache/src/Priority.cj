@@ -186,6 +186,27 @@ public open class Priority<V> <: Comparable<Priority<V>> where V <: Object {
         ref.fetchAdd(1)
         lastUsed = DateTime.now()
     }
+    /**
+     * 单次加锁完成「判过期 + 记一次使用 + 取值」，供 HeapCache.get 走读路径：
+     * 原先 `expired(p)` + `p.load()` 要两次加锁、两次 `DateTime.now()`。
+     * 过期判定与 incr 同锁，语义与「先 expired 再 load」等价（lastUsed 用同一个 now）。
+     */
+    protected func loadIfAlive(): Option<V> {
+        synchronized(lock) {
+            let now = DateTime.now()
+            let dead = if (once_.load()) {
+                birth + maxLife_
+            } else {
+                lastUsed + maxLife_
+            }
+            if (now >= dead) {
+                return None<V>
+            }
+            ref.fetchAdd(1)
+            lastUsed = now
+            return Some(value.load())
+        }
+    }
     protected func load(): V {
         synchronized(lock) {
             incr()

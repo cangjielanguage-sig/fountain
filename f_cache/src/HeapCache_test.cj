@@ -17,7 +17,7 @@ package fountain::f_cache
 
 import std.unittest.*
 import std.unittest.testmacro.*
-import std.time.DateTime
+import std.time.{DateTime, MonoTime}
 import std.collection.ArrayList
 import std.sync.Mutex
 import fountain::f_collection.PriorityQueue
@@ -394,6 +394,82 @@ public class HeapCache_test {
         //同分候选（都没被用过、都新鲜）里淘汰更老的 'a'（保护新生），回调应拿到它的键
         @Assert(1, delivered.size)
         @Assert('a', delivered[0])
+    }
+
+    /**
+     * close() 不应等待淘汰消费线程的轮询超时（修复前阻塞在 `q.remove(100ms)`，close 需 ~100ms）。
+     * 这里用 50ms 上限守护：哨兵唤醒后 close 应在毫秒级返回。
+     */
+    @TestCase
+    public func testCloseDoesNotWaitForEvictionPollInterval(): Unit {
+        let cache = HeapCache<Test>(maxLife: Duration.second * 30, checkDuration: Duration.second * 30)
+        for (i in 0..5) {
+            let _ = cache.set('p${i}', Test(i))
+        }
+        let t0 = MonoTime.now()
+        cache.close()
+        let spentMs = (MonoTime.now() - t0) / Duration.millisecond
+        @Assert(true, spentMs < 50.0)
+    }
+
+    /**
+     * 淘汰采样的链表序守护：每段候选是 LinkedHashMap 链表头（最久未访问），
+     * 所以反复访问过的键必须存活。单段（concurrencyLevel = 1）时候选池只有链表头，最能暴露采样退化。
+     */
+    @TestCase
+    public func testEvictionKeepsFrequentlyUsedKeys(): Unit {
+        let cache = HeapCache<Test>(concurrencyLevel: 1, maxSize: 200, maxLife: Duration.second * 30,
+            checkDuration: Duration.millisecond * 100)
+        for (i in 0..400) {
+            let _ = cache.set('e${i}', Test(i))
+        }
+        for (_ in 0..5) {
+            for (i in 0..100) {
+                let _ = cache.get('e${i}')
+            }
+        }
+        sleep(Duration.millisecond * 700)
+        @Assert(true, cache.size <= 200)
+        var alive = 0
+        for (i in 0..100) {
+            if (cache.contains('e${i}')) {
+                alive++
+            }
+        }
+        @Assert(100, alive)
+    }
+
+    /** 段锁改互斥后的并发正确性：多线程各写各键，值不得串、size 不得丢 */
+    @TestCase
+    public func testConcurrentAccessDistinctKeys(): Unit {
+        let cache = HeapCache<Test>(concurrencyLevel: 16, maxLife: Duration.second * 30,
+            checkDuration: Duration.second * 30)
+        let threads = 4
+        let per = 200
+        let futures = ArrayList<Future<Int64>>()
+        for (t in 0..threads) {
+            let myT = t
+            futures.add(spawn {
+                var ok: Int64 = 0
+                for (i in 0..per) {
+                    let k = 'c${myT}_${i}'
+                    let _ = cache.set(k, Test(myT * 1000 + i))
+                    if (let Some(v) <- cache.get(k)) {
+                        if (v.value == myT * 1000 + i) {
+                            ok++
+                        }
+                    }
+                }
+                ok
+            })
+        }
+        var total: Int64 = 0
+        for (f in futures) {
+            total += f.get()
+        }
+        @Assert(threads * per, total)
+        @Assert(threads * per, cache.size)
+        cache.close()
     }
 
     @TestCase
