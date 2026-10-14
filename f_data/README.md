@@ -219,12 +219,13 @@ public class CombinedValidator <: Validator {
 ```
 
 #### IsDuration
-数据必须是Duration字符串
+数据必须是Duration字符串（与 `Duration.tryParse` 同一套规则：单位严格递减、每个单位至多一次，`1s1s`/`9h10d` 不通过）
 
 #### IsIntegers
 ```cj
 /**
- * seperator 数据的分割符，用seperator分割数据且分割每一部分都必须是整数
+ * seperator 数据的分割符（按字面量处理，正则元字符会被转义），
+ * 用seperator分割数据且分割每一部分都必须是整数
  */
 @IsIntegers[messageIfNotMatch: 'not match message', separator: ',']
 ```
@@ -747,7 +748,7 @@ depth=n: match(...match(@.name, 'Alice')..., 'Alice')
 | 重复节点保留 `$[0,0]` | §6.3 | 通过 lazy flatMap 链保留 |
 | 空 nodelist → 空结果 | §6.1 | 默认行为 |
 | 类型不匹配 → false | §6.2 | `case _ => false` |
-| `@` 仅在 filter 内有效 | §2.1 | `doCompile` 验证 |
+| `@` filter 内为当前节点；顶层 `@`/`@.`/`@[` 也被接受（内部子 filter 编译用） | §2.1 | `doCompile` 校验前缀 |
 | 结构失配 → 空结果 | §6.1 | `case _ => OptionIterator<Data>()` |
 | I-JSON 数字范围 | §6.5 | `validateIJSON()` |
 | `..` 必须有选择器 | §2.5.2 | 抛 `DataException` |
@@ -780,6 +781,9 @@ depth=n: match(...match(@.name, 'Alice')..., 'Alice')
 - **转换 flag**（`src/base/global_objects.cj`，作为 `toData` / `fromData` / `populate` 的 `flag!` 参数）：
   `DEFAULT`、`IGNORE_FIELD_NOT_FOUND`、`IGNORE_FIELD_TYPE_NOT_MATCH`、`IGNORE_NONE`、`IGNORE_VALIDATION`、
   `IGNORE_NOT_MATCHED_VALIDATION`、`DEEP`、`WRAPPING`、`THROWING`、`SATURATING_ON_INT_OVERFLOW`。
+  **优先级**：显式传入的溢出策略（`WRAPPING > THROWING > SATURATING`）优先于 `SILENCE` 里的
+  `IGNORE_FIELD_NOT_CONVERTABLE`；`DEFAULT_DATA_FLAG` 等于 `SILENCE`，**越界/不可转换一律落 `None`**，
+  不回绕（要回绕需显式传 `WRAPPING_ON_INT_OVERFLOW`，如 `300 → Int8 = 44`）。
 - **校验生效时机**：校验器只在 `MutableField.set` 写入时执行，且**仅当值是 `DataString`** 时才跑；
   `ReadableField.validator` 可读取；失败抛 `ValidationException`。
 - **异常家族**（`src/exception/`）：`DataException`、`DataParsableException`、`JsonException`、`ValidationException`。
@@ -795,9 +799,15 @@ depth=n: match(...match(@.name, 'Alice')..., 'Alice')
   `toJsonSchema<T>()` 返回的是 `JsonObject`（不是 `String`）。
 - **`DataPath.cache` 依赖 `f_cache.HeapCache`、`DataPath.solid` 依赖 `ConcurrentHashMap`**；
   基类 `DataPathNode` 是 internal 接口 ⇒ **不能在包外自定义路径节点**。
-- `src/path/` 下的 8 个测试文件随包发布（`cjpm.toml` 的 `include = ["src","doc"]`）。
+- `src/path/` 下的 9 个测试文件随包发布（`cjpm.toml` 的 `include = ["src","doc"]`）。
 - **已过期的文档**：`doc/RFC9535_GAPS.md` 里不少「Missing」项实际已实现（filter 内 `count/value` 比较、
   I-JSON 校验、对象/数组结构相等、`in [null]`），以 `doc/RFC9535_COVERAGE.md` 与源码为准。
+- **判等语义（2026-10-15 起）**：`@DataAssist[equal]` 生成的逐字段判等，对「不可比较」的字段
+  （类型既不实现 `Equatable` 也不实现 `Comparable`）按**引用相等**处理——同一实例相等、不同实例不等，
+  不再静默判等；`hashCode` 的哈希快筛在无法计算哈希时仍返回 `true`（不构成否证）。
+  变更背景与影响面见 `doc/REVIEW_2026-10-15.md` §5.1。
+- **顶层 `@` 路径**：`DataPath` 的合法性检查也接受顶层 `@`/`@.`/`@[`（内部子 filter 编译依赖），
+  不再是「仅 filter 内有效」。审查与修复清单见 `doc/REVIEW_2026-10-15.md`。
 
 ---
 

@@ -124,6 +124,10 @@ extend JsonObject <: ToJsonSchema {
                 if(let Some(pattern) <- s.pattern){
                     property.add("pattern", JsonString(pattern))
                 }
+                // 修复历史缺陷：JsonStringSchema.format 此前被静默丢弃，注解里写的 format 不生效
+                if(let Some(format) <- s.format){
+                    property.add("format", JsonString(format))
+                }
                 if(let Some(enumeration) <- s.enumeration){
                     property.add("enum", JsonValue.fromStr(enumeration).asArray())
                 }

@@ -18,9 +18,11 @@ package fountain::f_data.base
 public struct DataToString <: ToString {
     private let builder = StringGenerator()
 
+    /**
+     * 不再向 builder 追加 `}`：旧实现每调用一次就多一个 `}`（重复调用得到 `}}`，toString 非幂等）。
+     */
     public func toString(): String {
-        builder.append('}')
-        builder.toString()
+        builder.toString() + '}'
     }
     public func append<T>(): Unit {
         builder.append(TypeInfo.of<T>())

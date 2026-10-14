@@ -28,7 +28,7 @@ public struct ObjectFields <: Collection<ReadableField> {
             let that = ObjectFields(creator)
             func populateField(name: String, field: ReadableField, throwIfDuplicate!: Bool = true): Unit {
                 if (that.readables.addIfAbsent(name, field).isSome() && throwIfDuplicate) {
-                    throw DataException('duplicate field ${name}}')
+                    throw DataException('duplicate field ${name}')
                 } else if (let x: MutableField <- field) {
                     that.mutables.addIfAbsent(name, x)
                 }
