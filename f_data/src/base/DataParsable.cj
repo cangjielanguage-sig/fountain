@@ -29,30 +29,44 @@ public interface DataParsable<T> where T <: DataParsable<T> {
  */
 extend Duration <: DataParsable<Duration> {
     public static func parse(s: String): Duration {
-        tryParse(s).getOrThrow {DataParsableException('${s} cannot be parsed to ${TypeInfo.of<Duration>()}')}
+        doTryParse(s).getOrThrow()
     }
     public static func tryParse(s: String): ?Duration {
-        if (s.isEmpty()) { return None }
+        // 与 Int64.tryParse 对齐（实测其对超长值返回 None，不抛异常）：
+        // 不能解析、或数值超出 Duration 表示范围时返回 None。
+        try {
+            doTryParse(s)
+        } catch (_: ArithmeticException) {
+            None
+        }
+    }
+    // 解析核心：不能解析的字符串返回 None；数值超出 Duration 表示范围时抛 ArithmeticException。
+    // 这里刻意不沿用昨夜合入的「循环内就地 catch 溢出并返回 None」写法：那种写法把溢出无声地
+    // 吞成 None，核心解析与 tryParse 之间的分层就没了。改由本函数抛出、tryParse 统一收敛为 None，
+    // 是为了保持与其他类型的 tryParse 语义一致——Int64/UInt64 等的 tryParse 同样是
+    // 「不能解析、数值超出表示范围 → None」，由底层解析负责报错。
+    private static func doTryParse(value: String): ?Duration {
+        if (value.isEmpty()) { return None }
         var duration = Duration.Zero
         var i = 0
-        while (i < s.size) {
+        while (i < value.size) {
             let start = i
-            if (s[i] == b'-' || s[i] == b'+') { i++ }
+            if (value[i] == b'-' || value[i] == b'+') { i++ }
             let digits = i
-            while (i < s.size && s[i] >= b'0' && s[i] <= b'9') { i++ }
-            if (i == digits || i == s.size) { return None }
-            let numberStart = if (s[start] == b'+') { start + 1 } else { start }
-            let value = match (Int64.tryParse(s[numberStart..i])) {
-                case Some(number) => number
+            while (i < value.size && value[i] >= b'0' && value[i] <= b'9') { i++ }
+            if (i == digits || i == value.size) { return None }
+            let numberStart = if (value[start] == b'+') { start + 1 } else { start }
+            let number = match (Int64.tryParse(value[numberStart..i])) {
+                case Some(n) => n
                 case None => return None
             }
-            let unit = s[i]
+            let unit = value[i]
             i++
             let scale = match (unit) {
                 case b'd' => Duration.day
                 case b'h' => Duration.hour
                 case b'm' =>
-                    if (i < s.size && s[i] == b's') {
+                    if (i < value.size && value[i] == b's') {
                         i++
                         Duration.millisecond
                     } else {
@@ -60,20 +74,16 @@ extend Duration <: DataParsable<Duration> {
                     }
                 case b's' => Duration.second
                 case b'u' =>
-                    if (i >= s.size || s[i] != b's') { return None }
+                    if (i >= value.size || value[i] != b's') { return None }
                     i++
                     Duration.microsecond
                 case b'n' =>
-                    if (i >= s.size || s[i] != b's') { return None }
+                    if (i >= value.size || value[i] != b's') { return None }
                     i++
                     Duration.nanosecond
                 case _ => return None
             }
-            try {
-                duration += scale * value
-            } catch (_: ArithmeticException) {
-                return None
-            }
+            duration += scale * number
         }
         duration
     }
