@@ -20,6 +20,22 @@ import fountain::f_base.*
 import fountain::f_regex.*
 import fountain::f_data.base.*
 
+/**
+ * 把调用方传入的分隔符按字面量拼进正则：转义正则元字符，
+ * 避免 `separator: "."` 被当成「任意字符」、`|`/`(` 等改变校验语义。
+ */
+private func escapeRegexLiteral(literal: String): String {
+    let meta = #'\^$.|?*+()[]{}'#
+    let builder = StringGenerator()
+    for (c in literal.runes()) {
+        if (meta.contains(c.toString())) {
+            builder.append(r'\\')
+        }
+        builder.append(c)
+    }
+    builder.toString()
+}
+
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class IsNotEmpty <: Validator {
     public const init(messageIfNotMatch!: String = '') {
@@ -56,7 +72,8 @@ public class StringSize <: Validator {
     }
     public func validate(value: ?String): Bool {
         let v = value ?? ''
-        v.size >= 0 && v.size <= max
+        // 修复历史缺陷：min 此前从未参与判定（`v.size >= 0` 恒真），@StringSize[min: N] 实际不生效
+        v.size >= min && v.size <= max
     }
     public prop description: String {
         get(){
@@ -126,8 +143,9 @@ public class IsChineseCellPhone <: Validator {
         var rege = ''
         if (withCountryCode) {
             rege = match (countryCodeSeparator) {
-                case ')' => '(86)'
-                case x => '86${x}'
+                // 字面量 '(' / ')' 此前会被当成捕获组：`(86)1\d{10}` 匹配 "8613..." 却匹配不了 "(86)13..."
+                case ')' => '\\(86\\)'
+                case x => '86${escapeRegexLiteral(x)}'
             }
         }
         return '^${rege}1\\d{10}'.regex(solid: true).matches(value ?? '')
@@ -217,7 +235,11 @@ public class IsDuration <: Validator {
         super(messageIfNotMatch: messageIfNotMatch)
     }
     public func validate(value: ?String): Bool {
-        Regex.DURATION.matches(value ?? '')
+        // 与 Duration 解析器保持一致：此前用 f_regex 的 DURATION 正则会放行 `1s1s`、`9h10d`（校验过、解析炸）
+        match (Duration.tryParse(value ?? '')) {
+            case Some(_) => true
+            case _ => false
+        }
     }
     public prop description: String {
         get(){
@@ -231,7 +253,7 @@ public class IsIntegers <: Validator {
         super(messageIfNotMatch: messageIfNotMatch)
     }
     public func validate(value: ?String): Bool {
-        '^\\d+(${separator}\\d+)*$'.regex(solid: true).matches(value ?? '')
+        '^\\d+(${escapeRegexLiteral(separator)}\\d+)*$'.regex(solid: true).matches(value ?? '')
     }
     public prop description: String {
         get(){

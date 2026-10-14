@@ -63,4 +63,31 @@ public class DataUnitTest {
         dt = DataObject<DataTest>.populate(data).getOrThrow()
         @Assert('hello world', dt.s)
     }
+
+    @TestCase
+    public func testUncomparableFieldIsNotSilentlyEqual(): Unit {
+        // DataTest.tt 的类型 TT 没有 Equatable：修复前 f_data_eq 兜底返回 true，
+        // 两个字段完全相同的实例会被判相等（fail-open）；现在改为引用相等语义。
+        let a = DataTest()
+        let b = DataTest()
+        @Assert(a == a)
+        @Assert(!(a == b))
+    }
+
+    @TestCase
+    public func testUnsupportedTryParseReturnsNone(): Unit {
+        // tryParse 契约与其余 Data* 一致：不支持解析的类型返回 None（parse 仍抛异常）
+        @Assert(DataList.tryParse('[]').isNone())
+        @Assert(DataDict.tryParse('{}').isNone())
+        @Assert(DataTuples.tryParse('[]').isNone())
+    }
+
+    @TestCase
+    public func testDataToStringIsIdempotent(): Unit {
+        // 修复前 toString() 每次都向 builder 追加 '}'，重复调用得到 `}}`
+        let s = DataToString()
+        s.append<DataTest>()
+        s.append('i', 1)
+        @Assert(s.toString(), s.toString())
+    }
 }

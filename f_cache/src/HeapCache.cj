@@ -24,27 +24,40 @@ import fountain::f_base.*
 import fountain::f_collection.PriorityQueue
 
 public class HeapCache<V> <: Resource where V <: Object {
+    /**实际分段数：显式指定，或按 maxSize 推导（见 autoConcurrencyLevel）*/
+    private let concurrencyLevel: Int64
     private let store: ConcHashMap<Priority<V>>
     private let closedFlag = AtomicBool(false)
     /**内部淘汰消费线程的句柄：close() 时向它发送取消请求，用例可通过 threadHandles() 等它结束*/
     private var evictionTask: Option<Future<Unit>> = None
     /**定时器句柄：close() 时 cancel，避免关闭后再触发一轮清扫*/
     private var timerHandle: Option<Timer> = None
-    /**淘汰消费线程取元素的轮询间隔：既保证 close() 能被及时感知，又不必忙等*/
+    /**淘汰消费线程取元素的轮询间隔：只是「队列长期为空」时的兜底唤醒，close() 靠投递哨兵立即唤醒它*/
     private static let EVICTION_POLL_INTERVAL = Duration.millisecond * 100
+    /**淘汰回调队列：元素 Some((key, value))；close() 投递 None 哨兵以立即唤醒阻塞中的消费线程*/
+    private let evictionQueue = LinkedBlockingQueue<Option<(String, V)>>()
 
+    /**
+     * `concurrencyLevel` 传 0（默认）表示按 `maxSize` 自动选段数（见 `autoConcurrencyLevel`）；
+     * 显式传正数则按指定值分段。
+     */
     public HeapCache(
-        private let concurrencyLevel!: Int64 = DEFAULT_HEAP_CACHE_CONCURRENCY_LEVEL,
+        concurrencyLevel!: Int64 = 0,
         private let maxLife!: Duration = DEFAULT_HEAP_CACHE_MAX_LIFE,
         private let maxSize!: Int64 = DEFAULT_HEAP_CACHE_MAX_SIZE,
         private let checkDuration!: Duration = DEFAULT_HEAP_CHECK_CHECK_DURATION,
         private let evictionCallback!: (String, V) -> Unit = {_, _ => ()}
     ) {
-        if (maxLife < Duration.Zero || maxSize <= 0 || concurrencyLevel <= 0 || checkDuration <= Duration.Zero) {
+        if (maxLife < Duration.Zero || maxSize <= 0 || concurrencyLevel < 0 || checkDuration <= Duration.Zero) {
             throw IllegalArgumentException(
-                "maxLife must not be less than zero. maxSize and concurrencyLevel must be greater than zero. checkDuration must be greater than Duration.Zero. however current are ${maxLife}, ${maxSize}, ${concurrencyLevel}, ${checkDuration}")
+                "maxLife must not be less than zero. maxSize and concurrencyLevel must not be less than zero. checkDuration must be greater than Duration.Zero. however current are ${maxLife}, ${maxSize}, ${concurrencyLevel}, ${checkDuration}")
         }
-        this.store = ConcHashMap<Priority<V>>.create(concurrencyLevel: concurrencyLevel)
+        this.concurrencyLevel = if (concurrencyLevel > 0) {
+            concurrencyLevel
+        } else {
+            autoConcurrencyLevel(maxSize)
+        }
+        this.store = ConcHashMap<Priority<V>>.create(concurrencyLevel: this.concurrencyLevel)
         startTimer()
         //进程退出时自动 close（close 会把已入队的淘汰回调投递完）；注册项只捕弱引用，
         //避免 f_base 的全局注册表把实例钉住 —— close() 之后对象可被 GC 回收
@@ -55,18 +68,41 @@ public class HeapCache<V> <: Resource where V <: Object {
     public static func builder(): HeapCacheBuilder<V> {
         return HeapCacheBuilder<V>()
     }
-    private func onEviction(): LinkedBlockingQueue<(String, V)> {
-        let q = LinkedBlockingQueue<(String, V)>()
+    /**
+     * 按预期条目数（maxSize）选分段数：每段目标 ≤1024 条，段数取 2 的幂、范围 [16, 128]。
+     * 段锁与段对象的固定开销摊在每个实例上，段数过密（旧默认 128）会让小缓存白付内存与构造时间。
+     */
+    private static func autoConcurrencyLevel(maxSize: Int64): Int64 {
+        var level: Int64 = 16
+        while (level < DEFAULT_HEAP_CACHE_CONCURRENCY_LEVEL && maxSize / level > 1024) {
+            level *= 2
+        }
+        return level
+    }
+    /**仅供同包用例使用：实际分段数（concurrencyLevel 传 0 时由 maxSize 推导）*/
+    func segmentCount(): Int64 {
+        concurrencyLevel
+    }
+    private func onEviction(): LinkedBlockingQueue<Option<(String, V)>> {
+        let q = evictionQueue
         evictionTask = Some(spawn {
-            //按固定间隔取元素，并每轮检查一次取消请求（close() 会 future.cancel()）
-            while (!Thread.currentThread.hasPendingCancellation) {
-                if (let Some((k, v)) <- q.remove(EVICTION_POLL_INTERVAL)) {
-                    notifyEviction(k, v)
+            //按固定间隔取元素，并每轮检查一次取消请求（close() 会 future.cancel() 并投递哨兵）
+            var stopping = false
+            while (!stopping && !Thread.currentThread.hasPendingCancellation) {
+                if (let Some(item) <- q.remove(EVICTION_POLL_INTERVAL)) {
+                    match (item) {
+                        //哨兵：close() 正在等本线程退出
+                        case None => stopping = true
+                        case Some((k, v)) => notifyEviction(k, v)
+                    }
                 }
             }
-            //收到取消请求后，把已入队的淘汰回调投递完再退出
-            while (let Some((k, v)) <- q.tryRemove()) {
-                notifyEviction(k, v)
+            //收到取消请求/哨兵后，把已入队的淘汰回调投递完再退出
+            while (let Some(item) <- q.tryRemove()) {
+                match (item) {
+                    case Some((k, v)) => notifyEviction(k, v)
+                    case None => ()
+                }
             }
         })
         q
@@ -92,7 +128,8 @@ public class HeapCache<V> <: Resource where V <: Object {
         handles
     }
     private func startTimer() {
-        let topVals = PriorityQueue<Priority<V>>.create<Priority<V>>(capacity: concurrencyLevel)
+        //淘汰堆用快照比较器：进堆前 snapshot 一次（见 checkOverSize），堆内比较不再逐次加锁/取时间
+        let topVals = PriorityQueue<Priority<V>>({a, b => a.compareSnapshot(b)}, capacity: concurrencyLevel)
         let tops = HashMap<String, Priority<V>>()
         let q = onEviction()
         timerHandle = Some(Timer.after(checkDuration) {
@@ -106,17 +143,25 @@ public class HeapCache<V> <: Resource where V <: Object {
             }
         })
     }
-    private func checkTimeout(evictionQueue: LinkedBlockingQueue<(String, V)>): Unit {
-        removeIfLocked {
-            k, p => if (!closedFlag.load()) {
-                if (expired(p)) {
-                    evictionQueue.add((k, p.load()))
-                    true
-                } else {
-                    false
-                }
+    /**
+     * 定时清扫（增量）：只扫「段级死亡时间下界已到」的段，稳定态下每 tick 只遍历段数组做一次原子读，
+     * 不再全表逐条判过期。下界由 set/once/prolong/getOrCompute 保守登记（见各自调用点）。
+     * 谓词在段锁内执行；关闭时清空全部条目（与原 removeIfLocked 的 closed 分支一致）。
+     */
+    private func checkTimeout(evictionQueue: LinkedBlockingQueue<Option<(String, V)>>): Unit {
+        let now = DateTime.now()
+        let nowNanos = now.toUnixTimeStamp().toNanoseconds()
+        store.sweepExpired(nowNanos) {k, p =>
+            if (closedFlag.load()) {
+                (true, Int64.Max)
             } else {
-                return true
+                let (alive, deathNanos) = p.aliveAndDeathNanos(now)
+                if (alive) {
+                    (false, deathNanos)
+                } else {
+                    evictionQueue.add(Some((k, p.load())))
+                    (true, Int64.Max)
+                }
             }
         }
     }
@@ -124,7 +169,7 @@ public class HeapCache<V> <: Resource where V <: Object {
         topVals: PriorityQueue<Priority<V>>,
         tops: HashMap<String, Priority<V>>,
         iterator: ConcHashMapIterator<Priority<V>>,
-        evictionQueue: LinkedBlockingQueue<(String, V)>
+        evictionQueue: LinkedBlockingQueue<Option<(String, V)>>
     ): Unit {
         let store = this.store
         let maxSize = this.maxSize
@@ -137,6 +182,7 @@ public class HeapCache<V> <: Resource where V <: Object {
                 if (let Some((k, p)) <- segmItr.next()) {
                     segmItrMap[i] = segmItr
                     p.index = i
+                    p.snapshot(current)//堆内比较只读这份进堆前的快照
                     topVals.add(p)
                 }
                 i++
@@ -146,12 +192,13 @@ public class HeapCache<V> <: Resource where V <: Object {
                 if (let Some(p) <- topVals.remove()) {
                     store.remove(p.key)
                     minIdx = p.index
-                    evictionQueue.add((p.key, p.load()))
+                    evictionQueue.add(Some((p.key, p.load())))
                 }
                 if (minIdx < 0 || store.size <= maxSize) {
                     break
                 } else if (let Some(segm) <- segmItrMap.get(minIdx) && let Some(next) <- segm.next()) {
                     next[1].index = minIdx
+                    next[1].snapshot(current)//补位候选同样先进快照再进堆
                     topVals.add(next[1])
                 }
             }
@@ -165,7 +212,7 @@ public class HeapCache<V> <: Resource where V <: Object {
         tops.clear()
     }
     private func expired(p: Priority<V>): Bool {
-        DateTime.now() >= p.deathTime
+        DateTime.now().toUnixTimeStamp().toNanoseconds() >= p.deathNanos
     }
 
     /**关闭校验：关闭后调用任何公开操作都抛 IllegalStateException（isClosed/close 除外）*/
@@ -176,8 +223,9 @@ public class HeapCache<V> <: Resource where V <: Object {
     }
     public func get(key: String): Option<V> {
         ensureOpen()
+        //单次加锁完成「判过期 + 记一次使用 + 取值」：原先 expired + load 要两次加锁、两次取时间
         match (store.get(key)) {
-            case Some(p) where !expired(p) => p.load()
+            case Some(p) => p.loadIfAlive()
             case _ => None<V>
         }
     }
@@ -189,52 +237,76 @@ public class HeapCache<V> <: Resource where V <: Object {
         ensureOpen()
         match (store.get(key)) {
             //与 get/contains 同口径：已过期（即使尚未被定时清扫）视为不存在
-            case Some(p) where !expired(p) => synchronized(p.lock) {
-                p.load()
-                p.once = true
-                true
-            }
+            case Some(p) where !expired(p) => onceLocked(key, p)
             case _ => false
         }
+    }
+    private func onceLocked(key: String, p: Priority<V>): Bool {
+        let (r, dn) = synchronized(p.lock) {
+            p.load()
+            p.once = true
+            //once=true 后死亡时间从 birth 起算（比 lastUsed 早），登记它可保证清扫不漏
+            (true, p.deathNanos)
+        }
+        store.noteDeath(key, dn)
+        r
     }
     public func prolong(key: String, life: Duration, once!: Bool = false): Bool {
         ensureOpen()
         match (store.get(key)) {
             //已过期条目不允许通过续期“复活”，调用方应改用 set 重建
-            case Some(p) where !expired(p) => synchronized(p.lock) {
-                p.load()
-                p.maxLife = life
-                p.once = once
-                true
-            }
+            case Some(p) where !expired(p) => prolongLocked(key, p, life, once)
             case _ => false
         }
+    }
+    private func prolongLocked(key: String, p: Priority<V>, life: Duration, once: Bool): Bool {
+        let (r, dn) = synchronized(p.lock) {
+            p.load()
+            p.maxLife = life
+            p.once = once
+            //deathNanos 按 once 取 birth/lastUsed 基准；lastUsed 刚被 p.load() 更新，精确且保守
+            (true, p.deathNanos)
+        }
+        store.noteDeath(key, dn)
+        r
     }
     public func prolong(key: String, deathTime: DateTime): Bool {
         ensureOpen()
         match (store.get(key)) {
-            case Some(p) where !expired(p) => synchronized(p.lock) {
-                p.load()
-                p.deathTime = deathTime
-                p.once = true
-                true
-            }
+            case Some(p) where !expired(p) => prolongDeathAtLocked(key, p, deathTime)
             case _ => false
         }
+    }
+    private func prolongDeathAtLocked(key: String, p: Priority<V>, deathTime: DateTime): Bool {
+        let deathNanos = deathTime.toUnixTimeStamp().toNanoseconds()
+        let r = synchronized(p.lock) {
+            p.load()
+            p.deathNanos = deathNanos
+            p.once = true
+            true
+        }
+        store.noteDeath(key, deathNanos)
+        r
     }
     public func set(key: String, value: V, life!: Duration = this.maxLife, once!: Bool = false): ?V {
         ensureOpen()
         if (let Some(p) <- store.get(key)) {
-            synchronized(p.lock) {
+            let (old, dn) = synchronized(p.lock) {
                 let old = p.load()
                 p.store(value)
                 p.maxLife = life
                 p.once = once
-                old
+                //deathNanos 按 once 取 birth/lastUsed 基准（lastUsed 刚被 p.store 更新）；登记给定时清扫做段级下界
+                (old, p.deathNanos)
             }
+            store.noteDeath(key, dn)
+            old
         } else {
             //新建条目同样按本次调用给出的寿命与一次性标记：life 的默认值就是缓存级 maxLife
-            store.add(key, Priority<V>(key, value, life, checkDuration, once))
+            let created = Priority<V>(key, value, life, checkDuration, once)
+            store.add(key, created)
+            //新建条目 deathNanos = birth（= lastUsed）+ life；登记它保守
+            store.noteDeath(key, created.deathNanos)
             Option<V>.None
         }
     }
@@ -258,17 +330,29 @@ public class HeapCache<V> <: Resource where V <: Object {
     }
     public func getOrCompute(key: String, callable: () -> (V, DateTime)): V {
         ensureOpen()
-        store.computeIfAbsent(key) {
+        let note = DeathNote()
+        let p = store.computeIfAbsent(key) {
             let data = callable()
-            Priority<V>(key, data[0], data[1] - DateTime.now(), checkDuration, true)
-        }.load()
+            let created = Priority<V>(key, data[0], data[1] - DateTime.now(), checkDuration, true)
+            //只有真的新建了条目才会走到这里；deathTime = birth + (dieAt - now) ≥ dieAt，登记 dieAt 保守
+            note.nanos = data[1].toUnixTimeStamp().toNanoseconds()
+            created
+        }
+        store.noteDeath(key, note.nanos)
+        p.load()
     }
     public func getOrCompute(key: String, callable: () -> (V, Duration, Bool)): V {
         ensureOpen()
-        store.computeIfAbsent(key) {
+        let note = DeathNote()
+        let p = store.computeIfAbsent(key) {
             let data = callable()
-            Priority<V>(key, data[0], data[1], checkDuration, data[2])
-        }.load()
+            let created = Priority<V>(key, data[0], data[1], checkDuration, data[2])
+            //新建条目的 deathNanos = birth/lastUsed（此刻相同）+ life
+            note.nanos = created.deathNanos
+            created
+        }
+        store.noteDeath(key, note.nanos)
+        p.load()
     }
     public func remove(key: String): Option<V> {
         ensureOpen()
@@ -281,10 +365,6 @@ public class HeapCache<V> <: Resource where V <: Object {
     public func removeIf(predicate: (String, V) -> Bool): Unit {
         ensureOpen()
         store.removeIf {k: String, p: Priority<V> => predicate(k, p.load())}
-    }
-    /**锁内版本：谓词廉价且需要「判定—删除」原子（定时清扫用）*/
-    private func removeIfLocked(predicate: (String, Priority<V>) -> Bool): Unit {
-        store.removeIfLocked(predicate)
     }
     public prop size: Int64 {
         get() {
@@ -312,6 +392,9 @@ public class HeapCache<V> <: Resource where V <: Object {
         store.clear()
         if (let Some(f) <- evictionTask) {
             f.cancel()
+            //投递哨兵唤醒可能正阻塞在 q.remove(EVICTION_POLL_INTERVAL) 的消费线程：
+            //否则 close 要等它轮询超时（最长 ~100ms）
+            evictionQueue.add(None<(String, V)>)
             //等消费线程把已入队的淘汰回调投递完并退出：close 返回即「清理完成」
             try {
                 f.get()
@@ -323,4 +406,9 @@ public class HeapCache<V> <: Resource where V <: Object {
     public func isClosed(): Bool {
         closedFlag.load()
     }
+}
+
+/**getOrCompute 闭包内回写「本次新建条目的死亡时间」（命中时不写，保持 Int64.Max 使 noteDeath 直接短路）*/
+class DeathNote {
+    var nanos = Int64.Max
 }

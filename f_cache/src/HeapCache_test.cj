@@ -17,7 +17,7 @@ package fountain::f_cache
 
 import std.unittest.*
 import std.unittest.testmacro.*
-import std.time.DateTime
+import std.time.{DateTime, MonoTime}
 import std.collection.ArrayList
 import std.sync.Mutex
 import fountain::f_collection.PriorityQueue
@@ -302,6 +302,148 @@ public class HeapCache_test {
         @Assert(false, cache.contains('k'))
     }
 
+    /**
+     * 寿命被改短的条目：段的死亡时间下界必须随之下调，否则清扫会跳过该段（条目留在表里）。
+     * 单段（concurrencyLevel = 1）+ 全量 size 断言，把「读时判过期」与「真的被清扫删掉」区分开。
+     */
+    @TestCase
+    public func testSweepClearsShortenedLife(): Unit {
+        let cache = HeapCache<Test>(concurrencyLevel: 1, maxLife: Duration.second * 10,
+            maxSize: 100, checkDuration: Duration.millisecond * 100)
+        cache.set('byProlong', Test(1))//下界初始 ≈ t0+10s
+        cache.set('bySet', Test(2))
+        sleep(Duration.millisecond * 100)
+        cache.prolong('byProlong', Duration.millisecond * 100)//死亡时间改短到 ≈ t0+200ms
+        cache.set('bySet', Test(3), life: Duration.millisecond * 100)//同上
+        @Assert(2, cache.size)//尚未到期：不得被误清
+        sleep(Duration.millisecond * 800)
+        @Assert(0, cache.size)//到期后必须真删，而不是仅“读时判过期”
+    }
+
+    /**
+     * 清扫后必须把段下界**重算**为剩余条目的最小死亡时间：
+     * 首轮下界（life=200ms）到点扫一次时续期过的条目仍活着 ⇒ 保留；重算出的下界再到点时必须清掉它。
+     */
+    @TestCase
+    public func testSweepReschedulesAfterSweep(): Unit {
+        let cache = HeapCache<Test>(concurrencyLevel: 1, maxLife: Duration.millisecond * 200,
+            maxSize: 100, checkDuration: Duration.millisecond * 100)
+        cache.set('k', Test(1))//下界 ≈ t0+200ms
+        cache.prolong('k', Duration.millisecond * 400)//死亡时间 ≈ t0+400ms
+        sleep(Duration.millisecond * 300)//首轮下界到点：k 仍活着，不得被误清
+        @Assert(1, cache.size)
+        @Assert(true, cache.contains('k'))
+        sleep(Duration.millisecond * 600)//重算后的下界到点：必须被清掉（写成 Int64.Max 会漏清）
+        @Assert(0, cache.size)
+    }
+
+    /** getOrCompute 两种重载新建的条目也必须登记死亡时间：到点后被清扫真删，长寿命条目保留 */
+    @TestCase
+    public func testSweepClearsComputedEntries(): Unit {
+        let byDuration = HeapCache<Test>(concurrencyLevel: 1, maxLife: Duration.second * 10,
+            maxSize: 100, checkDuration: Duration.millisecond * 100)
+        let _ = byDuration.getOrCompute('alive') {Test(1)}//对照：活到 10s
+        let _ = byDuration.getOrCompute('short') {(Test(2), Duration.millisecond * 200, false)}
+        let byDateTime = HeapCache<Test>(concurrencyLevel: 1, maxLife: Duration.second * 10,
+            maxSize: 100, checkDuration: Duration.millisecond * 100)
+        let _ = byDateTime.getOrCompute('alive') {Test(1)}//对照
+        let _ = byDateTime.getOrCompute('short') {(Test(2), DateTime.now() + Duration.millisecond * 200)}
+        sleep(Duration.millisecond * 800)
+        @Assert(1, byDuration.size)
+        @Assert(true, byDuration.contains('alive'))
+        @Assert(1, byDateTime.size)
+        @Assert(true, byDateTime.contains('alive'))
+    }
+
+    /**
+     * 并发写入短寿命条目：清扫与「登记下界」（含 deathVer 保护下的重算）竞争时不得漏清，
+     * 全部到期后 size 必须归零，而不是留下永远无人清扫的条目。
+     */
+    @TestCase
+    public func testSweepKeepsUpUnderConcurrentWrites(): Unit {
+        let cache = HeapCache<Test>(concurrencyLevel: 4, maxLife: Duration.millisecond * 100,
+            maxSize: 10000, checkDuration: Duration.millisecond * 50)
+        let threads = 4
+        let per = 300
+        let futures = ArrayList<Future<Unit>>()
+        for (t in 0..threads) {
+            let myT = t
+            futures.add(spawn {
+                for (i in 0..per) {
+                    let _ = cache.set('w${myT}_${i}', Test(i), life: Duration.millisecond * 100)
+                }
+            })
+        }
+        for (f in futures) {
+            f.get()
+        }
+        sleep(Duration.second)
+        @Assert(0, cache.size)
+        cache.close()
+    }
+
+    /**段数按预期条目数推导：显式指定优先；传 0（默认）时每段目标 ≤1024 条、段数取 2 的幂且不超过 128 */
+    @TestCase
+    public func testAutoConcurrencyLevel(): Unit {
+        let c1024 = HeapCache<Test>(concurrencyLevel: 0, maxSize: 1024)
+        @Assert(16, c1024.segmentCount())
+        c1024.close()
+        let c16k = HeapCache<Test>(maxSize: 16384)//默认参数（concurrencyLevel 省略）同样走自动推导
+        @Assert(16, c16k.segmentCount())
+        c16k.close()
+        let c20k = HeapCache<Test>(concurrencyLevel: 0, maxSize: 20000)
+        @Assert(32, c20k.segmentCount())
+        c20k.close()
+        let cBig = HeapCache<Test>(concurrencyLevel: 0, maxSize: 200000)
+        @Assert(128, cBig.segmentCount())
+        cBig.close()
+        let cExplicit = HeapCache<Test>(concurrencyLevel: 4, maxSize: 200000)
+        @Assert(4, cExplicit.segmentCount())//显式指定优先
+        cExplicit.close()
+        let built = HeapCacheBuilder<Test>().setMaxSize(8192).build()
+        @Assert(16, built.segmentCount())
+        built.close()
+    }
+
+    /**
+     * 淘汰比较快照：进堆前 snapshot 一次，堆内比较（compareSnapshot）之后不再受实时状态影响；
+     * 且与实时比较（compare）遵循同一套排序规则。
+     */
+    @TestCase
+    public func testEvictionSnapshotIsStableAndMatchesLiveCompare(): Unit {
+        let older = Priority<Test>('old', Test(1), Duration.second * 30, Duration.second, false)
+        let newer = Priority<Test>('new', Test(2), Duration.second * 30, Duration.second, false)
+        older.incr()
+        newer.incr()
+        newer.incr()//newer 本周期用得多 ⇒ 更该保留
+        @Assert(Ordering.LT, older.compare(newer))
+        let now = DateTime.now()
+        older.snapshot(now)
+        newer.snapshot(now)
+        @Assert(Ordering.LT, older.compareSnapshot(newer))
+        //快照之后再改实时状态：堆内比较（读快照）不变；实时比较（compare）已反转
+        older.store(Test(3))
+        older.incr()
+        older.incr()
+        @Assert(Ordering.LT, older.compareSnapshot(newer))
+        @Assert(Ordering.GT, older.compare(newer))
+    }
+
+    /**时间戳统一为 Unix 纳秒后的口径守护：deathNanos 与判定用的死亡时间一致；once 切换后按 birth 起算 */
+    @TestCase
+    public func testDeathNanosIsConsistentAndOnceSwitchesToBirth(): Unit {
+        let p = Priority<Test>('k', Test(1), Duration.millisecond * 200, Duration.second, false)
+        let (alive, dead) = p.aliveAndDeathNanos(DateTime.now())
+        @Assert(true, alive)
+        @Assert(dead, p.deathNanos)
+        sleep(Duration.millisecond * 60)
+        p.incr()//lastUsed 前进 ⇒ 非 once 时死亡时间随之推后
+        let usedBased = p.deathNanos
+        @Assert(true, usedBased > dead)
+        p.once = true//切到 once：死亡时间改为从 birth 起算 ⇒ 回到（更早的）初值
+        @Assert(dead, p.deathNanos)
+    }
+
     @TestCase
     public func testHeapCacheIsResource(): Unit {
         let cache = HeapCache<Test>(maxLife: Duration.second * 30,
@@ -394,6 +536,97 @@ public class HeapCache_test {
         //同分候选（都没被用过、都新鲜）里淘汰更老的 'a'（保护新生），回调应拿到它的键
         @Assert(1, delivered.size)
         @Assert('a', delivered[0])
+    }
+
+    /**
+     * close() 不应等待淘汰消费线程的轮询超时（修复前阻塞在 `q.remove(100ms)`，close 需 ~100ms）。
+     * 这里用 50ms 上限守护：哨兵唤醒后 close 应在毫秒级返回。
+     */
+    @TestCase
+    public func testCloseDoesNotWaitForEvictionPollInterval(): Unit {
+        let cache = HeapCache<Test>(maxLife: Duration.second * 30, checkDuration: Duration.second * 30)
+        for (i in 0..5) {
+            let _ = cache.set('p${i}', Test(i))
+        }
+        let t0 = MonoTime.now()
+        cache.close()
+        let spentMs = (MonoTime.now() - t0) / Duration.millisecond
+        @Assert(true, spentMs < 50.0)
+    }
+
+    /**
+     * 淘汰采样的链表序守护：每段候选是 LinkedHashMap 链表头（最久未访问），
+     * 所以反复访问过的键必须存活。单段（concurrencyLevel = 1）时候选池只有链表头，最能暴露采样退化。
+     */
+    @TestCase
+    public func testEvictionKeepsFrequentlyUsedKeys(): Unit {
+        let cache = HeapCache<Test>(concurrencyLevel: 1, maxSize: 200, maxLife: Duration.second * 30,
+            checkDuration: Duration.millisecond * 100)
+        for (i in 0..400) {
+            let _ = cache.set('e${i}', Test(i))
+        }
+        for (_ in 0..5) {
+            for (i in 0..100) {
+                let _ = cache.get('e${i}')
+            }
+        }
+        sleep(Duration.millisecond * 700)
+        @Assert(true, cache.size <= 200)
+        var alive = 0
+        for (i in 0..100) {
+            if (cache.contains('e${i}')) {
+                alive++
+            }
+        }
+        @Assert(100, alive)
+    }
+
+    /** 段锁改互斥后的并发正确性：多线程各写各键，值不得串、size 不得丢 */
+    @TestCase
+    public func testConcurrentAccessDistinctKeys(): Unit {
+        let cache = HeapCache<Test>(concurrencyLevel: 16, maxLife: Duration.second * 30,
+            checkDuration: Duration.second * 30)
+        let threads = 4
+        let per = 200
+        let futures = ArrayList<Future<Int64>>()
+        for (t in 0..threads) {
+            let myT = t
+            futures.add(spawn {
+                var ok: Int64 = 0
+                for (i in 0..per) {
+                    let k = 'c${myT}_${i}'
+                    let _ = cache.set(k, Test(myT * 1000 + i))
+                    if (let Some(v) <- cache.get(k)) {
+                        if (v.value == myT * 1000 + i) {
+                            ok++
+                        }
+                    }
+                }
+                ok
+            })
+        }
+        var total: Int64 = 0
+        for (f in futures) {
+            total += f.get()
+        }
+        @Assert(threads * per, total)
+        @Assert(threads * per, cache.size)
+        cache.close()
+    }
+
+    /**
+     * 段清扫的谓词约定守护：removeIf 的语义是「谓词返回 true ⇒ 删除」，
+     * sweepLocked 依赖它（曾把语义写反，导致删活留死）。
+     */
+    @TestCase
+    public func testSegmentRemoveIfDeletesWhenTrue(): Unit {
+        let m = SyncLinkedHashMap<Test>()
+        m.add('a', Test(1))
+        m.add('b', Test(2))
+        m.removeIfLocked {k, _ => k == 'a'}
+        @Assert(1, m.size)
+        @Assert(false, m.contains('a'))
+        @Assert(true, m.contains('b'))
     }
 
     @TestCase
