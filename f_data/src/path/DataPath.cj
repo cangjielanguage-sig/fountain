@@ -754,10 +754,15 @@ abstract sealed class DataPath <: DataPathNode {
         if (arrs + 1 == arre) {
             throw DataException('illegal empty array in data path filter ${sub} for in expression')
         }
+        // 集合文本以引号开头时（如 `['nullable', 'y']`），框架会把这段原文当字符串字面量拼接，
+        // 首尾引号被吞掉（`'nullable', 'y'` → `nullable', 'y`），于是 `in ['x']` 会在编译期抛
+        // `illegal token for set filter`。这里对「以引号开头」的集合补一对引号抵消，其余集合保持原文拼装。
+        let setText = sub[arrs + 1 .. arre].toString()
+        let setSplice = if (setText.size > 0 && (setText[0] == 0x27u8 || setText[0] == 0x22u8)) { "'${setText}'" } else { setText }
             let tokens = match (sub[arrs + 1].kind) {
-            case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL => quote($(filter)<String>($(sub[i .. e].toString()), $(sub[arrs + 1 .. arre].toString()), 'false'))
-            case INTEGER_LITERAL => quote($(filter)<Int64>($(sub[i .. e].toString()), $(sub[arrs + 1 .. arre].toString()), 'false'))
-            case FLOAT_LITERAL => quote($(filter)<Float64>($(sub[i .. e].toString()), $(sub[arrs + 1 .. arre].toString()), 'false'))
+            case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL => quote($(filter)<String>($(sub[i .. e].toString()), $(setSplice), 'false'))
+            case INTEGER_LITERAL => quote($(filter)<Int64>($(sub[i .. e].toString()), $(setSplice), 'false'))
+            case FLOAT_LITERAL => quote($(filter)<Float64>($(sub[i .. e].toString()), $(setSplice), 'false'))
             case IDENTIFIER where sub[arrs + 1].value == 'null' =>
                 // null element: scan for first non-null element to infer type, default to String
                 var inferredType = "String"
@@ -767,9 +772,9 @@ abstract sealed class DataPath <: DataPathNode {
                     else if (sub[scanIdx].kind == STRING_LITERAL || sub[scanIdx].kind == SINGLE_QUOTED_STRING_LITERAL) { inferredType = "String"; break }
                 }
                 match (inferredType) {
-                    case "Int64" => quote($(filter)<Int64>($(sub[i .. e].toString()), $(sub[arrs + 1 .. arre].toString()), 'false'))
-                    case "Float64" => quote($(filter)<Float64>($(sub[i .. e].toString()), $(sub[arrs + 1 .. arre].toString()), 'false'))
-                    case _ => quote($(filter)<String>($(sub[i .. e].toString()), $(sub[arrs + 1 .. arre].toString()), 'false'))
+                    case "Int64" => quote($(filter)<Int64>($(sub[i .. e].toString()), $(setSplice), 'false'))
+                    case "Float64" => quote($(filter)<Float64>($(sub[i .. e].toString()), $(setSplice), 'false'))
+                    case _ => quote($(filter)<String>($(sub[i .. e].toString()), $(setSplice), 'false'))
                 }
             case _ => throw DataException('illegal array element type in data path filter ${sub} for in expression')
         }
@@ -799,6 +804,19 @@ abstract sealed class DataPath <: DataPathNode {
                 v
             }
         }
+        /**
+         * 集合字面量参数（in/nin/anyof/subsetof/nooneof 的第 2 个参数）不能走 arg()：
+         * 它由 parseSetOp 用原文切片生成，文本自身可能以引号开头（如 `['nullable', 'y']`），
+         * arg() 的「剥外层引号」会吃掉首个元素的引号（`'nullable', 'y'` → `nullable', 'y`），
+         * 导致 `in ['x']` 这类写法在编译期抛 `illegal token for set filter`。
+         */
+        func setArg(args: Tokens, index: Int64): String {
+            let actualIndex = index * 2
+            if (actualIndex >= args.size) {
+                throw DataException('missing argument at index ${index} in filter ${args}')
+            }
+            args[actualIndex].value
+        }
         match (expr) {
             case x: CallExpr =>
                 let tokens = x.toTokens()
@@ -825,22 +843,22 @@ abstract sealed class DataPath <: DataPathNode {
                     case ('CmpFilter', 'Float64') => CmpFilter<Float64>(arg(args, 0), arg(args, 1), arg(args, 2),
                         arg(args, 3), arg(args, 4))
                     case ('RegexFilter', _) => RegexFilter(arg(args, 0), arg(args, 1), arg(args, 2))
-                    case ('InFilter', 'String') => InFilter<String>(arg(args, 0), arg(args, 1), arg(args, 2))
-                    case ('InFilter', 'Int64') => InFilter<Int64>(arg(args, 0), arg(args, 1), arg(args, 2))
-                    case ('InFilter', 'Float64') => InFilter<Float64>(arg(args, 0), arg(args, 1), arg(args, 2))
-                    case ('NinFilter', 'String') => NinFilter<String>(arg(args, 0), arg(args, 1), arg(args, 2))
-                    case ('NinFilter', 'Int64') => NinFilter<Int64>(arg(args, 0), arg(args, 1), arg(args, 2))
-                    case ('NinFilter', 'Float64') => NinFilter<Float64>(arg(args, 0), arg(args, 1), arg(args, 2))
-                    case ('AnyOfFilter', 'String') => AnyOfFilter<String>(arg(args, 0), arg(args, 1), arg(args, 2))
-                    case ('AnyOfFilter', 'Int64') => AnyOfFilter<Int64>(arg(args, 0), arg(args, 1), arg(args, 2))
-                    case ('AnyOfFilter', 'Float64') => AnyOfFilter<Float64>(arg(args, 0), arg(args, 1), arg(args, 2))
-                    case ('SubSetOfFilter', 'String') => SubSetOfFilter<String>(arg(args, 0), arg(args, 1), arg(args, 2))
-                    case ('SubSetOfFilter', 'Int64') => SubSetOfFilter<Int64>(arg(args, 0), arg(args, 1), arg(args, 2))
-                    case ('SubSetOfFilter', 'Float64') => SubSetOfFilter<Float64>(arg(args, 0), arg(args, 1),
+                    case ('InFilter', 'String') => InFilter<String>(arg(args, 0), setArg(args, 1), arg(args, 2))
+                    case ('InFilter', 'Int64') => InFilter<Int64>(arg(args, 0), setArg(args, 1), arg(args, 2))
+                    case ('InFilter', 'Float64') => InFilter<Float64>(arg(args, 0), setArg(args, 1), arg(args, 2))
+                    case ('NinFilter', 'String') => NinFilter<String>(arg(args, 0), setArg(args, 1), arg(args, 2))
+                    case ('NinFilter', 'Int64') => NinFilter<Int64>(arg(args, 0), setArg(args, 1), arg(args, 2))
+                    case ('NinFilter', 'Float64') => NinFilter<Float64>(arg(args, 0), setArg(args, 1), arg(args, 2))
+                    case ('AnyOfFilter', 'String') => AnyOfFilter<String>(arg(args, 0), setArg(args, 1), arg(args, 2))
+                    case ('AnyOfFilter', 'Int64') => AnyOfFilter<Int64>(arg(args, 0), setArg(args, 1), arg(args, 2))
+                    case ('AnyOfFilter', 'Float64') => AnyOfFilter<Float64>(arg(args, 0), setArg(args, 1), arg(args, 2))
+                    case ('SubSetOfFilter', 'String') => SubSetOfFilter<String>(arg(args, 0), setArg(args, 1), arg(args, 2))
+                    case ('SubSetOfFilter', 'Int64') => SubSetOfFilter<Int64>(arg(args, 0), setArg(args, 1), arg(args, 2))
+                    case ('SubSetOfFilter', 'Float64') => SubSetOfFilter<Float64>(arg(args, 0), setArg(args, 1),
                         arg(args, 2))
-                    case ('NoOneOfFilter', 'String') => NoOneOfFilter<String>(arg(args, 0), arg(args, 1), arg(args, 2))
-                    case ('NoOneOfFilter', 'Int64') => NoOneOfFilter<Int64>(arg(args, 0), arg(args, 1), arg(args, 2))
-                    case ('NoOneOfFilter', 'Float64') => NoOneOfFilter<Float64>(arg(args, 0), arg(args, 1), arg(args, 2))
+                    case ('NoOneOfFilter', 'String') => NoOneOfFilter<String>(arg(args, 0), setArg(args, 1), arg(args, 2))
+                    case ('NoOneOfFilter', 'Int64') => NoOneOfFilter<Int64>(arg(args, 0), setArg(args, 1), arg(args, 2))
+                    case ('NoOneOfFilter', 'Float64') => NoOneOfFilter<Float64>(arg(args, 0), setArg(args, 1), arg(args, 2))
                     case ('SizeFilter', _) => SizeFilter(arg(args, 0), arg(args, 1), arg(args, 2))
                     case ('ExistsFilter', _) => ExistsFilter(arg(args, 0), arg(args, 1))
                     case ('NullFilter', _) => NullFilter(arg(args, 0), arg(args, 1), arg(args, 2))

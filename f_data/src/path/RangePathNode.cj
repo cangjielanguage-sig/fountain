@@ -35,29 +35,37 @@ internal class RangePathNode <: DataPathNode {
                 let len = x.size
                 let actualStart = if (start == UNSET) {
                     if (step >= 0) { 0 } else { len - 1 }
-                } else if (start < 0) {
-                    len + start
                 } else {
-                    start
+                    normalize(start, len)
                 }
                 let actualEnd = if (end == UNSET) {
-                    if (step >= 0) { len } else { -len - 1 }
-                } else if (end < 0) {
-                    len + end
+                    // RFC 9535：负步长且 end 缺省时为 -1（降序循环走到 0 结束）。
+                    // 旧实现写 -len-1，再靠下面那次「二次归一化」折算成 -1；去掉二次归一化后必须直接用 -1。
+                    if (step >= 0) { len } else { -1 }
                 } else {
-                    end
+                    normalize(end, len)
                 }
-                // RFC 9535 normalization: negative values are relative to length
-                let finalStart = if (actualStart < 0) { len + actualStart } else { actualStart }
-                let finalEnd = if (actualEnd < 0) { len + actualEnd } else { actualEnd }
                 if (step == 0) {
                     OptionIterator<Data>()
                 } else {
-                    buildIndices(finalStart, finalEnd, step).iterator()
+                    buildIndices(actualStart, actualEnd, step).iterator()
                         .map {idx => IndexPathNode(idx)}
                         .flatMap {n => n.get(data).iterator()}
                 }
             case _ => OptionIterator<Data>()
+        }
+    }
+    /**
+     * RFC 9535 §2.3.4.2.2 的 Normalize：非负值夹到 [0, len]，负值先按 len + i 折算再夹到 [0, len]。
+     * 修复历史缺陷：旧实现对负值折算两次（`len+start` 后又 `len+actualStart`），
+     * 导致 `$.arr[-7:]`（len=5）只返回后 2 个元素，而按 RFC 应返回全部 5 个。
+     */
+    private static func normalize(i: Int64, len: Int64): Int64 {
+        if (i >= 0) {
+            if (i > len) { len } else { i }
+        } else {
+            let shifted = len + i
+            if (shifted < 0) { 0 } else { shifted }
         }
     }
     private static func buildIndices(start: Int64, end: Int64, step: Int64): ArrayList<Int64> {
