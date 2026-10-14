@@ -119,3 +119,11 @@ public abstract class DelayedTicktockTask <: CronTicktockTask {
 | `TicktockException` | Module exception |
 
 Conventions: when `concurrentable` is `false` (the default), the run is skipped if the previous one has not finished; a task with `once` set to `true` runs only once; `executing`/`reset` keep accounts by "task name + timestamp" by default and can be overridden.
+
+## Implementation notes (performance optimisation, external behaviour unchanged)
+
+The timer keeps a time index for the registered CRON expressions: on every tick it first selects candidate tasks according to the current time, then matches the candidates precisely, and runs the business logic only on a match. The selection only rules out tasks that cannot fire on this tick; whether a task fires is still decided by `CronDataCollection.matches`, so the semantics are exactly the same as without the index.
+
+- The index keeps three sets of tasks per time unit (value buckets / unconstrained / dynamic); tasks using `L` or a constrained year go into the dynamic set and take part in the decision on every tick, so they can never be missed by the value buckets.
+- `addOrReplaceTask` / `removeTask` update the index under the same lock as a tick, so dynamic add/remove at runtime is safe.
+- Tasks whose expression text is identical share one read-only compiled result within a process (cache limited to 4096 expressions), reducing registration cost and memory footprint.
