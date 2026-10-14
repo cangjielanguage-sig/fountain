@@ -124,6 +124,6 @@ Conventions: when `concurrentable` is `false` (the default), the run is skipped 
 
 The timer keeps a time index for the registered CRON expressions: on every tick it first selects candidate tasks according to the current time, then matches the candidates precisely, and runs the business logic only on a match. The selection only rules out tasks that cannot fire on this tick; whether a task fires is still decided by `CronDataCollection.matches`, so the semantics are exactly the same as without the index.
 
-- The index keeps three sets of tasks per time unit (value buckets / unconstrained / dynamic); tasks using `L` or a constrained year go into the dynamic set and take part in the decision on every tick, so they can never be missed by the value buckets.
+- The index keeps four sets of tasks per time unit (value buckets / unconstrained / dynamic / always-true): `L` is expanded into the value buckets of its candidate span (28~31 for the day field, a fixed value for the other units), so such tasks take part in the decision only inside that span; only a constrained year goes into the dynamic set that is decided on every tick; all-wildcard tasks are kept in a separate set and are always candidates.
 - `addOrReplaceTask` / `removeTask` update the index under the same lock as a tick, so dynamic add/remove at runtime is safe.
 - Tasks whose expression text is identical share one read-only compiled result within a process (cache limited to 4096 expressions), reducing registration cost and memory footprint.

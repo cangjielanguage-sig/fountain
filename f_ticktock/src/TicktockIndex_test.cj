@@ -31,6 +31,13 @@ func indexTestTime(year: Int64, month: Int64, day: Int64, hour: Int64, minute: I
 
 let INDEX_TEST_TIME = indexTestTime(2026, 5, 4, 3, 2, 1)
 
+func indexTestHas(buffer: ArrayList<Int64>, id: Int64): Bool {
+    for (x in buffer where x == id) {
+        return true
+    }
+    false
+}
+
 func indexTestWaitUntil(condition: () -> Bool, timeout: Duration): Unit {
     let deadline = DateTime.now() + timeout
     while (!condition() && DateTime.now() < deadline) {
@@ -61,6 +68,10 @@ public class TicktockIndex_test {
         "1,3,5 * * * * *",
         "0 0 0 L 2 *",
         "30 30 1 L 1,3,5,7,8,10,12 *",
+        "0 L * * * *",
+        "0 0 L * * *",
+        "0 0 0 * L *",
+        "0 0 0 * * L",
         "0 0 0 * * *",
         "* * * * * L",
         "1/3-45 * * * * * | 0 0 3 29 2 *",
@@ -130,23 +141,59 @@ public class TicktockIndex_test {
         @Assert(hits > 0)
     }
 
-    /** L 任务进 dynamic：任意 tick 都不被静态值桶漏掉。 */
+    /**
+     * L 任务：按该单位的 lastRange（日字段即 28..=31）展开进值桶后，
+     * 候选集合对 L 任务是精确的 —— 非候选时刻必定不命中。
+     */
     @TestCase
-    public func testLastTaskIsAlwaysCandidate(): Unit {
+    public func testLastTaskCandidateIsExact(): Unit {
         let index = TicktockIndex()
-        let crons = CronCompiler.compile("L * * * * *")
+        let crons = CronCompiler.compile("0 0 0 L * *")
         for (cron in crons) {
+            index.add(0, cron)
+        }
+        let buffer = ArrayList<Int64>()
+        // 月中：非最后一天、也不在 28..=31，不命中 → 不进候选
+        index.candidates(indexTestTime(2026, 10, 15, 0, 0, 0), buffer)
+        @Assert(!indexTestHas(buffer, 0))
+        // 28 日：matches 的常规分支命中（28 ∈ [28, 31]）→ 候选
+        index.candidates(indexTestTime(2026, 10, 28, 0, 0, 0), buffer)
+        @Assert(indexTestHas(buffer, 0))
+        // 月末：isLastMonthDay 命中 → 候选
+        index.candidates(indexTestTime(2026, 10, 31, 0, 0, 0), buffer)
+        @Assert(indexTestHas(buffer, 0))
+        // 非闰年 2 月末与闰年 2 月末均在 lastRange 内 → 候选
+        index.candidates(indexTestTime(2026, 2, 28, 0, 0, 0), buffer)
+        @Assert(indexTestHas(buffer, 0))
+        index.candidates(indexTestTime(2028, 2, 29, 0, 0, 0), buffer)
+        @Assert(indexTestHas(buffer, 0))
+        // 秒字段的 L 只在第 59 秒参与候选
+        let sec = TicktockIndex()
+        for (cron in CronCompiler.compile("L * * * * *")) {
+            sec.add(1, cron)
+        }
+        sec.candidates(indexTestTime(2026, 10, 14, 10, 30, 59), buffer)
+        @Assert(indexTestHas(buffer, 1))
+        sec.candidates(indexTestTime(2026, 10, 14, 10, 30, 58), buffer)
+        @Assert(!indexTestHas(buffer, 1))
+    }
+
+    /** 全通配任务（所有单位都未约束）恒为候选、恒命中；移除后不再出现。 */
+    @TestCase
+    public func testAlwaysTaskCandidateAndRemovable(): Unit {
+        let index = TicktockIndex()
+        for (cron in CronCompiler.compile("* * * * * *")) {
             index.add(0, cron)
         }
         let buffer = ArrayList<Int64>()
         for (time in TIMES) {
             index.candidates(time, buffer)
-            var found = false
-            for (id in buffer where id == 0) {
-                found = true
-                break
-            }
-            @Assert(found)
+            @Assert(indexTestHas(buffer, 0))
+        }
+        index.removeId(0)
+        for (time in TIMES) {
+            index.candidates(time, buffer)
+            @Assert(!indexTestHas(buffer, 0))
         }
     }
 

@@ -35,9 +35,14 @@ class TicktockEntry {
  * 运行期时间索引：把每个 tick "遍历全部任务"降为"只遍历候选任务"。
  *
  * 每个时间单位维护三组任务下标：
- * - `buckets[值]`：该单位的允许值集合包含该值（且不是 L）；
+ * - `buckets[值]`：该单位的允许值集合包含该值。`L` 按该单位的 lastRange 展开进值桶
+ *   （日字段是 28..=31，其余单位的 L 是固定值；matches 的真值集合等于该区间），
+ *   因此 L 任务只在对应候选区间参与求交，不再每 tick 进候选；
  * - `wildcard`  ：该单位未约束（表达式里该字段等价于 *）；
- * - `dynamic`   ：该单位使用 L（末值随月份变化），或年字段被约束（年份无上限，不做值桶）。
+ * - `dynamic`   ：年字段被约束（年份无上限，不做值桶）。
+ *
+ * 另有 `always`：所有单位都未约束的"恒真"任务（如 `* * * * * *`），
+ * 不进任何单位的集合（省去 7 份重复登记与求交），收集候选时无条件加入。
  *
  * 索引只用于排除"不可能在本 tick 触发"的任务，最终是否触发仍由
  * CronDataCollection.matches(now) 判定，因此不会改变任何既有语义。
@@ -48,6 +53,8 @@ class TicktockIndex {
     private let buckets = HashMap<Int64, HashMap<Int64, HashSet<Int64>>>()
     private let wildcard = HashMap<Int64, HashSet<Int64>>()
     private let dynamic = HashMap<Int64, HashSet<Int64>>()
+    /** 恒真任务（所有单位都未约束）。 */
+    private let always = HashSet<Int64>()
     /** 平凡单位：只有 wildcard（没有任何任务约束它），求交时不可能过滤掉任何任务，直接跳过。 */
     private let trivial = HashMap<Int64, Bool>()
 
@@ -60,15 +67,24 @@ class TicktockIndex {
         }
     }
 
-    /** 把一个任务的某个 cron（`|` 分隔的一组表达式之一）登记进索引。 */
+    /**
+     * 把一个任务的某个 cron（`|` 分隔的一组表达式之一）登记进索引。
+     *
+     * 全通配任务（所有单位都未约束）只登记进 `always`；
+     * 其余任务按单位写入值桶 / wildcard / dynamic。
+     */
     func add(id: Int64, cron: CronDataCollection): Unit {
+        var constrained = false
         for (u in units_) {
             match (cron.get(u)) {
                 case Some(crons) =>
+                    constrained = true
                     for (c in crons) {
-                        if (c.last || u == TicktockUnit.YEARLY) {
+                        if (u == TicktockUnit.YEARLY) {
                             dynamic[u.value].add(id)
                         } else {
+                            // `L` 的 range 就是该单位的 lastRange（如日字段 28..=31），
+                            // 按它展开即 matches 真值集合的超集（此处实际为精确集合）
                             var v = c.start
                             let step = c.duration
                             while (v <= c.end) {
@@ -80,6 +96,16 @@ class TicktockIndex {
                         }
                         trivial[u.value] = false
                     }
+                case None => ()
+            }
+        }
+        if (!constrained) {
+            always.add(id)
+            return
+        }
+        for (u in units_) {
+            match (cron.get(u)) {
+                case Some(_) => ()
                 case None => wildcard[u.value].add(id)
             }
         }
@@ -87,6 +113,7 @@ class TicktockIndex {
 
     /** 从索引里摘除一个任务（值桶按单位全量扫描，单次移除成本为常数级）。 */
     func removeId(id: Int64): Unit {
+        always.remove(id)
         for (u in units_) {
             wildcard[u.value].remove(id)
             dynamic[u.value].remove(id)
@@ -149,7 +176,8 @@ class TicktockIndex {
     }
 
     private func sizeAt(unit: Int64, value: Int64): Int64 {
-        var n = wildcard[unit].size + dynamic[unit].size
+        // always 是各单位的公共常量，只影响 argmin 的绝对值、不影响挑选结果
+        var n = wildcard[unit].size + dynamic[unit].size + always.size
         match (buckets[unit].get(value)) {
             case Some(set) => n += set.size
             case None => ()
@@ -158,6 +186,9 @@ class TicktockIndex {
     }
 
     private func collect(unit: Int64, value: Int64, into: ArrayList<Int64>): Unit {
+        for (id in always) {
+            into.add(id)
+        }
         match (buckets[unit].get(value)) {
             case Some(set) =>
                 for (id in set) {
@@ -174,7 +205,7 @@ class TicktockIndex {
     }
 
     private func keep(unit: Int64, value: Int64, id: Int64): Bool {
-        if (wildcard[unit].contains(id) || dynamic[unit].contains(id)) {
+        if (always.contains(id) || wildcard[unit].contains(id) || dynamic[unit].contains(id)) {
             return true
         }
         match (buckets[unit].get(value)) {
