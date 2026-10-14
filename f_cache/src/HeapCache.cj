@@ -116,17 +116,25 @@ public class HeapCache<V> <: Resource where V <: Object {
             }
         })
     }
+    /**
+     * 定时清扫（增量）：只扫「段级死亡时间下界已到」的段，稳定态下每 tick 只遍历段数组做一次原子读，
+     * 不再全表逐条判过期。下界由 set/once/prolong/getOrCompute 保守登记（见各自调用点）。
+     * 谓词在段锁内执行；关闭时清空全部条目（与原 removeIfLocked 的 closed 分支一致）。
+     */
     private func checkTimeout(evictionQueue: LinkedBlockingQueue<Option<(String, V)>>): Unit {
-        removeIfLocked {
-            k, p => if (!closedFlag.load()) {
-                if (expired(p)) {
-                    evictionQueue.add(Some((k, p.load())))
-                    true
-                } else {
-                    false
-                }
+        let now = DateTime.now()
+        let nowNanos = now.toUnixTimeStamp().toNanoseconds()
+        store.sweepExpired(nowNanos) {k, p =>
+            if (closedFlag.load()) {
+                (true, Int64.Max)
             } else {
-                return true
+                let (alive, deathNanos) = p.aliveAndDeathNanos(now)
+                if (alive) {
+                    (false, deathNanos)
+                } else {
+                    evictionQueue.add(Some((k, p.load())))
+                    (true, Int64.Max)
+                }
             }
         }
     }
@@ -200,52 +208,82 @@ public class HeapCache<V> <: Resource where V <: Object {
         ensureOpen()
         match (store.get(key)) {
             //与 get/contains 同口径：已过期（即使尚未被定时清扫）视为不存在
-            case Some(p) where !expired(p) => synchronized(p.lock) {
-                p.load()
-                p.once = true
-                true
-            }
+            case Some(p) where !expired(p) => onceLocked(key, p)
             case _ => false
         }
+    }
+    private func onceLocked(key: String, p: Priority<V>): Bool {
+        let (r, dn) = synchronized(p.lock) {
+            p.load()
+            p.once = true
+            //once=true 后死亡时间从 birth 起算（比 lastUsed 早），登记它可保证清扫不漏
+            (true, (p.birthTime + p.maxLife).toUnixTimeStamp().toNanoseconds())
+        }
+        store.noteDeath(key, dn)
+        r
     }
     public func prolong(key: String, life: Duration, once!: Bool = false): Bool {
         ensureOpen()
         match (store.get(key)) {
             //已过期条目不允许通过续期“复活”，调用方应改用 set 重建
-            case Some(p) where !expired(p) => synchronized(p.lock) {
-                p.load()
-                p.maxLife = life
-                p.once = once
-                true
-            }
+            case Some(p) where !expired(p) => prolongLocked(key, p, life, once)
             case _ => false
         }
+    }
+    private func prolongLocked(key: String, p: Priority<V>, life: Duration, once: Bool): Bool {
+        let (r, dn) = synchronized(p.lock) {
+            p.load()
+            p.maxLife = life
+            p.once = once
+            (true, (if (once) {
+                p.birthTime + life
+            } else {
+                //lastUsed 刚被 p.load() 更新，取它算出的死亡时间精确且保守
+                p.lastUsedTime + life
+            }).toUnixTimeStamp().toNanoseconds())
+        }
+        store.noteDeath(key, dn)
+        r
     }
     public func prolong(key: String, deathTime: DateTime): Bool {
         ensureOpen()
         match (store.get(key)) {
-            case Some(p) where !expired(p) => synchronized(p.lock) {
-                p.load()
-                p.deathTime = deathTime
-                p.once = true
-                true
-            }
+            case Some(p) where !expired(p) => prolongDeathAtLocked(key, p, deathTime)
             case _ => false
         }
+    }
+    private func prolongDeathAtLocked(key: String, p: Priority<V>, deathTime: DateTime): Bool {
+        let r = synchronized(p.lock) {
+            p.load()
+            p.deathTime = deathTime
+            p.once = true
+            true
+        }
+        store.noteDeath(key, deathTime.toUnixTimeStamp().toNanoseconds())
+        r
     }
     public func set(key: String, value: V, life!: Duration = this.maxLife, once!: Bool = false): ?V {
         ensureOpen()
         if (let Some(p) <- store.get(key)) {
-            synchronized(p.lock) {
+            let (old, dn) = synchronized(p.lock) {
                 let old = p.load()
                 p.store(value)
                 p.maxLife = life
                 p.once = once
-                old
+                //死亡时间：once 从 birth 算，否则从刚被更新的 lastUsed 算；登记给定时清扫做段级下界
+                (old, (if (once) {
+                    p.birthTime + life
+                } else {
+                    p.lastUsedTime + life
+                }).toUnixTimeStamp().toNanoseconds())
             }
+            store.noteDeath(key, dn)
+            old
         } else {
             //新建条目同样按本次调用给出的寿命与一次性标记：life 的默认值就是缓存级 maxLife
-            store.add(key, Priority<V>(key, value, life, checkDuration, once))
+            let created = Priority<V>(key, value, life, checkDuration, once)
+            store.add(key, created)
+            store.noteDeath(key, (created.birthTime + life).toUnixTimeStamp().toNanoseconds())
             Option<V>.None
         }
     }
@@ -269,17 +307,29 @@ public class HeapCache<V> <: Resource where V <: Object {
     }
     public func getOrCompute(key: String, callable: () -> (V, DateTime)): V {
         ensureOpen()
-        store.computeIfAbsent(key) {
+        let note = DeathNote()
+        let p = store.computeIfAbsent(key) {
             let data = callable()
-            Priority<V>(key, data[0], data[1] - DateTime.now(), checkDuration, true)
-        }.load()
+            let created = Priority<V>(key, data[0], data[1] - DateTime.now(), checkDuration, true)
+            //只有真的新建了条目才会走到这里；deathTime = birth + (dieAt - now) ≥ dieAt，登记 dieAt 保守
+            note.nanos = data[1].toUnixTimeStamp().toNanoseconds()
+            created
+        }
+        store.noteDeath(key, note.nanos)
+        p.load()
     }
     public func getOrCompute(key: String, callable: () -> (V, Duration, Bool)): V {
         ensureOpen()
-        store.computeIfAbsent(key) {
+        let note = DeathNote()
+        let p = store.computeIfAbsent(key) {
             let data = callable()
-            Priority<V>(key, data[0], data[1], checkDuration, data[2])
-        }.load()
+            let created = Priority<V>(key, data[0], data[1], checkDuration, data[2])
+            //deathTime = birth + life（once）或 lastUsed + life，均不早于 birth + life
+            note.nanos = (created.birthTime + data[1]).toUnixTimeStamp().toNanoseconds()
+            created
+        }
+        store.noteDeath(key, note.nanos)
+        p.load()
     }
     public func remove(key: String): Option<V> {
         ensureOpen()
@@ -292,10 +342,6 @@ public class HeapCache<V> <: Resource where V <: Object {
     public func removeIf(predicate: (String, V) -> Bool): Unit {
         ensureOpen()
         store.removeIf {k: String, p: Priority<V> => predicate(k, p.load())}
-    }
-    /**锁内版本：谓词廉价且需要「判定—删除」原子（定时清扫用）*/
-    private func removeIfLocked(predicate: (String, Priority<V>) -> Bool): Unit {
-        store.removeIfLocked(predicate)
     }
     public prop size: Int64 {
         get() {
@@ -337,4 +383,9 @@ public class HeapCache<V> <: Resource where V <: Object {
     public func isClosed(): Bool {
         closedFlag.load()
     }
+}
+
+/**getOrCompute 闭包内回写「本次新建条目的死亡时间」（命中时不写，保持 Int64.Max 使 noteDeath 直接短路）*/
+class DeathNote {
+    var nanos = Int64.Max
 }

@@ -302,6 +302,86 @@ public class HeapCache_test {
         @Assert(false, cache.contains('k'))
     }
 
+    /**
+     * 寿命被改短的条目：段的死亡时间下界必须随之下调，否则清扫会跳过该段（条目留在表里）。
+     * 单段（concurrencyLevel = 1）+ 全量 size 断言，把「读时判过期」与「真的被清扫删掉」区分开。
+     */
+    @TestCase
+    public func testSweepClearsShortenedLife(): Unit {
+        let cache = HeapCache<Test>(concurrencyLevel: 1, maxLife: Duration.second * 10,
+            maxSize: 100, checkDuration: Duration.millisecond * 100)
+        cache.set('byProlong', Test(1))//下界初始 ≈ t0+10s
+        cache.set('bySet', Test(2))
+        sleep(Duration.millisecond * 100)
+        cache.prolong('byProlong', Duration.millisecond * 100)//死亡时间改短到 ≈ t0+200ms
+        cache.set('bySet', Test(3), life: Duration.millisecond * 100)//同上
+        @Assert(2, cache.size)//尚未到期：不得被误清
+        sleep(Duration.millisecond * 800)
+        @Assert(0, cache.size)//到期后必须真删，而不是仅“读时判过期”
+    }
+
+    /**
+     * 清扫后必须把段下界**重算**为剩余条目的最小死亡时间：
+     * 首轮下界（life=200ms）到点扫一次时续期过的条目仍活着 ⇒ 保留；重算出的下界再到点时必须清掉它。
+     */
+    @TestCase
+    public func testSweepReschedulesAfterSweep(): Unit {
+        let cache = HeapCache<Test>(concurrencyLevel: 1, maxLife: Duration.millisecond * 200,
+            maxSize: 100, checkDuration: Duration.millisecond * 100)
+        cache.set('k', Test(1))//下界 ≈ t0+200ms
+        cache.prolong('k', Duration.millisecond * 400)//死亡时间 ≈ t0+400ms
+        sleep(Duration.millisecond * 300)//首轮下界到点：k 仍活着，不得被误清
+        @Assert(1, cache.size)
+        @Assert(true, cache.contains('k'))
+        sleep(Duration.millisecond * 600)//重算后的下界到点：必须被清掉（写成 Int64.Max 会漏清）
+        @Assert(0, cache.size)
+    }
+
+    /** getOrCompute 两种重载新建的条目也必须登记死亡时间：到点后被清扫真删，长寿命条目保留 */
+    @TestCase
+    public func testSweepClearsComputedEntries(): Unit {
+        let byDuration = HeapCache<Test>(concurrencyLevel: 1, maxLife: Duration.second * 10,
+            maxSize: 100, checkDuration: Duration.millisecond * 100)
+        let _ = byDuration.getOrCompute('alive') {Test(1)}//对照：活到 10s
+        let _ = byDuration.getOrCompute('short') {(Test(2), Duration.millisecond * 200, false)}
+        let byDateTime = HeapCache<Test>(concurrencyLevel: 1, maxLife: Duration.second * 10,
+            maxSize: 100, checkDuration: Duration.millisecond * 100)
+        let _ = byDateTime.getOrCompute('alive') {Test(1)}//对照
+        let _ = byDateTime.getOrCompute('short') {(Test(2), DateTime.now() + Duration.millisecond * 200)}
+        sleep(Duration.millisecond * 800)
+        @Assert(1, byDuration.size)
+        @Assert(true, byDuration.contains('alive'))
+        @Assert(1, byDateTime.size)
+        @Assert(true, byDateTime.contains('alive'))
+    }
+
+    /**
+     * 并发写入短寿命条目：清扫与「登记下界」（含 deathVer 保护下的重算）竞争时不得漏清，
+     * 全部到期后 size 必须归零，而不是留下永远无人清扫的条目。
+     */
+    @TestCase
+    public func testSweepKeepsUpUnderConcurrentWrites(): Unit {
+        let cache = HeapCache<Test>(concurrencyLevel: 4, maxLife: Duration.millisecond * 100,
+            maxSize: 10000, checkDuration: Duration.millisecond * 50)
+        let threads = 4
+        let per = 300
+        let futures = ArrayList<Future<Unit>>()
+        for (t in 0..threads) {
+            let myT = t
+            futures.add(spawn {
+                for (i in 0..per) {
+                    let _ = cache.set('w${myT}_${i}', Test(i), life: Duration.millisecond * 100)
+                }
+            })
+        }
+        for (f in futures) {
+            f.get()
+        }
+        sleep(Duration.second)
+        @Assert(0, cache.size)
+        cache.close()
+    }
+
     @TestCase
     public func testHeapCacheIsResource(): Unit {
         let cache = HeapCache<Test>(maxLife: Duration.second * 30,
@@ -470,6 +550,21 @@ public class HeapCache_test {
         @Assert(threads * per, total)
         @Assert(threads * per, cache.size)
         cache.close()
+    }
+
+    /**
+     * 段清扫的谓词约定守护：removeIf 的语义是「谓词返回 true ⇒ 删除」，
+     * sweepLocked 依赖它（曾把语义写反，导致删活留死）。
+     */
+    @TestCase
+    public func testSegmentRemoveIfDeletesWhenTrue(): Unit {
+        let m = SyncLinkedHashMap<Test>()
+        m.add('a', Test(1))
+        m.add('b', Test(2))
+        m.removeIfLocked {k, _ => k == 'a'}
+        @Assert(1, m.size)
+        @Assert(false, m.contains('a'))
+        @Assert(true, m.contains('b'))
     }
 
     @TestCase
