@@ -16,11 +16,48 @@ limitations under the License.
 package fountain::f_ticktock
 
 import std.collection.ArrayList
+import std.collection.concurrent.ConcurrentHashMap
 import std.convert.Parsable
 import std.regex.Regex
-import fountain::f_regex.RegexFromString
 
 public class CronCompiler {
+    /**
+     * 四个字段语法正则提升为静态常量，并直接用标准库 Regex 构造：
+     * 原实现每解析一个字段子表达式都要走一次 `String.regex(solid: true)`——
+     * 它要拼 key 字符串并查一次全局 ConcurrentHashMap（SOLID 缓存）。
+     * 静态常量只需在类加载时构造一次，运行期零查找。
+     */
+    private static let DURATION_RANGE = Regex("^(\\d{1,2}|\\*)?/(\\d{1,2}|\\*)?-(\\d{1,2}|\\*)?$")
+    private static let DURATION = Regex("^(\\d{1,2}|\\*)?/(\\d{1,2}|\\*)?$")
+    private static let RANGE = Regex("^(\\d{1,2}|\\*)?-(\\d{1,2}|\\*)?$")
+    private static let SINGLE = Regex("^\\d{1,2}$")
+
+    /** 表达式文本 -> 编译结果（只读共享），仅由 Ticktock 内部使用。 */
+    private static let sharedCache = ConcurrentHashMap<String, Collection<CronDataCollection>>()
+    private static let SHARED_CACHE_LIMIT = 4096
+
+    /**
+     * 驻留版编译：同一表达式文本在进程内只编译一份，多个任务共享同一份只读规则数据。
+     *
+     * 只由 Ticktock 内部调用，共享对象不对外暴露（使用处只读）；
+     * 公开的 {@code compile} 行为不变，每次仍返回新建的对象。
+     */
+    @Frozen
+    static func compileShared(cronExpr: String): Collection<CronDataCollection> {
+        match (sharedCache.get(cronExpr)) {
+            case Some(existing) => return existing
+            case None => ()
+        }
+        let compiled = compile(cronExpr)
+        if (sharedCache.size >= SHARED_CACHE_LIMIT) {
+            return compiled
+        }
+        match (sharedCache.addIfAbsent(cronExpr, compiled)) {
+            case Some(existing) => existing
+            case None => compiled
+        }
+    }
+
     /**
      * 添加任务
      */
@@ -53,7 +90,7 @@ public class CronCompiler {
                     continue
                 }
                 for (value in unit.split(",")) {
-                    if ("^(\\d{1,2}|\\*)?/(\\d{1,2}|\\*)?-(\\d{1,2}|\\*)?$".regex(solid: true).matches(value)) {
+                    if (DURATION_RANGE.matches(value)) {
                         //value.contains("/") && value.contains("-")
                         var first = 0
                         var last = value.indexOf("/", first) ?? -1
@@ -68,7 +105,7 @@ public class CronCompiler {
                         last = value.size
                         var end = parsePart(value, first, last, ticktockUnit.max)
                         putCronc(cronc, ticktockUnit, start, end, duration)
-                    } else if ("^(\\d{1,2}|\\*)?/(\\d{1,2}|\\*)?$".regex(solid: true).matches(value)) {
+                    } else if (DURATION.matches(value)) {
                         var first = 0
                         var last = value.indexOf("/", first) ?? -1
                         var start = parsePart(value, first, last, ticktockUnit.min)
@@ -80,7 +117,7 @@ public class CronCompiler {
                         var duration = parsePart(value, first, last, 1)
                         var end = ticktockUnit.max
                         putCronc(cronc, ticktockUnit, start, end, duration)
-                    } else if ("^(\\d{1,2}|\\*)?-(\\d{1,2}|\\*)?$".regex(solid: true).matches(value)) {
+                    } else if (RANGE.matches(value)) {
                         var first = 0
                         var last = value.indexOf("-", first) ?? -1
                         var start = parsePart(value, first, last, ticktockUnit.min)
@@ -97,7 +134,7 @@ public class CronCompiler {
                         }
                     } else if (value == "L") {
                         cronc.putLast(ticktockUnit)
-                    } else if ("^\\d{1,2}$".regex(solid: true).matches(value)) {
+                    } else if (SINGLE.matches(value)) {
                         var single = Int64.parse(value)
                         cronc.put(ticktockUnit, ticktockUnit.convertSingle(single))
                     } else {
