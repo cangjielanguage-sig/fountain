@@ -17,12 +17,13 @@ package fountain::f_data.base
 
 import std.unittest.*
 import std.unittest.testmacro.*
-import fountain::f_data.exception.DataParsableException
 
 /**
- * `Duration.tryParse` 的候选解析约定：
+ * `Duration.tryParse` 的解析约定：
  * 单位链 `d/h/m/s/ms/us/ns`；数字段可带正负号、可多段拼接（`1d2h`）；
- * **非法输入返回 `None`**（调用方据此回退默认值），不抛异常。
+ * **不能解析、或数值超出 `Duration` 表示范围时返回 `None`**（调用方据此回退默认值），不抛异常。
+ * `Duration.parse` 直接由内部 `doTryParse` 经 `getOrThrow()` 取值：
+ * 不能解析（含数字段超出 `Int64`）时抛 `NoneValueException`，数值溢出时抛 `ArithmeticException`。
  */
 @Test
 public class DataParsableTest {
@@ -73,10 +74,11 @@ public class DataParsableTest {
         }
         for (s in ['1m-', '1m--2s', '1m-2']) {
             expectNone(s)
+            // 不能解析 ⇒ parse 落在 doTryParse(s).getOrThrow() 的 None 分支
             var rejected = false
             try {
                 Duration.parse(s)
-            } catch (_: DataParsableException) {
+            } catch (_: NoneValueException) {
                 rejected = true
             }
             @Assert(rejected)
@@ -101,20 +103,37 @@ public class DataParsableTest {
     }
 
     @TestCase
-    public func testOverflowReturnsNone(): Unit {
-        for (s in [
-            '9223372036854775808s', '-9223372036854775809s',
-            '9223372036854775807h', '9223372036854775807s1s',
-            '-9223372036854775808s-1ns', '9223372036854775807s999999999ns1ns'
-        ]) {
+    public func testDigitBeyondInt64ReturnsNone(): Unit {
+        // 数字段本身超出 Int64 ⇒ Int64.tryParse 返回 None，属「不能解析」；
+        // 与 Int64.tryParse 对超长值的行为一致：返回 None 而不是抛异常。
+        for (s in ['9223372036854775808s', '-9223372036854775809s']) {
             expectNone(s)
             var rejected = false
             try {
                 Duration.parse(s)
-            } catch (_: DataParsableException) {
+            } catch (_: NoneValueException) {
                 rejected = true
             }
             @Assert(rejected)
+        }
+    }
+
+    @TestCase
+    public func testOverflowThrows(): Unit {
+        // 数值超出 Duration 表示范围：tryParse 返回 None（与 Int64.tryParse 对超长值的行为一致）；
+        // parse 不包装异常，直接抛出 doTryParse 的溢出异常。
+        for (s in [
+            '9223372036854775807h', '9223372036854775807s1s',
+            '-9223372036854775808s-1ns', '9223372036854775807s999999999ns1ns'
+        ]) {
+            expectNone(s)
+            var thrown = false
+            try {
+                Duration.parse(s)
+            } catch (_: ArithmeticException) {
+                thrown = true
+            }
+            @Assert(thrown)
         }
     }
 
