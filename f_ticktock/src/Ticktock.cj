@@ -16,10 +16,10 @@ limitations under the License.
 
 package fountain::f_ticktock
 
-import std.collection.ArrayList
-import std.collection.concurrent.ConcurrentHashMap
+import std.collection.{ArrayList, HashMap}
 import std.env
 import std.sync.{AtomicOptionReference, Mutex}
+import stdx.log.LogLevel
 public import std.time.DateTime
 import fountain::f_bean.BeanFactory
 import fountain::f_log.impl.LoggerFactory
@@ -116,7 +116,14 @@ public class Ticktock <: Emitter {
         }
     }
 
-    private let tasks = ConcurrentHashMap<String, (TicktockTask, Collection<CronDataCollection>)>()
+    /** 注册表：任务下标 -> 任务条目；下标由 freeIds 复用，避免长期运行下无限增长。 */
+    private let indexLock = Mutex()
+    private let index = TicktockIndex()
+    private let entries = ArrayList<Option<TicktockEntry>>()
+    private let freeIds = ArrayList<Int64>()
+    private let idByName = HashMap<String, Int64>()
+    /** 复用的候选缓冲，仅在 indexLock 内使用。 */
+    private let candidateIds = ArrayList<Int64>()
     private let ticktock = Chrono()
     private init() {
         ticktock.start(this)
@@ -128,7 +135,16 @@ public class Ticktock <: Emitter {
     }
 
     public func removeTask(name: String): Unit {
-        tasks.remove(name)
+        synchronized(indexLock) {
+            match (idByName.get(name)) {
+                case Some(id) =>
+                    index.removeId(id)
+                    entries[id] = None
+                    idByName.remove(name)
+                    freeIds.add(id)
+                case None => ()
+            }
+        }
     }
 
     public func addOrReplaceDelayTask(task: DelayedTicktockTask) {
@@ -184,31 +200,93 @@ public class Ticktock <: Emitter {
      * @param cronExpr 关于表达式的解释请见{@code CronCompiler}
      */
     public func addOrReplaceTask(task: TicktockTask, cronExpr: String) {
-        tasks.add(task.name, (task, CronCompiler.compile(cronExpr)))
+        register(task.name, task, CronCompiler.compileShared(cronExpr))
     }
+
+    /** 登记（或替换同名）任务：任务表与时间索引在同一把锁内更新。 */
+    private func register(name: String, task: TicktockTask, crons: Collection<CronDataCollection>): Unit {
+        synchronized(indexLock) {
+            var id = 0
+            match (idByName.get(name)) {
+                case Some(existing) =>
+                    id = existing
+                    index.removeId(id)
+                case None =>
+                    if (freeIds.isEmpty()) {
+                        id = entries.size
+                        entries.add(None<TicktockEntry>)
+                    } else {
+                        id = freeIds.remove(at: freeIds.size - 1)
+                    }
+                    idByName[name] = id
+            }
+            entries[id] = Some(TicktockEntry(name, task, crons))
+            for (cron in crons) {
+                index.add(id, cron)
+            }
+        }
+    }
+
+    /**
+     * 一个 tick：先用时间索引算出候选任务，再由 matches 精确判定，命中才执行。
+     *
+     * 非候选任务不会进入匹配与执行，因此每 tick 的成本与"候选数"成正比，而不是与任务总数成正比。
+     * DEBUG 日志级别在 tick 级判定一次，级别未开启时不为候选构造日志闭包。
+     */
     @Frozen
     public func emit(now: DateTime): Unit {
-        for ((name, (task, crons)) in tasks) {
-            spawn {
-                var emitted = false
-                var once = false
-                try {
-                    for (cron in crons where cron.matches(now)) {
-                        task.run()
-                        once = task.once
-                        if (once) {
-                            this.removeTask(task)
-                        }
-                        emitted = true
-                        break
-                    }
-                    let (n, e, o) = (name, emitted, once)
-                    LOGGER.debug{"Ticktock.emit:${n}; ${e}; ${o}"}
-                } catch (e: Exception) {
-                    let (n, em, o) = (name, emitted, once)
-                    LOGGER.warn("Ticktock.emit:${n}; ${em}; ${o}", e)
+        let batch = ArrayList<TicktockEntry>()
+        synchronized(indexLock) {
+            index.candidates(now, candidateIds)
+            for (id in candidateIds) {
+                match (entries[id]) {
+                    case Some(entry) => batch.add(entry)
+                    case None => ()
                 }
             }
+        }
+        let debugOn = LOGGER.logLevelEnabled(LogLevel.DEBUG)
+        for (entry in batch) {
+            var hit = false
+            try {
+                for (cron in entry.crons) {
+                    if (cron.matches(now)) {
+                        hit = true
+                        break
+                    }
+                }
+            } catch (e: Exception) {
+                LOGGER.warn("Ticktock.emit:${entry.name}; false; false", e)
+                continue
+            }
+            if (hit) {
+                spawn {
+                    executeOne(entry, debugOn: debugOn)
+                }
+            }
+        }
+    }
+
+    /** 原 emit 中 spawn 块的主体：命中判定已在 tick 线程内联完成。 */
+    private func executeOne(entry: TicktockEntry, debugOn!: Bool): Unit {
+        let name = entry.name
+        let task = entry.task
+        var emitted = false
+        var once = false
+        try {
+            task.run()
+            once = task.once
+            if (once) {
+                this.removeTask(task)
+            }
+            emitted = true
+            if (debugOn) {
+                let (n, e, o) = (name, emitted, once)
+                LOGGER.debug{"Ticktock.emit:${n}; ${e}; ${o}"}
+            }
+        } catch (e: Exception) {
+            let (n, em, o) = (name, emitted, once)
+            LOGGER.warn("Ticktock.emit:${n}; ${em}; ${o}", e)
         }
     }
 
