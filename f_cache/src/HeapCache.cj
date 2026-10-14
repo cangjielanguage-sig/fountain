@@ -30,8 +30,10 @@ public class HeapCache<V> <: Resource where V <: Object {
     private var evictionTask: Option<Future<Unit>> = None
     /**定时器句柄：close() 时 cancel，避免关闭后再触发一轮清扫*/
     private var timerHandle: Option<Timer> = None
-    /**淘汰消费线程取元素的轮询间隔：既保证 close() 能被及时感知，又不必忙等*/
+    /**淘汰消费线程取元素的轮询间隔：只是「队列长期为空」时的兜底唤醒，close() 靠投递哨兵立即唤醒它*/
     private static let EVICTION_POLL_INTERVAL = Duration.millisecond * 100
+    /**淘汰回调队列：元素 Some((key, value))；close() 投递 None 哨兵以立即唤醒阻塞中的消费线程*/
+    private let evictionQueue = LinkedBlockingQueue<Option<(String, V)>>()
 
     public HeapCache(
         private let concurrencyLevel!: Int64 = DEFAULT_HEAP_CACHE_CONCURRENCY_LEVEL,
@@ -55,18 +57,26 @@ public class HeapCache<V> <: Resource where V <: Object {
     public static func builder(): HeapCacheBuilder<V> {
         return HeapCacheBuilder<V>()
     }
-    private func onEviction(): LinkedBlockingQueue<(String, V)> {
-        let q = LinkedBlockingQueue<(String, V)>()
+    private func onEviction(): LinkedBlockingQueue<Option<(String, V)>> {
+        let q = evictionQueue
         evictionTask = Some(spawn {
-            //按固定间隔取元素，并每轮检查一次取消请求（close() 会 future.cancel()）
-            while (!Thread.currentThread.hasPendingCancellation) {
-                if (let Some((k, v)) <- q.remove(EVICTION_POLL_INTERVAL)) {
-                    notifyEviction(k, v)
+            //按固定间隔取元素，并每轮检查一次取消请求（close() 会 future.cancel() 并投递哨兵）
+            var stopping = false
+            while (!stopping && !Thread.currentThread.hasPendingCancellation) {
+                if (let Some(item) <- q.remove(EVICTION_POLL_INTERVAL)) {
+                    match (item) {
+                        //哨兵：close() 正在等本线程退出
+                        case None => stopping = true
+                        case Some((k, v)) => notifyEviction(k, v)
+                    }
                 }
             }
-            //收到取消请求后，把已入队的淘汰回调投递完再退出
-            while (let Some((k, v)) <- q.tryRemove()) {
-                notifyEviction(k, v)
+            //收到取消请求/哨兵后，把已入队的淘汰回调投递完再退出
+            while (let Some(item) <- q.tryRemove()) {
+                match (item) {
+                    case Some((k, v)) => notifyEviction(k, v)
+                    case None => ()
+                }
             }
         })
         q
@@ -106,11 +116,11 @@ public class HeapCache<V> <: Resource where V <: Object {
             }
         })
     }
-    private func checkTimeout(evictionQueue: LinkedBlockingQueue<(String, V)>): Unit {
+    private func checkTimeout(evictionQueue: LinkedBlockingQueue<Option<(String, V)>>): Unit {
         removeIfLocked {
             k, p => if (!closedFlag.load()) {
                 if (expired(p)) {
-                    evictionQueue.add((k, p.load()))
+                    evictionQueue.add(Some((k, p.load())))
                     true
                 } else {
                     false
@@ -124,7 +134,7 @@ public class HeapCache<V> <: Resource where V <: Object {
         topVals: PriorityQueue<Priority<V>>,
         tops: HashMap<String, Priority<V>>,
         iterator: ConcHashMapIterator<Priority<V>>,
-        evictionQueue: LinkedBlockingQueue<(String, V)>
+        evictionQueue: LinkedBlockingQueue<Option<(String, V)>>
     ): Unit {
         let store = this.store
         let maxSize = this.maxSize
@@ -146,7 +156,7 @@ public class HeapCache<V> <: Resource where V <: Object {
                 if (let Some(p) <- topVals.remove()) {
                     store.remove(p.key)
                     minIdx = p.index
-                    evictionQueue.add((p.key, p.load()))
+                    evictionQueue.add(Some((p.key, p.load())))
                 }
                 if (minIdx < 0 || store.size <= maxSize) {
                     break
@@ -176,8 +186,9 @@ public class HeapCache<V> <: Resource where V <: Object {
     }
     public func get(key: String): Option<V> {
         ensureOpen()
+        //单次加锁完成「判过期 + 记一次使用 + 取值」：原先 expired + load 要两次加锁、两次取时间
         match (store.get(key)) {
-            case Some(p) where !expired(p) => p.load()
+            case Some(p) => p.loadIfAlive()
             case _ => None<V>
         }
     }
@@ -312,6 +323,9 @@ public class HeapCache<V> <: Resource where V <: Object {
         store.clear()
         if (let Some(f) <- evictionTask) {
             f.cancel()
+            //投递哨兵唤醒可能正阻塞在 q.remove(EVICTION_POLL_INTERVAL) 的消费线程：
+            //否则 close 要等它轮询超时（最长 ~100ms）
+            evictionQueue.add(None<(String, V)>)
             //等消费线程把已入队的淘汰回调投递完并退出：close 返回即「清理完成」
             try {
                 f.get()

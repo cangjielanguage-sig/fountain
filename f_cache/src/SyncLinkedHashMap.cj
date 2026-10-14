@@ -15,30 +15,38 @@ limitations under the License.
  */
 package fountain::f_cache
 
-import std.sync.{ReadWriteLock, Lock}
+import std.sync.Mutex
 import std.collection.ArrayList
 import fountain::f_collection.LinkedHashMap
 
+/**
+ * 段内哈希表 + 互斥锁。
+ *
+ * 段锁用 Mutex 而非 ReadWriteLock 的原因（实测见 cron-bench/logs/heapcache/perf-audit-2026-10-14.md）：
+ * - std 的读锁为「每线程读计数」维护 ThreadLocal（一次 lock+unlock 约 4 次 ThreadLocal 访问），
+ *   无人竞争也要 ~517 ns；Mutex（runtime 原生实现）无竞争约 20 ns。
+ * - `get` 经 LinkedHashMap.get 维护 LRU 链表序（turnToTail 写链表指针），本身就是写操作，
+ *   互斥保护同时消除「读锁下多读者并发改链表」的竞争。
+ * 链表序（头 = 该段最久未访问）是 HeapCache 淘汰采样的依据，不能省。
+ */
 class SyncLinkedHashMap<V> <: Collection<(String, V)> {
-    private let rwl = ReadWriteLock()
-    private let rl = rwl.readLock
-    private let wl = rwl.writeLock
+    private let mtx = Mutex()
     private let map = LinkedHashMap<String, V>()
     public func iterator(): Iterator<(String, V)> {
-        SyncLinkedHashMapIterator<V>(map.iterator(), rl)
+        SyncLinkedHashMapIterator<V>(map.iterator(), mtx)
     }
     public func get(key: String): ?V {
-        synchronized(rl) {
+        synchronized(mtx) {
             map.get(key)
         }
     }
     public func contains(key: String): Bool {
-        synchronized(rl) {
+        synchronized(mtx) {
             map.contains(key)
         }
     }
     public func add(key: String, value: V): ?V {
-        synchronized(wl) {
+        synchronized(mtx) {
             map.add(key, value)
         }
     }
@@ -54,7 +62,7 @@ class SyncLinkedHashMap<V> <: Collection<(String, V)> {
             (v, false)
         } else {
             let computed = callable()
-            synchronized(wl) {
+            synchronized(mtx) {
                 if (let Some(v) <- map.get(key)) {
                     (v, false)
                 } else {
@@ -65,7 +73,7 @@ class SyncLinkedHashMap<V> <: Collection<(String, V)> {
         }
     }
     public func remove(key: String): ?V {
-        synchronized(wl) {
+        synchronized(mtx) {
             map.remove(key)
         }
     }
@@ -74,18 +82,18 @@ class SyncLinkedHashMap<V> <: Collection<(String, V)> {
      * 定时清扫（判定与删除需原子、谓词是内部代码）用它。
      */
     func removeIfLocked(predicate: (String, V) -> Bool): Unit {
-        synchronized(wl) {
+        synchronized(mtx) {
             map.removeIf(predicate)
         }
     }
 
     /**
-     * 两阶段删除：读锁下取快照 → **锁外**跑谓词 → 写锁下按 key 删。用户谓词不阻塞同段读写。
+     * 两阶段删除：锁下取快照 → **锁外**跑谓词 → 锁下按 key 删。用户谓词不阻塞同段读写。
      * 代价：谓词看到的是快照，两阶段之间新写入的条目也可能因「快照里的值满足谓词」而被删除。
      * 返回实际删除的条目数。
      */
     func removeIfOutside(predicate: (String, V) -> Bool): Int64 {
-        let snapshot = synchronized(rl) {
+        let snapshot = synchronized(mtx) {
             let copy = ArrayList<(String, V)>()
             for (entry in map) {
                 copy.add(entry)
@@ -101,7 +109,7 @@ class SyncLinkedHashMap<V> <: Collection<(String, V)> {
         if (victims.isEmpty()) {
             return 0
         }
-        synchronized(wl) {
+        synchronized(mtx) {
             var removed = 0
             for (key in victims) {
                 if (let Some(_) <- map.remove(key)) {
@@ -113,27 +121,27 @@ class SyncLinkedHashMap<V> <: Collection<(String, V)> {
     }
     public prop size: Int64 {
         get() {
-            synchronized(rl) {
+            synchronized(mtx) {
                 map.size
             }
         }
     }
     public func isEmpty(): Bool {
-        synchronized(rl) {
+        synchronized(mtx) {
             map.isEmpty()
         }
     }
     public func clear(): Unit {
-        synchronized(wl) {
+        synchronized(mtx) {
             map.clear()
         }
     }
 }
 
 class SyncLinkedHashMapIterator<V> <: Iterator<(String, V)> {
-    SyncLinkedHashMapIterator(private let itr: Iterator<(String, V)>, private let rl: Lock) {}
+    SyncLinkedHashMapIterator(private let itr: Iterator<(String, V)>, private let mtx: Mutex) {}
     public func next(): ?(String, V) {
-        synchronized(rl) {
+        synchronized(mtx) {
             itr.next()
         }
     }
