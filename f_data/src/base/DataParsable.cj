@@ -24,8 +24,12 @@ public interface DataParsable<T> where T <: DataParsable<T> {
 }
 
 /**
- * 各个“整数 + 单位”片段分别带符号，再按顺序相加。
- * 例如 `1m-2s` 为 58 秒，`-1m2s` 为 -58 秒；首段的负号不作用于整串。
+ * 整个 Duration 字符串可带一个正负号前缀，**作用于整个值**；其余是连写的“整数 + 单位”片段，
+ * 例如 `-45s`、`+3s`、`-10d`、`-1m2s`（为 -62 秒）。字符串中不允许空白。
+ * 单位必须从左往右严格变小（`d > h > m > s > ms > us > ns`），每个单位至多出现一次，
+ * 因此 `9h10d`、`1ms1s` 这类顺序错误或重复的串会被拒绝。
+ * 符号只允许出现在字符串开头——`1m-2s`、`1m+2s`、`-1m 2s` 这类段间符号按四则运算拒绝；
+ * `-5`、`+3` 这类没有单位的串也不是合法的 Duration 字符串。
  */
 extend Duration <: DataParsable<Duration> {
     public static func parse(s: String): Duration {
@@ -49,9 +53,17 @@ extend Duration <: DataParsable<Duration> {
         if (value.isEmpty()) { return None }
         var duration = Duration.Zero
         var i = 0
+        var parsed = false
+        var negative = false
+        var lastRank = -1
         while (i < value.size) {
             let start = i
-            if (value[i] == b'-' || value[i] == b'+') { i++ }
+            if (value[i] == b'-' || value[i] == b'+') {
+                // 正负号只允许出现在字符串最开头，且作用于整个值；段间符号是四则运算（`1m-2s`），拒绝
+                if (start != 0) { return None }
+                negative = value[i] == b'-'
+                i++
+            }
             let digits = i
             while (i < value.size && value[i] >= b'0' && value[i] <= b'9') { i++ }
             if (i == digits || i == value.size) { return None }
@@ -62,29 +74,42 @@ extend Duration <: DataParsable<Duration> {
             }
             let unit = value[i]
             i++
-            let scale = match (unit) {
-                case b'd' => Duration.day
-                case b'h' => Duration.hour
+            // 单位必须从左往右严格变小：d > h > m > s > ms > us > ns（每个单位至多出现一次）
+            let (scale, rank) = match (unit) {
+                case b'd' => (Duration.day, 0)
+                case b'h' => (Duration.hour, 1)
                 case b'm' =>
                     if (i < value.size && value[i] == b's') {
                         i++
-                        Duration.millisecond
+                        (Duration.millisecond, 4)
                     } else {
-                        Duration.minute
+                        (Duration.minute, 2)
                     }
-                case b's' => Duration.second
+                case b's' => (Duration.second, 3)
                 case b'u' =>
                     if (i >= value.size || value[i] != b's') { return None }
                     i++
-                    Duration.microsecond
+                    (Duration.microsecond, 5)
                 case b'n' =>
                     if (i >= value.size || value[i] != b's') { return None }
                     i++
-                    Duration.nanosecond
+                    (Duration.nanosecond, 6)
                 case _ => return None
             }
-            duration += scale * number
+            if (rank <= lastRank) { return None }
+            lastRank = rank
+            // 开头的负号作用于整串：首段沿用它自己的符号解析，其余片段按负值累加（-(x + y) == -x - y）。
+            // 这里用「加上负值」而不是「减法」：Duration 的减法在结果落到 Int64.Min 秒时会误报溢出
+            // （实测 `(-Max 秒) - 1s` 抛 ArithmeticException，而 `(-Max 秒) + (second * -1)` 正常），
+            // 用加法才能保证 `-106751991167300d15h30m8s` 这类 Min 秒的 toString 输出也被读回
+            if (parsed && negative) {
+                duration += scale * (-number)
+            } else {
+                duration += scale * number
+            }
+            parsed = true
         }
+        if (!parsed) { return None }
         duration
     }
 }
