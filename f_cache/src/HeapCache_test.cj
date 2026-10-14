@@ -382,6 +382,68 @@ public class HeapCache_test {
         cache.close()
     }
 
+    /**段数按预期条目数推导：显式指定优先；传 0（默认）时每段目标 ≤1024 条、段数取 2 的幂且不超过 128 */
+    @TestCase
+    public func testAutoConcurrencyLevel(): Unit {
+        let c1024 = HeapCache<Test>(concurrencyLevel: 0, maxSize: 1024)
+        @Assert(16, c1024.segmentCount())
+        c1024.close()
+        let c16k = HeapCache<Test>(maxSize: 16384)//默认参数（concurrencyLevel 省略）同样走自动推导
+        @Assert(16, c16k.segmentCount())
+        c16k.close()
+        let c20k = HeapCache<Test>(concurrencyLevel: 0, maxSize: 20000)
+        @Assert(32, c20k.segmentCount())
+        c20k.close()
+        let cBig = HeapCache<Test>(concurrencyLevel: 0, maxSize: 200000)
+        @Assert(128, cBig.segmentCount())
+        cBig.close()
+        let cExplicit = HeapCache<Test>(concurrencyLevel: 4, maxSize: 200000)
+        @Assert(4, cExplicit.segmentCount())//显式指定优先
+        cExplicit.close()
+        let built = HeapCacheBuilder<Test>().setMaxSize(8192).build()
+        @Assert(16, built.segmentCount())
+        built.close()
+    }
+
+    /**
+     * 淘汰比较快照：进堆前 snapshot 一次，堆内比较（compareSnapshot）之后不再受实时状态影响；
+     * 且与实时比较（compare）遵循同一套排序规则。
+     */
+    @TestCase
+    public func testEvictionSnapshotIsStableAndMatchesLiveCompare(): Unit {
+        let older = Priority<Test>('old', Test(1), Duration.second * 30, Duration.second, false)
+        let newer = Priority<Test>('new', Test(2), Duration.second * 30, Duration.second, false)
+        older.incr()
+        newer.incr()
+        newer.incr()//newer 本周期用得多 ⇒ 更该保留
+        @Assert(Ordering.LT, older.compare(newer))
+        let now = DateTime.now()
+        older.snapshot(now)
+        newer.snapshot(now)
+        @Assert(Ordering.LT, older.compareSnapshot(newer))
+        //快照之后再改实时状态：堆内比较（读快照）不变；实时比较（compare）已反转
+        older.store(Test(3))
+        older.incr()
+        older.incr()
+        @Assert(Ordering.LT, older.compareSnapshot(newer))
+        @Assert(Ordering.GT, older.compare(newer))
+    }
+
+    /**时间戳统一为 Unix 纳秒后的口径守护：deathNanos 与判定用的死亡时间一致；once 切换后按 birth 起算 */
+    @TestCase
+    public func testDeathNanosIsConsistentAndOnceSwitchesToBirth(): Unit {
+        let p = Priority<Test>('k', Test(1), Duration.millisecond * 200, Duration.second, false)
+        let (alive, dead) = p.aliveAndDeathNanos(DateTime.now())
+        @Assert(true, alive)
+        @Assert(dead, p.deathNanos)
+        sleep(Duration.millisecond * 60)
+        p.incr()//lastUsed 前进 ⇒ 非 once 时死亡时间随之推后
+        let usedBased = p.deathNanos
+        @Assert(true, usedBased > dead)
+        p.once = true//切到 once：死亡时间改为从 birth 起算 ⇒ 回到（更早的）初值
+        @Assert(dead, p.deathNanos)
+    }
+
     @TestCase
     public func testHeapCacheIsResource(): Unit {
         let cache = HeapCache<Test>(maxLife: Duration.second * 30,

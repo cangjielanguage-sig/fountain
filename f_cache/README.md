@@ -5,14 +5,14 @@
 ```cj
 public class HeapCache<V> where V <: Object {
     /**
-     * concurrencyLevel 并发度，默认128
+     * concurrencyLevel 并发度（分段数），默认 0 = 按 maxSize 自动选段数（16~128，2 的幂）
      * maxLife 缓存对象的最大寿命
      * maxSize 缓存对象的最大数
      * checkDuration 缓存的检查周期
      * evictionCallback 缓存对象失效的回调函数
      */
     public HeapCache(
-        private let concurrencyLevel!: Int64 = DEFAULT_HEAP_CACHE_CONCURRENCY_LEVEL,
+        concurrencyLevel!: Int64 = 0,
         private let maxLife!: Duration = DEFAULT_HEAP_CACHE_MAX_LIFE,
         private let maxSize!: Int64 = DEFAULT_HEAP_CACHE_MAX_SIZE,
         private let checkDuration!: Duration = DEFAULT_HEAP_CHECK_CHECK_DURATION,
@@ -143,7 +143,7 @@ public class WeakHeapCache<T> where T <: Object {
 
 # 并发与约定（2026-10-05 补充）
 
-缓存内部按 `concurrencyLevel` 分成若干分段，每个分段一把互斥锁（`Mutex`），段与段之间互不阻塞。段内用互斥锁而非读写锁：std 的读锁为「每线程读计数」维护 ThreadLocal，无人竞争时一次 lock+unlock 也要 ~517 ns，而 `Mutex` 约 20 ns；且段内 `get` 会经 `turnToTail` 维护 LRU 链表序（`checkOverSize` 的采样依据），本身就是写操作，互斥保护同时消除并发改链表的竞争（实测见 `cron-bench/logs/heapcache/perf-audit-2026-10-14.md`）：
+缓存内部按 `concurrencyLevel` 分成若干分段，每个分段一把互斥锁（`Mutex`），段与段之间互不阻塞。`concurrencyLevel` 默认传 0：按 `maxSize` 自动选段数（每段目标 ≤1024 条、段数取 2 的幂且不超过 `DEFAULT_HEAP_CACHE_CONCURRENCY_LEVEL`=128）——段对象的固定开销摊在每个实例上，小缓存（如 `maxSize: 1000`）用 128 段会白付 ~150 KB 内存与 ~250 µs 构造时间（实测见 `cron-bench/logs/evict2_new.log`）；`maxSize` 无上限时仍是 128 段。显式传正数则按指定值分段。段内用互斥锁而非读写锁：std 的读锁为「每线程读计数」维护 ThreadLocal，无人竞争时一次 lock+unlock 也要 ~517 ns，而 `Mutex` 约 20 ns；且段内 `get` 会经 `turnToTail` 维护 LRU 链表序（`checkOverSize` 的采样依据），本身就是写操作，互斥保护同时消除并发改链表的竞争（实测见 `cron-bench/logs/heapcache/perf-audit-2026-10-14.md`）：
 
 - **`getOrCompute` 的 callable 在分段锁之外执行**：同一键可能被并发计算多次，只有第一次写入的结果生效，其余计算结果被丢弃。callable 应当是纯计算或幂等的；有副作用、或必须「只算一次」时请在调用方自行去重。
 - **`removeIf` 是两阶段删除**：先在锁下取快照，再在锁外执行谓词，最后在锁下按 key 删除。谓词不会阻塞同段读写；代价是「判定—删除」不是原子的——两阶段之间新写入的条目也可能因快照里的旧值满足谓词而被删除。
@@ -152,6 +152,7 @@ public class WeakHeapCache<T> where T <: Object {
 - **迭代一致性**：`ConcHashMap`/`SyncLinkedHashMap` 的迭代器是**弱一致**的（锁外创建、逐段/逐项取锁，跨段无快照）⇒ 迭代期间发生的写入不保证被本轮迭代看到、也不保证顺序；`HeapCache` 的定时淘汰与业务读并发时同理。
 - **`maxSize` 超限时的淘汰顺序**：两个候选先比「距今时长」——差距超过一个 `checkDuration` 时直接淘汰更老的那个；差距在一个周期内则逐级比较：**本次检查周期内使用次数多者、最后使用时间更晚者优先保留**（「保护新生」）。（再往下还有「历史访问总量多者」「出生更晚者」两级 tie-break，实际几乎用不到。）
 - **定时清扫是增量式的（段级死亡时间下界）**：每个段维护「段内条目最小死亡时间」的下界，由 `set`/`once`/`prolong`/`getOrCompute` 在改动条目死亡时间时保守登记（只降不升）。定时器每 tick 只遍历段数组做一次原子读，跳过「下界未到」的段 ⇒ 稳定态下（条目未集中到期）清扫成本与总条目数无关。只降不升保证不漏清：条目一旦到期，其所在段必在下一个 `checkDuration` 内被扫到。
+- **淘汰比较走「进堆快照」**：`checkOverSize` 把候选放进最小堆之前先加锁取一次「比较快照」（年龄 + 五级 tie-break 所需的量），堆内比较只读快照，不再逐次加锁、逐次取 `DateTime.now()` ⇒ 同一轮里所有候选的年龄基准一致，单轮可淘汰更多条目（实测 `evict 50000 maxSize=1000`：写入期淘汰量 ×2~4，300 ms 后能收敛到 `maxSize`）。`Priority` 内部时间戳统一为 Unix 纳秒（`Int64`）、计数与值字段用普通变量（读写都在 `lock` 内，不再用 `AtomicReference`/`AtomicBool` 包装）——10 万条目常驻 RSS 约降 10%。
 - `set` / `get` / `remove` / `once` / `prolong` / `clear` 等公开方法都可并发调用（分段锁 + 原子计数）。
 - **`HeapCache` 与 `WeakHeapCache` 实现了 `Resource`**：两者各持有 1 个常驻内部线程（`HeapCache` = 淘汰回调消费线程 + 1 个定时器；`WeakHeapCache` = 弱引用清扫线程）。用完请 `close()`（可重复调用）：它会向内部线程发送取消请求、取消定时器（`HeapCache`）并清空缓存；内部线程每轮循环检查 `Thread.currentThread.hasPendingCancellation`，`HeapCache` 的消费线程在收到取消后会把已入队的淘汰回调投递完再退出。（`HeapCache` 原 `destroy()` 已删除，统一用 `close()`；进程退出时由 `f_base` 的 `ExitCallbacks` 自动 `close()`，该注册项持**弱引用**，`close()` 之后实例可被 GC 回收。`close()` 还会向淘汰队列投递一个 `None` 哨兵，立即唤醒阻塞中的消费线程。）
 - **关闭延迟**：`HeapCache` 的 `close()` 靠哨兵唤醒消费线程，毫秒级返回（不再等 100 ms 轮询超时）；`WeakHeapCache` 的清扫周期是 1 s，其 `close()` 最长会阻塞这么久（它在返回前会等内部线程结束）；两者的 `isClosed()` 都立即变为 true。
@@ -165,5 +166,5 @@ public class WeakHeapCache<T> where T <: Object {
 
 以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
 
-- 模块级：`public let DEFAULT_HEAP_CACHE_CONCURRENCY_LEVEL = 128`、`DEFAULT_HEAP_CACHE_MAX_LIFE`（let）、`public let DEFAULT_HEAP_CACHE_MAX_SIZE = Int64.Max`、`public let DEFAULT_HEAP_CHECK_CHECK_DURATION = Duration.second`、`Priority`（class）、`public func hashCode(): Int64`
+- 模块级：`public let DEFAULT_HEAP_CACHE_CONCURRENCY_LEVEL = 128`（`concurrencyLevel=0` 自动推导时的段数上限）、`DEFAULT_HEAP_CACHE_MAX_LIFE`（let）、`public let DEFAULT_HEAP_CACHE_MAX_SIZE = Int64.Max`、`public let DEFAULT_HEAP_CHECK_CHECK_DURATION = Duration.second`、`Priority`（class）、`public func hashCode(): Int64`
 - `Priority`：`open func compare(other: Priority<V>): Ordering`
