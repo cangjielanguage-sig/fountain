@@ -207,6 +207,20 @@ public open class Priority<V> <: Comparable<Priority<V>> where V <: Object {
             return Some(value.load())
         }
     }
+    /**
+     * 单锁返回「在 now 时刻是否未过期」与该条目的死亡时间（Unix 纳秒，供段级清扫下界使用）。
+     * 与 loadIfAlive 共用同一套过期判定（once 从 birth 算、否则从 lastUsed 算）。
+     */
+    protected func aliveAndDeathNanos(now: DateTime): (Bool, Int64) {
+        synchronized(lock) {
+            let dead = if (once_.load()) {
+                birth + maxLife_
+            } else {
+                lastUsed + maxLife_
+            }
+            (now < dead, dead.toUnixTimeStamp().toNanoseconds())
+        }
+    }
     protected func load(): V {
         synchronized(lock) {
             incr()

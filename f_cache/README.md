@@ -151,6 +151,7 @@ public class WeakHeapCache<T> where T <: Object {
 - **`WeakHeapCache` 是弱引用缓存，键强、值弱**：值一旦不再被外部强引用就可能被 GC 回收，条目随之失效（最长 1 s 后被清扫线程摘除）⇒ `size` 会包含「值已失效但尚未清扫」的条目，与 `get`/`contains` 的口径差最长 1 s；`close()` 会主动清空并等清扫线程结束。
 - **迭代一致性**：`ConcHashMap`/`SyncLinkedHashMap` 的迭代器是**弱一致**的（锁外创建、逐段/逐项取锁，跨段无快照）⇒ 迭代期间发生的写入不保证被本轮迭代看到、也不保证顺序；`HeapCache` 的定时淘汰与业务读并发时同理。
 - **`maxSize` 超限时的淘汰顺序**：两个候选先比「距今时长」——差距超过一个 `checkDuration` 时直接淘汰更老的那个；差距在一个周期内则逐级比较：**本次检查周期内使用次数多者、最后使用时间更晚者优先保留**（「保护新生」）。（再往下还有「历史访问总量多者」「出生更晚者」两级 tie-break，实际几乎用不到。）
+- **定时清扫是增量式的（段级死亡时间下界）**：每个段维护「段内条目最小死亡时间」的下界，由 `set`/`once`/`prolong`/`getOrCompute` 在改动条目死亡时间时保守登记（只降不升）。定时器每 tick 只遍历段数组做一次原子读，跳过「下界未到」的段 ⇒ 稳定态下（条目未集中到期）清扫成本与总条目数无关。只降不升保证不漏清：条目一旦到期，其所在段必在下一个 `checkDuration` 内被扫到。
 - `set` / `get` / `remove` / `once` / `prolong` / `clear` 等公开方法都可并发调用（分段锁 + 原子计数）。
 - **`HeapCache` 与 `WeakHeapCache` 实现了 `Resource`**：两者各持有 1 个常驻内部线程（`HeapCache` = 淘汰回调消费线程 + 1 个定时器；`WeakHeapCache` = 弱引用清扫线程）。用完请 `close()`（可重复调用）：它会向内部线程发送取消请求、取消定时器（`HeapCache`）并清空缓存；内部线程每轮循环检查 `Thread.currentThread.hasPendingCancellation`，`HeapCache` 的消费线程在收到取消后会把已入队的淘汰回调投递完再退出。（`HeapCache` 原 `destroy()` 已删除，统一用 `close()`；进程退出时由 `f_base` 的 `ExitCallbacks` 自动 `close()`，该注册项持**弱引用**，`close()` 之后实例可被 GC 回收。`close()` 还会向淘汰队列投递一个 `None` 哨兵，立即唤醒阻塞中的消费线程。）
 - **关闭延迟**：`HeapCache` 的 `close()` 靠哨兵唤醒消费线程，毫秒级返回（不再等 100 ms 轮询超时）；`WeakHeapCache` 的清扫周期是 1 s，其 `close()` 最长会阻塞这么久（它在返回前会等内部线程结束）；两者的 `isClosed()` 都立即变为 true。

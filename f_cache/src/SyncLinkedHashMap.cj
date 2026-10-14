@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain::f_cache
 
-import std.sync.Mutex
+import std.sync.{Mutex, AtomicInt64}
 import std.collection.ArrayList
 import fountain::f_collection.LinkedHashMap
 
@@ -32,6 +32,13 @@ import fountain::f_collection.LinkedHashMap
 class SyncLinkedHashMap<V> <: Collection<(String, V)> {
     private let mtx = Mutex()
     private let map = LinkedHashMap<String, V>()
+    /**
+     * 本段条目的「最小死亡时间下界」（Unix 纳秒，只降不升的保守值）。
+     * 定时清扫据此跳过不可能有到期条目的段：稳定态下每 tick 只做一次原子读。
+     */
+    private let minDeath = AtomicInt64(Int64.Max)
+    /**下界被下调的版本号：sweepLocked 用它判断「遍历期间是否有新条目下调」，避免重算覆盖新值*/
+    private let deathVer = AtomicInt64(0)
     public func iterator(): Iterator<(String, V)> {
         SyncLinkedHashMapIterator<V>(map.iterator(), mtx)
     }
@@ -78,8 +85,8 @@ class SyncLinkedHashMap<V> <: Collection<(String, V)> {
         }
     }
     /**
-     * 锁内删除：谓词在段写锁内执行，必须廉价且不得阻塞或回访本缓存；
-     * 定时清扫（判定与删除需原子、谓词是内部代码）用它。
+     * 锁内删除：谓词在段写锁内执行，必须廉价且不得阻塞或回访本缓存。
+     * 约定与 `Collection.removeIf` 一致：谓词返回 true 的条目被删除（`sweepLocked` 依赖该约定）。
      */
     func removeIfLocked(predicate: (String, V) -> Bool): Unit {
         synchronized(mtx) {
@@ -136,6 +143,63 @@ class SyncLinkedHashMap<V> <: Collection<(String, V)> {
             map.clear()
         }
     }
+    /**
+     * 登记一个条目的死亡时间（Unix 纳秒）：把本段下界**下调**到不超过它（只降不升，保守）。
+     * 保守方向安全：实际最小值可能更小 ⇒ 只是多扫；绝不会因为漏登记而漏清。
+     */
+    func noteDeathNanos(nanos: Int64): Unit {
+        while (true) {
+            let cur = minDeath.load()
+            if (nanos >= cur) {
+                return
+            }
+            if (minDeath.compareAndSwap(cur, nanos)) {
+                deathVer.fetchAdd(1)
+                return
+            }
+        }
+    }
+    /**本段下界（Unix 纳秒）；Int64.Max 表示段内没有已知到期的条目*/
+    prop minDeathNanos: Int64 {
+        get() {
+            minDeath.load()
+        }
+    }
+    /**
+     * 锁内清扫本段：probe 在段锁内执行，返回 (是否已过期/应删除, 该条目的死亡时间纳秒)。
+     * 遍历结束后把下界**重算**为「保留条目的最小死亡时间」—— 只有当遍历期间没有任何
+     * 新登记（版本号未变）时才写回，否则保持旧值（下次 tick 再扫），避免覆盖新条目的更早死亡时间。
+     * 返回值：实际删除的条目数。
+     */
+    func sweepLocked(probe: (String, V) -> (Bool, Int64)): Int64 {
+        synchronized(mtx) {
+            let ver0 = deathVer.load()
+            //仓颉不允许闭包捕获 var：用「不可变引用 + 可变字段」回写统计值
+            let st = SweepStats()
+            map.removeIf {k, v =>
+                let (dead, d) = probe(k, v)
+                if (dead) {
+                    st.removed++
+                    true//removeIf 的约定：谓词返回 true ⇒ 删除
+                } else {
+                    if (d < st.minDeath) {
+                        st.minDeath = d
+                    }
+                    false
+                }
+            }
+            if (deathVer.load() == ver0) {
+                minDeath.store(st.minDeath)
+            }
+            st.removed
+        }
+    }
+}
+
+/**sweepLocked 的统计载体（闭包内回写用）*/
+class SweepStats {
+    var removed = 0
+    var minDeath = Int64.Max
 }
 
 class SyncLinkedHashMapIterator<V> <: Iterator<(String, V)> {
