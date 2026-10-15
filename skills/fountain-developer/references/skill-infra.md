@@ -29,3 +29,28 @@ python <skill-root>/scripts/install_skill.py all                 # 两个都装
 - 安装目标目录默认自动探测：优先**当前放着 `fountain-developer` 的那个技能目录**（`~/.codebuddy/skills`、`~/.claude/skills`、`~/.agents/skills` 等），也可 `--skills-root DIR` 指定；已装过的技能默认不覆盖，要升级加 `--force`。
 - 装完**复验**：`install_skill.py list` 两个都显示 `[已装]`。装好 `cangjie-doc-lookup` 后**必须**再跑它自己的执行前检查（`python <skills>/cangjie-doc-lookup/scripts/skill_paths.py check`），文档源路径对不上时按它 SKILL.md「执行前检查」的四选一处理。
 - 不支持的技能机制的 Agent 不需要「安装」这一步：直接按上面的来源读该技能的 `SKILL.md` 即可（脚本也能用，只是把文件放到一个目录）。
+
+## 3. 另外两类联动技能（test-driven-development / openspec 技能组）
+
+### 3.1 `test-driven-development`
+
+**工作流 F / G / H / I / J 开工前必须加载**（**REQUIRED SUB-SKILL:**）；它定义 Red-Green-Refactor 循环与反合理化清单，本技能的 TDD 门禁以它为准。
+它随 **superpowers** 技能集分发，不归 `install_skill.py` 管；常见位置：
+
+| 场景 | 位置 |
+| --- | --- |
+| 已装进当前 Agent（CodeBuddy） | `~/.codebuddy/skills/test-driven-development/`（含 `SKILL.md` + `writing-good-tests.md`） |
+| superpowers 插件本体 | `~/.codebuddy/plugins/marketplaces/codebuddy-plugins-official/external_plugins/superpowers/skills/test-driven-development/` |
+| Claude Code | `~/.claude/skills/test-driven-development/`（或该平台的 superpowers 插件目录） |
+
+处理顺序：能加载就加载 → 加载失败**不要中断任务、也不要停下来问用户**：按上表在本机找一份拷进当前 Agent 的技能目录（如 `~/.codebuddy/skills/`）→ 本机确实没有时，按 SKILL.md「严格 TDD」与 `references/delivery-workflow.md` 第 3 节的 Red-Green-Refactor 循环执行，并在交付说明里写明「未加载 `test-driven-development` 技能」。
+不支持的技能机制的 Agent 直接读该技能目录下的 `SKILL.md`。
+
+### 3.2 openspec 技能组（`opsx:propose` / `opsx:apply` / `opsx:update` / `opsx:verify` / `opsx:archive`）
+
+**工作流 F 全程、工作流 J 新建模块时加载**。它们由 openspec CLI 自己生成，**不要手工写、也不要手工拷**：
+
+- 生成位置：按 `openspec init --tools <tool>` 选的工具落地（CodeBuddy → `<项目>/.codebuddy/skills/openspec-*`；Claude Code → `<项目>/.claude/commands/opsx/*`）。
+- 加载失败（没装）= 这个项目还没初始化 OpenSpec：按 `references/openspec-workflow.md` 第 1–2 节装 CLI、`openspec init --tools <tool>`（**`<tool>` 问用户**）、确认 `config.yaml` 的 `context` 含「所有产出物用简体中文撰写」。
+- CLI 升级后用 `openspec update` 重新生成，别沿用旧版指令文件。
+- `opsx:verify` 不在默认 core profile 里，需要 extended（启用命令与回退见 openspec-workflow 第 6 节）。

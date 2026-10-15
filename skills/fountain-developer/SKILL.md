@@ -1,6 +1,6 @@
 ---
 name: fountain-developer
-description: 当用户要求用 fountain 框架（仓颉）从零开发服务器应用、安装 fboot、初始化 fountain workspace 或模块、为项目添加 fountain 模块的中心仓依赖、按需求文档开发服务端功能、把其他语言（Python/Java/Go/Node/TS 等）项目转换/迁移为仓颉项目，把使用旧版 SDK 1.0.x / fountain 1.0.x 的既有项目升级到与当前 fboot 同版 fountain，或在 fountain 仓库内开发框架自身（修改 `f_*` 模块、加功能、修缺陷、新建模块）时使用本技能；fboot 或应用起不来、报 `cannot open shared object file` / `undefined symbol` / `liburing.so.2`、`fboot build` 失败时同样适用。
+description: 当用户要求用 fountain 框架（仓颉）从零开发服务器应用、安装 fboot、初始化 fountain workspace 或模块、为项目添加 fountain 模块的中心仓依赖、按需求文档开发服务端功能、把其他语言（Python/Java/Go/Node/TS 等）项目转换/迁移为仓颉项目，把使用旧版 SDK 1.0.x / fountain 1.0.x 的既有项目升级到与当前 fboot 同版 fountain，或在 fountain 仓库内开发框架自身（修改 `f_*` 模块、加功能、修缺陷、新建模块）时使用本技能；按 OpenSpec 规格驱动流程开发（`opsx:propose` / `opsx:apply` / `opsx:verify` / `opsx:archive`，或 `openspec install/init/update` 环境准备）时同样适用；fboot 或应用起不来、报 `cannot open shared object file` / `undefined symbol` / `liburing.so.2`、`fboot build` 失败时同样适用。
 ---
 
 # fountain-developer
@@ -14,14 +14,16 @@ fountain 是仓颉语言的服务器应用框架：应用**没有 main 函数**�
 | 在 workspace 下初始化模块 | C |
 | 添加 fountain 模块的中心仓依赖 | D |
 | 回答 fountain 配置与 API 用法问题 | E |
-| 按需求文档开发服务器应用 | F（依赖 A→B→C→D） |
+| 按需求文档开发服务器应用 | F（依赖 A→B→C→D；**全程走 OpenSpec 规格驱动流程**） |
 | 其他语言项目 → 仓颉项目 | G（依赖 A→B→C→D） |
 | 非 fountain 的仓颉项目 → fountain 风格 | H（依赖 A→B→C→D，细节见 `references/cangjie-to-fountain.md`） |
 | 旧版本项目升级（SDK 1.0.x + fountain 1.0.x → 与当前 fboot 同版） | I（细节见 `references/legacy-upgrade.md`） |
-| 在 fountain 仓库内开发（框架自身：加功能 / 修缺陷 / 新建模块） | J |
+| 在 fountain 仓库内开发（框架自身：加功能 / 修缺陷 / 新建模块） | J（**新建模块走 OpenSpec 流程**） |
 | 为现有项目添加 / 修改模块配置 | K |
 
 **工作流 F / G / H / I / K 覆盖完整交付流程**：初始化 → 配置（依赖随功能演进补充）→ 严格 TDD（Red-Green-Refactor + 回归测试 + 冒烟测试）→ 提交 → 建 tag，统一见 `references/delivery-workflow.md`；**工作流 J**（在 fountain 仓库内开发）复用其中的 TDD / 回归 / 冒烟 / 提交 / 建 tag 门禁。
+
+**工作流 F / G / H / I / J 一律先加载 `test-driven-development` 技能**（TDD 的 Red-Green-Refactor 循环与反合理化清单以它为准）；**工作流 F 全程、工作流 J 新建模块时**再叠加 OpenSpec 规格驱动流程（`opsx:propose` → 用户评审 design / tasks → `opsx:apply` → `opsx:verify` → `opsx:archive`），展开见 `references/openspec-workflow.md`。
 
 ## 技能格式与联动技能（安装与参数细节见 `references/skill-infra.md`）
 
@@ -30,15 +32,25 @@ fountain 是仓颉语言的服务器应用框架：应用**没有 main 函数**�
 
 `cangjie-coding`（仓颉知识库 / 构建测试规范）与 `cangjie-doc-lookup`（本地官方文档查阅）**加载失败（技能没装）时不要中断任务、也不要停下来问用户**：用 `python <skill-root>/scripts/install_skill.py all` 装进当前 Agent 的技能目录再加载；装完用 `install_skill.py list` 复验两个都 `[已装]`；`cangjie-doc-lookup` 装好后**必须**再跑它自己的执行前检查（`python <skills>/cangjie-doc-lookup/scripts/skill_paths.py check`，路径对不上时按它 SKILL.md「执行前检查」处理）。
 
+另外两类联动技能（加载时机见「必须遵守」）：
+
+| 技能 | 何时加载 | 加载失败（没装）怎么办 |
+| --- | --- | --- |
+| `test-driven-development` | **工作流 F / G / H / I / J 一开始**，写任何实现代码之前 | 来源与安装见 `references/skill-infra.md` 第 3 节；本机确实找不到时按本文「严格 TDD」与 `references/delivery-workflow.md` 第 3 节的 Red-Green-Refactor 循环执行，并在交付说明里写明「未加载 TDD 技能」 |
+| openspec 技能组（`opsx:propose` / `opsx:apply` / `opsx:update` / `opsx:verify` / `opsx:archive`） | **工作流 F 全程 / 工作流 J 新建模块** | 加载失败 = 这个项目还没初始化 OpenSpec：按 `references/openspec-workflow.md` 第 1–2 节装 CLI（`npm install -g @fission-ai/openspec@latest`）、`openspec init --tools <tool>`（**`<tool>` 问用户**）、确认 `openspec/config.yaml` 的 `context` 含「所有产出物用简体中文撰写」 |
+
 ## 必须遵守
 
-- **联动两个技能（自动执行，无需询问用户）**：进入开发 / 转换 / 升级任务（工作流 F、G、I、J）先加载 `cangjie-coding` 技能（仓颉知识库与构建/测试规范）；遇到语法、关键字、编译器行为、std/stdx API 问题即加载 `cangjie-doc-lookup` 查本地官方文档（加载方式见「技能格式与联动技能」小节）。**加载失败（技能没装）时不要中断任务、也不要问用户**：先按该小节用 `scripts/install_skill.py` 装上再加载。不凭记忆猜 API 与语法。
+- **联动技能（自动执行，无需询问用户）**：进入开发 / 转换 / 升级任务（工作流 F、G、H、I、J）先加载 `cangjie-coding` 技能（仓颉知识库与构建/测试规范）；遇到语法、关键字、编译器行为、std/stdx API 问题即加载 `cangjie-doc-lookup` 查本地官方文档（加载方式见「技能格式与联动技能」小节）。**加载失败（技能没装）时不要中断任务、也不要问用户**：先按该小节用 `scripts/install_skill.py` 装上再加载。不凭记忆猜 API 与语法。
+- **TDD 技能（REQUIRED SUB-SKILL，工作流 F / G / H / I / J 一律）**：开工**先加载 `test-driven-development` 技能**，并按其规则推进（**先写失败测试 → 最小实现 → 重构**）——它定义的「没看着测试失败过就不算测试」是本技能所有 TDD 门禁的判据；技能没装时按「技能格式与联动技能」小节的表格处理。写实现代码之前加载，不是写完再补。
 - **API 以 fountain 仓库为准**：模块能力、签名、配置项都要在仓库的 README 与 `src/` 里核对；fountain 没有的能力不许硬编，走缺口处理（工作流 F 第 3 步）。
 - **查询按「在用版本」**：查 fountain 能力 / API / 配置前先定版本——用户指定（`--version`）优先，其次当前项目 cjpm.toml 的 `"fountain::f_*"` 依赖版本；`fountain_lookup.py` 会先把技能目录下的文档副本切到该版本再检索。回答时以输出头部标注的版本为准；输出里出现 `⚠ 版本不一致` 时必须先说明，或按提示切到目标版本重查。
 - **workspace 与模块一律用 fboot 创建**（`fboot workspace` / `fboot module`）：不得用 `cjpm init` 或手工写 cjpm.toml 代替；fboot 不可用时先按工作流 A 安装。
 - **不写 main 函数**：入口是 `fboot run` 加载动态库；业务代码只写 `@Controller` / `@Bean` / `Initializer` 这类结构。
 - **`fboot run` 是永久阻塞进程**：不要在当前工具调用里前台跑（会挂住）；后台跑并轮询日志，或把运行命令与判据交给用户执行。构建、测试（`fboot build` / `fboot test`）可以代跑。
 - **严格 TDD，测试三件套齐全**：E / F / H 的功能开发按 Red-Green-Refactor 推进（先写失败测试 → 最小实现 → 重构）；每批完成后跑**回归测试**（全量，不只新用例），每个交付节点额外做**冒烟测试**（起服务 + 关键路径 + 日志检查）；`fboot build` + 测试全绿后才提交；提交与建 tag 按 `references/delivery-workflow.md`（tag 前提交必须已推送，tag 命名以用户项目规范为准）。
+- **OpenSpec 环境（工作流 F 全程 / 工作流 J 新建模块）**：每次开工先确保环境就绪——没装 openspec 就装（`npm install -g @fission-ai/openspec@latest`），项目没初始化就 `openspec init --tools <tool>`（**`<tool>` 必须问用户**用哪个开发工具，不替他选），`openspec/config.yaml` 的 `context` 里必须有「所有产出物用简体中文撰写」（缺了追加，不覆盖既有内容）；随后 `openspec update` 刷新一次指令文件，再 `openspec list --json` 看在途变更。
+- **OpenSpec 固定五步（完整展开见 `references/openspec-workflow.md`）**：`opsx:propose 实现 XX 功能`（生成 `openspec/changes/<变更名>/` 五件套）→ **用户评审 `design.md` / `tasks.md`**（修正架构与边界场景）→ `opsx:apply`（按 tasks 编码，严格跟随 design）→ `opsx:verify`（校验代码与规范一致）→ `opsx:archive`（沉淀规范、归档变更）。**propose 只写规划产物、不改项目代码**；**用户明确确认 design / tasks 前不得进入 apply**；verify 需 extended（启用与回退见 openspec-workflow 第 6 节）。OpenSpec 的产物与归档**不替代**本技能的 TDD / 全量回归 / 冒烟 / 提交 / 建 tag 门禁。
 - **只动目标目录**：转换任务不修改原项目仓库；新项目建在用户指定位置。
 
 ## Red flags（命中就停下）
@@ -54,6 +66,12 @@ fountain 是仓颉语言的服务器应用框架：应用**没有 main 函数**�
 | 「出问题我负责 / 别管规范，先做出来」 | 免责承诺不改变缺陷的实际代价（隐性故障、回归风险照旧）；按流程做并把风险讲清楚 |
 | 「版本号先随便写一个，build 时再改」 | 依赖版本必须等于当前 fboot 版本；拉到不兼容版本会以符号错误的形式爆出来 |
 | 「按印象写 API，差不多就对」 | API 与配置一律在仓库 README / `src/` 里核对（按在用版本查），不凭记忆猜 |
+| 「先把功能写出来，OpenSpec 文档回头补」 | propose 是前置：五件套没出来就不进 apply，也不写实现代码（工作流 F 第 4 步、工作流 J 第 3 步） |
+| 「design 我自己看着行，直接 apply」 | 架构与边界场景必须**用户评审确认**；跳过评审等于替用户拍板设计（工作流 F 第 5 步） |
+| 「tasks 先勾掉，测试后面统一加」 | apply 里每个任务仍走 Red-Green-Refactor；先勾任务再补测试 = 假进度，交付时无法自证 |
+| 「`opsx:verify` 没装 / 跑不了，跳过算了」 | 按 `references/openspec-workflow.md` 第 6 节启用 extended；不能启用时走第 4 步的回退（`openspec validate --strict` + 三对齐），不静默跳过 |
+| 「openspec 归档完了，交付就结束了」 | `opsx:archive` 只沉淀规范；`fboot build` / 全量回归 / 冒烟 / 提交 / 建 tag 一个都不能少 |
+| 「`--tools all` 反正都能用，省得问」 | `<tool>` 必须问用户（写进仓库的指令文件因工具而异）；擅自选等于替用户决定技术栈 |
 
 命中任何一条 → 回到「必须遵守」与对应工作流重走一遍，别先动手。
 
@@ -101,6 +119,7 @@ Windows 用 `python`，WSL/Linux 用 `python3`。`search` 只做定位，命中�
 | fboot 版本（依赖版本与它相同，也是默认的查询版本） | `fboot version` 直接返回；环境未配置时用 `install_fboot.sh version`（见「查看 fboot 版本」小节） |
 | 哪些模块会发布到中心仓 | 根 `.modules`（`[include]` 发布 / `[detention]` 不发布） |
 | 项目结构 / cjpm.toml 样例 | `fdemo/cjpm.toml`、`fdemo/user/cjpm.toml` |
+| OpenSpec 流程 / 产物 / CLI 对照（工作流 F、J） | `references/openspec-workflow.md`；在途变更用 `openspec list`（产物在仓库根的 `openspec/`） |
 
 ## 查看 fboot 版本
 
@@ -203,23 +222,30 @@ fboot 自动完成：生成模块 `cjpm.toml`（`output-type = "dynamic"`）、�
 
 ## 工作流 F — 按需求文档开发服务器应用
 
-1. **读需求**：拆出功能点清单（接口、数据、认证、定时任务、外部调用、缓存等）。需求缺失关键信息时向用户要，不臆造。
+**全程走 OpenSpec 规格驱动流程**（`opsx:propose` → 用户评审 → `opsx:apply` → `opsx:verify` → `opsx:archive`，展开与 CLI 对照见 `references/openspec-workflow.md`）；**开工先加载 `test-driven-development` 技能**。
+
+1. **前置 + 读需求**：先确保 OpenSpec 环境就绪——没装 CLI 就装、项目没初始化就 `openspec init --tools <tool>`（**`<tool>` 问用户**）、`config.yaml` 的 `context` 含「所有产出物用简体中文撰写」（细节见 openspec-workflow 第 1–2 节）→ **`openspec update`（每次开工都要先更新一次）** → `openspec list --json` 看有没有在途变更。然后拆功能点清单（接口、数据、认证、定时任务、外部调用、缓存等）；需求缺失关键信息时向用户要，不臆造。
 2. **能力映射**：逐条把功能点映射到 fountain 模块（映射表见 `references/server-development.md`），用 `fountain_lookup.py search` 与模块 README 核对具体 API（按项目在用版本查，见「定位 fountain 仓库与查询版本」）。
 3. **缺口处理（硬性门禁）**：任何功能点映射不到 fountain 能力时，**停下来问用户**，给出选项：a) 用更简单的方式继续实现；b) 用户提供第三方依赖（包名或源码路径）；c) 缩减范围/不实现；d) 在项目内自行实现完整功能和要求的基础设施代码、工具代码，然后完成需求功能。不得把缺失能力硬编成假实现，不得自行引入未经验证的第三方库。
-4. **搭骨架（初始化 + 配置）**：按工作流 A→B→C 安装 fboot、建 workspace、按分层建模块（业务模块 + 可选 boot 初始化模块），按工作流 D 加依赖；**生成三平台启动脚本** `boot.sh` / `boot-macos.sh` / `boot-win-gitbash.sh`（Web 型参考 `fdemo`，含 RPC 时结合 `frpcdemo`，模板选用与合并规则见 `references/launch-scripts.md`）。
-5. **TDD 逐层实现（严格 Red-Green-Refactor）**：数据模型/DAO → service → controller；每个功能点先写测试并确认**失败**（Red）→ 最小实现转绿（Green）→ 重构后再跑（Refactor），循环细则见 `references/delivery-workflow.md` 第 3 节。写法与注解见 `references/server-development.md`，测试规范加载 cangjie-coding；实现中发现需要新的 fountain 模块，按工作流 D 随时补根 cjpm.toml 依赖（依赖随功能演进同步，见 delivery-workflow 第 2 节）。
-6. **构建 + 回归测试**：`fboot build` 通过；跑**全量回归**（不只新用例，`cjpm test` / `fboot test`），回归失败先修再往下（delivery-workflow 第 4 节）；编译错误按 cangjie-coding 的流程定位（先最小可编译切片，再逐步补全）。
-7. **冒烟 + 验收**：用启动脚本拉起应用（`./boot.sh build` → `./boot.sh run`，`--dylibPattern` 覆盖 controller、service.impl、初始化、cron 所在库），先做**冒烟**（关键路径 curl / RPC 调用 + 日志无异常堆栈），再按需求逐条验收接口；长驻进程交给用户跑或后台跑；判据见 delivery-workflow 第 5 节。
-8. **交付**：按 `references/delivery-workflow.md` 完成提交与建 tag（提交前测试全绿；tag 前提交已推送；tag 命名以用户项目规范为准）。
+4. **`opsx:propose 实现 XX 功能`**：生成 `openspec/changes/<变更名>/` 下**五件套** —— `proposal.md`（做什么、为什么）、`specs/<capability>/spec.md`（规格 delta）、`design.md`（怎么做）、`tasks.md`（实施步骤）、`.openspec.yaml`（schema 元数据）。第 2 / 3 步的映射与缺口结论写进 proposal / design，别留在对话里。**本步只产出规划产物，不改项目代码**；产物交出来后停下等用户。
+5. **用户评审（门禁）**：把 `design.md` 与 `tasks.md` 交用户逐条评审，重点确认**模块边界 / 依赖方向 / 数据模型与迁移 / 异常与错误码 / 边界场景（空值、超限、并发、重启）/ 验收判据**；按反馈用 `opsx:update` 折回产物并保持一致。**用户明确确认前不进入 apply。**
+6. **搭骨架（初始化 + 配置）**：按工作流 A→B→C 安装 fboot、建 workspace、按分层建模块（业务模块 + 可选 boot 初始化模块），按工作流 D 加依赖；**生成三平台启动脚本** `boot.sh` / `boot-macos.sh` / `boot-win-gitbash.sh`（Web 型参考 `fdemo`，含 RPC 时结合 `frpcdemo`，模板选用与合并规则见 `references/launch-scripts.md`）。
+7. **`opsx:apply` — 逐任务 TDD 实现**：**严格跟随 `design.md` 与 `tasks.md`**，按数据模型/DAO → service → controller 推进；**每个任务先写失败测试再写最小实现**（Red-Green-Refactor，**REQUIRED SUB-SKILL:** `test-driven-development`），跑绿之后才勾掉任务——不允许出现「任务已勾选但没有对应测试」的进度。写法与注解见 `references/server-development.md`；实现中发现需要新的 fountain 模块，按工作流 D 随时补根 cjpm.toml 依赖（依赖随功能演进同步，见 delivery-workflow 第 2 节）。**实现与 design 冲突时不要自行改设计**——回第 5 步问用户。
+8. **构建 + 回归测试**：`fboot build` 通过；跑**全量回归**（不只新用例，`cjpm test` / `fboot test`），回归失败先修再往下（delivery-workflow 第 4 节）；编译错误按 cangjie-coding 的流程定位（先最小可编译切片，再逐步补全）。
+9. **冒烟 + 验收**：用启动脚本拉起应用（`./boot.sh build` → `./boot.sh run`，`--dylibPattern` 覆盖 controller、service.impl、初始化、cron 所在库），先做**冒烟**（关键路径 curl / RPC 调用 + 日志无异常堆栈），再按 specs / design 逐条验收接口；长驻进程交给用户跑或后台跑；判据见 delivery-workflow 第 5 节。
+10. **`opsx:verify`**：校验代码与规范一致（Completeness 任务与规格覆盖 / Correctness 需求是否真实现 / Coherence 是否遵循 design 与既有模式），**CRITICAL 未清零不往下走**；verify 需要 extended（启用与回退见 openspec-workflow 第 6 节）。
+11. **交付 + `opsx:archive`**：按 `references/delivery-workflow.md` 完成提交与建 tag（提交前测试全绿；tag 前提交已推送；tag 命名以用户项目规范为准）；最后 `opsx:archive` 沉淀规范、归档变更 —— archive 放最后，万一还要补代码可以继续 apply。
 
 ## 工作流 G — 其他语言项目 → 仓颉项目
 
 输入为本地路径或 git 链接；产出为**独立的新 fountain 项目**，不改原仓库。
 
+**开工先加载 `test-driven-development` 技能**（**REQUIRED SUB-SKILL:**），全程按 Red-Green-Refactor 推进。
+
 1. **取源码**：git 链接 clone 到新目录；本地路径只读分析。
 2. **侦察与映射**：读原项目结构与关键文件，产出「原功能 → fountain 模块」映射表与缺口清单（侦察清单与映射表见 `references/porting-guide.md`）。
 3. **缺口处理**：同工作流 F 第 3 步。
-4. **搭骨架**：工作流 A→B→C→D 建新项目，模块划分对齐原项目分层；生成三平台启动脚本（同工作流 F 第 4 步，见 `references/launch-scripts.md`）。
+4. **搭骨架**：工作流 A→B→C→D 建新项目，模块划分对齐原项目分层；生成三平台启动脚本（同工作流 F 第 6 步，见 `references/launch-scripts.md`）。
 5. **分批转换（严格 TDD）**：按「数据模型 → 数据访问 → 业务逻辑 → 接口层 → 定时/异步任务」顺序逐批转换；每批按 Red-Green-Refactor 补测试（先失败测试再实现），批次末跑**全量回归** + `fboot build`；发现需要新模块时按工作流 D 补依赖。
 6. **冒烟 + 验收**：启动做**冒烟**（关键路径）后，对照原项目行为逐项验证；输出转换报告（对应关系、缺口、未实现项），见 `references/porting-guide.md`。
 7. **交付**：按 `references/delivery-workflow.md` 完成提交与建 tag。
@@ -228,6 +254,8 @@ fboot 自动完成：生成模块 `cjpm.toml`（`output-type = "dynamic"`）、�
 
 输入：用户当前的仓颉项目（cjpm 项目、不依赖 fountain，可能带 `main()` / executable）。
 先判断：改造目标是服务端应用才适合 fountain 风格；纯 CLI / 库项目先与用户确认必要性。
+
+**开工先加载 `test-driven-development` 技能**（**REQUIRED SUB-SKILL:**），能力替换逐类按 Red-Green-Refactor 推进。
 与工作流 F / G / I / K 一样，本工作流覆盖**完整交付流程**（初始化 → 配置 → 严格 TDD → 回归 + 冒烟 → 提交 → 建 tag），通用门禁见 `references/delivery-workflow.md`。
 
 1. **评估现状（只读）**：cjpm.toml（`output-type`、dependencies）、src 布局、`main()` 入口、现有能力（HTTP / DB / 日志 / 配置 / 定时）来自 stdx 还是手写。
@@ -244,6 +272,8 @@ fboot 自动完成：生成模块 `cjpm.toml`（`output-type = "dynamic"`）、�
 输入是已跑起来的**老项目**（SDK 1.0.x + fountain 1.0.x：模块 `cjc-version = "1.0.4"`，源码里是聚合根
 `import fountain.mvc.*` 或扁平 `import f_mvc.*`）。产出默认是**同一项目就地升级**（保留 git 历史）到
 「fountain 依赖版本 = 当前 fboot 版本」；不改技术栈、不重写业务。完整展开见 `references/legacy-upgrade.md`。
+
+**开工先加载 `test-driven-development` 技能**（**REQUIRED SUB-SKILL:**）；升级属高风险改动，API 适配与行为修复都先落失败用例再改代码。
 
 1. **环境对齐（先做）**：工作流 A 安装 / 配置当前 fboot——`fboot version` 定目标版本号（它就是待写入的依赖版本）；
    把 SDK / stdx 换到与 fboot 匹配的版本（老项目 `cjc-version = "1.0.4"` 对不上当前 fountain 的 `"1.2.0"`），
@@ -267,6 +297,8 @@ fboot 自动完成：生成模块 `cjpm.toml`（`output-type = "dynamic"`）、�
 
 **适用**：当前正在开发的项目就是 fountain 仓库——根 cjpm.toml 的包名是 `fountain`、`fountain::f_*` 依赖全是 `{path = "./f_xxx"}` 形态，仓库里有 `.modules` 与各 `f_*` 模块目录；此时被开发的对象就是框架自身（加功能 / 修缺陷 / 新建模块），产出是框架源码的改动。**仓库内查询不加 `--version` 即读工作区源码**（path 依赖没有版本号、脚本不需要切文档副本；输出头部标注源码版本与分支 / tag）。
 
+**开工先加载 `test-driven-development` 技能**（**REQUIRED SUB-SKILL:**）。**两条轨道**：**新建模块**（以及用户拍板要立项的等价大功能）走 OpenSpec 流程（第 3 步）；修缺陷 / 既有模块的小改动走第 1、2、4 步。
+
 1. **先复用，再实现——优先使用 fountain 自身的 API**：动手写代码前，把要用到的能力逐条在仓库里查证有没有现成实现，命中即用：
    - 查证链路：`fountain_lookup.py modules` → `search "<能力关键词>"` → 模块 README → `api <模块>` → 读 `src/` 核对签名；
    - 现有模块能满足的**不重复造轮子**（异常体系、日志、工具函数、集合扩展、时间换算、编解码等，先按 `references/module-index.md` 对号入座再现场核对，不按记忆猜）；
@@ -275,8 +307,9 @@ fboot 自动完成：生成模块 `cjpm.toml`（`output-type = "dynamic"`）、�
    - 每条建议写清代价与影响面（是否动公开 API、是否破坏兼容、影响哪些调用方、测试与文档成本）；公开 API 变更宁保守（能加参数 / 重载就不改既有签名）；
    - 典型候选：a) 扩展现有模块（哪个模块、加什么 API 的签名草案）；b) 新建模块（职责边界与发布登记；聚合根包与 `src/<模块>` shim 已冻结，新模块不登记进去）；c) 改用仓颉标准库 / stdx 的现成能力（不新增 fountain API）；d) 在目标模块内部实现（不公开，仅本次需求用）；e) 缩减范围或调整需求；
    - 未拍板前不写实现代码。
-3. **按拍板方案实现（严格 TDD）**：先写失败用例（Red）→ 最小实现（Green）→ 重构（Refactor）；用例放语义所属的层 / 包；公开 API 变化同步该模块 README（中英成对）。
-4. **回归 + 交付**：受影响模块 + 全量 `cjpm test` 全绿再提交；涉及 fboot / 应用启动链的改动按 `references/delivery-workflow.md` 第 5 节做冒烟；提交与建 tag 按该文件第 6 / 7 节。fountain 自身的升版（各 `cjpm.toml` + `f_version/src/FountainVersion.cj`）与发布文档同步按仓库既有发布流程；仓库里可能有其他会话的并行工作线（`.worktrees/` 工作树与分支）——只操作自己的，不 prune、不删除任何工作树与分支。
+3. **新建模块 → OpenSpec 流程**（完整展开见 `references/openspec-workflow.md`）：先确保环境就绪（没装 CLI / 没初始化见 openspec-workflow 第 1–2 节）→ `openspec update` → 确认 `openspec/config.yaml` 的 `context` 含「所有产出物用简体中文撰写」（缺则追加）→ `opsx:propose 新建 f_xxx 模块（职责 + 对外 API 草案）` 生成五件套 → **用户评审 `design.md` / `tasks.md`**（模块职责边界、公开 API 签名、与既有模块的依赖方向、`.modules` 发布登记、README 中英同步、边界场景与兼容性；**未确认不进下一步**）→ `opsx:apply`（按 tasks 编码，严格跟随 design，逐任务 TDD）→ `opsx:verify`（CRITICAL 清零；需 extended）→ 交付后 `opsx:archive`。新建模块的目录 / 包结构 / 测试布局以 design 为准，既有约束（`[detention]`、聚合根 shim 冻结）不破。
+4. **按拍板方案实现（严格 TDD，含非 OpenSpec 轨道）**：先写失败用例（Red）→ 最小实现（Green）→ 重构（Refactor）；用例放语义所属的层 / 包；公开 API 变化同步该模块 README（中英成对）。走 OpenSpec 时，这一步就是 `opsx:apply` 里的逐任务循环——**跑绿才勾任务**。
+5. **回归 + 交付**：受影响模块 + 全量 `cjpm test` 全绿再提交；涉及 fboot / 应用启动链的改动按 `references/delivery-workflow.md` 第 5 节做冒烟；提交与建 tag 按该文件第 6 / 7 节。fountain 自身的升版（各 `cjpm.toml` + `f_version/src/FountainVersion.cj`）与发布文档同步按仓库既有发布流程；仓库里可能有其他会话的并行工作线（`.worktrees/` 工作树与分支）——只操作自己的，不 prune、不删除任何工作树与分支。
 
 ## 工作流 K — 为现有 fountain 项目添加 / 修改模块配置
 
@@ -300,6 +333,7 @@ fboot 自动完成：生成模块 `cjpm.toml`（`output-type = "dynamic"`）、�
   用 `scripts/migrate_fountain_imports.py` 重写、别手改；聚合根 shim 已冻结（没有 f_rpc / f_dbpool 等新模块），
   不作为新代码路线（工作流 I）。
 - 需求缺口不得私自「造 API」；`[detention]` 模块不能用中心仓版本依赖。
+- OpenSpec 是叠加在交付门禁之上的流程，不是替代：propose 阶段只写规划产物（改代码要等 apply）；`opsx:archive` 之后仍要过 `fboot build` / 全量回归 / 冒烟 / 提交 / 建 tag；`openspec validate` 只校验文件与规格格式，代码一致性靠 `opsx:verify`。
 - 查询前先看输出头部的**版本标注**：默认按当前项目依赖版本切文档副本；在项目目录外查、或项目还没写 `[dependencies]` 时，副本会停在上次的版本上（可能是 master），别把 master 的内容当成在用版本。`--version` 可显式指定。
 - 文档副本会随切换累积多个版本的快照（约 30MB/版本，浅克隆）；副本损坏、或想清干净时直接删 `<skill-root>/fountain` 重新克隆即可。
 - 切版本只对**技能目录下的副本**生效（`--root` / `$FOUNTAIN_ROOT` 指定的源码目录不会被改动，只会警告）；别指望它把用户项目里的源码切到某版本。
@@ -313,6 +347,7 @@ fboot 自动完成：生成模块 `cjpm.toml`（`output-type = "dynamic"`）、�
 - `references/launch-scripts.md` — 启动脚本（boot.sh / boot-macos.sh / boot-win-gitbash.sh）的模板选用与合并（工作流 F / G / H 搭骨架、工作流 I 升级脚本时）
 - `references/delivery-workflow.md` — 交付全流程（工作流 F / G / H / I / K 共用：初始化 / 配置演进 / TDD / 提交 / 建 tag；工作流 J 复用第 3–7 节）
 - `references/porting-guide.md` — 跨语言项目转换流程（工作流 G 展开）
+- `references/openspec-workflow.md` — OpenSpec 规格驱动流程（工作流 F 全程、工作流 J 新建模块：装 CLI / `openspec init --tools <tool>` / `config.yaml` 的 context / 每次开工 `openspec update` / propose→评审→apply→verify→archive 五步与 CLI 对照 / extended 启用与回退）
 - `references/cangjie-to-fountain.md` — 非 fountain 的仓颉项目改造为 fountain 风格（工作流 H 展开）
 - `references/legacy-upgrade.md` — 旧版本项目升级（工作流 I 展开：SDK 1.0.x + fountain 1.0.x → 与当前 fboot 同版）
 - `references/skill-infra.md` — 技能格式与联动技能：跨 Agent 通用性，cangjie-coding / cangjie-doc-lookup 的安装来源与脚本参数（SKILL.md「技能格式与联动技能」的展开）
