@@ -131,6 +131,16 @@ public class HeapCache_test {
         }
     }
 
+    /**断言 body 抛出 IllegalArgumentException（参数校验失败）*/
+    private func expectIllegalArgument(body: () -> Unit): Unit {
+        try {
+            body()
+            @Assert(false)
+        } catch (e: IllegalArgumentException) {
+            @Assert(true)
+        }
+    }
+
     @TestCase
     public func testOperationsAfterCloseThrow(): Unit {
         let cache = HeapCache<Test>(maxLife: Duration.second * 30, checkDuration: Duration.second * 30)
@@ -382,7 +392,7 @@ public class HeapCache_test {
         cache.close()
     }
 
-    /**段数按预期条目数推导：显式指定优先；传 0（默认）时每段目标 ≤1024 条、段数取 2 的幂且不超过 128 */
+    /**段数按预期条目数推导：显式指定优先（非 2 的幂时向上取整）；传 0（默认）时每段目标 ≤1024 条、段数取 2 的幂且不超过 128 */
     @TestCase
     public func testAutoConcurrencyLevel(): Unit {
         let c1024 = HeapCache<Test>(concurrencyLevel: 0, maxSize: 1024)
@@ -403,6 +413,42 @@ public class HeapCache_test {
         let built = HeapCacheBuilder<Test>().setMaxSize(8192).build()
         @Assert(16, built.segmentCount())
         built.close()
+    }
+
+    /**
+     * 显式 concurrencyLevel 向上取到 ≥ 该值的最小 2 的幂：段索引用 `hashCode & (段数 - 1)` 取模，
+     * 段数不是 2 的幂时部分段永远取不到、且分布不均。
+     */
+    @TestCase
+    public func testExplicitConcurrencyLevelRoundsUpToPowerOfTwo(): Unit {
+        let c1 = HeapCache<Test>(concurrencyLevel: 1, maxSize: 1_000_000)
+        @Assert(1, c1.segmentCount())//1 已是 2 的幂
+        c1.close()
+        let c3 = HeapCache<Test>(concurrencyLevel: 3, maxSize: 1_000_000)
+        @Assert(4, c3.segmentCount())
+        c3.close()
+        let c17 = HeapCache<Test>(concurrencyLevel: 17, maxSize: 1_000_000)
+        @Assert(32, c17.segmentCount())
+        c17.close()
+        let c100 = HeapCache<Test>(concurrencyLevel: 100, maxSize: 1_000_000)
+        @Assert(128, c100.segmentCount())
+        c100.close()
+        let c128 = HeapCache<Test>(concurrencyLevel: 128, maxSize: 1_000_000)
+        @Assert(128, c128.segmentCount())//已是 2 的幂 ⇒ 原值不动
+        c128.close()
+        let c200 = HeapCache<Test>(concurrencyLevel: 200, maxSize: 1_000_000)
+        @Assert(256, c200.segmentCount())//显式值不受自动推导上限 128 的约束
+        c200.close()
+        let cBuilder = HeapCacheBuilder<Test>().setConcurrencyLevel(5).setMaxSize(1_000_000).build()
+        @Assert(8, cBuilder.segmentCount())//builder 同样按 2 的幂取整
+        cBuilder.close()
+    }
+
+    /**没有 ≥ concurrencyLevel 的 2 的幂可表示时（> 2^62）明确报错，而不是取到溢出后的负数 */
+    @TestCase
+    public func testConcurrencyLevelTooLargeThrows(): Unit {
+        expectIllegalArgument {let _ = HeapCache<Test>(concurrencyLevel: (Int64(1) << 62) + 1, maxSize: 1_000_000)}
+        expectIllegalArgument {let _ = HeapCache<Test>(concurrencyLevel: Int64.Max, maxSize: 1_000_000)}
     }
 
     /**

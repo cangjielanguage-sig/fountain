@@ -34,7 +34,7 @@ public open class HeapCacheBuilder<V> where V <: Object {
         this.maxLife = maxLife
         return this
     }
-    /**`concurrencyLevel` 传 0 表示按 `maxSize` 自动选段数；传正数则按指定值分段*/
+    /**`concurrencyLevel` 传 0 表示按 `maxSize` 自动选段数；传正数时向上取到 ≥ 该值的最小 2 的幂*/
     public func setConcurrencyLevel(concurrencyLevel: Int64): HeapCacheBuilder<V> {
         if (concurrencyLevel < 0) {
             throw IllegalArgumentException(
