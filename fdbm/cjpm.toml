@@ -27,7 +27,7 @@
   target-dir = ""
   version = "1.3.16"
   package-configuration = {}
-  category = ["Data Encapsulation and Transfer", "Database Driver", "Database Framework", "Infrastructure", 'Database Middleware']
+  category = ["Database Framework", "Distributed", "Data Encapsulation and Transfer", "Network", "Infrastructure"]
   license = ["Apache-2.0"]
   include = ["src", "doc", "boot.sh"]
   exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
