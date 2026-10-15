@@ -38,6 +38,14 @@ func indexTestHas(buffer: ArrayList<Int64>, id: Int64): Bool {
     false
 }
 
+/** 一组编译结果中是否存在命中该时刻的表达式。 */
+func indexCronsMatch(crons: Collection<CronDataCollection>, time: DateTime): Bool {
+    for (cron in crons where cron.matches(time)) {
+        return true
+    }
+    false
+}
+
 func indexTestWaitUntil(condition: () -> Bool, timeout: Duration): Unit {
     let deadline = DateTime.now() + timeout
     while (!condition() && DateTime.now() < deadline) {
@@ -142,32 +150,33 @@ public class TicktockIndex_test {
     }
 
     /**
-     * L 任务：按该单位的 lastRange（日字段即 28..=31）展开进值桶后，
-     * 候选集合对 L 任务是精确的 —— 非候选时刻必定不命中。
+     * L 任务：索引仍按该单位的 lastRange（日字段即 28..=31）展开进值桶，
+     * 候选是**超集**（不漏任何命中）；而收紧后的 matches 只命中"该单位的最后一天"。
      */
     @TestCase
-    public func testLastTaskCandidateIsExact(): Unit {
+    public func testLastTaskCandidateIsSuperset(): Unit {
         let index = TicktockIndex()
         let crons = CronCompiler.compile("0 0 0 L * *")
         for (cron in crons) {
             index.add(0, cron)
         }
         let buffer = ArrayList<Int64>()
-        // 月中：非最后一天、也不在 28..=31，不命中 → 不进候选
-        index.candidates(indexTestTime(2026, 10, 15, 0, 0, 0), buffer)
+        // 月中：不在 28..=31、也不是最后一天 → 不进候选、不命中
+        let mid = indexTestTime(2026, 10, 15, 0, 0, 0)
+        index.candidates(mid, buffer)
         @Assert(!indexTestHas(buffer, 0))
-        // 28 日：matches 的常规分支命中（28 ∈ [28, 31]）→ 候选
-        index.candidates(indexTestTime(2026, 10, 28, 0, 0, 0), buffer)
+        @Assert(!indexCronsMatch(crons, mid))
+        // 28 日（大月非最后一天）：因超集展开仍在候选里，但不再命中
+        let day28 = indexTestTime(2026, 10, 28, 0, 0, 0)
+        index.candidates(day28, buffer)
         @Assert(indexTestHas(buffer, 0))
-        // 月末：isLastMonthDay 命中 → 候选
-        index.candidates(indexTestTime(2026, 10, 31, 0, 0, 0), buffer)
+        @Assert(!indexCronsMatch(crons, day28))
+        // 月末：唯一命中的时刻，且必须出现在候选里（索引不漏）
+        let monthEnd = indexTestTime(2026, 10, 31, 0, 0, 0)
+        index.candidates(monthEnd, buffer)
         @Assert(indexTestHas(buffer, 0))
-        // 非闰年 2 月末与闰年 2 月末均在 lastRange 内 → 候选
-        index.candidates(indexTestTime(2026, 2, 28, 0, 0, 0), buffer)
-        @Assert(indexTestHas(buffer, 0))
-        index.candidates(indexTestTime(2028, 2, 29, 0, 0, 0), buffer)
-        @Assert(indexTestHas(buffer, 0))
-        // 秒字段的 L 只在第 59 秒参与候选
+        @Assert(indexCronsMatch(crons, monthEnd))
+        // 秒字段的 L：lastRange 为单值 59，行为不变 —— 只在第 59 秒候选且命中
         let sec = TicktockIndex()
         for (cron in CronCompiler.compile("L * * * * *")) {
             sec.add(1, cron)
@@ -176,6 +185,35 @@ public class TicktockIndex_test {
         @Assert(indexTestHas(buffer, 1))
         sec.candidates(indexTestTime(2026, 10, 14, 10, 30, 58), buffer)
         @Assert(!indexTestHas(buffer, 1))
+    }
+
+    /**
+     * L（日字段）月末形态对拍：大月 / 小月 / 平年二月 / 闰年二月，
+     * 只有"当月最后一天"命中；倒数第二天不再命中（收紧前会被 28..=31 的常规分支误命中）。
+     * 同时验证"命中 ⊆ 候选"：最后一天必须出现在候选集合中。
+     */
+    @TestCase
+    public func testLastMatchesOnlyOnMonthEnd(): Unit {
+        let index = TicktockIndex()
+        let crons = CronCompiler.compile("0 0 0 L * *")
+        for (cron in crons) {
+            index.add(0, cron)
+        }
+        let buffer = ArrayList<Int64>()
+        // 每月形态的（倒数第二天, 最后一天）：大月 10 月 / 小月 11 月 / 平年二月 / 闰年二月
+        let shapes = [
+            (indexTestTime(2026, 10, 30, 0, 0, 0), indexTestTime(2026, 10, 31, 0, 0, 0)),
+            (indexTestTime(2026, 11, 29, 0, 0, 0), indexTestTime(2026, 11, 30, 0, 0, 0)),
+            (indexTestTime(2026, 2, 27, 0, 0, 0), indexTestTime(2026, 2, 28, 0, 0, 0)),
+            (indexTestTime(2028, 2, 28, 0, 0, 0), indexTestTime(2028, 2, 29, 0, 0, 0))
+        ]
+        for (shape in shapes) {
+            let (secondLast, lastDay) = shape
+            @Assert(!indexCronsMatch(crons, secondLast))
+            @Assert(indexCronsMatch(crons, lastDay))
+            index.candidates(lastDay, buffer)
+            @Assert(indexTestHas(buffer, 0))
+        }
     }
 
     /** 全通配任务（所有单位都未约束）恒为候选、恒命中；移除后不再出现。 */
