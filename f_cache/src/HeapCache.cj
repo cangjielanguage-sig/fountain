@@ -24,7 +24,7 @@ import fountain::f_base.*
 import fountain::f_collection.PriorityQueue
 
 public class HeapCache<V> <: Resource where V <: Object {
-    /**实际分段数：显式指定，或按 maxSize 推导（见 autoConcurrencyLevel）*/
+    /**实际分段数（始终是 2 的幂）：显式指定时向上取整，或按 maxSize 推导（见 autoConcurrencyLevel）*/
     private let concurrencyLevel: Int64
     private let store: ConcHashMap<Priority<V>>
     private let closedFlag = AtomicBool(false)
@@ -39,7 +39,7 @@ public class HeapCache<V> <: Resource where V <: Object {
 
     /**
      * `concurrencyLevel` 传 0（默认）表示按 `maxSize` 自动选段数（见 `autoConcurrencyLevel`）；
-     * 显式传正数则按指定值分段。
+     * 显式传正数时向上取到 ≥ 该值的最小 2 的幂（见 `roundUpToPowerOf2`），实际段数因此始终是 2 的幂。
      */
     public HeapCache(
         concurrencyLevel!: Int64 = 0,
@@ -53,7 +53,7 @@ public class HeapCache<V> <: Resource where V <: Object {
                 "maxLife must not be less than zero. maxSize and concurrencyLevel must not be less than zero. checkDuration must be greater than Duration.Zero. however current are ${maxLife}, ${maxSize}, ${concurrencyLevel}, ${checkDuration}")
         }
         this.concurrencyLevel = if (concurrencyLevel > 0) {
-            concurrencyLevel
+            roundUpToPowerOf2(concurrencyLevel)
         } else {
             autoConcurrencyLevel(maxSize)
         }
@@ -79,7 +79,18 @@ public class HeapCache<V> <: Resource where V <: Object {
         }
         return level
     }
-    /**仅供同包用例使用：实际分段数（concurrencyLevel 传 0 时由 maxSize 推导）*/
+    /**
+     * 显式段数向上取到 ≥ concurrencyLevel 的最小 2 的幂：段索引按 `hashCode & (段数 - 1)` 取模，
+     * 段数不是 2 的幂时会有段永远取不到、且分布不均。> 2^62 时没有可表示的 2 的幂，直接报错。
+     */
+    private static func roundUpToPowerOf2(concurrencyLevel: Int64): Int64 {
+        if (concurrencyLevel > (Int64(1) << 62)) {
+            throw IllegalArgumentException(
+                "concurrencyLevel is too large to round up to a power of two. however current is ${concurrencyLevel}")
+        }
+        nextPowerOf2(concurrencyLevel)
+    }
+    /**仅供同包用例使用：实际分段数（始终是 2 的幂；concurrencyLevel 传 0 时由 maxSize 推导）*/
     func segmentCount(): Int64 {
         concurrencyLevel
     }
