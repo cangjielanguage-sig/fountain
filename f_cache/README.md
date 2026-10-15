@@ -5,7 +5,7 @@
 ```cj
 public class HeapCache<V> where V <: Object {
     /**
-     * concurrencyLevel 并发度（分段数），默认 0 = 按 maxSize 自动选段数（16~128，2 的幂）
+     * concurrencyLevel 并发度（分段数），默认 0 = 按 maxSize 自动选段数（16~128）；显式传正数时向上取到 ≥ 该值的最小 2 的幂
      * maxLife 缓存对象的最大寿命
      * maxSize 缓存对象的最大数
      * checkDuration 缓存的检查周期
@@ -143,7 +143,7 @@ public class WeakHeapCache<T> where T <: Object {
 
 # 并发与约定（2026-10-05 补充）
 
-缓存内部按 `concurrencyLevel` 分成若干分段，每个分段一把互斥锁（`Mutex`），段与段之间互不阻塞。`concurrencyLevel` 默认传 0：按 `maxSize` 自动选段数（每段目标 ≤1024 条、段数取 2 的幂且不超过 `DEFAULT_HEAP_CACHE_CONCURRENCY_LEVEL`=128）——段对象的固定开销摊在每个实例上，小缓存（如 `maxSize: 1000`）用 128 段会白付 ~150 KB 内存与 ~250 µs 构造时间（实测见 `cron-bench/logs/evict2_new.log`）；`maxSize` 无上限时仍是 128 段。显式传正数则按指定值分段。段内用互斥锁而非读写锁：std 的读锁为「每线程读计数」维护 ThreadLocal，无人竞争时一次 lock+unlock 也要 ~517 ns，而 `Mutex` 约 20 ns；且段内 `get` 会经 `turnToTail` 维护 LRU 链表序（`checkOverSize` 的采样依据），本身就是写操作，互斥保护同时消除并发改链表的竞争（实测见 `cron-bench/logs/heapcache/perf-audit-2026-10-14.md`）：
+缓存内部按 `concurrencyLevel` 分成若干分段，每个分段一把互斥锁（`Mutex`），段与段之间互不阻塞。`concurrencyLevel` 默认传 0：按 `maxSize` 自动选段数（每段目标 ≤1024 条、段数取 2 的幂且不超过 `DEFAULT_HEAP_CACHE_CONCURRENCY_LEVEL`=128）——段对象的固定开销摊在每个实例上，小缓存（如 `maxSize: 1000`）用 128 段会白付 ~150 KB 内存与 ~250 µs 构造时间（实测见 `cron-bench/logs/evict2_new.log`）；`maxSize` 无上限时仍是 128 段。显式传正数时向上取到 ≥ 该值的最小 2 的幂（段索引按 `hashCode & (段数 - 1)` 取模，段数不是 2 的幂时会有段永远取不到、且分布不均），不受 128 这个推导上限的约束；> 2^62 时没有可表示的 2 的幂，构造抛 `IllegalArgumentException`。段内用互斥锁而非读写锁：std 的读锁为「每线程读计数」维护 ThreadLocal，无人竞争时一次 lock+unlock 也要 ~517 ns，而 `Mutex` 约 20 ns；且段内 `get` 会经 `turnToTail` 维护 LRU 链表序（`checkOverSize` 的采样依据），本身就是写操作，互斥保护同时消除并发改链表的竞争（实测见 `cron-bench/logs/heapcache/perf-audit-2026-10-14.md`）：
 
 - **`getOrCompute` 的 callable 在分段锁之外执行**：同一键可能被并发计算多次，只有第一次写入的结果生效，其余计算结果被丢弃。callable 应当是纯计算或幂等的；有副作用、或必须「只算一次」时请在调用方自行去重。
 - **`removeIf` 是两阶段删除**：先在锁下取快照，再在锁外执行谓词，最后在锁下按 key 删除。谓词不会阻塞同段读写；代价是「判定—删除」不是原子的——两阶段之间新写入的条目也可能因快照里的旧值满足谓词而被删除。
