@@ -53,7 +53,7 @@ python <skill-root>/scripts/install_skill.py all                 # 三组全装
 
 | | `opsx-*`（12 个） | `openspec-*`（项目内） |
 | --- | --- | --- |
-| 是什么 | **你这个 Agent 的执行通道**：用 `opsx_fusion.py` 生成命令块，交融合终端面板执行 | **融合侧 CodeBuddy 读的指令文件** |
+| 是什么 | **你这个 Agent 的执行通道**：ssh 探测连接 → `opsx_fusion.py` 生成命令 → Bash 工具代跑到融合开发引擎 | **融合侧 CodeBuddy 读的指令文件** |
 | 谁生成 | fountain 仓库的 `skills/opsx-*`，用 `install_skill.py opsx` 安装 | `openspec init` / `openspec update`（**不要手工写、也不要手工拷**） |
 | 位置 | 当前 Agent 的技能目录（鸿蒙 PC 上是 `~/.workbuddy/skills/`） | `<项目>/.codebuddy/skills/openspec-*` 与 `<项目>/.codebuddy/commands/opsx/*`（按 `--tools <tool>` 落地；Claude Code 是 `<项目>/.claude/commands/opsx/*`）|
 | 加载时机 | **工作流 F 全程 / 工作流 J 新建模块**，第 1–5 步每一步 | 不归你加载——由融合侧 CodeBuddy 读 |
@@ -61,4 +61,4 @@ python <skill-root>/scripts/install_skill.py all                 # 三组全装
 
 - CLI 升级后用 `openspec update` 重新生成指令文件，别沿用旧版。
 - `verify` / `bulk-archive` 等 core 之外的工作流需先在全局档位启用（`profile=custom` + `workflows` 列全），启用与回退见 openspec-workflow 第 6 节。
-- 执行通道的完整说明（对应关系、命令块形状、两侧分工、缺件症状）见 `references/openspec-workflow.md` **第 9 节**。
+- 执行通道的完整说明（ssh 连接管理、对应关系、命令形状、两侧分工、缺件症状）见 `references/openspec-workflow.md` **第 9 节**。

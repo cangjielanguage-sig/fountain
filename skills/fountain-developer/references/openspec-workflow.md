@@ -3,7 +3,7 @@
 **工作流 F**（按需求文档开发服务器应用）**全程**走 OpenSpec；**工作流 J**（在 fountain 仓库内开发框架自身）在**新建模块**时走同一套流程。
 OpenSpec 把「需求 → 规格 → 设计 → 任务 → 实现 → 校验 → 归档」固化成仓库里的文件；本技能原有的门禁（TDD / 全量回归 / 冒烟 / 提交 / 建 tag）**不变**，只是把「读需求 + 拆功能点」从对话里的临时结论变成可评审、可回溯的产物。
 
-> **在鸿蒙 PC 上，第 4 节五步里的每一步都不由你直接执行**——执行通道是 12 个 `opsx-*` 技能（你产出命令块 → 用户粘到融合终端面板）。通道、对应关系、安装与两套技能的区别见**第 9 节**。
+> **在鸿蒙 PC 上，第 4 节五步里的每一步都经 12 个 `opsx-*` 技能走 ssh 投递到融合开发引擎执行**（连接信息首次访问问用户并固化、IP 失效重问）。通道、对应关系、安装与两套技能的区别见**第 9 节**。
 
 ## 1. 环境准备（每个项目一次）
 
@@ -195,16 +195,16 @@ openspec update
 - propose 阶段的 `design.md` 在 `spec-driven` schema 里是**可选**产物（`skip_specs` 场景同理），但工作流 F / J 依赖它做评审门禁 —— 本技能要求必须产出。
 - 一个仓库可能有多个在途变更：开工前 `openspec list` 看清，别把别人的变更当自己的继续做。
 - Windows 下 `openspec` 是 npm 全局 shim（`.cmd`）：命令找不到先查 `npm prefix -g` 与 PATH，别急着卸载重装。
-- 在鸿蒙 PC 上，OpenSpec 的**工作流步骤**由 12 个 `opsx-*` 技能产出命令块、交**融合终端面板**执行；`openspec` CLI 只在鸿蒙侧做**环境与查询**（`init` / `update` / `list` / `config` / `validate`）。两者别混：混了会漏掉 `/mnt/linux_share` 前缀与预检，或误在融合侧重装 CLI（第 9 节）。
+- 在鸿蒙 PC 上，OpenSpec 的**工作流步骤**由 12 个 `opsx-*` 技能生成 ssh 命令、代跑到**融合开发引擎**执行；`openspec` CLI 只在鸿蒙侧做**环境与查询**（`init` / `update` / `list` / `config` / `validate`）。两者别混：混了会漏掉 `/mnt/linux_share` 前缀与预检，或误在融合侧重装 CLI（第 9 节）。
 
 ## 9. 在鸿蒙 PC 上执行：用 `opsx-*` 技能族（12 个）
 
-**在鸿蒙 PC 上，五步流程的每一步都不由你直接执行。** 你负责产出「可粘贴的命令块」，执行发生在**融合开发环境**（Linux 子系统）里的 CodeBuddy CLI。这条通道由 12 个 `opsx-*` 技能承担，与 OpenSpec 的 12 个工作流一一对应。
+**在鸿蒙 PC 上，五步流程的每一步都经 12 个 `opsx-*` 技能投递，访问通道是 ssh。** 技能先探测与**融合开发引擎**（Linux 子系统）的 ssh 连接（首次访问问用户 IP / 用户名 / 密码并固化，IP 失效重问），再生成 ssh 命令、由你用 Bash 工具代跑到那边 CodeBuddy CLI，跑完读回输出汇报。12 个技能与 OpenSpec 的 12 个工作流一一对应。
 
 ### 9.1 先做这一步（条件判断，别跳过）
 
 ```
-本机能加载 opsx-<工作流> 技能  →  直接加载，按它产命令块
+本机能加载 opsx-<工作流> 技能  →  直接加载，按它的流程执行（ssh 探测 → 生成命令 → 代跑 → 汇报）
 本机没装这批技能              →  先 install_skill.py opsx 装上，再加载
 ```
 
@@ -237,20 +237,21 @@ python <skill-root>/scripts/install_skill.py list      # 复验：opsx-* 那组�
 | `opsx-bulk-archive` | `bulk-archive` | 多个已完成的变更一次归档 |
 | `opsx-onboard` | `onboard` | 给还没有规范的老项目反向生成初始规范 |
 
-### 9.3 每个技能产出什么、谁在哪一侧
+### 9.3 每个技能做什么、谁在哪一侧
 
-每个技能交付「**一个 bash 代码块 + 三行说明**」，块内是三段固定顺序：
+每个技能的流程：**ssh 探测（`ssh-check`）→ 生成命令（`plan`，一条 ssh + heredoc 命令）→ 代跑 → 汇报**。命令内三段固定顺序：
 
 1. `cd /mnt/linux_share/<鸿蒙侧家目录>/...`——**融合侧路径 = 鸿蒙侧路径前加 `/mnt/linux_share`**；
 2. 预检：确认此处是 openspec 根（有 `openspec/config.yaml`）、确认融合侧有 `codebuddy`，缺了就打安装命令并中止；
 3. `codebuddy -p "/opsx:<工作流> <主题>" --permission-mode acceptEdits`。
 
-交用户粘到 **WorkBuddy 融合终端面板**执行。**技能不执行、不建目录、不改文件**——执行结果由用户带回给你。
+命令由你按技能指引用 Bash 工具（长任务后台模式）**原样代跑**到融合开发引擎；连接信息（IP / 用户名 / 密码）首次访问问用户后用 `ssh-set` 固化在 `~/.workbuddy/openspec-fusion.json` 的 `fusion.ssh` 段，IP 失效重问。**技能不建目录、不改文件**（除固化自身连接配置外）。
 
 | 动作 | 在哪一侧 | 谁做 |
 | --- | --- | --- |
 | `openspec init` / `update` / `list` / `config` / `validate` | **鸿蒙侧** | 你（直接跑） |
-| `/opsx:<工作流>` 的实际执行 | **融合侧**（`/mnt/linux_share/...`） | 用户粘命令块到融合终端面板 |
+| ssh 连接探测与固化 | 鸿蒙侧（`ssh-check` / `ssh-set` / `ssh-push-key`） | 你（按技能流程） |
+| `/opsx:<工作流>` 的实际执行 | **融合开发引擎**（ssh 投递，路径 `/mnt/linux_share/...`） | 你（Bash 工具代跑技能生成的命令） |
 | 产出物落盘 | 融合侧写入共享目录 = 鸿蒙侧同一份文件 | — |
 
 - `openspec` CLI 跑在**鸿蒙侧**；**不要在融合侧重装它**，融合侧只需要仓库里那份 `.codebuddy/commands/opsx/` 与 `.codebuddy/skills/openspec-*`。
@@ -262,6 +263,7 @@ python <skill-root>/scripts/install_skill.py list      # 复验：opsx-* 那组�
 | 缺 | 症状 | 处理 |
 | --- | --- | --- |
 | 12 个 `opsx-*` 技能 | 你不知道第 1–5 步该怎么执行，容易自己拼 `openspec` 命令，或直接去拉 `codebuddy` | `python <skill-root>/scripts/install_skill.py opsx` |
-| 融合侧 codebuddy | 命令块的第 ② 步预检就中止，并打印安装命令 | 交用户跑 `~/.local/opt/codebuddy-linux/install.sh` |
+| 融合引擎 ssh 连接信息 | `ssh-check` 退出码 2（配置缺失），技能会问用户三项再固化 | 按技能流程提供 IP / 用户名 / 密码（已配置免密可留空），`ssh-set` 固化后复探 |
+| 融合侧 codebuddy | 命令的第 ② 步预检就中止，并打印安装命令 | 按提示处理（融合侧跑 `~/.local/opt/codebuddy-linux/install.sh`） |
 | 工作流未启用（如 `verify`） | 对应 `opsx-<工作流>` 技能加载后预检会硬拦截 | 按第 6 节把 profile 设为 `custom` 并启用该工作流 |
-| 项目未初始化 OpenSpec | 命令块的预检找不到 `openspec/config.yaml` | 按第 1–2 节装 CLI / `openspec init --tools <tool>`（**`<tool>` 问用户**） |
+| 项目未初始化 OpenSpec | 命令的预检找不到 `openspec/config.yaml` | 按第 1–2 节装 CLI / `openspec init --tools <tool>`（**`<tool>` 问用户**） |
