@@ -3,6 +3,8 @@
 **工作流 F**（按需求文档开发服务器应用）**全程**走 OpenSpec；**工作流 J**（在 fountain 仓库内开发框架自身）在**新建模块**时走同一套流程。
 OpenSpec 把「需求 → 规格 → 设计 → 任务 → 实现 → 校验 → 归档」固化成仓库里的文件；本技能原有的门禁（TDD / 全量回归 / 冒烟 / 提交 / 建 tag）**不变**，只是把「读需求 + 拆功能点」从对话里的临时结论变成可评审、可回溯的产物。
 
+> **在鸿蒙 PC 上，第 4 节五步里的每一步都不由你直接执行**——执行通道是 12 个 `opsx-*` 技能（你产出命令块 → 用户粘到融合终端面板）。通道、对应关系、安装与两套技能的区别见**第 9 节**。
+
 ## 1. 环境准备（每个项目一次）
 
 **先检测，再决定装不装**（不要无条件重装）：
@@ -51,9 +53,11 @@ openspec list --json       # 看有没有在途变更；有则先决定「继续
 
 ## 4. 五步流程
 
+> **在鸿蒙 PC 上，下面每步的「加载技能」一律指加载对应的 `opsx-*` 技能**（`opsx:propose` → `opsx-propose`，依次类推）——它是你的执行通道。本节提到的 `openspec-propose` / `openspec-apply-change` 等项目内技能文件，是**融合侧 CodeBuddy** 读的指令文件，不是你自己的加载对象；两套的区别与分工见第 9 节。
+
 ### 第 1 步 — `opsx:propose 实现 XX 功能`
 
-加载 `openspec-propose` 技能（说「openspec propose」/「opsx propose」等价）。等价 CLI 链路：
+**加载 `opsx-propose` 技能**（鸿蒙 PC 上的执行通道，见第 9 节；`openspec-propose` 是融合侧 CodeBuddy 读的指令文件，不是你的加载对象）。等价的 CLI 链路：
 
 ```bash
 openspec new change "<变更名>"                                  # 变更名用 kebab-case
@@ -91,7 +95,7 @@ openspec instructions <artifact> --change "<变更名>" --json     # 逐个取 t
 
 ### 第 3 步 — `opsx:apply`
 
-加载 `openspec-apply-change` 技能；等价 CLI：
+**加载 `opsx-apply` 技能**（见第 9 节）；等价 CLI：
 
 ```bash
 openspec instructions apply --change "<变更名>" --json   # 取 contextFiles 与任务进度
@@ -104,7 +108,7 @@ openspec instructions apply --change "<变更名>" --json   # 取 contextFiles �
 
 ### 第 4 步 — `opsx:verify`（不在 core 档，需先启用，见第 6 节）
 
-加载 `openspec-verify-change` 技能。三个维度：
+**加载 `opsx-verify` 技能**（见第 9 节）。三个维度：
 
 | 维度 | 查什么 |
 | --- | --- |
@@ -121,7 +125,7 @@ design 的每个决定能在代码里找到落点；tasks 全部勾选且逐条�
 
 ### 第 5 步 — `opsx:archive`
 
-加载 `openspec-archive-change` 技能；等价 CLI：
+**加载 `opsx-archive` 技能**（见第 9 节）；等价 CLI：
 
 ```bash
 openspec archive <变更名>          # 把 delta 规格合并进 openspec/specs/，变更目录移进 changes/archive/
@@ -191,3 +195,73 @@ openspec update
 - propose 阶段的 `design.md` 在 `spec-driven` schema 里是**可选**产物（`skip_specs` 场景同理），但工作流 F / J 依赖它做评审门禁 —— 本技能要求必须产出。
 - 一个仓库可能有多个在途变更：开工前 `openspec list` 看清，别把别人的变更当自己的继续做。
 - Windows 下 `openspec` 是 npm 全局 shim（`.cmd`）：命令找不到先查 `npm prefix -g` 与 PATH，别急着卸载重装。
+- 在鸿蒙 PC 上，OpenSpec 的**工作流步骤**由 12 个 `opsx-*` 技能产出命令块、交**融合终端面板**执行；`openspec` CLI 只在鸿蒙侧做**环境与查询**（`init` / `update` / `list` / `config` / `validate`）。两者别混：混了会漏掉 `/mnt/linux_share` 前缀与预检，或误在融合侧重装 CLI（第 9 节）。
+
+## 9. 在鸿蒙 PC 上执行：用 `opsx-*` 技能族（12 个）
+
+**在鸿蒙 PC 上，五步流程的每一步都不由你直接执行。** 你负责产出「可粘贴的命令块」，执行发生在**融合开发环境**（Linux 子系统）里的 CodeBuddy CLI。这条通道由 12 个 `opsx-*` 技能承担，与 OpenSpec 的 12 个工作流一一对应。
+
+### 9.1 先做这一步（条件判断，别跳过）
+
+```
+本机能加载 opsx-<工作流> 技能  →  直接加载，按它产命令块
+本机没装这批技能              →  先 install_skill.py opsx 装上，再加载
+```
+
+`opsx-*` 技能的来源是 **fountain 仓库的 `skills/opsx-*`**。本机没装就用本技能自带的脚本从那份源装上（**不要手工 `git clone` + `cp`、不要改用手写规格代替**）：
+
+```bash
+python <skill-root>/scripts/install_skill.py opsx      # 装 12 个 opsx-* 技能
+python <skill-root>/scripts/install_skill.py list      # 复验：opsx-* 那组应显示 12/12 已装
+```
+
+- 安装目标是**当前 Agent 的技能目录**——在鸿蒙 PC 的 WorkBuddy 上就是 `~/.workbuddy/skills/`（脚本会优先选中「放着 `fountain-developer` 的那个技能目录」）。
+- 脚本会**自动跳过**被 openspec 托管的项目内 `.codebuddy/skills`（那是 `openspec update` 生成、会被整片重刷的目录，装进去会静默消失）。
+- 源里没有这批技能时（例如检出的分支还没合入它们），脚本会明确报「该切哪个分支」；按提示 `git -C <fountain> switch sts/1.3.x`，或 `--fountain-root` 指到含 `skills/opsx-*` 的源码。
+- 同一脚本的 `all` 会把三组联动技能（cangjie-coding / cangjie-doc-lookup / 12 个 opsx-*）一次装齐；单个技能名可单装。
+
+### 9.2 12 个技能 ↔ 12 个工作流
+
+| 技能 | 对应 `/opsx:` | 本流程里什么时候用 |
+| --- | --- | --- |
+| `opsx-propose` | `propose` | 第 1 步：建变更 + 一次性产出规划产物 |
+| `opsx-explore` | `explore` | 第 1 步之前：需求还没想清楚，先调研再写 |
+| `opsx-new` | `new` | 只要脚手架、明确不要任何产物 |
+| `opsx-continue` | `continue` | 变更只产出了一部分，补下一份 |
+| `opsx-ff` | `ff` | 快速路线：一次性出全部规划产物 |
+| `opsx-apply` | `apply` | 第 3 步：按 tasks.md 编码 |
+| `opsx-update` | `update` | 第 2 步评审后：修订产出的规划文档 |
+| `opsx-verify` | `verify` | 第 4 步：实现与规范一致性校验 |
+| `opsx-sync` | `sync` | 把 delta 规格合进主规范 `openspec/specs/` |
+| `opsx-archive` | `archive` | 第 5 步：归档变更 |
+| `opsx-bulk-archive` | `bulk-archive` | 多个已完成的变更一次归档 |
+| `opsx-onboard` | `onboard` | 给还没有规范的老项目反向生成初始规范 |
+
+### 9.3 每个技能产出什么、谁在哪一侧
+
+每个技能交付「**一个 bash 代码块 + 三行说明**」，块内是三段固定顺序：
+
+1. `cd /mnt/linux_share/<鸿蒙侧家目录>/...`——**融合侧路径 = 鸿蒙侧路径前加 `/mnt/linux_share`**；
+2. 预检：确认此处是 openspec 根（有 `openspec/config.yaml`）、确认融合侧有 `codebuddy`，缺了就打安装命令并中止；
+3. `codebuddy -p "/opsx:<工作流> <主题>" --permission-mode acceptEdits`。
+
+交用户粘到 **WorkBuddy 融合终端面板**执行。**技能不执行、不建目录、不改文件**——执行结果由用户带回给你。
+
+| 动作 | 在哪一侧 | 谁做 |
+| --- | --- | --- |
+| `openspec init` / `update` / `list` / `config` / `validate` | **鸿蒙侧** | 你（直接跑） |
+| `/opsx:<工作流>` 的实际执行 | **融合侧**（`/mnt/linux_share/...`） | 用户粘命令块到融合终端面板 |
+| 产出物落盘 | 融合侧写入共享目录 = 鸿蒙侧同一份文件 | — |
+
+- `openspec` CLI 跑在**鸿蒙侧**；**不要在融合侧重装它**，融合侧只需要仓库里那份 `.codebuddy/commands/opsx/` 与 `.codebuddy/skills/openspec-*`。
+- **两套东西别混**：12 个 `opsx-*` 技能 = **你这个 Agent 的执行通道**（由 fountain 仓库分发、用 `install_skill.py opsx` 装）；`openspec update` 生成的 `openspec-*`（项目内 `.codebuddy/skills/`）= **融合侧 CodeBuddy 读的指令文件**（由 openspec CLI 生成、不要手工写）。两套都要在。
+- 目标 worktree 与子目录由技能的参数决定，缺省回落配置文件（项目内 `<repo>/.workbuddy/openspec-fusion.json` 优先，回落到用户级）；现有 worktree 多于一个而用户没说时，**停下来问**，不要替用户挑。
+
+### 9.4 缺哪一件会怎样
+
+| 缺 | 症状 | 处理 |
+| --- | --- | --- |
+| 12 个 `opsx-*` 技能 | 你不知道第 1–5 步该怎么执行，容易自己拼 `openspec` 命令，或直接去拉 `codebuddy` | `python <skill-root>/scripts/install_skill.py opsx` |
+| 融合侧 codebuddy | 命令块的第 ② 步预检就中止，并打印安装命令 | 交用户跑 `~/.local/opt/codebuddy-linux/install.sh` |
+| 工作流未启用（如 `verify`） | 对应 `opsx-<工作流>` 技能加载后预检会硬拦截 | 按第 6 节把 profile 设为 `custom` 并启用该工作流 |
+| 项目未初始化 OpenSpec | 命令块的预检找不到 `openspec/config.yaml` | 按第 1–2 节装 CLI / `openspec init --tools <tool>`（**`<tool>` 问用户**） |
