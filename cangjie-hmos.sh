@@ -8,6 +8,9 @@
 # and add 'source /path/of/cangjie-hmos.sh' to the end of ~/.bashrc
 
 # 仓颉安装根目录（SDK、stdx、study 等都放在这里）
+
+alias hmrm='/usr/bin/rm'
+
 export CANGJIE_ROOT=${CANGJIE_ROOT:-$HOME/cangjie}
 export CANGJIE_HOME=$( cd -- "$( dirname -- "${BASH_SOURCE}" )" &> /dev/null && pwd -P )
 export FOUNTAIN_HOME=$CANGJIE_HOME/projects/fountain
@@ -68,10 +71,10 @@ cangjie_env(){
   export LD_LIBRARY_PATH=$CANGJIE_FOUNTAIN_LIBS:$LD_LIBRARY_PATH
   export PATH=$PATH:$CJPM_INSTALL/bin:$CANGJIE_HOME/third_party/llvm/lldb/bin
   source $CANGJIE_HOME/envsetup.sh
-  rm -f $bin_root/sdk/current/cangjie
-  rm -f $bin_root/sdk/current
+  hmrm -f $bin_root/sdk/current/cangjie
+  hmrm -f $bin_root/sdk/current
   ln -s $CANGJIE_HOME $bin_root/sdk/current
-  rm -f $bin_root/stdx/current
+  hmrm -f $bin_root/stdx/current
   ln -s $CANGJIE_STDX_PATH $bin_root/stdx/current
   # 如有自定义 cjpm 配置则复制进 SDK（find 检测，兼容 zsh 的 no-match glob 报错）
   if [ -n "$(find "$HOME/.cjpm/tools/config" -maxdepth 1 -name '*.json' 2>/dev/null)" ]; then
@@ -95,14 +98,14 @@ cjsetup(){
   cd $path
   wget $sdk_url
   tar zxf *.tar.gz
-  rm -f *.tar.gz
+  hmrm -f *.tar.gz
 
   path=$target/stdx/$stdx_version
   mkdir -p $path
   cd $path
   wget $stdx_url
   unzip -o -q *.zip
-  rm -f *.zip
+  hmrm -f *.zip
 
   cj env $sdk_version $stdx_version
 }
