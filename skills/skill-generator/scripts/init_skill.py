@@ -6,7 +6,7 @@ Usage:
     init_skill.py <skill-name> [--path <output-directory>]
 
 If --path is omitted, the skill is created under the user skills directory
-(~/.codebuddy/skills/ on CodeBuddy).
+(~/.workbuddy/skills/ on WorkBuddy).
 
 Examples:
     init_skill.py my-new-skill
@@ -303,7 +303,7 @@ def main():
 
     if not args:
         print("Usage: init_skill.py <skill-name> [--path <output-directory>]")
-        print("\nIf --path is omitted, the skill is created under ~/.codebuddy/skills/ (CodeBuddy user scope).")
+        print("\nIf --path is omitted, the skill is created under ~/.workbuddy/skills/ (WorkBuddy user scope).")
         print("\nSkill name requirements:")
         print("  - Hyphen-case identifier (e.g., 'data-analyzer')")
         print("  - Lowercase letters, digits, and hyphens only")
@@ -324,7 +324,7 @@ def main():
             sys.exit(1)
         path = args[path_index + 1]
     else:
-        path = str(Path.home() / '.codebuddy' / 'skills')
+        path = str(Path.home() / '.workbuddy' / 'skills')
 
     safe_print(f"🚀 Initializing skill: {skill_name}")
     safe_print(f"   Location: {path}")
