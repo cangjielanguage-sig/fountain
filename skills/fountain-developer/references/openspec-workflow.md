@@ -219,6 +219,7 @@ python <skill-root>/scripts/install_skill.py list      # 复验：opsx-* 那组�
 - 脚本会**自动跳过**被 openspec 托管的项目内 `.codebuddy/skills`（那是 `openspec update` 生成、会被整片重刷的目录，装进去会静默消失）。
 - 源里没有这批技能时（例如检出的分支还没合入它们），脚本会明确报「该切哪个分支」；按提示 `git -C <fountain> switch sts/1.3.x`，或 `--fountain-root` 指到含 `skills/opsx-*` 的源码。
 - 同一脚本的 `all` 会把三组联动技能（cangjie-coding / cangjie-doc-lookup / 12 个 opsx-*）一次装齐；单个技能名可单装。
+- 装 12 个 `opsx-*` 时会把**运行器 `opsx_fusion.py` 一并部署**到 `~/.workbuddy/scripts/`（ssh 探测 / 连接固化 / 生成命令都靠它，缺了技能第一步就失败；源在仓库 `skills/fountain-developer/scripts/`）。
 
 ### 9.2 12 个技能 ↔ 12 个工作流
 

@@ -30,6 +30,7 @@ python <skill-root>/scripts/install_skill.py all                 # 三组全装
 
 - 安装目标目录默认自动探测：优先**当前放着 `fountain-developer` 的那个技能目录**（`~/.workbuddy/skills`、`~/.codebuddy/skills`、`~/.claude/skills`、`~/.agents/skills` 等），也可 `--skills-root DIR` 指定；已装过的技能默认不覆盖，要升级加 `--force`。**被 openspec 托管的项目内 `.codebuddy/skills` 会被自动跳过**（它是 `openspec update` 生成、会被整片重刷的目录，装进去会静默消失）。
 - 装完**复验**：`install_skill.py list` 显示三组均已装（`opsx-*` 那组应为 `12/12`）。装好 `cangjie-doc-lookup` 后**必须**再跑它自己的执行前检查（`python <skills>/cangjie-doc-lookup/scripts/skill_paths.py check`），文档源路径对不上时按它 SKILL.md「执行前检查」的四选一处理。
+- 装 12 个 `opsx-*` 时会把它依赖的**运行器 `opsx_fusion.py` 一并部署**到 `~/.workbuddy/scripts/`（ssh 探测 / 连接信息固化 / 生成执行命令都靠它，缺了技能第一步就失败）。源在 fountain 仓库 `skills/fountain-developer/scripts/opsx_fusion.py`；`list` 里会显示它的部署状态，已存在不一致时加 `--force` 更新。
 - 不支持的技能机制的 Agent 不需要「安装」这一步：直接按上面的来源读该技能的 `SKILL.md` 即可（脚本也能用，只是把文件放到一个目录）。
 
 ## 3. 另外两类联动技能（test-driven-development / openspec 技能组）
