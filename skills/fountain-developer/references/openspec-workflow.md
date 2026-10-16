@@ -102,7 +102,7 @@ openspec instructions apply --change "<变更名>" --json   # 取 contextFiles �
 - 实现中需要新的 fountain 模块，按工作流 D 随时补根 `cjpm.toml` 依赖。
 - 批次末跑全量回归；`fboot build` 通过。
 
-### 第 4 步 — `opsx:verify`（需 extended，见第 6 节）
+### 第 4 步 — `opsx:verify`（不在 core 档，需先启用，见第 6 节）
 
 加载 `openspec-verify-change` 技能。三个维度：
 
@@ -144,22 +144,26 @@ openspec/
 
 是否把 `openspec/` 提交进 git 由项目决定（fountain 仓库当前在 `.gitignore` 里忽略它，即归档只作本地沉淀）。换项目时先确认落库策略再动手。
 
-## 6. 启用 `opsx:verify`（extended）
+## 6. 工作流档位（profile）：启用 core 之外的 6 个工作流
 
-`verify` **不在默认的 core profile 里**（core 只有 `propose` / `explore` / `apply` / `update` / `sync` / `archive`），所以初次 `openspec init` 不会生成 `openspec-verify-change`。
+OpenSpec 的工作流分两处来：**core 档固定 6 个**——`propose` / `explore` / `apply` / `update` / `sync` / `archive`，初次 `openspec init` 只生成这 6 个技能与命令；**其余 6 个**——`new` / `continue` / `ff` / `verify` / `bulk-archive` / `onboard`，必须在全局档位里显式启用才会生成。
+
+本技能用到 core 之外的两个：`verify`（第 4 步，代码与规范一致性校验）与 `bulk-archive`（多个已完成变更一次归档）。
 
 ```bash
 openspec config list                    # 先看当前 profile 与 workflows
-openspec config set profile custom
-openspec config set workflows '["propose","explore","apply","update","sync","archive","verify"]'
-openspec update --force                 # 重新生成项目内的技能/命令，此时才出现 openspec-verify-change
+openspec config set profile custom      # 必须：profile=core 时 workflows 数组被完全忽略
+openspec config set workflows '["propose","explore","new","continue","apply","update","ff","sync","archive","bulk-archive","verify","onboard"]'
+openspec update --force                 # 重新生成项目内的技能/命令，这时才出现 openspec-verify-change 等
 ```
 
-- **`openspec config set` 传数组在 Windows PowerShell 下会失败**（报 `Invalid input: expected array, received string`——PowerShell 把内层双引号剥掉，值解析不出数组）。两条出路：改用 `cmd /c` / Git Bash 跑上面这条命令；或直接编辑全局配置文件（Windows `%APPDATA%\openspec\config.json`，Unix/macOS `~/.config/openspec/config.json`，有 `$XDG_CONFIG_HOME` 时在它下面），把 `"workflows"` 数组补上 `"verify"`，再 `openspec update --force`。改完都用 `openspec config list` 复验。
-- **这是全局配置**，影响本机所有项目；改之前跟用户说一声。
-- 选 `custom` 后必须显式列出**全部**想用的工作流——漏掉的会被卸掉；`archive` / `bulk-archive` 会自动带上 `sync`。
-- 也可用交互式选择器 `openspec config profile`（需要 TTY），它会给出 core 之外的候选（`new` / `continue` / `ff` / `bulk-archive` / `verify` / `onboard`）。
-- 生效判据：`openspec update` 提示里的「N more workflows are available」数字变小，且项目技能目录里出现 `openspec-verify-change`。
+- **`profile` 只有 `core` / `custom` 两个取值**，没有第三档。要自定义就必须 `custom`；留在 `core` 时 `workflows` 数组会被直接忽略——配置写得进去、也不报错，就是不生效，这是最容易白忙一场的坑。
+- **`openspec config profile [preset]` 只有一个 preset：`core`。** 不带参数会进交互式选择器，它能勾选 core 之外的候选（`new` / `continue` / `ff` / `bulk-archive` / `verify` / `onboard`），但选择器**要求 TTY**——非交互环境（脚本、CI、编辑器托管的终端）里直接报 `Interactive mode required` 并退出。所以自动化场景只能走上面的 `config set`。
+- **选 `custom` 后必须显式列出全部想用的工作流**——漏掉的会被卸掉（项目里对应的技能与命令文件被清掉）；`archive` / `bulk-archive` 会自动带上 `sync`。
+- **`openspec config set` 传数组在 Windows PowerShell 下会失败**（报 `Invalid input: expected array, received string`——PowerShell 把内层双引号剥掉，值解析不出数组）。两条出路：改用 `cmd /c` / Git Bash 跑上面这条命令；或直接编辑全局配置文件（Windows `%APPDATA%\openspec\config.json`，Unix/macOS `~/.config/openspec/config.json`，有 `$XDG_CONFIG_HOME` 时在它下面），把 `"workflows"` 数组补齐，再 `openspec update --force`。改完都用 `openspec config list` 复验。
+- **这是全局配置**（`openspec config` 只支持 global scope，没有项目级档位），影响本机所有项目——其它项目下次 `openspec update` 也会多拿到这些工作流；改之前跟用户说一声。
+- **改完配置不会自动同步**，必须到项目里跑一次 `openspec update`。工作流集合发生变化时它会自动识别并重新生成，无需 `--force`；`--force` 只是保险（用于怀疑"判定已最新而跳过"时）。
+- **生效判据**：`openspec update` 输出里的「N more workflows are available」提示消失（或数字变小），且项目技能目录里出现对应的 `openspec-verify-change` / `openspec-bulk-archive-change` 等。
 - 装好 `verify` 后，本技能的工作流 F / J 走第 4 步的完整校验；没装就按第 4 步的**回退**执行，不静默跳过。
 
 ## 7. 与交付门禁的关系（顺序）
