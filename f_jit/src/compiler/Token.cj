@@ -217,14 +217,24 @@ internal struct Token {
     public let column: Int64
     /** 本 token 之前（跳过空白与注释时）**跨过了换行**。 */
     public let nlBefore: Bool
+    /**
+     * `RegexLit` 的 flags 位域（bit0=i bit1=m bit2=u）；其余 kind 恒 0。
+     *
+     * 加这个字段的原因：`text` 只放 pattern（`Lexer_test` 与设计均按此断言），而降低阶段
+     * 需要把 flags 写进正则常量（§11.5 kind 10）；`Lexer.lastRegexFlags()` 只在「刚取完
+     * 该 token」时有意义，`Parser` 预先批量取词后已无法回读。
+     */
+    public let flags: UInt8
 
-    public init(kind: TokenKind, text: String, pos: Int64, line: Int64, column: Int64, nlBefore: Bool) {
+    public init(kind: TokenKind, text: String, pos: Int64, line: Int64, column: Int64, nlBefore: Bool,
+        flags!: UInt8 = 0u8) {
         this.kind = kind
         this.text = text
         this.pos = pos
         this.line = line
         this.column = column
         this.nlBefore = nlBefore
+        this.flags = flags
     }
 }
 
@@ -277,4 +287,11 @@ internal class DiagKind {
     public static const TYPE_MISMATCH: String = "TypeMismatch"
     /** 语法错误（无法归入上述细类的解析期错误）。 */
     public static const SYNTAX_ERROR: String = "SyntaxError"
+    /**
+     * 代码生成期的**内部不变量**被破坏（未回填的标签、分支汇合栈深不等、发射了 RSVD/FORBID 区等）。
+     *
+     * 触发面**不可由用户源码直接构造**：发生即意味着 `Lowerer` / `BytecodeBuilder` 自身的缺陷
+     * （正常路径在下层已被 diag 拦住）；它与源语言无关，故独占一个 kind 以便快速定位。
+     */
+    public static const CODE_GEN: String = "CodeGen"
 }

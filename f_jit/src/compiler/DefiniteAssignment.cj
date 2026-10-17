@@ -330,6 +330,62 @@ internal class DefiniteAssignment {
                 }
             case AstExpr.Closure(inner, _) =>
                 this.analyzeClosureAt(inner, DefiniteAssignment.merge(state, outer))
+            case AstExpr.Binary(_, l, r, _) =>
+                this.walkExprWithOuter(l, state, outer)
+                this.walkExprWithOuter(r, state, outer)
+            case AstExpr.Unary(_, x, _) => this.walkExprWithOuter(x, state, outer)
+            case AstExpr.IfExpr(c, th, el, _) =>
+                this.walkExprWithOuter(c, state, outer)
+                this.walkExprWithOuter(th, state, outer)
+                this.walkExprWithOuter(el, state, outer)
+            case AstExpr.Call(tg, args, _) =>
+                this.walkExprWithOuter(tg, state, outer)
+                for (a in args) {
+                    this.walkExprWithOuter(a, state, outer)
+                }
+            case AstExpr.IIFE(c, args, _) =>
+                this.walkExprWithOuter(c, state, outer)
+                for (a in args) {
+                    this.walkExprWithOuter(a, state, outer)
+                }
+            case AstExpr.Interp(parts, _) =>
+                for (x in parts) {
+                    this.walkExprWithOuter(x, state, outer)
+                }
+            case AstExpr.StrAdd(l, r, _) =>
+                this.walkExprWithOuter(l, state, outer)
+                this.walkExprWithOuter(r, state, outer)
+            case AstExpr.RegexOp(_, re, s2, rp, _, _, _) =>
+                this.walkExprWithOuter(re, state, outer)
+                this.walkExprWithOuter(s2, state, outer)
+                match (rp) {
+                    case Some(x) => this.walkExprWithOuter(x, state, outer)
+                    case None => ()
+                }
+            case AstExpr.RangeLit(a, b, c, _, _) =>
+                this.walkExprWithOuter(a, state, outer)
+                this.walkExprWithOuter(b, state, outer)
+                match (c) {
+                    case Some(x) => this.walkExprWithOuter(x, state, outer)
+                    case None => ()
+                }
+            case AstExpr.ListLit(es, _, _) =>
+                for (x in es) {
+                    this.walkExprWithOuter(x, state, outer)
+                }
+            case AstExpr.MapLit(ps, _, _) =>
+                for (kv in ps) {
+                    this.walkExprWithOuter(kv[0], state, outer)
+                    this.walkExprWithOuter(kv[1], state, outer)
+                }
+            case AstExpr.TupleLit(es, _) =>
+                for (x in es) {
+                    this.walkExprWithOuter(x, state, outer)
+                }
+            case AstExpr.Index(tg, i, _) =>
+                this.walkExprWithOuter(tg, state, outer)
+                this.walkExprWithOuter(i, state, outer)
+            case AstExpr.MemberName(_, tg, _) => this.walkExprWithOuter(tg, state, outer)
             case _ => this.walkExpr(e, state)
         }
     }

@@ -175,9 +175,10 @@ public class ConstRegistry {
      */
     private func tokenOf(i: Int64): String {
         match (this.payloads[i]) {
-            case PI64(v) => 'i${v}'
-            case PF64(b) => 'f${b}'
-            case PStr(s) => 's${s}'
+            // 与运行期 `mapKeyOf`/`canonKeyOf` 的规范键**同前缀**（否则常量键与运行时键永不相等）
+            case PI64(v) => 'i:${v}'
+            case PF64(b) => 'f:${b}'
+            case PStr(s) => 's:${s}'
             case PList(xs) =>
                 var t = 'l['
                 for (x in xs) {

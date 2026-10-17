@@ -66,3 +66,19 @@ internal func lineTextAt(src: String, line: Int64): String {
 internal func diagFail(kind: String, src: String, pos: Int64, line: Int64, column: Int64): Nothing {
     diagFail(kind, src, pos, line, column, '')
 }
+
+/**
+ * 代码生成期的**内部不变量**被破坏（无源码位置可归属）。
+ *
+ * 与 `diagFail` 的区别：这类错误发生在「源码已通过词法 / 语法 / 名字 / 类型检查之后」，
+ * 责任面在 `Lowerer` / `BytecodeBuilder` 自身（未回填的标签、分支汇合栈深不等、
+ * 栈下越界等），因此不附源码行 —— 附了反而把内部缺陷伪装成用户源码的问题。
+ */
+internal func codeFail(hint: String): Nothing {
+    throw SourceCompileException(DiagKind.CODE_GEN, 0, 0, 0, '', hint)
+}
+
+/** M1 未实现特性（§7 校验 2/8/11）：`NotImpl` 独立出口，便于上层按 kind 识别。 */
+internal func notImplFail(hint: String): Nothing {
+    throw SourceCompileException(DiagKind.NOT_IMPL, 0, 0, 0, '', hint)
+}

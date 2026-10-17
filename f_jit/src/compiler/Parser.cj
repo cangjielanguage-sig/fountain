@@ -202,6 +202,14 @@ internal class Parser {
                 case AstStmt.ExprStmt(e, _) =>
                     n = n - 1
                     ret = Some(e)
+                // 尾位置的 `if`：§5「按使用位置判定」——尾返回 = 值用法 ⇒ 表达式形式
+                case AstStmt.If(c, t, Some(el), p) =>
+                    match ((Parser.tailValueOf(t), Parser.tailValueOf(el))) {
+                        case (Some(te), Some(ee)) =>
+                            n = n - 1
+                            ret = Some(AstExpr.IfExpr(c, te, ee, p))
+                        case _ => ()
+                    }
                 case _ => ()
             }
         }
@@ -210,6 +218,29 @@ internal class Parser {
             stmts.add(body[i])
         }
         (stmts.toArray(), ret)
+    }
+
+    /**
+     * 语句的**值形态**：块末表达式 / 带 else 的 if 递归折算为表达式。
+     *
+     * 仅用于尾位置（§5 值用法判定）；分支末不是表达式（如赋值）⇒ `None`（语句形式）。
+     */
+    private static func tailValueOf(s: AstStmt): ?AstExpr {
+        match (s) {
+            case AstStmt.ExprStmt(e, _) => Some(e)
+            case AstStmt.Block(ss, _) =>
+                if (ss.size > 0) {
+                    Parser.tailValueOf(ss[ss.size - 1])
+                } else {
+                    None
+                }
+            case AstStmt.If(c, t, Some(el), p) =>
+                match ((Parser.tailValueOf(t), Parser.tailValueOf(el))) {
+                    case (Some(te), Some(ee)) => Some(AstExpr.IfExpr(c, te, ee, p))
+                    case _ => None
+                }
+            case _ => None
+        }
     }
 
     /** 形参表：`name: Type`（可空）；不支持具名参数与默认值。 */

@@ -64,13 +64,33 @@ public class HandleTable {
     public static var capacityLimit: Int64 = 1048576
 
     private static let mtx = Mutex()
-    private static let objs: ArrayList<Any> = ArrayList<Any>()
-    private static let tags: ArrayList<UInt16> = ArrayList<UInt16>()
-    private static let gens: ArrayList<UInt16> = ArrayList<UInt16>()
-    private static let alive: ArrayList<Bool> = ArrayList<Bool>()
-    private static let constFlags: ArrayList<Bool> = ArrayList<Bool>()
-    private static let escapeFlags: ArrayList<Bool> = ArrayList<Bool>()
+    // **索引 0 是哨兵**（不可达）：ID 编码里 idx=0 与「空句柄」共用 0 值域，且全表遍历从 1 起
+    // （`for i in 1..objs.size`）——没有哨兵时**第一个 pin 的对象必然拿 idx=0 而永久不可读**。
+    private static let objs: ArrayList<Any> = HandleTable.seedObjs()
+    private static let tags: ArrayList<UInt16> = HandleTable.seedU16()
+    private static let gens: ArrayList<UInt16> = HandleTable.seedU16()
+    private static let alive: ArrayList<Bool> = HandleTable.seedBool()
+    private static let constFlags: ArrayList<Bool> = HandleTable.seedBool()
+    private static let escapeFlags: ArrayList<Bool> = HandleTable.seedBool()
     private static let freeSlots: ArrayList<Int64> = ArrayList<Int64>()
+
+    private static func seedObjs(): ArrayList<Any> {
+        let a = ArrayList<Any>()
+        a.add('')
+        a
+    }
+
+    private static func seedU16(): ArrayList<UInt16> {
+        let a = ArrayList<UInt16>()
+        a.add(0u16)
+        a
+    }
+
+    private static func seedBool(): ArrayList<Bool> {
+        let a = ArrayList<Bool>()
+        a.add(false)
+        a
+    }
 
     /** 当前窗口：`[windowBase, windowTop)`（M1 只增不减）。 */
     private static var windowBase: Int64 = 0

@@ -45,6 +45,13 @@ internal enum TypeRef {
      * `List<Int64>` 与 `List<String>` 在字节码的类型表里同为 10。
      */
     | Builtin(UInt16)
+
+    /** 类型注解 → `LocalType` 码（降低阶段读形参/声明的静态类型）。 */
+    public func code(): UInt16 {
+        match (this) {
+            case Builtin(c) => c
+        }
+    }
 }
 
 /** 形参：`name` + 类型注解 + 槽位（`locals[slot]`）+ 位置。 */
