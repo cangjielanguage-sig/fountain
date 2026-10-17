@@ -44,6 +44,16 @@ public class X86Lower_test {
         @Assert(X86Lower_test.hex(BackendX86_64.emitStoreL(1)), '488F85D8FFFFFF')
     }
 
+    @TestCase
+    public func controlOps(): Unit {
+        // SET_SITE 7 → mov dword [r15+8], 7
+        @Assert(X86Lower_test.hex(BackendX86_64.emitSetSite(7)), '41C74F0807000000')
+        // CHECK_ERR → cmp qword [r15],0; jne rel32（占位 0，回填由 P5.8）
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCheckErr()), '49833F000F8500000000')
+        // BAIL 3 → mov dword [r15],3; xor eax,eax; jmp rel32
+        @Assert(X86Lower_test.hex(BackendX86_64.emitBail(3)), '41C70703000000' + '31C0' + 'E900000000')
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {

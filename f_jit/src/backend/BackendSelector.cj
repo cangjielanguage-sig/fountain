@@ -209,6 +209,35 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
+    /** `SET_SITE s`：`mov dword [r15+8], s`。 */
+    internal static func emitSetSite(site: Int64): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (b in [0x41u8, 0xC7u8, 0x4Fu8, 0x08u8]) {
+            out.add(b)
+        }
+        BackendX86_64.w32(out, BackendX86_64.i32bits(site))
+        out.toArray()
+    }
+
+    /** `CHECK_ERR`：`cmp qword [r15],0; jne rel32`（rel 占位 0，P5.8 回填）。 */
+    internal static func emitCheckErr(): Array<UInt8> {
+        [0x49u8, 0x83u8, 0x3Fu8, 0x00u8, 0x0Fu8, 0x85u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]
+    }
+
+    /** `<bail:k>`：写槽 k → `xor eax,eax` → `jmp rel32`（rel 占位 0）。 */
+    internal static func emitBail(k: Int64): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (b in [0x41u8, 0xC7u8, 0x07u8]) {
+            out.add(b)
+        }
+        BackendX86_64.w32(out, BackendX86_64.i32bits(k))
+        for (b in [0x31u8, 0xC0u8, 0xE9u8]) {
+            out.add(b)
+        }
+        BackendX86_64.w32(out, 0u32)
+        out.toArray()
+    }
+
     // ---- P5.4 帧序列（§12.3、§4 prologue）----
 
     /** FRAME = align16(32 + 8×(nLocals + maxStack))。 */
