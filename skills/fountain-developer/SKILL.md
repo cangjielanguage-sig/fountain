@@ -58,6 +58,7 @@ fountain 是仓颉语言的服务器应用框架：应用**没有 main 函数**�
 - **规格产物落盘 `doc/spec/`（六步的一部分，propose 后 + archive 后各一次）**：把四件套（`proposal.md` / `spec.md`（规格 delta，多 capability 时为 `specs/<capability-path>/spec.md`）/ `design.md` / `tasks.md`）同步到 **`doc/spec/<变更名>/`**——**fountain 仓库放相应模块的 `doc/spec/<变更名>/`**（跨多个模块时，各模块放与其 capability 相关的 `spec.md`，`proposal.md` / `design.md` / `tasks.md` 放主模块），**其他项目放项目根的 `doc/spec/<变更名>/`**。propose 完成后新建副本（评审与入库可见），archive 完成后用 OpenSpec 最终版覆盖更新（以最终版为准）。`openspec/` 可能被 `.gitignore` 忽略——`doc/spec/` 才是随代码入库、可回溯的规格副本，不得省略。
 - **鸿蒙 PC 上的 OpenSpec 执行通道（工作流 F / G / H / I / J 全程）**：六步的每一步都经对应的 `opsx-*` 技能执行——技能先 `ssh-check` 探测融合开发引擎的 ssh 连接（首次访问问用户 IP / 用户名 / 密码并固化，IP 失效重问），再用 `opsx_fusion.py` 生成 ssh 命令、用 Bash 工具代跑到融合侧 CodeBuddy CLI 并回收结果；对应关系与安装见 `references/openspec-workflow.md` 第 9 节，本机没装先 `install_skill.py opsx`。**不要自己把 `codebuddy` 拉起来跑、不要让用户自己拼命令**；`openspec init` / `update` / `list` / `config` / `validate` 这类环境与查询命令仍由你在鸿蒙侧直接跑（两者分工见第 9.3 节）。
 - **等待 OpenSpec 任务期间按协议周期报告进度（工作流 F / G / H / I / J 全程）**：opsx 任务在后台运行期间，**每 5 分钟**输出一次进度报告——【项目/模块】+ 六阶段状态（① 环境与刷新 / ② propose / ③ 用户评审 / ④ apply / ⑤ verify / ⑥ archive + 落盘），**「进行中」的阶段必须给客观详情**（tasks 勾选 x/y、当前任务、近 10 分钟改动文件、后台输出尾部）；快照一律用 `python3 <skill-root>/scripts/opsx_progress.py --repo <仓库> --change <变更名> --stage <当前步骤> --log <后台输出文件>` 采集，不凭印象编。**连续 3 轮（约 15 分钟）无进展即暂停周期报告、转入停滞诊断**：先说明卡点与证据 → 给出解决方案 → 实际尝试（ssh 连通 → 远程进程 → CodeBuddy 日志 → 重扫输出；已死则重跑）→ **问题解决后先更新并报告进度（`--reset` + 新快照），再回到 OpenSpec 六步当前步骤继续——apply 内按 `test-driven-development` 继续逐任务 TDD 验证（测试绿才勾任务），build / 全量回归 / 冒烟门禁不变——随后恢复周期报告**；无解则带证据交还用户，不空转。完整协议（报告模板、诊断步骤、恢复动作、示例、红旗）见 `references/opsx-waiting.md`。
+- **遇到仓颉 SDK / STDX 的 BUG（工作流 F / G / H / I / J 全程）**：先按「查证」排除用法与环境问题（查文档 → 查既有用法 → 缩最小 → 排除环境），确认是 SDK/STDX 缺陷后再走协议——**先问用户最小复现用例的保存路径**，生成 ≤ 30 行的独立复现用例（单文件或最小 cjpm 项目，命名 `sdk-bug-<现象>-<yyyymmdd>`），**并立即显示其文件名 / 项目名与路径**；然后在不改变设计意图的前提下尝试绕过（换 API / 规避触发 / 适配层 shim 标记 `WORKAROUND(<repro 名>)` / 版本调整需用户同意）；确实绕不过就**报告 OpenSpec 流程进度（变更 / 步骤 / tasks）与 TDD 进度（当前任务、测试红绿）并暂停**，等用户决定，不跳步、不伪造进度。完整协议见 `references/sdk-bug-handling.md`。
 - **只动目标目录**：转换任务不修改原项目仓库；新项目建在用户指定位置。
 
 ## Red flags（命中就停下）
@@ -92,6 +93,9 @@ fountain 是仓颉语言的服务器应用框架：应用**没有 main 函数**�
 | 「卡住了，先问用户怎么办」 | 先按协议诊断并尝试（ssh 连通 → 远程进程 → 日志 → 重扫输出）；带证据和方案再找用户 |
 | 「停滞了，继续按 5 分钟报流水账」 | 停滞即暂停周期报告、转诊断块；每轮诊断必须有新动作或新信息，没有就交还用户 |
 | 「停滞问题解决了，直接继续下一轮报告」 | 先更新并报告进度（`--reset` + 新快照）→ 回到六步当前步骤 → apply 里继续 TDD 验证（测试绿才勾任务）；跳过任一步等于把未验证的修复带进交付 |
+| 「报错就是 SDK bug，直接写复现用例」 | 先查文档 / 既有用法 / 缩到最小 / 排除环境；用法错就改自己代码（`references/sdk-bug-handling.md`） |
+| 「绕过 SDK bug 不用留记录」 | 必须写 `WORKAROUND(<repro 名>)`；verify 与交付说明保留记录 |
+| 「绕不过，先跳过这段往下做」 | 报告 OpenSpec + TDD 进度并暂停；静默跳过 = 伪造进度 |
 
 命中任何一条 → 回到「必须遵守」与对应工作流重走一遍，别先动手。
 
