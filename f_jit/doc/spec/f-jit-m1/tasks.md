@@ -77,7 +77,7 @@
 - [x] S3.8 `NameResolver.resolve`：先写失败用例——`recursive` 优先、命中注册表 → `UserHelper(slot)`、未注册 → `UnregisteredFunction`（消息含名字/位置/已注册清单）、非调用未定义标识符 → `UndefinedIdentifier`；再写实现（名字表 + 冲突拒绝）；验收：T23 前置就绪
 - [x] S3.9 `DefiniteAssignment.analyze`：先写失败用例——先写后读通过、读未赋值拒绝、循环出口不视为已赋值（含回边不动点）、分支全赋值才算已赋值、`PUSH_NULL` 直存句柄型槽拒绝、捕获未赋值变量拒绝；再写实现（数据流不动点）；验收：T13 前置就绪（汇编期拒绝，零值填充不可被观察）
 - [x] S3.10 `Lowerer` 算术/比较/位/`%`：先写失败用例——逐指令产物断言（`IADD…IPOPCNT`、`CMP/EQ/LT`、逻辑、位、移位低 6 位、`EQ_H/NE_H`）、`%` 仅 `(Int64,Int64)` → `IMOD`、F64/Decimal/混合 → 编译错误、符号四象限与除零边界；再写实现（发射序列）；验收：产物与规格附 A 逐条一致
-- [ ] S3.11 `Lowerer` 字面值与混合提升：先写失败用例——小数字面值精确构造为 Decimal（不经 F64）、超 Int64 整数 → Decimal(scale=0)、指数形式 scale、混合四则/比较插入 `TO_F64/TO_DEC`、显式转换 6 方向（窄化仅显式）；再写实现（类型推导 + 插入）；验收：T12 全组用例绿
+- [x] S3.11 `Lowerer` 字面值与混合提升：先写失败用例——小数字面值精确构造为 Decimal（不经 F64）、超 Int64 整数 → Decimal(scale=0)、指数形式 scale、混合四则/比较插入 `TO_F64/TO_DEC`、显式转换 6 方向（窄化仅显式）；再写实现（类型推导 + 插入）；验收：T12 全组用例绿
 - [x] S3.12 `Lowerer` 插值与混合 String 加法：先写失败用例——`"a${x}b"` → `TO_STR(t)+STR_CAT` 左结合、`s+x`/`x+s`、非标签类型（Closure/容器/Unit）→ 编译错误、求值顺序左→右、原始串 `${` 为字面文本；再写实现；验收：T11/T12 相关用例绿
 - [x] S3.13 `Lowerer` 控制流与循环：先写失败用例——`if` 双用法（值用法类型逐位一致且必需 else；语句用法 POP + 栈无残留）、`while`（`LOOP_BACK` 安全点）、`for-in` 四类（Range 含负 step/空区间、List 长度快照 + `GET_IDX`、Map `MAP_ITER_BEGIN/STEP` + 出口 close + 23 语义、String 码点序）、`where`、`break/continue`；再写实现（规范降低模式）；验收：T44/T45 前置就绪
 - [x] S3.14 `Lowerer` 多重赋值：先写失败用例——`(a,b)=(b,a)` 隐藏局部 + 先读后写、`_` 忽略位仍求值后丢弃、RHS 左到右、仅一维元组字面量；再写实现；验收：T21 用例绿
@@ -88,7 +88,7 @@
 - [x] S3.19 `BytecodeBuilder`（`emit*`、`newLabel/place/fixupRel`、`setSite`、`callHelper/_NoCheck/_Void`、`callFunc/callClosure/ret/retVoid/bail`、`finish`）：先写失败用例——标签回填目标正确、`emitRel` 相对下一条指令、`CALL_HELPER` 自动尾随 `CHECK_ERR`（`_NC` 不尾随）、`setSite` 只在可能失败点前（产物断言）、`finish` 的 maxStack/flags（含变更型调用 → `flags.bit0`）；再写实现；验收：为 §7 汇编校验提供正确输入
 - [x] S3.20 `Assembler` 校验 1–11：先为每条校验写一个拒绝用例（缺 `CHECK_ERR`、发射 `0xA9–AA`/`0xC0–FF`、sink 前栈不平衡、`PUSH_KH` 越界/未 freeze、`LOADL/STOREL` 越界、跨回边优化掉错误检查、`CALL_FUNC` fid 不存在或 argc≠nargs、`CALL_HOST`/`HW_*` → NotImpl、类型表长度/值、明确赋值对接、变更型函数发射 deopt 模式）；再集中实现校验；验收：每检查点一条负向用例且互不掩盖
 - [x] S3.21 `SourceCompiler.compile` 端到端：先写失败用例——源码 → `.fbc` 字节 → `FbcReader.load` 回读，目录/类型/site/name 与编译时记录逐项一致；未注册函数/坏形参等 → 对应 `SourceCompileException`；再写实现（管线组装）；验收：T22 基础与 T50 编译期组用例绿
-- [ ] S3.22 `SourceCompiler` 兼容/回归金样：先写失败用例——对 M1 规格 §8.0 四例（阶乘/插值/容器变更/空构造 Map）固化产物指纹金样；再落金样文件；验收：重复编译的金样指纹与留档逐位相同，后续步骤防回归可比对
+- [x] S3.22 `SourceCompiler` 兼容/回归金样：先写失败用例——对 M1 规格 §8.0 四例（阶乘/插值/容器变更/空构造 Map）固化产物指纹金样；再落金样文件；验收：重复编译的金样指纹与留档逐位相同，后续步骤防回归可比对
 
 ## 6. P4 包 `runtime`（S4.1–S4.22）
 

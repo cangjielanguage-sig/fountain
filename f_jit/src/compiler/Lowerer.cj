@@ -988,6 +988,57 @@ internal class Lowerer {
         }
     }
 
+    /**
+     * 显式数值转换（§11.9）：6 个方向全部开放，窄化（F64/DEC → I64、DEC → F64）仅此路径可达。
+     *
+     * 失败语义取**报错版**（`TO_I64 mode=0` / `DEC_TO_I64 mode=0`）；deopt 版留给后端
+     * 在已判定函数无变更型调用时选择（M1 解释器路径不使用 deopt）。
+     */
+    private func lowerNumericCast(name: String, e: AstExpr, pos: SourcePos): UInt16 {
+        let ctx = this.requireCtx()
+        let from = this.lowerExpr(e)
+        match (name) {
+            case 'Int64' =>
+                if (from == LocalType.I64) {
+                    return LocalType.I64
+                }
+                if (from == LocalType.F64) {
+                    ctx.builder.emitU8(Op.TO_I64, 0u8)
+                    return LocalType.I64
+                }
+                if (from == LocalType.DECIMAL) {
+                    ctx.builder.emitU8(Op.DEC_TO_I64, 0u8)
+                    return LocalType.I64
+                }
+            case 'Float64' =>
+                if (from == LocalType.F64) {
+                    return LocalType.F64
+                }
+                if (from == LocalType.I64) {
+                    ctx.builder.emit(Op.TO_F64)
+                    return LocalType.F64
+                }
+                if (from == LocalType.DECIMAL) {
+                    ctx.builder.emit(Op.DEC_TO_F64)
+                    return LocalType.F64
+                }
+            case _ =>
+                if (from == LocalType.DECIMAL) {
+                    return LocalType.DECIMAL
+                }
+                if (from == LocalType.I64) {
+                    ctx.builder.emitU8(Op.TO_DEC, 0u8)
+                    return LocalType.DECIMAL
+                }
+                if (from == LocalType.F64) {
+                    ctx.builder.emitU8(Op.TO_DEC, 1u8)
+                    return LocalType.DECIMAL
+                }
+        }
+        diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+            '不支持的数值转换: ${LocalType.name(from)} → ${name}')
+    }
+
     private func lowerCall(target: AstExpr, args: Array<AstExpr>, pos: SourcePos): UInt16 {
         let ctx = this.requireCtx()
         match (target) {
@@ -1019,6 +1070,10 @@ internal class Lowerer {
                         ctx.builder.callClosure(UInt8(args.size))
                         LocalType.I64
                     case None =>
+                        // 显式数值转换（§11.9）：形式由前端定义为 `Int64(x)` / `Float64(x)` / `Decimal(x)`
+                        if (args.size == 1 && (name == 'Int64' || name == 'Float64' || name == 'Decimal')) {
+                            return this.lowerNumericCast(name, args[0], vpos)
+                        }
                         let r = this.resolver.resolve(name, vpos)
                         match (r) {
                             case ResolvedCall.Recursive =>

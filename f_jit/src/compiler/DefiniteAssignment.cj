@@ -282,7 +282,8 @@ internal class DefiniteAssignment {
     private func walkCallee(t: AstExpr, state: HashMap<String, Bool>, pos: SourcePos): Unit {
         match (t) {
             case AstExpr.Var(n, _) =>
-                if (n == 'recursive') {
+                // `recursive` 与数值转换内建（`Int64`/`Float64`/`Decimal`）是名字而非局部
+                if (n == 'recursive' || n == 'Int64' || n == 'Float64' || n == 'Decimal') {
                     return
                 }
             case _ => ()

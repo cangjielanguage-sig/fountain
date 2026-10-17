@@ -56,6 +56,19 @@ public class Lowerer_test {
         @Assert(Lowerer_test.runInt('{ => 1.1 > 1.0 }', []), 1)
     }
 
+    /** S3.11：显式数值转换 6 方向（窄化仅显式可达）。 */
+    @TestCase
+    public func explicitNumericCasts(): Unit {
+        @Assert(Lowerer_test.runInt('{ => Int64(1.9) }', []), 1)
+        @Assert(Lowerer_test.runInt('{ => -Int64(1.9) }', []), -1)
+        @Assert(Lowerer_test.runInt('{ => Decimal(2.9) == 2.9 }', []), 1)
+        @Assert(Lowerer_test.runInt('{ => Float64(1) == 1.0 }', []), 1)
+        @Assert(Lowerer_test.runInt('{ => Float64(2.5) == 2.5 }', []), 1)
+        @Assert(Lowerer_test.runInt('{ => Decimal(2.5) == 2.5 }', []), 1)
+        // 非数值类型不允许任何方向
+        @Assert(Lowerer_test.compileKind('{ => Int64(true) }'), DiagKind.TYPE_MISMATCH)
+    }
+
     /** S3.12：混合 String 加法与插值共用 `TO_STR + STR_CAT`。 */
     @TestCase
     public func mixedStringAddition(): Unit {
