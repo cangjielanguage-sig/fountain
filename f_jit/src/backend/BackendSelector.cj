@@ -240,6 +240,41 @@ internal class BackendX86_64 <: Backend {
         BackendX86_64.binOp([0x48u8, 0x0Fu8, 0xAFu8, 0x04u8, 0x24u8])
     }
 
+    internal static func emitBAnd(): Array<UInt8> {
+        BackendX86_64.binOp([0x48u8, 0x23u8, 0x04u8, 0x24u8])
+    }
+
+    internal static func emitBOr(): Array<UInt8> {
+        BackendX86_64.binOp([0x48u8, 0x0Bu8, 0x04u8, 0x24u8])
+    }
+
+    internal static func emitBXor(): Array<UInt8> {
+        BackendX86_64.binOp([0x48u8, 0x33u8, 0x04u8, 0x24u8])
+    }
+
+    private static func cmpOp(setcc: Array<UInt8>): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (x in [0x48u8, 0x8Bu8, 0x44u8, 0x24u8, 0x08u8, 0x48u8, 0x3Bu8, 0x04u8, 0x24u8]) {
+            out.add(x)
+        }
+        for (x in setcc) {
+            out.add(x)
+        }
+        for (x in [0x0Fu8, 0xB6u8, 0xC0u8, 0x48u8, 0x89u8, 0x44u8, 0x24u8, 0x08u8,
+            0x48u8, 0x83u8, 0xC4u8, 0x08u8]) {
+            out.add(x)
+        }
+        out.toArray()
+    }
+
+    internal static func emitCmpEq(): Array<UInt8> {
+        BackendX86_64.cmpOp([0x0Fu8, 0x94u8, 0xC0u8])
+    }
+
+    internal static func emitCmpLt(): Array<UInt8> {
+        BackendX86_64.cmpOp([0x0Fu8, 0x9Cu8, 0xC0u8])
+    }
+
     /** `JMP rel32`（占位 0，P5.8 回填）。 */
     internal static func emitJmp(): Array<UInt8> {
         [0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]

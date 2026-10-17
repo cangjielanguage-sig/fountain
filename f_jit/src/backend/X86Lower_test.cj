@@ -69,6 +69,19 @@ public class X86Lower_test {
         @Assert(X86Lower_test.hex(BackendX86_64.emitJnz()), '0F8500000000')
     }
 
+    @TestCase
+    public func bitAndCompareOps(): Unit {
+        let tail = '4889442408' + '4883C408'
+        @Assert(X86Lower_test.hex(BackendX86_64.emitBAnd()), '488B442408' + '48230424' + tail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitBOr()), '488B442408' + '480B0424' + tail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitBXor()), '488B442408' + '48330424' + tail)
+        // EQ：cmp rax,[rsp]; sete al; movzx eax,al
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpEq()),
+            '488B442408' + '483B0424' + '0F94C0' + '0FB6C0' + tail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpLt()),
+            '488B442408' + '483B0424' + '0F9CC0' + '0FB6C0' + tail)
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {
