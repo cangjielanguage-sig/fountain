@@ -1,6 +1,6 @@
 # 交付全流程（初始化 → 配置 → TDD → 提交 → 建 tag）
 
-工作流 F / G / H / I / K 共用；工作流 J（在 fountain 仓库内开发）复用其中第 3–7 节（TDD / 回归 / 冒烟 / 提交 / 建 tag）。原则：能用工具就先用工具（`fboot` 建骨架、`fountain_lookup.py` 查 API、`install_fboot.sh` 查版本）。
+工作流 F / G / H / I 共用；工作流 J（在 fountain 仓库内开发）复用其中第 3–7 节（TDD / 回归 / 冒烟 / 提交 / 建 tag），工作流 K 只走第 4–7 节（构建 / 回归 / 冒烟 / 提交 / 建 tag）。原则：能用工具就先用工具（`fboot` 建骨架、`fountain_lookup.py` 查 API、`install_fboot.sh` 查版本）。
 查 API 时按**在用版本**：`fountain_lookup.py` 默认取当前项目 cjpm.toml 的 fountain 依赖版本并先把文档副本切到该版本
 （输出头部标注版本；换版本 `--version X.Y.Z` / `switch X.Y.Z`，见 SKILL.md「定位 fountain 仓库与查询版本」）。
 
@@ -31,7 +31,7 @@
 **工作流 F / G / H / I / J 开工先加载 `test-driven-development` 技能**（**REQUIRED SUB-SKILL:**，加载失败时的处理见 `references/skill-infra.md` 第 3 节）——
 Red-Green-Refactor 的循环、反合理化清单与「没看着测试失败过就不算测试」的判据以它为准，本节只补仓颉 / fountain 的落法。
 
-F / G / H / I / J / K 的功能开发与适配一律按 TDD 循环推进，**先写测试再写实现**，不许先实现后补测试：
+F / G / H / I / J 的功能开发与适配一律按 TDD 循环推进，**先写测试再写实现**，不许先实现后补测试；工作流 K 只改配置、无功能代码，不走 TDD（仍要构建 + 回归 + 冒烟）：
 
 1. **Red**：先写该功能点的仓颉单元测试（`*_test.cj`，与实现同目录结构），跑一次确认它**失败**；
    失败原因必须是「功能未实现 / 断言不满足」，不是编译错误或用例本身写错——这一步是测试有效性的证明。
