@@ -2,9 +2,12 @@
 # 并在home目录的.bashrc末尾添加source /path/of/cangjie.sh
 # Please copy this file to the location you need,
 # and add 'source /path/of/cangjie.sh' to the end of ~/.bashrc
+# 本脚本用于融合开发环境（linux-aarch64，经 /mnt/linux_share 访问鸿蒙用户目录）；
+# 鸿蒙 PC 本机用同目录下的 cangjie-hmos.sh。
 
-export CANGJIE_HOME=$( cd -- "$( dirname -- "${BASH_SOURCE}" )" &> /dev/null && pwd -P )
-export FOUNTAIN_HOME=$CANGJIE_HOME/projects/fountain
+export FOUNTAIN_HOME=$( cd -- "$( dirname -- "${BASH_SOURCE}" )" &> /dev/null && pwd -P )
+# 仓颉根目录：鸿蒙侧 ~/cangjie（cangjie-linux-bin 布局，由 installing-cangjie-sdk 技能双平台安装）
+export CANGJIE_ROOT=${CANGJIE_ROOT:-/mnt/linux_share/storage/Users/currentUser/cangjie}
 
 cangjie_version(){
   echo '### 系统环境'
@@ -53,20 +56,22 @@ cd ../fdemo
   echo
 }
 cangjie_env(){
-  export CJPM_CONFIG=/mnt/d/docs/work/cangjie/repository
-  export CJPM_INSTALL=/mnt/d/docs/work/cangjie/installed
-  export CANGJIE_STDX_PATH=/mnt/d/docs/work/cangjie/cangjie-linux-bin/stdx/$2/linux_x86_64_cjnative
+  export CJPM_CONFIG=$CANGJIE_ROOT/repository
+  export CJPM_INSTALL=$CANGJIE_ROOT/installed
+  export CANGJIE_STDX_PATH=$CANGJIE_ROOT/cangjie-linux-bin/stdx/$2/linux_aarch64_cjnative
   export CANGJIE_STDX_DYNAMIC_PATH=$CANGJIE_STDX_PATH/dynamic/stdx
   export CANGJIE_STDX_STATIC_PATH=$CANGJIE_STDX_PATH/static/stdx
   export CANGJIE_FOUNTAIN_LIBS=$CJPM_INSTALL/libs/fboot
-  export CANGJIE_HOME=/mnt/d/docs/work/cangjie/cangjie-linux-bin/sdk/$1/cangjie
+  export CANGJIE_HOME=$CANGJIE_ROOT/cangjie-linux-bin/sdk/$1/cangjie
   export LD_LIBRARY_PATH=/usr/local/openssl-3.3.2/lib:$CANGJIE_FOUNTAIN_LIBS:$LD_LIBRARY_PATH
   export PATH=$PATH:$CJPM_INSTALL/bin:$CANGJIE_HOME/third_party/llvm/lldb/bin
   source $CANGJIE_HOME/envsetup.sh
-  rm -f /mnt/d/docs/work/cangjie/cangjie-linux-bin/sdk/current/cangjie
-  rm -f /mnt/d/docs/work/cangjie/cangjie-linux-bin/sdk/current
-  ln -s $CANGJIE_HOME /mnt/d/docs/work/cangjie/cangjie-linux-bin/sdk/current
-  cp ~/.cjpm/tools/config/*.json $CANGJIE_HOME/tools/config/
+  rm -f $CANGJIE_ROOT/cangjie-linux-bin/sdk/current/cangjie
+  rm -f $CANGJIE_ROOT/cangjie-linux-bin/sdk/current
+  ln -s $CANGJIE_HOME $CANGJIE_ROOT/cangjie-linux-bin/sdk/current
+  if [ -n "$(find "$HOME/.cjpm/tools/config" -maxdepth 1 -name '*.json' 2>/dev/null)" ]; then
+    cp "$HOME"/.cjpm/tools/config/*.json $CANGJIE_HOME/tools/config/
+  fi
   cjc -v
 }
 
@@ -77,7 +82,7 @@ cjsetup(){
   arch=$1
   version=$2
   url=map["sdk_$arch-$version"]
-  target=${CANGJIE_HOME:-"~/.cjpm/home"}
+  target=${CANGJIE_ROOT:-"~/.cjpm/home"}
   path=$target/sdk/$version
   mkdir -p $path
   cd $path
@@ -87,7 +92,7 @@ cjsetup(){
   version=$3
   path=$target/stdx/$version
   mkdir -p $path
-  cd path
+  cd $path
   url=map["stdx_$arch-$version"]
   wget $url
   unzip *.zip
@@ -126,7 +131,7 @@ cj(){
     cjsetup $3 $4
     ;;
   study)
-    cd /mnt/d/docs/work/cangjie/study
+    cd $CANGJIE_ROOT/study
     ;;
   fountain)
     cd $FOUNTAIN_HOME
@@ -143,7 +148,7 @@ cj(){
     cd $FOUNTAIN_HOME/fdemo
     ;;
   cj)
-    cd /mnt/d/docs/work/cangjie/$2
+    cd $CANGJIE_ROOT/$2
     ;;
   '-c')
     f=$2
@@ -153,4 +158,4 @@ cj(){
   esac
 }
 
-cj env 1.1.0 1.1.0
+cj env 1.3.0 1.3.0

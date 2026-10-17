@@ -1,310 +1,349 @@
 ---
 name: skill-generator
-description: Use when creating a new skill, editing or merging existing skills, or validating a skill before deployment — including requests to turn a workflow into a reusable skill, scaffold a skill directory, write or improve SKILL.md, make a skill trigger more reliably, test a skill with subagents, or package and install a skill.
+description: Use when 用户要创建新技能、修改或合并已有技能、在分发前校验技能，或要求对某个技能做收口检查 —— 包括把一套工作流沉淀成可复用技能、生成技能目录骨架、编写或改进 SKILL.md、让技能更可靠地被触发、用子智能体测试技能、检查版本号一致性、语法、安全、跨平台兼容、冒烟测试、打包 zip、TRACE 评测、发布前自检。
 ---
 
-# Skill Generator
+# skill-generator
 
-Merges two skills: `skill-creator` (scaffolding → packaging pipeline) and `writing-skills` (TDD discipline for authoring). Use the pipeline for the mechanics, the TDD discipline for correctness.
+本技能由三部分合并而成：Anthropic 的 `skill-creator`（脚手架到打包的管线）、superpowers 的 `writing-skills`（写作纪律），以及「技能检查大师」的收口检查引擎。用管线解决机制问题，用纪律解决正确性问题，用收口解决「发出去会不会崩」的问题。
 
-## Overview
+## 概述
 
-**Creating a skill IS Test-Driven Development applied to process documentation.**
+**创建技能就是给流程文档做测试驱动开发。**
 
-A skill is a modular, self-contained package that extends an agent's capabilities: specialized workflows, tool integrations, domain expertise, bundled resources — "onboarding guides" for a domain. A skill is a reference guide for a proven technique, pattern, or tool; it is NOT a narrative about how you solved a problem once.
+技能是一个自包含的模块化包，用来扩展智能体的能力：专门的工作流、工具集成、领域知识、随包资源——相当于某个领域的「上手引导」。技能是针对已验证技法、模式或工具的参考指南，**不是**「我上次怎么解决某个问题」的流水账。
 
-**Core principle:** If you didn't watch an agent fail without the skill, you don't know if the skill teaches the right thing.
+**核心原则：没有亲眼见过智能体在缺这个技能时失败，就不知道这个技能该教什么。**
 
-**Iron law: NO SKILL WITHOUT A FAILING TEST FIRST.** This applies to NEW skills AND EDITS to existing skills. Write the skill before testing it? Delete it, start over. No exceptions — not for "simple additions", not for "documentation updates", not for "just adding a section". Don't keep untested content as "reference". Delete means delete.
+**铁律：没有先跑出失败测试，就不算有技能。** 这条同时约束新建技能和修改已有技能。先写了技能再补测试？删掉重来。没有例外——不因为「只是加一节」「只是改文档」「只是补个说明」而例外。别把没测过的内容留作「参考资料」。删就是删。
 
-**REQUIRED BACKGROUND:** You must understand RED-GREEN-REFACTOR — load the `test-driven-development` skill when available.
+**前置背景：** 需要理解 RED-GREEN-REFACTOR。环境里能加载 `test-driven-development` 技能时先加载它。
 
-### When to create a skill
+### 什么时候该建技能
 
-Create when:
-- The technique wasn't intuitively obvious
-- You'd reference this again across projects
-- The pattern applies broadly (not project-specific)
-- Others would benefit
+该建：
+- 这个技法不直观，事后才想明白
+- 跨项目还会反复用到
+- 模式足够通用，不是某个项目的私有约定
+- 别人也用得上
 
-Don't create for:
-- One-off solutions
-- Standard practices well-documented elsewhere
-- Project-specific conventions (put those in the project instructions file)
-- Mechanical constraints — if it's enforceable with regex/validation, automate it; save documentation for judgment calls
+不该建：
+- 一次性的解法
+- 到处都有权威文档的标准做法
+- 项目私有约定（写进项目的说明文件，而不是技能）
+- 机械约束——能用正则或校验脚本强制的，就自动化掉；文档留给需要判断力的地方
 
-### Skill types
+### 技能类型
 
-| Type | What it is | Examples | Test approach |
-|------|-----------|----------|---------------|
-| Technique | Concrete method with steps | condition-based-waiting, root-cause-tracing | Application scenarios |
-| Pattern | Way of thinking about problems | flatten-with-flags, test-invariants | Recognition + counter-examples |
-| Reference | API docs, syntax guides, tool docs | office docs, library guides | Retrieval + gap testing |
-| Discipline-enforcing | Rules agents know but skip under pressure | TDD, verification-before-completion | Pressure scenarios |
+| 类型 | 是什么 | 例子 | 怎么测 |
+| --- | --- | --- | --- |
+| 技法 | 有步骤的具体方法 | 基于条件等待、根因追踪 | 应用场景 |
+| 模式 | 看待问题的方式 | 用标志位打平、测不变量 | 识别 + 反例 |
+| 参考 | API 文档、语法指南、工具说明 | office 文档、库指南 | 检索 + 缺口测试 |
+| 纪律 | 智能体知道却会在压力下跳过的规则 | TDD、完成前验证 | 压力场景 |
 
-## Skill anatomy
+## 技能结构
 
-Every skill is a directory: a required `SKILL.md` plus optional bundled resources.
+每个技能是一个目录：必需的 `SKILL.md`，加上可选的随包资源。
 
 ```
 skill-name/
-├── SKILL.md (required)
-│   ├── YAML frontmatter metadata (required)
-│   │   ├── name: (required)
-│   │   └── description: (required)
-│   └── Markdown instructions (required)
-└── Bundled Resources (optional)
-    ├── scripts/          - Executable code (Python/Bash/etc.)
-    ├── references/       - Documentation loaded into context as needed
-    └── assets/           - Files used in output (templates, icons, fonts, etc.)
+├── SKILL.md（必需）
+│   ├── YAML frontmatter 元数据（必需）
+│   │   ├── name:（必需）
+│   │   └── description:（必需）
+│   └── Markdown 正文（必需）
+└── 随包资源（可选）
+    ├── scripts/          - 可执行代码（Python / Bash 等）
+    ├── references/       - 按需载入上下文的文档
+    └── assets/           - 用于产出物的文件（模板、图标、字体等）
 ```
 
-- **SKILL.md**: the metadata determines when the skill is used; the body holds the process. Write **imperative/infinitive form** (verb-first), not second person. Answer three questions: What is the purpose of the skill? When should it be used? How should the agent use each bundled resource?
-- **scripts/**: for repeated code or deterministic reliability. Token efficient — can be executed without loading into context (the agent may still read them to patch). Make execution intent explicit: "Run `analyze_form.py` to extract fields" (execute) vs "See `analyze_form.py` for the algorithm" (read as reference).
-- **references/**: schemas, API docs, company policies, detailed workflow guides. Keeps SKILL.md lean; loaded only when needed. If a file is large, add a table of contents and include grep search patterns in SKILL.md. Keep references **one level deep** from SKILL.md — nested references cause partial reads.
-- **assets/**: files not loaded into context but used in output — templates (.pptx/.docx), logo.png, boilerplate directories, fonts, sample documents.
-- Avoid duplication: information lives in either SKILL.md or a reference file, not both. Keep only essential procedural instructions in SKILL.md; move detail out.
-- Delete unneeded example files and directories — most skills won't need all of them.
+- **SKILL.md**：元数据决定技能何时被使用，正文承载流程。正文用祈使句写（动词开头），不要用第二人称。要回答三个问题：这个技能的目的、什么时候用它、每个随包资源该怎么用。
+- **scripts/**：给会重复执行、或要求确定性可靠的代码用。省 token——可以不载入上下文直接执行（智能体仍可能读它来打补丁）。要明确写清意图：写「运行 `analyze_form.py` 提取字段」是执行，写「算法见 `analyze_form.py`」是当参考读。
+- **references/**：schema、API 文档、公司政策、详细工作流指南。用来给 SKILL.md 减负，只在需要时载入。文件大了就加目录，并在 SKILL.md 里给出检索关键词。引用只到 SKILL.md 下一层——嵌套引用会导致只读一半。
+- **assets/**：不载入上下文、直接进产出物的文件——模板（.pptx / .docx）、logo、样板目录、字体、样例文档。
+- 避免重复：同一条信息要么在 SKILL.md，要么在某个参考文件里，不要两边都有。SKILL.md 只留关键流程，细节外移。
+- 删掉用不上的示例文件和目录——大多数技能并不需要三样都占。
 
-### Progressive disclosure
+### 三级渐进披露
 
-Skills use a three-level loading system to manage context:
+技能的加载是三层，用来管理上下文：
 
-1. **Metadata** (name + description) — always in context (~100 words)
-2. **SKILL.md body** — when the skill triggers (<5k words / <500 lines)
-3. **Bundled resources** — as needed by the agent (effectively unlimited; scripts run without loading)
+1. **元数据**（name + description）——始终在上下文里（约 100 词）
+2. **SKILL.md 正文**——技能被触发时载入（小于 5k 词 / 500 行）
+3. **随包资源**——由智能体按需读取（实际上无上限；脚本执行不必载入）
 
-## Lifecycle
+## 生命周期
 
-Follow these steps in order; skip one only when there is a clear reason it doesn't apply.
+按顺序走这九步，跳过某一步要能说出明确理由。
 
-### 1. Understand with concrete examples
+### 1. 用具体例子把需求问清楚
 
-Clearly understand how the skill will be used, from real user examples or examples validated with the user. Ask questions like: "What functionality should this skill support?", "Give examples of how it would be used", "What would a user say that should trigger this skill?". Ask the most important questions first; don't overwhelm in a single message.
+从真实用户例子出发，或与用户一起确认出一组例子。要问：这个技能应该支持什么？举几个它会怎么被使用的例子？用户会说什么话才该触发它？先问最重要的几个问题，不要一条消息里把人问懵。
 
-### 2. RED — baseline before writing
+### 2. RED —— 写之前先跑基线
 
-Run the scenarios WITHOUT the skill first. Document exact behavior:
-- What choices did the agent make?
-- What rationalizations did it use (verbatim)?
-- Which pressures triggered violations?
+先**不带**技能跑这些场景，把行为如实记下来：
 
-This is "watch the test fail". For discipline skills use pressure scenarios (3+ combined pressures). For technique/pattern/reference skills use representative tasks and note missing context, wrong application, or knowledge gaps (see evaluation-driven development in `references/anthropic-best-practices.md`).
+- 智能体做了什么选择？
+- 它用了哪些借口（原话照抄）？
+- 哪些压力导致它违规？
 
-**Micro-test wording before full scenarios** (behavior-shaping guidance only): one fresh-context sample per call; always include a no-guidance control; 5+ reps per variant; read every flagged match manually; treat variance as a metric (reps converging on the same shape = wording binds). If the control doesn't exhibit the failure, there is nothing to fix — stop, don't author the guidance.
+这一步就是「看测试失败」。纪律型技能用压力场景（叠加 3 种以上压力）。技法 / 模式 / 参考型技能用代表性任务，记录缺失的上下文、错误的应用、知识盲区（详见 `references/anthropic-best-practices.md` 中的评测驱动开发）。
 
-### 3. Plan reusable contents & pick the guidance form
+**先做措辞微测，再上完整场景**（仅针对塑造行为的指导语）：每次调用只用一个全新上下文的样本；永远带一组无指导语的对照；每种变体至少 5 次重复；被标记的命中逐条人工复核；把方差本身当指标——多次重复收敛到同一种形状，说明措辞真的约束住了。如果对照组根本不出问题，那就没有要修的东西，**停下，别写这条指导语**。
 
-For each example, analyze how you'd execute it from scratch and what would be useful when done repeatedly: a script (`scripts/rotate_pdf.py`), a template (`assets/hello-world/`), a schema reference (`references/schema.md`). Then classify the baseline failure and choose the matching form (see "Match the Form to the Failure" below) — the wrong form measurably backfires.
+### 3. 规划复用件，并选对指导形式
 
-### 4. Initialize
+对每个例子，想清楚从零做一遍会怎么做、反复做时什么东西有用：一个脚本（`scripts/rotate_pdf.py`）、一个模板（`assets/hello-world/`）、一份 schema 参考（`references/schema.md`）。然后判断基线失败的类别，选对应的形式（见「让形式匹配失败类型」）——形式选错会实打实地帮倒忙。
+
+### 4. 初始化
 
 ```bash
-python scripts/init_skill.py <skill-name> [--path <output-directory>]
+python3 scripts/init_skill.py <skill-name> [--path <输出目录>]
 ```
 
-The script creates the skill directory, a SKILL.md template, and example `scripts/`, `references/`, `assets/` files. Without `--path` it creates under the user skills directory (`~/.codebuddy/skills/` on CodeBuddy). Skill name rules: lowercase letters, digits, hyphens only; max 40 characters; must match the directory name exactly. Then customize the SKILL.md and delete unneeded examples.
+脚本会建好技能目录、SKILL.md 模板，以及示例的 `scripts/`、`references/`、`assets/`。不给 `--path` 时建在用户技能目录（WorkBuddy 上是 `~/.workbuddy/skills/`）。技能命名规则：只含小写字母、数字、连字符；不超过 40 字符；必须与目录名完全一致。随后改写 SKILL.md 并删掉用不上的示例。
 
-Skills live in two locations depending on scope:
+技能按作用域分两处：
 
-| Type | Path | Scope |
-|------|------|-------|
-| User skill | `~/.codebuddy/skills/skill-name/` | Available across all your projects |
-| Project skill | `.codebuddy/skills/skill-name/` | Shared with everyone using the repository |
+| 类型 | 路径 | 作用范围 |
+| --- | --- | --- |
+| 用户级技能 | `~/.workbuddy/skills/skill-name/` | 本机所有项目可用 |
+| 项目级技能 | `.workbuddy/skills/skill-name/` | 随仓库共享给所有使用者 |
 
-When scope is unclear, prefer a **user skill**; use a **project skill** only when there is a clear need to share (team conventions, project schemas, shared workflows). A repo `skills/` directory may hold the source of truth for a skill that is installed into the user library.
+作用域不清楚时优先**用户级技能**；只有明确需要共享（团队约定、项目 schema、共用工作流）时才用项目级。仓库里的 `skills/` 目录可以充当某个技能的源头，再由它安装进用户技能库——fountain 仓库就是这个用法。
 
-### 5. Write SKILL.md (GREEN)
+### 5. 写 SKILL.md（GREEN）
 
-Write the **minimal** skill that addresses the specific baseline failures — no content for hypothetical cases. Start with the reusable resources (`scripts/`, `references/`, `assets/`), then complete SKILL.md. Follow the SDO rules and structure below. For common structures (workflow-based / task-based / reference-guidelines / capabilities-based), see `references/structure-patterns.md`.
+只写能解决刚才那些具体基线失败的最小内容，不为假想情况写。先落随包资源（`scripts/`、`references/`、`assets/`），再写完 SKILL.md。遵守下面的 SDO 规则与结构约定。四种常见结构（工作流式 / 任务式 / 参考准则式 / 能力式）见 `references/structure-patterns.md`。
 
-Suggested body skeleton: `## Overview` (what + core principle) → `## When to Use` (symptoms, and when not) → `## Core Pattern` (before/after) → `## Quick Reference` (table for scanning) → `## Implementation` (inline code or link) → `## Common Mistakes` → optional `## Real-World Impact`.
+正文骨架建议：`## 概述`（是什么 + 核心原则）→ `## 何时使用`（症状，以及什么时候不用）→ `## 核心模式`（改前 / 改后）→ `## 速查`（便于扫读的表格）→ `## 实现`（内联代码或链接）→ `## 常见错误` → 可选的 `## 实际影响`。
 
-### 6. Test (VERIFY GREEN → REFACTOR) — mandatory
+### 6. 测试（验证 GREEN → REFACTOR）—— 强制
 
-Run the same scenarios WITH the skill. Agent should now comply / apply the technique / find the reference. Then close loopholes: capture NEW rationalizations verbatim, add explicit counters, extend the rationalization table and red flags list, re-test until compliant. Full methodology (scenario formats, pressure types, meta-testing, plugging holes): `references/testing-skills-with-subagents.md`.
+**带**技能跑同一批场景。智能体这时应该遵守规则 / 用上技法 / 找到参考。然后堵漏洞：把新出现的借口原话记下来，逐条加上明确的反制，扩充借口表和红旗清单，反复重测直到稳定合规。完整方法论（场景格式、压力类型、元测试、堵洞）：`references/testing-skills-with-subagents.md`。
 
-### 7. Validate & package
+### 7. 校验
 
 ```bash
-python scripts/quick_validate.py <skill-directory>
-python scripts/package_skill.py <skill-directory> [output-directory]
+python3 scripts/quick_validate.py <技能目录>
+python3 scripts/package_skill.py <技能目录> [输出目录]
 ```
 
-`package_skill.py` validates first (frontmatter format, required fields, naming conventions, structure, description quality, file references) and only then creates `<skill-name>.zip` with the correct directory structure. If validation fails, fix the errors and re-run.
+`quick_validate.py` 检查 SKILL.md 是否存在、frontmatter 是否合法、`name` 是否连字符式、`description` 是否含尖括号。
 
-### 8. Install & iterate
+`package_skill.py` 会先校验再打包：frontmatter 格式、必需字段、命名约定、结构、描述质量、文件引用；只有校验通过才生成 `<skill-name>.zip`，且 zip 内保留技能目录名一层。校验失败就先修，别硬打。
 
-Install to the user or project scope from the table above; for repo-managed skills, commit the skill to git and push (consider contributing upstream if broadly useful). Then iterate on real usage:
-1. Use the skill on real tasks
-2. Notice struggles or inefficiencies (missed links, ignored files, triggers that don't fire, unexpected reading order)
-3. Identify how SKILL.md or bundled resources should be updated
-4. Implement changes and test again
+### 8. 收口检查
 
-**STOP: never batch-create multiple skills without testing each one.** Move to the next skill only after the current one is verified. Deploying untested skills = deploying untested code.
+上一步只管「结构对不对」。真正分发前还要过一遍收口：版本号一致性、语法编译、安全检查、跨平台兼容、依赖最小化、冒烟测试、全新打包、同事审查模拟、TRACE 五维评测。
 
-## Skill Discovery Optimization (SDO)
+```bash
+python3 scripts/release_engine.py --skill-path <技能目录>
+```
 
-Future agents must be able to FIND the skill. Agents read the description to decide "should I read this right now?".
+只跑需要的几步：
 
-### Description rules
+```bash
+python3 scripts/release_engine.py --skill-path <技能目录> --step version,syntax,security
+```
 
-The `description` field drives discovery:
+收口是本次合并进来的新阶段，也是最容易被跳过的一步——本地跑得通的技能，同事导入后崩掉，多半就崩在这一步。五阶段十二步的完整流程、每个检查模块的判据、配置项含义、常见失败与修法见 `references/release-check.md`。安装与自检方式见 `INSTALL.md`。
 
-- **Third person** (it is injected into the system prompt): "Processes Excel files..." not "I can help you...".
-- Start with **"Use when..."** to focus on triggering conditions: specific symptoms, situations, error messages, file types, contexts.
-- Cover **keywords** an agent would search for — error messages ("Hook timed out", "ENOTEMPTY"), symptoms ("flaky", "hanging", "zombie", "pollution"), synonyms ("timeout/hang/freeze", "cleanup/teardown"), actual tools/commands, file types. State the *problem* (race conditions, inconsistent behavior), not language-specific symptoms, unless the skill itself is technology-specific.
-- **NEVER summarize the skill's process or workflow.** A workflow-summarizing description becomes a shortcut: agents follow the summary and skip the body. Observed: a description saying "code review between tasks" caused an agent to do ONE review, though the skill's flowchart clearly showed TWO (spec compliance, then code quality); removing the summary fixed compliance.
-- Keep under 500 characters if possible; the frontmatter limit is 1024 (name: 64 max, letters/digits/hyphens).
+### 9. 安装与迭代
+
+按上面那张作用域表装到用户级或项目级；仓库托管的技能要提交进 git 并推送（足够通用时考虑上游贡献）。然后在真实使用中迭代：
+
+1. 拿技能去干活
+2. 留意别扭或低效的地方（链接失效、文件被忽略、触发不了、读取顺序不符合预期）
+3. 判断该改 SKILL.md 还是改随包资源
+4. 改完重新测
+
+**停：没有逐个测过，就不要批量创建多个技能。** 当前这个验证通过，才动下一个。分发未测试的技能，等于分发未测试的代码。
+
+## 技能发现优化（SDO）
+
+未来的智能体必须能找到这个技能。它读的是 description，用来判断「现在该不该读这个」。
+
+### description 规则
+
+`description` 字段直接决定被发现的概率：
+
+- **第三人称**（它会被注入系统提示）：「处理 Excel 文件……」而不是「我可以帮你……」。
+- 以 **"Use when..."** 开头，聚焦触发条件：具体症状、情境、报错信息、文件类型、上下文。
+- 覆盖智能体真会去搜的**关键词**——报错原文（"Hook timed out"、"ENOTEMPTY"）、症状（"flaky"、"hanging"、"zombie"、"pollution"）、同义词（"timeout/hang/freeze"、"cleanup/teardown"）、真实工具与命令、文件类型。说*问题*（竞态、行为不一致），别只说语言特有的症状，除非技能本身就是特定技术的。
+- **绝不概括技能的流程。** 概括了流程的 description 会变成捷径：智能体照着摘要做完，就不读正文了。实测过：一个写着「任务之间做代码审查」的 description，让智能体只做了一次审查，而技能的流程图明明画了两次（先查规格符合性，再查代码质量）；去掉那句概括就好了。
+- 尽量控制在 500 字符内；frontmatter 上限 1024（`name` 上限 64，只含字母、数字、连字符）。
 
 ```yaml
-# ❌ BAD: summarizes workflow — agents may follow this instead of reading the skill
+# ❌ 差：概括了流程——智能体会照着这句做，而不去读技能
 description: Use when executing plans - dispatches subagent per task with code review between tasks
-# ❌ BAD: first person / too abstract
+# ❌ 差：第一人称 / 太抽象
 description: I can help you with async tests when they're flaky
-# ✅ GOOD: triggering conditions only, searchable problem terms
+# ✅ 好：只写触发条件 + 可检索的问题词
 description: Use when tests have race conditions, timing dependencies, or pass/fail inconsistently
-# ✅ GOOD: technology-specific skill with explicit trigger
+# ✅ 好：技术特定技能，触发条件写实
 description: Use when using React Router and handling authentication redirects
 ```
 
-### Naming
+### 命名
 
-Active voice, verb-first, name by what you DO or the core insight — `creating-skills` not `skill-creation`; `condition-based-waiting` not `async-test-helpers`; `flatten-with-flags` not `data-structure-refactoring`. Gerunds (-ing) work well for processes. Avoid vague names ("Helper", "Utils", "Tools") and inconsistent patterns across a collection.
+主动语态，动词开头，按「你做什么」或「核心洞察」来命名——`creating-skills` 而不是 `skill-creation`；`condition-based-waiting` 而不是 `async-test-helpers`；`flatten-with-flags` 而不是 `data-structure-refactoring`。动名词（-ing）对流程类很好用。避免含糊的名字（"Helper"、"Utils"、"Tools"），避免一个技能集里命名风格前后不一。
 
-### Token efficiency
+### token 效率
 
-Frequently-loaded skills (getting-started, using-skills) load into EVERY conversation — every token counts. Targets: getting-started workflows <150 words each; frequently-loaded skills <200 words total; other skills <500 words (still be concise). Techniques:
+高频加载的技能（getting-started、using-skills）会进每一次对话，每个 token 都算数。目标：getting-started 类工作流各小于 150 词；高频技能合计小于 200 词；其它技能小于 500 词（能省还是要省）。手法：
 
-- Move details to tool help ("supports multiple modes and filters, run --help") instead of documenting all flags
-- Cross-reference other skills instead of repeating workflows
-- Compress examples to the minimum that still teaches
-- Eliminate redundancy; don't explain what's obvious from the command
-- Verify with `wc -w skills/path/SKILL.md`
+- 细节甩给工具自带的帮助（「支持多种模式和过滤，跑 `--help`」），不要把每个参数都列一遍
+- 交叉引用别的技能，而不是把流程抄一遍
+- 示例压缩到「还教得会」的最小程度
+- 去掉冗余，命令本身已说明的事不用再解释
+- 用 `wc -w skills/path/SKILL.md` 量一下
 
-### Cross-referencing other skills
+### 交叉引用别的技能
 
-Use the skill name with explicit requirement markers: `**REQUIRED SUB-SKILL:** Use skill-name`, `**REQUIRED BACKGROUND:** You MUST understand skill-name`. Never use ambiguous paths ("See skills/testing/...") and never `@`-links — `@` syntax force-loads files immediately, burning context long before they're needed.
+用技能名加明确的要求标记：`**REQUIRED SUB-SKILL:** Use skill-name`、`**REQUIRED BACKGROUND:** You MUST understand skill-name`。绝不要用含糊路径（"See skills/testing/..."），也绝不要用 `@` 链接——`@` 语法会立刻强制载入文件，在真正需要之前就把上下文烧掉了。
 
-## Match the Form to the Failure
+## 让形式匹配失败类型
 
-Classify the baseline failure before writing guidance: the form that bulletproofs one failure type measurably backfires on another.
+动笔前先给基线失败分类：一个失败类型能被某种形式彻底堵死，而同样的形式在另一个类型上会实打实地帮倒忙。
 
-| Baseline failure | Right form | Wrong form |
-|---|---|---|
-| Skips/violates a rule under pressure (knows better, does it anyway) | Prohibition + rationalization table + red flags | Soft guidance ("prefer...", "consider...") |
-| Complies, but output has the wrong shape (bloated prompt, buried verdict) | Positive recipe or contract: state what the output IS — its parts, in order | Prohibition list ("don't restate", "never narrate") |
-| Omits a required element from something they already produce | Structural: REQUIRED field or slot in the template they fill in | Prose reminders near the template |
-| Behavior should depend on a condition | Conditional keyed to an observable predicate ("if the brief exists, reference it") | Unconditional rule + exemption clauses |
+| 基线失败 | 正确的形式 | 错误的形式 |
+| --- | --- | --- |
+| 压力下跳过或违反规则（明知故犯） | 禁止 + 借口表 + 红旗 | 软性建议（「最好…」「可以考虑…」） |
+| 遵守了，但产出形状不对（提示词臃肿、结论被埋） | 正面配方或契约：说明产出**是**什么——由哪些部分组成，按什么顺序 | 禁止清单（「不要复述」「不要旁白」） |
+| 该产出的东西里漏了必需元素 | 结构性手段：在他们本来就要填的模板里加必需字段或槽位 | 在模板旁边写散文提醒 |
+| 行为应当随条件而变 | 条件句，挂钩到可观察的判据（「如果简报已存在，就引用它」） | 无条件规则 + 豁免条款 |
 
-**Why prohibitions backfire on shaping problems:** under a competing incentive, agents negotiate with "don't X". Head-to-head wording tests on dispatch-prompt guidance: the prohibition arm produced clearly more of the unwanted content than the recipe arm — and trended worse than the no-guidance control. A recipe leaves nothing to negotiate: the output matches the stated shape or it doesn't. Micro-test your own case rather than assuming, but never reach for the prohibition by default.
+**为什么禁止式在「形状」问题上会反噬：** 在有竞争性激励时，智能体会跟「不要 X」讨价还价。针对派发提示的措辞对照实验里，禁止组的产出明显比配方组更多了不想要的内容，甚至比无指导语的对照组还差。配方没有讨价还价的余地：产出要么符合声明的形状，要么不符合。自己的场景要自己微测，但**永远不要默认拿禁止式上手**。
 
-**Rules for whichever form you pick:**
-- **No nuance clauses.** "Don't X unless it matters" reopens the negotiation — appending one nuance clause degraded a winning recipe from consistent to noisy in the same wording tests. Express a real exception as its own conditional on an observable predicate.
-- **Exemption clauses don't scope.** "This limit doesn't apply to code blocks" still suppresses code blocks. If part of the output must be exempt, restructure so the rule can't reach it.
+**无论选哪种形式，都要遵守：**
 
-## Bulletproofing (discipline skills)
+- **不要夹带变通条款。** 「别 X，除非确实重要」会把谈判重新打开——在同一批措辞测试里，加上一个变通条款就把一个稳定获胜的配方从「一致」打回「嘈杂」。真有例外，就把例外写成挂在可观察判据上的条件句。
+- **豁免条款不划范围。** 「这条限制不适用于代码块」依然会压掉代码块。如果产出的一部分必须豁免，就重构结构，让规则够不着它。
 
-Scope: for discipline failures — an agent that knows the rule and skips it under pressure. For wrong-shaped output or omitted elements, prohibition-based bulletproofing backfires; use the forms above instead.
+## 纪律型技能的防弹化
 
-- **Close every loophole explicitly** — forbid specific workarounds:
+适用范围：纪律型失败——智能体知道规则，但在压力下跳过。对于「形状不对」或「漏元素」的失败，用禁止式防弹化会反噬，改用上面那张表里的形式。
+
+- **逐个堵死漏洞**，点名禁止具体的绕道：
+
   ```markdown
-  Write code before test? Delete it. Start over.
+  没写测试就写了代码？删掉，从头再来。
 
-  **No exceptions:**
-  - Don't keep it as "reference"
-  - Don't "adapt" it while writing tests
-  - Don't look at it
-  - Delete means delete
+  **没有例外：**
+  - 不许留作「参考资料」
+  - 不许边写测试边「改造」它
+  - 不许看它
+  - 删就是删
   ```
-- **Address "spirit vs letter" arguments** with a foundational principle early: "**Violating the letter of the rules is violating the spirit of the rules.**" This cuts off an entire class of rationalizations.
-- **Build a rationalization table** from baseline verbatim excuses: `| Excuse | Reality |` (e.g. "Too simple to test" → "Simple code breaks. Test takes 30 seconds.").
-- **Create a red flags list** for self-checking: "## Red Flags - STOP and Start Over — code before test; 'I already manually tested it'; 'This is different because...' — All of these mean: delete code, start over."
-- **Update the description** with symptoms of being about to violate (e.g. "before writing implementation code").
-- Psychology foundation (Cialdini authority/commitment/scarcity/social proof/unity; Meincke et al. 2025: 33% → 72% compliance): `references/persuasion-principles.md`.
 
-## Testing skills (summary)
+- **正面回答「精神 vs 字面」的诡辩**，把一条根本原则放在前面：「**违反规则的字面，就是违反规则的精神。**」这一句能砍掉一整类借口。
+- **用基线原话建借口表**：`| 借口 | 事实 |`，例如「太简单了不用测」→「简单的代码也会坏。测一次 30 秒。」
+- **列红旗清单**供自查：「## 红旗——停下重来：测试之前先写了代码；『我已经手动测过了』；『这次不一样，因为……』——出现任何一条都意味着：删代码，从头来。」
+- **同步更新 description**，把「即将违规」的症状写进去（例如「在写实现代码之前」）。
+- 心理学依据（西奥迪尼的权威 / 承诺 / 稀缺 / 社会认同 / 共同体；Meincke 等 2025：合规率从 33% 提到 72%）：`references/persuasion-principles.md`。
 
-| TDD concept | Skill creation |
-|-------------|----------------|
-| Test case | Pressure scenario with subagent |
-| Production code | Skill document (SKILL.md) |
-| RED | Agent violates rule / misses information without skill (baseline) |
-| GREEN | Agent complies with skill present |
-| Refactor | Close loopholes while maintaining compliance |
-| Watch it fail | Document exact rationalizations verbatim |
-| Minimal code | Write skill addressing those specific violations |
+## 测试技能（摘要）
 
-Test approach by type:
-- **Discipline**: academic questions (do they understand the rules?) + pressure scenarios (do they comply under stress?) + multiple pressures combined. Success = follows rule under maximum pressure.
-- **Technique**: application scenarios + variation scenarios + missing-information tests. Success = applies the technique correctly to a new scenario.
-- **Pattern**: recognition scenarios + application + counter-examples. Success = knows when NOT to apply.
-- **Reference**: retrieval + application + gap testing. Success = finds and correctly applies the information.
+| TDD 概念 | 技能创作 |
+| --- | --- |
+| 测试用例 | 带子智能体的压力场景 |
+| 生产代码 | 技能文档（SKILL.md） |
+| RED | 不带技能时智能体违规 / 信息缺失（基线） |
+| GREEN | 带上技能时智能体遵守 |
+| REFACTOR | 保持合规的同时堵掉漏洞 |
+| 看它失败 | 原话记录借口 |
+| 最小实现 | 只针对这些具体违规写技能 |
 
-Pressure types: time, sunk cost, authority, economic, exhaustion, social, pragmatic — **combine 3+**. Good scenarios force an explicit A/B/C choice with real constraints and make the agent act, not theorize. Common rationalizations for skipping testing ("obviously clear", "it's just a reference", "testing is overkill", "no time") all mean the same thing: **test before deploying. No exceptions.**
+按类型选测法：
 
-## Writing style, examples, flowcharts
+- **纪律**：学术问答（是否理解规则？）+ 压力场景（有压力时是否遵守？）+ 多重压力叠加。成功标准是在最大压力下仍然守规则。
+- **技法**：应用场景 + 变体场景 + 信息缺失测试。成功标准是能把技法正确用到新场景。
+- **模式**：识别场景 + 应用 + 反例。成功标准是知道什么时候**不**该用。
+- **参考**：检索 + 应用 + 缺口测试。成功标准是能找到并正确使用信息。
 
-- **Concise is key.** Agents are already smart — only add context they don't have. Challenge every paragraph: "Does the agent need this? Can I assume it knows this? Does it justify its token cost?"
-- **One excellent example beats many mediocre ones.** Choose the most relevant language (testing techniques → TypeScript/JavaScript; system debugging → Shell/Python; data processing → Python). Make it complete, runnable, well-commented explaining WHY, from a real scenario. Don't implement in 5+ languages, don't create fill-in-the-blank templates, don't write contrived examples.
-- **Flowcharts ONLY for**: non-obvious decision points, process loops where you might stop too early, "when to use A vs B" decisions. **Never for**: reference material (tables/lists), code examples (markdown blocks), linear instructions (numbered lists), meaningless labels (step1, helper2). Style rules: `references/graphviz-conventions.dot`. Render a skill's diagrams to SVG for your human partner: `node scripts/render-graphs.js <skill-directory> [--combine]` (requires graphviz).
-- **File organization**: self-contained (everything inline) when all content fits; skill with reusable tool (SKILL.md + working example file); skill with heavy reference (SKILL.md + 100+ line reference files + scripts). Invoke bundled scripts through their interpreter in the prose (`python scripts/tool.py`, `node scripts/tool.js`), never by bare path — some packagers strip executable bits.
-- Use consistent terminology throughout; avoid time-sensitive information (put legacy content in an "old patterns" section); avoid offering too many options (give a default plus an escape hatch).
+压力类型：时间、沉没成本、权威、经济、疲惫、社交、务实——**至少叠加 3 种**。好的场景要逼出一个明确的 A/B/C 选择，带真实约束，让智能体去做而不是去谈。跳过测试的常见借口（「这显然很清楚」「这只是个参考」「测试是杀鸡用牛刀」「没时间」）都指向同一件事：**先测再发。没有例外。**
 
-### Anti-patterns
+## 写作风格、示例、流程图
 
-- ❌ **Narrative example** — "In session 2025-10-03, we found empty projectDir caused...". Too specific, not reusable.
-- ❌ **Multi-language dilution** — example-js.js, example-py.py, example-go.go. Mediocre quality, maintenance burden.
-- ❌ **Code in flowcharts** — can't copy-paste, hard to read.
-- ❌ **Generic labels** — helper1, step2; labels should carry semantic meaning.
+- **简练为王。** 智能体本来就很聪明，只补它不知道的上下文。逐段自问：智能体需要这段吗？我能假设它已经知道吗？它值这些 token 吗？
+- **一个好例子胜过一堆平庸例子。** 选最贴切的语言（测技法用 TypeScript / JavaScript；系统排障用 Shell / Python；数据处理用 Python）。写完整、能跑、注释解释「为什么」，来自真实场景。不要用 5 种以上语言各实现一遍，不要写填空模板，不要编造示例。
+- **流程图只在三处用**：不显然的决策点、容易提前停下的流程循环、「什么时候用 A 而不是 B」的判断。**绝不**用于：参考材料（表格 / 列表）、代码示例（markdown 代码块）、线性指令（有序列表）、无意义的标签（step1、helper2）。风格规则见 `references/graphviz-conventions.dot`。要给人看就把技能里的图渲染成 SVG：`node scripts/render-graphs.js <技能目录> [--combine]`（需要 graphviz）。
+- **文件组织**：内容全装得下就自包含；有可复用工具就 SKILL.md + 一个能跑的示例文件；参考很重就 SKILL.md + 100 行以上的参考文件 + 脚本。正文里通过解释器调用随包脚本（`python scripts/tool.py`、`node scripts/tool.js`），不要写裸路径——有些打包器会剥掉可执行位。
+- 术语前后一致；避免时效性信息（旧内容放进「旧做法」一节）；别给一堆选项（给一个默认值加一个逃生口）。
 
-## Deployment checklist (before sharing a skill)
+### 反模式
 
-Create a todo for each item:
+- ❌ **叙事型示例**——「在 2025-10-03 那次会话里，我们发现空的项目目录会导致……」。太具体，不可复用。
+- ❌ **多语言稀释**——example-js.js、example-py.py、example-go.go。质量平庸，维护负担重。
+- ❌ **流程图里放代码**——不能复制粘贴，还难读。
+- ❌ **通用标签**——helper1、step2；标签要带语义。
+
+## 发布前检查清单
+
+每一条都建一个待办。
 
 **RED**
-- [ ] Pressure scenarios created (3+ combined pressures for discipline skills)
-- [ ] Scenarios run WITHOUT skill; baseline behavior documented verbatim
-- [ ] Patterns in rationalizations/failures identified
+- [ ] 压力场景已建好（纪律型技能叠加 3 种以上压力）
+- [ ] 不带技能跑过场景，基线行为原话记录
+- [ ] 借口与失败中的共性已归纳
 
 **GREEN**
-- [ ] Name is letters/digits/hyphens only; frontmatter has `name` + `description` (≤1024 chars)
-- [ ] Description starts with "Use when...", third person, specific triggers/symptoms, keyword-rich, **no workflow summary**
-- [ ] Addresses the specific baseline failures; guidance form matches the failure type
-- [ ] Wording micro-tested against a no-guidance control (behavior-shaping guidance; N/A for pure reference skills)
-- [ ] Clear overview with core principle; one excellent example; code inline or linked
-- [ ] Scenarios run WITH skill — agents comply
+- [ ] 名称只含字母、数字、连字符；frontmatter 有 `name` + `description`（不超过 1024 字符）
+- [ ] description 以 "Use when..." 开头、第三人称、含具体触发条件与症状、关键词丰富，**没有概括流程**
+- [ ] 针对具体基线失败；指导形式与失败类型匹配
+- [ ] 会塑造行为的措辞做过微测，且有无指导语的对照（纯参考型技能可跳过）
+- [ ] 概述清晰并给出核心原则；有一个好例子；代码内联或给链接
+- [ ] 带技能跑过场景，智能体合规
 
 **REFACTOR**
-- [ ] New rationalizations identified and countered; rationalization table and red flags list built
-- [ ] Re-tested until bulletproof for the tested scenarios
+- [ ] 新借口已识别并反制；借口表与红旗清单已建
+- [ ] 针对已测场景重测到防弹
 
-**Quality & deployment**
-- [ ] Flowchart only if decision is non-obvious; quick reference table; common mistakes section; no narrative
-- [ ] SKILL.md body under 500 lines; detail moved to one-level-deep references
-- [ ] `quick_validate.py` passes; packaged/installed (user or project scope); committed to git if repo-managed
+**收口**
+- [ ] `references/VERSION.txt`、`CHANGELOG.md`、SKILL.md 三处版本号一致
+- [ ] `scripts/*.py` 全部通过语法编译
+- [ ] 安全项清零（裸 except、硬编码密钥、`eval` / `exec`、递归强删）
+- [ ] 兼容项清零（硬编码绝对路径、平台专属命令、非 ASCII 文件名）
+- [ ] 冒烟测试含边界用例且通过
+- [ ] 全新打包，包内 ASCII 文件名、结构符合目标平台要求
+- [ ] 同事审查模拟通过（纯净性、密钥扫描）
+- [ ] TRACE 五维不低于 4.5
 
-## Discovery workflow (optimize for this)
+**质量与交付**
+- [ ] 只在决策不显然时才用流程图；有速查表；有常见错误一节；无叙事
+- [ ] SKILL.md 正文不到 500 行；细节外移到下一层引用
+- [ ] `quick_validate.py` 通过；已打包 / 安装（用户级或项目级）；仓库托管的已提交
 
-1. Agent encounters a problem ("tests are flaky")
-2. Searches skills (greps descriptions, browses categories)
-3. Finds your SKILL.md (description matches)
-4. Scans overview (relevant?)
-5. Reads patterns / quick reference table
-6. Loads the example only when implementing
+## 发现路径（一切为它优化）
 
-Put searchable terms early and often.
+1. 智能体遇到问题（「测试不稳定」）
+2. 检索技能（grep description、浏览分类）
+3. 命中你的 SKILL.md（description 对上了）
+4. 扫一眼概述（相关吗？）
+5. 读模式 / 速查表
+6. 真正实现时才载入示例
 
-## Bundled resources
+把可检索的词往前放、反复放。
 
-- `references/anthropic-best-practices.md` — official authoring best practices: conciseness, degrees of freedom, structure patterns, workflows and feedback loops, evaluation-driven development, executable-code guidance, full checklists. Load when writing or restructuring SKILL.md.
-- `references/structure-patterns.md` — the four common SKILL.md structures.
-- `references/testing-skills-with-subagents.md` — complete RED-GREEN-REFACTOR testing methodology: pressure scenarios, meta-testing, hole-plugging.
-- `references/persuasion-principles.md` — persuasion research for bulletproofing discipline skills.
-- `references/graphviz-conventions.dot` — graphviz style guide for skill flowcharts.
-- `examples/CLAUDE_MD_TESTING.md` — a complete worked test campaign (documentation variants).
-- `scripts/init_skill.py` — scaffold a new skill; `scripts/quick_validate.py` — structural validation; `scripts/package_skill.py` — validate + zip; `scripts/render-graphs.js` — render `dot` blocks to SVG.
+## 随包资源
+
+- `references/anthropic-best-practices.md` —— 官方写作最佳实践：简练、自由度、结构模式、工作流与反馈环、评测驱动开发、可执行代码指南、完整检查清单。写或重构 SKILL.md 时载入。
+- `references/structure-patterns.md` —— SKILL.md 的四种常见结构。
+- `references/testing-skills-with-subagents.md` —— 完整的 RED-GREEN-REFACTOR 测试方法论：压力场景、元测试、堵洞。
+- `references/persuasion-principles.md` —— 用于防弹化纪律型技能的说服力研究。
+- `references/release-check.md` —— 收口检查参考：五阶段十二步、八个检查模块的判据、配置项含义、常见失败与修法。
+- `references/graphviz-conventions.dot` —— 技能流程图用的 graphviz 风格指南。
+- `references/VERSION.txt` —— 技能自身的版本号（当前 2.0.0），参与收口检查。
+- `examples/CLAUDE_MD_TESTING.md` —— 一次完整的实测记录（文档变体对照）。
+- `INSTALL.md` —— 安装、验证、给已有技能加收口能力的方式。
+- `assets/release-config.json` —— 通用收口配置模板，复制到目标技能根目录并改名为 `.release-config.json`。
+- `assets/release_check.py` —— 单文件轻量收口脚本，复制进目标技能的 `scripts/` 后自给自足。
+- `scripts/init_skill.py` —— 初始化技能目录；`scripts/quick_validate.py` —— 结构校验；`scripts/package_skill.py` —— 校验后打包（保留目录名一层）；`scripts/release_engine.py` —— 收口检查引擎（内容平铺到 zip 根）；`scripts/render-graphs.js` —— 把 `dot` 代码块渲染成 SVG。
 
 ---
 
-*Merged from Anthropic's `skill-creator` (Apache-2.0; see `LICENSE.txt`) and the `writing-skills` skill (superpowers).*
+*合并自 Anthropic 的 `skill-creator`（Apache-2.0，见 `LICENSE.txt`）、superpowers 的 `writing-skills`，以及「技能检查大师」的收口检查引擎。*

@@ -2,18 +2,22 @@
 # -*- coding: utf-8 -*-
 """install_skill.py - 给 fountain-developer 补装联动技能（加载失败时自动执行）
 
-fountain-developer 要联动两个技能：cangjie-coding（仓颉知识库 / 构建测试规范）与
-cangjie-doc-lookup（本地官方文档查阅）。它们没装（加载失败）时用本脚本装进**当前 Agent
-的技能目录**，装完即可按正常方式加载：
+fountain-developer 联动的技能分三组，它们没装（加载失败）时用本脚本装进**当前 Agent 的
+技能目录**，装完即可按正常方式加载：
 
-    cangjie-doc-lookup  <- 已克隆的 fountain 项目的 skills/cangjie-doc-lookup
     cangjie-coding      <- https://gitcode.com/Cangjie-SIG/CangjieSkills.git（.agents/skills/<名字>）
+                           仓颉知识库 / 构建测试规范
+    cangjie-doc-lookup  <- 已克隆的 fountain 项目的 skills/cangjie-doc-lookup（本地官方文档查阅）
+    opsx-*（12 个）      <- 已克隆的 fountain 项目的 skills/opsx-<工作流>
+                           在鸿蒙 PC 上执行 OpenSpec 的通道，见 references/openspec-workflow.md
+                           （装这批时会把运行器 opsx_fusion.py 一并部署到 ~/.workbuddy/scripts/）
 
 用法：
-    python install_skill.py list                        # 看两个技能的安装状态与来源
-    python install_skill.py cangjie-doc-lookup          # 装文档查阅技能
-    python install_skill.py cangjie-coding              # 装仓颉知识库技能
-    python install_skill.py all                         # 两个都装
+    python install_skill.py list                  # 看所有联动技能的安装状态与来源
+    python install_skill.py cangjie-doc-lookup    # 装文档查阅技能
+    python install_skill.py cangjie-coding        # 装仓颉知识库技能
+    python install_skill.py opsx                  # 装 12 个 opsx-* 技能（OpenSpec 执行通道）
+    python install_skill.py all                   # 三组全装
 
 选项：
     --skills-root DIR    目标技能目录（默认自动探测，见 pick_skills_root）
@@ -39,6 +43,7 @@ def skill_root_candidates() -> "list[Path]":
     """各 Agent 的技能目录（按常见程度排序）。"""
     home = Path.home()
     return [
+        home / ".workbuddy" / "skills",       # WorkBuddy 桌面版（鸿蒙 PC 上就是它）
         home / ".codebuddy" / "skills",       # CodeBuddy
         home / ".claude" / "skills",          # Claude Code
         home / ".agents" / "skills",          # 通用别名（Codex / Copilot CLI / Gemini CLI…）
@@ -47,12 +52,44 @@ def skill_root_candidates() -> "list[Path]":
     ]
 
 
+def cwd_safe() -> "Path | None":
+    try:
+        return Path.cwd()
+    except OSError:
+        return None
+
+
+def is_openspec_generated(d: Path) -> bool:
+    """d 是不是被 openspec 托管（`openspec init/update` 生成的技能目录）。
+
+    判据：它直接装着 `openspec-*` 技能。这类目录**不能当安装目标**——下一次
+    `openspec update` 会把其中内容整片重刷，装进去的技能会静默消失。"""
+    if not d.is_dir():
+        return False
+    try:
+        return any((c / "SKILL.md").is_file() for c in d.glob("openspec-*"))
+    except OSError:
+        return False
+
+
+def usable_candidates() -> "list[Path]":
+    """候选目录，剔除被 openspec 托管的项目内 `.codebuddy/skills`。"""
+    out = []
+    for c in skill_root_candidates():
+        if is_openspec_generated(c):
+            print(f"[install_skill] 跳过 {c}：这是 openspec 生成并托管的目录，"
+                  f"下一次 `openspec update` 会重刷它", file=sys.stderr)
+            continue
+        out.append(c)
+    return out
+
+
 def pick_skills_root(explicit: "str | None", wanted: "list[str]") -> Path:
     """定安装目标：--skills-root > 放着 fountain-developer 的目录 > 已装过目标技能的目录
-    > 第一个存在的候选 > ~/.codebuddy/skills（新建）。"""
+    > 第一个存在的候选 > ~/.workbuddy/skills（新建）。"""
     if explicit:
         return Path(explicit).expanduser()
-    cands = skill_root_candidates()
+    cands = usable_candidates()
     for c in cands:
         if (c / "fountain-developer" / "SKILL.md").is_file():
             return c
@@ -142,32 +179,84 @@ def fountain_root(explicit: "str | None") -> Path:
     )
 
 
-def source_doc_lookup(fountain_root_dir: Path) -> "tuple[Path | None, str]":
-    src = fountain_root_dir / "skills" / "cangjie-doc-lookup"
-    ok, why = check_frontmatter(src, "cangjie-doc-lookup")
+def fountain_root_readonly(explicit: "str | None") -> "Path | None":
+    """只定位、不克隆。给 `list` 这类「看一眼状态」的场景用——
+    为了显示状态去拉一份 30~45MB 的文档副本是没人想要的副作用。"""
+    return _fountain_lookup().find_root(explicit)
+
+
+def source_from_fountain(fountain_root_dir: Path, name: str) -> "tuple[Path | None, str]":
+    """从 fountain 仓库的 skills/<name> 取技能源。找不到时带可操作的处理提示。"""
+    src = fountain_root_dir / "skills" / name
+    ok, why = check_frontmatter(src, name)
     if ok:
         return src, ""
     if (src / "SKILL.md").is_file():
-        return None, f"{src} 不是 cangjie-doc-lookup（{why}）"
+        return None, f"{src} 不是 {name}（{why}）"
     fl = _fountain_lookup()
     if fl.is_doc_clone(fountain_root_dir):
         # 文档副本可能停在没有该技能的旧版本（查询按在用版本切过）：切回默认分支最新再找一次。
         # 下一次查询会自动切回在用版本，所以这一步不影响查询口径。
         ok, note = fl.switch_latest(fountain_root_dir)
         if ok:
-            print(f"[install_skill] 文档副本{note}，重新查找 skills/cangjie-doc-lookup", file=sys.stderr)
-            src = fountain_root_dir / "skills" / "cangjie-doc-lookup"
+            print(f"[install_skill] 文档副本{note}，重新查找 skills/{name}", file=sys.stderr)
+            src = fountain_root_dir / "skills" / name
             if src.is_dir():
                 return src, ""
     hint = (
-        f"fountain 仓库（{fountain_root_dir}）里没有 skills/cangjie-doc-lookup。\n"
+        f"fountain 仓库（{fountain_root_dir}）里没有 skills/{name}。\n"
         "  常见原因与处理：\n"
-        "  - 源码 / 副本停在还没有该技能的版本：更新到含它的版本"
+        "  - 检出的分支 / 标签还没有这批技能：切到含它的分支"
+        "（如 `git -C <fountain> switch sts/1.3.x`）；\n"
+        "  - 源码 / 副本停在没有该技能的旧版本：更新到含它的版本"
         "（文档副本用 `python scripts/fountain_lookup.py switch latest`）；\n"
         "  - 该技能尚未提交进 fountain 仓库（它由 fountain 仓库随源码分发）：先提交 / 换一份含它的源码；\n"
-        "  - 或用 --fountain-root 指到一份含 skills/cangjie-doc-lookup 的 fountain 源码。"
+        "  - 或用 --fountain-root 指到一份含 skills/<技能> 的 fountain 源码。"
     )
     return None, hint
+
+
+def source_doc_lookup(fountain_root_dir: Path) -> "tuple[Path | None, str]":
+    return source_from_fountain(fountain_root_dir, "cangjie-doc-lookup")
+
+
+# ---- 来源三：opsx-* 技能族（12 个，鸿蒙 PC 上执行 OpenSpec 的通道）----------
+
+OPSX_SKILLS = [
+    "opsx-propose", "opsx-explore", "opsx-new", "opsx-continue",
+    "opsx-apply", "opsx-update", "opsx-ff", "opsx-sync",
+    "opsx-archive", "opsx-bulk-archive", "opsx-verify", "opsx-onboard",
+]
+
+
+def install_one_from_fountain(fr: Path, root: Path, name: str, force: bool) -> "tuple[bool, str]":
+    src, why = source_from_fountain(fr, name)
+    if src is None:
+        return False, why
+    ok, note = install_dir(src, root / name, force)
+    return ok, f"{note}（来源：{src}）"
+
+
+def deploy_opsx_runner(fr: Path, force: bool) -> "tuple[bool, str]":
+    """把运行器 opsx_fusion.py 部署到 ~/.workbuddy/scripts/。
+
+    12 个 opsx-* 技能的命令都引用这个脚本（ssh 探测 / 连接信息固化 / 生成执行命令），
+    技能装好但运行器缺失时，技能第一步就失败。源在 fountain 仓库的
+    skills/fountain-developer/scripts/opsx_fusion.py。
+    """
+    src = fr / "skills" / "fountain-developer" / "scripts" / "opsx_fusion.py"
+    if not src.is_file():
+        return False, f"运行器源不存在：{src}（该检出还没合入运行器，切到含它的分支再试）"
+    dest_dir = Path.home() / ".workbuddy" / "scripts"
+    dest = dest_dir / "opsx_fusion.py"
+    if dest.is_file():
+        if dest.read_bytes() == src.read_bytes():
+            return True, f"已部署且与来源一致（{dest}）"
+        if not force:
+            return True, f"已存在，未覆盖（要覆盖加 --force）：{dest}"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, dest)
+    return True, f"已部署到 {dest}"
 
 
 # ---- 来源二：CangjieSkills 仓 ------------------------------------------
@@ -218,25 +307,43 @@ def source_cangjie_skills(repo_dir: Path, name: str) -> "tuple[Path | None, str]
 
 
 def cmd_list(a: argparse.Namespace) -> None:
-    wanted = ["cangjie-coding", "cangjie-doc-lookup"]
-    root = pick_skills_root(a.skills_root, wanted)
+    root = pick_skills_root(a.skills_root, ["cangjie-coding", "cangjie-doc-lookup"] + OPSX_SKILLS)
     print(f"技能目录：{root}{'' if root.is_dir() else '（尚不存在）'}")
     print()
-    for name in wanted:
-        installed = (root / name / "SKILL.md").is_file()
-        print(f"[{'已装' if installed else '未装'}] {name}：{root / name}")
+    for label, names in (
+        ("cangjie-coding / cangjie-doc-lookup（仓颉知识库与文档）", ["cangjie-coding", "cangjie-doc-lookup"]),
+        ("opsx-*（鸿蒙 PC 上执行 OpenSpec 的通道）", OPSX_SKILLS),
+    ):
+        done = sum(1 for n in names if (root / n / "SKILL.md").is_file())
+        print(f"{label}：{done}/{len(names)} 已装")
+        for name in names:
+            installed = (root / name / "SKILL.md").is_file()
+            print(f"  [{'已装' if installed else '未装'}] {name}")
     print()
     print("来源：")
-    try:
-        fr = fountain_root(a.fountain_root)
-        src, why = source_doc_lookup(fr)
-        print(f"  cangjie-doc-lookup <- {src if src else f'不可用（{why.splitlines()[0]}）'}")
-    except SystemExit as e:
-        print(f"  cangjie-doc-lookup <- 不可用（{e}）")
+    fr = fountain_root_readonly(a.fountain_root)
+    if fr is None:
+        print("  cangjie-doc-lookup  <- 未找到本机 fountain 源码（list 只为看状态，不会为此克隆）")
+        print("  opsx-*（12 个）      <- 同上；用 --fountain-root 指定，或按 references/environment.md"
+              " 先让 fountain_lookup.py 克隆一份文档副本")
+    else:
+        src, why = source_from_fountain(fr, "cangjie-doc-lookup")
+        print(f"  cangjie-doc-lookup  <- {src if src else f'不可用（{why.splitlines()[0]}）'}")
+        have = [n for n in OPSX_SKILLS if (fr / "skills" / n).is_dir()]
+        if len(have) == len(OPSX_SKILLS):
+            print(f"  opsx-*（12 个）      <- {fr / 'skills'}（全部可用）")
+        else:
+            miss = [n for n in OPSX_SKILLS if n not in have]
+            print(f"  opsx-*（12 个）      <- {fr / 'skills'} 只有 {len(have)}/12"
+                  f"（缺：{', '.join(miss[:3])}{' 等' if len(miss) > 3 else ''}）")
+            print(f"     该检出还没这批技能：切到含它的分支再试"
+                  f"（git -C {fr} switch sts/1.3.x），或 --fountain-root 指到含 skills/opsx-* 的源码")
     repo_dir = Path(a.repo_dir).expanduser() if a.repo_dir else DEFAULT_REPO_DIR
     src2, why2 = source_cangjie_skills(repo_dir, "cangjie-coding")
     state = "已克隆" if (repo_dir / ".git").exists() else "未克隆（首次安装时自动克隆）"
-    print(f"  cangjie-coding     <- {src2 if src2 else f'{CANGJIE_SKILLS_REPO}（{state}）'}")
+    print(f"  cangjie-coding      <- {src2 if src2 else f'{CANGJIE_SKILLS_REPO}（{state}）'}")
+    runner = Path.home() / ".workbuddy" / "scripts" / "opsx_fusion.py"
+    print(f"  opsx_fusion.py（运行器）<- {runner}（{'已部署' if runner.is_file() else '未部署：装 opsx 时自动部署'}）")
 
 
 def install_doc_lookup(a: argparse.Namespace, root: Path) -> "tuple[bool, str]":
@@ -272,10 +379,10 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(
         prog="install_skill.py",
-        description="给 fountain-developer 补装联动技能（cangjie-coding / cangjie-doc-lookup）",
+        description="给 fountain-developer 补装联动技能（cangjie-coding / cangjie-doc-lookup / opsx-* 12 个）",
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
-    for name in ("list", "cangjie-coding", "cangjie-doc-lookup", "all"):
+    for name in ("list", "cangjie-coding", "cangjie-doc-lookup", "opsx", "all"):
         p = sub.add_parser(name, help=f"{name} 子命令")
         p.add_argument("--skills-root", default=None, help="目标技能目录（默认自动探测）")
         p.add_argument("--fountain-root", default=None, help="fountain 仓库根（默认自动定位）")
@@ -287,23 +394,46 @@ def main() -> None:
         cmd_list(args)
         return
 
-    wanted = ["cangjie-coding", "cangjie-doc-lookup"] if args.cmd == "all" else [args.cmd]
+    if args.cmd == "all":
+        wanted = ["cangjie-coding", "cangjie-doc-lookup"] + OPSX_SKILLS
+    elif args.cmd == "opsx":
+        wanted = list(OPSX_SKILLS)
+    else:
+        wanted = [args.cmd]
     root = pick_skills_root(args.skills_root, wanted)
     print(f"安装目标：{root}\n")
     failed = []
+    fr = None
+    fr_err = None
     for name in wanted:
-        if name == "cangjie-doc-lookup":
+        if name in OPSX_SKILLS:
+            if fr is None and fr_err is None:
+                try:
+                    fr = fountain_root(args.fountain_root)
+                except SystemExit as e:
+                    fr_err = str(e)
+            ok, note = (False, fr_err) if fr_err else install_one_from_fountain(fr, root, name, args.force)
+        elif name == "cangjie-doc-lookup":
             ok, note = install_doc_lookup(args, root)
         else:
             ok, note = install_cangjie_coding(args, root)
         print(f"[{'ok' if ok else '失败'}] {name}：{note}")
         if not ok:
             failed.append(name)
+    if any(n in OPSX_SKILLS for n in wanted):
+        if fr_err:
+            print(f"[失败] opsx_fusion.py（运行器）：{fr_err}")
+            failed.append("opsx_fusion.py")
+        else:
+            ok, note = deploy_opsx_runner(fr, args.force)
+            print(f"[{'ok' if ok else '失败'}] opsx_fusion.py（运行器）：{note}")
+            if not ok:
+                failed.append("opsx_fusion.py")
     print()
     if failed:
         print(f"[!] 未装好：{'、'.join(failed)}（按上面的原因处理后重跑）", file=sys.stderr)
         sys.exit(1)
-    print("装好后按正常方式加载这两个技能；本技能「必须遵守」里的联动要求即可满足。")
+    print("装好后按正常方式加载这些技能；本技能「必须遵守」里的联动要求即可满足。")
 
 
 if __name__ == "__main__":
