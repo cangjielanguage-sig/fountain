@@ -15,4 +15,17 @@ limitations under the License.
 */
 package fountain::f_jit.backend
 
-// P0 骨架占位：JIT 后端——字节码 → 机器码（x86_64 / AArch64）（见 doc/plan-m1.md §0.4）
+/** 后端契约（design §6.3.1、§12.2）：机器码编译入口 + ABI 摘要 + 入口 thunk。 */
+public interface Backend {
+    /** "x86_64" / "aarch64"（缓存键与诊断用）。 */
+    prop name: String
+
+    /** ABI 摘要（CTX/FP/SP/RETV/TMP 映射；诊断/测试用）。 */
+    func abiSummary(): String
+
+    /** 入口 thunk 区基址。 */
+    func entryThunkBase(): Int64
+
+    /** 某函数的入口 thunk 地址。 */
+    func entryThunkFor(fnId: UInt32): Int64
+}
