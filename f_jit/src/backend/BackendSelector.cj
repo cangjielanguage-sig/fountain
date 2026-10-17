@@ -158,6 +158,57 @@ internal class BackendX86_64 <: Backend {
         this.thunkCount = 0
     }
 
+    // ---- S5.5 第一片：常量 / 栈 / 局部 ----
+
+    internal static func emitNop(): Array<UInt8> {
+        [0x90u8]
+    }
+
+    /** `PUSH_I64 v`：`movabs rax, v; push rax`。 */
+    internal static func emitPushI64(v: Int64): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        out.add(0x48u8)
+        out.add(0xB8u8)
+        BackendX86_64.w64(out, v)
+        out.add(0x50u8)
+        out.toArray()
+    }
+
+    /** `DUP`：`push qword [rsp]`。 */
+    internal static func emitDup(): Array<UInt8> {
+        [0xFFu8, 0x34u8, 0x24u8]
+    }
+
+    /** `POP`：`add rsp, 8`。 */
+    internal static func emitPop(): Array<UInt8> {
+        [0x48u8, 0x83u8, 0xC4u8, 0x08u8]
+    }
+
+    /** `SWAP`：交换 `[rsp]` 与 `[rsp+8]`。 */
+    internal static func emitSwap(): Array<UInt8> {
+        [0x48u8, 0x8Bu8, 0x04u8, 0x24u8, 0x48u8, 0x8Bu8, 0x4Cu8, 0x24u8, 0x08u8,
+         0x48u8, 0x89u8, 0x0Cu8, 0x24u8, 0x48u8, 0x89u8, 0x44u8, 0x24u8, 0x08u8]
+    }
+
+    /** `LOADL idx`：`push qword [rbp-32-8idx]`。 */
+    internal static func emitLoadL(idx: Int64): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        out.add(0xFFu8)
+        out.add(0xB5u8)
+        BackendX86_64.w32(out, BackendX86_64.i32bits(0 - (32 + 8 * idx)))
+        out.toArray()
+    }
+
+    /** `STOREL idx`：`pop qword [rbp-32-8idx]`。 */
+    internal static func emitStoreL(idx: Int64): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        out.add(0x48u8)
+        out.add(0x8Fu8)
+        out.add(0x85u8)
+        BackendX86_64.w32(out, BackendX86_64.i32bits(0 - (32 + 8 * idx)))
+        out.toArray()
+    }
+
     // ---- P5.4 帧序列（§12.3、§4 prologue）----
 
     /** FRAME = align16(32 + 8×(nLocals + maxStack))。 */
