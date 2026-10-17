@@ -4,8 +4,8 @@
 查 API 时按**在用版本**：`fountain_lookup.py` 默认取当前项目 cjpm.toml 的 fountain 依赖版本并先把文档副本切到该版本
 （输出头部标注版本；换版本 `--version X.Y.Z` / `switch X.Y.Z`，见 SKILL.md「定位 fountain 仓库与查询版本」）。
 
-**与 OpenSpec 的分工**：工作流 F 全程、工作流 J 新建模块还要走 OpenSpec 规格驱动流程（`opsx:propose` → 用户评审 design / tasks → `opsx:apply`
-→ `opsx:verify` → `opsx:archive`，见 `references/openspec-workflow.md`）。OpenSpec 负责「做什么 / 为什么 / 怎么设计 / 进度」，
+**与 OpenSpec 的分工**：工作流 F / G / H / I / J 全程都要走 OpenSpec 六步规格驱动流程（环境与刷新 → `opsx:propose` → 用户评审 design / tasks → `opsx:apply`
+→ `opsx:verify` → `opsx:archive` + 落盘 `doc/spec/<变更名>/`，见 `references/openspec-workflow.md`）。OpenSpec 负责「做什么 / 为什么 / 怎么设计 / 进度」，
 本文件负责「在 fountain 里怎么把它做对」；**OpenSpec 的产物与归档不豁免本文件的任何门禁**（TDD / 全量回归 / 冒烟 / 提交 / 建 tag）。
 
 ## 1. 初始化
@@ -39,7 +39,7 @@ F / G / H / I / J / K 的功能开发与适配一律按 TDD 循环推进，**先
 3. **Refactor**：在测试全绿的保护下重构（命名、结构、去重）；重构后再跑一次确认仍绿。
 4. 每个功能点（或一小批相关点）走完一轮循环，形成一个可提交的增量。
 
-走 OpenSpec 流程时（工作流 F 全程 / 工作流 J 新建模块），TDD 落在 `opsx:apply` 的**每个 task** 上：
+走 OpenSpec 流程时（工作流 F / G / H / I / J 全程），TDD 落在 `opsx:apply` 的**每个 task** 上：
 任务勾选前先跑绿，**不允许出现「任务已勾选但没有对应测试」的进度**（假进度在 `opsx:verify` 里会暴露为 completeness 缺口）。
 
 - 写法与运行：测试规范与 API 加载 `cangjie-coding`；`cjpm test` 在模块 / 项目里直接跑；

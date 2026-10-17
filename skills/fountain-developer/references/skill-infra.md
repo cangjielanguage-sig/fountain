@@ -57,7 +57,7 @@ python <skill-root>/scripts/install_skill.py all                 # 三组全装
 | 是什么 | **你这个 Agent 的执行通道**：ssh 探测连接 → `opsx_fusion.py` 生成命令 → Bash 工具代跑到融合开发引擎 | **融合侧 CodeBuddy 读的指令文件** |
 | 谁生成 | fountain 仓库的 `skills/opsx-*`，用 `install_skill.py opsx` 安装 | `openspec init` / `openspec update`（**不要手工写、也不要手工拷**） |
 | 位置 | 当前 Agent 的技能目录（鸿蒙 PC 上是 `~/.workbuddy/skills/`） | `<项目>/.codebuddy/skills/openspec-*` 与 `<项目>/.codebuddy/commands/opsx/*`（按 `--tools <tool>` 落地；Claude Code 是 `<项目>/.claude/commands/opsx/*`）|
-| 加载时机 | **工作流 F 全程 / 工作流 J 新建模块**，第 1–5 步每一步 | 不归你加载——由融合侧 CodeBuddy 读 |
+| 加载时机 | **工作流 F / G / H / I / J 全程**，六步的每一步 | 不归你加载——由融合侧 CodeBuddy 读 |
 | 缺失时 | `python <skill-root>/scripts/install_skill.py opsx` | 这个项目还没初始化 OpenSpec：按 `references/openspec-workflow.md` 第 1–2 节装 CLI、`openspec init --tools <tool>`（**`<tool>` 问用户**）、确认 `config.yaml` 的 `context` 含「所有产出物用简体中文撰写」 |
 
 - CLI 升级后用 `openspec update` 重新生成指令文件，别沿用旧版。

@@ -42,7 +42,7 @@
    - 命令行参数 → 环境变量或 `fboot build --key=value`；
    - 确认全项目不再有 `main()`（应用由 `fboot run` 加载动态库启动）。
 4. 能力替换（**严格 TDD**）：按第 1 节映射逐类改写 import 与调用；每类按 Red-Green-Refactor 推进——
-   先把对应测试迁移 / 补写成失败用例 → 最小实现转绿 → 重构；缺口按工作流 F 第 3 步处理（a–d 选项）。
+   先把对应测试迁移 / 补写成失败用例 → 最小实现转绿 → 重构；缺口按工作流 F 步骤 2 处理（a–d 选项）。
 5. 依赖与配置：依赖统一声明在 workspace 根 cjpm.toml（fountain 模块版本 = fboot 版本；第三方驱动保留，确认 `output-type`），
    **随功能演进补齐**；运行期 / 编译期配置落到三平台启动脚本。
 6. 启动脚本：按 `references/launch-scripts.md` 生成三平台脚本（`dylibPattern` 覆盖 controller / service.impl / boot / cron 所在库）。
