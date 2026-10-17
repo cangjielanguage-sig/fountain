@@ -136,8 +136,8 @@
 
 ## 8. P6 门面 / 桥（包 `fountain::f_jit`，S6.1–S6.12）
 
-- [ ] S6.1 `CompileOptions` + `PredefinedFunction`：先写失败用例——默认值与构造校验（`paramTypes` 合法集按版本分派：M1 为 0–8/10–11，M2/M3 续 13/14/15–19 的登记位本步预留）、`impl` 返回值与 `retType` 匹配（不符 → 契约类错误、`site=-1`）；再写实现；验收：注册契约可用
-- [ ] S6.2 `Compiler.init/registerFunction/unregisterFunction/hasFunction/registeredNames`：先写失败用例——注册/查询/注销、重名 → `DuplicateRegistration`、超 `maxPredefined` → 编译期错误、快照语义（注册变更不影响已编译产物，与 S6.8 联测）；再写实现（注册表 + 锁）；验收：T23 需求 2 用例绿
+- [x] S6.1 `CompileOptions` + `PredefinedFunction`：先写失败用例——默认值与构造校验（`paramTypes` 合法集按版本分派：M1 为 0–8/10–11，M2/M3 续 13/14/15–19 的登记位本步预留）、`impl` 返回值与 `retType` 匹配（不符 → 契约类错误、`site=-1`）；再写实现；验收：注册契约可用
+- [x] S6.2 `Compiler.init/registerFunction/unregisterFunction/hasFunction/registeredNames`：先写失败用例——注册/查询/注销、重名 → `DuplicateRegistration`、超 `maxPredefined` → 编译期错误、快照语义（注册变更不影响已编译产物，与 S6.8 联测）；再写实现（注册表 + 锁）；验收：T23 需求 2 用例绿
 - [ ] S6.3 `CallMarshal`（`makeArgMarshalers/marshalArg/makeRetUnboxer/escapeAndGet/cleanup`）：先写失败用例——§8.2.1 表全行（Int64/F64/Bool/句柄型；不符 → 19）、不接受 Option/null、不做隐式宽化、解包表全行、`escapeAndGet` 自动回收、`try/finally` 全路径清理（含封送失败/执行错误/中断）；再写实现；验收：T15 用例绿且非逃逸句柄无残留
 - [ ] S6.4 三态收尾 + `Report.throwJit`：先写失败用例——0 → unbox、-1 → `Interp.run` 透明重跑（结果与直接解释一致）、-2 → InterruptedException、>0 → 携带原错误码/原站点/报告的 `JitException`、19 契约错误 `site=-1`、非预期异常兜 99 且不逃逸其它异常类型；再写实现；验收：T6/T15 用例绿
 - [ ] S6.5 `JitFunction.call<T>` 六步：先写失败用例——参数长度不符 → 19、元素类型不符 → 19、`T` 与 `retType` 一致性（编译期校验 + 运行期注册表 → 19）、契约错误 `site=-1` 且 `sourcePos=None`、返回正确的 `T`、**机器码形态与纯字节码形态同接口同行为**（同源同参结果/错误码/站点/报告文本逐位一致）；再写实现（单态化适配器）；验收：T15/T52 用例绿
