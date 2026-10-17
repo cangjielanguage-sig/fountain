@@ -57,6 +57,7 @@ fountain 是仓颉语言的服务器应用框架：应用**没有 main 函数**�
 - **OpenSpec 六步（工作流 F / G / H / I / J 全程，自动执行，无需用户要求）**：**步骤 1 环境与刷新**（`openspec update` + `openspec list --json`）→ **步骤 2 `opsx:propose`**（生成 `openspec/changes/<变更名>/` 五件套）→ **步骤 3 用户评审（门禁）**（逐条确认 `design.md` / `tasks.md`；反馈用 `opsx:update`）→ **步骤 4 `opsx:apply`**（按 tasks 逐任务 TDD，严格跟随 design）→ **步骤 5 `opsx:verify`**（前置：`fboot build` / 全量回归 / 冒烟全绿；CRITICAL 清零）→ **步骤 6 `opsx:archive` + 产物落盘**（沉淀规范、归档变更、更新 doc 副本）。**propose 只写规划产物、不改项目代码**；**用户明确确认 design / tasks 前不得进入 apply**；verify 不在 core 档、需先启用（启用与回退见 openspec-workflow 第 6 节）。OpenSpec 的产物与归档**不替代**本技能的 TDD / 全量回归 / 冒烟 / 提交 / 建 tag 门禁。
 - **规格产物落盘 `doc/spec/`（六步的一部分，propose 后 + archive 后各一次）**：把四件套（`proposal.md` / `spec.md`（规格 delta，多 capability 时为 `specs/<capability-path>/spec.md`）/ `design.md` / `tasks.md`）同步到 **`doc/spec/<变更名>/`**——**fountain 仓库放相应模块的 `doc/spec/<变更名>/`**（跨多个模块时，各模块放与其 capability 相关的 `spec.md`，`proposal.md` / `design.md` / `tasks.md` 放主模块），**其他项目放项目根的 `doc/spec/<变更名>/`**。propose 完成后新建副本（评审与入库可见），archive 完成后用 OpenSpec 最终版覆盖更新（以最终版为准）。`openspec/` 可能被 `.gitignore` 忽略——`doc/spec/` 才是随代码入库、可回溯的规格副本，不得省略。
 - **鸿蒙 PC 上的 OpenSpec 执行通道（工作流 F / G / H / I / J 全程）**：六步的每一步都经对应的 `opsx-*` 技能执行——技能先 `ssh-check` 探测融合开发引擎的 ssh 连接（首次访问问用户 IP / 用户名 / 密码并固化，IP 失效重问），再用 `opsx_fusion.py` 生成 ssh 命令、用 Bash 工具代跑到融合侧 CodeBuddy CLI 并回收结果；对应关系与安装见 `references/openspec-workflow.md` 第 9 节，本机没装先 `install_skill.py opsx`。**不要自己把 `codebuddy` 拉起来跑、不要让用户自己拼命令**；`openspec init` / `update` / `list` / `config` / `validate` 这类环境与查询命令仍由你在鸿蒙侧直接跑（两者分工见第 9.3 节）。
+- **等待 OpenSpec 任务期间按协议周期报告进度（工作流 F / G / H / I / J 全程）**：opsx 任务在后台运行期间，**每 3 分钟**输出一次进度报告——【项目/模块】+ 六阶段状态（① 环境与刷新 / ② propose / ③ 用户评审 / ④ apply / ⑤ verify / ⑥ archive + 落盘），**「进行中」的阶段必须给客观详情**（tasks 勾选 x/y、当前任务、近 10 分钟改动文件、后台输出尾部）；快照一律用 `python3 <skill-root>/scripts/opsx_progress.py --repo <仓库> --change <变更名> --stage <当前步骤> --log <后台输出文件>` 采集，不凭印象编。**连续 2 轮（约 6 分钟）无进展即暂停周期报告、转入停滞诊断**：先说明卡点与证据 → 给出解决方案 → 实际尝试（ssh 连通 → 远程进程 → CodeBuddy 日志 → 重扫输出；已死则重跑）→ 解决后恢复报告，无解则带证据交还用户，不空转。完整协议（报告模板、诊断步骤、示例、红旗）见 `references/opsx-waiting.md`。
 - **只动目标目录**：转换任务不修改原项目仓库；新项目建在用户指定位置。
 
 ## Red flags（命中就停下）
@@ -86,6 +87,10 @@ fountain 是仓颉语言的服务器应用框架：应用**没有 main 函数**�
 | 「技能没装就先跳过，五件套我自己手写」 | 先装再走。手写的产物不经 `/opsx:propose`，后续 apply / verify / archive 与 `openspec instructions` 全部对不上 |
 | 「openspec 归档完了，交付就结束了」 | `opsx:archive` 只沉淀规范；`fboot build` / 全量回归 / 冒烟 / 提交 / 建 tag 一个都不能少 |
 | 「`--tools all` 反正都能用，省得问」 | `<tool>` 必须问用户（写进仓库的指令文件因工具而异）；擅自选等于替用户决定技术栈 |
+| 「任务在后台跑，我安静等结果就好」 | 用户看不到任何进度；每 3 分钟一轮报告（六阶段 + 进行中客观详情），见 `references/opsx-waiting.md` |
+| 「报告一句『还在跑』就够了」 | 缺阶段状态与客观证据等于没报：tasks 勾选 / 当前任务 / 改动文件 / 日志尾部必须给 |
+| 「卡住了，先问用户怎么办」 | 先按协议诊断并尝试（ssh 连通 → 远程进程 → 日志 → 重扫输出）；带证据和方案再找用户 |
+| 「停滞了但继续按 3 分钟报流水账」 | 停滞即暂停周期报告、转诊断块；每轮诊断必须有新动作或新信息，没有就交还用户 |
 
 命中任何一条 → 回到「必须遵守」与对应工作流重走一遍，别先动手。
 
