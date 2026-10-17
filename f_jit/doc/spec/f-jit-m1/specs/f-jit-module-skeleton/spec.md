@@ -2,7 +2,7 @@
 
 ## Purpose
 
-定义 `f_jit` 模块的物理骨架：包划分与依赖方向、构建配置、在根工程的登记，以及「构建通过、测试可跑」的可回归基线。
+定义 `f_jit` 模块的物理骨架：包划分与依赖方向、构建配置，以及「构建通过、测试可跑」的可回归基线（模块独立构建，不登记根 `cjpm.toml`）。
 
 ## ADDED Requirements
 
@@ -43,27 +43,13 @@
 - **WHEN** 检视 `cjpm.toml` 的 `[target.*]` 段
 - **THEN** 覆盖 Linux（x86_64/aarch64）、Windows、macOS、HarmonyOS 目标的编译与链接选项，与仓库其它模块保持同一写法
 
-### Requirement: 根工程登记
-
-根 `cjpm.toml` SHALL 登记 `fountain::f_jit`（路径依赖 `./f_jit`），使其与其它 `f_*` 模块一样进入全仓库构建与回归。
-
-#### Scenario: 根构建纳入
-
-- **WHEN** 在仓库根执行构建
-- **THEN** `f_jit` 与其它 `f_*` 模块一同参与构建，且 `f_jit` 出现在依赖清单中
-
-#### Scenario: 仓库约定不破坏
-
-- **WHEN** 检视根 `cjpm.toml` 的 `exclude` 与其它依赖项
-- **THEN** 既有条目与写法不变，仅新增 `fountain::f_jit` 一行
-
 ### Requirement: 构建与测试基线可回归
 
-骨架 SHALL 满足「`cjpm build` 通过、`cjpm test` 可执行且 0 用例失败」的基线，作为后续每步 TDD 的起点。
+骨架 SHALL 满足「`cjpm build` 通过、`cjpm test` 可执行且 0 用例失败」的基线，作为后续每步 TDD 的起点；根 `cjpm.toml` **不登记** `f_jit`（用户裁定），验收以模块自身目录为准。
 
 #### Scenario: 空基线通过
 
-- **WHEN** 在骨架完成后执行 `cjpm build` 与 `cjpm test`
+- **WHEN** 在骨架完成后于 `f_jit` 模块目录执行 `cjpm build` 与 `cjpm test`
 - **THEN** 构建成功、测试进程正常退出且无失败用例
 
 #### Scenario: 基线数字留档

@@ -8,8 +8,8 @@
 
 ## What Changes
 
-- **前置依赖**：在 `f_util` 新增 `Fnv` 常量命名空间族（`Fnv32`/`Fnv64`/`Fnv128`/`Fnv256` × `fnv1`/`fnv1a`，标准 FNV 常量，不自造算法），供 f_jit 的常量指纹（FNV-1a-64）与去重键（FNV-1a-128）调用；这是 S2.16 的前置任务。
-- **P0 骨架与测试基建**：完善 `f_jit/cjpm.toml`（依赖 `f_base`/`f_regex`/`f_util`）、六个包与差分测试层目录；把 `fountain::f_jit` 登记进根 `cjpm.toml`；建三引擎差分 harness（`src/test/diff`）与 T 编号映射表。
+- **前置依赖**：在 `f_util` 新增 `Fnv` 常量命名空间族（`Fnv32`/`Fnv64`/`Fnv128`/`Fnv256`/`Fnv1024` × `fnv1`/`fnv1a`，标准 FNV 常量，不自造算法）与**统一 API**（`Fnv.hash(width, variant, data)` 返回统一的大端字数组、`FnvHasher` 支持增量喂入；类型化入口委托同一引擎），供 f_jit 的常量指纹（FNV-1a-64）与去重键（FNV-1a-128）调用；这是 S2.16 的前置任务。
+- **P0 骨架与测试基建**：完善 `f_jit/cjpm.toml`（依赖 `f_base`/`f_regex`/`f_util`）、六个包与差分测试层目录；**不登记根 `cjpm.toml`**（用户裁定，模块以独立 cjpm 工程构建与回归）；建三引擎差分 harness（`src/test/diff`）与 T 编号映射表。
 - **P1 `base`**：`LocalType`（0–12）、`TypeToken`（0–9）、`ErrCode`（含 `describe`/`isHostSide`）、`Version`（1/14/36/`"FBC1"`）、`SourcePos`/`JitMode`/`Engine`/`JitValue`/`CallContext`/`SourceUnit`、`JitException`/`SourceCompileException`（统一继承 `f_base.BaseException`）、`DiagnosticsSink`/`DiagnosticLevel`/`DiagCode`/`DummyDiagnosticsSink`。
 - **P2 `bytecode`**：`OpInfo` 256 项 opcode 表、显式 LE 编解码原语、指令解码、函数目录与局部类型表、常量表模型与注册 API、站点表/名字表、`.fbc` 容器头与读写、加载期全拒绝面校验，以及接入 `f_util.Fnv` 的指纹原语。
 - **P3 `compiler`**：词法（三形态字符串、行首锚定标记、嵌套注释、正则字面量）→ 语法 → 名字解析 → 明确赋值 → 降低（含控制流、闭包、多重赋值、正则操作符、尾递归）→ `BytecodeBuilder` → 汇编期校验 1–11 → `.fbc` 组装，失败一律 `SourceCompileException`。
@@ -23,8 +23,8 @@
 
 ### New Capabilities
 
-- `f-util-fnv`: `f_util` 的 FNV 哈希族（32/64/128/256 × fnv1/fnv1a）与黄金值校验，供 f_jit 指纹与去重键复用。
-- `f-jit-module-skeleton`: `f_jit` 模块的包结构、构建配置、根 `cjpm.toml` 登记与 `cjpm build`/`cjpm test` 基线。
+- `f-util-fnv`: `f_util` 的 FNV 哈希族（32/64/128/256/1024 × fnv1/fnv1a）、统一 API（`Fnv.hash` / `FnvHasher`）与黄金值校验，供 f_jit 指纹与去重键复用；`Fnv1024` 以 16 字大端序表示，落实 1024 位乘法与进位正确性。
+- `f-jit-module-skeleton`: `f_jit` 模块的包结构、构建配置与 `cjpm build`/`cjpm test` 基线（模块独立构建，不登记根 `cjpm.toml`）。
 - `f-jit-base-contracts`: `base` 包的共享契约——类型编码、错误码、公共值类型、异常与诊断接口。
 - `f-jit-bytecode-format`: 字节码静态模型与 `.fbc` 容器编解码、加载期校验与版本兼容。
 - `f-jit-compiler-frontend`: 源入口前端——词法/语法/名字解析/明确赋值/降低/汇编校验与 `.fbc` 产出。
@@ -39,7 +39,7 @@
 
 ## Impact
 
-- **代码**：新增/填充 `f_jit/src/{Root,base,bytecode,compiler,runtime,backend}` 与 `f_jit/src/test/diff`；修订 `f_jit/cjpm.toml`；根 `cjpm.toml` 增加 `fountain::f_jit` 依赖；`f_util/src` 新增 `Fnv` 及 `Fnv_test`。
+- **代码**：新增/填充 `f_jit/src/{Root,base,bytecode,compiler,runtime,backend}` 与 `f_jit/src/test/diff`；修订 `f_jit/cjpm.toml`；`f_util/src` 新增 `Fnv`（含 `Fnv1024` 与统一 API）及 `Fnv_test`。**不改根 `cjpm.toml`**（用户裁定不登记 `f_jit`）。
 - **API**：新增用户面 `fountain::f_jit.*`（`Compiler`/`JitFunction`/`CallMarshal`/`HandleTable`/`LocalType`/`ErrCode`/`JitException`/`SourceCompileException`/`JitMode`/`CompileOptions`/`PredefinedFunction`/`SourceUnit`/`CallContext`/`SourcePos`/`DiagnosticsSink` 等）；`JitContext`/`Engine`/`JitValue`/`CompileCache`/`AdapterRegistry`/`CallMarshal`/`CompilePipeline`/`Report`/`SourceCompiler`/`CompiledSourceUnit` 为 `protected`，不进用户面。
 - **依赖**：`f_jit` 依赖 `f_base`（`BaseException`、OS/Arch）、`f_regex`（Regex 常量与 `String.regex()` 扩展）、`f_util`（`Crc32.isoHdlc`、新增 `Fnv`）；M3 才追加 `f_data`。
 - **平台**：解释器全平台；JIT 仅 Linux 且指令集在仓颉 SDK for Linux 支持范围内（当前 x86_64 / aarch64）；其余平台恒为解释器并静默降级。本机为 aarch64 Linux ⇒ 机器码断言以 AArch64 为原生证据，x86_64 机器码用例转为条件跳过（跨架构由 CI 矩阵补），差分最小集为 `Interp × AArch64`。

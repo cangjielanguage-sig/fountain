@@ -6,18 +6,20 @@
 > ```bash
 > cd /mnt/linux_share/storage/Users/currentUser/Documents/cangjie/projects/fountain/.worktrees/f_jit/f_util && cjpm build && cjpm test   # 第 1 组（f_util.Fnv）
 > cd /mnt/linux_share/storage/Users/currentUser/Documents/cangjie/projects/fountain/.worktrees/f_jit/f_jit  && cjpm build && cjpm test   # 第 2–9 组（f_jit 各步）
-> cd /mnt/linux_share/storage/Users/currentUser/Documents/cangjie/projects/fountain/.worktrees/f_jit       && cjpm build && cjpm test   # 第 10 组（根工程登记后全仓库回归）
 > ```
 >
 > 每一步的验收口径：对应目录下 `cjpm build` 通过、`cjpm test` 新增用例由红转绿且既有用例无回归；用例数单调增长、失败数为 0。
+> 根 `cjpm.toml` **不登记** `f_jit`（用户裁定）；模块以自身 `cjpm build` / `cjpm test` 为验收入口，不做全仓库依赖登记。
 > 不允许出现「任务已勾选但没有对应用例」的进度。
 
 ## 1. 前置任务：`f_util.Fnv`（S2.16 指纹接入的依赖）
 
-- [ ] FNV.1 新增 `f_util/src/Fnv.cj`：`Fnv32`/`Fnv64`/`Fnv128`/`Fnv256` 四个入口 × `fnv1`/`fnv1a` 两变体，返回类型分别钉为 `UInt32`/`UInt64`/`UInt128`/`Array<UInt64>`（4 字、大端序）；先写失败用例 `Fnv_test`：空串 `fnv1a` 四组黄金值（`0x811C9DC5`、`0xCBF29CE484222325`、`0x6C62272E07BB014262B821756295C58D`、`0xDD268DBCAAC550362D98C384C4E576CCC8B1536847B6BBB31023B4C8CAEE0535`）；再写最小实现（标准 FNV 偏移基值与素数常量，不自造常数）；验收：`cjpm test` 下 `Fnv_test` 四条空串用例由红转绿
+- [ ] FNV.1 新建 `f_util/src/Fnv.cj`：`Fnv32`/`Fnv64`/`Fnv128`/`Fnv256`/`Fnv1024` 五个入口 × `fnv1`/`fnv1a` 两变体，返回类型分别钉为 `UInt32`/`UInt64`/`UInt128`/4 字/16 字（大端序）；先写失败用例 `Fnv_test`：空串 `fnv1a` 五组黄金值（32/64/128/256 用已公布常量；1024 用官方偏移基值的 16 字大端表示）；再写最小实现（标准 FNV 偏移基值与素数，不自造常数）；验收：`Fnv_test` 五条空串用例由红转绿
 - [ ] FNV.2 实现 `fnv1` 与 `fnv1a` 的逐字节主循环，并同时接受 `String` 与 `Array<UInt8>` 两种输入；先写失败用例：同输入 `fnv1 ≠ fnv1a`、`Fnv64.fnv1a("123456789") == 0x06D5573923C6CDFC`、字符串与其 UTF-8 字节流结果逐位相同、含 4 字节码点（emoji）的输入与参考实现一致；再补实现（按字节处理，不依赖字符边界与主机端序）；验收：`Fnv_test` 新增用例全绿且 `f_util` 既有用例无回归
 - [ ] FNV.3 提供增量喂入（同一上下文分三段喂入 + 空增量不改变结果）与长输入（> 4 KiB）分块等价；先写失败用例：增量与一次性喂入逐位相同、长输入不分块失真；再补实现；验收：两组对照用例通过，128 位结果可直接参与 `==` / `ToString` / 哈希容器键
-- [ ] FNV.4 `Fnv256` 字序与可比较性收口：结果恒为长度 4 的 `UInt64` 数组、最高有效字在前、同一输入两次调用逐位相等；先写失败用例；验收：`f_util` 全量 `cjpm test` 通过，`Fnv_test` 覆盖 32/64/128/256 × fnv1/fnv1a 全部组合
+- [ ] FNV.4 `Fnv256` 与 `Fnv1024` 字序与可比较性收口：结果分别恒为长度 4 / 16 的 `UInt64` 数组、最高有效字在前、同一输入两次调用逐位相等；先写失败用例；验收：`f_util` 全量 `cjpm test` 通过，`Fnv_test` 覆盖 32/64/128/256/1024 × fnv1/fnv1a 全部组合
+- [ ] FNV.5 统一 API：`Fnv.hash(width, variant, data)`（`String` / `Array<UInt8>`）、`Fnv.fnv1` / `Fnv.fnv1a`、`FnvWidth`（`W32`…`W1024` + `name()`/`bits()`/`words()`）、`FnvHasher`（`update` / `finish` / `reset`）；先写失败用例——五种宽度的统一入口与类型化入口逐位一致、返回数组长度 1/1/2/4/16、`finish` 可重复且 `reset` 回基值；再写实现（类型化入口委托同一引擎，算法只写一份）；验收：统一 API 与类型化入口等价用例全绿
+- [ ] FNV.6 `Fnv1024` 正确性：按 `2^680 + 2^8 + 0x8D` 素数做 16 字「移位 + 加法」乘法并保留进位、按 `2^1024` 取模；偏移基值与素数逐字抄官方参考并在文件头注明来源；先写失败用例——`Fnv1024.fnv1a("123456789")` 与 `Fnv1024.fnv1("123456789")` 等于独立 Python 大整数参考实现、长输入高位进位不失真、结果长度恒为 16；再写实现；验收：两组黄金值 + 进位用例全绿
 
 ## 2. P0 骨架与测试基建（S0.1–S0.3）
 
@@ -150,11 +152,6 @@
 - [ ] S7.6 T42–T48、T50–T53：先写失败用例——字符串形态、重复与日期差、`if` 双用法、Map 惰性迭代、Regex 互操作、尾递归、容器自建、源位置与诊断、容器/类型矩阵；再补齐；验收：对应项全绿，T 映射脚本校验无悬空项
 - [ ] S7.7 容量与性能基线：先写失败用例——显式调小 `initialCapacity` 复现窗口扩容深度与大循环触顶 16 边界；再做 JIT 相对解释器的吞吐对照（两侧遍历源、类型判定、目标容器、逐元素日志完全一致）；验收：记录**实测**数字与比值（非估计），扩容与触顶数字与留档一致
 - [ ] S7.8 文档同步：先写核对用例——设计与计划文档有对应修订记录且修订内容与代码行为一致；再回写 `f_jit/doc/design-m1.md` / `plan-m1.md` 的偏差，并对附 A / 附 B / 附 C 各抽 3 行与规格 §5 / §10 / §12 同源比对（不一致按规格修正并留痕）；验收：文档与产物一致，并把本次变更产物镜像一份到 `f_jit/doc/spec/f-jit-m1/` 随模块走查
-
-## 10. 收尾任务：根工程登记与全仓库回归
-
-- [ ] ROOT.1 根 `cjpm.toml` 登记：在 `[dependencies]` 增加一行 `"fountain::f_jit" = {path = "./f_jit"}`（按字母序落在 `fountain::f_io` 与 `fountain::f_jwt` 之间）；先写校验用例——根依赖清单含 `fountain::f_jit` 且 `exclude` 与既有条目写法不变；验收：仓库根 `cjpm build` 把 `f_jit` 与其它 `f_*` 模块一同纳入
-- [ ] ROOT.2 全仓库回归与基线留档：在融合开发环境的仓库根执行 `cjpm build` 与 `cjpm test`（含 `f_util` 与 `f_jit`）全绿，记录用例总数与失败数（对照 P0 基线确认「用例数单调增长、失败数为 0」）；验收：融合开发环境实测输出留档，`fboot build` 通过
 
 ## Workflow follow-up
 
