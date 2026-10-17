@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""opsx_progress.py — 采集 OpenSpec 任务进度快照（等待期间每 3 分钟报告一次用）。
+"""opsx_progress.py — 采集 OpenSpec 任务进度快照（等待期间每 5 分钟报告一次用）。
 
 背景：六步流程里的 opsx 任务由融合侧 CodeBuddy 后台执行，可能跑几分钟到几十分钟。
 等待期间按 references/opsx-waiting.md 的协议周期报告进度；本脚本负责把「进度」
@@ -307,14 +307,14 @@ def render(result: dict) -> str:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="采集 OpenSpec 任务进度快照（等待期间每 3 分钟报告用）")
+    ap = argparse.ArgumentParser(description="采集 OpenSpec 任务进度快照（等待期间每 5 分钟报告用）")
     ap.add_argument("--repo", default=".", help="仓库根（含 openspec/ 的那一层或其下）")
     ap.add_argument("--change", help="变更名（缺省列出全部在途变更）")
     ap.add_argument("--stage", help="当前阶段标签（propose/apply/verify/archive 等，仅用于报告标注）")
     ap.add_argument("--log", help="后台任务输出文件（可选；报告大小与尾部）")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--reset", action="store_true", help="清掉上一轮快照（新任务开始时用）")
-    ap.add_argument("--stall-rounds", type=int, default=2, help="连续多少轮无变化视为停滞（默认 2）")
+    ap.add_argument("--stall-rounds", type=int, default=3, help="连续多少轮无变化视为停滞（默认 3）")
     args = ap.parse_args()
 
     repo = Path(args.repo).expanduser().resolve()
