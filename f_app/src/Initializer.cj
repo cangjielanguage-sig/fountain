@@ -73,8 +73,11 @@ public struct InitializerCollection {
     public static func register(initializer: Initializer): Unit {
         instance.doRegister(initializer)
     }
-    private func doInit() {
-        let starters = ArrayList<() -> Unit>()
+    private static func providerOf(initializer: Initializer): () -> Initializer {
+        {=> initializer}
+    }
+    private func doInit(): ArrayList<() -> Initializer> {
+        let providers = ArrayList<() -> Initializer>()
         while(let Some(initializer) <- initializers.remove()){
             var toInit = true
             for(dependency in initializer.dependencies where dependencies.contains(dependency)){
@@ -84,17 +87,18 @@ public struct InitializerCollection {
             }
             if(toInit){
                 initializer.initialize()
-                starters.add(initializer.start)
+                providers.add(InitializerCollection.providerOf(initializer))
                 dependencies.remove(initializer.name)
             }
         }
         instance = unsafeZeroValue<InitializerCollection>()
-        starters
+        providers
     }
     /**
-     * 给fountain::f_app.App调用的函数
+     * 给fountain::f_app.App与需要自定义扩展的宿主调用的函数。
+     * 返回已执行 initialize() 的实例提供器；调用提供器即可取得实例。
      */
-    static func initialize(): ArrayList<() -> Unit> {
+    public static func initialize(): ArrayList<() -> Initializer> {
         instance.doInit()
     }
 }
