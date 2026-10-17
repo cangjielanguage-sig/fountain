@@ -54,6 +54,21 @@ public class X86Lower_test {
         @Assert(X86Lower_test.hex(BackendX86_64.emitBail(3)), '41C70703000000' + '31C0' + 'E900000000')
     }
 
+    @TestCase
+    public func integerBinaryOps(): Unit {
+        let tail = '4889442408' + '4883C408'
+        @Assert(X86Lower_test.hex(BackendX86_64.emitIAdd()), '488B442408' + '48030424' + tail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitISub()), '488B442408' + '482B0424' + tail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitIMul()), '488B442408' + '480FAF0424' + tail)
+    }
+
+    @TestCase
+    public func branches(): Unit {
+        @Assert(X86Lower_test.hex(BackendX86_64.emitJmp()), 'E900000000')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitJz()), '0F8400000000')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitJnz()), '0F8500000000')
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {

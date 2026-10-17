@@ -209,6 +209,52 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
+    // ---- S5.5 整型二元 / 分支 ----
+
+    private static func binOp(opBytes: Array<UInt8>): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (b in [0x48u8, 0x8Bu8, 0x44u8, 0x24u8, 0x08u8]) {
+            out.add(b) // mov rax,[rsp+8]
+        }
+        for (b in opBytes) {
+            out.add(b)
+        }
+        for (b in [0x48u8, 0x89u8, 0x44u8, 0x24u8, 0x08u8]) {
+            out.add(b) // mov [rsp+8],rax
+        }
+        for (b in [0x48u8, 0x83u8, 0xC4u8, 0x08u8]) {
+            out.add(b) // add rsp,8
+        }
+        out.toArray()
+    }
+
+    internal static func emitIAdd(): Array<UInt8> {
+        BackendX86_64.binOp([0x48u8, 0x03u8, 0x04u8, 0x24u8])
+    }
+
+    internal static func emitISub(): Array<UInt8> {
+        BackendX86_64.binOp([0x48u8, 0x2Bu8, 0x04u8, 0x24u8])
+    }
+
+    internal static func emitIMul(): Array<UInt8> {
+        BackendX86_64.binOp([0x48u8, 0x0Fu8, 0xAFu8, 0x04u8, 0x24u8])
+    }
+
+    /** `JMP rel32`（占位 0，P5.8 回填）。 */
+    internal static func emitJmp(): Array<UInt8> {
+        [0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]
+    }
+
+    /** `JZ rel32`（占位 0）。 */
+    internal static func emitJz(): Array<UInt8> {
+        [0x0Fu8, 0x84u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]
+    }
+
+    /** `JNZ rel32`（占位 0）。 */
+    internal static func emitJnz(): Array<UInt8> {
+        [0x0Fu8, 0x85u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]
+    }
+
     /** `SET_SITE s`：`mov dword [r15+8], s`。 */
     internal static func emitSetSite(site: Int64): Array<UInt8> {
         let out = ArrayList<UInt8>()
