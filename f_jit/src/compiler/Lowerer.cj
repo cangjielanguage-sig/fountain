@@ -770,16 +770,26 @@ internal class Lowerer {
                     this.coerceToStr(rt)
                     ctx.builder.emit(Op.STR_CAT)
                 } else {
+                    this.coerceOperands(lt, rt, t, pos)
                     this.emitArith(t, Op.IADD, Op.FADD, Op.DEC_ADD)
                 }
                 t
             case TokenKind.Minus =>
+                this.coerceOperands(lt, rt, t, pos)
                 this.emitArith(t, Op.ISUB, Op.FSUB, Op.DEC_SUB)
                 t
             case TokenKind.Star =>
+                this.coerceOperands(lt, rt, t, pos)
                 this.emitArith(t, Op.IMUL, Op.FMUL, Op.DEC_MUL)
                 t
             case TokenKind.Slash =>
+                if (t != LocalType.STRING) {
+                    this.coerceOperands(lt, rt, t, pos)
+                }
+                // 整数 / Decimal 除法可能失败（除零 1/10）⇒ 失败点前记站点（§9.16）
+                if (t == LocalType.I64 || t == LocalType.DECIMAL) {
+                    ctx.builder.setSite(pos)
+                }
                 this.emitArith(t, Op.IDIV, Op.FDIV, Op.DEC_DIV)
                 t
             case TokenKind.Percent =>
@@ -787,10 +797,13 @@ internal class Lowerer {
                     diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
                         '% 仅支持 (Int64, Int64)')
                 }
+                ctx.builder.setSite(pos) // 取余除零 → 2
                 ctx.builder.emit(Op.IMOD)
                 LocalType.I64
             case TokenKind.EqEq | TokenKind.NotEq | TokenKind.Lt | TokenKind.Le | TokenKind.Gt |
-                TokenKind.Ge => this.emitCompare(op, t, pos)
+                TokenKind.Ge =>
+                this.coerceOperands(lt, rt, t, pos)
+                this.emitCompare(op, t, pos)
             case TokenKind.Amp =>
                 if (t == LocalType.BOOL) {
                     ctx.builder.emit(Op.AND_B)
@@ -840,6 +853,44 @@ internal class Lowerer {
         }
         diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
             '运算两侧类型不兼容: ${LocalType.name(lt)} / ${LocalType.name(rt)}')
+    }
+
+    /**
+     * 混合数值提升的**栈上转换**：两侧已按 `[l, r]` 入栈，`t` 是提升后的公共类型。
+     *
+     * 只处理 I64/F64/Decimal 三者的提升（§11.9）；其余类型不插入任何指令。
+     * 栈序技巧：右侧转换直接作用于栈顶；左侧需 `SWAP → 转换 → SWAP` 复原。
+     */
+    private func coerceOperands(lt: UInt16, rt: UInt16, t: UInt16, pos: SourcePos): Unit {
+        if (t != LocalType.I64 && t != LocalType.F64 && t != LocalType.DECIMAL) {
+            return
+        }
+        if (lt == t && rt == t) {
+            return
+        }
+        let ctx = this.requireCtx()
+        if (rt != t) {
+            this.coerceTop(rt, t, pos)
+        }
+        if (lt != t) {
+            ctx.builder.emit(Op.SWAP)
+            this.coerceTop(lt, t, pos)
+            ctx.builder.emit(Op.SWAP)
+        }
+    }
+
+    private func coerceTop(from: UInt16, to: UInt16, pos: SourcePos): Unit {
+        let ctx = this.requireCtx()
+        if (to == LocalType.F64 && from == LocalType.I64) {
+            ctx.builder.emit(Op.TO_F64)
+        } else if (to == LocalType.DECIMAL && from == LocalType.I64) {
+            ctx.builder.emitU8(Op.TO_DEC, 0u8)
+        } else if (to == LocalType.DECIMAL && from == LocalType.F64) {
+            ctx.builder.emitU8(Op.TO_DEC, 1u8)
+        } else {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                '无法提升 ${LocalType.name(from)} → ${LocalType.name(to)}')
+        }
     }
 
     private func emitArith(t: UInt16, iop: UInt8, fop: UInt8, dop: UInt8): Unit {

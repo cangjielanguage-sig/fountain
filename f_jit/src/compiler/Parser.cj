@@ -670,10 +670,45 @@ internal class Parser {
     }
 
     private func parseCompare(): AstExpr {
-        var left = this.parseShift()
+        var left = this.parseBitOr()
         while (Parser.isCompareOp(this.peek().kind)) {
             let opTok = this.take()
-            let right = this.parseRange()
+            let right = this.parseBitOr()
+            left = AstExpr.Binary(opTok.kind, left, right, SourcePos(opTok.line, opTok.column))
+        }
+        left
+    }
+
+    /**
+     * 位运算三级（与仓颉一致）：`|` < `^` < `&`，均高于比较、低于移位。
+     *
+     * Bool 上的同名运算由降低阶段分派为 `AND_B/OR_B/XOR_B`（§5）。
+     */
+    private func parseBitOr(): AstExpr {
+        var left = this.parseBitXor()
+        while (this.atKind(TokenKind.Pipe)) {
+            let opTok = this.take()
+            let right = this.parseBitXor()
+            left = AstExpr.Binary(opTok.kind, left, right, SourcePos(opTok.line, opTok.column))
+        }
+        left
+    }
+
+    private func parseBitXor(): AstExpr {
+        var left = this.parseBitAnd()
+        while (this.atKind(TokenKind.Caret)) {
+            let opTok = this.take()
+            let right = this.parseBitAnd()
+            left = AstExpr.Binary(opTok.kind, left, right, SourcePos(opTok.line, opTok.column))
+        }
+        left
+    }
+
+    private func parseBitAnd(): AstExpr {
+        var left = this.parseShift()
+        while (this.atKind(TokenKind.Amp)) {
+            let opTok = this.take()
+            let right = this.parseShift()
             left = AstExpr.Binary(opTok.kind, left, right, SourcePos(opTok.line, opTok.column))
         }
         left
