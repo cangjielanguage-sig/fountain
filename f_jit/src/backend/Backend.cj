@@ -15,6 +15,8 @@ limitations under the License.
 */
 package fountain::f_jit.backend
 
+import fountain::f_jit.bytecode.LoadedUnit
+
 /** 后端契约（design §6.3.1、§12.2）：机器码编译入口 + ABI 摘要 + 入口 thunk。 */
 public interface Backend {
     /** "x86_64" / "aarch64"（缓存键与诊断用）。 */
@@ -22,6 +24,9 @@ public interface Backend {
 
     /** ABI 摘要（CTX/FP/SP/RETV/TMP 映射；诊断/测试用）。 */
     func abiSummary(): String
+
+    /** 整单元 lowering 到 `sink`；暂不支持 / 失败 → false（调用方降级解释器）。 */
+    func compile(unit: LoadedUnit, sink: CodeBuffer): Bool
 
     /** 入口 thunk 区基址。 */
     func entryThunkBase(): Int64

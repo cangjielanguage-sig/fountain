@@ -23,6 +23,7 @@ import fountain::f_jit.base.DiagnosticLevel
 import fountain::f_jit.base.DiagnosticsSink
 import fountain::f_jit.base.Engine
 import fountain::f_jit.base.JitMode
+import fountain::f_jit.bytecode.LoadedUnit
 
 /**
  * 引擎选择（design §6.3.4、§12.1、plan S5.3）。
@@ -68,6 +69,11 @@ internal class BackendX86_64 <: Backend {
 
     public func abiSummary(): String {
         'CTX=r15 FP=rbp SP=rsp RETV=rax TMP=r10/r11'
+    }
+
+    public func compile(unit: LoadedUnit, sink: CodeBuffer): Bool {
+        // S5.4 骨架：指令 lowering 在 S5.5/S5.6 落地；当前一律降级解释器。
+        false
     }
 
     public func entryThunkBase(): Int64 {
@@ -247,6 +253,10 @@ internal class BackendAArch64 <: Backend {
 
     public func abiSummary(): String {
         'CTX=x19 FP=x29 SP=sp RETV=x0 TMP=x9/x10'
+    }
+
+    public func compile(unit: LoadedUnit, sink: CodeBuffer): Bool {
+        false // S5.9 落地
     }
 
     public func entryThunkBase(): Int64 {
