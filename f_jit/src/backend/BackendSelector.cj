@@ -71,11 +71,85 @@ internal class BackendX86_64 <: Backend {
     }
 
     public func entryThunkBase(): Int64 {
-        0
+        match (this.thunkBuf) {
+            case Some(b) => b.base
+            case None => 0
+        }
     }
 
     public func entryThunkFor(fnId: UInt32): Int64 {
-        0
+        if (Int64(fnId) >= this.thunkCount) {
+            return 0
+        }
+        this.entryThunkBase() + Int64(fnId) * 16
+    }
+
+    // ---- P5.4 entryThunk（每函数 16 B：endbr64; jmp rel32）----
+
+    private var thunkBuf: ?CodeBuffer = None
+    private var thunkCount: Int64 = 0
+
+    /** 为 `entries` 建 thunk 区并 seal；失败 → false（调用方降级解释器）。 */
+    internal func prepareThunks(entries: Array<Int64>): Bool {
+        this.releaseThunks()
+        if (entries.size == 0) {
+            return true
+        }
+        let buf = match (CodeBuffer.alloc(entries.size * 16)) {
+            case Some(b) => b
+            case None => return false
+        }
+        var i = 0
+        while (i < entries.size) {
+            let thunkAddr = buf.base + i * 16
+            let rel = entries[i] - (thunkAddr + 9)
+            let bs = ArrayList<UInt8>()
+            for (x in [0xF3u8, 0x0Fu8, 0x1Eu8, 0xFAu8]) {
+                bs.add(x)
+            }
+            if (rel >= -2147483648 && rel <= 2147483647) {
+                bs.add(0xE9u8) // jmp rel32
+                BackendX86_64.w32(bs, BackendX86_64.i32bits(rel))
+            } else {
+                // 远目标：mov rax, imm64; jmp rax（整槽 16 B）
+                bs.add(0x48u8)
+                bs.add(0xB8u8)
+                BackendX86_64.w64(bs, entries[i])
+                bs.add(0xFFu8)
+                bs.add(0xE0u8)
+            }
+            if (!buf.write(bs.toArray(), i * 16)) {
+                buf.free()
+                return false
+            }
+            i = i + 1
+        }
+        if (!buf.seal()) {
+            buf.free()
+            return false
+        }
+        this.thunkBuf = Some(buf)
+        this.thunkCount = entries.size
+        true
+    }
+
+    internal func thunkBytes(fnId: UInt32): Array<UInt8> {
+        if (Int64(fnId) >= this.thunkCount) {
+            return Array<UInt8>()
+        }
+        match (this.thunkBuf) {
+            case Some(b) => b.read(Int64(fnId) * 16, 16)
+            case None => Array<UInt8>()
+        }
+    }
+
+    internal func releaseThunks(): Unit {
+        match (this.thunkBuf) {
+            case Some(b) => b.free()
+            case None => ()
+        }
+        this.thunkBuf = None
+        this.thunkCount = 0
     }
 
     // ---- P5.4 帧序列（§12.3、§4 prologue）----
@@ -138,6 +212,14 @@ internal class BackendX86_64 <: Backend {
     /** 出口：恢复 r15 → `rsp=rbp` → pop rbp → ret（RET/RET_VOID/BAIL 统一跳这里）。 */
     internal static func emitEpilogue(): Array<UInt8> {
         [0x4Cu8, 0x8Bu8, 0x7Du8, 0xF8u8, 0x48u8, 0x89u8, 0xECu8, 0x5Du8, 0xC3u8]
+    }
+
+    private static func w64(out: ArrayList<UInt8>, v: Int64): Unit {
+        var k = 0
+        while (k < 8) {
+            out.add(UInt8((v >> (8 * k)) & 0xFF))
+            k = k + 1
+        }
     }
 
     /** Int64 → 低 32 位（两补码，不做范围检查）。 */
