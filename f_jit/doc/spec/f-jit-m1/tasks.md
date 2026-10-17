@@ -14,63 +14,68 @@
 
 ## 1. 前置任务：`f_util.Fnv`（S2.16 指纹接入的依赖）
 
-- [ ] FNV.1 新建 `f_util/src/Fnv.cj`：`Fnv32`/`Fnv64`/`Fnv128`/`Fnv256`/`Fnv1024` 五个入口 × `fnv1`/`fnv1a` 两变体，返回类型分别钉为 `UInt32`/`UInt64`/`UInt128`/4 字/16 字（大端序）；先写失败用例 `Fnv_test`：空串 `fnv1a` 五组黄金值（32/64/128/256 用已公布常量；1024 用官方偏移基值的 16 字大端表示）；再写最小实现（标准 FNV 偏移基值与素数，不自造常数）；验收：`Fnv_test` 五条空串用例由红转绿
-- [ ] FNV.2 实现 `fnv1` 与 `fnv1a` 的逐字节主循环，并同时接受 `String` 与 `Array<UInt8>` 两种输入；先写失败用例：同输入 `fnv1 ≠ fnv1a`、`Fnv64.fnv1a("123456789") == 0x06D5573923C6CDFC`、字符串与其 UTF-8 字节流结果逐位相同、含 4 字节码点（emoji）的输入与参考实现一致；再补实现（按字节处理，不依赖字符边界与主机端序）；验收：`Fnv_test` 新增用例全绿且 `f_util` 既有用例无回归
-- [ ] FNV.3 提供增量喂入（同一上下文分三段喂入 + 空增量不改变结果）与长输入（> 4 KiB）分块等价；先写失败用例：增量与一次性喂入逐位相同、长输入不分块失真；再补实现；验收：两组对照用例通过，128 位结果可直接参与 `==` / `ToString` / 哈希容器键
-- [ ] FNV.4 `Fnv256` 与 `Fnv1024` 字序与可比较性收口：结果分别恒为长度 4 / 16 的 `UInt64` 数组、最高有效字在前、同一输入两次调用逐位相等；先写失败用例；验收：`f_util` 全量 `cjpm test` 通过，`Fnv_test` 覆盖 32/64/128/256/1024 × fnv1/fnv1a 全部组合
-- [ ] FNV.5 统一 API：`Fnv.hash(width, variant, data)`（`String` / `Array<UInt8>`）、`Fnv.fnv1` / `Fnv.fnv1a`、`FnvWidth`（`W32`…`W1024` + `name()`/`bits()`/`words()`）、`FnvHasher`（`update` / `finish` / `reset`）；先写失败用例——五种宽度的统一入口与类型化入口逐位一致、返回数组长度 1/1/2/4/16、`finish` 可重复且 `reset` 回基值；再写实现（类型化入口委托同一引擎，算法只写一份）；验收：统一 API 与类型化入口等价用例全绿
-- [ ] FNV.6 `Fnv1024` 正确性：按 `2^680 + 2^8 + 0x8D` 素数做 16 字「移位 + 加法」乘法并保留进位、按 `2^1024` 取模；偏移基值与素数逐字抄官方参考并在文件头注明来源；先写失败用例——`Fnv1024.fnv1a("123456789")` 与 `Fnv1024.fnv1("123456789")` 等于独立 Python 大整数参考实现、长输入高位进位不失真、结果长度恒为 16；再写实现；验收：两组黄金值 + 进位用例全绿
+- [x] FNV.1 新建 `f_util/src/Fnv.cj`：`Fnv32`/`Fnv64`/`Fnv128`/`Fnv256`/`Fnv1024` 五个入口 × `fnv1`/`fnv1a` 两变体，返回类型分别钉为 `UInt32`/`UInt64`/`UInt128`/4 字/16 字（大端序）；先写失败用例 `Fnv_test`：空串 `fnv1a` 五组黄金值（32/64/128/256 用已公布常量；1024 用官方偏移基值的 16 字大端表示）；再写最小实现（标准 FNV 偏移基值与素数，不自造常数）；验收：`Fnv_test` 五条空串用例由红转绿
+- [x] FNV.2 实现 `fnv1` 与 `fnv1a` 的逐字节主循环，并同时接受 `String` 与 `Array<UInt8>` 两种输入；先写失败用例：同输入 `fnv1 ≠ fnv1a`、`Fnv64.fnv1a("123456789") == 0x06D5573923C6CDFC`、字符串与其 UTF-8 字节流结果逐位相同、含 4 字节码点（emoji）的输入与参考实现一致；再补实现（按字节处理，不依赖字符边界与主机端序）；验收：`Fnv_test` 新增用例全绿且 `f_util` 既有用例无回归
+- [x] FNV.3 提供增量喂入（同一上下文分三段喂入 + 空增量不改变结果）与长输入（> 4 KiB）分块等价；先写失败用例：增量与一次性喂入逐位相同、长输入不分块失真；再补实现；验收：两组对照用例通过，128 位结果可直接参与 `==` / `ToString` / 哈希容器键
+- [x] FNV.4 `Fnv256` 与 `Fnv1024` 字序与可比较性收口：结果分别恒为长度 4 / 16 的 `UInt64` 数组、最高有效字在前、同一输入两次调用逐位相等；先写失败用例；验收：`f_util` 全量 `cjpm test` 通过，`Fnv_test` 覆盖 32/64/128/256/1024 × fnv1/fnv1a 全部组合
+- [x] FNV.5 统一 API：`Fnv.hash(width, variant, data)`（`String` / `Array<UInt8>`）、`Fnv.fnv1` / `Fnv.fnv1a`、`FnvWidth`（`W32`…`W1024` + `name()`/`bits()`/`words()`）、`FnvHasher`（`update` / `finish` / `reset`）；先写失败用例——五种宽度的统一入口与类型化入口逐位一致、返回数组长度 1/1/2/4/16、`finish` 可重复且 `reset` 回基值；再写实现（类型化入口委托同一引擎，算法只写一份）；验收：统一 API 与类型化入口等价用例全绿
+- [x] FNV.6 `Fnv1024` 正确性：按 `2^680 + 2^8 + 0x8D` 素数做 16 字「移位 + 加法」乘法并保留进位、按 `2^1024` 取模；偏移基值与素数逐字抄官方参考并在文件头注明来源；先写失败用例——`Fnv1024.fnv1a("123456789")` 与 `Fnv1024.fnv1("123456789")` 等于独立 Python 大整数参考实现、长输入高位进位不失真、结果长度恒为 16；再写实现；验收：两组黄金值 + 进位用例全绿
 
 ## 2. P0 骨架与测试基建（S0.1–S0.3）
 
-- [ ] S0.1 模块骨架：补全 `f_jit/cjpm.toml`（`name=f_jit`、`organization=fountain`、`output-type=dynamic`、版本跟随仓库、`[dependencies]` 含 `fountain::f_base`/`fountain::f_regex`/`fountain::f_util`（`Crc32` 与 `Fnv`）、`[target.*]` 覆盖 Linux x86_64/aarch64、Windows、macOS、HarmonyOS）与六个包目录（`Root.cj` + `base`/`bytecode`/`compiler`/`runtime`/`backend`）；先写「红」：`cjpm build` 能跑通、依赖可被解析的基线用例；再按 §0.4 落 `package` 声明与 `public import` 占位；验收：`cjpm build` 通过、`cjpm test` 可执行且 0 失败，基线数字（构建结果 + 用例计数）留档
-- [ ] S0.2 差分测试 harness（`f_jit/src/test/diff`，独立目录）：同一单元跑 `Interp`/`BackendX86_64`/`BackendAArch64` 并逐位对比；先写失败用例：以「常量 1+1」驱动 harness 自身（先只挂 `Interp`，两后端以 mock 桩替代），断言三元组输出与对拍函数 `assertTripleEqual` 行为正确；再实现统一输出（结果 / errCode / site + 报告文本）与对拍函数；验收：harness 自测通过，后续每步自动接入
-- [ ] S0.3 T 编号映射表与用例命名规范：先写失败用例——空跑校验「映射表每项都能定位到具体步骤 + 用例名」（可脚本校验）；再建 `T# → 用例路径` 对照；验收：映射覆盖 M1 §13.2 全集（T1–T29、T42–T48、T50–T53），T30–T41 / T49 明确标注归属 M2/M3 且不计入本次完成判据，无悬空项
+- [x] S0.1 模块骨架：补全 `f_jit/cjpm.toml`（`name=f_jit`、`organization=fountain`、`output-type=dynamic`、版本跟随仓库、`[dependencies]` 含 `fountain::f_base`/`fountain::f_regex`/`fountain::f_util`（`Crc32` 与 `Fnv`）、`[target.*]` 覆盖 Linux x86_64/aarch64、Windows、macOS、HarmonyOS）与六个包目录（`Root.cj` + `base`/`bytecode`/`compiler`/`runtime`/`backend`）；先写「红」：`cjpm build` 能跑通、依赖可被解析的基线用例；再按 §0.4 落 `package` 声明与 `public import` 占位；验收：`cjpm build` 通过、`cjpm test` 可执行且 0 失败，基线数字（构建结果 + 用例计数）留档
+- [x] S0.2 差分测试 harness（`f_jit/src/test/diff`，独立目录）：同一单元跑 `Interp`/`BackendX86_64`/`BackendAArch64` 并逐位对比；先写失败用例：以「常量 1+1」驱动 harness 自身（先只挂 `Interp`，两后端以 mock 桩替代），断言三元组输出与对拍函数 `assertTripleEqual` 行为正确；再实现统一输出（结果 / errCode / site + 报告文本）与对拍函数；验收：harness 自测通过，后续每步自动接入
+- [x] S0.3 T 编号映射表与用例命名规范：先写失败用例——空跑校验「映射表每项都能定位到具体步骤 + 用例名」（可脚本校验）；再建 `T# → 用例路径` 对照；验收：映射覆盖 M1 §13.2 全集（T1–T29、T42–T48、T50–T53），T30–T41 / T49 明确标注归属 M2/M3 且不计入本次完成判据，无悬空项
+
+> **P0 基线留档（2026-10-17 · 融合开发环境 Linux aarch64 / 仓颉 1.3.0）**
+> - `f_util`：`cjpm build` 通过；`cjpm test` TOTAL 45 / PASSED 45 / FAILED 0，其中 `Fnv_test` 13 例全绿（32/64/128/256/1024 × fnv1/fnv1a）。
+> - `f_jit`：`cjpm build` 通过；`cjpm test` TOTAL 14 / PASSED 14 / FAILED 0——`Skeleton_test` 4 例（六包可达 + 三个外部依赖解析）+ `Diff_test` 10 例（harness 自证 + T 映射空跑校验）。
+> - 后续每步对照「用例数单调增长、失败数为 0」。
 
 ## 3. P1 包 `base`（S1.1–S1.11）
 
-- [ ] S1.1 `LocalType`：13 个常量（0–12）+ `name`/`isHandle`/`fromToken`；先写失败用例——逐值断言 0–12、`isHandle(4..12)=true` 且 `(0..3)=false`、`fromToken` 与 §11.7 对应表全等、合法集按 verMajor 分派（v1 拒 13；预留 v2:0–14、v3:0–19 登记位）；再写最小实现（静态常量 + 查询函数 + 0–19 全表 `name`）；验收：与规格 §11.7 逐项一致
-- [ ] S1.2 `TypeToken`：token 0–9（`RESERVED`/`LIST`/`MAP`/`STRING`/`DECIMAL`/`DATETIME`/`DURATION`/`RANGE`/`REGEX`/`CLOSURE`）+ `name`，与 `LocalType` 的映射集中一处；先写失败用例（逐值断言 + `name` 非空）；再写实现；验收：与 §6 类型 token 表一致
-- [ ] S1.3 `ErrCode`：`OK`/`DEOPT`/`INTERRUPT` 与 1–20、`CONCURRENT_MOD`(23)、`HELPER_PANIC`(99) + `describe`/`isHostSide`；先写失败用例——全码值断言、`describe(-2..99)` 非空且含语义关键词、未知码有兜底描述、宿主侧判定与规格归类一致；再写实现（静态表，无宏）；验收：与规格 §2 错误码表逐项一致
-- [ ] S1.4 `Version`：`MAJOR=1`/`MINOR=14`/`HDR_SIZE=36`/`MAGIC="FBC1"`，与 `.fbc` 读写两侧共用同一份定义；先写失败用例（四常量断言 + 用它们构造最小容器头可被同版本读回、magic 与长度字段匹配）；再写实现；验收：与 §11.6 一致
-- [ ] S1.5 `SourcePos`、`JitMode`、`Engine`、`JitValue`：先写失败用例——构造/字段读、`match` 穷尽性（四个 `JitValue` 构造器）、`==` 语义；再写 struct/enum 实现（`Engine`/`JitValue` 声明为 `protected`）；验收：值语义正确且两个内部枚举不进用户面
-- [ ] S1.6 `CallContext`：先写失败用例——默认值断言（`literalCopy=false`、`strictFp=false`、`deadline=None`）；再写 struct + 默认值；验收：默认值契约正确（`strictFp=true` 写 ctx.flags 在后续步骤联测）
-- [ ] S1.7 `SourceUnit`：先写失败用例——构造与字段读（`entryFn` 与容器头不一致的拒绝路径在 S2.15 / S6.9 联测）；再写 struct；验收：字段读回与构造入参一致
-- [ ] S1.8 `JitException`：`init(code,site,fnId,sourcePos,message,cause)` 与六个字段读回，继承 `fountain::f_base.BaseException`；先写失败用例——字段保真、`sourcePos=None` 与 `cause=None` 分支、可 `catch (e: JitException)` 读回全部字段、`is BaseException` 断言；再写实现（`super(message)` 转发报告文本）；验收：宿主可 `catch (e: BaseException)` 统一捕获并读到报告文本
-- [ ] S1.9 `SourceCompileException`：`kind`/`position`/`line`/`column`/`lineText`/`hint`，同样继承 `BaseException`；先写失败用例——多行源码上触发编译期错误，断言 `line`/`column` 指向出错位置且 `lineText` 与该行源码逐字节相同；再写实现；验收：编译期错误不写入任何运行期错误码、不涉及错误槽
-- [ ] S1.10 诊断接口：`DiagnosticsSink`（主签名 `(level, code, message)` + 便捷重载 `(level, message)`）、`DiagnosticLevel`（仅 `Info`/`Warn`）、`DiagCode`（`JitFallback`/`MmapFailed`/`RegistrationSkipped`/`PredefinedLimit`/`PlanFallback`/`Unspecified`）、`DummyDiagnosticsSink`；先写失败用例——桩实现记录 level+message、六值 `DiagCode` 逐值、便捷重载默认以 `Unspecified` 转发；再写实现；验收：sink 抛异常被引擎吞掉（有在途异常挂 suppressed），调用结果/错误码/site 与不接 sink 时逐位一致（`Error` 不捕、不重入）
-- [ ] S1.11 `base` 包整体可见性检查：先写正向用例——用户代码 `import fountain::f_jit.base.*` 可见全部 `public` 声明；再人工核对负向（`internal` 不外泄、`Engine`/`JitValue` 用户面不可见的编译期断言）；验收：与 design §1.2 可见性规则一致，`cjpm build` 与 `cjpm test` 全绿
+- [x] S1.1 `LocalType`：13 个常量（0–12）+ `name`/`isHandle`/`fromToken`；先写失败用例——逐值断言 0–12、`isHandle(4..12)=true` 且 `(0..3)=false`、`fromToken` 与 §11.7 对应表全等、合法集按 verMajor 分派（v1 拒 13；预留 v2:0–14、v3:0–19 登记位）；再写最小实现（静态常量 + 查询函数 + 0–19 全表 `name`）；验收：与规格 §11.7 逐项一致
+- [x] S1.2 `TypeToken`：token 0–9（`RESERVED`/`LIST`/`MAP`/`STRING`/`DECIMAL`/`DATETIME`/`DURATION`/`RANGE`/`REGEX`/`CLOSURE`）+ `name`，与 `LocalType` 的映射集中一处；先写失败用例（逐值断言 + `name` 非空）；再写实现；验收：与 §6 类型 token 表一致
+- [x] S1.3 `ErrCode`：`OK`/`DEOPT`/`INTERRUPT` 与 1–20、`CONCURRENT_MOD`(23)、`HELPER_PANIC`(99) + `describe`/`isHostSide`；先写失败用例——全码值断言、`describe(-2..99)` 非空且含语义关键词、未知码有兜底描述、宿主侧判定与规格归类一致；再写实现（静态表，无宏）；验收：与规格 §2 错误码表逐项一致
+- [x] S1.4 `Version`：`MAJOR=1`/`MINOR=14`/`HDR_SIZE=36`/`MAGIC="FBC1"`，与 `.fbc` 读写两侧共用同一份定义；先写失败用例（四常量断言 + 用它们构造最小容器头可被同版本读回、magic 与长度字段匹配）；再写实现；验收：与 §11.6 一致
+- [x] S1.5 `SourcePos`、`JitMode`、`Engine`、`JitValue`：先写失败用例——构造/字段读、`match` 穷尽性（四个 `JitValue` 构造器）、`==` 语义；再写 struct/enum 实现（`Engine`/`JitValue` 声明为 `protected`）；验收：值语义正确且两个内部枚举不进用户面
+- [x] S1.6 `CallContext`：先写失败用例——默认值断言（`literalCopy=false`、`strictFp=false`、`deadline=None`）；再写 struct + 默认值；验收：默认值契约正确（`strictFp=true` 写 ctx.flags 在后续步骤联测）
+- [x] S1.7 `SourceUnit`：先写失败用例——构造与字段读（`entryFn` 与容器头不一致的拒绝路径在 S2.15 / S6.9 联测）；再写 struct；验收：字段读回与构造入参一致
+- [x] S1.8 `JitException`：`init(code,site,fnId,sourcePos,message,cause)` 与六个字段读回，继承 `fountain::f_base.BaseException`；先写失败用例——字段保真、`sourcePos=None` 与 `cause=None` 分支、可 `catch (e: JitException)` 读回全部字段、`is BaseException` 断言；再写实现（`super(message)` 转发报告文本）；验收：宿主可 `catch (e: BaseException)` 统一捕获并读到报告文本
+- [x] S1.9 `SourceCompileException`：`kind`/`position`/`line`/`column`/`lineText`/`hint`，同样继承 `BaseException`；先写失败用例——多行源码上触发编译期错误，断言 `line`/`column` 指向出错位置且 `lineText` 与该行源码逐字节相同；再写实现；验收：编译期错误不写入任何运行期错误码、不涉及错误槽
+- [x] S1.10 诊断接口：`DiagnosticsSink`（主签名 `(level, code, message)` + 便捷重载 `(level, message)`）、`DiagnosticLevel`（仅 `Info`/`Warn`）、`DiagCode`（`JitFallback`/`MmapFailed`/`RegistrationSkipped`/`PredefinedLimit`/`PlanFallback`/`Unspecified`）、`DummyDiagnosticsSink`；先写失败用例——桩实现记录 level+message、六值 `DiagCode` 逐值、便捷重载默认以 `Unspecified` 转发；再写实现；验收：sink 抛异常被引擎吞掉（有在途异常挂 suppressed），调用结果/错误码/site 与不接 sink 时逐位一致（`Error` 不捕、不重入）
+- [x] S1.11 `base` 包整体可见性检查：先写正向用例——用户代码 `import fountain::f_jit.base.*` 可见全部 `public` 声明；再人工核对负向（`internal` 不外泄、`Engine`/`JitValue` 用户面不可见的编译期断言）；验收：与 design §1.2 可见性规则一致，`cjpm build` 与 `cjpm test` 全绿
 
 ## 4. P2 包 `bytecode`（S2.1–S2.16）
 
-- [ ] S2.1 `OpInfo`：5 字段 + `const init` + `static const CAT_*` + `static let OPCODE_TABLE`（256 项）；先写失败用例——`size == 256` 且 `table[i].code == i`、代表项（`SET_SITE=5`、`CALL_HELPER="u16 u8"=4`、`CALL_CLOSURE=u8=2`、`MAP_ITER_STEP=u8=2`）与 §10.3 逐条核对、未分配为 `OP_RSVD/CAT_RSVD`、`0xA9/0xAA = CAT_FORBID`、`0xC0–0xFF` 全 RSVD；再按 §10.3 录入；验收：与 §10.3 全等
-- [ ] S2.2 `ByteReader`/`ByteWriter`：`u8/u16/u32/i32/i64/f64bits/bytes/remaining` 等显式小端原语；先写失败用例——LE 往返（含非对齐与跨缓冲区边界、`0x0102` 字节序断言）、越界读返回错误或抛异常而非越界访问；再写实现（逐字节读写，禁 memcpy/指针强转）；验收：解码结果与主机端序无关
-- [ ] S2.3 `DecodedInsn` + `InsnDecoder.decode/u16/i32/i64/rel32`：先写失败用例——按 fmt 解码各类指令、`rel32` 目标 = 下一条指令位置 + offset、RSVD/FORBID 编码在解码阶段被语义拒绝；再写实现（查表 + 游标推进）；验收：解码器成为解释器取指的唯一入口
-- [ ] S2.4 `FuncEntry`（10 字段 + `SIZE`）：先写失败用例——26 字节编解码往返、字段保真；再写实现；验收：条目恒 26 B，与 §11.7 一致
-- [ ] S2.5 `FuncDir.add/get/find/size/validate`：先写失败用例——增查正常、重复 `fnId` 拒绝、`off`/`len` 越界拒绝、`entryFn` 不命中拒绝；再写实现（数组 + 索引）；验收：加载期校验前置可用
-- [ ] S2.6 `LocalTypes.init/get/set/size/validate/isHandleSlot`：先写失败用例——读写与越界、长度 ≠ nLocals 拒绝、`validate` 按该单元 verMajor 的合法集（v1 拒 13–255；v2 拒 15–255 放行 13/14；v3 拒 20–255 放行 15–19）、`isHandleSlot(4..12)=true`；再写实现（每槽 1 B）；验收：与 §11.7 校验一致
-- [ ] S2.7 `ConstKind`（常量命名空间）+ `ConstPayload`（enum，10 个构造器）：先写失败用例——各 kind 载荷构造/匹配、DAG 引用（`PList`/`PMap` 引用子索引）；再写实现（`match` 穷尽）；验收：与 §11.5 载荷编码一一对应
-- [ ] S2.8 `ConstRegistry` 拼装 API（`addList/addMap/addStr/addValue/addRange/addRegex/freeze/size/get/isFrozen`）：先写失败用例——各 `add` 返回递增 hid、`addRegex` 去重（同 pattern+flags 同 hid、flags 归一 `im`≡`mi`≡`ii`）、`freeze` 后写操作拒绝、`get(i)` 载荷保真；再写实现（数组表 + 去重键表）；验收：与 §3.3 / §11.5 一致
-- [ ] S2.9 `SiteEntry` + `SiteTable.add/freeze/lookup/validate`：先写失败用例——`lookup` 取 `off ≤ site` 的最大条目、无命中返回空、严格升序与 `off<codeLen`/`line,column ≥ 1` 校验拒绝、覆盖率 = 全部 `SET_SITE`（与 S3.19 联测）；再写实现（升序数组 + 二分）；验收：与 §11.6 / §9.16 一致
-- [ ] S2.10 `NameEntry` + `NameTable.add/freeze/lookup/validate`：先写失败用例——`lookup(fnId,slot)` 命中/未命中（→None 即省略名字）、`fnId` 命中目录、`slot<nLocals`、升序唯一、`strLen ≥ 1`、`strOff+strLen` 在界、UTF-8 合法；再写实现（段内相对偏移）；验收：与 §11.6 name 段一致
-- [ ] S2.11 `FbcFlags` + `FbcHeader.read/write`：先写失败用例——新布局字段偏移断言（0/4/6/8/12/16/20/24/28/32/36）、旧布局（`verMinor ≤ 13`）读入时无 `nameLen`、payload = 36、`hdrSize = 32`；再写实现（结构体 + 分支）；验收：旧单元兼容可读
-- [ ] S2.12 `FbcWriter`（`setEntryFn/setCode/setConst/setSite/setName/setFlags/build`）：先写失败用例——`build` 产物的 magic/verMajor/minor/lengths 正确、crc32 覆盖 code+const+site+name（改任一字节即变）、基准向量 `crc32(空)=0` 与 `crc32("123456789")=0xCBF43926`；再写实现（缓冲拼接 + `f_util.Crc32.isoHdlc`）；验收：与 §11.6 一致
-- [ ] S2.13 `FbcReader.load`（正向）：先写失败用例——手工构造最小合法单元，全字段解出（header/code/consts/site/name/dir/types）且 `entryFn` 命中目录；再写实现（分派 + 各表解析）；验收：T1 基础可用
-- [ ] S2.14 `FbcReader.load`（拒绝面，逐条）：先为 11 类各写一条失败用例（① 魔数错 ② verMajor 2/3 → 18 语义 + 兼容矩阵给出最小可接受 verMinor ③ 未知 flags 位 / `bit1=1` ④ 段长不符 ⑤ 常量 DAG 环 ⑥ 坏载荷（非 canonical F64 / 非法 kind）⑦ 目录越界 ⑧ 类型表非法 ⑨ site 未覆盖/乱序 ⑩ name 坏键 ⑪ crc32 不符），断言拒绝与错误码；再把校验集中进 `validate`；验收：每条拒绝面一条用例、互不掩盖
-- [ ] S2.15 `ConstRegistry` 加载期实例化（kind 3–10）：先写失败用例——kind 3/4/5/6/7/8/9 往返（对象等值、DAG 共享子结构同一对象）、kind 10 合法 pattern 只编译一次（编译次数断言）、非法/空 pattern → 14（加载期而非执行期）、`PUSH_KH idx < size`；再写实现（实例化经 std，正则经 `f_regex`）；验收：T20 前置就绪
-- [ ] S2.16 指纹接入：常量指纹 FNV-1a-64、源码/字节码去重键 FNV-1a-128、命中后二次校验原字节；先写失败用例——`f_util.Fnv` 可用（见第 1 组）、基准向量断言（空串 → `0xCBF29CE484222325`、`123456789` → `0x06D5573923C6CDFC`）、等长不同源二次校验判定不命中；再写实现（**经 `fountain::f_util` 调用，不自实现哈希**）；验收：crc32 / 64 位常量指纹 / 128 位去重键三者分工不混用，与 §11.5、§12.6 一致
+- [x] S2.1 `OpInfo`：5 字段 + `const init` + `static const CAT_*` + `static let OPCODE_TABLE`（256 项）；先写失败用例——`size == 256` 且 `table[i].code == i`、代表项（`SET_SITE=5`、`CALL_HELPER="u16 u8"=4`、`CALL_CLOSURE=u8=2`、`MAP_ITER_STEP=u8=2`）与 §10.3 逐条核对、未分配为 `OP_RSVD/CAT_RSVD`、`0xA9/0xAA = CAT_FORBID`、`0xC0–0xFF` 全 RSVD；再按 §10.3 录入；验收：与 §10.3 全等
+- [x] S2.2 `ByteReader`/`ByteWriter`：`u8/u16/u32/i32/i64/f64bits/bytes/remaining` 等显式小端原语；先写失败用例——LE 往返（含非对齐与跨缓冲区边界、`0x0102` 字节序断言）、越界读返回错误或抛异常而非越界访问；再写实现（逐字节读写，禁 memcpy/指针强转）；验收：解码结果与主机端序无关
+- [x] S2.3 `DecodedInsn` + `InsnDecoder.decode/u16/i32/i64/rel32`：先写失败用例——按 fmt 解码各类指令、`rel32` 目标 = 下一条指令位置 + offset、RSVD/FORBID 编码在解码阶段被语义拒绝；再写实现（查表 + 游标推进）；验收：解码器成为解释器取指的唯一入口
+- [x] S2.4 `FuncEntry`（10 字段 + `SIZE`）：先写失败用例——26 字节编解码往返、字段保真；再写实现；验收：条目恒 26 B，与 §11.7 一致
+- [x] S2.5 `FuncDir.add/get/find/size/validate`：先写失败用例——增查正常、重复 `fnId` 拒绝、`off`/`len` 越界拒绝、`entryFn` 不命中拒绝；再写实现（数组 + 索引）；验收：加载期校验前置可用
+- [x] S2.6 `LocalTypes.init/get/set/size/validate/isHandleSlot`：先写失败用例——读写与越界、长度 ≠ nLocals 拒绝、`validate` 按该单元 verMajor 的合法集（v1 拒 13–255；v2 拒 15–255 放行 13/14；v3 拒 20–255 放行 15–19）、`isHandleSlot(4..12)=true`；再写实现（每槽 1 B）；验收：与 §11.7 校验一致
+- [x] S2.7 `ConstKind`（常量命名空间）+ `ConstPayload`（enum，10 个构造器）：先写失败用例——各 kind 载荷构造/匹配、DAG 引用（`PList`/`PMap` 引用子索引）；再写实现（`match` 穷尽）；验收：与 §11.5 载荷编码一一对应
+- [x] S2.8 `ConstRegistry` 拼装 API（`addList/addMap/addStr/addValue/addRange/addRegex/freeze/size/get/isFrozen`）：先写失败用例——各 `add` 返回递增 hid、`addRegex` 去重（同 pattern+flags 同 hid、flags 归一 `im`≡`mi`≡`ii`）、`freeze` 后写操作拒绝、`get(i)` 载荷保真；再写实现（数组表 + 去重键表）；验收：与 §3.3 / §11.5 一致
+- [x] S2.9 `SiteEntry` + `SiteTable.add/freeze/lookup/validate`：先写失败用例——`lookup` 取 `off ≤ site` 的最大条目、无命中返回空、严格升序与 `off<codeLen`/`line,column ≥ 1` 校验拒绝、覆盖率 = 全部 `SET_SITE`（与 S3.19 联测）；再写实现（升序数组 + 二分）；验收：与 §11.6 / §9.16 一致
+- [x] S2.10 `NameEntry` + `NameTable.add/freeze/lookup/validate`：先写失败用例——`lookup(fnId,slot)` 命中/未命中（→None 即省略名字）、`fnId` 命中目录、`slot<nLocals`、升序唯一、`strLen ≥ 1`、`strOff+strLen` 在界、UTF-8 合法；再写实现（段内相对偏移）；验收：与 §11.6 name 段一致
+- [x] S2.11 `FbcFlags` + `FbcHeader.read/write`：先写失败用例——新布局字段偏移断言（0/4/6/8/12/16/20/24/28/32/36）、旧布局（`verMinor ≤ 13`）读入时无 `nameLen`、payload = 36、`hdrSize = 32`；再写实现（结构体 + 分支）；验收：旧单元兼容可读
+- [x] S2.12 `FbcWriter`（`setEntryFn/setCode/setConst/setSite/setName/setFlags/build`）：先写失败用例——`build` 产物的 magic/verMajor/minor/lengths 正确、crc32 覆盖 code+const+site+name（改任一字节即变）、基准向量 `crc32(空)=0` 与 `crc32("123456789")=0xCBF43926`；再写实现（缓冲拼接 + `f_util.Crc32.isoHdlc`）；验收：与 §11.6 一致
+- [x] S2.13 `FbcReader.load`（正向）：先写失败用例——手工构造最小合法单元，全字段解出（header/code/consts/site/name/dir/types）且 `entryFn` 命中目录；再写实现（分派 + 各表解析）；验收：T1 基础可用
+- [x] S2.14 `FbcReader.load`（拒绝面，逐条）：先为 11 类各写一条失败用例（① 魔数错 ② verMajor 2/3 → 18 语义 + 兼容矩阵给出最小可接受 verMinor ③ 未知 flags 位 / `bit1=1` ④ 段长不符 ⑤ 常量 DAG 环 ⑥ 坏载荷（非 canonical F64 / 非法 kind）⑦ 目录越界 ⑧ 类型表非法 ⑨ site 未覆盖/乱序 ⑩ name 坏键 ⑪ crc32 不符），断言拒绝与错误码；再把校验集中进 `validate`；验收：每条拒绝面一条用例、互不掩盖
+- [x] S2.15 `ConstRegistry` 加载期实例化（kind 3–10）：先写失败用例——kind 3/4/5/6/7/8/9 往返（对象等值、DAG 共享子结构同一对象）、kind 10 合法 pattern 只编译一次（编译次数断言）、非法/空 pattern → 14（加载期而非执行期）、`PUSH_KH idx < size`；再写实现（实例化经 std，正则经 `f_regex`）；验收：T20 前置就绪
+- [x] S2.16 指纹接入：常量指纹 FNV-1a-64、源码/字节码去重键 FNV-1a-128、命中后二次校验原字节；先写失败用例——`f_util.Fnv` 可用（见第 1 组）、基准向量断言（空串 → `0xCBF29CE484222325`、`123456789` → `0x06D5573923C6CDFC`）、等长不同源二次校验判定不命中；再写实现（**经 `fountain::f_util` 调用，不自实现哈希**）；验收：crc32 / 64 位常量指纹 / 128 位去重键三者分工不混用，与 §11.5、§12.6 一致
 
 ## 5. P3 包 `compiler`（S3.1–S3.22）
 
-- [ ] S3.1 `TokenKind`（§4.3.1 全表 58 项）+ `Token`（kind/text/pos/line/column/`nlBefore`）：先写失败用例——每个 kind 各一条构造用例、位置字段正确（多字节字符列号按码点）、`nlBefore` 正确性（同行紧跟为 false、跨行含注释跨行为 true）、`match` 穷尽性；再写实现（无载荷 enum + 只读 struct）；验收：词法基座可用
-- [ ] S3.2 `Lexer` 基础（`next/position/line/column`、`nlBefore`）：先写失败用例——标识符/关键字、数字（含小数、指数、超 Int64 标记）、标点/运算符（含 `!~` 单 token）、`=>`、EOF、`;` 与换行的 `nlBefore`、词法错误族逐 kind 一条（`IllegalCharacter`/`UnterminatedString`/`BadEscape`/`BadNumber`/`UnterminatedRegex`，fail-fast 抛出且**无 error token**）；再写实现（扫描器 + 关键字表，`null` 给专门诊断）；验收：逐 token 断言通过
-- [ ] S3.3 `Lexer` 字符串三形态：先写失败用例——单行（转义、异种引号为内容）、多行（首行换行、首个非转义三连终止、单独 `\` → 错误 kind）、原始串（`#`×n 定界、verbatim、可跨行、未闭合 → 错误）、`'''` 最长匹配消歧、CRLF/CR → LF；再写实现；验收：T42 词法组用例全绿
-- [ ] S3.4 `Lexer` 行首锚定标记（多行串，`>|`；规格 §8.8 / design §4.4）：先写失败用例——进入判定（仅首个非空白位置的标记触发）、无标记行整行保留、标记不进入产物（单独标记行 → 空串）、标记前含非空白字符的同类序列视为内容、非标记三例；再写实现；验收：产物中不含标记与前导缩进
-- [ ] S3.5 `Lexer` 注释与词法保护：先写失败用例——单行/多行注释、`/* */` 嵌套配平、未闭合 → `UnterminatedComment`、字符串跨度内 `//`/`/*`/引号/`{`/`}`/行首锚定标记不参与识别、注释不影响 site 语义；再写实现（保护 → 剥离 → 解析三阶段）；验收：T24 注释组用例全绿
-- [ ] S3.6 `Lexer` 正则字面量：先写失败用例——`/pattern/flags`（flags 顺序无关、重复幂等）、字面量后紧贴 `/` 优先于注释识别（三书写形态）、`/` 与除法消歧；再写实现（正则段扫描；非法 flags 不在词法层判）；验收：T20/T26 词法组就绪
-- [ ] S3.7 `LambdaAst/AstExpr/AstStmt` + `Parser.parseLambda`：先写失败用例——全 `AstExpr` 构造器各一例、形参 `name: Type`（不支持具名/默认）、`=>` 缺失 → `MissingArrow`、尾表达式即返回值、嵌套闭包与 IIFE、`recursive` 调用表达式、语句终结判定（`;` 或换行；一行多条必须 `;`）、AST 节点携带 `pos`；再写实现（递归下降）；验收：T22 前置就绪
-- [ ] S3.8 `NameResolver.resolve`：先写失败用例——`recursive` 优先、命中注册表 → `UserHelper(slot)`、未注册 → `UnregisteredFunction`（消息含名字/位置/已注册清单）、非调用未定义标识符 → `UndefinedIdentifier`；再写实现（名字表 + 冲突拒绝）；验收：T23 前置就绪
-- [ ] S3.9 `DefiniteAssignment.analyze`：先写失败用例——先写后读通过、读未赋值拒绝、循环出口不视为已赋值（含回边不动点）、分支全赋值才算已赋值、`PUSH_NULL` 直存句柄型槽拒绝、捕获未赋值变量拒绝；再写实现（数据流不动点）；验收：T13 前置就绪（汇编期拒绝，零值填充不可被观察）
+- [x] S3.1 `TokenKind`（§4.3.1 全表 58 项）+ `Token`（kind/text/pos/line/column/`nlBefore`）：先写失败用例——每个 kind 各一条构造用例、位置字段正确（多字节字符列号按码点）、`nlBefore` 正确性（同行紧跟为 false、跨行含注释跨行为 true）、`match` 穷尽性；再写实现（无载荷 enum + 只读 struct）；验收：词法基座可用
+- [x] S3.2 `Lexer` 基础（`next/position/line/column`、`nlBefore`）：先写失败用例——标识符/关键字、数字（含小数、指数、超 Int64 标记）、标点/运算符（含 `!~` 单 token）、`=>`、EOF、`;` 与换行的 `nlBefore`、词法错误族逐 kind 一条（`IllegalCharacter`/`UnterminatedString`/`BadEscape`/`BadNumber`/`UnterminatedRegex`，fail-fast 抛出且**无 error token**）；再写实现（扫描器 + 关键字表，`null` 给专门诊断）；验收：逐 token 断言通过
+- [x] S3.3 `Lexer` 字符串三形态：先写失败用例——单行（转义、异种引号为内容）、多行（首行换行、首个非转义三连终止、单独 `\` → 错误 kind）、原始串（`#`×n 定界、verbatim、可跨行、未闭合 → 错误）、`'''` 最长匹配消歧、CRLF/CR → LF；再写实现；验收：T42 词法组用例全绿
+- [x] S3.4 `Lexer` 行首锚定标记（多行串，`>|`；规格 §8.8 / design §4.4）：先写失败用例——进入判定（仅首个非空白位置的标记触发）、无标记行整行保留、标记不进入产物（单独标记行 → 空串）、标记前含非空白字符的同类序列视为内容、非标记三例；再写实现；验收：产物中不含标记与前导缩进
+- [x] S3.5 `Lexer` 注释与词法保护：先写失败用例——单行/多行注释、`/* */` 嵌套配平、未闭合 → `UnterminatedComment`、字符串跨度内 `//`/`/*`/引号/`{`/`}`/行首锚定标记不参与识别、注释不影响 site 语义；再写实现（保护 → 剥离 → 解析三阶段）；验收：T24 注释组用例全绿
+- [x] S3.6 `Lexer` 正则字面量：先写失败用例——`/pattern/flags`（flags 顺序无关、重复幂等）、字面量后紧贴 `/` 优先于注释识别（三书写形态）、`/` 与除法消歧；再写实现（正则段扫描；非法 flags 不在词法层判）；验收：T20/T26 词法组就绪
+- [x] S3.7 `LambdaAst/AstExpr/AstStmt` + `Parser.parseLambda`：先写失败用例——全 `AstExpr` 构造器各一例、形参 `name: Type`（不支持具名/默认）、`=>` 缺失 → `MissingArrow`、尾表达式即返回值、嵌套闭包与 IIFE、`recursive` 调用表达式、语句终结判定（`;` 或换行；一行多条必须 `;`）、AST 节点携带 `pos`；再写实现（递归下降）；验收：T22 前置就绪
+- [x] S3.8 `NameResolver.resolve`：先写失败用例——`recursive` 优先、命中注册表 → `UserHelper(slot)`、未注册 → `UnregisteredFunction`（消息含名字/位置/已注册清单）、非调用未定义标识符 → `UndefinedIdentifier`；再写实现（名字表 + 冲突拒绝）；验收：T23 前置就绪
+- [x] S3.9 `DefiniteAssignment.analyze`：先写失败用例——先写后读通过、读未赋值拒绝、循环出口不视为已赋值（含回边不动点）、分支全赋值才算已赋值、`PUSH_NULL` 直存句柄型槽拒绝、捕获未赋值变量拒绝；再写实现（数据流不动点）；验收：T13 前置就绪（汇编期拒绝，零值填充不可被观察）
 - [ ] S3.10 `Lowerer` 算术/比较/位/`%`：先写失败用例——逐指令产物断言（`IADD…IPOPCNT`、`CMP/EQ/LT`、逻辑、位、移位低 6 位、`EQ_H/NE_H`）、`%` 仅 `(Int64,Int64)` → `IMOD`、F64/Decimal/混合 → 编译错误、符号四象限与除零边界；再写实现（发射序列）；验收：产物与规格附 A 逐条一致
 - [ ] S3.11 `Lowerer` 字面值与混合提升：先写失败用例——小数字面值精确构造为 Decimal（不经 F64）、超 Int64 整数 → Decimal(scale=0)、指数形式 scale、混合四则/比较插入 `TO_F64/TO_DEC`、显式转换 6 方向（窄化仅显式）；再写实现（类型推导 + 插入）；验收：T12 全组用例绿
 - [ ] S3.12 `Lowerer` 插值与混合 String 加法：先写失败用例——`"a${x}b"` → `TO_STR(t)+STR_CAT` 左结合、`s+x`/`x+s`、非标签类型（Closure/容器/Unit）→ 编译错误、求值顺序左→右、原始串 `${` 为字面文本；再写实现；验收：T11/T12 相关用例绿
@@ -87,28 +92,28 @@
 
 ## 6. P4 包 `runtime`（S4.1–S4.22）
 
-- [ ] S4.1 `JitContext`（`create/free/errCode/site/hwBase/hwCap/hwTop/fnId/flags/dbgBase/resetForCall/cp`）：先写失败用例——偏移断言（0/8/16/24/32/40/48/56）、`resetForCall` 归零（`errCode=0`/`site=-1`/`hwTop=hwBase`）、`create/free` 配对（`LibC.malloc<Int64>(count: 8)` / `LibC.free<Int64>` 计数断言）、跨线程独立；再写实现（`protected` 访问器 + 非托管分配，释放走桥 `finally`，不用 `CPointerResource`）；验收：T27 基础通过且无泄漏
-- [ ] S4.2 `HandleTable.pin/get/release`：先写失败用例——同对象复用同 ID、不同类型对象不同 ID、`get` 类型不符 → None、`release` 后 `get` → None 且表项不按原位复用（gen 校验）、null 拒绝；再写实现（托管容器 + 槽三元组）；验收：T14 基础就绪
-- [ ] S4.3 `HandleTable` 窗口（`append`、扩容、封顶）：先写失败用例——`hwTop == hwCap` 时就地倍增（容量 ≥ 2×已用）、触及 `capacityLimit` → 16 且错误站点指向触发点、`initialCapacity` 调用前可调且不追溯进行中的调用；再写实现；验收：T10 用例绿
-- [ ] S4.4 `HandleTable.fetch` + `idxOf/tagOf/genOf`：先写失败用例——null → 6、tag 不符 → 8、坏 idx → 6/99 防御，无错配对象命中；再写实现（槽解析）；验收：helper 公共前置可用
-- [ ] S4.5 `HandleTable.escape/resetWindow/promote` + `EscapeArea`：先写失败用例——逃逸槽 ID 不变且窗口重置后仍可取到同一对象、非逃逸槽随重置失效、自动回收只作用于窗口区间内的槽、`gen+1` 可复用；再写实现（逃逸区登记）；验收：T14 用例绿
-- [ ] S4.6 `IterTable`（`open/next/key/value/close/clearAll`）：先写失败用例——游标 `(gen<<32)|idx`、`next` 的 0/1 是终止唯一来源、未推进取件 → 99、`close` 幂等、`clearAll` 后旧游标 → 99、条目数 ≤ 嵌套深度、不占用句柄窗口（记账零新增）；再写实现；验收：T45 用例绿
-- [ ] S4.7 `HelperId`（常量 + `name`）：先写失败用例——1–62、69–72 逐值、63–68 保留、`name` 非空；再写实现；验收：与 §8.4 hid 编码一致
-- [ ] S4.8 H01–H08（容器/字符串读）：先写失败用例——逐 helper 正常值与失败码（越界 4、缺键 5、null 6、tag 8）、`hwTop` 不变（不登记槽）；再写实现（`@C` 薄入口 + 仓颉实现）；验收：T18 前置就绪
-- [ ] S4.9 H09–H20（比较/判定）：先写失败用例——字符串/Decimal/DateTime/Duration 比较（禁浮点中间值）、`h_ref_eq` 恒不失败、`h_guard` null→6/类型→8、`h_is_type` null→false；再写实现；验收：逐 helper 用例绿
-- [ ] S4.10 H21–H23（错误/安全点/窗口）：先写失败用例——`err_raise` 写槽 + site 后返回、`interrupt_poll` deadline 到期 → -2、`hw_check` 触顶 → 16；再写实现；验收：-2/16 语义与规格一致
-- [ ] S4.11 H24–H31（Decimal）：先写失败用例——四则、`dec_div` ÷0 → 10、`dec_from_i64` scale=0、`dec_from_f64` 最短往返（`0.1f64 == Decimal("0.1")`）、`dec_to_i64` 越界 → 9、`dec_to_f64` 溢出 → ±Inf 不报错、分配型登记恰好 1 槽；再写实现（std Decimal 默认上下文）；验收：T12 用例绿
-- [ ] S4.12 H32/H33/H50/H51/H60（字符串族）：先写失败用例——`str_cat`、`to_str` 全标签（0–8）逐字节格式（整数值 F64 附 `.0`、NaN/Infinity、Decimal plain、DateTime 本地时区固定 TZ 采金样、Duration 仓颉同形、Range、Regex 规范序、String 原样）、`str_sub` 码点索引与边界、`str_replace` 空模式 → 14、`str_repeat` n≤0 → 空串与溢出 → 3；再写实现（格式算法内嵌，禁依赖平台 locale/printf）；验收：T11 用例绿且与宿主区域设置无关
-- [ ] S4.13 H34–H40/H61（时间族）：先写失败用例——DT±DUR 越界 → 11、DUR 四则溢出 → 12、`dur_div` ÷0 → 1、`dt_diff` 正/负/零与越界 → 12、DateTime 值恒 UTC；再写实现（std time）；验收：T43 用例绿
-- [ ] S4.14 H41/H42（区间）：先写失败用例——`range_new` step=0 → 14、`isClosed∉{0,1}` → 14、空区间规则四式、`range_contains` 含端点/空区间 false；再写实现（std Range）；验收：T12 子集用例绿
-- [ ] S4.15 H43–H48（变更型）：先写失败用例——逐 helper 与 std 语义对齐（`add/insert/set/remove/put/remove`；`LIST_REMOVE` 返回被删元素、`MAP_REMOVE` 归一 0/1）、常量目标 → 20、null 6/tag 8、**不登记槽**（`hwTop` 不变）；再写实现；验收：T18/T53 用例绿
-- [ ] S4.16 H52/H53/H58/H59/H69/H72（正则族）：先写失败用例——`is_match/find`（无匹配 → 0）、替换 g/n/n,m（越位 → 原串、剩余不足 → 到末尾、n=0,m=1 ≡ /0）、`str_to_regex` 非法/空 → 14（运行期，每次新对象不去重）、替换结果为新串（分配型）；再写实现（std regex）；验收：T20/T26/T46 用例绿
-- [ ] S4.17 H54–H57（闭包族）：先写失败用例——`closure_new`（fnId + 捕获快照，登记 1 槽）、`closure_fnid/closure_cap`（越界 6/8）、`fn_table` 基址（非 GC 内存）；再写实现；验收：T25 用例绿
-- [ ] S4.18 `ctxWriteCode` 多级写码：先写失败用例——内层已写码时外层仅在新异常时覆盖、catch-all 末尾兜 99、任何 helper 内部异常不逃逸为宿主异常；再写实现；验收：与 §9.5 一致
-- [ ] S4.19 `DbgDump.writeOnce/report/allocateDump/freeDump`：先写失败用例——首格哨兵（首个收敛点获胜）、DEOPT 不转储、`dbgBase=0` 跳过、报告模板逐字节（含源码行 `L:C · fnId=F`、变量清单；无名槽省略名字、句柄型按类型名 `#idx` 呈现、值型按 §11.9 文本化）；再写实现；验收：T50 报告文本与解释器/JIT 两路径逐位一致
-- [ ] S4.20 `Interp` 框架（帧/local 载入/操作数栈/指令循环/返回）：先写失败用例——帧尺寸公式（16 对齐）、`LOADL/STOREL`、`RET/RET_VOID` 唯一出口、结束即销毁；再写实现（解释循环）；验收：最小单元可解释执行
-- [ ] S4.21 `Interp` 全指令语义（分组）：先写逐组失败用例——控制/常量栈/局部/整型（溢出检查、`IDIV` 边界、`IMOD` 四象限）/浮点（NaN 规范化）/比较逻辑位/控制流（`JMP/JZ/JNZ/LOOP_BACK`）/调用（`CALL_FUNC` 共窗口、`CALL_CLOSURE`、user helper 路由、fnId 重写）/类型（`CAST/TO_I64/TO_F64/IS_TYPE/GUARD/THROW/ASSERT/ABORT/GUARD_NNZ`）/容器与值提取；并断言 fail-fast（错误后剩余指令不再执行、栈不再消费）与 `CALL_HELPER` 自动 `CHECK_ERR` 短路；再逐指令实现；验收：T2/T6 用例绿
-- [ ] S4.22 `Interp` §11.9 语义组：先写失败用例——List/Map/Range/String 迭代（含 23 并发修改）、`s[a..=b]` 折算、插值、范围/正则操作、`TO_STR` 契约与 JIT 一致（先自证）；再写实现；验收：T19/T45 用例绿
+- [x] S4.1 `JitContext`（`create/free/errCode/site/hwBase/hwCap/hwTop/fnId/flags/dbgBase/resetForCall/cp`）：先写失败用例——偏移断言（0/8/16/24/32/40/48/56）、`resetForCall` 归零（`errCode=0`/`site=-1`/`hwTop=hwBase`）、`create/free` 配对（`LibC.malloc<Int64>(count: 8)` / `LibC.free<Int64>` 计数断言）、跨线程独立；再写实现（`protected` 访问器 + 非托管分配，释放走桥 `finally`，不用 `CPointerResource`）；验收：T27 基础通过且无泄漏
+- [x] S4.2 `HandleTable.pin/get/release`：先写失败用例——同对象复用同 ID、不同类型对象不同 ID、`get` 类型不符 → None、`release` 后 `get` → None 且表项不按原位复用（gen 校验）、null 拒绝；再写实现（托管容器 + 槽三元组）；验收：T14 基础就绪
+- [x] S4.3 `HandleTable` 窗口（`append`、扩容、封顶）：先写失败用例——`hwTop == hwCap` 时就地倍增（容量 ≥ 2×已用）、触及 `capacityLimit` → 16 且错误站点指向触发点、`initialCapacity` 调用前可调且不追溯进行中的调用；再写实现；验收：T10 用例绿
+- [x] S4.4 `HandleTable.fetch` + `idxOf/tagOf/genOf`：先写失败用例——null → 6、tag 不符 → 8、坏 idx → 6/99 防御，无错配对象命中；再写实现（槽解析）；验收：helper 公共前置可用
+- [x] S4.5 `HandleTable.escape/resetWindow/promote` + `EscapeArea`：先写失败用例——逃逸槽 ID 不变且窗口重置后仍可取到同一对象、非逃逸槽随重置失效、自动回收只作用于窗口区间内的槽、`gen+1` 可复用；再写实现（逃逸区登记）；验收：T14 用例绿
+- [x] S4.6 `IterTable`（`open/next/key/value/close/clearAll`）：先写失败用例——游标 `(gen<<32)|idx`、`next` 的 0/1 是终止唯一来源、未推进取件 → 99、`close` 幂等、`clearAll` 后旧游标 → 99、条目数 ≤ 嵌套深度、不占用句柄窗口（记账零新增）；再写实现；验收：T45 用例绿
+- [x] S4.7 `HelperId`（常量 + `name`）：先写失败用例——1–62、69–72 逐值、63–68 保留、`name` 非空；再写实现；验收：与 §8.4 hid 编码一致
+- [x] S4.8 H01–H08（容器/字符串读）：先写失败用例——逐 helper 正常值与失败码（越界 4、缺键 5、null 6、tag 8）、`hwTop` 不变（不登记槽）；再写实现（`@C` 薄入口 + 仓颉实现）；验收：T18 前置就绪
+- [x] S4.9 H09–H20（比较/判定）：先写失败用例——字符串/Decimal/DateTime/Duration 比较（禁浮点中间值）、`h_ref_eq` 恒不失败、`h_guard` null→6/类型→8、`h_is_type` null→false；再写实现；验收：逐 helper 用例绿
+- [x] S4.10 H21–H23（错误/安全点/窗口）：先写失败用例——`err_raise` 写槽 + site 后返回、`interrupt_poll` deadline 到期 → -2、`hw_check` 触顶 → 16；再写实现；验收：-2/16 语义与规格一致
+- [x] S4.11 H24–H31（Decimal）：先写失败用例——四则、`dec_div` ÷0 → 10、`dec_from_i64` scale=0、`dec_from_f64` 最短往返（`0.1f64 == Decimal("0.1")`）、`dec_to_i64` 越界 → 9、`dec_to_f64` 溢出 → ±Inf 不报错、分配型登记恰好 1 槽；再写实现（std Decimal 默认上下文）；验收：T12 用例绿
+- [x] S4.12 H32/H33/H50/H51/H60（字符串族）：先写失败用例——`str_cat`、`to_str` 全标签（0–8）逐字节格式（整数值 F64 附 `.0`、NaN/Infinity、Decimal plain、DateTime 本地时区固定 TZ 采金样、Duration 仓颉同形、Range、Regex 规范序、String 原样）、`str_sub` 码点索引与边界、`str_replace` 空模式 → 14、`str_repeat` n≤0 → 空串与溢出 → 3；再写实现（格式算法内嵌，禁依赖平台 locale/printf）；验收：T11 用例绿且与宿主区域设置无关
+- [x] S4.13 H34–H40/H61（时间族）：先写失败用例——DT±DUR 越界 → 11、DUR 四则溢出 → 12、`dur_div` ÷0 → 1、`dt_diff` 正/负/零与越界 → 12、DateTime 值恒 UTC；再写实现（std time）；验收：T43 用例绿
+- [x] S4.14 H41/H42（区间）：先写失败用例——`range_new` step=0 → 14、`isClosed∉{0,1}` → 14、空区间规则四式、`range_contains` 含端点/空区间 false；再写实现（std Range）；验收：T12 子集用例绿
+- [x] S4.15 H43–H48（变更型）：先写失败用例——逐 helper 与 std 语义对齐（`add/insert/set/remove/put/remove`；`LIST_REMOVE` 返回被删元素、`MAP_REMOVE` 归一 0/1）、常量目标 → 20、null 6/tag 8、**不登记槽**（`hwTop` 不变）；再写实现；验收：T18/T53 用例绿
+- [x] S4.16 H52/H53/H58/H59/H69/H72（正则族）：先写失败用例——`is_match/find`（无匹配 → 0）、替换 g/n/n,m（越位 → 原串、剩余不足 → 到末尾、n=0,m=1 ≡ /0）、`str_to_regex` 非法/空 → 14（运行期，每次新对象不去重）、替换结果为新串（分配型）；再写实现（std regex）；验收：T20/T26/T46 用例绿
+- [x] S4.17 H54–H57（闭包族）：先写失败用例——`closure_new`（fnId + 捕获快照，登记 1 槽）、`closure_fnid/closure_cap`（越界 6/8）、`fn_table` 基址（非 GC 内存）；再写实现；验收：T25 用例绿
+- [x] S4.18 `ctxWriteCode` 多级写码：先写失败用例——内层已写码时外层仅在新异常时覆盖、catch-all 末尾兜 99、任何 helper 内部异常不逃逸为宿主异常；再写实现；验收：与 §9.5 一致
+- [x] S4.19 `DbgDump.writeOnce/report/allocateDump/freeDump`：先写失败用例——首格哨兵（首个收敛点获胜）、DEOPT 不转储、`dbgBase=0` 跳过、报告模板逐字节（含源码行 `L:C · fnId=F`、变量清单；无名槽省略名字、句柄型按类型名 `#idx` 呈现、值型按 §11.9 文本化）；再写实现；验收：T50 报告文本与解释器/JIT 两路径逐位一致
+- [x] S4.20 `Interp` 框架（帧/local 载入/操作数栈/指令循环/返回）：先写失败用例——帧尺寸公式（16 对齐）、`LOADL/STOREL`、`RET/RET_VOID` 唯一出口、结束即销毁；再写实现（解释循环）；验收：最小单元可解释执行
+- [x] S4.21 `Interp` 全指令语义（分组）：先写逐组失败用例——控制/常量栈/局部/整型（溢出检查、`IDIV` 边界、`IMOD` 四象限）/浮点（NaN 规范化）/比较逻辑位/控制流（`JMP/JZ/JNZ/LOOP_BACK`）/调用（`CALL_FUNC` 共窗口、`CALL_CLOSURE`、user helper 路由、fnId 重写）/类型（`CAST/TO_I64/TO_F64/IS_TYPE/GUARD/THROW/ASSERT/ABORT/GUARD_NNZ`）/容器与值提取；并断言 fail-fast（错误后剩余指令不再执行、栈不再消费）与 `CALL_HELPER` 自动 `CHECK_ERR` 短路；再逐指令实现；验收：T2/T6 用例绿
+- [x] S4.22 `Interp` §11.9 语义组：先写失败用例——List/Map/Range/String 迭代（含 23 并发修改）、`s[a..=b]` 折算、插值、范围/正则操作、`TO_STR` 契约与 JIT 一致（先自证）；再写实现；验收：T19/T45 用例绿
 
 ## 7. P5 包 `backend`（S5.1–S5.14）
 
