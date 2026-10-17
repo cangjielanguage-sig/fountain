@@ -128,6 +128,24 @@ public class Lowerer_test {
         @Assert(Lowerer_test.runInt('{ => /z/ !~ "abc" }', []), 1)
     }
 
+    /** S3.18：String 重复 ×n（含 n 位置窄化）与区间 step=0 拒绝。 */
+    @TestCase
+    public func stringRepeatAndNarrowing(): Unit {
+        @Assert(Lowerer_test.runString('{ => "ab" * 3 }', []), 'ababab')
+        @Assert(Lowerer_test.runString('{ => "ab" * 2.0 }', []), 'abab')
+        @Assert(Lowerer_test.runString('{ => 2.0 * "ab" }', []), 'abab')
+        @Assert(Lowerer_test.runString('{ => "ab" * Decimal(2) }', []), 'abab')
+        @Assert(Lowerer_test.compileKind('{ => 1..=5 : 0 }'), DiagKind.TYPE_MISMATCH)
+    }
+
+    /** S3.18：正则替换三形（g / 第 n 个 / 越位返回原串）。 */
+    @TestCase
+    public func regexReplacementForms(): Unit {
+        @Assert(Lowerer_test.runString('{ => /b//"abc"/"x"/g }', []), 'axc')
+        @Assert(Lowerer_test.runString('{ => /b//"abc"/"x"/0 }', []), 'axc')
+        @Assert(Lowerer_test.runString('{ => /b//"abc"/"x"/1 }', []), 'abc')
+    }
+
     /** S3.21：目录 / 类型 / 站点 / 名字与编译期记录一致。 */
     @TestCase
     public func artifactTablesAreConsistent(): Unit {

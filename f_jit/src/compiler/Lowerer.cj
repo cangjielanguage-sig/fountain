@@ -647,11 +647,16 @@ internal class Lowerer {
                 LocalType.STRING
             case AstExpr.RegexOp(kind, re, s, repl, n, m, pos) =>
                 this.lowerRegexOp(kind, re, s, repl, n, m, pos)
-            case AstExpr.RangeLit(start, endE, stepE, isClosed, _) =>
+            case AstExpr.RangeLit(start, endE, stepE, isClosed, pos) =>
                 let _ = this.lowerExprAs(start, LocalType.I64)
                 let _ = this.lowerExprAs(endE, LocalType.I64)
                 match (stepE) {
-                    case Some(se) => let _ = this.lowerExprAs(se, LocalType.I64)
+                    case Some(se) =>
+                        if (Lowerer.isZeroIntLit(se)) {
+                            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                                'Range step 不得为 0（§11.9）')
+                        }
+                        let _ = this.lowerExprAs(se, LocalType.I64)
                     case None => ctx.builder.emitI64(Op.PUSH_I64, 1)
                 }
                 ctx.builder.emitU8(Op.PUSH_BOOL, if (isClosed) { 1u8 } else { 0u8 })
@@ -779,9 +784,21 @@ internal class Lowerer {
                 this.emitArith(t, Op.ISUB, Op.FSUB, Op.DEC_SUB)
                 t
             case TokenKind.Star =>
-                this.coerceOperands(lt, rt, t, pos)
-                this.emitArith(t, Op.IMUL, Op.FMUL, Op.DEC_MUL)
-                t
+                if (lt == LocalType.STRING && Lowerer.isNumeric(rt)) {
+                    this.narrowTopToI64(rt, pos)
+                    ctx.builder.emit(Op.STR_REPEAT)
+                    LocalType.STRING
+                } else if (rt == LocalType.STRING && Lowerer.isNumeric(lt)) {
+                    // `n * s` 换序为 `s * n`（STR_REPEAT 操作数序固定）
+                    ctx.builder.emit(Op.SWAP)
+                    this.narrowTopToI64(lt, pos)
+                    ctx.builder.emit(Op.STR_REPEAT)
+                    LocalType.STRING
+                } else {
+                    this.coerceOperands(lt, rt, t, pos)
+                    this.emitArith(t, Op.IMUL, Op.FMUL, Op.DEC_MUL)
+                    t
+                }
             case TokenKind.Slash =>
                 if (t != LocalType.STRING) {
                     this.coerceOperands(lt, rt, t, pos)
@@ -861,6 +878,42 @@ internal class Lowerer {
      * 只处理 I64/F64/Decimal 三者的提升（§11.9）；其余类型不插入任何指令。
      * 栈序技巧：右侧转换直接作用于栈顶；左侧需 `SWAP → 转换 → SWAP` 复原。
      */
+    private static func isNumeric(t: UInt16): Bool {
+        t == LocalType.I64 || t == LocalType.F64 || t == LocalType.DECIMAL
+    }
+
+    /** 字面量 0 判定（Range step 编译期拒绝用；非字面量留给运行期 helper 的 14）。 */
+    private static func isZeroIntLit(e: AstExpr): Bool {
+        match (e) {
+            case AstExpr.Lit(t, _) =>
+                if (t.kind == TokenKind.IntLit) {
+                    match (Lowerer.parseInt64(t.text)) {
+                        case Some(v) => v == 0
+                        case None => false
+                    }
+                } else {
+                    false
+                }
+            case _ => false
+        }
+    }
+
+    /** n 位置运行期自动窄化（§11.9 v0.15）：F64/DEC → Int64，仅报错版（mode=0）。 */
+    private func narrowTopToI64(from: UInt16, pos: SourcePos): Unit {
+        let ctx = this.requireCtx()
+        if (from == LocalType.I64) {
+            return
+        }
+        if (from == LocalType.F64) {
+            ctx.builder.emitU8(Op.TO_I64, 0u8)
+        } else if (from == LocalType.DECIMAL) {
+            ctx.builder.emitU8(Op.DEC_TO_I64, 0u8)
+        } else {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                'n 位置不支持该类型: ${LocalType.name(from)}')
+        }
+    }
+
     private func coerceOperands(lt: UInt16, rt: UInt16, t: UInt16, pos: SourcePos): Unit {
         if (t != LocalType.I64 && t != LocalType.F64 && t != LocalType.DECIMAL) {
             return
