@@ -119,7 +119,7 @@
 
 ## 7. P5 包 `backend`（S5.1–S5.14）
 
-- [ ] S5.1 `CodeBuffer`（`alloc/write/patch/seal/flushICache/free/base/size`）：先写失败用例——分配/写入/读回、seal 后写入失败（W^X）、I-cache 接口被调用、`free` 幂等、4K/16K/64K 页大小下基址与长度按页对齐且释放完整（T4 条件用例）；再写实现（mmap/mprotect + cache 序列）；验收：T4 用例在本机通过
+- [x] S5.1 `CodeBuffer`（`alloc/write/patch/seal/flushICache/free/base/size`）：先写失败用例——分配/写入/读回、seal 后写入失败（W^X）、I-cache 接口被调用、`free` 幂等、4K/16K/64K 页大小下基址与长度按页对齐且释放完整（T4 条件用例）；再写实现（mmap/mprotect + cache 序列）；验收：T4 用例在本机通过
 - [ ] S5.2 `FnTable`（`alloc/set/entry/free`）+ `ConstMirror`（`build/base/free`）：先写失败用例——表项读写、镜像连续 8 B 且基址可烘焙进机器码立即数（读回值与常量表一致）、分配与释放配对；再写实现（非 GC 内存）；验收：两件资产生命周期配对
 - [ ] S5.3 `BackendSelector.select`：先写失败用例——矩阵 `{Off,Auto,Force} × {Linux x86_64, Linux aarch64, Linux 其他, Windows, macOS, HarmonyOS}` 结果确定、非 Linux 恒 `Interp` 且不抛异常、有降级诊断记录；再写实现（OS/Arch 判定经 `f_base`）；验收：T7/T9 用例绿
 - [ ] S5.4 `BackendX86_64` 框架 + `compile/entryThunk/abiSummary/name`：先写失败用例——prologue/epilogue 序列（r15 保存恢复、hwBase 镜像、fnId 写 ctx、args 拷入 locals、卫生填充）、帧 16 对齐算术；再写实现（发射器）；验收：与 §12.3 一致（机器码断言在非原生架构上条件跳过并计入「非原生跳过」）
