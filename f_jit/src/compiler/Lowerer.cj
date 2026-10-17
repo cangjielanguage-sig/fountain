@@ -767,6 +767,10 @@ internal class Lowerer {
         }
         let lt = this.lowerExpr(l)
         let rt = this.lowerExpr(r)
+        match (this.tryLowerTemporal(op, lt, rt, pos)) {
+            case Some(t) => return t
+            case None => ()
+        }
         let t = this.promote(lt, rt, pos)
         match (op) {
             case TokenKind.Plus =>
@@ -878,6 +882,67 @@ internal class Lowerer {
      * 只处理 I64/F64/Decimal 三者的提升（§11.9）；其余类型不插入任何指令。
      * 栈序技巧：右侧转换直接作用于栈顶；左侧需 `SWAP → 转换 → SWAP` 复原。
      */
+    /**
+     * DateTime / Duration 算术（§11.9 量纲约定）：
+     *
+     * - `dt − dt → dur`、`dt ± dur → dt`、`dur + dur / dur − dur → dur`；
+     * - `dur × Int64` / `Int64 × dur → dur`、`dur ÷ n → dur`（n 位置允许 F64/Decimal 窄化）。
+     *
+     * 这些组合**不参与数值提升**，必须在 `promote` 之前短路；命中后返回结果类型。
+     */
+    private func tryLowerTemporal(op: TokenKind, lt: UInt16, rt: UInt16, pos: SourcePos): ?UInt16 {
+        let ctx = this.requireCtx()
+        if (op == TokenKind.Minus && lt == LocalType.DATETIME && rt == LocalType.DATETIME) {
+            ctx.builder.setSite(pos)
+            ctx.builder.emit(Op.DT_DIFF)
+            return Some(LocalType.DURATION)
+        }
+        if (op == TokenKind.Plus && lt == LocalType.DATETIME && rt == LocalType.DURATION) {
+            ctx.builder.setSite(pos)
+            ctx.builder.emit(Op.DT_ADD)
+            return Some(LocalType.DATETIME)
+        }
+        if (op == TokenKind.Minus && lt == LocalType.DATETIME && rt == LocalType.DURATION) {
+            ctx.builder.setSite(pos)
+            ctx.builder.emit(Op.DT_SUB)
+            return Some(LocalType.DATETIME)
+        }
+        if (op == TokenKind.Plus && lt == LocalType.DURATION && rt == LocalType.DATETIME) {
+            ctx.builder.emit(Op.SWAP)
+            ctx.builder.setSite(pos)
+            ctx.builder.emit(Op.DT_ADD)
+            return Some(LocalType.DATETIME)
+        }
+        if (op == TokenKind.Plus && lt == LocalType.DURATION && rt == LocalType.DURATION) {
+            ctx.builder.setSite(pos)
+            ctx.builder.emit(Op.DUR_ADD)
+            return Some(LocalType.DURATION)
+        }
+        if (op == TokenKind.Minus && lt == LocalType.DURATION && rt == LocalType.DURATION) {
+            ctx.builder.setSite(pos)
+            ctx.builder.emit(Op.DUR_SUB)
+            return Some(LocalType.DURATION)
+        }
+        if (op == TokenKind.Star && lt == LocalType.DURATION && rt == LocalType.I64) {
+            ctx.builder.setSite(pos)
+            ctx.builder.emit(Op.DUR_MUL)
+            return Some(LocalType.DURATION)
+        }
+        if (op == TokenKind.Star && lt == LocalType.I64 && rt == LocalType.DURATION) {
+            ctx.builder.emit(Op.SWAP)
+            ctx.builder.setSite(pos)
+            ctx.builder.emit(Op.DUR_MUL)
+            return Some(LocalType.DURATION)
+        }
+        if (op == TokenKind.Slash && lt == LocalType.DURATION && Lowerer.isNumeric(rt)) {
+            this.narrowTopToI64(rt, pos)
+            ctx.builder.setSite(pos)
+            ctx.builder.emit(Op.DUR_DIV)
+            return Some(LocalType.DURATION)
+        }
+        None
+    }
+
     private static func isNumeric(t: UInt16): Bool {
         t == LocalType.I64 || t == LocalType.F64 || t == LocalType.DECIMAL
     }
