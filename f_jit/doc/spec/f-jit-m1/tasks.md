@@ -65,7 +65,7 @@
 - [x] S2.15 `ConstRegistry` 加载期实例化（kind 3–10）：先写失败用例——kind 3/4/5/6/7/8/9 往返（对象等值、DAG 共享子结构同一对象）、kind 10 合法 pattern 只编译一次（编译次数断言）、非法/空 pattern → 14（加载期而非执行期）、`PUSH_KH idx < size`；再写实现（实例化经 std，正则经 `f_regex`）；验收：T20 前置就绪
 - [x] S2.16 指纹接入：常量指纹 FNV-1a-64、源码/字节码去重键 FNV-1a-128、命中后二次校验原字节；先写失败用例——`f_util.Fnv` 可用（见第 1 组）、基准向量断言（空串 → `0xCBF29CE484222325`、`123456789` → `0x06D5573923C6CDFC`）、等长不同源二次校验判定不命中；再写实现（**经 `fountain::f_util` 调用，不自实现哈希**）；验收：crc32 / 64 位常量指纹 / 128 位去重键三者分工不混用，与 §11.5、§12.6 一致
 
-## 5. P3 包 `compiler`（S3.1–S3.22）
+## 5. P3 包 `compiler`（S3.1–S3.23）
 
 - [x] S3.1 `TokenKind`（§4.3.1 全表 58 项）+ `Token`（kind/text/pos/line/column/`nlBefore`）：先写失败用例——每个 kind 各一条构造用例、位置字段正确（多字节字符列号按码点）、`nlBefore` 正确性（同行紧跟为 false、跨行含注释跨行为 true）、`match` 穷尽性；再写实现（无载荷 enum + 只读 struct）；验收：词法基座可用
 - [x] S3.2 `Lexer` 基础（`next/position/line/column`、`nlBefore`）：先写失败用例——标识符/关键字、数字（含小数、指数、超 Int64 标记）、标点/运算符（含 `!~` 单 token）、`=>`、EOF、`;` 与换行的 `nlBefore`、词法错误族逐 kind 一条（`IllegalCharacter`/`UnterminatedString`/`BadEscape`/`BadNumber`/`UnterminatedRegex`，fail-fast 抛出且**无 error token**）；再写实现（扫描器 + 关键字表，`null` 给专门诊断）；验收：逐 token 断言通过
@@ -89,6 +89,7 @@
 - [x] S3.20 `Assembler` 校验 1–11：先为每条校验写一个拒绝用例（缺 `CHECK_ERR`、发射 `0xA9–AA`/`0xC0–FF`、sink 前栈不平衡、`PUSH_KH` 越界/未 freeze、`LOADL/STOREL` 越界、跨回边优化掉错误检查、`CALL_FUNC` fid 不存在或 argc≠nargs、`CALL_HOST`/`HW_*` → NotImpl、类型表长度/值、明确赋值对接、变更型函数发射 deopt 模式）；再集中实现校验；验收：每检查点一条负向用例且互不掩盖
 - [x] S3.21 `SourceCompiler.compile` 端到端：先写失败用例——源码 → `.fbc` 字节 → `FbcReader.load` 回读，目录/类型/site/name 与编译时记录逐项一致；未注册函数/坏形参等 → 对应 `SourceCompileException`；再写实现（管线组装）；验收：T22 基础与 T50 编译期组用例绿
 - [x] S3.22 `SourceCompiler` 兼容/回归金样：先写失败用例——对 M1 规格 §8.0 四例（阶乘/插值/容器变更/空构造 Map）固化产物指纹金样；再落金样文件；验收：重复编译的金样指纹与留档逐位相同，后续步骤防回归可比对
+- [x] S3.23 源语言 DateTime/Duration 构造（M1 扩展，S3.18 续）：`DateTime.now()` / `DateTime.parse(s)` / `DateTime.of(y,m,d[,h,mi,s[,ns]])`、`Duration.<unit>`（Zero/nanosecond…day）与 `Duration.parse(s)`（f_data 同形）；hid 73–76 + 常量表单位；验收：TemporalSurface_test 5 例全绿（含非法输入 → 14）
 
 ## 6. P4 包 `runtime`（S4.1–S4.22）
 
@@ -114,6 +115,7 @@
 - [x] S4.20 `Interp` 框架（帧/local 载入/操作数栈/指令循环/返回）：先写失败用例——帧尺寸公式（16 对齐）、`LOADL/STOREL`、`RET/RET_VOID` 唯一出口、结束即销毁；再写实现（解释循环）；验收：最小单元可解释执行
 - [x] S4.21 `Interp` 全指令语义（分组）：先写逐组失败用例——控制/常量栈/局部/整型（溢出检查、`IDIV` 边界、`IMOD` 四象限）/浮点（NaN 规范化）/比较逻辑位/控制流（`JMP/JZ/JNZ/LOOP_BACK`）/调用（`CALL_FUNC` 共窗口、`CALL_CLOSURE`、user helper 路由、fnId 重写）/类型（`CAST/TO_I64/TO_F64/IS_TYPE/GUARD/THROW/ASSERT/ABORT/GUARD_NNZ`）/容器与值提取；并断言 fail-fast（错误后剩余指令不再执行、栈不再消费）与 `CALL_HELPER` 自动 `CHECK_ERR` 短路；再逐指令实现；验收：T2/T6 用例绿
 - [x] S4.22 `Interp` §11.9 语义组：先写失败用例——List/Map/Range/String 迭代（含 23 并发修改）、`s[a..=b]` 折算、插值、范围/正则操作、`TO_STR` 契约与 JIT 一致（先自证）；再写实现；验收：T19/T45 用例绿
+
 
 ## 7. P5 包 `backend`（S5.1–S5.14）
 

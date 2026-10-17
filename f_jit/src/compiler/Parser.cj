@@ -849,6 +849,17 @@ internal class Parser {
                 }
                 continue
             }
+            if (this.atKind(TokenKind.Dot)) {
+                let dot = this.take()
+                let nameTok = this.peek()
+                if (nameTok.kind != TokenKind.Ident) {
+                    diagFail(DiagKind.SYNTAX_ERROR, this.src, nameTok.pos, nameTok.line, nameTok.column,
+                        '成员访问的「.」后必须是标识符')
+                }
+                this.take()
+                cur = AstExpr.MemberName(nameTok.text, cur, SourcePos(dot.line, dot.column))
+                continue
+            }
             if (this.atKind(TokenKind.LBracket)) {
                 let openTok = this.take()
                 let idx = this.parseExpr()

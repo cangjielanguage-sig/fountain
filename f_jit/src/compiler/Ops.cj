@@ -230,6 +230,12 @@ internal class HelperCodec {
     /** H72 `regex_replace_range`（v0.18.19 区间替换）。 */
     public static const REGEX_REPLACE_RANGE: UInt16 = 72u16
 
+    /** 时间/间隔构造（M1 扩展，hid 73–76；源语言 `DateTime.*` / `Duration.parse`）。 */
+    public static const DATETIME_NOW: UInt16 = 73u16
+    public static const DATETIME_PARSE: UInt16 = 74u16
+    public static const DATETIME_OF: UInt16 = 75u16
+    public static const DURATION_PARSE: UInt16 = 76u16
+
     /** 变更型 helper 的 hid 区间（H43–H48，§9.15 / §7 校验 11）。 */
     public static const MUTATION_MIN: UInt16 = 43u16
     public static const MUTATION_MAX: UInt16 = 48u16

@@ -1611,3 +1611,21 @@ Ready --CAS--> Unloading（拒绝新调用；活跃调用照常完成）--active
 - **解释器**（`Interp.run`，design §5.3.6）逐指令执行**同一** `.fbc` 字节码，是**语义基准**；两个 JIT 后端由本附 C 的对照表发射机器码，**唯一可观察差异是性能**。
 - **差分测试**（规格 §13.2 T2）断言 `interp(args) == jit_x86_64(args) == jit_aarch64(args)`：结果、`errCode`、`site` 三者全等——I7 的可测定义。
 - 分配型/变更型语义（窗口登记、§9.15 规则、`frozen`）全在 **helper 内**实现，机器码侧无新增模式（I8 自动满足）。
+
+---
+
+### D. M1 实现扩展：源语言 DateTime / Duration 构造（2026-10-18）
+
+原规格 §11.9 只定义时间算术；为使**被编译的 lambda 源码**能自行构造时间值，实现增加以下形式（不改 `.fbc` 格式，仅新增固定 helper 槽与复用常量表）：
+
+| 源形式 | 降低 | 说明 |
+|---|---|---|
+| `DateTime.now()` | `CALL_HELPER 73, 0` | 宿主当前时间（`DateTime.now()`，本地时区） |
+| `DateTime.parse(s)` | `CALL_HELPER 74, 1` | RFC3339 `date-time`；非法 → 14 |
+| `DateTime.of(y, m, d[, h, mi, s[, ns]])` | `CALL_HELPER 75, argc` | 3–7 个整数位置参数；缺省段为 0；非法日期 → 14 |
+| `Duration.<unit>` | `PUSH_KH addDuration(nanos)` | `Zero` / `nanosecond` / `microsecond` / `millisecond` / `second` / `minute` / `hour` / `day` |
+| `Duration.parse(s)` | `CALL_HELPER 76, 1` | 与 `fountain::f_data` 的 `Duration.parse` 同形；非法 → 14 |
+
+- 解析器为此新增 `.` 成员后缀（仅识别 `Ident`），降低阶段只放行上述 `DateTime.*` / `Duration.*` 组合；其余成员访问仍报 `NotImpl`（M2）。
+- `DefiniteAssignment` 把 `DateTime` / `Duration` 视为内建命名空间，不作为局部变量读取。
+- 与宿主侧构造（`HandleTable.pin` 传参）等价；两者在解释器路径结果一致。

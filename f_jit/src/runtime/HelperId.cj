@@ -93,6 +93,12 @@ public class HelperId {
     public static const MAP_NEW: UInt16 = 71u16
     public static const REGEX_REPLACE_RANGE: UInt16 = 72u16
 
+    /** 时间构造（M1 扩展）。 */
+    public static const DATETIME_NOW: UInt16 = 73u16
+    public static const DATETIME_PARSE: UInt16 = 74u16
+    public static const DATETIME_OF: UInt16 = 75u16
+    public static const DURATION_PARSE: UInt16 = 76u16
+
     /** M1 登记区间下界 / 上界（`CALL_HELPER` 的 hid 合法值域，§5）。 */
     public static const MIN_FIXED: UInt16 = 1u16
     public static const MAX_FIXED: UInt16 = 72u16
@@ -168,6 +174,11 @@ public class HelperId {
             case 70u16 => 'list_new'
             case 71u16 => 'map_new'
             case 72u16 => 'regex_replace_range'
+            // ---- 时间构造（M1 扩展，73–76）----
+            case 73u16 => 'datetime_now'
+            case 74u16 => 'datetime_parse'
+            case 75u16 => 'datetime_of'
+            case 76u16 => 'duration_parse'
             case _ =>
                 if (hid >= 63u16 && hid <= 68u16) {
                     'reserved(${hid})'

@@ -17,6 +17,7 @@ package fountain::f_jit.runtime
 
 import std.collection.ArrayList
 import std.collection.HashMap
+import std.convert.*
 import std.math.numeric.BigInt
 import std.math.numeric.Decimal
 import std.math.numeric.OverflowStrategy
@@ -89,6 +90,11 @@ internal func dispatchHelper(ctx: JitContext, hid: Int64, a: Array<Int64>): Int6
         case 39 => durDiv(ctx, a)
         case 40 => durNeg(ctx, a)
         case 61 => dtDiff(ctx, a)
+        // ---- 时间构造（M1 扩展 H73–H76）----
+        case 73 => dtNow(ctx, a)
+        case 74 => dtParse(ctx, a)
+        case 75 => dtOf(ctx, a)
+        case 76 => durParse(ctx, a)
         // ---- 区间（H41 / H42）----
         case 41 => rangeNew(ctx, a)
         case 42 => rangeContains(ctx, a)
@@ -554,6 +560,139 @@ internal func dtDiff(ctx: JitContext, a: Array<Int64>): Int64 {
         failWith(ErrCode.DUR_OVERFLOW)
     }
     allocValue(ctx, r)
+}
+
+// ============================================================================
+// H73–H76 时间 / 间隔构造（M1 扩展：源语言 DateTime.* / Duration.parse）
+// ============================================================================
+
+/** `datetime_now()`：宿主当前时间（`DateTime.now()`，本地时区）。 */
+internal func dtNow(ctx: JitContext, a: Array<Int64>): Int64 {
+    allocValue(ctx, DateTime.now())
+}
+
+/** `datetime_parse(s)`：RFC3339 date-time；非法 → 14。 */
+internal func dtParse(ctx: JitContext, a: Array<Int64>): Int64 {
+    let s = HandleTable.fetchString(argAt(a, 0))
+    var dt = DateTime.now()
+    try {
+        dt = DateTime.parse(s)
+    } catch (_: Exception) {
+        failWith(ErrCode.ARG_MISMATCH)
+    }
+    allocValue(ctx, dt)
+}
+
+/** `datetime_of(y, m, d[, h, mi, s[, ns]])`：位置参数 3–7 个；非法日期 → 14。 */
+internal func dtOf(ctx: JitContext, a: Array<Int64>): Int64 {
+    let n = a.size
+    if (n < 3 || n > 7) {
+        failWith(ErrCode.ARG_MISMATCH)
+    }
+    let y = argAt(a, 0)
+    let mo = argAt(a, 1)
+    let d = argAt(a, 2)
+    let h = if (n > 3) { argAt(a, 3) } else { 0 }
+    let mi = if (n > 4) { argAt(a, 4) } else { 0 }
+    let se = if (n > 5) { argAt(a, 5) } else { 0 }
+    let ns = if (n > 6) { argAt(a, 6) } else { 0 }
+    var dt = DateTime.now()
+    try {
+        dt = DateTime.of(year: y, month: mo, dayOfMonth: d, hour: h, minute: mi, second: se,
+            nanosecond: ns)
+    } catch (_: Exception) {
+        failWith(ErrCode.ARG_MISMATCH)
+    }
+    allocValue(ctx, dt)
+}
+
+/** `duration_parse(s)`：与 `fountain::f_data` 的 `Duration.parse` 同形；非法 → 14。 */
+internal func durParse(ctx: JitContext, a: Array<Int64>): Int64 {
+    let s = HandleTable.fetchString(argAt(a, 0))
+    allocValue(ctx, parseDurationText(s))
+}
+
+/**
+ * Duration 文本解析（与 `f_data/src/base/DataParsable.cj` 同语义）：
+ * 可选整串符号 + 严格递减单位的「整数+单位」串（`1h2m3s`、`-1m2s`）；
+ * 单位至多一次、段间不允许符号与空白；非法或溢出 → 14。
+ */
+private func parseDurationText(value: String): Duration {
+    if (value.isEmpty()) {
+        failWith(ErrCode.ARG_MISMATCH)
+    }
+    var duration = Duration.Zero
+    var i = 0
+    var parsed = false
+    var negative = false
+    var lastRank = -1
+    try {
+        while (i < value.size) {
+            let start = i
+            if (value[i] == b'-' || value[i] == b'+') {
+                if (start != 0) {
+                    failWith(ErrCode.ARG_MISMATCH)
+                }
+                negative = value[i] == b'-'
+                i = i + 1
+            }
+            let digits = i
+            while (i < value.size && value[i] >= b'0' && value[i] <= b'9') {
+                i = i + 1
+            }
+            if (i == digits || i == value.size) {
+                failWith(ErrCode.ARG_MISMATCH)
+            }
+            let numberStart = if (value[start] == b'+') { start + 1 } else { start }
+            let number = match (Int64.tryParse(value[numberStart..i])) {
+                case Some(n) => n
+                case None => failWith(ErrCode.ARG_MISMATCH)
+            }
+            let unit = value[i]
+            i = i + 1
+            let (scale, rank) = match (unit) {
+                case b'd' => (Duration.day, 0)
+                case b'h' => (Duration.hour, 1)
+                case b'm' =>
+                    if (i < value.size && value[i] == b's') {
+                        i = i + 1
+                        (Duration.millisecond, 4)
+                    } else {
+                        (Duration.minute, 2)
+                    }
+                case b's' => (Duration.second, 3)
+                case b'u' =>
+                    if (i >= value.size || value[i] != b's') {
+                        failWith(ErrCode.ARG_MISMATCH)
+                    }
+                    i = i + 1
+                    (Duration.microsecond, 5)
+                case b'n' =>
+                    if (i >= value.size || value[i] != b's') {
+                        failWith(ErrCode.ARG_MISMATCH)
+                    }
+                    i = i + 1
+                    (Duration.nanosecond, 6)
+                case _ => failWith(ErrCode.ARG_MISMATCH)
+            }
+            if (rank <= lastRank) {
+                failWith(ErrCode.ARG_MISMATCH)
+            }
+            lastRank = rank
+            if (parsed && negative) {
+                duration = duration + scale * (-number)
+            } else {
+                duration = duration + scale * number
+            }
+            parsed = true
+        }
+    } catch (_: ArithmeticException) {
+        failWith(ErrCode.ARG_MISMATCH)
+    }
+    if (!parsed) {
+        failWith(ErrCode.ARG_MISMATCH)
+    }
+    duration
 }
 
 // ============================================================================

@@ -194,7 +194,8 @@ internal class DefiniteAssignment {
         match (e) {
             case AstExpr.Lit(_, _) => ()
             case AstExpr.Var(n, pos) =>
-                if (n == '_') {
+                // `DateTime` / `Duration` 是内建构造命名空间（`DateTime.now()` 等），不是局部
+                if (n == '_' || n == 'DateTime' || n == 'Duration') {
                     return
                 }
                 var assigned = false

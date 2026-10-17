@@ -687,8 +687,7 @@ internal class Lowerer {
             case AstExpr.IndexTarget(_, _, pos) =>
                 diagFail(DiagKind.SYNTAX_ERROR, this.src, 0, pos.line, pos.column,
                     '下标赋值目标只能出现在赋值语句左侧')
-            case AstExpr.MemberName(_, _, pos) =>
-                diagFail(DiagKind.NOT_IMPL, this.src, 0, pos.line, pos.column, '成员访问属 M2')
+            case AstExpr.MemberName(name, tg, pos) => this.lowerMemberValue(name, tg, pos)
         }
     }
 
@@ -1157,6 +1156,105 @@ internal class Lowerer {
             '不支持的数值转换: ${LocalType.name(from)} → ${name}')
     }
 
+    /**
+     * 成员**值**：M1 扩展只开放 `Duration.<unit>`（其余成员访问仍属 M2）。
+     *
+     * 单位常量走常量表（`ConstRegistry.addDuration` + `PUSH_KH`），不占 helper 槽。
+     */
+    private func lowerMemberValue(name: String, tg: AstExpr, pos: SourcePos): UInt16 {
+        let ctx = this.requireCtx()
+        match (tg) {
+            case AstExpr.Var(ns, _) =>
+                if (ns == 'Duration') {
+                    let nanos = match (name) {
+                        case 'Zero' => 0
+                        case 'nanosecond' => 1
+                        case 'microsecond' => 1000
+                        case 'millisecond' => 1000000
+                        case 'second' => 1000000000
+                        case 'minute' => 60000000000
+                        case 'hour' => 3600000000000
+                        case 'day' => 86400000000000
+                        case _ =>
+                            diagFail(DiagKind.NOT_IMPL, this.src, 0, pos.line, pos.column,
+                                'Duration.${name} 不是已支持的时间单位')
+                    }
+                    let hid = this.sess.consts.addDuration(nanos)
+                    ctx.builder.emitU16(Op.PUSH_KH, UInt16(hid))
+                    return LocalType.DURATION
+                }
+                diagFail(DiagKind.NOT_IMPL, this.src, 0, pos.line, pos.column,
+                    '仅支持 Duration.<unit> 成员常量')
+            case _ =>
+                diagFail(DiagKind.NOT_IMPL, this.src, 0, pos.line, pos.column, '成员访问属 M2')
+        }
+    }
+
+    /**
+     * 成员**调用**（M1 扩展）：`DateTime.now/parse/of` 与 `Duration.parse`。
+     *
+     * `DateTime.of` 取 3–7 个位置参数（年、月、日、时、分、秒、纳秒；缺省段为 0）；
+     * `Duration.parse` 与 `fountain::f_data` 的 `Duration.parse` 同形（`1h2m3s`、`-1m2s`）。
+     */
+    private func lowerBuiltinMemberCall(name: String, tg: AstExpr, args: Array<AstExpr>,
+        pos: SourcePos): UInt16 {
+        let ctx = this.requireCtx()
+        match (tg) {
+            case AstExpr.Var(ns, _) =>
+                if (ns == 'DateTime') {
+                    if (name == 'now') {
+                        if (args.size != 0) {
+                            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                                'DateTime.now() 不接受参数')
+                        }
+                        ctx.builder.callHelper(HelperCodec.DATETIME_NOW, 0u8)
+                        return LocalType.DATETIME
+                    }
+                    if (name == 'parse') {
+                        if (args.size != 1) {
+                            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                                'DateTime.parse(s) 需要 1 个字符串参数')
+                        }
+                        let _ = this.lowerExprAs(args[0], LocalType.STRING)
+                        ctx.builder.setSite(pos)
+                        ctx.builder.callHelper(HelperCodec.DATETIME_PARSE, 1u8)
+                        return LocalType.DATETIME
+                    }
+                    if (name == 'of') {
+                        if (args.size < 3 || args.size > 7) {
+                            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                                'DateTime.of 需要 3–7 个整数参数（年、月、日[, 时, 分, 秒[, 纳秒]]）')
+                        }
+                        for (a in args) {
+                            let _ = this.lowerExprAs(a, LocalType.I64)
+                        }
+                        ctx.builder.setSite(pos)
+                        ctx.builder.callHelper(HelperCodec.DATETIME_OF, UInt8(args.size))
+                        return LocalType.DATETIME
+                    }
+                    diagFail(DiagKind.NOT_IMPL, this.src, 0, pos.line, pos.column,
+                        'DateTime.${name}() 尚未支持')
+                }
+                if (ns == 'Duration') {
+                    if (name == 'parse') {
+                        if (args.size != 1) {
+                            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                                'Duration.parse(s) 需要 1 个字符串参数')
+                        }
+                        let _ = this.lowerExprAs(args[0], LocalType.STRING)
+                        ctx.builder.setSite(pos)
+                        ctx.builder.callHelper(HelperCodec.DURATION_PARSE, 1u8)
+                        return LocalType.DURATION
+                    }
+                    diagFail(DiagKind.NOT_IMPL, this.src, 0, pos.line, pos.column,
+                        'Duration.${name}() 尚未支持')
+                }
+                diagFail(DiagKind.NOT_IMPL, this.src, 0, pos.line, pos.column, '成员调用属 M2')
+            case _ =>
+                diagFail(DiagKind.NOT_IMPL, this.src, 0, pos.line, pos.column, '成员调用属 M2')
+        }
+    }
+
     private func lowerCall(target: AstExpr, args: Array<AstExpr>, pos: SourcePos): UInt16 {
         let ctx = this.requireCtx()
         match (target) {
@@ -1209,6 +1307,8 @@ internal class Lowerer {
                                 ret
                         }
                 }
+            case AstExpr.MemberName(name, tg, mpos) =>
+                this.lowerBuiltinMemberCall(name, tg, args, mpos)
             case _ =>
                 let _ = this.lowerExpr(target)
                 for (a in args) {

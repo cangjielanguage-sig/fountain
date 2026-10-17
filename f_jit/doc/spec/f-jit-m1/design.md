@@ -213,6 +213,7 @@ ctx = `LibC.malloc<Int64>(count: 8)`（64 B、≥16 B 对齐），转储缓冲 =
 
 ## 实施注意（2026-10-17 实测，apply 阶段必读）
 
-1. **仓颉 codegen 已知缺陷（已在代码层规避，勿再踩）**：`lib` 与 `$test` 两个编译单元对「递归枚举 + 中间 `Option` 载荷」的布局不一致——`AstStmt.Decl(String, ?TypeRef, ?AstExpr, SourcePos)` 在 `*_test.cj` 里 `match` 会把 `Some` 读成 `None`（枚举自身方法与普通文件读取正常；最小复现不重现）。**规则：`*_test.cj` 中不要直接 `match` `AstExpr` / `AstStmt` / 其它递归 AST 枚举**；形状断言一律调用 `src/compiler/AstShape.cj`（lib 编译单元）暴露的 `shapeE/shapeS/exprOf/retShapeOf/retPosOf/...`，断言字符串。新增需要读取 AST 的测试辅助函数也必须放在非 `_test.cj` 文件中。
+1. **类型间递归依赖（违反仓颉类型规则，待重构）**：仓颉禁止类型之间的递归依赖；当前 `AstExpr ↔ LambdaAst ↔ AstStmt` 的互递归属于**非法用法**（不是 SDK / codegen 缺陷）。`lib` 与 `$test` 两编译单元对「递归枚举 + `Option` 载荷」的布局不一致只是该非法用法的表现——`AstStmt.Decl(..., Some)` 在 `*_test.cj` 里可能被读成 `None` 或崩溃。**临时规避：`*_test.cj` 中不要直接 `match` `AstExpr` / `AstStmt` 等递归 AST 枚举**，形状断言一律调用 `src/compiler/AstShape.cj`（lib 编译单元）的 `shapeE/shapeS/exprOf/retShapeOf/retPosOf/...`，断言字符串。**长期修复：用句柄 / ID / 扁平节点表（`Array<Node>` + 索引）打破类型环，随后删除 `AstShape` 绕过。**
 2. **构建与测试入口（融合开发环境）**：`source /tmp/cjenv.sh` 后 `cd f_jit && cjpm build && cjpm test`；全绿才算通过。基线与每批结果（用例数、失败数）写进提交信息。
 3. **TDD 落点**：每个 S 任务先写失败用例并确认失败原因正确（功能缺失 / 断言不满足），再写最小实现；跑绿后才勾 `tasks.md` 并同步 `f_jit/doc/spec/f-jit-m1/tasks.md`。
+4. **源语言时间构造（M1 扩展，2026-10-18）**：`DateTime.now()` / `DateTime.parse(s)` / `DateTime.of(y,m,d[,h,mi,s[,ns]])`、`Duration.<unit>`（Zero/nanosecond…day）、`Duration.parse(s)`（与 `f_data` 同形）。降低：hid 73–76 + `addDuration` 常量；解析器新增 `.` 成员后缀，其余成员访问仍 `NotImpl`。详见 `doc/design-m1.md` 附录 D。

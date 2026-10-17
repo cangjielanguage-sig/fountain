@@ -113,9 +113,9 @@ public class Helpers_test {
             1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
             21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
             39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56,
-            57, 58, 59, 60, 61, 62, 69, 70, 71, 72
+            57, 58, 59, 60, 61, 62, 69, 70, 71, 72, 73, 74, 75, 76
         ]
-        @Assert(expected.size, 66)
+        @Assert(expected.size, 70)
         for (v in expected) {
             @Assert(HelperId.isFixed(UInt16(v)), true)
             @Assert(HelperId.name(UInt16(v)).isEmpty(), false)
@@ -125,9 +125,11 @@ public class Helpers_test {
             @Assert(HelperId.name(UInt16(v)).contains('reserved'), true)
         }
         @Assert(HelperId.isFixed(0u16), false)
-        @Assert(HelperId.isFixed(73u16), false)
+        @Assert(HelperId.isFixed(77u16), false)
         @Assert(HelperId.name(HelperId.H_LEN), 'hl_len')
         @Assert(HelperId.name(HelperId.REGEX_REPLACE_RANGE), 'regex_replace_range')
+        @Assert(HelperId.name(HelperId.DATETIME_NOW), 'datetime_now')
+        @Assert(HelperId.name(HelperId.DURATION_PARSE), 'duration_parse')
         @Assert(HelperId.USER_BASE, 0x0100u16)
     }
 
