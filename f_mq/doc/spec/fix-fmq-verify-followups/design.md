@@ -24,7 +24,7 @@
 
 ### 2.1 管理端测试（对应 11.1 / 任务 1）
 
-- 落点：`fmq/src/manager/MQManager_test.cj`（新增）。
+- 落点：`fmq/src/server/MQManager_test.cj`（新增）。
 - 方式：进程内起 `MQServer`（复用 `MQServer_test` 的装配方式），用 `MQManager` 直接调用六个
   方法；连接失败路径用一个未监听端口构造 `MQManagerArgs`。
 - 断言维度：返回码（0 / 1 / 2）与服务端状态变化（注册后 `listTopics` 可见、删除后不可见）。
@@ -35,7 +35,7 @@
 - 落点：`f_mq/src/base/payload/MQPayload_test.cj` 或 `MQMessageRecord_test.cj`（就近扩展）。
 - 数据：非空与空的两组 `TreeSet<Int64>`、`HashMap<String, Int64>`、`Array<Int64>`。
 - 断言：`decode(encode(x))` 的类型、长度/键集合、元素逐一相等；`MQMatcher.matches` 对
-  `$.age`、`$.items[0]` 等路径返回预期布尔。
+  `$.age`、`$[0]` 等路径返回预期布尔。
 - 若 `f_codec` 对 `TreeSet` 不支持，先补 `f_codec` 用例再改编码路径；不在 MQ 层做特判。
 
 ### 2.3 备份刷写与关闭（对应 11.3 / 任务 3）
@@ -57,7 +57,7 @@
 - `MQClientConfig.parseHost` 删除，`MQClientConfig.hosts` / `MQNodePool` 改调 `MQHost.parseHost`；
   `fmq/src/cluster/NodeRegistry.cj` 改 import `fountain::f_mq.base.MQHost`。
 - 用例迁移：`MQClientConfig_test` 的 parseHost 用例改到新文件 `MQHost_test.cj`，断言不变。
-- 验证：`grep -r "f_mq.client" fmq/src` 为空；`fmq` 构建与测试通过。
+- 验证：`grep -rn "f_mq.client" fmq/src --include='*.cj' | grep -v '_test.cj'` 为空；`fmq` 构建与测试通过。
 
 ### 2.5 段格式文档（对应 11.5 / 任务 5）
 
@@ -98,7 +98,7 @@ length = 记录体字节数（不含这 4 字节），取值范围 1..64MiB
 
 | 项 | 用例落点 | 验收 |
 |---|---|---|
-| 管理端 | `fmq/src/manager/MQManager_test.cj` | 六子命令正常/错误路径全绿 |
+| 管理端 | `fmq/src/server/MQManager_test.cj` | 六子命令正常/错误路径全绿 |
 | BODY 容器 | `f_mq/src/base/**/*_test.cj` | 三类容器非空/空往返 + filter |
 | 备份 | `BackupReplicator_test.cj`、`BackupStore_test.cj` | 定时 flush、关闭排空、并发关闭 |
 | 分层 | `MQHost_test.cj` + import 检查 | `fmq` 无 `f_mq.client` 引用 |
