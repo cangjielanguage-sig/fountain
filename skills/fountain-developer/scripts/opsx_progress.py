@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""opsx_progress.py — 采集 OpenSpec 任务进度快照（等待期间每 5 分钟报告一次用）。
+"""opsx_progress.py — 采集 OpenSpec 流程与 cjpm/cjc 执行快照（每 5 分钟报告一次用）。
 
-背景：六步流程里的 opsx 任务由融合侧 CodeBuddy 后台执行，可能跑几分钟到几十分钟。
-等待期间按 references/opsx-waiting.md 的协议周期报告进度；本脚本负责把「进度」
-采集为确定性的数据——tasks 勾选、四件套、工作区改动、后台输出、停滞判定——
-避免每轮报告的采集口径漂移（少采一项就会被漏报）。
+背景：工作流 F / G / H / I / J 中，从进入 OpenSpec 六步或执行任何 cjpm/cjc 命令开始，
+就要按 references/opsx-waiting.md 的协议周期报告——不再判断「是否在等任务」或
+「测试是否耗时太久」。本脚本负责把「进度」采集为确定性的数据——tasks 勾选、四件套、
+工作区改动、后台输出、cjpm/cjc 进程与输出、停滞判定——避免每轮采集口径漂移。
 
 用法：
     python3 opsx_progress.py --repo <仓库根> [--change <变更名>] [--stage apply] [--log <后台输出文件>]
-    python3 opsx_progress.py --repo <仓库根> --cjpm     # 附带融合侧 cjpm build/test 状况（ssh 采集）
     python3 opsx_progress.py --repo <仓库根> --json
     python3 opsx_progress.py --repo <仓库根> --reset      # 新任务开始时清掉上一轮快照
 
 输出（默认人类可读）：在途变更 / 指定变更的 tasks 进度与当前任务、四件套、归档状态、
-工作区改动、近 10 分钟改动文件、后台输出大小与尾部、与上轮的差异、停滞判定。
+工作区改动、近 10 分钟改动文件、后台输出大小与尾部、cjpm/cjc 执行状况（默认经 ssh
+采集）、与上轮的差异、停滞判定。
 快照状态存 ~/.workbuddy/state/opsx-progress.json（按「仓库 + 变更」隔离，换任务自动重置）。
 """
 
@@ -247,7 +247,7 @@ def save_state(state: dict) -> None:
 
 
 def collect(repo: Path, change: str | None, stage: str | None, log: Path | None,
-            stall_rounds: int, with_cjpm: bool = False) -> dict:
+            stall_rounds: int) -> dict:
     root = find_openspec(repo)
     result: dict = {
         "ts": datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -290,7 +290,7 @@ def collect(repo: Path, change: str | None, stage: str | None, log: Path | None,
     result["git"] = git_summary(repo)
     result["recent"] = recent_files(repo)
     result["log"] = log_info(log)
-    result["cjpm"] = cjpm_status(repo) if with_cjpm else None
+    result["cjpm"] = cjpm_status(repo)
 
     # 停滞判定：与上轮快照（同一仓库 + 同一变更）做签名比较
     state = load_state()
@@ -385,15 +385,15 @@ def render(result: dict) -> str:
     cj = result.get("cjpm")
     if cj is not None:
         if not cj.get("checked"):
-            lines.append(f"cjpm 状况：不可用（{(cj.get('detail') or '')[:120]}）")
+            lines.append(f"cjpm/cjc 状况：不可用（{(cj.get('detail') or '')[:120]}）")
         else:
             procs = cj.get("procs") or []
             if procs:
-                lines.append(f"cjpm 状况：运行中（全局 {len(procs)} 个 cjpm/cjc 进程）")
+                lines.append(f"cjpm/cjc 状况：运行中（全局 {len(procs)} 个 cjpm/cjc 进程）")
                 for p in procs[:3]:
                     lines.append(f"  · PID {p['pid']}  已 {p['etime']}  CPU {p['cpu']}%  STAT {p['stat']}  {p['args'][:90]}")
             else:
-                lines.append("cjpm 状况：未在运行")
+                lines.append("cjpm/cjc 状况：未在运行")
             if cj.get("command"):
                 lines.append(f"  最近命令：{cj['command'][:200]}")
             if cj.get("outputFile"):
@@ -403,7 +403,7 @@ def render(result: dict) -> str:
                     lines.append(f"  | {l[:160]}")
 
     if result["stalled"]:
-        lines.append(f"停滞：**是**（连续 {result['stallRounds']} 轮无变化，阈值 {result['stallRoundsThreshold']}）")
+        lines.append(f"停滞：**是**（同一状态连续 {result['stallRounds']} 轮无变化，阈值 {result['stallRoundsThreshold']}）")
     else:
         if result["round"] == 1:
             changed = "（首轮，无基线）"
@@ -411,18 +411,16 @@ def render(result: dict) -> str:
             changed = "、".join(result["changedFields"])
         else:
             changed = "（无变化）"
-        lines.append(f"停滞：否（连续 {result['stallRounds']} 轮无变化；本轮变化项：{changed}）")
+        lines.append(f"停滞：否（同一状态连续 {result['stallRounds']} 轮无变化；本轮变化项：{changed}）")
     return "\n".join(lines)
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="采集 OpenSpec 任务进度快照（等待期间每 5 分钟报告用）")
+    ap = argparse.ArgumentParser(description="采集 OpenSpec 流程与 cjpm/cjc 执行快照（每 5 分钟报告用）")
     ap.add_argument("--repo", default=".", help="仓库根（含 openspec/ 的那一层或其下）")
     ap.add_argument("--change", help="变更名（缺省列出全部在途变更）")
     ap.add_argument("--stage", help="当前阶段标签（propose/apply/verify/archive 等，仅用于报告标注）")
     ap.add_argument("--log", help="后台任务输出文件（可选；报告大小与尾部）")
-    ap.add_argument("--cjpm", action="store_true",
-                    help="附带融合侧 cjpm build/test 状况（经 ssh 采集进程与输出尾部）")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--reset", action="store_true", help="清掉上一轮快照（新任务开始时用）")
     ap.add_argument("--stall-rounds", type=int, default=3, help="连续多少轮无变化视为停滞（默认 3）")
@@ -454,8 +452,7 @@ def main() -> int:
         return 2
 
     result = collect(repo, args.change, args.stage,
-                     Path(args.log).expanduser() if args.log else None, args.stall_rounds,
-                     with_cjpm=args.cjpm)
+                     Path(args.log).expanduser() if args.log else None, args.stall_rounds)
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:

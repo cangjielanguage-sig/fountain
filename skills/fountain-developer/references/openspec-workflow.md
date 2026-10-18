@@ -287,7 +287,7 @@ python <skill-root>/scripts/install_skill.py list      # 复验：opsx-* 那组�
 2. 预检：确认此处是 openspec 根（有 `openspec/config.yaml`）、确认融合侧有 `codebuddy`，缺了就打安装命令并中止；
 3. `codebuddy -p "/opsx:<工作流> <主题>" --permission-mode acceptEdits`。
 
-命令由你按技能指引用 Bash 工具（长任务后台模式）**原样代跑**到融合开发引擎；连接信息（IP / 用户名 / 密码）首次访问问用户后用 `ssh-set` 固化在 `~/.workbuddy/openspec-fusion.json` 的 `fusion.ssh` 段，IP 失效重问。**等待期间按 `references/opsx-waiting.md` 的协议每 5 分钟报告一次进度**（六阶段状态 + 进行中客观详情；连续 3 轮无进展即暂停报告、转停滞诊断）。**技能不建目录、不改文件**（除固化自身连接配置外）。
+命令由你按技能指引用 Bash 工具（长任务后台模式）**原样代跑**到融合开发引擎；连接信息（IP / 用户名 / 密码）首次访问问用户后用 `ssh-set` 固化在 `~/.workbuddy/openspec-fusion.json` 的 `fusion.ssh` 段，IP 失效重问。**进入六步或执行任何 cjpm/cjc 命令起，按 `references/opsx-waiting.md` 每 5 分钟报告一次**（六阶段状态 + 进行中客观详情 + cjpm/cjc 状况；同一状态连续 3 轮无变化即暂停报告、转停滞诊断）。**技能不建目录、不改文件**（除固化自身连接配置外）。
 
 | 动作 | 在哪一侧 | 谁做 |
 | --- | --- | --- |
