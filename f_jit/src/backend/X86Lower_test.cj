@@ -122,6 +122,21 @@ public class X86Lower_test {
         @Assert(X86Lower_test.hex(BackendX86_64.emitPushUnit()), '6A00')
     }
 
+    @TestCase
+    public func remainingLowOpcodes(): Unit {
+        @Assert(X86Lower_test.hex(BackendX86_64.emitPushBool(true)), '6A01')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitPushBool(false)), '6A00')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitPushNull()), '6A00')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitPushI8(7)), '48B8070000000000000050')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitPushI32(7)), '48B8070000000000000050')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitDup2()),
+            '488B0424' + '488B4C2408' + '50' + '51')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitPop2()), '4883C410')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitLoadL0()), 'FFB5E0FFFFFF')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitLoadL3()), 'FFB5C8FFFFFF')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitIAddWrap()), X86Lower_test.hex(BackendX86_64.emitIAdd()))
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {

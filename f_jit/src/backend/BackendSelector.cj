@@ -275,6 +275,51 @@ internal class BackendX86_64 <: Backend {
         BackendX86_64.cmpOp([0x0Fu8, 0x9Cu8, 0xC0u8])
     }
 
+    /** `PUSH_BOOL v`：`push 0/1`。 */
+    internal static func emitPushBool(v: Bool): Array<UInt8> {
+        if (v) {
+            [0x6Au8, 0x01u8]
+        } else {
+            [0x6Au8, 0x00u8]
+        }
+    }
+
+    /** `PUSH_NULL`：`push 0`。 */
+    internal static func emitPushNull(): Array<UInt8> {
+        [0x6Au8, 0x00u8]
+    }
+
+    internal static func emitPushI8(v: Int64): Array<UInt8> {
+        BackendX86_64.emitPushI64(v)
+    }
+
+    internal static func emitPushI32(v: Int64): Array<UInt8> {
+        BackendX86_64.emitPushI64(v)
+    }
+
+    /** `DUP2`：复制顶两格。 */
+    internal static func emitDup2(): Array<UInt8> {
+        [0x48u8, 0x8Bu8, 0x04u8, 0x24u8, 0x48u8, 0x8Bu8, 0x4Cu8, 0x24u8, 0x08u8,
+         0x50u8, 0x51u8]
+    }
+
+    /** `POP2`：收两格。 */
+    internal static func emitPop2(): Array<UInt8> {
+        [0x48u8, 0x83u8, 0xC4u8, 0x10u8]
+    }
+
+    internal static func emitLoadL0(): Array<UInt8> {
+        BackendX86_64.emitLoadL(0)
+    }
+
+    internal static func emitLoadL3(): Array<UInt8> {
+        BackendX86_64.emitLoadL(3)
+    }
+
+    internal static func emitIAddWrap(): Array<UInt8> {
+        BackendX86_64.emitIAdd()
+    }
+
     /** `PUSH_KH idx`：常量镜像地址已烘焙为绝对地址，`mov rax,[imm64]; push rax`。 */
     internal static func emitPushKh(constAddr: Int64): Array<UInt8> {
         let out = ArrayList<UInt8>()
