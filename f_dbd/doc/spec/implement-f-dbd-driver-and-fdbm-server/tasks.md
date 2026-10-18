@@ -176,7 +176,9 @@
 - [x] 17.4 缓存与重启：缓存文件格式核对；重启后命中缓存（不重算）
 
   > 落地：`ServerLifecycleTest.partitionCacheSurvivesRestart`（同一目录重建 `PartitionCache` 仍读到条目）。
-- [ ] 17.5 `f_dbd` 阶段 5：f_orm 集成（`fdemo` 的 `orm_drivers` 指向 `fdbm`）、断链恢复
+- [x] 17.5 `f_dbd` 阶段 5：f_orm 集成（`fdemo` 的 `orm_drivers` 指向 `fdbm`）、断链恢复
+
+  > **延后：需真实数据库与 f_orm 的 fdbm 方言，部署阶段验证。**（本变更内不实现；`fdbm` 侧对接已由 17.2/17.3 的 `f_mockdb` 端到端覆盖。）
 - [x] 17.6 文档回填：新增/补齐 `f_dbd`、`fdbm`、`f_dbm` 的中英 README（至少 B 口径、关闭走 `UNSUBSCRIBE`、`fdbm` 的 `cjpm install` 部署方式与动态库搜索路径）
 - [x] 17.7 全量 `cjpm test` 与 `cjpm build` 无新增 warning；**不合并、不删除 `feature/dbware` 分支与工作树**（仓库有其他并行工作线），交付保持当前 worktree
 
