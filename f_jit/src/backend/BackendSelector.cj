@@ -291,6 +291,44 @@ internal class BackendX86_64 <: Backend {
         BackendX86_64.cmpOp([0x0Fu8, 0x9Cu8, 0xC0u8])
     }
 
+    private static func fBinOp(opBytes: Array<UInt8>): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (x in [0xF2u8, 0x0Fu8, 0x10u8, 0x44u8, 0x24u8, 0x08u8,
+            0xF2u8, 0x0Fu8, 0x10u8, 0x0Cu8, 0x24u8]) {
+            out.add(x) // movsd xmm0,[rsp+8]; movsd xmm1,[rsp]
+        }
+        for (x in opBytes) {
+            out.add(x)
+        }
+        for (x in [0xF2u8, 0x0Fu8, 0x11u8, 0x44u8, 0x24u8, 0x08u8, 0x48u8, 0x83u8, 0xC4u8,
+            0x08u8]) {
+            out.add(x) // movsd [rsp+8],xmm0; add rsp,8
+        }
+        // NaN 规范化：ucomisd xmm0,xmm0; jnp .n; movabs rax,CANON; movq xmm0,rax
+        for (x in [0x66u8, 0x0Fu8, 0x2Eu8, 0xC0u8, 0x0Fu8, 0x8Bu8, 0x00u8, 0x00u8, 0x00u8,
+            0x00u8, 0x48u8, 0xB8u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0xF8u8,
+            0x7Fu8, 0x66u8, 0x48u8, 0x0Fu8, 0x6Eu8, 0xC0u8]) {
+            out.add(x)
+        }
+        out.toArray()
+    }
+
+    internal static func emitFAdd(): Array<UInt8> {
+        BackendX86_64.fBinOp([0xF2u8, 0x0Fu8, 0x58u8, 0xC1u8])
+    }
+
+    internal static func emitFSub(): Array<UInt8> {
+        BackendX86_64.fBinOp([0xF2u8, 0x0Fu8, 0x5Cu8, 0xC1u8])
+    }
+
+    internal static func emitFMul(): Array<UInt8> {
+        BackendX86_64.fBinOp([0xF2u8, 0x0Fu8, 0x59u8, 0xC1u8])
+    }
+
+    internal static func emitFDiv(): Array<UInt8> {
+        BackendX86_64.fBinOp([0xF2u8, 0x0Fu8, 0x5Eu8, 0xC1u8])
+    }
+
     /** `PUSH_BOOL v`：`push 0/1`。 */
     internal static func emitPushBool(v: Bool): Array<UInt8> {
         if (v) {

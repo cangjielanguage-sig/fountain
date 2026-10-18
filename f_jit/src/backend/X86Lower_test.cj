@@ -147,6 +147,17 @@ public class X86Lower_test {
         @Assert(X86Lower_test.hex(BackendX86_64.emitCmpGe()), head + '0F9DC0' + tail)
     }
 
+    @TestCase
+    public func floatArithmetic(): Unit {
+        let head = 'F20F10442408' + 'F20F100C24'
+        let tail = 'F20F11442408' + '4883C408' +
+            '660F2EC0' + '0F8B00000000' + '48B8000000000000F87F' + '66480F6EC0'
+        @Assert(X86Lower_test.hex(BackendX86_64.emitFAdd()), head + 'F20F58C1' + tail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitFSub()), head + 'F20F5CC1' + tail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitFMul()), head + 'F20F59C1' + tail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitFDiv()), head + 'F20F5EC1' + tail)
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {
