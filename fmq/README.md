@@ -33,15 +33,35 @@ fmq server
 
 ```bash
 fmq manager --server=127.0.0.1:2350 registerTopic /order 4
+fmq manager --server=127.0.0.1:2350 registerTopic /reminder 2 delaying=1m1s
 fmq manager --server=127.0.0.1:2350 registerSubscriber /order grp1
 fmq manager --server=127.0.0.1:2350 listTopics
 fmq manager --server=127.0.0.1:2350 listSubscribeGroups /order
 fmq manager --server=127.0.0.1:2350 deleteSubscribeGroup /order grp1
 fmq manager --server=127.0.0.1:2350 deleteTopic /order
+fmq manager --server=127.0.0.1:2350 stats /order
+fmq manager --server=127.0.0.1:2350 stats
 ```
 
 `--server` 可放在子命令前后；缺省读取 `mqServer_port` 并连接 `127.0.0.1:<port>`。
 连接失败打印「无法连接消息队列服务」并返回 1。
+
+## 指标与延迟
+
+`stats [topic]` 返回**当前节点**的指标：
+
+- `backlog`：订阅组在该主题本地队列中 `committed` 之后的记录数（含已投递未确认）。
+- `lagMs`：backlog 中最早一条消息的发布时长（毫秒）。
+- `delivered` / `acked` / `redelivered` / `deadLettered`：进程启动以来的累计值。
+- `messages` / `bytes`：主题本地队列的记录总数与有效字节数。
+
+多节点部署时需分别查询各节点；manager 不自动聚合。`backlog` / `lagMs` 在查询时扫描，
+超大积压会有一定耗时。
+
+主题注册时可用 `delaying=<DurationString>`（如 `1m1s`、`500ms`，默认 `0s`）设置延迟投递。
+消息在「发布时间 + delaying」之前不会投递，也不会推进游标；未到期消息会阻塞该队列的后续消息
+（保持 FIFO）。发布时间取自 messageId 末尾的 UTC 时间戳，因此跨重启有效；依赖生产者与
+服务端时钟基本同步（NTP）。非标准 messageId 无法解析时间戳时按已到期处理并记 WARN。
 
 ## 存储布局
 

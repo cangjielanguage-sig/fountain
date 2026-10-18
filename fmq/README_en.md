@@ -33,15 +33,31 @@ replicas are stored only and never delivered. `fmq server --help` prints all opt
 
 ```bash
 fmq manager --server=127.0.0.1:2350 registerTopic /order 4
+fmq manager --server=127.0.0.1:2350 registerTopic /reminder 2 delaying=1m1s
 fmq manager --server=127.0.0.1:2350 registerSubscriber /order grp1
 fmq manager --server=127.0.0.1:2350 listTopics
 fmq manager --server=127.0.0.1:2350 listSubscribeGroups /order
 fmq manager --server=127.0.0.1:2350 deleteSubscribeGroup /order grp1
 fmq manager --server=127.0.0.1:2350 deleteTopic /order
+fmq manager --server=127.0.0.1:2350 stats /order
+fmq manager --server=127.0.0.1:2350 stats
 ```
 
 `--server` may appear before or after the subcommand. Without it, the manager connects to
 `127.0.0.1:<mqServer_port>`. On connection failure it prints `无法连接消息队列服务` and exits 1.
+
+## Metrics and delayed delivery
+
+`stats [topic]` reports metrics for the **current node**: `backlog` (records after each group's
+`committed` position), `lagMs` (age of the oldest backlog record), and process-lifetime counters
+`delivered` / `acked` / `redelivered` / `deadLettered`, plus topic totals `messages` / `bytes`.
+Query each node separately; the manager does not aggregate.
+
+`registerTopic` accepts an optional `delaying=<DurationString>` (for example `1m1s`, default `0s`).
+A record is delivered only after its publish time plus the delay. Not-yet-due records are not
+delivered, do not advance the cursor, and block later records in the same queue (FIFO). The publish
+time comes from the UTC timestamp in the messageId, so the delay survives restarts; producer and
+server clocks must be synchronized. Records with a non-standard messageId are treated as due.
 
 ## Storage layout
 
