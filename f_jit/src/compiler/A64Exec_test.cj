@@ -19,6 +19,7 @@ import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_jit.base.DummyDiagnosticsSink
 import fountain::f_jit.backend.JitCompiler
+import fountain::f_jit.backend.A64Compiler
 import fountain::f_jit.backend.CodeBuffer
 import fountain::f_jit.backend.FnTable
 import fountain::f_jit.backend.ConstMirror
@@ -93,7 +94,7 @@ public class A64Exec_test {
         }
         let mirror = ConstMirror.build(ids)
         @Assert(mirror.base() != 0, true)
-        let (r, err) = A64Exec_test.runUnit(cu, mirror.base(), 0, Array<Int64>())
+        let (r, err) = A64Exec_test.runUnit(cu, mirror.base(), Array<Int64>())
         @Assert(err, 0)
         @Assert(r != 0, true)
         // JIT 取到的句柄必须命中本单元常量句柄之一（同一 pinConst 结果）
@@ -134,18 +135,70 @@ public class A64Exec_test {
         @Assert(r, 42)
     }
 
+    /** S5.10：跳板模式（第二遍布局）可编译分支函数。 */
+    @TestCase
+    public func trampolineLayoutCompiles(): Unit {
+        let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(
+            '{ n: Int64 => if (n > 0) { 10 } else { 20 } }')
+        let unit = FbcReader.load(cu.raw)
+        @Assert(A64Compiler.compileFunctionFar(unit, unit.entry(), 0, 0).isSome(), true)
+    }
+
+    /** S5.10：跳板模式执行语义与短距模式一致。 */
+    @TestCase
+    public func farCondSemanticsMatchNear(): Unit {
+        let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(
+            '{ n: Int64 => if (n > 0) { 10 } else { 20 } }')
+        let unit = FbcReader.load(cu.raw)
+        let code = match (A64Compiler.compileFunctionFar(unit, unit.entry(), 0, 0)) {
+            case Some(b) => b
+            case None => @Fail('compileFunctionFar 返回 None'); return
+        }
+        let buf = match (CodeBuffer.alloc(code.size + 16)) {
+            case Some(b) => b
+            case None => @Fail('CodeBuffer.alloc 失败'); return
+        }
+        @Assert(buf.write(code, 0), true)
+        @Assert(buf.seal(), true)
+        buf.flushICache()
+        let ctx = JitContext.create(hwBase: 0, hwCap: 0, fnId: Int64(cu.entryFn), dbgBase: 0)
+        let argsPtr = A64Exec_test.argsPointer([1])
+        let f = CFunc<(CPointer<Unit>, CPointer<Int64>, Int64) -> Int64>(
+            CPointer<Unit>(buf.rawPointer()))
+        let r = unsafe { f(CPointer<Unit>(ctx.cp()), argsPtr, 1) }
+        @Assert(unsafe { ctx.cp().read(0) }, 0)
+        @Assert(r, 10)
+        unsafe { LibC.free<Int64>(argsPtr) }
+        JitContext.free(ctx)
+        buf.free()
+    }
+
+    /** S5.10：`CALL_FUNC` 跨函数入口回填（顶层 recursive 自递归）。 */
+    @TestCase
+    public func factorialViaCallFunc(): Unit {
+        let (r, err) = A64Exec_test.run2(
+            '{ n: Int64 => if (n <= 1) { 1 } else { n * recursive(n - 1) } }', [5])
+        @Assert(err, 0)
+        @Assert(r, 120)
+    }
+
     /** 编译整单元 → 单块 CodeBuffer → fnTable/常量镜像回填 → 调用入口。 */
     private static func run2(src: String, args: Array<Int64>): (Int64, Int64) {
         let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(src)
-        A64Exec_test.runUnit(cu, 0, 0, args)
+        A64Exec_test.runUnit(cu, 0, args)
     }
 
-    private static func runUnit(cu: CompiledSourceUnit, constBase: Int64, fnTableBase: Int64,
+    private static func runUnit(cu: CompiledSourceUnit, constBase: Int64,
         args: Array<Int64>): (Int64, Int64) {
         let unit = FbcReader.load(cu.raw)
         var result: Int64 = -1
         var err: Int64 = -1
-        match (JitCompiler.compileUnitWith(unit, constBase, fnTableBase)) {
+        // 先建入口表（桥的真实顺序：表 → 编译烘焙基址 → 拷码 → 填入口）
+        let table = match (FnTable.alloc(unit.dir.size)) {
+            case Some(t) => t
+            case None => @Fail('FnTable.alloc 失败'); return (result, err)
+        }
+        match (JitCompiler.compileUnitWith(unit, constBase, table.base())) {
             case Some(art) =>
                 let buf = match (CodeBuffer.alloc(art.code.size + 16)) {
                     case Some(b) => b
@@ -154,10 +207,6 @@ public class A64Exec_test {
                 @Assert(buf.write(art.code, 0), true)
                 @Assert(buf.seal(), true)
                 buf.flushICache()
-                let table = match (FnTable.alloc(unit.dir.size)) {
-                    case Some(t) => t
-                    case None => @Fail('FnTable.alloc 失败'); return (result, err)
-                }
                 var i = 0
                 while (i < unit.dir.size) {
                     let fn = unit.dir.at(i)

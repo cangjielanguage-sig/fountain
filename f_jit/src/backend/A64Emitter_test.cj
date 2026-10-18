@@ -49,6 +49,28 @@ public class A64Emitter_test {
     }
 
     @TestCase
+    public func farConditionalTrampoline(): Unit {
+        // b.eq → b.ne +8; b target
+        let e = A64Emitter(true)
+        e.bCond(A64Cond.EQ, 'x')
+        e.nop()
+        e.bind('x')
+        @Assert(A64Emitter_test.hex(e.finish()), '41000054' + '02000014' + '1F2003D5')
+        // cbz → cbnz +8; b target
+        let c = A64Emitter(true)
+        c.cbz(0, 'y')
+        c.nop()
+        c.bind('y')
+        @Assert(A64Emitter_test.hex(c.finish()), '400000B5' + '02000014' + '1F2003D5')
+        // cbnz → cbz +8; b target
+        let n = A64Emitter(true)
+        n.cbnz(0, 'z')
+        n.nop()
+        n.bind('z')
+        @Assert(A64Emitter_test.hex(n.finish()), '400000B4' + '02000014' + '1F2003D5')
+    }
+
+    @TestCase
     public func conditionalBranchRangeBoundary(): Unit {
         // 界内：delta/4 = 262143 → Some
         let ok = A64Emitter()

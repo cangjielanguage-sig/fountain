@@ -586,9 +586,12 @@ internal class A64Lower {
     /** `CALL_FUNC fid argc`：fnTable 间接调用 + 共窗口 + 重写 fnId。 */
     private func callFunc(fid: Int64, argc: Int64): Unit {
         if (this.fnTableBase == 0) {
+            // 未提供入口表基址（桥未建表）→ 降级解释器，避免运行期空表跳转
             this.ok = false
             return
         }
+        this.e.movImm64(9, this.fnTableBase + 8 * fid)
+        this.e.ldrOff(10, 9, 0)
         this.e.movReg(0, 19)
         if (argc == 0) {
             this.e.movReg(1, 31)

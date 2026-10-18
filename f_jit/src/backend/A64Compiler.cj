@@ -36,11 +36,31 @@ public class A64Compiler {
         A64Compiler.compileFunctionWith(unit, fn, 0, 0)
     }
 
-    /** 带常量镜像 / fnTable 基址的编译入口（`PUSH_KH` / `CALL_FUNC`）。 */
+    /**
+     * 带常量镜像 / fnTable 基址的编译入口（`PUSH_KH` / `CALL_FUNC`）。
+     *
+     * **两遍布局**（§12.4「分支可达范围差异」）：第一遍按短条件分支编码；若任一
+     * `b.cond/cbz/cbnz` 越出 ±1 MB，第二遍把所有条件分支放大为
+     * 「取反条件 +8；b target」跳板（`b` 范围 ±128 MB），语义逐位一致。
+     */
     public static func compileFunctionWith(unit: LoadedUnit, fn: FuncEntry,
         constBase: Int64, fnTableBase: Int64): ?Array<UInt8> {
-        let frame = A64Compiler.frameSize(Int64(fn.nLocals), Int64(fn.maxStack))
-        let e = A64Emitter()
+        match (A64Compiler.compileOnce(unit, fn, constBase, fnTableBase, false)) {
+            case Some(b) => return Some(b)
+            case None => ()
+        }
+        A64Compiler.compileOnce(unit, fn, constBase, fnTableBase, true)
+    }
+
+    /** 测试接缝：强制跳板模式编译（验证第二遍编码可用）。 */
+    public static func compileFunctionFar(unit: LoadedUnit, fn: FuncEntry,
+        constBase: Int64, fnTableBase: Int64): ?Array<UInt8> {
+        A64Compiler.compileOnce(unit, fn, constBase, fnTableBase, true)
+    }
+
+    private static func compileOnce(unit: LoadedUnit, fn: FuncEntry,
+        constBase: Int64, fnTableBase: Int64, farCond: Bool): ?Array<UInt8> {        let frame = A64Compiler.frameSize(Int64(fn.nLocals), Int64(fn.maxStack))
+        let e = A64Emitter(farCond)
         e.btiC()
         e.prologue()
         e.movReg(19, 0)

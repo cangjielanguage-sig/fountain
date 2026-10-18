@@ -51,12 +51,24 @@ internal class A64Emitter {
     private let labels: ArrayList<A64Label>
     private let relocs: ArrayList<A64Reloc>
     private var done: Bool
+    /** 条件分支一律放大为「取反条件 +8；b target」（±1 MB 越界时由第二遍开启）。 */
+    private let farCond: Bool
 
     init() {
         this.out = ArrayList<UInt8>()
         this.labels = ArrayList<A64Label>()
         this.relocs = ArrayList<A64Reloc>()
         this.done = false
+        this.farCond = false
+    }
+
+    /** 跳板模式：所有条件分支占 8 B（`b.cond +8; b target`）。 */
+    init(farCond: Bool) {
+        this.out = ArrayList<UInt8>()
+        this.labels = ArrayList<A64Label>()
+        this.relocs = ArrayList<A64Reloc>()
+        this.done = false
+        this.farCond = farCond
     }
 
     func size(): Int64 {
@@ -161,18 +173,54 @@ internal class A64Emitter {
     }
 
     func bCond(cond: Int64, label: String): Unit {
-        this.relocs.add(A64Reloc(this.out.size, 1, label))
-        this.word(0x54000000u32 | (UInt32(cond) & 0xFu32))
+        if (this.farCond) {
+            // b.<inverse> +8（跳过下一条 b）；b label（±128 MB）
+            this.word(0x54000000u32 | (UInt32(A64Emitter.invert(cond)) & 0xFu32) | (2u32 << 5))
+            this.b(label)
+        } else {
+            this.relocs.add(A64Reloc(this.out.size, 1, label))
+            this.word(0x54000000u32 | (UInt32(cond) & 0xFu32))
+        }
     }
 
     func cbz(rt: Int64, label: String): Unit {
-        this.relocs.add(A64Reloc(this.out.size, 2, label))
-        this.word(0xB4000000u32 | UInt32(rt))
+        if (this.farCond) {
+            this.word(0xB5000000u32 | (2u32 << 5) | UInt32(rt)) // cbnz rt,+8
+            this.b(label)
+        } else {
+            this.relocs.add(A64Reloc(this.out.size, 2, label))
+            this.word(0xB4000000u32 | UInt32(rt))
+        }
     }
 
     func cbnz(rt: Int64, label: String): Unit {
-        this.relocs.add(A64Reloc(this.out.size, 2, label))
-        this.word(0xB5000000u32 | UInt32(rt))
+        if (this.farCond) {
+            this.word(0xB4000000u32 | (2u32 << 5) | UInt32(rt)) // cbz rt,+8
+            this.b(label)
+        } else {
+            this.relocs.add(A64Reloc(this.out.size, 2, label))
+            this.word(0xB5000000u32 | UInt32(rt))
+        }
+    }
+
+    private static func invert(cond: Int64): Int64 {
+        match (cond) {
+            case 0 => 1
+            case 1 => 0
+            case 2 => 3
+            case 3 => 2
+            case 4 => 5
+            case 5 => 4
+            case 6 => 7
+            case 7 => 6
+            case 8 => 9
+            case 9 => 8
+            case 10 => 11
+            case 11 => 10
+            case 12 => 13
+            case 13 => 12
+            case _ => 1
+        }
     }
 
     // ---- 杂项 / 帧序 ----
