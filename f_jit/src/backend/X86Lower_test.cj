@@ -137,6 +137,16 @@ public class X86Lower_test {
         @Assert(X86Lower_test.hex(BackendX86_64.emitIAddWrap()), X86Lower_test.hex(BackendX86_64.emitIAdd()))
     }
 
+    @TestCase
+    public func integerCompareFamily(): Unit {
+        let head = '488B442408' + '483B0424'
+        let tail = '0FB6C0' + '4889442408' + '4883C408'
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpNe()), head + '0F95C0' + tail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpLe()), head + '0F9EC0' + tail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpGt()), head + '0F9FC0' + tail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpGe()), head + '0F9DC0' + tail)
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {

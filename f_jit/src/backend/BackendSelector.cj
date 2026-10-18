@@ -271,6 +271,22 @@ internal class BackendX86_64 <: Backend {
         BackendX86_64.cmpOp([0x0Fu8, 0x94u8, 0xC0u8])
     }
 
+    internal static func emitCmpNe(): Array<UInt8> {
+        BackendX86_64.cmpOp([0x0Fu8, 0x95u8, 0xC0u8])
+    }
+
+    internal static func emitCmpLe(): Array<UInt8> {
+        BackendX86_64.cmpOp([0x0Fu8, 0x9Eu8, 0xC0u8])
+    }
+
+    internal static func emitCmpGt(): Array<UInt8> {
+        BackendX86_64.cmpOp([0x0Fu8, 0x9Fu8, 0xC0u8])
+    }
+
+    internal static func emitCmpGe(): Array<UInt8> {
+        BackendX86_64.cmpOp([0x0Fu8, 0x9Du8, 0xC0u8])
+    }
+
     internal static func emitCmpLt(): Array<UInt8> {
         BackendX86_64.cmpOp([0x0Fu8, 0x9Cu8, 0xC0u8])
     }
