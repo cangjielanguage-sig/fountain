@@ -609,4 +609,25 @@ class GroupCursorTest {
             fixture.close()
         }
     }
+    @TestCase
+    public func delayedRecordNotAssignedToOtherSubscriberEarly(): Unit {
+        let fixture = CursorFixture("delay_group")
+        try {
+            fixture.appendAt(["b"], "one", DateTime.nowUTC())
+            let cursor = fixture.cursorOf(delaying: Duration.second * 61)
+            let s1 = fixture.sub("s1", tags: ["a"])
+            let s2 = fixture.sub("s2", tags: ["b"])
+            let members = [s1, s2]
+            // s1 不匹配，但也不能在到期前把记录分配给 s2
+            @Assert(cursor.next(s1, members, MQMatcher()).isNone())
+            @Assert(cursor.next(s2, members, MQMatcher()).isNone())
+
+            fixture.clock.advance(Duration.second * 62)
+            @Assert(cursor.next(s1, members, MQMatcher()).isNone())
+            @Assert(cursor.next(s2, members, MQMatcher()).isSome())
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
 }

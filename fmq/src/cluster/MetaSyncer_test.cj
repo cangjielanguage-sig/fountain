@@ -255,4 +255,20 @@ class MetaSyncerTest {
             shutdown(store, "snapshot")
         }
     }
+    @TestCase
+    public func registerTopicRejectsNegativeDelaying(): Unit {
+        let (store, _, syncer) = fixture("negative_delay")
+        try {
+            var rejected = false
+            try {
+                syncer.registerTopic(MQTopicMeta("/neg", 1, delayingMs: -1))
+            } catch (_: Exception) {
+                rejected = true
+            }
+            @Assert(rejected)
+            @Assert(store.topicOf("/neg").isNone())
+        } finally {
+            shutdown(store, "negative_delay")
+        }
+    }
 }

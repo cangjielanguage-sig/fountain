@@ -196,7 +196,7 @@ public class MQManager {
                             continue
                         }
                         let fields = line.split("\t")
-                        if (fields.size < 10) {
+                        if (fields.size < 11) {
                             continue
                         }
                         let group = if (fields[2].size == 0) {

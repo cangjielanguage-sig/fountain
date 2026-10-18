@@ -175,4 +175,13 @@ class MQPayloadTest {
     }
 
 
+    @TestCase
+    public func topicMetaAndAssignmentCarryDelaying(): Unit {
+        let meta = roundtrip<MQTopicMeta>(MQTopicMeta("/t", 2, delayingMs: 61000)).getOrThrow()
+        @Assert(meta.delayingMs == 61000)
+        let assignment = roundtrip<MQTopicAssignment>(MQTopicAssignment("/t", 2, 0, [0, 1],
+            delayingMs: 61000)).getOrThrow()
+        @Assert(assignment.delayingMs == 61000)
+        @Assert(assignment.owners == [0, 1])
+    }
 }

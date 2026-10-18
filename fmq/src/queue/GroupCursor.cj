@@ -145,6 +145,10 @@ protected class GroupCursor {
                     entry.decided = true
                     continue
                 }
+                // 已分配但尚未取走：延迟未到期时停在队首（已投递过的重投不受延迟约束）
+                if (!entry.delivered && !isDue(record.getOrThrow(), current)) {
+                    return None<(Array<Byte>, LogPosition)>
+                }
                 // 已分配给本订阅但尚未取走时，匹配在分配时已判定；退回组内的记录必须重新匹配
                 let needMatch = entry.delivered || entry.owner.isNone()
                 if (needMatch) {
@@ -215,19 +219,12 @@ protected class GroupCursor {
                 let ownResult = MQMatcher.matches(subscription, record)
                 match (ownResult) {
                     case Match =>
-                        if (delaying > Duration.Zero) {
-                            match (MQMessageRecord.publishTime(record)) {
-                                case Some(published) =>
-                                    if (current - published < delaying) {
-                                        // 未到期：停在队首，不建未决项、不推进 committed
-                                        scanPosition = position
-                                        reader.getOrThrow().close()
-                                        reader = None
-                                        return None<(Array<Byte>, LogPosition)>
-                                    }
-                                case None =>
-                                    logger.warn("no publish time in messageId on delayed topic ${topic}, deliver immediately")
-                            }
+                        if (!isDue(record, current)) {
+                            // 未到期：停在队首，不建未决项、不推进 committed
+                            scanPosition = position
+                            reader.getOrThrow().close()
+                            reader = None
+                            return None<(Array<Byte>, LogPosition)>
                         }
                         let entry = DeliveryRecord(position, after, Some(subscription.subscribedId), 1, now(), true)
                         entries.add(entry)
@@ -264,6 +261,12 @@ protected class GroupCursor {
                     }
                 }
                 if (let Some(other) <- assignedTo) {
+                    if (!isDue(record, current)) {
+                        scanPosition = position
+                        reader.getOrThrow().close()
+                        reader = None
+                        return None<(Array<Byte>, LogPosition)>
+                    }
                     entries.add(DeliveryRecord(position, after, Some(other), 0, now(), false))
                 } else if (unsupported) {
                     // BODY 无法评估：不建未决项、不标记已决、不推进 committed；下次从本条重扫
@@ -412,6 +415,19 @@ protected class GroupCursor {
         logger.warn("cursor of ${topic}/${queueIndex}/${group} moved from ${previous.seq}:${previous.offset} to " +
             "${oldest.index}:0 because its segment was removed")
         true
+    }
+
+    /** 延迟到期判定：未配置延迟恒为真；无发布时间时按已到期并告警。 */
+    private func isDue(record: Array<Byte>, current: DateTime): Bool {
+        if (delaying <= Duration.Zero) {
+            return true
+        }
+        match (MQMessageRecord.publishTime(record)) {
+            case Some(published) => current - published >= delaying
+            case None =>
+                logger.warn("no publish time in messageId on delayed topic ${topic}, deliver immediately")
+                true
+        }
     }
 
     private func writeDeadLetter(entry: DeliveryRecord, record: Array<Byte>, now: DateTime): Unit {
