@@ -345,6 +345,14 @@ public class X86Lower_test {
             X86Lower_test.hex(BackendX86_64.emitCallHelper(0x8202, 2)))
     }
 
+    @TestCase
+    public func decimalHelperRoutes(): Unit {
+        @Assert(X86Lower_test.hex(BackendX86_64.emitDecAdd(0x8300)),
+            X86Lower_test.hex(BackendX86_64.emitCallHelper(0x8300, 2)))
+        @Assert(X86Lower_test.hex(BackendX86_64.emitDecToI64(0x8301)),
+            X86Lower_test.hex(BackendX86_64.emitCallHelper(0x8301, 1)))
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {
