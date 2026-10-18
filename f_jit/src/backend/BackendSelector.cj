@@ -438,6 +438,23 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
+    /** `LOAD_CAP idx`：push locals[0]（闭包句柄）+ push idx，再走 H56 模板 A。 */
+    internal static func emitLoadCap(h56: Int64, idx: Int64): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (x in [0xFFu8, 0xB5u8]) {
+            out.add(x)
+        }
+        BackendX86_64.w32(out, BackendX86_64.i32bits(-32))
+        out.add(0x48u8)
+        out.add(0xB8u8)
+        BackendX86_64.w64(out, idx)
+        out.add(0x50u8)
+        for (x in BackendX86_64.emitCallHelper(h56, 2)) {
+            out.add(x)
+        }
+        out.toArray()
+    }
+
     /** `GUARD v`：取 cell 高 16 位 tag，不等于 v → bail（rel 占位）。 */
     internal static func emitGuard(v: Int64): Array<UInt8> {
         let out = ArrayList<UInt8>()

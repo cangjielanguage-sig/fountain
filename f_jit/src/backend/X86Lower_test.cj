@@ -253,6 +253,14 @@ public class X86Lower_test {
             '0F94C0' + '0FB6C0' + '48890424')
     }
 
+    @TestCase
+    public func loadCap(): Unit {
+        let got = BackendX86_64.emitLoadCap(0x5000, 2)
+        @Assert(got.size > 30, true)
+        // push locals[0]（闭包句柄）
+        @Assert(X86Lower_test.hex(got[0..6]), 'FFB5E0FFFFFF')
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {
