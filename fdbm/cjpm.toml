@@ -15,6 +15,9 @@
   "fountain::f_util" = {path = "../f_util"}
   "fountain::f_version" = {path = "../f_version"}
 
+[test-dependencies]
+  "fountain::f_mockdb" = {path = "../f_mockdb"}
+
 [package]
   cjc-version = "1.2.0"
   compile-option = "-O2 --dy-std"
