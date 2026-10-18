@@ -63,7 +63,10 @@ fmq manager --server=127.0.0.1:2350 deleteTopic /order
 - at-least-once：未确认消息会被重复投递。
 - 无自动故障转移：备份副本只保证落盘，不自动接管。
 - manager 与普通客户端共用 TCP 协议，没有强身份隔离（客户端 API 不提供注册入口）。
-- BODY 为自定义对象类型时，服务端无法求值过滤器（该记录不会被投递）。
+- BODY 为未注册对象类型且存在非空 filter 的活跃订阅时，发布返回 `FILTER_UNSUPPORTED_BODY`
+  且不落盘；空 filter 不需要服务端解码 BODY。
+- ACK 按 `(topic, queueIndex, group)` 精确定位游标；队列身份缺失或不属于本机时返回 `ACK_UNKNOWN`。
+- 游标指向的段被 TTL 清理后，自动跳到现存最老段并落盘；全部段不可读时返回空，不永久报错。
 
 ## 测试与端到端
 

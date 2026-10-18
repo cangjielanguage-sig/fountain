@@ -14,7 +14,7 @@ main() {
     let sid = client.subscribe("/order", subscribeGroup: "g1")
     let message = client.consume(sid)
     let body = message.get<String>()
-    client.ack(sid, message.segmentedIndex, message.segmentedOffset)
+    client.ack(sid, message.queueIndex, message.segmentedIndex, message.segmentedOffset)
     client.unsubscribe(sid)
     client.close()
 }
@@ -34,10 +34,13 @@ main() {
 ## Semantics and limits
 
 - Delivery is **at-least-once**: unacknowledged messages may be redelivered after a timeout or restart.
+- A message position is the triple `(queueIndex, segmentedIndex, segmentedOffset)`: each queue is an
+  independent segmented log, so segment/offset alone collide across queues. `ack` must echo `queueIndex`.
 - Topic/group registration is not exposed to clients; use `fmq manager`.
 - `consume` blocks until a message is available; the server returns "has/has not" immediately.
-- Filters use `f_data.path` expressions. A record whose BODY is an unknown object type is not delivered
-  when the subscription has a non-empty filter.
+- Filters use `f_data.path` expressions. If an active subscription has a non-empty filter and the BODY
+  cannot be evaluated by the server (unknown object type), publishing fails with
+  `FILTER_UNSUPPORTED_BODY` and nothing is persisted.
 - No new protocol commands are introduced; MQ reuses existing `f_protocol` commands and distinguishes
   their purpose by the runtime payload type.
 
