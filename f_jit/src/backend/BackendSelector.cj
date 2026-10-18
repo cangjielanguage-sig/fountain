@@ -291,7 +291,16 @@ internal class BackendX86_64 <: Backend {
         BackendX86_64.cmpOp([0x0Fu8, 0x9Cu8, 0xC0u8])
     }
 
-    /** `TO_I64`：`cvttsd2si rax,xmm0`（NaN/越界行为待 P5.6 完整边界）。 */
+    /** `TO_I64`：NaN 前置 `jp bail`；越界判定待补。 */
+    internal static func emitToI64Checked(): Array<UInt8> {
+        [0xF2u8, 0x0Fu8, 0x10u8, 0x04u8, 0x24u8,
+         0x66u8, 0x0Fu8, 0x2Eu8, 0xC0u8,
+         0x0Fu8, 0x8Au8, 0x00u8, 0x00u8, 0x00u8, 0x00u8,
+         0xF2u8, 0x48u8, 0x0Fu8, 0x2Cu8, 0xC0u8,
+         0x48u8, 0x89u8, 0x04u8, 0x24u8]
+    }
+
+    /** `TO_I64`：`cvttsd2si rax,xmm0`（无检查；仅供已证明有界的路径）。 */
     internal static func emitToI64(): Array<UInt8> {
         [0xF2u8, 0x0Fu8, 0x10u8, 0x04u8, 0x24u8,
          0xF2u8, 0x48u8, 0x0Fu8, 0x2Cu8, 0xC0u8,

@@ -178,6 +178,12 @@ public class X86Lower_test {
             '488B0424' + 'F2480F2AC0' + 'F20F110424')
     }
 
+    @TestCase
+    public func toI64NanGuard(): Unit {
+        @Assert(X86Lower_test.hex(BackendX86_64.emitToI64Checked()),
+            'F20F100424' + '660F2EC0' + '0F8A00000000' + 'F2480F2CC0' + '48890424')
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {
