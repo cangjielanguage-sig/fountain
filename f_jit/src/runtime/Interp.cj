@@ -129,10 +129,25 @@ public class Interp {
         this.retCell
     }
 
-    /** 常量索引 → 句柄 ID（首次访问时登记为路径 A 常量）。 */
+    /**
+     * 常量索引 → cell（句柄型登记为路径 A 常量；Int64/F64 直接返回位值）。
+     *
+     * `PUSH_KH` 只引用句柄型常量；非句柄常量（容器常量内部的元素）若也走 `pin`，
+     * `tokenOf` 会以 19 拒绝——故此处先按值型返回。
+     */
     public func constHandle(idx: Int64): Int64 {
+        let obj = this.unit.consts.instanceAt(idx)
+        match (obj) {
+            case v: Int64 => return v
+            case v: Float64 =>
+                let bits = v.toBits()
+                if (bits >= 0x8000000000000000u64) {
+                    return Int64(bits - 0x8000000000000000u64) + Int64.Min
+                }
+                return Int64(bits)
+            case _ => ()
+        }
         if (this.constIds[idx] == 0) {
-            let obj = this.unit.consts.instanceAt(idx)
             let wrapped = wrapConst(idx, obj)
             this.constIds[idx] = HandleTable.pinConst(wrapped)
         }

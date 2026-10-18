@@ -79,6 +79,12 @@ public class GoldenDiff_test {
     }
 
     @TestCase
+    public func goldenContainerMutation(): Unit {
+        GoldenDiff_test.check('G/mutation', '{ => let l = [1, 2]\n l[0] = 3\n l[0] }',
+            Array<Any>())
+    }
+
+    @TestCase
     public func goldenEmptyMap(): Unit {
         GoldenDiff_test.check('G/empty-map',
             '{ => let m: Map<String, Int64> = {}\n m["k"] = 1\n m["k"] }', Array<Any>())
