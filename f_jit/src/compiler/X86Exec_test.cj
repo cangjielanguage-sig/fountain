@@ -56,6 +56,33 @@ public class X86Exec_test {
             '{ n: Int64 => if (n <= 1) { 1 } else { n * recursive(n - 1) } }', [5])
     }
 
+    @TestCase
+    public func floatArithmetic(): Unit {
+        X86Exec_test.check('X86/float', '{ a: Float64, b: Float64 => a * b + 1.0f64 }', [2.5, 4.0])
+    }
+
+    @TestCase
+    public func divMod(): Unit {
+        X86Exec_test.check('X86/divmod', '{ a: Int64 => a / 3 + a % 2 }', [17])
+    }
+
+    @TestCase
+    public func floatToInt(): Unit {
+        X86Exec_test.check('X86/cast', '{ x: Float64 => Int64(x) }', [3.9])
+    }
+
+    @TestCase
+    public func closureCall(): Unit {
+        X86Exec_test.check('X86/closure', '{ => let f = { x: Int64 => x + 1 }\n f(2) }',
+            Array<Any>())
+    }
+
+    @TestCase
+    public func listLen(): Unit {
+        X86Exec_test.check('X86/len',
+            '{ => let l = [1, 2, 3]\n var s = 0\n for (x in l) { s = s + x }\n s }', Array<Any>())
+    }
+
     private static func check(id: String, src: String, args: Array<Any>): Unit {
         let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(src)
         let r = NativeRunner().run(DiffCase(id, cu.raw, args))

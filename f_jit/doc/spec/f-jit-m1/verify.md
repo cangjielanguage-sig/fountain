@@ -4,7 +4,7 @@
 - 校验对象：`openspec/changes/f-jit-m1` 的 9 份 spec（40 requirement / 156 scenario）、`tasks.md`（115 项）
 - 校验时间：2026-10-18
 - 校验方式：**手工等价校验**。本 worktree 的 `.codebuddy/commands/opsx/` 未安装 `verify` 工作流（只有 apply/archive/explore/propose/sync/update），`/opsx:verify` 无法在融合侧启动；本报告按同一口径逐项对照实现与用例，不修改 `tasks.md`。
-- 基线：`cjpm test` **547/547**（Linux aarch64 原生）；`scripts/check_tmap.sh` **40 条范围内映射，悬空/未断言 0 条**。
+- 基线：`cjpm test` **552/552**（Linux aarch64 原生）；`scripts/check_tmap.sh` **40 条范围内映射，悬空/未断言 0 条**。
 
 ## 结论
 
@@ -13,7 +13,7 @@
 | ID | 严重度 | 状态 | 摘要 |
 |---|---|---|---|
 | CRITICAL-01 | CRITICAL | **已修复** | 用户面 `Compiler.compile` 原先只返回解释器函数，JIT 从未接入生产路径 |
-| CRITICAL-02 | CRITICAL | **部分修复** | x86 lowering 已补控制流/比较/调用模板/常量镜像；浮点、CAST、CALL_CLOSURE、LEN 等仍缺，遇未支持指令整单元降级 |
+| CRITICAL-02 | CRITICAL | **已修复（实现层）** | x86 lowering 已按 A64 的 157 个 opcode 全量补齐；本机只做字节级组装验收，原生执行证据待 WARNING-01 |
 | CRITICAL-03 | CRITICAL | **部分修复** | T6 错误矩阵由 5 码扩到 16 码；7/15/16/17/19/99 仍无源码级差分证据（19 有契约用例，其余为引擎内部码） |
 | CRITICAL-04 | CRITICAL | **已修复** | T52/T53 原为「挂名映射」；已补真实两形态用例与常量写 20 断言 |
 | WARNING-01 | WARNING | 未关闭 | x86 执行证据未在本机取得（无 x86_64 原生环境）；本轮只做字节级组装验收，需在 x86_64 机器跑 `X86Exec_test` |
@@ -39,7 +39,7 @@
 **残留**
 - `MachineEnv.fnTableBase` 仍是进程级全局，多单元并发 JIT 调用存在竞态；M1 未提供隔离。建议下一轮加 per-call 保存/恢复或串行化。
 
-### CRITICAL-02 x86 指令降低未覆盖全部指令（部分修复）
+### CRITICAL-02 x86 指令降低未覆盖全部指令（已修复，实现层）
 
 **规格**：`f-jit-backend/spec.md`「两架构降低覆盖全部指令」——两个后端 SHALL 为全部已分配指令提供降低实现。
 
@@ -58,15 +58,17 @@
 - x86 实参 ABI 对齐共享约定：`rsi` 指向最深实参，第 i 个在 `[rsi-8i]`；`X86Frame_test` 期望同步更新。
 - 证据：`X86Compile_test`（分支 / 容器+常量镜像 / 递归+fnTable）三例通过，说明组装层不再对这三类单元返回 `None`；`X86Exec_test` 新增容器与递归两例（x86-only）。
 
-**仍缺（遇之仍整单元降级）**
-- 浮点：`FADD/FSUB/FMUL/FDIV/FDIV_CHK/FNEG/FABS/FMIN/FMAX/FSQRT/FFLOOR/FCEIL/FTRUNC/FROUND`（`0x40–0x4D`）
-- 整型：`IDIV/IMOD/IMIN/IMAX/ICLZ/IPOPCNT`（`0x33/0x34/0x37/0x38/0x3A/0x3B`）
-- 类型：`CAST`（`0x80`）、`TO_I64`（`0x81`）、`TO_F64`（`0x82`）、`GUARD_TYPE mode1`、`DEC_TO_I64 mode1` 的 DEOPT 改写
-- 调用：`CALL_CLOSURE`（`0x7F`）、`LOAD_CAP`（`0x26`）
-- 容器动态 `LEN`（`0x90`，需按 tag 选 hid）
-- `DT_NEW/DUR_NEW`（`0xA9/0xAA`，M1 汇编期禁发）
+**本轮补齐**
+- 整型：`IDIV/IMOD`（÷0/INT64_MIN÷-1）、`IMIN/IMAX`、`IABS`、`ICLZ`（bsr）、`IPOPCNT`（SWAR）
+- 浮点：`FADD/FSUB/FMUL/FDIV/FDIV_CHK`、`FNEG/FAbs`、`FMIN/FMAX`、`FSQRT`、`FFLOOR/FCEIL/FTRUNC/FROUND`、`CMP_F`
+- 类型：`CAST`/`GUARD_TYPE mode1`（H17 判定 + bail7/deopt）、`TO_I64`（NaN/±2^63 边界）、`TO_F64`、`DEC_TO_I64 mode1`（9 → DEOPT）
+- 调用/闭包：`CALL_CLOSURE`（H55/H57/间接调用/重写 fnId）、`LOAD_CAP`（H56）
+- 容器：动态 `LEN`（H18 取 tag → H01/H03/H07）
+- 覆盖核对：`X86Lower` 的 case 集合与 `A64Lower` 全等（157 个 opcode，0 缺失）
 
-**判定**：分支与容器用例已可「真走 JIT」，但「全部指令」要求仍未满足。要么补齐上述分组，要么在 spec 中把 M1 的 x86 明确降为「框架 + 部分指令」，不能两处都写成已完成。
+**口径说明**
+- `FFLOOR/FCEIL/FTRUNC/FROUND` 使用 `roundsd`（SSE4.1）；design §12.4 的基线是 SSE2 软件序列，SSE4.1 仅在显式开启时使用。当前实现未做 CPUID 判定，目标机需具备 SSE4.1；若必须支持纯 SSE2，应改回软件序列。
+**判定**：实现层已按 A64 的 opcode 全集补齐，CRITICAL-02 关闭；x86 原生执行证据仍未取得（WARNING-01），不能据此宣称「x86 端到端全绿」。
 
 ### CRITICAL-03 T6 错误矩阵不完整（部分修复）
 
@@ -135,7 +137,7 @@ cd f_jit && cjpm test --filter X86Compile_test
 | `f-jit-bytecode-format` | 10 / 24 | 绿 | 编解码、校验、指纹 |
 | `f-jit-compiler-frontend` | 10 / 24 | 绿 | 词法/语法/降低/金样 |
 | `f-jit-runtime` | 11 / 21 | 绿 | 解释器/句柄/helper/转储 |
-| `f-jit-backend` | 10 / 16 | **黄** | aarch64 全量绿；x86 仅部分指令，见 CRITICAL-02 |
+| `f-jit-backend` | 10 / 16 | **绿（实现层）** | aarch64 全量绿；x86 已补齐 157 个 opcode，原生执行证据待 WARNING-01 |
 | `f-jit-facade-bridge` | 10 / 20 | **绿（本轮修复）** | 生产 JIT 已接入；T52 两形态已补 |
 | `f-jit-differential-acceptance` | 7 / 13 | **黄** | T6 16/21；x86 执行证据待补 |
 
@@ -143,16 +145,17 @@ cd f_jit && cjpm test --filter X86Compile_test
 
 | 命令 | 结果 |
 |---|---|
-| `cjpm test`（Linux aarch64） | **547/547 通过** |
+| `cjpm test`（Linux aarch64） | **552/552 通过** |
 | `scripts/check_tmap.sh` | 40 条范围内映射，悬空/未断言 **0** |
 | `JitWire_test.createsExecutableAssets` | 通过（生产路径可建 JIT 资产） |
-| `X86Compile_test`（分支/容器/递归） | 3/3 通过（字节级组装） |
+| `X86Compile_test`（分支/容器/递归/浮点/除法/转换/闭包/LEN） | 8/8 通过（字节级组装） |
 | `X86Frame_test` | 通过（实参 ABI 改为 `[rsi-8i]`） |
+| `X86Exec_test` | 10 例，本机全部条件跳过（x86_64 原生待跑） |
 
 ## 建议的下一步（按优先级）
 
-1. **补 x86 浮点/CAST/TO_I64/CALL_CLOSURE/LEN**，或在 spec 中显式降级 x86 范围；二选一，不能继续双口径。
+1. **x86 原生验收**：在真实 x86_64 机器上跑 `X86Exec_test` 与全量 `cjpm test`；若失败，按失败指令修 `X86Lower`。
 2. **T6 剩余码**：7/15/16/17/99 补专用构造用例；19 已有契约用例，在 plan 中改为「契约层覆盖」。
-3. **x86_64 机器验收**：跑 `X86Exec_test` 与全量 `cjpm test`，把结果回填本报告 WARNING-01。
+3. **x86_64 机器验收**：同上；SSE4.1 目标机可直接跑，纯 SSE2 目标需改 `roundsd` 序列。
 4. **MachineEnv 并发隔离**：per-call 保存/恢复或串行化，避免多单元并发 JIT 串表。
 5. 上述完成后重跑 `check_tmap.sh`，再进 `opsx:archive`。

@@ -377,6 +377,282 @@ internal class X86Lower {
         this.depth = this.depth - argc + 1
     }
 
+    // ---------------------------------------------------------------- 指令组
+
+    private func sseBinRR(op: UInt8): Unit {
+        this.add([0xF2u8, 0x0Fu8, op, 0xC1u8])
+    }
+
+    private func floatBin(op: UInt8, commutative: Bool): Unit {
+        if (commutative) {
+            this.sseLoad(0, 0)
+            this.sseBin(op, 8)
+        } else {
+            this.sseLoad(0, 8)
+            this.sseBin(op, 0)
+        }
+        this.canonXmm0()
+        this.sseStore(8, 0)
+        this.addRsp(8)
+        this.depth = this.depth - 1
+    }
+
+    private func floatDivChk(): Unit {
+        this.seq = this.seq + 1
+        let go = 'fd${this.seq}'
+        let z = 'fdz${this.seq}'
+        let done = 'fdd${this.seq}'
+        this.add([0x66u8, 0x0Fu8, 0x57u8, 0xC9u8])
+        this.ucomisdRM(1, 0)
+        this.jcc(0x8Bu8, go) // jnp：除数 NaN 不判零
+        this.jcc(0x84u8, z)
+        this.bind(go)
+        this.floatBin(0x5Eu8, false)
+        this.jmpLabel(done)
+        this.bind(z)
+        this.bail(1)
+        this.bind(done)
+    }
+
+    private func floatMinMax(op: UInt8): Unit {
+        this.seq = this.seq + 1
+        let canon = 'fmc${this.seq}'
+        let done = 'fmd${this.seq}'
+        this.sseLoad(0, 8)
+        this.sseLoad(1, 0)
+        this.ucomisdRR(0, 0)
+        this.jcc(0x8Au8, canon) // jp
+        this.ucomisdRR(1, 1)
+        this.jcc(0x8Au8, canon)
+        this.sseBinRR(op)
+        this.jmpLabel(done)
+        this.bind(canon)
+        this.movImm(0, Int64(0x7FF8000000000000))
+        this.movqXmmRax(0)
+        this.bind(done)
+        this.sseStore(8, 0)
+        this.addRsp(8)
+        this.depth = this.depth - 1
+    }
+
+    private func floatRound(imm: UInt8): Unit {
+        this.sseLoad(0, 0)
+        this.add([0x66u8, 0x0Fu8, 0x3Au8, 0x0Bu8, 0xC0u8, imm])
+        this.canonXmm0()
+        this.sseStore(0, 0)
+    }
+
+    /** `cc`：0=EQ、1=LT、2=LE、4=NE、6=GE、7=GT（无序语义按 §12.4）。 */
+    private func floatCmp(cc: UInt8): Unit {
+        this.sseLoad(0, 8)
+        this.sseLoad(1, 0)
+        this.ucomisdRR(0, 1)
+        match (cc) {
+            case 0u8 =>
+                this.add([0x0Fu8, 0x94u8, 0xC0u8, 0x0Fu8, 0x9Bu8, 0xC2u8, 0x20u8, 0xD0u8])
+            case 1u8 =>
+                this.add([0x0Fu8, 0x92u8, 0xC0u8, 0x0Fu8, 0x9Bu8, 0xC2u8, 0x20u8, 0xD0u8])
+            case 2u8 =>
+                this.add([0x0Fu8, 0x96u8, 0xC0u8, 0x0Fu8, 0x9Bu8, 0xC2u8, 0x20u8, 0xD0u8])
+            case 4u8 =>
+                this.add([0x0Fu8, 0x95u8, 0xC0u8, 0x0Fu8, 0x9Au8, 0xC2u8, 0x08u8, 0xD0u8])
+            case 6u8 =>
+                this.add([0x0Fu8, 0x93u8, 0xC0u8])
+            case _ =>
+                this.add([0x0Fu8, 0x97u8, 0xC0u8])
+        }
+        this.add([0x0Fu8, 0xB6u8, 0xC0u8, 0x48u8, 0x89u8, 0x44u8, 0x24u8, 0x08u8,
+            0x48u8, 0x83u8, 0xC4u8, 0x08u8])
+        this.depth = this.depth - 1
+    }
+
+    /** `CMP_F` 三向：`(a<b) - (a>b)`，NaN → 0。 */
+    private func floatCmpTri(): Unit {
+        this.sseLoad(0, 8)
+        this.sseLoad(1, 0)
+        this.ucomisdRR(0, 1)
+        this.add([0x0Fu8, 0x92u8, 0xC0u8, 0x0Fu8, 0x97u8, 0xC2u8,
+            0x0Fu8, 0xB6u8, 0xC0u8, 0x0Fu8, 0xB6u8, 0xD2u8,
+            0x29u8, 0xD0u8, 0x48u8, 0x98u8,
+            0x48u8, 0x89u8, 0x44u8, 0x24u8, 0x08u8,
+            0x48u8, 0x83u8, 0xC4u8, 0x08u8])
+        this.depth = this.depth - 1
+    }
+
+    private func minMax(cmov: UInt8): Unit {
+        this.add([0x48u8, 0x8Bu8, 0x0Cu8, 0x24u8, 0x48u8, 0x8Bu8, 0x44u8, 0x24u8, 0x08u8,
+            0x48u8, 0x83u8, 0xC4u8, 0x08u8, 0x48u8, 0x3Bu8, 0xC1u8,
+            0x48u8, 0x0Fu8, cmov, 0xC1u8, 0x48u8, 0x89u8, 0x04u8, 0x24u8])
+        this.depth = this.depth - 1
+    }
+
+    private func castLike(tok: Int64, mode: Int64): Unit {
+        this.pushMemRsp(0)
+        this.depth = this.depth + 1
+        this.movImm(0, tok)
+        this.pushReg(0)
+        this.depth = this.depth + 1
+        this.helper(17, 2, 0)
+        this.popReg(0)
+        this.depth = this.depth - 1
+        this.add([0x48u8, 0x85u8, 0xC0u8])
+        this.seq = this.seq + 1
+        let ok = 'cast${this.seq}'
+        this.jcc(0x85u8, ok)
+        if (mode == 0) {
+            this.bail(7)
+        } else {
+            this.bail(-1)
+        }
+        this.bind(ok)
+    }
+
+    private func toI64(mode: Int64): Unit {
+        this.seq = this.seq + 1
+        let bad = 'ti${this.seq}'
+        let done = 'tid${this.seq}'
+        this.sseLoad(0, 0)
+        this.ucomisdRR(0, 0)
+        this.jcc(0x8Au8, bad) // jp：NaN
+        this.movImm(0, Int64(0x43E0000000000000))
+        this.movqXmmRax(1)
+        this.ucomisdRR(0, 1)
+        this.jcc(0x83u8, bad) // jae：>= 2^63
+        this.movImm(0, -4332462841530417152) // -2^63
+        this.movqXmmRax(1)
+        this.ucomisdRR(0, 1)
+        this.jcc(0x86u8, bad) // jbe：<= -2^63
+        this.add([0xF2u8, 0x48u8, 0x0Fu8, 0x2Cu8, 0xC0u8,
+            0x48u8, 0x89u8, 0x04u8, 0x24u8])
+        this.jmpLabel(done)
+        this.bind(bad)
+        if (mode == 0) {
+            this.bail(13)
+        } else {
+            this.bail(-1)
+        }
+        this.bind(done)
+    }
+
+    private func callClosure(argc: Int64): Unit {
+        let disp = 8 * argc
+        // H55(ctx, &closure, 1) → fnId；闭包槽不覆盖
+        this.movImm(7, 55)
+        this.movReg(6, 15)
+        this.leaRdxRsp(disp)
+        this.add([0xB9u8])
+        this.w32(1)
+        this.movImm(0, this.dispatch)
+        let p1 = this.alignBeforeCall()
+        this.add([0xFFu8, 0xD0u8])
+        this.unalignAfterCall(p1)
+        this.add([0x48u8, 0x89u8, 0x45u8, 0xF0u8]) // mov [rbp-16],rax
+        this.checkErr()
+        // H57(ctx) → fnTable 基址
+        this.movImm(7, 57)
+        this.movReg(6, 15)
+        this.add([0x31u8, 0xD2u8, 0x31u8, 0xC9u8])
+        this.movImm(0, this.dispatch)
+        let p2 = this.alignBeforeCall()
+        this.add([0xFFu8, 0xD0u8])
+        this.unalignAfterCall(p2)
+        this.add([0x48u8, 0x89u8, 0x45u8, 0xE8u8]) // mov [rbp-24],rax
+        this.checkErr()
+        this.add([0x48u8, 0x8Bu8, 0x45u8, 0xF0u8,
+            0x48u8, 0x8Bu8, 0x4Du8, 0xE8u8,
+            0x48u8, 0x8Bu8, 0x04u8, 0xC1u8]) // rax = fnTable[fnId]
+        this.movReg(7, 15)
+        this.leaRsiRsp(disp)
+        this.add([0xBAu8])
+        this.w32(argc)
+        let p3 = this.alignBeforeCall()
+        this.add([0xFFu8, 0xD0u8])
+        this.unalignAfterCall(p3)
+        this.checkErr()
+        this.movDwordCtx(40, Int64(this.fn.fnId))
+        this.moveRaxToMemRsp(disp)
+        this.addRsp(disp)
+        this.depth = this.depth - argc
+    }
+
+    // ---------------------------------------------------------------- SSE / 分支
+
+    private func sseLoad(dst: Int64, disp: Int64): Unit {
+        this.add([0xF2u8, 0x0Fu8, 0x10u8, UInt8(0x84 + dst * 8), 0x24u8])
+        this.w32(disp)
+    }
+
+    private func sseStore(disp: Int64, src: Int64): Unit {
+        this.add([0xF2u8, 0x0Fu8, 0x11u8, UInt8(0x84 + src * 8), 0x24u8])
+        this.w32(disp)
+    }
+
+    private func sseBin(op: UInt8, disp: Int64): Unit {
+        this.add([0xF2u8, 0x0Fu8, op, 0x84u8, 0x24u8])
+        this.w32(disp)
+    }
+
+    private func ucomisdRR(a: Int64, b: Int64): Unit {
+        this.add([0x66u8, 0x0Fu8, 0x2Eu8, UInt8(0xC0 | (a << 3) | b)])
+    }
+
+    private func ucomisdRM(reg: Int64, disp: Int64): Unit {
+        this.add([0x66u8, 0x0Fu8, 0x2Eu8, UInt8(0x84 | (reg << 3)), 0x24u8])
+        this.w32(disp)
+    }
+
+    private func movqXmmRax(xmm: Int64): Unit {
+        this.add([0x66u8, 0x48u8, 0x0Fu8, 0x6Eu8, UInt8(0xC0 | (xmm << 3))])
+    }
+
+    private func movqRaxXmm(xmm: Int64): Unit {
+        this.add([0x66u8, 0x48u8, 0x0Fu8, 0x7Eu8, UInt8(0xC0 | (xmm << 3))])
+    }
+
+    private func jcc(cc: UInt8, label: String): Unit {
+        this.rel32([0x0Fu8, cc, 0x00u8, 0x00u8, 0x00u8, 0x00u8], label)
+    }
+
+    private func jmpLabel(label: String): Unit {
+        this.rel32([0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8], label)
+    }
+
+    /** 结果 NaN → CANON（`ucomisd xmm0,xmm0; jnp ok`）。 */
+    private func canonXmm0(): Unit {
+        this.seq = this.seq + 1
+        let ok = 'nan${this.seq}'
+        this.ucomisdRR(0, 0)
+        this.jcc(0x8Bu8, ok) // jnp
+        this.movImm(0, Int64(0x7FF8000000000000))
+        this.movqXmmRax(0)
+        this.bind(ok)
+    }
+
+    private func helperReg(hidReg: Int64, argc: Int64): Unit {
+        let disp = 8 * (argc - 1)
+        if (argc == 0) {
+            this.add([0x31u8, 0xD2u8])
+        } else {
+            this.leaRdxRsp(disp)
+        }
+        this.movReg(7, hidReg)
+        this.movReg(6, 15)
+        this.add([0xB9u8])
+        this.w32(argc)
+        this.movImm(0, this.dispatch)
+        let pad = this.alignBeforeCall()
+        this.add([0xFFu8, 0xD0u8])
+        this.unalignAfterCall(pad)
+        if (argc == 0) {
+            this.pushReg(0)
+        } else {
+            this.moveRaxToMemRsp(disp)
+            this.addRsp(disp)
+        }
+        this.depth = this.depth - argc + 1
+        this.checkErr()
+    }
+
     private func translate(op: UInt8, ops: Array<UInt8>, at: Int64, next: Int64): Unit {
         match (op) {
             case 0x00u8 => this.add([0x90u8])
@@ -458,10 +734,60 @@ internal class X86Lower {
             case 0x25u8 =>
                 this.pushMemRbp(-56)
                 this.depth = this.depth + 1
-            case 0x26u8 => this.ok = false
+            case 0x26u8 =>
+                this.pushMemRbp(-32)
+                this.movImm(0, X86Lower.u16(ops, 0))
+                this.pushReg(0)
+                this.depth = this.depth + 2
+                this.helper(56, 2, 0)
             case 0x30u8 => this.binOp([0x48u8, 0x03u8, 0x04u8, 0x24u8], true)
             case 0x31u8 => this.binOp([0x48u8, 0x2Bu8, 0x04u8, 0x24u8], true)
             case 0x32u8 => this.binOp([0x48u8, 0x0Fu8, 0xAFu8, 0x04u8, 0x24u8], true)
+            case 0x33u8 =>
+                this.movRaxMemRsp(8)
+                this.add([0x48u8, 0x8Bu8, 0x0Cu8, 0x24u8, 0x48u8, 0x85u8, 0xC9u8])
+                this.seq = this.seq + 1
+                let div0 = 'd0${this.seq}'
+                let ok = 'dok${this.seq}'
+                let ov = 'dov${this.seq}'
+                let done = 'ddone${this.seq}'
+                this.jcc(0x84u8, div0)
+                this.add([0x48u8, 0x83u8, 0xF9u8, 0xFFu8])
+                this.jcc(0x85u8, ok)
+                this.movImm(2, -9223372036854775807 - 1)
+                this.add([0x48u8, 0x39u8, 0xD0u8])
+                this.jcc(0x84u8, ov)
+                this.bind(ok)
+                this.add([0x48u8, 0x99u8, 0x48u8, 0xF7u8, 0xF9u8,
+                    0x48u8, 0x89u8, 0x44u8, 0x24u8, 0x08u8, 0x48u8, 0x83u8, 0xC4u8, 0x08u8])
+                this.jmpLabel(done)
+                this.bind(div0)
+                this.bail(1)
+                this.bind(ov)
+                this.bail(3)
+                this.bind(done)
+                this.depth = this.depth - 1
+            case 0x34u8 =>
+                this.movRaxMemRsp(8)
+                this.add([0x48u8, 0x8Bu8, 0x0Cu8, 0x24u8, 0x48u8, 0x85u8, 0xC9u8])
+                this.seq = this.seq + 1
+                let m0 = 'm0${this.seq}'
+                let mz = 'mz${this.seq}'
+                let md = 'md${this.seq}'
+                this.jcc(0x84u8, m0)
+                this.add([0x48u8, 0x83u8, 0xF9u8, 0xFFu8])
+                this.jcc(0x84u8, mz)
+                this.add([0x48u8, 0x99u8, 0x48u8, 0xF7u8, 0xF9u8,
+                    0x48u8, 0x89u8, 0x54u8, 0x24u8, 0x08u8, 0x48u8, 0x83u8, 0xC4u8, 0x08u8])
+                this.jmpLabel(md)
+                this.bind(mz)
+                this.add([0x31u8, 0xD2u8, 0x48u8, 0x89u8, 0x54u8, 0x24u8, 0x08u8,
+                    0x48u8, 0x83u8, 0xC4u8, 0x08u8])
+                this.jmpLabel(md)
+                this.bind(m0)
+                this.bail(2)
+                this.bind(md)
+                this.depth = this.depth - 1
             case 0x35u8 =>
                 this.add([0x48u8, 0x8Bu8, 0x04u8, 0x24u8, 0x48u8, 0xF7u8, 0xD8u8])
                 this.seq = this.seq + 1
@@ -470,13 +796,83 @@ internal class X86Lower {
                 this.bail(3)
                 this.bind(okLabel)
                 this.add([0x48u8, 0x89u8, 0x04u8, 0x24u8])
+            case 0x36u8 =>
+                this.popReg(0)
+                this.add([0x48u8, 0x85u8, 0xC0u8])
+                this.seq = this.seq + 1
+                let aok = 'ab${this.seq}'
+                let aov = 'abo${this.seq}'
+                let ad = 'abd${this.seq}'
+                this.jcc(0x89u8, aok)
+                this.add([0x48u8, 0xF7u8, 0xD8u8])
+                this.jcc(0x80u8, aov)
+                this.bind(aok)
+                this.pushReg(0)
+                this.jmpLabel(ad)
+                this.bind(aov)
+                this.bail(3)
+                this.bind(ad)
+            case 0x37u8 =>
+                this.minMax(0x4Du8)
+            case 0x38u8 =>
+                this.minMax(0x4Cu8)
             case 0x39u8 => this.binOp([0x48u8, 0x03u8, 0x04u8, 0x24u8], false)
+            case 0x3Au8 =>
+                this.add([0x48u8, 0x8Bu8, 0x0Cu8, 0x24u8, 0x48u8, 0xC7u8, 0xC0u8,
+                    0x40u8, 0x00u8, 0x00u8, 0x00u8, 0x48u8, 0x85u8, 0xC9u8])
+                this.seq = this.seq + 1
+                let cdone = 'cl${this.seq}'
+                this.jcc(0x84u8, cdone)
+                this.add([0x48u8, 0x0Fu8, 0xBDu8, 0xC1u8, 0x48u8, 0x35u8,
+                    0x3Fu8, 0x00u8, 0x00u8, 0x00u8])
+                this.bind(cdone)
+                this.add([0x48u8, 0x89u8, 0x04u8, 0x24u8])
+            case 0x3Bu8 => this.add(BackendX86_64.emitIPopcnt())
+            case 0x40u8 => this.floatBin(0x58u8, true)
+            case 0x41u8 => this.floatBin(0x5Cu8, false)
+            case 0x42u8 => this.floatBin(0x59u8, true)
+            case 0x43u8 => this.floatBin(0x5Eu8, false)
+            case 0x44u8 => this.floatDivChk()
+            case 0x45u8 =>
+                this.sseLoad(0, 0)
+                this.movImm(0, -9223372036854775807 - 1)
+                this.movqXmmRax(1)
+                this.add([0x66u8, 0x0Fu8, 0x57u8, 0xC1u8])
+                this.canonXmm0()
+                this.sseStore(0, 0)
+            case 0x46u8 =>
+                this.sseLoad(0, 0)
+                this.movImm(0, 9223372036854775807)
+                this.movqXmmRax(1)
+                this.add([0x66u8, 0x0Fu8, 0x54u8, 0xC1u8])
+                this.canonXmm0()
+                this.sseStore(0, 0)
+            case 0x47u8 => this.floatMinMax(0x5Du8)
+            case 0x48u8 => this.floatMinMax(0x5Fu8)
+            case 0x49u8 =>
+                this.sseLoad(0, 0)
+                this.add([0xF2u8, 0x0Fu8, 0x51u8, 0x04u8, 0x24u8])
+                this.canonXmm0()
+                this.sseStore(0, 0)
+            case 0x4Au8 => this.floatRound(1u8)
+            case 0x4Bu8 => this.floatRound(2u8)
+            case 0x4Cu8 => this.floatRound(3u8)
+            case 0x4Du8 => this.floatRound(0u8)
+            case 0x50u8 => this.add(BackendX86_64.emitCmpI()); this.depth = this.depth - 1
+            case 0x51u8 => this.floatCmpTri()
             case 0x52u8 => this.cmpOp(0x94u8)
             case 0x53u8 => this.cmpOp(0x95u8)
             case 0x54u8 => this.cmpOp(0x9Cu8)
             case 0x55u8 => this.cmpOp(0x9Eu8)
             case 0x56u8 => this.cmpOp(0x9Fu8)
             case 0x57u8 => this.cmpOp(0x9Du8)
+            case 0x58u8 => this.floatCmp(0u8)
+            case 0x59u8 => this.floatCmp(4u8)
+            case 0x5Au8 => this.floatCmp(1u8)
+            case 0x5Bu8 => this.floatCmp(2u8)
+            case 0x5Cu8 => this.floatCmp(7u8)
+            case 0x5Du8 => this.floatCmp(6u8)
+            case 0x5Eu8 => this.add([0x48u8, 0x83u8, 0x34u8, 0x24u8, 0x01u8])
             case 0x5Fu8 => this.binOp([0x48u8, 0x23u8, 0x04u8, 0x24u8], false)
             case 0x60u8 => this.binOp([0x48u8, 0x0Bu8, 0x04u8, 0x24u8], false)
             case 0x61u8 => this.binOp([0x48u8, 0x33u8, 0x04u8, 0x24u8], false)
@@ -539,10 +935,13 @@ internal class X86Lower {
             case 0x7Eu8 =>
                 this.add([0x31u8, 0xC0u8])
                 this.rel32([0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8], 'epilogue')
-            case 0x7Fu8 => this.ok = false
-            case 0x80u8 => this.ok = false
-            case 0x81u8 => this.ok = false
-            case 0x82u8 => this.ok = false
+            case 0x7Fu8 => this.callClosure(X86Lower.u8(ops, 0))
+            case 0x80u8 => this.castLike(X86Lower.u16(ops, 0), X86Lower.u8(ops, 2))
+            case 0x81u8 => this.toI64(X86Lower.u8(ops, 0))
+            case 0x82u8 =>
+                this.movRaxMemRsp(0)
+                this.add([0xF2u8, 0x48u8, 0x0Fu8, 0x2Au8, 0xC0u8])
+                this.sseStore(0, 0)
             case 0x83u8 =>
                 this.movImm(0, X86Lower.u16(ops, 0))
                 this.pushReg(0)
@@ -555,7 +954,7 @@ internal class X86Lower {
                     this.depth = this.depth + 1
                     this.helper(19, 2, 0)
                 } else {
-                    this.ok = false
+                    this.castLike(X86Lower.u16(ops, 0), 1)
                 }
             case 0x85u8 => this.bail(17)
             case 0x86u8 =>
@@ -579,7 +978,23 @@ internal class X86Lower {
                 }
                 this.bind(okLabel)
             case 0x89u8 => this.helper(18, 1, 0)
-            case 0x90u8 => this.ok = false
+            case 0x90u8 =>
+                this.pushMemRsp(0)
+                this.depth = this.depth + 1
+                this.helper(18, 1, 0)
+                this.popReg(0)
+                this.depth = this.depth - 1
+                this.seq = this.seq + 1
+                let lcall = 'len${this.seq}'
+                this.movImm(7, 1)
+                this.add([0x48u8, 0x83u8, 0xF8u8, 0x01u8])
+                this.jcc(0x84u8, lcall)
+                this.movImm(7, 3)
+                this.add([0x48u8, 0x83u8, 0xF8u8, 0x02u8])
+                this.jcc(0x84u8, lcall)
+                this.movImm(7, 7)
+                this.bind(lcall)
+                this.helperReg(7, 1)
             case 0x91u8 => this.helper(2, 2, 0)
             case 0x92u8 => this.helper(4, 2, 0)
             case 0x93u8 => this.helper(5, 3, 0)
@@ -597,7 +1012,24 @@ internal class X86Lower {
             case 0x9Bu8 => this.helper(42, 2, 0)
             case 0x9Cu8 =>
                 this.helper(if (X86Lower.u8(ops, 0) == 0) { 28 } else { 29 }, 1, 0)
-            case 0x9Du8 => this.helper(30, 1, 0)
+            case 0x9Du8 =>
+                if (X86Lower.u8(ops, 0) == 1) {
+                    this.helper(30, 1, 1)
+                    this.seq = this.seq + 1
+                    let dfin = 'df${this.seq}'
+                    let dother = 'dfo${this.seq}'
+                    this.add([0x41u8, 0x83u8, 0x3Fu8, 0x00u8])
+                    this.jcc(0x84u8, dfin) // errCode == 0
+                    this.add([0x41u8, 0x83u8, 0x3Fu8, 0x09u8])
+                    this.jcc(0x85u8, dother) // != 9
+                    this.movDwordCtx(0, -1)
+                    this.jmpLabel('epilogue')
+                    this.bind(dother)
+                    this.jmpLabel('checkfail')
+                    this.bind(dfin)
+                } else {
+                    this.helper(30, 1, 0)
+                }
             case 0x9Eu8 => this.helper(31, 1, 0)
             case 0xA0u8 => this.helper(70, 0, 0)
             case 0xA1u8 => this.helper(43, 2, 0)
