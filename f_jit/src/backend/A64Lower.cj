@@ -487,14 +487,34 @@ internal class A64Lower {
         }
     }
 
+    /**
+     * 原地翻转栈顶 `n` 格：调用前把「逆序压栈」的实参区变成**正序连续区**。
+     *
+     * 统一 ABI：x1/x2 指向最低格（`args[0]`），第 i 个在 +8i —— 与桥入口的
+     * `Array<Int64>` 布局一致（§12.3「args 拷入 locals」）。
+     */
+    private func reverseArgs(n: Int64): Unit {
+        var i = 0
+        while (i < n / 2) {
+            this.e.ldrOff(9, 20, 8 * i)
+            this.e.ldrOff(10, 20, 8 * (n - 1 - i))
+            this.e.strOff(10, 20, 8 * i)
+            this.e.strOff(9, 20, 8 * (n - 1 - i))
+            i = i + 1
+        }
+    }
+
     /** 统一 helper 调用：variant 0=普通、1=NC（无 CHECK_ERR）、2=V（无结果）。 */
     private func helperCall(hid: Int64, argc: Int64, variant: Int64): Unit {
+        if (argc > 1) {
+            this.reverseArgs(argc)
+        }
         this.e.movImm64(0, hid)
         this.e.movReg(1, 19)
         if (argc == 0) {
             this.e.movReg(2, 31)
         } else {
-            this.e.addImm(2, 20, 8 * (argc - 1))
+            this.e.movReg(2, 20)
         }
         this.e.movImm64(3, argc)
         this.e.movImm64(9, this.helperDispatch)
@@ -506,8 +526,7 @@ internal class A64Lower {
                 this.e.subImm(20, 20, 8)
                 this.e.strOff(0, 20, 0)
             } else {
-                this.e.strOff(0, 20, 8 * (argc - 1))
-                this.e.addImm(20, 20, 8 * (argc - 1))
+                this.e.strOff(0, 20, 0)
             }
             if (variant == 0) {
                 this.seq = this.seq + 1
@@ -551,18 +570,20 @@ internal class A64Lower {
 
     /** helper 编号已在寄存器（`LEN` 的 tag 分派）。 */
     private func helperCallHidReg(hidReg: Int64, argc: Int64): Unit {
+        if (argc > 1) {
+            this.reverseArgs(argc)
+        }
         this.e.movReg(0, hidReg)
         this.e.movReg(1, 19)
         if (argc == 0) {
             this.e.movReg(2, 31)
         } else {
-            this.e.addImm(2, 20, 8 * (argc - 1))
+            this.e.movReg(2, 20)
         }
         this.e.movImm64(3, argc)
         this.e.movImm64(9, this.helperDispatch)
         this.e.blr(9)
-        this.e.strOff(0, 20, 8 * (argc - 1))
-        this.e.addImm(20, 20, 8 * (argc - 1))
+        this.e.strOff(0, 20, 0)
         this.checkErr()
     }
 
@@ -590,17 +611,18 @@ internal class A64Lower {
             this.ok = false
             return
         }
+        if (argc > 1) {
+            this.reverseArgs(argc)
+        }
         this.e.movImm64(9, this.fnTableBase + 8 * fid)
         this.e.ldrOff(10, 9, 0)
         this.e.movReg(0, 19)
         if (argc == 0) {
             this.e.movReg(1, 31)
         } else {
-            this.e.addImm(1, 20, 8 * (argc - 1))
+            this.e.movReg(1, 20)
         }
         this.e.movImm64(2, argc)
-        this.e.movImm64(9, this.fnTableBase + 8 * fid)
-        this.e.ldrOff(10, 9, 0)
         this.e.blr(10)
         this.checkErr()
         this.e.movImm64(11, Int64(this.fn.fnId))
@@ -608,18 +630,18 @@ internal class A64Lower {
         if (argc == 0) {
             this.pushX(0)
         } else {
-            this.e.strOff(0, 20, 8 * (argc - 1))
-            this.e.addImm(20, 20, 8 * (argc - 1))
+            this.e.strOff(0, 20, 0)
         }
     }
 
     /** `CALL_CLOSURE argc`：H55 取 fnId → H57 取 fnTable → 间接调用。 */
     private func callClosure(argc: Int64): Unit {
-        let disp = 8 * argc
+        // 全部实参 + 闭包句柄翻转为正序区：closure 在最低（locals[0]）
+        this.reverseArgs(argc + 1)
         // H55(ctx, &closure, 1) → fnId；不覆盖闭包槽（被调帧 locals[0] 仍需要句柄）
         this.e.movImm64(0, 55)
         this.e.movReg(1, 19)
-        this.e.addImm(2, 20, disp)
+        this.e.movReg(2, 20)
         this.e.movImm64(3, 1)
         this.e.movImm64(9, this.helperDispatch)
         this.e.blr(9)
@@ -638,15 +660,13 @@ internal class A64Lower {
         this.e.ldrOff(9, 29, -32) // fnId
         this.e.ldrReg(10, 12, 9)
         this.e.movReg(0, 19)
-        // 闭包帧实参区 = [闭包句柄, a1..argc]（句柄在低地址），x1 指向句柄
-        this.e.addImm(1, 20, disp)
+        this.e.movReg(1, 20)
         this.e.movImm64(2, argc)
         this.e.blr(10)
         this.e.movImm64(11, Int64(this.fn.fnId))
         this.e.strOff(11, 19, 40)
         this.checkErr()
-        this.e.strOff(0, 20, disp)
-        this.e.addImm(20, 20, disp)
+        this.e.strOff(0, 20, 0)
     }
 
     /** `TO_I64 mode`：NaN 与 ±2^63 界外 → mode0 `<bail:13>` / mode1 `<deopt>`。 */
