@@ -147,17 +147,11 @@ protected class ConsumeService {
         out.append("#\t${nodeIndex}\t${now().toUnixTimeStamp().toMilliseconds()}\n")
         for (name in topics) {
             let locals = queues.localQueues(name)
-            var messages = 0i64
-            var bytes = 0i64
-            for ((_, log) in locals) {
-                messages += log.countAll()
-                bytes += log.size
-            }
             let queueNum = queues.queueNumOf(name)
             let delayingMs = queues.delayingOf(name)
             let groups = groupsOf(name)
             if (groups.size == 0) {
-                out.append("R\t${name}\t\t${queueNum}\t${delayingMs}\t${messages}\t0\t0\t0\t0\t0\t0\n")
+                out.append("R\t${name}\t\t${queueNum}\t${delayingMs}\t0\t0\t0\t0\t0\t0\n")
                 continue
             }
             for (group in groups) {
@@ -197,8 +191,8 @@ protected class ConsumeService {
                     redelivered = m.redeliveredOf(name, group)
                     deadLettered = m.deadLetteredOf(name, group)
                 }
-                out.append("R\t${name}\t${group}\t${queueNum}\t${delayingMs}\t${messages}\t${backlog}\t" +
-                    "${lagMs}\t${delivered}\t${acked}\t${redelivered}\t${deadLettered}\n")
+                out.append("R\t${name}\t${group}\t${queueNum}\t${delayingMs}\t${backlog}\t${lagMs}\t" +
+                    "${delivered}\t${acked}\t${redelivered}\t${deadLettered}\n")
             }
         }
         out.toString()

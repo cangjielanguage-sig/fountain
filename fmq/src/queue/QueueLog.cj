@@ -103,6 +103,7 @@ protected class QueueLog <: Resource {
         }
         var count = 0i64
         var first: ?DateTime = None
+        var firstResolved = false
         try {
             let reader = openRecordsFrom(start)
             try {
@@ -110,8 +111,10 @@ protected class QueueLog <: Resource {
                     match (reader.next()) {
                         case Some(item) =>
                             count++
-                            if (first.isNone()) {
+                            if (!firstResolved) {
+                                // 只看第一条：它无法解析时 lag 未知，固定为 None（调用方输出 0）
                                 first = MQMessageRecord.publishTime(item[0])
+                                firstResolved = true
                             }
                         case None => break
                     }

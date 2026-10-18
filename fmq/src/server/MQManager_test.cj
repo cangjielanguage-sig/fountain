@@ -180,4 +180,9 @@ class MQManagerTest {
             server.close()
         }
     }
+    @TestCase
+    public func statsConnectionFailureReturnsOne(): Unit {
+        let port = freePort()
+        @Assert(manager("127.0.0.1:${port}", ["stats"]).run() == 1)
+    }
 }

@@ -196,7 +196,7 @@ public class MQManager {
                             continue
                         }
                         let fields = line.split("\t")
-                        if (fields.size < 12) {
+                        if (fields.size < 10) {
                             continue
                         }
                         let group = if (fields[2].size == 0) {
@@ -205,8 +205,8 @@ public class MQManager {
                             fields[2]
                         }
                         let delay = (Duration.millisecond * Int64.parse(fields[4])).toString()
-                        rows.add([fields[1], group, fields[3], delay, fields[6], fields[7], fields[8], fields[9],
-                            fields[10], fields[11]])
+                        rows.add([fields[1], group, fields[3], delay, fields[5], fields[6], fields[7], fields[8],
+                            fields[9], fields[10]])
                     }
                     println(MQManagerOutput.table(
                         ["topic", "group", "queueNum", "delaying", "backlog", "lagMs", "delivered", "acked",

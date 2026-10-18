@@ -285,7 +285,7 @@ class ConsumeServiceTest {
     private static func statsRow(text: String, topic: String, group: String): Array<String> {
         for (line in text.split("\n")) {
             let fields = line.split("\t")
-            if (fields.size >= 12 && fields[0] == "R" && fields[1] == topic && fields[2] == group) {
+            if (fields.size >= 10 && fields[0] == "R" && fields[1] == topic && fields[2] == group) {
                 return fields
             }
         }
@@ -308,11 +308,11 @@ class ConsumeServiceTest {
             let text = fixture.service.stats("/t", 3, {_ => ["g"]})
             @Assert(text.startsWith("#\t3\t"))
             let row = statsRow(text, "/t", "g")
-            @Assert(row.size >= 12)
-            @Assert(Int64.parse(row[6]) == 2)      // backlog
-            @Assert(Int64.parse(row[7]) >= 3000)   // lagMs
-            @Assert(Int64.parse(row[8]) == 1)      // delivered
-            @Assert(Int64.parse(row[9]) == 1)      // acked
+            @Assert(row.size >= 10)
+            @Assert(Int64.parse(row[5]) == 2)      // backlog
+            @Assert(Int64.parse(row[6]) >= 3000)   // lagMs
+            @Assert(Int64.parse(row[7]) == 1)      // delivered
+            @Assert(Int64.parse(row[8]) == 1)      // acked
         } finally {
             fixture.close()
         }
@@ -336,8 +336,46 @@ class ConsumeServiceTest {
             fixture.append([], "one")
             let text = fixture.service.stats("", 1, {_ => ["g"]})
             let row = statsRow(text, "/t", "g")
-            @Assert(row.size >= 12)
-            @Assert(Int64.parse(row[6]) == 1)
+            @Assert(row.size >= 10)
+            @Assert(Int64.parse(row[5]) == 1)
+            // 首条 messageId 不含时间戳：lag 未知，固定为 0
+            @Assert(Int64.parse(row[6]) == 0)
+        } finally {
+            fixture.close()
+        }
+    }
+    @TestCase
+    public func statsAllTopicsAndFiltering(): Unit {
+        let fixture = ConsumeFixture("stats_two")
+        try {
+            fixture.append([], "one")
+            fixture.queues.openTopic(MQTopicAssignment("/u", 1, 0, [0]), 0)
+            let record = MQMessageRecord.encode("/u", [], "mid-u", "u".toData())
+            fixture.queues.queueOf("/u", 0).getOrThrow().append(record)
+
+            let all = fixture.service.stats("", 0, {topic => if (topic == "/t") {["g"]} else {["h"]}})
+            @Assert(all.contains("R\t/t\tg\t"))
+            @Assert(all.contains("R\t/u\th\t"))
+
+            let only = fixture.service.stats("/t", 0, {_ => ["g"]})
+            @Assert(only.contains("R\t/t\tg\t"))
+            @Assert(!only.contains("R\t/u\t"))
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @TestCase
+    public func statsDoesNotCreateCursorOrChangeLog(): Unit {
+        let fixture = ConsumeFixture("stats_pure")
+        try {
+            fixture.append([], "one")
+            @Assert(fixture.store.load("/t", 0, "g").isNone())
+            let before = fixture.queues.queueOf("/t", 0).getOrThrow().countAll()
+            let text = fixture.service.stats("/t", 0, {_ => ["g"]})
+            @Assert(text.contains("R\t/t\tg\t"))
+            @Assert(fixture.store.load("/t", 0, "g").isNone())
+            @Assert(fixture.queues.queueOf("/t", 0).getOrThrow().countAll() == before)
         } finally {
             fixture.close()
         }
