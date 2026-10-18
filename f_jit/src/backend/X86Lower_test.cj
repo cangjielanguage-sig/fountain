@@ -390,6 +390,12 @@ public class X86Lower_test {
             X86Lower_test.hex(BackendX86_64.emitCallHelper(0x8701, 2)))
     }
 
+    @TestCase
+    public func strToRegexRoute(): Unit {
+        @Assert(X86Lower_test.hex(BackendX86_64.emitStrToRegex(0x8800)),
+            X86Lower_test.hex(BackendX86_64.emitCallHelper(0x8800, 1)))
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {

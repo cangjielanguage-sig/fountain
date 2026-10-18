@@ -481,6 +481,11 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
+    /** `STR_TO_REGEX`：H69 单参模板 A。 */
+    internal static func emitStrToRegex(h69: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h69, 1)
+    }
+
     /** Map 迭代 helper 路由。 */
     internal static func emitMapIterBegin(h49: Int64): Array<UInt8> {
         BackendX86_64.emitCallHelper(h49, 1)
