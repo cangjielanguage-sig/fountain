@@ -97,6 +97,12 @@ class MQFilterTest {
         let set = TreeSet<Int64>()
         set.add(1)
         @Assert(MQFilter.compile("$").matches(set.toData()))
+
+        // 空容器 + 空串过滤：恒为真
+        let emptyFilter = MQFilter.compile("")
+        @Assert(emptyFilter.matches(TreeSet<Int64>().toData()))
+        @Assert(emptyFilter.matches(HashMap<String, Int64>().toData()))
+        @Assert(emptyFilter.matches(Array<Int64>().toData()))
     }
 
     @TestCase
