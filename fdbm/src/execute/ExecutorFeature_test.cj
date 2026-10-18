@@ -86,6 +86,27 @@ public class ExecutorFeatureTest {
     }
 
     @TestCase
+    public func unknownDriverReturningReportsDriverName(): Unit {
+        let fixture = insertFixture('oracle')
+        let session = DbdSession('s', None, 'db0')
+        try {
+            var message = ''
+            try {
+                fixture.executor.execute(session,
+                    "insert into t (id, name) values (5, 'a') returning id", [])
+            } catch (e: FdbmException) {
+                @Assert(e.code, DbdErrorCode.UNSUPPORTED_SQL)
+                message = e.message
+            }
+            @Assert(message.contains('oracle'), true)
+            @Assert(fixture.sqls.isEmpty(), true)
+        } finally {
+            session.close()
+            fixture.resources.close()
+        }
+    }
+
+    @TestCase
     public func globalTableReturningIsRouteFailed(): Unit {
         let fixture = globalFixture('postgres')
         let session = DbdSession('s', None, 'db0')

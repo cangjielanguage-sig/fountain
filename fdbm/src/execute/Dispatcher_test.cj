@@ -296,6 +296,35 @@ public class DispatcherTest {
     }
 
     @TestCase
+    public func showTablesTreatsMariadbAsMysql(): Unit {
+        let fixture = showFixture('mariadb')
+        let session = DbdSession('s', None, 'db0')
+        try {
+            ShowExecutor(fixture.accessor).execute(session,
+                ShowStatement(ShowKind.Tables, None, None)).cursor.getOrThrow().close()
+            @Assert(fixture.sqls.toArray(), ['show tables'])
+        } finally {
+            session.close()
+            fixture.resources.close()
+        }
+    }
+
+    @TestCase
+    public func showTablesTreatsOpengaussAsPostgres(): Unit {
+        let fixture = showFixture('opengauss')
+        let session = DbdSession('s', None, 'db0')
+        try {
+            ShowExecutor(fixture.accessor).execute(session,
+                ShowStatement(ShowKind.Tables, None, None)).cursor.getOrThrow().close()
+            @Assert(fixture.sqls.size, 1)
+            @Assert(fixture.sqls[0].contains('information_schema.tables'), true)
+        } finally {
+            session.close()
+            fixture.resources.close()
+        }
+    }
+
+    @TestCase
     public func showTablesRejectsUnknownDriver(): Unit {
         let fixture = showFixture('oracle')
         let session = DbdSession('s', None, 'db0')
