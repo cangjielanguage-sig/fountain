@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_jit
 
+import std.collection.ArrayList
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_jit.base.ErrCode
@@ -92,5 +93,40 @@ public class JitFunction_test {
         } catch (e: JitException) {
             e.code
         }
+    }
+}
+
+/** S6.10：卸载状态机（Ready → Unloading → Unloaded）。 */
+@Test
+public class JitFunctionLifecycle_test {
+    @TestCase
+    public func unloadThenCallIsRejected(): Unit {
+        let f = JitFunctionLifecycle_test.fn()
+        @Assert(f.call<Int64>(Array<Any>()), 1)
+        @Assert(f.unload(0), true)
+        @Assert(f.isUnloaded(), true)
+        try {
+            let _ = f.call<Int64>(Array<Any>())
+            @Fail('未抛 19')
+        } catch (e: JitException) {
+            @Assert(e.code, ErrCode.CALL_CONTRACT)
+            @Assert(e.site, -1)
+        }
+    }
+
+    @TestCase
+    public func doubleUnloadIsIdempotent(): Unit {
+        let released = ArrayList<Int64>()
+        let f = JitFunction(0, LocalType.I64, Array<UInt16>(),
+            { _, _ => 1 }, { _, _ => 1 }, '',
+            Some({ => released.add(1) }))
+        @Assert(f.unload(0), true)
+        @Assert(f.unload(0), true)
+        @Assert(released.size, 1)
+    }
+
+    private static func fn(): JitFunction {
+        JitFunction(0, LocalType.I64, Array<UInt16>(),
+            { _, _ => 1 }, { _, _ => 1 }, '')
     }
 }

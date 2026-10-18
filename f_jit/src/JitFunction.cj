@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_jit
 
 import std.reflect.TypeInfo
+import std.sync.Mutex
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.JitException
 import fountain::f_jit.base.LocalType
@@ -34,20 +35,107 @@ public class JitFunction {
     private let body: (JitContext, Array<Int64>) -> Int64
     private let replay: (JitContext, Array<Int64>) -> Int64
     private let report: String
+    // ---- 生命周期（S6.10）：0 Ready / 1 Unloading / 2 Unloaded ----
+    private let mtx: Mutex = Mutex()
+    private var state: Int64 = 0
+    private var active: Int64 = 0
+    private var release: ?(() -> Unit) = None
 
     public init(nargs: Int64, retType: UInt16, paramTypes: Array<UInt16>,
         body: (JitContext, Array<Int64>) -> Int64,
         replay: (JitContext, Array<Int64>) -> Int64, report: String) {
+        this(nargs, retType, paramTypes, body, replay, report, None)
+    }
+
+    public init(nargs: Int64, retType: UInt16, paramTypes: Array<UInt16>,
+        body: (JitContext, Array<Int64>) -> Int64,
+        replay: (JitContext, Array<Int64>) -> Int64, report: String,
+        release: ?(() -> Unit)) {
         this.nargs = nargs
         this.retType = retType
         this.paramTypes = paramTypes
         this.body = body
         this.replay = replay
         this.report = report
+        this.release = release
     }
 
     /** 六步调用：长度 → 封送 → 执行 → 解包 → `T` 校验 → 返回。 */
     public func call<T>(args: Array<Any>): T {
+        this.enter()
+        try {
+            return this.callLocked<T>(args)
+        } finally {
+            this.exit()
+        }
+    }
+
+    /** 未卸载/未进入卸载态 → 允许调用；否则 19（§8.7）。 */
+    private func enter(): Unit {
+        synchronized(this.mtx) {
+            if (this.state != 0) {
+                throw JitException(ErrCode.CALL_CONTRACT, -1, 0, None,
+                    '单元已卸载或正在卸载（§8.7）')
+            }
+            this.active = this.active + 1
+        }
+    }
+
+    private func exit(): Unit {
+        synchronized(this.mtx) {
+            this.active = this.active - 1
+        }
+    }
+
+    /** 卸载：等待活跃调用排空；超时恢复 Ready 返回 false；双卸载幂等。 */
+    public func unload(timeoutMs: Int64): Bool {
+        synchronized(this.mtx) {
+            if (this.state == 2) {
+                return true
+            }
+            this.state = 1
+        }
+        var spins: Int64 = 0
+        let limit = if (timeoutMs <= 0) { 0 } else { timeoutMs * 100000 }
+        while (true) {
+            let drained = synchronized(this.mtx) {
+                this.active == 0
+            }
+            if (drained) {
+                break
+            }
+            if (spins >= limit) {
+                synchronized(this.mtx) {
+                    this.state = 0
+                }
+                return false
+            }
+            spins = spins + 1
+        }
+        synchronized(this.mtx) {
+            this.state = 2
+            match (this.release) {
+                case Some(f) =>
+                    this.release = None
+                    f()
+                case None => ()
+            }
+        }
+        true
+    }
+
+    /** 便捷重载（默认为不等待活跃调用）。 */
+    public func unload(): Bool {
+        this.unload(0)
+    }
+
+    public func isUnloaded(): Bool {
+        synchronized(this.mtx) {
+            this.state == 2
+        }
+    }
+
+    private func callLocked<T>(args: Array<Any>): T {
         // 1. 参数个数
         if (Int64(args.size) != this.nargs) {
             return JitFunction.contractFail('实参个数不符：期望 ${this.nargs}，实际 ${args.size}')
