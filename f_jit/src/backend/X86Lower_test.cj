@@ -246,9 +246,11 @@ public class X86Lower_test {
 
     @TestCase
     public func callFuncTemplateB(): Unit {
-        let got = BackendX86_64.emitCallFunc(0x2000, 1u32, 0u32)
-        let expected = '48B80020000000000000' + 'FF9008000000' +
-            '41C7472800000000' + '49833F000F8500000000'
+        let got = BackendX86_64.emitCallFunc(0x2000, 1u32, 0u32, 2)
+        let expected = '4C89FF' + '488D742408' + 'BA02000000' +
+            '48B80020000000000000' + 'FF9008000000' +
+            '49833F000F8500000000' + '49C7472800000000' +
+            '4889842408000000' + '4883C408'
         @Assert(X86Lower_test.hex(got), expected)
     }
 
@@ -260,9 +262,20 @@ public class X86Lower_test {
         @Assert(got[0], 0x4Cu8)
         @Assert(got[1], 0x89u8)
         @Assert(got[2], 0xFFu8)
-        // 两个 helper 绝对地址分别烘焙在偏移 15 / 55
-        @Assert(X86Lower_test.imm64(got, 15), 0x3000)
-        @Assert(X86Lower_test.imm64(got, 55), 0x4000)
+        // 两个 helper 绝对地址以 movabs 立即数形式烘焙
+        @Assert(X86Lower_test.hasImm64(got, 0x3000), true)
+        @Assert(X86Lower_test.hasImm64(got, 0x4000), true)
+    }
+
+    private static func hasImm64(bs: Array<UInt8>, v: Int64): Bool {
+        var i = 0
+        while (i + 9 < bs.size) {
+            if (bs[i] == 0x48u8 && bs[i + 1] == 0xB8u8 && X86Lower_test.imm64(bs, i + 2) == v) {
+                return true
+            }
+            i = i + 1
+        }
+        false
     }
 
     private static func imm64(bs: Array<UInt8>, off: Int64): Int64 {

@@ -358,23 +358,34 @@ internal class BackendX86_64 <: Backend {
      * 尾随 `CHECK_ERR`（rel 占位）。
      */
     internal static func emitCallFunc(fnTableBase: Int64, fid: UInt32,
-        selfFnId: UInt32): Array<UInt8> {
+        selfFnId: UInt32, argc: Int64): Array<UInt8> {
         let out = ArrayList<UInt8>()
+        for (x in [0x4Cu8, 0x89u8, 0xFFu8, 0x48u8, 0x8Du8, 0x74u8, 0x24u8]) {
+            out.add(x) // rdi=ctx; rsi=&args[0]
+        }
+        out.add(UInt8(8 * (argc - 1)))
+        out.add(0xBAu8)
+        BackendX86_64.w32(out, BackendX86_64.i32bits(argc))
         out.add(0x48u8)
         out.add(0xB8u8)
         BackendX86_64.w64(out, fnTableBase)
         for (x in [0xFFu8, 0x90u8]) {
-            out.add(x) // call qword [rax+disp32]
+            out.add(x) // call qword [rax+8*fid]
         }
         BackendX86_64.w32(out, BackendX86_64.i32bits(8 * Int64(fid)))
-        for (x in [0x41u8, 0xC7u8, 0x47u8, 0x28u8]) {
-            out.add(x) // mov dword [r15+40], self
+        BackendX86_64.appendCheckErr(out)
+        for (x in [0x49u8, 0xC7u8, 0x47u8, 0x28u8]) {
+            out.add(x) // mov qword [r15+40], self
         }
         BackendX86_64.w32(out, UInt32(Int64(selfFnId)))
-        for (x in [0x49u8, 0x83u8, 0x3Fu8, 0x00u8, 0x0Fu8, 0x85u8, 0x00u8, 0x00u8, 0x00u8,
-            0x00u8]) {
-            out.add(x) // CHECK_ERR（占位）
+        for (x in [0x48u8, 0x89u8, 0x84u8, 0x24u8]) {
+            out.add(x) // 结果写回 args[0]
         }
+        BackendX86_64.w32(out, BackendX86_64.i32bits(8 * (argc - 1)))
+        for (x in [0x48u8, 0x83u8, 0xC4u8]) {
+            out.add(x) // add rsp,8*(argc-1)
+        }
+        out.add(UInt8(8 * (argc - 1)))
         out.toArray()
     }
 
@@ -405,13 +416,9 @@ internal class BackendX86_64 <: Backend {
         }
         BackendX86_64.w32(out, BackendX86_64.i32bits(disp))
         BackendX86_64.appendCheckErr(out)
-        // H57(ctx, &0, 0)
-        for (x in [0x4Cu8, 0x89u8, 0xFFu8, 0x48u8, 0x8Du8, 0x74u8, 0x24u8]) {
-            out.add(x)
-        }
-        out.add(UInt8(disp))
-        for (x in [0x31u8, 0xD2u8]) {
-            out.add(x) // xor edx,edx
+        // H57(ctx) 零参
+        for (x in [0x4Cu8, 0x89u8, 0xFFu8, 0x31u8, 0xF6u8, 0x31u8, 0xD2u8]) {
+            out.add(x) // rdi=ctx; rsi=0; rdx=0
         }
         out.add(0x48u8)
         out.add(0xB8u8)
