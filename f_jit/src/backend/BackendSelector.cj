@@ -467,6 +467,15 @@ internal class BackendX86_64 <: Backend {
         BackendX86_64.emitCallHelper(h72, 6)
     }
 
+    /** 区间 helper 路由。 */
+    internal static func emitRangeNew(h41: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h41, 4)
+    }
+
+    internal static func emitRangeContains(h42: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h42, 2)
+    }
+
     /** Decimal helper 路由。 */
     internal static func emitDecAdd(h24: Int64): Array<UInt8> {
         BackendX86_64.emitCallHelper(h24, 2)
