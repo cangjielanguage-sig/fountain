@@ -273,6 +273,11 @@ public class X86Lower_test {
             '488B0424' + '418907' + '31C0' + 'E900000000')
     }
 
+    @TestCase
+    public func breakpoint(): Unit {
+        @Assert(X86Lower_test.hex(BackendX86_64.emitBreakpoint()), '90')
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {

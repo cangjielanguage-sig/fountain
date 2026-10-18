@@ -455,6 +455,11 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
+    /** `BREAKPOINT`：发布版空操作。 */
+    internal static func emitBreakpoint(): Array<UInt8> {
+        [0x90u8]
+    }
+
     /** `ABORT`：写 errCode=99 → RETV=0 → jmp epilogue（rel 占位）。 */
     internal static func emitAbort(): Array<UInt8> {
         [0x41u8, 0xC7u8, 0x07u8, 0x63u8, 0x00u8, 0x00u8, 0x00u8,
