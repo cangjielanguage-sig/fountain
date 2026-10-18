@@ -64,6 +64,15 @@ public class CodeBuffer {
         Some(CodeBuffer(p, rounded))
     }
 
+    /** 裸指针视图（构造 `CFunc` 调用用；未分配 / 已释放为空指针）。 */
+    public func rawPointer(): CPointer<UInt8> {
+        if (this.freed) {
+            CPointer<UInt8>()
+        } else {
+            this.ptr
+        }
+    }
+
     /** 基址（未分配 / 已释放 → 0）。 */
     public prop base: Int64 {
         get() {

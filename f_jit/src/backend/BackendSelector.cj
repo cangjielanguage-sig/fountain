@@ -1682,7 +1682,20 @@ internal class BackendAArch64 <: Backend {
     }
 
     public func compile(unit: LoadedUnit, sink: CodeBuffer): Bool {
-        false // S5.9 落地
+        var off: Int64 = 0
+        var i: Int64 = 0
+        while (i < unit.dir.size) {
+            match (A64Compiler.compileFunction(unit, unit.dir.at(i))) {
+                case Some(b) =>
+                    if (!sink.write(b, off)) {
+                        return false
+                    }
+                    off = off + b.size
+                case None => return false
+            }
+            i = i + 1
+        }
+        true
     }
 
     public func entryThunkBase(): Int64 {
