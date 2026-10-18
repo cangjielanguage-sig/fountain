@@ -455,6 +455,12 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
+    /** `ABORT`：写 errCode=99 → RETV=0 → jmp epilogue（rel 占位）。 */
+    internal static func emitAbort(): Array<UInt8> {
+        [0x41u8, 0xC7u8, 0x07u8, 0x63u8, 0x00u8, 0x00u8, 0x00u8,
+         0x31u8, 0xC0u8, 0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]
+    }
+
     /** `GUARD v`：取 cell 高 16 位 tag，不等于 v → bail（rel 占位）。 */
     internal static func emitGuard(v: Int64): Array<UInt8> {
         let out = ArrayList<UInt8>()

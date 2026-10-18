@@ -261,6 +261,12 @@ public class X86Lower_test {
         @Assert(X86Lower_test.hex(got[0..6]), 'FFB5E0FFFFFF')
     }
 
+    @TestCase
+    public func abort(): Unit {
+        @Assert(X86Lower_test.hex(BackendX86_64.emitAbort()),
+            '41C70763000000' + '31C0' + 'E900000000')
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {
