@@ -275,6 +275,35 @@ internal class BackendX86_64 <: Backend {
         BackendX86_64.cmpOp([0x0Fu8, 0x9Cu8, 0xC0u8])
     }
 
+    /** `PUSH_KH idx`：常量镜像地址已烘焙为绝对地址，`mov rax,[imm64]; push rax`。 */
+    internal static func emitPushKh(constAddr: Int64): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        out.add(0x48u8)
+        out.add(0xA1u8)
+        BackendX86_64.w64(out, constAddr)
+        out.add(0x50u8)
+        out.toArray()
+    }
+
+    /** `PUSH_F64 bits`：`movabs rax,bits; push rax`。 */
+    internal static func emitPushF64(bits: UInt64): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        out.add(0x48u8)
+        out.add(0xB8u8)
+        var k = 0
+        while (k < 8) {
+            out.add(UInt8((bits >> (8 * UInt64(k))) & 0xFFu64))
+            k = k + 1
+        }
+        out.add(0x50u8)
+        out.toArray()
+    }
+
+    /** `PUSH_UNIT`：`push 0`。 */
+    internal static func emitPushUnit(): Array<UInt8> {
+        [0x6Au8, 0x00u8]
+    }
+
     private static func unaryTop(opBytes: Array<UInt8>): Array<UInt8> {
         let out = ArrayList<UInt8>()
         for (x in [0x48u8, 0x8Bu8, 0x04u8, 0x24u8]) {

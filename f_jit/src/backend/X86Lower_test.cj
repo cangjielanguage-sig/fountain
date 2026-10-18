@@ -110,6 +110,18 @@ public class X86Lower_test {
         @Assert(X86Lower_test.hex(BackendX86_64.emitPick(2)), 'FFB424' + '10000000')
     }
 
+    @TestCase
+    public func constantVariants(): Unit {
+        // PUSH_KH：mov rax,[imm64 常量镜像地址]; push rax
+        @Assert(X86Lower_test.hex(BackendX86_64.emitPushKh(0x1000)),
+            '48A1' + '0010000000000000' + '50')
+        // PUSH_F64：movabs rax,bits; push rax（1.0 = 0x3FF0000000000000）
+        @Assert(X86Lower_test.hex(BackendX86_64.emitPushF64(0x3FF0000000000000u64)),
+            '48B8' + '000000000000F03F' + '50')
+        // PUSH_UNIT：push 0
+        @Assert(X86Lower_test.hex(BackendX86_64.emitPushUnit()), '6A00')
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {
