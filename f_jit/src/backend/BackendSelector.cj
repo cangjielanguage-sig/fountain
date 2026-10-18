@@ -423,6 +423,21 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
+    /** `IS_TYPE v`：tag == v → 顶格布尔（0/1）。 */
+    internal static func emitIsType(v: Int64): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (x in [0x48u8, 0x8Bu8, 0x04u8, 0x24u8, 0x48u8, 0x89u8, 0xC1u8,
+            0x48u8, 0xC1u8, 0xE9u8, 0x30u8, 0x48u8, 0x81u8, 0xF9u8]) {
+            out.add(x)
+        }
+        BackendX86_64.w32(out, BackendX86_64.i32bits(v))
+        for (x in [0x0Fu8, 0x94u8, 0xC0u8, 0x0Fu8, 0xB6u8, 0xC0u8, 0x48u8, 0x89u8, 0x04u8,
+            0x24u8]) {
+            out.add(x)
+        }
+        out.toArray()
+    }
+
     /** `GUARD v`：取 cell 高 16 位 tag，不等于 v → bail（rel 占位）。 */
     internal static func emitGuard(v: Int64): Array<UInt8> {
         let out = ArrayList<UInt8>()

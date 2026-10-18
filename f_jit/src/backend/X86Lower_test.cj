@@ -233,6 +233,13 @@ public class X86Lower_test {
             '488B0424' + '4889C1' + '48C1E930' + '4881F904000000' + '0F8500000000')
     }
 
+    @TestCase
+    public func isType(): Unit {
+        @Assert(X86Lower_test.hex(BackendX86_64.emitIsType(4)),
+            '488B0424' + '4889C1' + '48C1E930' + '4881F904000000' +
+            '0F94C0' + '0FB6C0' + '48890424')
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {
