@@ -109,6 +109,44 @@ func port(): UInt16 {
     }
 }
 
+func backend(): String {
+    match (getVariable('FDBM_E2E_BACKEND')) {
+        case Some(value) => value
+        case None => 'postgres'
+    }
+}
+
+func isMySql(): Bool {
+    backend() == 'mysql'
+}
+
+/** 两个后端都接受的文本类型（MySQL 的 `text` 不能做分库键主键）。 */
+func textType(): String {
+    'varchar(64)'
+}
+
+func blobType(): String {
+    if (isMySql()) { 'longblob' } else { 'bytea' }
+}
+
+func firstInt(connection: Connection, sql: String): Int64 {
+    let statement = connection.prepareStatement(sql)
+    try {
+        let result = statement.query()
+        try {
+            if (result.next()) {
+                result.get<Int64>(0)
+            } else {
+                0
+            }
+        } finally {
+            result.close()
+        }
+    } finally {
+        statement.close()
+    }
+}
+
 func secondPort(): UInt16 {
     match (getVariable('FDBM_E2E_PORT2')) {
         case Some(value) => UInt16.parse(value)
@@ -147,6 +185,7 @@ main(): Int64 {
         largeValues(connection)
         cursorSemantics(connection)
         errorMapping(connection)
+        sqlExtensions(connection)
     } finally {
         connection.close()
         datasource.close()
@@ -209,17 +248,17 @@ func ddlAndUnpartitioned(connection: Connection): Unit {
         checkInt('ddl ${sql}', execUpdate(connection, sql), 0)
     }
     checkInt('ddl create t_step', execUpdate(connection,
-        'create table t_step (id bigint primary key, name text)'), 0)
+        'create table t_step (id bigint primary key, name ${textType()})'), 0)
     checkInt('ddl create t_hash', execUpdate(connection,
-        'create table t_hash (id bigint primary key, user_id bigint, name text)'), 0)
+        'create table t_hash (id bigint primary key, user_id bigint, name ${textType()})'), 0)
     checkInt('ddl create t_substr', execUpdate(connection,
-        'create table t_substr (account_no text primary key, name text)'), 0)
+        'create table t_substr (account_no ${textType()} primary key, name ${textType()})'), 0)
     checkInt('ddl create t_global', execUpdate(connection,
-        'create table t_global (k bigint primary key, v text)'), 0)
+        'create table t_global (k bigint primary key, v ${textType()})'), 0)
     checkInt('ddl create t_plain', execUpdate(connection,
-        'create table t_plain (id bigint primary key, name text)'), 0)
+        'create table t_plain (id bigint primary key, name ${textType()})'), 0)
     checkInt('ddl create t_stream', execUpdate(connection,
-        'create table t_stream (id bigint primary key, data bytea)'), 0)
+        'create table t_stream (id bigint primary key, data ${blobType()})'), 0)
 
     // 未分库表：INSERT/UPDATE/DELETE/SELECT 都按 Single 走
     let insert = connection.prepareStatement('insert into t_plain (id, name) values (?, ?)')
@@ -375,7 +414,7 @@ func showAndExport(connection: Connection): Unit {
         }
         check('show tables contains t_step', names.contains('t_step'))
         check('show tables contains t_plain', names.contains('t_plain'))
-        check('show tables postgres column', rsInfoName(connection) == 'table_name')
+        check('show tables column name', rsInfoName(connection) == 'table_name')
     } finally {
         tables.close()
     }
@@ -448,9 +487,10 @@ func largeValues(connection: Connection): Unit {
         hex.append(digits[high..high + 1])
         hex.append(digits[low..low + 1])
     }
-    // Postgres 的未知类型字面量会按目标列（bytea）解释 `\x...`
-    checkInt('bytea insert', execUpdate(connection,
-        "insert into t_stream (id, data) values (1, '\\x${hex}')"), 1)
+    // PostgreSQL 的未知类型字面量按目标列（bytea）解释 `\x...`；MySQL 用 X'...' 十六进制字面量
+    let literal = if (isMySql()) { "X'${hex}'" } else { "'\\x${hex}'" }
+    checkInt('blob insert', execUpdate(connection,
+        "insert into t_stream (id, data) values (1, ${literal})"), 1)
     // 二进制结果无法跨 DataAny 线缆（DataCollection 会退化成 `_`），
     // 由 run.sh 用 psql 校验 octet_length；此处只验证大字段写入成功。
 
@@ -486,6 +526,57 @@ func errorMapping(connection: Connection): Unit {
     check('update without partition key', codeOf {
         execUpdate(connection, "update t_step set name = 'x'")
     } == DbdErrorCode.ROUTE_FAILED)
+}
+
+/**
+ * f_orm 分页/实体插入依赖的最小 SQL 子集：`returning`、`count(*)`、派生表分页。
+ *
+ * 这些用例在全部数据操作之后执行，计数基于本函数之前的最终分布。
+ */
+func sqlExtensions(connection: Connection): Unit {
+    if (isMySql()) {
+        check('returning rejected on mysql', codeOf {
+            execUpdate(connection, "insert into t_plain (id, name) values (100, 'ret') returning id")
+        } == DbdErrorCode.UNSUPPORTED_SQL)
+        checkInt('returning rejected leaves no row', rowCount(connection,
+            'select id from t_plain where id = 100'), 0)
+    } else {
+        let insert = connection.prepareStatement(
+            "insert into t_plain (id, name) values (100, 'ret') returning id")
+        try {
+            let result = insert.update()
+            checkInt('returning row count', result.rowCount, 1)
+            checkInt('returning lastInsertId', result.lastInsertId, 100)
+        } finally {
+            insert.close()
+        }
+        checkText('returning row visible', firstText(connection,
+            'select name from t_plain where id = 100') ?? '', 'ret')
+        checkInt('returning cleanup', execUpdate(connection,
+            'delete from t_plain where id = 100'), 1)
+    }
+
+    checkInt('count single shard', firstInt(connection,
+        'select count(*) from t_step where id = 1'), 1)
+    checkInt('count derived multi shard', firstInt(connection,
+        'select count(*) from (select 1 from t_step where id between 1 and 3001) as c'), 6)
+    checkInt('count empty route', firstInt(connection,
+        'select count(*) from t_step where id > 5000 and id < 1000'), 0)
+    checkInt('count global table one replica', firstInt(connection,
+        'select count(*) from t_global'), 1)
+
+    checkInt('paging single shard rows', rowCount(connection,
+        'select * from (select id from t_step where id >= 1 and id < 1000 order by id) as p ' +
+        'limit 2 offset 1'), 2)
+    checkText('paging single shard first id', firstText(connection,
+        'select id from (select id from t_step where id >= 1 and id < 1000 order by id) as p ' +
+        'limit 2 offset 1') ?? '', '2')
+    check('paging multi shard rejected', codeOf {
+        rowCount(connection,
+            'select * from (select id from t_step where id in (1, 1001)) as p limit 1 offset 0')
+    } == DbdErrorCode.ROUTE_FAILED)
+    checkInt('derived broadcast without paging', rowCount(connection,
+        'select * from (select id from t_step where id in (1, 1001)) as p'), 2)
 }
 
 func multiD(): Unit {
