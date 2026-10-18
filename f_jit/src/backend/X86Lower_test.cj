@@ -193,6 +193,16 @@ public class X86Lower_test {
             head + 'F2480F2CC0' + '48890424')
     }
 
+    @TestCase
+    public func callHelperTemplateA(): Unit {
+        let got = BackendX86_64.emitCallHelper(0x1000, 2)
+        let expected = '4C89FF' + '488D742408' + 'BA02000000' +
+            '48B80010000000000000' + 'FFD0' +
+            '4889842408000000' + '4883C408' +
+            '49833F000F8500000000'
+        @Assert(X86Lower_test.hex(got), expected)
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {

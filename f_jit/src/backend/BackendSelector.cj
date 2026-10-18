@@ -291,6 +291,45 @@ internal class BackendX86_64 <: Backend {
         BackendX86_64.cmpOp([0x0Fu8, 0x9Cu8, 0xC0u8])
     }
 
+    /**
+     * 模板 A：`CALL_HELPER hid, argc`。
+     *
+     * `rdi=ctx(r15)`、`rsi=&args`（最深实参 = `rsp+8*(argc-1)`）、`rdx=argc`；
+     * `call rax` 后结果替换最深槽并收参；尾随 `CHECK_ERR`（rel 占位）。
+     */
+    internal static func emitCallHelper(helperAddr: Int64, argc: Int64): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (x in [0x4Cu8, 0x89u8, 0xFFu8]) {
+            out.add(x) // mov rdi,r15
+        }
+        for (x in [0x48u8, 0x8Du8, 0x74u8, 0x24u8]) {
+            out.add(x) // lea rsi,[rsp+disp8]
+        }
+        out.add(UInt8(8 * (argc - 1)))
+        for (x in [0xBAu8]) {
+            out.add(x) // mov edx,argc
+        }
+        BackendX86_64.w32(out, BackendX86_64.i32bits(argc))
+        out.add(0x48u8)
+        out.add(0xB8u8)
+        BackendX86_64.w64(out, helperAddr)
+        for (x in [0xFFu8, 0xD0u8]) {
+            out.add(x) // call rax
+        }
+        for (x in [0x48u8, 0x89u8, 0x84u8, 0x24u8]) {
+            out.add(x) // mov [rsp+disp32],rax
+        }
+        BackendX86_64.w32(out, BackendX86_64.i32bits(8 * (argc - 1)))
+        for (x in [0x48u8, 0x83u8, 0xC4u8, UInt8(8 * (argc - 1))]) {
+            out.add(x) // add rsp,8*(argc-1)
+        }
+        for (x in [0x49u8, 0x83u8, 0x3Fu8, 0x00u8, 0x0Fu8, 0x85u8, 0x00u8, 0x00u8, 0x00u8,
+            0x00u8]) {
+            out.add(x) // CHECK_ERR（占位）
+        }
+        out.toArray()
+    }
+
     /** `TO_I64`：NaN + ±2^63 越界判定（jae/jb bail）；通过后 cvttsd2si。 */
     internal static func emitToI64RangeGuarded(): Array<UInt8> {
         [0xF2u8, 0x0Fu8, 0x10u8, 0x04u8, 0x24u8,
