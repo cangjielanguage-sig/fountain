@@ -219,6 +219,19 @@ public class X86Lower_test {
         @Assert(got[0], 0x4Cu8)
         @Assert(got[1], 0x89u8)
         @Assert(got[2], 0xFFu8)
+        // 两个 helper 绝对地址分别烘焙在偏移 15 / 55
+        @Assert(X86Lower_test.imm64(got, 15), 0x3000)
+        @Assert(X86Lower_test.imm64(got, 55), 0x4000)
+    }
+
+    private static func imm64(bs: Array<UInt8>, off: Int64): Int64 {
+        var v: Int64 = 0
+        var k = 0
+        while (k < 8) {
+            v = v | (Int64(bs[off + k]) << (8 * k))
+            k = k + 1
+        }
+        v
     }
 
     @TestCase
