@@ -17,12 +17,15 @@ package fountain::f_jit
 
 // 门面/桥层：用户面 API 的再导出点（见 doc/plan-m1.md §0.4、S0.1 / S6.11）。
 //
-// 下面是 S0.1 的 `public import` 占位：骨架阶段各子包还没有可导出的声明，先把「根包依赖全部子包、
-// 子包之间不成环」这条依赖方向钉住（仓颉禁止包间循环依赖，见 design D2）。
-// 用户面清单的最终形态由 S6.11 收口：`JitContext` / `Engine` / `JitValue` / `CompileCache` /
-// `AdapterRegistry` / `CompilePipeline` 等执行期内部类型一律不进用户面。
-public import fountain::f_jit.base.*
-public import fountain::f_jit.bytecode.*
-public import fountain::f_jit.compiler.*
-public import fountain::f_jit.runtime.*
-public import fountain::f_jit.backend.*
+// 用户面冻结（S6.11，design §7.3）：**只**导出下列声明。
+// `JitContext` / `Engine` / `JitValue` / `CompileCache` / `AdapterRegistry` /
+// `CompilePipeline` 等执行期内部类型一律不进用户面（根包内部按需普通 import）。
+public import fountain::f_jit.base.JitException
+public import fountain::f_jit.base.ErrCode
+public import fountain::f_jit.base.SourceCompileException
+public import fountain::f_jit.base.SourcePos
+public import fountain::f_jit.base.JitMode
+public import fountain::f_jit.base.DiagnosticsSink
+public import fountain::f_jit.base.DiagnosticLevel
+public import fountain::f_jit.base.DiagCode
+public import fountain::f_jit.base.DummyDiagnosticsSink

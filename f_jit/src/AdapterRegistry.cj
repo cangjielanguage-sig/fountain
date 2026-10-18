@@ -24,7 +24,7 @@ import std.sync.Mutex
  *
  * 宿主侧锁保护；`removeUnit` 按单元指纹整维移除（卸载路径，§8.7）。
  */
-public class AdapterRegistry {
+protected class AdapterRegistry {
     private static let lock = Mutex()
     private static let adapters = HashMap<String, Int64>()
     private static let units = HashMap<String, ArrayList<String>>()

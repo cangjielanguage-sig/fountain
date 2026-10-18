@@ -30,7 +30,7 @@ import fountain::f_jit.runtime.HandleTable
  *
  * 生命周期：一次调用一个实例；`cleanup()` 释放本次 pin 的非逃逸槽（try/finally 义务）。
  */
-public class CallMarshal {
+protected class CallMarshal {
     /** 本次调用 pin 的窗口槽（B 路径）；escape 后移入 escaped。 */
     private let pinned = ArrayList<Int64>()
     private let escaped = ArrayList<Int64>()

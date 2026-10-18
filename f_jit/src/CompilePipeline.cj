@@ -33,7 +33,7 @@ import fountain::f_jit.runtime.JitContext
  * 进程级去重键 = 源码 FNV-1a-128；同源复用同一 `JitFunction`（`CompileCache`）。
  * 失败在 `compile` 时刻抛出（`SourceCompileException`），不进入运行期错误槽。
  */
-public class CompilePipeline {
+protected class CompilePipeline {
     public static func runSource(source: String, c: Compiler): JitFunction {
         let key = 'src/${Fingerprint.fnv1a128(source)}'
         match (CompileCache.lookup(key)) {

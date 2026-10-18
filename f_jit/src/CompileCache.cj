@@ -26,7 +26,7 @@ import std.sync.Mutex
  * 同键并发只有一个线程 `claim` 成功并执行管线；其余线程 `awaitReady` 等价共享结果
  * （失败亦共享）。命中后二次校验原字节由调用方（Pipeline）负责。
  */
-public class CompileCache {
+protected class CompileCache {
     private static let mtx = Mutex()
     private static let ready = HashMap<String, JitFunction>()
     private static let compiling = HashSet<String>()

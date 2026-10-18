@@ -32,7 +32,7 @@ import fountain::f_jit.runtime.JitContext
  *
  * `Replay` 为非预期异常时兜底转 99（实现缺陷信号），**绝不让其它异常类型逃逸**。
  */
-public class JitReport {
+protected class JitReport {
     /** 按错误槽抛出对应异常；`errCode == 0/-1` 属调用方分派，不在此列。 */
     public static func throwJit(ctx: JitContext, report: String): Nothing {
         let code = ctx.errCode
