@@ -17,7 +17,9 @@ package fountain::fmq.queue
 
 import std.collection.ArrayList
 import std.io.InputStream
+import std.time.DateTime
 import fountain::f_io.*
+import fountain::f_mq.base.MQMessageRecord
 
 /**
  * 一条队列 = 一个 `SegmentedLog`。
@@ -85,6 +87,47 @@ protected class QueueLog <: Resource {
         } catch (_: Exception) {
             ArrayList<SegmentedMeta>()
         }
+    }
+
+    /**
+     * 从 `position` 起扫描记录：返回记录数与第一条记录的发布时间。
+     *
+     * 用于统计：`backlog` 与 `lagMs` 不依赖内存计数器，重启后仍然准确。
+     * 起始段被 TTL 清理时自动从现存最老段开始；目录不可读返回 `(0, None)`。
+     */
+    protected func scanAfter(position: LogPosition): (Int64, ?DateTime) {
+        var start = position
+        let segs = segmentsOrEmpty()
+        if (segs.size > 0 && start.seq < segs[0].index) {
+            start = LogPosition(segs[0].index, 0)
+        }
+        var count = 0i64
+        var first: ?DateTime = None
+        try {
+            let reader = openRecordsFrom(start)
+            try {
+                while (true) {
+                    match (reader.next()) {
+                        case Some(item) =>
+                            count++
+                            if (first.isNone()) {
+                                first = MQMessageRecord.publishTime(item[0])
+                            }
+                        case None => break
+                    }
+                }
+            } finally {
+                reader.close()
+            }
+        } catch (_: Exception) {
+            return (0, None<DateTime>)
+        }
+        (count, first)
+    }
+
+    /** 当前队列的记录总数（从现存最老段扫描）。 */
+    protected func countAll(): Int64 {
+        scanAfter(LogPosition(1, 0))[0]
     }
 
     /** 有效字节数（各段有效长度之和，含 4 字节头）。 */

@@ -31,14 +31,18 @@ public class MQTopicAssignment {
     private var startNodeIndex: Int64 = 0
     /** `owners[i]` = 队列 i 的所属节点下标 */
     private var owners: Array<Int64> = []
+    /** 延迟投递时长（毫秒），0 表示不延迟 */
+    private var delayingMs: Int64 = 0
 
     public init() {}
 
-    public init(topic: String, queueNum: Int64, startNodeIndex: Int64, owners: Array<Int64>) {
+    public init(topic: String, queueNum: Int64, startNodeIndex: Int64, owners: Array<Int64>,
+        delayingMs!: Int64 = 0) {
         this.topic = topic
         this.queueNum = queueNum
         this.startNodeIndex = startNodeIndex
         this.owners = owners
+        this.delayingMs = delayingMs
     }
 
     /** 队列对应的 owner 节点下标；越界返回 `None`。 */

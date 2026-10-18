@@ -157,6 +157,23 @@ class MetaSyncerTest {
     }
 
     @TestCase
+    public func registerTopicKeepsDelayingInAssignmentAndBroadcast(): Unit {
+        let (store, transport, syncer) = fixture("delaying")
+        try {
+            let assignment = syncer.registerTopic(MQTopicMeta("/d", 2, delayingMs: 61000))
+            @Assert(assignment.delayingMs == 61000)
+            @Assert(store.topicOf("/d").getOrThrow().delayingMs == 61000)
+            let sent = transport.messagesSentTo(1)
+            @Assert(sent.size == 1)
+            let internal = MQProtocol.asInternal(sent[0]).getOrThrow()
+            let remote = MQProtocol.decodePayload<MQTopicAssignment>(internal.payload).getOrThrow()
+            @Assert(remote.delayingMs == 61000)
+        } finally {
+            shutdown(store, "delaying")
+        }
+    }
+
+    @TestCase
     public func remoteApplyIsIdempotentAndKeepsFirst(): Unit {
         let (store, _, syncer) = fixture("remote")
         try {

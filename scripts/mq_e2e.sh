@@ -195,6 +195,19 @@ check "重投次数 >= 2" [ "${REDELIVER_COUNT}" -ge 2 ]
 DEAD_COUNT=$(dead_entry_count)
 check "死信条目 >= 1" [ "${DEAD_COUNT}" -ge 1 ]
 
+echo "==> 延迟投递（delaying=3s）"
+manager registerTopic /delay 1 delaying=3s >/dev/null 2>&1
+manager registerSubscriber /delay dgroup >/dev/null 2>&1
+client publish "${NODES}" /delay 1 >/dev/null 2>&1
+DELAY_START=$(date +%s%N)
+DELAY_OUT=$(timeout 30 env mqClient_hosts="${NODES}" "${CLIENT_BIN}" consume-one "${NODES}" /delay dgroup 2>&1)
+DELAY_RC=$?
+DELAY_END=$(date +%s%N)
+DELAY_MS=$(( (DELAY_END - DELAY_START) / 1000000 ))
+DELAY_COUNT=$(echo "${DELAY_OUT}" | grep -c '^CONSUMED' || true)
+check "延迟消息可投递" [ "${DELAY_RC}" -eq 0 ] && check "延迟消息条数 = 1" [ "${DELAY_COUNT}" -eq 1 ]
+check "延迟至少 2.5s" [ "${DELAY_MS}" -ge 2500 ]
+
 PUB_SECONDS=$(( (PUB_END - START_NS) / 1000000 ))
 CON_SECONDS=$(( (CON_END - START_NS) / 1000000 ))
 echo "==> 指标：发布 100 条 ${PUB_SECONDS}ms；消费 100 条 ${CON_SECONDS}ms；重投 ${REDELIVER_COUNT} 次；死信段 ${DEAD_COUNT}"

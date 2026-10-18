@@ -64,4 +64,10 @@ class MQAssignmentTest {
         @Assert(owners[2] == 2)
         @Assert(owners[3] == 0)
     }
+    @TestCase
+    public func allocateKeepsDelaying(): Unit {
+        let assignment = MQAssignment.allocate("/d", 2, 3, 0, delayingMs: 61000)
+        @Assert(assignment.delayingMs == 61000)
+        @Assert(assignment.owners == [0, 1])
+    }
 }

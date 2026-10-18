@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::fmq.server
 
+import std.convert.*
 import std.fs.*
 import std.unittest.*
 import std.unittest.testmacro.*
@@ -66,8 +67,8 @@ class ExecutorFixture <: Resource {
         executor.execute(None, message).getOrThrow()
     }
 
-    func registerTopic(topic: String, queueNum: Int64): Message {
-        call(MQProtocol.registerTopic(MQTopicMeta(topic, queueNum)))
+    func registerTopic(topic: String, queueNum: Int64, delayingMs!: Int64 = 0): Message {
+        call(MQProtocol.registerTopic(MQTopicMeta(topic, queueNum, delayingMs: delayingMs)))
     }
 
     func registerGroup(topic: String, group: String): Message {
@@ -404,6 +405,21 @@ class MQCommandExecutorTest {
             // 未知订阅退订
             @Assert(codeOf(fixture.call(MQProtocol.unsubscribe(MQUnsubscribePayload(sid)))) ==
                 MQErrorCode.SUBSCRIBE_NOT_EXIST)
+        } finally {
+            fixture.close()
+        }
+    }
+    @TestCase
+    public func statsInternalReturnsSnapshot(): Unit {
+        let fixture = ExecutorFixture("stats")
+        try {
+            fixture.registerTopic("/s", 2)
+            fixture.registerGroup("/s", "g")
+            fixture.publish("/s", "one".toData())
+            let response = fixture.call(MQProtocol.stats("/s"))
+            let text = convert<String>(response.data).getOrThrow()
+            @Assert(text.startsWith("#\t0\t"))
+            @Assert(text.contains("R\t/s\tg\t"))
         } finally {
             fixture.close()
         }

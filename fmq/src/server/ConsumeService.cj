@@ -21,6 +21,8 @@ import std.time.DateTime
 import fountain::f_io.LogPosition
 import fountain::f_mq.base.MQErrorCode
 import fountain::f_mq.base.payload.{MQAckPayload, MQConsumeResult, MQResult}
+import fountain::f_time.*
+import fountain::fmq.metrics.MQMetrics
 import fountain::fmq.queue.*
 
 /**
@@ -36,13 +38,14 @@ protected class ConsumeService {
     private let deadLetter: DeadLetterQueue
     private let ackTimeout: Duration
     private let deadMsgThreshold: Int64
+    private let metrics: ?MQMetrics
     private let now: () -> DateTime
     private let lock = Mutex()
     private let cursors = HashMap<String, GroupCursor>()
 
     init(queues: QueueManager, store: CursorStore, subscribers: SubscriberRegistry, matcher: MQMatcher,
         deadLetter: DeadLetterQueue, ackTimeout: Duration, deadMsgThreshold: Int64,
-        now!: () -> DateTime = {=> DateTime.now()}) {
+        metrics!: ?MQMetrics = None, now!: () -> DateTime = {=> DateTime.now()}) {
         this.queues = queues
         this.store = store
         this.subscribers = subscribers
@@ -50,6 +53,7 @@ protected class ConsumeService {
         this.deadLetter = deadLetter
         this.ackTimeout = ackTimeout
         this.deadMsgThreshold = deadMsgThreshold
+        this.metrics = metrics
         this.now = now
     }
 
@@ -115,11 +119,86 @@ protected class ConsumeService {
                             "queue ${queueIndex} of topic '${topic}' is not local")
                     }
                     let cursor = GroupCursor(topic, queueIndex, group, log, store, ackTimeout, deadMsgThreshold,
-                        deadLetter, now: now)
+                        deadLetter, delaying: Duration.millisecond * queues.delayingOf(topic), metrics: metrics,
+                        now: now)
                     cursors.add(key, cursor)
                     cursor
             }
         }
+    }
+
+    /**
+     * 组装节点级统计文本（TSV）。
+     *
+     * 第一行 `#\t节点\t生成时间`；其后每个 `(topic, group)` 一行 `R` 记录。
+     * 无订阅组的主题输出一行 group 为空的记录。`groupsOf(topic)` 由调用方提供。
+     */
+    func stats(topic: String, nodeIndex: Int64, groupsOf: (String) -> Array<String>): String {
+        let topics = ArrayList<String>()
+        if (topic.isEmpty()) {
+            for (name in queues.localTopics()) {
+                topics.add(name)
+            }
+        } else if (queues.localQueues(topic).size > 0) {
+            topics.add(topic)
+        }
+
+        let out = StringBuilder()
+        out.append("#\t${nodeIndex}\t${now().toUnixTimeStamp().toMilliseconds()}\n")
+        for (name in topics) {
+            let locals = queues.localQueues(name)
+            var messages = 0i64
+            var bytes = 0i64
+            for ((_, log) in locals) {
+                messages += log.countAll()
+                bytes += log.size
+            }
+            let queueNum = queues.queueNumOf(name)
+            let delayingMs = queues.delayingOf(name)
+            let groups = groupsOf(name)
+            if (groups.size == 0) {
+                out.append("R\t${name}\t\t${queueNum}\t${delayingMs}\t${messages}\t0\t0\t0\t0\t0\t0\n")
+                continue
+            }
+            for (group in groups) {
+                var backlog = 0i64
+                var oldest: ?DateTime = None
+                for ((queueIndex, log) in locals) {
+                    let cursor = cursorOf(name, queueIndex, group)
+                    let scanned = log.scanAfter(cursor.committed)
+                    backlog += scanned[0]
+                    match (scanned[1]) {
+                        case Some(published) =>
+                            let earlier = match (oldest) {
+                                case None => true
+                                case Some(current) =>
+                                    published.toUnixTimeStamp() < current.toUnixTimeStamp()
+                            }
+                            if (earlier) {
+                                oldest = Some(published)
+                            }
+                        case None => ()
+                    }
+                }
+                let lagMs = match (oldest) {
+                    case Some(published) => (now() - published).toMilliseconds()
+                    case None => 0
+                }
+                var delivered = 0i64
+                var acked = 0i64
+                var redelivered = 0i64
+                var deadLettered = 0i64
+                if (let Some(m) <- metrics) {
+                    delivered = m.deliveredOf(name, group)
+                    acked = m.ackedOf(name, group)
+                    redelivered = m.redeliveredOf(name, group)
+                    deadLettered = m.deadLetteredOf(name, group)
+                }
+                out.append("R\t${name}\t${group}\t${queueNum}\t${delayingMs}\t${messages}\t${backlog}\t" +
+                    "${lagMs}\t${delivered}\t${acked}\t${redelivered}\t${deadLettered}\n")
+            }
+        }
+        out.toString()
     }
 
     /** 段是否仍被某游标引用（不存在游标视为未引用）。 */

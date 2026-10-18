@@ -45,18 +45,20 @@ mqServer_segmentedLogDir / mqServer_deadMsgDir。
 """
     }
 
-    /** `fmq manager --help`：六个子命令与 --server。 */
+    /** `fmq manager --help`：七个子命令与 --server。 */
     public static func managerHelp(): String {
         """
 Usage: fmq manager [--server=host:port] <subcommand> [args...]
 
 子命令：
-  registerTopic <topic> <queueNum>       注册主题并分配队列
+  registerTopic <topic> <queueNum> [delaying=1m1s]
+                                         注册主题并分配队列；可选延迟投递（默认 0s）
   deleteTopic <topic>                    删除主题及其消息、订阅组、游标
   registerSubscriber <topic> <group>     注册订阅组
   deleteSubscribeGroup <topic> <group>   删除订阅组
-  listTopics                             列出全部主题与队列分配
+  listTopics                             列出全部主题、队列分配与延迟
   listSubscribeGroups <topic>            列出主题下的订阅组
+  stats [topic]                          查询节点级积压/延迟/投递/重投/死信指标
 
 选项：
   --server=host:port   目标服务地址，可出现在子命令前后；

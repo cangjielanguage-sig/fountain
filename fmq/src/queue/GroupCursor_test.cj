@@ -27,6 +27,7 @@ import fountain::f_data.*
 import fountain::f_io.LogPosition
 import fountain::f_mq.base.{MQFilter, MQMessageRecord}
 import fountain::f_mq.base.payload.MQDeadLetterMessage
+import fountain::fmq.metrics.MQMetrics
 
 class CursorClock {
     var value: DateTime = DateTime.now()
@@ -66,8 +67,17 @@ class CursorFixture <: Resource {
         log.append(record)
     }
 
-    func cursorOf(group!: String = "g"): GroupCursor {
-        GroupCursor(topic, 0, group, log, store, ackTimeout_, threshold_, deadLetter, now: {=> clock.value})
+    /** 用带标准 UTC 时间戳的 messageId 追加，供延迟用例使用。 */
+    func appendAt(tags: Array<String>, body: String, at: DateTime): LogPosition {
+        let id = "1_2_3_${at.format("yyyyMMddHHmmssSSS")}"
+        let record = MQMessageRecord.encode(topic, tags, id, body.toData())
+        log.append(record)
+    }
+
+    func cursorOf(group!: String = "g", delaying!: Duration = Duration.Zero,
+        metrics!: ?MQMetrics = None): GroupCursor {
+        GroupCursor(topic, 0, group, log, store, ackTimeout_, threshold_, deadLetter, delaying: delaying,
+            metrics: metrics, now: {=> clock.value})
     }
 
     func sub(id: String, tags!: Array<String> = [], filter!: String = '', autoAck!: Bool = false): MQSubscriptionView {
@@ -478,6 +488,122 @@ class GroupCursorTest {
             }
             @Assert(done.load() == 4)
             @Assert(seen.size == 200)
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+    @TestCase
+    public func delayedRecordWaitsUntilDue(): Unit {
+        let fixture = CursorFixture("delay")
+        try {
+            let published = DateTime.nowUTC()
+            fixture.appendAt([], "one", published)
+            let cursor = fixture.cursorOf(delaying: Duration.second * 61)
+            let sub = fixture.sub("s1")
+            @Assert(cursor.next(sub, [sub], MQMatcher()).isNone())
+            @Assert(cursor.committed.seq == 1 && cursor.committed.offset == 0)
+
+            fixture.clock.advance(Duration.second * 62)
+            let item = cursor.next(sub, [sub], MQMatcher()).getOrThrow()
+            @Assert(convert<String>(MQMessageRecord.decode(item[0]).getOrThrow().body.data) == Some("one"))
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @TestCase
+    public func delayedTopicBlocksHeadOfLine(): Unit {
+        let fixture = CursorFixture("delay_hol")
+        try {
+            let now = DateTime.nowUTC()
+            // 第一条未到期；第二条虽然已到期，也不能越过第一条
+            fixture.appendAt([], "late", now)
+            fixture.appendAt([], "already-due", now - Duration.second * 120)
+            let cursor = fixture.cursorOf(delaying: Duration.second * 61)
+            let sub = fixture.sub("s1")
+            @Assert(cursor.next(sub, [sub], MQMatcher()).isNone())
+            @Assert(cursor.committed.seq == 1 && cursor.committed.offset == 0)
+
+            fixture.clock.advance(Duration.second * 62)
+            let first = cursor.next(sub, [sub], MQMatcher()).getOrThrow()
+            @Assert(convert<String>(MQMessageRecord.decode(first[0]).getOrThrow().body.data) == Some("late"))
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @TestCase
+    public func delayedRecordSurvivesCursorReopen(): Unit {
+        let fixture = CursorFixture("delay_restart")
+        try {
+            fixture.appendAt([], "one", DateTime.nowUTC())
+            let first = fixture.cursorOf(delaying: Duration.second * 61)
+            let sub = fixture.sub("s1")
+            @Assert(first.next(sub, [sub], MQMatcher()).isNone())
+            first.close()
+
+            let reopened = fixture.cursorOf(delaying: Duration.second * 61)
+            @Assert(reopened.next(sub, [sub], MQMatcher()).isNone())
+            reopened.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @TestCase
+    public func nonStandardMessageIdDeliversImmediately(): Unit {
+        let fixture = CursorFixture("delay_bad_id")
+        try {
+            fixture.append([], "one")
+            let cursor = fixture.cursorOf(delaying: Duration.second * 61)
+            let sub = fixture.sub("s1")
+            @Assert(cursor.next(sub, [sub], MQMatcher()).isSome())
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @TestCase
+    public func metricsCountDeliveryAckAndRedelivery(): Unit {
+        let fixture = CursorFixture("metrics", ackTimeout: Duration.second * 10, threshold: 10)
+        try {
+            fixture.append([], "one")
+            let metrics = MQMetrics()
+            let cursor = fixture.cursorOf(metrics: metrics)
+            let sub = fixture.sub("s1")
+            let first = cursor.next(sub, [sub], MQMatcher()).getOrThrow()
+            fixture.clock.advance(Duration.second * 11)
+            let again = cursor.next(sub, [sub], MQMatcher()).getOrThrow()
+            @Assert(again[1].seq == first[1].seq && again[1].offset == first[1].offset)
+            @Assert(cursor.ack("s1", again[1]))
+            @Assert(metrics.deliveredOf("/t", "g") == 2)
+            @Assert(metrics.redeliveredOf("/t", "g") == 1)
+            @Assert(metrics.ackedOf("/t", "g") == 1)
+            @Assert(metrics.deadLetteredOf("/t", "g") == 0)
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @TestCase
+    public func metricsCountDeadLetter(): Unit {
+        let fixture = CursorFixture("metrics_dl", ackTimeout: Duration.second * 10, threshold: 1)
+        try {
+            fixture.append([], "one")
+            let metrics = MQMetrics()
+            let cursor = fixture.cursorOf(metrics: metrics)
+            let sub = fixture.sub("s1")
+            @Assert(cursor.next(sub, [sub], MQMatcher()).isSome())
+            fixture.clock.advance(Duration.second * 11)
+            // 第二次尝试超过阈值：直接进死信，不再返回给订阅者
+            @Assert(cursor.next(sub, [sub], MQMatcher()).isNone())
+            @Assert(metrics.deliveredOf("/t", "g") == 1)
+            @Assert(metrics.deadLetteredOf("/t", "g") == 1)
             cursor.close()
         } finally {
             fixture.close()

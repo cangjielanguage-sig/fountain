@@ -18,6 +18,7 @@ package fountain::f_mq.base
 import std.collection.ArrayList
 import std.fs.*
 import std.io.SeekPosition
+import std.time.*
 import fountain::f_data.*
 import fountain::f_codec.default.DefaultCodec
 import fountain::f_io.ByteBuffer
@@ -91,6 +92,39 @@ public class MQMessageRecord {
         match (valueAt(record, 2)) {
             case None => None<String>
             case Some(d) => convert<String>(d)
+        }
+    }
+
+    /**
+     * 解析记录发布时间。
+     *
+     * messageId 形如 `pid_tid_hostId_<yyyyMMddHHmmss + 9 位纳秒>`（UTC）；只接受末尾 23 位数字。
+     * 非标准 ID（例如测试里的 `mid-1`）返回 `None`，由调用方决定兜底策略。
+     */
+    public static func publishTime(record: Array<Byte>): ?DateTime {
+        let idOpt = messageId(record)
+        if (idOpt.isNone()) {
+            return None<DateTime>
+        }
+        let parts = idOpt.getOrThrow().split("_")
+        if (parts.size == 0) {
+            return None<DateTime>
+        }
+        let stamp = parts[parts.size - 1]
+        if (stamp.size != 23) {
+            return None<DateTime>
+        }
+        for (c in stamp.toRuneArray()) {
+            if (c < r'0' || c > r'9') {
+                return None<DateTime>
+            }
+        }
+        try {
+            let parsed = DateTime.parse(stamp, "yyyyMMddHHmmssSSS")
+            // parse 按本地时区解释，时间戳本身是 UTC：加回本地偏移得到 UTC 时刻
+            Some(DateTime.fromUnixTimeStamp(parsed.toUnixTimeStamp() + parsed.zoneOffset))
+        } catch (_: Exception) {
+            None<DateTime>
         }
     }
 

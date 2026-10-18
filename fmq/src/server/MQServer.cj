@@ -23,6 +23,7 @@ import fountain::f_net.server.Server
 import fountain::f_protocol.default.Message
 import fountain::fmq.cluster.{BackupReplicator, LogCleaner, MetaSyncer, NodeRegistry}
 import fountain::fmq.meta.MetaStore
+import fountain::fmq.metrics.MQMetrics
 import fountain::fmq.queue.{CursorStore, DeadLetterQueue, MQMatcher, QueueManager}
 
 /**
@@ -82,7 +83,7 @@ public class MQServer {
         this.backupStore = BackupStore(options.segmentedLogDir, options.segmentedLogMaxSize, 1)
         this.backup = BackupReplicator(registry, options.backup)
         let consumer = ConsumeService(queues, cursorStore, subscribers, MQMatcher(), deadLetter,
-            options.ackTimeout, options.deadMsgThreshold)
+            options.ackTimeout, options.deadMsgThreshold, metrics: MQMetrics())
         this.consume = consumer
         this.cleaner = LogCleaner(queues, deadLetter,
             {topic, queueIndex, segmentIndex => consumer.references(topic, queueIndex, segmentIndex)},

@@ -48,6 +48,9 @@ protected class MetaSyncer {
         if (meta.queueNum < 1) {
             throw MQServiceException(MQErrorCode.INVALID_TOPIC, "queueNum must be at least 1")
         }
+        if (meta.delayingMs < 0) {
+            throw MQServiceException(MQErrorCode.INVALID_TOPIC, "delaying must not be negative")
+        }
         if (store.topicOf(meta.topic).isSome()) {
             throw MQServiceException(MQErrorCode.TOPIC_ALREADY_EXIST, "topic '${meta.topic}' already exists")
         }
@@ -56,7 +59,8 @@ protected class MetaSyncer {
             throw MQServiceException(MQErrorCode.INTERNAL, "no node in cluster")
         }
         let start = store.nextStartNode % nodeCount
-        let assignment = MQAssignment.allocate(meta.topic, meta.queueNum, nodeCount, start)
+        let assignment = MQAssignment.allocate(meta.topic, meta.queueNum, nodeCount, start,
+            delayingMs: meta.delayingMs)
         let next = MQAssignment.nextStart(start, meta.queueNum, nodeCount)
         store.applyTopic(assignment, nextStart: next)
         broadcastTopic(assignment)

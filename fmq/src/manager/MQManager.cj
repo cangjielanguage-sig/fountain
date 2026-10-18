@@ -17,6 +17,7 @@ package fountain::fmq.manager
 
 import std.collection.ArrayList
 import std.convert.*
+import fountain::f_data.*
 import fountain::f_data.DataAny
 import fountain::f_mq.base.*
 import fountain::f_mq.base.model.*
@@ -50,21 +51,47 @@ public class MQManager {
                         println(MQManagerOutput.error("队列数必须是整数"))
                         return 2
                 }
-                registerTopic(args.operands[0], queueNum)
+                var delayingMs = 0i64
+                if (args.operands.size >= 3) {
+                    let text = args.operands[2]
+                    if (!text.startsWith("delaying=")) {
+                        println(MQManagerOutput.error("第三个参数必须是 delaying=<时长>"))
+                        return 2
+                    }
+                    match (Duration.tryParse(text["delaying=".size..])) {
+                        case None =>
+                            println(MQManagerOutput.error("delaying 不是合法时长"))
+                            return 2
+                        case Some(value) =>
+                            if (value < Duration.Zero) {
+                                println(MQManagerOutput.error("delaying 不能为负"))
+                                return 2
+                            }
+                            delayingMs = value.toMilliseconds()
+                    }
+                }
+                registerTopic(args.operands[0], queueNum, delayingMs: delayingMs)
             case "deleteTopic" => deleteTopic(args.operands[0])
             case "registerSubscriber" => registerSubscriber(args.operands[0], args.operands[1])
             case "deleteSubscribeGroup" => deleteSubscribeGroup(args.operands[0], args.operands[1])
             case "listTopics" => listTopics()
             case "listSubscribeGroups" => listSubscribeGroups(args.operands[0])
+            case "stats" =>
+                if (args.operands.size == 0) {
+                    stats("")
+                } else {
+                    stats(args.operands[0])
+                }
             case _ =>
                 println(MQManagerArgs.helpText())
                 2
         }
     }
 
-    public func registerTopic(topic: String, queueNum: Int64): Int64 {
+    public func registerTopic(topic: String, queueNum: Int64, delayingMs!: Int64 = 0): Int64 {
         withClient {client =>
-            let response = exchange(client, MQProtocol.registerTopic(MQTopicMeta(topic, queueNum)))
+            let response = exchange(client, MQProtocol.registerTopic(MQTopicMeta(topic, queueNum,
+                delayingMs: delayingMs)))
             match (response) {
                 case None => connectionFailed()
                 case Some(message) =>
@@ -78,7 +105,8 @@ public class MQManager {
                     for (i in 0..assignment.owners.size) {
                         parts.add("${i}→${assignment.owners[i]}")
                     }
-                    println("${topic} 已注册，队列 0..${queueNum - 1}，分配：${join(parts)}")
+                    let delay = (Duration.millisecond * delayingMs).toString()
+                    println("${topic} 已注册，队列 0..${queueNum - 1}，延迟：${delay}，分配：${join(parts)}")
                     0
             }
         }
@@ -118,9 +146,10 @@ public class MQManager {
                         for (index in 0..assignment.owners.size) {
                             owners.add("${index}→${assignment.owners[index]}")
                         }
-                        rows.add([assignment.topic, "${assignment.queueNum}", join(owners)])
+                        rows.add([assignment.topic, "${assignment.queueNum}",
+                            (Duration.millisecond * assignment.delayingMs).toString(), join(owners)])
                     }
-                    println(MQManagerOutput.table(["topic", "queueNum", "分配"], rows.toArray()))
+                    println(MQManagerOutput.table(["topic", "queueNum", "delaying", "分配"], rows.toArray()))
                     0
             }
         }
@@ -144,6 +173,44 @@ public class MQManager {
                         }
                     }
                     println(MQManagerOutput.table(["subscribeGroup"], rows.toArray()))
+                    0
+            }
+        }
+    }
+
+    public func stats(topic: String): Int64 {
+        withClient {client =>
+            let response = exchange(client, MQProtocol.stats(topic))
+            match (response) {
+                case None => connectionFailed()
+                case Some(message) =>
+                    if (message.command == Command.ERROR) {
+                        return printError(MQProtocol.asResult(message))
+                    }
+                    let text = convert<String>(message.data).getOrThrow {
+                        MQServiceFailure("响应不是统计文本")
+                    }
+                    let rows = ArrayList<Array<String>>()
+                    for (line in text.split("\n")) {
+                        if (!line.startsWith("R\t")) {
+                            continue
+                        }
+                        let fields = line.split("\t")
+                        if (fields.size < 12) {
+                            continue
+                        }
+                        let group = if (fields[2].size == 0) {
+                            "（无）"
+                        } else {
+                            fields[2]
+                        }
+                        let delay = (Duration.millisecond * Int64.parse(fields[4])).toString()
+                        rows.add([fields[1], group, fields[3], delay, fields[6], fields[7], fields[8], fields[9],
+                            fields[10], fields[11]])
+                    }
+                    println(MQManagerOutput.table(
+                        ["topic", "group", "queueNum", "delaying", "backlog", "lagMs", "delivered", "acked",
+                            "redelivered", "deadLettered"], rows.toArray()))
                     0
             }
         }

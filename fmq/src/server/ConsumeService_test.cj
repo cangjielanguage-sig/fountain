@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::fmq.server
 
 import std.fs.*
+import std.time.DateTime
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_data.*
@@ -25,6 +26,7 @@ import fountain::f_mq.base.{MQErrorCode, MQFilter, MQMessageRecord}
 import fountain::f_mq.base.payload.{MQAckPayload, MQConsumeResult, MQResult}
 import fountain::f_mq.base.payload.MQTopicAssignment
 import fountain::f_net.SocketBuffer
+import fountain::fmq.metrics.MQMetrics
 import fountain::fmq.queue.*
 
 @DataAssist[props fields]
@@ -44,6 +46,7 @@ class ConsumeFixture <: Resource {
     let store: CursorStore
     let deadLetter: DeadLetterQueue
     let registry = SubscriberRegistry()
+    let metrics = MQMetrics()
     let service: ConsumeService
     private let topic = "/t"
 
@@ -59,7 +62,7 @@ class ConsumeFixture <: Resource {
         let owners = Array<Int64>(queueCount) {_ => 0}
         this.queues.openTopic(MQTopicAssignment(topic, queueCount, 0, owners), 0)
         this.service = ConsumeService(queues, store, registry, MQMatcher(), deadLetter,
-            Duration.second * 10, 3)
+            Duration.second * 10, 3, metrics: metrics)
     }
 
     func append(tags: Array<String>, body: String): LogPosition {
@@ -68,6 +71,12 @@ class ConsumeFixture <: Resource {
 
     func appendTo(queueIndex: Int64, tags: Array<String>, body: String): LogPosition {
         let record = MQMessageRecord.encode(topic, tags, "mid-${body}", body.toData())
+        queues.queueOf(topic, queueIndex).getOrThrow().append(record)
+    }
+
+    func appendAt(queueIndex: Int64, tags: Array<String>, body: String, at: DateTime): LogPosition {
+        let id = "1_2_3_${at.format("yyyyMMddHHmmssSSS")}"
+        let record = MQMessageRecord.encode(topic, tags, id, body.toData())
         queues.queueOf(topic, queueIndex).getOrThrow().append(record)
     }
 
@@ -269,6 +278,66 @@ class ConsumeServiceTest {
             @Assert(fixture.service.ack(info, MQAckPayload("s1", 0, r0.segmentedIndex,
                 r0.segmentedOffset)).code == 0)
             @Assert(fixture.service.cursorOf("/t", 0, "g").pendingCount == 0)
+        } finally {
+            fixture.close()
+        }
+    }
+    private static func statsRow(text: String, topic: String, group: String): Array<String> {
+        for (line in text.split("\n")) {
+            let fields = line.split("\t")
+            if (fields.size >= 12 && fields[0] == "R" && fields[1] == topic && fields[2] == group) {
+                return fields
+            }
+        }
+        Array<String>()
+    }
+
+    @TestCase
+    public func statsReportsBacklogLagAndCounters(): Unit {
+        let fixture = ConsumeFixture("stats")
+        try {
+            let base = DateTime.nowUTC() - Duration.second * 5
+            fixture.appendAt(0, [], "one", base)
+            fixture.appendAt(0, [], "two", base + Duration.second)
+            fixture.appendAt(0, [], "three", base + Duration.second * 2)
+            let info = fixture.register("s1")
+            let first = fixture.service.consume(info).getOrThrow()
+            @Assert(fixture.service.ack(info, MQAckPayload("s1", first.queueIndex, first.segmentedIndex,
+                first.segmentedOffset)).code == 0)
+
+            let text = fixture.service.stats("/t", 3, {_ => ["g"]})
+            @Assert(text.startsWith("#\t3\t"))
+            let row = statsRow(text, "/t", "g")
+            @Assert(row.size >= 12)
+            @Assert(Int64.parse(row[6]) == 2)      // backlog
+            @Assert(Int64.parse(row[7]) >= 3000)   // lagMs
+            @Assert(Int64.parse(row[8]) == 1)      // delivered
+            @Assert(Int64.parse(row[9]) == 1)      // acked
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @TestCase
+    public func statsUnknownTopicReturnsEmpty(): Unit {
+        let fixture = ConsumeFixture("stats_unknown")
+        try {
+            let text = fixture.service.stats("/missing", 0, {_ => []})
+            @Assert(!text.contains("R\t"))
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @TestCase
+    public func statsWithoutTopicListsAllLocalTopics(): Unit {
+        let fixture = ConsumeFixture("stats_all")
+        try {
+            fixture.append([], "one")
+            let text = fixture.service.stats("", 1, {_ => ["g"]})
+            let row = statsRow(text, "/t", "g")
+            @Assert(row.size >= 12)
+            @Assert(Int64.parse(row[6]) == 1)
         } finally {
             fixture.close()
         }

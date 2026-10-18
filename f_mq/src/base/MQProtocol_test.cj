@@ -163,4 +163,14 @@ class MQProtocolTest {
         @Assert(backupDecoded.ownerIndex == 1)
         @Assert(backupDecoded.records == [[9u8]])
     }
+
+    @TestCase
+    public func statsRequestUsesRegisterAndInternalKind(): Unit {
+        let message = MQProtocol.stats("/order")
+        @Assert(message.command == Command.REGISTER)
+        let internal = MQProtocol.asInternal(message).getOrThrow()
+        @Assert(internal.kind == MQInternalKind.STATS)
+        let decoded = MQProtocol.decodePayload<String>(internal.payload).getOrThrow()
+        @Assert(decoded == "/order")
+    }
 }

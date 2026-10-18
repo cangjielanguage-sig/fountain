@@ -141,6 +141,19 @@ class MQMessageRecordTest {
     }
 
     @TestCase
+    public func publishTimeParsesStandardMessageId(): Unit {
+        let record = encode("/t", [], "1_2_3_20261018183000123456789", 1i64.toData())
+        let time = MQMessageRecord.publishTime(record).getOrThrow()
+        @Assert(time.format("yyyyMMddHHmmssSSS") == "20261018183000123456789")
+    }
+
+    @TestCase
+    public func publishTimeRejectsNonStandardMessageId(): Unit {
+        @Assert(MQMessageRecord.publishTime(encode("/t", [], "mid-1", 1i64.toData())).isNone())
+        @Assert(MQMessageRecord.publishTime(encode("/t", [], "a_b_2026", 1i64.toData())).isNone())
+    }
+
+    @TestCase
     public func emptyTagsStayEmpty(): Unit {
         let record = encode("/t", [], "m", 1i64.toData())
         let tags = MQMessageRecord.tags(record).getOrThrow()

@@ -96,6 +96,12 @@ public class MQProtocol {
         Message.deregister<MQInternalMessage>(data: envelope)
     }
 
+    /** 指标查询：`REGISTER` + `MQInternalMessage{kind = stats}`，子载荷为 topic 字符串。 */
+    public static func stats(topic: String): Message {
+        let envelope = MQInternalMessage(MQInternalKind.STATS, encodePayload<String>(topic))
+        Message.register<MQInternalMessage>(data: envelope)
+    }
+
     // ===== 响应构造 =====
 
     public static func respond<T>(request: Message, data: T): Message where T <: ToData {

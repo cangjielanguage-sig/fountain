@@ -60,16 +60,17 @@ public struct MQManagerArgs {
         }
         let command = tokens[0]
         let operands = tokens[1..].toArray()
-        let expected = match (command) {
-            case "registerTopic" => 2
-            case "deleteTopic" => 1
-            case "registerSubscriber" => 2
-            case "deleteSubscribeGroup" => 2
-            case "listTopics" => 0
-            case "listSubscribeGroups" => 1
-            case _ => -1
+        let valid = match (command) {
+            case "registerTopic" => operands.size == 2 || operands.size == 3
+            case "deleteTopic" => operands.size == 1
+            case "registerSubscriber" => operands.size == 2
+            case "deleteSubscribeGroup" => operands.size == 2
+            case "listTopics" => operands.size == 0
+            case "listSubscribeGroups" => operands.size == 1
+            case "stats" => operands.size <= 1
+            case _ => false
         }
-        if (expected < 0 || operands.size != expected) {
+        if (!valid) {
             return None<MQManagerArgs>
         }
         if (server.isEmpty()) {
@@ -85,12 +86,14 @@ public struct MQManagerArgs {
 Usage: fmq manager [--server=host:port] <subcommand> [args...]
 
 子命令：
-  registerTopic <topic> <queueNum>       注册主题并分配队列
+  registerTopic <topic> <queueNum> [delaying=1m1s]
+                                         注册主题并分配队列；可选延迟投递（默认 0s）
   deleteTopic <topic>                    删除主题及其消息、订阅组、游标
   registerSubscriber <topic> <group>     注册订阅组
   deleteSubscribeGroup <topic> <group>   删除订阅组
-  listTopics                             列出全部主题与队列分配
+  listTopics                             列出全部主题、队列分配与延迟
   listSubscribeGroups <topic>            列出主题下的订阅组
+  stats [topic]                          查询节点级积压/延迟/投递/重投/死信指标
 
 选项：
   --server=host:port   目标服务地址，可出现在子命令前后；

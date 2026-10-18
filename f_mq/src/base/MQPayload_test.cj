@@ -24,6 +24,7 @@ import fountain::f_io.ByteBuffer
 import fountain::f_mq.base.model.*
 import fountain::f_mq.base.payload.*
 
+
 @Test
 class MQPayloadTest {
     private static func roundtrip<T>(value: T): ?T where T <: DataFields<T> {
@@ -172,4 +173,6 @@ class MQPayloadTest {
         @Assert(back.deadTime == time)
         @Assert(back.record == [1u8, 2u8])
     }
+
+
 }

@@ -20,7 +20,9 @@ import std.sync.Mutex
 import std.time.DateTime
 import fountain::f_io.LogPosition
 import fountain::f_log.*
+import fountain::f_mq.base.{MQMessageRecord}
 import fountain::f_mq.base.payload.MQDeadLetterMessage
+import fountain::fmq.metrics.MQMetrics
 
 /**
  * `(topic, queueIndex, group)` 的消费游标。
@@ -45,6 +47,8 @@ protected class GroupCursor {
     private let ackTimeout: Duration
     private let deadMsgThreshold: Int64
     private let deadLetter: DeadLetterQueue
+    private let delaying: Duration
+    private let metrics: ?MQMetrics
     private let now: () -> DateTime
     private let lock = Mutex()
 
@@ -56,6 +60,7 @@ protected class GroupCursor {
 
     protected init(topic: String, queueIndex: Int64, group: String, log: QueueLog, store: CursorStore,
         ackTimeout: Duration, deadMsgThreshold: Int64, deadLetter: DeadLetterQueue,
+        delaying!: Duration = Duration.Zero, metrics!: ?MQMetrics = None,
         now!: () -> DateTime = {=> DateTime.now()}) {
         this.topic = topic
         this.queueIndex = queueIndex
@@ -65,6 +70,8 @@ protected class GroupCursor {
         this.ackTimeout = ackTimeout
         this.deadMsgThreshold = deadMsgThreshold
         this.deadLetter = deadLetter
+        this.delaying = delaying
+        this.metrics = metrics
         this.now = now
         let loaded = match (store.load(topic, queueIndex, group)) {
             case Some(position) => position
@@ -156,6 +163,12 @@ protected class GroupCursor {
                     continue
                 }
                 redelivered = Some((record.getOrThrow(), entry.position))
+                if (let Some(m) <- metrics) {
+                    m.incDelivered(topic, group)
+                    if (entry.deliverCount > 1) {
+                        m.incRedelivered(topic, group)
+                    }
+                }
                 if (subscription.autoAck) {
                     entry.decided = true
                 }
@@ -202,8 +215,25 @@ protected class GroupCursor {
                 let ownResult = MQMatcher.matches(subscription, record)
                 match (ownResult) {
                     case Match =>
+                        if (delaying > Duration.Zero) {
+                            match (MQMessageRecord.publishTime(record)) {
+                                case Some(published) =>
+                                    if (current - published < delaying) {
+                                        // 未到期：停在队首，不建未决项、不推进 committed
+                                        scanPosition = position
+                                        reader.getOrThrow().close()
+                                        reader = None
+                                        return None<(Array<Byte>, LogPosition)>
+                                    }
+                                case None =>
+                                    logger.warn("no publish time in messageId on delayed topic ${topic}, deliver immediately")
+                            }
+                        }
                         let entry = DeliveryRecord(position, after, Some(subscription.subscribedId), 1, now(), true)
                         entries.add(entry)
+                        if (let Some(m) <- metrics) {
+                            m.incDelivered(topic, group)
+                        }
                         if (subscription.autoAck) {
                             entry.decided = true
                             advance()
@@ -267,6 +297,9 @@ protected class GroupCursor {
                 }
                 entry.decided = true
                 advance()
+                if (let Some(m) <- metrics) {
+                    m.incAcked(topic, group)
+                }
                 return true
             }
             false
@@ -384,5 +417,8 @@ protected class GroupCursor {
     private func writeDeadLetter(entry: DeliveryRecord, record: Array<Byte>, now: DateTime): Unit {
         deadLetter.append(MQDeadLetterMessage(topic, queueIndex, group, entry.position.seq, entry.position.offset,
             entry.deliverCount, now, record))
+        if (let Some(m) <- metrics) {
+            m.incDeadLettered(topic, group)
+        }
     }
 }

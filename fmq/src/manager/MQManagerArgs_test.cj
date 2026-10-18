@@ -47,6 +47,8 @@ class MQManagerArgsTest {
         @Assert(MQManagerArgs.parse(["deleteTopic"]).isNone())
         @Assert(MQManagerArgs.parse(["registerSubscriber", "/t"]).isNone())
         @Assert(MQManagerArgs.parse(["listSubscribeGroups"]).isNone())
+        @Assert(MQManagerArgs.parse(["registerTopic", "/t", "2", "delaying=1s", "extra"]).isNone())
+        @Assert(MQManagerArgs.parse(["stats", "/t", "extra"]).isNone())
         @Assert(MQManagerArgs.parse(["bogus"]).isNone())
         @Assert(MQManagerArgs.parse(["--help"]).isNone())
     }
@@ -59,13 +61,16 @@ class MQManagerArgsTest {
         @Assert(MQManagerArgs.parse(["deleteSubscribeGroup", "/t", "g"]).isSome())
         @Assert(MQManagerArgs.parse(["listTopics"]).isSome())
         @Assert(MQManagerArgs.parse(["listSubscribeGroups", "/t"]).isSome())
+        @Assert(MQManagerArgs.parse(["stats"]).isSome())
+        @Assert(MQManagerArgs.parse(["stats", "/t"]).isSome())
+        @Assert(MQManagerArgs.parse(["registerTopic", "/t", "2", "delaying=1m1s"]).isSome())
     }
 
     @TestCase
     public func helpTextListsCommandsAndServer(): Unit {
         let text = MQManagerArgs.helpText()
         for (command in ["registerTopic", "deleteTopic", "registerSubscriber", "deleteSubscribeGroup",
-            "listTopics", "listSubscribeGroups"]) {
+            "listTopics", "listSubscribeGroups", "stats", "delaying="]) {
             @Assert(text.contains(command))
         }
         @Assert(text.contains("--server"))

@@ -55,5 +55,6 @@ class MQErrorCodeTest {
         @Assert(MQConfigKey.CLIENT_HOSTS == "mqClient_hosts")
         @Assert(MQInternalKind.META_SYNC == "metaSync")
         @Assert(MQInternalKind.BACKUP == "backup")
+        @Assert(MQInternalKind.STATS == "stats")
     }
 }

@@ -75,6 +75,7 @@ public class MQConfigKey {
 public class MQInternalKind {
     public static const META_SYNC: String = "metaSync"
     public static const BACKUP: String = "backup"
+    public static const STATS: String = "stats"
 }
 
 /** 载荷分派结果（`MQProtocol.kindOf`）。 */

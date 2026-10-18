@@ -155,4 +155,29 @@ class MQManagerTest {
             ["listTopics", "--server=127.0.0.1:${port}"]).getOrThrow())
         @Assert(manager.run() == 1)
     }
+    @TestCase
+    public func registerTopicWithDelayingAndStats(): Unit {
+        let (server, address) = startServer("delaying")
+        try {
+            @Assert(manager(address, ["registerTopic", "/d", "2", "delaying=1m1s"]).run() == 0)
+            @Assert(manager(address, ["listTopics"]).run() == 0)
+            @Assert(manager(address, ["stats"]).run() == 0)
+            @Assert(manager(address, ["stats", "/d"]).run() == 0)
+            @Assert(manager(address, ["stats", "/missing"]).run() == 0)
+        } finally {
+            server.close()
+        }
+    }
+
+    @TestCase
+    public func invalidDelayingReturnsTwo(): Unit {
+        let (server, address) = startServer("bad-delaying")
+        try {
+            @Assert(manager(address, ["registerTopic", "/d", "2", "delaying=abc"]).run() == 2)
+            @Assert(manager(address, ["registerTopic", "/d", "2", "delaying=-1s"]).run() == 2)
+            @Assert(manager(address, ["registerTopic", "/d", "2", "not-delaying=1s"]).run() == 2)
+        } finally {
+            server.close()
+        }
+    }
 }

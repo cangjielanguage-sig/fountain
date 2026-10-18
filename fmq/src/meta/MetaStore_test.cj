@@ -41,7 +41,7 @@ class MetaStoreTest {
         try {
             let first = MetaStore(dir)
             first.load()
-            @Assert(first.applyTopic(MQTopicAssignment("/t", 2, 0, [0, 1]), nextStart: 1) ==
+            @Assert(first.applyTopic(MQTopicAssignment("/t", 2, 0, [0, 1], delayingMs: 61000), nextStart: 1) ==
                 MetaApplyResult.Applied)
             @Assert(first.applyGroup(MQSubscribeGroupMeta("/t", "")) == MetaApplyResult.Applied)
             @Assert(first.applyGroup(MQSubscribeGroupMeta("/t", "g1")) == MetaApplyResult.Applied)
@@ -52,6 +52,7 @@ class MetaStoreTest {
             let assignment = second.topicOf("/t").getOrThrow()
             @Assert(assignment.queueNum == 2)
             @Assert(assignment.owners == [0, 1])
+            @Assert(assignment.delayingMs == 61000)
             @Assert(second.groupsOf("/t").size == 2)
             @Assert(second.groupExists("/t", ""))
             @Assert(second.nextStartNode == 1)

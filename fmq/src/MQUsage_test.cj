@@ -44,10 +44,10 @@ class MQUsageTest {
     }
 
     @TestCase
-    public func managerHelpListsSixSubcommands(): Unit {
+    public func managerHelpListsAllSubcommands(): Unit {
         let text = MQUsage.managerHelp()
         for (command in ["registerTopic", "deleteTopic", "registerSubscriber", "deleteSubscribeGroup",
-            "listTopics", "listSubscribeGroups"]) {
+            "listTopics", "listSubscribeGroups", "stats", "delaying="]) {
             @Assert(text.contains(command))
         }
         @Assert(text.contains("--server"))

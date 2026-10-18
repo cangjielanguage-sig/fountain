@@ -25,10 +25,14 @@ import fountain::f_mq.base.payload.MQTopicAssignment
 /** 一个主题在本机的队列集合与发布轮转游标。 */
 private class TopicQueueSet {
     let items: Array<(Int64, QueueLog)>
+    let queueNum: Int64
+    let delayingMs: Int64
     private let cursor = AtomicInt64(0)
 
-    init(items: Array<(Int64, QueueLog)>) {
+    init(items: Array<(Int64, QueueLog)>, queueNum: Int64, delayingMs: Int64) {
         this.items = items
+        this.queueNum = queueNum
+        this.delayingMs = delayingMs
     }
 
     func pick(): ?(Int64, QueueLog) {
@@ -39,7 +43,6 @@ private class TopicQueueSet {
         }
     }
 }
-
 /**
  * 主题 / 队列生命周期：只为本机持有的队列打开 `QueueLog`。
  *
@@ -70,7 +73,7 @@ protected class QueueManager <: Resource {
                 local.add((i, QueueLog(dir, maxFileSize, syncInterval)))
             }
         }
-        topics.add(assignment.topic, TopicQueueSet(local.toArray()))
+        topics.add(assignment.topic, TopicQueueSet(local.toArray(), assignment.queueNum, assignment.delayingMs))
     }
 
     /**
@@ -111,6 +114,31 @@ protected class QueueManager <: Resource {
         match (topics.get(topic)) {
             case Some(set) => set.items
             case None => Array<(Int64, QueueLog)>()
+        }
+    }
+
+    /** 本节点已打开的主题名（升序由调用方决定）。 */
+    protected func localTopics(): Array<String> {
+        let names = ArrayList<String>()
+        for ((topic, _) in topics) {
+            names.add(topic)
+        }
+        names.toArray()
+    }
+
+    /** 主题的延迟投递时长（毫秒）；未知主题返回 0。 */
+    protected func delayingOf(topic: String): Int64 {
+        match (topics.get(topic)) {
+            case Some(set) => set.delayingMs
+            case None => 0
+        }
+    }
+
+    /** 主题的队列总数；未知主题返回 0。 */
+    protected func queueNumOf(topic: String): Int64 {
+        match (topics.get(topic)) {
+            case Some(set) => set.queueNum
+            case None => 0
         }
     }
 

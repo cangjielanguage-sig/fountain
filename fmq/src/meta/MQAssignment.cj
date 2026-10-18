@@ -24,7 +24,8 @@ import fountain::f_mq.base.payload.MQTopicAssignment
  * `owners[i] = (start + i) % nodeCount`；下一主题的起始下标为 `(start + queueNum) % nodeCount`。
  */
 protected class MQAssignment {
-    protected static func allocate(topic: String, queueNum: Int64, nodeCount: Int64, start: Int64): MQTopicAssignment {
+    protected static func allocate(topic: String, queueNum: Int64, nodeCount: Int64, start: Int64,
+        delayingMs!: Int64 = 0): MQTopicAssignment {
         if (queueNum < 1) {
             throw IllegalArgumentException("queueNum must be at least 1, got ${queueNum}")
         }
@@ -33,7 +34,7 @@ protected class MQAssignment {
         }
         let normalized = normalize(start, nodeCount)
         let owners = Array<Int64>(queueNum) {i => (normalized + i) % nodeCount}
-        MQTopicAssignment(topic, queueNum, normalized, owners)
+        MQTopicAssignment(topic, queueNum, normalized, owners, delayingMs: delayingMs)
     }
 
     protected static func nextStart(start: Int64, queueNum: Int64, nodeCount: Int64): Int64 {

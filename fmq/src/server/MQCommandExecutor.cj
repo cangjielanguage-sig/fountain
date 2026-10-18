@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::fmq.server
 
+import std.collection.ArrayList
 import fountain::f_log.*
 import fountain::f_mq.base.*
 import fountain::f_mq.base.model.*
@@ -102,10 +103,17 @@ protected class MQCommandExecutor {
         }
     }
 
-    /** 内部消息：请求快照 / 主题变更 / 组变更 / 删除。 */
+    /** 内部消息：请求快照 / 主题变更 / 组变更 / 删除 / 指标查询。 */
     private func onInternal(request: Message): Message {
         let envelope = MQProtocol.asInternal(request).getOrThrow {
             MQServiceException(MQErrorCode.INTERNAL, "cannot decode MQInternalMessage")
+        }
+        if (envelope.kind == MQInternalKind.STATS) {
+            let topic = MQProtocol.decodePayload<String>(envelope.payload).getOrThrow {
+                MQServiceException(MQErrorCode.INTERNAL, "cannot decode stats topic")
+            }
+            return MQProtocol.respond<String>(request,
+                consume.stats(topic, selfIndex, {name => groupNamesOf(name)}))
         }
         if (envelope.kind != MQInternalKind.META_SYNC) {
             return MQProtocol.fail(request, MQErrorCode.INTERNAL, "unsupported internal kind '${envelope.kind}'")
@@ -140,6 +148,14 @@ protected class MQCommandExecutor {
         syncer.deregister(payload)
         cleanupAfterDelete(payload)
         MQProtocol.respond<MQResult>(request, MQResult(0, "ok"))
+    }
+
+    private func groupNamesOf(topic: String): Array<String> {
+        let names = ArrayList<String>()
+        for (meta in store.groupsOf(topic)) {
+            names.add(meta.subscribeGroup)
+        }
+        names.toArray()
     }
 
     private func cleanupAfterDelete(payload: MQDeregisterPayload): Unit {

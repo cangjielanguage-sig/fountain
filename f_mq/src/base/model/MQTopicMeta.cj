@@ -25,11 +25,14 @@ public class MQTopicMeta {
     private var topic: String = ''
     /** 队列数，必须 >= 1 */
     private var queueNum: Int64 = 0
+    /** 延迟投递时长（毫秒），0 表示不延迟 */
+    private var delayingMs: Int64 = 0
 
     public init() {}
 
-    public init(topic: String, queueNum: Int64) {
+    public init(topic: String, queueNum: Int64, delayingMs!: Int64 = 0) {
         this.topic = topic
         this.queueNum = queueNum
+        this.delayingMs = delayingMs
     }
 }
