@@ -66,3 +66,27 @@ public class DiffExec_test {
         @Assert(session.ran() >= 1, true)
     }
 }
+
+/** S6.12：S3.22 金样四例（Interp × AArch64 结果/错误码/站点一致）。 */
+@Test
+public class GoldenDiff_test {
+    private static const DOLLAR: String = '$'
+
+    @TestCase
+    public func goldenFactorial(): Unit {
+        GoldenDiff_test.check('G/factorial',
+            '{ n: Int64 => if (n <= 1) { 1 } else { n * recursive(n - 1) } }', [5])
+    }
+
+    @TestCase
+    public func goldenEmptyMap(): Unit {
+        GoldenDiff_test.check('G/empty-map',
+            '{ => let m: Map<String, Int64> = {}\n m["k"] = 1\n m["k"] }', Array<Any>())
+    }
+
+    private static func check(id: String, src: String, args: Array<Any>): Unit {
+        let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(src)
+        let session = DiffSession([InterpRunner(), AArch64Runner()])
+        session.assertTripleEqual(DiffCase(id, cu.raw, args))
+    }
+}

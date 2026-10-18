@@ -220,12 +220,27 @@ public class A64Exec_test {
         let unit = FbcReader.load(cu.raw)
         var result: Int64 = -1
         var err: Int64 = -1
+        // constBase=0 → 自建常量镜像（PUSH_KH 需要；caller 传 0 表示未提供）
+        var mirrorBase = constBase
+        var ownMirror: ?ConstMirror = None
+        if (mirrorBase == 0) {
+            let probe = Interp(unit)
+            let ids = Array<Int64>(unit.consts.size, repeat: 0)
+            var ci = 0
+            while (ci < unit.consts.size) {
+                ids[ci] = probe.constHandle(ci)
+                ci = ci + 1
+            }
+            let m = ConstMirror.build(ids)
+            mirrorBase = m.base()
+            ownMirror = Some(m)
+        }
         // 先建入口表（桥的真实顺序：表 → 编译烘焙基址 → 拷码 → 填入口）
         let table = match (FnTable.alloc(unit.dir.size)) {
             case Some(t) => t
             case None => @Fail('FnTable.alloc 失败'); return (result, err)
         }
-        match (JitCompiler.compileUnitWith(unit, constBase, table.base())) {
+        match (JitCompiler.compileUnitWith(unit, mirrorBase, table.base())) {
             case Some(art) =>
                 let buf = match (CodeBuffer.alloc(art.code.size + 16)) {
                     case Some(b) => b
@@ -259,6 +274,10 @@ public class A64Exec_test {
                 }
                 MachineEnv.reset()
                 table.free()
+                match (ownMirror) {
+                    case Some(m) => m.free()
+                    case None => ()
+                }
                 JitContext.free(ctx)
                 buf.free()
             case None => @Fail('JitCompiler.compileUnitWith 返回 None')

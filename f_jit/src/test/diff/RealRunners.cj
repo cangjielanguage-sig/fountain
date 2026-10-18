@@ -25,6 +25,7 @@ import fountain::f_jit.backend.JitCompiler
 import fountain::f_jit.base.LocalType
 import fountain::f_jit.bytecode.FbcReader
 import fountain::f_jit.bytecode.LoadedUnit
+import fountain::f_jit.runtime.HandleTable
 import fountain::f_jit.runtime.Interp
 import fountain::f_jit.runtime.JitContext
 import fountain::f_jit.runtime.MachineEnv
@@ -173,6 +174,12 @@ internal class RealRunners {
     /** 结果按返回类型文本化（F64 → 最短往返；其余按 Int64）。 */
     static func text(unit: LoadedUnit, fnId: UInt32, cell: Int64): String {
         let t = unit.dir.get(fnId).retType
+        if (t == LocalType.STRING) {
+            match (HandleTable.getAny(cell)) {
+                case Some(s: String) => return s
+                case _ => return ''
+            }
+        }
         if (t == LocalType.F64) {
             let bits = if (cell < 0) {
                 UInt64(cell - Int64.Min) + 0x8000000000000000u64
