@@ -792,42 +792,158 @@ internal class BackendX86_64 <: Backend {
         BackendX86_64.fCmpOp([0x0Fu8, 0x93u8, 0xC2u8])
     }
 
-    private static func fBinOp(opBytes: Array<UInt8>): Array<UInt8> {
-        let out = ArrayList<UInt8>()
-        for (x in [0xF2u8, 0x0Fu8, 0x10u8, 0x44u8, 0x24u8, 0x08u8,
-            0xF2u8, 0x0Fu8, 0x10u8, 0x0Cu8, 0x24u8]) {
-            out.add(x) // movsd xmm0,[rsp+8]; movsd xmm1,[rsp]
-        }
-        for (x in opBytes) {
-            out.add(x)
-        }
-        for (x in [0xF2u8, 0x0Fu8, 0x11u8, 0x44u8, 0x24u8, 0x08u8, 0x48u8, 0x83u8, 0xC4u8,
-            0x08u8]) {
-            out.add(x) // movsd [rsp+8],xmm0; add rsp,8
-        }
-        // NaN 规范化：ucomisd xmm0,xmm0; jnp .n; movabs rax,CANON; movq xmm0,rax
+    /** NaN 规范化尾：`ucomisd xmm0,xmm0; jnp .n; movabs rax,CANON; movq xmm0,rax`。 */
+    private static func appendNanTail(out: ArrayList<UInt8>): Unit {
         for (x in [0x66u8, 0x0Fu8, 0x2Eu8, 0xC0u8, 0x0Fu8, 0x8Bu8, 0x00u8, 0x00u8, 0x00u8,
             0x00u8, 0x48u8, 0xB8u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0xF8u8,
             0x7Fu8, 0x66u8, 0x48u8, 0x0Fu8, 0x6Eu8, 0xC0u8]) {
             out.add(x)
         }
+    }
+
+    /**
+     * 浮点二元（§12.4）：`movsd xmm0,<a>; <op> xmm0,<b>; <NaN 尾>; 写回; 收栈`。
+     * 交换律运算取 `[rsp]` 为首操作数（a 在 `[rsp+8]` 的交换不影响结果）。
+     */
+    private static func fBinOp(commutative: Bool, opByte: UInt8): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        if (commutative) {
+            for (x in [0xF2u8, 0x0Fu8, 0x10u8, 0x04u8, 0x24u8]) {
+                out.add(x) // movsd xmm0,[rsp]
+            }
+        } else {
+            for (x in [0xF2u8, 0x0Fu8, 0x10u8, 0x44u8, 0x24u8, 0x08u8]) {
+                out.add(x) // movsd xmm0,[rsp+8]
+            }
+        }
+        out.add(0xF2u8)
+        out.add(0x0Fu8)
+        out.add(opByte)
+        if (commutative) {
+            for (x in [0x44u8, 0x24u8, 0x08u8]) {
+                out.add(x) // op xmm0,[rsp+8]
+            }
+        } else {
+            for (x in [0x04u8, 0x24u8]) {
+                out.add(x) // op xmm0,[rsp]
+            }
+        }
+        BackendX86_64.appendNanTail(out)
+        for (x in [0xF2u8, 0x0Fu8, 0x11u8, 0x44u8, 0x24u8, 0x08u8,
+            0x48u8, 0x83u8, 0xC4u8, 0x08u8]) {
+            out.add(x) // 写回; 收栈
+        }
         out.toArray()
     }
 
     internal static func emitFAdd(): Array<UInt8> {
-        BackendX86_64.fBinOp([0xF2u8, 0x0Fu8, 0x58u8, 0xC1u8])
+        BackendX86_64.fBinOp(true, 0x58u8)
     }
 
     internal static func emitFSub(): Array<UInt8> {
-        BackendX86_64.fBinOp([0xF2u8, 0x0Fu8, 0x5Cu8, 0xC1u8])
+        BackendX86_64.fBinOp(false, 0x5Cu8)
     }
 
     internal static func emitFMul(): Array<UInt8> {
-        BackendX86_64.fBinOp([0xF2u8, 0x0Fu8, 0x59u8, 0xC1u8])
+        BackendX86_64.fBinOp(true, 0x59u8)
     }
 
     internal static func emitFDiv(): Array<UInt8> {
-        BackendX86_64.fBinOp([0xF2u8, 0x0Fu8, 0x5Eu8, 0xC1u8])
+        BackendX86_64.fBinOp(false, 0x5Eu8)
+    }
+
+    /** `FDIV_CHK`：前置 `ucomisd 除数,0`（NaN 继续、等于 0 → `<bail:1>`），后接 FDIV。 */
+    internal static func emitFDivChk(): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (x in [0x66u8, 0x0Fu8, 0x57u8, 0xC9u8, 0x66u8, 0x0Fu8, 0x2Eu8, 0x0Cu8, 0x24u8,
+            0x0Fu8, 0x8Au8, 0x00u8, 0x00u8, 0x00u8, 0x00u8,
+            0x0Fu8, 0x84u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+            out.add(x) // xorpd xmm1,xmm1; ucomisd xmm1,[rsp]; jp .go; je <bail:1>
+        }
+        for (x in BackendX86_64.emitFDiv()) {
+            out.add(x)
+        }
+        out.toArray()
+    }
+
+    /** 符号域单目：`movq xmm1,mask; xorpd/andpd xmm0,xmm1; <NaN 尾>; 写回`。 */
+    private static func fSignOp(mask: Int64, opBytes: Array<UInt8>): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        out.add(0x48u8)
+        out.add(0xB8u8)
+        BackendX86_64.w64(out, mask)
+        for (x in [0x66u8, 0x48u8, 0x0Fu8, 0x6Eu8, 0xC8u8]) {
+            out.add(x) // movq xmm1,rax
+        }
+        for (x in opBytes) {
+            out.add(x)
+        }
+        BackendX86_64.appendNanTail(out)
+        for (x in [0xF2u8, 0x0Fu8, 0x11u8, 0x04u8, 0x24u8]) {
+            out.add(x)
+        }
+        out.toArray()
+    }
+
+    internal static func emitFNeg(): Array<UInt8> {
+        BackendX86_64.fSignOp(-9223372036854775807 - 1, [0x66u8, 0x0Fu8, 0x57u8, 0xC1u8])
+    }
+
+    internal static func emitFAbs(): Array<UInt8> {
+        BackendX86_64.fSignOp(9223372036854775807, [0x66u8, 0x0Fu8, 0x54u8, 0xC1u8])
+    }
+
+    /** `FSQRT`：`sqrtsd xmm0,[rsp]; <NaN 尾>; 写回`。 */
+    internal static func emitFSqrt(): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (x in [0xF2u8, 0x0Fu8, 0x51u8, 0x04u8, 0x24u8]) {
+            out.add(x)
+        }
+        BackendX86_64.appendNanTail(out)
+        for (x in [0xF2u8, 0x0Fu8, 0x11u8, 0x04u8, 0x24u8]) {
+            out.add(x)
+        }
+        out.toArray()
+    }
+
+    /**
+     * `FMIN`/`FMAX`：任一操作数 NaN → 直接产 CANON；否则 `minsd/maxsd`。
+     */
+    private static func fMinMax(opByte: UInt8): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (x in [0xF2u8, 0x0Fu8, 0x10u8, 0x44u8, 0x24u8, 0x08u8,
+            0xF2u8, 0x0Fu8, 0x10u8, 0x0Cu8, 0x24u8,
+            0x66u8, 0x0Fu8, 0x2Eu8, 0xC0u8,
+            0x0Fu8, 0x8Au8, 0x00u8, 0x00u8, 0x00u8, 0x00u8,
+            0x66u8, 0x0Fu8, 0x2Eu8, 0xC9u8,
+            0x0Fu8, 0x8Au8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+            out.add(x) // 双 NaN 自检，jp .canon
+        }
+        out.add(0xF2u8)
+        out.add(0x0Fu8)
+        out.add(opByte)
+        out.add(0xC1u8) // min/max xmm0,xmm1
+        for (x in [0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+            out.add(x) // jmp .done
+        }
+        for (x in [0x48u8, 0xB8u8]) {
+            out.add(x) // .canon
+        }
+        BackendX86_64.w64(out, Int64(0x7FF8000000000000))
+        for (x in [0x66u8, 0x48u8, 0x0Fu8, 0x6Eu8, 0xC0u8,
+            0xF2u8, 0x0Fu8, 0x11u8, 0x44u8, 0x24u8, 0x08u8,
+            0x48u8, 0x83u8, 0xC4u8, 0x08u8]) {
+            out.add(x) // movq xmm0,rax; .done: 写回; 收栈
+        }
+        out.toArray()
+    }
+
+    internal static func emitFMin(): Array<UInt8> {
+        BackendX86_64.fMinMax(0x5Du8)
+    }
+
+    internal static func emitFMax(): Array<UInt8> {
+        BackendX86_64.fMinMax(0x5Fu8)
     }
 
     /** `PUSH_BOOL v`：`push 0/1`。 */

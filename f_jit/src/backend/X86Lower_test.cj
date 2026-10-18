@@ -158,13 +158,41 @@ public class X86Lower_test {
 
     @TestCase
     public func floatArithmetic(): Unit {
-        let head = 'F20F10442408' + 'F20F100C24'
-        let tail = 'F20F11442408' + '4883C408' +
-            '660F2EC0' + '0F8B00000000' + '48B8000000000000F87F' + '66480F6EC0'
-        @Assert(X86Lower_test.hex(BackendX86_64.emitFAdd()), head + 'F20F58C1' + tail)
-        @Assert(X86Lower_test.hex(BackendX86_64.emitFSub()), head + 'F20F5CC1' + tail)
-        @Assert(X86Lower_test.hex(BackendX86_64.emitFMul()), head + 'F20F59C1' + tail)
-        @Assert(X86Lower_test.hex(BackendX86_64.emitFDiv()), head + 'F20F5EC1' + tail)
+        let nanTail = '660F2EC0' + '0F8B00000000' + '48B8000000000000F87F' + '66480F6EC0'
+        let store = 'F20F11442408' + '4883C408'
+        // FADD/FMUL：movsd xmm0,[rsp]; op xmm0,[rsp+8]
+        @Assert(X86Lower_test.hex(BackendX86_64.emitFAdd()),
+            'F20F100424' + 'F20F58442408' + nanTail + store)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitFMul()),
+            'F20F100424' + 'F20F59442408' + nanTail + store)
+        // FSUB/FDIV：movsd xmm0,[rsp+8]; op xmm0,[rsp]
+        @Assert(X86Lower_test.hex(BackendX86_64.emitFSub()),
+            'F20F10442408' + 'F20F5C0424' + nanTail + store)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitFDiv()),
+            'F20F10442408' + 'F20F5E0424' + nanTail + store)
+    }
+
+    @TestCase
+    public func floatUnaryAndMinMax(): Unit {
+        let nanTail = '660F2EC0' + '0F8B00000000' + '48B8000000000000F87F' + '66480F6EC0'
+        // FNEG/FABS：符号域
+        @Assert(X86Lower_test.hex(BackendX86_64.emitFNeg()),
+            '48B80000000000000080' + '66480F6EC8' + '660F57C1' + nanTail + 'F20F110424')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitFAbs()),
+            '48B8FFFFFFFFFFFFFF7F' + '66480F6EC8' + '660F54C1' + nanTail + 'F20F110424')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitFSqrt()),
+            'F20F510424' + nanTail + 'F20F110424')
+        // FMIN：双 NaN 自检 → CANON，否则 minsd
+        let mmHead = 'F20F10442408' + 'F20F100C24' +
+            '660F2EC0' + '0F8A00000000' + '660F2EC9' + '0F8A00000000'
+        let mmTail = 'E900000000' + '48B8000000000000F87F' + '66480F6EC0' +
+            'F20F11442408' + '4883C408'
+        @Assert(X86Lower_test.hex(BackendX86_64.emitFMin()), mmHead + 'F20F5DC1' + mmTail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitFMax()), mmHead + 'F20F5FC1' + mmTail)
+        // FDIV_CHK
+        @Assert(X86Lower_test.hex(BackendX86_64.emitFDivChk()),
+            '660F57C9' + '660F2E0C24' + '0F8A00000000' + '0F8400000000' +
+            X86Lower_test.hex(BackendX86_64.emitFDiv()))
     }
 
     @TestCase
