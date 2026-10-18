@@ -87,6 +87,11 @@ public class Compiler {
         }
     }
 
+    /** 端到端编译源码（S6.8）：失败在 compile 时刻抛出，返回统一包装。 */
+    public func compile(source: String): JitFunction {
+        CompilePipeline.runSource(source, this)
+    }
+
     /** 当前注册表快照（编译期使用；注册/注销不影响已编译产物）。 */
     protected func snapshot(): PredefinedSnapshot {
         synchronized(this.mtx) {
