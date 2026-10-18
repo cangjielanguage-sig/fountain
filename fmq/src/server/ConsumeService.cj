@@ -71,20 +71,26 @@ protected class ConsumeService {
             cursor.sweep(active)
             match (cursor.next(info.view(), views, matcher)) {
                 case Some(item) =>
-                    return Some(MQConsumeResult(item[1].seq, item[1].offset, item[0]))
+                    return Some(MQConsumeResult(queueIndex, item[1].seq, item[1].offset, item[0]))
                 case None => ()
             }
         }
         None<MQConsumeResult>
     }
 
-    /** 确认位置；不属于该订阅或位置已越过时返回 `ACK_UNKNOWN`。 */
+    /**
+     * 确认位置；不属于该订阅或位置已越过时返回 `ACK_UNKNOWN`。
+     *
+     * 按载荷里的 `queueIndex` 精确定位游标：每个队列的段日志位置都会从 `1:0` 重复，
+     * 不能遍历本机队列「命中第一个即返回」。
+     */
     func ack(info: MQSubscriptionInfo, payload: MQAckPayload): MQResult {
-        for ((queueIndex, _) in queues.localQueues(info.topic)) {
-            let cursor = cursorOf(info.topic, queueIndex, info.subscribeGroup)
-            if (cursor.ack(payload.subscribedId, LogPosition(payload.segmentedIndex, payload.segmentedOffset))) {
-                return MQResult(0, "ok")
-            }
+        if (queues.queueOf(info.topic, payload.queueIndex).isNone()) {
+            return MQResult(MQErrorCode.ACK_UNKNOWN, MQErrorCode.messageOf(MQErrorCode.ACK_UNKNOWN))
+        }
+        let cursor = cursorOf(info.topic, payload.queueIndex, info.subscribeGroup)
+        if (cursor.ack(payload.subscribedId, LogPosition(payload.segmentedIndex, payload.segmentedOffset))) {
+            return MQResult(0, "ok")
         }
         MQResult(MQErrorCode.ACK_UNKNOWN, MQErrorCode.messageOf(MQErrorCode.ACK_UNKNOWN))
     }

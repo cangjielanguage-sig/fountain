@@ -47,7 +47,7 @@ class MQProtocolTest {
             case CONSUME(_) => @Assert(true)
             case _ => @Assert(false)
         }
-        @Assert(commandIs(MQProtocol.ack(MQAckPayload("s", 1, 2)), Command.ACK))
+        @Assert(commandIs(MQProtocol.ack(MQAckPayload("s", 0, 1, 2)), Command.ACK))
         @Assert(commandIs(MQProtocol.registerTopic(MQTopicMeta("/t", 1)), REGISTER))
         @Assert(commandIs(MQProtocol.registerGroup(MQSubscribeGroupMeta("/t", "g")), REGISTER))
         @Assert(commandIs(MQProtocol.deregister(MQDeregisterPayload("topic", "/t")), DEREGISTER))
@@ -126,12 +126,24 @@ class MQProtocolTest {
     @TestCase
     public func consumeResultParsing(): Unit {
         let request = MQProtocol.consume(MQConsumePayload("s"))
-        let payload = MQConsumeResult(7, 128, [1u8, 2u8])
+        let payload = MQConsumeResult(3, 7, 128, [1u8, 2u8])
         let response = MQProtocol.respond<MQConsumeResult>(request, payload)
         let parsed = MQProtocol.asConsumeResult(response).getOrThrow()
+        @Assert(parsed.queueIndex == 3)
         @Assert(parsed.segmentedIndex == 7)
         @Assert(parsed.segmentedOffset == 128)
         @Assert(parsed.record == [1u8, 2u8])
+    }
+
+    @TestCase
+    public func ackPayloadCarriesQueueIdentity(): Unit {
+        let request = MQProtocol.ack(MQAckPayload("s", 2, 7, 128))
+        let decoded = roundtripFrame(request)
+        let payload = MQProtocol.asPayload<MQAckPayload>(decoded).getOrThrow()
+        @Assert(payload.subscribedId == "s")
+        @Assert(payload.queueIndex == 2)
+        @Assert(payload.segmentedIndex == 7)
+        @Assert(payload.segmentedOffset == 128)
     }
 
     @TestCase

@@ -18,17 +18,23 @@ package fountain::f_mq.base.payload
 import fountain::f_data.*
 import fountain::f_data.macros.*
 
-/** `ACK` 载荷。 */
+/**
+ * `ACK` 载荷。
+ *
+ * `queueIndex` 与位置一起唯一确定被确认的记录 —— 不同队列的段日志位置会重复。
+ */
 @DataAssist[props fields]
 public class MQAckPayload {
     private var subscribedId: String = ''
+    private var queueIndex: Int64 = 0
     private var segmentedIndex: Int64 = 0
     private var segmentedOffset: Int64 = 0
 
     public init() {}
 
-    public init(subscribedId: String, segmentedIndex: Int64, segmentedOffset: Int64) {
+    public init(subscribedId: String, queueIndex: Int64, segmentedIndex: Int64, segmentedOffset: Int64) {
         this.subscribedId = subscribedId
+        this.queueIndex = queueIndex
         this.segmentedIndex = segmentedIndex
         this.segmentedOffset = segmentedOffset
     }

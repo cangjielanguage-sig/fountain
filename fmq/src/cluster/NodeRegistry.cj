@@ -39,6 +39,7 @@ protected class NodeRegistry <: MQNodeTransport & Resource {
     private let alive: Array<AtomicBool>
     private let lock = Mutex()
     private let closed = AtomicBool(false)
+    private var revivedCallback: ?(() -> Unit) = None
 
     protected init(nodes: Array<String>, selfIndex: Int64, checkDuration!: Duration = Duration.second * 30,
         pingTimeout!: Duration = Duration.second) {
@@ -69,6 +70,16 @@ protected class NodeRegistry <: MQNodeTransport & Resource {
     public prop nodeCount: Int64 {
         get() {
             nodes.size
+        }
+    }
+
+    /** 节点由死转活时的回调（服务装配里接到 `MetaSyncer.syncFromPeers`）。 */
+    protected mut prop onRevived: ?(() -> Unit) {
+        get() {
+            revivedCallback
+        }
+        set(value) {
+            revivedCallback = value
         }
     }
 
@@ -158,6 +169,16 @@ protected class NodeRegistry <: MQNodeTransport & Resource {
             alive[index].store(true)
             if (!wasAlive) {
                 log.info("node ${index} is back online")
+                // 恢复后补齐离线期间错过的元数据变更；回调异常不得影响心跳/调用线程
+                match (revivedCallback) {
+                    case Some(callback) =>
+                        try {
+                            callback()
+                        } catch (e: Exception) {
+                            log.warn("resync after node ${index} revived failed: ${e.message}")
+                        }
+                    case None => ()
+                }
             }
         }
     }

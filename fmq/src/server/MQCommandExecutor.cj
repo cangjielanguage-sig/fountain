@@ -24,7 +24,7 @@ import fountain::f_net.SocketBuffer
 import fountain::f_protocol.default.*
 import fountain::fmq.cluster.{BackupReplicator, MetaSyncer}
 import fountain::fmq.meta.{MetaApplyResult, MetaStore}
-import fountain::fmq.queue.{CursorStore, QueueManager}
+import fountain::fmq.queue.{CursorStore, MQMatcher, QueueManager}
 
 /**
  * 命令分发：解析 → 校验 → 调服务 → 组装响应。
@@ -178,6 +178,11 @@ protected class MQCommandExecutor {
         if (store.topicOf(topic).isNone()) {
             return MQProtocol.fail(request, MQErrorCode.TOPIC_NOT_EXIST, "topic '${topic}' does not exist")
         }
+        // 有非空 filter 的活跃订阅时，BODY 必须可评估；否则发布即会静默丢消息，直接拒绝且不落盘
+        if (!bodyIsEvaluable(topic, record)) {
+            return MQProtocol.fail(request, MQErrorCode.FILTER_UNSUPPORTED_BODY,
+                MQErrorCode.messageOf(MQErrorCode.FILTER_UNSUPPORTED_BODY))
+        }
         match (queues.pickQueue(topic)) {
             case None => MQProtocol.fail(request, MQErrorCode.NOT_OWNER, "this node owns no queue of '${topic}'")
             case Some((queueIndex, log)) =>
@@ -185,6 +190,25 @@ protected class MQCommandExecutor {
                 backup.record(topic, queueIndex, position, record)
                 MQProtocol.respond<MQResult>(request, MQResult(0, "ok"))
         }
+    }
+
+    /**
+     * 该主题下是否有活跃订阅的非空 filter 无法评估这条记录的 BODY。
+     *
+     * 空 filter 不需要服务端解码 BODY；只有「filter 非空 + BODY 解不出」才是无法评估。
+     * 返回 `false` 时发布必须失败且不落盘。
+     */
+    private func bodyIsEvaluable(topic: String, record: Array<Byte>): Bool {
+        for (info in subscribers.byTopicOf(topic)) {
+            if (info.filter.path.isEmpty()) {
+                continue
+            }
+            match (MQMatcher.matches(info.view(), record)) {
+                case Unsupported => return false
+                case _ => ()
+            }
+        }
+        true
     }
 
     private func onSubscribe(buffer: ?SocketBuffer, request: Message): Message {

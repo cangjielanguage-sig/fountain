@@ -20,6 +20,7 @@ import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_data.*
 import fountain::f_data.macros.*
+import fountain::f_io.LogPosition
 import fountain::f_mq.base.{MQErrorCode, MQFilter, MQMessageRecord}
 import fountain::f_mq.base.payload.{MQAckPayload, MQConsumeResult, MQResult}
 import fountain::f_mq.base.payload.MQTopicAssignment
@@ -46,7 +47,7 @@ class ConsumeFixture <: Resource {
     let service: ConsumeService
     private let topic = "/t"
 
-    init(name: String) {
+    init(name: String, queueCount!: Int64 = 1) {
         this.root = "/tmp/fmq_test_consume/${name}"
         if (exists(root)) {
             remove(root, recursive: true)
@@ -55,14 +56,19 @@ class ConsumeFixture <: Resource {
         this.queues = QueueManager("${root}/logs", 1024 * 1024, 1)
         this.store = CursorStore(root)
         this.deadLetter = DeadLetterQueue("${root}/dead", 1024 * 1024, 1)
-        this.queues.openTopic(MQTopicAssignment(topic, 1, 0, [0]), 0)
+        let owners = Array<Int64>(queueCount) {_ => 0}
+        this.queues.openTopic(MQTopicAssignment(topic, queueCount, 0, owners), 0)
         this.service = ConsumeService(queues, store, registry, MQMatcher(), deadLetter,
             Duration.second * 10, 3)
     }
 
-    func append(tags: Array<String>, body: String) {
+    func append(tags: Array<String>, body: String): LogPosition {
+        appendTo(0, tags, body)
+    }
+
+    func appendTo(queueIndex: Int64, tags: Array<String>, body: String): LogPosition {
         let record = MQMessageRecord.encode(topic, tags, "mid-${body}", body.toData())
-        queues.queueOf(topic, 0).getOrThrow().append(record)
+        queues.queueOf(topic, queueIndex).getOrThrow().append(record)
     }
 
     func appendObject(enabled: Bool) {
@@ -108,7 +114,7 @@ class ConsumeServiceTest {
             let result = fixture.service.consume(info).getOrThrow()
             @Assert(bodyOf(result) == "hello")
             @Assert(result.segmentedIndex >= 1)
-            @Assert(fixture.service.ack(info, MQAckPayload("s1", result.segmentedIndex,
+            @Assert(fixture.service.ack(info, MQAckPayload("s1", result.queueIndex, result.segmentedIndex,
                 result.segmentedOffset)).code == 0)
         } finally {
             fixture.close()
@@ -151,12 +157,12 @@ class ConsumeServiceTest {
             let s1 = fixture.register("s1")
             let s2 = fixture.register("s2")
             let result = fixture.service.consume(s1).getOrThrow()
-            let payload = MQAckPayload("s2", result.segmentedIndex, result.segmentedOffset)
+            let payload = MQAckPayload("s2", result.queueIndex, result.segmentedIndex, result.segmentedOffset)
             @Assert(fixture.service.ack(s2, payload).code == MQErrorCode.ACK_UNKNOWN)
-            @Assert(fixture.service.ack(s1, MQAckPayload("s1", result.segmentedIndex,
+            @Assert(fixture.service.ack(s1, MQAckPayload("s1", result.queueIndex, result.segmentedIndex,
                 result.segmentedOffset)).code == 0)
             // 已越过
-            @Assert(fixture.service.ack(s1, MQAckPayload("s1", result.segmentedIndex,
+            @Assert(fixture.service.ack(s1, MQAckPayload("s1", result.queueIndex, result.segmentedIndex,
                 result.segmentedOffset)).code == MQErrorCode.ACK_UNKNOWN)
         } finally {
             fixture.close()
@@ -221,12 +227,48 @@ class ConsumeServiceTest {
             let info = fixture.register("s1", autoAck: true)
             let first = fixture.service.consume(info).getOrThrow()
             // 已被服务端自动确认
-            let ack = fixture.service.ack(info, MQAckPayload("s1", first.segmentedIndex,
+            let ack = fixture.service.ack(info, MQAckPayload("s1", first.queueIndex, first.segmentedIndex,
                 first.segmentedOffset))
             @Assert(ack.code == MQErrorCode.ACK_UNKNOWN)
             let second = fixture.service.consume(info).getOrThrow()
             @Assert(second.segmentedIndex != first.segmentedIndex ||
                 second.segmentedOffset != first.segmentedOffset)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @TestCase
+    public func ackTargetsExactQueueAndRejectsUnknownQueue(): Unit {
+        let fixture = ConsumeFixture("queue_route", queueCount: 2)
+        try {
+            // 两个独立队列的首条记录位置相同 (1, 0)
+            let p0 = fixture.appendTo(0, [], "zero")
+            let p1 = fixture.appendTo(1, [], "one")
+            @Assert(p0.seq == p1.seq && p0.offset == p1.offset)
+            let info = fixture.register("s1")
+            let r0 = fixture.service.consume(info).getOrThrow()
+            let r1 = fixture.service.consume(info).getOrThrow()
+            @Assert(r0.queueIndex == 0)
+            @Assert(r1.queueIndex == 1)
+            @Assert(r0.segmentedIndex == r1.segmentedIndex)
+            @Assert(r0.segmentedOffset == r1.segmentedOffset)
+
+            // 不存在的队列身份 → ACK_UNKNOWN，两个游标都不变
+            @Assert(fixture.service.ack(info, MQAckPayload("s1", 9, r0.segmentedIndex,
+                r0.segmentedOffset)).code == MQErrorCode.ACK_UNKNOWN)
+            @Assert(fixture.service.cursorOf("/t", 0, "g").pendingCount == 1)
+            @Assert(fixture.service.cursorOf("/t", 1, "g").pendingCount == 1)
+
+            // 只确认队列 1：队列 0 的同位置记录必须保持未决
+            @Assert(fixture.service.ack(info, MQAckPayload("s1", 1, r1.segmentedIndex,
+                r1.segmentedOffset)).code == 0)
+            @Assert(fixture.service.cursorOf("/t", 0, "g").pendingCount == 1)
+            @Assert(fixture.service.cursorOf("/t", 1, "g").pendingCount == 0)
+
+            @Assert(fixture.service.ack(info, MQAckPayload("s1", 0, r0.segmentedIndex,
+                r0.segmentedOffset)).code == 0)
+            @Assert(fixture.service.cursorOf("/t", 0, "g").pendingCount == 0)
         } finally {
             fixture.close()
         }

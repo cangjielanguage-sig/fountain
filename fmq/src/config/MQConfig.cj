@@ -229,6 +229,23 @@ protected struct MQConfig {
         if (nodes.size == 0) {
             throw MQConfigException("${MQConfigKey.CLIENT_HOSTS} is required")
         }
+        // 任意两个节点端口重复都拒绝启动，不能只校验「重复端口是否等于本机端口」
+        let entries = nodes
+        for (i in 0..entries.size) {
+            match (parsePort(entries[i])) {
+                case Some(port) =>
+                    for (j in i + 1..entries.size) {
+                        match (parsePort(entries[j])) {
+                            case Some(other) =>
+                                if (port == other) {
+                                    throw MQConfigException("duplicate port ${port} in ${MQConfigKey.CLIENT_HOSTS}")
+                                }
+                            case None => ()
+                        }
+                    }
+                case None => ()
+            }
+        }
         if (deadMsgThreshold < 1) {
             throw MQConfigException("${DEAD_MSG_THRESHOLD} must be at least 1, got ${deadMsgThreshold}")
         }

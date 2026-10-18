@@ -22,7 +22,8 @@ import fountain::f_mq.base.MQFilter
 /**
  * 客户端侧订阅状态。
  *
- * `deliveries` 记录「位置 → 投递该位置的节点下标」，`ack` 据此把确认发回正确节点；
+ * `deliveries` 记录「队列 + 位置 → 投递该位置的节点下标」，`ack` 据此把确认发回正确节点；
+ * 每个队列的段日志位置都会重复，键必须包含 `queueIndex` 才能避免串台。
  * `autoAck` 订阅不记录，显式 ack 走广播路径。
  */
 internal class MQSubscription {
@@ -47,8 +48,8 @@ internal class MQSubscription {
         this.owners = owners
     }
 
-    static func keyOf(segmentedIndex: Int64, segmentedOffset: Int64): String {
-        "${segmentedIndex}:${segmentedOffset}"
+    static func keyOf(queueIndex: Int64, segmentedIndex: Int64, segmentedOffset: Int64): String {
+        "${queueIndex}:${segmentedIndex}:${segmentedOffset}"
     }
 
     /** 轮询游标：每轮从下一个 owner 开始，避免总是打同一个节点。 */

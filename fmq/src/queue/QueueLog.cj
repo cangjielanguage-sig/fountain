@@ -78,6 +78,15 @@ protected class QueueLog <: Resource {
         log.logMetas()
     }
 
+    /** 段元数据；目录不可读（例如整个队列目录被删除）时返回空，调用方按「无段可读」处理。 */
+    protected func segmentsOrEmpty(): ArrayList<SegmentedMeta> {
+        try {
+            segments()
+        } catch (_: Exception) {
+            ArrayList<SegmentedMeta>()
+        }
+    }
+
     /** 有效字节数（各段有效长度之和，含 4 字节头）。 */
     protected prop size: Int64 {
         get() {

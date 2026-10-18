@@ -17,6 +17,7 @@ package fountain::fmq.cluster
 
 import std.unittest.*
 import std.unittest.testmacro.*
+import std.sync.AtomicInt64
 import fountain::f_protocol.default.{Message, MessageID}
 
 @Test
@@ -69,6 +70,24 @@ class NodeRegistryTest {
         // 自身发送恒为 None
         @Assert(registry.send(1, Message.ack(MessageID())).isNone())
         registry.close()
+        registry.close()
+    }
+
+    @TestCase
+    public func revivalTriggersResyncOnlyOnce(): Unit {
+        let registry = NodeRegistry(["127.0.0.1:1", "127.0.0.1:2"], 1)
+        let revived = AtomicInt64(0)
+        registry.onRevived = {=> revived.fetchAdd(1)}
+        // 存活 → 存活：不触发
+        registry.markSeen(0)
+        @Assert(revived.load() == 0)
+        // 死亡 → 复活：触发一次
+        registry.markFailed(0)
+        registry.markSeen(0)
+        @Assert(revived.load() == 1)
+        // 继续存活：不重复触发
+        registry.markSeen(0)
+        @Assert(revived.load() == 1)
         registry.close()
     }
 

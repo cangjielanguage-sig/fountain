@@ -47,19 +47,19 @@ class MQMatcherTest {
     @TestCase
     public func topicMustMatchExactly(): Unit {
         let value = record("/a/bc", [], 1i64.toData())
-        @Assert(!MQMatcher.matches(view("/a/b"), value))
-        @Assert(MQMatcher.matches(view("/a/bc"), value))
+        @Assert(MQMatcher.matches(view("/a/b"), value) == NoMatch)
+        @Assert(MQMatcher.matches(view("/a/bc"), value) == Match)
     }
 
     @TestCase
     public func tagsAreSubsetAndOrderIndependent(): Unit {
         let value = record("/t", ["b", "c", "a"], 1i64.toData())
-        @Assert(MQMatcher.matches(view("/t", tags: ["a", "b"]), value))
-        @Assert(!MQMatcher.matches(view("/t", tags: ["a", "x"]), value))
+        @Assert(MQMatcher.matches(view("/t", tags: ["a", "b"]), value) == Match)
+        @Assert(MQMatcher.matches(view("/t", tags: ["a", "x"]), value) == NoMatch)
         // 空订阅 tags 不限制
-        @Assert(MQMatcher.matches(view("/t"), value))
+        @Assert(MQMatcher.matches(view("/t"), value) == Match)
         // 重复的订阅 tags 不影响
-        @Assert(MQMatcher.matches(view("/t", tags: ["a", "a"]), value))
+        @Assert(MQMatcher.matches(view("/t", tags: ["a", "a"]), value) == Match)
         @Assert(MQMatcher.matchesTags(["a", "b"], ["b", "c", "a"]))
         @Assert(!MQMatcher.matchesTags(["a"], ["b"]))
         @Assert(MQMatcher.matchesTags([], []))
@@ -68,8 +68,8 @@ class MQMatcherTest {
     @TestCase
     public func emptyFilterAlwaysMatches(): Unit {
         let value = record("/t", [], MatchBody(1, true).toData())
-        @Assert(MQMatcher.matches(view("/t"), value))
-        @Assert(MQMatcher.matches(view("/t", filter: ""), value))
+        @Assert(MQMatcher.matches(view("/t"), value) == Match)
+        @Assert(MQMatcher.matches(view("/t", filter: ""), value) == Match)
     }
 
     @TestCase
@@ -80,8 +80,8 @@ class MQMatcherTest {
         let highRecord = record("/t", [], high.toData())
         let lowRecord = record("/t", [], low.toData())
         let sub = view("/t", filter: "$[?(@.level > 2)]")
-        @Assert(MQMatcher.matches(sub, highRecord))
-        @Assert(!MQMatcher.matches(sub, lowRecord))
+        @Assert(MQMatcher.matches(sub, highRecord) == Match)
+        @Assert(MQMatcher.matches(sub, lowRecord) == NoMatch)
     }
 
     @TestCase
@@ -89,18 +89,18 @@ class MQMatcherTest {
         let enabled = record("/t", [], MatchBody(1, true).toData())
         let disabled = record("/t", [], MatchBody(1, false).toData())
         let sub = view("/t", filter: "$.enabled")
-        @Assert(MQMatcher.matches(sub, enabled))
-        @Assert(!MQMatcher.matches(sub, disabled))
+        @Assert(MQMatcher.matches(sub, enabled) == Match)
+        @Assert(MQMatcher.matches(sub, disabled) == NoMatch)
     }
 
     @TestCase
-    public func undecodableBodyDoesNotMatch(): Unit {
-        // 截断记录：topic/tags 可解，BODY 不可解；带 filter 的订阅必须不匹配
+    public func undecodableBodyIsUnsupportedOnlyWithFilter(): Unit {
+        // 截断记录：topic/tags 可解，BODY 不可解；带 filter 的订阅无法判定
         let full = record("/t", [], MatchBody(3, true).toData())
         let truncated = full[0..full.size - 3]
         let sub = view("/t", filter: "$.level")
-        @Assert(!MQMatcher.matches(sub, truncated))
+        @Assert(MQMatcher.matches(sub, truncated) == Unsupported)
         // 无 filter 时只看 topic/tags
-        @Assert(MQMatcher.matches(view("/t"), truncated))
+        @Assert(MQMatcher.matches(view("/t"), truncated) == Match)
     }
 }

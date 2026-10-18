@@ -124,6 +124,16 @@ class MQConfigTest {
         }
         @Assert(message.contains("duplicate"))
 
+        // ---- 非本机端口重复也必须拒绝 ----
+        Config.set([(MQConfig.PORT, "2350"), (MQConfigKey.CLIENT_HOSTS, "h1:2350,h2:2351,h3:2351")])
+        message = ""
+        try {
+            MQConfig.validate()
+        } catch (e: MQConfigException) {
+            message = e.message
+        }
+        @Assert(message.contains("duplicate"))
+
         // ---- 阈值为 0 ----
         Config.set([(MQConfig.PORT, "2350"), (MQConfigKey.CLIENT_HOSTS, "h1:2350"),
             (MQConfig.DEAD_MSG_THRESHOLD, "0")])

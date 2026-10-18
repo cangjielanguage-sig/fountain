@@ -39,9 +39,9 @@ main(args: Array<String>): Int64 {
                 let sid = client.subscribe(topic, subscribeGroup: group, autoAck: auto)
                 for (_ in 0..count) {
                     let message = client.consume(sid)
-                    println("CONSUMED ${message.get<String>().getOrThrow()} ${message.segmentedIndex}:${message.segmentedOffset}")
+                    println("CONSUMED ${message.get<String>().getOrThrow()} ${message.queueIndex}:${message.segmentedIndex}:${message.segmentedOffset}")
                     if (!auto) {
-                        client.ack(sid, message.segmentedIndex, message.segmentedOffset)
+                        client.ack(sid, message.queueIndex, message.segmentedIndex, message.segmentedOffset)
                     }
                 }
                 client.unsubscribe(sid)
@@ -51,7 +51,7 @@ main(args: Array<String>): Int64 {
                 let sid = client.subscribe(topic, subscribeGroup: group)
                 for (_ in 0..count) {
                     let message = client.consume(sid)
-                    println("CONSUMED ${message.get<String>().getOrThrow()} ${message.segmentedIndex}:${message.segmentedOffset}")
+                    println("CONSUMED ${message.get<String>().getOrThrow()} ${message.queueIndex}:${message.segmentedIndex}:${message.segmentedOffset}")
                 }
                 0
             case "redeliver" =>
@@ -60,14 +60,14 @@ main(args: Array<String>): Int64 {
                 let sid = client.subscribe(topic, subscribeGroup: group)
                 for (_ in 0..attempts) {
                     let message = client.consume(sid)
-                    println("CONSUMED ${message.get<String>().getOrThrow()} ${message.segmentedIndex}:${message.segmentedOffset}")
+                    println("CONSUMED ${message.get<String>().getOrThrow()} ${message.queueIndex}:${message.segmentedIndex}:${message.segmentedOffset}")
                     sleep(Duration.millisecond * 2500)
                 }
                 0
             case "consume-one" =>
                 let sid = client.subscribe(topic, subscribeGroup: group)
                 let message = client.consume(sid)
-                println("CONSUMED ${message.get<String>().getOrThrow()} ${message.segmentedIndex}:${message.segmentedOffset}")
+                println("CONSUMED ${message.get<String>().getOrThrow()} ${message.queueIndex}:${message.segmentedIndex}:${message.segmentedOffset}")
                 0
             case _ =>
                 eprintln("unknown mode ${mode}")

@@ -38,10 +38,39 @@ protected struct MQSubscriptionView {
 }
 
 /**
+ * 匹配结果三态。
+ *
+ * `Unsupported` 表示「无法判定」而不是「不匹配」：BODY 是未在本进程注册的对象类型，
+ * 非空 filter 无法求值。调用方既不能投递，也不能把记录标记为已决（否则静默丢消息）。
+ */
+protected enum MQMatchResult <: Equatable<MQMatchResult> & ToString {
+    | Match
+    | NoMatch
+    | Unsupported
+
+    public operator func ==(other: MQMatchResult): Bool {
+        match ((this, other)) {
+            case (Match, Match) => true
+            case (NoMatch, NoMatch) => true
+            case (Unsupported, Unsupported) => true
+            case _ => false
+        }
+    }
+
+    public func toString(): String {
+        match (this) {
+            case Match => "Match"
+            case NoMatch => "NoMatch"
+            case Unsupported => "Unsupported"
+        }
+    }
+}
+
+/**
  * 服务端权威匹配：topic 完全相等 → tags 子集（顺序无关）→ filter 求值为真。
  *
  * 前一步失败即短路；BODY 只在 filter 非空时才解码。BODY 无法解码（对象类型未在本进程注册）
- * 时视为不匹配，绝不误投。
+ * 时返回 `Unsupported`，由调用方决定「不投递且不越过」。
  */
 protected class MQMatcher {
     static func topicOf(record: Array<Byte>): ?String {
@@ -60,27 +89,32 @@ protected class MQMatcher {
         true
     }
 
-    static func matches(subscription: MQSubscriptionView, record: Array<Byte>): Bool {
+    protected static func matches(subscription: MQSubscriptionView, record: Array<Byte>): MQMatchResult {
         match (MQMessageRecord.topic(record)) {
-            case None => return false
+            case None => return NoMatch
             case Some(topic) =>
                 if (topic != subscription.topic) {
-                    return false
+                    return NoMatch
                 }
         }
         let recordTags = match (MQMessageRecord.tags(record)) {
             case Some(tags) => tags
-            case None => return false
+            case None => return NoMatch
         }
         if (!matchesTags(subscription.tags, recordTags)) {
-            return false
+            return NoMatch
         }
         if (subscription.filter.path.isEmpty()) {
-            return true
+            return Match
         }
         match (MQMessageRecord.body(record)) {
-            case None => false
-            case Some(body) => subscription.filter.matches(body.data)
+            case None => Unsupported
+            case Some(body) =>
+                if (subscription.filter.matches(body.data)) {
+                    Match
+                } else {
+                    NoMatch
+                }
         }
     }
 }

@@ -103,16 +103,16 @@ class MQServerTest {
                 let sid = client.subscribe("/t", subscribeGroup: "g")
                 let first = client.consume(sid)
                 @Assert(first.get<String>() == Some("one"))
-                client.ack(sid, first.segmentedIndex, first.segmentedOffset)
+                client.ack(sid, first.queueIndex, first.segmentedIndex, first.segmentedOffset)
                 let second = client.consume(sid)
                 @Assert(second.get<String>() == Some("two"))
-                client.ack(sid, second.segmentedIndex, second.segmentedOffset)
+                client.ack(sid, second.queueIndex, second.segmentedIndex, second.segmentedOffset)
 
                 // 消费期间的新消息同样可取
                 client.publish("/t", "three")
                 let third = client.consume(sid)
                 @Assert(third.get<String>() == Some("three"))
-                client.ack(sid, third.segmentedIndex, third.segmentedOffset)
+                client.ack(sid, third.queueIndex, third.segmentedIndex, third.segmentedOffset)
             } finally {
                 client.close()
             }
@@ -173,9 +173,9 @@ class MQServerTest {
                 client.publish("/t", "three")
                 let sid = client.subscribe("/t", subscribeGroup: "g")
                 let one = client.consume(sid)
-                client.ack(sid, one.segmentedIndex, one.segmentedOffset)
+                client.ack(sid, one.queueIndex, one.segmentedIndex, one.segmentedOffset)
                 let two = client.consume(sid)
-                client.ack(sid, two.segmentedIndex, two.segmentedOffset)
+                client.ack(sid, two.queueIndex, two.segmentedIndex, two.segmentedOffset)
                 // 第三条不确认
                 let three = client.consume(sid)
                 @Assert(three.get<String>() == Some("three"))
@@ -196,7 +196,7 @@ class MQServerTest {
                 let redelivered = client.consume(sid)
                 // 前两条不再出现，第三条被重投
                 @Assert(redelivered.get<String>() == Some("three"))
-                client.ack(sid, redelivered.segmentedIndex, redelivered.segmentedOffset)
+                client.ack(sid, redelivered.queueIndex, redelivered.segmentedIndex, redelivered.segmentedOffset)
             } finally {
                 client.close()
             }

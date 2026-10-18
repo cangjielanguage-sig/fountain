@@ -403,6 +403,51 @@ class GroupCursorTest {
     }
 
     @TestCase
+    public func removedCommittedSegmentRecoversToOldestSurvivor(): Unit {
+        let sz1 = 4 + recordSize("one", [])
+        let sz2 = 4 + recordSize("two", [])
+        let fixture = CursorFixture("segment_gone", maxFileSize: sz1 + sz2)
+        try {
+            fixture.append([], "one")
+            fixture.append([], "two")
+            fixture.append([], "three") // 段 1 封口，段 2 成为当前段
+            // 模拟重启前落盘的位点：committed 仍指向段 1
+            fixture.store.save("/t", 0, "g", LogPosition(1, 0))
+            fixture.log.removeById(1)
+
+            let cursor = fixture.cursorOf()
+            let sub = fixture.sub("s1")
+            // 打开段 1 失败 → 跳到现存最老段 2 继续，不永久报错
+            let recovered = cursor.next(sub, [sub], MQMatcher()).getOrThrow()
+            @Assert(recovered[1].seq == 2)
+            @Assert(cursor.committed.seq == 2)
+            @Assert(convert<String>(MQMessageRecord.decode(recovered[0]).getOrThrow().body.data).getOrThrow() ==
+                "three")
+            // 恢复后的位置已落盘
+            @Assert(fixture.store.load("/t", 0, "g").getOrThrow().seq == 2)
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @TestCase
+    public func allSegmentsMissingReturnsNone(): Unit {
+        let fixture = CursorFixture("all_gone")
+        try {
+            fixture.append([], "one")
+            let cursor = fixture.cursorOf()
+            let sub = fixture.sub("s1")
+            // 整目录被删除：没有任何可读段，返回空而不是抛出
+            remove("${fixture.root}/logs", recursive: true)
+            @Assert(cursor.next(sub, [sub], MQMatcher()).isNone())
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @TestCase
     public func concurrentNextAndAckProduceUniquePositions(): Unit {
         let fixture = CursorFixture("concurrent", ackTimeout: Duration.hour, threshold: 1000)
         try {

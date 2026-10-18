@@ -93,6 +93,19 @@ protected class SubscriberRegistry {
         }
     }
 
+    /** 主题下全部订阅的只读快照（发布前 filter 可评估性检查）。 */
+    func byTopicOf(topic: String): Array<MQSubscriptionInfo> {
+        synchronized(lock) {
+            let result = ArrayList<MQSubscriptionInfo>()
+            for ((_, info) in byId) {
+                if (info.topic == topic) {
+                    result.add(info)
+                }
+            }
+            result.toArray()
+        }
+    }
+
     /** 连接断开时清理其名下全部订阅。 */
     func removeByBuffer(buffer: SocketBuffer): Unit {
         synchronized(lock) {

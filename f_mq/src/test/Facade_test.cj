@@ -36,7 +36,7 @@ class FacadeTest {
         let assignment = MQTopicAssignment("/order", 2, 0, [0, 1])
         @Assert(assignment.owner(1) == Some(1))
 
-        let message = MQMessage("/order", ["a"], Some(DataAny(1i64.toData())), 1, 0)
+        let message = MQMessage("/order", ["a"], Some(DataAny(1i64.toData())), 0, 1, 0)
         @Assert(message.get<Int64>() == Some(1))
 
         let error = MQServiceException(MQErrorCode.TOPIC_NOT_EXIST, "missing")

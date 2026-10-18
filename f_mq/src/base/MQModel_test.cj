@@ -79,11 +79,11 @@ class MQModelTest {
 
     @TestCase
     public func messageGetSupportsScalarsAndObjects(): Unit {
-        let scalar = MQMessage("/t", ["a"], Some(DataAny(42i64.toData())), 7, 128)
+        let scalar = MQMessage("/t", ["a"], Some(DataAny(42i64.toData())), 0, 7, 128)
         @Assert(scalar.get<Int64>() == Some(42))
 
         let obj = TestOrderBody(9, "book", true)
-        let message = MQMessage("/t", [], Some(DataAny(obj.toData())), 1, 2)
+        let message = MQMessage("/t", [], Some(DataAny(obj.toData())), 0, 1, 2)
         let got = message.get<TestOrderBody>().getOrThrow()
         @Assert(got.id == 9)
         @Assert(got.title == "book")
@@ -91,7 +91,7 @@ class MQModelTest {
         // 对象载荷不能当标量读出
         @Assert(message.get<Int64>().isNone())
 
-        let empty = MQMessage("/t", [], None, 0, 0)
+        let empty = MQMessage("/t", [], None, 0, 0, 0)
         @Assert(empty.get<Int64>().isNone())
 
         @Assert(scalar.segmentedIndex == 7)
@@ -101,10 +101,11 @@ class MQModelTest {
 
     @TestCase
     public func messageRoundtripKeepsBodyAndPosition(): Unit {
-        let message = MQMessage("/t", ["x", "y"], Some(DataAny("hello".toData())), 3, 64)
+        let message = MQMessage("/t", ["x", "y"], Some(DataAny("hello".toData())), 2, 3, 64)
         let back = roundtrip<MQMessage>(message).getOrThrow()
         @Assert(back.topic == "/t")
         @Assert(back.tags == ["x", "y"])
+        @Assert(back.queueIndex == 2)
         @Assert(back.segmentedIndex == 3)
         @Assert(back.segmentedOffset == 64)
         @Assert(back.get<String>() == Some("hello"))
@@ -113,9 +114,10 @@ class MQModelTest {
     @TestCase
     public func messageContentToMessage(): Unit {
         let content = MQMessageContent("/t", ["a"], "mid", DataAny(7i64.toData()))
-        let message = content.toMessage(11, 22)
+        let message = content.toMessage(4, 11, 22)
         @Assert(message.topic == "/t")
         @Assert(message.tags == ["a"])
+        @Assert(message.queueIndex == 4)
         @Assert(message.segmentedIndex == 11)
         @Assert(message.segmentedOffset == 22)
         @Assert(message.get<Int64>() == Some(7))

@@ -31,8 +31,8 @@ public struct MQMessageContent {
         this.body = body
     }
 
-    /** 补上服务端位置，转成客户端可见的 `MQMessage`。 */
-    public func toMessage(segmentedIndex: Int64, segmentedOffset: Int64): MQMessage {
-        MQMessage(topic, tags, Some(body), segmentedIndex, segmentedOffset)
+    /** 补上服务端位置（队列 + 段 + 偏移），转成客户端可见的 `MQMessage`。 */
+    public func toMessage(queueIndex: Int64, segmentedIndex: Int64, segmentedOffset: Int64): MQMessage {
+        MQMessage(topic, tags, Some(body), queueIndex, segmentedIndex, segmentedOffset)
     }
 }

@@ -230,6 +230,45 @@ class MQCommandExecutorTest {
     }
 
     @TestCase
+    public func unsupportedBodyIsRejectedBeforeAppend(): Unit {
+        let fixture = ExecutorFixture("filter_unsupported")
+        try {
+            fixture.registerTopic("/t", 1)
+            fixture.registerGroup("/t", "g")
+            @Assert(codeOf(fixture.call(MQProtocol.subscribe(
+                MQSubscribePayload("sid-filter", "/t", "g", [], "$.enabled", false)))) == 0)
+            // BODY 无法解码（模拟未注册对象 / 损坏）：topic 与 tags 仍可解，filter 无法评估
+            let full = MQMessageRecord.encode("/t", [], "mid", "body".toData())
+            let truncated = full[0..full.size - 3]
+            let rejected = fixture.call(MQProtocol.publish(truncated))
+            @Assert(rejected.command == Command.ERROR)
+            @Assert(codeOf(rejected) == MQErrorCode.FILTER_UNSUPPORTED_BODY)
+            // 不得落盘，也不得入备份队列
+            @Assert(fixture.queues.queueOf("/t", 0).getOrThrow().size == 0)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @TestCase
+    public func emptyFilterPublishesWithoutDecodingBody(): Unit {
+        let fixture = ExecutorFixture("filter_empty")
+        try {
+            fixture.registerTopic("/t", 1)
+            fixture.registerGroup("/t", "g")
+            @Assert(codeOf(fixture.call(MQProtocol.subscribe(
+                MQSubscribePayload("sid-empty", "/t", "g", [], "", false)))) == 0)
+            let full = MQMessageRecord.encode("/t", [], "mid", "body".toData())
+            let truncated = full[0..full.size - 3]
+            // 空 filter 不需要服务端解码 BODY，照常发布
+            @Assert(codeOf(fixture.call(MQProtocol.publish(truncated))) == 0)
+            @Assert(fixture.queues.queueOf("/t", 0).getOrThrow().size > 0)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @TestCase
     public func subscribeConsumeAckFlow(): Unit {
         let fixture = ExecutorFixture("flow")
         try {
@@ -244,13 +283,13 @@ class MQCommandExecutorTest {
                 fixture.call(MQProtocol.consume(MQConsumePayload(sid)))).getOrThrow()
             @Assert(bodyOf(first) == "one")
             @Assert(fixture.consume.ack(fixture.subscribers.of(sid).getOrThrow(),
-                MQAckPayload(sid, first.segmentedIndex, first.segmentedOffset)).code == 0)
+                MQAckPayload(sid, first.queueIndex, first.segmentedIndex, first.segmentedOffset)).code == 0)
 
             let second = MQProtocol.asConsumeResult(
                 fixture.call(MQProtocol.consume(MQConsumePayload(sid)))).getOrThrow()
             @Assert(bodyOf(second) == "two")
             @Assert(fixture.consume.ack(fixture.subscribers.of(sid).getOrThrow(),
-                MQAckPayload(sid, second.segmentedIndex, second.segmentedOffset)).code == 0)
+                MQAckPayload(sid, second.queueIndex, second.segmentedIndex, second.segmentedOffset)).code == 0)
 
             // 空消费不是错误
             let empty = MQProtocol.asConsumeResult(
@@ -269,7 +308,7 @@ class MQCommandExecutorTest {
             fixture.registerGroup("/t", "g")
             let sid = "sid-ack"
             fixture.call(MQProtocol.subscribe(MQSubscribePayload(sid, "/t", "g", [], "", false)))
-            let response = fixture.call(MQProtocol.ack(MQAckPayload(sid, 999, 999)))
+            let response = fixture.call(MQProtocol.ack(MQAckPayload(sid, 0, 999, 999)))
             @Assert(codeOf(response) == MQErrorCode.ACK_UNKNOWN)
         } finally {
             fixture.close()

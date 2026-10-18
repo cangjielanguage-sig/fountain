@@ -19,6 +19,7 @@ import std.collection.ArrayList
 import std.sync.Mutex
 import std.time.DateTime
 import fountain::f_io.LogPosition
+import fountain::f_log.*
 import fountain::f_mq.base.payload.MQDeadLetterMessage
 
 /**
@@ -34,6 +35,8 @@ import fountain::f_mq.base.payload.MQDeadLetterMessage
  * 乱序确认只留洞，不按最大位置推进。
  */
 protected class GroupCursor {
+    private static let logger = LoggerFactory.getLogger("fountain::fmq.queue.GroupCursor")
+
     private let topic: String
     private let queueIndex: Int64
     private let group: String
@@ -121,7 +124,15 @@ protected class GroupCursor {
                 if (!ready) {
                     continue
                 }
-                let record = log.readAt(entry.position)
+                let record = try {
+                    log.readAt(entry.position)
+                } catch (e: Exception) {
+                    // 段被 TTL 清理：跳到现存最老段后重试（本轮直接返回，下次从新位置开始）
+                    if (!recoverIfSegmentGone(entry.position.seq)) {
+                        throw e
+                    }
+                    return None<(Array<Byte>, LogPosition)>
+                }
                 if (record.isNone()) {
                     // 记录已不可读（段被清理）：标记已决，避免阻塞
                     entry.decided = true
@@ -129,8 +140,11 @@ protected class GroupCursor {
                 }
                 // 已分配给本订阅但尚未取走时，匹配在分配时已判定；退回组内的记录必须重新匹配
                 let needMatch = entry.delivered || entry.owner.isNone()
-                if (needMatch && !MQMatcher.matches(subscription, record.getOrThrow())) {
-                    continue
+                if (needMatch) {
+                    match (MQMatcher.matches(subscription, record.getOrThrow())) {
+                        case Match => ()
+                        case _ => continue
+                    }
                 }
                 entry.deliverCount++
                 entry.lastDeliverTime = current
@@ -155,9 +169,25 @@ protected class GroupCursor {
             // 2. 扫描新记录
             while (true) {
                 if (reader.isNone()) {
-                    reader = Some(log.openRecordsFrom(scanPosition))
+                    try {
+                        reader = Some(log.openRecordsFrom(scanPosition))
+                    } catch (e: Exception) {
+                        // 起始段已被清理：跳到现存最老段继续；没有任何段则视为空
+                        if (!recoverIfSegmentGone(scanPosition.seq) || log.segmentsOrEmpty().size == 0) {
+                            return None<(Array<Byte>, LogPosition)>
+                        }
+                        continue
+                    }
                 }
-                let item = reader.getOrThrow().next()
+                let item = try {
+                    reader.getOrThrow().next()
+                } catch (e: Exception) {
+                    // 读取中途段失效：同样恢复；记录损坏（段仍在）则保持原样抛出
+                    if (!recoverIfSegmentGone(scanPosition.seq) || log.segmentsOrEmpty().size == 0) {
+                        throw e
+                    }
+                    continue
+                }
                 if (item.isNone()) {
                     reader.getOrThrow().close()
                     reader = None
@@ -169,28 +199,48 @@ protected class GroupCursor {
                 let after = reader.getOrThrow().position()
                 scanPosition = after
 
-                if (MQMatcher.matches(subscription, record)) {
-                    let entry = DeliveryRecord(position, after, Some(subscription.subscribedId), 1, now(), true)
-                    entries.add(entry)
-                    if (subscription.autoAck) {
-                        entry.decided = true
-                        advance()
-                    }
-                    return Some((record, position))
+                let ownResult = MQMatcher.matches(subscription, record)
+                match (ownResult) {
+                    case Match =>
+                        let entry = DeliveryRecord(position, after, Some(subscription.subscribedId), 1, now(), true)
+                        entries.add(entry)
+                        if (subscription.autoAck) {
+                            entry.decided = true
+                            advance()
+                        }
+                        return Some((record, position))
+                    case _ => ()
                 }
-                // 是否属于组内其它订阅
+                // 是否属于组内其它订阅；任一活跃订阅「无法判定」时整组暂停，不得越过该位置
                 var assignedTo: ?String = None
-                for (member in groupMembers) {
-                    if (member.subscribedId == subscription.subscribedId) {
-                        continue
-                    }
-                    if (MQMatcher.matches(member, record)) {
-                        assignedTo = Some(member.subscribedId)
-                        break
+                var unsupported = match (ownResult) {
+                    case Unsupported => true
+                    case _ => false
+                }
+                if (!unsupported) {
+                    for (member in groupMembers) {
+                        if (member.subscribedId == subscription.subscribedId) {
+                            continue
+                        }
+                        match (MQMatcher.matches(member, record)) {
+                            case Match =>
+                                assignedTo = Some(member.subscribedId)
+                                break
+                            case Unsupported =>
+                                unsupported = true
+                                break
+                            case NoMatch => ()
+                        }
                     }
                 }
                 if (let Some(other) <- assignedTo) {
                     entries.add(DeliveryRecord(position, after, Some(other), 0, now(), false))
+                } else if (unsupported) {
+                    // BODY 无法评估：不建未决项、不标记已决、不推进 committed；下次从本条重扫
+                    scanPosition = position
+                    reader.getOrThrow().close()
+                    reader = None
+                    return None<(Array<Byte>, LogPosition)>
                 } else {
                     // 组内无人匹配：不适用，允许越过
                     entries.add(DeliveryRecord(position, after, None<String>, 0, now(), false, decided: true))
@@ -296,6 +346,39 @@ protected class GroupCursor {
         if (moved) {
             store.save(topic, queueIndex, group, committed_)
         }
+    }
+
+    /**
+     * 位置所在段已不存在时恢复游标：关闭读流、丢弃未决项、跳到现存最老段起点并落盘。
+     *
+     * 返回 `true` 表示已执行恢复（调用方应中止本轮），`false` 表示段仍在（异常另有原因，应继续抛出）。
+     * 调用方必须已持有 `lock`。
+     */
+    private func recoverIfSegmentGone(segmentIndex: Int64): Bool {
+        let segments = log.segmentsOrEmpty()
+        for (meta in segments) {
+            if (meta.index == segmentIndex) {
+                return false
+            }
+        }
+        match (reader) {
+            case Some(r) => r.close()
+            case None => ()
+        }
+        reader = None
+        entries.clear()
+        if (segments.size == 0) {
+            logger.warn("no segment left on queue ${topic}/${queueIndex} for group '${group}'")
+            return true
+        }
+        let oldest = segments[0]
+        let previous = committed_
+        committed_ = LogPosition(oldest.index, 0)
+        scanPosition = committed_
+        store.save(topic, queueIndex, group, committed_)
+        logger.warn("cursor of ${topic}/${queueIndex}/${group} moved from ${previous.seq}:${previous.offset} to " +
+            "${oldest.index}:0 because its segment was removed")
+        true
     }
 
     private func writeDeadLetter(entry: DeliveryRecord, record: Array<Byte>, now: DateTime): Unit {

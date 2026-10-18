@@ -91,6 +91,8 @@ public class MQServer {
             backupStore, options.selfIndex)
         this.server = Server<DataAny>(bindAt: options.port, checkDuration: CHECK_DURATION, executors: 200,
             checker: {=> Message.ping()})
+        // 节点由死转活时补一次全量同步，避免离线期间错过的注册/删除
+        this.registry.onRevived = {=> this.syncer.syncFromPeers()}
     }
 
     protected prop port: UInt16 {

@@ -146,10 +146,21 @@ if [ "${CON_RC}" -ne 0 ]; then echo "--- grp1 output ---"; echo "${CON_OUT}" | h
 CON_END=$(date +%s%N)
 CON_COUNT=$(echo "${CON_OUT}" | grep -c '^CONSUMED' || true)
 UNIQ_COUNT=$(echo "${CON_OUT}" | grep '^CONSUMED' | awk '{print $2}' | sort -u | wc -l | tr -d ' ')
-# 位置 (segmentedIndex:segmentedOffset) 只在单个队列内唯一：每个队列的 SegmentedLog 都从 1:0 开始，
-# 而 MQConsumeResult 不携带 queueIndex。因此跨队列做「位置全局唯一」断言不成立，这里只断言消息 id 唯一。
+# 位置只在单个队列内唯一（每个队列的 SegmentedLog 都从 1:0 开始），
+# 必须带上 queueIndex 才能全局唯一；同时断言确实出现了跨队列同位置，证明 ACK 串台风险被覆盖。
+UNIQ_POS=$(echo "${CON_OUT}" | grep '^CONSUMED' | awk '{print $3}' | sort -u | wc -l | tr -d ' ')
+DUP_POS=$(echo "${CON_OUT}" | grep '^CONSUMED' | awk '{print $3}' | cut -d: -f2- | sort | uniq -d | wc -l | tr -d ' ')
 check "grp1 消费 100 条" [ "${CON_RC}" -eq 0 ] && check "grp1 条数 = 100" [ "${CON_COUNT}" -eq 100 ]
 check "100 条不重（消息 id 唯一）" [ "${UNIQ_COUNT}" -eq 100 ]
+check "100 条位置（队列+段+偏移）唯一" [ "${UNIQ_POS}" -eq 100 ]
+check "存在跨队列同位置场景" [ "${DUP_POS}" -ge 1 ]
+
+echo "==> grp1 全部 ACK 后不应重复投递"
+# ackTimeout=2s：等待超过重投窗口，确认没有 ACK 落错队列导致的重复投递
+sleep 3
+REPLAY_OUT=$(timeout 3 env mqClient_hosts="${NODES}" "${CLIENT_BIN}" consume "${NODES}" /e2e grp1 1 2>&1 || true)
+REPLAY_COUNT=$(echo "${REPLAY_OUT}" | grep -c '^CONSUMED' || true)
+check "ACK 后无重复投递" [ "${REPLAY_COUNT}" -eq 0 ]
 
 echo "==> grp2 以 autoAck 消费 100 条"
 AUTO_OUT=$(client consume "${NODES}" /e2e grp2 100 auto 2>&1)

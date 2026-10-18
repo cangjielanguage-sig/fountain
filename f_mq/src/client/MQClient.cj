@@ -184,10 +184,11 @@ public class MQClient <: Resource {
                         }
                         if (let Some(content) <- MQMessageRecord.decode(result.record)) {
                             if (!sub.autoAck) {
-                                sub.deliveries.add(MQSubscription.keyOf(result.segmentedIndex, result.segmentedOffset),
-                                    node)
+                                sub.deliveries.add(MQSubscription.keyOf(result.queueIndex, result.segmentedIndex,
+                                    result.segmentedOffset), node)
                             }
-                            return content.toMessage(result.segmentedIndex, result.segmentedOffset)
+                            return content.toMessage(result.queueIndex, result.segmentedIndex,
+                                result.segmentedOffset)
                         }
                     }
                 }
@@ -201,13 +202,14 @@ public class MQClient <: Resource {
     /**
      * 确认消息。
      *
-     * 优先发给投递该位置的节点（命中即删）；未命中时向所有 owner 广播，忽略 `ACK_UNKNOWN`。
+     * 位置只在单个队列内唯一，`queueIndex` 必须与消费时一致；优先发给投递该位置的节点
+     * （命中即删）；未命中时向所有 owner 广播，忽略 `ACK_UNKNOWN`。
      */
-    public func ack(subscribedId: String, segmentedIndex: Int64, segmentedOffset: Int64): Unit {
+    public func ack(subscribedId: String, queueIndex: Int64, segmentedIndex: Int64, segmentedOffset: Int64): Unit {
         ensureOpen()
         let sub = subscriptionOf(subscribedId)
-        let payload = MQAckPayload(subscribedId, segmentedIndex, segmentedOffset)
-        match (sub.deliveries.remove(MQSubscription.keyOf(segmentedIndex, segmentedOffset))) {
+        let payload = MQAckPayload(subscribedId, queueIndex, segmentedIndex, segmentedOffset)
+        match (sub.deliveries.remove(MQSubscription.keyOf(queueIndex, segmentedIndex, segmentedOffset))) {
             case Some(node) =>
                 transferOf(node, MQProtocol.ack(payload), ACK_TIMEOUT)
             case None =>

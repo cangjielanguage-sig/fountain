@@ -86,8 +86,9 @@ class MQPayloadTest {
     public func simplePayloadsRoundtrip(): Unit {
         @Assert(roundtrip<MQUnsubscribePayload>(MQUnsubscribePayload("sid")).getOrThrow().subscribedId == "sid")
         @Assert(roundtrip<MQConsumePayload>(MQConsumePayload("sid")).getOrThrow().subscribedId == "sid")
-        let ack = roundtrip<MQAckPayload>(MQAckPayload("sid", 7, 128)).getOrThrow()
-        @Assert(ack.subscribedId == "sid" && ack.segmentedIndex == 7 && ack.segmentedOffset == 128)
+        let ack = roundtrip<MQAckPayload>(MQAckPayload("sid", 3, 7, 128)).getOrThrow()
+        @Assert(ack.subscribedId == "sid" && ack.queueIndex == 3)
+        @Assert(ack.segmentedIndex == 7 && ack.segmentedOffset == 128)
         let dereg = roundtrip<MQDeregisterPayload>(MQDeregisterPayload("group", "/t", subscribeGroup: "g")).getOrThrow()
         @Assert(!dereg.isTopic())
         @Assert(dereg.subscribeGroup == "g")
@@ -97,16 +98,18 @@ class MQPayloadTest {
 
     @TestCase
     public func emptyRecordStaysEmpty(): Unit {
-        let value = MQConsumeResult(7, 128, [])
+        let value = MQConsumeResult(2, 7, 128, [])
         @Assert(!value.hasMessage())
         let back = roundtrip<MQConsumeResult>(value).getOrThrow()
+        @Assert(back.queueIndex == 2)
         @Assert(back.segmentedIndex == 7)
         @Assert(back.segmentedOffset == 128)
         @Assert(back.record.size == 0)
         @Assert(!back.hasMessage())
 
-        let withRecord = roundtrip<MQConsumeResult>(MQConsumeResult(1, 2, [1u8, 2u8, 3u8])).getOrThrow()
+        let withRecord = roundtrip<MQConsumeResult>(MQConsumeResult(5, 1, 2, [1u8, 2u8, 3u8])).getOrThrow()
         @Assert(withRecord.hasMessage())
+        @Assert(withRecord.queueIndex == 5)
         @Assert(withRecord.record == [1u8, 2u8, 3u8])
     }
 

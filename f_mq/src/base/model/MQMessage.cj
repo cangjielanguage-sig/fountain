@@ -21,7 +21,8 @@ import fountain::f_data.macros.*
 /**
  * 客户端消费到的一条消息。
  *
- * `segmentedIndex` / `segmentedOffset` 是该消息在服务端段日志中的位置，`ack` 时原样回传。
+ * `queueIndex` / `segmentedIndex` / `segmentedOffset` 是该消息在服务端的位置，`ack` 时原样回传。
+ * 位置只在单个队列内唯一，因此队列身份必须一起带回，否则多队列会串台。
  */
 @DataAssist[props fields]
 public class MQMessage {
@@ -31,6 +32,8 @@ public class MQMessage {
     private var tags: Array<String> = []
     /** 消息内容；`None` 表示 BODY 为 `DataNone` */
     private var body: ?DataAny = None
+    /** 主题内的队列编号 */
+    private var queueIndex: Int64 = 0
     /** 消息在 SegmentedLog 的段索引 */
     private var segmentedIndex: Int64 = 0
     /** 段内偏移 */
@@ -38,10 +41,12 @@ public class MQMessage {
 
     public init() {}
 
-    public init(topic: String, tags: Array<String>, body: ?DataAny, segmentedIndex: Int64, segmentedOffset: Int64) {
+    public init(topic: String, tags: Array<String>, body: ?DataAny, queueIndex: Int64, segmentedIndex: Int64,
+        segmentedOffset: Int64) {
         this.topic = topic
         this.tags = tags
         this.body = body
+        this.queueIndex = queueIndex
         this.segmentedIndex = segmentedIndex
         this.segmentedOffset = segmentedOffset
     }

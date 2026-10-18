@@ -60,9 +60,10 @@ class MQClientTest {
         count
     }
 
-    private static func stubMessage(topic: String, index: Int64, offset: Int64): MQConsumeResult {
+    private static func stubMessage(topic: String, index: Int64, offset: Int64,
+        queueIndex!: Int64 = 0): MQConsumeResult {
         let record = MQMessageRecord.encode(topic, ["a"], "m-${index}-${offset}", "body-${index}".toData())
-        MQConsumeResult(index, offset, record)
+        MQConsumeResult(queueIndex, index, offset, record)
     }
 
     @TestCase
@@ -365,13 +366,55 @@ class MQClientTest {
             let client = MQClient([stub0.address(), stub1.address()])
             let sid = client.subscribe("/order")
             let message = client.consume(sid)
-            client.ack(sid, message.segmentedIndex, message.segmentedOffset)
+            client.ack(sid, message.queueIndex, message.segmentedIndex, message.segmentedOffset)
             @Assert(countOf(stub1, "ACK") == 1)
             @Assert(countOf(stub0, "ACK") == 0)
             client.close()
         } finally {
             stub0.close()
             stub1.close()
+        }
+    }
+
+    @TestCase
+    public func ackPayloadKeepsQueueIdentity(): Unit {
+        // 同一节点、同一位置 (1, 0) 先后来自队列 0 与队列 2：ACK 必须携带各自的 queueIndex
+        let calls = AtomicInt64(0)
+        let stub = MQStubServer({buffer, request =>
+            match (request.command) {
+                case CONSUME(_) =>
+                    let n = calls.fetchAdd(1)
+                    if (n == 0) {
+                        Some(MQProtocol.respond<MQConsumeResult>(request, stubMessage("/order", 1, 0, queueIndex: 0)))
+                    } else {
+                        Some(MQProtocol.respond<MQConsumeResult>(request, stubMessage("/order", 1, 0, queueIndex: 2)))
+                    }
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let client = MQClient([stub.address()])
+            let sid = client.subscribe("/order")
+            let first = client.consume(sid)
+            let second = client.consume(sid)
+            @Assert(first.queueIndex == 0)
+            @Assert(second.queueIndex == 2)
+            @Assert(first.segmentedIndex == second.segmentedIndex)
+            @Assert(first.segmentedOffset == second.segmentedOffset)
+            client.ack(sid, first.queueIndex, first.segmentedIndex, first.segmentedOffset)
+            client.ack(sid, second.queueIndex, second.segmentedIndex, second.segmentedOffset)
+            let seen = ArrayList<Int64>()
+            for (message in stub.received()) {
+                if (message.command == Command.ACK) {
+                    seen.add(MQProtocol.asPayload<MQAckPayload>(message).getOrThrow().queueIndex)
+                }
+            }
+            @Assert(seen.size == 2)
+            @Assert(seen[0] == 0)
+            @Assert(seen[1] == 2)
+            client.close()
+        } finally {
+            stub.close()
         }
     }
 
@@ -392,7 +435,7 @@ class MQClientTest {
         try {
             let client = MQClient([stub0.address(), stub1.address()])
             let sid = client.subscribe("/order")
-            client.ack(sid, 99, 100)
+            client.ack(sid, 0, 99, 100)
             @Assert(countOf(stub0, "ACK") == 1)
             @Assert(countOf(stub1, "ACK") == 1)
             client.close()
@@ -409,7 +452,7 @@ class MQClientTest {
         try {
             let client = MQClient([stub0.address(), stub1.address()])
             let sid = client.subscribe("/order", autoAck: true)
-            client.ack(sid, 1, 2)
+            client.ack(sid, 0, 1, 2)
             // autoAck 不记录投递来源 ⇒ 广播
             @Assert(countOf(stub0, "ACK") == 1)
             @Assert(countOf(stub1, "ACK") == 1)
@@ -477,7 +520,7 @@ class MQClientTest {
                 threw++
             }
             try {
-                client.ack("none", 0, 0)
+                client.ack("none", 0, 0, 0)
             } catch (_: MQConnectionException) {
                 threw++
             }
