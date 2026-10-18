@@ -39,13 +39,13 @@ public class DiffExec_test {
     @TestCase
     public func multiArgumentAdd(): Unit {
         DiffExec_test.check('T2/args-add', '{ a: Int64, b: Int64 => a + b }',
-            [20 as Any, 22 as Any])
+            [20, 22])
     }
 
     @TestCase
     public func branchSelect(): Unit {
         DiffExec_test.check('T2/if', '{ n: Int64 => if (n > 0) { 10 } else { 20 } }',
-            [-1 as Any])
+            [-1])
     }
 
     @TestCase
