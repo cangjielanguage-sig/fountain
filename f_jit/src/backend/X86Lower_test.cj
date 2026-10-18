@@ -211,6 +211,16 @@ public class X86Lower_test {
         @Assert(X86Lower_test.hex(got), expected)
     }
 
+    @TestCase
+    public func callClosureTemplateC(): Unit {
+        let got = BackendX86_64.emitCallClosure(0x3000, 0x4000, 1, 0u32)
+        // 骨架：H55 取 fnId → H57 取表 → 间接 call → 重写 fnId → CHECK_ERR
+        @Assert(got.size > 80, true)
+        @Assert(got[0], 0x4Cu8)
+        @Assert(got[1], 0x89u8)
+        @Assert(got[2], 0xFFu8)
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {

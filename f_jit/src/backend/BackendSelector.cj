@@ -357,6 +357,72 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
+    /**
+     * 模板 C：`CALL_CLOSURE argc`（骨架）。
+     *
+     * H55 取 fnId → H57 取 fnTable 基址 → `call [base+8*fnId]` → 重写 `ctx.fnId`
+     * → 结果替换闭包槽并收参；每个 helper 后 CHECK_ERR（rel 占位）。
+     */
+    internal static func emitCallClosure(h55: Int64, h57: Int64, argc: Int64,
+        selfFnId: UInt32): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        let disp = 8 * argc
+        // H55(ctx, &closure, 1)
+        for (x in [0x4Cu8, 0x89u8, 0xFFu8, 0x48u8, 0x8Du8, 0x74u8, 0x24u8]) {
+            out.add(x)
+        }
+        out.add(UInt8(disp))
+        for (x in [0xBAu8]) {
+            out.add(x)
+        }
+        BackendX86_64.w32(out, 1u32)
+        out.add(0x48u8)
+        out.add(0xB8u8)
+        BackendX86_64.w64(out, h55)
+        for (x in [0xFFu8, 0xD0u8, 0x48u8, 0x89u8, 0x84u8, 0x24u8]) {
+            out.add(x)
+        }
+        BackendX86_64.w32(out, BackendX86_64.i32bits(disp))
+        BackendX86_64.appendCheckErr(out)
+        // H57(ctx, &0, 0)
+        for (x in [0x4Cu8, 0x89u8, 0xFFu8, 0x48u8, 0x8Du8, 0x74u8, 0x24u8]) {
+            out.add(x)
+        }
+        out.add(UInt8(disp))
+        for (x in [0x31u8, 0xD2u8]) {
+            out.add(x) // xor edx,edx
+        }
+        out.add(0x48u8)
+        out.add(0xB8u8)
+        BackendX86_64.w64(out, h57)
+        for (x in [0xFFu8, 0xD0u8]) {
+            out.add(x)
+        }
+        BackendX86_64.appendCheckErr(out)
+        // call [rax + r11*8]
+        for (x in [0x4Cu8, 0x8Bu8, 0x9Cu8, 0x24u8]) {
+            out.add(x)
+        }
+        BackendX86_64.w32(out, BackendX86_64.i32bits(disp))
+        for (x in [0x42u8, 0xFFu8, 0x14u8, 0xD8u8]) {
+            out.add(x)
+        }
+        for (x in [0x41u8, 0xC7u8, 0x47u8, 0x28u8]) {
+            out.add(x)
+        }
+        BackendX86_64.w32(out, UInt32(Int64(selfFnId)))
+        BackendX86_64.appendCheckErr(out)
+        for (x in [0x48u8, 0x89u8, 0x84u8, 0x24u8]) {
+            out.add(x)
+        }
+        BackendX86_64.w32(out, BackendX86_64.i32bits(disp))
+        for (x in [0x48u8, 0x81u8, 0xC4u8]) {
+            out.add(x)
+        }
+        BackendX86_64.w32(out, BackendX86_64.i32bits(disp))
+        out.toArray()
+    }
+
     /** `TO_I64`：NaN + ±2^63 越界判定（jae/jb bail）；通过后 cvttsd2si。 */
     internal static func emitToI64RangeGuarded(): Array<UInt8> {
         [0xF2u8, 0x0Fu8, 0x10u8, 0x04u8, 0x24u8,
@@ -756,6 +822,13 @@ internal class BackendX86_64 <: Backend {
     /** 出口：恢复 r15 → `rsp=rbp` → pop rbp → ret（RET/RET_VOID/BAIL 统一跳这里）。 */
     internal static func emitEpilogue(): Array<UInt8> {
         [0x4Cu8, 0x8Bu8, 0x7Du8, 0xF8u8, 0x48u8, 0x89u8, 0xECu8, 0x5Du8, 0xC3u8]
+    }
+
+    private static func appendCheckErr(out: ArrayList<UInt8>): Unit {
+        for (x in [0x49u8, 0x83u8, 0x3Fu8, 0x00u8, 0x0Fu8, 0x85u8, 0x00u8, 0x00u8, 0x00u8,
+            0x00u8]) {
+            out.add(x)
+        }
     }
 
     private static func w64(out: ArrayList<UInt8>, v: Int64): Unit {
