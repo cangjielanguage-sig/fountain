@@ -124,7 +124,7 @@
 - [x] S5.3 `BackendSelector.select`：先写失败用例——矩阵 `{Off,Auto,Force} × {Linux x86_64, Linux aarch64, Linux 其他, Windows, macOS, HarmonyOS}` 结果确定、非 Linux 恒 `Interp` 且不抛异常、有降级诊断记录；再写实现（OS/Arch 判定经 `f_base`）；验收：T7/T9 用例绿
 - [ ] S5.4 `BackendX86_64` 框架 + `compile/entryThunk/abiSummary/name`：先写失败用例——prologue/epilogue 序列（r15 保存恢复、hwBase 镜像、fnId 写 ctx、args 拷入 locals、卫生填充）、帧 16 对齐算术；再写实现（发射器）；验收：与 §12.3 一致（机器码断言在非原生架构上条件跳过并计入「非原生跳过」）
 - [x] S5.5 x86 lowering 0x00–0x3F：先写失败用例——`SET_SITE`、`BAIL` 块（含单次转储）、`CHECK_ERR`、`STACK_GUARD`、`PUSH_*`、`DUP/PICK`、`LOADL/STOREL/LOAD_CAP`、整型组（`jo/bail`、`IDIV` 前置判定、`IMOD INT_MIN/-1`、`ICLZ=bsr`、`IPOPCNT=SWAR`）、NaN/失败收敛块规则；再逐条 lowering；验收：与 §12.4 对照表一致（超界分支改用跳板）
-- [ ] S5.6 x86 lowering 0x40–0x8F：先写失败用例——浮点（含 NaN 尾 `CANON`）、比较（`EQ_F` 谓词、`GT` 交换）、逻辑位、跳转（`rel32`）、调用模板 A/B/C、`CAST/TO_I64`（哨兵区分）、`GUARD/ASSERT/ABORT`；再逐条 lowering；验收：与 §12.4 一致
+- [x] S5.6 x86 lowering 0x40–0x8F：先写失败用例——浮点（含 NaN 尾 `CANON`）、比较（`EQ_F` 谓词、`GT` 交换）、逻辑位、跳转（`rel32`）、调用模板 A/B/C、`CAST/TO_I64`（哨兵区分）、`GUARD/ASSERT/ABORT`；再逐条 lowering；验收：与 §12.4 一致
 - [ ] S5.7 x86 模板 A/B/C 与镜像：先写失败用例——`CALL_HELPER`（lea rsi/argc 收参 + 自动 `CHECK_ERR`）、`CALL_FUNC`（fnTable 间接 + fnId 重写）、`CALL_CLOSURE`（H55/H57/间接调用 + IBT `endbr64`）、`PUSH_KH`（镜像立即数）；再写实现；验收：三类调用与解释器结果/错误码/站点逐位一致
 - [ ] S5.8 `JitCompiler.compileUnit`（x86 路径）+ `JitArtifacts`：先写失败用例——最小单元（`{=>1}`）编译 → 执行 → 结果 1、两遍布局与重定位补丁正确；再写实现（编排）；验收：T2 前置就绪（本机为条件跳过证据，CI 补原生证据）
 - [ ] S5.9 `BackendAArch64` 框架 + 全量 lowering：先写失败用例——x29/x30 保存、CTX x19、`b.vs` 溢出、`sdiv` 预判、`frint*`、`cset` 谓词、`csel`、`clz`、FPCR.DN、跳板、条件分支 ±1 MB 边界；再逐条实现；验收：**本机原生证据**——与 §12.4 对照表一致

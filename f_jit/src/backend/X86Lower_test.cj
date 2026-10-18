@@ -197,16 +197,20 @@ public class X86Lower_test {
 
     @TestCase
     public func floatCompareFamily(): Unit {
-        let head = 'F20F10442408' + 'F20F100C24' + '660F2EC1' + '0F9BC0'
-        let tail = '20D0' + '0FB6C0' + '4889442408' + '4883C408'
-        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpEqF()), head + '0F94C2' + tail)
-        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpLtF()), head + '0F92C2' + tail)
-        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpGtF()), head + '0F97C2' + tail)
-        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpLeF()), head + '0F96C2' + tail)
-        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpGeF()), head + '0F93C2' + tail)
-        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpNeF()), head + '0F95C2' + tail)
+        let tail = '66480F7EC0' + '83E001' + '4889442408' + '4883C408'
+        let normal = 'F20F10442408' + 'F20F100C24'
+        let swapped = 'F20F100424' + 'F20F104C2408'
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpEqF()), normal + 'F20FC2C100' + tail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpNeF()), normal + 'F20FC2C104' + tail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpLtF()), normal + 'F20FC2C101' + tail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpLeF()), normal + 'F20FC2C102' + tail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpGtF()), swapped + 'F20FC2C101' + tail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpGeF()), swapped + 'F20FC2C102' + tail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitEqH()),
+            X86Lower_test.hex(BackendX86_64.emitCmpEq()))
+        @Assert(X86Lower_test.hex(BackendX86_64.emitNeH()),
+            X86Lower_test.hex(BackendX86_64.emitCmpNe()))
     }
-
     @TestCase
     public func numericConversions(): Unit {
         @Assert(X86Lower_test.hex(BackendX86_64.emitToI64()),
@@ -511,6 +515,37 @@ public class X86Lower_test {
         // TYPE_OF：H18 单参
         @Assert(X86Lower_test.hex(BackendX86_64.emitTypeOf(0x9205)),
             X86Lower_test.hex(BackendX86_64.emitCallHelper(0x9205, 1)))
+    }
+
+    @TestCase
+    public func roundingFamily(): Unit {
+        let head = '660F2EC0' + '0F8A00000000' +
+            '48B8000000000000E043' + '66480F6EC8' + '660F2EC1' + '0F8300000000' +
+            '48B8000000000000E0C3' + '66480F6EC8' + '660F2EC1' + '0F8200000000' +
+            'F2480F2CC0' + 'F2480F2AC8'
+        let store = 'F20F110C24' + 'E900000000'
+        let pass = 'F20F110424' + 'E900000000'
+        let canon = '48B8000000000000F87F' + '66480F6EC0' + 'F20F110424'
+        // FTRUNC：无修正
+        @Assert(X86Lower_test.hex(BackendX86_64.emitFTrunc()), head + store + pass + canon)
+        // FFLOOR：t > x → t-1
+        @Assert(X86Lower_test.hex(BackendX86_64.emitFFloor()),
+            head + '660F2EC1' + '0F8600000000' + '48B8000000000000F03F' +
+            '66480F6ED0' + 'F20F5CCA' + store + pass + canon)
+        // FCEIL：t < x → t+1
+        @Assert(X86Lower_test.hex(BackendX86_64.emitFCeil()),
+            head + '660F2EC1' + '0F8300000000' + '48B8000000000000F03F' +
+            '66480F6ED0' + 'F20F58CA' + store + pass + canon)
+        // FROUND：round-half-even（含奇偶判定）
+        @Assert(X86Lower_test.hex(BackendX86_64.emitFRound()),
+            head + 'F20F10D0' + 'F20F5CD1' +
+            '48B9000000000000E03F' + '66480F6ED9' + '660F2ED3' + '0F8700000000' +
+            '48B9000000000000E0BF' + '66480F6ED9' + '660F2ED3' + '0F8200000000' +
+            '48A901000000' + '0F8400000000' +
+            '660F57DB' + '660F2ED3' + '0F8700000000' + 'E900000000' +
+            '48B8000000000000F03F' + '66480F6ED8' + 'F20F58CB' + 'E900000000' +
+            '48B8000000000000F03F' + '66480F6ED8' + 'F20F5CCB' +
+            store + pass + canon)
     }
 
     private static func hex(bs: Array<UInt8>): String {

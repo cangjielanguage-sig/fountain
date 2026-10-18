@@ -750,46 +750,55 @@ internal class BackendX86_64 <: Backend {
          0xF2u8, 0x0Fu8, 0x11u8, 0x04u8, 0x24u8]
     }
 
-    /** 浮点比较：`ucomisd` + `setnp` + `setcc` + and（NaN 全 false）。 */
-    private static func fCmpOp(setcc: Array<UInt8>): Array<UInt8> {
+    /**
+     * 浮点比较（§12.4）：`cmpsd` 谓词——EQ=0、LT=1、LE=2、NE=4；
+     * GT/GE 交换操作数后用 1/2。无序语义：NE=true，其余 false。
+     */
+    private static func fCmpOp(swapped: Bool, predicate: UInt8): Array<UInt8> {
         let out = ArrayList<UInt8>()
-        for (x in [0xF2u8, 0x0Fu8, 0x10u8, 0x44u8, 0x24u8, 0x08u8,
-            0xF2u8, 0x0Fu8, 0x10u8, 0x0Cu8, 0x24u8, 0x66u8, 0x0Fu8, 0x2Eu8, 0xC1u8,
-            0x0Fu8, 0x9Bu8, 0xC0u8]) {
-            out.add(x) // movsd xmm0,[rsp+8]; movsd xmm1,[rsp]; ucomisd; setnp al
+        if (swapped) {
+            for (x in [0xF2u8, 0x0Fu8, 0x10u8, 0x04u8, 0x24u8,
+                0xF2u8, 0x0Fu8, 0x10u8, 0x4Cu8, 0x24u8, 0x08u8]) {
+                out.add(x) // xmm0=b, xmm1=a
+            }
+        } else {
+            for (x in [0xF2u8, 0x0Fu8, 0x10u8, 0x44u8, 0x24u8, 0x08u8,
+                0xF2u8, 0x0Fu8, 0x10u8, 0x0Cu8, 0x24u8]) {
+                out.add(x) // xmm0=a, xmm1=b
+            }
         }
-        for (x in setcc) {
-            out.add(x)
-        }
-        for (x in [0x20u8, 0xD0u8, 0x0Fu8, 0xB6u8, 0xC0u8, 0x48u8, 0x89u8, 0x44u8, 0x24u8,
-            0x08u8, 0x48u8, 0x83u8, 0xC4u8, 0x08u8]) {
-            out.add(x) // and al,dl; movzx; 回写；收栈
+        for (x in [0xF2u8, 0x0Fu8, 0xC2u8, 0xC1u8, predicate,
+            0x66u8, 0x48u8, 0x0Fu8, 0x7Eu8, 0xC0u8,
+            0x83u8, 0xE0u8, 0x01u8,
+            0x48u8, 0x89u8, 0x44u8, 0x24u8, 0x08u8,
+            0x48u8, 0x83u8, 0xC4u8, 0x08u8]) {
+            out.add(x) // cmpsd; movq rax,xmm0; and eax,1; 写回; 收栈
         }
         out.toArray()
     }
 
     internal static func emitCmpEqF(): Array<UInt8> {
-        BackendX86_64.fCmpOp([0x0Fu8, 0x94u8, 0xC2u8])
+        BackendX86_64.fCmpOp(false, 0u8)
     }
 
     internal static func emitCmpNeF(): Array<UInt8> {
-        BackendX86_64.fCmpOp([0x0Fu8, 0x95u8, 0xC2u8])
+        BackendX86_64.fCmpOp(false, 4u8)
     }
 
     internal static func emitCmpLtF(): Array<UInt8> {
-        BackendX86_64.fCmpOp([0x0Fu8, 0x92u8, 0xC2u8])
+        BackendX86_64.fCmpOp(false, 1u8)
     }
 
     internal static func emitCmpLeF(): Array<UInt8> {
-        BackendX86_64.fCmpOp([0x0Fu8, 0x96u8, 0xC2u8])
+        BackendX86_64.fCmpOp(false, 2u8)
     }
 
     internal static func emitCmpGtF(): Array<UInt8> {
-        BackendX86_64.fCmpOp([0x0Fu8, 0x97u8, 0xC2u8])
+        BackendX86_64.fCmpOp(true, 1u8)
     }
 
     internal static func emitCmpGeF(): Array<UInt8> {
-        BackendX86_64.fCmpOp([0x0Fu8, 0x93u8, 0xC2u8])
+        BackendX86_64.fCmpOp(true, 2u8)
     }
 
     /** NaN 规范化尾：`ucomisd xmm0,xmm0; jnp .n; movabs rax,CANON; movq xmm0,rax`。 */
@@ -801,10 +810,6 @@ internal class BackendX86_64 <: Backend {
         }
     }
 
-    /**
-     * 浮点二元（§12.4）：`movsd xmm0,<a>; <op> xmm0,<b>; <NaN 尾>; 写回; 收栈`。
-     * 交换律运算取 `[rsp]` 为首操作数（a 在 `[rsp+8]` 的交换不影响结果）。
-     */
     private static func fBinOp(commutative: Bool, opByte: UInt8): Array<UInt8> {
         let out = ArrayList<UInt8>()
         if (commutative) {
@@ -936,6 +941,146 @@ internal class BackendX86_64 <: Backend {
             out.add(x) // movq xmm0,rax; .done: 写回; 收栈
         }
         out.toArray()
+    }
+
+    /**
+     * 取整族基线序列（§12.4）：NaN → CANON；|x|≥2^63 直通；否则
+     * `cvttsd2si` + `cvtsi2sd`，floor/ceil 再按比较修正 ±1。
+     */
+    private static func fRoundOp(kind: Int64): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (x in [0x66u8, 0x0Fu8, 0x2Eu8, 0xC0u8,
+            0x0Fu8, 0x8Au8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+            out.add(x) // ucomisd 自检；jp .canon
+        }
+        out.add(0x48u8)
+        out.add(0xB8u8)
+        BackendX86_64.w64(out, 0x43E0000000000000) // +2^63
+        for (x in [0x66u8, 0x48u8, 0x0Fu8, 0x6Eu8, 0xC8u8,
+            0x66u8, 0x0Fu8, 0x2Eu8, 0xC1u8,
+            0x0Fu8, 0x83u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+            out.add(x) // movq; ucomisd; jae .pass
+        }
+        out.add(0x48u8)
+        out.add(0xB8u8)
+        BackendX86_64.w64(out, -4332462841530417152) // -2^63 的 double 位型 0xC3E0...
+        for (x in [0x66u8, 0x48u8, 0x0Fu8, 0x6Eu8, 0xC8u8,
+            0x66u8, 0x0Fu8, 0x2Eu8, 0xC1u8,
+            0x0Fu8, 0x82u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+            out.add(x) // movq; ucomisd; jb .pass
+        }
+        for (x in [0xF2u8, 0x48u8, 0x0Fu8, 0x2Cu8, 0xC0u8,
+            0xF2u8, 0x48u8, 0x0Fu8, 0x2Au8, 0xC8u8]) {
+            out.add(x) // cvttsd2si rax,xmm0; cvtsi2sd xmm1,rax
+        }
+        if (kind == 1 || kind == 2) {
+            for (x in [0x66u8, 0x0Fu8, 0x2Eu8, 0xC1u8]) {
+                out.add(x) // ucomisd xmm1,xmm0
+            }
+            if (kind == 1) {
+                for (x in [0x0Fu8, 0x86u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+                    out.add(x) // jbe .store（floor：t <= x 无需修正）
+                }
+            } else {
+                for (x in [0x0Fu8, 0x83u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+                    out.add(x) // jae .store（ceil：t >= x 无需修正）
+                }
+            }
+            out.add(0x48u8)
+            out.add(0xB8u8)
+            BackendX86_64.w64(out, 0x3FF0000000000000) // 1.0
+            for (x in [0x66u8, 0x48u8, 0x0Fu8, 0x6Eu8, 0xD0u8]) {
+                out.add(x) // movq xmm2,rax
+            }
+            if (kind == 1) {
+                for (x in [0xF2u8, 0x0Fu8, 0x5Cu8, 0xCAu8]) {
+                    out.add(x) // subsd xmm1,xmm2
+                }
+            } else {
+                for (x in [0xF2u8, 0x0Fu8, 0x58u8, 0xCAu8]) {
+                    out.add(x) // addsd xmm1,xmm2
+                }
+            }
+        } else if (kind == 3) {
+            // FROUND：round-half-even
+            for (x in [0xF2u8, 0x0Fu8, 0x10u8, 0xD0u8, 0xF2u8, 0x0Fu8, 0x5Cu8, 0xD1u8]) {
+                out.add(x) // xmm2 = x - t
+            }
+            out.add(0x48u8)
+            out.add(0xB9u8)
+            BackendX86_64.w64(out, 0x3FE0000000000000) // +0.5
+            for (x in [0x66u8, 0x48u8, 0x0Fu8, 0x6Eu8, 0xD9u8,
+                0x66u8, 0x0Fu8, 0x2Eu8, 0xD3u8,
+                0x0Fu8, 0x87u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+                out.add(x) // movq xmm3,rcx; ucomisd; ja .plus
+            }
+            out.add(0x48u8)
+            out.add(0xB9u8)
+            BackendX86_64.w64(out, -4620693217682128896) // -0.5
+            for (x in [0x66u8, 0x48u8, 0x0Fu8, 0x6Eu8, 0xD9u8,
+                0x66u8, 0x0Fu8, 0x2Eu8, 0xD3u8,
+                0x0Fu8, 0x82u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+                out.add(x) // movq xmm3,rcx; ucomisd; jb .minus
+            }
+            for (x in [0x48u8, 0xA9u8, 0x01u8, 0x00u8, 0x00u8, 0x00u8,
+                0x0Fu8, 0x84u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+                out.add(x) // test rax,1; jz .store（偶数保持）
+            }
+            for (x in [0x66u8, 0x0Fu8, 0x57u8, 0xDBu8, 0x66u8, 0x0Fu8, 0x2Eu8, 0xD3u8,
+                0x0Fu8, 0x87u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8,
+                0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+                out.add(x) // xorpd xmm3; ucomisd; ja .plus; jmp .minus
+            }
+            // .plus
+            out.add(0x48u8)
+            out.add(0xB8u8)
+            BackendX86_64.w64(out, 0x3FF0000000000000)
+            for (x in [0x66u8, 0x48u8, 0x0Fu8, 0x6Eu8, 0xD8u8,
+                0xF2u8, 0x0Fu8, 0x58u8, 0xCBu8,
+                0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+                out.add(x) // movq xmm3,rax; addsd xmm1,xmm3; jmp .store
+            }
+            // .minus
+            out.add(0x48u8)
+            out.add(0xB8u8)
+            BackendX86_64.w64(out, 0x3FF0000000000000)
+            for (x in [0x66u8, 0x48u8, 0x0Fu8, 0x6Eu8, 0xD8u8,
+                0xF2u8, 0x0Fu8, 0x5Cu8, 0xCBu8]) {
+                out.add(x) // movq xmm3,rax; subsd xmm1,xmm3
+            }
+        }
+        for (x in [0xF2u8, 0x0Fu8, 0x11u8, 0x0Cu8, 0x24u8,
+            0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+            out.add(x) // .store: 写回; jmp .done
+        }
+        for (x in [0xF2u8, 0x0Fu8, 0x11u8, 0x04u8, 0x24u8,
+            0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+            out.add(x) // .pass: 写回原值; jmp .done
+        }
+        out.add(0x48u8)
+        out.add(0xB8u8)
+        BackendX86_64.w64(out, 0x7FF8000000000000)
+        for (x in [0x66u8, 0x48u8, 0x0Fu8, 0x6Eu8, 0xC0u8,
+            0xF2u8, 0x0Fu8, 0x11u8, 0x04u8, 0x24u8]) {
+            out.add(x) // .canon: CANON → 写回
+        }
+        out.toArray()
+    }
+
+    internal static func emitFTrunc(): Array<UInt8> {
+        BackendX86_64.fRoundOp(0)
+    }
+
+    internal static func emitFFloor(): Array<UInt8> {
+        BackendX86_64.fRoundOp(1)
+    }
+
+    internal static func emitFCeil(): Array<UInt8> {
+        BackendX86_64.fRoundOp(2)
+    }
+
+    internal static func emitFRound(): Array<UInt8> {
+        BackendX86_64.fRoundOp(3)
     }
 
     internal static func emitFMin(): Array<UInt8> {
@@ -1245,6 +1390,15 @@ internal class BackendX86_64 <: Backend {
          0x29u8, 0xD0u8,
          0x48u8, 0x98u8,
          0x48u8, 0x89u8, 0x04u8, 0x24u8]
+    }
+
+    /** `EQ_H`/`NE_H`：句柄即整数，复用整数比较。 */
+    internal static func emitEqH(): Array<UInt8> {
+        BackendX86_64.emitCmpEq()
+    }
+
+    internal static func emitNeH(): Array<UInt8> {
+        BackendX86_64.emitCmpNe()
     }
 
     /** `CMP_STR`/`CMP_DEC`/`CMP_DT`/`CMP_DUR`：双参 helper 路由。 */
