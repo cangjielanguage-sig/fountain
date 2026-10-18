@@ -753,9 +753,11 @@ protected class InsertExecutor {
         let isGlobal = globals.isGlobal(logical, statement.table.name)
         if (!statement.returning.isEmpty()) {
             // 先判方言再判路由：MySQL 上即使目标是全局表也应报「不支持」
-            if (dialectOf(resources, resources.databases()) != SqlDialect.Postgres) {
+            let databases = resources.databases()
+            if (dialectOf(resources, databases) != SqlDialect.Postgres) {
+                let driver = if (databases.isEmpty()) { 'unknown' } else { resources.driver(databases[0]) }
                 throw FdbmException(DbdErrorCode.UNSUPPORTED_SQL,
-                    'returning is only supported by the PostgreSQL family')
+                    'returning is only supported by the PostgreSQL family (driver \'${driver}\')')
             }
             if (isGlobal) {
                 throw FdbmException(DbdErrorCode.ROUTE_FAILED,
