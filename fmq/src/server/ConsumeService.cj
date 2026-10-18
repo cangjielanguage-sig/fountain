@@ -164,8 +164,11 @@ protected class ConsumeService {
                 var backlog = 0i64
                 var oldest: ?DateTime = None
                 for ((queueIndex, log) in locals) {
-                    let cursor = cursorOf(name, queueIndex, group)
-                    let scanned = log.scanAfter(cursor.committed)
+                    let committed = match (store.load(name, queueIndex, group)) {
+                        case Some(position) => position
+                        case None => LogPosition(1, 0)
+                    }
+                    let scanned = log.scanAfter(committed)
                     backlog += scanned[0]
                     match (scanned[1]) {
                         case Some(published) =>
