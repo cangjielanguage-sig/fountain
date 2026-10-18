@@ -20,7 +20,10 @@ import std.unittest.testmacro.*
 import std.time.*
 import fountain::f_jit.base.DummyDiagnosticsSink
 import fountain::f_jit.bytecode.FbcReader
+import std.collection.*
 import fountain::f_jit.runtime.HandleTable
+import fountain::f_jit.runtime.JitContext
+import fountain::f_jit.runtime.h_dispatch
 import fountain::f_jit.test.diff.AArch64Runner
 import fountain::f_jit.test.diff.DiffCase
 import fountain::f_jit.test.diff.NativeRunner
@@ -69,7 +72,7 @@ public class Acceptance_test {
 
     // ---------------------------------------------------------------- S7.2
 
-    /** T6：错误一致性——每个错误码同时断言 `errCode` 与站点。 */
+    /** T6：错误一致性——每个可达错误码同时断言 `errCode` 与站点。 */
     @TestCase
     public func t6ErrorConsistency(): Unit {
         Acceptance_test.diffCode('T6/div0', '{ a: Int64 => a / (a - a) }', [1], 1)
@@ -78,6 +81,59 @@ public class Acceptance_test {
         Acceptance_test.diffCode('T6/oob', '{ => let l = [1, 2]\n l[5] }', Array<Any>(), 4)
         Acceptance_test.diffCode('T6/key-missing',
             '{ => let m: Map<String, Int64> = {}\n m["k"] }', Array<Any>(), 5)
+        Acceptance_test.diffCode('T6/dec-range', '{ => Int64(Decimal(1.0e30)) }', Array<Any>(), 9)
+        Acceptance_test.diffCode('T6/dec-div0',
+            '{ => let d = Decimal(1) / Decimal(0)\n 0 }', Array<Any>(), 10)
+        Acceptance_test.diffCode('T6/dt-range',
+            '{ => let t = DateTime.parse("9999-12-31T23:59:59Z") + Duration.day\n 0 }',
+            Array<Any>(), 11)
+        Acceptance_test.diffCode('T6/fp-invalid', '{ x: Float64 => Int64(x) }', [1.0e300], 13)
+        Acceptance_test.diffCode('T6/regex-invalid',
+            '{ => let b = "(".regex() ~ "a"\n 0 }', Array<Any>(), 14)
+        Acceptance_test.diffCode('T6/concurrent-mod',
+            '{ => let m: Map<Int64, Int64> = {}\n m[1] = 1\n m[2] = 2\n' +
+            ' for ((k, v) in m) { m[3] = 3 }\n 0 }', Array<Any>(), 23)
+        // 6 / 8 / 18 / 20：源码类型系统不可达，按 helper 入口直接构造（三引擎共用同一实现）。
+        let ctx = JitContext.create(hwBase: 0, hwCap: 0, fnId: 0, dbgBase: 0)
+        @Assert(Acceptance_test.callHelper(1, [0], ctx), 0)
+        @Assert(ctx.errCode, 6)
+        ctx.errCode = 0
+        let str = HandleTable.pin("abc")
+        @Assert(Acceptance_test.callHelper(1, [str], ctx), 0)
+        @Assert(ctx.errCode, 8)
+        ctx.errCode = 0
+        let cl = ArrayList<Any>()
+        cl.add(1)
+        let constList = HandleTable.pinConst(cl)
+        @Assert(Acceptance_test.callHelper(43, [constList, 2], ctx), 0)
+        @Assert(ctx.errCode, 20)
+        ctx.errCode = 0
+        @Assert(Acceptance_test.callHelper(999, [], ctx), 0)
+        @Assert(ctx.errCode, 18)
+        JitContext.free(ctx)
+    }
+
+    /** 直呼 `h_dispatch(hid, ctx, &args, n)`；args 按「最深实参在高地址」排列。 */
+    private static func callHelper(hid: Int64, values: Array<Int64>, ctx: JitContext): Int64 {
+        let n = values.size
+        let p = if (n == 0) {
+            CPointer<Int64>()
+        } else {
+            let raw = LibC.malloc<Int64>(count: n)
+            var i = 0
+            while (i < n) {
+                unsafe { raw.write(i, values[n - 1 - i]) }
+                i = i + 1
+            }
+            unsafe { raw + (n - 1) }
+        }
+        let alloc = if (n == 0) { CPointer<Int64>() } else { unsafe { p - (n - 1) } }
+        let f: CFunc<(Int64, CPointer<Unit>, CPointer<Int64>, Int64) -> Int64> = h_dispatch
+        let r = unsafe { f(hid, CPointer<Unit>(ctx.cp()), p, n) }
+        if (n > 0) {
+            unsafe { LibC.free<Int64>(alloc) }
+        }
+        r
     }
 
     /** T8：NaN 与文本化——位模式与 `TO_STR` 文本逐字节一致。 */
@@ -143,6 +199,14 @@ public class Acceptance_test {
             '{ => let m: Map<Int64, Int64> = {}\n m[1] = 11\n m[1] }', Array<Any>())
         Acceptance_test.diff('T53/list-sum',
             '{ => let l = [10, 20, 30]\n l[0] + l[1] + l[2] }', Array<Any>())
+        // T53：变更型 helper 的目标是路径 A 常量 → 20（源码不可直接构造常量容器）
+        let ctx = JitContext.create(hwBase: 0, hwCap: 0, fnId: 0, dbgBase: 0)
+        let cl = ArrayList<Any>()
+        cl.add(1)
+        let constList = HandleTable.pinConst(cl)
+        @Assert(Acceptance_test.callHelper(43, [constList, 2], ctx), 0)
+        @Assert(ctx.errCode, 20)
+        JitContext.free(ctx)
     }
 
     /** T19 / T45：List / Map / String 迭代（Map 走惰性单遍迭代器）。 */

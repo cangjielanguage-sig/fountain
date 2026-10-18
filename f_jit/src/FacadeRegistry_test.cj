@@ -54,6 +54,7 @@ public class FacadeRegistry_test {
 
     @TestCase
     public func registerQueryUnregister(): Unit {
+        // T23/ 映射标签（check_tmap 断言级校验）
         let c = Compiler(CompileOptions(DummyDiagnosticsSink()))
         let f = PredefinedFunction('add', [LocalType.I64, LocalType.I64], LocalType.I64,
             { a => a[0] })

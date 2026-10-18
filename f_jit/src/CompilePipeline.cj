@@ -18,6 +18,7 @@ package fountain::f_jit
 import fountain::f_jit.base.DummyDiagnosticsSink
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.JitException
+import fountain::f_jit.base.JitMode
 import fountain::f_jit.base.SourceCompileException
 import fountain::f_jit.bytecode.OpInfo
 import fountain::f_jit.bytecode.FbcReader
@@ -25,6 +26,7 @@ import fountain::f_jit.bytecode.Fingerprint
 import fountain::f_jit.bytecode.LoadedUnit
 import fountain::f_jit.bytecode.LocalTypes
 import fountain::f_jit.compiler.SourceCompiler
+import fountain::f_jit.backend.JitExecutor
 import fountain::f_jit.runtime.DbgDump
 import fountain::f_jit.runtime.Interp
 import fountain::f_jit.runtime.JitContext
@@ -37,7 +39,7 @@ import fountain::f_jit.runtime.JitContext
  */
 protected class CompilePipeline {
     public static func runSource(source: String, c: Compiler): JitFunction {
-        let key = 'src/${Fingerprint.fnv1a128(source)}'
+        let key = 'src/${CompilePipeline.modeKey(c.opts.jit)}/${Fingerprint.fnv1a128(source)}'
         match (CompileCache.lookup(key)) {
             case Some(f) => return f
             case None => ()
@@ -46,7 +48,7 @@ protected class CompilePipeline {
             try {
                 let cu = SourceCompiler(c.snapshot(), DummyDiagnosticsSink()).compile(source)
                 let unit = FbcReader.load(cu.raw)
-                let fn = CompilePipeline.makeFunction(unit, cu.entryFn)
+                let fn = CompilePipeline.makeFunction(unit, cu.entryFn, c.opts)
                 CompileCache.finish(key, fn)
                 return fn
             } catch (e: Exception) {
@@ -67,7 +69,7 @@ protected class CompilePipeline {
 
     /** S6.9 字节码管线：`.fbc` → 校验 → 执行器；整份 raw 的 FNV-1a-128 去重。 */
     public static func runUnit(raw: Array<UInt8>, c: Compiler): JitFunction {
-        let key = 'fbc/${Fingerprint.fnv1a128(raw)}'
+        let key = 'fbc/${CompilePipeline.modeKey(c.opts.jit)}/${Fingerprint.fnv1a128(raw)}'
         match (CompileCache.lookup(key)) {
             case Some(f) => return f
             case None => ()
@@ -76,7 +78,7 @@ protected class CompilePipeline {
             try {
                 let unit = FbcReader.load(raw)
                 CompilePipeline.rejectUserHelpers(unit)
-                let fn = CompilePipeline.makeFunction(unit, unit.header.entryFn)
+                let fn = CompilePipeline.makeFunction(unit, unit.header.entryFn, c.opts)
                 CompileCache.finish(key, fn)
                 return fn
             } catch (e: Exception) {
@@ -92,6 +94,15 @@ protected class CompilePipeline {
                     case None => '装载失败'
                 }
                 throw SourceCompileException('CompileFailed', 0, 0, 0, '', msg)
+        }
+    }
+
+    /** 缓存键的引擎维度：`Off`/`Auto`/`Force` 产物不同，不能互相命中。 */
+    private static func modeKey(m: JitMode): String {
+        match (m) {
+            case JitMode.Off => 'off'
+            case JitMode.Auto => 'auto'
+            case JitMode.Force => 'force'
         }
     }
 
@@ -113,7 +124,8 @@ protected class CompilePipeline {
     }
 
     /** 字节码形态执行器（机器码装载由 S6.9/桥接管，接口不变）。 */
-    private static func makeFunction(unit: LoadedUnit, entryFn: UInt32): JitFunction {
+    private static func makeFunction(unit: LoadedUnit, entryFn: UInt32,
+        opts: CompileOptions): JitFunction {
         let idx = CompilePipeline.indexOf(unit, entryFn)
         let e = unit.dir.get(entryFn)
         let types = unit.types[idx]
@@ -123,10 +135,27 @@ protected class CompilePipeline {
             params[i] = UInt16(types.get(i))
             i = i + 1
         }
+        // S6.9：Linux + 已支持指令集尝试 JIT；`Off` 或任何一步失败静默退回解释器（T7/T9）。
+        let executor: ?JitExecutor = if (opts.jit == JitMode.Off) {
+            None
+        } else {
+            JitExecutor.create(unit, entryFn)
+        }
         let body: (JitContext, Array<Int64>) -> Int64 = { ctx, cells =>
+            match (executor) {
+                case Some(ex) => ex.invoke(ctx, cells)
+                case None => Interp(unit).run(entryFn, cells, ctx)
+            }
+        }
+        // DEOPT(-1) 的透明重跑必须走解释器（§8.5）。
+        let replay: (JitContext, Array<Int64>) -> Int64 = { ctx, cells =>
             Interp(unit).run(entryFn, cells, ctx)
         }
-        let fn = JitFunction(Int64(e.nargs), e.retType, params, body, body, '')
+        let release: ?(() -> Unit) = match (executor) {
+            case Some(ex) => Some({ => ex.release() })
+            case None => None
+        }
+        let fn = JitFunction(Int64(e.nargs), e.retType, params, body, replay, '', release)
         // T50：桥侧报告（源码行 + 变量清单），与差分层/解释器共用一份组装逻辑。
         fn.bindDiagnostics(CompilePipeline.maxNLocals(unit)) { ctx, dump =>
             CompilePipeline.reportOf(unit, entryFn, ctx, dump)

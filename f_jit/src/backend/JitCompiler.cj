@@ -79,7 +79,7 @@ public class JitCompiler {
         while (i < unit.dir.size) {
             let fn = unit.dir.at(i)
             let compiled = match (Arch.current.toString()) {
-                case 'x86_64' => X86Compiler.compileFunction(unit, fn)
+                case 'x86_64' => X86Compiler.compileFunctionWith(unit, fn, constBase, fnTableBase)
                 case _ => A64Compiler.compileFunctionWith(unit, fn, constBase, fnTableBase)
             }
             match (compiled) {

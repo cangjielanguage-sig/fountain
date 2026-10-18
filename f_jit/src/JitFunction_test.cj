@@ -27,6 +27,7 @@ import fountain::f_jit.base.LocalType
 public class JitFunction_test {
     @TestCase
     public func returnsT(): Unit {
+        // T15/ 映射标签（check_tmap 断言级校验）
         let f = JitFunction_test.addFn()
         @Assert(f.call<Int64>([20, 22]), 42)
     }
@@ -101,6 +102,7 @@ public class JitFunction_test {
 public class JitFunctionLifecycle_test {
     @TestCase
     public func unloadThenCallIsRejected(): Unit {
+        // T29/ 映射标签（check_tmap 断言级校验）
         let f = JitFunctionLifecycle_test.fn()
         @Assert(f.call<Int64>(Array<Any>()), 1)
         @Assert(f.unload(0), true)

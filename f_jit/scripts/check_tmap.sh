@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# T 编号映射强校验（S7.6 / S0.3）：每条 TMapping 的 caseName SHALL 能在
-# `src/**/*_test.cj` 中解析到 `func <caseName>(`。改名或写错即判悬空并退出 1。
+# T 编号映射强校验（S7.6 / S0.3）：
+#   ① 每条 TMapping 的 caseName SHALL 能在 `src/**/*_test.cj` 中解析到 `func <caseName>(`；
+#   ② 该用例体 SHALL 含 `T<id>/` 断言标签（防止「挂名映射」）；
+#   ③ 范围内映射为空步骤/空用例名同样判悬空。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -11,25 +13,46 @@ if [[ ! -f "$MAP" ]]; then
   exit 2
 fi
 
-total=0
-missing=0
+python3 - "$ROOT" "$MAP" <<'PY'
+import glob, os, re, sys
 
-while IFS= read -r line; do
-  case_name="$(printf '%s\n' "$line" | sed -E "s/.*TMapping\('[^']+', \[[^]]*\], '([^']+)',.*/\1/")"
-  id="$(printf '%s\n' "$line" | sed -E "s/.*TMapping\('([^']+)'.*/\1/")"
-  total=$((total + 1))
-  if [[ -z "$case_name" ]]; then
-    echo "MISSING $id: caseName 为空"
-    missing=$((missing + 1))
-    continue
-  fi
-  if ! grep -rqE "func[[:space:]]+${case_name}[[:space:]]*\(" "$ROOT/src" --include='*_test.cj'; then
-    echo "MISSING $id: 用例 $case_name 在 src/**/*_test.cj 中不存在"
-    missing=$((missing + 1))
-  fi
-done < <(grep -E "^[[:space:]]*TMapping\(" "$MAP" | grep -F ", 'M1', true)")
+root, map_path = sys.argv[1], sys.argv[2]
+text = open(map_path, encoding='utf-8').read()
+entries = re.findall(
+    r"TMapping\('(T\d+)',\s*\[([^\]]*)\],\s*'([^']+)',\s*'M1',\s*true\)", text)
 
-echo "check_tmap: ${total} 条范围内映射，悬空 ${missing} 条"
-if [[ "$missing" -ne 0 ]]; then
-  exit 1
-fi
+bodies = {}
+for path in glob.glob(os.path.join(root, 'src', '**', '*_test.cj'), recursive=True):
+    src = open(path, encoding='utf-8').read()
+    for m in re.finditer(r'func\s+(\w+)\s*\([^)]*\)\s*:\s*Unit\s*\{', src):
+        name, i, depth = m.group(1), m.end(), 1
+        while i < len(src) and depth > 0:
+            if src[i] == '{':
+                depth += 1
+            elif src[i] == '}':
+                depth -= 1
+            i += 1
+        bodies[name] = (path, src[m.start():i])
+
+missing = 0
+for tid, steps, case in entries:
+    if not steps.strip():
+        print(f'MISSING {tid}: steps 为空')
+        missing += 1
+        continue
+    if not case:
+        print(f'MISSING {tid}: caseName 为空')
+        missing += 1
+        continue
+    if case not in bodies:
+        print(f'MISSING {tid}: 用例 {case} 在 src/**/*_test.cj 中不存在')
+        missing += 1
+        continue
+    path, body = bodies[case]
+    if f'{tid}/' not in body:
+        print(f'MISSING {tid}: 用例 {case}（{os.path.relpath(path, root)}）未含 `{tid}/` 断言标签')
+        missing += 1
+
+print(f'check_tmap: {len(entries)} 条范围内映射，悬空/未断言 {missing} 条')
+sys.exit(1 if missing else 0)
+PY

@@ -42,6 +42,7 @@ public class CodeBuffer_test {
 
     @TestCase
     public func pageAlignment(): Unit {
+        // T4/ 映射标签（check_tmap 断言级校验）
         let page = CodeBuffer.pageSize()
         @Assert(page > 0, true)
         let b1 = CodeBuffer_test.allocOrFail(1)

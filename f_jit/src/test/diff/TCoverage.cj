@@ -88,7 +88,7 @@ public let T_MAP_IN_SCOPE: Array<TMapping> = [
     TMapping('T48', ['S3.17', 'S7.6'], 't48EmptyContainers', 'M1', true),
     TMapping('T50', ['S1.9', 'S4.19', 'S7.6'], 't50SourcePosDiagnostics', 'M1', true),
     TMapping('T51', ['S3.17', 'S7.6'], 't48EmptyContainers', 'M1', true),
-    TMapping('T52', ['S6.5', 'S7.6'], 't2TripleEqualCore', 'M1', true),
+    TMapping('T52', ['S6.5', 'S7.6'], 't52TwoFormsSameBehavior', 'M1', true),
     TMapping('T53', ['S4.15', 'S7.6'], 't18ContainerMutation', 'M1', true)
 ]
 

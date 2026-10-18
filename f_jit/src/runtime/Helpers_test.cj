@@ -605,6 +605,7 @@ public class Helpers_test {
     /** `closure_new` 登记 1 槽；`closure_fnid` / `closure_cap`；`fn_table` 基址。 */
     @TestCase
     public func closureHelpers(): Unit {
+        // T25/ 映射标签（check_tmap 断言级校验）
         setup()
         let s = str('cap')
         let base = used()

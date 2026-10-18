@@ -1642,11 +1642,22 @@ internal class BackendX86_64 <: Backend {
         BackendX86_64.w32(out, BackendX86_64.i32bits(frame))
         var i: Int64 = 0
         while (i < nargs) {
-            // mov rax,[rsi+8i]
-            out.add(0x48u8)
-            out.add(0x8Bu8)
-            out.add(0x46u8)
-            out.add(UInt8(i * 8))
+            // 共享 ABI：rsi 指向最深实参，第 i 个在 [rsi-8i]（与 AArch64 一致）
+            if (i == 0) {
+                out.add(0x48u8)
+                out.add(0x8Bu8)
+                out.add(0x06u8)
+            } else if (i * 8 <= 127) {
+                out.add(0x48u8)
+                out.add(0x8Bu8)
+                out.add(0x46u8)
+                out.add(UInt8(256 - i * 8))
+            } else {
+                out.add(0x48u8)
+                out.add(0x8Bu8)
+                out.add(0x86u8)
+                BackendX86_64.w32(out, BackendX86_64.i32bits(0 - 8 * i))
+            }
             // mov [rbp-(32+8i)],rax
             out.add(0x48u8)
             out.add(0x89u8)

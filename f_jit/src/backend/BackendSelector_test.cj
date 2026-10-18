@@ -59,6 +59,7 @@ public class BackendSelector_test {
 
     @TestCase
     public func nonLinuxFallsBackWithDiagnostic(): Unit {
+        // T7/ 映射标签（check_tmap 断言级校验）
         let oses = [OS.Windows, OS.macOS, OS.HarmonyOS, OS.OpenHarmony, OS.Android, OS.iOS]
         for (os in oses) {
             let sink = Sink()

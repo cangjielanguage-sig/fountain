@@ -186,6 +186,7 @@ public class A64Exec_test {
     /** S5.14：每个函数入口与间接调用着陆点都以 `bti c` 开始（IBT/BTI）。 */
     @TestCase
     public func allFunctionEntriesStartWithBtiC(): Unit {
+        // T5/ 映射标签（check_tmap 断言级校验）
         let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(
             '{ => let f = { x: Int64 => x + 1 }\n f(41) }')
         let unit = FbcReader.load(cu.raw)

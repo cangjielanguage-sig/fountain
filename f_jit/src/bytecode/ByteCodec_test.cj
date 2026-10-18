@@ -31,6 +31,7 @@ public class ByteCodec_test {
     /** 字节序断言 + 往返：`0x0102` 的 LE 字节序列为 `02 01`，读回与写入值相同。 */
     @TestCase
     public func littleEndianRoundTrip(): Unit {
+        // T3/ 映射标签（check_tmap 断言级校验）
         let w = ByteWriter()
         w.wU16(0x0102u16)
         let bs = w.take()

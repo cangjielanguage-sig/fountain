@@ -57,7 +57,7 @@ public class X86Frame_test {
             '4989FF' + // mov r15,rdi
             '41C74728' + '2A000000' + // mov dword [r15+40],42（ctx.fnId）
             '4881EC' + '40000000' + // sub rsp,64
-            '488B4600' + '488985E0FFFFFF' + // arg0 → locals[0] ([rbp-32])
+            '488B06' + '488985E0FFFFFF' + // arg0 → locals[0] ([rbp-32])
             '48C785D8FFFFFF00000000' // locals[1] 卫生填 0（[rbp-40]）
         @Assert(X86Frame_test.hex(got), expected)
     }

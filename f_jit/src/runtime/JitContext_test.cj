@@ -112,6 +112,7 @@ public class JitContext_test {
     /** `create` / `free` 配对（T27 的 malloc/free 计数断言）：正常路径无泄漏。 */
     @TestCase
     public func createFreePairIsBalanced(): Unit {
+        // T27/ 映射标签（check_tmap 断言级校验）
         NativeMem.resetCounters()
         let ctx = JitContext.create(hwBase: 0, hwCap: 0, fnId: 0, dbgBase: 0)
         @Assert(NativeMem.mallocCount, 1)

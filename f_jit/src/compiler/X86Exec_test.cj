@@ -44,6 +44,18 @@ public class X86Exec_test {
         X86Exec_test.check('X86/branch', '{ a: Int64 => if (a > 0) { 1 } else { 0 } }', [5])
     }
 
+    @TestCase
+    public func containerMutation(): Unit {
+        X86Exec_test.check('X86/container', '{ => let l = [1, 2]\n l[0] = 3\n l[0] }',
+            Array<Any>())
+    }
+
+    @TestCase
+    public func recursiveCall(): Unit {
+        X86Exec_test.check('X86/recursive',
+            '{ n: Int64 => if (n <= 1) { 1 } else { n * recursive(n - 1) } }', [5])
+    }
+
     private static func check(id: String, src: String, args: Array<Any>): Unit {
         let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(src)
         let r = NativeRunner().run(DiffCase(id, cu.raw, args))

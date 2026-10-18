@@ -63,6 +63,7 @@ public class CallMarshal_test {
 
     @TestCase
     public func handlePinnedAndCleaned(): Unit {
+        // T14/ 映射标签（check_tmap 断言级校验）
         let m = CallMarshal()
         let id = m.marshalArg(LocalType.STRING, 'hello')
         @Assert(id != 0, true)

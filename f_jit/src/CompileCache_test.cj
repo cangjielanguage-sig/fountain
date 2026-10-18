@@ -26,6 +26,7 @@ import fountain::f_jit.base.LocalType
 public class CompileCache_test {
     @TestCase
     public func claimIsExclusive(): Unit {
+        // T16/ 映射标签（check_tmap 断言级校验）
         CompileCache.reset()
         let key = 'S6.7/claim'
         @Assert(CompileCache.claim(key), true)
@@ -39,6 +40,7 @@ public class CompileCache_test {
 
     @TestCase
     public func concurrentPipelineRunsOnce(): Unit {
+        // T17/ 映射标签（check_tmap 断言级校验）
         CompileCache.reset()
         let key = 'S6.7/concurrent'
         let results = ArrayList<JitFunction>()
