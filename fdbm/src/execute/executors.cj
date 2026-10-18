@@ -19,7 +19,7 @@ import std.collection.{ArrayList, HashMap}
 import std.database.sql.*
 import std.unicode.UnicodeStringExtension
 import fountain::f_data.{Data, DataReal, DataString}
-import fountain::f_dbd.common.{ColumnInfoImpl, DbdErrorCode, UpdateResultPayload}
+import fountain::f_dbd.common.{ColumnInfoImpl, DbdErrorCode, SqlTypes, UpdateResultPayload}
 import fountain::fdbm.config.{BootScriptWriter, IdMakerConfig}
 import fountain::fdbm.exception.FdbmException
 import fountain::fdbm.idmaker.IdMakers
@@ -79,6 +79,82 @@ func allDatabases(resources: NodeAccessor): Array<String> {
     resources.databases()
 }
 
+/** 执行一条 UPDATE 并关闭语句句柄（避免真实驱动的句柄泄漏）。 */
+func executeUpdate(connection: Connection, sql: String): UpdateResult {
+    let statement = connection.prepareStatement(sql)
+    try {
+        let result = statement.update()
+        statement.close()
+        return result
+    } catch (e: Exception) {
+        try {
+            statement.close()
+        } catch (_: Exception) {
+            ()
+        }
+        throw e
+    }
+}
+
+/** 逗号拼接（错误信息用）。 */
+func joinNames(names: ArrayList<String>): String {
+    let text = StringBuilder()
+    for (name in names) {
+        if (text.size > 0) {
+            text.append(', ')
+        }
+        text.append(name)
+    }
+    text.toString()
+}
+
+/**
+ * 全局表写广播（设计 §9.4）：逐物理库、逐写节点执行；全部成功才成功。
+ *
+ * 部分成功 → `DB_ERROR` 并列出成功/失败库（无两阶段提交，列为限制）。
+ * 广播写使用独立连接，不参与会话事务（"每库独立事务"）。
+ */
+func broadcastWrite(resources: NodeAccessor, databases: Array<String>,
+    sql: String): UpdateResultPayload {
+    let targets = if (!databases.isEmpty()) { databases } else { resources.databases() }
+    let succeeded = ArrayList<String>()
+    let failed = ArrayList<String>()
+    var rowCount: Int64 = 0
+    var lastInsertId: Int64 = 0
+    var firstError = ''
+    for (database in targets) {
+        var connections = Array<Connection>()
+        try {
+            connections = resources.selectAllWrite(database)
+            for (connection in connections) {
+                let result = executeUpdate(connection, sql)
+                rowCount += result.rowCount
+                lastInsertId = result.lastInsertId
+            }
+            succeeded.add(database)
+        } catch (e: Exception) {
+            failed.add(database)
+            if (firstError.isEmpty()) {
+                firstError = e.message
+            }
+        } finally {
+            for (connection in connections) {
+                try {
+                    connection.close()
+                } catch (_: Exception) {
+                    ()
+                }
+            }
+        }
+    }
+    if (!failed.isEmpty()) {
+        throw FdbmException(DbdErrorCode.DB_ERROR,
+            'global table write partially failed; success: [${joinNames(succeeded)}]; ' +
+            'failed: [${joinNames(failed)}]: ${firstError}')
+    }
+    UpdateResultPayload(rowCount, lastInsertId)
+}
+
 /** SELECT（设计 §9.3）：Single/Multi/Broadcast 共用多段游标；Empty 只取列信息。 */
 protected class SelectExecutor {
     private let resources: NodeAccessor
@@ -96,7 +172,14 @@ protected class SelectExecutor {
         if (plan.kind == RouteKind.Empty) {
             return emptyOutcome(session, statement)
         }
-        let databases = if (plan.kind == RouteKind.Broadcast || plan.kind == RouteKind.Unroutable) {
+        let databases = if (plan.kind == RouteKind.Broadcast) {
+            // 全局表读任意副本即可（设计 §9.4），避免同一行被多副本重复返回
+            if (globalOnly(statement, session.database) && !plan.databases.isEmpty()) {
+                [plan.databases[0]]
+            } else {
+                plan.databases
+            }
+        } else if (plan.kind == RouteKind.Unroutable) {
             allDatabases(resources)
         } else {
             plan.databases
@@ -120,6 +203,23 @@ protected class SelectExecutor {
             throw e
         }
         ExecutionOutcome(cursor: Some(QueryCursor(segments.toArray(), infos)), columns: infos)
+    }
+
+    /** 语句是否只引用全局表（读只需任一副本）。 */
+    private func globalOnly(statement: SelectStatement, currentDatabase: String): Bool {
+        if (statement.tables.isEmpty()) {
+            return false
+        }
+        for (table in statement.tables) {
+            let logical = match (table.database) {
+                case Some(database) => database
+                case None => currentDatabase
+            }
+            if (!globals.isGlobal(logical, table.name)) {
+                return false
+            }
+        }
+        true
     }
 
     private func emptyOutcome(session: DbdSession, statement: SelectStatement): ExecutionOutcome {
@@ -158,17 +258,25 @@ protected class SelectExecutor {
     }
 }
 
-/** UPDATE / DELETE：按计划逐库执行并累加 `rowCount`。 */
+/** UPDATE：全局表广播；分片表按计划逐库执行并累加 `rowCount`。 */
 protected class DmlExecutor {
     private let resources: NodeAccessor
     private let router: PartitionRouter
+    private let globals: GlobalTableRouter
 
-    public init(resources: NodeAccessor, router: PartitionRouter) {
+    public init(resources: NodeAccessor, router: PartitionRouter, globals: GlobalTableRouter) {
         this.resources = resources
         this.router = router
+        this.globals = globals
     }
 
-    public func execute(session: DbdSession, statement: SqlStatement): ExecutionOutcome {
+    public func execute(session: DbdSession, statement: UpdateStatement): ExecutionOutcome {
+        let logical = logicalOf(statement.table, session.database)
+        if (globals.isGlobal(logical, statement.table.name)) {
+            let sql = SqlRenderer.render(statement)
+            return ExecutionOutcome(update: Some(broadcastWrite(resources,
+                globals.physicalDatabases(logical), sql)))
+        }
         let plan = router.route(statement, session.database)
         if (plan.kind == RouteKind.Empty) {
             return ExecutionOutcome(update: Some(UpdateResultPayload(0, 0)))
@@ -183,7 +291,7 @@ protected class DmlExecutor {
         for (database in plan.databases) {
             let (connection, owns) = borrow(session, resources, database, write: true)
             try {
-                let result = connection.prepareStatement(sql).update()
+                let result = executeUpdate(connection, sql)
                 rowCount += result.rowCount
                 lastInsertId = result.lastInsertId
             } finally {
@@ -194,21 +302,146 @@ protected class DmlExecutor {
         }
         ExecutionOutcome(update: Some(UpdateResultPayload(rowCount, lastInsertId)))
     }
+
+    static func logicalOf(table: TableRef, currentDatabase: String): String {
+        match (table.database) {
+            case Some(database) => database
+            case None => currentDatabase
+        }
+    }
+}
+
+/**
+ * DELETE（设计 §6.2/§9.3 的三步顺序）：
+ * ① 先查受影响行的分库键；② 逐库删除并累加；③ 删除缓存条目。
+ *
+ * 全局表没有分库键，直接广播删除；未分库表跳过键查询与缓存。
+ */
+protected class DeleteExecutor {
+    private let resources: NodeAccessor
+    private let router: PartitionRouter
+    private let globals: GlobalTableRouter
+
+    public init(resources: NodeAccessor, router: PartitionRouter, globals: GlobalTableRouter) {
+        this.resources = resources
+        this.router = router
+        this.globals = globals
+    }
+
+    public func execute(session: DbdSession, statement: DeleteStatement): ExecutionOutcome {
+        let logical = DmlExecutor.logicalOf(statement.table, session.database)
+        if (globals.isGlobal(logical, statement.table.name)) {
+            let sql = SqlRenderer.render(statement)
+            return ExecutionOutcome(update: Some(broadcastWrite(resources,
+                globals.physicalDatabases(logical), sql)))
+        }
+        let plan = router.route(statement, session.database)
+        if (plan.kind == RouteKind.Empty) {
+            return ExecutionOutcome(update: Some(UpdateResultPayload(0, 0)))
+        }
+        if (plan.kind == RouteKind.Unroutable) {
+            throw FdbmException(DbdErrorCode.ROUTE_FAILED,
+                'update/delete requires a partition key condition')
+        }
+        let rule = router.rule(logical, statement.table.name)
+        let keys = match (rule) {
+            case Some(found) => queryKeys(session, statement, found, plan.databases)
+            case None => ArrayList<String>() // 未分库表：无缓存可失效
+        }
+        let sql = SqlRenderer.render(statement)
+        var rowCount: Int64 = 0
+        var lastInsertId: Int64 = 0
+        for (database in plan.databases) {
+            let (connection, owns) = borrow(session, resources, database, write: true)
+            try {
+                let result = executeUpdate(connection, sql)
+                rowCount += result.rowCount
+                lastInsertId = result.lastInsertId
+            } finally {
+                if (owns) {
+                    connection.close()
+                }
+            }
+        }
+        match (rule) {
+            case Some(found) =>
+                for (value in keys) {
+                    router.invalidate(found, value)
+                }
+            case None => ()
+        }
+        ExecutionOutcome(update: Some(UpdateResultPayload(rowCount, lastInsertId)))
+    }
+
+    /** 第一步：`select <column> from <table> where ...`，逐库取键并去重。 */
+    private func queryKeys(session: DbdSession, statement: DeleteStatement,
+        rule: PartitionRule, databases: Array<String>): ArrayList<String> {
+        let select = SelectStatement(false,
+            [SelectItem(ColumnExpression(None, rule.column), None)],
+            [statement.table], [], statement.condition, [], None, None)
+        let sql = SqlRenderer.render(select)
+        let keys = ArrayList<String>()
+        for (database in databases) {
+            let (connection, owns) = borrow(session, resources, database)
+            var result: ?QueryResult = None
+            try {
+                let prepared = connection.prepareStatement(sql)
+                try {
+                    let query = prepared.query()
+                    result = Some(query)
+                    let typeName = query.columnInfos[0].typeName
+                    while (query.next()) {
+                        let cell = SqlTypes.readData(query, 0, typeName)
+                        match (PartitionKeyExtractor.literalString(LiteralExpression(cell))) {
+                            case Some(value) =>
+                                if (!keys.contains(value)) {
+                                    keys.add(value)
+                                }
+                            case None => ()
+                        }
+                    }
+                } finally {
+                    try {
+                        prepared.close()
+                    } catch (_: Exception) {
+                        ()
+                    }
+                }
+            } finally {
+                match (result) {
+                    case Some(query) =>
+                        try {
+                            query.close()
+                        } catch (_: Exception) {
+                            ()
+                        }
+                    case None => ()
+                }
+                if (owns) {
+                    connection.close()
+                }
+            }
+        }
+        keys
+    }
 }
 
 /** INSERT：逐行路由执行；缺分库列时由 ID 生成器补；`insert … select` 先物化再逐行插入。 */
 protected class InsertExecutor {
     private let resources: NodeAccessor
     private let router: PartitionRouter
+    private let globals: GlobalTableRouter
     private let selectExecutor: SelectExecutor
     private let idmaker: IdMakerConfig
     private let sequenceDatabase: String
     private let custom: HashMap<String, IdGenerator>
 
-    public init(resources: NodeAccessor, router: PartitionRouter, selectExecutor: SelectExecutor,
-        idmaker: IdMakerConfig, sequenceDatabase: String, custom: HashMap<String, IdGenerator>) {
+    public init(resources: NodeAccessor, router: PartitionRouter, globals: GlobalTableRouter,
+        selectExecutor: SelectExecutor, idmaker: IdMakerConfig, sequenceDatabase: String,
+        custom: HashMap<String, IdGenerator>) {
         this.resources = resources
         this.router = router
+        this.globals = globals
         this.selectExecutor = selectExecutor
         this.idmaker = idmaker
         this.sequenceDatabase = sequenceDatabase
@@ -295,7 +528,8 @@ protected class InsertExecutor {
 
     private func fillAndRoute(session: DbdSession, statement: InsertStatement,
         row: Array<SqlExpression>, setPairs: ?Array<(String, SqlExpression)>): InsertStatement {
-        let rule = router.rule(session.database, statement.table.name)
+        let logical = DmlExecutor.logicalOf(statement.table, session.database)
+        let rule = router.rule(logical, statement.table.name)
         let columns = ArrayList<String>()
         for (column in statement.columns) {
             columns.add(column)
@@ -360,6 +594,11 @@ protected class InsertExecutor {
     }
 
     private func executeSingle(session: DbdSession, statement: InsertStatement): UpdateResultPayload {
+        let logical = DmlExecutor.logicalOf(statement.table, session.database)
+        if (globals.isGlobal(logical, statement.table.name)) {
+            let sql = SqlRenderer.render(statement)
+            return broadcastWrite(resources, globals.physicalDatabases(logical), sql)
+        }
         let plan = router.route(statement, session.database)
         if (plan.kind == RouteKind.Empty) {
             return UpdateResultPayload(0, 0)
@@ -373,7 +612,7 @@ protected class InsertExecutor {
         for (database in plan.databases) {
             let (connection, owns) = borrow(session, resources, database, write: true)
             try {
-                let result = connection.prepareStatement(sql).update()
+                let result = executeUpdate(connection, sql)
                 rowCount += result.rowCount
                 lastInsertId = result.lastInsertId
             } finally {
@@ -509,22 +748,48 @@ protected class ExportExecutor {
 /** DDL：广播到全部物理库，全部成功才算成功。 */
 protected class DdlExecutor {
     private let resources: NodeAccessor
+    private let globals: GlobalTableRouter
 
-    public init(resources: NodeAccessor) {
+    public init(resources: NodeAccessor, globals: GlobalTableRouter) {
         this.resources = resources
+        this.globals = globals
     }
 
+    /** DDL 广播到当前逻辑库的全部物理库；部分失败 → `DB_ERROR` 并列出成功/失败库。 */
     public func execute(session: DbdSession, statement: DdlStatement): ExecutionOutcome {
+        let configured = globals.physicalDatabases(session.database)
+        let databases = if (!configured.isEmpty()) { configured } else { resources.databases() }
+        let succeeded = ArrayList<String>()
+        let failed = ArrayList<String>()
         var rowCount: Int64 = 0
-        for (database in resources.databases()) {
-            let (connection, owns) = borrow(session, resources, database, write: true)
+        var firstError = ''
+        for (database in databases) {
+            var connection: ?Connection = None
+            var owns = false
             try {
-                rowCount += connection.prepareStatement(statement.sql).update().rowCount
+                let (found, owned) = borrow(session, resources, database, write: true)
+                connection = Some(found)
+                owns = owned
+                rowCount += executeUpdate(found, statement.sql).rowCount
+                succeeded.add(database)
+            } catch (e: Exception) {
+                failed.add(database)
+                if (firstError.isEmpty()) {
+                    firstError = e.message
+                }
             } finally {
                 if (owns) {
-                    connection.close()
+                    match (connection) {
+                        case Some(found) => found.close()
+                        case None => ()
+                    }
                 }
             }
+        }
+        if (!failed.isEmpty()) {
+            throw FdbmException(DbdErrorCode.DB_ERROR,
+                'ddl partially failed; success: [${joinNames(succeeded)}]; ' +
+                'failed: [${joinNames(failed)}]: ${firstError}')
         }
         ExecutionOutcome(update: Some(UpdateResultPayload(rowCount, 0)))
     }
@@ -548,13 +813,13 @@ protected class SessionCtlExecutor {
                 let pinned = PinnedConnection(connection)
                 pinned.transactionOpen = true
                 session.pinned = Some(pinned)
-                let result = connection.prepareStatement(statement.sql).update()
+                let result = executeUpdate(connection, statement.sql)
                 ExecutionOutcome(update: Some(UpdateResultPayload(result.rowCount, 0)))
             case SessionCtlVerb.Commit | SessionCtlVerb.Rollback =>
                 match (session.pinned) {
                     case Some(pinned) =>
                         try {
-                            let result = pinned.connection.prepareStatement(statement.sql).update()
+                            let result = executeUpdate(pinned.connection, statement.sql)
                             ExecutionOutcome(update: Some(UpdateResultPayload(result.rowCount, 0)))
                         } finally {
                             pinned.close()
@@ -566,7 +831,7 @@ protected class SessionCtlExecutor {
             case _ =>
                 match (session.pinned) {
                     case Some(pinned) =>
-                        let result = pinned.connection.prepareStatement(statement.sql).update()
+                        let result = executeUpdate(pinned.connection, statement.sql)
                         ExecutionOutcome(update: Some(UpdateResultPayload(result.rowCount, 0)))
                     case None => throw FdbmException(DbdErrorCode.TX_STATE,
                         'cannot ${statement.sql}: the transaction has not begun')

@@ -114,7 +114,7 @@
 
 - **GIVEN** 一个结果集，服务端对 `UNSUBSCRIBE` 回 `ERROR` 或超时
 - **WHEN** 调用 `close()`
-- **THEN** 异常被吞掉、`isClosed()` 为 `true`、已打开的流失效；连接按断链处理置 `Broken`
+- **THEN** 异常被吞掉、`isClosed()` 为 `true`、已打开的流失效；`ERROR` 时连接保持可用，超时/断链才置 `Broken`
 
 #### Scenario: qid 不匹配时服务端幂等 ACK
 
@@ -186,7 +186,7 @@
 
 本要求为强制要求（MUST）。
 
-`f_dbd` 只识别 `f_dbd/doc/详细设计.md` §8 表内的仓颉类型名（`String`/`Bool`/`Int*`/`UInt*`/`Float*`/`Decimal`/`BigInt`/`Array<Byte>`/`InputStream`/`DateTime`/`Duration`）；未知拼写按 `String` 读取并记 WARN。识别顺序：精确匹配 → 去包名前缀 → 兜底。**不做**方言与 `Sql*` 名的归一（那是 fdbm 的职责）。
+`f_dbd` 只识别 `f_dbd/doc/详细设计.md` §8 表内的仓颉类型名（`String`/`Bool`/`Int*`/`UInt*`/`Float*`/`Decimal`/`BigInt`/`Array<Byte>`/`InputStream`/`DateTime`/`Duration`）；未知拼写按 `String` 读取并记 WARN。识别顺序：精确匹配 → 去包名前缀 → 兜底。**不做**方言与 `Sql*` 名的归一；归一表实现在 `f_dbd.common.SqlTypes`（供 fdbm 复用），但 f_dbd 的连接与结果集路径不调用它，线上只出现仓颉类型名。
 
 #### Scenario: 仓颉类型名原样命中
 

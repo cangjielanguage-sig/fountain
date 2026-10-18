@@ -141,12 +141,6 @@ public class DbdConnection <: Connection {
         }
     }
 
-    func currentResult(): ?QueryResultImpl {
-        synchronized(lock) {
-            activeResult
-        }
-    }
-
     /** 结果集专用的收发通道接入点（`QueryResultImpl` 的 `send` / `closer` 由此注入）。 */
     func request<T>(payload: T, timeout: Duration): Message where T <: ToData {
         transport.request(payload, timeout)

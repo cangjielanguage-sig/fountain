@@ -25,7 +25,8 @@ import fountain::f_mockdb.*
 import fountain::fdbm.config.{BootScriptWriter, DatabaseNodeConfig, IdMakerConfig, LoadBalanceConfig, PoolConfig}
 import fountain::fdbm.exception.FdbmException
 import fountain::fdbm.resources.{DatabaseResources, NodeAccessor}
-import fountain::fdbm.route.{GlobalTableRouter, PartitionRouter, PartitionRule, StepPartition}
+import fountain::fdbm.route.{GlobalTableRouter, GlobalTableRule, PartitionCache, PartitionRouter,
+    PartitionRule, StepPartition}
 import fountain::fdbm.sql.*
 
 /** 阶段 7：分发器与执行器的核心路径（mockdb 真实连接）。 */
@@ -225,8 +226,8 @@ public class DispatcherTest {
         let accessor = RecordingAccessor(resources)
         let router = routerOf()
         let select = SelectExecutor(accessor, router, GlobalTableRouter([]))
-        let insert = InsertExecutor(accessor, router, select, IdMakerConfig('uuid'), 'db0',
-            HashMap<String, IdGenerator>())
+        let insert = InsertExecutor(accessor, router, GlobalTableRouter([]), select,
+            IdMakerConfig('uuid'), 'db0', HashMap<String, IdGenerator>())
         let session = DbdSession('s', None, 'db0')
         try {
             let outcome = insert.execute(session,
@@ -364,6 +365,186 @@ public class DispatcherTest {
         @Assert(codeOf { ExportExecutor(None).execute(ExportStatement('fdbm_port', '9000')) },
             DbdErrorCode.CONFIG)
     }
+
+    // ==================== 全局表写广播 / 未分库表 / DELETE 三步 ====================
+
+    @TestCase
+    public func unpartitionedTableInsertUsesSingleDatabase(): Unit {
+        let (executor, resources, accessor) = plainFixture()
+        let session = DbdSession('s', None, 'db0')
+        try {
+            let outcome = executor.execute(session, "insert into plain (id, name) values (1, 'a')", [])
+            @Assert(outcome.update.getOrThrow().rowCount, 1)
+            @Assert(accessor.writes.toArray(), ['db0'])
+        } finally {
+            session.close()
+            resources.close()
+        }
+    }
+
+    @TestCase
+    public func globalTableInsertBroadcastsToEveryPhysicalDatabase(): Unit {
+        let logicals = HashMap<String, Array<String>>()
+        logicals['db0'] = ['db0', 'db1']
+        let globals = GlobalTableRouter([GlobalTableRule('db0', 'dict')],
+            logicalDatabases: logicals)
+        let (executor, resources, accessor) = globalFixture(globals)
+        let session = DbdSession('s', None, 'db0')
+        try {
+            let outcome = executor.execute(session, "insert into dict (k, v) values (1, 'a')", [])
+            @Assert(outcome.update.getOrThrow().rowCount, 2)
+            @Assert(accessor.writes.toArray(), ['db0', 'db1'])
+        } finally {
+            session.close()
+            resources.close()
+        }
+    }
+
+    @TestCase
+    public func globalTableReadUsesOneReplica(): Unit {
+        let logicals = HashMap<String, Array<String>>()
+        logicals['db0'] = ['db0', 'db1']
+        let globals = GlobalTableRouter([GlobalTableRule('db0', 'dict')],
+            logicalDatabases: logicals)
+        let (executor, resources, accessor) = globalFixture(globals)
+        let session = DbdSession('s', None, 'db0')
+        try {
+            let outcome = executor.execute(session, 'select * from dict', [])
+            let cursor = outcome.cursor.getOrThrow()
+            @Assert(cursor.next(), true)
+            @Assert(cursor.next(), false) // 只有一个副本，不重复返回
+            cursor.close()
+            @Assert(accessor.reads.toArray(), ['db0'])
+        } finally {
+            session.close()
+            resources.close()
+        }
+    }
+
+    @TestCase
+    public func globalTableWriteReportsPartialFailure(): Unit {
+        let logicals = HashMap<String, Array<String>>()
+        logicals['db0'] = ['db0', 'db1']
+        let globals = GlobalTableRouter([GlobalTableRule('db0', 'dict')],
+            logicalDatabases: logicals)
+        let resources = resourcesOf()
+        let accessor = FailingAccessor(resources, 'db1')
+        let router = PartitionRouter([], None, HashMap<String, PartitionAlgorithm>(),
+            knownDatabases: ['db0', 'db1'], globalTables: globals)
+        let executor = ExecutorDispatcher(router, globals, accessor, IdMakerConfig('uuid'), 'db0',
+            HashMap<String, IdGenerator>(), None)
+        let session = DbdSession('s', None, 'db0')
+        try {
+            var message = ''
+            try {
+                executor.execute(session, "insert into dict (k, v) values (1, 'a')", [])
+            } catch (e: FdbmException) {
+                message = e.message
+                @Assert(e.code, DbdErrorCode.DB_ERROR)
+            }
+            @Assert(message.contains('db1'), true)
+            @Assert(message.contains('db0'), true)
+        } finally {
+            session.close()
+            resources.close()
+        }
+    }
+
+    @TestCase
+    public func deleteQueriesKeysDeletesThenInvalidatesCache(): Unit {
+        let dir = Directory.createTemp('/tmp')
+        try {
+            let cache = PartitionCache(dir.toString(), None, 0)
+            cache.put('db0', 't', 'id', '5', 'db0')
+            let sqls = ArrayList<String>()
+            MOCKDB.clear()
+            MOCKDB.execution = {sql, _ =>
+                sqls.add(sql)
+                if (sql.startsWith('select')) {
+                    MOCKDB.addQueryResultColumnInfo(name: 'id', nullable: false, typeName: 'Int64')
+                    MOCKDB.addQueryResultRow([5])
+                } else {
+                    MOCKDB.rowCount = 1
+                }
+            }
+            let resources = resourcesOf()
+            let accessor = RecordingAccessor(resources)
+            let rules = [PartitionRule('db0', 't', 'id', StepPartition(['db0', 'db1'], 1000))]
+            let router = PartitionRouter(rules, Some(cache), HashMap<String, PartitionAlgorithm>(),
+                knownDatabases: ['db0', 'db1'], globalTables: GlobalTableRouter([]))
+            let executor = ExecutorDispatcher(router, GlobalTableRouter([]), accessor,
+                IdMakerConfig('uuid'), 'db0', HashMap<String, IdGenerator>(), None)
+            let session = DbdSession('s', None, 'db0')
+            try {
+                let outcome = executor.execute(session, 'delete from t where id = 5', [])
+                @Assert(outcome.update.getOrThrow().rowCount, 1)
+                @Assert(sqls.toArray(), ['select id from t where (id = 5)', 'delete from t where (id = 5)'])
+                @Assert(cache.get('db0', 't', 'id', '5').isNone(), true)
+            } finally {
+                session.close()
+                resources.close()
+            }
+        } finally {
+            remove(dir, recursive: true)
+        }
+    }
+
+    @TestCase
+    public func ddlPartialFailureListsDatabases(): Unit {
+        let logicals = HashMap<String, Array<String>>()
+        logicals['db0'] = ['db0', 'db1']
+        let globals = GlobalTableRouter([], logicalDatabases: logicals)
+        let resources = resourcesOf()
+        let accessor = FailingAccessor(resources, 'db1')
+        MOCKDB.clear()
+        MOCKDB.execution = {_, _ => MOCKDB.rowCount = 0}
+        let executor = DdlExecutor(accessor, globals)
+        let session = DbdSession('s', None, 'db0')
+        try {
+            var message = ''
+            try {
+                executor.execute(session, parseDdl('create table x (id int)'))
+            } catch (e: FdbmException) {
+                message = e.message
+                @Assert(e.code, DbdErrorCode.DB_ERROR)
+            }
+            @Assert(message.contains('db0'), true)
+            @Assert(message.contains('db1'), true)
+        } finally {
+            session.close()
+            resources.close()
+        }
+    }
+
+    /** 无分库规则、只配置逻辑库映射的执行器。 */
+    private func plainFixture(): (ExecutorDispatcher, DatabaseResources, RecordingAccessor) {
+        let logicals = HashMap<String, Array<String>>()
+        logicals['db0'] = ['db0', 'db1']
+        let globals = GlobalTableRouter([], logicalDatabases: logicals)
+        globalFixture(globals, rules: [])
+    }
+
+    private func globalFixture(globals: GlobalTableRouter,
+        rules!: Array<PartitionRule> = [PartitionRule('db0', 't', 'id',
+            StepPartition(['db0', 'db1'], 1000))]):
+        (ExecutorDispatcher, DatabaseResources, RecordingAccessor) {
+        MOCKDB.clear()
+        MOCKDB.execution = {sql, _ =>
+            if (sql.startsWith('select')) {
+                MOCKDB.addQueryResultColumnInfo(name: 'id', nullable: false, typeName: 'Int64')
+                MOCKDB.addQueryResultRow([1])
+            } else {
+                MOCKDB.rowCount = 1
+            }
+        }
+        let resources = resourcesOf()
+        let accessor = RecordingAccessor(resources)
+        let router = PartitionRouter(rules, None, HashMap<String, PartitionAlgorithm>(),
+            knownDatabases: ['db0', 'db1'], globalTables: globals)
+        let executor = ExecutorDispatcher(router, globals, accessor, IdMakerConfig('uuid'), 'db0',
+            HashMap<String, IdGenerator>(), None)
+        (executor, resources, accessor)
+    }
 }
 
 // ==================== 测试替身与工具 ====================
@@ -408,6 +589,51 @@ class RecordingAccessor <: NodeAccessor {
 
     public func driver(_: String): String {
         driverName
+    }
+}
+
+/** 指定物理库的写入口直接失败（验证全局表广播的部分失败报错）。 */
+class FailingAccessor <: NodeAccessor {
+    private let inner: NodeAccessor
+    private let failing: String
+
+    init(inner: NodeAccessor, failing: String) {
+        this.inner = inner
+        this.failing = failing
+    }
+
+    public func selectRead(database: String): Connection {
+        inner.selectRead(database)
+    }
+
+    public func selectWrite(database: String): Connection {
+        if (database == failing) {
+            throw FdbmException(DbdErrorCode.DB_ERROR, 'simulated failure on ${database}')
+        }
+        inner.selectWrite(database)
+    }
+
+    public func selectAllWrite(database: String): Array<Connection> {
+        if (database == failing) {
+            throw FdbmException(DbdErrorCode.DB_ERROR, 'simulated failure on ${database}')
+        }
+        inner.selectAllWrite(database)
+    }
+
+    public func databases(): Array<String> {
+        inner.databases()
+    }
+
+    public func contains(database: String): Bool {
+        inner.contains(database)
+    }
+
+    public func readNodes(database: String): Array<String> {
+        inner.readNodes(database)
+    }
+
+    public func driver(database: String): String {
+        inner.driver(database)
     }
 }
 
@@ -507,6 +733,13 @@ func parseInsert(sql: String): InsertStatement {
     match (SqlParser.parse(sql, 'db0')) {
         case statement: InsertStatement => statement
         case _ => throw FdbmException(DbdErrorCode.INTERNAL, 'not an insert statement')
+    }
+}
+
+func parseDdl(sql: String): DdlStatement {
+    match (SqlParser.parse(sql, 'db0')) {
+        case statement: DdlStatement => statement
+        case _ => throw FdbmException(DbdErrorCode.INTERNAL, 'not a ddl statement')
     }
 }
 

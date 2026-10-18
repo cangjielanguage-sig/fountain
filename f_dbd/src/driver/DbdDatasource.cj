@@ -45,10 +45,6 @@ public class DbdDatasource <: Datasource {
         url.withCredentials(user, password)
     }
 
-    func connectionOptions(): DbdOptions {
-        options
-    }
-
     /**
      * 建立一条到 fdbm 的连接。
      *

@@ -81,7 +81,8 @@ protected class FdbmServer <: Resource {
         for (config in settings.globalTables) {
             globalRules.add(GlobalTableRule(config.database, config.table))
         }
-        let globals = GlobalTableRouter(globalRules.toArray())
+        let globals = GlobalTableRouter(globalRules.toArray(),
+            logicalDatabases: settings.logicalDatabases)
         this.router = PartitionRouter(rules.toArray(), cache, custom.partitions,
             knownDatabases: physical, globalTables: globals)
 

@@ -33,6 +33,7 @@ import fountain::fdbm.sql.*
 protected class ExecutorDispatcher {
     private let selectExecutor: SelectExecutor
     private let dmlExecutor: DmlExecutor
+    private let deleteExecutor: DeleteExecutor
     private let insertExecutor: InsertExecutor
     private let showExecutor: ShowExecutor
     private let ddlExecutor: DdlExecutor
@@ -43,11 +44,12 @@ protected class ExecutorDispatcher {
         idmaker: IdMakerConfig, sequenceDatabase: String,
         customIdGenerators: HashMap<String, IdGenerator>, bootScript: ?BootScriptWriter) {
         this.selectExecutor = SelectExecutor(resources, router, globals)
-        this.dmlExecutor = DmlExecutor(resources, router)
-        this.insertExecutor = InsertExecutor(resources, router, this.selectExecutor, idmaker,
+        this.dmlExecutor = DmlExecutor(resources, router, globals)
+        this.deleteExecutor = DeleteExecutor(resources, router, globals)
+        this.insertExecutor = InsertExecutor(resources, router, globals, this.selectExecutor, idmaker,
             sequenceDatabase, customIdGenerators)
         this.showExecutor = ShowExecutor(resources)
-        this.ddlExecutor = DdlExecutor(resources)
+        this.ddlExecutor = DdlExecutor(resources, globals)
         this.sessionExecutor = SessionCtlExecutor(resources)
         this.exportExecutor = ExportExecutor(bootScript)
     }
@@ -58,7 +60,7 @@ protected class ExecutorDispatcher {
         match (statement) {
             case s: SelectStatement => selectExecutor.execute(session, s)
             case s: UpdateStatement => dmlExecutor.execute(session, s)
-            case s: DeleteStatement => dmlExecutor.execute(session, s)
+            case s: DeleteStatement => deleteExecutor.execute(session, s)
             case s: InsertStatement => insertExecutor.execute(session, s)
             case s: ShowStatement => showExecutor.execute(session, s)
             case s: DdlStatement => ddlExecutor.execute(session, s)

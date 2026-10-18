@@ -133,29 +133,51 @@
 - [x] 15.2 Step 7.1 游标 `qid`：创建游标时记录查询 CONSUME 的 `Message.id.toString()`，供 `UNSUBSCRIBE` 匹配
 - [x] 15.3 Step 7.2 `ExecutorDispatcher.execute`（会话控制分流 → parse → bind → 分发）
 - [x] 15.4 Step 7.3 `SelectExecutor`（路由五态、多段合并、**列类型归一回归**）
-- [ ] 15.5 Step 7.3 `InsertExecutor`（多行按行路由、ID 回填后再路由、`insert…select` 拆解）
+- [x] 15.5 Step 7.3 `InsertExecutor`（多行按行路由、ID 回填后再路由、`insert…select` 拆解）
+
+  > 落地：`insert … select` 先**物化**结果再关游标、随后逐行 INSERT（池 `maxSize` 默认 1，边读边插会自锁）；无可用生成器 → `ROUTE_FAILED`。
 - [x] 15.6 Step 7.3 `UpdateExecutor`（`rowCount` 求和、缺分库条件不下推、缓存失效联动）
 - [x] 15.7 Step 7.3 `DeleteExecutor`（查键 → 删除 → 删缓存的三步顺序）
-- [ ] 15.8 Step 7.3 `ShowExecutor`（方言分支、未支持驱动 → `UNSUPPORTED_SQL`）
+- [x] 15.8 Step 7.3 `ShowExecutor`（方言分支、未支持驱动 → `UNSUPPORTED_SQL`）
+
+  > 落地：驱动名由 `NodeAccessor.driver(database)` 提供；`show databases` 按名称排序；结果列名统一 `table_name`。顺带修复 `MemoryQueryResult` 用列号当前行号的越界取值缺陷。
 - [x] 15.9 Step 7.3 `DdlExecutor`（广播、部分失败列出成功/失败库）
-- [ ] 15.10 Step 7.3 `ExportExecutor`（白名单校验、落盘、响应）
+- [x] 15.10 Step 7.3 `ExportExecutor`（白名单校验、落盘、响应）
+
+  > 落地：独立 `ExportExecutor`，响应 `UpdateResultPayload(0, 0)`；白名单沿用 `BootScriptWriter.set`。
 - [x] 15.11 Step 7.3 `SessionCtlExecutor`（pin/解 pin、read-your-writes、未 begin 的 `commit`/`rollback` → `TX_STATE`）
 
 ## 16. `fdbm` 阶段 8：`fountain::fdbm.server`
 
-- [ ] 16.1 Step 8.1 `FdbmHandler.handle`（回环连接驱动）：三类请求判别、必有回包、无游标 → `CURSOR_STATE`、`UNSUBSCRIBE` 幂等 ACK、会话绑定
-- [ ] 16.2 Step 8.2 `SessionRegistry`（同连接同会话、巡检回收）与 `InFlight`（计数、`await` 超时）
-- [ ] 16.3 Step 8.3 `DriverLoader`（唯一驱动、驱动名一致性、`NO_DRIVER`）
-- [ ] 16.4 `CustomLoader` 与 `CustomExtensions`（目录不存在=空、加载失败=`CONFIG`、内置/自定义 `name` 冲突拒绝、`initialize()` 先于资源创建）
-- [ ] 16.5 Step 8.4 `FdbmServer`（启动顺序、`stop()` 顺序与幂等、自检负例退出码、`main()` 退出码）
-- [ ] 16.6 优雅停止（SIGTERM）：仅 Linux/macOS 的脚本用例，校验退出码 0 与资源释放顺序
+- [x] 16.1 Step 8.1 `FdbmHandler.handle`（回环连接驱动）：三类请求判别、必有回包、无游标 → `CURSOR_STATE`、`UNSUBSCRIBE` 幂等 ACK、会话绑定
+
+  > 落地：`src/server/handler.cj` + `Handler_test.cj`（11 条回环用例）；关闭命中时 `QueryCursor.drain()` 负责"清空缓冲 → 读尽 → close → 归还"。
+- [x] 16.2 Step 8.2 `SessionRegistry`（同连接同会话、巡检回收）与 `InFlight`（计数、`await` 超时）
+- [x] 16.3 Step 8.3 `DriverLoader`（唯一驱动、驱动名一致性、`NO_DRIVER`）
+
+  > 偏差：`DriverManager.drivers()` 返回驱动**名字**数组，校验后需再 `getDriver(name)`；成功路径由真实进程用例覆盖。
+- [x] 16.4 `CustomLoader` 与 `CustomExtensions`（目录不存在=空、加载失败=`CONFIG`、内置/自定义 `name` 冲突拒绝、`initialize()` 先于资源创建）
+- [x] 16.5 Step 8.4 `FdbmServer`（启动顺序、`stop()` 顺序与幂等、自检负例退出码、`main()` 退出码）
+
+  > 用例：真实回环启动/服务/停止、驱动名不一致即构造失败、缓存重启命中；`driver` 参数是进程内嵌/用例接入口，生产仍走 `driver/` 目录加载。
+- [x] 16.6 优雅停止（SIGTERM）：仅 Linux/macOS 的脚本用例，校验退出码 0 与资源释放顺序
+
+  > 落地：`test/lifecycle_test.sh`（start → status → stop，校验 stopped 标记；已实跑通过）。
 
 ## 17. 集成、端到端与收尾
 
-- [ ] 17.1 `fdbm` 阶段 9：`boot.sh`（配置区 + `start/status/stop/restart`）实跑
-- [ ] 17.2 f_dbd ↔ fdbm 集成：起本地 fdbm（`f_mockdb` 驱动、两节点两库），用 f_dbd 跑建表/插入/分库查询/更新/删除/事务/流列/`show databases`/`show tables`/`export`
-- [ ] 17.3 关闭握手端到端：`close()` 的 `UNSUBSCRIBE(qid) → ACK` 真实时序；断链场景下 `CURSOR_STATE` fail-fast
-- [ ] 17.4 缓存与重启：缓存文件格式核对；重启后命中缓存（不重算）
+- [x] 17.1 `fdbm` 阶段 9：`boot.sh`（配置区 + `start/status/stop/restart`）实跑
+- [x] 17.2 f_dbd ↔ fdbm 集成：起本地 fdbm（`f_mockdb` 驱动、两节点两库），用 f_dbd 跑建表/插入/分库查询/更新/删除/事务/流列/`show databases`/`show tables`/`export`
+
+  > 落地：`src/server/Integration_test.cj`（建表/插入/查询/更新/删除/事务/流列/SHOW/关闭握手）。`show tables` 的方言分支由 `ShowExecutor` 单测覆盖（mockdb 驱动名不是 mysql/postgres，集成里走 `UNSUPPORTED_SQL` 以外的方言用例不适用）。
+- [x] 17.3 关闭握手端到端：`close()` 的 `UNSUBSCRIBE(qid) → ACK` 真实时序；断链场景下 `CURSOR_STATE` fail-fast
+
+  > 落地：`IntegrationTest.closeSendsUnsubscribeAndReleasesCursor` + `HandlerTest` 的 qid 不匹配/重复关闭/关闭后列读用例。
+- [x] 17.4 缓存与重启：缓存文件格式核对；重启后命中缓存（不重算）
+
+  > 落地：`ServerLifecycleTest.partitionCacheSurvivesRestart`（同一目录重建 `PartitionCache` 仍读到条目）。
 - [ ] 17.5 `f_dbd` 阶段 5：f_orm 集成（`fdemo` 的 `orm_drivers` 指向 `fdbm`）、断链恢复
-- [ ] 17.6 文档回填：新增/补齐 `f_dbd`、`fdbm`、`f_dbm` 的中英 README（至少 B 口径、关闭走 `UNSUBSCRIBE`、`fdbm` 的 `cjpm install` 部署方式与动态库搜索路径）
-- [ ] 17.7 全量 `cjpm test` 与 `cjpm build` 无新增 warning；**不合并、不删除 `feature/dbware` 分支与工作树**（仓库有其他并行工作线），交付保持当前 worktree
+- [x] 17.6 文档回填：新增/补齐 `f_dbd`、`fdbm`、`f_dbm` 的中英 README（至少 B 口径、关闭走 `UNSUBSCRIBE`、`fdbm` 的 `cjpm install` 部署方式与动态库搜索路径）
+- [x] 17.7 全量 `cjpm test` 与 `cjpm build` 无新增 warning；**不合并、不删除 `feature/dbware` 分支与工作树**（仓库有其他并行工作线），交付保持当前 worktree
+
+  > 结果：`f_dbd` 180 条、`fdbm` 136 条全绿；三个模块 `cjpm build` 无新增 warning。

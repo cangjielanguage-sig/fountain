@@ -246,7 +246,7 @@ protected class MemoryQueryResult <: QueryResult {
         rowIndex < rows.size
     }
 
-    public func next(values: Array<SqlDbType>): Bool {
+    public func next(_: Array<SqlDbType>): Bool {
         next()
     }
 

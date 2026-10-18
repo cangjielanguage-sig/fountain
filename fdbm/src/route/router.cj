@@ -105,6 +105,7 @@ protected class PartitionRouter {
     private let rules: HashMap<String, PartitionRule>
     private let cache: ?PartitionCache
     private let known: HashSet<String>
+    private let knownOrder: Array<String>
     private let globalTables: GlobalTableRouter
 
     public init(rules: Array<PartitionRule>, cache: ?PartitionCache,
@@ -121,12 +122,15 @@ protected class PartitionRouter {
             known.add(database)
         }
         this.known = known
+        this.knownOrder = knownDatabases
         this.globalTables = globalTables
     }
 
-    /** 语句级路由：等值/IN/范围（仅 step）→ Single/Multi；无分库条件 → Unroutable。 */
+    /** 语句级路由：等值/IN/范围（仅 step）→ Single/Multi；全局表 → Broadcast；未分库表 → Single。 */
     public func route(statement: SqlStatement, currentDatabase: String): RoutePlan {
         let constraints = ArrayList<(PartitionRule, Array<String>)>()
+        var hasPartitionedTable = false
+        var hasNonGlobalTable = false
         for (table in statement.tables) {
             let logical = match (table.database) {
                 case Some(database) => database
@@ -135,8 +139,10 @@ protected class PartitionRouter {
             if (globalTables.isGlobal(logical, table.name)) {
                 continue
             }
+            hasNonGlobalTable = true
             match (rule(logical, table.name)) {
                 case Some(found) =>
+                    hasPartitionedTable = true
                     match (constraintOf(found, statement)) {
                         case Some(databases) => constraints.add((found, databases))
                         case None => return RoutePlan.unroutable()
@@ -145,6 +151,25 @@ protected class PartitionRouter {
             }
         }
         if (constraints.isEmpty()) {
+            if (hasPartitionedTable) {
+                return RoutePlan.unroutable()
+            }
+            let logical = logicalOf(statement, currentDatabase)
+            let physicals = globalTables.physicalDatabases(logical)
+            if (!hasNonGlobalTable) {
+                // 全部是全局表：写广播到逻辑库全部物理库；读由执行器取任一副本
+                if (!physicals.isEmpty()) {
+                    return RoutePlan.broadcast(physicals)
+                }
+                return RoutePlan.unroutable()
+            }
+            // 全部未分库（或未分库 + 全局表）：任选一个物理库
+            if (!physicals.isEmpty()) {
+                return RoutePlan.single(physicals[0])
+            }
+            if (!knownOrder.isEmpty()) {
+                return RoutePlan.single(knownOrder[0])
+            }
             return RoutePlan.unroutable()
         }
         // 同一分库维度取交集；不同维度要求各表都收敛到同一个库
@@ -208,6 +233,25 @@ protected class PartitionRouter {
 
     public func rule(database: String, table: String): ?PartitionRule {
         rules.get('${database}.${table}')
+    }
+
+    /** 删除缓存条目（DELETE 三步顺序的第三步）。 */
+    public func invalidate(rule: PartitionRule, value: String): Unit {
+        match (cache) {
+            case Some(store) => store.remove(rule.database, rule.table, rule.column, value)
+            case None => ()
+        }
+    }
+
+    /** 语句归属的逻辑库：首个表引用显式库优先，否则用会话当前库。 */
+    private static func logicalOf(statement: SqlStatement, currentDatabase: String): String {
+        for (table in statement.tables) {
+            match (table.database) {
+                case Some(database) => return database
+                case None => return currentDatabase
+            }
+        }
+        currentDatabase
     }
 
     public func isPartitioned(database: String, table: String): Bool {

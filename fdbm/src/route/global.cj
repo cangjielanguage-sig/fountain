@@ -31,8 +31,14 @@ protected class GlobalTableRule {
 protected class GlobalTableRouter {
     private let keys: HashSet<String>
     private let byDatabase = HashMap<String, ArrayList<String>>()
+    private let logicalDatabases: HashMap<String, Array<String>>
 
-    public init(rules: Array<GlobalTableRule>) {
+    /**
+     * @param logicalDatabases 逻辑库 → 物理库列表（`FdbmSettings.logicalDatabases`）。
+     *        全局表写广播与"未分库表选一个库"都靠它定位物理库。
+     */
+    public init(rules: Array<GlobalTableRule>,
+        logicalDatabases!: HashMap<String, Array<String>> = HashMap<String, Array<String>>()) {
         let keys = HashSet<String>()
         for (rule in rules) {
             keys.add('${rule.database}.${rule.table}')
@@ -46,6 +52,15 @@ protected class GlobalTableRouter {
             list.add(rule.table)
         }
         this.keys = keys
+        this.logicalDatabases = logicalDatabases
+    }
+
+    /** 逻辑库包含的物理库；未配置映射时返回空数组（调用方自行回退）。 */
+    public func physicalDatabases(logical: String): Array<String> {
+        match (logicalDatabases.get(logical)) {
+            case Some(value) => value
+            case None => Array<String>()
+        }
     }
 
     public func isGlobal(database: String, table: String): Bool {
