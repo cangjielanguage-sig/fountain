@@ -19,6 +19,7 @@ import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_jit.base.DummyDiagnosticsSink
 import fountain::f_jit.test.diff.DiffCase
+import fountain::f_jit.test.diff.InterpRunner
 import fountain::f_jit.test.diff.NativeRunner
 
 /**
@@ -85,8 +86,11 @@ public class X86Exec_test {
 
     private static func check(id: String, src: String, args: Array<Any>): Unit {
         let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(src)
-        let r = NativeRunner().run(DiffCase(id, cu.raw, args))
-        @Assert(r.errCode, 0)
-        @Assert(r.result.size > 0, true)
+        let c = DiffCase(id, cu.raw, args)
+        let base = InterpRunner().run(c)
+        let r = NativeRunner().run(c)
+        @Assert(r.errCode, base.errCode)
+        @Assert(r.site, base.site)
+        @Assert(r.result, base.result)
     }
 }

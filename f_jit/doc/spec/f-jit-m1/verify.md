@@ -8,7 +8,7 @@
 
 ## 结论
 
-**apply 的 115/115 不等于规格全绿。** 本轮已修掉全部 4 个 CRITICAL（生产 JIT 接入、x86 全 opcode、T6 20/21、T52/T53 映射）；仅剩 WARNING-01（x86 原生执行证据）与 WARNING-02（单元标签强度）。建议在真实 x86_64 机器跑完 `X86Exec_test` 后 archive。
+**apply 的 115/115 不等于规格全绿。** 本轮已修掉全部 4 个 CRITICAL（生产 JIT 接入、x86 全 opcode、T6 20/21、T52/T53 映射）；WARNING-01（x86 原生执行证据）与 WARNING-02（单元标签强度）仍在；另有常量句柄回收、SSE4.1 依赖、Force 可观测性、x86 字节 golden、性能留档等遗留（见「剩余未完成 / 测试未覆盖」）。建议在真实 x86_64 机器跑完 `X86Exec_test`、并至少处理常量句柄回收后再 archive。
 
 | ID | 严重度 | 状态 | 摘要 |
 |---|---|---|---|
@@ -126,6 +126,30 @@ cd f_jit && cjpm test --filter X86Compile_test
 - `S5.5–S5.7` 的 x86 lowering 勾选依据是 `X86Lower_test` 的**单指令字节断言**，不等于整单元可执行；本轮 `X86Lower` 才把片段组装起来。
 
 建议在 verify 结论中把「框架/单指令断言」与「整单元可执行」分开记，避免后续里程碑继续复用「已勾选」的错觉。
+
+## 剩余未完成 / 测试未覆盖（M1）
+
+以下项不阻塞「aarch64 语义正确」，但属于 M1 收口前应知悉的遗留；按影响排序。
+
+### 功能 / 资源
+
+1. **x86 原生执行证据缺失**：157 个 opcode 只做到「可组装 + 字节断言」，`X86Exec_test` 10 例在本机全部条件跳过。`X86Compile_test` 只断言产物非空，编码错误只能等 x86_64 原生执行暴露。
+2. **常量句柄不回收**：`JitExecutor.create` 经 `Interp.constHandle` 调 `HandleTable.pinConst`；路径 A 常量被 `resetWindow` 跳过，且没有 `releaseConst`/引用计数。`JitExecutor.release` 只释放 mirror/table/code，不释放常量槽。不同源码反复编译会累积常量槽，最终可能触发 16 `HANDLE_WINDOW_FULL`；JIT 编译失败时同样已 pin。design §8.7「镜像与单元同生命周期」尚未在句柄层兑现。
+3. **SSE4.1 依赖**：`FLOOR/CEIL/TRUNC/ROUND` 用 `roundsd`；design §12.4 的基线是 SSE2 软件序列，SSE4.1 仅显式开启时使用。当前无 CPUID 判定，纯 SSE2 机器上这四条指令会非法。
+4. **`JitMode.Force` 不可观测**：没有公开标志/计数器证明「本次真的走了 JIT」。`JitWire_test` 只证明单例资产可建，`T52` 只证明两形态结果一致；若 `create` 静默失败，测试无法区分。
+5. **JIT 调用全局串行化**：`JitExecutor.envMtx` 保证 `fnTableBase` 不串表，但所有 JIT 调用串行；无并发吞吐测试。M2 引入宿主回调后需换成 per-call 隔离，否则有重入死锁风险。
+6. **非 Linux / 其他指令集门禁**：本轮已在 `JitExecutor.create` 补 `OS.isLinux` + `Arch` 判定，但本机无法执行非 Linux 分支，缺少 CI 证据。
+
+### 测试覆盖
+
+1. **T6/15 `STACK_GUARD`** 无行为用例；解释器把 `0x07` 当 NOP，15 只在桥层重跑余量不足时产生，M1 无稳定构造路径。
+2. **T6 映射用例只覆盖 16 码**；7/16/17/19/99 的行为证据分散在 `Interp_test`/`HandleTable_test`/`userapi`/`Helpers_test`，未纳入 `t6ErrorConsistency` 本体。
+3. **T 标签强度**：13 个单元用例的 `T<id>/` 是注释标签，`check_tmap.sh` 只能证明「标签存在」，不能证明断言覆盖该 T 的语义。
+4. **x86 新 lowering 无字节 golden**：浮点/除法/CAST/闭包/LEN 的 519 行降低没有逐序列字节断言；`X86Lower_test` 只覆盖旧 `BackendX86_64.emit*` 片段。
+5. **x86 执行矩阵是代表性覆盖**：`X86Exec_test` 10 例、`X86Compile_test` 8 个单元，不等于 157 opcode 逐条执行/逐条字节对拍。
+6. **性能数字未留档**：`PerfCompare_test` 只打印 `PERF-CJNATIVE` 比值，不断言上界；aarch64/x86 实测数字未回填文档（S7.7 要求留档）。
+7. **scenario → test 无矩阵**：156 条 spec scenario 只有 T 编号映射；verify 是手工等价校验，没有逐 scenario 的自动化追溯。
+8. **官方 `/opsx:verify` 未安装**：`.codebuddy/commands/opsx/` 缺 `verify.md`，本报告是手工等价产物；若要求流程合规，需先补工作流。
 
 ## 逐 capability 状态
 

@@ -19,6 +19,8 @@ import fountain::f_jit.bytecode.LoadedUnit
 import fountain::f_jit.runtime.Interp
 import fountain::f_jit.runtime.JitContext
 import std.sync.Mutex
+import fountain::f_base.Arch
+import fountain::f_base.OS
 import fountain::f_jit.runtime.MachineEnv
 
 /**
@@ -48,6 +50,13 @@ public class JitExecutor {
 
     /** 为 `entryFn` 建可执行资产；不支持/分配失败 → None。 */
     public static func create(unit: LoadedUnit, entryFn: UInt32): ?JitExecutor {
+        // 引擎选择门禁：非 Linux 或其他指令集一律解释器（T7/T9 冻结决策）。
+        if (!OS.current.isLinux) {
+            return None
+        }
+        if (!Arch.current.isAarch64 && !Arch.current.isX86_64) {
+            return None
+        }
         let interp = Interp(unit)
         let ids = Array<Int64>(unit.consts.size, repeat: 0)
         var i = 0
