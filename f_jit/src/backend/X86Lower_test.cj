@@ -301,6 +301,12 @@ public class X86Lower_test {
             '41C70707000000' + '31C0' + 'E900000000')
     }
 
+    @TestCase
+    public func toStringHelperRoute(): Unit {
+        @Assert(X86Lower_test.hex(BackendX86_64.emitToStr(0x6000)),
+            X86Lower_test.hex(BackendX86_64.emitCallHelper(0x6000, 1)))
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {

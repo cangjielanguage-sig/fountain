@@ -455,6 +455,11 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
+    /** `TO_STR`：H33 单参模板 A。 */
+    internal static func emitToStr(h33: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h33, 1)
+    }
+
     /** `ASSERT code`：弹 bool；false → 内联 BAIL(code)（rel 占位）。 */
     internal static func emitAssert(code: Int64): Array<UInt8> {
         let out = ArrayList<UInt8>()
