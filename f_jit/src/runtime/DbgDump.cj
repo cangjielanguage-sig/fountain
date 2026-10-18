@@ -29,8 +29,10 @@ import fountain::f_jit.bytecode.SiteTable
  * 权威 = `doc/jit-bytecode-m1.md` §9 附则 16（v0.18.23 / v0.18.25）：
  *
  * - **fail-fast 收敛时执行单次转储**：凡 `errCode > 0` 的收敛点（`BAIL` / `CHECK_ERR → bail`；
- *   **-1/-2 不转储**），若 `ctx.dbgBase ≠ 0` 且缓冲首格为 0（未填）⇒ 写 `[0]=fnId`、`[1]=nLocals`、
- *   拷 `locals[0..nLocals)`：**第一个收敛点获胜**（= 最深失败帧；外层传播帧因哨兵跳过）；
+ *   **-1/-2 不转储**），若 `ctx.dbgBase ≠ 0` 且缓冲首格为 0（未填）⇒ 写 `[0]=fnId+1`、
+ *   `[1]=nLocals`、拷 `locals[0..nLocals)`：**第一个收敛点获胜**（= 最深失败帧；外层传播帧因哨兵跳过）。
+ *   首格存 `fnId+1` 而非 `fnId`：入口函数号合法值为 0，若直接存 fnId 会被误判为「未填」，
+ *   0 因此保留为哨兵（§9.16 的实现订正，见 `design-m1.md` §E）；
  * - 缓冲区 = `(2 + maxNLocals) × 8`（max 取目录全域；桥分配 / 清零）；
  * - 报告模板**逐字节冻结**（三引擎逐位比对）：
  *   `（code=N，site=OFF）` ⏎ `  源码行 L:C · fnId=F` ⏎ `  变量: [0] a: Int64 = 42; …`
@@ -66,23 +68,41 @@ public class DbgDump {
      * 首格哨兵非 0（已有更深的失败帧获胜）。
      */
     public static func writeOnce(ctx: JitContext, fnId: Int64, nLocals: Int64, locals: CPointer<Int64>): Unit {
-        let base = ctx.dbgBase
-        if (base == 0) {
-            return
+        match (DbgDump.beginDump(ctx, fnId, nLocals)) {
+            case Some(p) =>
+                unsafe {
+                    var i: Int64 = 0
+                    while (i < nLocals) {
+                        p.write(HEADER_WORDS + i, locals.read(i))
+                        i = i + 1
+                    }
+                }
+            case None => ()
         }
-        if (ctx.errCode <= 0) {
+    }
+
+    /**
+     * **机器码帧**形态的转储写（`@C` 入口专用）：`locals` 指向 `locals[0]`，
+     * 后续槽在 −8、−16…（栈向下生长）。
+     *
+     * 入参全部是原生值（不构造 `JitContext` 托管对象）：`@C` 入口运行在 C2N 边界上，
+     * 机器码把 `ctx.dbgBase`、`ctx.errCode` 与帧局部槽地址直接传入。解释器与 JIT
+     * 共用同一段「哨兵 → fnId/nLocals → locals」写缓冲逻辑，报告文本因此逐位一致（I7 / T50）。
+     */
+    public static func writeOnceStackRaw(dump: CPointer<Int64>, errCode: Int64, fnId: Int64,
+        nLocals: Int64, locals: CPointer<Int64>): Unit {
+        if (errCode <= 0 || dump.isNull()) {
             return
         }
         unsafe {
-            let p = ctx.dumpPointer()
-            if (p.read(0) != 0) {
+            if (dump.read(0) != 0) {
                 return
             }
-            p.write(0, fnId)
-            p.write(1, nLocals)
+            dump.write(0, fnId + 1)
+            dump.write(1, nLocals)
             var i: Int64 = 0
             while (i < nLocals) {
-                p.write(HEADER_WORDS + i, locals.read(i))
+                dump.write(HEADER_WORDS + i, locals.read(-i))
                 i = i + 1
             }
         }
@@ -90,22 +110,32 @@ public class DbgDump {
 
     /** 托管数组形态的转储写（解释器帧的局部槽是 `Array<Int64>`）。 */
     public static func writeOnce(ctx: JitContext, fnId: Int64, locals: Array<Int64>): Unit {
-        let base = ctx.dbgBase
-        if (base == 0 || ctx.errCode <= 0) {
-            return
+        match (DbgDump.beginDump(ctx, fnId, locals.size)) {
+            case Some(p) =>
+                unsafe {
+                    var i: Int64 = 0
+                    while (i < locals.size) {
+                        p.write(HEADER_WORDS + i, locals[i])
+                        i = i + 1
+                    }
+                }
+            case None => ()
+        }
+    }
+
+    /** 三条跳过条件集中在此：`dbgBase=0`、`errCode≤0`、首格哨兵非 0。 */
+    private static func beginDump(ctx: JitContext, fnId: Int64, nLocals: Int64): ?CPointer<Int64> {
+        if (ctx.dbgBase == 0 || ctx.errCode <= 0) {
+            return None
         }
         unsafe {
             let p = ctx.dumpPointer()
             if (p.read(0) != 0) {
-                return
+                return None
             }
-            p.write(0, fnId)
-            p.write(1, locals.size)
-            var i: Int64 = 0
-            while (i < locals.size) {
-                p.write(HEADER_WORDS + i, locals[i])
-                i = i + 1
-            }
+            p.write(0, fnId + 1)
+            p.write(1, nLocals)
+            Some(p)
         }
     }
 
@@ -138,7 +168,7 @@ public class DbgDump {
             if (p.read(0) == 0) {
                 return out
             }
-            let dumpFnId = p.read(0)
+            let dumpFnId = p.read(0) - 1
             let n = p.read(1)
             var items = ArrayList<String>()
             var i: Int64 = 0
@@ -205,3 +235,17 @@ public class DbgDump {
         out
     }
 }
+
+/**
+ * 机器码 BAIL 块的 `@C` 转储入口（T50）。
+ *
+ * `x0 = ctx`、`x1 = fnId`、`x2 = nLocals`、`x3 = &locals[0]`；后续局部槽在 `−8、−16…`。
+ * 与 H01–H72 一样，本方法不把异常抛回机器码（转储失败一律静默返回）。
+ */
+@C
+public func jit_dump(dump: CPointer<Int64>, errCode: Int64, fnId: Int64, nLocals: Int64,
+    locals: CPointer<Int64>): Int64 {
+    DbgDump.writeOnceStackRaw(dump, errCode, fnId, nLocals, locals)
+    0
+}
+

@@ -243,6 +243,29 @@ public class Acceptance_test {
             '{ => let l: List<Int64> = []\n l[0] = 1\n l[0] }', Array<Any>())
     }
 
+    /**
+     * T50：运行期报告（源码行 + 变量名/类型/值）在解释器与机器码两条路径逐位一致。
+     *
+     * 失败点必须**同时**产出转储：`ctx.dbgBase` 指向桥分配的非托管缓冲，
+     * 首个收敛点获胜（最深失败帧），报告按 §9.16 模板组装。
+     */
+    @TestCase
+    public func t50SourcePosDiagnostics(): Unit {
+        let src = '{ a: Int64 => let b = a + 1\n b / (a - a) }'
+        let raw = Acceptance_test.rawOf(src)
+        let c = DiffCase('T50/report', raw, [1])
+        let i = InterpRunner().run(c)
+        let j = AArch64Runner().run(c)
+        @Assert(i.errCode, 1)
+        @Assert(j.errCode, 1)
+        @Assert(i.site, j.site)
+        @Assert(i.report, j.report)
+        @Assert(i.report.contains('（code=1，site='), true)
+        @Assert(i.report.contains('源码行 2:'), true)
+        @Assert(i.report.contains('[0] a: Int64 = 1'), true)
+        @Assert(i.report.contains('[1] b: Int64 = 2'), true)
+    }
+
     // ---------------------------------------------------------------- S7.7
 
     /**

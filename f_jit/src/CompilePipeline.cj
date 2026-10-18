@@ -23,7 +23,9 @@ import fountain::f_jit.bytecode.OpInfo
 import fountain::f_jit.bytecode.FbcReader
 import fountain::f_jit.bytecode.Fingerprint
 import fountain::f_jit.bytecode.LoadedUnit
+import fountain::f_jit.bytecode.LocalTypes
 import fountain::f_jit.compiler.SourceCompiler
+import fountain::f_jit.runtime.DbgDump
 import fountain::f_jit.runtime.Interp
 import fountain::f_jit.runtime.JitContext
 
@@ -124,7 +126,46 @@ protected class CompilePipeline {
         let body: (JitContext, Array<Int64>) -> Int64 = { ctx, cells =>
             Interp(unit).run(entryFn, cells, ctx)
         }
-        JitFunction(Int64(e.nargs), e.retType, params, body, body, '')
+        let fn = JitFunction(Int64(e.nargs), e.retType, params, body, body, '')
+        // T50：桥侧报告（源码行 + 变量清单），与差分层/解释器共用一份组装逻辑。
+        fn.bindDiagnostics(CompilePipeline.maxNLocals(unit)) { ctx, dump =>
+            CompilePipeline.reportOf(unit, entryFn, ctx, dump)
+        }
+        fn
+    }
+
+    /** 转储缓冲槽数上限（目录全域）。 */
+    private static func maxNLocals(unit: LoadedUnit): Int64 {
+        var m: Int64 = 0
+        var i = 0
+        while (i < unit.dir.size) {
+            let n = Int64(unit.dir.at(i).nLocals)
+            if (n > m) {
+                m = n
+            }
+            i = i + 1
+        }
+        m
+    }
+
+    /** 失败报告（`errCode > 0`）；`fnId` 取转储首格编码（`fnId+1`），未转储则回落到入口。 */
+    private static func reportOf(unit: LoadedUnit, entryFn: UInt32, ctx: JitContext,
+        dump: CPointer<Int64>): String {
+        let marker = unsafe { dump.read(0) }
+        let fnId = if (marker != 0) { marker - 1 } else { Int64(entryFn) }
+        DbgDump.report(ctx.errCode, ctx.site, fnId,
+            CompilePipeline.typesOf(unit, fnId), unit.site, unit.name, dump)
+    }
+
+    private static func typesOf(unit: LoadedUnit, fnId: Int64): LocalTypes {
+        var i = 0
+        while (i < unit.dir.size) {
+            if (Int64(unit.dir.at(i).fnId) == fnId) {
+                return unit.types[i]
+            }
+            i = i + 1
+        }
+        unit.types[0]
     }
 
     private static func indexOf(unit: LoadedUnit, fnId: UInt32): Int64 {

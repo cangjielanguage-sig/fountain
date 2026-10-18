@@ -45,6 +45,62 @@ public class DbgDump_test {
         NativeMem.resetCounters()
     }
 
+    /** `fnId = 0`（入口函数）也必须能转储：首格编码 fnId+1，0 专用于「未填」哨兵。 */
+    @TestCase
+    public func entryFnZeroIsDumpable(): Unit {
+        NativeMem.resetCounters()
+        let p = DbgDump.allocateDump(2)
+        let ctx = JitContext.create(hwBase: 0, hwCap: 0, fnId: 0, dbgBase: 0)
+        ctx.attachDump(p)
+        try {
+            ctx.errCode = 4
+            DbgDump.writeOnce(ctx, 0, [Int64(5), Int64(6)])
+            unsafe {
+                @Assert(p.read(0), 1) // fnId 0 编码为 1
+                @Assert(p.read(1), 2)
+                @Assert(p.read(2), 5)
+                @Assert(p.read(3), 6)
+            }
+            // 首个收敛点获胜：后续帧不得覆盖
+            ctx.errCode = 8
+            DbgDump.writeOnce(ctx, 1, [Int64(9)])
+            unsafe { @Assert(p.read(2), 5) }
+        } finally {
+            JitContext.free(ctx)
+            DbgDump.freeDump(p)
+        }
+        NativeMem.resetCounters()
+    }
+
+    /** `@C` 转储入口与托管数组路径逐位一致（机器码 BAIL 块用降序槽）。 */
+    @TestCase
+    public func stackDumpEntryMatchesArrayDump(): Unit {
+        NativeMem.resetCounters()
+        let p = DbgDump.allocateDump(2)
+        let ctx = JitContext.create(hwBase: 0, hwCap: 0, fnId: 7, dbgBase: 0)
+        let slots = LibC.malloc<Int64>(count: 2)
+        ctx.attachDump(p)
+        try {
+            unsafe {
+                slots.write(0, 22) // locals[1]
+                slots.write(1, 11) // locals[0]（深槽在高地址）
+            }
+            ctx.errCode = 9
+            unsafe { jit_dump(p, 9, 7, 2, slots + 1) }
+            unsafe {
+                @Assert(p.read(0), 8) // fnId + 1（0 保留为未填哨兵）
+                @Assert(p.read(1), 2)
+                @Assert(p.read(2), 11)
+                @Assert(p.read(3), 22)
+            }
+        } finally {
+            unsafe { LibC.free<Int64>(slots) }
+            JitContext.free(ctx)
+            DbgDump.freeDump(p)
+        }
+        NativeMem.resetCounters()
+    }
+
     /** `dbgBase = 0`（转储区禁用）⇒ 跳过转储，首格保持 0。 */
     @TestCase
     public func dumpSkippedWhenDbgBaseIsZero(): Unit {
@@ -80,7 +136,7 @@ public class DbgDump_test {
             ctx.errCode = 4
             DbgDump.writeOnce(ctx, 1, [Int64(7), Int64(8)])
             unsafe {
-                @Assert(p.read(0), 1) // fnId
+                @Assert(p.read(0), 2) // fnId + 1
                 @Assert(p.read(1), 2) // nLocals
                 @Assert(p.read(2), 7)
                 @Assert(p.read(3), 8)
@@ -106,7 +162,7 @@ public class DbgDump_test {
             ctx.errCode = 8
             DbgDump.writeOnce(ctx, 1, [Int64(99)])
             unsafe {
-                @Assert(p.read(0), 9)
+                @Assert(p.read(0), 10) // fnId + 1
                 @Assert(p.read(1), 2)
                 @Assert(p.read(2), 1)
                 @Assert(p.read(3), 2)

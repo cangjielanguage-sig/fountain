@@ -20,6 +20,7 @@ import std.sync.Mutex
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.JitException
 import fountain::f_jit.base.LocalType
+import fountain::f_jit.runtime.DbgDump
 import fountain::f_jit.runtime.JitContext
 
 /**
@@ -35,6 +36,9 @@ public class JitFunction {
     private let body: (JitContext, Array<Int64>) -> Int64
     private let replay: (JitContext, Array<Int64>) -> Int64
     private let report: String
+    /** 诊断报告工厂（装载层注入；None = 不分配转储缓冲，保持旧行为）。 */
+    private var diagMaxLocals: Int64 = 0
+    private var diagReporter: ?((JitContext, CPointer<Int64>) -> String) = None
     // ---- 生命周期（S6.10）：0 Ready / 1 Unloading / 2 Unloaded ----
     private let mtx: Mutex = Mutex()
     private var state: Int64 = 0
@@ -58,6 +62,16 @@ public class JitFunction {
         this.replay = replay
         this.report = report
         this.release = release
+    }
+
+    /**
+     * 装载层注入诊断能力（T50）：`maxNLocals` 决定转储缓冲大小，`reporter` 在
+     * `errCode > 0` 时按转储内容组装报告文本。
+     */
+    internal func bindDiagnostics(maxNLocals: Int64,
+        reporter: (JitContext, CPointer<Int64>) -> String): Unit {
+        this.diagMaxLocals = maxNLocals
+        this.diagReporter = reporter
     }
 
     /** 六步调用：长度 → 封送 → 执行 → 解包 → `T` 校验 → 返回。 */
@@ -151,6 +165,13 @@ public class JitFunction {
         }
         let marshal = CallMarshal()
         let ctx = JitContext.create(hwBase: 0, hwCap: 0, fnId: 0, dbgBase: 0)
+        let dump = match (this.diagReporter) {
+            case Some(_) => DbgDump.allocateDump(this.diagMaxLocals)
+            case None => CPointer<Int64>()
+        }
+        if (!dump.isNull()) {
+            ctx.attachDump(dump)
+        }
         try {
             // 2. 封送
             let cells = Array<Int64>(args.size, repeat: 0)
@@ -161,7 +182,11 @@ public class JitFunction {
             }
             // 3. 执行 + 三态收尾
             let cell = this.body(ctx, cells)
-            let ret = JitReport.finish(ctx, cell, { => this.replay(ctx, cells) }, this.report)
+            let report = match (this.diagReporter) {
+                case Some(f) => if (ctx.errCode > 0) { f(ctx, dump) } else { this.report }
+                case None => this.report
+            }
+            let ret = JitReport.finish(ctx, cell, { => this.replay(ctx, cells) }, report)
             // 4. 解包
             let v = marshal.makeRetUnboxer(this.retType)(ret)
             // 6. 返回 T
@@ -171,6 +196,9 @@ public class JitFunction {
             }
         } finally {
             marshal.cleanup()
+            if (!dump.isNull()) {
+                DbgDump.freeDump(dump)
+            }
             JitContext.free(ctx)
         }
     }

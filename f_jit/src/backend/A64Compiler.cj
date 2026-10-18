@@ -17,6 +17,7 @@ package fountain::f_jit.backend
 
 import fountain::f_jit.bytecode.FuncEntry
 import fountain::f_jit.bytecode.LoadedUnit
+import fountain::f_jit.runtime.HelperAddresses
 
 /**
  * AArch64 单函数编排（S5.8 最小路径）：帧序 + 指令降低 + 收敛块。
@@ -99,18 +100,38 @@ public class A64Compiler {
         }
         e.bind('epilogue')
         e.epilogue()
-        A64Compiler.bindBail(e, 'bail1', 1)
-        A64Compiler.bindBail(e, 'bail2', 2)
-        A64Compiler.bindBail(e, 'bail3', 3)
-        A64Compiler.bindBail(e, 'deopt', -1)
+        A64Compiler.bindBail(e, fn, 'bail1', 1)
+        A64Compiler.bindBail(e, fn, 'bail2', 2)
+        A64Compiler.bindBail(e, fn, 'bail3', 3)
+        A64Compiler.bindBail(e, fn, 'deopt', -1)
         e.finishOrNull()
     }
 
-    private static func bindBail(e: A64Emitter, label: String, k: Int64): Unit {
+    /**
+     * 收敛块：写错误槽 → （`k > 0` 时）单次转储 → 返回 0。
+     *
+     * 转储经 `@C` 入口 `jit_dump` 回到 `DbgDump.writeOnceStack`，与解释器共用同一份
+     * 报告逻辑（T50）；`-1`（DEOPT）不转储。
+     */
+    private static func bindBail(e: A64Emitter, fn: FuncEntry, label: String, k: Int64): Unit {
         e.bind(label)
         e.movImm64(11, k)
         e.strOff(11, 19, 0)
+        if (k > 0) {
+            A64Compiler.emitDump(e, fn)
+        }
         e.movReg(0, 31)
         e.b('epilogue')
+    }
+
+    /** `jit_dump(dbgBase, errCode, fnId, nLocals, &locals[0])`；locals[i] 在 `[x29, #-40-8i]`。 */
+    private static func emitDump(e: A64Emitter, fn: FuncEntry): Unit {
+        e.subImm(4, 29, 40)
+        e.ldrOff(0, 19, 56)
+        e.ldrOff(1, 19, 0)
+        e.movImm64(2, Int64(fn.fnId))
+        e.movImm64(3, Int64(fn.nLocals))
+        e.movImm64(11, HelperAddresses.dump())
+        e.blr(11)
     }
 }

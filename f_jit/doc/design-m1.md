@@ -1661,6 +1661,20 @@ Ready --CAS--> Unloading（拒绝新调用；活跃调用照常完成）--active
      （跨 H55/H57 两个 helper 调用存活，不能放寄存器），`locals[0]` 顺移到 `-40`；
    - 该偏移只影响 AArch64 机器层；解释器与 `.fbc` 均不感知。附 C 的对照表已按实现更新。
 
+6. **转储首格编码 `fnId + 1`（0 保留为「未填」哨兵）**
+   - 规格 §9.16 写「首格为 0（未填）→ 写 `[dbgBase]=fnId`」；但入口函数号合法值就是 **0**，
+     直接写 fnId 会让 `fnId=0` 的失败帧被当成「未填」，报告丢失变量清单（T50 实测）；
+   - 修正：首格写 `fnId+1`，0 专用于哨兵；报告侧读回首格减 1。缓冲区大小 / `[1]=nLocals` /
+     locals 起始位置均不变，解释器与机器码共用同一编码。
+
+7. **机器码转储入口不构造 `JitContext` 托管对象**
+   - AArch64 BAIL 块经新增 `@C func jit_dump(dump, errCode, fnId, nLocals, locals)` 回到
+     `DbgDump.writeOnceStackRaw`；机器码从 ctx 直接读 `dbgBase`（off 56）与 `errCode`（off 0）传参；
+   - 原因：在 C2N 边界上调用 `JitContext.wrap`（托管对象分配）会触发无法 root 的引用，
+     实测段错误；纯原生入参路径无托管对象，解释器路径仍走 `writeOnce(JitContext, …)`；
+   - 两份实现共用同一套「哨兵编码 → fnId/nLocals → locals」约定与同一个报告组装器，
+     解释器与 JIT 的报告文本因此逐位一致。
+
 **新增源语言能力**：`regexStr.regex()`（v0.17 规格已定义、前端此前缺失）→ `CALL_HELPER 69, 1`，返回 Regex、非法/空 pattern 运行期 14（T46）。
 
 **仍待补齐（不属本次修正）**：x86_64 的整单元 lowering（P5.8）。`BackendX86_64.compile` 保持「降级解释器」，因为现有 x86 片段内多处 `rel32` 仍是 P5.8 回填占位（`emitCast`/`emitAssert`/浮点收尾等），在缺少 x86_64 原生证据时不应假装可执行。

@@ -22,4 +22,15 @@ public class HelperAddresses {
         let f: CFunc<(Int64, CPointer<Unit>, CPointer<Int64>, Int64) -> Int64> = h_dispatch
         Int64(CPointer<Unit>(f).toUIntNative())
     }
+
+    /**
+     * 诊断转储入口 `jit_dump(dump, errCode, fnId, nLocals, locals)` 的地址（T50 BAIL 块）。
+     *
+     * 入参全部是原生值：机器码从 ctx 读 `dbgBase`（off 56）与 `errCode`（off 0）后直传，
+     * 避免在 C2N 边界上构造托管对象。第 5 参指向 `locals[0]`，后续局部槽在 −8、−16…
+     */
+    public static func dump(): Int64 {
+        let f: CFunc<(CPointer<Int64>, Int64, Int64, Int64, CPointer<Int64>) -> Int64> = jit_dump
+        Int64(CPointer<Unit>(f).toUIntNative())
+    }
 }

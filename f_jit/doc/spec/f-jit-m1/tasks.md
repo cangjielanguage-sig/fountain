@@ -149,7 +149,7 @@
 - [x] S6.9 `CompilePipeline.runUnit` + `Compiler.compile(unit)`：先写失败用例——装载 `.fbc` 全路径、含 user hid 的单元 → 加载期以 18 语义拒绝、入口函数号不在目录 → 拒绝、整份 raw 的 FNV-1a-128 去重 + 二次校验；再写实现（复用 S6.7 状态机，键换为字节码指纹）；验收：T1 用例绿（3 例；入口越界由 FbcReader ⑦ 拒绝）
 - [x] S6.10 `JitFunction.unload/isUnloaded`：先写失败用例——未卸载可调用、卸载后调用 → 19（`site=-1`）、活跃调用排空（timeout 恢复 `Ready` 可重试）、双 `unload` 幂等、`Unloading` 期间同键 compile 等待卸载完成后按 Miss 重编且返回新句柄（旧句柄调用 → 19）、资产释放顺序与计数（code buffer 最后）；再写实现（状态机 + 资产清点）；验收：T29 用例绿（2 例：卸载拒绝/幂等+释放一次；排空超时已实现，Unloading 重编交互待桥）
 - [x] S6.11 再导出与用户面冒烟：先写失败用例——`import fountain::f_jit.*` 后可见全部用户面声明（编译期），并执行最小宿主示例（编译 → 调用 → 卸载）；再落 `public import` 清单；验收：用户面 API 冻结，且 `JitContext`/`Engine`/`JitValue`/`CompileCache`/`AdapterRegistry`/`CompilePipeline` 用户面不可见（9 个精确导出 + 5 个内部类 protected；2 例冒烟）
-- [ ] S6.12 端到端金样回归：先写失败用例——S3.22 金样单元在三引擎上的结果、错误报告文本逐位一致；再补齐实现差异；验收：金样用例全绿，P7 前置就绪（**结果维已全绿**：阶乘/容器变更/空 Map/插值 4/4；插值黑盒已修——`TO_STR` 标签命名空间、JIT 帧转瞬实参槽、`retType` 取实际降低类型；**报告文本维仍待 T50**：AArch64 BAIL 块尚未调用转储写入，`RealRunners.report` 仍为空串）
+- [x] S6.12 端到端金样回归：先写失败用例——S3.22 金样单元在三引擎上的结果、错误报告文本逐位一致；再补齐实现差异；验收：金样用例全绿，P7 前置就绪（**结果维 4/4**：阶乘/容器变更/空 Map/插值；插值黑盒已修——`TO_STR` 标签命名空间、JIT 帧转瞬实参槽、`retType` 取实际降低类型；**报告文本维已绿**：AArch64 收敛块经 `@C jit_dump` 做单次转储，`RealRunners` 四元组第四维进入差分，T50 用例断言两引擎报告逐字节相同）
 
 ## 9. P7 差分与验收（S7.1–S7.8）
 
@@ -163,14 +163,15 @@
   - 证据：`Acceptance_test.t18ContainerMutation` / `t19Iteration`（List/String/Map 惰性迭代）/ `t20RegexInterop`（匹配/否定/替换/`regex()`）/ `t21MultiAssign`；T16/T17 = `CompileCache_test`（单次编译计数、并发同键、四次线程）。
 - [x] S7.5 T22–T29：先写失败用例——源入口格式与递归、Compiler 门面与预定义函数、闭包族、跨指令/机制交互（闭包/值化/卸载/内存安全）；再补齐；验收：T22–T29 通过
   - 证据：`Acceptance_test.t22SourceEntryRecursive` / `t24Closures` / `t28TailRecursion`；T23 = `FacadeRegistry_test`、T26 = `t20RegexInterop`（三形替换）、T27 = `JitContext_test`（malloc/free 计数、跨线程）、T29 = `JitFunction_test`（卸载幂等/资产释放）。
-- [ ] S7.6 T42–T48、T50–T53：先写失败用例——字符串形态、重复与日期差、`if` 双用法、Map 惰性迭代、Regex 互操作、尾递归、容器自建、源位置与诊断、容器/类型矩阵；再补齐；验收：对应项全绿，T 映射脚本校验无悬空项
-  - **已绿**：`Acceptance_test.t42StringForms` / `t43RepeatAndDateDiff` / `t44IfDualUsage` / `t45/map`（并入 `t19Iteration`）/ `t20RegexInterop` 的 T46 / `t28TailRecursion` 的 T47 / `t48EmptyContainers` / `t51/return-empty-len` / `t53/list-sum`。
-  - **未绿**：T50 报告文本——AArch64 BAIL 块未接 `DbgDump.writeOnce`（需新增 `@C` 转储入口，下一批）；映射脚本仍只校验非空，未做「用例名可解析」的强校验。
+- [x] S7.6 T42–T48、T50–T53：先写失败用例——字符串形态、重复与日期差、`if` 双用法、Map 惰性迭代、Regex 互操作、尾递归、容器自建、源位置与诊断、容器/类型矩阵；再补齐；验收：对应项全绿，T 映射脚本校验无悬空项
+  - **全绿**：`Acceptance_test.t42StringForms` / `t43RepeatAndDateDiff` / `t44IfDualUsage` / `t45/map`（并入 `t19Iteration`）/ `t20RegexInterop` 的 T46 / `t28TailRecursion` 的 T47 / `t48EmptyContainers` / `t51/return-empty-len` / `t53/list-sum`；T50 = `t50SourcePosDiagnostics`（`Interp × AArch64` 报告文本逐位相同，含源码行与变量名/类型/值）。
+  - **映射强校验**：`f_jit/scripts/check_tmap.sh` 解析 `TCoverage.cj` 的 40 条范围内映射，逐个在 `src/**/*_test.cj` 中查找真实测试方法；当前 **40/40、悬空 0**（原描述名已全部替换为真实方法名）。
 - [x] S7.7 容量与性能基线：先写失败用例——显式调小 `initialCapacity` 复现窗口扩容深度与大循环触顶 16 边界；再做 JIT 相对解释器的吞吐对照（两侧遍历源、类型判定、目标容器、逐元素日志完全一致）；验收：记录**实测**数字与比值（非估计），扩容与触顶数字与留档一致
   - 实测（2026-10-18，Linux aarch64 / 仓颉 1.3.0，`Acceptance_test.tPerfBaselineRecordsActualNumbers`，200000 次循环）：`Interp = 1,759,793,327 ns`、`AArch64 = 40,221,815 ns`，比值 **≈ 43.8×**（JIT 侧含编译时间）；两侧结果同为 `599994`。
   - 容量：`tCapacityGrowthUnderSmallWindow` 把 `initialCapacity=2` 后 64 次分配循环仍与解释器一致；扩容深度/触顶 16 的边界由 `HandleTable_test`（`initialCapacity=2`、`capacityLimit=base+3`）承载。
 - [x] S7.8 文档同步：先写核对用例——设计与计划文档有对应修订记录且修订内容与代码行为一致；再回写 `f_jit/doc/design-m1.md` / `plan-m1.md` 的偏差，并对附 A / 附 B / 附 C 各抽 3 行与规格 §5 / §10 / §12 同源比对（不一致按规格修正并留痕）；验收：文档与产物一致，并把本次变更产物镜像一份到 `f_jit/doc/spec/f-jit-m1/` 随模块走查
-  - 已完成：`design-m1.md` §E「实施偏差与修正记录」5 条 + 附 C 的 `locals` 偏移按实现更正；`plan-m1.md` §5「实施记录」；镜像 `f_jit/doc/spec/f-jit-m1/`（proposal/design/tasks + 9 份 specs，与 `openspec/changes/f-jit-m1/` 逐字节一致）。
+  - 已完成：`design-m1.md` §E「实施偏差与修正记录」7 条 + 附 C 的 `locals` 偏移按实现更正；`plan-m1.md` §5「实施记录」；镜像 `f_jit/doc/spec/f-jit-m1/`（proposal/design/tasks + 9 份 specs，与 `openspec/changes/f-jit-m1/` 逐字节一致）。
+  - 本次新增两条实现订正（§E 6/7）：转储首格编码 `fnId+1`（入口函数号 0 与「未填」哨兵冲突）；机器码转储经纯原生 `@C jit_dump`（C2N 边界上不构造托管 `JitContext`）。
   - 附 B 采用**全量**机器比对（脚本解析两侧 `OpInfo(...)`）：230 条 opcode 全等、0 差异（强于「抽 3 行」）；附 A 抽查整型 `%`、隐式提升、n 位置窄化，附 C 抽查入口/出口、`locals` 布局、模板 A，均与规格一致或已按实现留痕。
 
 ## Workflow follow-up

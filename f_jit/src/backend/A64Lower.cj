@@ -68,6 +68,22 @@ internal class A64Lower {
         this.bail(k)
     }
 
+    /**
+     * 收敛前的单次转储（T50）：`jit_dump(dbgBase, errCode, fnId, nLocals, &locals[0])`。
+     *
+     * `DbgDump` 内部仍按 `dbgBase=0` / `errCode≤0` / 首格哨兵三条规则跳过，
+     * 因此 DEOPT(-1)、INTERRUPT(-2) 与「外层传播帧」都不会覆盖最深失败帧。
+     */
+    private func emitDump(): Unit {
+        this.e.subImm(4, 29, 40)
+        this.e.ldrOff(0, 19, 56)
+        this.e.ldrOff(1, 19, 0)
+        this.e.movImm64(2, Int64(this.fn.fnId))
+        this.e.movImm64(3, Int64(this.fn.nLocals))
+        this.e.movImm64(11, HelperAddresses.dump())
+        this.e.blr(11)
+    }
+
     /** 降低单函数体；返回是否全部支持。 */
     func lower(unit: LoadedUnit): Unit {
         var off = Int64(this.fn.codeOff)
@@ -137,6 +153,7 @@ internal class A64Lower {
             case 0x04 =>
                 this.e.ldrOff(11, 19, 0)
                 this.e.cbz(11, 'chk${at}')
+                this.emitDump()
                 this.e.movReg(0, 31)
                 this.e.b('epilogue')
                 this.e.bind('chk${at}')
@@ -515,6 +532,7 @@ internal class A64Lower {
                 let okLabel = 'hok${this.seq}'
                 this.e.ldrOff(11, 19, 0)
                 this.e.cbz(11, okLabel)
+                this.emitDump()
                 this.e.movReg(0, 31)
                 this.e.b('epilogue')
                 this.e.bind(okLabel)
@@ -534,6 +552,7 @@ internal class A64Lower {
         let okLabel = 'h0ok${this.seq}'
         this.e.ldrOff(11, 19, 0)
         this.e.cbz(11, okLabel)
+        this.emitDump()
         this.e.movReg(0, 31)
         this.e.b('epilogue')
         this.e.bind(okLabel)
@@ -545,6 +564,7 @@ internal class A64Lower {
         let okLabel = 'ce${this.seq}'
         this.e.ldrOff(11, 19, 0)
         this.e.cbz(11, okLabel)
+        this.emitDump()
         this.e.movReg(0, 31)
         this.e.b('epilogue')
         this.e.bind(okLabel)

@@ -18,6 +18,7 @@ package fountain::f_jit
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_jit.base.DummyDiagnosticsSink
+import fountain::f_jit.base.JitException
 
 /** S6.8：源码管线端到端、同源复用、编译期失败。 */
 @Test
@@ -59,5 +60,23 @@ public class CompilePipeline_test {
             threw = true
         }
         @Assert(threw, true)
+    }
+
+    /** T50：宿主侧 `JitException` 携带源码行与变量清单（含名字/类型/值）。 */
+    @TestCase
+    public func runtimeErrorCarriesSourceReport(): Unit {
+        CompileCache.reset()
+        let c = Compiler(CompileOptions(DummyDiagnosticsSink()))
+        let f = c.compile('{ a: Int64 => let b = a + 1\n b / (a - a) }')
+        var msg = ''
+        try {
+            let _ = f.call<Int64>([1])
+        } catch (e: JitException) {
+            msg = e.message
+        }
+        @Assert(msg.contains('（code=1，site='), true)
+        @Assert(msg.contains('源码行 2:'), true)
+        @Assert(msg.contains('[0] a: Int64 = 1'), true)
+        @Assert(msg.contains('[1] b: Int64 = 2'), true)
     }
 }

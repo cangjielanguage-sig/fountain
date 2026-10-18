@@ -24,6 +24,8 @@ import fountain::f_jit.backend.JitCompiler
 import fountain::f_jit.base.LocalType
 import fountain::f_jit.bytecode.FbcReader
 import fountain::f_jit.bytecode.LoadedUnit
+import fountain::f_jit.bytecode.LocalTypes
+import fountain::f_jit.runtime.DbgDump
 import fountain::f_jit.runtime.HandleTable
 import fountain::f_jit.runtime.Interp
 import fountain::f_jit.runtime.JitContext
@@ -33,8 +35,8 @@ import fountain::f_jit.runtime.TextFormat
 /**
  * 真实解释器 runner（S5.11 最小集基准）：同一份 `.fbc` + 同一组入参 → 四元组。
  *
- * 报告文本本步留空——转储文本的逐字节对齐属于 T50 的独立判据，S5.11 只要求
- * 结果 / NaN 位模式 / errCode / site 四项一致。
+ * 失败路径经 `DbgDump` 产出报告文本（T50）：转储缓冲由本 runner 分配并挂到 ctx，
+ * 与 AArch64 runner 走同一份报告组装逻辑，因此四元组的第四维可逐位对拍。
  */
 public class InterpRunner <: DiffRunner {
     public func engine(): DiffEngine {
@@ -48,11 +50,14 @@ public class InterpRunner <: DiffRunner {
     public func run(c: DiffCase): DiffOutcome {
         let unit = FbcReader.load(c.unit)
         let interp = Interp(unit)
+        let dump = DbgDump.allocateDump(RealRunners.maxNLocals(unit))
         let ctx = JitContext.create(hwBase: 0, hwCap: 0,
             fnId: Int64(unit.header.entryFn), dbgBase: 0)
+        ctx.attachDump(dump)
         let r = interp.run(unit.header.entryFn, RealRunners.cells(c.args), ctx)
         let out = DiffOutcome(RealRunners.text(unit, unit.header.entryFn, r),
-            ctx.errCode, ctx.site, '')
+            ctx.errCode, ctx.site, RealRunners.reportOf(unit, ctx, dump))
+        DbgDump.freeDump(dump)
         JitContext.free(ctx)
         out
     }
@@ -115,6 +120,8 @@ public class AArch64Runner <: DiffRunner {
         }
         let ctx = JitContext.create(hwBase: 0, hwCap: 0,
             fnId: Int64(unit.header.entryFn), dbgBase: 0)
+        let dump = DbgDump.allocateDump(RealRunners.maxNLocals(unit))
+        ctx.attachDump(dump)
         let args = RealRunners.cells(c.args)
         let argsPtr = RealRunners.arrayPointer(args)
         let f = CFunc<(CPointer<Unit>, CPointer<Int64>, Int64) -> Int64>(
@@ -126,11 +133,12 @@ public class AArch64Runner <: DiffRunner {
         }
         let r = unsafe { f(CPointer<Unit>(ctx.cp()), argv, args.size) }
         let out = DiffOutcome(RealRunners.text(unit, unit.header.entryFn, r),
-            ctx.errCode, ctx.site, '')
+            ctx.errCode, ctx.site, RealRunners.reportOf(unit, ctx, dump))
         if (args.size > 0) {
             unsafe { LibC.free<Int64>(argsPtr) }
         }
         MachineEnv.reset()
+        DbgDump.freeDump(dump)
         JitContext.free(ctx)
         table.free()
         mirror.free()
@@ -193,5 +201,47 @@ internal class RealRunners {
             return TextFormat.f64(Float64.fromBits(bits))
         }
         TextFormat.i64(cell)
+    }
+
+    /** 转储缓冲需要的槽数上限（目录全域）。 */
+    static func maxNLocals(unit: LoadedUnit): Int64 {
+        var m: Int64 = 0
+        var i = 0
+        while (i < unit.dir.size) {
+            let n = Int64(unit.dir.at(i).nLocals)
+            if (n > m) {
+                m = n
+            }
+            i = i + 1
+        }
+        m
+    }
+
+    /** `fnId` 对应的局部类型表（目录顺序与 `types` 一致，§11.7）。 */
+    static func typesOf(unit: LoadedUnit, fnId: Int64): LocalTypes {
+        var i = 0
+        while (i < unit.dir.size) {
+            if (Int64(unit.dir.at(i).fnId) == fnId) {
+                return unit.types[i]
+            }
+            i = i + 1
+        }
+        unit.types[0]
+    }
+
+    /**
+     * 失败路径的报告文本（T50）。
+     *
+     * 成功 / DEOPT / 中断没有报告（与桥只在 `errCode > 0` 时抛异常一致）；
+     * 失败时按转储首格的「最深失败帧」取 `fnId` 与局部类型表。
+     */
+    static func reportOf(unit: LoadedUnit, ctx: JitContext, dump: CPointer<Int64>): String {
+        if (ctx.errCode <= 0) {
+            return ''
+        }
+        let marker = unsafe { dump.read(0) }
+        let fnId = if (marker != 0) { marker - 1 } else { Int64(unit.header.entryFn) }
+        DbgDump.report(ctx.errCode, ctx.site, fnId,
+            RealRunners.typesOf(unit, fnId), unit.site, unit.name, dump)
     }
 }
