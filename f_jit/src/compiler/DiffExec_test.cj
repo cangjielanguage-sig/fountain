@@ -20,6 +20,7 @@ import std.unittest.testmacro.*
 import fountain::f_jit.base.DummyDiagnosticsSink
 import fountain::f_jit.test.diff.AArch64Runner
 import fountain::f_jit.test.diff.DiffCase
+import fountain::f_jit.test.diff.NativeRunner
 import fountain::f_jit.test.diff.DiffSession
 import fountain::f_jit.test.diff.InterpRunner
 
@@ -61,7 +62,7 @@ public class DiffExec_test {
     private static func check(id: String, src: String, args: Array<Any>): Unit {
         let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(src)
         let c = DiffCase(id, cu.raw, args)
-        let session = DiffSession([InterpRunner(), AArch64Runner()])
+        let session = DiffSession([InterpRunner(), NativeRunner()])
         session.assertTripleEqual(c)
         @Assert(session.ran() >= 1, true)
     }
@@ -128,7 +129,7 @@ public class GoldenDiff_test {
     private static func checkCode(id: String, src: String, args: Array<Any>,
         expect: Int64): Unit {
         let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(src)
-        let session = DiffSession([InterpRunner(), AArch64Runner()])
+        let session = DiffSession([InterpRunner(), NativeRunner()])
         session.assertTripleEqual(DiffCase(id, cu.raw, args))
         let base = InterpRunner().run(DiffCase(id, cu.raw, args))
         @Assert(base.errCode, expect)
@@ -136,7 +137,7 @@ public class GoldenDiff_test {
 
     private static func check(id: String, src: String, args: Array<Any>): Unit {
         let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(src)
-        let session = DiffSession([InterpRunner(), AArch64Runner()])
+        let session = DiffSession([InterpRunner(), NativeRunner()])
         session.assertTripleEqual(DiffCase(id, cu.raw, args))
     }
 }

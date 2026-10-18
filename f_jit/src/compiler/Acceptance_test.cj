@@ -23,6 +23,7 @@ import fountain::f_jit.bytecode.FbcReader
 import fountain::f_jit.runtime.HandleTable
 import fountain::f_jit.test.diff.AArch64Runner
 import fountain::f_jit.test.diff.DiffCase
+import fountain::f_jit.test.diff.NativeRunner
 import fountain::f_jit.test.diff.DiffSession
 import fountain::f_jit.test.diff.InterpRunner
 
@@ -255,7 +256,7 @@ public class Acceptance_test {
         let raw = Acceptance_test.rawOf(src)
         let c = DiffCase('T50/report', raw, [1])
         let i = InterpRunner().run(c)
-        let j = AArch64Runner().run(c)
+        let j = NativeRunner().run(c)
         @Assert(i.errCode, 1)
         @Assert(j.errCode, 1)
         @Assert(i.site, j.site)
@@ -300,7 +301,7 @@ public class Acceptance_test {
         let a = InterpRunner().run(c)
         let d1 = DateTime.now() - i0
         let j0 = DateTime.now()
-        let b = AArch64Runner().run(c)
+        let b = NativeRunner().run(c)
         let d2 = DateTime.now() - j0
         @Assert(a.result, b.result)
         @Assert(a.errCode, b.errCode)
@@ -323,7 +324,7 @@ public class Acceptance_test {
     }
 
     private static func diffRaw(id: String, raw: Array<UInt8>, args: Array<Any>): Unit {
-        let session = DiffSession([InterpRunner(), AArch64Runner()])
+        let session = DiffSession([InterpRunner(), NativeRunner()])
         session.assertTripleEqual(DiffCase(id, raw, args))
         @Assert(session.ran() >= 1, true)
     }
