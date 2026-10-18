@@ -278,6 +278,11 @@ public class X86Lower_test {
         @Assert(X86Lower_test.hex(BackendX86_64.emitBreakpoint()), '90')
     }
 
+    @TestCase
+    public func trap(): Unit {
+        @Assert(X86Lower_test.hex(BackendX86_64.emitTrap()), 'CC')
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {

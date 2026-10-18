@@ -455,6 +455,11 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
+    /** `TRAP`：`int3`（调试面）。 */
+    internal static func emitTrap(): Array<UInt8> {
+        [0xCCu8]
+    }
+
     /** `BREAKPOINT`：发布版空操作。 */
     internal static func emitBreakpoint(): Array<UInt8> {
         [0x90u8]
