@@ -184,6 +184,15 @@ public class X86Lower_test {
             'F20F100424' + '660F2EC0' + '0F8A00000000' + 'F2480F2CC0' + '48890424')
     }
 
+    @TestCase
+    public func toI64RangeGuard(): Unit {
+        let head = 'F20F100424' + '660F2EC0' + '0F8A00000000' +
+            '48B8000000000000E043' + '66480F6EC8' + '660F2EC1' + '0F8300000000' +
+            '48B8000000000000E0C3' + '66480F6EC8' + '660F2EC1' + '0F8200000000'
+        @Assert(X86Lower_test.hex(BackendX86_64.emitToI64RangeGuarded()),
+            head + 'F2480F2CC0' + '48890424')
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {
