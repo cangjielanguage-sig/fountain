@@ -27,7 +27,7 @@ import fountain::f_jit.bytecode.LoadedUnit
 public class A64Compiler {
     /** `FRAME = align16(32 + 8*(nLocals+maxStack))`（§12.2/§12.3）。 */
     static func frameSize(nLocals: Int64, maxStack: Int64): Int64 {
-        let raw = 32 + 8 * (nLocals + maxStack)
+        let raw = 40 + 8 * (nLocals + maxStack)
         ((raw + 15) / 16) * 16
     }
 
@@ -46,18 +46,23 @@ public class A64Compiler {
         e.movReg(19, 0)
         e.subImm(31, 31, frame)
         // 操作数栈指针 x20 = locals 区顶端（真实 sp 全程保持 16 对齐）
-        e.subImm(20, 29, 32 + 8 * Int64(fn.nLocals))
-        // 实参拷入 locals[0..nargs)
+        e.subImm(20, 29, 40 + 8 * Int64(fn.nLocals))
+        // 实参拷入 locals[0..nargs)：x1 指向最深实参（高地址），第 i 个在 −8i
         var i = 0
         while (i < Int64(fn.nargs)) {
-            e.ldrOff(9, 1, 8 * i)
-            e.strOff(9, 29, -32 - 8 * i)
+            if (i == 0) {
+                e.ldrOff(9, 1, 0)
+            } else {
+                e.subImm(11, 1, 8 * i)
+                e.ldrOff(9, 11, 0)
+            }
+            e.strOff(9, 29, -40 - 8 * i)
             i = i + 1
         }
         // 其余局部槽卫生填 0
         while (i < Int64(fn.nLocals)) {
             e.movReg(9, 31)
-            e.strOff(9, 29, -32 - 8 * i)
+            e.strOff(9, 29, -40 - 8 * i)
             i = i + 1
         }
         let lower = A64Lower(e, fn, frame, constBase, fnTableBase)

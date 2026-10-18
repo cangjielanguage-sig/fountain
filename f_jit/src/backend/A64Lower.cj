@@ -119,11 +119,11 @@ internal class A64Lower {
     }
 
     private func loadLocal(i: Int64, reg: Int64): Unit {
-        this.e.ldrOff(reg, 29, -32 - 8 * i)
+        this.e.ldrOff(reg, 29, -40 - 8 * i)
     }
 
     private func storeLocal(i: Int64, reg: Int64): Unit {
-        this.e.strOff(reg, 29, -32 - 8 * i)
+        this.e.strOff(reg, 29, -40 - 8 * i)
     }
 
     private func translate(op: UInt8, ops: Array<UInt8>, at: Int64, next: Int64): Unit {
@@ -613,14 +613,15 @@ internal class A64Lower {
     /** `CALL_CLOSURE argc`：H55 取 fnId → H57 取 fnTable → 间接调用。 */
     private func callClosure(argc: Int64): Unit {
         let disp = 8 * argc
-        // H55(ctx, &closure, 1) → fnId
+        // H55(ctx, &closure, 1) → fnId；不覆盖闭包槽（被调帧 locals[0] 仍需要句柄）
         this.e.movImm64(0, 55)
         this.e.movReg(1, 19)
         this.e.addImm(2, 20, disp)
         this.e.movImm64(3, 1)
         this.e.movImm64(9, this.helperDispatch)
         this.e.blr(9)
-        this.e.strOff(0, 20, disp)
+        // fnId 暂存 [x29,#-32]（跨 H57 调用不可存活于寄存器）
+        this.e.strOff(0, 29, -32)
         this.checkErr()
         // H57(ctx) → fnTable 基址
         this.e.movImm64(0, 57)
@@ -631,14 +632,11 @@ internal class A64Lower {
         this.e.blr(9)
         this.e.movReg(12, 0)
         this.checkErr()
-        this.e.ldrOff(9, 20, disp) // fnId
+        this.e.ldrOff(9, 29, -32) // fnId
         this.e.ldrReg(10, 12, 9)
         this.e.movReg(0, 19)
-        if (argc == 0) {
-            this.e.movReg(1, 31)
-        } else {
-            this.e.addImm(1, 20, 8 * (argc - 1))
-        }
+        // 闭包帧实参区 = [闭包句柄, a1..argc]（句柄在低地址），x1 指向句柄
+        this.e.addImm(1, 20, disp)
         this.e.movImm64(2, argc)
         this.e.blr(10)
         this.e.movImm64(11, Int64(this.fn.fnId))
