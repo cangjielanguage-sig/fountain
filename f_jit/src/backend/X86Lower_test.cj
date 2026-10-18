@@ -335,6 +335,16 @@ public class X86Lower_test {
             X86Lower_test.hex(BackendX86_64.emitCallHelper(0x8102, 6)))
     }
 
+    @TestCase
+    public func stringHelperRoutes(): Unit {
+        @Assert(X86Lower_test.hex(BackendX86_64.emitStrSub(0x8200)),
+            X86Lower_test.hex(BackendX86_64.emitCallHelper(0x8200, 3)))
+        @Assert(X86Lower_test.hex(BackendX86_64.emitStrReplace(0x8201)),
+            X86Lower_test.hex(BackendX86_64.emitCallHelper(0x8201, 3)))
+        @Assert(X86Lower_test.hex(BackendX86_64.emitStrRepeat(0x8202)),
+            X86Lower_test.hex(BackendX86_64.emitCallHelper(0x8202, 2)))
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {

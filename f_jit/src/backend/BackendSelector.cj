@@ -467,6 +467,19 @@ internal class BackendX86_64 <: Backend {
         BackendX86_64.emitCallHelper(h72, 6)
     }
 
+    /** 字符串 helper 路由。 */
+    internal static func emitStrSub(h50: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h50, 3)
+    }
+
+    internal static func emitStrReplace(h51: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h51, 3)
+    }
+
+    internal static func emitStrRepeat(h60: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h60, 2)
+    }
+
     /** 正则 helper 路由：双参模板 A。 */
     internal static func emitRegexIsMatch(h52: Int64): Array<UInt8> {
         BackendX86_64.emitCallHelper(h52, 2)
