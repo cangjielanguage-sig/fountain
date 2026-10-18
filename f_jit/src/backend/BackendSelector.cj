@@ -481,17 +481,36 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
-    /** `CAST t`：保留低 48 位、重写高 16 位 tag（失败判定 7 待补）。 */
-    internal static func emitCast(t: Int64): Array<UInt8> {
+    /**
+     * `CAST tok mode`（§12.4）：`DUP` 保留原值 → 压 tok → `call H17`（永失败不置错）。
+     *
+     * 命中：弹掉判定结果继续；未命中：mode0 → `<bail:7>`、mode1 → `<deopt>`
+     * （rel32 占位，P5.8 回填）。值型恒等/静态相容 = 空操作（前端不发射本指令）。
+     */
+    internal static func emitCast(h17: Int64, tok: Int64, mode: Int64): Array<UInt8> {
         let out = ArrayList<UInt8>()
-        for (x in [0x48u8, 0x8Bu8, 0x04u8, 0x24u8, 0x48u8, 0xC1u8, 0xE0u8, 0x10u8,
-            0x48u8, 0xC1u8, 0xE8u8, 0x10u8, 0x48u8, 0xB9u8]) {
-            out.add(x) // 清高 16 位
+        for (x in [0xFFu8, 0x34u8, 0x24u8]) {
+            out.add(x) // DUP
         }
-        BackendX86_64.w64(out, t)
-        for (x in [0x48u8, 0xC1u8, 0xE1u8, 0x30u8, 0x48u8, 0x09u8, 0xC8u8, 0x48u8, 0x89u8,
-            0x04u8, 0x24u8]) {
-            out.add(x) // tag<<48 | value
+        out.add(0x48u8)
+        out.add(0xB8u8)
+        BackendX86_64.w64(out, tok)
+        out.add(0x50u8) // push tok
+        for (x in [0x4Cu8, 0x89u8, 0xFFu8, 0x48u8, 0x8Du8, 0x74u8, 0x24u8, 0x08u8,
+            0xBAu8, 0x02u8, 0x00u8, 0x00u8, 0x00u8, 0x48u8, 0xB8u8]) {
+            out.add(x) // rdi=ctx; rsi=&value; edx=2; movabs h17
+        }
+        BackendX86_64.w64(out, h17)
+        for (x in [0xFFu8, 0xD0u8, 0x48u8, 0x89u8, 0x84u8, 0x24u8,
+            0x08u8, 0x00u8, 0x00u8, 0x00u8, 0x48u8, 0x83u8, 0xC4u8, 0x08u8,
+            0x85u8, 0xC0u8, 0x0Fu8, 0x84u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8,
+            0x58u8, 0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8,
+            0x58u8, 0x49u8, 0xC7u8, 0x07u8]) {
+            out.add(x) // call; 回写; 收 tok; test; jz; pop; jmp; .m: pop; mov qword [r15],k
+        }
+        BackendX86_64.w32(out, BackendX86_64.i32bits(if (mode == 0) { 7 } else { -1 }))
+        for (x in [0x31u8, 0xC0u8, 0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+            out.add(x)
         }
         out.toArray()
     }
@@ -596,7 +615,7 @@ internal class BackendX86_64 <: Backend {
             0x48u8, 0x85u8, 0xC0u8, 0x0Fu8, 0x85u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
             out.add(x) // pop; test; jnz ok（跳过 bail）
         }
-        for (x in [0x41u8, 0xC7u8, 0x07u8]) {
+        for (x in [0x49u8, 0xC7u8, 0x07u8]) {
             out.add(x)
         }
         BackendX86_64.w32(out, BackendX86_64.i32bits(code))
@@ -640,7 +659,7 @@ internal class BackendX86_64 <: Backend {
 
     /** `ABORT`：写 errCode=99 → RETV=0 → jmp epilogue（rel 占位）。 */
     internal static func emitAbort(): Array<UInt8> {
-        [0x41u8, 0xC7u8, 0x07u8, 0x63u8, 0x00u8, 0x00u8, 0x00u8,
+        [0x49u8, 0xC7u8, 0x07u8, 0x63u8, 0x00u8, 0x00u8, 0x00u8,
          0x31u8, 0xC0u8, 0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]
     }
 
@@ -995,10 +1014,10 @@ internal class BackendX86_64 <: Backend {
         [0x49u8, 0x83u8, 0x3Fu8, 0x00u8, 0x0Fu8, 0x85u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]
     }
 
-    /** `<bail:k>`：写槽 k → `xor eax,eax` → `jmp rel32`（rel 占位 0）。 */
+    /** `<bail:k>`：写 qword 槽 k → `xor eax,eax` → `jmp rel32`（rel 占位 0）。 */
     internal static func emitBail(k: Int64): Array<UInt8> {
         let out = ArrayList<UInt8>()
-        for (b in [0x41u8, 0xC7u8, 0x07u8]) {
+        for (b in [0x49u8, 0xC7u8, 0x07u8]) {
             out.add(b)
         }
         BackendX86_64.w32(out, BackendX86_64.i32bits(k))

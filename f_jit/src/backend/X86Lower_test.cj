@@ -51,7 +51,7 @@ public class X86Lower_test {
         // CHECK_ERR → cmp qword [r15],0; jne rel32（占位 0，回填由 P5.8）
         @Assert(X86Lower_test.hex(BackendX86_64.emitCheckErr()), '49833F000F8500000000')
         // BAIL 3 → mov dword [r15],3; xor eax,eax; jmp rel32
-        @Assert(X86Lower_test.hex(BackendX86_64.emitBail(3)), '41C70703000000' + '31C0' + 'E900000000')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitBail(3)), '49C70703000000' + '31C0' + 'E900000000')
     }
 
     @TestCase
@@ -264,7 +264,7 @@ public class X86Lower_test {
     @TestCase
     public func abort(): Unit {
         @Assert(X86Lower_test.hex(BackendX86_64.emitAbort()),
-            '41C70763000000' + '31C0' + 'E900000000')
+            '49C70763000000' + '31C0' + 'E900000000')
     }
 
     @TestCase
@@ -298,7 +298,7 @@ public class X86Lower_test {
     public func assertOp(): Unit {
         @Assert(X86Lower_test.hex(BackendX86_64.emitAssert(7)),
             '488B0424' + '4883C408' + '4885C0' + '0F8500000000' +
-            '41C70707000000' + '31C0' + 'E900000000')
+            '49C70707000000' + '31C0' + 'E900000000')
     }
 
     @TestCase
@@ -397,10 +397,15 @@ public class X86Lower_test {
     }
 
     @TestCase
-    public func castTagRewrite(): Unit {
-        @Assert(X86Lower_test.hex(BackendX86_64.emitCast(4)),
-            '488B0424' + '48C1E010' + '48C1E810' + '48B90400000000000000' +
-            '48C1E130' + '4809C8' + '48890424')
+    public func castThroughH17(): Unit {
+        let head = 'FF3424' + '48B80400000000000000' + '50' + '4C89FF' + '488D742408' +
+            'BA02000000' + '48B80090000000000000' + 'FFD0' +
+            '4889842408000000' + '4883C408' + '85C0' + '0F8400000000' +
+            '58' + 'E900000000' + '58'
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCast(0x9000, 4, 0)),
+            head + '49C70707000000' + '31C0' + 'E900000000')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCast(0x9000, 4, 1)),
+            head + '49C707FFFFFFFF' + '31C0' + 'E900000000')
     }
 
     private static func hex(bs: Array<UInt8>): String {
