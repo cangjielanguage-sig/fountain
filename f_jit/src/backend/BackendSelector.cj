@@ -44,18 +44,33 @@ public class BackendSelector {
     /** 可注入 OS/Arch 的矩阵入口（测试用；语义与 `select` 完全一致）。 */
     protected static func selectFor(mode: JitMode, os: OS, arch: Arch,
         diag: DiagnosticsSink): (Engine, ?Backend) {
+        BackendSelector.selectForArchName(mode, os.toString(), arch.toString(), diag)
+    }
+
+    /**
+     * 按**名字**注入的矩阵入口：`archName` 不在 `{x86_64, aarch64}` 时视为
+     * 「指令集不支持」，与「非 Linux」同等静默降级（`Warn/JitFallback`，绝不报错）。
+     * 供 S5.12 在单一宿主上模拟其他指令集。
+     */
+    protected static func selectForArchName(mode: JitMode, osName: String, archName: String,
+        diag: DiagnosticsSink): (Engine, ?Backend) {
         if (mode == JitMode.Off) {
             return (Engine.Interp, None)
         }
-        if (!os.isLinux) {
+        if (osName != 'Linux') {
             diag.diag(DiagnosticLevel.Warn, DiagCode.JitFallback,
-                '非 Linux 平台（${os}）：JIT 不可用，降级解释器（§12.1）')
+                '非 Linux 平台（${osName}）：JIT 不可用，降级解释器（§12.1）')
             return (Engine.Interp, None)
         }
-        match (arch) {
-            case Arch.x86_64 => (Engine.Jit, Some(BackendX86_64()))
-            case Arch.aarch64 => (Engine.Jit, Some(BackendAArch64()))
+        if (archName == 'x86_64') {
+            return (Engine.Jit, Some(BackendX86_64()))
         }
+        if (archName == 'aarch64') {
+            return (Engine.Jit, Some(BackendAArch64()))
+        }
+        diag.diag(DiagnosticLevel.Warn, DiagCode.JitFallback,
+            '指令集不支持（${archName}）：JIT 不可用，降级解释器（§12.1）')
+        (Engine.Interp, None)
     }
 }
 

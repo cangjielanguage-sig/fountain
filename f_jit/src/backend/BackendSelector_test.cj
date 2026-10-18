@@ -21,6 +21,7 @@ import std.unittest.testmacro.*
 import fountain::f_base.Arch
 import fountain::f_base.OS
 import fountain::f_jit.base.*
+import fountain::f_jit.runtime.JitContext
 
 /**
  * P5.3 `BackendSelector`：`{Off, Auto, Force} × OS × Arch` 的结果必须确定；
@@ -74,6 +75,32 @@ public class BackendSelector_test {
     public func currentPlatformSelectsExpected(): Unit {
         let (e, _) = BackendSelector.select(JitMode.Auto, Sink())
         @Assert(e, Engine.Jit) // 本机为 Linux/aarch64
+    }
+
+    /** S5.12：不受支持的指令集在 `Force` 下静默降级（不抛、不写错误槽）。 */
+    @TestCase
+    public func unsupportedArchSoftFallsBack(): Unit {
+        for (name in ['riscv64', 'loongarch64', 'armv7']) {
+            let sink = Sink()
+            let (e, b) = BackendSelector.selectForArchName(JitMode.Force, 'Linux', name, sink)
+            @Assert(e, Engine.Interp)
+            @Assert(none(b), true)
+            @Assert(sink.size(), 1)
+            @Assert(sink.lastCode(), DiagCode.JitFallback)
+            @Assert(sink.lastLevel(), DiagnosticLevel.Warn)
+        }
+    }
+
+    /** S5.12：降级路径不触碰 ctx 错误槽（错误只由真正的执行失败写入）。 */
+    @TestCase
+    public func fallbackLeavesErrorSlotUntouched(): Unit {
+        let ctx = JitContext.create(hwBase: 0, hwCap: 0, fnId: 0, dbgBase: 0)
+        let sink = Sink()
+        let (e, _) = BackendSelector.selectForArchName(JitMode.Force, 'Windows', 'aarch64', sink)
+        @Assert(e, Engine.Interp)
+        @Assert(ctx.errCode, 0)
+        @Assert(ctx.site, -1)
+        JitContext.free(ctx)
     }
 
 }
