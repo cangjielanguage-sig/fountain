@@ -229,6 +229,8 @@ internal class HelperCodec {
     public static const REGEX_REPLACE_NTH: UInt16 = 59u16
     /** H72 `regex_replace_range`（v0.18.19 区间替换）。 */
     public static const REGEX_REPLACE_RANGE: UInt16 = 72u16
+    /** H69 `str_to_regex`（v0.17 `regexStr.regex()`；无专用 opcode 的 helper 直呼）。 */
+    public static const STR_TO_REGEX: UInt16 = 69u16
 
     /** 时间/间隔构造（M1 扩展，hid 73–76；源语言 `DateTime.*` / `Duration.parse`）。 */
     public static const DATETIME_NOW: UInt16 = 73u16

@@ -90,6 +90,13 @@ public class GoldenDiff_test {
             '{ => let m: Map<String, Int64> = {}\n m["k"] = 1\n m["k"] }', Array<Any>())
     }
 
+    /** S3.22 第 4 例：插值 —— `TO_STR` + `STR_CAT` 左结合，跨引擎逐位一致。 */
+    @TestCase
+    public func goldenInterpolation(): Unit {
+        GoldenDiff_test.check('G/interp', '{ x: Int64 => "n=${GoldenDiff_test.DOLLAR}{x}!" }',
+            [7])
+    }
+
     @TestCase
     public func errorDivisionByZero(): Unit {
         GoldenDiff_test.check('E/div0', '{ a: Int64 => a / (a - a) }', [1])

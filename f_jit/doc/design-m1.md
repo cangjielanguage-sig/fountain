@@ -1415,7 +1415,7 @@ Ready --CAS--> Unloading（拒绝新调用；活跃调用照常完成）--active
 
 **口径**：机器码**只加速、不改语义**（I7）——解释器与两个 JIT 后端对同一 `.fbc` 必须给出逐位一致的（结果、`errCode`、`site`）。本附 C 的对照表**同源摘录自规格 §12.4**（`§` 均为规格章节号；冲突以规格为准）。
 
-**通用栈机映射（§12.4 约定）**：`push v` = `sub rsp,8; mov [rsp],v`（a64 `str v,[sp,#-8]!`）；`pop r` = `mov r,[rsp]; add rsp,8`（a64 `ldr r,[sp],#8`）；二元 `a b → r` 中 `b`@`[rsp]`、`a`@`[rsp+8]`，结果写回 `[rsp+8]` 后收栈；`locals[i]` = `[rbp-32-8i]`（a64 `[x29,#-32-8i]`）。
+**通用栈机映射（§12.4 约定）**：`push v` = `sub rsp,8; mov [rsp],v`（a64 `str v,[sp,#-8]!`）；`pop r` = `mov r,[rsp]; add rsp,8`（a64 `ldr r,[sp],#8`）；二元 `a b → r` 中 `b`@`[rsp]`、`a`@`[rsp+8]`，结果写回 `[rsp+8]` 后收栈；`locals[i]` = `[rbp-32-8i]`（a64 `[x29,#-40-8i]`——`-32` 留作 `CALL_CLOSURE` 的 fnId 暂存槽；实现口径，见 E.5）。
 
 ### C.1 后端抽象与 ABI 映射（§12.2）
 
@@ -1443,7 +1443,7 @@ Ready --CAS--> Unloading（拒绝新调用；活跃调用照常完成）--active
 
 **通用约定（全表共用）**：
 
-- 栈机模型：`push v` = `sub rsp,8; mov [rsp],v`（a64 `str v,[sp,#-8]!`）；`pop r` = `mov r,[rsp]; add rsp,8`（a64 `ldr r,[sp],#8`）。二元 `a b → r`：`b`@`[rsp]`、`a`@`[rsp+8]`，结果写回 `[rsp+8]` 后 `add rsp,8`（a64：先弹 `b` 至 `x10`，结果写回 `[sp]`）。`locals[i]` = `[rbp-32-8i]`（a64 `[x29,#-32-8i]`）。`FRAME`/`nLocals`/`need` 均为编译期立即数。
+- 栈机模型：`push v` = `sub rsp,8; mov [rsp],v`（a64 `str v,[sp,#-8]!`）；`pop r` = `mov r,[rsp]; add rsp,8`（a64 `ldr r,[sp],#8`）。二元 `a b → r`：`b`@`[rsp]`、`a`@`[rsp+8]`，结果写回 `[rsp+8]` 后 `add rsp,8`（a64：先弹 `b` 至 `x10`，结果写回 `[sp]`）。`locals[i]` = `[rbp-32-8i]`（a64 `[x29,#-40-8i]`——`-32` 留作 `CALL_CLOSURE` 的 fnId 暂存槽；实现口径，见 E.5）。`FRAME`/`nLocals`/`need` 均为编译期立即数。
 - **失败收敛块**：`<bail:k>` = 写槽 k（`mov qword [r15],k`／`movz x11,k; str x11,[x19]`）→ `k>0` 时**单次转储序**（§9.16：`dbgBase≠0` 且首格 0 → 写 fnId/nLocals、拷贝 `locals[0..nLocals)`——按 nLocals 展开；首个收敛点获胜）→ `RETV=0` → `jmp/b .epilogue`；`<deopt>` = 写 `-1` → `RETV=0` → 跳 epilogue（**不转储**，§9.16）。
 - `CHECK_ERR`：`cmp qword [r15],0; jne <最近 bail>`（a64 `ldr x11,[x19]; cbnz x11,<bail>`）。
 - **NaN 规范化尾**（§11.3 的机器层兑现；`CANON=0x7FF8000000000000`）：x86 对一切可产 NaN 的浮点指令尾接 `ucomisd xmm0,xmm0; jnp .n; movabs rax,CANON; movq xmm0,rax; .n:`；a64 依赖 **FPCR.DN=1**（引擎初始化显式置位）天然产出 canonical NaN——**不尾接**（DN=0 的宿主必须补尾）。FMIN/FMAX 行内强制（见行）。
@@ -1486,8 +1486,8 @@ Ready --CAS--> Unloading（拒绝新调用；活跃调用照常完成）--active
 
 | 字节码 | x86_64 | AArch64 |
 |---|---|---|
-| `LOADL i` / `LOADL0–3` | `mov rax,[rbp-32-8i]; push rax` | `ldr x11,[x29,#-32-8i]; str x11,[sp,#-8]!` |
-| `STOREL i` | `pop rax; mov [rbp-32-8i],rax` | `ldr x11,[sp],#8; str x11,[x29,#-32-8i]` |
+| `LOADL i` / `LOADL0–3` | `mov rax,[rbp-32-8i]; push rax` | `ldr x11,[x29,#-40-8i]; str x11,[sp,#-8]!` |
+| `STOREL i` | `pop rax; mov [rbp-32-8i],rax` | `ldr x11,[sp],#8; str x11,[x29,#-40-8i]` |
 | `LOAD_CAP idx` | `CALL_HELPER H56`（argc=2——句柄+idx） | 同 |
 
 **0x30–0x3F 整型算术**
@@ -1629,3 +1629,38 @@ Ready --CAS--> Unloading（拒绝新调用；活跃调用照常完成）--active
 - 解析器为此新增 `.` 成员后缀（仅识别 `Ident`），降低阶段只放行上述 `DateTime.*` / `Duration.*` 组合；其余成员访问仍报 `NotImpl`（M2）。
 - `DefiniteAssignment` 把 `DateTime` / `Duration` 视为内建命名空间，不作为局部变量读取。
 - 与宿主侧构造（`HandleTable.pin` 传参）等价；两者在解释器路径结果一致。
+
+---
+
+### E. 实施偏差与修正记录（2026-10-18，`opsx:apply` S6.12/S7）
+
+以下四处是**实现缺陷修正**而非设计变更；共同点是「字节码/规格口径与实现不一致」，修正后以规格为准。
+
+1. **`TO_STR` 的 `t` 是 §6 文本化标签，不是 `LocalType`**
+   - 规格：`0=I64 1=F64 2=Bool 3=String 4=Decimal 5=DateTime 6=Duration 7=Range 8=Regex`；
+   - `LocalType` 的 3 是 Unit、4 才是 String，原实现直接透传，导致 String 被当 Decimal、Decimal 被当 DateTime；
+   - 修正：`Lowerer.toStrTag` 做一次性映射；非标签类型（Unit/List/Map/Closure）编译期 `TYPE_MISMATCH`（§9 附则 13）。
+
+2. **JIT 帧多留一格「转瞬实参槽」**
+   - 模板 A 需要把标签/立即数压到操作数栈顶再调 helper，峰值比字节码 `maxStack` 多一格；
+   - 原 `FRAME` 恰好用满，该格落在 `sp` 之下，被 helper 自己的栈帧覆盖（实测插值串 `TO_STR` 标签读回垃圾 ⇒ 14）；
+   - 修正：`A64Compiler.frameSize` / `BackendX86_64.frameSize` 各加 8 B 再 16 对齐（`40`/`32` 基址不变）。
+   - **该偏差只影响 JIT 帧大小**，不改 `.fbc` 的 `maxStack` 字段与解释器帧。
+
+3. **`JMP/JZ/JNZ/LOOP_BACK` 的 `rel32` 是有符号偏移**
+   - 原 AArch64 lowering 按 `u32` 读，回边（负偏移）被解释成巨大正偏移 ⇒ 重定位越界、函数降级解释器（`while`/`for-in` 首当其冲）；
+   - 修正：按 `i32` 读，目标 = 下一条指令 + offset（与 `InsnDecoder.rel32` 同口径）。
+
+4. **函数返回类型以降低结果为准**
+   - `staticTypeOfTop` 只认识字面量/比较，`"ab" * 3`、`1 + 0.5`、`dt1 - dt2` 都被预判成 Int64；
+   - 修正：`lowerLambda` 取 `lowerExprAs` 的实际返回类型写入 `FuncEntry.retType`，闭包表同法覆盖登记。
+   - 影响宿主 Marshal/解包与差分文本化；`1 + 0.5` 现在正确标为 Decimal。
+
+5. **AArch64 `locals` 基址 = `[x29, #-40]`（x86 仍为 `[rbp, #-32]`）**
+   - 规格 §12.4 写的是 `[x29,#-32-8i]`；实现把 `-32` 留作 `CALL_CLOSURE` 的 fnId 暂存槽
+     （跨 H55/H57 两个 helper 调用存活，不能放寄存器），`locals[0]` 顺移到 `-40`；
+   - 该偏移只影响 AArch64 机器层；解释器与 `.fbc` 均不感知。附 C 的对照表已按实现更新。
+
+**新增源语言能力**：`regexStr.regex()`（v0.17 规格已定义、前端此前缺失）→ `CALL_HELPER 69, 1`，返回 Regex、非法/空 pattern 运行期 14（T46）。
+
+**仍待补齐（不属本次修正）**：x86_64 的整单元 lowering（P5.8）。`BackendX86_64.compile` 保持「降级解释器」，因为现有 x86 片段内多处 `rel32` 仍是 P5.8 回填占位（`emitCast`/`emitAssert`/浮点收尾等），在缺少 x86_64 原生证据时不应假装可执行。

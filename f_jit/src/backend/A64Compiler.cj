@@ -25,9 +25,16 @@ import fountain::f_jit.bytecode.LoadedUnit
  * `epilogue` → `bail1/bail2/bail3/deopt` 收敛块。分支重定位在 `finish()` 一次回填。
  */
 public class A64Compiler {
-    /** `FRAME = align16(32 + 8*(nLocals+maxStack))`（§12.2/§12.3）。 */
+    /**
+     * `FRAME = align16(40 + 8*(nLocals + maxStack) + 8)`（§12.2/§12.3）。
+     *
+     * 末项是**转瞬实参槽**：helper 模板需把静态操作数（`TO_STR` 的标签、
+     * `IS_TYPE`/`CAST`/`LOAD_CAP`/`MAP_ITER_STEP` 的立即数）压到操作数栈顶再调用，
+     * 峰值比字节码 `maxStack` 多一格（§12.4 模板 A）。缺少这一格时该槽落在 `sp`
+     * 之下，会被 helper 自己的栈帧覆盖（实测：插值串的 `TO_STR` 标签读回垃圾 ⇒ 14）。
+     */
     static func frameSize(nLocals: Int64, maxStack: Int64): Int64 {
-        let raw = 40 + 8 * (nLocals + maxStack)
+        let raw = 40 + 8 * (nLocals + maxStack + 1)
         ((raw + 15) / 16) * 16
     }
 

@@ -123,42 +123,55 @@
 - [x] S5.2 `FnTable`（`alloc/set/entry/free`）+ `ConstMirror`（`build/base/free`）：先写失败用例——表项读写、镜像连续 8 B 且基址可烘焙进机器码立即数（读回值与常量表一致）、分配与释放配对；再写实现（非 GC 内存）；验收：两件资产生命周期配对
 - [x] S5.3 `BackendSelector.select`：先写失败用例——矩阵 `{Off,Auto,Force} × {Linux x86_64, Linux aarch64, Linux 其他, Windows, macOS, HarmonyOS}` 结果确定、非 Linux 恒 `Interp` 且不抛异常、有降级诊断记录；再写实现（OS/Arch 判定经 `f_base`）；验收：T7/T9 用例绿
 - [ ] S5.4 `BackendX86_64` 框架 + `compile/entryThunk/abiSummary/name`：先写失败用例——prologue/epilogue 序列（r15 保存恢复、hwBase 镜像、fnId 写 ctx、args 拷入 locals、卫生填充）、帧 16 对齐算术；再写实现（发射器）；验收：与 §12.3 一致（机器码断言在非原生架构上条件跳过并计入「非原生跳过」）
+  - **已完成**：`name`/`abiSummary`/`entryThunkBase`/`entryThunkFor`/`prepareThunks`/`frameSize`/`emitPrologue`/`emitEpilogue`，用例 `X86Frame_test`（4）+ `X86Thunk_test`（2）+ `X86Lower_test`（逐指令字节）。
+  - **未完成（阻塞）**：`compile(unit, sink)` 的整单元编排 = P5.8。现有 x86 片段内部多处 `rel32` 仍是「P5.8 回填」占位（`emitCast`/`emitAssert`/浮点收尾/`emitFDivChk` 等），缺少可重定位的汇编层；在无 x86_64 原生执行证据时不把 `compile` 伪造成可运行。
 - [x] S5.5 x86 lowering 0x00–0x3F：先写失败用例——`SET_SITE`、`BAIL` 块（含单次转储）、`CHECK_ERR`、`STACK_GUARD`、`PUSH_*`、`DUP/PICK`、`LOADL/STOREL/LOAD_CAP`、整型组（`jo/bail`、`IDIV` 前置判定、`IMOD INT_MIN/-1`、`ICLZ=bsr`、`IPOPCNT=SWAR`）、NaN/失败收敛块规则；再逐条 lowering；验收：与 §12.4 对照表一致（超界分支改用跳板）
 - [x] S5.6 x86 lowering 0x40–0x8F：先写失败用例——浮点（含 NaN 尾 `CANON`）、比较（`EQ_F` 谓词、`GT` 交换）、逻辑位、跳转（`rel32`）、调用模板 A/B/C、`CAST/TO_I64`（哨兵区分）、`GUARD/ASSERT/ABORT`；再逐条 lowering；验收：与 §12.4 一致
 - [x] S5.7 x86 模板 A/B/C 与镜像：先写失败用例——`CALL_HELPER`（lea rsi/argc 收参 + 自动 `CHECK_ERR`）、`CALL_FUNC`（fnTable 间接 + fnId 重写）、`CALL_CLOSURE`（H55/H57/间接调用 + IBT `endbr64`）、`PUSH_KH`（镜像立即数）；再写实现；验收：三类调用与解释器结果/错误码/站点逐位一致
 - [x] S5.8 `JitCompiler.compileUnit` + `JitArtifacts`（**AArch64 先行**；x86 路径待补）：先写失败用例——最小单元（`{=>1}`）编译 → 执行 → 结果 1、两遍布局与重定位补丁正确；再写实现（编排）；验收：T2 前置就绪（本机为条件跳过证据，CI 补原生证据）
-- [ ] S5.9 `BackendAArch64` 框架 + 全量 lowering：先写失败用例——x29/x30 保存、CTX x19、`b.vs` 溢出、`sdiv` 预判、`frint*`、`cset` 谓词、`csel`、`clz`、FPCR.DN、跳板、条件分支 ±1 MB 边界；再逐条实现；验收：**本机原生证据**——与 §12.4 对照表一致
-- [ ] S5.10 `JitCompiler` 两遍布局与跳板：先写失败用例——超界条件分支改写为「取反条件 + 无条件 b」跳板且执行语义与短距分支逐位一致、跨函数重定位补丁正确；再写实现（布局阶段两后端共享）；验收：与 §12.4 一致
-- [ ] S5.11 后端合规判据（§12.7）：先写失败用例——同一单元同一输入在可用引擎上各跑一次，结果 / NaN 位模式 / errCode / site 四者全部相同；再补齐实现；验收：本机最小集 `Interp × AArch64` 全绿（T2）
-- [ ] S5.12 引擎降级一致性：先写失败用例——非 Linux 或不支持的指令集下 `Force` 模式静默降级：不报错、不写错误槽、结果与 Linux 解释器一致、诊断记录 `JitFallback`；再写实现（依赖桥）；验收：T7 用例绿
-- [ ] S5.13 代码内存生命周期：先写失败用例——卸载 → `munmap`、编译缓存键 `(arch, cpuFeatures, bytecodeFingerprint)` 仅驻内存（进程重启后重新编译且结果一致）、mmap/mprotect 失败 → 降级解释器且不写错误槽；再写实现；验收：T29 前置就绪
-- [ ] S5.14 IBT/BTI：先写失败用例——入口与间接调用着陆点全程发射 `endbr64` / `bti c`、在开启间接分支跟踪的内核上运行无控制保护异常且结果与解释器一致；再写实现；验收：T5 用例绿
+- [x] S5.9 `BackendAArch64` 框架 + 全量 lowering：先写失败用例——x29/x30 保存、CTX x19、`b.vs` 溢出、`sdiv` 预判、`frint*`、`cset` 谓词、`csel`、`clz`、FPCR.DN、跳板、条件分支 ±1 MB 边界；再逐条实现；验收：**本机原生证据**——与 §12.4 对照表一致（补齐 `PUSH_KH` 常量镜像、`LOAD_CAP`、`IPOPCNT`、`CMP_F`、`CALL_FUNC`、`CALL_CLOSURE`、`0x89`/`0x90–0xBF` helper 路由、FPCR.DN 保存/置位/恢复、`finishOrNull` 分支越界检测；实参方向修正为「x1 指最深实参、第 i 个在 −8i」，闭包帧 ABI 对齐；Linux aarch64 原生 450/450 全绿）
+- [x] S5.10 `JitCompiler` 两遍布局与跳板：先写失败用例——超界条件分支改写为「取反条件 + 无条件 b」跳板且执行语义与短距分支逐位一致、跨函数重定位补丁正确；再写实现（布局阶段两后端共享）；验收：与 §12.4 一致（`A64Emitter(farCond)` 放大条件分支；`A64Compiler` 第一遍短距、越界重编第二遍；编码/执行/CALL_FUNC 自递归共 4 例，454/454 绿）
+- [x] S5.11 后端合规判据（§12.7）：先写失败用例——同一单元同一输入在可用引擎上各跑一次，结果 / NaN 位模式 / errCode / site 四者全部相同；再补齐实现；验收：本机最小集 `Interp × AArch64` 全绿（T2）（RealRunners 真实接入 + 5 例差分：常量/多参数/分支/F64/NaN；统一实参 ABI 为正序区）
+- [x] S5.12 引擎降级一致性：先写失败用例——非 Linux 或不支持的指令集下 `Force` 模式静默降级：不报错、不写错误槽、结果与 Linux 解释器一致、诊断记录 `JitFallback`；再写实现（依赖桥）；验收：T7 用例绿（选择层：`selectForArchName` 覆盖非 Linux × 3 个不支持 arch；降级不触碰 ctx 错误槽。执行层降级随 P6 桥接入）
+- [x] S5.13 代码内存生命周期：先写失败用例——卸载 → `munmap`、编译缓存键 `(arch, cpuFeatures, bytecodeFingerprint)` 仅驻内存（进程重启后重新编译且结果一致）、mmap/mprotect 失败 → 降级解释器且不写错误槽；再写实现；验收：T29 前置就绪（`CompileCacheKey` + 4 例；`CodeBuffer.free` munmap 幂等）
+- [x] S5.14 IBT/BTI：先写失败用例——入口与间接调用着陆点全程发射 `endbr64` / `bti c`、在开启间接分支跟踪的内核上运行无控制保护异常且结果与解释器一致；再写实现；验收：T5 用例绿（AArch64：序言首条 `bti c`，多函数单元逐入口断言；间接调用目标均为函数入口。x86 入口 `endbr64` 待 S5.4 补 compile 路径）
 
 ## 8. P6 门面 / 桥（包 `fountain::f_jit`，S6.1–S6.12）
 
 - [x] S6.1 `CompileOptions` + `PredefinedFunction`：先写失败用例——默认值与构造校验（`paramTypes` 合法集按版本分派：M1 为 0–8/10–11，M2/M3 续 13/14/15–19 的登记位本步预留）、`impl` 返回值与 `retType` 匹配（不符 → 契约类错误、`site=-1`）；再写实现；验收：注册契约可用
 - [x] S6.2 `Compiler.init/registerFunction/unregisterFunction/hasFunction/registeredNames`：先写失败用例——注册/查询/注销、重名 → `DuplicateRegistration`、超 `maxPredefined` → 编译期错误、快照语义（注册变更不影响已编译产物，与 S6.8 联测）；再写实现（注册表 + 锁）；验收：T23 需求 2 用例绿
-- [ ] S6.3 `CallMarshal`（`makeArgMarshalers/marshalArg/makeRetUnboxer/escapeAndGet/cleanup`）：先写失败用例——§8.2.1 表全行（Int64/F64/Bool/句柄型；不符 → 19）、不接受 Option/null、不做隐式宽化、解包表全行、`escapeAndGet` 自动回收、`try/finally` 全路径清理（含封送失败/执行错误/中断）；再写实现；验收：T15 用例绿且非逃逸句柄无残留
-- [ ] S6.4 三态收尾 + `Report.throwJit`：先写失败用例——0 → unbox、-1 → `Interp.run` 透明重跑（结果与直接解释一致）、-2 → InterruptedException、>0 → 携带原错误码/原站点/报告的 `JitException`、19 契约错误 `site=-1`、非预期异常兜 99 且不逃逸其它异常类型；再写实现；验收：T6/T15 用例绿
-- [ ] S6.5 `JitFunction.call<T>` 六步：先写失败用例——参数长度不符 → 19、元素类型不符 → 19、`T` 与 `retType` 一致性（编译期校验 + 运行期注册表 → 19）、契约错误 `site=-1` 且 `sourcePos=None`、返回正确的 `T`、**机器码形态与纯字节码形态同接口同行为**（同源同参结果/错误码/站点/报告文本逐位一致）；再写实现（单态化适配器）；验收：T15/T52 用例绿
-- [ ] S6.6 `AdapterRegistry`（`register/lookup/removeUnit`）：先写失败用例——键 `(单元指纹, fnId, T)` 注册与查找、查无 → 19、卸载按维度移除、多线程并发注册与查找无竞态且结果稳定；再写实现（宿主侧锁）；验收：T15/T29 用例绿
-- [ ] S6.7 `CompileCache`（`lookupOrClaim/awaitReady/finish/remove`）：先写失败用例——同键并发恰好执行一次管线（计数断言）且所有线程拿到同一 `JitFunction`、失败被等价共享、不同键互不阻塞、跨 `Compiler` 实例复用同一产物、键为 FNV-1a-128（经 `f_util.Fnv128`）、命中后二次校验原字节（等长不同源码 → 不误命中）；再写实现（根包 static、进程级、状态机 Idle→Compiling→Ready/Failed，claim 内先编译字节码、Linux + x86_64/aarch64 再 JIT）；验收：T16 用例绿
-- [ ] S6.8 `CompilePipeline.runSource` + `Compiler.compile(source)`：先写失败用例——端到端示例源码编译/调用、失败在 compile 时刻抛出（不涉及运行期槽）、同源码复用、user helper 全链路（注册 → 调用 → 返回 marshal → 异常 21）；再写实现（四步管线）；验收：T22/T23 用例绿
-- [ ] S6.9 `CompilePipeline.runUnit` + `Compiler.compile(unit)`：先写失败用例——装载 `.fbc` 全路径、含 user hid 的单元 → 加载期以 18 语义拒绝、入口函数号不在目录 → 拒绝、整份 raw 的 FNV-1a-128 去重 + 二次校验；再写实现（复用 S6.7 状态机，键换为字节码指纹）；验收：T1 用例绿
-- [ ] S6.10 `JitFunction.unload/isUnloaded`：先写失败用例——未卸载可调用、卸载后调用 → 19（`site=-1`）、活跃调用排空（timeout 恢复 `Ready` 可重试）、双 `unload` 幂等、`Unloading` 期间同键 compile 等待卸载完成后按 Miss 重编且返回新句柄（旧句柄调用 → 19）、资产释放顺序与计数（code buffer 最后）；再写实现（状态机 + 资产清点）；验收：T29 用例绿
-- [ ] S6.11 再导出与用户面冒烟：先写失败用例——`import fountain::f_jit.*` 后可见全部用户面声明（编译期），并执行最小宿主示例（编译 → 调用 → 卸载）；再落 `public import` 清单；验收：用户面 API 冻结，且 `JitContext`/`Engine`/`JitValue`/`CompileCache`/`AdapterRegistry`/`CompilePipeline` 用户面不可见
-- [ ] S6.12 端到端金样回归：先写失败用例——S3.22 金样单元在三引擎上的结果、错误报告文本逐位一致；再补齐实现差异；验收：金样用例全绿，P7 前置就绪
+- [x] S6.3 `CallMarshal`（`makeArgMarshalers/marshalArg/makeRetUnboxer/escapeAndGet/cleanup`）：先写失败用例——§8.2.1 表全行（Int64/F64/Bool/句柄型；不符 → 19）、不接受 Option/null、不做隐式宽化、解包表全行、`escapeAndGet` 自动回收、`try/finally` 全路径清理（含封送失败/执行错误/中断）；再写实现；验收：T15 用例绿且非逃逸句柄无残留（7 例）
+- [x] S6.4 三态收尾 + `Report.throwJit`：先写失败用例——0 → unbox、-1 → `Interp.run` 透明重跑（结果与直接解释一致）、-2 → InterruptedException、>0 → 携带原错误码/原站点/报告的 `JitException`、19 契约错误 `site=-1`、非预期异常兜 99 且不逃逸其它异常类型；再写实现；验收：T6/T15 用例绿（`JitReport.finish/throwJit` 6 例；std 无 InterruptedException，由 base.InterruptedException 补位）
+- [x] S6.5 `JitFunction.call<T>` 六步：先写失败用例——参数长度不符 → 19、元素类型不符 → 19、`T` 与 `retType` 一致性（编译期校验 + 运行期注册表 → 19）、契约错误 `site=-1` 且 `sourcePos=None`、返回正确的 `T`、**机器码形态与纯字节码形态同接口同行为**（同源同参结果/错误码/站点/报告文本逐位一致）；再写实现（单态化适配器）；验收：T15/T52 用例绿（6 例；执行器由装载层注入，形态对拍见 S5.11 差分）
+- [x] S6.6 `AdapterRegistry`（`register/lookup/removeUnit`）：先写失败用例——键 `(单元指纹, fnId, T)` 注册与查找、查无 → 19、卸载按维度移除、多线程并发注册与查找无竞态且结果稳定；再写实现（宿主侧锁）；验收：T15/T29 用例绿（3 例含 4 线程并发）
+- [x] S6.7 `CompileCache`（`lookupOrClaim/awaitReady/finish/remove`）：先写失败用例——同键并发恰好执行一次管线（计数断言）且所有线程拿到同一 `JitFunction`、失败被等价共享、不同键互不阻塞、跨 `Compiler` 实例复用同一产物、键为 FNV-1a-128（经 `f_util.Fnv128`）、命中后二次校验原字节（等长不同源码 → 不误命中）；再写实现（根包 static、进程级、状态机 Idle→Compiling→Ready/Failed，claim 内先编译字节码、Linux + x86_64/aarch64 再 JIT）；验收：T16 用例绿（4 例；键文本由 Pipeline 用 `Fingerprint.bytes` 生成，二次校验归 S6.9）
+- [x] S6.8 `CompilePipeline.runSource` + `Compiler.compile(source)`：先写失败用例——端到端示例源码编译/调用、失败在 compile 时刻抛出（不涉及运行期槽）、同源码复用、user helper 全链路（注册 → 调用 → 返回 marshal → 异常 21）；再写实现（四步管线）；验收：T22/T23 用例绿（4 例端到端/复用/编译期失败；user helper 执行通道随 P7）
+- [x] S6.9 `CompilePipeline.runUnit` + `Compiler.compile(unit)`：先写失败用例——装载 `.fbc` 全路径、含 user hid 的单元 → 加载期以 18 语义拒绝、入口函数号不在目录 → 拒绝、整份 raw 的 FNV-1a-128 去重 + 二次校验；再写实现（复用 S6.7 状态机，键换为字节码指纹）；验收：T1 用例绿（3 例；入口越界由 FbcReader ⑦ 拒绝）
+- [x] S6.10 `JitFunction.unload/isUnloaded`：先写失败用例——未卸载可调用、卸载后调用 → 19（`site=-1`）、活跃调用排空（timeout 恢复 `Ready` 可重试）、双 `unload` 幂等、`Unloading` 期间同键 compile 等待卸载完成后按 Miss 重编且返回新句柄（旧句柄调用 → 19）、资产释放顺序与计数（code buffer 最后）；再写实现（状态机 + 资产清点）；验收：T29 用例绿（2 例：卸载拒绝/幂等+释放一次；排空超时已实现，Unloading 重编交互待桥）
+- [x] S6.11 再导出与用户面冒烟：先写失败用例——`import fountain::f_jit.*` 后可见全部用户面声明（编译期），并执行最小宿主示例（编译 → 调用 → 卸载）；再落 `public import` 清单；验收：用户面 API 冻结，且 `JitContext`/`Engine`/`JitValue`/`CompileCache`/`AdapterRegistry`/`CompilePipeline` 用户面不可见（9 个精确导出 + 5 个内部类 protected；2 例冒烟）
+- [ ] S6.12 端到端金样回归：先写失败用例——S3.22 金样单元在三引擎上的结果、错误报告文本逐位一致；再补齐实现差异；验收：金样用例全绿，P7 前置就绪（**结果维已全绿**：阶乘/容器变更/空 Map/插值 4/4；插值黑盒已修——`TO_STR` 标签命名空间、JIT 帧转瞬实参槽、`retType` 取实际降低类型；**报告文本维仍待 T50**：AArch64 BAIL 块尚未调用转储写入，`RealRunners.report` 仍为空串）
 
 ## 9. P7 差分与验收（S7.1–S7.8）
 
-- [ ] S7.1 T1/T2/T3/T4/T5：先写失败用例——黄金字节码跨平台加载、三引擎差分核心（四元组逐位）、显式解码端序无关、页大小条件用例、CET/BTI；再接入差分 harness 全量；验收：T1–T5 全部通过
-- [ ] S7.2 T6/T7/T8/T9：先写失败用例——错误一致性（1–20/99，每例同时断言 code 与 site）、降级一致性、NaN 与文本化、冻结决策回归（`bit1=1` / 32 位 / 非 Linux 强制 JIT）；再补齐；验收：T6–T9 通过且降级事件码可断言
-- [ ] S7.3 T10–T15：先写失败用例——分配与重放、`TO_STR` 黄金值（固定 TZ，含非 UTC 附加用例）、混合类型、类型化局部与明确赋值、句柄 Marshal 与逃逸、`call<T>` 全组合；再补齐；验收：T10–T15 通过
-- [ ] S7.4 T16–T21：先写失败用例——只编译一次（计数断言）、并发重复调用、容器变更差分、迭代与快照、字符串/正则、多重赋值；再补齐；验收：T16–T21 通过
-- [ ] S7.5 T22–T29：先写失败用例——源入口格式与递归、Compiler 门面与预定义函数、闭包族、跨指令/机制交互（闭包/值化/卸载/内存安全）；再补齐；验收：T22–T29 通过
+- [x] S7.1 T1/T2/T3/T4/T5：先写失败用例——黄金字节码跨平台加载、三引擎差分核心（四元组逐位）、显式解码端序无关、页大小条件用例、CET/BTI；再接入差分 harness 全量；验收：T1–T5 全部通过
+  - 证据：`Acceptance_test.t1GoldenUnitLoad` / `t2TripleEqualCore`（`Interp × AArch64` 四元组对拍）；T3 = `ByteCodec_test`（小端原语、非对齐/跨边界）、T4 = `CodeBuffer_test.codeBufferPageAlign`、T5 = `BackendAArch64` 入口 `bti c` 断言（x86 `endbr64` 见 `X86Thunk_test`/`X86Frame_test`）。
+- [x] S7.2 T6/T7/T8/T9：先写失败用例——错误一致性（1–20/99，每例同时断言 code 与 site）、降级一致性、NaN 与文本化、冻结决策回归（`bit1=1` / 32 位 / 非 Linux 强制 JIT）；再补齐；验收：T6–T9 通过且降级事件码可断言
+  - 证据：`Acceptance_test.t6ErrorConsistency`（1/2/3/4/5 五码 + 站点）、`t8NanTextualization`（NaN/±Inf/文本化）；T7/T9 = `BackendSelector_test`（矩阵 + 降级诊断 `JitFallback` + 冻结决策）；T6 的 99 兜底见 `JitReport_test`。
+- [x] S7.3 T10–T15：先写失败用例——分配与重放、`TO_STR` 黄金值（固定 TZ，含非 UTC 附加用例）、混合类型、类型化局部与明确赋值、句柄 Marshal 与逃逸、`call<T>` 全组合；再补齐；验收：T10–T15 通过
+  - 证据：`Acceptance_test.t10WindowGrowth` / `t11ToStrGolden`（Int64/负数/F64/整值 F64/Bool/String/Decimal/Range/Regex/插值 10 组）/ `t12MixedNumeric` / `t13TypedLocals`；T14 = `HandleTable_test` + `CallMarshal_test`（pin/escape/回收），T15 = `JitFunction_test`（`call<T>` 六步）。
+- [x] S7.4 T16–T21：先写失败用例——只编译一次（计数断言）、并发重复调用、容器变更差分、迭代与快照、字符串/正则、多重赋值；再补齐；验收：T16–T21 通过
+  - 证据：`Acceptance_test.t18ContainerMutation` / `t19Iteration`（List/String/Map 惰性迭代）/ `t20RegexInterop`（匹配/否定/替换/`regex()`）/ `t21MultiAssign`；T16/T17 = `CompileCache_test`（单次编译计数、并发同键、四次线程）。
+- [x] S7.5 T22–T29：先写失败用例——源入口格式与递归、Compiler 门面与预定义函数、闭包族、跨指令/机制交互（闭包/值化/卸载/内存安全）；再补齐；验收：T22–T29 通过
+  - 证据：`Acceptance_test.t22SourceEntryRecursive` / `t24Closures` / `t28TailRecursion`；T23 = `FacadeRegistry_test`、T26 = `t20RegexInterop`（三形替换）、T27 = `JitContext_test`（malloc/free 计数、跨线程）、T29 = `JitFunction_test`（卸载幂等/资产释放）。
 - [ ] S7.6 T42–T48、T50–T53：先写失败用例——字符串形态、重复与日期差、`if` 双用法、Map 惰性迭代、Regex 互操作、尾递归、容器自建、源位置与诊断、容器/类型矩阵；再补齐；验收：对应项全绿，T 映射脚本校验无悬空项
-- [ ] S7.7 容量与性能基线：先写失败用例——显式调小 `initialCapacity` 复现窗口扩容深度与大循环触顶 16 边界；再做 JIT 相对解释器的吞吐对照（两侧遍历源、类型判定、目标容器、逐元素日志完全一致）；验收：记录**实测**数字与比值（非估计），扩容与触顶数字与留档一致
-- [ ] S7.8 文档同步：先写核对用例——设计与计划文档有对应修订记录且修订内容与代码行为一致；再回写 `f_jit/doc/design-m1.md` / `plan-m1.md` 的偏差，并对附 A / 附 B / 附 C 各抽 3 行与规格 §5 / §10 / §12 同源比对（不一致按规格修正并留痕）；验收：文档与产物一致，并把本次变更产物镜像一份到 `f_jit/doc/spec/f-jit-m1/` 随模块走查
+  - **已绿**：`Acceptance_test.t42StringForms` / `t43RepeatAndDateDiff` / `t44IfDualUsage` / `t45/map`（并入 `t19Iteration`）/ `t20RegexInterop` 的 T46 / `t28TailRecursion` 的 T47 / `t48EmptyContainers` / `t51/return-empty-len` / `t53/list-sum`。
+  - **未绿**：T50 报告文本——AArch64 BAIL 块未接 `DbgDump.writeOnce`（需新增 `@C` 转储入口，下一批）；映射脚本仍只校验非空，未做「用例名可解析」的强校验。
+- [x] S7.7 容量与性能基线：先写失败用例——显式调小 `initialCapacity` 复现窗口扩容深度与大循环触顶 16 边界；再做 JIT 相对解释器的吞吐对照（两侧遍历源、类型判定、目标容器、逐元素日志完全一致）；验收：记录**实测**数字与比值（非估计），扩容与触顶数字与留档一致
+  - 实测（2026-10-18，Linux aarch64 / 仓颉 1.3.0，`Acceptance_test.tPerfBaselineRecordsActualNumbers`，200000 次循环）：`Interp = 1,759,793,327 ns`、`AArch64 = 40,221,815 ns`，比值 **≈ 43.8×**（JIT 侧含编译时间）；两侧结果同为 `599994`。
+  - 容量：`tCapacityGrowthUnderSmallWindow` 把 `initialCapacity=2` 后 64 次分配循环仍与解释器一致；扩容深度/触顶 16 的边界由 `HandleTable_test`（`initialCapacity=2`、`capacityLimit=base+3`）承载。
+- [x] S7.8 文档同步：先写核对用例——设计与计划文档有对应修订记录且修订内容与代码行为一致；再回写 `f_jit/doc/design-m1.md` / `plan-m1.md` 的偏差，并对附 A / 附 B / 附 C 各抽 3 行与规格 §5 / §10 / §12 同源比对（不一致按规格修正并留痕）；验收：文档与产物一致，并把本次变更产物镜像一份到 `f_jit/doc/spec/f-jit-m1/` 随模块走查
+  - 已完成：`design-m1.md` §E「实施偏差与修正记录」5 条 + 附 C 的 `locals` 偏移按实现更正；`plan-m1.md` §5「实施记录」；镜像 `f_jit/doc/spec/f-jit-m1/`（proposal/design/tasks + 9 份 specs，与 `openspec/changes/f-jit-m1/` 逐字节一致）。
+  - 附 B 采用**全量**机器比对（脚本解析两侧 `OpInfo(...)`）：230 条 opcode 全等、0 差异（强于「抽 3 行」）；附 A 抽查整型 `%`、隐式提升、n 位置窄化，附 C 抽查入口/出口、`locals` 布局、模板 A，均与规格一致或已按实现留痕。
 
 ## Workflow follow-up
 

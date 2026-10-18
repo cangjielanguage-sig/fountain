@@ -29,10 +29,21 @@ public class X86Frame_test {
 
     @TestCase
     public func frameSizeIs16Aligned(): Unit {
-        @Assert(BackendX86_64.frameSize(0, 0), 32)
+        // 32（rbp/r15 保存 + 局部基址）+ 8×(nLocals + maxStack) + 8（转瞬实参槽）
+        @Assert(BackendX86_64.frameSize(0, 0), 48)
         @Assert(BackendX86_64.frameSize(1, 0), 48)
-        @Assert(BackendX86_64.frameSize(1, 1), 48)
+        @Assert(BackendX86_64.frameSize(1, 1), 64)
         @Assert(BackendX86_64.frameSize(3, 2) % 16, 0)
+    }
+
+    /**
+     * 转瞬实参槽必须真实存在：`TO_STR`/`IS_TYPE` 等模板在 `maxStack` 之外多压一格，
+     * 帧不够时该格会被 helper 栈帧覆盖（见 `frameSize` 注释）。
+     */
+    @TestCase
+    public func frameLeavesRoomForTransientHelperArg(): Unit {
+        @Assert(BackendX86_64.frameSize(0, 1) >= 32 + 8 * (0 + 1) + 8, true)
+        @Assert(BackendX86_64.frameSize(0, 1) % 16, 0)
     }
 
     @TestCase

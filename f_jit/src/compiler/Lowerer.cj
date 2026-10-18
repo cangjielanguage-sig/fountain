@@ -197,15 +197,22 @@ internal class Lowerer {
         for (s in lambda.body) {
             this.lowerStmt(s)
         }
+        var retT: UInt16 = LocalType.UNIT
         match (lambda.retExpr) {
             case Some(e) =>
-                let _ = this.lowerExprAs(e, this.fnRetType(ctx))
+                // 返回类型以**降低时得到的实际类型**为准：静态预判（`staticTypeOfTop`）只认识
+                // 字面量/比较这类简单形状，`"ab" * 3`（String）、`1 + 0.5`（Decimal）、
+                // `dt1 - dt2`（Duration）都会被猜成 Int64，导致 retType 与栈上值不符。
+                retT = this.lowerExprAs(e, this.fnRetType(ctx))
                 ctx.builder.ret()
             case None => ctx.builder.retVoid()
         }
+        if (ctx.isClosure) {
+            this.setClosureRetType(fnId, retT)
+        }
         let body = ctx.builder.finish()
         let types = this.typesOf(ctx)
-        this.sess.addFunc(LoweredFunc(fnId, nargs, this.fnRetType(ctx), types, body,
+        this.sess.addFunc(LoweredFunc(fnId, nargs, retT, types, body,
             ctx.builder.pendingSites()))
         this.ctx = parent
     }
@@ -236,6 +243,16 @@ internal class Lowerer {
     }
 
     private func setClosureRetType(fnId: UInt32, t: UInt16): Unit {
+        // 先按静态预判登记、降低完再按实际类型**覆盖**（`closureRetType` 取首个匹配，
+        // 所以这里必须就地改值而不是追加）。
+        var i = 0
+        while (i < this.closureRets.size) {
+            if (this.closureRets[i][0] == fnId) {
+                this.closureRets[i] = (fnId, t)
+                return
+            }
+            i = i + 1
+        }
         this.closureRets.add((fnId, t))
     }
 
@@ -637,12 +654,12 @@ internal class Lowerer {
                 }
                 ctx.builder.callClosure(UInt8(args.size))
                 LocalType.I64
-            case AstExpr.Interp(parts, _) => this.lowerInterp(parts)
-            case AstExpr.StrAdd(l, r, _) =>
+            case AstExpr.Interp(parts, pos) => this.lowerInterp(parts, pos)
+            case AstExpr.StrAdd(l, r, pos) =>
                 let lt = this.lowerExpr(l)
-                this.coerceToStr(lt)
+                this.coerceToStr(lt, pos)
                 let rt = this.lowerExpr(r)
-                this.coerceToStr(rt)
+                this.coerceToStr(rt, pos)
                 ctx.builder.emit(Op.STR_CAT)
                 LocalType.STRING
             case AstExpr.RegexOp(kind, re, s, repl, n, m, pos) =>
@@ -774,8 +791,14 @@ internal class Lowerer {
         match (op) {
             case TokenKind.Plus =>
                 if (t == LocalType.STRING) {
-                    this.coerceToStr(lt)
-                    this.coerceToStr(rt)
+                    // 两个操作数都已入栈：`rt` 在栈顶、`lt` 在 [rsp+8]（§12.4 二元约定）。
+                    // 不能按「先 lt 后 rt」的顺序连续 TO_STR —— 那会把 lt 的转换作用到 rt 上。
+                    this.coerceToStr(rt, pos)
+                    if (lt != LocalType.STRING) {
+                        ctx.builder.emit(Op.SWAP)
+                        this.coerceToStr(lt, pos)
+                        ctx.builder.emit(Op.SWAP)
+                    }
                     ctx.builder.emit(Op.STR_CAT)
                 } else {
                     this.coerceOperands(lt, rt, t, pos)
@@ -1199,6 +1222,17 @@ internal class Lowerer {
     private func lowerBuiltinMemberCall(name: String, tg: AstExpr, args: Array<AstExpr>,
         pos: SourcePos): UInt16 {
         let ctx = this.requireCtx()
+        // v0.17 `regexStr.regex()`（f_regex 扩展）：字符串 → Regex（无 flags）。
+        if (name == 'regex' && args.size == 0) {
+            let t = this.lowerExpr(tg)
+            if (t != LocalType.STRING) {
+                diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                    'regex() 只接受 String 接收者')
+            }
+            ctx.builder.setSite(pos)
+            ctx.builder.callHelper(HelperCodec.STR_TO_REGEX, 1u8)
+            return LocalType.REGEX
+        }
         match (tg) {
             case AstExpr.Var(ns, _) =>
                 if (ns == 'DateTime') {
@@ -1319,7 +1353,7 @@ internal class Lowerer {
         }
     }
 
-    private func lowerInterp(parts: Array<AstExpr>): UInt16 {
+    private func lowerInterp(parts: Array<AstExpr>, pos: SourcePos): UInt16 {
         let ctx = this.requireCtx()
         let empty = this.sess.consts.addStr('')
         ctx.builder.emitU16(Op.PUSH_KH, UInt16(empty))
@@ -1331,7 +1365,7 @@ internal class Lowerer {
                 ctx.builder.emitU16(Op.PUSH_KH, UInt16(hid))
             } else {
                 let t = this.lowerExpr(p)
-                this.emitToStr(t)
+                this.emitToStr(t, pos)
             }
             ctx.builder.emit(Op.STR_CAT)
             i = i + 1
@@ -1346,16 +1380,61 @@ internal class Lowerer {
         }
     }
 
-    private func coerceToStr(t: UInt16): Unit {
+    private func coerceToStr(t: UInt16, pos: SourcePos): Unit {
         if (t == LocalType.STRING) {
             return
         }
-        this.emitToStr(t)
+        this.emitToStr(t, pos)
     }
 
-    private func emitToStr(t: UInt16): Unit {
+    /**
+     * `TO_STR` 的 `t` 是 **§6 文本化标签**，不是 `LocalType`：
+     * `0=I64 1=F64 2=Bool 3=String 4=Decimal 5=DateTime 6=Duration 7=Range 8=Regex`。
+     *
+     * 两套编号只在 0–2 重合（`LocalType` 的 3 是 Unit、4 才是 String），
+     * 直接透传会把 String 当 Decimal、把 Decimal 当 DateTime——插值串在 JIT 侧
+     * 因此报 8（类型不符）或 14（标签越界）。非标签类型（Unit/List/Map/Closure）
+     * 一律编译错误（§9 附则 13、§11.9）。
+     */
+    internal static func toStrTag(t: UInt16): ?UInt8 {
+        if (t == LocalType.I64) {
+            return Some(0u8)
+        }
+        if (t == LocalType.F64) {
+            return Some(1u8)
+        }
+        if (t == LocalType.BOOL) {
+            return Some(2u8)
+        }
+        if (t == LocalType.STRING) {
+            return Some(3u8)
+        }
+        if (t == LocalType.DECIMAL) {
+            return Some(4u8)
+        }
+        if (t == LocalType.DATETIME) {
+            return Some(5u8)
+        }
+        if (t == LocalType.DURATION) {
+            return Some(6u8)
+        }
+        if (t == LocalType.RANGE) {
+            return Some(7u8)
+        }
+        if (t == LocalType.REGEX) {
+            return Some(8u8)
+        }
+        None
+    }
+
+    private func emitToStr(t: UInt16, pos: SourcePos): Unit {
         let ctx = this.requireCtx()
-        ctx.builder.emitU8(Op.TO_STR, UInt8(t & 0xFFu16))
+        match (Lowerer.toStrTag(t)) {
+            case Some(tag) => ctx.builder.emitU8(Op.TO_STR, tag)
+            case None =>
+                diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                    '${LocalType.name(t)} 没有文本形式，不能用于插值或字符串拼接')
+        }
     }
 
     private func lowerRegexOp(kind: TokenKind, re: AstExpr, s: AstExpr, repl: ?AstExpr, n: ?Int64,

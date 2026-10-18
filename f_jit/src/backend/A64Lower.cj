@@ -304,7 +304,7 @@ internal class A64Lower {
             case 0x5D => this.floatCmp(A64Cond.GE, true)
             case 0x5E =>
                 this.e.ldrOff(9, 20, 0)
-                this.e.word(0xD2401C09u32) // eor x9,x9,#1
+                this.e.word(0xD2400009u32) // eor x9,x9,#1（逻辑非；0↔1）
                 this.e.strOff(9, 20, 0)
             case 0x5F => this.boolBin(0)
             case 0x60 => this.boolBin(1)
@@ -326,15 +326,16 @@ internal class A64Lower {
             case 0x6D => this.helperCall(13, 2, 0)
             case 0x6E => this.helperCall(15, 2, 0)
             case 0x70 =>
-                let rel = A64Lower.u32(ops, 0)
+                // rel32 是**有符号**（向后跳为负；§5/§11.7），按 u32 读会把回边变成巨大正偏移
+                let rel = A64Lower.i32(ops, 0)
                 this.e.b('L${next + rel}')
             case 0x71 =>
-                let rel = A64Lower.u32(ops, 0)
+                let rel = A64Lower.i32(ops, 0)
                 this.e.ldrOff(9, 20, 0)
                 this.e.addImm(20, 20, 8)
                 this.e.cbz(9, 'L${next + rel}')
             case 0x72 =>
-                let rel = A64Lower.u32(ops, 0)
+                let rel = A64Lower.i32(ops, 0)
                 this.e.ldrOff(9, 20, 0)
                 this.e.addImm(20, 20, 8)
                 this.e.cbnz(9, 'L${next + rel}')
@@ -348,7 +349,7 @@ internal class A64Lower {
                 this.e.cmpReg(11, 12)
                 this.e.bCond(A64Cond.LO, 'deopt')
                 this.helperCall0(22)
-                this.e.b('L${next + A64Lower.u32(ops, 0)}')
+                this.e.b('L${next + A64Lower.i32(ops, 0)}')
             case 0x75 => this.helperCall(A64Lower.u16(ops, 0), A64Lower.u8(ops, 2), 0)
             case 0x76 => this.helperCall(A64Lower.u16(ops, 0), A64Lower.u8(ops, 2), 1)
             case 0x77 => this.helperCall(A64Lower.u16(ops, 0), A64Lower.u8(ops, 2), 2)

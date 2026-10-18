@@ -33,6 +33,7 @@ import fountain::f_jit.runtime.JitContext
  */
 @Test
 public class Lowerer_test {
+    private static const DOLLAR: String = '$'
 
     /** S3.10：整型算术 / 位 / 移位 / `%`（仅 Int64）。 */
     @TestCase
@@ -74,6 +75,37 @@ public class Lowerer_test {
     public func mixedStringAddition(): Unit {
         @Assert(Lowerer_test.runString('{ x: Int64 => "n=" + x }', [7]), 'n=7')
         @Assert(Lowerer_test.runString('{ x: Int64 => x + "!" }', [7]), '7!')
+    }
+
+    /**
+     * S3.12 / §6：`TO_STR` 的 `t` 是文本化标签（0=I64 … 3=String 4=Decimal …），
+     * **不是** `LocalType`（那里 3=Unit、4=String）。两套编号必须在降低期换算。
+     */
+    @TestCase
+    public func toStrUsesTextualTagNamespace(): Unit {
+        let d = Lowerer_test.DOLLAR
+        @Assert(Lowerer_test.hasToStrTag('{ s: String => "v=' + d + '{s}" }', 'TO_STR 3'), true)
+        @Assert(Lowerer_test.hasToStrTag('{ => "v=' + d + '{1}" }', 'TO_STR 0'), true)
+        @Assert(Lowerer_test.hasToStrTag('{ => "v=' + d + '{1.5}" }', 'TO_STR 4'), true)
+    }
+
+    /** 非标签类型（Closure/容器/Unit）不得进入 `TO_STR`，编译期即拒绝。 */
+    @TestCase
+    public func untoStrAbleTypesAreRejectedAtCompileTime(): Unit {
+        let d = Lowerer_test.DOLLAR
+        @Assert(Lowerer_test.compileKind('{ => "v=' + d + '{ {=> 1} }" }'),
+            DiagKind.TYPE_MISMATCH)
+    }
+
+    /**
+     * S3.12：二元 `+` 的两个操作数都已入栈（`rt` 在栈顶、`lt` 在 [rsp+8]），
+     * 非 String 侧必须就地转换，不能把 `TO_STR` 作用到栈顶的 String 上。
+     */
+    @TestCase
+    public func stringConcatConvertsTheCorrectOperand(): Unit {
+        @Assert(Lowerer_test.runString('{ => let s = "a"\n 7 + s }', []), '7a')
+        @Assert(Lowerer_test.runString('{ => let s = "a"\n s + 7 }', []), 'a7')
+        @Assert(Lowerer_test.runString('{ => let s = "a"\n let n = 7\n n + s }', []), '7a')
     }
 
     /** S3.13：Map / String 迭代、`where`、Range step 与闭区间。 */
@@ -187,6 +219,12 @@ public class Lowerer_test {
         let r = interp.run(unit.header.entryFn, args, ctx)
         JitContext.free(ctx)
         r
+    }
+
+    /** 产物文本是否含某条助记符（`TO_STR 3` 这类带操作数的断言）。 */
+    private static func hasToStrTag(src: String, want: String): Bool {
+        let unit = Lowerer_test.compile(src)
+        CodeDump.dump(unit.code).contains(want)
     }
 
     private static func runString(src: String, args: Array<Int64>): String {

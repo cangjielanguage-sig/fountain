@@ -1594,9 +1594,14 @@ internal class BackendX86_64 <: Backend {
 
     // ---- P5.4 帧序列（§12.3、§4 prologue）----
 
-    /** FRAME = align16(32 + 8×(nLocals + maxStack))。 */
+    /**
+     * `FRAME = align16(32 + 8×(nLocals + maxStack) + 8)`。
+     *
+     * 末项是**转瞬实参槽**（与 `A64Compiler.frameSize` 同因）：helper 模板把
+     * `TO_STR` 标签等静态操作数压到操作数栈顶再调用，峰值比 `maxStack` 多一格。
+     */
     internal static func frameSize(nLocals: Int64, maxStack: Int64): Int64 {
-        let raw = 32 + 8 * (nLocals + maxStack)
+        let raw = 32 + 8 * (nLocals + maxStack + 1)
         ((raw + 15) / 16) * 16
     }
 
