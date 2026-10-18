@@ -423,6 +423,20 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
+    /** `GUARD v`：取 cell 高 16 位 tag，不等于 v → bail（rel 占位）。 */
+    internal static func emitGuard(v: Int64): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (x in [0x48u8, 0x8Bu8, 0x04u8, 0x24u8, 0x48u8, 0x89u8, 0xC1u8,
+            0x48u8, 0xC1u8, 0xE9u8, 0x30u8, 0x48u8, 0x81u8, 0xF9u8]) {
+            out.add(x) // mov rax,[rsp]; mov rcx,rax; shr rcx,48; cmp rcx,v
+        }
+        BackendX86_64.w32(out, BackendX86_64.i32bits(v))
+        for (x in [0x0Fu8, 0x85u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+            out.add(x) // jne bail（占位）
+        }
+        out.toArray()
+    }
+
     /** `GUARD_NNZ`：顶格为 0 → bail（rel 占位）。 */
     internal static func emitGuardNnz(): Array<UInt8> {
         [0x48u8, 0x8Bu8, 0x04u8, 0x24u8, 0x48u8, 0x85u8, 0xC0u8, 0x0Fu8, 0x84u8,

@@ -227,6 +227,12 @@ public class X86Lower_test {
             '488B0424' + '4885C0' + '0F8400000000')
     }
 
+    @TestCase
+    public func guardTag(): Unit {
+        @Assert(X86Lower_test.hex(BackendX86_64.emitGuard(4)),
+            '488B0424' + '4889C1' + '48C1E930' + '4881F904000000' + '0F8500000000')
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {
