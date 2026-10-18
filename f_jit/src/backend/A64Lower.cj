@@ -18,6 +18,7 @@ package fountain::f_jit.backend
 import fountain::f_jit.bytecode.FuncEntry
 import fountain::f_jit.bytecode.InsnDecoder
 import fountain::f_jit.bytecode.LoadedUnit
+import fountain::f_jit.runtime.HelperAddresses
 
 /**
  * AArch64 指令降低（§12.4）。
@@ -31,13 +32,17 @@ internal class A64Lower {
     private let e: A64Emitter
     private let fn: FuncEntry
     private let frame: Int64
+    private let helperDispatch: Int64
     private var ok: Bool
+    private var seq: Int64
 
     init(e: A64Emitter, fn: FuncEntry, frame: Int64) {
         this.e = e
         this.fn = fn
         this.frame = frame
+        this.helperDispatch = HelperAddresses.dispatch()
         this.ok = true
+        this.seq = 0
     }
 
     func success(): Bool {
@@ -285,10 +290,10 @@ internal class A64Lower {
             case 0x68 => this.shiftBin(2)
             case 0x69 => this.intCmp(A64Cond.EQ)
             case 0x6A => this.intCmp(A64Cond.NE)
-            case 0x6B => this.ok = false
-            case 0x6C => this.ok = false
-            case 0x6D => this.ok = false
-            case 0x6E => this.ok = false
+            case 0x6B => this.helperCall(9, 2, 0)
+            case 0x6C => this.helperCall(11, 2, 0)
+            case 0x6D => this.helperCall(13, 2, 0)
+            case 0x6E => this.helperCall(15, 2, 0)
             case 0x70 =>
                 let rel = A64Lower.u32(ops, 0)
                 this.e.b('L${next + rel}')
@@ -303,8 +308,19 @@ internal class A64Lower {
                 this.e.addImm(20, 20, 8)
                 this.e.cbnz(9, 'L${next + rel}')
             case 0x74 =>
-                // 回边：安全点 H22 由 caller 注入前先保留纯跳转（need 由汇编期另行计算）
+                // 回边：STACK_GUARD + H22 安全点，再跳目标
+                let need = this.frame
+                this.e.movReg(11, 29)
+                this.e.subImm(11, 11, this.frame)
+                this.e.subReg(11, 11, 31)
+                this.e.movImm64(12, need)
+                this.e.cmpReg(11, 12)
+                this.e.bCond(A64Cond.LO, 'deopt')
+                this.helperCall0(22)
                 this.e.b('L${next + A64Lower.u32(ops, 0)}')
+            case 0x75 => this.helperCall(A64Lower.u16(ops, 0), A64Lower.u8(ops, 2), 0)
+            case 0x76 => this.helperCall(A64Lower.u16(ops, 0), A64Lower.u8(ops, 2), 1)
+            case 0x77 => this.helperCall(A64Lower.u16(ops, 0), A64Lower.u8(ops, 2), 2)
             case 0x7C =>
                 this.e.ldrOff(0, 20, 0)
                 this.e.b('epilogue')
@@ -315,13 +331,25 @@ internal class A64Lower {
                 this.e.movReg(0, 31)
                 this.e.b('epilogue')
             case 0x81 =>
-                this.e.ldrD(0, 20, 0)
-                this.e.fcvtzs(9, 0)
-                this.e.strOff(9, 20, 0)
+                this.toI64(A64Lower.u8(ops, 0), at)
             case 0x82 =>
                 this.e.ldrOff(9, 20, 0)
                 this.e.scvtf(0, 9)
                 this.e.strD(0, 20, 0)
+            case 0x80 =>
+                this.castLike(A64Lower.u16(ops, 0), A64Lower.u8(ops, 2), at)
+            case 0x83 =>
+                this.e.movImm64(9, A64Lower.u16(ops, 0))
+                this.pushX(9)
+                this.helperCall(17, 2, 0)
+            case 0x84 =>
+                if (A64Lower.u8(ops, 2) == 0) {
+                    this.e.movImm64(9, A64Lower.u16(ops, 0))
+                    this.pushX(9)
+                    this.helperCall(19, 2, 0)
+                } else {
+                    this.castLike(A64Lower.u16(ops, 0), 1, at)
+                }
             case 0x85 =>
                 this.bail(17)
             case 0x86 =>
@@ -336,10 +364,108 @@ internal class A64Lower {
             case 0x88 =>
                 this.e.ldrOff(9, 20, 0)
                 this.e.cbnz(9, 'gnnz${at}')
-                this.bail(6)
+                if (A64Lower.u8(ops, 0) == 0) {
+                    this.bail(6)
+                } else {
+                    this.e.b('deopt')
+                }
                 this.e.bind('gnnz${at}')
             case _ => this.ok = false
         }
+    }
+
+    /** 统一 helper 调用：variant 0=普通、1=NC（无 CHECK_ERR）、2=V（无结果）。 */
+    private func helperCall(hid: Int64, argc: Int64, variant: Int64): Unit {
+        this.e.movImm64(0, hid)
+        this.e.movReg(1, 19)
+        if (argc == 0) {
+            this.e.movReg(2, 31)
+        } else {
+            this.e.addImm(2, 20, 8 * (argc - 1))
+        }
+        this.e.movImm64(3, argc)
+        this.e.movImm64(9, this.helperDispatch)
+        this.e.blr(9)
+        if (variant == 2) {
+            this.e.addImm(20, 20, 8 * argc)
+        } else {
+            if (argc == 0) {
+                this.e.subImm(20, 20, 8)
+                this.e.strOff(0, 20, 0)
+            } else {
+                this.e.strOff(0, 20, 8 * (argc - 1))
+                this.e.addImm(20, 20, 8 * (argc - 1))
+            }
+            if (variant == 0) {
+                this.seq = this.seq + 1
+                let okLabel = 'hok${this.seq}'
+                this.e.ldrOff(11, 19, 0)
+                this.e.cbz(11, okLabel)
+                this.e.movReg(0, 31)
+                this.e.b('epilogue')
+                this.e.bind(okLabel)
+            }
+        }
+    }
+
+    /** 零参 V 变体（H22 安全点）。 */
+    private func helperCall0(hid: Int64): Unit {
+        this.e.movImm64(0, hid)
+        this.e.movReg(1, 19)
+        this.e.movReg(2, 31)
+        this.e.movReg(3, 31)
+        this.e.movImm64(9, this.helperDispatch)
+        this.e.blr(9)
+        this.seq = this.seq + 1
+        let okLabel = 'h0ok${this.seq}'
+        this.e.ldrOff(11, 19, 0)
+        this.e.cbz(11, okLabel)
+        this.e.movReg(0, 31)
+        this.e.b('epilogue')
+        this.e.bind(okLabel)
+    }
+
+    /** `TO_I64 mode`：NaN 与 ±2^63 界外 → mode0 `<bail:13>` / mode1 `<deopt>`。 */
+    private func toI64(mode: Int64, at: Int64): Unit {
+        this.e.ldrD(0, 20, 0)
+        this.e.fcmp(0, 0)
+        this.e.bCond(A64Cond.VS, 'ti64bad${at}')
+        this.e.movImm64(9, 0x43E0000000000000)
+        this.e.fmovDFromX(1, 9)
+        this.e.fcmp(0, 1)
+        this.e.bCond(A64Cond.GE, 'ti64bad${at}')
+        this.e.movImm64(9, -4332462841530417152)
+        this.e.fmovDFromX(1, 9)
+        this.e.fcmp(0, 1)
+        this.e.bCond(A64Cond.LT, 'ti64bad${at}')
+        this.e.fcvtzs(9, 0)
+        this.e.strOff(9, 20, 0)
+        this.e.b('ti64done${at}')
+        this.e.bind('ti64bad${at}')
+        if (mode == 0) {
+            this.bail(13)
+        } else {
+            this.e.b('deopt')
+        }
+        this.e.bind('ti64done${at}')
+    }
+
+    /** `CAST`/`GUARD_TYPE mode1`：DUP 保留值 → H17 判定 → 失败 bail7 / deopt。 */
+    private func castLike(tok: Int64, mode: Int64, at: Int64): Unit {
+        this.e.ldrOff(9, 20, 0)
+        this.pushX(9) // DUP
+        this.e.movImm64(9, tok)
+        this.pushX(9)
+        this.helperCall(17, 2, 0) // 结果 bool 覆盖副本值槽
+        this.e.ldrOff(9, 20, 0)
+        this.e.addImm(20, 20, 8) // 弹掉 bool，保留原值
+        this.e.cbnz(9, 'castok${at}')
+        if (mode == 0) {
+            this.bail(7)
+        } else {
+            this.e.b('deopt')
+        }
+        this.e.bind('castok${at}')
     }
 
     private func intBin(kind: Int64): Unit {
@@ -459,7 +585,12 @@ internal class A64Lower {
         this.e.ldrD(0, 20, 8)
         this.e.ldrD(1, 20, 0)
         this.e.addImm(20, 20, 8)
-        if (kind == 0 || kind == 4) {
+        if (kind == 4) {
+            this.e.word(0x9E6703E2u32) // fmov d2,xzr
+            this.e.fcmp(1, 2)
+            this.e.bCond(A64Cond.EQ, 'bail1')
+            this.e.fdiv(0, 0, 1)
+        } else if (kind == 0) {
             this.e.fadd(0, 0, 1)
         } else if (kind == 1) {
             this.e.fsub(0, 0, 1)

@@ -147,6 +147,14 @@ public class A64Emitter_test {
         @Assert(A64Emitter_test.hex(cnz.finish()), '400000B5' + '1F2003D5')
     }
 
+    @TestCase
+    public func callAndTrap(): Unit {
+        let e = A64Emitter()
+        e.blr(10)
+        e.brk()
+        @Assert(A64Emitter_test.hex(e.finish()), '40013FD6' + '000020D4')
+    }
+
     private static func wordAt(bs: Array<UInt8>, off: Int64): UInt32 {
         var w = 0u32
         var k = 0

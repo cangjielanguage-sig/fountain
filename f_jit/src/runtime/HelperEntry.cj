@@ -371,3 +371,14 @@ public func map_new(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64
 public func regex_replace_range(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64 {
     helperEntry(72, ctx, args, n)
 }
+
+/**
+ * H00 `h_dispatch`：全部内建 helper 的**统一 @C 入口**（hid 在首参）。
+ *
+ * JIT 机器码经此一跳调用任意 H01–H72：`x0 = hid`、`x1 = ctx`、`x2 = &args`、`x3 = argc`。
+ * 语义与逐 helper `@C` 入口完全一致（同一 `helperEntry` 分派），仅省去 72 个地址。
+ */
+@C
+public func h_dispatch(hid: Int64, ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64 {
+    helperEntry(hid, ctx, args, n)
+}

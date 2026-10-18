@@ -168,6 +168,10 @@ internal class A64Emitter {
         this.word(0xD4200000u32)
     }
 
+    func blr(rn: Int64): Unit {
+        this.word(0xD63F0000u32 | (UInt32(rn) << 5))
+    }
+
     func prologue(): Unit {
         this.word(0xA9BF7BFDu32) // stp x29,x30,[sp,#-16]!
         this.word(0x910003FDu32) // mov x29,sp

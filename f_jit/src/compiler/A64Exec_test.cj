@@ -21,6 +21,8 @@ import fountain::f_jit.base.DummyDiagnosticsSink
 import fountain::f_jit.backend.JitCompiler
 import fountain::f_jit.backend.CodeBuffer
 import fountain::f_jit.bytecode.FbcReader
+import fountain::f_jit.runtime.HelperAddresses
+import fountain::f_jit.runtime.h_dispatch
 import fountain::f_jit.runtime.JitContext
 
 /**
@@ -59,6 +61,17 @@ public class A64Exec_test {
         @Assert(A64Exec_test.run('{ => 1.5f64 + 2.5f64 }', Array<Int64>()), 0x4010000000000000)
         // 1.5 * 2.0 = 3.0 → 0x4008000000000000
         @Assert(A64Exec_test.run('{ => 1.5f64 * 2.0f64 }', Array<Int64>()), 0x4008000000000000)
+    }
+
+    @TestCase
+    public func helperDispatchTrampoline(): Unit {
+        let addr = HelperAddresses.dispatch()
+        @Assert(addr != 0, true)
+        let ctx = JitContext.create(hwBase: 0, hwCap: 0, fnId: 0, dbgBase: 0)
+        let f: CFunc<(Int64, CPointer<Unit>, CPointer<Int64>, Int64) -> Int64> = h_dispatch
+        let r = unsafe { f(22, CPointer<Unit>(ctx.cp()), CPointer<Int64>(), 0) }
+        @Assert(r, 0)
+        JitContext.free(ctx)
     }
 
     /** 编译并直接调用；断言 errCode 为 0，返回 x0。 */
