@@ -18,6 +18,7 @@ package fountain::f_jit.backend
 import fountain::f_jit.bytecode.LoadedUnit
 import fountain::f_jit.runtime.Interp
 import fountain::f_jit.runtime.JitContext
+import std.sync.Mutex
 import fountain::f_jit.runtime.MachineEnv
 
 /**
@@ -29,6 +30,8 @@ import fountain::f_jit.runtime.MachineEnv
  * 生命周期：`release()` 幂等，按「码内存最后释放」的顺序回收。
  */
 public class JitExecutor {
+    /** `MachineEnv.fnTableBase` 是进程级全局；序列化 JIT 调用，避免多单元并发串表。 */
+    private static let envMtx = Mutex()
     private let buf: CodeBuffer
     private let table: FnTable
     private let mirror: ConstMirror
@@ -101,6 +104,12 @@ public class JitExecutor {
 
     /** 以 `cells` 为实参执行入口函数；入参按「最深实参在高地址」的共享 ABI 排列。 */
     public func invoke(ctx: JitContext, cells: Array<Int64>): Int64 {
+        synchronized (JitExecutor.envMtx) {
+            return this.invokeLocked(ctx, cells)
+        }
+    }
+
+    private func invokeLocked(ctx: JitContext, cells: Array<Int64>): Int64 {
         MachineEnv.setFnTableBase(this.table.base())
         let n = cells.size
         let p = if (n == 0) {

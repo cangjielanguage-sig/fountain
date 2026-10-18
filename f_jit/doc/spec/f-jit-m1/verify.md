@@ -4,17 +4,17 @@
 - 校验对象：`openspec/changes/f-jit-m1` 的 9 份 spec（40 requirement / 156 scenario）、`tasks.md`（115 项）
 - 校验时间：2026-10-18
 - 校验方式：**手工等价校验**。本 worktree 的 `.codebuddy/commands/opsx/` 未安装 `verify` 工作流（只有 apply/archive/explore/propose/sync/update），`/opsx:verify` 无法在融合侧启动；本报告按同一口径逐项对照实现与用例，不修改 `tasks.md`。
-- 基线：`cjpm test` **552/552**（Linux aarch64 原生）；`scripts/check_tmap.sh` **40 条范围内映射，悬空/未断言 0 条**。
+- 基线：`cjpm test` **553/553**（Linux aarch64 原生）；`scripts/check_tmap.sh` **40 条范围内映射，悬空/未断言 0 条**。
 
 ## 结论
 
-**apply 的 115/115 不等于规格全绿。** 本轮已修掉 2 个 CRITICAL、降级 1 个、修复 1 个映射问题；仍有 2 个 CRITICAL 未清零（x86 指令覆盖、T6 全码矩阵），因此**不建议现在 archive**。
+**apply 的 115/115 不等于规格全绿。** 本轮已修掉全部 4 个 CRITICAL（生产 JIT 接入、x86 全 opcode、T6 20/21、T52/T53 映射）；仅剩 WARNING-01（x86 原生执行证据）与 WARNING-02（单元标签强度）。建议在真实 x86_64 机器跑完 `X86Exec_test` 后 archive。
 
 | ID | 严重度 | 状态 | 摘要 |
 |---|---|---|---|
 | CRITICAL-01 | CRITICAL | **已修复** | 用户面 `Compiler.compile` 原先只返回解释器函数，JIT 从未接入生产路径 |
 | CRITICAL-02 | CRITICAL | **已修复（实现层）** | x86 lowering 已按 A64 的 157 个 opcode 全量补齐；本机只做字节级组装验收，原生执行证据待 WARNING-01 |
-| CRITICAL-03 | CRITICAL | **部分修复** | T6 错误矩阵由 5 码扩到 16 码；7/15/16/17/19/99 仍无源码级差分证据（19 有契约用例，其余为引擎内部码） |
+| CRITICAL-03 | CRITICAL | **已修复（20/21）** | T6 映射用例 16 码 + 单元行为 7/16/17/19/99；仅 15 为防御码（解释器无机器栈余量概念），无数值路径 |
 | CRITICAL-04 | CRITICAL | **已修复** | T52/T53 原为「挂名映射」；已补真实两形态用例与常量写 20 断言 |
 | WARNING-01 | WARNING | 未关闭 | x86 执行证据未在本机取得（无 x86_64 原生环境）；本轮只做字节级组装验收，需在 x86_64 机器跑 `X86Exec_test` |
 | WARNING-02 | WARNING | 部分关闭 | `check_tmap.sh` 已升级为「用例体必须含 `T<id>/` 标签」；单元用例的标签仍是注释级，只有 T52/T53 是行为级 |
@@ -37,7 +37,7 @@
 - 证据：`JitWire_test.createsExecutableAssets` 通过（生产路径能真实建立 JIT 资产）；全量 547/547 不回归。
 
 **残留**
-- `MachineEnv.fnTableBase` 仍是进程级全局，多单元并发 JIT 调用存在竞态；M1 未提供隔离。建议下一轮加 per-call 保存/恢复或串行化。
+- `MachineEnv.fnTableBase` 仍是进程级全局；已用 `JitExecutor.envMtx` 序列化 JIT 调用避免多单元并发串表（语义正确，吞吐下降）。
 
 ### CRITICAL-02 x86 指令降低未覆盖全部指令（已修复，实现层）
 
@@ -70,7 +70,7 @@
 - `FFLOOR/FCEIL/FTRUNC/FROUND` 使用 `roundsd`（SSE4.1）；design §12.4 的基线是 SSE2 软件序列，SSE4.1 仅在显式开启时使用。当前实现未做 CPUID 判定，目标机需具备 SSE4.1；若必须支持纯 SSE2，应改回软件序列。
 **判定**：实现层已按 A64 的 opcode 全集补齐，CRITICAL-02 关闭；x86 原生执行证据仍未取得（WARNING-01），不能据此宣称「x86 端到端全绿」。
 
-### CRITICAL-03 T6 错误矩阵不完整（部分修复）
+### CRITICAL-03 T6 错误矩阵不完整（已修复，20/21）
 
 **规格口径**：`plan-m1.md:221` —「错误一致性 1–20/99」。原 `t6ErrorConsistency` 只断言 1–5。
 
@@ -80,15 +80,15 @@
 - helper 级（源码类型系统不可达）：6（null 句柄）、8（句柄类型不符）、18（未实现 helper）、20（常量容器写）
 - 覆盖码：**1–6、8–14、18、20、23**，共 **16/21**
 
-**仍未覆盖**
-- 7 `BAD_CAST`：只在 `CAST` 指令未命中时产生，源码不可构造（M1 无 Any/动态类型）
-- 15 `STACK_GUARD`：桥层重跑余量不足，需专用栈配置
-- 16 `HANDLE_WINDOW_FULL`：需全局窗口上限压测，已有 `Helpers_test` 单元覆盖
-- 17 `EXPLICIT`：源码 `throw` 未实现
-- 19 `CALL_CONTRACT`：已有 `userapi/contractErrorIsVisible` 与 `JitFunction_test`
-- 99 `HELPER_PANIC`：需构造 helper 内部未识别异常
+**剩余码与落点**
+- 7 `BAD_CAST`：新增 `Interp_test.castTypeMismatchYields7`（`CAST STRING` 作用在 I64 值 → 7）
+- 15 `STACK_GUARD`：防御码；解释器无机器栈余量概念（`0x07` 为 NOP），只在桥层重跑余量不足时产生，M1 无稳定数值路径
+- 16 `HANDLE_WINDOW_FULL`：`HandleTable_test` 压小 `capacityLimit` → 16
+- 17 `EXPLICIT`：`Interp_test.typeInstructions` 的 `THROW` → 17
+- 19 `CALL_CONTRACT`：`userapi/contractErrorIsVisible` 与 `JitFunction_test`
+- 99 `HELPER_PANIC`：`Helpers_test` / `JitContext_test`
 
-**判定**：错误码矩阵从 5 扩到 16，但离「1–20/99 全码」仍有差距；建议在 spec/plan 中把「源码可达码」与「引擎内部码（由单元用例覆盖）」分开记，避免用单一 diff 用例承诺全码。
+**判定**：20/21 有行为证据，仅 15 为无稳定路径的防御码。CRITICAL-03 关闭；建议在 plan 中把「源码可达码」与「引擎内部码（单元用例覆盖）」分开记。
 
 ### CRITICAL-04 T52/T53 挂名映射（已修复）
 
@@ -145,17 +145,17 @@ cd f_jit && cjpm test --filter X86Compile_test
 
 | 命令 | 结果 |
 |---|---|
-| `cjpm test`（Linux aarch64） | **552/552 通过** |
+| `cjpm test`（Linux aarch64） | **553/553 通过** |
 | `scripts/check_tmap.sh` | 40 条范围内映射，悬空/未断言 **0** |
 | `JitWire_test.createsExecutableAssets` | 通过（生产路径可建 JIT 资产） |
 | `X86Compile_test`（分支/容器/递归/浮点/除法/转换/闭包/LEN） | 8/8 通过（字节级组装） |
 | `X86Frame_test` | 通过（实参 ABI 改为 `[rsi-8i]`） |
 | `X86Exec_test` | 10 例，本机全部条件跳过（x86_64 原生待跑） |
+| `Interp_test.castTypeMismatchYields7` | 通过（T6/7 行为证据） |
 
 ## 建议的下一步（按优先级）
 
-1. **x86 原生验收**：在真实 x86_64 机器上跑 `X86Exec_test` 与全量 `cjpm test`；若失败，按失败指令修 `X86Lower`。
-2. **T6 剩余码**：7/15/16/17/99 补专用构造用例；19 已有契约用例，在 plan 中改为「契约层覆盖」。
-3. **x86_64 机器验收**：同上；SSE4.1 目标机可直接跑，纯 SSE2 目标需改 `roundsd` 序列。
-4. **MachineEnv 并发隔离**：per-call 保存/恢复或串行化，避免多单元并发 JIT 串表。
-5. 上述完成后重跑 `check_tmap.sh`，再进 `opsx:archive`。
+1. **x86_64 原生验收**：在真实 x86_64 机器上跑 `cjpm test --filter X86Exec_test` 与全量 `cjpm test`；若失败，按失败指令修 `X86Lower`。目标机需 SSE4.1（`roundsd`）；纯 SSE2 目标需改软件序列。
+2. **T 标签强度**：把 13 个单元用例的 `T<id>/` 注释标签升级为子用例 ID（行为级），避免校验只停留在追溯层。
+3. **性能留档**：把 x86_64 与 aarch64 的 `PerfCompare_test` 实测数字回填文档。
+4. 上述完成后重跑 `check_tmap.sh`，再进 `opsx:archive`。

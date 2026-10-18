@@ -500,6 +500,22 @@ public class Interp_test {
         }
     }
 
+    /** T6/7：`CAST` 值型转型失败 → 7（`BAD_CAST`），与 `GUARD_TYPE` 的 8 区分。 */
+    @TestCase
+    public func castTypeMismatchYields7(): Unit {
+        let ctx = ctxOf()
+        try {
+            let body = cat([
+                opI32(0x11u8, 1), // PUSH_I64 1（I64 值）
+                opU16U8(0x80u8, UInt16(LocalType.STRING), 0u8), // CAST STRING mode0
+                op0(0x7Cu8)])
+            @Assert(runBody(ctx, body), 0)
+            @Assert(ctx.errCode, ErrCode.BAD_CAST)
+        } finally {
+            JitContext.free(ctx)
+        }
+    }
+
     /** 容器与值提取：`LEN / GET_IDX / HAS_KEY / GET_KEY_OR`；`PUSH_KH` 常量句柄。 */
     @TestCase
     public func containerAndValueExtraction(): Unit {
