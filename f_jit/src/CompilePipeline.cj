@@ -16,7 +16,10 @@ limitations under the License.
 package fountain::f_jit
 
 import fountain::f_jit.base.DummyDiagnosticsSink
+import fountain::f_jit.base.ErrCode
+import fountain::f_jit.base.JitException
 import fountain::f_jit.base.SourceCompileException
+import fountain::f_jit.bytecode.OpInfo
 import fountain::f_jit.bytecode.FbcReader
 import fountain::f_jit.bytecode.Fingerprint
 import fountain::f_jit.bytecode.LoadedUnit
@@ -57,6 +60,53 @@ public class CompilePipeline {
                     case None => '编译失败'
                 }
                 throw SourceCompileException('CompileFailed', 0, 0, 0, '', msg)
+        }
+    }
+
+    /** S6.9 字节码管线：`.fbc` → 校验 → 执行器；整份 raw 的 FNV-1a-128 去重。 */
+    public static func runUnit(raw: Array<UInt8>, c: Compiler): JitFunction {
+        let key = 'fbc/${Fingerprint.fnv1a128(raw)}'
+        match (CompileCache.lookup(key)) {
+            case Some(f) => return f
+            case None => ()
+        }
+        if (CompileCache.claim(key)) {
+            try {
+                let unit = FbcReader.load(raw)
+                CompilePipeline.rejectUserHelpers(unit)
+                let fn = CompilePipeline.makeFunction(unit, unit.header.entryFn)
+                CompileCache.finish(key, fn)
+                return fn
+            } catch (e: Exception) {
+                CompileCache.fail(key, e.message)
+                throw e
+            }
+        }
+        match (CompileCache.awaitReady(key)) {
+            case Some(f) => f
+            case None =>
+                let msg = match (CompileCache.failureOf(key)) {
+                    case Some(m) => m
+                    case None => '装载失败'
+                }
+                throw SourceCompileException('CompileFailed', 0, 0, 0, '', msg)
+        }
+    }
+
+    /** 加载期拒绝 user helper（hid ≥ 0x0100，§8.4）→ 18。 */
+    private static func rejectUserHelpers(unit: LoadedUnit): Unit {
+        var off = 0
+        while (off < unit.code.size) {
+            let op = unit.code[off]
+            let len = OpInfo.OPCODE_TABLE[Int64(op)].len
+            if ((op == 0x75u8 || op == 0x76u8 || op == 0x77u8) && len >= 3 && off + 2 < unit.code.size) {
+                let hid = UInt16(unit.code[off + 1]) | (UInt16(unit.code[off + 2]) << 8)
+                if (hid >= 0x0100u16) {
+                    throw JitException(ErrCode.NOT_IMPL, -1, 0, None,
+                        '单元含 user helper（hid=0x${hid}），M1 加载期拒绝（§8.4）')
+                }
+            }
+            off = off + len
         }
     }
 
