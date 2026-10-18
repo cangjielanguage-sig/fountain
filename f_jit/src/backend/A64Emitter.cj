@@ -123,6 +123,31 @@ internal class A64Emitter {
         this.out.toArray()
     }
 
+    /**
+     * 回填并**校验分支可达范围**：`b/bl` ±128 MB、`b.cond`/`cbz`/`cbnz` ±1 MB。
+     *
+     * 越界 → None（调用方降级解释器；跳板改写由布局阶段 S5.10 负责）。
+     */
+    func finishOrNull(): ?Array<UInt8> {
+        for (r in this.relocs) {
+            let delta = this.labelOffset(r.label) - r.at
+            if (delta % 4 != 0) {
+                return None
+            }
+            let words = delta / 4
+            if (r.kind == 0) {
+                if (words < -33554432 || words > 33554431) {
+                    return None
+                }
+            } else {
+                if (words < -262144 || words > 262143) {
+                    return None
+                }
+            }
+        }
+        Some(this.finish())
+    }
+
     // ---- 分支 ----
 
     func b(label: String): Unit {
@@ -177,9 +202,16 @@ internal class A64Emitter {
         this.word(0x910003FDu32) // mov x29,sp
         this.word(0xF81F83B3u32) // stur x19,[x29,#-8]
         this.word(0xF81F03B4u32) // stur x20,[x29,#-16]
+        // FPCR.DN=1（§12.4：NaN 规范化由硬件完成；原值存 [x29,#-24]，出口恢复）
+        this.word(0xD53B4409u32) // mrs x9,fpcr
+        this.word(0xF81E83A9u32) // stur x9,[x29,#-24]
+        this.word(0xB2670129u32) // orr x9,x9,#0x02000000
+        this.word(0xD51B4409u32) // msr fpcr,x9
     }
 
     func epilogue(): Unit {
+        this.word(0xF85E83A9u32) // ldur x9,[x29,#-24]
+        this.word(0xD51B4409u32) // msr fpcr,x9
         this.word(0xF85F03B4u32) // ldur x20,[x29,#-16]
         this.word(0xF85F83B3u32) // ldur x19,[x29,#-8]
         this.word(0x910003BFu32) // mov sp,x29
@@ -420,6 +452,23 @@ internal class A64Emitter {
 
     func fcvtzs(rd: Int64, rn: Int64): Unit {
         this.word(0x9E780000u32 | (UInt32(rn) << 5) | UInt32(rd))
+    }
+
+    // ---- 位计数 / 寄存器偏移寻址（S5.9）----
+
+    /** `cnt vd.8b, vn.8b`。 */
+    func cntBytes(rd: Int64, rn: Int64): Unit {
+        this.word(0x0E205800u32 | (UInt32(rn) << 5) | UInt32(rd))
+    }
+
+    /** `addv bd, vn.8b`（横向求和到字节）。 */
+    func addvB(rd: Int64, rn: Int64): Unit {
+        this.word(0x0E31B800u32 | (UInt32(rn) << 5) | UInt32(rd))
+    }
+
+    /** `ldr xt, [xn, xm, lsl #3]`（fnTable 间接取入口）。 */
+    func ldrReg(rt: Int64, rn: Int64, rm: Int64): Unit {
+        this.word(0xF8607800u32 | (UInt32(rm) << 16) | (UInt32(rn) << 5) | UInt32(rt))
     }
 }
 

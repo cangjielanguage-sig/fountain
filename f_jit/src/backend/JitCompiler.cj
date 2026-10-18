@@ -61,6 +61,15 @@ public class JitArtifacts {
  */
 public class JitCompiler {
     public static func compileUnit(unit: LoadedUnit): ?JitArtifacts {
+        JitCompiler.compileUnitWith(unit, 0, 0)
+    }
+
+    /**
+     * @param constBase 常量句柄镜像基址（`PUSH_KH` 烘焙；0 = 无常量）
+     * @param fnTableBase `fnTable` 基址（`CALL_FUNC` 烘焙；0 = 无跨函数调用）
+     */
+    public static func compileUnitWith(unit: LoadedUnit, constBase: Int64,
+        fnTableBase: Int64): ?JitArtifacts {
         let out = ArrayList<UInt8>()
         let ids = ArrayList<UInt32>()
         let offs = ArrayList<Int64>()
@@ -68,7 +77,7 @@ public class JitCompiler {
         var i = 0
         while (i < unit.dir.size) {
             let fn = unit.dir.at(i)
-            match (A64Compiler.compileFunction(unit, fn)) {
+            match (A64Compiler.compileFunctionWith(unit, fn, constBase, fnTableBase)) {
                 case Some(b) =>
                     ids.add(fn.fnId)
                     offs.add(out.size)

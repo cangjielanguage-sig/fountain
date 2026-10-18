@@ -31,8 +31,14 @@ public class A64Compiler {
         ((raw + 15) / 16) * 16
     }
 
-    /** 编译单函数；含未支持指令 → None（调用方降级解释器）。 */
+    /** 编译单函数；含未支持指令或分支越界 → None（调用方降级解释器）。 */
     public static func compileFunction(unit: LoadedUnit, fn: FuncEntry): ?Array<UInt8> {
+        A64Compiler.compileFunctionWith(unit, fn, 0, 0)
+    }
+
+    /** 带常量镜像 / fnTable 基址的编译入口（`PUSH_KH` / `CALL_FUNC`）。 */
+    public static func compileFunctionWith(unit: LoadedUnit, fn: FuncEntry,
+        constBase: Int64, fnTableBase: Int64): ?Array<UInt8> {
         let frame = A64Compiler.frameSize(Int64(fn.nLocals), Int64(fn.maxStack))
         let e = A64Emitter()
         e.btiC()
@@ -54,7 +60,7 @@ public class A64Compiler {
             e.strOff(9, 29, -32 - 8 * i)
             i = i + 1
         }
-        let lower = A64Lower(e, fn, frame)
+        let lower = A64Lower(e, fn, frame, constBase, fnTableBase)
         lower.lower(unit)
         if (!lower.success()) {
             return None
@@ -65,7 +71,7 @@ public class A64Compiler {
         A64Compiler.bindBail(e, 'bail2', 2)
         A64Compiler.bindBail(e, 'bail3', 3)
         A64Compiler.bindBail(e, 'deopt', -1)
-        Some(e.finish())
+        e.finishOrNull()
     }
 
     private static func bindBail(e: A64Emitter, label: String, k: Int64): Unit {

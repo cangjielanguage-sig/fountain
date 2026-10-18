@@ -29,9 +29,47 @@ public class A64Emitter_test {
         e.btiC()
         e.prologue()
         e.epilogue()
+        // 序言尾 4 条 = FPCR 保存/置 DN；出口头 2 条 = 恢复
         @Assert(A64Emitter_test.hex(e.finish()),
             '5F2403D5' + 'FD7BBFA9' + 'FD030091' + 'B3831FF8' + 'B4031FF8' +
+            '09443BD5' + 'A9831EF8' + '290167B2' + '09441BD5' +
+            'A9835EF8' + '09441BD5' +
             'B4035FF8' + 'B3835FF8' + 'BF030091' + 'FD7BC1A8' + 'C0035FD6')
+    }
+
+    @TestCase
+    public func popcntAndTableLoad(): Unit {
+        let e = A64Emitter()
+        e.fmovDFromX(8, 9) // 2801679E
+        e.cntBytes(8, 8) // 0859200E
+        e.addvB(8, 8) // 08B9310E
+        e.fmovXFromD(9, 8) // 0901669E
+        e.ldrReg(10, 12, 9) // ldr x10,[x12,x9,lsl #3] = 8A7969F8
+        @Assert(A64Emitter_test.hex(e.finish()), '2801679E' + '0859200E' + '08B9310E' + '0901669E' + '8A7969F8')
+    }
+
+    @TestCase
+    public func conditionalBranchRangeBoundary(): Unit {
+        // 界内：delta/4 = 262143 → Some
+        let ok = A64Emitter()
+        ok.bCond(A64Cond.EQ, 'far')
+        var i = 0
+        while (i < 262142) {
+            ok.nop()
+            i = i + 1
+        }
+        ok.bind('far')
+        @Assert(ok.finishOrNull().isSome(), true)
+        // 越界：delta/4 = 262145 → None
+        let bad = A64Emitter()
+        bad.bCond(A64Cond.EQ, 'far')
+        i = 0
+        while (i < 262144) {
+            bad.nop()
+            i = i + 1
+        }
+        bad.bind('far')
+        @Assert(bad.finishOrNull().isNone(), true)
     }
 
     @TestCase

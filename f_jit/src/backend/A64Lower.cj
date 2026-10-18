@@ -33,14 +33,21 @@ internal class A64Lower {
     private let fn: FuncEntry
     private let frame: Int64
     private let helperDispatch: Int64
+    /** 常量句柄镜像基址（`PUSH_KH` 烘焙；0 = 未提供 → 含 PUSH_KH 即降级）。 */
+    private let constBase: Int64
+    /** `fnTable` 基址（`CALL_FUNC` 烘焙；0 = 未提供 → 含 CALL_FUNC 即降级）。 */
+    private let fnTableBase: Int64
     private var ok: Bool
     private var seq: Int64
 
-    init(e: A64Emitter, fn: FuncEntry, frame: Int64) {
+    init(e: A64Emitter, fn: FuncEntry, frame: Int64, constBase: Int64,
+        fnTableBase: Int64) {
         this.e = e
         this.fn = fn
         this.frame = frame
         this.helperDispatch = HelperAddresses.dispatch()
+        this.constBase = constBase
+        this.fnTableBase = fnTableBase
         this.ok = true
         this.seq = 0
     }
@@ -164,7 +171,16 @@ internal class A64Lower {
             case 0x15 =>
                 this.e.movReg(9, 31)
                 this.pushX(9)
-            case 0x16 => this.ok = false
+            case 0x16 =>
+                // PUSH_KH idx：常量句柄镜像（基址编译期烘焙，§12.4）
+                if (this.constBase == 0) {
+                    this.ok = false
+                } else {
+                    let idx = A64Lower.u16(ops, 0)
+                    this.e.movImm64(9, this.constBase + 8 * idx)
+                    this.e.ldrOff(9, 9, 0)
+                    this.pushX(9)
+                }
             case 0x17 =>
                 this.e.ldrOff(9, 20, 0)
                 this.pushX(9)
@@ -196,7 +212,14 @@ internal class A64Lower {
             case 0x23 => this.loadLocal(1, 9); this.pushX(9)
             case 0x24 => this.loadLocal(2, 9); this.pushX(9)
             case 0x25 => this.loadLocal(3, 9); this.pushX(9)
-            case 0x26 => this.ok = false
+            case 0x26 =>
+                // LOAD_CAP idx：locals[0] 闭包句柄 + idx → H56
+                let capIdx = A64Lower.u16(ops, 0)
+                this.loadLocal(0, 9)
+                this.pushX(9)
+                this.e.movImm64(9, capIdx)
+                this.pushX(9)
+                this.helperCall(56, 2, 0)
             case 0x30 => this.intBin(A64Bin.ADD)
             case 0x31 => this.intBin(A64Bin.SUB)
             case 0x32 => this.intBin(A64Bin.MUL)
@@ -222,7 +245,14 @@ internal class A64Lower {
                 this.e.ldrOff(9, 20, 0)
                 this.e.clz(9, 9)
                 this.e.strOff(9, 20, 0)
-            case 0x3B => this.ok = false
+            case 0x3B =>
+                // IPOPCNT：fmov d8,x9; cnt v8.8b,v8.8b; addv b8,v8.8b; fmov x9,d8
+                this.e.ldrOff(9, 20, 0)
+                this.e.fmovDFromX(8, 9)
+                this.e.cntBytes(8, 8)
+                this.e.addvB(8, 8)
+                this.e.fmovXFromD(9, 8)
+                this.e.strOff(9, 20, 0)
             case 0x40 => this.floatBin(0)
             case 0x41 => this.floatBin(1)
             case 0x42 => this.floatBin(2)
@@ -259,6 +289,7 @@ internal class A64Lower {
                 this.e.frintn(0, 0)
                 this.e.strD(0, 20, 0)
             case 0x50 => this.intCmpI()
+            case 0x51 => this.floatCmpTri()
             case 0x52 => this.intCmp(A64Cond.EQ)
             case 0x53 => this.intCmp(A64Cond.NE)
             case 0x54 => this.intCmp(A64Cond.LT)
@@ -321,6 +352,11 @@ internal class A64Lower {
             case 0x75 => this.helperCall(A64Lower.u16(ops, 0), A64Lower.u8(ops, 2), 0)
             case 0x76 => this.helperCall(A64Lower.u16(ops, 0), A64Lower.u8(ops, 2), 1)
             case 0x77 => this.helperCall(A64Lower.u16(ops, 0), A64Lower.u8(ops, 2), 2)
+            case 0x78 => this.callFunc(A64Lower.u16(ops, 0), A64Lower.u8(ops, 2))
+            case 0x79 => this.bail(18) // CALL_HOST：M1 汇编期即拒绝（§6）
+            case 0x7A => this.bail(18) // HW_OPEN：M1 未启用
+            case 0x7B => this.e.nop()   // HW_CLOSE
+            case 0x7F => this.callClosure(A64Lower.u8(ops, 0))
             case 0x7C =>
                 this.e.ldrOff(0, 20, 0)
                 this.e.b('epilogue')
@@ -370,6 +406,83 @@ internal class A64Lower {
                     this.e.b('deopt')
                 }
                 this.e.bind('gnnz${at}')
+            case 0x89 => this.helperCall(18, 1, 0)
+            // ---- 0x90–0xBF：全量 CALL_HELPER 路由（§12.4）----
+            case 0x90 => this.lenOp()
+            case 0x91 => this.helperCall(2, 2, 0)
+            case 0x92 => this.helperCall(4, 2, 0)
+            case 0x93 => this.helperCall(5, 3, 0)
+            case 0x94 => this.helperCall(6, 2, 0)
+            case 0x95 => this.helperCall(8, 2, 0)
+            case 0x96 =>
+                this.e.movImm64(9, A64Lower.u8(ops, 0))
+                this.pushX(9)
+                this.helperCall(14, 2, 0)
+            case 0x97 => this.helperCall(16, 1, 0)
+            case 0x98 => this.helperCall(12, 1, 0)
+            case 0x99 => this.helperCall(18, 1, 0)
+            case 0x9A => this.helperCall(41, 4, 0)
+            case 0x9B => this.helperCall(42, 2, 0)
+            case 0x9C =>
+                this.helperCall(if (A64Lower.u8(ops, 0) == 0) { 28 } else { 29 }, 1, 0)
+            case 0x9D =>
+                // DEC_TO_I64：mode1 时 DEC_RANGE(9) 改写为 DEOPT(-1)
+                this.helperCall(30, 1, 1)
+                this.seq = this.seq + 1
+                let doneLabel = 'dec${this.seq}'
+                let failLabel = 'decf${this.seq}'
+                this.e.ldrOff(11, 19, 0)
+                this.e.cbz(11, doneLabel)
+                if (A64Lower.u8(ops, 0) == 1) {
+                    this.e.cmpImm(11, 9)
+                    this.e.bCond(A64Cond.NE, failLabel)
+                    this.e.movImm64(11, -1)
+                    this.e.strOff(11, 19, 0)
+                    this.e.b(doneLabel)
+                    this.e.bind(failLabel)
+                }
+                this.e.movReg(0, 31)
+                this.e.b('epilogue')
+                this.e.bind(doneLabel)
+            case 0x9E => this.helperCall(31, 1, 0)
+            case 0xA0 => this.helperCall(70, 0, 0)
+            case 0xA1 => this.helperCall(43, 2, 0)
+            case 0xA2 => this.helperCall(71, 0, 0)
+            case 0xA3 => this.helperCall(44, 3, 0)
+            case 0xA4 => this.helperCall(32, 2, 0)
+            case 0xA5 => this.helperCall(24, 2, 0)
+            case 0xA6 => this.helperCall(25, 2, 0)
+            case 0xA7 => this.helperCall(26, 2, 0)
+            case 0xA8 => this.helperCall(27, 2, 0)
+            case 0xA9 => this.ok = false // DT_NEW：汇编期禁发
+            case 0xAA => this.ok = false // DUR_NEW：汇编期禁发
+            case 0xAB => this.helperCall(45, 3, 0)
+            case 0xAC => this.helperCall(46, 3, 0)
+            case 0xAD => this.helperCall(47, 2, 0)
+            case 0xAE => this.helperCall(48, 2, 0)
+            case 0xAF => this.helperCall(49, 1, 0)
+            case 0xB0 => this.helperCall(34, 2, 0)
+            case 0xB1 => this.helperCall(35, 2, 0)
+            case 0xB2 => this.helperCall(36, 2, 0)
+            case 0xB3 => this.helperCall(37, 2, 0)
+            case 0xB4 => this.helperCall(38, 2, 0)
+            case 0xB5 => this.helperCall(39, 2, 0)
+            case 0xB6 => this.helperCall(40, 1, 0)
+            case 0xB7 =>
+                this.e.movImm64(9, A64Lower.u8(ops, 0))
+                this.pushX(9)
+                this.helperCall(33, 2, 0)
+            case 0xB8 => this.helperCall(50, 3, 0)
+            case 0xB9 => this.helperCall(51, 3, 0)
+            case 0xBA => this.helperCall(52, 2, 0)
+            case 0xBB => this.helperCall(53, 2, 0)
+            case 0xBC => this.helperCall(60, 2, 0)
+            case 0xBD => this.helperCall(61, 2, 0)
+            case 0xBE =>
+                this.e.movImm64(9, A64Lower.u8(ops, 0))
+                this.pushX(9)
+                this.helperCall(62, 2, 0)
+            case 0xBF => this.helperCall(69, 1, 0)
             case _ => this.ok = false
         }
     }
@@ -423,6 +536,116 @@ internal class A64Lower {
         this.e.movReg(0, 31)
         this.e.b('epilogue')
         this.e.bind(okLabel)
+    }
+
+    /** 错误槽非 0 → 立刻收敛（共享出口）。 */
+    private func checkErr(): Unit {
+        this.seq = this.seq + 1
+        let okLabel = 'ce${this.seq}'
+        this.e.ldrOff(11, 19, 0)
+        this.e.cbz(11, okLabel)
+        this.e.movReg(0, 31)
+        this.e.b('epilogue')
+        this.e.bind(okLabel)
+    }
+
+    /** helper 编号已在寄存器（`LEN` 的 tag 分派）。 */
+    private func helperCallHidReg(hidReg: Int64, argc: Int64): Unit {
+        this.e.movReg(0, hidReg)
+        this.e.movReg(1, 19)
+        if (argc == 0) {
+            this.e.movReg(2, 31)
+        } else {
+            this.e.addImm(2, 20, 8 * (argc - 1))
+        }
+        this.e.movImm64(3, argc)
+        this.e.movImm64(9, this.helperDispatch)
+        this.e.blr(9)
+        this.e.strOff(0, 20, 8 * (argc - 1))
+        this.e.addImm(20, 20, 8 * (argc - 1))
+        this.checkErr()
+    }
+
+    /** `LEN`：H18 取 tag → LIST=1/H01、MAP=2/H03、其余 H07。 */
+    private func lenOp(): Unit {
+        this.e.ldrOff(9, 20, 0)
+        this.pushX(9) // DUP（保留 h）
+        this.helperCall(18, 1, 0) // tag 覆盖副本
+        this.e.ldrOff(10, 20, 0)
+        this.e.addImm(20, 20, 8) // 弹 tag
+        this.e.movImm64(12, 7)
+        this.e.movImm64(13, 1)
+        this.e.cmpImm(10, 1)
+        this.e.csel(12, 13, 12, A64Cond.EQ)
+        this.e.movImm64(13, 3)
+        this.e.cmpImm(10, 2)
+        this.e.csel(12, 13, 12, A64Cond.EQ)
+        this.helperCallHidReg(12, 1)
+    }
+
+    /** `CALL_FUNC fid argc`：fnTable 间接调用 + 共窗口 + 重写 fnId。 */
+    private func callFunc(fid: Int64, argc: Int64): Unit {
+        if (this.fnTableBase == 0) {
+            this.ok = false
+            return
+        }
+        this.e.movReg(0, 19)
+        if (argc == 0) {
+            this.e.movReg(1, 31)
+        } else {
+            this.e.addImm(1, 20, 8 * (argc - 1))
+        }
+        this.e.movImm64(2, argc)
+        this.e.movImm64(9, this.fnTableBase + 8 * fid)
+        this.e.ldrOff(10, 9, 0)
+        this.e.blr(10)
+        this.checkErr()
+        this.e.movImm64(11, Int64(this.fn.fnId))
+        this.e.strOff(11, 19, 40)
+        if (argc == 0) {
+            this.pushX(0)
+        } else {
+            this.e.strOff(0, 20, 8 * (argc - 1))
+            this.e.addImm(20, 20, 8 * (argc - 1))
+        }
+    }
+
+    /** `CALL_CLOSURE argc`：H55 取 fnId → H57 取 fnTable → 间接调用。 */
+    private func callClosure(argc: Int64): Unit {
+        let disp = 8 * argc
+        // H55(ctx, &closure, 1) → fnId
+        this.e.movImm64(0, 55)
+        this.e.movReg(1, 19)
+        this.e.addImm(2, 20, disp)
+        this.e.movImm64(3, 1)
+        this.e.movImm64(9, this.helperDispatch)
+        this.e.blr(9)
+        this.e.strOff(0, 20, disp)
+        this.checkErr()
+        // H57(ctx) → fnTable 基址
+        this.e.movImm64(0, 57)
+        this.e.movReg(1, 19)
+        this.e.movReg(2, 31)
+        this.e.movReg(3, 31)
+        this.e.movImm64(9, this.helperDispatch)
+        this.e.blr(9)
+        this.e.movReg(12, 0)
+        this.checkErr()
+        this.e.ldrOff(9, 20, disp) // fnId
+        this.e.ldrReg(10, 12, 9)
+        this.e.movReg(0, 19)
+        if (argc == 0) {
+            this.e.movReg(1, 31)
+        } else {
+            this.e.addImm(1, 20, 8 * (argc - 1))
+        }
+        this.e.movImm64(2, argc)
+        this.e.blr(10)
+        this.e.movImm64(11, Int64(this.fn.fnId))
+        this.e.strOff(11, 19, 40)
+        this.checkErr()
+        this.e.strOff(0, 20, disp)
+        this.e.addImm(20, 20, disp)
     }
 
     /** `TO_I64 mode`：NaN 与 ±2^63 界外 → mode0 `<bail:13>` / mode1 `<deopt>`。 */
@@ -612,6 +835,18 @@ internal class A64Lower {
             this.e.fmin(0, 0, 1)
         }
         this.e.strD(0, 20, 0)
+    }
+
+    /** `CMP_F`：三路浮点比较（NaN → 0，与解释器一致）。 */
+    private func floatCmpTri(): Unit {
+        this.e.ldrD(0, 20, 0) // b
+        this.e.ldrD(1, 20, 8) // a
+        this.e.addImm(20, 20, 8)
+        this.e.fcmp(1, 0)
+        this.e.cset(9, A64Cond.LT)
+        this.e.cset(10, A64Cond.GT)
+        this.e.subReg(9, 9, 10)
+        this.e.strOff(9, 20, 0)
     }
 
     private func floatCmp(cond: Int64, swapped: Bool): Unit {

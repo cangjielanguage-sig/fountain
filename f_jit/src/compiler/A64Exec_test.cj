@@ -20,10 +20,14 @@ import std.unittest.testmacro.*
 import fountain::f_jit.base.DummyDiagnosticsSink
 import fountain::f_jit.backend.JitCompiler
 import fountain::f_jit.backend.CodeBuffer
+import fountain::f_jit.backend.FnTable
+import fountain::f_jit.backend.ConstMirror
 import fountain::f_jit.bytecode.FbcReader
 import fountain::f_jit.runtime.HelperAddresses
 import fountain::f_jit.runtime.h_dispatch
 import fountain::f_jit.runtime.JitContext
+import fountain::f_jit.runtime.MachineEnv
+import fountain::f_jit.runtime.Interp
 
 /**
  * S5.8/S5.9 原生执行：源码 → 字节码 → AArch64 机器码 → 直接调用。
@@ -72,6 +76,118 @@ public class A64Exec_test {
         let r = unsafe { f(22, CPointer<Unit>(ctx.cp()), CPointer<Int64>(), 0) }
         @Assert(r, 0)
         JitContext.free(ctx)
+    }
+
+    /** S5.9：`PUSH_KH` 常量镜像 —— JIT 与解释器取到同一句柄。 */
+    @TestCase
+    public func constantHandleMirror(): Unit {
+        let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile('{ => "hi" }')
+        let unit = FbcReader.load(cu.raw)
+        @Assert(unit.consts.size > 0, true)
+        let interp = Interp(unit)
+        let ids = Array<Int64>(unit.consts.size, repeat: 0)
+        var i = 0
+        while (i < unit.consts.size) {
+            ids[i] = interp.constHandle(i)
+            i = i + 1
+        }
+        let mirror = ConstMirror.build(ids)
+        @Assert(mirror.base() != 0, true)
+        let (r, err) = A64Exec_test.runUnit(cu, mirror.base(), 0, Array<Int64>())
+        @Assert(err, 0)
+        @Assert(r != 0, true)
+        // JIT 取到的句柄必须命中本单元常量句柄之一（同一 pinConst 结果）
+        var hit = false
+        i = 0
+        while (i < unit.consts.size) {
+            if (ids[i] == r) {
+                hit = true
+            }
+            i = i + 1
+        }
+        @Assert(hit, true)
+        mirror.free()
+    }
+
+    /** S5.9：`FPCR.DN=1` —— 0/0 的 NaN 位型收敛到 canonical。 */
+    @TestCase
+    public func nanCanonicalizedByHardware(): Unit {
+        let (r, err) = A64Exec_test.run2('{ => 0.0f64 / 0.0f64 }', Array<Int64>())
+        @Assert(err, 0)
+        @Assert(r, 0x7FF8000000000000)
+    }
+
+    /** S5.9：闭包值调用（H54/H55/H57 + `CALL_CLOSURE`）。 */
+    @TestCase
+    public func closureCall(): Unit {
+        let (r, err) = A64Exec_test.run2('{ => let f = { x: Int64 => x + 1 }\n f(41) }', Array<Int64>())
+        @Assert(err, 0)
+        @Assert(r, 42)
+    }
+
+    /** S5.9：`LOAD_CAP` 捕获外层实参。 */
+    @TestCase
+    public func capturedUpvalue(): Unit {
+        let (r, err) = A64Exec_test.run2(
+            '{ a: Int64 => let f = { b: Int64 => a + b }\n f(2) }', [40])
+        @Assert(err, 0)
+        @Assert(r, 42)
+    }
+
+    /** 编译整单元 → 单块 CodeBuffer → fnTable/常量镜像回填 → 调用入口。 */
+    private static func run2(src: String, args: Array<Int64>): (Int64, Int64) {
+        let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(src)
+        A64Exec_test.runUnit(cu, 0, 0, args)
+    }
+
+    private static func runUnit(cu: CompiledSourceUnit, constBase: Int64, fnTableBase: Int64,
+        args: Array<Int64>): (Int64, Int64) {
+        let unit = FbcReader.load(cu.raw)
+        var result: Int64 = -1
+        var err: Int64 = -1
+        match (JitCompiler.compileUnitWith(unit, constBase, fnTableBase)) {
+            case Some(art) =>
+                let buf = match (CodeBuffer.alloc(art.code.size + 16)) {
+                    case Some(b) => b
+                    case None => @Fail('CodeBuffer.alloc 失败'); return (result, err)
+                }
+                @Assert(buf.write(art.code, 0), true)
+                @Assert(buf.seal(), true)
+                buf.flushICache()
+                let table = match (FnTable.alloc(unit.dir.size)) {
+                    case Some(t) => t
+                    case None => @Fail('FnTable.alloc 失败'); return (result, err)
+                }
+                var i = 0
+                while (i < unit.dir.size) {
+                    let fn = unit.dir.at(i)
+                    match (art.entry(fn.fnId)) {
+                        case Some((off, _)) => table.set(fn.fnId, buf.base + off)
+                        case None => ()
+                    }
+                    i = i + 1
+                }
+                MachineEnv.setFnTableBase(table.base())
+                let entryOff = match (art.entry(cu.entryFn)) {
+                    case Some((off, _)) => off
+                    case None => 0
+                }
+                let ctx = JitContext.create(hwBase: 0, hwCap: 0, fnId: Int64(cu.entryFn), dbgBase: 0)
+                let argsPtr = A64Exec_test.argsPointer(args)
+                let f = CFunc<(CPointer<Unit>, CPointer<Int64>, Int64) -> Int64>(
+                    CPointer<Unit>(unsafe { buf.rawPointer() + entryOff }))
+                result = unsafe { f(CPointer<Unit>(ctx.cp()), argsPtr, args.size) }
+                err = unsafe { ctx.cp().read(0) }
+                if (args.size > 0) {
+                    unsafe { LibC.free<Int64>(argsPtr) }
+                }
+                MachineEnv.reset()
+                table.free()
+                JitContext.free(ctx)
+                buf.free()
+            case None => @Fail('JitCompiler.compileUnitWith 返回 None')
+        }
+        (result, err)
     }
 
     /** 编译并直接调用；断言 errCode 为 0，返回 x0。 */
