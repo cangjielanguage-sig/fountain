@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::fdbm.server
 
-import std.collection.ArrayList
+import std.collection.{ArrayList, HashSet}
 import std.database.sql.{Driver, DriverManager}
 import std.fs.*
 import std.reflect.PackageInfo
@@ -50,22 +50,46 @@ protected struct DriverLoader {
             throw FdbmException(DbdErrorCode.CONFIG,
                 'failed to load database driver \'${path}\': ${e.message}', e)
         }
+        // 真实驱动常注册多个别名（postgres / postgresql / pg）；只要别名指向同一个驱动实例即可。
         let names = DriverManager.drivers()
-        if (names.size != 1) {
-            throw FdbmException(DbdErrorCode.NO_DRIVER,
-                'expected exactly one registered driver after loading \'${path}\', got ${names.size}')
+        let distinct = HashSet<String>()
+        let registered = ArrayList<String>()
+        for (name in names) {
+            match (DriverManager.getDriver(name)) {
+                case Some(value) =>
+                    distinct.add(value.name)
+                    registered.add(name)
+                case None => ()
+            }
         }
-        if (names[0] != expectedName) {
+        if (distinct.size != 1) {
             throw FdbmException(DbdErrorCode.NO_DRIVER,
-                'driver \'${names[0]}\' does not match fdbm_db_driver_* = \'${expectedName}\'')
+                'expected exactly one registered driver after loading \'${path}\', got ' +
+                '${distinct.size}: [${joinNames(registered)}]')
         }
-        let driver = match (DriverManager.getDriver(names[0])) {
+        if (!names.contains(expectedName)) {
+            throw FdbmException(DbdErrorCode.NO_DRIVER,
+                'driver \'${expectedName}\' is not registered after loading \'${path}\'; ' +
+                'available: [${joinNames(registered)}]')
+        }
+        let driver = match (DriverManager.getDriver(expectedName)) {
             case Some(value) => value
             case None => throw FdbmException(DbdErrorCode.NO_DRIVER,
-                'driver \'${names[0]}\' disappeared after loading \'${path}\'')
+                'driver \'${expectedName}\' disappeared after loading \'${path}\'')
         }
         logger.info('loaded database driver \'${driver.name}\' from ${path}')
         driver
+    }
+
+    private static func joinNames(values: ArrayList<String>): String {
+        let text = StringBuilder()
+        for (value in values) {
+            if (text.size > 0) {
+                text.append(', ')
+            }
+            text.append(value)
+        }
+        text.toString()
     }
 
     /** 目录里按文件名排序的动态库；目录不存在 → 空（由调用方报 `NO_DRIVER`）。 */

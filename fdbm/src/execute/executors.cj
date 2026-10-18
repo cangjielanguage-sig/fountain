@@ -20,6 +20,7 @@ import std.database.sql.*
 import std.unicode.UnicodeStringExtension
 import fountain::f_data.{Data, DataReal, DataString}
 import fountain::f_dbd.common.{ColumnInfoImpl, DbdErrorCode, SqlTypes, UpdateResultPayload}
+import fountain::f_log.LoggerFactory
 import fountain::fdbm.config.{BootScriptWriter, IdMakerConfig}
 import fountain::fdbm.exception.FdbmException
 import fountain::fdbm.idmaker.IdMakers
@@ -27,6 +28,8 @@ import fountain::fdbm.resources.NodeAccessor
 import fountain::fdbm.route.*
 import fountain::fdbm.sql.*
 import fountain::f_dbm.{IdGenerator, PartitionAlgorithm}
+
+private let execLogger = LoggerFactory.getLogger('fountain::fdbm.execute')
 
 /** 执行结果（设计 §9.2）：更新结果或游标二选一。 */
 protected class ExecutionOutcome {
@@ -96,6 +99,16 @@ func executeUpdate(connection: Connection, sql: String): UpdateResult {
     }
 }
 
+/** 异常文本：`message` 为空时退回 `toString()`（部分驱动的 SqlException 只带 code）。 */
+func detailOf(e: Exception): String {
+    let message = e.message
+    if (message.isEmpty()) {
+        e.toString()
+    } else {
+        message
+    }
+}
+
 /** 逗号拼接（错误信息用）。 */
 func joinNames(names: ArrayList<String>): String {
     let text = StringBuilder()
@@ -134,8 +147,9 @@ func broadcastWrite(resources: NodeAccessor, databases: Array<String>,
             succeeded.add(database)
         } catch (e: Exception) {
             failed.add(database)
+            execLogger.warn('global table write failed on ${database}: ${detailOf(e)}')
             if (firstError.isEmpty()) {
-                firstError = e.message
+                firstError = detailOf(e)
             }
         } finally {
             for (connection in connections) {
@@ -774,8 +788,9 @@ protected class DdlExecutor {
                 succeeded.add(database)
             } catch (e: Exception) {
                 failed.add(database)
+                execLogger.warn('ddl failed on ${database}: ${detailOf(e)}')
                 if (firstError.isEmpty()) {
-                    firstError = e.message
+                    firstError = detailOf(e)
                 }
             } finally {
                 if (owns) {
