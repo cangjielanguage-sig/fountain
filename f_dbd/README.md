@@ -38,6 +38,9 @@ main() {
 URL 形如 `fdbm://user:password@host:port/database`；端口缺省 `8112`，`database` 必填，凭据支持
 `%XX` 编码。`multidbm://user1:pwd1@h1:p1,user2:pwd2@h2:p2/database` 为多节点形态。
 
+驱动本身不解析 SQL：支持的 SQL 子集、方言（PostgreSQL / MySQL 家族）、`INSERT ... RETURNING`、
+`count(*)` 等能力都由 fdbm 决定，见 [fdbm README 的 SQL 能力](../fdbm/README.md#sql-能力)。
+
 ## 配置
 
 ```bash
@@ -49,6 +52,37 @@ export dbd_driverName=postgres
   配置成**后端物理库的方言名**（`postgres` / `mysql` / ...）。
 - 未配置或为空：驱动加载时记录 ERROR（说明正确做法）并结束进程。
 - 只影响应用侧注册名；SQL 方言的解析/改写仍只在 fdbm 内完成，URL scheme 仍是 `fdbm://`。
+
+## 连接选项
+
+`Driver.open` 的 `opts` 与 `Datasource.setOption` 支持 `std.database.sql` 的标准选项：
+
+| 选项 | 作用 |
+| --- | --- |
+| `username` / `password` | 覆盖 URL 中的凭据 |
+| `connectionTimeout` | 建立 TCP 后首个 PING 的往返超时（毫秒） |
+| `queryTimeout` / `updateTimeout` | 每次查询 / 更新请求的超时（毫秒） |
+| `fetchRows` | 流列分块大小；`0` 取默认块大小 |
+
+未识别的选项只记 DEBUG 并忽略；非法超时值记 WARN 并忽略。查询/更新超时未设置时使用驱动
+默认上限（6 小时）；`connectionTimeout` 未设置时不执行建链后的首个 PING。
+
+## 多节点驱动
+
+`fountain::f_dbd.multid` 提供 `MultiD`（注册名 `multidbd`），在客户端侧对多个 fdbm 节点做
+负载均衡：
+
+- URL 形如 `multidbm://user1:pwd1@h1:p1,user2:pwd2@h2:p2/database`，也接受 `multidbd://`；
+  各节点凭据支持 `%XX` 编码，`opts` 的 `username` / `password` 可统一覆盖。
+- `multidbm_loadbalance`：`random` / `roundrobin`，可带权重（如 `random,1,2,3`；首段为纯数字时
+  按权重列表处理、算法取 `random`）。
+- 每个节点一个 `f_dbpool.DatabasePool`，参数为 `multidbm_databasePool*`：
+  `InitSize` / `MinSize` / `MaxSize` / `CheckOnCreation` / `CheckOnBorrowing` / `CheckOnReturning` /
+  `IdleTimeout` / `ConnectionLife` / `CheckInterval` / `ConnectTimeout` / `MaxWaiting` / `CheckSql`。
+  时间项单位：`IdleTimeout` / `ConnectionLife` / `CheckInterval` 为秒，`ConnectTimeout` /
+  `MaxWaiting` 为毫秒；`MaxWaiting=0` 表示真无限等待。
+- `MultiD.preferredPooling = false`：数据源内部已按节点池化，上层不要再套一层。
+- 入口：单节点 `dbdDriver()`，多节点 `multiDDriver()`。
 
 ## 协议口径（与 fdbm 一一对应）
 
@@ -76,5 +110,8 @@ cjpm test
 ```
 
 协议/驱动层用进程内 `f_net.Server<DataAny>` 桩；结果集与流用桩发送器，不起网络。
+真库联调由 `fdbm/test/e2e` 驱动（PostgreSQL / MySQL 8.0），覆盖本驱动到 fdbm 再到物理库的
+完整链路：`bash fdbm/test/e2e/run.sh postgres|mysql`，环境与断言见
+[`fdbm/test/e2e/README.md`](../fdbm/test/e2e/README.md)。
 性能前置实验见 `src/common/dispatch_perf_test.cj`（`get<T>` 分派选型结论在
 `doc/详细设计.md` §10.1）。

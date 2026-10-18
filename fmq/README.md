@@ -3,13 +3,20 @@
 消息队列服务端（可执行文件）：`fmq server` 与 `fmq manager`。
 依赖 `f_mq`（共用 API）、`f_io`（分段日志）、`f_net` / `f_protocol`（节点间通讯）等。
 
-## 启动
+## 构建与启动
 
 ```bash
+cjpm build          # 产物：target/release/bin/main
+cjpm install        # 安装为 $HOME/.cjpm/bin/fmq
+
 export mqClient_hosts="127.0.0.1:2350,127.0.0.1:2351,127.0.0.1:2352"
 export mqServer_port=2350
 fmq server
 ```
+
+`mqClient_hosts` 既是客户端节点表，也是服务端的集群节点表。服务端按 `mqServer_port` 在表中
+匹配本机下标；端口不在表中或重复出现会在启动时报错退出。多节点部署还应给每台机器设置唯一的
+`protocol_hostId`，否则 `MessageID` 无法区分节点。
 
 配置项（均可用环境变量或命令行参数覆盖）：
 
@@ -26,7 +33,8 @@ fmq server
 | `mqServer_backup` | 0（不复制） |
 | `mqClient_hosts` | 必填，节点表 |
 
-`mqServer_backup = N` 时每条消息异步推送给环形后续的 N 个节点；副本只落盘，不参与投递。
+`mqServer_backup = N` 时每条消息异步推送给环形后续的 N 个节点（不含自身，最多 `节点数-1`）；
+副本只落盘，不参与投递。备份队列满或关闭阶段到达的写入会被丢弃并记 WARN，发布路径不阻塞。
 `fmq server --help` 打印全部配置项。
 
 ## 管理命令
@@ -44,15 +52,29 @@ fmq manager --server=127.0.0.1:2350 stats
 ```
 
 `--server` 可放在子命令前后；缺省读取 `mqServer_port` 并连接 `127.0.0.1:<port>`。
-连接失败打印「无法连接消息队列服务」并返回 1。
+连接失败打印「无法连接消息队列服务」并返回 1。`listTopics` 输出 topic、queueNum、delaying
+与队列到节点的分配；`listSubscribeGroups` 输出订阅组（空名显示为默认组）。
 
-## 指标与延迟
+## 消费语义
 
-`stats [topic]` 返回**当前节点**的指标：
+- 一个主题有 `queueNum` 个队列，注册时按节点轮转分配；每个队列是一份独立的段日志。
+- 订阅组按 `(topic, group)` 注册；每个 `(topic, queueIndex, group)` 维护一个组游标，
+  组内订阅共享该游标（未确认记录归属到具体订阅），服务端保证 **at-least-once**。
+- `ack` 推进对应队列的 `committed`；超过 `mqServer_ackTimeout` 未确认的消息会重投。
+- 投递次数超过 `mqServer_deadMsgThreshold` 的消息进入死信，不再投递；死信段按
+  `mqServer_deadMsgTTL` 保留。
+- `autoAck` 订阅在投递时自动推进游标，客户端无需 `ack`。
+- 延迟消息未到期时不投递、不推进游标，并阻塞该队列的后续消息（保持 FIFO）。
 
-- `backlog`：订阅组在该主题本地队列中 `committed` 之后的记录数（含已投递未确认）。
-- `lagMs`：backlog 中最早一条消息的发布时长（毫秒）。
-- `delivered` / `acked` / `redelivered` / `deadLettered`：进程启动以来的累计值。
+## 指标与延迟投递
+
+`stats [topic]` 返回**当前节点**的指标，输出列为
+`topic / group / queueNum / delaying / backlog / lagMs / delivered / acked / redelivered / deadLettered`：
+
+- `backlog`：订阅组在该主题本地队列中 `committed` 之后的记录数（含已投递未确认与未到期延迟消息）。
+- `lagMs`：backlog 中最早一条消息的发布时长（毫秒）；无积压时为 `0`。
+- `delivered` / `acked` / `redelivered` / `deadLettered`：进程启动以来的累计值，重启归零。
+- 主题没有订阅组时输出一行 `group` 为空的零值行；`stats` 不带 topic 时汇总本节点持有的主题。
 
 多节点部署时需分别查询各节点；manager 不自动聚合。`backlog` / `lagMs` 在查询时扫描，
 超大积压会有一定耗时。

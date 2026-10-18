@@ -56,7 +56,8 @@ class MyPartition <: PartitionAlgorithm & Initializer {
 1. fdbm 先把 `custom/` 下**全部**动态库 `PackageInfo.load`，再调用一次
    `InitializerCollection.initialize()`，因此各库 `static init` 的注册都能被看到；
 2. 用两轮模式匹配收集 `PartitionAlgorithm` 与 `IdGenerator`（同一实例可同时命中两者）；
-3. 自定义之间重名 → `CONFIG` / `PARTITION_CONFIG` 启动失败；与内置重名同样拒绝，不允许覆盖；
+3. 自定义之间重名 → `CONFIG` / `PARTITION_CONFIG` 启动失败；与内置同名时**自定义优先**
+   （算法/生成器工厂先查自定义，再查内置），因此可以用自定义实现覆盖内置实现；
 4. 任一库加载失败或任一 `initialize()` 抛异常 → `CONFIG` 启动失败；
 5. `custom/` 目录不存在表示没有扩展；目录里只应放扩展库（所有 `Initializer` 都会被执行）。
 

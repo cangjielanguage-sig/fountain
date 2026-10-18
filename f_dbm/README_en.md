@@ -67,7 +67,9 @@ rules (fdbm design §10.5):
 2. Two pattern-matching passes collect `PartitionAlgorithm` and `IdGenerator`
    (one instance may satisfy both).
 3. Duplicate names between custom extensions fail startup with `CONFIG` /
-   `PARTITION_CONFIG`; overriding a built-in name is rejected as well.
+   `PARTITION_CONFIG`. A custom name that matches a built-in takes precedence: the
+   algorithm/generator factories look up custom implementations first, so a custom
+   extension can override a built-in one.
 4. Any load failure or any `initialize()` exception fails startup with `CONFIG`.
 5. A missing `custom/` directory means no extensions. Only extension libraries should
    be placed there (every registered `Initializer` is executed).
