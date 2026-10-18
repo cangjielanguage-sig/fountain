@@ -17,6 +17,7 @@ package fountain::f_mq.client
 
 import std.sync.{Mutex, AtomicBool}
 import fountain::f_data.DataAny
+import fountain::f_mq.base.MQHost
 import fountain::f_mq.exception.MQConnectionException
 import fountain::f_net.client.Client
 import fountain::f_protocol.default.Message
@@ -37,7 +38,7 @@ internal class MQNodePool {
             throw MQConnectionException("node list is empty")
         }
         for (entry in hosts) {
-            if (MQClientConfig.parseHost(entry).isNone()) {
+            if (MQHost.parseHost(entry).isNone()) {
                 throw MQConnectionException("invalid node '${entry}', expect host:port")
             }
         }
@@ -88,7 +89,7 @@ internal class MQNodePool {
     }
 
     private static func buildClient(entry: String): Client<DataAny> {
-        let (host, port) = MQClientConfig.parseHost(entry).getOrThrow {
+        let (host, port) = MQHost.parseHost(entry).getOrThrow {
             MQConnectionException("invalid node '${entry}', expect host:port")
         }
         Client<DataAny>.builder(

@@ -15,9 +15,8 @@ limitations under the License.
 */
 package fountain::f_mq.client
 
-import std.convert.*
 import fountain::f_config.Config
-import fountain::f_mq.base.MQConfigKey
+import fountain::f_mq.base.{MQConfigKey, MQHost}
 import fountain::f_mq.exception.MQConnectionException
 
 /**
@@ -35,38 +34,12 @@ public struct MQClientConfig {
                 throw MQConnectionException("configuration '${MQConfigKey.CLIENT_HOSTS}' is required")
             }
             for (entry in entries) {
-                if (parseHost(entry).isNone()) {
+                if (MQHost.parseHost(entry).isNone()) {
                     throw MQConnectionException(
                         "invalid node '${entry}' in '${MQConfigKey.CLIENT_HOSTS}', expect host:port")
                 }
             }
             entries
-        }
-    }
-
-    /** 解析 `host:port`；缺少端口、端口为 0 或越界、主机/端口为空都返回 `None`。 */
-    public static func parseHost(entry: String): ?(String, UInt16) {
-        let text = entry.trimAscii()
-        if (text.isEmpty()) {
-            return None<(String, UInt16)>
-        }
-        let parts = text.split(":")
-        if (parts.size != 2) {
-            return None<(String, UInt16)>
-        }
-        let host = parts[0].trimAscii()
-        let portText = parts[1].trimAscii()
-        if (host.isEmpty() || portText.isEmpty()) {
-            return None<(String, UInt16)>
-        }
-        match (UInt16.tryParse(portText)) {
-            case None => None<(String, UInt16)>
-            case Some(port) =>
-                if (port == 0) {
-                    None<(String, UInt16)>
-                } else {
-                    Some((host, port))
-                }
         }
     }
 }

@@ -117,7 +117,13 @@ protected class MetaSyncer {
     }
 
     protected func applyRemote(assignment: MQTopicAssignment): MetaApplyResult {
-        store.applyTopic(assignment)
+        let nodeCount = transport.nodeCount
+        let nextStart = if (nodeCount < 1) {
+            assignment.startNodeIndex
+        } else {
+            MQAssignment.nextStart(assignment.startNodeIndex, assignment.queueNum, nodeCount)
+        }
+        store.applyTopic(assignment, nextStart: nextStart)
     }
 
     protected func applyRemoteGroup(meta: MQSubscribeGroupMeta): MetaApplyResult {

@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_mq.base
 
+import std.collection.{HashMap, TreeSet}
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_data.*
@@ -76,6 +77,26 @@ class MQFilterTest {
         // 选中 null → 假
         let body = TestFilterBody(true, 1, 3, 1)
         @Assert(!MQFilter.compile("$.nothing").matches(body.toData()))
+    }
+
+    @TestCase
+    public func containerBodiesSupportPathEvaluation(): Unit {
+        // HashMap：按字段取值
+        let map = HashMap<String, Int64>()
+        map.add("age", 40)
+        @Assert(MQFilter.compile("$.age").matches(map.toData()))
+        @Assert(!MQFilter.compile("$.missing").matches(map.toData()))
+
+        // Array：按下标取值
+        let array: Array<Int64> = [10, 20, 30]
+        @Assert(MQFilter.compile("$[0]").matches(array.toData()))
+        // 越界 → 无元素 → 假
+        @Assert(!MQFilter.compile("$[9]").matches(array.toData()))
+
+        // TreeSet：集合本身存在即真
+        let set = TreeSet<Int64>()
+        set.add(1)
+        @Assert(MQFilter.compile("$").matches(set.toData()))
     }
 
     @TestCase

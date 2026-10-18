@@ -19,7 +19,7 @@ import std.collection.ArrayList
 import std.sync.{AtomicBool, Mutex}
 import fountain::f_data.DataAny
 import fountain::f_log.*
-import fountain::f_mq.client.MQClientConfig
+import fountain::f_mq.base.MQHost
 import fountain::f_net.client.Client
 import fountain::f_protocol.default.Message
 
@@ -47,7 +47,7 @@ protected class NodeRegistry <: MQNodeTransport & Resource {
             throw IllegalArgumentException("selfIndex ${selfIndex} out of range [0, ${nodes.size})")
         }
         for (entry in nodes) {
-            if (MQClientConfig.parseHost(entry).isNone()) {
+            if (MQHost.parseHost(entry).isNone()) {
                 throw IllegalArgumentException("invalid node '${entry}', expect host:port")
             }
         }
@@ -87,7 +87,7 @@ protected class NodeRegistry <: MQNodeTransport & Resource {
         if (index < 0 || index >= nodes.size) {
             None<(String, UInt16)>
         } else {
-            MQClientConfig.parseHost(nodes[index])
+            MQHost.parseHost(nodes[index])
         }
     }
 
@@ -107,7 +107,7 @@ protected class NodeRegistry <: MQNodeTransport & Resource {
                     }
                     client
                 case None =>
-                    let (host, port) = MQClientConfig.parseHost(nodes[index]).getOrThrow {
+                    let (host, port) = MQHost.parseHost(nodes[index]).getOrThrow {
                         IllegalArgumentException("invalid node '${nodes[index]}'")
                     }
                     let client = Client<DataAny>.builder(

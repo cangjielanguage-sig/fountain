@@ -41,26 +41,4 @@ class MQClientConfigTest {
         }
         @Assert(message.contains(MQConfigKey.CLIENT_HOSTS))
     }
-
-    @TestCase
-    public func parseHostAcceptsValidEntry(): Unit {
-        let parsed = MQClientConfig.parseHost("127.0.0.1:2350").getOrThrow()
-        @Assert(parsed[0] == "127.0.0.1")
-        @Assert(parsed[1] == 2350)
-        // 前后空格被去掉
-        let trimmed = MQClientConfig.parseHost("  localhost:8080  ").getOrThrow()
-        @Assert(trimmed[0] == "localhost")
-        @Assert(trimmed[1] == 8080)
-    }
-
-    @TestCase
-    public func parseHostRejectsInvalidEntry(): Unit {
-        @Assert(MQClientConfig.parseHost("").isNone())
-        @Assert(MQClientConfig.parseHost("localhost").isNone())
-        @Assert(MQClientConfig.parseHost(":2350").isNone())
-        @Assert(MQClientConfig.parseHost("localhost:").isNone())
-        @Assert(MQClientConfig.parseHost("localhost:0").isNone())
-        @Assert(MQClientConfig.parseHost("localhost:70000").isNone())
-        @Assert(MQClientConfig.parseHost("a:b:c").isNone())
-    }
 }

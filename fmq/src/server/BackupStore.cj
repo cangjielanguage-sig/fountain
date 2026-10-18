@@ -16,7 +16,8 @@ limitations under the License.
 package fountain::fmq.server
 
 import std.collection.concurrent.ConcurrentHashMap
-import std.sync.Mutex
+import std.sync.{AtomicBool, Mutex}
+import fountain::f_io.LogClosedException
 import fountain::fmq.meta.MQFileNames
 import fountain::fmq.queue.{QueueLog}
 
@@ -32,6 +33,7 @@ protected class BackupStore <: Resource {
     private let logs = ConcurrentHashMap<String, QueueLog>()
     /** 保护 `logs` 的 get-or-create：并发的首批备份不得为同一目录创建两个 `QueueLog`。 */
     private let lock = Mutex()
+    private let closed = AtomicBool(false)
 
     protected init(logRoot: String, maxFileSize: Int64, syncInterval: Int64) {
         this.root = "${logRoot}/backup"
@@ -40,19 +42,35 @@ protected class BackupStore <: Resource {
     }
 
     protected func append(ownerIndex: Int64, topic: String, queueIndex: Int64, record: Array<Byte>): Unit {
+        if (closed.load()) {
+            return
+        }
         let key = "${ownerIndex}\u{0}${topic}\u{0}${queueIndex}"
-        let log = synchronized(lock) {
-            match (logs.get(key)) {
-                case Some(existing) => existing
-                case None =>
-                    let dir = "${root}/${ownerIndex}/${MQFileNames.escape(topic)}/${queueIndex}"
-                    let created = QueueLog(dir, maxFileSize, syncInterval)
-                    logs.add(key, created)
-                    created
+        let maybeLog: ?QueueLog = synchronized(lock) {
+            // 关闭可能发生在第一次检查之后、拿到锁之前
+            if (closed.load()) {
+                None<QueueLog>
+            } else {
+                match (logs.get(key)) {
+                    case Some(existing) => Some(existing)
+                    case None =>
+                        let dir = "${root}/${ownerIndex}/${MQFileNames.escape(topic)}/${queueIndex}"
+                        let created = QueueLog(dir, maxFileSize, syncInterval)
+                        logs.add(key, created)
+                        Some(created)
+                }
             }
         }
-        // 写入由 QueueLog 自身的追加锁串行，放在锁外避免阻塞 get-or-create
-        log.append(record)
+        match (maybeLog) {
+            case None => ()
+            case Some(log) =>
+                // 写入由 QueueLog 自身的追加锁串行，放在锁外避免阻塞 get-or-create
+                try {
+                    log.append(record)
+                } catch (_: LogClosedException) {
+                    // 关闭与写入并发：关闭方已接管，安全丢弃本条
+                }
+        }
     }
 
     /** 当前实例数（并发用例据此断言只创建了一个 `QueueLog`）。 */
@@ -65,10 +83,13 @@ protected class BackupStore <: Resource {
     }
 
     public func isClosed(): Bool {
-        false
+        closed.load()
     }
 
     public func close(): Unit {
+        if (!closed.compareAndSwap(false, true)) {
+            return
+        }
         synchronized(lock) {
             for ((key, log) in logs) {
                 log.close()

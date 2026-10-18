@@ -165,10 +165,25 @@ class MetaSyncerTest {
             @Assert(syncer.applyRemote(assignment) == MetaApplyResult.Duplicated)
             @Assert(syncer.applyRemote(MQTopicAssignment("/t", 3, 0, [0, 1, 2])) == MetaApplyResult.Conflict)
             @Assert(store.topicOf("/t").getOrThrow().queueNum == 2)
-            // 远端变更不推进本地轮转指针
-            @Assert(store.nextStartNode == 0)
+            // 远端变更同步推进本地轮转指针：(0 + 2) % 3 = 2
+            @Assert(store.nextStartNode == 2)
         } finally {
             shutdown(store, "remote")
+        }
+    }
+
+    @TestCase
+    public func remoteApplyAdvancesRoundRobinPointer(): Unit {
+        let (store, _, syncer) = fixture("remote_pointer")
+        try {
+            // 4 队列、start = 0、3 节点 → 下一 start = 1
+            @Assert(syncer.applyRemote(MQTopicAssignment("/a", 4, 0, [0, 1, 2, 0])) == MetaApplyResult.Applied)
+            @Assert(store.nextStartNode == 1)
+            // 本地后续注册的新主题必须沿用推进后的起点
+            let next = syncer.registerTopic(MQTopicMeta("/b", 2))
+            @Assert(next.owners == [1, 2])
+        } finally {
+            shutdown(store, "remote_pointer")
         }
     }
 

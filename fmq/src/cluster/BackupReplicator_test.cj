@@ -106,4 +106,25 @@ class BackupReplicatorTest {
         replicator.close()
         @Assert(transport.messagesSentTo(1).size == 1)
     }
+
+    @TestCase
+    public func timerFlushesBeforeBatchIsFull(): Unit {
+        let transport = FakeTransport(2, 0)
+        let replicator = BackupReplicator(transport, 1)
+        replicator.start()
+        try {
+            replicator.record("/t", 0, LogPosition(1, 0), [1u8])
+            // 只等定时器（100ms），不手动 flush；超时 3s 轮询
+            var waited = 0
+            while (transport.sentCount() == 0 && waited < 300) {
+                sleep(Duration.millisecond * 10)
+                waited++
+            }
+            @Assert(transport.sentCount() == 1)
+            let payload = payloadOf(transport.messagesSentTo(1)[0])
+            @Assert(payload.records.size == 1)
+        } finally {
+            replicator.close()
+        }
+    }
 }

@@ -17,7 +17,7 @@ package fountain::f_mq.base
 
 import std.unittest.*
 import std.unittest.testmacro.*
-import std.collection.{ArrayList, HashSet, TreeMap}
+import std.collection.{ArrayList, HashMap, HashSet, TreeMap, TreeSet}
 import std.fs.*
 import std.math.numeric.Decimal
 import std.time.DateTime
@@ -100,6 +100,44 @@ class MQMessageRecordTest {
         map.add("k", 1)
         let mapRecord = encode("/t", [], "m", map.toData())
         @Assert(convert<TreeMap<String, Int64>>(MQMessageRecord.body(mapRecord).getOrThrow().data) == Some(map))
+    }
+
+    @TestCase
+    public func containerBodiesRoundtrip(): Unit {
+        // TreeSet
+        let treeSet = TreeSet<Int64>()
+        treeSet.add(2)
+        treeSet.add(1)
+        treeSet.add(3)
+        let setRecord = encode("/t", [], "m", treeSet.toData())
+        @Assert(convert<TreeSet<Int64>>(MQMessageRecord.body(setRecord).getOrThrow().data) == Some(treeSet))
+
+        // HashMap
+        let hashMap = HashMap<String, Int64>()
+        hashMap.add("age", 40)
+        hashMap.add("count", 3)
+        let hashRecord = encode("/t", [], "m", hashMap.toData())
+        @Assert(convert<HashMap<String, Int64>>(MQMessageRecord.body(hashRecord).getOrThrow().data) == Some(hashMap))
+
+        // Array<Int64>（非字符串元素）
+        let intArray: Array<Int64> = [10, 20, 30]
+        let intArrayRecord = encode("/t", [], "m", intArray.toData())
+        @Assert(convert<Array<Int64>>(MQMessageRecord.body(intArrayRecord).getOrThrow().data) == Some(intArray))
+    }
+
+    @TestCase
+    public func emptyContainerBodiesRoundtrip(): Unit {
+        let emptySet = TreeSet<Int64>()
+        let setRecord = encode("/t", [], "m", emptySet.toData())
+        @Assert(convert<TreeSet<Int64>>(MQMessageRecord.body(setRecord).getOrThrow().data).getOrThrow().isEmpty())
+
+        let emptyMap = HashMap<String, Int64>()
+        let mapRecord = encode("/t", [], "m", emptyMap.toData())
+        @Assert(convert<HashMap<String, Int64>>(MQMessageRecord.body(mapRecord).getOrThrow().data).getOrThrow().isEmpty())
+
+        let emptyArray = Array<Int64>()
+        let arrayRecord = encode("/t", [], "m", emptyArray.toData())
+        @Assert(convert<Array<Int64>>(MQMessageRecord.body(arrayRecord).getOrThrow().data).getOrThrow().size == 0)
     }
 
     @TestCase
