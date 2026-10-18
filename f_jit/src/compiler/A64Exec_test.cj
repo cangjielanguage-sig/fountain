@@ -182,6 +182,33 @@ public class A64Exec_test {
         @Assert(r, 120)
     }
 
+    /** S5.14：每个函数入口与间接调用着陆点都以 `bti c` 开始（IBT/BTI）。 */
+    @TestCase
+    public func allFunctionEntriesStartWithBtiC(): Unit {
+        let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(
+            '{ => let f = { x: Int64 => x + 1 }\n f(41) }')
+        let unit = FbcReader.load(cu.raw)
+        let art = match (JitCompiler.compileUnitWith(unit, 0, 0)) {
+            case Some(a) => a
+            case None => @Fail('compileUnitWith 返回 None'); return
+        }
+        @Assert(unit.dir.size >= 2, true)
+        var i = 0
+        while (i < unit.dir.size) {
+            let code = match (art.codeOf(unit.dir.at(i).fnId)) {
+                case Some(c) => c
+                case None => @Fail('codeOf 返回 None'); return
+            }
+            @Assert(code.size >= 4, true)
+            // bti c = 0xD503245F，小端 5F 24 03 D5
+            @Assert(code[0], 0x5Fu8)
+            @Assert(code[1], 0x24u8)
+            @Assert(code[2], 0x03u8)
+            @Assert(code[3], 0xD5u8)
+            i = i + 1
+        }
+    }
+
     /** 编译整单元 → 单块 CodeBuffer → fnTable/常量镜像回填 → 调用入口。 */
     private static func run2(src: String, args: Array<Int64>): (Int64, Int64) {
         let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(src)
