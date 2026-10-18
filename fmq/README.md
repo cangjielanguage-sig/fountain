@@ -67,6 +67,8 @@ fmq manager --server=127.0.0.1:2350 deleteTopic /order
   且不落盘；空 filter 不需要服务端解码 BODY。
 - ACK 按 `(topic, queueIndex, group)` 精确定位游标；队列身份缺失或不属于本机时返回 `ACK_UNKNOWN`。
 - 游标指向的段被 TTL 清理后，自动跳到现存最老段并落盘；全部段不可读时返回空，不永久报错。
+- 备份副本在关闭阶段允许丢弃：`BackupStore` 关闭后到达的写入静默丢弃，不阻塞发布路径；
+  关闭前已成功返回的写入会落盘。
 
 ## 测试与端到端
 

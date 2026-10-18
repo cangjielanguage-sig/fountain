@@ -70,6 +70,8 @@ Topic names use percent-encoding (only `[A-Za-z0-9._-]`, empty → `%00`); metad
   `ACK_UNKNOWN`.
 - If a cursor's segment was removed by TTL cleanup, it jumps to the oldest surviving segment and
   persists the new position; when no segment is readable it returns empty instead of failing forever.
+- Backup writes may be dropped during shutdown: writes arriving after `BackupStore` closes are
+  silently discarded so the publish path never blocks; writes acknowledged before close are persisted.
 
 ## Tests
 
