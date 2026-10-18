@@ -481,6 +481,15 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
+    /** Map 迭代 helper 路由。 */
+    internal static func emitMapIterBegin(h49: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h49, 1)
+    }
+
+    internal static func emitMapIterStep(h62: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h62, 2)
+    }
+
     /** 容器变更 helper 路由。 */
     internal static func emitMapPut(h44: Int64): Array<UInt8> {
         BackendX86_64.emitCallHelper(h44, 3)
