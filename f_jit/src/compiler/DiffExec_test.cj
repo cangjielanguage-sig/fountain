@@ -90,6 +90,43 @@ public class GoldenDiff_test {
             '{ => let m: Map<String, Int64> = {}\n m["k"] = 1\n m["k"] }', Array<Any>())
     }
 
+    @TestCase
+    public func errorDivisionByZero(): Unit {
+        GoldenDiff_test.check('E/div0', '{ a: Int64 => a / (a - a) }', [1])
+    }
+
+    @TestCase
+    public func errorListIndexOutOfBounds(): Unit {
+        GoldenDiff_test.check('E/list-oob', '{ => let l = [1, 2]\n l[5] }', Array<Any>())
+    }
+
+    /** T6：三引擎一致 + 期望错误码逐条断言。 */
+    @TestCase
+    public func errorModZero(): Unit {
+        GoldenDiff_test.checkCode('E/mod0', '{ a: Int64 => a % (a - a) }', [1], 2)
+    }
+
+    @TestCase
+    public func errorI64Overflow(): Unit {
+        GoldenDiff_test.checkCode('E/overflow', '{ a: Int64 => a * a }', [3037000500], 3)
+    }
+
+    @TestCase
+    public func errorMapKeyMissing(): Unit {
+        GoldenDiff_test.checkCode('E/key-missing',
+            '{ => let m: Map<String, Int64> = {}\n m["k"] }', Array<Any>(), 5)
+    }
+
+
+    private static func checkCode(id: String, src: String, args: Array<Any>,
+        expect: Int64): Unit {
+        let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(src)
+        let session = DiffSession([InterpRunner(), AArch64Runner()])
+        session.assertTripleEqual(DiffCase(id, cu.raw, args))
+        let base = InterpRunner().run(DiffCase(id, cu.raw, args))
+        @Assert(base.errCode, expect)
+    }
+
     private static func check(id: String, src: String, args: Array<Any>): Unit {
         let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(src)
         let session = DiffSession([InterpRunner(), AArch64Runner()])
