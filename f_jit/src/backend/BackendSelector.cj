@@ -291,6 +291,48 @@ internal class BackendX86_64 <: Backend {
         BackendX86_64.cmpOp([0x0Fu8, 0x9Cu8, 0xC0u8])
     }
 
+    /** 浮点比较：`ucomisd` + `setnp` + `setcc` + and（NaN 全 false）。 */
+    private static func fCmpOp(setcc: Array<UInt8>): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (x in [0xF2u8, 0x0Fu8, 0x10u8, 0x44u8, 0x24u8, 0x08u8,
+            0xF2u8, 0x0Fu8, 0x10u8, 0x0Cu8, 0x24u8, 0x66u8, 0x0Fu8, 0x2Eu8, 0xC1u8,
+            0x0Fu8, 0x9Bu8, 0xC0u8]) {
+            out.add(x) // movsd xmm0,[rsp+8]; movsd xmm1,[rsp]; ucomisd; setnp al
+        }
+        for (x in setcc) {
+            out.add(x)
+        }
+        for (x in [0x20u8, 0xD0u8, 0x0Fu8, 0xB6u8, 0xC0u8, 0x48u8, 0x89u8, 0x44u8, 0x24u8,
+            0x08u8, 0x48u8, 0x83u8, 0xC4u8, 0x08u8]) {
+            out.add(x) // and al,dl; movzx; 回写；收栈
+        }
+        out.toArray()
+    }
+
+    internal static func emitCmpEqF(): Array<UInt8> {
+        BackendX86_64.fCmpOp([0x0Fu8, 0x94u8, 0xC2u8])
+    }
+
+    internal static func emitCmpNeF(): Array<UInt8> {
+        BackendX86_64.fCmpOp([0x0Fu8, 0x95u8, 0xC2u8])
+    }
+
+    internal static func emitCmpLtF(): Array<UInt8> {
+        BackendX86_64.fCmpOp([0x0Fu8, 0x92u8, 0xC2u8])
+    }
+
+    internal static func emitCmpLeF(): Array<UInt8> {
+        BackendX86_64.fCmpOp([0x0Fu8, 0x96u8, 0xC2u8])
+    }
+
+    internal static func emitCmpGtF(): Array<UInt8> {
+        BackendX86_64.fCmpOp([0x0Fu8, 0x97u8, 0xC2u8])
+    }
+
+    internal static func emitCmpGeF(): Array<UInt8> {
+        BackendX86_64.fCmpOp([0x0Fu8, 0x93u8, 0xC2u8])
+    }
+
     private static func fBinOp(opBytes: Array<UInt8>): Array<UInt8> {
         let out = ArrayList<UInt8>()
         for (x in [0xF2u8, 0x0Fu8, 0x10u8, 0x44u8, 0x24u8, 0x08u8,

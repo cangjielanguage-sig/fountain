@@ -158,6 +158,18 @@ public class X86Lower_test {
         @Assert(X86Lower_test.hex(BackendX86_64.emitFDiv()), head + 'F20F5EC1' + tail)
     }
 
+    @TestCase
+    public func floatCompareFamily(): Unit {
+        let head = 'F20F10442408' + 'F20F100C24' + '660F2EC1' + '0F9BC0'
+        let tail = '20D0' + '0FB6C0' + '4889442408' + '4883C408'
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpEqF()), head + '0F94C2' + tail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpLtF()), head + '0F92C2' + tail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpGtF()), head + '0F97C2' + tail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpLeF()), head + '0F96C2' + tail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpGeF()), head + '0F93C2' + tail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpNeF()), head + '0F95C2' + tail)
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {
