@@ -294,6 +294,13 @@ public class X86Lower_test {
             '4889E8' + '482D40000000' + '4829E0' + '483D80000000' + '0F8200000000')
     }
 
+    @TestCase
+    public func assertOp(): Unit {
+        @Assert(X86Lower_test.hex(BackendX86_64.emitAssert(7)),
+            '488B0424' + '4883C408' + '4885C0' + '0F8500000000' +
+            '41C70707000000' + '31C0' + 'E900000000')
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {

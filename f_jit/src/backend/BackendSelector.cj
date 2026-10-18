@@ -455,6 +455,23 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
+    /** `ASSERT code`：弹 bool；false → 内联 BAIL(code)（rel 占位）。 */
+    internal static func emitAssert(code: Int64): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (x in [0x48u8, 0x8Bu8, 0x04u8, 0x24u8, 0x48u8, 0x83u8, 0xC4u8, 0x08u8,
+            0x48u8, 0x85u8, 0xC0u8, 0x0Fu8, 0x85u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+            out.add(x) // pop; test; jnz ok（跳过 bail）
+        }
+        for (x in [0x41u8, 0xC7u8, 0x07u8]) {
+            out.add(x)
+        }
+        BackendX86_64.w32(out, BackendX86_64.i32bits(code))
+        for (x in [0x31u8, 0xC0u8, 0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+            out.add(x)
+        }
+        out.toArray()
+    }
+
     /** `STACK_GUARD need`：剩余栈 = (rbp-FRAME)-rsp；不足 → jb deopt（rel 占位）。 */
     internal static func emitStackGuard(frame: Int64, need: Int64): Array<UInt8> {
         let out = ArrayList<UInt8>()
