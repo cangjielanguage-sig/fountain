@@ -1,0 +1,527 @@
+/*
+Copyright (c) 2026 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package fountain::f_mq.client.test
+
+import std.collection.ArrayList
+import std.collection.concurrent.ConcurrentHashMap
+import std.sync.AtomicInt64
+import std.unittest.*
+import std.unittest.testmacro.*
+import fountain::f_data.*
+import fountain::f_mq.base.*
+import fountain::f_mq.base.model.*
+import fountain::f_mq.base.payload.*
+import fountain::f_mq.client.MQClient
+import fountain::f_mq.exception.*
+import fountain::f_net.SocketBuffer
+import fountain::f_protocol.default.*
+import fountain::f_util.UUID
+
+@Test
+class MQClientTest {
+    private static func ok(buffer: SocketBuffer, request: Message): ?Message {
+        Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+    }
+
+    private static func okBut(buffer: SocketBuffer, request: Message, code: Int64): ?Message {
+        Some(MQProtocol.fail(request, code, MQErrorCode.messageOf(code)))
+    }
+
+    private static func countOf(stub: MQStubServer, command: String): Int64 {
+        var count = 0i64
+        for (message in stub.received()) {
+            let matched = match (message.command) {
+                case PUBLISH(_) => command == "PUBLISH"
+                case SUBSCRIBE => command == "SUBSCRIBE"
+                case UNSUBSCRIBE => command == "UNSUBSCRIBE"
+                case CONSUME(_) => command == "CONSUME"
+                case ACK => command == "ACK"
+                case DEREGISTER => command == "DEREGISTER"
+                case REGISTER => command == "REGISTER"
+                case _ => false
+            }
+            if (matched) {
+                count++
+            }
+        }
+        count
+    }
+
+    private static func stubMessage(topic: String, index: Int64, offset: Int64): MQConsumeResult {
+        let record = MQMessageRecord.encode(topic, ["a"], "m-${index}-${offset}", "body-${index}".toData())
+        MQConsumeResult(index, offset, record)
+    }
+
+    @TestCase
+    public func publishSendsRecordAndAlignsMessageId(): Unit {
+        let stub = MQStubServer(ok).start()
+        try {
+            let client = MQClient([stub.address()])
+            client.publish("/order", "hello", tags: ["x", "y"])
+            let requests = stub.received()
+            @Assert(requests.size == 1)
+            let request = requests[0]
+            match (request.command) {
+                case PUBLISH(_) => @Assert(true)
+                case _ => @Assert(false)
+            }
+            let record = MQProtocol.asRecord(request).getOrThrow()
+            let content = MQMessageRecord.decode(record).getOrThrow()
+            @Assert(content.topic == "/order")
+            @Assert(content.tags == ["x", "y"])
+            @Assert(convert<String>(content.body.data) == Some("hello"))
+            // 帧 id 与记录内的 MESSAGE_ID 一致
+            @Assert(content.messageId == request.id.toString())
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+
+    @TestCase
+    public func publishFallsBackFromNotOwnerAndCachesOwner(): Unit {
+        let stub0 = MQStubServer({buffer, request => okBut(buffer, request, MQErrorCode.NOT_OWNER)}).start()
+        let stub1 = MQStubServer(ok).start()
+        try {
+            let client = MQClient([stub0.address(), stub1.address()])
+            client.publish("/order", 1i64)
+            @Assert(countOf(stub0, "PUBLISH") == 1)
+            @Assert(countOf(stub1, "PUBLISH") == 1)
+            // 缓存被修正为实际 owner：第二次直接命中节点 1
+            client.publish("/order", 2i64)
+            @Assert(countOf(stub0, "PUBLISH") == 1)
+            @Assert(countOf(stub1, "PUBLISH") == 2)
+            client.close()
+        } finally {
+            stub0.close()
+            stub1.close()
+        }
+    }
+
+    @TestCase
+    public func publishTopicNotExistThrowsServiceException(): Unit {
+        let stub = MQStubServer({buffer, request => okBut(buffer, request,
+            MQErrorCode.TOPIC_NOT_EXIST)}).start()
+        try {
+            let client = MQClient([stub.address()])
+            var code = -1i64
+            try {
+                client.publish("/missing", 1i64)
+            } catch (e: MQServiceException) {
+                code = e.code
+            }
+            @Assert(code == MQErrorCode.TOPIC_NOT_EXIST)
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+
+    @TestCase
+    public func invalidTopicFailsLocally(): Unit {
+        let stub = MQStubServer(ok).start()
+        try {
+            let client = MQClient([stub.address()])
+            var threw = false
+            try {
+                client.publish("order", 1i64)
+            } catch (_: MQException) {
+                threw = true
+            }
+            @Assert(threw)
+            @Assert(stub.receivedCount() == 0)
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+
+    @TestCase
+    public func allNodesUnreachableThrowsConnectionException(): Unit {
+        let client = MQClient(["127.0.0.1:1"])
+        var threw = false
+        try {
+            client.publish("/t", 1i64)
+        } catch (_: MQConnectionException) {
+            threw = true
+        }
+        @Assert(threw)
+        client.close()
+    }
+
+    @TestCase
+    public func subscribeBroadcastsSamePayload(): Unit {
+        let stub0 = MQStubServer(ok).start()
+        let stub1 = MQStubServer(ok).start()
+        try {
+            let client = MQClient([stub0.address(), stub1.address()])
+            let sid = client.subscribe("/order", subscribeGroup: "g1", tags: ["a"], filter: "$.enabled",
+                autoAck: true)
+            @Assert(UUID.tryParse(sid).isSome())
+
+            let payloads = ArrayList<MQSubscribePayload>()
+            for (stub in [stub0, stub1]) {
+                for (message in stub.received()) {
+                    if (message.command == SUBSCRIBE) {
+                        payloads.add(MQProtocol.asPayload<MQSubscribePayload>(message).getOrThrow())
+                    }
+                }
+            }
+            @Assert(payloads.size == 2)
+            for (payload in payloads) {
+                @Assert(payload.subscribedId == sid)
+                @Assert(payload.topic == "/order")
+                @Assert(payload.subscribeGroup == "g1")
+                @Assert(payload.tags == ["a"])
+                @Assert(payload.filter == "$.enabled")
+                @Assert(payload.autoAck)
+            }
+            client.close()
+        } finally {
+            stub0.close()
+            stub1.close()
+        }
+    }
+
+    @TestCase
+    public func subscribeRollsBackOnGroupNotExist(): Unit {
+        let stub0 = MQStubServer(ok).start()
+        let stub1 = MQStubServer({buffer, request => okBut(buffer, request,
+            MQErrorCode.GROUP_NOT_EXIST)}).start()
+        try {
+            let client = MQClient([stub0.address(), stub1.address()])
+            var code = -1i64
+            try {
+                client.subscribe("/order", subscribeGroup: "missing")
+            } catch (e: MQServiceException) {
+                code = e.code
+            }
+            @Assert(code == MQErrorCode.GROUP_NOT_EXIST)
+            // 已接受的节点收到回滚
+            @Assert(countOf(stub0, "UNSUBSCRIBE") == 1)
+            client.close()
+        } finally {
+            stub0.close()
+            stub1.close()
+        }
+    }
+
+    @TestCase
+    public func subscribeDefaultGroupAndInvalidFilter(): Unit {
+        let stub = MQStubServer(ok).start()
+        try {
+            let client = MQClient([stub.address()])
+            client.subscribe("/order")
+            let payload = MQProtocol.asPayload<MQSubscribePayload>(stub.received()[0]).getOrThrow()
+            @Assert(payload.subscribeGroup.isEmpty())
+            @Assert(!payload.autoAck)
+
+            // 非法过滤器本地失败，不发请求
+            let before = stub.receivedCount()
+            var threw = false
+            try {
+                client.subscribe("/order", filter: "order")
+            } catch (_: Exception) {
+                threw = true
+            }
+            @Assert(threw)
+            @Assert(stub.receivedCount() == before)
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+
+    @TestCase
+    public func consumeDecodesMessageAndFillsPosition(): Unit {
+        let stub = MQStubServer({buffer, request =>
+            match (request.command) {
+                case CONSUME(_) => Some(MQProtocol.respond<MQConsumeResult>(request, stubMessage("/order", 7, 128)))
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let client = MQClient([stub.address()])
+            let sid = client.subscribe("/order")
+            let message = client.consume(sid)
+            @Assert(message.topic == "/order")
+            @Assert(message.tags == ["a"])
+            @Assert(message.segmentedIndex == 7)
+            @Assert(message.segmentedOffset == 128)
+            @Assert(message.get<String>() == Some("body-7"))
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+
+    @TestCase
+    public func consumeEmptyMovesToNextOwner(): Unit {
+        let stub0 = MQStubServer({buffer, request =>
+            match (request.command) {
+                case CONSUME(_) => Some(MQProtocol.respond<MQConsumeResult>(request, MQConsumeResult()))
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        let stub1 = MQStubServer({buffer, request =>
+            match (request.command) {
+                case CONSUME(_) => Some(MQProtocol.respond<MQConsumeResult>(request, stubMessage("/order", 1, 0)))
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let client = MQClient([stub0.address(), stub1.address()])
+            let sid = client.subscribe("/order")
+            let message = client.consume(sid)
+            @Assert(message.segmentedIndex == 1)
+            // 同一轮里 node0 只被请求一次
+            @Assert(countOf(stub0, "CONSUME") == 1)
+            @Assert(countOf(stub1, "CONSUME") == 1)
+            client.close()
+        } finally {
+            stub0.close()
+            stub1.close()
+        }
+    }
+
+    @TestCase
+    public func consumeWaitsUntilMessageArrives(): Unit {
+        let calls = AtomicInt64(0)
+        let stub = MQStubServer({buffer, request =>
+            match (request.command) {
+                case CONSUME(_) =>
+                    if (calls.fetchAdd(1) < 2) {
+                        Some(MQProtocol.respond<MQConsumeResult>(request, MQConsumeResult()))
+                    } else {
+                        Some(MQProtocol.respond<MQConsumeResult>(request, stubMessage("/order", 3, 0)))
+                    }
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let client = MQClient([stub.address()])
+            let sid = client.subscribe("/order")
+            let message = client.consume(sid)
+            @Assert(message.segmentedIndex == 3)
+            @Assert(countOf(stub, "CONSUME") == 3)
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+
+    @TestCase
+    public func consumeThrowsWhenSubscriptionGone(): Unit {
+        let stub = MQStubServer({buffer, request =>
+            match (request.command) {
+                case CONSUME(_) => okBut(buffer, request, MQErrorCode.SUBSCRIBE_NOT_EXIST)
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let client = MQClient([stub.address()])
+            let sid = client.subscribe("/order")
+            var code = -1i64
+            try {
+                client.consume(sid)
+            } catch (e: MQServiceException) {
+                code = e.code
+            }
+            @Assert(code == MQErrorCode.SUBSCRIBE_NOT_EXIST)
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+
+    @TestCase
+    public func ackGoesBackToDeliveryNode(): Unit {
+        let stub0 = MQStubServer({buffer, request =>
+            match (request.command) {
+                case CONSUME(_) => Some(MQProtocol.respond<MQConsumeResult>(request, MQConsumeResult()))
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        let stub1 = MQStubServer({buffer, request =>
+            match (request.command) {
+                case CONSUME(_) => Some(MQProtocol.respond<MQConsumeResult>(request, stubMessage("/order", 2, 9)))
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let client = MQClient([stub0.address(), stub1.address()])
+            let sid = client.subscribe("/order")
+            let message = client.consume(sid)
+            client.ack(sid, message.segmentedIndex, message.segmentedOffset)
+            @Assert(countOf(stub1, "ACK") == 1)
+            @Assert(countOf(stub0, "ACK") == 0)
+            client.close()
+        } finally {
+            stub0.close()
+            stub1.close()
+        }
+    }
+
+    @TestCase
+    public func unknownPositionAckBroadcastsAndIgnoresErrors(): Unit {
+        let stub0 = MQStubServer({buffer, request =>
+            match (request.command) {
+                case ACK => okBut(buffer, request, MQErrorCode.ACK_UNKNOWN)
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        let stub1 = MQStubServer({buffer, request =>
+            match (request.command) {
+                case ACK => okBut(buffer, request, MQErrorCode.ACK_UNKNOWN)
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let client = MQClient([stub0.address(), stub1.address()])
+            let sid = client.subscribe("/order")
+            client.ack(sid, 99, 100)
+            @Assert(countOf(stub0, "ACK") == 1)
+            @Assert(countOf(stub1, "ACK") == 1)
+            client.close()
+        } finally {
+            stub0.close()
+            stub1.close()
+        }
+    }
+
+    @TestCase
+    public func autoAckDoesNotRecordDeliveryAndStillAcks(): Unit {
+        let stub0 = MQStubServer(ok).start()
+        let stub1 = MQStubServer(ok).start()
+        try {
+            let client = MQClient([stub0.address(), stub1.address()])
+            let sid = client.subscribe("/order", autoAck: true)
+            client.ack(sid, 1, 2)
+            // autoAck 不记录投递来源 ⇒ 广播
+            @Assert(countOf(stub0, "ACK") == 1)
+            @Assert(countOf(stub1, "ACK") == 1)
+            client.close()
+        } finally {
+            stub0.close()
+            stub1.close()
+        }
+    }
+
+    @TestCase
+    public func unsubscribeIsIdempotentOnServerAndRejectsUnknownId(): Unit {
+        let stub = MQStubServer({buffer, request =>
+            match (request.command) {
+                case UNSUBSCRIBE => okBut(buffer, request, MQErrorCode.SUBSCRIBE_NOT_EXIST)
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let client = MQClient([stub.address()])
+            let sid = client.subscribe("/order")
+            // 服务端回 SUBSCRIBE_NOT_EXIST 视为成功
+            client.unsubscribe(sid)
+            @Assert(countOf(stub, "UNSUBSCRIBE") == 1)
+
+            // 本地不存在的 id：抛异常且不发请求
+            let before = stub.receivedCount()
+            var code = -1i64
+            try {
+                client.unsubscribe(sid)
+            } catch (e: MQServiceException) {
+                code = e.code
+            }
+            @Assert(code == MQErrorCode.SUBSCRIBE_NOT_EXIST)
+            @Assert(stub.receivedCount() == before)
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+
+    @TestCase
+    public func closeIsIdempotentAndBlocksApis(): Unit {
+        let stub = MQStubServer(ok).start()
+        try {
+            let client = MQClient([stub.address()])
+            client.close()
+            client.close()
+            @Assert(client.isClosed())
+
+            var threw = 0
+            try {
+                client.publish("/t", 1i64)
+            } catch (_: MQConnectionException) {
+                threw++
+            }
+            try {
+                client.subscribe("/t")
+            } catch (_: MQConnectionException) {
+                threw++
+            }
+            try {
+                client.consume("none")
+            } catch (_: MQConnectionException) {
+                threw++
+            }
+            try {
+                client.ack("none", 0, 0)
+            } catch (_: MQConnectionException) {
+                threw++
+            }
+            @Assert(threw == 4)
+        } finally {
+            stub.close()
+        }
+    }
+
+    @TestCase
+    public func concurrentConsumersGetUniquePositions(): Unit {
+        let counter = AtomicInt64(0)
+        let stub = MQStubServer({buffer, request =>
+            match (request.command) {
+                case CONSUME(_) =>
+                    let n = counter.fetchAdd(1)
+                    Some(MQProtocol.respond<MQConsumeResult>(request, stubMessage("/order", n, 0)))
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let client = MQClient([stub.address()])
+            let sid = client.subscribe("/order")
+            let seen = ConcurrentHashMap<String, Bool>()
+            let done = AtomicInt64(0)
+            for (_ in 0..4) {
+                spawn {
+                    for (_ in 0..50) {
+                        let message = client.consume(sid)
+                        seen.addIfAbsent("${message.segmentedIndex}:${message.segmentedOffset}", true)
+                    }
+                    done.fetchAdd(1)
+                }
+            }
+            var waited = 0
+            while (done.load() < 4 && waited < 300) {
+                sleep(Duration.millisecond * 20)
+                waited++
+            }
+            @Assert(done.load() == 4)
+            @Assert(seen.size == 200)
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+}
