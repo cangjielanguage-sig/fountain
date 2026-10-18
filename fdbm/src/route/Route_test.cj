@@ -265,6 +265,58 @@ public class PartitionRouterTest {
             SqlParser.parse('select * from t, dict where t.id = 5 and dict.k = 1', 'db0'), 'db0')
         @Assert(plan.kind == RouteKind.Single, true)
     }
+
+    // ==================== 派生表沿内层条件路由（设计 D5） ====================
+
+    @TestCase
+    public func derivedTableFollowsInnerEquality(): Unit {
+        let plan = router().route(
+            SqlParser.parse('select count(*) from (select 1 from t where id = 5) as c', 'db0'),
+            'db0')
+        @Assert(plan.kind == RouteKind.Single, true)
+        @Assert(plan.databases[0], 'p0')
+    }
+
+    @TestCase
+    public func derivedTableFollowsInnerInList(): Unit {
+        let plan = router().route(
+            SqlParser.parse('select * from (select id from t where id in (5, 1500)) as p', 'db0'),
+            'db0')
+        @Assert(plan.kind == RouteKind.Multi, true)
+        @Assert(plan.databases.size, 2)
+    }
+
+    @TestCase
+    public func derivedTableWithContradictoryRangeIsEmpty(): Unit {
+        let plan = router().route(
+            SqlParser.parse('select count(*) from (select 1 from t where id > 1500 and id < 500) as c',
+                'db0'), 'db0')
+        @Assert(plan.kind == RouteKind.Empty, true)
+    }
+
+    @TestCase
+    public func derivedTableOverGlobalTableIsBroadcast(): Unit {
+        let logicals = HashMap<String, Array<String>>()
+        logicals['db0'] = ['p0', 'p1']
+        let globals = GlobalTableRouter([GlobalTableRule('db0', 'dict')],
+            logicalDatabases: logicals)
+        let router = PartitionRouter([], None, HashMap<String, PartitionAlgorithm>(),
+            knownDatabases: ['p0', 'p1'], globalTables: globals)
+        let plan = router.route(
+            SqlParser.parse('select count(*) from (select 1 from dict where k = 1) as c', 'db0'),
+            'db0')
+        @Assert(plan.kind == RouteKind.Broadcast, true)
+        @Assert(plan.databases.size, 2)
+    }
+
+    @TestCase
+    public func countOnDerivedTableHitsSingleShard(): Unit {
+        let plan = router().route(
+            SqlParser.parse('select count(*) from (select 1 from t where id = 1500) as c', 'db0'),
+            'db0')
+        @Assert(plan.kind == RouteKind.Single, true)
+        @Assert(plan.databases[0], 'p1')
+    }
 }
 
 /** 固定返回某个库的算法（自定义覆盖用）。 */

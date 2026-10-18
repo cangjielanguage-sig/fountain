@@ -270,11 +270,26 @@ protected class PartitionRouter {
     private func constraintOf(rule: PartitionRule, statement: SqlStatement): ?Array<String> {
         match (statement) {
             case s: InsertStatement => insertConstraint(rule, s)
-            case s: SelectStatement => expressionConstraint(rule, s.condition)
+            case s: SelectStatement => selectConstraint(rule, s)
             case s: UpdateStatement => expressionConstraint(rule, s.condition)
             case s: DeleteStatement => expressionConstraint(rule, s.condition)
             case _ => None<Array<String>>
         }
+    }
+
+    /**
+     * SELECT 的分区约束（设计 D5）：派生表沿内层查询计算，与直接执行内层一致。
+     *
+     * 形状校验保证派生表最多一个且没有外层条件，因此递归进入内层不会有歧义。
+     */
+    private func selectConstraint(rule: PartitionRule, statement: SelectStatement): ?Array<String> {
+        for (table in statement.from) {
+            match (table.derived) {
+                case Some(inner) => return selectConstraint(rule, inner)
+                case None => ()
+            }
+        }
+        expressionConstraint(rule, statement.condition)
     }
 
     private func expressionConstraint(rule: PartitionRule,
@@ -331,7 +346,7 @@ protected class PartitionRouter {
             var index: Int64 = -1
             var i: Int64 = 0
             while (i < statement.columns.size) {
-                if (statement.columns[i] == rule.column) {
+                if (statement.columns[i].name == rule.column) {
                     index = i
                     break
                 }
@@ -352,7 +367,7 @@ protected class PartitionRouter {
         } else {
             var found = false
             for ((column, value) in statement.setPairs) {
-                if (column == rule.column) {
+                if (column.name == rule.column) {
                     found = true
                     match (PartitionKeyExtractor.literalString(value)) {
                         case Some(text) => values.add(text)

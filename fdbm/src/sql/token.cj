@@ -50,18 +50,21 @@ protected class Token {
     public let kind: TokenKind
     public let text: String
     public let position: Int64
+    /** 该标识符在原文里是否带引用符（`"..."` / `` `...` ``）。 */
+    public let quoted: Bool
     private let upper: String
 
-    public init(kind: TokenKind, text: String, position: Int64) {
+    public init(kind: TokenKind, text: String, position: Int64, quoted!: Bool = false) {
         this.kind = kind
         this.text = text
         this.position = position
+        this.quoted = quoted
         this.upper = text.toUpper()
     }
 
-    /** 是否关键字（大小写不敏感）。 */
+    /** 是否关键字（大小写不敏感）；引用过的标识符不算关键字。 */
     public func isKeyword(word: String): Bool {
-        kind == TokenKind.Ident && upper == word.toUpper()
+        kind == TokenKind.Ident && !quoted && upper == word.toUpper()
     }
 
     public func upperText(): String {
@@ -70,9 +73,10 @@ protected class Token {
 }
 
 /**
- * 手写词法（设计 §8.2）：标识符 / 数字 / 单双引号字符串 / `?` / 比较与算术运算符 / 标点。
+ * 手写词法（设计 §8.2）：标识符 / 数字 / 单引号字符串 / `?` / 比较与算术运算符 / 标点。
  *
- * 字符串支持 `''`（或 `""`）转义；`--` 行注释与 `/* */` 块注释被跳过。
+ * `'...'` 是字符串（`''` 转义）；`"..."` 与 `` `...` `` 是引用标识符（SQL 标准 / MySQL）。
+ * `--` 行注释与 `/* */` 块注释被跳过。
  */
 protected struct Lexer {
     private let source: String
@@ -117,16 +121,16 @@ protected struct Lexer {
                 }
                 continue
             }
-            if (byte == 0x27 || byte == 0x22) {
+            if (byte == 0x27) {
+                // 'string literal'（单引号才是字符串）
                 let start = i
-                let delimiter = byte
                 i += 1
                 let text = ArrayList<Byte>()
                 var closed = false
                 while (i < chars.size) {
-                    if (chars[i] == delimiter) {
-                        if (i + 1 < chars.size && chars[i + 1] == delimiter) {
-                            text.add(delimiter)
+                    if (chars[i] == 0x27) {
+                        if (i + 1 < chars.size && chars[i + 1] == 0x27) {
+                            text.add(0x27)
                             i += 2
                             continue
                         }
@@ -143,20 +147,58 @@ protected struct Lexer {
                 tokens.add(Token(TokenKind.Text, String.fromUtf8(text.toArray()), start))
                 continue
             }
-            if (byte == 0x60) {
-                // `quoted identifier`
+            if (byte == 0x22) {
+                // "quoted identifier"（SQL 标准；`""` 转义为 `"`）
                 let start = i
                 i += 1
                 let name = ArrayList<Byte>()
-                while (i < chars.size && chars[i] != 0x60) {
+                var closed = false
+                while (i < chars.size) {
+                    if (chars[i] == 0x22) {
+                        if (i + 1 < chars.size && chars[i + 1] == 0x22) {
+                            name.add(0x22)
+                            i += 2
+                            continue
+                        }
+                        i += 1
+                        closed = true
+                        break
+                    }
                     name.add(chars[i])
                     i += 1
                 }
-                if (i >= chars.size) {
+                if (!closed) {
                     throw syntax('unterminated quoted identifier', start)
                 }
+                tokens.add(Token(TokenKind.Ident, String.fromUtf8(name.toArray()), start,
+                    quoted: true))
+                continue
+            }
+            if (byte == 0x60) {
+                // `quoted identifier`（MySQL；``` `` ``` 转义为 `` ` ``）
+                let start = i
                 i += 1
-                tokens.add(Token(TokenKind.Ident, String.fromUtf8(name.toArray()), start))
+                let name = ArrayList<Byte>()
+                var closed = false
+                while (i < chars.size) {
+                    if (chars[i] == 0x60) {
+                        if (i + 1 < chars.size && chars[i + 1] == 0x60) {
+                            name.add(0x60)
+                            i += 2
+                            continue
+                        }
+                        i += 1
+                        closed = true
+                        break
+                    }
+                    name.add(chars[i])
+                    i += 1
+                }
+                if (!closed) {
+                    throw syntax('unterminated quoted identifier', start)
+                }
+                tokens.add(Token(TokenKind.Ident, String.fromUtf8(name.toArray()), start,
+                    quoted: true))
                 continue
             }
             if (isDigit(byte)) {

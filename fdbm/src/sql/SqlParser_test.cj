@@ -100,7 +100,7 @@ public class SqlParserTest {
 
         let set = parseAs<InsertStatement>('insert into t set id = 1, name = \'a\'')
         @Assert(set.setPairs.size, 2)
-        @Assert(set.setPairs[1][0], 'name')
+        @Assert(set.setPairs[1][0].name, 'name')
 
         let fromSelect = parseAs<InsertStatement>('insert into t (id) select id from s')
         @Assert(fromSelect.fromSelect.isSome(), true)
@@ -181,7 +181,7 @@ public class SqlParserTest {
 
     @TestCase
     public func unsupportedStatements(): Unit {
-        @Assert(parseCode('select count(*) from t') == DbdErrorCode.UNSUPPORTED_SQL, true)
+        @Assert(parseCode('select count(1) from t') == DbdErrorCode.UNSUPPORTED_SQL, true)
         @Assert(parseCode('select * from t group by id') == DbdErrorCode.UNSUPPORTED_SQL, true)
         @Assert(parseCode('select * from a union select * from b') == DbdErrorCode.UNSUPPORTED_SQL, true)
         @Assert(parseCode('call proc()') == DbdErrorCode.UNSUPPORTED_SQL, true)

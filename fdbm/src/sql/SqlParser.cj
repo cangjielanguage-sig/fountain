@@ -232,8 +232,65 @@ protected class SqlParser {
                 }
             }
         }
-        SelectStatement(distinct, columns.toArray(), from.toArray(), joins.toArray(), condition,
-            orderBy.toArray(), limit, offset)
+        let statement = SelectStatement(distinct, columns.toArray(), from.toArray(), joins.toArray(),
+            condition, orderBy.toArray(), limit, offset)
+        validateSelectShape(statement)
+        statement
+    }
+
+    /**
+     * 派生表 / `count(*)` 的形状校验（设计 D4）。
+     *
+     * 只放行 f_orm 分页固定生成的两类语句，其余组合一律 `UNSUPPORTED_SQL`，
+     * 避免「能解析但语义不确定」的语句被静默下推。
+     */
+    private func validateSelectShape(statement: SelectStatement): Unit {
+        var derivedCount: Int64 = 0
+        for (table in statement.from) {
+            if (table.derived.isSome()) {
+                derivedCount += 1
+            }
+        }
+        var countColumns: Int64 = 0
+        for (item in statement.columns) {
+            if (item.expression is CountExpression) {
+                countColumns += 1
+            }
+        }
+        if (countColumns > 0 && (countColumns != 1 || statement.columns.size != 1)) {
+            throw unsupported('count(*) must be the only select column', peek().position)
+        }
+        if (countColumns == 1) {
+            if (statement.from.isEmpty()) {
+                throw unsupported('count(*) requires a from clause', peek().position)
+            }
+            if (statement.limit.isSome() || statement.offset.isSome() || statement.distinct ||
+                !statement.orderBy.isEmpty()) {
+                throw unsupported('count(*) cannot be combined with limit/offset/distinct/order by',
+                    peek().position)
+            }
+        }
+        if (derivedCount == 0) {
+            return
+        }
+        if (derivedCount != 1 || statement.from.size != 1 || !statement.joins.isEmpty()) {
+            throw unsupported('a derived table must be the only from item and cannot be joined',
+                peek().position)
+        }
+        if (statement.condition.isSome() || !statement.orderBy.isEmpty() || statement.distinct) {
+            throw unsupported('where / order by / distinct on a derived table is not supported',
+                peek().position)
+        }
+        if (countColumns == 0) {
+            for (item in statement.columns) {
+                match (item.expression) {
+                    case _: StarExpression => ()
+                    case _: ColumnExpression => ()
+                    case _ => throw unsupported('column expression on a derived table is not supported',
+                        peek().position)
+                }
+            }
+        }
     }
 
     /** `limit` / `offset` 的值：整数或 `?`（与 WHERE 的参数共用同一序号）。 */
@@ -279,7 +336,8 @@ protected class SqlParser {
         keyword == 'FROM' || keyword == 'WHERE' || keyword == 'ORDER' || keyword == 'LIMIT' ||
             keyword == 'OFFSET' || keyword == 'GROUP' || keyword == 'HAVING' || keyword == 'UNION' ||
             keyword == 'JOIN' || keyword == 'INNER' || keyword == 'LEFT' || keyword == 'RIGHT' ||
-            keyword == 'ON' || keyword == 'AS' || keyword == 'SET' || keyword == 'USING'
+            keyword == 'ON' || keyword == 'AS' || keyword == 'SET' || keyword == 'USING' ||
+            keyword == 'RETURNING'
     }
 
     private func isJoinStart(): Bool {
@@ -314,16 +372,16 @@ protected class SqlParser {
         expectKeyword('insert')
         expectKeyword('into')
         let table = tableRef(allowAlias: false)
-        let columns = ArrayList<String>()
+        let columns = ArrayList<Identifier>()
         if (accept(TokenKind.LParen)) {
-            columns.add(expectIdent('column').text)
+            columns.add(identifierOf(expectIdent('column')))
             while (accept(TokenKind.Comma)) {
-                columns.add(expectIdent('column').text)
+                columns.add(identifierOf(expectIdent('column')))
             }
             expect(TokenKind.RParen, ')')
         }
         let values = ArrayList<Array<SqlExpression>>()
-        let setPairs = ArrayList<(String, SqlExpression)>()
+        let setPairs = ArrayList<(Identifier, SqlExpression)>()
         var fromSelect: ?SelectStatement = None
         if (matchKeyword('values') || matchKeyword('value')) {
             values.add(valueRow())
@@ -340,7 +398,33 @@ protected class SqlParser {
         } else {
             throw syntax('expect values / set / select after insert into', peek().position)
         }
-        InsertStatement(table, columns.toArray(), values.toArray(), setPairs.toArray(), fromSelect)
+        let returning = ArrayList<Identifier>()
+        if (peek().isKeyword('returning')) {
+            if (fromSelect.isSome()) {
+                throw unsupported('insert ... select ... returning is not supported', peek().position)
+            }
+            next()
+            returning.add(returningColumn())
+            while (accept(TokenKind.Comma)) {
+                returning.add(returningColumn())
+            }
+        }
+        InsertStatement(table, columns.toArray(), values.toArray(), setPairs.toArray(), fromSelect,
+            returning: returning.toArray())
+    }
+
+    /** `returning` 只接受列标识符：`*` / 函数 / 算术表达式一律 `UNSUPPORTED_SQL`。 */
+    private func returningColumn(): Identifier {
+        let token = peek()
+        if (token.kind == TokenKind.Operator || token.kind == TokenKind.LParen) {
+            throw unsupported('returning only accepts column identifiers', token.position)
+        }
+        let column = expectIdent('column')
+        if (peek().kind == TokenKind.LParen || peek().kind == TokenKind.Dot ||
+            peek().kind == TokenKind.Operator) {
+            throw unsupported('returning only accepts column identifiers', peek().position)
+        }
+        identifierOf(column)
     }
 
     private func valueRow(): Array<SqlExpression> {
@@ -356,8 +440,8 @@ protected class SqlParser {
         row.toArray()
     }
 
-    private func assignment(): (String, SqlExpression) {
-        let column = expectIdent('column').text
+    private func assignment(): (Identifier, SqlExpression) {
+        let column = identifierOf(expectIdent('column'))
         expectOperator('=')
         (column, expression())
     }
@@ -384,14 +468,18 @@ protected class SqlParser {
     }
 
     private func updateAssignment(): (ColumnExpression, SqlExpression) {
+        let first = expectIdent('column')
         var table: ?String = None
-        var column = expectIdent('column').text
+        var quoted = first.quoted
+        var column = first.text
         if (accept(TokenKind.Dot)) {
-            table = Some(column)
-            column = expectIdent('column').text
+            table = Some(first.text)
+            let second = expectIdent('column')
+            column = second.text
+            quoted = quoted || second.quoted
         }
         expectOperator('=')
-        (ColumnExpression(table, column), expression())
+        (ColumnExpression(table, column, quoted: quoted), expression())
     }
 
     private func delete(): DeleteStatement {
@@ -620,6 +708,13 @@ protected class SqlParser {
                 }
                 next()
                 if (accept(TokenKind.LParen)) {
+                    // 只支持 count(*)；其余函数（含 count(1) / count(col)）保持拒绝
+                    if (!token.quoted && token.isKeyword('count') &&
+                        peek().kind == TokenKind.Operator && peek().text == '*') {
+                        next()
+                        expect(TokenKind.RParen, ')')
+                        return CountExpression()
+                    }
                     let args = ArrayList<SqlExpression>()
                     if (!accept(TokenKind.RParen)) {
                         args.add(expression())
@@ -631,10 +726,11 @@ protected class SqlParser {
                     throw unsupported('function call \'${token.text}\' is not supported', token.position)
                 }
                 if (accept(TokenKind.Dot)) {
-                    let column = expectIdent('column').text
-                    return ColumnExpression(Some(token.text), column)
+                    let column = expectIdent('column')
+                    return ColumnExpression(Some(token.text), column.text,
+                        quoted: token.quoted || column.quoted)
                 }
-                return ColumnExpression(None, token.text)
+                return ColumnExpression(None, token.text, quoted: token.quoted)
             case _ => throw syntax('unexpected token \'${token.text}\'', token.position)
         }
         throw syntax('unexpected token \'${token.text}\'', token.position)
@@ -673,11 +769,31 @@ protected class SqlParser {
     // ==================== 基础 ====================
 
     private func tableRef(allowAlias!: Bool = true): TableRef {
-        var first = expectIdent('table name').text
+        if (allowAlias && peek().kind == TokenKind.LParen) {
+            let start = peek().position
+            next()
+            if (!peek().isKeyword('select')) {
+                throw syntax('expect select in a derived table', peek().position)
+            }
+            let inner = select()
+            expect(TokenKind.RParen, ')')
+            var alias: ?String = None
+            if (matchKeyword('as')) {
+                alias = Some(expectIdent('alias').text)
+            } else if (peek().kind == TokenKind.Ident && !isClauseKeyword()) {
+                alias = Some(next().text)
+            }
+            match (alias) {
+                case Some(value) => return TableRef(None, '', alias, currentDatabase,
+                    derived: Some(inner))
+                case None => throw syntax('a derived table requires an alias', start)
+            }
+        }
+        let first = expectIdent('table name')
         var database: ?String = None
-        var name = first
+        var name = first.text
         if (accept(TokenKind.Dot)) {
-            database = Some(first)
+            database = Some(first.text)
             name = expectIdent('table name').text
         }
         var alias: ?String = None
@@ -688,7 +804,11 @@ protected class SqlParser {
                 alias = Some(next().text)
             }
         }
-        TableRef(database, name, alias, currentDatabase)
+        TableRef(database, name, alias, currentDatabase, quoted: first.quoted)
+    }
+
+    private static func identifierOf(token: Token): Identifier {
+        Identifier(token.text, quoted: token.quoted)
     }
 
     private func integerLiteral(): Int64 {

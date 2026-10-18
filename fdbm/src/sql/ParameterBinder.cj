@@ -52,16 +52,20 @@ class BindContext {
                 for (item in s.columns) {
                     columns.add(SelectItem(bindExpression(item.expression), item.alias))
                 }
+                let from = ArrayList<TableRef>()
+                for (table in s.from) {
+                    from.add(bindTable(table))
+                }
                 let joins = ArrayList<JoinClause>()
                 for (join in s.joins) {
-                    joins.add(JoinClause(join.joinType, join.table,
+                    joins.add(JoinClause(join.joinType, bindTable(join.table),
                         bindOptional(join.on)))
                 }
                 let orderBy = ArrayList<(SqlExpression, Bool)>()
                 for ((expression, asc) in s.orderBy) {
                     orderBy.add((bindExpression(expression), asc))
                 }
-                SelectStatement(s.distinct, columns.toArray(), s.from, joins.toArray(),
+                SelectStatement(s.distinct, columns.toArray(), from.toArray(), joins.toArray(),
                     bindOptional(s.condition), orderBy.toArray(), bindOptional(s.limit),
                     bindOptional(s.offset))
             case s: InsertStatement =>
@@ -73,7 +77,7 @@ class BindContext {
                     }
                     rows.add(bound.toArray())
                 }
-                let setPairs = ArrayList<(String, SqlExpression)>()
+                let setPairs = ArrayList<(Identifier, SqlExpression)>()
                 for ((column, value) in s.setPairs) {
                     setPairs.add((column, bindExpression(value)))
                 }
@@ -81,7 +85,7 @@ class BindContext {
                     match (s.fromSelect) {
                         case Some(select) => Some(bindSelect(select))
                         case None => None<SelectStatement>
-                    })
+                    }, returning: s.returning)
             case s: UpdateStatement =>
                 let assignments = ArrayList<(ColumnExpression, SqlExpression)>()
                 for ((column, value) in s.assignments) {
@@ -89,17 +93,27 @@ class BindContext {
                 }
                 let joins = ArrayList<JoinClause>()
                 for (join in s.joins) {
-                    joins.add(JoinClause(join.joinType, join.table, bindOptional(join.on)))
+                    joins.add(JoinClause(join.joinType, bindTable(join.table),
+                        bindOptional(join.on)))
                 }
                 UpdateStatement(s.table, joins.toArray(), assignments.toArray(),
                     bindOptional(s.condition))
             case s: DeleteStatement =>
                 let joins = ArrayList<JoinClause>()
                 for (join in s.joins) {
-                    joins.add(JoinClause(join.joinType, join.table, bindOptional(join.on)))
+                    joins.add(JoinClause(join.joinType, bindTable(join.table),
+                        bindOptional(join.on)))
                 }
                 DeleteStatement(s.table, joins.toArray(), bindOptional(s.condition))
             case other => other
+        }
+    }
+
+    /** 派生表必须递归绑定内层 `?`，否则下推时占位符不会被替换。 */
+    private func bindTable(table: TableRef): TableRef {
+        match (table.derived) {
+            case Some(inner) => table.withDerived(bindSelect(inner))
+            case None => table
         }
     }
 

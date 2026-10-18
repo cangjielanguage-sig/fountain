@@ -71,14 +71,37 @@ protected enum BinaryOp <: Equatable<BinaryOp> & ToString {
 /** 表达式基接口。 */
 protected interface SqlExpression {}
 
+/** 标识符（列名 / 表名）：保留「原文是否带引用符」，渲染时按目标方言重写。 */
+protected class Identifier <: Equatable<Identifier> {
+    public let name: String
+    public let quoted: Bool
+
+    public init(name: String, quoted!: Bool = false) {
+        this.name = name
+        this.quoted = quoted
+    }
+
+    /** 相等按裸名比较（引用符不参与，避免 `"id"` 与 `id` 被当成两列）。 */
+    public operator func ==(other: Identifier): Bool {
+        name == other.name
+    }
+
+    public func equalsName(name: String): Bool {
+        this.name == name
+    }
+}
+
 /** `[table.]column` */
 protected class ColumnExpression <: SqlExpression {
     public let table: ?String
     public let column: String
+    /** 表名 / 列名在原文里是否带引用符。 */
+    public let quoted: Bool
 
-    public init(table: ?String, column: String) {
+    public init(table: ?String, column: String, quoted!: Bool = false) {
         this.table = table
         this.column = column
+        this.quoted = quoted
     }
 }
 
@@ -151,18 +174,30 @@ protected class StarExpression <: SqlExpression {
     public init() {}
 }
 
+/** `count(*)`（f_orm 分页的唯一聚合；其它聚合仍不支持）。 */
+protected class CountExpression <: SqlExpression {
+    public init() {}
+}
+
 /** 表引用：`database` 缺省时由解析器补当前库（`key()` 使用）。 */
 protected class TableRef {
     public let database: ?String
     public let name: String
     public let alias: ?String
+    /** 表名是否带引用符。 */
+    public let quoted: Bool
+    /** `from ( <select> ) [as] alias` 的内层查询；普通表为 `None`。 */
+    public let derived: ?SelectStatement
     private let current: String
 
-    public init(database: ?String, name: String, alias: ?String, current: String) {
+    public init(database: ?String, name: String, alias: ?String, current: String,
+        quoted!: Bool = false, derived!: ?SelectStatement = None) {
         this.database = database
         this.name = name
         this.alias = alias
         this.current = current
+        this.quoted = quoted
+        this.derived = derived
     }
 
     /** `'<database>.<name>'`（补全当前库后）；别名不参与。 */
@@ -179,6 +214,19 @@ protected class TableRef {
             case Some(value) => value
             case None => name
         }
+    }
+
+    /** 语句话术里的真实表集合：派生表递归展开为内层查询的表引用。 */
+    public func collectTables(): Array<TableRef> {
+        match (derived) {
+            case Some(inner) => inner.tables
+            case None => [this]
+        }
+    }
+
+    /** 派生表替换内层查询（参数绑定后重建 AST 用）。 */
+    public func withDerived(inner: SelectStatement): TableRef {
+        TableRef(database, name, alias, current, quoted: quoted, derived: Some(inner))
     }
 }
 
@@ -262,10 +310,14 @@ protected class SelectStatement <: SqlStatement {
         get() {
             let result = ArrayList<TableRef>()
             for (table in from) {
-                result.add(table)
+                for (expanded in table.collectTables()) {
+                    result.add(expanded)
+                }
             }
             for (join in joins) {
-                result.add(join.table)
+                for (expanded in join.table.collectTables()) {
+                    result.add(expanded)
+                }
             }
             result.toArray()
         }
@@ -274,18 +326,22 @@ protected class SelectStatement <: SqlStatement {
 
 protected class InsertStatement <: SqlStatement {
     public let table: TableRef
-    public let columns: Array<String>
+    public let columns: Array<Identifier>
     public let values: Array<Array<SqlExpression>>
-    public let setPairs: Array<(String, SqlExpression)>
+    public let setPairs: Array<(Identifier, SqlExpression)>
     public let fromSelect: ?SelectStatement
+    /** `returning <列>[, <列>...]`（仅 PostgreSQL 家族、单目标路由可执行）。 */
+    public let returning: Array<Identifier>
 
-    public init(table: TableRef, columns: Array<String>, values: Array<Array<SqlExpression>>,
-        setPairs: Array<(String, SqlExpression)>, fromSelect: ?SelectStatement) {
+    public init(table: TableRef, columns: Array<Identifier>, values: Array<Array<SqlExpression>>,
+        setPairs: Array<(Identifier, SqlExpression)>, fromSelect: ?SelectStatement,
+        returning!: Array<Identifier> = []) {
         this.table = table
         this.columns = columns
         this.values = values
         this.setPairs = setPairs
         this.fromSelect = fromSelect
+        this.returning = returning
     }
 
     public prop kind: SqlKind {

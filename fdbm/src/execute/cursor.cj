@@ -18,7 +18,7 @@ package fountain::fdbm.execute
 import std.collection.{ArrayList, HashMap}
 import std.database.sql.*
 import std.io.InputStream
-import fountain::f_data.{Data, DataNone, DataString}
+import fountain::f_data.{Data, DataNone, DataReal, DataString}
 import fountain::f_data.base.*
 import fountain::f_dbd.common.{ColumnInfoImpl, DbdErrorCode, DEFAULT_STREAM_CHUNK, SqlTypes}
 import fountain::fdbm.exception.FdbmException
@@ -274,6 +274,13 @@ protected class MemoryQueryResult <: QueryResult {
             case text: DataString =>
                 match (text.data) {
                     case value: T => return Some(value)
+                    case _ => throw FdbmException(DbdErrorCode.CONVERSION,
+                        'column ${index} cannot be read as ${TypeInfo.of<T>()}')
+                }
+            case real: DataReal =>
+                let value = real.toInt64()
+                match (value) {
+                    case typed: T => return Some(typed)
                     case _ => throw FdbmException(DbdErrorCode.CONVERSION,
                         'column ${index} cannot be read as ${TypeInfo.of<T>()}')
                 }

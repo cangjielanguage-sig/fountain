@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::fdbm.execute
 
 import std.collection.{ArrayList, HashMap}
+import std.convert.*
 import std.database.sql.*
 import std.unicode.UnicodeStringExtension
 import fountain::f_data.{Data, DataReal, DataString}
@@ -80,6 +81,27 @@ func borrow(session: DbdSession, resources: NodeAccessor, database: String,
 
 func allDatabases(resources: NodeAccessor): Array<String> {
     resources.databases()
+}
+
+/**
+ * 目标库方言（设计 D2）：启动校验保证全节点同一驱动，取首个目标库即可。
+ *
+ * 没有目标库时返回 `Unknown`（引用标识符按 SQL 标准双引号渲染）。
+ */
+func dialectOf(resources: NodeAccessor, databases: Array<String>): SqlDialect {
+    if (databases.isEmpty()) {
+        return SqlDialect.Unknown
+    }
+    SqlDialects.ofDriver(resources.driver(databases[0]))
+}
+
+/** 驱动返回的单格值 → `Int64`（`lastInsertId` / `count(*)` 用）；不可转换时 `None`。 */
+func int64Of(data: Data): ?Int64 {
+    match (data) {
+        case real: DataReal => Some(real.toInt64())
+        case text: DataString => Int64.tryParse(text.data)
+        case _ => None<Int64>
+    }
 }
 
 /** 执行一条 UPDATE 并关闭语句句柄（避免真实驱动的句柄泄漏）。 */
@@ -182,26 +204,24 @@ protected class SelectExecutor {
     }
 
     public func execute(session: DbdSession, statement: SelectStatement): ExecutionOutcome {
+        if (isCountOnly(statement)) {
+            return executeCount(session, statement)
+        }
         let plan = router.route(statement, session.database)
         if (plan.kind == RouteKind.Empty) {
             return emptyOutcome(session, statement)
         }
-        let databases = if (plan.kind == RouteKind.Broadcast) {
-            // 全局表读任意副本即可（设计 §9.4），避免同一行被多副本重复返回
-            if (globalOnly(statement, session.database) && !plan.databases.isEmpty()) {
-                [plan.databases[0]]
-            } else {
-                plan.databases
-            }
-        } else if (plan.kind == RouteKind.Unroutable) {
-            allDatabases(resources)
-        } else {
-            plan.databases
-        }
+        let databases = targetDatabases(statement, plan, session)
         if (databases.isEmpty()) {
             return ExecutionOutcome(cursor: Some(QueryCursor([], [])), columns: [])
         }
-        let sql = SqlRenderer.render(statement)
+        // 派生表 + 分页只在单目标下推；多库下发 limit/offset 会按分片截断（设计 D6）
+        if (hasDerivedTable(statement) &&
+            (statement.limit.isSome() || statement.offset.isSome()) && databases.size > 1) {
+            throw FdbmException(DbdErrorCode.ROUTE_FAILED,
+                'derived table paging cannot be pushed down to ${databases.size} physical databases')
+        }
+        let sql = SqlRenderer.render(statement, dialect: dialectOf(resources, databases))
         let segments = ArrayList<CursorSegment>()
         var infos: Array<ColumnInfoImpl> = []
         try {
@@ -236,12 +256,116 @@ protected class SelectExecutor {
         true
     }
 
+    /** 路由计划 → 实际下推的物理库（全局表读只取一份副本）。 */
+    private func targetDatabases(statement: SelectStatement, plan: RoutePlan,
+        session: DbdSession): Array<String> {
+        if (plan.kind == RouteKind.Broadcast) {
+            if (globalOnly(statement, session.database) && !plan.databases.isEmpty()) {
+                return [plan.databases[0]]
+            }
+            return plan.databases
+        }
+        if (plan.kind == RouteKind.Unroutable) {
+            return allDatabases(resources)
+        }
+        plan.databases
+    }
+
+    /** `select count(*) ...`：逐库下推并求和，返回一行的内存结果（设计 D6）。 */
+    private func executeCount(session: DbdSession, statement: SelectStatement): ExecutionOutcome {
+        let plan = router.route(statement, session.database)
+        if (plan.kind == RouteKind.Empty) {
+            return countOutcome(0)
+        }
+        let databases = targetDatabases(statement, plan, session)
+        if (databases.isEmpty()) {
+            return countOutcome(0)
+        }
+        // 事务 pin 只对应一个物理库，跨库求和会得到不完整计数
+        if (session.pinned.isSome() && databases.size > 1) {
+            throw FdbmException(DbdErrorCode.ROUTE_FAILED,
+                'count(*) spanning ${databases.size} physical databases is not allowed inside a ' +
+                'transaction')
+        }
+        let sql = SqlRenderer.render(statement, dialect: dialectOf(resources, databases))
+        var total: Int64 = 0
+        for (database in databases) {
+            let (connection, owns) = borrow(session, resources, database)
+            try {
+                total += queryCount(connection, sql)
+            } finally {
+                if (owns) {
+                    connection.close()
+                }
+            }
+        }
+        countOutcome(total)
+    }
+
+    private func queryCount(connection: Connection, sql: String): Int64 {
+        let prepared = connection.prepareStatement(sql)
+        var result: ?QueryResult = None
+        try {
+            let query = prepared.query()
+            result = Some(query)
+            if (!query.next()) {
+                return 0
+            }
+            let cell = SqlTypes.readData(query, 0, query.columnInfos[0].typeName)
+            match (int64Of(cell)) {
+                case Some(value) => value
+                case None => throw FdbmException(DbdErrorCode.CONVERSION,
+                    'count(*) did not return an integer')
+            }
+        } finally {
+            match (result) {
+                case Some(query) =>
+                    try {
+                        query.close()
+                    } catch (_: Exception) {
+                        ()
+                    }
+                case None => ()
+            }
+            try {
+                prepared.close()
+            } catch (_: Exception) {
+                ()
+            }
+        }
+    }
+
+    private func countOutcome(count: Int64): ExecutionOutcome {
+        let infos = [ColumnInfoImpl('count', 'Int64', 0, 0, false, 0)]
+        let columns = ArrayList<ColumnInfo>()
+        for (info in infos) {
+            columns.add(info)
+        }
+        let rows = ArrayList<Array<Data>>()
+        rows.add([DataReal(count)])
+        let result = MemoryQueryResult(columns.toArray(), rows.toArray())
+        ExecutionOutcome(cursor: Some(QueryCursor([], infos, memory: Some(result))), columns: infos)
+    }
+
+    private static func isCountOnly(statement: SelectStatement): Bool {
+        statement.columns.size == 1 && statement.columns[0].expression is CountExpression
+    }
+
+    private static func hasDerivedTable(statement: SelectStatement): Bool {
+        for (table in statement.from) {
+            if (table.derived.isSome()) {
+                return true
+            }
+        }
+        false
+    }
+
     private func emptyOutcome(session: DbdSession, statement: SelectStatement): ExecutionOutcome {
         let databases = allDatabases(resources)
         if (databases.isEmpty()) {
             return ExecutionOutcome(cursor: Some(QueryCursor([], [])), columns: [])
         }
-        let sql = SqlRenderer.render(statement)
+        let sql = SqlRenderer.render(statement, dialect: dialectOf(resources, databases))
         let segment = openSegment(session, databases[0], sql)
         let infos = QueryCursor.columnsOf(segment.result)
         segment.close()
@@ -287,9 +411,9 @@ protected class DmlExecutor {
     public func execute(session: DbdSession, statement: UpdateStatement): ExecutionOutcome {
         let logical = logicalOf(statement.table, session.database)
         if (globals.isGlobal(logical, statement.table.name)) {
-            let sql = SqlRenderer.render(statement)
-            return ExecutionOutcome(update: Some(broadcastWrite(resources,
-                globals.physicalDatabases(logical), sql)))
+            let targets = globals.physicalDatabases(logical)
+            let sql = SqlRenderer.render(statement, dialect: dialectOf(resources, targets))
+            return ExecutionOutcome(update: Some(broadcastWrite(resources, targets, sql)))
         }
         let plan = router.route(statement, session.database)
         if (plan.kind == RouteKind.Empty) {
@@ -299,7 +423,7 @@ protected class DmlExecutor {
             throw FdbmException(DbdErrorCode.ROUTE_FAILED,
                 'update/delete requires a partition key condition')
         }
-        let sql = SqlRenderer.render(statement)
+        let sql = SqlRenderer.render(statement, dialect: dialectOf(resources, plan.databases))
         var rowCount: Int64 = 0
         var lastInsertId: Int64 = 0
         for (database in plan.databases) {
@@ -345,9 +469,9 @@ protected class DeleteExecutor {
     public func execute(session: DbdSession, statement: DeleteStatement): ExecutionOutcome {
         let logical = DmlExecutor.logicalOf(statement.table, session.database)
         if (globals.isGlobal(logical, statement.table.name)) {
-            let sql = SqlRenderer.render(statement)
-            return ExecutionOutcome(update: Some(broadcastWrite(resources,
-                globals.physicalDatabases(logical), sql)))
+            let targets = globals.physicalDatabases(logical)
+            let sql = SqlRenderer.render(statement, dialect: dialectOf(resources, targets))
+            return ExecutionOutcome(update: Some(broadcastWrite(resources, targets, sql)))
         }
         let plan = router.route(statement, session.database)
         if (plan.kind == RouteKind.Empty) {
@@ -357,12 +481,13 @@ protected class DeleteExecutor {
             throw FdbmException(DbdErrorCode.ROUTE_FAILED,
                 'update/delete requires a partition key condition')
         }
+        let dialect = dialectOf(resources, plan.databases)
         let rule = router.rule(logical, statement.table.name)
         let keys = match (rule) {
-            case Some(found) => queryKeys(session, statement, found, plan.databases)
+            case Some(found) => queryKeys(session, statement, found, plan.databases, dialect)
             case None => ArrayList<String>() // 未分库表：无缓存可失效
         }
-        let sql = SqlRenderer.render(statement)
+        let sql = SqlRenderer.render(statement, dialect: dialect)
         var rowCount: Int64 = 0
         var lastInsertId: Int64 = 0
         for (database in plan.databases) {
@@ -389,11 +514,11 @@ protected class DeleteExecutor {
 
     /** 第一步：`select <column> from <table> where ...`，逐库取键并去重。 */
     private func queryKeys(session: DbdSession, statement: DeleteStatement,
-        rule: PartitionRule, databases: Array<String>): ArrayList<String> {
+        rule: PartitionRule, databases: Array<String>, dialect: SqlDialect): ArrayList<String> {
         let select = SelectStatement(false,
             [SelectItem(ColumnExpression(None, rule.column), None)],
             [statement.table], [], statement.condition, [], None, None)
-        let sql = SqlRenderer.render(select)
+        let sql = SqlRenderer.render(select, dialect: dialect)
         let keys = ArrayList<String>()
         for (database in databases) {
             let (connection, owns) = borrow(session, resources, database)
@@ -496,6 +621,10 @@ protected class InsertExecutor {
      */
     private func insertFromSelect(session: DbdSession, statement: InsertStatement,
         query: SelectStatement): ExecutionOutcome {
+        if (!statement.returning.isEmpty()) {
+            throw FdbmException(DbdErrorCode.UNSUPPORTED_SQL,
+                'insert ... select ... returning is not supported')
+        }
         if (statement.columns.isEmpty()) {
             throw FdbmException(DbdErrorCode.UNSUPPORTED_SQL,
                 'insert ... select requires an explicit column list')
@@ -541,10 +670,10 @@ protected class InsertExecutor {
     }
 
     private func fillAndRoute(session: DbdSession, statement: InsertStatement,
-        row: Array<SqlExpression>, setPairs: ?Array<(String, SqlExpression)>): InsertStatement {
+        row: Array<SqlExpression>, setPairs: ?Array<(Identifier, SqlExpression)>): InsertStatement {
         let logical = DmlExecutor.logicalOf(statement.table, session.database)
         let rule = router.rule(logical, statement.table.name)
-        let columns = ArrayList<String>()
+        let columns = ArrayList<Identifier>()
         for (column in statement.columns) {
             columns.add(column)
         }
@@ -552,7 +681,7 @@ protected class InsertExecutor {
         for (value in row) {
             values.add(value)
         }
-        let pairs = ArrayList<(String, SqlExpression)>()
+        let pairs = ArrayList<(Identifier, SqlExpression)>()
         var hasPairs = false
         match (setPairs) {
             case Some(existing) =>
@@ -565,11 +694,11 @@ protected class InsertExecutor {
         match (rule) {
             case Some(found) =>
                 let missing = if (!columns.isEmpty()) {
-                    !columns.contains(found.column)
+                    !hasColumn(columns, found.column)
                 } else if (hasPairs) {
                     var has = false
                     for ((column, _) in pairs) {
-                        if (column == found.column) {
+                        if (column.name == found.column) {
                             has = true
                         }
                     }
@@ -586,17 +715,29 @@ protected class InsertExecutor {
                             '\'${found.column}\' and no usable id generator')
                     }
                     let literal: SqlExpression = LiteralExpression(idLiteral(generator, found.algorithm))
+                    let identifier = Identifier(found.column)
                     if (!columns.isEmpty()) {
-                        columns.add(found.column)
+                        columns.add(identifier)
                         values.add(literal)
                     } else if (hasPairs) {
-                        pairs.add((found.column, literal))
+                        pairs.add((identifier, literal))
                     }
                 }
             case None => ()
         }
-        let pairArray = if (hasPairs) { pairs.toArray() } else { Array<(String, SqlExpression)>() }
-        InsertStatement(statement.table, columns.toArray(), [values.toArray()], pairArray, None)
+        let pairArray = if (hasPairs) { pairs.toArray() } else { Array<(Identifier, SqlExpression)>() }
+        // 重建语句必须显式带上 returning，否则绑定/逐行拆分后会被静默丢弃（设计 D6）
+        InsertStatement(statement.table, columns.toArray(), [values.toArray()], pairArray, None,
+            returning: statement.returning)
+    }
+
+    private static func hasColumn(columns: ArrayList<Identifier>, name: String): Bool {
+        for (column in columns) {
+            if (column.name == name) {
+                return true
+            }
+        }
+        false
     }
 
     private func idLiteral(generator: IdGenerator, algorithm: PartitionAlgorithm): Data {
@@ -609,9 +750,22 @@ protected class InsertExecutor {
 
     private func executeSingle(session: DbdSession, statement: InsertStatement): UpdateResultPayload {
         let logical = DmlExecutor.logicalOf(statement.table, session.database)
-        if (globals.isGlobal(logical, statement.table.name)) {
-            let sql = SqlRenderer.render(statement)
-            return broadcastWrite(resources, globals.physicalDatabases(logical), sql)
+        let isGlobal = globals.isGlobal(logical, statement.table.name)
+        if (!statement.returning.isEmpty()) {
+            // 先判方言再判路由：MySQL 上即使目标是全局表也应报「不支持」
+            if (dialectOf(resources, resources.databases()) != SqlDialect.Postgres) {
+                throw FdbmException(DbdErrorCode.UNSUPPORTED_SQL,
+                    'returning is only supported by the PostgreSQL family')
+            }
+            if (isGlobal) {
+                throw FdbmException(DbdErrorCode.ROUTE_FAILED,
+                    'returning cannot be used with a global table write')
+            }
+        }
+        if (isGlobal) {
+            let targets = globals.physicalDatabases(logical)
+            let sql = SqlRenderer.render(statement, dialect: dialectOf(resources, targets))
+            return broadcastWrite(resources, targets, sql)
         }
         let plan = router.route(statement, session.database)
         if (plan.kind == RouteKind.Empty) {
@@ -620,7 +774,14 @@ protected class InsertExecutor {
         if (plan.kind != RouteKind.Single && plan.kind != RouteKind.Multi) {
             throw FdbmException(DbdErrorCode.ROUTE_FAILED, 'insert cannot determine a target database')
         }
-        let sql = SqlRenderer.render(statement)
+        if (!statement.returning.isEmpty() && plan.kind != RouteKind.Single) {
+            throw FdbmException(DbdErrorCode.ROUTE_FAILED,
+                'returning requires a single target database')
+        }
+        let sql = SqlRenderer.render(statement, dialect: dialectOf(resources, plan.databases))
+        if (!statement.returning.isEmpty()) {
+            return executeReturning(session, sql, plan.databases[0])
+        }
         var rowCount: Int64 = 0
         var lastInsertId: Int64 = 0
         for (database in plan.databases) {
@@ -636,6 +797,53 @@ protected class InsertExecutor {
             }
         }
         UpdateResultPayload(rowCount, lastInsertId)
+    }
+
+    /** `insert ... returning`：走 query 通道，`lastInsertId` 取首行首列（设计 D6）。 */
+    private func executeReturning(session: DbdSession, sql: String,
+        database: String): UpdateResultPayload {
+        let (connection, owns) = borrow(session, resources, database, write: true)
+        var result: ?QueryResult = None
+        try {
+            let prepared = connection.prepareStatement(sql)
+            try {
+                let query = prepared.query()
+                result = Some(query)
+                var rowCount: Int64 = 0
+                var lastInsertId: Int64 = 0
+                while (query.next()) {
+                    rowCount += 1
+                    if (rowCount == 1) {
+                        let cell = SqlTypes.readData(query, 0, query.columnInfos[0].typeName)
+                        lastInsertId = match (int64Of(cell)) {
+                            case Some(value) => value
+                            case None => throw FdbmException(DbdErrorCode.CONVERSION,
+                                'returning column is not an integer')
+                        }
+                    }
+                }
+                UpdateResultPayload(rowCount, lastInsertId)
+            } finally {
+                try {
+                    prepared.close()
+                } catch (_: Exception) {
+                    ()
+                }
+            }
+        } finally {
+            match (result) {
+                case Some(query) =>
+                    try {
+                        query.close()
+                    } catch (_: Exception) {
+                        ()
+                    }
+                case None => ()
+            }
+            if (owns) {
+                connection.close()
+            }
+        }
     }
 }
 
@@ -687,22 +895,22 @@ protected class ShowExecutor {
             case Some(value) => Some(SqlRenderer.literal(DataString(value)))
             case None => None<String>
         }
-        let name = driver.toLower()
-        if (name == 'mysql' || name == 'mariadb') {
-            return match (pattern) {
-                case Some(value) => 'show tables like ${value}'
-                case None => 'show tables'
-            }
+        match (SqlDialects.ofDriver(driver)) {
+            case SqlDialect.MySql =>
+                match (pattern) {
+                    case Some(value) => 'show tables like ${value}'
+                    case None => 'show tables'
+                }
+            case SqlDialect.Postgres =>
+                let base = "select table_name from information_schema.tables where table_schema='public'"
+                match (pattern) {
+                    case Some(value) => '${base} and table_name like ${value}'
+                    case None => base
+                }
+            case SqlDialect.Unknown =>
+                throw FdbmException(DbdErrorCode.UNSUPPORTED_SQL,
+                    'show tables is not supported by driver \'${driver}\'')
         }
-        if (name == 'postgres' || name == 'postgresql' || name == 'pgsql' || name == 'opengauss') {
-            let base = "select table_name from information_schema.tables where table_schema='public'"
-            return match (pattern) {
-                case Some(value) => '${base} and table_name like ${value}'
-                case None => base
-            }
-        }
-        throw FdbmException(DbdErrorCode.UNSUPPORTED_SQL,
-            'show tables is not supported by driver \'${driver}\'')
     }
 
     /** 结果列名统一为 `table_name`（设计 §9.5）。 */

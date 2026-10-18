@@ -19,17 +19,19 @@ import std.collection.ArrayList
 import fountain::f_data.{Data, DataBool, DataNone, DataReal, DataString}
 
 /**
- * AST → SQL（设计 §8.2）：只做**方言无关**的原样重建，供下推与 `parse → render → parse` 往返。
+ * AST → SQL（设计 §8.2 / D3）：按目标方言重建语句，供下推与 `parse → render → parse` 往返。
  *
- * 二元/IN/NOT 一律加括号，渲染结果可能与原文不同，但语义等价、可再次解析。
+ * - 原文带引用符的标识符按方言重写（PostgreSQL `"..."` / MySQL `` `...` ``）；
+ * - 未引用的标识符保持裸名（与历史行为一致，避免把普通 SQL 全量改写）；
+ * - 二元/IN/NOT 一律加括号，渲染结果可能与原文不同，但语义等价、可再次解析。
  */
 protected struct SqlRenderer {
-    public static func render(statement: SqlStatement): String {
+    public static func render(statement: SqlStatement, dialect!: SqlDialect = SqlDialect.Unknown): String {
         match (statement) {
-            case s: SelectStatement => renderSelect(s)
-            case s: InsertStatement => renderInsert(s)
-            case s: UpdateStatement => renderUpdate(s)
-            case s: DeleteStatement => renderDelete(s)
+            case s: SelectStatement => renderSelect(s, dialect)
+            case s: InsertStatement => renderInsert(s, dialect)
+            case s: UpdateStatement => renderUpdate(s, dialect)
+            case s: DeleteStatement => renderDelete(s, dialect)
             case s: ShowStatement => renderShow(s)
             case s: DdlStatement => s.sql
             case s: ExportStatement => 'export ${s.key}=${quoteText(s.value)}'
@@ -38,7 +40,7 @@ protected struct SqlRenderer {
         }
     }
 
-    private static func renderSelect(statement: SelectStatement): String {
+    private static func renderSelect(statement: SelectStatement, dialect: SqlDialect): String {
         let builder = StringBuilder()
         builder.append('select ')
         if (statement.distinct) {
@@ -50,7 +52,7 @@ protected struct SqlRenderer {
                 builder.append(', ')
             }
             let item = statement.columns[i]
-            builder.append(renderExpression(item.expression))
+            builder.append(renderExpression(item.expression, dialect))
             match (item.alias) {
                 case Some(alias) => builder.append(' as ${alias}')
                 case None => ()
@@ -64,7 +66,7 @@ protected struct SqlRenderer {
                 if (i > 0) {
                     builder.append(', ')
                 }
-                builder.append(renderTable(statement.from[i]))
+                builder.append(renderTable(statement.from[i], dialect))
                 i += 1
             }
             for (join in statement.joins) {
@@ -74,15 +76,15 @@ protected struct SqlRenderer {
                     case JoinType.Left => builder.append('left join ')
                     case JoinType.Right => builder.append('right join ')
                 }
-                builder.append(renderTable(join.table))
+                builder.append(renderTable(join.table, dialect))
                 match (join.on) {
-                    case Some(on) => builder.append(' on ${renderExpression(on)}')
+                    case Some(on) => builder.append(' on ${renderExpression(on, dialect)}')
                     case None => ()
                 }
             }
         }
         match (statement.condition) {
-            case Some(condition) => builder.append(' where ${renderExpression(condition)}')
+            case Some(condition) => builder.append(' where ${renderExpression(condition, dialect)}')
             case None => ()
         }
         if (!statement.orderBy.isEmpty()) {
@@ -92,25 +94,25 @@ protected struct SqlRenderer {
                 if (i > 0) {
                     builder.append(', ')
                 }
-                builder.append(renderExpression(statement.orderBy[i][0]))
+                builder.append(renderExpression(statement.orderBy[i][0], dialect))
                 builder.append(if (statement.orderBy[i][1]) { ' asc' } else { ' desc' })
                 i += 1
             }
         }
         match (statement.limit) {
-            case Some(limit) => builder.append(' limit ${renderExpression(limit)}')
+            case Some(limit) => builder.append(' limit ${renderExpression(limit, dialect)}')
             case None => ()
         }
         match (statement.offset) {
-            case Some(offset) => builder.append(' offset ${renderExpression(offset)}')
+            case Some(offset) => builder.append(' offset ${renderExpression(offset, dialect)}')
             case None => ()
         }
         builder.toString()
     }
 
-    private static func renderInsert(statement: InsertStatement): String {
+    private static func renderInsert(statement: InsertStatement, dialect: SqlDialect): String {
         let builder = StringBuilder()
-        builder.append('insert into ${renderTable(statement.table)}')
+        builder.append('insert into ${renderTable(statement.table, dialect)}')
         if (!statement.columns.isEmpty()) {
             builder.append(' (')
             var i: Int64 = 0
@@ -118,7 +120,7 @@ protected struct SqlRenderer {
                 if (i > 0) {
                     builder.append(', ')
                 }
-                builder.append(statement.columns[i])
+                builder.append(renderIdentifier(statement.columns[i], dialect))
                 i += 1
             }
             builder.append(')')
@@ -137,7 +139,7 @@ protected struct SqlRenderer {
                     if (c > 0) {
                         builder.append(', ')
                     }
-                    builder.append(renderExpression(row[c]))
+                    builder.append(renderExpression(row[c], dialect))
                     c += 1
                 }
                 builder.append(')')
@@ -150,21 +152,33 @@ protected struct SqlRenderer {
                 if (i > 0) {
                     builder.append(', ')
                 }
-                builder.append('${statement.setPairs[i][0]} = ${renderExpression(statement.setPairs[i][1])}')
+                builder.append('${renderIdentifier(statement.setPairs[i][0], dialect)} = ')
+                builder.append(renderExpression(statement.setPairs[i][1], dialect))
                 i += 1
             }
         } else {
             match (statement.fromSelect) {
-                case Some(select) => builder.append(' ${renderSelect(select)}')
+                case Some(select) => builder.append(' ${renderSelect(select, dialect)}')
                 case None => ()
+            }
+        }
+        if (!statement.returning.isEmpty()) {
+            builder.append(' returning ')
+            var i: Int64 = 0
+            while (i < statement.returning.size) {
+                if (i > 0) {
+                    builder.append(', ')
+                }
+                builder.append(renderIdentifier(statement.returning[i], dialect))
+                i += 1
             }
         }
         builder.toString()
     }
 
-    private static func renderUpdate(statement: UpdateStatement): String {
+    private static func renderUpdate(statement: UpdateStatement, dialect: SqlDialect): String {
         let builder = StringBuilder()
-        builder.append('update ${renderTable(statement.table)}')
+        builder.append('update ${renderTable(statement.table, dialect)}')
         for (join in statement.joins) {
             builder.append(' ')
             match (join.joinType) {
@@ -172,9 +186,9 @@ protected struct SqlRenderer {
                 case JoinType.Left => builder.append('left join ')
                 case JoinType.Right => builder.append('right join ')
             }
-            builder.append(renderTable(join.table))
+            builder.append(renderTable(join.table, dialect))
             match (join.on) {
-                case Some(on) => builder.append(' on ${renderExpression(on)}')
+                case Some(on) => builder.append(' on ${renderExpression(on, dialect)}')
                 case None => ()
             }
         }
@@ -185,19 +199,20 @@ protected struct SqlRenderer {
                 builder.append(', ')
             }
             let (column, value) = statement.assignments[i]
-            builder.append('${renderExpression(column)} = ${renderExpression(value)}')
+            builder.append('${renderExpression(column, dialect)} = ')
+            builder.append(renderExpression(value, dialect))
             i += 1
         }
         match (statement.condition) {
-            case Some(condition) => builder.append(' where ${renderExpression(condition)}')
+            case Some(condition) => builder.append(' where ${renderExpression(condition, dialect)}')
             case None => ()
         }
         builder.toString()
     }
 
-    private static func renderDelete(statement: DeleteStatement): String {
+    private static func renderDelete(statement: DeleteStatement, dialect: SqlDialect): String {
         let builder = StringBuilder()
-        builder.append('delete from ${renderTable(statement.table)}')
+        builder.append('delete from ${renderTable(statement.table, dialect)}')
         for (join in statement.joins) {
             builder.append(' ')
             match (join.joinType) {
@@ -205,14 +220,14 @@ protected struct SqlRenderer {
                 case JoinType.Left => builder.append('left join ')
                 case JoinType.Right => builder.append('right join ')
             }
-            builder.append(renderTable(join.table))
+            builder.append(renderTable(join.table, dialect))
             match (join.on) {
-                case Some(on) => builder.append(' on ${renderExpression(on)}')
+                case Some(on) => builder.append(' on ${renderExpression(on, dialect)}')
                 case None => ()
             }
         }
         match (statement.condition) {
-            case Some(condition) => builder.append(' where ${renderExpression(condition)}')
+            case Some(condition) => builder.append(' where ${renderExpression(condition, dialect)}')
             case None => ()
         }
         builder.toString()
@@ -235,29 +250,63 @@ protected struct SqlRenderer {
         }
     }
 
-    static func renderTable(table: TableRef): String {
-        let name = match (table.database) {
-            case Some(database) => '${database}.${table.name}'
-            case None => table.name
+    static func renderTable(table: TableRef, dialect: SqlDialect): String {
+        match (table.derived) {
+            case Some(inner) =>
+                let alias = match (table.alias) {
+                    case Some(value) => value
+                    case None => ''
+                }
+                return '(${renderSelect(inner, dialect)}) as ${alias}'
+            case None => ()
+        }
+        let name = if (table.quoted) {
+            SqlDialects.quoteIdentifier(table.name, dialect)
+        } else {
+            table.name
+        }
+        let qualified = match (table.database) {
+            case Some(database) => '${database}.${name}'
+            case None => name
         }
         match (table.alias) {
-            case Some(alias) => '${name} ${alias}'
-            case None => name
+            case Some(alias) => '${qualified} ${alias}'
+            case None => qualified
         }
     }
 
-    static func renderExpression(expression: SqlExpression): String {
+    static func renderIdentifier(identifier: Identifier, dialect: SqlDialect): String {
+        if (identifier.quoted) {
+            SqlDialects.quoteIdentifier(identifier.name, dialect)
+        } else {
+            identifier.name
+        }
+    }
+
+    static func renderExpression(expression: SqlExpression, dialect: SqlDialect): String {
         match (expression) {
             case c: ColumnExpression =>
+                let column = if (c.quoted) {
+                    SqlDialects.quoteIdentifier(c.column, dialect)
+                } else {
+                    c.column
+                }
                 match (c.table) {
-                    case Some(table) => '${table}.${c.column}'
-                    case None => c.column
+                    case Some(table) =>
+                        let prefix = if (c.quoted) {
+                            SqlDialects.quoteIdentifier(table, dialect)
+                        } else {
+                            table
+                        }
+                        '${prefix}.${column}'
+                    case None => column
                 }
             case l: LiteralExpression => literal(l.data)
             case p: ParameterExpression => '?'
-            case b: BinaryExpression => '(${renderExpression(b.left)} ${b.op} ${renderExpression(b.right)})'
+            case b: BinaryExpression =>
+                '(${renderExpression(b.left, dialect)} ${b.op} ${renderExpression(b.right, dialect)})'
             case i: InExpression =>
-                let builder = StringBuilder('(${renderExpression(i.operand)} ')
+                let builder = StringBuilder('(${renderExpression(i.operand, dialect)} ')
                 if (i.negated) {
                     builder.append('not ')
                 }
@@ -267,12 +316,12 @@ protected struct SqlRenderer {
                     if (index > 0) {
                         builder.append(', ')
                     }
-                    builder.append(renderExpression(i.values[index]))
+                    builder.append(renderExpression(i.values[index], dialect))
                     index += 1
                 }
                 builder.append('))')
                 builder.toString()
-            case n: NotExpression => '(not ${renderExpression(n.operand)})'
+            case n: NotExpression => '(not ${renderExpression(n.operand, dialect)})'
             case f: FunctionExpression =>
                 let builder = StringBuilder('${f.name}(')
                 var index: Int64 = 0
@@ -280,11 +329,12 @@ protected struct SqlRenderer {
                     if (index > 0) {
                         builder.append(', ')
                     }
-                    builder.append(renderExpression(f.args[index]))
+                    builder.append(renderExpression(f.args[index], dialect))
                     index += 1
                 }
                 builder.append(')')
                 builder.toString()
+            case _: CountExpression => 'count(*)'
             case _: StarExpression => '*'
             case _ => ''
         }
