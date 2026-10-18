@@ -275,6 +275,49 @@ internal class BackendX86_64 <: Backend {
         BackendX86_64.cmpOp([0x0Fu8, 0x9Cu8, 0xC0u8])
     }
 
+    private static func divModOp(storeRdx: Bool): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (x in [0x48u8, 0x8Bu8, 0x44u8, 0x24u8, 0x08u8, 0x48u8, 0x8Bu8, 0x0Cu8, 0x24u8,
+            0x48u8, 0x85u8, 0xC9u8]) {
+            out.add(x) // a → rax, b → rcx, test rcx,rcx
+        }
+        for (x in [0x0Fu8, 0x84u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+            out.add(x) // jz bail2（占位）
+        }
+        for (x in [0x48u8, 0x83u8, 0xF9u8, 0xFFu8, 0x0Fu8, 0x85u8, 0x00u8, 0x00u8, 0x00u8,
+            0x00u8]) {
+            out.add(x) // cmp rcx,-1; jne ok（占位）
+        }
+        for (x in [0x48u8, 0xBAu8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8,
+            0x80u8, 0x48u8, 0x39u8, 0xD0u8, 0x0Fu8, 0x85u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+            out.add(x) // mov rdx,INT64_MIN; cmp rax,rdx; jne ok（占位）
+        }
+        for (x in [0x48u8, 0x99u8, 0x48u8, 0xF7u8, 0xF9u8]) {
+            out.add(x) // cqo; idiv rcx
+        }
+        if (storeRdx) {
+            for (x in [0x48u8, 0x89u8, 0x54u8, 0x24u8, 0x08u8]) {
+                out.add(x)
+            }
+        } else {
+            for (x in [0x48u8, 0x89u8, 0x44u8, 0x24u8, 0x08u8]) {
+                out.add(x)
+            }
+        }
+        for (x in [0x48u8, 0x83u8, 0xC4u8, 0x08u8]) {
+            out.add(x)
+        }
+        out.toArray()
+    }
+
+    internal static func emitIDiv(): Array<UInt8> {
+        BackendX86_64.divModOp(false)
+    }
+
+    internal static func emitIMod(): Array<UInt8> {
+        BackendX86_64.divModOp(true)
+    }
+
     private static func shiftOp(shiftBytes: Array<UInt8>): Array<UInt8> {
         let out = ArrayList<UInt8>()
         for (x in [0x48u8, 0x8Bu8, 0x44u8, 0x24u8, 0x08u8, 0x48u8, 0x8Bu8, 0x0Cu8, 0x24u8]) {

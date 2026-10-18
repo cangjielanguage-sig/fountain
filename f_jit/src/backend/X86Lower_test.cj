@@ -91,6 +91,17 @@ public class X86Lower_test {
         @Assert(X86Lower_test.hex(BackendX86_64.emitUShr()), head + '48D3E8' + tail)
     }
 
+    @TestCase
+    public func divModOps(): Unit {
+        let head = '488B442408' + '488B0C24' + '4885C9' + '0F8400000000' +
+            '4883F9FF' + '0F8500000000' + '48BA0000000000000080' + '4839D0' + '0F8500000000'
+        let tail = '4899' + '48F7F9'
+        @Assert(X86Lower_test.hex(BackendX86_64.emitIDiv()),
+            head + tail + '4889442408' + '4883C408')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitIMod()),
+            head + tail + '4889542408' + '4883C408')
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {
