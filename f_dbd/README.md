@@ -1,8 +1,8 @@
 # f_dbd
 
 `std.database.sql` 驱动实现：把 SQL 与参数发给 [fdbm](../fdbm) 中间件，把结果集按需拉回。
-本模块**不依赖任何物理数据库驱动**，应用侧把它当普通驱动用即可（`DriverManager` 名 `fdbm`，
-多节点版本为 `multidbd`）。
+本模块**不依赖任何物理数据库驱动**，应用侧把它当普通驱动用即可（`DriverManager` 名为配置项
+`dbd_driverName`，多节点版本为 `multidbd`）。
 
 ## 包结构
 
@@ -20,7 +20,7 @@ import std.database.sql.*
 import fountain::f_dbd.driver.*
 
 main() {
-    let driver = dbdDriver()                                  // 注册名 fdbm
+    let driver = dbdDriver()                                  // 注册名 = dbd_driverName
     let datasource = driver.open("fdbm://user:pwd@127.0.0.1:8112/order", [])
     let connection = datasource.connect()
     let statement = connection.prepareStatement("select id, name from t where id = ?")
@@ -37,6 +37,18 @@ main() {
 
 URL 形如 `fdbm://user:password@host:port/database`；端口缺省 `8112`，`database` 必填，凭据支持
 `%XX` 编码。`multidbm://user1:pwd1@h1:p1,user2:pwd2@h2:p2/database` 为多节点形态。
+
+## 配置
+
+```bash
+# 后端物理库是 PostgreSQL（fdbm 的 fdbm_db_driver_* = postgres）
+export dbd_driverName=postgres
+```
+
+- 必需。fdbm 是代理、自身没有方言；f_orm 按驱动名选择 SQL 方言，因此应用项目必须把驱动名
+  配置成**后端物理库的方言名**（`postgres` / `mysql` / ...）。
+- 未配置或为空：驱动加载时记录 ERROR（说明正确做法）并结束进程。
+- 只影响应用侧注册名；SQL 方言的解析/改写仍只在 fdbm 内完成，URL scheme 仍是 `fdbm://`。
 
 ## 协议口径（与 fdbm 一一对应）
 

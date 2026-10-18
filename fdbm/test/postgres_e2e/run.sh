@@ -198,7 +198,7 @@ start_server "$PORT2" "$WORK/cache_$PORT2" "$WORK/export_$PORT2.sh" "$WORK/fdbm_
 say "运行联调客户端"
 cd "$E2E/client"
 set +e
-FDBM_E2E_PORT="$PORT1" FDBM_E2E_PORT2="$PORT2" \
+dbd_driverName=fdbm FDBM_E2E_PORT="$PORT1" FDBM_E2E_PORT2="$PORT2" \
     cjpm run > "$WORK/client.log" 2>&1
 CLIENT_EXIT=$?
 set -e
@@ -207,6 +207,18 @@ tail -2 "$WORK/client.log"
 grep -q "^E2E_DONE$" "$WORK/client.log" || { echo "client aborted before finishing" >&2; exit 1; }
 grep -q "^checks=.*failures=0$" "$WORK/client.log" || { echo "client reported failures" >&2; exit 1; }
 [ "$CLIENT_EXIT" -eq 0 ] || { echo "client failed (exit $CLIENT_EXIT)" >&2; exit 1; }
+
+say "运行 f_orm 客户端（f_orm 零改动，dbd_driverName=postgres）"
+cd "$E2E/orm_client"
+set +e
+dbd_driverName=postgres orm_drivers=postgres FDBM_E2E_PORT="$PORT1" \
+    cjpm run > "$WORK/orm.log" 2>&1
+ORM_EXIT=$?
+set -e
+grep -E "^(PASS|FAIL) " "$WORK/orm.log" | tail -15
+grep -q "^E2E_DONE$" "$WORK/orm.log" || { tail -20 "$WORK/orm.log" >&2; echo "orm client aborted" >&2; exit 1; }
+grep -q "^checks=.*failures=0$" "$WORK/orm.log" || { echo "orm client reported failures" >&2; exit 1; }
+[ "$ORM_EXIT" -eq 0 ] || { echo "orm client failed (exit $ORM_EXIT)" >&2; exit 1; }
 
 say "逐库核对 DDL 广播 / 分片分布 / 全局表副本"
 for db in "${DATABASES[@]}"; do
@@ -231,6 +243,7 @@ for db in "${DATABASES[@]}"; do
     [ "$(db_sql "$db" "select v from t_global where k = 2")" = "left2" ] || fail "$db global k=2 missing"
 done
 [ "$(db_sql db0 "select octet_length(data) from t_stream where id = 1")" = "200000" ] || fail "bytea not stored"
+[ "$(db_sql db0 "select name from t_orm where id = 1")" = "updated" ] || fail "orm row missing"
 [ -s "$WORK/export_$PORT1.sh" ] || fail "export script not written"
 grep -q "fdbm_port='19999'" "$WORK/export_$PORT1.sh" || fail "export did not persist fdbm_port"
 
@@ -243,7 +256,7 @@ stop_server "$PORT1" "$WORK/fdbm_$PORT1.log"
 stop_server "$PORT2" "$WORK/fdbm_$PORT2.log"
 start_server "$PORT1" "$WORK/cache_$PORT1" "$WORK/export_$PORT1.sh" "$WORK/fdbm_restart_$PORT1.log"
 cd "$E2E/client"
-FDBM_E2E_PROBE=1 FDBM_E2E_PORT="$PORT1" cjpm run > "$WORK/probe.log" 2>&1 \
+dbd_driverName=fdbm FDBM_E2E_PROBE=1 FDBM_E2E_PORT="$PORT1" cjpm run > "$WORK/probe.log" 2>&1 \
     || { tail -20 "$WORK/probe.log" >&2; fail "restart probe failed"; }
 grep -E "^(PASS|FAIL) " "$WORK/probe.log" | tail -5
 grep -q "^E2E_DONE$" "$WORK/probe.log" || { echo "probe aborted" >&2; exit 1; }

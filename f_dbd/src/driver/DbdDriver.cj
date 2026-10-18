@@ -16,12 +16,22 @@ limitations under the License.
 package fountain::f_dbd.driver
 
 import std.database.sql.*
+import std.env.exit
+import fountain::f_config.Config
+import fountain::f_log.LoggerFactory
 import fountain::f_version.FountainVersion
 import fountain::f_dbd.common.DbdErrorCode
 import fountain::f_dbd.exception.DbdException
 
-/** 驱动名（= URL 的 scheme = `DriverManager` 的 key）。 */
-private const DRIVER_NAME: String = 'fdbm'
+/**
+ * 驱动注册名 = 后端物理库的方言名（如 `postgres` / `mysql`）。
+ *
+ * fdbm 是代理，自身没有方言；f_orm 按驱动名选择方言。应用项目必须显式配置本项，
+ * 否则 f_dbd 无法向 f_orm 暴露正确的方言，按约定记录 ERROR 后结束进程。
+ * SQL 方言本身仍只在 fdbm 内处理（fdbm 启动时已掌握真实数据库信息）。
+ */
+private const NAME_KEY: String = 'dbd_driverName'
+private let logger = LoggerFactory.getLogger('fountain::f_dbd.driver')
 
 /**
  * fdbm 的单节点驱动（设计 §5.2）。
@@ -30,15 +40,24 @@ private const DRIVER_NAME: String = 'fdbm'
  * `DriverManager.getDriver('fdbm')` 取到它（与 `f_mockdb.MockDriver` 同构）。
  */
 public class DbdDriver <: Driver {
-    public init() {}
+    private let registeredName: String
+
+    public init() {
+        this.registeredName = configuredName()
+    }
+
+    public init(name: String) {
+        this.registeredName = name
+    }
 
     static init() {
-        DriverManager.register(DRIVER_NAME, DbdDriver())
+        let name = configuredName()
+        DriverManager.register(name, DbdDriver(name))
     }
 
     public prop name: String {
         get() {
-            DRIVER_NAME
+            registeredName
         }
     }
 
@@ -73,19 +92,44 @@ public class DbdDriver <: Driver {
     }
 }
 
+private func configuredName(): String {
+    match (Config.getString(NAME_KEY)) {
+        case Some(value) =>
+            let name = value.trimAscii()
+            if (name.isEmpty()) {
+                missingName()
+            } else {
+                name
+            }
+        case None => missingName()
+    }
+}
+
+private func missingName(): Nothing {
+    let message = 'dbd_driverName is not configured. f_dbd is a proxy driver and cannot know ' +
+        'the physical database dialect; set export dbd_driverName=<backend dialect> ' +
+        '(for example postgres or mysql) so f_orm can select the matching SQL dialect. ' +
+        'SQL dialect handling itself stays inside fdbm.'
+    logger.error(message)
+    // 应用未配置 f_log appender 时也保证错误可见
+    eprintln('ERROR: ${message}')
+    exit(1)
+}
+
 /**
- * 取出注册名为 `'fdbm'` 的驱动；没注册到（包未初始化）时抛 `DbdException(CONFIG)`。
+ * 取出 `dbd_driverName` 对应的驱动；没注册到（包未初始化）时抛 `DbdException(CONFIG)`。
  *
  * 用例与 `f_orm` 都用它做入口，省掉"拿到 DriverManager 里那个实例"的样板。
  */
 public func dbdDriver(): DbdDriver {
-    match (DriverManager.getDriver(DRIVER_NAME)) {
+    let name = configuredName()
+    match (DriverManager.getDriver(name)) {
         case Some(d) =>
             match (d) {
                 case x: DbdDriver => x
                 case _ => throw DbdException(DbdErrorCode.CONFIG,
-                    'the driver registered as ${DRIVER_NAME} is not a DbdDriver')
+                    'the driver registered as ${name} is not a DbdDriver')
             }
-        case None => throw DbdException(DbdErrorCode.CONFIG, 'driver ${DRIVER_NAME} is not registered')
+        case None => throw DbdException(DbdErrorCode.CONFIG, 'driver ${name} is not registered')
     }
 }

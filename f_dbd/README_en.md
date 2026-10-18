@@ -2,8 +2,8 @@
 
 A `std.database.sql` driver that sends SQL and parameters to the [fdbm](../fdbm)
 middleware and pulls result rows on demand. It does **not** depend on any physical
-database driver: applications use it like any other driver (`DriverManager` name
-`fdbm`; `multidbd` for the multi-node variant).
+database driver: applications use it like any other driver (`DriverManager` name is
+the `dbd_driverName` setting; `multidbd` for the multi-node variant).
 
 ## Packages
 
@@ -21,7 +21,7 @@ import std.database.sql.*
 import fountain::f_dbd.driver.*
 
 main() {
-    let driver = dbdDriver()                                  // registered as fdbm
+    let driver = dbdDriver()                                  // name = dbd_driverName
     let datasource = driver.open("fdbm://user:pwd@127.0.0.1:8112/order", [])
     let connection = datasource.connect()
     let statement = connection.prepareStatement("select id, name from t where id = ?")
@@ -39,6 +39,20 @@ main() {
 URL format: `fdbm://user:password@host:port/database` (default port `8112`,
 database required, credentials percent-encoded). Multi-node form:
 `multidbm://user1:pwd1@h1:p1,user2:pwd2@h2:p2/database`.
+
+## Configuration
+
+```bash
+# the backend physical database is PostgreSQL (fdbm's fdbm_db_driver_* = postgres)
+export dbd_driverName=postgres
+```
+
+- Required. fdbm is a proxy without a dialect of its own; f_orm selects the SQL dialect
+  by driver name, so the application must set the name to the **backend dialect**
+  (`postgres` / `mysql` / ...).
+- Missing or empty: the driver logs an ERROR with the correct usage and exits the process.
+- It only affects the client-side registration name; SQL dialect handling stays inside
+  fdbm, and the URL scheme remains `fdbm://`.
 
 ## Protocol contract (mirrors fdbm)
 

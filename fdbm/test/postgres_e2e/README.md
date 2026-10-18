@@ -40,6 +40,7 @@ bash fdbm/test/postgres_e2e/run.sh
 | 查询 | `show databases`、`show tables`（PostgreSQL 方言）、`get`/`getOrNull`、NULL、空结果 |
 | 其它 | EXPORT 落盘与白名单、错误码（SQL_SYNTAX/DB_ERROR/ROUTE_FAILED/CURSOR_STATE）、缓存落盘、SIGTERM 优雅停止、重启探针 |
 | f_dbd | 驱动/连接元数据、结果集独占（二次 query → `CURSOR_STATE`）、提前 close 后继续查询、MultiD 双 fdbm 路由 |
+| f_orm | **f_orm 零改动**：`dbd_driverName=postgres` 让 f_dbd 以方言名注册，`orm_drivers=postgres` 选中 `PostgresDialect`；DDL/CRUD/参数绑定/方言 `limit ? offset ?` 全链路 |
 
 客户端共 96 条断言；`run.sh` 额外做逐库 SQL 核对（分片分布、全局表副本、`octet_length`、缓存文件、EXPORT 内容）。
 
@@ -47,4 +48,6 @@ bash fdbm/test/postgres_e2e/run.sh
 
 - **二进制参数/结果不能跨 `DataAny` 线缆**：`Array<Byte>` 会编码成 `DataCollection`，经协议解码后退化为 `_`，因此 `set<Array<Byte>>` 与二进制列读取不在本联调覆盖内；大字段用 SQL 字面量写入，`run.sh` 用 `octet_length` 核对存储。协议层修复需扩展 `f_data` 的线缆编解码，属于后续变更。
 - 读写分离用同一 PostgreSQL 实例上的两个账号（`fdbm_rw` 只写、`fdbm_ro` 只读）验证，不是物理双机。
-- f_orm / fdemo 端到端（原任务 17.5）仍延后：需要 `f_orm` 的 `fdbm` 方言与真实部署。
+- f_orm 的 ORM 层已覆盖；`fdemo` 完整应用（控制器/MVC/静态资源）未在本脚本内启动。
+- 应用侧必须先设置 `dbd_driverName=<后端方言>`（脚本已设置）；未设置时 f_dbd 记录 ERROR 并退出。
+- SQL 方言的解析/改写只在 fdbm 内做，f_dbd 不感知物理库。
