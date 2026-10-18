@@ -307,6 +307,16 @@ public class X86Lower_test {
             X86Lower_test.hex(BackendX86_64.emitCallHelper(0x6000, 1)))
     }
 
+    @TestCase
+    public func containerHelperRoutes(): Unit {
+        @Assert(X86Lower_test.hex(BackendX86_64.emitListGet(0x7000)),
+            X86Lower_test.hex(BackendX86_64.emitCallHelper(0x7000, 2)))
+        @Assert(X86Lower_test.hex(BackendX86_64.emitListAdd(0x7001)),
+            X86Lower_test.hex(BackendX86_64.emitCallHelper(0x7001, 2)))
+        @Assert(X86Lower_test.hex(BackendX86_64.emitMapGet(0x7002)),
+            X86Lower_test.hex(BackendX86_64.emitCallHelper(0x7002, 2)))
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {

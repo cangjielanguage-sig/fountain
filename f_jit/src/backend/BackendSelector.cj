@@ -455,6 +455,19 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
+    /** 容器 helper 路由：均为双参模板 A。 */
+    internal static func emitListGet(h02: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h02, 2)
+    }
+
+    internal static func emitListAdd(h43: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h43, 2)
+    }
+
+    internal static func emitMapGet(h04: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h04, 2)
+    }
+
     /** `TO_STR`：H33 单参模板 A。 */
     internal static func emitToStr(h33: Int64): Array<UInt8> {
         BackendX86_64.emitCallHelper(h33, 1)
