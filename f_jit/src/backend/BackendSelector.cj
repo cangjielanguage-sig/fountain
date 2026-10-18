@@ -228,16 +228,37 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
+    /** 溢出检查版二元：`<op> rax,[rsp]; jo <bail:3>`（rel 占位）。 */
+    private static func binOpChecked(opBytes: Array<UInt8>): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (b in [0x48u8, 0x8Bu8, 0x44u8, 0x24u8, 0x08u8]) {
+            out.add(b) // mov rax,[rsp+8]
+        }
+        for (b in opBytes) {
+            out.add(b)
+        }
+        for (b in [0x0Fu8, 0x80u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+            out.add(b) // jo <bail:3>
+        }
+        for (b in [0x48u8, 0x89u8, 0x44u8, 0x24u8, 0x08u8]) {
+            out.add(b)
+        }
+        for (b in [0x48u8, 0x83u8, 0xC4u8, 0x08u8]) {
+            out.add(b)
+        }
+        out.toArray()
+    }
+
     internal static func emitIAdd(): Array<UInt8> {
-        BackendX86_64.binOp([0x48u8, 0x03u8, 0x04u8, 0x24u8])
+        BackendX86_64.binOpChecked([0x48u8, 0x03u8, 0x04u8, 0x24u8])
     }
 
     internal static func emitISub(): Array<UInt8> {
-        BackendX86_64.binOp([0x48u8, 0x2Bu8, 0x04u8, 0x24u8])
+        BackendX86_64.binOpChecked([0x48u8, 0x2Bu8, 0x04u8, 0x24u8])
     }
 
     internal static func emitIMul(): Array<UInt8> {
-        BackendX86_64.binOp([0x48u8, 0x0Fu8, 0xAFu8, 0x04u8, 0x24u8])
+        BackendX86_64.binOpChecked([0x48u8, 0x0Fu8, 0xAFu8, 0x04u8, 0x24u8])
     }
 
     internal static func emitBAnd(): Array<UInt8> {
@@ -851,7 +872,7 @@ internal class BackendX86_64 <: Backend {
     }
 
     internal static func emitIAddWrap(): Array<UInt8> {
-        BackendX86_64.emitIAdd()
+        BackendX86_64.binOp([0x48u8, 0x03u8, 0x04u8, 0x24u8])
     }
 
     /** `PUSH_KH idx`：常量镜像地址已烘焙为绝对地址，`mov rax,[imm64]; push rax`。 */
@@ -898,7 +919,88 @@ internal class BackendX86_64 <: Backend {
     }
 
     internal static func emitINeg(): Array<UInt8> {
-        BackendX86_64.unaryTop([0x48u8, 0xF7u8, 0xD8u8])
+        let out = ArrayList<UInt8>()
+        for (x in [0x48u8, 0x8Bu8, 0x04u8, 0x24u8, 0x48u8, 0xF7u8, 0xD8u8,
+            0x0Fu8, 0x80u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8,
+            0x48u8, 0x89u8, 0x04u8, 0x24u8]) {
+            out.add(x) // mov rax,[rsp]; neg; jo bail3; 写回
+        }
+        out.toArray()
+    }
+
+    /** `IABS`：`pop rax; test; jns .ok; neg; jo bail3; .ok: push rax`。 */
+    internal static func emitIAbs(): Array<UInt8> {
+        [0x58u8, 0x48u8, 0x85u8, 0xC0u8,
+         0x0Fu8, 0x89u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8,
+         0x48u8, 0xF7u8, 0xD8u8,
+         0x0Fu8, 0x80u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8,
+         0x50u8]
+    }
+
+    /** `IMIN`/`IMAX`：`cmovl`（max）/`cmovge`（min）。 */
+    private static func iminMax(cmov: Array<UInt8>): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (x in [0x48u8, 0x8Bu8, 0x0Cu8, 0x24u8, 0x48u8, 0x8Bu8, 0x44u8, 0x24u8, 0x08u8,
+            0x48u8, 0x83u8, 0xC4u8, 0x08u8, 0x48u8, 0x3Bu8, 0xC1u8]) {
+            out.add(x)
+        }
+        for (x in cmov) {
+            out.add(x)
+        }
+        for (x in [0x48u8, 0x89u8, 0x04u8, 0x24u8]) {
+            out.add(x)
+        }
+        out.toArray()
+    }
+
+    internal static func emitIMin(): Array<UInt8> {
+        BackendX86_64.iminMax([0x48u8, 0x0Fu8, 0x4Du8, 0xC1u8])
+    }
+
+    internal static func emitIMax(): Array<UInt8> {
+        BackendX86_64.iminMax([0x48u8, 0x0Fu8, 0x4Cu8, 0xC1u8])
+    }
+
+    /** `ICLZ`：`bsr` + `xor 63`（0 → 64 走分支）。 */
+    internal static func emitIClz(): Array<UInt8> {
+        [0x48u8, 0x8Bu8, 0x0Cu8, 0x24u8,
+         0x48u8, 0xC7u8, 0xC0u8, 0x40u8, 0x00u8, 0x00u8, 0x00u8,
+         0x48u8, 0x85u8, 0xC9u8,
+         0x0Fu8, 0x84u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8,
+         0x48u8, 0x0Fu8, 0xBDu8, 0xC1u8,
+         0x48u8, 0x35u8, 0x3Fu8, 0x00u8, 0x00u8, 0x00u8,
+         0x48u8, 0x89u8, 0x04u8, 0x24u8]
+    }
+
+    /** `IPOPCNT`：SWAR（SSE2 基线，不依赖 POPCNT 指令）。 */
+    internal static func emitIPopcnt(): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (x in [0x48u8, 0x8Bu8, 0x04u8, 0x24u8, 0x48u8, 0x89u8, 0xC1u8,
+            0x48u8, 0xD1u8, 0xE9u8, 0x48u8, 0xBAu8]) {
+            out.add(x) // mov rax,[rsp]; mov rcx,rax; shr rcx,1; movabs m1
+        }
+        BackendX86_64.w64(out, 0x5555555555555555)
+        for (x in [0x48u8, 0x21u8, 0xD1u8, 0x48u8, 0x29u8, 0xC8u8,
+            0x48u8, 0x89u8, 0xC1u8, 0x48u8, 0xBAu8]) {
+            out.add(x) // and rcx,rdx; sub rax,rcx; mov rcx,rax; movabs m2
+        }
+        BackendX86_64.w64(out, 0x3333333333333333)
+        for (x in [0x48u8, 0x21u8, 0xD0u8, 0x48u8, 0x21u8, 0xD1u8,
+            0x48u8, 0xC1u8, 0xE9u8, 0x02u8, 0x48u8, 0x01u8, 0xC8u8,
+            0x48u8, 0x89u8, 0xC1u8, 0x48u8, 0xC1u8, 0xE9u8, 0x04u8,
+            0x48u8, 0x01u8, 0xC8u8, 0x48u8, 0xBAu8]) {
+            out.add(x) // 标准 SWAR 折叠
+        }
+        BackendX86_64.w64(out, 0x0F0F0F0F0F0F0F0F)
+        for (x in [0x48u8, 0x21u8, 0xD0u8, 0x48u8, 0xBAu8]) {
+            out.add(x)
+        }
+        BackendX86_64.w64(out, 0x0101010101010101)
+        for (x in [0x48u8, 0x0Fu8, 0xAFu8, 0xC2u8, 0x48u8, 0xC1u8, 0xE8u8, 0x38u8,
+            0x48u8, 0x89u8, 0x04u8, 0x24u8]) {
+            out.add(x)
+        }
+        out.toArray()
     }
 
     internal static func emitBNot(): Array<UInt8> {
@@ -915,47 +1017,60 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
-    private static func divModOp(storeRdx: Bool): Array<UInt8> {
+    /**
+     * `IDIV`（§12.4）：÷0 → `<bail:1>`；`INT64_MIN/-1` → `<bail:3>`；`cqo; idiv` 商写回。
+     */
+    internal static func emitIDiv(): Array<UInt8> {
         let out = ArrayList<UInt8>()
         for (x in [0x48u8, 0x8Bu8, 0x44u8, 0x24u8, 0x08u8, 0x48u8, 0x8Bu8, 0x0Cu8, 0x24u8,
             0x48u8, 0x85u8, 0xC9u8]) {
-            out.add(x) // a → rax, b → rcx, test rcx,rcx
+            out.add(x) // a→rax, b→rcx, test
         }
         for (x in [0x0Fu8, 0x84u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
-            out.add(x) // jz bail2（占位）
+            out.add(x) // jz <bail:1>
         }
         for (x in [0x48u8, 0x83u8, 0xF9u8, 0xFFu8, 0x0Fu8, 0x85u8, 0x00u8, 0x00u8, 0x00u8,
             0x00u8]) {
-            out.add(x) // cmp rcx,-1; jne ok（占位）
+            out.add(x) // cmp rcx,-1; jne .ok
         }
         for (x in [0x48u8, 0xBAu8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8,
-            0x80u8, 0x48u8, 0x39u8, 0xD0u8, 0x0Fu8, 0x85u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
-            out.add(x) // mov rdx,INT64_MIN; cmp rax,rdx; jne ok（占位）
+            0x80u8, 0x48u8, 0x39u8, 0xD0u8, 0x0Fu8, 0x84u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+            out.add(x) // mov rdx,INT64_MIN; cmp; je <bail:3>
         }
-        for (x in [0x48u8, 0x99u8, 0x48u8, 0xF7u8, 0xF9u8]) {
-            out.add(x) // cqo; idiv rcx
-        }
-        if (storeRdx) {
-            for (x in [0x48u8, 0x89u8, 0x54u8, 0x24u8, 0x08u8]) {
-                out.add(x)
-            }
-        } else {
-            for (x in [0x48u8, 0x89u8, 0x44u8, 0x24u8, 0x08u8]) {
-                out.add(x)
-            }
-        }
-        for (x in [0x48u8, 0x83u8, 0xC4u8, 0x08u8]) {
-            out.add(x)
+        for (x in [0x48u8, 0x99u8, 0x48u8, 0xF7u8, 0xF9u8,
+            0x48u8, 0x89u8, 0x44u8, 0x24u8, 0x08u8, 0x48u8, 0x83u8, 0xC4u8, 0x08u8]) {
+            out.add(x) // cqo; idiv rcx; 商写回; 收栈
         }
         out.toArray()
     }
 
-    internal static func emitIDiv(): Array<UInt8> {
-        BackendX86_64.divModOp(false)
-    }
-
+    /**
+     * `IMOD`（§12.4）：÷0 → `<bail:2>`；除数为 -1 → 余数恒 0（不报溢出）。
+     */
     internal static func emitIMod(): Array<UInt8> {
-        BackendX86_64.divModOp(true)
+        let out = ArrayList<UInt8>()
+        for (x in [0x48u8, 0x8Bu8, 0x44u8, 0x24u8, 0x08u8, 0x48u8, 0x8Bu8, 0x0Cu8, 0x24u8,
+            0x48u8, 0x85u8, 0xC9u8]) {
+            out.add(x)
+        }
+        for (x in [0x0Fu8, 0x84u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+            out.add(x) // jz <bail:2>
+        }
+        for (x in [0x48u8, 0x83u8, 0xF9u8, 0xFFu8, 0x0Fu8, 0x84u8, 0x00u8, 0x00u8, 0x00u8,
+            0x00u8]) {
+            out.add(x) // cmp rcx,-1; je .zero
+        }
+        for (x in [0x48u8, 0x99u8, 0x48u8, 0xF7u8, 0xF9u8,
+            0x48u8, 0x89u8, 0x54u8, 0x24u8, 0x08u8, 0x48u8, 0x83u8, 0xC4u8, 0x08u8,
+            0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+            out.add(x) // cqo; idiv; 余数写回; 收栈; jmp .done
+        }
+        for (x in [0x31u8, 0xD2u8,
+            0x48u8, 0x89u8, 0x54u8, 0x24u8, 0x08u8,
+            0x48u8, 0x83u8, 0xC4u8, 0x08u8]) {
+            out.add(x) // .zero: xor edx,edx; 写回; 收栈
+        }
+        out.toArray()
     }
 
     private static func shiftOp(shiftBytes: Array<UInt8>): Array<UInt8> {
@@ -982,6 +1097,55 @@ internal class BackendX86_64 <: Backend {
 
     internal static func emitUShr(): Array<UInt8> {
         BackendX86_64.shiftOp([0x48u8, 0xD3u8, 0xE8u8])
+    }
+
+    /** `NOT_B`：`xor qword [rsp],1`。 */
+    internal static func emitNotB(): Array<UInt8> {
+        [0x48u8, 0x83u8, 0x34u8, 0x24u8, 0x01u8]
+    }
+
+    internal static func emitAndB(): Array<UInt8> {
+        BackendX86_64.binOp([0x48u8, 0x23u8, 0x04u8, 0x24u8])
+    }
+
+    internal static func emitOrB(): Array<UInt8> {
+        BackendX86_64.binOp([0x48u8, 0x0Bu8, 0x04u8, 0x24u8])
+    }
+
+    internal static func emitXorB(): Array<UInt8> {
+        BackendX86_64.binOp([0x48u8, 0x33u8, 0x04u8, 0x24u8])
+    }
+
+    /** `CMP_I`：三向比较，结果 -1/0/1。 */
+    internal static func emitCmpI(): Array<UInt8> {
+        [0x48u8, 0x8Bu8, 0x44u8, 0x24u8, 0x08u8,
+         0x48u8, 0x8Bu8, 0x0Cu8, 0x24u8,
+         0x48u8, 0x83u8, 0xC4u8, 0x08u8,
+         0x48u8, 0x3Bu8, 0xC1u8,
+         0x0Fu8, 0x9Fu8, 0xC2u8,
+         0x0Fu8, 0x9Cu8, 0xC0u8,
+         0x0Fu8, 0xB6u8, 0xC0u8,
+         0x0Fu8, 0xB6u8, 0xD2u8,
+         0x29u8, 0xD0u8,
+         0x48u8, 0x98u8,
+         0x48u8, 0x89u8, 0x04u8, 0x24u8]
+    }
+
+    /** `CMP_STR`/`CMP_DEC`/`CMP_DT`/`CMP_DUR`：双参 helper 路由。 */
+    internal static func emitCmpStr(h09: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h09, 2)
+    }
+
+    internal static func emitCmpDec(h11: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h11, 2)
+    }
+
+    internal static func emitCmpDt(h13: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h13, 2)
+    }
+
+    internal static func emitCmpDur(h15: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h15, 2)
     }
 
     /** `JMP rel32`（占位 0，P5.8 回填）。 */

@@ -56,10 +56,13 @@ public class X86Lower_test {
 
     @TestCase
     public func integerBinaryOps(): Unit {
-        let tail = '4889442408' + '4883C408'
+        let tail = '0F8000000000' + '4889442408' + '4883C408'
         @Assert(X86Lower_test.hex(BackendX86_64.emitIAdd()), '488B442408' + '48030424' + tail)
         @Assert(X86Lower_test.hex(BackendX86_64.emitISub()), '488B442408' + '482B0424' + tail)
         @Assert(X86Lower_test.hex(BackendX86_64.emitIMul()), '488B442408' + '480FAF0424' + tail)
+        // IADD_WRAP 不发射 jo
+        @Assert(X86Lower_test.hex(BackendX86_64.emitIAddWrap()),
+            '488B442408' + '48030424' + '4889442408' + '4883C408')
     }
 
     @TestCase
@@ -94,17 +97,22 @@ public class X86Lower_test {
     @TestCase
     public func divModOps(): Unit {
         let head = '488B442408' + '488B0C24' + '4885C9' + '0F8400000000' +
-            '4883F9FF' + '0F8500000000' + '48BA0000000000000080' + '4839D0' + '0F8500000000'
-        let tail = '4899' + '48F7F9'
+            '4883F9FF'
+        // IDIV：÷0→1；INT64_MIN/-1→3；商写回
         @Assert(X86Lower_test.hex(BackendX86_64.emitIDiv()),
-            head + tail + '4889442408' + '4883C408')
+            head + '0F8500000000' + '48BA0000000000000080' + '4839D0' + '0F8400000000' +
+            '4899' + '48F7F9' + '4889442408' + '4883C408')
+        // IMOD：÷0→2；除数 -1 直达零分支
         @Assert(X86Lower_test.hex(BackendX86_64.emitIMod()),
-            head + tail + '4889542408' + '4883C408')
+            head + '0F8400000000' +
+            '4899' + '48F7F9' + '4889542408' + '4883C408' + 'E900000000' +
+            '31D2' + '4889542408' + '4883C408')
     }
 
     @TestCase
     public func unaryAndPick(): Unit {
-        @Assert(X86Lower_test.hex(BackendX86_64.emitINeg()), '488B0424' + '48F7D8' + '48890424')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitINeg()),
+            '488B0424' + '48F7D8' + '0F8000000000' + '48890424')
         @Assert(X86Lower_test.hex(BackendX86_64.emitBNot()), '488B0424' + '48F7D0' + '48890424')
         // PICK 2 → push qword [rsp+16]
         @Assert(X86Lower_test.hex(BackendX86_64.emitPick(2)), 'FFB424' + '10000000')
@@ -134,7 +142,8 @@ public class X86Lower_test {
         @Assert(X86Lower_test.hex(BackendX86_64.emitPop2()), '4883C410')
         @Assert(X86Lower_test.hex(BackendX86_64.emitLoadL0()), 'FFB5E0FFFFFF')
         @Assert(X86Lower_test.hex(BackendX86_64.emitLoadL3()), 'FFB5C8FFFFFF')
-        @Assert(X86Lower_test.hex(BackendX86_64.emitIAddWrap()), X86Lower_test.hex(BackendX86_64.emitIAdd()))
+        @Assert(X86Lower_test.hex(BackendX86_64.emitIAddWrap()),
+            '488B442408' + '48030424' + '4889442408' + '4883C408')
     }
 
     @TestCase
@@ -406,6 +415,41 @@ public class X86Lower_test {
             head + '49C70707000000' + '31C0' + 'E900000000')
         @Assert(X86Lower_test.hex(BackendX86_64.emitCast(0x9000, 4, 1)),
             head + '49C707FFFFFFFF' + '31C0' + 'E900000000')
+    }
+
+    @TestCase
+    public func integerExtras(): Unit {
+        @Assert(X86Lower_test.hex(BackendX86_64.emitIAbs()),
+            '58' + '4885C0' + '0F8900000000' + '48F7D8' + '0F8000000000' + '50')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitIMin()),
+            '488B0C24' + '488B442408' + '4883C408' + '483BC1' + '480F4DC1' + '48890424')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitIMax()),
+            '488B0C24' + '488B442408' + '4883C408' + '483BC1' + '480F4CC1' + '48890424')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitIClz()),
+            '488B0C24' + '48C7C040000000' + '4885C9' + '0F8400000000' +
+            '480FBDC1' + '48353F000000' + '48890424')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitIPopcnt()),
+            '488B0424' + '4889C1' + '48D1E9' + '48BA5555555555555555' +
+            '4821D1' + '4829C8' + '4889C1' + '48BA3333333333333333' +
+            '4821D0' + '4821D1' + '48C1E902' + '4801C8' +
+            '4889C1' + '48C1E904' + '4801C8' + '48BA0F0F0F0F0F0F0F0F' +
+            '4821D0' + '48BA0101010101010101' + '480FAFC2' + '48C1E838' + '48890424')
+    }
+
+    @TestCase
+    public func booleanAndTriCompare(): Unit {
+        @Assert(X86Lower_test.hex(BackendX86_64.emitNotB()), '4883342401')
+        let binTail = '4889442408' + '4883C408'
+        @Assert(X86Lower_test.hex(BackendX86_64.emitAndB()), '488B442408' + '48230424' + binTail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitOrB()), '488B442408' + '480B0424' + binTail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitXorB()), '488B442408' + '48330424' + binTail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpI()),
+            '488B442408' + '488B0C24' + '4883C408' + '483BC1' +
+            '0F9FC2' + '0F9CC0' + '0FB6C0' + '0FB6D2' + '29D0' + '4898' + '48890424')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpStr(0x9100)),
+            X86Lower_test.hex(BackendX86_64.emitCallHelper(0x9100, 2)))
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCmpDec(0x9101)),
+            X86Lower_test.hex(BackendX86_64.emitCallHelper(0x9101, 2)))
     }
 
     private static func hex(bs: Array<UInt8>): String {
