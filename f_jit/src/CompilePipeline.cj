@@ -183,6 +183,10 @@ protected class CompilePipeline {
             case None => Some({ => CompilePipeline.releaseConsts(constIds) })
         }
         let fn = JitFunction(Int64(e.nargs), e.retType, params, body, replay, '', release)
+        match (executor) {
+            case Some(_) => fn.markJitBacked()
+            case None => ()
+        }
         // T50：桥侧报告（源码行 + 变量清单），与差分层/解释器共用一份组装逻辑。
         fn.bindDiagnostics(CompilePipeline.maxNLocals(unit)) { ctx, dump =>
             CompilePipeline.reportOf(unit, entryFn, ctx, dump)

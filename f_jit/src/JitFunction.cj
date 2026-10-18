@@ -47,6 +47,8 @@ public class JitFunction {
     private var state: Int64 = 0
     private var active: Int64 = 0
     private var release: ?(() -> Unit) = None
+    /** 产物是否由机器码执行器承载（false = 纯字节码；用于 T52/诊断）。 */
+    private var jitBacked: Bool = false
 
     public init(nargs: Int64, retType: UInt16, paramTypes: Array<UInt16>,
         body: (JitContext, Array<Int64>) -> Int64,
@@ -145,6 +147,16 @@ public class JitFunction {
     }
 
     /** 便捷重载（默认为不等待活跃调用）。 */
+    /** 本次产物是否走机器码路径（装载层在成功创建 JitExecutor 后置 true）。 */
+    public func isJitBacked(): Bool {
+        this.jitBacked
+    }
+
+    /** 装载层内部：标记机器码产物。 */
+    internal func markJitBacked(): Unit {
+        this.jitBacked = true
+    }
+
     public func unload(): Bool {
         this.unload(0)
     }

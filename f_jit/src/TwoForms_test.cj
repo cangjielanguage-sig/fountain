@@ -31,9 +31,11 @@ public class TwoForms_test {
         var o = CompileOptions(DummyDiagnosticsSink())
         o.jit = JitMode.Force
         let jit = Compiler(o).compile(src)
+        @Assert(jit.isJitBacked(), true)
         var b = CompileOptions(DummyDiagnosticsSink())
         b.jit = JitMode.Off
         let bc = Compiler(b).compile(src)
+        @Assert(bc.isJitBacked(), false)
         for (n in [0, 1, 7, 21, 1000]) {
             @Assert(jit.call<Int64>([n]), bc.call<Int64>([n]))
         }
