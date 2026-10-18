@@ -481,6 +481,21 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
+    /** `CAST t`：保留低 48 位、重写高 16 位 tag（失败判定 7 待补）。 */
+    internal static func emitCast(t: Int64): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (x in [0x48u8, 0x8Bu8, 0x04u8, 0x24u8, 0x48u8, 0xC1u8, 0xE0u8, 0x10u8,
+            0x48u8, 0xC1u8, 0xE8u8, 0x10u8, 0x48u8, 0xB9u8]) {
+            out.add(x) // 清高 16 位
+        }
+        BackendX86_64.w64(out, t)
+        for (x in [0x48u8, 0xC1u8, 0xE1u8, 0x30u8, 0x48u8, 0x09u8, 0xC8u8, 0x48u8, 0x89u8,
+            0x04u8, 0x24u8]) {
+            out.add(x) // tag<<48 | value
+        }
+        out.toArray()
+    }
+
     /** `STR_TO_REGEX`：H69 单参模板 A。 */
     internal static func emitStrToRegex(h69: Int64): Array<UInt8> {
         BackendX86_64.emitCallHelper(h69, 1)

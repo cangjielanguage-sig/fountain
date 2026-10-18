@@ -396,6 +396,13 @@ public class X86Lower_test {
             X86Lower_test.hex(BackendX86_64.emitCallHelper(0x8800, 1)))
     }
 
+    @TestCase
+    public func castTagRewrite(): Unit {
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCast(4)),
+            '488B0424' + '48C1E010' + '48C1E810' + '48B90400000000000000' +
+            '48C1E130' + '4809C8' + '48890424')
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {
