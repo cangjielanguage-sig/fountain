@@ -39,7 +39,6 @@
    （`f_mq/src/client/MQClient.cj:41`），无服务端 long-poll。
 10. **静态成员，无再平衡**
     节点表来自 `mqClient_hosts`，主题注册时一次性分配；扩缩容不迁移队列、不重新分配。
-11. **无指标查询**（本轮已由 `add-fmq-metrics-and-delay` 实现，故从遗留清单移除）。
 
 ## P2（暂记录，不展开）
 
