@@ -53,7 +53,6 @@ fmq manager --server=127.0.0.1:2350 stats
 - `backlog`：订阅组在该主题本地队列中 `committed` 之后的记录数（含已投递未确认）。
 - `lagMs`：backlog 中最早一条消息的发布时长（毫秒）。
 - `delivered` / `acked` / `redelivered` / `deadLettered`：进程启动以来的累计值。
-- `messages` / `bytes`：主题本地队列的记录总数与有效字节数。
 
 多节点部署时需分别查询各节点；manager 不自动聚合。`backlog` / `lagMs` 在查询时扫描，
 超大积压会有一定耗时。

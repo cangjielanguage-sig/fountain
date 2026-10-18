@@ -11,7 +11,6 @@
 - `backlog`：指定组在该主题本地队列中、`committed` 位置之后的记录数（含已投递未确认与未投递）。
 - `lagMs`：`backlog` 中最早一条记录的发布时间到当前时间的毫秒数；`backlog = 0` 或发布时间
   不可解析时为 0。
-- `messages` / `bytes`：主题本地队列的记录总数与有效字节数。
 
 发布时间 SHALL 取自 messageId 末尾的 23 位 UTC 时间戳。`backlog` 与 `lagMs` 在查询时按游标位置
 扫描计算，必须与查询时刻的持久化状态一致，不得使用可能失真的估算值。
@@ -38,19 +37,19 @@
 
 ```
 #\t<nodeIndex>\t<generatedAtMs>\n
-R\t<topic>\t<group>\t<queueNum>\t<delayingMs>\t<messages>\t<backlog>\t<lagMs>\t
+R\t<topic>\t<group>\t<queueNum>\t<delayingMs>\t<backlog>\t<lagMs>\t
   <delivered>\t<acked>\t<redelivered>\t<deadLettered>\n
 ```
 
 无订阅组的主题输出一行 group 为空的 `R` 记录。
 
-统计 SHALL 只反映被查询节点的本地队列；不存在的主题返回空 `topics`，不报错。
+统计 SHALL 只反映被查询节点的本地队列；不存在的主题不返回 `R` 记录，不报错。
 查询 SHALL NOT 改变游标、消息或元数据。
 
 #### Scenario: 查询全部
 
 - **WHEN** 节点上有两个主题时执行 stats 且 topic 为空
-- **THEN** 返回两个主题，`nodeIndex` 为本节点下标
+- **THEN** 返回两行 `R` 记录，首行 `#` 的节点下标为本节点
 
 #### Scenario: 按主题过滤
 
@@ -60,7 +59,7 @@ R\t<topic>\t<group>\t<queueNum>\t<delayingMs>\t<messages>\t<backlog>\t<lagMs>\t
 #### Scenario: 未知主题
 
 - **WHEN** stats 请求一个未注册主题
-- **THEN** `topics` 为空数组，响应成功
+- **THEN** 响应成功且不含 `R` 记录
 
 #### Scenario: 查询无副作用
 

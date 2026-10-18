@@ -5,7 +5,7 @@
 ### Requirement: 统计查询子命令
 
 管理端 SHALL 新增 `stats [topic]` 子命令：向目标服务发送
-`REGISTER` + `MQInternalMessage{kind = "stats"}`，解析 `MQStatsSnapshot` 并渲染表格。
+`REGISTER` + `MQInternalMessage{kind = "stats"}`，解析 TSV 响应并渲染表格。
 `topic` 省略时查询全部本地主题；`topic` 多余参数或无法连接时 SHALL 返回非 0。
 
 表格列 SHALL 包含：`topic`、`group`、`queueNum`、`delaying`、`backlog`、`lagMs`、

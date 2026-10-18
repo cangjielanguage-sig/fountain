@@ -31,7 +31,6 @@
 | `deadLettered` | 写入死信的条数 |
 | `backlog` | 组在该主题本地队列中 `committed` 之后的记录数（含 pending 与未投递） |
 | `lagMs` | backlog 中最早一条记录的发布时间到现在的毫秒数；无 backlog/无法解析为 0 |
-| `messages` / `bytes` | 主题本地队列的总记录数 / 有效字节数 |
 
 计数器按 `(topic, group)` 维度，进程内 `ConcurrentHashMap<String, AtomicInt64>`；
 `backlog/lag` 在查询时用游标位置扫描，保证与持久化状态一致。
@@ -49,15 +48,14 @@
 - 服务端 `MQCommandExecutor.onInternal` 分派到 `ConsumeService.stats(request)`。
 - 组装：
   1. 主题列表：`QueueManager.localTopics()`；请求 topic 非空时只取该主题（不存在返回空）。
-  2. 每个主题：`messages`/`bytes` 由 `QueueLog.countAll()` / `QueueLog.size` 汇总；
-     `queueNum` 取分配结果；`delayingMs` 取分配结果。
-  3. 组列表：`SubscriberRegistry.groupsOf(topic)` 与现有游标键的并集。
+  2. `queueNum` 与 `delayingMs` 取分配结果。
+  3. 组列表：元数据中的已注册组（`MetaStore.groupsOf`），保证从未消费的组也有记录。
   4. 每组：对每个本地队列调用 `cursorOf(...).committed`，`QueueLog.scanAfter(committed)`
      得到 backlog 与该段最早发布时间 → `lagMs = now - publishTime`。
   5. 计数器从 `MQMetrics` 读取。
 - 查询开销：`scanAfter` 只扫 backlog 部分；超大积压时 stats 会变慢，属于已知取舍，
   不阻塞发布/消费（各自持有独立锁）。
-- `MQStatsSnapshot.nodeIndex` 标明节点，避免误读为集群总量。
+- 首行 `#` 携带节点下标，避免误读为集群总量。
 
 ### 2.4 响应格式
 
@@ -65,7 +63,7 @@
 
 ```text
 #\t<nodeIndex>\t<generatedAtMs>\n
-R\t<topic>\t<group>\t<queueNum>\t<delayingMs>\t<messages>\t<backlog>\t<lagMs>\t
+R\t<topic>\t<group>\t<queueNum>\t<delayingMs>\t<backlog>\t<lagMs>\t
   <delivered>\t<acked>\t<redelivered>\t<deadLettered>\n
 ```
 
@@ -123,7 +121,7 @@ if delaying > 0:
 
 | 层 | 用例 |
 |---|---|
-| 协议 | `MQStatsRequest/Group/Topic/Snapshot` 往返；`MQInternalKind.STATS` 稳定；`publishTime` 标准/非标准 ID |
+| 协议 | `MQProtocol.stats(topic)` 的 `REGISTER`/`STATS` 与字符串子载荷；`publishTime` 标准/非标准 ID |
 | 元数据 | `MQTopicMeta`/`MQTopicAssignment` 带 delaying 往返；MetaStore 重启保持；快照/远端应用 |
 | 消费 | 未到期不投递、到期投递、零延迟、队首阻塞、重启后仍延迟、非标准 ID 立即投递 |
 | 指标 | 积压/延迟计算、计数器（投递/重投/确认/死信）、查询无副作用、未知主题 |

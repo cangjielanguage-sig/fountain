@@ -56,7 +56,7 @@
 | `fmq/src/queue/QueueLog.cj` | 新增 `scanAfter()`（记录数与最早发布时间） |
 | `fmq/src/queue/QueueManager.cj` | 保存/查询主题延迟与本地主题列表 |
 | `fmq/src/metrics/MQMetrics.cj` | 新增指标计数器 |
-| `fmq/src/server/ConsumeService.cj` | 组装 `MQStatsSnapshot`；向游标注入延迟与指标 |
+| `fmq/src/server/ConsumeService.cj` | 组装 TSV 统计；向游标注入延迟与指标 |
 | `fmq/src/server/MQCommandExecutor.cj` | 分派 `STATS` 内部消息 |
 | `fmq/src/manager/MQManager*.cj` | `stats` 子命令、`registerTopic` 可选参数、列表列 |
 | `fmq/doc/backlog.md` | P0/P1 归档 |

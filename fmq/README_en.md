@@ -50,7 +50,7 @@ fmq manager --server=127.0.0.1:2350 stats
 
 `stats [topic]` reports metrics for the **current node**: `backlog` (records after each group's
 `committed` position), `lagMs` (age of the oldest backlog record), and process-lifetime counters
-`delivered` / `acked` / `redelivered` / `deadLettered`, plus topic totals `messages` / `bytes`.
+`delivered` / `acked` / `redelivered` / `deadLettered`.
 Query each node separately; the manager does not aggregate.
 
 `registerTopic` accepts an optional `delaying=<DurationString>` (for example `1m1s`, default `0s`).
