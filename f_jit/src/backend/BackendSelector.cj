@@ -455,6 +455,15 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
+    /** 正则 helper 路由：双参模板 A。 */
+    internal static func emitRegexIsMatch(h52: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h52, 2)
+    }
+
+    internal static func emitRegexFind(h53: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h53, 2)
+    }
+
     /** 容器 helper 路由：均为双参模板 A。 */
     internal static func emitListGet(h02: Int64): Array<UInt8> {
         BackendX86_64.emitCallHelper(h02, 2)
