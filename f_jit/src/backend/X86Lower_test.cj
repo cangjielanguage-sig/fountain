@@ -102,6 +102,14 @@ public class X86Lower_test {
             head + tail + '4889542408' + '4883C408')
     }
 
+    @TestCase
+    public func unaryAndPick(): Unit {
+        @Assert(X86Lower_test.hex(BackendX86_64.emitINeg()), '488B0424' + '48F7D8' + '48890424')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitBNot()), '488B0424' + '48F7D0' + '48890424')
+        // PICK 2 → push qword [rsp+16]
+        @Assert(X86Lower_test.hex(BackendX86_64.emitPick(2)), 'FFB424' + '10000000')
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {

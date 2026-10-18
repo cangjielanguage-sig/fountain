@@ -275,6 +275,38 @@ internal class BackendX86_64 <: Backend {
         BackendX86_64.cmpOp([0x0Fu8, 0x9Cu8, 0xC0u8])
     }
 
+    private static func unaryTop(opBytes: Array<UInt8>): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (x in [0x48u8, 0x8Bu8, 0x04u8, 0x24u8]) {
+            out.add(x) // mov rax,[rsp]
+        }
+        for (x in opBytes) {
+            out.add(x)
+        }
+        for (x in [0x48u8, 0x89u8, 0x04u8, 0x24u8]) {
+            out.add(x) // mov [rsp],rax
+        }
+        out.toArray()
+    }
+
+    internal static func emitINeg(): Array<UInt8> {
+        BackendX86_64.unaryTop([0x48u8, 0xF7u8, 0xD8u8])
+    }
+
+    internal static func emitBNot(): Array<UInt8> {
+        BackendX86_64.unaryTop([0x48u8, 0xF7u8, 0xD0u8])
+    }
+
+    /** `PICK n`：`push qword [rsp+8n]`。 */
+    internal static func emitPick(n: Int64): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (x in [0xFFu8, 0xB4u8, 0x24u8]) {
+            out.add(x)
+        }
+        BackendX86_64.w32(out, BackendX86_64.i32bits(8 * n))
+        out.toArray()
+    }
+
     private static func divModOp(storeRdx: Bool): Array<UInt8> {
         let out = ArrayList<UInt8>()
         for (x in [0x48u8, 0x8Bu8, 0x44u8, 0x24u8, 0x08u8, 0x48u8, 0x8Bu8, 0x0Cu8, 0x24u8,
