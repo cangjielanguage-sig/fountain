@@ -34,9 +34,10 @@ internal func helperEntry(hid: Int64, raw: CPointer<Unit>, args: CPointer<Int64>
     let ctx = JitContext.wrap(raw)
     var a = Array<Int64>(if (n <= 0) { 0 } else { n }, repeat: 0)
     var i: Int64 = 0
-    // 机器码在调用前已把实参区翻转为正序（args[0] 在最低地址）
+    // 机器码按栈机压参：args 指向**最深**实参（args[0]，高地址），
+    // 后续实参在 −8、−16…（栈向下生长，§12.4 模板 A）
     while (i < n) {
-        a[i] = unsafe { args.read(i) }
+        a[i] = unsafe { args.read(-i) }
         i = i + 1
     }
     invokeHelper(ctx, hid, a)

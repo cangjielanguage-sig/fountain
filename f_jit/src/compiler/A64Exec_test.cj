@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_jit.compiler
 
+
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_jit.base.DummyDiagnosticsSink
@@ -267,7 +268,12 @@ public class A64Exec_test {
                 let argsPtr = A64Exec_test.argsPointer(args)
                 let f = CFunc<(CPointer<Unit>, CPointer<Int64>, Int64) -> Int64>(
                     CPointer<Unit>(unsafe { buf.rawPointer() + entryOff }))
-                result = unsafe { f(CPointer<Unit>(ctx.cp()), argsPtr, args.size) }
+                let argv = if (args.size == 0) {
+                CPointer<Int64>()
+            } else {
+                unsafe { argsPtr + (args.size - 1) }
+            }
+            result = unsafe { f(CPointer<Unit>(ctx.cp()), argv, args.size) }
                 err = unsafe { ctx.cp().read(0) }
                 if (args.size > 0) {
                     unsafe { LibC.free<Int64>(argsPtr) }
@@ -300,7 +306,12 @@ public class A64Exec_test {
                 let argsPtr = A64Exec_test.argsPointer(args)
                 let f = CFunc<(CPointer<Unit>, CPointer<Int64>, Int64) -> Int64>(
                     CPointer<Unit>(buf.rawPointer()))
-                result = unsafe { f(CPointer<Unit>(ctx.cp()), argsPtr, args.size) }
+                let argv = if (args.size == 0) {
+                CPointer<Int64>()
+            } else {
+                unsafe { argsPtr + (args.size - 1) }
+            }
+            result = unsafe { f(CPointer<Unit>(ctx.cp()), argv, args.size) }
                 @Assert(unsafe { ctx.cp().read(0) }, 0)
                 if (args.size > 0) {
                     unsafe { LibC.free<Int64>(argsPtr) }
@@ -326,7 +337,8 @@ public class A64Exec_test {
         let p = LibC.malloc<Int64>(count: args.size)
         var i = 0
         while (i < args.size) {
-            unsafe { p.write(i, args[i]) }
+            // 逆序 ABI：args[0] 在最高地址（x1 指向它）
+            unsafe { p.write(i, args[args.size - 1 - i]) }
             i = i + 1
         }
         p

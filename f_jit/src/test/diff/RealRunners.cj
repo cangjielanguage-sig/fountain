@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::f_jit.test.diff
 
-import std.collection.ArrayList
 import fountain::f_base.Arch
 import fountain::f_base.OS
 import fountain::f_jit.backend.CodeBuffer
@@ -120,7 +119,12 @@ public class AArch64Runner <: DiffRunner {
         let argsPtr = RealRunners.arrayPointer(args)
         let f = CFunc<(CPointer<Unit>, CPointer<Int64>, Int64) -> Int64>(
             CPointer<Unit>(unsafe { buf.rawPointer() + entryOff }))
-        let r = unsafe { f(CPointer<Unit>(ctx.cp()), argsPtr, args.size) }
+        let argv = if (args.size == 0) {
+            CPointer<Int64>()
+        } else {
+            unsafe { argsPtr + (args.size - 1) }
+        }
+        let r = unsafe { f(CPointer<Unit>(ctx.cp()), argv, args.size) }
         let out = DiffOutcome(RealRunners.text(unit, unit.header.entryFn, r),
             ctx.errCode, ctx.site, '')
         if (args.size > 0) {
@@ -165,7 +169,7 @@ internal class RealRunners {
         let p = LibC.malloc<Int64>(count: args.size)
         var i = 0
         while (i < args.size) {
-            unsafe { p.write(i, args[i]) }
+            unsafe { p.write(i, args[args.size - 1 - i]) }
             i = i + 1
         }
         p
