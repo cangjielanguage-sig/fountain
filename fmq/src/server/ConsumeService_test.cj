@@ -313,6 +313,16 @@ class ConsumeServiceTest {
             @Assert(Int64.parse(row[6]) >= 3000)   // lagMs
             @Assert(Int64.parse(row[7]) == 1)      // delivered
             @Assert(Int64.parse(row[8]) == 1)      // acked
+
+            // 全部确认后 backlog 与 lag 归零
+            for (_ in 0..2) {
+                let rest = fixture.service.consume(info).getOrThrow()
+                @Assert(fixture.service.ack(info, MQAckPayload("s1", rest.queueIndex, rest.segmentedIndex,
+                    rest.segmentedOffset)).code == 0)
+            }
+            let emptyRow = statsRow(fixture.service.stats("/t", 3, {_ => ["g"]}), "/t", "g")
+            @Assert(Int64.parse(emptyRow[5]) == 0)
+            @Assert(Int64.parse(emptyRow[6]) == 0)
         } finally {
             fixture.close()
         }
@@ -360,6 +370,13 @@ class ConsumeServiceTest {
             let only = fixture.service.stats("/t", 0, {_ => ["g"]})
             @Assert(only.contains("R\t/t\tg\t"))
             @Assert(!only.contains("R\t/u\t"))
+
+            // 本节点不持有队列的主题：全量与按主题都不出现
+            fixture.queues.openTopic(MQTopicAssignment("/remote", 1, 0, [1]), 0)
+            let reopenedAll = fixture.service.stats("", 0, {_ => ["g"]})
+            @Assert(!reopenedAll.contains("/remote"))
+            let remoteOnly = fixture.service.stats("/remote", 0, {_ => ["g"]})
+            @Assert(!remoteOnly.contains("R\t"))
         } finally {
             fixture.close()
         }
@@ -376,6 +393,17 @@ class ConsumeServiceTest {
             @Assert(text.contains("R\t/t\tg\t"))
             @Assert(fixture.store.load("/t", 0, "g").isNone())
             @Assert(fixture.queues.queueOf("/t", 0).getOrThrow().countAll() == before)
+        } finally {
+            fixture.close()
+        }
+    }
+    @TestCase
+    public func statsEmitsEmptyGroupRow(): Unit {
+        let fixture = ConsumeFixture("stats_no_group")
+        try {
+            fixture.append([], "one")
+            let text = fixture.service.stats("/t", 0, {_ => []})
+            @Assert(text.contains("R\t/t\t\t"))
         } finally {
             fixture.close()
         }

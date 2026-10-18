@@ -120,8 +120,11 @@ protected class QueueManager <: Resource {
     /** 本节点已打开的主题名（升序由调用方决定）。 */
     protected func localTopics(): Array<String> {
         let names = ArrayList<String>()
-        for ((topic, _) in topics) {
-            names.add(topic)
+        for ((topic, set) in topics) {
+            // 只列出本节点真正持有队列的主题，避免 stats 全量/按主题口径不一致
+            if (set.items.size > 0) {
+                names.add(topic)
+            }
         }
         names.toArray()
     }
@@ -187,8 +190,11 @@ protected class QueueManager <: Resource {
             return
         }
         let names = ArrayList<String>()
-        for ((topic, _) in topics) {
-            names.add(topic)
+        for ((topic, set) in topics) {
+            // 只列出本节点真正持有队列的主题，避免 stats 全量/按主题口径不一致
+            if (set.items.size > 0) {
+                names.add(topic)
+            }
         }
         for (topic in names) {
             match (topics.remove(topic)) {

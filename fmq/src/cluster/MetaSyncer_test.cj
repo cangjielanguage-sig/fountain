@@ -177,11 +177,12 @@ class MetaSyncerTest {
     public func remoteApplyIsIdempotentAndKeepsFirst(): Unit {
         let (store, _, syncer) = fixture("remote")
         try {
-            let assignment = MQTopicAssignment("/t", 2, 0, [0, 1])
+            let assignment = MQTopicAssignment("/t", 2, 0, [0, 1], delayingMs: 61000)
             @Assert(syncer.applyRemote(assignment) == MetaApplyResult.Applied)
             @Assert(syncer.applyRemote(assignment) == MetaApplyResult.Duplicated)
             @Assert(syncer.applyRemote(MQTopicAssignment("/t", 3, 0, [0, 1, 2])) == MetaApplyResult.Conflict)
             @Assert(store.topicOf("/t").getOrThrow().queueNum == 2)
+            @Assert(store.topicOf("/t").getOrThrow().delayingMs == 61000)
             // 远端变更同步推进本地轮转指针：(0 + 2) % 3 = 2
             @Assert(store.nextStartNode == 2)
         } finally {
@@ -245,10 +246,11 @@ class MetaSyncerTest {
     public func snapshotForReturnsAllMetadata(): Unit {
         let (store, _, syncer) = fixture("snapshot")
         try {
-            syncer.registerTopic(MQTopicMeta("/a", 2))
+            syncer.registerTopic(MQTopicMeta("/a", 2, delayingMs: 61000))
             syncer.registerGroup(MQSubscribeGroupMeta("/a", "g"))
             let snapshot = syncer.snapshotFor(1)
             @Assert(snapshot.topics.size == 1)
+            @Assert(snapshot.topics[0].delayingMs == 61000)
             @Assert(snapshot.groups.size == 1)
             @Assert(snapshot.nextStartNode == 2)
         } finally {
