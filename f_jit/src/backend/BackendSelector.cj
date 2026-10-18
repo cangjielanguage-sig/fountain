@@ -467,6 +467,20 @@ internal class BackendX86_64 <: Backend {
         BackendX86_64.emitCallHelper(h72, 6)
     }
 
+    /** 零参 helper（`MAKE_LIST`/`MAKE_MAP`）：无实参，结果压栈。 */
+    internal static func emitCallHelper0(helperAddr: Int64): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (x in [0x4Cu8, 0x89u8, 0xFFu8, 0x31u8, 0xF6u8, 0x31u8, 0xD2u8, 0x48u8, 0xB8u8]) {
+            out.add(x) // rdi=ctx; rsi=rdx=0; movabs
+        }
+        BackendX86_64.w64(out, helperAddr)
+        for (x in [0xFFu8, 0xD0u8, 0x50u8]) {
+            out.add(x) // call rax; push rax
+        }
+        BackendX86_64.appendCheckErr(out)
+        out.toArray()
+    }
+
     /** 区间 helper 路由。 */
     internal static func emitRangeNew(h41: Int64): Array<UInt8> {
         BackendX86_64.emitCallHelper(h41, 4)

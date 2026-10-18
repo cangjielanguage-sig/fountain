@@ -361,6 +361,13 @@ public class X86Lower_test {
             X86Lower_test.hex(BackendX86_64.emitCallHelper(0x8401, 2)))
     }
 
+    @TestCase
+    public func zeroArgHelper(): Unit {
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCallHelper0(0x8500)),
+            '4C89FF' + '31F6' + '31D2' + '48B80085000000000000' + 'FFD0' + '50' +
+            '49833F000F8500000000')
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {
