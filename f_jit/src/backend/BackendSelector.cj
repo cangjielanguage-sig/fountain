@@ -461,6 +461,12 @@ internal class BackendX86_64 <: Backend {
          0x31u8, 0xC0u8, 0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]
     }
 
+    /** `THROW`：顶格 code 写入 ctx.errCode → RETV=0 → jmp epilogue（rel 占位）。 */
+    internal static func emitThrow(): Array<UInt8> {
+        [0x48u8, 0x8Bu8, 0x04u8, 0x24u8, 0x41u8, 0x89u8, 0x07u8,
+         0x31u8, 0xC0u8, 0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]
+    }
+
     /** `GUARD v`：取 cell 高 16 位 tag，不等于 v → bail（rel 占位）。 */
     internal static func emitGuard(v: Int64): Array<UInt8> {
         let out = ArrayList<UInt8>()
