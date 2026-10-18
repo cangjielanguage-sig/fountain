@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_jit.backend
 
 import std.collection.ArrayList
+import fountain::f_base.Arch
 import fountain::f_jit.bytecode.LoadedUnit
 
 /** 整单元 JIT 产物：机器码 + 每函数在码流中的偏移/长度（按目录顺序）。 */
@@ -77,7 +78,11 @@ public class JitCompiler {
         var i = 0
         while (i < unit.dir.size) {
             let fn = unit.dir.at(i)
-            match (A64Compiler.compileFunctionWith(unit, fn, constBase, fnTableBase)) {
+            let compiled = match (Arch.current.toString()) {
+                case 'x86_64' => X86Compiler.compileFunction(unit, fn)
+                case _ => A64Compiler.compileFunctionWith(unit, fn, constBase, fnTableBase)
+            }
+            match (compiled) {
                 case Some(b) =>
                     ids.add(fn.fnId)
                     offs.add(out.size)

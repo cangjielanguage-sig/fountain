@@ -87,8 +87,20 @@ internal class BackendX86_64 <: Backend {
     }
 
     public func compile(unit: LoadedUnit, sink: CodeBuffer): Bool {
-        // S5.4 骨架：指令 lowering 在 S5.5/S5.6 落地；当前一律降级解释器。
-        false
+        let out = ArrayList<UInt8>()
+        var i = 0
+        while (i < unit.dir.size) {
+            let fn = unit.dir.at(i)
+            match (X86Compiler.compileFunction(unit, fn)) {
+                case Some(b) =>
+                    for (x in b) {
+                        out.add(x)
+                    }
+                case None => return false
+            }
+            i = i + 1
+        }
+        sink.write(out.toArray(), 0)
     }
 
     public func entryThunkBase(): Int64 {
