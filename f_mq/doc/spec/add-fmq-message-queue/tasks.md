@@ -147,3 +147,15 @@
 - 阶段 8 只依赖阶段 1 与 `f_net`，可与阶段 7 并行；其集成用例需要阶段 7 提供的服务。
 - 阶段 9 依赖全部前置阶段。
 - 阶段 10 依赖阶段 9；完成后需重新跑 `opsx:verify`，无 critical 才能 archive。
+
+## 11. 遗留任务（本次未纳入，待新变更承接）
+
+> 以下各项来自二次 `opsx:verify` 的 warning / suggestion，经评审确认本轮不修，随变更归档记录。
+> 实施时按 OpenSpec 六步另开变更（`opsx:propose`）承接，不在本归档上直接勾选。
+
+- [ ] 11.1 补 `fmq/src/manager/MQManager_test.cj`：覆盖任务 8.3 的六个管理子命令（`registerTopic` / `deleteTopic` / `registerSubscriber` / `deleteSubscribeGroup` / `listTopics` / `listSubscribeGroups`）的正常与错误路径，断言错误路径返回非 0 且提示可读
+- [ ] 11.2 补齐 BODY 类型矩阵用例：现有用例未覆盖 `TreeSet` / `HashMap` / `Array` 三类容器的编解码与 filter 求值，补在 `MQPayload_test.cj` 或 `MQMessageRecord_test.cj`
+- [ ] 11.3 补备份定时 flush 与并发关闭用例：`BackupStore` 的 100ms 定时 flush 无直接用例；`close()` 与在途 `append` / `flush` 并发无用例，需验证关闭后调用不崩溃且已确认数据不丢
+- [ ] 11.4 消除 `fmq → f_mq.client` 分层偏离：`fmq` 为 `parseHost`（`f_mq/src/client/MQClientConfig.cj:48`）依赖 `f_mq.client`，与「`fmq` 只依赖 `f_mq.base`」的设计不一致；把 `parseHost` 下沉到 `f_mq.base` 或改用 `f_net`，同步 `fmq/cjpm.toml` 与依赖图
+- [ ] 11.5 把 `QueueLog` 的 4 字节长度前缀写入 `design.md`：段记录格式为「4 字节大端长度 + 载荷」，设计文档未记录，需补格式说明与跨版本兼容约束
+- [ ] 11.6 修复远端分配不推进轮转指针（W5）：`MQTopicAssignment` 在远端分配 / 同步路径上不推进 `nextStartNode`，新主题的起始队列会重复落在同一节点；先补失败用例再修正轮转
