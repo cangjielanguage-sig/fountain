@@ -39,8 +39,8 @@
 
 ### Requirement: 启动期校验
 
-服务端 SHALL 在 `backup < 0`、`mqClient_hosts` 为空、本机端口不在节点表、`deadMsgThreshold < 1`
-时拒绝启动，打印明确原因并返回非 0 退出码。
+服务端 SHALL 在 `backup < 0`、`mqClient_hosts` 为空、本机端口不在节点表、节点表中任意两个节点端口重复、
+`deadMsgThreshold < 1` 时拒绝启动，打印明确原因并返回非 0 退出码。
 
 #### Scenario: 负数备份
 
@@ -57,10 +57,25 @@
 - **WHEN** `mqServer_port` 不在节点表
 - **THEN** 启动失败并提示端口未出现在节点表中
 
+#### Scenario: 非本机端口重复
+
+- **WHEN** `mqClient_hosts = "h1:2350,h2:2351,h3:2351"` 且 `mqServer_port = 2350`
+- **THEN** 启动失败并提示节点表端口重复（不能只校验本机端口）
+
 #### Scenario: 阈值为 0
 
 - **WHEN** `mqServer_deadMsgThreshold = 0`
 - **THEN** 启动失败
+
+### Requirement: 备份副本并发安全
+
+同一 `(ownerIndex, topic, queueIndex)` 的备份写入 SHALL 复用同一个 `QueueLog`；并发创建 MUST NOT
+产生两个指向同一目录的实例，所有并发写入的记录 SHALL 可按序读回。
+
+#### Scenario: 并发备份同一队列
+
+- **WHEN** 4 个线程同时写入同一 `(ownerIndex, topic, queueIndex)` 的首批备份
+- **THEN** 只创建一个 `QueueLog`，记录无交错、无丢失，全部可读回
 
 ### Requirement: 子命令分发
 

@@ -119,8 +119,24 @@
 
 #### Scenario: 消费响应可解析
 
-- **WHEN** 响应载荷为 `MQConsumeResult{segmentedIndex, segmentedOffset, record}`
-- **THEN** `asConsumeResult` 三个字段与入参一致；载荷不是该类型时返回 `None`
+- **WHEN** 响应载荷为 `MQConsumeResult{queueIndex, segmentedIndex, segmentedOffset, record}`
+- **THEN** `asConsumeResult` 四个字段与入参一致；载荷不是该类型时返回 `None`
+
+### Requirement: ACK 必须携带队列身份
+
+`MQAckPayload` SHALL 携带 `queueIndex`，与 `subscribedId`、`segmentedIndex`、`segmentedOffset` 一起
+唯一确定被确认的记录。服务端 MUST 只在该队列的游标上执行确认，不得用「遍历本机队列、命中第一个即返回」
+的方式兜底。
+
+#### Scenario: 同一位置出现在两个队列
+
+- **WHEN** 两个队列都存在 `(segmentedIndex=1, segmentedOffset=0)` 且都投递过未确认消息
+- **THEN** 携带 `queueIndex=2` 的 ACK 只确认队列 2 的记录，队列 1 的游标与未确认记录保持不变
+
+#### Scenario: 队列身份不存在
+
+- **WHEN** ACK 的 `queueIndex` 不属于本机该主题的队列
+- **THEN** 返回 `ACK_UNKNOWN`，且不修改任何游标
 
 ### Requirement: 稳定的错误码表
 

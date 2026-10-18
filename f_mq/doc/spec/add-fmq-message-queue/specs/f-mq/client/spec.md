@@ -118,14 +118,19 @@
 
 ### Requirement: 确认路由
 
-`ack(subscribedId, segmentedIndex, segmentedOffset)` SHALL 优先把确认发给「投递该位置」的节点
-（该映射由 `consume` 记录，命中后删除）；未命中时 SHALL 向所有 owner 广播，并忽略 `ACK_UNKNOWN`。
-`autoAck = true` 的订阅不记录投递来源，显式 `ack` 走广播路径且不抛异常。
+`ack(subscribedId, queueIndex, segmentedIndex, segmentedOffset)` SHALL 优先把确认发给「投递该位置」的节点
+（该映射由 `consume` 记录，键包含 `queueIndex`，命中后删除）；未命中时 SHALL 向所有 owner 广播，
+并忽略 `ACK_UNKNOWN`。`autoAck = true` 的订阅不记录投递来源，显式 `ack` 走广播路径且不抛异常。
 
 #### Scenario: 回到投递节点
 
 - **WHEN** 从节点 1 取到消息后 ack 该位置
-- **THEN** 只有节点 1 收到 `ACK`，载荷中的位置与取消息时一致
+- **THEN** 只有节点 1 收到 `ACK`，载荷中的 `queueIndex` 与位置和取消息时一致
+
+#### Scenario: 两队列同位置不串台
+
+- **WHEN** 同一节点的队列 0 与队列 2 都投递过 `(1,0)`，先 ack 队列 2 的 `(1,0)`，再消费队列 0
+- **THEN** 队列 2 的游标前进；队列 0 的那条记录仍可被消费，不因 ACK 误落而丢失
 
 #### Scenario: 未知位置广播
 

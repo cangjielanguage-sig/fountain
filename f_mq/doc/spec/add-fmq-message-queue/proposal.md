@@ -62,6 +62,20 @@ MQ 的整条读取链路（`append` 返回位置 → 落盘游标 → `openEntry
 同一命令的不同用途用**载荷运行时类型**区分（`MQTopicMeta` / `MQSubscribeGroupMeta` /
 `MQInternalMessage` / 记录字节块）。
 
+### verify 修复（2026-10-18）
+
+`opsx:verify` 发现 3 个 critical 与 3 个 warning，用户确认全部修复：
+
+- **C1 队列身份**：`MQConsumeResult` / `MQAckPayload` / `MQMessage` 增加 `queueIndex`；
+  客户端投递映射与服务端 ACK 都按 `(queueIndex, segmentedIndex, segmentedOffset)` 精确定位，
+  消除多队列同位置 ACK 串台。
+- **C2 filter 三态**：`MQMatcher` 区分 `Match / NoMatch / Unsupported`；未注册对象 BODY + 非空 filter
+  时，发布路径返回 `FILTER_UNSUPPORTED_BODY` 且不落盘；消费路径不把 `Unsupported` 标记为已决。
+- **C3 段失效恢复**：游标指向已删除段时跳到现存最老段并落盘，全部删除时返回空，不再永久 `INTERNAL`。
+- **W1**：节点由死转活触发一次 `syncFromPeers`。
+- **W2**：节点表任意重复端口都拒绝启动。
+- **W3**：`BackupStore` 的 get-or-create 加锁，避免并发创建两个同目录 `QueueLog`。
+
 ## Impact
 
 ### 受影响规格
@@ -73,8 +87,8 @@ MQ 的整条读取链路（`append` 返回位置 → 落盘游标 → `openEntry
 | 路径 | 变更 |
 | --- | --- |
 | `f_io/src/SegmentedLog.cj` | 两个字段加 `public`（前置） |
-| `f_mq/cjpm.toml` / `f_mq/src/**` | 新增约 20 个源文件与对应 `*_test.cj` |
-| `fmq/cjpm.toml` / `fmq/src/**` | 新增约 20 个源文件与对应 `*_test.cj` |
+| `f_mq/cjpm.toml` / `f_mq/src/**` | 新增约 20 个源文件与对应 `*_test.cj`；verify 修复给 `MQConsumeResult`/`MQAckPayload`/`MQMessage` 加 `queueIndex`，客户端 `deliveries` 键与 ack 路由同步调整 |
+| `fmq/cjpm.toml` / `fmq/src/**` | 新增约 20 个源文件与对应 `*_test.cj`；verify 修复 `ConsumeService.ack` 精确定位、`MQMatcher` 三态、`GroupCursor` 段恢复、`NodeRegistry` 重同步回调、`MQConfig` 端口唯一性、`BackupStore` 并发锁 |
 | `README.md` / `README_en.md` / `CHANGELOG` / `.modules` | 模块登记与文档 |
 | `docs/模块依赖图/**` | 依赖图重新生成（脚本产出） |
 
@@ -84,6 +98,8 @@ MQ 的整条读取链路（`append` 返回位置 → 落盘游标 → `openEntry
   回归以 `f_io` 全量单测（当前 19 项）为准。
 - `f_mq`、`fmq` 为全新模块，不影响现有模块的编译与运行。
 - 协议层不新增命令号，不改变 `f_protocol` 的帧格式，因此与既有 `f_rpc` / `f_net` 部署兼容。
+- verify 修复给 MQ 自己的 `MQConsumeResult` / `MQAckPayload` / `MQMessage` 增加 `queueIndex` 字段；
+  这是 MQ 载荷的字段新增，服务端与客户端需同版本部署（本期无旧客户端兼容要求）。
 - 投递语义为 **at-least-once**：未确认消息在重启或超时后会重复投递；`committed` 之前的消息不再投递。
   这是有意的取舍（重复优于丢失），写入文档与用例。
 
@@ -93,8 +109,8 @@ MQ 的整条读取链路（`append` 返回位置 → 落盘游标 → `openEntry
   register/deregister 入口 + 文档约定」）。
 - 备份副本的自动故障转移与恢复流程（本期只保证副本落盘）。
 - 死信队列的「专门消费者」产品形态（本期提供 `DeadLetterQueue.iterate` 机制）。
-- BODY 为任意自定义 `@DataAssist` 类型时的服务端 filter 求值（需 `f_codec` 支持未知对象兜底解码；
-  本期对这类记录回 `FILTER_UNSUPPORTED_BODY`，不误投、不丢）。
+- BODY 为任意自定义 `@DataAssist` 类型时的服务端 filter 求值仍不支持（需 `f_codec` 支持未知对象兜底解码）；
+  本期对这类记录明确回 `FILTER_UNSUPPORTED_BODY`，不落盘、不误投、不静默丢。
 - 客户端元数据查询 API、`consume` 带超时重载、`tryConsume`（规格未要求）。
 
 ## 成功判据
@@ -108,3 +124,6 @@ MQ 的整条读取链路（`append` 返回位置 → 落盘游标 → `openEntry
    - 停掉一个节点后客户端仍能发布与消费（`NOT_OWNER` 重试路径）。
 3. 管理端六个子命令在真实服务上可用，`--help` 文本完整，连接失败返回 1 且提示
    「无法连接消息队列服务」。
+4. verify 修复的回归：两队列同位置 ACK 不串台；未注册对象 BODY + 非空 filter 发布返回
+   `FILTER_UNSUPPORTED_BODY`；删除 `committed` 所在段后消费恢复；死转活触发重同步；
+   任意节点端口重复拒绝启动；备份并发只创建一个 `QueueLog`。

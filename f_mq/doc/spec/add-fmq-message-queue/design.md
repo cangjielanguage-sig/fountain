@@ -529,3 +529,65 @@ P2 与 P3–P6 可并行（`fmq` 只依赖 `f_mq.base`）；P7 起需要 `f_mq.c
 3. 文档与元数据更新完成：`f_mq`/`fmq` 的中英文 README、根 README 模块表、`CHANGELOG`、
    `.modules`、依赖图重新生成。
 4. 所有新增公共 API 有对应用例；`fmq` 的纯逻辑无套接字依赖。
+
+## 13. verify 修复设计（2026-10-18）
+
+> 本节是 `opsx:verify` 发现问题的实现级修订，优先级高于前文对应段落；不改已完成的 70 项任务，
+> 新增阶段 10 承载以下修复。详见 `verify-report.md`。
+
+### 13.1 C1：ACK 链路加入队列身份
+
+- `MQConsumeResult` 增加 `queueIndex: Int64`（与 `segmentedIndex`/`segmentedOffset`/`record` 同级）。
+- `MQAckPayload` 增加 `queueIndex: Int64`；`MQMessage` 增加 `queueIndex: Int64`，`toMessage` 填入。
+- 客户端 `MQSubscription.deliveries` 的键从 `"index:offset"` 改为 `"queueIndex:index:offset"`；
+  `ack` 发送 `MQAckPayload(subscribedId, queueIndex, segmentedIndex, segmentedOffset)`。
+- `ConsumeService.consume` 返回 `queueIndex`；`ack` 直接按 `(topic, queueIndex, group)` 取游标，
+  不再遍历本机队列「命中第一个即返回」。`queueIndex` 不在本机队列集合 → `ACK_UNKNOWN`。
+- 协议兼容性：字段是新增的，编解码自描述；服务端与客户端必须同版本部署（本期无旧客户端兼容要求）。
+
+### 13.2 C2：filter 三态与 `FILTER_UNSUPPORTED_BODY`
+
+- `MQMatcher` 返回 `MQMatchResult { Match, NoMatch, Unsupported }`：
+  - topic/tags 不匹配 → `NoMatch`；
+  - 非空 filter 且 BODY 解码结果为 `None`（未注册对象/损坏）→ `Unsupported`；
+  - 其余按现有规则 → `Match`/`NoMatch`。
+- `GroupCursor`：`Unsupported` 的记录 MUST NOT 标记 `decided`、MUST NOT 推进 `committed`；返回 `None`
+  让调用方稍后重试（组内无人能评估时暂停该组，而不是丢消息）。
+- 发布路径（`MQCommandExecutor.onPublish`）：在 `append` 前扫描该主题下所有活跃订阅；若任一订阅的
+  filter 非空且该记录的 BODY 无法评估，直接回 `FILTER_UNSUPPORTED_BODY`，不落盘、不入备份队列。
+  没有任何活跃订阅或 filter 全空时，照常发布（BODY 不需要服务端解码）。
+- 该检查只针对「有非空 filter 的活跃订阅」，避免对普通纯字节消息强制解码 BODY。
+
+### 13.3 C3：游标段失效恢复
+
+- `GroupCursor` 的 `openRecordsFrom` / `readAt` 捕获段失效（`IllegalArgumentException`）：
+  1. 关闭当前 reader；
+  2. `log.segments()` 取最老现存段（列表第一个；空列表 → 返回 `None`，不报错）；
+  3. `committed_ = LogPosition(oldest.index, 0)`，`scanPosition = committed_`，`CursorStore.save`；
+  4. 记 WARN（含旧位置、新位置、组/队列），继续本轮扫描。
+- `advance()` 与重投路径的 `readAt` 同样走该恢复逻辑；恢复后不得重复推进已越过的新段前缀。
+
+### 13.4 W1：死转活触发重同步
+
+- `NodeRegistry` 增加 `onRevived: ?(() -> Unit)`（构造参数或 setter）；`markSeen(index)` 记录
+  `wasAlive`，在 `false → true` 时调用一次回调。
+- `MQServer` 装配时把回调接到 `MetaSyncer.syncFromPeers()`；回调内部异常只记 WARN，不影响心跳线程。
+
+### 13.5 W2：节点表端口唯一性
+
+- `MQConfig.validate()` 先遍历 `nodes` 解析所有端口，任意重复即抛 `MQConfigException`
+  （不再只检查「重复端口是否等于本机端口」）；随后再做 `selfIndex` 定位。
+- `helpText` 不变。
+
+### 13.6 W3：BackupStore 并发安全
+
+- `BackupStore` 用 `Mutex` 保护 `logs` 的 get-or-create；创建 `QueueLog` 的过程在锁内完成，
+  避免同一 `(ownerIndex, topic, queueIndex)` 生成两个实例。
+- 写入仍按 `QueueLog.append` 自身锁串行；锁外只做已存在实例的 append。
+
+### 13.7 测试与验收增量
+
+- 新增用例：协议四字段往返、两队列同位置 ACK 不串台、客户端 deliveries 键含 queueIndex、
+  filter 三态、发布 `FILTER_UNSUPPORTED_BODY`、段删除后恢复、死转活回调、任意端口重复、备份并发。
+- 回归：`f_io` / `f_mq` / `fmq` 全量 + `scripts/mq_e2e.sh` 的 `E2E_OK`。
+- E2E 增加两队列同位置场景（可在现有 4 队列拓扑上断言 ACK 后无重复投递/无丢失）。

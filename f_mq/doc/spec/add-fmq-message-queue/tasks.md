@@ -107,6 +107,22 @@
 - [x] 9.7 依赖图重生成：`python docs/模块依赖图/extract_deps.py` → `gen_layered_svg.py` / `gen_matrix_svg.py`
 - [x] 9.8 提交前检查：换行符归一（LF）、一次提交只做一类改动（代码 / 文档）、按任务独立提交
 
+## 10. verify 修复（2026-10-18）
+
+> 来源 `verify-report.md`；用户确认修复 C1–C3 + W1–W3。每步仍按 Red → Green → Refactor → 回归。
+
+- [ ] 10.1 协议字段 `queueIndex`：先写 `MQProtocol_test` 的 `MQConsumeResult`/`MQAckPayload` 四字段往返用例，再给 `MQConsumeResult`、`MQAckPayload`、`MQMessage` 加 `queueIndex`，更新 `toMessage` 与所有构造点
+- [ ] 10.2 客户端 ACK 路由：先写「两队列同位置不串台」用例，再把 `MQSubscription.deliveries` 键改为 `queueIndex:index:offset`，`ack` 载荷携带 `queueIndex`
+- [ ] 10.3 服务端 ACK 精确定位：先写「错 queueIndex → `ACK_UNKNOWN`」与「两队列同位置只确认目标队列」用例，再改 `ConsumeService.ack` 按 `(topic, queueIndex, group)` 取游标，删除遍历兜底
+- [ ] 10.4 `MQMatcher` 三态：先写 `Match/NoMatch/Unsupported` 用例（未注册对象 BODY + 非空 filter），再改返回类型与调用点
+- [ ] 10.5 发布 `FILTER_UNSUPPORTED_BODY`：先写「对象 BODY + 非空 filter → 发布报错且不落盘」「空 filter → 正常发布」用例，再改 `MQCommandExecutor.onPublish` 的落盘前检查
+- [ ] 10.6 `GroupCursor` 段失效恢复：先写「删除 committed 所在段后继续消费」「全部段删除返回 None」用例，再实现跳最老段、重置并落盘
+- [ ] 10.7 死转活重同步：先写 `NodeRegistry.markSeen` 的 `false → true` 回调一次用例，再接线 `MetaSyncer.syncFromPeers`
+- [ ] 10.8 端口唯一性：先写「非本机端口重复也拒绝启动」用例，再改 `MQConfig.validate`
+- [ ] 10.9 `BackupStore` 并发：先写 4 线程同 `(owner,topic,queue)` 只创建一个 `QueueLog` 的用例，再给 get-or-create 加锁
+- [ ] 10.10 E2E 扩展：在现有 4 队列拓扑上增加「两队列同位置 ACK 后不重复投递、不丢消息」断言；脚本仍输出 `E2E_OK`
+- [ ] 10.11 回归与文档：`f_io` / `f_mq` / `fmq` 全量 + E2E；README/CHANGELOG 补充 `queueIndex` 与 `FILTER_UNSUPPORTED_BODY` 行为
+
 ## 验收清单
 
 - [x] `f_io` 全量测试通过（20/20，可见性改动无回归）
@@ -116,6 +132,11 @@
 - [x] 六个管理子命令在进程内真实服务上可用，错误路径返回非 0
 - [x] 中英文文档、CHANGELOG、`.modules`、依赖图均已更新
 - [x] 已知限制写入文档：at-least-once、无自动故障转移、manager 无强隔离、对象 BODY 过滤器限制
+- [ ] 两队列同位置 ACK 不串台；错 `queueIndex` 返回 `ACK_UNKNOWN`
+- [ ] 未注册对象 BODY + 非空 filter 发布返回 `FILTER_UNSUPPORTED_BODY`，不落盘
+- [ ] 删除 `committed` 所在段后消费恢复；全部段删除返回空
+- [ ] 死转活重同步、任意节点端口重复拒绝启动、`BackupStore` 并发只创建一个实例
+- [ ] `opsx:verify` 重新校验无 critical
 
 ## 依赖与并行
 
@@ -125,3 +146,4 @@
 - 阶段 7 依赖阶段 2（节点互连）与阶段 3–6（组件就绪）。
 - 阶段 8 只依赖阶段 1 与 `f_net`，可与阶段 7 并行；其集成用例需要阶段 7 提供的服务。
 - 阶段 9 依赖全部前置阶段。
+- 阶段 10 依赖阶段 9；完成后需重新跑 `opsx:verify`，无 critical 才能 archive。
