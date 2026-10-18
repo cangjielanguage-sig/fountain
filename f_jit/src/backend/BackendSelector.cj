@@ -423,6 +423,12 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
+    /** `GUARD_NNZ`：顶格为 0 → bail（rel 占位）。 */
+    internal static func emitGuardNnz(): Array<UInt8> {
+        [0x48u8, 0x8Bu8, 0x04u8, 0x24u8, 0x48u8, 0x85u8, 0xC0u8, 0x0Fu8, 0x84u8,
+         0x00u8, 0x00u8, 0x00u8, 0x00u8]
+    }
+
     /** `TO_I64`：NaN + ±2^63 越界判定（jae/jb bail）；通过后 cvttsd2si。 */
     internal static func emitToI64RangeGuarded(): Array<UInt8> {
         [0xF2u8, 0x0Fu8, 0x10u8, 0x04u8, 0x24u8,

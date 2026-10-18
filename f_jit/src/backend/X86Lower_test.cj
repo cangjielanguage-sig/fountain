@@ -221,6 +221,12 @@ public class X86Lower_test {
         @Assert(got[2], 0xFFu8)
     }
 
+    @TestCase
+    public func guardNnz(): Unit {
+        @Assert(X86Lower_test.hex(BackendX86_64.emitGuardNnz()),
+            '488B0424' + '4885C0' + '0F8400000000')
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {
