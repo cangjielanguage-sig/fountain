@@ -455,6 +455,11 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
+    /** `CHECK_ERR_NC`：发布版空操作（调试断言由构建开关另行发射）。 */
+    internal static func emitCheckErrNc(): Array<UInt8> {
+        Array<UInt8>()
+    }
+
     /** `TRAP`：`int3`（调试面）。 */
     internal static func emitTrap(): Array<UInt8> {
         [0xCCu8]

@@ -283,6 +283,11 @@ public class X86Lower_test {
         @Assert(X86Lower_test.hex(BackendX86_64.emitTrap()), 'CC')
     }
 
+    @TestCase
+    public func checkErrNc(): Unit {
+        @Assert(BackendX86_64.emitCheckErrNc().size, 0)
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {
