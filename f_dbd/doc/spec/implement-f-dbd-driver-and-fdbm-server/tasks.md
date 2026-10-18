@@ -182,4 +182,4 @@
 - [x] 17.6 文档回填：新增/补齐 `f_dbd`、`fdbm`、`f_dbm` 的中英 README（至少 B 口径、关闭走 `UNSUBSCRIBE`、`fdbm` 的 `cjpm install` 部署方式与动态库搜索路径）
 - [x] 17.7 全量 `cjpm test` 与 `cjpm build` 无新增 warning；**不合并、不删除 `feature/dbware` 分支与工作树**（仓库有其他并行工作线），交付保持当前 worktree
 
-  > 结果：`f_dbd` 180 条、`fdbm` 136 条全绿；三个模块 `cjpm build` 无新增 warning。
+  > 结果：`f_dbd` 180 条、`fdbm` 143 条全绿；三个模块 `cjpm build` 无新增 warning。
