@@ -288,6 +288,12 @@ public class X86Lower_test {
         @Assert(BackendX86_64.emitCheckErrNc().size, 0)
     }
 
+    @TestCase
+    public func stackGuard(): Unit {
+        @Assert(X86Lower_test.hex(BackendX86_64.emitStackGuard(64, 128)),
+            '4889E8' + '482D40000000' + '4829E0' + '483D80000000' + '0F8200000000')
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {

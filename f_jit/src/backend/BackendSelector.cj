@@ -455,6 +455,23 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
+    /** `STACK_GUARD need`：剩余栈 = (rbp-FRAME)-rsp；不足 → jb deopt（rel 占位）。 */
+    internal static func emitStackGuard(frame: Int64, need: Int64): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (x in [0x48u8, 0x89u8, 0xE8u8, 0x48u8, 0x2Du8]) {
+            out.add(x) // mov rax,rbp; sub rax,FRAME
+        }
+        BackendX86_64.w32(out, BackendX86_64.i32bits(frame))
+        for (x in [0x48u8, 0x29u8, 0xE0u8, 0x48u8, 0x3Du8]) {
+            out.add(x) // sub rax,rsp; cmp rax,need
+        }
+        BackendX86_64.w32(out, BackendX86_64.i32bits(need))
+        for (x in [0x0Fu8, 0x82u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+            out.add(x) // jb deopt（占位）
+        }
+        out.toArray()
+    }
+
     /** `CHECK_ERR_NC`：发布版空操作（调试断言由构建开关另行发射）。 */
     internal static func emitCheckErrNc(): Array<UInt8> {
         Array<UInt8>()
