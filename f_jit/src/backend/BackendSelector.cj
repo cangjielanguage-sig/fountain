@@ -275,6 +275,32 @@ internal class BackendX86_64 <: Backend {
         BackendX86_64.cmpOp([0x0Fu8, 0x9Cu8, 0xC0u8])
     }
 
+    private static func shiftOp(shiftBytes: Array<UInt8>): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (x in [0x48u8, 0x8Bu8, 0x44u8, 0x24u8, 0x08u8, 0x48u8, 0x8Bu8, 0x0Cu8, 0x24u8]) {
+            out.add(x)
+        }
+        for (x in shiftBytes) {
+            out.add(x)
+        }
+        for (x in [0x48u8, 0x89u8, 0x44u8, 0x24u8, 0x08u8, 0x48u8, 0x83u8, 0xC4u8, 0x08u8]) {
+            out.add(x)
+        }
+        out.toArray()
+    }
+
+    internal static func emitShl(): Array<UInt8> {
+        BackendX86_64.shiftOp([0x48u8, 0xD3u8, 0xE0u8])
+    }
+
+    internal static func emitShr(): Array<UInt8> {
+        BackendX86_64.shiftOp([0x48u8, 0xD3u8, 0xF8u8])
+    }
+
+    internal static func emitUShr(): Array<UInt8> {
+        BackendX86_64.shiftOp([0x48u8, 0xD3u8, 0xE8u8])
+    }
+
     /** `JMP rel32`（占位 0，P5.8 回填）。 */
     internal static func emitJmp(): Array<UInt8> {
         [0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]

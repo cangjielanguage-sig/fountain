@@ -82,6 +82,15 @@ public class X86Lower_test {
             '488B442408' + '483B0424' + '0F9CC0' + '0FB6C0' + tail)
     }
 
+    @TestCase
+    public func shiftOps(): Unit {
+        let head = '488B442408' + '488B0C24'
+        let tail = '4889442408' + '4883C408'
+        @Assert(X86Lower_test.hex(BackendX86_64.emitShl()), head + '48D3E0' + tail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitShr()), head + '48D3F8' + tail)
+        @Assert(X86Lower_test.hex(BackendX86_64.emitUShr()), head + '48D3E8' + tail)
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {
