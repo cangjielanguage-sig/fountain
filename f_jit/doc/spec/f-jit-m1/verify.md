@@ -8,13 +8,13 @@
 
 ## 结论
 
-**apply 的 115/115 不等于规格全绿。** 本轮已修掉全部 4 个 CRITICAL（生产 JIT 接入、x86 全 opcode、T6 20/21、T52/T53 映射）；WARNING-01（x86 原生执行证据）与 WARNING-02（单元标签强度）仍在；另有常量句柄回收、SSE4.1 依赖、Force 可观测性、x86 字节 golden、性能留档等遗留（见「剩余未完成 / 测试未覆盖」）。建议在真实 x86_64 机器跑完 `X86Exec_test`、并至少处理常量句柄回收后再 archive。
+**apply 的 115/115 不等于规格全绿。** 本轮已修掉全部 4 个 CRITICAL（生产 JIT 接入、x86 全 opcode、T6 21/22、T52/T53 映射）；WARNING-01（x86 原生执行证据）与 WARNING-02（单元标签强度）仍在；另有常量句柄回收、SSE4.1 依赖、Force 可观测性、x86 字节 golden、性能留档等遗留（见「剩余未完成 / 测试未覆盖」）。建议在真实 x86_64 机器跑完 `X86Exec_test`、并至少处理常量句柄回收后再 archive。
 
 | ID | 严重度 | 状态 | 摘要 |
 |---|---|---|---|
 | CRITICAL-01 | CRITICAL | **已修复** | 用户面 `Compiler.compile` 原先只返回解释器函数，JIT 从未接入生产路径 |
 | CRITICAL-02 | CRITICAL | **已修复（实现层）** | x86 lowering 已按 A64 的 157 个 opcode 全量补齐；本机只做字节级组装验收，原生执行证据待 WARNING-01 |
-| CRITICAL-03 | CRITICAL | **已修复（20/21）** | T6 映射用例 16 码 + 单元行为 7/16/17/19/99；仅 15 为防御码（解释器无机器栈余量概念），无数值路径 |
+| CRITICAL-03 | CRITICAL | **已修复（21/22）** | T6 映射用例 15 码 + 单元行为 7/12/16/17/19/99；仅 15 为防御码（解释器无机器栈余量概念），无数值路径 |
 | CRITICAL-04 | CRITICAL | **已修复** | T52/T53 原为「挂名映射」；已补真实两形态用例与常量写 20 断言 |
 | WARNING-01 | WARNING | 未关闭 | x86 执行证据未在本机取得（无 x86_64 原生环境）；本轮只做字节级组装验收，需在 x86_64 机器跑 `X86Exec_test` |
 | WARNING-02 | WARNING | 部分关闭 | `check_tmap.sh` 已升级为「用例体必须含 `T<id>/` 标签」；单元用例的标签仍是注释级，只有 T52/T53 是行为级 |
@@ -70,7 +70,7 @@
 - `FFLOOR/FCEIL/FTRUNC/FROUND` 使用 `roundsd`（SSE4.1）；design §12.4 的基线是 SSE2 软件序列，SSE4.1 仅在显式开启时使用。当前实现未做 CPUID 判定，目标机需具备 SSE4.1；若必须支持纯 SSE2，应改回软件序列。
 **判定**：实现层已按 A64 的 opcode 全集补齐，CRITICAL-02 关闭；x86 原生执行证据仍未取得（WARNING-01），不能据此宣称「x86 端到端全绿」。
 
-### CRITICAL-03 T6 错误矩阵不完整（已修复，20/21）
+### CRITICAL-03 T6 错误矩阵不完整（已修复，21/22）
 
 **规格口径**：`plan-m1.md:221` —「错误一致性 1–20/99」。原 `t6ErrorConsistency` 只断言 1–5。
 
@@ -78,7 +78,7 @@
 - 源码级差分：9（Decimal→I64 越界）、10（Decimal ÷0）、11（DateTime 越界）、13（F64→I64 NaN/Inf/越界）、14（非法 regex）、23（迭代中改同一 map）
 - 修复 `decToI64` 对超大指数静默返回 0 的缺陷：`Int64(1.0e300)` 现按 **9** 报错（该字面量在 M1 是 Decimal，不是 F64；13 由运行时 `Int64(x: Float64)` 覆盖）
 - helper 级（源码类型系统不可达）：6（null 句柄）、8（句柄类型不符）、18（未实现 helper）、20（常量容器写）
-- 覆盖码：**1–6、8–14、18、20、23**，共 **16/21**
+- 覆盖码：**1–6、8–11、13、14、18、20、23**，共 **15/22**（映射用例内）
 
 **剩余码与落点**
 - 7 `BAD_CAST`：新增 `Interp_test.castTypeMismatchYields7`（`CAST STRING` 作用在 I64 值 → 7）
@@ -88,7 +88,7 @@
 - 19 `CALL_CONTRACT`：`userapi/contractErrorIsVisible` 与 `JitFunction_test`
 - 99 `HELPER_PANIC`：`Helpers_test` / `JitContext_test`
 
-**判定**：20/21 有行为证据，仅 15 为无稳定路径的防御码。CRITICAL-03 关闭；建议在 plan 中把「源码可达码」与「引擎内部码（单元用例覆盖）」分开记。
+**判定**：21/22 有行为证据（映射用例 15 + 单元行为 7/12/16/17/19/99），仅 15 为无稳定路径的防御码。CRITICAL-03 关闭；建议在 plan 中把「源码可达码」与「引擎内部码（单元用例覆盖）」分开记。
 
 ### CRITICAL-04 T52/T53 挂名映射（已修复）
 
@@ -143,7 +143,7 @@ cd f_jit && cjpm test --filter X86Compile_test
 ### 测试覆盖
 
 1. **T6/15 `STACK_GUARD`** 无行为用例；解释器把 `0x07` 当 NOP，15 只在桥层重跑余量不足时产生，M1 无稳定构造路径。
-2. **T6 映射用例只覆盖 16 码**；7/16/17/19/99 的行为证据分散在 `Interp_test`/`HandleTable_test`/`userapi`/`Helpers_test`，未纳入 `t6ErrorConsistency` 本体。
+2. **T6 映射用例只覆盖 15 码**；7/12/16/17/19/99 的行为证据分散在 `Interp_test`/`HandleTable_test`/`userapi`/`Helpers_test`，未纳入 `t6ErrorConsistency` 本体。
 3. **T 标签强度**：13 个单元用例的 `T<id>/` 是注释标签，`check_tmap.sh` 只能证明「标签存在」，不能证明断言覆盖该 T 的语义。
 4. **x86 新 lowering 无字节 golden**：浮点/除法/CAST/闭包/LEN 的 519 行降低没有逐序列字节断言；`X86Lower_test` 只覆盖旧 `BackendX86_64.emit*` 片段。
 5. **x86 执行矩阵是代表性覆盖**：`X86Exec_test` 10 例、`X86Compile_test` 8 个单元，不等于 157 opcode 逐条执行/逐条字节对拍。
@@ -163,7 +163,7 @@ cd f_jit && cjpm test --filter X86Compile_test
 | `f-jit-runtime` | 11 / 21 | 绿 | 解释器/句柄/helper/转储 |
 | `f-jit-backend` | 10 / 16 | **绿（实现层）** | aarch64 全量绿；x86 已补齐 157 个 opcode，原生执行证据待 WARNING-01 |
 | `f-jit-facade-bridge` | 10 / 20 | **绿（本轮修复）** | 生产 JIT 已接入；T52 两形态已补 |
-| `f-jit-differential-acceptance` | 7 / 13 | **黄** | T6 16/21；x86 执行证据待补 |
+| `f-jit-differential-acceptance` | 7 / 13 | **黄** | T6 21/22（仅 15 防御码无路径）；x86 执行证据待补 |
 
 ## 本轮执行的校验
 
