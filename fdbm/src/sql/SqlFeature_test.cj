@@ -75,6 +75,24 @@ public class QuotedIdentifierTest {
     }
 
     @TestCase
+    public func hexLiteralRendersPerDialect(): Unit {
+        let statement = SqlParser.parse("insert into t (data) values (X'4142')", 'db0')
+        @Assert(SqlRenderer.render(statement, dialect: SqlDialect.MySql),
+            "insert into t (data) values (X'4142')")
+        @Assert(SqlRenderer.render(statement, dialect: SqlDialect.Postgres),
+            "insert into t (data) values ('\\x4142')")
+        @Assert(SqlRenderer.render(statement),
+            "insert into t (data) values ('\\x4142')")
+        @Assert(SqlParser.parse(SqlRenderer.render(statement, dialect: SqlDialect.MySql), 'db0')
+            is InsertStatement, true)
+    }
+
+    @TestCase
+    public func unterminatedHexLiteralIsSyntaxError(): Unit {
+        @Assert(parseCode("insert into t (data) values (X'414") == DbdErrorCode.SQL_SYNTAX, true)
+    }
+
+    @TestCase
     public func unterminatedQuotesAreSyntaxErrors(): Unit {
         @Assert(parseCode('select * from "t') == DbdErrorCode.SQL_SYNTAX, true)
         @Assert(parseCode('select * from `t') == DbdErrorCode.SQL_SYNTAX, true)

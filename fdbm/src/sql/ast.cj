@@ -105,6 +105,15 @@ protected class ColumnExpression <: SqlExpression {
     }
 }
 
+/** 十六进制字面量 `X'...'`：MySQL 原样下发，PostgreSQL 渲染为 bytea 的 `'\\x...'`。 */
+protected class HexLiteralExpression <: SqlExpression {
+    public let hex: String
+
+    public init(hex: String) {
+        this.hex = hex
+    }
+}
+
 /** 字面量（数字 / 字符串 / NULL / 布尔）。 */
 protected class LiteralExpression <: SqlExpression {
     public let data: Data

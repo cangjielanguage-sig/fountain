@@ -302,6 +302,11 @@ protected struct SqlRenderer {
                     case None => column
                 }
             case l: LiteralExpression => literal(l.data)
+            case h: HexLiteralExpression =>
+                match (dialect) {
+                    case SqlDialect.MySql => "X'${h.hex}'"
+                    case _ => "'\\x${h.hex}'"
+                }
             case p: ParameterExpression => '?'
             case b: BinaryExpression =>
                 '(${renderExpression(b.left, dialect)} ${b.op} ${renderExpression(b.right, dialect)})'

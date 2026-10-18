@@ -22,7 +22,8 @@ import fountain::fdbm.exception.FdbmException
 
 /** 词法记号种类（设计 §8.2）。 */
 protected enum TokenKind <: Equatable<TokenKind> {
-    | Ident | Number | Text | Question | Operator | LParen | RParen | Comma | Semicolon | Dot | End
+    | Ident | Number | Text | HexText | Question | Operator | LParen | RParen | Comma | Semicolon
+    | Dot | End
 
     public operator func ==(other: TokenKind): Bool {
         index() == other.index()
@@ -33,14 +34,15 @@ protected enum TokenKind <: Equatable<TokenKind> {
             case Ident => 0
             case Number => 1
             case Text => 2
-            case Question => 3
-            case Operator => 4
-            case LParen => 5
-            case RParen => 6
-            case Comma => 7
-            case Semicolon => 8
-            case Dot => 9
-            case End => 10
+            case HexText => 3
+            case Question => 4
+            case Operator => 5
+            case LParen => 6
+            case RParen => 7
+            case Comma => 8
+            case Semicolon => 9
+            case Dot => 10
+            case End => 11
         }
     }
 }
@@ -119,6 +121,22 @@ protected struct Lexer {
                 if (!closed) {
                     throw syntax('unterminated block comment', start)
                 }
+                continue
+            }
+            if ((byte == 0x58 || byte == 0x78) && i + 1 < chars.size && chars[i + 1] == 0x27) {
+                // X'...' 十六进制字面量（MySQL 二进制字面量；渲染时按方言改写）
+                let start = i
+                i += 2
+                let digits = ArrayList<Byte>()
+                while (i < chars.size && chars[i] != 0x27) {
+                    digits.add(chars[i])
+                    i += 1
+                }
+                if (i >= chars.size) {
+                    throw syntax('unterminated hex literal', start)
+                }
+                i += 1
+                tokens.add(Token(TokenKind.HexText, String.fromUtf8(digits.toArray()), start))
                 continue
             }
             if (byte == 0x27) {

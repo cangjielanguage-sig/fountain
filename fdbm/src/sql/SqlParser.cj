@@ -676,6 +676,9 @@ protected class SqlParser {
             case TokenKind.Text =>
                 next()
                 return LiteralExpression(DataString(token.text))
+            case TokenKind.HexText =>
+                next()
+                return HexLiteralExpression(token.text)
             case TokenKind.Question =>
                 next()
                 let index = parameterIndex
