@@ -325,6 +325,16 @@ public class X86Lower_test {
             X86Lower_test.hex(BackendX86_64.emitCallHelper(0x8001, 2)))
     }
 
+    @TestCase
+    public func regexReplaceRoutes(): Unit {
+        @Assert(X86Lower_test.hex(BackendX86_64.emitRegexReplaceAll(0x8100)),
+            X86Lower_test.hex(BackendX86_64.emitCallHelper(0x8100, 3)))
+        @Assert(X86Lower_test.hex(BackendX86_64.emitRegexReplaceNth(0x8101)),
+            X86Lower_test.hex(BackendX86_64.emitCallHelper(0x8101, 4)))
+        @Assert(X86Lower_test.hex(BackendX86_64.emitRegexReplaceRange(0x8102)),
+            X86Lower_test.hex(BackendX86_64.emitCallHelper(0x8102, 6)))
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {

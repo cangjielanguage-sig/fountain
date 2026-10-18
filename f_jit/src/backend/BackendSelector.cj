@@ -455,6 +455,18 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
+    internal static func emitRegexReplaceAll(h58: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h58, 3)
+    }
+
+    internal static func emitRegexReplaceNth(h59: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h59, 4)
+    }
+
+    internal static func emitRegexReplaceRange(h72: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h72, 6)
+    }
+
     /** 正则 helper 路由：双参模板 A。 */
     internal static func emitRegexIsMatch(h52: Int64): Array<UInt8> {
         BackendX86_64.emitCallHelper(h52, 2)
