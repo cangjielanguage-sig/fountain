@@ -481,6 +481,27 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
+    /** 容器变更 helper 路由。 */
+    internal static func emitMapPut(h44: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h44, 3)
+    }
+
+    internal static func emitListInsert(h45: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h45, 3)
+    }
+
+    internal static func emitListSet(h46: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h46, 3)
+    }
+
+    internal static func emitListRemove(h47: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h47, 2)
+    }
+
+    internal static func emitMapRemove(h48: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h48, 2)
+    }
+
     /** 区间 helper 路由。 */
     internal static func emitRangeNew(h41: Int64): Array<UInt8> {
         BackendX86_64.emitCallHelper(h41, 4)

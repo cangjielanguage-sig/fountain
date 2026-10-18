@@ -368,6 +368,20 @@ public class X86Lower_test {
             '49833F000F8500000000')
     }
 
+    @TestCase
+    public func mutationHelperRoutes(): Unit {
+        @Assert(X86Lower_test.hex(BackendX86_64.emitMapPut(0x8600)),
+            X86Lower_test.hex(BackendX86_64.emitCallHelper(0x8600, 3)))
+        @Assert(X86Lower_test.hex(BackendX86_64.emitListInsert(0x8601)),
+            X86Lower_test.hex(BackendX86_64.emitCallHelper(0x8601, 3)))
+        @Assert(X86Lower_test.hex(BackendX86_64.emitListSet(0x8602)),
+            X86Lower_test.hex(BackendX86_64.emitCallHelper(0x8602, 3)))
+        @Assert(X86Lower_test.hex(BackendX86_64.emitListRemove(0x8603)),
+            X86Lower_test.hex(BackendX86_64.emitCallHelper(0x8603, 2)))
+        @Assert(X86Lower_test.hex(BackendX86_64.emitMapRemove(0x8604)),
+            X86Lower_test.hex(BackendX86_64.emitCallHelper(0x8604, 2)))
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {
