@@ -291,6 +291,20 @@ internal class BackendX86_64 <: Backend {
         BackendX86_64.cmpOp([0x0Fu8, 0x9Cu8, 0xC0u8])
     }
 
+    /** `TO_I64`：`cvttsd2si rax,xmm0`（NaN/越界行为待 P5.6 完整边界）。 */
+    internal static func emitToI64(): Array<UInt8> {
+        [0xF2u8, 0x0Fu8, 0x10u8, 0x04u8, 0x24u8,
+         0xF2u8, 0x48u8, 0x0Fu8, 0x2Cu8, 0xC0u8,
+         0x48u8, 0x89u8, 0x04u8, 0x24u8]
+    }
+
+    /** `TO_F64`：`cvtsi2sd xmm0,rax`。 */
+    internal static func emitToF64(): Array<UInt8> {
+        [0x48u8, 0x8Bu8, 0x04u8, 0x24u8,
+         0xF2u8, 0x48u8, 0x0Fu8, 0x2Au8, 0xC0u8,
+         0xF2u8, 0x0Fu8, 0x11u8, 0x04u8, 0x24u8]
+    }
+
     /** 浮点比较：`ucomisd` + `setnp` + `setcc` + and（NaN 全 false）。 */
     private static func fCmpOp(setcc: Array<UInt8>): Array<UInt8> {
         let out = ArrayList<UInt8>()
