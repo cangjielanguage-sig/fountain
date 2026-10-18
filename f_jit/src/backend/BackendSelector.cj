@@ -1264,6 +1264,114 @@ internal class BackendX86_64 <: Backend {
         BackendX86_64.emitCallHelper(h15, 2)
     }
 
+    /** `CALL_HELPER_NC`：模板 A 去掉尾随 `CHECK_ERR`。 */
+    internal static func emitCallHelperNC(helperAddr: Int64, argc: Int64): Array<UInt8> {
+        let full = BackendX86_64.emitCallHelper(helperAddr, argc)
+        full[0..(full.size - 10)]
+    }
+
+    /** `CALL_HELPER_V`：结果不压栈；收全部实参；保留 `CHECK_ERR`。 */
+    internal static func emitCallHelperV(helperAddr: Int64, argc: Int64): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (x in [0x4Cu8, 0x89u8, 0xFFu8, 0x48u8, 0x8Du8, 0x74u8, 0x24u8]) {
+            out.add(x)
+        }
+        out.add(UInt8(8 * (argc - 1)))
+        out.add(0xBAu8)
+        BackendX86_64.w32(out, BackendX86_64.i32bits(argc))
+        out.add(0x48u8)
+        out.add(0xB8u8)
+        BackendX86_64.w64(out, helperAddr)
+        for (x in [0xFFu8, 0xD0u8, 0x48u8, 0x83u8, 0xC4u8]) {
+            out.add(x) // call rax; add rsp,8*argc
+        }
+        out.add(UInt8(8 * argc))
+        BackendX86_64.appendCheckErr(out)
+        out.toArray()
+    }
+
+    /** 零参 `CALL_HELPER_V`（`LOOP_BACK` 的 H22）。 */
+    internal static func emitCallHelper0V(helperAddr: Int64): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (x in [0x4Cu8, 0x89u8, 0xFFu8, 0x31u8, 0xF6u8, 0x31u8, 0xD2u8, 0x48u8, 0xB8u8]) {
+            out.add(x)
+        }
+        BackendX86_64.w64(out, helperAddr)
+        for (x in [0xFFu8, 0xD0u8]) {
+            out.add(x)
+        }
+        BackendX86_64.appendCheckErr(out)
+        out.toArray()
+    }
+
+    /** `LOOP_BACK`：`STACK_GUARD need` + `call H22` + `jmp target`（rel 占位）。 */
+    internal static func emitLoopBack(h22: Int64, frame: Int64, need: Int64): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        for (x in BackendX86_64.emitStackGuard(frame, need)) {
+            out.add(x)
+        }
+        for (x in BackendX86_64.emitCallHelper0V(h22)) {
+            out.add(x)
+        }
+        for (x in [0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+            out.add(x)
+        }
+        out.toArray()
+    }
+
+    /** `RET`：`mov rax,[rsp]; jmp .epilogue`。 */
+    internal static func emitRet(): Array<UInt8> {
+        [0x48u8, 0x8Bu8, 0x04u8, 0x24u8, 0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]
+    }
+
+    /** `RET_VOID`/`RET_NULL`：`xor eax,eax; jmp .epilogue`。 */
+    internal static func emitRetVoid(): Array<UInt8> {
+        [0x31u8, 0xC0u8, 0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]
+    }
+
+    /** `GUARD_TYPE mode`：mode0 → H19 + `CHECK_ERR`；mode1 → H17 + `<deopt>`。 */
+    internal static func emitGuardType(h17: Int64, h19: Int64, tok: Int64,
+        mode: Int64): Array<UInt8> {
+        if (mode == 0) {
+            let out = ArrayList<UInt8>()
+            out.add(0x48u8)
+            out.add(0xB8u8)
+            BackendX86_64.w64(out, tok)
+            out.add(0x50u8)
+            for (x in BackendX86_64.emitCallHelper(h19, 2)) {
+                out.add(x)
+            }
+            return out.toArray()
+        }
+        let out = ArrayList<UInt8>()
+        for (x in [0xFFu8, 0x34u8, 0x24u8]) {
+            out.add(x) // DUP
+        }
+        out.add(0x48u8)
+        out.add(0xB8u8)
+        BackendX86_64.w64(out, tok)
+        out.add(0x50u8)
+        for (x in [0x4Cu8, 0x89u8, 0xFFu8, 0x48u8, 0x8Du8, 0x74u8, 0x24u8, 0x08u8,
+            0xBAu8, 0x02u8, 0x00u8, 0x00u8, 0x00u8, 0x48u8, 0xB8u8]) {
+            out.add(x)
+        }
+        BackendX86_64.w64(out, h17)
+        for (x in [0xFFu8, 0xD0u8, 0x48u8, 0x89u8, 0x84u8, 0x24u8,
+            0x08u8, 0x00u8, 0x00u8, 0x00u8, 0x48u8, 0x83u8, 0xC4u8, 0x08u8,
+            0x85u8, 0xC0u8, 0x0Fu8, 0x84u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8,
+            0x58u8, 0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8,
+            0x58u8, 0x49u8, 0xC7u8, 0x07u8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
+            0x31u8, 0xC0u8, 0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]) {
+            out.add(x)
+        }
+        out.toArray()
+    }
+
+    /** `TYPE_OF`：H18 单参 + `CHECK_ERR`。 */
+    internal static func emitTypeOf(h18: Int64): Array<UInt8> {
+        BackendX86_64.emitCallHelper(h18, 1)
+    }
+
     /** `JMP rel32`（占位 0，P5.8 回填）。 */
     internal static func emitJmp(): Array<UInt8> {
         [0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]

@@ -480,6 +480,39 @@ public class X86Lower_test {
             X86Lower_test.hex(BackendX86_64.emitCallHelper(0x9101, 2)))
     }
 
+    @TestCase
+    public func controlTransferAndGuards(): Unit {
+        @Assert(X86Lower_test.hex(BackendX86_64.emitRet()),
+            '488B0424' + 'E900000000')
+        @Assert(X86Lower_test.hex(BackendX86_64.emitRetVoid()), '31C0' + 'E900000000')
+        // CALL_HELPER_NC：去掉 10 字节 CHECK_ERR
+        let nc = BackendX86_64.emitCallHelperNC(0x9200, 1)
+        let full = BackendX86_64.emitCallHelper(0x9200, 1)
+        @Assert(nc.size, full.size - 10)
+        // CALL_HELPER_V：不压结果，收全部实参
+        @Assert(X86Lower_test.hex(BackendX86_64.emitCallHelperV(0x9201, 2)),
+            '4C89FF' + '488D742408' + 'BA02000000' + '48B80192000000000000' +
+            'FFD0' + '4883C410' + '49833F000F8500000000')
+        // LOOP_BACK：STACK_GUARD + H22 零参 + jmp
+        @Assert(X86Lower_test.hex(BackendX86_64.emitLoopBack(0x9202, 64, 128)),
+            X86Lower_test.hex(BackendX86_64.emitStackGuard(64, 128)) +
+            '4C89FF' + '31F6' + '31D2' + '48B80292000000000000' + 'FFD0' +
+            '49833F000F8500000000' + 'E900000000')
+        // GUARD_TYPE mode0：压 tok + H19 双参
+        @Assert(X86Lower_test.hex(BackendX86_64.emitGuardType(0x9203, 0x9204, 4, 0)),
+            '48B80400000000000000' + '50' +
+            X86Lower_test.hex(BackendX86_64.emitCallHelper(0x9204, 2)))
+        // GUARD_TYPE mode1：H17 判定 + deopt(-1)
+        let gt = X86Lower_test.hex(BackendX86_64.emitGuardType(0x9203, 0x9204, 4, 1))
+        @Assert(gt, 'FF3424' + '48B80400000000000000' + '50' + '4C89FF' + '488D742408' +
+            'BA02000000' + '48B80392000000000000' + 'FFD0' +
+            '4889842408000000' + '4883C408' + '85C0' + '0F8400000000' +
+            '58' + 'E900000000' + '58' + '49C707FFFFFFFF' + '31C0' + 'E900000000')
+        // TYPE_OF：H18 单参
+        @Assert(X86Lower_test.hex(BackendX86_64.emitTypeOf(0x9205)),
+            X86Lower_test.hex(BackendX86_64.emitCallHelper(0x9205, 1)))
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {
