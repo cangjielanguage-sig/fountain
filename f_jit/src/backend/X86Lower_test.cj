@@ -203,6 +203,14 @@ public class X86Lower_test {
         @Assert(X86Lower_test.hex(got), expected)
     }
 
+    @TestCase
+    public func callFuncTemplateB(): Unit {
+        let got = BackendX86_64.emitCallFunc(0x2000, 1u32, 0u32)
+        let expected = '48B80020000000000000' + 'FF9008000000' +
+            '41C7472800000000' + '49833F000F8500000000'
+        @Assert(X86Lower_test.hex(got), expected)
+    }
+
     private static func hex(bs: Array<UInt8>): String {
         var s = ''
         for (b in bs) {
