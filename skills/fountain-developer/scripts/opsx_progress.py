@@ -9,6 +9,7 @@
 
 用法：
     python3 opsx_progress.py --repo <仓库根> [--change <变更名>] [--stage apply] [--log <后台输出文件>]
+    python3 opsx_progress.py --repo <仓库根> --cjpm     # 附带融合侧 cjpm build/test 状况（ssh 采集）
     python3 opsx_progress.py --repo <仓库根> --json
     python3 opsx_progress.py --repo <仓库根> --reset      # 新任务开始时清掉上一轮快照
 
@@ -23,6 +24,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -94,7 +96,7 @@ def artifacts(change_dir: Path) -> dict:
 
 
 def git_summary(repo: Path) -> dict:
-    code, out = run(["git", "-C", str(repo), "status", "--porcelain"], repo)
+    code, out = run(["git", "-C", str(repo), "-c", "core.quotepath=false", "status", "--porcelain"], repo)
     if code != 0:
         return {"ok": False, "changed": None, "files": [], "detail": out[:200]}
     lines = [l for l in out.splitlines() if l.strip()]
@@ -136,6 +138,90 @@ def log_info(path: Path | None) -> dict | None:
     return {"size": size, "tail": tail}
 
 
+def cjpm_status(repo: Path) -> dict:
+    """经 ssh 采集融合侧 cjpm build/test 状况：进程 + 最近一次 cjpm 命令 + 输出尾部。
+
+    数据来源：`ps` 的 cjpm/cjc 进程 + CodeBuddy 日志里最近一条 cjpm build/test 命令
+    （含重定向输出文件，如 /tmp/xxx.log）。连不上 ssh / 没配 fusion.ssh 时优雅降级。
+    """
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import opsx_fusion as fx  # noqa: E402
+    except Exception as exc:  # noqa: BLE001
+        return {"checked": False, "detail": f"无法加载 opsx_fusion：{exc}"}
+    ssh = fx.ssh_config(fx.load_config(repo))
+    if not ssh["host"] or not ssh["user"]:
+        return {"checked": False, "detail": "fusion.ssh 未配置（先跑 opsx_fusion.py ssh-check）"}
+
+    script = r'''
+set -u
+REPO=__REPO__
+echo "=PROCS="
+ps -eo pid,etime,pcpu,stat,args 2>/dev/null | grep -E "cjpm|cjc" | grep -v grep || true
+echo "=CMD="
+LOG=""
+for f in $(ls -t "$HOME/.codebuddy/logs/$(date +%F)"/*.log 2>/dev/null); do
+  if tail -n 3000 "$f" 2>/dev/null | grep -qF "$REPO"; then LOG="$f"; break; fi
+done
+[ -z "${LOG:-}" ] && LOG=$(ls -t "$HOME/.codebuddy/logs/$(date +%F)"/*.log 2>/dev/null | head -1)
+if [ -n "${LOG:-}" ]; then
+  LINE=$(tail -n 3000 "$LOG" 2>/dev/null | grep -E "cjpm (build|test)" | tail -1)
+  printf "%s\n" "${LINE:-}"
+  OUT=$(printf "%s" "${LINE:-}" | grep -oE "(> *|tee *)[^ ]+\.log" | head -1 | sed -E "s/^(> *|tee *)//")
+  if [ -n "${OUT:-}" ] && [ -f "$OUT" ]; then
+    echo "=OUT="
+    echo "FILE=$OUT"
+    stat -c "%s %y" "$OUT" 2>/dev/null || true
+    echo "=TAIL="
+    tail -n 12 "$OUT" 2>/dev/null || true
+  fi
+fi
+'''.replace("__REPO__", shlex.quote(str(repo)))
+    code, out = fx.run(["ssh", *fx.ssh_opts(ssh), fx.ssh_target(ssh), "bash -s"],
+                       cwd=Path.home(), input_text=script, timeout=30)
+    if code != 0:
+        return {"checked": False, "detail": (out or "")[-300:]}
+
+    sections: dict[str, list[str]] = {}
+    cur: str | None = None
+    for line in out.splitlines():
+        s = line.strip()
+        if s.startswith("=") and s.endswith("=") and len(s) > 2:
+            cur = s.strip("=")
+            sections[cur] = []
+        elif cur is not None:
+            sections[cur].append(line)
+
+    procs: list[dict] = []
+    for line in sections.get("PROCS", []):
+        parts = line.split(None, 4)
+        if len(parts) >= 5:
+            procs.append({"pid": parts[0], "etime": parts[1], "cpu": parts[2],
+                          "stat": parts[3], "args": parts[4][:200]})
+
+    cmd_lines = [l.strip() for l in sections.get("CMD", []) if l.strip()]
+    command = cmd_lines[0] if cmd_lines else ""
+    m = re.search(r'cmd="([^"]+)"', command)
+    if m:
+        command = m.group(1)
+    out_file, out_size, out_mtime = "", None, ""
+    for line in sections.get("OUT", []):
+        if line.startswith("FILE="):
+            out_file = line[len("FILE="):].strip()
+        elif re.match(r"^\d+\s", line):
+            bits = line.split(None, 1)
+            out_size = int(bits[0]) if bits[0].isdigit() else None
+            out_mtime = bits[1].strip() if len(bits) > 1 else ""
+
+    return {"checked": True,
+            "procs": procs,
+            "command": command,
+            "outputFile": out_file,
+            "outputSize": out_size,
+            "outputMtime": out_mtime,
+            "outputTail": [l.rstrip() for l in sections.get("TAIL", []) if l.strip()][-8:]}
+
+
 def load_state() -> dict:
     """返回 {"entries": {key: {...}}}；兼容旧的单条格式（文件里只有 key 字段）。"""
     if STATE.is_file():
@@ -161,7 +247,7 @@ def save_state(state: dict) -> None:
 
 
 def collect(repo: Path, change: str | None, stage: str | None, log: Path | None,
-            stall_rounds: int) -> dict:
+            stall_rounds: int, with_cjpm: bool = False) -> dict:
     root = find_openspec(repo)
     result: dict = {
         "ts": datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -204,6 +290,7 @@ def collect(repo: Path, change: str | None, stage: str | None, log: Path | None,
     result["git"] = git_summary(repo)
     result["recent"] = recent_files(repo)
     result["log"] = log_info(log)
+    result["cjpm"] = cjpm_status(repo) if with_cjpm else None
 
     # 停滞判定：与上轮快照（同一仓库 + 同一变更）做签名比较
     state = load_state()
@@ -215,6 +302,8 @@ def collect(repo: Path, change: str | None, stage: str | None, log: Path | None,
         "gitChanged": result["git"]["changed"],
         "recent": sorted(result["recent"]),
         "logSize": result["log"]["size"] if result["log"] else None,
+        "cjpmProcs": len((result["cjpm"] or {}).get("procs") or []) if result["cjpm"] else None,
+        "cjpmOutSize": (result["cjpm"] or {}).get("outputSize") if result["cjpm"] else None,
     }
     prev_sig = prev.get("signature") or {}
     changed = [k for k, v in signature.items() if prev_sig.get(k) != v]
@@ -293,6 +382,26 @@ def render(result: dict) -> str:
     elif result.get("stage"):
         lines.append("后台输出：未提供（--log）")
 
+    cj = result.get("cjpm")
+    if cj is not None:
+        if not cj.get("checked"):
+            lines.append(f"cjpm 状况：不可用（{(cj.get('detail') or '')[:120]}）")
+        else:
+            procs = cj.get("procs") or []
+            if procs:
+                lines.append(f"cjpm 状况：运行中（全局 {len(procs)} 个 cjpm/cjc 进程）")
+                for p in procs[:3]:
+                    lines.append(f"  · PID {p['pid']}  已 {p['etime']}  CPU {p['cpu']}%  STAT {p['stat']}  {p['args'][:90]}")
+            else:
+                lines.append("cjpm 状况：未在运行")
+            if cj.get("command"):
+                lines.append(f"  最近命令：{cj['command'][:200]}")
+            if cj.get("outputFile"):
+                size = cj.get("outputSize")
+                lines.append(f"  输出：{cj['outputFile']}（{size if size is not None else '?'} 字节）")
+                for l in cj.get("outputTail") or []:
+                    lines.append(f"  | {l[:160]}")
+
     if result["stalled"]:
         lines.append(f"停滞：**是**（连续 {result['stallRounds']} 轮无变化，阈值 {result['stallRoundsThreshold']}）")
     else:
@@ -312,6 +421,8 @@ def main() -> int:
     ap.add_argument("--change", help="变更名（缺省列出全部在途变更）")
     ap.add_argument("--stage", help="当前阶段标签（propose/apply/verify/archive 等，仅用于报告标注）")
     ap.add_argument("--log", help="后台任务输出文件（可选；报告大小与尾部）")
+    ap.add_argument("--cjpm", action="store_true",
+                    help="附带融合侧 cjpm build/test 状况（经 ssh 采集进程与输出尾部）")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--reset", action="store_true", help="清掉上一轮快照（新任务开始时用）")
     ap.add_argument("--stall-rounds", type=int, default=3, help="连续多少轮无变化视为停滞（默认 3）")
@@ -343,7 +454,8 @@ def main() -> int:
         return 2
 
     result = collect(repo, args.change, args.stage,
-                     Path(args.log).expanduser() if args.log else None, args.stall_rounds)
+                     Path(args.log).expanduser() if args.log else None, args.stall_rounds,
+                     with_cjpm=args.cjpm)
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
