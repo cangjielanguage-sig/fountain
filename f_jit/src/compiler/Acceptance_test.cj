@@ -88,6 +88,7 @@ public class Acceptance_test {
             '{ => let t = DateTime.parse("9999-12-31T23:59:59Z") + Duration.day\n 0 }',
             Array<Any>(), 11)
         Acceptance_test.diffCode('T6/fp-invalid', '{ x: Float64 => Int64(x) }', [1.0e300], 13)
+        Acceptance_test.diffCode('T6/dec-const', '{ => Int64(1.0e300) }', Array<Any>(), 9)
         Acceptance_test.diffCode('T6/regex-invalid',
             '{ => let b = "(".regex() ~ "a"\n 0 }', Array<Any>(), 14)
         Acceptance_test.diffCode('T6/concurrent-mod',

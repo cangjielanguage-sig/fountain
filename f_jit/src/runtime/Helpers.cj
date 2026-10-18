@@ -372,6 +372,11 @@ internal func decFromF64(ctx: JitContext, a: Array<Int64>): Int64 {
 /** `dec_to_i64`：向零截断；越界 ⇒ 9（mode=1 由指令层转 DEOPT，helper 只管报错模式）。 */
 internal func decToI64(ctx: JitContext, a: Array<Int64>): Int64 {
     let d = HandleTable.fetchDecimal(argAt(a, 0))
+    // 显式值域判定：std 的 `toInt64(Throwing)` 对 1e300 这类超大指数不抛异常（实测返回 0），
+    // 不能只依赖 catch，否则 `Int64(1.0e300)` 会静默变 0。
+    if (d > Decimal(Int64.Max) || d < Decimal(Int64.Min)) {
+        failWith(ErrCode.DEC_RANGE)
+    }
     try {
         d.toInt64(overflowHandling: OverflowStrategy.Throwing)
     } catch (e: Exception) {
