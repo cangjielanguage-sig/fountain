@@ -62,7 +62,8 @@ class BindContext {
                     orderBy.add((bindExpression(expression), asc))
                 }
                 SelectStatement(s.distinct, columns.toArray(), s.from, joins.toArray(),
-                    bindOptional(s.condition), orderBy.toArray(), s.limit, s.offset)
+                    bindOptional(s.condition), orderBy.toArray(), bindOptional(s.limit),
+                    bindOptional(s.offset))
             case s: InsertStatement =>
                 let rows = ArrayList<Array<SqlExpression>>()
                 for (row in s.values) {

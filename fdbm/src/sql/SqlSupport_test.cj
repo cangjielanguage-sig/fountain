@@ -46,6 +46,18 @@ public class ParameterBinderTest {
     }
 
     @TestCase
+    public func bindsLimitOffsetParameters(): Unit {
+        // f_orm 的方言用 `limit ? offset ?`；fdbm 必须在绑定后还原为整数。
+        let statement = SqlParser.parse('select id from t where id = ? limit ? offset ?', 'db0')
+        let bound = ParameterBinder.bind(statement, [
+            DataAny(DataReal(7)), DataAny(DataReal(10)), DataAny(DataReal(20))
+        ])
+        let sql = SqlRenderer.render(bound)
+        @Assert(sql.contains('limit 10 offset 20'), true)
+        @Assert(sql.contains('?'), false)
+    }
+
+    @TestCase
     public func bindsInsertValues(): Unit {
         let statement = SqlParser.parse('insert into t (id, name) values (?, ?), (?, ?)', 'db0')
         let bound = ParameterBinder.bind(statement, [

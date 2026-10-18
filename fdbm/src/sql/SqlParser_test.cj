@@ -40,8 +40,14 @@ public class SqlParserTest {
         @Assert(statement.joins[0].joinType == JoinType.Left, true)
         @Assert(statement.condition.isSome(), true)
         @Assert(statement.orderBy.size, 1)
-        @Assert(statement.limit.getOrThrow(), 10)
-        @Assert(statement.offset.getOrThrow(), 5)
+        match (statement.limit.getOrThrow()) {
+            case l: LiteralExpression => @Assert(SqlRenderer.literal(l.data), '10')
+            case _ => @Assert(false, true)
+        }
+        match (statement.offset.getOrThrow()) {
+            case l: LiteralExpression => @Assert(SqlRenderer.literal(l.data), '5')
+            case _ => @Assert(false, true)
+        }
     }
 
     /** `*`、多表与不写 `from` 的查询。 */

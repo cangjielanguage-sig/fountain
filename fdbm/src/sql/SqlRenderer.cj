@@ -98,11 +98,11 @@ protected struct SqlRenderer {
             }
         }
         match (statement.limit) {
-            case Some(limit) => builder.append(' limit ${limit}')
+            case Some(limit) => builder.append(' limit ${renderExpression(limit)}')
             case None => ()
         }
         match (statement.offset) {
-            case Some(offset) => builder.append(' offset ${offset}')
+            case Some(offset) => builder.append(' offset ${renderExpression(offset)}')
             case None => ()
         }
         builder.toString()

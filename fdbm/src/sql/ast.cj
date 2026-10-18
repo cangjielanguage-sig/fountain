@@ -235,12 +235,13 @@ protected class SelectStatement <: SqlStatement {
     public let joins: Array<JoinClause>
     public let condition: ?SqlExpression
     public let orderBy: Array<(SqlExpression, Bool)>   // (expr, asc)
-    public let limit: ?Int64
-    public let offset: ?Int64
+    /** `limit` / `offset`：整数或 `?` 参数（绑定后为整数字面量）。 */
+    public let limit: ?SqlExpression
+    public let offset: ?SqlExpression
 
     public init(distinct: Bool, columns: Array<SelectItem>, from: Array<TableRef>,
         joins: Array<JoinClause>, condition: ?SqlExpression, orderBy: Array<(SqlExpression, Bool)>,
-        limit: ?Int64, offset: ?Int64) {
+        limit: ?SqlExpression, offset: ?SqlExpression) {
         this.distinct = distinct
         this.columns = columns
         this.from = from

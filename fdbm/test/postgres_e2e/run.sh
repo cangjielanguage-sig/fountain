@@ -230,7 +230,7 @@ for db in "${DATABASES[@]}"; do
     [ "$(db_sql "$db" "select count(*) from t_global where k = 1")" = "0" ] || fail "$db global k=1 should be deleted"
     [ "$(db_sql "$db" "select v from t_global where k = 2")" = "left2" ] || fail "$db global k=2 missing"
 done
-[ "$(db_sql db0 "select octet_length(data) from t_stream where id = 1")" = "200000" ] || fail "bytea not stored" 
+[ "$(db_sql db0 "select octet_length(data) from t_stream where id = 1")" = "200000" ] || fail "bytea not stored"
 [ -s "$WORK/export_$PORT1.sh" ] || fail "export script not written"
 grep -q "fdbm_port='19999'" "$WORK/export_$PORT1.sh" || fail "export did not persist fdbm_port"
 

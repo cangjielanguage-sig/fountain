@@ -218,22 +218,33 @@ protected class SqlParser {
                 orderBy.add(orderItem())
             }
         }
-        var limit: ?Int64 = None
-        var offset: ?Int64 = None
+        var limit: ?SqlExpression = None
+        var offset: ?SqlExpression = None
         if (matchKeyword('limit')) {
-            let first = integerLiteral()
+            let first = limitValue()
             if (accept(TokenKind.Comma)) {
                 offset = Some(first)
-                limit = Some(integerLiteral())
+                limit = Some(limitValue())
             } else {
                 limit = Some(first)
                 if (matchKeyword('offset')) {
-                    offset = Some(integerLiteral())
+                    offset = Some(limitValue())
                 }
             }
         }
         SelectStatement(distinct, columns.toArray(), from.toArray(), joins.toArray(), condition,
             orderBy.toArray(), limit, offset)
+    }
+
+    /** `limit` / `offset` 的值：整数或 `?`（与 WHERE 的参数共用同一序号）。 */
+    private func limitValue(): SqlExpression {
+        if (peek().kind == TokenKind.Question) {
+            next()
+            let index = parameterIndex
+            parameterIndex += 1
+            return ParameterExpression(index)
+        }
+        LiteralExpression(DataReal(integerLiteral()))
     }
 
     private func selectItem(): SelectItem {
