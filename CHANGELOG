@@ -1,3 +1,10 @@
+2026-10-18
+    新增 f_mq 模块（消息队列客户端与客户端/服务端共用 API）：记录编解码、协议载荷、过滤器、
+      主题校验、MQClient（publish/subscribe/unsubscribe/consume/ack/close）
+    新增 fmq 可执行文件（消息队列服务）：fmq server（多节点、队列分段日志、消费组游标、
+      超时重投与死信、元数据全量复制、备份副本）与 fmq manager（六个管理子命令）
+    放宽 f_io.LogPosition 的 seq/offset 为 public let，供 MQ 按位置续读
+    新增 scripts/mq_e2e.sh 三节点端到端脚本
 2024-11-03
 初始化项目目录结构
 增加通用异常声明
