@@ -21,6 +21,7 @@ import fountain::f_jit.runtime.JitContext
 import std.sync.Mutex
 import fountain::f_base.Arch
 import fountain::f_base.OS
+import fountain::f_jit.runtime.HandleTable
 import fountain::f_jit.runtime.MachineEnv
 
 /**
@@ -38,13 +39,16 @@ public class JitExecutor {
     private let table: FnTable
     private let mirror: ConstMirror
     private let entryOff: Int64
+    private let constIds: Array<Int64>
     private var released: Bool
 
-    private init(buf: CodeBuffer, table: FnTable, mirror: ConstMirror, entryOff: Int64) {
+    private init(buf: CodeBuffer, table: FnTable, mirror: ConstMirror, entryOff: Int64,
+        constIds: Array<Int64>) {
         this.buf = buf
         this.table = table
         this.mirror = mirror
         this.entryOff = entryOff
+        this.constIds = constIds
         this.released = false
     }
 
@@ -64,11 +68,13 @@ public class JitExecutor {
             ids[i] = interp.constHandle(i)
             i = i + 1
         }
+        let pinned = interp.pinnedConstIds()
         let mirror = ConstMirror.build(ids)
         let table = match (FnTable.alloc(unit.dir.size)) {
             case Some(t) => t
             case None =>
                 mirror.free()
+                JitExecutor.releaseConsts(pinned)
                 return None
         }
         let art = match (JitCompiler.compileUnitWith(unit, mirror.base(), table.base())) {
@@ -76,6 +82,7 @@ public class JitExecutor {
             case None =>
                 table.free()
                 mirror.free()
+                JitExecutor.releaseConsts(pinned)
                 return None
         }
         let entryOff = match (art.entry(entryFn)) {
@@ -83,6 +90,7 @@ public class JitExecutor {
             case None =>
                 table.free()
                 mirror.free()
+                JitExecutor.releaseConsts(pinned)
                 return None
         }
         let buf = match (CodeBuffer.alloc(art.code.size + 16)) {
@@ -90,12 +98,14 @@ public class JitExecutor {
             case None =>
                 table.free()
                 mirror.free()
+                JitExecutor.releaseConsts(pinned)
                 return None
         }
         if (!buf.write(art.code, 0) || !buf.seal()) {
             buf.free()
             table.free()
             mirror.free()
+            JitExecutor.releaseConsts(pinned)
             return None
         }
         buf.flushICache()
@@ -108,7 +118,7 @@ public class JitExecutor {
             }
             i = i + 1
         }
-        Some(JitExecutor(buf, table, mirror, entryOff))
+        Some(JitExecutor(buf, table, mirror, entryOff, pinned))
     }
 
     /** 以 `cells` 为实参执行入口函数；入参按「最深实参在高地址」的共享 ABI 排列。 */
@@ -156,5 +166,21 @@ public class JitExecutor {
         this.table.free()
         this.mirror.free()
         this.buf.free()
+        JitExecutor.releaseConsts(this.constIds)
+    }
+
+    /** 外部（CompilePipeline 的纯解释器形态）复用同一批常量句柄。 */
+    public func pinnedConstIds(): Array<Int64> {
+        this.constIds
+    }
+
+    private static func releaseConsts(ids: Array<Int64>): Unit {
+        var i = 0
+        while (i < ids.size) {
+            if (ids[i] != 0) {
+                HandleTable.releaseConst(ids[i])
+            }
+            i = i + 1
+        }
     }
 }

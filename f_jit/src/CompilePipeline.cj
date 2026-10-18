@@ -28,6 +28,7 @@ import fountain::f_jit.bytecode.LocalTypes
 import fountain::f_jit.compiler.SourceCompiler
 import fountain::f_jit.backend.JitExecutor
 import fountain::f_jit.runtime.DbgDump
+import fountain::f_jit.runtime.HandleTable
 import fountain::f_jit.runtime.Interp
 import fountain::f_jit.runtime.JitContext
 
@@ -97,6 +98,27 @@ protected class CompilePipeline {
         }
     }
 
+    /** 纯解释器形态：一次性登记常量句柄，后续每次调用复用。 */
+    private static func pinConsts(unit: LoadedUnit): Array<Int64> {
+        let probe = Interp(unit)
+        var i = 0
+        while (i < unit.consts.size) {
+            let _ = probe.constHandle(i)
+            i = i + 1
+        }
+        probe.pinnedConstIds()
+    }
+
+    private static func releaseConsts(ids: Array<Int64>): Unit {
+        var i = 0
+        while (i < ids.size) {
+            if (ids[i] != 0) {
+                HandleTable.releaseConst(ids[i])
+            }
+            i = i + 1
+        }
+    }
+
     /** 缓存键的引擎维度：`Off`/`Auto`/`Force` 产物不同，不能互相命中。 */
     private static func modeKey(m: JitMode): String {
         match (m) {
@@ -141,19 +163,24 @@ protected class CompilePipeline {
         } else {
             JitExecutor.create(unit, entryFn)
         }
+        // 常量句柄只登记一次：JIT 路径由执行器持有；纯解释器路径此处登记、卸载时归还。
+        let constIds = match (executor) {
+            case Some(ex) => ex.pinnedConstIds()
+            case None => CompilePipeline.pinConsts(unit)
+        }
         let body: (JitContext, Array<Int64>) -> Int64 = { ctx, cells =>
             match (executor) {
                 case Some(ex) => ex.invoke(ctx, cells)
-                case None => Interp(unit).run(entryFn, cells, ctx)
+                case None => Interp(unit, constIds).run(entryFn, cells, ctx)
             }
         }
         // DEOPT(-1) 的透明重跑必须走解释器（§8.5）。
         let replay: (JitContext, Array<Int64>) -> Int64 = { ctx, cells =>
-            Interp(unit).run(entryFn, cells, ctx)
+            Interp(unit, constIds).run(entryFn, cells, ctx)
         }
         let release: ?(() -> Unit) = match (executor) {
             case Some(ex) => Some({ => ex.release() })
-            case None => None
+            case None => Some({ => CompilePipeline.releaseConsts(constIds) })
         }
         let fn = JitFunction(Int64(e.nargs), e.retType, params, body, replay, '', release)
         // T50：桥侧报告（源码行 + 变量清单），与差分层/解释器共用一份组装逻辑。

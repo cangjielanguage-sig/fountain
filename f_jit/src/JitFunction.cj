@@ -21,6 +21,7 @@ import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.JitException
 import fountain::f_jit.base.LocalType
 import fountain::f_jit.runtime.DbgDump
+import fountain::f_jit.runtime.HandleTable
 import fountain::f_jit.runtime.JitContext
 
 /**
@@ -30,6 +31,8 @@ import fountain::f_jit.runtime.JitContext
  * `body(ctx, cells)` 返回结果 cell；`replay(ctx, cells)` 供 `-1 DEOPT` 透明重跑。
  */
 public class JitFunction {
+    /** 全局调用窗ロ：HandleTable 只有一个窗口，桥的 open/body/reset 必须串行。 */
+    private static let callMtx: Mutex = Mutex()
     private let nargs: Int64
     private let retType: UInt16
     private let paramTypes: Array<UInt16>
@@ -76,11 +79,14 @@ public class JitFunction {
 
     /** 六步调用：长度 → 封送 → 执行 → 解包 → `T` 校验 → 返回。 */
     public func call<T>(args: Array<Any>): T {
-        this.enter()
-        try {
-            return this.callLocked<T>(args)
-        } finally {
-            this.exit()
+        // HandleTable 是进程级单窗口：open/执行/reset 必须串行，否则并发调用会互相清窗。
+        synchronized (JitFunction.callMtx) {
+            this.enter()
+            try {
+                return this.callLocked<T>(args)
+            } finally {
+                this.exit()
+            }
         }
     }
 
@@ -164,7 +170,11 @@ public class JitFunction {
             case None => return JitFunction.contractFail('T 不是可解包类型')
         }
         let marshal = CallMarshal()
-        let ctx = JitContext.create(hwBase: 0, hwCap: 0, fnId: 0, dbgBase: 0)
+        // 每次调用独立窗口：执行期分配的句柄在 finally 统一回收（design §9.5 / T27）。
+        HandleTable.openWindow(HandleTable.initialCapacity)
+        let ctx = JitContext.create(hwBase: HandleTable.windowBaseOf(),
+            hwCap: HandleTable.windowCapOf(), fnId: 0, dbgBase: 0)
+        HandleTable.syncTo(ctx)
         let dump = match (this.diagReporter) {
             case Some(_) => DbgDump.allocateDump(this.diagMaxLocals)
             case None => CPointer<Int64>()
@@ -187,8 +197,11 @@ public class JitFunction {
                 case None => this.report
             }
             let ret = JitReport.finish(ctx, cell, { => this.replay(ctx, cells) }, report)
-            // 4. 解包
+            // 4. 解包；句柄型返回值已取成宿主对象，立即归还句柄（否则每次调用泄漏 1 槽）
             let v = marshal.makeRetUnboxer(this.retType)(ret)
+            if (this.retType >= LocalType.STRING && this.retType <= LocalType.MAP) {
+                HandleTable.releaseEscaped(ret)
+            }
             // 6. 返回 T
             match (v as T) {
                 case Some(x) => return x
@@ -196,6 +209,7 @@ public class JitFunction {
             }
         } finally {
             marshal.cleanup()
+            HandleTable.resetWindow(-1)
             if (!dump.isNull()) {
                 DbgDump.freeDump(dump)
             }

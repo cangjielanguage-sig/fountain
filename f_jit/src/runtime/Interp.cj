@@ -84,6 +84,17 @@ public class Interp {
         this.constIds = Array<Int64>(unit.consts.size, repeat: 0)
     }
 
+    /** 复用已登记的常量句柄（避免每次调用重复 pin；句柄生命周期由调用方持有）。 */
+    public init(unit: LoadedUnit, constIds: Array<Int64>) {
+        this.unit = unit
+        this.constIds = constIds
+    }
+
+    /** 已登记的路径 A 句柄（值型常量为 0；调用方负责 releaseConst）。 */
+    public func pinnedConstIds(): Array<Int64> {
+        this.constIds
+    }
+
     /** 帧尺寸信息 `(nLocals, maxStack)`（§3.1）。 */
     public func frameInfo(fnId: UInt32): (Int64, Int64) {
         let e = this.unit.dir.get(fnId)

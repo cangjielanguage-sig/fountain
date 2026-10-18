@@ -71,6 +71,8 @@ public class HandleTable {
     private static let gens: ArrayList<UInt16> = HandleTable.seedU16()
     private static let alive: ArrayList<Bool> = HandleTable.seedBool()
     private static let constFlags: ArrayList<Bool> = HandleTable.seedBool()
+    /** 路径 A 引用计数：同一常量被多个单元共享时按 pin 次数计数，归零才回收。 */
+    private static let constRefs: ArrayList<Int64> = HandleTable.seedI64()
     private static let escapeFlags: ArrayList<Bool> = HandleTable.seedBool()
     private static let freeSlots: ArrayList<Int64> = ArrayList<Int64>()
 
@@ -92,10 +94,19 @@ public class HandleTable {
         a
     }
 
+    private static func seedI64(): ArrayList<Int64> {
+        let a = ArrayList<Int64>()
+        a.add(0)
+        a
+    }
+
     /** 当前窗口：`[windowBase, windowTop)`（M1 只增不减）。 */
     private static var windowBase: Int64 = 0
     private static var windowCap: Int64 = 0
     private static var windowTop: Int64 = 0
+    /** 本次窗口实际占用的槽索引（允许复用旧 freeSlots，故不能用连续区间表示）。 */
+    private static let windowSlots: ArrayList<Int64> = ArrayList<Int64>()
+    private static var windowUsedCount: Int64 = 0
 
     // ---- 槽位三元组编码 ----
 
@@ -183,9 +194,9 @@ public class HandleTable {
         windowCap
     }
 
-    /** 当前窗口已用数（= `ctx.hwTop - hwBase`）。 */
+    /** 当前窗口已用数（逻辑计数；槽索引允许复用旧 freeSlots）。 */
     public static func windowUsed(): Int64 {
-        windowTop - windowBase
+        windowUsedCount
     }
 
     /**
@@ -198,6 +209,8 @@ public class HandleTable {
             windowBase = objs.size
             windowTop = windowBase
             windowCap = if (cap <= 0) { initialCapacity } else { cap }
+            windowSlots.clear()
+            windowUsedCount = 0
         }
     }
 
@@ -205,7 +218,7 @@ public class HandleTable {
     public static func syncTo(ctx: JitContext): Unit {
         ctx.hwBase = windowBase
         ctx.hwCap = windowCap
-        ctx.hwTop = windowTop
+        ctx.hwTop = windowBase + windowUsedCount
     }
 
     /** 从 ctx 读回窗口镜像（机器码侧推 `hwTop` 后由桥同步）。 */
@@ -213,6 +226,7 @@ public class HandleTable {
         windowBase = ctx.hwBase
         windowCap = ctx.hwCap
         windowTop = ctx.hwTop
+        windowUsedCount = ctx.hwTop - ctx.hwBase
     }
 
     // ---- 路径 B / A：pin ----
@@ -237,7 +251,7 @@ public class HandleTable {
                 let key = canonKeyOf(obj)
                 var i = 1
                 while (i < objs.size) {
-                    if (alive[i] && tags[i] == tok && canonKeyOf(objs[i]) == key) {
+                    if (alive[i] && !constFlags[i] && tags[i] == tok && canonKeyOf(objs[i]) == key) {
                         return makeId(i, tok, gens[i])
                     }
                     i = i + 1
@@ -247,13 +261,52 @@ public class HandleTable {
         }
     }
 
-    /** 路径 A：常量登记（跨调用共享、只读；写入 → 20）。 */
+    /**
+     * 路径 A：常量登记（跨调用共享、只读；写入 → 20）。
+     *
+     * 与普通 `pin` 分开：常量槽只与常量槽去重，并维护引用计数；
+     * `releaseConst` 归零后才真正回收，避免卸载一个单元误伤其他单元的常量句柄。
+     */
     public static func pinConst(obj: Any): Int64 {
-        let id = pin(obj)
-        synchronized(mtx) {
-            constFlags[idxOf(id)] = true
+        let tok = tokenOf(obj)
+        if (tok == TypeToken.RESERVED) {
+            failWith(ErrCode.CALL_CONTRACT)
         }
-        id
+        synchronized(mtx) {
+            if (tok != TypeToken.LIST && tok != TypeToken.MAP) {
+                let key = canonKeyOf(obj)
+                var i = 1
+                while (i < objs.size) {
+                    if (alive[i] && constFlags[i] && tags[i] == tok && canonKeyOf(objs[i]) == key) {
+                        constRefs[i] = constRefs[i] + 1
+                        return makeId(i, tok, gens[i])
+                    }
+                    i = i + 1
+                }
+            }
+            newSlotLocked(obj, tok, true)
+        }
+    }
+
+    /** 归还一次路径 A 引用；归零时回收槽位（幂等，非常量/已回收槽忽略）。 */
+    public static func releaseConst(id: Int64): Unit {
+        let i = idxOf(id)
+        synchronized(mtx) {
+            if (i <= 0 || i >= objs.size || !alive[i] || !constFlags[i]) {
+                return
+            }
+            constRefs[i] = constRefs[i] - 1
+            if (constRefs[i] > 0) {
+                return
+            }
+            alive[i] = false
+            objs[i] = Int64(0)
+            constFlags[i] = false
+            escapeFlags[i] = false
+            constRefs[i] = 0
+            gens[i] = gens[i] + UInt16(1)
+            freeSlots.add(i)
+        }
     }
 
     /** 某槽是否属路径 A（常量）。 */
@@ -292,7 +345,7 @@ public class HandleTable {
     public static func append(ctx: JitContext, obj: Any, tok: UInt16): Int64 {
         synchronized(mtx) {
             // 扩容触发点：保证追加后「容量 ≥ 2 × 已用数」（plan-m1 S4.3）
-            let need = 2 * (windowTop - windowBase + 1)
+            let need = 2 * (windowUsedCount + 1)
             if (need > windowCap) {
                 var nc = windowCap * 2
                 if (nc <= 0) {
@@ -304,19 +357,21 @@ public class HandleTable {
                 if (windowBase + nc > capacityLimit) {
                     nc = capacityLimit - windowBase
                 }
-                if (nc < windowTop - windowBase + 1) {
+                if (nc < windowUsedCount + 1) {
                     // 容量已到全局上限，无法再扩 ⇒ 触顶
                     syncTo(ctx)
                     failWith(ErrCode.HANDLE_WINDOW_FULL)
                 }
                 windowCap = nc
             }
-            if (windowTop >= capacityLimit) {
+            if (windowBase + windowUsedCount >= capacityLimit) {
                 syncTo(ctx)
                 failWith(ErrCode.HANDLE_WINDOW_FULL)
             }
             let id = newSlotLocked(obj, tok, false)
-            windowTop = windowTop + 1
+            windowSlots.add(idxOf(id))
+            windowUsedCount = windowUsedCount + 1
+            windowTop = windowBase + windowUsedCount
             syncTo(ctx)
             id
         }
@@ -531,6 +586,24 @@ public class HandleTable {
         }
     }
 
+    /** 显式归还一个逃逸句柄（桥把返回值取成宿主对象后调用；常量槽不回收）。 */
+    public static func releaseEscaped(id: Int64): Unit {
+        let i = idxOf(id)
+        synchronized(mtx) {
+            if (i <= 0 || i >= objs.size || !alive[i] || constFlags[i]) {
+                return
+            }
+            if (gens[i] != genOf(id)) {
+                return
+            }
+            alive[i] = false
+            objs[i] = Int64(0)
+            escapeFlags[i] = false
+            gens[i] = gens[i] + UInt16(1)
+            freeSlots.add(i)
+        }
+    }
+
     /** 路径 D：登记逃逸（窗口重置后仍可用且 ID 不变）。 */
     public static func escape(id: Int64): Unit {
         let i = idxOf(id)
@@ -551,16 +624,19 @@ public class HandleTable {
      */
     public static func resetWindow(hwBase: Int64): Unit {
         synchronized(mtx) {
-            var i = windowBase
-            while (i < windowTop) {
-                if (alive[i] && !escapeFlags[i] && !constFlags[i]) {
+            var k = 0
+            while (k < windowSlots.size) {
+                let i = windowSlots[k]
+                if (i > 0 && i < objs.size && alive[i] && !escapeFlags[i] && !constFlags[i]) {
                     alive[i] = false
                     objs[i] = Int64(0)
                     gens[i] = gens[i] + UInt16(1)
                     freeSlots.add(i)
                 }
-                i = i + 1
+                k = k + 1
             }
+            windowSlots.clear()
+            windowUsedCount = 0
             windowBase = if (hwBase >= 0) { hwBase } else { objs.size }
             windowTop = windowBase
             windowCap = initialCapacity
@@ -582,6 +658,7 @@ public class HandleTable {
             tags[idx] = tok
             alive[idx] = true
             constFlags[idx] = isConst
+            constRefs[idx] = if (isConst) { 1 } else { 0 }
             escapeFlags[idx] = false
         } else {
             objs.add(obj)
@@ -589,6 +666,7 @@ public class HandleTable {
             gens.add(1u16)
             alive.add(true)
             constFlags.add(isConst)
+            constRefs.add(if (isConst) { 1 } else { 0 })
             escapeFlags.add(false)
             idx = objs.size - 1
         }
@@ -623,14 +701,18 @@ public class HandleTable {
             gens.clear()
             alive.clear()
             constFlags.clear()
+            constRefs.clear()
             escapeFlags.clear()
             freeSlots.clear()
+            windowSlots.clear()
+            windowUsedCount = 0
             // idx 0 保留（null 哨兵）
             objs.add(Int64(0))
             tags.add(TypeToken.RESERVED)
             gens.add(0u16)
             alive.add(false)
             constFlags.add(false)
+            constRefs.add(0)
             escapeFlags.add(false)
             windowBase = 1
             windowTop = 1

@@ -20,6 +20,7 @@ import std.collection.HashMap
 import fountain::f_jit.bytecode.FuncEntry
 import fountain::f_jit.bytecode.InsnDecoder
 import fountain::f_jit.bytecode.LoadedUnit
+import fountain::f_base.CpuFeatures
 import fountain::f_jit.runtime.HelperAddresses
 
 /**
@@ -41,6 +42,8 @@ internal class X86Lower {
     private let dispatch: Int64
     private var depth: Int64
     private var ok: Bool
+    /** `roundsd` 需要 SSE4.1；不支持时含取整指令的单元整体降级解释器。 */
+    private let sse41: Bool
     private var seq: Int64
 
     init(fn: FuncEntry, constBase: Int64, fnTableBase: Int64) {
@@ -50,6 +53,7 @@ internal class X86Lower {
         this.dispatch = HelperAddresses.dispatch()
         this.depth = 0
         this.ok = true
+        this.sse41 = CpuFeatures.hasSse41
         this.seq = 0
     }
 
@@ -433,6 +437,14 @@ internal class X86Lower {
         this.sseStore(8, 0)
         this.addRsp(8)
         this.depth = this.depth - 1
+    }
+
+    private func floatRoundChecked(imm: UInt8): Unit {
+        if (!this.sse41) {
+            this.ok = false
+            return
+        }
+        this.floatRound(imm)
     }
 
     private func floatRound(imm: UInt8): Unit {
@@ -854,10 +866,10 @@ internal class X86Lower {
                 this.add([0xF2u8, 0x0Fu8, 0x51u8, 0x04u8, 0x24u8])
                 this.canonXmm0()
                 this.sseStore(0, 0)
-            case 0x4Au8 => this.floatRound(1u8)
-            case 0x4Bu8 => this.floatRound(2u8)
-            case 0x4Cu8 => this.floatRound(3u8)
-            case 0x4Du8 => this.floatRound(0u8)
+            case 0x4Au8 => this.floatRoundChecked(1u8)
+            case 0x4Bu8 => this.floatRoundChecked(2u8)
+            case 0x4Cu8 => this.floatRoundChecked(3u8)
+            case 0x4Du8 => this.floatRoundChecked(0u8)
             case 0x50u8 => this.add(BackendX86_64.emitCmpI()); this.depth = this.depth - 1
             case 0x51u8 => this.floatCmpTri()
             case 0x52u8 => this.cmpOp(0x94u8)

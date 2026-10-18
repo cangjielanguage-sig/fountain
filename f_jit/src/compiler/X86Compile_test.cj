@@ -83,6 +83,71 @@ public class X86Compile_test {
         @Assert(code.size > 0, true)
     }
 
+    @TestCase
+    public func goldenFloatDivCastClosureLen(): Unit {
+        let fadd = X86Compile_test.hex(X86Compile_test.compile(
+            '{ a: Float64, b: Float64 => a + b }', 0))
+        @Assert(fadd.contains('F20F10'), true)
+        @Assert(fadd.contains('F20F58842408000000'), true)
+
+        let idiv = X86Compile_test.hex(X86Compile_test.compile('{ a: Int64 => a / 3 }', 0))
+        @Assert(idiv.contains('48F7F9'), true)
+        @Assert(idiv.contains('4883F9FF'), true)
+
+        let imod = X86Compile_test.hex(X86Compile_test.compile('{ a: Int64 => a % 3 }', 0))
+        @Assert(imod.contains('48F7F9'), true)
+        @Assert(imod.contains('31D2'), true)
+
+        let cast = X86Compile_test.hex(X86Compile_test.compile('{ x: Float64 => Int64(x) }', 0))
+        @Assert(cast.contains('F2480F2CC0'), true)
+        @Assert(cast.contains('000000000000E043'), true)
+
+        let clo = X86Compile_test.hex(X86Compile_test.compile(
+            '{ => let f = { x: Int64 => x + 1 }\n f(2) }', 0))
+        @Assert(clo.contains('48BF3700000000000000'), true) // H55
+        @Assert(clo.contains('48BF3900000000000000'), true) // H57
+        @Assert(clo.contains('488B04C1'), true) // fnTable[fnId]
+
+        let len = X86Compile_test.hex(X86Compile_test.compile(
+            '{ => let l = [1, 2]\n var s = 0\n for (x in l) { s = s + x }\n s }', 0x1000))
+        @Assert(len.contains('48BF1200000000000000'), true) // H18 type_of
+        @Assert(len.contains('48BF0100000000000000'), true) // H01 list_len
+        @Assert(len.contains('48BF0300000000000000'), true) // H03 map_len
+        @Assert(len.contains('48BF0700000000000000'), true) // H07 str_len
+    }
+
+    private static func hex(bs: Array<UInt8>): String {
+        var s = ''
+        for (b in bs) {
+            let v = Int64(b)
+            let hi = v / 16
+            let lo = v % 16
+            s = s + X86Compile_test.nib(hi) + X86Compile_test.nib(lo)
+        }
+        s
+    }
+
+    private static func nib(v: Int64): String {
+        match (v) {
+            case 0 => '0'
+            case 1 => '1'
+            case 2 => '2'
+            case 3 => '3'
+            case 4 => '4'
+            case 5 => '5'
+            case 6 => '6'
+            case 7 => '7'
+            case 8 => '8'
+            case 9 => '9'
+            case 10 => 'A'
+            case 11 => 'B'
+            case 12 => 'C'
+            case 13 => 'D'
+            case 14 => 'E'
+            case _ => 'F'
+        }
+    }
+
     private static func compile(src: String, constBase: Int64): Array<UInt8> {
         let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(src)
         let unit = FbcReader.load(cu.raw)

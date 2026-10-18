@@ -315,6 +315,38 @@ public class HandleTable_test {
         }
     }
 
+    /** 常量槽引用计数：同一值共享、逐次释放、归零后回收；普通 pin 不复用常量槽。 */
+    @TestCase
+    public func constRefCountAndRelease(): Unit {
+        fresh()
+        let base = HandleTable.liveCount()
+        let a = HandleTable.pinConst('ref-const')
+        let b = HandleTable.pinConst('ref-const')
+        @Assert(a, b)
+        @Assert(HandleTable.isConst(a), true)
+        HandleTable.releaseConst(a)
+        @Assert(HandleTable.isLiveHandle(a), true)
+        HandleTable.releaseConst(b)
+        @Assert(HandleTable.isLiveHandle(a), false)
+        @Assert(HandleTable.liveCount(), base)
+        // 幂等：重复释放不得下溢或复活
+        HandleTable.releaseConst(a)
+        @Assert(HandleTable.liveCount(), base)
+    }
+
+    /** 普通 `pin` 不返回常量槽，避免常量释放后仍有运行期句柄指向该槽。 */
+    @TestCase
+    public func pinDoesNotReuseConstSlot(): Unit {
+        fresh()
+        let c = HandleTable.pinConst('same-value')
+        let n = HandleTable.pin('same-value')
+        @Assert(c == n, false)
+        @Assert(HandleTable.isConst(n), false)
+        HandleTable.releaseConst(c)
+        @Assert(HandleTable.isLiveHandle(n), true)
+        @Assert(HandleTable.liveCount(), 1)
+    }
+
     /** `cell` ↔ 宿主对象的互转：活句柄取对象，非句柄按原值装箱（§3.2 cell 表示）。 */
     @TestCase
     public func cellAndAnyConversion(): Unit {

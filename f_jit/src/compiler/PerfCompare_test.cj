@@ -18,25 +18,21 @@ package fountain::f_jit.compiler
 import std.unittest.*
 import std.unittest.testmacro.*
 import std.time.DateTime
+import fountain::f_jit.backend.JitExecutor
 import fountain::f_jit.base.DummyDiagnosticsSink
-import fountain::f_jit.test.diff.DiffCase
-import fountain::f_jit.test.diff.DiffRunner
-import fountain::f_jit.test.diff.NativeRunner
+import fountain::f_jit.bytecode.FbcReader
+import fountain::f_jit.runtime.Interp
+import fountain::f_jit.runtime.JitContext
 
 /**
- * JIT lambda 与 **同逻辑 cjnative 函数**的性能对比（实测数字，非估计）。
+ * S7.7 性能基线：**预编译后**的 JIT 稳态吞吐 vs 解释器 vs 同逻辑 cjnative 函数。
  *
- * - JIT 侧：同一 lambda 源码经 `SourceCompiler` → 当前架构的 runner 执行
- * - cjnative 侧：编译期仓颉函数
- * 两侧结果必须一致；比值打印留档，断言只设宽松上界防退化。
+ * 三者结构/副作用一致（同一个 while 循环、同一 `% 7` 累加）；JIT 编译/资产创建
+ * 在计时外完成，避免把编译开销混进吞吐。数字打印留档，结果必须逐位一致。
  */
 @When[os == 'Linux']
 @Test
 public class PerfCompare_test {
-    private static func nativeRunner(): DiffRunner {
-        NativeRunner()
-    }
-
     private static func nativeSum(n: Int64): Int64 {
         var s = 0
         var i = 0
@@ -48,39 +44,71 @@ public class PerfCompare_test {
     }
 
     @TestCase
-    public func jitVsCjnativeSameLogic(): Unit {
+    public func jitVsInterpVsCjnative(): Unit {
         let n: Int64 = 200000
+        let rounds: Int64 = 5
         let src = '{ n: Int64 => var s = 0\n var i = 0\n while (i < n) { s = s + i % 7\n i = i + 1 }\n s }'
-        let raw = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(src).raw
-        let c = DiffCase('PERF/cjnative', raw, [n])
+        let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(src)
+        let unit = FbcReader.load(cu.raw)
         let base = PerfCompare_test.nativeSum(n)
 
-        // JIT 侧执行一次（含编译开销），并校验结果与 cjnative 一致
-        let jitOut = PerfCompare_test.nativeRunner().run(c)
-        @Assert(jitOut.errCode, 0)
-        @Assert(jitOut.result, base.toString())
-
-        let t0 = DateTime.now()
-        var rn: Int64 = 0
-        var k = 0
-        while (k < 3) {
-            rn = PerfCompare_test.nativeSum(n)
-            k = k + 1
+        let ex = match (JitExecutor.create(unit, cu.entryFn)) {
+            case Some(e) => e
+            case None => @Fail('JIT 资产创建失败，无法测吞吐'); return
         }
-        let dNative = DateTime.now() - t0
+        let ctx = JitContext.create(hwBase: 0, hwCap: 0, fnId: 0, dbgBase: 0)
+        let interp = Interp(unit)
+        try {
+            // 预热 + 结果一致性
+            let cj = ex.invoke(ctx, [n])
+            ctx.errCode = 0
+            ctx.site = -1
+            let ci = interp.run(cu.entryFn, [n], ctx)
+            @Assert(cj, base)
+            @Assert(ci, base)
 
-        let t1 = DateTime.now()
-        let again = PerfCompare_test.nativeRunner().run(c)
-        let dJit = DateTime.now() - t1
-        @Assert(again.errCode, 0)
-        @Assert(again.result, rn.toString())
+            let t0 = DateTime.now()
+            var rn: Int64 = 0
+            var k = 0
+            while (k < rounds) {
+                rn = PerfCompare_test.nativeSum(n)
+                k = k + 1
+            }
+            let dNative = DateTime.now() - t0
 
-        let nn = dNative.toNanoseconds()
-        let jj = dJit.toNanoseconds()
-        @Assert(nn > 0, true)
-        @Assert(jj > 0, true)
-        println('PERF-CJNATIVE native=' + nn.toString() + 'ns jit=' + jj.toString() +
-            'ns ratio=' + (jj * 100 / nn).toString() + '%')
-        // 比值受宿主负载与「含编译」影响，只留档不断言上界（同 T-perf 口径）
+            let t1 = DateTime.now()
+            var rj: Int64 = 0
+            k = 0
+            while (k < rounds) {
+                rj = ex.invoke(ctx, [n])
+                k = k + 1
+            }
+            let dJit = DateTime.now() - t1
+
+            let t2 = DateTime.now()
+            var ri: Int64 = 0
+            k = 0
+            while (k < rounds) {
+                ctx.errCode = 0
+                ctx.site = -1
+                ri = interp.run(cu.entryFn, [n], ctx)
+                k = k + 1
+            }
+            let dInterp = DateTime.now() - t2
+
+            @Assert(rj, rn)
+            @Assert(ri, rn)
+            let nn = dNative.toNanoseconds()
+            let jj = dJit.toNanoseconds()
+            let ii = dInterp.toNanoseconds()
+            @Assert(nn > 0 && jj > 0 && ii > 0, true)
+            println('PERF-M1 native=' + nn.toString() + 'ns jit=' + jj.toString() +
+                'ns interp=' + ii.toString() + 'ns jit_vs_interp=' +
+                (jj * 100 / ii).toString() + '% jit_vs_native=' +
+                (jj * 100 / nn).toString() + '%')
+        } finally {
+            ex.release()
+            JitContext.free(ctx)
+        }
     }
 }
