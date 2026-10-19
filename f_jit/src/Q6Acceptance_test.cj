@@ -404,24 +404,32 @@ public class Q6Acceptance_test {
     }
 
     /** 已知限制（M2）：验签/分派面只覆盖 0–2 元；>2 元验签 19、直接 H63 分派 99。 */
+    /**
+     * 三元签名端到端可用（原「>2 元是已知限制」已被反射通道解除）。
+     *
+     * 旧实现在 `SignatureVerifier.verify` 里只覆盖 0–2 元，`HostCallDispatch` 亦只到 2 元，
+     * 故 3 元在入口报 19、直接分派报 99。改用 `FunctionTypeInfo`（验签）+ `apply`（调用）后，
+     * 元数不再受限：入口调用成功、直接分派同样成功。
+     */
     @TestCase
-    public func t30ArityAboveTwoIsKnownLimit(): Unit {
+    public func t30ArityAboveTwoWorks(): Unit {
         let c = Q6Acceptance_test.newCompiler()
         let u = c.compile('{ f: (Int64, Int64, Int64) -> Int64 => f(1, 2, 3) }')
         let f: (Int64, Int64, Int64) -> Int64 = { a, b, cc => a + b + cc }
-        let entryErr = Q6Acceptance_test.errOf({ => let _ = u.call<Int64>([f]) })
+        let args: Array<Any> = [f]
+        let viaEntry = u.call<Int64>(args)
         HandleTable.resetForTest()
         HandleTable.openWindow(128)
         let ctx = JitContext.create(hwBase: HandleTable.windowBaseOf(), hwCap: 128,
             fnId: 0, dbgBase: 0)
         let h = HandleTable.pin(HostCallback(f,
             SignatureDescriptor([LocalType.I64, LocalType.I64, LocalType.I64], LocalType.I64)))
-        let _ = invokeHelper(ctx, Int64(HelperId.HOST_CALL_TRAMPOLINE), [h, 1, 2, 3])
-        let dispatch99 = ctx.errCode == ErrCode.HELPER_PANIC
+        let direct = invokeHelper(ctx, Int64(HelperId.HOST_CALL_TRAMPOLINE), [h, 1, 2, 3])
+        let directOk = ctx.errCode == 0
         JitContext.free(ctx)
         HandleTable.resetForTest()
-        @Assert(TCase.hit('T30/arity-above-two-known-limit',
-            entryErr.code == ErrCode.CALL_CONTRACT && entryErr.site == -1 && dispatch99), true)
+        @Assert(TCase.hit('T30/arity-above-two-usable',
+            viaEntry == 6 && directOk && direct == 6), true)
     }
 
     // ==================================================================
@@ -996,12 +1004,7 @@ public class Q6Acceptance_test {
         let ret = c.compile('{ e: Q6Entity => e }')
         let f2 = refEq(ret.call<Q6Entity>([obj]), obj)
         let viaHost = c.compile('{ f: (Q6Entity) -> String, e: Q6Entity => f(e) }')
-        let host: (Object) -> String = { o =>
-            match (o) {
-                case e: Q6Entity => e.name
-                case _ => ''
-            }
-        }
+        let host: (Q6Entity) -> String = { e => e.name }
         let f3 = viaHost.call<String>([host, obj]) == 'bob'
         let viaFunc = c.compile(
             '{ e: Q6Entity => let g = { x: Q6Entity => x }\n g(e) }')

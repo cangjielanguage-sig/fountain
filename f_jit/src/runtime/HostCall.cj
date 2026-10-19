@@ -30,8 +30,8 @@ import fountain::f_jit.bytecode.ConstMapKey
  * 执行流（与 user helper 转发同一套 helper 基础设施）：
  *
  * 1. fetch **栈底**句柄 → `HostCallback{fn, sig}`（tag≠10 → 8；未验签/元数不符 → 99）；
- * 2. 按 `sig` 逐参 cell → 仓颉值（值型原值 / 句柄型 `get` / 14 实例引用）；
- * 3. 调用 `fn`（可能 GC / 抛异常 / 重入 JIT）；
+ * 2. 逐参 cell → 仓颉值（值型原值 / 句柄型 `get` / 14 实例引用，见 `reflectiveInvoke`）；
+ * 3. 用 `FunctionTypeInfo.apply` 调 `fn`（任意元数、零类型分派；可能 GC / 抛异常 / 重入 JIT）；
  * 4. 返回值 → cell：值型原值、引用型登记 1 槽。
  *
  * 失败语义：宿主闭包抛出的任何异常 ⇒ **21 + cause**（fail-fast）；引擎不变式破坏 ⇒ 99。
@@ -60,7 +60,7 @@ internal func hostCallTrampoline(ctx: JitContext, a: Array<Int64>): Int64 {
     }
     var r: Any = 0
     try {
-        r = dispatchHostCall(cb.fn, sig, a)
+        r = reflectiveInvoke(cb.fn, sig, a)
     } catch (e: HelperFail) {
         // 引擎侧失败（绑定/转换）原样转码，不归宿主异常
         throw e

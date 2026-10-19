@@ -92,13 +92,8 @@ public class Slot14_test {
     public func hostClosureParam14(): Unit {
         let c = Slot14_test.compiler()
         let unit = c.compile('{ f: (ManualUser) -> String, u: ManualUser => f(u) }')
-        // 14 为 opaque 形参：宿主函数以 Object 接收（H63 逐参转换的现行静态面）。
-        let f: (Object) -> String = { x =>
-            match (x) {
-                case u: ManualUser => u.name
-                case _ => ''
-            }
-        }
+        // 反射验签按 `TypeInfo.name` 判具体类，宿主函数可直接写 `ManualUser`（GAP-04 已解）。
+        let f: (ManualUser) -> String = { u => u.name }
         let u = ManualUser('host', 6)
         @Assert(unit.call<String>([f, u]), 'host')
         @Assert(TCase.hit('T59/host-closure-param14', unit.call<String>([f, u]) == 'host'), true)

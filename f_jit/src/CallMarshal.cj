@@ -121,10 +121,9 @@ protected class CallMarshal {
             case Some(s) => s
             case None => return CallMarshal.contractFail('HostClosure 参数缺少声明签名（m2 §4）')
         }
-        // 暂用分步核对（`verify`）：`verifyReflective` 会放行 3 元及以上，而 H63 的
-        // `dispatchHostCall` 无条件下落 `dispatchHostCall2`，接不住 >2 元（会栈溢出）。
-        // 两者必须同时切换——见 `SignatureVerifier.verifyReflective` 的用例与后续 H63 改造。
-        match (SignatureVerifier.verify(v, sig)) {
+        // 反射验签：`FunctionTypeInfo` 取真实签名逐位比对（元数不受限、14 比具体类）。
+        // H63 已同步改为 `reflectiveInvoke`（`FunctionTypeInfo.apply`），两侧口径一致。
+        match (SignatureVerifier.verifyReflective(v, sig)) {
             case Some(verified) =>
                 let id = HandleTable.pinHostClosure(v, verified)
                 this.pinned.add(id)

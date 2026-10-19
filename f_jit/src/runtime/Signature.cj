@@ -131,21 +131,30 @@ public class SignatureVerifier {
             } else {
                 ''
             }
-            if (!SignatureVerifier.componentMatches(p.name, declared.params[i], expected)) {
+            if (!SignatureVerifier.componentMatches(p.name, declared.params[i], expected, false)) {
                 return None
             }
             i = i + 1
         }
         if (!SignatureVerifier.componentMatches(ti.returnType.name, declared.ret,
-            declared.retName)) {
+            declared.retName, true)) {
             return None
         }
         declared
     }
 
-    /** 单个分量比对：码必须一致；14 位置若给了类名，则要求类型名逐字相等。 */
+    /**
+     * 单个分量比对：码必须一致；14 位置若给了类名，则要求类型名逐字相等。
+     *
+     * **返回位置另按协变放行 `Nothing`**：`{ x => throw ... }` 的推断返回类型是 `Nothing`，
+     * 它是任意 `R` 的子类型，赋给 `(Int64) -> Int64` 合法。逐字比对若不放行，会把
+     * 「总是抛异常的宿主函数」误判为签名不符（T31/T60 的既有用例正是这种写法）。
+     */
     private static func componentMatches(actualName: String, code: UInt16,
-        expectedName: String): Bool {
+        expectedName: String, isReturn: Bool): Bool {
+        if (isReturn && actualName == 'Nothing') {
+            return true
+        }
         if (TypeNames.codeOf(actualName) != code) {
             return false
         }
