@@ -18,6 +18,7 @@ package fountain::f_jit
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_jit.base.LocalType
+import fountain::f_jit.base.SignatureRegistry
 import fountain::f_jit.test.ReflectUser
 import fountain::f_jit.test.TCase
 

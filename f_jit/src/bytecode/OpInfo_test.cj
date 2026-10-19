@@ -133,6 +133,9 @@ public class OpInfo_test {
     /**
      * Q2.1：`0x79` 重定义为 `OP_CALL_HOST` / `u8 argc` / 总长 2 / `CAT_CALL`（m2 §2）。
      *
+     * GAP-05 乙的目标形态是 `u16 sigId`（签名由宿主注册、元数从签名反推），但改操作数要同步
+     * 六个消费点，且 `u.cb(a)` 这类字段形态的签名未进 `PublicField`——分步推进，本表暂留 `u8 argc`。
+     *
      * M1 预留的 `u16 fid` 编码废弃；`0x7A`/`0x7B` 仍是 `CAT_CALL`（汇编期 NotImpl 由
      * `Assembler_test` 守）。同时逐位核对**除 0x79 外**的 255 行与 M1 表完全一致
      * （FNV-1a-64 覆盖 `code|name|fmt|len|cat`），确保本次只改一行。

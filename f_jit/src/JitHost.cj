@@ -16,7 +16,9 @@ limitations under the License.
 package fountain::f_jit
 
 import std.collection.ArrayList
+import fountain::f_jit.base.HostSignature
 import fountain::f_jit.base.LocalType
+import fountain::f_jit.base.SignatureRegistry
 
 /**
  * 宿主侧注册门面（GAP-05 乙）。

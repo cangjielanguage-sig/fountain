@@ -317,6 +317,12 @@ internal class BytecodeBuilder {
      *
      * 与 `CALL_HELPER` 同构：自动尾随 `CHECK_ERR`（I3），并因宿主闭包体黑盒而按变更型置位。
      */
+    /**
+     * `CALL_HOST argc`：宿主闭包调用（栈 `[h_fn, a1..an]`，h_fn 栈底）。
+     *
+     * GAP-05 乙的目标是把操作数换成 `u16 sigId`（元数从签名反推、调用点零类型分派）；
+     * 转换中，暂保留 `u8 argc`。
+     */
     public func callHost(argc: UInt8): Unit {
         this.emitU8(Op.CALL_HOST, argc)
         this.trailCheck()

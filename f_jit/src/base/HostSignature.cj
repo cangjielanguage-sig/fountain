@@ -13,11 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_jit
+package fountain::f_jit.base
 
 import std.collection.ArrayList
 import std.sync.Mutex
-import fountain::f_jit.base.LocalType
 
 /**
  * 宿主函数**签名**的结构描述 + 调用适配器（GAP-05 乙，用户裁定）。
