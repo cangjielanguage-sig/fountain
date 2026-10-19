@@ -163,18 +163,27 @@ internal class AstShape {
         }
     }
 
+    /** 分量显示名：14 用具体类名，其余用 `LocalType.name`。 */
+    internal static func componentName(code: UInt16, name: String): String {
+        if (code == LocalType.HOST_OBJECT && name != '') {
+            name
+        } else {
+            LocalType.name(code)
+        }
+    }
+
     internal static func builtinName(v: TypeRef): String {
         match (v) {
             case TypeRef.Builtin(code) => LocalType.name(code)
-            case TypeRef.HostClosureT(params, ret) =>
+            case TypeRef.HostClosureT(params, pns, ret, rn) =>
                 var ps = ''
                 for (i in 0..params.size) {
                     if (i > 0) {
                         ps = ps + ','
                     }
-                    ps = ps + LocalType.name(params[i])
+                    ps = ps + AstShape.componentName(params[i], pns[i])
                 }
-                '(${ps}) -> ${LocalType.name(ret)}'
+                '(${ps}) -> ${AstShape.componentName(ret, rn)}'
             case TypeRef.HostObjectT(name) => name
         }
     }
@@ -188,7 +197,7 @@ internal class AstShape {
             let pa = l.params[i]
             let t = match (pa.typeAnn) {
                 case TypeRef.Builtin(code) => LocalType.name(code)
-                case TypeRef.HostClosureT(_, _) => 'HostClosure'
+                case TypeRef.HostClosureT(_, _, _, _) => 'HostClosure'
                 case TypeRef.HostObjectT(n) => n
             }
             ps = ps + pa.name + ':' + t

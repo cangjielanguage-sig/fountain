@@ -46,6 +46,27 @@ public class TypeRef_test {
         @Assert(AstShape.builtinName(l.params[0].typeAnn), '() -> Unit')
     }
 
+    /**
+     * 14 位置的**类名必须进 AST**（GAP-04/GAP-05 的前提）。
+     *
+     * `(User) -> User` 与 `(User) -> Order` 的类别码完全相同（`[14] -> 14`）；只靠码无法区分，
+     * 签名注册表（`JitHost.registerSignature`）按「码 + 类名」查 id，因此 AST 必须保留类名。
+     */
+    @TestCase
+    public func keepsClassNameInSignature(): Unit {
+        let l = Parser('{ f: (User) -> User, g: (User) -> Order => 1 }',
+            registered: { n => n == 'User' || n == 'Order' }).parseLambda()
+        @Assert(l.params[0].typeAnn.hostParams().size, 1)
+        @Assert(l.params[0].typeAnn.hostParams()[0], LocalType.HOST_OBJECT)
+        @Assert(l.params[0].typeAnn.hostParamNames().size, 1)
+        @Assert(l.params[0].typeAnn.hostParamNames()[0], 'User')
+        @Assert(l.params[0].typeAnn.hostRet(), LocalType.HOST_OBJECT)
+        @Assert(l.params[0].typeAnn.hostRetName(), 'User')
+        @Assert(l.params[1].typeAnn.hostRetName(), 'Order')
+        @Assert(AstShape.builtinName(l.params[0].typeAnn), '(User) -> User')
+        @Assert(AstShape.builtinName(l.params[1].typeAnn), '(User) -> Order')
+    }
+
     /** T/R 合法集 0–8/10–11/14：9（Regex）、12（Closure）拒绝。 */
     @TestCase
     public func rejectsIllegalSignatureComponents(): Unit {

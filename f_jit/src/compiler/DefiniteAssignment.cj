@@ -482,7 +482,7 @@ internal class DefiniteAssignment {
             case Some(v) =>
                 match (v) {
                     case TypeRef.Builtin(c) => code = c
-                    case TypeRef.HostClosureT(_, _) => code = 13u16
+                    case TypeRef.HostClosureT(_, _, _, _) => code = 13u16
                     case TypeRef.HostObjectT(_) => code = 14u16
                 }
             case None => code = this.typeOf(name)

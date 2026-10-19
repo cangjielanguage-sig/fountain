@@ -324,9 +324,12 @@ internal class Parser {
     private func parseClosureType(): TypeRef {
         let open = this.expect(TokenKind.LParen, '函数类型的 (')
         var params = ArrayList<UInt16>()
+        var names = ArrayList<String>()
         if (!this.atKind(TokenKind.RParen)) {
             while (true) {
-                params.add(this.parseTypeComponent())
+                let (code, cname) = this.parseTypeComponent()
+                params.add(code)
+                names.add(cname)
                 if (this.advanceIf(TokenKind.Comma)) {
                     continue
                 }
@@ -341,22 +344,33 @@ internal class Parser {
         }
         this.take()
         this.take()
-        let ret = this.parseTypeComponent()
+        let (ret, retName) = this.parseTypeComponent()
         for (p in params) {
             Parser.checkSignatureComponent(p, open.line, open.column, this.src)
         }
         Parser.checkSignatureComponent(ret, open.line, open.column, this.src)
-        TypeRef.HostClosureT(params.toArray(), ret)
+        TypeRef.HostClosureT(params.toArray(), names.toArray(), ret, retName)
     }
 
     /** 函数类型的单个分量（T/R）：内建或已注册类名；再出现 `(` 即禁高阶。 */
-    private func parseTypeComponent(): UInt16 {
+    /**
+     * 函数类型的单个分量（T/R）：返回「类别码 + 类名」。
+     *
+     * 类名是 14 位置的区分维度：`(User) -> R` 与 `(Order) -> R` 的码相同，签名注册表要按
+     * 类名区分（GAP-04/GAP-05）；非 14 位置返回空串。
+     */
+    private func parseTypeComponent(): (UInt16, String) {
         if (this.atKind(TokenKind.LParen)) {
             let t = this.peek()
             diagFail(DiagKind.BAD_PARAMETER_LIST, this.src, t.pos, t.line, t.column,
                 '禁高阶：HostClosure 的 T/R 不得为函数类型（m2 §3）')
         }
-        this.parseTypeRef().code()
+        let tr = this.parseTypeRef()
+        let cname = match (tr.objectName()) {
+            case Some(n) => n
+            case None => ''
+        }
+        (tr.code(), cname)
     }
 
     /** T/R 合法集：0–8、10–11、14（m2 §3）。 */

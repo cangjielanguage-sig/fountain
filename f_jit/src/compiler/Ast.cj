@@ -52,8 +52,18 @@ internal enum TypeRef {
      */
     | Builtin(UInt16)
 
-    /** 宿主闭包函数类型 `(T1, …, Tn) -> R`：参数序 = params, ret（LocalType 码）。 */
-    | HostClosureT(Array<UInt16>, UInt16)
+    /**
+     * 宿主闭包函数类型 `(T1, …, Tn) -> R`。
+     *
+     * 载荷按位置 = `(params, paramNames, ret, retName)`（仓颉 enum 构造器不支持参数名）：
+     * - `params` / `ret`：`LocalType` 码；
+     * - `paramNames` / `retName`：14 位置的**具体类名**，其余位置为空串。
+     *
+     * 类名必须进 AST：`(User) -> R` 与 `(Order) -> R` 的码完全相同（都是 `[14] -> R`），
+     * 只凭码无法把两个签名分开——签名注册表（`JitHost.registerSignature`）按「码 + 类名」
+     * 查 id，前端因此必须保留类名（GAP-04/GAP-05 的共同前提）。
+     */
+    | HostClosureT(Array<UInt16>, Array<String>, UInt16, String)
 
     /** 已注册类名（opaque 形参/局部/返回；LocalType 14）。 */
     | HostObjectT(String)
@@ -62,7 +72,7 @@ internal enum TypeRef {
     public func code(): UInt16 {
         match (this) {
             case Builtin(c) => c
-            case HostClosureT(_, _) => 13u16
+            case HostClosureT(_, _, _, _) => 13u16
             case HostObjectT(_) => 14u16
         }
     }
@@ -70,8 +80,32 @@ internal enum TypeRef {
     /** HostClosure 的返回码；其余 → `LocalType.NONE`。 */
     public func hostRet(): UInt16 {
         match (this) {
-            case HostClosureT(_, r) => r
+            case HostClosureT(_, _, r, _) => r
             case _ => 0xFFFFu16
+        }
+    }
+
+    /** HostClosure 的形参类别序列；其余 → 空。 */
+    public func hostParams(): Array<UInt16> {
+        match (this) {
+            case HostClosureT(p, _, _, _) => p
+            case _ => Array<UInt16>()
+        }
+    }
+
+    /** HostClosure 的形参类名序列（非 14 位置为空串）；其余 → 空。 */
+    public func hostParamNames(): Array<String> {
+        match (this) {
+            case HostClosureT(_, n, _, _) => n
+            case _ => Array<String>()
+        }
+    }
+
+    /** HostClosure 的返回类名（`ret == 14` 时有值，否则空串）。 */
+    public func hostRetName(): String {
+        match (this) {
+            case HostClosureT(_, _, _, rn) => rn
+            case _ => ''
         }
     }
 

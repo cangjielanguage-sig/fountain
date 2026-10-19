@@ -22,14 +22,23 @@ import fountain::f_jit.base.PublicCtor
 import fountain::f_jit.base.Version
 import fountain::f_util.Fnv128
 
-/** 入口形参的 HostClosure 声明签名（不落 `.fbc`，供桥 Marshal 验签）。 */
+/**
+ * 入口形参的 HostClosure 声明签名（不落 `.fbc`，供桥 Marshal 验签）。
+ *
+ * `paramNames` / `retName` 是 14 位置的**具体类名**（非 14 位置为空串）。只带类别码不足以
+ * 区分 `(User) -> R` 与 `(Order) -> R`，而签名注册表正是按「码 + 类名」查 id（GAP-04/05）。
+ */
 protected class HostClosureSigDecl {
     public let params: Array<UInt16>
+    public let paramNames: Array<String>
     public let ret: UInt16
+    public let retName: String
 
-    public init(params: Array<UInt16>, ret: UInt16) {
+    public init(params: Array<UInt16>, paramNames: Array<String>, ret: UInt16, retName: String) {
         this.params = params
+        this.paramNames = paramNames
         this.ret = ret
+        this.retName = retName
     }
 }
 
@@ -124,9 +133,9 @@ protected class SourceCompiler {
                 case TypeRef.HostObjectT(n) =>
                     classes0.add(Some(n))
                     sigs0.add(None)
-                case TypeRef.HostClosureT(ps, r) =>
+                case TypeRef.HostClosureT(ps, pns, r, rn) =>
                     classes0.add(None)
-                    sigs0.add(Some(HostClosureSigDecl(ps, r)))
+                    sigs0.add(Some(HostClosureSigDecl(ps, pns, r, rn)))
                 case _ =>
                     classes0.add(None)
                     sigs0.add(None)
