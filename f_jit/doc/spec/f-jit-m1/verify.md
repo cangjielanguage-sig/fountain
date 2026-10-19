@@ -4,12 +4,13 @@
 - 校验对象：`openspec/changes/f-jit-m1` 的 9 份 spec（40 requirement / 156 scenario）、`tasks.md`（115 项）
 - 校验时间：2026-10-19（x86 证据回填）
 - 校验方式：**手工等价校验**。本 worktree 的 `.codebuddy/commands/opsx/` 未安装 `verify` 工作流（只有 apply/archive/explore/propose/sync/update），`/opsx:verify` 无法在融合侧启动；本报告按同一口径逐项对照实现与用例，不修改 `tasks.md`。
-- 基线：`cjpm test` **560/560**（Linux aarch64 原生）；`scripts/check_tmap.sh` **40 条范围内映射，悬空/未断言 0 条**；`scripts/check_scenarios.sh` **13 条 scenario，缺失 0 条**。
+- 基线：`cjpm test` **560/560**（Linux aarch64 原生；**2026-10-19 追加 x86_64 真机同为 560/560**）；`scripts/check_tmap.sh` **40 条范围内映射，悬空/未断言 0 条**；`scripts/check_scenarios.sh` **13 条 scenario，缺失 0 条**。
 - x86 证据：box64 + x86 SDK 全量 **560 例 / 550 通过 / 9 失败 / 1 错误**（prologue 黄金更新前；更新后为 551 通过 / 8 失败 / 1 错误）；失败全部为 box64 下 Float64 字面量恒 0 导致，非 JIT 代码；`X86Exec_test` 12/13 通过（仅 `floatToInt` 受该模拟缺陷影响）。
+- **x86 真机证据（2026-10-19，WSL Ubuntu-24.04 / `x86_64-unknown-linux-gnu` / Cangjie `1.3.0-alpha.20261015001050`）**：`cjpm test` **560/560 通过、0 失败 / 0 跳过**；x86 后端专项 **85/85**；`PerfCompare_test` JIT 结果与 cjnative / 解释器**逐位一致**，稳态吞吐 **native=3,198,433ns / jit=2,276,989ns / interp=5,987,603,230ns**（JIT ≈ native 的 71%、相对解释器折合约 2600×）⇒ **box64 下的 9 失败确认为模拟器 Float64 字面量缺陷，真机不复现**。
 
 ## 结论
 
-**apply 的 115/115 不等于规格全绿。** 本轮已修掉全部 4 个 CRITICAL（生产 JIT 接入、x86 全 opcode、T6 21/22、T52/T53 映射），WARNING-01（x86 原生执行证据）已用 box64 + x86 SDK 全量取得证据：560 例中 550 通过，剩余 9 失败 + 1 错误全部由 box64 的 Float64 字面量缺陷引起（`Float64(3.0)` 被编译为 0.0），不是 JIT 逻辑；WARNING-02（单元标签强度）仍部分关闭。常量/窗口生命周期、SSE4.1 门禁、性能留档、差分 scenario 矩阵已收口。**建议在真实 x86_64 机器上复跑一次浮点相关用例后 archive**。
+**apply 的 115/115 不等于规格全绿。** 本轮已修掉全部 4 个 CRITICAL（生产 JIT 接入、x86 全 opcode、T6 21/22、T52/T53 映射），WARNING-01（x86 原生执行证据）已用 box64 + x86 SDK 全量取得证据：560 例中 550 通过，剩余 9 失败 + 1 错误全部由 box64 的 Float64 字面量缺陷引起（`Float64(3.0)` 被编译为 0.0），不是 JIT 逻辑；WARNING-02（单元标签强度）仍部分关闭。常量/窗口生命周期、SSE4.1 门禁、性能留档、差分 scenario 矩阵已收口。**真机 x86_64 已于 2026-10-19 复跑全量（560/560）+ x86 专项（85/85）+ 性能对拍，可直接 archive**。
 
 | ID | 严重度 | 状态 | 摘要 |
 |---|---|---|---|
@@ -17,7 +18,7 @@
 | CRITICAL-02 | CRITICAL | **已修复（含执行证据）** | x86 lowering 已按 A64 的 157 个 opcode 全量补齐；box64 下整数/分支/容器/闭包/递归均真实执行通过 |
 | CRITICAL-03 | CRITICAL | **已修复（21/22）** | T6 映射用例 15 码 + 单元行为 7/12/16/17/19/99；仅 15 为防御码（解释器无机器栈余量概念），无数值路径 |
 | CRITICAL-04 | CRITICAL | **已修复** | T52/T53 原为「挂名映射」；已补真实两形态用例与常量写 20 断言 |
-| WARNING-01 | WARNING | **已关闭（box64 证据）** | x86 全量已跑：560 例 / 550 过；`X86Exec_test` 12/13 过；剩余失败均由 box64 Float64 字面量缺陷引起，真机 x86_64 需复核浮点用例 |
+| WARNING-01 | WARNING | **已关闭（真机 x86_64 证据）** | 2026-10-19 WSL x86_64 真机全量 **560/560** + x86 专项 **85/85**；`PerfCompare_test` 三侧逐位一致；box64 的 9 失败确认为模拟器 Float64 缺陷，真机不复现 |
 | WARNING-02 | WARNING | 部分关闭 | `check_tmap.sh` 已升级为「用例体必须含 `T<id>/` 标签」；单元用例的标签仍是注释级，只有 T52/T53 是行为级 |
 | INFO-01 | INFO | 留档 | `tasks.md` 的 S5.4/S5.8 勾选与子项「未完成/待补」自相矛盾，建议 verify 后统一口径 |
 
@@ -68,8 +69,8 @@
 - 覆盖核对：`X86Lower` 的 case 集合与 `A64Lower` 全等（157 个 opcode，0 缺失）
 
 **口径说明**
-- `FFLOOR/FCEIL/FTRUNC/FROUND` 使用 `roundsd`（SSE4.1）；design §12.4 的基线是 SSE2 软件序列，SSE4.1 仅在显式开启时使用。当前实现未做 CPUID 判定，目标机需具备 SSE4.1；若必须支持纯 SSE2，应改回软件序列。
-**判定**：实现层已按 A64 的 opcode 全集补齐，CRITICAL-02 关闭；x86 原生执行证据仍未取得（WARNING-01），不能据此宣称「x86 端到端全绿」。
+- `FFLOOR/FCEIL/FTRUNC/FROUND` 使用 `roundsd`（SSE4.1）；design §12.4 的基线是 SSE2 软件序列，SSE4.1 仅在显式开启时使用。**已有 CPUID 门禁**：`X86Lower.sse41 = CpuFeatures.hasSse41`，不支持 SSE4.1 的机器上**含取整指令的单元整体降级解释器**（不执行非法指令）⇒ 目标机**不要求**必具备 SSE4.1；若要在纯 SSE2 上跑 JIT，仍需改回软件序列（未做）。
+**判定**：实现层已按 A64 的 opcode 全集补齐，CRITICAL-02 关闭；**x86 原生执行证据已于 2026-10-19 取得（真机 560/560 + 85/85 + 性能对拍）⇒ 可宣称「x86 端到端全绿」**。
 
 ### CRITICAL-03 T6 错误矩阵不完整（已修复，21/22）
 

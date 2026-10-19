@@ -16,9 +16,23 @@
 - JIT 相对解释器：约 **42×** 加速
 - JIT 相对 cjnative：约 **19×** 慢（栈机代码生成 + 每次 `invoke` 的边界/内存管理开销；M1 只要求相对解释器基线）
 
-## Linux x86_64（box64）
+## Linux x86_64（真机，2026-10-19）
 
-待 x86_64 全量测试跑通后回填。命令：
+WSL Ubuntu-24.04 / `x86_64-unknown-linux-gnu` / Cangjie `1.3.0-alpha.20261015001050`；同用例、同负载、同计时口径。
+
+| 引擎 | 5 轮总耗时 | 相对解释器 | 相对 cjnative |
+|---|---:|---:|---:|
+| cjnative | 3,198,433 ns | — | 100% |
+| JIT（预编译后） | **2,276,989 ns** | **≈ 0.04%（约 2600× 加速）** | **71%** |
+| 解释器 | 5,987,603,230 ns | 100% | ≈ 1872× |
+
+- 命令：`cjpm test --filter PerfCompare_test --no-capture-output`（WSL x86_64 真机，`cangjie_env 1.3.0 1.3.0`）
+- 三侧结果逐位一致（用例内 `@Assert(cj, base)` / `@Assert(ci, base)`）
+- 备注：box64 模拟下曾出现 9 失败 + 1 错误，经真机复跑确认全部为模拟器 Float64 字面量缺陷，与 JIT 无关
+
+## Linux x86_64（box64，历史留档）
+
+已被真机数据取代；重跑命令：
 
 ```
 source /tmp/x86env.sh
