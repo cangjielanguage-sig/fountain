@@ -33,10 +33,10 @@ protected class MQSubscriptionInfo {
     let autoAck: Bool
     /** 连接键：服务端接受的连接远端地址唯一标识一条 TCP 连接（单测为空串）。 */
     let connectionKey: String
-    var buffer: ?SocketBuffer
+    var buffer: SocketBuffer
 
     init(subscribedId: String, topic: String, subscribeGroup: String, tags: Array<String>, filter: MQFilter,
-        autoAck: Bool, buffer: ?SocketBuffer) {
+        autoAck: Bool, buffer: SocketBuffer) {
         this.subscribedId = subscribedId
         this.topic = topic
         this.subscribeGroup = subscribeGroup
@@ -44,29 +44,32 @@ protected class MQSubscriptionInfo {
         this.filter = filter
         this.autoAck = autoAck
         this.buffer = buffer
-        this.connectionKey = match (buffer) {
-            case Some(b) => b.remoteAddress.toString()
-            case None => ""
+        this.connectionKey = if(isEmptySocketBuffer(buffer)){
+            ''
+        }else{
+            buffer.remoteAddress.toString()
         }
     }
-
+    private static func isEmptySocketBuffer(buffer: SocketBuffer): Bool {
+        refEq(buffer, EMPTY_SOCKET_BUFFER)
+    }
     func view(): MQSubscriptionView {
         MQSubscriptionView(subscribedId, topic, tags, filter, autoAck)
     }
 
     func isConnected(): Bool {
-        match (buffer) {
-            case Some(b) => !b.isClosed()
-            case None => false
+        if(isEmptySocketBuffer(buffer)){
+            return false
         }
+        !buffer.isClosed()
     }
 
     /** 连接已断开（无连接的单测订阅不算断开）。 */
     func isDisconnected(): Bool {
-        match (buffer) {
-            case Some(b) => b.isClosed()
-            case None => false
+        if(isEmptySocketBuffer(buffer)){
+            return false
         }
+        buffer.isClosed()
     }
 
     func hasBuffer(buffer: SocketBuffer): Bool {

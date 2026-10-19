@@ -28,6 +28,8 @@ import fountain::fmq.cluster.{BackupReplicator, MetaSyncer}
 import fountain::fmq.meta.{MetaApplyResult, MetaStore}
 import fountain::fmq.queue.{CursorStore, MQMatcher, QueueManager}
 
+/** 无连接的哨兵值：只允许 `refEq` 比较，禁止解引用。 */
+internal static let EMPTY_SOCKET_BUFFER = unsafeZeroValue<SocketBuffer>()
 /**
  * 命令分发：解析 → 校验 → 调服务 → 组装响应。
  *
@@ -60,9 +62,6 @@ protected class MQCommandExecutor {
         this.selfIndex = selfIndex
     }
 
-    /** 无连接的哨兵值：只允许 `refEq` 比较，禁止解引用。 */
-    private static let EMPTY_SOCKET_BUFFER = unsafeZeroValue<SocketBuffer>()
-
     /** 生产入口：`f_net.Server.start` 直接传方法引用，连接恒非空。 */
     public func execute(buffer: SocketBuffer, request: Message): ?Message {
         dispatch(buffer, request)
@@ -74,17 +73,12 @@ protected class MQCommandExecutor {
     }
 
     private func dispatch(buffer: SocketBuffer, request: Message): ?Message {
-        let connection = if (refEq(buffer, EMPTY_SOCKET_BUFFER)) {
-            None<SocketBuffer>
-        } else {
-            Some(buffer)
-        }
         try {
             match (request.command) {
-                case REGISTER => Some(onRegister(connection, request))
+                case REGISTER => Some(onRegister(request))
                 case DEREGISTER => Some(onDeregister(request))
                 case PUBLISH(_) => Some(onPublish(request))
-                case SUBSCRIBE => Some(onSubscribe(connection, request))
+                case SUBSCRIBE => Some(onSubscribe(buffer, request))
                 case UNSUBSCRIBE => Some(onUnsubscribe(request))
                 case CONSUME(_) => Some(onConsume(request))
                 case ACK => Some(onAck(request))
@@ -100,7 +94,7 @@ protected class MQCommandExecutor {
         }
     }
 
-    private func onRegister(buffer: ?SocketBuffer, request: Message): Message {
+    private func onRegister(request: Message): Message {
         match (MQProtocol.kindOf(request)) {
             case MQPayloadKind.TopicMeta =>
                 let meta = MQProtocol.asPayload<MQTopicMeta>(request).getOrThrow {
@@ -246,7 +240,7 @@ protected class MQCommandExecutor {
         true
     }
 
-    private func onSubscribe(buffer: ?SocketBuffer, request: Message): Message {
+    private func onSubscribe(buffer: SocketBuffer, request: Message): Message {
         let payload = MQProtocol.asPayload<MQSubscribePayload>(request).getOrThrow {
             MQServiceException(MQErrorCode.INTERNAL, "cannot decode MQSubscribePayload")
         }
