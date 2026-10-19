@@ -84,7 +84,7 @@ public class HostCallTrampoline_test {
         @Assert(HelperId.HOST_CALL_TRAMPOLINE, 63u16)
         @Assert(HelperId.name(63u16), 'host_call_trampoline')
         @Assert(HelperId.isFixed(63u16), true)
-        @Assert(HelperId.isFixed(64u16), false)
+        @Assert(HelperId.isFixed(66u16), false)
     }
 
     /** 栈底句柄 tag≠10 ⇒ 8（类型不符）。 */

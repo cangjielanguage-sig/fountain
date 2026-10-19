@@ -358,6 +358,16 @@ public func map_iter_step(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64):
 public func host_call_trampoline(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64 {
     helperEntry(63, ctx, args, n)
 }
+/** H64 `host_get_field`（m2 §12.2）。 */
+@C
+public func host_get_field(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64 {
+    helperEntry(64, ctx, args, n)
+}
+/** H65 `host_set_field`（m2 §12.2）。 */
+@C
+public func host_set_field(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64 {
+    helperEntry(65, ctx, args, n)
+}
 /** H69 `str_to_regex`（§6）。 */
 @C
 public func str_to_regex(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64 {

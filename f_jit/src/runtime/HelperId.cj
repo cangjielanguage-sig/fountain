@@ -91,6 +91,9 @@ public class HelperId {
 
     /** M2 §5：CALL_HOST 的宿主闭包转发器。 */
     public static const HOST_CALL_TRAMPOLINE: UInt16 = 63u16
+    /** M2 §12.2：实例字段读 / 写（H64/H65）。 */
+    public static const HOST_GET_FIELD: UInt16 = 64u16
+    public static const HOST_SET_FIELD: UInt16 = 65u16
     public static const STR_TO_REGEX: UInt16 = 69u16
     public static const LIST_NEW: UInt16 = 70u16
     public static const MAP_NEW: UInt16 = 71u16
@@ -174,6 +177,8 @@ public class HelperId {
             case 61u16 => 'dt_diff'
             case 62u16 => 'map_iter_step'
             case 63u16 => 'host_call_trampoline'
+            case 64u16 => 'host_get_field'
+            case 65u16 => 'host_set_field'
             case 69u16 => 'str_to_regex'
             case 70u16 => 'list_new'
             case 71u16 => 'map_new'
@@ -184,7 +189,7 @@ public class HelperId {
             case 75u16 => 'datetime_of'
             case 76u16 => 'duration_parse'
             case _ =>
-                if (hid >= 64u16 && hid <= 68u16) {
+                if (hid == 66u16 || hid == 67u16 || hid == 68u16) {
                     'reserved(${hid})'
                 } else {
                     'unknown(${hid})'

@@ -263,6 +263,21 @@ public class Assembler_test {
         @Assert(Assembler_test.assembleKind(sess), DiagKind.NOT_IMPL)
     }
 
+    /** 校验 11：含 `H65 host_set_field` 的函数按变更型置位，同样禁用 deopt 源（m2 §12.2）。 */
+    @TestCase
+    public func hostSetFieldRejectsDeoptSource(): Unit {
+        let sess = Assembler_test.newSess(verMajor: 2u16)
+        let b = BytecodeBuilder(0u32, sess.consts)
+        b.emitI32(Op.PUSH_I32, 0)
+        b.emitI32(Op.PUSH_I32, 0)
+        b.emitI32(Op.PUSH_I32, 0)
+        b.callHelperVoid(HelperCodec.HOST_SET_FIELD, 3u8)
+        b.emitI32(Op.PUSH_I32, 0)
+        b.emitU8(Op.DEC_TO_I64, 1u8)
+        Assembler_test.add(sess, 0u32, 0, LocalType.I64, [], b.finish())
+        @Assert(Assembler_test.assembleKind(sess), DiagKind.NOT_IMPL)
+    }
+
     /** 校验 11：变更型函数同样禁用 `TO_I64 mode=1`。 */
     @TestCase
     public func mutationFunctionRejectsToI64Deopt(): Unit {

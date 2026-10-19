@@ -451,11 +451,17 @@ public class HandleTable {
         }
     }
 
-    /** 宿主侧类型化取回（类型不符 ⇒ `None`）。 */
+    /**
+     * 宿主侧类型化取回（类型不符 ⇒ `None`）。
+     *
+     * 按**槽位 tag** 判定（与 `fetch` 同口径）：tag 11 的宿主类实例没有内建 `tokenOf`
+     * （任意类都返回 RESERVED），故不能按载荷反推大类（m2 §11 / Q4.10）。
+     */
     public static func getAs(id: Int64, tok: UInt16): ?Any {
-        match (getAny(id)) {
-            case Some(v) => if (tokenOf(v) == tok) { Some(v) } else { None }
-            case None => None
+        if (isType(id, tok)) {
+            getAny(id)
+        } else {
+            None
         }
     }
 
@@ -723,9 +729,46 @@ public class HandleTable {
         }
     }
 
+    /**
+     * 提升组协作：**原地提升**一组槽（m2 §14.1/§14.2）。
+     *
+     * - 迁出**窗口记账**（从 `windowSlots` 移除并递减已用数；`hwTop` 镜像随之下降）；
+     * - 表项保留，**ID / gen 不变**，并打逃逸标记 ⇒ 窗口重置不释放；
+     * - 不进入对象内部（**槽级、免级联**，§14.6）；参数里没给的槽一律不动。
+     *
+     * 幂等：已迁出的槽不会重复扣减记账。
+     */
+    public static func moveOutGroup(ids: Array<Int64>): Unit {
+        synchronized(mtx) {
+            var n = 0
+            while (n < ids.size) {
+                let id = ids[n]
+                let i = idxOf(id)
+                if (i > 0 && i < objs.size && alive[i] && gens[i] == genOf(id) && !constFlags[i]) {
+                    escapeFlags[i] = true
+                    var k = 0
+                    var removed = false
+                    while (k < windowSlots.size && !removed) {
+                        if (windowSlots[k] == i) {
+                            windowSlots.remove(at: k)
+                            if (windowUsedCount > 0) {
+                                windowUsedCount = windowUsedCount - 1
+                            }
+                            windowTop = windowBase + windowUsedCount
+                            removed = true
+                        } else {
+                            k = k + 1
+                        }
+                    }
+                }
+                n = n + 1
+            }
+        }
+    }
+
     /** M2 提升组占位：把槽提升为「不受窗口重置影响」的常驻槽（等价逃逸登记）。 */
     public static func promote(id: Int64): Unit {
-        escape(id)
+        moveOutGroup([id])
     }
 
     // ---- 内部 ----

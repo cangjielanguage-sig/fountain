@@ -614,8 +614,15 @@ public class Interp {
                         None
                 }
             case 0x79u8 =>
-                ctx.errCode = ErrCode.NOT_IMPL // CALL_HOST：M1 汇编期即拒绝（§6）
-                None
+                // CALL_HOST：栈 `[h_fn, a1..an]`（h_fn 栈底）；与机器码共用 H63（m2 §5）。
+                let argc = Int64(InsnDecoder.u8(insn, 0))
+                let args = popArgs(f, argc + 1)
+                let r = invokeHelper(ctx, Int64(HelperId.HOST_CALL_TRAMPOLINE), args)
+                if (ctx.errCode != 0) {
+                    return None
+                }
+                f.push(r)
+                Some(pc + insn.size)
             case 0x7Au8 =>
                 ctx.errCode = ErrCode.NOT_IMPL // HW_OPEN：M1 未启用
                 None

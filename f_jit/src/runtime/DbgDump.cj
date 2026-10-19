@@ -37,8 +37,9 @@ import fountain::f_jit.bytecode.SiteTable
  * - 报告模板**逐字节冻结**（三引擎逐位比对）：
  *   `（code=N，site=OFF）` ⏎ `  源码行 L:C · fnId=F` ⏎ `  变量: [0] a: Int64 = 42; …`
  *   条目格式：有名字 ⇒ `名字: 类型…`；无名字 ⇒ 直接类型。值型（0–3）按 §11.9 文本化
- *   （Unit 记 `Unit`）；句柄型（4–12）记 `<类型名>#<idx>`（0 ⇒ `#0`；**不取对象**，避免错误
- *   路径二次失败）。
+ *   （Unit 记 `Unit`）；句柄型（4–14）记 `<类型名>#<idx>`（0 ⇒ `#0`；**不取对象**，避免错误
+ *   路径二次失败）。M2 的 13/14 沿用同一规则 ⇒ `HostClosure#idx` / `HostObject#idx`（大类名，
+ *   不解析注册类名；m2 §5.1）。
  */
 public class DbgDump {
     /** 缓冲字数常量：首格哨兵 + fnId + nLocals（nLocals 占 1 格）。 */
@@ -218,7 +219,7 @@ public class DbgDump {
             }
             return head + '${tname} = ${v}'
         }
-        // 句柄型（4–12）：`<类型名>#<idx>` —— 不取对象
+        // 句柄型（4–14）：`<类型名>#<idx>` —— 不取对象（13/14 同样只用大类名，m2 §5.1）
         head + '${tname}#${HandleTable.idxOf(cell)}'
     }
 
