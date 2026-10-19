@@ -248,19 +248,29 @@ public class HostFault {
         }
     }
 
-    /** 异常全文：`toString` + `causedBy` 链（完整仓颉异常栈由桥打印原始对象）。 */
+    /** 异常全文：`toString` + `causedBy` 链 + **完整仓颉异常栈**（帧序 = 抛出点在前）。 */
     private static func describe(e: Exception): String {
-        var s = e.toString()
+        var s = HostFault.describeOne(e)
         var cur = e.causedBy
         var depth = 0
         while (depth < 8) {
             match (cur) {
                 case Some(inner) =>
-                    s = s + '\nCaused by: ' + inner.toString()
+                    s = s + '\nCaused by: ' + HostFault.describeOne(inner)
                     cur = inner.causedBy
                 case None => break
             }
             depth = depth + 1
+        }
+        s
+    }
+
+    /** 单个异常的文本 + 栈帧（`at Class.method(file:line)`，逐帧一行、顺序保持）。 */
+    private static func describeOne(e: Exception): String {
+        var s = e.toString()
+        for (frame in e.getStackTrace()) {
+            s = s + '\n    at ${frame.declaringClass}.${frame.methodName}' +
+                '(${frame.fileName}: ${frame.lineNumber})'
         }
         s
     }

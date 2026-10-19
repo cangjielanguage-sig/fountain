@@ -43,7 +43,10 @@ public class ReflectMap_test {
         @Assert(ReflectMap_test.code<Float64>(), LocalType.F64)
         @Assert(ReflectMap_test.code<Bool>(), LocalType.BOOL)
         @Assert(ReflectMap_test.code<Unit>(), LocalType.UNIT)
-        @Assert(TCase.hit('T55/map-value-types', true), true)
+        @Assert(TCase.hit('T55/map-value-types', ReflectMap_test.code<Int64>() == LocalType.I64 &&
+            ReflectMap_test.code<Float64>() == LocalType.F64 &&
+            ReflectMap_test.code<Bool>() == LocalType.BOOL &&
+            ReflectMap_test.code<Unit>() == LocalType.UNIT), true)
     }
 
     /** std 句柄类型 → 4–11（按名映射；容器泛型实参外置）。 */
@@ -57,7 +60,8 @@ public class ReflectMap_test {
         @Assert(ReflectMap_test.code<Regex>(), LocalType.REGEX)
         @Assert(ReflectMap_test.code<ArrayList<Int64>>(), LocalType.LIST)
         @Assert(ReflectMap_test.code<HashMap<String, Int64>>(), LocalType.MAP)
-        @Assert(TCase.hit('T55/map-std-handles', true), true)
+        @Assert(TCase.hit('T55/map-std-handles', ReflectMap_test.code<String>() == LocalType.STRING &&
+            ReflectMap_test.code<HashMap<String, Int64>>() == LocalType.MAP), true)
     }
 
     /** 其余类 → 14 + typeRef；JSON 谱系与不可映射类型 → None。 */
@@ -73,7 +77,8 @@ public class ReflectMap_test {
         @Assert(ReflectMap_test.codeOpt<Option<Int64>>().isNone(), true)
         @Assert(ReflectMap_test.codeOptOf(TypeInfo.of<JsonValue>()).isNone(), true)
         @Assert(ReflectRegistrar.mapTypeRef(TypeInfo.of<JsonObject>()).isNone(), true)
-        @Assert(TCase.hit('T55/map-host-object', true), true)
+        @Assert(TCase.hit('T55/map-host-object', ReflectMap_test.codeOf(t) == LocalType.HOST_OBJECT &&
+            ReflectMap_test.codeOpt<Int32>().isNone()), true)
     }
 
     /** 构造器 `apply` 适配：参数逐项映射，adapter 可真正构造实例。 */
@@ -93,13 +98,15 @@ public class ReflectMap_test {
         }
         @Assert(ctor.params, [LocalType.STRING, LocalType.I64])
         let made = ctor.adapter(['bob', 9])
+        var ok = false
         match (made) {
             case u: ReflectUser =>
                 @Assert(u.name, 'bob')
                 @Assert(u.id, 9)
+                ok = u.name == 'bob' && u.id == 9
             case _ => @Fail('构造器返回类型不符')
         }
-        @Assert(TCase.hit('T54/reflect-ctor-apply', true), true)
+        @Assert(TCase.hit('T54/reflect-ctor-apply', ok), true)
     }
 
     /** 泛型类按具体实例化：`ReflectBox<Int64>` 的构造器参数映射为 0。 */

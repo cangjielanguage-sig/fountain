@@ -22,6 +22,7 @@ import fountain::f_jit.base.SourceCompileException
 import fountain::f_jit.base.Version
 import fountain::f_jit.bytecode.FbcReader
 import fountain::f_jit.bytecode.LoadedUnit
+import fountain::f_jit.test.TCase
 
 /** Q3.9 / Q3.10：逃逸闭包捕获描述符、白名单拒绝与放开。 */
 @Test
@@ -37,6 +38,9 @@ public class Capture_test {
         @Assert(d.entries[0].name, 'n')
         @Assert(d.entries[0].origin, CaptureOrigin.VALUE)
         @Assert(d.handleCaptureNames().size, 0)
+        @Assert(TCase.hit('T49/whitelist-value',
+            d.escaping && d.entries[0].origin == CaptureOrigin.VALUE &&
+            d.handleCaptureNames().size == 0), true)
     }
 
     /** 路径 A 常量捕获可逃逸。 */
@@ -48,6 +52,9 @@ public class Capture_test {
         @Assert(d.escaping, true)
         @Assert(d.entries[0].origin, CaptureOrigin.CONSTANT)
         @Assert(d.handleCaptureNames().size, 0)
+        @Assert(TCase.hit('T49/whitelist-constant',
+            d.escaping && d.entries[0].origin == CaptureOrigin.CONSTANT &&
+            d.handleCaptureNames().size == 0), true)
     }
 
     /** 路径 B（函数参数）捕获：第 1 步放开后仍保留来源分类。 */
@@ -105,6 +112,9 @@ public class Capture_test {
         @Assert(d.escaping, true)
         @Assert(d.handleCaptureNames().size, 1)
         @Assert(d.handleCaptureNames()[0], 's')
+        @Assert(TCase.hit('T49/handle-capture-promoted',
+            d.escaping && d.handleCaptureNames().size == 1 &&
+            d.handleCaptureNames()[0] == 's'), true)
     }
 
     /** 路径 C 捕获不再编译错误；提升组内容 = 句柄型捕获集。 */
@@ -129,6 +139,9 @@ public class Capture_test {
         @Assert(Capture_test.has(names, 'l'), true)
         @Assert(Capture_test.has(names, 'n'), false)
         @Assert(Capture_test.has(names, 'c'), false)
+        @Assert(TCase.hit('T49/promotion-set-exact',
+            names.size == 2 && Capture_test.has(names, 's') &&
+            Capture_test.has(names, 'l')), true)
     }
 
     private static func has(xs: Array<String>, x: String): Bool {

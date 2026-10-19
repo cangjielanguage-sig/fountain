@@ -406,7 +406,16 @@ public class JitFunction {
             let v = marshal.makeRetUnboxer(unboxCode)(ret)
             if (unboxCode >= LocalType.STRING && unboxCode <= LocalType.HOST_OBJECT &&
                 unboxCode != LocalType.CLOSURE) {
-                HandleTable.releaseEscaped(ret)
+                // 包装闭包返回的句柄若属于提升组（捕获的 14/容器），释放权在 `close`，
+                // 此处归还会把被捕获对象提前释放（第二次调用失效）。
+                var ownedByGroup = false
+                match (this.closureGroup) {
+                    case Some(g) => ownedByGroup = g.contains(ret)
+                    case None => ()
+                }
+                if (!ownedByGroup) {
+                    HandleTable.releaseEscaped(ret)
+                }
             }
             if (unboxCode == LocalType.CLOSURE) {
                 this.lastClosureGroup = marshal.closureGroupOf()
@@ -562,8 +571,37 @@ public class JitFunction {
         String.fromUtf8(out.toArray())
     }
 
+    /** 去掉命名空间前缀（`std.collection.ArrayList<Int64>` → `ArrayList<Int64>`）。 */
+    private static func simpleTypeName(name: String): String {
+        let b = name.unsafeBytes()
+        var lastDot = -1
+        var i = 0
+        while (i < b.size) {
+            let c = b[i]
+            if (c == 0x3Cu8) { // '<'：只在前缀段找分隔符
+                break
+            }
+            if (c == 0x2Eu8) { // '.'
+                lastDot = i
+            }
+            i = i + 1
+        }
+        if (lastDot <= 0) {
+            return name
+        }
+        let n = b.size - lastDot - 1
+        var out = Array<UInt8>(n, repeat: 0u8)
+        var j = 0
+        while (j < n) {
+            out[j] = b[lastDot + 1 + j]
+            j = j + 1
+        }
+        String.fromUtf8(out)
+    }
+
     private static func codeOfTypeName(name: String): ?UInt16 {
-        match (name) {
+        let sn = JitFunction.simpleTypeName(name)
+        match (sn) {
             case 'Int64' => Some(LocalType.I64)
             case 'Float64' => Some(LocalType.F64)
             case 'Bool' => Some(LocalType.BOOL)
@@ -574,13 +612,13 @@ public class JitFunction {
             case 'Duration' => Some(LocalType.DURATION)
             case 'Regex' => Some(LocalType.REGEX)
             case _ =>
-                if (name.startsWith('Range')) {
+                if (sn.startsWith('Range')) {
                     Some(LocalType.RANGE)
-                } else if (name.startsWith('ArrayList')) {
+                } else if (sn.startsWith('ArrayList')) {
                     Some(LocalType.LIST)
-                } else if (name.startsWith('HashMap')) {
+                } else if (sn.startsWith('HashMap')) {
                     Some(LocalType.MAP)
-                } else if (name.isEmpty()) {
+                } else if (sn.isEmpty()) {
                     None
                 } else {
                     // 注册类（或其它类）统一按 14；具体类由前端/验签静态知识承担。
@@ -591,7 +629,7 @@ public class JitFunction {
 
     private static func localTypeOf<T>(): ?UInt16 {
         let info = TypeInfo.of<T>()
-        let n = info.name
+        let n = JitFunction.simpleTypeName(info.name)
         if (n == 'Int64') {
             return Some(LocalType.I64)
         }

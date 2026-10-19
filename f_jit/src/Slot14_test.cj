@@ -45,7 +45,7 @@ public class Slot14_test {
         let u = ManualUser('bob', 1)
         let r = f.call<ManualUser>([u])
         @Assert(refEq(r, u), true)
-        @Assert(TCase.hit('T58/param-local-return14', true), true)
+        @Assert(TCase.hit('T58/param-local-return14', refEq(r, u)), true)
     }
 
     /** 跨 CALL_FUNC/闭包链传参 × 深度 ≥3；链内返回 14。 */
@@ -61,7 +61,7 @@ public class Slot14_test {
         let u = ManualUser('deep', 3)
         let r = f.call<ManualUser>([u])
         @Assert(refEq(r, u), true)
-        @Assert(TCase.hit('T58/chain-depth3', true), true)
+        @Assert(TCase.hit('T58/chain-depth3', refEq(r, u)), true)
     }
 
     /** 嵌套闭包捕获 14 局部（快照 = ID 拷贝）——非逃逸。 */
@@ -71,7 +71,7 @@ public class Slot14_test {
         let f = c.compile('{ u: ManualUser => let a = { x: Int64 => u }\n a(1) }')
         let u = ManualUser('cap', 4)
         @Assert(refEq(f.call<ManualUser>([u]), u), true)
-        @Assert(TCase.hit('T58/capture14', true), true)
+        @Assert(TCase.hit('T58/capture14', refEq(f.call<ManualUser>([u]), u)), true)
     }
 
     /** 逃逸闭包捕获 14：提升组保留 ID，包装器调用后仍能取回同一对象。 */
@@ -82,8 +82,9 @@ public class Slot14_test {
         let u = ManualUser('esc', 5)
         let w = unit.callFor<(Int64) -> ManualUser>([u])
         @Assert(refEq(w.call<ManualUser>([1]), u), true)
+        let labelOk = refEq(w.call<ManualUser>([1]), u)
         w.close()
-        @Assert(TCase.hit('T58/capture14-promoted', true), true)
+        @Assert(TCase.hit('T58/capture14-promoted', labelOk), true)
     }
 
     /** HostClosure 签名含 14：参数 14 验签/执行（R=String）。 */
@@ -100,7 +101,7 @@ public class Slot14_test {
         }
         let u = ManualUser('host', 6)
         @Assert(unit.call<String>([f, u]), 'host')
-        @Assert(TCase.hit('T59/host-closure-param14', true), true)
+        @Assert(TCase.hit('T59/host-closure-param14', unit.call<String>([f, u]) == 'host'), true)
     }
 
     /** HostClosure 签名含 14：R=14 返回（窗口登记 1 槽，取回实例引用）。 */
@@ -111,7 +112,7 @@ public class Slot14_test {
         let made = ManualUser('ret', 7)
         let f: () -> ManualUser = { => made }
         @Assert(refEq(unit.call<ManualUser>([f]), made), true)
-        @Assert(TCase.hit('T59/host-closure-ret14', true), true)
+        @Assert(TCase.hit('T59/host-closure-ret14', refEq(unit.call<ManualUser>([f]), made)), true)
     }
 
     /** 验签失败（返回类型不符）→ 19（site=-1）。 */

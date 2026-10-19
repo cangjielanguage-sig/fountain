@@ -63,9 +63,10 @@ public class CallMarshalM2_test {
         let admin = ReflectAdmin('root')
         let aid = m.marshalArg(LocalType.HOST_OBJECT, admin, className: Some('ReflectUser'))
         @Assert(aid != 0, true)
+        let labelOk = id != 0 && aid != 0 && HandleTable.isType(id, TypeToken.HOST_OBJECT)
         m.cleanup()
         CallMarshalM2_test.teardown()
-        @Assert(TCase.hit('T57/host-object-is-c', true), true)
+        @Assert(TCase.hit('T57/host-object-is-c', labelOk), true)
     }
 
     /** 型别不符 → 19（site=-1）；null → 19。 */
@@ -104,11 +105,13 @@ public class CallMarshalM2_test {
         @Assert(a, 7)
         @Assert(HandleTable.isType(s, TypeToken.STRING), true)
         @Assert(HandleTable.isType(h, TypeToken.HOST_OBJECT), true)
+        let labelOk = a == 7 && HandleTable.isType(s, TypeToken.STRING) &&
+            HandleTable.isType(h, TypeToken.HOST_OBJECT)
         m.cleanup()
         @Assert(HandleTable.getAny(s).isNone(), true)
         @Assert(HandleTable.getAny(h).isNone(), true)
         CallMarshalM2_test.teardown()
-        @Assert(TCase.hit('T57/mixed-args', true), true)
+        @Assert(TCase.hit('T57/mixed-args', labelOk), true)
     }
 
     /** HostClosure 参数：单次 `is` 验签 → pin(tag=10)；同函数同签名同 ID。 */
@@ -140,9 +143,10 @@ public class CallMarshalM2_test {
                 }
             case None => @Fail('回调句柄不可读')
         }
+        let labelOk = again != 0 && HandleTable.isType(id, TypeToken.HOST_CLOSURE)
         m.cleanup()
         CallMarshalM2_test.teardown()
-        @Assert(TCase.hit('T30/host-closure-pin', true), true)
+        @Assert(TCase.hit('T30/host-closure-pin', labelOk), true)
     }
 
     /** 非函数值 / 签名不符 / 禁高阶 → 19（site=-1）。 */
@@ -193,7 +197,8 @@ public class CallMarshalM2_test {
         }
         @Assert(code, ErrCode.CALL_CONTRACT)
         @Assert(site, -1)
-        @Assert(TCase.hit('T30/entry-host-closure', true), true)
+        @Assert(TCase.hit('T30/entry-host-closure',
+            unit.call<Int64>([f]) == 42 && code == ErrCode.CALL_CONTRACT && site == -1), true)
     }
 
     private static func codeOf(body: () -> Unit): ExcSite {

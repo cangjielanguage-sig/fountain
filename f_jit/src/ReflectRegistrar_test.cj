@@ -169,7 +169,10 @@ public class ReflectRegistrar_test {
         for (c in manual.ctors) {
             @Assert(ReflectRegistrar_test.hasCtor(auto, c.params), true)
         }
-        @Assert(TCase.hit('T55/reflect-auto-equals-manual', true), true)
+        @Assert(TCase.hit('T55/reflect-auto-equals-manual',
+            auto.fields.size == manual.fields.size &&
+            auto.methods.size == manual.methods.size &&
+            auto.ctors.size == manual.ctors.size), true)
     }
 
     /** JSON 谱系类拒绝注册（`JsonFamily`），且不登记。 */

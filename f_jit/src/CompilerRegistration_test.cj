@@ -147,7 +147,8 @@ public class CompilerRegistration_test {
         @Assert(made2.name, 'ann')
         @Assert(made2.id, 0)
 
-        @Assert(TCase.hit('T54/e2e-member-and-ctor', true), true)
+        @Assert(TCase.hit('T54/e2e-member-and-ctor',
+            made2.name == 'ann' && made.name == '' && u.age == 9), true)
     }
 
     /** `registerType<T>` 端到端：字段 / 属性 / 方法 / 构造器全走反射访问器。 */
@@ -177,7 +178,7 @@ public class CompilerRegistration_test {
         let made = ctor.call<ReflectUser>([])
         @Assert(made.name, 'ann')
         @Assert(made.id, 2)
-        @Assert(TCase.hit('T55/e2e-reflect', true), true)
+        @Assert(TCase.hit('T55/e2e-reflect', made.name == 'ann' && made.id == 2), true)
     }
 
     /** 快照：编译后的单元不受后续注册变更影响。 */
@@ -194,7 +195,8 @@ public class CompilerRegistration_test {
         ], methods: Array<PublicMethod>(), ctors: Array<PublicCtor>())
         c.registerClass(extra)
         @Assert(f.call<String>([ManualUser('kept', 1)]), 'kept')
-        @Assert(TCase.hit('T55/compile-snapshot', true), true)
+        @Assert(TCase.hit('T55/compile-snapshot',
+            f.call<String>([ManualUser('kept', 1)]) == 'kept'), true)
     }
 
     /** 四类类名冲突 → `RegistrationException`（kind/name/occupiedBy），且不登记。 */
@@ -232,7 +234,8 @@ public class CompilerRegistration_test {
         @Assert(c.hasClass('size'), false)
         @Assert(c.hasClass('Int64'), false)
         @Assert(c.hasClass('match'), false)
-        @Assert(TCase.hit('T55/four-name-clashes', true), true)
+        @Assert(TCase.hit('T55/four-name-clashes',
+            !c.hasClass('size') && !c.hasClass('Int64') && !c.hasClass('match')), true)
     }
 
     /** 关闭反射 / JSON 谱系 → 明确报错且不登记。 */

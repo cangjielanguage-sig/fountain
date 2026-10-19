@@ -79,7 +79,7 @@ public class JitFunctionClosure_test {
             ' let c = { x: Int64 => b(x) + 1 }\n c }')
         let w = unit.callFor<(Int64) -> Int64>([])
         @Assert(w.call<Int64>([39]), 42)
-        @Assert(TCase.hit('T49/wrapper-depth3', true), true)
+        @Assert(TCase.hit('T49/wrapper-depth3', w.call<Int64>([39]) == 42), true)
         w.close()
     }
 
@@ -112,7 +112,7 @@ public class JitFunctionClosure_test {
         let e = JitFunctionClosure_test.catchCall(w, 1)
         @Assert(e.code, ErrCode.CALL_CONTRACT)
         @Assert(e.site, -1)
-        @Assert(TCase.hit('T49/wrapper-close', true), true)
+        @Assert(TCase.hit('T49/wrapper-close', w.isClosed && HandleTable.liveCount() == base), true)
     }
 
     /** 旧 ID 校验拦截：close 后的 ID 再包装 → 19。 */
@@ -161,9 +161,11 @@ public class JitFunctionClosure_test {
         let e = JitFunctionClosure_test.catchCallAny(nested, [nested])
         @Assert(e.code, ErrCode.CALL_CONTRACT)
         @Assert(e.site, -1)
+        let labelOk = w.call<Int64>([5]) == 6 && e.code == ErrCode.CALL_CONTRACT &&
+            e.site == -1
         w.close()
         nested.close()
-        @Assert(TCase.hit('T49/call-for-wrapper', true), true)
+        @Assert(TCase.hit('T49/call-for-wrapper', labelOk), true)
     }
 
     /** Q5.11：callFor 实参面与 call<T> 一致——允许宿主闭包（13）作实参。 */
@@ -174,8 +176,9 @@ public class JitFunctionClosure_test {
         let f: (Int64) -> Int64 = { x => x + 1 }
         let w = unit.callFor<(Int64) -> Int64>([f])
         @Assert(w.call<Int64>([41]), 43)
+        let labelOk = w.call<Int64>([41]) == 43
         w.close()
-        @Assert(TCase.hit('T30/call-for-host-closure-arg', true), true)
+        @Assert(TCase.hit('T30/call-for-host-closure-arg', labelOk), true)
     }
 
     /** Q5.11：单元持有 ClassRegistry 快照（编译期静态知识随产物）。 */
@@ -192,7 +195,8 @@ public class JitFunctionClosure_test {
             case Some(s) => @Assert(s.classes.size, 1)
             case None => @Fail('单元未持有类快照')
         }
-        @Assert(TCase.hit('T49/unit-class-snapshot', true), true)
+        @Assert(TCase.hit('T49/unit-class-snapshot',
+            match (f.classSnapshotOf()) { case Some(s) => s.classes.size == 1; case None => false }), true)
     }
 
     /** 非返回闭包的单元调用 callFor → 19。 */

@@ -441,6 +441,10 @@ protected class ReflectRegistrar {
     }
 
     private static func isInstanceOf(o: Object, names: Array<String>): Bool {
+        // 反射访问器的载体（InstanceVariableInfo / 属性信息）属于**声明类**，std.reflect 的
+        // getValue/setValue 会拒绝子类实例（IllegalTypeException）。因此自动注册的访问器按
+        // **精确类**匹配；子类请单独注册（或用手工访问器 `o is C`，后者天然支持继承）。
+        // 这是 std.reflect 的实现约束，登记为 M2 已知限制（见 Q6.progress）。
         let actual = ClassTypeInfo.of(o).name
         names.contains(actual)
     }

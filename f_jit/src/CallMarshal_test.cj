@@ -143,15 +143,17 @@ public class CallMarshal_test {
         HandleTable.resetWindow(-1)
         @Assert(HandleTable.isLiveHandle(cid), true)
         @Assert(HandleTable.isLiveHandle(cap), true)
+        var grouped = false
         match (m.closureGroupOf()) {
             case Some(g) =>
                 @Assert(g.contains(cid), true)
                 @Assert(g.contains(cap), true)
+                grouped = g.contains(cid) && g.contains(cap)
                 g.releaseAll()
             case None => ()
         }
         CallMarshal_test.teardown()
-        @Assert(TCase.hit('T49/unbox-closure', true), true)
+        @Assert(TCase.hit('T49/unbox-closure', grouped), true)
     }
 
     /** Q5.9：`retType=13` → 原样带回宿主闭包引用。 */
@@ -163,13 +165,14 @@ public class CallMarshal_test {
         let cb = HostCallback(f, SignatureDescriptor([LocalType.I64], LocalType.I64))
         let id = HandleTable.append(ctx, cb, TypeToken.HOST_CLOSURE)
         let m = CallMarshal()
+        var ok13 = false
         match (m.makeRetUnboxer(LocalType.HOST_CLOSURE)(id)) {
-            case g: (Int64) -> Int64 => @Assert(g(41), 42)
+            case g: (Int64) -> Int64 => ok13 = g(41) == 42
             case _ => @Fail('retType=13 未带回函数值')
         }
         HandleTable.releaseEscaped(id)
         CallMarshal_test.teardown()
-        @Assert(TCase.hit('T49/unbox-host-closure', true), true)
+        @Assert(TCase.hit('T49/unbox-host-closure', ok13), true)
     }
 
     /** Q5.9：`retType=14` → 宿主类实例引用（零拷贝）。 */
@@ -180,13 +183,14 @@ public class CallMarshal_test {
         let u = ManualUser('bob', 1)
         let id = HandleTable.append(ctx, u, TypeToken.HOST_OBJECT)
         let m = CallMarshal()
+        var ok14 = false
         match (m.makeRetUnboxer(LocalType.HOST_OBJECT)(id)) {
-            case x: ManualUser => @Assert(x.name, 'bob')
+            case x: ManualUser => ok14 = x.name == 'bob'
             case _ => @Fail('retType=14 未带回实例')
         }
         HandleTable.releaseEscaped(id)
         CallMarshal_test.teardown()
-        @Assert(TCase.hit('T49/unbox-host-object', true), true)
+        @Assert(TCase.hit('T49/unbox-host-object', ok14), true)
     }
 
     private static func setupWindow(): Unit {

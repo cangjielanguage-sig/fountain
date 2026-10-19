@@ -19,6 +19,7 @@ import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_jit.base.*
 import fountain::f_jit.bytecode.*
+import fountain::f_jit.test.TCase
 
 /**
  * S3.20 `Assembler` 的 §7 校验 1–11 拒绝面（plan-m1 §7、design-m1 §4.3.7）。
@@ -260,7 +261,9 @@ public class Assembler_test {
         b.callHost(0u8) // 变更型置位 + 自动 CHECK_ERR
         b.emitU8(Op.DEC_TO_I64, 1u8)
         Assembler_test.add(sess, 0u32, 0, LocalType.I64, [LocalType.HOST_CLOSURE], b.finish())
-        @Assert(Assembler_test.assembleKind(sess), DiagKind.NOT_IMPL)
+        let kind = Assembler_test.assembleKind(sess)
+        @Assert(kind, DiagKind.NOT_IMPL)
+        @Assert(TCase.hit('T32/deopt-ban', kind == DiagKind.NOT_IMPL), true)
     }
 
     /** 校验 11：含 `H65 host_set_field` 的函数按变更型置位，同样禁用 deopt 源（m2 §12.2）。 */

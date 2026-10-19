@@ -45,6 +45,32 @@ public func failWith(code: Int64): Nothing {
 }
 
 /**
+ * 一次调用窗口的完整镜像（重入保存/恢复用，§8.2「各调用窗口互不重叠」）。
+ *
+ * 宿主闭包体内重入 JIT 时会再开一次窗口；外层窗口的**槽清单与计数**必须原样保存，
+ * 否则内层 `resetWindow` 会把外层的分配记账一并清掉（泄漏 + 账目失真）。
+ */
+private class WindowState {
+    let base: Int64
+    let cap: Int64
+    let top: Int64
+    let used: Int64
+    let slots: ArrayList<Int64>
+
+    init(base: Int64, cap: Int64, top: Int64, used: Int64, slots: ArrayList<Int64>) {
+        this.base = base
+        this.cap = cap
+        this.top = top
+        this.used = used
+        let copy = ArrayList<Int64>()
+        for (s in slots) {
+            copy.add(s)
+        }
+        this.slots = copy
+    }
+}
+
+/**
  * 句柄表（ID 形态） —— design-m1 §5.3.2、plan-m1 S4.2–S4.5。
  *
  * 权威 = `doc/jit-bytecode-m1.md` §1（槽 = `idx:u32 + tag:u16 + gen:u16`）、§8.1（四条路径）、
@@ -107,6 +133,8 @@ public class HandleTable {
     /** 本次窗口实际占用的槽索引（允许复用旧 freeSlots，故不能用连续区间表示）。 */
     private static let windowSlots: ArrayList<Int64> = ArrayList<Int64>()
     private static var windowUsedCount: Int64 = 0
+    /** 嵌套窗口栈：外层状态在 `openWindow` 时压栈、`resetWindow` 时恢复。 */
+    private static let windowStack: ArrayList<WindowState> = ArrayList<WindowState>()
 
     // ---- 槽位三元组编码 ----
 
@@ -207,6 +235,9 @@ public class HandleTable {
      */
     public static func openWindow(cap: Int64): Unit {
         synchronized(mtx) {
+            // 重入：保存外层窗口（基址/容量/已用/槽清单），内层结束后原样恢复。
+            windowStack.add(WindowState(windowBase, windowCap, windowTop, windowUsedCount,
+                windowSlots))
             windowBase = objs.size
             windowTop = windowBase
             windowCap = if (cap <= 0) { initialCapacity } else { cap }
@@ -775,9 +806,21 @@ public class HandleTable {
             }
             windowSlots.clear()
             windowUsedCount = 0
-            windowBase = if (hwBase >= 0) { hwBase } else { objs.size }
-            windowTop = windowBase
-            windowCap = initialCapacity
+            // 重入：内层窗口收尾后恢复外层窗口（基址/容量/已用/槽清单原样回填）。
+            if (windowStack.size > 0) {
+                let outer = windowStack.remove(at: windowStack.size - 1)
+                windowBase = outer.base
+                windowCap = outer.cap
+                windowTop = outer.top
+                windowUsedCount = outer.used
+                for (s in outer.slots) {
+                    windowSlots.add(s)
+                }
+            } else {
+                windowBase = if (hwBase >= 0) { hwBase } else { objs.size }
+                windowTop = windowBase
+                windowCap = initialCapacity
+            }
         }
     }
 
@@ -880,6 +923,7 @@ public class HandleTable {
             escapeFlags.clear()
             freeSlots.clear()
             windowSlots.clear()
+            windowStack.clear()
             windowUsedCount = 0
             // idx 0 保留（null 哨兵）
             objs.add(Int64(0))

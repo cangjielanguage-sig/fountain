@@ -1712,6 +1712,8 @@ internal class Lowerer {
                             for (a in args) {
                                 let _ = this.lowerExpr(a)
                             }
+                            // T31：宿主异常/引擎失败的 site = CALL_HOST 偏移（20/21 分类依据）。
+                            ctx.builder.setSite(vpos)
                             ctx.builder.callHost(UInt8(args.size))
                             let r = sym.hostRet
                             this.lastHostRet = LocalType.NONE
@@ -1758,6 +1760,8 @@ internal class Lowerer {
                                     let _ = this.lowerExpr(a)
                                 }
                                 let ret = this.sess.registry.retTypeOf(name)
+                                // T60：预定义函数面的 21 归属需要调用点（与 H64/H65 同口径）。
+                                ctx.builder.setSite(vpos)
                                 ctx.builder.callHelper(HelperCodec.hidOfSlot(slot), UInt8(args.size))
                                 ret
                             case ResolvedCall.HostClosureCall =>
@@ -1766,12 +1770,12 @@ internal class Lowerer {
                 }
             case AstExpr.MemberName(name, tg, mpos) =>
                 if (this.staticTypeFull(target) == LocalType.HOST_CLOSURE) {
-                    return this.lowerHostClosureInvoke(target, args)
+                    return this.lowerHostClosureInvoke(target, args, mpos)
                 }
                 this.lowerBuiltinMemberCall(name, tg, args, mpos)
             case _ =>
                 if (this.staticTypeFull(target) == LocalType.HOST_CLOSURE) {
-                    return this.lowerHostClosureInvoke(target, args)
+                    return this.lowerHostClosureInvoke(target, args, pos)
                 }
                 let _ = this.lowerExpr(target)
                 for (a in args) {
@@ -1786,7 +1790,8 @@ internal class Lowerer {
      * 13 型非局部表达式作被调：先求句柄存临时槽 → `LOADL`（栈底）→ 实参左→右 → `CALL_HOST`。
      * 布局 `[h_fn, a1..an]`（m2 §2/§5）；被调表达式仍先于实参求值。
      */
-    private func lowerHostClosureInvoke(target: AstExpr, args: Array<AstExpr>): UInt16 {
+    private func lowerHostClosureInvoke(target: AstExpr, args: Array<AstExpr>,
+        pos: SourcePos): UInt16 {
         let ctx = this.requireCtx()
         let tslot = ctx.builder.allocSlot(LocalType.HOST_CLOSURE)
         let _ = this.lowerExpr(target)
@@ -1795,6 +1800,7 @@ internal class Lowerer {
         for (a in args) {
             let _ = this.lowerExpr(a)
         }
+        ctx.builder.setSite(pos)
         ctx.builder.callHost(UInt8(args.size))
         LocalType.I64
     }
@@ -1810,6 +1816,7 @@ internal class Lowerer {
         for (a in args) {
             let _ = this.lowerExpr(a)
         }
+        ctx.builder.setSite(pos)
         ctx.builder.callHost(UInt8(args.size))
         LocalType.I64
     }

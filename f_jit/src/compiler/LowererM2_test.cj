@@ -30,6 +30,7 @@ import fountain::f_jit.base.Version
 import fountain::f_jit.bytecode.FbcReader
 import fountain::f_jit.bytecode.FuncFlags
 import fountain::f_jit.bytecode.LoadedUnit
+import fountain::f_jit.test.TCase
 
 /** Q3.5–Q3.7：M2 降低面（CALL_HOST / 成员访问 / 构造）。 */
 @Test
@@ -39,7 +40,7 @@ public class LowererM2_test {
     public func callHostInstructionSequence(): Unit {
         let unit = LowererM2_test.compileV2(
             '{ fn: (Int64, Int64) -> Bool, a: Int64, b: Int64 => fn(a, b) }')
-        @Assert(LowererM2_test.entryOps(unit), 'LOADL LOADL LOADL CALL_HOST CHECK_ERR RET')
+        @Assert(LowererM2_test.entryOps(unit), 'LOADL LOADL LOADL SET_SITE CALL_HOST CHECK_ERR RET')
         let d = LowererM2_test.entryDump(unit)
         @Assert(d.contains('LOADL 1'), true)
         @Assert(d.contains('LOADL 2'), true)
@@ -51,7 +52,7 @@ public class LowererM2_test {
     @TestCase
     public func callHostOneArgUsesDeclaredReturn(): Unit {
         let unit = LowererM2_test.compileV2('{ fn: (Int64) -> Bool => fn(1) }')
-        @Assert(LowererM2_test.entryOps(unit), 'LOADL PUSH_I64 CALL_HOST CHECK_ERR RET')
+        @Assert(LowererM2_test.entryOps(unit), 'LOADL PUSH_I64 SET_SITE CALL_HOST CHECK_ERR RET')
         @Assert(unit.dir.at(0).retType, LocalType.BOOL)
     }
 
@@ -59,7 +60,9 @@ public class LowererM2_test {
     @TestCase
     public func callHostMarksMutationFlag(): Unit {
         let unit = LowererM2_test.compileV2('{ fn: (Int64) -> Int64 => fn(1) }')
-        @Assert((unit.dir.at(0).flags & FuncFlags.MUTATION) != 0u16, true)
+        let flagged = (unit.dir.at(0).flags & FuncFlags.MUTATION) != 0u16
+        @Assert(flagged, true)
+        @Assert(TCase.hit('T32/call-host-flags-bit0', flagged), true)
     }
 
     /** HostClosure 形参/局部与 user helper 同名 → 编译错误。 */
