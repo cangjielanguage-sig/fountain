@@ -137,7 +137,15 @@ internal func hostGetField(ctx: JitContext, a: Array<Int64>): Int64 {
         case Some(x) => x
         case None => failWith(ErrCode.HELPER_PANIC)
     }
-    let v = acc.getter(obj)
+    // v0.8.19 §13-6：成员访问器执行期异常归属宿主异常专用码 21（原 99 收窄为引擎面）。
+    let v = try {
+        acc.getter(obj)
+    } catch (e: HelperFail) {
+        throw e
+    } catch (e: Exception) {
+        HostFault.record(ctx, e)
+        failWith(ErrCode.HOST_EXCEPTION)
+    }
     match (acc.`type`) {
         case 0u16 => match (v) {
             case i: Int64 => i
@@ -204,8 +212,14 @@ internal func hostSetField(ctx: JitContext, a: Array<Int64>): Int64 {
             }
             HandleTable.fetchAny(cell, tok)
     }
-    let _ = ctx
-    acc.setter(obj, v)
+    try {
+        acc.setter(obj, v)
+    } catch (e: HelperFail) {
+        throw e
+    } catch (e: Exception) {
+        HostFault.record(ctx, e)
+        failWith(ErrCode.HOST_EXCEPTION)
+    }
     0
 }
 

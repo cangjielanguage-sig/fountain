@@ -95,6 +95,10 @@ internal func hostResultCell(ctx: JitContext, ret: UInt16, r: Any): Int64 {
         case 9u16 => allocHandleResult(ctx, ret, r)
         case 10u16 => allocHandleResult(ctx, ret, r)
         case 11u16 => allocHandleResult(ctx, ret, r)
+        case 13u16 => match (r) {
+            case cb: HostCallback => HandleTable.append(ctx, cb, TypeToken.HOST_CLOSURE)
+            case _ => failWith(ErrCode.HELPER_PANIC)
+        }
         case 14u16 => match (r) {
             case o: Object => HandleTable.append(ctx, o, TypeToken.HOST_OBJECT)
             case _ => failWith(ErrCode.HELPER_PANIC)

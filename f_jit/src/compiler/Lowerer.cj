@@ -35,16 +35,19 @@ internal class VarSym {
     public let objectName: ?String
     /** 捕获来源（m2 §14.7）；赋值可保守降级（只升不降）。 */
     public var origin: UInt8
+    /** 12 型局部：闭包的 fnId（取闭包静态返回类型；`UInt32.Max` = 未知）。 */
+    public let closureFnId: UInt32
 
     public init(name: String, slot: Int64, ty: UInt16,
         hostRet!: UInt16 = LocalType.NONE, objectName!: ?String = None,
-        origin!: UInt8 = CaptureOrigin.VALUE) {
+        origin!: UInt8 = CaptureOrigin.VALUE, closureFnId!: UInt32 = UInt32.Max) {
         this.name = name
         this.slot = slot
         this.ty = ty
         this.hostRet = hostRet
         this.objectName = objectName
         this.origin = origin
+        this.closureFnId = closureFnId
     }
 }
 
@@ -127,6 +130,8 @@ internal class Lowerer {
     private var lastObjectName: ?String = None
     /** 最近一次 `lowerExpr` 产物的 HostClosure 返回码（13 型调用结果）。 */
     private var lastHostRet: UInt16 = LocalType.NONE
+    /** 最近一次 `lowerExpr` 产出的内部闭包 fnId（12 型局部的静态返回类型来源）。 */
+    private var lastClosureFnId: UInt32 = UInt32.Max
     /** 闭包静态捕获描述符（m2 §14.8；**不进 `.fbc`**）。 */
     private let captureDescs = ArrayList<CaptureDescriptor>()
     /** > 0 表示当前正在降低「返回位置」表达式（逃逸判定）。 */
@@ -218,7 +223,8 @@ internal class Lowerer {
                 let outer = Lowerer.findIn(parent, name, this.src)
                 let slot = ctx.builder.allocSlot(outer.ty)
                 let sym = VarSym(name, slot, outer.ty, hostRet: outer.hostRet,
-                    objectName: outer.objectName, origin: outer.origin)
+                    objectName: outer.objectName, origin: outer.origin,
+                    closureFnId: outer.closureFnId)
                 ctx.builder.emitU16(Op.LOAD_CAP, UInt16(i))
                 ctx.builder.emitU16(Op.STOREL, UInt16(slot))
                 ctx.captures.add(sym)
@@ -317,8 +323,13 @@ internal class Lowerer {
                     case None => ()
                 }
                 var initTy: UInt16 = declared
+                var declaredClosureFnId: UInt32 = UInt32.Max
                 match (initE) {
-                    case Some(e) => initTy = this.lowerExprAs(e, declared)
+                    case Some(e) =>
+                        initTy = this.lowerExprAs(e, declared)
+                        if (initTy == LocalType.CLOSURE) {
+                            declaredClosureFnId = this.lastClosureFnId
+                        }
                     case None =>
                         if (declared == LocalType.NONE) {
                             diagFail(DiagKind.SYNTAX_ERROR, this.src, 0, pos.line, pos.column,
@@ -350,7 +361,8 @@ internal class Lowerer {
                     }
                 }
                 ctx.declare(VarSym(name, slot, declared, hostRet: declaredHostRet,
-                    objectName: declaredObject, origin: declaredOrigin), pos, this.src)
+                    objectName: declaredObject, origin: declaredOrigin,
+                    closureFnId: declaredClosureFnId), pos, this.src)
                 this.pendingNames.add((ctx.fnId, slot, name))
             case AstStmt.Assign(lhs, rhs, pos) => this.lowerAssign(lhs, rhs, pos)
             case AstStmt.MultiAssign(lhs, rhs, pos) => this.lowerMultiAssign(lhs, rhs, pos)
@@ -1714,7 +1726,11 @@ internal class Lowerer {
                             let _ = this.lowerExpr(a)
                         }
                         ctx.builder.callClosure(UInt8(args.size))
-                        LocalType.I64
+                        if (sym.closureFnId != UInt32.Max) {
+                            this.closureRetType(sym.closureFnId)
+                        } else {
+                            LocalType.I64
+                        }
                     case None =>
                         // JSON 谱系是 M3 内建码，零注册、无注册构造器（v0.8.30）。
                         if (Lowerer.isJsonFamily(name)) {
@@ -2097,12 +2113,14 @@ internal class Lowerer {
         this.setClosureRetType(fnId, Lowerer.retTypeOf(lambda))
         this.lowerLambda(lambda, fnId, Some(outer), free, lambda.params.size + 1)
         outer.builder.callHelper(HelperCodec.CLOSURE_NEW, UInt8(free.size + 1))
+        this.lastClosureFnId = fnId
     }
 
     private func lowerRecursiveValue(): UInt16 {
         let ctx = this.requireCtx()
         if (ctx.isClosure) {
             ctx.builder.emitU16(Op.LOADL, 0u16)
+            this.lastClosureFnId = ctx.fnId
             return LocalType.CLOSURE
         }
         let adapterId = this.sess.newFnId()
@@ -2127,6 +2145,7 @@ internal class Lowerer {
         this.ctx = ctx
         ctx.builder.emitI64(Op.PUSH_I64, Int64(adapterId))
         ctx.builder.callHelper(HelperCodec.CLOSURE_NEW, 1u8)
+        this.lastClosureFnId = adapterId
         LocalType.CLOSURE
     }
 

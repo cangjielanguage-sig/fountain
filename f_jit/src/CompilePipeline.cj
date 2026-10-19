@@ -15,22 +15,32 @@ limitations under the License.
 */
 package fountain::f_jit
 
+import std.collection.ArrayList
 import fountain::f_jit.base.DummyDiagnosticsSink
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.JitException
 import fountain::f_jit.base.JitMode
+import fountain::f_jit.base.LocalType
+import fountain::f_jit.base.PublicCtor
 import fountain::f_jit.base.SourceCompileException
+import fountain::f_jit.base.TypeToken
+import fountain::f_jit.base.Version
 import fountain::f_jit.bytecode.OpInfo
 import fountain::f_jit.bytecode.FbcReader
 import fountain::f_jit.bytecode.Fingerprint
 import fountain::f_jit.bytecode.LoadedUnit
 import fountain::f_jit.bytecode.LocalTypes
+import fountain::f_jit.compiler.HostClosureSigDecl
+import fountain::f_jit.compiler.PredefinedSnapshot
 import fountain::f_jit.compiler.SourceCompiler
+import fountain::f_jit.compiler.ClassRegistrySnapshot
 import fountain::f_jit.backend.JitExecutor
 import fountain::f_jit.runtime.DbgDump
 import fountain::f_jit.runtime.HandleTable
 import fountain::f_jit.runtime.Interp
+import fountain::f_jit.runtime.JitClosure
 import fountain::f_jit.runtime.JitContext
+import fountain::f_jit.runtime.UserHelperEntry
 
 /**
  * S6.8 源码管线（§8）：`compile(source)` 四步——源码 → 字节码 → 执行器 → `JitFunction`。
@@ -47,9 +57,13 @@ protected class CompilePipeline {
         }
         if (CompileCache.claim(key)) {
             try {
-                let cu = SourceCompiler(c.snapshot(), DummyDiagnosticsSink()).compile(source)
+                let snap = c.snapshot()
+                let cu = SourceCompiler(snap, DummyDiagnosticsSink(),
+                    verMajor: Version.M2_MAJOR, classes: c.classSnapshot()).compile(source)
                 let unit = FbcReader.load(cu.raw)
-                let fn = CompilePipeline.makeFunction(unit, cu.entryFn, c.opts)
+                let fn = CompilePipeline.makeFunctionWith(unit, cu.entryFn, c.opts,
+                    Some(snap), cu.ctorHelpers, cu.entryParamClasses, cu.entryParamSigs,
+                    c.classSnapshot())
                 CompileCache.finish(key, fn)
                 return fn
             } catch (e: Exception) {
@@ -149,6 +163,15 @@ protected class CompilePipeline {
     /** 字节码形态执行器（机器码装载由 S6.9/桥接管，接口不变）。 */
     private static func makeFunction(unit: LoadedUnit, entryFn: UInt32,
         opts: CompileOptions): JitFunction {
+        CompilePipeline.makeFunctionWith(unit, entryFn, opts, None, Array<PublicCtor>(),
+            Array<?String>(), Array<?HostClosureSigDecl>(), None)
+    }
+
+    private static func makeFunctionWith(unit: LoadedUnit, entryFn: UInt32,
+        opts: CompileOptions, snap: ?PredefinedSnapshot,
+        ctors: Array<PublicCtor>, paramClasses: Array<?String>,
+        paramSigs: Array<?HostClosureSigDecl>,
+        classSnap: ?ClassRegistrySnapshot): JitFunction {
         let idx = CompilePipeline.indexOf(unit, entryFn)
         let e = unit.dir.get(entryFn)
         let types = unit.types[idx]
@@ -184,6 +207,11 @@ protected class CompilePipeline {
             case None => Some({ => CompilePipeline.releaseConsts(constIds) })
         }
         let fn = JitFunction(Int64(e.nargs), e.retType, params, body, replay, '', release)
+        fn.bindUserHelpers(CompilePipeline.userHelpers(snap, ctors))
+        fn.bindEntryMeta(paramClasses, paramSigs, classSnap)
+        fn.bindClosureRunner({ ctx, ch, args =>
+            CompilePipeline.invokeClosure(unit, executor, constIds, ctx, ch, args)
+        })
         match (executor) {
             case Some(_) => fn.markJitBacked()
             case None => ()
@@ -193,6 +221,60 @@ protected class CompilePipeline {
             CompilePipeline.reportOf(unit, entryFn, ctx, dump)
         }
         fn
+    }
+
+    /** 闭包包装调用：新桥调用 + 闭包帧 `locals[0]`（§14.3）。 */
+    private static func invokeClosure(unit: LoadedUnit, executor: ?JitExecutor,
+        constIds: Array<Int64>, ctx: JitContext, ch: Int64, args: Array<Int64>): Int64 {
+        let closure = match (HandleTable.getAs(ch, TypeToken.CLOSURE)) {
+            case Some(v) =>
+                match (v) {
+                    case c: JitClosure => c
+                    case _ => throw JitException(ErrCode.CALL_CONTRACT, -1, 0, None,
+                        '闭包槽载荷类型不符（§14.3）')
+                }
+            case None => throw JitException(ErrCode.CALL_CONTRACT, -1, 0, None,
+                '闭包句柄无效（§14.3）')
+        }
+        let cells = Array<Int64>(args.size + 1, repeat: 0)
+        cells[0] = ch
+        var i = 0
+        while (i < args.size) {
+            cells[i + 1] = args[i]
+            i = i + 1
+        }
+        let fid = UInt32(closure.fnId)
+        match (executor) {
+            case Some(ex) =>
+                match (ex.invokeFn(ctx, fid, cells)) {
+                    case Some(r) => r
+                    case None => Interp(unit, constIds).run(fid, cells, ctx)
+                }
+            case None => Interp(unit, constIds).run(fid, cells, ctx)
+        }
+    }
+
+    /** 构造本单元的 user helper 表：预定义函数（slot 序）+ 构造器（接在快照之后）。 */
+    private static func userHelpers(snap: ?PredefinedSnapshot,
+        ctors: Array<PublicCtor>): Array<UserHelperEntry> {
+        let out = ArrayList<UserHelperEntry>()
+        match (snap) {
+            case Some(s) =>
+                var i = 0
+                while (i < s.size()) {
+                    let impl: (Array<Any>) -> Any = match (s.implOf(i)) {
+                        case Some(f) => f
+                        case None => { _ => 0 }
+                    }
+                    out.add(UserHelperEntry(params: s.paramTypes[i], ret: s.retTypes[i], impl: impl))
+                    i = i + 1
+                }
+            case None => ()
+        }
+        for (c in ctors) {
+            out.add(UserHelperEntry(params: c.params, ret: LocalType.HOST_OBJECT, impl: c.adapter))
+        }
+        out.toArray()
     }
 
     /** 转储缓冲槽数上限（目录全域）。 */

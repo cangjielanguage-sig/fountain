@@ -190,4 +190,24 @@ public class HostFieldSet_test {
         @Assert(err(), ErrCode.HELPER_PANIC)
         teardown()
     }
+
+    /** 写访问器执行期异常 → 21（宿主异常专用码，v0.8.19 §13-6）。 */
+    @TestCase
+    public func setterExceptionMapsTo21(): Unit {
+        setup()
+        let p = FieldProbe()
+        let h = HandleTable.pinHostObject(p)
+        register(1u16, LocalType.I64, true,
+            { o => 0 },
+            { o, v =>
+                throw Exception('setter-boom')
+            })
+        let _ = call([h, 1, 5])
+        @Assert(err(), ErrCode.HOST_EXCEPTION)
+        match (this.ctx) {
+            case Some(c) => @Assert(HostFault.causeOf(c).isSome(), true)
+            case None => @Fail('ctx 缺失')
+        }
+        teardown()
+    }
 }

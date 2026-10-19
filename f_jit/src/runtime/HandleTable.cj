@@ -283,6 +283,58 @@ public class HandleTable {
     }
 
     /**
+     * 路径 B：宿主闭包 → tag=10 句柄（m2 §4/§10）。
+     *
+     * 同函数值 + 同签名 ⇒ 复用同 ID（幂等 Marshal）；签名不同则新槽（避免错用旧条目签名）。
+     */
+    public static func pinHostClosure(fn: Any, sig: SignatureDescriptor): Int64 {
+        synchronized(mtx) {
+            var i = 1
+            while (i < objs.size) {
+                if (alive[i] && !constFlags[i] && tags[i] == TypeToken.HOST_CLOSURE) {
+                    match (objs[i]) {
+                        case old: HostCallback =>
+                            let sameFn = match (old.fn) {
+                                case a: Object =>
+                                    match (fn) {
+                                        case b: Object => refEq(a, b)
+                                        case _ => false
+                                    }
+                                case _ => false
+                            }
+                            if (sameFn) {
+                                match (old.sig) {
+                                    case Some(s) =>
+                                        if (HandleTable.sigEquals(s, sig)) {
+                                            return makeId(i, TypeToken.HOST_CLOSURE, gens[i])
+                                        }
+                                    case None => ()
+                                }
+                            }
+                        case _ => ()
+                    }
+                }
+                i = i + 1
+            }
+            newSlotLocked(HostCallback(fn, sig), TypeToken.HOST_CLOSURE, false)
+        }
+    }
+
+    private static func sigEquals(a: SignatureDescriptor, b: SignatureDescriptor): Bool {
+        if (a.ret != b.ret || a.params.size != b.params.size) {
+            return false
+        }
+        var i = 0
+        while (i < a.params.size) {
+            if (a.params[i] != b.params[i]) {
+                return false
+            }
+            i = i + 1
+        }
+        true
+    }
+
+    /**
      * 路径 B：宿主注册类实例 → tag=11 句柄 ID（m2 §11/§16.2）。
      *
      * 注册类实例没有内建 token（`tokenOf` 对任意类返回 RESERVED），由调用方显式按

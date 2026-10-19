@@ -129,6 +129,30 @@ public class JitExecutor {
     }
 
     private func invokeLocked(ctx: JitContext, cells: Array<Int64>): Int64 {
+        this.invokeOffLocked(ctx, this.entryOff, cells)
+    }
+
+    /**
+     * 按 `fnId` 调用单元内任意函数（逃逸闭包回桥的包装器调用，§14.3）。
+     *
+     * 入口表在该 fnId 无机器码时返回 `None`（调用方退回解释器）。
+     */
+    public func invokeFn(ctx: JitContext, fnId: UInt32, cells: Array<Int64>): ?Int64 {
+        let entry = this.table.entry(fnId)
+        if (entry == 0) {
+            return None
+        }
+        let base = Int64(this.buf.rawPointer().toUIntNative())
+        let off = entry - base
+        if (off < 0) {
+            return None
+        }
+        synchronized (JitExecutor.envMtx) {
+            return Some(this.invokeOffLocked(ctx, off, cells))
+        }
+    }
+
+    private func invokeOffLocked(ctx: JitContext, entryOff: Int64, cells: Array<Int64>): Int64 {
         MachineEnv.setFnTableBase(this.table.base())
         let n = cells.size
         let p = if (n == 0) {
@@ -148,7 +172,7 @@ public class JitExecutor {
             unsafe { p - (n - 1) }
         }
         let f = CFunc<(CPointer<Unit>, CPointer<Int64>, Int64) -> Int64>(
-            CPointer<Unit>(unsafe { this.buf.rawPointer() + this.entryOff }))
+            CPointer<Unit>(unsafe { this.buf.rawPointer() + entryOff }))
         let r = unsafe { f(CPointer<Unit>(ctx.cp()), p, n) }
         if (n > 0) {
             unsafe { LibC.free<Int64>(rawAlloc) }

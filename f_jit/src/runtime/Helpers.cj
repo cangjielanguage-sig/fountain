@@ -128,7 +128,12 @@ internal func dispatchHelper(ctx: JitContext, hid: Int64, a: Array<Int64>): Int6
         // ---- 空容器构造（H70 / H71）----
         case 70 => listNew(ctx, a)
         case 71 => mapNew(ctx, a)
-        case _ => failWith(ErrCode.NOT_IMPL)
+        case _ =>
+            if (hid >= Int64(HelperId.USER_BASE)) {
+                invokeUserHelper(ctx, hid, a)
+            } else {
+                failWith(ErrCode.NOT_IMPL)
+            }
     }
 }
 

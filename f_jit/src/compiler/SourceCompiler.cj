@@ -15,11 +15,23 @@ limitations under the License.
 */
 package fountain::f_jit.compiler
 
+import std.collection.ArrayList
 import fountain::f_jit.base.DiagnosticsSink
 import fountain::f_jit.base.LocalType
 import fountain::f_jit.base.PublicCtor
 import fountain::f_jit.base.Version
 import fountain::f_util.Fnv128
+
+/** 入口形参的 HostClosure 声明签名（不落 `.fbc`，供桥 Marshal 验签）。 */
+protected class HostClosureSigDecl {
+    public let params: Array<UInt16>
+    public let ret: UInt16
+
+    public init(params: Array<UInt16>, ret: UInt16) {
+        this.params = params
+        this.ret = ret
+    }
+}
 
 /**
  * 源编译产物 —— design-m1 §4.3.9。
@@ -36,16 +48,24 @@ protected struct CompiledSourceUnit {
     public let ctorHelpers: Array<PublicCtor>
     /** 闭包静态捕获描述符（不进 `.fbc`，m2 §14.8）。 */
     public let captures: Array<CaptureDescriptor>
+    /** 入口形参的 14 声明类名（类身份外置，§16.1）。 */
+    public let entryParamClasses: Array<?String>
+    /** 入口形参的 HostClosure 声明签名（§4/§16.4）。 */
+    public let entryParamSigs: Array<?HostClosureSigDecl>
 
     public init(raw: Array<UInt8>, funcCount: UInt32, entryFn: UInt32, fingerprint: UInt64,
         ctorHelpers!: Array<PublicCtor> = Array<PublicCtor>(),
-        captures!: Array<CaptureDescriptor> = Array<CaptureDescriptor>()) {
+        captures!: Array<CaptureDescriptor> = Array<CaptureDescriptor>(),
+        entryParamClasses!: Array<?String> = Array<?String>(),
+        entryParamSigs!: Array<?HostClosureSigDecl> = Array<?HostClosureSigDecl>()) {
         this.raw = raw
         this.funcCount = funcCount
         this.entryFn = entryFn
         this.fingerprint = fingerprint
         this.ctorHelpers = ctorHelpers
         this.captures = captures
+        this.entryParamClasses = entryParamClasses
+        this.entryParamSigs = entryParamSigs
     }
 }
 
@@ -85,7 +105,9 @@ protected class SourceCompiler {
         let resolver = NameResolver(this.registry, src)
         // 明确赋值与空安全（§7 校验 10）；类型查询按注解不可得 → 用 NONE（PUSH_NULL 检查保守放行）
         let da = DefiniteAssignment(src, { _ => LocalType.NONE },
-            isClassName: { n => view.isRegistered(n) || SourceCompiler.jsonFamily(n) })
+            isClassName: { n =>
+                view.isRegistered(n) || SourceCompiler.jsonFamily(n) || this.registry.has(n)
+            })
         let _ = da.analyze(lambda)
         let sess = CompileSession(src, this.registry, this.diagnostics,
             verMajor: this.verMajor)
@@ -95,8 +117,24 @@ protected class SourceCompiler {
         let h = Fnv128.fnv1a(src)
         // 128 位 → 64 位：取低 64 位（缓存键只需稳定、不要求抗碰撞到 128 位）
         let fp = h.left
+        let classes0 = ArrayList<?String>()
+        let sigs0 = ArrayList<?HostClosureSigDecl>()
+        for (p in lambda.params) {
+            match (p.typeAnn) {
+                case TypeRef.HostObjectT(n) =>
+                    classes0.add(Some(n))
+                    sigs0.add(None)
+                case TypeRef.HostClosureT(ps, r) =>
+                    classes0.add(None)
+                    sigs0.add(Some(HostClosureSigDecl(ps, r)))
+                case _ =>
+                    classes0.add(None)
+                    sigs0.add(None)
+            }
+        }
         CompiledSourceUnit(raw, UInt32(sess.funcCount), entryFn, fp,
-            ctorHelpers: sess.ctorHelperList(), captures: lowerer.captureDescriptors())
+            ctorHelpers: sess.ctorHelperList(), captures: lowerer.captureDescriptors(),
+            entryParamClasses: classes0.toArray(), entryParamSigs: sigs0.toArray())
     }
 
     /** JSON 谱系类名（m3 内建码 16–19；构造写法在降低期拒绝）。 */

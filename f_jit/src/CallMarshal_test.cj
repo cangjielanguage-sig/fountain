@@ -20,7 +20,12 @@ import std.unittest.testmacro.*
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.JitException
 import fountain::f_jit.base.LocalType
+import fountain::f_jit.base.TypeToken
 import fountain::f_jit.runtime.HandleTable
+import fountain::f_jit.runtime.HostCallback
+import fountain::f_jit.runtime.JitClosure
+import fountain::f_jit.runtime.JitContext
+import fountain::f_jit.runtime.SignatureDescriptor
 import fountain::f_jit.test.TCase
 
 /** S6.3：§8.2.1 封送表 / §8.2.2 解包表 / 逃逸与清理。 */
@@ -114,6 +119,90 @@ public class CallMarshal_test {
         }
         m.cleanup()
         @Assert(HandleTable.getAny(id).isNone(), true)
+    }
+
+    /** Q5.9：`retType=12` → `JitClosureId`，闭包槽 + 句柄型捕获原地提升。 */
+    @TestCase
+    public func closureUnboxPromotesGroup(): Unit {
+        CallMarshal_test.setupWindow()
+        let ctx = CallMarshal_test.ctx()
+        let cap = HandleTable.append(ctx, 'captured', TypeToken.STRING)
+        let cid = HandleTable.append(ctx, JitClosure(0, [cap]),
+            TypeToken.CLOSURE)
+        let m = CallMarshal()
+        let v = m.makeRetUnboxer(LocalType.CLOSURE)(cid)
+        match (v) {
+            case id: JitClosureId => @Assert(id.id, cid)
+            case _ => @Fail('retType=12 未解包为 JitClosureId')
+        }
+        match (m.closureGroupOf()) {
+            case Some(g) => @Assert(g.size(), 2)
+            case None => @Fail('提升组缺失')
+        }
+        // 窗口重置后，闭包槽与捕获槽仍可读（原地提升）
+        HandleTable.resetWindow(-1)
+        @Assert(HandleTable.isLiveHandle(cid), true)
+        @Assert(HandleTable.isLiveHandle(cap), true)
+        match (m.closureGroupOf()) {
+            case Some(g) =>
+                @Assert(g.contains(cid), true)
+                @Assert(g.contains(cap), true)
+                g.releaseAll()
+            case None => ()
+        }
+        CallMarshal_test.teardown()
+        @Assert(TCase.hit('T49/unbox-closure', true), true)
+    }
+
+    /** Q5.9：`retType=13` → 原样带回宿主闭包引用。 */
+    @TestCase
+    public func hostClosureUnboxReturnsReference(): Unit {
+        CallMarshal_test.setupWindow()
+        let ctx = CallMarshal_test.ctx()
+        let f: (Int64) -> Int64 = { x => x + 1 }
+        let cb = HostCallback(f, SignatureDescriptor([LocalType.I64], LocalType.I64))
+        let id = HandleTable.append(ctx, cb, TypeToken.HOST_CLOSURE)
+        let m = CallMarshal()
+        match (m.makeRetUnboxer(LocalType.HOST_CLOSURE)(id)) {
+            case g: (Int64) -> Int64 => @Assert(g(41), 42)
+            case _ => @Fail('retType=13 未带回函数值')
+        }
+        HandleTable.releaseEscaped(id)
+        CallMarshal_test.teardown()
+        @Assert(TCase.hit('T49/unbox-host-closure', true), true)
+    }
+
+    /** Q5.9：`retType=14` → 宿主类实例引用（零拷贝）。 */
+    @TestCase
+    public func hostObjectUnboxReturnsInstance(): Unit {
+        CallMarshal_test.setupWindow()
+        let ctx = CallMarshal_test.ctx()
+        let u = ManualUser('bob', 1)
+        let id = HandleTable.append(ctx, u, TypeToken.HOST_OBJECT)
+        let m = CallMarshal()
+        match (m.makeRetUnboxer(LocalType.HOST_OBJECT)(id)) {
+            case x: ManualUser => @Assert(x.name, 'bob')
+            case _ => @Fail('retType=14 未带回实例')
+        }
+        HandleTable.releaseEscaped(id)
+        CallMarshal_test.teardown()
+        @Assert(TCase.hit('T49/unbox-host-object', true), true)
+    }
+
+    private static func setupWindow(): Unit {
+        HandleTable.resetForTest()
+        HandleTable.openWindow(128)
+    }
+
+    private static func teardown(): Unit {
+        HandleTable.resetForTest()
+    }
+
+    private static func ctx(): JitContext {
+        let c = JitContext.create(hwBase: HandleTable.windowBaseOf(),
+            hwCap: HandleTable.windowCapOf(), fnId: 0, dbgBase: 0)
+        HandleTable.syncTo(c)
+        c
     }
 
     private static func codeOf(body: () -> Unit): Int64 {

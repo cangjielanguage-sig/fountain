@@ -83,6 +83,21 @@ public class PromotionGroup {
         this.ids.size
     }
 
+    /** 组内条目快照（桥侧清理豁免对账用）。 */
+    public func snapshot(): Array<Int64> {
+        this.ids.toArray()
+    }
+
+    /** 释放整组（`close` 的遍历 −1 语义）：每个条目各减 1，归零释放。 */
+    public func releaseAll(): Unit {
+        let snapshot = this.ids.toArray()
+        for (id in snapshot) {
+            while (this.countOf(id) > 0) {
+                this.release(id)
+            }
+        }
+    }
+
     private func countOf(id: Int64): Int64 {
         match (this.refs.get(id)) {
             case Some(v) => v

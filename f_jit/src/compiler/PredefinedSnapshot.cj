@@ -37,11 +37,15 @@ protected class PredefinedSnapshot {
     public let paramTypes: Array<Array<UInt16>>
     /** 每个 slot 的返回类型（LocalType 码）。 */
     public let retTypes: Array<UInt16>
+    /** 每个 slot 的宿主实现（已解包仓颉值 → 返回值）；user helper 运行期执行面。 */
+    public let impls: Array<(Array<Any>) -> Any>
 
-    public init(names: Array<String>, paramTypes: Array<Array<UInt16>>, retTypes: Array<UInt16>) {
+    public init(names: Array<String>, paramTypes: Array<Array<UInt16>>, retTypes: Array<UInt16>,
+        impls!: Array<(Array<Any>) -> Any> = Array<(Array<Any>) -> Any>()) {
         this.names = names
         this.paramTypes = paramTypes
         this.retTypes = retTypes
+        this.impls = impls
     }
 
     /** 空快照（无预定义函数时 `SourceCompiler` 用）。 */
@@ -83,6 +87,14 @@ protected class PredefinedSnapshot {
             return LocalType.NONE
         }
         this.retTypes[s]
+    }
+
+    /** slot 的宿主实现；越界/无实现 ⇒ None。 */
+    public func implOf(slot: Int64): ?((Array<Any>) -> Any) {
+        if (slot < 0 || slot >= this.impls.size) {
+            return None
+        }
+        Some(this.impls[slot])
     }
 
     /** 已注册清单文本（未注册诊断的 `hint`，§8.4 需求 4）。 */
