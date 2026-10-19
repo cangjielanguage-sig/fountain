@@ -83,6 +83,25 @@ public class X86Compile_test {
         @Assert(code.size > 0, true)
     }
 
+    /** 溢出检查必须是 JNO（未溢出继续），不能是 JO（否则正常值全部误报 3）。 */
+    @TestCase
+    public func checkedArithmeticUsesJno(): Unit {
+        let add = X86Compile_test.hex(X86Compile_test.compile('{ a: Int64 => a + 1 }', 0))
+        @Assert(add.contains('480304240F81'), true)
+        let mul = X86Compile_test.hex(X86Compile_test.compile('{ a: Int64 => a * a }', 0))
+        @Assert(mul.contains('480FAF04240F81'), true)
+        let neg = X86Compile_test.hex(X86Compile_test.compile('{ a: Int64 => -a }', 0))
+        @Assert(neg.contains('48F7D80F81'), true)
+    }
+
+    /** ctx 字段（fnId/site）必须 64 位写，避免高 32 位残留。 */
+    @TestCase
+    public func ctxStoresAreQword(): Unit {
+        let code = X86Compile_test.hex(X86Compile_test.compile('{ a: Int64 => a / 3 }', 0))
+        @Assert(code.contains('49C74728'), true)
+        @Assert(code.contains('49C74708'), true)
+    }
+
     @TestCase
     public func goldenFloatDivCastClosureLen(): Unit {
         let fadd = X86Compile_test.hex(X86Compile_test.compile(

@@ -462,7 +462,7 @@ internal class BackendX86_64 <: Backend {
         for (x in [0x42u8, 0xFFu8, 0x14u8, 0xD8u8]) {
             out.add(x)
         }
-        for (x in [0x41u8, 0xC7u8, 0x47u8, 0x28u8]) {
+        for (x in [0x49u8, 0xC7u8, 0x47u8, 0x28u8]) {
             out.add(x)
         }
         BackendX86_64.w32(out, UInt32(Int64(selfFnId)))
@@ -1575,10 +1575,10 @@ internal class BackendX86_64 <: Backend {
         [0x0Fu8, 0x85u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]
     }
 
-    /** `SET_SITE s`：`mov dword [r15+8], s`。 */
+    /** `SET_SITE s`：`mov qword [r15+8], s`（site 是 Int64，不能只写低 32 位）。 */
     internal static func emitSetSite(site: Int64): Array<UInt8> {
         let out = ArrayList<UInt8>()
-        for (b in [0x41u8, 0xC7u8, 0x4Fu8, 0x08u8]) {
+        for (b in [0x49u8, 0xC7u8, 0x4Fu8, 0x08u8]) {
             out.add(b)
         }
         BackendX86_64.w32(out, BackendX86_64.i32bits(site))
@@ -1630,8 +1630,8 @@ internal class BackendX86_64 <: Backend {
             0x4Cu8, 0x89u8, 0x7Du8, 0xF8u8, 0x49u8, 0x89u8, 0xFFu8]) {
             out.add(b)
         }
-        // mov dword [r15+40], fnId
-        for (b in [0x41u8, 0xC7u8, 0x47u8, 0x28u8]) {
+        // mov qword [r15+40], fnId（Int64 字段，64 位写）
+        for (b in [0x49u8, 0xC7u8, 0x47u8, 0x28u8]) {
             out.add(b)
         }
         BackendX86_64.w32(out, BackendX86_64.i32bits(Int64(fnId)))

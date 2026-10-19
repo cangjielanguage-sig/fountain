@@ -31,7 +31,7 @@ import fountain::f_jit.runtime.JitContext
  * `body(ctx, cells)` 返回结果 cell；`replay(ctx, cells)` 供 `-1 DEOPT` 透明重跑。
  */
 public class JitFunction {
-    /** 全局调用窗ロ：HandleTable 只有一个窗口，桥的 open/body/reset 必须串行。 */
+    /** 全局调用窗口：HandleTable 只有一个窗口，桥的 open/body/reset 必须串行。 */
     private static let callMtx: Mutex = Mutex()
     private let nargs: Int64
     private let retType: UInt16

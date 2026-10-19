@@ -41,6 +41,21 @@ public class X86Exec_test {
     }
 
     @TestCase
+    public func constAdd(): Unit {
+        X86Exec_test.check('X86/constAdd', '{ => 1 + 2 }', Array<Any>())
+    }
+
+    @TestCase
+    public func identityArg(): Unit {
+        X86Exec_test.check('X86/identity', '{ a: Int64 => a }', [41])
+    }
+
+    @TestCase
+    public func argAddZero(): Unit {
+        X86Exec_test.check('X86/addZero', '{ a: Int64 => a + 0 }', [41])
+    }
+
+    @TestCase
     public func branch(): Unit {
         X86Exec_test.check('X86/branch', '{ a: Int64 => if (a > 0) { 1 } else { 0 } }', [5])
     }

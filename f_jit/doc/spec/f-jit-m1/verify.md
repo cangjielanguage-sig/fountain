@@ -2,21 +2,22 @@
 
 - 变更：`f-jit-m1`
 - 校验对象：`openspec/changes/f-jit-m1` 的 9 份 spec（40 requirement / 156 scenario）、`tasks.md`（115 项）
-- 校验时间：2026-10-18
+- 校验时间：2026-10-19（x86 证据回填）
 - 校验方式：**手工等价校验**。本 worktree 的 `.codebuddy/commands/opsx/` 未安装 `verify` 工作流（只有 apply/archive/explore/propose/sync/update），`/opsx:verify` 无法在融合侧启动；本报告按同一口径逐项对照实现与用例，不修改 `tasks.md`。
-- 基线：`cjpm test` **558/558**（Linux aarch64 原生）；`scripts/check_tmap.sh` **40 条范围内映射，悬空/未断言 0 条**。
+- 基线：`cjpm test` **560/560**（Linux aarch64 原生）；`scripts/check_tmap.sh` **40 条范围内映射，悬空/未断言 0 条**；`scripts/check_scenarios.sh` **13 条 scenario，缺失 0 条**。
+- x86 证据：box64 + x86 SDK 全量 **560 例 / 550 通过 / 9 失败 / 1 错误**（prologue 黄金更新前；更新后为 551 通过 / 8 失败 / 1 错误）；失败全部为 box64 下 Float64 字面量恒 0 导致，非 JIT 代码；`X86Exec_test` 12/13 通过（仅 `floatToInt` 受该模拟缺陷影响）。
 
 ## 结论
 
-**apply 的 115/115 不等于规格全绿。** 本轮已修掉全部 4 个 CRITICAL（生产 JIT 接入、x86 全 opcode、T6 21/22、T52/T53 映射）；WARNING-01（x86 原生执行证据）与 WARNING-02（单元标签强度）仍在；另有常量句柄回收、SSE4.1 依赖、Force 可观测性、x86 字节 golden、性能留档等遗留（见「剩余未完成 / 测试未覆盖」）。常量/窗口生命周期、SSE4.1 门禁、性能留档、差分 scenario 矩阵已收口；建议在真实 x86_64 或 box64 全量跑通 `X86Exec_test` 后 archive。
+**apply 的 115/115 不等于规格全绿。** 本轮已修掉全部 4 个 CRITICAL（生产 JIT 接入、x86 全 opcode、T6 21/22、T52/T53 映射），WARNING-01（x86 原生执行证据）已用 box64 + x86 SDK 全量取得证据：560 例中 550 通过，剩余 9 失败 + 1 错误全部由 box64 的 Float64 字面量缺陷引起（`Float64(3.0)` 被编译为 0.0），不是 JIT 逻辑；WARNING-02（单元标签强度）仍部分关闭。常量/窗口生命周期、SSE4.1 门禁、性能留档、差分 scenario 矩阵已收口。**建议在真实 x86_64 机器上复跑一次浮点相关用例后 archive**。
 
 | ID | 严重度 | 状态 | 摘要 |
 |---|---|---|---|
 | CRITICAL-01 | CRITICAL | **已修复** | 用户面 `Compiler.compile` 原先只返回解释器函数，JIT 从未接入生产路径 |
-| CRITICAL-02 | CRITICAL | **已修复（实现层）** | x86 lowering 已按 A64 的 157 个 opcode 全量补齐；本机只做字节级组装验收，原生执行证据待 WARNING-01 |
+| CRITICAL-02 | CRITICAL | **已修复（含执行证据）** | x86 lowering 已按 A64 的 157 个 opcode 全量补齐；box64 下整数/分支/容器/闭包/递归均真实执行通过 |
 | CRITICAL-03 | CRITICAL | **已修复（21/22）** | T6 映射用例 15 码 + 单元行为 7/12/16/17/19/99；仅 15 为防御码（解释器无机器栈余量概念），无数值路径 |
 | CRITICAL-04 | CRITICAL | **已修复** | T52/T53 原为「挂名映射」；已补真实两形态用例与常量写 20 断言 |
-| WARNING-01 | WARNING | 未关闭 | x86 执行证据未在本机取得（无 x86_64 原生环境）；本轮只做字节级组装验收，需在 x86_64 机器跑 `X86Exec_test` |
+| WARNING-01 | WARNING | **已关闭（box64 证据）** | x86 全量已跑：560 例 / 550 过；`X86Exec_test` 12/13 过；剩余失败均由 box64 Float64 字面量缺陷引起，真机 x86_64 需复核浮点用例 |
 | WARNING-02 | WARNING | 部分关闭 | `check_tmap.sh` 已升级为「用例体必须含 `T<id>/` 标签」；单元用例的标签仍是注释级，只有 T52/T53 是行为级 |
 | INFO-01 | INFO | 留档 | `tasks.md` 的 S5.4/S5.8 勾选与子项「未完成/待补」自相矛盾，建议 verify 后统一口径 |
 
@@ -107,13 +108,22 @@
 
 ## WARNING 明细
 
-### WARNING-01 x86 执行证据缺失
+### WARNING-01 x86 执行证据（已关闭）
 
-本轮在 Linux aarch64 上完成 x86 机器码的**字节级组装验收**（`X86Compile_test`）与 `X86Frame_test` 字节断言；`X86Exec_test` 的 5 例（最小单元/算术/分支/容器/递归）只在 `arch == 'x86_64' && os == 'Linux'` 时执行，本机全部条件跳过。需在真实 x86_64 机器上跑：
+在 Linux aarch64 上用 **box64 + x86_64 Cangjie SDK** 运行独立副本 `/tmp/f_jit_x86` 的全量 `cjpm test`：
+
+- 全量：**560 例 / 550 通过 / 9 失败 / 1 错误**（prologue 黄金更新前；更新后 551 通过 / 8 失败 / 1 错误。A64Exec_test 已按 aarch64 条件编译排除）。
+- `X86Exec_test`：**12/13 通过**；`minimalUnit`、`arithmetic`、`constAdd`、`identityArg`、`argAddZero`、`branch`、`containerMutation`、`recursiveCall`、`floatArithmetic`、`closureCall`、`listLen`、`divMod` 通过，仅 `floatToInt` 失败。
+- `X86Compile_test`：11/11；`X86Frame_test`：通过（prologue 黄金序列已同步为 64 位 fnId 写）。
+- 本轮修出的两个真实 x86 缺陷：
+  1. `X86Lower.binOp` / `INEG` 溢出检查方向反了（`JO ok` → 正常值落到 `bail(3)`，所有整数运算误报 `OVERFLOW_I64`）；改为 `JNO ok`，并加 `checkedArithmeticUsesJno` 字节级回归。
+  2. ctx 的 `site` / `fnId` 只写 32 位，高 32 位残留（`site=61` 读成 `-4294967235`）；`movDwordCtx` 改为 `movQwordCtx`，prologue、`emitSetSite`、closure 恢复 selfFnId 全部 64 位，并加 `ctxStoresAreQword` 回归。
+- **剩余失败的归因**：`X86Exec.floatToInt`、`Acceptance.t6ErrorConsistency`、`DbgDump.slotTextCoversValueTypes`、`Helpers.decimalConversions` / `toStrCoversAllTags`、`Interp.floatNanCanonicalization` / `typeInstructions`、`CallMarshal.scalarMarshalling` / `unboxTable`。这些用例都依赖 `Float64` 字面量；box64 下 x86 cjc 把 `Float64(3.0)` 编译为 `0.0`（`1.5` 位型同样为 0），导致基准与预期值错位。aarch64 上同类用例全绿，故判定为**模拟器/工具链缺陷，不是 JIT 代码缺陷**。
+- 真机复核命令：
 
 ```
-cd f_jit && cjpm test --filter X86Exec_test
-cd f_jit && cjpm test --filter X86Compile_test
+cd f_jit && cjpm test --filter '*X86Exec*'
+cd f_jit && cjpm test
 ```
 
 ### WARNING-02 T 映射校验的强度
@@ -135,16 +145,18 @@ cd f_jit && cjpm test --filter X86Compile_test
 - **调用窗口泄漏**：`JitFunction.call` 每次 `openWindow` → 执行 → `resetWindow`；窗口按实际槽索引列表回收（支持复用 freeSlots）；返回值句柄 `releaseEscaped`。连续 10/20 次不同源码调用后 liveCount 回到基线。
 - **SSE4.1 依赖**：新增 `f_base.CpuFeatures.hasSse41`；无 SSE4.1 时含 `FLOOR/CEIL/TRUNC/ROUND` 的单元整体降级解释器，不再发射非法 `roundsd`。
 - **x86 新 lowering 字节 golden**：`X86Compile_test.goldenFloatDivCastClosureLen` 覆盖 FADD、IDIV、IMOD、TO_I64、CALL_CLOSURE、动态 LEN 的关键字节序列。
+- **x86 溢出检查方向**：`binOp`/`INEG` 由 `JO ok` 改为 `JNO ok`；`X86Compile_test.checkedArithmeticUsesJno` 断言 IADD/IMUL/INEG 后必须是 `0F 81`。
+- **x86 ctx 字段宽度**：`site`/`fnId` 统一 64 位写；`X86Compile_test.ctxStoresAreQword` 断言 prologue 的 `49 C7 47 28` 与 `SET_SITE` 的 `49 C7 47 08`；`X86Frame_test` 黄金序列同步更新。
 - **性能留档**：`PerfCompare_test` 改为预编译稳态 JIT vs Interp vs cjnative；数字落 `doc/perf-m1.md`（aarch64 JIT 约为解释器的 2.4%，约 42× 加速）。
 - **scenario 矩阵**：`doc/spec/f-jit-m1/scenario-map.tsv` + `scripts/check_scenarios.sh`，差分验收 13 条 scenario 全覆盖（0 缺失）。
 - **`JitMode.Force` 可观测**：`JitFunction.isJitBacked()`；`T52` 断言 Force 产物为机器码、Off 产物为纯字节码（aarch64 通过）。
 
 ### 仍未完成 / 未覆盖
 
-1. **x86 原生执行证据**：`X86Exec_test` 10 例仍只在 x86_64 原生执行；本机 aarch64 全部跳过。当前正在用 box64 + x86 SDK 跑全量（独立副本），结果待回填。
+1. **x86 真机浮点复核**：box64 全量已取得证据（560 例 / 550 过）；剩余 9 失败 + 1 错误均为 box64 的 Float64 字面量恒 0 所致。需在真实 x86_64 上复跑浮点相关用例，确认后即可完全关闭。
 2. **JIT 全局串行化**：`JitExecutor.envMtx` + `JitFunction.callMtx` 保证单窗口/单 fnTable 正确，但所有调用串行；无并发吞吐测试，M2 宿主回调需改 per-call 隔离。
 3. **非 Linux / 其他指令集**：`JitExecutor.create` 已加 Linux + aarch64/x86_64 门禁，但本机无法执行非 Linux 分支，缺 CI 证据。
-4. **x86 执行矩阵代表性**：`X86Exec_test` 10 例、`X86Compile_test` 9 例，不等于 157 opcode 逐条执行/逐条字节对拍。
+4. **x86 执行矩阵代表性**：`X86Exec_test` 13 例、`X86Compile_test` 11 例，不等于 157 opcode 逐条执行/逐条字节对拍。
 5. **T6/15 `STACK_GUARD`** 无行为用例；解释器 `0x07` 为 NOP，15 只在桥层重跑余量不足时产生，M1 无稳定构造路径。
 6. **T6 映射用例只覆盖 15 码**；7/12/16/17/19/99 的行为证据在 `Interp_test`/`HandleTable_test`/`userapi`/`Helpers_test`，未纳入 `t6ErrorConsistency` 本体。
 7. **T 标签强度**：13 个单元用例的 `T<id>/` 是注释标签，`check_tmap.sh` 只证明标签存在。
@@ -161,25 +173,27 @@ cd f_jit && cjpm test --filter X86Compile_test
 | `f-jit-bytecode-format` | 10 / 24 | 绿 | 编解码、校验、指纹 |
 | `f-jit-compiler-frontend` | 10 / 24 | 绿 | 词法/语法/降低/金样 |
 | `f-jit-runtime` | 11 / 21 | 绿 | 解释器/句柄/helper/转储 |
-| `f-jit-backend` | 10 / 16 | **绿（实现层）** | aarch64 全量绿；x86 已补齐 157 个 opcode，原生执行证据待 WARNING-01 |
+| `f-jit-backend` | 10 / 16 | **绿** | aarch64 全量绿；x86 已补齐 157 个 opcode，box64 下整数/分支/容器/闭包/递归真实执行通过 |
 | `f-jit-facade-bridge` | 10 / 20 | **绿（本轮修复）** | 生产 JIT 已接入；T52 两形态已补 |
-| `f-jit-differential-acceptance` | 7 / 13 | **黄** | T6 21/22（仅 15 防御码无路径）；x86 执行证据待补 |
+| `f-jit-differential-acceptance` | 7 / 13 | **绿（浮点待真机）** | T6 21/22（仅 15 防御码无路径）；x86 差分在 box64 下仅浮点字面量用例失败 |
 
 ## 本轮执行的校验
 
 | 命令 | 结果 |
 |---|---|
-| `cjpm test`（Linux aarch64） | **558/558 通过** |
+| `cjpm test`（Linux aarch64） | **560/560 通过** |
 | `scripts/check_tmap.sh` | 40 条范围内映射，悬空/未断言 **0** |
+| `scripts/check_scenarios.sh` | 13 条 scenario，缺失 **0** |
 | `JitWire_test.createsExecutableAssets` | 通过（生产路径可建 JIT 资产） |
-| `X86Compile_test`（分支/容器/递归/浮点/除法/转换/闭包/LEN） | 8/8 通过（字节级组装） |
-| `X86Frame_test` | 通过（实参 ABI 改为 `[rsi-8i]`） |
-| `X86Exec_test` | 10 例，本机全部条件跳过（x86_64 原生待跑） |
+| `X86Compile_test`（分支/容器/递归/浮点/除法/转换/闭包/LEN/JNO/ctx 宽度） | 11/11 通过（字节级组装） |
+| `X86Frame_test` | 通过（prologue 黄金序列已同步为 64 位 fnId 写） |
+| `X86Exec_test`（box64 + x86 SDK） | 13 例，12 通过；仅 `floatToInt` 受 box64 Float64 字面量缺陷影响 |
+| `cjpm test`（box64 + x86 SDK，独立副本） | **560 例 / 550 通过 / 9 失败 / 1 错误**（prologue 黄金更新后 551 / 8 / 1）；失败均为 Float64 字面量缺陷 |
 | `Interp_test.castTypeMismatchYields7` | 通过（T6/7 行为证据） |
 
 ## 建议的下一步（按优先级）
 
-1. **x86_64 原生验收**：在真实 x86_64 机器上跑 `cjpm test --filter X86Exec_test` 与全量 `cjpm test`；若失败，按失败指令修 `X86Lower`。目标机需 SSE4.1（`roundsd`）；纯 SSE2 目标需改软件序列。
+1. **x86_64 真机浮点复核**：在真实 x86_64 机器上跑 `cjpm test --filter X86Exec_test` 与全量 `cjpm test`，重点确认 `floatToInt`、`t6ErrorConsistency` 及 runtime 浮点用例；这些在 box64 下因 Float64 字面量恒 0 失败。目标机需 SSE4.1（`roundsd`）；纯 SSE2 目标需改软件序列。
 2. **T 标签强度**：把 13 个单元用例的 `T<id>/` 注释标签升级为子用例 ID（行为级），避免校验只停留在追溯层。
 3. **性能留档**：把 x86_64 与 aarch64 的 `PerfCompare_test` 实测数字回填文档。
 4. 上述完成后重跑 `check_tmap.sh`，再进 `opsx:archive`。

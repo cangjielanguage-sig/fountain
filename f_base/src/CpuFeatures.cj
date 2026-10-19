@@ -41,8 +41,13 @@ public class CpuFeatures {
 
     @When[arch == 'x86_64' && os == 'Linux']
     private static func detectSse41(): Bool {
-        try (f = File('/proc/cpuinfo', OpenMode.Read)) {
-            StringReader(f).readToEnd().contains('sse4_1')
+        try {
+            let f = File('/proc/cpuinfo', OpenMode.Read)
+            try {
+                StringReader(f).readToEnd().contains('sse4_1')
+            } finally {
+                f.close()
+            }
         } catch (e: Exception) {
             false
         }

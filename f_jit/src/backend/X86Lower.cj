@@ -214,8 +214,9 @@ internal class X86Lower {
         }
     }
 
-    private func movDwordCtx(off: Int64, v: Int64): Unit {
-        this.add([0x41u8, 0xC7u8, 0x47u8, UInt8(off)])
+    /** ctx 字段均为 Int64：必须 64 位写，避免高 32 位残留（site/fnId/errCode）。 */
+    private func movQwordCtx(off: Int64, v: Int64): Unit {
+        this.add([0x49u8, 0xC7u8, 0x47u8, UInt8(off)])
         this.w32(v)
     }
 
@@ -272,7 +273,8 @@ internal class X86Lower {
         if (checked) {
             this.seq = this.seq + 1
             let okLabel = 'ov${this.seq}'
-            this.rel32([0x0Fu8, 0x80u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8], okLabel)
+            // JNO ok：未溢出直接继续；溢出才落到下面的 bail(3)
+            this.rel32([0x0Fu8, 0x81u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8], okLabel)
             this.bail(3)
             this.bind(okLabel)
         }
@@ -291,7 +293,7 @@ internal class X86Lower {
     }
 
     private func bail(k: Int64): Unit {
-        this.movDwordCtx(0, k)
+        this.movQwordCtx(0, k)
         if (k > 0) {
             this.rel32([0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8], 'checkfail')
         } else {
@@ -371,7 +373,7 @@ internal class X86Lower {
         this.w32(8 * fid)
         this.unalignAfterCall(pad)
         this.checkErr()
-        this.movDwordCtx(40, Int64(this.fn.fnId))
+        this.movQwordCtx(40, Int64(this.fn.fnId))
         if (argc == 0) {
             this.pushReg(0)
         } else {
@@ -581,7 +583,7 @@ internal class X86Lower {
         this.add([0xFFu8, 0xD0u8])
         this.unalignAfterCall(p3)
         this.checkErr()
-        this.movDwordCtx(40, Int64(this.fn.fnId))
+        this.movQwordCtx(40, Int64(this.fn.fnId))
         this.moveRaxToMemRsp(disp)
         this.addRsp(disp)
         this.depth = this.depth - argc
@@ -671,7 +673,7 @@ internal class X86Lower {
             case 0x01u8 => this.add([0xCCu8])
             case 0x02u8 => this.add([0x90u8])
             case 0x03u8 =>
-                this.movDwordCtx(8, X86Lower.i32(ops, 0))
+                this.movQwordCtx(8, X86Lower.i32(ops, 0))
             case 0x04u8 => this.checkErr()
             case 0x05u8 => this.bail(X86Lower.i8(ops, 0))
             case 0x06u8 => ()
@@ -804,7 +806,8 @@ internal class X86Lower {
                 this.add([0x48u8, 0x8Bu8, 0x04u8, 0x24u8, 0x48u8, 0xF7u8, 0xD8u8])
                 this.seq = this.seq + 1
                 let okLabel = 'ng${this.seq}'
-                this.rel32([0x0Fu8, 0x80u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8], okLabel)
+                // JNO ok：正常取负继续；仅 INT64_MIN 取负溢出时 bail(3)
+                this.rel32([0x0Fu8, 0x81u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8], okLabel)
                 this.bail(3)
                 this.bind(okLabel)
                 this.add([0x48u8, 0x89u8, 0x04u8, 0x24u8])
@@ -1034,7 +1037,7 @@ internal class X86Lower {
                     this.jcc(0x84u8, dfin) // errCode == 0
                     this.add([0x41u8, 0x83u8, 0x3Fu8, 0x09u8])
                     this.jcc(0x85u8, dother) // != 9
-                    this.movDwordCtx(0, -1)
+                    this.movQwordCtx(0, -1)
                     this.jmpLabel('epilogue')
                     this.bind(dother)
                     this.jmpLabel('checkfail')

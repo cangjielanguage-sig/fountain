@@ -36,6 +36,7 @@ import fountain::f_jit.runtime.Interp
  *
  * 仅在 aarch64 Linux 有意义（本机即原生架构）。
  */
+@When[arch == 'aarch64' && os == 'Linux']
 @Test
 public class A64Exec_test {
     @TestCase
