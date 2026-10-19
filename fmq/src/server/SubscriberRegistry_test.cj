@@ -19,12 +19,11 @@ import std.sync.AtomicInt64
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_mq.base.{MQErrorCode, MQFilter}
-import fountain::f_net.SocketBuffer
 
 @Test
 class SubscriberRegistryTest {
     private static func info(id: String, topic: String, group: String, tags!: Array<String> = []): MQSubscriptionInfo {
-        MQSubscriptionInfo(id, topic, group, tags, MQFilter.compile(""), false, None<SocketBuffer>)
+        MQSubscriptionInfo(id, topic, group, tags, MQFilter.compile(""), false, EMPTY_SOCKET_BUFFER)
     }
 
     @TestCase
