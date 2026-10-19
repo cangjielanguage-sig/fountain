@@ -30,6 +30,7 @@ import fountain::f_jit.runtime.h_dispatch
 import fountain::f_jit.runtime.JitContext
 import fountain::f_jit.runtime.MachineEnv
 import fountain::f_jit.runtime.Interp
+import fountain::f_jit.test.TCase
 
 /**
  * S5.8/S5.9 原生执行：源码 → 字节码 → AArch64 机器码 → 直接调用。
@@ -187,7 +188,6 @@ public class A64Exec_test {
     /** S5.14：每个函数入口与间接调用着陆点都以 `bti c` 开始（IBT/BTI）。 */
     @TestCase
     public func allFunctionEntriesStartWithBtiC(): Unit {
-        // T5/ 映射标签（check_tmap 断言级校验）
         let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(
             '{ => let f = { x: Int64 => x + 1 }\n f(41) }')
         let unit = FbcReader.load(cu.raw)
@@ -204,10 +204,8 @@ public class A64Exec_test {
             }
             @Assert(code.size >= 4, true)
             // bti c = 0xD503245F，小端 5F 24 03 D5
-            @Assert(code[0], 0x5Fu8)
-            @Assert(code[1], 0x24u8)
-            @Assert(code[2], 0x03u8)
-            @Assert(code[3], 0xD5u8)
+            @Assert(TCase.hit('T5/bti-c-first-word',
+                code[0] == 0x5Fu8 && code[1] == 0x24u8 && code[2] == 0x03u8 && code[3] == 0xD5u8), true)
             i = i + 1
         }
     }

@@ -22,6 +22,7 @@ import std.math.numeric.Decimal
 import std.time.DateTime
 import fountain::f_jit.base.*
 import fountain::f_base.*
+import fountain::f_jit.test.TCase
 
 /**
  * S2.13（正向）/ S2.14（11 类拒绝面）/ S2.15（加载期实例化）的失败用例（先写红）。
@@ -189,12 +190,11 @@ public class FbcReader_test {
     /** ③ 未知 flags 位 ⇒ 18；`bit1`（要求 JIT）= 1 ⇒ 18（§11.6 冻结决策）。 */
     @TestCase
     public func rejectUnknownFlagsAndNeedJit(): Unit {
-        // T9/ 映射标签（check_tmap 断言级校验）
         expectReject(buildUnit(flags: FbcFlags.UTF8 | 0x10u32), ErrCode.NOT_IMPL) // 未知 bit4
         expectReject(buildUnit(flags: FbcFlags.UTF8 | FbcFlags.NEED_JIT), ErrCode.NOT_IMPL)
         // 对照：bit2（值运算类）合法
         let ok = buildUnit(flags: FbcFlags.UTF8 | FbcFlags.VALUE_OPS)
-        @Assert(FbcReader.load(ok).header.flags, FbcFlags.UTF8 | FbcFlags.VALUE_OPS)
+        @Assert(TCase.hit('T9/known-flags-accepted', FbcReader.load(ok).header.flags == (FbcFlags.UTF8 | FbcFlags.VALUE_OPS)), true)
     }
 
     /** ④ 段长不符（payload 长度 ≠ 四段之和）⇒ 18。 */

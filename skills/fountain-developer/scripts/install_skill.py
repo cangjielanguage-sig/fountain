@@ -10,6 +10,7 @@ fountain-developer 联动的技能分三组，它们没装（加载失败）时�
     cangjie-doc-lookup  <- 已克隆的 fountain 项目的 skills/cangjie-doc-lookup（本地官方文档查阅）
     opsx-*（12 个）      <- 已克隆的 fountain 项目的 skills/opsx-<工作流>
                            在鸿蒙 PC 上执行 OpenSpec 的通道，见 references/openspec-workflow.md
+                           （装这批时会把运行器 opsx_fusion.py 一并部署到 ~/.workbuddy/scripts/）
 
 用法：
     python install_skill.py list                  # 看所有联动技能的安装状态与来源
@@ -236,6 +237,28 @@ def install_one_from_fountain(fr: Path, root: Path, name: str, force: bool) -> "
     return ok, f"{note}（来源：{src}）"
 
 
+def deploy_opsx_runner(fr: Path, force: bool) -> "tuple[bool, str]":
+    """把运行器 opsx_fusion.py 部署到 ~/.workbuddy/scripts/。
+
+    12 个 opsx-* 技能的命令都引用这个脚本（ssh 探测 / 连接信息固化 / 生成执行命令），
+    技能装好但运行器缺失时，技能第一步就失败。源在 fountain 仓库的
+    skills/fountain-developer/scripts/opsx_fusion.py。
+    """
+    src = fr / "skills" / "fountain-developer" / "scripts" / "opsx_fusion.py"
+    if not src.is_file():
+        return False, f"运行器源不存在：{src}（该检出还没合入运行器，切到含它的分支再试）"
+    dest_dir = Path.home() / ".workbuddy" / "scripts"
+    dest = dest_dir / "opsx_fusion.py"
+    if dest.is_file():
+        if dest.read_bytes() == src.read_bytes():
+            return True, f"已部署且与来源一致（{dest}）"
+        if not force:
+            return True, f"已存在，未覆盖（要覆盖加 --force）：{dest}"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, dest)
+    return True, f"已部署到 {dest}"
+
+
 # ---- 来源二：CangjieSkills 仓 ------------------------------------------
 
 CANGJIE_SKILLS_REPO = "https://gitcode.com/Cangjie-SIG/CangjieSkills.git"
@@ -319,6 +342,8 @@ def cmd_list(a: argparse.Namespace) -> None:
     src2, why2 = source_cangjie_skills(repo_dir, "cangjie-coding")
     state = "已克隆" if (repo_dir / ".git").exists() else "未克隆（首次安装时自动克隆）"
     print(f"  cangjie-coding      <- {src2 if src2 else f'{CANGJIE_SKILLS_REPO}（{state}）'}")
+    runner = Path.home() / ".workbuddy" / "scripts" / "opsx_fusion.py"
+    print(f"  opsx_fusion.py（运行器）<- {runner}（{'已部署' if runner.is_file() else '未部署：装 opsx 时自动部署'}）")
 
 
 def install_doc_lookup(a: argparse.Namespace, root: Path) -> "tuple[bool, str]":
@@ -395,6 +420,15 @@ def main() -> None:
         print(f"[{'ok' if ok else '失败'}] {name}：{note}")
         if not ok:
             failed.append(name)
+    if any(n in OPSX_SKILLS for n in wanted):
+        if fr_err:
+            print(f"[失败] opsx_fusion.py（运行器）：{fr_err}")
+            failed.append("opsx_fusion.py")
+        else:
+            ok, note = deploy_opsx_runner(fr, args.force)
+            print(f"[{'ok' if ok else '失败'}] opsx_fusion.py（运行器）：{note}")
+            if not ok:
+                failed.append("opsx_fusion.py")
     print()
     if failed:
         print(f"[!] 未装好：{'、'.join(failed)}（按上面的原因处理后重跑）", file=sys.stderr)

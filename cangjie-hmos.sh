@@ -13,7 +13,7 @@ alias hmrm='/usr/bin/rm'
 
 export CANGJIE_ROOT=${CANGJIE_ROOT:-$HOME/cangjie}
 export CANGJIE_HOME=$( cd -- "$( dirname -- "${BASH_SOURCE}" )" &> /dev/null && pwd -P )
-export FOUNTAIN_HOME=$CANGJIE_HOME/projects/fountain
+export FOUNTAIN_HOME=Documents/cangjie/projects/fountain
 
 cangjie_version(){
   echo '### 系统环境'

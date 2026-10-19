@@ -18,6 +18,7 @@ package fountain::f_jit.bytecode
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_jit.base.*
+import fountain::f_jit.test.TCase
 
 /**
  * S2.2 `ByteReader` / `ByteWriter` 的失败用例（先写红）。
@@ -31,12 +32,11 @@ public class ByteCodec_test {
     /** 字节序断言 + 往返：`0x0102` 的 LE 字节序列为 `02 01`，读回与写入值相同。 */
     @TestCase
     public func littleEndianRoundTrip(): Unit {
-        // T3/ 映射标签（check_tmap 断言级校验）
         let w = ByteWriter()
         w.wU16(0x0102u16)
         let bs = w.take()
         @Assert(bs.size, 2)
-        @Assert(bs[0], 0x02u8)
+        @Assert(TCase.hit('T3/little-endian', bs[0] == 0x02u8 && bs[1] == 0x01u8), true)
         @Assert(bs[1], 0x01u8)
 
         let r = ByteReader(bs)

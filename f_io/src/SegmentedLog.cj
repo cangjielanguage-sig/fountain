@@ -36,8 +36,10 @@ import fountain::f_base.{mcopy, nullptr}
 
 /** 写入位置：segment 序号 + 段内偏移 */
 public struct LogPosition {
-    let seq: Int64
-    let offset: Int64
+    /** segment 序号（对应文件名 `{filePrefix}_{seq}{fileExt}`） */
+    public let seq: Int64
+    /** 段内字节偏移，可直接回传给 `openEntryStream(seq, offset)` 续读 */
+    public let offset: Int64
 
     public init(seq: Int64, offset: Int64) {
         this.seq = seq

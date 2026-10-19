@@ -22,6 +22,7 @@ import fountain::f_base.Arch
 import fountain::f_base.OS
 import fountain::f_jit.base.*
 import fountain::f_jit.runtime.JitContext
+import fountain::f_jit.test.TCase
 
 /**
  * P5.3 `BackendSelector`：`{Off, Auto, Force} × OS × Arch` 的结果必须确定；
@@ -59,12 +60,11 @@ public class BackendSelector_test {
 
     @TestCase
     public func nonLinuxFallsBackWithDiagnostic(): Unit {
-        // T7/ 映射标签（check_tmap 断言级校验）
         let oses = [OS.Windows, OS.macOS, OS.HarmonyOS, OS.OpenHarmony, OS.Android, OS.iOS]
         for (os in oses) {
             let sink = Sink()
             let (e, b) = BackendSelector.selectFor(JitMode.Force, os, Arch.aarch64, sink)
-            @Assert(e, Engine.Interp)
+            @Assert(TCase.hit('T7/non-linux-interp', e == Engine.Interp), true)
             @Assert(none(b), true)
             @Assert(sink.size(), 1)
             @Assert(sink.lastCode(), DiagCode.JitFallback)

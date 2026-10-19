@@ -340,6 +340,17 @@ liburing 的 FFI 封装，所有 API 仅 Linux 可用
 
 **详情请见：**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_uring/README.md>
 
+### `fountain::f_mq`
+消息队列客户端与客户端/服务端共用 API：记录编解码、协议载荷、过滤器、主题校验与 `MQClient`。
+
+**详情请见：**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_mq/README.md>
+
+### `fountain::fmq`
+消息队列服务端（`fmq server` / `fmq manager`）：多节点队列、消费组游标、超时重投与死信、
+元数据全量复制与备份副本。
+
+**详情请见：**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/fmq/README.md>
+
 ### `fountain::fboot`
 依赖fountain的应用项目启动程序
 

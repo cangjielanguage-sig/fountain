@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # T 编号映射强校验（S7.6 / S0.3）：
 #   ① 每条 TMapping 的 caseName SHALL 能在 `src/**/*_test.cj` 中解析到 `func <caseName>(`；
-#   ② 该用例体 SHALL 含 `T<id>/` 断言标签（防止「挂名映射」）；
+#   ② 该用例体 SHALL 以**可执行语句**引用标签 `TCase.hit('<id>/<场景>', <真实条件>)`
+#      （先剥掉注释再判定——注释里的 `// T<id>/` 不算，防止「挂名映射」）；
 #   ③ 范围内映射为空步骤/空用例名同样判悬空。
 set -euo pipefail
 
@@ -49,8 +50,12 @@ for tid, steps, case in entries:
         missing += 1
         continue
     path, body = bodies[case]
-    if f'{tid}/' not in body:
-        print(f'MISSING {tid}: 用例 {case}（{os.path.relpath(path, root)}）未含 `{tid}/` 断言标签')
+    # 剥掉注释后再找标签：`// T14/` 这类注释不算数，必须是**函数实的字符串首参**
+    # ——差分侧 `diff('T18/…', …)`、单元侧 `TCase.hit('T14/…', 条件)` 都算行为级引用。
+    code = re.sub(r'/\*.*?\*/', '', body, flags=re.S)
+    code = re.sub(r'//[^\n]*', '', code)
+    if not re.search(rf"[A-Za-z_][A-Za-z0-9_.]*\(\s*'{tid}/", code):
+        print(f'MISSING {tid}: 用例 {case}（{os.path.relpath(path, root)}）未把 `{tid}/` 作为函数实的字符串首参（注释不算）')
         missing += 1
 
 print(f'check_tmap: {len(entries)} 条范围内映射，悬空/未断言 {missing} 条')
