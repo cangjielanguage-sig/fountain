@@ -1,0 +1,124 @@
+# Spec Delta
+
+## Purpose
+
+为 `f_util` 提供标准 FNV 哈希族（32/64/128/256/1024 位 × fnv1/fnv1a）与**统一 API**（一次性 + 增量），作为 f_jit 常量指纹与编译去重键的唯一哈希来源，避免模块内自造哈希算法。
+
+## ADDED Requirements
+
+### Requirement: FNV 全宽族可用
+
+`f_util` SHALL 提供 `Fnv32`/`Fnv64`/`Fnv128`/`Fnv256`/`Fnv1024` 五个哈希入口，每个 SHALL 同时支持 `fnv1` 与 `fnv1a` 两种变体，且只使用标准 FNV 偏移基值与素数，禁止自定义常数。
+
+#### Scenario: 空串黄金值（32/64/128/256）
+
+- **WHEN** 对空输入分别计算 `Fnv32.fnv1a`、`Fnv64.fnv1a`、`Fnv128.fnv1a`、`Fnv256.fnv1a`
+- **THEN** 结果分别等于标准 FNV 偏移基值 `0x811C9DC5`、`0xCBF29CE484222325`、`0x6C62272E07BB014262B821756295C58D`、`0xDD268DBCAAC550362D98C384C4E576CCC8B1536847B6BBB31023B4C8CAEE0535`
+
+#### Scenario: 空串黄金值（1024）
+
+- **WHEN** 对空输入计算 `Fnv1024.fnv1a` 或 `Fnv1024.fnv1`
+- **THEN** 结果等于官方 1024 位偏移基值，按 16 字大端序为：
+  `0x0000000000000000, 0x005F7A76758ECC4D, 0x32E56D5A591028B7, 0x4B29FC4223FDADA1,`
+  `0x6C3BF34EDA3674DA, 0x9A21D90000000000, 0x0000000000000000, 0x0000000000000000,`
+  `0x0000000000000000, 0x0000000000000000, 0x0000000000000000, 0x000000000004C6D7,`
+  `0xEB6E73802734510A, 0x555F256CC005AE55, 0x6BDE8CC9C6A93B21, 0xAFF4B16C71EE90B3`
+
+#### Scenario: FNV-1a-64 已知向量
+
+- **WHEN** 计算 `Fnv64.fnv1a("123456789")`
+- **THEN** 结果等于 `0x06D5573923C6CDFC`
+
+#### Scenario: fnv1 与 fnv1a 变体可区分
+
+- **WHEN** 对同一非空输入分别调用 `fnv1` 与 `fnv1a`
+- **THEN** 两者结果不同，且各自与标准 FNV 参考实现逐位一致
+
+### Requirement: Fnv1024 的 16 字表示与正确性
+
+`Fnv1024` SHALL 以 **16 个 `UInt64` 字（最高有效字在前）**表示 1024 位状态，按标准 FNV 公式逐字节运算；状态宽度 SHALL 恒为 1024 位（乘法按 2^1024 取模，不得截断或丢进位）。偏移基值与素数 SHALL 取自官方 FNV 参考实现（IETF `draft-eastlake-fnv-31` / `fnv.rs`），并在实现文件中注明来源。
+
+#### Scenario: 字长恒定
+
+- **WHEN** 取得任意输入的 `Fnv1024` 结果
+- **THEN** 结果恒为长度 16 的 `UInt64` 数组，最高有效字在前，同一输入两次调用逐位相等
+
+#### Scenario: 已知向量交叉验证
+
+- **WHEN** 计算 `Fnv1024.fnv1a("123456789")` 与 `Fnv1024.fnv1("123456789")`
+- **THEN** 两者分别等于独立参考实现（Python 大整数按同一公式计算）的结果，且 `fnv1 ≠ fnv1a`
+
+#### Scenario: 进位与溢出边界
+
+- **WHEN** 输入使 1024 位状态在高位产生进位（如长输入或多字节码点）
+- **THEN** 结果与独立参考实现逐位一致，未发生 64 位中间截断
+
+### Requirement: 统一 API
+
+`f_util` SHALL 提供统一入口 `Fnv.hash(width, variant, data)`，对全部五种宽度返回**同一形态**的结果 `Array<UInt64>`（长度 = `width.words`，最高有效字在前）；并 SHALL 提供增量入口 `FnvHasher`（`update` / `finish` / `reset`）。类型化入口（`Fnv32.fnv1a` 等）SHALL 委托同一套内部引擎实现，不得复制算法。
+
+#### Scenario: 统一入口与类型化入口一致
+
+- **WHEN** 对同一输入分别调用 `Fnv.hash(width, variant, data)` 与对应的类型化入口
+- **THEN** 两者的数值逐位相同（32/64 位按单字比较，128 位按两字比较，256/1024 按 4/16 字比较）
+
+#### Scenario: 五种宽度统一可用
+
+- **WHEN** 以 `FnvWidth.W32`/`W64`/`W128`/`W256`/`W1024` 调用 `Fnv.hash`
+- **THEN** 返回数组长度分别为 1/1/2/4/16，且每项结果与类型化入口一致
+
+#### Scenario: 增量与一次性一致
+
+- **WHEN** 把一段输入拆成任意多段喂给 `FnvHasher`，再调用 `finish`
+- **THEN** 结果与 `Fnv.hash` 一次性计算逐位相同；`finish` 可重复调用且不改变状态，`reset` 后回到偏移基值
+
+### Requirement: 返回类型与仓库既有类型对齐
+
+`Fnv32` SHALL 返回 `UInt32`，`Fnv64` SHALL 返回 `UInt64`，`Fnv128` SHALL 复用 `f_util.UInt128`，`Fnv256` SHALL 以 4 个 `UInt64` 字（大端序）的数组返回，`Fnv1024` SHALL 以 16 个 `UInt64` 字（大端序）的数组返回；统一入口一律返回 `Array<UInt64>`。
+
+#### Scenario: 128 位结果可直接比较与文本化
+
+- **WHEN** 取得 `Fnv128.fnv1a` 的结果
+- **THEN** 该结果是 `UInt128`，可直接参与相等比较、`ToString` 与哈希容器键
+
+#### Scenario: 256/1024 位结果字序确定
+
+- **WHEN** 取得 `Fnv256.fnv1a` / `Fnv1024.fnv1a` 的结果并按字展开
+- **THEN** 分别得到长度 4 / 16 的 `UInt64` 数组，最高有效字在前（大端序），同一输入两次调用逐位相等
+
+### Requirement: 字节流与字符串输入等价
+
+每个哈希入口（含统一入口与增量入口）SHALL 同时接受字符串与 `Array<UInt8>` 字节流输入，且对同一内容的两种输入形式产生逐位相同的摘要。
+
+#### Scenario: 字符串与字节流一致
+
+- **WHEN** 对同一段 UTF-8 文本分别以 `String` 与 `Array<UInt8>` 形式计算 `Fnv64.fnv1a` 与 `Fnv.hash(FnvWidth.W1024, FnvVariant.FNV1A, …)`
+- **THEN** 两次结果逐位相同
+
+#### Scenario: 增量喂入与一次性喂入一致
+
+- **WHEN** 把一段字节流拆成三段增量喂入同一个哈希上下文
+- **THEN** 结果与一次性喂入整段字节流的结果逐位相同，且空增量不改变结果
+
+### Requirement: 4 字节码点与超长输入正确性
+
+哈希实现 SHALL 按字节处理输入，不依赖字符边界与主机端序。
+
+#### Scenario: 多字节码点
+
+- **WHEN** 对含 4 字节码点的字符串（如 emoji）计算 `Fnv64.fnv1a` 与 `Fnv1024.fnv1a`
+- **THEN** 结果与对该串 UTF-8 字节序列的参考实现结果逐位相同
+
+#### Scenario: 长输入不分块失真
+
+- **WHEN** 对长度超过 4 KiB 的输入计算摘要，并与分块增量喂入的结果对照
+- **THEN** 两者逐位相同
+
+### Requirement: 黄金值单元测试随实现交付
+
+`Fnv` 的实现 SHALL 附带 `Fnv_test` 单元测试，覆盖各宽度 × 各变体的空串基值、已知向量、统一 API 等价与增量等价，测试 SHALL 在 `cjpm test` 下全绿。
+
+#### Scenario: 测试覆盖断言
+
+- **WHEN** 在 `f_util` 下运行单元测试
+- **THEN** `Fnv_test` 中 32/64/128/256/1024 × fnv1/fnv1a 全部用例通过，且至少包含空串、`123456789` 与统一 API 对照三组黄金值

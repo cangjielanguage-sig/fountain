@@ -265,3 +265,15 @@ f_jit/
 4. **T11 的 TZ 依赖**：DateTime 文本化用例固定 TZ 采金样（基准 UTC + 非 UTC 附加用例）。
 5. **风险**：helper 集（H01–H72）体量大且零散——按族推进（S4.8–S4.17），每族完成即接差分，避免最后积压。
 6. **与 M2/M3 的衔接**：M2（步骤前缀 `Q`）追加 LocalType 13/14 与 H63–H65、verMajor 2；M3（步骤前缀 `R`）追加 LocalType/token 15 与错误码 22、H66–H68、kind 11——M3 的 JSON helper 已裁定顺延为 **H73–H75**（避让 M1 已占用的 H72 `regex_replace_range`；2026-10-11 裁定，见 design-m3.md §10 的 M3-6）。
+
+---
+
+## §5 实施记录（2026-10-18，`opsx:apply`）
+
+- **S7.1–S7.5、S7.7 完成**：验收用例集中在 `f_jit/src/compiler/Acceptance_test.cj`（T1/T2/T6/T8/T10–T13/T18–T29/T42–T48/T51/T53），统一走 `DiffSession(Interp × AArch64)` 四元组对拍；T3/T4/T5/T7/T9/T14–T17/T23/T27/T29 的判据仍在各自包内的单元用例。
+- **S6.12 结果维 4/4 绿**（阶乘/容器变更/空 Map/插值）。插值链上修掉三处实现缺陷，详见 `design-m1.md` §E：`TO_STR` 标签命名空间、JIT 帧转瞬实参槽、`retType` 取实际降低类型。
+- **S7.7 实测**（200000 次循环，Linux aarch64 / 仓颉 1.3.0）：`Interp = 1,759,793,327 ns`、`AArch64 = 40,221,815 ns`，**≈ 43.8×**（JIT 侧含编译）；两侧结果 `599994`。
+- **S5.4 未完成**：`BackendX86_64.compile` 仍降级解释器。x86 片段内多处 `rel32` 是 P5.8 回填占位（`emitCast`/`emitAssert`/浮点收尾等），缺少可重定位汇编层；待 x86_64 原生 CI 上补。
+- **S6.12 / S7.6 / T50 完成**（2026-10-18 补）：AArch64 四个失败收敛点（`BAIL`、模板 A/B 的自动 `CHECK_ERR`）与解释器共用同一转储逻辑；`RealRunners` 分配转储缓冲，四元组的报告维进入差分。新增 `@C jit_dump` 入口（纯原生入参，不建托管对象）；首格编码 `fnId+1` 解决入口函数号 0 与哨兵冲突（§E 6/7）。`CompilePipeline` 同时注入报告工厂，宿主 `JitException` 携带源码行 + 变量清单。
+- **S7.6 映射强校验**：`f_jit/scripts/check_tmap.sh` 把 40 条范围内映射的 `caseName` 解析到真实测试方法，当前 40/40、悬空 0（原表用的是描述名，已全部改为真实方法名）。
+- 顺带补齐规格已有、前端缺失的 `regexStr.regex()`（v0.17，H69）；对照表自动比对结果：**附 B 的 230 条 opcode 与规格 §10 全等（0 差异）**。

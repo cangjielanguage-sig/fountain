@@ -184,7 +184,8 @@ extend DateTime <: ExtendDateTime {
             match (this.month) {
                 case January | March | May | July | August | October | December => this.dayOfMonth == 31
                 case April | June | September | November => this.dayOfMonth == 30
-                case February => (isLeapYear && this.dayOfMonth == 29) || this.dayOfMonth == 28
+                // 平年 2 月 28 日为最后一天；闰年只有 29 日为最后一天（28 日不是）
+                case February => this.dayOfMonth == (if (isLeapYear) { 29 } else { 28 })
             }
         }
     }

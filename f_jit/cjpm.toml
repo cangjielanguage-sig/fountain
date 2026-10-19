@@ -1,19 +1,13 @@
-[dependencies]
-  "fountain::f_base" = {path = "../f_base"}
-  "fountain::f_regex" = {path = "../f_regex"}
-  "fountain::f_util" = {path = "../f_util"}
 [package]
   cjc-version = "1.2.0"
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"
-  description = "仓颉方言 JIT 引擎：源码/字节码双入口编译（.fbc）、解释器与 x86_64/aarch64 机器码双后端、三引擎差分对拍、宿主互操作（闭包回调/宿主对象/Any 装箱/JSON 字面量/结构化错误报告）"
-  link-option = ""
   name = "f_jit"
-  organization="fountain"
-  output-type = "dynamic"
-  src-dir = ""
-  target-dir = ""
+  organization = "fountain"
+  description = "JIT编译器（字节码·解释器·JIT后端·桥）"
   version = "1.3.16"
+  target-dir = ""
+  output-type = "dynamic"
   package-configuration = {}
   category = ["Infrastructure", "Programming Framework", "Developer Tools", "Utility", "Data Encapsulation and Transfer"]
   license = ["Apache-2.0"]
@@ -21,6 +15,11 @@
   exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
   authors = ["吴京润"]
   repository = "https://gitcode.com/Cangjie-SIG/fountain/tree/master/f_jit"
+
+[dependencies]
+  "fountain::f_base" = {path = "../f_base"}
+  "fountain::f_regex" = {path = "../f_regex"}
+  "fountain::f_util" = {path = "../f_util"}
 
 [target]
 [target.x86_64-unknown-linux-gnu]

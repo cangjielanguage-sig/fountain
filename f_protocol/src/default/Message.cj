@@ -227,6 +227,16 @@ public struct Message <: Protocol<EncodedMessage, Message> {
     public static func unsubscribe(id: MessageID): Message {
         build(UNSUBSCRIBE, id)
     }
+    /**
+     * 带载荷的 `UNSUBSCRIBE`：`MessageID` 自动生成（与 `subscribe<T>(data!: T)` 同构）。
+     *
+     * 供 `f_dbd` 关闭游标时携带 `QueryResultClosePayload`（`qid`）使用
+     * （`f_dbd/doc/详细设计.md` §3.6.1、§5.9）；既有的 `unsubscribe(id)` /
+     * `unsubscribe(id, data!)` 语义不变。
+     */
+    public static func unsubscribe<T>(data!: T): Message where T <: ToData {
+        build<T>(UNSUBSCRIBE, data)
+    }
     
     public static func consume<T>(once!: Bool, qos!: QoS, data!: T): Message where T <: ToData {
         build<T>(CONSUME(to(once, ONCE) | qos.value), data)

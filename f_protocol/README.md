@@ -151,6 +151,7 @@ public struct Message <: Protocol<EncodedMessage, Message> {
     public static func subscribe<T>(data!: T): Message where T <: ToData
     public static func unsubscribe(id: MessageID, data!: T): Message where T <: ToData
     public static func unsubscribe(id: MessageID): Message
+    public static func unsubscribe<T>(data!: T): Message where T <: ToData  // 自动生成 MessageID，带载荷
     public static func consume<T>(once!: Bool, qos!: QoS, data!: T): Message where T <: ToData
     public static func resp<T>(id: MessageID, qos!: QoS, ack!: Bool, data!: T): Message where T <: ToData
     public static func ping(): Message
@@ -184,6 +185,9 @@ public class MessageID <: Hashable & Equatable<MessageID> & ToString {
 ```
 
 - `MessageID` 的相等/哈希**只用 `time`/`pid`/`tid`**（`hostId` 不参与）；
+- `unsubscribe<T>(data!)` 与 `subscribe<T>(data!)` 同构：自动生成 `MessageID` 并携带载荷。
+  `f_dbd` 用它发送 `QueryResultClosePayload(qid)` 关闭游标（服务端以 `ACK` 应答）；
+  既有的 `unsubscribe(id)` / `unsubscribe(id, data!)` 语义不变；
 - `EncodedMessage` 实现了 `Releasable`：**写出后必须 `release()`**（幂等），写失败也要释放；
 - `Message.decode<T>` 在解码前会按帧头的 `len` 与 `SizeBoundedInput.remainingBytes` 校验，避免「声称超大长度」拖死对端。
 

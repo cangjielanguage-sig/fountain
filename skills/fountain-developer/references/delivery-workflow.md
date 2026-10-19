@@ -1,18 +1,23 @@
 # 交付全流程（初始化 → 配置 → TDD → 提交 → 建 tag）
 
-工作流 F / G / H / I 共用。原则：能用工具就先用工具（`fboot` 建骨架、`fountain_lookup.py` 查 API、`install_fboot.sh` 查版本）。
+工作流 F / G / H / I 共用；工作流 J（在 fountain 仓库内开发）复用其中第 3–7 节（TDD / 回归 / 冒烟 / 提交 / 建 tag），工作流 K 只走第 4–7 节（构建 / 回归 / 冒烟 / 提交 / 建 tag）。原则：能用工具就先用工具（`fboot` 建骨架、`fountain_lookup.py` 查 API、`install_fboot.sh` 查版本）。
 查 API 时按**在用版本**：`fountain_lookup.py` 默认取当前项目 cjpm.toml 的 fountain 依赖版本并先把文档副本切到该版本
 （输出头部标注版本；换版本 `--version X.Y.Z` / `switch X.Y.Z`，见 SKILL.md「定位 fountain 仓库与查询版本」）。
+
+**与 OpenSpec 的分工**：工作流 F / G / H / I / J 全程都要走 OpenSpec 六步规格驱动流程（环境与刷新 → `opsx:propose` → 用户评审 design / tasks → `opsx:apply`
+→ `opsx:verify` → `opsx:archive` + 落盘 `doc/spec/<变更名>/`，见 `references/openspec-workflow.md`）。OpenSpec 负责「做什么 / 为什么 / 怎么设计 / 进度」，
+本文件负责「在 fountain 里怎么把它做对」；**OpenSpec 的产物与归档不豁免本文件的任何门禁**（TDD / 全量回归 / 冒烟 / 提交 / 建 tag）。
 
 ## 1. 初始化
 
 - 新项目 / 新功能骨架：工作流 A（装 fboot）→ B（workspace）→ C（模块）→ D（依赖）。
 - 已有项目：确认它是 fountain workspace（根 cjpm.toml 含 `[workspace]` 与 `"fountain::f_*"`），记录 fboot 版本
   （`install_fboot.sh version`）。
+- 旧版本项目（SDK 1.0.x + fountain 1.0.x）：先按工作流 I 完成升级（环境 → 依赖 → 包名 → API → 脚本），再回到本流程做功能改动。
 
 ## 2. 配置（含随功能演进补充依赖）
 
-三类配置载体（模块依赖 / 运行期环境变量 / 编译期 `--key=value`）的改法见工作流 I。其中**依赖必须随功能演进同步**：
+三类配置载体（模块依赖 / 运行期环境变量 / 编译期 `--key=value`）的改法见工作流 K。其中**依赖必须随功能演进同步**：
 
 - 每完成一批功能，核对代码里实际用到的 `fountain::f_*` 是否都已在**workspace 根 cjpm.toml** 声明：
   - 缺 → 补 `"fountain::f_xxx" = "<fboot 版本>"`（只加直接依赖，传递依赖交给 cjpm；`.modules` 的 `[detention]` 模块不能版本依赖）；
@@ -23,13 +28,19 @@
 
 ## 3. TDD（严格 Red-Green-Refactor）
 
-F / G / H / I 的功能开发一律按 TDD 循环推进，**先写测试再写实现**，不许先实现后补测试：
+**工作流 F / G / H / I / J 开工先加载 `test-driven-development` 技能**（**REQUIRED SUB-SKILL:**，加载失败时的处理见 `references/skill-infra.md` 第 3 节）——
+Red-Green-Refactor 的循环、反合理化清单与「没看着测试失败过就不算测试」的判据以它为准，本节只补仓颉 / fountain 的落法。
+
+F / G / H / I / J 的功能开发与适配一律按 TDD 循环推进，**先写测试再写实现**，不许先实现后补测试；工作流 K 只改配置、无功能代码，不走 TDD（仍要构建 + 回归 + 冒烟）：
 
 1. **Red**：先写该功能点的仓颉单元测试（`*_test.cj`，与实现同目录结构），跑一次确认它**失败**；
    失败原因必须是「功能未实现 / 断言不满足」，不是编译错误或用例本身写错——这一步是测试有效性的证明。
 2. **Green**：写**最小实现**让测试通过。
 3. **Refactor**：在测试全绿的保护下重构（命名、结构、去重）；重构后再跑一次确认仍绿。
 4. 每个功能点（或一小批相关点）走完一轮循环，形成一个可提交的增量。
+
+走 OpenSpec 流程时（工作流 F / G / H / I / J 全程），TDD 落在 `opsx:apply` 的**每个 task** 上：
+任务勾选前先跑绿，**不允许出现「任务已勾选但没有对应测试」的进度**（假进度在 `opsx:verify` 里会暴露为 completeness 缺口）。
 
 - 写法与运行：测试规范与 API 加载 `cangjie-coding`；`cjpm test` 在模块 / 项目里直接跑；
   fountain 应用项目可用 `fboot test [PATH] --dylibPattern='...'`（以 `PATH/test/cjpm.toml` 覆盖后 build + run，见 `f_app/README.md`）。
@@ -42,6 +53,7 @@ F / G / H / I 的功能开发一律按 TDD 循环推进，**先写测试再写�
 - 回归失败 = 门禁不通过：先定位是本次改动破坏的（优先修实现）还是用例本身过时（与用户确认后改用例）。
 - **交付节点（提交前、打 tag 前）必须再跑一次全量回归**。
 - 高风险改动（依赖升级、公共 API 变更、配置语义变化）做针对性回归：受影响的模块与调用方都要覆盖。
+  工作流 I 的版本升级即属此类，差异逐条对照 `references/legacy-upgrade.md` 的差异表。
 
 ## 5. 冒烟测试
 

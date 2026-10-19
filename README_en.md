@@ -86,15 +86,15 @@ The generators and how to redraw the diagrams: see [`docs/模块依赖图`](docs
 
 ## `fountain-developer`
 
-`skills/fountain-developer` is a skill for AI coding agents (a standard Agent Skills layout, not tied to any specific tool); it captures the complete workflow of building projects with fountain, covering nine workstreams from getting started to delivery:
+`skills/fountain-developer` is a skill for AI coding agents (a standard Agent Skills layout, not tied to any specific tool); it captures the complete workflow of building projects with fountain, covering eleven workstreams from getting started to delivery:
 
 - **Getting started**: install `fboot`, initialize a workspace, create modules with `fboot module`, and add central-repository module dependencies to a project;
 - **Q&A**: answer questions about fountain configuration keys and API usage, with sources cited (and an honest "not found" when the repository has no answer);
-- **Development**: build a server application from a requirements document (MVC / ORM / Bean / AOP / security / scheduled tasks); port projects written in other languages (Python / Java / Go / Node, etc.) to Cangjie; refactor Cangjie projects that do not use fountain into the fountain style;
+- **Development**: build a server application from a requirements document (MVC / ORM / Bean / AOP / security / scheduled tasks); port projects written in other languages (Python / Java / Go / Node, etc.) to Cangjie; refactor Cangjie projects that do not use fountain into the fountain style; develop the framework itself inside this repository (add features / fix defects / create modules);
 - **Evolution**: add or adjust module dependencies and configuration as features evolve, keeping the three platform scripts in sync;
-- **Delivery**: the development workstreams follow one complete pipeline — initialize → configure → strict TDD (Red-Green-Refactor) → regression + smoke tests → commit → tag.
+- **Delivery**: the development workstreams follow one complete pipeline — initialize → configure → strict TDD (Red-Green-Refactor, loading the `test-driven-development` skill up front) → regression + smoke tests → commit → tag.
 
-The skill always takes its API facts **from this repository's code and READMEs**: the bundled `scripts/fountain_lookup.py` locates this repository and provides module lists, keyword search (covering both READMEs and sources) and per-module public declaration listings; when no local checkout exists it clones a documentation copy automatically (for lookup only). Whenever fountain does not cover a required capability, the skill confirms the plan with the developer first (simplify / provide a third-party dependency / reduce scope / implement in-project) instead of faking it. It also links the Cangjie knowledge skills (`cangjie-coding` / `cangjie-doc-lookup`) to verify language and std/stdx APIs, and follows `fdemo` / `frpcdemo` to generate three-platform launch scripts (`boot.sh` / `boot-macos.sh` / `boot-win-gitbash.sh`) for new projects.
+The skill always takes its API facts **from this repository's code and READMEs**: the bundled `scripts/fountain_lookup.py` locates this repository and provides module lists, keyword search (covering both READMEs and sources) and per-module public declaration listings; when no local checkout exists it clones a documentation copy automatically (for lookup only). Whenever fountain does not cover a required capability, the skill confirms the plan with the developer first (simplify / provide a third-party dependency / reduce scope / implement in-project) instead of faking it. It also links the Cangjie knowledge skills (`cangjie-coding` / `cangjie-doc-lookup`) to verify language and std/stdx APIs, and follows `fdemo` / `frpcdemo` to generate three-platform launch scripts (`boot.sh` / `boot-macos.sh` / `boot-win-gitbash.sh`) for new projects. Building a server application from a requirements document (workflow F) and creating a module inside this repository (workflow J) additionally follow the OpenSpec spec-driven flow: `opsx:propose` produces the five change artifacts → the developer reviews `design.md` / `tasks.md` → `opsx:apply` implements task by task under TDD → `opsx:verify` checks code against spec → `opsx:archive` files the change (planning writes documents only, never code; the OpenSpec artifacts do not replace TDD / regression / smoke tests / commit / tag).
 
 Usage: copy `skills/fountain-developer` into your coding agent's skills directory (e.g. CodeBuddy's `~/.codebuddy/skills/`, Claude Code's `~/.claude/skills/`, or a project-local skills directory); agents without a skill mechanism can simply read `skills/fountain-developer/SKILL.md`.
 
@@ -352,6 +352,18 @@ Process health check
 FFI bindings for liburing; all APIs are available on Linux only
 
 **See details:**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_uring/README_en.md>
+
+### `fountain::f_mq`
+MQ client and the client/server shared API: record codec, protocol payloads, filters, topic validation,
+and `MQClient`.
+
+**See details:**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_mq/README_en.md>
+
+### `fountain::fmq`
+MQ server executable (`fmq server` / `fmq manager`): multi-node queues, consumer-group cursors,
+timeout redelivery and dead letters, full metadata replication, and backup replicas.
+
+**See details:**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/fmq/README_en.md>
 
 ### `fountain::fboot`
 Application project launcher depending on fountain

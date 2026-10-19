@@ -1,0 +1,14 @@
+# capability	scenario	test_case（逗号分隔；N/A = 流程/文档项，无代码用例）
+f-jit-differential-acceptance	harness 自证	harnessSelfProvesWithConstOnePlusOne
+f-jit-differential-acceptance	四元组逐位对拍	diffFourCatchesEachDimension
+f-jit-differential-acceptance	非原生用例跳过	unavailableEngineIsSkippedNotFailed
+f-jit-differential-acceptance	本机最小集生效	t2TripleEqualCore
+f-jit-differential-acceptance	映射可脚本校验	tMappingHasNoDanglingEntries
+f-jit-differential-acceptance	范围外编号有说明	outOfScopeIdsAreAttributedToLaterMilestones
+f-jit-differential-acceptance	双字段断言	t6ErrorConsistency
+f-jit-differential-acceptance	容量边界可复现	tCapacityGrowthUnderSmallWindow
+f-jit-differential-acceptance	性能对照同构	jitVsInterpVsCjnative
+f-jit-differential-acceptance	端序与页大小	littleEndianRoundTrip,pageAlignment
+f-jit-differential-acceptance	冻结决策回归	rejectUnknownFlagsAndNeedJit,nonLinuxFallsBackWithDiagnostic
+f-jit-differential-acceptance	偏差回写	N/A
+f-jit-differential-acceptance	同源抽查	N/A

@@ -107,6 +107,8 @@ public struct DataReal <: Data & Hashable & Comparable<DataReal> {
     private static let uint32Range = [Decimal(UInt32.Min), Decimal(UInt32.Max)]
     private static let int64Range = [Decimal(Int64.Min), Decimal(Int64.Max)]
     private static let uint64Range = [Decimal(UInt64.Min), Decimal(UInt64.Max)]
+    private static let intNativeRange = [Decimal(IntNative.Min), Decimal(IntNative.Max)]
+    private static let uintNativeRange = [Decimal(UIntNative.Min), Decimal(UIntNative.Max)]
     public func toInt8(strategy!: OverflowStrategy = Throwing): Int8 {
         data.toInt8(overflowHandling: strategy)
     }
@@ -194,7 +196,7 @@ public struct DataReal <: Data & Hashable & Comparable<DataReal> {
         data.toIntNative(overflowHandling: strategy)
     }
     public func tryToIntNative(): ?IntNative {
-        if (data >= int64Range[0] && data <= int64Range[1]) {
+        if (data >= intNativeRange[0] && data <= intNativeRange[1]) {
             data.toIntNative()
         } else {
             None<IntNative>
@@ -203,8 +205,12 @@ public struct DataReal <: Data & Hashable & Comparable<DataReal> {
     public func toUIntNative(strategy!: OverflowStrategy = Throwing): UIntNative {
         data.toUIntNative(overflowHandling: strategy)
     }
+    /**
+     * 修正历史缺陷：曾误用 int64Range 判定——
+     * 大于 Int64.Max 的合法 UIntNative 被判「不可转换」；负数通过检查后由 toUIntNative() 抛异常逃出 try 系列。
+     */
     public func tryToUIntNative(): ?UIntNative {
-        if (data >= int64Range[0] && data <= int64Range[1]) {
+        if (data >= uintNativeRange[0] && data <= uintNativeRange[1]) {
             data.toUIntNative()
         } else {
             None<UIntNative>

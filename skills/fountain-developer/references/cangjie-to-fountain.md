@@ -6,7 +6,9 @@
 ## 0. 先决判断
 
 - fountain 面向**服务端应用**；纯 CLI / 纯库项目改造成本高、收益低 ⇒ 先与用户确认是否有必要。
-- 原项目若已依赖 `fountain::f_*`（哪怕只用了部分模块）⇒ 属于工作流 I（加 / 改配置），不走本流程。
+- 原项目若已依赖 `fountain::f_*`（哪怕只用了部分模块）⇒ 属于工作流 K（加 / 改配置），不走本流程。
+- 原项目若用的是**旧版** fountain（1.0.x：聚合根 `import fountain.mvc.*` 或扁平 `import f_mvc.*`，`cjc-version = "1.0.4"`）
+  ⇒ 属于工作流 I（版本升级），不走本流程。
 
 ## 1. 评估清单（只读）
 
@@ -40,7 +42,7 @@
    - 命令行参数 → 环境变量或 `fboot build --key=value`；
    - 确认全项目不再有 `main()`（应用由 `fboot run` 加载动态库启动）。
 4. 能力替换（**严格 TDD**）：按第 1 节映射逐类改写 import 与调用；每类按 Red-Green-Refactor 推进——
-   先把对应测试迁移 / 补写成失败用例 → 最小实现转绿 → 重构；缺口按工作流 F 第 3 步处理（a–d 选项）。
+   先把对应测试迁移 / 补写成失败用例 → 最小实现转绿 → 重构；缺口按工作流 F 步骤 2 处理（a–d 选项）。
 5. 依赖与配置：依赖统一声明在 workspace 根 cjpm.toml（fountain 模块版本 = fboot 版本；第三方驱动保留，确认 `output-type`），
    **随功能演进补齐**；运行期 / 编译期配置落到三平台启动脚本。
 6. 启动脚本：按 `references/launch-scripts.md` 生成三平台脚本（`dylibPattern` 覆盖 controller / service.impl / boot / cron 所在库）。

@@ -118,3 +118,11 @@ public abstract class DelayedTicktockTask <: CronTicktockTask {
 | `TicktockException` | 模块异常 |
 
 约定：`concurrentable`为`false`（默认）时，上次任务未结束就跳过本次；`once`为`true`的任务只执行一次；`executing`/`reset`默认按「任务名+时间戳」记账，可以覆盖。
+
+## 实现说明（性能优化，对外行为不变）
+
+定时器为已注册的 CRON 表达式维护一份时间索引：每个 tick 先按当前时间筛选候选任务，再对候选做精确匹配，命中才执行业务逻辑。筛选只负责排除「不可能在本 tick 触发」的任务，是否触发仍由 `CronDataCollection.matches` 判定，与不做索引时的语义完全一致。
+
+- 索引按时间单位维护「值桶 / 未约束 / 动态 / 恒真」四类任务集合：`L` 按该单位的候选区间（日字段为 28~31，其余单位为固定值）展开进值桶，只在该区间内参与判定；只有年份约束进入每 tick 判定的动态集合；全通配任务单独成表、无条件候选。
+- `addOrReplaceTask` / `removeTask` 与 tick 在同一把锁内更新索引，运行期动态增删安全。
+- 表达式文本相同的任务在进程内共享同一份只读编译结果（缓存上限 4096 个表达式），降低注册开销与内存占用。

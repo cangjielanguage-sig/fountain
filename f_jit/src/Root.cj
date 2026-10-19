@@ -13,11 +13,19 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-// f_jit 门面/桥（plan-m1 P6；用户面 API 冻结点见 S6.11）。
-// public import 再导出占位——随 P1+ 各阶段逐步启用：
-//   public import fountain::f_jit.base.*
-//   public import fountain::f_jit.bytecode.*
-//   public import fountain::f_jit.compiler.*
-//   public import fountain::f_jit.runtime.*
-//   public import fountain::f_jit.backend.*
 package fountain::f_jit
+
+// 门面/桥层：用户面 API 的再导出点（见 doc/plan-m1.md §0.4、S0.1 / S6.11）。
+//
+// 用户面冻结（S6.11，design §7.3）：**只**导出下列声明。
+// `JitContext` / `Engine` / `JitValue` / `CompileCache` / `AdapterRegistry` /
+// `CompilePipeline` 等执行期内部类型一律不进用户面（根包内部按需普通 import）。
+public import fountain::f_jit.base.JitException
+public import fountain::f_jit.base.ErrCode
+public import fountain::f_jit.base.SourceCompileException
+public import fountain::f_jit.base.SourcePos
+public import fountain::f_jit.base.JitMode
+public import fountain::f_jit.base.DiagnosticsSink
+public import fountain::f_jit.base.DiagnosticLevel
+public import fountain::f_jit.base.DiagCode
+public import fountain::f_jit.base.DummyDiagnosticsSink

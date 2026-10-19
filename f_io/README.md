@@ -410,12 +410,16 @@ let config = LogConfig(
 ### 创建实例
 
 ```cj
-// 方式一：自动生成初始文件名 "{dir}/{filePrefix}_{startSeq}{fileExt}"
+// 方式一：自动生成初始文件名 "{dir}/{filePrefix}_{index}{fileExt}"
+// index = 目录里已有的最大编号 + 1（目录为空时取 startSeq）
 let log = SegmentedLog(config)
 
-// 方式二：指定初始文件路径。rotate() 时仍使用 config 生成后续文件名
+// 方式二：指定初始文件路径。rotate() 时仍使用 config 生成后续文件名；
+// 编号起点不低于目录里已有的最大编号
 let log = SegmentedLog(config, initPath: "/tmp/custom/path_1.log")
 ```
+
+段编号只增不减：即使某个段文件被删除，它的编号也不会被后续新建的段复用（新建段总是取当前最新编号 + 1）。
 
 ### 追加数据
 
@@ -452,15 +456,67 @@ let oldFiles = log.takeOldFiles()
 
 外部负责对返回的旧文件执行删除或归档操作。
 
-### 顺序读取已写入的segment
+### 段元数据
+
+```cj
+let metas: ArrayList<SegmentedMeta> = log.logMetas()
+// 目录下的 log 文件，按编号升序
+// metas[i].index        — 段编号（文件名里的序号）
+// metas[i].size         — 有效数据大小：封口段是截断后的文件大小，当前段是已写入字节数
+// metas[i].creationTime — 创建时间（取自 std.fs 的 FileInfo.creationTime，Linux 上是 inode ctime，秒级精度）
+// metas[i].updateTime   — 最后修改时间（取自 std.fs 的 FileInfo.lastModificationTime，秒级精度）
+// metas[i].last         — 是否当前正在写入的段
+```
+
+```cj
+public class SegmentedMeta {
+    public SegmentedMeta(
+        public let index: Int64, // log 文件的序号
+        public let size: Int64, // log 文件的有效数据大小（字节）
+        public let creationTime: DateTime, // log 文件的创建时间
+        public let updateTime: DateTime, // log 文件的最后修改时间
+        public let last: Bool // 是否当下最后一个
+    ) {}
+}
+```
+
+不符合 `{filePrefix}_{index}{fileExt}` 命名规则的文件不会被列出；用 `initPath` 指定的自定义文件名是个例外 —— 只要它还是当前段，就会作为当前段出现。
+
+注意：封口（rotate / close）时会把文件截断到实际写入长度，这一步会刷新文件的修改时间，因此封口段的 `creationTime` / `updateTime` 反映的是封口时刻（Linux 的 ctime 本身也会被写入刷新）。
+
+### 删除段文件
+
+```cj
+log.removeById(3)             // 按编号删除
+log.removeBetween(1..3)       // 按编号区间删除，[1, 3)
+log.removeBetween(3..=5)      // 闭区间，[3, 5]
+log.removeCreatedBefore(t)    // 创建时间早于 t
+log.removeCreatedAfter(t)     // 创建时间晚于 t
+log.removeUpdatedBefore(t)    // 最后修改时间早于 t
+log.removeUpdatedAfter(t)     // 最后修改时间晚于 t
+log.removeBetween(start, end) // 创建时间在 [start, end)（前闭后开）
+```
+
+约定：
+
+- **当前正在写入的段永远不会被删除**：批量删除（时间/区间）会跳过它；`removeById` 显式指名当前段时抛 `IllegalArgumentException`（避免继续往已 unlink 的 inode 里追加）
+- 编号不存在时为空操作；删除文件失败（如权限不足）时抛异常
+- 删除不影响编号分配：后续新建段仍取最新编号 + 1，已删编号不复用
+- 删除会把该文件同时从 `takeOldFiles()` 的待清理列表里摘掉，外部清理不会重复处理
+
+### 从指定位置顺序读取
 
 ```cj
 /**
- * 返回一个 InputStream，依次读取所有 segment 中已写入的数据。
- * 读完后自动关闭。调用方可用 DefaultCodec 流式解码每条 entry。
+ * 返回一个 InputStream，从编号为 index 的 log 文件的 offset 处开始读，
+ * 依次读到最后一个文件的最后一个有效字节为止。读完后自动关闭。
+ * 调用方可用 DefaultCodec 流式解码每条 entry。
+ * 编号不存在（含已被删除）或 offset 为负时抛 IllegalArgumentException。
  */
-public func openEntryStream(): InputStream
+public func openEntryStream(index: Int64, offset: Int64): InputStream
 ```
+
+读取按目录里现有的段进行（不依赖内存中的 `oldFiles` 列表），每个文件最多读它的有效长度（封口段的文件大小 / 当前段的已写入字节数），因此不会读到预分配区的空洞。
 
 ### 关闭日志
 
@@ -476,7 +532,7 @@ log.close()  // 实现 Resource 接口，可用 try-with-resource
 
 SegmentedLog 的核心需求：
 
-1. **顺序追加** — 只写不读，写入即落盘，不提供读取 API
+1. **顺序追加** — 只追加不修改，写入即落盘；读取按段定位，从任意 `(编号, 偏移)` 顺序读到末尾
 2. **固定大小分段** — 单文件不无限增长，到达阈值后自动轮转
 3. **高性能** — 最小化用户态到内核态的切换次数
 4. **跨平台** — Linux 用 mmap 零拷贝写入，非 Linux 回退 `file.write()`
@@ -528,6 +584,7 @@ SegmentedLog
 doRotate()
   ├─ syncImpl()                          // 刷盘当前 segment
   ├─ munmap(mmapPtr, maxFileSize)        // 解除映射（Linux）
+  ├─ setLength(currentSize)              // 截断到实际写入长度，封口段的 size 才是有效数据大小
   ├─ file.close()                        // 关闭当前文件
   ├─ oldFiles.add(curPath)               // 记录旧路径
   ├─ seq += 1
@@ -536,7 +593,7 @@ doRotate()
   └─ currentSize = 0, appendCount = 0
 ```
 
-`startSeq` 默认从 1 开始，文件名格式为 `{prefix}_{seq}.{ext}`，如 `wal_1.log`、`wal_2.log`。
+`startSeq` 默认从 1 开始，文件名格式为 `{prefix}_{seq}{fileExt}`，如 `wal_1.log`、`wal_2.log`。新段编号取目录里最新的编号 + 1，删除过的编号不会被复用。
 
 ### 刷盘策略
 
@@ -565,8 +622,11 @@ public func close(): Unit {
     if (!closed.compareAndSwap(false, true)) { return }
     synchronized (appendLock) {
         syncImpl()
-        unmapFile(mmapPtr, maxFileSize)   // Linux
-        if (!file.isClosed()) { file.close() }
+        unmapFile(mmapPtr, maxFileSize)          // Linux
+        if (!file.isClosed()) {
+            truncateFile(file, currentSize.load()) // 截断到实际写入长度
+            file.close()
+        }
     }
 }
 ```
@@ -586,6 +646,8 @@ public func close(): Unit {
 | `writeImpl` | `memcpy(mmapPtr + pos, data)` — 零 syscall | `file.write(data)` |
 | `syncImpl` | `file.flush()` — 实际触发 `msync + fsync` | `file.flush()` |
 
+`truncateFile`（内部走 `file.setLength`）是统一路径，不区分平台：Linux 下把预分配的文件截断到实际写入长度，非 Linux 下文件长度本就等于写入长度，调用无副作用。
+
 ### 与 WAL 的关系
 
 SegmentedLog 最初是为 `f_store::WAL`（Write-Ahead Log）提取的通用层。WAL 的核心约束与 SegmentedLog 的设计完全吻合：
@@ -603,11 +665,13 @@ SegmentedLog 最初是为 `f_store::WAL`（Write-Ahead Log）提取的通用层�
 1. 创建 SegmentedLog
 2. 循环 append(data) ← 自动 rotate
 3. 定期 checkpoint
-4. takeOldFiles() → 删除已 checkpoint 的旧文件
-5. close()
+4. takeOldFiles() → 删除已 checkpoint 的旧文件（或用 remove* 按编号/时间精确删除）
+5. logMetas() 查看目录里现有的段
+6. openEntryStream(index, offset) 从指定位置读到末尾
+7. close()
 ```
 
-不提供读取 API，读取由上层模块（如 WAL 的 recovery）自行按文件名规则遍历旧文件执行 `pread`。
+读取既可以走 `openEntryStream(index, offset)`，也可以由上层模块（如 WAL 的 recovery）自行按文件名规则遍历文件执行 `pread`。
 
 
 固定大小分段、纯顺序追加的写日志。Linux 使用 mmap 零 syscall 写入，非 Linux 回退 file.write()。供 WAL 等模块复用。
