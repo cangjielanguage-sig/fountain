@@ -28,7 +28,7 @@ internal func confirmTargetPath(args: Array<String>){
     }
     canonicalize(path)
 }
-internal func load(args: Array<String>, dynamic: Bool): (Path, ArrayList<() -> Unit>) {
+internal func load(args: Array<String>, dynamic: Bool): (Path, ArrayList<() -> Initializer>) {
     let path = confirmTargetPath(args)
     let (ext, libPathName, delim) = match (OS.current) {
         case Windows => (".dll", 'Path', ';')
@@ -58,7 +58,7 @@ internal func load(args: Array<String>, dynamic: Bool): (Path, ArrayList<() -> U
     if(dynamic){
         load(path, Regex('^lib.*(${extractPattern()}|.+${APP_STATIC_RESOURCE_SUFFIX}).*$'))
     }
-    let starters = InitializerCollection.initialize()
+    let providers = InitializerCollection.initialize()
     ExitCallbacks.toExitGracefully()
-    (path, starters)
+    (path, providers)
 }
