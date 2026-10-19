@@ -36,8 +36,37 @@ package fountain::f_jit.base
  * `MAGIC_TEXT` 是同一常量的文本形态，供诊断 / 断言直接比对。
  */
 public class Version {
-    /** M1 产物的 `verMajor`（§11.6）。 */
+    /**
+     * M1 产物的 `verMajor`（§11.6）。
+     *
+     * **legacy 常量**：M1 的写入/读取路径仍只引用它，M2 不得改写它来表达新版本
+     * （spec「legacy 常量与 M1 路径不变」）。
+     */
     public static const MAJOR: UInt16 = 1u16
+
+    // ---------------- M2 多版本常量（design-m2 §2.1、spec「版本常量」） ----------------
+
+    /** M1 主版本的显式命名（值与 legacy `MAJOR` 相同）。 */
+    public static const M1_MAJOR: UInt16 = 1u16
+
+    /** M2 主版本。 */
+    public static const M2_MAJOR: UInt16 = 2u16
+
+    /** M2 次版本（M2 产物从 0 起算）。 */
+    public static const M2_MINOR: UInt16 = 0u16
+
+    /** M3 主版本：仅登记位，本实现不启用 M3 语义（design D12）。 */
+    public static const M3_MAJOR: UInt16 = 3u16
+
+    /**
+     * 本加载器**已实现**的 `verMajor` 集合：v1（M1 规则集）与 v2（M2 规则集）。
+     *
+     * v3 只有登记位（`M3_MAJOR`），规则集未实现 ⇒ 不在此列；加载器遇 v3 仍按 18 拒绝。
+     * 每次返回新数组，避免调用方修改共享实例。
+     */
+    public static func supportedMajors(): Array<UInt16> {
+        [M1_MAJOR, M2_MAJOR]
+    }
 
     /** 本实现写出的 `verMinor` = 14（v0.18.25；加载器接受 ≤ 自身版本的 verMinor，§11.6）。 */
     public static const MINOR: UInt16 = 14u16

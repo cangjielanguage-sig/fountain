@@ -15,9 +15,6 @@ limitations under the License.
 */
 package fountain::f_jit
 
-import fountain::f_jit.base.JitException
-import fountain::f_jit.base.ErrCode
-import fountain::f_jit.base.LocalType
 import fountain::f_jit.base.JitMode
 import fountain::f_jit.base.DiagnosticsSink
 
@@ -33,46 +30,5 @@ public class CompileOptions {
 
     public init(diagnostics: DiagnosticsSink) {
         this.diagnostics = diagnostics
-    }
-}
-
-/**
- * 预定义函数注册契约（design §7.3.2、§8.4）。
- *
- * `impl` 收**已解包**的仓颉值，返回须与 `retType` 匹配（返回值校验发生在调用期；
- * 构造期只校验类型码合法集）。
- */
-public class PredefinedFunction {
-    public let name: String
-    public let paramTypes: Array<UInt16>
-    public let retType: UInt16
-    public let impl: (Array<Any>) -> Any
-
-    public init(name: String, paramTypes: Array<UInt16>, retType: UInt16,
-        impl: (Array<Any>) -> Any) {
-        PredefinedFunction.checkParamTypes(name, paramTypes)
-        PredefinedFunction.checkRetType(name, retType)
-        this.name = name
-        this.paramTypes = paramTypes
-        this.retType = retType
-        this.impl = impl
-    }
-
-    /** M1 形参类型：0–8、10–11（不含 Closure=12）。 */
-    private static func checkParamTypes(name: String, ts: Array<UInt16>): Unit {
-        for (t in ts) {
-            let ok = (t <= LocalType.RANGE) || (t == LocalType.LIST) || (t == LocalType.MAP)
-            if (!ok) {
-                throw JitException(ErrCode.CALL_CONTRACT, -1, -1, None,
-                    '预定义函数「${name}」的形参类型码非法: ${t}（M1 允许 0–8/10–11，§8.4）')
-            }
-        }
-    }
-
-    private static func checkRetType(name: String, t: UInt16): Unit {
-        if (t > LocalType.CLOSURE) {
-            throw JitException(ErrCode.CALL_CONTRACT, -1, -1, None,
-                '预定义函数「${name}」的返回类型码非法: ${t}（M1 允许 0–12，§8.4）')
-        }
     }
 }

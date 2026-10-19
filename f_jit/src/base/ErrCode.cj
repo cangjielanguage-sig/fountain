@@ -18,10 +18,10 @@ package fountain::f_jit.base
 /**
  * 运行期错误码常量命名空间 —— design-m1 §2.3.10、plan-m1 S1.3。
  *
- * 数值权威 = `doc/jit-bytecode-m1.md` §2 错误码表。三条非错误态（`0 OK` / `-1 DEOPT` /
- * `-2 INTERRUPT`）与 1–20、`23`、`99` 全部按表登记；`21 ERR_HOST_EXCEPTION`（M2）与
- * `22 ERR_ANY_CAST`（M3）**本步不登记**——design-m1 §2.3.10 明确「21/22 的 M2/M3 行后续版本
- * 追加」，M1 里它们落在「未登记码」的兜底分支。
+ * 数值权威 = `doc/jit-bytecode-m1.md` §2 错误码表 + `doc/jit-bytecode-m2.md` §2 增量。三条非错误态
+ * （`0 OK` / `-1 DEOPT` / `-2 INTERRUPT`）与 1–21、`23`、`99` 全部按表登记；`21
+ * ERR_HOST_EXCEPTION`（M2）为**仓颉侧异常专用码**，`22 ERR_ANY_CAST`（M3）仍落在「未登记码」的
+ * 兜底分支。
  *
  * 与 `LocalType` / `TypeToken` 同族，用「类 + `static const`」承载（design D3）：错误码要写进
  * ctx 错误槽、要参与 `Report.throwJit` 的分派，`describe` 是**静态表、无宏**（design §2.3.10）。
@@ -69,6 +69,13 @@ public class ErrCode {
     public static const CALL_CONTRACT: Int64 = 19
     /** 对常量 / 冻结容器写入（变更型 helper 的目标槽属路径 A）。 */
     public static const READONLY: Int64 = 20
+    /**
+     * 宿主（仓颉侧）调用面执行期异常且未回译（M2 §2、§13-6）。
+     *
+     * 覆盖 CALL_HOST 闭包、预定义与包装调用、构造适配器、成员访问器；`cause` 附原始异常全文
+     * （含完整仓颉栈），`site` = 对应调用指令偏移。与引擎侧兜底 `99` **严格区分**。
+     */
+    public static const HOST_EXCEPTION: Int64 = 21
     /** for-in 遍历 Map 期间修改同一 map（fail-fast，转码自 std 的 ConcurrentModificationException）。 */
     public static const CONCURRENT_MOD: Int64 = 23
     /** 引擎侧未识别异常兜底（msg 前缀 `internal helper failure`）。 */
@@ -105,6 +112,7 @@ public class ErrCode {
             case 18 => 'ERR_NOT_IMPL 未实现特性'
             case 19 => 'ERR_CALL_CONTRACT 调用契约错误（桥层产生，site = -1）'
             case 20 => 'ERR_READONLY 对常量或冻结容器写入'
+            case 21 => 'ERR_HOST_EXCEPTION 宿主侧异常：仓颉侧调用面抛出且未回译（含完整仓颉栈）'
             case 23 => 'ERR_CONCURRENT_MOD 遍历期间并发修改'
             case 99 => 'ERR_HELPER_PANIC helper 内部未识别异常（引擎侧兜底）'
             case _ => 'ERR_UNREGISTERED 未登记错误码 ${code}'
@@ -114,12 +122,12 @@ public class ErrCode {
     /**
      * 宿主侧（宿主 / 桥侧产生、不经字节码执行）错误码判定。
      *
-     * M1 **恒 false**：design-m1 §2.3.10 定义本方法是「M2 起 21 判定占位（M1 恒 false）」，
-     * design-m2 §2 亦标注「`isHostSide(code)`（实现落地）：21 判定（M1 占位返回 false）」。
-     * M2 引入 `21 ERR_HOST_EXCEPTION` 后由该函数给出 true。
+     * M2 起仅 `21 ERR_HOST_EXCEPTION` 为真（design-m2 §2「`isHostSide(code)`（实现落地）」）；
+     * 其余码——含引擎侧兜底 `99`——均为假，21/99 不得混用。
      */
     public static func isHostSide(code: Int64): Bool {
         match (code) {
+            case 21 => true
             case _ => false
         }
     }

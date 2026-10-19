@@ -46,11 +46,15 @@ public class FacadeRegistry_test {
 
         var code2: Int64 = 0
         try {
-            let _ = PredefinedFunction('bad2', [LocalType.I64], 13u16, { _ => 0 })
+            let _ = PredefinedFunction('bad2', [LocalType.I64], 15u16, { _ => 0 })
         } catch (e: JitException) {
             code2 = e.code
         }
         @Assert(code2, ErrCode.CALL_CONTRACT)
+
+        // M2 合法集扩展：形参 13/14、返回 13/14 均可登记
+        let _ = PredefinedFunction('hostOk', [LocalType.HOST_CLOSURE, LocalType.HOST_OBJECT],
+            LocalType.HOST_OBJECT, { _ => 0 })
     }
 
     @TestCase

@@ -17,6 +17,7 @@ package fountain::f_jit.bytecode
 
 import std.unittest.*
 import std.unittest.testmacro.*
+import fountain::f_util.Fnv64
 
 /**
  * S2.1 `OpInfo` 的失败用例（先写红）。
@@ -127,5 +128,35 @@ public class OpInfo_test {
             @Assert(OpInfo.OPCODE_TABLE[i].name.isEmpty(), false)
             @Assert(OpInfo.OPCODE_TABLE[i].fmt.isEmpty(), false)
         }
+    }
+
+    /**
+     * Q2.1：`0x79` 重定义为 `OP_CALL_HOST` / `u8 argc` / 总长 2 / `CAT_CALL`（m2 §2）。
+     *
+     * M1 预留的 `u16 fid` 编码废弃；`0x7A`/`0x7B` 仍是 `CAT_CALL`（汇编期 NotImpl 由
+     * `Assembler_test` 守）。同时逐位核对**除 0x79 外**的 255 行与 M1 表完全一致
+     * （FNV-1a-64 覆盖 `code|name|fmt|len|cat`），确保本次只改一行。
+     */
+    @TestCase
+    public func callHostRowAndM1RowsUnchanged(): Unit {
+        let t = OpInfo.OPCODE_TABLE
+        @Assert(t[0x79].name, 'OP_CALL_HOST')
+        @Assert(t[0x79].fmt, 'u8')
+        @Assert(t[0x79].len, 2)
+        @Assert(t[0x79].cat, OpInfo.CAT_CALL)
+        @Assert(t[0x7A].name, 'OP_HW_OPEN')
+        @Assert(t[0x7A].cat, OpInfo.CAT_CALL)
+        @Assert(t[0x7B].name, 'OP_HW_CLOSE')
+        @Assert(t[0x7B].cat, OpInfo.CAT_CALL)
+
+        var s = ''
+        for (i in 0..256) {
+            if (i != 0x79) {
+                let e = t[i]
+                s = s + '${Int64(e.code)}|${e.name}|${e.fmt}|${e.len}|${Int64(e.cat)};'
+            }
+        }
+        // 该摘要由 M1 表（仅剔除 0x79 行）逐字段计算；任何一行变动都会改变它。
+        @Assert(Fnv64.fnv1a(s), 10437089730419021315u64)
     }
 }

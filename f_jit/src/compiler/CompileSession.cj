@@ -18,6 +18,7 @@ package fountain::f_jit.compiler
 import std.collection.ArrayList
 import fountain::f_jit.base.DiagnosticsSink
 import fountain::f_jit.base.SourcePos
+import fountain::f_jit.base.Version
 import fountain::f_jit.bytecode.ConstRegistry
 import fountain::f_jit.bytecode.FuncDir
 import fountain::f_jit.bytecode.LocalTypes
@@ -118,14 +119,19 @@ internal class CompileSession {
     /** 入口函数号（顶层 lambda；汇编期写 `FbcHeader.entryFn`）。 */
     public var entryFn: UInt32 = 0u32
 
+    /** 汇编目标主版本（M1 缺省；M2 目标显式传 2，design-m2 D12）。 */
+    public let verMajor: UInt16
+
     /** 已降低的函数（按登记顺序 = fnId 分配顺序）。 */
     private let funcs: ArrayList<LoweredFunc>
     private var nextFnId: UInt32
 
-    public init(source: String, registry: PredefinedSnapshot, diagnostics: DiagnosticsSink) {
+    public init(source: String, registry: PredefinedSnapshot, diagnostics: DiagnosticsSink,
+        verMajor!: UInt16 = Version.MAJOR) {
         this.source = source
         this.registry = registry
         this.diagnostics = diagnostics
+        this.verMajor = verMajor
         this.consts = ConstRegistry()
         this.sites = SiteTable()
         this.names = NameTable()

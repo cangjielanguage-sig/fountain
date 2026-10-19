@@ -56,6 +56,7 @@ public class ErrCode_test {
         @Assert(ErrCode.NOT_IMPL, 18)
         @Assert(ErrCode.CALL_CONTRACT, 19)
         @Assert(ErrCode.READONLY, 20)
+        @Assert(ErrCode.HOST_EXCEPTION, 21)
         @Assert(ErrCode.CONCURRENT_MOD, 23)
         @Assert(ErrCode.HELPER_PANIC, 99)
     }
@@ -70,7 +71,8 @@ public class ErrCode_test {
             ErrCode.DEC_RANGE, ErrCode.DEC_DIV_ZERO, ErrCode.DT_RANGE, ErrCode.DUR_OVERFLOW,
             ErrCode.FP_INVALID, ErrCode.ARG_MISMATCH, ErrCode.STACK_GUARD,
             ErrCode.HANDLE_WINDOW_FULL, ErrCode.EXPLICIT, ErrCode.NOT_IMPL,
-            ErrCode.CALL_CONTRACT, ErrCode.READONLY, ErrCode.CONCURRENT_MOD, ErrCode.HELPER_PANIC
+            ErrCode.CALL_CONTRACT, ErrCode.READONLY, ErrCode.HOST_EXCEPTION,
+            ErrCode.CONCURRENT_MOD, ErrCode.HELPER_PANIC
         ]
         let keywords = [
             'OK', 'DEOPT', 'INTERRUPT',
@@ -79,9 +81,10 @@ public class ErrCode_test {
             'DEC_RANGE', 'DEC_DIV_ZERO', 'DT_RANGE', 'DUR_OVERFLOW',
             'FP_INVALID', 'ARG_MISMATCH', 'STACK_GUARD',
             'HANDLE_WINDOW_FULL', 'EXPLICIT', 'NOT_IMPL',
-            'CALL_CONTRACT', 'READONLY', 'CONCURRENT_MOD', 'HELPER_PANIC'
+            'CALL_CONTRACT', 'READONLY', 'HOST_EXCEPTION',
+            'CONCURRENT_MOD', 'HELPER_PANIC'
         ]
-        @Assert(codes.size, 25)
+        @Assert(codes.size, 26)
         @Assert(keywords.size, codes.size)
         for (i in 0..codes.size) {
             let text = ErrCode.describe(codes[i])
@@ -98,17 +101,17 @@ public class ErrCode_test {
         }
     }
 
-    /** 未登记码（21/22 属 M2/M3、以及任意越界值）走非空兜底描述，且不谎称是已定义码。 */
+    /** 未登记码（22 属 M3、24 起、以及任意越界值）走非空兜底描述，且不谎称是已定义码。 */
     @TestCase
     public func describeHasFallbackForUnregisteredCodes(): Unit {
-        for (code in [21, 22, 24, 50, 98, 100, -3, -99]) {
+        for (code in [22, 24, 50, 98, 100, -3, -99]) {
             let text = ErrCode.describe(code)
             @Assert(text.isEmpty(), false)
             @Assert(text.contains('未登记'), true)
         }
     }
 
-    /** 宿主侧判定：M1 恒 false（design-m1 §2.3.10 / design-m2 §2 的 M1 占位口径）。 */
+    /** 宿主侧判定：仅 21 为真，M1 码、99 与未登记码均为假（design-m2 §2 / m2 §2 错误码表）。 */
     @TestCase
     public func isHostSideIsFalseForAllM1Codes(): Unit {
         let codes = [
@@ -123,9 +126,23 @@ public class ErrCode_test {
         for (code in codes) {
             @Assert(ErrCode.isHostSide(code), false)
         }
-        // 未登记码同样不判为宿主侧
-        @Assert(ErrCode.isHostSide(21), false)
+        // 21 = 宿主（仓颉侧）异常专用码
+        @Assert(ErrCode.isHostSide(ErrCode.HOST_EXCEPTION), true)
+        // 未登记码（含 M3 的 22）同样不判为宿主侧
         @Assert(ErrCode.isHostSide(22), false)
         @Assert(ErrCode.isHostSide(-99), false)
+    }
+
+    /** 21 与 99 严格区分：描述与分类都不混用（21 宿主 / 99 引擎侧）。 */
+    @TestCase
+    public func hostExceptionAndPanicAreDistinguished(): Unit {
+        let host = ErrCode.describe(ErrCode.HOST_EXCEPTION)
+        let engine = ErrCode.describe(ErrCode.HELPER_PANIC)
+        @Assert(host.contains('宿主'), true)
+        @Assert(engine.contains('宿主'), false)
+        @Assert(engine.contains('引擎'), true)
+        @Assert(ErrCode.isHostSide(ErrCode.HOST_EXCEPTION), true)
+        @Assert(ErrCode.isHostSide(ErrCode.HELPER_PANIC), false)
+        @Assert(host == engine, false)
     }
 }

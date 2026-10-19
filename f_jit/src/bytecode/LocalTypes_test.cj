@@ -164,20 +164,60 @@ public class LocalTypes_test {
         @Assert(r4, true)
     }
 
-    /** `isHandleSlot(4..12) = true`、值型 0–3 为 false（§11.7 值型 / 句柄型分界）。 */
+    /** 规则集参数化校验（Q2.3）：与加载器取用同一规则集对象，逐码对齐全 0–255 边界。 */
+    @TestCase
+    public func validateAgainstSharedRuleSet(): Unit {
+        let dir = FuncDir()
+        dir.add(FuncEntry(0u32, 30u32, 8u32, 30u32,
+            0u16, 1u16, 1u16, LocalType.I64, 0u16))
+        for (rules in [FbcRuleRegistry.V1, FbcRuleRegistry.V2, FbcRuleRegistry.V3]) {
+            for (c in 0..256) {
+                let t = LocalTypes(1)
+                t.set(0, UInt8(c))
+                var ok = true
+                try {
+                    t.validate(dir, 0u32, rules)
+                } catch (_: JitException) {
+                    ok = false
+                }
+                @Assert(ok, rules.isLocalTypeInLegalSet(UInt16(c)))
+            }
+        }
+    }
+
+    /** `isHandleSlot(4..14) = true`、值型 0–3 为 false（§11.7 + M2 §2 的 13/14）。 */
     @TestCase
     public func isHandleSlotSplitsAtFour(): Unit {
-        let t = LocalTypes(13)
-        for (i in 0..13) {
+        let t = LocalTypes(16)
+        for (i in 0..16) {
             t.set(i, UInt8(i))
         }
         for (i in 0..4) {
             @Assert(t.isHandleSlot(i), false)
         }
-        for (i in 4..13) {
+        for (i in 4..15) {
             @Assert(t.isHandleSlot(i), true)
         }
+        // 15（M3 登记位）不是句柄型
+        @Assert(t.isHandleSlot(15), false)
         // 越界槽不为句柄（且不抛）
-        @Assert(t.isHandleSlot(13), false)
+        @Assert(t.isHandleSlot(16), false)
+    }
+
+    /**
+     * 规则集与 `LocalType.isLegal` 的合法集边界**同源**：对已实现的 v1/v2 规则集，
+     * 逐码（0–255）判定必须与 `LocalType.isLegal(code, verMajor)` 完全一致。
+     * v3 仅登记（`implemented=false`）⇒ 规则集一律拒绝，这是加载期开关而非边界差异。
+     */
+    @TestCase
+    public func ruleSetBoundaryMatchesLocalTypeIsLegal(): Unit {
+        for ((rs, major) in [(FbcRuleRegistry.V1, 1u16), (FbcRuleRegistry.V2, 2u16)]) {
+            for (code in 0..256) {
+                @Assert(rs.isLocalTypeLegal(UInt16(code)), LocalType.isLegal(UInt16(code), major))
+            }
+        }
+        let v3 = FbcRuleRegistry.V3
+        @Assert(v3.isLocalTypeLegal(16u16), false)
+        @Assert(v3.isLocalTypeLegal(19u16), false)
     }
 }

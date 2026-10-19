@@ -127,8 +127,10 @@ public class Assembler_test {
     public func m2OnlyOpsAreNotImpl(): Unit {
         let s1 = Assembler_test.newSess()
         let b1 = BytecodeBuilder(0u32, s1.consts)
-        b1.emitU16U8(Op.CALL_HOST, 0u16, 0u8)
-        Assembler_test.add(s1, 0u32, 0, LocalType.I64, [], b1.finish())
+        let hs = b1.allocSlot(LocalType.HOST_CLOSURE)
+        b1.emitU16(Op.LOADL, UInt16(hs))
+        b1.emitU8(Op.CALL_HOST, 0u8)
+        Assembler_test.add(s1, 0u32, 0, LocalType.I64, [LocalType.HOST_CLOSURE], b1.finish())
         @Assert(Assembler_test.assembleKind(s1), DiagKind.NOT_IMPL)
 
         let s2 = Assembler_test.newSess()
@@ -142,6 +144,72 @@ public class Assembler_test {
         b3.emit(Op.HW_CLOSE)
         Assembler_test.add(s3, 0u32, 0, LocalType.I64, [], b3.finish())
         @Assert(Assembler_test.assembleKind(s3), DiagKind.NOT_IMPL)
+    }
+
+    /**
+     * Q2.4：v2 规则集下 `CALL_HOST argc` 合法，产物为 verMajor 2 / verMinor 0，
+     * 且 `[h_fn, a1]` 布局（`LOADL` 句柄 + 1 个实参）通过加载期复核。
+     */
+    @TestCase
+    public func callHostV2AcceptedWithLayout(): Unit {
+        let sess = Assembler_test.newSess(verMajor: 2u16)
+        let b = BytecodeBuilder(0u32, sess.consts)
+        let hs = b.allocSlot(LocalType.HOST_CLOSURE)
+        b.emitI32(Op.PUSH_I32, 7)
+        b.emitU16(Op.LOADL, UInt16(hs))
+        b.emitU8(Op.CALL_HOST, 1u8)
+        b.ret()
+        Assembler_test.add(sess, 0u32, 0, LocalType.I64, [LocalType.HOST_CLOSURE], b.finish())
+        let raw = Assembler(sess).assemble()
+        let u = FbcReader.load(raw)
+        @Assert(u.header.verMajor, 2u16)
+        @Assert(u.header.verMinor, 0u16)
+        @Assert(u.rules.verMajor, 2u16)
+    }
+
+    /** Q2.4：v1 规则集下 `CALL_HOST` 仍为 `NotImpl`（同字节流，仅规则集不同）。 */
+    @TestCase
+    public func callHostV1IsNotImpl(): Unit {
+        let sess = Assembler_test.newSess()
+        let b = BytecodeBuilder(0u32, sess.consts)
+        let hs = b.allocSlot(LocalType.HOST_CLOSURE)
+        b.emitU16(Op.LOADL, UInt16(hs))
+        b.emitU8(Op.CALL_HOST, 0u8)
+        b.ret()
+        Assembler_test.add(sess, 0u32, 0, LocalType.I64, [LocalType.HOST_CLOSURE], b.finish())
+        @Assert(Assembler_test.assembleKind(sess), DiagKind.NOT_IMPL)
+    }
+
+    /** Q2.4：`argc` 与栈上实参个数不符（栈下越界）⇒ 汇编期拒绝。 */
+    @TestCase
+    public func callHostArgcMismatchIsRejected(): Unit {
+        let sess = Assembler_test.newSess(verMajor: 2u16)
+        // LOADL 0（h_fn）→ CALL_HOST 1（缺一个实参）→ RET
+        let w = ByteWriter()
+        w.wU8(Op.LOADL)
+        w.wU16(0u16)
+        w.wU8(Op.CALL_HOST)
+        w.wU8(1u8)
+        w.wU8(Op.RET)
+        Assembler_test.add(sess, 0u32, 0, LocalType.I64, [LocalType.HOST_CLOSURE],
+            FuncBody(w.take(), 2, 0u16))
+        @Assert(Assembler_test.assembleKind(sess), DiagKind.CODE_GEN)
+    }
+
+    /** Q2.4：`CALL_HOST` 前一条压栈的必须是 13 型句柄（栈底非句柄 ⇒ 拒绝）。 */
+    @TestCase
+    public func callHostNonHandleBaseIsRejected(): Unit {
+        let sess = Assembler_test.newSess(verMajor: 2u16)
+        // LOADL 0（I64 局部）→ CALL_HOST 0 → RET：句柄位置是值型槽
+        let w = ByteWriter()
+        w.wU8(Op.LOADL)
+        w.wU16(0u16)
+        w.wU8(Op.CALL_HOST)
+        w.wU8(0u8)
+        w.wU8(Op.RET)
+        Assembler_test.add(sess, 0u32, 0, LocalType.I64, [LocalType.I64],
+            FuncBody(w.take(), 1, 0u16))
+        @Assert(Assembler_test.assembleKind(sess), DiagKind.CODE_GEN)
     }
 
     /** 校验 9：局部类型表的值必须在 0–12（M1 合法集）。 */
@@ -180,8 +248,8 @@ public class Assembler_test {
     // 工具
     // ==================================================================
 
-    private static func newSess(): CompileSession {
-        CompileSession('', PredefinedSnapshot.empty(), DummyDiagnosticsSink())
+    private static func newSess(verMajor!: UInt16 = Version.MAJOR): CompileSession {
+        CompileSession('', PredefinedSnapshot.empty(), DummyDiagnosticsSink(), verMajor: verMajor)
     }
 
     private static func add(sess: CompileSession, fid: UInt32, nargs: Int64, ret: UInt16,

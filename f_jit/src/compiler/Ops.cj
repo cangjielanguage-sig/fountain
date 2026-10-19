@@ -298,7 +298,7 @@ internal class StackEffect {
         if (op == Op.CALL_HELPER_V) {
             return (arg, 0)
         }
-        if (op == Op.CALL_CLOSURE) {
+        if (op == Op.CALL_CLOSURE || op == Op.CALL_HOST) {
             return (arg + 1, 1)
         }
         TABLE[Int64(op)]

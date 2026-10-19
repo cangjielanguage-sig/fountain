@@ -77,7 +77,8 @@ protected class CompilePipeline {
         }
         if (CompileCache.claim(key)) {
             try {
-                let unit = FbcReader.load(raw)
+                // 分发入口无注册表上下文：14 槽 / user helper 在加载期拒绝（design-m2 D12）。
+                let unit = FbcReader.loadWithoutRegistry(raw)
                 CompilePipeline.rejectUserHelpers(unit)
                 let fn = CompilePipeline.makeFunction(unit, unit.header.entryFn, c.opts)
                 CompileCache.finish(key, fn)

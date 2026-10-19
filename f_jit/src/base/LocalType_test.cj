@@ -29,7 +29,7 @@ import std.unittest.testmacro.*
  */
 @Test
 public class LocalType_test {
-    /** 13 个常量与 §11.7 表逐值一致（0–12）。 */
+    /** 15 个常量与 §11.7 表逐值一致（0–12 为 M1，13/14 为 M2 §2 增量）。 */
     @TestCase
     public func constantsMatchSpecTable(): Unit {
         @Assert(LocalType.I64, 0u16)
@@ -45,31 +45,36 @@ public class LocalType_test {
         @Assert(LocalType.LIST, 10u16)
         @Assert(LocalType.MAP, 11u16)
         @Assert(LocalType.CLOSURE, 12u16)
+        @Assert(LocalType.HOST_CLOSURE, 13u16)
+        @Assert(LocalType.HOST_OBJECT, 14u16)
     }
 
-    /** `name` 与 §11.7 表的类型名逐项一致，且非空。 */
+    /** `name` 与 §11.7 表及 M2 §2 增量逐项一致，且非空。 */
     @TestCase
     public func nameMatchesSpecTable(): Unit {
         let expected = [
             'Int64', 'Float64', 'Bool', 'Unit', 'String', 'Decimal', 'DateTime',
-            'Duration', 'Range', 'Regex', 'List', 'Map', 'Closure'
+            'Duration', 'Range', 'Regex', 'List', 'Map', 'Closure', 'HostClosure', 'HostObject'
         ]
-        @Assert(expected.size, 13)
-        for (i in 0..13) {
+        @Assert(expected.size, 15)
+        for (i in 0..15) {
             @Assert(LocalType.name(UInt16(i)), expected[i])
             @Assert(LocalType.name(UInt16(i)).isEmpty(), false)
         }
     }
 
-    /** 句柄位分界：4–12 为真、0–3 为假（§11.7 值型/句柄型分界）。 */
+    /** 句柄位分界：4–14 为真、0–3 为假（§11.7 值型/句柄型分界 + M2 §2 的 13/14）。 */
     @TestCase
     public func isHandleSplitsAtFour(): Unit {
         for (i in 0..4) {
             @Assert(LocalType.isHandle(UInt16(i)), false)
         }
-        for (i in 4..13) {
+        for (i in 4..15) {
             @Assert(LocalType.isHandle(UInt16(i)), true)
         }
+        // 15 以上属 M3 登记位/保留区，不是句柄型
+        @Assert(LocalType.isHandle(15u16), false)
+        @Assert(LocalType.isHandle(255u16), false)
     }
 
     /** `fromToken` 与 §11.7 末段一一对应表全等：List↔1、Map↔2、String↔3、Decimal↔4、
@@ -91,7 +96,10 @@ public class LocalType_test {
     @TestCase
     public func fromTokenRejectsReservedAndUnknown(): Unit {
         @Assert(LocalType.fromToken(0u16), LocalType.NONE) // RESERVED
-        @Assert(LocalType.fromToken(10u16), LocalType.NONE)
+        // M2 起 10/11 已有定义；12 属 M3（Any）登记位，本步仍未定义
+        @Assert(LocalType.fromToken(10u16), LocalType.HOST_CLOSURE)
+        @Assert(LocalType.fromToken(11u16), LocalType.HOST_OBJECT)
+        @Assert(LocalType.fromToken(12u16), LocalType.NONE)
         @Assert(LocalType.fromToken(0xFFFFu16), LocalType.NONE)
         @Assert(LocalType.isHandle(LocalType.NONE), false)
     }
@@ -119,16 +127,16 @@ public class LocalType_test {
         @Assert(LocalType.isLegal(0u16, 4u16), false)
     }
 
-    /** `name` 表按码全表（0–19）登记：0–12 实名，13–19 为 M2/M3 预留登记位（非空，供 DbgDump/诊断）。 */
+    /** `name` 表按码全表（0–19）登记：0–14 实名，15–19 为 M3 预留登记位（非空，供 DbgDump/诊断）。 */
     @TestCase
     public func nameCoversFullRegistryRange(): Unit {
         for (i in 0..20) {
             @Assert(LocalType.name(UInt16(i)).isEmpty(), false)
         }
-        // 预留登记位尚未实名：非空、带码号、且与 0–12 的实名都不重复
-        @Assert(LocalType.name(13u16).contains('13'), true)
+        // M3 预留登记位尚未实名：非空、带码号、且与 0–14 的实名都不重复
+        @Assert(LocalType.name(15u16).contains('15'), true)
         @Assert(LocalType.name(19u16).contains('19'), true)
-        @Assert(LocalType.name(13u16) == LocalType.name(0u16), false)
-        @Assert(LocalType.name(13u16) == LocalType.name(12u16), false)
+        @Assert(LocalType.name(15u16) == LocalType.name(0u16), false)
+        @Assert(LocalType.name(15u16) == LocalType.name(14u16), false)
     }
 }

@@ -18,6 +18,7 @@ package fountain::f_jit
 import std.collection.ArrayList
 import std.sync.Mutex
 import fountain::f_jit.base.SourceCompileException
+import fountain::f_jit.base.PredefinedFunction
 import fountain::f_jit.compiler.PredefinedSnapshot
 
 /**

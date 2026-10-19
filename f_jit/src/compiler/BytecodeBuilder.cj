@@ -453,8 +453,9 @@ internal class BytecodeBuilder {
         }
         this.depth = after
         // 变更型调用按**字节流事实**置位（不依赖调用方走 `callHelper`/`callClosure` 便捷方法）：
-        // H43–H48 / user helper（§9.15）与 `CALL_CLOSURE`（§8.6，被调闭包体静态不可知）。
-        if (op == Op.CALL_CLOSURE) {
+        // H43–H48 / user helper（§9.15）与 `CALL_CLOSURE`（§8.6，被调闭包体静态不可知）/
+        // `CALL_HOST`（m2 §2，宿主闭包体黑盒）保守按变更型处理。
+        if (op == Op.CALL_CLOSURE || op == Op.CALL_HOST) {
             this.flags = this.flags | FuncFlags.MUTATION
         } else if (HelperCodec.isCallHelper(op)) {
             let hid = UInt16(this.code[at + 1]) | (UInt16(this.code[at + 2]) << 8)
@@ -469,7 +470,7 @@ internal class BytecodeBuilder {
         if (op == Op.CALL_HELPER || op == Op.CALL_HELPER_NC || op == Op.CALL_HELPER_V || op == Op.CALL_FUNC) {
             return Int64(this.code[at + 3])
         }
-        if (op == Op.CALL_CLOSURE) {
+        if (op == Op.CALL_CLOSURE || op == Op.CALL_HOST) {
             return Int64(this.code[at + 1])
         }
         0

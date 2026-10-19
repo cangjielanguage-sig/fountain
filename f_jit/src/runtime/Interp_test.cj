@@ -24,6 +24,7 @@ import fountain::f_jit.bytecode.ByteWriter
 import fountain::f_jit.bytecode.ConstRegistry
 import fountain::f_jit.bytecode.FbcHeader
 import fountain::f_jit.bytecode.FbcFlags
+import fountain::f_jit.bytecode.FbcRuleRegistry
 import fountain::f_jit.bytecode.FuncDir
 import fountain::f_jit.bytecode.FuncEntry
 import fountain::f_jit.bytecode.LoadedUnit
@@ -156,7 +157,7 @@ public class Interp_test {
             Version.MAGIC, Version.MAJOR, Version.MINOR,
             FbcFlags.UTF8 | FbcFlags.VALUE_OPS, UInt32(Version.HDR_SIZE),
             UInt32(code.size), UInt32(0), UInt32(0), 0u32, UInt32(4), 0u32)
-        LoadedUnit(header, code, consts, site, name, dir, typesArr.toArray())
+        LoadedUnit(header, code, consts, site, name, dir, typesArr.toArray(), FbcRuleRegistry.V1)
     }
 
     private func typesOf(ts: Array<UInt8>): Array<UInt8> {

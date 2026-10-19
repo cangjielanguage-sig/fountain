@@ -29,3 +29,5 @@ public import fountain::f_jit.base.DiagnosticsSink
 public import fountain::f_jit.base.DiagnosticLevel
 public import fountain::f_jit.base.DiagCode
 public import fountain::f_jit.base.DummyDiagnosticsSink
+// M2：PredefinedFunction 下沉到 base（PublicMethod.bind 需要），用户面路径不变
+public import fountain::f_jit.base.PredefinedFunction
