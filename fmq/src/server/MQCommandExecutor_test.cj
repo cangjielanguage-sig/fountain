@@ -64,7 +64,7 @@ class ExecutorFixture <: Resource {
     }
 
     func call(message: Message): Message {
-        executor.execute(None, message).getOrThrow()
+        executor.execute(message).getOrThrow()
     }
 
     func registerTopic(topic: String, queueNum: Int64, delayingMs!: Int64 = 0): Message {

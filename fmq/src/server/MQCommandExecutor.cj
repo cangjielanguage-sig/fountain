@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::fmq.server
 
 import std.collection.ArrayList
+import fountain::f_base.unsafeZeroValue
 import fountain::f_log.*
 import fountain::f_mq.base.*
 import fountain::f_mq.base.model.*
@@ -59,13 +60,31 @@ protected class MQCommandExecutor {
         this.selfIndex = selfIndex
     }
 
-    public func execute(buffer: ?SocketBuffer, request: Message): ?Message {
+    /** 无连接的哨兵值：只允许 `refEq` 比较，禁止解引用。 */
+    private static let EMPTY_SOCKET_BUFFER = unsafeZeroValue<SocketBuffer>()
+
+    /** 生产入口：`f_net.Server.start` 直接传方法引用，连接恒非空。 */
+    public func execute(buffer: SocketBuffer, request: Message): ?Message {
+        dispatch(buffer, request)
+    }
+
+    /** 无连接入口：仅供单测与内部调用，订阅不绑定连接。 */
+    protected func execute(request: Message): ?Message {
+        dispatch(EMPTY_SOCKET_BUFFER, request)
+    }
+
+    private func dispatch(buffer: SocketBuffer, request: Message): ?Message {
+        let connection = if (refEq(buffer, EMPTY_SOCKET_BUFFER)) {
+            None<SocketBuffer>
+        } else {
+            Some(buffer)
+        }
         try {
             match (request.command) {
-                case REGISTER => Some(onRegister(buffer, request))
+                case REGISTER => Some(onRegister(connection, request))
                 case DEREGISTER => Some(onDeregister(request))
                 case PUBLISH(_) => Some(onPublish(request))
-                case SUBSCRIBE => Some(onSubscribe(buffer, request))
+                case SUBSCRIBE => Some(onSubscribe(connection, request))
                 case UNSUBSCRIBE => Some(onUnsubscribe(request))
                 case CONSUME(_) => Some(onConsume(request))
                 case ACK => Some(onAck(request))

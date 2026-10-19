@@ -110,7 +110,7 @@ public class MQServer {
         let server = this.server
         let executor = this.executor
         spawn {
-            server.start {buffer, request => executor.execute(Some(buffer), request)}
+            server.start(executor.execute)
         }
         backup.start()
         cleaner.start()
