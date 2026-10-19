@@ -29,7 +29,7 @@ import fountain::fmq.meta.{MetaApplyResult, MetaStore}
 import fountain::fmq.queue.{CursorStore, MQMatcher, QueueManager}
 
 /** 无连接的哨兵值：只允许 `refEq` 比较，禁止解引用。 */
-internal static let EMPTY_SOCKET_BUFFER = unsafeZeroValue<SocketBuffer>()
+internal let EMPTY_SOCKET_BUFFER = unsafeZeroValue<SocketBuffer>()
 /**
  * 命令分发：解析 → 校验 → 调服务 → 组装响应。
  *

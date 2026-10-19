@@ -25,7 +25,6 @@ import fountain::f_io.LogPosition
 import fountain::f_mq.base.{MQErrorCode, MQFilter, MQMessageRecord}
 import fountain::f_mq.base.payload.{MQAckPayload, MQConsumeResult, MQResult}
 import fountain::f_mq.base.payload.MQTopicAssignment
-import fountain::f_net.SocketBuffer
 import fountain::fmq.metrics.MQMetrics
 import fountain::fmq.queue.*
 
@@ -88,7 +87,7 @@ class ConsumeFixture <: Resource {
     func register(id: String, group!: String = "g", tags!: Array<String> = [], filter!: String = '',
         autoAck!: Bool = false): MQSubscriptionInfo {
         let info = MQSubscriptionInfo(id, topic, group, tags, MQFilter.compile(filter), autoAck,
-            None<SocketBuffer>)
+            EMPTY_SOCKET_BUFFER)
         registry.register(info)
         info
     }
