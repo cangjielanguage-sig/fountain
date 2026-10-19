@@ -120,6 +120,8 @@ internal func dispatchHelper(ctx: JitContext, hid: Int64, a: Array<Int64>): Int6
         case 55 => closureFnid(ctx, a)
         case 56 => closureCap(ctx, a)
         case 57 => fnTable(ctx, a)
+        // ---- M2：宿主闭包转发（H63）----
+        case 63 => hostCallTrampoline(ctx, a)
         // ---- 空容器构造（H70 / H71）----
         case 70 => listNew(ctx, a)
         case 71 => mapNew(ctx, a)

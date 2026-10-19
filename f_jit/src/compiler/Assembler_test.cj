@@ -155,8 +155,8 @@ public class Assembler_test {
         let sess = Assembler_test.newSess(verMajor: 2u16)
         let b = BytecodeBuilder(0u32, sess.consts)
         let hs = b.allocSlot(LocalType.HOST_CLOSURE)
-        b.emitI32(Op.PUSH_I32, 7)
         b.emitU16(Op.LOADL, UInt16(hs))
+        b.emitI32(Op.PUSH_I32, 7)
         b.emitU8(Op.CALL_HOST, 1u8)
         b.ret()
         Assembler_test.add(sess, 0u32, 0, LocalType.I64, [LocalType.HOST_CLOSURE], b.finish())
@@ -196,7 +196,7 @@ public class Assembler_test {
         @Assert(Assembler_test.assembleKind(sess), DiagKind.CODE_GEN)
     }
 
-    /** Q2.4：`CALL_HOST` 前一条压栈的必须是 13 型句柄（栈底非句柄 ⇒ 拒绝）。 */
+    /** Q2.4：`CALL_HOST` 调用块栈底必须是 13 型句柄（栈底非句柄 ⇒ 拒绝）。 */
     @TestCase
     public func callHostNonHandleBaseIsRejected(): Unit {
         let sess = Assembler_test.newSess(verMajor: 2u16)
@@ -209,6 +209,23 @@ public class Assembler_test {
         w.wU8(Op.RET)
         Assembler_test.add(sess, 0u32, 0, LocalType.I64, [LocalType.I64],
             FuncBody(w.take(), 1, 0u16))
+        @Assert(Assembler_test.assembleKind(sess), DiagKind.CODE_GEN)
+    }
+
+    /**
+     * Q4.5：`[h_fn, a1..an]` 布局不可倒置——句柄若最后压栈（旧 §3 顺序的残留），
+     * 调用块栈底就是实参而非 13 型 LOADL ⇒ 拒绝。
+     */
+    @TestCase
+    public func callHostHandleNotAtBottomIsRejected(): Unit {
+        let sess = Assembler_test.newSess(verMajor: 2u16)
+        let b = BytecodeBuilder(0u32, sess.consts)
+        let hs = b.allocSlot(LocalType.HOST_CLOSURE)
+        b.emitI32(Op.PUSH_I32, 7)
+        b.emitU16(Op.LOADL, UInt16(hs))
+        b.emitU8(Op.CALL_HOST, 1u8)
+        b.ret()
+        Assembler_test.add(sess, 0u32, 0, LocalType.I64, [LocalType.HOST_CLOSURE], b.finish())
         @Assert(Assembler_test.assembleKind(sess), DiagKind.CODE_GEN)
     }
 
@@ -230,6 +247,19 @@ public class Assembler_test {
         b.callHelper(HelperCodec.MUTATION_MIN, 0u8)
         b.emitU8(Op.DEC_TO_I64, 1u8)
         Assembler_test.add(sess, 0u32, 0, LocalType.I64, [], b.finish())
+        @Assert(Assembler_test.assembleKind(sess), DiagKind.NOT_IMPL)
+    }
+
+    /** 校验 11：含 `CALL_HOST` 的函数按变更型置位，同样禁用 deopt 源（m2 §6）。 */
+    @TestCase
+    public func callHostFunctionRejectsDeoptSource(): Unit {
+        let sess = Assembler_test.newSess(verMajor: 2u16)
+        let b = BytecodeBuilder(0u32, sess.consts)
+        let hs = b.allocSlot(LocalType.HOST_CLOSURE)
+        b.emitU16(Op.LOADL, UInt16(hs))
+        b.callHost(0u8) // 变更型置位 + 自动 CHECK_ERR
+        b.emitU8(Op.DEC_TO_I64, 1u8)
+        Assembler_test.add(sess, 0u32, 0, LocalType.I64, [LocalType.HOST_CLOSURE], b.finish())
         @Assert(Assembler_test.assembleKind(sess), DiagKind.NOT_IMPL)
     }
 

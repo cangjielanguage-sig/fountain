@@ -18,6 +18,7 @@ package fountain::f_jit
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.InterruptedException
 import fountain::f_jit.base.JitException
+import fountain::f_jit.runtime.HostFault
 import fountain::f_jit.runtime.JitContext
 
 /**
@@ -38,6 +39,17 @@ protected class JitReport {
         let code = ctx.errCode
         if (code == ErrCode.INTERRUPT) {
             throw InterruptedException('调用被中断（-2，§2）')
+        }
+        if (code == ErrCode.HOST_EXCEPTION) {
+            // 宿主异常：桥负责打印**完整仓颉栈**（原始异常对象经 cause 旁路带出）。
+            match (HostFault.exceptionOf(ctx)) {
+                case Some(ex) => ex.printStackTrace()
+                case None => ()
+            }
+            match (HostFault.takeCause(ctx)) {
+                case Some(c) => throw JitException(code, ctx.site, ctx.fnId, None, report, c)
+                case None => throw JitException(code, ctx.site, ctx.fnId, None, report)
+            }
         }
         throw JitException(code, ctx.site, ctx.fnId, None, report)
     }

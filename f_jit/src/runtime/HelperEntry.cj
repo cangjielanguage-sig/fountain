@@ -23,7 +23,7 @@ package fountain::f_jit.runtime
  * 同一份仓颉实现**）；失败一律由 `invokeHelper` 转成错误码写槽，**绝不把异常抛回机器码**
  * （design D5：机器码没有栈展开能力）。
  *
- * `63–68` 保留给 M2/M3，本表不登记（§6）。
+ * `63` = M2 `host_call_trampoline`；`64–68` 保留给后续增量（§6）。
  */
 /**
  * `@C` 入口的公共实现体（hid → 实现分派）。
@@ -352,6 +352,11 @@ public func dt_diff(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64
 @C
 public func map_iter_step(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64 {
     helperEntry(62, ctx, args, n)
+}
+/** H63 `host_call_trampoline`（m2 §5）。 */
+@C
+public func host_call_trampoline(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64 {
+    helperEntry(63, ctx, args, n)
 }
 /** H69 `str_to_regex`（§6）。 */
 @C

@@ -34,7 +34,7 @@ import fountain::f_jit.bytecode.LoadedUnit
 /** Q3.5–Q3.7：M2 降低面（CALL_HOST / 成员访问 / 构造）。 */
 @Test
 public class LowererM2_test {
-    /** CALL_HOST：实参左→右 → LOADL fn → CALL_HOST 2 → 自动 CHECK_ERR。 */
+    /** CALL_HOST：LOADL fn（栈底）→ 实参左→右 → CALL_HOST 2 → 自动 CHECK_ERR。 */
     @TestCase
     public func callHostInstructionSequence(): Unit {
         let unit = LowererM2_test.compileV2(
@@ -51,7 +51,7 @@ public class LowererM2_test {
     @TestCase
     public func callHostOneArgUsesDeclaredReturn(): Unit {
         let unit = LowererM2_test.compileV2('{ fn: (Int64) -> Bool => fn(1) }')
-        @Assert(LowererM2_test.entryOps(unit), 'PUSH_I64 LOADL CALL_HOST CHECK_ERR RET')
+        @Assert(LowererM2_test.entryOps(unit), 'LOADL PUSH_I64 CALL_HOST CHECK_ERR RET')
         @Assert(unit.dir.at(0).retType, LocalType.BOOL)
     }
 

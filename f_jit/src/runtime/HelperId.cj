@@ -18,9 +18,9 @@ package fountain::f_jit.runtime
 /**
  * 固定 helper 编号（hid）常量命名空间 —— design-m1 §5.3.4、plan-m1 S4.7。
  *
- * 数值权威 = `doc/jit-bytecode-m1.md` §6「M1 @C helper 清单」。M1 登记 **1–62 与 69–72**
- * （H63–H68 保留给 M2/M3，`name` 对它们给保留占位、不实名）；单元私有预定义 helper 走
- * `[0x0100, 0xFFFF]`（§8.4），与本表不重叠。
+ * 数值权威 = `doc/jit-bytecode-m1.md` §6「M1 @C helper 清单」。M1 登记 **1–62 与 69–72**；
+ * M2 追加 **63 `host_call_trampoline`**（m2 §2/§5），**64–68** 仍保留给后续增量。
+ * 单元私有预定义 helper 走 `[0x0100, 0xFFFF]`（§8.4），与本表不重叠。
  *
  * 与 `LocalType` / `ErrCode` / `TypeToken` 同族：hid 是要**烘焙进机器码**的线上码，用
  * 「类 + `static const`」承载（design D3）。
@@ -88,6 +88,9 @@ public class HelperId {
     public static const STR_REPEAT: UInt16 = 60u16
     public static const DT_DIFF: UInt16 = 61u16
     public static const MAP_ITER_STEP: UInt16 = 62u16
+
+    /** M2 §5：CALL_HOST 的宿主闭包转发器。 */
+    public static const HOST_CALL_TRAMPOLINE: UInt16 = 63u16
     public static const STR_TO_REGEX: UInt16 = 69u16
     public static const LIST_NEW: UInt16 = 70u16
     public static const MAP_NEW: UInt16 = 71u16
@@ -170,6 +173,7 @@ public class HelperId {
             case 60u16 => 'str_repeat'
             case 61u16 => 'dt_diff'
             case 62u16 => 'map_iter_step'
+            case 63u16 => 'host_call_trampoline'
             case 69u16 => 'str_to_regex'
             case 70u16 => 'list_new'
             case 71u16 => 'map_new'
@@ -180,7 +184,7 @@ public class HelperId {
             case 75u16 => 'datetime_of'
             case 76u16 => 'duration_parse'
             case _ =>
-                if (hid >= 63u16 && hid <= 68u16) {
+                if (hid >= 64u16 && hid <= 68u16) {
                     'reserved(${hid})'
                 } else {
                     'unknown(${hid})'

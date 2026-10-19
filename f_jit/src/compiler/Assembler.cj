@@ -168,11 +168,11 @@ internal class Assembler {
     private func validateFunc(f: LoweredFunc, rules: FbcRuleSet): Unit {
         let code = f.body.code
         var off: Int64 = 0
-        // CALL_HOST 的栈布局校验需要「到此为止的栈深」与「最后压栈的槽」；
+        // CALL_HOST 的栈布局校验需要「到此为止的栈深」与每个深度上的压栈来源；
         // 其余指令不据深度拒绝（分支汇合由 BytecodeBuilder 在构建期守）。
         var depth: Int64 = 0
-        var prevOp: UInt8 = 0xFFu8
-        var prevSlot: Int64 = -1
+        // slots[i] = 第 i 个栈元素由哪条 `LOADL` 压入（槽号）；非 `LOADL` 压入记 -1。
+        var slots = ArrayList<Int64>()
         while (off < code.size) {
             let info = OpInfo.OPCODE_TABLE[Int64(code[off])]
             if (info.cat == OpInfo.CAT_FORBID || info.cat == OpInfo.CAT_RSVD) {
@@ -231,15 +231,16 @@ internal class Assembler {
                         'CALL_FUNC argc 不符: fid=${fid} argc=${argc} nargs=${nargs} @${off}（§7 校验 7）')
                 }
             }
-            // 7') Q2.4：CALL_HOST 的 `[h_fn, a1..an]` 栈布局
+            // 7') Q2.4：CALL_HOST 的 `[h_fn, a1..an]` 栈布局（h_fn 是**最先**压入的那个）
             if (op == Op.CALL_HOST) {
                 let argc = Int64(InsnDecoder.u8(insn, 0))
-                if (depth < argc + 1) {
+                if (depth < argc + 1 || slots.size < argc + 1) {
                     codeFail(
                         'CALL_HOST argc 与栈不符: argc=${argc} 需 ${argc + 1} 槽，实际 ${depth} @${off}（§7 校验 7）')
                 }
-                if (!Assembler.precededByHandleLoad(prevOp, prevSlot, f)) {
-                    codeFail('CALL_HOST 栈底非句柄: 前一条须为 13 型 LOADL @${off}（§7 校验 7）')
+                let base = slots[slots.size - argc - 1]
+                if (!Assembler.isHostClosureSlot(base, f)) {
+                    codeFail('CALL_HOST 调用块栈底非句柄: 须为 13 型 LOADL @${off}（§7 校验 7）')
                 }
             }
             // 11) 变更型函数禁用 deopt 源（DEC_TO_I64 / TO_I64 的 mode=1）
@@ -253,14 +254,23 @@ internal class Assembler {
             // 栈深（仅供 CALL_HOST 判据；分支造成的偏差不在此拒绝）
             let (pop, push) = StackEffect.of(op, Assembler.effectArgc(op, insn))
             if (pop >= 0) {
+                var k: Int64 = 0
+                while (k < pop && !slots.isEmpty()) {
+                    slots.remove(at: slots.size - 1)
+                    k = k + 1
+                }
+                let loaded = Assembler.loadedSlotOf(op, insn)
+                var j: Int64 = 0
+                while (j < push) {
+                    slots.add(if (j == 0) { loaded } else { -1 })
+                    j = j + 1
+                }
                 depth = if (depth >= pop) {
                     depth - pop + push
                 } else {
                     push
                 }
             }
-            prevOp = op
-            prevSlot = Assembler.loadedSlotOf(op, insn)
             off = off + insn.size
         }
         // 9) 类型表长度 = nLocals（由 LocalTypes 保证）且值在规则集合法集内
@@ -275,13 +285,10 @@ internal class Assembler {
         }
     }
 
-    /** `CALL_HOST` 前一条必须是 `LOADL`/`LOADL0-3` 且槽类型为 13（HostClosure）。 */
-    private static func precededByHandleLoad(prevOp: UInt8, prevSlot: Int64, f: LoweredFunc): Bool {
-        if (prevSlot < 0) {
-            return false
-        }
-        let isLoad = prevOp == Op.LOADL || (prevOp >= Op.LOADL0 && prevOp <= Op.LOADL3)
-        isLoad && prevSlot < f.types.size && UInt16(f.types.get(prevSlot)) == LocalType.HOST_CLOSURE
+    /** `CALL_HOST` 调用块栈底必须是 `LOADL`/`LOADL0-3` 且槽类型为 13（HostClosure）。 */
+    private static func isHostClosureSlot(slot: Int64, f: LoweredFunc): Bool {
+        slot >= 0 && slot < f.types.size &&
+            UInt16(f.types.get(slot)) == LocalType.HOST_CLOSURE
     }
 
     /** 栈账所需的 `argc`（`CALL_*` 家族）；其余 0。 */

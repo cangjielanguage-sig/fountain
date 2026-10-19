@@ -313,7 +313,7 @@ internal class BytecodeBuilder {
     }
 
     /**
-     * `CALL_HOST argc`：栈 `[a1..an, h_fn]`（m2 §3：实参左→右入栈 → `LOADL fn` → 调用）。
+     * `CALL_HOST argc`：栈 `[h_fn, a1..an]`（m2 §2/§5：`LOADL fn` 先入栈（栈底），实参左→右）。
      *
      * 与 `CALL_HELPER` 同构：自动尾随 `CHECK_ERR`（I3），并因宿主闭包体黑盒而按变更型置位。
      */

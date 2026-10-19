@@ -149,8 +149,9 @@ public class JitContext {
         JitContext(p)
     }
 
-    /** 配对释放（桥 `finally` 义务；T27）。 */
+    /** 配对释放（桥 `finally` 义务；T27）。释放前清掉本次调用的 cause 旁路。 */
     public static func free(ctx: JitContext): Unit {
+        HostFault.clear(ctx)
         unsafe { LibC.free<Int64>(ctx.p) }
         NativeMem.freeCount = NativeMem.freeCount + 1
     }

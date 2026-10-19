@@ -1695,11 +1695,11 @@ internal class Lowerer {
                                     '名字冲突：「${name}」既是 HostClosure 形参/局部，又是已注册的 user helper' +
                                     '（m2 §3：禁止静默择一，请改名）')
                             }
-                            // 实参左→右入栈 → LOADL fn → CALL_HOST argc（+ 自动 CHECK_ERR）。
+                            // m2 §2/§5：`[h_fn, a1..an]` —— 句柄先入栈（栈底），实参左→右。
+                            ctx.builder.emitU16(Op.LOADL, UInt16(sym.slot))
                             for (a in args) {
                                 let _ = this.lowerExpr(a)
                             }
-                            ctx.builder.emitU16(Op.LOADL, UInt16(sym.slot))
                             ctx.builder.callHost(UInt8(args.size))
                             let r = sym.hostRet
                             this.lastHostRet = LocalType.NONE
@@ -1767,33 +1767,33 @@ internal class Lowerer {
     }
 
     /**
-     * 13 型非局部表达式作被调：先求句柄存临时槽 → 实参左→右 → `LOADL` → `CALL_HOST`。
-     * 保证 CALL_HOST 的「句柄最后压栈」布局（m2 §3）。
+     * 13 型非局部表达式作被调：先求句柄存临时槽 → `LOADL`（栈底）→ 实参左→右 → `CALL_HOST`。
+     * 布局 `[h_fn, a1..an]`（m2 §2/§5）；被调表达式仍先于实参求值。
      */
     private func lowerHostClosureInvoke(target: AstExpr, args: Array<AstExpr>): UInt16 {
         let ctx = this.requireCtx()
         let tslot = ctx.builder.allocSlot(LocalType.HOST_CLOSURE)
         let _ = this.lowerExpr(target)
         ctx.builder.emitU16(Op.STOREL, UInt16(tslot))
+        ctx.builder.emitU16(Op.LOADL, UInt16(tslot))
         for (a in args) {
             let _ = this.lowerExpr(a)
         }
-        ctx.builder.emitU16(Op.LOADL, UInt16(tslot))
         ctx.builder.callHost(UInt8(args.size))
         LocalType.I64
     }
 
-    /** `u.cb(a…)`（13 型字段）：H64 求句柄 → 临时槽 → 实参 → LOADL → CALL_HOST。 */
+    /** `u.cb(a…)`（13 型字段）：H64 求句柄 → 临时槽 → LOADL → 实参 → CALL_HOST。 */
     private func lowerHostClosureFieldInvoke(className: String, field: String, tg: AstExpr,
         args: Array<AstExpr>, pos: SourcePos): UInt16 {
         let ctx = this.requireCtx()
         let tslot = ctx.builder.allocSlot(LocalType.HOST_CLOSURE)
         let _ = this.lowerHostFieldGet(className, field, tg, pos)
         ctx.builder.emitU16(Op.STOREL, UInt16(tslot))
+        ctx.builder.emitU16(Op.LOADL, UInt16(tslot))
         for (a in args) {
             let _ = this.lowerExpr(a)
         }
-        ctx.builder.emitU16(Op.LOADL, UInt16(tslot))
         ctx.builder.callHost(UInt8(args.size))
         LocalType.I64
     }

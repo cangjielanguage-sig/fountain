@@ -159,6 +159,7 @@ public class HandleTable {
             case _: Range<Int64> => TypeToken.RANGE
             case _: JitRegex => TypeToken.REGEX
             case _: JitClosure => TypeToken.CLOSURE
+            case _: HostCallback => TypeToken.HOST_CLOSURE
             case _ => TypeToken.RESERVED
         }
     }
@@ -247,7 +248,27 @@ public class HandleTable {
             failWith(ErrCode.CALL_CONTRACT)
         }
         synchronized(mtx) {
-            if (tok != TypeToken.LIST && tok != TypeToken.MAP) {
+            // 宿主闭包（tag=10）按**对象身份**去重：闭包没有值语义键，两个不同的闭包即使
+            // 代码相同也是不同回调（捕获环境可能不同）。
+            if (tok == TypeToken.HOST_CLOSURE) {
+                match (obj) {
+                    case cb: HostCallback =>
+                        var i = 1
+                        while (i < objs.size) {
+                            if (alive[i] && !constFlags[i] && tags[i] == tok) {
+                                match (objs[i]) {
+                                    case old: HostCallback =>
+                                        if (refEq(old, cb)) {
+                                            return makeId(i, tok, gens[i])
+                                        }
+                                    case _ => ()
+                                }
+                            }
+                            i = i + 1
+                        }
+                    case _ => ()
+                }
+            } else if (tok != TypeToken.LIST && tok != TypeToken.MAP) {
                 let key = canonKeyOf(obj)
                 var i = 1
                 while (i < objs.size) {
@@ -258,6 +279,31 @@ public class HandleTable {
                 }
             }
             newSlotLocked(obj, tok, false)
+        }
+    }
+
+    /**
+     * 路径 B：宿主注册类实例 → tag=11 句柄 ID（m2 §11/§16.2）。
+     *
+     * 注册类实例没有内建 token（`tokenOf` 对任意类返回 RESERVED），由调用方显式按
+     * **不透明宿主对象**大类登记；同一对象复用同 ID（引用语义、零拷贝）。
+     */
+    public static func pinHostObject(obj: Object): Int64 {
+        synchronized(mtx) {
+            var i = 1
+            while (i < objs.size) {
+                if (alive[i] && !constFlags[i] && tags[i] == TypeToken.HOST_OBJECT) {
+                    match (objs[i]) {
+                        case old: Object =>
+                            if (refEq(old, obj)) {
+                                return makeId(i, TypeToken.HOST_OBJECT, gens[i])
+                            }
+                        case _ => ()
+                    }
+                }
+                i = i + 1
+            }
+            newSlotLocked(obj, TypeToken.HOST_OBJECT, false)
         }
     }
 
@@ -509,6 +555,40 @@ public class HandleTable {
     public static func fetchClosure(id: Int64): JitClosure {
         match (fetchAny(id, TypeToken.CLOSURE)) {
             case v: JitClosure => v
+            case _ => failWith(ErrCode.HANDLE_TYPE)
+        }
+    }
+
+    /** 取宿主闭包条目（tag=10；null → 6、类型不符 → 8）。 */
+    public static func fetchHostCallback(id: Int64): HostCallback {
+        match (fetchAny(id, TypeToken.HOST_CLOSURE)) {
+            case v: HostCallback => v
+            case _ => failWith(ErrCode.HANDLE_TYPE)
+        }
+    }
+
+    /** 取宿主对象引用（tag=11；null → 6、类型不符 → 8）。 */
+    public static func fetchHostObject(id: Int64): Object {
+        // tag 11 是**显式写入**的大类（`pinHostObject`）：任意宿主类都没有内建 token，
+        // 故不能走 `fetchAny` 的 `tokenOf` 校验，改按槽位 tag 判定。
+        if (id == 0) {
+            failWith(ErrCode.NULL_HANDLE)
+        }
+        let i = idxOf(id)
+        if (i <= 0) {
+            failWith(ErrCode.NULL_HANDLE)
+        }
+        let v = synchronized(mtx) {
+            if (i >= objs.size) {
+                failWith(ErrCode.NULL_HANDLE)
+            }
+            if (!alive[i] || gens[i] != genOf(id) || tags[i] != TypeToken.HOST_OBJECT) {
+                failWith(ErrCode.HANDLE_TYPE)
+            }
+            objs[i]
+        }
+        match (v) {
+            case o: Object => o
             case _ => failWith(ErrCode.HANDLE_TYPE)
         }
     }
