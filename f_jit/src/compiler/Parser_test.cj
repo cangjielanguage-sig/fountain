@@ -52,6 +52,7 @@ public class Parser_test {
         @Assert(l.params[1].slot, 1)
         match (l.params[1].typeAnn) {
             case TypeRef.Builtin(code) => @Assert(code, LocalType.LIST)
+            case _ => @Assert('unexpected type form', 'Builtin')
         }
     }
 

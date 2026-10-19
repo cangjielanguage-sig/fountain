@@ -17,6 +17,7 @@ package fountain::f_jit.compiler
 
 import std.collection.ArrayList
 import fountain::f_jit.base.DiagnosticsSink
+import fountain::f_jit.base.PublicCtor
 import fountain::f_jit.base.SourcePos
 import fountain::f_jit.base.Version
 import fountain::f_jit.bytecode.ConstRegistry
@@ -125,6 +126,9 @@ internal class CompileSession {
     /** 已降低的函数（按登记顺序 = fnId 分配顺序）。 */
     private let funcs: ArrayList<LoweredFunc>
     private var nextFnId: UInt32
+    /** 构造器物化出的单元私有 user helper（slot 序，m2 §15）。 */
+    private let ctorHelpers: ArrayList<PublicCtor>
+    private let ctorKeys: ArrayList<String>
 
     public init(source: String, registry: PredefinedSnapshot, diagnostics: DiagnosticsSink,
         verMajor!: UInt16 = Version.MAJOR) {
@@ -138,6 +142,8 @@ internal class CompileSession {
         this.dir = FuncDir()
         this.funcs = ArrayList<LoweredFunc>()
         this.nextFnId = 0u32
+        this.ctorHelpers = ArrayList<PublicCtor>()
+        this.ctorKeys = ArrayList<String>()
     }
 
     /**
@@ -173,5 +179,30 @@ internal class CompileSession {
             t.set(i, f.types.get(i))
         }
         this.funcs.add(LoweredFunc(f.fnId, f.nargs, f.retType, t, f.body, f.sites))
+    }
+
+    /**
+     * 构造器 → 单元私有 user helper slot（m2 §15：零新指令/新 helper）。
+     *
+     * 同一 `(类名, 构造器下标)` 幂等复用同一 slot；slot 接在预定义快照之后，
+     * hid = slot + 0x0100（`HelperCodec.hidOfSlot`）。
+     */
+    public func allocCtorHelper(className: String, ctorIndex: Int64, ctor: PublicCtor): UInt16 {
+        let key = '${className}#${ctorIndex}'
+        var i = 0
+        while (i < this.ctorKeys.size) {
+            if (this.ctorKeys[i] == key) {
+                return UInt16(this.registry.size() + Int64(i))
+            }
+            i = i + 1
+        }
+        this.ctorKeys.add(key)
+        this.ctorHelpers.add(ctor)
+        UInt16(this.registry.size() + Int64(this.ctorHelpers.size - 1))
+    }
+
+    /** 本单元物化出的构造器 helper（按 slot 序）。 */
+    public func ctorHelperList(): Array<PublicCtor> {
+        this.ctorHelpers.toArray()
     }
 }

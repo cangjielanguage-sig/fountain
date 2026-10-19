@@ -312,6 +312,16 @@ internal class BytecodeBuilder {
         this.emitU8(Op.CALL_CLOSURE, argc)
     }
 
+    /**
+     * `CALL_HOST argc`：栈 `[a1..an, h_fn]`（m2 §3：实参左→右入栈 → `LOADL fn` → 调用）。
+     *
+     * 与 `CALL_HELPER` 同构：自动尾随 `CHECK_ERR`（I3），并因宿主闭包体黑盒而按变更型置位。
+     */
+    public func callHost(argc: UInt8): Unit {
+        this.emitU8(Op.CALL_HOST, argc)
+        this.trailCheck()
+    }
+
     /** `RET`：唯一出口（弹出返回值）。 */
     public func ret(): Unit {
         this.emitRaw(Op.RET)

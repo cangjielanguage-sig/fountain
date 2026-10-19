@@ -104,6 +104,11 @@ internal class AstShape {
             case AstExpr.Index(t, i, _) => 'index[${shapeE(t)},${shapeE(i)}]'
             case AstExpr.IndexTarget(t, i, _) => 'idxTarget[${shapeE(t)},${shapeE(i)}]'
             case AstExpr.MemberName(n, t, _) => 'member(${shapeE(t)}.${n})'
+            case AstExpr.FieldGet(t, f, _) => 'field(${shapeE(t)}.${f})'
+            case AstExpr.FieldSet(t, f, v, _) => 'fieldset(${shapeE(t)}.${f} = ${shapeE(v)})'
+            case AstExpr.MethodCall(t, m, args, _) =>
+                'method(${shapeE(t)}.${m} [${shapeList(args)}])'
+            case AstExpr.CtorCall(c, args, _) => 'ctor(${c} [${shapeList(args)}])'
         }
     }
 
@@ -161,6 +166,16 @@ internal class AstShape {
     internal static func builtinName(v: TypeRef): String {
         match (v) {
             case TypeRef.Builtin(code) => LocalType.name(code)
+            case TypeRef.HostClosureT(params, ret) =>
+                var ps = ''
+                for (i in 0..params.size) {
+                    if (i > 0) {
+                        ps = ps + ','
+                    }
+                    ps = ps + LocalType.name(params[i])
+                }
+                '(${ps}) -> ${LocalType.name(ret)}'
+            case TypeRef.HostObjectT(name) => name
         }
     }
 
@@ -173,6 +188,8 @@ internal class AstShape {
             let pa = l.params[i]
             let t = match (pa.typeAnn) {
                 case TypeRef.Builtin(code) => LocalType.name(code)
+                case TypeRef.HostClosureT(_, _) => 'HostClosure'
+                case TypeRef.HostObjectT(n) => n
             }
             ps = ps + pa.name + ':' + t
         }

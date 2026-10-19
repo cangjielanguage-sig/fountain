@@ -19,6 +19,7 @@ import std.collection.ArrayList
 import std.convert.*
 import fountain::f_base.UnsafeBytes
 import fountain::f_jit.base.LocalType
+import fountain::f_jit.base.PublicCtor
 import fountain::f_jit.base.SourcePos
 import fountain::f_jit.bytecode.ConstRegistry
 import fountain::f_jit.bytecode.LocalTypes
@@ -28,11 +29,22 @@ internal class VarSym {
     public let name: String
     public let slot: Int64
     public let ty: UInt16
+    /** 13 型：HostClosure 的返回类型码（CALL_HOST 的结果静态类型）。 */
+    public let hostRet: UInt16
+    /** 14 型：具体类名（成员访问链的类型跟踪，m2 §12.4）。 */
+    public let objectName: ?String
+    /** 捕获来源（m2 §14.7）；赋值可保守降级（只升不降）。 */
+    public var origin: UInt8
 
-    public init(name: String, slot: Int64, ty: UInt16) {
+    public init(name: String, slot: Int64, ty: UInt16,
+        hostRet!: UInt16 = LocalType.NONE, objectName!: ?String = None,
+        origin!: UInt8 = CaptureOrigin.VALUE) {
         this.name = name
         this.slot = slot
         this.ty = ty
+        this.hostRet = hostRet
+        this.objectName = objectName
+        this.origin = origin
     }
 }
 
@@ -102,6 +114,7 @@ internal class FnCtx {
 internal class Lowerer {
     private let sess: CompileSession
     private let resolver: NameResolver
+    private let view: ClassRegistryView
     private let src: String
     private var ctx: ?FnCtx = None
     private var entryFn: UInt32 = 0u32
@@ -110,10 +123,22 @@ internal class Lowerer {
     private let closureRets = ArrayList<(UInt32, UInt16)>()
     /** 待排序的名字表条目（NameTable 要求按 (fnId, slot) 严格升序）。 */
     private let pendingNames = ArrayList<(UInt32, Int64, String)>()
+    /** 最近一次 `lowerExpr` 产物的静态类知识（14 型链式解析，m2 §12.4）。 */
+    private var lastObjectName: ?String = None
+    /** 最近一次 `lowerExpr` 产物的 HostClosure 返回码（13 型调用结果）。 */
+    private var lastHostRet: UInt16 = LocalType.NONE
+    /** 闭包静态捕获描述符（m2 §14.8；**不进 `.fbc`**）。 */
+    private let captureDescs = ArrayList<CaptureDescriptor>()
+    /** > 0 表示当前正在降低「返回位置」表达式（逃逸判定）。 */
+    private var escapingDepth: Int64 = 0
+    /** 第 1 步：句柄型捕获（路径 B/C）放开（Q3.10）。 */
+    private static const ALLOW_ESCAPING_HANDLES: Bool = true
 
-    public init(sess: CompileSession, resolver: NameResolver) {
+    public init(sess: CompileSession, resolver: NameResolver,
+        view!: ClassRegistryView = ClassRegistryView(ClassRegistrySnapshot.empty())) {
         this.sess = sess
         this.resolver = resolver
+        this.view = view
         this.src = sess.source
     }
 
@@ -173,11 +198,18 @@ internal class Lowerer {
             base = 1
         }
         for (p in lambda.params) {
-            let slot = ctx.builder.allocSlot(p.typeAnn.code())
+            let code = p.typeAnn.code()
+            let slot = ctx.builder.allocSlot(code)
             if (slot != base + Int64(ctx.scopes[0].size)) {
                 codeFail('形参槽序错乱: ${slot} / ${base}')
             }
-            ctx.scopes[0].add(VarSym(p.name, slot, p.typeAnn.code()))
+            ctx.scopes[0].add(VarSym(p.name, slot, code, hostRet: p.typeAnn.hostRet(),
+                objectName: p.typeAnn.objectName(),
+                origin: if (code <= LocalType.UNIT) {
+                    CaptureOrigin.VALUE
+                } else {
+                    CaptureOrigin.PARAMETER
+                }))
             this.pendingNames.add((fnId, slot, p.name))
         }
         if (ctx.isClosure) {
@@ -185,7 +217,8 @@ internal class Lowerer {
             for (name in captureNames) {
                 let outer = Lowerer.findIn(parent, name, this.src)
                 let slot = ctx.builder.allocSlot(outer.ty)
-                let sym = VarSym(name, slot, outer.ty)
+                let sym = VarSym(name, slot, outer.ty, hostRet: outer.hostRet,
+                    objectName: outer.objectName, origin: outer.origin)
                 ctx.builder.emitU16(Op.LOAD_CAP, UInt16(i))
                 ctx.builder.emitU16(Op.STOREL, UInt16(slot))
                 ctx.captures.add(sym)
@@ -200,11 +233,15 @@ internal class Lowerer {
         var retT: UInt16 = LocalType.UNIT
         match (lambda.retExpr) {
             case Some(e) =>
-                // 返回类型以**降低时得到的实际类型**为准：静态预判（`staticTypeOfTop`）只认识
-                // 字面量/比较这类简单形状，`"ab" * 3`（String）、`1 + 0.5`（Decimal）、
-                // `dt1 - dt2`（Duration）都会被猜成 Int64，导致 retType 与栈上值不符。
+                // 返回位置的闭包表达式是「逃逸」的（m2 §14.7：仅跨桥返回方向）。
+                this.escapingDepth = this.escapingDepth + 1
                 retT = this.lowerExprAs(e, this.fnRetType(ctx))
-                ctx.builder.ret()
+                this.escapingDepth = this.escapingDepth - 1
+                if (retT == LocalType.UNIT) {
+                    ctx.builder.retVoid()
+                } else {
+                    ctx.builder.ret()
+                }
             case None => ctx.builder.retVoid()
         }
         if (ctx.isClosure) {
@@ -224,6 +261,11 @@ internal class Lowerer {
             t.set(i, UInt8(table[i]))
         }
         t
+    }
+
+    /** 本单元的闭包静态捕获描述符（登记序 = 闭包出现序）。 */
+    public func captureDescriptors(): Array<CaptureDescriptor> {
+        this.captureDescs.toArray()
     }
 
     private func fnRetType(ctx: FnCtx): UInt16 {
@@ -265,8 +307,13 @@ internal class Lowerer {
         match (s) {
             case AstStmt.Decl(name, tyAnn, initE, pos) =>
                 var declared: UInt16 = LocalType.NONE
+                var declaredHostRet: UInt16 = LocalType.NONE
+                var declaredObject: ?String = None
                 match (tyAnn) {
-                    case Some(t) => declared = t.code()
+                    case Some(t) =>
+                        declared = t.code()
+                        declaredHostRet = t.hostRet()
+                        declaredObject = t.objectName()
                     case None => ()
                 }
                 var initTy: UInt16 = declared
@@ -280,6 +327,12 @@ internal class Lowerer {
                 }
                 if (declared == LocalType.NONE) {
                     declared = initTy
+                    if (declared == LocalType.HOST_CLOSURE) {
+                        declaredHostRet = this.lastHostRet
+                    }
+                    if (declared == LocalType.HOST_OBJECT) {
+                        declaredObject = this.lastObjectName
+                    }
                 }
                 if (declared == LocalType.NONE) {
                     diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
@@ -287,7 +340,17 @@ internal class Lowerer {
                 }
                 let slot = ctx.builder.allocSlot(declared)
                 ctx.builder.emitU16(Op.STOREL, UInt16(slot))
-                ctx.declare(VarSym(name, slot, declared), pos, this.src)
+                var declaredOrigin: UInt8 = CaptureOrigin.WINDOW
+                if (declared <= LocalType.UNIT) {
+                    declaredOrigin = CaptureOrigin.VALUE
+                } else {
+                    match (initE) {
+                        case Some(e) => declaredOrigin = this.originOfExpr(e, declared)
+                        case None => ()
+                    }
+                }
+                ctx.declare(VarSym(name, slot, declared, hostRet: declaredHostRet,
+                    objectName: declaredObject, origin: declaredOrigin), pos, this.src)
                 this.pendingNames.add((ctx.fnId, slot, name))
             case AstStmt.Assign(lhs, rhs, pos) => this.lowerAssign(lhs, rhs, pos)
             case AstStmt.MultiAssign(lhs, rhs, pos) => this.lowerMultiAssign(lhs, rhs, pos)
@@ -332,7 +395,9 @@ internal class Lowerer {
                         if (this.tryLowerTailRecursive(e)) {
                             return
                         }
+                        this.escapingDepth = this.escapingDepth + 1
                         let _ = this.lowerExprAs(e, this.fnRetType(ctx))
+                        this.escapingDepth = this.escapingDepth - 1
                         ctx.builder.ret()
                     case None => ctx.builder.retVoid()
                 }
@@ -371,6 +436,7 @@ internal class Lowerer {
             case AstExpr.Var(name, vpos) =>
                 let sym = this.requireVar(name, vpos)
                 let _ = this.lowerExprAs(rhs, sym.ty)
+                sym.origin = Lowerer.worseOrigin(sym.origin, this.originOfExpr(rhs, sym.ty))
                 ctx.builder.emitU16(Op.STOREL, UInt16(sym.slot))
             case AstExpr.IndexTarget(target, index, _) =>
                 let tt = this.lowerExpr(target)
@@ -385,9 +451,25 @@ internal class Lowerer {
                         '下标赋值的目标必须是 List 或 Map')
                 }
                 ctx.builder.emit(Op.POP)
+            case AstExpr.MemberName(name, tg, mpos) =>
+                match (this.hostObjectClassOf(tg)) {
+                    case Some(className) =>
+                        this.lowerHostFieldSet(className, name, tg, rhs, mpos)
+                    case None =>
+                        diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, mpos.line, mpos.column,
+                            '字段写「.${name}」的接收者不是静态已知的注册类（m2 §12.4）')
+                }
+            case AstExpr.FieldSet(tg, field, _, fpos) =>
+                match (this.hostObjectClassOf(tg)) {
+                    case Some(className) =>
+                        this.lowerHostFieldSet(className, field, tg, rhs, fpos)
+                    case None =>
+                        diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, fpos.line, fpos.column,
+                            '字段写「.${field}」的接收者不是静态已知的注册类（m2 §12.4）')
+                }
             case _ =>
                 diagFail(DiagKind.SYNTAX_ERROR, this.src, 0, pos.line, pos.column,
-                    '赋值目标必须是局部变量或容器下标')
+                    '赋值目标必须是局部变量、容器下标或宿主字段')
         }
     }
 
@@ -620,11 +702,15 @@ internal class Lowerer {
 
     private func lowerExpr(e: AstExpr): UInt16 {
         let ctx = this.requireCtx()
+        this.lastObjectName = None
+        this.lastHostRet = LocalType.NONE
         match (e) {
             case AstExpr.Lit(t, pos) => this.lowerLiteral(t, pos)
             case AstExpr.Var(name, pos) =>
                 let sym = this.requireVar(name, pos)
                 ctx.builder.emitU16(Op.LOADL, UInt16(sym.slot))
+                this.lastObjectName = sym.objectName
+                this.lastHostRet = sym.hostRet
                 sym.ty
             case AstExpr.Binary(op, l, r, pos) => this.lowerBinary(op, l, r, pos)
             case AstExpr.Unary(op, x, pos) => this.lowerUnary(op, x, pos)
@@ -705,6 +791,33 @@ internal class Lowerer {
                 diagFail(DiagKind.SYNTAX_ERROR, this.src, 0, pos.line, pos.column,
                     '下标赋值目标只能出现在赋值语句左侧')
             case AstExpr.MemberName(name, tg, pos) => this.lowerMemberValue(name, tg, pos)
+            case AstExpr.FieldGet(tg, field, pos) => this.lowerMemberValue(field, tg, pos)
+            case AstExpr.FieldSet(tg, field, v, pos) =>
+                match (this.hostObjectClassOf(tg)) {
+                    case Some(className) => this.lowerHostFieldSet(className, field, tg, v, pos)
+                    case None =>
+                        diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                            '字段写「.${field}」的接收者不是静态已知的注册类（m2 §12.4）')
+                }
+                LocalType.UNIT
+            case AstExpr.MethodCall(tg, method, args, pos) =>
+                match (this.hostObjectClassOf(tg)) {
+                    case Some(className) =>
+                        match (this.view.fieldOf(className, method)) {
+                            case Some(f) =>
+                                if (f.`type` == LocalType.HOST_CLOSURE) {
+                                    this.lowerHostClosureFieldInvoke(className, method, tg, args, pos)
+                                } else {
+                                    this.lowerHostMethodCall(className, method, tg, args, pos)
+                                }
+                            case None =>
+                                this.lowerHostMethodCall(className, method, tg, args, pos)
+                        }
+                    case None =>
+                        this.lowerBuiltinMemberCall(method, tg, args, pos)
+                }
+            case AstExpr.CtorCall(className, args, pos) =>
+                this.lowerCtorCall(className, args, pos)
         }
     }
 
@@ -1180,12 +1293,17 @@ internal class Lowerer {
     }
 
     /**
-     * 成员**值**：M1 扩展只开放 `Duration.<unit>`（其余成员访问仍属 M2）。
+     * 成员**值**（m2 §12.4）：`u.f` → H64；`Duration.<unit>` 走 M1 常量路径。
      *
-     * 单位常量走常量表（`ConstRegistry.addDuration` + `PUSH_KH`），不占 helper 槽。
+     * 仅对静态已知为某注册类的 14 型表达式合法；类的静态知识沿 `Var` / 字段 `typeRef` /
+     * 构造结果传递（前端只查注册表条目，不做继承谱系上溯，v0.8.31）。
      */
     private func lowerMemberValue(name: String, tg: AstExpr, pos: SourcePos): UInt16 {
         let ctx = this.requireCtx()
+        match (this.hostObjectClassOf(tg)) {
+            case Some(className) => return this.lowerHostFieldGet(className, name, tg, pos)
+            case None => ()
+        }
         match (tg) {
             case AstExpr.Var(ns, _) =>
                 if (ns == 'Duration') {
@@ -1206,12 +1324,191 @@ internal class Lowerer {
                     ctx.builder.emitU16(Op.PUSH_KH, UInt16(hid))
                     return LocalType.DURATION
                 }
-                diagFail(DiagKind.NOT_IMPL, this.src, 0, pos.line, pos.column,
-                    '仅支持 Duration.<unit> 成员常量')
+                diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                    '成员访问「.${name}」的接收者不是静态已知的注册类（m2 §12.4：仅 14 型表达式可用点号）')
             case _ =>
-                diagFail(DiagKind.NOT_IMPL, this.src, 0, pos.line, pos.column, '成员访问属 M2')
+                diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                    '成员访问「.${name}」的接收者不是静态已知的注册类（m2 §12.4）')
         }
     }
+
+    /** `u.f` → `H64(obj, index)`（值型零登记；句柄型条件分配），返回字段静态类型。 */
+    private func lowerHostFieldGet(className: String, fieldName: String, tg: AstExpr,
+        pos: SourcePos): UInt16 {
+        let ctx = this.requireCtx()
+        let f = this.view.requireField(className, fieldName, pos, this.src)
+        let rt = this.lowerExpr(tg)
+        if (rt != LocalType.HOST_OBJECT) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                '成员访问「.${fieldName}」的接收者不是 HostObject（实际类型码 ${rt}，m2 §12.4）')
+        }
+        ctx.builder.emitI64(Op.PUSH_I64, Int64(f.index))
+        ctx.builder.setSite(pos)
+        ctx.builder.callHelper(HelperCodec.HOST_GET_FIELD, 2u8)
+        this.lastObjectName = if (f.`type` == LocalType.HOST_OBJECT) { f.typeRef } else { None }
+        this.lastHostRet = LocalType.NONE
+        f.`type`
+    }
+
+    /** `u.f = v` → `H65(obj, index, v)`；`let` 字段 → 编译错误（m2 §12.4 降级表）。 */
+    private func lowerHostFieldSet(className: String, fieldName: String, tg: AstExpr,
+        rhs: AstExpr, pos: SourcePos): Unit {
+        let ctx = this.requireCtx()
+        let f = this.view.requireField(className, fieldName, pos, this.src)
+        if (!f.mutable) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                '字段「${className}.${fieldName}」是 let（mutable=false），不可写（m2 §12.4）')
+        }
+        let rt = this.lowerExpr(tg)
+        if (rt != LocalType.HOST_OBJECT) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                '字段写「.${fieldName}」的接收者不是 HostObject（实际类型码 ${rt}）')
+        }
+        ctx.builder.emitI64(Op.PUSH_I64, Int64(f.index))
+        let _ = this.lowerExprAs(rhs, f.`type`)
+        ctx.builder.setSite(pos)
+        ctx.builder.callHelper(HelperCodec.HOST_SET_FIELD, 3u8)
+        ctx.builder.emit(Op.POP)
+        this.lastObjectName = None
+        this.lastHostRet = LocalType.NONE
+    }
+
+    /** `u.m(a…)` → 预定义调用 `m(u, a…)`（hid 由方法表 bind 解析，m2 §12.4）。 */
+    private func lowerHostMethodCall(className: String, methodName: String, tg: AstExpr,
+        args: Array<AstExpr>, pos: SourcePos): UInt16 {
+        let ctx = this.requireCtx()
+        let m = this.view.requireMethod(className, methodName, pos, this.src)
+        let slot = this.sess.registry.slotOf(m.bind.name)
+        if (slot < 0) {
+            diagFail(DiagKind.UNREGISTERED_FUNCTION, this.src, 0, pos.line, pos.column,
+                '方法「${className}.${methodName}」的绑定「${m.bind.name}」未注册为预定义函数' +
+                '（m2 §12.4：方法表 bind 是包装调用的 hid 来源）')
+        }
+        let want = m.bind.paramTypes.size - 1
+        if (Int64(args.size) != want) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                '方法「${className}.${methodName}」实参个数不符：需要 ${want}，实际 ${args.size}' +
+                '（m2 §12.4 静态签名）')
+        }
+        let rt = this.lowerExpr(tg)
+        if (rt != LocalType.HOST_OBJECT) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                '方法调用「.${methodName}」的接收者不是 HostObject（实际类型码 ${rt}）')
+        }
+        var i = 0
+        while (i < args.size) {
+            let expected = m.bind.paramTypes[i + 1]
+            let actual = this.lowerExprAs(args[i], expected)
+            if (expected != LocalType.NONE && actual != LocalType.NONE && actual != expected) {
+                diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                    '方法「${className}.${methodName}」第 ${i + 1} 个实参类型不符：' +
+                    '需要 ${LocalType.name(expected)}，实际 ${LocalType.name(actual)}（m2 §12.4）')
+            }
+            i = i + 1
+        }
+        ctx.builder.setSite(pos)
+        ctx.builder.callHelper(HelperCodec.hidOfSlot(UInt16(slot)), UInt8(args.size + 1))
+        this.lastObjectName = if (m.bind.retType == LocalType.HOST_OBJECT) {
+            Some(className)
+        } else {
+            None
+        }
+        this.lastHostRet = LocalType.NONE
+        m.bind.retType
+    }
+
+    /**
+     * 14 型表达式的静态类名（链路：局部声明 / 字段 `typeRef` / 方法返回值 / 构造结果）。
+     * 其余 → None（点号接收者合法性判定）。
+     */
+    private func hostObjectClassOf(e: AstExpr): ?String {
+        match (e) {
+            case AstExpr.Var(name, _) =>
+                match (this.requireCtx().find(name)) {
+                    case Some(sym) =>
+                        if (sym.ty == LocalType.HOST_OBJECT) {
+                            sym.objectName
+                        } else {
+                            None
+                        }
+                    case None => None
+                }
+            case AstExpr.MemberName(fieldName, inner, _) =>
+                match (this.hostObjectClassOf(inner)) {
+                    case Some(cls) =>
+                        match (this.view.fieldOf(cls, fieldName)) {
+                            case Some(f) =>
+                                if (f.`type` == LocalType.HOST_OBJECT) {
+                                    f.typeRef
+                                } else {
+                                    None
+                                }
+                            case None => None
+                        }
+                    case None => None
+                }
+            case AstExpr.FieldGet(inner, fieldName, _) =>
+                match (this.hostObjectClassOf(inner)) {
+                    case Some(cls) =>
+                        match (this.view.fieldOf(cls, fieldName)) {
+                            case Some(f) =>
+                                if (f.`type` == LocalType.HOST_OBJECT) {
+                                    f.typeRef
+                                } else {
+                                    None
+                                }
+                            case None => None
+                        }
+                    case None => None
+                }
+            case AstExpr.MethodCall(inner, methodName, _, _) =>
+                match (this.hostObjectClassOf(inner)) {
+                    case Some(cls) =>
+                        match (this.view.methodOf(cls, methodName)) {
+                            case Some(m) =>
+                                if (m.bind.retType == LocalType.HOST_OBJECT) {
+                                    Some(cls)
+                                } else {
+                                    None
+                                }
+                            case None => None
+                        }
+                    case None => None
+                }
+            case AstExpr.CtorCall(className, _, _) =>
+                if (this.view.isRegistered(className)) {
+                    Some(className)
+                } else {
+                    None
+                }
+            case AstExpr.Call(target, _, _) =>
+                match (target) {
+                    case AstExpr.Var(cname, _) =>
+                        if (this.view.isRegistered(cname)) {
+                            Some(cname)
+                        } else {
+                            None
+                        }
+                    case AstExpr.MemberName(methodName, inner, _) =>
+                        match (this.hostObjectClassOf(inner)) {
+                            case Some(cls) =>
+                                match (this.view.methodOf(cls, methodName)) {
+                                    case Some(m) =>
+                                        if (m.bind.retType == LocalType.HOST_OBJECT) {
+                                            Some(cls)
+                                        } else {
+                                            None
+                                        }
+                                    case None => None
+                                }
+                            case None => None
+                        }
+                    case _ => None
+                }
+            case _ => None
+        }
+    }
+
 
     /**
      * 成员**调用**（M1 扩展）：`DateTime.now/parse/of` 与 `Duration.parse`。
@@ -1222,6 +1519,11 @@ internal class Lowerer {
     private func lowerBuiltinMemberCall(name: String, tg: AstExpr, args: Array<AstExpr>,
         pos: SourcePos): UInt16 {
         let ctx = this.requireCtx()
+        match (this.hostObjectClassOf(tg)) {
+            case Some(className) =>
+                return this.lowerHostMethodCall(className, name, tg, args, pos)
+            case None => ()
+        }
         // v0.17 `regexStr.regex()`（f_regex 扩展）：字符串 → Regex（无 flags）。
         if (name == 'regex' && args.size == 0) {
             let t = this.lowerExpr(tg)
@@ -1289,6 +1591,83 @@ internal class Lowerer {
         }
     }
 
+    /**
+     * `C(args…)` → `CALL_HELPER <ctor-hid>`（m2 §15）。
+     *
+     * 每条 `PublicCtor` 物化为单元私有 user helper；重载按静态类型匹配，无匹配/歧义 →
+     * 编译错误。结果类型 = 14 + 具体类名（可直接进入成员链）。
+     */
+    private func lowerCtorCall(className: String, args: Array<AstExpr>, pos: SourcePos): UInt16 {
+        let ctx = this.requireCtx()
+        let ctors = this.view.requireCtors(className, pos, this.src)
+        let matches = ArrayList<Int64>()
+        var i = 0
+        while (i < ctors.size) {
+            if (Lowerer.ctorMatches(ctors[i], args, this)) {
+                matches.add(i)
+            }
+            i = i + 1
+        }
+        if (matches.size == 0) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                '类「${className}」没有匹配实参的构造器（m2 §15 重载静态匹配）')
+        }
+        if (matches.size > 1) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                '构造器调用「${className}」重载歧义：${matches.size} 个候选（m2 §15）')
+        }
+        let idx = matches[0]
+        let ctor = ctors[idx]
+        // 实参左→右求值（按选中构造器的形参类型做窄化/校验）。
+        var j = 0
+        while (j < args.size) {
+            let _ = this.lowerExprAs(args[j], ctor.params[j])
+            j = j + 1
+        }
+        let slot = this.sess.allocCtorHelper(className, idx, ctor)
+        ctx.builder.setSite(pos)
+        ctx.builder.callHelper(HelperCodec.hidOfSlot(slot), UInt8(args.size))
+        this.lastObjectName = Some(className)
+        this.lastHostRet = LocalType.NONE
+        LocalType.HOST_OBJECT
+    }
+
+    /** 构造器重载的静态匹配（14 型实参按静态类知识判定）。 */
+    private static func ctorMatches(ctor: PublicCtor, args: Array<AstExpr>,
+        l: Lowerer): Bool {
+        if (ctor.params.size != args.size) {
+            return false
+        }
+        var j = 0
+        while (j < args.size) {
+            let expected = ctor.params[j]
+            if (expected == LocalType.HOST_OBJECT) {
+                match (l.hostObjectClassOf(args[j])) {
+                    case Some(_) => ()
+                    case None => return false
+                }
+            } else {
+                let actual = l.staticTypeFull(args[j])
+                if (actual == LocalType.NONE) {
+                    return false
+                }
+                if (actual != expected) {
+                    let coercible = (expected == LocalType.F64 && actual == LocalType.I64)
+                    if (!coercible) {
+                        return false
+                    }
+                }
+            }
+            j = j + 1
+        }
+        true
+    }
+
+    /** JSON 谱系类名（m3 内建码 16–19；本层拒绝直接构造）。 */
+    private static func isJsonFamily(name: String): Bool {
+        name == 'JsonValue' || name == 'JsonObject' || name == 'JsonArray' || name == 'JsonNull'
+    }
+
     private func lowerCall(target: AstExpr, args: Array<AstExpr>, pos: SourcePos): UInt16 {
         let ctx = this.requireCtx()
         match (target) {
@@ -1309,6 +1688,23 @@ internal class Lowerer {
             case AstExpr.Var(name, vpos) =>
                 match (ctx.find(name)) {
                     case Some(sym) =>
+                        if (sym.ty == LocalType.HOST_CLOSURE) {
+                            // m2 §3：HostClosure 分支按声明类型静态判定，发射期间零运行期查找。
+                            if (this.sess.registry.has(name)) {
+                                diagFail(DiagKind.SYNTAX_ERROR, this.src, 0, vpos.line, vpos.column,
+                                    '名字冲突：「${name}」既是 HostClosure 形参/局部，又是已注册的 user helper' +
+                                    '（m2 §3：禁止静默择一，请改名）')
+                            }
+                            // 实参左→右入栈 → LOADL fn → CALL_HOST argc（+ 自动 CHECK_ERR）。
+                            for (a in args) {
+                                let _ = this.lowerExpr(a)
+                            }
+                            ctx.builder.emitU16(Op.LOADL, UInt16(sym.slot))
+                            ctx.builder.callHost(UInt8(args.size))
+                            let r = sym.hostRet
+                            this.lastHostRet = LocalType.NONE
+                            return if (r == LocalType.NONE) { LocalType.I64 } else { r }
+                        }
                         if (sym.ty != LocalType.CLOSURE) {
                             diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, vpos.line, vpos.column,
                                 '「${name}」不是可调用值')
@@ -1320,6 +1716,15 @@ internal class Lowerer {
                         ctx.builder.callClosure(UInt8(args.size))
                         LocalType.I64
                     case None =>
+                        // JSON 谱系是 M3 内建码，零注册、无注册构造器（v0.8.30）。
+                        if (Lowerer.isJsonFamily(name)) {
+                            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, vpos.line, vpos.column,
+                                '「${name}」属 JSON 谱系内建类型（16–19），无注册构造器（m2 §15/v0.8.30）')
+                        }
+                        // 已注册类名 → 字节码侧构造（m2 §15）。
+                        if (this.view.isRegistered(name)) {
+                            return this.lowerCtorCall(name, args, vpos)
+                        }
                         // 显式数值转换（§11.9）：形式由前端定义为 `Int64(x)` / `Float64(x)` / `Decimal(x)`
                         if (args.size == 1 && (name == 'Int64' || name == 'Float64' || name == 'Decimal')) {
                             return this.lowerNumericCast(name, args[0], vpos)
@@ -1339,11 +1744,19 @@ internal class Lowerer {
                                 let ret = this.sess.registry.retTypeOf(name)
                                 ctx.builder.callHelper(HelperCodec.hidOfSlot(slot), UInt8(args.size))
                                 ret
+                            case ResolvedCall.HostClosureCall =>
+                                notImplFail('HostClosure 调用降低尚未接入（Q3.5）')
                         }
                 }
             case AstExpr.MemberName(name, tg, mpos) =>
+                if (this.staticTypeFull(target) == LocalType.HOST_CLOSURE) {
+                    return this.lowerHostClosureInvoke(target, args)
+                }
                 this.lowerBuiltinMemberCall(name, tg, args, mpos)
             case _ =>
+                if (this.staticTypeFull(target) == LocalType.HOST_CLOSURE) {
+                    return this.lowerHostClosureInvoke(target, args)
+                }
                 let _ = this.lowerExpr(target)
                 for (a in args) {
                     let _ = this.lowerExpr(a)
@@ -1351,6 +1764,38 @@ internal class Lowerer {
                 ctx.builder.callClosure(UInt8(args.size))
                 LocalType.I64
         }
+    }
+
+    /**
+     * 13 型非局部表达式作被调：先求句柄存临时槽 → 实参左→右 → `LOADL` → `CALL_HOST`。
+     * 保证 CALL_HOST 的「句柄最后压栈」布局（m2 §3）。
+     */
+    private func lowerHostClosureInvoke(target: AstExpr, args: Array<AstExpr>): UInt16 {
+        let ctx = this.requireCtx()
+        let tslot = ctx.builder.allocSlot(LocalType.HOST_CLOSURE)
+        let _ = this.lowerExpr(target)
+        ctx.builder.emitU16(Op.STOREL, UInt16(tslot))
+        for (a in args) {
+            let _ = this.lowerExpr(a)
+        }
+        ctx.builder.emitU16(Op.LOADL, UInt16(tslot))
+        ctx.builder.callHost(UInt8(args.size))
+        LocalType.I64
+    }
+
+    /** `u.cb(a…)`（13 型字段）：H64 求句柄 → 临时槽 → 实参 → LOADL → CALL_HOST。 */
+    private func lowerHostClosureFieldInvoke(className: String, field: String, tg: AstExpr,
+        args: Array<AstExpr>, pos: SourcePos): UInt16 {
+        let ctx = this.requireCtx()
+        let tslot = ctx.builder.allocSlot(LocalType.HOST_CLOSURE)
+        let _ = this.lowerHostFieldGet(className, field, tg, pos)
+        ctx.builder.emitU16(Op.STOREL, UInt16(tslot))
+        for (a in args) {
+            let _ = this.lowerExpr(a)
+        }
+        ctx.builder.emitU16(Op.LOADL, UInt16(tslot))
+        ctx.builder.callHost(UInt8(args.size))
+        LocalType.I64
     }
 
     private func lowerInterp(parts: Array<AstExpr>, pos: SourcePos): UInt16 {
@@ -1622,6 +2067,28 @@ internal class Lowerer {
             }
         }
         let free = Lowerer.freeVarsOf(lambda, outerNames)
+        // m2 §14.8：静态捕获描述符（逐项分类；**不写入 `.fbc`**）。
+        let entries = ArrayList<CaptureEntry>()
+        for (name in free) {
+            match (outer.find(name)) {
+                case Some(sym) =>
+                    entries.add(CaptureEntry(name, sym.ty, sym.origin))
+                case None =>
+                    diagFail(DiagKind.UNDEFINED_IDENTIFIER, this.src, 0, lambda.pos.line,
+                        lambda.pos.column, '捕获的变量「${name}」不在外层作用域')
+            }
+        }
+        let desc = CaptureDescriptor(lambda.pos, this.escapingDepth > 0, entries.toArray())
+        if (desc.escaping && !Lowerer.ALLOW_ESCAPING_HANDLES) {
+            let bad = desc.invalidEntries()
+            if (bad.size > 0) {
+                let b = bad[0]
+                diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, lambda.pos.line, lambda.pos.column,
+                    '逃逸闭包捕获了「${b.name}」（来源：${CaptureOrigin.name(b.origin)}）；' +
+                    '第 0 步白名单只允许值型 / 路径 A 常量捕获（m2 §14.7）')
+            }
+        }
+        this.captureDescs.add(desc)
         outer.builder.emitI64(Op.PUSH_I64, Int64(fnId))
         for (name in free) {
             let sym = this.requireVar(name, lambda.pos)
@@ -1713,6 +2180,136 @@ internal class Lowerer {
                 }
             case _ => Lowerer.staticTypeOfTop(e)
         }
+    }
+
+    /** 含成员链 / 方法 / 构造的静态类型（成员访问的接收者与实参校验用）。 */
+    private func staticTypeFull(e: AstExpr): UInt16 {
+        match (e) {
+            case AstExpr.Var(_, _) => this.staticTypeOf(e)
+            case AstExpr.MemberName(fieldName, inner, _) =>
+                match (this.hostObjectClassOf(inner)) {
+                    case Some(cls) =>
+                        match (this.view.fieldOf(cls, fieldName)) {
+                            case Some(f) => f.`type`
+                            case None => LocalType.NONE
+                        }
+                    case None => LocalType.NONE
+                }
+            case AstExpr.FieldGet(inner, fieldName, _) =>
+                match (this.hostObjectClassOf(inner)) {
+                    case Some(cls) =>
+                        match (this.view.fieldOf(cls, fieldName)) {
+                            case Some(f) => f.`type`
+                            case None => LocalType.NONE
+                        }
+                    case None => LocalType.NONE
+                }
+            case AstExpr.FieldSet(_, _, _, _) => LocalType.UNIT
+            case AstExpr.MethodCall(inner, methodName, _, _) =>
+                match (this.hostObjectClassOf(inner)) {
+                    case Some(cls) =>
+                        match (this.view.methodOf(cls, methodName)) {
+                            case Some(m) => m.bind.retType
+                            case None => LocalType.NONE
+                        }
+                    case None => LocalType.NONE
+                }
+            case AstExpr.CtorCall(className, _, _) =>
+                if (this.view.isRegistered(className)) {
+                    LocalType.HOST_OBJECT
+                } else {
+                    LocalType.NONE
+                }
+            case AstExpr.Call(target, _, _) =>
+                match (target) {
+                    case AstExpr.Var(cname, _) =>
+                        if (this.view.isRegistered(cname)) {
+                            LocalType.HOST_OBJECT
+                        } else {
+                            this.sess.registry.retTypeOf(cname)
+                        }
+                    case AstExpr.MemberName(methodName, inner, _) =>
+                        match (this.hostObjectClassOf(inner)) {
+                            case Some(cls) =>
+                                match (this.view.methodOf(cls, methodName)) {
+                                    case Some(m) => m.bind.retType
+                                    case None => LocalType.NONE
+                                }
+                            case None => LocalType.NONE
+                        }
+                    case _ => LocalType.NONE
+                }
+            case _ => Lowerer.staticTypeOfTop(e)
+        }
+    }
+
+    /**
+     * 表达式的捕获来源分类（m2 §14.7）：值型 / 路径 A 常量 / 路径 C 窗口分配。
+     *
+     * 路径 B（参数）只在符号声明处产生；局部赋值的来源按「严重度只升不降」保守合并。
+     */
+    private func originOfExpr(e: AstExpr, ty: UInt16): UInt8 {
+        if (ty != LocalType.NONE && ty <= LocalType.UNIT) {
+            return CaptureOrigin.VALUE
+        }
+        match (e) {
+            case AstExpr.Var(name, _) =>
+                match (this.requireCtx().find(name)) {
+                    case Some(sym) => sym.origin
+                    case None => CaptureOrigin.CONSTANT
+                }
+            case AstExpr.Lit(t, _) =>
+                match (t.kind) {
+                    case TokenKind.StrLit | TokenKind.RegexLit | TokenKind.DecLit =>
+                        CaptureOrigin.CONSTANT
+                    case _ => CaptureOrigin.VALUE
+                }
+            case AstExpr.ListLit(_, isEmpty, _) =>
+                if (isEmpty) { CaptureOrigin.WINDOW } else { CaptureOrigin.CONSTANT }
+            case AstExpr.MapLit(_, isEmpty, _) =>
+                if (isEmpty) { CaptureOrigin.WINDOW } else { CaptureOrigin.CONSTANT }
+            case AstExpr.RegexOp(_, _, _, _, _, _, _) =>
+                if (ty != LocalType.NONE && ty <= LocalType.UNIT) {
+                    CaptureOrigin.VALUE
+                } else {
+                    CaptureOrigin.WINDOW
+                }
+            case AstExpr.IfExpr(_, t, f, _) =>
+                Lowerer.worseOrigin(this.originOfExpr(t, ty), this.originOfExpr(f, ty))
+            case AstExpr.Index(target, _, _) =>
+                if (this.originOfExpr(target, LocalType.NONE) == CaptureOrigin.CONSTANT) {
+                    CaptureOrigin.CONSTANT
+                } else {
+                    CaptureOrigin.WINDOW
+                }
+            case AstExpr.FieldGet(inner, _, _) =>
+                match (inner) {
+                    case AstExpr.Var('Duration', _) => CaptureOrigin.CONSTANT
+                    case _ => CaptureOrigin.WINDOW
+                }
+            case AstExpr.MemberName(_, inner, _) =>
+                match (inner) {
+                    case AstExpr.Var('Duration', _) => CaptureOrigin.CONSTANT
+                    case _ => CaptureOrigin.WINDOW
+                }
+            case AstExpr.FieldSet(_, _, _, _) => CaptureOrigin.VALUE
+            case AstExpr.StrAdd(_, _, _) => CaptureOrigin.WINDOW
+            case AstExpr.Interp(_, _) => CaptureOrigin.WINDOW
+            case AstExpr.Closure(_, _) => CaptureOrigin.WINDOW
+            case AstExpr.IIFE(_, _, _) => CaptureOrigin.WINDOW
+            case AstExpr.RecursiveValue(_) => CaptureOrigin.WINDOW
+            case AstExpr.RangeLit(_, _, _, _, _) => CaptureOrigin.WINDOW
+            case AstExpr.Call(_, _, _) => CaptureOrigin.WINDOW
+            case AstExpr.MethodCall(_, _, _, _) => CaptureOrigin.WINDOW
+            case AstExpr.CtorCall(_, _, _) => CaptureOrigin.WINDOW
+            case AstExpr.Binary(_, _, _, _) => CaptureOrigin.WINDOW
+            case AstExpr.Unary(_, _, _) => CaptureOrigin.WINDOW
+            case _ => CaptureOrigin.WINDOW
+        }
+    }
+
+    private static func worseOrigin(a: UInt8, b: UInt8): UInt8 {
+        if (a >= b) { a } else { b }
     }
 
     private func guessElemType(target: AstExpr): UInt16 {
@@ -1946,6 +2543,19 @@ internal class Lowerer {
                 Lowerer.scanExpr(t, locals, outer, free)
                 Lowerer.scanExpr(i, locals, outer, free)
             case AstExpr.MemberName(_, t, _) => Lowerer.scanExpr(t, locals, outer, free)
+            case AstExpr.FieldGet(t, _, _) => Lowerer.scanExpr(t, locals, outer, free)
+            case AstExpr.FieldSet(t, _, v, _) =>
+                Lowerer.scanExpr(t, locals, outer, free)
+                Lowerer.scanExpr(v, locals, outer, free)
+            case AstExpr.MethodCall(t, _, args, _) =>
+                Lowerer.scanExpr(t, locals, outer, free)
+                for (a in args) {
+                    Lowerer.scanExpr(a, locals, outer, free)
+                }
+            case AstExpr.CtorCall(_, args, _) =>
+                for (a in args) {
+                    Lowerer.scanExpr(a, locals, outer, free)
+                }
             case _ => ()
         }
     }

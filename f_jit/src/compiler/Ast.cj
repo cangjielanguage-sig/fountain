@@ -36,7 +36,13 @@ import fountain::f_jit.base.SourcePos
  * `AstExpr` 增 `Index`（附 A.6「容器索引读」的承载）与保留 M2 的 `MemberName`。
  */
 
-/** 类型注解节点（design §4.3.2：M1 仅 `Builtin`；M2 追加宿主闭包 / 宿主对象，M3 追加 `Any`）。 */
+/**
+ * 类型注解节点（design §4.3.2：M1 仅 `Builtin`；M2 追加宿主闭包 / 宿主对象，M3 追加 `Any`）。
+ *
+ * `HostClosureT` 的载荷按位置 = `(params, ret)`（仓颉 enum 构造器不支持参数名）；
+ * `HostObjectT` 的载荷 = 注册类名。`HostClosureT` 的 T/R 已由解析器按
+ * `jit-bytecode-m2 §3` 校验（0–8/10–11/14，禁高阶）。
+ */
 internal enum TypeRef {
     /**
      * 内建类型码：值 = `LocalType` 码（§11.7）。
@@ -46,10 +52,34 @@ internal enum TypeRef {
      */
     | Builtin(UInt16)
 
+    /** 宿主闭包函数类型 `(T1, …, Tn) -> R`：参数序 = params, ret（LocalType 码）。 */
+    | HostClosureT(Array<UInt16>, UInt16)
+
+    /** 已注册类名（opaque 形参/局部/返回；LocalType 14）。 */
+    | HostObjectT(String)
+
     /** 类型注解 → `LocalType` 码（降低阶段读形参/声明的静态类型）。 */
     public func code(): UInt16 {
         match (this) {
             case Builtin(c) => c
+            case HostClosureT(_, _) => 13u16
+            case HostObjectT(_) => 14u16
+        }
+    }
+
+    /** HostClosure 的返回码；其余 → `LocalType.NONE`。 */
+    public func hostRet(): UInt16 {
+        match (this) {
+            case HostClosureT(_, r) => r
+            case _ => 0xFFFFu16
+        }
+    }
+
+    /** HostObject 的类名；其余 → None。 */
+    public func objectName(): ?String {
+        match (this) {
+            case HostObjectT(n) => Some(n)
+            case _ => None
         }
     }
 }
@@ -140,8 +170,16 @@ internal enum AstExpr {
     | Index(AstExpr, AstExpr, SourcePos)
     /** 索引赋值目标（容器变更：`list[i] = v` / `map[k] = v`，§9.15；仅语句位置）。 */
     | IndexTarget(AstExpr, AstExpr, SourcePos)
-    /** M2 成员访问糖的预留位；M1 解析器不生成该构造器。 */
+    /** M1 成员访问的预留位（M2 解析器改为产出 `FieldGet`；保留供旧路径/诊断）。 */
     | MemberName(String, AstExpr, SourcePos)
+    /** M2 成员读 `u.f`（m2 §12.4）：参数序 = obj, field。 */
+    | FieldGet(AstExpr, String, SourcePos)
+    /** M2 成员写 `u.f = v`：参数序 = obj, field, value（表达式形态返回 Unit）。 */
+    | FieldSet(AstExpr, String, AstExpr, SourcePos)
+    /** M2 成员调用 `u.m(a…)`：参数序 = obj, method, args。 */
+    | MethodCall(AstExpr, String, Array<AstExpr>, SourcePos)
+    /** M2 构造 `C(args…)`：参数序 = className, args。 */
+    | CtorCall(String, Array<AstExpr>, SourcePos)
 
     /** 位置（驱动 `setSite` 与编译期诊断；design §4.3.2）。 */
     public func pos(): SourcePos {
@@ -165,6 +203,10 @@ internal enum AstExpr {
             case Index(_, _, p) => p
             case IndexTarget(_, _, p) => p
             case MemberName(_, _, p) => p
+            case FieldGet(_, _, p) => p
+            case FieldSet(_, _, _, p) => p
+            case MethodCall(_, _, _, p) => p
+            case CtorCall(_, _, p) => p
         }
     }
 }

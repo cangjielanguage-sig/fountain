@@ -44,10 +44,13 @@ internal class Parser {
     private var p: Int64 = 0
     /** > 0 时禁止解析替换段 —— 防止 `re/s/r/g` 的内层片段抢走后续斜杠。 */
     private var replaceDepth: Int64 = 0
+    /** 类型注解的「已注册类名」判定（M2 §3：内建 → 注册类名 → 未知=编译错误）。 */
+    private let registered: (String) -> Bool
 
-    public init(source: String) {
+    public init(source: String, registered!: (String) -> Bool = { _ => false }) {
         this.src = Lexer.normalizeNewlines(source)
         this.ts = Lexer(this.src).tokenize()
+        this.registered = registered
     }
 
     // ------------------------------------------------------------------
@@ -280,12 +283,18 @@ internal class Parser {
     }
 
     /**
-     * 类型注解 → `TypeRef.Builtin`（LocalType 码）。
+     * 类型注解 → `TypeRef`（M1：`Builtin`；M2：`HostClosureT` / `HostObjectT`）。
      *
      * 容器记 `List<元素类型>` / `Map<K, V>`；**元素类型是前端的并行静态知识**，
      * 不进 `TypeRef`（§11.7「类型表只记大类」）——但要被解析并丢弃，否则语法不闭合。
+     *
+     * 函数类型 `(T1, T2) -> R` 的 T/R 合法集 = 0–8、10–11、14（m2 §3）；9（Regex）与
+     * 12/13（函数类型）拒绝；**禁高阶**：分量不得再是函数类型。
      */
     private func parseTypeRef(): TypeRef {
+        if (this.atKind(TokenKind.LParen)) {
+            return this.parseClosureType()
+        }
         if (!this.atKind(TokenKind.Ident)) {
             let t = this.peek()
             diagFail(DiagKind.BAD_PARAMETER_LIST, this.src, t.pos, t.line, t.column, '缺类型名')
@@ -293,8 +302,11 @@ internal class Parser {
         let nameTok = this.take()
         let code = Parser.builtinTypeOf(nameTok.text)
         if (code == LocalType.NONE) {
+            if (this.registered(nameTok.text)) {
+                return TypeRef.HostObjectT(nameTok.text)
+            }
             diagFail(DiagKind.BAD_PARAMETER_LIST, this.src, nameTok.pos, nameTok.line, nameTok.column,
-                '未知类型名（M1 类型集见 §11.7：Int64/Float64/Bool/Unit/String/Decimal/DateTime/Duration/Range/Regex/List/Map/Closure）')
+                '未注册的类名「${nameTok.text}」（M2 类型集：内建类型 / 已注册类名 / (T…) -> R）')
         }
         if (this.atKind(TokenKind.Lt)) {
             this.take()
@@ -306,6 +318,57 @@ internal class Parser {
             this.expect(TokenKind.Gt, '容器类型实参的闭合 >')
         }
         TypeRef.Builtin(code)
+    }
+
+    /** `(T1, T2) -> R` / `() -> R`（m2 §3）。`->` 由 `Minus` + `Gt` 两 token 承载。 */
+    private func parseClosureType(): TypeRef {
+        let open = this.expect(TokenKind.LParen, '函数类型的 (')
+        var params = ArrayList<UInt16>()
+        if (!this.atKind(TokenKind.RParen)) {
+            while (true) {
+                params.add(this.parseTypeComponent())
+                if (this.advanceIf(TokenKind.Comma)) {
+                    continue
+                }
+                break
+            }
+        }
+        this.expect(TokenKind.RParen, '函数类型的闭合 )')
+        if (!this.atKind(TokenKind.Minus) || this.peekAt(1).kind != TokenKind.Gt) {
+            let t = this.peek()
+            diagFail(DiagKind.BAD_PARAMETER_LIST, this.src, t.pos, t.line, t.column,
+                'HostClosure 类型记法缺失 `->`（例：`(Int64) -> Bool`，m2 §3）')
+        }
+        this.take()
+        this.take()
+        let ret = this.parseTypeComponent()
+        for (p in params) {
+            Parser.checkSignatureComponent(p, open.line, open.column, this.src)
+        }
+        Parser.checkSignatureComponent(ret, open.line, open.column, this.src)
+        TypeRef.HostClosureT(params.toArray(), ret)
+    }
+
+    /** 函数类型的单个分量（T/R）：内建或已注册类名；再出现 `(` 即禁高阶。 */
+    private func parseTypeComponent(): UInt16 {
+        if (this.atKind(TokenKind.LParen)) {
+            let t = this.peek()
+            diagFail(DiagKind.BAD_PARAMETER_LIST, this.src, t.pos, t.line, t.column,
+                '禁高阶：HostClosure 的 T/R 不得为函数类型（m2 §3）')
+        }
+        this.parseTypeRef().code()
+    }
+
+    /** T/R 合法集：0–8、10–11、14（m2 §3）。 */
+    private static func checkSignatureComponent(code: UInt16, line: Int64, column: Int64,
+        src: String): Unit {
+        let ok = (code <= LocalType.RANGE) || (code == LocalType.LIST) || (code == LocalType.MAP) ||
+            (code == LocalType.HOST_OBJECT)
+        if (!ok) {
+            diagFail(DiagKind.BAD_PARAMETER_LIST, src, 0, line, column,
+                'HostClosure 的 T/R 不合法分量：${LocalType.name(code)}（允许 0–8/10–11/14；' +
+                '9/12/13 与高阶均拒绝，m2 §3）')
+        }
     }
 
     private static func builtinTypeOf(name: String): UInt16 {
@@ -484,11 +547,31 @@ internal class Parser {
             }
             if (!isAssign) {
                 this.p = save
-                return AstStmt.ExprStmt(this.parseExpr(), SourcePos(this.peek().line, this.peek().column))
+                let e = this.parseExpr()
+                if (this.atKind(TokenKind.Assign)) {
+                    this.take()
+                    let rhs = this.parseExpr()
+                    return this.assignFrom(e, rhs, SourcePos(this.peek().line, this.peek().column))
+                }
+                return AstStmt.ExprStmt(e, SourcePos(this.peek().line, this.peek().column))
             }
         }
         this.p = save
         this.parseMaybeMultiAssign()
+    }
+
+    /** 后缀形态的赋值目标：局部 / 容器下标 / 宿主字段（`u.f = v`，m2 §12.4）。 */
+    private func assignFrom(lhs: AstExpr, rhs: AstExpr, pos: SourcePos): AstStmt {
+        match (lhs) {
+            case AstExpr.Var(_, _) => AstStmt.Assign(lhs, rhs, pos)
+            case AstExpr.Index(t, i, ipos) => AstStmt.Assign(AstExpr.IndexTarget(t, i, ipos), rhs, pos)
+            case AstExpr.FieldGet(obj, field, fpos) =>
+                AstStmt.ExprStmt(AstExpr.FieldSet(obj, field, rhs, fpos), pos)
+            case AstExpr.MemberName(_, _, _) => AstStmt.Assign(lhs, rhs, pos)
+            case _ =>
+                diagFail(DiagKind.SYNTAX_ERROR, this.src, 0, pos.line, pos.column,
+                    '赋值目标只能是局部变量、容器下标或宿主字段')
+        }
     }
 
     /** 从 `from` 起的 `(` … `)` 之后是否紧跟 `=`（多重赋值判据）。 */
@@ -842,9 +925,17 @@ internal class Parser {
                 }
                 this.expect(TokenKind.RParen, '实参表的闭合 )')
                 let pos = SourcePos(openTok.line, openTok.column)
-                // 闭包表达式直接调用 = IIFE（§8.5）；其余为具名 / 变量调用
+                // 闭包表达式直接调用 = IIFE（§8.5）；成员/构造/具名调用分别成形（m2 §12.4/§15）
                 match (cur) {
                     case AstExpr.Closure(_, _) => cur = AstExpr.IIFE(cur, args.toArray(), pos)
+                    case AstExpr.FieldGet(obj, field, mpos) =>
+                        cur = AstExpr.MethodCall(obj, field, args.toArray(), mpos)
+                    case AstExpr.Var(callee, vpos) =>
+                        if (this.registered(callee)) {
+                            cur = AstExpr.CtorCall(callee, args.toArray(), pos)
+                        } else {
+                            cur = AstExpr.Call(cur, args.toArray(), pos)
+                        }
                     case _ => cur = AstExpr.Call(cur, args.toArray(), pos)
                 }
                 continue
@@ -857,7 +948,7 @@ internal class Parser {
                         '成员访问的「.」后必须是标识符')
                 }
                 this.take()
-                cur = AstExpr.MemberName(nameTok.text, cur, SourcePos(dot.line, dot.column))
+                cur = AstExpr.FieldGet(cur, nameTok.text, SourcePos(dot.line, dot.column))
                 continue
             }
             if (this.atKind(TokenKind.LBracket)) {

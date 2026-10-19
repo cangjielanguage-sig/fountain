@@ -108,14 +108,17 @@ internal enum ResolvedCall {
     | Recursive
     /** 命中注册表 —— user helper，载荷 = slot（hid = slot + 0x0100）。 */
     | UserHelper(UInt16)
+    /** 命中 HostClosure 形参/局部（静态类型 13）—— 降低为 `CALL_HOST`（m2 §3）。 */
+    | HostClosureCall
 }
 
 /**
- * 调用点名字解析（S3.8）——design §4.3.3 / §8.4 需求 4。
+ * 调用点名字解析（S3.8）——design §4.3.3 / §8.4 需求 4、m2 §3。
  *
- * 顺序（**冻结**）：`recursive` → 注册表（user helper）→ 未命中 `UnregisteredFunction`。
- * 非调用位置的未定义标识符 → `UndefinedIdentifier`（由 `requireValue` 判定）。
- * 编译期错误**不占用 §2 运行期错误码**（§8.4）。
+ * 顺序（**冻结**）：`recursive` → 注册表（user helper）→ HostClosure 形参/局部（静态 13）→
+ * 未命中 `UnregisteredFunction`。HostClosure 形参/局部与已注册 user helper **同名** →
+ * 编译错误（禁止静默择一，m2 §3）。非调用位置的未定义标识符 → `UndefinedIdentifier`
+ * （由 `requireValue` 判定）。编译期错误**不占用 §2 运行期错误码**（§8.4）。
  */
 internal class NameResolver {
     private let snapshot: PredefinedSnapshot
@@ -126,18 +129,26 @@ internal class NameResolver {
         this.src = Lexer.normalizeNewlines(source)
     }
 
-    /** 调用点解析：`recursive` → 注册表 → 未注册错误（消息含名字 / 位置 / 已注册清单）。 */
-    public func resolve(name: String, pos: SourcePos): ResolvedCall {
+    /** 调用点解析（`isHostClosure` = 该名字是静态类型 13 的形参/局部）。 */
+    public func resolve(name: String, pos: SourcePos, isHostClosure!: Bool = false): ResolvedCall {
         if (name == 'recursive') {
             return ResolvedCall.Recursive
         }
         let slot = this.snapshot.slotOf(name)
-        if (slot < 0) {
-            diagFail(DiagKind.UNREGISTERED_FUNCTION, this.src, 0, pos.line, pos.column,
-                '调用了未注册的预定义函数「${name}」。已注册：${this.snapshot.registeredList()}。' +
-                '请先经 Compiler.registerFunction 注册，或改用已注册的名字')
+        if (slot >= 0) {
+            if (isHostClosure) {
+                diagFail(DiagKind.SYNTAX_ERROR, this.src, 0, pos.line, pos.column,
+                    '名字冲突：「${name}」既是 HostClosure 形参/局部，又是已注册的 user helper' +
+                    '（m2 §3：禁止静默择一，请改名）')
+            }
+            return ResolvedCall.UserHelper(UInt16(slot))
         }
-        ResolvedCall.UserHelper(UInt16(slot))
+        if (isHostClosure) {
+            return ResolvedCall.HostClosureCall
+        }
+        diagFail(DiagKind.UNREGISTERED_FUNCTION, this.src, 0, pos.line, pos.column,
+            '调用了未注册的预定义函数「${name}」。已注册：${this.snapshot.registeredList()}。' +
+            '请先经 Compiler.registerFunction 注册，或改用已注册的名字')
     }
 
     /**

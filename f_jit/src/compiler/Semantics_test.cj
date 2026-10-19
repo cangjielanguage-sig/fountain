@@ -41,6 +41,7 @@ public class Semantics_test {
         match (got) {
             case ResolvedCall.Recursive => @Assert(true, true)
             case ResolvedCall.UserHelper(_) => @Fail('recursive 应优先解析为自递归')
+            case _ => @Fail('recursive 应优先解析为自递归')
         }
     }
 
@@ -53,11 +54,13 @@ public class Semantics_test {
         match (r.resolve('triple', SourcePos(1, 15))) {
             case ResolvedCall.UserHelper(slot) => @Assert(slot, 1u16)
             case ResolvedCall.Recursive => @Fail('应解析为 user helper')
+            case _ => @Fail('应解析为 user helper')
         }
         // hid = slot + 0x0100（§8.4）
         match (r.resolve('triple', SourcePos(1, 15))) {
             case ResolvedCall.UserHelper(slot) => @Assert(slot + 0x0100u16, 0x0101u16)
             case ResolvedCall.Recursive => @Fail('应解析为 user helper')
+            case _ => @Fail('应解析为 user helper')
         }
     }
 

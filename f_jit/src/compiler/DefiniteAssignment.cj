@@ -43,10 +43,14 @@ internal class DefiniteAssignment {
     private let src: String
     /** 名字 → 声明类型（未声明 ⇒ `LocalType.NONE`）；句柄型判定依据。 */
     private let typeOf: (String) -> UInt16
+    /** 调用位置的名字是否为「类名」（构造调用目标；不是局部读取）。 */
+    private let isClassName: (String) -> Bool
 
-    public init(source: String, typeOf: (String) -> UInt16) {
+    public init(source: String, typeOf: (String) -> UInt16,
+        isClassName!: (String) -> Bool = { _ => false }) {
         this.src = Lexer.normalizeNewlines(source)
         this.typeOf = typeOf
+        this.isClassName = isClassName
     }
 
     // ------------------------------------------------------------------
@@ -274,6 +278,20 @@ internal class DefiniteAssignment {
                 this.walkExpr(t, state)
                 this.walkExpr(i, state)
             case AstExpr.MemberName(_, t, _) => this.walkExpr(t, state)
+            case AstExpr.FieldGet(t, _, _) => this.walkExpr(t, state)
+            case AstExpr.FieldSet(t, _, v, _) =>
+                this.walkExpr(t, state)
+                this.walkExpr(v, state)
+            case AstExpr.MethodCall(t, _, args, _) =>
+                this.walkExpr(t, state)
+                for (a in args) {
+                    this.walkExpr(a, state)
+                }
+            case AstExpr.CtorCall(_, args, _) =>
+                // 类名不是变量读取（m2 §15）；实参按左→右校验
+                for (a in args) {
+                    this.walkExpr(a, state)
+                }
         }
     }
 
@@ -283,8 +301,10 @@ internal class DefiniteAssignment {
     private func walkCallee(t: AstExpr, state: HashMap<String, Bool>, pos: SourcePos): Unit {
         match (t) {
             case AstExpr.Var(n, _) =>
-                // `recursive` 与数值转换内建（`Int64`/`Float64`/`Decimal`）是名字而非局部
-                if (n == 'recursive' || n == 'Int64' || n == 'Float64' || n == 'Decimal') {
+                // `recursive`、数值转换内建（`Int64`/`Float64`/`Decimal`）与已注册类名
+                // 是名字而非局部（m2 §15：`C(args…)` 的 C 不是变量读取）。
+                if (n == 'recursive' || n == 'Int64' || n == 'Float64' || n == 'Decimal' ||
+                    this.isClassName(n)) {
                     return
                 }
             case _ => ()
@@ -388,6 +408,19 @@ internal class DefiniteAssignment {
                 this.walkExprWithOuter(tg, state, outer)
                 this.walkExprWithOuter(i, state, outer)
             case AstExpr.MemberName(_, tg, _) => this.walkExprWithOuter(tg, state, outer)
+            case AstExpr.FieldGet(tg, _, _) => this.walkExprWithOuter(tg, state, outer)
+            case AstExpr.FieldSet(tg, _, v, _) =>
+                this.walkExprWithOuter(tg, state, outer)
+                this.walkExprWithOuter(v, state, outer)
+            case AstExpr.MethodCall(tg, _, args, _) =>
+                this.walkExprWithOuter(tg, state, outer)
+                for (a in args) {
+                    this.walkExprWithOuter(a, state, outer)
+                }
+            case AstExpr.CtorCall(_, args, _) =>
+                for (a in args) {
+                    this.walkExprWithOuter(a, state, outer)
+                }
             case _ => this.walkExpr(e, state)
         }
     }
@@ -449,6 +482,8 @@ internal class DefiniteAssignment {
             case Some(v) =>
                 match (v) {
                     case TypeRef.Builtin(c) => code = c
+                    case TypeRef.HostClosureT(_, _) => code = 13u16
+                    case TypeRef.HostObjectT(_) => code = 14u16
                 }
             case None => code = this.typeOf(name)
         }

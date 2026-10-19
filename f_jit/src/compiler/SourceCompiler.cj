@@ -17,6 +17,8 @@ package fountain::f_jit.compiler
 
 import fountain::f_jit.base.DiagnosticsSink
 import fountain::f_jit.base.LocalType
+import fountain::f_jit.base.PublicCtor
+import fountain::f_jit.base.Version
 import fountain::f_util.Fnv128
 
 /**
@@ -30,12 +32,20 @@ protected struct CompiledSourceUnit {
     public let funcCount: UInt32
     public let entryFn: UInt32
     public let fingerprint: UInt64
+    /** 本单元物化出的构造器 helper（slot 序；不进 `.fbc`，供桥/执行侧解析 user hid）。 */
+    public let ctorHelpers: Array<PublicCtor>
+    /** 闭包静态捕获描述符（不进 `.fbc`，m2 §14.8）。 */
+    public let captures: Array<CaptureDescriptor>
 
-    public init(raw: Array<UInt8>, funcCount: UInt32, entryFn: UInt32, fingerprint: UInt64) {
+    public init(raw: Array<UInt8>, funcCount: UInt32, entryFn: UInt32, fingerprint: UInt64,
+        ctorHelpers!: Array<PublicCtor> = Array<PublicCtor>(),
+        captures!: Array<CaptureDescriptor> = Array<CaptureDescriptor>()) {
         this.raw = raw
         this.funcCount = funcCount
         this.entryFn = entryFn
         this.fingerprint = fingerprint
+        this.ctorHelpers = ctorHelpers
+        this.captures = captures
     }
 }
 
@@ -53,27 +63,44 @@ protected struct CompiledSourceUnit {
 protected class SourceCompiler {
     private let registry: PredefinedSnapshot
     private let diagnostics: DiagnosticsSink
+    /** 汇编目标主版本（M1 缺省；M2 由调用方显式传 `Version.M2_MAJOR`）。 */
+    private let verMajor: UInt16
+    /** 类注册表快照（M2：类型注解 / 成员访问 / 构造降低的静态知识）。 */
+    private let classes: ClassRegistrySnapshot
 
-    public init(registry: PredefinedSnapshot, diagnostics: DiagnosticsSink) {
+    public init(registry: PredefinedSnapshot, diagnostics: DiagnosticsSink,
+        verMajor!: UInt16 = Version.MAJOR,
+        classes!: ClassRegistrySnapshot = ClassRegistrySnapshot.empty()) {
         this.registry = registry
         this.diagnostics = diagnostics
+        this.verMajor = verMajor
+        this.classes = classes
     }
 
     /** 全管线：源码 → `.fbc` 字节（编译期错误一律抛 `SourceCompileException`）。 */
     public func compile(source: String): CompiledSourceUnit {
         let src = Lexer.normalizeNewlines(source)
-        let lambda = Parser(src).parseLambda()
+        let view = ClassRegistryView(this.classes)
+        let lambda = Parser(src, registered: { n => view.isRegistered(n) }).parseLambda()
         let resolver = NameResolver(this.registry, src)
         // 明确赋值与空安全（§7 校验 10）；类型查询按注解不可得 → 用 NONE（PUSH_NULL 检查保守放行）
-        let da = DefiniteAssignment(src, { _ => LocalType.NONE })
+        let da = DefiniteAssignment(src, { _ => LocalType.NONE },
+            isClassName: { n => view.isRegistered(n) || SourceCompiler.jsonFamily(n) })
         let _ = da.analyze(lambda)
-        let sess = CompileSession(src, this.registry, this.diagnostics)
-        let lowerer = Lowerer(sess, resolver)
+        let sess = CompileSession(src, this.registry, this.diagnostics,
+            verMajor: this.verMajor)
+        let lowerer = Lowerer(sess, resolver, view: view)
         let entryFn = lowerer.lowerTop(lambda)
         let raw = Assembler(sess).assemble()
         let h = Fnv128.fnv1a(src)
         // 128 位 → 64 位：取低 64 位（缓存键只需稳定、不要求抗碰撞到 128 位）
         let fp = h.left
-        CompiledSourceUnit(raw, UInt32(sess.funcCount), entryFn, fp)
+        CompiledSourceUnit(raw, UInt32(sess.funcCount), entryFn, fp,
+            ctorHelpers: sess.ctorHelperList(), captures: lowerer.captureDescriptors())
+    }
+
+    /** JSON 谱系类名（m3 内建码 16–19；构造写法在降低期拒绝）。 */
+    private static func jsonFamily(name: String): Bool {
+        name == 'JsonValue' || name == 'JsonObject' || name == 'JsonArray' || name == 'JsonNull'
     }
 }

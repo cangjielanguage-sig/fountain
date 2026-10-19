@@ -113,7 +113,7 @@ public class FbcReader {
             Int64(header.nameLen))
 
         let dir = readDir(code, rules)
-        dir.validate(header.codeLen, header.entryFn)
+        dir.validate(header.codeLen, header.entryFn, verMajor: rules.verMajor)
         checkInstructionSet(code, dir, rules)
         let types = readTypes(code, dir)
         for (i in 0..dir.size) {

@@ -184,7 +184,7 @@ public class FuncDir {
      * 2. 每条 `localTypesOff + nLocals <= codeLen`（局部类型表在 code 段内）；
      * 3. `entryFn` 必须命中目录中某个 `fnId`（§11.7「容器头 `entryFn` 必须命中目录」）。
      */
-    public func validate(codeLen: UInt32, entryFn: UInt32): Unit {
+    public func validate(codeLen: UInt32, entryFn: UInt32, verMajor!: UInt16 = Version.MAJOR): Unit {
         for (e in this.entries) {
             if (e.codeOff > codeLen || e.codeLen > codeLen - e.codeOff) {
                 rejectFormat('函数体越界: fnId=${e.fnId}, codeOff=${e.codeOff}, codeLen=${e.codeLen}, 段长=${codeLen}')
@@ -194,8 +194,9 @@ public class FuncDir {
                 rejectFormat(
                     '局部类型表越界: fnId=${e.fnId}, localTypesOff=${e.localTypesOff}, nLocals=${e.nLocals}, 段长=${codeLen}')
             }
-            if (!LocalType.isLegal(e.retType, Version.MAJOR)) {
-                rejectFormat('非法返回类型: fnId=${e.fnId}, retType=${e.retType}（§11.7 合法值 0–12）')
+            if (!LocalType.isLegal(e.retType, verMajor)) {
+                rejectFormat(
+                    '非法返回类型: fnId=${e.fnId}, retType=${e.retType}（verMajor=${verMajor}，§11.7）')
             }
         }
         if (find(entryFn).isNone()) {

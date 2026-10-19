@@ -238,6 +238,10 @@ internal class HelperCodec {
     public static const DATETIME_OF: UInt16 = 75u16
     public static const DURATION_PARSE: UInt16 = 76u16
 
+    /** M2：成员访问 helper（m2 §12.2，H64/H65）。 */
+    public static const HOST_GET_FIELD: UInt16 = 64u16
+    public static const HOST_SET_FIELD: UInt16 = 65u16
+
     /** 变更型 helper 的 hid 区间（H43–H48，§9.15 / §7 校验 11）。 */
     public static const MUTATION_MIN: UInt16 = 43u16
     public static const MUTATION_MAX: UInt16 = 48u16
@@ -264,7 +268,7 @@ internal class HelperCodec {
      * 静态不可知，§9.15 的「整函数保守判定」要求把它算进去。
      */
     public static func isMutating(hid: UInt16): Bool {
-        (hid >= MUTATION_MIN && hid <= MUTATION_MAX) || hid >= USER_BASE
+        hid == HOST_SET_FIELD || (hid >= MUTATION_MIN && hid <= MUTATION_MAX) || hid >= USER_BASE
     }
 }
 
