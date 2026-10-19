@@ -441,11 +441,17 @@ protected class ReflectRegistrar {
     }
 
     private static func isInstanceOf(o: Object, names: Array<String>): Bool {
-        // 反射访问器的载体（InstanceVariableInfo / 属性信息）属于**声明类**，std.reflect 的
-        // getValue/setValue 会拒绝子类实例（IllegalTypeException）。因此自动注册的访问器按
-        // **精确类**匹配；子类请单独注册（或用手工访问器 `o is C`，后者天然支持继承）。
-        // 这是 std.reflect 的实现约束，登记为 M2 已知限制（见 Q6.progress）。
-        let actual = ClassTypeInfo.of(o).name
-        names.contains(actual)
+        // `names` 的首项 = 字段/属性的**声明类**（`ancestryOf` 从 cls 自身开始，逐级到 Object）。
+        //
+        // M2 语义（用户裁定）：形参声明 `A` 时可传 `B` 实例（`B <: A`）——所以判定必须是
+        // 「o 是声明类的实例**含子类**」，不能是精确类相等；后者会把子类实例拒掉，与语言的
+        // 继承语义相悖。反过来，源码里写未注册的 `B` 由前端在**编译期**报错，运行期不必再管。
+        //
+        // 祖先链的其余项不参与判定：若拿 `Object` 当键，任何对象都会命中，同 index 的访问器
+        // 会互相串（`HostFieldTable.find` 取第一个 accepts 为真的表项）。
+        if (names.size == 0) {
+            return false
+        }
+        ReflectRegistrar.isInstanceOfClass(o, names[0])
     }
 }

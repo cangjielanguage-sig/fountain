@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_jit
 
 import std.collection.ArrayList
+import std.reflect.IllegalTypeException
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_jit.base.ClassDescriptor
@@ -29,10 +30,12 @@ import fountain::f_jit.base.PublicField
 import fountain::f_jit.base.PublicMethod
 import fountain::f_jit.base.RegistrationException
 import fountain::f_jit.base.RegistrationRejectKind
+import fountain::f_jit.runtime.HostFieldTable
 import fountain::f_jit.test.JsonArray
 import fountain::f_jit.test.JsonNull
 import fountain::f_jit.test.JsonObject
 import fountain::f_jit.test.JsonValue
+import fountain::f_jit.test.ReflectAdmin
 import fountain::f_jit.test.ReflectUser
 import fountain::f_jit.test.TCase
 
@@ -353,5 +356,61 @@ protected class RecReflectSink <: DiagnosticsSink {
 
     public func onlySkipped(): Bool {
         this.messages.size > 0
+    }
+}
+
+/**
+ * GAP-03：类型判定按「声明类的实例（含子类）」，但反射访问器执行层有硬限制。
+ *
+ * 语义（用户裁定）：形参声明 `A` 时可传 `B` 实例（`B <: A`）；源码里出现**未注册**的类名
+ * 由前端在编译期报错，运行期不再区分。
+ *
+ * 实测（SDK 1.3.0-alpha，见 Q6 后的探测）：
+ * - `ClassTypeInfo.instanceVariables` 只含当前类声明；
+ * - `ClassTypeInfo.getInstanceVariable(name)` **也不含继承**（找不到即抛 InfoNotFoundException）；
+ * - `InstanceVariableInfo.getValue(子类实例)` 抛 `IllegalTypeException`（`checkDeclaringClassType`
+ *   强制精确声明类）。
+ *
+ * 故分两层记录：① 类型判定必须接受子类（已修 `isInstanceOf`）；② 执行层受反射限制，
+ * 需非反射访问器（手工 `o is A` + 直接字段访问，或宏生成）才能真正支持继承字段。
+ */
+@Test
+public class InheritanceField_test {
+    @TestCase
+    public func subclassMatchesDeclaringClass(): Unit {
+        HostFieldTable.resetForTest()
+        let reg = ClassRegistry()
+        let out = RecReflectSink()
+        ReflectRegistrar.registerType<ReflectUser>(into: reg, diag: out)
+        let admin = ReflectAdmin('bob')
+        // index 0 = `id`（ReflectUser 首个 public let，注册序与 instanceVariables 一致）
+        let acc = match (HostFieldTable.find(admin, 0u16)) {
+            case Some(x) => x
+            case None => @Fail('子类实例未命中父类字段访问器：accepts 仍是精确类判定')
+        }
+        @Assert(TCase.hit('T36/subclass-accepts', acc.`type` == LocalType.I64), true)
+        HostFieldTable.resetForTest()
+    }
+
+    /** 记录反射执行层的硬限制（不是「通过」，是「已知不可行」的可执行证据）。 */
+    @TestCase
+    public func reflectGetValueRejectsSubclassInstance(): Unit {
+        HostFieldTable.resetForTest()
+        let reg = ClassRegistry()
+        let out = RecReflectSink()
+        ReflectRegistrar.registerType<ReflectUser>(into: reg, diag: out)
+        let admin = ReflectAdmin('bob')
+        let acc = match (HostFieldTable.find(admin, 0u16)) {
+            case Some(x) => x
+            case None => @Fail('子类实例未命中父类字段访问器')
+        }
+        var threw = false
+        try {
+            let _ = acc.getter(admin)
+        } catch (e: IllegalTypeException) {
+            threw = true
+        }
+        @Assert(TCase.hit('T36/reflect-getvalue-exact-class-only', threw), true)
+        HostFieldTable.resetForTest()
     }
 }
