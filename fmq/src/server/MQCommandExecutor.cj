@@ -59,7 +59,17 @@ protected class MQCommandExecutor {
         this.selfIndex = selfIndex
     }
 
-    public func execute(buffer: ?SocketBuffer, request: Message): ?Message {
+    /** 生产入口：`f_net.Server.start` 直接传方法引用，连接恒非空。 */
+    public func execute(buffer: SocketBuffer, request: Message): ?Message {
+        dispatch(Some(buffer), request)
+    }
+
+    /** 无连接入口：仅供单测与内部调用，订阅不绑定连接。 */
+    protected func execute(request: Message): ?Message {
+        dispatch(None, request)
+    }
+
+    private func dispatch(buffer: ?SocketBuffer, request: Message): ?Message {
         try {
             match (request.command) {
                 case REGISTER => Some(onRegister(buffer, request))
