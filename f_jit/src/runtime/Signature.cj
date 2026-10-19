@@ -19,7 +19,10 @@ import std.collection.ArrayList
 import std.collection.HashMap
 import std.math.numeric.Decimal
 import std.time.DateTime
+import std.reflect.FunctionTypeInfo
+import std.reflect.TypeInfo
 import fountain::f_jit.base.LocalType
+import fountain::f_jit.base.TypeNames
 import fountain::f_jit.bytecode.ConstMapKey
 
 /**
@@ -32,7 +35,19 @@ public class SignatureDescriptor {
     public let params: Array<UInt16>
     public let ret: UInt16
 
-    public init(params: Array<UInt16>, ret: UInt16) {
+    /**
+     * 14 位置的**具体类名**（与 `params` 等长，非 14 位置为空串）。
+     *
+     * 只带码无法区分 `(User) -> R` 与 `(Order) -> R`；反射验签按 `TypeInfo.name` 逐字比对，
+     * 类名为空表示「只比大类」。
+     */
+    public let paramNames: Array<String>
+
+    /** 返回值的具体类名（`ret != 14` 时为空串）。 */
+    public let retName: String
+
+    public init(params: Array<UInt16>, ret: UInt16, paramNames!: Array<String> = Array<String>(),
+        retName!: String = '') {
         var copy = Array<UInt16>(params.size, repeat: 0)
         var i = 0
         while (i < params.size) {
@@ -41,6 +56,8 @@ public class SignatureDescriptor {
         }
         this.params = copy
         this.ret = ret
+        this.paramNames = paramNames.clone()
+        this.retName = retName
     }
 
     /**
@@ -83,6 +100,60 @@ public class SignatureDescriptor {
  */
 public class SignatureVerifier {
     private init() {}
+
+    /**
+     * **反射验签**：用 `FunctionTypeInfo` 取出宿主函数值的真实签名，与声明逐位比对。
+     *
+     * 与 `verify` 的区别：`verify` 走「元数 ∥ 逐位 ∥ 返回」的分步核对且只覆盖 0–2 元、
+     * 14 位置不校验具体类；本函数元数不受限，且 14 位置按类名逐字比对（GAP-04/05）。
+     */
+    public static func verifyReflective(value: Any, declared: SignatureDescriptor):
+        ?SignatureDescriptor {
+        if (!declared.validate()) {
+            return None
+        }
+        let ti = try {
+            FunctionTypeInfo.of(value)
+        } catch (e: Exception) {
+            return None
+        }
+        let n = declared.params.size
+        if (Int64(ti.parameters.size) != n) {
+            return None
+        }
+        // 类名数组允许缺省（老调用点只给码）：缺省时视为「所有位置只比大类」。
+        let namesAligned = declared.paramNames.size == n
+        var i = 0
+        while (i < n) {
+            let p = ti.parameters[i]
+            let expected = if (namesAligned) {
+                declared.paramNames[i]
+            } else {
+                ''
+            }
+            if (!SignatureVerifier.componentMatches(p.name, declared.params[i], expected)) {
+                return None
+            }
+            i = i + 1
+        }
+        if (!SignatureVerifier.componentMatches(ti.returnType.name, declared.ret,
+            declared.retName)) {
+            return None
+        }
+        declared
+    }
+
+    /** 单个分量比对：码必须一致；14 位置若给了类名，则要求类型名逐字相等。 */
+    private static func componentMatches(actualName: String, code: UInt16,
+        expectedName: String): Bool {
+        if (TypeNames.codeOf(actualName) != code) {
+            return false
+        }
+        if (code == LocalType.HOST_OBJECT && expectedName != '') {
+            return actualName == expectedName
+        }
+        true
+    }
 
     /** 验签：不符 ⇒ `None`；通过 ⇒ 新描述符（由调用方写入句柄条目）。 */
     public static func verify(value: Any, declared: SignatureDescriptor): ?SignatureDescriptor {

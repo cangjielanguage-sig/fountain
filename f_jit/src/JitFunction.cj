@@ -211,7 +211,8 @@ public class JitFunction {
         let sigs = ArrayList<?SignatureDescriptor>()
         for (s in paramSigs) {
             match (s) {
-                case Some(d) => sigs.add(Some(SignatureDescriptor(d.params, d.ret)))
+                case Some(d) => sigs.add(Some(SignatureDescriptor(d.params, d.ret,
+                    paramNames: d.paramNames, retName: d.retName)))
                 case None => sigs.add(None)
             }
         }
