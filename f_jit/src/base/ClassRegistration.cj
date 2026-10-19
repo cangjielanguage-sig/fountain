@@ -52,17 +52,50 @@ public struct PublicField {
     /** 14 型字段的目标类名（链式解析 `u.a.b`）；其余类型不消费。 */
     public let typeRef: ?String
 
+    /**
+     * 13 型字段的**函数签名**：形参类别序列（`LocalType` 码）。
+     *
+     * 字段也能持有 HostClosure（`u.cb(a)`），但该调用的签名无法从字段名或 `typeRef` 推出。
+     * 手工注册可显式给出，`CALL_HOST` 因此能带 `sigId` 走精确签名；自动注册（`std.reflect`）
+     * 给不出函数类型信息 ⇒ 留空 ⇒ 该字段调用退回旧的 `argc` 分派。
+     */
+    public let sigParams: Array<UInt16>
+
+    /** 13 型字段的形参类名（非 14 位置为空串）；与 `sigParams` 等长。 */
+    public let sigParamNames: Array<String>
+
+    /** 13 型字段的返回类别；非 13 型为 `LocalType.NONE`。 */
+    public let sigRet: UInt16
+
+    /** 13 型字段的返回类名（`sigRet != 14` 时为空串）。 */
+    public let sigRetName: String
+
     public init(name!: String, `type`!: UInt16, index!: UInt16, mutable!: Bool,
-        typeRef!: ?String) {
+        typeRef!: ?String, sigParams!: Array<UInt16> = Array<UInt16>(),
+        sigParamNames!: Array<String> = Array<String>(), sigRet!: UInt16 = LocalType.NONE,
+        sigRetName!: String = '') {
         if (!isRegistrationLocalType(`type`)) {
             throw JitException(ErrCode.CALL_CONTRACT, -1, -1, None,
                 '字段「${name}」的类型码非法: ${`type`}（M2 允许 0–14，§12.2）')
+        }
+        if (sigParams.size != sigParamNames.size) {
+            throw JitException(ErrCode.CALL_CONTRACT, -1, -1, None,
+                '字段「${name}」的签名类名个数与形参个数不符: ${sigParamNames.size} / ${sigParams.size}')
         }
         this.name = name
         this.`type` = `type`
         this.index = index
         this.mutable = mutable
         this.typeRef = typeRef
+        this.sigParams = sigParams.clone()
+        this.sigParamNames = sigParamNames.clone()
+        this.sigRet = sigRet
+        this.sigRetName = sigRetName
+    }
+
+    /** 该字段是否带完整函数签名（13 型且形参类别已给出）。 */
+    public func hasSignature(): Bool {
+        this.`type` == LocalType.HOST_CLOSURE && this.sigRet != LocalType.NONE
     }
 }
 

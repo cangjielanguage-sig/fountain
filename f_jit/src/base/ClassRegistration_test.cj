@@ -231,3 +231,51 @@ public class ClassDescriptor_test {
     }
 }
 
+/**
+ * GAP-05 乙：13 型字段可携带函数签名。
+ *
+ * `u.cb(a)` 的签名既不能从字段名推，也不能从 `typeRef`（只有类名）推；手工注册显式给出后，
+ * `CALL_HOST` 才能带 `sigId` 走精确签名。自动注册（`std.reflect`）给不出函数类型 ⇒ 留空 ⇒
+ * 该字段调用退回旧的 `argc` 分派。
+ */
+@Test
+public class PublicFieldSignature_test {
+    @TestCase
+    public func hostClosureFieldCarriesSignature(): Unit {
+        let f = PublicField(name: 'cb', `type`: LocalType.HOST_CLOSURE, index: 2u16,
+            mutable: false, typeRef: None,
+            sigParams: [LocalType.HOST_OBJECT], sigParamNames: ['User'],
+            sigRet: LocalType.HOST_OBJECT, sigRetName: 'Order')
+        @Assert(f.hasSignature(), true)
+        @Assert(f.sigParams.size, 1)
+        @Assert(f.sigParams[0], LocalType.HOST_OBJECT)
+        @Assert(f.sigParamNames[0], 'User')
+        @Assert(f.sigRet, LocalType.HOST_OBJECT)
+        @Assert(f.sigRetName, 'Order')
+    }
+
+    /** 非 13 型字段不带签名（`hasSignature` 为假），既有注册面不受影响。 */
+    @TestCase
+    public func valueFieldHasNoSignature(): Unit {
+        let f = PublicField(name: 'id', `type`: LocalType.I64, index: 0u16, mutable: false,
+            typeRef: None)
+        @Assert(f.hasSignature(), false)
+        @Assert(f.sigParams.size, 0)
+    }
+
+    /** 类名个数与形参个数不符 ⇒ 注册期拒绝（避免半截签名流到运行期）。 */
+    @TestCase
+    public func mismatchedSignatureIsRejected(): Unit {
+        var rejected = false
+        try {
+            let _ = PublicField(name: 'cb', `type`: LocalType.HOST_CLOSURE, index: 0u16,
+                mutable: false, typeRef: None,
+                sigParams: [LocalType.HOST_OBJECT, LocalType.I64],
+                sigParamNames: ['User'],
+                sigRet: LocalType.I64, sigRetName: '')
+        } catch (e: JitException) {
+            rejected = true
+        }
+        @Assert(rejected, true)
+    }
+}
