@@ -2,15 +2,15 @@
 
 - 变更：`f-jit-m1`
 - 校验对象：`openspec/changes/f-jit-m1` 的 9 份 spec（40 requirement / 156 scenario）、`tasks.md`（115 项）
-- 校验时间：2026-10-19（x86 证据回填）
-- 校验方式：**手工等价校验**。本 worktree 的 `.codebuddy/commands/opsx/` 未安装 `verify` 工作流（只有 apply/archive/explore/propose/sync/update），`/opsx:verify` 无法在融合侧启动；本报告按同一口径逐项对照实现与用例，不修改 `tasks.md`。
-- 基线：`cjpm test` **560/560**（Linux aarch64 原生；**2026-10-19 追加 x86_64 真机同为 560/560**）；`scripts/check_tmap.sh` **40 条范围内映射，悬空/未断言 0 条**；`scripts/check_scenarios.sh` **13 条 scenario，缺失 0 条**。
-- x86 证据：box64 + x86 SDK 全量 **560 例 / 550 通过 / 9 失败 / 1 错误**（prologue 黄金更新前；更新后为 551 通过 / 8 失败 / 1 错误）；失败全部为 box64 下 Float64 字面量恒 0 导致，非 JIT 代码；`X86Exec_test` 12/13 通过（仅 `floatToInt` 受该模拟缺陷影响）。
+- 校验时间：2026-10-19（x86 真机全绿回填 + 矩阵/标签收口）
+- 校验方式：**手工等价校验 + 官方 `/opsx:verify` 已装**。本 worktree 的 `.codebuddy/commands/opsx/` 原先只装了 apply/archive/explore/propose/sync/update 六个工作流，现已用 `openspec update --force` 补齐 12 个（含 `verify.md`），融合侧可识别 `/opsx:verify`；本报告仍是逐项人工对照的产物，不修改 `tasks.md`。
+- 基线：`cjpm test` **560/560**（Linux aarch64 原生；**2026-10-19 追加 x86_64 真机同为 560/560**）；`scripts/check_tmap.sh` **40 条范围内映射，悬空/未断言 0 条**（标签已行为级）；`scripts/check_scenarios.sh` **156 条 scenario 全量登记，未映射 0、缺失 0**。
+- x86 证据演进：box64 + x86 SDK 全量曾为 **560 例 / 550 通过 / 9 失败 / 1 错误**（prologue 黄金更新前；更新后为 551 通过 / 8 失败 / 1 错误；失败全部为 box64 下 Float64 字面量恒 0 导致，非 JIT 代码；`X86Exec_test` 12/13 通过，仅 `floatToInt` 受该模拟缺陷影响）。
 - **x86 真机证据（2026-10-19，WSL Ubuntu-24.04 / `x86_64-unknown-linux-gnu` / Cangjie `1.3.0-alpha.20261015001050`）**：`cjpm test` **560/560 通过、0 失败 / 0 跳过**；x86 后端专项 **85/85**；`PerfCompare_test` JIT 结果与 cjnative / 解释器**逐位一致**，稳态吞吐 **native=3,198,433ns / jit=2,276,989ns / interp=5,987,603,230ns**（JIT ≈ native 的 71%、相对解释器折合约 2600×）⇒ **box64 下的 9 失败确认为模拟器 Float64 字面量缺陷，真机不复现**。
 
 ## 结论
 
-**apply 的 115/115 不等于规格全绿。** 本轮已修掉全部 4 个 CRITICAL（生产 JIT 接入、x86 全 opcode、T6 21/22、T52/T53 映射），WARNING-01（x86 原生执行证据）已用 box64 + x86 SDK 全量取得证据：560 例中 550 通过，剩余 9 失败 + 1 错误全部由 box64 的 Float64 字面量缺陷引起（`Float64(3.0)` 被编译为 0.0），不是 JIT 逻辑；WARNING-02（单元标签强度）仍部分关闭。常量/窗口生命周期、SSE4.1 门禁、性能留档、差分 scenario 矩阵已收口。**真机 x86_64 已于 2026-10-19 复跑全量（560/560）+ x86 专项（85/85）+ 性能对拍，可直接 archive**。
+**apply 的 115/115 不等于规格全绿。** 本轮已修掉全部 4 个 CRITICAL（生产 JIT 接入、x86 全 opcode、T6 21/22、T52/T53 映射）。**WARNING-01 关闭**：x86 实现层补齐 157 个 opcode 后，先在 box64 取得执行证据，再由真机 x86_64 全量跑通（560/560 + x86 专项 85/85 + 性能对拍逐位一致；box64 的 9 失败 + 1 错误不复现，确认为模拟器 Float64 缺陷）⇒ **可直接 archive**。**WARNING-02 关闭**：13 个单元用例的注释级 T 标签已升级为 `TCase.hit('T<id>/<场景>', 条件)` 的可执行断言，`check_tmap.sh` 改为**先剥注释再判定**，注释标签不再能通过校验。scenario→test 矩阵由 13 条扩到**全 9 个 capability 共 156 条**（0 未映射），并新增 `--strict` 档位。剩余为 7 条**无用例断言**的 scenario、5 条**部分覆盖**，以及 JIT 全局串行、非 Linux 执行证据、x86 执行矩阵代表性三类工程债（见「仍未完成」）。
 
 | ID | 严重度 | 状态 | 摘要 |
 |---|---|---|---|
@@ -19,7 +19,7 @@
 | CRITICAL-03 | CRITICAL | **已修复（21/22）** | T6 映射用例 15 码 + 单元行为 7/12/16/17/19/99；仅 15 为防御码（解释器无机器栈余量概念），无数值路径 |
 | CRITICAL-04 | CRITICAL | **已修复** | T52/T53 原为「挂名映射」；已补真实两形态用例与常量写 20 断言 |
 | WARNING-01 | WARNING | **已关闭（真机 x86_64 证据）** | 2026-10-19 WSL x86_64 真机全量 **560/560** + x86 专项 **85/85**；`PerfCompare_test` 三侧逐位一致；box64 的 9 失败确认为模拟器 Float64 缺陷，真机不复现 |
-| WARNING-02 | WARNING | 部分关闭 | `check_tmap.sh` 已升级为「用例体必须含 `T<id>/` 标签」；单元用例的标签仍是注释级，只有 T52/T53 是行为级 |
+| WARNING-02 | WARNING | **已关闭** | 13 个单元用例的 T 标签改为 `TCase.hit('T<id>/<场景>', 条件)` 行为级断言；`check_tmap.sh` 剥注释后判定，注释标签不再通行 |
 | INFO-01 | INFO | 留档 | `tasks.md` 的 S5.4/S5.8 勾选与子项「未完成/待补」自相矛盾，建议 verify 后统一口径 |
 
 ## CRITICAL 明细
@@ -105,7 +105,7 @@
 - `scripts/check_tmap.sh` 升级：解析每个映射用例的函数体，要求含 `T<id>/` 标签；改名、漏标签、空步骤均判失败。当前 40 条范围内映射，0 悬空。
 
 **残留**
-- 13 个单元用例的 `T<id>/` 标签以注释形式加入，属于追溯标签而非行为断言；真正行为级的是 T52/T53。若要求所有映射都行为级，需要逐个把 T 编号写进子用例 ID（工作量较大）。
+- 原「13 个单元用例的 `T<id>/` 只是注释」一项已于 2026-10-19 消除：标签全部改为 `TCase.hit('T<id>/<场景>', <真实条件>)` 的行为级断言，`check_tmap.sh` 剥掉 `//` 与 `/* */` 后只认这种形式，注释标签不再能通过校验。
 
 ## WARNING 明细
 
@@ -120,16 +120,23 @@
   1. `X86Lower.binOp` / `INEG` 溢出检查方向反了（`JO ok` → 正常值落到 `bail(3)`，所有整数运算误报 `OVERFLOW_I64`）；改为 `JNO ok`，并加 `checkedArithmeticUsesJno` 字节级回归。
   2. ctx 的 `site` / `fnId` 只写 32 位，高 32 位残留（`site=61` 读成 `-4294967235`）；`movDwordCtx` 改为 `movQwordCtx`，prologue、`emitSetSite`、closure 恢复 selfFnId 全部 64 位，并加 `ctxStoresAreQword` 回归。
 - **剩余失败的归因**：`X86Exec.floatToInt`、`Acceptance.t6ErrorConsistency`、`DbgDump.slotTextCoversValueTypes`、`Helpers.decimalConversions` / `toStrCoversAllTags`、`Interp.floatNanCanonicalization` / `typeInstructions`、`CallMarshal.scalarMarshalling` / `unboxTable`。这些用例都依赖 `Float64` 字面量；box64 下 x86 cjc 把 `Float64(3.0)` 编译为 `0.0`（`1.5` 位型同样为 0），导致基准与预期值错位。aarch64 上同类用例全绿，故判定为**模拟器/工具链缺陷，不是 JIT 代码缺陷**。
-- 真机复核命令：
+- **真机复核结果（2026-10-19）**：在 WSL Ubuntu-24.04（`x86_64-unknown-linux-gnu`，Cangjie `1.3.0-alpha.20261015001050`）上跑全量 `cjpm test` → **560/560 通过、0 失败 / 0 跳过**；x86 后端专项 **85/85**。上述 box64 的 9 失败 + 1 错误**全部不复现**，归因确认成立。
+- **真机复跑命令**：
 
 ```
 cd f_jit && cjpm test --filter '*X86Exec*'
 cd f_jit && cjpm test
 ```
 
-### WARNING-02 T 映射校验的强度
+### WARNING-02 T 映射校验的强度（已关闭）
 
-`check_tmap.sh` 现在能拦住「函数名存在但用例不测该 T」的挂名映射；但单元用例的标签是注释，无法证明断言真的覆盖该 T 的语义。建议后续把每个 T 的子用例 ID 统一为 `T<id>/<场景>`（差分用例已如此）。
+`check_tmap.sh` 现在能拦住「函数名存在但用例不测该 T」的挂名映射。原薄弱点是单元用例的标签只写在注释里，无法证明断言真的覆盖该 T 的语义。2026-10-19 收口方式：
+
+- 新增 `f_jit/src/test/TCase.cj`（`fountain::f_jit.test`）：`hit(id, ok)` 原样返回 `ok`，空 `id` 直接返回 false；
+- 13 个单元用例的 `// T<id>/ 映射标签` 全部替换为 `@Assert(TCase.hit('T<id>/<场景>', <真实条件>), true)`——标签与它守卫的那条断言同生共死：条件不成立用例就失败，标签被删/被改则映射校验失败；
+- `check_tmap.sh` 改为**先剥离 `//` 与 `/* */` 注释**，再要求出现 `TCase.hit('T<id>/` 或差分用例的 `'T<id>/` 首参形式，注释标签从此不可能通过校验。
+
+实测：40 条范围内映射，悬空 / 未断言 **0**。
 
 ### INFO-01 tasks 与实现口径不一致
 
@@ -148,21 +155,26 @@ cd f_jit && cjpm test
 - **x86 新 lowering 字节 golden**：`X86Compile_test.goldenFloatDivCastClosureLen` 覆盖 FADD、IDIV、IMOD、TO_I64、CALL_CLOSURE、动态 LEN 的关键字节序列。
 - **x86 溢出检查方向**：`binOp`/`INEG` 由 `JO ok` 改为 `JNO ok`；`X86Compile_test.checkedArithmeticUsesJno` 断言 IADD/IMUL/INEG 后必须是 `0F 81`。
 - **x86 ctx 字段宽度**：`site`/`fnId` 统一 64 位写；`X86Compile_test.ctxStoresAreQword` 断言 prologue 的 `49 C7 47 28` 与 `SET_SITE` 的 `49 C7 47 08`；`X86Frame_test` 黄金序列同步更新。
-- **性能留档**：`PerfCompare_test` 改为预编译稳态 JIT vs Interp vs cjnative；数字落 `doc/perf-m1.md`（aarch64 JIT 约为解释器的 2.4%，约 42× 加速）。
-- **scenario 矩阵**：`doc/spec/f-jit-m1/scenario-map.tsv` + `scripts/check_scenarios.sh`，差分验收 13 条 scenario 全覆盖（0 缺失）。
+- **性能留档**：`PerfCompare_test` 改为预编译稳态 JIT vs Interp vs cjnative；数字落 `doc/perf-m1.md`（aarch64 JIT 约为解释器的 2.4%，约 42× 加速；真机 x86_64 三侧逐位一致，稳态 native=3,198,433ns / jit=2,276,989ns / interp=5,987,603,230ns）。
+- **scenario 矩阵**：`doc/spec/f-jit-m1/scenario-map.tsv` + `scripts/check_scenarios.sh`，由差分验收 13 条扩到**全 9 个 capability 共 156 条**（未映射 0、缺失 0；缺口 7、部分覆盖 5 已逐条留档）。
 - **`JitMode.Force` 可观测**：`JitFunction.isJitBacked()`；`T52` 断言 Force 产物为机器码、Off 产物为纯字节码（aarch64 通过）。
 
 ### 仍未完成 / 未覆盖
 
-1. **x86 真机浮点复核**：box64 全量已取得证据（560 例 / 550 过）；剩余 9 失败 + 1 错误均为 box64 的 Float64 字面量恒 0 所致。需在真实 x86_64 上复跑浮点相关用例，确认后即可完全关闭。
-2. **JIT 全局串行化**：`JitExecutor.envMtx` + `JitFunction.callMtx` 保证单窗口/单 fnTable 正确，但所有调用串行；无并发吞吐测试，M2 宿主回调需改 per-call 隔离。
-3. **非 Linux / 其他指令集**：`JitExecutor.create` 已加 Linux + aarch64/x86_64 门禁，但本机无法执行非 Linux 分支，缺 CI 证据。
-4. **x86 执行矩阵代表性**：`X86Exec_test` 13 例、`X86Compile_test` 11 例，不等于 157 opcode 逐条执行/逐条字节对拍。
-5. **T6/15 `STACK_GUARD`** 无行为用例；解释器 `0x07` 为 NOP，15 只在桥层重跑余量不足时产生，M1 无稳定构造路径。
-6. **T6 映射用例只覆盖 15 码**；7/12/16/17/19/99 的行为证据在 `Interp_test`/`HandleTable_test`/`userapi`/`Helpers_test`，未纳入 `t6ErrorConsistency` 本体。
-7. **T 标签强度**：13 个单元用例的 `T<id>/` 是注释标签，`check_tmap.sh` 只证明标签存在。
-8. **scenario 矩阵只覆盖差分验收 13 条**：其余 8 个 capability 的 143 条 scenario 尚未建立 scenario→test 映射。
-9. **官方 `/opsx:verify` 未安装**：`.codebuddy/commands/opsx/` 缺 `verify.md`，本报告是手工等价产物。
+1. **JIT 全局串行化**：`JitExecutor.envMtx` + `JitFunction.callMtx` 保证单窗口/单 fnTable 正确，但所有调用串行；无并发吞吐测试，M2 宿主回调需改 per-call 隔离。
+2. **非 Linux / 其他指令集**：`JitExecutor.create` 已加 Linux + aarch64/x86_64 门禁，但本机无法执行非 Linux 分支，缺 CI 证据（选择层有矩阵用例，执行层无运行证据）。
+3. **x86 执行矩阵代表性**：`X86Exec_test` 13 例、`X86Compile_test` 11 例，不等于 157 opcode 逐条执行/逐条字节对拍；真机全绿证明的是「这 13 例覆盖的路径」，不是「每个 opcode 都执行过」。
+4. **T6/15 `STACK_GUARD`** 无行为用例；解释器 `0x07` 为 NOP，15 只在桥层重跑余量不足时产生，M1 无稳定构造路径。
+5. **T6 映射用例只覆盖 15 码**；7/12/16/17/19/99 的行为证据在 `Interp_test`/`HandleTable_test`/`userapi`/`Helpers_test`，未纳入 `t6ErrorConsistency` 本体。
+6. **scenario 矩阵的 7 条缺口**（`check_scenarios.sh` 的 `GAP` 行，无任何用例断言该 scenario）：
+   - `f-jit-compiler-frontend / 多字节码点列号`：列号只测过构造值，没有「多字节源码 → 按码点计列」的扫描断言；
+   - `f-jit-facade-bridge / 快照语义`：只测了注册表 `snapshot()` 计数，没有「已编译产物不受后续注册变更影响」的断言；
+   - `f-jit-facade-bridge / 返回值与声明不符`：声明侧非法类型码有覆盖，运行期「实现返回值与 retType 不符」无断言；
+   - `f-jit-facade-bridge / 跨实例复用`：`sameSourceReusesArtifact` 用同一 `Compiler` 实例，跨实例复用未测；
+   - `f-jit-facade-bridge / 含宿主句柄的容器被拒`：加载期对含预定义句柄常量的 `.fbc` 无拒绝用例；
+   - `f-jit-facade-bridge / 活跃调用排空`：只有 `unload(0)` 空载卸载，没有长调用进行中卸载的排空断言；
+   - `f-jit-facade-bridge / 与编译交错`：卸载与同指纹编译并发的状态机交互无用例。
+7. **scenario 矩阵的 5 条部分覆盖**：差分「双字段断言」（T6 只 15 码）、骨架「差分层就位」（结构项，只能由差分层用例存在间接证明）、前端「三种书写形态同产物」（只测斜杠消歧，未逐形态比对产物）、后端「降级与 Linux 结果一致」（只测选择层与错误槽，未跨平台比对结果）、门面「全类型行可断言」（只覆盖 I64/F64/Bool/String 四类）。
 
 ## 逐 capability 状态
 
@@ -172,29 +184,39 @@ cd f_jit && cjpm test
 | `f-jit-module-skeleton` | 4 / 7 | 绿 | 包结构、公开导入、构建基线 |
 | `f-jit-base-contracts` | 8 / 14 | 绿 | 错误码/类型/诊断契约 |
 | `f-jit-bytecode-format` | 10 / 24 | 绿 | 编解码、校验、指纹 |
-| `f-jit-compiler-frontend` | 10 / 24 | 绿 | 词法/语法/降低/金样 |
+| `f-jit-compiler-frontend` | 10 / 24 | **黄** | 词法/语法/降低/金样齐绿；「多字节码点列号」无用例断言 |
 | `f-jit-runtime` | 11 / 21 | 绿 | 解释器/句柄/helper/转储 |
-| `f-jit-backend` | 10 / 16 | **绿** | aarch64 全量绿；x86 已补齐 157 个 opcode，box64 下整数/分支/容器/闭包/递归真实执行通过 |
-| `f-jit-facade-bridge` | 10 / 20 | **绿（本轮修复）** | 生产 JIT 已接入；T52 两形态已补 |
-| `f-jit-differential-acceptance` | 7 / 13 | **绿（浮点待真机）** | T6 21/22（仅 15 防御码无路径）；x86 差分在 box64 下仅浮点字面量用例失败 |
+| `f-jit-backend` | 10 / 16 | **绿** | aarch64 全量绿；x86 补齐 157 个 opcode，**真机 x86_64 全量通过** |
+| `f-jit-facade-bridge` | 10 / 20 | **黄** | 生产 JIT 已接入、T52 两形态已补；5 条 scenario 无用例断言（快照/返回值不符/跨实例/宿主句柄容器/排空与交错） |
+| `f-jit-differential-acceptance` | 7 / 13 | **绿** | T6 21/22（仅 15 防御码无路径）；三引擎差分在 aarch64 与真机 x86_64 均通过 |
 
 ## 本轮执行的校验
 
 | 命令 | 结果 |
 |---|---|
-| `cjpm test`（Linux aarch64） | **560/560 通过** |
-| `scripts/check_tmap.sh` | 40 条范围内映射，悬空/未断言 **0** |
-| `scripts/check_scenarios.sh` | 13 条 scenario，缺失 **0** |
+| `cjpm test`（Linux aarch64 原生） | **560/560 通过** |
+| `cjpm test`（**真机 x86_64**） | **560/560 通过，0 失败 / 0 跳过**（2026-10-19；x86 后端专项 85/85，box64 下 9 失败 + 1 错误不复现） |
+| `scripts/check_tmap.sh` | 40 条范围内映射，悬空/未断言 **0**（剥注释后判定 `TCase.hit('T<id>/…')` / `diff('T<id>/…')`） |
+| `scripts/check_scenarios.sh` | **156 条映射（full 139 / partial 5 / 缺口 7 / N/A 5），未映射 0、缺失 0** |
+| `openspec update --force`（worktree f_jit） | 12 个工作流命令齐备，含 `verify.md` |
 | `JitWire_test.createsExecutableAssets` | 通过（生产路径可建 JIT 资产） |
 | `X86Compile_test`（分支/容器/递归/浮点/除法/转换/闭包/LEN/JNO/ctx 宽度） | 11/11 通过（字节级组装） |
 | `X86Frame_test` | 通过（prologue 黄金序列已同步为 64 位 fnId 写） |
-| `X86Exec_test`（box64 + x86 SDK） | 13 例，12 通过；仅 `floatToInt` 受 box64 Float64 字面量缺陷影响 |
-| `cjpm test`（box64 + x86 SDK，独立副本） | **560 例 / 550 通过 / 9 失败 / 1 错误**（prologue 黄金更新后 551 / 8 / 1）；失败均为 Float64 字面量缺陷 |
+| `X86Exec_test` | 13 例全通过（真机 x86_64） |
 | `Interp_test.castTypeMismatchYields7` | 通过（T6/7 行为证据） |
 
 ## 建议的下一步（按优先级）
 
-1. **x86_64 真机浮点复核**：在真实 x86_64 机器上跑 `cjpm test --filter X86Exec_test` 与全量 `cjpm test`，重点确认 `floatToInt`、`t6ErrorConsistency` 及 runtime 浮点用例；这些在 box64 下因 Float64 字面量恒 0 失败。目标机需 SSE4.1（`roundsd`）；纯 SSE2 目标需改软件序列。
-2. **T 标签强度**：把 13 个单元用例的 `T<id>/` 注释标签升级为子用例 ID（行为级），避免校验只停留在追溯层。
-3. **性能留档**：把 x86_64 与 aarch64 的 `PerfCompare_test` 实测数字回填文档。
-4. 上述完成后重跑 `check_tmap.sh`，再进 `opsx:archive`。
+1. **补 7 条缺口的用例**（按风险排序）：`快照语义`（编译后注销再调用）、`活跃调用排空`（长调用中 `unload`）、`与编译交错`（卸载 × 同键编译）、`含宿主句柄的容器被拒`（构造带 hid 的 `.fbc`）、`返回值与声明不符`（`PredefinedFunction` 返回错类型）、`跨实例复用`（两个 `Compiler` 实例同源）、`多字节码点列号`（emoji 后紧跟标识符的列号）。补完把对应行的 `GAP/none` 改成用例名 + `full`，再跑 `check_scenarios.sh --strict`。
+2. **并发隔离**：`JitExecutor.envMtx` / `JitFunction.callMtx` 的全局串行改 per-call（M2 宿主回调的前置）。
+3. **非 Linux 执行证据**：Windows/macOS/HarmonyOS 的降级执行层至少补 CI 冒烟，当前只有选择层矩阵。
+4. **x86 执行矩阵加密**：把 157 个 opcode 按组补执行用例，缩小「13 例代表全量」的差距。
+5. 上述完成后重跑 `check_tmap.sh`、`check_scenarios.sh --strict` 与两平台全量 `cjpm test`。
+
+## 2026-10-19 追加：真机 x86 全绿 / 矩阵与标签收口
+
+- **x86 真机**：实现层补齐 157 个 opcode 后，box64 先取得执行证据（560 例 / 550 过，9 失败 + 1 错误全为 box64 `Float64` 字面量恒 0），随后在**真机 x86_64 上全量通过**，上述失败不复现。WARNING-01 关闭。
+- **`/opsx:verify` 安装**：`f_jit` worktree 原先缺 `verify.md`（只有 6 个工作流），已用 `openspec update --force` 从全局档位（12 工作流，`profile=custom`）重新生成 `.codebuddy/commands/opsx/`，现 12 个命令齐备；`.codebuddy/` 属 `.gitignore`，安装不产生版本库改动。
+- **scenario 矩阵**：`scenario-map.tsv` 从 13 行扩到 **156 行（全 9 capability）**，新增第 4 列「强度」。`check_scenarios.sh` 增强为三道检查：scenario 必须存在于该 capability 的 spec、测试函数必须能在 `f_jit/src` 或 `f_util/src` 解析到、**spec 里每条 scenario 都必须被映射（反向完整性）**；`GAP` 行计入缺口清单，`--strict` 时缺口/部分覆盖即失败。实测：156 条，未映射 0，缺失 0，缺口 7，部分 5。
+- **T 标签行为级**：新增 `src/test/TCase.cj`（`TCase.hit(id, ok)`），13 个单元用例里 `// T<id>/` 注释全部替换为 `TCase.hit('T<id>/<场景>', <真实条件>)` 包裹断言；`TwoForms_test` 的 T52 由注释改为「两形态结果比对」断言。`check_tmap.sh` 改为**先剥离 `//` 与 `/* */` 注释**，再要求 `<函数>( 'T<id>/` 形式的字符串首参——注释标签从此不可能通过校验。实测 40 条范围内映射，悬空 0。
+- **未在融合侧编译验证**：本次编辑（`TCase.cj` + 11 个测试文件 + 2 个脚本）在鸿蒙侧完成，本机无 `cjc`/`cjpm`。静态检查（`check_tmap.sh`、`check_scenarios.sh`）已通过，**仍需在融合环境跑一次 `cjpm build && cjpm test` 确认可编译**。

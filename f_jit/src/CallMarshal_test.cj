@@ -21,6 +21,7 @@ import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.JitException
 import fountain::f_jit.base.LocalType
 import fountain::f_jit.runtime.HandleTable
+import fountain::f_jit.test.TCase
 
 /** S6.3：§8.2.1 封送表 / §8.2.2 解包表 / 逃逸与清理。 */
 @Test
@@ -63,13 +64,11 @@ public class CallMarshal_test {
 
     @TestCase
     public func handlePinnedAndCleaned(): Unit {
-        // T14/ 映射标签（check_tmap 断言级校验）
         let m = CallMarshal()
         let id = m.marshalArg(LocalType.STRING, 'hello')
-        @Assert(id != 0, true)
-        @Assert(HandleTable.getAny(id).isSome(), true)
+        @Assert(TCase.hit('T14/handle-pinned', id != 0 && HandleTable.getAny(id).isSome()), true)
         m.cleanup()
-        @Assert(HandleTable.getAny(id).isNone(), true)
+        @Assert(TCase.hit('T14/handle-cleaned', HandleTable.getAny(id).isNone()), true)
     }
 
     @TestCase

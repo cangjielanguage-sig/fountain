@@ -25,6 +25,7 @@ import std.time.DateTime
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.TypeToken
 import fountain::f_jit.bytecode.ConstMapKey
+import fountain::f_jit.test.TCase
 
 /**
  * S4.7–S4.18 helper 族的验收用例（逐族一条以上）。
@@ -605,7 +606,6 @@ public class Helpers_test {
     /** `closure_new` 登记 1 槽；`closure_fnid` / `closure_cap`；`fn_table` 基址。 */
     @TestCase
     public func closureHelpers(): Unit {
-        // T25/ 映射标签（check_tmap 断言级校验）
         setup()
         let s = str('cap')
         let base = used()
@@ -613,7 +613,7 @@ public class Helpers_test {
         @Assert(used(), base + 1)
         @Assert(call(55, [c]), 7)
         @Assert(call(56, [c, 0]), s)
-        @Assert(call(56, [c, 1]), 42)
+        @Assert(TCase.hit('T25/closure-capture', call(56, [c, 1]) == 42), true)
         @Assert(call(56, [c, 2]), 0)
         @Assert(err(), ErrCode.NULL_HANDLE)
         setup()

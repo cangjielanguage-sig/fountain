@@ -17,6 +17,7 @@ package fountain::f_jit.backend
 
 import std.unittest.*
 import std.unittest.testmacro.*
+import fountain::f_jit.test.TCase
 
 /**
  * P5.1 `CodeBuffer`：mmap RW → write/patch → mprotect RX（W^X）→ munmap。
@@ -42,12 +43,11 @@ public class CodeBuffer_test {
 
     @TestCase
     public func pageAlignment(): Unit {
-        // T4/ 映射标签（check_tmap 断言级校验）
         let page = CodeBuffer.pageSize()
         @Assert(page > 0, true)
         let b1 = CodeBuffer_test.allocOrFail(1)
-        @Assert(b1.base % page, 0)
-        @Assert(b1.size % page, 0)
+        @Assert(TCase.hit('T4/base-page-aligned', b1.base % page == 0), true)
+        @Assert(TCase.hit('T4/size-page-aligned', b1.size % page == 0), true)
         b1.free()
         let b2 = CodeBuffer_test.allocOrFail(page + 1)
         @Assert(b2.base % page, 0)
