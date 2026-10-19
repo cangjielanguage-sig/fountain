@@ -1793,6 +1793,7 @@ internal class Lowerer {
     private func lowerHostClosureInvoke(target: AstExpr, args: Array<AstExpr>,
         pos: SourcePos): UInt16 {
         let ctx = this.requireCtx()
+        let ret = this.hostRetOrI64(target)
         let tslot = ctx.builder.allocSlot(LocalType.HOST_CLOSURE)
         let _ = this.lowerExpr(target)
         ctx.builder.emitU16(Op.STOREL, UInt16(tslot))
@@ -1802,7 +1803,30 @@ internal class Lowerer {
         }
         ctx.builder.setSite(pos)
         ctx.builder.callHost(UInt8(args.size))
-        LocalType.I64
+        ret
+    }
+
+    /**
+     * 被调表达式的 HostClosure **返回码**（`CALL_HOST` 的结果静态类型）。
+     *
+     * `Var` 从符号表取（形参/局部的 `typeAnn.hostRet()` 已在声明处落表）；字段形态
+     * （`u.cb(...)`）的签名不在 `PublicField.typeRef` 里（该字段只承载类名）⇒ 退回 `I64`，
+     * 保持 M2 现状而不是把返回值判成未知。
+     */
+    private func hostRetOrI64(target: AstExpr): UInt16 {
+        match (target) {
+            case AstExpr.Var(name, _) =>
+                match (this.requireCtx().find(name)) {
+                    case Some(s) =>
+                        if (s.hostRet == LocalType.NONE) {
+                            LocalType.I64
+                        } else {
+                            s.hostRet
+                        }
+                    case None => LocalType.I64
+                }
+            case _ => LocalType.I64
+        }
     }
 
     /** `u.cb(a…)`（13 型字段）：H64 求句柄 → 临时槽 → LOADL → 实参 → CALL_HOST。 */
