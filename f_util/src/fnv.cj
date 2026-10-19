@@ -18,442 +18,395 @@ package fountain::f_util
 import fountain::f_base.*
 
 /**
- * FNV（Fowler–Noll–Vo）非加密哈希：**FNV-1 与 FNV-1a，宽度 32 / 64 / 128 / 256**。
+ * FNV 哈希族：**标准 FNV-1 / FNV-1a**，覆盖 32 / 64 / 128 / 256 / 1024 五种宽度。
  *
- * 定义（公有领域，1991；G. Fowler / L. C. Noll / K.-P. Vo）：
- * ```
- * FNV-1a :  hash = (hash XOR byte) * prime      // 推荐变体
- * FNV-1   :  hash = (hash * prime) XOR byte
- * ```
- * 全部运算为**无符号回绕**（mod 2^n）——仓颉默认溢出策略是 throwing，故本文件的实现函数
- * 一律标注 `@OverflowWrapping`（这是**语义对齐**，不是绕过检查）。
+ * 全部常数取自官方 FNV 参考定义（Glenn Fowler / Landon Curt Noll / Phong Vo，
+ * `http://www.isthe.com/chongo/tech/comp/fnv/index.html`，以及 `fnv.rs` / IETF
+ * `draft-eastlake-fnv`）——偏移基值（offset basis）与素数（prime）**逐字抄录，不自造**。
+ * 五种宽度的素数都形如 `2^k + 2^8 + c`：
  *
- * 参数（prime = 2^s + 2^8 + c；offset basis 由 FNV-0 对 Noll 签名行求得，见 FNV 官方参数表）：
- *
- * | 宽度 | offset basis | prime |
- * |---|---|---|
- * | 32 | `0x811C9DC5` | `0x01000193` |
- * | 64 | `0xCBF29CE484222325` | `0x100000001B3` |
- * | 128 | `0x6C62272E07BB014262B821756295C58D` | `2^88 + 2^8 + 0x3B` |
- * | 256 | `0xDD268DBCAAC550362D98C384C4E576CCC8B1536847B6BBB31023B4C8CAEE0535` | `2^168 + 2^8 + 0x63` |
- *
- * **非加密**：可预测、可构造碰撞（相关输入间存在 XOR 关系，如 `fnv1a(a) XOR fnv1a(b) = fnv1a(a') XOR fnv1a(b')`），
- * **不得**用于签名/防篡改/抗洪泛场景；作缓存键或去重键时应**命中后二次校验原字节**。
+ * | 宽度 | 偏移基值来源                    | 素数            | `k`（位） | `c`    |
+ * |-----|----------------------------|----------------|----------|--------|
+ * | 32  | `0x811C9DC5`               | `2^24+2^8+0x93` | 24       | 0x93   |
+ * | 64  | `0xCBF29CE484222325`       | `2^40+2^8+0xB3` | 40       | 0xB3   |
+ * | 128 | `0x6C62272E07BB014262B821756295C58D` | `2^88+2^8+0x3B` | 88 | 0x3B |
+ * | 256 | 见 `FnvCore.BASIS_256`     | `2^168+2^8+0x63`| 168      | 0x63   |
+ * | 1024| 见 `FnvCore.BASIS_1024`    | `2^680+2^8+0x8D`| 680      | 0x8D   |
  *
  * 用法：
  * ```
- * let h  = Fnv64.fnv1a.compute(bytes)          // 一次算完
- * var h2 = Fnv64.fnv1a.initRegister()          // 增量：init -> update -> finish
- * h2 = Fnv64.fnv1a.update(h2, chunk1)
- * h2 = Fnv64.fnv1a.update(h2, chunk2)
- * h2 = Fnv64.fnv1a.finish(h2)
- * let s  = Fnv64.fnv1a.computeHex(bytes)       // 定长十六进制（小写）
+ * Fnv64.fnv1a('123456789')                    // 0x06D5573923C6CDFC：常量指纹
+ * Fnv128.fnv1a(src)                           // UInt128：编译去重键
+ * Fnv.hash(FnvWidth.W1024, FnvVariant.FNV1A, data)  // 统一入口，16 字大端
+ * let h = FnvHasher(FnvWidth.W64, FnvVariant.FNV1A) // 增量：update -> finish -> reset
  * ```
- * 每个宽度提供 `fnv1` / `fnv1a` 两个变体，`all` 供遍历自检（见 `fnv_test.cj`：
- * 逐个核对 `"123456789"` 的黄金值、空输入 = offset basis、增量 ≡ 一次算完）。
+ *
+ * 所有宽度共用 `FnvCore` 一份算法（32 位 limb 数组 + 素数分解乘法），类型化入口只做
+ * 结果形态转换，不复制算法；输入一律按 **字节** 处理，与字符边界、主机端序无关。
  */
+public class Fnv {
+    /** 一次性算完：`String` 输入按其 UTF-8 字节序列计算。 */
+    public static func hash(width: FnvWidth, variant: FnvVariant, data: String): Array<UInt64> {
+        hash(width, variant, data.unsafeBytes())
+    }
+    /** 一次性算完：字节流输入。返回 `width.words()` 个 `UInt64`，**最高有效字在前**。 */
+    public static func hash(width: FnvWidth, variant: FnvVariant, data: Array<Byte>): Array<UInt64> {
+        let core = FnvCore.of(width, variant)
+        core.update(data)
+        core.words()
+    }
+    /** `Fnv.hash` 的 FNV-1 简写。 */
+    public static func fnv1(width: FnvWidth, data: String): Array<UInt64> {
+        hash(width, FnvVariant.FNV1, data)
+    }
+    /** `Fnv.hash` 的 FNV-1 简写（字节流）。 */
+    public static func fnv1(width: FnvWidth, data: Array<Byte>): Array<UInt64> {
+        hash(width, FnvVariant.FNV1, data)
+    }
+    /** `Fnv.hash` 的 FNV-1a 简写。 */
+    public static func fnv1a(width: FnvWidth, data: String): Array<UInt64> {
+        hash(width, FnvVariant.FNV1A, data)
+    }
+    /** `Fnv.hash` 的 FNV-1a 简写（字节流）。 */
+    public static func fnv1a(width: FnvWidth, data: Array<Byte>): Array<UInt64> {
+        hash(width, FnvVariant.FNV1A, data)
+    }
+}
 
-/** 下方 8 个变体的黄金值（`"123456789"`）与算法均为官方参数表的直接实现；256 位无值类型，用十六进制字符串承载。 */
-
+/** FNV-32：`fnv1` / `fnv1a`，返回 `UInt32`。 */
 public class Fnv32 {
-    /** FNV-1-32：先乘后异或。 */
-    public static let fnv1 = Fnv32('FNV-1-32', false, 0x811C9DC5u32, 0x01000193u32, 0x24148816u32)
-    /** FNV-1a-32：先异或后乘（推荐）。 */
-    public static let fnv1a = Fnv32('FNV-1a-32', true, 0x811C9DC5u32, 0x01000193u32, 0xBB86B11Cu32)
-    /** 全部变体（自检/按需挑选）。 */
-    public static let all = [fnv1, fnv1a]
-
-    /** 变体名（如 `FNV-1a-32`）。 */
-    public let name: String
-    /** 是否为 FNV-1a（先异或后乘）；false = FNV-1（先乘后异或）。 */
-    public let isFnv1a: Bool
-    /** `"123456789"` 的黄金值。 */
-    public let checkValue: UInt32
-    private let offset: UInt32
-    private let prime: UInt32
-
-    public init(name: String, isFnv1a: Bool, offset: UInt32, prime: UInt32, checkValue: UInt32) {
-        this.name = name
-        this.isFnv1a = isFnv1a
-        this.offset = offset
-        this.prime = prime
-        this.checkValue = checkValue
+    /** FNV-1（先乘后异或）。 */
+    public static func fnv1(data: String): UInt32 {
+        fnv1(data.unsafeBytes())
     }
-
-    /** 增量起始值 = offset basis。 */
-    public func initRegister(): UInt32 {
-        offset
+    /** FNV-1（字节流）。 */
+    public static func fnv1(data: Array<Byte>): UInt32 {
+        UInt32(Fnv.hash(FnvWidth.W32, FnvVariant.FNV1, data)[0])
     }
-
-    /** 增量更新（FNV 无末尾处理，`finish` 即恒等）。 */
-    @OverflowWrapping
-    public func update(hash: UInt32, data: Array<Byte>): UInt32 {
-        var h = hash
-        if (isFnv1a) {
-            for (b in data) {
-                h = (h ^ UInt32(b)) * prime
-            }
-        } else {
-            for (b in data) {
-                h = (h * prime) ^ UInt32(b)
-            }
-        }
-        return h
+    /** FNV-1a（先异或后乘）。 */
+    public static func fnv1a(data: String): UInt32 {
+        fnv1a(data.unsafeBytes())
     }
-
-    public func finish(hash: UInt32): UInt32 {
-        hash
-    }
-
-    public func compute(data: Array<Byte>): UInt32 {
-        update(initRegister(), data)
-    }
-
-    public func compute(s: String): UInt32 {
-        compute(s.unsafeBytes())
-    }
-
-    /** 定长十六进制（8 位、小写）。 */
-    public func computeHex(data: Array<Byte>): String {
-        fnvHex64(UInt64(compute(data)), 8)
-    }
-
-    public func computeHex(s: String): String {
-        computeHex(s.unsafeBytes())
+    /** FNV-1a（字节流）。 */
+    public static func fnv1a(data: Array<Byte>): UInt32 {
+        UInt32(Fnv.hash(FnvWidth.W32, FnvVariant.FNV1A, data)[0])
     }
 }
 
+/** FNV-64：`fnv1` / `fnv1a`，返回 `UInt64`。f_jit 的常量指纹用它。 */
 public class Fnv64 {
-    /** FNV-1-64：先乘后异或。 */
-    public static let fnv1 = Fnv64('FNV-1-64', false, 0xCBF29CE484222325u64, 0x100000001B3u64, 0xA72FFC362BF916D6u64)
-    /** FNV-1a-64：先异或后乘（推荐）。 */
-    public static let fnv1a = Fnv64('FNV-1a-64', true, 0xCBF29CE484222325u64, 0x100000001B3u64, 0x06D5573923C6CDFCu64)
-    /** 全部变体（自检/按需挑选）。 */
-    public static let all = [fnv1, fnv1a]
-
-    /** 变体名（如 `FNV-1a-64`）。 */
-    public let name: String
-    /** 是否为 FNV-1a（先异或后乘）；false = FNV-1（先乘后异或）。 */
-    public let isFnv1a: Bool
-    /** `"123456789"` 的黄金值。 */
-    public let checkValue: UInt64
-    private let offset: UInt64
-    private let prime: UInt64
-
-    public init(name: String, isFnv1a: Bool, offset: UInt64, prime: UInt64, checkValue: UInt64) {
-        this.name = name
-        this.isFnv1a = isFnv1a
-        this.offset = offset
-        this.prime = prime
-        this.checkValue = checkValue
+    /** FNV-1（先乘后异或）。 */
+    public static func fnv1(data: String): UInt64 {
+        fnv1(data.unsafeBytes())
     }
-
-    /** 增量起始值 = offset basis。 */
-    public func initRegister(): UInt64 {
-        offset
+    /** FNV-1（字节流）。 */
+    public static func fnv1(data: Array<Byte>): UInt64 {
+        Fnv.hash(FnvWidth.W64, FnvVariant.FNV1, data)[0]
     }
-
-    /** 增量更新（FNV 无末尾处理，`finish` 即恒等）。 */
-    @OverflowWrapping
-    public func update(hash: UInt64, data: Array<Byte>): UInt64 {
-        var h = hash
-        if (isFnv1a) {
-            for (b in data) {
-                h = (h ^ UInt64(b)) * prime
-            }
-        } else {
-            for (b in data) {
-                h = (h * prime) ^ UInt64(b)
-            }
-        }
-        return h
+    /** FNV-1a（先异或后乘）。 */
+    public static func fnv1a(data: String): UInt64 {
+        fnv1a(data.unsafeBytes())
     }
-
-    public func finish(hash: UInt64): UInt64 {
-        hash
-    }
-
-    public func compute(data: Array<Byte>): UInt64 {
-        update(initRegister(), data)
-    }
-
-    public func compute(s: String): UInt64 {
-        compute(s.unsafeBytes())
-    }
-
-    /** 定长十六进制（16 位、小写）。 */
-    public func computeHex(data: Array<Byte>): String {
-        fnvHex64(compute(data), 16)
-    }
-
-    public func computeHex(s: String): String {
-        computeHex(s.unsafeBytes())
+    /** FNV-1a（字节流）。 */
+    public static func fnv1a(data: Array<Byte>): UInt64 {
+        Fnv.hash(FnvWidth.W64, FnvVariant.FNV1A, data)[0]
     }
 }
 
+/** FNV-128：`fnv1` / `fnv1a`，返回 `UInt128`（可直接比较 / 文本化 / 作容器键）。f_jit 的编译去重键用它。 */
 public class Fnv128 {
-    /** FNV-1-128：先乘后异或。 */
-    public static let fnv1 = Fnv128('FNV-1-128', false,
-        UInt128(0x6C62272E07BB0142u64, 0x62B821756295C58Du64),
-        [0x13Bu64, 0x1000000u64],
-        UInt128(0x8BEA2C73BE03B30Fu64, 0xD4142FB1EC2C2066u64))
-    /** FNV-1a-128：先异或后乘（推荐；**f_jit 的源/字节码指纹用它**）。 */
-    public static let fnv1a = Fnv128('FNV-1a-128', true,
-        UInt128(0x6C62272E07BB0142u64, 0x62B821756295C58Du64),
-        [0x13Bu64, 0x1000000u64],
-        UInt128(0xDA2D42A08D04E458u64, 0x5DD325117F71D504u64))
-    /** 全部变体（自检/按需挑选）。 */
-    public static let all = [fnv1, fnv1a]
-
-    /** 变体名（如 `FNV-1a-128`）。 */
-    public let name: String
-    /** 是否为 FNV-1a（先异或后乘）；false = FNV-1（先乘后异或）。 */
-    public let isFnv1a: Bool
-    /** `"123456789"` 的黄金值。 */
-    public let checkValue: UInt128
-    private let offset: Array<UInt64> // 小端 limb： [低 64 位, 高 64 位]
-    private let prime: Array<UInt64>
-
-    public init(name: String, isFnv1a: Bool, offset: UInt128, prime: Array<UInt64>, checkValue: UInt128) {
-        this.name = name
-        this.isFnv1a = isFnv1a
-        this.offset = [offset.right, offset.left]
-        this.prime = prime
-        this.checkValue = checkValue
+    /** FNV-1（先乘后异或）。 */
+    public static func fnv1(data: String): UInt128 {
+        fnv1(data.unsafeBytes())
     }
-
-    /** 增量起始值 = offset basis。 */
-    public func initRegister(): UInt128 {
-        UInt128(offset[1], offset[0])
+    /** FNV-1（字节流）。 */
+    public static func fnv1(data: Array<Byte>): UInt128 {
+        let w = Fnv.hash(FnvWidth.W128, FnvVariant.FNV1, data)
+        UInt128(w[0], w[1])
     }
-
-    /** 增量更新（FNV 无末尾处理，`finish` 即恒等）。 */
-    @OverflowWrapping
-    public func update(hash: UInt128, data: Array<Byte>): UInt128 {
-        let h = [hash.right, hash.left] // 小端 limb
-        let acc = Array<UInt64>(2, repeat: 0)
-        for (b in data) {
-            if (isFnv1a) {
-                h[0] ^= UInt64(b)
-                fnvMulInto(h, prime, acc)
-            } else {
-                fnvMulInto(h, prime, acc)
-                h[0] ^= UInt64(b)
-            }
-        }
-        return UInt128(h[1], h[0])
+    /** FNV-1a（先异或后乘）。 */
+    public static func fnv1a(data: String): UInt128 {
+        fnv1a(data.unsafeBytes())
     }
-
-    public func finish(hash: UInt128): UInt128 {
-        hash
+    /** FNV-1a（字节流）。 */
+    public static func fnv1a(data: Array<Byte>): UInt128 {
+        let w = Fnv.hash(FnvWidth.W128, FnvVariant.FNV1A, data)
+        UInt128(w[0], w[1])
     }
+}
 
-    public func compute(data: Array<Byte>): UInt128 {
-        update(initRegister(), data)
+/** FNV-256：`fnv1` / `fnv1a`，返回 4 个 `UInt64`（**最高有效字在前**）。 */
+public class Fnv256 {
+    /** FNV-1（先乘后异或）。 */
+    public static func fnv1(data: String): Array<UInt64> {
+        Fnv.hash(FnvWidth.W256, FnvVariant.FNV1, data)
     }
-
-    public func compute(s: String): UInt128 {
-        compute(s.unsafeBytes())
+    /** FNV-1（字节流）。 */
+    public static func fnv1(data: Array<Byte>): Array<UInt64> {
+        Fnv.hash(FnvWidth.W256, FnvVariant.FNV1, data)
     }
-
-    /** 定长十六进制（32 位、小写）。 */
-    public func computeHex(data: Array<Byte>): String {
-        fnvHex128(compute(data))
+    /** FNV-1a（先异或后乘）。 */
+    public static func fnv1a(data: String): Array<UInt64> {
+        Fnv.hash(FnvWidth.W256, FnvVariant.FNV1A, data)
     }
+    /** FNV-1a（字节流）。 */
+    public static func fnv1a(data: Array<Byte>): Array<UInt64> {
+        Fnv.hash(FnvWidth.W256, FnvVariant.FNV1A, data)
+    }
+}
 
-    public func computeHex(s: String): String {
-        computeHex(s.unsafeBytes())
+/** FNV-1024：`fnv1` / `fnv1a`，返回 16 个 `UInt64`（**最高有效字在前**）。 */
+public class Fnv1024 {
+    /** FNV-1（先乘后异或）。 */
+    public static func fnv1(data: String): Array<UInt64> {
+        Fnv.hash(FnvWidth.W1024, FnvVariant.FNV1, data)
+    }
+    /** FNV-1（字节流）。 */
+    public static func fnv1(data: Array<Byte>): Array<UInt64> {
+        Fnv.hash(FnvWidth.W1024, FnvVariant.FNV1, data)
+    }
+    /** FNV-1a（先异或后乘）。 */
+    public static func fnv1a(data: String): Array<UInt64> {
+        Fnv.hash(FnvWidth.W1024, FnvVariant.FNV1A, data)
+    }
+    /** FNV-1a（字节流）。 */
+    public static func fnv1a(data: Array<Byte>): Array<UInt64> {
+        Fnv.hash(FnvWidth.W1024, FnvVariant.FNV1A, data)
     }
 }
 
 /**
- * FNV-256：**结果与状态均为 32 字节大端字节数组**（仓颉无 256 位整数类型；
- * 如需值类型可后续补 `UInt256`——接口以字节数组承载，语义不受影响）。
+ * 增量哈希上下文：`update` 可任意分段喂入，`finish` 可重复调用（不改状态），
+ * `reset` 回到偏移基值。分段喂入与一次性喂入结果逐位相同。
  */
-public class Fnv256 {
-    private static let OFFSET: Array<UInt64> =
-        [0x1023B4C8CAEE0535u64, 0xC8B1536847B6BBB3u64, 0x2D98C384C4E576CCu64, 0xDD268DBCAAC55036u64]
-    // prime = 2^168 + 2^8 + 0x63：2^168 = 2^(128+40) ⇒ **limb2** 的第 40 位（limb0 = 2^8 + 0x63）
-    private static let PRIME: Array<UInt64> = [0x163u64, 0x0u64, 0x10000000000u64, 0x0u64]
+public class FnvHasher {
+    private let core: FnvCore
+    /** 以给定宽度与变体建立上下文（初始状态 = 该宽度的偏移基值）。 */
+    public init(width: FnvWidth, variant: FnvVariant) {
+        this.core = FnvCore.of(width, variant)
+    }
+    /** 喂入一段字符串（取其 UTF-8 字节）。 */
+    public func update(data: String): Unit {
+        core.update(data)
+    }
+    /** 喂入一段字节流。 */
+    public func update(data: Array<Byte>): Unit {
+        core.update(data)
+    }
+    /** 取出当前摘要（`width.words()` 个字，最高有效字在前）；可重复调用。 */
+    public func finish(): Array<UInt64> {
+        core.words()
+    }
+    /** 丢弃已喂入的数据，回到偏移基值。 */
+    public func reset(): Unit {
+        core.reset()
+    }
+}
 
-    /** FNV-1-256：先乘后异或。 */
-    public static let fnv1 = Fnv256('FNV-1-256', false,
-        "0c37a392d3522f845f2553c403a80f659b80c9a5b0151496cc37419f79b95ef6")
-    /** FNV-1a-256：先异或后乘（推荐）。 */
-    public static let fnv1a = Fnv256('FNV-1a-256', true,
-        "0c2033a9bfac21398d7ba2c403a80f659b80c9a5b01178b5cff0ab62e9d53c4c")
-    /** 全部变体（自检/按需挑选）。 */
-    public static let all = [fnv1, fnv1a]
+/** FNV 宽度：`W32`/`W64`/`W128`/`W256`/`W1024`，决定状态位宽与统一入口返回的字（`UInt64`）个数。 */
+public enum FnvWidth {
+    W32 | W64 | W128 | W256 | W1024
+    /** 规格名，如 `FNV-1024`。 */
+    public func name(): String {
+        match (this) {
+            case W32 => 'FNV-32'
+            case W64 => 'FNV-64'
+            case W128 => 'FNV-128'
+            case W256 => 'FNV-256'
+            case W1024 => 'FNV-1024'
+        }
+    }
+    /** 状态位宽。 */
+    public func bits(): Int64 {
+        match (this) {
+            case W32 => 32
+            case W64 => 64
+            case W128 => 128
+            case W256 => 256
+            case W1024 => 1024
+        }
+    }
+    /** `Fnv.hash` 返回的 `UInt64` 字数（32/64 位各占 1 个字）。 */
+    public func words(): Int64 {
+        match (this) {
+            case W32 => 1
+            case W64 => 1
+            case W128 => 2
+            case W256 => 4
+            case W1024 => 16
+        }
+    }
+}
 
-    /** 变体名（如 `FNV-1a-256`）。 */
-    public let name: String
-    /** 是否为 FNV-1a（先异或后乘）；false = FNV-1（先乘后异或）。 */
-    public let isFnv1a: Bool
-    /** `"123456789"` 的黄金值（十六进制小写，64 位定长）。 */
-    public let checkHex: String
+/** FNV 变体：`FNV1` 先乘后异或，`FNV1A` 先异或后乘。 */
+public enum FnvVariant {
+    FNV1 | FNV1A
+    /** 规格名。 */
+    public func name(): String {
+        match (this) {
+            case FNV1 => 'FNV-1'
+            case FNV1A => 'FNV-1a'
+        }
+    }
+}
 
-    public init(name: String, isFnv1a: Bool, checkHex: String) {
-        this.name = name
-        this.isFnv1a = isFnv1a
-        this.checkHex = checkHex
+/**
+ * 五宽度共用的 FNV 引擎（包内可见）。
+ *
+ * 状态是 `bits/32` 个 `UInt32`（**小端序**：下标 0 为最低有效 limb）；借助
+ * `prime = 2^k + 2^8 + c` 这一标准形式，把 32/64 位乘法换成
+ * `state * prime = (state << k) + (state << 8) + state * c`（模 2^bits），
+ * 从而在不引入 128 位中间类型的情况下精确处理 256 / 1024 位的进位。
+ */
+internal class FnvCore {
+    /** 1024 位偏移基值（官方参考值，16 字大端序）。 */
+    private static let BASIS_1024: Array<UInt64> = [
+        0x0000000000000000u64, 0x005F7A76758ECC4Du64, 0x32E56D5A591028B7u64, 0x4B29FC4223FDADA1u64,
+        0x6C3BF34EDA3674DAu64, 0x9A21D90000000000u64, 0x0000000000000000u64, 0x0000000000000000u64,
+        0x0000000000000000u64, 0x0000000000000000u64, 0x0000000000000000u64, 0x000000000004C6D7u64,
+        0xEB6E73802734510Au64, 0x555F256CC005AE55u64, 0x6BDE8CC9C6A93B21u64, 0xAFF4B16C71EE90B3u64
+    ]
+    /** 256 位偏移基值（官方参考值，4 字大端序）。 */
+    private static let BASIS_256: Array<UInt64> = [
+        0xDD268DBCAAC55036u64, 0x2D98C384C4E576CCu64, 0xC8B1536847B6BBB3u64, 0x1023B4C8CAEE0535u64
+    ]
+    private let limbCount: Int64
+    private let wordCount: Int64
+    private let shiftBytes: Int64
+    private let smallC: UInt64
+    private let basis: Array<UInt32>
+    private var state: Array<UInt32>
+    private var scratchA: Array<UInt32>
+    private var scratchB: Array<UInt32>
+    private let variant: FnvVariant
+
+    private init(
+        limbCount: Int64,
+        wordCount: Int64,
+        shiftBytes: Int64,
+        smallC: UInt64,
+        basisWords: Array<UInt64>,
+        variant: FnvVariant
+    ) {
+        this.limbCount = limbCount
+        this.wordCount = wordCount
+        this.shiftBytes = shiftBytes
+        this.smallC = smallC
+        this.variant = variant
+        this.basis = FnvCore.toLimbs(basisWords, limbCount)
+        this.state = FnvCore.copyOf(this.basis)
+        this.scratchA = Array<UInt32>(limbCount, repeat: 0u32)
+        this.scratchB = Array<UInt32>(limbCount, repeat: 0u32)
     }
 
-    /** 增量起始值 = offset basis（大端 32 字节）。 */
-    public func initRegister(): Array<Byte> {
-        fnvBytes(Fnv256.OFFSET)
+    /** 按宽度取得引擎：`(limb 数, 字 数, 素数 2^k 项的字节偏移, 素数低位常数, 偏移基值)`。 */
+    internal static func of(width: FnvWidth, variant: FnvVariant): FnvCore {
+        match (width) {
+            case W32 => FnvCore(1, 1, 3, 0x93u64, [0x811C9DC5u64], variant)
+            case W64 => FnvCore(2, 1, 5, 0xB3u64, [0xCBF29CE484222325u64], variant)
+            case W128 => FnvCore(4, 2, 11, 0x3Bu64, [0x6C62272E07BB0142u64, 0x62B821756295C58Du64], variant)
+            case W256 => FnvCore(8, 4, 21, 0x63u64, BASIS_256, variant)
+            case W1024 => FnvCore(32, 16, 85, 0x8Du64, BASIS_1024, variant)
+        }
     }
 
-    /** 增量更新（FNV 无末尾处理，`finish` 即恒等）。 */
-    @OverflowWrapping
-    public func update(hash: Array<Byte>, data: Array<Byte>): Array<Byte> {
-        let h = fnvLimbs(hash)
-        let acc = Array<UInt64>(4, repeat: 0)
+    /** 逐字节喂入；按变体决定「乘—异或」的顺序。 */
+    internal func update(data: Array<Byte>): Unit {
         for (b in data) {
-            if (isFnv1a) {
-                h[0] ^= UInt64(b)
-                fnvMulInto(h, Fnv256.PRIME, acc)
+            match (variant) {
+                case FNV1 =>
+                    mulPrime()
+                    state[0] ^= UInt32(b)
+                case FNV1A =>
+                    state[0] ^= UInt32(b)
+                    mulPrime()
+            }
+        }
+    }
+
+    /** 喂入字符串的 UTF-8 字节。 */
+    internal func update(data: String): Unit {
+        update(data.unsafeBytes())
+    }
+
+    /** 取出摘要（`wordCount` 个 `UInt64`，最高有效字在前）；不改变状态。 */
+    internal func words(): Array<UInt64> {
+        FnvCore.toWords(state, wordCount)
+    }
+
+    /** 回到偏移基值。 */
+    internal func reset(): Unit {
+        this.state = FnvCore.copyOf(this.basis)
+    }
+
+    /** `state = state * prime (mod 2^bits)`，素数按 `2^k + 2^8 + c` 展开。 */
+    @OverflowWrapping
+    private func mulPrime(): Unit {
+        shiftBytesInto(scratchA, shiftBytes)
+        shiftBytesInto(scratchB, 1)
+        var carry: UInt64 = 0
+        for (i in 0..limbCount) {
+            let prod = UInt64(state[i]) * smallC
+            let sum = UInt64(scratchA[i]) + UInt64(scratchB[i]) + (prod & 0xFFFFFFFFu64) + carry
+            state[i] = UInt32(sum & 0xFFFFFFFFu64)
+            carry = (sum >> 32) + (prod >> 32)
+        }
+    }
+
+    /** `dst = state << (n * 8)` 位，超出 `bits` 的高位丢弃（`dst` 就地覆盖）。 */
+    @OverflowWrapping
+    private func shiftBytesInto(dst: Array<UInt32>, n: Int64): Unit {
+        for (i in 0..limbCount) {
+            dst[i] = 0u32
+        }
+        let limbShift = n / 4
+        let bitShift = (n % 4) * 8
+        if (limbShift >= limbCount) {
+            return
+        }
+        for (i in limbShift..limbCount) {
+            let src = i - limbShift
+            var v = (UInt64(state[src]) << bitShift) & 0xFFFFFFFFu64
+            if (bitShift > 0 && src > 0) {
+                v |= UInt64(state[src - 1]) >> (32 - bitShift)
+            }
+            dst[i] = UInt32(v)
+        }
+    }
+
+    /** 大端 `UInt64` 字 -> 小端 `UInt32` limb。 */
+    private static func toLimbs(words: Array<UInt64>, limbCount: Int64): Array<UInt32> {
+        var out = Array<UInt32>(limbCount, repeat: 0u32)
+        for (l in 0..limbCount) {
+            let w = words[words.size - 1 - l / 2]
+            out[l] = if (l % 2 == 0) {
+                UInt32(w & 0xFFFFFFFFu64)
             } else {
-                fnvMulInto(h, Fnv256.PRIME, acc)
-                h[0] ^= UInt64(b)
+                UInt32(w >> 32)
             }
         }
-        return fnvBytes(h)
+        out
     }
 
-    public func finish(hash: Array<Byte>): Array<Byte> {
-        hash
-    }
-
-    public func compute(data: Array<Byte>): Array<Byte> {
-        update(initRegister(), data)
-    }
-
-    public func compute(s: String): Array<Byte> {
-        compute(s.unsafeBytes())
-    }
-
-    /** 定长十六进制（64 位、小写）。 */
-    public func computeHex(data: Array<Byte>): String {
-        fnvHexBytes(compute(data))
-    }
-
-    public func computeHex(s: String): String {
-        computeHex(s.unsafeBytes())
-    }
-}
-
-// ============================ 内部工具：十六进制与 limb 算术 ============================
-
-/** 无符号值的定长十六进制（小写，`nibbles` 位）。 */
-func fnvHex64(value: UInt64, nibbles: Int64): String {
-    let digits = "0123456789abcdef".toArray()
-    let out = Array<Byte>(nibbles, repeat: 0)
-    var v = value
-    var i = nibbles - 1
-    while (i >= 0) {
-        out[i] = digits[Int64(v & 0xF)]
-        v = v >> 4
-        i--
-    }
-    return String.fromUtf8(out)
-}
-
-func fnvHex128(value: UInt128): String {
-    fnvHex64(value.left, 16) + fnvHex64(value.right, 16)
-}
-
-func fnvHexBytes(bytes: Array<Byte>): String {
-    let digits = "0123456789abcdef".toArray()
-    let out = Array<Byte>(bytes.size * 2, repeat: 0)
-    for (i in 0..bytes.size) {
-        let v = UInt64(bytes[i])
-        out[i * 2] = digits[Int64(v >> 4)]
-        out[i * 2 + 1] = digits[Int64(v & 0xF)]
-    }
-    return String.fromUtf8(out)
-}
-
-/** 大端字节（32 B）→ 小端 limb（4 项）。 */
-func fnvLimbs(bytes: Array<Byte>): Array<UInt64> {
-    let out = Array<UInt64>(4, repeat: 0)
-    for (i in 0..4) {
-        var v = 0u64
-        for (j in 0..8) {
-            v = (v << 8) | UInt64(bytes[(3 - i) * 8 + j])
-        }
-        out[i] = v
-    }
-    return out
-}
-
-/** 小端 limb（4 项）→ 大端字节（32 B）。 */
-func fnvBytes(limbs: Array<UInt64>): Array<Byte> {
-    let out = Array<Byte>(32, repeat: 0)
-    for (i in 0..4) {
-        var v = limbs[i]
-        for (j in 0..8) {
-            out[(3 - i) * 8 + (7 - j)] = UInt8(v & 0xFF)
-            v = v >> 8
-        }
-    }
-    return out
-}
-
-/** 64×64 → (hi, lo)。用 32 位半字拆分，避免 128 位中间值。 */
-@OverflowWrapping
-func fnvMul64x64(a: UInt64, b: UInt64): (UInt64, UInt64) {
-    let a0 = a & 0xFFFFFFFFu64
-    let a1 = a >> 32
-    let b0 = b & 0xFFFFFFFFu64
-    let b1 = b >> 32
-    let p00 = a0 * b0
-    let p01 = a0 * b1
-    let p10 = a1 * b0
-    let p11 = a1 * b1
-    let mid = (p00 >> 32) + (p01 & 0xFFFFFFFFu64) + (p10 & 0xFFFFFFFFu64)
-    let lo = (p00 & 0xFFFFFFFFu64) | (mid << 32)
-    let hi = p11 + (p01 >> 32) + (p10 >> 32) + (mid >> 32)
-    return (hi, lo)
-}
-
-/** `acc[idx..] += v`（带进位传播，越界丢弃 = mod 2^(64·len)）。 */
-@OverflowWrapping
-func fnvAddAt(acc: Array<UInt64>, idx: Int64, v: UInt64): Unit {
-    var j = idx
-    var add = v
-    while (j < acc.size && add != 0) {
-        let s = acc[j] + add
-        add = if (s < add) { 1u64 } else { 0u64 }
-        acc[j] = s
-        j++
-    }
-}
-
-/** `h = h * p (mod 2^(64·n))`：schoolbook 截断乘；`acc` 为复用的暂存（长度 = n）。 */
-@OverflowWrapping
-func fnvMulInto(h: Array<UInt64>, p: Array<UInt64>, acc: Array<UInt64>): Unit {
-    let n = h.size
-    var i = 0
-    while (i < n) {
-        acc[i] = 0
-        i++
-    }
-    i = 0
-    while (i < n) {
-        var j = 0
-        while (j < n - i) {
-            let (hi, lo) = fnvMul64x64(h[i], p[j])
-            fnvAddAt(acc, i + j, lo)
-            if (i + j + 1 < n) {
-                fnvAddAt(acc, i + j + 1, hi)
+    /** 小端 `UInt32` limb -> 大端 `UInt64` 字。 */
+    private static func toWords(state: Array<UInt32>, wordCount: Int64): Array<UInt64> {
+        var out = Array<UInt64>(wordCount, repeat: 0u64)
+        for (l in 0..state.size) {
+            let w = wordCount - 1 - l / 2
+            if (l % 2 == 0) {
+                out[w] |= UInt64(state[l])
+            } else {
+                out[w] |= UInt64(state[l]) << 32
             }
-            j++
         }
-        i++
+        out
     }
-    i = 0
-    while (i < n) {
-        h[i] = acc[i]
-        i++
+
+    private static func copyOf(src: Array<UInt32>): Array<UInt32> {
+        var out = Array<UInt32>(src.size, repeat: 0u32)
+        for (i in 0..src.size) {
+            out[i] = src[i]
+        }
+        out
     }
 }

@@ -9,7 +9,7 @@
   target-dir = ""
   output-type = "dynamic"
   package-configuration = {}
-  category = ["Infrastructure", "Programming Framework", "Developer Tools", "Utility", "Data Encapsulation and Transfer"]
+  category = ["Utility", "Developer Tools", "Programming Framework"]
   license = ["Apache-2.0"]
   include = ["src"]
   exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
