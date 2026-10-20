@@ -1299,13 +1299,14 @@ internal class Parser {
         this.expect(TokenKind.RParen, 'if 条件的 )')
         let thenE = this.parseBracedExpr()
         this.expect(TokenKind.KwElse, '值用法 if 的最终 else')
-        var elseE = this.parseBracedExpr()
-        // `else if` 链：逐级嵌套为 IfExpr（§5 降低模式）
-        while (this.atKind(TokenKind.KwIf)) {
+        // `else if` 链：**先判 `if`** 再取块——否则 `parseBracedExpr` 会在 `if` 上报「期望 {」，
+        // 旧实现的 `while` 因位置在后而永远不可达（A4/P1-4）。递归下降天然支持多级链。
+        var elseE: AstExpr
+        if (this.atKind(TokenKind.KwIf)) {
             let innerTok = this.take()
-            let innerPos = SourcePos(innerTok.line, innerTok.column)
-            let nested = this.parseIfExpr(innerPos)
-            elseE = nested
+            elseE = this.parseIfExpr(SourcePos(innerTok.line, innerTok.column))
+        } else {
+            elseE = this.parseBracedExpr()
         }
         AstExpr.IfExpr(cond, thenE, elseE, pos)
     }

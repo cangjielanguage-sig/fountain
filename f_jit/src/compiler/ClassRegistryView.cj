@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_jit.compiler
 
+import std.collection.ArrayList
 import fountain::f_jit.base.ClassDescriptor
 import fountain::f_jit.base.LocalType
 import fountain::f_jit.base.PublicCtor
@@ -125,6 +126,21 @@ protected class ClassRegistryView {
                 None
             case None => None
         }
+    }
+
+    /** 同名方法全集（重载解析输入；A4/P1-6）。 */
+    public func methodsOf(className: String, method: String): Array<PublicMethod> {
+        let out = ArrayList<PublicMethod>()
+        match (this.classOf(className)) {
+            case Some(c) =>
+                for (m in c.methods) {
+                    if (m.name == method) {
+                        out.add(m)
+                    }
+                }
+            case None => ()
+        }
+        out.toArray()
     }
 
     public func ctorsOf(className: String): Array<PublicCtor> {

@@ -21,6 +21,7 @@ import fountain::f_base.UnsafeBytes
 import fountain::f_data.json.{JsonArray, JsonObject, JsonValue}
 import fountain::f_jit.base.LocalType
 import fountain::f_jit.base.PublicCtor
+import fountain::f_jit.base.PublicMethod
 import fountain::f_jit.base.SourcePos
 import fountain::f_jit.bytecode.ConstRegistry
 import fountain::f_jit.bytecode.LocalTypes
@@ -264,7 +265,11 @@ internal class Lowerer {
             case Some(e) =>
                 // 返回位置的闭包表达式是「逃逸」的（m2 §14.7：仅跨桥返回方向）。
                 this.escapingDepth = this.escapingDepth + 1
-                retT = this.lowerExprAs(e, this.fnRetType(ctx))
+                // 返回位置**不做期望类型校验**（`lowerExprAs` 传 NONE）：`retTypeOf` 的浅层
+                // 推断只认字面量（`{ => s }` 之类会误判 I64），拿它当期望会把合法代码判错。
+                // 正确做法是「按实际产物定返回类型」——`lowerExpr` 的结果就是 retT，函数签名
+                // 随之下发（A4/P1-5）。装箱仍由表达式自身的 15 语境决定。
+                retT = this.lowerExprAs(e, LocalType.NONE)
                 this.escapingDepth = this.escapingDepth - 1
                 if (retT == LocalType.UNIT) {
                     ctx.builder.retVoid()
@@ -275,6 +280,9 @@ internal class Lowerer {
         }
         if (ctx.isClosure) {
             this.setClosureRetType(fnId, retT)
+        } else {
+            // 顶层单元的返回类型同样以**实际产物**为准（桥按它选解包器）。
+            this.topRetType = retT
         }
         let body = ctx.builder.finish()
         let types = this.typesOf(ctx)
@@ -311,6 +319,16 @@ internal class Lowerer {
             }
         }
         LocalType.I64
+    }
+
+    /** 已登记的闭包返回类型；未登记 → `None`（IIFE 据此报错而不是静默按 I64，A4/P1-5）。 */
+    private func closureRetOf(fnId: UInt32): ?UInt16 {
+        for (p in this.closureRets) {
+            if (p[0] == fnId) {
+                return Some(p[1])
+            }
+        }
+        None
     }
 
     /** 闭包形参类型码（未登记 → 空数组，调用点退回「不校验/不装箱」的老路径）。 */
@@ -479,7 +497,8 @@ internal class Lowerer {
                             return
                         }
                         this.escapingDepth = this.escapingDepth + 1
-                        let _ = this.lowerExprAs(e, this.fnRetType(ctx))
+                        // 与尾表达式同口径：不做期望类型校验（返回类型以实际产物为准）
+                        let _ = this.lowerExprAs(e, LocalType.NONE)
                         this.escapingDepth = this.escapingDepth - 1
                         ctx.builder.ret()
                     case None => ctx.builder.retVoid()
@@ -518,7 +537,9 @@ internal class Lowerer {
         match (lhs) {
             case AstExpr.Var(name, vpos) =>
                 let sym = this.requireVar(name, vpos)
-                let _ = this.lowerExprAs(rhs, sym.ty)
+                // 赋值与声明初始化同口径：容器字面值按**目标的元素/键值类型**发射（A4/P1-9）。
+                // 旧实现只传大类码 ⇒ `l = [1,2]`（l 为 List<Any>）把裸 Int64 写进盒容器。
+                let _ = this.lowerInit(rhs, sym.ty, sym.elemTy, sym.keyTy)
                 sym.origin = Lowerer.worseOrigin(sym.origin, this.originOfExpr(rhs, sym.ty))
                 ctx.builder.emitU16(Op.STOREL, UInt16(sym.slot))
             case AstExpr.IndexTarget(target, index, pos) =>
@@ -787,11 +808,26 @@ internal class Lowerer {
                         if (Int64(args.size) + base > ctx.builder.slotCount()) {
                             return false
                         }
-                        var i = args.size - 1
-                        while (i >= 0) {
-                            let _ = this.lowerExpr(args[i])
+                        // 实参必须**先全部求值到临时槽、再统一写形参槽**：旧实现（倒序 + 边求值
+                        // 边写槽）在 `rec(b, a)` 上会让第一个写槽覆盖掉第二个实参的读取源，
+                        // 两个形参都拿到旧值（A4/P1-3）。求值顺序保持左→右。
+                        var temps = ArrayList<UInt16>()
+                        var k = 0
+                        while (k < args.size) {
+                            let _ = this.lowerExpr(args[k])
+                            // 临时槽的类型码只用于帧布局校验：未知（NONE）退化为 I64（cell 同宽）
+                            let at = this.staticTypeFull(args[k])
+                            let ty = if (at == LocalType.NONE) { LocalType.I64 } else { at }
+                            let t = ctx.builder.allocSlot(ty)
+                            ctx.builder.emitU16(Op.STOREL, UInt16(t))
+                            temps.add(UInt16(t))
+                            k = k + 1
+                        }
+                        var i = 0
+                        while (i < args.size) {
+                            ctx.builder.emitU16(Op.LOADL, temps[i])
                             ctx.builder.emitU16(Op.STOREL, UInt16(i + base))
-                            i = i - 1
+                            i = i + 1
                         }
                         ctx.builder.emitRel(Op.LOOP_BACK, ctx.entryLabel)
                         return true
@@ -891,6 +927,11 @@ internal class Lowerer {
                 (actual == LocalType.JSON_VALUE && expected != LocalType.JSON_VALUE)) {
                 return this.emitJsonNarrow(actual, expected, e.pos())
             }
+            // 17/18/19 → 16 是码级上行：同一句柄，零动作（m3 §11）
+            if (expected == LocalType.JSON_VALUE &&
+                actual >= LocalType.JSON_VALUE && actual <= LocalType.JSON_NULL) {
+                return expected
+            }
         }
         // JSON 谱系无隐式转换：`JsonObject` 不能当 `JsonArray` 用（m3 §11 静态类型标注）。
         // 唯一的「上行」是收进 `JsonValue`（16，码级基类）——那正是 expected == 16 的情形。
@@ -905,6 +946,14 @@ internal class Lowerer {
             let ctx = this.requireCtx()
             ctx.builder.emit(Op.TO_F64)
             return LocalType.F64
+        }
+        // 兜底：走到这里的组合没有隐式转换（隐式面只有 I64→F64 与上面两条 JSON 规则）。
+        // 旧实现直接返回 `actual` ⇒ `let s: String = 1` 之类静默通过、运行期按错误类型解释
+        // （A4/P1-8）。容器元素类型不在码上，元素级不匹配由装箱/元素写入点各自校验。
+        if (actual != expected) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, e.pos().line, e.pos().column,
+                '类型不匹配：期望 ${LocalType.name(expected)}，实际 ${LocalType.name(actual)}' +
+                '（隐式转换只允许 Int64→Float64 与 JSON 谱系内的收窄/上行）')
         }
         actual
     }
@@ -994,10 +1043,34 @@ internal class Lowerer {
                 this.lowerClosureExpr(lambda)
                 LocalType.CLOSURE
             case AstExpr.IIFE(callee, args, _) =>
+                // 形参注解必须在 callee 降低前取：它决定 `List<Any>` 实参的逐元素装箱（A4/P1-9）。
+                let paramRefs = match (callee) {
+                    case AstExpr.Closure(l, _) => l.params
+                    case _ => Array<ParamAst>()
+                }
                 let _ = this.lowerExpr(callee)
-                this.lowerArgs(args, this.closureParamsOf(this.lastClosureFnId))
+                let fnId = this.lastClosureFnId
+                // 静态返回类型取**真实闭包签名**（旧实现恒 I64，导致「返回 String 的 IIFE 不能
+                // 继续 `.size`」）；签名未登记是内部错误，报错而不是静默当 I64（A4/P1-5）。
+                let ret = match (this.closureRetOf(fnId)) {
+                    case Some(t) => t
+                    case None =>
+                        diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, callee.pos().line,
+                            callee.pos().column,
+                            'IIFE 的闭包返回类型未登记（fnId=${fnId}）——无法确定静态类型')
+                }
+                if (paramRefs.size == args.size) {
+                    var k = 0
+                    while (k < args.size) {
+                        let tr = paramRefs[k].typeAnn
+                        let _ = this.lowerInit(args[k], tr.code(), tr.elemCode(), tr.keyCode())
+                        k = k + 1
+                    }
+                } else {
+                    this.lowerArgs(args, this.closureParamsOf(fnId))
+                }
                 ctx.builder.callClosure(UInt8(args.size))
-                LocalType.I64
+                ret
             case AstExpr.Interp(parts, pos) => this.lowerInterp(parts, pos)
             case AstExpr.StrAdd(l, r, pos) =>
                 let lt = this.lowerExpr(l)
@@ -1196,10 +1269,47 @@ internal class Lowerer {
         }
     }
 
+    /**
+     * String 算术拒绝面（D6）：`-` / `/` / `%` 见 String 即编译错误；`*` 只在**两侧都是
+     * String** 时报错（`s * n` 仍是 `STR_REPEAT`）。
+     *
+     * 为什么不在 `lowerBinary` 里「按类型悄悄选算子」：String 没有数值语义，静默当数值算
+     * （旧行为：把两个串按 cell 直接相减）是最坏的错——结果看似正常、实则无意义。
+     */
+    private func rejectStringArithmetic(op: TokenKind, l: AstExpr, r: AstExpr,
+        pos: SourcePos): Unit {
+        if (op != TokenKind.Minus && op != TokenKind.Star && op != TokenKind.Slash &&
+            op != TokenKind.Percent) {
+            return
+        }
+        let ls = this.staticTypeFull(l)
+        let rs = this.staticTypeFull(r)
+        let lStr = ls == LocalType.STRING
+        let rStr = rs == LocalType.STRING
+        var bad = false
+        if (op == TokenKind.Star) {
+            bad = lStr && rStr
+        } else {
+            bad = lStr || rStr
+        }
+        if (!bad) {
+            return
+        }
+        let opName = match (op) {
+            case TokenKind.Minus => '-'
+            case TokenKind.Star => '*'
+            case TokenKind.Slash => '/'
+            case _ => '%'
+        }
+        diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+            'String 不支持「${opName}」运算（D6：只有 `+` 是拼接，`- * / %` 对 String 无定义）')
+    }
+
     private func lowerBinary(op: TokenKind, l: AstExpr, r: AstExpr, pos: SourcePos): UInt16 {
         let ctx = this.requireCtx()
         // 禁止面在短路展开之前判：短路只改变求值顺序，不改变「盒不能参与运算」。
         this.rejectAnyOperand(l, r, pos)
+        this.rejectStringArithmetic(op, l, r, pos)
         if (op == TokenKind.AndAnd) {
             let shortL = ctx.builder.newLabel()
             let endL = ctx.builder.newLabel()
@@ -1971,11 +2081,91 @@ internal class Lowerer {
         this.lastHostRet = LocalType.NONE
     }
 
+    /**
+     * 实例方法重载解析（A4/P1-6）：名字 + **元数** + **实参静态类型**三重过滤。
+     *
+     * 旧实现 `requireMethod` 只按名字取第一条 ⇒ 同名重载静默错派。这里：
+     * 元数不符 / 类型全不符 / 仍有多个候选 都是编译错误（消息列出候选签名），禁止静默择一。
+     * 形参只带类型码（14 不带类名），因此 14 位置按码相等放行——具体类由注册期 `$as$` 与
+     * 运行期封送校验承担。
+     */
+    private func resolveMethod(className: String, methodName: String, args: Array<AstExpr>,
+        pos: SourcePos): PublicMethod {
+        let all = this.view.methodsOf(className, methodName)
+        if (all.size == 0) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                '类「${className}」未注册方法「${methodName}」（前端只查注册表条目，m2 §12.4）')
+        }
+        var sameArity = ArrayList<PublicMethod>()
+        for (m in all) {
+            if (Int64(m.bind.paramTypes.size - 1) == Int64(args.size)) {
+                sameArity.add(m)
+            }
+        }
+        if (sameArity.size == 0) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                '方法「${className}.${methodName}」实参个数不符：实际 ${args.size}；' +
+                '候选：${Lowerer.methodCandidates(all)}（m2 §12.4 静态签名）')
+        }
+        var typed = ArrayList<PublicMethod>()
+        for (m in sameArity) {
+            var ok = true
+            var i = 0
+            while (i < args.size) {
+                let expected = m.bind.paramTypes[i + 1]
+                let actual = this.staticTypeFull(args[i])
+                if (expected != LocalType.NONE && actual != LocalType.NONE && expected != actual) {
+                    ok = false
+                }
+                i = i + 1
+            }
+            if (ok) {
+                typed.add(m)
+            }
+        }
+        if (typed.size == 1) {
+            return typed[0]
+        }
+        if (typed.size == 0) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                '方法「${className}.${methodName}」没有与实参类型匹配的重载；' +
+                '候选：${Lowerer.methodCandidates(sameArity.toArray())}')
+        }
+        diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+            '方法「${className}.${methodName}」的调用有歧义（多个重载同样匹配）；' +
+            '候选：${Lowerer.methodCandidates(typed.toArray())}')
+    }
+
+    /** 候选签名文本（诊断用）：`f(Int64,String)` 形态。 */
+    private static func methodCandidates(ms: Array<PublicMethod>): String {
+        var sb = StringBuilder()
+        var k = 0
+        while (k < ms.size) {
+            if (k > 0) {
+                sb.append(' / ')
+            }
+            sb.append(ms[k].name)
+            sb.append('(')
+            let ps = ms[k].bind.paramTypes
+            var i = 1
+            while (i < ps.size) {
+                if (i > 1) {
+                    sb.append(',')
+                }
+                sb.append(LocalType.name(ps[i]))
+                i = i + 1
+            }
+            sb.append(')')
+            k = k + 1
+        }
+        sb.toString()
+    }
+
     /** `u.m(a…)` → 预定义调用 `m(u, a…)`（hid 由方法表 bind 解析，m2 §12.4）。 */
     private func lowerHostMethodCall(className: String, methodName: String, tg: AstExpr,
         args: Array<AstExpr>, pos: SourcePos): UInt16 {
         let ctx = this.requireCtx()
-        let m = this.view.requireMethod(className, methodName, pos, this.src)
+        let m = this.resolveMethod(className, methodName, args, pos)
         let slot = this.sess.registry.slotOf(m.bind.name)
         if (slot < 0) {
             diagFail(DiagKind.UNREGISTERED_FUNCTION, this.src, 0, pos.line, pos.column,

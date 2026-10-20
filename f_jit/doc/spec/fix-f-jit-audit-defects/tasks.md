@@ -43,14 +43,14 @@
 
 ## A4 前端逐条纠偏（P1-1 … P1-9）
 
-- [ ] A4.1 正则 flags（P1-1）：先写失败用例——`r"AbC"i` 命中 `"abc"`，无 `i` 不命中；`m` / `s` 各一例；`Token.flags` 逐位断言；再补词法构造的 `flags:`；验收：`Lowerer.cj:1169` 读到的 flags 与源码一致
-- [ ] A4.2 `else if`（P1-4）：先写失败用例——`if (a) {} else if (b) {} else {}` 编译通过，三臂语义与嵌套 `if` 逐位等价；`else` 后接非块表达式仍报错；再改 `Parser` 的 else 分支；验收：AST 形态与「嵌套 if 等价物」一致
-- [ ] A4.3 尾递归实参（P1-3）：先写失败用例——`fn rec(a, b) { if ... rec(b, a) }` 与手写循环结果一致；`rec(b, a)` 中 `a`/`b` 的实参不互相覆盖（构造 `a` 与 `b` 值不同且实参顺序反转的用例）；再改临时槽求值；验收：实参求值顺序为左→右，且形参槽写入在全部求值之后
-- [ ] A4.4 IIFE 返回类型（P1-5）：先写失败用例——`(fn() { "x" })()` 静态类型为 String 并可继续 `.size`；返回 `Any` / JSON / Unit 的 IIFE 各一例；再取真实闭包返回类型；验收：未知签名时保守 `NONE` 且报错不静默
-- [ ] A4.5 实例方法重载（P1-6）：先写失败用例——同一类 `f(Int64)` 与 `f(String)` 按实参类型各命中；元数不同各命中；多义 → 编译错误（消息含候选）；子类实参上行到父类形参命中；再改 `methodOf`/`requireMethod` 签名与选择顺序；验收：与 `ctorsOf` 的重载解析口径一致
-- [ ] A4.6 `lowerExprAs` 完备性（P1-8）：先写失败用例——`Int64 → String`、`String → Int64`、`Bool → Int64`、`List<Int64> → List<Any>`（未装箱路径）、`14 → 值型` 等组合逐个 `diagFail`（消息含「期望 → 实际」）；既有 F64←I64 与 JSON 收窄仍通过；再补末段判定；验收：每类被拒组合一条用例
-- [ ] A4.7 `List<Any>` 装箱三路径（P1-9）：先写失败用例——① 实参 `f(xs: List<Any>)` 以列表字面值调用；② 赋值 `x = [1,2]`（`x` 已声明 `List<Any>`）；③ `f(a: Any)` 传 `List<Int64>` 整体装箱；断言盒内元素是 Any 盒（`any_is(元素, …)` 命中）、装箱次数 = 元素数 + 1、无重复求值；再抽「按目标 TypeRef 装箱容器字面值」单一函数，`lowerExprAs` 与 `lowerAssign` 共用，`VarSym` 保留元素/键值类型；验收：三路径产物与 `lowerInit` 逐位同构
-- [ ] A4.8 String 算术拒绝面（P1-2 / D6）：先写失败用例——`"a"-"b"`、`"a"*"b"`、`"a"/"b"`、`"a"%"b"`、`"a"-1` 逐个编译错误（含位置）；`"a"+"b"` 仍走 `STR_CAT` 且结果正确；再改 `lowerBinary` 入口判定；验收：拒绝面清单并入 M3 §3 的禁止面用例集
+- [x] A4.1 正则 flags（P1-1）：先写失败用例——`r"AbC"i` 命中 `"abc"`，无 `i` 不命中；`m` / `s` 各一例；`Token.flags` 逐位断言；再补词法构造的 `flags:`；验收：`Lowerer.cj:1169` 读到的 flags 与源码一致**（根因：`Lexer.scanRegex` 构造 Token 时漏传 `flags: bits` ⇒ 恒 0。用例：`p1_1_regexFlagsSurviveLexing`（i/m/u/imu 四位逐位）+ `p1_1_regexFlagsAffectMatching`（`/AbC/i ~ "abc"`=1、无 i=0、`/^b/m` 多行命中）；注意操作数序是 `/re/ ~ s`）**
+- [x] A4.2 `else if`（P1-4）：先写失败用例——`if (a) {} else if (b) {} else {}` 编译通过，三臂语义与嵌套 `if` 逐位等价；`else` 后接非块表达式仍报错；再改 `Parser` 的 else 分支；验收：AST 形态与「嵌套 if 等价物」一致**（`Parser.parseIfExpr` 原先无条件先 `parseBracedExpr`，`while` 死代码；改为先判 `KwIf` 再取块、递归下降。`p1_4_elseIfParses` 覆盖语句/值用法 × 三臂）**
+- [x] A4.3 尾递归实参（P1-3）：先写失败用例——`fn rec(a, b) { if ... rec(b, a) }` 与手写循环结果一致；`rec(b, a)` 中 `a`/`b` 的实参不互相覆盖（构造 `a` 与 `b` 值不同且实参顺序反转的用例）；再改临时槽求值；验收：实参求值顺序为左→右，且形参槽写入在全部求值之后**（`p1_3_tailRecursionSwappedArgs`：`return recursive(b, a-1)` 的 `(2,7)→5`、`(4,3)→0`；红态为 0。注意必须用 `return` 语句，尾表达式不走该优化）**
+- [x] A4.4 IIFE 返回类型（P1-5）：先写失败用例——`(fn() { "x" })()` 静态类型为 String 并可继续 `.size`；返回 `Any` / JSON / Unit 的 IIFE 各一例；再取真实闭包返回类型；验收：未知签名时保守 `NONE` 且报错不静默**（`lowerExpr` 的 IIFE 分支改取 `closureRetOf(fnId)`，未登记即 `diagFail`；同时把「返回位置」的期望类型改为不校验、以实际产物回填 `retType`（`staticTypeOfTop` 的浅层推断会把 `{ => s }` 误判 I64）。`p1_5_iifeUsesClosureReturnType` 用带注解绑定断言 String/Int64/Bool 三型）**
+- [x] A4.5 实例方法重载（P1-6）：先写失败用例——同一类 `f(Int64)` 与 `f(String)` 按实参类型各命中；元数不同各命中；多义 → 编译错误（消息含候选）；子类实参上行到父类形参命中；再改 `methodOf`/`requireMethod` 签名与选择顺序；验收：与 `ctorsOf` 的重载解析口径一致**（新增 `ClassRegistryView.methodsOf` + `Lowerer.resolveMethod`：名字→元数→实参码三重过滤；0 候选/多候选都 `diagFail` 并列出候选签名。用例断言 hid 256/257/258；歧义/无匹配/元数三态各一条。14 位置按码相等放行——快照只带码，具体类由运行期封送校验）**
+- [x] A4.6 `lowerExprAs` 完备性（P1-8）：先写失败用例——`Int64 → String`、`String → Int64`、`Bool → Int64`、`List<Int64> → List<Any>`（未装箱路径）、`14 → 值型` 等组合逐个 `diagFail`（消息含「期望 → 实际」）；既有 F64←I64 与 JSON 收窄仍通过；再补末段判定；验收：每类被拒组合一条用例**（末段 `actual != expected` 即 `diagFail`；补齐 JSON 17/18/19→16 的码级上行（零动作），避免误伤既有 `let v: JsonValue = \`{...}\`` 用例。`p1_8_lowerExprAsRejectsUnconvertible` 覆盖 4 个拒绝面 + 2 个合法面）**
+- [x] A4.7 `List<Any>` 装箱三路径（P1-9）：先写失败用例——① 实参 `f(xs: List<Any>)` 以列表字面值调用；② 赋值 `x = [1,2]`（`x` 已声明 `List<Any>`）；③ `f(a: Any)` 传 `List<Int64>` 整体装箱；断言盒内元素是 Any 盒（`any_is(元素, …)` 命中）、装箱次数 = 元素数 + 1、无重复求值；再抽「按目标 TypeRef 装箱容器字面值」单一函数，`lowerExprAs` 与 `lowerAssign` 共用，`VarSym` 保留元素/键值类型；验收：三路径产物与 `lowerInit` 逐位同构**（复用既有 `lowerInit`：`lowerAssign` 的 Var 分支改传 `sym.elemTy/keyTy`；IIFE 实参改按 `lambda.params[i].typeAnn` 走 `lowerInit`。`p1_9_listAnyBoxesOnAssignAndArg`：赋值 2 次 H78、IIFE 实参 2 次、整体 Any 1 次。边界：**注册函数（user helper）形参只带类型码**，其 `List<Any>` 实参无法识别元素类型 → 不装箱；已在 design 记为已知边界）**
+- [x] A4.8 String 算术拒绝面（P1-2 / D6）：先写失败用例——`"a"-"b"`、`"a"*"b"`、`"a"/"b"`、`"a"%"b"`、`"a"-1` 逐个编译错误（含位置）；`"a"+"b"` 仍走 `STR_CAT` 且结果正确；再改 `lowerBinary` 入口判定；验收：拒绝面清单并入 M3 §3 的禁止面用例集**（`rejectStringArithmetic`：`- / %` 见 String 即拒；`*` 仅两侧都 String 拒（`s*n` 仍是 STR_REPEAT）。`p1_2_stringArithmeticIsCompileError` 五条拒绝 + `+`/`*n` 两条合法）**
 
 ## A5 常量键与迭代器表（P1-7 / P2-2）
 

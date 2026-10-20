@@ -764,7 +764,9 @@ internal class Lexer {
             this.bump()
         }
         this.regexFlags = bits
-        Token(TokenKind.RegexLit, pattern, start, startLine, startCol, nl)
+        // flags 必须随 Token 一并送出：Parser 批量取词后 `lastRegexFlags()` 已无意义，
+        // 降低阶段读的是 `token.flags`（A4/P1-1；旧实现漏传 ⇒ 所有正则常量 flags 恒 0）。
+        Token(TokenKind.RegexLit, pattern, start, startLine, startCol, nl, flags: bits)
     }
 
     // ------------------------------------------------------------------
