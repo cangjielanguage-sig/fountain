@@ -60,7 +60,7 @@ internal func hostCallTrampoline(ctx: JitContext, a: Array<Int64>): Int64 {
     }
     var r: Any = 0
     try {
-        r = reflectiveInvoke(cb.fn, sig, a)
+        r = reflectiveInvoke(cb.fn, cb.ti, sig, a)
     } catch (e: HelperFail) {
         // 引擎侧失败（绑定/转换）原样转码，不归宿主异常
         throw e

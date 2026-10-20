@@ -31,12 +31,17 @@ import fountain::f_jit.base.TypeToken
  *
  * 代价是走反射调用（`ApplyCJInstanceMethod`），开销需与 user helper 对照实测（见 perf-m2）。
  */
-internal func reflectiveInvoke(fn: Any, sig: SignatureDescriptor, a: Array<Int64>): Any {
-    let ti = try {
-        FunctionTypeInfo.of(fn)
-    } catch (e: Exception) {
-        // 不是函数值：验签应已拦住，走到这里说明引擎不变式被破坏 ⇒ 99（不是契约错误）
-        failWith(ErrCode.HELPER_PANIC)
+internal func reflectiveInvoke(fn: Any, cached: ?FunctionTypeInfo, sig: SignatureDescriptor,
+    a: Array<Int64>): Any {
+    let ti = match (cached) {
+        case Some(t) => t
+        case None =>
+            // 条目未缓存（老路径/非闭包条目）：回退到现场探测
+            try {
+                FunctionTypeInfo.of(fn)
+            } catch (e: Exception) {
+                failWith(ErrCode.HELPER_PANIC)
+            }
     }
     if (Int64(ti.parameters.size) != Int64(sig.params.size)) {
         // 描述符与函数值不匹配：H63 已校验 nargs == sig.params.size，走到这里是内部不一致

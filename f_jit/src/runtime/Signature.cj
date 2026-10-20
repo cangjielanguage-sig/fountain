@@ -352,13 +352,31 @@ public class HostCallback {
     public let fn: Any
     public let sig: ?SignatureDescriptor
 
+    /**
+     * 反射签名元数据（pin 时算一次，调用期复用）。
+     *
+     * `FunctionTypeInfo.of(fn)` 每次调用都做一次类型查找；M2 的宿主闭包调用频次高，
+     * 把它缓存进条目可省掉这部分（实测详见 `perf-m2`）。
+     */
+    public let ti: ?FunctionTypeInfo
+
     public init(fn: Any, sig: SignatureDescriptor) {
         this.fn = fn
         this.sig = Some(sig)
+        this.ti = HostCallback.probeType(fn)
     }
 
     public init(fn: Any) {
         this.fn = fn
         this.sig = None
+        this.ti = HostCallback.probeType(fn)
+    }
+
+    private static func probeType(fn: Any): ?FunctionTypeInfo {
+        try {
+            Some(FunctionTypeInfo.of(fn))
+        } catch (e: Exception) {
+            None
+        }
     }
 }
