@@ -54,9 +54,9 @@
 
 ## A5 常量键与迭代器表（P1-7 / P2-2）
 
-- [ ] A5.1 规范键单点（D5）：先写失败用例——`Map<Float64, Any>` / `Map<Decimal, …>` / `Map<DateTime, …>` / `Map<Duration, …>` / `Map<Range<Int64>, …>` / `Map<Regex, …>` 的常量键在运行期 `get` 必命中；同值不同写法必同键、异值必异键；再抽 `CanonKey` 并让 `tokenOf` 与 `canonKeyOf` 都调它；验收：跨类型键全部命中，且 `i:`/`s:` 既有行为不变
-- [ ] A5.2 `IterTable` 生命周期（P2-2a）：先写失败用例——一次调用结束后 `IterTable.liveCount() == 0`；跨调用的陈旧游标用它必 99；再在桥 `finally` 加 `clearAll()`；验收：异常路径（抛错/中断/重放）也清零
-- [ ] A5.3 `IterTable` 同步（P2-2b）：先写失败用例——多线程并发 `open/next/close` 不自增丢失、不越界；`clearAll` 与 `open` 竞争不死锁；再补静态锁；验收：并发用例在 `--repeat` 下稳定
+- [x] A5.1 规范键单点（D5）：先写失败用例——`Map<Float64, Any>` / `Map<Decimal, …>` / `Map<DateTime, …>` / `Map<Duration, …>` / `Map<Range<Int64>, …>` / `Map<Regex, …>` 的常量键在运行期 `get` 必命中；同值不同写法必同键、异值必异键；再抽 `CanonKey` 并让 `tokenOf` 与 `canonKeyOf` 都调它；验收：跨类型键全部命中，且 `i:`/`s:` 既有行为不变**（新增 `bytecode/CanonKey`：`i64/cell/f64/str/dec/decFromText/dateTime/duration/range/regex`；`ConstRegistry.tokenOf` 与 `HandleTable.canonKeyOf` 全部改调它。**Float64 的真正根因**：常量表用 `f:<bits>`、运行期裸 cell 走 `i:<cell>` —— 值型键统一为 `CanonKey.cell`（Float64 常量键 ⇒ `i:<bits>`）。Decimal 走「去尾零 + 调 scale」归一（`1.5` ≡ `1.50`）。用例：`p1_7_constMapFloatKeysHit` / `p1_7_constMapDecimalKeysHit` / `p1_7_canonKeyIsSingleSource`（六类键两侧对拍 + 异值异键）。DateTime/Duration/Range/Regex 无字面量语法 ⇒ 只做键对拍，不做常量 Map 取数）**
+- [x] A5.2 `IterTable` 生命周期（P2-2a）：先写失败用例——一次调用结束后 `IterTable.liveCount() == 0`；跨调用的陈旧游标用它必 99；再在桥 `finally` 加 `clearAll()`；验收：异常路径（抛错/中断/重放）也清零**（`JitFunction.callLocked` 的 `finally` 在 `marshal.cleanup()` 之后 `IterTable.clearAll()`，四条出口共用。用例：`p2_2_bridgeClearsIterTableAtCallEnd`（桥外开游标 → 跑一次无关调用 → liveCount=0 且旧游标 99）、`p2_2_iterTableClearInvalidatesCursor`）**
+- [x] A5.3 `IterTable` 同步（P2-2b）：先写失败用例——多线程并发 `open/next/close` 不自增丢失、不越界；`clearAll` 与 `open` 竞争不死锁；再补静态锁；验收：并发用例在 `--repeat` 下稳定**（静态 `Mutex` 覆盖 open/next/key/value/close/clearAll/liveCount；`close` 补 idx 越界防御。`p2_2_iterTableConcurrentSafe`：4 线程 × 100 轮各自 open→遍历 8 项→close，结束后 liveCount=0）**
 
 ## A6 并发与后端（P2-4 / P2-5）
 

@@ -177,10 +177,11 @@ public class ConstRegistry {
      */
     private func tokenOf(i: Int64): String {
         match (this.payloads[i]) {
-            // 与运行期 `mapKeyOf`/`canonKeyOf` 的规范键**同前缀**（否则常量键与运行时键永不相等）
-            case PI64(v) => 'i:${v}'
-            case PF64(b) => 'f:${b}'
-            case PStr(s) => 's:${s}'
+            // 与运行期 `HandleTable.canonKeyOf` 共用 `CanonKey`（D5：单一事实来源）
+            case PI64(v) => CanonKey.i64(v)
+            // 值型键在运行期是裸 cell：Float64 常量键必须与 `mapKeyOf` 的 cell 键同形
+            case PF64(b) => CanonKey.cell(Int64(b))
+            case PStr(s) => CanonKey.str(s)
             case PList(xs) =>
                 var t = 'l['
                 for (x in xs) {
@@ -193,11 +194,11 @@ public class ConstRegistry {
                     t = t + tokenOf(Int64(kv[0])) + ':' + tokenOf(Int64(kv[1])) + ','
                 }
                 t + ']'
-            case PDec(sign, scale, coeff) => 'd${sign}|${scale}|${coeff}'
-            case PDateTime(n) => 't${n}'
-            case PDuration(n) => 'u${n}'
-            case PRange(a, b, c, closed) => 'r${a}|${b}|${c}|${closed}'
-            case PRegex(p, f) => 'x${f}|${p}'
+            case PDec(sign, scale, coeff) => CanonKey.dec(sign, scale, coeff)
+            case PDateTime(n) => CanonKey.dateTime(n)
+            case PDuration(n) => CanonKey.duration(n)
+            case PRange(a, b, c, closed) => CanonKey.range(a, b, c, closed)
+            case PRegex(p, f) => CanonKey.regex(p, f)
             case PJson(raw) => 'j${raw}'
         }
     }

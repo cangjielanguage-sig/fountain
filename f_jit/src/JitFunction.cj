@@ -29,6 +29,7 @@ import fountain::f_jit.compiler.ClassRegistrySnapshot
 import fountain::f_jit.compiler.HostClosureSigDecl
 import fountain::f_jit.runtime.DbgDump
 import fountain::f_jit.runtime.HandleTable
+import fountain::f_jit.runtime.IterTable
 import fountain::f_jit.runtime.JitContext
 import fountain::f_jit.runtime.PromotionGroup
 import fountain::f_jit.runtime.RuntimeEnv
@@ -443,6 +444,9 @@ public class JitFunction {
                 UserHelperTable.pop()
             }
             marshal.cleanup()
+            // 迭代器表是**调用级**资源：正常返回 / 抛错 / 中断 / DEOPT 重放四条出口都在
+            // finally 收尾，跨调用的陈旧游标一律失效（A5/P2-2）。
+            IterTable.clearAll()
             HandleTable.resetWindow(-1)
             if (!dump.isNull()) {
                 DbgDump.freeDump(dump)

@@ -23,6 +23,7 @@ import std.time.DateTime
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.TypeToken
 import fountain::f_data.json.JsonValue
+import fountain::f_jit.bytecode.CanonKey
 import fountain::f_jit.bytecode.ConstMapKey
 
 /**
@@ -205,13 +206,16 @@ public class HandleTable {
      * 去重**（见 `pin` 的实现说明）。
      */
     public static func canonKeyOf(obj: Any): String {
+        // 与常量表的 `ConstRegistry.tokenOf` 共用 `CanonKey`（D5）：Float64 / Decimal 等
+        // 此前两边前缀不同，常量键在运行期永不命中（P1-7）。
         match (obj) {
-            case v: String => 's:${v}'
-            case v: Decimal => 'd:${v.toString()}'
-            case v: DateTime => 't:${safeNanos(v.toUnixTimeStamp())}'
-            case v: Duration => 'u:${safeNanos(v)}'
-            case v: Range<Int64> => 'r:${v.start}|${v.end}|${v.step}|${v.isClosed}'
-            case v: JitRegex => 'x:${v.re.string()}|${v.flags}'
+            case v: String => CanonKey.str(v)
+            case v: Float64 => CanonKey.f64(v.toBits())
+            case v: Decimal => CanonKey.decFromText(v.toString())
+            case v: DateTime => CanonKey.dateTime(safeNanos(v.toUnixTimeStamp()))
+            case v: Duration => CanonKey.duration(safeNanos(v))
+            case v: Range<Int64> => CanonKey.range(v.start, v.end, v.step, v.isClosed)
+            case v: JitRegex => CanonKey.regex(v.re.string(), v.flags)
             case _ => ''
         }
     }
