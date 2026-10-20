@@ -414,3 +414,28 @@ public class InheritanceField_test {
         HostFieldTable.resetForTest()
     }
 }
+
+/**
+ * 反射元数据保活（SIGSEGV 修复的回归锚）。
+ *
+ * 生成的 adapter 只闭包捕获成员级 `*Info`；声明类的 `TypeInfo` 由 `ReflectRegistrar`
+ * 按类名保活。若这条退化，「访问器/绑定在注册函数返回后仍可用」就只在 GC 不搬移时成立
+ * ——表现为并发全量跑偶发 SIGSEGV（崩点落在被调方法体内，离真正失效点很远）。
+ */
+@Test
+public class ReflectRetention_test {
+    @TestCase
+    public func registeredClassIsRetained(): Unit {
+        ReflectRegistrar.resetRetainedForTest()
+        ReflectRegistrar.registerType<ReflectUser>(into: ClassRegistry(), diag: RecReflectSink())
+        @Assert(TCase.hit('T55/reflect-metadata-retained', ReflectRegistrar.retainedCount() == 1),
+            true)
+        // 重复注册同一类不增长
+        ReflectRegistrar.registerType<ReflectUser>(into: ClassRegistry(), diag: RecReflectSink())
+        @Assert(ReflectRegistrar.retainedCount(), 1)
+        // 子类单独计入（其祖先 ReflectUser 已存在，不重复）
+        ReflectRegistrar.registerType<ReflectAdmin>(into: ClassRegistry(), diag: RecReflectSink())
+        @Assert(ReflectRegistrar.retainedCount(), 2)
+        ReflectRegistrar.resetRetainedForTest()
+    }
+}

@@ -17,6 +17,7 @@ package fountain::f_jit
 
 import std.collection.ArrayList
 import std.reflect.*
+import std.sync.Mutex
 import fountain::f_base.UnsafeBytes
 import fountain::f_jit.base.ClassDescriptor
 import fountain::f_jit.base.DiagCode
@@ -44,6 +45,53 @@ import fountain::f_jit.runtime.HostFieldTable
  * - JSON 谱系类 / 关闭反射 → `RegistrationException` 且**不登记**（v0.8.32）。
  */
 protected class ReflectRegistrar {
+    /**
+     * 反射元数据保活表（类名 → `TypeInfo`）。
+     *
+     * 生成的访问器 / 方法绑定 / 构造适配器只**闭包捕获成员级** `*Info`；而 `getValue` /
+     * `apply` / `ConstructorInfo.apply` 内部还要用**声明类的 `TypeInfo`** 做参数与返回值的
+     * ABI 转换。若注册函数返回后 `ClassTypeInfo` 失去强引用，该元数据可能被回收，后续调用
+     * 就在转换阶段读到失效指针。
+     *
+     * 实测形态（2026-10-20）：SIGSEGV 落在**被调方法体内**（`ReflectUser.greet` 的
+     * `StringBuilder.append`），而 `ApplyCJMethod(..., TypeInfo*)` 的最后一个实参已悬空——
+     * 即崩溃点离真正的失效点很远，只在并发/GC 压力下偶发。
+     *
+     * 故按类名保留一份强引用；重复注册同一类不增长。
+     */
+    private static let retained: ArrayList<TypeInfo> = ArrayList<TypeInfo>()
+    private static let retainedNames: ArrayList<String> = ArrayList<String>()
+    private static let retainedMtx = Mutex()
+
+    private static func retainClass(cls: ClassTypeInfo): Unit {
+        synchronized(retainedMtx) {
+            var i = 0
+            while (i < retainedNames.size) {
+                if (retainedNames[i] == cls.name) {
+                    return
+                }
+                i = i + 1
+            }
+            retainedNames.add(cls.name)
+            retained.add(cls)
+        }
+    }
+
+    /** 测试：已保活的类数（重复注册不增长）。 */
+    public static func retainedCount(): Int64 {
+        synchronized(retainedMtx) {
+            retainedNames.size
+        }
+    }
+
+    /** 测试：清空保活表（用例隔离）。 */
+    public static func resetRetainedForTest(): Unit {
+        synchronized(retainedMtx) {
+            retainedNames.clear()
+            retained.clear()
+        }
+    }
+
     /** 注册 `T`；`enabled=false` 模拟关闭反射的构建（测试与宿主配置可判）。 */
     public static func registerType<T>(into!: ClassRegistry, diag!: DiagnosticsSink,
         enabled!: Bool = true): Unit where T <: Object {
@@ -78,6 +126,7 @@ protected class ReflectRegistrar {
                     typeName, None)
         }
         let name = cls.name
+        ReflectRegistrar.retainClass(cls)
         let ancestry = ReflectRegistrar.ancestryOf(cls)
 
         let fields = ArrayList<PublicField>()
