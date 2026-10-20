@@ -14,23 +14,34 @@
 
 ### 结案进度（2026-10-20）
 
-**4/9 已解决**：GAP-03（子类判定）、GAP-04（14 具体类）、GAP-05（元数上限 + 分派表）、GAP-08（性能实测）。四项中三项由用户裁定方向后改实现，一项（GAP-08）由用户裁定接受现状并按实测修订规格。
+**9/9 全部解决**，可进入 archive：
 
-**剩余 5 项**：GAP-01（根包再导出）、GAP-02（M2 验收矩阵）、GAP-06（DbgDump 尖括号）、GAP-07（三引擎差分补齐）、GAP-09（文档回写）。均为机械或补测试性质，无设计分歧。
+| 批次 | 缺口 | 方式 |
+|---|---|---|
+| 语义改造 | GAP-03 / 04 / 05 | 用户裁定方向 → 改实现（`FunctionTypeInfo` 验签 + `apply` 调用、类名穿透、子类判定） |
+| 性能 | GAP-08 | 实测 4.6–5.8× → 用户裁定**接受现状** → 规格按实测修订 |
+| 机械补齐 | GAP-01 / 02 / 06 / 07 / 09 | 根包再导出、验收矩阵与脚本、尖括号、差分补齐、偏差回写 |
+
+**新增 GAP-13（INFO，不阻塞）**：`registerType<T>()` 的方法绑定在 **String 参数/返回**上必现
+SIGSEGV（`std.reflect` 的 `ApplyCJMethod`/MCC 路径；探针 300 次循环三轮全崩）。
+已规避（改用值型方法 + 手工绑定覆盖 String 面）并如实登记；根治 = M2.1 类型化包装闭包。
+
+**当前基线**：`cjpm test --parallel 1` = **849/849/0，零崩溃**；`check_tmap` 54 条 0 悬空；
+`check_scenarios m2` 156 条（full 138 / partial 11 / 缺口 5 / N/A 2）、未映射 0、缺失 0。
 
 **总结论：需先补 9 项，暂不可进入 archive。**
 
 | ID | 级别 | 阻塞 archive | 摘要 |
 |---|---|---|---|
-| GAP-01 | CRITICAL | 是 | 根包未再导出 M2 六个类型，`import fountain::f_jit.*` 无法使用 `registerClass`/`registerType` |
-| GAP-02 | CRITICAL | 是 | M2 的 T30–T36/T49/T54/T55/T57–T60 未进入 `TCoverage`，无 M2 scenario-map / 校验脚本 |
+| GAP-01 | CRITICAL | **已解决** | ~~根包未再导出 M2 六类型~~ → 已导出 7 项（+`LocalType`），独立包探针 `FacadeSurface_test` 只导根包即可完成注册 |
+| GAP-02 | CRITICAL | **已解决** | ~~M2 无验收矩阵~~ → `TCoverage` 14 条（`check_tmap` 54 条 0 悬空）、`scenario-map.tsv` 156 条（0 未映射）、脚本参数化 |
 | GAP-03 | WARNING | **已解决** | ~~反射自动访问器只按精确类匹配~~ → 类型判定改沿 `superClass` 链（接受子类实例）；反射执行层 `getValue` 拒绝子类实例经实测固化为已知限制（见段内处置） |
 | GAP-04 | WARNING | **已解决** | ~~签名中的 14 不携带具体类~~ → `HostClosureT`/`SignatureDescriptor` 携带类名，验签按类型名逐字比对 |
 | GAP-05 | WARNING | **已解决** | ~~验签/H63 分派仅支持 0–2 元~~ → 改用 `FunctionTypeInfo` 验签 + `apply` 调用，元数不限、1887 行分派表已删 |
-| GAP-06 | WARNING | 是 | DbgDump 输出 `HostClosure#N` / `HostObject#N`，规格与 doc §9.16 要求 `<HostClosure>#idx` / `<HostObject>#idx` |
-| GAP-07 | WARNING | 是 | M2 三引擎矩阵不完整：14、语法糖、对象身份只有单引擎用例，未入差分 |
+| GAP-06 | WARNING | **已解决** | ~~无尖括号~~ → `slotText` 对 `>=HOST_CLOSURE` 加尖括号（4–12 保持原样），三例通过 |
+| GAP-07 | WARNING | **已解决** | ~~14/糖/身份未入差分~~ → `Q6DiffCoverage_test` 三条（14 实参、成员访问糖、句柄型实参）全部两引擎一致 |
 | GAP-08 | WARNING | **已解决** | ~~性能对照未实测~~ → 实测 4.6–5.8×，留档 `doc/perf-m2.md`，用户裁定接受现状并按实测修订规格 §8 |
-| GAP-09 | WARNING | 是 | `design-m2.md` / `plan-m2.md` / `jit-bytecode-m2.md` 无实现偏差回写；`doc/spec/f-jit-m2/tasks.md` 镜像仍是未勾选旧版 |
+| GAP-09 | WARNING | **已解决** | ~~无偏差回写~~ → `design-m2` §11（10 条）、`plan-m2` §4、规格 v0.8.33、`tasks.md` 镜像 54/54、三表抽样 7 项 |
 | GAP-10 | INFO | 否 | 4 条 scenario 无任何用例断言（见「无用例断言」） |
 | GAP-11 | INFO | 否 | 13 条 scenario 仅部分覆盖（见各 capability 明细） |
 | GAP-12 | INFO | 否 | x86_64 非本机原生，M2 的 x86 执行证据待 CI（规格允许跳过，记工程债） |
@@ -224,6 +235,23 @@
 - 证据：三份权威文档最后修订 2026-10-13（实施前），无偏差段；`doc/spec/f-jit-m2/tasks.md` 仍是全 `[ ]`，与 `openspec/changes/f-jit-m2/tasks.md` 的 54 个 `[x]` 不一致；`design.md` / `proposal.md` / `specs/` 镜像一致。
 - 修复：把 A–D 与已知限制 ①–⑥ 回写三份文档（至少 design-m2 的「实施偏差」节与 plan-m2 的 Q6 备注），同步 `tasks.md` 镜像；补一次三表抽样记录。
 
+- **处置（2026-10-20，已解决）**：
+  - `design-m2.md` 新增 **§11 实施偏差回写**（10 条，逐条给原因与影响面）；
+  - `plan-m2.md` 新增 **§4 实施回写**（54/54、849 用例、9 项缺口处置表、测试口径、Q6 反推的 5 处缺陷）；
+  - `jit-bytecode-m2.md` 升 **v0.8.33**（§4 验签、§5 H63、§8 性能、§9.1 前提、§12.5 反射范围限定、T30）；
+  - `doc/spec/f-jit-m2/tasks.md` 镜像同步为 **54/54**（此前全 `[ ]`）；
+  - **三表抽样（7 项，逐项核对实现）**：
+
+    | 表 | 项 | 文档 | 实现 | 结论 |
+    |---|---|---|---|---|
+    | 附 A | `u.f` → `CALL_HELPER H64`（2 参） | §12.4 降级表 | `Lowerer.cj:1359` `callHelper(HOST_GET_FIELD, 2)` | ✓ |
+    | 附 A | `u.f = v` → `CALL_HELPER H65`（3 参） | §12.4 | `Lowerer.cj:1382` `callHelper(HOST_SET_FIELD, 3)` | ✓ |
+    | 附 A | `C(args…)` → `CALL_HELPER <ctor-hid>` | §15 | `Lowerer.cj:1607-1632`（`requireCtors` → `callHelper`） | ✓ |
+    | 附 B | `0x79` = `OP_CALL_HOST` / `u8` / len 2 / `CAT_CALL` | §10.1 | `OpInfo.cj:255` | ✓ |
+    | 附 B | H63/H64/H65 = 63/64/65 | §6 helper 表 | `HelperId.cj:93-96` | ✓ |
+    | 附 B | `LocalType` 13/14；token 10/11 → 13/14 | §2 | `LocalType.cj:57/60/130/131` | ✓ |
+    | 附 C | `CALL_HOST` → `helper(63, argc+1)` | §12.4 模板 | `A64Lower.cj:374`、`X86Lower.cj:941` | ✓ |
+
 ### INFO（不阻塞）
 
 - **GAP-10 无用例断言的 4 条**：`字节码格式 / 宿主值不可常量化`、`字节码格式 / 机器码零新模式`、`门面 / 含宿主句柄的容器被拒`、`门面 / 反射仅在注册期`。前两条是结构性/字节级断言缺失，第三条是 M1 遗留，第四条是执行路径约束。
@@ -331,7 +359,7 @@
 
 ## archive 建议
 
-**暂不可 archive。** 建议按以下顺序收口（对应 GAP-01–09）：
+**可以进入 archive。** 原建议清单保留作处置记录（GAP-01–09 均已划线完成）：
 
 1. **GAP-01**：`Root.cj` 补六条 `public import`，补一条「只 import 根包」的 M2 端到端用例。
 2. **GAP-06**：`DbgDump` 加尖括号并同步测试期望（最小改动）。

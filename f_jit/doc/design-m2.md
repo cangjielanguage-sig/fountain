@@ -461,3 +461,27 @@ Compiler.registerType<User>() → ReflectRegistrar：枚举 public 成员（字�
 | `flags.bit0`（deopt 禁令） | 既有机制（`CALL_CLOSURE` / 变更型 helper 触发） | M2 触发清单 **+H65**（`host_set_field`）；含此调用的函数禁全部 deopt 源 | §12.2、m1 §7 校验 11 |
 
 **生命周期与失效**：HostClosure 条目属 **B pin 路径**（per-call，随 try/finally 释放；`CALL_FUNC` 链内由被调帧窗口存活）；逃逸回桥第 1 步 = **槽级提升**（`PromotionGroup`，**唯一释放路径 = `close`**，调用 `try/finally` 清理豁免提升槽）；HostObject 走 **B/C/D** 句柄路径——**机器码层全部零新增**，deopt 重放安全（字节码零解引用、零副作用）。
+
+---
+
+## §11 实施偏差回写（M2 交付后补记，2026-10-20）
+
+本节只记「设计稿与落地实现不一致」之处，**权威语义以 `jit-bytecode-m2.md` v0.8.33 为准**。
+每条都注明了原因与影响面，避免后来者按设计稿的旧措辞理解现状。
+
+| # | 设计稿原样 | 落地实现 | 原因 / 影响 |
+|---|---|---|---|
+| 1 | 验签 = **单次 `is (T1..Tn) -> R`**（§5.1 验签段） | `FunctionTypeInfo.of(value)` 取真实签名**逐位比对**（`SignatureVerifier.verifyReflective`） | **原方案语言上不可实现**：`T`/`R` 是运行期数据，`is` 右侧须静态类型；物化路径为 11^(n+1) 分支（2 元 1331、3 元 14641、4 元 16 万）。改后**元数不限**、14 按**具体类名**精确 |
+| 2 | 调用 = 按 `sig` 枚举 `invokeN<P..,R>`（§5 H63 第 3 步） | `FunctionTypeInfo.apply(fn, args)` | JIT 运行期无法为宿主函数值单态化 `invokeN`；`HostCallDispatch.cj` 的 **1887 行分派表整体删除** |
+| 3 | 执行路径**零反射**（§12.5 性质） | 成员快照面仍零反射；**H63 对宿主函数值的调用是唯一执行期反射点** | 语言限制（见 #1/#2）。I2 不受影响（机器码仍不解引用句柄） |
+| 4 | 14 槽「只作不透明大类」 | `HostClosureT` 与 `SignatureDescriptor` **携带每个位置的具体类名**；`PublicField` 增可选 `sigParams/sigParamNames/sigRet/sigRetName` | 只带码时 `(User)->R` 与 `(Order)->R` 撞成同一签名；类名是「预先注册 User/Order 才能验签」的落点 |
+| 5 | 反射访问器「可沿继承逐级向上」（M2-7） | 类型判定按 `superClass` 链（**接受子类实例**）；但**执行层** `InstanceVariableInfo.getValue(子类实例)` 抛 `IllegalTypeException`（实测） | 自动注册的字段访问器只对**精确类**有效；有继承的类需手工访问器（`o is C`）或宏。已固化为 `T36/reflect-getvalue-exact-class-only` |
+| 6 | 宿主闭包开销「估算 1.5–3×」（m2 §8） | **实测 4.6–5.8×** user helper（release，同构一元） | 成本在 `apply` 的参数打包与间接分派；用户裁定**接受现状**，规格已按实测修订 |
+| 7 | `FbcHeader` 旧布局按 `verMinor ≤ 13` 判 | 判据改为 **`verMajor == 1`** | M2 的 `verMinor` 从 0 起算，旧判据会把 v2 产物误判成旧布局 |
+| 8 | `FuncDir` 的 `retType` 合法集写死 0–12 | 按 **`verMajor` 参数化**（v2 放行 14） | 否则 M2 产物无法加载 |
+| 9 | `CALL_HOST` 栈布局在 §3 与 §5 自相矛盾 | 定案 **`[h_fn, a1..an]`，`h_fn` 先压（栈底）** | 依据既有 `CALL_HELPER` ABI（`args[0]` = 最先压入；`CALL_CLOSURE` 同样先压闭包句柄）；`Lowerer`/`Assembler` 已按此固化 |
+| 10 | 反射注册的方法绑定视为「注册期产物、执行期纯调用」 | **String 参数/返回上必现 SIGSEGV**（`ApplyCJMethod`/MCC 路径，300 次循环必崩） | `std.reflect` 实现缺陷；已规避（值型方法 + 手工 String 方法）并登记 **GAP-13**；根治 = M2.1 类型化包装闭包（快 36×） |
+
+**未列入本表的项**：`CALL_HOST` 操作数仍为 `u8 argc`（`u16 sigId` 的迁移因「字段形态无签名」而分步推进）、
+`DbgDump` 的 13/14 尖括号（属**实现漏做**，非设计偏差，已在 GAP-06 修正）。
+

@@ -130,3 +130,49 @@
 3. **M1 零回归**：每步跑 plan-m1 §7 全量；任何 M1 产物差异按阻塞缺陷处理。
 4. **P1 依赖**（M2-1）：**已实测确认（2026-10-11，WSL SDK 1.3.0-alpha）**——`is` 支持函数类型（含入参逆变/返回协变），动态调用经类型模式绑定；⇒ Q5.11 的 `callFor<Fn>` **非必选**（备用通道；**形态已定：`JitFunction` 包装——M2-8 结案，2026-10-11**）。
 5. **编号说明**：T59 在 m2（HostClosure 签名含 14）与 m3（JSON 世界内可变 API + Any↔14）曾重号——**已裁定（2026-10-11）：m3 侧改 T61，m2 侧保持 T59**；本计划按 m2 语义使用 T59。
+
+---
+
+## §4 实施回写（Q6 验收结论，2026-10-20）
+
+**状态：54/54 全部完成**；`cjpm test --parallel 1` = **849/849/0**（M1 纯基线 560 与差分包零回归）。
+六次检查点提交：`5bcb3f11`（Q0–Q2）→ `1ce500cb`（Q3）→ `3efffeda`（Q4a）→ `3780cf57`（Q4b）
+→ `bb87fa03`（Q5）→ `5ef620d7`（Q6）。
+
+### §4.1 与设计稿不一致之处
+
+**统一见 `design-m2.md` §11（实施偏差回写，10 条）**——含验签/调用的实现手段变更
+（`is` → `FunctionTypeInfo`、`invokeN` 分派表 → `apply`）、14 的具体类载体、执行期反射点、
+性能实测 4.6–5.8×、头布局与 `retType` 的版本判据、`CALL_HOST` 栈布局定案等。
+本节不重复，只记**计划层面的收尾结论**。
+
+### §4.2 verify 的 9 项缺口处置
+
+verify（2026-10-20）判「9 项阻塞 archive」，逐项处置如下：
+
+| ID | 处置 | 落点 |
+|---|---|---|
+| GAP-01 | ✅ 根包再导出 7 类型（含清单外的 `LocalType`）+ 独立包用户面探针 | `Root.cj`、`src/surface/FacadeSurface_test.cj` |
+| GAP-02 | ✅ `TCoverage` 登记 14 个 M2 编号、`check_tmap` 接受 M2、156 行 `scenario-map.tsv`、`check_scenarios` 参数化 | `src/test/diff/TCoverage.cj`、`scripts/`、`doc/spec/f-jit-m2/` |
+| GAP-03 | ✅ 类型判定沿 `superClass`（接受子类）；反射执行层限制经实测固化为已知限制 | `ReflectRegistrar.isInstanceOf`、`T36/reflect-getvalue-exact-class-only` |
+| GAP-04 | ✅ 类名穿透（`HostClosureT` + `SignatureDescriptor`），14 按具体类名精确 | `Parser`、`Signature.cj`、`ReflectiveVerify_test` |
+| GAP-05 | ✅ `FunctionTypeInfo` 验签 + `apply` 调用，元数不限、1887 行分派表删除 | `ReflectiveCall.cj`、`t30ArityAboveTwoWorks` |
+| GAP-06 | ✅ 13/14 用尖括号标注大类名 | `DbgDump.slotText` |
+| GAP-07 | ✅ 14 实参 / 成员访问糖 / 句柄型实参进差分 | `Q6DiffCoverage_test` |
+| GAP-08 | ✅ 性能实测 4.6–5.8× 并留档；用户裁定**接受现状**，规格按实测修订 | `PerfM2_test`、`doc/perf-m2.md` |
+| GAP-09 | ✅ 本回写 + `design-m2` §11 + `tasks.md` 镜像 + 三表抽样 | 本节、`design-m2`、`doc/spec/f-jit-m2/` |
+| GAP-13（新增） | ⚠ INFO：反射方法绑定在 String 参数/返回上必现 SIGSEGV（`std.reflect` MCC 路径）；已规避并登记 | verify.md GAP-13 |
+
+### §4.3 测试口径（重要）
+
+`cjpm test` **必须带 `--parallel 1`**：
+反射 `InstanceFunctionInfo.apply` 的 MCC 路径在引用型参数上会触发 SIGSEGV（GAP-13），
+并发 worker 会放大触发频率。串行下当前 849 例稳定通过。
+M2.1 换成类型化包装闭包后可撤销此约束。
+
+### §4.4 Q6 里反推出的真实缺陷（验收的价值）
+
+Q6 不只是「补断言」，它反推出 5 处实现缺陷并已修复：
+提升组返回句柄未及时 release、重入时的窗口栈、`cause` 丢栈帧、`CALL_HOST` 与 user-helper
+调用缺 `SET_SITE`、`ReflectRegistrar` 误按子类匹配。
+
