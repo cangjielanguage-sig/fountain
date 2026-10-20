@@ -489,9 +489,11 @@ public class Interp {
     // ---- 0x50–0x6E 比较 / 逻辑 / 位 ----
 
     private func cmpOp(op: UInt8, f: InterpFrame, ctx: JitContext): Unit {
+        // 一元（NOT 0x5E / BNOT_I 0x65）与二元都先弹 a：一元少弹 b 即可。
+        // 旧实现在 0x65 上既跳过 b 又把 a 硬编成 0，导致 ~x 恒为 -1 且操作数滞留栈上。
         let one = op == 0x5Eu8 || op == 0x65u8
         let b = if (one) { 0 } else { f.pop() }
-        let a = if (one && op == 0x65u8) { 0 } else { if (one) { f.pop() } else { f.pop() } }
+        let a = f.pop()
         match (op) {
             case 0x50u8 => f.push(if (a < b) { -1 } else { if (a > b) { 1 } else { 0 } })
             case 0x51u8 =>
@@ -535,7 +537,7 @@ public class Interp {
             case 0x62u8 => f.push(a & b)
             case 0x63u8 => f.push(a | b)
             case 0x64u8 => f.push(a ^ b)
-            case 0x65u8 => f.push(0 - a - 1)
+            case 0x65u8 => f.push(a ^ Int64(-1))
             case 0x66u8 => f.push(a << (b & 63)) // 取低 6 位（§9 附则 2）
             case 0x67u8 => f.push(a >> (b & 63))
             case 0x68u8 => f.push(fromBits(toBits(a) >> UInt64(b & 63)))

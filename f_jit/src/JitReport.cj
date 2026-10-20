@@ -62,8 +62,21 @@ protected class JitReport {
             return retCell
         }
         if (code == ErrCode.DEOPT) {
+            // 重放复用同一个 ctx：必须先清掉 DEOPT 标记，否则解释器把 `errCode != 0` 当停机条件，
+            // 重放在第一条指令后即中止；重放结束后还必须**重新读**错误槽，否则重放期的真实错误
+            // 会被当作返回值交给宿主（P0-4 / P0-5）。
+            ctx.errCode = 0
+            ctx.site = -1
             try {
-                return replay()
+                let r = replay()
+                let after = ctx.errCode
+                if (after == 0) {
+                    return r
+                }
+                if (after == ErrCode.INTERRUPT) {
+                    throw InterruptedException('调用被中断（-2，§2）')
+                }
+                JitReport.throwJit(ctx, report)
             } catch (e: JitException) {
                 throw e
             } catch (e: InterruptedException) {

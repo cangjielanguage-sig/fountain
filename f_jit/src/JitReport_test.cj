@@ -153,6 +153,62 @@ public class JitReport_test {
         @Assert(hit, 24)
     }
 
+    /**
+     * A1.3（P0-4）：DEOPT 重放前必须复位错误槽。
+     *
+     * 重放复用同一个 ctx；若进入时 `errCode` 仍是 −1，解释器会把它当「已失败」在第一条
+     * 指令后中止。这里直接断言重放入口看到 0，且收尾后仍为 0。
+     */
+    @TestCase
+    public func p0_4_replayResetsErrorSlot(): Unit {
+        let ctx = JitReport_test.ctx()
+        ctx.errCode = ErrCode.DEOPT
+        let seen = ArrayList<Int64>()
+        let r = JitReport.finish(ctx, -1, { =>
+            seen.add(ctx.errCode)
+            42
+        }, '')
+        @Assert(seen.size, 1)
+        @Assert(seen[0], 0)
+        @Assert(r, 42)
+        @Assert(ctx.errCode, 0)
+        JitContext.free(ctx)
+    }
+
+    /** A1.4（P0-5）：重放中途的业务错误必须按原码抛出，不能被当成返回值。 */
+    @TestCase
+    public func p0_5_replayErrorIsRethrown(): Unit {
+        let ctx = JitReport_test.ctx()
+        ctx.errCode = ErrCode.DEOPT
+        try {
+            let _ = JitReport.finish(ctx, -1, { =>
+                ctx.errCode = ErrCode.DIV_ZERO
+                7
+            }, '')
+            @Fail('重放错误被吞成返回值')
+        } catch (e: JitException) {
+            @Assert(e.code, ErrCode.DIV_ZERO)
+        }
+        JitContext.free(ctx)
+    }
+
+    /** A1.4（P0-5）：重放期的 −2 必须转 `InterruptedException`。 */
+    @TestCase
+    public func p0_5_replayInterruptThrows(): Unit {
+        let ctx = JitReport_test.ctx()
+        ctx.errCode = ErrCode.DEOPT
+        try {
+            let _ = JitReport.finish(ctx, -1, { =>
+                ctx.errCode = ErrCode.INTERRUPT
+                0
+            }, '')
+            @Fail('重放中断未抛异常')
+        } catch (e: InterruptedException) {
+            @Assert(e.message.contains('中断'), true)
+        }
+        JitContext.free(ctx)
+    }
+
     private static func ctx(): JitContext {
         JitContext.create(hwBase: 0, hwCap: 0, fnId: 0, dbgBase: 0)
     }

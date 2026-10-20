@@ -380,6 +380,28 @@ public class Interp_test {
         }
     }
 
+    /**
+     * A1.1（P0-3）：`BNOT_I` 必须弹 1 压 1，结果按位取反。
+     *
+     * 既有 `compareLogicAndBitOps` 只喂操作数 `0`，错误实现恒得 `-1` 与期望同值，
+     * 属构造性恒真；这里用非零操作数与「后续还要用一个操作数」的序列，同时钉住取值与栈纪律。
+     */
+    @TestCase
+    public func bnotInvertsAndPopsOperand(): Unit {
+        let ctx = ctxOf()
+        try {
+            // ~5 = -6，~(-1) = 0，~7 = -8
+            @Assert(runBody(ctx, cat([opI32(0x11u8, 5), op0(0x65u8), op0(0x7Cu8)])), -6)
+            @Assert(runBody(ctx, cat([opI32(0x11u8, -1), op0(0x65u8), op0(0x7Cu8)])), 0)
+            @Assert(runBody(ctx, cat([opI32(0x11u8, 7), op0(0x65u8), op0(0x7Cu8)])), -8)
+            // 栈纪律：~5 后栈上只剩 -6，再 +1 得 -5；若残留 5，则 ADD 取到 1 与 -1 得 0
+            @Assert(runBody(ctx, cat([opI32(0x11u8, 5), op0(0x65u8), opI32(0x11u8, 1),
+                op0(0x30u8), op0(0x7Cu8)])), -5)
+        } finally {
+            JitContext.free(ctx)
+        }
+    }
+
     /** 控制流：`JMP` / `JZ` / `JNZ` / `LOOP_BACK`（回边安全点）。 */
     @TestCase
     public func controlFlowAndLoopBack(): Unit {
