@@ -26,8 +26,17 @@
 SIGSEGV（`std.reflect` 的 `ApplyCJMethod`/MCC 路径；探针 300 次循环三轮全崩）。
 **M2.1 已改为默认拒绝**：反射注册遇到**引用型**（`LocalType.STRING`–`HOST_OBJECT`）参数或返回的
 实例方法时不再生成绑定，改为 `RegistrationSkipped` + Warn 诊断；需要这些方法的宿主用
-`registerType<T>(overrides:)` 提供类型化闭包（`OverrideBinding_test` 覆盖替换/新增/契约三面）。
+`registerType<T>(overrides:)` 提供类型化闭包（`OverrideBinding_test` 覆盖替换/新增/契约三面），
+或用 `@JitBind[类名]` 宏自动生成（`JitBind_test`）。
 ⇒ 默认路径不再出现运行期 SIGSEGV，代价是「少一个方法」在编译期可见（`未注册方法「C.greet」`）。
+
+**判据的覆盖面（逐类实测，2026-10-20）**：在 f_jit 上下文内（`Compiler` + JIT 调用 + 每 10 次 256KB
+分配）对同一夹具跑 300 次，`fget`（String 字段读）/`fset`（String 字段写）/`pget`（值型属性读）/
+`sget`（String 静态属性）/`sfn`（String 参数静态函数）/`ctor`（String 构造器）**全部存活**；
+此前只在**实例方法**（`ifun`）上稳定复现。纯 `std.reflect` 独立进程里连 `ifun` 都不崩
+（20000 次 + GC 压力），说明触发依赖 JIT 侧的调用上下文，不是裸反射 API。
+**结论：判据只加在实例方法上，其余六类保留**——推广会砍掉 `u.name` 这类最常用能力，
+却换不到实测收益；若后续在别的上下文复现，按同一处 `unsafeForReflect` 扩展即可（判据是同一个函数）。
 **残余风险**：构造器仍走 `ConstructorInfo.apply`（现有用例的 String 构造器未崩），
 静态函数同理，若后续实测复现，按同一策略处理。
 
