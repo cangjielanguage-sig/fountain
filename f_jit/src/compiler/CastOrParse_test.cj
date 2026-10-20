@@ -60,11 +60,10 @@ public class CastOrParse_test {
         @Assert(AstShape.retShapeOf(l), 'castor(var(u) as User ?? var(u))')
     }
 
-    /** 裸 `as`（缺 `??`）→ 语法错误：本版本不提供「转型失败即报错」的形态。 */
+    /** 裸 `as`（无 `??`）合法：转型失败在运行期报错，不需要兜底。 */
     @TestCase
-    public func bareAsIsRejected(): Unit {
-        @Assert(CastOrParse_test.expectParseError('{ x: Int64 => x as Int64 }').kind,
-            DiagKind.SYNTAX_ERROR)
+    public func bareAsIsRecognized(): Unit {
+        @Assert(AstShape.exprOf('{ x: Int64 => x as Int64 }'), 'castor(var(x) as Int64)')
     }
 
     /** 裸 `??` → 语法错误：`??` 只作为 `as` 的兜底分隔符。 */

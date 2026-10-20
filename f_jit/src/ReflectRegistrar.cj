@@ -348,6 +348,16 @@ protected class ReflectRegistrar {
         for (f in mergedFns) {
             into.addAutoFunction(f)
         }
+        // M2.3：为每个类合成 `$as$<C>` —— `as C` 的运行期判定（`(14) -> Bool`）。
+        // 名字带 `$`，与用户标识符不可能相撞；判定走反射父链，子类实例算命中。
+        into.addAutoFunction(PredefinedFunction('$as$' + name,
+            [LocalType.HOST_OBJECT], LocalType.BOOL,
+            { args =>
+                match (args[0]) {
+                    case o: Object => ReflectRegistrar.isInstanceOfClass(o, name)
+                    case _ => false
+                }
+            }))
     }
 
     /**

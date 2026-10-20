@@ -94,6 +94,9 @@ public class HelperId {
     /** M2 §12.2：实例字段读 / 写（H64/H65）。 */
     public static const HOST_GET_FIELD: UInt16 = 64u16
     public static const HOST_SET_FIELD: UInt16 = 65u16
+
+    /** M2.3 `cast_fail`：`as` 转型失败的统一抛错点（恒置 `BAD_CAST`，无返回值）。 */
+    public static const CAST_FAIL: UInt16 = 77u16
     public static const STR_TO_REGEX: UInt16 = 69u16
     public static const LIST_NEW: UInt16 = 70u16
     public static const MAP_NEW: UInt16 = 71u16
@@ -179,6 +182,7 @@ public class HelperId {
             case 63u16 => 'host_call_trampoline'
             case 64u16 => 'host_get_field'
             case 65u16 => 'host_set_field'
+            case 77u16 => 'cast_fail'
             case 69u16 => 'str_to_regex'
             case 70u16 => 'list_new'
             case 71u16 => 'map_new'

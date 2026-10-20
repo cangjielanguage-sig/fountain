@@ -114,9 +114,9 @@ public class Helpers_test {
             1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
             21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
             39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56,
-            57, 58, 59, 60, 61, 62, 63, 64, 65, 69, 70, 71, 72, 73, 74, 75, 76
+            57, 58, 59, 60, 61, 62, 63, 64, 65, 69, 70, 71, 72, 73, 74, 75, 76, 77
         ]
-        @Assert(expected.size, 73)
+        @Assert(expected.size, 74)
         for (v in expected) {
             @Assert(HelperId.isFixed(UInt16(v)), true)
             @Assert(HelperId.name(UInt16(v)).isEmpty(), false)
@@ -127,7 +127,7 @@ public class Helpers_test {
         }
         @Assert(HelperId.name(HelperId.HOST_CALL_TRAMPOLINE), 'host_call_trampoline')
         @Assert(HelperId.isFixed(0u16), false)
-        @Assert(HelperId.isFixed(77u16), false)
+        @Assert(HelperId.isFixed(77u16), true)
         @Assert(HelperId.name(HelperId.H_LEN), 'hl_len')
         @Assert(HelperId.name(HelperId.REGEX_REPLACE_RANGE), 'regex_replace_range')
         @Assert(HelperId.name(HelperId.DATETIME_NOW), 'datetime_now')
@@ -701,6 +701,15 @@ public class Helpers_test {
         @Assert(c.site, 321)
         HelperCore.ctxWriteCode(c, 99, Exception('boom')) // 新异常 ⇒ 覆盖
         @Assert(c.errCode, 99)
+        teardown()
+    }
+
+    /** M2.3 H77 `cast_fail`：`as` 转型失败的专用码是 7，不是 18/21。 */
+    @TestCase
+    public func castFailRaisesBadCast(): Unit {
+        setup()
+        @Assert(call(77, []), 0)
+        @Assert(err(), ErrCode.BAD_CAST)
         teardown()
     }
 

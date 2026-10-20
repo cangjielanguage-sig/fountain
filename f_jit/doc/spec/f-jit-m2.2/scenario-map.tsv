@@ -6,11 +6,13 @@ f-jit-base-contracts	构造器重载与适配器	multipleCtorOverloadsArePreserv
 f-jit-base-contracts	父链用于静态子类型判定	subclassUpcastIsAllowed	full
 f-jit-base-contracts	返回类名驱动静态解析	methodResultChain	partial
 f-jit-compiler-frontend	同类与子类放行	sameClassKeepsValue,subclassUpcastIsAllowed	full
-f-jit-compiler-frontend	下转型拒绝	downcastIsRejected	full
+# 下转型在 M2.3 改为运行期判定（用例 downcast* 见 m2.3 矩阵），本条已作废
+f-jit-compiler-frontend	下转型拒绝	N/A	N/A
 f-jit-compiler-frontend	不相容拒绝	incompatibleTypesAreRejected	full
-f-jit-compiler-frontend	无法静态判定拒绝	nullOperandIsRejected,unknownReturnClassNameIsRejected	full
-f-jit-compiler-frontend	兜底不求值但受检	fallbackIsNotEvaluated,fallbackIsStillTypeChecked	full
-f-jit-compiler-frontend	语法拒绝面	bareAsIsRejected,bareCoalesceIsRejected,singleQuestionMarkStaysIllegal	full
+# 类名未跟踪在 M2.3 改为走运行期（unknownClassNameUsesRuntimeCheck），本条已作废
+f-jit-compiler-frontend	无法静态判定拒绝	N/A	N/A
+f-jit-compiler-frontend	兜底不求值但受检	fallbackIsNotEvaluatedOnStaticHit,fallbackIsStillTypeChecked	full
+f-jit-compiler-frontend	语法拒绝面	bareAsIsRecognized,bareCoalesceIsRejected,singleQuestionMarkStaysIllegal	full
 f-jit-facade-bridge	契约错误统一码	contractErrorHasNoSite	full
 f-jit-facade-bridge	两形态同接口同行为	t52TwoFormsSameBehavior	full
 f-jit-facade-bridge	闭包包装调用	wrapperCallMatchesDirectClosure	full

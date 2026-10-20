@@ -221,9 +221,12 @@ internal class DefiniteAssignment {
                 this.walkExpr(t, state)
                 this.walkExpr(f, state)
             case AstExpr.CastOr(x, _, fb, _) =>
-                // 兜底虽不可达，仍要完整降级/类型检查 ⇒ 两侧都走（与 IfExpr 同口径，M2.2）
+                // 兜底可能求值（转型失败时）⇒ 与 IfExpr 同口径，两侧都走
                 this.walkExpr(x, state)
-                this.walkExpr(fb, state)
+                match (fb) {
+                    case Some(v) => this.walkExpr(v, state)
+                    case None => ()
+                }
             case AstExpr.Call(t, args, pos) =>
                 this.walkCallee(t, state, pos)
                 for (a in args) {

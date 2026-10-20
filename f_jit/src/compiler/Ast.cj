@@ -215,14 +215,14 @@ internal enum AstExpr {
     /** M2 构造 `C(args…)`：参数序 = className, args。 */
     | CtorCall(String, Array<AstExpr>, SourcePos)
     /**
-     * M2.2 静态收窄 `E as T ?? F`：参数序 = expr, 目标类型, 兜底表达式。
+     * 收窄转型 `E as T` / `E as T ?? V`：参数序 = expr, 目标类型, 兜底（可缺省）。
      *
-     * **语义是编译期的**：`E` 的静态类型若可推断为 `T` 或其子类型，整个表达式取 `E`
-     * （向上转，运行期零动作）；否则编译期报错（不相容 / 下转型 / 无法静态判定）。
-     * `F` 因此永不求值——它仍被完整降级以完成类型检查，发射为**不可达分支**。
-     * 判定与诊断见 `Lowerer.lowerCastOr`。
+     * **静态能定的不查运行期**：`E` 的静态类型已是 `T` 或其子类 ⇒ 直接取 `E`（零动作）。
+     * 其余可判定相容的情形（下转型、类名未跟踪但两侧都是 14）⇒ 运行期按类判定：
+     * 命中取 `E`；`as T`（无兜底）失败报错 `BAD_CAST`，`as T ?? V` 失败取 `V`。
+     * 与 `T` 不相容、`T` 为函数类型 ⇒ 编译期报错。判定见 `Lowerer.lowerCastOr`。
      */
-    | CastOr(AstExpr, TypeRef, AstExpr, SourcePos)
+    | CastOr(AstExpr, TypeRef, ?AstExpr, SourcePos)
 
     /** 位置（驱动 `setSite` 与编译期诊断；design §4.3.2）。 */
     public func pos(): SourcePos {

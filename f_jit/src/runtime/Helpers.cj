@@ -125,6 +125,8 @@ internal func dispatchHelper(ctx: JitContext, hid: Int64, a: Array<Int64>): Int6
         // ---- M2：实例字段读写（H64 / H65）----
         case 64 => hostGetField(ctx, a)
         case 65 => hostSetField(ctx, a)
+        // ---- M2.3：转型失败（H77）----
+        case 77 => castFail(ctx, a)
         // ---- 空容器构造（H70 / H71）----
         case 70 => listNew(ctx, a)
         case 71 => mapNew(ctx, a)
@@ -135,6 +137,19 @@ internal func dispatchHelper(ctx: JitContext, hid: Int64, a: Array<Int64>): Int6
                 failWith(ErrCode.NOT_IMPL)
             }
     }
+}
+
+/**
+ * H77 `cast_fail`：`as` 转型失败的统一抛错点。
+ *
+ * 为什么单列一个 helper 而不是让 `$as$<C>` 判定函数自己抛：user helper 抛出的普通异常
+ * 会被统一转 21（宿主异常），而转型失败必须是 **7 BAD_CAST**。固定 helper 直接 `failWith`，
+ * 码值不被改写。
+ */
+private func castFail(ctx: JitContext, a: Array<Int64>): Int64 {
+    let unused = (ctx, a)
+    let _ = unused
+    failWith(ErrCode.BAD_CAST)
 }
 
 // ============================================================================

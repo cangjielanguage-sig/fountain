@@ -1792,19 +1792,30 @@ internal class Lowerer {
     }
 
     /**
-     * `E as T ?? F`（M2.2）：**编译期**收窄，运行期零判定。
+     * `E as T` / `E as T ?? V`（M2.3）：**能编译期定的不查运行期**，判不了的运行期按类判定。
      *
-     * 判定（全部在编译期，任一条不满足即 `TYPE_MISMATCH`）：
-     * 1. `T` 是注册类 → `E` 的静态类型必须是 14 且**类名已知**，且 `E` 的类是 `T` 或其子类；
-     * 2. `T` 是内建码 → `E` 的静态码必须等于它；
-     * 3. `T` 是函数类型 → 暂不支持（签名只能比对返回码，形参码不在符号表里）；
-     * 4. `F` 的静态类型必须是 `T` 或其子类。
+     * 判定顺序：
+     * 1. 静态已可推断为 `T` 或其子类 ⇒ 直接取 `E`（零动作）；
+     * 2. 两侧都是 14、相容但静态不确定（下转型，或左面类名未跟踪）⇒ 运行期查 `$as$<T>`；
+     * 3. 与 `T` 不相容 / `T` 是函数类型 ⇒ 编译期报错；
+     * 4. `V` 必须是 `T` 或其子类，且**只在转型失败时求值**。
      *
-     * 为什么 `F` 仍要降级：它永不求值，但必须走完整降级才能完成类型检查（否则
-     * `x as T ?? undefinedName` 会静默通过）。发射形态 = 「E → JMP end → F（不可达）→ end」，
-     * 与 `if/else` 表达式同构，因此对字节码校验器无新形态。
+     * 运行期形态（`$as$<T>` 是注册期合成的 `(14) -> Bool` 自动函数，走反射父链判定，
+     * 子类实例算命中）：
+     *
+     * ```
+     * lower E → STOREL tmp
+     * LOADL tmp ; CALL_HELPER $as$T 1 ; JZ fail
+     * LOADL tmp ; JMP end
+     * fail:  <as>      CALL_HELPER H77 0（恒置 7 BAD_CAST）
+     *        <as ?? V> lower V
+     * end:
+     * ```
+     *
+     * 为什么失败要另用 H77 而不是让 `$as$<T>` 自己抛：user helper 抛出的普通异常会被统一
+     * 转 21（宿主异常），而转型失败必须是 **7 BAD_CAST**；固定 helper 直接 `failWith` 才不改码值。
      */
-    private func lowerCastOr(e: AstExpr, t: TypeRef, fb: AstExpr, pos: SourcePos): UInt16 {
+    private func lowerCastOr(e: AstExpr, t: TypeRef, fb: ?AstExpr, pos: SourcePos): UInt16 {
         let ctx = this.requireCtx()
         let tCode = t.code()
         let sCode = this.staticTypeFull(e)
@@ -1821,58 +1832,82 @@ internal class Lowerer {
         } else {
             LocalType.name(sCode)
         }
+        var needRuntime = false
         if (tCode == LocalType.HOST_OBJECT) {
             if (sCode != LocalType.HOST_OBJECT) {
                 diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
                     '`as ${tName}` 的左面静态类型是 ${sDesc}，不是注册类实例——类型不相容')
             }
             if (sName == '') {
-                diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
-                    '`as ${tName}` 无法静态判定：左面是 14 型但类名未跟踪' +
-                    '（方法返回值 / if 合流 / 容器元素）；M2.2 只做编译期收窄')
-            }
-            if (!this.view.isSameOrSubclass(sName, tName)) {
+                // 类名未跟踪：编译期分不清「是 T / 是 T 的父类 / 无关」⇒ 交给运行期
+                needRuntime = true
+            } else if (sName != tName && !this.view.isSameOrSubclass(sName, tName)) {
                 if (this.view.isSameOrSubclass(tName, sName)) {
+                    // 下转型：运行期才知道成不成
+                    needRuntime = true
+                } else {
                     diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
-                        '`as ${tName}` 是下转型（${tName} 是 ${sName} 的父类）：' +
-                        '需要运行期类判定，当前字节码不支持（IS_TYPE 只认 tag）')
+                        '`as ${tName}` 与左面类型 ${sName} 无继承关系——类型不相容')
                 }
-                diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
-                    '`as ${tName}` 与左面类型 ${sName} 无继承关系——类型不相容')
             }
         } else if (tCode == LocalType.HOST_CLOSURE) {
             diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
-                '`as` 暂不支持函数类型：形参码不在符号表里，无法静态比对签名（M2.2 边界）')
+                '`as` 暂不支持函数类型：形参码不在符号表里，无法静态比对签名（M2.3 边界）')
         } else if (sCode != tCode) {
             diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
                 '`as ${LocalType.name(tCode)}` 的左面静态类型是 ${sDesc}——类型不相容')
         }
-        // 兜底：必须是 T 或其子类（子类是 M2.2 的放宽，整体类型仍取 T）
-        let fCode = this.staticTypeFull(fb)
-        let fName = match (this.hostObjectClassOf(fb)) {
-            case Some(n) => n
-            case None => ''
+        match (fb) {
+            case Some(v) =>
+                // 兜底：必须是 T 或其子类（整体类型仍取 T）
+                let fCode = this.staticTypeFull(v)
+                let fName = match (this.hostObjectClassOf(v)) {
+                    case Some(n) => n
+                    case None => ''
+                }
+                if (tCode == LocalType.HOST_OBJECT) {
+                    if (fCode != LocalType.HOST_OBJECT || fName == '' ||
+                        !this.view.isSameOrSubclass(fName, tName)) {
+                        diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                            '`??` 右面必须是 ${tName} 或其子类（实际：' +
+                            (if (fName != '') { fName } else { LocalType.name(fCode) }) + '）')
+                    }
+                } else if (fCode != tCode) {
+                    diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                        '`??` 右面必须是 ${LocalType.name(tCode)}（实际：${LocalType.name(fCode)}）')
+                }
+            case None => ()
         }
-        if (tCode == LocalType.HOST_OBJECT) {
-            if (fCode != LocalType.HOST_OBJECT || fName == '' ||
-                !this.view.isSameOrSubclass(fName, tName)) {
+        if (!needRuntime) {
+            let _ = this.lowerExpr(e)
+        } else {
+            let slot = this.sess.registry.slotOf('$as$' + tName)
+            if (slot < 0) {
                 diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
-                    '`??` 右面必须是 ${tName} 或其子类（实际：' +
-                    (if (fName != '') { fName } else { LocalType.name(fCode) }) + '）')
+                    '内部错误：类「${tName}」缺少转型判定函数（注册期未合成 `$as$` 条目）')
             }
-        } else if (fCode != tCode) {
-            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
-                '`??` 右面必须是 ${LocalType.name(tCode)}（实际：${LocalType.name(fCode)}）')
+            let tmp = ctx.builder.allocSlot(LocalType.HOST_OBJECT)
+            let failL = ctx.builder.newLabel()
+            let endL = ctx.builder.newLabel()
+            let _ = this.lowerExpr(e)
+            ctx.builder.emitU16(Op.STOREL, UInt16(tmp))
+            ctx.builder.emitU16(Op.LOADL, UInt16(tmp))
+            ctx.builder.setSite(pos)
+            ctx.builder.callHelper(HelperCodec.hidOfSlot(UInt16(slot)), 1u8)
+            ctx.builder.emitRel(Op.JZ, failL)
+            ctx.builder.emitU16(Op.LOADL, UInt16(tmp))
+            ctx.builder.emitRel(Op.JMP, endL)
+            ctx.builder.place(failL)
+            match (fb) {
+                case Some(v) =>
+                    let _ = this.lowerExpr(v)
+                case None =>
+                    ctx.builder.setSite(pos)
+                    // H77 恒抛；它的返回值（1 格）正好与命中分支的栈深对齐
+                    ctx.builder.callHelper(HelperCodec.CAST_FAIL, 0u8)
+            }
+            ctx.builder.place(endL)
         }
-        let _ = this.lowerExpr(e)
-        let endL = ctx.builder.newLabel()
-        ctx.builder.emitRel(Op.JMP, endL)
-        // 不可达分支：只为完成类型检查与捕获分析
-        let _ = this.lowerExpr(fb)
-        ctx.builder.place(endL)
-        // 收窄后的静态类型是 T，不是 E 的：`let u = a as User ?? a` 之后 `u.f` 必须按 T 解析。
-        // `lastObjectName` 是「表达式产物的 14 类名」的旁路通道（`Decl` 落到符号表），
-        // 必须在两侧都降级之后覆盖，否则会被 F 的类名或 E 的类名盖回去。
         this.lastObjectName = t.objectName()
         this.lastHostRet = LocalType.NONE
         tCode
@@ -2446,7 +2481,11 @@ internal class Lowerer {
             case AstExpr.MethodCall(_, _, _, _) => CaptureOrigin.WINDOW
             case AstExpr.CtorCall(_, _, _) => CaptureOrigin.WINDOW
             case AstExpr.CastOr(e, _, fb, _) =>
-                Lowerer.worseOrigin(this.originOfExpr(e, ty), this.originOfExpr(fb, ty))
+                match (fb) {
+                    case Some(v) => Lowerer.worseOrigin(this.originOfExpr(e, ty),
+                        this.originOfExpr(v, ty))
+                    case None => this.originOfExpr(e, ty)
+                }
             case AstExpr.Binary(_, _, _, _) => CaptureOrigin.WINDOW
             case AstExpr.Unary(_, _, _) => CaptureOrigin.WINDOW
             case _ => CaptureOrigin.WINDOW
