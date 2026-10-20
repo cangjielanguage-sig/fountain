@@ -256,7 +256,7 @@ public class FbcReader_test {
         expectRejectRules(raw, h, FbcRuleRegistry.V1)
     }
 
-    /** Q0.2：注册表登记 v1/v2（已实现）与 v3（仅登记）；未知主版本无规则集。 */
+    /** Q0.2：注册表登记 v1/v2/v3（均已实现）；未知主版本无规则集。 */
     @TestCase
     public func registryRegistersV1V2AndV3(): Unit {
         match (FbcRuleRegistry.get(Version.M1_MAJOR)) {
@@ -272,7 +272,7 @@ public class FbcReader_test {
         }
         match (FbcRuleRegistry.get(Version.M3_MAJOR)) {
             case Some(r) =>
-                @Assert(r.implemented, false)
+                @Assert(r.implemented, true)
                 @Assert(r.maxLocalType, 19u16)
             case None => @Assert(0, 1)
         }
@@ -332,14 +332,15 @@ public class FbcReader_test {
             name: emptyName()), ErrCode.NOT_IMPL)
     }
 
-    /** Q2.2：M1 规则集遇 v2 头 → 18（兼容矩阵 §9.2）。 */
+    /** Q2.2：M1 规则集遇 v2 头 → 18（兼容矩阵 §9.2）；v2 规则集遇 v3 头同理。 */
     @TestCase
     public func m1RuleSetRejectsV2Header(): Unit {
         let raw = buildUnit(verMajor: Version.M2_MAJOR, verMinor: Version.M2_MINOR)
         let h = FbcHeader.read(ByteReader(raw))
         expectRejectRules(raw, h, FbcRuleRegistry.V1)
-        // v2 加载器遇 v3 头（含 verMinor 0）同样按 18 拒绝
-        expectReject(buildUnit(verMajor: Version.M3_MAJOR, verMinor: 0u16), ErrCode.NOT_IMPL)
+        // v2 规则集遇 v3 头（含 verMinor 0）同样拒绝（主版本不一致）
+        let raw3 = buildUnit(verMajor: Version.M3_MAJOR, verMinor: 0u16)
+        expectRejectRules(raw3, FbcHeader.read(ByteReader(raw3)), FbcRuleRegistry.V2)
     }
 
     /**
@@ -362,9 +363,10 @@ public class FbcReader_test {
         @Assert(v2.isLocalTypeLegal(13u16), true)
         @Assert(v2.isLocalTypeLegal(14u16), true)
         @Assert(v2.isLocalTypeLegal(15u16), false)
-        // v3 仅登记：合法集 0–19，但加载器开关关
+        // v3：合法集 0–19，加载器开关自 M3 起打开
         @Assert(v3.isLocalTypeInLegalSet(19u16), true)
-        @Assert(v3.isLocalTypeLegal(19u16), false)
+        @Assert(v3.isLocalTypeLegal(19u16), true)
+        @Assert(v3.isLocalTypeLegal(20u16), false)
     }
 
     /**
@@ -418,17 +420,17 @@ public class FbcReader_test {
         expectReject(raw, ErrCode.NOT_IMPL)
     }
 
-    /** ② v3 仅登记未实现 / 未知主版本 / verMinor 超上限 ⇒ 18；v2 已被 M2 加载器接受。 */
+    /** ② 未知主版本 / verMinor 超上限 ⇒ 18；v2、v3 均已被本加载器接受。 */
     @TestCase
     public func rejectUnsupportedVerMajor(): Unit {
-        // v3：规则集仅登记（implemented=false），M2 加载器仍按 18 拒绝
+        // v3 自 M3 起已实现；verMinor 超出 [0,0] 仍按 18 拒绝
         expectReject(buildUnit(verMajor: Version.M3_MAJOR, verMinor: 16u16), ErrCode.NOT_IMPL)
         // 未知主版本：注册表无条目
         expectReject(buildUnit(verMajor: 4u16, verMinor: 0u16), ErrCode.NOT_IMPL)
-        // 兼容矩阵：v1/v2 的最小可接受 verMinor = 0；v3/未知无可用规则集
+        // 兼容矩阵：v1/v2/v3 的最小可接受 verMinor = 0；未知主版本无可用规则集
         @Assert(FbcReader.minVerMinorOf(1u16), 0u16)
         @Assert(FbcReader.minVerMinorOf(2u16), 0u16)
-        @Assert(FbcReader.minVerMinorOf(3u16), FbcReader.UNSUPPORTED_MINOR)
+        @Assert(FbcReader.minVerMinorOf(3u16), 0u16)
         @Assert(FbcReader.minVerMinorOf(4u16), FbcReader.UNSUPPORTED_MINOR)
         // verMinor 高于本主版本上限 ⇒ 同样拒绝（v1 上限 14）
         expectReject(buildUnit(verMinor: 99u16), ErrCode.NOT_IMPL)

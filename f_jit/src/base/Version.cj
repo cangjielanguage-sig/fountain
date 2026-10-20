@@ -55,17 +55,17 @@ public class Version {
     /** M2 次版本（M2 产物从 0 起算）。 */
     public static const M2_MINOR: UInt16 = 0u16
 
-    /** M3 主版本：仅登记位，本实现不启用 M3 语义（design D12）。 */
+    /** M3 主版本（M3 规则集已落地：LocalType 合法集 0–19）。 */
     public static const M3_MAJOR: UInt16 = 3u16
 
     /**
-     * 本加载器**已实现**的 `verMajor` 集合：v1（M1 规则集）与 v2（M2 规则集）。
+     * 本加载器**已实现**的 `verMajor` 集合：v1（M1）、v2（M2）、v3（M3）。
      *
-     * v3 只有登记位（`M3_MAJOR`），规则集未实现 ⇒ 不在此列；加载器遇 v3 仍按 18 拒绝。
+     * 三者均有已实现规则集；v3 的合法 LocalType 集为 0–19（15=Any、16–19=JSON 谱系）。
      * 每次返回新数组，避免调用方修改共享实例。
      */
     public static func supportedMajors(): Array<UInt16> {
-        [M1_MAJOR, M2_MAJOR]
+        [M1_MAJOR, M2_MAJOR, M3_MAJOR]
     }
 
     /** 本实现写出的 `verMinor` = 14（v0.18.25；加载器接受 ≤ 自身版本的 verMinor，§11.6）。 */

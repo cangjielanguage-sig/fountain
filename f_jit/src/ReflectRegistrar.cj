@@ -138,6 +138,12 @@ protected class ReflectRegistrar {
 
         // ---- 实例字段（let / var）----
         for (v in cls.instanceVariables) {
+            // m3 §3/§12-4：HostObject 字段类型**不扩展**至 15（Any）——逐成员跳过 + 诊断。
+            if (v.typeInfo.name == 'Any') {
+                ReflectRegistrar.skip(diag, '${name}.${v.name}',
+                    '字段类型不得为 Any（15 仅限局部 / 形参 / 返回，m3 §3/§12-4）')
+                continue
+            }
             let codeOpt = ReflectRegistrar.mapType(v.typeInfo)
             if (codeOpt.isNone()) {
                 ReflectRegistrar.skip(diag, '${name}.${v.name}', '字段类型不可映射')
@@ -497,6 +503,8 @@ protected class ReflectRegistrar {
             case 'DateTime' => return Some(LocalType.DATETIME)
             case 'Duration' => return Some(LocalType.DURATION)
             case 'Regex' => return Some(LocalType.REGEX)
+            // m3 §12-4：Any（15）不入字段/成员映射表；成员访问面只认确定类（14）。
+            case 'Any' => return None
             case _ => ()
         }
         if (n.startsWith('Range')) {

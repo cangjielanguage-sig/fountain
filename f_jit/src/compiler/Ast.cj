@@ -41,16 +41,33 @@ import fountain::f_jit.base.SourcePos
  *
  * `HostClosureT` 的载荷按位置 = `(params, ret)`（仓颉 enum 构造器不支持参数名）；
  * `HostObjectT` 的载荷 = 注册类名。`HostClosureT` 的 T/R 已由解析器按
- * `jit-bytecode-m2 §3` 校验（0–8/10–11/14，禁高阶）。
+ * `jit-bytecode-m2 §3` 校验（0–8/10–11/14 与 M3 的 15，禁高阶）。
+ *
+ * **M3 追加的三个构造器**：
+ * - `AnyT`（15）：盒类型。与 `Builtin(15)` 等值，但**单列**——15 在声明面有多处专属禁令
+ *   （不得作 HostObject 字段类型、不得作 `any_box` 的目标、不得二次装箱），单列让这些判定
+ *   不必靠「魔法数字 15」来猜意图；
+ * - `ListOf` / `MapOf`：容器**元素/键值类型**（m3 §3「异构容器」）。字节码类型表仍只记大类
+ *   10/11（§11.7 不变），元素类型是**前端的并行静态知识**，只为两件事存在：异构容器元素
+ *   写入点的装箱发射（m3 §3 第 ④ 类插入点）与元素读的静态类型。
  */
 internal enum TypeRef {
     /**
      * 内建类型码：值 = `LocalType` 码（§11.7）。
      *
-     * **容器元素类型是前端的并行静态知识**，不进入本节点（类型表只记大类，§11.7）——
-     * `List<Int64>` 与 `List<String>` 在字节码的类型表里同为 10。
+     * 只用于**无类型实参**的内建类型（标量、`Closure`、`Regex` 等）与 JSON 谱系码 16–19。
+     * 容器走 `ListOf` / `MapOf`（见下），因为它们必须携带元素/键值类型。
      */
     | Builtin(UInt16)
+
+    /** `Any`（`LocalType.ANY = 15`）：装箱搬运类型，见 `jit-bytecode-m3 §1/§3`。 */
+    | AnyT
+
+    /** `List<T>`：`T` 为元素类型注解（可为 `AnyT` / `Builtin` / 嵌套容器 / 宿主类）。 */
+    | ListOf(TypeRef)
+
+    /** `Map<K, V>`：键值类型注解。 */
+    | MapOf(TypeRef, TypeRef)
 
     /**
      * 宿主闭包函数类型 `(T1, …, Tn) -> R`。
@@ -72,8 +89,28 @@ internal enum TypeRef {
     public func code(): UInt16 {
         match (this) {
             case Builtin(c) => c
+            case AnyT => 15u16
+            case ListOf(_) => 10u16
+            case MapOf(_, _) => 11u16
             case HostClosureT(_, _, _, _) => 13u16
             case HostObjectT(_) => 14u16
+        }
+    }
+
+    /** 容器元素类型码（`List<T>` 的 T、`Map<K,V>` 的 V）；非容器或无实参 → `NONE`。 */
+    public func elemCode(): UInt16 {
+        match (this) {
+            case ListOf(t) => t.code()
+            case MapOf(_, v) => v.code()
+            case _ => 0xFFFFu16
+        }
+    }
+
+    /** 容器键类型码（仅 `Map<K,V>` 的 K）；其余 → `NONE`。 */
+    public func keyCode(): UInt16 {
+        match (this) {
+            case MapOf(k, _) => k.code()
+            case _ => 0xFFFFu16
         }
     }
 

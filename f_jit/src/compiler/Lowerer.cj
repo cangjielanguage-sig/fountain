@@ -31,21 +31,37 @@ internal class VarSym {
     public let ty: UInt16
     /** 13 型：HostClosure 的返回类型码（CALL_HOST 的结果静态类型）。 */
     public let hostRet: UInt16
+    /** 13 型：HostClosure 的形参类型码（Any 实参装箱的判定输入，m3 §3）。 */
+    public let hostParams: Array<UInt16>
     /** 14 型：具体类名（成员访问链的类型跟踪，m2 §12.4）。 */
     public let objectName: ?String
+    /**
+     * 10/11 型：容器元素类型码（`List<T>` 的 T / `Map<K,V>` 的 V）；未知 → `NONE`。
+     *
+     * 元素类型**不进字节码类型表**（§11.7 只记大类 10/11），但 m3 §3 的第 ④ 类装箱插入点
+     * （元素写入前 `any_box`）与元素读的静态类型都必须知道它——这是前端的并行静态知识。
+     */
+    public let elemTy: UInt16
+    /** 11 型：`Map<K,V>` 的键类型码；未知 → `NONE`。 */
+    public let keyTy: UInt16
     /** 捕获来源（m2 §14.7）；赋值可保守降级（只升不降）。 */
     public var origin: UInt8
     /** 12 型局部：闭包的 fnId（取闭包静态返回类型；`UInt32.Max` = 未知）。 */
     public let closureFnId: UInt32
 
     public init(name: String, slot: Int64, ty: UInt16,
-        hostRet!: UInt16 = LocalType.NONE, objectName!: ?String = None,
+        hostRet!: UInt16 = LocalType.NONE, hostParams!: Array<UInt16> = Array<UInt16>(),
+        objectName!: ?String = None, elemTy!: UInt16 = LocalType.NONE,
+        keyTy!: UInt16 = LocalType.NONE,
         origin!: UInt8 = CaptureOrigin.VALUE, closureFnId!: UInt32 = UInt32.Max) {
         this.name = name
         this.slot = slot
         this.ty = ty
         this.hostRet = hostRet
+        this.hostParams = hostParams
         this.objectName = objectName
+        this.elemTy = elemTy
+        this.keyTy = keyTy
         this.origin = origin
         this.closureFnId = closureFnId
     }
@@ -124,6 +140,8 @@ internal class Lowerer {
     private var topParamTypes: Array<UInt16> = Array<UInt16>()
     private var topRetType: UInt16 = LocalType.I64
     private let closureRets = ArrayList<(UInt32, UInt16)>()
+    /** 闭包形参类型码序列（m3 §3：Any 实参装箱的判定输入）。 */
+    private let closureParams = ArrayList<(UInt32, Array<UInt16>)>()
     /** 待排序的名字表条目（NameTable 要求按 (fnId, slot) 严格升序）。 */
     private let pendingNames = ArrayList<(UInt32, Int64, String)>()
     /** 最近一次 `lowerExpr` 产物的静态类知识（14 型链式解析，m2 §12.4）。 */
@@ -201,6 +219,7 @@ internal class Lowerer {
         if (ctx.isClosure) {
             let _ = ctx.builder.allocSlot(LocalType.CLOSURE)
             base = 1
+            this.setClosureParams(fnId, Lowerer.paramTypesOf(lambda))
         }
         for (p in lambda.params) {
             let code = p.typeAnn.code()
@@ -209,6 +228,8 @@ internal class Lowerer {
                 codeFail('形参槽序错乱: ${slot} / ${base}')
             }
             ctx.scopes[0].add(VarSym(p.name, slot, code, hostRet: p.typeAnn.hostRet(),
+                hostParams: p.typeAnn.hostParams(), elemTy: p.typeAnn.elemCode(),
+                keyTy: p.typeAnn.keyCode(),
                 objectName: p.typeAnn.objectName(),
                 origin: if (code <= LocalType.UNIT) {
                     CaptureOrigin.VALUE
@@ -223,7 +244,8 @@ internal class Lowerer {
                 let outer = Lowerer.findIn(parent, name, this.src)
                 let slot = ctx.builder.allocSlot(outer.ty)
                 let sym = VarSym(name, slot, outer.ty, hostRet: outer.hostRet,
-                    objectName: outer.objectName, origin: outer.origin,
+                    hostParams: outer.hostParams, objectName: outer.objectName,
+                    elemTy: outer.elemTy, keyTy: outer.keyTy, origin: outer.origin,
                     closureFnId: outer.closureFnId)
                 ctx.builder.emitU16(Op.LOAD_CAP, UInt16(i))
                 ctx.builder.emitU16(Op.STOREL, UInt16(slot))
@@ -290,6 +312,28 @@ internal class Lowerer {
         LocalType.I64
     }
 
+    /** 闭包形参类型码（未登记 → 空数组，调用点退回「不校验/不装箱」的老路径）。 */
+    private func closureParamsOf(fnId: UInt32): Array<UInt16> {
+        for (p in this.closureParams) {
+            if (p[0] == fnId) {
+                return p[1]
+            }
+        }
+        Array<UInt16>()
+    }
+
+    private func setClosureParams(fnId: UInt32, ps: Array<UInt16>): Unit {
+        var i = 0
+        while (i < this.closureParams.size) {
+            if (this.closureParams[i][0] == fnId) {
+                this.closureParams[i] = (fnId, ps)
+                return
+            }
+            i = i + 1
+        }
+        this.closureParams.add((fnId, ps))
+    }
+
     private func setClosureRetType(fnId: UInt32, t: UInt16): Unit {
         // 先按静态预判登记、降低完再按实际类型**覆盖**（`closureRetType` 取首个匹配，
         // 所以这里必须就地改值而不是追加）。
@@ -315,18 +359,24 @@ internal class Lowerer {
                 var declared: UInt16 = LocalType.NONE
                 var declaredHostRet: UInt16 = LocalType.NONE
                 var declaredObject: ?String = None
+                var declaredElem: UInt16 = LocalType.NONE
+                var declaredKey: UInt16 = LocalType.NONE
+                var declaredHostParams: Array<UInt16> = Array<UInt16>()
                 match (tyAnn) {
                     case Some(t) =>
                         declared = t.code()
                         declaredHostRet = t.hostRet()
                         declaredObject = t.objectName()
+                        declaredElem = t.elemCode()
+                        declaredKey = t.keyCode()
+                        declaredHostParams = t.hostParams()
                     case None => ()
                 }
                 var initTy: UInt16 = declared
                 var declaredClosureFnId: UInt32 = UInt32.Max
                 match (initE) {
                     case Some(e) =>
-                        initTy = this.lowerExprAs(e, declared)
+                        initTy = this.lowerInit(e, declared, declaredElem, declaredKey)
                         if (initTy == LocalType.CLOSURE) {
                             declaredClosureFnId = this.lastClosureFnId
                         }
@@ -344,10 +394,29 @@ internal class Lowerer {
                     if (declared == LocalType.HOST_OBJECT) {
                         declaredObject = this.lastObjectName
                     }
+                    if (declared == LocalType.CLOSURE) {
+                        declaredClosureFnId = this.lastClosureFnId
+                    }
                 }
                 if (declared == LocalType.NONE) {
                     diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
                         '无法推导局部「${name}」的类型')
+                }
+                // 无类型注解的容器字面量：元素类型按首元素静态类型回填（异构容器的最小推断）。
+                if ((declared == LocalType.LIST || declared == LocalType.MAP) &&
+                    declaredElem == LocalType.NONE) {
+                    match (initE) {
+                        case Some(AstExpr.ListLit(elems, _, _)) =>
+                            if (elems.size > 0) {
+                                declaredElem = this.staticTypeFull(elems[0])
+                            }
+                        case Some(AstExpr.MapLit(pairs, _, _)) =>
+                            if (pairs.size > 0) {
+                                declaredKey = this.staticTypeFull(pairs[0][0])
+                                declaredElem = this.staticTypeFull(pairs[0][1])
+                            }
+                        case _ => ()
+                    }
                 }
                 let slot = ctx.builder.allocSlot(declared)
                 ctx.builder.emitU16(Op.STOREL, UInt16(slot))
@@ -361,7 +430,8 @@ internal class Lowerer {
                     }
                 }
                 ctx.declare(VarSym(name, slot, declared, hostRet: declaredHostRet,
-                    objectName: declaredObject, origin: declaredOrigin,
+                    hostParams: declaredHostParams, objectName: declaredObject,
+                    elemTy: declaredElem, keyTy: declaredKey, origin: declaredOrigin,
                     closureFnId: declaredClosureFnId), pos, this.src)
                 this.pendingNames.add((ctx.fnId, slot, name))
             case AstStmt.Assign(lhs, rhs, pos) => this.lowerAssign(lhs, rhs, pos)
@@ -451,9 +521,21 @@ internal class Lowerer {
                 sym.origin = Lowerer.worseOrigin(sym.origin, this.originOfExpr(rhs, sym.ty))
                 ctx.builder.emitU16(Op.STOREL, UInt16(sym.slot))
             case AstExpr.IndexTarget(target, index, _) =>
+                let info = this.containerInfoOf(target)
                 let tt = this.lowerExpr(target)
-                let _ = this.lowerExprAs(index, LocalType.I64)
-                let _ = this.lowerExpr(rhs)
+                // Map 的键按声明的键类型降低（`Map<String,…>` 的键是 String 而非 I64）。
+                let idxTy = if (tt == LocalType.MAP && info[1] != LocalType.NONE) {
+                    info[1]
+                } else {
+                    LocalType.I64
+                }
+                let _ = this.lowerExprAs(index, idxTy)
+                // 元素类型为 Any 的写入点：值先装箱（m3 §3 第 ④ 类插入点）。
+                if (info[0] == LocalType.ANY) {
+                    let _ = this.lowerBox(rhs)
+                } else {
+                    let _ = this.lowerExprAs(rhs, info[0])
+                }
                 if (tt == LocalType.LIST) {
                     ctx.builder.emit(Op.LIST_SET)
                 } else if (tt == LocalType.MAP) {
@@ -523,6 +605,8 @@ internal class Lowerer {
         ctx.breakLabels.add(endL)
         ctx.continueLabels.add(contL)
         let itTy = this.staticTypeOf(iterable)
+        // 容器元素/键类型（`List<Any>` / `Map<String,Any>` 的绑定变量静态类型，m3 §3）。
+        let info = this.containerInfoOf(iterable)
 
         if (itTy == LocalType.RANGE) {
             match (iterable) {
@@ -596,16 +680,18 @@ internal class Lowerer {
             ctx.builder.emitU16(Op.LOADL, UInt16(curSlot))
             ctx.builder.emitU8(Op.MAP_ITER_STEP, 0u8)
             ctx.builder.emitRel(Op.JZ, endL)
-            let kSlot = ctx.builder.allocSlot(LocalType.I64)
+            let kTy = if (info[1] != LocalType.NONE) { info[1] } else { LocalType.I64 }
+            let kSlot = ctx.builder.allocSlot(kTy)
             ctx.builder.emitU16(Op.LOADL, UInt16(curSlot))
             ctx.builder.emitU8(Op.MAP_ITER_STEP, 1u8)
             ctx.builder.emitU16(Op.STOREL, UInt16(kSlot))
-            let vSlot = ctx.builder.allocSlot(LocalType.I64)
+            let vTy = if (info[0] != LocalType.NONE) { info[0] } else { LocalType.I64 }
+            let vSlot = ctx.builder.allocSlot(vTy)
             ctx.builder.emitU16(Op.LOADL, UInt16(curSlot))
             ctx.builder.emitU8(Op.MAP_ITER_STEP, 2u8)
             ctx.builder.emitU16(Op.STOREL, UInt16(vSlot))
-            ctx.declare(VarSym(binding[0], kSlot, LocalType.I64), SourcePos(0, 0), this.src)
-            ctx.declare(VarSym(binding[1], vSlot, LocalType.I64), SourcePos(0, 0), this.src)
+            ctx.declare(VarSym(binding[0], kSlot, kTy), SourcePos(0, 0), this.src)
+            ctx.declare(VarSym(binding[1], vSlot, vTy, elemTy: info[0]), SourcePos(0, 0), this.src)
             this.pendingNames.add((ctx.fnId, kSlot, binding[0]))
             this.pendingNames.add((ctx.fnId, vSlot, binding[1]))
             this.lowerWhereAndBody(whereCond, body, contL)
@@ -637,12 +723,17 @@ internal class Lowerer {
             ctx.builder.emitU16(Op.LOADL, UInt16(nSlot))
             ctx.builder.emit(Op.LT_I)
             ctx.builder.emitRel(Op.JZ, endL)
-            let bSlot = ctx.builder.allocSlot(LocalType.I64)
+            let bTy = if (isStr || info[0] == LocalType.NONE) {
+                LocalType.I64
+            } else {
+                info[0]
+            }
+            let bSlot = ctx.builder.allocSlot(bTy)
             ctx.builder.emitU16(Op.LOADL, UInt16(hSlot))
             ctx.builder.emitU16(Op.LOADL, UInt16(jSlot))
             ctx.builder.emit(if (isStr) { Op.STR_AT } else { Op.GET_IDX })
             ctx.builder.emitU16(Op.STOREL, UInt16(bSlot))
-            ctx.declare(VarSym(binding[0], bSlot, LocalType.I64), SourcePos(0, 0), this.src)
+            ctx.declare(VarSym(binding[0], bSlot, bTy, elemTy: info[0]), SourcePos(0, 0), this.src)
             this.pendingNames.add((ctx.fnId, bSlot, binding[0]))
             this.lowerWhereAndBody(whereCond, body, contL)
             ctx.builder.place(contL)
@@ -699,7 +790,76 @@ internal class Lowerer {
     // 表达式
     // ==================================================================
 
+    /**
+     * 初始化 / 赋值位置的降低。
+     *
+     * 与 `lowerExprAs` 的唯一差别：**容器字面量按目标元素类型发射**——`List<Any>` / `Map<…,Any>`
+     * 的元素在写入前逐个装箱（m3 §3 第 ④ 类插入点）；其余情形原样转交 `lowerExprAs`。
+     */
+    private func lowerInit(e: AstExpr, expected: UInt16, elem: UInt16, key: UInt16): UInt16 {
+        if (expected == LocalType.LIST && elem == LocalType.ANY) {
+            match (e) {
+                case AstExpr.ListLit(elems, isEmpty, _) =>
+                    return this.lowerListLitBoxed(elems, isEmpty)
+                case _ => ()
+            }
+        }
+        if (expected == LocalType.MAP && (key == LocalType.ANY || elem == LocalType.ANY)) {
+            match (e) {
+                case AstExpr.MapLit(pairs, isEmpty, _) =>
+                    return this.lowerMapLitBoxed(pairs, isEmpty, key, elem)
+                case _ => ()
+            }
+        }
+        this.lowerExprAs(e, expected)
+    }
+
+    /** `List<Any>` 的不定长构造：每个元素先 `any_box` 再 `LIST_APPEND`（不走常量路径）。 */
+    private func lowerListLitBoxed(elems: Array<AstExpr>, isEmpty: Bool): UInt16 {
+        let ctx = this.requireCtx()
+        let _ = isEmpty
+        ctx.builder.emit(Op.MAKE_LIST)
+        for (e in elems) {
+            let _ = this.lowerBox(e)
+            // `LIST_APPEND` 的栈效应是 (2,1)：弹出「列表 + 元素」后再把列表压回，
+            // 所以这里**不能** POP——列表要留给下一个元素。
+            ctx.builder.emit(Op.LIST_APPEND)
+        }
+        LocalType.LIST
+    }
+
+    /** `Map<K,Any>` / `Map<Any,…>` 的不定长构造：键值按声明类型装箱后 `MAP_PUT`。 */
+    private func lowerMapLitBoxed(pairs: Array<(AstExpr, AstExpr)>, isEmpty: Bool,
+        keyTy: UInt16, valTy: UInt16): UInt16 {
+        let ctx = this.requireCtx()
+        let _ = isEmpty
+        ctx.builder.emit(Op.MAKE_MAP)
+        let slot = ctx.builder.allocSlot(LocalType.MAP)
+        ctx.builder.emitU16(Op.STOREL, UInt16(slot))
+        for (kv in pairs) {
+            ctx.builder.emitU16(Op.LOADL, UInt16(slot))
+            if (keyTy == LocalType.ANY) {
+                let _ = this.lowerBox(kv[0])
+            } else {
+                let _ = this.lowerExprAs(kv[0], keyTy)
+            }
+            if (valTy == LocalType.ANY) {
+                let _ = this.lowerBox(kv[1])
+            } else {
+                let _ = this.lowerExprAs(kv[1], valTy)
+            }
+            ctx.builder.emit(Op.MAP_PUT)
+            ctx.builder.emit(Op.POP)
+        }
+        ctx.builder.emitU16(Op.LOADL, UInt16(slot))
+        LocalType.MAP
+    }
+
     private func lowerExprAs(e: AstExpr, expected: UInt16): UInt16 {
+        // 目标位置是 Any 槽 ⇒ 类型驱动的装箱（m3 §3 第 ①–③ 类插入点）。
+        if (expected == LocalType.ANY) {
+            return this.lowerBox(e)
+        }
         let actual = this.lowerExpr(e)
         if (expected == LocalType.NONE || actual == LocalType.NONE || expected == actual) {
             return actual
@@ -710,6 +870,54 @@ internal class Lowerer {
             return LocalType.F64
         }
         actual
+    }
+
+    /**
+     * 装箱发射（m3 §3）：目标是 Any(15) 而源表达式静态类型不是 15 时，发 `any_box(码, cell)`。
+     *
+     * **盒不套盒**：源已是 15 ⇒ **零动作直传**（绝不发射 `any_box(15, …)`，m3 §1「15 不在
+     * 可转集」）。同一句柄在两侧共享——盒不可变（只有 `is`/`as` 读），共享无语义差异。
+     *
+     * 栈序为 `(码, cell)`（H78 的形参序），而码要等表达式降低完才知道 ⇒ 先落临时槽再压码取回；
+     * 这样**不依赖任何静态预判**，也保证操作数**只求值一次**。
+     */
+    private func lowerBox(e: AstExpr): UInt16 {
+        let ctx = this.requireCtx()
+        let actual = this.lowerExpr(e)
+        if (actual == LocalType.ANY) {
+            return LocalType.ANY
+        }
+        this.checkBoxable(actual, e.pos())
+        let tmp = ctx.builder.allocSlot(actual)
+        ctx.builder.emitU16(Op.STOREL, UInt16(tmp))
+        ctx.builder.emitI64(Op.PUSH_I64, Int64(actual))
+        ctx.builder.emitU16(Op.LOADL, UInt16(tmp))
+        ctx.builder.setSite(e.pos())
+        ctx.builder.callHelper(HelperCodec.ANY_BOX, 2u8)
+        LocalType.ANY
+    }
+
+    /**
+     * 装箱前的可转集校验（m3 §1）。
+     *
+     * 拒绝：15（盒不套盒）、12（闭包——「闭包禁止存入集合，含经 Any 盒的间接路径」）、
+     * 13（HostClosure 二期候选）、3（Unit 无装箱发射点），以及任何未知类型。
+     */
+    private func checkBoxable(code: UInt16, pos: SourcePos): Unit {
+        if (code == LocalType.ANY) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                '不得二次装箱：盒不套盒（m3 §1/§12-5；`any_box(15, …)` 不可发射）')
+        }
+        if (code == LocalType.CLOSURE) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                '闭包值不得装箱（m3 §1/§12-1：12 不在可转集；闭包禁止存入集合，含经 Any 盒的间接路径）')
+        }
+        let ok = LocalType.isConvertible(code) && code != LocalType.UNIT &&
+            code != LocalType.HOST_CLOSURE
+        if (!ok) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                '${LocalType.name(code)} 不可装箱（m3 §1 可转集：0–2、4–11、14、16–19）')
+        }
     }
 
     private func lowerExpr(e: AstExpr): UInt16 {
@@ -748,9 +956,7 @@ internal class Lowerer {
                 LocalType.CLOSURE
             case AstExpr.IIFE(callee, args, _) =>
                 let _ = this.lowerExpr(callee)
-                for (a in args) {
-                    let _ = this.lowerExpr(a)
-                }
+                this.lowerArgs(args, this.closureParamsOf(this.lastClosureFnId))
                 ctx.builder.callClosure(UInt8(args.size))
                 LocalType.I64
             case AstExpr.Interp(parts, pos) => this.lowerInterp(parts, pos)
@@ -1691,15 +1897,11 @@ internal class Lowerer {
             case AstExpr.RecursiveValue(_) =>
                 if (ctx.isClosure) {
                     ctx.builder.emitU16(Op.LOADL, 0u16)
-                    for (a in args) {
-                        let _ = this.lowerExpr(a)
-                    }
+                    this.lowerArgs(args, this.closureParamsOf(ctx.fnId))
                     ctx.builder.callClosure(UInt8(args.size))
                     return this.closureRetType(ctx.fnId)
                 }
-                for (a in args) {
-                    let _ = this.lowerExpr(a)
-                }
+                this.lowerArgs(args, this.topParamTypes)
                 ctx.builder.callFunc(UInt16(this.entryFn), UInt8(args.size))
                 this.topRetType
             case AstExpr.Var(name, vpos) =>
@@ -1714,9 +1916,7 @@ internal class Lowerer {
                             }
                             // m2 §2/§5：`[h_fn, a1..an]` —— 句柄先入栈（栈底），实参左→右。
                             ctx.builder.emitU16(Op.LOADL, UInt16(sym.slot))
-                            for (a in args) {
-                                let _ = this.lowerExpr(a)
-                            }
+                            this.lowerArgs(args, sym.hostParams)
                             // T31：宿主异常/引擎失败的 site = CALL_HOST 偏移（20/21 分类依据）。
                             ctx.builder.setSite(vpos)
                             ctx.builder.callHost(UInt8(args.size))
@@ -1729,9 +1929,7 @@ internal class Lowerer {
                                 '「${name}」不是可调用值')
                         }
                         ctx.builder.emitU16(Op.LOADL, UInt16(sym.slot))
-                        for (a in args) {
-                            let _ = this.lowerExpr(a)
-                        }
+                        this.lowerArgs(args, this.closureParamsOf(sym.closureFnId))
                         ctx.builder.callClosure(UInt8(args.size))
                         if (sym.closureFnId != UInt32.Max) {
                             this.closureRetType(sym.closureFnId)
@@ -1755,15 +1953,11 @@ internal class Lowerer {
                         let r = this.resolver.resolve(name, vpos)
                         match (r) {
                             case ResolvedCall.Recursive =>
-                                for (a in args) {
-                                    let _ = this.lowerExpr(a)
-                                }
+                                this.lowerArgs(args, this.topParamTypes)
                                 ctx.builder.callFunc(UInt16(this.entryFn), UInt8(args.size))
                                 this.topRetType
                             case ResolvedCall.UserHelper(slot) =>
-                                for (a in args) {
-                                    let _ = this.lowerExpr(a)
-                                }
+                                this.lowerArgs(args, this.sess.registry.paramTypesOf(name))
                                 let ret = this.sess.registry.retTypeOf(name)
                                 // T60：预定义函数面的 21 归属需要调用点（与 H64/H65 同口径）。
                                 ctx.builder.setSite(vpos)
@@ -2121,8 +2315,8 @@ internal class Lowerer {
         ctx.builder.emit(Op.MAKE_LIST)
         for (e in elems) {
             let _ = this.lowerExpr(e)
+            // 栈效应 (2,1)：列表留在栈上供下一个元素使用（POP 会把列表一起丢掉）。
             ctx.builder.emit(Op.LIST_APPEND)
-            ctx.builder.emit(Op.POP)
         }
         LocalType.LIST
     }
@@ -2496,20 +2690,56 @@ internal class Lowerer {
         if (a >= b) { a } else { b }
     }
 
-    private func guessElemType(target: AstExpr): UInt16 {
-        match (target) {
+    /**
+     * 按被调用方的形参类型降低实参列表（左→右）。
+     *
+     * 「任意形参是 Any ⇒ 实参装箱」是 m3 §3 的第 ② 类插入点；形参类型未知（空数组）时退化为
+     * 不装箱的既有行为。求值顺序与实参个数均不受影响。
+     */
+    private func lowerArgs(args: Array<AstExpr>, paramTypes: Array<UInt16>): Unit {
+        var j = 0
+        while (j < args.size) {
+            let pt = if (j < paramTypes.size) { paramTypes[j] } else { LocalType.NONE }
+            let _ = this.lowerExprAs(args[j], pt)
+            j = j + 1
+        }
+    }
+
+    /**
+     * 容器表达式的静态元素/键类型（`(elem, key)`；未知 → `NONE`）。
+     *
+     * 来源只有两处：**声明注解**（`List<Any>` / `Map<String,Any>` 进 `VarSym`）与**字面量首元素**。
+     * 这是 m3 §3 的「元素/键值类型为前端静态知识」——字节码类型表仍只记大类 10/11。
+     */
+    private func containerInfoOf(e: AstExpr): (UInt16, UInt16) {
+        match (e) {
+            case AstExpr.Var(name, _) =>
+                match (this.requireCtx().find(name)) {
+                    case Some(s) => (s.elemTy, s.keyTy)
+                    case None => (LocalType.NONE, LocalType.NONE)
+                }
             case AstExpr.ListLit(elems, _, _) =>
                 if (elems.size > 0) {
-                    return this.staticTypeOf(elems[0])
+                    (this.staticTypeFull(elems[0]), LocalType.NONE)
+                } else {
+                    (LocalType.NONE, LocalType.NONE)
                 }
-                LocalType.I64
             case AstExpr.MapLit(pairs, _, _) =>
                 if (pairs.size > 0) {
-                    return this.staticTypeOf(pairs[0][1])
+                    (this.staticTypeFull(pairs[0][1]), this.staticTypeFull(pairs[0][0]))
+                } else {
+                    (LocalType.NONE, LocalType.NONE)
                 }
-                LocalType.I64
-            case _ => LocalType.I64
+            case _ => (LocalType.NONE, LocalType.NONE)
         }
+    }
+
+    private func guessElemType(target: AstExpr): UInt16 {
+        let info = this.containerInfoOf(target)
+        if (info[0] != LocalType.NONE) {
+            return info[0]
+        }
+        LocalType.I64
     }
 
     private static func paramTypesOf(lambda: LambdaAst): Array<UInt16> {

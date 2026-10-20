@@ -203,19 +203,21 @@ public class LocalTypes_test {
     }
 
     /**
-     * 规则集与 `LocalType.isLegal` 的合法集边界**同源**：对已实现的 v1/v2 规则集，
+     * 规则集与 `LocalType.isLegal` 的合法集边界**同源**：对已实现的 v1/v2/v3 规则集，
      * 逐码（0–255）判定必须与 `LocalType.isLegal(code, verMajor)` 完全一致。
-     * v3 仅登记（`implemented=false`）⇒ 规则集一律拒绝，这是加载期开关而非边界差异。
+     * v3 合法集 = 0–19（15=Any、16–19=JSON），M3 起 `implemented=true`。
      */
     @TestCase
     public func ruleSetBoundaryMatchesLocalTypeIsLegal(): Unit {
-        for ((rs, major) in [(FbcRuleRegistry.V1, 1u16), (FbcRuleRegistry.V2, 2u16)]) {
+        for ((rs, major) in [(FbcRuleRegistry.V1, 1u16), (FbcRuleRegistry.V2, 2u16),
+            (FbcRuleRegistry.V3, 3u16)]) {
             for (code in 0..256) {
                 @Assert(rs.isLocalTypeLegal(UInt16(code)), LocalType.isLegal(UInt16(code), major))
             }
         }
         let v3 = FbcRuleRegistry.V3
-        @Assert(v3.isLocalTypeLegal(16u16), false)
-        @Assert(v3.isLocalTypeLegal(19u16), false)
+        @Assert(v3.isLocalTypeLegal(16u16), true)
+        @Assert(v3.isLocalTypeLegal(19u16), true)
+        @Assert(v3.isLocalTypeLegal(20u16), false)
     }
 }

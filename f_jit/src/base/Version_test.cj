@@ -83,7 +83,7 @@ public class Version_test {
 
     // ---------------- Q0.1 多版本常量（M2 兼容基建） ----------------
 
-    /** Q0.1：M1/M2/M3 版本常量逐项与 spec「版本常量」一致（M3 仅登记主版本号）。 */
+    /** Q0.1：M1/M2/M3 版本常量逐项与 spec「版本常量」一致。 */
     @TestCase
     public func multiVersionConstantsMatchSpec(): Unit {
         @Assert(Version.M1_MAJOR, 1u16)
@@ -92,7 +92,7 @@ public class Version_test {
         @Assert(Version.M3_MAJOR, 3u16)
     }
 
-    /** Q0.1：`supportedMajors()` 含 v1/v2（已实现），不含仅登记的 v3。 */
+    /** Q0.1：`supportedMajors()` 含 v1/v2/v3（三者规则集均已实现）。 */
     @TestCase
     public func supportedMajorsCoversImplementedMajors(): Unit {
         let majors = Version.supportedMajors()
@@ -112,8 +112,8 @@ public class Version_test {
         }
         @Assert(has1, true)
         @Assert(has2, true)
-        @Assert(has3, false)
-        @Assert(majors.size, 2)
+        @Assert(has3, true)
+        @Assert(majors.size, 3)
     }
 
     /** Q0.1：legacy `MAJOR/MINOR/HDR_SIZE/MAGIC` 与 M1 读取路径逐项不变。 */

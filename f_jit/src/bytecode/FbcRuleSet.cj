@@ -31,8 +31,8 @@ internal const HELPER_USER_BASE: UInt16 = 0x0100u16
  * `.fbc` 加载校验规则集 —— design-m2 D12、spec「版本兼容矩阵与规则集分派」。
  *
  * 加载器不写死单一合法集，而是按单元 `verMajor` 取一份规则集：合法 LocalType 上限、
- * 可接受的 `verMinor` 区间、是否已实现。v1 / v2 为已实现规则集；v3 仅**登记**合法集
- * （0–19），本实现不启用 M3 语义，因此 `implemented = false`。
+ * 可接受的 `verMinor` 区间、是否已实现。v1 / v2 / v3 均为已实现规则集；v3 的合法集为
+ * **0–19**（15=Any、16–19=JSON 谱系，m3 §2）。
  */
 public class FbcRuleSet {
     /** 本规则集对应的主版本。 */
@@ -44,10 +44,10 @@ public class FbcRuleSet {
     /** 可接受的最大 `verMinor`（含）。 */
     public let maxVerMinor: UInt16
 
-    /** 该版本允许的最大 LocalType 码（v1=12、v2=14、v3 登记 19）。 */
+    /** 该版本允许的最大 LocalType 码（v1=12、v2=14、v3=19）。 */
     public let maxLocalType: UInt16
 
-    /** 规则集是否已实现；仅登记的规则集（v3）为 `false`，加载器遇之按 18 拒绝。 */
+    /** 规则集是否已实现（v1/v2/v3 均为 `true`；未实现的登记位在加载期按 18 拒绝）。 */
     public let implemented: Bool
 
     public init(
@@ -118,8 +118,7 @@ public class FbcRuleSet {
 /**
  * 规则集注册表 —— 按 `verMajor` 取加载校验规则集（design-m2 D12）。
  *
- * 登记项与 `Version.supportedMajors()` 的区别：注册表含 v3（仅登记合法集边界），
- * `supportedMajors()` 只列**已实现**的加载版本（v1/v2）。
+ * 登记项与 `Version.supportedMajors()` 同源：v1/v2/v3 均为**已实现**的加载版本。
  */
 public class FbcRuleRegistry {
     /** M1 规则集：LocalType 0–12、`verMinor ∈ [0, 14]`。 */
@@ -138,8 +137,8 @@ public class FbcRuleRegistry {
         14u16,
         true)
 
-    /** M3 规则集：仅登记 LocalType 0–19（15=Any、16–19=JSON），不实现语义。 */
-    public static let V3: FbcRuleSet = FbcRuleSet(Version.M3_MAJOR, 0u16, 0u16, 19u16, false)
+    /** M3 规则集：LocalType 0–19（15=Any、16–19=JSON），M3 语义已落地。 */
+    public static let V3: FbcRuleSet = FbcRuleSet(Version.M3_MAJOR, 0u16, 0u16, 19u16, true)
 
     /** 按主版本取规则集；未登记的主版本返回 `None`。 */
     public static func get(major: UInt16): ?FbcRuleSet {

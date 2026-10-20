@@ -36,6 +36,7 @@ import fountain::f_jit.test.JsonNull
 import fountain::f_jit.test.JsonObject
 import fountain::f_jit.test.JsonValue
 import fountain::f_jit.test.ReflectAdmin
+import fountain::f_jit.test.ReflectAnyHolder
 import fountain::f_jit.test.ReflectUser
 import fountain::f_jit.test.TCase
 
@@ -115,6 +116,23 @@ public class ReflectRegistrar_test {
         @Assert(out.contains('global'), true)
         @Assert(out.onlySkipped(), true)
         @Assert(TCase.hit('T55/reflect-static-mutable-skipped', out.count() >= 2), true)
+    }
+
+    /** `Any` 字段（m3 §12-4）→ 该字段跳过 + 诊断；同类其余字段照常注册。 */
+    @TestCase
+    public func skipsAnyTypedField(): Unit {
+        let reg = ReflectRegistrar_test.registry()
+        let out = ReflectRegistrar_test.sink()
+        ReflectRegistrar.registerType<ReflectAnyHolder>(into: reg, diag: out)
+        @Assert(out.contains('Any'), true)
+        @Assert(out.contains('anything'), true)
+        match (reg.resolve('ReflectAnyHolder')) {
+            case Some(d) =>
+                @Assert(ReflectRegistrar_test.fieldOfOrNone(d, 'anything').isNone(), true)
+                @Assert(ReflectRegistrar_test.fieldOfOrNone(d, 'tag').isSome(), true)
+            case None => @Fail('ReflectAnyHolder 未注册')
+        }
+        @Assert(TCase.hit('T37/any-field-skipped', out.contains('Any')), true)
     }
 
     /** 支撑面外类型（Int32）→ 该成员跳过 + 诊断。 */

@@ -180,6 +180,9 @@ internal class AstShape {
     internal static func builtinName(v: TypeRef): String {
         match (v) {
             case TypeRef.Builtin(code) => LocalType.name(code)
+            case TypeRef.AnyT => 'Any'
+            case TypeRef.ListOf(t) => 'List<${AstShape.builtinName(t)}>'
+            case TypeRef.MapOf(k, x) => 'Map<${AstShape.builtinName(k)},${AstShape.builtinName(x)}>'
             case TypeRef.HostClosureT(params, pns, ret, rn) =>
                 var ps = ''
                 for (i in 0..params.size) {
@@ -202,6 +205,9 @@ internal class AstShape {
             let pa = l.params[i]
             let t = match (pa.typeAnn) {
                 case TypeRef.Builtin(code) => LocalType.name(code)
+                case TypeRef.AnyT => 'Any'
+                case TypeRef.ListOf(_) => 'List'
+                case TypeRef.MapOf(_, _) => 'Map'
                 case TypeRef.HostClosureT(_, _, _, _) => 'HostClosure'
                 case TypeRef.HostObjectT(n) => n
             }

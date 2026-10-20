@@ -35,7 +35,7 @@ internal const OP_SET_SITE: UInt8 = 0x03u8
  * | # | 情形 | 码 |
  * |---|---|---|
  * | ① | 魔数错 | 18 |
- * | ② | 主版本不受支持（verMajor 2/3；verMinor 高于自身） | 18 |
+ * | ② | 主版本不受支持（未知主版本；verMinor 高于自身） | 18 |
  * | ③ | 未知 flags 位 / `bit1`（要求 JIT）= 1 | 18 |
  * | ④ | 段长不符（payload ≠ code+const+site+name） | 18 |
  * | ⑤ | 常量图成环 | 18 |
@@ -72,7 +72,7 @@ public class FbcReader {
      *
      * - `1` ⇒ 0（v1 全系列，上限 `maxSupportedMinor`）；
      * - `2` ⇒ 0（M2 产物从 verMinor 0 起算，上限 0）；
-     * - `3` ⇒ `UNSUPPORTED_MINOR`（M3 规则集仅登记，未实现语义）；
+     * - `3` ⇒ 0（M3 产物从 verMinor 0 起算，上限 0）；
      * - 其余主版本 ⇒ `UNSUPPORTED_MINOR`。
      *
      * 拒绝信息里带上它，便于宿主判断「需要哪个版本的加载器」。
@@ -88,7 +88,7 @@ public class FbcReader {
         }
     }
 
-    /** 按主版本取加载规则集（v1/v2 已实现，v3 仅登记）；未登记返回 `None`。 */
+    /** 按主版本取加载规则集（v1/v2/v3 均已实现）；未登记返回 `None`。 */
     public static func rulesFor(major: UInt16): ?FbcRuleSet {
         FbcRuleRegistry.get(major)
     }
@@ -160,7 +160,7 @@ public class FbcReader {
         match (rulesFor(major)) {
             case Some(r) => r
             case None => rejectFormat(
-                '不受支持的 verMajor=${major}（规则集注册表仅登记 v1/v2/v3；已实现 v1/v2）')
+                '不受支持的 verMajor=${major}（规则集注册表仅登记 v1/v2/v3）')
         }
     }
 

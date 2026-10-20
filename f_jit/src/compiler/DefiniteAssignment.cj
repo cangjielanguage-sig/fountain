@@ -489,6 +489,9 @@ internal class DefiniteAssignment {
             case Some(v) =>
                 match (v) {
                     case TypeRef.Builtin(c) => code = c
+                    case TypeRef.AnyT => code = 15u16
+                    case TypeRef.ListOf(_) => code = 10u16
+                    case TypeRef.MapOf(_, _) => code = 11u16
                     case TypeRef.HostClosureT(_, _, _, _) => code = 13u16
                     case TypeRef.HostObjectT(_) => code = 14u16
                 }

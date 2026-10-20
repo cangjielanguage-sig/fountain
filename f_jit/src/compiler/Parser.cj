@@ -283,13 +283,16 @@ internal class Parser {
     }
 
     /**
-     * 类型注解 → `TypeRef`（M1：`Builtin`；M2：`HostClosureT` / `HostObjectT`）。
+     * 类型注解 → `TypeRef`（M1：`Builtin`；M2：`HostClosureT` / `HostObjectT`；M3：`AnyT` /
+     * `ListOf` / `MapOf` / JSON 谱系码 16–19）。
      *
-     * 容器记 `List<元素类型>` / `Map<K, V>`；**元素类型是前端的并行静态知识**，
-     * 不进 `TypeRef`（§11.7「类型表只记大类」）——但要被解析并丢弃，否则语法不闭合。
+     * 容器记 `List<T>` / `Map<K, V>` 时**元素/键值类型进 AST**（`ListOf` / `MapOf`）——字节码
+     * 类型表仍只记大类 10/11（§11.7），但 m3 §3 的异构容器要求前端知道元素类型，否则第 ④ 类
+     * 装箱插入点（元素写入前 `any_box`）无从发射。裸 `List` / `Map`（无实参）仍允许，元素类型
+     * 记为未知（`NONE`），行为与 M1 一致。
      *
-     * 函数类型 `(T1, T2) -> R` 的 T/R 合法集 = 0–8、10–11、14（m2 §3）；9（Regex）与
-     * 12/13（函数类型）拒绝；**禁高阶**：分量不得再是函数类型。
+     * 函数类型 `(T1, T2) -> R` 的 T/R 合法集 = 0–8、10–11、14（m2 §3）与 15（m3 §3）；
+     * 9（Regex）与 12/13（函数类型）拒绝；**禁高阶**：分量不得再是函数类型。
      */
     private func parseTypeRef(): TypeRef {
         if (this.atKind(TokenKind.LParen)) {
@@ -300,22 +303,35 @@ internal class Parser {
             diagFail(DiagKind.BAD_PARAMETER_LIST, this.src, t.pos, t.line, t.column, '缺类型名')
         }
         let nameTok = this.take()
+        // `Any` 是 M3 的盒类型（LocalType 15）：非泛型，也不接受容器实参。
+        if (nameTok.text == 'Any') {
+            if (this.atKind(TokenKind.Lt)) {
+                let t = this.peek()
+                diagFail(DiagKind.BAD_PARAMETER_LIST, this.src, t.pos, t.line, t.column,
+                    'Any 不是泛型类型（m3 §3：盒类型不带类型实参）')
+            }
+            return TypeRef.AnyT
+        }
         let code = Parser.builtinTypeOf(nameTok.text)
         if (code == LocalType.NONE) {
             if (this.registered(nameTok.text)) {
                 return TypeRef.HostObjectT(nameTok.text)
             }
             diagFail(DiagKind.BAD_PARAMETER_LIST, this.src, nameTok.pos, nameTok.line, nameTok.column,
-                '未注册的类名「${nameTok.text}」（M2 类型集：内建类型 / 已注册类名 / (T…) -> R）')
+                '未注册的类名「${nameTok.text}」（M3 类型集：内建类型 / Any / JSON 谱系 16–19 / ' +
+                '已注册类名 / (T…) -> R）')
         }
         if (this.atKind(TokenKind.Lt)) {
             this.take()
-            this.parseTypeRef()
+            let elem = this.parseTypeRef()
             if (code == LocalType.MAP) {
                 this.expect(TokenKind.Comma, 'Map 键值类型之间的逗号')
-                this.parseTypeRef()
+                let value = this.parseTypeRef()
+                this.expect(TokenKind.Gt, '容器类型实参的闭合 >')
+                return TypeRef.MapOf(elem, value)
             }
             this.expect(TokenKind.Gt, '容器类型实参的闭合 >')
+            return TypeRef.ListOf(elem)
         }
         TypeRef.Builtin(code)
     }
@@ -373,15 +389,15 @@ internal class Parser {
         (tr.code(), cname)
     }
 
-    /** T/R 合法集：0–8、10–11、14（m2 §3）。 */
+    /** T/R 合法集：0–8、10–11、14（m2 §3）与 15（m3 §3 的 `Any` 分量）。 */
     private static func checkSignatureComponent(code: UInt16, line: Int64, column: Int64,
         src: String): Unit {
         let ok = (code <= LocalType.RANGE) || (code == LocalType.LIST) || (code == LocalType.MAP) ||
-            (code == LocalType.HOST_OBJECT)
+            (code == LocalType.HOST_OBJECT) || (code == LocalType.ANY)
         if (!ok) {
             diagFail(DiagKind.BAD_PARAMETER_LIST, src, 0, line, column,
-                'HostClosure 的 T/R 不合法分量：${LocalType.name(code)}（允许 0–8/10–11/14；' +
-                '9/12/13 与高阶均拒绝，m2 §3）')
+                'HostClosure 的 T/R 不合法分量：${LocalType.name(code)}（允许 0–8/10–11/14/15；' +
+                '9/12/13 与高阶均拒绝，m2 §3 + m3 §3）')
         }
     }
 
@@ -400,6 +416,11 @@ internal class Parser {
             case 'List' => LocalType.LIST
             case 'Map' => LocalType.MAP
             case 'Closure' => LocalType.CLOSURE
+            // M3：JSON 谱系内建码（16–19）。`Any` 走 `AnyT`，不在此表（见 parseTypeRef）。
+            case 'JsonValue' => LocalType.JSON_VALUE
+            case 'JsonObject' => LocalType.JSON_OBJECT
+            case 'JsonArray' => LocalType.JSON_ARRAY
+            case 'JsonNull' => LocalType.JSON_NULL
             case _ => LocalType.NONE
         }
     }

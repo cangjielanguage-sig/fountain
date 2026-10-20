@@ -107,6 +107,22 @@ public class ReflectAdmin <: ReflectUser {
     }
 }
 
+/**
+ * `Any` 字段夹具（m3 §12-4）：HostObject 字段类型**不扩展**至 15 —— 注册面必须
+ * 「跳过该字段 + 记诊断」，其余成员照常注册。
+ */
+public class ReflectAnyHolder {
+    public var tag: String
+    public var anything: Any
+    public let flag: Bool
+
+    public init() {
+        this.tag = 'a'
+        this.anything = 1
+        this.flag = true
+    }
+}
+
 /** 泛型类夹具：`registerType<Box<Int64>>()` 的具体实例化。 */
 public class ReflectBox<T> {
     public var value: T

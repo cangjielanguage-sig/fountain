@@ -133,7 +133,7 @@ internal class Assembler {
         w.build()
     }
 
-    /** 汇编目标规则集：只接受**已实现**的版本；v3 仅登记，不能作为汇编目标。 */
+    /** 汇编目标规则集：只接受**已实现**的版本（v1/v2/v3 均已实现）。 */
     private func rules(): FbcRuleSet {
         match (FbcRuleRegistry.get(this.sess.verMajor)) {
             case Some(r) => if (r.implemented) {
