@@ -127,6 +127,10 @@ internal func dispatchHelper(ctx: JitContext, hid: Int64, a: Array<Int64>): Int6
         case 65 => hostSetField(ctx, a)
         // ---- M2.3：转型失败（H77）----
         case 77 => castFail(ctx, a)
+        // ---- M3：Any 通道（H78–H80）----
+        case 78 => anyBox(ctx, a)
+        case 79 => anyIs(ctx, a)
+        case 80 => anyAs(ctx, a)
         // ---- 空容器构造（H70 / H71）----
         case 70 => listNew(ctx, a)
         case 71 => mapNew(ctx, a)

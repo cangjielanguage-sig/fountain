@@ -97,6 +97,15 @@ public class HelperId {
 
     /** M2.3 `cast_fail`：`as` 转型失败的统一抛错点（恒置 `BAD_CAST`，无返回值）。 */
     public static const CAST_FAIL: UInt16 = 77u16
+
+    /** M3 Any 通道（R4.1–R4.3）：装箱 / 类型问答 / 强制转型。 */
+    public static const ANY_BOX: UInt16 = 78u16
+    public static const ANY_IS: UInt16 = 79u16
+    public static const ANY_AS: UInt16 = 80u16
+    /** M3 JSON 世界内可变 API（R4.6–R4.8）。 */
+    public static const JSON_GET: UInt16 = 81u16
+    public static const JSON_SET: UInt16 = 82u16
+    public static const JSON_NEW: UInt16 = 83u16
     public static const STR_TO_REGEX: UInt16 = 69u16
     public static const LIST_NEW: UInt16 = 70u16
     public static const MAP_NEW: UInt16 = 71u16
@@ -183,6 +192,12 @@ public class HelperId {
             case 64u16 => 'host_get_field'
             case 65u16 => 'host_set_field'
             case 77u16 => 'cast_fail'
+            case 78u16 => 'any_box'
+            case 79u16 => 'any_is'
+            case 80u16 => 'any_as'
+            case 81u16 => 'json_get'
+            case 82u16 => 'json_set'
+            case 83u16 => 'json_new'
             case 69u16 => 'str_to_regex'
             case 70u16 => 'list_new'
             case 71u16 => 'map_new'

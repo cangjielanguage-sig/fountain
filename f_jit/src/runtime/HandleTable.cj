@@ -22,6 +22,7 @@ import std.sync.Mutex
 import std.time.DateTime
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.TypeToken
+import fountain::f_data.json.JsonValue
 import fountain::f_jit.bytecode.ConstMapKey
 
 /**
@@ -100,6 +101,8 @@ public class HandleTable {
     /** 路径 A 引用计数：同一常量被多个单元共享时按 pin 次数计数，归零才回收。 */
     private static let constRefs: ArrayList<Int64> = HandleTable.seedI64()
     private static let escapeFlags: ArrayList<Bool> = HandleTable.seedBool()
+    /** M3：常量实例化登记时置位（JSON 写保护）；非常量路径恒 false。 */
+    private static let frozenFlags: ArrayList<Bool> = HandleTable.seedBool()
     private static let freeSlots: ArrayList<Int64> = ArrayList<Int64>()
 
     private static func seedObjs(): ArrayList<Any> {
@@ -188,6 +191,7 @@ public class HandleTable {
             case _: JitRegex => TypeToken.REGEX
             case _: JitClosure => TypeToken.CLOSURE
             case _: HostCallback => TypeToken.HOST_CLOSURE
+            case _: JsonValue => TypeToken.HOST_OBJECT
             case _ => TypeToken.RESERVED
         }
     }
@@ -432,6 +436,7 @@ public class HandleTable {
             objs[i] = Int64(0)
             constFlags[i] = false
             escapeFlags[i] = false
+            frozenFlags[i] = false
             constRefs[i] = 0
             gens[i] = gens[i] + UInt16(1)
             freeSlots.add(i)
@@ -878,6 +883,7 @@ public class HandleTable {
             constFlags[idx] = isConst
             constRefs[idx] = if (isConst) { 1 } else { 0 }
             escapeFlags[idx] = false
+            frozenFlags[idx] = false
         } else {
             objs.add(obj)
             tags.add(tok)
@@ -886,6 +892,7 @@ public class HandleTable {
             constFlags.add(isConst)
             constRefs.add(if (isConst) { 1 } else { 0 })
             escapeFlags.add(false)
+            frozenFlags.add(false)
             idx = objs.size - 1
         }
         makeId(idx, tok, gens[idx])
@@ -921,6 +928,7 @@ public class HandleTable {
             constFlags.clear()
             constRefs.clear()
             escapeFlags.clear()
+            frozenFlags.clear()
             freeSlots.clear()
             windowSlots.clear()
             windowStack.clear()
@@ -933,6 +941,7 @@ public class HandleTable {
             constFlags.add(false)
             constRefs.add(0)
             escapeFlags.add(false)
+            frozenFlags.add(false)
             windowBase = 1
             windowTop = 1
             windowCap = initialCapacity
@@ -962,6 +971,46 @@ public class HandleTable {
     }
 
     /** 宿主对象 → `cell`（活句柄取 ID；值型按其类型装箱后由调用方解释）。 */
+    /**
+     * M3：把任意宿主值装进 **Any 盒**（tag=12）并返回句柄。
+     *
+     * 盒不可变：存进去的是什么就取什么（值型已在调用侧拷贝、引用型即共享引用）。
+     * 与 `pin` 分开是因为 `pin` 按对象类型选 tag，而盒的 tag 恒为 12。
+     */
+    public static func pinAnyBox(v: Any): Int64 {
+        synchronized(mtx) {
+            newSlotLocked(v, TypeToken.ANY, false)
+        }
+    }
+
+    /** 取 Any 盒内容；tag ≠ 12 → 8（契约类错误）。 */
+    public static func fetchAnyBox(id: Int64): Any {
+        let i = idxOf(id)
+        synchronized(mtx) {
+            if (i <= 0 || i >= objs.size || !alive[i] || tags[i] != TypeToken.ANY) {
+                failWith(ErrCode.HANDLE_TYPE)
+            }
+            objs[i]
+        }
+    }
+
+    /** 标记/查询 frozen（M3 §11：常量实例化登记时置位，H82 写保护判定）。 */
+    public static func markFrozen(id: Int64): Unit {
+        let i = idxOf(id)
+        synchronized(mtx) {
+            if (i > 0 && i < frozenFlags.size) {
+                frozenFlags[i] = true
+            }
+        }
+    }
+
+    public static func isFrozen(id: Int64): Bool {
+        let i = idxOf(id)
+        synchronized(mtx) {
+            i > 0 && i < frozenFlags.size && frozenFlags[i]
+        }
+    }
+
     public static func anyToCell(v: Any): Int64 {
         match (v) {
             case i: Int64 => i

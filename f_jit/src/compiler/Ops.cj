@@ -207,7 +207,7 @@ internal class Op {
 /**
  * `CALL_HELPER` 系列的操作数位置与 hid 编码 —— §5 / §6 / §8.4。
  *
- * hid 的合法值域：`1–62`、`69–77` 为固定 helper；`[0x0100, 0xFFFF]` 为单元私有预定义 helper
+ * hid 的合法值域：`1–62`、`69–83` 为固定 helper；`[0x0100, 0xFFFF]` 为单元私有预定义 helper
  * （user helper，slot = hid − 0x0100）；`63–68` 与 `0` 保留。
  *
  * **为什么本文件自带这几个 hid 而不是 import `runtime.HelperId`**：仓颉禁止包间循环依赖，
@@ -243,6 +243,13 @@ internal class HelperCodec {
     public static const HOST_SET_FIELD: UInt16 = 65u16
     /** H66 `cast_fail`：`as` 转型失败（恒置 7 BAD_CAST）。 */
     public static const CAST_FAIL: UInt16 = 77u16
+    /** M3：Any 通道与 JSON 世界内可变 API。 */
+    public static const ANY_BOX: UInt16 = 78u16
+    public static const ANY_IS: UInt16 = 79u16
+    public static const ANY_AS: UInt16 = 80u16
+    public static const JSON_GET: UInt16 = 81u16
+    public static const JSON_SET: UInt16 = 82u16
+    public static const JSON_NEW: UInt16 = 83u16
 
     /** 变更型 helper 的 hid 区间（H43–H48，§9.15 / §7 校验 11）。 */
     public static const MUTATION_MIN: UInt16 = 43u16
