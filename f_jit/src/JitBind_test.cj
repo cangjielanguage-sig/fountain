@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_jit
 
+import std.reflect.TypeInfo
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_jit.base.DummyDiagnosticsSink
@@ -52,7 +53,7 @@ public class JitBindUser {
 @Test
 public class JitBind_test {
     private static func methodOf(name: String): PublicMethod {
-        for (m in jitOverrides_JitBindUser()) {
+        for (m in JitBindSupport.enrolledOf(TypeInfo.of<JitBindUser>().name)) {
             if (m.name == name) {
                 return m
             }
@@ -63,7 +64,7 @@ public class JitBind_test {
     @TestCase
     public func macroGeneratedBindingIsEndToEnd(): Unit {
         let c = Compiler(CompileOptions(DummyDiagnosticsSink()))
-        c.registerType<JitBindUser>(overrides: jitOverrides_JitBindUser())
+        c.registerType<JitBindUser>()
         CompileCache.reset()
         let f = c.compile('{ u: JitBindUser => u.greet("z") }')
         let u = JitBindUser('bob')
@@ -84,7 +85,7 @@ public class JitBind_test {
     /** 类级展开只收公共实例方法：私有方法不入表，值型/引用型签名都要对。 */
     @TestCase
     public func generatedSignatureMatchesReflectiveShape(): Unit {
-        let ms = jitOverrides_JitBindUser()
+        let ms = JitBindSupport.enrolledOf(TypeInfo.of<JitBindUser>().name)
         @Assert(ms.size, 2)
 
         let g = JitBind_test.methodOf('greet')

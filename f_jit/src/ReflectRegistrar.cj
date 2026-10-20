@@ -122,6 +122,13 @@ protected class ReflectRegistrar {
                     typeName, None)
         }
         let name = cls.name
+        // `@JitBind` 在包初始化期把 overrides 登记到「类全限定名 → 绑定」表里；
+        // 显式传参优先，空则取自动登记（宏因此不需要生成中间函数，注册处也只写 registerType）。
+        let effectiveOverrides = if (overrides.size == 0) {
+            JitBindSupport.enrolledOf(name)
+        } else {
+            overrides
+        }
         ReflectRegistrar.retainClass(cls)
         let ancestry = ReflectRegistrar.ancestryOf(cls)
 
@@ -230,7 +237,7 @@ protected class ReflectRegistrar {
             // SIGSEGV（栈顶落在被调方法体内，离真正失效点很远）。默认不再生成这种绑定：
             // 宁可注册期少一个方法（+ 一条 Warn 诊断），也不要在 JIT 里直接杀进程。
             // 需要它的宿主用 `overrides` 提供类型化实现（M2.1），此时本条不跳过。
-            if (!ReflectRegistrar.hasOverrideName(overrides, f.name) &&
+            if (!ReflectRegistrar.hasOverrideName(effectiveOverrides, f.name) &&
                 ReflectRegistrar.unsafeForReflect(sig, ret)) {
                 ReflectRegistrar.skip(diag, '${name}.${f.name}',
                     '引用型参数/返回在反射 apply 上会 SIGSEGV（GAP-13），请用 overrides 提供类型化绑定')
@@ -306,7 +313,7 @@ protected class ReflectRegistrar {
 
         // 全量构建完成后一次性登记：任何拒绝都不会留下半成品。
         let (mergedMethods, mergedFns) = ReflectRegistrar.applyOverrides(methods.toArray(),
-            auto.toArray(), overrides)
+            auto.toArray(), effectiveOverrides)
         let descObj = ClassDescriptor(name: name, fields: fields.toArray(),
             methods: mergedMethods, ctors: ctors.toArray())
         into.register(descObj)

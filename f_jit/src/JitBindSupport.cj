@@ -15,7 +15,9 @@ limitations under the License.
 */
 package fountain::f_jit
 
+import std.collection.HashMap
 import std.reflect.TypeInfo
+import std.sync.Mutex
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.JitException
 import fountain::f_jit.base.LocalType
@@ -28,6 +30,15 @@ import fountain::f_jit.base.LocalType
  * 否则 `overrides` 会与反射项对不上（前者按方法名匹配，签名不符会让 Lowerer 的实参校验错位）。
  */
 public class JitBindSupport {
+    /**
+     * `@JitBind` 的**自动登记表**：类全限定名 → 该类的 overrides。
+     *
+     * 宏不往类里插声明，也不生成中间函数——它在包级放一个 `let jitBindEnroll_X = enrollOf<X>([...])`，
+     * 包初始化时把表填好；`registerType<T>()` 不传 `overrides` 时按 `TypeInfo.of<T>().name` 自动取用。
+     */
+    private static let enrolled = HashMap<String, Array<PublicMethod>>()
+    private static let mtx = Mutex()
+
     /** `LocalType.HOST_OBJECT`（14）的编译期常量：宏里直接引用，避免再包一层函数。 */
     public static let HOST_OBJECT_CODE: UInt16 = LocalType.HOST_OBJECT
 
@@ -53,6 +64,24 @@ public class JitBindSupport {
     /** 同 `bindName`，但把 `TypeInfo` 藏进泛型实参——宏生成的代码因此不必 `import std.reflect`。 */
     public static func bindNameOf<T>(m: String): String {
         '${TypeInfo.of<T>().name}.${m}'
+    }
+
+    /** 包初始化期由宏生成的 `let` 调用：按类全限定名登记 overrides。 */
+    public static func enrollOf<T>(methods: Array<PublicMethod>): Unit {
+        let key = TypeInfo.of<T>().name
+        synchronized (JitBindSupport.mtx) {
+            JitBindSupport.enrolled[key] = methods
+        }
+    }
+
+    /** 取某类的自动登记；没有则空数组（注册侧据此判断是否走反射）。 */
+    public static func enrolledOf(name: String): Array<PublicMethod> {
+        synchronized (JitBindSupport.mtx) {
+            match (JitBindSupport.enrolled.get(name)) {
+                case Some(v) => v
+                case None => Array<PublicMethod>()
+            }
+        }
     }
 
     /** 实参类型不符 → `CALL_CONTRACT`（3），不是宿主异常（21）。 */

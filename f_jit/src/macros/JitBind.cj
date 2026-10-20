@@ -25,10 +25,12 @@ import fountain::f_macros.*
  * @JitBind
  * public class ReflectUser { public func greet(s: String): String { … } }
  *
- * c.registerType<ReflectUser>(overrides: jitOverrides_ReflectUser())
+ * c.registerType<ReflectUser>()   // 无需再传 overrides
  * ```
  *
- * 展开结果 = 「原类 + 一个顶层函数 `jitOverrides_<类名>(): Array<PublicMethod>`」。
+ * 展开结果 = 「原类 + 一个包级 `let jitBindEnroll_<类名> = enrollOf<类名>([...])`」——
+ * 包初始化期把绑定登记进 `JitBindSupport` 的表，**不往类里插任何声明，也不生成中间函数**；
+ * 注册处只写 `c.registerType<类名>()`，注册时按类全限定名自动取用。
  * 每条绑定的函数体是**类型化嵌套调用**：逐参 `as` 成声明类型后静态调用目标方法，
  * 不再经 `InstanceFunctionInfo.apply` 的 MCC 路径（GAP-13 的根治形态）。
  *
@@ -69,12 +71,10 @@ public macro JitBind(input: Tokens): Tokens {
         diagReport(WARNING, input,
             '${clsName.value}：${skippedGeneric} 个泛型方法未生成绑定（无法静态确定类型）', '')
     }
-    let fnName = Token(TokenKind.IDENTIFIER, 'jitOverrides_' + clsName.value)
+    let enrollName = Token(TokenKind.IDENTIFIER, 'jitBindEnroll_' + clsName.value)
     quote(
         $input
-        public func $fnName(): Array<PublicMethod> {
-            [$items]
-        }
+        let $enrollName = JitBindSupport.enrollOf<$clsName>([$items])
     )
 }
 
