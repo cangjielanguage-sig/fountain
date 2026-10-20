@@ -19,6 +19,7 @@ import std.time.DateTime
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_jit.base.DummyDiagnosticsSink
+import fountain::f_jit.base.JitBindings
 import fountain::f_jit.base.LocalType
 import fountain::f_jit.base.PredefinedFunction
 import fountain::f_jit.base.PublicMethod
@@ -72,7 +73,7 @@ public class PerfOverride_test {
         let fRef = plain.compile(src)
 
         let tuned = Compiler(CompileOptions(DummyDiagnosticsSink()))
-        tuned.registerType<ReflectUser>(overrides: [PerfOverride_test.bumpOverride()])
+        tuned.registerType<ReflectUser>(bindings: JitBindings(methods: [PerfOverride_test.bumpOverride()]))
         CompileCache.reset()
         let fOv = tuned.compile(src)
 

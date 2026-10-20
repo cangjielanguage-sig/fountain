@@ -18,6 +18,7 @@ package fountain::f_jit
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_jit.base.DummyDiagnosticsSink
+import fountain::f_jit.base.JitBindings
 import fountain::f_jit.base.LocalType
 import fountain::f_jit.base.PredefinedFunction
 import fountain::f_jit.base.PublicMethod
@@ -66,7 +67,7 @@ public class OverrideBinding_test {
     @TestCase
     public func overrideReplacesReflectiveBinding(): Unit {
         let c = OverrideBinding_test.compiler()
-        c.registerType<ReflectUser>(overrides: [OverrideBinding_test.greetOverride()])
+        c.registerType<ReflectUser>(bindings: JitBindings(methods: [OverrideBinding_test.greetOverride()]))
         CompileCache.reset()
         let greet = c.compile('{ u: ReflectUser => u.greet("z") }')
         let u = ReflectUser('bob', 0)
@@ -81,7 +82,7 @@ public class OverrideBinding_test {
     @TestCase
     public func overrideSurvivesRepeatedCalls(): Unit {
         let c = OverrideBinding_test.compiler()
-        c.registerType<ReflectUser>(overrides: [OverrideBinding_test.greetOverride()])
+        c.registerType<ReflectUser>(bindings: JitBindings(methods: [OverrideBinding_test.greetOverride()]))
         CompileCache.reset()
         let greet = c.compile('{ u: ReflectUser => u.greet("z") }')
         let u = ReflectUser('bob', 0)
@@ -101,7 +102,7 @@ public class OverrideBinding_test {
     @TestCase
     public func unmatchedOverrideRegistersNewMethod(): Unit {
         let c = OverrideBinding_test.compiler()
-        c.registerType<ReflectUser>(overrides: [OverrideBinding_test.jitOnlyOverride()])
+        c.registerType<ReflectUser>(bindings: JitBindings(methods: [OverrideBinding_test.jitOnlyOverride()]))
         let f = c.compile('{ u: ReflectUser => u.jitOnly() }')
         @Assert(f.call<String>([ReflectUser('bob', 0)]), 'jit-only')
     }
@@ -131,7 +132,7 @@ public class OverrideBinding_test {
     @TestCase
     public func overrideKeepsStaticContract(): Unit {
         let c = OverrideBinding_test.compiler()
-        c.registerType<ReflectUser>(overrides: [OverrideBinding_test.greetOverride()])
+        c.registerType<ReflectUser>(bindings: JitBindings(methods: [OverrideBinding_test.greetOverride()]))
         var failed = false
         try {
             CompileCache.reset()

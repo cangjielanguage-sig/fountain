@@ -94,7 +94,7 @@ protected class ReflectRegistrar {
 
     /** 注册 `T`；`enabled=false` 模拟关闭反射的构建（测试与宿主配置可判）。 */
     public static func registerType<T>(into!: ClassRegistry, diag!: DiagnosticsSink,
-        enabled!: Bool = true, overrides!: Array<PublicMethod> = Array<PublicMethod>()): Unit
+        enabled!: Bool = true, bindings!: JitBindings = JitBindings.empty()): Unit
         where T <: Object {
         var typeName = '<unknown>'
         try {
@@ -124,10 +124,10 @@ protected class ReflectRegistrar {
         let name = cls.name
         // `@JitBind` 在包初始化期把 overrides 登记到「类全限定名 → 绑定」表里；
         // 显式传参优先，空则取自动登记（宏因此不需要生成中间函数，注册处也只写 registerType）。
-        let effectiveOverrides = if (overrides.size == 0) {
+        let effective = if (bindings.isEmpty()) {
             JitBindSupport.enrolledOf(name)
         } else {
-            overrides
+            bindings
         }
         ReflectRegistrar.retainClass(cls)
         let ancestry = ReflectRegistrar.ancestryOf(cls)
@@ -165,11 +165,26 @@ protected class ReflectRegistrar {
             let rowIdx = idx
             let rowMutable = mutable
             let rowAncestry = ancestry
+            // 有类型化绑定时优先用它（`@JitBind` 生成：直接读写字段，不经 MCC）
+            let typedField = effective.fieldOf(v.name)
             pending.add({ =>
                 HostFieldTable.register(index: rowIdx, `type`: rowCode, mutable: rowMutable,
                     accepts: { o => ReflectRegistrar.isInstanceOf(o, rowAncestry) },
-                    getter: { o => member.getValue(o) },
-                    setter: { o, x => member.setValue(o, x) })
+                    getter: { o =>
+                        match (typedField) {
+                            case Some(b) => b.get(o)
+                            case None => member.getValue(o)
+                        }
+                    },
+                    setter: { o, x =>
+                        match (typedField) {
+                            case Some(b) => match (b.set) {
+                                case Some(s) => s(o, x)
+                                case None => member.setValue(o, x)
+                            }
+                            case None => member.setValue(o, x)
+                        }
+                    })
             })
             let _ = rowName
         }
@@ -237,7 +252,7 @@ protected class ReflectRegistrar {
             // SIGSEGV（栈顶落在被调方法体内，离真正失效点很远）。默认不再生成这种绑定：
             // 宁可注册期少一个方法（+ 一条 Warn 诊断），也不要在 JIT 里直接杀进程。
             // 需要它的宿主用 `overrides` 提供类型化实现（M2.1），此时本条不跳过。
-            if (!ReflectRegistrar.hasOverrideName(effectiveOverrides, f.name) &&
+            if (!ReflectRegistrar.hasOverrideName(effective.methods, f.name) &&
                 ReflectRegistrar.unsafeForReflect(sig, ret)) {
                 ReflectRegistrar.skip(diag, '${name}.${f.name}',
                     '引用型参数/返回在反射 apply 上会 SIGSEGV（GAP-13），请用 overrides 提供类型化绑定')
@@ -304,7 +319,7 @@ protected class ReflectRegistrar {
 
         // ---- 构造器 ----
         for (c in cls.constructors) {
-            match (ReflectRegistrar.buildCtor(c)) {
+            match (ReflectRegistrar.buildCtor(c, bindings: effective)) {
                 case Some(pc) => ctors.add(pc)
                 case None =>
                     ReflectRegistrar.skip(diag, '${name}.<init>', '构造器参数/返回类型不可映射')
@@ -313,7 +328,7 @@ protected class ReflectRegistrar {
 
         // 全量构建完成后一次性登记：任何拒绝都不会留下半成品。
         let (mergedMethods, mergedFns) = ReflectRegistrar.applyOverrides(methods.toArray(),
-            auto.toArray(), effectiveOverrides)
+            auto.toArray(), effective.methods)
         let descObj = ClassDescriptor(name: name, fields: fields.toArray(),
             methods: mergedMethods, ctors: ctors.toArray())
         into.register(descObj)
@@ -491,10 +506,14 @@ protected class ReflectRegistrar {
     }
 
     /** 构造器自动适配：参数不可映射 ⇒ None（该构造器跳过 + 诊断）。 */
-    public static func buildCtor(info: ConstructorInfo): ?PublicCtor {
+    public static func buildCtor(info: ConstructorInfo, bindings!: JitBindings): ?PublicCtor {
         let codes = ReflectRegistrar.mapParams(info.parameters)
         match (codes) {
-            case Some(ps) => Some(PublicCtor(params: ps, adapter: { args => info.apply(args) }))
+            case Some(ps) => match (bindings.ctorOf(ps)) {
+                // 类型化构造器：参数已在绑定体里 `as` 好，直接静态调用
+                case Some(typed) => Some(typed)
+                case None => Some(PublicCtor(params: ps, adapter: { args => info.apply(args) }))
+            }
             case None => None
         }
     }

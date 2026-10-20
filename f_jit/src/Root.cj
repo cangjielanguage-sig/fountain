@@ -36,6 +36,8 @@ public import fountain::f_jit.base.PredefinedFunction
 public import fountain::f_jit.base.ClassDescriptor
 public import fountain::f_jit.base.PublicField
 public import fountain::f_jit.base.PublicMethod
+public import fountain::f_jit.base.JitBindings
+public import fountain::f_jit.base.JitFieldBinding
 public import fountain::f_jit.base.PublicCtor
 public import fountain::f_jit.base.RegistrationException
 public import fountain::f_jit.base.RegistrationRejectKind

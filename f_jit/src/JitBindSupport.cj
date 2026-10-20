@@ -20,6 +20,7 @@ import std.reflect.TypeInfo
 import std.sync.Mutex
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.JitException
+import fountain::f_jit.base.JitBindings
 import fountain::f_jit.base.LocalType
 
 /**
@@ -36,7 +37,7 @@ public class JitBindSupport {
      * 宏不往类里插声明，也不生成中间函数——它在包级放一个 `let jitBindEnroll_X = enrollOf<X>([...])`，
      * 包初始化时把表填好；`registerType<T>()` 不传 `overrides` 时按 `TypeInfo.of<T>().name` 自动取用。
      */
-    private static let enrolled = HashMap<String, Array<PublicMethod>>()
+    private static let enrolled = HashMap<String, JitBindings>()
     private static let mtx = Mutex()
 
     /** `LocalType.HOST_OBJECT`（14）的编译期常量：宏里直接引用，避免再包一层函数。 */
@@ -67,19 +68,19 @@ public class JitBindSupport {
     }
 
     /** 包初始化期由宏生成的 `let` 调用：按类全限定名登记 overrides。 */
-    public static func enrollOf<T>(methods: Array<PublicMethod>): Unit {
+    public static func enrollOf<T>(b: JitBindings): Unit {
         let key = TypeInfo.of<T>().name
         synchronized (JitBindSupport.mtx) {
-            JitBindSupport.enrolled[key] = methods
+            JitBindSupport.enrolled[key] = b
         }
     }
 
     /** 取某类的自动登记；没有则空数组（注册侧据此判断是否走反射）。 */
-    public static func enrolledOf(name: String): Array<PublicMethod> {
+    public static func enrolledOf(name: String): JitBindings {
         synchronized (JitBindSupport.mtx) {
             match (JitBindSupport.enrolled.get(name)) {
                 case Some(v) => v
-                case None => Array<PublicMethod>()
+                case None => JitBindings.empty()
             }
         }
     }

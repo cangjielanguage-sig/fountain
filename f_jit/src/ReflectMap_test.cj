@@ -87,7 +87,7 @@ public class ReflectMap_test {
         let cls = ClassTypeInfo.of(ReflectUser())
         var picked: ?PublicCtor = None
         for (c in cls.constructors) {
-            match (ReflectRegistrar.buildCtor(c)) {
+            match (ReflectRegistrar.buildCtor(c, bindings: JitBindings.empty())) {
                 case Some(pc) => if (pc.params.size == 2) { picked = Some(pc) }
                 case None => ()
             }
@@ -115,7 +115,7 @@ public class ReflectMap_test {
         let cls = ClassTypeInfo.of(ReflectBox<Int64>(0))
         var found = false
         for (c in cls.constructors) {
-            match (ReflectRegistrar.buildCtor(c)) {
+            match (ReflectRegistrar.buildCtor(c, bindings: JitBindings.empty())) {
                 case Some(pc) =>
                     if (pc.params.size == 1 && pc.params[0] == LocalType.I64) {
                         found = true
@@ -140,7 +140,7 @@ public class ReflectMap_test {
         var mapped = false
         for (c in cls.constructors) {
             any = true
-            match (ReflectRegistrar.buildCtor(c)) {
+            match (ReflectRegistrar.buildCtor(c, bindings: JitBindings.empty())) {
                 case Some(_) => mapped = true
                 case None => ()
             }
