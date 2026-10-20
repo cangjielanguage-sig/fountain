@@ -185,6 +185,11 @@ private func buildMethod(f: FuncDecl, clsName: Token): Tokens {
     } catch (_) {
         Token(TokenKind.INTEGER_LITERAL, '3').toTokens()
     }
+    let retNameStr = try {
+        Token(TokenKind.STRING_LITERAL, classNameOf(f.declType))
+    } catch (_) {
+        Token(TokenKind.STRING_LITERAL, '')
+    }
 
     quote(
         PublicMethod(
@@ -200,7 +205,8 @@ private func buildMethod(f: FuncDecl, clsName: Token): Tokens {
                     }
                     $prelude
                     __self.$nameTok($callArgs)
-                }
+                },
+                retName: $retNameStr
             )
         )
     )
@@ -251,6 +257,7 @@ private func buildPropGetter(p: PropDecl, clsName: Token): Tokens {
     let pType = p.declType
     let c14 = Token(TokenKind.INTEGER_LITERAL, '14').toTokens()
     let pcode = codeToken(pType)
+    let pRetName = Token(TokenKind.STRING_LITERAL, classNameOf(pType))
     quote(
         PublicMethod(
             name: $nameStr,
@@ -265,7 +272,8 @@ private func buildPropGetter(p: PropDecl, clsName: Token): Tokens {
                             r
                         case None => JitBindSupport.typeMismatch()
                     }
-                }
+                },
+                retName: $pRetName
             )
         )
     )
@@ -347,12 +355,17 @@ private func buildCtor(f: FuncDecl, clsName: Token): Tokens {
 
 /** 源码类型 → `LocalType` 码（编译期决定，避免运行期反射）。 */
 private func codeToken(t: TypeNode): Tokens {
+    Token(TokenKind.INTEGER_LITERAL, codeOf(t).toString()).toTokens()
+}
+
+/** 源码类型 → `LocalType` 码（宏内编译期映射；非内建一律按注册类 14 处理）。 */
+private func codeOf(t: TypeNode): Int64 {
     let ts = t.toTokens()
     var name = ''
     if (ts.size > 0) {
         name = ts[0].value
     }
-    let c = match (name) {
+    match (name) {
         case 'Int64' => 0
         case 'Float64' => 1
         case 'Bool' => 2
@@ -367,7 +380,15 @@ private func codeToken(t: TypeNode): Tokens {
         case 'HashMap' => 11
         case _ => 14
     }
-    Token(TokenKind.INTEGER_LITERAL, c.toString()).toTokens()
+}
+
+/** 源码类型 → 返回类名（仅 14 非空）；`PredefinedFunction.retName` 的编译期来源。 */
+private func classNameOf(t: TypeNode): String {
+    let ts = t.toTokens()
+    if (ts.size == 0 || codeOf(t) != 14) {
+        return ''
+    }
+    ts[0].value
 }
 
 // ---- 静态成员（无接收者，直接进 auto 函数表）----
@@ -402,6 +423,11 @@ private func buildStaticFunc(f: FuncDecl, clsName: Token): Tokens {
     } catch (_) {
         Token(TokenKind.INTEGER_LITERAL, '3').toTokens()
     }
+    let sRetName = try {
+        Token(TokenKind.STRING_LITERAL, classNameOf(f.declType))
+    } catch (_) {
+        Token(TokenKind.STRING_LITERAL, '')
+    }
     quote(
         PredefinedFunction(
             $nameStr,
@@ -410,7 +436,8 @@ private func buildStaticFunc(f: FuncDecl, clsName: Token): Tokens {
             { args =>
                 $prelude
                 $clsName.$nameTok($callArgs)
-            }
+            },
+            retName: $sRetName
         )
     )
 }
@@ -421,6 +448,7 @@ private func buildStaticValue(ident: Token, t: TypeNode, clsName: Token,
     let emptyCodes = Token(TokenKind.LSQUARE, '[').toTokens() +
         Token(TokenKind.RSQUARE, ']').toTokens()
     let pcode = codeToken(t)
+    let vRetName = Token(TokenKind.STRING_LITERAL, classNameOf(t))
     quote(
         PredefinedFunction(
             $nameStr,
@@ -429,7 +457,8 @@ private func buildStaticValue(ident: Token, t: TypeNode, clsName: Token,
             { _ =>
                 let r: Any = $clsName.$ident
                 r
-            }
+            },
+            retName: $vRetName
         )
     )
 }

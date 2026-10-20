@@ -47,15 +47,25 @@ internal func reflectiveInvoke(fn: Any, cached: ?FunctionTypeInfo, sig: Signatur
         // 描述符与函数值不匹配：H63 已校验 nargs == sig.params.size，走到这里是内部不一致
         failWith(ErrCode.HELPER_PANIC)
     }
+    let args = convertArgs(sig, a)
+    // **不捕获** apply 的异常：宿主业务异常必须冒到 H63，由它统一转 21 + cause（v0.8.19 §13-6）。
+    // 这里若吞成 19，`hostExceptionMapsTo21WithCause` 一类用例会全线失败，且语义颠倒。
+    ti.apply(fn, args)
+}
+
+/**
+ * 逐参 cell → 仓颉值（M2.2 抽出）：反射路径与类型化 adapter 路径**共用**。
+ *
+ * `a[0]` 是 h_fn，实参从 `a[1]` 起。
+ */
+internal func convertArgs(sig: SignatureDescriptor, a: Array<Int64>): Array<Any> {
     let args = Array<Any>(sig.params.size, repeat: 0)
     var i = 0
     while (i < sig.params.size) {
         args[i] = cellToHostValue(sig.params[i], a[i + 1])
         i = i + 1
     }
-    // **不捕获** apply 的异常：宿主业务异常必须冒到 H63，由它统一转 21 + cause（v0.8.19 §13-6）。
-    // 这里若吞成 19，`hostExceptionMapsTo21WithCause` 一类用例会全线失败，且语义颠倒。
-    ti.apply(fn, args)
+    args
 }
 
 /**

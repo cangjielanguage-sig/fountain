@@ -17,7 +17,6 @@ package fountain::f_jit.compiler
 
 import std.collection.ArrayList
 import fountain::f_jit.base.LocalType
-import fountain::f_jit.base.Version
 import fountain::f_jit.bytecode.ByteWriter
 import fountain::f_jit.bytecode.DecodedInsn
 import fountain::f_jit.bytecode.FbcWriter

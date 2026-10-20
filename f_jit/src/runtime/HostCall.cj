@@ -60,7 +60,11 @@ internal func hostCallTrampoline(ctx: JitContext, a: Array<Int64>): Int64 {
     }
     var r: Any = 0
     try {
-        r = reflectiveInvoke(cb.fn, cb.ti, sig, a)
+        // M2.2：登记过同结构类型化 adapter 时**跳过反射**（静态类型调用）；否则维持原路径。
+        match (cb.adapter) {
+            case Some(ad) => r = ad(cb.fn, convertArgs(sig, a))
+            case None => r = reflectiveInvoke(cb.fn, cb.ti, sig, a)
+        }
     } catch (e: HelperFail) {
         // 引擎侧失败（绑定/转换）原样转码，不归宿主异常
         throw e

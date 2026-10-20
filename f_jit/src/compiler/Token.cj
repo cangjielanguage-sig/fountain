@@ -69,6 +69,8 @@ internal enum TokenKind <: Equatable<TokenKind> {
     | KwTrue
     | KwFalse
     | KwNull
+    /** `as`（M2.2：仅用于 `E as T ?? F` 的静态收窄）。 */
+    | KwAs
 
     // ---- 标点（12）----
     | LParen
@@ -108,6 +110,8 @@ internal enum TokenKind <: Equatable<TokenKind> {
     | Tilde
     /** `!~`（**单一 token**，优先于一元 `!` 识别，避免 `!` + `~` 歧义；§11.9）。 */
     | BangTilde
+    /** `??`（M2.2：`as` 收窄的兜底分隔符；单 `?` 不合法）。 */
+    | QuestionQuestion
     | DotDot
     | DotDotEq
 
@@ -115,9 +119,9 @@ internal enum TokenKind <: Equatable<TokenKind> {
     | EOF
 
     /**
-     * 相等判定经**构造器序号**（见下）：58 项两两比对写成 match 需 58×58 项，
+     * 相等判定经**构造器序号**（见下）：60 项两两比对写成 match 需 60×60 项，
      * 唯一能长期维护的形态是「序号 + 数值比较」——序号表本身同时是**全表清单**，
-     * 写漏任何一项都会在 `Lexer_test.allFiftyEightKindsAreConstructible` 暴露（design §4.3.1）。
+     * 写漏任何一项都会在 `Lexer_test.allSixtyKindsAreConstructible` 暴露（design §4.3.1）。
      */
     public operator func ==(other: TokenKind): Bool {
         TokenKind.ordinal(this) == TokenKind.ordinal(other)
@@ -147,43 +151,45 @@ internal enum TokenKind <: Equatable<TokenKind> {
             case KwTrue => 18
             case KwFalse => 19
             case KwNull => 20
-            case LParen => 21
-            case RParen => 22
-            case LBrace => 23
-            case RBrace => 24
-            case LBracket => 25
-            case RBracket => 26
-            case Comma => 27
-            case Colon => 28
-            case Arrow => 29
-            case Dot => 30
-            case Underscore => 31
-            case Semi => 32
-            case Plus => 33
-            case Minus => 34
-            case Star => 35
-            case Slash => 36
-            case Percent => 37
-            case Assign => 38
-            case EqEq => 39
-            case NotEq => 40
-            case Lt => 41
-            case Le => 42
-            case Gt => 43
-            case Ge => 44
-            case AndAnd => 45
-            case OrOr => 46
-            case Bang => 47
-            case Amp => 48
-            case Pipe => 49
-            case Caret => 50
-            case Shl => 51
-            case Shr => 52
-            case Tilde => 53
-            case BangTilde => 54
-            case DotDot => 55
-            case DotDotEq => 56
-            case EOF => 57
+            case KwAs => 21
+            case LParen => 22
+            case RParen => 23
+            case LBrace => 24
+            case RBrace => 25
+            case LBracket => 26
+            case RBracket => 27
+            case Comma => 28
+            case Colon => 29
+            case Arrow => 30
+            case Dot => 31
+            case Underscore => 32
+            case Semi => 33
+            case Plus => 34
+            case Minus => 35
+            case Star => 36
+            case Slash => 37
+            case Percent => 38
+            case Assign => 39
+            case EqEq => 40
+            case NotEq => 41
+            case Lt => 42
+            case Le => 43
+            case Gt => 44
+            case Ge => 45
+            case AndAnd => 46
+            case OrOr => 47
+            case Bang => 48
+            case Amp => 49
+            case Pipe => 50
+            case Caret => 51
+            case Shl => 52
+            case Shr => 53
+            case Tilde => 54
+            case BangTilde => 55
+            case QuestionQuestion => 56
+            case DotDot => 57
+            case DotDotEq => 58
+            case EOF => 59
         }
     }
 }

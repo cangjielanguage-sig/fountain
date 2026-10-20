@@ -98,7 +98,7 @@ f-jit-facade-bridge	快照语义	snapshotIsIsolated	full
 f-jit-facade-bridge	注册类实参	hostObjectAcceptanceAndIdentity	full
 f-jit-facade-bridge	HostClosure 实参	hostClosureVerifiesAndPins	full
 f-jit-facade-bridge	解包三行	unboxTable	full
-f-jit-facade-bridge	包装值不作实参	callForReturnsWrapperAndRejectsWrapperArg	full
+f-jit-facade-bridge	包装值不作实参	callForFnReturnsWrapperAndRejectsWrapperArg	full
 f-jit-facade-bridge	全类型行可断言	scalarMarshalling	full
 f-jit-facade-bridge	全路径清理	escapedSurvivesCleanup	full
 f-jit-facade-bridge	契约错误统一码	contractErrorHasNoSite	full

@@ -45,9 +45,9 @@ public class Lexer_test {
      */
     public static const DOLLAR: String = '$'
 
-    /** 58 项全表逐一可构造（穷尽 `match` 的反向证明：写漏任何一项都会编译失败）。 */
+    /** 60 项全表逐一可构造（穷尽 `match` 的反向证明：写漏任何一项都会编译失败）。 */
     @TestCase
-    public func allFiftyEightKindsAreConstructible(): Unit {
+    public func allSixtyKindsAreConstructible(): Unit {
         var n = 0
         n = n + Lexer_test.count(TokenKind.IntLit)
         n = n + Lexer_test.count(TokenKind.DecLit)
@@ -70,6 +70,7 @@ public class Lexer_test {
         n = n + Lexer_test.count(TokenKind.KwTrue)
         n = n + Lexer_test.count(TokenKind.KwFalse)
         n = n + Lexer_test.count(TokenKind.KwNull)
+        n = n + Lexer_test.count(TokenKind.KwAs)
         n = n + Lexer_test.count(TokenKind.LParen)
         n = n + Lexer_test.count(TokenKind.RParen)
         n = n + Lexer_test.count(TokenKind.LBrace)
@@ -104,11 +105,12 @@ public class Lexer_test {
         n = n + Lexer_test.count(TokenKind.Shr)
         n = n + Lexer_test.count(TokenKind.Tilde)
         n = n + Lexer_test.count(TokenKind.BangTilde)
+        n = n + Lexer_test.count(TokenKind.QuestionQuestion)
         n = n + Lexer_test.count(TokenKind.DotDot)
         n = n + Lexer_test.count(TokenKind.DotDotEq)
         n = n + Lexer_test.count(TokenKind.EOF)
-        // 5 字面量 + 16 标识符/关键字 + 12 标点 + 24 运算符 + 1 EOF = 58
-        @Assert(n, 58)
+        // 5 字面量 + 17 标识符/关键字 + 12 标点 + 25 运算符 + 1 EOF = 60
+        @Assert(n, 60)
     }
 
     private static func count(k: TokenKind): Int64 {
@@ -162,6 +164,7 @@ public class Lexer_test {
             case TokenKind.KwTrue => 'KwTrue'
             case TokenKind.KwFalse => 'KwFalse'
             case TokenKind.KwNull => 'KwNull'
+            case TokenKind.KwAs => 'KwAs'
             case TokenKind.LParen => 'LParen'
             case TokenKind.RParen => 'RParen'
             case TokenKind.LBrace => 'LBrace'
@@ -196,6 +199,7 @@ public class Lexer_test {
             case TokenKind.Shr => 'Shr'
             case TokenKind.Tilde => 'Tilde'
             case TokenKind.BangTilde => 'BangTilde'
+            case TokenKind.QuestionQuestion => 'QuestionQuestion'
             case TokenKind.DotDot => 'DotDot'
             case TokenKind.DotDotEq => 'DotDotEq'
             case TokenKind.EOF => 'EOF'

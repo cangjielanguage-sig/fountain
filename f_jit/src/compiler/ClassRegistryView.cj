@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::f_jit.compiler
 
-import std.collection.ArrayList
 import fountain::f_jit.base.ClassDescriptor
 import fountain::f_jit.base.LocalType
 import fountain::f_jit.base.PublicCtor
@@ -66,6 +65,28 @@ protected class ClassRegistryView {
     public func isRegistered(name: String): Bool {
         match (this.classOf(name)) {
             case Some(_) => true
+            case None => false
+        }
+    }
+
+    /**
+     * `sub` 是 `sup` 或其子类？（M2.2，`as` 静态收窄的合法性判据）
+     *
+     * 只看**注册期快照**里的 `ClassDescriptor.parents`：不查反射、不做运行期判定。
+     * 手工注册的类默认无父链 ⇒ 只有同名才算通过。
+     */
+    public func isSameOrSubclass(sub: String, sup: String): Bool {
+        if (sub == sup) {
+            return true
+        }
+        match (this.classOf(sub)) {
+            case Some(c) =>
+                for (p in c.parents) {
+                    if (p == sup) {
+                        return true
+                    }
+                }
+                false
             case None => false
         }
     }

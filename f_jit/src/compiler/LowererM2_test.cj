@@ -348,9 +348,10 @@ public class LowererM2_test {
                 PublicMethod(name: 'save', bind: PredefinedFunction(
                     'user_save', [LocalType.HOST_OBJECT, LocalType.STRING], LocalType.UNIT,
                     { _ => 0 })),
+                // M2.2：返回 14 的方法必须声明 retName，链式 `u.self().age` 才可静态解析
                 PublicMethod(name: 'self', bind: PredefinedFunction(
                     'user_self', [LocalType.HOST_OBJECT], LocalType.HOST_OBJECT,
-                    { args => args[0] }))
+                    { args => args[0] }, retName: 'User'))
             ],
             ctors: [
                 PublicCtor(params: Array<UInt16>(), adapter: { _ => 'User()' }),

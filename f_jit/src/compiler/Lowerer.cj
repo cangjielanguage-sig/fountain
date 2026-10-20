@@ -741,6 +741,7 @@ internal class Lowerer {
                         'if 表达式的两个分支类型不一致（§5 值用法）')
                 }
                 t1
+            case AstExpr.CastOr(e, t, fb, pos) => this.lowerCastOr(e, t, fb, pos)
             case AstExpr.Call(target, args, pos) => this.lowerCall(target, args, pos)
             case AstExpr.Closure(lambda, _) =>
                 this.lowerClosureExpr(lambda)
@@ -1473,13 +1474,17 @@ internal class Lowerer {
                         }
                     case None => None
                 }
+            case AstExpr.CastOr(_, t, _, _) => t.objectName()
             case AstExpr.MethodCall(inner, methodName, _, _) =>
                 match (this.hostObjectClassOf(inner)) {
                     case Some(cls) =>
                         match (this.view.methodOf(cls, methodName)) {
                             case Some(m) =>
-                                if (m.bind.retType == LocalType.HOST_OBJECT) {
-                                    Some(cls)
+                                // 只认注册期记录的返回类名（M2.2）；空 = 不知道。
+                                // 旧实现返回**接收者**的类名，等价于假设「方法返回 this」——
+                                // 那是猜的，会让 `u.getAddr() as User` 通过静态检查（类型混淆）。
+                                if (m.bind.retType == LocalType.HOST_OBJECT && m.bind.retName != '') {
+                                    Some(m.bind.retName)
                                 } else {
                                     None
                                 }
@@ -1784,6 +1789,93 @@ internal class Lowerer {
                 ctx.builder.callClosure(UInt8(args.size))
                 LocalType.I64
         }
+    }
+
+    /**
+     * `E as T ?? F`（M2.2）：**编译期**收窄，运行期零判定。
+     *
+     * 判定（全部在编译期，任一条不满足即 `TYPE_MISMATCH`）：
+     * 1. `T` 是注册类 → `E` 的静态类型必须是 14 且**类名已知**，且 `E` 的类是 `T` 或其子类；
+     * 2. `T` 是内建码 → `E` 的静态码必须等于它；
+     * 3. `T` 是函数类型 → 暂不支持（签名只能比对返回码，形参码不在符号表里）；
+     * 4. `F` 的静态类型必须是 `T` 或其子类。
+     *
+     * 为什么 `F` 仍要降级：它永不求值，但必须走完整降级才能完成类型检查（否则
+     * `x as T ?? undefinedName` 会静默通过）。发射形态 = 「E → JMP end → F（不可达）→ end」，
+     * 与 `if/else` 表达式同构，因此对字节码校验器无新形态。
+     */
+    private func lowerCastOr(e: AstExpr, t: TypeRef, fb: AstExpr, pos: SourcePos): UInt16 {
+        let ctx = this.requireCtx()
+        let tCode = t.code()
+        let sCode = this.staticTypeFull(e)
+        let tName = match (t.objectName()) {
+            case Some(n) => n
+            case None => ''
+        }
+        let sName = match (this.hostObjectClassOf(e)) {
+            case Some(n) => n
+            case None => ''
+        }
+        let sDesc = if (sCode == LocalType.HOST_OBJECT && sName != '') {
+            '${sName}'
+        } else {
+            LocalType.name(sCode)
+        }
+        if (tCode == LocalType.HOST_OBJECT) {
+            if (sCode != LocalType.HOST_OBJECT) {
+                diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                    '`as ${tName}` 的左面静态类型是 ${sDesc}，不是注册类实例——类型不相容')
+            }
+            if (sName == '') {
+                diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                    '`as ${tName}` 无法静态判定：左面是 14 型但类名未跟踪' +
+                    '（方法返回值 / if 合流 / 容器元素）；M2.2 只做编译期收窄')
+            }
+            if (!this.view.isSameOrSubclass(sName, tName)) {
+                if (this.view.isSameOrSubclass(tName, sName)) {
+                    diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                        '`as ${tName}` 是下转型（${tName} 是 ${sName} 的父类）：' +
+                        '需要运行期类判定，当前字节码不支持（IS_TYPE 只认 tag）')
+                }
+                diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                    '`as ${tName}` 与左面类型 ${sName} 无继承关系——类型不相容')
+            }
+        } else if (tCode == LocalType.HOST_CLOSURE) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                '`as` 暂不支持函数类型：形参码不在符号表里，无法静态比对签名（M2.2 边界）')
+        } else if (sCode != tCode) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                '`as ${LocalType.name(tCode)}` 的左面静态类型是 ${sDesc}——类型不相容')
+        }
+        // 兜底：必须是 T 或其子类（子类是 M2.2 的放宽，整体类型仍取 T）
+        let fCode = this.staticTypeFull(fb)
+        let fName = match (this.hostObjectClassOf(fb)) {
+            case Some(n) => n
+            case None => ''
+        }
+        if (tCode == LocalType.HOST_OBJECT) {
+            if (fCode != LocalType.HOST_OBJECT || fName == '' ||
+                !this.view.isSameOrSubclass(fName, tName)) {
+                diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                    '`??` 右面必须是 ${tName} 或其子类（实际：' +
+                    (if (fName != '') { fName } else { LocalType.name(fCode) }) + '）')
+            }
+        } else if (fCode != tCode) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                '`??` 右面必须是 ${LocalType.name(tCode)}（实际：${LocalType.name(fCode)}）')
+        }
+        let _ = this.lowerExpr(e)
+        let endL = ctx.builder.newLabel()
+        ctx.builder.emitRel(Op.JMP, endL)
+        // 不可达分支：只为完成类型检查与捕获分析
+        let _ = this.lowerExpr(fb)
+        ctx.builder.place(endL)
+        // 收窄后的静态类型是 T，不是 E 的：`let u = a as User ?? a` 之后 `u.f` 必须按 T 解析。
+        // `lastObjectName` 是「表达式产物的 14 类名」的旁路通道（`Decl` 落到符号表），
+        // 必须在两侧都降级之后覆盖，否则会被 F 的类名或 E 的类名盖回去。
+        this.lastObjectName = t.objectName()
+        this.lastHostRet = LocalType.NONE
+        tCode
     }
 
     /**
@@ -2270,6 +2362,7 @@ internal class Lowerer {
                 } else {
                     LocalType.NONE
                 }
+            case AstExpr.CastOr(_, t, _, _) => t.code()
             case AstExpr.Call(target, _, _) =>
                 match (target) {
                     case AstExpr.Var(cname, _) =>
@@ -2352,6 +2445,8 @@ internal class Lowerer {
             case AstExpr.Call(_, _, _) => CaptureOrigin.WINDOW
             case AstExpr.MethodCall(_, _, _, _) => CaptureOrigin.WINDOW
             case AstExpr.CtorCall(_, _, _) => CaptureOrigin.WINDOW
+            case AstExpr.CastOr(e, _, fb, _) =>
+                Lowerer.worseOrigin(this.originOfExpr(e, ty), this.originOfExpr(fb, ty))
             case AstExpr.Binary(_, _, _, _) => CaptureOrigin.WINDOW
             case AstExpr.Unary(_, _, _) => CaptureOrigin.WINDOW
             case _ => CaptureOrigin.WINDOW
@@ -2413,6 +2508,7 @@ internal class Lowerer {
             case AstExpr.ListLit(_, _, _) => LocalType.LIST
             case AstExpr.MapLit(_, _, _) => LocalType.MAP
             case AstExpr.Closure(_, _) => LocalType.CLOSURE
+            case AstExpr.CastOr(_, t, _, _) => t.code()
             case AstExpr.RecursiveValue(_) => LocalType.CLOSURE
             case AstExpr.RegexOp(k, _, _, _, _, _, _) =>
                 if (k == TokenKind.Tilde || k == TokenKind.BangTilde) {

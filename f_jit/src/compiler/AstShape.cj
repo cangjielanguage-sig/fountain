@@ -109,6 +109,8 @@ internal class AstShape {
             case AstExpr.MethodCall(t, m, args, _) =>
                 'method(${shapeE(t)}.${m} [${shapeList(args)}])'
             case AstExpr.CtorCall(c, args, _) => 'ctor(${c} [${shapeList(args)}])'
+            case AstExpr.CastOr(e, t, f, _) =>
+                'castor(${shapeE(e)} as ${builtinName(t)} ?? ${shapeE(f)})'
         }
     }
 

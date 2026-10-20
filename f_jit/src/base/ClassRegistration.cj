@@ -165,11 +165,20 @@ public class ClassDescriptor {
     /** 构造器表（`C(args…)` 重载解析）。 */
     public let ctors: Array<PublicCtor>
 
+    /**
+     * 祖先类名链（M2.2）：**直接父类在前**，逐级到 `Object`，不含自身。
+     *
+     * 只为「静态子类型判定」而存在（`E as T ?? F` 的合法性检查）。前端**不据此做成员解析**
+     * ——成员查找仍只查本类条目（v0.8.31）。手工注册的类若不填，则该类只与自身同型。
+     */
+    public let parents: Array<String>
+
     public init(name!: String, fields!: Array<PublicField>, methods!: Array<PublicMethod>,
-        ctors!: Array<PublicCtor>) {
+        ctors!: Array<PublicCtor>, parents!: Array<String> = Array<String>()) {
         this.name = name
         this.fields = fields.clone()
         this.methods = methods.clone()
         this.ctors = ctors.clone()
+        this.parents = parents.clone()
     }
 }

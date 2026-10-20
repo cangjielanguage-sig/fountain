@@ -102,7 +102,7 @@ public let T_MAP_IN_SCOPE: Array<TMapping> = [
  */
 public let T_MAP_M2: Array<TMapping> = [
     // 验签与 Marshal：失败面全 19（site=-1）、一次缓存、禁高阶双拒、同名冲突编译错误
-    TMapping('T30', ['Q4.1', 'Q4.2', 'Q5.10', 'Q6.1'], 'callForAcceptsHostClosureArgument',
+    TMapping('T30', ['Q4.1', 'Q4.2', 'Q5.10', 'Q6.1'], 'callForFnAcceptsHostClosureArgument',
         'M2', true),
     // CALL_HOST 语义：值型/引用型返回、21 + cause、重入、内层错误不污染外层
     TMapping('T31', ['Q3.5', 'Q4.5', 'Q4.6', 'Q6.2'], 't31CallHostValueAndReference', 'M2', true),

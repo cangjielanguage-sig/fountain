@@ -33,15 +33,26 @@ public class PredefinedFunction {
     public let name: String
     public let paramTypes: Array<UInt16>
     public let retType: UInt16
+
+    /**
+     * 返回值的**具体类名**（M2.2）：仅当 `retType == 14` 且来源已知时非空，其余为 `''`。
+     *
+     * 用途 = 前端的静态类型知识：`E as T ?? F` 的判定、`u.m().f` 链式成员解析都要知道
+     * 「这个方法返回的是哪个类」。不知道就必须留空——**猜一个类名比不知道更危险**
+     * （会把 `Address` 当成 `User` 用）。
+     */
+    public let retName: String
+
     public let impl: (Array<Any>) -> Any
 
     public init(name: String, paramTypes: Array<UInt16>, retType: UInt16,
-        impl: (Array<Any>) -> Any) {
+        impl: (Array<Any>) -> Any, retName!: String = '') {
         PredefinedFunction.checkParamTypes(name, paramTypes)
         PredefinedFunction.checkRetType(name, retType)
         this.name = name
         this.paramTypes = paramTypes
         this.retType = retType
+        this.retName = retName
         this.impl = impl
     }
 

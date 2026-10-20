@@ -22,6 +22,7 @@ import std.time.DateTime
 import std.reflect.FunctionTypeInfo
 import std.reflect.TypeInfo
 import fountain::f_jit.base.LocalType
+import fountain::f_jit.base.SignatureRegistry
 import fountain::f_jit.base.TypeNames
 import fountain::f_jit.bytecode.ConstMapKey
 
@@ -360,16 +361,26 @@ public class HostCallback {
      */
     public let ti: ?FunctionTypeInfo
 
+    /**
+     * 类型化适配器（M2.2）：`SignatureRegistry` 中与 `sig` 同结构的那条。
+     *
+     * `Some` ⇒ H63 直接调它（静态类型调用，跳过 `FunctionTypeInfo.apply`）；
+     * `None` ⇒ 退回反射（现状，行为不变）。查找只在**装箱时**做一次，调用期零查找。
+     */
+    public let adapter: ?((Any, Array<Any>) -> Any)
+
     public init(fn: Any, sig: SignatureDescriptor) {
         this.fn = fn
         this.sig = Some(sig)
         this.ti = HostCallback.probeType(fn)
+        this.adapter = SignatureRegistry.adapterOf(sig.params, sig.paramNames, sig.ret, sig.retName)
     }
 
     public init(fn: Any) {
         this.fn = fn
         this.sig = None
         this.ti = HostCallback.probeType(fn)
+        this.adapter = None
     }
 
     private static func probeType(fn: Any): ?FunctionTypeInfo {

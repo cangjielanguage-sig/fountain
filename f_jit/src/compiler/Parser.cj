@@ -742,7 +742,35 @@ internal class Parser {
     // ------------------------------------------------------------------
 
     public func parseExpr(): AstExpr {
-        this.parseOr()
+        this.parseCastOr()
+    }
+
+    /**
+     * M2.2 `E as T ?? F`：`??` 是全表达式里**最低**的结合层（低于 `||`），右结合。
+     *
+     * 为什么 `as T` 与 `??` 绑在同一层而不是拆成两层：`??` 在当前语义下只作为 `as` 的兜底
+     * 分隔符存在（见 `AstExpr.CastOr`），单独出现即语法错误——拆成两层反而要额外拒绝裸 `??`。
+     */
+    private func parseCastOr(): AstExpr {
+        let left = this.parseOr()
+        if (this.atKind(TokenKind.QuestionQuestion)) {
+            let t = this.peek()
+            diagFail(DiagKind.SYNTAX_ERROR, this.src, t.pos, t.line, t.column,
+                '`??` 只能跟在使用 `as T` 之后（M2.2 仅支持 `E as T ?? F`）')
+        }
+        if (!this.atKind(TokenKind.KwAs)) {
+            return left
+        }
+        let asTok = this.take()
+        let tr = this.parseTypeRef()
+        if (!this.atKind(TokenKind.QuestionQuestion)) {
+            let t = this.peek()
+            diagFail(DiagKind.SYNTAX_ERROR, this.src, t.pos, t.line, t.column,
+                '`as` 必须与 `??` 连用（M2.2 仅支持 `E as T ?? F`，不提供裸 `as` 转型）')
+        }
+        let _ = this.take()
+        let fallback = this.parseCastOr()
+        AstExpr.CastOr(left, tr, fallback, SourcePos(asTok.line, asTok.column))
     }
 
     private func parseOr(): AstExpr {

@@ -841,14 +841,14 @@ public class Q6Acceptance_test {
         // 引用身份：捕获的宿主对象（14 形参）经包装器多次调用仍是同一对象。
         let childUnit = c.compile('{ ch: Q6Child => let f = { x: Int64 => ch }\n f }')
         let child = Q6Child('keep')
-        let cw = childUnit.callFor<(Int64) -> Q6Child>([child])
+        let cw = childUnit.callForFn<(Int64) -> Q6Child>([child])
         let a = cw.call<Q6Child>([1])
         let b = cw.call<Q6Child>([2])
         let same = refEq(a, b) && a.city == 'keep'
         cw.close()
         // 路径 C：外层窗口内新建的 14 局部被捕获（提升后跨窗口仍同一对象）。
         let localUnit = c.compile('{ => let ch = Q6Child("local")\n { x: Int64 => ch } }')
-        let lw = localUnit.callFor<(Int64) -> Q6Child>([])
+        let lw = localUnit.callForFn<(Int64) -> Q6Child>([])
         let la = lw.call<Q6Child>([1])
         let lb = lw.call<Q6Child>([2])
         let localSame = refEq(la, lb) && la.city == 'local'
@@ -859,7 +859,7 @@ public class Q6Acceptance_test {
         lst.add(1)
         lst.add(2)
         lst.add(3)
-        let w2 = elemUnit.callFor<(Int64) -> Int64>([lst])
+        let w2 = elemUnit.callForFn<(Int64) -> Int64>([lst])
         let v1 = w2.call<Int64>([1])
         let v2 = w2.call<Int64>([1])
         w2.close()
@@ -873,14 +873,14 @@ public class Q6Acceptance_test {
     public func t49WrapperEqualsDirectAndWeakUnload(): Unit {
         let c = Q6Acceptance_test.newCompiler()
         let unit = c.compile('{ => let f = { x: Int64 => x + 1 }\n f }')
-        let w = unit.callFor<(Int64) -> Int64>([])
+        let w = unit.callForFn<(Int64) -> Int64>([])
         let viaWrapper = w.call<Int64>([41])
         let direct = c.compile('{ => let f = { x: Int64 => x + 1 }\n f(41) }')
         let viaDirect = direct.call<Int64>([])
         w.close()
         let closedErr = Q6Acceptance_test.errOf({ => let _ = w.call<Int64>([1]) })
         let unit2 = c.compile('{ => let f = { x: Int64 => x + 1 }\n f }')
-        let w2 = unit2.callFor<(Int64) -> Int64>([])
+        let w2 = unit2.callForFn<(Int64) -> Int64>([])
         let _ = unit2.unload(0)
         let unloadErr = Q6Acceptance_test.errOf({ => let _ = w2.call<Int64>([1]) })
         w2.close()

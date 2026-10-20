@@ -131,3 +131,25 @@
 
 闭包层的 36× 结论不受影响（上一节，直接对 `InstanceFunctionInfo.apply` 计时，不含 `call` 开销）。
 
+
+## 追加实测：宿主闭包的类型化 adapter（M2.2，2026-10-20）
+
+**动因**：M2 的宿主闭包调用（`CALL_HOST` → H63 → `FunctionTypeInfo.apply`）每次穿一次反射，
+本文件开头测的是单点调用（约 707 ns/次）。M2.2 把 `JitHost.registerSignature` 的 adapter
+接进 H63：句柄条目在 pin 时按签名查一次，命中就直接静态调用。
+
+**方法**（`HostClosureAdapter_test.adapterBeatsReflectionInCallbackLoop`）：一个 JIT 单元内部
+`while` 循环回调宿主闭包 **5 万次**（`{ g: (Int64) -> Int64, n: Int64 => … g(i) … }`），
+先预热 1000 次，再分别在有/无 adapter 下计时。单位 ns/次回调：
+
+| 轮次 | 反射（`FunctionTypeInfo.apply`） | 类型化 adapter | 比值 |
+|---|---|---|---|
+| 第 1 次 | 9,521 | 2,925 | **3.25×** |
+| 第 2 次 | 10,428 | 2,926 | **3.56×** |
+
+**为什么这里数字比开头的 707 ns 大一个量级**：开头测的是 `invokeHelper(H63)` 单点调用；
+这里每次回调还含 JIT 单元内的循环、参数搬运与结果装箱，单次成本被摊在完整执行路径上。
+两者不冲突——**比值**才是本节的结论。
+
+**边界**：收益只在「一次 JIT 调用内部多次回调」时可见。`call<T>` 每次 8–17 μs 的固定开销
+远大于单次回调的差值，单回调场景看不出差别。门禁取 **1.3×**（实测 3.2–3.6×，留噪声余量）。

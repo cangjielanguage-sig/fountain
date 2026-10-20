@@ -153,6 +153,25 @@ public class SignatureRegistry {
         }
     }
 
+    /**
+     * 按结构取**适配器**（M2.2：H63 的类型化快速路径）；未登记 → `None`。
+     *
+     * 单次持锁扫描，不嵌套 `find` + `get`——`Mutex` 不可重入，嵌套会自锁。
+     */
+    public static func adapterOf(params: Array<UInt16>, paramNames: Array<String>,
+        ret: UInt16, retName: String): ?((Any, Array<Any>) -> Any) {
+        synchronized(mtx) {
+            var i = 0
+            while (i < entries.size) {
+                if (entries[i].sameShape(params, paramNames, ret, retName)) {
+                    return Some(entries[i].adapter)
+                }
+                i = i + 1
+            }
+            None
+        }
+    }
+
     /** 已登记数量（诊断/测试用）。 */
     public static func count(): Int64 {
         synchronized(mtx) {

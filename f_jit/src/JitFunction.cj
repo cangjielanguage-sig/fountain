@@ -275,12 +275,12 @@ public class JitFunction {
      *
      * `Fn` = 返回闭包的函数类型（编译期已知）；解析失败时退化为动态签名（零运行期函数判定）。
      */
-    public func callFor<Fn>(args: Array<Any>): JitFunction {
+    public func callForFn<Fn>(args: Array<Any>): JitFunction {
         if (this.owner.isSome()) {
-            return JitFunction.contractFail('包装实例不可再 callFor（m2 §9.1）')
+            return JitFunction.contractFail('包装实例不可再 callForFn（m2 §9.1）')
         }
         if (this.retType != LocalType.CLOSURE) {
-            return JitFunction.contractFail('callFor 要求单元返回闭包（retType=12）')
+            return JitFunction.contractFail('callForFn 要求单元返回闭包（retType=12）')
         }
         let typeName = TypeInfo.of<Fn>().name
         let id = this.call<JitClosureId>(args)
@@ -682,7 +682,7 @@ public class JitFunction {
     }
 }
 
-/** `callFor<Fn>` 解析出的返回闭包签名（`Fn` 的函数类型名 → LocalType 编码）。 */
+/** `callForFn<Fn>` 解析出的返回闭包签名（`Fn` 的函数类型名 → LocalType 编码）。 */
 protected class JitFnSig {
     public let params: Array<UInt16>
     public let ret: UInt16

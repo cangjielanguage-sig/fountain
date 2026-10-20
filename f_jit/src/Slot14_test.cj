@@ -80,7 +80,7 @@ public class Slot14_test {
         let c = Slot14_test.compiler()
         let unit = c.compile('{ u: ManualUser => let a = { x: Int64 => u }\n a }')
         let u = ManualUser('esc', 5)
-        let w = unit.callFor<(Int64) -> ManualUser>([u])
+        let w = unit.callForFn<(Int64) -> ManualUser>([u])
         @Assert(refEq(w.call<ManualUser>([1]), u), true)
         let labelOk = refEq(w.call<ManualUser>([1]), u)
         w.close()

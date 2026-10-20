@@ -256,7 +256,8 @@ protected class ReflectRegistrar {
                 continue
             }
             let bind = PredefinedFunction(bindName, sig, ret,
-                { args => f.apply(args[0], ReflectRegistrar.tail(args)) })
+                { args => f.apply(args[0], ReflectRegistrar.tail(args)) },
+                retName: ReflectRegistrar.retNameOf(f.returnType, ret))
             methods.add(PublicMethod(name: f.name, bind: bind))
             auto.add(bind)
         }
@@ -319,7 +320,9 @@ protected class ReflectRegistrar {
                 case Some(typed) => typed
                 case None => PredefinedFunction(f.name, ReflectRegistrar.unwrapParams(paramCodes),
                     ReflectRegistrar.unwrapCode(codeOpt),
-                    { args => f.apply(staticType, args) })
+                    { args => f.apply(staticType, args) },
+                    retName: ReflectRegistrar.retNameOf(f.returnType,
+                        ReflectRegistrar.unwrapCode(codeOpt)))
             })
         }
 
@@ -336,7 +339,8 @@ protected class ReflectRegistrar {
         let (mergedMethods, mergedFns) = ReflectRegistrar.applyOverrides(methods.toArray(),
             auto.toArray(), effective.methods)
         let descObj = ClassDescriptor(name: name, fields: fields.toArray(),
-            methods: mergedMethods, ctors: ctors.toArray())
+            methods: mergedMethods, ctors: ctors.toArray(),
+            parents: ReflectRegistrar.parentsOf(ancestry))
         into.register(descObj)
         for (p in pending) {
             p()
@@ -381,7 +385,7 @@ protected class ReflectRegistrar {
             }
             let canonical = methods[hit].bind.name
             let rebind = PredefinedFunction(canonical, ov.bind.paramTypes, ov.bind.retType,
-                ov.bind.impl)
+                ov.bind.impl, retName: ov.bind.retName)
             methods[hit] = PublicMethod(name: ov.name, bind: rebind)
             fns = ReflectRegistrar.replaceFunction(fns, canonical, rebind)
         }
@@ -617,6 +621,34 @@ protected class ReflectRegistrar {
 
     private static func isJsonFamily(name: String): Bool {
         name == 'JsonValue' || name == 'JsonObject' || name == 'JsonArray' || name == 'JsonNull'
+    }
+
+    /** 14 型返回的具体类名；其余（或不适用）→ 空串。 */
+    private static func retNameOf(t: TypeInfo, code: UInt16): String {
+        if (code == LocalType.HOST_OBJECT) {
+            t.name
+        } else {
+            ''
+        }
+    }
+
+    /**
+     * 祖先链去掉首项（自身）⇒ `ClassDescriptor.parents`（M2.2）。
+     *
+     * `ancestryOf` 的首项是声明类自身、逐级到 `Object`，正好与 `parents` 的语义（直接父类在前、
+     * 不含自身）对齐，不需要再反转。
+     */
+    private static func parentsOf(ancestry: Array<String>): Array<String> {
+        if (ancestry.size <= 1) {
+            return Array<String>()
+        }
+        let out = Array<String>(ancestry.size - 1, repeat: '')
+        var i = 1
+        while (i < ancestry.size) {
+            out[i - 1] = ancestry[i]
+            i = i + 1
+        }
+        out
     }
 
     private static func ancestryOf(cls: ClassTypeInfo): Array<String> {

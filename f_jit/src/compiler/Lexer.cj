@@ -315,6 +315,7 @@ internal class Lexer {
             case 'true' => TokenKind.KwTrue
             case 'false' => TokenKind.KwFalse
             case 'null' => TokenKind.KwNull
+            case 'as' => TokenKind.KwAs
             case _ => TokenKind.Ident
         }
     }
@@ -780,6 +781,10 @@ internal class Lexer {
             len = 2
         } else if (b == 0x3Eu8 && n1 == 0x3Eu8) {
             k = TokenKind.Shr
+            len = 2
+        } else if (b == 0x3Fu8 && n1 == 0x3Fu8) {
+            // `??`（M2.2）：单 `?` 不属于任何合法词法单元，仍走 ILLEGAL_CHARACTER
+            k = TokenKind.QuestionQuestion
             len = 2
         } else if (b == 0x2Eu8 && n1 == 0x2Eu8 && n2 == 0x3Du8) {
             k = TokenKind.DotDotEq

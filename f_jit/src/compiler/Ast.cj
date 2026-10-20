@@ -214,6 +214,15 @@ internal enum AstExpr {
     | MethodCall(AstExpr, String, Array<AstExpr>, SourcePos)
     /** M2 构造 `C(args…)`：参数序 = className, args。 */
     | CtorCall(String, Array<AstExpr>, SourcePos)
+    /**
+     * M2.2 静态收窄 `E as T ?? F`：参数序 = expr, 目标类型, 兜底表达式。
+     *
+     * **语义是编译期的**：`E` 的静态类型若可推断为 `T` 或其子类型，整个表达式取 `E`
+     * （向上转，运行期零动作）；否则编译期报错（不相容 / 下转型 / 无法静态判定）。
+     * `F` 因此永不求值——它仍被完整降级以完成类型检查，发射为**不可达分支**。
+     * 判定与诊断见 `Lowerer.lowerCastOr`。
+     */
+    | CastOr(AstExpr, TypeRef, AstExpr, SourcePos)
 
     /** 位置（驱动 `setSite` 与编译期诊断；design §4.3.2）。 */
     public func pos(): SourcePos {
@@ -241,6 +250,7 @@ internal enum AstExpr {
             case FieldSet(_, _, _, p) => p
             case MethodCall(_, _, _, p) => p
             case CtorCall(_, _, p) => p
+            case CastOr(_, _, _, p) => p
         }
     }
 }

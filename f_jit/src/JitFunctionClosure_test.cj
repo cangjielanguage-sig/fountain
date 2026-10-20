@@ -46,7 +46,7 @@ public class JitFunctionClosure_test {
     @TestCase
     public func wrapperCallMatchesDirectClosure(): Unit {
         let unit = JitFunctionClosure_test.closureUnit()
-        let w = unit.callFor<(Int64) -> Int64>([])
+        let w = unit.callForFn<(Int64) -> Int64>([])
         @Assert(w.call<Int64>([41]), 42)
         let direct = JitFunctionClosure_test.compiler().compile(
             '{ => let f = { x: Int64 => x + 1 }\n f(41) }')
@@ -60,7 +60,7 @@ public class JitFunctionClosure_test {
     public func wrapperErrorMatchesDirect(): Unit {
         let unit = JitFunctionClosure_test.compiler().compile(
             '{ => let f = { x: Int64 => 10 / x }\n f }')
-        let w = unit.callFor<(Int64) -> Int64>([])
+        let w = unit.callForFn<(Int64) -> Int64>([])
         let got = JitFunctionClosure_test.catchCall(w, 0)
         let direct = JitFunctionClosure_test.compiler().compile(
             '{ => let f = { x: Int64 => 10 / x }\n f(0) }')
@@ -77,7 +77,7 @@ public class JitFunctionClosure_test {
             '{ => let a = { x: Int64 => x + 1 }\n' +
             ' let b = { x: Int64 => a(x) + 1 }\n' +
             ' let c = { x: Int64 => b(x) + 1 }\n c }')
-        let w = unit.callFor<(Int64) -> Int64>([])
+        let w = unit.callForFn<(Int64) -> Int64>([])
         @Assert(w.call<Int64>([39]), 42)
         @Assert(TCase.hit('T49/wrapper-depth3', w.call<Int64>([39]) == 42), true)
         w.close()
@@ -87,7 +87,7 @@ public class JitFunctionClosure_test {
     @TestCase
     public func unloadThenWrapperCallIsRejected(): Unit {
         let unit = JitFunctionClosure_test.closureUnit()
-        let w = unit.callFor<(Int64) -> Int64>([])
+        let w = unit.callForFn<(Int64) -> Int64>([])
         @Assert(w.call<Int64>([1]), 2)
         @Assert(unit.unload(0), true)
         let e = JitFunctionClosure_test.catchCall(w, 1)
@@ -102,7 +102,7 @@ public class JitFunctionClosure_test {
         HandleTable.resetForTest()
         let unit = JitFunctionClosure_test.closureUnit()
         let base = HandleTable.liveCount()
-        let w = unit.callFor<(Int64) -> Int64>([])
+        let w = unit.callForFn<(Int64) -> Int64>([])
         @Assert(HandleTable.liveCount() > base, true)
         @Assert(w.isClosed, false)
         w.close()
@@ -151,13 +151,13 @@ public class JitFunctionClosure_test {
         @Assert(f.isClosed, false)
     }
 
-    /** Q5.11：callFor 返回可继续调用的 JitFunction；包装值直接作实参 → 19。 */
+    /** Q5.11：callForFn 返回可继续调用的 JitFunction；包装值直接作实参 → 19。 */
     @TestCase
-    public func callForReturnsWrapperAndRejectsWrapperArg(): Unit {
+    public func callForFnReturnsWrapperAndRejectsWrapperArg(): Unit {
         let unit = JitFunctionClosure_test.closureUnit()
-        let w = unit.callFor<(Int64) -> Int64>([])
+        let w = unit.callForFn<(Int64) -> Int64>([])
         @Assert(w.call<Int64>([5]), 6)
-        let nested = unit.callFor<(Int64) -> Int64>([])
+        let nested = unit.callForFn<(Int64) -> Int64>([])
         let e = JitFunctionClosure_test.catchCallAny(nested, [nested])
         @Assert(e.code, ErrCode.CALL_CONTRACT)
         @Assert(e.site, -1)
@@ -168,13 +168,13 @@ public class JitFunctionClosure_test {
         @Assert(TCase.hit('T49/call-for-wrapper', labelOk), true)
     }
 
-    /** Q5.11：callFor 实参面与 call<T> 一致——允许宿主闭包（13）作实参。 */
+    /** Q5.11：callForFn 实参面与 call<T> 一致——允许宿主闭包（13）作实参。 */
     @TestCase
-    public func callForAcceptsHostClosureArgument(): Unit {
+    public func callForFnAcceptsHostClosureArgument(): Unit {
         let unit = JitFunctionClosure_test.compiler().compile(
             '{ f: (Int64) -> Int64 => let g = { x: Int64 => f(x) + 1 }\n g }')
         let f: (Int64) -> Int64 = { x => x + 1 }
-        let w = unit.callFor<(Int64) -> Int64>([f])
+        let w = unit.callForFn<(Int64) -> Int64>([f])
         @Assert(w.call<Int64>([41]), 43)
         let labelOk = w.call<Int64>([41]) == 43
         w.close()
@@ -199,13 +199,13 @@ public class JitFunctionClosure_test {
             match (f.classSnapshotOf()) { case Some(s) => s.classes.size == 1; case None => false }), true)
     }
 
-    /** 非返回闭包的单元调用 callFor → 19。 */
+    /** 非返回闭包的单元调用 callForFn → 19。 */
     @TestCase
-    public func callForOnNonClosureUnitIsRejected(): Unit {
+    public func callForFnOnNonClosureUnitIsRejected(): Unit {
         let f = JitFunctionClosure_test.compiler().compile('{ => 1 }')
         var code: Int64 = 0
         try {
-            let _ = f.callFor<(Int64) -> Int64>([])
+            let _ = f.callForFn<(Int64) -> Int64>([])
         } catch (e: JitException) {
             code = e.code
         }
