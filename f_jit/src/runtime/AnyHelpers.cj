@@ -22,6 +22,7 @@ import std.time.DateTime
 import fountain::f_data.json.{JsonArray, JsonNull, JsonObject, JsonValue}
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.LocalType
+import fountain::f_jit.base.TypeToken
 import fountain::f_jit.bytecode.ConstMapKey
 
 /**
@@ -30,9 +31,10 @@ import fountain::f_jit.bytecode.ConstMapKey
  * 盒 = 句柄条目直存原生 `Any`（tag 12）；唯一算子 = `is` / `as`。`as` 是本方言的
  * **强制转型**（未命中 → 22），不是仓颉的 `as`（后者返回 `Option`）。
  *
- * 已知边界（M3 实施期登记）：`typecode = 14` 目前按「是宿主对象」判定，**未做类界精确核对**
- * ——前端尚未发射 14 目标的 Any 转型，等 typeRef 表落地再收紧；容器 `aux` 只校验元素为
- * `Any`（其余元素码走同一分派表，属 R4.5 的 P2 分支表工作）。
+ * 14 目标的类界（A2/D1）：`aux != 0xFFFF` 时委托给该 hid 对应的 `$as$<C>`（注册期合成的
+ * `(14) -> Bool`），子类实例命中、无关类与向下转型不命中；`aux == 0xFFFF` 保留「任意非 JSON
+ * 宿主对象」的兼容口径（仅当前端拿不到类名时出现）。命中后的句柄恒以 tag **11** 登记并计入
+ * 窗口（`appendHostObject`）；容器 `aux` 只校验元素为 `Any`（其余元素码走同一分派表）。
  */
 
 /** H78：`any_box(typecode, cell) → h`（分配型，登记 1 槽）。 */
@@ -60,10 +62,8 @@ internal func anyIs(ctx: JitContext, a: Array<Int64>): Int64 {
     }
 }
 
-/** H80：`any_as(box, typecode, aux) → cell`（命中 → 值型直返 / 句柄型 pin；未命中 → 22）。 */
+/** H80：`any_as(box, typecode, aux) → cell`（命中 → 值型直返 / 句柄型窗口内登记；未命中 → 22）。 */
 internal func anyAs(ctx: JitContext, a: Array<Int64>): Int64 {
-    let unused = ctx
-    let _ = unused
     let v = HandleTable.fetchAnyBox(argAt(a, 0))
     let code = UInt16(argAt(a, 1))
     let aux = argAt(a, 2)
@@ -89,13 +89,30 @@ internal func anyAs(ctx: JitContext, a: Array<Int64>): Int64 {
                 case _ => failWith(ErrCode.ANY_CAST)
             }
         case 3u16 => 0
-        case _ =>
-            let out = HandleTable.pin(v)
-            // M3 R4.9：frozen 经拆箱传播（盒只读 ⇒ 取出的引用也保持只读）
-            if (HandleTable.isFrozen(src)) {
-                HandleTable.markFrozen(out)
+        case 14u16 =>
+            // 14 恒以 tag 11 登记（不走通用 `pin`：注册类实例无内建 token，会被拒成 19）
+            let out = match (v) {
+                case o: Object => HandleTable.appendHostObject(ctx, o)
+                case _ => failWith(ErrCode.HANDLE_TYPE)
             }
+            propagateFrozen(src, out)
             out
+        case _ =>
+            // 4–11 与 16–19：句柄型分支统一走窗口内分配（A2/P2-6 记账）
+            let tok = HandleTable.tokenOf(v)
+            if (tok == TypeToken.RESERVED) {
+                failWith(ErrCode.HANDLE_TYPE)
+            }
+            let out = HandleTable.append(ctx, v, tok)
+            propagateFrozen(src, out)
+            out
+    }
+}
+
+/** M3 R4.9：frozen 经拆箱传播（盒只读 ⇒ 取出的引用也保持只读）。 */
+private func propagateFrozen(src: Int64, out: Int64): Unit {
+    if (HandleTable.isFrozen(src)) {
+        HandleTable.markFrozen(out)
     }
 }
 
@@ -139,13 +156,43 @@ private func anyMatches(v: Any, code: UInt16, aux: Int64): Bool {
         // 容器：世界内形态恒为 ArrayList<Any> / HashMap<ConstMapKey, Any>，再看 aux
         case 10u16 => v is ArrayList<Any> && listAuxMatches(aux)
         case 11u16 => v is HashMap<ConstMapKey, Any> && mapAuxMatches(aux)
-        // 14：宿主对象（类界精确核对待 typeRef 表，见文件头）
-        case 14u16 => v is Object && !(v is JsonValue)
+        // 14：宿主对象 + 类界（aux = `$as$<C>` 的 hid；0xFFFF = 兼容口径）
+        case 14u16 => v is Object && !(v is JsonValue) &&
+            (aux == 0xFFFF || classBoundHit(v, aux))
         case 16u16 => v is JsonValue
         case 17u16 => v is JsonObject
         case 18u16 => v is JsonArray
         case 19u16 => v is JsonNull
         case _ => false
+    }
+}
+
+/**
+ * 14 目标的类界判定（D1）：委托给 `aux` 指向的 `$as$<C>`（注册期合成的 `(14) -> Bool`）。
+ *
+ * `$as$<C>` 走反射父链 ⇒ 子类实例命中、无关类与向下转型不命中，与非 Any 路径的 `is C`
+ * 逐例一致。条目缺失 / 签名不符 / 返回值非 Bool 都按**契约错误 8** 处理（`is` 侧除 8 外
+ * 永不失败）；判定体内部抛出的普通异常同样不允许穿透到字节码。
+ */
+private func classBoundHit(v: Any, aux: Int64): Bool {
+    let entry = match (UserHelperTable.find(aux)) {
+        case Some(e) => e
+        case None => failWith(ErrCode.HANDLE_TYPE)
+    }
+    if (entry.params.size != 1 || entry.params[0] != LocalType.HOST_OBJECT) {
+        failWith(ErrCode.HANDLE_TYPE)
+    }
+    var r: Any = false
+    try {
+        r = entry.impl([v])
+    } catch (e: HelperFail) {
+        throw e
+    } catch (_: Exception) {
+        failWith(ErrCode.HOST_EXCEPTION)
+    }
+    match (r) {
+        case b: Bool => b
+        case _ => failWith(ErrCode.HANDLE_TYPE)
     }
 }
 

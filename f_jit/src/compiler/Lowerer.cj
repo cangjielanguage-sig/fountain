@@ -2422,12 +2422,36 @@ internal class Lowerer {
         code
     }
 
-    /** 描述符 `aux`（m3 §5）：List → 元素码、Map → `(键码 << 8) | 值码`、其余 `0xFFFF`。 */
-    private static func auxOf(t: TypeRef): UInt16 {
+    /**
+     * 描述符 `aux`（m3 §5）：
+     * - `List` → 元素码、`Map` → `(键码 << 8) | 值码`；
+     * - **14 目标** → 该类的 `$as$<C>` 的 16 位 helper id（H79/H80 据此做类界判定，D1）；
+     * - 其余（含 16–19 的 JSON 目标）→ `0xFFFF`。
+     *
+     * 类名拿不到时保留 `0xFFFF` 的兼容口径；`$as$<C>` 槽缺失是**编译错误**（不进运行期）。
+     */
+    private func auxOf(t: TypeRef, pos: SourcePos, opName: String): UInt16 {
         match (t) {
             case TypeRef.ListOf(e) => e.code()
             case TypeRef.MapOf(k, v) => UInt16((Int64(k.code()) << 8) | Int64(v.code()))
-            case _ => 0xFFFFu16
+            case _ =>
+                if (t.code() != LocalType.HOST_OBJECT) {
+                    return 0xFFFFu16
+                }
+                let tName = match (t.objectName()) {
+                    case Some(n) => n
+                    case None => ''
+                }
+                if (tName == '') {
+                    return 0xFFFFu16
+                }
+                let slot = this.sess.registry.slotOf('$as$' + tName)
+                if (slot < 0) {
+                    diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                        '`${opName} ${tName}` 需要类「${tName}」的转型判定函数（`$as$` 系列），' +
+                        '但注册表里没有该槽——请在宿主侧注册该类')
+                }
+                HelperCodec.hidOfSlot(UInt16(slot))
         }
     }
 
@@ -2484,7 +2508,7 @@ internal class Lowerer {
         if (sCode == LocalType.ANY) {
             let _ = this.lowerExpr(e)
             ctx.builder.emitI64(Op.PUSH_I64, Int64(tCode))
-            ctx.builder.emitI64(Op.PUSH_I64, Int64(Lowerer.auxOf(t)))
+            ctx.builder.emitI64(Op.PUSH_I64, Int64(this.auxOf(t, pos, 'is')))
             ctx.builder.setSite(pos)
             ctx.builder.callHelper(HelperCodec.ANY_IS, 3u8)
             return LocalType.BOOL
@@ -2536,7 +2560,7 @@ internal class Lowerer {
         }
         let _ = this.lowerExpr(e)
         ctx.builder.emitI64(Op.PUSH_I64, Int64(tCode))
-        ctx.builder.emitI64(Op.PUSH_I64, Int64(Lowerer.auxOf(t)))
+        ctx.builder.emitI64(Op.PUSH_I64, Int64(this.auxOf(t, pos, 'as')))
         ctx.builder.setSite(pos)
         ctx.builder.callHelper(HelperCodec.ANY_AS, 3u8)
         // 结果静态类型 = T；14 位置带回类名，便于继续走成员链（m2 §12.4）

@@ -481,36 +481,70 @@ public class HandleTable {
      */
     public static func append(ctx: JitContext, obj: Any, tok: UInt16): Int64 {
         synchronized(mtx) {
-            // 扩容触发点：保证追加后「容量 ≥ 2 × 已用数」（plan-m1 S4.3）
-            let need = 2 * (windowUsedCount + 1)
-            if (need > windowCap) {
-                var nc = windowCap * 2
-                if (nc <= 0) {
-                    nc = initialCapacity
-                }
-                if (nc < need) {
-                    nc = need
-                }
-                if (windowBase + nc > capacityLimit) {
-                    nc = capacityLimit - windowBase
-                }
-                if (nc < windowUsedCount + 1) {
-                    // 容量已到全局上限，无法再扩 ⇒ 触顶
-                    syncTo(ctx)
-                    failWith(ErrCode.HANDLE_WINDOW_FULL)
-                }
-                windowCap = nc
+            appendLocked(ctx, obj, tok)
+        }
+    }
+
+    /** `append` 的锁内实现（`Mutex` 不可重入，供 `appendHostObject` 复用）。 */
+    private static func appendLocked(ctx: JitContext, obj: Any, tok: UInt16): Int64 {
+        // 扩容触发点：保证追加后「容量 ≥ 2 × 已用数」（plan-m1 S4.3）
+        let need = 2 * (windowUsedCount + 1)
+        if (need > windowCap) {
+            var nc = windowCap * 2
+            if (nc <= 0) {
+                nc = initialCapacity
             }
-            if (windowBase + windowUsedCount >= capacityLimit) {
+            if (nc < need) {
+                nc = need
+            }
+            if (windowBase + nc > capacityLimit) {
+                nc = capacityLimit - windowBase
+            }
+            if (nc < windowUsedCount + 1) {
+                // 容量已到全局上限，无法再扩 ⇒ 触顶
                 syncTo(ctx)
                 failWith(ErrCode.HANDLE_WINDOW_FULL)
             }
-            let id = newSlotLocked(obj, tok, false)
-            windowSlots.add(idxOf(id))
-            windowUsedCount = windowUsedCount + 1
-            windowTop = windowBase + windowUsedCount
+            windowCap = nc
+        }
+        if (windowBase + windowUsedCount >= capacityLimit) {
             syncTo(ctx)
-            id
+            failWith(ErrCode.HANDLE_WINDOW_FULL)
+        }
+        let id = newSlotLocked(obj, tok, false)
+        windowSlots.add(idxOf(id))
+        windowUsedCount = windowUsedCount + 1
+        windowTop = windowBase + windowUsedCount
+        syncTo(ctx)
+        id
+    }
+
+    /**
+     * 世界内的宿主类实例登记（H80 的 14 分支，tag 恒 **11**）。
+     *
+     * 与 `pinHostObject` 的唯一差异是**窗口记账**：本函数走路径 C（计入 `windowSlots` /
+     * `hwTop`，容量触顶报 16），`pinHostObject` 走路径 B（桥侧参数封送，不占窗口）。
+     * 同一对象在本窗口内复用同 ID（否则每次 `as C` 都新开一槽，窗口被读操作耗尽）；
+     * 去重只看**本窗口已登记的槽**——复用窗口外（含桥侧 pin）的槽会让记账与实际分配脱节。
+     */
+    public static func appendHostObject(ctx: JitContext, obj: Object): Int64 {
+        synchronized(mtx) {
+            var i = 0
+            while (i < windowSlots.size) {
+                let s = windowSlots[i]
+                if (s > 0 && s < objs.size && alive[s] && !constFlags[s] &&
+                    tags[s] == TypeToken.HOST_OBJECT) {
+                    match (objs[s]) {
+                        case old: Object =>
+                            if (refEq(old, obj)) {
+                                return makeId(s, TypeToken.HOST_OBJECT, gens[s])
+                            }
+                        case _ => ()
+                    }
+                }
+                i = i + 1
+            }
+            appendLocked(ctx, obj, TypeToken.HOST_OBJECT)
         }
     }
 
@@ -745,7 +779,12 @@ public class HandleTable {
 
     // ---- 释放 / 逃逸 / 重置 ----
 
-    /** 释放（宿主显式释放逃逸句柄；表项 gen+1 后方可复用 ⇒ 旧 ID 永久失效）。 */
+    /**
+     * 释放（宿主显式释放逃逸句柄；表项 gen+1 后方可复用 ⇒ 旧 ID 永久失效）。
+     *
+     * 逃逸标记必须在此复位并把槽归还 `freeSlots`：逃逸槽的唯一归宿就是宿主 `release`，
+     * 旧实现只对「未逃逸」槽归还 ⇒ 逃逸槽既不可复用也不再可达，逐次调用净泄漏。
+     */
     public static func release(id: Int64): Unit {
         let i = idxOf(id)
         if (i <= 0 || i >= objs.size) {
@@ -755,10 +794,10 @@ public class HandleTable {
             if (alive[i] && gens[i] == genOf(id) && !constFlags[i]) {
                 alive[i] = false
                 objs[i] = Int64(0)
+                escapeFlags[i] = false
+                frozenFlags[i] = false
                 gens[i] = gens[i] + UInt16(1)
-                if (!escapeFlags[i]) {
-                    freeSlots.add(i)
-                }
+                freeSlots.add(i)
             }
         }
     }
@@ -776,6 +815,7 @@ public class HandleTable {
             alive[i] = false
             objs[i] = Int64(0)
             escapeFlags[i] = false
+            frozenFlags[i] = false
             gens[i] = gens[i] + UInt16(1)
             freeSlots.add(i)
         }
@@ -997,11 +1037,16 @@ public class HandleTable {
         append(ctx, JitAnyBox(v), TypeToken.ANY)
     }
 
-    /** 取 Any 盒内容；tag ≠ 12 → 8（契约类错误）。 */
+    /**
+     * 取 Any 盒内容；tag ≠ 12 / 失效 / **代数不符** → 8（契约类错误）。
+     *
+     * 代数校验与 `fetchHostObject` 同构：槽被释放并复用后，旧 ID 必须失效，不能读到新盒。
+     */
     public static func fetchAnyBox(id: Int64): Any {
         let i = idxOf(id)
         synchronized(mtx) {
-            if (i <= 0 || i >= objs.size || !alive[i] || tags[i] != TypeToken.ANY) {
+            if (i <= 0 || i >= objs.size || !alive[i] || gens[i] != genOf(id) ||
+                tags[i] != TypeToken.ANY) {
                 failWith(ErrCode.HANDLE_TYPE)
             }
             match (objs[i]) {

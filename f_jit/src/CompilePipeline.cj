@@ -58,8 +58,12 @@ protected class CompilePipeline {
         if (CompileCache.claim(key)) {
             try {
                 let snap = c.snapshot()
+                // 公开入口产出**本实现支持的最新版本**（M3）：LocalType 合法集 0–19。
+                // 原为 M2（0–14），导致公开 `compile` 完全编不了 `Any` / JSON 字面量
+                // （「局部槽类型码非法: 15」）——M3 的 Any 通道因此只在测试直连
+                // `SourceCompiler` 时可用；A2 端到端验收把这一口径纠正到 M3。
                 let cu = SourceCompiler(snap, DummyDiagnosticsSink(),
-                    verMajor: Version.M2_MAJOR, classes: c.classSnapshot()).compile(source)
+                    verMajor: Version.M3_MAJOR, classes: c.classSnapshot()).compile(source)
                 let unit = FbcReader.load(cu.raw)
                 let fn = CompilePipeline.makeFunctionWith(unit, cu.entryFn, c.opts,
                     Some(snap), cu.ctorHelpers, cu.entryParamClasses, cu.entryParamSigs,

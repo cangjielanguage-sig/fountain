@@ -125,6 +125,11 @@
 | `invoke` 新增公开 API | 用户面扩大 | `call` 保持原签名与语义；`invoke` 只做参数透传，不改变封送/解包 |
 | A64 慢路径寄存器压力 | 编码序列变长，跳转偏移需重算 | 慢路径只在越界时触发；两遍布局已支持变长序列 |
 
+**A2 实施中新增的必要修复（记录，不属于原 26 条）**：`CompilePipeline.runSource` 把 `verMajor`
+硬编码为 `M2_MAJOR`（LocalType 合法集 0–14），因此公开 `Compiler.compile` **完全编不了 `Any`**
+（报「局部槽类型码非法: 15」）——M3 的 Any 通道只在测试直连 `SourceCompiler` 时可用。A2 的
+端到端验收必须走公开入口，故改为 `M3_MAJOR`（M3 是 M2 的超集，既有 M2 用例全量通过）。
+
 ## 7 文档回写清单
 
 - `f_jit/doc/jit-bytecode-m3.md`：§5 类型描述符（14 的 aux）、§8 兼容矩阵、§11 helper 表（H78–H80 的 tag / 窗口 / 失败码）。

@@ -21,13 +21,17 @@
 
 ## A2 H80 的 14 目标与句柄表资源（P0-1 / P2-6 / P2-1 / P2-3）
 
-- [ ] A2.1 `HandleTable.appendHostObject`：先写失败用例——同一对象两次 append 返回同 ID；tag 为 `HOST_OBJECT`；`windowUsed()` 递增 1；`resetWindow` 后非逃逸槽释放；再写 append 系实现（复用 `append` + 同对象去重）；验收：与 `pinHostObject`（桥侧）行为差异只在窗口记账，且有对拍用例
-- [ ] A2.2 H80 的 14 分支换 tag：先写失败用例——`as C` 命中返回的句柄 `tagOf == HOST_OBJECT`（当前为 `CALL_CONTRACT(8)` 或 tag 12）；未命中仍 22；再改 `AnyHelpers.anyAs` 的 `case _` 到显式 `case 14u16`；验收：tag 11 且 `getAs(id, HOST_OBJECT)` 可取回同一对象
-- [ ] A2.3 H79/H80 的类界判定（D1）：先写失败用例——盒装类 A 实例，`as B`（无关类）必 22、`as A` 命中、`as A父类` 命中、`as A子类` 必 22；`is` 侧同构；再按 `aux` 承载 `$as$<C>` helper id 实现；验收：类界与 `is C`（非 Any 路径）逐例一致
-- [ ] A2.4 前端发射 `aux`：先写失败用例——`as C` / `is C`（左为 15）的产物里 `aux` = `$as$C` 的 helper id，而非 `0xFFFF`；目标非 14 时 `aux` 不变；`$as$` 槽缺失 → 编译错误；再改 `Lowerer.auxOf` / `lowerAnyCast` / `lowerAnyIs`；验收：产物逐指令可断言，且三引擎执行结果一致
-- [ ] A2.5 H80 窗口记账（P2-6）：先写失败用例——循环 `as List<Any>` 触顶（`hwCap`）第 N 次必报 16；`windowUsed()` 与命中次数一致；再让 14 与句柄型分支统一走 `append*`；验收：`hwTop` 记账与 H78 一致，H79 仍零分配
-- [ ] A2.6 `fetchAnyBox` gen 校验（P2-1）：先写失败用例——释放盒 → 复用同槽 → 旧 ID 必 8（`HANDLE_TYPE`）；再补 `gens[i] != genOf(id)`；验收：与 `fetchHostObject` 同构
-- [ ] A2.7 逃逸槽归还（P2-3）：先写失败用例——分别返回 15 与 16–19，各 1000 次调用后 `windowUsed()`/表长不增长（当前 15/16–19 落在 `JitFunction.cj:408` 的 4–14 条件外，必泄漏）；再扩归还条件为句柄型集合，并让 `release` 尾段复位 `escapeFlags` 且归还 `freeSlots`；验收：4–14 既有行为不变，`resetWindow` 仍保留未释放的逃逸槽
+> **本批附带修复（A2 验收时暴露）**：`CompilePipeline.runSource` 原固定 `verMajor = M2`（合法集 0–14），
+> 公开 `Compiler.compile` 因此完全编不了 `Any`（`局部槽类型码非法: 15`）——M3 的 Any 通道只在
+> 测试直连 `SourceCompiler` 时可用。已改为 `M3_MAJOR`（`CompilePipeline.cj`，附注释）。
+
+- [x] A2.1 `HandleTable.appendHostObject`：先写失败用例——同一对象两次 append 返回同 ID；tag 为 `HOST_OBJECT`；`windowUsed()` 递增 1；`resetWindow` 后非逃逸槽释放；再写 append 系实现（复用 `append` + 同对象去重）；验收：与 `pinHostObject`（桥侧）行为差异只在窗口记账，且有对拍用例**（`appendHostObjectSharesWindowAccounting` / `appendHostObjectDiffersOnlyInWindow`；实现抽出 `appendLocked` 以避开 `Mutex` 不可重入）**
+- [x] A2.2 H80 的 14 分支换 tag：先写失败用例——`as C` 命中返回的句柄 `tagOf == HOST_OBJECT`（当前为 `CALL_CONTRACT(8)` 或 tag 12）；未命中仍 22；再改 `AnyHelpers.anyAs` 的 `case _` 到显式 `case 14u16`；验收：tag 11 且 `getAs(id, HOST_OBJECT)` 可取回同一对象**（`p0_1_asHostClassReturnsTag11`：红态 errCode=19 → 绿态 tag=11、`getAs` 同对象、窗口 +1）**
+- [x] A2.3 H79/H80 的类界判定（D1）：先写失败用例——盒装类 A 实例，`as B`（无关类）必 22、`as A` 命中、`as A父类` 命中、`as A子类` 必 22；`is` 侧同构；再按 `aux` 承载 `$as$<C>` helper id 实现；验收：类界与 `is C`（非 Any 路径）逐例一致**（runtime `p0_1_asHostClassRespectsClassBoundary` 覆盖委托契约；根包 `p0_1_asHostClassRespectsClassBoundary` / `p0_1_anyIsMatchesNonAnyIs` 用真实注册类；红态 `is ReflectAdmin` 对 `ReflectUser` 误答 true）**
+- [x] A2.4 前端发射 `aux`：先写失败用例——`as C` / `is C`（左为 15）的产物里 `aux` = `$as$C` 的 helper id，而非 `0xFFFF`；目标非 14 时 `aux` 不变；`$as$` 槽缺失 → 编译错误；再改 `Lowerer.auxOf` / `lowerAnyCast` / `lowerAnyIs`；验收：产物逐指令可断言，且三引擎执行结果一致**（`p1_4_auxCarriesAsHelperId` / `p1_4_nonHostTargetsKeepMaxAux` / `p1_4_missingAsHelperIsCompileError`；`auxOf` 改为实例方法并接收 `pos`/`opName` 以给出可定位诊断）**
+- [x] A2.5 H80 窗口记账（P2-6）：先写失败用例——循环 `as List<Any>` 触顶（`hwCap`）第 N 次必报 16；`windowUsed()` 与命中次数一致；再让 14 与句柄型分支统一走 `append*`；验收：`hwTop` 记账与 H78 一致，H79 仍零分配**（`p2_6_anyAsCountsWindow`：capacityLimit 卡到基线+2，第 3 次报 16；H79 ×1000 表长与 `windowUsed` 均不变）**
+- [x] A2.6 `fetchAnyBox` gen 校验（P2-1）：先写失败用例——释放盒 → 复用同槽 → 旧 ID 必 8（`HANDLE_TYPE`）；再补 `gens[i] != genOf(id)`；验收：与 `fetchHostObject` 同构**（`p2_1_fetchAnyBoxChecksGeneration`：红态 errCode=0（读到新盒）→ 绿态 8）**
+- [x] A2.7 逃逸槽归还（P2-3）：先写失败用例——分别返回 15 与 16–19，各 1000 次调用后 `windowUsed()`/表长不增长（当前 15/16–19 落在 `JitFunction.cj:408` 的 4–14 条件外，必泄漏）；再扩归还条件为句柄型集合，并让 `release` 尾段复位 `escapeFlags` 且归还 `freeSlots`；验收：4–14 既有行为不变，`resetWindow` 仍保留未释放的逃逸槽**（`releaseReturnHandle` / `isReturnedHandle` 抽出为可测函数；`p2_3_escapedAnyJsonSlotsReleased` 五种返回码各 1000 轮后表长 = 基线+1；`releaseReclaimsEscapedSlot` 断言槽位复用与世代 +1）**
 
 ## A3 桥的入参、出参与调用入口（P0-2 / P0-6）
 

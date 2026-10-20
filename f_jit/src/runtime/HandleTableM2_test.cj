@@ -141,4 +141,85 @@ public class HandleTableM2_test {
             JitContext.free(c)
         }
     }
+
+    /**
+     * A2.1（P0-1 的句柄侧）：`appendHostObject` 在本窗口内**同对象同 ID**、tag 恒 11、
+     * 窗口记账 +1；`resetWindow` 回收未逃逸槽。
+     */
+    @TestCase
+    public func appendHostObjectSharesWindowAccounting(): Unit {
+        setup()
+        let c = ctx()
+        try {
+            let probe = FieldProbe()
+            let a = HandleTable.appendHostObject(c, probe)
+            let b = HandleTable.appendHostObject(c, probe)
+            @Assert(a, b)
+            @Assert(HandleTable.tagOf(a), TypeToken.HOST_OBJECT)
+            @Assert(HandleTable.tagOf(a), 11u16)
+            @Assert(HandleTable.windowUsed(), 1)
+            @Assert(refEq(HandleTable.fetchHostObject(a), probe), true)
+            HandleTable.resetWindow(-1)
+            @Assert(HandleTable.windowUsed(), 0)
+            @Assert(HandleTable.isLiveHandle(a), false)
+        } finally {
+            JitContext.free(c)
+        }
+    }
+
+    /**
+     * A2.1 对拍：与 `pinHostObject` 的唯一差异是**窗口记账**。
+     *
+     * 桥侧 pin 走路径 B（不占窗口、跨调用存活）；世界内 append 走路径 C（占 1 槽、
+     * 随窗口重置回收）。两者对同一对象给出不同的 ID，但 tag 与取回身份完全一致。
+     */
+    @TestCase
+    public func appendHostObjectDiffersOnlyInWindow(): Unit {
+        setup()
+        let c = ctx()
+        try {
+            let probe = FieldProbe()
+            let pinned = HandleTable.pinHostObject(probe)
+            @Assert(HandleTable.windowUsed(), 0)
+            let appended = HandleTable.appendHostObject(c, probe)
+            @Assert(HandleTable.windowUsed(), 1)
+            @Assert(appended != pinned, true)
+            @Assert(HandleTable.tagOf(appended), HandleTable.tagOf(pinned))
+            @Assert(refEq(HandleTable.fetchHostObject(pinned),
+                HandleTable.fetchHostObject(appended)), true)
+            HandleTable.escape(appended)
+            HandleTable.resetWindow(-1)
+            @Assert(HandleTable.isLiveHandle(pinned), true)
+            @Assert(HandleTable.isLiveHandle(appended), true)
+        } finally {
+            JitContext.free(c)
+        }
+    }
+
+    /** A2.7（P2-3）：逃逸槽经 `release` 后复位标记并归还空闲表（逐次调用不再净泄漏）。 */
+    @TestCase
+    public func releaseReclaimsEscapedSlot(): Unit {
+        setup()
+        let c = ctx()
+        try {
+            let probe = FieldProbe()
+            let h = HandleTable.appendHostObject(c, probe)
+            HandleTable.escape(h)
+            HandleTable.resetWindow(-1)
+            @Assert(HandleTable.isLiveHandle(h), true)
+            @Assert(HandleTable.isEscaped(h), true)
+            let before = HandleTable.slotCount()
+            HandleTable.release(h)
+            @Assert(HandleTable.isLiveHandle(h), false)
+            @Assert(HandleTable.isEscaped(h), false)
+            // 槽位回到空闲表：下一次登记复用同一索引、世代 +1
+            let again = HandleTable.appendHostObject(c, probe)
+            @Assert(HandleTable.slotCount(), before)
+            @Assert(HandleTable.idxOf(again), HandleTable.idxOf(h))
+            @Assert(HandleTable.genOf(again) != HandleTable.genOf(h), true)
+            @Assert(HandleTable.isLiveHandle(h), false)
+        } finally {
+            JitContext.free(c)
+        }
+    }
 }

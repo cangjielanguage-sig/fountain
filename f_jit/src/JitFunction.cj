@@ -405,19 +405,7 @@ public class JitFunction {
             let ret = JitReport.finish(ctx, cell, { => this.replay(ctx, cells) }, report)
             // 4. 解包；句柄型返回值已取成宿主对象，立即归还句柄（否则每次调用泄漏 1 槽）
             let v = marshal.makeRetUnboxer(unboxCode)(ret)
-            if (unboxCode >= LocalType.STRING && unboxCode <= LocalType.HOST_OBJECT &&
-                unboxCode != LocalType.CLOSURE) {
-                // 包装闭包返回的句柄若属于提升组（捕获的 14/容器），释放权在 `close`，
-                // 此处归还会把被捕获对象提前释放（第二次调用失效）。
-                var ownedByGroup = false
-                match (this.closureGroup) {
-                    case Some(g) => ownedByGroup = g.contains(ret)
-                    case None => ()
-                }
-                if (!ownedByGroup) {
-                    HandleTable.releaseEscaped(ret)
-                }
-            }
+            let _ = JitFunction.releaseReturnHandle(ret, unboxCode, this.closureGroup)
             if (unboxCode == LocalType.CLOSURE) {
                 this.lastClosureGroup = marshal.closureGroupOf()
             }
@@ -437,6 +425,34 @@ public class JitFunction {
             }
             JitContext.free(ctx)
         }
+    }
+
+    /**
+     * 归还返回位置的逃逸句柄（A2/P2-3）。
+     *
+     * 覆盖 4–14（12 除外，闭包有自己的提升组）、**15** 与 **16–19**：后两组此前落在
+     * `4..14` 条件外，每次「返回 Any / 返回 JSON 节点」都泄漏 1 槽（跨调用单调增长）。
+     * 包装闭包返回的句柄若属于提升组（捕获的 14/容器），释放权在 `close`，此处不归。
+     */
+    internal static func releaseReturnHandle(ret: Int64, unboxCode: UInt16,
+        group: ?PromotionGroup): Bool {
+        if (!JitFunction.isReturnedHandle(unboxCode)) {
+            return false
+        }
+        match (group) {
+            case Some(g) => if (g.contains(ret)) { return false }
+            case None => ()
+        }
+        HandleTable.releaseEscaped(ret)
+        true
+    }
+
+    /** 句柄型返回码：4–14 去 12、15、16–19（13 沿用 M2 既有口径）。 */
+    internal static func isReturnedHandle(unboxCode: UInt16): Bool {
+        let hosted = unboxCode >= LocalType.STRING && unboxCode <= LocalType.HOST_OBJECT &&
+            unboxCode != LocalType.CLOSURE
+        hosted || unboxCode == LocalType.ANY ||
+            (unboxCode >= LocalType.JSON_VALUE && unboxCode <= LocalType.JSON_NULL)
     }
 
     private func classAt(i: Int64): ?String {
