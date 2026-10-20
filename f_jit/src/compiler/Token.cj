@@ -74,6 +74,14 @@ internal enum TokenKind <: Equatable<TokenKind> {
     /** `is`（M3：类型问答；左值 15 ⇒ H79，其余走静态关系，见 m3 §3）。 */
     | KwIs
 
+    /**
+     * JSON 字面量（M3 §11）：`` `{…}` `` / `` `[…]` ``。
+     *
+     * `text` = **反引号之间的原文**（零宿主转义、可跨行；CRLF/CR 已在源规范化阶段折成 `\n`）。
+     * 取界 = 下一个反引号——段内的行注释、块注释、引号、`{`、`}` 与行首锚定标记**根本不参与**词法判定。
+     */
+    | JsonLit
+
     // ---- 标点（12）----
     | LParen
     | RParen
@@ -194,6 +202,7 @@ internal enum TokenKind <: Equatable<TokenKind> {
             case EOF => 59
             // M3 追加（排在全表末尾，不动既有编号 —— 既有编号是 M1/M2 用例的锚点）
             case KwIs => 60
+            case JsonLit => 61
         }
     }
 }

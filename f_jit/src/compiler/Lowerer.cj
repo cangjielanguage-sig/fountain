@@ -18,6 +18,7 @@ package fountain::f_jit.compiler
 import std.collection.ArrayList
 import std.convert.*
 import fountain::f_base.UnsafeBytes
+import fountain::f_data.json.{JsonArray, JsonObject, JsonValue}
 import fountain::f_jit.base.LocalType
 import fountain::f_jit.base.PublicCtor
 import fountain::f_jit.base.SourcePos
@@ -871,6 +872,15 @@ internal class Lowerer {
         if (expected == LocalType.NONE || actual == LocalType.NONE || expected == actual) {
             return actual
         }
+        // JSON 谱系无隐式转换：`JsonObject` 不能当 `JsonArray` 用（m3 §11 静态类型标注）。
+        // 唯一的「上行」是收进 `JsonValue`（16，码级基类）——那正是 expected == 16 的情形。
+        if (expected >= LocalType.JSON_VALUE && expected <= LocalType.JSON_NULL &&
+            actual >= LocalType.JSON_VALUE && actual <= LocalType.JSON_NULL &&
+            expected != LocalType.JSON_VALUE) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, e.pos().line, e.pos().column,
+                'JSON 谱系类型不匹配：期望 ${LocalType.name(expected)}，实际 ${LocalType.name(actual)}' +
+                '（只有 `JsonValue` 能收全部节点，m3 §11）')
+        }
         if (expected == LocalType.F64 && actual == LocalType.I64) {
             let ctx = this.requireCtx()
             ctx.builder.emit(Op.TO_F64)
@@ -958,6 +968,7 @@ internal class Lowerer {
                 t1
             case AstExpr.CastOr(e, t, fb, pos) => this.lowerCastOr(e, t, fb, pos)
             case AstExpr.IsType(e, t, pos) => this.lowerIsType(e, t, pos)
+            case AstExpr.JsonLit(text, code, pos) => this.lowerJsonLit(text, code, pos)
             case AstExpr.Call(target, args, pos) => this.lowerCall(target, args, pos)
             case AstExpr.Closure(lambda, _) =>
                 this.lowerClosureExpr(lambda)
@@ -1048,6 +1059,38 @@ internal class Lowerer {
             case AstExpr.CtorCall(className, args, pos) =>
                 this.lowerCtorCall(className, args, pos)
         }
+    }
+
+    /**
+     * JSON 字面量（m3 §11）：编译期**解析一遍**，非法即源编译错误；合法则
+     * 非空 → 常量 kind 11（`PUSH_KH`，句柄码 17/18、加载期实例化后只读 frozen）；
+     * 空 `` `{}` `` / `` `[]` `` → H83 `json_new`（世界内构造，可变、非常量）。
+     */
+    private func lowerJsonLit(text: String, code: UInt16, pos: SourcePos): UInt16 {
+        let ctx = this.requireCtx()
+        var parsed: JsonValue
+        try {
+            parsed = JsonValue.fromStr(text)
+        } catch (e: Exception) {
+            diagFail(DiagKind.SYNTAX_ERROR, this.src, 0, pos.line, pos.column,
+                'JSON 字面量非法：${e.message}')
+        }
+        let empty = match (parsed) {
+            case o: JsonObject => o.size == 0
+            case arr: JsonArray => arr.size == 0
+            case _ => false
+        }
+        if (empty) {
+            // 空形态 = 世界内构造（对齐 M1 v0.18 空容器先例）：可变、非常量
+            ctx.builder.emitI64(Op.PUSH_I64,
+                if (code == LocalType.JSON_OBJECT) { 0 } else { 1 })
+            ctx.builder.setSite(pos)
+            ctx.builder.callHelper(HelperCodec.JSON_NEW, 1u8)
+            return code
+        }
+        let hid = this.sess.consts.addJson(text)
+        ctx.builder.emitU16(Op.PUSH_KH, UInt16(hid))
+        code
     }
 
     private func lowerLiteral(t: Token, pos: SourcePos): UInt16 {
@@ -1327,6 +1370,35 @@ internal class Lowerer {
     }
 
     /** 字面量 0 判定（Range step 编译期拒绝用；非字面量留给运行期 helper 的 14）。 */
+    /** JSON 字面量体是否「空对象 / 空数组」（只用于捕获来源判定，与降低期的空判定同构）。 */
+    private static func isJsonBodyEmpty(text: String): Bool {
+        let bs = text.unsafeBytes()
+        var i = 0
+        while (i < bs.size && (bs[i] == 0x20u8 || bs[i] == 0x09u8 || bs[i] == 0x0Au8 ||
+            bs[i] == 0x0Du8)) {
+            i = i + 1
+        }
+        if (i >= bs.size) {
+            return true
+        }
+        let open = bs[i]
+        i = i + 1
+        while (i < bs.size && (bs[i] == 0x20u8 || bs[i] == 0x09u8 || bs[i] == 0x0Au8 ||
+            bs[i] == 0x0Du8)) {
+            i = i + 1
+        }
+        if (i >= bs.size) {
+            return false
+        }
+        if (open == 0x7Bu8) {
+            return bs[i] == 0x7Du8
+        }
+        if (open == 0x5Bu8) {
+            return bs[i] == 0x5Du8
+        }
+        false
+    }
+
     private static func isZeroIntLit(e: AstExpr): Bool {
         match (e) {
             case AstExpr.Lit(t, _) =>
@@ -1724,6 +1796,8 @@ internal class Lowerer {
             case AstExpr.CastOr(_, t, _, _) => t.objectName()
             // `is` 的结果恒为 Bool（14 不在结果类型里）
             case AstExpr.IsType(_, _, _) => None
+            // JSON 字面量的静态类型就是节点码 17/18（不是 14）
+            case AstExpr.JsonLit(_, _, _) => None
             case AstExpr.MethodCall(inner, methodName, _, _) =>
                 match (this.hostObjectClassOf(inner)) {
                     case Some(cls) =>
@@ -2800,6 +2874,7 @@ internal class Lowerer {
                 }
             case AstExpr.CastOr(_, t, _, _) => t.code()
             case AstExpr.IsType(_, _, _) => LocalType.BOOL
+            case AstExpr.JsonLit(_, code, _) => code
             case AstExpr.Call(target, _, _) =>
                 match (target) {
                     case AstExpr.Var(cname, _) =>
@@ -2892,6 +2967,13 @@ internal class Lowerer {
             case AstExpr.Unary(_, _, _) => CaptureOrigin.WINDOW
             // `E is T` 产出 Bool（值型），不进窗口分配面
             case AstExpr.IsType(_, _, _) => CaptureOrigin.VALUE
+            // 非空 JSON 字面量是**路径 A 常量**；空字面量走 H83（窗口分配）⇒ 保守取 WINDOW
+            case AstExpr.JsonLit(text, _, _) =>
+                if (Lowerer.isJsonBodyEmpty(text)) {
+                    CaptureOrigin.WINDOW
+                } else {
+                    CaptureOrigin.CONSTANT
+                }
             case _ => CaptureOrigin.WINDOW
         }
     }
@@ -2989,6 +3071,7 @@ internal class Lowerer {
             case AstExpr.Closure(_, _) => LocalType.CLOSURE
             case AstExpr.CastOr(_, t, _, _) => t.code()
             case AstExpr.IsType(_, _, _) => LocalType.BOOL
+            case AstExpr.JsonLit(_, code, _) => code
             case AstExpr.RecursiveValue(_) => LocalType.CLOSURE
             case AstExpr.RegexOp(k, _, _, _, _, _, _) =>
                 if (k == TokenKind.Tilde || k == TokenKind.BangTilde) {
@@ -3184,6 +3267,7 @@ internal class Lowerer {
                 }
             // `E is T` 的操作数仍要参与自由变量扫描（否则闭包里的 `x is Int64` 捕获不到 x）
             case AstExpr.IsType(t, _, _) => Lowerer.scanExpr(t, locals, outer, free)
+            case AstExpr.JsonLit(_, _, _) => ()
             case _ => ()
         }
     }

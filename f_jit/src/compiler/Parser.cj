@@ -1146,6 +1146,9 @@ internal class Parser {
             case TokenKind.StrLit =>
                 this.take()
                 return this.buildStringExpr(t, pos)
+            case TokenKind.JsonLit =>
+                this.take()
+                return this.buildJsonExpr(t, pos)
             case TokenKind.KwRecursive =>
                 this.take()
                 return AstExpr.RecursiveValue(pos)
@@ -1194,6 +1197,35 @@ internal class Parser {
      * 切分在**解析期**完成（插值原文由词法保留，§8.8 冻结顺序的最后一步），
      * 片段内的表达式递归解析——位置取片段在原串中的相对行列（由片段起点推算）。
      */
+    /**
+     * JSON 字面量（m3 §11）：**体首非空白字符**决定静态类型。
+     *
+     * `{` ⇒ `JsonObject`（17）、`[` ⇒ `JsonArray`（18）；空体与标量顶层（数字 / 字符串 /
+     * `true` / `false` / `null`）一律编译错误——标量只作元素（§12-8①），空体也无法定形态。
+     * 这里只做**形态判定**；JSON 语法本身在降低阶段解析一遍（非法即源编译错误）。
+     */
+    private func buildJsonExpr(t: Token, pos: SourcePos): AstExpr {
+        let body = t.text
+        let bs = body.unsafeBytes()
+        var i = 0
+        while (i < bs.size && (bs[i] == 0x20u8 || bs[i] == 0x09u8 || bs[i] == 0x0Au8 ||
+            bs[i] == 0x0Du8)) {
+            i = i + 1
+        }
+        if (i >= bs.size) {
+            diagFail(DiagKind.SYNTAX_ERROR, this.src, t.pos, t.line, t.column,
+                'JSON 字面量为空（体必须是对象 `{…}` 或数组 `[…]`，m3 §11）')
+        }
+        if (bs[i] == 0x7Bu8) {
+            return AstExpr.JsonLit(body, LocalType.JSON_OBJECT, pos)
+        }
+        if (bs[i] == 0x5Bu8) {
+            return AstExpr.JsonLit(body, LocalType.JSON_ARRAY, pos)
+        }
+        diagFail(DiagKind.SYNTAX_ERROR, this.src, t.pos, t.line, t.column,
+            'JSON 字面量的体必须以 `{` 或 `[` 开头（标量顶层不开放，m3 §11/§12-8①）')
+    }
+
     private func buildStringExpr(t: Token, pos: SourcePos): AstExpr {
         let raw = t.text
         // 原始串 verbatim（§8.8）：不插值 —— 依 token 起点字符是否为 # 判定

@@ -115,6 +115,7 @@ internal class AstShape {
                     case None => 'castor(${shapeE(e)} as ${builtinName(t)})'
                 }
             case AstExpr.IsType(e, t, _) => 'is(${shapeE(e)} is ${builtinName(t)})'
+            case AstExpr.JsonLit(_, code, _) => 'json(${LocalType.name(code)})'
         }
     }
 

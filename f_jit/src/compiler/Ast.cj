@@ -269,6 +269,15 @@ internal enum AstExpr {
      */
     | IsType(AstExpr, TypeRef, SourcePos)
 
+    /**
+     * JSON 字面量（m3 §11）：载荷 = `(原文, 静态类型码)`。
+     *
+     * 静态类型码在**解析期**由体首非空白字符决定：`{` ⇒ `JSON_OBJECT(17)`、`[` ⇒
+     * `JSON_ARRAY(18)`；标量顶层（数字/字符串/`true`/`false`/`null`）在解析期即编译错误
+     * （m3 §12-8①：标量只作元素）。原文进常量（kind 11）或经 H83 构造，见 `lowerJsonLit`。
+     */
+    | JsonLit(String, UInt16, SourcePos)
+
     /** 位置（驱动 `setSite` 与编译期诊断；design §4.3.2）。 */
     public func pos(): SourcePos {
         match (this) {
@@ -297,6 +306,7 @@ internal enum AstExpr {
             case CtorCall(_, _, p) => p
             case CastOr(_, _, _, p) => p
             case IsType(_, _, p) => p
+            case JsonLit(_, _, p) => p
         }
     }
 }

@@ -228,6 +228,7 @@ internal class DefiniteAssignment {
                     case None => ()
                 }
             case AstExpr.IsType(x, _, _) => this.walkExpr(x, state)
+            case AstExpr.JsonLit(_, _, _) => ()
             case AstExpr.Call(t, args, pos) =>
                 this.walkCallee(t, state, pos)
                 for (a in args) {
@@ -437,6 +438,7 @@ internal class DefiniteAssignment {
                     case None => ()
                 }
             case AstExpr.IsType(t, _, _) => this.walkExprWithOuter(t, state, outer)
+            case AstExpr.JsonLit(_, _, _) => ()
             case _ => this.walkExpr(e, state)
         }
     }

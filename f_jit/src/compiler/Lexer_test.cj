@@ -166,6 +166,7 @@ public class Lexer_test {
             case TokenKind.KwNull => 'KwNull'
             case TokenKind.KwAs => 'KwAs'
             case TokenKind.KwIs => 'KwIs'
+            case TokenKind.JsonLit => 'JsonLit'
             case TokenKind.LParen => 'LParen'
             case TokenKind.RParen => 'RParen'
             case TokenKind.LBrace => 'LBrace'
