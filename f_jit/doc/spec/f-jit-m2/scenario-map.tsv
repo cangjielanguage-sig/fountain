@@ -1,0 +1,157 @@
+# capability	scenario	test_case（逗号分隔；N/A = 流程/文档项；GAP = 无对应用例）	强度（full/partial/none/N/A）
+f-jit-base-contracts	码值与查询一致	constantsMatchSpecTable	full
+f-jit-base-contracts	版本分派合法集	legalSetIsDispatchedByVerMajor	full
+f-jit-base-contracts	token 与类型码对应	mappingIsClosedWithLocalType	full
+f-jit-base-contracts	token 11 的大类归属	hostObjectTokenIsTheSharedOpaqueCategory	full
+f-jit-base-contracts	描述可断言	describeIsNonEmptyAndCarriesKeyword	full
+f-jit-base-contracts	21 与 99 不混用	hostExceptionAndPanicAreDistinguished	full
+f-jit-base-contracts	宿主侧判定	isHostSideIsFalseForAllM1Codes	full
+f-jit-base-contracts	常量自洽	constantsMatchSpecTable	full
+f-jit-base-contracts	legacy 常量与 M1 路径不变	legacyM1ConstantsUnchanged	full
+f-jit-base-contracts	M2 目标版本显式选择	m2HeaderBuildsWithM2Constants	full
+f-jit-base-contracts	字段项构造保真	fieldsRoundTrip	full
+f-jit-base-contracts	14 型字段携带 typeRef	hostObjectFieldCarriesTypeRef	full
+f-jit-base-contracts	构造器重载与适配器	multipleCtorOverloadsArePreserved	full
+f-jit-base-contracts	六类 kind 逐值可断言	sixKindsRoundTrip	full
+f-jit-base-contracts	三段消息与固定 hint	messageHasThreeSegmentsAndFixedHint	full
+f-jit-base-contracts	不占运行期错误码	doesNotOccupyErrCode	full
+f-jit-bytecode-format	CALL_HOST 行元信息	callHostRowAndM1RowsUnchanged	full
+f-jit-bytecode-format	禁区与保留区	forbiddenAndReservedRegions	full
+f-jit-bytecode-format	已分配项逐条核对	representativeEntriesMatchSpec	full
+f-jit-bytecode-format	表规模与自洽	tableIs256AndSelfIndexed	full
+f-jit-bytecode-format	条目定长往返	entryRoundTripsIn26Bytes	full
+f-jit-bytecode-format	类型表按版本拒绝	illegalTypeValuesRejectedByVerMajor	full
+f-jit-bytecode-format	13/14 为句柄槽	isHandleSlotSplitsAtFour	full
+f-jit-bytecode-format	目录越界拒绝	codeRangeOutOfBoundsIsRejected	full
+f-jit-bytecode-format	宿主值不可常量化	GAP	none
+f-jit-bytecode-format	常量段零增量	GAP	none
+f-jit-bytecode-format	注册去重与归一	addRegexDeduplicatesAndNormalizesFlags	full
+f-jit-bytecode-format	冻结后只读	freezeMakesRegistryReadOnly	full
+f-jit-bytecode-format	有向无环共享	listAndMapReferenceChildIndices	partial
+f-jit-bytecode-format	版本兼容矩阵	supportedMajorsCoversImplementedMajors	full
+f-jit-bytecode-format	M1 加载器拒绝 v2	m1RuleSetRejectsV2Product	full
+f-jit-bytecode-format	无注册表分发拒绝	noRegistryDispatchRejectsHostObjectAndUserHelpers	full
+f-jit-bytecode-format	每条拒绝面独立可测	rejectBadMagic	partial
+f-jit-bytecode-format	规则集取用可断言	registryRegistersV1V2AndV3	full
+f-jit-bytecode-format	矩阵边界	v2RuleSetEnforcesMinorRange	full
+f-jit-bytecode-format	字节码语义与 helper 转发一致	helperDispatchTrampoline	partial
+f-jit-bytecode-format	机器码零新模式	GAP	none
+f-jit-compiler-frontend	未注册函数诊断	unregisteredFunctionReportsNameAndRegistryList	full
+f-jit-compiler-frontend	HostClosure 静态判定	parsesThreeForms	full
+f-jit-compiler-frontend	同名冲突拒绝	nameClashIsRejected	full
+f-jit-compiler-frontend	缺失箭头与非法形参	rejectsIllegalSignatureComponents	full
+f-jit-compiler-frontend	读未赋值拒绝	readBeforeWriteIsRejected	full
+f-jit-compiler-frontend	14 槽恒非空	nullCannotBeStoredIntoHandleSlot	full
+f-jit-compiler-frontend	捕获未赋值变量	capturingAnUnassignedVariableIsRejected	full
+f-jit-compiler-frontend	回边不动点	loopExitDoesNotCountAsAssigned	full
+f-jit-compiler-frontend	CALL_HOST 降低	callHostInstructionSequence	full
+f-jit-compiler-frontend	求值顺序	callHostInstructionSequence	partial
+f-jit-compiler-frontend	构造结果类型	parsesFourM2Constructors	partial
+f-jit-compiler-frontend	取余仅整型	integerArithmeticAndBitOps	full
+f-jit-compiler-frontend	小数字面值精确构造	decimalLiteralsAreExact	full
+f-jit-compiler-frontend	控制流栈平衡	branchConvergenceRequiresEqualDepth	full
+f-jit-compiler-frontend	多重赋值先读后写	multiAssignReadsBeforeWrite	full
+f-jit-compiler-frontend	闭包与自递归三路降低	closuresIifeAndCapture	full
+f-jit-compiler-frontend	空容器需上下文类型	emptyContainersNeedContext	full
+f-jit-compiler-frontend	缺失错误检查被拒	missingCheckErrIsRejected	full
+f-jit-compiler-frontend	变更型与去优化禁令	callHostMarksMutationFlag	full
+f-jit-compiler-frontend	CALL_HOST 版本门槛	callHostV1IsNotImpl	full
+f-jit-compiler-frontend	三类记法解析	parsesThreeForms	full
+f-jit-compiler-frontend	禁高阶与 9/12/13	rejectsHigherOrder	full
+f-jit-compiler-frontend	未注册类名	rejectsUnknownClassName	full
+f-jit-compiler-frontend	命中与未命中	classLookupHitAndMiss	full
+f-jit-compiler-frontend	快照语义	snapshotIsolation	full
+f-jit-compiler-frontend	继承成员按表解析	inheritedMemberOnlyByTableEntry	full
+f-jit-compiler-frontend	糖 ≡ 手写	t35SugarEqualsManualWrapper	full
+f-jit-compiler-frontend	编译期拒绝集	memberAccessRejectSet	full
+f-jit-compiler-frontend	链式与 typeRef	fieldGetChainUsesTypeRef	full
+f-jit-compiler-frontend	构造降级与自动检查	parsesFourM2Constructors	partial
+f-jit-compiler-frontend	重载与嵌套	multipleCtorOverloadsArePreserved	full
+f-jit-compiler-frontend	JSON 谱系拒绝	jsonFamilyIsRejected	full
+f-jit-compiler-frontend	第 0 步白名单拒绝	parameterCaptureEscapeKeepsOrigin	full
+f-jit-compiler-frontend	第 1 步放开	valueCaptureMayEscape	full
+f-jit-compiler-frontend	描述符不入产物	descriptorIsNotInFbc	full
+f-jit-compiler-frontend	LOAD_CAP 语义不变	loadCapSemanticsUnchanged	full
+f-jit-differential-acceptance	映射可脚本校验	tMappingHasNoDanglingEntries	full
+f-jit-differential-acceptance	M2 编号全覆盖	m2ScopeIsFullyCovered	full
+f-jit-differential-acceptance	范围外编号有说明	outOfScopeIdsAreAttributedToLaterMilestones	full
+f-jit-differential-acceptance	双字段断言	assertTripleEqualThrowsOnMismatch	full
+f-jit-differential-acceptance	21/99 分类断言	t60ThreeFacesMapTo21,t60EngineFailureStays99	full
+f-jit-differential-acceptance	容量边界可复现	windowDoublesWhenExhausted	full
+f-jit-differential-acceptance	窗口账目可对账	t54CtorRegistersOneSlot	full
+f-jit-differential-acceptance	性能对照同构	userHelperVsHostClosure	full
+f-jit-differential-acceptance	端序与页大小	littleEndianRoundTrip	full
+f-jit-differential-acceptance	版本矩阵	v2ProductDispatchesToV2RuleSet	full
+f-jit-differential-acceptance	冻结决策回归	offsetsMatchSpecLayout	partial
+f-jit-differential-acceptance	偏差回写	N/A	N/A
+f-jit-differential-acceptance	同源抽查	N/A	N/A
+f-jit-differential-acceptance	三引擎逐位一致	t33HostCallValueIsTripleEqual	full
+f-jit-differential-acceptance	重入与引用返回	t31ReentrancyDepthThree	full
+f-jit-differential-acceptance	糖与手写对拍	t35SugarEqualsManualWrapper	full
+f-jit-differential-acceptance	对象身份	t34HostObjectRoundtripKeepsIdentity	full
+f-jit-differential-acceptance	每步回归	t49M1DiffRegressionIsZeroChange	partial
+f-jit-differential-acceptance	M1 产物不变	t49M1DiffRegressionIsZeroChange	full
+f-jit-differential-acceptance	版本隔离	m1RuleSetRejectsV2Product	full
+f-jit-facade-bridge	重名与超限	duplicateIsRejected	full
+f-jit-facade-bridge	类名冲突拒绝	fourClassNameClashesAreRejected	full
+f-jit-facade-bridge	快照语义	snapshotIsIsolated	full
+f-jit-facade-bridge	注册类实参	hostObjectAcceptanceAndIdentity	full
+f-jit-facade-bridge	HostClosure 实参	hostClosureVerifiesAndPins	full
+f-jit-facade-bridge	解包三行	unboxTable	full
+f-jit-facade-bridge	包装值不作实参	callForReturnsWrapperAndRejectsWrapperArg	full
+f-jit-facade-bridge	全类型行可断言	scalarMarshalling	full
+f-jit-facade-bridge	全路径清理	escapedSurvivesCleanup	full
+f-jit-facade-bridge	契约错误统一码	contractErrorHasNoSite	full
+f-jit-facade-bridge	两形态同接口同行为	t52TwoFormsSameBehavior	full
+f-jit-facade-bridge	闭包包装调用	wrapperCallMatchesDirectClosure	full
+f-jit-facade-bridge	close 协议	closeIsIdempotentAndReleasesGroup	full
+f-jit-facade-bridge	卸载弱语义	unloadThenWrapperCallIsRejected	full
+f-jit-facade-bridge	含宿主句柄的容器被拒	GAP	none
+f-jit-facade-bridge	注册表依赖面拒绝	noRegistryDispatchRejectsHostObjectAndUserHelpers	full
+f-jit-facade-bridge	入口校验	entryHostClosureParamWorks	full
+f-jit-facade-bridge	一次导入可用	canRegisterThroughRootImportOnly	full
+f-jit-facade-bridge	内部类型不外泄	protectedDeclarationsAreVisibleInsideModule	partial
+f-jit-facade-bridge	注册与查询	registerAndResolve	full
+f-jit-facade-bridge	拒绝后不登记	reflectionAndJsonRejectionsDoNotRegister	full
+f-jit-facade-bridge	快照隔离	compiledUnitKeepsItsSnapshot	full
+f-jit-facade-bridge	全覆盖与逐项等价	autoMatchesManualDescriptor	full
+f-jit-facade-bridge	反射仅在注册期	GAP	none
+f-jit-facade-bridge	过滤与诊断	skipsStaticMutableMembersWithDiagnostics	full
+f-jit-facade-bridge	JSON 谱系拒绝	jsonFamilyIsRejected	full
+f-jit-facade-bridge	每次求值新实例	t54CtorInstanceFlowsAllChannels	full
+f-jit-facade-bridge	嵌套构造	t57ArgumentFlowsAllChannels	partial
+f-jit-facade-bridge	适配器异常	setterExceptionMapsTo21	full
+f-jit-facade-bridge	源入口实参身份	hostObjectAcceptanceAndIdentity	full
+f-jit-facade-bridge	槽 14 链内传递	chainDepthThreeKeeps14	full
+f-jit-facade-bridge	HostClosure 签名含 14	hostClosureParam14	full
+f-jit-runtime	同对象同标识	pinReusesIdForSameObject	full
+f-jit-runtime	无 token 对象仍拒绝	pinRejectsObjectWithoutToken	full
+f-jit-runtime	释放后不可达	releasedIdIsUnreachableAndGenBlocksReuse	full
+f-jit-runtime	逃逸槽幸存	escapedSlotSurvivesWindowReset	full
+f-jit-runtime	提升组槽级语义	moveOutGroupIsSlotLevel	full
+f-jit-runtime	try/finally 豁免	cleanupExemptsPromotedSlots	full
+f-jit-runtime	失败不逃逸	failuresNeverEscapeAsExceptions	full
+f-jit-runtime	窗口账目分野	referenceReturnRegistersOneSlot	full
+f-jit-runtime	宿主异常统一 21	accessorExceptionMapsTo21	full
+f-jit-runtime	迭代中修改同容器	t19Iteration	partial
+f-jit-runtime	13/14 大类名呈现	hostHandleSlotTextUsesLargeClassName	full
+f-jit-runtime	报告逐位一致	reportTemplateIsByteExact	full
+f-jit-runtime	首个收敛点获胜	firstConvergencePointWins	full
+f-jit-runtime	失败即终止	failFastStopsRemainingInstructions	full
+f-jit-runtime	CALL_HOST 与 H63 对拍	interpreterMatchesDirectTrampoline	full
+f-jit-runtime	逐组语义可断言	helperIdsCoverSpecRange	full
+f-jit-runtime	签名合法性	legalCodeSet	full
+f-jit-runtime	单次判定覆盖全部不符	checksConcreteClassName	full
+f-jit-runtime	缓存复用	cachedReturnsEntrySig	full
+f-jit-runtime	正常调用与窗口登记	t31CallHostValueAndReference	full
+f-jit-runtime	异常与站点	t60CauseCarriesFullStack	full
+f-jit-runtime	重入隔离	t31InnerErrorDoesNotLeak	full
+f-jit-runtime	值型与句柄型读	valueFieldIsReadWithoutRegistration	full
+f-jit-runtime	写后宿主可见	valueFieldWriteIsVisibleAndUnregistered	full
+f-jit-runtime	只读字段双防线	immutableFieldIsRejected	full
+f-jit-runtime	共享捕获计数	addIsIdempotentAndCounts	full
+f-jit-runtime	幂等提升	moveOutGroupPromotesInPlace	full
+f-jit-runtime	常量不入组	constantsAreNeverPromotedOrReleased	full
+f-jit-runtime	21 与 99 分类	t60EngineFailureStays99	full
+f-jit-runtime	栈完整性与终止	t60CauseCarriesFullStack	full
+f-jit-runtime	并发隔离	t60ConcurrentFailuresAreIsolated	full

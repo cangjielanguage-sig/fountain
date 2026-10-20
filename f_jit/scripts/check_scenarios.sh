@@ -12,14 +12,24 @@
 #   2. 声明的测试函数必须存在（否则视为笔误/挂名）；
 #   3. spec 里的每条 scenario 都必须出现在映射中（完整性，禁止漏登记）。
 #
-# 默认：缺口与部分覆盖只报告不失败（M1 遗留，已在 verify.md 登记）。
-# --strict：缺口或部分覆盖也判失败，供后续里程碑把矩阵收紧到「全 full」。
+# 用法：
+#   check_scenarios.sh [m1|m2] [--strict]
+#     m1（默认）/ m2 = 里程碑，决定 spec 目录与 tsv 路径
+#     --strict       = 缺口或部分覆盖也判失败（供里程碑把矩阵收紧到「全 full」）
+# 默认：缺口与部分覆盖只报告不失败（各里程碑的遗留项在 verify.md 登记）。
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SPECS="$ROOT/doc/spec/f-jit-m1/specs"
-MAP="$ROOT/doc/spec/f-jit-m1/scenario-map.tsv"
+MILESTONE="m1"
 STRICT=0
-[[ "${1:-}" == "--strict" ]] && STRICT=1
+for arg in "$@"; do
+  case "$arg" in
+    m1|m2) MILESTONE="$arg" ;;
+    --strict) STRICT=1 ;;
+    *) echo "check_scenarios: 未知参数 $arg" >&2; exit 2 ;;
+  esac
+done
+SPECS="$ROOT/doc/spec/f-jit-$MILESTONE/specs"
+MAP="$ROOT/doc/spec/f-jit-$MILESTONE/scenario-map.tsv"
 [[ -f "$MAP" ]] || { echo "check_scenarios: 缺少 $MAP" >&2; exit 2; }
 
 # 测试函数可来自 f_jit 自身，也可来自 f_util（f-util-fnv 的用例在那边）。
