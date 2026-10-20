@@ -85,10 +85,10 @@ f-jit-differential-acceptance	版本矩阵	v2ProductDispatchesToV2RuleSet	full
 f-jit-differential-acceptance	冻结决策回归	offsetsMatchSpecLayout	partial
 f-jit-differential-acceptance	偏差回写	N/A	N/A
 f-jit-differential-acceptance	同源抽查	N/A	N/A
-f-jit-differential-acceptance	三引擎逐位一致	t33HostCallValueIsTripleEqual	full
+f-jit-differential-acceptance	三引擎逐位一致	t33HostCallValueIsTripleEqual,t33HandleArgIsTripleEqual,t57HostObjectArgIsTripleEqual	full
 f-jit-differential-acceptance	重入与引用返回	t31ReentrancyDepthThree	full
-f-jit-differential-acceptance	糖与手写对拍	t35SugarEqualsManualWrapper	full
-f-jit-differential-acceptance	对象身份	t34HostObjectRoundtripKeepsIdentity	full
+f-jit-differential-acceptance	糖与手写对拍	t35SugarEqualsManualWrapper,t35SugarIsTripleEqual	full
+f-jit-differential-acceptance	对象身份	t34HostObjectRoundtripKeepsIdentity,t57HostObjectArgIsTripleEqual	full
 f-jit-differential-acceptance	每步回归	t49M1DiffRegressionIsZeroChange	partial
 f-jit-differential-acceptance	M1 产物不变	t49M1DiffRegressionIsZeroChange	full
 f-jit-differential-acceptance	版本隔离	m1RuleSetRejectsV2Product	full
