@@ -126,9 +126,9 @@ public class PerfOverride_test {
             (ovCost / rounds).toString() + 'ns ratioX10=' + (refCost * 10 / ovCost).toString())
 
         // 门禁：覆盖后**净成本**必须低于反射净成本的 4/5（即至少快 1.25×）。
-        // 为何门槛这么低：`JitFunction.call<T>` 每次都要 `TypeInfo.of<T>()`，固定开销
-        // ≈18.8 μs/次，把方法调用那几微秒压在下面（见 doc/perf-m2.md「端到端实测」）。
-        // 本条只拦「覆盖退化成反射」，不承担端到端加速比的表达。
+        // 为何门槛这么低：`JitFunction.call<T>` 每次调用有 8–17 μs 的固定开销（逐项探针见
+        // doc/perf-m2.md：localTypeOf 只占 0.1–0.2 μs，大头在 JitExecutor.invoke 与收尾），
+        // 把方法调用那几微秒压在下面。本条只拦「覆盖退化成反射」，不表达端到端加速比。
         if (ovCost * 5 >= refCost * 4) {
             @Fail('PERF-OVERRIDE 净成本未达标 ref=' + (refCost / rounds).toString() + 'ns ov=' +
                 (ovCost / rounds).toString() + 'ns')
