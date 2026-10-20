@@ -45,13 +45,22 @@ public class JitBindings {
     public let methods: Array<PublicMethod>
     public let fields: Array<JitFieldBinding>
     public let ctors: Array<PublicCtor>
+    /**
+     * 静态成员的绑定（静态函数 / 静态只读字段 / 只读静态属性）。
+     *
+     * 静态成员在注册表里没有 `PublicMethod` 条目，只以「自动包装函数」形式存在（名字即成员名），
+     * 因此这里直接存 `PredefinedFunction`，注册时按名替换 `auto` 表里的反射版本。
+     */
+    public let statics: Array<PredefinedFunction>
 
     public init(methods!: Array<PublicMethod> = Array<PublicMethod>(),
         fields!: Array<JitFieldBinding> = Array<JitFieldBinding>(),
-        ctors!: Array<PublicCtor> = Array<PublicCtor>()) {
+        ctors!: Array<PublicCtor> = Array<PublicCtor>(),
+        statics!: Array<PredefinedFunction> = Array<PredefinedFunction>()) {
         this.methods = methods
         this.fields = fields
         this.ctors = ctors
+        this.statics = statics
     }
 
     public static func empty(): JitBindings {
@@ -59,7 +68,18 @@ public class JitBindings {
     }
 
     public func isEmpty(): Bool {
-        this.methods.size == 0 && this.fields.size == 0 && this.ctors.size == 0
+        this.methods.size == 0 && this.fields.size == 0 && this.ctors.size == 0 &&
+            this.statics.size == 0
+    }
+
+    /** 按成员名取静态绑定；未登记 → `None`（退回反射包装）。 */
+    public func staticOf(name: String): ?PredefinedFunction {
+        for (f in this.statics) {
+            if (f.name == name) {
+                return Some(f)
+            }
+        }
+        None
     }
 
     /** 按字段名取绑定；未登记 → `None`（该字段退回反射）。 */

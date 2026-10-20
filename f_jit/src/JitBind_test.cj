@@ -39,10 +39,33 @@ public class JitBindUser {
     public let id: Int64
     private var _score: Int64
 
+    /** 重载构造器 1：只有名字。 */
+    public init(name: String) {
+        this.name = name
+        this.id = 0
+        this._score = 0
+    }
+
+    /** 重载构造器 2：名字 + id。 */
     public init(name: String, id: Int64) {
         this.name = name
         this.id = id
         this._score = 0
+    }
+
+    /** 静态只读字段。 */
+    public static let version: Int64 = 3
+
+    /** 静态只读属性。 */
+    public static prop label: String {
+        get() {
+            'v${JitBindUser.version}'
+        }
+    }
+
+    /** 静态函数。 */
+    public static func parse(s: String): String {
+        'p${s}'
     }
 
     public func greet(s: String): String {
@@ -121,9 +144,41 @@ public class JitBind_test {
             case None => @Fail('字段 id 未生成绑定')
         }
 
-        // 构造器：1 条 (String, Int64)
-        @Assert(b.ctors.size, 1)
-        @Assert(b.ctors[0].params, [LocalType.STRING, LocalType.I64])
+        // 构造器：两条重载 (String) / (String, Int64)
+        @Assert(b.ctors.size, 2)
+        var hasOne = false
+        var hasTwo = false
+        for (c in b.ctors) {
+            if (c.params.size == 1 && c.params[0] == LocalType.STRING) {
+                hasOne = true
+            }
+            if (c.params.size == 2 && c.params[0] == LocalType.STRING &&
+                c.params[1] == LocalType.I64) {
+                hasTwo = true
+            }
+        }
+        @Assert(hasOne, true)
+        @Assert(hasTwo, true)
+
+        // 静态成员：version / label / parse
+        @Assert(b.statics.size, 3)
+        var hasVersion = false
+        var hasLabel = false
+        var hasParse = false
+        for (f in b.statics) {
+            if (f.name == 'version') {
+                hasVersion = true
+            }
+            if (f.name == 'label') {
+                hasLabel = true
+            }
+            if (f.name == 'parse') {
+                hasParse = true
+            }
+        }
+        @Assert(hasVersion, true)
+        @Assert(hasLabel, true)
+        @Assert(hasParse, true)
 
         // 私有方法不入表
         for (m in b.methods) {
@@ -161,6 +216,22 @@ public class JitBind_test {
         CompileCache.reset()
         let ctor = c.compile('{ => JitBindUser("cid", 2) }')
         @Assert(ctor.call<JitBindUser>([]).id, 2)
+
+        CompileCache.reset()
+        let ctor1 = c.compile('{ => JitBindUser("only") }')
+        @Assert(ctor1.call<JitBindUser>([]).id, 0)
+
+        CompileCache.reset()
+        let staticField = c.compile('{ => version() }')
+        @Assert(staticField.call<Int64>([]), 3)
+
+        CompileCache.reset()
+        let staticProp = c.compile('{ => label() }')
+        @Assert(staticProp.call<String>([]), 'v3')
+
+        CompileCache.reset()
+        let staticFunc = c.compile('{ => parse("x") }')
+        @Assert(staticFunc.call<String>([]), 'px')
     }
 
     /** 性能路径的回归：全部走类型化绑定后 300 次调用不崩、结果稳定。 */

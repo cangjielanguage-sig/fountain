@@ -35,11 +35,14 @@ import fountain::f_macros.*
  * - **实例方法** → `PublicMethod`；
  * - **实例字段**（`var`/`let`）→ `JitFieldBinding`（getter；`var` 另带 setter）；
  * - **实例属性**（`prop`/`mut prop`）→ 两条 `PublicMethod`（getter 用属性名，setter 用 `set<Name>`）；
- * - **构造器**（`init`）→ `PublicCtor`。
+ * - **构造器**（`init`）→ 每条一个 `PublicCtor`（重载按形参码区分）；
+ * - **静态函数 / 静态只读字段 / 只读静态属性** → `PredefinedFunction`（进 `statics`，
+ *   注册时按名替换 `auto` 表里的反射包装）。
  *
  * 每条绑定体都是「`as` 成声明类型后静态调用」，不经 `InstanceVariableInfo.getValue` /
  * `InstanceFunctionInfo.apply` / `ConstructorInfo.apply` 的 MCC 路径。
- * 静态成员、私有成员、泛型方法不展开（泛型发 WARNING）。
+ * 私有成员、泛型方法不展开（泛型发 WARNING）；`static var` 与 `static mut prop`
+ * 属注册面的「永久排除」（`§12.5` 附 B），宏只发 WARNING、不生成。
  */
 public macro JitBind(input: Tokens): Tokens {
     let klass = match (parseDecl(input)) {
@@ -52,22 +55,22 @@ public macro JitBind(input: Tokens): Tokens {
     var methods = quote()
     var fields = quote()
     var ctors = quote()
+    var statics = quote()
     var hasMethod = false
     var hasField = false
     var hasCtor = false
+    var hasStatic = false
     var skippedGeneric = 0
 
     for (d in klass.body.decls) {
         match (d) {
             case f: FuncDecl where isPublic(f) && !isStatic(f) =>
                 if (f.identifier.value == 'init') {
-                    if (!hasCtor) {
-                        ctors += buildCtor(f, clsName)
-                        hasCtor = true
-                    } else {
-                        diagReport(WARNING, input,
-                            '${clsName.value}：多构造器只展开第一个，其余走反射', '')
+                    if (hasCtor) {
+                        ctors += Token(TokenKind.COMMA, ',').toTokens()
                     }
+                    ctors += buildCtor(f, clsName)
+                    hasCtor = true
                 } else if (f.isGenericDecl) {
                     skippedGeneric = skippedGeneric + 1
                 } else {
@@ -76,6 +79,38 @@ public macro JitBind(input: Tokens): Tokens {
                     }
                     methods += buildMethod(f, clsName)
                     hasMethod = true
+                }
+            case f: FuncDecl where isPublic(f) && isStatic(f) =>
+                if (f.isGenericDecl) {
+                    skippedGeneric = skippedGeneric + 1
+                } else {
+                    if (hasStatic) {
+                        statics += Token(TokenKind.COMMA, ',').toTokens()
+                    }
+                    statics += buildStaticFunc(f, clsName)
+                    hasStatic = true
+                }
+            case v: VarDecl where isPublic(v) && isStatic(v) =>
+                if (v.isVar()) {
+                    diagReport(WARNING, input,
+                        '${clsName.value}.${v.identifier.value}：static var 未纳入注册面（附 B），不生成绑定', '')
+                } else {
+                    if (hasStatic) {
+                        statics += Token(TokenKind.COMMA, ',').toTokens()
+                    }
+                    statics += buildStaticValue(v.identifier, v.declType, clsName, true)
+                    hasStatic = true
+                }
+            case p: PropDecl where isPublic(p) && isStatic(p) =>
+                if (isMut(p)) {
+                    diagReport(WARNING, input,
+                        '${clsName.value}.${p.identifier.value}：static mut prop 未纳入注册面（附 B），不生成绑定', '')
+                } else {
+                    if (hasStatic) {
+                        statics += Token(TokenKind.COMMA, ',').toTokens()
+                    }
+                    statics += buildStaticValue(p.identifier, p.declType, clsName, false)
+                    hasStatic = true
                 }
             case v: VarDecl where isPublic(v) && !isStatic(v) =>
                 if (hasField) {
@@ -108,7 +143,8 @@ public macro JitBind(input: Tokens): Tokens {
             JitBindings(
                 methods: [$methods],
                 fields: [$fields],
-                ctors: [$ctors]
+                ctors: [$ctors],
+                statics: [$statics]
             )
         )
     )
@@ -332,4 +368,68 @@ private func codeToken(t: TypeNode): Tokens {
         case _ => 14
     }
     Token(TokenKind.INTEGER_LITERAL, c.toString()).toTokens()
+}
+
+// ---- 静态成员（无接收者，直接进 auto 函数表）----
+
+private func buildStaticFunc(f: FuncDecl, clsName: Token): Tokens {
+    let nameTok = f.identifier
+    let nameStr = Token(TokenKind.STRING_LITERAL, nameTok.value)
+    let params = f.funcParams
+    var codes: Tokens = Token(TokenKind.LSQUARE, '[').toTokens()
+    var prelude = quote()
+    var callArgs = quote()
+    for (i in 0..params.size) {
+        let p = params[i]
+        let pTok = p.identifier
+        let pType = p.paramType
+        if (i > 0) {
+            codes += Token(TokenKind.COMMA, ',').toTokens()
+            callArgs += Token(TokenKind.COMMA, ',').toTokens()
+        }
+        codes += codeToken(pType)
+        prelude += quote(
+            let $pTok = match (args[$(i)] as $pType) {
+                case Some(v) => v
+                case None => JitBindSupport.typeMismatch()
+            }
+        ) + Token(TokenKind.NL, '\n').toTokens()
+        callArgs += pTok.toTokens()
+    }
+    codes += Token(TokenKind.RSQUARE, ']').toTokens()
+    let retCode = try {
+        codeToken(f.declType)
+    } catch (_) {
+        Token(TokenKind.INTEGER_LITERAL, '3').toTokens()
+    }
+    quote(
+        PredefinedFunction(
+            $nameStr,
+            $codes,
+            $retCode,
+            { args =>
+                $prelude
+                $clsName.$nameTok($callArgs)
+            }
+        )
+    )
+}
+
+private func buildStaticValue(ident: Token, t: TypeNode, clsName: Token,
+    fromVar: Bool): Tokens {
+    let nameStr = Token(TokenKind.STRING_LITERAL, ident.value)
+    let emptyCodes = Token(TokenKind.LSQUARE, '[').toTokens() +
+        Token(TokenKind.RSQUARE, ']').toTokens()
+    let pcode = codeToken(t)
+    quote(
+        PredefinedFunction(
+            $nameStr,
+            $emptyCodes,
+            $pcode,
+            { _ =>
+                let r: Any = $clsName.$ident
+                r
+            }
+        )
+    )
 }

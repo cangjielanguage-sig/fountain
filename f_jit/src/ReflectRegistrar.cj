@@ -278,8 +278,11 @@ protected class ReflectRegistrar {
             if (!ReflectRegistrar.claimName(v.name, into, localNames, diag, '${name}.${v.name}')) {
                 continue
             }
-            auto.add(PredefinedFunction(v.name, Array<UInt16>(),
-                ReflectRegistrar.unwrapCode(codeOpt), { _ => v.getValue() }))
+            auto.add(match (effective.staticOf(v.name)) {
+                case Some(typed) => typed
+                case None => PredefinedFunction(v.name, Array<UInt16>(),
+                    ReflectRegistrar.unwrapCode(codeOpt), { _ => v.getValue() })
+            })
         }
         for (p in cls.staticProperties) {
             if (p.isMutable()) {
@@ -294,8 +297,11 @@ protected class ReflectRegistrar {
             if (!ReflectRegistrar.claimName(p.name, into, localNames, diag, '${name}.${p.name}')) {
                 continue
             }
-            auto.add(PredefinedFunction(p.name, Array<UInt16>(),
-                ReflectRegistrar.unwrapCode(codeOpt), { _ => p.getValue() }))
+            auto.add(match (effective.staticOf(p.name)) {
+                case Some(typed) => typed
+                case None => PredefinedFunction(p.name, Array<UInt16>(),
+                    ReflectRegistrar.unwrapCode(codeOpt), { _ => p.getValue() })
+            })
         }
         for (f in cls.staticFunctions) {
             let codeOpt = ReflectRegistrar.mapType(f.returnType)
@@ -312,9 +318,12 @@ protected class ReflectRegistrar {
                 continue
             }
             let staticType = TypeInfo.of<T>()
-            auto.add(PredefinedFunction(f.name, ReflectRegistrar.unwrapParams(paramCodes),
-                ReflectRegistrar.unwrapCode(codeOpt),
-                { args => f.apply(staticType, args) }))
+            auto.add(match (effective.staticOf(f.name)) {
+                case Some(typed) => typed
+                case None => PredefinedFunction(f.name, ReflectRegistrar.unwrapParams(paramCodes),
+                    ReflectRegistrar.unwrapCode(codeOpt),
+                    { args => f.apply(staticType, args) })
+            })
         }
 
         // ---- 构造器 ----
