@@ -76,10 +76,10 @@ public class SignatureDescriptor {
         SignatureDescriptor.isLegalCode(this.ret)
     }
 
-    /** `T/R` 合法码（m2 §3「T/R ∈ 0–8/10–11 与 14」）。 */
+    /** `T/R` 合法码（m2 §3「0–8/10–11/14」+ m3 §11「JSON 码 16–19 零注册」）。 */
     public static func isLegalCode(t: UInt16): Bool {
         (t <= LocalType.RANGE) || (t == LocalType.LIST) || (t == LocalType.MAP) ||
-            (t == LocalType.HOST_OBJECT)
+            (t == LocalType.HOST_OBJECT) || (t >= LocalType.JSON_VALUE && t <= LocalType.JSON_NULL)
     }
 }
 

@@ -405,6 +405,12 @@ public class FbcReader_test {
         let ok = FbcReader.loadWithoutRegistry(buildUnit(
             localType: 13u8, verMajor: Version.M2_MAJOR, verMinor: Version.M2_MINOR))
         @Assert(ok.types[0].get(0), 13u8)
+        // JSON 内建码（v3，槽 0 = 形参）同样零注册 ⇒ 放行（R3.10 对拍面）
+        for (c in 16..20) {
+            let ju = FbcReader.loadWithoutRegistry(buildUnit(
+                localType: UInt8(c), verMajor: Version.M3_MAJOR, verMinor: 0u16))
+            @Assert(ju.types[0].get(0), UInt8(c))
+        }
         // JSON 内建码（16–19）：规则集判定零注册（不触发无注册表拒绝面）
         for (c in 16..20) {
             @Assert(FbcRuleRegistry.V3.isRegistryDependent(UInt16(c)), false)

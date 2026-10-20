@@ -392,12 +392,14 @@ internal class Parser {
     /** T/R 合法集：0–8、10–11、14（m2 §3）与 15（m3 §3 的 `Any` 分量）。 */
     private static func checkSignatureComponent(code: UInt16, line: Int64, column: Int64,
         src: String): Unit {
+        // 允许 0–8 / 10–11 / 14 / 15 / 16–19：JSON 内建码作签名分量零注册（m3 §11 v0.3.20）。
         let ok = (code <= LocalType.RANGE) || (code == LocalType.LIST) || (code == LocalType.MAP) ||
-            (code == LocalType.HOST_OBJECT) || (code == LocalType.ANY)
+            (code == LocalType.HOST_OBJECT) || (code == LocalType.ANY) ||
+            (code >= LocalType.JSON_VALUE && code <= LocalType.JSON_NULL)
         if (!ok) {
             diagFail(DiagKind.BAD_PARAMETER_LIST, src, 0, line, column,
-                'HostClosure 的 T/R 不合法分量：${LocalType.name(code)}（允许 0–8/10–11/14/15；' +
-                '9/12/13 与高阶均拒绝，m2 §3 + m3 §3）')
+                'HostClosure 的 T/R 不合法分量：${LocalType.name(code)}' +
+                '（允许 0–8/10–11/14/15/16–19；9/12/13 与高阶均拒绝，m2 §3 + m3 §11）')
         }
     }
 

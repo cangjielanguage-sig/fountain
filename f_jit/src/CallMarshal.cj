@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_jit
 
 import std.collection.ArrayList
+import fountain::f_data.json.{JsonArray, JsonNull, JsonObject, JsonValue}
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.JitException
 import fountain::f_jit.base.LocalType
@@ -70,6 +71,17 @@ protected class CallMarshal {
                 case Some(x) => return if (x) { 1 } else { 0 }
                 case None => return CallMarshal.contractFail('参数类型不符：期望 Bool')
             }
+        }
+        if (t >= LocalType.JSON_VALUE && t <= LocalType.JSON_NULL) {
+            // JSON 内建码（16–19）跨桥走 **token 11 例外行**（v0.3.20：不为 JSON 新开 token/tag）。
+            // 只校验「是 JSON 节点」这一层：17/18/19 精确、16 收全部节点（码级继承）。
+            if (!CallMarshal.jsonValueMatches(t, v)) {
+                return CallMarshal.contractFail(
+                    '参数不是 ${LocalType.name(t)} 节点（m3 §11：16–19 跨桥走 token 11）')
+            }
+            let id = HandleTable.pin(v)
+            this.pinned.add(id)
+            return id
         }
         if (t == LocalType.HOST_OBJECT) {
             // 源入口实参（m2 §16.2）：注册类实例以不透明 tag=11 进入；null/其他对象 → 19。
@@ -288,8 +300,31 @@ protected class CallMarshal {
     }
 
     /** 句柄型 LocalType：4–11（String..Map）、12（内部闭包）、13（宿主闭包）、14（宿主对象）。 */
+    /**
+     * 句柄型码集：4–14 与 **16–19**（JSON 内建码；跨桥走 token 11 例外行）。
+     *
+     * 15（Any 盒）不在其中——盒的封送属 R5「Marshal Any 行」。
+     */
     private static func isHandleType(t: UInt16): Bool {
-        t >= LocalType.STRING && t <= LocalType.HOST_OBJECT
+        (t >= LocalType.STRING && t <= LocalType.HOST_OBJECT) ||
+            (t >= LocalType.JSON_VALUE && t <= LocalType.JSON_NULL)
+    }
+
+    /** JSON 内建码的运行时类判定（17/18/19 精确；16 收全部节点）。 */
+    private static func jsonValueMatches(code: UInt16, v: Any): Bool {
+        if (code == LocalType.JSON_VALUE) {
+            return v is JsonValue
+        }
+        if (code == LocalType.JSON_OBJECT) {
+            return v is JsonObject
+        }
+        if (code == LocalType.JSON_ARRAY) {
+            return v is JsonArray
+        }
+        if (code == LocalType.JSON_NULL) {
+            return v is JsonNull
+        }
+        false
     }
 
     private static func bitsOf(v: Float64): Int64 {

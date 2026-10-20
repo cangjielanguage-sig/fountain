@@ -107,6 +107,11 @@ internal func hostResultCell(ctx: JitContext, ret: UInt16, r: Any): Int64 {
             case o: Object => HandleTable.append(ctx, o, TypeToken.HOST_OBJECT)
             case _ => failWith(ErrCode.HELPER_PANIC)
         }
+        // JSON 内建码（16–19）：返回侧同样走 token 11 例外行（v0.3.20）
+        case 16u16 => allocHandleResult(ctx, ret, r)
+        case 17u16 => allocHandleResult(ctx, ret, r)
+        case 18u16 => allocHandleResult(ctx, ret, r)
+        case 19u16 => allocHandleResult(ctx, ret, r)
         case _ => failWith(ErrCode.HELPER_PANIC)
     }
 }
@@ -133,6 +138,11 @@ private class HostCall {
             case 10u16 => TypeToken.LIST
             case 11u16 => TypeToken.MAP
             case 14u16 => TypeToken.HOST_OBJECT
+            // JSON 内建码：tag/token 复用 11（不为 JSON 新开编码）
+            case 16u16 => TypeToken.HOST_OBJECT
+            case 17u16 => TypeToken.HOST_OBJECT
+            case 18u16 => TypeToken.HOST_OBJECT
+            case 19u16 => TypeToken.HOST_OBJECT
             case _ => TypeToken.RESERVED
         }
     }

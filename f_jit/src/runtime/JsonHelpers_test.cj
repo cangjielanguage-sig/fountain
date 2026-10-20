@@ -20,12 +20,26 @@ import std.unittest.testmacro.*
 import fountain::f_data.json.{JsonArray, JsonObject}
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.LocalType
+import fountain::f_jit.base.TypeToken
 
 /**
  * M3 R4.6–R4.9：H81 `json_get` / H82 `json_set` / H83 `json_new` 与 frozen 传播。
  */
 @Test
 public class JsonHelpers_test {
+
+    /** 宿主返回侧（R3.10）：ret 16–19 → 句柄登记（tag 复用 11，零新编码）。 */
+    @TestCase
+    public func hostReturnAcceptsJsonCodes(): Unit {
+        let ctx = JsonHelpers_test.mkCtx()
+        let o = hostResultCell(ctx, LocalType.JSON_OBJECT, JsonObject())
+        @Assert(ctx.errCode, 0)
+        @Assert(HandleTable.isType(o, TypeToken.HOST_OBJECT), true)
+        let a = hostResultCell(ctx, LocalType.JSON_ARRAY, JsonArray())
+        @Assert(ctx.errCode, 0)
+        @Assert(HandleTable.isType(a, TypeToken.HOST_OBJECT), true)
+        JitContext.free(ctx)
+    }
 
     private static func mkCtx(): JitContext {
         HandleTable.resetForTest()

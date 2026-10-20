@@ -89,7 +89,8 @@ public class SignatureDescriptor_test {
     /** 越界码（15 起 / 255）⇒ 非法。 */
     @TestCase
     public func outOfRangeCodesRejected(): Unit {
-        for (t in [15u16, 19u16, 20u16, 255u16]) {
+        // 16–19 自 M3 起是合法分量（JSON 内建码，零注册）；15（Any 盒）与 20+ 仍拒。
+        for (t in [15u16, 20u16, 255u16]) {
             @Assert(SignatureDescriptor([t], LocalType.I64).validate(), false)
             @Assert(SignatureDescriptor([LocalType.I64], t).validate(), false)
         }

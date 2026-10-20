@@ -81,6 +81,11 @@ internal func cellToHostValue(code: UInt16, cell: Int64): Any {
         case 2u16 => cell != 0
         case 3u16 => ()
         case 14u16 => HandleTable.fetchHostObject(cell)
+        // JSON 内建码（16–19）：跨桥走 token 11 例外行，cell 即节点句柄
+        case 16u16 => HandleTable.fetchHostObject(cell)
+        case 17u16 => HandleTable.fetchHostObject(cell)
+        case 18u16 => HandleTable.fetchHostObject(cell)
+        case 19u16 => HandleTable.fetchHostObject(cell)
         case _ =>
             let tok = signatureToken(code)
             if (tok == TypeToken.RESERVED) {

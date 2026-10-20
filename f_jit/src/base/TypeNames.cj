@@ -41,6 +41,11 @@ public class TypeNames {
             case 'Duration' => LocalType.DURATION
             case 'Range' => LocalType.RANGE
             case 'Regex' => LocalType.REGEX
+            // M3：JSON 内建码（16–19）——反射侧 `TypeInfo.name` 就是这几个短名
+            case 'JsonValue' => LocalType.JSON_VALUE
+            case 'JsonObject' => LocalType.JSON_OBJECT
+            case 'JsonArray' => LocalType.JSON_ARRAY
+            case 'JsonNull' => LocalType.JSON_NULL
             case _ =>
                 if (name.startsWith('ArrayList<') || name.startsWith('List<') ||
                     name.startsWith('Array<')) {
