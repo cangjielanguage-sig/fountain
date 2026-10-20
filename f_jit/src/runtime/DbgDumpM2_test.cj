@@ -26,7 +26,8 @@ import fountain::f_jit.bytecode.SiteTable
 /**
  * Q4.12 `DbgDump` 的 13/14 呈现（m2 §5.1 / design §5.2）。
  *
- * 13 记 `HostClosure#idx`、14 记 `HostObject#idx`——**大类名**呈现；不取对象、不解析注册类名。
+ * 13 记 `<HostClosure>#idx`、14 记 `<HostObject>#idx`——**大类名加尖括号**呈现（与 4–12 的
+ * 真实类型名区分）；不取对象、不解析注册类名。
  * 报告模板与 M1 §9.16 逐条一致（三行模板 / 条目格式 / 槽位序号 / `site=-1` / `dbgBase=0` /
  * `-1`·`-2` 不转储 / 最深失败帧获胜）。
  */
@@ -41,12 +42,12 @@ public class DbgDumpM2_test {
         let id13 = HandleTable.makeId(7, 10u16, 1u16)
         let id14 = HandleTable.makeId(9, 11u16, 1u16)
         @Assert(DbgDump.slotText(name, 1, 0, UInt8(LocalType.HOST_CLOSURE), id13),
-            'HostClosure#7')
+            '<HostClosure>#7')
         @Assert(DbgDump.slotText(name, 1, 1, UInt8(LocalType.HOST_OBJECT), id14),
-            'HostObject#9')
+            '<HostObject>#9')
         // 0（null）同样只呈现大类名 + 0
         @Assert(DbgDump.slotText(name, 1, 2, UInt8(LocalType.HOST_OBJECT), 0),
-            'HostObject#0')
+            '<HostObject>#0')
     }
 
     /** 报告中的 13/14 槽：名字 + 大类名 + idx；**不取对象**（陈旧/不存在的槽也能呈现）。 */
@@ -79,7 +80,7 @@ public class DbgDumpM2_test {
             let text = DbgDump.report(21, 3, 7, ts, site, name, p)
             @Assert(text,
                 '（code=21，site=3）\n  源码行 12:4 · fnId=7\n  变量: ' +
-                '[0] cb: HostClosure#9999; [1] Int64 = 5; [2] obj: HostObject#8888')
+                '[0] cb: <HostClosure>#9999; [1] Int64 = 5; [2] obj: <HostObject>#8888')
         } finally {
             JitContext.free(ctx)
             DbgDump.freeDump(p)
