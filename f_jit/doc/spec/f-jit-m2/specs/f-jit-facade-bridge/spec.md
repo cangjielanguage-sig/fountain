@@ -27,7 +27,7 @@
 
 ### Requirement: 参数封送与返回解包表
 
-封送 SHALL 按类型表逐行把宿主值转为字节码侧表示（不接受可选/空值、不做隐式宽化），解包 SHALL 按对应表把结果转回宿主值；句柄型返回 SHALL 走逃逸登记并在调用收尾自动回收；清理 SHALL 覆盖正常与异常全路径。M2 SHALL 增加参数行：声明类型为注册类 `C` 时接受 `C` 实例（`is C`，含子类，opaque 视图）→ `pin`（tag=11）→ cell，null → 19；声明为 HostClosure `(T1..Tn) -> R` 时接受仓颉函数值 → 单次 `is` 验签 → pin（tag=10）→ cell，失败 → 19（site=-1）。解包 SHALL 增加行：`retType=12 → JitClosureId`（提升组已登记）、`retType=13 → 原样带回宿主闭包引用`、`retType=14 → get 宿主类实例引用`。包装值（`JitFunction`）SHALL NOT 直接作实参（→19），回传须由宿主包一层闭包。
+封送 SHALL 按类型表逐行把宿主值转为字节码侧表示（不接受可选/空值、不做隐式宽化），解包 SHALL 按对应表把结果转回宿主值；句柄型返回 SHALL 走逃逸登记并在调用收尾自动回收；清理 SHALL 覆盖正常与异常全路径。M2 SHALL 增加参数行：声明类型为注册类 `C` 时接受 `C` 实例（`is C`，含子类，opaque 视图）→ `pin`（tag=11）→ cell，null → 19；声明为 HostClosure `(T1..Tn) -> R` 时接受仓颉函数值 → **`FunctionTypeInfo` 逐位验签**（14 按具体类名）→ pin（tag=10）→ cell，失败 → 19（site=-1）。解包 SHALL 增加行：`retType=12 → JitClosureId`（提升组已登记）、`retType=13 → 原样带回宿主闭包引用`、`retType=14 → get 宿主类实例引用`。包装值（`JitFunction`）SHALL NOT 直接作实参（→19），回传须由宿主包一层闭包。
 
 #### Scenario: 注册类实参
 
@@ -37,7 +37,7 @@
 #### Scenario: HostClosure 实参
 
 - **WHEN** 以合法仓颉闭包调用声明为 `(Int64) -> Bool` 的形参
-- **THEN** 单次 `is` 验签通过，pin 为 tag=10；非函数值/签名不符 → 19（site=-1）
+- **THEN** `FunctionTypeInfo` 验签通过，pin 为 tag=10；非函数值/签名不符 → 19（site=-1）；14 的具体类名不符同样 → 19
 
 #### Scenario: 解包三行
 

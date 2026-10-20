@@ -12,18 +12,24 @@
 
 **`tasks.md` 的 54/54 勾选不等于规格全绿。** M2 的行为主体已经落地（CALL_HOST/H63、宿主对象通道、成员访问、字节码侧构造、反射注册、逃逸闭包、版本规则集均有实现与用例），M1 零回归成立；但存在 **9 项阻塞 archive 的缺口**，集中在用户面再导出、M2 验收证据链、验签的元数/14 具体类、反射子类访问、报告文本与文档回写。
 
+### 结案进度（2026-10-20）
+
+**4/9 已解决**：GAP-03（子类判定）、GAP-04（14 具体类）、GAP-05（元数上限 + 分派表）、GAP-08（性能实测）。四项中三项由用户裁定方向后改实现，一项（GAP-08）由用户裁定接受现状并按实测修订规格。
+
+**剩余 5 项**：GAP-01（根包再导出）、GAP-02（M2 验收矩阵）、GAP-06（DbgDump 尖括号）、GAP-07（三引擎差分补齐）、GAP-09（文档回写）。均为机械或补测试性质，无设计分歧。
+
 **总结论：需先补 9 项，暂不可进入 archive。**
 
 | ID | 级别 | 阻塞 archive | 摘要 |
 |---|---|---|---|
 | GAP-01 | CRITICAL | 是 | 根包未再导出 M2 六个类型，`import fountain::f_jit.*` 无法使用 `registerClass`/`registerType` |
 | GAP-02 | CRITICAL | 是 | M2 的 T30–T36/T49/T54/T55/T57–T60 未进入 `TCoverage`，无 M2 scenario-map / 校验脚本 |
-| GAP-03 | WARNING | 是 | 反射自动访问器只按精确类匹配，`registerType<Base>` + 子类实例成员访问失败（自动 ≠ 手工） |
-| GAP-04 | WARNING | 是 | 签名中的 14 不携带具体类，验签与 H63 未按声明类校验（doc §16.4 要求覆盖具体类） |
-| GAP-05 | WARNING | 是 | 验签/H63 分派仅支持 0–2 元；>2 元 19/99，且实现为 doc §4 明文否定的「分步核对」 |
+| GAP-03 | WARNING | **已解决** | ~~反射自动访问器只按精确类匹配~~ → 类型判定改沿 `superClass` 链（接受子类实例）；反射执行层 `getValue` 拒绝子类实例经实测固化为已知限制（见段内处置） |
+| GAP-04 | WARNING | **已解决** | ~~签名中的 14 不携带具体类~~ → `HostClosureT`/`SignatureDescriptor` 携带类名，验签按类型名逐字比对 |
+| GAP-05 | WARNING | **已解决** | ~~验签/H63 分派仅支持 0–2 元~~ → 改用 `FunctionTypeInfo` 验签 + `apply` 调用，元数不限、1887 行分派表已删 |
 | GAP-06 | WARNING | 是 | DbgDump 输出 `HostClosure#N` / `HostObject#N`，规格与 doc §9.16 要求 `<HostClosure>#idx` / `<HostObject>#idx` |
 | GAP-07 | WARNING | 是 | M2 三引擎矩阵不完整：14、语法糖、对象身份只有单引擎用例，未入差分 |
-| GAP-08 | WARNING | 是 | M2 性能对照（HostClosure vs user helper）未实测、未留档 |
+| GAP-08 | WARNING | **已解决** | ~~性能对照未实测~~ → 实测 4.6–5.8×，留档 `doc/perf-m2.md`，用户裁定接受现状并按实测修订规格 §8 |
 | GAP-09 | WARNING | 是 | `design-m2.md` / `plan-m2.md` / `jit-bytecode-m2.md` 无实现偏差回写；`doc/spec/f-jit-m2/tasks.md` 镜像仍是未勾选旧版 |
 | GAP-10 | INFO | 否 | 4 条 scenario 无任何用例断言（见「无用例断言」） |
 | GAP-11 | INFO | 否 | 13 条 scenario 仅部分覆盖（见各 capability 明细） |
@@ -163,6 +169,8 @@
 - 影响：`registerType<Base>()` + `Sub` 实例 + `e.field` 会以访问器异常（21）失败；自动 ≠ 手工。
 - 修复：为祖先链逐级生成访问器（用 `ClassTypeInfo.superClass` 选声明类），或明确在规格/设计中把「自动注册仅精确类、子类须手工注册」写成限制。
 
+- **处置（2026-10-20，已解决）**：按用户裁定「声明 `A` 做形参时可传 `B` 实例；源码出现**未注册**的类名由前端编译期报错」——`ReflectRegistrar.isInstanceOf` 改为沿 `superClass` 链判定「`o` 是声明类的实例（含子类）」。**实测补充一条前提之外的事实**：`ClassTypeInfo.instanceVariables` 与 `getInstanceVariable(name)` 均不含继承成员，且 `InstanceVariableInfo.getValue(子类实例)` 抛 `IllegalTypeException`（`checkDeclaringClassType` 强制精确声明类）——故「用父类注册、子类实例经反射读父类字段」在执行层不可实现。两条事实固化为例句：`T36/subclass-accepts`（判定接受子类）、`T36/reflect-getvalue-exact-class-only`（执行层限制）。有继承的类需或手工访问器（`o is C`，天然支持）或宏生成。
+
 **GAP-04 签名 14 未覆盖具体类**
 
 - 判定：**真实缺口（阻塞）**。
@@ -171,6 +179,8 @@
 - 影响：声明 `(User)->Order` 却传入 `(Other)->…` 仍可验签通过；`retType=14` 可把任意 `Object` 当 `User` 返回，后续成员访问按错误类解析。`Slot14_test.hostClosureParam14` 用 `(Object)->…` 规避，反证该面未实现。
 - 修复：让 `SignatureDescriptor` 携带 `typeRef`/类名（或验签 API 增加 `className`），按 `is C` 判定；或修订规格明确 14 只做大类、不做具体类校验。
 
+- **处置（2026-10-20，已解决）**：取原「修复」的第一条路径——`Ast.TypeRef.HostClosureT` 由 `(Array<UInt16>, UInt16)` 扩为 `(Array<UInt16>, Array<String>, UInt16, String)`（类名在解析期曾被压平，是根因），`SignatureDescriptor` 随之携带 `paramNames` / `retName`；`SignatureVerifier.verifyReflective` 按 `FunctionTypeInfo` 的 `parameters[i].name` / `returnType.name` 逐位比对，14 位置要求类名逐字相等。用例 `ReflectiveVerify_test.checksConcreteClassName` 断言 `(ReflectUser)->Int64` 的声明拒绝 `(ReflectAdmin)->Int64`。原「已知限制 ②」撤销。
+
 **GAP-05 验签 / H63 分派只覆盖 0–2 元**
 
 - 判定：**真实缺口（阻塞）**。
@@ -178,6 +188,8 @@
 - 证据：`Signature.cj:81-82`「支持面：元数 0–2」、`arityMatches` 仅 0/1/2；`HostCallDispatch.cj:44-52` 仅 `dispatchHostCall0/1/2`。`Q6Acceptance_test.t30ArityAboveTwoIsKnownLimit` 显式断言该限制。
 - 影响：3 个及以上形参的 HostClosure 无法使用：入口验签 19，直接 H63 分派 99。实现采用 doc 明文否定的「元数 + 逐位 + 返回」分步核对（虽然 ≤2 元行为等价）。
 - 修复：扩展 `dispatchHostCallN`（代价 12^(n+1) 分支）与 `arityMatches`，或修订规格把 M2 签名元数上限写成 0–2 并说明理由。
+
+- **处置（2026-10-20，已解决；用户裁定方案乙的终态）**：两条原修复路径都被否——分支表是 11^(n+1)，3 元实测编译 +5 分钟且 4 元不可行；而规格 §4 的「单次 `is`」语言上根本不成立（`T`/`R` 是运行期数据，`is` 右侧须静态类型），故「分步核对」不是实现偷懒而是唯一可写的形式。改用 `std.reflect.FunctionTypeInfo`：验签取真实签名逐位比对（`verifyReflective`）、调用走 `apply(fn, args)`（`runtime/ReflectiveCall.cj`）。**元数不限**（3 元用例 `t30ArityAboveTwoWorks` 断言端到端 `6`），`HostCallDispatch.cj` 的 1887 行分派表**整文件删除**。规格 §4/§5/§8/§9.1/T30 已同步（m2 v0.8.33）。
 
 **GAP-06 DbgDump 13/14 文本与规格不符**
 
@@ -201,6 +213,8 @@
 - 依据：`f-jit-differential-acceptance / 容量与性能基线实测留档` —「M2 SHALL 增加……宿主闭包调用相对 user helper 的开销比值（规格估算 1.5–3×，以实测为准）」；scenario `性能对照同构`。
 - 证据：`PerfCompare_test` 只有 M1 的 JIT/Interp/cjnative；无 HostClosure/CALL_HOST 对照；`doc/` 下无 `perf-m2.md`。
 - 修复：新增同构的 user helper vs HostClosure+CALL_HOST 稳态吞吐用例，记录实测数字与比值，落 `doc/perf-m2.md`。
+
+- **处置（2026-10-20，已解决；用户裁定接受现状）**：新增 `PerfM2_test`（同构一元 `(Int64)->Int64`，预热 64 次 × 2000 次）：user helper ≈ **153 ns/次**、宿主闭包 ≈ **707 ns/次** = **4.63×**；第二轮（缓存 `FunctionTypeInfo` 后）5.75×，波动 ±20%。**超出原估 1.5–3×**，成本主体在 `apply` 的参数打包与间接分派，缓存类型查找无收益。落档 `doc/perf-m2.md`，以 10× 为回归门禁（`T32/host-call-overhead-ratio`）。**用户裁定接受现状**：宿主闭包调用是跨 JIT 边界的控制反转、不在内循环热点，用分派表与元数上限换 3× 不划算；规格 §8 的估算已按实测修订（m2 v0.8.33）。
 
 **GAP-09 文档回写与镜像同步缺失**
 
@@ -296,11 +310,11 @@
 
 1. **GAP-01**：`Root.cj` 补六条 `public import`，补一条「只 import 根包」的 M2 端到端用例。
 2. **GAP-06**：`DbgDump` 加尖括号并同步测试期望（最小改动）。
-3. **GAP-05 / GAP-04**：先由用户裁定「扩展分派/类名载体」还是「修订规格收窄」；二者都必须落到文档与用例。
-4. **GAP-03**：逐祖先生成反射访问器，或在规格/设计中明确「自动注册仅精确类」。
+3. ~~**GAP-05 / GAP-04**~~ **（已完成 2026-10-20）**：用户裁定改实现——`FunctionTypeInfo` 验签 + `apply` 调用；类名经 `HostClosureT` 与 `SignatureDescriptor` 穿透；规格 §4/§5/§8/§9.1/T30 同步（m2 v0.8.33）。
+4. ~~**GAP-03**~~ **（已完成 2026-10-20）**：类型判定改沿 `superClass` 链；反射执行层的精确类限制经实测固化为已知限制与对应用例。
 5. **GAP-02**：补 M2 `TCoverage`、`scenario-map.tsv` 与脚本，跑 `--strict`。
 6. **GAP-07**：把糖、对象身份、14 与句柄型参数纳入 `DiffSession`。
-7. **GAP-08**：补 HostClosure vs user helper 性能对照并留档。
+7. ~~**GAP-08**~~ **（已完成 2026-10-20）**：`PerfM2_test` + `doc/perf-m2.md`；实测 4.6–5.8×，用户裁定接受现状、规格 §8 按实测修订。
 8. **GAP-09**：回写三份权威文档 + 同步 `tasks.md` 镜像 + 三表抽样记录。
 
 完成 1–8（GAP-01–09）后重跑 `cjpm build`、`cjpm test`、M2 场景矩阵与差分，再进入 archive。

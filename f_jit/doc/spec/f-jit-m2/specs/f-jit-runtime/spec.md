@@ -119,21 +119,21 @@ runtime SHALL 提供 `HostCallback`（`fn: Any`、`sig: SignatureDescriptor`）�
 
 ### Requirement: 签名验签与条目缓存
 
-纯静态工具类 `SignatureVerifier`（无实例、无构造、无状态）SHALL 提供 `verify(value: Any, declared: SignatureDescriptor)`：以**单次 `is (T1..Tn) -> R`** 判定（声明签名取自前端/桥静态知识，子类型语义覆盖参数个数、逐参与返回），失败返回 None（→19），成功产出描述符。`cached(entry: HostCallback)` SHALL 在条目已验签时返回 `entry.sig`，否则返回 None；缓存一律落在条目上。
+纯静态工具类 `SignatureVerifier`（无实例、无构造、无状态）SHALL 提供 `verifyReflective(value: Any, declared: SignatureDescriptor)`：以 **`std.reflect.FunctionTypeInfo.of(value)`** 取出真实签名（形参类型名序列 + 返回类型名），与声明逐位比对（元数、逐参、返回一次覆盖；**14 位置按具体类名逐字相等**），失败返回 None（→19），成功产出描述符。原 `verify`（分步核对、仅 0–2 元）SHALL NOT 作为验签主路。`cached(entry: HostCallback)` SHALL 在条目已验签时返回 `entry.sig`，否则返回 None；缓存一律落在条目上。
 
 #### Scenario: 单次判定覆盖全部不符
 
 - **WHEN** 分别以非函数值、参数个数不符、逐参类型不符、返回类型不符的值验签
-- **THEN** 全部返回 None；合法函数值返回描述符
+- **THEN** 全部返回 None；合法函数值返回描述符；**元数不限**（≥3 元通过）；**14 位置的具体类名不符 → None**；仅当整体返回类型为 `Nothing`（全部分支抛异常）时返回位置放行
 
 #### Scenario: 缓存复用
 
 - **WHEN** 对同一 `HostCallback` 连续调用 `cached`
-- **THEN** 首次（未验签）返回 None；写入 `sig` 后返回同一描述符，且不产生第二次 `is` 判定
+- **THEN** 首次（未验签）返回 None；写入 `sig` 后返回同一描述符，且不产生第二次类型探测
 
 ### Requirement: H63 CALL_HOST 转发器
 
-runtime SHALL 提供顶层 `@C` helper H63 `host_call_trampoline`：fetch 栈底句柄 → `HostCallback{fn, sig}`（tag≠10 → 8）→ 按 sig 逐参 cell→仓颉值（值型原值；句柄型 get；14 取实例引用）→ 调用 `fn` → 返回值封装为 cell（R 为引用型 → 窗口登记 1 槽；值型 → 原值）。宿主闭包异常 SHALL catch-all → 21 + cause（含完整仓颉栈、桥打印）并 fail-fast；重入 JIT SHALL 合法（新 ctx、独立事务、内层错误不影响外层）；含 `CALL_HOST` 的函数 SHALL 置 `flags.bit0` 并拒绝 deopt 源；运行期防御 -1 → 99。
+runtime SHALL 提供顶层 `@C` helper H63 `host_call_trampoline`：fetch 栈底句柄 → `HostCallback{fn, sig}`（tag≠10 → 8）→ 按 sig 逐参 cell→仓颉值（值型原值；句柄型 get；14 取实例引用）→ **`FunctionTypeInfo.apply(fn, args)`** 调用（元数不限、零类型分派）→ 返回值封装为 cell（R 为引用型 → 窗口登记 1 槽；值型 → 原值）。宿主闭包异常 SHALL catch-all → 21 + cause（含完整仓颉栈、桥打印）并 fail-fast；重入 JIT SHALL 合法（新 ctx、独立事务、内层错误不影响外层）；含 `CALL_HOST` 的函数 SHALL 置 `flags.bit0` 并拒绝 deopt 源；运行期防御 -1 → 99。
 
 #### Scenario: 正常调用与窗口登记
 
