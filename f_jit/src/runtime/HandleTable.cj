@@ -303,7 +303,7 @@ public class HandleTable {
                         }
                     case _ => ()
                 }
-            } else if (tok != TypeToken.LIST && tok != TypeToken.MAP) {
+            } else if (tok != TypeToken.LIST && tok != TypeToken.MAP && !(obj is JsonValue)) {
                 let key = canonKeyOf(obj)
                 var i = 1
                 while (i < objs.size) {
@@ -406,7 +406,8 @@ public class HandleTable {
             failWith(ErrCode.CALL_CONTRACT)
         }
         synchronized(mtx) {
-            if (tok != TypeToken.LIST && tok != TypeToken.MAP) {
+            // JSON 节点是可变的，按身份区分（它们的 canonKeyOf 为空，合并会把对象/数组混为一谈）
+            if (tok != TypeToken.LIST && tok != TypeToken.MAP && !(obj is JsonValue)) {
                 let key = canonKeyOf(obj)
                 var i = 1
                 while (i < objs.size) {

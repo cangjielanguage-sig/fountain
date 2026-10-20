@@ -131,6 +131,10 @@ internal func dispatchHelper(ctx: JitContext, hid: Int64, a: Array<Int64>): Int6
         case 78 => anyBox(ctx, a)
         case 79 => anyIs(ctx, a)
         case 80 => anyAs(ctx, a)
+        // ---- M3：JSON 世界内可变 API（H81–H83）----
+        case 81 => jsonGet(ctx, a)
+        case 82 => jsonSet(ctx, a)
+        case 83 => jsonNew(ctx, a)
         // ---- 空容器构造（H70 / H71）----
         case 70 => listNew(ctx, a)
         case 71 => mapNew(ctx, a)
