@@ -31,3 +31,14 @@ public import fountain::f_jit.base.DiagCode
 public import fountain::f_jit.base.DummyDiagnosticsSink
 // M2：PredefinedFunction 下沉到 base（PublicMethod.bind 需要），用户面路径不变
 public import fountain::f_jit.base.PredefinedFunction
+// M2 用户面：注册协议（`registerClass` / `registerType<T>()` 的入参与拒绝体例）。
+// 缺这几条时用户 `import fountain::f_jit.*` 后写不出任何注册代码——GAP-01。
+public import fountain::f_jit.base.ClassDescriptor
+public import fountain::f_jit.base.PublicField
+public import fountain::f_jit.base.PublicMethod
+public import fountain::f_jit.base.PublicCtor
+public import fountain::f_jit.base.RegistrationException
+public import fountain::f_jit.base.RegistrationRejectKind
+// 注册协议的入参是**类型码**，用户写不出 `PublicField(type: …)` 就无法注册——
+// `LocalType` 与上面六个同属用户面最小集（GAP-01 清单外补项）。
+public import fountain::f_jit.base.LocalType

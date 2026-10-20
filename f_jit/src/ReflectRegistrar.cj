@@ -107,21 +107,16 @@ protected class ReflectRegistrar {
         if (ReflectRegistrar.isJsonFamily(typeName)) {
             throw RegistrationException(RegistrationRejectKind.JsonFamily, typeName, None)
         }
-        var info: ?TypeInfo = None
-        try {
-            info = Some(TypeInfo.of<T>())
+        // 直接取 TypeInfo（不再经 `?TypeInfo` 中转：那条路径上 `None` 分支恒不可达，
+        // 编译器会报 unreachable pattern——2026-10-20 清理）。
+        let info = try {
+            TypeInfo.of<T>()
         } catch (_: Exception) {
             throw RegistrationException(RegistrationRejectKind.ReflectionUnavailable, typeName, None)
         }
         let cls = match (info) {
-            case Some(t) =>
-                match (t) {
-                    case c: ClassTypeInfo => c
-                    case _ =>
-                        throw RegistrationException(RegistrationRejectKind.ReflectionUnavailable,
-                            typeName, None)
-                }
-            case None =>
+            case c: ClassTypeInfo => c
+            case _ =>
                 throw RegistrationException(RegistrationRejectKind.ReflectionUnavailable,
                     typeName, None)
         }
