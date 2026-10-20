@@ -78,3 +78,40 @@
   需增加可选的 `typedImpl`（与 `PublicField.hasSignature()` 同型）。
 - M2 仍按用户裁定停在现状（4.6×）；本节的数字作为 M2.1 的立项依据。
 
+## 追加实测：`overrides` 端到端（2026-10-20，M2.1 第一步）
+
+**动因**：上一节测的是「裸闭包替换」这一层（`apply` vs 手写 adapter，36×）。真正交付的是
+`registerType<T>(overrides:)`——用户看到的是 `f.call` → 预定义槽位 → `impl` 整条链，
+本节测这条链上「换掉 impl」到底省多少。
+
+**方法**（`PerfOverride_test`）：`ReflectUser.bump(Int64): Unit`，三个臂各 3000 次、预热 200 次，
+两臂源码相同、仅注册方式不同（`CompileCache` 键只含源码指纹，故每臂前必须 `reset`）。
+同机两次独立运行（ns/次）：
+
+| 臂 | 说明 | 运行 1 | 运行 2 |
+|---|---|---|---|
+| 基线 | `{ u: ReflectUser => 0 }`（不调任何宿主方法） | 18,769 | 17,779 |
+| 反射 | `{ u: ReflectUser => u.bump(1)\n 0 }` + `registerType<ReflectUser>()` | 22,743 | 27,905 |
+| 覆盖 | 同源码 + `registerType<ReflectUser>(overrides: [bump])` | 21,159 | 18,004 |
+
+扣掉基线后的**方法调用净成本**：反射 **3,973 / 10,125 ns**、覆盖 **2,390 / 224 ns**，
+比值 **1.66× / 45×**。两端都比预期散：反射臂要经 MCC 打包 `ArgValue`，会触发 GC，
+耗时随 GC 时机摆动；覆盖臂只做一次 `as` + 静态调用，稳定在亚微秒（与上一节手写 adapter 的
+270 ns 同一量级）。**取保守值：覆盖把方法调用成本从 4–10 μs 压到 0.2–2.4 μs。**
+
+**为什么不用 `greet(String)`**：反射臂在 String 参数/返回上必现 SIGSEGV（GAP-13），
+跑不到 3000 次；值型参数不触发，且两臂的固定开销等价，比值仍具代表性。
+
+### 两条结论
+
+1. **端到端只有 1.1–1.6×，远不是 36×**。差额被 `JitFunction.call<T>` 的固定开销吃掉了：
+   `callLocked` 每次调用都执行 `localTypeOf<T>()` → `TypeInfo.of<T>()`（`JitFunction.cj:632`），
+   实测 ≈**18 μs/次**，占端到端总成本的 **65–98%**。方法调用本身只有 0.2–10 μs。
+2. 因此 M2.1 的下一个高价值优化不是「继续压方法调用」，而是**把 `T` → `LocalType` 的映射缓存**
+   （`localTypeOf` 走静态表 / 首次查表后按类型键缓存）。这一项不改任何语义，收益覆盖**所有**
+   `call` 调用（含 M2 已有的全部用例），比 overrides 本身大一个量级。
+
+`T32/override-beats-reflect` 的门禁因此只设 **1.25×**（拦「覆盖退化成反射」），不承担端到端加速比的表达。
+
+闭包层的 36× 结论不受影响（上一节，直接对 `InstanceFunctionInfo.apply` 计时，不含 `call` 开销）。
+

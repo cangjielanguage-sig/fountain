@@ -94,7 +94,8 @@ protected class ReflectRegistrar {
 
     /** 注册 `T`；`enabled=false` 模拟关闭反射的构建（测试与宿主配置可判）。 */
     public static func registerType<T>(into!: ClassRegistry, diag!: DiagnosticsSink,
-        enabled!: Bool = true): Unit where T <: Object {
+        enabled!: Bool = true, overrides!: Array<PublicMethod> = Array<PublicMethod>()): Unit
+        where T <: Object {
         var typeName = '<unknown>'
         try {
             typeName = TypeInfo.of<T>().name
@@ -294,15 +295,116 @@ protected class ReflectRegistrar {
         }
 
         // 全量构建完成后一次性登记：任何拒绝都不会留下半成品。
+        let (mergedMethods, mergedFns) = ReflectRegistrar.applyOverrides(methods.toArray(),
+            auto.toArray(), overrides)
         let descObj = ClassDescriptor(name: name, fields: fields.toArray(),
-            methods: methods.toArray(), ctors: ctors.toArray())
+            methods: mergedMethods, ctors: ctors.toArray())
         into.register(descObj)
         for (p in pending) {
             p()
         }
-        for (f in auto) {
+        for (f in mergedFns) {
             into.addAutoFunction(f)
         }
+    }
+
+    /**
+     * 手工覆盖合并（M2.1「overrides」）：按**方法名**替换反射生成的绑定，未命中的追加。
+     *
+     * 为什么必须同时改方法表与自动包装函数表：前端 `Lowerer` 用 `m.bind.name` 查 slot，
+     * 运行期执行的是该 slot 的 `impl`。只换方法表 ⇒ slot 仍指旧反射实现，覆盖静默失效。
+     *
+     * 为什么保留反射生成的 bind 名：slot 以名字为键，换名会让同一方法在快照里出现两条；
+     * 手工 bind 的名字只是宿主侧标识，不参与解析。手写的签名与实现则原样采用。
+     */
+    private static func applyOverrides(base: Array<PublicMethod>,
+        auto: Array<PredefinedFunction>, overrides: Array<PublicMethod>)
+        : (Array<PublicMethod>, Array<PredefinedFunction>) {
+        if (overrides.size == 0) {
+            return (base, auto)
+        }
+        var methods = ReflectRegistrar.copyMethods(base)
+        var fns = ReflectRegistrar.copyFunctions(auto)
+        for (ov in overrides) {
+            var hit = -1
+            var i = 0
+            while (i < methods.size) {
+                if (methods[i].name == ov.name) {
+                    hit = i
+                    break
+                }
+                i = i + 1
+            }
+            if (hit < 0) {
+                // 反射没生成（类外方法 / 该成员被跳过）：按新增登记，slot 同时补一条
+                methods = ReflectRegistrar.appendMethod(methods, ov)
+                fns = ReflectRegistrar.appendFunction(fns, ov.bind)
+                continue
+            }
+            let canonical = methods[hit].bind.name
+            let rebind = PredefinedFunction(canonical, ov.bind.paramTypes, ov.bind.retType,
+                ov.bind.impl)
+            methods[hit] = PublicMethod(name: ov.name, bind: rebind)
+            fns = ReflectRegistrar.replaceFunction(fns, canonical, rebind)
+        }
+        (methods, fns)
+    }
+
+    private static func appendMethod(xs: Array<PublicMethod>, m: PublicMethod): Array<PublicMethod> {
+        let out = Array<PublicMethod>(xs.size + 1, repeat: m)
+        var i = 0
+        while (i < xs.size) {
+            out[i] = xs[i]
+            i = i + 1
+        }
+        out[xs.size] = m
+        out
+    }
+
+    private static func appendFunction(xs: Array<PredefinedFunction>, f: PredefinedFunction)
+        : Array<PredefinedFunction> {
+        let out = Array<PredefinedFunction>(xs.size + 1, repeat: f)
+        var i = 0
+        while (i < xs.size) {
+            out[i] = xs[i]
+            i = i + 1
+        }
+        out[xs.size] = f
+        out
+    }
+
+    private static func copyMethods(xs: Array<PublicMethod>): Array<PublicMethod> {
+        let list = ArrayList<PublicMethod>()
+        for (x in xs) {
+            list.add(x)
+        }
+        list.toArray()
+    }
+
+    private static func copyFunctions(xs: Array<PredefinedFunction>): Array<PredefinedFunction> {
+        let list = ArrayList<PredefinedFunction>()
+        for (x in xs) {
+            list.add(x)
+        }
+        list.toArray()
+    }
+
+    private static func replaceFunction(xs: Array<PredefinedFunction>, name: String,
+        v: PredefinedFunction): Array<PredefinedFunction> {
+        var hit = false
+        var out = ReflectRegistrar.copyFunctions(xs)
+        var i = 0
+        while (i < out.size) {
+            if (out[i].name == name) {
+                out[i] = v
+                hit = true
+            }
+            i = i + 1
+        }
+        if (!hit) {
+            out = ReflectRegistrar.appendFunction(out, v)
+        }
+        out
     }
 
     /** 反射 TypeInfo → LocalType；不可映射 ⇒ None（JSON 谱系永不映射 14）。 */

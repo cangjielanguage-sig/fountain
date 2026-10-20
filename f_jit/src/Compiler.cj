@@ -20,6 +20,7 @@ import std.sync.Mutex
 import fountain::f_jit.base.ClassDescriptor
 import fountain::f_jit.base.SourceCompileException
 import fountain::f_jit.base.PredefinedFunction
+import fountain::f_jit.base.PublicMethod
 import fountain::f_jit.compiler.ClassRegistrySnapshot
 import fountain::f_jit.compiler.PredefinedSnapshot
 
@@ -104,9 +105,10 @@ public class Compiler {
     }
 
     /** 反射自动注册（m2 §12.5）；`enabled=false` 用于关闭反射的构建。 */
-    public func registerType<T>(enabled!: Bool = true): Unit where T <: Object {
+    public func registerType<T>(enabled!: Bool = true,
+        overrides!: Array<PublicMethod> = Array<PublicMethod>()): Unit where T <: Object {
         ReflectRegistrar.registerType<T>(into: this.classes, diag: this.opts.diagnostics,
-            enabled: enabled)
+            enabled: enabled, overrides: overrides)
     }
 
     /** 类是否已注册（诊断/测试）。 */
