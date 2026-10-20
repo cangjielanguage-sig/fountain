@@ -63,7 +63,13 @@ internal func hostCallTrampoline(ctx: JitContext, a: Array<Int64>): Int64 {
         // M2.2：登记过同结构类型化 adapter 时**跳过反射**（静态类型调用）；否则维持原路径。
         match (cb.adapter) {
             case Some(ad) => r = ad(cb.fn, convertArgs(sig, a))
-            case None => r = reflectiveInvoke(cb.fn, cb.ti, sig, a)
+            case None =>
+                // 无类型化 adapter 时优先走 per-signature 计划（R4.10–R4.12）；
+                // 冷路径（开关关 / 超上限）退回通用反射，两路逐位一致。
+                match (cb.plan) {
+                    case Some(p) => r = reflectiveInvokeWithPlan(cb.fn, cb.ti, p, a)
+                    case None => r = reflectiveInvoke(cb.fn, cb.ti, sig, a)
+                }
         }
     } catch (e: HelperFail) {
         // 引擎侧失败（绑定/转换）原样转码，不归宿主异常

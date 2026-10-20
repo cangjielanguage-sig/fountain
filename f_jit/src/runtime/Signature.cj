@@ -369,11 +369,20 @@ public class HostCallback {
      */
     public let adapter: ?((Any, Array<Any>) -> Any)
 
+    /**
+     * per-signature 调用计划（R4.10–R4.12）：**验签即建**、条目级绑定。
+     *
+     * `Some` ⇒ H63 在无类型化 adapter 时走计划路径（转换器已固化）；
+     * `None` ⇒ 冷路径（开关关闭 / 超上限 / 未验签条目），退回通用反射。
+     */
+    public let plan: ?SignaturePlan
+
     public init(fn: Any, sig: SignatureDescriptor) {
         this.fn = fn
         this.sig = Some(sig)
         this.ti = HostCallback.probeType(fn)
         this.adapter = SignatureRegistry.adapterOf(sig.params, sig.paramNames, sig.ret, sig.retName)
+        this.plan = SignatureTable.getOrBuild(sig)
     }
 
     public init(fn: Any) {
@@ -381,6 +390,7 @@ public class HostCallback {
         this.sig = None
         this.ti = HostCallback.probeType(fn)
         this.adapter = None
+        this.plan = None
     }
 
     private static func probeType(fn: Any): ?FunctionTypeInfo {

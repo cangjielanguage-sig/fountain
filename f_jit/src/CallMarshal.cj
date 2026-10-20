@@ -72,6 +72,13 @@ protected class CallMarshal {
                 case None => return CallMarshal.contractFail('参数类型不符：期望 Bool')
             }
         }
+        if (t == LocalType.ANY) {
+            // Any 行（R5.1）：任意宿主值（值型 / 引用型 / 闭包 / 实例 / 对象）→ 装箱 → 盒句柄。
+            // 盒是值语义载体：宿主给什么就存什么，调用期由 `any_is` / `any_as` 做类型问答。
+            let id = HandleTable.pinAnyBox(v)
+            this.pinned.add(id)
+            return id
+        }
         if (t >= LocalType.JSON_VALUE && t <= LocalType.JSON_NULL) {
             // JSON 内建码（16–19）跨桥走 **token 11 例外行**（v0.3.20：不为 JSON 新开 token/tag）。
             // 只校验「是 JSON 节点」这一层：17/18/19 精确、16 收全部节点（码级继承）。
@@ -168,6 +175,12 @@ protected class CallMarshal {
             }
             if (t == LocalType.HOST_OBJECT) {
                 return this.escapeAndGetTyped(cell, TypeToken.HOST_OBJECT)
+            }
+            if (t == LocalType.ANY) {
+                // Any 行（R5.2）：逃逸后拆盒，把**原生 Any** 交还宿主（不是盒句柄）
+                HandleTable.escape(cell)
+                CallMarshal.moveTo(this.pinned, this.escaped, cell)
+                return HandleTable.fetchAnyBox(cell)
             }
             if (CallMarshal.isHandleType(t)) {
                 return this.escapeAndGet(cell)
