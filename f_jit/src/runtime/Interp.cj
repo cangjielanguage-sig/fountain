@@ -160,7 +160,13 @@ public class Interp {
         }
         if (this.constIds[idx] == 0) {
             let wrapped = wrapConst(idx, obj)
-            this.constIds[idx] = HandleTable.pinConst(wrapped)
+            let hid = HandleTable.pinConst(wrapped)
+            // M3 S2.5：JSON 常量（kind 11）登记即 frozen —— H82 写保护与「读/拆箱传播」的起点
+            match (this.unit.consts.get(idx)) {
+                case ConstPayload.PJson(_) => HandleTable.markFrozen(hid)
+                case _ => ()
+            }
+            this.constIds[idx] = hid
         }
         this.constIds[idx]
     }

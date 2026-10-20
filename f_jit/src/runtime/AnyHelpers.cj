@@ -69,6 +69,7 @@ internal func anyAs(ctx: JitContext, a: Array<Int64>): Int64 {
     if (!anyMatches(v, code)) {
         failWith(ErrCode.ANY_CAST)
     }
+    let src = argAt(a, 0)
     // 注：本方言源码里的 `as T` 返回 `Option<T>`（那是仓颉语义），宿主侧取值必须用 match
     match (code) {
         case 0u16 =>
@@ -87,7 +88,13 @@ internal func anyAs(ctx: JitContext, a: Array<Int64>): Int64 {
                 case _ => failWith(ErrCode.ANY_CAST)
             }
         case 3u16 => 0
-        case _ => HandleTable.pin(v)
+        case _ =>
+            let out = HandleTable.pin(v)
+            // M3 R4.9：frozen 经拆箱传播（盒只读 ⇒ 取出的引用也保持只读）
+            if (HandleTable.isFrozen(src)) {
+                HandleTable.markFrozen(out)
+            }
+            out
     }
 }
 
