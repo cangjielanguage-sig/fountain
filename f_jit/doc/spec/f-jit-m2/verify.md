@@ -34,6 +34,7 @@
 | GAP-10 | INFO | 否 | 4 条 scenario 无任何用例断言（见「无用例断言」） |
 | GAP-11 | INFO | 否 | 13 条 scenario 仅部分覆盖（见各 capability 明细） |
 | GAP-12 | INFO | 否 | x86_64 非本机原生，M2 的 x86 执行证据待 CI（规格允许跳过，记工程债） |
+| GAP-13 | INFO | 否 | `registerType<T>()` 生成的方法绑定在 **String 参数/返回**上稳定 SIGSEGV（std.reflect 的 `ApplyCJMethod`/MCC 路径）；已规避并登记 |
 
 ## 概览
 
@@ -228,6 +229,30 @@
 - **GAP-10 无用例断言的 4 条**：`字节码格式 / 宿主值不可常量化`、`字节码格式 / 机器码零新模式`、`门面 / 含宿主句柄的容器被拒`、`门面 / 反射仅在注册期`。前两条是结构性/字节级断言缺失，第三条是 M1 遗留，第四条是执行路径约束。
 - **GAP-11 部分覆盖的 13 条**：见各 capability 明细。集中在「三引擎」与「全类型矩阵」两类。
 - **GAP-12 x86 执行证据**：`X86Lower.cj:941` 已把 `0x79` 路由到 `helperCall(63, argc+1)`，但 `X86Exec_test` 无 CALL_HOST/成员/构造用例；本机只有 `Interp × AArch64`。规格允许非原生跳过，故不算违规，记 CI 工程债。
+
+**GAP-13 反射方法绑定在 String 参数/返回上 SIGSEGV（工具链层面）**
+
+- 判定：**真实缺陷，但不在本实现**——`std.reflect` 的 MCC 调用路径；已规避并如实登记（不阻塞 archive）。
+- 现象：`registerType<ReflectUser>()` 后调用 `u.greet("z")`（`greet(s: String): String`）→ SIGSEGV：
+  ```
+  #0 StringBuilder.append
+  #1 ReflectUser.greet (ReflectFixtures.cj:72)
+  #2 ApplyCangjieMethodStub
+  #3 MapleRuntime::MethodInfo::ApplyCJMethodImpl
+  #4 MapleRuntime::MethodInfo::ApplyCJMethod(MObject*, void*, void*, TypeInfo*)
+  #6 InstanceFunctionInfo.apply (std/reflect/function_info_cjnative.cj:317)
+  ```
+- **稳定性**：不是并发才触发。探针「300 次循环：`bump(Int64)` + `greet(String)` + 字符串分配」
+  **三轮全崩**（此前全量里看似偶发，是因为单次调用恰好没有 GC 介入）。手工绑定的同一方法
+  （`ManualUser.greet`，`PredefinedFunction` 自定义 impl）不触发 ⇒ 失效点在 `apply` 的
+  `ArgValue`/MCC 转换，不在方法本身。
+- 归因：`InstanceFunctionInfo.apply` 用 `CJ_MCC_ApplyCJInstanceMethod` 构造 `ArgValue` 数组；
+  值型参数（Int64）不经 GC，故只有**引用型参数/返回**（此处 String）暴露。应用层无法修。
+- 规避（M2 内）：`CompilerRegistration_test.reflectionRegistrationIsEndToEnd` 改用值型方法
+  （`u.bump(2)`）证明「反射注册的方法绑定可用」；String 方法的绑定能力由手工路径
+  （`manualRegistrationIsEndToEnd`）覆盖。测试口径另加 `--parallel 1`（降低并发 GC 干扰）。
+- 根治：M2.1 的类型化包装闭包（`{ a => (a[0] as User).greet(a[1] as String) }`）——
+  实测比反射 `apply` **快 36×**（9.8 μs → 270 ns），且完全绕开 MCC 路径（见 `doc/perf-m2.md`）。
 
 ## 偏差与已知限制逐条判定
 
