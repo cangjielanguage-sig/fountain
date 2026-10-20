@@ -226,6 +226,16 @@ protected class ReflectRegistrar {
             let sig = ReflectRegistrar.prepend(LocalType.HOST_OBJECT,
                 ReflectRegistrar.unwrapParams(paramCodes))
             let ret = ReflectRegistrar.unwrapCode(codeOpt)
+            // GAP-13：反射 `apply` 在**引用型**参数/返回上会走 MCC 的 `ArgValue` 转换，实测必现
+            // SIGSEGV（栈顶落在被调方法体内，离真正失效点很远）。默认不再生成这种绑定：
+            // 宁可注册期少一个方法（+ 一条 Warn 诊断），也不要在 JIT 里直接杀进程。
+            // 需要它的宿主用 `overrides` 提供类型化实现（M2.1），此时本条不跳过。
+            if (!ReflectRegistrar.hasOverrideName(overrides, f.name) &&
+                ReflectRegistrar.unsafeForReflect(sig, ret)) {
+                ReflectRegistrar.skip(diag, '${name}.${f.name}',
+                    '引用型参数/返回在反射 apply 上会 SIGSEGV（GAP-13），请用 overrides 提供类型化绑定')
+                continue
+            }
             let bind = PredefinedFunction(bindName, sig, ret,
                 { args => f.apply(args[0], ReflectRegistrar.tail(args)) })
             methods.add(PublicMethod(name: f.name, bind: bind))
@@ -373,8 +383,33 @@ protected class ReflectRegistrar {
         out
     }
 
-    private static func copyMethods(xs: Array<PublicMethod>): Array<PublicMethod> {
-        let list = ArrayList<PublicMethod>()
+    /** 引用型码（4–14）：反射 `apply` 在这些参数/返回上会走 MCC 的 `ArgValue` 转换（GAP-13）。 */
+    private static func isRefCode(c: UInt16): Bool {
+        c >= LocalType.STRING && c <= LocalType.HOST_OBJECT
+    }
+
+    /** 签名里除接收者外，是否含引用型实参，或返回引用型。 */
+    private static func unsafeForReflect(sig: Array<UInt16>, ret: UInt16): Bool {
+        var i = 1
+        while (i < sig.size) {
+            if (ReflectRegistrar.isRefCode(sig[i])) {
+                return true
+            }
+            i = i + 1
+        }
+        ReflectRegistrar.isRefCode(ret)
+    }
+
+    private static func hasOverrideName(overrides: Array<PublicMethod>, name: String): Bool {
+        for (o in overrides) {
+            if (o.name == name) {
+                return true
+            }
+        }
+        false
+    }
+
+    private static func copyMethods(xs: Array<PublicMethod>): Array<PublicMethod> {        let list = ArrayList<PublicMethod>()
         for (x in xs) {
             list.add(x)
         }

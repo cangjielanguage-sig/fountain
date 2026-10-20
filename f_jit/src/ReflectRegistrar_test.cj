@@ -75,7 +75,9 @@ public class ReflectRegistrar_test {
 
         // 实例方法 + 属性访问器（getter 名 = 成员名；mut prop setter = set + 首字母大写）
         @Assert(ReflectRegistrar_test.methodOfOrNone(d, 'bump').isSome(), true)
-        @Assert(ReflectRegistrar_test.methodOfOrNone(d, 'greet').isSome(), true)
+        // GAP-13 默认拒绝：`greet` 的签名含引用型（String），反射 `apply` 在该形态上必现
+        // SIGSEGV，故默认**不生成**绑定；需要它必须用 `overrides` 提供类型化实现（M2.1）。
+        @Assert(ReflectRegistrar_test.methodOfOrNone(d, 'greet').isNone(), true)
         let age = ReflectRegistrar_test.methodOf(d, 'age')
         @Assert(age.bind.paramTypes, [LocalType.HOST_OBJECT])
         @Assert(age.bind.retType, LocalType.I64)
@@ -95,7 +97,9 @@ public class ReflectRegistrar_test {
         @Assert(ReflectRegistrar_test.hasAuto(reg, 'version'), true)
         @Assert(ReflectRegistrar_test.hasAuto(reg, 'label'), true)
         @Assert(ReflectRegistrar_test.hasAuto(reg, 'parse'), true)
-        @Assert(TCase.hit('T55/reflect-all-members', d.fields.size == 2 && d.methods.size == 5), true)
+        // 方法面 5 → 4：`greet` 因 String 参数/返回被 GAP-13 默认拒绝（见上方断言）
+        @Assert(TCase.hit('T55/reflect-all-members', d.fields.size == 2 && d.methods.size == 4),
+            true)
     }
 
     /** `static var` / `static mut prop` 永久跳过（附 B），并逐项记 diagnostics。 */
@@ -162,8 +166,12 @@ public class ReflectRegistrar_test {
             @Assert(a.mutable, f.mutable)
             @Assert(a.typeRef.isNone() == f.typeRef.isNone(), true)
         }
-        @Assert(auto.methods.size, manual.methods.size)
+        // GAP-13 默认拒绝：`greet`（String 参数/返回）在 auto 侧被跳过，manual 侧仍有 ⇒ 差 1 条
+        @Assert(auto.methods.size + 1, manual.methods.size)
         for (m in manual.methods) {
+            if (m.name == 'greet') {
+                continue
+            }
             let a = ReflectRegistrar_test.methodOf(auto, m.name)
             @Assert(a.bind.paramTypes, m.bind.paramTypes)
             @Assert(a.bind.retType, m.bind.retType)
@@ -174,7 +182,7 @@ public class ReflectRegistrar_test {
         }
         @Assert(TCase.hit('T55/reflect-auto-equals-manual',
             auto.fields.size == manual.fields.size &&
-            auto.methods.size == manual.methods.size &&
+            auto.methods.size + 1 == manual.methods.size &&
             auto.ctors.size == manual.ctors.size), true)
     }
 

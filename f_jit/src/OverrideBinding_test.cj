@@ -67,6 +67,7 @@ public class OverrideBinding_test {
     public func overrideReplacesReflectiveBinding(): Unit {
         let c = OverrideBinding_test.compiler()
         c.registerType<ReflectUser>(overrides: [OverrideBinding_test.greetOverride()])
+        CompileCache.reset()
         let greet = c.compile('{ u: ReflectUser => u.greet("z") }')
         let u = ReflectUser('bob', 0)
         @Assert(greet.call<String>([u]), 'override z')
@@ -81,6 +82,7 @@ public class OverrideBinding_test {
     public func overrideSurvivesRepeatedCalls(): Unit {
         let c = OverrideBinding_test.compiler()
         c.registerType<ReflectUser>(overrides: [OverrideBinding_test.greetOverride()])
+        CompileCache.reset()
         let greet = c.compile('{ u: ReflectUser => u.greet("z") }')
         let u = ReflectUser('bob', 0)
         var i = 0
@@ -104,6 +106,27 @@ public class OverrideBinding_test {
         @Assert(f.call<String>([ReflectUser('bob', 0)]), 'jit-only')
     }
 
+    /** GAP-13 默认拒绝：没有 overrides 时，引用型签名的方法不生成反射绑定（宁可缺方法也不崩）。 */
+    @TestCase
+    public func reflectiveStringMethodIsRejectedByDefault(): Unit {
+        let c = OverrideBinding_test.compiler()
+        c.registerType<ReflectUser>()
+        var failed = false
+        try {
+            // 缓存键只含源码指纹，且别的用例编译过同一段源码（带 overrides）⇒ 先清缓存
+            CompileCache.reset()
+            let _ = c.compile('{ u: ReflectUser => u.greet("z") }')
+        } catch (_: Exception) {
+            failed = true
+        }
+        // 失败也会进缓存（`failureOf`），不清理会污染后续用例
+        CompileCache.reset()
+        @Assert(failed, true)
+        // 值型方法不受影响，仍走反射绑定
+        let bump = c.compile('{ u: ReflectUser => u.bump(2)\n 0 }')
+        @Assert(bump.call<Int64>([ReflectUser('bob', 0)]), 0)
+    }
+
     /** 覆盖不改契约：签名取自手工 bind，编译期仍做逐参类型检查。 */
     @TestCase
     public func overrideKeepsStaticContract(): Unit {
@@ -111,10 +134,12 @@ public class OverrideBinding_test {
         c.registerType<ReflectUser>(overrides: [OverrideBinding_test.greetOverride()])
         var failed = false
         try {
+            CompileCache.reset()
             let _ = c.compile('{ u: ReflectUser => u.greet(1) }')
         } catch (_: Exception) {
             failed = true
         }
+        CompileCache.reset()
         @Assert(failed, true)
     }
 }

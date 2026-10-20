@@ -24,7 +24,12 @@
 
 **新增 GAP-13（INFO，不阻塞）**：`registerType<T>()` 的方法绑定在 **String 参数/返回**上必现
 SIGSEGV（`std.reflect` 的 `ApplyCJMethod`/MCC 路径；探针 300 次循环三轮全崩）。
-已规避（改用值型方法 + 手工绑定覆盖 String 面）并如实登记；根治 = M2.1 类型化包装闭包。
+**M2.1 已改为默认拒绝**：反射注册遇到**引用型**（`LocalType.STRING`–`HOST_OBJECT`）参数或返回的
+实例方法时不再生成绑定，改为 `RegistrationSkipped` + Warn 诊断；需要这些方法的宿主用
+`registerType<T>(overrides:)` 提供类型化闭包（`OverrideBinding_test` 覆盖替换/新增/契约三面）。
+⇒ 默认路径不再出现运行期 SIGSEGV，代价是「少一个方法」在编译期可见（`未注册方法「C.greet」`）。
+**残余风险**：构造器仍走 `ConstructorInfo.apply`（现有用例的 String 构造器未崩），
+静态函数同理，若后续实测复现，按同一策略处理。
 
 **当前基线**：`cjpm test --parallel 1` = **849/849/0，零崩溃**；`check_tmap` 54 条 0 悬空；
 `check_scenarios m2` 156 条（full 138 / partial 11 / 缺口 5 / N/A 2）、未映射 0、缺失 0。
@@ -45,7 +50,7 @@ SIGSEGV（`std.reflect` 的 `ApplyCJMethod`/MCC 路径；探针 300 次循环三
 | GAP-10 | INFO | 否 | 4 条 scenario 无任何用例断言（见「无用例断言」） |
 | GAP-11 | INFO | 否 | 13 条 scenario 仅部分覆盖（见各 capability 明细） |
 | GAP-12 | INFO | 否 | x86_64 非本机原生，M2 的 x86 执行证据待 CI（规格允许跳过，记工程债） |
-| GAP-13 | INFO | 否 | `registerType<T>()` 生成的方法绑定在 **String 参数/返回**上稳定 SIGSEGV（std.reflect 的 `ApplyCJMethod`/MCC 路径）；已规避并登记 |
+| GAP-13 | INFO | 否 | `registerType<T>()` 的引用型（String 等）方法绑定若走反射 `apply` 会稳定 SIGSEGV；**M2.1 起默认拒绝该形态**（Warn + 跳过），需要者用 `overrides:` 提供类型化闭包 |
 
 ## 概览
 
