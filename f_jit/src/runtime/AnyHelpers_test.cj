@@ -18,7 +18,9 @@ package fountain::f_jit.runtime
 import std.unittest.*
 import std.unittest.testmacro.*
 import std.collection.ArrayList
+import std.collection.HashMap
 import fountain::f_jit.base.ErrCode
+import fountain::f_jit.bytecode.ConstMapKey
 import fountain::f_jit.base.LocalType
 
 /**
@@ -107,7 +109,8 @@ public class AnyHelpers_test {
      *
      * 边界：`ArrayList<Int64>` **当前无法 pin 进句柄表**（`tokenOf` 只认 `ArrayList<Any>`，
      * 其余返回 RESERVED → 19）——这是 M1 就有的容器类型外置约束，不是 M3 引入的；
-     * 元素码分派（`aux` 的有限分支表）属 R4.5 的 P2 工作，尚未落地。
+     * 因此「元素类型一致」的 finite 分支表退化为「aux = 15/0xFFFF 命中、其余不命中」
+     *（design D18）；元素码分派见 `containerAuxChecksElementType`。
      */
     /** 容器的「不变语义」：`ArrayList<Any>` 命中。 */
     @TestCase
@@ -118,6 +121,47 @@ public class AnyHelpers_test {
         let boxA = AnyHelpers_test.call(ctx, 78,
             [Int64(LocalType.LIST), HandleTable.pin(anys)])
         @Assert(AnyHelpers_test.call(ctx, 79, [boxA, Int64(LocalType.LIST), 0xFFFF]), 1)
+        JitContext.free(ctx)
+    }
+
+    /**
+     * R4.4/R4.5：容器的 `aux` 分派——`List<Any>`（aux=15）与「未指定」（aux=0xFFFF）命中；
+     * `List<Int64>`（aux=0）按**不变语义**不命中（`is` 答 0、`as` 置 22）。
+     */
+    @TestCase
+    public func containerAuxChecksElementType(): Unit {
+        let ctx = AnyHelpers_test.mkCtx()
+        let anys = ArrayList<Any>()
+        anys.add(1)
+        let boxA = AnyHelpers_test.call(ctx, 78,
+            [Int64(LocalType.LIST), HandleTable.pin(anys)])
+        @Assert(AnyHelpers_test.call(ctx, 79, [boxA, Int64(LocalType.LIST), 15]), 1)
+        @Assert(AnyHelpers_test.call(ctx, 79, [boxA, Int64(LocalType.LIST), 0xFFFF]), 1)
+        @Assert(AnyHelpers_test.call(ctx, 79, [boxA, Int64(LocalType.LIST), 0]), 0)
+        @Assert(ctx.errCode, 0)
+        // as：命中 → 句柄；不命中 → 22
+        let hit = AnyHelpers_test.call(ctx, 80, [boxA, Int64(LocalType.LIST), 15])
+        @Assert(ctx.errCode, 0)
+        @Assert(hit != 0, true)
+        let _ = AnyHelpers_test.call(ctx, 80, [boxA, Int64(LocalType.LIST), 0])
+        @Assert(ctx.errCode, ErrCode.ANY_CAST)
+        JitContext.free(ctx)
+    }
+
+    /** Map 的 `aux = (键码 << 8) | 值码`：值码 = 15 命中、值码 = 0 不命中。 */
+    @TestCase
+    public func mapAuxChecksValueType(): Unit {
+        let ctx = AnyHelpers_test.mkCtx()
+        let m = HashMap<ConstMapKey, Any>()
+        m.add(ConstMapKey('k', 's:k'), 1)
+        let boxM = AnyHelpers_test.call(ctx, 78,
+            [Int64(LocalType.MAP), HandleTable.pin(m)])
+        // Map<String, Any> = (4<<8)|15 = 1039；Map<String, Int64> = 1024
+        @Assert(AnyHelpers_test.call(ctx, 79, [boxM, Int64(LocalType.MAP), 1039]), 1)
+        @Assert(AnyHelpers_test.call(ctx, 79, [boxM, Int64(LocalType.MAP), 1024]), 0)
+        @Assert(AnyHelpers_test.call(ctx, 79, [boxM, Int64(LocalType.MAP), 0xFFFF]), 1)
+        let _ = AnyHelpers_test.call(ctx, 80, [boxM, Int64(LocalType.MAP), 1024])
+        @Assert(ctx.errCode, ErrCode.ANY_CAST)
         JitContext.free(ctx)
     }
 

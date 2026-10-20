@@ -53,7 +53,8 @@ internal func anyIs(ctx: JitContext, a: Array<Int64>): Int64 {
     let _ = unused
     let v = HandleTable.fetchAnyBox(argAt(a, 0))
     let code = UInt16(argAt(a, 1))
-    if (anyMatches(v, code)) {
+    let aux = argAt(a, 2)
+    if (anyMatches(v, code, aux)) {
         1
     } else {
         0
@@ -66,7 +67,8 @@ internal func anyAs(ctx: JitContext, a: Array<Int64>): Int64 {
     let _ = unused
     let v = HandleTable.fetchAnyBox(argAt(a, 0))
     let code = UInt16(argAt(a, 1))
-    if (!anyMatches(v, code)) {
+    let aux = argAt(a, 2)
+    if (!anyMatches(v, code, aux)) {
         failWith(ErrCode.ANY_CAST)
     }
     let src = argAt(a, 0)
@@ -122,8 +124,8 @@ private func anyValueOf(code: UInt16, cell: Int64): Any {
     }
 }
 
-/** 盒内容是否匹配类型码（JSON 走码级继承：17/18/19 都是 16 的后代）。 */
-private func anyMatches(v: Any, code: UInt16): Bool {
+/** 盒内容是否匹配「类型码 + aux」（JSON 走码级继承：17/18/19 都是 16 的后代）。 */
+private func anyMatches(v: Any, code: UInt16, aux: Int64): Bool {
     match (code) {
         case 0u16 => v is Int64
         case 1u16 => v is Float64
@@ -135,9 +137,9 @@ private func anyMatches(v: Any, code: UInt16): Bool {
         case 7u16 => v is Duration
         case 8u16 => v is Range<Int64>
         case 9u16 => v is JitRegex
-        // 容器：只承认「元素为 Any」的异构容器（不变语义：ArrayList<Int64> 不匹配）
-        case 10u16 => v is ArrayList<Any>
-        case 11u16 => v is HashMap<ConstMapKey, Any>
+        // 容器：世界内形态恒为 ArrayList<Any> / HashMap<ConstMapKey, Any>，再看 aux
+        case 10u16 => v is ArrayList<Any> && listAuxMatches(aux)
+        case 11u16 => v is HashMap<ConstMapKey, Any> && mapAuxMatches(aux)
         // 14：宿主对象（类界精确核对待 typeRef 表，见文件头）
         case 14u16 => v is Object && !(v is JsonValue)
         case 16u16 => v is JsonValue
@@ -146,4 +148,29 @@ private func anyMatches(v: Any, code: UInt16): Bool {
         case 19u16 => v is JsonNull
         case _ => false
     }
+}
+
+/**
+ * List 的 `aux` 分派（m3 §5「有限分支表」）：`aux = 元素类型码`。
+ *
+ * 世界内列表的运行时形态**恒为** `ArrayList<Any>`（`tokenOf` 只认它，其余 RESERVED），
+ * 因此只有「元素 = Any」（15）与「未指定」（0xFFFF）两种 aux 能命中——`List<Int64>`
+ * 按不变语义**不命中**（design D18）。元素非 Any 的宿主容器根本 pin 不进句柄表，
+ * 所以这里不存在「漏判」：能进盒的列表元素一定是盒。
+ */
+private func listAuxMatches(aux: Int64): Bool {
+    aux == Int64(LocalType.ANY) || aux == 0xFFFF
+}
+
+/**
+ * Map 的 `aux` = `(键码 << 8) | 值码`。
+ *
+ * 键码被 `ConstMapKey` 包装**擦除**（`Map<Int64,Any>` 与 `Map<String,Any>` 运行时同形），
+ * 无法也不应校验；只看值码是否 Any / 未指定。
+ */
+private func mapAuxMatches(aux: Int64): Bool {
+    if (aux == 0xFFFF) {
+        return true
+    }
+    (aux & 0xFF) == Int64(LocalType.ANY)
 }
