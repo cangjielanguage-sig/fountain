@@ -109,6 +109,7 @@ public class AnyHelpers_test {
      * 其余返回 RESERVED → 19）——这是 M1 就有的容器类型外置约束，不是 M3 引入的；
      * 元素码分派（`aux` 的有限分支表）属 R4.5 的 P2 工作，尚未落地。
      */
+    /** 容器的「不变语义」：`ArrayList<Any>` 命中。 */
     @TestCase
     public func containerMatchIsInvariant(): Unit {
         let ctx = AnyHelpers_test.mkCtx()
@@ -117,6 +118,30 @@ public class AnyHelpers_test {
         let boxA = AnyHelpers_test.call(ctx, 78,
             [Int64(LocalType.LIST), HandleTable.pin(anys)])
         @Assert(AnyHelpers_test.call(ctx, 79, [boxA, Int64(LocalType.LIST), 0xFFFF]), 1)
+        JitContext.free(ctx)
+    }
+
+    /**
+     * 盒经容器往返（m3 §1「存储」能力面）：`MAKE_LIST` → `any_box` → `LIST_APPEND` → `GET_IDX`
+     * → `any_as` 五步逐段断言，定位「盒存进容器就取不出来」的层次（runtime / 编译产物）。
+     */
+    @TestCase
+    public func boxRoundTripsThroughList(): Unit {
+        let ctx = AnyHelpers_test.mkCtx()
+        let list = AnyHelpers_test.call(ctx, 70, [])
+        @Assert(ctx.errCode, 0)
+        @Assert(list != 0, true)
+        let boxed = AnyHelpers_test.call(ctx, 78, [Int64(LocalType.I64), 7])
+        @Assert(ctx.errCode, 0)
+        @Assert(boxed != 0, true)
+        let _ = AnyHelpers_test.call(ctx, 43, [list, boxed])
+        @Assert(ctx.errCode, 0)
+        let cell = AnyHelpers_test.call(ctx, 2, [list, 0])
+        @Assert(ctx.errCode, 0)
+        @Assert(cell != 0, true)
+        let back = AnyHelpers_test.call(ctx, 80, [cell, Int64(LocalType.I64), 0xFFFF])
+        @Assert(ctx.errCode, 0)
+        @Assert(back, 7)
         JitContext.free(ctx)
     }
 }

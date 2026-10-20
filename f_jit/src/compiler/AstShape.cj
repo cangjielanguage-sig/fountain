@@ -114,6 +114,7 @@ internal class AstShape {
                     case Some(v) => 'castor(${shapeE(e)} as ${builtinName(t)} ?? ${shapeE(v)})'
                     case None => 'castor(${shapeE(e)} as ${builtinName(t)})'
                 }
+            case AstExpr.IsType(e, t, _) => 'is(${shapeE(e)} is ${builtinName(t)})'
         }
     }
 

@@ -261,6 +261,14 @@ internal enum AstExpr {
      */
     | CastOr(AstExpr, TypeRef, ?AstExpr, SourcePos)
 
+    /**
+     * 类型问答 `E is T`（m3 §3）：参数序 = expr, 目标类型。
+     *
+     * 左值静态类型为 15 ⇒ 运行期 `any_is`（H79）；左值非 15 ⇒ **静态判定**（同型 / 上行 →
+     * 常量 true；不相容 → 编译错误），不发射 helper。结果静态类型恒为 Bool。
+     */
+    | IsType(AstExpr, TypeRef, SourcePos)
+
     /** 位置（驱动 `setSite` 与编译期诊断；design §4.3.2）。 */
     public func pos(): SourcePos {
         match (this) {
@@ -288,6 +296,7 @@ internal enum AstExpr {
             case MethodCall(_, _, _, p) => p
             case CtorCall(_, _, p) => p
             case CastOr(_, _, _, p) => p
+            case IsType(_, _, p) => p
         }
     }
 }

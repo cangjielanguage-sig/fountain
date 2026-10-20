@@ -191,6 +191,7 @@ public class HandleTable {
             case _: JitRegex => TypeToken.REGEX
             case _: JitClosure => TypeToken.CLOSURE
             case _: HostCallback => TypeToken.HOST_CLOSURE
+            case _: JitAnyBox => TypeToken.ANY
             case _: JsonValue => TypeToken.HOST_OBJECT
             case _ => TypeToken.RESERVED
         }
@@ -283,17 +284,18 @@ public class HandleTable {
             failWith(ErrCode.CALL_CONTRACT)
         }
         synchronized(mtx) {
-            // 宿主闭包（tag=10）按**对象身份**去重：闭包没有值语义键，两个不同的闭包即使
-            // 代码相同也是不同回调（捕获环境可能不同）。
-            if (tok == TypeToken.HOST_CLOSURE) {
+            // 身份型载荷（tag=10 宿主闭包 / tag=12 Any 盒）按**对象身份**去重：两者都没有
+            // 值语义键——闭包即便代码相同也可能捕获不同环境；盒的值可以有等值副本，但盒本身
+            // 有身份（容器里存的就是同一个盒，反复读出必须回到同一句柄，否则窗口会被读操作耗尽）。
+            if (tok == TypeToken.HOST_CLOSURE || tok == TypeToken.ANY) {
                 match (obj) {
-                    case cb: HostCallback =>
+                    case target: Object =>
                         var i = 1
                         while (i < objs.size) {
                             if (alive[i] && !constFlags[i] && tags[i] == tok) {
                                 match (objs[i]) {
-                                    case old: HostCallback =>
-                                        if (refEq(old, cb)) {
+                                    case old: Object =>
+                                        if (refEq(old, target)) {
                                             return makeId(i, tok, gens[i])
                                         }
                                     case _ => ()
@@ -976,11 +978,12 @@ public class HandleTable {
      * M3：把任意宿主值装进 **Any 盒**（tag=12）并返回句柄。
      *
      * 盒不可变：存进去的是什么就取什么（值型已在调用侧拷贝、引用型即共享引用）。
-     * 与 `pin` 分开是因为 `pin` 按对象类型选 tag，而盒的 tag 恒为 12。
+     * 与 `pin` 分开是因为 `pin` 按对象类型选 tag，而盒的 tag 恒为 12；载荷是 `JitAnyBox`
+     * 包装对象（保证盒在容器里保持身份，见 `JitAnyBox` 的类注释）。
      */
     public static func pinAnyBox(v: Any): Int64 {
         synchronized(mtx) {
-            newSlotLocked(v, TypeToken.ANY, false)
+            newSlotLocked(JitAnyBox(v), TypeToken.ANY, false)
         }
     }
 
@@ -991,7 +994,10 @@ public class HandleTable {
             if (i <= 0 || i >= objs.size || !alive[i] || tags[i] != TypeToken.ANY) {
                 failWith(ErrCode.HANDLE_TYPE)
             }
-            objs[i]
+            match (objs[i]) {
+                case b: JitAnyBox => b.value
+                case _ => failWith(ErrCode.HANDLE_TYPE)
+            }
         }
     }
 

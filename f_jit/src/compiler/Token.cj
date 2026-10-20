@@ -71,6 +71,8 @@ internal enum TokenKind <: Equatable<TokenKind> {
     | KwNull
     /** `as`（M2.2：仅用于 `E as T ?? F` 的静态收窄）。 */
     | KwAs
+    /** `is`（M3：类型问答；左值 15 ⇒ H79，其余走静态关系，见 m3 §3）。 */
+    | KwIs
 
     // ---- 标点（12）----
     | LParen
@@ -190,6 +192,8 @@ internal enum TokenKind <: Equatable<TokenKind> {
             case DotDot => 57
             case DotDotEq => 58
             case EOF => 59
+            // M3 追加（排在全表末尾，不动既有编号 —— 既有编号是 M1/M2 用例的锚点）
+            case KwIs => 60
         }
     }
 }

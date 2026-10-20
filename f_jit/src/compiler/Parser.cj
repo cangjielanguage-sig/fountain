@@ -815,6 +815,12 @@ internal class Parser {
 
     private func parseCompare(): AstExpr {
         var left = this.parseBitOr()
+        // `E is T`（m3 §3）：类型问答与比较同级，右结合关闭（`a is T is U` 无意义，交给降低期判）。
+        while (this.atKind(TokenKind.KwIs)) {
+            let isTok = this.take()
+            let tr = this.parseTypeRef()
+            left = AstExpr.IsType(left, tr, SourcePos(isTok.line, isTok.column))
+        }
         while (Parser.isCompareOp(this.peek().kind)) {
             let opTok = this.take()
             let right = this.parseBitOr()

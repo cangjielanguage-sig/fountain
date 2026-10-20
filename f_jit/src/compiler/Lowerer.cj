@@ -546,6 +546,7 @@ internal class Lowerer {
                 }
                 ctx.builder.emit(Op.POP)
             case AstExpr.MemberName(name, tg, mpos) =>
+                this.rejectAnyReceiver(tg, '字段写「.${name}」', mpos)
                 match (this.hostObjectClassOf(tg)) {
                     case Some(className) =>
                         this.lowerHostFieldSet(className, name, tg, rhs, mpos)
@@ -554,6 +555,7 @@ internal class Lowerer {
                             '字段写「.${name}」的接收者不是静态已知的注册类（m2 §12.4）')
                 }
             case AstExpr.FieldSet(tg, field, _, fpos) =>
+                this.rejectAnyReceiver(tg, '字段写「.${field}」', fpos)
                 match (this.hostObjectClassOf(tg)) {
                     case Some(className) =>
                         this.lowerHostFieldSet(className, field, tg, rhs, fpos)
@@ -819,12 +821,17 @@ internal class Lowerer {
         let ctx = this.requireCtx()
         let _ = isEmpty
         ctx.builder.emit(Op.MAKE_LIST)
+        // `LIST_APPEND` 的契约是 `list cell → 0`（m1 §A1：消费列表并压回 helper 返回值 0），
+        // 所以列表必须落在槽里、每轮重取——与 `lowerMapLit` 的 `MAP_PUT` 写法同构。
+        let slot = ctx.builder.allocSlot(LocalType.LIST)
+        ctx.builder.emitU16(Op.STOREL, UInt16(slot))
         for (e in elems) {
+            ctx.builder.emitU16(Op.LOADL, UInt16(slot))
             let _ = this.lowerBox(e)
-            // `LIST_APPEND` 的栈效应是 (2,1)：弹出「列表 + 元素」后再把列表压回，
-            // 所以这里**不能** POP——列表要留给下一个元素。
             ctx.builder.emit(Op.LIST_APPEND)
+            ctx.builder.emit(Op.POP)
         }
+        ctx.builder.emitU16(Op.LOADL, UInt16(slot))
         LocalType.LIST
     }
 
@@ -950,6 +957,7 @@ internal class Lowerer {
                 }
                 t1
             case AstExpr.CastOr(e, t, fb, pos) => this.lowerCastOr(e, t, fb, pos)
+            case AstExpr.IsType(e, t, pos) => this.lowerIsType(e, t, pos)
             case AstExpr.Call(target, args, pos) => this.lowerCall(target, args, pos)
             case AstExpr.Closure(lambda, _) =>
                 this.lowerClosureExpr(lambda)
@@ -1012,6 +1020,7 @@ internal class Lowerer {
             case AstExpr.MemberName(name, tg, pos) => this.lowerMemberValue(name, tg, pos)
             case AstExpr.FieldGet(tg, field, pos) => this.lowerMemberValue(field, tg, pos)
             case AstExpr.FieldSet(tg, field, v, pos) =>
+                this.rejectAnyReceiver(tg, '字段写「.${field}」', pos)
                 match (this.hostObjectClassOf(tg)) {
                     case Some(className) => this.lowerHostFieldSet(className, field, tg, v, pos)
                     case None =>
@@ -1020,6 +1029,7 @@ internal class Lowerer {
                 }
                 LocalType.UNIT
             case AstExpr.MethodCall(tg, method, args, pos) =>
+                this.rejectAnyReceiver(tg, '调用「.${method}()」', pos)
                 match (this.hostObjectClassOf(tg)) {
                     case Some(className) =>
                         match (this.view.fieldOf(className, method)) {
@@ -1085,8 +1095,23 @@ internal class Lowerer {
         }
     }
 
+    /**
+     * 禁止面（m3 §3）：15 型表达式上的运算 / 比较 / 等值。
+     *
+     * 盒只能「持有 / 传参 / 返回 / is / as」；任何按值计算都必须先 `as`。
+     * JSON 访问糖（点号 / 下标）是唯一例外，但那是**访问**而非运算，见 `rejectAnyReceiver`。
+     */
+    private func rejectAnyOperand(l: AstExpr, r: AstExpr, pos: SourcePos): Unit {
+        if (this.staticTypeFull(l) == LocalType.ANY || this.staticTypeFull(r) == LocalType.ANY) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                'Any 值上不得做运算 / 比较 / 等值（m3 §3 禁止面）：先 `as` 成具体类型（"先 as 后算"）')
+        }
+    }
+
     private func lowerBinary(op: TokenKind, l: AstExpr, r: AstExpr, pos: SourcePos): UInt16 {
         let ctx = this.requireCtx()
+        // 禁止面在短路展开之前判：短路只改变求值顺序，不改变「盒不能参与运算」。
+        this.rejectAnyOperand(l, r, pos)
         if (op == TokenKind.AndAnd) {
             let shortL = ctx.builder.newLabel()
             let endL = ctx.builder.newLabel()
@@ -1432,6 +1457,8 @@ internal class Lowerer {
 
     private func lowerUnary(op: TokenKind, x: AstExpr, pos: SourcePos): UInt16 {
         let ctx = this.requireCtx()
+        // 禁止面（m3 §3）：15 型上不得做一元运算（含 `!`——盒没有真值语义）。
+        this.rejectAnyOperand(x, x, pos)
         let t = this.lowerExpr(x)
         match (op) {
             case TokenKind.Minus =>
@@ -1517,8 +1544,22 @@ internal class Lowerer {
      * 仅对静态已知为某注册类的 14 型表达式合法；类的静态知识沿 `Var` / 字段 `typeRef` /
      * 构造结果传递（前端只查注册表条目，不做继承谱系上溯，v0.8.31）。
      */
+    /**
+     * 禁止面（m3 §3）：15 型表达式上不得做成员访问 / 调用 / 字段写。
+     *
+     * JSON 访问糖（`o.k` / `j[i]`，m3 §11）是**唯一例外**，随 R3.9 落地；在那之前一律拒绝，
+     * 否则「盒被当成宿主对象用」会静默取错槽位。
+     */
+    private func rejectAnyReceiver(tg: AstExpr, what: String, pos: SourcePos): Unit {
+        if (this.staticTypeFull(tg) == LocalType.ANY) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                'Any 值上不得做${what}（m3 §3 禁止面）：先 `as` 成具体类型再使用')
+        }
+    }
+
     private func lowerMemberValue(name: String, tg: AstExpr, pos: SourcePos): UInt16 {
         let ctx = this.requireCtx()
+        this.rejectAnyReceiver(tg, '成员访问「.${name}」', pos)
         match (this.hostObjectClassOf(tg)) {
             case Some(className) => return this.lowerHostFieldGet(className, name, tg, pos)
             case None => ()
@@ -1681,6 +1722,8 @@ internal class Lowerer {
                     case None => None
                 }
             case AstExpr.CastOr(_, t, _, _) => t.objectName()
+            // `is` 的结果恒为 Bool（14 不在结果类型里）
+            case AstExpr.IsType(_, _, _) => None
             case AstExpr.MethodCall(inner, methodName, _, _) =>
                 match (this.hostObjectClassOf(inner)) {
                     case Some(cls) =>
@@ -1968,6 +2011,7 @@ internal class Lowerer {
                         }
                 }
             case AstExpr.MemberName(name, tg, mpos) =>
+                this.rejectAnyReceiver(tg, '调用「.${name}()」', mpos)
                 if (this.staticTypeFull(target) == LocalType.HOST_CLOSURE) {
                     return this.lowerHostClosureInvoke(target, args, mpos)
                 }
@@ -2009,10 +2053,164 @@ internal class Lowerer {
      * 为什么失败要另用 H77 而不是让 `$as$<T>` 自己抛：user helper 抛出的普通异常会被统一
      * 转 21（宿主异常），而转型失败必须是 **7 BAD_CAST**；固定 helper 直接 `failWith` 才不改码值。
      */
+    // ==================================================================
+    // Any 的类型问答与拆箱（m3 §3）
+    // ==================================================================
+
+    /** 静态关系：同型 / 上行 ⇒ 零动作（`is` 恒真、`as` 直取）。 */
+    private static const CAST_STATIC: UInt8 = 0u8
+    /** 静态关系：需要运行期判定（14 下转型 / 类名未知）。 */
+    private static const CAST_RUNTIME: UInt8 = 1u8
+    /** 静态关系：不相容（编译错误）。 */
+    private static const CAST_BAD: UInt8 = 2u8
+
+    /**
+     * `is` / `as` 的目标类型校验（m3 §1/§3）。
+     *
+     * 可转集 = 0–2、4–11、14、16–19。**12（Closure）不开放**（§12-1）、**13（HostClosure）
+     * 二期候选**、**15（Any）盒不套盒**——三者都必须编译期报错，而不是运行期恒假或恒 22。
+     */
+    private func requireCastTarget(t: TypeRef, pos: SourcePos, opName: String): UInt16 {
+        let code = t.code()
+        let ok = LocalType.isConvertible(code) && code != LocalType.ANY &&
+            code != LocalType.CLOSURE && code != LocalType.HOST_CLOSURE
+        if (!ok) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                '`${opName} ${AstShape.builtinName(t)}` 的目标类型不可转换（m3 §1 可转集：' +
+                '0–2、4–11、14、16–19；12/13/15 与高阶均拒绝）')
+        }
+        code
+    }
+
+    /** 描述符 `aux`（m3 §5）：List → 元素码、Map → `(键码 << 8) | 值码`、其余 `0xFFFF`。 */
+    private static func auxOf(t: TypeRef): UInt16 {
+        match (t) {
+            case TypeRef.ListOf(e) => e.code()
+            case TypeRef.MapOf(k, v) => UInt16((Int64(k.code()) << 8) | Int64(v.code()))
+            case _ => 0xFFFFu16
+        }
+    }
+
+    /**
+     * 左值静态类型与目标类型的**静态关系**（m3 §3「上行零操作 / 不相容编译错误」）。
+     *
+     * 覆盖三条线：同为 14 时按仓颉继承名谱系（含「类名未跟踪 ⇒ 交运行期」）；JSON 谱系
+     * `17/18/19 <: 16` 的上行；其余跨码一律不相容。
+     */
+    private func castRelation(e: AstExpr, sCode: UInt16, t: TypeRef): UInt8 {
+        let tCode = t.code()
+        if (sCode == tCode) {
+            if (tCode != LocalType.HOST_OBJECT) {
+                return Lowerer.CAST_STATIC
+            }
+            let sName = match (this.hostObjectClassOf(e)) {
+                case Some(n) => n
+                case None => ''
+            }
+            let tName = match (t.objectName()) {
+                case Some(n) => n
+                case None => ''
+            }
+            if (sName == '' || tName == '') {
+                return Lowerer.CAST_RUNTIME
+            }
+            if (sName == tName || this.view.isSameOrSubclass(sName, tName)) {
+                return Lowerer.CAST_STATIC
+            }
+            if (this.view.isSameOrSubclass(tName, sName)) {
+                return Lowerer.CAST_RUNTIME
+            }
+            return Lowerer.CAST_BAD
+        }
+        // JSON 谱系：17/18/19 <: 16（码级继承）——上行到 JsonValue 是零动作
+        if (tCode == LocalType.JSON_VALUE && sCode >= LocalType.JSON_VALUE &&
+            sCode <= LocalType.JSON_NULL) {
+            return Lowerer.CAST_STATIC
+        }
+        Lowerer.CAST_BAD
+    }
+
+    /**
+     * `E is T`（m3 §3）。
+     *
+     * - 左值 15 ⇒ H79 `any_is`（参数 `(盒, 码, aux)`）；
+     * - 左值非 15 ⇒ **静态判定**，零 helper：同型/上行 ⇒ 常量 true（操作数仍求值，副作用不丢）；
+     *   14 下转型 ⇒ 复用注册期合成的 `$as$<C>`（纯判定，不抛 7/22）；不相容 ⇒ 编译错误。
+     */
+    private func lowerIsType(e: AstExpr, t: TypeRef, pos: SourcePos): UInt16 {
+        let ctx = this.requireCtx()
+        let tCode = this.requireCastTarget(t, pos, 'is')
+        let sCode = this.staticTypeFull(e)
+        if (sCode == LocalType.ANY) {
+            let _ = this.lowerExpr(e)
+            ctx.builder.emitI64(Op.PUSH_I64, Int64(tCode))
+            ctx.builder.emitI64(Op.PUSH_I64, Int64(Lowerer.auxOf(t)))
+            ctx.builder.setSite(pos)
+            ctx.builder.callHelper(HelperCodec.ANY_IS, 3u8)
+            return LocalType.BOOL
+        }
+        let rel = this.castRelation(e, sCode, t)
+        if (rel == Lowerer.CAST_STATIC) {
+            let _ = this.lowerExpr(e)
+            ctx.builder.emit(Op.POP)
+            ctx.builder.emitU8(Op.PUSH_BOOL, 1u8)
+            return LocalType.BOOL
+        }
+        if (rel == Lowerer.CAST_RUNTIME) {
+            let tName = match (t.objectName()) {
+                case Some(n) => n
+                case None => ''
+            }
+            if (tName == '') {
+                diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                    '`is` 的运行期判定需要明确类名（14 目标缺类名）')
+            }
+            let slot = this.sess.registry.slotOf('$as$' + tName)
+            if (slot < 0) {
+                diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                    '内部错误：类「${tName}」缺少转型判定函数（注册期未合成 `$as$` 条目）')
+            }
+            let _ = this.lowerExpr(e)
+            ctx.builder.setSite(pos)
+            ctx.builder.callHelper(HelperCodec.hidOfSlot(UInt16(slot)), 1u8)
+            return LocalType.BOOL
+        }
+        diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+            '`is` 的左右两侧类型不相容（m3 §3：仅同型 / 上行 / 14 继承谱系可判定）')
+    }
+
+    /**
+     * 左值静态类型为 15 的 `as`：H80 `any_as`（参数 `(盒, 码, aux)`）。
+     *
+     * **不支持 `??` 兜底**：盒不可变 ⇒ 「失败可继续」一律写「先 `is` 后 `as`」（m3 §3），
+     * 这里显式报错而不是静默退回 H79+H80 两条路（避免同一语义两种产物）。
+     */
+    private func lowerAnyCast(e: AstExpr, t: TypeRef, fb: ?AstExpr, pos: SourcePos): UInt16 {
+        let ctx = this.requireCtx()
+        let tCode = this.requireCastTarget(t, pos, 'as')
+        match (fb) {
+            case Some(_) =>
+                diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                    'Any 上不支持 `as T ?? V`：盒不可变，失败可继续请写「先 is 后 as」（m3 §3）')
+            case None => ()
+        }
+        let _ = this.lowerExpr(e)
+        ctx.builder.emitI64(Op.PUSH_I64, Int64(tCode))
+        ctx.builder.emitI64(Op.PUSH_I64, Int64(Lowerer.auxOf(t)))
+        ctx.builder.setSite(pos)
+        ctx.builder.callHelper(HelperCodec.ANY_AS, 3u8)
+        // 结果静态类型 = T；14 位置带回类名，便于继续走成员链（m2 §12.4）
+        this.lastObjectName = t.objectName()
+        tCode
+    }
+
     private func lowerCastOr(e: AstExpr, t: TypeRef, fb: ?AstExpr, pos: SourcePos): UInt16 {
         let ctx = this.requireCtx()
-        let tCode = t.code()
         let sCode = this.staticTypeFull(e)
+        if (sCode == LocalType.ANY) {
+            return this.lowerAnyCast(e, t, fb, pos)
+        }
+        let tCode = this.requireCastTarget(t, pos, 'as')
         let tName = match (t.objectName()) {
             case Some(n) => n
             case None => ''
@@ -2313,11 +2511,16 @@ internal class Lowerer {
             return LocalType.LIST
         }
         ctx.builder.emit(Op.MAKE_LIST)
+        // 同 `lowerListLitBoxed`：`LIST_APPEND` 消费列表并压回 0，列表必须先落槽再逐轮重取。
+        let slot = ctx.builder.allocSlot(LocalType.LIST)
+        ctx.builder.emitU16(Op.STOREL, UInt16(slot))
         for (e in elems) {
+            ctx.builder.emitU16(Op.LOADL, UInt16(slot))
             let _ = this.lowerExpr(e)
-            // 栈效应 (2,1)：列表留在栈上供下一个元素使用（POP 会把列表一起丢掉）。
             ctx.builder.emit(Op.LIST_APPEND)
+            ctx.builder.emit(Op.POP)
         }
+        ctx.builder.emitU16(Op.LOADL, UInt16(slot))
         LocalType.LIST
     }
 
@@ -2557,6 +2760,10 @@ internal class Lowerer {
     private func staticTypeFull(e: AstExpr): UInt16 {
         match (e) {
             case AstExpr.Var(_, _) => this.staticTypeOf(e)
+            // 容器下标读的静态类型 = 声明的元素类型（`List<Any>` ⇒ 15，`Map<String,Int64>` ⇒ 0）；
+            // 未知则按 M1 老口径 I64。缺这一支会让 `l[0] as Int64`（l: List<Any>）被误判成
+            // 「同型零动作」，直接把盒句柄当整数用。
+            case AstExpr.Index(target, _, _) => this.guessElemType(target)
             case AstExpr.MemberName(fieldName, inner, _) =>
                 match (this.hostObjectClassOf(inner)) {
                     case Some(cls) =>
@@ -2592,6 +2799,7 @@ internal class Lowerer {
                     LocalType.NONE
                 }
             case AstExpr.CastOr(_, t, _, _) => t.code()
+            case AstExpr.IsType(_, _, _) => LocalType.BOOL
             case AstExpr.Call(target, _, _) =>
                 match (target) {
                     case AstExpr.Var(cname, _) =>
@@ -2682,6 +2890,8 @@ internal class Lowerer {
                 }
             case AstExpr.Binary(_, _, _, _) => CaptureOrigin.WINDOW
             case AstExpr.Unary(_, _, _) => CaptureOrigin.WINDOW
+            // `E is T` 产出 Bool（值型），不进窗口分配面
+            case AstExpr.IsType(_, _, _) => CaptureOrigin.VALUE
             case _ => CaptureOrigin.WINDOW
         }
     }
@@ -2778,6 +2988,7 @@ internal class Lowerer {
             case AstExpr.MapLit(_, _, _) => LocalType.MAP
             case AstExpr.Closure(_, _) => LocalType.CLOSURE
             case AstExpr.CastOr(_, t, _, _) => t.code()
+            case AstExpr.IsType(_, _, _) => LocalType.BOOL
             case AstExpr.RecursiveValue(_) => LocalType.CLOSURE
             case AstExpr.RegexOp(k, _, _, _, _, _, _) =>
                 if (k == TokenKind.Tilde || k == TokenKind.BangTilde) {
@@ -2971,6 +3182,8 @@ internal class Lowerer {
                 for (a in args) {
                     Lowerer.scanExpr(a, locals, outer, free)
                 }
+            // `E is T` 的操作数仍要参与自由变量扫描（否则闭包里的 `x is Int64` 捕获不到 x）
+            case AstExpr.IsType(t, _, _) => Lowerer.scanExpr(t, locals, outer, free)
             case _ => ()
         }
     }

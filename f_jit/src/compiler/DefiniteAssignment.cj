@@ -227,6 +227,7 @@ internal class DefiniteAssignment {
                     case Some(v) => this.walkExpr(v, state)
                     case None => ()
                 }
+            case AstExpr.IsType(x, _, _) => this.walkExpr(x, state)
             case AstExpr.Call(t, args, pos) =>
                 this.walkCallee(t, state, pos)
                 for (a in args) {
@@ -428,6 +429,14 @@ internal class DefiniteAssignment {
                 for (a in args) {
                     this.walkExprWithOuter(a, state, outer)
                 }
+            // 捕获面同样要穿透 `as` / `is` 的操作数（否则闭包里 `x as T` / `x is T` 会被误判未赋值）
+            case AstExpr.CastOr(x, _, fb, _) =>
+                this.walkExprWithOuter(x, state, outer)
+                match (fb) {
+                    case Some(v) => this.walkExprWithOuter(v, state, outer)
+                    case None => ()
+                }
+            case AstExpr.IsType(t, _, _) => this.walkExprWithOuter(t, state, outer)
             case _ => this.walkExpr(e, state)
         }
     }

@@ -316,6 +316,7 @@ internal class Lexer {
             case 'false' => TokenKind.KwFalse
             case 'null' => TokenKind.KwNull
             case 'as' => TokenKind.KwAs
+            case 'is' => TokenKind.KwIs
             case _ => TokenKind.Ident
         }
     }
