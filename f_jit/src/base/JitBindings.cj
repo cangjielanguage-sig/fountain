@@ -39,7 +39,7 @@ public class JitFieldBinding {
  * 一个类的全部类型化绑定（M2.1）：方法 / 字段 / 构造器三张表。
  *
  * `@JitBind` 在包初始化期用 `JitBindSupport.enrollOf<T>(JitBindings(…))` 登记，
- * `registerType<T>()` 未显式传参时按类全限定名取用；显式传参优先。
+ * `registerType<T>()` 按类全限定名取用；显式传参**合并**其上（同成员以显式为准）。
  */
 public class JitBindings {
     public let methods: Array<PublicMethod>
@@ -70,6 +70,117 @@ public class JitBindings {
     public func isEmpty(): Bool {
         this.methods.size == 0 && this.fields.size == 0 && this.ctors.size == 0 &&
             this.statics.size == 0
+    }
+
+    /**
+     * 把 `over` **合并**到自身之上：同名/同形参的项由 `over` 顶掉，其余保留。
+     *
+     * 为什么是合并而不是整体取代：`@JitBind` 的自动登记覆盖整类成员。若显式传参整体取代它，
+     * 用户为改一个方法就得把字段/构造器/静态成员的绑定全部重写一遍；漏掉的那些会退回反射，
+     * 而引用型签名的成员在反射侧属于「默认拒绝」，于是「只想改一个方法」变成「掉一半成员」。
+     * 合并让显式传参只表达「我要改哪几条」。
+     */
+    public func withOverrides(over: JitBindings): JitBindings {
+        var ms = this.methods
+        for (o in over.methods) {
+            ms = JitBindings.replaceMethod(ms, o)
+        }
+        var fs = this.fields
+        for (o in over.fields) {
+            fs = JitBindings.replaceField(fs, o)
+        }
+        var cs = this.ctors
+        for (o in over.ctors) {
+            cs = JitBindings.replaceCtor(cs, o)
+        }
+        var ss = this.statics
+        for (o in over.statics) {
+            ss = JitBindings.replaceStatic(ss, o)
+        }
+        JitBindings(methods: ms, fields: fs, ctors: cs, statics: ss)
+    }
+
+    private static func replaceMethod(xs: Array<PublicMethod>, v: PublicMethod)
+        : Array<PublicMethod> {
+        var i = 0
+        while (i < xs.size) {
+            if (xs[i].name == v.name) {
+                let out = xs.clone()
+                out[i] = v
+                return out
+            }
+            i = i + 1
+        }
+        let out = Array<PublicMethod>(xs.size + 1, repeat: v)
+        i = 0
+        while (i < xs.size) {
+            out[i] = xs[i]
+            i = i + 1
+        }
+        out[xs.size] = v
+        out
+    }
+
+    private static func replaceField(xs: Array<JitFieldBinding>, v: JitFieldBinding)
+        : Array<JitFieldBinding> {
+        var i = 0
+        while (i < xs.size) {
+            if (xs[i].name == v.name) {
+                let out = xs.clone()
+                out[i] = v
+                return out
+            }
+            i = i + 1
+        }
+        let out = Array<JitFieldBinding>(xs.size + 1, repeat: v)
+        i = 0
+        while (i < xs.size) {
+            out[i] = xs[i]
+            i = i + 1
+        }
+        out[xs.size] = v
+        out
+    }
+
+    private static func replaceCtor(xs: Array<PublicCtor>, v: PublicCtor): Array<PublicCtor> {
+        var i = 0
+        while (i < xs.size) {
+            if (JitBindings.sameParams(xs[i].params, v.params)) {
+                let out = xs.clone()
+                out[i] = v
+                return out
+            }
+            i = i + 1
+        }
+        let out = Array<PublicCtor>(xs.size + 1, repeat: v)
+        i = 0
+        while (i < xs.size) {
+            out[i] = xs[i]
+            i = i + 1
+        }
+        out[xs.size] = v
+        out
+    }
+
+    private static func replaceStatic(xs: Array<PredefinedFunction>, v: PredefinedFunction)
+        : Array<PredefinedFunction> {
+        var i = 0
+        while (i < xs.size) {
+            if (xs[i].name == v.name) {
+                let out = xs.clone()
+                out[i] = v
+                return out
+            }
+            i = i + 1
+        }
+        let out = Array<PredefinedFunction>(xs.size + 1, repeat: v)
+        i = 0
+        while (i < xs.size) {
+            out[i] = xs[i]
+            i = i + 1
+        }
+        out[xs.size] = v
+        out
     }
 
     /** 按成员名取静态绑定；未登记 → `None`（退回反射包装）。 */

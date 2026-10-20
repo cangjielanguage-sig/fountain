@@ -122,13 +122,10 @@ protected class ReflectRegistrar {
                     typeName, None)
         }
         let name = cls.name
-        // `@JitBind` 在包初始化期把 overrides 登记到「类全限定名 → 绑定」表里；
-        // 显式传参优先，空则取自动登记（宏因此不需要生成中间函数，注册处也只写 registerType）。
-        let effective = if (bindings.isEmpty()) {
-            JitBindSupport.enrolledOf(name)
-        } else {
-            bindings
-        }
+        // `@JitBind` 在包初始化期把绑定登记到「类全限定名 → 绑定」表里。
+        // 显式传参**合并**到自动登记之上（同成员以显式为准），不整体取代：否则只想改一个方法
+        // 也会把字段/构造器/静态成员的绑定一起丢掉，退回反射后引用型成员还会撞上「默认拒绝」。
+        let effective = JitBindSupport.enrolledOf(name).withOverrides(bindings)
         ReflectRegistrar.retainClass(cls)
         let ancestry = ReflectRegistrar.ancestryOf(cls)
 

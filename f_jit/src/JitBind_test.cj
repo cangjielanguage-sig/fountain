@@ -123,6 +123,14 @@ public class JitBind_test {
         let _ = JitBind_test.methodOf('tag')
         let _ = JitBind_test.methodOf('setTag')
 
+        // 属性按 get/set 各一条绑定，签名逐位对：`(C) -> String` 与 `(C, String) -> Unit`
+        let getter = JitBind_test.methodOf('tag')
+        @Assert(getter.bind.paramTypes, [LocalType.HOST_OBJECT])
+        @Assert(getter.bind.retType, LocalType.STRING)
+        let setter = JitBind_test.methodOf('setTag')
+        @Assert(setter.bind.paramTypes, [LocalType.HOST_OBJECT, LocalType.STRING])
+        @Assert(setter.bind.retType, LocalType.UNIT)
+
         // 字段：name(var，带 setter) / id(let，无 setter)
         @Assert(b.fields.size, 2)
         var nameField: ?JitFieldBinding = None
@@ -232,6 +240,41 @@ public class JitBind_test {
         CompileCache.reset()
         let staticFunc = c.compile('{ => parse("x") }')
         @Assert(staticFunc.call<String>([]), 'px')
+    }
+
+    /**
+     * 显式 `bindings` 与自动登记**合并**：同成员以显式为准，其余自动登记继续生效。
+     *
+     * 判据取 `mut prop tag`：它的 getter 是 `(C) -> String`，一旦丢掉类型化绑定就会落到反射侧
+     * 的「引用型默认拒绝」而不给槽位，`tag(u)` 直接编译不过 —— 所以「编译得过 + 返回原值」
+     * 就证明自动登记没有被显式传参整体顶掉。
+     */
+    @TestCase
+    public func explicitBindingsMergeOverEnrollment(): Unit {
+        let c = Compiler(CompileOptions(DummyDiagnosticsSink()))
+        let explicit = PublicMethod(name: 'greet', bind: PredefinedFunction(
+            'fountain::f_jit.JitBindUser.greet',
+            [LocalType.HOST_OBJECT, LocalType.STRING], LocalType.STRING,
+            { args =>
+                match (args[0]) {
+                    case u: JitBindUser =>
+                        match (args[1]) {
+                            case s: String => 'explicit ' + s
+                            case _ => 'explicit ?'
+                        }
+                    case _ => 'explicit ?'
+                }
+            }))
+        c.registerType<JitBindUser>(bindings: JitBindings(methods: [explicit]))
+        let u = JitBindUser('bob', 0)
+
+        CompileCache.reset()
+        let greet = c.compile('{ u: JitBindUser => u.greet("z") }')
+        @Assert(greet.call<String>([u]), 'explicit z')
+
+        CompileCache.reset()
+        let tag = c.compile('{ u: JitBindUser => tag(u) }')
+        @Assert(tag.call<String>([u]), 'bob')
     }
 
     /** 性能路径的回归：全部走类型化绑定后 300 次调用不崩、结果稳定。 */
