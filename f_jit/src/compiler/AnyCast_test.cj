@@ -171,21 +171,24 @@ public class AnyCast_test {
         @Assert(TCase.hit('T38/any-operators-rejected', true), true)
     }
 
-    /** 盒上访问不了：成员读 / 成员写 / 方法调用 / 下标读一律编译错误。 */
+    /**
+     * 15 盒上的**点号 / 下标**是 JSON 访问糖（m3 §3 例外，v0.3.18/19），编译通过；
+     * 其余访问面（对盒本身调用、成员表未命中的方法调用）仍是禁止面。
+     */
     @TestCase
-    public func rejectsAnyMemberAccess(): Unit {
-        @Assert(AnyCast_test.errKind('{ a: Any => a.foo }'), DiagKind.TYPE_MISMATCH)
-        @Assert(AnyCast_test.errKind('{ a: Any => a.foo = 1 }'), DiagKind.TYPE_MISMATCH)
+    public func anyDotAndIndexAreJsonSugar(): Unit {
+        @Assert(AnyCast_test.errKind('{ a: Any => a.foo }'), '')
+        @Assert(AnyCast_test.errKind('{ a: Any => a.foo = 1 }'), '')
+        @Assert(AnyCast_test.errKind('{ a: Any => a[0] }'), '')
         @Assert(AnyCast_test.errKind('{ a: Any => a.foo() }'), DiagKind.TYPE_MISMATCH)
-        @Assert(AnyCast_test.errKind('{ a: Any => a[0] }'), DiagKind.TYPE_MISMATCH)
-        @Assert(TCase.hit('T38/any-member-rejected', true), true)
+        @Assert(TCase.hit('T38/any-json-sugar', true), true)
     }
 
     /** 诊断消息提示「先 as」——禁止面不是静默失败。 */
     @TestCase
     public func rejectedAnySuggestsCast(): Unit {
         @Assert(AnyCast_test.errText('{ a: Any => a + 1 }').contains('先 `as`'), true)
-        @Assert(AnyCast_test.errText('{ a: Any => a.foo() }').contains('先 `as`'), true)
+        @Assert(AnyCast_test.errText('{ a: Any => a < 1 }').contains('先 `as`'), true)
     }
 
     // ------------------------------------------------------------------

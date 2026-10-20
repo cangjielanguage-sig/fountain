@@ -151,6 +151,12 @@ private func userHelperToken(code: UInt16): UInt16 {
         case 10u16 => TypeToken.LIST
         case 11u16 => TypeToken.MAP
         case 12u16 => TypeToken.CLOSURE
+        // JSON 内建码（16–19）跨桥走 **token 11 例外行**（m3 §11 / v0.3.20：句柄 tag 复用 11，
+        // 不为 JSON 新开 token）——JSON 成员函数（首参 ∈ 16–19）即经此路径取到节点。
+        case 16u16 => TypeToken.HOST_OBJECT
+        case 17u16 => TypeToken.HOST_OBJECT
+        case 18u16 => TypeToken.HOST_OBJECT
+        case 19u16 => TypeToken.HOST_OBJECT
         case _ => TypeToken.RESERVED
     }
 }

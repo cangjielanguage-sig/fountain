@@ -521,7 +521,11 @@ internal class Lowerer {
                 let _ = this.lowerExprAs(rhs, sym.ty)
                 sym.origin = Lowerer.worseOrigin(sym.origin, this.originOfExpr(rhs, sym.ty))
                 ctx.builder.emitU16(Op.STOREL, UInt16(sym.slot))
-            case AstExpr.IndexTarget(target, index, _) =>
+            case AstExpr.IndexTarget(target, index, pos) =>
+                if (this.isJsonAccessReceiver(target)) {
+                    this.lowerJsonIndexWrite(target, index, rhs, pos)
+                    return
+                }
                 let info = this.containerInfoOf(target)
                 let tt = this.lowerExpr(target)
                 // Map 的键按声明的键类型降低（`Map<String,…>` 的键是 String 而非 I64）。
@@ -547,6 +551,10 @@ internal class Lowerer {
                 }
                 ctx.builder.emit(Op.POP)
             case AstExpr.MemberName(name, tg, mpos) =>
+                if (this.isJsonAccessReceiver(tg)) {
+                    this.lowerJsonDotWrite(name, tg, rhs, mpos)
+                    return
+                }
                 this.rejectAnyReceiver(tg, '字段写「.${name}」', mpos)
                 match (this.hostObjectClassOf(tg)) {
                     case Some(className) =>
@@ -556,6 +564,10 @@ internal class Lowerer {
                             '字段写「.${name}」的接收者不是静态已知的注册类（m2 §12.4）')
                 }
             case AstExpr.FieldSet(tg, field, _, fpos) =>
+                if (this.isJsonAccessReceiver(tg)) {
+                    this.lowerJsonDotWrite(field, tg, rhs, fpos)
+                    return
+                }
                 this.rejectAnyReceiver(tg, '字段写「.${field}」', fpos)
                 match (this.hostObjectClassOf(tg)) {
                     case Some(className) =>
@@ -872,6 +884,14 @@ internal class Lowerer {
         if (expected == LocalType.NONE || actual == LocalType.NONE || expected == actual) {
             return actual
         }
+        // JSON 谱系：15 盒 / 16 基类 → 具体节点类 = **自动收窄**（与链式访问同口径，m3 §11）；
+        // 17/18/19 → 16 是码级上行，零动作（同一句柄，由下面的共同返回处理）。
+        if (expected >= LocalType.JSON_VALUE && expected <= LocalType.JSON_NULL) {
+            if (actual == LocalType.ANY ||
+                (actual == LocalType.JSON_VALUE && expected != LocalType.JSON_VALUE)) {
+                return this.emitJsonNarrow(actual, expected, e.pos())
+            }
+        }
         // JSON 谱系无隐式转换：`JsonObject` 不能当 `JsonArray` 用（m3 §11 静态类型标注）。
         // 唯一的「上行」是收进 `JsonValue`（16，码级基类）——那正是 expected == 16 的情形。
         if (expected >= LocalType.JSON_VALUE && expected <= LocalType.JSON_NULL &&
@@ -1009,7 +1029,11 @@ internal class Lowerer {
                 diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
                     '元组字面量只能用于多重赋值右侧（M1 无元组类型）')
             case AstExpr.RecursiveValue(_) => this.lowerRecursiveValue()
-            case AstExpr.Index(target, index, _) =>
+            case AstExpr.Index(target, index, pos) =>
+                // 15 盒 / 16–19 节点 ⇒ JSON 访问糖（m3 §11；R3.4 禁止面的唯一例外）
+                if (this.isJsonAccessReceiver(target)) {
+                    return this.lowerJsonIndexRead(target, index, pos)
+                }
                 let tt = this.lowerExpr(target)
                 let _ = this.lowerExpr(index)
                 if (tt == LocalType.LIST) {
@@ -1028,9 +1052,21 @@ internal class Lowerer {
             case AstExpr.IndexTarget(_, _, pos) =>
                 diagFail(DiagKind.SYNTAX_ERROR, this.src, 0, pos.line, pos.column,
                     '下标赋值目标只能出现在赋值语句左侧')
-            case AstExpr.MemberName(name, tg, pos) => this.lowerMemberValue(name, tg, pos)
-            case AstExpr.FieldGet(tg, field, pos) => this.lowerMemberValue(field, tg, pos)
+            case AstExpr.MemberName(name, tg, pos) =>
+                if (this.isJsonAccessReceiver(tg)) {
+                    return this.lowerJsonDotRead(name, tg, pos)
+                }
+                this.lowerMemberValue(name, tg, pos)
+            case AstExpr.FieldGet(tg, field, pos) =>
+                if (this.isJsonAccessReceiver(tg)) {
+                    return this.lowerJsonDotRead(field, tg, pos)
+                }
+                this.lowerMemberValue(field, tg, pos)
             case AstExpr.FieldSet(tg, field, v, pos) =>
+                if (this.isJsonAccessReceiver(tg)) {
+                    this.lowerJsonDotWrite(field, tg, v, pos)
+                    return LocalType.UNIT
+                }
                 this.rejectAnyReceiver(tg, '字段写「.${field}」', pos)
                 match (this.hostObjectClassOf(tg)) {
                     case Some(className) => this.lowerHostFieldSet(className, field, tg, v, pos)
@@ -1040,6 +1076,15 @@ internal class Lowerer {
                 }
                 LocalType.UNIT
             case AstExpr.MethodCall(tg, method, args, pos) =>
+                if (this.isJsonAccessReceiver(tg)) {
+                    let owner = this.jsonMemberOwner(method)
+                    if (owner == LocalType.NONE) {
+                        diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                            'JSON 上没有成员「${method}」：成员表为空或无此类；' +
+                            "键访问请写 ['${method}']（m3 §11 成员优先 → 键兜底）")
+                    }
+                    return this.lowerJsonMemberCall(method, owner, tg, args, pos)
+                }
                 this.rejectAnyReceiver(tg, '调用「.${method}()」', pos)
                 match (this.hostObjectClassOf(tg)) {
                     case Some(className) =>
@@ -1627,6 +1672,227 @@ internal class Lowerer {
             diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
                 'Any 值上不得做${what}（m3 §3 禁止面）：先 `as` 成具体类型再使用')
         }
+    }
+
+    // ------------------------------------------------------------------
+    // JSON 访问糖（m3 §11 / R3.9）：下标与点号
+    // ------------------------------------------------------------------
+
+    /** 接收者是否落在 JSON 访问面上（15 盒 / 16–19 内建码）；其余仍走 M1/M2 原有分派。 */
+    private func isJsonAccessReceiver(tg: AstExpr): Bool {
+        let c = this.staticTypeFull(tg)
+        c >= LocalType.ANY && c <= LocalType.JSON_NULL
+    }
+
+    /**
+     * 下标访问的目标类：由**索引静态类型**决定（m3 §11 自动收窄）——
+     * `Int64` ⇒ `JsonArray`(18)、`String` ⇒ `JsonObject`(17)；其余 / 判不出 ⇒ 编译错误。
+     */
+    private func jsonIndexTarget(index: AstExpr, pos: SourcePos): UInt16 {
+        let ic = this.staticTypeFull(index)
+        if (ic == LocalType.I64) {
+            return LocalType.JSON_ARRAY
+        }
+        if (ic == LocalType.STRING) {
+            return LocalType.JSON_OBJECT
+        }
+        diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+            'JSON 下标的静态类型是 ${LocalType.name(ic)}，判不出目标：JsonArray 收 Int64、' +
+            'JsonObject 收 String（m3 §11 自动收窄）')
+    }
+
+    /**
+     * 把**栈上**的 JSON 节点（15 盒 / 16 基类）收窄到 `target`（17/18；16 作上行也接受）。
+     *
+     * - 同码，或 17–19 → 16：**零动作**（句柄同一格）；
+     * - 15 盒 → 16–19：H80 `any_as`（`盒, 码, 0xFFFF`）；
+     * - 16 → 17/18：先 `any_box(16, h)` 再 H80（H80 只吃盒；换来统一的 22 失败口径）；
+     * - 静态已知具体类之间不相容 ⇒ 编译错误（负向面）。
+     */
+    private func emitJsonNarrow(actual: UInt16, target: UInt16, pos: SourcePos): UInt16 {
+        let ctx = this.requireCtx()
+        if (actual == target) {
+            return target
+        }
+        if (target == LocalType.JSON_VALUE && actual >= LocalType.JSON_VALUE) {
+            return target
+        }
+        if (actual != LocalType.ANY && actual != LocalType.JSON_VALUE) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                '接收者静态类型是 ${LocalType.name(actual)}，不能当 ${LocalType.name(target)} 用' +
+                '（m3 §11：静态已知具体类上取键 / 下标是编译错误）')
+        }
+        if (actual == LocalType.JSON_VALUE) {
+            let tmp = ctx.builder.allocSlot(LocalType.JSON_VALUE)
+            ctx.builder.emitU16(Op.STOREL, UInt16(tmp))
+            ctx.builder.emitI64(Op.PUSH_I64, Int64(LocalType.JSON_VALUE))
+            ctx.builder.emitU16(Op.LOADL, UInt16(tmp))
+            ctx.builder.setSite(pos)
+            ctx.builder.callHelper(HelperCodec.ANY_BOX, 2u8)
+        }
+        ctx.builder.emitI64(Op.PUSH_I64, Int64(target))
+        ctx.builder.emitI64(Op.PUSH_I64, Int64(0xFFFFu16))
+        ctx.builder.setSite(pos)
+        ctx.builder.callHelper(HelperCodec.ANY_AS, 3u8)
+        target
+    }
+
+    /** 接收者表达式 → 收窄到 `target` 后的节点句柄。 */
+    private func lowerJsonReceiverAs(tg: AstExpr, target: UInt16, pos: SourcePos): UInt16 {
+        let actual = this.lowerExpr(tg)
+        this.emitJsonNarrow(actual, target, pos)
+    }
+
+    /** 栈 `(节点, 键)` 已就绪：补 `mode` 并调 H81，结果恒为 15 盒。 */
+    private func emitJsonGet(mode: UInt8, pos: SourcePos): UInt16 {
+        let ctx = this.requireCtx()
+        ctx.builder.emitI64(Op.PUSH_I64, Int64(mode))
+        ctx.builder.setSite(pos)
+        ctx.builder.callHelper(HelperCodec.JSON_GET, 3u8)
+        LocalType.ANY
+    }
+
+    /** `j[k]` 读：`JsonArray` 收 Int64、`JsonObject` 收 String；结果恒为 15 盒。 */
+    private func lowerJsonIndexRead(tg: AstExpr, index: AstExpr, pos: SourcePos): UInt16 {
+        let target = this.jsonIndexTarget(index, pos)
+        let _ = this.lowerJsonReceiverAs(tg, target, pos)
+        if (target == LocalType.JSON_ARRAY) {
+            let _ = this.lowerExprAs(index, LocalType.I64)
+            return this.emitJsonGet(1u8, pos)
+        }
+        let _ = this.lowerExprAs(index, LocalType.STRING)
+        this.emitJsonGet(0u8, pos)
+    }
+
+    /** `j.k` 读：与 `j['k']` **逐位等价**（键 = 标识符常量）。 */
+    private func lowerJsonKeyRead(tg: AstExpr, key: String, pos: SourcePos): UInt16 {
+        let ctx = this.requireCtx()
+        let _ = this.lowerJsonReceiverAs(tg, LocalType.JSON_OBJECT, pos)
+        let hid = this.sess.consts.addStr(key)
+        ctx.builder.emitU16(Op.PUSH_KH, UInt16(hid))
+        this.emitJsonGet(0u8, pos)
+    }
+
+    /** 写侧值域（m3 §11）：值型 0–2 / String / JSON 节点 16–19；Unit 与 15 均拒绝。 */
+    private func checkJsonWriteValue(code: UInt16, pos: SourcePos): Unit {
+        let ok = code == LocalType.I64 || code == LocalType.F64 || code == LocalType.BOOL ||
+            code == LocalType.STRING ||
+            (code >= LocalType.JSON_VALUE && code <= LocalType.JSON_NULL)
+        if (!ok) {
+            let why = if (code == LocalType.ANY) {
+                '（Any 盒先 `as` 成具体类型）'
+            } else if (code == LocalType.NONE) {
+                '（JSON null 写 `JsonNull`；本方言无 `null` 关键字写入面）'
+            } else {
+                ''
+            }
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                'JSON 写入的值类型是 ${LocalType.name(code)}，不在值域内：只收 Int64 / Float64 / ' +
+                'Bool / String / JSON 节点（m3 §11）' + why)
+        }
+    }
+
+    /** 栈 `(节点, 键)` 就绪后写：值先落槽（只求值一次）⇒ `PUSH code` ⇒ H82 ⇒ POP。 */
+    private func emitJsonSet(rhs: AstExpr, pos: SourcePos): Unit {
+        let ctx = this.requireCtx()
+        let vc = this.lowerExpr(rhs)
+        this.checkJsonWriteValue(vc, rhs.pos())
+        let tmp = ctx.builder.allocSlot(vc)
+        ctx.builder.emitU16(Op.STOREL, UInt16(tmp))
+        ctx.builder.emitI64(Op.PUSH_I64, Int64(vc))
+        ctx.builder.emitU16(Op.LOADL, UInt16(tmp))
+        ctx.builder.setSite(pos)
+        ctx.builder.callHelper(HelperCodec.JSON_SET, 4u8)
+        ctx.builder.emit(Op.POP)
+    }
+
+    /** `j[i] = v`：目标类按索引类型定；写侧与读侧**对称**收窄。 */
+    private func lowerJsonIndexWrite(tg: AstExpr, index: AstExpr, rhs: AstExpr,
+        pos: SourcePos): Unit {
+        let target = this.jsonIndexTarget(index, pos)
+        let _ = this.lowerJsonReceiverAs(tg, target, pos)
+        if (target == LocalType.JSON_ARRAY) {
+            let _ = this.lowerExprAs(index, LocalType.I64)
+        } else {
+            let _ = this.lowerExprAs(index, LocalType.STRING)
+        }
+        this.emitJsonSet(rhs, pos)
+    }
+
+    /** `j.k = v`：与 `j['k'] = v` 逐位等价（键 = 标识符常量）。 */
+    private func lowerJsonKeyWrite(tg: AstExpr, key: String, rhs: AstExpr, pos: SourcePos): Unit {
+        let ctx = this.requireCtx()
+        let _ = this.lowerJsonReceiverAs(tg, LocalType.JSON_OBJECT, pos)
+        let hid = this.sess.consts.addStr(key)
+        ctx.builder.emitU16(Op.PUSH_KH, UInt16(hid))
+        this.emitJsonSet(rhs, pos)
+    }
+
+    /**
+     * JSON 成员表（编译期快照，m3 §11）：预定义函数通道里**首参码 ∈ 16–19** 的条目，
+     * 成员名 = 函数名，归属类 = 首参码（名字唯一 ⇒ 沿 `JsonObject → JsonValue` 向上查找
+     * 退化为一次查表）。返回所属类码；未命中 → `NONE`。
+     */
+    private func jsonMemberOwner(name: String): UInt16 {
+        let ps = this.sess.registry.paramTypesOf(name)
+        if (ps.size == 0) {
+            return LocalType.NONE
+        }
+        let c = ps[0]
+        if (c >= LocalType.JSON_VALUE && c <= LocalType.JSON_NULL) {
+            return c
+        }
+        LocalType.NONE
+    }
+
+    /**
+     * 点号读：**成员优先 → 键兜底**（m3 §11）。
+     *
+     * 命中成员表 ⇒ 裸成员名不给值（成员是函数，必须调用）；未命中 ⇒ 键访问，与 `j['k']` 等价。
+     */
+    private func lowerJsonDotRead(name: String, tg: AstExpr, pos: SourcePos): UInt16 {
+        if (this.jsonMemberOwner(name) != LocalType.NONE) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                '「.${name}」是 JSON 成员（函数），裸成员名不给值：调用写 `${name}(…)`，' +
+                "取键写 ['${name}']（m3 §11 成员优先）")
+        }
+        this.lowerJsonKeyRead(tg, name, pos)
+    }
+
+    /** 点号写：成员优先 ⇒ 同名成员存在时点号不可写（成员是方法）；取键写用 `['k']`。 */
+    private func lowerJsonDotWrite(name: String, tg: AstExpr, rhs: AstExpr,
+        pos: SourcePos): Unit {
+        if (this.jsonMemberOwner(name) != LocalType.NONE) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                '「.${name}」是 JSON 成员（方法），不可作字段写：取键写请用 ' +
+                "['${name}']（m3 §11 成员优先）")
+        }
+        this.lowerJsonKeyWrite(tg, name, rhs, pos)
+    }
+
+    /** `j.k(args…)` 命中成员 ⇒ 等价于 `k(j, args…)`（预定义函数通道，零新指令）。 */
+    private func lowerJsonMemberCall(name: String, owner: UInt16, tg: AstExpr,
+        args: Array<AstExpr>, pos: SourcePos): UInt16 {
+        let ctx = this.requireCtx()
+        let slot = this.sess.registry.slotOf(name)
+        let ps = this.sess.registry.paramTypesOf(name)
+        if (slot < 0 || ps.size == 0) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                '「.${name}」不在 JSON 成员表里（m3 §11）')
+        }
+        if (ps.size != args.size + 1) {
+            diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                'JSON 成员「${name}」需要 ${ps.size - 1} 个实参（实际 ${args.size}）')
+        }
+        let _ = this.lowerJsonReceiverAs(tg, owner, pos)
+        var i = 0
+        while (i < args.size) {
+            let _ = this.lowerExprAs(args[i], ps[i + 1])
+            i = i + 1
+        }
+        ctx.builder.setSite(pos)
+        ctx.builder.callHelper(HelperCodec.hidOfSlot(UInt16(slot)), UInt8(args.size + 1))
+        this.sess.registry.retTypeOf(name)
     }
 
     private func lowerMemberValue(name: String, tg: AstExpr, pos: SourcePos): UInt16 {
@@ -2837,34 +3103,60 @@ internal class Lowerer {
             // 容器下标读的静态类型 = 声明的元素类型（`List<Any>` ⇒ 15，`Map<String,Int64>` ⇒ 0）；
             // 未知则按 M1 老口径 I64。缺这一支会让 `l[0] as Int64`（l: List<Any>）被误判成
             // 「同型零动作」，直接把盒句柄当整数用。
-            case AstExpr.Index(target, _, _) => this.guessElemType(target)
+            case AstExpr.Index(target, _, _) =>
+                // JSON 下标读的结果恒为 15 盒（m3 §11）；容器读仍是声明的元素类型
+                let rt = this.staticTypeFull(target)
+                if (rt >= LocalType.ANY && rt <= LocalType.JSON_NULL) {
+                    LocalType.ANY
+                } else {
+                    this.guessElemType(target)
+                }
             case AstExpr.MemberName(fieldName, inner, _) =>
-                match (this.hostObjectClassOf(inner)) {
-                    case Some(cls) =>
-                        match (this.view.fieldOf(cls, fieldName)) {
-                            case Some(f) => f.`type`
-                            case None => LocalType.NONE
-                        }
-                    case None => LocalType.NONE
+                // JSON 点号读的结果恒为 15 盒（m3 §11）
+                let jrt = this.staticTypeFull(inner)
+                if (jrt >= LocalType.ANY && jrt <= LocalType.JSON_NULL) {
+                    LocalType.ANY
+                } else {
+                    match (this.hostObjectClassOf(inner)) {
+                        case Some(cls) =>
+                            match (this.view.fieldOf(cls, fieldName)) {
+                                case Some(f) => f.`type`
+                                case None => LocalType.NONE
+                            }
+                        case None => LocalType.NONE
+                    }
                 }
             case AstExpr.FieldGet(inner, fieldName, _) =>
-                match (this.hostObjectClassOf(inner)) {
-                    case Some(cls) =>
-                        match (this.view.fieldOf(cls, fieldName)) {
-                            case Some(f) => f.`type`
-                            case None => LocalType.NONE
-                        }
-                    case None => LocalType.NONE
+                // JSON 点号读的结果恒为 15 盒（m3 §11）
+                let jrt2 = this.staticTypeFull(inner)
+                if (jrt2 >= LocalType.ANY && jrt2 <= LocalType.JSON_NULL) {
+                    LocalType.ANY
+                } else {
+                    match (this.hostObjectClassOf(inner)) {
+                        case Some(cls) =>
+                            match (this.view.fieldOf(cls, fieldName)) {
+                                case Some(f) => f.`type`
+                                case None => LocalType.NONE
+                            }
+                        case None => LocalType.NONE
+                    }
                 }
             case AstExpr.FieldSet(_, _, _, _) => LocalType.UNIT
             case AstExpr.MethodCall(inner, methodName, _, _) =>
-                match (this.hostObjectClassOf(inner)) {
-                    case Some(cls) =>
-                        match (this.view.methodOf(cls, methodName)) {
-                            case Some(m) => m.bind.retType
-                            case None => LocalType.NONE
-                        }
-                    case None => LocalType.NONE
+                // JSON 成员调用：返回成员的声明返回类型
+                let jrt3 = this.staticTypeFull(inner)
+                if (jrt3 >= LocalType.ANY && jrt3 <= LocalType.JSON_NULL &&
+                    this.jsonMemberOwner(methodName) != LocalType.NONE) {
+                    this.sess.registry.retTypeOf(methodName)
+                } else {
+                    match (this.hostObjectClassOf(inner)) {
+                        case Some(cls) =>
+                            match (this.view.methodOf(cls, methodName)) {
+                                case Some(m) => m.bind.retType
+                                case None => LocalType.NONE
+                            }
+                        case None => LocalType.NONE
+                    }
                 }
             case AstExpr.CtorCall(className, _, _) =>
                 if (this.view.isRegistered(className)) {

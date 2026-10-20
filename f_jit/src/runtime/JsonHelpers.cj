@@ -112,7 +112,19 @@ private func exportJson(v: JsonValue): Any {
             } catch (_: Exception) {
                 i.value
             }
-        case d: JsonDecimal => d.value
+        case d: JsonDecimal =>
+            // f_data 的 `fromStr` 把**所有** JSON 数字都解析成 `JsonDecimal`（含整数）——
+            // 出口按 m3 §11「域内 → Int64、超域 → Decimal」解包；否则 `{"a":1}` 读出来是
+            // Decimal，源级 `as Int64` 直接 22（parse 路径此前未被用例覆盖）。
+            try {
+                if (d.value.isInteger()) {
+                    d.value.toInt64()
+                } else {
+                    d.value
+                }
+            } catch (_: Exception) {
+                d.value
+            }
         case s: JsonString => s.value
         case b: JsonBool => b.value
         case n: JsonNull => n
