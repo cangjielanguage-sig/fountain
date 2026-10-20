@@ -37,14 +37,13 @@ import fountain::f_jit.bytecode.ConstMapKey
 
 /** H78：`any_box(typecode, cell) → h`（分配型，登记 1 槽）。 */
 internal func anyBox(ctx: JitContext, a: Array<Int64>): Int64 {
-    let unused = ctx
-    let _ = unused
     let code = UInt16(argAt(a, 0))
     // 可转集之外（含 12/13/15）不得装箱：8 = HANDLE_TYPE（契约类错误）
     if (!LocalType.isConvertible(code) || code == LocalType.ANY) {
         failWith(ErrCode.HANDLE_TYPE)
     }
-    HandleTable.pinAnyBox(anyValueOf(code, argAt(a, 1)))
+    // 世界内分配：计入窗口（m3 §8）；桥侧 `CallMarshal` 仍走 `pinAnyBox`
+    HandleTable.appendAnyBox(ctx, anyValueOf(code, argAt(a, 1)))
 }
 
 /** H79：`any_is(box, typecode, aux) → 0/1`（纯读；集合外类型答 0，不是错误）。 */

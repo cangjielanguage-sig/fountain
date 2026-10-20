@@ -17,6 +17,7 @@ package fountain::f_jit.runtime
 
 import fountain::f_data.json.{JsonArray, JsonBool, JsonDecimal, JsonInt, JsonNull, JsonObject, JsonString, JsonValue}
 import fountain::f_jit.base.ErrCode
+import fountain::f_jit.base.TypeToken
 
 /**
  * M3 JSON 世界内可变 API：H81 `json_get` / H82 `json_set` / H83 `json_new`（m3 §11）。
@@ -27,8 +28,6 @@ import fountain::f_jit.base.ErrCode
  * 基底，Float64 的精确十进制化口径未定；其余值域（Int64/Bool/String/JSON 节点）已实现。
  */
 internal func jsonGet(ctx: JitContext, a: Array<Int64>): Int64 {
-    let unused = ctx
-    let _ = unused
     let h = argAt(a, 0)
     let keyCell = argAt(a, 1)
     let mode = UInt8(argAt(a, 2))
@@ -54,7 +53,8 @@ internal func jsonGet(ctx: JitContext, a: Array<Int64>): Int64 {
             case _ => failWith(ErrCode.HANDLE_TYPE)
         }
     }
-    let boxed = HandleTable.pinAnyBox(exportJson(value))
+    // 世界内分配：计入窗口（m3 §8）
+    let boxed = HandleTable.appendAnyBox(ctx, exportJson(value))
     // frozen 经读传播：从只读常量取出的一切子值都保持只读（无需树遍历）
     if (HandleTable.isFrozen(h)) {
         HandleTable.markFrozen(boxed)
@@ -99,7 +99,8 @@ internal func jsonNew(ctx: JitContext, a: Array<Int64>): Int64 {
     } else {
         JsonArray()
     }
-    HandleTable.pin(v)
+    // 世界内构造的新可变节点：计入窗口（与 list_new / map_new 同口径）
+    HandleTable.append(ctx, v, TypeToken.HOST_OBJECT)
 }
 
 /** 出口解包（只在 `json_get` 出口发生）：标量 → 宿主值盒；对象/数组/null → 节点盒。 */

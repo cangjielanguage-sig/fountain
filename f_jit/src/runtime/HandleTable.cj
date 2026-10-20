@@ -987,6 +987,16 @@ public class HandleTable {
         }
     }
 
+    /**
+     * **世界内**装箱（H78/H81 用）：`JitAnyBox` 走 `append` ⇒ 计入窗口容量（m3 §8 hwCap 对账）。
+     *
+     * 与 `pinAnyBox` 的分工：`pinAnyBox` 是**桥侧**（`CallMarshal` 的 Any 行）路径 B，不占窗口；
+     * 世界内分配必须占窗口，否则 `hwTop` 记账失真、容量触顶永远不触发（T40 抓到的缺陷）。
+     */
+    public static func appendAnyBox(ctx: JitContext, v: Any): Int64 {
+        append(ctx, JitAnyBox(v), TypeToken.ANY)
+    }
+
     /** 取 Any 盒内容；tag ≠ 12 → 8（契约类错误）。 */
     public static func fetchAnyBox(id: Int64): Any {
         let i = idxOf(id)

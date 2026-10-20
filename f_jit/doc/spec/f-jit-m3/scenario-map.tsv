@@ -43,10 +43,10 @@ f-jit-compiler-frontend	链式自动收窄	JsonAccess_test,AnyContainer_test	ful
 f-jit-compiler-frontend	下标自动收窄与混链	JsonAccess_test,AnyContainer_test	full
 f-jit-compiler-frontend	负向面	JsonAccess_test,AnyContainer_test	full
 f-jit-compiler-frontend	JSON 谱系不可注册	JsonAccess_test,AnyContainer_test	full
-f-jit-differential-acceptance	七项验收齐备	Q6DiffCoverage_test,Q6Acceptance_test,PerfM2_test	full
-f-jit-differential-acceptance	三引擎全等	Q6DiffCoverage_test,Q6Acceptance_test,PerfM2_test	full
-f-jit-differential-acceptance	M1/M2 零回归	Q6DiffCoverage_test,Q6Acceptance_test,PerfM2_test	full
-f-jit-differential-acceptance	缺口如实登记	Q6DiffCoverage_test,Q6Acceptance_test,PerfM2_test	full
+f-jit-differential-acceptance	七项验收齐备	Q6DiffCoverage_test,Q6Acceptance_test,PerfM2_test,T40Account_test,T40Deopt_test	full
+f-jit-differential-acceptance	三引擎全等	Q6DiffCoverage_test,Q6Acceptance_test,PerfM2_test,T40Account_test,T40Deopt_test	full
+f-jit-differential-acceptance	M1/M2 零回归	Q6DiffCoverage_test,Q6Acceptance_test,PerfM2_test,T40Account_test,T40Deopt_test	full
+f-jit-differential-acceptance	缺口如实登记	Q6DiffCoverage_test,Q6Acceptance_test,PerfM2_test,T40Account_test,T40Deopt_test	full
 f-jit-facade-bridge	注册类实参	CallMarshalAny_test,CallMarshalM2_test,JsonBridge_test	full
 f-jit-facade-bridge	HostClosure 实参	CallMarshalAny_test,CallMarshalM2_test,JsonBridge_test	full
 f-jit-facade-bridge	解包三行	CallMarshalAny_test,CallMarshalM2_test,JsonBridge_test	full
