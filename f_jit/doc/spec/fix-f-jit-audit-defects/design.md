@@ -80,6 +80,11 @@
 
 `callMtx` 只串行化顶层调用，同一线程的重入（闭包内再调 JIT）不受锁约束；直接 `setDeadline` 会把外层 deadline 覆盖掉。因此 `invoke` 取「保存旧值 → 写入 → `finally` 恢复」。`deadline = None` 写入 `-1`（既有「无期限」约定）。**不新增 `tryInvoke`**：错误语义与 `call` 完全一致（>0 抛 `JitException`、−2 抛中断），避免多一套「吞错」API。
 
+**A3.5 补充裁定（`strictFp` / `literalCopy`）**：实测前端对 `Float64` 的 `/` 恒发射 `FDIV`（0x43），
+**从不发射 `FDIV_CHK`（0x44）**；`strictFp` 只写 `ctx.flags` bit0，无任何运行期读取点。两者统一
+登记为**未接线**（`strictFp` 保留 flags 写入、`literalCopy` 无消费点），不新增「看起来已接线」的
+第三态；`CallContext` 类注释与 `a3_5_strictFpDoesNotChangeFdivChk`（`÷0 → +Inf`，与开关无关）为准。
+
 ### D4 重放的三态：把 `finish` 改成两段式
 
 `finish` 内部顺序固定为：判 `DEOPT` → 复位错误槽 → 重放 → **重新读** `ctx.errCode` → 按三态分派。重放抛出的 `JitException`/`InterruptedException` 原样透传（既有契约），其余异常兜底 99。

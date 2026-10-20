@@ -23,12 +23,16 @@ import std.time.DateTime
  * | 成员 | 意义 |
  * |---|---|
  * | `args: Array<Int64>` | 入参 cell 数组（Marshal 结果），三态收尾第 2 步 `rawEntry(ctx, &args[0], nargs)` |
- * | `literalCopy: Bool = false` | M2：字面量深拷贝开关（本步只落默认值，M2 消费） |
- * | `strictFp: Bool = false` | bit0 → ctx.flags（`FDIV_CHK` 语义），由 `invoke(ctx)` 写 flags |
+ * | `literalCopy: Bool = false` | M2：字面量深拷贝开关（**当前无消费点**，保留字段；见下） |
+ * | `strictFp: Bool = false` | 只写 `ctx.flags` bit0；`FDIV_CHK` 的检查点由 opcode 静态决定（见下） |
  * | `deadline: ?DateTime` | 配合 `interrupt_poll`，到期 → -2（`LOOP_BACK` 安全点查询） |
  *
  * **默认值契约**（spec「公共值类型」）：`literalCopy=false`、`strictFp=false`、`deadline=None`。
- * `strictFp = true` 真正写进 ctx.flags 的验证在 S4.1 / S6.4 联测（plan-m1 S1.6 明写后置联测）。
+ *
+ * **`strictFp` / `literalCopy` 的真实状态（A3.5 收口）**：`invoke` 把 `strictFp` 写进
+ * `ctx.flags` bit0，但 `/` 的除零检查由前端**选择 `FDIV_CHK`（0x44）还是 `FDIV`（0x43）**
+ * 静态决定，运行期不再读该位——因此 `strictFp` 不改变除法语义，不存在「同一表达式两种行为」
+ * 的第三态。`literalCopy` 自 M2 起只落默认值，无消费点；两者都不是「已接线」的开关。
  */
 public struct CallContext {
     /** 入参 cell 数组（Marshal 结果）。 */

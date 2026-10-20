@@ -20,6 +20,7 @@ import std.reflect.ClassTypeInfo
 import std.reflect.TypeInfo
 import std.sync.Mutex
 import fountain::f_base.UnsafeBytes
+import fountain::f_jit.base.CallContext
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.JitException
 import fountain::f_jit.base.LocalType
@@ -30,6 +31,7 @@ import fountain::f_jit.runtime.DbgDump
 import fountain::f_jit.runtime.HandleTable
 import fountain::f_jit.runtime.JitContext
 import fountain::f_jit.runtime.PromotionGroup
+import fountain::f_jit.runtime.RuntimeEnv
 import fountain::f_jit.runtime.SignatureDescriptor
 import fountain::f_jit.runtime.UserHelperEntry
 import fountain::f_jit.runtime.UserHelperTable
@@ -109,14 +111,32 @@ public class JitFunction {
 
     /** 六步调用：长度 → 封送 → 执行 → 解包 → `T` 校验 → 返回。 */
     public func call<T>(args: Array<Any>): T {
-        // HandleTable 是进程级单窗口：open/执行/reset 必须串行，否则并发调用会互相清窗。
-        synchronized (JitFunction.callMtx) {
-            this.enter()
-            try {
-                return this.callLocked<T>(args)
-            } finally {
-                this.exit()
+        // 薄委托：错误语义与 `invoke` 完全一致（>0 抛 JitException、−2 抛 InterruptedException）
+        this.invoke<T>(args, CallContext())
+    }
+
+    /**
+     * 带调用选项的六步调用（D3）：`deadline` 到期 ⇒ H22 写 −2 ⇒ `InterruptedException`。
+     *
+     * **deadline 用栈式保存/恢复**而不是每次覆盖：`callMtx` 只串行化顶层调用，同一线程的
+     * 重入（宿主闭包体内再调 JIT）不受锁约束，直接 `setDeadline` 会把外层期限冲掉。
+     * `options.strictFp` 写入 `ctx.flags` bit0（`FDIV_CHK` 的实际检查由 opcode 决定，见 A3.5）。
+     */
+    public func invoke<T>(args: Array<Any>, options: CallContext): T {
+        let saved = RuntimeEnv.deadlineNanos
+        RuntimeEnv.setDeadline(RuntimeEnv.deadlineNanosOf(options.deadline))
+        try {
+            // HandleTable 是进程级单窗口：open/执行/reset 必须串行，否则并发调用会互相清窗。
+            synchronized (JitFunction.callMtx) {
+                this.enter()
+                try {
+                    return this.callLocked<T>(args, options)
+                } finally {
+                    this.exit()
+                }
             }
+        } finally {
+            RuntimeEnv.setDeadline(saved)
         }
     }
 
@@ -320,7 +340,7 @@ public class JitFunction {
         this.lastClosureGroup
     }
 
-    private func callLocked<T>(args: Array<Any>): T {
+    private func callLocked<T>(args: Array<Any>, options: CallContext): T {
         let isWrapper = this.owner.isSome()
         if (this.closedFlag) {
             return JitFunction.contractFail('闭包包装已 close（m2 §14.3）')
@@ -366,6 +386,10 @@ public class JitFunction {
         HandleTable.openWindow(HandleTable.initialCapacity)
         let ctx = JitContext.create(hwBase: HandleTable.windowBaseOf(),
             hwCap: HandleTable.windowCapOf(), fnId: 0, dbgBase: 0)
+        // bit0 = strictFp（§1 flags 布局；FDIV_CHK 的检查点由 opcode 静态决定，见 A3.5）
+        if (options.strictFp) {
+            ctx.flags = ctx.flags | 1
+        }
         HandleTable.syncTo(ctx)
         let dump = match (this.diagReporter) {
             case Some(_) => DbgDump.allocateDump(this.diagMaxLocals)
@@ -628,6 +652,12 @@ public class JitFunction {
             case 'DateTime' => Some(LocalType.DATETIME)
             case 'Duration' => Some(LocalType.DURATION)
             case 'Regex' => Some(LocalType.REGEX)
+            // M3：与 `localTypeOf` 同表（闭包签名里的 Any / JSON 不能被误记为 14）
+            case 'Any' => Some(LocalType.ANY)
+            case 'JsonValue' => Some(LocalType.JSON_VALUE)
+            case 'JsonObject' => Some(LocalType.JSON_OBJECT)
+            case 'JsonArray' => Some(LocalType.JSON_ARRAY)
+            case 'JsonNull' => Some(LocalType.JSON_NULL)
             case _ =>
                 if (sn.startsWith('Range')) {
                     Some(LocalType.RANGE)
@@ -685,6 +715,23 @@ public class JitFunction {
         }
         if (n == 'JitClosureId') {
             return Some(LocalType.CLOSURE)
+        }
+        // M3：Any 与 JSON 谱系（A3.1/D2）——缺这四行时 `call<Any>` / `call<Json*>` 恒报
+        // 「T 不是可解包类型」，P0-2 的宿侧通路完全不可达。
+        if (n == 'Any') {
+            return Some(LocalType.ANY)
+        }
+        if (n == 'JsonValue') {
+            return Some(LocalType.JSON_VALUE)
+        }
+        if (n == 'JsonObject') {
+            return Some(LocalType.JSON_OBJECT)
+        }
+        if (n == 'JsonArray') {
+            return Some(LocalType.JSON_ARRAY)
+        }
+        if (n == 'JsonNull') {
+            return Some(LocalType.JSON_NULL)
         }
         // 注册类 / 宿主类实例统一按 14 承接（具体类由 call<T> 的单态化适配器校验）。
         match (info) {

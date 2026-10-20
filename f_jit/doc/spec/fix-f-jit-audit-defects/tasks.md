@@ -35,11 +35,11 @@
 
 ## A3 桥的入参、出参与调用入口（P0-2 / P0-6）
 
-- [ ] A3.1 `localTypeOf` 补 15/16–19：先写失败用例——`call<Any>`、`call<JsonValue/JsonObject/JsonArray/JsonNull>` 不再抛「T 不是可解包类型」；`T=Int64` 等既有行不变；再补四行映射；验收：与 `CallMarshal.makeRetUnboxer` 的行一一对表（逐个 T 断言 `unboxCode`）
-- [ ] A3.2 `retType=15` 端到端：先写失败用例——函数返回 `Any`，宿主 `call<Any>` 拿回原生对象（不是盒句柄）；`retType=16–19` 返回 JSON 节点时同上且 tag 走 11 例外行；再确认逃逸/拆盒/归还顺序；验收：同一对象身份往返、无泄漏
-- [ ] A3.3 `invoke` 接线 deadline（D3）：先写失败用例——`invoke(args, CallContext(deadline = 过去时刻))` 在 `LOOP_BACK` 处返回 −2 → `InterruptedException`（当前不可达）；`deadline = None` 不受影响；重入时外层 deadline 在返回后恢复；再写入口 + `RuntimeEnv` 栈式保存/恢复；验收：`call` 等价 `invoke(args, CallContext())`，既有调用零变化
-- [ ] A3.4 `invoke` 三态与 `call` 逐位一致：先写失败用例——正常值、`>0` 错误码、`−2` 三条出口各一例，断言 `invoke(args, CallContext())` 与 `call(args)` 的结果/错误码/site 完全相同；再确认 `call` 是薄委托（无重复逻辑）；验收：两入口对拍零差异
-- [ ] A3.5 `strictFp` / `literalCopy` 口径确认：先写失败用例——`options.strictFp = true` 是否影响 `FDIV_CHK`（当前实现）；再决定「接线」或「文档标注未接线」；验收：文档口径与实现一致（不留下第三态）
+- [x] A3.1 `localTypeOf` 补 15/16–19：先写失败用例——`call<Any>`、`call<JsonValue/JsonObject/JsonArray/JsonNull>` 不再抛「T 不是可解包类型」；`T=Int64` 等既有行不变；再补四行映射；验收：与 `CallMarshal.makeRetUnboxer` 的行一一对表（逐个 T 断言 `unboxCode`）**（`localTypeOf` 补 5 行（15 + 16–19），`codeOfTypeName` 同步以免闭包签名把 Any 误记 14；红态 6 条新用例全报「T 不是可解包类型」）**
+- [x] A3.2 `retType=15` 端到端：先写失败用例——函数返回 `Any`，宿主 `call<Any>` 拿回原生对象（不是盒句柄）；`retType=16–19` 返回 JSON 节点时同上且 tag 走 11 例外行；再确认逃逸/拆盒/归还顺序；验收：同一对象身份往返、无泄漏**（`p0_2_callAnyIsReachable`：Int64 原生值 + 同一 ReflectUser 对象；`p0_2_callJsonReturnsAreReachable`：Object/Array/Value 三型；两者各 200 次调用后 `liveCount` 不变）**
+- [x] A3.3 `invoke` 接线 deadline（D3）：先写失败用例——`invoke(args, CallContext(deadline = 过去时刻))` 在 `LOOP_BACK` 处返回 −2 → `InterruptedException`（当前不可达）；`deadline = None` 不受影响；重入时外层 deadline 在返回后恢复；再写入口 + `RuntimeEnv` 栈式保存/恢复；验收：`call` 等价 `invoke(args, CallContext())`，既有调用零变化**（`p0_6_deadlineInterruptsLoop` / `p0_6_deadlineRestoredAfterCall`；`RuntimeEnv.deadlineNanosOf` 做 `?DateTime → 纳秒`，极端值退化 ±哨兵）**
+- [x] A3.4 `invoke` 三态与 `call` 逐位一致：先写失败用例——正常值、`>0` 错误码、`−2` 三条出口各一例，断言 `invoke(args, CallContext())` 与 `call(args)` 的结果/错误码/site 完全相同；再确认 `call` 是薄委托（无重复逻辑）；验收：两入口对拍零差异**（`a3_4_invokeMatchesCall`：结果相等 + `DIV_ZERO` 的 code/site 逐位相等；`call` 已改为单行委托）**
+- [x] A3.5 `strictFp` / `literalCopy` 口径确认：先写失败用例——`options.strictFp = true` 是否影响 `FDIV_CHK`（当前实现）；再决定「接线」或「文档标注未接线」；验收：文档口径与实现一致（不留下第三态）**（实测：前端对 Float64 的 `/` **恒发 `FDIV`（0x43）**、从不发 `FDIV_CHK`；`strictFp` 只写 `ctx.flags` bit0 且无读取点 ⇒ `÷0` 恒 `+Inf`。裁定「未接线」：`strictFp` / `literalCopy` 均登记为无消费点占位，`CallContext` 类注释与 `a3_5_strictFpDoesNotChangeFdivChk` 双双落定）**
 
 ## A4 前端逐条纠偏（P1-1 … P1-9）
 

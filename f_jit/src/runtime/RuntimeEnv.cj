@@ -39,6 +39,24 @@ public class RuntimeEnv {
         deadlineNanos = -1
     }
 
+    /**
+     * `CallContext.deadline` → 绝对截止纳秒（`None` ⇒ −1 = 无期限）。
+     *
+     * 极端时刻（超出 `Duration` 纳秒表示）退化为 ±哨兵而不是抛异常：期限只是「尽快停」的
+     * 提示，不应让一次调用在建窗阶段就失败。
+     */
+    public static func deadlineNanosOf(d: ?DateTime): Int64 {
+        match (d) {
+            case Some(v) =>
+                try {
+                    v.toUnixTimeStamp().toNanoseconds()
+                } catch (_: Exception) {
+                    if (v.toUnixTimeStamp() > Duration.Zero) { Int64.Max } else { Int64.Min }
+                }
+            case None => -1
+        }
+    }
+
     /** 当前时刻（epoch 纳秒）。 */
     public static func nowNanos(): Int64 {
         DateTime.nowUTC().toUnixTimeStamp().toNanoseconds()
