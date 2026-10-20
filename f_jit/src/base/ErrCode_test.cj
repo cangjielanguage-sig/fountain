@@ -22,8 +22,8 @@ import std.unittest.testmacro.*
  * S1.3 `ErrCode` 的失败用例（先写红）。
  *
  * 数值权威 = `doc/jit-bytecode-m1.md` §2 错误码表（`0 OK`、`-1 DEOPT`、`-2 INTERRUPT`、
- * `1–20`、`23 ERR_CONCURRENT_MOD`、`99 ERR_HELPER_PANIC`）；`21/22` 是 M2/M3 码，本步不登记
- * （design-m1 §2.3.10「21/22 的 M2/M3 行后续版本追加」）。
+ * `1–20`、`23 ERR_CONCURRENT_MOD`、`99 ERR_HELPER_PANIC`）；`21`（M2）与 `22`（M3）分别在
+ * 各自里程碑追加登记（design-m1 §2.3.10 的「后续版本追加」已兑现）。
  *
  * `isHostSide` 的口径同样出自 design-m1 §2.3.10：`isHostSide` 是「M2 起 21 判定占位
  * （M1 恒 false）」，design-m2 §2 的 `isHostSide(code)（实现落地）` 亦标注「M1 占位返回 false」。
@@ -101,10 +101,10 @@ public class ErrCode_test {
         }
     }
 
-    /** 未登记码（22 属 M3、24 起、以及任意越界值）走非空兜底描述，且不谎称是已定义码。 */
+    /** 未登记码（24 起、以及任意越界值）走非空兜底描述，且不谎称是已定义码。 */
     @TestCase
     public func describeHasFallbackForUnregisteredCodes(): Unit {
-        for (code in [22, 24, 50, 98, 100, -3, -99]) {
+        for (code in [24, 50, 98, 100, -3, -99]) {
             let text = ErrCode.describe(code)
             @Assert(text.isEmpty(), false)
             @Assert(text.contains('未登记'), true)
@@ -128,8 +128,8 @@ public class ErrCode_test {
         }
         // 21 = 宿主（仓颉侧）异常专用码
         @Assert(ErrCode.isHostSide(ErrCode.HOST_EXCEPTION), true)
-        // 未登记码（含 M3 的 22）同样不判为宿主侧
-        @Assert(ErrCode.isHostSide(22), false)
+        // 22（M3 ANY_CAST）是引擎侧码，同样不判为宿主侧
+        @Assert(ErrCode.isHostSide(ErrCode.ANY_CAST), false)
         @Assert(ErrCode.isHostSide(-99), false)
     }
 

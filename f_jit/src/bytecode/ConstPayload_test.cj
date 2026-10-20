@@ -38,7 +38,7 @@ import fountain::f_jit.base.*
  */
 @Test
 public class ConstPayload_test {
-    /** kind 码 1–10 与 §11.5 逐值一致（M3 追加 11=Json，本步不登记）。 */
+    /** kind 码 1–11 与 §11.5 逐值一致（M3 追加 11=Json）。 */
     @TestCase
     public func kindCodesMatchSpec(): Unit {
         @Assert(ConstKind.I64, 1u8)
@@ -51,6 +51,7 @@ public class ConstPayload_test {
         @Assert(ConstKind.DURATION, 8u8)
         @Assert(ConstKind.RANGE, 9u8)
         @Assert(ConstKind.REGEX, 10u8)
+        @Assert(ConstKind.JSON, 11u8)
     }
 
     /** `ConstPayload` 十个构造器与 kind 一一对应，`match` 分派可取回载荷。 */
@@ -66,11 +67,12 @@ public class ConstPayload_test {
             ConstPayload.PDateTime(1700000000000000000),
             ConstPayload.PDuration(-5),
             ConstPayload.PRange(0, 10, 2, true),
-            ConstPayload.PRegex('a+', 0u8)
+            ConstPayload.PRegex('a+', 0u8),
+            ConstPayload.PJson("{\"a\":1}")
         ]
-        @Assert(all.size, 10)
-        let kinds = [1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8, 10u8]
-        for (i in 0..10) {
+        @Assert(all.size, 11)
+        let kinds = [1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8, 10u8, 11u8]
+        for (i in 0..11) {
             @Assert(ConstPayload.kindOf(all[i]), kinds[i])
         }
         // 逐构造器的字段读回

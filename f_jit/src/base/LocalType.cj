@@ -59,6 +59,20 @@ public class LocalType {
     /** 不透明宿主对象引用（M2 §11；句柄型，恒非空）。 */
     public static const HOST_OBJECT: UInt16 = 14u16
 
+    /** 装箱搬运类型（M3 §1；句柄型、恒非空；禁止二次装箱）。 */
+    public static const ANY: UInt16 = 15u16
+
+    /**
+     * JSON 内建句柄类型（M3 §11/v0.3.20）：零注册、与 14 结构性无关。
+     *
+     * 码级继承：`JSON_OBJECT` / `JSON_ARRAY` / `JSON_NULL` 均为 `JSON_VALUE` 的子类；
+     * 标量节点类（JsonInt/JsonDecimal/JsonBool/JsonString）的句柄码一律 `JSON_VALUE`。
+     */
+    public static const JSON_VALUE: UInt16 = 16u16
+    public static const JSON_OBJECT: UInt16 = 17u16
+    public static const JSON_ARRAY: UInt16 = 18u16
+    public static const JSON_NULL: UInt16 = 19u16
+
     /** `fromToken` 的「无对应类型码」哨兵：不与 0–19 任何登记位撞（0xFFFF 在 §11.7 属保留区）。 */
     public static const NONE: UInt16 = 0xFFFFu16
 
@@ -87,8 +101,13 @@ public class LocalType {
             case 12u16 => 'Closure'
             case 13u16 => 'HostClosure'
             case 14u16 => 'HostObject'
+            case 15u16 => 'Any'
+            case 16u16 => 'JsonValue'
+            case 17u16 => 'JsonObject'
+            case 18u16 => 'JsonArray'
+            case 19u16 => 'JsonNull'
             case _ =>
-                if (code <= 19u16) {
+                if (code <= 255u16 && code >= 20u16) {
                     'Reserved(${code})'
                 } else {
                     'Unknown(${code})'
@@ -99,11 +118,47 @@ public class LocalType {
     /**
      * 句柄型判定：4–14 为真、0–3 为假（§11.7 值型/句柄型分界 + M2 §2 的 13/14）。
      *
-     * 13（宿主闭包）与 14（不透明宿主对象）都是句柄型；15 起属 M3 登记位/保留区，判假。
+     * 13（宿主闭包）与 14（不透明宿主对象）都是句柄型；M3 的 15（Any）与 16–19（JSON）
+     * 同为句柄型（槽内存句柄 ID）；20 起是保留区，判假。
      * 该判定与版本无关——版本只约束**合法集**（`isLegal`），不改变类型归类。
      */
     public static func isHandle(code: UInt16): Bool {
-        code >= 4u16 && code <= 14u16
+        code >= 4u16 && code <= 19u16
+    }
+
+    /** JSON 内建码判定（16–19）。 */
+    public static func isJson(code: UInt16): Bool {
+        code >= 16u16 && code <= 19u16
+    }
+
+    /**
+     * 可转集（M3 §1，**冻结**）：`0–8`、`9–11`、`14`、`16–19`。
+     *
+     * `12`（Closure）不开放转型、`13`（HostClosure）二期候选、`15`（Any）不在集合内
+     * （盒不套盒）。该表是 `any_box` / `any_is` / `any_as` 的 `typecode` 合法域与前端
+     * `is`/`as` 目标检查的**唯一来源**。
+     */
+    public static func isConvertible(code: UInt16): Bool {
+        if (code <= 11u16) {
+            return true
+        }
+        if (code == 12u16 || code == 13u16 || code == 15u16) {
+            return false
+        }
+        code == 14u16 || (code >= 16u16 && code <= 19u16)
+    }
+
+    /** 是否有装箱发射点：只有 `3`（Unit）没有（M3 §2）。 */
+    public static func hasBoxPoint(code: UInt16): Bool {
+        code != 3u16
+    }
+
+    /** 码级继承：`T` 是否为 `base` 或其后代（M3 §11：17/18/19 <: 16）。 */
+    public static func isSameOrDescendant(code: UInt16, base: UInt16): Bool {
+        if (code == base) {
+            return true
+        }
+        base == 16u16 && (code >= 17u16 && code <= 19u16)
     }
 
     /**
@@ -129,6 +184,7 @@ public class LocalType {
             case 9u16 => CLOSURE
             case 10u16 => HOST_CLOSURE
             case 11u16 => HOST_OBJECT
+            case 12u16 => ANY
             case _ => NONE
         }
     }

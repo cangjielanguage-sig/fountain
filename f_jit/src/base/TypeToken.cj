@@ -57,6 +57,9 @@ public class TypeToken {
      */
     public static const HOST_OBJECT: UInt16 = 11u16
 
+    /** M3 §2：装箱句柄（与 LocalType 15 对应）；JSON 复用 11，不另开 token。 */
+    public static const ANY: UInt16 = 12u16
+
     /** token → 名称（诊断用）；M1/M2 封闭集之外的值给非空兜底，便于定位「未知 token」。 */
     public static func name(tok: UInt16): String {
         match (tok) {
@@ -72,6 +75,7 @@ public class TypeToken {
             case 9u16 => 'Closure'
             case 10u16 => 'HostClosure'
             case 11u16 => 'HostObject'
+            case 12u16 => 'Any'
             case _ => 'Unknown(${tok})'
         }
     }

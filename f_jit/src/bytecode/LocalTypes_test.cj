@@ -188,20 +188,18 @@ public class LocalTypes_test {
     /** `isHandleSlot(4..14) = true`、值型 0–3 为 false（§11.7 + M2 §2 的 13/14）。 */
     @TestCase
     public func isHandleSlotSplitsAtFour(): Unit {
-        let t = LocalTypes(16)
-        for (i in 0..16) {
+        let t = LocalTypes(20)
+        for (i in 0..20) {
             t.set(i, UInt8(i))
         }
         for (i in 0..4) {
             @Assert(t.isHandleSlot(i), false)
         }
-        for (i in 4..15) {
+        for (i in 4..20) {
             @Assert(t.isHandleSlot(i), true)
         }
-        // 15（M3 登记位）不是句柄型
-        @Assert(t.isHandleSlot(15), false)
         // 越界槽不为句柄（且不抛）
-        @Assert(t.isHandleSlot(16), false)
+        @Assert(t.isHandleSlot(20), false)
     }
 
     /**

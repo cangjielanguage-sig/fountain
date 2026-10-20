@@ -76,6 +76,13 @@ public class ErrCode {
      * （含完整仓颉栈），`site` = 对应调用指令偏移。与引擎侧兜底 `99` **严格区分**。
      */
     public static const HOST_EXCEPTION: Int64 = 21
+    /**
+     * Any 盒上的**动态转型失败**（M3 §2）：`as` 命中判定为假。
+     *
+     * 与 `BAD_CAST`（7，`CAST` 的静态值转型）分列：`as` 在左值静态类型非 15 时不经 helper，
+     * 22 只出自盒面；7 只出自 `CAST` —— 结构性不重叠。`site` = `any_as` 调用点。
+     */
+    public static const ANY_CAST: Int64 = 22
     /** for-in 遍历 Map 期间修改同一 map（fail-fast，转码自 std 的 ConcurrentModificationException）。 */
     public static const CONCURRENT_MOD: Int64 = 23
     /** 引擎侧未识别异常兜底（msg 前缀 `internal helper failure`）。 */
@@ -113,6 +120,7 @@ public class ErrCode {
             case 19 => 'ERR_CALL_CONTRACT 调用契约错误（桥层产生，site = -1）'
             case 20 => 'ERR_READONLY 对常量或冻结容器写入'
             case 21 => 'ERR_HOST_EXCEPTION 宿主侧异常：仓颉侧调用面抛出且未回译（含完整仓颉栈）'
+            case 22 => 'ERR_ANY_CAST 动态转型失败：Any 盒内容与目标类型不符（as 未命中）'
             case 23 => 'ERR_CONCURRENT_MOD 遍历期间并发修改'
             case 99 => 'ERR_HELPER_PANIC helper 内部未识别异常（引擎侧兜底）'
             case _ => 'ERR_UNREGISTERED 未登记错误码 ${code}'

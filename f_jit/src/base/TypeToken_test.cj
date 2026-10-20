@@ -113,8 +113,9 @@ public class TypeToken_test {
     public func hostObjectTokenIsTheSharedOpaqueCategory(): Unit {
         @Assert(TypeToken.name(TypeToken.HOST_OBJECT), 'HostObject')
         @Assert(LocalType.name(LocalType.fromToken(TypeToken.HOST_OBJECT)), 'HostObject')
-        // M2 不登记 token 12（M3 Any），也不为 JSON 增开 token
-        @Assert(LocalType.fromToken(12u16), LocalType.NONE)
-        @Assert(TypeToken.name(12u16).contains('Unknown'), true)
+        // M3 登记 token 12 = Any；JSON 仍复用 tag 11，不另开 token
+        @Assert(LocalType.fromToken(12u16), LocalType.ANY)
+        @Assert(TypeToken.name(12u16), 'Any')
+        @Assert(TypeToken.name(13u16).contains('Unknown'), true)
     }
 }
