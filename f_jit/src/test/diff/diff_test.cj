@@ -142,24 +142,22 @@ public class Diff_test {
         @Assert(got.toArray(), expected)
     }
 
-    /** 范围外编号（T37–T41）明确标注归属 M3，且不计入任何里程碑的完成判据。 */
+    /**
+     * M3 的 7 个编号（T37–T41、T56、T61）全部登记在案且都计入完成判据。
+     *
+     * 与 `m2ScopeIsFullyCovered` 同构：`check_tmap.sh` 对它们做同一套强校验，本用例钉住集合本身。
+     */
     @TestCase
-    public func outOfScopeIdsAreAttributedToLaterMilestones(): Unit {
-        @Assert(T_MAP_OUT_OF_SCOPE.size, 5)
-        let seen = HashSet<String>()
-        for (m in T_MAP_OUT_OF_SCOPE) {
-            @Assert(m.inScope, false)
-            @Assert(m.owner, 'M2/M3')
-            if (m.caseName.isEmpty()) {
-                @Fail('${m.id} 缺少归属说明')
-            }
-            if (!seen.add(m.id)) {
-                @Fail('${m.id} 重复登记')
-            }
-        }
-        let expected = ['T37', 'T38', 'T39', 'T40', 'T41']
+    public func m3ScopeIsFullyCovered(): Unit {
+        @Assert(T_MAP_M3.size, 7)
+        let expected = ['T37', 'T38', 'T39', 'T40', 'T41', 'T56', 'T61']
         let got = ArrayList<String>()
-        for (m in T_MAP_OUT_OF_SCOPE) {
+        for (m in T_MAP_M3) {
+            if (!(m.inScope && m.owner == 'M3')) {
+                @Fail('${m.id} 未计入 M3 完成判据')
+            }
+            @Assert(m.steps.size > 0, true)
+            @Assert(m.caseName.isEmpty(), false)
             got.add(m.id)
         }
         @Assert(got.toArray(), expected)
@@ -189,9 +187,9 @@ public class Diff_test {
         @Assert(got.toArray(), expected)
     }
 
-    /** 全量表 = M1 范围内 + M2 + 范围外，合计 59 项。 */
+    /** 全量表 = M1 40 + M2 14 + M3 7，合计 61 项。 */
     @TestCase
     public func allTMappingsIsTheUnion(): Unit {
-        @Assert(allTMappings().size, 59)
+        @Assert(allTMappings().size, 61)
     }
 }

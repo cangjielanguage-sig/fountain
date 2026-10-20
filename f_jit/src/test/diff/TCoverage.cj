@@ -92,7 +92,6 @@ public let T_MAP_IN_SCOPE: Array<TMapping> = [
     TMapping('T53', ['S4.15', 'S7.6'], 't18ContainerMutation', 'M1', true)
 ]
 
-/** 范围外编号：T30–T41、T49 归属 M2/M3，不计入本次完成判据。 */
 /**
  * M2 的 T 编号（14 个，m2 §10 测试矩阵）：T30–T36、T49、T54、T55、T57–T60。
  *
@@ -132,15 +131,31 @@ public let T_MAP_M2: Array<TMapping> = [
     TMapping('T60', ['Q4.6', 'Q6.2'], 't60ThreeFacesMapTo21', 'M2', true)
 ]
 
-public let T_MAP_OUT_OF_SCOPE: Array<TMapping> = [
-    TMapping('T37', [], 'M2: 错误通道扩展', 'M2/M3', false),
-    TMapping('T38', [], 'M2: 调试与诊断扩展', 'M2/M3', false),
-    TMapping('T39', [], 'M3: Any 与动态类型', 'M2/M3', false),
-    TMapping('T40', [], 'M3: JSON 互操作', 'M2/M3', false),
-    TMapping('T41', [], 'M3: 扩展 helper 族', 'M2/M3', false)
+/**
+ * M3 的 T 编号（7 个，m3 §10 测试矩阵）：T37–T41、T56、T61。
+ *
+ * M3 落地后它们从「范围外」转为**完成判据**：`check_tmap.sh` 对三张表做同一套强校验
+ * （用例存在 + 用例体以可执行语句把 `T<id>/` 作为函数实参首字符串）。
+ */
+public let T_MAP_M3: Array<TMapping> = [
+    // 装箱/拆箱往返：四类插入点、桥行、值型逐位、引用型同对象、typecode 防御
+    TMapping('T37', ['R3.1', 'R3.2', 'R5.1', 'R5.2'], 'boxesAtAnyInitialization', 'M3', true),
+    // is/as 语义：三种回答、22 与 7 分列、静态路径免 helper、禁止面编译错误
+    TMapping('T38', ['R3.3', 'R3.4', 'R5.3'], 'asMismatchIs22', 'M3', true),
+    // 异构容器端到端：构造/遍历/分派/容器转型 P2
+    TMapping('T39', ['R3.5', 'R4.4', 'R4.5'], 'listAuxEncodesElementCode', 'M3', true),
+    // T40 对账：deopt 重放、装箱 churn、分配压力、跨线程只读盒
+    TMapping('T40', ['R6.4'], 'boxingChurnHonoursWindowCapacity', 'M3', true),
+    // JSON 字面量：取界、静态类型、空/非空分界、双层拒绝
+    TMapping('T41', ['R3.6', 'R3.7', 'R3.8'], 'objectLiteralBecomesJsonObjectConstant', 'M3', true),
+    // 转发特化：双路径逐位、构建计数、argc 边界、失效面、格式零改动
+    TMapping('T56', ['R4.10', 'R4.11', 'R4.12', 'R5.4', 'R5.5'], 'dualPathIsBitIdentical', 'M3', true),
+    // JSON 世界内可变 API：读写、frozen 传播、点号/下标糖、零注册内建码
+    TMapping('T61', ['R3.9', 'R3.10', 'R4.6', 'R4.7', 'R4.8', 'R4.9'], 'readsObjectKeyByIndex',
+        'M3', true)
 ]
 
-/** 全量映射（范围内 + 范围外），供空跑校验遍历。 */
+/** 全量映射（M1 + M2 + M3），供空跑校验遍历。 */
 public func allTMappings(): Array<TMapping> {
     let out = ArrayList<TMapping>()
     for (m in T_MAP_IN_SCOPE) {
@@ -149,7 +164,7 @@ public func allTMappings(): Array<TMapping> {
     for (m in T_MAP_M2) {
         out.add(m)
     }
-    for (m in T_MAP_OUT_OF_SCOPE) {
+    for (m in T_MAP_M3) {
         out.add(m)
     }
     out.toArray()

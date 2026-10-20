@@ -57,6 +57,7 @@ public class ErrCode_test {
         @Assert(ErrCode.CALL_CONTRACT, 19)
         @Assert(ErrCode.READONLY, 20)
         @Assert(ErrCode.HOST_EXCEPTION, 21)
+        @Assert(ErrCode.ANY_CAST, 22)
         @Assert(ErrCode.CONCURRENT_MOD, 23)
         @Assert(ErrCode.HELPER_PANIC, 99)
     }
@@ -72,7 +73,7 @@ public class ErrCode_test {
             ErrCode.FP_INVALID, ErrCode.ARG_MISMATCH, ErrCode.STACK_GUARD,
             ErrCode.HANDLE_WINDOW_FULL, ErrCode.EXPLICIT, ErrCode.NOT_IMPL,
             ErrCode.CALL_CONTRACT, ErrCode.READONLY, ErrCode.HOST_EXCEPTION,
-            ErrCode.CONCURRENT_MOD, ErrCode.HELPER_PANIC
+            ErrCode.ANY_CAST, ErrCode.CONCURRENT_MOD, ErrCode.HELPER_PANIC
         ]
         let keywords = [
             'OK', 'DEOPT', 'INTERRUPT',
@@ -82,9 +83,9 @@ public class ErrCode_test {
             'FP_INVALID', 'ARG_MISMATCH', 'STACK_GUARD',
             'HANDLE_WINDOW_FULL', 'EXPLICIT', 'NOT_IMPL',
             'CALL_CONTRACT', 'READONLY', 'HOST_EXCEPTION',
-            'CONCURRENT_MOD', 'HELPER_PANIC'
+            'ANY_CAST', 'CONCURRENT_MOD', 'HELPER_PANIC'
         ]
-        @Assert(codes.size, 26)
+        @Assert(codes.size, 27)
         @Assert(keywords.size, codes.size)
         for (i in 0..codes.size) {
             let text = ErrCode.describe(codes[i])

@@ -18,8 +18,10 @@ package fountain::f_jit
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_jit.base.ErrCode
+import fountain::f_data.json.JsonObject
 import fountain::f_jit.base.JitException
 import fountain::f_jit.base.LocalType
+import fountain::f_jit.test.ReflectUser
 import fountain::f_jit.runtime.HandleTable
 import fountain::f_jit.test.TCase
 
@@ -54,6 +56,27 @@ public class CallMarshalAny_test {
         match (HandleTable.fetchAnyBox(hs)) {
             case v: String => @Assert(v, 'hi')
             case _ => @Fail('盒内容不是 String')
+        }
+        // 注册类实例：盒内保持同一引用
+        let user = ReflectUser('u')
+        let hu = m.marshalArg(LocalType.ANY, user)
+        match (HandleTable.fetchAnyBox(hu)) {
+            case v: ReflectUser => @Assert(v.name, 'u')
+            case _ => @Fail('盒内容不是 ReflectUser')
+        }
+        // 仓颉闭包：可持有并原样取回（仍可调用）
+        let f: (Int64) -> Int64 = { x => x + 1 }
+        let hf = m.marshalArg(LocalType.ANY, f)
+        match (HandleTable.fetchAnyBox(hf)) {
+            case g: (Int64) -> Int64 => @Assert(g(41), 42)
+            case _ => @Fail('盒内容不是闭包')
+        }
+        // JSON 节点：跨桥走 token 11 例外行，盒内是节点本身
+        let node = JsonObject()
+        let hn = m.marshalArg(LocalType.ANY, node)
+        match (HandleTable.fetchAnyBox(hn)) {
+            case o: JsonObject => @Assert(o.size, 0)
+            case _ => @Fail('盒内容不是 JsonObject')
         }
         @Assert(TCase.hit('T37/marshal-any-arg', true), true)
     }

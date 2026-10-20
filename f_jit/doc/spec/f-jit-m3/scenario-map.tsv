@@ -1,80 +1,80 @@
-# capability	scenario	test_case（本变更按**测试类**聚合；逐条 @TestCase 见类内）	强度（full/partial/none/N/A）
-f-jit-base-contracts	码值与查询一致	LocalTypes_test	full
-f-jit-base-contracts	版本分派合法集	LocalTypes_test	full
-f-jit-base-contracts	码级继承	LocalTypes_test	full
-f-jit-base-contracts	token 与类型码对应	AnyHelpers_test,JsonBridge_test	full
-f-jit-base-contracts	token 11 的大类归属	AnyHelpers_test,JsonBridge_test	full
-f-jit-base-contracts	零格式新增	AnyHelpers_test,JsonBridge_test	full
-f-jit-base-contracts	描述可断言	JsonBridge_test,CallMarshalAny_test	full
-f-jit-base-contracts	22 与 7 不串号	JsonBridge_test,CallMarshalAny_test	full
-f-jit-base-contracts	映射范围	JsonBridge_test,CallMarshalAny_test	full
-f-jit-base-contracts	集合边界	AnyHelpers_test,AnyFrontend_test,AnyCast_test	full
-f-jit-base-contracts	二次装箱拒绝	AnyHelpers_test,AnyFrontend_test,AnyCast_test	full
-f-jit-base-contracts	单一来源	AnyHelpers_test,AnyFrontend_test,AnyCast_test	full
-f-jit-bytecode-format	宿主值不可常量化	JsonConst_test	full
-f-jit-bytecode-format	常量段零增量	JsonConst_test	full
-f-jit-bytecode-format	注册去重与归一	JsonConst_test	full
-f-jit-bytecode-format	冻结后只读	JsonConst_test	full
-f-jit-bytecode-format	有向无环共享	JsonConst_test	full
-f-jit-bytecode-format	JSON 常量拼装期不解析	JsonConst_test	full
-f-jit-bytecode-format	规则集取用可断言	FbcReader_test,LocalTypes_test,Version_test	full
-f-jit-bytecode-format	矩阵边界	FbcReader_test,LocalTypes_test,Version_test	full
-f-jit-bytecode-format	合法码边界	FbcReader_test,LocalTypes_test,Version_test	full
-f-jit-bytecode-format	一次解析	JsonConst_test,JsonHelpers_test	full
-f-jit-bytecode-format	加载期防御拒绝	JsonConst_test,JsonHelpers_test	full
-f-jit-bytecode-format	常量冻结	JsonConst_test,JsonHelpers_test	full
-f-jit-bytecode-format	跨平台字节一致	JsonConst_test,JsonHelpers_test	full
-f-jit-compiler-frontend	四类插入点	AnyFrontend_test,AnyCast_test	full
-f-jit-compiler-frontend	静态路径免 helper	AnyFrontend_test,AnyCast_test	full
-f-jit-compiler-frontend	结果类型可续算	AnyFrontend_test,AnyCast_test	full
-f-jit-compiler-frontend	禁止面	AnyFrontend_test,AnyCast_test	full
-f-jit-compiler-frontend	二次装箱拒绝	AnyFrontend_test,AnyCast_test	full
-f-jit-compiler-frontend	闭包不得入容器	AnyFrontend_test,AnyCast_test	full
-f-jit-compiler-frontend	反引号取界	JsonLit_test	full
-f-jit-compiler-frontend	注释不被剥离	JsonLit_test	full
-f-jit-compiler-frontend	非法 JSON 编译错误	JsonLit_test	full
-f-jit-compiler-frontend	静态类型标注	JsonLit_test	full
-f-jit-compiler-frontend	标量顶层拒绝	JsonLit_test	full
-f-jit-compiler-frontend	空与非空的分界	JsonLit_test	full
-f-jit-compiler-frontend	无消歧	JsonLit_test	full
-f-jit-compiler-frontend	点号与下标逐位等价	JsonAccess_test,AnyContainer_test	full
-f-jit-compiler-frontend	成员优先	JsonAccess_test,AnyContainer_test	full
-f-jit-compiler-frontend	链式自动收窄	JsonAccess_test,AnyContainer_test	full
-f-jit-compiler-frontend	下标自动收窄与混链	JsonAccess_test,AnyContainer_test	full
-f-jit-compiler-frontend	负向面	JsonAccess_test,AnyContainer_test	full
-f-jit-compiler-frontend	JSON 谱系不可注册	JsonAccess_test,AnyContainer_test	full
-f-jit-differential-acceptance	七项验收齐备	Q6DiffCoverage_test,Q6Acceptance_test,PerfM2_test,T40Account_test,T40Deopt_test	full
-f-jit-differential-acceptance	三引擎全等	Q6DiffCoverage_test,Q6Acceptance_test,PerfM2_test,T40Account_test,T40Deopt_test	full
-f-jit-differential-acceptance	M1/M2 零回归	Q6DiffCoverage_test,Q6Acceptance_test,PerfM2_test,T40Account_test,T40Deopt_test	full
-f-jit-differential-acceptance	缺口如实登记	Q6DiffCoverage_test,Q6Acceptance_test,PerfM2_test,T40Account_test,T40Deopt_test	full
-f-jit-facade-bridge	注册类实参	CallMarshalAny_test,CallMarshalM2_test,JsonBridge_test	full
-f-jit-facade-bridge	HostClosure 实参	CallMarshalAny_test,CallMarshalM2_test,JsonBridge_test	full
-f-jit-facade-bridge	解包三行	CallMarshalAny_test,CallMarshalM2_test,JsonBridge_test	full
-f-jit-facade-bridge	包装值不作实参	CallMarshalAny_test,CallMarshalM2_test,JsonBridge_test	full
-f-jit-facade-bridge	全类型行可断言	CallMarshalAny_test,CallMarshalM2_test,JsonBridge_test	full
-f-jit-facade-bridge	Any 实参	CallMarshalAny_test,CallMarshalM2_test,JsonBridge_test	full
-f-jit-facade-bridge	Any 返回	CallMarshalAny_test,CallMarshalM2_test,JsonBridge_test	full
-f-jit-facade-bridge	集合外类型可持有转发	CallMarshalAny_test,CallMarshalM2_test,JsonBridge_test	full
-f-jit-facade-bridge	双路径对拍	SignaturePlan_test	full
-f-jit-facade-bridge	冷路径回退	SignaturePlan_test	full
-f-jit-facade-bridge	开关不改变语义	SignaturePlan_test	full
-f-jit-runtime	13/14 大类名呈现	DbgDumpM3_test,DbgDumpM2_test	full
-f-jit-runtime	15–19 呈现	DbgDumpM3_test,DbgDumpM2_test	full
-f-jit-runtime	报告逐位一致	DbgDumpM3_test,DbgDumpM2_test	full
-f-jit-runtime	首个收敛点获胜	DbgDumpM3_test,DbgDumpM2_test	full
-f-jit-runtime	装箱往返	AnyHelpers_test,AnyCast_test	full
-f-jit-runtime	is 的三种回答	AnyHelpers_test,AnyCast_test	full
-f-jit-runtime	as 未命中	AnyHelpers_test,AnyCast_test	full
-f-jit-runtime	容器转型校验	AnyHelpers_test,AnyCast_test	full
-f-jit-runtime	不触发 deopt 禁令	AnyHelpers_test,AnyCast_test	full
-f-jit-runtime	读的出口解包	JsonHelpers_test,JsonConst_test	full
-f-jit-runtime	越界与缺键	JsonHelpers_test,JsonConst_test	full
-f-jit-runtime	写的边界	JsonHelpers_test,JsonConst_test	full
-f-jit-runtime	frozen 传播	JsonHelpers_test,JsonConst_test	full
-f-jit-runtime	空形态可变	JsonHelpers_test,JsonConst_test	full
-f-jit-runtime	变更型纪律	JsonHelpers_test,JsonConst_test	full
-f-jit-runtime	验签即建	SignaturePlan_test	full
-f-jit-runtime	展开与循环逐位一致	SignaturePlan_test	full
-f-jit-runtime	失效面	SignaturePlan_test	full
-f-jit-runtime	卸载不被绕过	SignaturePlan_test	full
-f-jit-runtime	格式零改动	SignaturePlan_test	full
+# capability	scenario	test_case（逗号分隔，须能在 src/**/*_test.cj 解析到）	strength（full/partial/none/N/A）
+f-jit-base-contracts	码值与查询一致	constantsMatchSpecTable,nameMatchesSpecTable,isHandleSplitsAtFour	full
+f-jit-base-contracts	版本分派合法集	legalSetIsDispatchedByVerMajor,localTypeLegalSetBoundariesByVersion	full
+f-jit-base-contracts	码级继承	jsonCodesHaveCodeLevelInheritance	full
+f-jit-base-contracts	token 与类型码对应	constantsMatchSpecTable,nameMatchesSpecTable	full
+f-jit-base-contracts	token 11 的大类归属	hostObjectTokenIsTheSharedOpaqueCategory,jsonTagsReuseHostObject	full
+f-jit-base-contracts	零格式新增	tokensCoverExactlyTheNineHandleTypes,jsonTagsReuseHostObject	full
+f-jit-base-contracts	描述可断言	describeIsNonEmptyAndCarriesKeyword	full
+f-jit-base-contracts	22 与 7 不串号	asMismatchIs22,bareCastFailsWithBadCast	full
+f-jit-base-contracts	映射范围	fullPositiveCodeRangeMapsToJitException	full
+f-jit-base-contracts	集合边界	convertibleSetIsFrozen	full
+f-jit-base-contracts	二次装箱拒绝	noDoubleBoxing,boxRejectsNonConvertibleTypes	full
+f-jit-base-contracts	单一来源	fromTokenMatchesTypeTokenTable	full
+f-jit-bytecode-format	宿主值不可常量化	unknownKindIsRejected,instantiateValueKinds	partial
+f-jit-bytecode-format	常量段零增量	t49M1DiffRegressionIsZeroChange	full
+f-jit-bytecode-format	注册去重与归一	addRegexDeduplicatesAndNormalizesFlags	full
+f-jit-bytecode-format	冻结后只读	freezeMakesRegistryReadOnly	full
+f-jit-bytecode-format	有向无环共享	instantiateSharesDagSubstructures	full
+f-jit-bytecode-format	JSON 常量拼装期不解析	addJsonOnlyStoresRawBytes,invalidJsonIsRejectedAtLoad	full
+f-jit-bytecode-format	规则集取用可断言	registryRegistersV1V2AndV3,v1ProductDispatchesToV1RuleSet,v2ProductDispatchesToV2RuleSet	full
+f-jit-bytecode-format	矩阵边界	rejectUnsupportedVerMajor,m1RuleSetRejectsV2Header	full
+f-jit-bytecode-format	合法码边界	localTypeLegalSetBoundariesByVersion,ruleSetBoundaryMatchesLocalTypeIsLegal	full
+f-jit-bytecode-format	一次解析	jsonInstantiatesOnceAndReusesIdentity	partial
+f-jit-bytecode-format	加载期防御拒绝	invalidJsonIsRejectedAtLoad,unknownKindIsRejected	full
+f-jit-bytecode-format	常量冻结	frozenBlocksWritesAndPropagates,frozenConstantRejectsWrite	full
+f-jit-bytecode-format	跨平台字节一致	normalizesNewlinesInJson,jsonPayloadRoundTrips	full
+f-jit-compiler-frontend	四类插入点	boxesAtAnyInitialization,boxesAtAnyAssignment,boxesAtAnyArgument,boxesAtAnyReturn,boxesAtListElement,boxesAtMapValueWrite	full
+f-jit-compiler-frontend	静态路径免 helper	staticIsNeedsNoHelper,staticCastNeedsNoHelper	full
+f-jit-compiler-frontend	结果类型可续算	asOnContainerElement,asRoundTripsValueType	full
+f-jit-compiler-frontend	禁止面	rejectsAnyOperators,rejectedAnySuggestsCast	full
+f-jit-compiler-frontend	二次装箱拒绝	noDoubleBoxing	full
+f-jit-compiler-frontend	闭包不得入容器	rejectsClosureBoxing,rejectsClosureInHeterogeneousList	full
+f-jit-compiler-frontend	反引号取界	takesBoundaryWithBraceInString,takesBoundaryWithBracketInString,takesNestedBoundary	full
+f-jit-compiler-frontend	注释不被剥离	keepsCommentLikeContent	full
+f-jit-compiler-frontend	非法 JSON 编译错误	rejectsInvalidJson	full
+f-jit-compiler-frontend	静态类型标注	jsonStaticTypeAnnotation	full
+f-jit-compiler-frontend	标量顶层拒绝	rejectsScalarTopLevel	full
+f-jit-compiler-frontend	空与非空的分界	emptyObjectUsesJsonNew,emptyArrayUsesJsonNew,objectLiteralBecomesJsonObjectConstant	full
+f-jit-compiler-frontend	无消歧	bracesKeepM1Meaning,braceObjectStaysMapLiteral	full
+f-jit-compiler-frontend	点号与下标逐位等价	dotReadEqualsIndexRead,dotWriteEqualsIndexWrite	full
+f-jit-compiler-frontend	成员优先	memberWinsOverKey,bareMemberNameIsRejected	full
+f-jit-compiler-frontend	链式自动收窄	chainNarrowsAutomatically	full
+f-jit-compiler-frontend	下标自动收窄与混链	mixedChainsNarrowByIndexType	full
+f-jit-compiler-frontend	负向面	staticConcreteNegatives	full
+f-jit-compiler-frontend	JSON 谱系不可注册	jsonFamilyIsRejected,jsonClassConstructionIsRejected	full
+f-jit-differential-acceptance	七项验收齐备	N/A	N/A
+f-jit-differential-acceptance	三引擎全等	t35SugarIsTripleEqual,t33HandleArgIsTripleEqual,t57HostObjectArgIsTripleEqual	full
+f-jit-differential-acceptance	M1/M2 零回归	t49M1DiffRegressionIsZeroChange	full
+f-jit-differential-acceptance	缺口如实登记	N/A	N/A
+f-jit-facade-bridge	注册类实参	hostObjectAcceptanceAndIdentity	full
+f-jit-facade-bridge	HostClosure 实参	hostClosureVerifiesAndPins,hostClosureRejectSetIs19	full
+f-jit-facade-bridge	解包三行	closureUnboxPromotesGroup,hostClosureUnboxReturnsReference,hostObjectUnboxReturnsInstance	full
+f-jit-facade-bridge	包装值不作实参	wrapperValueIsRejectedAsArgument	full
+f-jit-facade-bridge	全类型行可断言	unboxTable,scalarMarshalling	full
+f-jit-facade-bridge	Any 实参	anyArgIsBoxed	full
+f-jit-facade-bridge	Any 返回	anyReturnUnboxes	full
+f-jit-facade-bridge	集合外类型可持有转发	closureHeldInBoxIsNotConvertible	full
+f-jit-facade-bridge	双路径对拍	dualPathIsBitIdentical	full
+f-jit-facade-bridge	冷路径回退	switchDisablesSpecialization	partial
+f-jit-facade-bridge	开关不改变语义	switchDisablesSpecialization,anyCastErrorReachesBridge	full
+f-jit-runtime	13/14 大类名呈现	hostHandleSlotTextUsesLargeClassName	full
+f-jit-runtime	15–19 呈现	jsonSlotTextUsesLargeClassName,jsonNullSlotRendersZero	full
+f-jit-runtime	报告逐位一致	reportTemplateIsByteExact,reportRendersHostHandlesWithoutFetching	full
+f-jit-runtime	首个收敛点获胜	firstConvergencePointWins	full
+f-jit-runtime	装箱往返	boxAndUnboxInt64,boxKeepsReferenceIdentity	full
+f-jit-runtime	is 的三种回答	isAnswersWithoutFailing	full
+f-jit-runtime	as 未命中	asMismatchIsAnyCast	full
+f-jit-runtime	容器转型校验	containerAuxChecksElementType,listCastHonoursElementType	full
+f-jit-runtime	不触发 deopt 禁令	m3HelperFlagsMatchSpec	full
+f-jit-runtime	读的出口解包	scalarsAreUnwrappedAtExit	full
+f-jit-runtime	越界与缺键	readFailuresAreCoded	full
+f-jit-runtime	写的边界	writeBoundsFollowContainerSemantics,frozenConstantRejectsWrite	full
+f-jit-runtime	frozen 传播	frozenBlocksWritesAndPropagates	full
+f-jit-runtime	空形态可变	newObjectIsMutableAndReadable	full
+f-jit-runtime	变更型纪律	m3HelperFlagsMatchSpec	full
+f-jit-runtime	验签即建	plansAreBuiltOncePerSignature	full
+f-jit-runtime	展开与循环逐位一致	argcBoundaryMatchesBetweenPaths,planHandlesMaxArity	full
+f-jit-runtime	失效面	slotReuseBindsFreshPlan	full
+f-jit-runtime	卸载不被绕过	t32UnloadAndHostClosureLifecycle	full
+f-jit-runtime	格式零改动	switchDoesNotChangeArtifact	full

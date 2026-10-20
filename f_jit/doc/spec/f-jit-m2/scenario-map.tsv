@@ -74,7 +74,7 @@ f-jit-compiler-frontend	描述符不入产物	descriptorIsNotInFbc	full
 f-jit-compiler-frontend	LOAD_CAP 语义不变	loadCapSemanticsUnchanged	full
 f-jit-differential-acceptance	映射可脚本校验	tMappingHasNoDanglingEntries	full
 f-jit-differential-acceptance	M2 编号全覆盖	m2ScopeIsFullyCovered	full
-f-jit-differential-acceptance	范围外编号有说明	outOfScopeIdsAreAttributedToLaterMilestones	full
+f-jit-differential-acceptance	范围外编号有说明	m3ScopeIsFullyCovered	full
 f-jit-differential-acceptance	双字段断言	assertTripleEqualThrowsOnMismatch	full
 f-jit-differential-acceptance	21/99 分类断言	t60ThreeFacesMapTo21,t60EngineFailureStays99	full
 f-jit-differential-acceptance	容量边界可复现	windowDoublesWhenExhausted	full

@@ -274,10 +274,15 @@ internal class HelperCodec {
      * 该 hid 是否为变更型 helper（§7 校验 11 的保守判定输入）。
      *
      * 除 H43–H48 外，**user helper（§8.4 预定义函数）同样按变更型保守处理**——宿主实现体
-     * 静态不可知，§9.15 的「整函数保守判定」要求把它算进去。
+     * 静态不可知，§9.15 的「整函数保守判定」要求把它算进去。M3 追加 H82（`json_set`），
+     * 其余新增 helper（H78–H81/H83）均非变更型。
      */
     public static func isMutating(hid: UInt16): Bool {
-        hid == HOST_SET_FIELD || (hid >= MUTATION_MIN && hid <= MUTATION_MAX) || hid >= USER_BASE
+        // H82 `json_set` 是 M3 唯一的变更型 helper（m3 §5「变更型纪律」：flags.bit0 +
+        // 拒绝全部 deopt 源）。H78/H79/H80/H81/H83 都不是变更型：box 不可变、is 纯读、
+        // as 与 get/new 只分配。
+        hid == HOST_SET_FIELD || hid == JSON_SET ||
+            (hid >= MUTATION_MIN && hid <= MUTATION_MAX) || hid >= USER_BASE
     }
 }
 

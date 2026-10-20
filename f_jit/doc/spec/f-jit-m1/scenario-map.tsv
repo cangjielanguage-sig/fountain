@@ -4,7 +4,7 @@ f-jit-differential-acceptance	四元组逐位对拍	diffFourCatchesEachDimension
 f-jit-differential-acceptance	非原生用例跳过	unavailableEngineIsSkippedNotFailed	full
 f-jit-differential-acceptance	本机最小集生效	t2TripleEqualCore	full
 f-jit-differential-acceptance	映射可脚本校验	tMappingHasNoDanglingEntries	full
-f-jit-differential-acceptance	范围外编号有说明	outOfScopeIdsAreAttributedToLaterMilestones	full
+f-jit-differential-acceptance	范围外编号有说明	m3ScopeIsFullyCovered	full
 f-jit-differential-acceptance	双字段断言	t6ErrorConsistency	partial
 f-jit-differential-acceptance	容量边界可复现	tCapacityGrowthUnderSmallWindow	full
 f-jit-differential-acceptance	性能对照同构	jitVsInterpVsCjnative	full

@@ -201,6 +201,32 @@ public class CallMarshalM2_test {
             unit.call<Int64>([f]) == 42 && code == ErrCode.CALL_CONTRACT && site == -1), true)
     }
 
+    /**
+     * 包装值不作实参（m3 §2）：`JitFunction` 直接放进 `args` ⇒ 19；
+     * 宿主须包一层闭包（`{ => f.call<Int64>(…) }`）才能传入。
+     */
+    @TestCase
+    public func wrapperValueIsRejectedAsArgument(): Unit {
+        CallMarshalM2_test.setup()
+        let m = CallMarshal()
+        let inner = JitFunction(0, LocalType.I64, Array<UInt16>(),
+            { c, _ =>
+                let _ = c
+                0
+            },
+            { c, _ =>
+                let _ = c
+                0
+            }, '')
+        let e = CallMarshalM2_test.codeOf({ =>
+            let _ = m.marshalArg(LocalType.HOST_CLOSURE, inner)
+        })
+        @Assert(e.code, ErrCode.CALL_CONTRACT)
+        @Assert(TCase.hit('T57/wrapper-not-arg', e.code == ErrCode.CALL_CONTRACT), true)
+        m.cleanup()
+        CallMarshalM2_test.teardown()
+    }
+
     private static func codeOf(body: () -> Unit): ExcSite {
         try {
             body()

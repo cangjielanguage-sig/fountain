@@ -21,7 +21,7 @@ root, map_path = sys.argv[1], sys.argv[2]
 text = open(map_path, encoding='utf-8').read()
 # M1 与 M2 同属「完成判据」：两张表用同一套强校验（owner 只用于区分里程碑）。
 entries = re.findall(
-    r"TMapping\('(T\d+)',\s*\[([^\]]*)\],\s*'([^']+)',\s*'(?:M1|M2)',\s*true\)", text)
+    r"TMapping\('(T\d+)',\s*\[([^\]]*)\],\s*'([^']+)',\s*'(?:M1|M2|M3)',\s*true\)", text)
 
 bodies = {}
 for path in glob.glob(os.path.join(root, 'src', '**', '*_test.cj'), recursive=True):
@@ -59,6 +59,6 @@ for tid, steps, case in entries:
         print(f'MISSING {tid}: 用例 {case}（{os.path.relpath(path, root)}）未把 `{tid}/` 作为函数实的字符串首参（注释不算）')
         missing += 1
 
-print(f'check_tmap: {len(entries)} 条范围内映射（M1+M2），悬空/未断言 {missing} 条')
+print(f'check_tmap: {len(entries)} 条范围内映射（M1+M2+M3），悬空/未断言 {missing} 条')
 sys.exit(1 if missing else 0)
 PY

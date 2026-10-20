@@ -13,8 +13,8 @@
 #   3. spec 里的每条 scenario 都必须出现在映射中（完整性，禁止漏登记）。
 #
 # 用法：
-#   check_scenarios.sh [m1|m2|m2.1|m2.2|m2.3] [--strict]
-#     m1（默认）/ m2 / m2.1 / m2.2 / m2.3 = 里程碑，决定 spec 目录与 tsv 路径
+#   check_scenarios.sh [m1|m2|m2.1|m2.2|m2.3|m3] [--strict]
+#     m1（默认）/ m2 / m2.1 / m2.2 / m2.3 / m3 = 里程碑，决定 spec 目录与 tsv 路径
 #     m2.1 是**增量矩阵**：doc/spec/f-jit-m2.1 只收录该变更改动的 requirement，
 #     未改动的 capability 由 m2 的矩阵覆盖，两者互补。
 #     --strict       = 缺口或部分覆盖也判失败（供里程碑把矩阵收紧到「全 full」）
@@ -25,7 +25,7 @@ MILESTONE="m1"
 STRICT=0
 for arg in "$@"; do
   case "$arg" in
-    m1|m2|m2.1|m2.2|m2.3) MILESTONE="$arg" ;;
+    m1|m2|m2.1|m2.2|m2.3|m3) MILESTONE="$arg" ;;
     --strict) STRICT=1 ;;
     *) echo "check_scenarios: 未知参数 $arg" >&2; exit 2 ;;
   esac

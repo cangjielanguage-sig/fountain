@@ -31,6 +31,30 @@ import fountain::f_jit.base.LocalType
 @Test
 public class AnyHelpers_test {
 
+    /**
+     * 集合外类型（闭包）经桥装箱后**只可持有转发**：`is` 恒 0、`as` 以 22 失败。
+     *
+     * 盒本身由桥侧 `marshalArg(ANY, …)` 建立（这里直接 `appendAnyBox` 复刻同一形态），
+     * 证明「不可转集」不会因为进了盒就获得转型能力（m3 §2「集合外类型可持有转发」）。
+     */
+    @TestCase
+    public func closureHeldInBoxIsNotConvertible(): Unit {
+        let ctx = AnyHelpers_test.mkCtx()
+        let f: (Int64) -> Int64 = { x => x + 1 }
+        let boxed = HandleTable.appendAnyBox(ctx, f)
+        @Assert(ctx.errCode, 0)
+        @Assert(AnyHelpers_test.call(ctx, 79, [boxed, 12, 0xFFFF]), 0)
+        @Assert(ctx.errCode, 0)
+        let _ = AnyHelpers_test.call(ctx, 80, [boxed, 12, 0xFFFF])
+        @Assert(ctx.errCode, ErrCode.ANY_CAST)
+        // 仍可原样取回并调用（持有转发不被破坏）
+        match (HandleTable.fetchAnyBox(boxed)) {
+            case g: (Int64) -> Int64 => @Assert(g(41), 42)
+            case _ => @Fail('盒内容丢失')
+        }
+        JitContext.free(ctx)
+    }
+
     private static func mkCtx(): JitContext {
         HandleTable.resetForTest()
         HandleTable.openWindow(128)

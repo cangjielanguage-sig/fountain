@@ -117,6 +117,42 @@ public class JitReport_test {
         JitContext.free(ctx)
     }
 
+    /**
+     * 桥的错误码映射覆盖全量正值域（m3 §2「映射范围」）：1–23 与 99 逐码按**原码**抛出，
+     * 22（`ANY_CAST`）独立成行、不被折叠为 7 或 21。
+     */
+    @TestCase
+    public func fullPositiveCodeRangeMapsToJitException(): Unit {
+        var code: Int64 = 1
+        var hit = 0
+        while (code <= 23) {
+            let c = JitReport_test.ctx()
+            c.errCode = code
+            c.site = code
+            try {
+                let _ = JitReport.finish(c, -1, { => 0 }, '')
+                @Fail('未抛 JitException: ${code}')
+            } catch (e: JitException) {
+                @Assert(e.code, code)
+                @Assert(e.site, code)
+                hit = hit + 1
+            }
+            JitContext.free(c)
+            code = code + 1
+        }
+        let c99 = JitReport_test.ctx()
+        c99.errCode = ErrCode.HELPER_PANIC
+        try {
+            let _ = JitReport.finish(c99, -1, { => 0 }, '')
+            @Fail('未抛 99')
+        } catch (e: JitException) {
+            @Assert(e.code, ErrCode.HELPER_PANIC)
+            hit = hit + 1
+        }
+        JitContext.free(c99)
+        @Assert(hit, 24)
+    }
+
     private static func ctx(): JitContext {
         JitContext.create(hwBase: 0, hwCap: 0, fnId: 0, dbgBase: 0)
     }

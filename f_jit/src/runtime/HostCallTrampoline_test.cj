@@ -20,6 +20,7 @@ import std.unittest.testmacro.*
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.LocalType
 import fountain::f_jit.base.TypeToken
+import fountain::f_jit.test.TCase
 
 /**
  * Q4.5 H63 `host_call_trampoline` 基础语义（m2 §5）。
@@ -76,6 +77,26 @@ public class HostCallTrampoline_test {
 
     private func entry(fn: Any, params: Array<UInt16>, ret: UInt16): Int64 {
         HandleTable.pin(HostCallback(fn, SignatureDescriptor(params, ret)))
+    }
+
+    /**
+     * 失效面（m3 §13）：释放闭包条目后，在**复用槽**上放入签名不同的新闭包再调用——
+     * 新闭包绑定自己的 plan，不命中任何旧加速；结果正确。
+     */
+    @TestCase
+    public func slotReuseBindsFreshPlan(): Unit {
+        this.setup()
+        let f1: (Int64) -> Int64 = { x => x + 1 }
+        let h1 = this.entry(f1, [LocalType.I64], LocalType.I64)
+        @Assert(this.call([h1, 7]), 8)
+        @Assert(this.err(), 0)
+        HandleTable.release(h1)
+        let f2: () -> Int64 = { => 55 }
+        let h2 = this.entry(f2, Array<UInt16>(), LocalType.I64)
+        @Assert(this.call([h2]), 55)
+        @Assert(this.err(), 0)
+        @Assert(TCase.hit('T56/slot-reuse', true), true)
+        this.teardown()
     }
 
     /** H63 已登记（hid 63、名称、isFixed）。 */

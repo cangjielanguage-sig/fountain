@@ -20,8 +20,8 @@ package fountain::f_jit.base
  *
  * 数值权威 = `doc/jit-bytecode-m1.md` §2 错误码表 + `doc/jit-bytecode-m2.md` §2 增量。三条非错误态
  * （`0 OK` / `-1 DEOPT` / `-2 INTERRUPT`）与 1–21、`23`、`99` 全部按表登记；`21
- * ERR_HOST_EXCEPTION`（M2）为**仓颉侧异常专用码**，`22 ERR_ANY_CAST`（M3）仍落在「未登记码」的
- * 兜底分支。
+ * ERR_HOST_EXCEPTION`（M2）为**仓颉侧异常专用码**，`22 ERR_ANY_CAST`（M3）为 Any 盒上的
+ * 动态转型失败（与 7 `BAD_CAST` 的静态值转型分列）。
  *
  * 与 `LocalType` / `TypeToken` 同族，用「类 + `static const`」承载（design D3）：错误码要写进
  * ctx 错误槽、要参与 `Report.throwJit` 的分派，`describe` 是**静态表、无宏**（design §2.3.10）。
