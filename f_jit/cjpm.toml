@@ -18,6 +18,7 @@
 
 [dependencies]
   "fountain::f_base" = {path = "../f_base"}
+  "fountain::f_macros" = {path = "../f_macros"}
   "fountain::f_regex" = {path = "../f_regex"}
   "fountain::f_util" = {path = "../f_util"}
 

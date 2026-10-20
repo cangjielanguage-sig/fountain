@@ -24,11 +24,11 @@ import fountain::f_jit.base.PublicMethod
 import fountain::f_jit.macros.*
 
 /**
- * M2.1：`@JitBind` 把 overrides 从「手写 PredefinedFunction + 逐参 as」降到一行标注。
+ * M2.1：`@JitBind` 修饰类，一次生成全部公共实例方法的 overrides。
  *
- * 生成的 `jitBind_greet()` 与手写版等价：签名码由 `JitBindSupport.code<T>()` 在注册期算出，
- * 绑定体是类型化嵌套调用（不再经过 `InstanceFunctionInfo.apply` 的 MCC 路径）。
+ * 宏展开出顶层函数 `jitOverrides_JitBindUser()`，注册处直接交给 `overrides:`。
  */
+@JitBind
 public class JitBindUser {
     public var name: String
 
@@ -36,24 +36,34 @@ public class JitBindUser {
         this.name = name
     }
 
-    @JitBind[JitBindUser]
     public func greet(s: String): String {
         'macro hi ${s}'
     }
 
-    /** 值型方法也要能生成（用于混合签名场景）。 */
-    @JitBind[JitBindUser]
     public func bump(n: Int64): Unit {
         this.name = '${this.name}!'
+    }
+
+    private func hidden(): Int64 {
+        0
     }
 }
 
 @Test
 public class JitBind_test {
+    private static func methodOf(name: String): PublicMethod {
+        for (m in jitOverrides_JitBindUser()) {
+            if (m.name == name) {
+                return m
+            }
+        }
+        throw Exception('未生成方法「${name}」的绑定')
+    }
+
     @TestCase
     public func macroGeneratedBindingIsEndToEnd(): Unit {
         let c = Compiler(CompileOptions(DummyDiagnosticsSink()))
-        c.registerType<JitBindUser>(overrides: [JitBindUser.jitBind_greet(), JitBindUser.jitBind_bump()])
+        c.registerType<JitBindUser>(overrides: jitOverrides_JitBindUser())
         CompileCache.reset()
         let f = c.compile('{ u: JitBindUser => u.greet("z") }')
         let u = JitBindUser('bob')
@@ -71,16 +81,26 @@ public class JitBind_test {
         @Assert(ok, true)
     }
 
-    /** 签名码来自宏展开，必须与反射注册的口径逐位一致（含首参 14）。 */
+    /** 类级展开只收公共实例方法：私有方法不入表，值型/引用型签名都要对。 */
     @TestCase
     public func generatedSignatureMatchesReflectiveShape(): Unit {
-        let m = JitBindUser.jitBind_greet()
-        @Assert(m.name, 'greet')
-        @Assert(m.bind.paramTypes, [LocalType.HOST_OBJECT, LocalType.STRING])
-        @Assert(m.bind.retType, LocalType.STRING)
+        let ms = jitOverrides_JitBindUser()
+        @Assert(ms.size, 2)
 
-        let b = JitBindUser.jitBind_bump()
+        let g = JitBind_test.methodOf('greet')
+        @Assert(g.bind.paramTypes, [LocalType.HOST_OBJECT, LocalType.STRING])
+        @Assert(g.bind.retType, LocalType.STRING)
+
+        let b = JitBind_test.methodOf('bump')
         @Assert(b.bind.paramTypes, [LocalType.HOST_OBJECT, LocalType.I64])
         @Assert(b.bind.retType, LocalType.UNIT)
+
+        var hasHidden = false
+        for (m in ms) {
+            if (m.name == 'hidden') {
+                hasHidden = true
+            }
+        }
+        @Assert(hasHidden, false)
     }
 }

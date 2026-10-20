@@ -16,32 +16,72 @@ limitations under the License.
 macro package fountain::f_jit.macros
 
 import std.ast.*
+import fountain::f_macros.*
 
 /**
- * `@JitBind[ClassName]`（M2.1）：把实例方法展开成「原方法 + 类型化绑定构造器」。
+ * `@JitBind`（M2.1）：修饰**类**，把它的公共实例方法一次性展开成 `overrides`。
  *
- * 生成后可在注册处直接取用：
  * ```
- * c.registerType<ReflectUser>(overrides: [ReflectUser.jitBind_greet()])
- * ```
- * 绑定体是**嵌套闭包调用**——逐参 `as` 成声明类型后静态调用，不再经 `InstanceFunctionInfo.apply`
- * 的 MCC 路径（GAP-13 的根治形态）。
+ * @JitBind
+ * public class ReflectUser { public func greet(s: String): String { … } }
  *
- * 约束（宏的固有边界）：
- * - 只能修饰**实例方法**，且必须用 `@JitBind[类名]` 显式给出所属类（宏看不到外层类声明）；
- * - 类的成员清单不在宏可见范围内，故**不能**一次展开整个类，只能逐方法标注；
- * - 参数/返回类型走 `JitBindSupport.code<T>()` 映射，映射不到的类型在**运行期注册时**报 CALL_CONTRACT。
+ * c.registerType<ReflectUser>(overrides: jitOverrides_ReflectUser())
+ * ```
+ *
+ * 展开结果 = 「原类 + 一个顶层函数 `jitOverrides_<类名>(): Array<PublicMethod>`」。
+ * 每条绑定的函数体是**类型化嵌套调用**：逐参 `as` 成声明类型后静态调用目标方法，
+ * 不再经 `InstanceFunctionInfo.apply` 的 MCC 路径（GAP-13 的根治形态）。
+ *
+ * 覆盖范围与边界：
+ * - **公共实例方法**会被展开；`init`、静态方法、泛型方法、带宏展开的成员跳过；
+ * - **字段（var/let）不展开**：字段访问走 H64/H65 的字段表，`PublicField` 没有 override 通道，
+ *   宏无从替换——这是注册面的结构限制，不是宏的取舍；
+ * - **属性（prop）暂未展开**：值型属性走反射已实测稳定（GAP-13 不涉及），需要时可后续补；
+ * - 类型码经 `JitBindSupport.code<T>()` 在**注册期**算出，映射不到即报 3（CALL_CONTRACT）。
  */
-public macro JitBind(attr: Tokens, input: Tokens): Tokens {
-    let decl = match (parseDecl(input)) {
-        case f: FuncDecl => f
+public macro JitBind(input: Tokens): Tokens {
+    let klass = match (parseDecl(input)) {
+        case c: ClassDecl => c
         case _ =>
-            diagReport(ERROR, input, '@JitBind 只能修饰实例方法', '')
+            diagReport(ERROR, input, '@JitBind 只能修饰类', '')
             return input
     }
-    let nameTok = decl.identifier
-    let name = nameTok.value
-    let params = decl.funcParams
+    let clsName = klass.identifier
+    var items = quote()
+    var first = true
+    var skippedGeneric = 0
+    for (d in klass.body.decls) {
+        match (d) {
+            case f: FuncDecl where isPublic(f) && !isStatic(f) && f.identifier.value != 'init' =>
+                if (f.isGenericDecl) {
+                    skippedGeneric = skippedGeneric + 1
+                    continue
+                }
+                if (!first) {
+                    items += Token(TokenKind.COMMA, ',').toTokens()
+                }
+                items += buildItem(f, clsName)
+                first = false
+            case _ => ()
+        }
+    }
+    if (skippedGeneric > 0) {
+        diagReport(WARNING, input,
+            '${clsName.value}：${skippedGeneric} 个泛型方法未生成绑定（无法静态确定类型）', '')
+    }
+    let fnName = Token(TokenKind.IDENTIFIER, 'jitOverrides_' + clsName.value)
+    quote(
+        $input
+        public func $fnName(): Array<PublicMethod> {
+            [$items]
+        }
+    )
+}
+
+private func buildItem(f: FuncDecl, clsName: Token): Tokens {
+    let nameTok = f.identifier
+    let nameStr = Token(TokenKind.STRING_LITERAL, nameTok.value)
+    let params = f.funcParams
 
     var codes: Tokens = Token(TokenKind.LSQUARE, '[').toTokens()
     codes += quote(JitBindSupport.HOST_OBJECT_CODE)
@@ -67,33 +107,28 @@ public macro JitBind(attr: Tokens, input: Tokens): Tokens {
     codes += Token(TokenKind.RSQUARE, ']').toTokens()
 
     let retCode = try {
-        let rt = decl.declType
+        let rt = f.declType
         quote(JitBindSupport.code<$rt>())
     } catch (_) {
         quote(JitBindSupport.UNIT_CODE)
     }
 
-    let bindFnTok = Token(TokenKind.IDENTIFIER, 'jitBind_' + name)
-    let nameStr = Token(TokenKind.STRING_LITERAL, name)
     quote(
-        $input
-        public static func $bindFnTok(): PublicMethod {
-            PublicMethod(
-                name: $nameStr,
-                bind: PredefinedFunction(
-                    JitBindSupport.bindNameOf<$attr>($nameStr),
-                    $codes,
-                    $retCode,
-                    { args =>
-                        let __self = match (args[0] as $attr) {
-                            case Some(v) => v
-                            case None => JitBindSupport.typeMismatch()
-                        }
-                        $prelude
-                        __self.$nameTok($callArgs)
+        PublicMethod(
+            name: $nameStr,
+            bind: PredefinedFunction(
+                JitBindSupport.bindNameOf<$clsName>($nameStr),
+                $codes,
+                $retCode,
+                { args =>
+                    let __self = match (args[0] as $clsName) {
+                        case Some(v) => v
+                        case None => JitBindSupport.typeMismatch()
                     }
-                )
+                    $prelude
+                    __self.$nameTok($callArgs)
+                }
             )
-        }
+        )
     )
 }
