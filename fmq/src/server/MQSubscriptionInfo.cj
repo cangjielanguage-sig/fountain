@@ -34,9 +34,14 @@ protected class MQSubscriptionInfo {
     /** 连接键：服务端接受的连接远端地址唯一标识一条 TCP 连接（单测为空串）。 */
     let connectionKey: String
     var buffer: SocketBuffer
+    /** 订阅代次：每次 `SUBSCRIBE` 自增；断链清理只删「自己看到的那一代」（A60）。 */
+    var generation: Int64 = 0
+    /** 存活探测替身：用例注入，默认真实连接状态。 */
+    private let aliveCheck: ?() -> Bool
 
     init(subscribedId: String, topic: String, subscribeGroup: String, tags: Array<String>, filter: MQFilter,
-        autoAck: Bool, buffer: SocketBuffer) {
+        autoAck: Bool, buffer: SocketBuffer, alive!: ?() -> Bool = None) {
+        this.aliveCheck = alive
         this.subscribedId = subscribedId
         this.topic = topic
         this.subscribeGroup = subscribeGroup
@@ -66,6 +71,9 @@ protected class MQSubscriptionInfo {
 
     /** 连接已断开（无连接的单测订阅不算断开）。 */
     func isDisconnected(): Bool {
+        if (let Some(check) <- aliveCheck) {
+            return !check()
+        }
         if(isEmptySocketBuffer(buffer)){
             return false
         }

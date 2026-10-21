@@ -36,10 +36,14 @@ protected struct MQServerOptions {
     let segmentedLogTTL: Duration
     let backup: Int64
     let metaDir: String
+    let tombstoneTTL: Duration
+    let antiEntropyInterval: Duration
 
     protected init(port: UInt16, nodes: Array<String>, selfIndex: Int64, ackTimeout: Duration,
         deadMsgThreshold: Int64, deadMsgTTL: Duration, segmentedLogDir: String, deadMsgDir: String,
-        segmentedLogMaxSize: Int64, segmentedLogTTL: Duration, backup: Int64, metaDir: String) {
+        segmentedLogMaxSize: Int64, segmentedLogTTL: Duration, backup: Int64, metaDir: String,
+        tombstoneTTL!: Duration = Duration.hour * 24 * 7,
+        antiEntropyInterval!: Duration = Duration.second * 30) {
         this.port = port
         this.nodes = nodes
         this.selfIndex = selfIndex
@@ -52,6 +56,8 @@ protected struct MQServerOptions {
         this.segmentedLogTTL = segmentedLogTTL
         this.backup = backup
         this.metaDir = metaDir
+        this.tombstoneTTL = tombstoneTTL
+        this.antiEntropyInterval = antiEntropyInterval
     }
 
     protected static func fromConfig(): MQServerOptions {
@@ -68,7 +74,9 @@ protected struct MQServerOptions {
             MQConfig.segmentedLogMaxSize,
             MQConfig.segmentedLogTTL,
             MQConfig.backup,
-            MQConfig.metaDir.toString()
+            MQConfig.metaDir.toString(),
+            tombstoneTTL: MQConfig.tombstoneTTL,
+            antiEntropyInterval: MQConfig.antiEntropyInterval
         )
     }
 }

@@ -79,14 +79,31 @@ class MQConfigTest {
         @Assert(MQConfig.nodes.size == 2)
         @Assert(MQConfig.selfIndex == 1)
 
-        // ---- 非法字节量回落默认值 ----
+        var message = ""
+
+        // ---- 非法显式值必须报错，不能静默回落（A63） ----
         Config.set([(MQConfig.SEGMENTED_LOG_MAX_SIZE, "not-a-size")])
-        @Assert(MQConfig.segmentedLogMaxSize == 1_073_741_824)
+        message = ""
+        try {
+            MQConfig.validate()
+        } catch (e: MQConfigException) {
+            message = e.message
+        }
+        @Assert(message.contains("not a byte size"))
         Config.set([(MQConfig.SEGMENTED_LOG_MAX_SIZE, "1G")])
+
+        Config.set([(MQConfig.PORT, "abc")])
+        message = ""
+        try {
+            MQConfig.validate()
+        } catch (e: MQConfigException) {
+            message = e.message
+        }
+        @Assert(message.contains("not a valid port"))
+        Config.set([(MQConfig.PORT, "2401")])
 
         // ---- 负数 backup ----
         Config.set([(MQConfig.BACKUP, "-1")])
-        var message = ""
         try {
             MQConfig.validate()
         } catch (e: MQConfigException) {
@@ -144,6 +161,86 @@ class MQConfigTest {
             message = e.message
         }
         @Assert(message.contains("at least 1"))
+
+        // ---- 各项 0 / 负值都拒绝启动（A54/A63） ----
+        let zeroCases = [
+            (MQConfig.ACK_TIMEOUT, "0s"),
+            (MQConfig.SEGMENTED_LOG_MAX_SIZE, "0"),
+            (MQConfig.SEGMENTED_LOG_TTL, "0s"),
+            (MQConfig.DEAD_MSG_TTL, "-1h"),
+            (MQConfig.TOMBSTONE_TTL, "0s"),
+            (MQConfig.ANTI_ENTROPY_INTERVAL, "0s")
+        ]
+        for ((key, value) in zeroCases) {
+            Config.set([
+                (MQConfig.PORT, "2350"),
+                (MQConfigKey.CLIENT_HOSTS, "h1:2350"),
+                (MQConfig.ACK_TIMEOUT, "10s"),
+                (MQConfig.SEGMENTED_LOG_MAX_SIZE, "1M"),
+                (MQConfig.SEGMENTED_LOG_TTL, "72h"),
+                (MQConfig.DEAD_MSG_TTL, "72h"),
+                (MQConfig.TOMBSTONE_TTL, "7d"),
+                (MQConfig.ANTI_ENTROPY_INTERVAL, "30s"),
+                (key, value)
+            ])
+            var rejected = false
+            try {
+                MQConfig.validate()
+            } catch (_: MQConfigException) {
+                rejected = true
+            }
+            @Assert(rejected)
+        }
+
+        // ---- 非法 host:port ----
+        Config.set([
+            (MQConfig.PORT, "2350"),
+            (MQConfigKey.CLIENT_HOSTS, "h1:0"),
+            (MQConfig.ACK_TIMEOUT, "10s"),
+            (MQConfig.SEGMENTED_LOG_MAX_SIZE, "1M"),
+            (MQConfig.SEGMENTED_LOG_TTL, "72h"),
+            (MQConfig.DEAD_MSG_TTL, "72h"),
+            (MQConfig.TOMBSTONE_TTL, "7d"),
+            (MQConfig.ANTI_ENTROPY_INTERVAL, "30s")
+        ])
+        message = ""
+        try {
+            MQConfig.validate()
+        } catch (e: MQConfigException) {
+            message = e.message
+        }
+        @Assert(message.contains("invalid node"))
+
+        // ---- backup 超过节点数 ----
+        Config.set([
+            (MQConfig.PORT, "2350"),
+            (MQConfigKey.CLIENT_HOSTS, "h1:2350,h2:2351,h3:2352"),
+            (MQConfig.BACKUP, "3")
+        ])
+        message = ""
+        try {
+            MQConfig.validate()
+        } catch (e: MQConfigException) {
+            message = e.message
+        }
+        @Assert(message.contains("exceeds node count"))
+
+        // ---- 合法边界通过 ----
+        Config.set([
+            (MQConfig.PORT, "2350"),
+            (MQConfigKey.CLIENT_HOSTS, "h1:2350,h2:2351,h3:2352"),
+            (MQConfig.BACKUP, "2"),
+            (MQConfig.ACK_TIMEOUT, "1ms"),
+            (MQConfig.SEGMENTED_LOG_MAX_SIZE, "1M"),
+            (MQConfig.SEGMENTED_LOG_TTL, "72h"),
+            (MQConfig.DEAD_MSG_TTL, "72h"),
+            (MQConfig.TOMBSTONE_TTL, "7d"),
+            (MQConfig.ANTI_ENTROPY_INTERVAL, "30s"),
+            (MQConfig.DEAD_MSG_THRESHOLD, "1")
+        ])
+        MQConfig.validate()
+        @Assert(MQConfig.segmentedLogMaxSize == 1024 * 1024)
+        @Assert(MQConfig.ackTimeout == Duration.millisecond)
 
         // ---- 帮助文本 ----
         let text = MQConfig.helpText()

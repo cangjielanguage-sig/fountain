@@ -18,6 +18,22 @@ package fountain::f_mq.base.payload
 import fountain::f_data.*
 import fountain::f_data.macros.*
 
+/** 注销目标：封闭枚举，任何其它取值都是 `Unknown`，不得落到「删除订阅组」分支（A10）。 */
+public enum DeregisterKind <: Equatable<DeregisterKind> {
+    | Topic
+    | Group
+    | Unknown
+
+    public operator func ==(other: DeregisterKind): Bool {
+        match ((this, other)) {
+            case (Topic, Topic) => true
+            case (Group, Group) => true
+            case (Unknown, Unknown) => true
+            case _ => false
+        }
+    }
+}
+
 /** `DEREGISTER` 载荷。`kind` 取 `topic` / `group`。 */
 @DataAssist[props fields]
 public class MQDeregisterPayload {
@@ -37,7 +53,22 @@ public class MQDeregisterPayload {
         this.subscribeGroup = subscribeGroup
     }
 
+    /** 精确判别：大小写变体、空串、拼写错误都是 `Unknown`。 */
+    public func kindOf(): DeregisterKind {
+        if (kind == TOPIC) {
+            return DeregisterKind.Topic
+        }
+        if (kind == GROUP) {
+            return DeregisterKind.Group
+        }
+        DeregisterKind.Unknown
+    }
+
     public func isTopic(): Bool {
-        kind == TOPIC
+        kindOf() == DeregisterKind.Topic
+    }
+
+    public func isGroup(): Bool {
+        kindOf() == DeregisterKind.Group
     }
 }

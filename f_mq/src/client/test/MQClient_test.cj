@@ -30,6 +30,14 @@ import fountain::f_net.SocketBuffer
 import fountain::f_protocol.default.*
 import fountain::f_util.UUID
 
+private func longText(n: Int64): String {
+    let buf = StringBuilder()
+    for (_ in 0..n) {
+        buf.append("a")
+    }
+    buf.toString()
+}
+
 @Test
 class MQClientTest {
     private static func ok(buffer: SocketBuffer, request: Message): ?Message {
@@ -64,6 +72,51 @@ class MQClientTest {
         queueIndex!: Int64 = 0): MQConsumeResult {
         let record = MQMessageRecord.encode(topic, ["a"], "m-${index}-${offset}", "body-${index}".toData())
         MQConsumeResult(queueIndex, index, offset, record)
+    }
+
+    /** 非法 tags / 组名在本地失败，一个请求都不发（A19/A05）。 */
+    @TestCase
+    public func invalidTagsAndGroupFailBeforeAnyRequest(): Unit {
+        let stub = MQStubServer(ok).start()
+        try {
+            let client = MQClient([stub.address()])
+            var failed = 0
+            try {
+                client.publish("/order", "hi", tags: [""])
+            } catch (_: MQException) {
+                failed++
+            }
+            try {
+                client.publish("/order", "hi", tags: ["a b"])
+            } catch (_: MQException) {
+                failed++
+            }
+            try {
+                client.publish("/order", "hi", tags: Array<String>(65, repeat: "t"))
+            } catch (_: MQException) {
+                failed++
+            }
+            try {
+                client.publish("/order", "hi", tags: [longText(129)])
+            } catch (_: MQException) {
+                failed++
+            }
+            try {
+                client.subscribe("/order", tags: ["bad tag"])
+            } catch (_: MQException) {
+                failed++
+            }
+            try {
+                client.subscribe("/order", subscribeGroup: "g:1")
+            } catch (_: MQException) {
+                failed++
+            }
+            @Assert(failed == 6)
+            @Assert(stub.received().size == 0)
+            client.close()
+        } finally {
+            stub.close()
+        }
     }
 
     @TestCase
@@ -295,6 +348,238 @@ class MQClientTest {
         } finally {
             stub0.close()
             stub1.close()
+        }
+    }
+
+    /** 全部 owner 不可达时 consume 必须抛错，而不是永久空转（A12）。 */
+    @TestCase
+    public func consumeThrowsWhenAllOwnersUnreachable(): Unit {
+        let stub = MQStubServer(ok).start()
+        let client = MQClient([stub.address()])
+        let sid = client.subscribe("/order")
+        stub.close()
+        var threw = false
+        var text = ""
+        try {
+            client.consume(sid)
+        } catch (e: MQConnectionException) {
+            threw = true
+            text = e.message
+        }
+        @Assert(threw)
+        // 场景「全部 owner 不可达」要求文案包含尝试过的节点：单节点客户端即节点 0
+        @Assert(text.contains("[0]"))
+        client.close()
+    }
+
+    /** 全部 NOT_OWNER 是服务端确定答案，必须抛服务异常而不是连接异常（A18）。 */
+    @TestCase
+    public func publishAllNotOwnerRaisesServiceException(): Unit {
+        let stub = MQStubServer({buffer, request => okBut(buffer, request, MQErrorCode.NOT_OWNER)}).start()
+        try {
+            let client = MQClient([stub.address()])
+            var code = -1i64
+            try {
+                client.publish("/t", 1i64)
+            } catch (e: MQServiceException) {
+                code = e.code
+            }
+            @Assert(code == MQErrorCode.NOT_OWNER)
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+
+    /** `FILTER_UNSUPPORTED_BODY` 等错误码必须抛给调用方（A16）。 */
+    @TestCase
+    public func consumeMapsServiceErrorCode(): Unit {
+        let stub = MQStubServer({buffer, request =>
+            match (request.command) {
+                case CONSUME(_) => okBut(buffer, request, MQErrorCode.FILTER_UNSUPPORTED_BODY)
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let client = MQClient([stub.address()])
+            let sid = client.subscribe("/order")
+            var code = -1i64
+            try {
+                client.consume(sid)
+            } catch (e: MQServiceException) {
+                code = e.code
+            }
+            @Assert(code == MQErrorCode.FILTER_UNSUPPORTED_BODY)
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+
+    /** 非空记录解码失败不能当成「没有消息」继续轮询（A16）。 */
+    @TestCase
+    public func consumeFailsOnUndecodableRecord(): Unit {
+        let stub = MQStubServer({buffer, request =>
+            match (request.command) {
+                case CONSUME(_) =>
+                    Some(MQProtocol.respond<MQConsumeResult>(request,
+                        MQConsumeResult(0, 1, 0, [1u8, 2u8, 3u8])))
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let client = MQClient([stub.address()])
+            let sid = client.subscribe("/order")
+            var code = -1i64
+            try {
+                client.consume(sid)
+            } catch (e: MQServiceException) {
+                code = e.code
+            }
+            @Assert(code == MQErrorCode.INTERNAL)
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+
+    /** ack 的失败必须可见：非 ACK_UNKNOWN 抛服务异常，ACK_UNKNOWN 视为已处理（A13）。 */
+    @TestCase
+    public func ackSurfacesFailuresExceptUnknown(): Unit {
+        let internalError = MQStubServer({buffer, request =>
+            match (request.command) {
+                case ACK => okBut(buffer, request, MQErrorCode.INTERNAL)
+                case CONSUME(_) => Some(MQProtocol.respond<MQConsumeResult>(request, stubMessage("/order", 1, 0)))
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        let unknownAck = MQStubServer({buffer, request =>
+            match (request.command) {
+                case ACK => okBut(buffer, request, MQErrorCode.ACK_UNKNOWN)
+                case CONSUME(_) => Some(MQProtocol.respond<MQConsumeResult>(request, stubMessage("/order", 1, 0)))
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let failing = MQClient([internalError.address()])
+            let sid0 = failing.subscribe("/order")
+            let first = failing.consume(sid0)
+            var code = -1i64
+            try {
+                failing.ack(sid0, first.queueIndex, first.segmentedIndex, first.segmentedOffset)
+            } catch (e: MQServiceException) {
+                code = e.code
+            }
+            @Assert(code == MQErrorCode.INTERNAL)
+            failing.close()
+
+            let tolerant = MQClient([unknownAck.address()])
+            let sid1 = tolerant.subscribe("/order")
+            let second = tolerant.consume(sid1)
+            // ACK_UNKNOWN 不抛
+            tolerant.ack(sid1, second.queueIndex, second.segmentedIndex, second.segmentedOffset)
+            tolerant.close()
+        } finally {
+            internalError.close()
+            unknownAck.close()
+        }
+    }
+
+    /** unsubscribe 部分失败必须抛错且保留本地订阅，重试仍会发请求（A14）。 */
+    @TestCase
+    public func unsubscribePartialFailureKeepsSubscription(): Unit {
+        let good = MQStubServer(ok).start()
+        let bad = MQStubServer({buffer, request =>
+            match (request.command) {
+                case UNSUBSCRIBE => okBut(buffer, request, MQErrorCode.INTERNAL)
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let client = MQClient([good.address(), bad.address()])
+            let sid = client.subscribe("/order")
+            var threw = false
+            try {
+                client.unsubscribe(sid)
+            } catch (_: MQConnectionException) {
+                threw = true
+            }
+            @Assert(threw)
+            @Assert(countOf(good, "UNSUBSCRIBE") == 1)
+            // 本地订阅仍在：再退一次仍会发请求（而不是 SUBSCRIBE_NOT_EXIST）
+            let again = try {
+                client.unsubscribe(sid)
+                false
+            } catch (_: Exception) {
+                true
+            }
+            @Assert(again)
+            @Assert(countOf(good, "UNSUBSCRIBE") == 2)
+            client.close()
+        } finally {
+            good.close()
+            bad.close()
+        }
+    }
+
+    /** 同一位置只允许一个线程认领：服务端重投窗口内的重复位置不能被两个消费者同时拿走（A20）。 */
+    @TestCase
+    public func sameDeliveryPositionIsClaimedOnce(): Unit {
+        let stub = MQStubServer({buffer, request =>
+            match (request.command) {
+                case CONSUME(_) => Some(MQProtocol.respond<MQConsumeResult>(request, stubMessage("/order", 1, 0)))
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        let client = MQClient([stub.address()])
+        let sid = client.subscribe("/order")
+        let delivered = AtomicInt64(0)
+        try {
+            for (_ in 0..2) {
+                spawn {
+                    try {
+                        client.consume(sid)
+                        delivered.fetchAdd(1)
+                    } catch (_: Exception) {
+                        ()
+                    }
+                    ()
+                }
+            }
+            var waited = 0
+            while (delivered.load() == 0 && waited < 400) {
+                sleep(Duration.millisecond * 10)
+                waited++
+            }
+            // 给另一个线程足够的轮询时间：它必须一直被认领失败挡住
+            sleep(Duration.millisecond * 600)
+            @Assert(delivered.load() == 1)
+        } finally {
+            client.close()
+            stub.close()
+        }
+    }
+
+    /** ack 释放位置后，同一位置可以被重新认领（重投语义）（A20）。 */
+    @TestCase
+    public func ackReleasesPositionForRedelivery(): Unit {
+        let stub = MQStubServer({buffer, request =>
+            match (request.command) {
+                case CONSUME(_) => Some(MQProtocol.respond<MQConsumeResult>(request, stubMessage("/order", 1, 0)))
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let client = MQClient([stub.address()])
+            let sid = client.subscribe("/order")
+            let first = client.consume(sid)
+            client.ack(sid, first.queueIndex, first.segmentedIndex, first.segmentedOffset)
+            let second = client.consume(sid)
+            @Assert(second.segmentedIndex == first.segmentedIndex)
+            @Assert(second.segmentedOffset == first.segmentedOffset)
+            client.close()
+        } finally {
+            stub.close()
         }
     }
 
@@ -562,6 +847,145 @@ class MQClientTest {
             }
             @Assert(done.load() == 4)
             @Assert(seen.size == 200)
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+
+    /** 全部节点都回 NOT_OWNER：没有 owner，必须明确报错（A21）。 */
+    @TestCase
+    public func subscribeWithNoOwnerThrows(): Unit {
+        let stub = MQStubServer({buffer, request => okBut(buffer, request, MQErrorCode.NOT_OWNER)}).start()
+        try {
+            let client = MQClient([stub.address()])
+            var message = ""
+            try {
+                client.subscribe("/order")
+            } catch (e: MQConnectionException) {
+                message = e.message
+            }
+            @Assert(message.contains("no node owns"))
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+
+    /** 订阅时全部节点不可达：抛连接异常而不是留下半个订阅（A21）。 */
+    @TestCase
+    public func subscribeWithAllNodesUnreachableThrows(): Unit {
+        let stub = MQStubServer(ok).start()
+        let client = MQClient([stub.address()])
+        stub.close()
+        var threw = false
+        try {
+            client.subscribe("/order")
+        } catch (_: MQConnectionException) {
+            threw = true
+        }
+        @Assert(threw)
+        client.close()
+    }
+
+    /** 对端不回应答：publish 超时后抛连接异常，不得永久挂起（A21）。 */
+    @TestCase
+    public func publishTimesOutWhenServerSilent(): Unit {
+        let stub = MQStubServer({_, _ => None<Message>}).start()
+        try {
+            let client = MQClient([stub.address()])
+            var threw = false
+            try {
+                client.publish("/order", 1i64)
+            } catch (_: MQConnectionException) {
+                threw = true
+            }
+            @Assert(threw)
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+
+    /** 关闭与在途调用并发：只允许抛 MQ 异常，不得空引用崩溃（A71）。 */
+    @TestCase
+    public func closeIsSafeUnderConcurrentCalls(): Unit {
+        let stub = MQStubServer(ok).start()
+        let client = MQClient([stub.address()])
+        let unexpected = AtomicInt64(0)
+        let completed = AtomicInt64(0)
+        for (_ in 0..8) {
+            spawn {
+                for (_ in 0..50) {
+                    try {
+                        client.publish("/order", 1i64)
+                    } catch (e: Exception) {
+                        if (!(e is MQException)) {
+                            unexpected.fetchAdd(1)
+                        }
+                    }
+                }
+                completed.fetchAdd(1)
+            }
+        }
+        sleep(Duration.millisecond * 20)
+        client.close()
+        var waited = 0
+        while (completed.load() < 8 && waited < 500) {
+            sleep(Duration.millisecond * 10)
+            waited++
+        }
+        try {
+            @Assert(completed.load() == 8)
+            @Assert(unexpected.load() == 0)
+        } finally {
+            stub.close()
+        }
+    }
+
+    /** 全部节点不可达时，每个节点都要留下含下标与地址的 WARN/ERROR（A16）。 */
+    @TestCase
+    public func clientFailsWithPerNodeLogs(): Unit {
+        CapturingAppender.install()
+        let hosts = ["127.0.0.1:1", "127.0.0.1:2"]
+        let client = MQClient(hosts)
+        try {
+            var threw = false
+            try {
+                client.publish("/order", 1i64)
+            } catch (_: MQConnectionException) {
+                threw = true
+            }
+            @Assert(threw)
+            for (i in 0..hosts.size) {
+                @Assert(CapturingAppender.waitFor(["node ${i}", hosts[i]]))
+            }
+        } finally {
+            client.close()
+        }
+    }
+
+    /** 记录解码失败时，ERROR 日志要含订阅 id、队列与位置（A16）。 */
+    @TestCase
+    public func decodeFailureLogsPosition(): Unit {
+        CapturingAppender.install()
+        let stub = MQStubServer({buffer, request =>
+            match (request.command) {
+                case CONSUME(_) =>
+                    Some(MQProtocol.respond<MQConsumeResult>(request,
+                        MQConsumeResult(0, 1, 0, [1u8, 2u8, 3u8])))
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let client = MQClient([stub.address()])
+            let sid = client.subscribe("/order")
+            try {
+                client.consume(sid)
+            } catch (_: MQServiceException) {
+                ()
+            }
+            @Assert(CapturingAppender.waitFor([sid, "0:1:0", "3 bytes"]))
             client.close()
         } finally {
             stub.close()

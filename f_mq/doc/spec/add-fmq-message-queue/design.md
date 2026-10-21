@@ -351,6 +351,11 @@ registerTopic(meta):
 
 `QueueLog` 只包一层 `SegmentedLog`：
 
+**段记录格式**：`[4 字节大端长度 length][length 字节记录载荷]`。读取端在分配缓冲前校验
+`0 < length <= 64 MiB`（`QueueLog.MAX_RECORD_SIZE`）且 `length <= 段剩余有效字节`，否则判段损坏并抛
+`QueueCorruptionException`；`length == 0` 表示流结束。该格式是跨版本兼容约束：新增字段必须走内部自描述编码
+（`MQBlob` / `f_codec`），不得改变这 4 字节头。
+
 | 方法 | 实现 |
 | --- | --- |
 | `append(record)` | `log.append(record)`，直接返回位置 |

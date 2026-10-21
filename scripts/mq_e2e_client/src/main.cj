@@ -69,6 +69,21 @@ main(args: Array<String>): Int64 {
                 let message = client.consume(sid)
                 println("CONSUMED ${message.get<String>().getOrThrow()} ${message.queueIndex}:${message.segmentedIndex}:${message.segmentedOffset}")
                 0
+            case "big" =>
+                // 1MB 级记录：发布 → 订阅 → 消费 → ack，输出实际长度与位置
+                let size = Int64.parse(args[4])
+                let builder = StringBuilder()
+                for (_ in 0..size) {
+                    builder.append("x")
+                }
+                client.publish(topic, builder.toString(), tags: ["big"])
+                let sid = client.subscribe(topic, subscribeGroup: group)
+                let message = client.consume(sid)
+                let body = message.get<String>().getOrThrow()
+                client.ack(sid, message.queueIndex, message.segmentedIndex, message.segmentedOffset)
+                client.unsubscribe(sid)
+                println("BIG ${body.size} ${message.queueIndex}:${message.segmentedIndex}:${message.segmentedOffset}")
+                0
             case _ =>
                 eprintln("unknown mode ${mode}")
                 2

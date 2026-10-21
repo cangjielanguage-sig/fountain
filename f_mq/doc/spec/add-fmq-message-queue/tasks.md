@@ -36,13 +36,13 @@
 ## 2. `f_mq` 客户端
 
 - [x] 2.0 建测试桩 `src/client/test/MQStubServer.cj`：基于 `f_net.Server<DataAny>` 的进程内服务端，可预设响应并记录收到的请求
-- [x] 2.1 `MQClientConfig`：先写 `MQClientConfig_test.cj`（配置读取、去空格、缺失抛异常、`host:port` 解析、非法项），再实现 `hosts` / `parseHost`
+- [x] 2.1 `MQClientConfig`：先写 `MQClientConfig_test.cj`（配置读取、去空格、缺失抛异常、`host:port` 解析、非法项；用例结束还原全局 `Config`），再实现 `hosts` / `parseHost`
 - [x] 2.2 `MQNodePool`：先写 `MQNodePool_test.cj`（懒建、同下标缓存、死节点抛异常、`aliveNodes` 过滤、`close` 幂等），再实现
 - [x] 2.3 `MQOwnershipCache`：先写 `MQOwnershipCache_test.cj`（命中、TTL 过期、失效、替换语义），再实现（注入 `now`）
-- [x] 2.4 `MQClient.publish`：先写 `MQClientPublish_test.cj`（发往 owner、字段与 id 一致、主题不存在、`NOT_OWNER` 换节点、非法主题本地失败、全节点不可达、多 tags 顺序），再实现
+- [x] 2.4 `MQClient.publish`：先写 `src/client/test/MQClient_test.cj`（发往 owner、字段与 id 一致、主题不存在、`NOT_OWNER` 换节点、非法主题本地失败、全节点不可达、tags 顺序无关（2 个 tag）、publish 超时），再实现
 - [x] 2.5 `MQClient.subscribe` / `unsubscribe`：先写用例（返回 UUID、所有节点同 id、汇总 owners、未知组回滚、默认组、非法 filter 本地失败、退订幂等、未知 id），再实现
 - [x] 2.6 `MQClient.consume` / `ack`：先写用例（解码与位置、空后换 owner、阻塞等待、订阅失效、对象 BODY、ack 回投递节点、未知位置广播、autoAck 广播、并发不重复），再实现
-- [x] 2.7 生命周期：先写 `MQClientLifecycle_test.cj`（关闭连接、幂等、关闭后调用抛异常、关闭与调用并发），再实现 `close` / `isClosed`
+- [x] 2.7 生命周期：先写 `src/client/test/MQClient_test.cj` 的 `closeIsSafeUnderConcurrentCalls`（关闭连接、幂等、关闭后调用抛异常、关闭与调用并发），再实现 `close` / `isClosed`
 - [x] 2.8 回归：`cd f_mq && cjpm test` 全绿（含阶段 1 全部用例）
 
 ## 3. `fmq` 基础设施
@@ -83,8 +83,10 @@
 ## 7. `fmq` 服务运行时
 
 - [x] 7.1 `main` / `dispatch`：先写 `Main_test.cj`（`server --help`、`manager --help`、空参数返回 2、未知子命令返回 2、`server` 调用装配点），再把 `main` 抽成可测 `dispatch`
-- [x] 7.2 `MQCommandExecutor`：先写 `MQCommandExecutor_test.cj` 全矩阵（注册回分配、非法主题、注销、主题不存在、非 owner、原样落盘、16KB 大记录、备份入队、未注册组、订阅消费确认闭环、空消费、`ACK_UNKNOWN`、metaSync 快照、备份只存不投递、垃圾载荷），再实现分派
-- [x] 7.3 `MQServer` 装配：先写 `MQServer_test.cj`（绑定并接受、负数 backup 拒绝、未知自身拒绝、无 peer 仍启动、只开本地队列、关闭释放端口、重启恢复消费），再实现 `build()` 与 `run()`
+- [x] 7.2 `MQCommandExecutor`：先写 `MQCommandExecutor_test.cj` 全矩阵（注册回分配、非法主题、注销、主题不存在、非 owner、原样落盘、16KB 大记录、未注册组、订阅消费确认闭环、空消费、`ACK_UNKNOWN`、metaSync 快照、备份只存不投递、垃圾载荷），再实现分派
+  > 备份入队本身由 `fmq/src/cluster/BackupReplicator_test.cj` 覆盖；`MQCommandExecutor_test.cj` 里的装配用 `BackupReplicator(registry, 0)`（关闭备份）只为验证「只存不投递」。
+- [x] 7.3 `MQServer` 装配：先写 `MQServer_test.cj`（绑定并接受、无 peer 仍启动、只开本地队列、关闭释放端口、重启恢复消费），再实现 `build()` 与 `run()`
+  > 配置侧的「负数 backup 拒绝」在 `fmq/src/config/MQConfig_test.cj`，「未知自身下标拒绝」在 `fmq/src/Main_test.cj`，不在 `MQServer_test.cj`。
 - [x] 7.4 回归：`cd fmq && cjpm test` 全绿
 - [x] 7.5 手工冒烟：单节点起服务 → 用 `f_mq` 客户端完成注册、发布、订阅、消费、ack（记录命令与输出）
   > 结论：已用真实 `fmq server` 进程 + `fmq manager` + e2e 客户端完成注册、发布 3 条、订阅、消费 3 条；三节点脚本另见 9.x。
@@ -126,10 +128,10 @@
 ## 验收清单
 
 - [x] `f_io` 全量测试通过（20/20，可见性改动无回归）
-- [x] `f_mq` 全量测试通过（79 项：base + client + 门面）
-- [x] `fmq` 全量测试通过（145 项，`cjpm test` 直接可用）
+- [x] `f_mq` 全量测试通过（126 项：base + client + 门面，2026-10-21 复核）
+- [x] `fmq` 全量测试通过（281 项，`cjpm test` 直接可用，2026-10-21 复核）
 - [x] `scripts/mq_e2e.sh` 输出 `E2E_OK`
-- [x] 六个管理子命令在进程内真实服务上可用，错误路径返回非 0
+- [x] 七个管理子命令（含 `stats`）在进程内真实服务上可用，错误路径返回非 0
 - [x] 中英文文档、CHANGELOG、`.modules`、依赖图均已更新
 - [x] 已知限制写入文档：at-least-once、无自动故障转移、manager 无强隔离、对象 BODY 过滤器限制
 - [x] 两队列同位置 ACK 不串台；错 `queueIndex` 返回 `ACK_UNKNOWN`
@@ -137,6 +139,29 @@
 - [x] 删除 `committed` 所在段后消费恢复；全部段删除返回空
 - [x] 死转活重同步、任意节点端口重复拒绝启动、`BackupStore` 并发只创建一个实例
 - [x] `opsx:verify` 重新校验无 critical（2026-10-18 二次校验：C1–C3/W1–W3 全部确认修复；仅剩 W4/S3 等已知 warning，按范围不修）
+
+
+## 11. 遗留任务（已由 `fix-fmq-full-audit` 承接并关闭）
+
+> 以下各项来自二次 `opsx:verify` 的 warning / suggestion，原本计划另开变更承接；
+> 实际由 `openspec/changes/fix-fmq-full-audit` 一并落地，逐项核对后勾选。
+
+- [x] 11.1 补 `fmq/src/server/MQManager_test.cj`：覆盖任务 8.3 的六个管理子命令（`registerTopic` / `deleteTopic` / `registerSubscriber` / `deleteSubscribeGroup` / `listTopics` / `listSubscribeGroups`）的正常与错误路径，断言退出码；可读性与列宽由 `fmq/src/manager/MQManagerOutput_test.cj` 对纯函数断言
+- [x] 11.2 补齐 BODY 类型矩阵用例：现有用例未覆盖 `TreeSet` / `HashMap` / `Array` 三类容器的编解码与 filter 求值，补在 `MQPayload_test.cj` 或 `MQMessageRecord_test.cj`
+- [x] 11.3 补备份定时 flush 与并发关闭用例：`BackupStore` 的 100ms 定时 flush 无直接用例；`close()` 与在途 `append` / `flush` 并发无用例，需验证关闭后调用不崩溃且已确认数据不丢
+- [x] 11.4 消除 `fmq → f_mq.client` 分层偏离：`fmq` 为 `parseHost`（`f_mq/src/client/MQClientConfig.cj:48`）依赖 `f_mq.client`，与「`fmq` 只依赖 `f_mq.base`」的设计不一致；把 `parseHost` 下沉到 `f_mq.base` 或改用 `f_net`，同步 `fmq/cjpm.toml` 与依赖图
+- [x] 11.5 把 `QueueLog` 的 4 字节长度前缀写入 `design.md`：段记录格式为「4 字节大端长度 + 载荷」，设计文档未记录，需补格式说明与跨版本兼容约束
+- [x] 11.6 修复远端分配不推进轮转指针（W5）：`MQTopicAssignment` 在远端分配 / 同步路径上不推进 `nextStartNode`，新主题的起始队列会重复落在同一节点；先补失败用例再修正轮转
+
+## 12. 全量审查修复（2026-10-21）
+
+> 来源 `reviews/202610210648_fmq-f_mq-full-audit/todo.md`（A01–A75）；逐项任务编号见
+> `openspec/changes/fix-fmq-full-audit/tasks.md`，此处只记录台账层面的对应关系。
+
+- [x] 12.1 数据安全：`MQBlob` 大载荷、段 TTL 持久化游标、长度头上界、元数据墓碑、备份异步与真实状态、fsync、注册原子性、删除顺序、退出钩子（对应 T1–T9、A01/A02/A25/A26/A27/A28/A37/A44/A45/A51/A58）
+- [x] 12.2 正确性：UTC 时间戳、严格解码、组名/kind/tags 校验、连接自愈、客户端错误可见、投递唯一认领、反熵与远端校验、不可评估 BODY 出口、扫描可观测、ACK 已投递校验、队列打开原子性、配置校验、断链清理、指标口径、管理端错误分类、备份段清理、清理器隔离、可注入启动（对应 T10–T27）
+- [x] 12.3 测试与文档：协议/客户端/元数据/队列/死信/服务端缺口用例、两份详细设计、中英文 README、E2E 扩展（对应 T28–T31）
+- [x] 12.4 台账：本文件 11.1–11.6 已逐项核对落地（管理端子命令用例、BODY 容器矩阵、备份定时/并发关闭、`f_mq.base.MQHost` 下沉、段格式入库、远端分配推进指针）
 
 ## 依赖与并行
 
@@ -147,15 +172,3 @@
 - 阶段 8 只依赖阶段 1 与 `f_net`，可与阶段 7 并行；其集成用例需要阶段 7 提供的服务。
 - 阶段 9 依赖全部前置阶段。
 - 阶段 10 依赖阶段 9；完成后需重新跑 `opsx:verify`，无 critical 才能 archive。
-
-## 11. 遗留任务（本次未纳入，待新变更承接）
-
-> 以下各项来自二次 `opsx:verify` 的 warning / suggestion，经评审确认本轮不修，随变更归档记录。
-> 实施时按 OpenSpec 六步另开变更（`opsx:propose`）承接，不在本归档上直接勾选。
-
-- [ ] 11.1 补 `fmq/src/manager/MQManager_test.cj`：覆盖任务 8.3 的六个管理子命令（`registerTopic` / `deleteTopic` / `registerSubscriber` / `deleteSubscribeGroup` / `listTopics` / `listSubscribeGroups`）的正常与错误路径，断言错误路径返回非 0 且提示可读
-- [ ] 11.2 补齐 BODY 类型矩阵用例：现有用例未覆盖 `TreeSet` / `HashMap` / `Array` 三类容器的编解码与 filter 求值，补在 `MQPayload_test.cj` 或 `MQMessageRecord_test.cj`
-- [ ] 11.3 补备份定时 flush 与并发关闭用例：`BackupStore` 的 100ms 定时 flush 无直接用例；`close()` 与在途 `append` / `flush` 并发无用例，需验证关闭后调用不崩溃且已确认数据不丢
-- [ ] 11.4 消除 `fmq → f_mq.client` 分层偏离：`fmq` 为 `parseHost`（`f_mq/src/client/MQClientConfig.cj:48`）依赖 `f_mq.client`，与「`fmq` 只依赖 `f_mq.base`」的设计不一致；把 `parseHost` 下沉到 `f_mq.base` 或改用 `f_net`，同步 `fmq/cjpm.toml` 与依赖图
-- [ ] 11.5 把 `QueueLog` 的 4 字节长度前缀写入 `design.md`：段记录格式为「4 字节大端长度 + 载荷」，设计文档未记录，需补格式说明与跨版本兼容约束
-- [ ] 11.6 修复远端分配不推进轮转指针（W5）：`MQTopicAssignment` 在远端分配 / 同步路径上不推进 `nextStartNode`，新主题的起始队列会重复落在同一节点；先补失败用例再修正轮转
