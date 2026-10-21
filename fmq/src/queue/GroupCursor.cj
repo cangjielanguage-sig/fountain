@@ -62,6 +62,8 @@ protected class GroupCursor {
     private var skippedUnreadable_: Int64 = 0
     /** 组内无人匹配而越过的记录计数（规格要求可观测）。 */
     private var noMatchSkipped_: Int64 = 0
+    /** BODY 不可评估而越过的位置计数（A46，与 `unreadableSkipped`/`noMatchSkipped` 并列观测）。 */
+    private var unsupportedSkipped_: Int64 = 0
     private var closed = false
 
     protected init(topic: String, queueIndex: Int64, group: String, log: QueueLog, catalog: CursorCatalog,
@@ -140,11 +142,12 @@ protected class GroupCursor {
                 let record = try {
                     log.readAt(entry.position)
                 } catch (e: Exception) {
-                    // 段被 TTL 清理：跳到现存最老段后重试（本轮直接返回，下次从新位置开始）
-                    if (!recoverIfSegmentGone(entry.position.seq)) {
-                        throw e
+                    // 段被 TTL 清理：跳到现存后继段后重试（本轮直接返回，下次从新位置开始）
+                    match (recoverIfSegmentGone(entry.position.seq)) {
+                        case StillPresent => throw e
+                        case Moved => return None<(Array<Byte>, LogPosition)>
+                        case NoFuture => return None<(Array<Byte>, LogPosition)>
                     }
-                    return None<(Array<Byte>, LogPosition)>
                 }
                 if (record.isNone()) {
                     // 记录已不可读（段被清理/记录被截断）：标记已决，但必须留痕（A48）
@@ -202,21 +205,23 @@ protected class GroupCursor {
                     try {
                         reader = Some(log.openRecordsFrom(scanPosition))
                     } catch (e: Exception) {
-                        // 起始段已被清理：跳到现存最老段继续；没有任何段则视为空
-                        if (!recoverIfSegmentGone(scanPosition.seq) || log.segmentsOrEmpty().size == 0) {
-                            return None<(Array<Byte>, LogPosition)>
+                        // 起始段已被清理：跳到后继段继续；没有任何段则视为空
+                        match (recoverIfSegmentGone(scanPosition.seq)) {
+                            case StillPresent => throw e
+                            case Moved => continue
+                            case NoFuture => return None<(Array<Byte>, LogPosition)>
                         }
-                        continue
                     }
                 }
                 let item = try {
                     reader.getOrThrow().next()
                 } catch (e: Exception) {
-                    // 读取中途段失效：同样恢复；记录损坏（段仍在）则保持原样抛出
-                    if (!recoverIfSegmentGone(scanPosition.seq) || log.segmentsOrEmpty().size == 0) {
-                        throw e
+                    // 读取中途段失效：与开流路径同样恢复；记录损坏（段仍在）则保持原样抛出
+                    match (recoverIfSegmentGone(scanPosition.seq)) {
+                        case StillPresent => throw e
+                        case Moved => continue
+                        case NoFuture => return None<(Array<Byte>, LogPosition)>
                     }
-                    continue
                 }
                 if (item.isNone()) {
                     let corrupted = reader.getOrThrow().isCorrupted()
@@ -294,6 +299,7 @@ protected class GroupCursor {
                     // BODY 无法评估：跳过该位置并留痕，不让整组永久停摆（A46）。
                     // 该位置只报一次；其它组独立游标，不受影响。
                     entries.add(DeliveryRecord(position, after, None<String>, 0, current, false, decided: true))
+                    unsupportedSkipped_ = unsupportedSkipped_ + 1
                     scanPosition = after
                     reader.getOrThrow().close()
                     reader = None
@@ -329,6 +335,15 @@ protected class GroupCursor {
         get() {
             synchronized(lock) {
                 noMatchSkipped_
+            }
+        }
+    }
+
+    /** 因 BODY 不可评估而被越过的位置数（观测用）。 */
+    protected prop unsupportedSkipped: Int64 {
+        get() {
+            synchronized(lock) {
+                unsupportedSkipped_
             }
         }
     }
@@ -452,17 +467,22 @@ protected class GroupCursor {
     }
 
     /**
-     * 位置所在段已不存在时恢复游标：关闭读流、丢弃未决项、跳到现存最老段起点并落盘。
+     * 位置所在段已不存在时恢复游标：关闭读流、丢弃未决项、跳到「最接近的更大段」起点并落盘。
      *
-     * 返回 `true` 表示已执行恢复（调用方应中止本轮），`false` 表示段仍在（异常另有原因，应继续抛出）。
+     * 规格要求起点段被删时从后继段继续，不能退回更老的段（否则已确认区间被重投）；
+     * 没有任何后继段时按空队列处理（`NoFuture`），不得把空队列变成异常。
+     * `StillPresent` 表示目标段仍在（异常另有原因，调用方应继续抛出）。
      * 调用方必须已持有 `lock`。
      */
-    private func recoverIfSegmentGone(segmentIndex: Int64): Bool {
+    private func recoverIfSegmentGone(segmentIndex: Int64): SegmentRecovery {
         let segments = log.segmentsOrEmpty()
-        for (meta in segments) {
-            if (meta.index == segmentIndex) {
-                return false
-            }
+        let next = QueueLog.startSegmentAtOrAfter(segments, segmentIndex)
+        match (next) {
+            case Some(index) =>
+                if (index == segmentIndex) {
+                    return StillPresent
+                }
+            case None => ()
         }
         match (reader) {
             case Some(r) => r.close()
@@ -470,18 +490,20 @@ protected class GroupCursor {
         }
         reader = None
         entries.clear()
-        if (segments.size == 0) {
-            logger.warn("no segment left on queue ${topic}/${queueIndex} for group '${group}'")
-            return true
+        match (next) {
+            case Some(index) =>
+                let previous = committed_
+                committed_ = LogPosition(index, 0)
+                scanPosition = committed_
+                catalog.save(topic, queueIndex, group, committed_)
+                logger.warn("cursor of ${topic}/${queueIndex}/${group} moved from ${previous.seq}:${previous.offset} to " +
+                    "${index}:0 because its segment was removed")
+                Moved
+            case None =>
+                logger.warn("no segment at or after ${segmentIndex} on queue ${topic}/${queueIndex} for group " +
+                    "'${group}', treated as empty")
+                NoFuture
         }
-        let oldest = segments[0]
-        let previous = committed_
-        committed_ = LogPosition(oldest.index, 0)
-        scanPosition = committed_
-        catalog.save(topic, queueIndex, group, committed_)
-        logger.warn("cursor of ${topic}/${queueIndex}/${group} moved from ${previous.seq}:${previous.offset} to " +
-            "${oldest.index}:0 because its segment was removed")
-        true
     }
 
     /**

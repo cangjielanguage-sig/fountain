@@ -469,6 +469,82 @@ class GroupCursorTest {
         }
     }
 
+    /** 读流已打开后整目录被删除：与开流路径一致返回空，不把空队列变成异常（W1）。 */
+    @TestCase
+    public func allSegmentsMissingMidStreamReturnsNone(): Unit {
+        let fixture = CursorFixture("all_gone_mid", maxFileSize: 4 + recordSize("m0", []))
+        try {
+            fixture.append([], "m0")
+            fixture.append([], "m1")
+            let cursor = fixture.cursorOf()
+            let sub = fixture.sub("s1")
+            // 第一次投递后读流仍开着（跨段），此时运维删掉整个队列目录
+            let first = cursor.next(sub, [sub], MQMatcher()).getOrThrow()
+            @Assert(first[1].seq == 1)
+            remove("${fixture.root}/logs", recursive: true)
+            var thrown = false
+            var item: ?(Array<Byte>, LogPosition) = None
+            try {
+                item = cursor.next(sub, [sub], MQMatcher())
+            } catch (_: Exception) {
+                thrown = true
+            }
+            @Assert(!thrown)
+            @Assert(item.isNone())
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 起点段落在空洞时从最接近的更大段继续，不得回退到更老段重投（W2）。 */
+    @TestCase
+    public func startingSegmentHoleResumesAtNextSegment(): Unit {
+        let fixture = CursorFixture("segment_hole", maxFileSize: 4 + recordSize("m0", []))
+        try {
+            for (i in 0..8) {
+                fixture.append([], "m${i}")
+            }
+            // 运维手删中间段：只剩 1、7、8
+            for (i in 2..=6) {
+                fixture.log.removeById(i)
+            }
+            @Assert(fixture.log.segments().size == 3)
+            fixture.store.save("/t", 0, "g", LogPosition(5, 0))
+
+            let cursor = fixture.cursorOf()
+            let sub = fixture.sub("s1")
+            let item = cursor.next(sub, [sub], MQMatcher()).getOrThrow()
+            // 从段 7 起点继续（第 7 条记录 m6），而不是回退到段 1 重投 m0
+            @Assert(item[1].seq == 7 && item[1].offset == 0)
+            @Assert(convert<String>(MQMessageRecord.decode(item[0]).getOrThrow().body.data).getOrThrow() == "m6")
+            @Assert(cursor.committed.seq == 7 && cursor.committed.offset == 0)
+            @Assert(fixture.store.load("/t", 0, "g").getOrThrow().seq == 7)
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 「不可评估 BODY 跳过」必须计数（W3）。 */
+    @TestCase
+    public func unsupportedBodySkipIsCounted(): Unit {
+        let fixture = CursorFixture("unsupported_skip")
+        try {
+            // 截断记录：topic/tags 可解，BODY 不可解 ⇒ 带 filter 的订阅无法判定
+            let full = MQMessageRecord.encode("/t", [], "mid-truncated", "{\"level\":1}".toData())
+            fixture.log.append(full[0..full.size - 3])
+            let cursor = fixture.cursorOf()
+            let sub = fixture.sub("s1", filter: "$.level")
+            @Assert(cursor.next(sub, [sub], MQMatcher()).isNone())
+            @Assert(cursor.unsupportedSkipped == 1)
+            @Assert(cursor.takeUnsupported().isSome())
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
     @TestCase
     public func concurrentNextAndAckProduceUniquePositions(): Unit {
         let fixture = CursorFixture("concurrent", ackTimeout: Duration.hour, threshold: 1000)

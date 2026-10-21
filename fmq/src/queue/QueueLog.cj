@@ -23,6 +23,18 @@ import fountain::f_log.*
 import fountain::f_mq.base.MQMessageRecord
 
 /**
+ * 段消失后的恢复结论。
+ *
+ * `StillPresent` 表示目标段仍在（异常另有原因，调用方应继续抛出）；
+ * `Moved` 表示已把游标移到后继段起点；`NoFuture` 表示已无任何可读段，应按空队列处理。
+ */
+protected enum SegmentRecovery {
+    | StillPresent
+    | Moved
+    | NoFuture
+}
+
+/**
  * 一条队列 = 一个 `SegmentedLog`。
  *
  * 每条记录在段内以 `[4B 大端长度][记录字节]` 存放：记录本身仍是 `MQMessageRecord` 的原始
@@ -98,14 +110,32 @@ protected class QueueLog <: Resource {
      * 从 `position` 起扫描记录：返回记录数与第一条记录的发布时间。
      *
      * 用于统计：`backlog` 与 `lagMs` 不依赖内存计数器，重启后仍然准确。
-     * 起始段被 TTL 清理时自动从现存最老段开始；目录不可读返回 `(0, None)`。
+     * 起始段被 TTL 清理时跳到「最接近的更大段」继续并记 WARN；没有任何后继段（或目录不可读）
+     * 返回 `(0, None)` 并记 WARN，不把「段缺失」静默解释成「没有积压」。
      */
     protected func scanAfter(position: LogPosition): (Int64, ?DateTime) {
-        var start = position
         let segs = segmentsOrEmpty()
-        if (segs.size > 0 && start.seq < segs[0].index) {
-            start = LogPosition(segs[0].index, 0)
+        if (segs.size == 0) {
+            logger.warn("no segment left on queue ${label}, treated as empty")
+            return (0, None<DateTime>)
         }
+        var start = position
+        match (QueueLog.startSegmentAtOrAfter(segs, position.seq)) {
+            case Some(index) =>
+                if (index != position.seq) {
+                    start = LogPosition(index, 0)
+                    logger.warn("scan of queue ${label} starts at ${start.seq}:0 instead of " +
+                        "${position.seq}:${position.offset} because that segment was removed")
+                }
+            case None =>
+                logger.warn("no segment at or after ${position.seq} on queue ${label}, treated as empty")
+                return (0, None<DateTime>)
+        }
+        scanFrom(start)
+    }
+
+    /** 从现存段中 `index >= position.seq` 的最小段号起扫描。 */
+    private func scanFrom(start: LogPosition): (Int64, ?DateTime) {
         var count = 0i64
         var first: ?DateTime = None
         var firstResolved = false
@@ -141,7 +171,21 @@ protected class QueueLog <: Resource {
 
     /** 当前队列的记录总数（从现存最老段扫描）。 */
     protected func countAll(): Int64 {
-        scanAfter(LogPosition(1, 0))[0]
+        let segs = segmentsOrEmpty()
+        if (segs.size == 0) {
+            return 0
+        }
+        scanFrom(LogPosition(segs[0].index, 0))[0]
+    }
+
+    /** 现存段中段号 `>= index` 的最小段号；没有则 `None`（段被删或全部缺失）。 */
+    static func startSegmentAtOrAfter(segments: ArrayList<SegmentedMeta>, index: Int64): ?Int64 {
+        for (meta in segments) {
+            if (meta.index >= index) {
+                return Some(meta.index)
+            }
+        }
+        None<Int64>
     }
 
     /** 有效字节数（各段有效长度之和，含 4 字节头）。 */

@@ -434,6 +434,36 @@ class QueueLogTest {
         }
     }
 
+    /**
+     * 起点段落在空洞里时：从最接近的更大段继续扫描，不得静默返回 0。
+     *
+     * 规格 `queue-storage`「起始段落在空洞」：起点段 5、现存 1/7/8 ⇒ 从段 7 继续并记 WARN。
+     */
+    @TestCase
+    public func scanAfterSkipsGapToNextSegment(): Unit {
+        let dir = dirOf("scan_after_hole")
+        clean(dir)
+        // 每条 entry 20 字节 ⇒ 段上限 20 时一条一段
+        let log = QueueLog(dir, 20, 1)
+        try {
+            for (i in 0..8) {
+                log.append(recordOf(UInt8(i), 16))
+            }
+            // 运维手删中间段：只剩 1、7、8
+            for (i in 2..=6) {
+                log.removeById(i)
+            }
+            @Assert(log.segments().size == 3)
+            @Assert(log.segments()[0].index == 1)
+            @Assert(log.scanAfter(LogPosition(5, 0))[0] == 2)
+            // 没有任何后继段：返回空（并记 WARN），不抛异常
+            @Assert(log.scanAfter(LogPosition(99, 0))[0] == 0)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
     /** 从中间记录开流：只返回该位置及其后的记录。 */
     @TestCase
     public func openFromMiddleRecordReturnsRemaining(): Unit {
