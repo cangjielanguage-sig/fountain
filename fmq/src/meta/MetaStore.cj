@@ -20,7 +20,7 @@ import std.fs.*
 import std.sync.Mutex
 import std.time.DateTime
 import fountain::f_log.*
-import fountain::f_mq.base.MQProtocol
+import fountain::f_mq.base.{MQGroup, MQProtocol, MQTopic}
 import fountain::f_mq.base.model.{MQSubscribeGroupMeta, MQTopicMeta}
 import fountain::f_mq.base.payload.{MQMetaSnapshot, MQMetaTombstone, MQTopicAssignment}
 
@@ -31,6 +31,8 @@ public enum MetaApplyResult <: Equatable<MetaApplyResult> & ToString {
     | Conflict
     /** 组依赖的主题不存在（组先于主题到达时进入待应用队列） */
     | TopicMissing
+    /** 载荷结构非法（分配字段越界、组名非法等），不得落盘 */
+    | Invalid
 
     public operator func ==(other: MetaApplyResult): Bool {
         match ((this, other)) {
@@ -38,6 +40,7 @@ public enum MetaApplyResult <: Equatable<MetaApplyResult> & ToString {
             case (Duplicated, Duplicated) => true
             case (Conflict, Conflict) => true
             case (TopicMissing, TopicMissing) => true
+            case (Invalid, Invalid) => true
             case _ => false
         }
     }
@@ -48,6 +51,7 @@ public enum MetaApplyResult <: Equatable<MetaApplyResult> & ToString {
             case Duplicated => "duplicated"
             case Conflict => "conflict"
             case TopicMissing => "topic-missing"
+            case Invalid => "invalid"
         }
     }
 }
@@ -185,6 +189,9 @@ protected class MetaStore <: Resource {
 
     /** 注册订阅组：主题存在性与组存在性检查、写盘在同一个临界区内完成（A28/A36）。 */
     protected func registerGroup(meta: MQSubscribeGroupMeta): MetaApplyResult {
+        if (!MQGroup.isValid(meta.subscribeGroup) || !MQTopic.isValid(meta.topic)) {
+            return MetaApplyResult.Invalid
+        }
         synchronized(lock) {
             if (topicIndex.get(meta.topic).isNone()) {
                 return MetaApplyResult.TopicMissing
@@ -238,6 +245,9 @@ protected class MetaStore <: Resource {
     }
 
     protected func applyGroup(meta: MQSubscribeGroupMeta): MetaApplyResult {
+        if (!MQGroup.isValid(meta.subscribeGroup) || !MQTopic.isValid(meta.topic)) {
+            return MetaApplyResult.Invalid
+        }
         synchronized(lock) {
             if (topicIndex.get(meta.topic).isNone()) {
                 // 组先于主题到达（网络乱序）或主题已删除：拒绝，交给 Syncer 的待应用队列

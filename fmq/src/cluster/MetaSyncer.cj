@@ -85,6 +85,9 @@ protected class MetaSyncer {
             case MetaApplyResult.Duplicated =>
                 throw MQServiceException(MQErrorCode.GROUP_ALREADY_EXIST,
                     "subscribe group '${meta.subscribeGroup}' already exists on '${meta.topic}'")
+            case MetaApplyResult.Invalid =>
+                throw MQServiceException(MQErrorCode.INVALID_GROUP,
+                    "invalid subscribe group '${meta.subscribeGroup}'")
             case _ =>
                 throw MQServiceException(MQErrorCode.INTERNAL, "cannot register group '${meta.subscribeGroup}'")
         }

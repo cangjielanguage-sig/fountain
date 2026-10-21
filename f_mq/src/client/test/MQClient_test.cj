@@ -30,6 +30,14 @@ import fountain::f_net.SocketBuffer
 import fountain::f_protocol.default.*
 import fountain::f_util.UUID
 
+private func longText(n: Int64): String {
+    let buf = StringBuilder()
+    for (_ in 0..n) {
+        buf.append("a")
+    }
+    buf.toString()
+}
+
 @Test
 class MQClientTest {
     private static func ok(buffer: SocketBuffer, request: Message): ?Message {
@@ -64,6 +72,51 @@ class MQClientTest {
         queueIndex!: Int64 = 0): MQConsumeResult {
         let record = MQMessageRecord.encode(topic, ["a"], "m-${index}-${offset}", "body-${index}".toData())
         MQConsumeResult(queueIndex, index, offset, record)
+    }
+
+    /** 非法 tags / 组名在本地失败，一个请求都不发（A19/A05）。 */
+    @TestCase
+    public func invalidTagsAndGroupFailBeforeAnyRequest(): Unit {
+        let stub = MQStubServer(ok).start()
+        try {
+            let client = MQClient([stub.address()])
+            var failed = 0
+            try {
+                client.publish("/order", "hi", tags: [""])
+            } catch (_: MQException) {
+                failed++
+            }
+            try {
+                client.publish("/order", "hi", tags: ["a b"])
+            } catch (_: MQException) {
+                failed++
+            }
+            try {
+                client.publish("/order", "hi", tags: Array<String>(65, repeat: "t"))
+            } catch (_: MQException) {
+                failed++
+            }
+            try {
+                client.publish("/order", "hi", tags: [longText(129)])
+            } catch (_: MQException) {
+                failed++
+            }
+            try {
+                client.subscribe("/order", tags: ["bad tag"])
+            } catch (_: MQException) {
+                failed++
+            }
+            try {
+                client.subscribe("/order", subscribeGroup: "g:1")
+            } catch (_: MQException) {
+                failed++
+            }
+            @Assert(failed == 6)
+            @Assert(stub.received().size == 0)
+            client.close()
+        } finally {
+            stub.close()
+        }
     }
 
     @TestCase

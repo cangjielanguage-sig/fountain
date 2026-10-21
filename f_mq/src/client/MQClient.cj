@@ -70,6 +70,9 @@ public class MQClient <: Resource {
         if (!MQTopic.isValid(topic)) {
             throw MQException("invalid topic '${topic}'")
         }
+        if (!MQTags.isValid(tags)) {
+            throw MQException("invalid tags on topic '${topic}'")
+        }
         // 用 UTC 生成 id：帧里的时间戳往返后按 UTC 表示，记录中的 MESSAGE_ID 才能与解码后的帧 id 逐字一致
         let id = MessageID(time: DateTime.nowUTC())
         let record = MQMessageRecord.encode(topic, tags, id.toString(), body)
@@ -107,6 +110,12 @@ public class MQClient <: Resource {
         ensureOpen()
         if (!MQTopic.isValid(topic)) {
             throw MQException("invalid topic '${topic}'")
+        }
+        if (!MQGroup.isValid(subscribeGroup)) {
+            throw MQException("invalid subscribe group '${subscribeGroup}'")
+        }
+        if (!MQTags.isValid(tags)) {
+            throw MQException("invalid tags on topic '${topic}'")
         }
         // 非法表达式在本地失败，不发请求
         let compiled = MQFilter.compile(filter)

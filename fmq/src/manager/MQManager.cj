@@ -120,6 +120,11 @@ public class MQManager {
     }
 
     public func registerSubscriber(topic: String, group: String): Int64 {
+        // 组名非法时不发请求：服务端同样会拒，但本地失败能让脚本立刻拿到非 0 退出码
+        if (!MQGroup.isValid(group)) {
+            return printError(MQResult(MQErrorCode.INVALID_GROUP,
+                "invalid subscribe group '${group}'"))
+        }
         withClient {client =>
             let response = exchange(client, MQProtocol.registerGroup(MQSubscribeGroupMeta(topic, group)))
             finish(response, {result => println("订阅组 ${group} 已注册")})
@@ -127,6 +132,10 @@ public class MQManager {
     }
 
     public func deleteSubscribeGroup(topic: String, group: String): Int64 {
+        if (!MQGroup.isValid(group)) {
+            return printError(MQResult(MQErrorCode.INVALID_GROUP,
+                "invalid subscribe group '${group}'"))
+        }
         withClient {client =>
             let response = exchange(client,
                 MQProtocol.deregister(MQDeregisterPayload("group", topic, subscribeGroup: group)))

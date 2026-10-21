@@ -101,12 +101,24 @@ protected class MQCommandExecutor {
                 let meta = MQProtocol.asPayload<MQTopicMeta>(request).getOrThrow {
                     MQServiceException(MQErrorCode.INTERNAL, "cannot decode MQTopicMeta")
                 }
+                if (!MQTopic.isValid(meta.topic)) {
+                    return MQProtocol.fail(request, MQErrorCode.INVALID_TOPIC,
+                        "invalid topic '${meta.topic}'")
+                }
                 let assignment = syncer.registerTopic(meta)
                 queues.openTopic(assignment, selfIndex)
                 MQProtocol.respond<MQTopicAssignment>(request, assignment)
             case MQPayloadKind.GroupMeta =>
                 let meta = MQProtocol.asPayload<MQSubscribeGroupMeta>(request).getOrThrow {
                     MQServiceException(MQErrorCode.INTERNAL, "cannot decode MQSubscribeGroupMeta")
+                }
+                if (!MQTopic.isValid(meta.topic)) {
+                    return MQProtocol.fail(request, MQErrorCode.INVALID_TOPIC,
+                        "invalid topic '${meta.topic}'")
+                }
+                if (!MQGroup.isValid(meta.subscribeGroup)) {
+                    return MQProtocol.fail(request, MQErrorCode.INVALID_GROUP,
+                        "invalid subscribe group '${meta.subscribeGroup}'")
                 }
                 syncer.registerGroup(meta)
                 MQProtocol.respond<MQResult>(request, MQResult(0, "ok"))
@@ -152,6 +164,9 @@ protected class MQCommandExecutor {
             return MQProtocol.respond<MQResult>(request, MQResult(0, "ok"))
         }
         if (let Some(payload) <- MQProtocol.decodePayload<MQDeregisterPayload>(envelope.payload)) {
+            if (payload.kindOf() == DeregisterKind.Unknown) {
+                return MQProtocol.fail(request, MQErrorCode.INTERNAL, "invalid deregister kind")
+            }
             syncer.applyRemoteDelete(payload)
             cleanupAfterDelete(payload)
             return MQProtocol.respond<MQResult>(request, MQResult(0, "ok"))
@@ -162,6 +177,20 @@ protected class MQCommandExecutor {
     private func onDeregister(request: Message): Message {
         let payload = MQProtocol.asPayload<MQDeregisterPayload>(request).getOrThrow {
             MQServiceException(MQErrorCode.INTERNAL, "cannot decode MQDeregisterPayload")
+        }
+        // kind 是封闭枚举：拼错/大小写变体/空串一律拒绝，绝不落到「删除订阅组」分支（A10）
+        match (payload.kindOf()) {
+            case DeregisterKind.Topic =>
+                if (!MQTopic.isValid(payload.topic)) {
+                    return MQProtocol.fail(request, MQErrorCode.INVALID_TOPIC, "invalid topic '${payload.topic}'")
+                }
+            case DeregisterKind.Group =>
+                if (!MQGroup.isValid(payload.subscribeGroup)) {
+                    return MQProtocol.fail(request, MQErrorCode.INVALID_GROUP,
+                        "invalid subscribe group '${payload.subscribeGroup}'")
+                }
+            case DeregisterKind.Unknown =>
+                return MQProtocol.fail(request, MQErrorCode.INTERNAL, "invalid deregister kind")
         }
         syncer.deregister(payload)
         cleanupAfterDelete(payload)
@@ -177,12 +206,12 @@ protected class MQCommandExecutor {
     }
 
     private func cleanupAfterDelete(payload: MQDeregisterPayload): Unit {
-        if (payload.isTopic()) {
+        if (payload.kindOf() == DeregisterKind.Topic) {
             queues.closeTopic(payload.topic, deleteFiles: true)
             consume.removeTopic(payload.topic)
             subscribers.removeByTopic(payload.topic)
             cursors.removeAllOf(payload.topic)
-        } else {
+        } else if (payload.kindOf() == DeregisterKind.Group) {
             consume.removeGroup(payload.topic, payload.subscribeGroup)
             subscribers.removeByGroup(payload.topic, payload.subscribeGroup)
             cursors.removeGroup(payload.topic, payload.subscribeGroup)
@@ -262,6 +291,13 @@ protected class MQCommandExecutor {
         }
         if (!MQTopic.isValid(payload.topic)) {
             return MQProtocol.fail(request, MQErrorCode.INVALID_TOPIC, "invalid topic '${payload.topic}'")
+        }
+        if (!MQGroup.isValid(payload.subscribeGroup)) {
+            return MQProtocol.fail(request, MQErrorCode.INVALID_GROUP,
+                "invalid subscribe group '${payload.subscribeGroup}'")
+        }
+        if (!MQTags.isValid(payload.tags)) {
+            return MQProtocol.fail(request, MQErrorCode.INTERNAL, "invalid tags")
         }
         if (store.topicOf(payload.topic).isNone()) {
             return MQProtocol.fail(request, MQErrorCode.TOPIC_NOT_EXIST,

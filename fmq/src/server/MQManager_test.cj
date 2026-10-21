@@ -92,6 +92,22 @@ class MQManagerTest {
         MQManager(MQManagerArgs.parse(all.toArray()).getOrThrow())
     }
 
+    /** 非法组名在管理端本地被拒：非 0 退出码，且不发请求（A05）。 */
+    @TestCase
+    public func invalidGroupIsRejectedLocally(): Unit {
+        let (server, address) = startServer("bad_group")
+        try {
+            @Assert(manager(address, ["registerTopic", "/t", "1"]).run() == 0)
+            // 指向不存在的地址也应当先被本地校验挡下（否则会打印「无法连接」）
+            let offline = MQManager(MQManagerArgs.parse(
+                ["registerSubscriber", "/t", "g 1", "--server=127.0.0.1:1"]).getOrThrow())
+            @Assert(offline.run() == 1)
+            @Assert(manager(address, ["deleteSubscribeGroup", "/t", "g/1"]).run() == 1)
+        } finally {
+            server.close()
+        }
+    }
+
     @TestCase
     public func sixSubcommandsSucceedAndMutateState(): Unit {
         let (server, address) = startServer("flow")

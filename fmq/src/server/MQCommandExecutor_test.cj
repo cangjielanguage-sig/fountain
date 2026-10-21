@@ -126,6 +126,52 @@ class MQCommandExecutorTest {
         convert<String>(content.body.data).getOrThrow()
     }
 
+    /** 非法组名在注册入口被拒，且不落盘、不建目录（A05）。 */
+    @TestCase
+    public func registerGroupRejectsInvalidName(): Unit {
+        let fixture = ExecutorFixture("bad_group")
+        try {
+            @Assert(MQProtocol.asPayload<MQTopicAssignment>(fixture.registerTopic("/t", 1)).isSome())
+            for (name in ["g 1", "g:1", "g/1", "g%2F", ".g", "g."]) {
+                @Assert(codeOf(fixture.registerGroup("/t", name)) == MQErrorCode.INVALID_GROUP)
+            }
+            @Assert(!fixture.meta.groupExists("/t", "g 1"))
+            let dir = "${fixture.root}/metas/groups"
+            // 用数组做盒子：闭包不能捕获可变局部变量
+            let files = Array<Int64>(1, repeat: 0)
+            if (exists(dir)) {
+                Directory.walk(dir) {info: FileInfo =>
+                    if (!info.isDirectory()) {
+                        files[0] = files[0] + 1
+                    }
+                    true
+                }
+            }
+            @Assert(files[0] == 0)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** `kind` 拼错/大小写变体不得落到「删除订阅组」分支，也不得删任何东西（A10）。 */
+    @TestCase
+    public func deregisterWithUnknownKindDeletesNothing(): Unit {
+        let fixture = ExecutorFixture("bad_kind")
+        try {
+            @Assert(MQProtocol.asPayload<MQTopicAssignment>(fixture.registerTopic("/t", 1)).isSome())
+            @Assert(codeOf(fixture.registerGroup("/t", "g")) == 0)
+            for (kind in ["", "Topic", "GROUP", "subscriber", "topics"]) {
+                let response = fixture.call(
+                    MQProtocol.deregister(MQDeregisterPayload(kind, "/t", subscribeGroup: "g")))
+                @Assert(codeOf(response) == MQErrorCode.INTERNAL)
+            }
+            @Assert(fixture.meta.topicOf("/t").isSome())
+            @Assert(fixture.meta.groupExists("/t", "g"))
+        } finally {
+            fixture.close()
+        }
+    }
+
     @TestCase
     public func registerTopicReturnsAssignment(): Unit {
         let fixture = ExecutorFixture("register_topic")
