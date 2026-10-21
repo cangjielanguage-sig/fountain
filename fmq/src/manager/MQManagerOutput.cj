@@ -60,7 +60,8 @@ public class MQManagerOutput {
      * `stats` 表格：把服务端 TSV 里的 `R` 记录解析成表格。
      *
      * 服务端格式固定为 11 列（`R` + 10 个指标），列顺序见 `STATS_HEADER`；
-     * 其它行（表头、分隔）与非 `R` 行一律跳过。
+     * 其它行（表头、分隔）与非 `R` 行一律跳过。`R` 行结构不符或数值列不可解析时抛
+     * `MQServiceFailure`——这属于「服务端响应格式不正确」，不得被上层报成「无法连接」。
      */
     public static func stats(text: String): String {
         let rows = ArrayList<Array<String>>()
@@ -70,14 +71,20 @@ public class MQManagerOutput {
             }
             let fields = line.split("\t")
             if (fields.size < 11) {
-                continue
+                throw MQServiceFailure(
+                    "服务端响应格式不正确: stats 行列数 ${fields.size} < 11（'${line}'）")
             }
             let group = if (fields[2].size == 0) {
                 "（无）"
             } else {
                 fields[2]
             }
-            let delay = (Duration.millisecond * Int64.parse(fields[4])).toString()
+            let delayingMs = match (Int64.tryParse(fields[4])) {
+                case Some(value) => value
+                case None => throw MQServiceFailure(
+                    "服务端响应格式不正确: stats 列 delaying='${fields[4]}' 不是整数")
+            }
+            let delay = (Duration.millisecond * delayingMs).toString()
             rows.add([fields[1], group, fields[3], delay, fields[5], fields[6], fields[7], fields[8],
                 fields[9], fields[10]])
         }

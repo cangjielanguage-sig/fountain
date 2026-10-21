@@ -98,7 +98,29 @@ class MQManagerTest {
         MQManager(MQManagerArgs.parse(all.toArray()).getOrThrow())
     }
 
-    /** 非法组名在管理端本地被拒：非 0 退出码，且不发请求（A05）。 */
+    /** 注入 sink 的 manager：返回实例与收集到的输出行。 */
+    private static func managerWithOutput(args: Array<String>): (MQManager, ArrayList<String>) {
+        let lines = ArrayList<String>()
+        let all = ArrayList<String>()
+        for (arg in args) {
+            all.add(arg)
+        }
+        let manager = MQManager(MQManagerArgs.parse(all.toArray()).getOrThrow(), {line => lines.add(line)})
+        (manager, lines)
+    }
+
+    /** 输出按行拼接，便于 `contains` 断言。 */
+    private static func joined(lines: ArrayList<String>): String {
+        let out = StringBuilder()
+        for (line in lines) {
+            if (out.size > 0) {
+                out.append('\n')
+            }
+            out.append(line)
+        }
+        out.toString()
+    }
+
     /** 服务端回 ERROR 时必须打印服务端错误，而不是「无法连接」（A65）。 */
     @TestCase
     public func serverErrorIsNotReportedAsConnectionFailure(): Unit {
@@ -112,9 +134,11 @@ class MQManagerTest {
         }
         try {
             waitReady(port)
-            let manager = MQManager(MQManagerArgs.parse(
-                ["listTopics", "--server=127.0.0.1:${port}"]).getOrThrow())
+            let (manager, lines) = managerWithOutput(["listTopics", "--server=127.0.0.1:${port}"])
             @Assert(manager.run() == 1)
+            let text = joined(lines)
+            @Assert(text.contains("boom from server"))
+            @Assert(!text.contains("无法连接"))
         } finally {
             server.close()
         }
@@ -133,9 +157,64 @@ class MQManagerTest {
         }
         try {
             waitReady(port)
-            let manager = MQManager(MQManagerArgs.parse(
-                ["listTopics", "--server=127.0.0.1:${port}"]).getOrThrow())
+            let (manager, lines) = managerWithOutput(["listTopics", "--server=127.0.0.1:${port}"])
             @Assert(manager.run() == 1)
+            let text = joined(lines)
+            @Assert(text.contains("响应不是 MQMetaSnapshot"))
+            @Assert(!text.contains("无法连接"))
+        } finally {
+            server.close()
+        }
+    }
+
+    /** `stats` 数值列不可解析：报「服务端响应格式不正确」，不得报成连接失败。 */
+    @TestCase
+    public func nonNumericStatsDelayingIsProtocolError(): Unit {
+        let port = freePort()
+        let server = Server<DataAny>(bindAt: port, checkDuration: Duration.second * 30, executors: 2,
+            checker: {=> Message.ping()})
+        spawn {
+            server.start({_, request =>
+                Some(MQProtocol.respond<String>(request, "R\t/t\tg\t1\tabc\t0\t0\t0\t0\t0\t0"))
+            })
+        }
+        try {
+            waitReady(port)
+            let (manager, lines) = managerWithOutput(["stats", "--server=127.0.0.1:${port}"])
+            @Assert(manager.run() == 1)
+            let text = joined(lines)
+            @Assert(text.contains("服务端响应格式不正确"))
+            @Assert(!text.contains("无法连接"))
+        } finally {
+            server.close()
+        }
+    }
+
+    /** 成功输出可断言：注册/列表/统计/空列表都给出关键字段（R4-S1）。 */
+    @TestCase
+    public func successOutputsAreAssertable(): Unit {
+        let (server, address) = startServer("output")
+        try {
+            let (register, registerLines) = managerWithOutput(["registerTopic", "/order", "4",
+                "--server=${address}"])
+            @Assert(register.run() == 0)
+            let registerText = joined(registerLines)
+            @Assert(registerText.contains("/order"))
+            @Assert(registerText.contains("队列 0..3（共 4 个）"))
+            @Assert(registerText.contains("0→"))
+
+            let (list, listLines) = managerWithOutput(["listTopics", "--server=${address}"])
+            @Assert(list.run() == 0)
+            @Assert(joined(listLines).contains("/order"))
+
+            let (stats, statsLines) = managerWithOutput(["stats", "/order", "--server=${address}"])
+            @Assert(stats.run() == 0)
+            @Assert(!joined(statsLines).contains("错误："))
+
+            let (missing, missingLines) = managerWithOutput(["listSubscribeGroups", "/none",
+                "--server=${address}"])
+            @Assert(missing.run() == 0)
+            @Assert(joined(missingLines).contains("（空）"))
         } finally {
             server.close()
         }

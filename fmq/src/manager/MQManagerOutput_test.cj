@@ -130,9 +130,30 @@ class MQManagerOutputTest {
         @Assert(lines[2].contains("1"))
     }
 
-    /** 非 `R` 行与列数不足的行都被跳过；全无有效行时输出占位。 */
+    /**
+     * 非 `R` 行被跳过；`R` 行列数不足属「响应格式不正确」，必须显式失败而不是静默丢弃。
+     */
     @TestCase
-    public func statsIgnoresHeaderAndShortRows(): Unit {
-        @Assert(MQManagerOutput.stats("#\t0\t1\nT\ttopic\tgroup\nR\t/t\tg\t1\n") == MQManagerOutput.EMPTY)
+    public func statsRejectsShortRowsAsProtocolError(): Unit {
+        @Assert(MQManagerOutput.stats("#\t0\t1\nT\ttopic\tgroup\n") == MQManagerOutput.EMPTY)
+        var failed = false
+        try {
+            MQManagerOutput.stats("#\t0\t1\nR\t/t\tg\t1\n")
+        } catch (e: MQServiceFailure) {
+            failed = e.message.contains("服务端响应格式不正确")
+        }
+        @Assert(failed)
+    }
+
+    /** 数值列不可解析同样是协议错误，不得静默产出空表。 */
+    @TestCase
+    public func statsRejectsNonNumericColumns(): Unit {
+        var failed = false
+        try {
+            MQManagerOutput.stats("R\t/t\tg\t1\tabc\t0\t0\t0\t0\t0\t0\n")
+        } catch (e: MQServiceFailure) {
+            failed = e.message.contains("服务端响应格式不正确")
+        }
+        @Assert(failed)
     }
 }

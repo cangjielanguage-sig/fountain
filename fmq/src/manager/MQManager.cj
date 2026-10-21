@@ -33,14 +33,27 @@ public class MQManager {
     private static let TIMEOUT = Duration.second * 5
 
     private let args: MQManagerArgs
+    /** 输出出口：CLI 默认打印，用例注入收集器后断言完整文本。 */
+    private let sink: (String) -> Unit
 
     public init(args: MQManagerArgs) {
         this.args = args
+        this.sink = {line => println(line)}
+    }
+
+    /** 注入输出出口（用例断言输出文案，不依赖 stdout 重定向）。 */
+    public init(args: MQManagerArgs, sink: (String) -> Unit) {
+        this.args = args
+        this.sink = sink
+    }
+
+    private func emit(line: String): Unit {
+        sink(line)
     }
 
     public func run(): Int64 {
         if (args.server.isEmpty()) {
-            println(MQManagerOutput.error(CONNECTION_FAILED))
+            emit(MQManagerOutput.error(CONNECTION_FAILED))
             return 1
         }
         match (args.command) {
@@ -48,23 +61,23 @@ public class MQManager {
                 let queueNum = match (Int64.tryParse(args.operands[1])) {
                     case Some(value) => value
                     case None =>
-                        println(MQManagerOutput.error("队列数必须是整数"))
+                        emit(MQManagerOutput.error("队列数必须是整数"))
                         return 2
                 }
                 var delayingMs = 0i64
                 if (args.operands.size >= 3) {
                     let text = args.operands[2]
                     if (!text.startsWith("delaying=")) {
-                        println(MQManagerOutput.error("第三个参数必须是 delaying=<时长>"))
+                        emit(MQManagerOutput.error("第三个参数必须是 delaying=<时长>"))
                         return 2
                     }
                     match (Duration.tryParse(text["delaying=".size..])) {
                         case None =>
-                            println(MQManagerOutput.error("delaying 不是合法时长"))
+                            emit(MQManagerOutput.error("delaying 不是合法时长"))
                             return 2
                         case Some(value) =>
                             if (value < Duration.Zero) {
-                                println(MQManagerOutput.error("delaying 不能为负"))
+                                emit(MQManagerOutput.error("delaying 不能为负"))
                                 return 2
                             }
                             delayingMs = value.toMilliseconds()
@@ -83,7 +96,7 @@ public class MQManager {
                     stats(args.operands[0])
                 }
             case _ =>
-                println(MQManagerArgs.helpText())
+                emit(MQManagerArgs.helpText())
                 2
         }
     }
@@ -101,7 +114,7 @@ public class MQManager {
                     let assignment = MQProtocol.asPayload<MQTopicAssignment>(message).getOrThrow {
                         MQServiceFailure("响应不是 MQTopicAssignment")
                     }
-                    println(MQManagerOutput.registeredTopic(topic, queueNum, delayingMs, assignment.owners))
+                    emit(MQManagerOutput.registeredTopic(topic, queueNum, delayingMs, assignment.owners))
                     0
             }
         }
@@ -110,31 +123,29 @@ public class MQManager {
     public func deleteTopic(topic: String): Int64 {
         withClient {client =>
             let response = exchange(client, MQProtocol.deregister(MQDeregisterPayload("topic", topic)))
-            finish(response, {result => println("${topic} 已删除")})
+            finish(response, {result => emit("${topic} 已删除")})
         }
     }
 
     public func registerSubscriber(topic: String, group: String): Int64 {
         // 组名非法时不发请求：服务端同样会拒，但本地失败能让脚本立刻拿到非 0 退出码
         if (!MQGroup.isValid(group)) {
-            return printError(MQResult(MQErrorCode.INVALID_GROUP,
-                "invalid subscribe group '${group}'"))
+            return localError("invalid subscribe group '${group}'")
         }
         withClient {client =>
             let response = exchange(client, MQProtocol.registerGroup(MQSubscribeGroupMeta(topic, group)))
-            finish(response, {result => println("订阅组 ${group} 已注册")})
+            finish(response, {result => emit("订阅组 ${group} 已注册")})
         }
     }
 
     public func deleteSubscribeGroup(topic: String, group: String): Int64 {
         if (!MQGroup.isValid(group)) {
-            return printError(MQResult(MQErrorCode.INVALID_GROUP,
-                "invalid subscribe group '${group}'"))
+            return localError("invalid subscribe group '${group}'")
         }
         withClient {client =>
             let response = exchange(client,
                 MQProtocol.deregister(MQDeregisterPayload("group", topic, subscribeGroup: group)))
-            finish(response, {result => println("订阅组 ${group} 已删除")})
+            finish(response, {result => emit("订阅组 ${group} 已删除")})
         }
     }
 
@@ -145,7 +156,7 @@ public class MQManager {
                 case SnapshotOutcome.Server(error) => printError(error)
                 case SnapshotOutcome.Protocol(reason) => protocolError(reason)
                 case SnapshotOutcome.Ok(value) =>
-                    println(MQManagerOutput.topicList(value))
+                    emit(MQManagerOutput.topicList(value))
                     0
             }
         }
@@ -169,7 +180,7 @@ public class MQManager {
                             rows.add([name])
                         }
                     }
-                    println(MQManagerOutput.table(["subscribeGroup"], rows.toArray()))
+                    emit(MQManagerOutput.table(["subscribeGroup"], rows.toArray()))
                     0
             }
         }
@@ -184,10 +195,11 @@ public class MQManager {
                     if (message.command == Command.ERROR) {
                         return printError(MQProtocol.asResult(message))
                     }
-                    let text = convert<String>(message.data).getOrThrow {
-                        MQServiceFailure("响应不是统计文本")
+                    let text = match (MQProtocol.asPayload<String>(message)) {
+                        case Some(value) => value
+                        case None => throw MQServiceFailure("响应不是统计文本")
                     }
-                    println(MQManagerOutput.stats(text))
+                    emit(MQManagerOutput.stats(text))
                     0
             }
         }
@@ -208,11 +220,11 @@ public class MQManager {
         }
         try {
             body(client.getOrThrow())
-        } catch (_: MQServiceFailure) {
-            println(MQManagerOutput.error("服务端响应格式不正确"))
-            1
+        } catch (e: MQServiceFailure) {
+            // 对端已回包但内容不符：协议错误，不能报成连接失败
+            return report(Failure.Protocol(e.message))
         } catch (_: Exception) {
-            connectionFailed()
+            return report(Failure.Unreachable)
         } finally {
             try {
                 client.getOrThrow().close()
@@ -260,24 +272,49 @@ public class MQManager {
 
     /** 协议错误（对端回包但内容不符）：不能报成连接失败。 */
     private func protocolError(reason: String): Int64 {
-        println(MQManagerOutput.error(reason))
-        1
+        report(Failure.Protocol(reason))
     }
 
     private func printError(result: MQResult): Int64 {
-        let text = if (result.message.isEmpty()) {
-            MQErrorCode.messageOf(result.code)
-        } else {
-            result.message
-        }
-        println(MQManagerOutput.error(text))
-        1
+        report(Failure.Server(result))
+    }
+
+    private func localError(reason: String): Int64 {
+        report(Failure.Local(reason))
     }
 
     private func connectionFailed(): Int64 {
-        println(MQManagerOutput.error(CONNECTION_FAILED))
+        report(Failure.Unreachable)
+    }
+
+    /** 四类失败统一出口：文案互斥，退出码统一为 1（本地解析错误另用 2）。 */
+    private func report(failure: Failure): Int64 {
+        let text = match (failure) {
+            case Failure.Unreachable => CONNECTION_FAILED
+            case Failure.Server(result) =>
+                if (result.message.isEmpty()) {
+                    MQErrorCode.messageOf(result.code)
+                } else {
+                    result.message
+                }
+            case Failure.Protocol(reason) => reason
+            case Failure.Local(reason) => reason
+        }
+        emit(MQManagerOutput.error(text))
         1
     }
+}
+
+/**
+ * 管理端失败分类：四类文案互斥，回归用例据此断言「不是所有失败都叫无法连接」。
+ */
+private enum Failure {
+    | Unreachable
+    | Server(MQResult)
+    /** 对端回包但载荷类型/格式不符 */
+    | Protocol(String)
+    /** 本地参数/配置非法，请求未发出 */
+    | Local(String)
 }
 
 /** 本地响应格式错误（与连接失败区分）。 */
