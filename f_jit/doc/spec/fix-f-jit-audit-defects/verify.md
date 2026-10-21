@@ -57,3 +57,30 @@ unset CJPM_CONFIG && cjpm test --filter PerfOverride_test --parallel 1
 - 注册函数（user helper）的 `List<Any>` 实参无法逐元素装箱：`PredefinedSnapshot` 只存类型码，
   没有元素类型。闭包 / IIFE 形参走 TypeRef，可装箱。
 - `strictFp` / `literalCopy` 为**未接线**占位（前端恒发 `FDIV`，`FDIV_CHK` 不可达）。
+
+## 归档（全流程收尾）
+
+| 项 | 结果 |
+| --- | --- |
+| 命令 | `openspec archive fix-f-jit-audit-defects --yes` |
+| 增量应用 | **+14 added / ~4 modified / −0 removed / →0 renamed**（与 18 条 delta 一一对应） |
+| 归档路径 | `openspec/changes/archive/2026-10-21-fix-f-jit-audit-defects/`（proposal / design / tasks / test-plan / verify + 6 个能力 delta + `.openspec.yaml`） |
+| 活动变更 | `openspec list` → `No active changes found` |
+| 主规格 | 9 个 capability；需求数：backend 11、base-contracts 13、bytecode-format 14、compiler-frontend 25、differential-acceptance 12、facade-bridge 19、module-skeleton 4、runtime 25、f-util-fnv 7 |
+| 镜像一致性 | `f_jit/doc/spec/fix-f-jit-audit-defects/` 与归档目录逐文件 `diff` 一致（5 个顶层文件 + 6 个 delta） |
+
+### 归档后规格 lint：既有债务，非本变更引入
+
+`openspec validate --all --strict` 结果 **4 passed / 5 failed**，5 个失败全部是「需求正文 > 500 字符」的 WARNING（不是结构错误）。按变更前主规格与历史归档逐条测量：
+
+| 规格 | 超限需求（字符数） | 判定 |
+| --- | --- | --- |
+| f-jit-base-contracts | 638 / 564 | 变更前已超限 |
+| f-jit-compiler-frontend | 645 / 692 / 685 / 843 | 变更前已超限 |
+| f-jit-differential-acceptance | 656 | 变更前已超限 |
+| f-jit-facade-bridge | 722 / 592 | 变更前已超限 |
+| f-jit-runtime | 786 / 801（+ H78–H80 765） | 变更前已超限 |
+
+本变更只新增 **1 处**告警：`统一调用包装` 由 492 → 962 字符（D3 引入 `invoke` / `deadline` 契约文本）。OpenSpec 给出的处置建议是「拆成多条 requirement 或把细节移入 scenario」——那会改写既有规格结构，属**独立**的规格治理变更；本变更不改写既有规格骨架，按仓库惯例登记为债务（与「374 条编译 warning」同口径）。
+
+判定口径：变更级门禁 `openspec validate fix-f-jit-audit-defects --strict` 在归档前**通过**；全局 `--all --strict` 的失败集合在本次前后不变（同一 5 个规格）。

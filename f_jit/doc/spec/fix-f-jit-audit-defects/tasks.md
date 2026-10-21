@@ -72,3 +72,8 @@
 - [x] A7.4 矩阵诚实化（P3-4）：T48/T51 改为**逐条断言真值**（空列表读写 = 4、空 Map upsert = 成功路径）；新增 `m3AnyJsonIsTripleEqual`（Interp × Native，verMajor=3 产物）；H65 注释的 `19` 统一为 **20**。`returnPositionBoxesIntoAny` 按「方言无返回类型注解 ⇒ 第三插入点不可达」**修订口径**（不新增假用例）
 - [x] A7.5 `doc/spec/` 产物补齐（P3-5）：为 `f-jit-m3`、`f-jit-m2.1`、`f-jit-m2.2`、`f-jit-m2.3` 各补 `proposal.md` / `design.md` / `tasks.md`（共 12 个文件，按既有 `design-mN.md` / `jit-bytecode-mN.md` / `plan-mN.md` 反写，文首标注「归档反写、不补造过程」）；验收：四个目录四件套齐全
 - [x] A7.6 总回归与 `verify.md`：**已出具** `verify.md`——终态 1076 用例 / 1075 通过 / 0 失败 / 0 error（`PerfOverride_test` 负载下假失败，单跑通过）；26 条逐条落点表 + 已知边界
+
+## 收尾
+
+- [x] **归档**：`openspec archive fix-f-jit-audit-defects --yes` —— **+14 added / ~4 modified / −0 removed / →0 renamed**（18 条 delta 全量落地）；目录归档为 `openspec/changes/archive/2026-10-21-fix-f-jit-audit-defects/`；`openspec list` 无活动变更。
+- [x] **归档后规格自查**：9 个 capability 全部可解析（backend 11 / base-contracts 13 / bytecode-format 14 / compiler-frontend 25 / differential-acceptance 12 / facade-bridge 19 / module-skeleton 4 / runtime 25 / f-util-fnv 7 条需求）；`validate --all --strict` 的 5 个失败均为「需求正文 >500 字符」的**既有**告警（逐条证据见 `verify.md` §归档）。
