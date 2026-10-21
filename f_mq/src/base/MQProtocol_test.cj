@@ -174,4 +174,16 @@ class MQProtocolTest {
         let decoded = MQProtocol.decodePayload<String>(internal.payload).getOrThrow()
         @Assert(decoded == "/order")
     }
+
+    /** 标量/异类载荷不能被宽松转成「字段全默认」的对象（A03）。 */
+    @TestCase
+    public func decodePayloadRejectsScalarForObjectPayload(): Unit {
+        @Assert(MQProtocol.decodePayload<MQMetaSyncRequest>(MQProtocol.encodePayload<String>("not-a-request")).isNone())
+        @Assert(MQProtocol.decodePayload<MQMetaSyncRequest>(MQProtocol.encodePayload<Float64>(1.5)).isNone())
+        @Assert(MQProtocol.decodePayload<MQTopicAssignment>(MQProtocol.encodePayload<Int64>(7)).isNone())
+        // 正例：同类型的自描述对象仍可解出
+        let request = MQProtocol.decodePayload<MQMetaSyncRequest>(
+            MQProtocol.encodePayload<MQMetaSyncRequest>(MQMetaSyncRequest(3))).getOrThrow()
+        @Assert(request.requesterIndex == 3)
+    }
 }

@@ -198,18 +198,6 @@ public class MQProtocol {
 
     // ===== 内部子载荷编解码 =====
 
-    /** `T` 是否是「对象型」载荷（`@DataAssist` 类），而不是标量/集合。 */
-    private static func isObjectPayload<T>(): Bool where T <: FromToData {
-        try {
-            match (T.tryFromData(DataNone.INSTANCE)) {
-                case _: SimpleDataObject => true
-                case _ => false
-            }
-        } catch (_: Exception) {
-            false
-        }
-    }
-
     /** 把任意自描述值编码为字节（内部消息的子载荷）。 */
     public static func encodePayload<T>(value: T): Array<Byte> where T <: ToData {
         let codec = DefaultCodec()
@@ -224,21 +212,29 @@ public class MQProtocol {
         }
     }
 
-    /** 从 `MQBlob` 解出自描述值；损坏返回 `None`。 */
-    public static func decodePayload<T>(blob: MQBlob): ?T where T <: FromToData {
+    /**
+     * 内部子载荷解码。
+     *
+     * 转换仍用 `SILENCE`（标量载荷依赖它的宽松数值转换），但对象载荷必须先过两道类型闸门，
+     * 否则「标量/空载荷」会被静默折成「字段全默认的对象」（A03）：
+     * 1. 解出来是对象时，类全名必须等于 `T`；
+     * 2. `T` 是对象类型（`ObjectData`，`isSimple() == false`）而解出来不是对象时，直接拒绝。
+     */
+    public static func decodePayload<T>(blob: MQBlob): ?T where T <: DataFields<T> {
         decodePayload<T>(blob.copyBytes())
     }
 
-    /** 从字节解出自描述值；损坏返回 `None`。 */
-    public static func decodePayload<T>(bytes: Array<Byte>): ?T where T <: FromToData {
+    /** 从字节解出自描述值；损坏或类型不符返回 `None`。 */
+    public static func decodePayload<T>(bytes: Array<Byte>): ?T where T <: DataFields<T> {
         if (bytes.size == 0) {
             return None<T>
         }
         let codec = DefaultCodec()
         try {
             let data = codec.decodeData(ByteBuffer(bytes))
+            let objectTarget = !T.isSimple()
             // 只按运行时类型精确匹配：codec 的 decode 会按编码里的类型创建对象，
-            // 但 `T.tryFromData` 的 SILENCE 语义会把「别的类型」宽松转成默认 T ——
+            // 但 SILENCE 语义会把「别的类型」宽松转成默认 T ——
             // 这正是「标量载荷解出字段全默认对象」的来源，必须在转换前挡掉。
             match (data) {
                 case o: SimpleDataObject =>
@@ -246,12 +242,11 @@ public class MQProtocol {
                         return None<T>
                     }
                 case _ =>
-                    // 非对象数据配对象型 T：类型不符，不能返回默认对象
-                    if (isObjectPayload<T>()) {
+                    if (objectTarget) {
                         return None<T>
                     }
             }
-            match (T.tryFromData(data)) {
+            match (T.tryFromData(data, DEFAULT_DATA_FLAG)) {
                 case x: ?T => x
                 case x: T => Some(x)
                 case _ => None<T>
