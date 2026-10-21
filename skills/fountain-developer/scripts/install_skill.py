@@ -463,6 +463,8 @@ def install_harness_all(a: argparse.Namespace, root: Path) -> "tuple[bool, str]"
     skills = discover_skill_dirs(repo_dir)
     if not skills:
         return False, f"仓库里没找到有效技能：{repo_dir}"
+    if "cangjie-code-review-harness" not in skills:
+        return False, f"harness 仓里没有 cangjie-code-review-harness（仓库结构可能已变）：{repo_dir}"
     failed = []
     for name, src in sorted(skills.items()):
         ok2, note2 = install_dir(src, root / name, a.force)
@@ -487,6 +489,11 @@ def install_fountain_all(a: argparse.Namespace, root: Path) -> "tuple[bool, str]
                    if (p / "SKILL.md").is_file() and p.name != "fountain-developer")
     if not names:
         return False, f"{skills_dir} 下没有可安装的技能"
+    required = ["cangjie-doc-lookup"] + OPSX_SKILLS
+    missing = [n for n in required if not (skills_dir / n / "SKILL.md").is_file()]
+    if missing:
+        return False, (f"{skills_dir} 缺工作流 L 依赖：{'、'.join(missing)}；"
+                       f"切到含这些技能的 fountain 检出（如 git -C {fr} switch sts/1.3.x）后重试")
     failed = []
     for name in names:
         src = skills_dir / name
