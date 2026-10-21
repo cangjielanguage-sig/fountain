@@ -351,6 +351,173 @@ class MQClientTest {
         }
     }
 
+    /** 全部 owner 不可达时 consume 必须抛错，而不是永久空转（A12）。 */
+    @TestCase
+    public func consumeThrowsWhenAllOwnersUnreachable(): Unit {
+        let stub = MQStubServer(ok).start()
+        let client = MQClient([stub.address()])
+        let sid = client.subscribe("/order")
+        stub.close()
+        var threw = false
+        try {
+            client.consume(sid)
+        } catch (_: MQConnectionException) {
+            threw = true
+        }
+        @Assert(threw)
+        client.close()
+    }
+
+    /** 全部 NOT_OWNER 是服务端确定答案，必须抛服务异常而不是连接异常（A18）。 */
+    @TestCase
+    public func publishAllNotOwnerRaisesServiceException(): Unit {
+        let stub = MQStubServer({buffer, request => okBut(buffer, request, MQErrorCode.NOT_OWNER)}).start()
+        try {
+            let client = MQClient([stub.address()])
+            var code = -1i64
+            try {
+                client.publish("/t", 1i64)
+            } catch (e: MQServiceException) {
+                code = e.code
+            }
+            @Assert(code == MQErrorCode.NOT_OWNER)
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+
+    /** `FILTER_UNSUPPORTED_BODY` 等错误码必须抛给调用方（A16）。 */
+    @TestCase
+    public func consumeMapsServiceErrorCode(): Unit {
+        let stub = MQStubServer({buffer, request =>
+            match (request.command) {
+                case CONSUME(_) => okBut(buffer, request, MQErrorCode.FILTER_UNSUPPORTED_BODY)
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let client = MQClient([stub.address()])
+            let sid = client.subscribe("/order")
+            var code = -1i64
+            try {
+                client.consume(sid)
+            } catch (e: MQServiceException) {
+                code = e.code
+            }
+            @Assert(code == MQErrorCode.FILTER_UNSUPPORTED_BODY)
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+
+    /** 非空记录解码失败不能当成「没有消息」继续轮询（A16）。 */
+    @TestCase
+    public func consumeFailsOnUndecodableRecord(): Unit {
+        let stub = MQStubServer({buffer, request =>
+            match (request.command) {
+                case CONSUME(_) =>
+                    Some(MQProtocol.respond<MQConsumeResult>(request,
+                        MQConsumeResult(0, 1, 0, [1u8, 2u8, 3u8])))
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let client = MQClient([stub.address()])
+            let sid = client.subscribe("/order")
+            var code = -1i64
+            try {
+                client.consume(sid)
+            } catch (e: MQServiceException) {
+                code = e.code
+            }
+            @Assert(code == MQErrorCode.INTERNAL)
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+
+    /** ack 的失败必须可见：非 ACK_UNKNOWN 抛服务异常，ACK_UNKNOWN 视为已处理（A13）。 */
+    @TestCase
+    public func ackSurfacesFailuresExceptUnknown(): Unit {
+        let internalError = MQStubServer({buffer, request =>
+            match (request.command) {
+                case ACK => okBut(buffer, request, MQErrorCode.INTERNAL)
+                case CONSUME(_) => Some(MQProtocol.respond<MQConsumeResult>(request, stubMessage("/order", 1, 0)))
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        let unknownAck = MQStubServer({buffer, request =>
+            match (request.command) {
+                case ACK => okBut(buffer, request, MQErrorCode.ACK_UNKNOWN)
+                case CONSUME(_) => Some(MQProtocol.respond<MQConsumeResult>(request, stubMessage("/order", 1, 0)))
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let failing = MQClient([internalError.address()])
+            let sid0 = failing.subscribe("/order")
+            let first = failing.consume(sid0)
+            var code = -1i64
+            try {
+                failing.ack(sid0, first.queueIndex, first.segmentedIndex, first.segmentedOffset)
+            } catch (e: MQServiceException) {
+                code = e.code
+            }
+            @Assert(code == MQErrorCode.INTERNAL)
+            failing.close()
+
+            let tolerant = MQClient([unknownAck.address()])
+            let sid1 = tolerant.subscribe("/order")
+            let second = tolerant.consume(sid1)
+            // ACK_UNKNOWN 不抛
+            tolerant.ack(sid1, second.queueIndex, second.segmentedIndex, second.segmentedOffset)
+            tolerant.close()
+        } finally {
+            internalError.close()
+            unknownAck.close()
+        }
+    }
+
+    /** unsubscribe 部分失败必须抛错且保留本地订阅，重试仍会发请求（A14）。 */
+    @TestCase
+    public func unsubscribePartialFailureKeepsSubscription(): Unit {
+        let good = MQStubServer(ok).start()
+        let bad = MQStubServer({buffer, request =>
+            match (request.command) {
+                case UNSUBSCRIBE => okBut(buffer, request, MQErrorCode.INTERNAL)
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let client = MQClient([good.address(), bad.address()])
+            let sid = client.subscribe("/order")
+            var threw = false
+            try {
+                client.unsubscribe(sid)
+            } catch (_: MQConnectionException) {
+                threw = true
+            }
+            @Assert(threw)
+            @Assert(countOf(good, "UNSUBSCRIBE") == 1)
+            // 本地订阅仍在：再退一次仍会发请求（而不是 SUBSCRIBE_NOT_EXIST）
+            let again = try {
+                client.unsubscribe(sid)
+                false
+            } catch (_: Exception) {
+                true
+            }
+            @Assert(again)
+            @Assert(countOf(good, "UNSUBSCRIBE") == 2)
+            client.close()
+        } finally {
+            good.close()
+            bad.close()
+        }
+    }
+
     @TestCase
     public func consumeWaitsUntilMessageArrives(): Unit {
         let calls = AtomicInt64(0)
