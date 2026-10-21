@@ -1019,4 +1019,76 @@ class MQClientTest {
             stub.close()
         }
     }
+
+    /** 解码失败日志同时要带主题，排障才能定位到订阅（R1-G2）。 */
+    @TestCase
+    public func decodeFailureLogsSubscriptionAndTopic(): Unit {
+        CapturingAppender.install()
+        let stub = MQStubServer({buffer, request =>
+            match (request.command) {
+                case CONSUME(_) =>
+                    Some(MQProtocol.respond<MQConsumeResult>(request,
+                        MQConsumeResult(0, 1, 0, [1u8, 2u8, 3u8])))
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let client = MQClient([stub.address()])
+            let sid = client.subscribe("/order")
+            try {
+                client.consume(sid)
+            } catch (_: MQServiceException) {
+                ()
+            }
+            @Assert(CapturingAppender.waitFor([sid, "/order", "cannot decode record"]))
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+
+    /** 退订失败日志要带订阅 id 与主题（R1-G2）。 */
+    @TestCase
+    public func unsubscribeFailureLogsSubscriptionAndTopic(): Unit {
+        CapturingAppender.install()
+        let stub = MQStubServer({buffer, request =>
+            match (request.command) {
+                case UNSUBSCRIBE => okBut(buffer, request, MQErrorCode.INTERNAL)
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let client = MQClient([stub.address()])
+            let sid = client.subscribe("/order", subscribeGroup: "g1")
+            try {
+                client.unsubscribe(sid)
+            } catch (_: MQConnectionException) {
+                ()
+            }
+            @Assert(CapturingAppender.waitFor([sid, "/order", "unsubscribe"]))
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+
+    /** 全部 owner 不可达的消费失败日志要带订阅 id 与主题（R1-G2）。 */
+    @TestCase
+    public func consumeFailureLogsSubscriptionAndTopic(): Unit {
+        CapturingAppender.install()
+        let stub = MQStubServer(ok).start()
+        let client = MQClient([stub.address()])
+        let sid = client.subscribe("/order")
+        stub.close()
+        try {
+            try {
+                client.consume(sid)
+            } catch (_: MQConnectionException) {
+                ()
+            }
+            @Assert(CapturingAppender.waitFor([sid, "/order", "unreachable"]))
+        } finally {
+            client.close()
+        }
+    }
 }
