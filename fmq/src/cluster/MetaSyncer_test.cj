@@ -714,6 +714,34 @@ class MetaSyncerTest {
         }
     }
 
+    /** 快照里的畸形条目不得触发本地合法条目的删除（R2-G1）。 */
+    @TestCase
+    public func malformedSnapshotEntryDoesNotDeleteLocalTopic(): Unit {
+        let dir = dirOf("snapshot_malformed_vs_local")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            store.applyTopic(MQTopicAssignment("/t", 2, 0, [0, 1], revision: 1))
+            let transport = FakeTransport(2, 1)
+            let syncer = MetaSyncer(store, transport)
+            let deleted = ArrayList<String>()
+            syncer.onDeleted = {payload => deleted.add(payload.topic)}
+            // queueNum=2 但只带 1 个 owner：畸形条目，必须进「跳过」集合而不是「缺失」
+            let snapshot = MQMetaSnapshot([MQTopicAssignment("/t", 2, 0, [0], revision: 3)],
+                Array<MQSubscribeGroupMeta>(), 0, revision: 3)
+            transport.responder = {_, request =>
+                Some(MQProtocol.respond<MQMetaSnapshot>(request, snapshot))
+            }
+            syncer.syncFromPeers()
+            @Assert(store.topicOf("/t").isSome())
+            @Assert(deleted.size == 0)
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
     /** 广播跳过的死节点进入待补偿集合，反熵成功后清空（A31）。 */
     @TestCase
     public func knownDeadPeerIsSkippedAndCompensatedByAntiEntropy(): Unit {

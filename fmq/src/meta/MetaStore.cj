@@ -104,7 +104,54 @@ protected class MetaStore <: Resource {
             loadTopics()
             loadGroups()
             loadTombstones()
+            // 崩溃窗口可能留下「条目与墓碑共存」：按 isNewer 收敛，不留复活态（R2-G2）
+            convergeTombstonesLocked()
             revision = maxRevisionLocked()
+        }
+    }
+
+    /**
+     * 加载后收敛「条目与墓碑共存」的状态（调用方必须持有 `lock`）。
+     *
+     * 条目版本更新 → 删墓碑（重新注册胜过旧墓碑）；墓碑版本更新 → 删条目；
+     * 逐条容错：单条失败只记 ERROR，下一次加载会再收敛一遍。
+     */
+    private func convergeTombstonesLocked(): Unit {
+        let pending = ArrayList<MQMetaTombstone>()
+        for ((_, tombstone) in tombstones) {
+            pending.add(tombstone)
+        }
+        for (tombstone in pending) {
+            try {
+                if (tombstone.isTopic()) {
+                    match (topicIndex.get(tombstone.topic)) {
+                        case Some(local) =>
+                            if (isNewer(local.revision, local.origin, tombstone.revision, tombstone.origin)) {
+                                dropTombstoneLocked(MQMetaTombstone.KIND_TOPIC, tombstone.topic, '')
+                            } else {
+                                log.warn("topic '${tombstone.topic}' survived a newer tombstone on disk, " +
+                                    "dropping it")
+                                dropTopicLocked(tombstone.topic)
+                            }
+                        case None => ()
+                    }
+                } else {
+                    match (groupOfLocked(tombstone.topic, tombstone.subscribeGroup)) {
+                        case Some(local) =>
+                            if (isNewer(local.revision, local.origin, tombstone.revision, tombstone.origin)) {
+                                dropTombstoneLocked(MQMetaTombstone.KIND_GROUP, tombstone.topic,
+                                    tombstone.subscribeGroup)
+                            } else {
+                                log.warn("group '${tombstone.subscribeGroup}' of '${tombstone.topic}' " +
+                                    "survived a newer tombstone on disk, dropping it")
+                                dropGroupLocked(tombstone.topic, tombstone.subscribeGroup)
+                            }
+                        case None => ()
+                    }
+                }
+            } catch (e: Exception) {
+                log.error("cannot converge tombstone '${tombstone.key()}': ${e.message}")
+            }
         }
     }
 

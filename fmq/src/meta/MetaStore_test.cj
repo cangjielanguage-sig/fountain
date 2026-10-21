@@ -785,4 +785,82 @@ class MetaStoreTest {
             clean(dir)
         }
     }
+    /**
+     * 墓碑已落盘、条目文件在崩溃窗口里残留：重开后条目必须被墓碑清掉，不得复活（R2-G2）。
+     */
+    @TestCase
+    public func reloadConvergesTombstoneOverStaleEntry(): Unit {
+        let dir = dirOf("converge_tombstone_wins")
+        clean(dir)
+        try {
+            let first = MetaStore(dir)
+            first.load()
+            @Assert(first.applyTopic(MQTopicAssignment("/t", 2, 0, [0, 1], revision: 2)) ==
+                MetaApplyResult.Applied)
+            @Assert(first.applyTombstone(MQMetaTombstone(MQMetaTombstone.KIND_TOPIC, "/t", "", 7, 0, 0)) ==
+                MetaApplyResult.Applied)
+            @Assert(first.topicOf("/t").isNone())
+            first.close()
+
+            // 模拟「删条目失败但墓碑已落盘」的残留文件
+            let path = "${dir}/${MQFileNames.topicFile("/t")}"
+            let file = File.create(path)
+            file.write(MQProtocol.encodePayload<MQTopicAssignment>(
+                MQTopicAssignment("/t", 2, 0, [0, 1], revision: 2)))
+            file.close()
+            @Assert(exists(path))
+
+            let second = MetaStore(dir)
+            second.load()
+            @Assert(second.topicOf("/t").isNone())
+            @Assert(second.topicTombstone("/t").isSome())
+            @Assert(!exists(path))
+            second.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    /**
+     * 条目 rev 8 与残留墓碑 rev 5 共存：重开后墓碑必须被删掉，条目保留（R2-G2）。
+     */
+    @TestCase
+    public func reloadDropsTombstoneOlderThanEntry(): Unit {
+        let dir = dirOf("converge_entry_wins")
+        clean(dir)
+        try {
+            let first = MetaStore(dir)
+            first.load()
+            @Assert(first.applyTopic(MQTopicAssignment("/t", 2, 0, [0, 1], revision: 8)) ==
+                MetaApplyResult.Applied)
+            first.close()
+
+            let tombstoneDir = "${dir}/tombstones"
+            if (!exists(tombstoneDir)) {
+                Directory.create(tombstoneDir, recursive: true)
+            }
+            let path = "${tombstoneDir}/t_${MQFileNames.escape("/t")}.meta"
+            let file = File.create(path)
+            file.write(MQProtocol.encodePayload<MQMetaTombstone>(
+                MQMetaTombstone(MQMetaTombstone.KIND_TOPIC, "/t", "", 5, 0, 0)))
+            file.close()
+
+            let second = MetaStore(dir)
+            second.load()
+            @Assert(second.topicOf("/t").isSome())
+            @Assert(second.topicTombstone("/t").isNone())
+            @Assert(!exists(path))
+            second.close()
+
+            // 幂等：再开一次结论不变
+            let third = MetaStore(dir)
+            third.load()
+            @Assert(third.topicOf("/t").isSome())
+            @Assert(third.topicTombstone("/t").isNone())
+            third.close()
+        } finally {
+            clean(dir)
+        }
+    }
 }
+
