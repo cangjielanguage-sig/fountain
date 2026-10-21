@@ -245,6 +245,7 @@ protected class MetaStore <: Resource {
     /** 注册订阅组：主题存在性与组存在性检查、写盘在同一个临界区内完成（A28/A36）。 */
     protected func registerGroup(meta: MQSubscribeGroupMeta): MetaApplyResult {
         if (!MQGroup.isValid(meta.subscribeGroup) || !MQTopic.isValid(meta.topic)) {
+            log.warn("reject group registration '${meta.subscribeGroup}' of '${meta.topic}': ${invalidReason(meta)}")
             return MetaApplyResult.Invalid
         }
         synchronized(lock) {
@@ -311,6 +312,7 @@ protected class MetaStore <: Resource {
 
     protected func applyGroup(meta: MQSubscribeGroupMeta): MetaApplyResult {
         if (!MQGroup.isValid(meta.subscribeGroup) || !MQTopic.isValid(meta.topic)) {
+            log.warn("reject group '${meta.subscribeGroup}' of '${meta.topic}': ${invalidReason(meta)}")
             return MetaApplyResult.Invalid
         }
         synchronized(lock) {
@@ -597,6 +599,15 @@ protected class MetaStore <: Resource {
 
     private func groupPath(topic: String, group: String): String {
         "${dir}/${MQFileNames.groupFile(topic, group)}"
+    }
+
+    /** 组载荷非法的原因：区分组名与主题，WARN 里能直接指向失败字段（R2-G10）。 */
+    private static func invalidReason(meta: MQSubscribeGroupMeta): String {
+        if (!MQGroup.isValid(meta.subscribeGroup)) {
+            "invalid group name '${meta.subscribeGroup}'"
+        } else {
+            "invalid topic '${meta.topic}'"
+        }
     }
 
     private static func isNewer(remoteRevision: Int64, remoteOrigin: Int64, localRevision: Int64,

@@ -785,6 +785,86 @@ class MetaStoreTest {
             clean(dir)
         }
     }
+    /** 删除主题后重新注册：新 revision 必须越过墓碑，墓碑被清除，快照不再带它（R2-G7）。 */
+    @TestCase
+    public func reregisteringTopicAfterDeleteClearsTombstone(): Unit {
+        let dir = dirOf("reregister_topic")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            @Assert(store.applyTopic(MQTopicAssignment("/t", 1, 0, [0])) == MetaApplyResult.Applied)
+            let tombstones = store.removeTopic("/t")
+            @Assert(tombstones.size == 1)
+            let tombstone = tombstones[0]
+            @Assert(store.topicTombstone("/t").isSome())
+
+            let (result, assignment) = store.registerTopic(MQTopicMeta("/t", 2), 1)
+            @Assert(result == MetaApplyResult.Applied)
+            let created = assignment.getOrThrow()
+            @Assert(created.revision > tombstone.revision)
+            @Assert(store.topicTombstone("/t").isNone())
+            @Assert(store.snapshot().tombstones.size == 0)
+            store.close()
+
+            // 重启后依旧没有墓碑
+            let reloaded = MetaStore(dir)
+            reloaded.load()
+            @Assert(reloaded.topicOf("/t").isSome())
+            @Assert(reloaded.topicTombstone("/t").isNone())
+            reloaded.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    /** 删除订阅组后重新注册：逻辑同上（R2-G7）。 */
+    @TestCase
+    public func reregisteringGroupAfterDeleteClearsTombstone(): Unit {
+        let dir = dirOf("reregister_group")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            @Assert(store.applyTopic(MQTopicAssignment("/t", 1, 0, [0])) == MetaApplyResult.Applied)
+            @Assert(store.applyGroup(MQSubscribeGroupMeta("/t", "g1")) == MetaApplyResult.Applied)
+            let tombstone = store.removeGroup("/t", "g1").getOrThrow()
+            @Assert(store.applyGroup(MQSubscribeGroupMeta("/t", "g1")) == MetaApplyResult.Tombstoned)
+
+            let result = store.registerGroup(MQSubscribeGroupMeta("/t", "g1"))
+            @Assert(result == MetaApplyResult.Applied)
+            @Assert(store.groupExists("/t", "g1"))
+            let group = store.groupsOf("/t")[0]
+            @Assert(group.revision > tombstone.revision)
+            @Assert(store.snapshot().tombstones.size == 0)
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    /** 非法组名/主题的载荷返回 `Invalid`，并留下带字段与原因的 WARN（R2-G10）。 */
+    @TestCase
+    public func invalidGroupPayloadLogsWarning(): Unit {
+        CapturingAppender.install()
+        let dir = dirOf("invalid_group_warn")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            @Assert(store.registerGroup(MQSubscribeGroupMeta("/t", "g\u{7F}")) == MetaApplyResult.Invalid)
+            @Assert(CapturingAppender.waitFor(["g\u{7F}", "invalid group name"]))
+            @Assert(store.applyGroup(MQSubscribeGroupMeta("/t", "g\u{3000}")) == MetaApplyResult.Invalid)
+            @Assert(CapturingAppender.waitFor(["g\u{3000}", "invalid group name"]))
+            // 主题非法时原因指向主题
+            @Assert(store.registerGroup(MQSubscribeGroupMeta("bad", "g1")) == MetaApplyResult.Invalid)
+            @Assert(CapturingAppender.waitFor(["bad", "invalid topic"]))
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
     /**
      * 墓碑已落盘、条目文件在崩溃窗口里残留：重开后条目必须被墓碑清掉，不得复活（R2-G2）。
      */

@@ -714,6 +714,20 @@ class MetaSyncerTest {
         }
     }
 
+    /** 远端组载荷非法：返回 `Invalid` 并留下带字段的 WARN（R2-G10）。 */
+    @TestCase
+    public func invalidRemoteGroupIsRejectedWithWarning(): Unit {
+        CapturingAppender.install()
+        let (store, _, syncer) = fixture("invalid_remote_group")
+        try {
+            @Assert(syncer.applyRemoteGroup(MQSubscribeGroupMeta("/t", "g\u{7F}")) ==
+                MetaApplyResult.Invalid)
+            @Assert(CapturingAppender.waitFor(["reject remote group", "g\u{7F}"]))
+        } finally {
+            shutdown(store, "invalid_remote_group")
+        }
+    }
+
     /** 快照里的畸形条目不得触发本地合法条目的删除（R2-G1）。 */
     @TestCase
     public func malformedSnapshotEntryDoesNotDeleteLocalTopic(): Unit {

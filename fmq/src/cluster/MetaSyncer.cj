@@ -280,6 +280,10 @@ protected class MetaSyncer <: Resource {
 
     protected func applyRemoteGroup(meta: MQSubscribeGroupMeta): MetaApplyResult {
         let result = store.applyGroup(meta)
+        if (result == MetaApplyResult.Invalid) {
+            // store 侧已记明细 WARN；这里再标出来源是远端广播，便于区分本地注册与对端同步（R2-G10）
+            log.warn("reject remote group '${meta.subscribeGroup}' of '${meta.topic}': payload is invalid")
+        }
         if (result == MetaApplyResult.TopicMissing) {
             // 主题已被墓碑删除时直接拒绝（迟到组不得复活），与「尚未到达」区分开
             if (store.topicTombstone(meta.topic).isSome()) {
