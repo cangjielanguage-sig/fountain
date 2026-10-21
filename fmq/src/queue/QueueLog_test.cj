@@ -496,6 +496,72 @@ class QueueLogTest {
         }
     }
 
+    /** 多字节记录：长度头按字节计，读取与扫描都不截断（R3-M10）。 */
+    @TestCase
+    public func multiByteRecordRoundTrips(): Unit {
+        let dir = dirOf("multibyte")
+        clean(dir)
+        let log = QueueLog(dir, 1024, 1)
+        try {
+            let text = "订单-2026-中文标签".toArray()
+            let first = log.append(text)
+            @Assert(readOne(log, first) == text)
+            @Assert(log.segments()[0].size == 4 + text.size)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** 记录上限随段上限收敛：1024 字节段只接受 1020 字节记录（R3-M10）。 */
+    @TestCase
+    public func recordLimitFollowsSegmentSize(): Unit {
+        let dir = dirOf("record_limit")
+        clean(dir)
+        let log = QueueLog(dir, 1024, 1)
+        try {
+            let atLimit = log.append(recordOf(0x11u8, 1020))
+            @Assert(readOne(log, atLimit).size == 1020)
+            var threw = false
+            try {
+                log.append(recordOf(0x22u8, 1021))
+            } catch (_: IllegalArgumentException) {
+                threw = true
+            }
+            @Assert(threw)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** sync 后重开段日志仍可完整读回（R3-M11）。 */
+    @TestCase
+    public func syncedRecordsSurviveReopen(): Unit {
+        let dir = dirOf("sync_reopen")
+        clean(dir)
+        let first = QueueLog(dir, 1024, 1)
+        let payload = recordOf(0x5Au8, 128)
+        let position = first.append(payload)
+        first.sync()
+        first.close()
+
+        let reopened = QueueLog(dir, 1024, 1)
+        try {
+            @Assert(readOne(reopened, position) == payload)
+            var found = false
+            for (meta in reopened.segments()) {
+                if (meta.index == position.seq) {
+                    found = true
+                }
+            }
+            @Assert(found)
+        } finally {
+            reopened.close()
+            clean(dir)
+        }
+    }
+
     /** 段被真正删除后读取按「段缺失」处理，跳到后继段继续，不判损坏（R3-M2）。 */
     @TestCase
     public func missingSegmentResumesAtNextSegmentNotCorruption(): Unit {
