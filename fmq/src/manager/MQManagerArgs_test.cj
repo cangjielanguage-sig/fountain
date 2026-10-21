@@ -63,6 +63,24 @@ class MQManagerArgsTest {
         @Assert(MQManagerArgs.parse(["--help"]).isNone())
     }
 
+    /** 帮助文本与子命令表一致：恰好 7 个子命令（R4-G9）。 */
+    @TestCase
+    public func helpListsSevenSubcommands(): Unit {
+        let text = MQManagerArgs.helpText()
+        let commands = ["registerTopic", "deleteTopic", "registerSubscriber", "deleteSubscribeGroup",
+            "listTopics", "listSubscribeGroups", "stats"]
+        var counted = 0
+        for (line in text.split("\n")) {
+            let trimmed = line.trimAscii()
+            for (command in commands) {
+                if (trimmed.startsWith(command)) {
+                    counted++
+                }
+            }
+        }
+        @Assert(counted == 7)
+    }
+
     @TestCase
     public func sixSubcommandsParse(): Unit {
         @Assert(MQManagerArgs.parse(["registerTopic", "/t", "2"]).isSome())

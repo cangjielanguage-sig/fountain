@@ -51,5 +51,19 @@ class MQUsageTest {
             @Assert(text.contains(command))
         }
         @Assert(text.contains("--server"))
+
+        // 恰好 7 个子命令行：漏掉 stats 或重复列出都会失败（R4-G9）
+        let commands = ["registerTopic", "deleteTopic", "registerSubscriber", "deleteSubscribeGroup",
+            "listTopics", "listSubscribeGroups", "stats"]
+        var counted = 0
+        for (line in text.split("\n")) {
+            let trimmed = line.trimAscii()
+            for (command in commands) {
+                if (trimmed.startsWith(command)) {
+                    counted++
+                }
+            }
+        }
+        @Assert(counted == 7)
     }
 }

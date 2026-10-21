@@ -26,7 +26,7 @@ import fountain::f_net.client.Client
 import fountain::f_protocol.default.{Message, Command}
 
 /**
- * `fmq manager`：六个子命令，每个命令「建连 → 单次请求 → 渲染 → 关闭」。
+ * `fmq manager`：七个子命令，每个命令「建连 → 单次请求 → 渲染 → 关闭」。
  */
 public class MQManager {
     private static let CONNECTION_FAILED = "无法连接消息队列服务"
