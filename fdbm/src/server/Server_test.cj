@@ -247,6 +247,36 @@ public class ServerLifecycleTest {
         }
     }
 
+    /** G14：构造失败时缓存/连接池必须已释放（同一 cache 目录可立即重新打开并写入）。 */
+    @TestCase
+    public func constructorFailureReleasesCacheAndPools(): Unit {
+        let dir = tempDir()
+        try {
+            let port = uniquePort()
+            let source = settingsSource(port, idmaker: 'sequence', cache: true,
+                cachePath: dir.toString())
+            let settings = FdbmSettings.load(source: source)
+            let driver = DriverManager.getDriver('mockdb').getOrThrow()
+            MOCKDB.clear()
+            MOCKDB.execution = {sql, _ =>
+                if (sql.contains('fountain_sequence')) {
+                    throw Exception('injected missing sequence table')
+                }
+                MOCKDB.rowCount = 1
+            }
+            @Assert(codeOf { FdbmServer(settings, source: source, driver: driver) },
+                DbdErrorCode.ID_GENERATOR)
+
+            // 上一个实例的缓存若未关闭，这里会看到残留状态/句柄；能正常写入即证明已释放
+            let cache = PartitionCache(dir.toString(), None, 0)
+            cache.put('db0', 't', 'id', '1', 'p0')
+            @Assert(cache.count(), 1)
+            cache.close()
+        } finally {
+            removeTree(dir)
+        }
+    }
+
     /** G12：端口被占用时 `start()` 必须报 `CONFIG`（main 据此返回 1）。 */
     @TestCase
     public func listenFailureIsConfigError(): Unit {
@@ -373,14 +403,17 @@ public class ServerLifecycleTest {
         }
     }
 
-    private func settingsSource(port: UInt16, driverName!: String = 'mockdb'): ConfigSource {
+    private func settingsSource(port: UInt16, driverName!: String = 'mockdb',
+        idmaker!: String = 'uuid,4', cache!: Bool = false,
+        cachePath!: String = './cache'): ConfigSource {
         let values = HashMap<String, String>()
         values['fdbm_port'] = port.toString()
         values['fdbm_db'] = 'name0@127.0.0.1:3306'
         values['fdbm_db_driver_name0'] = driverName
         values['fdbm_db_database_name0'] = 'db0,db1'
-        values['fdbm_idmaker'] = 'uuid,4'
-        values['fdbm_cache'] = 'false'
+        values['fdbm_idmaker'] = idmaker
+        values['fdbm_cache'] = if (cache) { 'true' } else { 'false' }
+        values['fdbm_cachePath'] = cachePath
         values['fdbm_driverDir'] = '/tmp/definitely-missing-driver'
         values['fdbm_customDir'] = '/tmp/definitely-missing-custom'
         values['fdbm_bootScript'] = '/tmp/definitely-missing-boot.sh'

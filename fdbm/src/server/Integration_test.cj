@@ -107,6 +107,28 @@ public class IntegrationTest {
         }
     }
 
+    /** G23：`show tables` 失败（未知方言）后连接必须归还，`maxSize=1` 下后续查询仍可用。 */
+    @TestCase
+    public func showFailureReturnsConnectionUnderSingleSlotPool(): Unit {
+        let fixture = integrationFixture(maxSize: 1)
+        let connection = fixture.connect('db0')
+        try {
+            var failed = false
+            try {
+                connection.prepareStatement('show tables').query()
+            } catch (_: Exception) {
+                failed = true
+            }
+            @Assert(failed, true)
+            let after = connection.prepareStatement('select * from t where id = 5').query()
+            @Assert(after.next(), true)
+            after.close()
+        } finally {
+            connection.close()
+            fixture.close()
+        }
+    }
+
     /** T09：`maxSize=1` 下关游标、DDL 失败后连接都必须归还，否则下一次查询会超时。 */
     @TestCase
     public func connectionsAreReturnedUnderSingleSlotPool(): Unit {

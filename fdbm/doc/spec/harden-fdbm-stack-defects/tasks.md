@@ -44,7 +44,7 @@
   `defaultDatabaseOf`；`validatePartitions`/`validateIdMaker`/`validate` 改用它
 - [x] 1.14 绿：`ShowExecutor` 注入 catalog，按逻辑库解析内省库；`Dispatcher_test` 的物理名断言改为逻辑名
 - [x] 1.15 `[e2e]` 改 e2e 部署：逻辑库 `app`，物理库 `db0..db3`；客户端断言未限定读写命中正确分片、
-  `show databases` 只含 `app`（PG 123 / MySQL 121 断言；顺带修 `begin` 的 pin 目标未解析逻辑名）
+  `show databases` 只含 `app`（PG 126 / MySQL 124 断言；顺带修 `begin` 的 pin 目标未解析逻辑名）
 
 ### D04 事务 pin 的目标唯一性（R5S1 / R5S4）
 
@@ -79,7 +79,7 @@
 
 - [x] 1.28 红：三条语句（JOIN 派生表、`update ... join (select...)`、`delete ... join (select...)`）
   均 `UNSUPPORTED_SQL` 且含位置（当前放行）
-- [x] 1.29 绿：`derivedTablesOf` 统计 from + joins；新增 `validateUpdateShape`/`validateDeleteShape`
+- [x] 1.29 绿：`derivedTablesOf` 统计 from + joins；新增 `validateNoDerivedInJoins`（UPDATE/DELETE/JOIN 共用同一形状校验）
 - [x] 1.30 回归：合法 `update t join u on ...` / `select ... from a join b` 不受影响
 
 ### D09 内置名保护（R2S4 / R5G10 / R6S1）
@@ -187,7 +187,7 @@
   `shutdownTimeout` / `substr start,length<0` / 内置名冲突 / 全局表逻辑库 / sequence 表）；
   另加进程级用例：坏配置启动 → 退出码 1 且端口未监听
 - [x] 3.9 T09 连接归还断言：`maxSize=1` 下「关游标后继续查询」「returning 后继续查询」「DDL 失败后继续查询」
-  「广播部分失败后继续查询」均成功（泄漏即超时）
+  均成功（泄漏即超时）；「广播部分失败后继续查询」由 `globalTableWriteReportsPartialFailure` 在执行器层覆盖
 - [x] 3.10 T10 `f_dbd` 公开行为缺口：`parameterColumnInfos` 为空（按设计固定）、`close()` 后 `query/update` →
   `CURSOR_STATE`、`update()` 载荷不符 → `PROTOCOL`、`update_timeout` 生效、`setSqlDbType` 的 `case _` →
   `CONVERSION` 与 `SqlBlob`/`SqlClob`、未 `begin` 的 `save/rollback(name)/release` → `TX_STATE`、
@@ -210,7 +210,7 @@
 - [x] 4.5 三个 README 的驱动名、逻辑库、SHOW、流列、NULL 口径与代码一致
 - [x] 4.6 全量验收：三模块 `cjpm test`、`[e2e]` 两后端、`f_orm` 回归、`cjpm build` 无新增 warning
 
-  - 结果：`f_dbm` 5/5、`fdbm` 244/244、`f_dbd` 208/208；`cjpm build` 无新增 warning（三模块各有基线 warning）。
+  - 结果：`f_dbm` 5/5、`fdbm` 247/247、`f_dbd` 208/208；`cjpm build` 无新增 warning（三模块各有基线 warning）。
   - e2e：PostgreSQL `126+28+13`、MySQL `124+28+10`，全部 `failures=0`。
   - `f_orm` 64 例中 1 例 `QueryResultWrapTest.testEveryReaderBranchAndAlias` 报 `bytea → Array<UInt8>` 类型不匹配；
     `f_orm` 本次零改动（`git status` 干净），该失败在基线提交即存在，按约束不修，记录为已知问题。
