@@ -627,7 +627,7 @@ class GroupCursorTest {
             @Assert(p2.seq > p1.seq)
             let cursor = fixture.cursorOf()
             let sub = fixture.sub("s1")
-            // 组从未消费：边界钉在最老段
+            // 组从未消费：边界钉在编号最小的现存段
             @Assert(fixture.catalog.floorOf("/t", 0) == 1)
             let first = cursor.next(sub, [sub], MQMatcher()).getOrThrow()
             @Assert(cursor.ack("s1", first[1]))
@@ -681,7 +681,7 @@ class GroupCursorTest {
 
             let cursor = fixture.cursorOf()
             let sub = fixture.sub("s1")
-            // 打开段 1 失败 → 跳到现存最老段 2 继续，不永久报错
+            // 打开段 1 失败 → 跳到现存编号最小的现存段 2 继续，不永久报错
             let recovered = cursor.next(sub, [sub], MQMatcher()).getOrThrow()
             @Assert(recovered[1].seq == 2)
             @Assert(cursor.committed.seq == 2)

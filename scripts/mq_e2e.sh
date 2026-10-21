@@ -188,9 +188,10 @@ check "停机后仍可消费" [ "${CON2_RC}" -eq 0 ] && check "停机后消费 1
 echo "==> 超时重投与死信"
 manager registerSubscriber /e2e grp3 >/dev/null 2>&1
 client publish "${NODES}" /e2e 1 >/dev/null 2>&1
-# 每次 consume 之间 sleep 2.5s（ackTimeout=2s），3 次至少 7.5s；高负载下留足 30s，
-# 否则 timeout 会杀掉仍正常推进的客户端，stdout 缓冲丢失被误判为「0 次重投」。
-REDELIVER_OUT=$(timeout 30 env mqClient_hosts="${NODES}" "${CLIENT_BIN}" redeliver "${NODES}" /e2e grp3 3 2>&1)
+# deadMsgThreshold=2 表示「重试 2 次」：共 3 次投递，第 4 次扫描才进死信。
+# 每次 consume 之间 sleep 2.5s（ackTimeout=2s）；第 4 次消费会写死信后继续轮询，
+# 由 timeout 收尾（留足 30s，避免杀掉仍在推进的客户端导致 buffered 输出丢失）。
+REDELIVER_OUT=$(timeout 40 env mqClient_hosts="${NODES}" "${CLIENT_BIN}" redeliver "${NODES}" /e2e grp3 4 2>&1)
 REDELIVER_COUNT=$(echo "${REDELIVER_OUT}" | grep -c '^CONSUMED' || true)
 check "重投次数 >= 2" [ "${REDELIVER_COUNT}" -ge 2 ]
 DEAD_COUNT=$(dead_entry_count)

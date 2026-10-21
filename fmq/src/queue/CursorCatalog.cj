@@ -103,7 +103,7 @@ protected class CursorCatalog {
             let position = match (positionOf(topic, queueIndex, group.subscribeGroup)) {
                 case Some(p) => p
                 case None =>
-                    // 组从未消费：位点缺失等同于「从头开始」，把边界钉在最老段。
+                    // 组从未消费：位点缺失等同于「从头开始」，把边界钉在编号最小的现存段。
                     // 文件存在却读不出来是「损坏」，按缺失处理但必须留痕。
                     if (store.hasCursor(topic, queueIndex, group.subscribeGroup)) {
                         log.error("cursor of ${topic}/${queueIndex}/${group.subscribeGroup} is corrupted, treat as missing")

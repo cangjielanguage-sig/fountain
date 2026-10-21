@@ -46,7 +46,7 @@ replays acknowledged messages; backup segments are reclaimed by those cursors an
 `segmentedLogTTL`. `fmq server --help` prints all options.
 
 `SIGTERM`/`SIGINT` triggers graceful shutdown: the exit hook calls `MQServer.close()`, which
-releases server → timers → anti-entropy → backup → cleaner → consume → backup store → queues
+releases server → timers → anti-entropy → backup → cleaner → consume → subscribers → backup store → queues.sync → queues
 → dead letters → metadata → node connections. A failing step does not block the others, and
 calling `close()` again retries only the failed steps.
 

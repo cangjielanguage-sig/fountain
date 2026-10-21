@@ -42,8 +42,8 @@ fmq server
 一起参与清理，磁盘不会无界增长。`fmq server --help` 打印全部配置项。
 
 `SIGTERM`/`SIGINT` 会触发优雅关闭：退出钩子调用 `MQServer.close()`，按固定顺序释放
-server → 定时器 → 反熵 → 备份 → 清理器 → 消费 → 备份存储 → 队列 → 死信 → 元数据 → 节点连接；
-单步失败不影响其它步骤，再次调用 `close()` 只重试失败步骤。
+server → 定时器 → 反熵 → 备份 → 清理器 → 消费 → 订阅表 → 备份存储 → `queues.sync` → 队列 →
+死信 → 元数据 → 节点连接；单步失败不影响其它步骤，再次调用 `close()` 只重试失败步骤。
 
 ## 管理命令
 
@@ -80,7 +80,8 @@ fmq manager --server=127.0.0.1:2350 stats
 ## 指标与延迟投递
 
 `stats [topic]` 返回**当前节点**的指标，输出列为
-`topic / group / queueNum / delaying / backlog / lagMs / delivered / acked / redelivered / deadLettered`：
+`topic / group / queueNum / delaying / backlog / lagMs / delivered / acked / redelivered / deadLettered /
+skippedUnreadable / skippedNoMatch / skippedUnsupported`：
 
 - `backlog`：订阅组在该主题本地队列中 `committed` 之后的记录数（含已投递未确认与未到期延迟消息）。
 - `lagMs`：backlog 中最早一条消息的发布时长（毫秒）；无积压时为 `0`。
@@ -125,10 +126,11 @@ fmq manager --server=127.0.0.1:2350 stats
 - BODY 为未注册对象类型且存在非空 filter 的活跃订阅时，发布返回 `FILTER_UNSUPPORTED_BODY`
   且不落盘；空 filter 不需要服务端解码 BODY。
 - ACK 按 `(topic, queueIndex, group)` 精确定位游标；队列身份缺失或不属于本机时返回 `ACK_UNKNOWN`。
-- 游标指向的段被 TTL 清理后，自动跳到现存最老段并落盘；全部段不可读时返回空，不永久报错。
-- 备份副本在关闭阶段允许丢弃：`BackupStore` 关闭后到达的写入静默丢弃，不阻塞发布路径；
-  关闭前已成功返回的写入会落盘。
-- 段保留边界取「所有已注册组持久化位点的最小值」：从未消费过的组会把边界钉在最老段，
+- 游标指向的段被 TTL 清理后，自动跳到编号更大的最近现存段并落盘（记 WARN，同一位置按秒限流）；
+  全部段不可读时返回空，不永久报错。
+- 备份副本在关闭阶段允许丢弃：`BackupStore` 关闭后到达的写入会被丢弃并留痕
+  （WARN，同一秒限流一条），不阻塞发布路径；关闭前已成功返回的写入会落盘。
+- 段保留边界取「所有已注册组持久化位点的最小值」：从未消费过的组会把边界钉在编号最小的现存段，
   历史段不会回收。需要回收时删除该组，或接受语义变化后下调 `segmentedLogTTL`。
 - 删除墓碑默认保留 7d：离线时间超过 `mqServer_tombstoneTTL` 的节点无法通过增量收敛，
   需全量重建元数据（清空该节点 `metas/` 后重启拉快照）。

@@ -377,7 +377,7 @@ class ConsumeServiceTest {
         }
     }
 
-    /** 记录总数：从现存最老段扫一遍（替代生产侧已删除的 `countAll`）。 */
+    /** 记录总数：从现存编号最小的现存段扫一遍（替代生产侧已删除的 `countAll`）。 */
     private static func countOf(log: QueueLog): Int64 {
         let segs = log.segmentsOrEmpty()
         if (segs.size == 0) {

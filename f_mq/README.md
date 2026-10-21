@@ -1,7 +1,7 @@
 # f_mq
 
 消息队列的客户端与客户端/服务端共用 API（动态库，`fountain::f_mq`）。
-依赖 `f_codec`、`f_data`、`f_protocol`、`f_net`、`f_util`。
+依赖 `f_base`、`f_codec`、`f_config`、`f_data`、`f_io`、`f_log`、`f_net`、`f_protocol`、`f_time`、`f_util`。
 
 ## 快速开始
 
@@ -94,6 +94,15 @@ public class MQClient <: Resource {
   （`yyyyMMddHHmmss` + 9 位纳秒），用于服务端延迟投递判定；非标准 ID 返回 `None`。
 
 客户端 API 不提供主题/订阅组注册与统计入口；运维操作使用 `fmq manager`。
+
+## 命名与长度限制
+
+| 项目 | 规则 |
+| --- | --- |
+| 主题 | 非空、以 `/` 开头、不以 `/` 结尾、无空段（`//`）；不含控制字符与 Unicode 空白（`MQChars.isBlankOrControl`）；不是绝对路径时本地直接失败（`INVALID_TOPIC`） |
+| 订阅组 | 空串为默认组；≤ `MQGroup.MAX_LENGTH`（255）字节；不含控制字符/Unicode 空白与 `/` `\` `:` `%`；不以 `.` 开头或结尾（`INVALID_GROUP`） |
+| tags | 最多 `MQTags.MAX_COUNT`（64）个，每个 1..`MQTags.MAX_LENGTH`（128）字节；不含控制字符/Unicode 空白（`INVALID_TAGS`） |
+| 单条记录 | ≤ `min(QueueLog.MAX_RECORD_SIZE, 段上限 - 4 字节)`（即 `QueueLog.effectiveMaxRecord`）；超过时发布本地失败，不会写入段文件 |
 
 ## 语义与限制
 

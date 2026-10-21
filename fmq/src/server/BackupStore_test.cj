@@ -108,7 +108,7 @@ class BackupStoreTest {
         @Assert(store.instanceCount == 1)
         store.close()
 
-        // 关闭后从最老段顺序读回：记录不交错、不丢失
+        // 关闭后从编号最小的现存段顺序读回：记录不交错、不丢失
         let readerLog = QueueLog("${root}/backup/0/%2Ft/0", 1024 * 1024, 1)
         let reader = readerLog.openRecordsFrom(LogPosition(1, 0))
         var count = 0
