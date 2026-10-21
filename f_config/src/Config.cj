@@ -128,6 +128,28 @@ public class Config {
 
     }
     /**
+     * 删除配置项；键不存在时为空操作。
+     *
+     * 「值设成空串」与「原本没有这个键」对 `getString` 是不同的（`Some("")` vs `None`），
+     * 用例的保存-修改-还原需要真正的删除语义。
+     */
+    public static func remove(key: String): Unit {
+        ARGS.remove(key)
+        sensitiveMap.remove(key)
+        let prefixEnd = match (key.indexOf('_')) {
+            case Some(x) => x
+            case None => key.size
+        }
+        let prefix = key[0..prefixEnd]
+        for ((p, fn) in REFRESHER) {
+            if (prefix.startsWith(p) || prefix.startsWith('${Config.prefix}_${p}')) {
+                fn()
+                break
+            }
+        }
+    }
+
+    /**
      * 得到相同前缀的配置项
      */
     public static func getAll(prefix: String): Map<String, String> {

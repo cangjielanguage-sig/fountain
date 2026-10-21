@@ -159,7 +159,7 @@ public class MQClient <: Resource {
             }
         }
         if (let Some(error) <- fatal) {
-            let failedNodes = rollback(subscribedId, accepted)
+            let failedNodes = rollback(subscribedId, topic, accepted)
             let suffix = if (failedNodes.size == 0) {
                 ""
             } else {
@@ -180,7 +180,7 @@ public class MQClient <: Resource {
     }
 
     /** 回滚已接受的节点；返回回滚失败的节点描述（调用方把它拼进异常文案，A15）。 */
-    private func rollback(subscribedId: String, accepted: ArrayList<Int64>): Array<String> {
+    private func rollback(subscribedId: String, topic: String, accepted: ArrayList<Int64>): Array<String> {
         if (accepted.size == 0) {
             return []
         }
@@ -200,7 +200,8 @@ public class MQClient <: Resource {
             }
         }
         if (failed.size > 0) {
-            log.error("rollback of subscription ${subscribedId} failed on nodes: ${String.join(failed.toArray(), delimiter: ",")}")
+            log.error("rollback of subscription '${subscribedId}' (topic '${topic}') failed on nodes: " +
+                "${String.join(failed.toArray(), delimiter: ",")}")
         }
         failed.toArray()
     }

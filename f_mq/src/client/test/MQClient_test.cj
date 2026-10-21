@@ -21,6 +21,7 @@ import std.sync.AtomicInt64
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_data.*
+import fountain::f_data.macros.*
 import fountain::f_mq.base.*
 import fountain::f_mq.base.model.*
 import fountain::f_mq.base.payload.*
@@ -1072,6 +1073,160 @@ class MQClientTest {
         }
     }
 
+    /** 回滚失败要报出失败节点，并在 ERROR 日志里带订阅 id 与主题（R1-G11）。 */
+    @TestCase
+    public func rollbackFailureReportsNodeAndLogsContext(): Unit {
+        CapturingAppender.install()
+        let accepted = MQStubServer({buffer, request =>
+            match (request.command) {
+                case UNSUBSCRIBE => okBut(buffer, request, MQErrorCode.INTERNAL)
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        let rejected = MQStubServer({buffer, request => okBut(buffer, request, MQErrorCode.GROUP_NOT_EXIST)}).start()
+        try {
+            let client = MQClient([accepted.address(), rejected.address()])
+            var text = ""
+            try {
+                client.subscribe("/order", subscribeGroup: "g1")
+            } catch (e: MQServiceException) {
+                text = e.message
+            }
+            // 回滚失败的节点下标必须出现在异常文案里
+            @Assert(text.contains("0("))
+            @Assert(CapturingAppender.waitFor(["rollback", "0(", "/order"]))
+            client.close()
+        } finally {
+            accepted.close()
+            rejected.close()
+        }
+    }
+
+    /** ack 发送失败保留投递映射，重试成功后映射才删除（R1-G14）。 */
+    @TestCase
+    public func ackFailureKeepsDeliveryMappingAndRetryClearsIt(): Unit {
+        let acks = AtomicInt64(0)
+        let empty = MQStubServer({buffer, request =>
+            match (request.command) {
+                case CONSUME(_) => Some(MQProtocol.respond<MQConsumeResult>(request, MQConsumeResult()))
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        let owner = MQStubServer({buffer, request =>
+            match (request.command) {
+                case CONSUME(_) => Some(MQProtocol.respond<MQConsumeResult>(request, stubMessage("/order", 1, 0)))
+                case ACK =>
+                    if (acks.fetchAdd(1) == 0) {
+                        okBut(buffer, request, MQErrorCode.INTERNAL)
+                    } else {
+                        Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+                    }
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let client = MQClient([empty.address(), owner.address()])
+            let sid = client.subscribe("/order")
+            let message = client.consume(sid)
+            let position = (message.queueIndex, message.segmentedIndex, message.segmentedOffset)
+
+            // 第一次 ack 被服务端拒绝：异常上抛，映射必须保留
+            var code = -1i64
+            try {
+                client.ack(sid, position[0], position[1], position[2])
+            } catch (e: MQServiceException) {
+                code = e.code
+            }
+            @Assert(code == MQErrorCode.INTERNAL)
+
+            // 重试命中同一条映射：成功，映射删除，空节点没收到 ACK
+            client.ack(sid, position[0], position[1], position[2])
+            @Assert(countOf(empty, "ACK") == 0)
+            @Assert(countOf(owner, "ACK") == 2)
+
+            // 映射已删除：第三次 ack 走广播路径，两个 owner 都收到
+            client.ack(sid, position[0], position[1], position[2])
+            @Assert(countOf(empty, "ACK") == 1)
+            @Assert(countOf(owner, "ACK") == 3)
+            client.close()
+        } finally {
+            empty.close()
+            owner.close()
+        }
+    }
+
+    /** tags 顺序是业务语义：10 个 tag 发布后按原顺序还原（R1-G15）。 */
+    @TestCase
+    public func publishKeepsTenTagsInOrder(): Unit {
+        let stub = MQStubServer(ok).start()
+        try {
+            let client = MQClient([stub.address()])
+            let tags = Array<String>(10) {i => "tag-${i}"}
+            client.publish("/order", 1i64, tags: tags)
+            let record = MQProtocol.asRecord(stub.received()[0]).getOrThrow()
+            @Assert(MQMessageRecord.decode(record).getOrThrow().tags == tags)
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+
+    /** 订阅 owner 汇总只含接受者：NOT_OWNER 节点不参与 consume/ack（R1-G17）。 */
+    @TestCase
+    public func subscribeOwnersOnlyContainAcceptors(): Unit {
+        let acceptor = MQStubServer({buffer, request =>
+            match (request.command) {
+                case CONSUME(_) => Some(MQProtocol.respond<MQConsumeResult>(request, stubMessage("/order", 5, 0)))
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        let bystander = MQStubServer({buffer, request => okBut(buffer, request, MQErrorCode.NOT_OWNER)}).start()
+        try {
+            let client = MQClient([bystander.address(), acceptor.address()])
+            let sid = client.subscribe("/order")
+            let message = client.consume(sid)
+            client.ack(sid, message.queueIndex, message.segmentedIndex, message.segmentedOffset)
+            @Assert(countOf(bystander, "CONSUME") == 0)
+            @Assert(countOf(bystander, "ACK") == 0)
+            @Assert(countOf(acceptor, "CONSUME") == 1)
+            @Assert(countOf(acceptor, "ACK") == 1)
+            client.close()
+        } finally {
+            acceptor.close()
+            bystander.close()
+        }
+    }
+
+    /** 对象 BODY 端到端：publish → consume → get<T>() 字段相等，跨类型读为 None（R1-G18）。 */
+    @TestCase
+    public func objectBodyRoundTripsThroughPublishAndConsume(): Unit {
+        let published = ConcurrentHashMap<String, Array<Byte>>()
+        let stub = MQStubServer({buffer, request =>
+            match (request.command) {
+                case PUBLISH(_) =>
+                    published.add("record", MQProtocol.asRecord(request).getOrThrow())
+                    Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+                case CONSUME(_) =>
+                    let record = published.get("record").getOrThrow()
+                    Some(MQProtocol.respond<MQConsumeResult>(request, MQConsumeResult(0, 1, 0, record)))
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let client = MQClient([stub.address()])
+            client.publish("/order", OrderBody("book", 42))
+            let sid = client.subscribe("/order")
+            let message = client.consume(sid)
+            let body = message.get<OrderBody>().getOrThrow()
+            @Assert(body.name == "book")
+            @Assert(body.amount == 42)
+            @Assert(message.get<String>().isNone())
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+
     /** 全部 owner 不可达的消费失败日志要带订阅 id 与主题（R1-G2）。 */
     @TestCase
     public func consumeFailureLogsSubscriptionAndTopic(): Unit {
@@ -1090,5 +1245,19 @@ class MQClientTest {
         } finally {
             client.close()
         }
+    }
+}
+
+/** 端到端对象 BODY 的载荷类型。 */
+@DataAssist[props fields]
+public class OrderBody {
+    private var name: String = ''
+    private var amount: Int64 = 0
+
+    public init() {}
+
+    public init(name: String, amount: Int64) {
+        this.name = name
+        this.amount = amount
     }
 }
