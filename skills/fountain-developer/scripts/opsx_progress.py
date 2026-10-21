@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """opsx_progress.py — 采集 OpenSpec 流程与 cjpm/cjc 执行快照（每 5 分钟报告一次用）。
 
-背景：工作流 F / G / H / I / J 中，从进入 OpenSpec 六步或执行任何 cjpm/cjc 命令开始，
+背景：工作流 F / G / H / I / J / L 中，从进入 OpenSpec 六步或执行任何 cjpm/cjc 命令开始，
 就要按 references/opsx-waiting.md 的协议周期报告——不再判断「是否在等任务」或
 「测试是否耗时太久」。本脚本负责把「进度」采集为确定性的数据——tasks 勾选、四件套、
 工作区改动、后台输出、cjpm/cjc 进程与输出、停滞判定——避免每轮采集口径漂移。
