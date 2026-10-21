@@ -531,6 +531,17 @@ func transactions(connection: Connection): Unit {
         'select id from t_plain where id = 22'), 1)
 
     check('commit without begin', codeOf { transaction.commit() } == DbdErrorCode.TX_STATE)
+
+    // G25（记录不修）：全局表写在事务内仍走独立连接、各自提交，rollback 不会撤销它。
+    // 4 个物理库各一副本，故 rowCount=4；回滚后仍能读到该行，清理时按 4 行删除。
+    transaction.begin()
+    checkInt('global write inside transaction', execUpdate(connection,
+        "insert into t_global (k, v) values (9, 'tx')"), 4)
+    transaction.rollback()
+    checkInt('global write survives rollback', rowCount(connection,
+        'select v from t_global where k = 9'), 1)
+    checkInt('global write cleanup', execUpdate(connection,
+        'delete from t_global where k = 9'), 4)
 }
 
 func deleteFlow(connection: Connection): Unit {

@@ -700,6 +700,32 @@ public class DispatcherTest {
         }
     }
 
+    /** G25（记录不修）：事务内的全局表写走独立连接、各自提交，`rollback` 不会撤销。 */
+    @TestCase
+    public func globalWriteInsideTransactionUsesIndependentConnections(): Unit {
+        let logicals = HashMap<String, Array<String>>()
+        logicals['db0'] = ['db0', 'db1']
+        let globals = GlobalTableRouter([GlobalTableRule('db0', 'dict')],
+            logicalDatabases: logicals)
+        let (executor, resources, accessor) = globalFixture(globals)
+        let session = DbdSession('s', None, 'db0')
+        try {
+            executor.execute(session, 'begin', [])
+            @Assert(accessor.writes.toArray(), ['db0']) // pin 自身占一个写连接
+            let outcome = executor.execute(session, "insert into dict (k, v) values (1, 'a')", [])
+            @Assert(outcome.update.getOrThrow().rowCount, 2)
+            // 广播不复用 pin 连接：又向 db0 / db1 各借了独立写连接
+            @Assert(accessor.writes.toArray(), ['db0', 'db0', 'db1'])
+            executor.execute(session, 'rollback', [])
+            @Assert(session.isPinned(), false)
+            // rollback 只作用于 pin 连接；广播写已各自提交，故不会被撤销（无 2PC）
+            @Assert(accessor.writes.size, 3)
+        } finally {
+            session.close()
+            resources.close()
+        }
+    }
+
     @TestCase
     public func globalTableWriteReportsPartialFailure(): Unit {
         let logicals = HashMap<String, Array<String>>()
