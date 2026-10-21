@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::fmq.cluster
 
 import std.fs.*
+import std.sync.AtomicInt64
 import std.time.DateTime
 import std.unittest.*
 import std.unittest.testmacro.*
@@ -244,6 +245,79 @@ class LogCleanerTest {
             @Assert(log.segments().size == 1)
         } finally {
             meta.close()
+            queues.close()
+            dead.close()
+            clean(root)
+        }
+    }
+
+    /** 单个队列的清理失败不得中断整轮：其它队列照常回收（A41）。 */
+    @TestCase
+    public func oneQueueFailureDoesNotStopOthers(): Unit {
+        let root = rootOf("isolate")
+        clean(root)
+        let queues = QueueManager("${root}/logs", 40, 1)
+        queues.openTopic(MQTopicAssignment("/t", 1, 0, [0]), 0)
+        queues.openTopic(MQTopicAssignment("/u", 1, 0, [0]), 0)
+        let dead = DeadLetterQueue("${root}/dead", 40, 1)
+        try {
+            let logT = queues.queueOf("/t", 0).getOrThrow()
+            let logU = queues.queueOf("/u", 0).getOrThrow()
+            for (i in 0..6) {
+                logT.append(Array<Byte>(20, repeat: UInt8(i)))
+                logU.append(Array<Byte>(20, repeat: UInt8(i)))
+            }
+            let beforeT = logT.segments().size
+            let beforeU = logU.segments().size
+            @Assert(beforeT >= 2 && beforeU >= 2)
+            let cleaner = LogCleaner(queues, dead, {topic, _ =>
+                if (topic == "/t") {
+                    throw Exception("boom")
+                }
+                Int64.Max
+            }, Duration.second * -1, Duration.hour * 72)
+            try {
+                let removed = cleaner.cleanOnce(DateTime.now())
+                @Assert(removed >= 1)
+                // /t 一个都没删，/u 被回收
+                @Assert(logT.segments().size == beforeT)
+                @Assert(logU.segments().size < beforeU)
+            } finally {
+                cleaner.close()
+            }
+        } finally {
+            queues.close()
+            dead.close()
+            clean(root)
+        }
+    }
+
+    /** 定时器回调抛异常也不能让后续轮次停摆（A41）。 */
+    @TestCase
+    public func timerKeepsRunningAfterFailure(): Unit {
+        let (root, queues, dead) = make("timer_isolate", 40)
+        try {
+            fill(queues)
+            let calls = AtomicInt64(0)
+            let cleaner = LogCleaner(queues, dead, {_, _ =>
+                let n = calls.fetchAdd(1)
+                if (n == 0) {
+                    throw Exception("first round boom")
+                }
+                Int64.Max
+            }, Duration.second * -1, Duration.hour * 72, interval: Duration.millisecond * 50)
+            try {
+                cleaner.start()
+                var waited = 0
+                while (calls.load() < 2 && waited < 200) {
+                    sleep(Duration.millisecond * 10)
+                    waited++
+                }
+                @Assert(calls.load() >= 2)
+            } finally {
+                cleaner.close()
+            }
+        } finally {
             queues.close()
             dead.close()
             clean(root)

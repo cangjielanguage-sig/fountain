@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::fmq.cluster
 
+import std.collection.ArrayList
 import std.sync.{AtomicBool, Timer}
 import std.time.DateTime
 import fountain::f_log.*
@@ -47,22 +48,43 @@ protected class LogCleaner {
         this.interval = interval
     }
 
-    /** 一轮清理：返回删除的段数（普通队列 + 死信）。 */
+    /**
+     * 一轮清理：返回删除的段数（普通队列 + 死信）。
+     *
+     * 单个段/单个队列的删除失败不能中断整轮：逐对象 try/catch，最后汇总一条日志（A41）。
+     */
     protected func cleanOnce(now: DateTime): Int64 {
         var removed = 0i64
+        let failures = ArrayList<String>()
         for ((topic, queueIndex, queue) in queues.allLogs()) {
-            for (meta in queue.segments()) {
-                if (meta.last) {
-                    continue
+            try {
+                for (meta in queue.segments()) {
+                    if (meta.last) {
+                        continue
+                    }
+                    // 只有「段号小于全部组位点最小段号」的段才无人需要
+                    if (meta.updateTime + ttl < now && meta.index < floorOf(topic, queueIndex)) {
+                        try {
+                            queue.removeById(meta.index)
+                            removed++
+                        } catch (e: Exception) {
+                            failures.add("${topic}/${queueIndex}#${meta.index}(${e.message})")
+                        }
+                    }
                 }
-                // 只有「段号小于全部组位点最小段号」的段才无人需要
-                if (meta.updateTime + ttl < now && meta.index < floorOf(topic, queueIndex)) {
-                    queue.removeById(meta.index)
-                    removed++
-                }
+            } catch (e: Exception) {
+                // 位点查询等前置步骤失败：只跳过该队列，其它对象照常清理
+                failures.add("${topic}/${queueIndex}(${e.message})")
             }
         }
-        removed += deadLetter.cleanExpired(deadMsgTTL, now)
+        try {
+            removed += deadLetter.cleanExpired(deadMsgTTL, now)
+        } catch (e: Exception) {
+            failures.add("dead-letter(${e.message})")
+        }
+        if (failures.size > 0) {
+            log.warn("cleanup skipped ${failures.size} object(s): ${String.join(failures.toArray(), delimiter: ",")}")
+        }
         if (removed > 0) {
             log.info("removed ${removed} expired segments")
         }
@@ -70,7 +92,15 @@ protected class LogCleaner {
     }
 
     protected func start(now!: () -> DateTime = {=> DateTime.now()}): Unit {
-        timer = Some(Timer.repeat(interval, interval, {=> cleanOnce(now())}))
+        // 定时回调必须自吞异常，否则一次失败会让后续所有轮次停摆（A41）
+        timer = Some(Timer.repeat(interval, interval, {=>
+            try {
+                cleanOnce(now())
+            } catch (e: Exception) {
+                log.error("cleanup round failed: ${e.message}")
+            }
+            ()
+        }))
     }
 
     protected func close(): Unit {
