@@ -31,11 +31,19 @@ fmq server
 | `mqServer_segmentedLogMaxSize` | 1G |
 | `mqServer_segmentedLogTTL` | 72h |
 | `mqServer_backup` | 0（不复制） |
+| `mqServer_tombstoneTTL` | 7d（删除墓碑保留时长） |
+| `mqServer_antiEntropyInterval` | 30s（反熵同步间隔） |
 | `mqClient_hosts` | 必填，节点表 |
 
 `mqServer_backup = N` 时每条消息异步推送给环形后续的 N 个节点（不含自身，最多 `节点数-1`）；
-副本只落盘，不参与投递。备份队列满或关闭阶段到达的写入会被丢弃并记 WARN，发布路径不阻塞。
-`fmq server --help` 打印全部配置项。
+副本只落盘，不参与投递。发布路径只入队，独立工作线程按 64 条或 100ms 批量发送，失败批次重入队、
+最多重试 3 次后丢弃并记 ERROR；备份队列满或关闭阶段到达的写入会被丢弃并记 WARN，发布路径不阻塞。
+备份载荷携带每组真实位点（`cursors`），恢复时据此不回放已确认消息；备份段按位点与 `segmentedLogTTL`
+一起参与清理，磁盘不会无界增长。`fmq server --help` 打印全部配置项。
+
+`SIGTERM`/`SIGINT` 会触发优雅关闭：退出钩子调用 `MQServer.close()`，按固定顺序释放
+server → 定时器 → 反熵 → 备份 → 清理器 → 消费 → 备份存储 → 队列 → 死信 → 元数据 → 节点连接；
+单步失败不影响其它步骤，再次调用 `close()` 只重试失败步骤。
 
 ## 管理命令
 
@@ -65,6 +73,9 @@ fmq manager --server=127.0.0.1:2350 stats
   `mqServer_deadMsgTTL` 保留。
 - `autoAck` 订阅在投递时自动推进游标，客户端无需 `ack`。
 - 延迟消息未到期时不投递、不推进游标，并阻塞该队列的后续消息（保持 FIFO）。
+- 组内无匹配订阅时该位置被标记为「不适用」并越过（DEBUG 日志）；组内无人在线时保留未决、不推进。
+- BODY 无法评估（未注册对象类型 + 非空 filter）时，该位置被越过并向触发扫描的消费者返回一次
+  `FILTER_UNSUPPORTED_BODY`，同一位置不重复报错，组不会停摆。
 
 ## 指标与延迟投递
 
@@ -73,7 +84,9 @@ fmq manager --server=127.0.0.1:2350 stats
 
 - `backlog`：订阅组在该主题本地队列中 `committed` 之后的记录数（含已投递未确认与未到期延迟消息）。
 - `lagMs`：backlog 中最早一条消息的发布时长（毫秒）；无积压时为 `0`。
-- `delivered` / `acked` / `redelivered` / `deadLettered`：进程启动以来的累计值，重启归零。
+- `delivered` / `acked` / `redelivered` / `deadLettered`：进程启动以来的累计值，重启归零；
+  `autoAck` 订阅的投递同样计入 `acked`，删除主题/组时对应计数器清零。
+- 扫描失败（段损坏）时返回 `ERROR(INTERNAL)`，不会伪造 `backlog=0`；`lagMs` 负值钳到 0。
 - 主题没有订阅组时输出一行 `group` 为空的零值行；`stats` 不带 topic 时汇总本节点持有的主题。
 
 多节点部署时需分别查询各节点；manager 不自动聚合。`backlog` / `lagMs` 在查询时扫描，
@@ -89,15 +102,20 @@ fmq manager --server=127.0.0.1:2350 stats
 ```
 <可执行文件目录>/metas/
 ├── assign.meta
+├── revision.meta                       # Lamport 计数器
 ├── topics/<topicEsc>.meta
 ├── groups/<topicEsc>/<groupEsc>.meta
+├── tombstones/t_<topicEsc>.meta         # 主题墓碑
+├── tombstones/g_<topicEsc>_<groupEsc>.meta
 └── offsets/<topicEsc>/<queueIndex>/<groupEsc>.cursor
 <segmentedLogDir>/<topicEsc>/<queueIndex>/log_<seq>.log
 <segmentedLogDir>/backup/<ownerIndex>/<topicEsc>/<queueIndex>/log_<seq>.log
+<segmentedLogDir>/backup/<ownerIndex>/<topicEsc>/<queueIndex>/cursors/<groupEsc>.cursor
 <deadMsgDir>/log_<seq>.log
 ```
 
-主题名使用百分号编码（仅保留 `[A-Za-z0-9._-]`，空串 → `%00`）；元数据写入采用 `.tmp` + rename。
+主题名使用百分号编码（仅保留 `[A-Za-z0-9._-]`，空串 → `%00`）；元数据与游标写入采用
+`.tmp` + `fsync` + rename + 父目录 `fsync`，掉电不会留下空文件。
 
 ## 已知限制
 
@@ -110,6 +128,12 @@ fmq manager --server=127.0.0.1:2350 stats
 - 游标指向的段被 TTL 清理后，自动跳到现存最老段并落盘；全部段不可读时返回空，不永久报错。
 - 备份副本在关闭阶段允许丢弃：`BackupStore` 关闭后到达的写入静默丢弃，不阻塞发布路径；
   关闭前已成功返回的写入会落盘。
+- 段保留边界取「所有已注册组持久化位点的最小值」：从未消费过的组会把边界钉在最老段，
+  历史段不会回收。需要回收时删除该组，或接受语义变化后下调 `segmentedLogTTL`。
+- 删除墓碑默认保留 7d：离线时间超过 `mqServer_tombstoneTTL` 的节点无法通过增量收敛，
+  需全量重建元数据（清空该节点 `metas/` 后重启拉快照）。
+- 大记录（>4096 字节）的完整支持要求集群内**所有节点**升级到本版本：旧节点收到大记录仍会降级为空，
+  发布大消息前先完成服务端滚动升级。
 
 ## 测试与端到端
 
