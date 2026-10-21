@@ -28,6 +28,13 @@ import fountain::f_dbd.multid.MultiD
 var checks: Int64 = 0
 var failures: Int64 = 0
 
+func isCustomExtension(): Bool {
+    match (getVariable('FDBM_E2E_CUSTOM')) {
+        case Some(value) => value == '1'
+        case None => false
+    }
+}
+
 func check(name: String, ok: Bool): Unit {
     checks += 1
     if (ok) {
@@ -36,6 +43,10 @@ func check(name: String, ok: Bool): Unit {
         failures += 1
         println('FAIL ${name}')
     }
+}
+
+func checkOptionalText(name: String, actual: Option<String>, expected: Option<String>): Unit {
+    check('${name} (${actual} == ${expected})', actual == expected)
 }
 
 func checkInt(name: String, actual: Int64, expected: Int64): Unit {
@@ -80,6 +91,17 @@ func firstText(connection: Connection, sql: String): ?String {
         } finally {
             result.close()
         }
+    } finally {
+        statement.close()
+    }
+}
+
+/** 执行更新并返回 (rowCount, lastInsertId)。 */
+func execUpdateWithId(connection: Connection, sql: String): (Int64, Int64) {
+    let statement = connection.prepareStatement(sql)
+    try {
+        let result = statement.update()
+        (result.rowCount, result.lastInsertId)
     } finally {
         statement.close()
     }
@@ -172,9 +194,59 @@ func secondPort(): UInt16 {
  * 序列 ID、INSERT…SELECT、SHOW、EXPORT、事务/savepoint、DELETE 三步、大字段、错误码。
  * 覆盖 f_dbd：连接元数据、参数绑定、get/getOrNull、结果集独占与关闭握手、MultiD。
  */
+/** T07 自定义扩展：自定义分区算法 + 自定义 ID 生成器。 */
+func customExtension(): Int64 {
+    let base = 'fdbm://fdbm@127.0.0.1:${port()}/${logicalDatabase()}'
+    let datasource = dbdDriver().open(base, [])
+    datasource.setOption('query_timeout', '30000')
+    datasource.setOption('update_timeout', '30000')
+    let connection = datasource.connect()
+    try {
+        check('custom ddl drop', execUpdate(connection, 'drop table if exists t_custom') >= 0)
+        check('custom ddl create', execUpdate(connection,
+            'create table t_custom (id bigint primary key, name varchar(32))') >= 0)
+        var i: Int64 = 1
+        while (i <= 4) {
+            check('custom insert ${i}', execUpdate(connection,
+                "insert into t_custom (id, name) values (${i}, 'n${i}')") == 1)
+            i += 1
+        }
+        checkOptionalText('custom count', firstText(connection, 'select count(*) from t_custom'), Some('4'))
+
+        let (rows, _) = execUpdateWithId(connection,
+            "insert into t_custom (name) values ('auto')")
+        checkInt('custom auto insert', rows, 1)
+        // 自定义生成器写入的值必须真的落库（落点由 run.sh 逐库核对）
+        checkOptionalText('custom auto id from extension',
+            firstText(connection, "select id from t_custom where name = 'auto'"), Some('7001'))
+        checkOptionalText('custom count after auto',
+            firstText(connection, 'select count(*) from t_custom'), Some('5'))
+
+        // T09：`maxSize=1` 下 returning 也必须归还连接，否则下面的查询会超时（MySQL 无 RETURNING）
+        if (backend() == 'postgres') {
+            let (retRows, retId) = execUpdateWithId(connection,
+                "insert into t_custom (id, name) values (100, 'ret') returning id")
+            checkInt('custom returning insert', retRows, 1)
+            checkInt('custom returning lastInsertId', retId, 100)
+            checkOptionalText('custom query after returning',
+                firstText(connection, 'select count(*) from t_custom'), Some('6'))
+        }
+    } finally {
+        connection.close()
+        datasource.close()
+    }
+    println('----')
+    println('checks=${checks}, failures=${failures}')
+    println('E2E_DONE')
+    if (failures == 0) { 0 } else { 1 }
+}
+
 main(): Int64 {
     if (isProbe()) {
         return probe()
+    }
+    if (isCustomExtension()) {
+        return customExtension()
     }
     let base = 'fdbm://fdbm@127.0.0.1:${port()}/${logicalDatabase()}'
     let datasource = dbdDriver().open(base, [])

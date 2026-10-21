@@ -54,10 +54,10 @@ build_fdbm() {
         || { tail -30 "$WORK/fdbm-install.log" >&2; fail "fdbm install failed"; }
 }
 
-# start_server <port> <cache 目录> <export 脚本> <日志>
-# 公共环境 + backend_server_env 输出写入 env_<port>.sh，再以该环境启动 fdbm。
+# start_server <port> <cache 目录> <export 脚本> <日志> [额外 env 文件]
+# 公共环境 + backend_server_env（+ 额外 env）写入 env_<port>.sh，再以该环境启动 fdbm。
 start_server() {
-    local port="$1"; local cache="$2"; local export="$3"; local log="$4"
+    local port="$1"; local cache="$2"; local export="$3"; local log="$4"; local extra="${5:-}"
     local envfile="$WORK/env_$port.sh"
     {
         echo "export fdbm_port=$port"
@@ -93,6 +93,9 @@ start_server() {
         echo "export logger_appender_console=FdbmConsole"
         echo "export logger_appender_FdbmConsole_level=INFO"
         backend_server_env
+        if [ -n "$extra" ]; then
+            cat "$extra"
+        fi
     } > "$envfile"
     touch "$export"
     (
