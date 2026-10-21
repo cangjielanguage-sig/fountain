@@ -23,11 +23,15 @@ import std.sync.AtomicInt64
 import std.time.DateTime
 import std.unittest.*
 import std.unittest.testmacro.*
+import fountain::f_mq.base.payload.MQTopicAssignment
 import fountain::f_data.*
 import fountain::f_io.LogPosition
 import fountain::f_mq.base.{MQFilter, MQMessageRecord}
 import fountain::f_mq.base.payload.MQDeadLetterMessage
+import fountain::fmq.meta.MetaStore
+import fountain::f_mq.base.model.MQSubscribeGroupMeta
 import fountain::fmq.metrics.MQMetrics
+import fountain::fmq.test.TestDirs
 
 class CursorClock {
     var value: DateTime = DateTime.now()
@@ -41,19 +45,26 @@ class CursorFixture <: Resource {
     let root: String
     let log: QueueLog
     let store: CursorStore
+    let meta: MetaStore
+    let catalog: CursorCatalog
     let deadLetter: DeadLetterQueue
     let clock = CursorClock()
     private let topic = "/t"
 
     init(name: String, maxFileSize!: Int64 = 1024 * 1024, ackTimeout!: Duration = Duration.second * 10,
         threshold!: Int64 = 3) {
-        this.root = "/tmp/fmq_test_group_cursor/${name}"
+        this.root = TestDirs.of("group_cursor", name)
         if (exists(root)) {
             remove(root, recursive: true)
         }
         Directory.create(root, recursive: true)
         this.log = QueueLog("${root}/logs", maxFileSize, 1)
         this.store = CursorStore(root)
+        this.meta = MetaStore("${root}/metas")
+        meta.load()
+        meta.applyTopic(MQTopicAssignment("/t", 1, 0, [0]))
+        meta.applyGroup(MQSubscribeGroupMeta("/t", "g"))
+        this.catalog = CursorCatalog(store, meta)
         this.deadLetter = DeadLetterQueue("${root}/dead", maxFileSize, 1)
         this.ackTimeout_ = ackTimeout
         this.threshold_ = threshold
@@ -76,7 +87,7 @@ class CursorFixture <: Resource {
 
     func cursorOf(group!: String = "g", delaying!: Duration = Duration.Zero,
         metrics!: ?MQMetrics = None): GroupCursor {
-        GroupCursor(topic, 0, group, log, store, ackTimeout_, threshold_, deadLetter, delaying: delaying,
+        GroupCursor(topic, 0, group, log, catalog, ackTimeout_, threshold_, deadLetter, delaying: delaying,
             metrics: metrics, now: {=> clock.value})
     }
 
@@ -296,6 +307,8 @@ class GroupCursorTest {
             // 唯一的记录不匹配 ⇒ 记为不适用并越过
             let expected = 4 + recordSize("one", tags)
             @Assert(posEq(cursor.committed, LogPosition(1, expected)))
+            // 越过必须留痕（DEBUG 日志 + 跳过计数）
+            @Assert(cursor.noMatchSkipped == 1)
             cursor.close()
         } finally {
             fixture.close()
@@ -387,25 +400,24 @@ class GroupCursorTest {
     }
 
     @TestCase
-    public func referencesCoversCommittedAndLaterSegments(): Unit {
-        // 段上限 120：每条记录 4 + record.size 字节，第二条必然轮转
-        let fixture = CursorFixture("references", maxFileSize: 32)
+    public func catalogFloorTracksCommittedSegments(): Unit {
+        // 段上限 32：两条记录必然跨段
+        let fixture = CursorFixture("floor_committed", maxFileSize: 32)
         try {
             let p1 = fixture.append([], "one")
             let p2 = fixture.append([], "two")
             @Assert(p2.seq > p1.seq)
             let cursor = fixture.cursorOf()
             let sub = fixture.sub("s1")
-            // committed 仍在段 1：段 1、2 都可能含未读数据
-            @Assert(cursor.references(1))
-            @Assert(cursor.references(2))
+            // 组从未消费：边界钉在最老段
+            @Assert(fixture.catalog.floorOf("/t", 0) == 1)
             let first = cursor.next(sub, [sub], MQMatcher()).getOrThrow()
             @Assert(cursor.ack("s1", first[1]))
             let second = cursor.next(sub, [sub], MQMatcher()).getOrThrow()
             @Assert(cursor.ack("s1", second[1]))
-            // committed 已越过段 1
-            @Assert(!cursor.references(1))
-            @Assert(cursor.references(2))
+            // committed 已越过段 1：边界抬到 committed 的段号
+            @Assert(fixture.catalog.floorOf("/t", 0) == cursor.committed.seq)
+            @Assert(cursor.committed.seq > 1)
             cursor.close()
         } finally {
             fixture.close()
@@ -457,6 +469,82 @@ class GroupCursorTest {
         }
     }
 
+    /** 读流已打开后整目录被删除：与开流路径一致返回空，不把空队列变成异常（W1）。 */
+    @TestCase
+    public func allSegmentsMissingMidStreamReturnsNone(): Unit {
+        let fixture = CursorFixture("all_gone_mid", maxFileSize: 4 + recordSize("m0", []))
+        try {
+            fixture.append([], "m0")
+            fixture.append([], "m1")
+            let cursor = fixture.cursorOf()
+            let sub = fixture.sub("s1")
+            // 第一次投递后读流仍开着（跨段），此时运维删掉整个队列目录
+            let first = cursor.next(sub, [sub], MQMatcher()).getOrThrow()
+            @Assert(first[1].seq == 1)
+            remove("${fixture.root}/logs", recursive: true)
+            var thrown = false
+            var item: ?(Array<Byte>, LogPosition) = None
+            try {
+                item = cursor.next(sub, [sub], MQMatcher())
+            } catch (_: Exception) {
+                thrown = true
+            }
+            @Assert(!thrown)
+            @Assert(item.isNone())
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 起点段落在空洞时从最接近的更大段继续，不得回退到更老段重投（W2）。 */
+    @TestCase
+    public func startingSegmentHoleResumesAtNextSegment(): Unit {
+        let fixture = CursorFixture("segment_hole", maxFileSize: 4 + recordSize("m0", []))
+        try {
+            for (i in 0..8) {
+                fixture.append([], "m${i}")
+            }
+            // 运维手删中间段：只剩 1、7、8
+            for (i in 2..=6) {
+                fixture.log.removeById(i)
+            }
+            @Assert(fixture.log.segments().size == 3)
+            fixture.store.save("/t", 0, "g", LogPosition(5, 0))
+
+            let cursor = fixture.cursorOf()
+            let sub = fixture.sub("s1")
+            let item = cursor.next(sub, [sub], MQMatcher()).getOrThrow()
+            // 从段 7 起点继续（第 7 条记录 m6），而不是回退到段 1 重投 m0
+            @Assert(item[1].seq == 7 && item[1].offset == 0)
+            @Assert(convert<String>(MQMessageRecord.decode(item[0]).getOrThrow().body.data).getOrThrow() == "m6")
+            @Assert(cursor.committed.seq == 7 && cursor.committed.offset == 0)
+            @Assert(fixture.store.load("/t", 0, "g").getOrThrow().seq == 7)
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 「不可评估 BODY 跳过」必须计数（W3）。 */
+    @TestCase
+    public func unsupportedBodySkipIsCounted(): Unit {
+        let fixture = CursorFixture("unsupported_skip")
+        try {
+            // 截断记录：topic/tags 可解，BODY 不可解 ⇒ 带 filter 的订阅无法判定
+            let full = MQMessageRecord.encode("/t", [], "mid-truncated", "{\"level\":1}".toData())
+            fixture.log.append(full[0..full.size - 3])
+            let cursor = fixture.cursorOf()
+            let sub = fixture.sub("s1", filter: "$.level")
+            @Assert(cursor.next(sub, [sub], MQMatcher()).isNone())
+            @Assert(cursor.unsupportedSkipped == 1)
+            @Assert(cursor.takeUnsupported().isSome())
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
     @TestCase
     public func concurrentNextAndAckProduceUniquePositions(): Unit {
         let fixture = CursorFixture("concurrent", ackTimeout: Duration.hour, threshold: 1000)
@@ -488,6 +576,8 @@ class GroupCursorTest {
             }
             @Assert(done.load() == 4)
             @Assert(seen.size == 200)
+            // 并发确认后 committed 已推进（单调，不回退到起点）
+            @Assert(cursor.committed.seq > 1 || cursor.committed.offset > 0)
             cursor.close()
         } finally {
             fixture.close()
@@ -548,6 +638,22 @@ class GroupCursorTest {
             let reopened = fixture.cursorOf(delaying: Duration.second * 61)
             @Assert(reopened.next(sub, [sub], MQMatcher()).isNone())
             reopened.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 比当前时刻晚 8 小时的时间戳（旧版按本地时区写入）必须视为已到期，不能把组卡住（A02）。 */
+    @TestCase
+    public func futurePublishTimeIsDeliveredImmediately(): Unit {
+        let fixture = CursorFixture("delay_future")
+        try {
+            fixture.appendAt([], "skewed", DateTime.nowUTC() + Duration.hour * 8)
+            let cursor = fixture.cursorOf(delaying: Duration.second * 61)
+            let sub = fixture.sub("s1")
+            let item = cursor.next(sub, [sub], MQMatcher()).getOrThrow()
+            @Assert(convert<String>(MQMessageRecord.decode(item[0]).getOrThrow().body.data) == Some("skewed"))
+            cursor.close()
         } finally {
             fixture.close()
         }
@@ -625,6 +731,65 @@ class GroupCursorTest {
             fixture.clock.advance(Duration.second * 62)
             @Assert(cursor.next(s1, members, MQMatcher()).isNone())
             @Assert(cursor.next(s2, members, MQMatcher()).isSome())
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 记录不可读时标记已决但必须留痕，不能静默吞掉（A48）。 */
+    @TestCase
+    public func unreadableRecordIsCounted(): Unit {
+        let fixture = CursorFixture("unreadable")
+        try {
+            let position = fixture.append(["b"], "one")
+            let cursor = fixture.cursorOf()
+            let s1 = fixture.sub("s1", tags: ["a"])
+            let s2 = fixture.sub("s2", tags: ["b"])
+            let members = [s1, s2]
+            // s1 扫描：记录分配给 s2（entry.position = 记录位置）
+            @Assert(cursor.next(s1, members, MQMatcher()).isNone())
+            // 把该段的长度头改成 0：readAt 读不到内容
+            let dir = "${fixture.root}/logs"
+            let rewritten = Array<Bool>(1, repeat: false)
+            Directory.walk(dir) {info: FileInfo =>
+                if (!rewritten[0] && !info.isDirectory() && info.name.startsWith("log_")) {
+                    let file = File(info.path.toString(), OpenMode.Write)
+                    file.write([0u8, 0u8, 0u8, 0u8])
+                    file.close()
+                    rewritten[0] = true
+                }
+                true
+            }
+            @Assert(rewritten[0])
+            @Assert(cursor.next(s2, members, MQMatcher()).isNone())
+            @Assert(cursor.unreadableSkipped == 1)
+            @Assert(cursor.committed.seq > position.seq ||
+                (cursor.committed.seq == position.seq && cursor.committed.offset > position.offset))
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 未真正投递过的位置不接受 ACK，游标也不得推进（A50）。 */
+    @TestCase
+    public func ackRequiresDeliveredPosition(): Unit {
+        let fixture = CursorFixture("ack_not_delivered")
+        try {
+            let position = fixture.append(["b"], "one")
+            let cursor = fixture.cursorOf()
+            let s1 = fixture.sub("s1", tags: ["a"])
+            let s2 = fixture.sub("s2", tags: ["b"])
+            let members = [s1, s2]
+            // s1 扫描时把记录分配给 s2（delivered = false），s1 拿不到
+            @Assert(cursor.next(s1, members, MQMatcher()).isNone())
+            // s2 还没取走就 ACK：必须被拒绝
+            @Assert(!cursor.ack("s2", position))
+            @Assert(cursor.committed.seq == 1 && cursor.committed.offset == 0)
+            // s2 真正取走后 ACK 生效
+            @Assert(cursor.next(s2, members, MQMatcher()).isSome())
+            @Assert(cursor.ack("s2", position))
             cursor.close()
         } finally {
             fixture.close()

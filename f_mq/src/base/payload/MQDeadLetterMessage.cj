@@ -32,12 +32,24 @@ public class MQDeadLetterMessage {
     private var segmentedOffset: Int64 = 0
     private var deliverCount: Int64 = 0
     private var deadTime: DateTime = DateTime.now()
-    private var record: Array<Byte> = []
+    private var record: MQBlob = MQBlob()
 
     public init() {}
 
     public init(topic: String, queueIndex: Int64, subscribeGroup: String, segmentedIndex: Int64,
         segmentedOffset: Int64, deliverCount: Int64, deadTime: DateTime, record: Array<Byte>) {
+        this.topic = topic
+        this.queueIndex = queueIndex
+        this.subscribeGroup = subscribeGroup
+        this.segmentedIndex = segmentedIndex
+        this.segmentedOffset = segmentedOffset
+        this.deliverCount = deliverCount
+        this.deadTime = deadTime
+        this.record = MQBlob(record)
+    }
+
+    public init(topic: String, queueIndex: Int64, subscribeGroup: String, segmentedIndex: Int64,
+        segmentedOffset: Int64, deliverCount: Int64, deadTime: DateTime, record: MQBlob) {
         this.topic = topic
         this.queueIndex = queueIndex
         this.subscribeGroup = subscribeGroup

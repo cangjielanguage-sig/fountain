@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::fmq.cluster
 
 import std.collection.ArrayList
-import std.sync.{AtomicBool, Mutex}
+import std.sync.{AtomicBool, AtomicInt64, Mutex}
 import fountain::f_data.DataAny
 import fountain::f_log.*
 import fountain::f_mq.base.MQHost
@@ -31,18 +31,25 @@ import fountain::f_protocol.default.Message
  */
 protected class NodeRegistry <: MQNodeTransport & Resource {
     private static let log = LoggerFactory.getLogger("fountain::fmq.cluster.NodeRegistry")
+    /** 存活状态三态：未知 / 存活 / 已知死亡。 */
+    private static let STATE_UNKNOWN: Int64 = 0
+    private static let STATE_ALIVE: Int64 = 1
+    private static let STATE_DEAD: Int64 = 2
 
     private let nodes: Array<String>
     private let self: Int64
     private let pingTimeout: Duration
     private let clients: Array<?Client<DataAny>>
-    private let alive: Array<AtomicBool>
+    private let alive: Array<AtomicInt64>
     private let lock = Mutex()
     private let closed = AtomicBool(false)
     private var revivedCallback: ?(() -> Unit) = None
+    /** 建连函数：生产用真实 `Client.builder`，用例注入替身避免依赖真实端口（0.4 的约定）。 */
+    private let buildClientFn: (String) -> Client<DataAny>
 
     protected init(nodes: Array<String>, selfIndex: Int64, checkDuration!: Duration = Duration.second * 30,
-        pingTimeout!: Duration = Duration.second) {
+        pingTimeout!: Duration = Duration.second,
+        clientBuilder!: ?(String) -> Client<DataAny> = None) {
         if (selfIndex < 0 || selfIndex >= nodes.size) {
             throw IllegalArgumentException("selfIndex ${selfIndex} out of range [0, ${nodes.size})")
         }
@@ -55,11 +62,22 @@ protected class NodeRegistry <: MQNodeTransport & Resource {
         this.self = selfIndex
         this.pingTimeout = pingTimeout
         this.clients = Array<?Client<DataAny>>(nodes.size) {_ => None<Client<DataAny>>}
-        this.alive = Array<AtomicBool>(nodes.size) {_ => AtomicBool(true)}
-        this.checkDuration_ = checkDuration
+        // 存活标记初值必须是「未知=不存活」：旧实现全真，isAlive 永远为真而没有意义（A40）
+        this.alive = Array<AtomicInt64>(nodes.size) {_ => AtomicInt64(STATE_UNKNOWN)}
+        this.buildClientFn = match (clientBuilder) {
+            case Some(fn) => fn
+            case None => {entry =>
+                let (host, port) = MQHost.parseHost(entry).getOrThrow {
+                    IllegalArgumentException("invalid node '${entry}'")
+                }
+                Client<DataAny>.builder(
+                    address: "${host}:${port}",
+                    checkDuration: checkDuration,
+                    checker: {=> Message.ping()}
+                ).pingTimeout(pingTimeout).build()
+            }
+        }
     }
-
-    private let checkDuration_: Duration
 
     public prop selfIndex: Int64 {
         get() {
@@ -102,23 +120,25 @@ protected class NodeRegistry <: MQNodeTransport & Resource {
         synchronized(lock) {
             match (clients[index]) {
                 case Some(client) =>
-                    if (client.isClosed()) {
-                        throw Exception("connection to node ${index} is closed")
+                    if (!client.isClosed()) {
+                        return client
                     }
-                    client
-                case None =>
-                    let (host, port) = MQHost.parseHost(nodes[index]).getOrThrow {
-                        IllegalArgumentException("invalid node '${nodes[index]}'")
-                    }
-                    let client = Client<DataAny>.builder(
-                        address: "${host}:${port}",
-                        checkDuration: checkDuration_,
-                        checker: {=> Message.ping()}
-                    ).pingTimeout(pingTimeout).build()
-                    clients[index] = client
-                    client
+                    // 连接被关闭（心跳超时/对端断开）：清槽重建，不能让节点永久不可用（A39）
+                    try {
+                        client.close()
+                    } catch (_: Exception) {}
+                    clients[index] = None<Client<DataAny>>
+                    createClient(index)
+                case None => createClient(index)
             }
         }
+    }
+
+    /** 建连并写槽；调用方必须已持有 `lock`。 */
+    private func createClient(index: Int64): Client<DataAny> {
+        let client = buildClientFn(nodes[index])
+        clients[index] = client
+        client
     }
 
     /** 向指定节点发请求；自身或失败返回 `None`。 */
@@ -165,9 +185,9 @@ protected class NodeRegistry <: MQNodeTransport & Resource {
 
     protected func markSeen(index: Int64): Unit {
         if (index >= 0 && index < alive.size) {
-            let wasAlive = alive[index].load()
-            alive[index].store(true)
-            if (!wasAlive) {
+            let previous = alive[index].load()
+            alive[index].store(STATE_ALIVE)
+            if (previous != STATE_ALIVE) {
                 log.info("node ${index} is back online")
                 // 恢复后补齐离线期间错过的元数据变更；回调异常不得影响心跳/调用线程
                 match (revivedCallback) {
@@ -185,15 +205,24 @@ protected class NodeRegistry <: MQNodeTransport & Resource {
 
     protected func markFailed(index: Int64): Unit {
         if (index >= 0 && index < alive.size) {
-            alive[index].store(false)
+            alive[index].store(STATE_DEAD)
         }
     }
 
-    protected func isAlive(index: Int64): Bool {
+    public func isAlive(index: Int64): Bool {
         if (index < 0 || index >= alive.size) {
             false
         } else {
-            alive[index].load()
+            alive[index].load() == STATE_ALIVE
+        }
+    }
+
+    /** 最近一次调用已失败：广播跳过它，靠反熵补偿（A40）。 */
+    public func isKnownDead(index: Int64): Bool {
+        if (index < 0 || index >= alive.size) {
+            true
+        } else {
+            alive[index].load() == STATE_DEAD
         }
     }
 

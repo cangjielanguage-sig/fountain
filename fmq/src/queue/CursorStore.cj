@@ -19,7 +19,7 @@ import std.collection.ArrayList
 import std.fs.*
 import fountain::f_codec.default.DefaultCodec
 import fountain::f_io.{ByteBuffer, LogPosition}
-import fountain::fmq.meta.MQFileNames
+import fountain::fmq.meta.{AtomicFile, MQFileNames}
 
 /**
  * 消费位点落盘：`metas/offsets/<topicEsc>/<queueIndex>/<groupEsc>.cursor`。
@@ -67,6 +67,11 @@ protected class CursorStore {
         }
     }
 
+    /** 位点文件是否存在（用于区分「从未消费」与「文件损坏」）。 */
+    protected func hasCursor(topic: String, queueIndex: Int64, group: String): Bool {
+        exists(pathOf(topic, queueIndex, group))
+    }
+
     protected func save(topic: String, queueIndex: Int64, group: String, position: LogPosition): Unit {
         let path = pathOf(topic, queueIndex, group)
         let parent = Path(path).parent
@@ -81,16 +86,7 @@ protected class CursorStore {
         } finally {
             codec.release()
         }
-        let tmp = "${path}.tmp"
-        let file = File.create(tmp)
-        try {
-            file.write(bytes)
-        } finally {
-            if (!file.isClosed()) {
-                file.close()
-            }
-        }
-        rename(tmp, to: path, overwrite: true)
+        AtomicFile().write(path, bytes)
     }
 
     /** 删除主题下的全部游标位点。 */

@@ -50,6 +50,13 @@ public struct MQManagerArgs {
                     return None<MQManagerArgs>
                 }
                 server = args[i]
+            } else if (arg.startsWith("-")) {
+                // 配置参数（`--k=v` / `-k v`）不是子命令：跳过它定位真正的子命令。
+                // 单横线形式的值是下一个 token（与 f_config 的解析规则一致），一并跳过。
+                if (!arg.startsWith("--") && arg.indexOf('=').isNone() && i + 1 < args.size &&
+                    !args[i + 1].startsWith("-")) {
+                    i++
+                }
             } else {
                 tokens.add(arg)
             }

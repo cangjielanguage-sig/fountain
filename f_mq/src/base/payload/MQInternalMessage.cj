@@ -26,11 +26,16 @@ import fountain::f_data.macros.*
 @DataAssist[props fields]
 public class MQInternalMessage {
     private var kind: String = ''
-    private var payload: Array<Byte> = []
+    private var payload: MQBlob = MQBlob()
 
     public init() {}
 
     public init(kind: String, payload: Array<Byte>) {
+        this.kind = kind
+        this.payload = MQBlob(payload)
+    }
+
+    public init(kind: String, payload: MQBlob) {
         this.kind = kind
         this.payload = payload
     }

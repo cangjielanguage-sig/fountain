@@ -99,6 +99,28 @@ class MQModelTest {
         @Assert(scalar.tags == ["a"])
     }
 
+    /** 空 BODY / 异类对象 BODY / 标量 BODY 都不得解出「字段全默认的对象」（A04）。 */
+    @TestCase
+    public func messageGetRejectsEmptyAndMismatchedBody(): Unit {
+        let noneBody = MQMessage("/t", [], Some(DataAny(DataNone.INSTANCE)), 0, 0, 0)
+        @Assert(noneBody.get<TestOrderBody>().isNone())
+
+        let otherObject = MQMessage("/t", [], Some(DataAny(MQTopicMeta("/x", 1).toData())), 0, 0, 0)
+        @Assert(otherObject.get<TestOrderBody>().isNone())
+
+        let scalar = MQMessage("/t", [], Some(DataAny(42i64.toData())), 0, 0, 0)
+        @Assert(scalar.get<TestOrderBody>().isNone())
+
+        let collection = MQMessage("/t", [], Some(DataAny([1i64, 2].toData())), 0, 0, 0)
+        @Assert(collection.get<TestOrderBody>().isNone())
+
+        // 正例：同类型对象照常解出
+        let ok = MQMessage("/t", [], Some(DataAny(TestOrderBody(5, "ok", false).toData())), 0, 0, 0)
+        let got = ok.get<TestOrderBody>().getOrThrow()
+        @Assert(got.id == 5)
+        @Assert(got.title == "ok")
+    }
+
     @TestCase
     public func messageRoundtripKeepsBodyAndPosition(): Unit {
         let message = MQMessage("/t", ["x", "y"], Some(DataAny("hello".toData())), 2, 3, 64)
