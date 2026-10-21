@@ -531,6 +531,59 @@ public class DispatcherTest {
         }
     }
 
+    /** W-1：事务内 INSERT 命中其它分片必须 ROUTE_FAILED，不能静默写到 pin 库。 */
+    @TestCase
+    public func pinnedTransactionRejectsOtherShardInsert(): Unit {
+        let (executor, resources) = dispatcher()
+        let session = DbdSession('s', None, 'db0')
+        try {
+            executor.execute(session, 'begin', [])
+            @Assert(codeOf {
+                executor.execute(session, "insert into t (id, name) values (1500, 'x')", [])
+            }, DbdErrorCode.ROUTE_FAILED)
+            // 本片仍可写
+            @Assert(executor.execute(session, "insert into t (id, name) values (5, 'x')", [])
+                .update.getOrThrow().rowCount, 1)
+            executor.execute(session, 'commit', [])
+        } finally {
+            session.close()
+            resources.close()
+        }
+    }
+
+    /** W-4：多行 INSERT 跨库时按库分组，各组独立 begin/commit。 */
+    @TestCase
+    public func multiRowInsertGroupsByDatabase(): Unit {
+        let sqls = ArrayList<String>()
+        MOCKDB.clear()
+        MOCKDB.execution = {sql, _ =>
+            sqls.add(sql)
+            MOCKDB.rowCount = 1
+        }
+        let nodes = [DatabaseNodeConfig('name0', '127.0.0.1', 3306u16, 'mockdb', ['db0', 'db1'], '', '')]
+        let poolConfig = PoolConfig(initSize: 0, minSize: 0, maxSize: 2, checkOnBorrowing: false,
+            checkOnReturning: false, connectTimeout: Duration.second, maxWaiting: Duration.second)
+        let resources = DatabaseResources(nodes, poolConfig, LoadBalanceConfig())
+        let rules = [PartitionRule('db0', 't', 'id', StepPartition(['db0', 'db1'], 1000))]
+        let router = PartitionRouter(rules, None, HashMap<String, PartitionAlgorithm>(),
+            knownDatabases: ['db0', 'db1'], globalTables: GlobalTableRouter([]))
+        let executor = ExecutorDispatcher(router, GlobalTableRouter([]), resources,
+            IdMakerConfig('uuid', arg: Some('4')), 'db0', HashMap<String, IdGenerator>(), None)
+        let session = DbdSession('s', None, 'db0')
+        try {
+            let outcome = executor.execute(session,
+                "insert into t (id, name) values (5, 'a'), (1500, 'b'), (6, 'c')", [])
+            @Assert(outcome.update.getOrThrow().rowCount, 3)
+            let begins = sqls.toArray().filter {sql => sql == 'begin'}.size
+            let commits = sqls.toArray().filter {sql => sql == 'commit'}.size
+            @Assert(begins, 2)
+            @Assert(commits, 2)
+        } finally {
+            session.close()
+            resources.close()
+        }
+    }
+
     /** D03：事务 pin 的目标是逻辑库解析出的物理库，不是逻辑名本身。 */
     @TestCase
     public func beginPinsFirstPhysicalDatabase(): Unit {

@@ -25,7 +25,8 @@ import fountain::f_log.LoggerFactory
  *
  * **物理库名不会被自动注册成逻辑库键**。装载规则：
  * 1. `fdbm_db_logicalDatabase_<logical>` 是唯一显式声明来源；
- * 2. `fdbm_partition__*` / `fdbm_global__*` 引用但未显式配置的逻辑库 → 全部物理库（排序去重）；
+ * 2. 仅 `fdbm_partition__*` 引用但未显式配置的逻辑库 → 全部物理库（排序去重）；
+ *    `fdbm_global__*` 不触发隐式展开，必须显式引用已存在的逻辑库（否则 CONFIG）；
  * 3. 仍为空时，以排序后的第一个物理库名作唯一命名空间并记 WARN（兼容旧部署）。
  *
  * `names()` / `default()` 都按名称排序，保证跨进程确定性。

@@ -247,6 +247,25 @@ public class ServerLifecycleTest {
         }
     }
 
+    /** G14：驱动缺失导致构造失败后，已创建的缓存也必须释放。 */
+    @TestCase
+    public func driverFailureReleasesCache(): Unit {
+        let dir = tempDir()
+        try {
+            let port = uniquePort()
+            let source = settingsSource(port, driverName: 'postgres', cache: true,
+                cachePath: dir.toString())
+            let settings = FdbmSettings.load(source: source)
+            @Assert(codeOf { FdbmServer(settings, source: source) }, DbdErrorCode.NO_DRIVER)
+            let cache = PartitionCache(dir.toString(), None, 0)
+            cache.put('db0', 't', 'id', '1', 'p0')
+            @Assert(cache.count(), 1)
+            cache.close()
+        } finally {
+            removeTree(dir)
+        }
+    }
+
     /** G14：构造失败时缓存/连接池必须已释放（同一 cache 目录可立即重新打开并写入）。 */
     @TestCase
     public func constructorFailureReleasesCacheAndPools(): Unit {

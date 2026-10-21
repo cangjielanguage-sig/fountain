@@ -16,5 +16,5 @@ limitations under the License.
 package fountain::f_dbd.common
 
 /**
- * f_dbd 与 fdbm 的共用代码：payload / 列信息 / 结果集与流列 / 错误码 / 类型映射（§3）。阶段 0 仅建骨架。
+ * f_dbd 与 fdbm 的共用代码：payload / 列信息 / 结果集与流列 / 错误码 / 类型映射（§3）。共用占位类型（保留以兼容既有 import）。
  */

@@ -22,11 +22,14 @@ import fountain::f_net.SocketBuffer
 /** 事务期间 pin 住的写连接（设计 §9.1）：close 幂等，归还一次。 */
 protected class PinnedConnection {
     public let connection: Connection
+    /** 该连接对应的物理库：事务内语句只允许命中它（D04/W-1）。 */
+    public let database: String
     public var transactionOpen: Bool = false
     private var closed: Bool = false
 
-    public init(connection: Connection) {
+    public init(connection: Connection, database: String) {
         this.connection = connection
+        this.database = database
     }
 
     public func close(): Unit {

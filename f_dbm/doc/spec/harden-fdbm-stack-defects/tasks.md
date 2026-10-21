@@ -148,7 +148,7 @@
 - [x] 2.18 红/绿 G07：池耗尽/借连接失败 → `TIMEOUT`；资源已关闭 → `CONFIG`（`DatabaseResources` 单测）
 - [x] 2.19 红/绿 G08：`fdbm_global__dict='cfg'`（未配置逻辑库且非物理库）→ 启动失败；合法逻辑库通过
 - [x] 2.20 红/绿 G09：`sequence` 且分配库无 `fountain_sequence` 表 → `ID_GENERATOR`，不监听
-- [x] 2.21 红/绿 G10：同键区块内外并存时区块内优先并 WARN；区块外行保留在区块外
+- [x] 2.21 红/绿 G10：同键区块内外并存时区块内优先并 WARN；区块外同名行按 spec 移除（其余行保留）
 - [x] 2.22 红/绿 G27：跨逻辑库同列同算法但分片空间不同 → `Unroutable`（信息列两表库名），不再 `Empty`
 
 ### 2.6 SQL 语义
@@ -210,10 +210,14 @@
 - [x] 4.5 三个 README 的驱动名、逻辑库、SHOW、流列、NULL 口径与代码一致
 - [x] 4.6 全量验收：三模块 `cjpm test`、`[e2e]` 两后端、`f_orm` 回归、`cjpm build` 无新增 warning
 
-  - 结果：`f_dbm` 5/5、`fdbm` 247/247、`f_dbd` 208/208；`cjpm build` 无新增 warning（三模块各有基线 warning）。
+  - 结果：`f_dbm` 5/5、`fdbm` 250/250、`f_dbd` 208/208；`cjpm build` 无新增 warning（三模块各有基线 warning）。
   - e2e：PostgreSQL `126+28+13`、MySQL `124+28+10`，全部 `failures=0`。
+  - W-1 修复：`PinnedConnection` 记录 pin 的物理库，事务内命中其它分片 → `ROUTE_FAILED`（不再静默写错库）。
   - `f_orm` 64 例中 1 例 `QueryResultWrapTest.testEveryReaderBranchAndAlias` 报 `bytea → Array<UInt8>` 类型不匹配；
     `f_orm` 本次零改动（`git status` 干净），该失败在基线提交即存在，按约束不修，记录为已知问题。
+  - 已知未直接覆盖（代码审查确认，非本次新增规格）：多 `.so` 的「全部 load 后只 initialize 一次」、
+    `DatabaseResources` 建池中途失败的已建池释放、跨库 INSERT 分组的失败回滚分支；
+    跨库分组成功路径由 `multiRowInsertGroupsByDatabase` 覆盖。
 - [x] 4.7 按缺陷族分批 `git commit`（D01…D12 / P1 分组 / P2 分组），最后 `CHANGELOG` 汇总已知变更
 
 ## 5. 一般项处置索引（51 条逐条可追溯）

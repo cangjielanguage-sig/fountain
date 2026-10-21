@@ -68,7 +68,14 @@ protected class ExecutionOutcome {
 func borrow(session: DbdSession, resources: NodeAccessor, database: String,
     write!: Bool = false): (Connection, Bool) {
     match (session.pinnedConnection()) {
-        case Some(pinned) => (pinned.connection, false)
+        case Some(pinned) =>
+            // 事务只作用于 begin 时 pin 的物理库：跨片语句必须拒绝，不能把 SQL 发到本片（W-1）
+            if (pinned.database != database) {
+                throw FdbmException(DbdErrorCode.ROUTE_FAILED,
+                    'statement targets physical database \'${database}\' but the transaction is pinned to ' +
+                    '\'${pinned.database}\'')
+            }
+            (pinned.connection, false)
         case None =>
             let connection = if (write) {
                 resources.selectWrite(database)
@@ -1301,11 +1308,12 @@ protected class SessionCtlExecutor {
                 if (session.isPinned()) {
                     throw FdbmException(DbdErrorCode.TX_STATE, 'the transaction has already begun')
                 }
-                let connection = resources.selectWrite(pinTarget(session))
+                let target = pinTarget(session)
+                let connection = resources.selectWrite(target)
                 // 先让物理库接受 begin，成功后才 pin（G26：失败的 begin 不得留下 pin）
                 try {
                     let result = executeUpdate(connection, statement.sql)
-                    let pinned = PinnedConnection(connection)
+                    let pinned = PinnedConnection(connection, target)
                     pinned.transactionOpen = true
                     session.pin(pinned)
                     ExecutionOutcome(update: Some(UpdateResultPayload(result.rowCount, 0)))
