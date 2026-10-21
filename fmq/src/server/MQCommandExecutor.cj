@@ -26,7 +26,7 @@ import fountain::f_net.SocketBuffer
 import fountain::f_protocol.default.*
 import fountain::fmq.cluster.{BackupReplicator, MetaSyncer}
 import fountain::fmq.meta.{MetaApplyResult, MetaStore}
-import fountain::fmq.queue.{CursorStore, MQMatcher, QueueManager}
+import fountain::fmq.queue.{CursorCatalog, MQMatcher, QueueManager}
 
 /** 无连接的哨兵值：只允许 `refEq` 比较，禁止解引用。 */
 internal let EMPTY_SOCKET_BUFFER = unsafeZeroValue<SocketBuffer>()
@@ -41,14 +41,14 @@ protected class MQCommandExecutor {
     private let store: MetaStore
     private let syncer: MetaSyncer
     private let queues: QueueManager
-    private let cursors: CursorStore
+    private let cursors: CursorCatalog
     private let subscribers: SubscriberRegistry
     private let consume: ConsumeService
     private let backup: BackupReplicator
     private let backupStore: BackupStore
     private let selfIndex: Int64
 
-    protected init(store: MetaStore, syncer: MetaSyncer, queues: QueueManager, cursors: CursorStore,
+    protected init(store: MetaStore, syncer: MetaSyncer, queues: QueueManager, cursors: CursorCatalog,
         subscribers: SubscriberRegistry, consume: ConsumeService, backup: BackupReplicator,
         backupStore: BackupStore, selfIndex: Int64) {
         this.store = store

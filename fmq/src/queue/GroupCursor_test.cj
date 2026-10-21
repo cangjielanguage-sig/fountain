@@ -27,6 +27,8 @@ import fountain::f_data.*
 import fountain::f_io.LogPosition
 import fountain::f_mq.base.{MQFilter, MQMessageRecord}
 import fountain::f_mq.base.payload.MQDeadLetterMessage
+import fountain::fmq.meta.MetaStore
+import fountain::f_mq.base.model.MQSubscribeGroupMeta
 import fountain::fmq.metrics.MQMetrics
 
 class CursorClock {
@@ -41,6 +43,8 @@ class CursorFixture <: Resource {
     let root: String
     let log: QueueLog
     let store: CursorStore
+    let meta: MetaStore
+    let catalog: CursorCatalog
     let deadLetter: DeadLetterQueue
     let clock = CursorClock()
     private let topic = "/t"
@@ -54,6 +58,10 @@ class CursorFixture <: Resource {
         Directory.create(root, recursive: true)
         this.log = QueueLog("${root}/logs", maxFileSize, 1)
         this.store = CursorStore(root)
+        this.meta = MetaStore("${root}/metas")
+        meta.load()
+        meta.applyGroup(MQSubscribeGroupMeta("/t", "g"))
+        this.catalog = CursorCatalog(store, meta)
         this.deadLetter = DeadLetterQueue("${root}/dead", maxFileSize, 1)
         this.ackTimeout_ = ackTimeout
         this.threshold_ = threshold
@@ -76,7 +84,7 @@ class CursorFixture <: Resource {
 
     func cursorOf(group!: String = "g", delaying!: Duration = Duration.Zero,
         metrics!: ?MQMetrics = None): GroupCursor {
-        GroupCursor(topic, 0, group, log, store, ackTimeout_, threshold_, deadLetter, delaying: delaying,
+        GroupCursor(topic, 0, group, log, catalog, ackTimeout_, threshold_, deadLetter, delaying: delaying,
             metrics: metrics, now: {=> clock.value})
     }
 
@@ -387,25 +395,24 @@ class GroupCursorTest {
     }
 
     @TestCase
-    public func referencesCoversCommittedAndLaterSegments(): Unit {
-        // 段上限 120：每条记录 4 + record.size 字节，第二条必然轮转
-        let fixture = CursorFixture("references", maxFileSize: 32)
+    public func catalogFloorTracksCommittedSegments(): Unit {
+        // 段上限 32：两条记录必然跨段
+        let fixture = CursorFixture("floor_committed", maxFileSize: 32)
         try {
             let p1 = fixture.append([], "one")
             let p2 = fixture.append([], "two")
             @Assert(p2.seq > p1.seq)
             let cursor = fixture.cursorOf()
             let sub = fixture.sub("s1")
-            // committed 仍在段 1：段 1、2 都可能含未读数据
-            @Assert(cursor.references(1))
-            @Assert(cursor.references(2))
+            // 组从未消费：边界钉在最老段
+            @Assert(fixture.catalog.floorOf("/t", 0) == 1)
             let first = cursor.next(sub, [sub], MQMatcher()).getOrThrow()
             @Assert(cursor.ack("s1", first[1]))
             let second = cursor.next(sub, [sub], MQMatcher()).getOrThrow()
             @Assert(cursor.ack("s1", second[1]))
-            // committed 已越过段 1
-            @Assert(!cursor.references(1))
-            @Assert(cursor.references(2))
+            // committed 已越过段 1：边界抬到 committed 的段号
+            @Assert(fixture.catalog.floorOf("/t", 0) == cursor.committed.seq)
+            @Assert(cursor.committed.seq > 1)
             cursor.close()
         } finally {
             fixture.close()

@@ -32,7 +32,7 @@ import fountain::fmq.queue.*
  */
 protected class ConsumeService {
     private let queues: QueueManager
-    private let store: CursorStore
+    private let catalog: CursorCatalog
     private let subscribers: SubscriberRegistry
     private let matcher: MQMatcher
     private let deadLetter: DeadLetterQueue
@@ -43,11 +43,11 @@ protected class ConsumeService {
     private let lock = Mutex()
     private let cursors = HashMap<String, GroupCursor>()
 
-    init(queues: QueueManager, store: CursorStore, subscribers: SubscriberRegistry, matcher: MQMatcher,
+    init(queues: QueueManager, catalog: CursorCatalog, subscribers: SubscriberRegistry, matcher: MQMatcher,
         deadLetter: DeadLetterQueue, ackTimeout: Duration, deadMsgThreshold: Int64,
         metrics!: ?MQMetrics = None, now!: () -> DateTime = {=> DateTime.now()}) {
         this.queues = queues
-        this.store = store
+        this.catalog = catalog
         this.subscribers = subscribers
         this.matcher = matcher
         this.deadLetter = deadLetter
@@ -118,7 +118,7 @@ protected class ConsumeService {
                         case None => throw IllegalArgumentException(
                             "queue ${queueIndex} of topic '${topic}' is not local")
                     }
-                    let cursor = GroupCursor(topic, queueIndex, group, log, store, ackTimeout, deadMsgThreshold,
+                    let cursor = GroupCursor(topic, queueIndex, group, log, catalog, ackTimeout, deadMsgThreshold,
                         deadLetter, delaying: Duration.millisecond * queues.delayingOf(topic), metrics: metrics,
                         now: now)
                     cursors.add(key, cursor)
@@ -158,7 +158,7 @@ protected class ConsumeService {
                 var backlog = 0i64
                 var oldest: ?DateTime = None
                 for ((queueIndex, log) in locals) {
-                    let committed = match (store.load(name, queueIndex, group)) {
+                    let committed = match (catalog.positionOf(name, queueIndex, group)) {
                         case Some(position) => position
                         case None => LogPosition(1, 0)
                     }
@@ -198,19 +198,13 @@ protected class ConsumeService {
         out.toString()
     }
 
-    /** 段是否仍被某游标引用（不存在游标视为未引用）。 */
-    protected func references(topic: String, queueIndex: Int64, segmentIndex: Int64): Bool {
-        let key = "${topic}\u{0}${queueIndex}\u{0}"
-        synchronized(lock) {
-            for ((cursorKey, cursor) in cursors) {
-                if (cursorKey.startsWith(key)) {
-                    if (cursor.references(segmentIndex)) {
-                        return true
-                    }
-                }
-            }
-            false
-        }
+    /**
+     * 段保留边界：该队列全部**已注册组**位点的最小段号。
+     *
+     * 走 `CursorCatalog` 而不是内存游标：离线组只有磁盘位点，按内存游标删段会删掉慢组积压。
+     */
+    protected func floorOf(topic: String, queueIndex: Int64): Int64 {
+        catalog.floorOf(topic, queueIndex)
     }
 
     /** 主题删除：关闭并移除其全部游标。 */

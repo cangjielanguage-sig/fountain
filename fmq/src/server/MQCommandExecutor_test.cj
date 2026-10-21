@@ -33,7 +33,8 @@ class ExecutorFixture <: Resource {
     let root: String
     let meta: MetaStore
     let queues: QueueManager
-    let cursors: CursorStore
+    let cursorStore: CursorStore
+    let cursors: CursorCatalog
     let dead: DeadLetterQueue
     let subscribers: SubscriberRegistry
     let consume: ConsumeService
@@ -52,7 +53,8 @@ class ExecutorFixture <: Resource {
         this.registry = NodeRegistry(nodes, selfIndex)
         let syncer = MetaSyncer(meta, registry)
         this.queues = QueueManager("${root}/logs", 1024 * 1024, 1)
-        this.cursors = CursorStore("${root}/metas")
+        this.cursorStore = CursorStore("${root}/metas")
+        this.cursors = CursorCatalog(cursorStore, meta)
         this.dead = DeadLetterQueue("${root}/dead", 1024 * 1024, 1)
         this.subscribers = SubscriberRegistry()
         this.consume = ConsumeService(queues, cursors, subscribers, MQMatcher(), dead,

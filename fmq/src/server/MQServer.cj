@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::fmq.server
 
+import std.collection.ArrayList
 import std.fs.*
 import std.sync.{AtomicBool, Timer}
 import fountain::f_data.DataAny
@@ -24,7 +25,7 @@ import fountain::f_protocol.default.Message
 import fountain::fmq.cluster.{BackupReplicator, LogCleaner, MetaSyncer, NodeRegistry}
 import fountain::fmq.meta.MetaStore
 import fountain::fmq.metrics.MQMetrics
-import fountain::fmq.queue.{CursorStore, DeadLetterQueue, MQMatcher, QueueManager}
+import fountain::fmq.queue.{CursorCatalog, CursorStore, DeadLetterQueue, MQMatcher, QueueManager}
 
 /**
  * 服务端装配与生命周期。
@@ -43,6 +44,7 @@ public class MQServer {
     private let syncer: MetaSyncer
     private let queues: QueueManager
     private let cursorStore: CursorStore
+    private let cursorCatalog: CursorCatalog
     private let deadLetter: DeadLetterQueue
     private let subscribers: SubscriberRegistry
     private let consume: ConsumeService
@@ -68,6 +70,8 @@ public class MQServer {
 
         this.meta = MetaStore(options.metaDir)
         this.meta.load()
+        // 局部别名：闭包不能捕获尚未完成初始化的 `this`，只能捕获局部变量
+        let metaStore = this.meta
         this.registry = NodeRegistry(options.nodes, options.selfIndex)
         this.syncer = MetaSyncer(meta, registry)
         // 先向 peer 补齐元数据，再按最终分配打开本机队列
@@ -78,17 +82,18 @@ public class MQServer {
             queues.openTopic(assignment, options.selfIndex)
         }
         this.cursorStore = CursorStore(options.metaDir)
+        this.cursorCatalog = CursorCatalog(cursorStore, metaStore)
         this.deadLetter = DeadLetterQueue(options.deadMsgDir, options.segmentedLogMaxSize, 1)
         this.subscribers = SubscriberRegistry()
         this.backupStore = BackupStore(options.segmentedLogDir, options.segmentedLogMaxSize, 1)
         this.backup = BackupReplicator(registry, options.backup)
-        let consumer = ConsumeService(queues, cursorStore, subscribers, MQMatcher(), deadLetter,
+        let consumer = ConsumeService(queues, cursorCatalog, subscribers, MQMatcher(), deadLetter,
             options.ackTimeout, options.deadMsgThreshold, metrics: MQMetrics())
         this.consume = consumer
         this.cleaner = LogCleaner(queues, deadLetter,
-            {topic, queueIndex, segmentIndex => consumer.references(topic, queueIndex, segmentIndex)},
+            {topic, queueIndex => consumer.floorOf(topic, queueIndex)},
             options.segmentedLogTTL, options.deadMsgTTL)
-        this.executor = MQCommandExecutor(meta, syncer, queues, cursorStore, subscribers, consume, backup,
+        this.executor = MQCommandExecutor(meta, syncer, queues, cursorCatalog, subscribers, consume, backup,
             backupStore, options.selfIndex)
         this.server = Server<DataAny>(bindAt: options.port, checkDuration: CHECK_DURATION, executors: 200,
             checker: {=> Message.ping()})

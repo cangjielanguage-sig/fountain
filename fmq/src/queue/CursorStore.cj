@@ -67,6 +67,11 @@ protected class CursorStore {
         }
     }
 
+    /** 位点文件是否存在（用于区分「从未消费」与「文件损坏」）。 */
+    protected func hasCursor(topic: String, queueIndex: Int64, group: String): Bool {
+        exists(pathOf(topic, queueIndex, group))
+    }
+
     protected func save(topic: String, queueIndex: Int64, group: String, position: LogPosition): Unit {
         let path = pathOf(topic, queueIndex, group)
         let parent = Path(path).parent

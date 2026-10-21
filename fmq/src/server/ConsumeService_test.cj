@@ -25,6 +25,9 @@ import fountain::f_io.LogPosition
 import fountain::f_mq.base.{MQErrorCode, MQFilter, MQMessageRecord}
 import fountain::f_mq.base.payload.{MQAckPayload, MQConsumeResult, MQResult}
 import fountain::f_mq.base.payload.MQTopicAssignment
+import fountain::fmq.cluster.LogCleaner
+import fountain::fmq.meta.{MetaApplyResult, MetaStore}
+import fountain::f_mq.base.model.MQSubscribeGroupMeta
 import fountain::fmq.metrics.MQMetrics
 import fountain::fmq.queue.*
 
@@ -43,6 +46,8 @@ class ConsumeFixture <: Resource {
     let root: String
     let queues: QueueManager
     let store: CursorStore
+    let meta: MetaStore
+    let catalog: CursorCatalog
     let deadLetter: DeadLetterQueue
     let registry = SubscriberRegistry()
     let metrics = MQMetrics()
@@ -57,10 +62,14 @@ class ConsumeFixture <: Resource {
         Directory.create(root, recursive: true)
         this.queues = QueueManager("${root}/logs", 1024 * 1024, 1)
         this.store = CursorStore(root)
+        this.meta = MetaStore("${root}/metas")
+        meta.load()
+        meta.applyGroup(MQSubscribeGroupMeta("/t", "g"))
+        this.catalog = CursorCatalog(store, meta)
         this.deadLetter = DeadLetterQueue("${root}/dead", 1024 * 1024, 1)
         let owners = Array<Int64>(queueCount) {_ => 0}
         this.queues.openTopic(MQTopicAssignment(topic, queueCount, 0, owners), 0)
-        this.service = ConsumeService(queues, store, registry, MQMatcher(), deadLetter,
+        this.service = ConsumeService(queues, catalog, registry, MQMatcher(), deadLetter,
             Duration.second * 10, 3, metrics: metrics)
     }
 
@@ -405,6 +414,59 @@ class ConsumeServiceTest {
             @Assert(text.contains("R\t/t\t\t"))
         } finally {
             fixture.close()
+        }
+    }
+
+    /** 段清理边界取自「真实 ConsumeService + CursorCatalog」而不是替身回调。 */
+    @TestCase
+    public func consumedGroupRaisesCleanerFloor(): Unit {
+        let root = "/tmp/fmq_test_consume/cleaner_floor"
+        if (exists(root)) {
+            remove(root, recursive: true)
+        }
+        Directory.create(root, recursive: true)
+        let queues = QueueManager("${root}/logs", 32, 1)
+        queues.openTopic(MQTopicAssignment("/t", 1, 0, [0]), 0)
+        let meta = MetaStore("${root}/metas")
+        meta.load()
+        let store = CursorStore("${root}/metas")
+        let dead = DeadLetterQueue("${root}/dead", 32, 1)
+        let registry = SubscriberRegistry()
+        try {
+            @Assert(meta.applyGroup(MQSubscribeGroupMeta("/t", "g")) == MetaApplyResult.Applied)
+            let catalog = CursorCatalog(store, meta)
+            let service = ConsumeService(queues, catalog, registry, MQMatcher(), dead,
+                Duration.second * 10, 3)
+            let log = queues.queueOf("/t", 0).getOrThrow()
+            for (i in 0..5) {
+                log.append(MQMessageRecord.encode("/t", [], "mid-${i}", i.toData()))
+            }
+            let before = log.segments().size
+            @Assert(before >= 3)
+            let info = MQSubscriptionInfo("s1", "/t", "g", [], MQFilter.compile(""), false, EMPTY_SOCKET_BUFFER)
+            registry.register(info)
+            while (let Some(result) <- service.consume(info)) {
+                @Assert(service.ack(info, MQAckPayload("s1", result.queueIndex, result.segmentedIndex,
+                    result.segmentedOffset)).code == 0)
+            }
+            // 未清理前段都还在
+            @Assert(log.segments().size == before)
+            let cleaner = LogCleaner(queues, dead, {topic, queueIndex => service.floorOf(topic, queueIndex)},
+                Duration.second * -1, Duration.hour * 72)
+            try {
+                @Assert(cleaner.cleanOnce(DateTime.now()) >= 1)
+            } finally {
+                cleaner.close()
+            }
+            @Assert(log.segments().size < before)
+            service.close()
+        } finally {
+            meta.close()
+            queues.close()
+            dead.close()
+            if (exists(root)) {
+                remove(root, recursive: true)
+            }
         }
     }
 }

@@ -43,7 +43,7 @@ protected class GroupCursor {
     private let queueIndex: Int64
     private let group: String
     private let log: QueueLog
-    private let store: CursorStore
+    private let catalog: CursorCatalog
     private let ackTimeout: Duration
     private let deadMsgThreshold: Int64
     private let deadLetter: DeadLetterQueue
@@ -58,7 +58,7 @@ protected class GroupCursor {
     private var reader: ?QueueRecordReader = None
     private var closed = false
 
-    protected init(topic: String, queueIndex: Int64, group: String, log: QueueLog, store: CursorStore,
+    protected init(topic: String, queueIndex: Int64, group: String, log: QueueLog, catalog: CursorCatalog,
         ackTimeout: Duration, deadMsgThreshold: Int64, deadLetter: DeadLetterQueue,
         delaying!: Duration = Duration.Zero, metrics!: ?MQMetrics = None,
         now!: () -> DateTime = {=> DateTime.now()}) {
@@ -66,14 +66,14 @@ protected class GroupCursor {
         this.queueIndex = queueIndex
         this.group = group
         this.log = log
-        this.store = store
+        this.catalog = catalog
         this.ackTimeout = ackTimeout
         this.deadMsgThreshold = deadMsgThreshold
         this.deadLetter = deadLetter
         this.delaying = delaying
         this.metrics = metrics
         this.now = now
-        let loaded = match (store.load(topic, queueIndex, group)) {
+        let loaded = match (catalog.positionOf(topic, queueIndex, group)) {
             case Some(position) => position
             case None => LogPosition(1, 0)
         }
@@ -347,13 +347,6 @@ protected class GroupCursor {
         }
     }
 
-    /** 本游标是否仍然引用该段（清理器据此保留段）。 */
-    protected func references(segmentIndex: Int64): Bool {
-        synchronized(lock) {
-            segmentIndex >= committed_.seq
-        }
-    }
-
     protected func close(): Unit {
         synchronized(lock) {
             if (closed) {
@@ -365,7 +358,7 @@ protected class GroupCursor {
                 case None => ()
             }
             reader = None
-            store.save(topic, queueIndex, group, committed_)
+            catalog.save(topic, queueIndex, group, committed_)
         }
     }
 
@@ -380,7 +373,7 @@ protected class GroupCursor {
             moved = true
         }
         if (moved) {
-            store.save(topic, queueIndex, group, committed_)
+            catalog.save(topic, queueIndex, group, committed_)
         }
     }
 
@@ -411,7 +404,7 @@ protected class GroupCursor {
         let previous = committed_
         committed_ = LogPosition(oldest.index, 0)
         scanPosition = committed_
-        store.save(topic, queueIndex, group, committed_)
+        catalog.save(topic, queueIndex, group, committed_)
         logger.warn("cursor of ${topic}/${queueIndex}/${group} moved from ${previous.seq}:${previous.offset} to " +
             "${oldest.index}:0 because its segment was removed")
         true

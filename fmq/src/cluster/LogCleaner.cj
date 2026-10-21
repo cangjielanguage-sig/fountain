@@ -30,18 +30,18 @@ protected class LogCleaner {
 
     private let queues: QueueManager
     private let deadLetter: DeadLetterQueue
-    private let referenced: (String, Int64, Int64) -> Bool
+    private let floorOf: (String, Int64) -> Int64
     private let ttl: Duration
     private let deadMsgTTL: Duration
     private let interval: Duration
     private let closed = AtomicBool(false)
     private var timer: ?Timer = None
 
-    protected init(queues: QueueManager, deadLetter: DeadLetterQueue, referenced: (String, Int64, Int64) -> Bool,
+    protected init(queues: QueueManager, deadLetter: DeadLetterQueue, floorOf: (String, Int64) -> Int64,
         ttl: Duration, deadMsgTTL: Duration, interval!: Duration = Duration.minute * 5) {
         this.queues = queues
         this.deadLetter = deadLetter
-        this.referenced = referenced
+        this.floorOf = floorOf
         this.ttl = ttl
         this.deadMsgTTL = deadMsgTTL
         this.interval = interval
@@ -55,7 +55,8 @@ protected class LogCleaner {
                 if (meta.last) {
                     continue
                 }
-                if (meta.updateTime + ttl < now && !referenced(topic, queueIndex, meta.index)) {
+                // 只有「段号小于全部组位点最小段号」的段才无人需要
+                if (meta.updateTime + ttl < now && meta.index < floorOf(topic, queueIndex)) {
                     queue.removeById(meta.index)
                     removed++
                 }

@@ -21,7 +21,10 @@ import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_mq.base.payload.MQDeadLetterMessage
 import fountain::f_mq.base.payload.MQTopicAssignment
-import fountain::fmq.queue.{DeadLetterQueue, QueueManager}
+import fountain::fmq.meta.{MetaApplyResult, MetaStore}
+import fountain::f_mq.base.model.MQSubscribeGroupMeta
+import fountain::f_io.LogPosition
+import fountain::fmq.queue.{CursorCatalog, CursorStore, DeadLetterQueue, QueueManager}
 
 @Test
 class LogCleanerTest {
@@ -59,7 +62,7 @@ class LogCleanerTest {
             let log = queues.queueOf("/t", 0).getOrThrow()
             let before = log.segments().size
             @Assert(before >= 2)
-            let cleaner = LogCleaner(queues, dead, {_, _, _ => false}, Duration.second * -1,
+            let cleaner = LogCleaner(queues, dead, {_, _ => Int64.Max}, Duration.second * -1,
                 Duration.hour * 72)
             let removed = cleaner.cleanOnce(DateTime.now())
             @Assert(removed >= 1)
@@ -85,7 +88,7 @@ class LogCleanerTest {
             let log = queues.queueOf("/t", 0).getOrThrow()
             let firstSealed = log.segments()[0]
             @Assert(!firstSealed.last)
-            let cleaner = LogCleaner(queues, dead, {_, _, index => index == firstSealed.index},
+            let cleaner = LogCleaner(queues, dead, {_, _ => firstSealed.index + 1},
                 Duration.second * -1, Duration.hour * 72)
             cleaner.cleanOnce(DateTime.now())
             // 被引用的段保留
@@ -110,7 +113,7 @@ class LogCleanerTest {
         try {
             let log = queues.queueOf("/t", 0).getOrThrow()
             log.append([1u8, 2u8, 3u8])
-            let cleaner = LogCleaner(queues, dead, {_, _, _ => false}, Duration.second * -1,
+            let cleaner = LogCleaner(queues, dead, {_, _ => Int64.Max}, Duration.second * -1,
                 Duration.hour * 72)
             @Assert(cleaner.cleanOnce(DateTime.now()) == 0)
             @Assert(log.segments().size == 1)
@@ -135,12 +138,108 @@ class LogCleanerTest {
             }
             @Assert(dead.cleanExpired(Duration.second * -1, DateTime.now()) >= 1)
             // 再用 cleaner：普通队列 TTL 很大 → 不删；死信 TTL 负 → 已无封口段则为 0
-            let cleaner = LogCleaner(queues, dead, {_, _, _ => false}, Duration.hour * 72,
+            let cleaner = LogCleaner(queues, dead, {_, _ => Int64.Max}, Duration.hour * 72,
                 Duration.second * -1)
             cleaner.cleanOnce(DateTime.now())
             @Assert(queues.queueOf("/t", 0).getOrThrow().segments().size == 1)
             cleaner.close()
         } finally {
+            queues.close()
+            dead.close()
+            clean(root)
+        }
+    }
+
+    @TestCase
+    public func offlineGroupPositionKeepsSegments(): Unit {
+        let (root, queues, dead) = make("offline_group", 32)
+        let meta = MetaStore("${root}/metas")
+        meta.load()
+        let store = CursorStore("${root}/metas")
+        try {
+            fill(queues)
+            let log = queues.queueOf("/t", 0).getOrThrow()
+            @Assert(log.segments().size >= 3)
+            @Assert(meta.applyGroup(MQSubscribeGroupMeta("/t", "g")) == MetaApplyResult.Applied)
+            // 离线组只有磁盘位点：停在段 2
+            store.save("/t", 0, "g", LogPosition(2, 0))
+            let catalog = CursorCatalog(store, meta)
+            let cleaner = LogCleaner(queues, dead, {topic, queueIndex => catalog.floorOf(topic, queueIndex)},
+                Duration.second * -1, Duration.hour * 72)
+            try {
+                cleaner.cleanOnce(DateTime.now())
+            } finally {
+                cleaner.close()
+            }
+            var hasTwo = false
+            for (segment in log.segments()) {
+                @Assert(segment.index >= 2)
+                if (segment.index == 2) {
+                    hasTwo = true
+                }
+            }
+            @Assert(hasTwo)
+        } finally {
+            meta.close()
+            queues.close()
+            dead.close()
+            clean(root)
+        }
+    }
+
+    @TestCase
+    public func neverConsumedGroupKeepsEverySegment(): Unit {
+        let (root, queues, dead) = make("never_consumed", 32)
+        let meta = MetaStore("${root}/metas")
+        meta.load()
+        let store = CursorStore("${root}/metas")
+        try {
+            fill(queues)
+            let log = queues.queueOf("/t", 0).getOrThrow()
+            let before = log.segments().size
+            @Assert(meta.applyGroup(MQSubscribeGroupMeta("/t", "g")) == MetaApplyResult.Applied)
+            let catalog = CursorCatalog(store, meta)
+            let cleaner = LogCleaner(queues, dead, {topic, queueIndex => catalog.floorOf(topic, queueIndex)},
+                Duration.second * -1, Duration.hour * 72)
+            try {
+                @Assert(cleaner.cleanOnce(DateTime.now()) == 0)
+            } finally {
+                cleaner.close()
+            }
+            @Assert(log.segments().size == before)
+        } finally {
+            meta.close()
+            queues.close()
+            dead.close()
+            clean(root)
+        }
+    }
+
+    @TestCase
+    public func removingGroupLetsSegmentsBeReclaimed(): Unit {
+        let (root, queues, dead) = make("group_removed", 32)
+        let meta = MetaStore("${root}/metas")
+        meta.load()
+        let store = CursorStore("${root}/metas")
+        try {
+            fill(queues)
+            let log = queues.queueOf("/t", 0).getOrThrow()
+            @Assert(meta.applyGroup(MQSubscribeGroupMeta("/t", "slow")) == MetaApplyResult.Applied)
+            store.save("/t", 0, "slow", LogPosition(1, 0))
+            let catalog = CursorCatalog(store, meta)
+            let cleaner = LogCleaner(queues, dead, {topic, queueIndex => catalog.floorOf(topic, queueIndex)},
+                Duration.second * -1, Duration.hour * 72)
+            try {
+                @Assert(cleaner.cleanOnce(DateTime.now()) == 0)
+                @Assert(meta.removeGroup("/t", "slow"))
+                catalog.removeGroup("/t", "slow")
+                @Assert(cleaner.cleanOnce(DateTime.now()) >= 1)
+            } finally {
+                cleaner.close()
+            }
+            @Assert(log.segments().size == 1)
+        } finally {
+            meta.close()
             queues.close()
             dead.close()
             clean(root)
