@@ -303,6 +303,50 @@ class ConsumeServiceTest {
         Array<String>()
     }
 
+    /** 不可评估 BODY：报一次错并越过，组不再停摆（A46/A57）。 */
+    @TestCase
+    public func unsupportedBodyIsReportedOnceAndSkipped(): Unit {
+        let fixture = ConsumeFixture("unsupported")
+        try {
+            // BODY 段被截断：topic/tags 可解，BODY 解不出 ⇒ filter 无法评估
+            let full = MQMessageRecord.encode("/t", [], "1_2_3_${DateTime.nowUTC().format("yyyyMMddHHmmssSSS")}",
+                "one".toData())
+            fixture.queues.queueOf("/t", 0).getOrThrow().append(full[0..full.size - 2])
+            let filtered = fixture.register("s1", filter: "$.enabled")
+            var code = -1i64
+            try {
+                fixture.service.consume(filtered)
+            } catch (e: MQServiceException) {
+                code = e.code
+            }
+            @Assert(code == MQErrorCode.FILTER_UNSUPPORTED_BODY)
+            // 同一位置不重复报错（已越过）
+            @Assert(fixture.service.consume(filtered).isNone())
+            // 后续消息照常消费（组未停摆）
+            fixture.append([], "two")
+            let plain = fixture.register("s2", filter: "")
+            @Assert(fixture.service.consume(plain).isSome())
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 组内无匹配记录时越过，不进入死信（A57）。 */
+    @TestCase
+    public func noMatchIsSkippedWithoutDeadLetter(): Unit {
+        let fixture = ConsumeFixture("no_match_skip")
+        try {
+            fixture.append([], "one")
+            let s1 = fixture.register("s1", tags: ["never"])
+            @Assert(fixture.service.consume(s1).isNone())
+            // 已越过：再消费不会重复看到它，也不产生死信
+            @Assert(fixture.service.consume(s1).isNone())
+            @Assert(fixture.metrics.deadLetteredOf("/t", "g") == 0)
+        } finally {
+            fixture.close()
+        }
+    }
+
     /** 断链订阅名下已分配的记录必须退回组内，其它匹配订阅下一轮可取到（A55）。 */
     @TestCase
     public func disconnectedSubscriptionDoesNotBlockGroup(): Unit {

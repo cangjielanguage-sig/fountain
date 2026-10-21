@@ -56,6 +56,8 @@ protected class GroupCursor {
     private var scanPosition: LogPosition
     private let entries = ArrayList<DeliveryRecord>()
     private var reader: ?QueueRecordReader = None
+    /** 本轮扫描遇到的「BODY 不可评估」位置，由调用方取走并转成协议错误（A46）。 */
+    private var unsupportedAt: ?LogPosition = None
     private var closed = false
 
     protected init(topic: String, queueIndex: Int64, group: String, log: QueueLog, catalog: CursorCatalog,
@@ -282,10 +284,16 @@ protected class GroupCursor {
                     }
                     entries.add(DeliveryRecord(position, after, Some(other), 0, now(), false))
                 } else if (unsupported) {
-                    // BODY 无法评估：不建未决项、不标记已决、不推进 committed；下次从本条重扫
-                    scanPosition = position
+                    // BODY 无法评估：跳过该位置并留痕，不让整组永久停摆（A46）。
+                    // 该位置只报一次；其它组独立游标，不受影响。
+                    entries.add(DeliveryRecord(position, after, None<String>, 0, current, false, decided: true))
+                    scanPosition = after
                     reader.getOrThrow().close()
                     reader = None
+                    unsupportedAt = Some(position)
+                    logger.warn("body of ${topic}/${queueIndex}@${position.seq}:${position.offset} cannot be evaluated " +
+                        "for group '${group}', skipped")
+                    advance()
                     return None<(Array<Byte>, LogPosition)>
                 } else {
                     // 组内无人匹配：不适用，允许越过
@@ -294,6 +302,15 @@ protected class GroupCursor {
                 advance()
             }
             None<(Array<Byte>, LogPosition)>
+        }
+    }
+
+    /** 取走「不可评估」位置（每处只报一次）。 */
+    protected func takeUnsupported(): ?LogPosition {
+        synchronized(lock) {
+            let value = unsupportedAt
+            unsupportedAt = None<LogPosition>
+            value
         }
     }
 

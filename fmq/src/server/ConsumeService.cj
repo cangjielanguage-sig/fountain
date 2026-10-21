@@ -78,7 +78,14 @@ protected class ConsumeService <: BackupStateSource {
             match (cursor.next(info.view(), views, matcher)) {
                 case Some(item) =>
                     return Some(MQConsumeResult(queueIndex, item[1].seq, item[1].offset, item[0]))
-                case None => ()
+                case None =>
+                    // 本轮跳过了不可评估 BODY：把位置报给调用方，客户端据此看到错误（A46）
+                    match (cursor.takeUnsupported()) {
+                        case Some(position) =>
+                            throw MQServiceException(MQErrorCode.FILTER_UNSUPPORTED_BODY,
+                                "filter cannot be evaluated at ${queueIndex}:${position.seq}:${position.offset}")
+                        case None => ()
+                    }
             }
         }
         None<MQConsumeResult>
