@@ -126,6 +126,56 @@ class ConsumeServiceTest {
         convert<String>(content.body.data).getOrThrow()
     }
 
+    /**
+     * 备份状态以「全部组的最小 committed」为准，且 committed 必须严格越过该位置（R2-G8）。
+     */
+    @TestCase
+    public func backupStatesUseSmallestCommittedStrictlyGreater(): Unit {
+        let fixture = ConsumeFixture("backup_states")
+        try {
+            let p0 = fixture.append([], "a")
+            let p1 = fixture.append([], "b")
+            let p2 = fixture.append([], "c")
+            let p3 = fixture.append([], "d")
+            @Assert(fixture.meta.applyGroup(MQSubscribeGroupMeta("/t", "slow")) == MetaApplyResult.Applied)
+            // 快组越过 p3；慢组刚好停在 p2 之后
+            fixture.store.save("/t", 0, "g", LogPosition(p3.seq, p3.offset + 1))
+            fixture.store.save("/t", 0, "slow", LogPosition(p2.seq, p2.offset + 1))
+            let states = fixture.service.backupStates("/t", 0, [p0, p1, p2, p3])
+            @Assert(states.size == 4)
+            @Assert(states[0].acked)
+            @Assert(states[1].acked)
+            @Assert(states[2].acked)
+            // p3 还没被慢组越过
+            @Assert(!states[3].acked)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 组位点恰好等于记录位置时不算确认；主题没有组时全部未确认（R2-G8）。 */
+    @TestCase
+    public func backupStatesBoundaryAndNoGroupAreUnacked(): Unit {
+        let fixture = ConsumeFixture("backup_boundary")
+        try {
+            let position = fixture.append([], "a")
+            fixture.store.save("/t", 0, "g", LogPosition(position.seq, position.offset))
+            let states = fixture.service.backupStates("/t", 0, [position])
+            @Assert(!states[0].acked)
+
+            // 无组主题
+            fixture.meta.applyTopic(MQTopicAssignment("/u", 1, 0, [0]))
+            fixture.queues.openTopic(MQTopicAssignment("/u", 1, 0, [0]), 0)
+            let record = MQMessageRecord.encode("/u", [], "mid-u", "x".toData())
+            let orphan = fixture.queues.queueOf("/u", 0).getOrThrow().append(record)
+            let orphanStates = fixture.service.backupStates("/u", 0, [orphan])
+            @Assert(orphanStates.size == 1)
+            @Assert(!orphanStates[0].acked)
+        } finally {
+            fixture.close()
+        }
+    }
+
     @TestCase
     public func consumeReturnsMatchingMessage(): Unit {
         let fixture = ConsumeFixture("match")

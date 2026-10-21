@@ -45,6 +45,7 @@ class ExecutorFixture <: Resource {
     let syncer: MetaSyncer
     private let registry: NodeRegistry
     private let backup: BackupReplicator
+    let backupStore: BackupStore
 
     init(name: String, selfIndex!: Int64 = 0, nodes!: Array<String> = ["127.0.0.1:1"]) {
         this.root = TestDirs.of("executor", name)
@@ -67,6 +68,7 @@ class ExecutorFixture <: Resource {
             Duration.second * 10, 3, metrics: metrics)
         this.backup = BackupReplicator(registry, 0)
         let backupStore = BackupStore("${root}/logs", 1024 * 1024, 1)
+        this.backupStore = backupStore
         this.executor = MQCommandExecutor(meta, syncer, queues, cursors, subscribers, consume, backup,
             backupStore, selfIndex)
         // 与 `MQServer` 的装配保持一致：peer 墓碑生效后清理本机状态（A25）
@@ -409,6 +411,42 @@ class MQCommandExecutorTest {
             @Assert(exists("${fixture.root}/logs/backup/0/%2Ft/0"))
             // 副本不进入本队列
             @Assert(fixture.queues.queueOf("/t", 0).getOrThrow().size == 0)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 备份批次的状态数与记录数不匹配：记录照常落盘，位点不更新且留 WARN（R2-G5）。 */
+    @TestCase
+    public func backupStatesMismatchSkipsCursors(): Unit {
+        CapturingAppender.install()
+        let fixture = ExecutorFixture("backup_mismatch")
+        try {
+            fixture.registerTopic("/t", 1)
+            let payload = MQBackupPayload(0, "/t", 0, [[1u8], [2u8]], [MQBackupState(1, 0, 0, true)],
+                cursors: [MQBackupCursor("g", 1, 0)])
+            @Assert(codeOf(fixture.call(MQProtocol.publishBackup(payload))) == 0)
+            @Assert(exists("${fixture.root}/logs/backup/0/%2Ft/0"))
+            @Assert(fixture.backupStore.loadCursor(0, "/t", 0, "g").isNone())
+            @Assert(CapturingAppender.waitFor(["2 records", "1 states"]))
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 状态数匹配时位点才落盘（R2-G5）。 */
+    @TestCase
+    public func backupCursorsAppliedWhenStatesMatch(): Unit {
+        let fixture = ExecutorFixture("backup_cursors")
+        try {
+            fixture.registerTopic("/t", 1)
+            let payload = MQBackupPayload(0, "/t", 0, [[1u8], [2u8]],
+                [MQBackupState(1, 0, 0, true), MQBackupState(1, 8, 0, false)],
+                cursors: [MQBackupCursor("g", 1, 8)])
+            @Assert(codeOf(fixture.call(MQProtocol.publishBackup(payload))) == 0)
+            let cursor = fixture.backupStore.loadCursor(0, "/t", 0, "g").getOrThrow()
+            @Assert(cursor.seq == 1)
+            @Assert(cursor.offset == 8)
         } finally {
             fixture.close()
         }

@@ -213,6 +213,57 @@ class BackupReplicatorTest {
         replicator.close()
     }
 
+    /** 部分目标失败：只重试失败目标，已成功的目标不重复收（R2-G5）。 */
+    @TestCase
+    public func partialTargetFailureRetriesOnlyFailedTarget(): Unit {
+        let transport = makeTransport(3, 0)
+        transport.available[2] = false
+        let replicator = BackupReplicator(transport, 2)
+        try {
+            replicator.record("/t", 0, LogPosition(1, 0), [1u8])
+            replicator.flush()
+            @Assert(transport.messagesSentTo(1).size == 1)
+            @Assert(transport.messagesSentTo(2).size == 0)
+            // 只有失败目标那一条留在队列里
+            @Assert(replicator.pendingCount == 1)
+
+            transport.available[2] = true
+            replicator.flush()
+            // 节点 1 不重复收，节点 2 补齐
+            @Assert(transport.messagesSentTo(1).size == 1)
+            @Assert(transport.messagesSentTo(2).size == 1)
+            @Assert(replicator.pendingCount == 0)
+        } finally {
+            replicator.close()
+        }
+    }
+
+    /** 关闭必须等在途批次发完再 drain：close 返回后不得还有发送在进行（R2-G6）。 */
+    @TestCase
+    public func closeWaitsForInFlightBatch(): Unit {
+        let transport = makeTransport(2, 0)
+        let active = AtomicInt64(0)
+        transport.responder = {_, message =>
+            active.fetchAdd(1)
+            sleep(Duration.millisecond * 700)
+            active.fetchSub(1)
+            Some(MQProtocol.respond<MQBackupPayload>(message, MQBackupPayload()))
+        }
+        let replicator = BackupReplicator(transport, 1)
+        replicator.start()
+        replicator.record("/t", 0, LogPosition(1, 0), [1u8])
+        var waited = 0
+        while (active.load() == 0 && waited < 200) {
+            sleep(Duration.millisecond * 10)
+            waited++
+        }
+        @Assert(active.load() == 1)
+        replicator.close()
+        // close 返回即在途发送已结束，待发队列也排空
+        @Assert(active.load() == 0)
+        @Assert(replicator.pendingCount == 0)
+    }
+
     /** 关闭后 record 丢弃且不崩溃。 */
     @TestCase
     public func recordAfterCloseIsDropped(): Unit {
