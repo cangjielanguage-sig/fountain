@@ -15,6 +15,8 @@ limitations under the License.
 */
 package fountain::fmq
 
+import std.collection.ArrayList
+import std.sync.AtomicInt64
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_config.Config
@@ -26,6 +28,48 @@ class MainTest {
     public func topLevelHelpReturnsZero(): Unit {
         @Assert(dispatch(["--help"]) == 0)
         @Assert(dispatch(["-h"]) == 0)
+    }
+
+    /** `server` 与 `manager` 都走可注入工厂，方便断言「调用一次 + 返回码透传」（A68）。 */
+    @TestCase
+    public func dispatchWithInjectedFactories(): Unit {
+        let serverCalls = AtomicInt64(0)
+        let managerCalls = AtomicInt64(0)
+        let seenArgs = ArrayList<String>()
+        let code = dispatchWith(
+            {=>
+                serverCalls.fetchAdd(1)
+                7
+            },
+            {args =>
+                managerCalls.fetchAdd(1)
+                for (arg in args) {
+                    seenArgs.add(arg)
+                }
+                9
+            },
+            ["server"])
+        @Assert(code == 7)
+        @Assert(serverCalls.load() == 1)
+        @Assert(managerCalls.load() == 0)
+
+        let managerCode = dispatchWith(
+            {=>
+                serverCalls.fetchAdd(1)
+                7
+            },
+            {args =>
+                managerCalls.fetchAdd(1)
+                for (arg in args) {
+                    seenArgs.add(arg)
+                }
+                9
+            },
+            ["manager", "listTopics", "--server=127.0.0.1:1"])
+        @Assert(managerCode == 9)
+        @Assert(managerCalls.load() == 1)
+        @Assert(serverCalls.load() == 1)
+        @Assert(seenArgs.toArray() == ["listTopics", "--server=127.0.0.1:1"])
     }
 
     @TestCase
