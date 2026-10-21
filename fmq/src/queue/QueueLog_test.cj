@@ -620,6 +620,89 @@ class QueueLogTest {
         }
     }
 
+    /** 记录上限与段上限联动：超过段容量的记录必须在写入前被拒，段文件长度不变（R3-C2）。 */
+    @TestCase
+    public func recordLargerThanSegmentIsRejectedBeforeWrite(): Unit {
+        let dir = dirOf("record_over_segment")
+        clean(dir)
+        let log = QueueLog(dir, 1024 * 1024, 1)
+        try {
+            log.append(recordOf(0x11u8, 100))
+            let before = log.size
+            var thrown = false
+            try {
+                log.append(Array<Byte>(2 * 1024 * 1024, repeat: 0u8))
+            } catch (_: IllegalArgumentException) {
+                thrown = true
+            }
+            @Assert(thrown)
+            @Assert(log.size == before)
+            @Assert(log.segments().size == 1)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** 空记录不得写入（否则段里会留下 4 字节零长度头）。 */
+    @TestCase
+    public func emptyRecordIsRejected(): Unit {
+        let dir = dirOf("empty_record")
+        clean(dir)
+        let log = QueueLog(dir, 1024, 1)
+        try {
+            var thrown = false
+            try {
+                log.append([])
+            } catch (_: IllegalArgumentException) {
+                thrown = true
+            }
+            @Assert(thrown)
+            @Assert(log.size == 0)
+            @Assert(log.segments().size == 0 || log.segments()[0].size == 0)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** 段上限必须能容纳 4 字节长度头。 */
+    @TestCase
+    public func segmentLimitMustExceedPrefix(): Unit {
+        let dir = dirOf("tiny_segment")
+        clean(dir)
+        var thrown = false
+        try {
+            let log = QueueLog(dir, QueueLog.PREFIX_SIZE, 1)
+            log.close()
+        } catch (_: IllegalArgumentException) {
+            thrown = true
+        }
+        @Assert(thrown)
+        clean(dir)
+    }
+
+    /** 正例：恰好填满一段的记录可写入、独占段、可完整读回；下一条触发轮转（R3-C2）。 */
+    @TestCase
+    public func recordFillingSegmentSucceeds(): Unit {
+        let dir = dirOf("record_fills_segment")
+        clean(dir)
+        let log = QueueLog(dir, 1024 * 1024, 1)
+        try {
+            let data = Array<Byte>(1024 * 1024 - QueueLog.PREFIX_SIZE, repeat: 0x5Au8)
+            let first = log.append(data)
+            @Assert(first.seq == 1 && first.offset == 0)
+            @Assert(log.segments().size == 1)
+            @Assert(log.readAt(first).getOrThrow() == data)
+            let second = log.append(data)
+            @Assert(second.seq == 2 && second.offset == 0)
+            @Assert(log.readAt(second).getOrThrow() == data)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
     /** 写入侧同样以 64 MiB 为上界，超限在分配前拒绝（A56）。 */
     @TestCase
     public func oversizedRecordIsRejectedBeforeWrite(): Unit {

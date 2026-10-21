@@ -49,15 +49,31 @@ protected class QueueLog <: Resource {
 
     private let log: SegmentedLog
     private let label: String
+    /** 单条记录的真实上限：段容量减长度头，再与 `MAX_RECORD_SIZE` 取小。 */
+    private let effectiveMaxRecord: Int64
 
     protected init(dir: String, maxFileSize: Int64, syncInterval: Int64) {
+        if (maxFileSize <= PREFIX_SIZE) {
+            throw IllegalArgumentException(
+                "segment size ${maxFileSize} must be greater than the ${PREFIX_SIZE}-byte record header")
+        }
         this.log = SegmentedLog(LogConfig(dir, "log", maxFileSize, syncInterval))
         this.label = dir
+        let bySegment = maxFileSize - PREFIX_SIZE
+        this.effectiveMaxRecord = if (bySegment < MAX_RECORD_SIZE) {
+            bySegment
+        } else {
+            MAX_RECORD_SIZE
+        }
     }
 
     protected func append(record: Array<Byte>): LogPosition {
-        if (record.size > MAX_RECORD_SIZE) {
-            throw IllegalArgumentException("record too large: ${record.size} bytes, limit ${MAX_RECORD_SIZE}")
+        if (record.size == 0) {
+            throw IllegalArgumentException("empty record is not allowed")
+        }
+        if (record.size > effectiveMaxRecord) {
+            throw IllegalArgumentException(
+                "record too large: ${record.size} bytes, limit ${effectiveMaxRecord}")
         }
         let entry = Array<Byte>(PREFIX_SIZE + record.size, repeat: 0u8)
         QueueLog.putInt32BE(entry, 0, record.size)

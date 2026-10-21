@@ -206,8 +206,8 @@ class DeadLetterQueueTest {
     public func cleanExpiredLeavesOnlyCurrentSegment(): Unit {
         let root = rootOf("ttl_segments")
         clean(root)
-        // 每条消息大于段上限 40 字节 ⇒ 每次 append 都轮转，4 条产生 3 个封口段
-        let queue = DeadLetterQueue(root, 40, 1)
+        // 段上限 200 字节、单条死信约 165 字节 ⇒ 每次 append 都轮转，4 条产生 3 个封口段
+        let queue = DeadLetterQueue(root, 200, 1)
         try {
             for (i in 0..4) {
                 queue.append(MQDeadLetterMessage("/t", 0, "g", Int64(i), 0, 4, DateTime.now(),

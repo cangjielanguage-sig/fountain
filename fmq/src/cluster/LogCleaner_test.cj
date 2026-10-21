@@ -128,7 +128,7 @@ class LogCleanerTest {
 
     @TestCase
     public func deadLetterUsesItsOwnTtl(): Unit {
-        let (root, queues, dead) = make("dead_ttl", 60)
+        let (root, queues, dead) = make("dead_ttl", 200)
         try {
             // 普通队列只有一个当前段（不会被删）
             queues.queueOf("/t", 0).getOrThrow().append([1u8])

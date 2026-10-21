@@ -18,6 +18,7 @@ package fountain::fmq.config
 import std.convert.*
 import std.fs.Path
 import fountain::f_config.Config
+import fountain::f_log.*
 import fountain::f_mq.base.{MQConfigKey, MQHost}
 import fountain::f_process.getAbsoluteCommandDir
 
@@ -36,6 +37,7 @@ public class MQConfigException <: Exception {
  */
 protected struct MQConfig {
     private static const PREFIX = "mqServer"
+    private static let log = LoggerFactory.getLogger("fountain::fmq.config.MQConfig")
 
     static let PORT = "${PREFIX}_port"
     static let ACK_TIMEOUT = "${PREFIX}_ackTimeout"
@@ -305,6 +307,11 @@ protected struct MQConfig {
         }
         if (checkedMaxSize <= 0) {
             throw MQConfigException("${SEGMENTED_LOG_MAX_SIZE} must be positive, got ${checkedMaxSize}")
+        }
+        // 段上限压低单条记录上限：必须让运维看见真实可用值，而不是等到写入时才发现越界
+        if (checkedMaxSize <= 64 * 1024 * 1024 + 4) {
+            log.warn("${SEGMENTED_LOG_MAX_SIZE}=${checkedMaxSize} limits a single record to " +
+                "${checkedMaxSize - 4} bytes; records above that are rejected at publish time")
         }
         if (checkedBackup < 0) {
             throw MQConfigException("${BACKUP} must not be negative, got ${checkedBackup}")
