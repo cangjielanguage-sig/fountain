@@ -19,7 +19,8 @@ import std.collection.{ArrayList, HashMap}
 import std.sync.Mutex
 import std.time.DateTime
 import fountain::f_io.LogPosition
-import fountain::f_mq.base.MQErrorCode
+import fountain::f_mq.base.{MQErrorCode, MQMessageRecord}
+import fountain::f_mq.exception.MQServiceException
 import fountain::f_mq.base.payload.{MQAckPayload, MQBackupCursor, MQBackupState, MQConsumeResult, MQResult}
 import fountain::f_time.*
 import fountain::fmq.cluster.BackupStateSource
@@ -155,36 +156,71 @@ protected class ConsumeService <: BackupStateSource {
                 out.append("R\t${name}\t\t${queueNum}\t${delayingMs}\t0\t0\t0\t0\t0\t0\n")
                 continue
             }
+            // 单趟扫描：每个队列只顺序读一遍，按各组位点分桶计数（A62）
+            let backlog = HashMap<String, Int64>()
+            let oldest = HashMap<String, DateTime>()
             for (group in groups) {
-                var backlog = 0i64
-                var oldest: ?DateTime = None
-                for ((queueIndex, log) in locals) {
+                backlog.add(group, 0)
+            }
+            for ((queueIndex, log) in locals) {
+                if (log.segmentsOrEmpty().size == 0) {
+                    continue
+                }
+                let starts = HashMap<String, LogPosition>()
+                var minStart = LogPosition(Int64.Max, 0)
+                for (group in groups) {
                     let committed = match (catalog.positionOf(name, queueIndex, group)) {
                         case Some(position) => position
                         case None => LogPosition(1, 0)
                     }
-                    let scanned = log.scanAfter(committed)
-                    backlog += scanned[0]
-                    match (scanned[1]) {
-                        case Some(published) =>
-                            let earlier = match (oldest) {
-                                case None => true
-                                case Some(current) =>
-                                    published.toUnixTimeStamp() < current.toUnixTimeStamp()
-                            }
-                            if (earlier) {
-                                oldest = Some(published)
-                            }
-                        case None => ()
+                    starts.add(group, committed)
+                    if (before(committed, minStart)) {
+                        minStart = committed
                     }
                 }
-                let lagMs = match (oldest) {
+                let reader = try {
+                    log.openRecordsFrom(minStart)
+                } catch (e: QueueCorruptionException) {
+                    throw MQServiceException(MQErrorCode.INTERNAL, "stats scan failed on ${name}/${queueIndex}: ${e.message}")
+                }
+                try {
+                    while (true) {
+                        let current = reader.position()
+                        match (reader.next()) {
+                            case None => break
+                            case Some(item) =>
+                                for (group in groups) {
+                                    let start = starts.get(group).getOrThrow()
+                                    if (before(current, start)) {
+                                        continue
+                                    }
+                                    backlog.add(group, backlog.get(group).getOrThrow() + 1)
+                                    if (oldest.get(group).isNone()) {
+                                        match (MQMessageRecord.publishTime(item[0])) {
+                                            case Some(published) => oldest.add(group, published)
+                                            case None => ()
+                                        }
+                                    }
+                                }
+                        }
+                    }
+                    if (reader.isCorrupted()) {
+                        throw MQServiceException(MQErrorCode.INTERNAL,
+                            "stats scan failed on ${name}/${queueIndex}: queue is corrupted")
+                    }
+                } finally {
+                    reader.close()
+                }
+            }
+            for (group in groups) {
+                let lagMs = match (oldest.get(group)) {
                     // 旧版本按本地时区写入的 id 会被解释成未来时刻，负滞后没有意义，钳到 0（A02）
                     case Some(published) =>
                         let lag = (now() - published).toMilliseconds()
                         if (lag < 0) {0} else {lag}
                     case None => 0
                 }
+                let groupBacklog = backlog.get(group).getOrThrow()
                 var delivered = 0i64
                 var acked = 0i64
                 var redelivered = 0i64
@@ -195,11 +231,16 @@ protected class ConsumeService <: BackupStateSource {
                     redelivered = m.redeliveredOf(name, group)
                     deadLettered = m.deadLetteredOf(name, group)
                 }
-                out.append("R\t${name}\t${group}\t${queueNum}\t${delayingMs}\t${backlog}\t${lagMs}\t" +
+                out.append("R\t${name}\t${group}\t${queueNum}\t${delayingMs}\t${groupBacklog}\t${lagMs}\t" +
                     "${delivered}\t${acked}\t${redelivered}\t${deadLettered}\n")
             }
         }
         out.toString()
+    }
+
+    /** `left` 是否在 `right` 之前（段号优先，段内偏移其次）。 */
+    private static func before(left: LogPosition, right: LogPosition): Bool {
+        left.seq < right.seq || (left.seq == right.seq && left.offset < right.offset)
     }
 
     /** 备份状态：逐条计算「是否已被所有组确认」与投递次数（A26）。 */
@@ -271,6 +312,10 @@ protected class ConsumeService <: BackupStateSource {
 
     /** 主题删除：关闭并移除其全部游标。 */
     func removeTopic(topic: String): Unit {
+        match (metrics) {
+            case Some(m) => m.removeTopic(topic)
+            case None => ()
+        }
         let prefix = "${topic}\u{0}"
         let victims = ArrayList<String>()
         synchronized(lock) {
@@ -290,6 +335,10 @@ protected class ConsumeService <: BackupStateSource {
 
     /** 订阅组删除：关闭并移除该组游标。 */
     func removeGroup(topic: String, group: String): Unit {
+        match (metrics) {
+            case Some(m) => m.removeGroup(topic, group)
+            case None => ()
+        }
         let suffix = "\u{0}${group}"
         let victims = ArrayList<String>()
         synchronized(lock) {

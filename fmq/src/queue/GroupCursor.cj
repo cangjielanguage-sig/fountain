@@ -174,7 +174,11 @@ protected class GroupCursor {
                     }
                 }
                 if (subscription.autoAck) {
+                    // autoAck 也是「已确认」，必须计入 acked（A61）
                     entry.decided = true
+                    if (let Some(m) <- metrics) {
+                        m.incAcked(topic, group)
+                    }
                 }
                 break
             }
@@ -239,6 +243,9 @@ protected class GroupCursor {
                         }
                         if (subscription.autoAck) {
                             entry.decided = true
+                            if (let Some(m) <- metrics) {
+                                m.incAcked(topic, group)
+                            }
                             advance()
                         }
                         return Some((record, position))

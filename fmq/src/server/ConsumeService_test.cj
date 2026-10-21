@@ -25,8 +25,9 @@ import fountain::f_io.LogPosition
 import fountain::f_mq.base.{MQErrorCode, MQFilter, MQMessageRecord}
 import fountain::f_mq.base.payload.{MQAckPayload, MQConsumeResult, MQResult}
 import fountain::f_mq.base.payload.MQTopicAssignment
+import fountain::f_mq.exception.MQServiceException
 import fountain::fmq.cluster.LogCleaner
-import fountain::fmq.meta.{MetaApplyResult, MetaStore}
+import fountain::fmq.meta.{MQFileNames, MetaApplyResult, MetaStore}
 import fountain::f_mq.base.model.MQSubscribeGroupMeta
 import fountain::fmq.metrics.MQMetrics
 import fountain::fmq.queue.*
@@ -352,6 +353,89 @@ class ConsumeServiceTest {
             let emptyRow = statsRow(fixture.service.stats("/t", 3, {_ => ["g"]}), "/t", "g")
             @Assert(Int64.parse(emptyRow[5]) == 0)
             @Assert(Int64.parse(emptyRow[6]) == 0)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** autoAck 的投递也要计入 acked，且不产生 backlog（A61）。 */
+    @TestCase
+    public func autoAckCountsAckedAndClearsBacklog(): Unit {
+        let fixture = ConsumeFixture("auto_ack")
+        try {
+            for (i in 0..3) {
+                fixture.append([], "m-${i}")
+            }
+            let info = fixture.register("s1", autoAck: true)
+            for (_ in 0..3) {
+                @Assert(fixture.service.consume(info).isSome())
+            }
+            let row = statsRow(fixture.service.stats("/t", 0, {_ => ["g"]}), "/t", "g")
+            @Assert(Int64.parse(row[5]) == 0)      // backlog
+            @Assert(Int64.parse(row[8]) == 3)      // acked
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 删除主题/组后计数器清零，同名重建不复用旧值（A61）。 */
+    @TestCase
+    public func removingTopicAndGroupClearsCounters(): Unit {
+        let fixture = ConsumeFixture("clear_counters")
+        try {
+            fixture.append([], "one")
+            let info = fixture.register("s1", autoAck: true)
+            fixture.service.consume(info)
+            @Assert(fixture.metrics.ackedOf("/t", "g") == 1)
+            fixture.service.removeGroup("/t", "g")
+            @Assert(fixture.metrics.ackedOf("/t", "g") == 0)
+            fixture.service.removeTopic("/t")
+            @Assert(fixture.metrics.size == 0)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 多队列 backlog 与逐队列求和一致（A62）。 */
+    @TestCase
+    public func backlogAggregatesAcrossQueues(): Unit {
+        let fixture = ConsumeFixture("multi_queue", queueCount: 2)
+        try {
+            fixture.appendTo(0, [], "a")
+            fixture.appendTo(1, [], "b")
+            fixture.appendTo(1, [], "c")
+            let row = statsRow(fixture.service.stats("/t", 0, {_ => ["g"]}), "/t", "g")
+            @Assert(Int64.parse(row[5]) == 3)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 扫描失败时 stats 必须报错，不能伪造 backlog=0（A62）。 */
+    @TestCase
+    public func statsPropagatesScanFailure(): Unit {
+        let fixture = ConsumeFixture("stats_corrupt")
+        try {
+            fixture.append([], "one")
+            let dir = MQFileNames.queueDir("${fixture.root}/logs", "/t", 0)
+            let corrupted = Array<Bool>(1, repeat: false)
+            Directory.walk(dir) {info: FileInfo =>
+                if (!corrupted[0] && !info.isDirectory() && info.name.startsWith("log_")) {
+                    let file = File(info.path.toString(), OpenMode.Write)
+                    file.write([0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8])
+                    file.close()
+                    corrupted[0] = true
+                }
+                true
+            }
+            @Assert(corrupted[0])
+            var code = -1i64
+            try {
+                fixture.service.stats("/t", 0, {_ => ["g"]})
+            } catch (e: MQServiceException) {
+                code = e.code
+            }
+            @Assert(code == MQErrorCode.INTERNAL)
         } finally {
             fixture.close()
         }
