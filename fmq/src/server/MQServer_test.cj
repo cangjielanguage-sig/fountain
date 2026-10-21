@@ -18,6 +18,7 @@ package fountain::fmq.server
 import std.fs.*
 import std.net.{TcpSocket, IPSocketAddress}
 import std.sync.AtomicInt64
+import std.time.DateTime
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_mq.client.MQClient
@@ -277,4 +278,86 @@ class MQServerTest {
         @Assert(MQManager(args).run() == 1)
     }
 
+    // ===== 退出钩子与关闭容错（A58/A59） =====
+
+    @TestCase
+    public func closeIsolatesFailingStep(): Unit {
+        let root = "/tmp/fmq_test_server/close_isolate"
+        let port = ServerPortAllocator.freePort()
+        let server = MQServer(options(root, port, ["127.0.0.1:${port}"]))
+        let laterRan = Array<Int64>(1, repeat: 0)
+        server.setCloseStepsOverride({=>
+            [
+                ("boom", {=> throw IllegalArgumentException("simulated close failure")}),
+                ("later", {=> laterRan[0] = laterRan[0] + 1})
+            ]
+        })
+        // 单步失败不影响后续步骤
+        server.close()
+        @Assert(laterRan[0] == 1)
+        // 未完成：再次 close 会重试失败步骤，已成功的步骤不重复执行
+        server.close()
+        @Assert(laterRan[0] == 1)
+        @Assert(server.isClosed())
+    }
+
+    @TestCase
+    public func closeRetriesOnlyFailedStepsUntilComplete(): Unit {
+        let root = "/tmp/fmq_test_server/close_retry"
+        let port = ServerPortAllocator.freePort()
+        let server = MQServer(options(root, port, ["127.0.0.1:${port}"]))
+        let attempts = Array<Int64>(1, repeat: 0)
+        let laterRan = Array<Int64>(1, repeat: 0)
+        server.setCloseStepsOverride({=>
+            [
+                ("flaky", {=>
+                    attempts[0] = attempts[0] + 1
+                    if (attempts[0] == 1) {
+                        throw IllegalArgumentException("first attempt fails")
+                    }
+                }),
+                ("later", {=> laterRan[0] = laterRan[0] + 1})
+            ]
+        })
+        server.close()
+        @Assert(attempts[0] == 1)
+        server.close()
+        @Assert(attempts[0] == 2)
+        @Assert(laterRan[0] == 1)
+        // 完成后不再执行任何步骤
+        server.close()
+        @Assert(attempts[0] == 2)
+    }
+
+    @TestCase
+    public func closeMakesRunReturnZero(): Unit {
+        let root = "/tmp/fmq_test_server/close_run"
+        let port = ServerPortAllocator.freePort()
+        let server = MQServer(options(root, port, ["127.0.0.1:${port}"]))
+        server.start()
+        waitReady(port)
+        server.close()
+        let started = DateTime.now()
+        let code = server.run()
+        @Assert(code == 0)
+        @Assert((DateTime.now() - started).toMilliseconds() < 1000)
+    }
+
+    @TestCase
+    public func installExitHooksClosesServer(): Unit {
+        let root = "/tmp/fmq_test_server/exit_hooks"
+        let port = ServerPortAllocator.freePort()
+        let server = MQServer(options(root, port, ["127.0.0.1:${port}"]))
+        let captured = Array<() -> Unit>(1, repeat: {=> ()})
+        let capturedSet = Array<Bool>(1, repeat: false)
+        installExitHooks(server, {callback =>
+            captured[0] = callback
+            capturedSet[0] = true
+        })
+        @Assert(capturedSet[0])
+        @Assert(!server.isClosed())
+        // 触发回调等价于收到 SIGTERM：服务器完成关闭
+        captured[0]()
+        @Assert(server.isClosed())
+    }
 }

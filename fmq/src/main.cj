@@ -15,9 +15,10 @@ limitations under the License.
  */
 package fountain::fmq
 
+import fountain::f_base.ExitCallbacks
 import fountain::fmq.config.MQConfigException
 import fountain::fmq.manager.{MQManager, MQManagerArgs}
-import fountain::fmq.server.MQServer
+import fountain::fmq.server.{MQServer, installExitHooks}
 
 /**
  * fmq 可执行文件入口：`server` / `manager` / `--help` 分发。
@@ -79,7 +80,11 @@ private func runServer(): Int64 {
         eprintln("fmq server: ${e.message}")
         return 2
     }
-    server.getOrThrow().run()
+    let instance = server.getOrThrow()
+    // 只在 server 分支安装：manager / --help 不需要
+    ExitCallbacks.toExitGracefully()
+    installExitHooks(instance, {close => ExitCallbacks.atExit(0, close)})
+    instance.run()
 }
 
 private func wantsHelp(args: Array<String>): Bool {

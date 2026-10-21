@@ -15,9 +15,9 @@ limitations under the License.
 */
 package fountain::fmq.server
 
-import std.collection.ArrayList
+import std.collection.{ArrayList, HashSet}
 import std.fs.*
-import std.sync.{AtomicBool, Timer}
+import std.sync.{AtomicBool, Mutex, Timer}
 import fountain::f_data.DataAny
 import fountain::f_log.*
 import fountain::f_net.server.Server
@@ -56,6 +56,10 @@ public class MQServer {
     private let started = AtomicBool(false)
     private let closed = AtomicBool(false)
     private var cleanupTimer: ?Timer = None
+    private let closeLock = Mutex()
+    private var closeCompleted = false
+    private let closeDone = HashSet<String>()
+    private var closeStepsOverride: ?(() -> Array<(String, () -> Unit)>) = None
 
     /** 从 `mqServer_*` / `mqClient_hosts` 读取配置并装配。 */
     public init() {
@@ -133,27 +137,77 @@ public class MQServer {
         0
     }
 
-    /** 按相反顺序释放资源；幂等。 */
+    /**
+     * 关闭步骤（可覆写以便注入失败）：按相反顺序释放资源。
+     *
+     * 每一步单独 try/catch：单步失败不影响其它资源释放（A59）。
+     */
+    protected func closeSteps(): Array<(String, () -> Unit)> {
+        [
+            ("server", {=> server.close()}),
+            ("cleanupTimer", {=> cancelCleanupTimer()}),
+            ("backup", {=> backup.close()}),
+            ("cleaner", {=> cleaner.close()}),
+            ("consume", {=> consume.close()}),
+            ("backupStore", {=> backupStore.close()}),
+            ("queues.sync", {=> queues.sync()}),
+            ("queues", {=> queues.close()}),
+            ("deadLetter", {=> deadLetter.close()}),
+            ("meta", {=> meta.close()}),
+            ("registry", {=> registry.close()})
+        ]
+    }
+
+    /**
+     * 关闭：幂等、逐步容错、失败步骤可在下一次调用重试。
+     *
+     * `closed` 先置位让 `run()` 退出；只有全部步骤成功才算 `closeCompleted`。
+     */
     public func close(): Unit {
-        if (!closed.compareAndSwap(false, true)) {
-            return
+        synchronized(closeLock) {
+            if (closeCompleted) {
+                return
+            }
+            closed.store(true)
+            let failures = ArrayList<String>()
+            for ((name, step) in currentCloseSteps()) {
+                if (closeDone.contains(name)) {
+                    continue
+                }
+                try {
+                    step()
+                    closeDone.add(name)
+                } catch (e: Exception) {
+                    failures.add(name)
+                    log.error("close step '${name}' failed: ${e.message}")
+                }
+            }
+            closeCompleted = failures.size == 0
+            if (!closeCompleted) {
+                log.error("close incomplete, retry later: ${failures.toString()}")
+            }
         }
-        server.close()
+    }
+
+    /** 测试用：替换关闭步骤（注入失败步骤，验证隔离与重试）。 */
+    protected func setCloseStepsOverride(provider: () -> Array<(String, () -> Unit)>): Unit {
+        this.closeStepsOverride = Some(provider)
+    }
+
+    private func currentCloseSteps(): Array<(String, () -> Unit)> {
+        match (closeStepsOverride) {
+            case Some(provider) => provider()
+            case None => closeSteps()
+        }
+    }
+
+    private func cancelCleanupTimer(): Unit {
         match (cleanupTimer) {
             case Some(timer) =>
                 timer.cancel()
                 cleanupTimer = None
             case None => ()
         }
-        backup.close()
-        cleaner.close()
-        consume.close()
-        backupStore.close()
-        queues.sync()
-        queues.close()
-        deadLetter.close()
-        meta.close()
-        registry.close()
     }
 
     public func isClosed(): Bool {
@@ -180,4 +234,13 @@ public class MQServer {
             Directory.create(path, recursive: true)
         }
     }
+}
+
+/**
+ * 安装退出钩子：`SIGTERM`/`SIGINT` 时先执行全部 atExit 回调（含 `server.close()`）再退出。
+ *
+ * `install` 可注入，用例据此断言「只注册一次、且回调确实会关闭服务器」，不必真的发信号。
+ */
+public func installExitHooks(server: MQServer, install: (() -> Unit) -> Unit): Unit {
+    install({=> server.close()})
 }
