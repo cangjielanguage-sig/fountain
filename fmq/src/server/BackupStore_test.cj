@@ -25,7 +25,8 @@ import fountain::f_data.*
 import fountain::f_io.LogPosition
 import fountain::f_mq.base.MQMessageRecord
 import fountain::fmq.cluster.LogCleaner
-import fountain::fmq.queue.{DeadLetterQueue, QueueLog, QueueManager}
+import fountain::fmq.meta.MetaStore
+import fountain::fmq.queue.{CursorCatalog, CursorStore, DeadLetterQueue, QueueLog, QueueManager}
 import fountain::fmq.test.TestDirs
 
 @Test
@@ -283,6 +284,34 @@ class BackupStoreTest {
             @Assert(logs[0][0] == 0)
             @Assert(logs[0][1] == "/t")
             @Assert(logs[0][2] == 0)
+        } finally {
+            store.close()
+            remove(root, recursive: true)
+        }
+    }
+
+    /** 备份位点可读回，并作为重建消费游标的唯一来源（恢复场景的数据基础）。 */
+    @TestCase
+    public func backupCursorRebuildsConsumerCursor(): Unit {
+        let root = TestDirs.of("backup_store", "cursor_rebuild")
+        if (exists(root)) {
+            remove(root, recursive: true)
+        }
+        Directory.create(root, recursive: true)
+        let store = BackupStore(root, 1024 * 1024, 1)
+        try {
+            store.append(0, "/t", 0, [1u8])
+            store.saveCursor(0, "/t", 0, "g", LogPosition(3, 40))
+            let saved = store.loadCursor(0, "/t", 0, "g").getOrThrow()
+            @Assert(samePosition(saved, LogPosition(3, 40)))
+
+            // 恢复：备份位点写回游标目录后，目录（而非内存）就能给出 committed
+            let cursorStore = CursorStore("${root}/metas")
+            cursorStore.save("/t", 0, "g", saved)
+            let meta = MetaStore("${root}/metas")
+            meta.load()
+            let catalog = CursorCatalog(cursorStore, meta)
+            @Assert(samePosition(catalog.positionOf("/t", 0, "g").getOrThrow(), LogPosition(3, 40)))
         } finally {
             store.close()
             remove(root, recursive: true)

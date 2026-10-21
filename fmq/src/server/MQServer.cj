@@ -74,7 +74,7 @@ public class MQServer {
         ensureDir(options.segmentedLogDir)
         ensureDir(options.deadMsgDir)
 
-        this.meta = MetaStore(options.metaDir, origin: options.selfIndex)
+        this.meta = MetaStore(options.metaDir, origin: options.selfIndex, nodeCount: options.nodes.size)
         this.meta.load()
         // 局部别名：闭包不能捕获尚未完成初始化的 `this`，只能捕获局部变量
         let metaStore = this.meta
@@ -202,6 +202,7 @@ public class MQServer {
             ("backup", {=> backup.close()}),
             ("cleaner", {=> cleaner.close()}),
             ("consume", {=> consume.close()}),
+            ("subscribers", {=> subscribers.clear()}),
             ("backupStore", {=> backupStore.close()}),
             ("queues.sync", {=> queues.sync()}),
             ("queues", {=> queues.close()}),
@@ -239,6 +240,13 @@ public class MQServer {
             if (!closeCompleted) {
                 log.error("close incomplete, retry later: ${failures.toString()}")
             }
+        }
+    }
+
+    /** 测试用：订阅表（注入断链订阅、断言清理结果）。 */
+    protected prop subscriptionRegistry: SubscriberRegistry {
+        get() {
+            subscribers
         }
     }
 

@@ -68,6 +68,8 @@ protected class MetaStore <: Resource {
     private let dir: String
     /** 本节点下标；同 revision 时用 origin 打破平局 */
     private let origin: Int64
+    /** 集群节点数；0 表示未知（加载时只做与节点数无关的结构校验） */
+    private let nodeCount: Int64
     private let lock = Mutex()
     private let topicIndex = HashMap<String, MQTopicAssignment>()
     private let groups = HashMap<String, ArrayList<MQSubscribeGroupMeta>>()
@@ -77,9 +79,10 @@ protected class MetaStore <: Resource {
     private var nextStart: Int64 = 0
     private var closed = false
 
-    protected init(metaDir: String, origin!: Int64 = 0) {
+    protected init(metaDir: String, origin!: Int64 = 0, nodeCount!: Int64 = 0) {
         this.dir = metaDir
         this.origin = origin
+        this.nodeCount = nodeCount
         if (!exists(dir)) {
             Directory.create(dir, recursive: true)
         }
@@ -285,17 +288,30 @@ protected class MetaStore <: Resource {
     /**
      * 删除主题及其订阅组：先写墓碑，再删元数据。
      *
-     * 返回墓碑（调用方负责广播）；主题不存在返回 `None`。
+     * 返回墓碑列表（主题墓碑在首位，随后是该主题下每个订阅组的墓碑），调用方负责逐条广播；
+     * 主题不存在返回空列表。级联写组墓碑是为了让对端在只收到组快照时不会重建孤儿组。
      */
-    protected func removeTopic(topic: String): ?MQMetaTombstone {
+    protected func removeTopic(topic: String): Array<MQMetaTombstone> {
         synchronized(lock) {
             if (topicIndex.get(topic).isNone()) {
-                return None<MQMetaTombstone>
+                return []
             }
-            let tombstone = newTombstoneLocked(MQMetaTombstone.KIND_TOPIC, topic, '')
-            tombstones.add(tombstone.key(), tombstone)
+            let result = ArrayList<MQMetaTombstone>()
+            let topicTombstone = newTombstoneLocked(MQMetaTombstone.KIND_TOPIC, topic, '')
+            tombstones.add(topicTombstone.key(), topicTombstone)
+            result.add(topicTombstone)
+            match (groups.get(topic)) {
+                case Some(list) =>
+                    for (meta in list) {
+                        let groupTombstone = newTombstoneLocked(MQMetaTombstone.KIND_GROUP, topic,
+                            meta.subscribeGroup)
+                        tombstones.add(groupTombstone.key(), groupTombstone)
+                        result.add(groupTombstone)
+                    }
+                case None => ()
+            }
             dropTopicLocked(topic)
-            Some(tombstone)
+            result.toArray()
         }
     }
 
@@ -674,7 +690,19 @@ protected class MetaStore <: Resource {
         walkFiles(topicDir) {info: FileInfo =>
             if (info.name.endsWith(".meta")) {
                 match (MQProtocol.decodePayload<MQTopicAssignment>(readAll(info.path.toString()))) {
-                    case Some(assignment) => topicIndex.add(assignment.topic, assignment)
+                    case Some(assignment) =>
+                        // 可解码不等于合法：owners 数量不符/越界的文件不得进入索引，更不能进快照（A34）
+                        let valid = if (nodeCount > 0) {
+                            MQAssignment.validate(assignment, nodeCount)
+                        } else {
+                            MQAssignment.validateStructure(assignment)
+                        }
+                        if (!valid) {
+                            log.error("skip invalid topic metadata ${info.path}: '${assignment.topic}' " +
+                                "queueNum=${assignment.queueNum} owners=${assignment.owners.size}")
+                        } else {
+                            topicIndex.add(assignment.topic, assignment)
+                        }
                     case None => log.error("skip corrupted topic metadata ${info.path}")
                 }
             }

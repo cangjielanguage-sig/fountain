@@ -38,6 +38,14 @@ protected interface MQNodeTransport {
      */
     func isKnownDead(index: Int64): Bool
 
+    /**
+     * 该节点最近一次交互确认存活。
+     *
+     * 与 `isKnownDead` 互补：两者都为假表示「未知」（从未成功调用过）。
+     * 反熵据此分层选点：未知 → 存活 → 已知死亡（A40）。
+     */
+    func isAlive(index: Int64): Bool
+
     /** 环形后继节点（用于备份副本）。 */
     func successors(count: Int64): Array<Int64>
 }

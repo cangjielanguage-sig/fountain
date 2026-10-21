@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::fmq.cluster
 
+import std.collection.ArrayList
 import std.fs.*
 import std.sync.AtomicInt64
 import std.unittest.*
@@ -475,7 +476,7 @@ class MetaSyncerTest {
             let transport = FakeTransport(1, 0)
             let syncer = MetaSyncer(store, transport)
             syncer.applyRemote(MQTopicAssignment("/t", 1, 0, [0], revision: 1))
-            @Assert(store.removeTopic("/t").isSome())
+            @Assert(store.removeTopic("/t").size > 0)
 
             @Assert(syncer.applyRemoteGroup(MQSubscribeGroupMeta("/t", "g", revision: 5)) ==
                 MetaApplyResult.TopicMissing)
@@ -651,6 +652,35 @@ class MetaSyncerTest {
             syncer.antiEntropyOnce()
             @Assert(store.topicOf("/remote").isSome())
             @Assert(syncer.pendingPeerCount() == 0)
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    /** 反熵选点参考存活标记：未知 → 存活 → 已知死亡（A40）。 */
+    @TestCase
+    public func antiEntropyPrefersUnknownThenAliveThenDead(): Unit {
+        let dir = dirOf("anti_entropy_tier")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            let transport = FakeTransport(4, 0)
+            transport.alive[2] = true
+            transport.knownDead[1] = true
+            // 节点 3 既非存活也非死亡：未知
+            let attempts = ArrayList<Int64>()
+            transport.responder = {index, _ =>
+                attempts.add(index)
+                None<Message>
+            }
+            let syncer = MetaSyncer(store, transport)
+            syncer.syncFromPeers()
+            @Assert(attempts.size == 3)
+            @Assert(attempts[0] == 3)
+            @Assert(attempts[1] == 2)
+            @Assert(attempts[2] == 1)
             store.close()
         } finally {
             clean(dir)

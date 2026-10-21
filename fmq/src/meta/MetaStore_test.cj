@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::fmq.meta
 
+import std.collection.ArrayList
 import std.fs.*
 import std.sync.AtomicInt64
 import fountain::f_mq.base.model.MQTopicMeta
@@ -99,12 +100,59 @@ class MetaStoreTest {
             store.applyTopic(MQTopicAssignment("/t", 1, 0, [0]))
             store.applyGroup(MQSubscribeGroupMeta("/t", "g1"))
             store.applyGroup(MQSubscribeGroupMeta("/t", "g2"))
-            @Assert(store.removeTopic("/t").isSome())
+            let tombstones = store.removeTopic("/t")
+            // 主题墓碑在首位，随后级联每个组的墓碑（A35 的墓碑传播侧）
+            @Assert(tombstones.size == 3)
+            @Assert(tombstones[0].isTopic())
+            let groupNames = ArrayList<String>()
+            for (tombstone in tombstones[1..]) {
+                @Assert(!tombstone.isTopic())
+                groupNames.add(tombstone.subscribeGroup)
+            }
+            @Assert(groupNames.contains("g1"))
+            @Assert(groupNames.contains("g2"))
             @Assert(store.topicOf("/t").isNone())
             @Assert(store.groupsOf("/t").size == 0)
             @Assert(!store.groupExists("/t", "g1"))
             @Assert(!exists("${dir}/topics/%2Ft.meta"))
+            // 墓碑随快照下发：对端据此丢弃组，不必依赖组快照缺失兜底
+            @Assert(store.snapshot().tombstones.size == 3)
             store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    /** 磁盘上 owners 数量与队列数不符的条目不得进入索引，更不能随快照扩散（A34）。 */
+    @TestCase
+    public func loadTopicsSkipsInvalidAssignment(): Unit {
+        let dir = dirOf("load_invalid")
+        clean(dir)
+        try {
+            Directory.create("${dir}/topics", recursive: true)
+            let bad = MQTopicAssignment("/bad", 2, 0, [0])
+            let path = "${dir}/topics/${MQFileNames.escape("/bad")}.meta"
+            let file = File.create(path)
+            file.write(MQProtocol.encodePayload<MQTopicAssignment>(bad))
+            file.close()
+
+            let store = MetaStore(dir)
+            store.load()
+            @Assert(store.topicOf("/bad").isNone())
+            @Assert(store.topics().size == 0)
+            @Assert(store.snapshot().topics.size == 0)
+            store.close()
+
+            // 节点数已知时，owner 越界同样拒绝
+            let good = MQTopicAssignment("/bad", 1, 0, [3])
+            remove(path)
+            let file2 = File.create(path)
+            file2.write(MQProtocol.encodePayload<MQTopicAssignment>(good))
+            file2.close()
+            let sized = MetaStore(dir, nodeCount: 2)
+            sized.load()
+            @Assert(sized.topicOf("/bad").isNone())
+            sized.close()
         } finally {
             clean(dir)
         }
@@ -300,7 +348,7 @@ class MetaStoreTest {
             let store = MetaStore(dir, origin: 3)
             store.load()
             store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 2))
-            let tombstone = store.removeTopic("/t").getOrThrow()
+            let tombstone = store.removeTopic("/t")[0]
             @Assert(tombstone.revision > 2)
             @Assert(tombstone.origin == 3)
             @Assert(store.topicOf("/t").isNone())
@@ -326,7 +374,7 @@ class MetaStoreTest {
             let store = MetaStore(dir)
             store.load()
             store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 1))
-            let tombstone = store.removeTopic("/t").getOrThrow()
+            let tombstone = store.removeTopic("/t")[0]
             let now = tombstone.deletedAtMs
             // 未过期：不回收
             @Assert(store.gcTombstones(now + 1000, Duration.hour.toMilliseconds()) == 0)
@@ -491,7 +539,7 @@ class MetaStoreTest {
             store.load()
             store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 1))
             store.applyGroup(MQSubscribeGroupMeta("/t", "g", revision: 2))
-            let tombstone = store.removeTopic("/t").getOrThrow()
+            let tombstone = store.removeTopic("/t")[0]
             @Assert(tombstone.isTopic())
             @Assert(store.topicOf("/t").isNone())
             @Assert(!store.groupExists("/t", "g"))
@@ -540,7 +588,7 @@ class MetaStoreTest {
         try {
             let store = MetaStore(dir)
             store.load()
-            @Assert(store.removeTopic("/missing").isNone())
+            @Assert(store.removeTopic("/missing").size == 0)
             @Assert(store.removeGroup("/missing", "g").isNone())
             store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 1))
             @Assert(store.removeGroup("/t", "missing").isNone())

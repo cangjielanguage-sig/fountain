@@ -19,6 +19,7 @@ import std.collection.{ArrayList, HashMap}
 import std.sync.{AtomicInt64, Mutex}
 import std.time.DateTime
 import fountain::f_io.LogPosition
+import fountain::f_log.*
 import fountain::f_mq.base.{MQErrorCode, MQMessageRecord}
 import fountain::f_mq.exception.MQServiceException
 import fountain::f_mq.base.payload.{MQAckPayload, MQBackupCursor, MQBackupState, MQConsumeResult, MQResult}
@@ -33,6 +34,7 @@ import fountain::fmq.queue.*
  * 每个 `(topic, queueIndex, group)` 一个 `GroupCursor`，懒建并缓存；不同组之间互不阻塞。
  */
 protected class ConsumeService <: BackupStateSource {
+    private static let log = LoggerFactory.getLogger("fountain::fmq.server.ConsumeService")
     private let queues: QueueManager
     private let catalog: CursorCatalog
     private let subscribers: SubscriberRegistry
@@ -67,7 +69,13 @@ protected class ConsumeService <: BackupStateSource {
         if (locals.size == 0) {
             return None<MQConsumeResult>
         }
-        let members = subscribers.byGroupOf(info.topic, info.subscribeGroup)
+        let members = ArrayList<MQSubscriptionInfo>()
+        for (member in subscribers.byGroupOf(info.topic, info.subscribeGroup)) {
+            // 断链订阅不是活跃成员：否则记录会被反复分配给一个收不到消息的连接（A55/A70）
+            if (!member.isDisconnected()) {
+                members.add(member)
+            }
+        }
         if (members.size == 0) {
             return None<MQConsumeResult>
         }
@@ -171,9 +179,12 @@ protected class ConsumeService <: BackupStateSource {
             for (group in groups) {
                 backlog.add(group, 0)
             }
-            for ((queueIndex, log) in locals) {
-                if (log.segmentsOrEmpty().size == 0) {
-                    continue
+            for ((queueIndex, log_) in locals) {
+                if (log_.segmentsOrEmpty().size == 0) {
+                    // 空队列也至少有一个段：没有段说明段被删或目录不可读，不能输出 backlog=0（A61）
+                    log.warn("stats of ${name}/${queueIndex} has no readable segment, report INTERNAL")
+                    throw MQServiceException(MQErrorCode.INTERNAL,
+                        "stats scan failed on ${name}/${queueIndex}: no readable segment")
                 }
                 let starts = HashMap<String, LogPosition>()
                 var minStart = LogPosition(Int64.Max, 0)
@@ -188,7 +199,7 @@ protected class ConsumeService <: BackupStateSource {
                     }
                 }
                 let reader = try {
-                    log.openRecordsFrom(minStart)
+                    log_.openRecordsFrom(minStart)
                 } catch (e: QueueCorruptionException) {
                     throw MQServiceException(MQErrorCode.INTERNAL, "stats scan failed on ${name}/${queueIndex}: ${e.message}")
                 }

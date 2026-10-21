@@ -29,6 +29,8 @@ protected class FakeTransport <: MQNodeTransport {
     let available: Array<Bool>
     /** 显式标记「已知死亡」：用于验证广播跳过死节点。 */
     let knownDead: Array<Bool>
+    /** 显式标记「存活」：用于验证反熵选点的分层。 */
+    let alive: Array<Bool>
     /** 可选应答器：返回 `None` 表示本次调用失败。 */
     var responder: (Int64, Message) -> ?Message = {_, _ => None<Message>}
 
@@ -37,6 +39,7 @@ protected class FakeTransport <: MQNodeTransport {
         this.self = selfIndex
         this.available = Array<Bool>(nodeCount, repeat: true)
         this.knownDead = Array<Bool>(nodeCount, repeat: false)
+        this.alive = Array<Bool>(nodeCount, repeat: false)
     }
 
     public prop nodeCount: Int64 {
@@ -69,6 +72,13 @@ protected class FakeTransport <: MQNodeTransport {
             return true
         }
         knownDead[index] || !available[index]
+    }
+
+    public func isAlive(index: Int64): Bool {
+        if (index < 0 || index >= total) {
+            return false
+        }
+        alive[index]
     }
 
     /** 发送尝试次数（含被跳过的死节点）。 */

@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::fmq.meta
 
 import std.fs.*
+import fountain::f_log.*
 
 /**
  * 原子文件写入：`写临时文件 → fsync → rename → fsync(parent)`。
@@ -23,10 +24,11 @@ import std.fs.*
  * 没有 fsync 时掉电可能留下「0 字节的正式文件」（rename 已生效、数据还在页缓存），
  * 元数据与位点都会因此丢条目。顺序通过 `trace` 钩子暴露给用例断言。
  *
- * 目录 fsync 依赖平台能力：不可用时只记 trace，不阻断写入（rename 的元数据由文件系统
- * 自身日志保证）。
+ * 目录 fsync 依赖平台能力：不支持时只记 DEBUG，不阻断写入；其它失败记 ERROR 并向上抛，
+ * 不允许把「已 rename」当成持久化成功。
  */
 protected class AtomicFile {
+    private static let log = LoggerFactory.getLogger("fountain::fmq.meta.AtomicFile")
     private let trace: (String) -> Unit
 
     protected init(trace!: (String) -> Unit = {_ => ()}) {
@@ -49,7 +51,12 @@ protected class AtomicFile {
             file.write(bytes)
             // `File.flush` 在标准库里就是 fsync：把数据刷到介质再 rename
             this.trace("fsync(file)")
-            file.flush()
+            try {
+                file.flush()
+            } catch (e: Exception) {
+                log.error("fsync of ${tmp} failed, abort write of ${path}: ${e.message}")
+                throw e
+            }
         } finally {
             this.trace("close")
             if (!file.isClosed()) {
@@ -62,7 +69,12 @@ protected class AtomicFile {
         syncDirectory(parent.toString())
     }
 
-    /** 目录 fsync：尽力而为，不支持时静默跳过。 */
+    /**
+     * 目录 fsync：平台不支持时按尽力而为处理，真实失败向上抛。
+     *
+     * 不区分两者会把「目录 fsync 未实现」当成致命错误，让所有元数据写入瘫痪；
+     * 反过来一律吞掉则会让掉电丢文件的真实故障无迹可寻。
+     */
     private func syncDirectory(parent: String): Unit {
         try {
             let dir = File(parent, OpenMode.Read)
@@ -73,6 +85,20 @@ protected class AtomicFile {
                     dir.close()
                 }
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            if (isUnsupportedFsync(e)) {
+                log.debug("directory fsync is not supported on ${parent}, skipped: ${e.message}")
+            } else {
+                log.error("directory fsync of ${parent} failed: ${e.message}")
+                throw e
+            }
+        }
+    }
+
+    /** 判断是否属于「平台不支持目录 fsync」：这类失败不阻断写入。 */
+    protected static func isUnsupportedFsync(e: Exception): Bool {
+        let message = e.message.toAsciiLower()
+        message.contains("not support") || message.contains("unsupported") ||
+            message.contains("operation not permitted") || message.contains("invalid argument")
     }
 }

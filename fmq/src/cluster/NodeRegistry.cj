@@ -209,7 +209,7 @@ protected class NodeRegistry <: MQNodeTransport & Resource {
         }
     }
 
-    protected func isAlive(index: Int64): Bool {
+    public func isAlive(index: Int64): Bool {
         if (index < 0 || index >= alive.size) {
             false
         } else {

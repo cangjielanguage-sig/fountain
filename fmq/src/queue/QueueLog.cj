@@ -80,12 +80,44 @@ protected class QueueLog <: Resource {
 
     /** 从位置起打开原始顺序流（快照语义：之后新 append 的数据不出现）。 */
     protected func openFrom(position: LogPosition): InputStream {
-        log.openEntryStream(position.seq, position.offset)
+        let segs = segmentsOrEmpty()
+        match (startPositionOf(segs, position)) {
+            case Some(start) => log.openEntryStream(start.seq, start.offset)
+            // 没有任何可读段：按空流处理，调用方读到 EOF，不抛异常（A47）
+            case None => ByteBuffer()
+        }
     }
 
     /** 从位置起按记录边界顺序读取（游标用）。 */
     protected func openRecordsFrom(position: LogPosition): QueueRecordReader {
-        QueueRecordReader(openFrom(position), segments(), position, label)
+        let segs = segmentsOrEmpty()
+        match (startPositionOf(segs, position)) {
+            case Some(start) => QueueRecordReader(log.openEntryStream(start.seq, start.offset), segs, start, label)
+            case None => QueueRecordReader(ByteBuffer(), segs, position, label)
+        }
+    }
+
+    /**
+     * 起点段被清理时给出实际可读的起点。
+     *
+     * 段号 `>= position.seq` 的最小段优先：段号更大说明起点段已被 TTL 清理，从后继段继续；
+     * 没有后继段返回 `None`（调用方按空流处理）。两种恢复都记 WARN，便于发现「读流起点被删」。
+     */
+    private func startPositionOf(segments: ArrayList<SegmentedMeta>, position: LogPosition): ?LogPosition {
+        for (meta in segments) {
+            if (meta.index == position.seq) {
+                return Some(position)
+            }
+        }
+        match (QueueLog.startSegmentAtOrAfter(segments, position.seq)) {
+            case Some(index) =>
+                logger.warn("stream of queue ${label} starts at ${index}:0 instead of " +
+                    "${position.seq}:${position.offset} because that segment was removed")
+                Some(LogPosition(index, 0))
+            case None =>
+                logger.warn("no segment at or after ${position.seq} on queue ${label}, treated as empty stream")
+                None<LogPosition>
+        }
     }
 
     /** 删除指定段（当前段由 f_io 拒绝）。 */
@@ -119,19 +151,8 @@ protected class QueueLog <: Resource {
             logger.warn("no segment left on queue ${label}, treated as empty")
             return (0, None<DateTime>)
         }
-        var start = position
-        match (QueueLog.startSegmentAtOrAfter(segs, position.seq)) {
-            case Some(index) =>
-                if (index != position.seq) {
-                    start = LogPosition(index, 0)
-                    logger.warn("scan of queue ${label} starts at ${start.seq}:0 instead of " +
-                        "${position.seq}:${position.offset} because that segment was removed")
-                }
-            case None =>
-                logger.warn("no segment at or after ${position.seq} on queue ${label}, treated as empty")
-                return (0, None<DateTime>)
-        }
-        scanFrom(start)
+        // 起点段被清理的恢复与 WARN 由 openRecordsFrom 统一负责
+        scanFrom(position)
     }
 
     /** 从现存段中 `index >= position.seq` 的最小段号起扫描。 */

@@ -250,4 +250,25 @@ class MQManagerTest {
         let port = freePort()
         @Assert(manager("127.0.0.1:${port}", ["stats"]).run() == 1)
     }
+
+    /** 配置参数可出现在子命令前后：解析器跳过它们定位子命令（A69）。 */
+    @TestCase
+    public func configTokensAroundSubcommandAreSkipped(): Unit {
+        let before = MQManagerArgs.parse(["--mqServer_port=2400", "listTopics"]).getOrThrow()
+        @Assert(before.command == "listTopics")
+        @Assert(before.operands.size == 0)
+
+        let after = MQManagerArgs.parse(["listTopics", "--mqServer_port=2400"]).getOrThrow()
+        @Assert(after.command == "listTopics")
+        @Assert(after.operands.size == 0)
+
+        let mixed = MQManagerArgs.parse(["registerTopic", "/t", "2", "--mqServer_port=2400"]).getOrThrow()
+        @Assert(mixed.command == "registerTopic")
+        @Assert(mixed.operands.size == 2)
+
+        // 单横线形式的值是下一个 token，也要一起跳过
+        let short = MQManagerArgs.parse(["-mqServer_port", "2400", "listTopics"]).getOrThrow()
+        @Assert(short.command == "listTopics")
+        @Assert(short.operands.size == 0)
+    }
 }

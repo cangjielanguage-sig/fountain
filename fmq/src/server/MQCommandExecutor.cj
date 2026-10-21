@@ -88,6 +88,12 @@ protected class MQCommandExecutor {
                     Some(MQProtocol.fail(request, MQErrorCode.INTERNAL, "unsupported command"))
             }
         } catch (e: MQServiceException) {
+            // 服务端自身故障（INTERNAL）必须留日志；NOT_OWNER/ACK_UNKNOWN 等正常应答只记 DEBUG
+            if (e.code == MQErrorCode.INTERNAL) {
+                log.warn("execute ${request.command} failed with code ${e.code}: ${e.message}")
+            } else {
+                log.debug("execute ${request.command} rejected with code ${e.code}: ${e.message}")
+            }
             Some(MQProtocol.fail(request, e.code, e.message))
         } catch (e: Exception) {
             log.warn("execute ${request.command} failed: ${e.message}")

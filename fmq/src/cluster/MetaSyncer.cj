@@ -176,20 +176,24 @@ protected class MetaSyncer <: Resource {
 
     /** 注销：先写墓碑 + 删本地元数据，再广播墓碑（删除必须能传播，见 A25）。 */
     protected func deregister(payload: MQDeregisterPayload): MQResult {
-        let tombstone = if (payload.isTopic()) {
-            match (store.removeTopic(payload.topic)) {
-                case Some(value) => value
-                case None => throw MQServiceException(MQErrorCode.TOPIC_NOT_EXIST,
+        let tombstones = if (payload.isTopic()) {
+            let removed = store.removeTopic(payload.topic)
+            if (removed.size == 0) {
+                throw MQServiceException(MQErrorCode.TOPIC_NOT_EXIST,
                     "topic '${payload.topic}' does not exist")
             }
+            removed
         } else {
             match (store.removeGroup(payload.topic, payload.subscribeGroup)) {
-                case Some(value) => value
+                case Some(value) => [value]
                 case None => throw MQServiceException(MQErrorCode.GROUP_NOT_EXIST,
                     "subscribe group '${payload.subscribeGroup}' does not exist")
             }
         }
-        broadcastTombstone(tombstone)
+        // 主题墓碑之后是该主题各组墓碑，逐条广播
+        for (tombstone in tombstones) {
+            broadcastTombstone(tombstone)
+        }
         MQResult(0, "ok")
     }
 
@@ -210,13 +214,20 @@ protected class MetaSyncer <: Resource {
         }
         var attempted = 0i64
         var skipped = 0i64
-        // 两趟：先试「未知/存活」的 peer，再试「已知死亡」的 peer。
-        // 直接跳过已知死亡的节点会让它在恢复后永远拿不到同步（反熵反而永不收敛）。
-        for (pass in 0..2) {
+        // 三趟：未知 → 存活 → 已知死亡。未知节点优先探测（可能刚恢复、也可能从未联系过），
+        // 存活节点次之，已知死亡最后仍要试——直接跳过会让它在恢复后永远拿不到同步（A40）。
+        for (pass in 0..3) {
             for (offset in 1..nodeCount) {
             let peer = (transport.selfIndex + offset) % nodeCount
             let knownDead = transport.isKnownDead(peer)
-            if ((pass == 0 && knownDead) || (pass == 1 && !knownDead)) {
+            let tier = if (knownDead) {
+                2
+            } else if (transport.isAlive(peer)) {
+                1
+            } else {
+                0
+            }
+            if (tier != pass) {
                 if (pass == 0 && knownDead) {
                     skipped++
                 }

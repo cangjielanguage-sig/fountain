@@ -119,6 +119,15 @@ class AtomicFileTest {
         }
     }
 
+    /** 目录 fsync 的失败要区分「平台不支持」（跳过）与「真实失败」（抛出并记 ERROR）。 */
+    @TestCase
+    public func unsupportedDirectoryFsyncIsClassified(): Unit {
+        @Assert(AtomicFile.isUnsupportedFsync(Exception("Operation not supported")))
+        @Assert(AtomicFile.isUnsupportedFsync(Exception("fsync: invalid argument")))
+        @Assert(!AtomicFile.isUnsupportedFsync(Exception("No space left on device")))
+        @Assert(!AtomicFile.isUnsupportedFsync(Exception("Input/output error")))
+    }
+
     /** 写入失败时 MetaStore 的内存索引不得前进。 */
     @TestCase
     public func metastoreKeepsMemoryWhenWriteFails(): Unit {

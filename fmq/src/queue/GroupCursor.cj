@@ -203,7 +203,7 @@ protected class GroupCursor {
             while (true) {
                 if (reader.isNone()) {
                     try {
-                        reader = Some(log.openRecordsFrom(scanPosition))
+                        reader = Some(openReaderAt(scanPosition))
                     } catch (e: Exception) {
                         // 起始段已被清理：跳到后继段继续；没有任何段则视为空
                         match (recoverIfSegmentGone(scanPosition.seq)) {
@@ -464,6 +464,32 @@ protected class GroupCursor {
         if (moved) {
             catalog.save(topic, queueIndex, group, committed_)
         }
+    }
+
+    /**
+     * 在指定位置开读流，并把「起点段已被清理」的跳转同步到游标。
+     *
+     * `QueueLog.openRecordsFrom` 已经会跳到后继段（A47），但游标位点也必须跟着前移：
+     * 否则 `committed` 会停在已不存在的段上，`advance()` 永远等不到可吞并的已决项。
+     * 调用方必须已持有 `lock`。
+     */
+    private func openReaderAt(position: LogPosition): QueueRecordReader {
+        let opened = log.openRecordsFrom(position)
+        let actual = opened.position()
+        if (actual.seq != position.seq || actual.offset != position.offset) {
+            entries.clear()
+            let movedForward = actual.seq > committed_.seq ||
+                (actual.seq == committed_.seq && actual.offset > committed_.offset)
+            if (movedForward) {
+                committed_ = actual
+                catalog.save(topic, queueIndex, group, committed_)
+                logger.warn("cursor of ${topic}/${queueIndex}/${group} moved from " +
+                    "${position.seq}:${position.offset} to ${actual.seq}:${actual.offset} " +
+                    "because its segment was removed")
+            }
+            scanPosition = actual
+        }
+        opened
     }
 
     /**

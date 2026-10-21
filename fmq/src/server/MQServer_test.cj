@@ -23,6 +23,7 @@ import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_io.LogPosition
 import fountain::f_mq.client.MQClient
+import fountain::f_mq.base.MQFilter
 import fountain::f_mq.base.model.MQSubscribeGroupMeta
 import fountain::f_mq.base.payload.MQTopicAssignment
 import fountain::fmq.manager.{MQManager, MQManagerArgs}
@@ -178,7 +179,7 @@ class MQServerTest {
         @Assert(exists(queueDir))
         @Assert(exists("${root}/metas/offsets/%2Ft/0/g.cursor"))
         // 离线期间被删：只剩墓碑
-        @Assert(meta.removeTopic("/t").isSome())
+        @Assert(meta.removeTopic("/t").size > 0)
         meta.close()
 
         let server = MQServer(options)
@@ -397,5 +398,143 @@ class MQServerTest {
         // 触发回调等价于收到 SIGTERM：服务器完成关闭
         captured[0]()
         @Assert(server.isClosed())
+    }
+
+    // ===== 断链清理（A55/A60/A70） =====
+
+    /** 断链巡检：移除订阅并释放其名下记录，同组其它订阅下一次消费即可取到。 */
+    @TestCase
+    public func cleanupSubscribersRemovesAndReleases(): Unit {
+        let root = TestDirs.of("server", "cleanup_release")
+        let port = ServerPortAllocator.freePort()
+        let server = MQServer(options(root, port, ["127.0.0.1:${port}"]))
+        try {
+            server.start()
+            waitReady(port)
+            let address = "127.0.0.1:${port}"
+            @Assert(register(address, "/t", 1) == 0)
+            @Assert(registerGroup(address, "/t", "g") == 0)
+            let first = MQClient([address])
+            let sid = first.subscribe("/t", subscribeGroup: "g")
+            first.publish("/t", "held")
+            let message = first.consume(sid)
+            @Assert(message.get<String>() == Some("held"))
+            // 断开连接：服务端连接关闭，但订阅表要等巡检才清
+            first.close()
+            var disconnected = false
+            var tries = 0
+            while (!disconnected && tries < 300) {
+                for (info in server.subscriptionRegistry.infos()) {
+                    if (info.subscribedId == sid && info.isDisconnected()) {
+                        disconnected = true
+                    }
+                }
+                sleep(Duration.millisecond * 10)
+                tries++
+            }
+            @Assert(disconnected)
+            server.cleanupSubscribers()
+            @Assert(server.subscriptionRegistry.count() == 0)
+            // 记录被退回组内：同组的新订阅下一次消费即可取到
+            let second = MQClient([address])
+            try {
+                let other = second.subscribe("/t", subscribeGroup: "g")
+                let delivered = second.consume(other)
+                @Assert(delivered.get<String>() == Some("held"))
+                second.ack(other, delivered.queueIndex, delivered.segmentedIndex, delivered.segmentedOffset)
+            } finally {
+                second.close()
+            }
+        } finally {
+            server.close()
+        }
+    }
+
+    /** 巡检期间同一 subscribedId 重订阅（连接恢复）：清理不得删掉新订阅。 */
+    @TestCase
+    public func cleanupSubscribersKeepsResubscribed(): Unit {
+        let root = TestDirs.of("server", "cleanup_resubscribe")
+        let port = ServerPortAllocator.freePort()
+        let server = MQServer(options(root, port, ["127.0.0.1:${port}"]))
+        try {
+            let dead = MQSubscriptionInfo("s1", "/t", "g", [], MQFilter.compile(""), false, EMPTY_SOCKET_BUFFER,
+                alive: {=> false})
+            @Assert(server.subscriptionRegistry.register(dead).code == 0)
+            server.cleanupSubscribers()
+            @Assert(server.subscriptionRegistry.count() == 0)
+            // 同一 id 在清理快照之后重订阅：代次自增，旧快照不得摘掉它
+            let live = MQSubscriptionInfo("s1", "/t", "g", [], MQFilter.compile(""), false, EMPTY_SOCKET_BUFFER,
+                alive: {=> true})
+            @Assert(server.subscriptionRegistry.register(live).code == 0)
+            server.cleanupSubscribers()
+            @Assert(server.subscriptionRegistry.count() == 1)
+        } finally {
+            server.close()
+        }
+    }
+
+    /** 断链即释放：按连接缓冲区摘除订阅后，同组另一订阅下一次消费取到记录。 */
+    @TestCase
+    public func removeByBufferReleasesRecordToGroup(): Unit {
+        let root = TestDirs.of("server", "cleanup_buffer")
+        let port = ServerPortAllocator.freePort()
+        let server = MQServer(options(root, port, ["127.0.0.1:${port}"]))
+        try {
+            server.start()
+            waitReady(port)
+            let address = "127.0.0.1:${port}"
+            @Assert(register(address, "/t", 1) == 0)
+            @Assert(registerGroup(address, "/t", "g") == 0)
+            let first = MQClient([address])
+            let sid = first.subscribe("/t", subscribeGroup: "g")
+            first.publish("/t", "held")
+            let message = first.consume(sid)
+            @Assert(message.get<String>() == Some("held"))
+            // 连接断开回调等价路径：按缓冲区摘除订阅
+            var bufferFound = false
+            for (info in server.subscriptionRegistry.infos()) {
+                if (info.subscribedId == sid) {
+                    server.subscriptionRegistry.removeByBuffer(info.buffer)
+                    bufferFound = true
+                }
+            }
+            @Assert(bufferFound)
+            @Assert(server.subscriptionRegistry.count() == 0)
+            let second = MQClient([address])
+            try {
+                let other = second.subscribe("/t", subscribeGroup: "g")
+                let delivered = second.consume(other)
+                @Assert(delivered.get<String>() == Some("held"))
+                second.ack(other, delivered.queueIndex, delivered.segmentedIndex, delivered.segmentedOffset)
+            } finally {
+                second.close()
+                first.close()
+            }
+        } finally {
+            server.close()
+        }
+    }
+
+    /** 关闭时清空订阅表：进程内重启不残留旧订阅。 */
+    @TestCase
+    public func closeClearsSubscriptionTable(): Unit {
+        let root = TestDirs.of("server", "close_subscribers")
+        let port = ServerPortAllocator.freePort()
+        let server = MQServer(options(root, port, ["127.0.0.1:${port}"]))
+        try {
+            server.start()
+            waitReady(port)
+            let address = "127.0.0.1:${port}"
+            @Assert(register(address, "/t", 1) == 0)
+            @Assert(registerGroup(address, "/t", "g") == 0)
+            let client = MQClient([address])
+            let sid = client.subscribe("/t", subscribeGroup: "g")
+            @Assert(server.subscriptionRegistry.count() == 1)
+            server.close()
+            @Assert(server.subscriptionRegistry.count() == 0)
+            client.close()
+        } finally {
+            server.close()
+        }
     }
 }

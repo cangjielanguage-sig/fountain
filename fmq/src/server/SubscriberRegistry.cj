@@ -125,6 +125,14 @@ protected class SubscriberRegistry {
         }
     }
 
+    /** 关闭时清空全部订阅：同一进程内重启服务端不残留旧订阅。 */
+    func clear(): Unit {
+        synchronized(lock) {
+            byId.clear()
+            byGroup.clear()
+        }
+    }
+
     /** 连接断开时清理其名下全部订阅。 */
     func removeByBuffer(buffer: SocketBuffer): Unit {
         synchronized(lock) {

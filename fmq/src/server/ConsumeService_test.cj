@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::fmq.server
 
+import std.collection.ArrayList
 import std.fs.*
 import std.time.DateTime
 import std.unittest.*
@@ -494,6 +495,36 @@ class ConsumeServiceTest {
                 true
             }
             @Assert(corrupted[0])
+            var code = -1i64
+            try {
+                fixture.service.stats("/t", 0, {_ => ["g"]})
+            } catch (e: MQServiceException) {
+                code = e.code
+            }
+            @Assert(code == MQErrorCode.INTERNAL)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 段被清理/目录不可读时 stats 必须报错，不得输出 backlog=0（A61）。 */
+    @TestCase
+    public func statsFailsWhenSegmentsAreGone(): Unit {
+        let fixture = ConsumeFixture("stats_no_segment")
+        try {
+            fixture.append([], "one")
+            let dir = MQFileNames.queueDir("${fixture.root}/logs", "/t", 0)
+            let victims = ArrayList<String>()
+            Directory.walk(dir) {info: FileInfo =>
+                if (!info.isDirectory() && info.name.startsWith("log_")) {
+                    victims.add(info.path.toString())
+                }
+                true
+            }
+            @Assert(victims.size > 0)
+            for (path in victims) {
+                remove(path)
+            }
             var code = -1i64
             try {
                 fixture.service.stats("/t", 0, {_ => ["g"]})

@@ -112,19 +112,36 @@ class QueueLogTest {
         }
     }
 
+    /** 起点段已被清理：从最接近的更大段继续，不抛 `IllegalArgumentException`（A47）。 */
     @TestCase
-    public func unknownSegmentThrows(): Unit {
+    public func unknownSegmentResumesAtNextSegment(): Unit {
         let dir = dirOf("unknown_segment")
         clean(dir)
-        let log = QueueLog(dir, 1024, 1)
+        // 每条 entry 20 字节 ⇒ 段上限 20 时一条一段
+        let log = QueueLog(dir, 20, 1)
         try {
-            var threw = false
-            try {
-                log.openRecordsFrom(LogPosition(999, 0))
-            } catch (_: IllegalArgumentException) {
-                threw = true
+            for (i in 0..8) {
+                log.append(recordOf(UInt8(i), 16))
             }
-            @Assert(threw)
+            // 运维删段 7：位点仍指向 7，读取要从 8 的起点继续
+            log.removeById(7)
+            let reader = log.openRecordsFrom(LogPosition(7, 0))
+            try {
+                let item = reader.next().getOrThrow()
+                @Assert(item[1].seq == 8)
+                @Assert(item[1].offset == 0)
+                @Assert(item[0] == recordOf(7u8, 16))
+                @Assert(reader.next().isNone())
+            } finally {
+                reader.close()
+            }
+            // 没有任何后继段：返回空流，不抛异常
+            let empty = log.openRecordsFrom(LogPosition(999, 0))
+            try {
+                @Assert(empty.next().isNone())
+            } finally {
+                empty.close()
+            }
         } finally {
             log.close()
             clean(dir)
