@@ -563,6 +563,22 @@ class GroupCursorTest {
         }
     }
 
+    /** 比当前时刻晚 8 小时的时间戳（旧版按本地时区写入）必须视为已到期，不能把组卡住（A02）。 */
+    @TestCase
+    public func futurePublishTimeIsDeliveredImmediately(): Unit {
+        let fixture = CursorFixture("delay_future")
+        try {
+            fixture.appendAt([], "skewed", DateTime.nowUTC() + Duration.hour * 8)
+            let cursor = fixture.cursorOf(delaying: Duration.second * 61)
+            let sub = fixture.sub("s1")
+            let item = cursor.next(sub, [sub], MQMatcher()).getOrThrow()
+            @Assert(convert<String>(MQMessageRecord.decode(item[0]).getOrThrow().body.data) == Some("skewed"))
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
     @TestCase
     public func nonStandardMessageIdDeliversImmediately(): Unit {
         let fixture = CursorFixture("delay_bad_id")

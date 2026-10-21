@@ -179,7 +179,10 @@ protected class ConsumeService <: BackupStateSource {
                     }
                 }
                 let lagMs = match (oldest) {
-                    case Some(published) => (now() - published).toMilliseconds()
+                    // 旧版本按本地时区写入的 id 会被解释成未来时刻，负滞后没有意义，钳到 0（A02）
+                    case Some(published) =>
+                        let lag = (now() - published).toMilliseconds()
+                        if (lag < 0) {0} else {lag}
                     case None => 0
                 }
                 var delivered = 0i64

@@ -428,13 +428,24 @@ protected class GroupCursor {
         true
     }
 
-    /** 延迟到期判定：未配置延迟恒为真；无发布时间时按已到期并告警。 */
+    /**
+     * 延迟到期判定：未配置延迟恒为真；无发布时间时按已到期并告警。
+     *
+     * 发布时间比当前时刻还晚 5 分钟以上，说明 id 由旧版本按本地时区写入（按 UTC 解释会整体后移
+     * 一个时区偏移）。这类记录按「已到期」处理，避免延迟组被未来时间卡住（A02）。
+     */
     private func isDue(record: Array<Byte>, current: DateTime): Bool {
         if (delaying <= Duration.Zero) {
             return true
         }
         match (MQMessageRecord.publishTime(record)) {
-            case Some(published) => current - published >= delaying
+            case Some(published) =>
+                if (published > current + Duration.minute * 5) {
+                    logger.warn("publish time of record on ${topic}/${queueIndex} is in the future by more than 5m, " +
+                        "deliver immediately")
+                    return true
+                }
+                current - published >= delaying
             case None =>
                 logger.warn("no publish time in messageId on delayed topic ${topic}, deliver immediately")
                 true

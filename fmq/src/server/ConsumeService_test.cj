@@ -338,6 +338,19 @@ class ConsumeServiceTest {
         }
     }
 
+    /** 发布时间在未来（旧版本地时区按 UTC 解释）时，`lagMs` 不得为负（A02）。 */
+    @TestCase
+    public func statsClampsNegativeLag(): Unit {
+        let fixture = ConsumeFixture("stats_future")
+        try {
+            fixture.appendAt(0, [], "future", DateTime.nowUTC() + Duration.hour * 8)
+            let row = statsRow(fixture.service.stats("/t", 0, {_ => ["g"]}), "/t", "g")
+            @Assert(Int64.parse(row[6]) == 0)
+        } finally {
+            fixture.close()
+        }
+    }
+
     @TestCase
     public func statsUnknownTopicReturnsEmpty(): Unit {
         let fixture = ConsumeFixture("stats_unknown")

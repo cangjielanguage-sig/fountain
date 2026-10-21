@@ -147,6 +147,17 @@ class MQMessageRecordTest {
         @Assert(time.format("yyyyMMddHHmmssSSS") == "20261018183000123456789")
     }
 
+    /** 时间戳文本按 UTC 解释，往返后与原始绝对时刻一致（A02）。 */
+    @TestCase
+    public func publishTimeRoundTripsAcrossTimeZones(): Unit {
+        let moment = DateTime.ofUTC(year: 2026, month: 8, dayOfMonth: 21, hour: 10, minute: 30,
+            second: 15, nanosecond: 123000000)
+        let stamp = moment.format("yyyyMMddHHmmssSSS")
+        let record = encode("/t", [], "7_8_9_${stamp}", 1i64.toData())
+        let parsed = MQMessageRecord.publishTime(record).getOrThrow()
+        @Assert(parsed.toUnixTimeStamp() == moment.toUnixTimeStamp())
+    }
+
     @TestCase
     public func publishTimeRejectsNonStandardMessageId(): Unit {
         @Assert(MQMessageRecord.publishTime(encode("/t", [], "mid-1", 1i64.toData())).isNone())
