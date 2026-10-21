@@ -24,7 +24,7 @@ import fountain::f_data.*
 import fountain::f_mq.base.*
 import fountain::f_mq.base.model.*
 import fountain::f_mq.base.payload.*
-import fountain::f_mq.client.MQClient
+import fountain::f_mq.client.{MQClient, MQRetiredSubscriptions}
 import fountain::f_mq.exception.*
 import fountain::f_net.SocketBuffer
 import fountain::f_protocol.default.*
@@ -748,6 +748,10 @@ class MQClientTest {
         }
     }
 
+    /**
+     * 退订幂等：同一 id 退两次都成功，第二次纯本地空操作；
+     * 从未订阅过的 id 抛服务异常且不发请求（R5-4）。
+     */
     @TestCase
     public func unsubscribeIsIdempotentOnServerAndRejectsUnknownId(): Unit {
         let stub = MQStubServer({buffer, request =>
@@ -763,11 +767,15 @@ class MQClientTest {
             client.unsubscribe(sid)
             @Assert(countOf(stub, "UNSUBSCRIBE") == 1)
 
-            // 本地不存在的 id：抛异常且不发请求
+            // 已退订的 id 再退一次：成功，且不再发请求
             let before = stub.receivedCount()
+            client.unsubscribe(sid)
+            @Assert(stub.receivedCount() == before)
+
+            // 从未订阅过的 id：抛异常且不发请求
             var code = -1i64
             try {
-                client.unsubscribe(sid)
+                client.unsubscribe("never-subscribed")
             } catch (e: MQServiceException) {
                 code = e.code
             }
@@ -777,6 +785,26 @@ class MQClientTest {
         } finally {
             stub.close()
         }
+    }
+
+    /** 退订记忆有界：超出容量后最老的 id 被淘汰，再退订视为未知（R5-4）。 */
+    @TestCase
+    public func retiredSubscriptionsEvictOldestBeyondCapacity(): Unit {
+        let retired = MQRetiredSubscriptions(capacity: 2)
+        retired.add("a")
+        retired.add("b")
+        @Assert(retired.contains("a"))
+        @Assert(retired.contains("b"))
+        retired.add("c")
+        @Assert(!retired.contains("a"))
+        @Assert(retired.contains("b"))
+        @Assert(retired.contains("c"))
+        // 重复加入不刷新位置：加入 d 时仍按 FIFO 淘汰最老的 b
+        retired.add("b")
+        retired.add("d")
+        @Assert(!retired.contains("b"))
+        @Assert(retired.contains("c"))
+        @Assert(retired.contains("d"))
     }
 
     @TestCase

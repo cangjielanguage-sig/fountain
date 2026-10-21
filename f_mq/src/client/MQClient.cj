@@ -45,6 +45,7 @@ public class MQClient <: Resource {
     private let pool: MQNodePool
     private let ownership: MQOwnershipCache
     private let subscriptions = ConcurrentHashMap<String, MQSubscription>()
+    private let retired = MQRetiredSubscriptions()
     private let closed = AtomicBool(false)
     private let closeLock = Mutex()
 
@@ -363,11 +364,22 @@ public class MQClient <: Resource {
     /**
      * 退订：向该订阅的所有 owner 发送 `UNSUBSCRIBE` 并删除本地订阅。
      *
-     * 服务端回 `SUBSCRIBE_NOT_EXIST` 视为成功；本地不存在的 id 直接抛异常且不发请求。
+     * 幂等：同一 id 重复退订返回成功且不再发请求（本地已无该订阅）；
+     * 服务端回 `SUBSCRIBE_NOT_EXIST` 视为成功；从未订阅过的 id 抛异常且不发请求。
+     * 部分节点失败时保留本地订阅，调用方可重试。
      */
     public func unsubscribe(subscribedId: String): Unit {
         ensureOpen()
-        let sub = subscriptionOf(subscribedId)
+        let sub = match (subscriptions.get(subscribedId)) {
+            case Some(s) => s
+            case None =>
+                // 已退订 → 成功空操作；从未订阅 → 未知 id（R5-4）
+                if (retired.contains(subscribedId)) {
+                    return
+                }
+                throw MQServiceException(MQErrorCode.SUBSCRIBE_NOT_EXIST,
+                    "subscription '${subscribedId}' does not exist")
+        }
         let payload = MQUnsubscribePayload(subscribedId)
         let failed = ArrayList<String>()
         for (node in sub.owners) {
@@ -391,6 +403,7 @@ public class MQClient <: Resource {
                 "unsubscribe '${subscribedId}' failed on nodes: ${String.join(failed.toArray(), delimiter: ",")}")
         }
         subscriptions.remove(subscribedId)
+        retired.add(subscribedId)
     }
 
     /** 幂等关闭：关闭全部节点连接并清空订阅。 */
