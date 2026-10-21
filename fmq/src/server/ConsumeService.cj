@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::fmq.server
 
 import std.collection.{ArrayList, HashMap}
-import std.sync.Mutex
+import std.sync.{AtomicInt64, Mutex}
 import std.time.DateTime
 import fountain::f_io.LogPosition
 import fountain::f_mq.base.{MQErrorCode, MQMessageRecord}
@@ -44,6 +44,8 @@ protected class ConsumeService <: BackupStateSource {
     private let now: () -> DateTime
     private let lock = Mutex()
     private let cursors = HashMap<String, GroupCursor>()
+    /** `stats` 打开的队列读流总数：用于断言「每队列只扫一趟」，与组数无关。 */
+    private let statsScans_ = AtomicInt64(0)
 
     init(queues: QueueManager, catalog: CursorCatalog, subscribers: SubscriberRegistry, matcher: MQMatcher,
         deadLetter: DeadLetterQueue, ackTimeout: Duration, deadMsgThreshold: Int64,
@@ -190,6 +192,8 @@ protected class ConsumeService <: BackupStateSource {
                 } catch (e: QueueCorruptionException) {
                     throw MQServiceException(MQErrorCode.INTERNAL, "stats scan failed on ${name}/${queueIndex}: ${e.message}")
                 }
+                // 单趟扫描：一个队列一次统计只开一次读流（组数再多也不重扫）
+                statsScans_.fetchAdd(1)
                 try {
                     while (true) {
                         let current = reader.position()
@@ -315,6 +319,13 @@ protected class ConsumeService <: BackupStateSource {
      */
     protected func floorOf(topic: String, queueIndex: Int64): Int64 {
         catalog.floorOf(topic, queueIndex)
+    }
+
+    /** `stats` 累计打开的队列读流数（用例据此断言单趟扫描，不看耗时）。 */
+    protected prop statsScans: Int64 {
+        get() {
+            statsScans_.load()
+        }
     }
 
     /** 主题删除：关闭并移除其全部游标。 */

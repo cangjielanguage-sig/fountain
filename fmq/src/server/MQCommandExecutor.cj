@@ -210,7 +210,12 @@ protected class MQCommandExecutor {
         names.toArray()
     }
 
-    private func cleanupAfterDelete(payload: MQDeregisterPayload): Unit {
+    /**
+     * 删除生效后的本机清理：队列目录、组游标、订阅、指标计数器。
+     *
+     * 直连注销路径由本类调用；peer 收到的墓碑由 `MetaSyncer.onDeleted` 回调到这里（A25）。
+     */
+    protected func cleanupAfterDelete(payload: MQDeregisterPayload): Unit {
         if (payload.kindOf() == DeregisterKind.Topic) {
             queues.closeTopic(payload.topic, deleteFiles: true)
             consume.removeTopic(payload.topic)

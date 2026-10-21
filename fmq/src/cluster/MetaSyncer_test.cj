@@ -480,6 +480,10 @@ class MetaSyncerTest {
             @Assert(syncer.applyRemoteGroup(MQSubscribeGroupMeta("/t", "g", revision: 5)) ==
                 MetaApplyResult.TopicMissing)
             @Assert(!store.groupExists("/t", "g"))
+            // 迟到组不入待应用队列：主题以更高 revision 重新出现也不得复活
+            @Assert(syncer.applyRemote(MQTopicAssignment("/t", 1, 0, [0], revision: 9)) ==
+                MetaApplyResult.Applied)
+            @Assert(!store.groupExists("/t", "g"))
             store.close()
         } finally {
             clean(dir)

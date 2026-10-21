@@ -93,6 +93,9 @@ protected class BackupReplicator {
     /** 发布成功后调用：只入队，不发送。 */
     protected func record(topic: String, queueIndex: Int64, position: LogPosition, record: Array<Byte>): Unit {
         if (backup <= 0) {
+            // 未开启备份时发布路径仍会调用：丢弃必须留痕（限流，避免每条消息刷屏）
+            warnRateLimited("dropped backup of ${topic}/${queueIndex}@${position.seq}:${position.offset}: " +
+                "backup replication is disabled (mqServer_backup=${backup})")
             return
         }
         if (closed.load()) {

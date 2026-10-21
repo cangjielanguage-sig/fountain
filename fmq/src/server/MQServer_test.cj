@@ -21,8 +21,13 @@ import std.sync.AtomicInt64
 import std.time.DateTime
 import std.unittest.*
 import std.unittest.testmacro.*
+import fountain::f_io.LogPosition
 import fountain::f_mq.client.MQClient
+import fountain::f_mq.base.model.MQSubscribeGroupMeta
+import fountain::f_mq.base.payload.MQTopicAssignment
 import fountain::fmq.manager.{MQManager, MQManagerArgs}
+import fountain::fmq.meta.MetaStore
+import fountain::fmq.queue.CursorStore
 import fountain::fmq.test.TestDirs
 
 class ServerPortAllocator {
@@ -148,6 +153,38 @@ class MQServerTest {
             @Assert(register(address, "/t", 2) == 0)
             @Assert(exists("${root}/logs/%2Ft/0"))
             @Assert(!exists("${root}/logs/%2Ft/1"))
+        } finally {
+            server.close()
+            if (exists(root)) {
+                remove(root, recursive: true)
+            }
+        }
+    }
+
+    /** 离线期间被删除的主题：重启后队列目录、游标文件、订阅与计数器都不得残留（A25）。 */
+    @TestCase
+    public func restartCleansStateOfTopicDeletedWhileOffline(): Unit {
+        let root = TestDirs.of("server", "offline_delete")
+        let port = ServerPortAllocator.freePort()
+        let options = options(root, port, ["127.0.0.1:${port}"])
+        // 模拟上一次运行留下的盘上状态：主题/组元数据、队列段目录、游标位点
+        let meta = MetaStore("${root}/metas")
+        meta.load()
+        meta.applyTopic(MQTopicAssignment("/t", 1, 0, [0]))
+        meta.applyGroup(MQSubscribeGroupMeta("/t", "g"))
+        let queueDir = "${root}/logs/%2Ft/0"
+        Directory.create(queueDir, recursive: true)
+        CursorStore("${root}/metas").save("/t", 0, "g", LogPosition(1, 0))
+        @Assert(exists(queueDir))
+        @Assert(exists("${root}/metas/offsets/%2Ft/0/g.cursor"))
+        // 离线期间被删：只剩墓碑
+        @Assert(meta.removeTopic("/t").isSome())
+        meta.close()
+
+        let server = MQServer(options)
+        try {
+            @Assert(!exists("${root}/logs/%2Ft"))
+            @Assert(!exists("${root}/metas/offsets/%2Ft"))
         } finally {
             server.close()
             if (exists(root)) {

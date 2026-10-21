@@ -48,6 +48,8 @@ protected class MetaSyncer <: Resource {
     private var closed = false
     /** 主题落地后打开本机队列（A29） */
     private var topicAppliedCallback: ?(String) -> Unit = None
+    /** 删除生效后清理本机队列/游标/订阅/计数器（A25 的对端侧） */
+    private var deletedCallback: ?(MQDeregisterPayload) -> Unit = None
 
     protected init(store: MetaStore, transport: MQNodeTransport) {
         this.store = store
@@ -61,6 +63,16 @@ protected class MetaSyncer <: Resource {
         }
         set(value) {
             topicAppliedCallback = value
+        }
+    }
+
+    /** 删除生效回调；服务装配里接到 `MQCommandExecutor.cleanupAfterDelete`。 */
+    protected mut prop onDeleted: ?(MQDeregisterPayload) -> Unit {
+        get() {
+            deletedCallback
+        }
+        set(value) {
+            deletedCallback = value
         }
     }
 
@@ -258,6 +270,11 @@ protected class MetaSyncer <: Resource {
     protected func applyRemoteGroup(meta: MQSubscribeGroupMeta): MetaApplyResult {
         let result = store.applyGroup(meta)
         if (result == MetaApplyResult.TopicMissing) {
+            // 主题已被墓碑删除时直接拒绝（迟到组不得复活），与「尚未到达」区分开
+            if (store.topicTombstone(meta.topic).isSome()) {
+                log.warn("reject group '${meta.subscribeGroup}' for topic '${meta.topic}': topic was deleted")
+                return result
+            }
             addPendingGroup(meta)
         }
         result
@@ -330,9 +347,13 @@ protected class MetaSyncer <: Resource {
         store.applyTombstone(tombstone) == MetaApplyResult.Applied
     }
 
-    /** 收到 peer 的墓碑广播。 */
+    /** 收到 peer 的墓碑广播：落盘后若本地条目确实消失，连带清理队列/游标/订阅/计数器。 */
     protected func applyRemoteTombstone(tombstone: MQMetaTombstone): MetaApplyResult {
-        store.applyTombstone(tombstone)
+        let result = store.applyTombstone(tombstone)
+        if (result == MetaApplyResult.Applied) {
+            notifyDeletedIfGone(tombstone)
+        }
+        result
     }
 
     /**
@@ -342,7 +363,9 @@ protected class MetaSyncer <: Resource {
      */
     private func mergeSnapshot(snapshot: MQMetaSnapshot): Unit {
         for (tombstone in snapshot.tombstones) {
-            store.applyTombstone(tombstone)
+            if (store.applyTombstone(tombstone) == MetaApplyResult.Applied) {
+                notifyDeletedIfGone(tombstone)
+            }
         }
         let topicNames = HashSet<String>()
         for (assignment in snapshot.topics) {
@@ -390,6 +413,7 @@ protected class MetaSyncer <: Resource {
                     assignment.revision <= snapshot.revision) {
                     log.warn("topic '${assignment.topic}' is missing from the peer snapshot, dropping it")
                     store.dropTopicLocally(assignment.topic)
+                    notifyDeleted(MQDeregisterPayload(MQDeregisterPayload.TOPIC, assignment.topic))
                 }
             }
             for (meta in store.allGroups()) {
@@ -398,6 +422,8 @@ protected class MetaSyncer <: Resource {
                     meta.revision <= snapshot.revision) {
                     log.warn("group '${meta.subscribeGroup}' of '${meta.topic}' is missing from the peer snapshot, dropping it")
                     store.dropGroupLocally(meta.topic, meta.subscribeGroup)
+                    notifyDeleted(MQDeregisterPayload(MQDeregisterPayload.GROUP, meta.topic,
+                        subscribeGroup: meta.subscribeGroup))
                 }
             }
         }
@@ -454,6 +480,41 @@ protected class MetaSyncer <: Resource {
                     callback(topic)
                 } catch (e: Exception) {
                     log.warn("open queue for applied topic '${topic}' failed: ${e.message}")
+                }
+            case None => ()
+        }
+    }
+
+    /**
+     * 墓碑已生效且本地条目确实消失时，通知装配层清理队列目录、游标、订阅与计数器。
+     *
+     * 本地存在更高 revision 的活跃条目（重新注册覆盖墓碑）时不清理，避免删掉刚建好的队列。
+     */
+    private func notifyDeletedIfGone(tombstone: MQMetaTombstone): Unit {
+        let gone = if (tombstone.isTopic()) {
+            store.topicOf(tombstone.topic).isNone()
+        } else {
+            !store.groupExists(tombstone.topic, tombstone.subscribeGroup)
+        }
+        if (!gone) {
+            return
+        }
+        if (tombstone.isTopic()) {
+            notifyDeleted(MQDeregisterPayload(MQDeregisterPayload.TOPIC, tombstone.topic))
+        } else {
+            notifyDeleted(MQDeregisterPayload(MQDeregisterPayload.GROUP, tombstone.topic,
+                subscribeGroup: tombstone.subscribeGroup))
+        }
+    }
+
+    /** 删除清理回调；异常只记 WARN，不得影响元数据收敛。 */
+    private func notifyDeleted(payload: MQDeregisterPayload): Unit {
+        match (deletedCallback) {
+            case Some(callback) =>
+                try {
+                    callback(payload)
+                } catch (e: Exception) {
+                    log.warn("cleanup after deleting ${payload.topic}/${payload.subscribeGroup} failed: ${e.message}")
                 }
             case None => ()
         }

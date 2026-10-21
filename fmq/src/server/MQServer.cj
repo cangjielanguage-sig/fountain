@@ -21,6 +21,7 @@ import std.sync.{AtomicBool, Mutex, Timer}
 import std.time.DateTime
 import fountain::f_data.DataAny
 import fountain::f_log.*
+import fountain::f_mq.base.payload.MQDeregisterPayload
 import fountain::f_net.server.Server
 import fountain::f_protocol.default.Message
 import fountain::fmq.cluster.{BackupReplicator, LogCleaner, MetaSyncer, NodeRegistry}
@@ -107,6 +108,9 @@ public class MQServer {
         this.backup.setStateSource(consumer)
         this.executor = MQCommandExecutor(meta, syncer, queues, cursorCatalog, subscribers, consume, backup,
             backupStore, options.selfIndex)
+        // peer 墓碑生效后，对端也要清掉队列/游标/订阅/计数器（A25）
+        let commandExecutor = this.executor
+        syncer.onDeleted = {payload => commandExecutor.cleanupAfterDelete(payload)}
         this.server = Server<DataAny>(bindAt: options.port, checkDuration: CHECK_DURATION, executors: 200,
             checker: {=> Message.ping()})
         // 清理器最后装配：它要闭包捕获 backupStore，必须等全部成员初始化完成
@@ -118,6 +122,36 @@ public class MQServer {
             backupFloor: {owner, topic, queueIndex => store.cursorFloor(owner, topic, queueIndex)})
         // 节点由死转活时补一次全量同步，避免离线期间错过的注册/删除
         this.registry.onRevived = {=> this.syncer.syncFromPeers()}
+        // 离线期间被删除的主题/组：元数据已被墓碑或快照清掉，本机队列目录与游标也要清（A25）
+        reconcileDeletions(commandExecutor)
+    }
+
+    /**
+     * 启动期收敛墓碑：本地条目已不存在时，清掉残留的队列目录、游标、订阅与计数器。
+     *
+     * 启动同步发生在装配完成之前（`onDeleted` 尚未接线），所以这里补一遍，避免重启后
+     * 已删主题的段目录/游标文件跟着留下来。
+     */
+    private func reconcileDeletions(executor: MQCommandExecutor): Unit {
+        for (tombstone in meta.allTombstones()) {
+            let payload = if (tombstone.isTopic()) {
+                if (meta.topicOf(tombstone.topic).isSome()) {
+                    continue
+                }
+                MQDeregisterPayload(MQDeregisterPayload.TOPIC, tombstone.topic)
+            } else {
+                if (meta.groupExists(tombstone.topic, tombstone.subscribeGroup)) {
+                    continue
+                }
+                MQDeregisterPayload(MQDeregisterPayload.GROUP, tombstone.topic,
+                    subscribeGroup: tombstone.subscribeGroup)
+            }
+            try {
+                executor.cleanupAfterDelete(payload)
+            } catch (e: Exception) {
+                log.warn("startup cleanup for '${payload.topic}/${payload.subscribeGroup}' failed: ${e.message}")
+            }
+        }
     }
 
     protected prop port: UInt16 {

@@ -60,6 +60,8 @@ protected class GroupCursor {
     private var unsupportedAt: ?LogPosition = None
     /** 不可读记录计数（段被清理/记录被截断），用于观测「静默已决」（A48）。 */
     private var skippedUnreadable_: Int64 = 0
+    /** 组内无人匹配而越过的记录计数（规格要求可观测）。 */
+    private var noMatchSkipped_: Int64 = 0
     private var closed = false
 
     protected init(topic: String, queueIndex: Int64, group: String, log: QueueLog, catalog: CursorCatalog,
@@ -301,8 +303,11 @@ protected class GroupCursor {
                     advance()
                     return None<(Array<Byte>, LogPosition)>
                 } else {
-                    // 组内无人匹配：不适用，允许越过
+                    // 组内无人匹配：不适用，允许越过（记 DEBUG + 计数，便于排查「消息被越过」）
                     entries.add(DeliveryRecord(position, after, None<String>, 0, now(), false, decided: true))
+                    noMatchSkipped_ = noMatchSkipped_ + 1
+                    logger.debug("record at ${topic}/${queueIndex}@${position.seq}:${position.offset} " +
+                        "matches no active subscriber of group '${group}', skipped")
                 }
                 advance()
             }
@@ -315,6 +320,15 @@ protected class GroupCursor {
         get() {
             synchronized(lock) {
                 skippedUnreadable_
+            }
+        }
+    }
+
+    /** 因组内无人匹配而被越过（标为不适用）的记录数（观测用）。 */
+    protected prop noMatchSkipped: Int64 {
+        get() {
+            synchronized(lock) {
+                noMatchSkipped_
             }
         }
     }

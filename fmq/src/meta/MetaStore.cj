@@ -364,6 +364,17 @@ protected class MetaStore <: Resource {
         }
     }
 
+    /**
+     * 某主题的主题墓碑。
+     *
+     * 用来区分「主题不存在是因为还没到达」与「主题已被删除」（后者拒绝迟到组）。
+     */
+    protected func topicTombstone(topic: String): ?MQMetaTombstone {
+        synchronized(lock) {
+            tombstones.get("${MQMetaTombstone.KIND_TOPIC}\u{0}${topic}")
+        }
+    }
+
     /** 生成下一个 revision 并落盘（Lamport 计数，不看墙钟）。 */
     protected func nextRevision(): Int64 {
         synchronized(lock) {

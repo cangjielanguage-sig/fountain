@@ -307,6 +307,8 @@ class GroupCursorTest {
             // 唯一的记录不匹配 ⇒ 记为不适用并越过
             let expected = 4 + recordSize("one", tags)
             @Assert(posEq(cursor.committed, LogPosition(1, expected)))
+            // 越过必须留痕（DEBUG 日志 + 跳过计数）
+            @Assert(cursor.noMatchSkipped == 1)
             cursor.close()
         } finally {
             fixture.close()

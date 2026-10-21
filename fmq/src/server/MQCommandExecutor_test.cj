@@ -27,6 +27,7 @@ import fountain::f_mq.base.payload.*
 import fountain::f_protocol.default.*
 import fountain::fmq.cluster.{BackupReplicator, MetaSyncer, NodeRegistry}
 import fountain::fmq.meta.MetaStore
+import fountain::fmq.metrics.MQMetrics
 import fountain::fmq.queue.*
 import fountain::fmq.test.TestDirs
 
@@ -38,8 +39,10 @@ class ExecutorFixture <: Resource {
     let cursors: CursorCatalog
     let dead: DeadLetterQueue
     let subscribers: SubscriberRegistry
+    let metrics: MQMetrics
     let consume: ConsumeService
     let executor: MQCommandExecutor
+    let syncer: MetaSyncer
     private let registry: NodeRegistry
     private let backup: BackupReplicator
 
@@ -52,18 +55,23 @@ class ExecutorFixture <: Resource {
         this.meta = MetaStore("${root}/metas")
         meta.load()
         this.registry = NodeRegistry(nodes, selfIndex)
-        let syncer = MetaSyncer(meta, registry)
+        this.syncer = MetaSyncer(meta, registry)
         this.queues = QueueManager("${root}/logs", 1024 * 1024, 1)
         this.cursorStore = CursorStore("${root}/metas")
         this.cursors = CursorCatalog(cursorStore, meta)
         this.dead = DeadLetterQueue("${root}/dead", 1024 * 1024, 1)
         this.subscribers = SubscriberRegistry()
+        let metrics = MQMetrics()
+        this.metrics = metrics
         this.consume = ConsumeService(queues, cursors, subscribers, MQMatcher(), dead,
-            Duration.second * 10, 3)
+            Duration.second * 10, 3, metrics: metrics)
         this.backup = BackupReplicator(registry, 0)
         let backupStore = BackupStore("${root}/logs", 1024 * 1024, 1)
         this.executor = MQCommandExecutor(meta, syncer, queues, cursors, subscribers, consume, backup,
             backupStore, selfIndex)
+        // 与 `MQServer` 的装配保持一致：peer 墓碑生效后清理本机状态（A25）
+        let commandExecutor = this.executor
+        syncer.onDeleted = {payload => commandExecutor.cleanupAfterDelete(payload)}
     }
 
     func call(message: Message): Message {
@@ -440,6 +448,83 @@ class MQCommandExecutorTest {
             @Assert(codeOf(fixture.call(MQProtocol.metaSync(tombstone))) == 0)
             @Assert(fixture.meta.topicOf("/t").isNone())
             @Assert(!fixture.meta.groupExists("/t", "g"))
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** peer 的主题墓碑生效后，队列目录 / 游标文件 / 订阅 / 计数器全部清空（A25/F1）。 */
+    @TestCase
+    public func topicTombstoneFromPeerClearsLocalState(): Unit {
+        let fixture = ExecutorFixture("tombstone_topic_cleanup")
+        try {
+            @Assert(MQProtocol.asPayload<MQTopicAssignment>(fixture.registerTopic("/t", 1)).isSome())
+            @Assert(codeOf(fixture.registerGroup("/t", "g")) == 0)
+            let sid = "sid-tomb-topic"
+            @Assert(codeOf(fixture.call(
+                MQProtocol.subscribe(MQSubscribePayload(sid, "/t", "g", [], "", false)))) == 0)
+            fixture.publish("/t", "one".toData())
+            let message = MQProtocol.asConsumeResult(
+                fixture.call(MQProtocol.consume(MQConsumePayload(sid)))).getOrThrow()
+            @Assert(codeOf(fixture.call(MQProtocol.ack(
+                MQAckPayload(sid, message.queueIndex, message.segmentedIndex, message.segmentedOffset)))) == 0)
+
+            let queueDir = "${fixture.root}/logs/%2Ft"
+            let cursorFile = "${fixture.root}/metas/offsets/%2Ft/0/g.cursor"
+            @Assert(exists(queueDir))
+            @Assert(exists(cursorFile))
+            @Assert(fixture.subscribers.of(sid).isSome())
+            @Assert(fixture.metrics.deliveredOf("/t", "g") > 0)
+
+            // peer 广播的墓碑（origin != 本机下标）
+            @Assert(codeOf(fixture.call(MQProtocol.metaSync(
+                MQMetaTombstone(MQMetaTombstone.KIND_TOPIC, "/t", "", 99, 1, 0)))) == 0)
+
+            @Assert(!exists(queueDir))
+            @Assert(!exists(cursorFile))
+            @Assert(fixture.subscribers.of(sid).isNone())
+            @Assert(fixture.metrics.deliveredOf("/t", "g") == 0)
+            @Assert(fixture.metrics.ackedOf("/t", "g") == 0)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** peer 的组墓碑生效后，只清该组的游标/订阅/计数器，主题队列保留（A25/F1）。 */
+    @TestCase
+    public func groupTombstoneFromPeerClearsGroupStateOnly(): Unit {
+        let fixture = ExecutorFixture("tombstone_group_cleanup")
+        try {
+            @Assert(MQProtocol.asPayload<MQTopicAssignment>(fixture.registerTopic("/t", 1)).isSome())
+            @Assert(codeOf(fixture.registerGroup("/t", "g1")) == 0)
+            @Assert(codeOf(fixture.registerGroup("/t", "g2")) == 0)
+            let sid1 = "sid-tomb-g1"
+            let sid2 = "sid-tomb-g2"
+            @Assert(codeOf(fixture.call(
+                MQProtocol.subscribe(MQSubscribePayload(sid1, "/t", "g1", [], "", false)))) == 0)
+            @Assert(codeOf(fixture.call(
+                MQProtocol.subscribe(MQSubscribePayload(sid2, "/t", "g2", [], "", true)))) == 0)
+            fixture.publish("/t", "one".toData())
+            let first = MQProtocol.asConsumeResult(
+                fixture.call(MQProtocol.consume(MQConsumePayload(sid1)))).getOrThrow()
+            @Assert(codeOf(fixture.call(MQProtocol.ack(
+                MQAckPayload(sid1, first.queueIndex, first.segmentedIndex, first.segmentedOffset)))) == 0)
+
+            let g1Cursor = "${fixture.root}/metas/offsets/%2Ft/0/g1.cursor"
+            @Assert(exists(g1Cursor))
+            @Assert(fixture.metrics.deliveredOf("/t", "g1") > 0)
+
+            @Assert(codeOf(fixture.call(MQProtocol.metaSync(
+                MQMetaTombstone(MQMetaTombstone.KIND_GROUP, "/t", "g1", 99, 1, 0)))) == 0)
+
+            @Assert(!exists(g1Cursor))
+            @Assert(fixture.subscribers.of(sid1).isNone())
+            @Assert(fixture.metrics.deliveredOf("/t", "g1") == 0)
+            // 主题与另一个组不受影响
+            @Assert(exists("${fixture.root}/logs/%2Ft"))
+            @Assert(fixture.meta.topicOf("/t").isSome())
+            @Assert(fixture.meta.groupExists("/t", "g2"))
+            @Assert(fixture.subscribers.of(sid2).isSome())
         } finally {
             fixture.close()
         }

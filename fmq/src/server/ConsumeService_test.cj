@@ -455,6 +455,27 @@ class ConsumeServiceTest {
         }
     }
 
+    /** 单趟扫描：每个队列只开一次读流，与组数无关（A62/T23.6）。 */
+    @TestCase
+    public func statsScansEachQueueOnceRegardlessOfGroupCount(): Unit {
+        let fixture = ConsumeFixture("stats_single_pass", queueCount: 3)
+        try {
+            for (queueIndex in 0..3) {
+                fixture.appendTo(queueIndex, [], "m${queueIndex}")
+            }
+            let groups: Array<String> = ["g1", "g2", "g3", "g4"]
+            let before = fixture.service.statsScans
+            let text = fixture.service.stats("/t", 0, {_ => groups})
+            // 3 个队列 × 4 个组：读流只开 3 次（每组各扫一遍就是 12 次）
+            @Assert(fixture.service.statsScans - before == 3)
+            for (group in groups) {
+                @Assert(Int64.parse(statsRow(text, "/t", group)[5]) == 3)
+            }
+        } finally {
+            fixture.close()
+        }
+    }
+
     /** 扫描失败时 stats 必须报错，不能伪造 backlog=0（A62）。 */
     @TestCase
     public func statsPropagatesScanFailure(): Unit {

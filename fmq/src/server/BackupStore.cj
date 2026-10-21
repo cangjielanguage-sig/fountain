@@ -22,6 +22,7 @@ import std.sync.{AtomicBool, Mutex}
 import fountain::f_codec.default.DefaultCodec
 import fountain::f_io.{ByteBuffer, LogPosition}
 import fountain::f_io.LogClosedException
+import fountain::f_log.*
 import fountain::fmq.meta.{AtomicFile, MQFileNames}
 import fountain::fmq.queue.{QueueLog}
 
@@ -31,6 +32,8 @@ import fountain::fmq.queue.{QueueLog}
  * 只写入，不参与本队列投递，也不再向外备份。
  */
 protected class BackupStore <: Resource {
+    private static let log = LoggerFactory.getLogger("fountain::fmq.server.BackupStore")
+
     private let root: String
     private let maxFileSize: Int64
     private let syncInterval: Int64
@@ -107,6 +110,8 @@ protected class BackupStore <: Resource {
             case Some(existing) =>
                 if (existing.seq > position.seq ||
                     (existing.seq == position.seq && existing.offset >= position.offset)) {
+                    log.warn("ignored backup cursor rollback for ${cursorPath(ownerIndex, topic, queueIndex, group)}: " +
+                        "stored ${existing.seq}:${existing.offset}, incoming ${position.seq}:${position.offset}")
                     return
                 }
             case None => ()
