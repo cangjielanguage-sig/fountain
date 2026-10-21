@@ -193,7 +193,10 @@ public class AnyBridgeCall_test {
      */
     @TestCase
     public func a3_5_bridgeKeepsDivisionSemantics(): Unit {
-        let c = AnyBridgeCall_test.compiler()
+        // 本用例断言 IEEE 语义：显式关闭严格浮点
+        let opts = CompileOptions(DummyDiagnosticsSink())
+        opts.strictFp = false
+        let c = Compiler(opts)
         CompileCache.reset()
         let f = c.compile('{ x: Float64 => 1.0f64 / x }')
         let viaInvoke = f.invoke<Float64>([0.0], CallContext())

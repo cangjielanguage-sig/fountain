@@ -29,13 +29,13 @@ import fountain::f_jit.base.Version
 @Test
 public class CompileOptions_test {
 
-    /** 缺省：版本取最新，严格浮点关闭。 */
+    /** 缺省：版本取最新，严格浮点**开启**（÷0 当场失败）。 */
     @TestCase
     public func optionsDefaultToLatestVersion(): Unit {
         let o = CompileOptions(DummyDiagnosticsSink())
         @Assert(o.verMajor, Version.LATEST)
         @Assert(Version.LATEST, Version.M3_MAJOR)
-        @Assert(o.strictFp, false)
+        @Assert(o.strictFp, true)
     }
 
     /** 显式设置可读回（选项是可变配置，不是只读常量）。 */

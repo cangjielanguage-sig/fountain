@@ -46,7 +46,18 @@ public class StrictFpCodegen_test {
         @Assert(StrictFpCodegen_test.countOf(o, 'FDIV'), 0)
     }
 
-    /** 非严格：只有 `FDIV`，`FDIV_CHK` 零出现（默认产物不变）。 */
+    /** 缺省（不传 `strictFp`）：产物就是 `FDIV_CHK`——严格是产品缺省。 */
+    @TestCase
+    public func defaultEmitsFdivChk(): Unit {
+        let sc = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink(),
+            verMajor: Version.M3_MAJOR)
+        let o = CodeDump.ops(LowererM2_test.entryBytes(
+            FbcReader.load(sc.compile(StrictFpCodegen_test.DIV_SRC).raw)))
+        @Assert(StrictFpCodegen_test.countOf(o, 'FDIV_CHK'), 1)
+        @Assert(StrictFpCodegen_test.countOf(o, 'FDIV'), 0)
+    }
+
+    /** 显式关闭：只有 `FDIV`，`FDIV_CHK` 零出现。 */
     @TestCase
     public func looseKeepsFdiv(): Unit {
         let o = StrictFpCodegen_test.ops(StrictFpCodegen_test.DIV_SRC, false)

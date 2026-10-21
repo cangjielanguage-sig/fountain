@@ -240,7 +240,9 @@ public class A64Exec_test {
     }
 
     private static func run2(src: String, args: Array<Int64>): (Int64, Int64) {
-        let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(src)
+        // IEEE 语义用例（含 0/0 → canonical NaN）：显式关闭严格浮点，不依赖产品缺省
+        let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink(),
+            strictFp: false).compile(src)
         A64Exec_test.runUnit(cu, 0, args)
     }
 

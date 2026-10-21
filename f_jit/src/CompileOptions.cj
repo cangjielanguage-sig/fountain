@@ -37,9 +37,12 @@ public class CompileOptions {
     /**
      * 严格浮点（X3）：决定 `Float64` 的 `/` 发 `FDIV`（÷0 得 ±Inf）还是 `FDIV_CHK`（÷0 → 1）。
      *
+     * **缺省 `true`（严格）**：÷0 当场以 1（`DIV_ZERO`）失败，不让 `Inf` 静默污染后续计算。
+     * 需要 IEEE 语义（如以 `Inf` 作哨兵）时显式置 `false`。
+     *
      * 这是**产物级**选项：同一份源码在两种配置下是两份独立产物，不存在「同一条指令两种行为」。
      */
-    public var strictFp: Bool = false
+    public var strictFp: Bool = true
     public let diagnostics: DiagnosticsSink
 
     public init(diagnostics: DiagnosticsSink) {

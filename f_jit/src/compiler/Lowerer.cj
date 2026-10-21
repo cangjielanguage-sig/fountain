@@ -137,7 +137,7 @@ internal class Lowerer {
     private let resolver: NameResolver
     private let view: ClassRegistryView
     private let src: String
-    /** 严格浮点（X3）：`Float64` 的 `/` 发 `FDIV_CHK`（÷0 → 1）而非 `FDIV`（÷0 → ±Inf）。 */
+    /** 严格浮点（X3）：缺省 `true` —— `Float64` 的 `/` 发 `FDIV_CHK`（÷0 → 1）；`false` 才是 IEEE。 */
     private let strictFp: Bool
     private var ctx: ?FnCtx = None
     private var entryFn: UInt32 = 0u32
@@ -163,7 +163,7 @@ internal class Lowerer {
 
     public init(sess: CompileSession, resolver: NameResolver,
         view!: ClassRegistryView = ClassRegistryView(ClassRegistrySnapshot.empty()),
-        strictFp!: Bool = false) {
+        strictFp!: Bool = true) {
         this.sess = sess
         this.resolver = resolver
         this.view = view

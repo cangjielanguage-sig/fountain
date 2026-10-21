@@ -49,7 +49,7 @@ off  size 字段      含义
 24   8    hwCap     窗口初始容量（默认 128；§9.6）
 32   8    hwTop     窗口已用数（helper 写）
 40   8    fnId      函数 id（桥填，供错误上下文）
-48   8    flags     bit0=strictFp（历史位，运行期不读）  bit1=trace  bit2=hasLoop  ...
+48   8    flags     bit0=strictFp（历史位，运行期不读；严格浮点缺省开启，见 CompileOptions）  bit1=trace  bit2=hasLoop  ...
 56   8    dbgBase   诊断转储区基址（非托管内存；0=禁用；桥在 ctx 准备时写入并清零首格，§9.16）
 ```
 
@@ -290,7 +290,7 @@ ret: rax = cell（返回值或句柄）；errCode != 0 时 rax 未定义
 | 41 | `FSUB` | a-b | — |
 | 42 | `FMUL` | a*b | — |
 | 43 | `FDIV` | a/b，IEEE（得 ±Inf/NaN，**不报错**） | — |
-| 44 | `FDIV_CHK` | a/b，÷0 报错（strictFp） | 1 |
+| 44 | `FDIV_CHK` | a/b，÷0 报错（**缺省形态**；`CompileOptions.strictFp = false` 时改用 `FDIV`） | 1 |
 | 45 | `FNEG` | -a | — |
 | 46 | `FABS` | \|a\| | — |
 | 47 | `FMIN` | min（任一操作数为 NaN → canonical NaN，§11.3） | — |

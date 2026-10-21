@@ -32,11 +32,26 @@ public class StrictFp_test {
 
     private static const DIV_SRC: String = '{ x: Float64 => 1.0f64 / x }'
 
-    /** 非严格：÷0 得 +Inf，不报错。 */
+    /** 缺省即严格：不设任何选项，÷0 以 1 失败。 */
     @TestCase
-    public func looseDivisionByZeroYieldsInf(): Unit {
+    public func defaultIsStrict(): Unit {
         let f = Compiler(CompileOptions(DummyDiagnosticsSink()))
             .compile(StrictFp_test.DIV_SRC)
+        var code = 0
+        try {
+            let _ = f.call<Float64>([0.0])
+        } catch (e: JitException) {
+            code = e.code
+        }
+        @Assert(code, ErrCode.DIV_ZERO)
+    }
+
+    /** 显式关闭严格：÷0 得 +Inf，不报错。 */
+    @TestCase
+    public func looseDivisionByZeroYieldsInf(): Unit {
+        let opts = CompileOptions(DummyDiagnosticsSink())
+        opts.strictFp = false
+        let f = Compiler(opts).compile(StrictFp_test.DIV_SRC)
         let v = f.call<Float64>([0.0])
         @Assert(Int64(v.toBits()), Int64(0x7FF0000000000000u64))
     }
@@ -72,7 +87,9 @@ public class StrictFp_test {
      */
     @TestCase
     public func strictFpIsPartOfCacheKey(): Unit {
-        let loose = Compiler(CompileOptions(DummyDiagnosticsSink()))
+        let looseOpts = CompileOptions(DummyDiagnosticsSink())
+        looseOpts.strictFp = false
+        let loose = Compiler(looseOpts)
         @Assert(Int64(loose.compile(StrictFp_test.DIV_SRC).call<Float64>([0.0]).toBits()),
             Int64(0x7FF0000000000000u64))
 

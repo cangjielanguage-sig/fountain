@@ -404,7 +404,9 @@ public class Acceptance_test {
     private static const DOLLAR: String = '$'
 
     private static func rawOf(src: String): Array<UInt8> {
-        SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(src).raw
+        // M1 验收基线是 IEEE 语义（T8/nan|inf|neg-inf）：显式关闭严格浮点
+        SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink(),
+            strictFp: false).compile(src).raw
     }
 
     /** M3 口径的产物（`verMajor=3`；Any / JSON 需要合法集 0–19）。 */
