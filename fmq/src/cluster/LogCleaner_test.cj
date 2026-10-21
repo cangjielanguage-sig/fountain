@@ -155,6 +155,7 @@ class LogCleanerTest {
         let (root, queues, dead) = make("offline_group", 32)
         let meta = MetaStore("${root}/metas")
         meta.load()
+        meta.applyTopic(MQTopicAssignment("/t", 1, 0, [0]))
         let store = CursorStore("${root}/metas")
         try {
             fill(queues)
@@ -192,6 +193,7 @@ class LogCleanerTest {
         let (root, queues, dead) = make("never_consumed", 32)
         let meta = MetaStore("${root}/metas")
         meta.load()
+        meta.applyTopic(MQTopicAssignment("/t", 1, 0, [0]))
         let store = CursorStore("${root}/metas")
         try {
             fill(queues)
@@ -220,6 +222,7 @@ class LogCleanerTest {
         let (root, queues, dead) = make("group_removed", 32)
         let meta = MetaStore("${root}/metas")
         meta.load()
+        meta.applyTopic(MQTopicAssignment("/t", 1, 0, [0]))
         let store = CursorStore("${root}/metas")
         try {
             fill(queues)

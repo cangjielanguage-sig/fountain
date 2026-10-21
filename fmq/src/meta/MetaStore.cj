@@ -239,6 +239,10 @@ protected class MetaStore <: Resource {
 
     protected func applyGroup(meta: MQSubscribeGroupMeta): MetaApplyResult {
         synchronized(lock) {
+            if (topicIndex.get(meta.topic).isNone()) {
+                // 组先于主题到达（网络乱序）或主题已删除：拒绝，交给 Syncer 的待应用队列
+                return MetaApplyResult.TopicMissing
+            }
             let list = match (groups.get(meta.topic)) {
                 case Some(items) => items
                 case None =>
@@ -497,18 +501,22 @@ protected class MetaStore <: Resource {
         }
     }
 
-    /** 删除主题的本地状态与文件（不含墓碑）。 */
+    /**
+     * 删除主题的本地状态与文件（不含墓碑）。
+     *
+     * 顺序固定为「组 → 主题」：反过来的话，中途崩溃会留下没有主题的孤儿组文件（A35）。
+     */
     private func dropTopicLocked(topic: String): Unit {
-        topicIndex.remove(topic)
         groups.remove(topic)
-        let topicFile = topicPath(topic)
-        if (exists(topicFile)) {
-            remove(topicFile)
-        }
         let groupDir = "${dir}/groups/${MQFileNames.escape(topic)}"
         if (exists(groupDir)) {
             remove(groupDir, recursive: true)
         }
+        let topicFile = topicPath(topic)
+        if (exists(topicFile)) {
+            remove(topicFile)
+        }
+        topicIndex.remove(topic)
     }
 
     private func dropGroupLocked(topic: String, group: String): Unit {
@@ -653,6 +661,8 @@ protected class MetaStore <: Resource {
     }
 
     private func loadGroups(): Unit {
+        // 加载时丢弃孤儿组（主题文件已被删除但组文件还在，旧版本的删除顺序残留）
+        // 注意：先加载主题，再调用本方法
         let groupRoot = "${dir}/groups"
         if (!exists(groupRoot)) {
             return
@@ -661,12 +671,16 @@ protected class MetaStore <: Resource {
             if (info.name.endsWith(".meta")) {
                 match (MQProtocol.decodePayload<MQSubscribeGroupMeta>(readAll(info.path.toString()))) {
                     case Some(meta) =>
-                        match (groups.get(meta.topic)) {
-                            case Some(list) => list.add(meta)
-                            case None =>
-                                let list = ArrayList<MQSubscribeGroupMeta>()
-                                list.add(meta)
-                                groups.add(meta.topic, list)
+                        if (topicIndex.get(meta.topic).isNone()) {
+                            log.error("drop orphan group '${meta.subscribeGroup}' of missing topic '${meta.topic}'")
+                        } else {
+                            match (groups.get(meta.topic)) {
+                                case Some(list) => list.add(meta)
+                                case None =>
+                                    let list = ArrayList<MQSubscribeGroupMeta>()
+                                    list.add(meta)
+                                    groups.add(meta.topic, list)
+                            }
                         }
                     case None => log.error("skip corrupted group metadata ${info.path}")
                 }

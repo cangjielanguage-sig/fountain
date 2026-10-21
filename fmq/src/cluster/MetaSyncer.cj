@@ -15,7 +15,8 @@ limitations under the License.
 */
 package fountain::fmq.cluster
 
-import std.collection.HashSet
+import std.collection.{ArrayList, HashMap, HashSet}
+import std.sync.Mutex
 import std.time.DateTime
 import fountain::f_log.*
 import fountain::f_mq.base.*
@@ -34,8 +35,14 @@ protected class MetaSyncer {
     private static let log = LoggerFactory.getLogger("fountain::fmq.cluster.MetaSyncer")
     private static let SYNC_TIMEOUT_MULTIPLIER = 5
 
+    private static let PENDING_TTL_MS: Int64 = 5 * 60 * 1000
+    private static let MAX_PENDING: Int64 = 1024
+
     private let store: MetaStore
     private let transport: MQNodeTransport
+    /** 主题未到达的组（有界 + TTL），主题落地后自动应用（A36） */
+    private let pendingLock = Mutex()
+    private let pendingGroups = HashMap<String, PendingGroup>()
 
     protected init(store: MetaStore, transport: MQNodeTransport) {
         this.store = store
@@ -144,11 +151,77 @@ protected class MetaSyncer {
         } else {
             MQAssignment.nextStart(assignment.startNodeIndex, assignment.queueNum, nodeCount)
         }
-        store.applyTopic(assignment, nextStart: nextStart)
+        // 指针只增不减：乱序到达的旧分配不能把轮转指针拉回去（A33）
+        let current = store.nextStartNode
+        let persisted = if (nextStart > current) { nextStart } else { current }
+        let result = store.applyTopic(assignment, nextStart: persisted)
+        if (result == MetaApplyResult.Applied) {
+            flushPendingGroups(assignment.topic)
+        }
+        result
     }
 
     protected func applyRemoteGroup(meta: MQSubscribeGroupMeta): MetaApplyResult {
-        store.applyGroup(meta)
+        let result = store.applyGroup(meta)
+        if (result == MetaApplyResult.TopicMissing) {
+            addPendingGroup(meta)
+        }
+        result
+    }
+
+    /** 主题落地后重试待应用的组。 */
+    private func flushPendingGroups(topic: String): Unit {
+        let prefix = "${topic}\u{0}"
+        let candidates = ArrayList<String>()
+        synchronized(pendingLock) {
+            for ((key, _) in pendingGroups) {
+                if (key.startsWith(prefix)) {
+                    candidates.add(key)
+                }
+            }
+        }
+        for (key in candidates) {
+            let pendingMeta = synchronized(pendingLock) {
+                match (pendingGroups.get(key)) {
+                    case Some(value) => Some(value.meta)
+                    case None => None<MQSubscribeGroupMeta>
+                }
+            }
+            match (pendingMeta) {
+                case Some(meta) =>
+                    if (store.applyGroup(meta) == MetaApplyResult.Applied) {
+                        synchronized(pendingLock) {
+                            pendingGroups.remove(key)
+                        }
+                    }
+                case None => ()
+            }
+        }
+    }
+
+    private func addPendingGroup(meta: MQSubscribeGroupMeta): Unit {
+        let now = DateTime.now().toUnixTimeStamp().toMilliseconds()
+        let key = "${meta.topic}\u{0}${meta.subscribeGroup}"
+        synchronized(pendingLock) {
+            // 先淘汰过期项；队列有界，满了就拒绝并 WARN
+            let expired = ArrayList<String>()
+            for ((k, value) in pendingGroups) {
+                if (now - value.addedMs > PENDING_TTL_MS) {
+                    expired.add(k)
+                }
+            }
+            for (k in expired) {
+                pendingGroups.remove(k)
+            }
+            if (pendingGroups.get(key).isSome()) {
+                return
+            }
+            if (pendingGroups.size >= MAX_PENDING) {
+                log.warn("pending group queue is full (${MAX_PENDING}), dropping group '${meta.subscribeGroup}'")
+                return
+            }
+            pendingGroups.add(key, PendingGroup(meta, now))
+        }
     }
 
     /** 旧版 peer 的删除广播（无墓碑）：本地补一条墓碑，避免二次复活。 */
@@ -239,5 +312,16 @@ protected class MetaSyncer {
                 log.warn("metadata broadcast to node ${index} failed, peer will catch up on startup")
             }
         }
+    }
+}
+
+/** 等待主题到达的组。 */
+private class PendingGroup {
+    let meta: MQSubscribeGroupMeta
+    let addedMs: Int64
+
+    init(meta: MQSubscribeGroupMeta, addedMs: Int64) {
+        this.meta = meta
+        this.addedMs = addedMs
     }
 }

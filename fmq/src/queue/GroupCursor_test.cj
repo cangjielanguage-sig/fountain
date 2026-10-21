@@ -23,6 +23,7 @@ import std.sync.AtomicInt64
 import std.time.DateTime
 import std.unittest.*
 import std.unittest.testmacro.*
+import fountain::f_mq.base.payload.MQTopicAssignment
 import fountain::f_data.*
 import fountain::f_io.LogPosition
 import fountain::f_mq.base.{MQFilter, MQMessageRecord}
@@ -60,6 +61,7 @@ class CursorFixture <: Resource {
         this.store = CursorStore(root)
         this.meta = MetaStore("${root}/metas")
         meta.load()
+        meta.applyTopic(MQTopicAssignment("/t", 1, 0, [0]))
         meta.applyGroup(MQSubscribeGroupMeta("/t", "g"))
         this.catalog = CursorCatalog(store, meta)
         this.deadLetter = DeadLetterQueue("${root}/dead", maxFileSize, 1)

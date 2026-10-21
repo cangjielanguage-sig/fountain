@@ -450,4 +450,55 @@ class MetaStoreTest {
             clean(dir)
         }
     }
+
+    // ===== 删除顺序与孤儿组（A35/A36） =====
+
+    @TestCase
+    public func orphanGroupsAreDroppedOnLoad(): Unit {
+        let dir = dirOf("orphan")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 1))
+            store.applyGroup(MQSubscribeGroupMeta("/t", "g1", revision: 2))
+            store.applyGroup(MQSubscribeGroupMeta("/t", "g2", revision: 3))
+            store.close()
+
+            // 模拟「删除中断」：主题文件已删、组文件残留
+            let topicFile = "${dir}/${MQFileNames.topicFile("/t")}"
+            remove(topicFile)
+
+            let reloaded = MetaStore(dir)
+            reloaded.load()
+            @Assert(reloaded.topicOf("/t").isNone())
+            @Assert(!reloaded.groupExists("/t", "g1"))
+            @Assert(!reloaded.groupExists("/t", "g2"))
+            @Assert(reloaded.snapshot().groups.size == 0)
+            reloaded.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    @TestCase
+    public func removeTopicDeletesGroupsBeforeTopicFile(): Unit {
+        let dir = dirOf("delete_order")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 1))
+            store.applyGroup(MQSubscribeGroupMeta("/t", "g", revision: 2))
+            let tombstone = store.removeTopic("/t").getOrThrow()
+            @Assert(tombstone.isTopic())
+            @Assert(store.topicOf("/t").isNone())
+            @Assert(!store.groupExists("/t", "g"))
+            // 组目录已随主题一起删除
+            @Assert(!exists("${dir}/groups/${MQFileNames.escape("/t")}"))
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
 }

@@ -18,6 +18,7 @@ package fountain::fmq.queue
 import std.fs.*
 import std.unittest.*
 import std.unittest.testmacro.*
+import fountain::f_mq.base.payload.MQTopicAssignment
 import fountain::f_io.LogPosition
 import fountain::f_mq.base.model.MQSubscribeGroupMeta
 import fountain::fmq.meta.{MQFileNames, MetaApplyResult, MetaStore}
@@ -52,6 +53,7 @@ class CursorCatalogTest {
         let dir = freshDir("never")
         let meta = MetaStore("${dir}/metas")
         meta.load()
+        meta.applyTopic(MQTopicAssignment("/t", 1, 0, [0]))
         let store = CursorStore("${dir}/metas")
         try {
             @Assert(meta.applyGroup(MQSubscribeGroupMeta("/t", "g")) == MetaApplyResult.Applied)
@@ -71,6 +73,7 @@ class CursorCatalogTest {
         let dir = freshDir("offline")
         let meta = MetaStore("${dir}/metas")
         meta.load()
+        meta.applyTopic(MQTopicAssignment("/t", 1, 0, [0]))
         let store = CursorStore("${dir}/metas")
         try {
             @Assert(meta.applyGroup(MQSubscribeGroupMeta("/t", "g")) == MetaApplyResult.Applied)
@@ -89,6 +92,7 @@ class CursorCatalogTest {
         let dir = freshDir("multi")
         let meta = MetaStore("${dir}/metas")
         meta.load()
+        meta.applyTopic(MQTopicAssignment("/t", 1, 0, [0]))
         let store = CursorStore("${dir}/metas")
         try {
             @Assert(meta.applyGroup(MQSubscribeGroupMeta("/t", "fast")) == MetaApplyResult.Applied)
@@ -108,6 +112,7 @@ class CursorCatalogTest {
         let dir = freshDir("corrupt")
         let meta = MetaStore("${dir}/metas")
         meta.load()
+        meta.applyTopic(MQTopicAssignment("/t", 1, 0, [0]))
         let store = CursorStore("${dir}/metas")
         try {
             @Assert(meta.applyGroup(MQSubscribeGroupMeta("/t", "g")) == MetaApplyResult.Applied)
@@ -131,6 +136,7 @@ class CursorCatalogTest {
         let dir = freshDir("remove_group")
         let meta = MetaStore("${dir}/metas")
         meta.load()
+        meta.applyTopic(MQTopicAssignment("/t", 1, 0, [0]))
         let store = CursorStore("${dir}/metas")
         try {
             @Assert(meta.applyGroup(MQSubscribeGroupMeta("/t", "fast")) == MetaApplyResult.Applied)

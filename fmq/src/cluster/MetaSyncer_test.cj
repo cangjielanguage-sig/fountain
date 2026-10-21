@@ -435,4 +435,52 @@ class MetaSyncerTest {
             clean(dir)
         }
     }
+
+    // ===== 组依赖与待应用队列（A36） =====
+
+    @TestCase
+    public func groupArrivingBeforeTopicIsAppliedLater(): Unit {
+        let dir = dirOf("group_before_topic")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            let transport = FakeTransport(1, 0)
+            let syncer = MetaSyncer(store, transport)
+
+            // 组先到：进入待应用队列，不落盘
+            @Assert(syncer.applyRemoteGroup(MQSubscribeGroupMeta("/t", "g", revision: 2)) ==
+                MetaApplyResult.TopicMissing)
+            @Assert(!store.groupExists("/t", "g"))
+
+            // 主题到达后自动应用
+            @Assert(syncer.applyRemote(MQTopicAssignment("/t", 1, 0, [0], revision: 1)) ==
+                MetaApplyResult.Applied)
+            @Assert(store.groupExists("/t", "g"))
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    @TestCase
+    public func groupIsRejectedWhenTopicIsDeleted(): Unit {
+        let dir = dirOf("group_after_delete")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            let transport = FakeTransport(1, 0)
+            let syncer = MetaSyncer(store, transport)
+            syncer.applyRemote(MQTopicAssignment("/t", 1, 0, [0], revision: 1))
+            @Assert(store.removeTopic("/t").isSome())
+
+            @Assert(syncer.applyRemoteGroup(MQSubscribeGroupMeta("/t", "g", revision: 5)) ==
+                MetaApplyResult.TopicMissing)
+            @Assert(!store.groupExists("/t", "g"))
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
 }
