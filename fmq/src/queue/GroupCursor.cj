@@ -290,6 +290,18 @@ protected class GroupCursor {
         }
     }
 
+    /** 该位置的已投递次数；不在未决集合时返回 0（备份诊断用）。 */
+    protected func deliverCountAt(position: LogPosition): Int64 {
+        synchronized(lock) {
+            for (entry in entries) {
+                if (entry.position.seq == position.seq && entry.position.offset == position.offset) {
+                    return entry.deliverCount
+                }
+            }
+            0
+        }
+    }
+
     /**
      * 确认位置。位置不在未决集合、或已分配给其它订阅时返回 `false`。
      */

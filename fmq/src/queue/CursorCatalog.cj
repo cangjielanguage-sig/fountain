@@ -121,6 +121,15 @@ protected class CursorCatalog {
         floor
     }
 
+    /** 该主题下全部已注册组的组名。 */
+    protected func groupNames(topic: String): Array<String> {
+        let names = ArrayList<String>()
+        for (group in meta.groupsOf(topic)) {
+            names.add(group.subscribeGroup)
+        }
+        names.toArray()
+    }
+
     /** 删除某订阅组在各队列上的位点，并让缓存失效。 */
     protected func removeGroup(topic: String, group: String): Unit {
         store.removeGroup(topic, group)

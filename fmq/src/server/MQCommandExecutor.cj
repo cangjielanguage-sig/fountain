@@ -17,6 +17,7 @@ package fountain::fmq.server
 
 import std.collection.ArrayList
 import fountain::f_base.unsafeZeroValue
+import fountain::f_io.LogPosition
 import fountain::f_log.*
 import fountain::f_mq.base.*
 import fountain::f_mq.base.model.*
@@ -195,9 +196,19 @@ protected class MQCommandExecutor {
                 let payload = MQProtocol.decodePayload<MQBackupPayload>(internal.payload).getOrThrow {
                     MQServiceException(MQErrorCode.INTERNAL, "cannot decode MQBackupPayload")
                 }
+                // 先落记录，再落位点：位点只进不退，重复批次不会回退恢复点（A26）
                 for (i in 0..payload.records.size) {
                     backupStore.append(payload.ownerIndex, payload.topic, payload.queueIndex,
                         payload.records[i].copyBytes())
+                }
+                if (payload.records.size != payload.states.size) {
+                    log.warn("backup batch of ${payload.topic}/${payload.queueIndex} has " +
+                        "${payload.records.size} records but ${payload.states.size} states, cursors are skipped")
+                } else {
+                    for (cursor in payload.cursors) {
+                        backupStore.saveCursor(payload.ownerIndex, payload.topic, payload.queueIndex,
+                            cursor.group, LogPosition(cursor.segmentedIndex, cursor.segmentedOffset))
+                    }
                 }
                 return MQProtocol.respond<MQResult>(request, MQResult(0, "ok"))
             }

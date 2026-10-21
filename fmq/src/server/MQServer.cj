@@ -90,6 +90,8 @@ public class MQServer {
         let consumer = ConsumeService(queues, cursorCatalog, subscribers, MQMatcher(), deadLetter,
             options.ackTimeout, options.deadMsgThreshold, metrics: MQMetrics())
         this.consume = consumer
+        // 备份要携带真实消费状态与位点（A26）
+        this.backup.setStateSource(consumer)
         this.cleaner = LogCleaner(queues, deadLetter,
             {topic, queueIndex => consumer.floorOf(topic, queueIndex)},
             options.segmentedLogTTL, options.deadMsgTTL)

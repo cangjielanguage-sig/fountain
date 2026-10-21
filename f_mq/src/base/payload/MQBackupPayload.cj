@@ -27,24 +27,28 @@ public class MQBackupPayload {
     private var queueIndex: Int64 = 0
     private var records: Array<MQBlob> = []
     private var states: Array<MQBackupState> = []
+    /** 各订阅组在发送时刻的已确认位点（旧接收端忽略） */
+    private var cursors: Array<MQBackupCursor> = []
 
     public init() {}
 
     public init(ownerIndex: Int64, topic: String, queueIndex: Int64, records: Array<Array<Byte>>,
-        states: Array<MQBackupState>) {
+        states: Array<MQBackupState>, cursors!: Array<MQBackupCursor> = []) {
         this.ownerIndex = ownerIndex
         this.topic = topic
         this.queueIndex = queueIndex
         this.records = Array<MQBlob>(records.size) {i => MQBlob(records[i])}
         this.states = states
+        this.cursors = cursors
     }
 
     public init(ownerIndex: Int64, topic: String, queueIndex: Int64, records: Array<MQBlob>,
-        states: Array<MQBackupState>) {
+        states: Array<MQBackupState>, cursors!: Array<MQBackupCursor> = []) {
         this.ownerIndex = ownerIndex
         this.topic = topic
         this.queueIndex = queueIndex
         this.records = records
         this.states = states
+        this.cursors = cursors
     }
 }

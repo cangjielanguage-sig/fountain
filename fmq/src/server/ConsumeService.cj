@@ -20,8 +20,9 @@ import std.sync.Mutex
 import std.time.DateTime
 import fountain::f_io.LogPosition
 import fountain::f_mq.base.MQErrorCode
-import fountain::f_mq.base.payload.{MQAckPayload, MQConsumeResult, MQResult}
+import fountain::f_mq.base.payload.{MQAckPayload, MQBackupCursor, MQBackupState, MQConsumeResult, MQResult}
 import fountain::f_time.*
+import fountain::fmq.cluster.BackupStateSource
 import fountain::fmq.metrics.MQMetrics
 import fountain::fmq.queue.*
 
@@ -30,7 +31,7 @@ import fountain::fmq.queue.*
  *
  * 每个 `(topic, queueIndex, group)` 一个 `GroupCursor`，懒建并缓存；不同组之间互不阻塞。
  */
-protected class ConsumeService {
+protected class ConsumeService <: BackupStateSource {
     private let queues: QueueManager
     private let catalog: CursorCatalog
     private let subscribers: SubscriberRegistry
@@ -196,6 +197,64 @@ protected class ConsumeService {
             }
         }
         out.toString()
+    }
+
+    /** 备份状态：逐条计算「是否已被所有组确认」与投递次数（A26）。 */
+    public func backupStates(topic: String, queueIndex: Int64,
+        positions: Array<LogPosition>): Array<MQBackupState> {
+        let groups = catalog.groupNames(topic)
+        let committed = Array<LogPosition>(groups.size) {i =>
+            match (catalog.positionOf(topic, queueIndex, groups[i])) {
+                case Some(position) => position
+                case None => LogPosition(1, 0)
+            }
+        }
+        Array<MQBackupState>(positions.size) {i =>
+            MQBackupState(positions[i].seq, positions[i].offset, deliverCountOf(topic, queueIndex, positions[i]),
+                ackedByAll(committed, positions[i]))
+        }
+    }
+
+    /** 备份附带位点：每个已注册组当前 committed。 */
+    public func backupCursors(topic: String, queueIndex: Int64): Array<MQBackupCursor> {
+        let groups = catalog.groupNames(topic)
+        Array<MQBackupCursor>(groups.size) {i =>
+            let position = match (catalog.positionOf(topic, queueIndex, groups[i])) {
+                case Some(value) => value
+                case None => LogPosition(1, 0)
+            }
+            MQBackupCursor(groups[i], position.seq, position.offset)
+        }
+    }
+
+    /** 位置是否已被全部组越过；没有组时视为未确认（不伪造已确认）。 */
+    private static func ackedByAll(committed: Array<LogPosition>, position: LogPosition): Bool {
+        if (committed.size == 0) {
+            return false
+        }
+        for (current in committed) {
+            if (current.seq < position.seq ||
+                (current.seq == position.seq && current.offset <= position.offset)) {
+                return false
+            }
+        }
+        true
+    }
+
+    /** 已投递次数：只查已存在的游标，不为备份创建新游标。 */
+    private func deliverCountOf(topic: String, queueIndex: Int64, position: LogPosition): Int64 {
+        let key = "${topic}\u{0}${queueIndex}\u{0}"
+        synchronized(lock) {
+            for ((cursorKey, cursor) in cursors) {
+                if (cursorKey.startsWith(key)) {
+                    let count = cursor.deliverCountAt(position)
+                    if (count > 0) {
+                        return count
+                    }
+                }
+            }
+            0
+        }
     }
 
     /**

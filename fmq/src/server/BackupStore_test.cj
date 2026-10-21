@@ -164,4 +164,42 @@ class BackupStoreTest {
             remove(root, recursive: true)
         }
     }
+
+    private static func samePosition(left: LogPosition, right: LogPosition): Bool {
+        left.seq == right.seq && left.offset == right.offset
+    }
+
+    @TestCase
+    public func cursorsOnlyMoveForward(): Unit {
+        let root = "/tmp/fmq_test_backup_store/cursors"
+        if (exists(root)) {
+            remove(root, recursive: true)
+        }
+        Directory.create(root, recursive: true)
+        let store = BackupStore(root, 1024 * 1024, 1)
+        try {
+            store.append(0, "/t", 0, [1u8])
+            store.saveCursor(0, "/t", 0, "g", LogPosition(2, 8))
+            @Assert(samePosition(store.loadCursor(0, "/t", 0, "g").getOrThrow(), LogPosition(2, 8)))
+            // 回退请求被忽略
+            store.saveCursor(0, "/t", 0, "g", LogPosition(1, 0))
+            @Assert(samePosition(store.loadCursor(0, "/t", 0, "g").getOrThrow(), LogPosition(2, 8)))
+            // 前进生效
+            store.saveCursor(0, "/t", 0, "g", LogPosition(3, 0))
+            @Assert(samePosition(store.loadCursor(0, "/t", 0, "g").getOrThrow(), LogPosition(3, 0)))
+            @Assert(store.cursorFloor(0, "/t", 0) == 3)
+
+            store.saveCursor(0, "/t", 0, "slow", LogPosition(1, 0))
+            @Assert(store.cursorFloor(0, "/t", 0) == 1)
+
+            let logs = store.allLogs()
+            @Assert(logs.size == 1)
+            @Assert(logs[0][0] == 0)
+            @Assert(logs[0][1] == "/t")
+            @Assert(logs[0][2] == 0)
+        } finally {
+            store.close()
+            remove(root, recursive: true)
+        }
+    }
 }
