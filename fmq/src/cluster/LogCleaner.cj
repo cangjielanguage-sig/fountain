@@ -39,13 +39,16 @@ protected class LogCleaner {
     private let backupLogs: () -> Array<(Int64, String, Int64, QueueLog)>
     /** 备份队列的保留边界：位点最小值，缺失时返回 1（保留全部）。 */
     private let backupFloor: (Int64, String, Int64) -> Int64
+    /** 段删除动作：生产走 `QueueLog.removeById`，用例注入失败以验证隔离（R2-G3）。 */
+    private let removeSegment: (QueueLog, Int64) -> Unit
     private let closed = AtomicBool(false)
     private var timer: ?Timer = None
 
     protected init(queues: QueueManager, deadLetter: DeadLetterQueue, floorOf: (String, Int64) -> Int64,
         ttl: Duration, deadMsgTTL: Duration, interval!: Duration = Duration.minute * 5,
         backupLogs!: () -> Array<(Int64, String, Int64, QueueLog)> = {=> []},
-        backupFloor!: (Int64, String, Int64) -> Int64 = {_, _, _ => 1}) {
+        backupFloor!: (Int64, String, Int64) -> Int64 = {_, _, _ => 1},
+        removeSegment!: (QueueLog, Int64) -> Unit = {log, index => log.removeById(index)}) {
         this.queues = queues
         this.deadLetter = deadLetter
         this.floorOf = floorOf
@@ -54,6 +57,7 @@ protected class LogCleaner {
         this.interval = interval
         this.backupLogs = backupLogs
         this.backupFloor = backupFloor
+        this.removeSegment = removeSegment
     }
 
     /**
@@ -73,49 +77,57 @@ protected class LogCleaner {
                     // 只有「段号小于全部组位点最小段号」的段才无人需要
                     if (meta.updateTime + ttl < now && meta.index < floorOf(topic, queueIndex)) {
                         try {
-                            queue.removeById(meta.index)
+                            removeSegment(queue, meta.index)
                             removed++
                         } catch (e: Exception) {
+                            // 段级失败单独记 ERROR：汇总日志只有计数，排障要能定位到具体段（R2-G3）
+                            log.error("cannot remove segment ${topic}/${queueIndex}#${meta.index}: ${e.message}")
                             failures.add("${topic}/${queueIndex}#${meta.index}(${e.message})")
                         }
                     }
                 }
             } catch (e: Exception) {
                 // 位点查询等前置步骤失败：只跳过该队列，其它对象照常清理
+                log.error("cannot clean queue ${topic}/${queueIndex}: ${e.message}")
                 failures.add("${topic}/${queueIndex}(${e.message})")
             }
         }
         // 备份副本队列：保留边界取该队列全部组备份位点的最小值，无位点则全部保留（A66）
-        for ((owner, topic, queueIndex, log) in backupLogs()) {
+        for ((owner, topic, queueIndex, backupLog) in backupLogs()) {
             try {
                 let floor = backupFloor(owner, topic, queueIndex)
-                for (meta in log.segments()) {
+                for (meta in backupLog.segments()) {
                     if (meta.last) {
                         continue
                     }
                     if (meta.updateTime + ttl < now && meta.index < floor) {
                         try {
-                            log.removeById(meta.index)
+                            removeSegment(backupLog, meta.index)
                             removed++
                         } catch (e: Exception) {
+                            log.error("cannot remove backup segment ${owner}/${topic}/${queueIndex}#${meta.index}: " +
+                                "${e.message}")
                             failures.add("backup ${owner}/${topic}/${queueIndex}#${meta.index}(${e.message})")
                         }
                     }
                 }
             } catch (e: Exception) {
+                log.error("cannot clean backup queue ${owner}/${topic}/${queueIndex}: ${e.message}")
                 failures.add("backup ${owner}/${topic}/${queueIndex}(${e.message})")
             }
         }
         try {
             removed += deadLetter.cleanExpired(deadMsgTTL, now)
         } catch (e: Exception) {
+            log.error("cannot clean dead-letter segments: ${e.message}")
             failures.add("dead-letter(${e.message})")
         }
+        // 轮末汇总：一个计数行就够看整轮结果，明细都在上面的 ERROR 里
         if (failures.size > 0) {
-            log.warn("cleanup skipped ${failures.size} object(s): ${String.join(failures.toArray(), delimiter: ",")}")
-        }
-        if (removed > 0) {
-            log.info("removed ${removed} expired segments")
+            log.warn("cleanup round: removed ${removed} segment(s), failed ${failures.size} object(s): " +
+                "${String.join(failures.toArray(), delimiter: ",")}")
+        } else if (removed > 0) {
+            log.info("cleanup round: removed ${removed} segment(s), failed 0")
         }
         removed
     }

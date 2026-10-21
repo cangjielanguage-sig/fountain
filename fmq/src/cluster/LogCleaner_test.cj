@@ -25,7 +25,7 @@ import fountain::f_mq.base.payload.MQTopicAssignment
 import fountain::fmq.meta.{MetaApplyResult, MetaStore}
 import fountain::f_mq.base.model.MQSubscribeGroupMeta
 import fountain::f_io.LogPosition
-import fountain::fmq.queue.{CursorCatalog, CursorStore, DeadLetterQueue, QueueManager}
+import fountain::fmq.queue.{CursorCatalog, CursorStore, DeadLetterQueue, QueueLog, QueueManager}
 import fountain::fmq.test.TestDirs
 
 @Test
@@ -281,6 +281,67 @@ class LogCleanerTest {
                 // /t 一个都没删，/u 被回收
                 @Assert(logT.segments().size == beforeT)
                 @Assert(logU.segments().size < beforeU)
+            } finally {
+                cleaner.close()
+            }
+        } finally {
+            queues.close()
+            dead.close()
+            clean(root)
+        }
+    }
+
+    /** 单个段删除失败不得中断同队列其它段，并留下含 topic/queue/段号的 ERROR（R2-G3）。 */
+    @TestCase
+    public func oneSegmentFailureDoesNotStopOthersAndLogsError(): Unit {
+        let (root, queues, dead) = make("segment_isolate", 40)
+        let log = queues.queueOf("/t", 0).getOrThrow()
+        CapturingAppender.install()
+        try {
+            fill(queues)
+            let before = log.segments()
+            @Assert(before.size >= 3)
+            let victim = before[0].index
+            let cleaner = LogCleaner(queues, dead, {_, _ => Int64.Max}, Duration.second * -1,
+                Duration.hour * 72, removeSegment: {queueLog, index =>
+                    if (index == victim) {
+                        throw Exception("cannot unlink segment")
+                    }
+                    queueLog.removeById(index)
+                })
+            try {
+                let removed = cleaner.cleanOnce(DateTime.now())
+                @Assert(removed >= 1)
+                // 只有失败的段留下
+                @Assert(log.segments().size == 2)
+                @Assert(CapturingAppender.waitFor(["/t/0#${victim}", "cannot unlink segment"]))
+                @Assert(CapturingAppender.waitFor(["removed", "failed 1"]))
+            } finally {
+                cleaner.close()
+            }
+        } finally {
+            queues.close()
+            dead.close()
+            clean(root)
+        }
+    }
+
+    /** 普通队列整队失败时，死信清理仍要照常执行（R2-G4）。 */
+    @TestCase
+    public func deadLetterStillCleansWhenQueueFails(): Unit {
+        let (root, queues, dead) = make("dead_after_queue_failure", 200)
+        try {
+            queues.queueOf("/t", 0).getOrThrow().append([1u8])
+            for (i in 0..4) {
+                dead.append(MQDeadLetterMessage("/t", 0, "g", Int64(i), 0, 1, DateTime.now(),
+                    Array<Byte>(20, repeat: UInt8(i))))
+            }
+            let cleaner = LogCleaner(queues, dead, {_, _ =>
+                throw Exception("cursor lookup boom")
+            }, Duration.hour * 72, Duration.second * -1)
+            try {
+                // 普通队列全失败，删除数全部来自死信清理
+                @Assert(cleaner.cleanOnce(DateTime.now()) >= 1)
             } finally {
                 cleaner.close()
             }
