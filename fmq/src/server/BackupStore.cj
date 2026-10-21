@@ -22,7 +22,7 @@ import std.sync.{AtomicBool, Mutex}
 import fountain::f_codec.default.DefaultCodec
 import fountain::f_io.{ByteBuffer, LogPosition}
 import fountain::f_io.LogClosedException
-import fountain::fmq.meta.MQFileNames
+import fountain::fmq.meta.{AtomicFile, MQFileNames}
 import fountain::fmq.queue.{QueueLog}
 
 /**
@@ -193,16 +193,7 @@ protected class BackupStore <: Resource {
         } finally {
             codec.release()
         }
-        let tmp = "${path}.tmp"
-        let file = File.create(tmp)
-        try {
-            file.write(bytes)
-        } finally {
-            if (!file.isClosed()) {
-                file.close()
-            }
-        }
-        rename(tmp, to: path, overwrite: true)
+        AtomicFile().write(path, bytes)
     }
 
     private static func readAll(path: String): Array<Byte> {

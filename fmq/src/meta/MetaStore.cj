@@ -624,24 +624,9 @@ protected class MetaStore <: Resource {
         MQProtocol.encodePayload<Int64>(value)
     }
 
+    /** 元数据写入统一走 `AtomicFile`：写 → fsync → rename → fsync(parent)。 */
     private func writeAtomically(path: String, bytes: Array<Byte>): Unit {
-        let parent = Path(path).parent
-        if (!exists(parent)) {
-            Directory.create(parent, recursive: true)
-        }
-        let tmp = "${path}.tmp"
-        if (exists(tmp)) {
-            remove(tmp)
-        }
-        let file = File.create(tmp)
-        try {
-            file.write(bytes)
-        } finally {
-            if (!file.isClosed()) {
-                file.close()
-            }
-        }
-        rename(tmp, to: path, overwrite: true)
+        AtomicFile().write(path, bytes)
     }
 
     private static func walkFiles(dir: String, f: (FileInfo) -> Unit): Unit {
