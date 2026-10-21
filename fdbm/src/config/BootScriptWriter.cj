@@ -17,6 +17,7 @@ package fountain::fdbm.config
 
 import std.collection.{ArrayList, HashMap}
 import std.fs.*
+import std.sync.Mutex
 import fountain::f_config.Config
 import fountain::f_dbd.common.DbdErrorCode
 import fountain::f_log.LoggerFactory
@@ -74,6 +75,9 @@ protected class BootScriptWriter {
 
     private let path: Path
     private let pending = HashMap<String, String>()
+    /** `export` 在 f_net 线程池上并发执行：`pending`、写盘与临时文件名都要串行化（G11）。 */
+    private let lock = Mutex()
+    private var serial: Int64 = 0
 
     public init(path: String) {
         let candidate = Path(path)
@@ -89,12 +93,20 @@ protected class BootScriptWriter {
             throw FdbmException(DbdErrorCode.CONFIG,
                 'key \'${key}\' is not writable through the boot script')
         }
-        Config.set([(key, value)])
-        pending[key] = value
+        synchronized(lock) {
+            Config.set([(key, value)])
+            pending[key] = value
+        }
     }
 
     /** 重写 managed 区块：已有键保留，`set` 过的覆盖；区块外内容逐字节不变。 */
     public func flush(): Unit {
+        synchronized(lock) {
+            flushLocked()
+        }
+    }
+
+    private func flushLocked(): Unit {
         let lines = readLines()
         let parsed = parseBlock(lines)
         let entries = HashMap<String, String>()
@@ -132,17 +144,19 @@ protected class BootScriptWriter {
      * @return 是否写回（内容已规范 → `false`）
      */
     public func normalize(): Bool {
-        try {
-            let source = readText()
-            let result = normalizeText(source)
-            if (result == source) {
-                return false
+        synchronized(lock) {
+            try {
+                let source = readText()
+                let result = normalizeText(source)
+                if (result == source) {
+                    return false
+                }
+                writeAtomically(result)
+                true
+            } catch (e: Exception) {
+                logger.error('failed to normalize boot script \'${path}\': ${e.message}', e)
+                false
             }
-            writeAtomically(result)
-            true
-        } catch (e: Exception) {
-            logger.error('failed to normalize boot script \'${path}\': ${e.message}', e)
-            false
         }
     }
 
@@ -363,7 +377,13 @@ protected class BootScriptWriter {
             if (trimmed.startsWith('export fdbm_') && !lines[i].startsWith(' ')) {
                 if (let Some((key, value)) <- parseExport(trimmed)) {
                     if (isWritableKey(key)) {
-                        entries[key] = value
+                        // G10：区块内优先；区块外的同名行只记 WARN 并丢弃
+                        if (entries.get(key).isSome()) {
+                            logger.warn('${key} is also exported outside the managed block; ' +
+                                'the value inside the block wins and the outside line is removed')
+                        } else {
+                            entries[key] = value
+                        }
                         i += 1
                         continue
                     }
@@ -439,7 +459,8 @@ protected class BootScriptWriter {
      */
     private func writeAtomically(content: String): Unit {
         let target = path.toString()
-        let temp = '${target}.tmp'
+        serial += 1
+        let temp = '${target}.tmp.${serial}'
         try {
             File.writeTo(Path(temp), content.toArray())
             if (FileInfo(path).canExecute()) {

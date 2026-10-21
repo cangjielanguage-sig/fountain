@@ -17,9 +17,11 @@ package fountain::fdbm.sql
 
 import std.unittest.*
 import std.unittest.testmacro.*
-import fountain::f_data.{DataAny, DataReal, DataString}
+import fountain::f_data.{DataAny, DataDateTime, DataDuration, DataList, DataReal, DataString}
+import fountain::f_data.base.*
 import fountain::f_dbd.common.DbdErrorCode
 import fountain::fdbm.exception.FdbmException
+import std.time.DateTime
 
 /** Step 3.3 `ParameterBinder`（设计 §8.2）：顺序替换与个数校验。 */
 @Test
@@ -66,6 +68,42 @@ public class ParameterBinderTest {
         ])
         let sql = SqlRenderer.render(bound)
         @Assert(sql.contains("values (1, 'a'), (2, 'b')"), true)
+    }
+
+    /** D06：白名单外的参数类型在绑定阶段失败，物理库不会收到语句。 */
+    @TestCase
+    public func rejectsNonLiteralParameterTypes(): Unit {
+        let statement = SqlParser.parse('select * from t where c = ?', 'db0')
+        @Assert(binderCode(statement, [DataAny(DataDuration(Duration.second))]) ==
+            DbdErrorCode.CONVERSION, true)
+        @Assert(binderCode(statement, [DataAny(DataList())]) == DbdErrorCode.CONVERSION, true)
+    }
+
+    /** D06：`DateTime` / 字节参数生成可解析的字面量。 */
+    @TestCase
+    public func rendersDateTimeAndBytesAsLiterals(): Unit {
+        let moment = DateTime.parse('2026-10-21T06:49:00+08:00')
+        let expected = moment.format('yyyy-MM-dd HH:mm:ss')
+        let statement = SqlParser.parse('select * from t where c = ?', 'db0')
+        let bound = ParameterBinder.bind(statement, [DataAny(DataDateTime(moment))])
+        let sql = SqlRenderer.render(bound, dialect: SqlDialect.Postgres)
+        @Assert(sql.contains("'${expected}'"), true)
+        @Assert(sql.contains('T06:49'), false)
+
+        let bytes = ParameterBinder.bind(statement, [DataAny([1u8, 2u8].toData())])
+        let rendered = SqlRenderer.render(bytes, dialect: SqlDialect.Postgres)
+        @Assert(rendered.contains("'\\x0102'"), true)
+        let mysql = SqlRenderer.render(bytes, dialect: SqlDialect.MySql)
+        @Assert(mysql.contains("X'0102'"), true)
+    }
+
+    /** G21：MySQL 族必须转义反斜杠，字面量才能闭合。 */
+    @TestCase
+    public func mysqlEscapesBackslashInStrings(): Unit {
+        let statement = SqlParser.parse('select * from t where c = ?', 'db0')
+        let bound = ParameterBinder.bind(statement, [DataAny(DataString("C:\\"))])
+        @Assert(SqlRenderer.render(bound, dialect: SqlDialect.MySql).contains("'C:\\\\'"), true)
+        @Assert(SqlRenderer.render(bound, dialect: SqlDialect.Postgres).contains("'C:\\'"), true)
     }
 }
 

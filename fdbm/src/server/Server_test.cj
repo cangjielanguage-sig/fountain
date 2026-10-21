@@ -15,9 +15,10 @@ limitations under the License.
 */
 package fountain::fdbm.server
 
-import std.collection.HashMap
+import std.collection.{ArrayList, HashMap}
 import std.database.sql.DriverManager
 import std.fs.*
+import std.sync.Mutex
 import std.time.DateTime
 import std.unittest.*
 import std.unittest.testmacro.*
@@ -57,6 +58,19 @@ public class ServerLifecycleTest {
         @Assert(InFlight.await(Duration.millisecond * 100), true)
     }
 
+    /** T04：`leave` 必须唤醒阻塞中的 `await` 并返回 `true`（不是超时 `false`）。 */
+    @TestCase
+    public func inFlightLeaveWakesBlockedAwait(): Unit {
+        InFlight.enter()
+        let awaiting = spawn {
+            InFlight.await(Duration.second * 5)
+        }
+        sleep(Duration.millisecond * 100)
+        InFlight.leave()
+        @Assert(awaiting.get(), true)
+        @Assert(InFlight.count(), 0)
+    }
+
     // ==================== SessionRegistry ====================
 
     @TestCase
@@ -74,6 +88,42 @@ public class ServerLifecycleTest {
             @Assert(harness.sessions.size(), 0)
             let recreated = harness.sessions.of(buffer)
             @Assert(recreated.id == first.id, false)
+        } finally {
+            client.close()
+            harness.close()
+        }
+    }
+
+    /** T04：同一连接并发 `of()` 只创建一个会话（不因竞态重复建）。 */
+    @TestCase
+    public func concurrentOfSameBufferCreatesOneSession(): Unit {
+        let harness = Harness(rows: [1])
+        let client = harness.client()
+        try {
+            client.transfer(Message.consume(once: true, qos: QoS.AtMostOnce,
+                data: SqlPayload('select * from t where id = 1')), Duration.second * 5)
+            let buffer = harness.lastBuffer()
+            let lock = Mutex()
+            let ids = ArrayList<String>()
+            let futures = ArrayList<Future<Unit>>()
+            for (_ in 0..8) {
+                let fut = spawn {
+                    let session = harness.sessions.of(buffer)
+                    synchronized(lock) {
+                        ids.add(session.id)
+                    }
+                }
+                futures.add(fut)
+            }
+            for (fut in futures) {
+                fut.get()
+            }
+            @Assert(ids.size, 8)
+            let first = ids[0]
+            for (id in ids) {
+                @Assert(id, first)
+            }
+            @Assert(harness.sessions.size(), 1)
         } finally {
             client.close()
             harness.close()
@@ -197,6 +247,127 @@ public class ServerLifecycleTest {
         }
     }
 
+    /** G14：驱动缺失导致构造失败后，已创建的缓存也必须释放。 */
+    @TestCase
+    public func driverFailureReleasesCache(): Unit {
+        let dir = tempDir()
+        try {
+            let port = uniquePort()
+            let source = settingsSource(port, driverName: 'postgres', cache: true,
+                cachePath: dir.toString())
+            let settings = FdbmSettings.load(source: source)
+            @Assert(codeOf { FdbmServer(settings, source: source) }, DbdErrorCode.NO_DRIVER)
+            let cache = PartitionCache(dir.toString(), None, 0)
+            cache.put('db0', 't', 'id', '1', 'p0')
+            @Assert(cache.count(), 1)
+            cache.close()
+        } finally {
+            removeTree(dir)
+        }
+    }
+
+    /** G14：构造失败时缓存/连接池必须已释放（同一 cache 目录可立即重新打开并写入）。 */
+    @TestCase
+    public func constructorFailureReleasesCacheAndPools(): Unit {
+        let dir = tempDir()
+        try {
+            let port = uniquePort()
+            let source = settingsSource(port, idmaker: 'sequence', cache: true,
+                cachePath: dir.toString())
+            let settings = FdbmSettings.load(source: source)
+            let driver = DriverManager.getDriver('mockdb').getOrThrow()
+            MOCKDB.clear()
+            MOCKDB.execution = {sql, _ =>
+                if (sql.contains('fountain_sequence')) {
+                    throw Exception('injected missing sequence table')
+                }
+                MOCKDB.rowCount = 1
+            }
+            @Assert(codeOf { FdbmServer(settings, source: source, driver: driver) },
+                DbdErrorCode.ID_GENERATOR)
+
+            // 上一个实例的缓存若未关闭，这里会看到残留状态/句柄；能正常写入即证明已释放
+            let cache = PartitionCache(dir.toString(), None, 0)
+            cache.put('db0', 't', 'id', '1', 'p0')
+            @Assert(cache.count(), 1)
+            cache.close()
+        } finally {
+            removeTree(dir)
+        }
+    }
+
+    /** G12：端口被占用时 `start()` 必须报 `CONFIG`（main 据此返回 1）。 */
+    @TestCase
+    public func listenFailureIsConfigError(): Unit {
+        let port = uniquePort()
+        let source = settingsSource(port)
+        let settings = FdbmSettings.load(source: source)
+        let driver = DriverManager.getDriver('mockdb').getOrThrow()
+        let first = FdbmServer(settings, source: source, driver: driver)
+        let started = first
+        spawn {
+            try {
+                started.start()
+            } catch (_: Exception) {
+                ()
+            }
+        }
+        try {
+            @Assert(waitForPort(port), true)
+            let second = FdbmServer(settings, source: source, driver: driver)
+            try {
+                @Assert(codeOf { second.start() }, DbdErrorCode.CONFIG)
+            } finally {
+                second.stop()
+            }
+        } finally {
+            first.stop()
+        }
+    }
+
+    /** G16：巡检与在途请求并发 100 轮，不得误关活跃会话。 */
+    @TestCase
+    public func sweepKeepsLiveSessionWhileRequestsInFlight(): Unit {
+        let harness = Harness(rows: [1], sweep: Duration.millisecond * 1)
+        let client = harness.client()
+        try {
+            client.transfer(Message.consume(once: true, qos: QoS.AtMostOnce,
+                data: SqlPayload('select * from t where id = 1')), Duration.second * 5)
+            @Assert(harness.sessions.size(), 1)
+            var i: Int64 = 0
+            while (i < 100) {
+                InFlight.enter()
+                harness.sessions.sweep()
+                @Assert(harness.sessions.size(), 1)
+                InFlight.leave()
+                i += 1
+            }
+        } finally {
+            client.close()
+            harness.close()
+        }
+    }
+
+    /** G16：同一连接重复 remove 只关闭一次（第二次是 no-op）。 */
+    @TestCase
+    public func removeTwiceIsIdempotent(): Unit {
+        let harness = Harness(rows: [1])
+        let client = harness.client()
+        try {
+            client.transfer(Message.consume(once: true, qos: QoS.AtMostOnce,
+                data: SqlPayload('select * from t where id = 1')), Duration.second * 5)
+            let buffer = harness.lastBuffer()
+            @Assert(harness.sessions.size(), 1)
+            harness.sessions.remove(buffer)
+            @Assert(harness.sessions.size(), 0)
+            harness.sessions.remove(buffer)
+            @Assert(harness.sessions.size(), 0)
+        } finally {
+            client.close()
+            harness.close()
+        }
+    }
+
     @TestCase
     public func constructorRejectsDriverNameMismatch(): Unit {
         let port = uniquePort()
@@ -251,14 +422,17 @@ public class ServerLifecycleTest {
         }
     }
 
-    private func settingsSource(port: UInt16, driverName!: String = 'mockdb'): ConfigSource {
+    private func settingsSource(port: UInt16, driverName!: String = 'mockdb',
+        idmaker!: String = 'uuid,4', cache!: Bool = false,
+        cachePath!: String = './cache'): ConfigSource {
         let values = HashMap<String, String>()
         values['fdbm_port'] = port.toString()
         values['fdbm_db'] = 'name0@127.0.0.1:3306'
         values['fdbm_db_driver_name0'] = driverName
         values['fdbm_db_database_name0'] = 'db0,db1'
-        values['fdbm_idmaker'] = 'uuid,4'
-        values['fdbm_cache'] = 'false'
+        values['fdbm_idmaker'] = idmaker
+        values['fdbm_cache'] = if (cache) { 'true' } else { 'false' }
+        values['fdbm_cachePath'] = cachePath
         values['fdbm_driverDir'] = '/tmp/definitely-missing-driver'
         values['fdbm_customDir'] = '/tmp/definitely-missing-custom'
         values['fdbm_bootScript'] = '/tmp/definitely-missing-boot.sh'

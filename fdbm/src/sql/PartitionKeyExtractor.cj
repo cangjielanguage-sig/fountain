@@ -17,7 +17,7 @@ package fountain::fdbm.sql
 
 import std.collection.ArrayList
 import std.convert.*
-import fountain::f_data.{Data, DataBool, DataNone, DataReal, DataString}
+import fountain::f_data.{DataBool, DataNone, DataReal, DataString}
 
 /** 某列的范围约束：`None` 表示该侧无界；闭开由 `loInclusive` / `hiInclusive` 表示。 */
 protected class PartitionRange {
@@ -62,8 +62,9 @@ protected class PartitionRange {
 protected struct PartitionKeyExtractor {
 
     /** 某列的字面量集合（等值/IN）。 */
-    public static func extract(expression: ?SqlExpression, table: ?String, column: String): Array<String> {
-        let context = ExtractContext(table, column)
+    public static func extract(expression: ?SqlExpression, table: ?String, column: String,
+        qualifiers!: Array<String> = []): Array<String> {
+        let context = ExtractContext(table, column, qualifiers: qualifiers)
         match (expression) {
             case Some(value) =>
                 if (!context.collect(value)) {
@@ -76,8 +77,8 @@ protected struct PartitionKeyExtractor {
 
     /** 某列的范围约束；不可判定（OR/NOT/非整数字面量）→ `None`。 */
     public static func extractRange(expression: ?SqlExpression, table: ?String,
-        column: String): ?PartitionRange {
-        let context = RangeContext(table, column)
+        column: String, qualifiers!: Array<String> = []): ?PartitionRange {
+        let context = RangeContext(table, column, qualifiers: qualifiers)
         let result = match (expression) {
             case Some(value) => context.collect(value)
             case None => RangeResult(false)
@@ -88,23 +89,33 @@ protected struct PartitionKeyExtractor {
         Some(PartitionRange(result.lo, result.loInclusive, result.hi, result.hiInclusive))
     }
 
-    /** 列是否命中目标（表限定名可为别名/表名；无限定视为命中）。 */
-    public static func matches(expression: SqlExpression, table: ?String, column: String): Bool {
+    /** 列是否命中目标（限定名可为表名或别名；ASCII 大小写不敏感；无限定视为命中）。 */
+    public static func matches(expression: SqlExpression, table: ?String, column: String,
+        qualifiers!: Array<String> = []): Bool {
         match (expression) {
             case c: ColumnExpression =>
-                if (c.column != column) {
+                if (!asciiEquals(c.column, column)) {
                     return false
                 }
                 match (c.table) {
                     case Some(qualifier) =>
                         match (table) {
-                            case Some(name) => qualifier == name
+                            case Some(name) => asciiEquals(qualifier, name) || containsQualifier(qualifiers, qualifier)
                             case None => false
                         }
                     case None => true
                 }
             case _ => false
         }
+    }
+
+    private static func containsQualifier(qualifiers: Array<String>, value: String): Bool {
+        for (candidate in qualifiers) {
+            if (asciiEquals(candidate, value)) {
+                return true
+            }
+        }
+        false
     }
 
     /** 字面量 → 路由字符串；NULL 或无法表达 → `None`。 */
@@ -141,11 +152,13 @@ protected struct PartitionKeyExtractor {
 class ExtractContext {
     private let table: ?String
     private let column: String
+    private let qualifiers: Array<String>
     let values = ArrayList<String>()
 
-    init(table: ?String, column: String) {
+    init(table: ?String, column: String, qualifiers!: Array<String> = []) {
         this.table = table
         this.column = column
+        this.qualifiers = qualifiers
     }
 
     /** @return `false` 表示遇到 OR/NOT（不可安全收敛）。 */
@@ -167,7 +180,7 @@ class ExtractContext {
                 if (i.negated) {
                     return true
                 }
-                if (!PartitionKeyExtractor.matches(i.operand, table, column)) {
+                if (!PartitionKeyExtractor.matches(i.operand, table, column, qualifiers: qualifiers)) {
                     return true
                 }
                 for (value in i.values) {
@@ -183,7 +196,7 @@ class ExtractContext {
     }
 
     private func collectEquality(columnSide: SqlExpression, valueSide: SqlExpression): Unit {
-        if (PartitionKeyExtractor.matches(columnSide, table, column)) {
+        if (PartitionKeyExtractor.matches(columnSide, table, column, qualifiers: qualifiers)) {
             match (PartitionKeyExtractor.literalString(valueSide)) {
                 case Some(text) => values.add(text)
                 case None => ()
@@ -253,10 +266,12 @@ class RangeResult {
 class RangeContext {
     private let table: ?String
     private let column: String
+    private let qualifiers: Array<String>
 
-    init(table: ?String, column: String) {
+    init(table: ?String, column: String, qualifiers!: Array<String> = []) {
         this.table = table
         this.column = column
+        this.qualifiers = qualifiers
     }
 
     func collect(expression: SqlExpression): RangeResult {
@@ -288,8 +303,8 @@ class RangeContext {
         var columnSide = binary.left
         var valueSide = binary.right
         var op = binary.op
-        if (!PartitionKeyExtractor.matches(columnSide, table, column)) {
-            if (PartitionKeyExtractor.matches(valueSide, table, column)) {
+        if (!PartitionKeyExtractor.matches(columnSide, table, column, qualifiers: qualifiers)) {
+            if (PartitionKeyExtractor.matches(valueSide, table, column, qualifiers: qualifiers)) {
                 // `100 < id` ≡ `id > 100`
                 columnSide = binary.right
                 valueSide = binary.left

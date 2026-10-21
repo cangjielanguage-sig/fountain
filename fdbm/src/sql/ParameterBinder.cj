@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::fdbm.sql
 
 import std.collection.ArrayList
+import std.reflect.TypeInfo
 import fountain::f_data.DataAny
 import fountain::f_dbd.common.DbdErrorCode
 import fountain::fdbm.exception.FdbmException
@@ -50,7 +51,8 @@ class BindContext {
             case s: SelectStatement =>
                 let columns = ArrayList<SelectItem>()
                 for (item in s.columns) {
-                    columns.add(SelectItem(bindExpression(item.expression), item.alias))
+                    columns.add(SelectItem(bindExpression(item.expression), item.alias,
+                        aliasQuoted: item.aliasQuoted))
                 }
                 let from = ArrayList<TableRef>()
                 for (table in s.from) {
@@ -139,7 +141,13 @@ class BindContext {
                         'missing value for parameter ${p.index}')
                 }
                 used += 1
-                LiteralExpression(params[p.index].data)
+                let data = params[p.index].data
+                // 类型白名单：不支持的字面量在**绑定阶段**失败，物理库不会收到语句（D06）
+                if (!SqlRenderer.isLiteral(data)) {
+                    throw FdbmException(DbdErrorCode.CONVERSION,
+                        'parameter ${p.index} of type ${TypeInfo.of(data)} cannot be used as a SQL literal')
+                }
+                LiteralExpression(data)
             case b: BinaryExpression =>
                 BinaryExpression(b.op, bindExpression(b.left), bindExpression(b.right))
             case i: InExpression =>

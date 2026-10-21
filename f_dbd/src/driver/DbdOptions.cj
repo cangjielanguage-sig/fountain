@@ -55,27 +55,41 @@ class DbdOptions {
                 case None => logger.warn('illegal ${SqlOption.FetchRows}: ${value}, ignored')
             }
         } else if (key == SqlOption.ConnectionTimeout) {
-            connectionTimeout = timeoutOf(key, value)
+            match (timeoutOf(key, value)) {
+                case Some(parsed) => connectionTimeout = Some(parsed)
+                case None => ()   // 保留原值：配置写错不得把已配置的超时清成"无限等待"
+            }
         } else if (key == SqlOption.QueryTimeout) {
-            queryTimeout = timeoutOf(key, value)
+            match (timeoutOf(key, value)) {
+                case Some(parsed) => queryTimeout = Some(parsed)
+                case None => ()
+            }
         } else if (key == SqlOption.UpdateTimeout) {
-            updateTimeout = timeoutOf(key, value)
+            match (timeoutOf(key, value)) {
+                case Some(parsed) => updateTimeout = Some(parsed)
+                case None => ()
+            }
         } else {
             logger.debug{'ignored unknown dbd option ${key}'}
         }
     }
 
-    /** 毫秒数 → `Duration`；非法时记 WARN 并保持原值不变（配置写错不该让请求无限等待）。 */
+    /**
+     * 毫秒数 → `Duration`；非法、`0`、负数都记 WARN 并返回 `None`。
+     *
+     * `None` 的语义是「本次不修改」，由 `apply` 保留原值——配置写错不该让请求无限等待。
+     */
     private static func timeoutOf(key: String, value: String): ?Duration {
         match (Int64.tryParse(value)) {
             case Some(ms) =>
                 if (ms <= 0) {
+                    logger.warn('illegal ${key}: ${value}, keeping the current value')
                     None<Duration>
                 } else {
                     Some(Duration.millisecond * ms)
                 }
             case None =>
-                logger.warn('illegal ${key}: ${value}, ignored')
+                logger.warn('illegal ${key}: ${value}, keeping the current value')
                 None<Duration>
         }
     }

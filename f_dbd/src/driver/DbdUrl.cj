@@ -59,28 +59,28 @@ public class DbdUrl {
                 }
             case None => throw DbdException(CONFIG, 'illegal fdbm url \'${url}\': scheme must be ${SCHEME}')
         }
-        let rest = take(url, SCHEME_PREFIX.size, countOf(url))
+        let rest = url[SCHEME_PREFIX.size..url.size]
         let slash = match (rest.indexOf('/')) {
             case Some(i) => i
             case None => throw DbdException(CONFIG, 'illegal fdbm url \'${url}\': database is missing')
         }
-        let database = firstSegmentOf(take(rest, slash + 1, countOf(rest)))
+        let database = percentDecode(firstSegmentOf(rest[slash + 1..rest.size]), url)
         if (database.isEmpty()) {
             throw DbdException(CONFIG, 'illegal fdbm url \'${url}\': database is empty')
         }
-        let authority = take(rest, 0, slash)
+        let authority = rest[0..slash]
         var user = ''
         var password = ''
         var hostPort = authority
         match (authority.lastIndexOf('@')) {
             case Some(at) =>
-                hostPort = take(authority, at + 1, countOf(authority))
+                hostPort = authority[at + 1..authority.size]
                 // 密码里的字面 `:` 必须写成 `%3A`，故按**第一个** `:` 切 user / password
-                match (take(authority, 0, at).indexOf(':')) {
+                match (authority[0..at].indexOf(':')) {
                     case Some(colon) =>
-                        user = percentDecode(take(authority, 0, colon))
-                        password = percentDecode(take(authority, colon + 1, at))
-                    case None => user = percentDecode(take(authority, 0, at))
+                        user = percentDecode(authority[0..colon], url)
+                        password = percentDecode(authority[colon + 1..at], url)
+                    case None => user = percentDecode(authority[0..at], url)
                 }
             case None => ()
         }
@@ -90,8 +90,8 @@ public class DbdUrl {
             // IPv6 字面量：`[::1]:8112`
             match (hostPort.indexOf(']')) {
                 case Some(bracket) =>
-                    host = take(hostPort, 0, bracket + 1)
-                    let tail = take(hostPort, bracket + 1, countOf(hostPort))
+                    host = hostPort[0..bracket + 1]
+                    let tail = hostPort[bracket + 1..hostPort.size]
                     if (tail.startsWith(':')) {
                         port = parsePort(tail.removePrefix(':'), url)
                     }
@@ -100,8 +100,8 @@ public class DbdUrl {
         } else {
             match (hostPort.indexOf(':')) {
                 case Some(colon) =>
-                    host = take(hostPort, 0, colon)
-                    port = parsePort(take(hostPort, colon + 1, countOf(hostPort)), url)
+                    host = hostPort[0..colon]
+                    port = parsePort(hostPort[colon + 1..hostPort.size], url)
                 case None => ()
             }
         }
@@ -163,7 +163,7 @@ public class DbdUrl {
 
 /** `database` 取路径首段：`/db?x=1` 与 `/db/` 都得到 `db`。 */
 private func firstSegmentOf(value: String): String {
-    var end = countOf(value)
+    var end = value.size
     for (sep in ['?', '/']) {
         match (value.indexOf(sep)) {
             case Some(i) =>
@@ -173,48 +173,64 @@ private func firstSegmentOf(value: String): String {
             case None => ()
         }
     }
-    take(value, 0, end)
+    value[0..end]
 }
 
-/** `[start, end)` 的子串：仓颉 `String` 无 `substring`，按 `Rune` 切分后拼回。 */
-private func take(value: String, start: Int64, end: Int64): String {
-    let runes = value.toRuneArray()
-    let out = ArrayList<Rune>()
-    var i = if (start < 0) { 0 } else { start }
-    let stop = if (end > runes.size) { runes.size } else { end }
-    while (i < stop) {
-        out.add(runes[i])
-        i += 1
+/** 两位十六进制 → 字节；非十六进制 → `None`。 */
+private func hexByte(high: Byte, low: Byte): ?Byte {
+    let h = nibbleOf(high)
+    let l = nibbleOf(low)
+    match ((h, l)) {
+        case (Some(hi), Some(lo)) => Some(UInt8((hi << 4) | lo))
+        case _ => None<Byte>
     }
-    String(out.toArray())
 }
 
-private func countOf(value: String): Int64 {
-    value.toRuneArray().size
+private func nibbleOf(c: Byte): ?UInt8 {
+    if (c >= UInt8(UInt32(r'0')) && c <= UInt8(UInt32(r'9'))) {
+        return Some(UInt8(c - UInt8(UInt32(r'0'))))
+    }
+    if (c >= UInt8(UInt32(r'a')) && c <= UInt8(UInt32(r'f'))) {
+        return Some(UInt8(c - UInt8(UInt32(r'a')) + 10u8))
+    }
+    if (c >= UInt8(UInt32(r'A')) && c <= UInt8(UInt32(r'F'))) {
+        return Some(UInt8(c - UInt8(UInt32(r'A')) + 10u8))
+    }
+    None<UInt8>
 }
 
-/** `%XX` → 原字符；残缺（`%` 后不足两位或不是十六进制）时 `%` 原样保留。 */
-private func percentDecode(value: String): String {
-    let runes = value.toRuneArray()
-    let out = ArrayList<Rune>()
+/**
+ * `%XX` 按**字节**解码：每个转义写回一个字节，其它字符按其 UTF-8 字节原样写入，
+ * 最后整体按 UTF-8 还原。非法 UTF-8 或残缺 `%` → `DbdException(CONFIG)`（D12）。
+ */
+private func percentDecode(value: String, url: String): String {
+    let bytes = value.unsafeBytes()
+    let out = ArrayList<Byte>()
     var i: Int64 = 0
-    while (i < runes.size) {
-        if (runes[i] == r'%' && i + 2 < runes.size) {
-            let hex = String([runes[i + 1], runes[i + 2]])
-            match (Int64.tryParse(hex, radix: 16)) {
-                case Some(n) =>
-                    out.add(Rune(UInt32(n)))
+    while (i < bytes.size) {
+        let b = bytes[i]
+        if (b == UInt8(UInt32(r'%'))) {
+            if (i + 2 >= bytes.size) {
+                throw DbdException(CONFIG, 'illegal fdbm url \'${url}\': truncated percent escape in \'${value}\'')
+            }
+            match (hexByte(bytes[i + 1], bytes[i + 2])) {
+                case Some(decoded) =>
+                    out.add(decoded)
                     i += 3
                 case None =>
-                    out.add(runes[i])
-                    i += 1
+                    throw DbdException(CONFIG,
+                        'illegal fdbm url \'${url}\': bad percent escape in \'${value}\'')
             }
         } else {
-            out.add(runes[i])
+            out.add(b)
             i += 1
         }
     }
-    String(out.toArray())
+    try {
+        String.fromUtf8(out.toArray())
+    } catch (_: Exception) {
+        throw DbdException(CONFIG, 'illegal fdbm url \'${url}\': credentials are not valid UTF-8')
+    }
 }
 
 /**

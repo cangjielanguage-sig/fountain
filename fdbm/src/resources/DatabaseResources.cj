@@ -19,9 +19,10 @@ import std.collection.{ArrayList, HashMap}
 import std.database.sql.{Connection, DriverManager}
 import std.sync.AtomicBool
 import fountain::f_concurrent.{Int64Weight, LoadBalance, LoadBalanceAlgo, RoundRobin}
-import fountain::f_dbpool.DatabasePool
+import fountain::f_dbpool.{ConnectionException, DatabasePool}
 import fountain::f_dbd.common.DbdErrorCode
 import fountain::fdbm.config.{DatabaseNodeConfig, LoadBalanceConfig, PoolConfig}
+import fountain::f_log.LoggerFactory
 import fountain::fdbm.exception.FdbmException
 
 /** 资源访问抽象（设计 §5）：执行器只依赖它，用例注入 `FakeNodeAccessor`。 */
@@ -43,11 +44,14 @@ protected interface NodeAccessor {
  * 权重为 0 的节点不注册（累计权重会覆盖前一个桶）。
  */
 protected class DatabaseResources <: NodeAccessor & Resource {
+    private static let logger = LoggerFactory.getLogger('fountain::fdbm.resources.DatabaseResources')
     private let readNodes_: HashMap<String, LoadBalance<Int64, Unit, Connection>>
     private let writeNodes_: HashMap<String, LoadBalance<Int64, Unit, Connection>>
     private let writePools: HashMap<String, Array<DatabasePool>>
     private let readPoolNames: HashMap<String, Array<String>>
     private let pools: Array<DatabasePool>
+    /** 每池的可读标签（`<node>/<database>`），停止日志用。 */
+    private let poolLabels: Array<String>
     private let names: Array<String>
     private let driverNames: HashMap<String, String>
     private let closed = AtomicBool(false)
@@ -55,9 +59,11 @@ protected class DatabaseResources <: NodeAccessor & Resource {
     public init(nodes: Array<DatabaseNodeConfig>, poolConfig: PoolConfig,
         weights: LoadBalanceConfig) {
         let builtPools = ArrayList<DatabasePool>()
+        let labels = ArrayList<String>()
         let names = ArrayList<String>()
         let driverNames = HashMap<String, String>()
         let byDatabase = HashMap<String, ArrayList<(String, DatabasePool, Int64, Int64)>>()
+        try {
         for (node in nodes) {
             for (database in node.databases) {
                 let driver = match (DriverManager.getDriver(node.driverName)) {
@@ -80,6 +86,7 @@ protected class DatabaseResources <: NodeAccessor & Resource {
                     maxWaiting: poolConfig.maxWaiting,
                     checkSql: poolConfig.checkSql)
                 builtPools.add(pool)
+                labels.add('${node.name}/${database}')
                 if (!names.contains(database)) {
                     names.add(database)
                 }
@@ -95,7 +102,19 @@ protected class DatabaseResources <: NodeAccessor & Resource {
                 entries.add((node.name, pool, weight.write, weight.read))
             }
         }
+        } catch (e: Exception) {
+            // G14：建池循环中途失败 → 先关闭已建池，再抛出
+            for (pool in builtPools) {
+                try {
+                    pool.close()
+                } catch (_: Exception) {
+                    ()
+                }
+            }
+            throw e
+        }
         this.pools = builtPools.toArray()
+        this.poolLabels = labels.toArray()
         this.names = names.toArray()
         this.driverNames = driverNames
 
@@ -146,7 +165,7 @@ protected class DatabaseResources <: NodeAccessor & Resource {
     public func selectRead(database: String): Connection {
         ensureOpen()
         match (readNodes_.get(database)) {
-            case Some(balance) => balance.call(())
+            case Some(balance) => borrow(database, balance)
             case None => throw FdbmException(DbdErrorCode.ROUTE_FAILED,
                 'physical database \'${database}\' has no read node')
         }
@@ -155,9 +174,20 @@ protected class DatabaseResources <: NodeAccessor & Resource {
     public func selectWrite(database: String): Connection {
         ensureOpen()
         match (writeNodes_.get(database)) {
-            case Some(balance) => balance.call(())
+            case Some(balance) => borrow(database, balance)
             case None => throw FdbmException(DbdErrorCode.ROUTE_FAILED,
                 'physical database \'${database}\' has no write node')
+        }
+    }
+
+    /** 池耗尽/等待超时 → `TIMEOUT`；不得冒泡到协议层退化为 `INTERNAL`（G07）。 */
+    private static func borrow(database: String,
+        balance: LoadBalance<Int64, Unit, Connection>): Connection {
+        try {
+            balance.call(())
+        } catch (e: ConnectionException) {
+            throw FdbmException(DbdErrorCode.TIMEOUT,
+                'cannot borrow a connection from \'${database}\': ${e.message}', e)
         }
     }
 
@@ -171,7 +201,12 @@ protected class DatabaseResources <: NodeAccessor & Resource {
         let connections = ArrayList<Connection>()
         try {
             for (pool in targets) {
-                connections.add(pool.connect())
+                try {
+                    connections.add(pool.connect())
+                } catch (e: ConnectionException) {
+                    throw FdbmException(DbdErrorCode.TIMEOUT,
+                        'cannot borrow a connection from \'${database}\': ${e.message}', e)
+                }
             }
         } catch (e: Exception) {
             for (connection in connections) {
@@ -222,20 +257,29 @@ protected class DatabaseResources <: NodeAccessor & Resource {
         }
     }
 
-    /** 优雅停止：逐池 `closeAndAwait`（调用方须先归还全部连接）。 */
+    /** 优雅停止：逐池 `closeAndAwait`（调用方须先归还全部连接）；失败/超时逐池记 WARN（G13）。 */
     public func closeAndAwait(timeout!: Duration): Bool {
+        // 参数错误必须直接暴露，不能被下面的 `catch` 降级成 `false`（T05）。
+        if (timeout <= Duration.Zero || timeout == Duration.Max) {
+            throw IllegalArgumentException('database resources termination requires a positive finite timeout')
+        }
         if (closed.swap(true)) {
             return true
         }
         var all = true
-        for (pool in pools) {
+        var index: Int64 = 0
+        while (index < pools.size) {
+            let label = if (index < poolLabels.size) { poolLabels[index] } else { index.toString() }
             try {
-                if (!pool.closeAndAwait(timeout: timeout)) {
+                if (!pools[index].closeAndAwait(timeout: timeout)) {
+                    logger.warn('database pool ${label} did not terminate within ${timeout}')
                     all = false
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                logger.warn('failed to close database pool ${label}: ${e.message}')
                 all = false
             }
+            index += 1
         }
         all
     }

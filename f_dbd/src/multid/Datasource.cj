@@ -113,12 +113,23 @@ public class MultiDatasource <: Datasource {
         try {
             loadbalance.call(())
         } catch (e: ConnectionException) {
-            if (e.message.contains('database pool is closed')) {
+            // 只依据状态判定（G06）：消息文本可被本地化/改写，不得作为契约
+            if (closed.load() || anyPoolClosed()) {
                 throw DbdException(DbdErrorCode.CONFIG, 'a node pool is closed: ${e.message}', cause: e)
             }
             throw DbdException(DbdErrorCode.TIMEOUT, 'cannot borrow a connection from the node pool: ${e.message}',
                 cause: e)
         }
+    }
+
+    /** 任一节点池已关闭（`MultiDatasource` 关闭后池也会被关闭）。 */
+    private func anyPoolClosed(): Bool {
+        for (pool in pools) {
+            if (pool.isClosed()) {
+                return true
+            }
+        }
+        false
     }
 
     /** 转发到每个节点；对已建立的连接不生效（各自持有选项副本）。 */

@@ -31,6 +31,7 @@ protected class FdbmSettings {
     public let partitions: Array<PartitionRuleConfig>
     public let partitionStep: Int64
     public let globalTables: Array<GlobalTableConfig>
+    public let catalog: LogicalCatalog
     public let logicalDatabases: HashMap<String, Array<String>>
     public let defaultDatabase: String
     public let idmaker: IdMakerConfig
@@ -46,7 +47,7 @@ protected class FdbmSettings {
 
     private init(port: UInt16, nodes: Array<DatabaseNodeConfig>, pool: PoolConfig,
         loadBalance: LoadBalanceConfig, partitions: Array<PartitionRuleConfig>, partitionStep: Int64,
-        globalTables: Array<GlobalTableConfig>, logicalDatabases: HashMap<String, Array<String>>,
+        globalTables: Array<GlobalTableConfig>, catalog: LogicalCatalog,
         defaultDatabase: String, idmaker: IdMakerConfig, cache: CacheConfig,
         driverDir: String, customDir: String, bootScript: String, sessionSweepInterval: Duration,
         shutdownTimeout: Duration, checkDuration: Duration, unavailableChecked: Int64,
@@ -58,7 +59,8 @@ protected class FdbmSettings {
         this.partitions = partitions
         this.partitionStep = partitionStep
         this.globalTables = globalTables
-        this.logicalDatabases = logicalDatabases
+        this.catalog = catalog
+        this.logicalDatabases = catalog.toMap()
         this.defaultDatabase = defaultDatabase
         this.idmaker = idmaker
         this.cache = cache
@@ -75,17 +77,19 @@ protected class FdbmSettings {
     /** 读取并解析全部配置；任何单项非法都抛 `FdbmException(CONFIG)`（含配置项名与原始值）。 */
     public static func load(source!: ConfigSource = EnvConfigSource()): FdbmSettings {
         let nodes = FdbmConfig.getNodes(source: source)
-        let logicals = FdbmConfig.getLogicalDatabases(nodes, source: source)
+        let partitions = FdbmConfig.getPartitions(source: source)
+        let globalTables = FdbmConfig.getGlobalTables(source: source)
+        let catalog = LogicalCatalog.of(nodes, partitions, source)
         FdbmSettings(
             FdbmConfig.getPort(source: source),
             nodes,
             FdbmConfig.getPool(source: source),
             FdbmConfig.getLoadBalance(source: source),
-            FdbmConfig.getPartitions(source: source),
+            partitions,
             FdbmConfig.getPartitionStep(source: source),
-            FdbmConfig.getGlobalTables(source: source),
-            logicals,
-            defaultDatabaseOf(nodes, logicals),
+            globalTables,
+            catalog,
+            catalog.default(),
             FdbmConfig.getIdMaker(source: source),
             FdbmConfig.getCache(source: source),
             FdbmConfig.getDriverDir(source: source),
@@ -95,24 +99,7 @@ protected class FdbmSettings {
             FdbmConfig.getShutdownTimeout(source: source),
             FdbmConfig.getCheckDuration(source: source),
             FdbmConfig.getUnavailableChecked(source: source),
-            FdbmConfig.getSequenceDatabase(source: source, nodes: Some(nodes))
+            FdbmConfig.getSequenceDatabase(source: source, catalog: catalog)
         )
-    }
-
-    /**
-     * 会话的默认逻辑库。
-     *
-     * 协议目前没有"连接时声明 database"的报文（f_dbd 只把 database 放在 URL 里做元信息），
-     * 因此在只有一个逻辑库时取它；多逻辑库时取第一个节点的第一个物理库。
-     * 该偏差登记在 `详细设计.md` §9.1。
-     */
-    private static func defaultDatabaseOf(nodes: Array<DatabaseNodeConfig>,
-        logicals: HashMap<String, Array<String>>): String {
-        if (logicals.size == 1) {
-            for ((name, _) in logicals) {
-                return name
-            }
-        }
-        nodes[0].databases[0]
     }
 }

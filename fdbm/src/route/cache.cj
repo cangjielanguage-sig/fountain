@@ -15,9 +15,11 @@ limitations under the License.
 */
 package fountain::fdbm.route
 
-import std.sync.Mutex
+import std.sync.{AtomicBool, Mutex}
+import fountain::f_dbd.common.DbdErrorCode
 import fountain::f_log.LoggerFactory
 import fountain::f_store.Store
+import fountain::fdbm.exception.FdbmException
 
 /**
  * 分库缓存（设计 §6.3）：`f_store` 落地，键 `<logical>.<table>.<column>:<value>`。
@@ -32,7 +34,7 @@ protected class PartitionCache <: Resource {
     private let capacity: Int64
     private let lock = Mutex()
     private var count_: Int64 = 0
-    private var closed_: Bool = false
+    private let closed_ = AtomicBool(false)
     private var capacityWarned: Bool = false
 
     public init(path: String, expire: ?Duration, size: Int64) {
@@ -50,22 +52,25 @@ protected class PartitionCache <: Resource {
     }
 
     public func get(logical: String, table: String, column: String, value: String): ?String {
-        if (closed_) {
-            return None<String>
-        }
-        match (store.get(keyOf(logical, table, column, value))) {
-            case Some(bytes) => Some(String.fromUtf8(bytes))
-            case None => None<String>
+        synchronized(lock) {
+            // 关闭与读写必须共用同一把锁：否则检查通过后 close() 关掉 store，读写会抛非 CACHE 异常（G15）
+            if (closed_.load()) {
+                throw FdbmException(DbdErrorCode.CACHE, 'partition cache is closed')
+            }
+            match (store.get(keyOf(logical, table, column, value))) {
+                case Some(bytes) => Some(String.fromUtf8(bytes))
+                case None => None<String>
+            }
         }
     }
 
     public func put(logical: String, table: String, column: String, value: String,
         physical: String): Unit {
-        if (closed_) {
-            return
-        }
         let key = keyOf(logical, table, column, value)
         synchronized(lock) {
+            if (closed_.load()) {
+                throw FdbmException(DbdErrorCode.CACHE, 'partition cache is closed')
+            }
             if (capacity > 0 && count_ >= capacity && store.get(key).isNone()) {
                 if (!capacityWarned) {
                     logger.warn('partition cache reached its capacity ${capacity}; new keys are not cached')
@@ -85,10 +90,10 @@ protected class PartitionCache <: Resource {
     }
 
     public func remove(logical: String, table: String, column: String, value: String): Unit {
-        if (closed_) {
-            return
-        }
         synchronized(lock) {
+            if (closed_.load()) {
+                throw FdbmException(DbdErrorCode.CACHE, 'partition cache is closed')
+            }
             if (store.remove(keyOf(logical, table, column, value)).isSome()) {
                 count_ -= 1
             }
@@ -103,20 +108,19 @@ protected class PartitionCache <: Resource {
 
     public func close(): Unit {
         synchronized(lock) {
-            if (closed_) {
+            if (closed_.swap(true)) {
                 return
             }
-            closed_ = true
             try {
                 store.close()
-            } catch (_: Exception) {
-                ()
+            } catch (e: Exception) {
+                logger.warn('failed to close the partition cache: ${e.message}')
             }
         }
     }
 
     public func isClosed(): Bool {
-        closed_
+        closed_.load()
     }
 
     private func keyOf(logical: String, table: String, column: String, value: String): Array<Byte> {

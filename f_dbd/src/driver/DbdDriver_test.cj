@@ -17,8 +17,10 @@ package fountain::f_dbd.driver
 
 import std.collection.Map
 import std.database.sql.*
+import std.database.sql.{DriverManager, SqlOption}
 import std.unittest.*
 import std.unittest.testmacro.*
+import fountain::f_config.Config
 import fountain::f_version.FountainVersion
 import fountain::f_dbd.common.DbdErrorCode
 import fountain::f_dbd.common.UpdateResultPayload
@@ -27,17 +29,37 @@ import fountain::f_dbd.common.UpdateResultPayload
 @Test
 public class DbdDriverTest {
 
-    /** 驱动以 `'fdbm'` 注册在 `DriverManager`，且元信息符合设计。 */
+    /** 注册名 = `dbd_driverName`（显式配置，不依赖外部 env），且元信息符合设计。 */
     @TestCase
     public func registersItself(): Unit {
+        Config.set([('dbd_driverName', 'postgres')])
         let driver = dbdDriver()
-        @Assert(driver.name, 'fdbm')
+        @Assert(driver.name, 'postgres')
         @Assert(driver.preferredPooling, true)
         @Assert(driver.version, FountainVersion)
-        match (DriverManager.getDriver('fdbm')) {
-            case Some(found) => @Assert(found.name, 'fdbm')
+        match (DriverManager.getDriver('postgres')) {
+            case Some(found) => @Assert(found.name, 'postgres')
             case None => @Assert(false, true)
         }
+    }
+
+    /** G01：非法、0、负数超时都保留原值，`copy()` 返回独立副本。 */
+    @TestCase
+    public func illegalTimeoutKeepsPreviousValue(): Unit {
+        let options = DbdOptions()
+        options.apply(SqlOption.QueryTimeout, '30000')
+        @Assert(options.queryTimeout.getOrThrow(), Duration.millisecond * 30000)
+        options.apply(SqlOption.QueryTimeout, '30s')
+        @Assert(options.queryTimeout.getOrThrow(), Duration.millisecond * 30000)
+        options.apply(SqlOption.QueryTimeout, '0')
+        @Assert(options.queryTimeout.getOrThrow(), Duration.millisecond * 30000)
+        options.apply(SqlOption.QueryTimeout, '-1')
+        @Assert(options.queryTimeout.getOrThrow(), Duration.millisecond * 30000)
+
+        let cloned = options.copy()
+        cloned.apply(SqlOption.QueryTimeout, '1000')
+        @Assert(cloned.queryTimeout.getOrThrow(), Duration.millisecond * 1000)
+        @Assert(options.queryTimeout.getOrThrow(), Duration.millisecond * 30000)
     }
 
     /** `open` 只解析 URL，不建立任何 TCP；一个没有监听者的端口也能立即返回。 */

@@ -15,21 +15,31 @@ limitations under the License.
 */
 package fountain::f_dbd
 
+import std.database.sql.DriverManager
 import std.unittest.*
 import std.unittest.testmacro.*
-import fountain::f_version.FountainVersion
 
 /**
- * 阶段 0 的平凡用例：证明 `cjpm test` 在本模块可跑（骨架尚未有实现代码时的占位）。
- *
- * 断言框架版本非空即可——它同时钉住"根包能 import `fountain::f_version`"这一依赖关系。
+ * 根包公开入口（G02）：只 `import fountain::f_dbd.*` 即可取到常用类型与版本入口。
  */
 @Test
 public class DbdTest {
 
     @TestCase
-    public func fountainVersionIsNotEmpty(): Unit {
-        @Assert(FountainVersion.size > 0)
-        @Assert(FountainVersion.contains('fountain'))
+    public func versionEntryIsNotEmpty(): Unit {
+        @Assert(fdBDVersion().size > 0)
+        @Assert(fdBDVersion().contains('fountain'))
+    }
+
+    @TestCase
+    public func rootPackageReexportsCommonTypes(): Unit {
+        // 编译期即验证重导出：不写深层包路径也能构造这些类型
+        let url = DbdUrl.parse('fdbm://u:p@h:1/db0')
+        @Assert(url.database, 'db0')
+        @Assert(DbdErrorCode.CONFIG.value > 0, true)
+        @Assert(DbdException(DbdErrorCode.CONFIG, 'x').code, DbdErrorCode.CONFIG)
+        let multi = MultiDUrl.parse('multidbm://h1:1,h2:2/db0')
+        @Assert(multi.database, 'db0')
+        @Assert(DriverManager.getDriver('multidbd').isSome(), true)
     }
 }

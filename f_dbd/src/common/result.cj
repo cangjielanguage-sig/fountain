@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_dbd.common
 
-import std.collection.ArrayList
+import std.collection.{ArrayList, HashSet}
 import std.database.sql.*
 import std.io.InputStream
 import std.reflect.TypeInfo
@@ -53,6 +53,8 @@ public class QueryResultImpl <: QueryResult {
     private let infos_: Array<ColumnInfo>
     /** 当前行已打开的流（按列索引复用句柄：同一行同一列只打开一次，见 `openStreamAsAny`）。 */
     private let streams_: ArrayList<DbdInputStream> = ArrayList<DbdInputStream>()
+    /** 本行已探测为 SQL NULL 的流列（避免重复探测）。 */
+    private let nullStreams_: HashSet<Int64> = HashSet<Int64>()
     /** 当前行是否可读（最后一次 `next()` 返回 `true`）。 */
     private var rowValid: Bool = false
     /** 结果集是否已耗尽（`next()` 返回过 `false`，终态）。 */
@@ -122,9 +124,18 @@ public class QueryResultImpl <: QueryResult {
      */
     public func getOrNull<T>(index: Int64): ?T {
         ensureReadable(index)
+        // G05：流列只能按 InputStream 读；标量目标必须在**发请求之前**失败
+        if (isStreamColumn(index) && !isStreamTarget<T>()) {
+            throw DbdException(CONVERSION,
+                'column ${index} is a stream column; read it as InputStream')
+        }
         if (isStreamTarget<T>()) {
-            // 流列只打开句柄，**不发列读请求**：首次 `read` 才发块请求（§3.10、`DbdInputStream`）
-            return Some(asTarget<T>(openStreamAsAny(index), index))
+            // G04：首次打开时发 `CELL(index, -1)` 探测 NULL；首块作为流的初始缓冲
+            let opened = openStreamAsAny(index)
+            if (opened is DataNone) {
+                return None<T>
+            }
+            return Some(asTarget<T>(opened, index))
         }
         let data = send_(QueryResultColumnPayload.cell(index))
         if (data is DataNone) {
@@ -303,7 +314,29 @@ public class QueryResultImpl <: QueryResult {
                 return stream
             }
         }
-        let stream = DbdInputStream(this, index, chunkSize_)
+        if (nullStreams_.contains(index)) {
+            return DataNone.INSTANCE
+        }
+        // `bufSize = -1` 是 NULL 探测的保留值：服务端回 `DataNone` 表示 SQL NULL
+        let probe = send_(QueryResultColumnPayload.cell(index, bufSize: -1))
+        if (probe is DataNone) {
+            nullStreams_.add(index)
+            return DataNone.INSTANCE
+        }
+        let initial = try {
+            match (SqlTypes.decode<Array<Byte>>(probe)) {
+                case Some(bytes) => bytes
+                case None => throw DbdException(CONVERSION,
+                    'stream probe of column ${index} is not a byte array')
+            }
+        } catch (e: DataException) {
+            throw DbdException(CONVERSION,
+                'stream probe of column ${index} cannot be decoded: ${e.message}', cause: e)
+        } catch (e: Exception) {
+            throw DbdException(CONVERSION,
+                'stream probe of column ${index} is not a byte array: ${e.message}', cause: e)
+        }
+        let stream = DbdInputStream(this, index, chunkSize_, initial: initial)
         streams_.add(stream)
         stream
     }
@@ -314,6 +347,7 @@ public class QueryResultImpl <: QueryResult {
             stream.invalidate()
         }
         streams_.clear()
+        nullStreams_.clear()
     }
 
     /** 供 `DbdInputStream` 发块请求：`CELL(index, bufSize)` → 字节块（空数组表示 EOF）。 */
@@ -328,13 +362,17 @@ public class QueryResultImpl <: QueryResult {
         try {
             match (SqlTypes.decode<Array<Byte>>(data)) {
                 case Some(bytes) => bytes
-                case None => Array<Byte>()
+                case None => throw DbdException(CONVERSION,
+                    'stream block of column ${index} is not a byte array')
             }
         } catch (e: DataException) {
             throw DbdException(CONVERSION, 'stream block of column ${index} cannot be decoded: ${e.message}',
                 cause: e)
         } catch (e: OverflowException) {
             throw DbdException(CONVERSION, 'stream block of column ${index} is out of range: ${e.message}',
+                cause: e)
+        } catch (e: Exception) {
+            throw DbdException(CONVERSION, 'stream block of column ${index} is not a byte array: ${e.message}',
                 cause: e)
         }
     }
@@ -359,10 +397,12 @@ public class DbdInputStream <: InputStream {
     private var eof: Bool = false
     private var dead: Bool = false
 
-    init(owner: QueryResultImpl, columnIndex: Int64, chunkSize: Int64) {
+    init(owner: QueryResultImpl, columnIndex: Int64, chunkSize: Int64,
+        initial!: Array<Byte> = []) {
         this.owner = owner
         this.columnIndex = columnIndex
         this.chunkSize = chunkSize
+        this.pending = initial
     }
 
     /**

@@ -119,13 +119,27 @@ protected class QueryCursor <: Resource {
         match (memory) {
             case Some(result) =>
                 clearRow()
-                rowValid = result.next()
+                rowValid = try {
+                    result.next()
+                } catch (e: Exception) {
+                    // G28：推进失败后必须复位行状态，否则后续 cell() 会返回上一行
+                    rowValid = false
+                    clearRow()
+                    throw e
+                }
                 return rowValid
             case None => ()
         }
         while (segmentIndex < segments.size) {
             let segment = segments[segmentIndex]
-            if (segment.result.next()) {
+            let has = try {
+                segment.result.next()
+            } catch (e: Exception) {
+                rowValid = false
+                clearRow()
+                throw e
+            }
+            if (has) {
                 clearRow()
                 rowValid = true
                 return true
@@ -153,6 +167,15 @@ protected class QueryCursor <: Resource {
         }
         let typeName = infos[index].typeName
         if (typeName == 'InputStream' || typeName == 'std.io.InputStream') {
+            // `bufSize < 0` 是 NULL 探测（保留值）：NULL → DataNone，非 NULL → 首块（可为空 BLOB）
+            if (bufSize < 0) {
+                match (currentResult().getOrNull<InputStream>(index)) {
+                    case Some(opened) =>
+                        streams[index] = opened
+                        return SqlTypes.readChunk(opened, DEFAULT_STREAM_CHUNK).toData()
+                    case None => return DataNone.INSTANCE
+                }
+            }
             let stream = match (streams.get(index)) {
                 case Some(existing) => existing
                 case None =>

@@ -312,7 +312,9 @@
 
 本要求为强制要求（MUST）。
 
-`DbdDriver` 在 `static init` 注册为 `fdbm`，`preferredPooling = true`，`open()` 不产生 IO；URL 形如 `fdbm://user:pwd@host:port/database`，凭据支持 % 编码，缺省端口 8112；`database` 必填。
+`DbdDriver` 在 `static init` 按配置项 `dbd_driverName`（**后端物理库的方言名**，如 `postgres`）注册；
+未配置时只记 INFO 跳过注册、不结束进程（`DbdDriver()` / `dbdDriver()` 取用时抛 `DbdException(CONFIG)`）；
+`fdbm` 仅作为兼容别名保留（名字未被占用时注册）。`preferredPooling = true`，`open()` 不产生 IO；URL 形如 `fdbm://user:pwd@host:port/database`，凭据支持 % 编码，缺省端口 8112；`database` 必填。
 
 #### Scenario: URL 解析与重建
 
@@ -329,7 +331,7 @@
 #### Scenario: open 不建链
 
 - **GIVEN** 一个未被监听的地址
-- **WHEN** `DriverManager.getDriver('fdbm').open(url, opts)`
+- **WHEN** `DriverManager.getDriver(<dbd_driverName>).open(url, opts)`（兼容别名 `fdbm` 等价）
 - **THEN** 返回 `DbdDatasource` 成功（连接发生在 `connect()`）
 
 #### Scenario: 元数据不含密码

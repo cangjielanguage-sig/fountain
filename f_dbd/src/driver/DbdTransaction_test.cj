@@ -73,6 +73,23 @@ public class DbdTransactionTest {
         }
     }
 
+    /** T10：未 `begin` 就 save / rollback(name) / release → `TX_STATE`，且都不发包。 */
+    @TestCase
+    public func savepointsRequireActiveTransaction(): Unit {
+        let stub = StubFdbm(handler: {msg => resp(msg.id, data: UpdateResultPayload(0, 0))})
+        let connection = connectTo(stub)
+        try {
+            let transaction = connection.createTransaction()
+            @Assert(codeOf { transaction.save('sp1') }, DbdErrorCode.TX_STATE)
+            @Assert(codeOf { transaction.rollback('sp1') }, DbdErrorCode.TX_STATE)
+            @Assert(codeOf { transaction.release('sp1') }, DbdErrorCode.TX_STATE)
+            @Assert(stub.receivedCount(), 0)
+        } finally {
+            connection.close()
+            stub.close()
+        }
+    }
+
     /** savepoint 三兄弟透传成固定 SQL。 */
     @TestCase
     public func savepointsArePassedThrough(): Unit {

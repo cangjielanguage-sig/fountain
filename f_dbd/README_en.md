@@ -54,7 +54,9 @@ export dbd_driverName=postgres
 - Required. fdbm is a proxy without a dialect of its own; f_orm selects the SQL dialect
   by driver name, so the application must set the name to the **backend dialect**
   (`postgres` / `mysql` / ...).
-- Missing or empty: the driver logs an ERROR with the correct usage and exits the process.
+- Missing or empty: package initialization logs INFO and skips registration — the process keeps
+  running; `dbdDriver()` / `DbdDriver()` throw `DbdException(CONFIG)` when used. The registration
+  name is always `dbd_driverName`; `fdbm` is kept only as a compatibility alias (registered when free).
 - It only affects the client-side registration name; SQL dialect handling stays inside
   fdbm, and the URL scheme remains `fdbm://`.
 
@@ -118,6 +120,14 @@ across multiple fdbm nodes on the client side:
 Only `fountain::f_dbd.exception.DbdException` (`<: SqlException`) escapes the driver.
 Its `code` is the fine-grained `DbdErrorCode`: `CONFIG` / `IO` / `TIMEOUT` /
 `PROTOCOL` / `CURSOR_STATE` / `CONVERSION` / `DB_ERROR` / `INTERNAL`, etc.
+
+- **Stream columns**: the first open sends `CELL(index, -1)` as a NULL probe; SQL NULL makes
+  `getOrNull<InputStream>` return `None` (and `get` throw `CONVERSION`), while an empty BLOB returns
+  `Some(empty stream)`. Scalar reads (`get<Array<Byte>>`/`get<String>`) on a stream column throw
+  `CONVERSION` without sending a request.
+- **Root package**: `import fountain::f_dbd.*` re-exports error codes, exceptions, `DbdUrl`,
+  `dbdDriver`, `MultiDUrl`, ...; `fdBDVersion()` returns the module version. An unconfigured
+  `dbd_driverName` no longer exits the process; `dbdDriver()` throws `CONFIG` when used.
 
 ## Tests
 

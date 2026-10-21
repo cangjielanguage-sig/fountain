@@ -20,6 +20,7 @@ import std.convert.*
 import fountain::f_data.{Data, DataBool, DataNone, DataReal, DataString}
 import fountain::f_dbd.common.DbdErrorCode
 import fountain::fdbm.exception.FdbmException
+import fountain::f_log.LoggerFactory
 
 /**
  * 手写递归下降解析器（设计 §8.2）。
@@ -28,6 +29,8 @@ import fountain::fdbm.exception.FdbmException
  * - 语法正确但本期不支持（函数、子查询、`group by`、`union`、存储过程等）→ `UNSUPPORTED_SQL`。
  */
 protected class SqlParser {
+    private static let logger = LoggerFactory.getLogger('fountain::fdbm.sql.SqlParser')
+
     private let tokens: Array<Token>
     private let currentDatabase: String
     private var cursor: Int64 = 0
@@ -244,13 +247,24 @@ protected class SqlParser {
      * 只放行 f_orm 分页固定生成的两类语句，其余组合一律 `UNSUPPORTED_SQL`，
      * 避免「能解析但语义不确定」的语句被静默下推。
      */
-    private func validateSelectShape(statement: SelectStatement): Unit {
-        var derivedCount: Int64 = 0
+    /** 派生表计数：覆盖 `from` 与 `joins` 的所有表引用位置（D08）。 */
+    private static func derivedTablesOf(statement: SelectStatement): Int64 {
+        var count: Int64 = 0
         for (table in statement.from) {
             if (table.derived.isSome()) {
-                derivedCount += 1
+                count += 1
             }
         }
+        for (join in statement.joins) {
+            if (join.table.derived.isSome()) {
+                count += 1
+            }
+        }
+        count
+    }
+
+    private func validateSelectShape(statement: SelectStatement): Unit {
+        let derivedCount = derivedTablesOf(statement)
         var countColumns: Int64 = 0
         for (item in statement.columns) {
             if (item.expression is CountExpression) {
@@ -312,12 +326,17 @@ protected class SqlParser {
             expression()
         }
         var alias: ?String = None
+        var aliasQuoted = false
         if (matchKeyword('as')) {
-            alias = Some(expectIdent('alias').text)
+            let token = expectIdent('alias')
+            alias = Some(token.text)
+            aliasQuoted = token.quoted
         } else if (peek().kind == TokenKind.Ident && !isClauseKeyword()) {
-            alias = Some(next().text)
+            let token = next()
+            alias = Some(token.text)
+            aliasQuoted = token.quoted
         }
-        SelectItem(expression, alias)
+        SelectItem(expression, alias, aliasQuoted: aliasQuoted)
     }
 
     private func orderItem(): (SqlExpression, Bool) {
@@ -446,6 +465,19 @@ protected class SqlParser {
         (column, expression())
     }
 
+    /**
+     * `update/delete ... join (select ...)` 一律 `UNSUPPORTED_SQL`（D08）。
+     *
+     * `tableRef` 仍允许解析派生表，由这里统一拒绝，保证错误码一致；错误文案带当前位置。
+     */
+    private func validateNoDerivedInJoins(joins: Array<JoinClause>, kind: String): Unit {
+        for (join in joins) {
+            if (join.table.derived.isSome()) {
+                throw unsupported('a derived table in ${kind} joins is not supported', peek().position)
+            }
+        }
+    }
+
     private func update(): UpdateStatement {
         expectKeyword('update')
         let table = tableRef(allowAlias: true)
@@ -453,6 +485,7 @@ protected class SqlParser {
         while (isJoinStart()) {
             joins.add(joinClause())
         }
+        validateNoDerivedInJoins(joins.toArray(), 'update')
         expectKeyword('set')
         let assignments = ArrayList<(ColumnExpression, SqlExpression)>()
         assignments.add(updateAssignment())
@@ -471,15 +504,17 @@ protected class SqlParser {
         let first = expectIdent('column')
         var table: ?String = None
         var quoted = first.quoted
+        var tableQuoted = false
         var column = first.text
         if (accept(TokenKind.Dot)) {
             table = Some(first.text)
+            tableQuoted = first.quoted
             let second = expectIdent('column')
             column = second.text
-            quoted = quoted || second.quoted
+            quoted = second.quoted
         }
         expectOperator('=')
-        (ColumnExpression(table, column, quoted: quoted), expression())
+        (ColumnExpression(table, column, quoted: quoted, tableQuoted: tableQuoted), expression())
     }
 
     private func delete(): DeleteStatement {
@@ -490,6 +525,7 @@ protected class SqlParser {
         while (isJoinStart()) {
             joins.add(joinClause())
         }
+        validateNoDerivedInJoins(joins.toArray(), 'delete')
         let condition = if (matchKeyword('where')) {
             Some(expression())
         } else {
@@ -632,6 +668,9 @@ protected class SqlParser {
 
     private func inExpression(operand: SqlExpression, negated: Bool): InExpression {
         expect(TokenKind.LParen, '(')
+        if (isSubqueryStart()) {
+            throw unsupported('subquery in IN (...) is not supported', peek().position)
+        }
         let values = ArrayList<SqlExpression>()
         values.add(expression())
         while (accept(TokenKind.Comma)) {
@@ -639,6 +678,11 @@ protected class SqlParser {
         }
         expect(TokenKind.RParen, ')')
         InExpression(operand, values.toArray(), negated: negated)
+    }
+
+    /** 当前位置是否是子查询起点（`select`）。 */
+    private func isSubqueryStart(): Bool {
+        peek().kind == TokenKind.Ident && !peek().quoted && peek().isKeyword('select')
     }
 
     private func additive(): SqlExpression {
@@ -701,6 +745,9 @@ protected class SqlParser {
                 }
                 throw syntax('unexpected operator \'${token.text}\'', token.position)
             case TokenKind.Ident =>
+                if (!token.quoted && token.isKeyword('select')) {
+                    throw unsupported('subquery expressions are not supported', token.position)
+                }
                 if (token.isKeyword('null')) {
                     next()
                     return LiteralExpression(DataNone.INSTANCE)
@@ -731,7 +778,7 @@ protected class SqlParser {
                 if (accept(TokenKind.Dot)) {
                     let column = expectIdent('column')
                     return ColumnExpression(Some(token.text), column.text,
-                        quoted: token.quoted || column.quoted)
+                        quoted: column.quoted, tableQuoted: token.quoted)
                 }
                 return ColumnExpression(None, token.text, quoted: token.quoted)
             case _ => throw syntax('unexpected token \'${token.text}\'', token.position)
@@ -739,6 +786,10 @@ protected class SqlParser {
         throw syntax('unexpected token \'${token.text}\'', token.position)
     }
 
+    /**
+     * 数值字面量（D07）：`Int64` 优先；超出范围按**原文**交给 `Decimal`，不经 `Float64` 中转。
+     * `Decimal` 不接受时才回退 `Float64`（记 WARN），仍失败 → `SQL_SYNTAX`。
+     */
     private static func numberOf(token: Token): Data {
         let text = token.text
         if (!text.contains('.') && !text.contains('e') && !text.contains('E')) {
@@ -747,8 +798,14 @@ protected class SqlParser {
                 case None => ()
             }
         }
+        match (decimalOf(text)) {
+            case Some(value) => return value
+            case None => ()
+        }
         match (Float64.tryParse(text)) {
-            case Some(value) => DataReal(value)
+            case Some(value) =>
+                logger.warn('number \'${text}\' is not representable as Decimal, falling back to Float64')
+                DataReal(value)
             case None => throw FdbmException(DbdErrorCode.SQL_SYNTAX,
                 'illegal number \'${text}\' at position ${token.position}')
         }
@@ -762,10 +819,24 @@ protected class SqlParser {
                 case None => ()
             }
         }
+        match (decimalOf('-${text}')) {
+            case Some(value) => return value
+            case None => ()
+        }
         match (Float64.tryParse(text)) {
-            case Some(value) => DataReal(-value)
+            case Some(value) =>
+                logger.warn('number \'-${text}\' is not representable as Decimal, falling back to Float64')
+                DataReal(-value)
             case None => throw FdbmException(DbdErrorCode.SQL_SYNTAX,
                 'illegal number \'${text}\' at position ${token.position}')
+        }
+    }
+
+    private static func decimalOf(text: String): ?Data {
+        try {
+            Some(DataReal(text))
+        } catch (_: Exception) {
+            None<Data>
         }
     }
 
@@ -781,33 +852,49 @@ protected class SqlParser {
             let inner = select()
             expect(TokenKind.RParen, ')')
             var alias: ?String = None
+            var aliasQuoted = false
             if (matchKeyword('as')) {
-                alias = Some(expectIdent('alias').text)
+                let token = expectIdent('alias')
+                alias = Some(token.text)
+                aliasQuoted = token.quoted
             } else if (peek().kind == TokenKind.Ident && !isClauseKeyword()) {
-                alias = Some(next().text)
+                let token = next()
+                alias = Some(token.text)
+                aliasQuoted = token.quoted
             }
             match (alias) {
                 case Some(value) => return TableRef(None, '', alias, currentDatabase,
-                    derived: Some(inner))
+                    aliasQuoted: aliasQuoted, derived: Some(inner))
                 case None => throw syntax('a derived table requires an alias', start)
             }
         }
         let first = expectIdent('table name')
         var database: ?String = None
+        var databaseQuoted = false
         var name = first.text
+        var quoted = first.quoted
         if (accept(TokenKind.Dot)) {
             database = Some(first.text)
-            name = expectIdent('table name').text
+            databaseQuoted = first.quoted
+            let second = expectIdent('table name')
+            name = second.text
+            quoted = second.quoted
         }
         var alias: ?String = None
+        var aliasQuoted = false
         if (allowAlias) {
             if (matchKeyword('as')) {
-                alias = Some(expectIdent('alias').text)
+                let token = expectIdent('alias')
+                alias = Some(token.text)
+                aliasQuoted = token.quoted
             } else if (peek().kind == TokenKind.Ident && !isClauseKeyword()) {
-                alias = Some(next().text)
+                let token = next()
+                alias = Some(token.text)
+                aliasQuoted = token.quoted
             }
         }
-        TableRef(database, name, alias, currentDatabase, quoted: first.quoted)
+        TableRef(database, name, alias, currentDatabase, quoted: quoted,
+            databaseQuoted: databaseQuoted, aliasQuoted: aliasQuoted)
     }
 
     private static func identifierOf(token: Token): Identifier {
