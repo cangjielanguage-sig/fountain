@@ -101,12 +101,7 @@ public class MQManager {
                     let assignment = MQProtocol.asPayload<MQTopicAssignment>(message).getOrThrow {
                         MQServiceFailure("响应不是 MQTopicAssignment")
                     }
-                    let parts = ArrayList<String>()
-                    for (i in 0..assignment.owners.size) {
-                        parts.add("${i}→${assignment.owners[i]}")
-                    }
-                    let delay = (Duration.millisecond * delayingMs).toString()
-                    println("${topic} 已注册，队列 0..${queueNum - 1}，延迟：${delay}，分配：${join(parts)}")
+                    println(MQManagerOutput.registeredTopic(topic, queueNum, delayingMs, assignment.owners))
                     0
             }
         }
@@ -150,16 +145,7 @@ public class MQManager {
                 case SnapshotOutcome.Server(error) => printError(error)
                 case SnapshotOutcome.Protocol(reason) => protocolError(reason)
                 case SnapshotOutcome.Ok(value) =>
-                    let rows = ArrayList<Array<String>>()
-                    for (assignment in value.topics) {
-                        let owners = ArrayList<String>()
-                        for (index in 0..assignment.owners.size) {
-                            owners.add("${index}→${assignment.owners[index]}")
-                        }
-                        rows.add([assignment.topic, "${assignment.queueNum}",
-                            (Duration.millisecond * assignment.delayingMs).toString(), join(owners)])
-                    }
-                    println(MQManagerOutput.table(["topic", "queueNum", "delaying", "分配"], rows.toArray()))
+                    println(MQManagerOutput.topicList(value))
                     0
             }
         }
@@ -201,27 +187,7 @@ public class MQManager {
                     let text = convert<String>(message.data).getOrThrow {
                         MQServiceFailure("响应不是统计文本")
                     }
-                    let rows = ArrayList<Array<String>>()
-                    for (line in text.split("\n")) {
-                        if (!line.startsWith("R\t")) {
-                            continue
-                        }
-                        let fields = line.split("\t")
-                        if (fields.size < 11) {
-                            continue
-                        }
-                        let group = if (fields[2].size == 0) {
-                            "（无）"
-                        } else {
-                            fields[2]
-                        }
-                        let delay = (Duration.millisecond * Int64.parse(fields[4])).toString()
-                        rows.add([fields[1], group, fields[3], delay, fields[5], fields[6], fields[7], fields[8],
-                            fields[9], fields[10]])
-                    }
-                    println(MQManagerOutput.table(
-                        ["topic", "group", "queueNum", "delaying", "backlog", "lagMs", "delivered", "acked",
-                            "redelivered", "deadLettered"], rows.toArray()))
+                    println(MQManagerOutput.stats(text))
                     0
             }
         }
@@ -311,17 +277,6 @@ public class MQManager {
     private func connectionFailed(): Int64 {
         println(MQManagerOutput.error(CONNECTION_FAILED))
         1
-    }
-
-    private static func join(parts: ArrayList<String>): String {
-        let out = StringBuilder()
-        for (i in 0..parts.size) {
-            if (i > 0) {
-                out.append(',')
-            }
-            out.append(parts[i])
-        }
-        out.toString()
     }
 }
 
