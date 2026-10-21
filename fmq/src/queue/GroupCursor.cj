@@ -58,6 +58,8 @@ protected class GroupCursor {
     private var reader: ?QueueRecordReader = None
     /** 本轮扫描遇到的「BODY 不可评估」位置，由调用方取走并转成协议错误（A46）。 */
     private var unsupportedAt: ?LogPosition = None
+    /** 不可读记录计数（段被清理/记录被截断），用于观测「静默已决」（A48）。 */
+    private var skippedUnreadable_: Int64 = 0
     private var closed = false
 
     protected init(topic: String, queueIndex: Int64, group: String, log: QueueLog, catalog: CursorCatalog,
@@ -143,8 +145,11 @@ protected class GroupCursor {
                     return None<(Array<Byte>, LogPosition)>
                 }
                 if (record.isNone()) {
-                    // 记录已不可读（段被清理）：标记已决，避免阻塞
+                    // 记录已不可读（段被清理/记录被截断）：标记已决，但必须留痕（A48）
                     entry.decided = true
+                    skippedUnreadable_ = skippedUnreadable_ + 1
+                    logger.warn("record at ${topic}/${queueIndex}@${entry.position.seq}:${entry.position.offset} " +
+                        "is unreadable for group '${group}', marked decided")
                     continue
                 }
                 // 已分配但尚未取走：延迟未到期时停在队首（已投递过的重投不受延迟约束）
@@ -302,6 +307,15 @@ protected class GroupCursor {
                 advance()
             }
             None<(Array<Byte>, LogPosition)>
+        }
+    }
+
+    /** 因不可读而被跳过的记录数（观测用）。 */
+    protected prop unreadableSkipped: Int64 {
+        get() {
+            synchronized(lock) {
+                skippedUnreadable_
+            }
         }
     }
 

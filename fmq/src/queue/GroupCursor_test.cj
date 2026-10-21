@@ -657,6 +657,41 @@ class GroupCursorTest {
         }
     }
 
+    /** 记录不可读时标记已决但必须留痕，不能静默吞掉（A48）。 */
+    @TestCase
+    public func unreadableRecordIsCounted(): Unit {
+        let fixture = CursorFixture("unreadable")
+        try {
+            let position = fixture.append(["b"], "one")
+            let cursor = fixture.cursorOf()
+            let s1 = fixture.sub("s1", tags: ["a"])
+            let s2 = fixture.sub("s2", tags: ["b"])
+            let members = [s1, s2]
+            // s1 扫描：记录分配给 s2（entry.position = 记录位置）
+            @Assert(cursor.next(s1, members, MQMatcher()).isNone())
+            // 把该段的长度头改成 0：readAt 读不到内容
+            let dir = "${fixture.root}/logs"
+            let rewritten = Array<Bool>(1, repeat: false)
+            Directory.walk(dir) {info: FileInfo =>
+                if (!rewritten[0] && !info.isDirectory() && info.name.startsWith("log_")) {
+                    let file = File(info.path.toString(), OpenMode.Write)
+                    file.write([0u8, 0u8, 0u8, 0u8])
+                    file.close()
+                    rewritten[0] = true
+                }
+                true
+            }
+            @Assert(rewritten[0])
+            @Assert(cursor.next(s2, members, MQMatcher()).isNone())
+            @Assert(cursor.unreadableSkipped == 1)
+            @Assert(cursor.committed.seq > position.seq ||
+                (cursor.committed.seq == position.seq && cursor.committed.offset > position.offset))
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
     /** 未真正投递过的位置不接受 ACK，游标也不得推进（A50）。 */
     @TestCase
     public func ackRequiresDeliveredPosition(): Unit {
