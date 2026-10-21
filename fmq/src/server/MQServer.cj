@@ -68,7 +68,7 @@ public class MQServer {
         ensureDir(options.segmentedLogDir)
         ensureDir(options.deadMsgDir)
 
-        this.meta = MetaStore(options.metaDir)
+        this.meta = MetaStore(options.metaDir, origin: options.selfIndex)
         this.meta.load()
         // 局部别名：闭包不能捕获尚未完成初始化的 `this`，只能捕获局部变量
         let metaStore = this.meta

@@ -96,6 +96,12 @@ public class MQProtocol {
         Message.deregister<MQInternalMessage>(data: envelope)
     }
 
+    /** 墓碑广播：`DEREGISTER` + `MQInternalMessage{kind = metaSync}`，子载荷为 `MQMetaTombstone`。 */
+    public static func metaSync(tombstone: MQMetaTombstone): Message {
+        let envelope = MQInternalMessage(MQInternalKind.META_SYNC, encodePayload<MQMetaTombstone>(tombstone))
+        Message.deregister<MQInternalMessage>(data: envelope)
+    }
+
     /** 指标查询：`REGISTER` + `MQInternalMessage{kind = stats}`，子载荷为 topic 字符串。 */
     public static func stats(topic: String): Message {
         let envelope = MQInternalMessage(MQInternalKind.STATS, encodePayload<String>(topic))

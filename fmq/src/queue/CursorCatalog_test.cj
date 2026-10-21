@@ -139,7 +139,7 @@ class CursorCatalogTest {
             store.save("/t", 0, "slow", LogPosition(2, 0))
             let catalog = CursorCatalog(store, meta)
             @Assert(catalog.floorOf("/t", 0) == 2)
-            @Assert(meta.removeGroup("/t", "slow"))
+            @Assert(meta.removeGroup("/t", "slow").isSome())
             @Assert(catalog.floorOf("/t", 0) == 9)
             catalog.removeGroup("/t", "slow")
             @Assert(catalog.positionOf("/t", 0, "slow").isNone())

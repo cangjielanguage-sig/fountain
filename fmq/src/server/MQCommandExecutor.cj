@@ -146,6 +146,10 @@ protected class MQCommandExecutor {
             syncer.applyRemoteGroup(meta)
             return MQProtocol.respond<MQResult>(request, MQResult(0, "ok"))
         }
+        if (let Some(tombstone) <- MQProtocol.decodePayload<MQMetaTombstone>(envelope.payload)) {
+            syncer.applyRemoteTombstone(tombstone)
+            return MQProtocol.respond<MQResult>(request, MQResult(0, "ok"))
+        }
         if (let Some(payload) <- MQProtocol.decodePayload<MQDeregisterPayload>(envelope.payload)) {
             syncer.applyRemoteDelete(payload)
             cleanupAfterDelete(payload)

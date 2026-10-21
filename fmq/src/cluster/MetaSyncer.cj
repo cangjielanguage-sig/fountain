@@ -15,6 +15,8 @@ limitations under the License.
 */
 package fountain::fmq.cluster
 
+import std.collection.HashSet
+import std.time.DateTime
 import fountain::f_log.*
 import fountain::f_mq.base.*
 import fountain::f_mq.base.model.{MQSubscribeGroupMeta, MQTopicMeta}
@@ -60,7 +62,7 @@ protected class MetaSyncer {
         }
         let start = store.nextStartNode % nodeCount
         let assignment = MQAssignment.allocate(meta.topic, meta.queueNum, nodeCount, start,
-            delayingMs: meta.delayingMs)
+            delayingMs: meta.delayingMs, revision: store.nextRevision(), origin: transport.selfIndex)
         let next = MQAssignment.nextStart(start, meta.queueNum, nodeCount)
         store.applyTopic(assignment, nextStart: next)
         broadcastTopic(assignment)
@@ -75,24 +77,29 @@ protected class MetaSyncer {
             throw MQServiceException(MQErrorCode.GROUP_ALREADY_EXIST,
                 "subscribe group '${meta.subscribeGroup}' already exists on '${meta.topic}'")
         }
-        store.applyGroup(meta)
-        broadcastGroup(meta)
+        let versioned = MQSubscribeGroupMeta(meta.topic, meta.subscribeGroup, revision: store.nextRevision(),
+            origin: transport.selfIndex)
+        store.applyGroup(versioned)
+        broadcastGroup(versioned)
         MQResult(0, "ok")
     }
 
+    /** 注销：先写墓碑 + 删本地元数据，再广播墓碑（删除必须能传播，见 A25）。 */
     protected func deregister(payload: MQDeregisterPayload): MQResult {
-        if (payload.isTopic()) {
-            if (!store.removeTopic(payload.topic)) {
-                throw MQServiceException(MQErrorCode.TOPIC_NOT_EXIST, "topic '${payload.topic}' does not exist")
+        let tombstone = if (payload.isTopic()) {
+            match (store.removeTopic(payload.topic)) {
+                case Some(value) => value
+                case None => throw MQServiceException(MQErrorCode.TOPIC_NOT_EXIST,
+                    "topic '${payload.topic}' does not exist")
             }
         } else {
-            if (!store.groupExists(payload.topic, payload.subscribeGroup)) {
-                throw MQServiceException(MQErrorCode.GROUP_NOT_EXIST,
+            match (store.removeGroup(payload.topic, payload.subscribeGroup)) {
+                case Some(value) => value
+                case None => throw MQServiceException(MQErrorCode.GROUP_NOT_EXIST,
                     "subscribe group '${payload.subscribeGroup}' does not exist")
             }
-            store.removeGroup(payload.topic, payload.subscribeGroup)
         }
-        broadcastDelete(payload)
+        broadcastTombstone(tombstone)
         MQResult(0, "ok")
     }
 
@@ -134,25 +141,67 @@ protected class MetaSyncer {
         store.applyGroup(meta)
     }
 
+    /** 旧版 peer 的删除广播（无墓碑）：本地补一条墓碑，避免二次复活。 */
     protected func applyRemoteDelete(payload: MQDeregisterPayload): Bool {
-        if (payload.isTopic()) {
-            store.removeTopic(payload.topic)
+        let kind = if (payload.isTopic()) {
+            MQMetaTombstone.KIND_TOPIC
         } else {
-            store.removeGroup(payload.topic, payload.subscribeGroup)
+            MQMetaTombstone.KIND_GROUP
         }
+        let tombstone = MQMetaTombstone(kind, payload.topic, payload.subscribeGroup, store.nextRevision(),
+            transport.selfIndex, DateTime.now().toUnixTimeStamp().toMilliseconds())
+        store.applyTombstone(tombstone) == MetaApplyResult.Applied
     }
 
+    /** 收到 peer 的墓碑广播。 */
+    protected func applyRemoteTombstone(tombstone: MQMetaTombstone): MetaApplyResult {
+        store.applyTombstone(tombstone)
+    }
+
+    /**
+     * 合并全量快照：应用条目与墓碑 → 本地更旧且快照缺失的条目视为删除 → 指针只进不退。
+     *
+     * 墓碑让「离线节点重启后复活已删主题/组」不再发生（A25）；缺失扫描是墓碑被 GC 后的兜底。
+     */
     private func mergeSnapshot(snapshot: MQMetaSnapshot): Unit {
+        for (tombstone in snapshot.tombstones) {
+            store.applyTombstone(tombstone)
+        }
+        let topicNames = HashSet<String>()
         for (assignment in snapshot.topics) {
-            if (store.topicOf(assignment.topic).isNone()) {
-                store.applyTopic(assignment)
-            }
+            topicNames.add(assignment.topic)
+            store.applyTopic(assignment)
         }
+        let groupKeys = HashSet<String>()
         for (meta in snapshot.groups) {
-            if (!store.groupExists(meta.topic, meta.subscribeGroup)) {
-                store.applyGroup(meta)
+            groupKeys.add("${meta.topic}\u{0}${meta.subscribeGroup}")
+            store.applyGroup(meta)
+        }
+        let tombstoneKeys = HashSet<String>()
+        for (tombstone in snapshot.tombstones) {
+            tombstoneKeys.add(tombstone.key())
+        }
+        // 兜底：快照里没有、本地更旧的条目视为已删除。只在快照带版本时执行，
+        // 避免与「全是 0 版本的旧数据」互相清空。
+        if (snapshot.revision > 0) {
+            for (assignment in store.topics()) {
+                if (!topicNames.contains(assignment.topic) &&
+                    !tombstoneKeys.contains("${MQMetaTombstone.KIND_TOPIC}\u{0}${assignment.topic}") &&
+                    assignment.revision <= snapshot.revision) {
+                    log.warn("topic '${assignment.topic}' is missing from the peer snapshot, dropping it")
+                    store.dropTopicLocally(assignment.topic)
+                }
+            }
+            for (meta in store.allGroups()) {
+                if (!groupKeys.contains("${meta.topic}\u{0}${meta.subscribeGroup}") &&
+                    !tombstoneKeys.contains("${MQMetaTombstone.KIND_GROUP}\u{0}${meta.topic}\u{0}${meta.subscribeGroup}") &&
+                    meta.revision <= snapshot.revision) {
+                    log.warn("group '${meta.subscribeGroup}' of '${meta.topic}' is missing from the peer snapshot, dropping it")
+                    store.dropGroupLocally(meta.topic, meta.subscribeGroup)
+                }
             }
         }
+        // 轮转指针只增不减，乱序快照不会让分配回退
         if (snapshot.nextStartNode > store.nextStartNode) {
             store.advanceNextStart(snapshot.nextStartNode)
         }
@@ -166,8 +215,8 @@ protected class MetaSyncer {
         broadcast(MQProtocol.metaSync(meta))
     }
 
-    private func broadcastDelete(payload: MQDeregisterPayload): Unit {
-        broadcast(MQProtocol.metaSync(payload))
+    private func broadcastTombstone(tombstone: MQMetaTombstone): Unit {
+        broadcast(MQProtocol.metaSync(tombstone))
     }
 
     private func broadcast(message: Message): Unit {

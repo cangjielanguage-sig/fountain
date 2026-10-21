@@ -231,7 +231,7 @@ class LogCleanerTest {
                 Duration.second * -1, Duration.hour * 72)
             try {
                 @Assert(cleaner.cleanOnce(DateTime.now()) == 0)
-                @Assert(meta.removeGroup("/t", "slow"))
+                @Assert(meta.removeGroup("/t", "slow").isSome())
                 catalog.removeGroup("/t", "slow")
                 @Assert(cleaner.cleanOnce(DateTime.now()) >= 1)
             } finally {

@@ -273,4 +273,86 @@ class MetaSyncerTest {
             shutdown(store, "negative_delay")
         }
     }
+
+    // ===== 删除收敛（A25） =====
+
+    /** 离线节点重启后，peer 的快照必须让它删掉「离线期间被删掉」的主题。 */
+    @TestCase
+    public func snapshotMergeDropsTopicDeletedWhileOffline(): Unit {
+        let dir = dirOf("merge_topic")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 3))
+            @Assert(store.topicOf("/t").isSome())
+
+            let transport = FakeTransport(2, 1)
+            let syncer = MetaSyncer(store, transport)
+            let tombstone = MQMetaTombstone(MQMetaTombstone.KIND_TOPIC, "/t", "", 9, 0, 0)
+            let snapshot = MQMetaSnapshot(Array<MQTopicAssignment>(), Array<MQSubscribeGroupMeta>(), 0,
+                tombstones: [tombstone], revision: 9)
+            transport.responder = {_, request => Some(MQProtocol.respond<MQMetaSnapshot>(request, snapshot))}
+            syncer.syncFromPeers()
+
+            @Assert(store.topicOf("/t").isNone())
+            @Assert(store.allTombstones().size == 1)
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    /** 组删除后重启不复活，且同主题重新注册同名组可以成功（墓碑被更高 revision 覆盖）。 */
+    @TestCase
+    public func deletedGroupCanBeRecreatedWithHigherRevision(): Unit {
+        let dir = dirOf("merge_group")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 1))
+            store.applyGroup(MQSubscribeGroupMeta("/t", "g", revision: 2))
+            @Assert(store.groupExists("/t", "g"))
+
+            let transport = FakeTransport(2, 1)
+            let syncer = MetaSyncer(store, transport)
+            let tombstone = MQMetaTombstone(MQMetaTombstone.KIND_GROUP, "/t", "g", 7, 0, 0)
+            let snapshot = MQMetaSnapshot([MQTopicAssignment("/t", 1, 0, [0], revision: 1)],
+                Array<MQSubscribeGroupMeta>(), 0, tombstones: [tombstone], revision: 7)
+            transport.responder = {_, request => Some(MQProtocol.respond<MQMetaSnapshot>(request, snapshot))}
+            syncer.syncFromPeers()
+            @Assert(!store.groupExists("/t", "g"))
+
+            // 重新注册同名组：更高 revision 覆盖墓碑
+            @Assert(store.applyGroup(MQSubscribeGroupMeta("/t", "g", revision: 8)) == MetaApplyResult.Applied)
+            @Assert(store.groupExists("/t", "g"))
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    /** 快照不带版本（旧 peer）时不做「缺失即删除」，避免互相清空。 */
+    @TestCase
+    public func legacySnapshotDoesNotWipeLocalMetadata(): Unit {
+        let dir = dirOf("merge_legacy")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            store.applyTopic(MQTopicAssignment("/t", 1, 0, [0]))
+
+            let transport = FakeTransport(2, 1)
+            let syncer = MetaSyncer(store, transport)
+            let snapshot = MQMetaSnapshot(Array<MQTopicAssignment>(), Array<MQSubscribeGroupMeta>(), 0)
+            transport.responder = {_, request => Some(MQProtocol.respond<MQMetaSnapshot>(request, snapshot))}
+            syncer.syncFromPeers()
+
+            @Assert(store.topicOf("/t").isSome())
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
 }

@@ -184,4 +184,36 @@ class MQPayloadTest {
         @Assert(assignment.delayingMs == 61000)
         @Assert(assignment.owners == [0, 1])
     }
+
+    @TestCase
+    public func revisionAndTombstoneRoundtrip(): Unit {
+        let assignment = roundtrip<MQTopicAssignment>(
+            MQTopicAssignment("/t", 2, 0, [0, 1], revision: 7, origin: 3)).getOrThrow()
+        @Assert(assignment.revision == 7)
+        @Assert(assignment.origin == 3)
+
+        let group = roundtrip<MQSubscribeGroupMeta>(MQSubscribeGroupMeta("/t", "g", revision: 8, origin: 1)).getOrThrow()
+        @Assert(group.revision == 8)
+        @Assert(group.origin == 1)
+
+        let tombstone = roundtrip<MQMetaTombstone>(
+            MQMetaTombstone(MQMetaTombstone.KIND_GROUP, "/t", "g", 9, 2, 1700000000000)).getOrThrow()
+        @Assert(!tombstone.isTopic())
+        @Assert(tombstone.revision == 9)
+        @Assert(tombstone.deletedAtMs == 1700000000000)
+        @Assert(tombstone.key() == MQMetaTombstone(MQMetaTombstone.KIND_GROUP, "/t", "g", 0, 0, 0).key())
+
+        let snapshot = roundtrip<MQMetaSnapshot>(MQMetaSnapshot([assignment], [group], 4,
+            tombstones: [tombstone], revision: 9, tombstoneFloor: 9)).getOrThrow()
+        @Assert(snapshot.tombstones.size == 1)
+        @Assert(snapshot.revision == 9)
+        @Assert(snapshot.tombstoneFloor == 9)
+
+        // 旧数据（无新字段）解码为默认值
+        let legacy = roundtrip<MQMetaSnapshot>(MQMetaSnapshot(Array<MQTopicAssignment>(), [], 0)).getOrThrow()
+        @Assert(legacy.tombstones.size == 0)
+        @Assert(legacy.revision == 0)
+        @Assert(legacy.tombstoneFloor == 0)
+        @Assert(roundtrip<MQTopicAssignment>(MQTopicAssignment("/x", 1, 0, [0])).getOrThrow().revision == 0)
+    }
 }
