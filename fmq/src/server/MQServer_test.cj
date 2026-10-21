@@ -15,9 +15,10 @@ limitations under the License.
 */
 package fountain::fmq.server
 
+import std.collection.ArrayList
 import std.fs.*
 import std.net.{TcpSocket, IPSocketAddress}
-import std.sync.AtomicInt64
+import std.sync.{AtomicBool, AtomicInt64}
 import std.time.DateTime
 import std.unittest.*
 import std.unittest.testmacro.*
@@ -38,15 +39,29 @@ class ServerPortAllocator {
         var attempt = 0
         while (attempt < 200) {
             let port = UInt16(next.fetchAdd(1) % 60000)
-            try {
-                let probe = TcpSocket(IPSocketAddress("127.0.0.1", port))
-                probe.close()
+            if (!isListening(port)) {
                 return port
-            } catch (_: Exception) {
-                attempt++
             }
+            attempt++
         }
         throw Exception("cannot find a free port")
+    }
+
+    /** 该端口是否已有监听者：TCP 构造函数不建连，必须显式 `connect()`。 */
+    static func isListening(port: UInt16): Bool {
+        let probe = TcpSocket(IPSocketAddress("127.0.0.1", port))
+        try {
+            probe.connect()
+            true
+        } catch (_: Exception) {
+            false
+        } finally {
+            try {
+                probe.close()
+            } catch (_: Exception) {
+                ()
+            }
+        }
     }
 }
 
@@ -62,15 +77,16 @@ class MQServerTest {
             "${root}/logs", "${root}/dead", 1024 * 1024, Duration.hour * 72, 0, "${root}/metas")
     }
 
+    private static func canConnect(port: UInt16): Bool {
+        ServerPortAllocator.isListening(port)
+    }
+
     private static func waitReady(port: UInt16): Unit {
         var ready = false
         var tries = 0
         while (!ready && tries < 300) {
-            try {
-                let probe = TcpSocket(IPSocketAddress("127.0.0.1", port))
-                probe.close()
-                ready = true
-            } catch (_: Exception) {
+            ready = canConnect(port)
+            if (!ready) {
                 sleep(Duration.millisecond * 10)
                 tries++
             }
@@ -88,6 +104,102 @@ class MQServerTest {
     private static func registerGroup(server: String, topic: String, group: String): Int64 {
         let args = MQManagerArgs.parse(["registerSubscriber", topic, group, "--server=${server}"]).getOrThrow()
         MQManager(args).registerSubscriber(topic, group)
+    }
+
+    /** 构造 `MQServer` 不绑定端口；只有 `start()` 才监听（R4-G2）。 */
+    @TestCase
+    public func portIsNotBoundBeforeStart(): Unit {
+        let root = TestDirs.of("server", "deferred_bind")
+        let port = ServerPortAllocator.freePort()
+        let server = MQServer(options(root, port, ["127.0.0.1:${port}"]))
+        try {
+            @Assert(!canConnect(port))
+            server.start()
+            waitReady(port)
+            @Assert(canConnect(port))
+        } finally {
+            server.close()
+            if (exists(root)) {
+                remove(root, recursive: true)
+            }
+        }
+    }
+
+    /** 定时器启动早于端口绑定：监听前端口一律拒绝连接（R4-G2）。 */
+    @TestCase
+    public func timersStartBeforePortBinding(): Unit {
+        let root = TestDirs.of("server", "timer_first")
+        let port = ServerPortAllocator.freePort()
+        let server = MQServer(options(root, port, ["127.0.0.1:${port}"]))
+        let reached = AtomicBool(false)
+        let refusedAtHook = AtomicBool(false)
+        server.beforeBind = {=>
+            reached.store(true)
+            if (!canConnect(port)) {
+                refusedAtHook.store(true)
+            }
+        }
+        try {
+            server.start()
+            @Assert(reached.load())
+            @Assert(refusedAtHook.load())
+            waitReady(port)
+        } finally {
+            server.close()
+            if (exists(root)) {
+                remove(root, recursive: true)
+            }
+        }
+    }
+
+    /** 装配期抛错不占端口：构造失败后端口仍闲置（R4-G2）。 */
+    @TestCase
+    public func assemblyFailureLeavesPortFree(): Unit {
+        let root = TestDirs.of("server", "assembly_failure")
+        if (exists(root)) {
+            remove(root, recursive: true)
+        }
+        Directory.create(root, recursive: true)
+        let port = ServerPortAllocator.freePort()
+        // 节点下标越界：装配期（NodeRegistry）必然抛错
+        let opts = options(root, port, ["127.0.0.1:${port}"], selfIndex: 5)
+        var threw = false
+        try {
+            MQServer(opts)
+        } catch (_: Exception) {
+            threw = true
+        }
+        @Assert(threw)
+        @Assert(!canConnect(port))
+        remove(root, recursive: true)
+    }
+
+    /** 关闭步骤与规格顺序一致，且 `queues.sync` 独立执行一次（R4-G18）。 */
+    @TestCase
+    public func closeSyncsQueuesExactlyOnce(): Unit {
+        let root = TestDirs.of("server", "close_sync")
+        let port = ServerPortAllocator.freePort()
+        let server = MQServer(options(root, port, ["127.0.0.1:${port}"]))
+        let syncs = AtomicInt64(0)
+        server.syncQueuesOverride = {=> syncs.fetchAdd(1)}
+        try {
+            server.start()
+            waitReady(port)
+            let names = ArrayList<String>()
+            for ((name, _) in server.closeSteps()) {
+                names.add(name)
+            }
+            @Assert(String.join(names.toArray(), delimiter: ",") ==
+                "server,cleanupTimer,antiEntropy,backup,cleaner,consume,subscribers,backupStore," +
+                "queues.sync,queues,deadLetter,meta,registry")
+            server.close()
+            @Assert(syncs.load() == 1)
+        } finally {
+            server.close()
+            if (exists(root)) {
+                remove(root, recursive: true)
+            }
+        }
     }
 
     @TestCase
