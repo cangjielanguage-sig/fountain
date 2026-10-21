@@ -52,22 +52,25 @@ protected class PartitionCache <: Resource {
     }
 
     public func get(logical: String, table: String, column: String, value: String): ?String {
-        if (closed_.load()) {
-            throw FdbmException(DbdErrorCode.CACHE, 'partition cache is closed')
-        }
-        match (store.get(keyOf(logical, table, column, value))) {
-            case Some(bytes) => Some(String.fromUtf8(bytes))
-            case None => None<String>
+        synchronized(lock) {
+            // 关闭与读写必须共用同一把锁：否则检查通过后 close() 关掉 store，读写会抛非 CACHE 异常（G15）
+            if (closed_.load()) {
+                throw FdbmException(DbdErrorCode.CACHE, 'partition cache is closed')
+            }
+            match (store.get(keyOf(logical, table, column, value))) {
+                case Some(bytes) => Some(String.fromUtf8(bytes))
+                case None => None<String>
+            }
         }
     }
 
     public func put(logical: String, table: String, column: String, value: String,
         physical: String): Unit {
-        if (closed_.load()) {
-            throw FdbmException(DbdErrorCode.CACHE, 'partition cache is closed')
-        }
         let key = keyOf(logical, table, column, value)
         synchronized(lock) {
+            if (closed_.load()) {
+                throw FdbmException(DbdErrorCode.CACHE, 'partition cache is closed')
+            }
             if (capacity > 0 && count_ >= capacity && store.get(key).isNone()) {
                 if (!capacityWarned) {
                     logger.warn('partition cache reached its capacity ${capacity}; new keys are not cached')
@@ -87,10 +90,10 @@ protected class PartitionCache <: Resource {
     }
 
     public func remove(logical: String, table: String, column: String, value: String): Unit {
-        if (closed_.load()) {
-            throw FdbmException(DbdErrorCode.CACHE, 'partition cache is closed')
-        }
         synchronized(lock) {
+            if (closed_.load()) {
+                throw FdbmException(DbdErrorCode.CACHE, 'partition cache is closed')
+            }
             if (store.remove(keyOf(logical, table, column, value)).isSome()) {
                 count_ -= 1
             }

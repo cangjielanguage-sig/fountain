@@ -16,7 +16,8 @@ limitations under the License.
 package fountain::fdbm.idmaker
 
 import std.collection.{ArrayList, HashMap, HashSet}
-import std.sync.Mutex
+import std.fs.{Directory, Path}
+import std.sync.{AtomicInt64, Mutex}
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_dbm.IdGenerator
@@ -62,6 +63,8 @@ public class IdMakersTest {
     /** D10：创建生成器不产生临时目录/文件，并发取号不重复。 */
     @TestCase
     public func uuidV1IsUniqueUnderConcurrency(): Unit {
+        // 旧实现为每个 ID 建临时目录/文件；这里断言 `/tmp` 下不再出现 17 位时间戳命名的文件
+        let tempEntriesBefore = timestampNamedEntries()
         let generator = UuidIdGenerator(version: 1)
         let lock = Mutex()
         let ids = ArrayList<String>()
@@ -86,6 +89,7 @@ public class IdMakersTest {
             @Assert(seen.add(id), true)
             @Assert(hundredNanosOf(UUID.parse(id)) > 0, true)
         }
+        @Assert(timestampNamedEntries(), tempEntriesBefore)
     }
 
     @TestCase
@@ -162,4 +166,29 @@ private func hundredNanosOf(value: UUID): Int64 {
             (Int64(bytes[3]) << 32) | (Int64(bytes[4]) << 24) | (Int64(bytes[5]) << 16) |
             (Int64(bytes[6] & 0xf) << 8) | Int64(bytes[7])
     }
+}
+
+
+/** `/tmp` 下 17 位纯数字命名的文件数（旧 UUID 实现的时间戳文件名）。 */
+private func timestampNamedEntries(): Int64 {
+    let count = AtomicInt64(0)
+    Directory.walk(Path('/tmp')) {info =>
+        if (!info.isDirectory() && isTimestampName(info.path.fileName)) {
+            count.fetchAdd(1)
+        }
+        true
+    }
+    count.load()
+}
+
+private func isTimestampName(name: String): Bool {
+    if (name.size != 17) {
+        return false
+    }
+    for (rune in name.toRuneArray()) {
+        if (rune < r'0' || rune > r'9') {
+            return false
+        }
+    }
+    true
 }

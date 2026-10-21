@@ -276,6 +276,18 @@ fdbm 必须扫描 `fdbm_customDir`（默认 `<工作目录>/custom`）下的动�
 - **WHEN** 解析
 - **THEN** 抛 `SQL_SYNTAX`（与 `UNSUPPORTED_SQL` 区分）
 
+#### Scenario: 新增子集可解析
+
+- **GIVEN** `insert ... returning <列>`、`select count(*) from (<select>) as a`、`select * from (<select>) as a limit ? offset ?`
+- **WHEN** 解析并绑定参数
+- **THEN** 均得到可执行语句，不再报 `UNSUPPORTED_SQL`
+
+#### Scenario: 会话控制语句快速分流
+
+- **GIVEN** `begin` / `commit` / `savepoint s1` 等语句
+- **WHEN** 进入处理
+- **THEN** 由 `parseSessionCtl` 命中并分流，不进入 SQL 解析主路径
+
 #### Scenario: 派生表位于 JOIN 或 DML
 
 - **GIVEN** `select ... from u join (select ...) c on ...`、`update t join (select ...) x on ... set ...`、
@@ -321,6 +333,12 @@ fdbm 必须扫描 `fdbm_customDir`（默认 `<工作目录>/custom`）下的动�
 - **WHEN** 再次启动并执行 `normalize()`
 - **THEN** 返回"未写回"，文件内容逐字节不变
 
+#### Scenario: 日志不泄露敏感值
+
+- **GIVEN** 涉及 `fdbm_db_password_*` 的整理或落盘
+- **WHEN** 查看日志
+- **THEN** 只出现键名，不出现值
+
 #### Scenario: 区块内优先
 
 - **GIVEN** managed 区块内 `fdbm_port=9000`，区块外另有 `export fdbm_port=9100`
@@ -354,6 +372,12 @@ fdbm 必须扫描 `fdbm_customDir`（默认 `<工作目录>/custom`）下的动�
 - **GIVEN** `sequence` 生成器与多个物理库
 - **WHEN** 连续取号
 - **THEN** 取号 SQL 只出现在分配库，返回递增后的值（首次返回 `increment`）
+
+#### Scenario: 生成器配置非法
+
+- **GIVEN** `fdbm_idmaker` 值或参数非法（含 `snowflake` 节点号缺失/越界）
+- **WHEN** 启动或构造生成器
+- **THEN** 报 `CONFIG`，不把底层 `NoneValueException` 漏到运行期
 
 #### Scenario: 只实现一种 ID 能力
 
@@ -440,7 +464,8 @@ fdbm 必须把物理驱动名归一为一个方言族，并在**下推渲染**�
 本要求为强制要求（MUST）。
 
 - `fdbm_db_logicalDatabase_<logical>` 是逻辑库的**唯一**声明来源；物理库名**不得**被自动注册成逻辑库键。
-- 未显式配置但被 `fdbm_partition__*` / `fdbm_global__*` 引用的逻辑库，隐式映射到**全部物理库**（排序去重）。
+- 未显式配置但被 `fdbm_partition__*` 引用的逻辑库，隐式映射到**全部物理库**（排序去重）。
+- `fdbm_global__*` **不**触发隐式展开：全局表必须引用已存在的逻辑库，否则启动报 `CONFIG`。
 - 若以上都没有，且只有一个物理库 → 以该物理库名作为唯一逻辑命名空间（记 WARN）；多个物理库 → 取排序首项作命名空间并记 WARN。
 - 会话默认库必须取自逻辑命名空间：只有一个 → 它；多个 → 排序首项并记 WARN。协议没有「连接时声明 database」，多逻辑库部署必须用 `<logical>.<table>` 限定（偏差登记于 §9.1）。
 - `SHOW DATABASES` 返回逻辑库名列表；`SHOW TABLES [<logical>]` 接受逻辑库名，按该逻辑库解析物理库后内省；未知 → `ROUTE_FAILED`。

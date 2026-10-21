@@ -247,6 +247,78 @@ public class ServerLifecycleTest {
         }
     }
 
+    /** G12：端口被占用时 `start()` 必须报 `CONFIG`（main 据此返回 1）。 */
+    @TestCase
+    public func listenFailureIsConfigError(): Unit {
+        let port = uniquePort()
+        let source = settingsSource(port)
+        let settings = FdbmSettings.load(source: source)
+        let driver = DriverManager.getDriver('mockdb').getOrThrow()
+        let first = FdbmServer(settings, source: source, driver: driver)
+        let started = first
+        spawn {
+            try {
+                started.start()
+            } catch (_: Exception) {
+                ()
+            }
+        }
+        try {
+            @Assert(waitForPort(port), true)
+            let second = FdbmServer(settings, source: source, driver: driver)
+            try {
+                @Assert(codeOf { second.start() }, DbdErrorCode.CONFIG)
+            } finally {
+                second.stop()
+            }
+        } finally {
+            first.stop()
+        }
+    }
+
+    /** G16：巡检与在途请求并发 100 轮，不得误关活跃会话。 */
+    @TestCase
+    public func sweepKeepsLiveSessionWhileRequestsInFlight(): Unit {
+        let harness = Harness(rows: [1], sweep: Duration.millisecond * 1)
+        let client = harness.client()
+        try {
+            client.transfer(Message.consume(once: true, qos: QoS.AtMostOnce,
+                data: SqlPayload('select * from t where id = 1')), Duration.second * 5)
+            @Assert(harness.sessions.size(), 1)
+            var i: Int64 = 0
+            while (i < 100) {
+                InFlight.enter()
+                harness.sessions.sweep()
+                @Assert(harness.sessions.size(), 1)
+                InFlight.leave()
+                i += 1
+            }
+        } finally {
+            client.close()
+            harness.close()
+        }
+    }
+
+    /** G16：同一连接重复 remove 只关闭一次（第二次是 no-op）。 */
+    @TestCase
+    public func removeTwiceIsIdempotent(): Unit {
+        let harness = Harness(rows: [1])
+        let client = harness.client()
+        try {
+            client.transfer(Message.consume(once: true, qos: QoS.AtMostOnce,
+                data: SqlPayload('select * from t where id = 1')), Duration.second * 5)
+            let buffer = harness.lastBuffer()
+            @Assert(harness.sessions.size(), 1)
+            harness.sessions.remove(buffer)
+            @Assert(harness.sessions.size(), 0)
+            harness.sessions.remove(buffer)
+            @Assert(harness.sessions.size(), 0)
+        } finally {
+            client.close()
+            harness.close()
+        }
+    }
+
     @TestCase
     public func constructorRejectsDriverNameMismatch(): Unit {
         let port = uniquePort()

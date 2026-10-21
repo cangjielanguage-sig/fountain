@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::fdbm.execute
 
 import std.collection.{ArrayList, HashMap}
+import std.sync.AtomicBool
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_dbm.{IdGenerator, PartitionAlgorithm}
@@ -213,6 +214,35 @@ public class ExecutorFeatureTest {
             @Assert(cursor.cell(0, 0).toString(), '1')
             cursor.close()
             @Assert(fixture.accessor.reads.toArray(), ['db0'])
+        } finally {
+            session.close()
+            fixture.resources.close()
+        }
+    }
+
+    /** G26：物理库拒绝 begin 时会话不得留下 pin，且可以重新 begin。 */
+    @TestCase
+    public func failedBeginLeavesSessionUnpinned(): Unit {
+        let failBegin = AtomicBool(true)
+        let fixture = recordingFixture('postgres') { sql, _ =>
+            if (sql.startsWith('begin') && failBegin.load()) {
+                throw Exception('injected begin failure')
+            }
+            MOCKDB.rowCount = 1
+        }
+        let session = DbdSession('s', None, 'db0')
+        try {
+            var failed = false
+            try {
+                fixture.executor.execute(session, 'begin', [])
+            } catch (_: Exception) {
+                failed = true
+            }
+            @Assert(failed, true)
+            @Assert(session.isPinned(), false)
+            failBegin.store(false)
+            fixture.executor.execute(session, 'begin', [])
+            @Assert(session.isPinned(), true)
         } finally {
             session.close()
             fixture.resources.close()

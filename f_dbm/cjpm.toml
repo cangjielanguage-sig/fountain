@@ -16,7 +16,7 @@
   package-configuration = {}
   category = ["Database Framework", "Data Encapsulation and Transfer", "Developer Tools"]
   license = ["Apache-2.0"]
-  include = ["src"]
+  include = ["src", "doc"]
   exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
   authors = ["吴京润"]
   repository = "https://gitcode.com/Cangjie-SIG/fountain/tree/master/f_dbm"

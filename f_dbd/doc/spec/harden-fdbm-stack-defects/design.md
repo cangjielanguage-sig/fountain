@@ -206,8 +206,10 @@
      自定义名 `myhash` 正常生效且 `hash` 仍为内置。
 - **验证**：见上；`CustomLoader` 的自定义之间重名路径不变。
 
-### D10 UUID v1/v6（`fdbm/src/idmaker/IdMakers.cj`）
+### D10 UUID v1/v6（`fdbm/src/idmaker/IdMakers.cj`、`f_util/src/uuid.cj`）
 
+- **根因**：`f_util` 的时间戳写入在 `Int64` 纳秒左移时溢出（`timestampNanos` 恒 0）；旧路径
+  `registerFileSequenceGenerator()` 还会为每次生成建临时目录/文件。
 - **方案**：`UuidIdGenerator` 持有**进程级复用的** `TimeBasedUUIDBuilder`（`version == 1` 用
   `UUID.timeBased(timeLowFirst: true)`，`6` 用 `UUID.timeBased()`），构造时调一次
   `registerSequenceGenerator()`（内存原子序列，不建临时文件/目录）；`nextStringId()` 在
@@ -341,12 +343,13 @@
 | 自定义名与内置冲突 → 启动失败 | 行为（收紧） | README 早已承诺 | CHANGELOG 记录 |
 | 多行 INSERT 同库事务 | 行为（增强） | `rowCount` 语义不变 | — |
 | 逻辑库限定符下推时去掉 | 行为 | 逻辑名≠物理名从「读错库」变为「读对库」 | 文档 §8.2 |
+| `DatabasePool.closeAndAwait` 等待在借连接 | 行为（收紧） | 有未归还连接时超时返回 `false`（原只看内部线程） | 仅影响优雅停止；`close()` 不变 |
 
 ## 6. 失败模式与回滚
 
 - **D03 是新旧语义分界**：旧部署若故意用物理库名当逻辑库（如 e2e 的 `db0`），修复后仍可用
-  （物理名会作为「未配置逻辑库」被隐式展开为全部物理库），但 `SHOW DATABASES` 的输出集合会变化；
-  文档与 e2e 断言同步更新。
+  （只有 `fdbm_partition__*` 引用的名字会隐式展开为全部物理库；`fdbm_global__*` 必须显式引用已存在
+  的逻辑库，否则 `CONFIG`），但 `SHOW DATABASES` 的输出集合会变化；文档与 e2e 断言同步更新。
 - **D05 收紧广播范围**：若语句带未知逻辑库限定，之前会「广播成功」，之后 `ROUTE_FAILED`。这是有意的
   安全收紧，登记为已知变更。
 - **G22 去限定符**：若客户端用限定名指向**另一个**逻辑库（`cfg.t`），语句的目标库由路由决定，

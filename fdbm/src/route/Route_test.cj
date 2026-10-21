@@ -17,6 +17,7 @@ package fountain::fdbm.route
 
 import std.collection.{ArrayList, HashMap}
 import std.fs.*
+import std.sync.AtomicInt64
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_dbm.PartitionAlgorithm
@@ -145,6 +146,45 @@ public class PartitionCacheTest {
             @Assert(cacheCodeOf { cache.get('db0', 't', 'id', '1') } == DbdErrorCode.CACHE, true)
             @Assert(cacheCodeOf { cache.put('db0', 't', 'id', '1', 'p0') } == DbdErrorCode.CACHE, true)
             @Assert(cacheCodeOf { cache.remove('db0', 't', 'id', '1') } == DbdErrorCode.CACHE, true)
+        } finally {
+            removeIfExists(dir, recursive: true)
+        }
+    }
+
+    /** G15：并发 `put` 与 `close` 交错 1000 次，只有 `CACHE` 错误，落盘可重开。 */
+    @TestCase
+    public func concurrentPutsAndCloseStayConsistent(): Unit {
+        let dir = Directory.createTemp('/tmp')
+        try {
+            let cache = PartitionCache(dir.toString(), None, 0)
+            let unexpected = AtomicInt64(0)
+            let futures = ArrayList<Future<Unit>>()
+            for (worker in 0..4) {
+                let fut = spawn {
+                    for (i in 0..250) {
+                        try {
+                            cache.put('db0', 't', 'id', '${worker * 1000 + i}', 'p0')
+                        } catch (e: FdbmException) {
+                            if (e.code != DbdErrorCode.CACHE) {
+                                unexpected.fetchAdd(1)
+                            }
+                        } catch (_: Exception) {
+                            unexpected.fetchAdd(1)
+                        }
+                    }
+                }
+                futures.add(fut)
+            }
+            sleep(Duration.millisecond * 5)
+            cache.close()
+            for (fut in futures) {
+                fut.get()
+            }
+            @Assert(unexpected.load(), 0)
+            @Assert(cache.isClosed(), true)
+            let reopened = PartitionCache(dir.toString(), None, 0)
+            @Assert(reopened.count() <= 1000, true)
+            reopened.close()
         } finally {
             removeIfExists(dir, recursive: true)
         }
