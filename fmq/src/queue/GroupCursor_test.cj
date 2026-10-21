@@ -828,6 +828,26 @@ class GroupCursorTest {
         }
     }
 
+    /** 跳过计数进指标：两条无匹配记录的越过计入 skippedNoMatch，其余两个不变（R3-M8）。 */
+    @TestCase
+    public func skippedNoMatchIsCountedInMetrics(): Unit {
+        let fixture = CursorFixture("metrics_no_match")
+        try {
+            fixture.append(["a"], "one")
+            fixture.append(["a"], "two")
+            let metrics = MQMetrics()
+            let cursor = fixture.cursorOf(metrics: metrics)
+            let s1 = fixture.sub("s1", tags: ["b"])
+            @Assert(cursor.next(s1, [s1], MQMatcher()).isNone())
+            @Assert(metrics.skippedNoMatchOf("/t", "g") == 2)
+            @Assert(metrics.skippedUnreadableOf("/t", "g") == 0)
+            @Assert(metrics.skippedUnsupportedOf("/t", "g") == 0)
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
     /** 未真正投递过的位置不接受 ACK，游标也不得推进（A50）。 */
     @TestCase
     public func ackRequiresDeliveredPosition(): Unit {

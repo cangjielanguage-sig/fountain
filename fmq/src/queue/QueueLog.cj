@@ -135,6 +135,26 @@ protected class QueueLog <: Resource {
      *   （游标异常），`offset == size` 只是正常的段末尾；
      * - 段已被清理：同样跳到更大段并 WARN；没有后继段返回 `None`（调用方按空流处理）。
      */
+    /**
+     * 解析「从该位点开始还能读到的起点」。
+     *
+     * `strict = true` 表示调用方不接受任何恢复：位点所在段不存在时直接抛
+     * [QueueCorruptionException]（`stats` 用它区分「还没被消费路径修复」与「真的读完了」）。
+     */
+    protected func resolveStart(position: LogPosition, strict!: Bool = false): ?LogPosition {
+        let segments = segmentsOrEmpty()
+        for (meta in segments) {
+            if (meta.index == position.seq) {
+                return startPositionOf(segments, position)
+            }
+        }
+        if (strict) {
+            throw QueueCorruptionException(
+                "segment ${position.seq} of queue ${label} is missing (position ${position.seq}:${position.offset})")
+        }
+        return startPositionOf(segments, position)
+    }
+
     private func startPositionOf(segments: ArrayList<SegmentedMeta>, position: LogPosition): ?LogPosition {
         for (meta in segments) {
             if (meta.index != position.seq) {

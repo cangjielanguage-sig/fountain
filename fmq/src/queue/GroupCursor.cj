@@ -161,6 +161,9 @@ protected class GroupCursor {
                         // 段被清理、记录已不可读：标记已决，但必须留痕（A48）
                         entry.decided = true
                         skippedUnreadable_ = skippedUnreadable_ + 1
+                        if (let Some(m) <- metrics) {
+                            m.incSkippedUnreadable(topic, group)
+                        }
                         logger.warn("record at ${topic}/${queueIndex}@${entry.position.seq}:" +
                             "${entry.position.offset} is gone for group '${group}', marked decided")
                         continue
@@ -308,6 +311,9 @@ protected class GroupCursor {
                     // 该位置只报一次；其它组独立游标，不受影响。
                     entries.add(DeliveryRecord(position, after, None<String>, 0, current, false, decided: true))
                     unsupportedSkipped_ = unsupportedSkipped_ + 1
+                    if (let Some(m) <- metrics) {
+                        m.incSkippedUnsupported(topic, group)
+                    }
                     scanPosition = after
                     reader.getOrThrow().close()
                     reader = None
@@ -320,6 +326,9 @@ protected class GroupCursor {
                     // 组内无人匹配：不适用，允许越过（记 DEBUG + 计数，便于排查「消息被越过」）
                     entries.add(DeliveryRecord(position, after, None<String>, 0, now(), false, decided: true))
                     noMatchSkipped_ = noMatchSkipped_ + 1
+                    if (let Some(m) <- metrics) {
+                        m.incSkippedNoMatch(topic, group)
+                    }
                     logger.debug("record at ${topic}/${queueIndex}@${position.seq}:${position.offset} " +
                         "matches no active subscriber of group '${group}', skipped")
                 }

@@ -29,7 +29,8 @@ public class MQManagerOutput {
 
     /** `stats` 表格的表头；列口径与 metrics 规格一致。 */
     public static let STATS_HEADER: Array<String> = ["topic", "group", "queueNum", "delaying", "backlog",
-        "lagMs", "delivered", "acked", "redelivered", "deadLettered"]
+        "lagMs", "delivered", "acked", "redelivered", "deadLettered", "skippedUnreadable", "skippedNoMatch",
+        "skippedUnsupported"]
 
     public static func error(message: String): String {
         "${ERROR_PREFIX}${message}"
@@ -85,10 +86,20 @@ public class MQManagerOutput {
                     "服务端响应格式不正确: stats 列 delaying='${fields[4]}' 不是整数")
             }
             let delay = (Duration.millisecond * delayingMs).toString()
+            // 旧服务端只有 11 列：新增的跳过计数缺省为 0（向后兼容）
             rows.add([fields[1], group, fields[3], delay, fields[5], fields[6], fields[7], fields[8],
-                fields[9], fields[10]])
+                fields[9], fields[10], columnOf(fields, 11), columnOf(fields, 12), columnOf(fields, 13)])
         }
         table(STATS_HEADER, rows.toArray())
+    }
+
+    /** 取第 `index` 列，缺列（旧服务端）按 `0` 处理。 */
+    private static func columnOf(fields: Array<String>, index: Int64): String {
+        if (index < fields.size) {
+            fields[index]
+        } else {
+            "0"
+        }
     }
 
     /** `0→0,1→2` 形式：队列下标 → owner 节点下标。 */

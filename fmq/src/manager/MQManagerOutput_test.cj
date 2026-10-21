@@ -106,8 +106,8 @@ class MQManagerOutputTest {
     @TestCase
     public func statsRendersHeaderAndTwoRows(): Unit {
         let text = "#\t0\t1729500000000\n" +
-            "R\t/order\tg1\t2\t61000\t5\t120\t9\t7\t1\t0\n" +
-            "R\t/audit\t\t1\t0\t0\t0\t3\t3\t0\t1\n"
+            "R\t/order\tg1\t2\t61000\t5\t120\t9\t7\t1\t0\t2\t3\t4\n" +
+            "R\t/audit\t\t1\t0\t0\t0\t3\t3\t0\t1\t0\t0\t0\n"
         let lines = MQManagerOutput.stats(text).split("\n")
         @Assert(lines.size == 3)
 
@@ -117,17 +117,32 @@ class MQManagerOutputTest {
         @Assert(header[1].startsWith("group"))
         @Assert(header[4].startsWith("backlog"))
         @Assert(header[9].startsWith("deadLettered"))
+        @Assert(header[10].startsWith("skippedUnreadable"))
+        @Assert(header[11].startsWith("skippedNoMatch"))
+        @Assert(header[12].startsWith("skippedUnsupported"))
 
         @Assert(lines[1].contains("/order"))
         @Assert(lines[1].contains("g1"))
         @Assert(lines[1].contains("1m1s"))
         @Assert(lines[1].contains("5"))
         @Assert(lines[1].contains("120"))
+        @Assert(lines[1].contains("2"))
+        @Assert(lines[1].contains("4"))
 
         // 空组名渲染为「（无）」，不能留空格子
         @Assert(lines[2].contains("/audit"))
         @Assert(lines[2].contains("（无）"))
         @Assert(lines[2].contains("1"))
+    }
+
+    /** 旧服务端只给 11 列：新增的三个跳过计数按 0 渲染，不报格式错误（兼容）。 */
+    @TestCase
+    public func statsAcceptsLegacyElevenColumns(): Unit {
+        let text = "R\t/order\tg1\t2\t61000\t5\t120\t9\t7\t1\t0\n"
+        let lines = MQManagerOutput.stats(text).split("\n")
+        @Assert(lines.size == 2)
+        @Assert(lines[1].contains("/order"))
+        @Assert(lines[1].contains("0"))
     }
 
     /**

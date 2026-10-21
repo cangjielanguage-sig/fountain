@@ -111,4 +111,30 @@ protected class MQMetrics {
     protected func deadLetteredOf(topic: String, group: String): Int64 {
         valueOf(topic, group, "deadLettered")
     }
+
+    // ===== 跳过计数（R3-M4/M8）：只统计「越过」，损坏不计入 =====
+
+    protected func incSkippedUnreadable(topic: String, group: String): Unit {
+        bump(topic, group, "skippedUnreadable")
+    }
+
+    protected func incSkippedNoMatch(topic: String, group: String): Unit {
+        bump(topic, group, "skippedNoMatch")
+    }
+
+    protected func incSkippedUnsupported(topic: String, group: String): Unit {
+        bump(topic, group, "skippedUnsupported")
+    }
+
+    protected func skippedUnreadableOf(topic: String, group: String): Int64 {
+        valueOf(topic, group, "skippedUnreadable")
+    }
+
+    protected func skippedNoMatchOf(topic: String, group: String): Int64 {
+        valueOf(topic, group, "skippedNoMatch")
+    }
+
+    protected func skippedUnsupportedOf(topic: String, group: String): Int64 {
+        valueOf(topic, group, "skippedUnsupported")
+    }
 }

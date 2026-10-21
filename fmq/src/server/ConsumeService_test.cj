@@ -57,20 +57,20 @@ class ConsumeFixture <: Resource {
     let service: ConsumeService
     private let topic = "/t"
 
-    init(name: String, queueCount!: Int64 = 1) {
+    init(name: String, queueCount!: Int64 = 1, maxFileSize!: Int64 = 1024 * 1024) {
         this.root = TestDirs.of("consume", name)
         if (exists(root)) {
             remove(root, recursive: true)
         }
         Directory.create(root, recursive: true)
-        this.queues = QueueManager("${root}/logs", 1024 * 1024, 1)
+        this.queues = QueueManager("${root}/logs", maxFileSize, 1)
         this.store = CursorStore(root)
         this.meta = MetaStore("${root}/metas")
         meta.load()
         meta.applyTopic(MQTopicAssignment("/t", 1, 0, [0]))
         meta.applyGroup(MQSubscribeGroupMeta("/t", "g"))
         this.catalog = CursorCatalog(store, meta)
-        this.deadLetter = DeadLetterQueue("${root}/dead", 1024 * 1024, 1)
+        this.deadLetter = DeadLetterQueue("${root}/dead", maxFileSize, 1)
         let owners = Array<Int64>(queueCount) {_ => 0}
         this.queues.openTopic(MQTopicAssignment(topic, queueCount, 0, owners), 0)
         this.service = ConsumeService(queues, catalog, registry, MQMatcher(), deadLetter,
@@ -344,6 +344,39 @@ class ConsumeServiceTest {
             fixture.close()
         }
     }
+    /** committed 段缺失且未修复 → `stats` 报 INTERNAL；修复后正常，尾部三列是跳过计数（R3-M4/M8）。 */
+    @TestCase
+    public func statsRejectsMissingCommittedSegmentUntilRepaired(): Unit {
+        let fixture = ConsumeFixture("stats_missing_segment", maxFileSize: 50)
+        try {
+            fixture.append([], "a")
+            fixture.append([], "b")
+            fixture.append([], "c")
+            // 人为删掉 committed 所在的段，且不修复位点
+            fixture.queues.queueOf("/t", 0).getOrThrow().removeById(1)
+            fixture.catalog.save("/t", 0, "g", LogPosition(1, 0))
+            var code = -1i64
+            try {
+                fixture.service.stats("/t", 0, {_ => ["g"]})
+            } catch (e: MQServiceException) {
+                code = e.code
+            }
+            @Assert(code == MQErrorCode.INTERNAL)
+
+            // 消费路径把位点前移后，统计恢复正常
+            fixture.catalog.save("/t", 0, "g", LogPosition(2, 0))
+            let text = fixture.service.stats("/t", 0, {_ => ["g"]})
+            @Assert(text.contains("skippedUnreadable"))
+            let row = statsRow(text, "/t", "g")
+            @Assert(row.size == 14)
+            @Assert(row[11] == "0")
+            @Assert(row[12] == "0")
+            @Assert(row[13] == "0")
+        } finally {
+            fixture.close()
+        }
+    }
+
     private static func statsRow(text: String, topic: String, group: String): Array<String> {
         for (line in text.split("\n")) {
             let fields = line.split("\t")
