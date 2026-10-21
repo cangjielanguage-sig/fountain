@@ -354,41 +354,59 @@ protected class MetaStore <: Resource {
     /**
      * 应用一条墓碑（来自广播或快照）。
      *
-     * 本地同 key 的条目 revision 不高于墓碑时一并删除；墓碑本身按 revision 只进不退。
+     * 胜负与条目之间用同一套 `isNewer` 规则：墓碑只有赢过同 key 的活条目与已有墓碑才生效。
+     * 输掉时零副作用——不写墓碑、不删条目、不回调（R2-S2）。
      */
     protected func applyTombstone(tombstone: MQMetaTombstone): MetaApplyResult {
         synchronized(lock) {
-            let key = tombstone.key()
-            var applied = true
-            match (tombstones.get(key)) {
-                case Some(existing) =>
-                    if (!isNewer(tombstone.revision, tombstone.origin, existing.revision, existing.origin)) {
-                        applied = false
-                    }
-                case None => ()
-            }
-            if (applied) {
-                writeTombstoneLocked(tombstone)
-                tombstones.add(key, tombstone)
-            }
+            // 先判活条目：`(rev 5, origin 9)` 的条目必须挡住 `(rev 5, origin 2)` 的墓碑
             if (tombstone.isTopic()) {
                 match (topicIndex.get(tombstone.topic)) {
                     case Some(local) =>
-                        if (local.revision <= tombstone.revision) {
-                            dropTopicLocked(tombstone.topic)
+                        if (!isNewer(tombstone.revision, tombstone.origin, local.revision, local.origin)) {
+                            return MetaApplyResult.Duplicated
                         }
                     case None => ()
                 }
             } else {
                 match (groupOfLocked(tombstone.topic, tombstone.subscribeGroup)) {
                     case Some(local) =>
-                        if (local.revision <= tombstone.revision) {
-                            dropGroupLocked(tombstone.topic, tombstone.subscribeGroup)
+                        if (!isNewer(tombstone.revision, tombstone.origin, local.revision, local.origin)) {
+                            return MetaApplyResult.Duplicated
                         }
                     case None => ()
                 }
             }
-            if (applied) { MetaApplyResult.Applied } else { MetaApplyResult.Duplicated }
+            // 再判已有墓碑：墓碑之间同样只进不退
+            let key = tombstone.key()
+            match (tombstones.get(key)) {
+                case Some(existing) =>
+                    if (!isNewer(tombstone.revision, tombstone.origin, existing.revision, existing.origin)) {
+                        return MetaApplyResult.Duplicated
+                    }
+                case None => ()
+            }
+            writeTombstoneLocked(tombstone)
+            tombstones.add(key, tombstone)
+            if (tombstone.isTopic()) {
+                match (topicIndex.get(tombstone.topic)) {
+                    case Some(_) =>
+                        for (meta in groupsOfLocked(tombstone.topic)) {
+                            if (meta.revision > tombstone.revision) {
+                                log.warn("group '${meta.subscribeGroup}' of deleted topic '${tombstone.topic}' " +
+                                    "has newer revision ${meta.revision}; dropping it with the topic")
+                            }
+                        }
+                        // 级联删除该主题下的组：主题已不存在，孤儿组只会让后续快照继续扩散
+                        dropTopicLocked(tombstone.topic)
+                    case None => ()
+                }
+            } else {
+                if (groupOfLocked(tombstone.topic, tombstone.subscribeGroup).isSome()) {
+                    dropGroupLocked(tombstone.topic, tombstone.subscribeGroup)
+                }
+            }
+            MetaApplyResult.Applied
         }
     }
 
@@ -594,6 +612,14 @@ protected class MetaStore <: Resource {
 
     private func groupExistsLocked(topic: String, group: String): Bool {
         groupOfLocked(topic, group).isSome()
+    }
+
+    /** 某主题下的全部组（快照副本，级联删除时安全遍历）。 */
+    private func groupsOfLocked(topic: String): Array<MQSubscribeGroupMeta> {
+        match (groups.get(topic)) {
+            case Some(list) => list.toArray()
+            case None => Array<MQSubscribeGroupMeta>()
+        }
     }
 
     private func groupOfLocked(topic: String, group: String): ?MQSubscribeGroupMeta {

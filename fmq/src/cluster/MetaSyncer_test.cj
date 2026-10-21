@@ -407,6 +407,30 @@ class MetaSyncerTest {
         }
     }
 
+    /** 输给活条目的墓碑不触发删除回调：队列/游标/订阅/指标都不得被清理（R2-S2）。 */
+    @TestCase
+    public func losingTombstoneDoesNotNotifyDeletion(): Unit {
+        let name = "tombstone_lose_callback"
+        let (store, _, syncer) = fixture(name)
+        try {
+            let deleted = AtomicInt64(0)
+            syncer.onDeleted = {_ => deleted.fetchAdd(1)}
+            store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 5, origin: 9))
+            store.applyGroup(MQSubscribeGroupMeta("/t", "g", revision: 5, origin: 9))
+            @Assert(syncer.applyRemoteTombstone(
+                MQMetaTombstone(MQMetaTombstone.KIND_GROUP, "/t", "g", 5, 2, 0)) == MetaApplyResult.Duplicated)
+            @Assert(deleted.load() == 0)
+            @Assert(store.groupExists("/t", "g"))
+            // 胜出的墓碑才回调
+            @Assert(syncer.applyRemoteTombstone(
+                MQMetaTombstone(MQMetaTombstone.KIND_GROUP, "/t", "g", 6, 2, 0)) == MetaApplyResult.Applied)
+            @Assert(deleted.load() == 1)
+            @Assert(!store.groupExists("/t", "g"))
+        } finally {
+            shutdown(store, name)
+        }
+    }
+
     /** 快照不带版本（旧 peer）时不做「缺失即删除」，避免互相清空。 */
     @TestCase
     public func legacySnapshotDoesNotWipeLocalMetadata(): Unit {
