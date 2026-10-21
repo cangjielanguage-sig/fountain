@@ -656,4 +656,28 @@ class GroupCursorTest {
             fixture.close()
         }
     }
+
+    /** 未真正投递过的位置不接受 ACK，游标也不得推进（A50）。 */
+    @TestCase
+    public func ackRequiresDeliveredPosition(): Unit {
+        let fixture = CursorFixture("ack_not_delivered")
+        try {
+            let position = fixture.append(["b"], "one")
+            let cursor = fixture.cursorOf()
+            let s1 = fixture.sub("s1", tags: ["a"])
+            let s2 = fixture.sub("s2", tags: ["b"])
+            let members = [s1, s2]
+            // s1 扫描时把记录分配给 s2（delivered = false），s1 拿不到
+            @Assert(cursor.next(s1, members, MQMatcher()).isNone())
+            // s2 还没取走就 ACK：必须被拒绝
+            @Assert(!cursor.ack("s2", position))
+            @Assert(cursor.committed.seq == 1 && cursor.committed.offset == 0)
+            // s2 真正取走后 ACK 生效
+            @Assert(cursor.next(s2, members, MQMatcher()).isSome())
+            @Assert(cursor.ack("s2", position))
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
 }

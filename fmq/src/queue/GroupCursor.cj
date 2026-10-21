@@ -316,6 +316,10 @@ protected class GroupCursor {
                         return false
                     }
                 }
+                // 只接受了「已分配的归属」还不够：必须真的投递过（A50）
+                if (!entry.delivered) {
+                    return false
+                }
                 entry.decided = true
                 advance()
                 if (let Some(m) <- metrics) {
