@@ -67,6 +67,12 @@ class ServerPortAllocator {
 
 @Test
 class MQServerTest {
+    /** 进程不再注册 `atExit`，整个类的临时目录在收尾时统一回收。 */
+    @AfterAll
+    static func removeTempDirs(): Unit {
+        TestDirs.cleanNamespace("server")
+    }
+
     private static func options(root: String, port: UInt16, nodes: Array<String>,
         selfIndex!: Int64 = 0): MQServerOptions {
         if (exists(root)) {
@@ -546,7 +552,7 @@ class MQServerTest {
             }
             @Assert(disconnected)
             server.cleanupSubscribers()
-            @Assert(server.subscriptionRegistry.count() == 0)
+            @Assert(server.subscriptionRegistry.infos().size == 0)
             // 记录被退回组内：同组的新订阅下一次消费即可取到
             let second = MQClient([address])
             try {
@@ -573,13 +579,13 @@ class MQServerTest {
                 alive: {=> false})
             @Assert(server.subscriptionRegistry.register(dead).code == 0)
             server.cleanupSubscribers()
-            @Assert(server.subscriptionRegistry.count() == 0)
+            @Assert(server.subscriptionRegistry.infos().size == 0)
             // 同一 id 在清理快照之后重订阅：代次自增，旧快照不得摘掉它
             let live = MQSubscriptionInfo("s1", "/t", "g", [], MQFilter.compile(""), false, EMPTY_SOCKET_BUFFER,
                 alive: {=> true})
             @Assert(server.subscriptionRegistry.register(live).code == 0)
             server.cleanupSubscribers()
-            @Assert(server.subscriptionRegistry.count() == 1)
+            @Assert(server.subscriptionRegistry.infos().size == 1)
         } finally {
             server.close()
         }
@@ -615,7 +621,7 @@ class MQServerTest {
             }
             @Assert(found)
             server.cleanupSubscribers()
-            @Assert(server.subscriptionRegistry.count() == 0)
+            @Assert(server.subscriptionRegistry.infos().size == 0)
 
             // 记录已退回组内：新订阅立刻拿到
             let second = MQClient([address])
@@ -647,9 +653,9 @@ class MQServerTest {
             @Assert(registerGroup(address, "/t", "g") == 0)
             let client = MQClient([address])
             let sid = client.subscribe("/t", subscribeGroup: "g")
-            @Assert(server.subscriptionRegistry.count() == 1)
+            @Assert(server.subscriptionRegistry.infos().size == 1)
             server.close()
-            @Assert(server.subscriptionRegistry.count() == 0)
+            @Assert(server.subscriptionRegistry.infos().size == 0)
             client.close()
         } finally {
             server.close()

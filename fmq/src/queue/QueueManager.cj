@@ -205,17 +205,6 @@ protected class QueueManager <: Resource {
         result.toArray()
     }
 
-    protected prop hasLocalQueues: Bool {
-        get() {
-            for ((_, set) in topics) {
-                if (set.items.size > 0) {
-                    return true
-                }
-            }
-            false
-        }
-    }
-
     protected func sync(): Unit {
         for ((_, _, log) in allLogs()) {
             log.sync()

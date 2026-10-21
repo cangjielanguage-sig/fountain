@@ -31,13 +31,19 @@ import fountain::fmq.manager.{MQManager, MQManagerArgs, MQManagerOutput}
 import fountain::fmq.test.TestDirs
 
 /**
- * 管理端六个子命令的独立用例。
+ * 管理端七个子命令的独立用例。
  *
  * 放在 `fmq.server` 包内是为了复用 `MQServerOptions` / `MQServer` 的测试装配
  * （两者对包外不可见）；`MQManager` 本身是 public，调用方式与真实 CLI 一致。
  */
 @Test
 class MQManagerTest {
+    /** 进程不再注册 `atExit`，整个类的临时目录在收尾时统一回收。 */
+    @AfterAll
+    static func removeTempDirs(): Unit {
+        TestDirs.cleanNamespace("manager")
+    }
+
     private static let nextPort = AtomicInt64(28100)
 
     private static func freePort(): UInt16 {
@@ -306,7 +312,7 @@ class MQManagerTest {
     }
 
     @TestCase
-    public func sixSubcommandsSucceedAndMutateState(): Unit {
+    public func sevenSubcommandsSucceedAndMutateState(): Unit {
         let (server, address) = startServer("flow")
         try {
             @Assert(manager(address, ["registerTopic", "/t", "2"]).run() == 0)

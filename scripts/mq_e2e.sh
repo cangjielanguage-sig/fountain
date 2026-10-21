@@ -62,6 +62,14 @@ echo "==> 构建 f_mq / fmq / e2e client"
 (cd "${ROOT}/fmq" && cjpm build >"${TMP}/build_fmq.log" 2>&1) || { echo "fmq build failed"; tail -20 "${TMP}/build_fmq.log"; exit 1; }
 (cd "${ROOT}/scripts/mq_e2e_client" && cjpm build >"${TMP}/build_client.log" 2>&1) || { echo "client build failed"; tail -20 "${TMP}/build_client.log"; exit 1; }
 
+# 打包边界（R5-3/C1）：测试替身不得进入生产产物
+check "f_mq 动态库不含 MQStubServer 符号" \
+  bash -c "! nm -D '${ROOT}/f_mq/target/release/f_mq@fountain/libf_mq@fountain.so' | grep -q MQStubServer"
+check "fmq 主程序不链接 TestDirs" \
+  bash -c "! nm '${ROOT}/fmq/target/release/bin/main' | grep -q TestDirs"
+check "fmq 主程序不含 TestDirs 字样" \
+  bash -c "! strings '${ROOT}/fmq/target/release/bin/main' | grep -q TestDirs"
+
 FMQ_DIR="${ROOT}/fmq/target/release"
 CLIENT_DIR="${ROOT}/scripts/mq_e2e_client/target/release"
 export LD_LIBRARY_PATH="$(lib_path "${FMQ_DIR}")$(lib_path "${CLIENT_DIR}")${LD_LIBRARY_PATH:-}"

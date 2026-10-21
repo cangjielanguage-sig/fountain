@@ -81,7 +81,7 @@ class MQManagerArgsTest {
     }
 
     @TestCase
-    public func sixSubcommandsParse(): Unit {
+    public func sevenSubcommandsParse(): Unit {
         @Assert(MQManagerArgs.parse(["registerTopic", "/t", "2"]).isSome())
         @Assert(MQManagerArgs.parse(["deleteTopic", "/t"]).isSome())
         @Assert(MQManagerArgs.parse(["registerSubscriber", "/t", "g"]).isSome())

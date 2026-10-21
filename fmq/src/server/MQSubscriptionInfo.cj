@@ -73,8 +73,4 @@ protected class MQSubscriptionInfo {
         }
         buffer.isClosed()
     }
-
-    func hasBuffer(buffer: SocketBuffer): Bool {
-        !connectionKey.isEmpty() && connectionKey == buffer.remoteAddress.toString()
-    }
 }

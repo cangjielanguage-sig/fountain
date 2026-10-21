@@ -19,7 +19,6 @@ import std.collection.{ArrayList, HashMap}
 import std.sync.Mutex
 import fountain::f_mq.base.MQErrorCode
 import fountain::f_mq.base.payload.MQResult
-import fountain::f_net.SocketBuffer
 
 /**
  * 订阅表：`subscribedId → 订阅`，外加 `(topic, group) → [subscribedId]` 索引。
@@ -195,12 +194,6 @@ protected class SubscriberRegistry {
                 result.add(info)
             }
             result.toArray()
-        }
-    }
-
-    func count(): Int64 {
-        synchronized(lock) {
-            byId.size
         }
     }
 

@@ -121,6 +121,12 @@ class ConsumeFixture <: Resource {
 
 @Test
 class ConsumeServiceTest {
+    /** 进程不再注册 `atExit`，整个类的临时目录在收尾时统一回收。 */
+    @AfterAll
+    static func removeTempDirs(): Unit {
+        TestDirs.cleanNamespace("consume")
+    }
+
     private static func bodyOf(result: MQConsumeResult): String {
         let content = MQMessageRecord.decode(result.record.copyBytes()).getOrThrow()
         convert<String>(content.body.data).getOrThrow()

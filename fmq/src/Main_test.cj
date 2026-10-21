@@ -27,6 +27,12 @@ import fountain::fmq.test.TestDirs
 
 @Test
 class MainTest {
+    /** 进程不再注册 `atExit`，整个类的临时目录在收尾时统一回收。 */
+    @AfterAll
+    static func removeTempDirs(): Unit {
+        TestDirs.cleanNamespace("main")
+    }
+
     @TestCase
     public func topLevelHelpReturnsZero(): Unit {
         @Assert(dispatch(["--help"]) == 0)

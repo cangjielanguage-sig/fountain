@@ -149,6 +149,12 @@ class CursorFixture <: Resource {
 
 @Test
 class GroupCursorTest {
+    /** 进程不再注册 `atExit`，整个类的临时目录在收尾时统一回收。 */
+    @AfterAll
+    static func removeTempDirs(): Unit {
+        TestDirs.cleanNamespace("group_cursor")
+    }
+
     private static func posEq(left: LogPosition, right: LogPosition): Bool {
         left.seq == right.seq && left.offset == right.offset
     }
@@ -667,7 +673,7 @@ class GroupCursorTest {
     }
 
     @TestCase
-    public func removedCommittedSegmentRecoversToOldestSurvivor(): Unit {
+    public func removedCommittedSegmentRecoversToNextSurvivor(): Unit {
         let sz1 = 4 + recordSize("one", [])
         let sz2 = 4 + recordSize("two", [])
         let fixture = CursorFixture("segment_gone", maxFileSize: sz1 + sz2)
