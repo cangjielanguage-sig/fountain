@@ -144,7 +144,7 @@
 > 以下各项来自二次 `opsx:verify` 的 warning / suggestion，原本计划另开变更承接；
 > 实际由 `openspec/changes/fix-fmq-full-audit` 一并落地，逐项核对后勾选。
 
-- [x] 11.1 补 `fmq/src/manager/MQManager_test.cj`：覆盖任务 8.3 的六个管理子命令（`registerTopic` / `deleteTopic` / `registerSubscriber` / `deleteSubscribeGroup` / `listTopics` / `listSubscribeGroups`）的正常与错误路径，断言错误路径返回非 0 且提示可读
+- [x] 11.1 补 `fmq/src/server/MQManager_test.cj`：覆盖任务 8.3 的六个管理子命令（`registerTopic` / `deleteTopic` / `registerSubscriber` / `deleteSubscribeGroup` / `listTopics` / `listSubscribeGroups`）的正常与错误路径，断言错误路径返回非 0 且提示可读
 - [x] 11.2 补齐 BODY 类型矩阵用例：现有用例未覆盖 `TreeSet` / `HashMap` / `Array` 三类容器的编解码与 filter 求值，补在 `MQPayload_test.cj` 或 `MQMessageRecord_test.cj`
 - [x] 11.3 补备份定时 flush 与并发关闭用例：`BackupStore` 的 100ms 定时 flush 无直接用例；`close()` 与在途 `append` / `flush` 并发无用例，需验证关闭后调用不崩溃且已确认数据不丢
 - [x] 11.4 消除 `fmq → f_mq.client` 分层偏离：`fmq` 为 `parseHost`（`f_mq/src/client/MQClientConfig.cj:48`）依赖 `f_mq.client`，与「`fmq` 只依赖 `f_mq.base`」的设计不一致；把 `parseHost` 下沉到 `f_mq.base` 或改用 `f_net`，同步 `fmq/cjpm.toml` 与依赖图
