@@ -1,3 +1,20 @@
+2026-10-21
+    fix(fdbm,f_dbd): 修复 fdbm 栈全量评审的 P0/P1 缺陷（D01-D12 / G01-G29）
+      逻辑库命名空间隔离、事务 pin 单目标、广播范围收敛、参数字面量白名单、
+      数值精度、派生表形状、内置扩展名保护、UUID 时间戳、ID 能力协商、
+      DbdUrl 字节下标与 %XX、流列 NULL 探测、池异常映射、会话并发安全等
+    feat(f_dbm): 补齐扩展契约单元测试（默认异常、单能力合法、分片确定性）
+    已知变更：SHOW DATABASES 返回逻辑库名；未知逻辑库广播改为 ROUTE_FAILED；
+      事务内多目标语句与 DDL 被拒绝；非法超时保留原值；驱动未配置不再 exit(1)
+2026-10-18
+    新增 f_mq 模块（消息队列客户端与客户端/服务端共用 API）：记录编解码、协议载荷、过滤器、
+      主题校验、MQClient（publish/subscribe/unsubscribe/consume/ack/close）
+    新增 fmq 可执行文件（消息队列服务）：fmq server（多节点、队列分段日志、消费组游标、
+      超时重投与死信、元数据全量复制、备份副本）与 fmq manager（六个管理子命令）
+    放宽 f_io.LogPosition 的 seq/offset 为 public let，供 MQ 按位置续读
+    新增 scripts/mq_e2e.sh 三节点端到端脚本
+    fix(f_mq|fmq): ACK 链路加入 queueIndex，多队列同位置不再串台
+    fix(fmq): 对象 BODY 无法评估过滤器时发布返回 FILTER_UNSUPPORTED_BODY 且不落盘；游标段失效后自动恢复
 2024-11-03
 初始化项目目录结构
 增加通用异常声明

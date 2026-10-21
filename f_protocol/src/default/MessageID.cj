@@ -37,6 +37,9 @@ public class MessageID <: Hashable & Equatable<MessageID> & ToString {
         this.time.toUnixTimeStamp() == other.time.toUnixTimeStamp()
     }
     public func toString(): String {
-        '${pid}_${tid}_${hostId}_${time.format("yyyyMMddHHmmssSSS")}'
+        // 23 位时间戳固定按 UTC 墙钟输出：`time` 可能是本地时区实例，
+        // 直接 format 会让同一绝对时刻在不同时区产生不同 id（A02）。
+        let utc = DateTime.fromUnixTimeStamp(time.toUnixTimeStamp())
+        '${pid}_${tid}_${hostId}_${utc.format("yyyyMMddHHmmssSSS")}'
     }
 }

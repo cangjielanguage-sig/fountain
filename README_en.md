@@ -353,6 +353,18 @@ FFI bindings for liburing; all APIs are available on Linux only
 
 **See details:**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_uring/README_en.md>
 
+### `fountain::f_mq`
+MQ client and the client/server shared API: record codec, protocol payloads, filters, topic validation,
+and `MQClient`.
+
+**See details:**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_mq/README_en.md>
+
+### `fountain::fmq`
+MQ server executable (`fmq server` / `fmq manager`): multi-node queues, consumer-group cursors,
+timeout redelivery and dead letters, full metadata replication, and backup replicas.
+
+**See details:**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/fmq/README_en.md>
+
 ### `fountain::fboot`
 Application project launcher depending on fountain
 

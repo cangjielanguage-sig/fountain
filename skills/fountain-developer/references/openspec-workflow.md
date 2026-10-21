@@ -1,6 +1,6 @@
-# OpenSpec 规格驱动流程（工作流 F / G / H / I / J 全程）
+# OpenSpec 规格驱动流程（工作流 F / G / H / I / J / L 全程）
 
-**工作流 F / G / H / I / J 五个开发类工作流全程自动走 OpenSpec 六步**（无需用户额外要求）：F（按需求文档开发服务器应用）、G（其他语言 → 仓颉）、H（仓颉项目 → fountain 风格）、I（旧版本升级）、J（fountain 仓库内开发：新建模块 / 加功能 / 修缺陷一律）。
+**工作流 F / G / H / I / J / L 六个开发类工作流全程自动走 OpenSpec 六步**（无需用户额外要求）：F（按需求文档开发服务器应用）、G（其他语言 → 仓颉）、H（仓颉项目 → fountain 风格）、I（旧版本升级）、J（fountain 仓库内开发：新建模块 / 加功能 / 修缺陷一律）、L（代码审查 → 按审查报告修复）。
 OpenSpec 把「需求 → 规格 → 设计 → 任务 → 实现 → 校验 → 归档」固化成仓库里的文件；本技能原有的门禁（TDD / 全量回归 / 冒烟 / 提交 / 建 tag）**不变**，只是把「读需求 + 拆功能点」从对话里的临时结论变成可评审、可回溯的产物。
 **产物必须落盘 `doc/spec/<变更名>/`**：fountain 放相应模块的 `doc/`，其他项目放项目根的 `doc/`（详见第 5.1 节）。
 
@@ -52,7 +52,7 @@ openspec list --json       # 看有没有在途变更；有则先决定「继续
 
 `openspec update` 刷新的是**指令文件**（技能 / 命令），不是「更新某个变更」；要改变更内容用 `opsx:update`（openspec-update-change，见第 4 节步骤 3）。CLI 升级过、或 `openspec init` 是很久以前跑的，这一步尤其重要。
 
-## 4. 六步流程（F / G / H / I / J 全程）
+## 4. 六步流程（F / G / H / I / J / L 全程）
 
 > **在鸿蒙 PC 上，下面每步的「加载技能」一律指加载对应的 `opsx-*` 技能**（`opsx:propose` → `opsx-propose`，依次类推）——它是你的执行通道。本节提到的 `openspec-propose` / `openspec-apply-change` 等项目内技能文件，是**融合侧 CodeBuddy** 读的指令文件，不是你自己的加载对象；两套的区别与分工见第 9 节。
 
@@ -207,7 +207,7 @@ openspec update --force                 # 重新生成项目内的技能/命令�
 - **这是全局配置**（`openspec config` 只支持 global scope，没有项目级档位），影响本机所有项目——其它项目下次 `openspec update` 也会多拿到这些工作流；改之前跟用户说一声。
 - **改完配置不会自动同步**，必须到项目里跑一次 `openspec update`。工作流集合发生变化时它会自动识别并重新生成，无需 `--force`；`--force` 只是保险（用于怀疑"判定已最新而跳过"时）。
 - **生效判据**：`openspec update` 输出里的「N more workflows are available」提示消失（或数字变小），且项目技能目录里出现对应的 `openspec-verify-change` / `openspec-bulk-archive-change` 等。
-- 装好 `verify` 后，本技能的工作流 F / G / H / I / J 走步骤 5 的完整校验；没装就按步骤 5 的**回退**执行，不静默跳过。
+- 装好 `verify` 后，本技能的工作流 F / G / H / I / J / L 走步骤 5 的完整校验；没装就按步骤 5 的**回退**执行，不静默跳过。
 
 ## 7. 与交付门禁的关系（顺序）
 
@@ -231,7 +231,7 @@ openspec update                     （步骤 1 环境与刷新）
 - `openspec list --json`  `"root": null` + 非零退出 = 项目未初始化（不是 CLI 坏了）；自动选中的流程不要顺手建 `openspec/`，只有用户明确要求初始化时才 `openspec init`。
 - `openspec update` ≠ `opsx:update`：前者刷新指令文件，后者修订某个变更的规划产物。
 - `openspec validate` 只校验**文件结构与规格格式**，不代表代码实现了；代码与规范是否一致靠 `opsx:verify`。
-- propose 阶段的 `design.md` 在 `spec-driven` schema 里是**可选**产物（`skip_specs` 场景同理），但工作流 F / G / H / I / J 依赖它做评审门禁 —— 本技能要求必须产出。
+- propose 阶段的 `design.md` 在 `spec-driven` schema 里是**可选**产物（`skip_specs` 场景同理），但工作流 F / G / H / I / J / L 依赖它做评审门禁 —— 本技能要求必须产出。
 - `doc/spec/` 不是可选副本：propose 后与 archive 后各同步一次；fountain 放相应模块 `doc/spec/<变更名>/`、其他项目放项目根 `doc/spec/<变更名>/`（第 5.1 节）。只留 `openspec/` 本地目录 = 交付无凭据（fountain 仓库还会被 `.gitignore` 掉）。
 - G / H / I 不是 OpenSpec 的例外：转换 / 升级同样六步全程，propose 前的能力映射与缺口结论必须写进 proposal / design（别留在对话里）。
 - 一个仓库可能有多个在途变更：开工前 `openspec list` 看清，别把别人的变更当自己的继续做。

@@ -358,6 +358,47 @@ public func murmurHash<T>(text: T, seed!: UInt64 = 0): UInt128 where T <: ToStri
 private func rotl64(x: UInt64, r: Int): UInt64 
 ```
 
+## fnv hash
+
+FNV (Fowler–Noll–Vo) non-cryptographic hash: **FNV-1 and FNV-1a × widths 32 / 64 / 128 / 256**.
+`fnv1a` = per byte `hash = (hash XOR byte) * prime` (recommended flavour); `fnv1` = multiply then XOR.
+All arithmetic is unsigned wraparound (the implementation functions are annotated `@OverflowWrapping`).
+
+**Not cryptographic**: predictable and collision-constructible — never use it for signatures, tamper
+protection or hash-flooding resistance; when used as a cache/dedup key, re-verify the raw bytes on a hit.
+
+```cj
+// one shot (8 variants: Fnv32/Fnv64/Fnv128/Fnv256 × {fnv1, fnv1a})
+let h32  = Fnv32.fnv1a.compute(bytes)        // UInt32
+let h64  = Fnv64.fnv1a.compute('text')       // UInt64 (String overload = UTF-8 bytes)
+let h128 = Fnv128.fnv1a.compute(bytes)       // UInt128 (f_util.UInt128)
+let h256 = Fnv256.fnv1a.compute(bytes)       // Array<Byte> (32 B big-endian; no 256-bit integer type)
+
+// fixed-width hex (lowercase; 32/64/128/256 -> 8/16/32/64 digits)
+let hex = Fnv128.fnv1a.computeHex(bytes)
+
+// incremental: init -> update -> finish (finish is identity: FNV has no finalisation)
+var h = Fnv64.fnv1a.initRegister()
+h = Fnv64.fnv1a.update(h, chunk1)
+h = Fnv64.fnv1a.update(h, chunk2)
+h = Fnv64.fnv1a.finish(h)
+
+// iterate the variants: each carries checkValue / checkHex (golden value of '123456789')
+for (v in Fnv64.all) { println(v.name + ' -> ' + v.computeHex('123456789')) }
+```
+
+Parameters (prime = 2^s + 2^8 + c):
+
+| width | offset basis | prime | golden value of '123456789' (fnv1a) |
+|---|---|---|---|
+| 32 | `0x811C9DC5` | `0x01000193` | `bb86b11c` |
+| 64 | `0xCBF29CE484222325` | `0x100000001B3` | `06d5573923c6cdfc` |
+| 128 | `0x6C62272E07BB014262B821756295C58D` | `2^88 + 2^8 + 0x3B` | `da2d42a08d04e4585dd325117f71d504` |
+| 256 | `0xDD268DBCAAC550362D98C384C4E576CCC8B1536847B6BBB31023B4C8CAEE0535` | `2^168 + 2^8 + 0x63` | `0c2033a9bfac21398d7ba2c403a80f659b80c9a5b01178b5cff0ab62e9d53c4c` |
+
+Self-check: `src/fnv_test.cj` (8-variant golden values, empty input = offset basis, incremental ≡ one shot,
+String ≡ bytes, FNV-1 ≠ FNV-1a).
+
 ## Path matching
 
 ```cj

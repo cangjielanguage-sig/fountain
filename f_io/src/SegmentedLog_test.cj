@@ -685,4 +685,27 @@ class SegmentedLogTest {
         @Assert(metas[2].last)
         log.close()
     }
+
+    @TestCase
+    public func appendPositionIsReadableAndReusable(): Unit {
+        cleanDir()
+        atExit { cleanDir() }
+        // 每段 100 字节，写入 60 字节的数据 ⇒ 第二条必然轮转到新段
+        let log = SegmentedLog(LogConfig(testDir(), "pos", 100, 100, fileExt: ".seg"))
+        let a = Array<Byte>(60, repeat: 0xA1u8)
+        let b = Array<Byte>(60, repeat: 0xB2u8)
+        let posA = log.append(a)
+        let posB = log.append(b)
+
+        // append 返回的位置字段可读（跨模块读取依赖 public 可见性）
+        @Assert(posA.seq == 1)
+        @Assert(posA.offset == 0)
+        @Assert(posB.seq == 2)
+        @Assert(posB.offset == 0)
+
+        // 两个字段可原样回传 openEntryStream 并续读到末尾
+        @Assert(readAll(log.openEntryStream(posA.seq, posA.offset)) == join([a, b]))
+        @Assert(readAll(log.openEntryStream(posB.seq, posB.offset)) == join([b]))
+        log.close()
+    }
 }
