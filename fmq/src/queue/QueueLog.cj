@@ -49,16 +49,20 @@ protected class QueueLog <: Resource {
 
     private let log: SegmentedLog
     private let label: String
+    /** 段缺失/越界 WARN 的秒级限流（R3-M9）。 */
+    private let warnLimiter: WarnLimiter
     /** 单条记录的真实上限：段容量减长度头，再与 `MAX_RECORD_SIZE` 取小。 */
     private let effectiveMaxRecord: Int64
 
-    protected init(dir: String, maxFileSize: Int64, syncInterval: Int64) {
+    protected init(dir: String, maxFileSize: Int64, syncInterval: Int64,
+        warnNowMs!: () -> Int64 = {=> DateTime.now().toUnixTimeStamp().toMilliseconds()}) {
         if (maxFileSize <= PREFIX_SIZE) {
             throw IllegalArgumentException(
                 "segment size ${maxFileSize} must be greater than the ${PREFIX_SIZE}-byte record header")
         }
         this.log = SegmentedLog(LogConfig(dir, "log", maxFileSize, syncInterval))
         this.label = dir
+        this.warnLimiter = WarnLimiter(nowMs: warnNowMs)
         let bySegment = maxFileSize - PREFIX_SIZE
         this.effectiveMaxRecord = if (bySegment < MAX_RECORD_SIZE) {
             bySegment
@@ -139,14 +143,16 @@ protected class QueueLog <: Resource {
             if (position.offset < meta.size) {
                 return Some(position)
             }
-            if (position.offset > meta.size) {
+            if (position.offset > meta.size && warnLimiter.allow("past-end\u{0}${position.seq}:${position.offset}")) {
                 logger.warn("position ${position.seq}:${position.offset} of queue ${label} is past segment end " +
                     "${meta.size}: continuing at the next segment")
             }
             return startAfter(segments, position.seq)
         }
-        logger.warn("stream of queue ${label} starts at the next existing segment instead of " +
-            "${position.seq}:${position.offset} because that segment was removed")
+        if (warnLimiter.allow("missing\u{0}${position.seq}:${position.offset}")) {
+            logger.warn("stream of queue ${label} starts at the next existing segment instead of " +
+                "${position.seq}:${position.offset} because that segment was removed")
+        }
         startAfter(segments, position.seq)
     }
 
@@ -155,7 +161,9 @@ protected class QueueLog <: Resource {
         match (QueueLog.startSegmentAtOrAfter(segments, seq + 1)) {
             case Some(index) => Some(LogPosition(index, 0))
             case None =>
-                logger.warn("no segment after ${seq} on queue ${label}, treated as empty stream")
+                if (warnLimiter.allow("no-successor\u{0}${seq}")) {
+                    logger.warn("no segment after ${seq} on queue ${label}, treated as empty stream")
+                }
                 None<LogPosition>
         }
     }

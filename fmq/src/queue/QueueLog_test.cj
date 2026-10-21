@@ -586,8 +586,39 @@ class QueueLogTest {
             @Assert(log.segments().size == 3)
             @Assert(log.segments()[0].index == 1)
             @Assert(log.scanAfter(LogPosition(5, 0))[0] == 2)
+            // 不回退到更老的段：从段 5 起读的第一条必须是段 7 的第一条
+            let reader = log.openRecordsFrom(LogPosition(5, 0))
+            try {
+                let item = reader.next().getOrThrow()
+                @Assert(item[0] == recordOf(6u8, 16))
+            } finally {
+                reader.close()
+            }
             // 没有任何后继段：返回空（并记 WARN），不抛异常
             @Assert(log.scanAfter(LogPosition(99, 0))[0] == 0)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** 同一位置连续 100 轮不可读：段缺失 WARN 受秒级限流（R3-M9）。 */
+    @TestCase
+    public func missingSegmentWarnIsRateLimited(): Unit {
+        CapturingAppender.install()
+        let dir = dirOf("warn_rate_limit")
+        clean(dir)
+        // 固定时钟：100 轮都落在同一窗口内
+        let log = QueueLog(dir, 50, 1, warnNowMs: {=> 1000i64})
+        try {
+            log.append(recordOf(0x11u8, 40))
+            log.append(recordOf(0x22u8, 40))
+            log.append(recordOf(0x33u8, 40))
+            log.removeById(1)
+            for (_ in 0..100) {
+                log.openRecordsFrom(LogPosition(1, 0)).close()
+            }
+            @Assert(CapturingAppender.find(["starts at the next existing segment instead of 1:0"]).size == 1)
         } finally {
             log.close()
             clean(dir)
