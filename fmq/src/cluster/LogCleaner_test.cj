@@ -88,7 +88,7 @@ class LogCleanerTest {
             let log = queues.queueOf("/t", 0).getOrThrow()
             let firstSealed = log.segments()[0]
             @Assert(!firstSealed.last)
-            let cleaner = LogCleaner(queues, dead, {_, _ => firstSealed.index + 1},
+            let cleaner = LogCleaner(queues, dead, {_, _ => firstSealed.index},
                 Duration.second * -1, Duration.hour * 72)
             cleaner.cleanOnce(DateTime.now())
             // 被引用的段保留

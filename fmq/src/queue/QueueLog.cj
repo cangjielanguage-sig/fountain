@@ -19,6 +19,7 @@ import std.collection.ArrayList
 import std.io.InputStream
 import std.time.DateTime
 import fountain::f_io.*
+import fountain::f_log.*
 import fountain::f_mq.base.MQMessageRecord
 
 /**
@@ -29,13 +30,17 @@ import fountain::f_mq.base.MQMessageRecord
  * 也不引入第二份写盘。
  */
 protected class QueueLog <: Resource {
+    static let logger = LoggerFactory.getLogger("fountain::fmq.queue.QueueLog")
     static let PREFIX_SIZE: Int64 = 4
-    private static let MAX_RECORD_SIZE: Int64 = 64 * 1024 * 1024
+    /** 单条记录上界；读端必须在分配缓冲前用它挡掉损坏的长度头。 */
+    static let MAX_RECORD_SIZE: Int64 = 64 * 1024 * 1024
 
     private let log: SegmentedLog
+    private let label: String
 
     protected init(dir: String, maxFileSize: Int64, syncInterval: Int64) {
         this.log = SegmentedLog(LogConfig(dir, "log", maxFileSize, syncInterval))
+        this.label = dir
     }
 
     protected func append(record: Array<Byte>): LogPosition {
@@ -68,7 +73,7 @@ protected class QueueLog <: Resource {
 
     /** 从位置起按记录边界顺序读取（游标用）。 */
     protected func openRecordsFrom(position: LogPosition): QueueRecordReader {
-        QueueRecordReader(openFrom(position), segments(), position)
+        QueueRecordReader(openFrom(position), segments(), position, label)
     }
 
     /** 删除指定段（当前段由 f_io 拒绝）。 */
@@ -119,9 +124,15 @@ protected class QueueLog <: Resource {
                         case None => break
                     }
                 }
+                if (reader.isCorrupted()) {
+                    throw QueueCorruptionException("queue ${label} is corrupted at ${start.seq}:${start.offset}")
+                }
             } finally {
                 reader.close()
             }
+        } catch (e: QueueCorruptionException) {
+            // 损坏必须让调用方看见（stats 转 ERROR、consume 转空 + WARN），不能吞成「0 条」
+            throw e
         } catch (_: Exception) {
             return (0, None<DateTime>)
         }
@@ -177,42 +188,70 @@ protected class QueueLog <: Resource {
 protected class QueueRecordReader {
     private let stream: InputStream
     private let segments: ArrayList<SegmentedMeta>
+    private let label: String
     private var seq: Int64
     private var offset: Int64
     private var closed = false
+    private var corrupted = false
 
-    init(stream: InputStream, segments: ArrayList<SegmentedMeta>, start: LogPosition) {
+    init(stream: InputStream, segments: ArrayList<SegmentedMeta>, start: LogPosition, label: String) {
         this.stream = stream
         this.segments = segments
         this.seq = start.seq
         this.offset = start.offset
+        this.label = label
+    }
+
+    /** 是否因为记录损坏而提前结束（调用方据此区分「读完了」与「读坏了」）。 */
+    protected func isCorrupted(): Bool {
+        corrupted
     }
 
     protected func next(): ?(Array<Byte>, LogPosition) {
-        if (closed) {
+        if (closed || corrupted) {
             return None<(Array<Byte>, LogPosition)>
         }
-        let header = readExact(QueueLog.PREFIX_SIZE)
-        match (header) {
+        let header = readUpTo(QueueLog.PREFIX_SIZE)
+        if (header.size == 0) {
+            // 干净结束：本段已读完
+            close()
+            return None<(Array<Byte>, LogPosition)>
+        }
+        if (header.size < QueueLog.PREFIX_SIZE) {
+            // 4 字节头不完整：截断的尾部
+            return corrupt(0, -1, "incomplete record header (${header.size} bytes)")
+        }
+        let length = QueueLog.getInt32BE(header, 0)
+        if (length == 0) {
+            // 零长度条目是「到此为止」的标记，写入侧不会产生；按干净结束处理
+            close()
+            return None<(Array<Byte>, LogPosition)>
+        }
+        match (segmentOf(seq)) {
             case None =>
-                close()
-                None<(Array<Byte>, LogPosition)>
-            case Some(h) =>
-                let length = QueueLog.getInt32BE(h, 0)
-                if (length <= 0) {
+                if (seq > lastSegmentIndex()) {
                     close()
-                    None<(Array<Byte>, LogPosition)>
+                    return None<(Array<Byte>, LogPosition)>
                 }
-                let body = readExact(length)
-                match (body) {
-                    case None =>
-                        close()
-                        None<(Array<Byte>, LogPosition)>
-                    case Some(record) =>
-                        let position = LogPosition(seq, offset)
-                        advance(QueueLog.PREFIX_SIZE + length)
-                        Some((record, position))
+                return corrupt(length, -1, "segment ${seq} is missing")
+            case Some(meta) =>
+                // 只在通过上界与剩余字节校验后才分配缓冲
+                let remaining = meta.size - offset - QueueLog.PREFIX_SIZE
+                if (length < 0 || length > QueueLog.MAX_RECORD_SIZE) {
+                    return corrupt(length, remaining,
+                        "declared length ${length} exceeds limit ${QueueLog.MAX_RECORD_SIZE}")
                 }
+                if (length > remaining) {
+                    return corrupt(length, remaining, "declared length ${length} exceeds remaining ${remaining}")
+                }
+                let body = readUpTo(length)
+                if (body.size != length) {
+                    return corrupt(length, remaining,
+                        "declared length ${length} but read ${body.size}")
+                }
+                let position = LogPosition(seq, offset)
+                advance(QueueLog.PREFIX_SIZE + length)
+                return Some((body, position))
         }
     }
 
@@ -237,8 +276,20 @@ protected class QueueRecordReader {
         LogPosition(seq, offset)
     }
 
-    /** 读满 `size` 字节；流在一开始就结束返回 `None`，读到一半结束视为记录损坏。 */
-    private func readExact(size: Int64): ?Array<Byte> {
+    /** 损坏：记 ERROR、关闭流、标记已损坏，返回 `None`。 */
+    private func corrupt(declaredLength: Int64, remaining: Int64, reason: String): ?(Array<Byte>, LogPosition) {
+        corrupted = true
+        QueueLog.logger.error("corrupted queue record in ${label}: segment=${seq} offset=${offset} " +
+            "declaredLength=${declaredLength} remaining=${remaining}: ${reason}")
+        close()
+        None<(Array<Byte>, LogPosition)>
+    }
+
+    /** 读最多 `size` 字节；返回实际读到的字节数（0 表示流结束）。 */
+    private func readUpTo(size: Int64): Array<Byte> {
+        if (size <= 0) {
+            return Array<Byte>()
+        }
         let out = Array<Byte>(size, repeat: 0u8)
         var got = 0i64
         while (got < size) {
@@ -252,13 +303,27 @@ protected class QueueRecordReader {
             }
             got += n
         }
-        if (got == 0) {
-            None<Array<Byte>>
-        } else if (got < size) {
-            throw IllegalArgumentException("truncated queue record: need ${size} bytes, got ${got}")
+        if (got == size) {
+            out
         } else {
-            Some(out)
+            out[0..got]
         }
+    }
+
+    private func segmentOf(index: Int64): ?SegmentedMeta {
+        for (i in 0..segments.size) {
+            if (segments[i].index == index) {
+                return Some(segments[i])
+            }
+        }
+        None<SegmentedMeta>
+    }
+
+    private func lastSegmentIndex(): Int64 {
+        if (segments.size == 0) {
+            return -1
+        }
+        segments[segments.size - 1].index
     }
 
     /** 按段长度把 consumed 字节映射到新的 (segment, offset)。 */

@@ -268,4 +268,144 @@ class QueueLogTest {
             clean(dir)
         }
     }
+
+    // ===== 长度头上界（A45） =====
+
+    /** 直接在段文件里写原始字节，模拟损坏段。 */
+    private static func rawLog(name: String, segments: Array<Array<Byte>>, maxFileSize!: Int64 = 1024 * 1024):
+        QueueLog {
+        let dir = dirOf(name)
+        clean(dir)
+        Directory.create(dir, recursive: true)
+        for (i in 0..segments.size) {
+            let file = File.create("${dir}/log_${i + 1}.log")
+            file.write(segments[i])
+            file.close()
+        }
+        QueueLog(dir, maxFileSize, 1)
+    }
+
+    private static func concat(left: Array<Byte>, right: Array<Byte>): Array<Byte> {
+        let out = Array<Byte>(left.size + right.size, repeat: 0u8)
+        left.copyTo(out, 0, 0, left.size)
+        right.copyTo(out, 0, left.size, right.size)
+        out
+    }
+
+    private static func header(value: Int64): Array<Byte> {
+        [
+            UInt8((value >> 24) & 0xff),
+            UInt8((value >> 16) & 0xff),
+            UInt8((value >> 8) & 0xff),
+            UInt8(value & 0xff)
+        ]
+    }
+
+    @TestCase
+    public func hugeDeclaredLengthIsRejectedWithoutAllocation(): Unit {
+        // 长度头 0xFFFFFFFF：绝不能据此申请 4 GiB
+        let log = rawLog("corrupt_huge", [header(0xFFFFFFFF)])
+        let dir = dirOf("corrupt_huge")
+        try {
+            @Assert(log.readAt(LogPosition(1, 0)).isNone())
+            var thrown = false
+            try {
+                log.scanAfter(LogPosition(1, 0))
+            } catch (_: QueueCorruptionException) {
+                thrown = true
+            }
+            @Assert(thrown)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    @TestCase
+    public func declaredLengthBeyondRemainingIsRejected(): Unit {
+        let segment = concat(header(100), [1u8, 2u8, 3u8])
+        let log = rawLog("corrupt_remaining", [segment])
+        let dir = dirOf("corrupt_remaining")
+        try {
+            @Assert(log.readAt(LogPosition(1, 0)).isNone())
+            var thrown = false
+            try {
+                log.scanAfter(LogPosition(1, 0))
+            } catch (_: QueueCorruptionException) {
+                thrown = true
+            }
+            @Assert(thrown)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    @TestCase
+    public func lengthEqualToRemainingIsValid(): Unit {
+        let log = rawLog("exact_remaining", [concat(header(3), [1u8, 2u8, 3u8])])
+        let dir = dirOf("exact_remaining")
+        try {
+            @Assert(log.readAt(LogPosition(1, 0)).getOrThrow() == [1u8, 2u8, 3u8])
+            let scanned = log.scanAfter(LogPosition(1, 0))
+            @Assert(scanned[0] == 1)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    @TestCase
+    public func incompleteHeaderIsCorruption(): Unit {
+        let log = rawLog("corrupt_header", [[1u8, 2u8]])
+        let dir = dirOf("corrupt_header")
+        try {
+            @Assert(log.readAt(LogPosition(1, 0)).isNone())
+            var thrown = false
+            try {
+                log.scanAfter(LogPosition(1, 0))
+            } catch (_: QueueCorruptionException) {
+                thrown = true
+            }
+            @Assert(thrown)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    @TestCase
+    public func zeroLengthHeaderEndsTheStream(): Unit {
+        let log = rawLog("zero_length", [header(0)])
+        let dir = dirOf("zero_length")
+        try {
+            @Assert(log.readAt(LogPosition(1, 0)).isNone())
+            let scanned = log.scanAfter(LogPosition(1, 0))
+            @Assert(scanned[0] == 0)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    @TestCase
+    public func corruptionDoesNotReadIntoNextSegment(): Unit {
+        // 段 1 声明 1000 字节但只剩 3 字节；段 2 有合法记录，不得被读进来充数
+        let log = rawLog("corrupt_cross", [concat(header(1000), [1u8, 2u8, 3u8]), concat(header(2), [9u8, 9u8])],
+            maxFileSize: 16)
+        let dir = dirOf("corrupt_cross")
+        try {
+            @Assert(log.readAt(LogPosition(1, 0)).isNone())
+            var thrown = false
+            try {
+                log.scanAfter(LogPosition(1, 0))
+            } catch (_: QueueCorruptionException) {
+                thrown = true
+            }
+            @Assert(thrown)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
 }

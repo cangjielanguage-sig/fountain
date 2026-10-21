@@ -115,7 +115,8 @@ protected class CursorCatalog {
             }
         }
         if (!seen) {
-            return 1
+            // 没有任何已注册组：没有读者需要历史段，交给 TTL 回收（规格：只保留被位点引用的段）
+            return Int64.Max
         }
         floor
     }

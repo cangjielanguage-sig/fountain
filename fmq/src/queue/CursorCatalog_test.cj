@@ -58,8 +58,8 @@ class CursorCatalogTest {
             let catalog = CursorCatalog(store, meta)
             // 无位点文件：视为从头开始
             @Assert(catalog.floorOf("/t", 0) == 1)
-            // 无任何组：同样保留
-            @Assert(catalog.floorOf("/unknown", 0) == 1)
+            // 无任何组：没有读者需要历史段
+            @Assert(catalog.floorOf("/unknown", 0) == Int64.Max)
         } finally {
             meta.close()
             clean(dir)

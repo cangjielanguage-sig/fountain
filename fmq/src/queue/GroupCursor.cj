@@ -206,8 +206,14 @@ protected class GroupCursor {
                     continue
                 }
                 if (item.isNone()) {
+                    let corrupted = reader.getOrThrow().isCorrupted()
                     reader.getOrThrow().close()
                     reader = None
+                    if (corrupted) {
+                        // 记录损坏：不推进、不崩溃，留给上层转成错误/告警（A45/A48）
+                        logger.error("queue ${topic}/${queueIndex} is corrupted at ${scanPosition.seq}:${scanPosition.offset}, group '${group}'")
+                        return None<(Array<Byte>, LogPosition)>
+                    }
                     advance()
                     return None<(Array<Byte>, LogPosition)>
                 }
