@@ -50,7 +50,9 @@ export dbd_driverName=postgres
 - Required. fdbm is a proxy without a dialect of its own; f_orm selects the SQL dialect
   by driver name, so the application must set the name to the **backend dialect**
   (`postgres` / `mysql` / ...).
-- Missing or empty: the driver logs an ERROR with the correct usage and exits the process.
+- Missing or empty: package initialization logs INFO and skips registration — the process keeps
+  running; `dbdDriver()` / `DbdDriver()` throw `DbdException(CONFIG)` when used. The registration
+  name is always `dbd_driverName`; `fdbm` is kept only as a compatibility alias (registered when free).
 - It only affects the client-side registration name; SQL dialect handling stays inside
   fdbm, and the URL scheme remains `fdbm://`.
 
