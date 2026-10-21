@@ -136,6 +136,8 @@ skippedUnreadable / skippedNoMatch / skippedUnsupported`：
   需全量重建元数据（清空该节点 `metas/` 后重启拉快照）。
 - 大记录（>4096 字节）的完整支持要求集群内**所有节点**升级到本版本：旧节点收到大记录仍会降级为空，
   发布大消息前先完成服务端滚动升级。
+- 客户端已退订 id 集合有界（默认 4096，FIFO 淘汰）：被淘汰的 id 再退订按「未知 id」处理并抛
+  `MQServiceException`，不影响服务端状态。
 
 ## 测试与端到端
 

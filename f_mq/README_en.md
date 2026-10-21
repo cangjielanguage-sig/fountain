@@ -1,7 +1,8 @@
 # f_mq
 
 MQ client and the client/server shared API (dynamic library, `fountain::f_mq`).
-Depends on `f_codec`, `f_data`, `f_protocol`, `f_net`, `f_util`.
+Depends on `f_base`, `f_codec`, `f_config`, `f_data`, `f_io`, `f_log`, `f_net`, `f_protocol`,
+`f_time`, `f_util`.
 
 ## Quick start
 
@@ -53,6 +54,11 @@ public class MQClient <: Resource {
 - `ack` must echo the `queueIndex` returned by `consume`. The client first targets the
   node that delivered the position; on a miss it broadcasts to all owners and ignores
   `ACK_UNKNOWN`.
+- `unsubscribe` is idempotent: re-unsubscribing a subscription id that was already
+  unsubscribed returns successfully without sending a request, while an id that was
+  never subscribed throws `MQServiceException` without sending a request. The client
+  keeps a bounded set of retired ids (`MQRetiredSubscriptions`, 4096 by default, FIFO
+  eviction); an evicted id is treated as "never subscribed".
 - With `autoAck: true` the server advances the cursor on delivery, so the caller does not
   need to `ack`.
 - `close` is idempotent; after closing, business APIs other than `isClosed()` throw
@@ -123,6 +129,13 @@ The client API exposes no topic/group registration or stats entry point; use
 - Records larger than 4096 bytes may be spooled to temporary files by the decoder;
   `MQBytes.fromData` restores the bytes either way, so large messages are never mistaken
   for empty ones.
+- The set of retired subscription ids is bounded (`MQRetiredSubscriptions`, 4096 by
+  default, FIFO eviction); an evicted id is treated as an unknown id and throws
+  `MQServiceException`.
+- A node offline for longer than the tombstone TTL (7d by default) cannot converge
+  incrementally; wipe that node's `metas/` and restart it to pull a full snapshot.
+- Full support for large records (>4096 bytes) requires **every node** in the cluster to
+  be upgraded to this version.
 
 ## Packages
 
