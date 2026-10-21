@@ -141,6 +141,10 @@ public class PartitionCacheTest {
             @Assert(cache.get('db0', 't', 'id', '1').isNone(), true)
             cache.close()
             @Assert(cache.isClosed(), true)
+            // G15：关闭后必须报 CACHE，不得静默当作未命中
+            @Assert(cacheCodeOf { cache.get('db0', 't', 'id', '1') } == DbdErrorCode.CACHE, true)
+            @Assert(cacheCodeOf { cache.put('db0', 't', 'id', '1', 'p0') } == DbdErrorCode.CACHE, true)
+            @Assert(cacheCodeOf { cache.remove('db0', 't', 'id', '1') } == DbdErrorCode.CACHE, true)
         } finally {
             removeIfExists(dir, recursive: true)
         }
@@ -320,6 +324,48 @@ public class PartitionRouterTest {
         @Assert(plan.kind == RouteKind.Single, true)
         @Assert(plan.databases[0], 'p1')
     }
+
+    /** G19：分库列名与表名按 ASCII 大小写不敏感匹配。 */
+    @TestCase
+    public func identifiersAreCaseInsensitive(): Unit {
+        let upper = router().route(SqlParser.parse("update t set name='x' where ID = 5", 'db0'), 'db0')
+        @Assert(upper.kind, RouteKind.Single)
+        @Assert(upper.databases[0], 'p0')
+        let insert = router().route(SqlParser.parse("insert into t (ID) values (1500)", 'db0'), 'db0')
+        @Assert(insert.kind, RouteKind.Single)
+        @Assert(insert.databases[0], 'p1')
+    }
+
+    /** G20：别名限定的分库键也能抽取（`from users u where u.id = 5`）。 */
+    @TestCase
+    public func aliasQualifiedKeyIsExtracted(): Unit {
+        let rules = [PartitionRule('db0', 'users', 'id', StepPartition(['db0', 'db1'], 1000))]
+        let router = PartitionRouter(rules, None, HashMap<String, PartitionAlgorithm>(),
+            knownDatabases: ['db0', 'db1'])
+        let plan = router.route(
+            SqlParser.parse('select * from users u where u.id = 1500', 'db0'), 'db0')
+        @Assert(plan.kind, RouteKind.Single)
+        @Assert(plan.databases[0], 'db1')
+    }
+
+    /** G27：列名/算法相同但分片空间不同的跨逻辑库 JOIN → Unroutable（不是 Empty）。 */
+    @TestCase
+    public func differentShardSpacesAreUnroutable(): Unit {
+        let rules = [
+            PartitionRule('app', 'a', 'id', StepPartition(['db0', 'db1'], 1000),
+                databases: ['db0', 'db1']),
+            PartitionRule('cfg', 'b', 'id', StepPartition(['db2', 'db3'], 1000),
+                databases: ['db2', 'db3'])
+        ]
+        let router = PartitionRouter(rules, None, HashMap<String, PartitionAlgorithm>(),
+            knownDatabases: ['db0', 'db1', 'db2', 'db3'])
+        let plan = router.route(
+            SqlParser.parse('select * from app.a x join cfg.b y on x.id = y.id where x.id = 5', 'app'),
+            'app')
+        @Assert(plan.kind, RouteKind.Unroutable)
+        @Assert(plan.reason.contains('db0'), true)
+        @Assert(plan.reason.contains('db2'), true)
+    }
 }
 
 /** 固定返回某个库的算法（自定义覆盖用）。 */
@@ -342,6 +388,19 @@ class FixedAlgorithm <: PartitionAlgorithm {
 }
 
 func partitionCode<T>(body: () -> T): DbdErrorCode {
+    try {
+        body()
+    } catch (e: FdbmException) {
+        return e.code
+    } catch (_: Exception) {
+        return DbdErrorCode.INTERNAL
+    }
+    DbdErrorCode.INTERNAL
+}
+
+
+/** 执行并取 `FdbmException.code`（路由用例共用）。 */
+func cacheCodeOf<T>(body: () -> T): DbdErrorCode {
     try {
         body()
     } catch (e: FdbmException) {

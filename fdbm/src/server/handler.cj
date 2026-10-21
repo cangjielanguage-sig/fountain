@@ -83,10 +83,22 @@ protected struct FdbmHandler {
         match (outcome.cursor) {
             case Some(cursor) =>
                 cursor.qid = message.id.toString()
-                session.cursor = Some(cursor)
+                // 会话已关闭/已摘除 → 新游标立即关闭，回 CURSOR_STATE（G16）
+                if (!session.installCursor(cursor)) {
+                    throw FdbmException(DbdErrorCode.CURSOR_STATE,
+                        'the session is closed; the query cursor has been released')
+                }
                 resp(message.id, QueryResultServerPayload(outcome.columns))
             case None =>
-                session.cursor = None
+                match (session.takeCursor()) {
+                    case Some(previous) =>
+                        try {
+                            previous.close()
+                        } catch (_: Exception) {
+                            ()
+                        }
+                    case None => ()
+                }
                 match (outcome.update) {
                     case Some(update) => resp(message.id, update)
                     case None => throw FdbmException(DbdErrorCode.INTERNAL,
@@ -114,15 +126,18 @@ protected struct FdbmHandler {
             case None => throw FdbmException(DbdErrorCode.PROTOCOL,
                 'UNSUBSCRIBE carries no QueryResultClosePayload')
         }
-        let cursor = match (session.cursor) {
+        let current = match (session.currentCursor()) {
             case Some(value) => value
             case None => return ack(message.id)
         }
         // 无游标 / 已关闭 / qid 不匹配：幂等 ACK，绝不关掉别的游标（设计 §10.2）
-        if (cursor.isClosed() || cursor.qid != payload.qid) {
+        if (current.isClosed() || current.qid != payload.qid) {
             return ack(message.id)
         }
-        session.cursor = None
+        let cursor = match (session.takeCursor()) {
+            case Some(value) => value
+            case None => return ack(message.id)
+        }
         try {
             // 清空当前行缓冲 → 读尽物理结果集 → 关闭段（归还连接）
             cursor.drain()
@@ -139,7 +154,7 @@ protected struct FdbmHandler {
     }
 
     private static func requireCursor(session: DbdSession): QueryCursor {
-        match (session.cursor) {
+        match (session.currentCursor()) {
             case Some(value) =>
                 if (value.isClosed()) {
                     throw FdbmException(DbdErrorCode.CURSOR_STATE,
@@ -152,9 +167,8 @@ protected struct FdbmHandler {
     }
 
     private static func closeSessionCursor(context: ServerContext, session: DbdSession): Unit {
-        match (session.cursor) {
+        match (session.takeCursor()) {
             case Some(cursor) =>
-                session.cursor = None
                 try {
                     cursor.close()
                 } catch (e: Exception) {

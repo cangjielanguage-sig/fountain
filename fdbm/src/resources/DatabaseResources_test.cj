@@ -40,6 +40,24 @@ public class DatabaseResourcesTest {
             checkOnReturning: false, connectTimeout: Duration.second, maxWaiting: Duration.second)
     }
 
+    /** G07：池耗尽等待超时 → `TIMEOUT`（不是冒泡成 INTERNAL）。 */
+    @TestCase
+    public func poolExhaustionMapsToTimeout(): Unit {
+        let single = [DatabaseNodeConfig('name0', '127.0.0.1', 3306u16, 'mockdb', ['db0'], '', '')]
+        let pool = PoolConfig(initSize: 0, minSize: 0, maxSize: 1, checkOnBorrowing: false,
+            checkOnReturning: false, connectTimeout: Duration.second,
+            maxWaiting: Duration.millisecond * 50)
+        let resources = DatabaseResources(single, pool, LoadBalanceConfig())
+        try {
+            let held = resources.selectRead('db0')
+            @Assert(fdbmCodeOf { resources.selectRead('db0') }, DbdErrorCode.TIMEOUT)
+            held.close()
+            resources.selectRead('db0').close()
+        } finally {
+            resources.close()
+        }
+    }
+
     @TestCase
     public func readAndWriteAcrossTwoNodes(): Unit {
         let resources = DatabaseResources(nodes(), poolConfig(), LoadBalanceConfig())

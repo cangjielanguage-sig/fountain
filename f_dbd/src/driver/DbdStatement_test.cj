@@ -284,8 +284,8 @@ public class DbdStreamTest {
             @Assert(result.next(), true)
             let before = stub.receivedCount()
             let stream = result.get<InputStream>(1)
-            // `get<InputStream>` 只打开句柄，不发请求
-            @Assert(stub.receivedCount(), before)
+            // 首次打开只发一次 NULL 探测（`bufSize = -1`），首块随探测返回
+            @Assert(stub.receivedCount(), before + 1)
 
             let first = Array<Byte>(8, repeat: 0)
             @Assert(stream.read(first), 2)
@@ -298,9 +298,15 @@ public class DbdStreamTest {
             @Assert(stream.read(third), 0) // EOF
 
             let requests = stub.allReceived()
-            // Sql + NEXT_ROW + 3 次块请求
+            // Sql + NEXT_ROW + 探测 + 2 次块请求
             @Assert(requests.size, 5)
-            var i = 2
+            match (columnOf(requests[2])) {
+                case Some(probe) =>
+                    @Assert(probe.index, 1)
+                    @Assert(probe.bufSize, -1)
+                case None => @Assert(false, true)
+            }
+            var i = 3
             while (i < 5) {
                 match (columnOf(requests[i])) {
                     case Some(column) =>

@@ -326,12 +326,17 @@ protected class SqlParser {
             expression()
         }
         var alias: ?String = None
+        var aliasQuoted = false
         if (matchKeyword('as')) {
-            alias = Some(expectIdent('alias').text)
+            let token = expectIdent('alias')
+            alias = Some(token.text)
+            aliasQuoted = token.quoted
         } else if (peek().kind == TokenKind.Ident && !isClauseKeyword()) {
-            alias = Some(next().text)
+            let token = next()
+            alias = Some(token.text)
+            aliasQuoted = token.quoted
         }
-        SelectItem(expression, alias)
+        SelectItem(expression, alias, aliasQuoted: aliasQuoted)
     }
 
     private func orderItem(): (SqlExpression, Bool) {
@@ -499,15 +504,17 @@ protected class SqlParser {
         let first = expectIdent('column')
         var table: ?String = None
         var quoted = first.quoted
+        var tableQuoted = false
         var column = first.text
         if (accept(TokenKind.Dot)) {
             table = Some(first.text)
+            tableQuoted = first.quoted
             let second = expectIdent('column')
             column = second.text
-            quoted = quoted || second.quoted
+            quoted = second.quoted
         }
         expectOperator('=')
-        (ColumnExpression(table, column, quoted: quoted), expression())
+        (ColumnExpression(table, column, quoted: quoted, tableQuoted: tableQuoted), expression())
     }
 
     private func delete(): DeleteStatement {
@@ -661,6 +668,9 @@ protected class SqlParser {
 
     private func inExpression(operand: SqlExpression, negated: Bool): InExpression {
         expect(TokenKind.LParen, '(')
+        if (isSubqueryStart()) {
+            throw unsupported('subquery in IN (...) is not supported', peek().position)
+        }
         let values = ArrayList<SqlExpression>()
         values.add(expression())
         while (accept(TokenKind.Comma)) {
@@ -668,6 +678,11 @@ protected class SqlParser {
         }
         expect(TokenKind.RParen, ')')
         InExpression(operand, values.toArray(), negated: negated)
+    }
+
+    /** 当前位置是否是子查询起点（`select`）。 */
+    private func isSubqueryStart(): Bool {
+        peek().kind == TokenKind.Ident && !peek().quoted && peek().isKeyword('select')
     }
 
     private func additive(): SqlExpression {
@@ -730,6 +745,9 @@ protected class SqlParser {
                 }
                 throw syntax('unexpected operator \'${token.text}\'', token.position)
             case TokenKind.Ident =>
+                if (!token.quoted && token.isKeyword('select')) {
+                    throw unsupported('subquery expressions are not supported', token.position)
+                }
                 if (token.isKeyword('null')) {
                     next()
                     return LiteralExpression(DataNone.INSTANCE)
@@ -760,7 +778,7 @@ protected class SqlParser {
                 if (accept(TokenKind.Dot)) {
                     let column = expectIdent('column')
                     return ColumnExpression(Some(token.text), column.text,
-                        quoted: token.quoted || column.quoted)
+                        quoted: column.quoted, tableQuoted: token.quoted)
                 }
                 return ColumnExpression(None, token.text, quoted: token.quoted)
             case _ => throw syntax('unexpected token \'${token.text}\'', token.position)
@@ -834,33 +852,49 @@ protected class SqlParser {
             let inner = select()
             expect(TokenKind.RParen, ')')
             var alias: ?String = None
+            var aliasQuoted = false
             if (matchKeyword('as')) {
-                alias = Some(expectIdent('alias').text)
+                let token = expectIdent('alias')
+                alias = Some(token.text)
+                aliasQuoted = token.quoted
             } else if (peek().kind == TokenKind.Ident && !isClauseKeyword()) {
-                alias = Some(next().text)
+                let token = next()
+                alias = Some(token.text)
+                aliasQuoted = token.quoted
             }
             match (alias) {
                 case Some(value) => return TableRef(None, '', alias, currentDatabase,
-                    derived: Some(inner))
+                    aliasQuoted: aliasQuoted, derived: Some(inner))
                 case None => throw syntax('a derived table requires an alias', start)
             }
         }
         let first = expectIdent('table name')
         var database: ?String = None
+        var databaseQuoted = false
         var name = first.text
+        var quoted = first.quoted
         if (accept(TokenKind.Dot)) {
             database = Some(first.text)
-            name = expectIdent('table name').text
+            databaseQuoted = first.quoted
+            let second = expectIdent('table name')
+            name = second.text
+            quoted = second.quoted
         }
         var alias: ?String = None
+        var aliasQuoted = false
         if (allowAlias) {
             if (matchKeyword('as')) {
-                alias = Some(expectIdent('alias').text)
+                let token = expectIdent('alias')
+                alias = Some(token.text)
+                aliasQuoted = token.quoted
             } else if (peek().kind == TokenKind.Ident && !isClauseKeyword()) {
-                alias = Some(next().text)
+                let token = next()
+                alias = Some(token.text)
+                aliasQuoted = token.quoted
             }
         }
-        TableRef(database, name, alias, currentDatabase, quoted: first.quoted)
+        TableRef(database, name, alias, currentDatabase, quoted: quoted,
+            databaseQuoted: databaseQuoted, aliasQuoted: aliasQuoted)
     }
 
     private static func identifierOf(token: Token): Identifier {

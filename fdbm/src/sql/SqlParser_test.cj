@@ -241,6 +241,42 @@ public class SqlParserTest {
             case _ => @Assert(false, true)
         }
     }
+
+    /** G17：WHERE/标量位置的非派生表子查询 → `UNSUPPORTED_SQL`（不是 SQL_SYNTAX）。 */
+    @TestCase
+    public func subqueriesAreUnsupported(): Unit {
+        @Assert(parseCode('select * from t where id in (select id from u)') ==
+            DbdErrorCode.UNSUPPORTED_SQL, true)
+        @Assert(parseCode('select * from t where exists (select 1 from u)') ==
+            DbdErrorCode.UNSUPPORTED_SQL, true)
+        @Assert(parseCode('select (select 1) from t') == DbdErrorCode.UNSUPPORTED_SQL, true)
+    }
+
+    /** G18：引用的别名/库名在 parse → render → parse 中闭合，且各部分独立加引用符。 */
+    @TestCase
+    public func quotedAliasAndDatabaseRoundTrip(): Unit {
+        for (sql in ['select id as "order" from "shop"."T" as "select"', 'select t."COL" from t']) {
+            let first = SqlParser.parse(sql, 'db0')
+            let rendered = SqlRenderer.render(first, dialect: SqlDialect.Postgres)
+            let second = SqlParser.parse(rendered, 'db0')
+            @Assert(SqlRenderer.render(second, dialect: SqlDialect.Postgres), rendered)
+        }
+        // 列名被引用不得把未引用的表名一起引用
+        @Assert(SqlRenderer.render(SqlParser.parse('select t."COL" from t', 'db0'),
+            dialect: SqlDialect.Postgres), 'select t."COL" from t')
+    }
+
+    /** G22：下推渲染去掉逻辑库限定符（由目标物理库定位）。 */
+    @TestCase
+    public func pushdownDropsLogicalQualifier(): Unit {
+        let statement = SqlParser.parse('select * from app.t where id = 1001', 'app')
+        let pushed = SqlRenderer.render(statement, unqualified: true, dialect: SqlDialect.Postgres)
+        @Assert(pushed.contains('from t'), true)
+        @Assert(pushed.contains('app.t'), false)
+        // 非下推路径（SHOW/文档）保留逻辑库限定名
+        @Assert(SqlRenderer.render(statement, dialect: SqlDialect.Postgres).contains('app.t'), true)
+    }
+
 }
 
 func parseAs<T>(sql: String): T where T <: SqlStatement {

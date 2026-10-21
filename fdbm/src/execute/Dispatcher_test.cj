@@ -134,15 +134,26 @@ public class DispatcherTest {
         }
     }
 
+    /** G16：会话关闭后不再接受新游标（立即关闭），close 幂等。 */
+    @TestCase
+    public func closedSessionRejectsNewCursor(): Unit {
+        let session = DbdSession('s', None, 'db0')
+        session.close()
+        @Assert(session.installCursor(QueryCursor([], [])), false)
+        @Assert(session.currentCursor().isNone(), true)
+        session.close()
+        @Assert(session.isClosed(), true)
+    }
+
     @TestCase
     public func sessionControlPinsConnection(): Unit {
         let (executor, resources) = dispatcher()
         let session = DbdSession('s', None, 'db0')
         try {
             executor.execute(session, 'begin', [])
-            @Assert(session.pinned.isSome(), true)
+            @Assert(session.isPinned(), true)
             executor.execute(session, 'commit', [])
-            @Assert(session.pinned.isNone(), true)
+            @Assert((!session.isPinned()), true)
             @Assert(codeOf { executor.execute(session, 'commit', []) }, DbdErrorCode.TX_STATE)
         } finally {
             session.close()
@@ -160,10 +171,17 @@ public class DispatcherTest {
             let outcome = fixture.executor.execute(session,
                 "insert into t (id, name) values (5, 'a'), (1500, 'b')", [])
             @Assert(outcome.update.getOrThrow().rowCount, 2)
-            @Assert(fixture.sqls.size, 2)
             @Assert(fixture.accessor.writes.toArray(), ['db0', 'db1'])
-            @Assert(fixture.sqls[0].contains('(5'), true)
-            @Assert(fixture.sqls[1].contains('(1500'), true)
+            // 每个目标库一个事务：begin / insert / commit（G24）
+            let inserts = ArrayList<String>()
+            for (sql in fixture.sqls) {
+                if (sql.startsWith('insert')) {
+                    inserts.add(sql)
+                }
+            }
+            @Assert(inserts.size, 2)
+            @Assert(inserts[0].contains('(5'), true)
+            @Assert(inserts[1].contains('(1500'), true)
         } finally {
             session.close()
             fixture.resources.close()
@@ -180,8 +198,7 @@ public class DispatcherTest {
             let outcome = fixture.executor.execute(session,
                 "insert into t (name) values ('a')", [])
             @Assert(outcome.update.getOrThrow().rowCount, 1)
-            @Assert(fixture.sqls.size, 1)
-            let sql = fixture.sqls[0]
+            let sql = singleInsertOf(fixture.sqls)
             @Assert(sql.startsWith('insert into t (name, id)'), true)
             // 回填值必须就是路由用的值：把 SQL 里的 id 字面量喂回算法，结果应与实际下推的库一致
             let literal = literalOfId(sql)
@@ -205,8 +222,7 @@ public class DispatcherTest {
             let outcome = fixture.executor.execute(session,
                 "insert into t (name) values ('a')", [])
             @Assert(outcome.update.getOrThrow().rowCount, 1)
-            @Assert(fixture.sqls.size, 1)
-            @Assert(fixture.sqls[0].contains("'1500'"), true)
+            @Assert(singleInsertOf(fixture.sqls).contains("'1500'"), true)
         } finally {
             session.close()
             fixture.resources.close()
@@ -271,10 +287,52 @@ public class DispatcherTest {
                 // 目标表与源表同名，但插入目标列由 insert 语句给出
                 parseInsert("insert into t (id, name) select id, name from t where id = 5"))
             @Assert(outcome.update.getOrThrow().rowCount, 2)
-            @Assert(sqls.size, 3)
             @Assert(sqls[0].startsWith('select'), true)
-            @Assert(sqls[1].startsWith('insert into t (id, name)'), true)
+            var inserts = 0
+            for (sql in sqls) {
+                if (sql.startsWith('insert into t (id, name)')) {
+                    inserts += 1
+                }
+            }
+            @Assert(inserts, 2)
             @Assert(accessor.writes.toArray(), ['db0', 'db1'])
+        } finally {
+            session.close()
+            resources.close()
+        }
+    }
+
+    /** G24：同库多行 INSERT 的第三行失败 → 前两行回滚（同一事务）。 */
+    @TestCase
+    public func multiRowInsertRollsBackOnFailure(): Unit {
+        let sqls = ArrayList<String>()
+        let inserts = ArrayList<Int64>()
+        MOCKDB.clear()
+        MOCKDB.execution = {sql, _ =>
+            sqls.add(sql)
+            if (sql.startsWith('insert')) {
+                inserts.add(1)
+                if (inserts.size == 3) {
+                    throw Exception('third row failed')
+                }
+                MOCKDB.rowCount = 1
+            }
+        }
+        let resources = resourcesOf()
+        let accessor = RecordingAccessor(resources)
+        let router = routerOf()
+        let select = SelectExecutor(accessor, router, GlobalTableRouter([]))
+        let insert = InsertExecutor(accessor, router, GlobalTableRouter([]), select,
+            IdMakerConfig('uuid'), 'db0', HashMap<String, IdGenerator>())
+        let session = DbdSession('s', None, 'db0')
+        try {
+            @Assert(codeOf {
+                insert.execute(session,
+                    parseInsert("insert into t (id, name) values (1, 'a'), (2, 'b'), (3, 'c')"))
+            }, DbdErrorCode.DB_ERROR)
+            @Assert(sqls.contains('begin'), true)
+            @Assert(sqls.contains('rollback'), true)
+            @Assert(sqls.contains('commit'), false)
         } finally {
             session.close()
             resources.close()
@@ -465,7 +523,7 @@ public class DispatcherTest {
             let outcome = executor.execute(session, 'update t set name = 1 where id = 5', [])
             @Assert(outcome.update.getOrThrow().rowCount, 1)
             executor.execute(session, 'commit', [])
-            @Assert(session.pinned.isNone(), true)
+            @Assert((!session.isPinned()), true)
         } finally {
             session.close()
             resources.close()
@@ -978,6 +1036,17 @@ func showFixture(driver: String): ShowFixture {
     let accessor = RecordingAccessor(resources)
     accessor.driverName = driver
     ShowFixture(resources, accessor, sqls)
+}
+
+/** 取唯一一条 INSERT 下推（忽略 G24 引入的 begin/commit）。 */
+func singleInsertOf(sqls: ArrayList<String>): String {
+    var found = ''
+    for (sql in sqls) {
+        if (sql.startsWith('insert')) {
+            found = sql
+        }
+    }
+    found
 }
 
 func parseInsert(sql: String): InsertStatement {

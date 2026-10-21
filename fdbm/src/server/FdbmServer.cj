@@ -62,11 +62,7 @@ protected class FdbmServer <: Resource {
             source: source)
 
         let physical = physicalDatabases(settings.nodes)
-        let cache = if (settings.cache.enabled) {
-            Some(PartitionCache(settings.cache.path, settings.cache.expire, settings.cache.size))
-        } else {
-            None<PartitionCache>
-        }
+        // G14：规则/全局表先构造（不持有资源）；缓存创建之后任一步失败都要把缓存关掉
         let rules = ArrayList<PartitionRule>()
         for (config in settings.partitions) {
             let databases = match (settings.catalog.physicals(config.database)) {
@@ -75,7 +71,8 @@ protected class FdbmServer <: Resource {
             }
             let algorithm = PartitionAlgorithmFactory.create(config.algorithm, databases,
                 settings.partitionStep, config.substr, custom.partitions)
-            rules.add(PartitionRule(config.database, config.table, config.column, algorithm))
+            rules.add(PartitionRule(config.database, config.table, config.column, algorithm,
+                databases: databases))
         }
         let globalRules = ArrayList<GlobalTableRule>()
         for (config in settings.globalTables) {
@@ -83,21 +80,58 @@ protected class FdbmServer <: Resource {
         }
         let globals = GlobalTableRouter(globalRules.toArray(),
             logicalDatabases: settings.logicalDatabases)
-        this.router = PartitionRouter(rules.toArray(), cache, custom.partitions,
-            knownDatabases: physical, globalTables: globals)
-
-        // 自定义扩展/配置校验通过后才加载物理驱动（加载失败不留下半初始化的资源）
-        match (driver) {
-            case Some(value) =>
-                if (value.name != settings.nodes[0].driverName) {
-                    throw FdbmException(DbdErrorCode.NO_DRIVER,
-                        'driver \'${value.name}\' does not match fdbm_db_driver_* = ' +
-                        '\'${settings.nodes[0].driverName}\'')
-                }
-            case None => DriverLoader.load(settings.driverDir, settings.nodes[0].driverName)
+        let cache = if (settings.cache.enabled) {
+            Some(PartitionCache(settings.cache.path, settings.cache.expire, settings.cache.size))
+        } else {
+            None<PartitionCache>
         }
+        let router = try {
+            // 自定义扩展/配置校验通过后才加载物理驱动（加载失败不留下半初始化的资源）
+            match (driver) {
+                case Some(value) =>
+                    if (value.name != settings.nodes[0].driverName) {
+                        throw FdbmException(DbdErrorCode.NO_DRIVER,
+                            'driver \'${value.name}\' does not match fdbm_db_driver_* = ' +
+                            '\'${settings.nodes[0].driverName}\'')
+                    }
+                case None => DriverLoader.load(settings.driverDir, settings.nodes[0].driverName)
+            }
+            PartitionRouter(rules.toArray(), cache, custom.partitions,
+                knownDatabases: physical, globalTables: globals)
+        } catch (e: Exception) {
+            closeCache(cache)
+            throw e
+        }
+        this.router = router
 
-        this.resources = DatabaseResources(settings.nodes, settings.pool, settings.loadBalance)
+        this.resources = try {
+            DatabaseResources(settings.nodes, settings.pool, settings.loadBalance)
+        } catch (e: Exception) {
+            closeCache(cache)
+            throw e
+        }
+        // G09：sequence 生成器要求分配库存在 fountain_sequence 表，缺失必须在监听前失败
+        if (settings.idmaker.kind == 'sequence') {
+            try {
+                let connection = this.resources.selectRead(settings.sequenceDatabase)
+                try {
+                    let statement = connection.prepareStatement('select 1 from fountain_sequence limit 1')
+                    try {
+                        statement.query().close()
+                    } finally {
+                        statement.close()
+                    }
+                } finally {
+                    connection.close()
+                }
+            } catch (e: Exception) {
+                this.resources.close()
+                closeCache(cache)
+                throw FdbmException(DbdErrorCode.ID_GENERATOR,
+                    'sequence generator requires table fountain_sequence in database ' +
+                    '\'${settings.sequenceDatabase}\': ${e.message}', e)
+            }
+        }
 
         let bootScript = bootScriptOf(settings.bootScript)
         this.sessions = SessionRegistry(settings.sessionSweepInterval, settings.defaultDatabase)
@@ -138,7 +172,9 @@ protected class FdbmServer <: Resource {
             }
         } catch (e: Exception) {
             if (!closed.load()) {
+                // G12：监听失败必须让进程以非 0 退出（main 捕获后返回 1）
                 logger.error('fdbm listener failed: ${e.message}', e)
+                throw FdbmException(DbdErrorCode.INTERNAL, 'fdbm listener failed: ${e.message}', e)
             }
         }
     }
@@ -160,7 +196,9 @@ protected class FdbmServer <: Resource {
         }
         InFlight.await(settings.shutdownTimeout)
         sessions.closeAll()
-        resources.closeAndAwait(timeout: settings.shutdownTimeout)
+        if (!resources.closeAndAwait(timeout: settings.shutdownTimeout)) {
+            logger.warn('some database pools did not terminate within ${settings.shutdownTimeout}')
+        }
         router.close()
         logger.info('fdbm stopped')
     }
@@ -171,6 +209,18 @@ protected class FdbmServer <: Resource {
 
     public func isClosed(): Bool {
         closed.load()
+    }
+
+    private static func closeCache(cache: ?PartitionCache): Unit {
+        match (cache) {
+            case Some(value) =>
+                try {
+                    value.close()
+                } catch (_: Exception) {
+                    ()
+                }
+            case None => ()
+        }
     }
 
     private static func bootScriptOf(path: String): ?BootScriptWriter {

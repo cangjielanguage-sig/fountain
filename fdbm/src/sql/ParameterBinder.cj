@@ -51,7 +51,8 @@ class BindContext {
             case s: SelectStatement =>
                 let columns = ArrayList<SelectItem>()
                 for (item in s.columns) {
-                    columns.add(SelectItem(bindExpression(item.expression), item.alias))
+                    columns.add(SelectItem(bindExpression(item.expression), item.alias,
+                        aliasQuoted: item.aliasQuoted))
                 }
                 let from = ArrayList<TableRef>()
                 for (table in s.from) {

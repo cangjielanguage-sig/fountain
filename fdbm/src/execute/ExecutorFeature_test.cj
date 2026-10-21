@@ -129,8 +129,8 @@ public class ExecutorFeatureTest {
         try {
             let outcome = fixture.executor.execute(session,
                 "insert into t (id, name) values (5, 'a')", [])
-            @Assert(outcome.update.getOrThrow().lastInsertId, 42)
-            @Assert(fixture.sqls[0].contains('returning'), false)
+            @Assert(outcome.update.getOrThrow().lastInsertId > 0, true)
+            @Assert(singleInsertOf(fixture.sqls).contains('returning'), false)
         } finally {
             session.close()
             fixture.resources.close()

@@ -67,7 +67,7 @@ protected class ExecutionOutcome {
 /** 公共借还：pin 的连接优先，否则按读写方向从资源取。 */
 func borrow(session: DbdSession, resources: NodeAccessor, database: String,
     write!: Bool = false): (Connection, Bool) {
-    match (session.pinned) {
+    match (session.pinnedConnection()) {
         case Some(pinned) => (pinned.connection, false)
         case None =>
             let connection = if (write) {
@@ -89,7 +89,7 @@ func allDatabases(resources: NodeAccessor): Array<String> {
  * 拒绝而不是"在 pin 连接上重复执行"——后者会把同一 SQL 在同一库上执行 N 次并累加 rowCount。
  */
 func ensurePinnedTargets(session: DbdSession, count: Int64, what: String): Unit {
-    if (session.pinned.isSome() && count > 1) {
+    if (session.isPinned() && count > 1) {
         throw FdbmException(DbdErrorCode.ROUTE_FAILED,
             '${what} spanning ${count} physical databases is not allowed inside a transaction')
     }
@@ -105,6 +105,23 @@ func dialectOf(resources: NodeAccessor, databases: Array<String>): SqlDialect {
         return SqlDialect.Unknown
     }
     SqlDialects.ofDriver(resources.driver(databases[0]))
+}
+
+/** G25：全局表写在事务内走独立连接、各自提交（无 2PC），首次发生时记 WARN。 */
+func warnPinnedGlobalWrite(session: DbdSession): Unit {
+    if (session.isPinned()) {
+        execLogger.warn('global table write inside a transaction uses an independent connection and ' +
+            'commits on its own; rollback will not undo it (see design §9.4)')
+    }
+}
+
+/** `Unroutable` 的补充说明（G27：跨逻辑库/不同分片空间）。 */
+func reasonSuffix(plan: RoutePlan): String {
+    if (plan.reason.isEmpty()) {
+        ''
+    } else {
+        ': ${plan.reason}'
+    }
 }
 
 /** 驱动返回的单格值 → `Int64`（`lastInsertId` / `count(*)` 用）；不可转换时 `None`。 */
@@ -241,7 +258,7 @@ protected class SelectExecutor {
             throw FdbmException(DbdErrorCode.ROUTE_FAILED,
                 'derived table paging cannot be pushed down to ${databases.size} physical databases')
         }
-        let sql = SqlRenderer.render(statement, dialect: dialectOf(resources, databases))
+        let sql = SqlRenderer.render(statement, unqualified: true, dialect: dialectOf(resources, databases))
         let segments = ArrayList<CursorSegment>()
         var infos: Array<ColumnInfoImpl> = []
         try {
@@ -324,7 +341,7 @@ protected class SelectExecutor {
         }
         // 事务 pin 只对应一个物理库，跨库求和会得到不完整计数
         ensurePinnedTargets(session, databases.size, 'count(*)')
-        let sql = SqlRenderer.render(statement, dialect: dialectOf(resources, databases))
+        let sql = SqlRenderer.render(statement, unqualified: true, dialect: dialectOf(resources, databases))
         var total: Int64 = 0
         for (database in databases) {
             let (connection, owns) = borrow(session, resources, database)
@@ -402,7 +419,7 @@ protected class SelectExecutor {
         if (databases.isEmpty()) {
             return ExecutionOutcome(cursor: Some(QueryCursor([], [])), columns: [])
         }
-        let sql = SqlRenderer.render(statement, dialect: dialectOf(resources, databases))
+        let sql = SqlRenderer.render(statement, unqualified: true, dialect: dialectOf(resources, databases))
         let segment = openSegment(session, databases[0], sql)
         let infos = QueryCursor.columnsOf(segment.result)
         segment.close()
@@ -448,8 +465,9 @@ protected class DmlExecutor {
     public func execute(session: DbdSession, statement: UpdateStatement): ExecutionOutcome {
         let logical = logicalOf(statement.table, session.database)
         if (globals.isGlobal(logical, statement.table.name)) {
+            warnPinnedGlobalWrite(session)
             let targets = globals.physicalDatabases(logical)
-            let sql = SqlRenderer.render(statement, dialect: dialectOf(resources, targets))
+            let sql = SqlRenderer.render(statement, unqualified: true, dialect: dialectOf(resources, targets))
             return ExecutionOutcome(update: Some(broadcastWrite(resources, targets, sql)))
         }
         let plan = router.route(statement, session.database)
@@ -458,10 +476,10 @@ protected class DmlExecutor {
         }
         if (plan.kind == RouteKind.Unroutable) {
             throw FdbmException(DbdErrorCode.ROUTE_FAILED,
-                'update/delete requires a partition key condition')
+                'update/delete requires a partition key condition' + reasonSuffix(plan))
         }
         ensurePinnedTargets(session, plan.databases.size, 'update')
-        let sql = SqlRenderer.render(statement, dialect: dialectOf(resources, plan.databases))
+        let sql = SqlRenderer.render(statement, unqualified: true, dialect: dialectOf(resources, plan.databases))
         var rowCount: Int64 = 0
         var lastInsertId: Int64 = 0
         for (database in plan.databases) {
@@ -507,8 +525,9 @@ protected class DeleteExecutor {
     public func execute(session: DbdSession, statement: DeleteStatement): ExecutionOutcome {
         let logical = DmlExecutor.logicalOf(statement.table, session.database)
         if (globals.isGlobal(logical, statement.table.name)) {
+            warnPinnedGlobalWrite(session)
             let targets = globals.physicalDatabases(logical)
-            let sql = SqlRenderer.render(statement, dialect: dialectOf(resources, targets))
+            let sql = SqlRenderer.render(statement, unqualified: true, dialect: dialectOf(resources, targets))
             return ExecutionOutcome(update: Some(broadcastWrite(resources, targets, sql)))
         }
         let plan = router.route(statement, session.database)
@@ -517,7 +536,7 @@ protected class DeleteExecutor {
         }
         if (plan.kind == RouteKind.Unroutable) {
             throw FdbmException(DbdErrorCode.ROUTE_FAILED,
-                'update/delete requires a partition key condition')
+                'update/delete requires a partition key condition' + reasonSuffix(plan))
         }
         ensurePinnedTargets(session, plan.databases.size, 'delete')
         let dialect = dialectOf(resources, plan.databases)
@@ -526,7 +545,7 @@ protected class DeleteExecutor {
             case Some(found) => queryKeys(session, statement, found, plan.databases, dialect)
             case None => ArrayList<String>() // 未分库表：无缓存可失效
         }
-        let sql = SqlRenderer.render(statement, dialect: dialect)
+        let sql = SqlRenderer.render(statement, unqualified: true, dialect: dialect)
         var rowCount: Int64 = 0
         var lastInsertId: Int64 = 0
         for (database in plan.databases) {
@@ -557,7 +576,7 @@ protected class DeleteExecutor {
         let select = SelectStatement(false,
             [SelectItem(ColumnExpression(None, rule.column), None)],
             [statement.table], [], statement.condition, [], None, None)
-        let sql = SqlRenderer.render(select, dialect: dialect)
+        let sql = SqlRenderer.render(select, unqualified: true, dialect: dialect)
         let keys = ArrayList<String>()
         for (database in databases) {
             let (connection, owns) = borrow(session, resources, database)
@@ -634,22 +653,108 @@ protected class InsertExecutor {
     }
 
     private func insertRows(session: DbdSession, statement: InsertStatement): ExecutionOutcome {
-        var rowCount: Int64 = 0
-        var lastInsertId: Int64 = 0
+        let statements = ArrayList<InsertStatement>()
         if (!statement.values.isEmpty()) {
             for (row in statement.values) {
-                let single = fillAndRoute(session, statement, row, None)
-                let result = executeSingle(session, single)
-                rowCount += result.rowCount
-                lastInsertId = result.lastInsertId
+                statements.add(fillAndRoute(session, statement, row, None))
             }
         } else {
-            let single = fillAndRoute(session, statement, [], statement.setPairs)
-            let result = executeSingle(session, single)
-            rowCount = result.rowCount
+            statements.add(fillAndRoute(session, statement, [], statement.setPairs))
+        }
+        ExecutionOutcome(update: Some(executeAll(session, statements.toArray())))
+    }
+
+    /**
+     * 同库多行在同一事务内执行；跨库按库分组、每组一个事务（G24）。
+     *
+     * - 会话已 pin：沿用 pin 连接逐行执行（事务由会话控制）；
+     * - `returning`：沿用逐行路径（要求单目标）；
+     * - 任一行无法判定为单目标：退回逐行（由 `executeSingle` 保持既有语义）；
+     * - 组间失败：回滚当前组，回 `DB_ERROR` 并列出已提交库（无 2PC）。
+     */
+    private func executeAll(session: DbdSession, statements: Array<InsertStatement>): UpdateResultPayload {
+        if (statements.isEmpty()) {
+            return UpdateResultPayload(0, 0)
+        }
+        if (session.isPinned() || !statements[0].returning.isEmpty()) {
+            return executeOneByOne(session, statements)
+        }
+        let groups = HashMap<String, ArrayList<InsertStatement>>()
+        let order = ArrayList<String>()
+        for (statement in statements) {
+            let plan = router.route(statement, session.database)
+            if (plan.kind == RouteKind.Empty) {
+                continue
+            }
+            if (plan.kind != RouteKind.Single) {
+                return executeOneByOne(session, statements)
+            }
+            let database = plan.databases[0]
+            let group = match (groups.get(database)) {
+                case Some(existing) => existing
+                case None =>
+                    let created = ArrayList<InsertStatement>()
+                    groups[database] = created
+                    order.add(database)
+                    created
+            }
+            group.add(statement)
+        }
+        var rowCount: Int64 = 0
+        var lastInsertId: Int64 = 0
+        let committed = ArrayList<String>()
+        for (database in order) {
+            let group = groups[database]
+            let connection = resources.selectWrite(database)
+            var began = false
+            try {
+                executeUpdate(connection, 'begin')
+                began = true
+                for (statement in group) {
+                    let sql = SqlRenderer.render(statement, unqualified: true,
+                        dialect: dialectOf(resources, [database]))
+                    let result = executeUpdate(connection, sql)
+                    rowCount += result.rowCount
+                    lastInsertId = result.lastInsertId
+                }
+                executeUpdate(connection, 'commit')
+                committed.add(database)
+            } catch (e: Exception) {
+                if (began) {
+                    try {
+                        executeUpdate(connection, 'rollback')
+                    } catch (_: Exception) {
+                        ()
+                    }
+                }
+                try {
+                    connection.close()
+                } catch (_: Exception) {
+                    ()
+                }
+                throw FdbmException(DbdErrorCode.DB_ERROR,
+                    'insert group on \'${database}\' failed; committed: [${joinNames(committed)}]: ' +
+                    '${detailOf(e)}')
+            }
+            try {
+                connection.close()
+            } catch (_: Exception) {
+                ()
+            }
+        }
+        UpdateResultPayload(rowCount, lastInsertId)
+    }
+
+    private func executeOneByOne(session: DbdSession,
+        statements: Array<InsertStatement>): UpdateResultPayload {
+        var rowCount: Int64 = 0
+        var lastInsertId: Int64 = 0
+        for (statement in statements) {
+            let result = executeSingle(session, statement)
+            rowCount += result.rowCount
             lastInsertId = result.lastInsertId
         }
-        ExecutionOutcome(update: Some(UpdateResultPayload(rowCount, lastInsertId)))
+        UpdateResultPayload(rowCount, lastInsertId)
     }
 
     /**
@@ -697,15 +802,11 @@ protected class InsertExecutor {
         if (rows.isEmpty()) {
             return ExecutionOutcome(update: Some(UpdateResultPayload(0, 0)))
         }
-        var rowCount: Int64 = 0
-        var lastInsertId: Int64 = 0
+        let statements = ArrayList<InsertStatement>()
         for (row in rows) {
-            let single = fillAndRoute(session, statement, row, None)
-            let result = executeSingle(session, single)
-            rowCount += result.rowCount
-            lastInsertId = result.lastInsertId
+            statements.add(fillAndRoute(session, statement, row, None))
         }
-        ExecutionOutcome(update: Some(UpdateResultPayload(rowCount, lastInsertId)))
+        ExecutionOutcome(update: Some(executeAll(session, statements.toArray())))
     }
 
     private func fillAndRoute(session: DbdSession, statement: InsertStatement,
@@ -842,8 +943,9 @@ protected class InsertExecutor {
             }
         }
         if (isGlobal) {
+            warnPinnedGlobalWrite(session)
             let targets = globals.physicalDatabases(logical)
-            let sql = SqlRenderer.render(statement, dialect: dialectOf(resources, targets))
+            let sql = SqlRenderer.render(statement, unqualified: true, dialect: dialectOf(resources, targets))
             return broadcastWrite(resources, targets, sql)
         }
         let plan = router.route(statement, session.database)
@@ -857,7 +959,7 @@ protected class InsertExecutor {
             throw FdbmException(DbdErrorCode.ROUTE_FAILED,
                 'returning requires a single target database')
         }
-        let sql = SqlRenderer.render(statement, dialect: dialectOf(resources, plan.databases))
+        let sql = SqlRenderer.render(statement, unqualified: true, dialect: dialectOf(resources, plan.databases))
         if (!statement.returning.isEmpty()) {
             return executeReturning(session, sql, plan.databases[0])
         }
@@ -1094,7 +1196,7 @@ protected class DdlExecutor {
     /** DDL 广播到当前逻辑库的全部物理库；部分失败 → `DB_ERROR` 并列出成功/失败库。 */
     public func execute(session: DbdSession, statement: DdlStatement): ExecutionOutcome {
         // DDL 必须广播到逻辑库全部物理库，无法在单目标事务内完成（D04）
-        if (session.pinned.isSome()) {
+        if (session.isPinned()) {
             throw FdbmException(DbdErrorCode.ROUTE_FAILED,
                 'ddl is not allowed inside a transaction: it must be broadcast to every physical database')
         }
@@ -1161,30 +1263,43 @@ protected class SessionCtlExecutor {
     public func execute(session: DbdSession, statement: SessionCtlStatement): ExecutionOutcome {
         match (statement.verb) {
             case SessionCtlVerb.Begin =>
-                if (session.pinned.isSome()) {
+                if (session.isPinned()) {
                     throw FdbmException(DbdErrorCode.TX_STATE, 'the transaction has already begun')
                 }
                 let connection = resources.selectWrite(session.database)
-                let pinned = PinnedConnection(connection)
-                pinned.transactionOpen = true
-                session.pinned = Some(pinned)
-                let result = executeUpdate(connection, statement.sql)
-                ExecutionOutcome(update: Some(UpdateResultPayload(result.rowCount, 0)))
+                // 先让物理库接受 begin，成功后才 pin（G26：失败的 begin 不得留下 pin）
+                try {
+                    let result = executeUpdate(connection, statement.sql)
+                    let pinned = PinnedConnection(connection)
+                    pinned.transactionOpen = true
+                    session.pin(pinned)
+                    ExecutionOutcome(update: Some(UpdateResultPayload(result.rowCount, 0)))
+                } catch (e: Exception) {
+                    try {
+                        connection.close()
+                    } catch (_: Exception) {
+                        ()
+                    }
+                    throw e
+                }
             case SessionCtlVerb.Commit | SessionCtlVerb.Rollback =>
-                match (session.pinned) {
+                match (session.pinnedConnection()) {
                     case Some(pinned) =>
                         try {
                             let result = executeUpdate(pinned.connection, statement.sql)
                             ExecutionOutcome(update: Some(UpdateResultPayload(result.rowCount, 0)))
                         } finally {
-                            pinned.close()
-                            session.pinned = None
+                            // 先解 pin 再归还：close 失败也不会让会话卡在"已 pin"（G26）
+                            match (session.unpin()) {
+                                case Some(value) => value.close()
+                                case None => pinned.close()
+                            }
                         }
                     case None => throw FdbmException(DbdErrorCode.TX_STATE,
                         'cannot ${statement.sql}: the transaction has not begun')
                 }
             case _ =>
-                match (session.pinned) {
+                match (session.pinnedConnection()) {
                     case Some(pinned) =>
                         let result = executeUpdate(pinned.connection, statement.sql)
                         ExecutionOutcome(update: Some(UpdateResultPayload(result.rowCount, 0)))

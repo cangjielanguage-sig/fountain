@@ -17,6 +17,7 @@ package fountain::fdbm.config
 
 import std.fs.*
 import std.random.Random
+import std.collection.ArrayList
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_config.Config
@@ -223,6 +224,53 @@ export fdbm_also_unknown=2
             writer.set('fdbm_port', '9000')
             writer.flush()
             @Assert(FileInfo(file).canExecute(), true)
+        } finally {
+            removeIfExists(file.toString().replace('/boot.sh', ''), recursive: true)
+        }
+    }
+
+    /** G10：区块内外同键 → 区块内优先，区块外行被移除。 */
+    @TestCase
+    public func blockWinsOverOutsideDuplicates(): Unit {
+        let file = scriptFile("""
+#!/bin/bash
+export fdbm_port=9100
+# ==== fdbm managed exports (auto-generated; do not edit) ====
+export fdbm_port='9000'
+# ==== fdbm managed exports end ====
+""")
+        try {
+            let writer = BootScriptWriter(file.toString())
+            @Assert(writer.normalize(), true)
+            let text = readFile(file)
+            @Assert(text.contains("export fdbm_port='9000'"), true)
+            @Assert(text.contains('9100'), false)
+        } finally {
+            removeIfExists(file.toString().replace('/boot.sh', ''), recursive: true)
+        }
+    }
+
+    /** G11：并发 set+flush 不报 CONFIG/ENOENT，最终脚本可再解析。 */
+    @TestCase
+    public func concurrentExportsAreSerialized(): Unit {
+        let file = scriptFile('#!/bin/bash\n')
+        try {
+            let writer = BootScriptWriter(file.toString())
+            let futures = ArrayList<Future<Unit>>()
+            for (i in 0..2) {
+                let fut = spawn {
+                    for (_ in 0..100) {
+                        writer.set('fdbm_port', '${9000 + i}')
+                        writer.flush()
+                    }
+                }
+                futures.add(fut)
+            }
+            for (fut in futures) {
+                fut.get()
+            }
+            let text = readFile(file)
+            @Assert(text.contains('export fdbm_port='), true)
         } finally {
             removeIfExists(file.toString().replace('/boot.sh', ''), recursive: true)
         }
