@@ -17,6 +17,7 @@ package fountain::fmq.meta
 
 import std.fs.*
 import std.sync.AtomicInt64
+import fountain::f_mq.base.model.MQTopicMeta
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_mq.base.model.MQSubscribeGroupMeta
@@ -355,6 +356,95 @@ class MetaStoreTest {
             @Assert(store.applyTombstone(MQMetaTombstone(MQMetaTombstone.KIND_TOPIC, "/t", "", 9, 0, 0)) ==
                 MetaApplyResult.Applied)
             @Assert(store.topicOf("/t").isNone())
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    // ===== 注册的检查-执行原子化（A28） =====
+
+    @TestCase
+    public func concurrentRegisterTopicOnlyOneWins(): Unit {
+        let dir = dirOf("atomic_register")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            let results = Array<Int64>(8, repeat: -1)
+            let done = AtomicInt64(0)
+            for (i in 0..8) {
+                spawn {
+                    let (result, _) = store.registerTopic(MQTopicMeta("/t", 4), 3)
+                    results[i] = if (result == MetaApplyResult.Applied) {1} else {0}
+                    done.fetchAdd(1)
+                }
+            }
+            var waited = 0
+            while (done.load() < 8 && waited < 3000) {
+                sleep(Duration.millisecond * 1)
+                waited++
+            }
+            @Assert(done.load() == 8)
+            var applied = 0
+            for (value in results) {
+                if (value == 1) {
+                    applied++
+                }
+            }
+            @Assert(applied == 1)
+            @Assert(store.topicOf("/t").getOrThrow().queueNum == 4)
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    @TestCase
+    public func concurrentDifferentTopicsGetDifferentStarts(): Unit {
+        let dir = dirOf("atomic_register_starts")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            let starts = Array<Int64>(2, repeat: -1)
+            let done = AtomicInt64(0)
+            spawn {
+                let (_, assignment) = store.registerTopic(MQTopicMeta("/a", 2), 3)
+                starts[0] = assignment.getOrThrow().startNodeIndex
+                done.fetchAdd(1)
+            }
+            spawn {
+                let (_, assignment) = store.registerTopic(MQTopicMeta("/b", 2), 3)
+                starts[1] = assignment.getOrThrow().startNodeIndex
+                done.fetchAdd(1)
+            }
+            var waited = 0
+            while (done.load() < 2 && waited < 3000) {
+                sleep(Duration.millisecond * 1)
+                waited++
+            }
+            @Assert(done.load() == 2)
+            @Assert(starts[0] != starts[1])
+            // 指针等于「最后注册的起点 + queueNum」，与到达顺序无关
+            let next = store.nextStartNode
+            @Assert(next == (starts[0] + 2) % 3 || next == (starts[1] + 2) % 3)
+        } finally {
+            clean(dir)
+        }
+    }
+
+    @TestCase
+    public func registerGroupRequiresTopicAndIsAtomic(): Unit {
+        let dir = dirOf("atomic_group")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            @Assert(store.registerGroup(MQSubscribeGroupMeta("/t", "g")) == MetaApplyResult.TopicMissing)
+            @Assert(store.registerTopic(MQTopicMeta("/t", 1), 1)[0] == MetaApplyResult.Applied)
+            @Assert(store.registerGroup(MQSubscribeGroupMeta("/t", "g")) == MetaApplyResult.Applied)
+            @Assert(store.registerGroup(MQSubscribeGroupMeta("/t", "g")) == MetaApplyResult.Duplicated)
             store.close()
         } finally {
             clean(dir)

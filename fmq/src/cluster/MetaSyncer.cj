@@ -42,7 +42,7 @@ protected class MetaSyncer {
         this.transport = transport
     }
 
-    /** 注册主题：分配 → 落盘（含轮转指针）→ 广播 → 返回分配。 */
+    /** 注册主题：检查/分配/写盘全在 store 的同一临界区，只有落盘成功才广播（A28）。 */
     protected func registerTopic(meta: MQTopicMeta): MQTopicAssignment {
         if (!MQTopic.isValid(meta.topic)) {
             throw MQServiceException(MQErrorCode.INVALID_TOPIC, "invalid topic '${meta.topic}'")
@@ -53,34 +53,44 @@ protected class MetaSyncer {
         if (meta.delayingMs < 0) {
             throw MQServiceException(MQErrorCode.INVALID_TOPIC, "delaying must not be negative")
         }
-        if (store.topicOf(meta.topic).isSome()) {
-            throw MQServiceException(MQErrorCode.TOPIC_ALREADY_EXIST, "topic '${meta.topic}' already exists")
-        }
         let nodeCount = transport.nodeCount
         if (nodeCount < 1) {
             throw MQServiceException(MQErrorCode.INTERNAL, "no node in cluster")
         }
-        let start = store.nextStartNode % nodeCount
-        let assignment = MQAssignment.allocate(meta.topic, meta.queueNum, nodeCount, start,
-            delayingMs: meta.delayingMs, revision: store.nextRevision(), origin: transport.selfIndex)
-        let next = MQAssignment.nextStart(start, meta.queueNum, nodeCount)
-        store.applyTopic(assignment, nextStart: next)
-        broadcastTopic(assignment)
-        assignment
+        let (result, assignment) = store.registerTopic(meta, nodeCount)
+        match (result) {
+            case MetaApplyResult.Applied =>
+                let persisted = assignment.getOrThrow()
+                broadcastTopic(persisted)
+                persisted
+            case MetaApplyResult.Duplicated =>
+                throw MQServiceException(MQErrorCode.TOPIC_ALREADY_EXIST, "topic '${meta.topic}' already exists")
+            case _ =>
+                throw MQServiceException(MQErrorCode.INTERNAL, "cannot register topic '${meta.topic}'")
+        }
     }
 
     protected func registerGroup(meta: MQSubscribeGroupMeta): MQResult {
-        if (store.topicOf(meta.topic).isNone()) {
-            throw MQServiceException(MQErrorCode.TOPIC_NOT_EXIST, "topic '${meta.topic}' does not exist")
+        match (store.registerGroup(meta)) {
+            case MetaApplyResult.Applied => ()
+            case MetaApplyResult.TopicMissing =>
+                throw MQServiceException(MQErrorCode.TOPIC_NOT_EXIST, "topic '${meta.topic}' does not exist")
+            case MetaApplyResult.Duplicated =>
+                throw MQServiceException(MQErrorCode.GROUP_ALREADY_EXIST,
+                    "subscribe group '${meta.subscribeGroup}' already exists on '${meta.topic}'")
+            case _ =>
+                throw MQServiceException(MQErrorCode.INTERNAL, "cannot register group '${meta.subscribeGroup}'")
         }
-        if (store.groupExists(meta.topic, meta.subscribeGroup)) {
-            throw MQServiceException(MQErrorCode.GROUP_ALREADY_EXIST,
-                "subscribe group '${meta.subscribeGroup}' already exists on '${meta.topic}'")
+        // 广播落盘后的对象（revision/origin 以盘上为准）
+        match (store.groupsOf(meta.topic)) {
+            case list =>
+                for (group in list) {
+                    if (group.subscribeGroup == meta.subscribeGroup) {
+                        broadcastGroup(group)
+                        break
+                    }
+                }
         }
-        let versioned = MQSubscribeGroupMeta(meta.topic, meta.subscribeGroup, revision: store.nextRevision(),
-            origin: transport.selfIndex)
-        store.applyGroup(versioned)
-        broadcastGroup(versioned)
         MQResult(0, "ok")
     }
 

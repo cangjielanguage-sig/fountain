@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::fmq.cluster
 
 import std.fs.*
+import std.sync.AtomicInt64
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_mq.base.*
@@ -350,6 +351,85 @@ class MetaSyncerTest {
             syncer.syncFromPeers()
 
             @Assert(store.topicOf("/t").isSome())
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    // ===== 注册原子性与广播（A28） =====
+
+    @TestCase
+    public func registeredAssignmentMatchesPersistedAndBroadcastsOnce(): Unit {
+        let dir = dirOf("register_atomic")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            let transport = FakeTransport(3, 0)
+            transport.responder = {_, message =>
+                Some(MQProtocol.respond<MQResult>(message, MQResult(0, "ok")))
+            }
+            let syncer = MetaSyncer(store, transport)
+            let returned = syncer.registerTopic(MQTopicMeta("/t", 2, delayingMs: 500))
+            let persisted = store.topicOf("/t").getOrThrow()
+            @Assert(returned.topic == persisted.topic)
+            @Assert(returned.queueNum == persisted.queueNum)
+            @Assert(returned.startNodeIndex == persisted.startNodeIndex)
+            @Assert(returned.delayingMs == persisted.delayingMs)
+            @Assert(returned.owners == persisted.owners)
+            @Assert(returned.revision == persisted.revision)
+            // 只广播一次，且内容是落盘结果
+            @Assert(transport.messagesSentTo(1).size == 1)
+            @Assert(transport.messagesSentTo(2).size == 1)
+            // 重复注册抛「已存在」，且不再广播
+            var thrown = false
+            try {
+                syncer.registerTopic(MQTopicMeta("/t", 2))
+            } catch (_: MQServiceException) {
+                thrown = true
+            }
+            @Assert(thrown)
+            @Assert(transport.messagesSentTo(1).size == 1)
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    @TestCase
+    public func concurrentRegisterThemeThrowsAlreadyExist(): Unit {
+        let dir = dirOf("register_concurrent")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            let transport = FakeTransport(1, 0)
+            let syncer = MetaSyncer(store, transport)
+            let successes = Array<Int64>(8, repeat: 0)
+            let done = AtomicInt64(0)
+            for (i in 0..8) {
+                spawn {
+                    try {
+                        syncer.registerTopic(MQTopicMeta("/t", 4))
+                        successes[i] = 1
+                    } catch (_: MQServiceException) {
+                        successes[i] = 0
+                    }
+                    done.fetchAdd(1)
+                }
+            }
+            var waited = 0
+            while (done.load() < 8 && waited < 3000) {
+                sleep(Duration.millisecond * 1)
+                waited++
+            }
+            @Assert(done.load() == 8)
+            var applied = 0
+            for (value in successes) {
+                applied += value
+            }
+            @Assert(applied == 1)
             store.close()
         } finally {
             clean(dir)

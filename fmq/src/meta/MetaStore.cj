@@ -21,7 +21,7 @@ import std.sync.Mutex
 import std.time.DateTime
 import fountain::f_log.*
 import fountain::f_mq.base.MQProtocol
-import fountain::f_mq.base.model.MQSubscribeGroupMeta
+import fountain::f_mq.base.model.{MQSubscribeGroupMeta, MQTopicMeta}
 import fountain::f_mq.base.payload.{MQMetaSnapshot, MQMetaTombstone, MQTopicAssignment}
 
 /** 应用一条元数据变更的结果。 */
@@ -29,12 +29,15 @@ public enum MetaApplyResult <: Equatable<MetaApplyResult> & ToString {
     | Applied
     | Duplicated
     | Conflict
+    /** 组依赖的主题不存在（组先于主题到达时进入待应用队列） */
+    | TopicMissing
 
     public operator func ==(other: MetaApplyResult): Bool {
         match ((this, other)) {
             case (Applied, Applied) => true
             case (Duplicated, Duplicated) => true
             case (Conflict, Conflict) => true
+            case (TopicMissing, TopicMissing) => true
             case _ => false
         }
     }
@@ -44,6 +47,7 @@ public enum MetaApplyResult <: Equatable<MetaApplyResult> & ToString {
             case Applied => "applied"
             case Duplicated => "duplicated"
             case Conflict => "conflict"
+            case TopicMissing => "topic-missing"
         }
     }
 }
@@ -151,6 +155,56 @@ protected class MetaStore <: Resource {
             synchronized(lock) {
                 nextStart
             }
+        }
+    }
+
+    /**
+     * 注册主题：检查是否存在、分配、写盘、推进指针全在同一个临界区内完成（A28）。
+     *
+     * 返回「结果 + 落盘的分配」；`Duplicated` 时分配为 `None`。
+     */
+    protected func registerTopic(meta: MQTopicMeta, nodeCount: Int64): (MetaApplyResult, ?MQTopicAssignment) {
+        if (meta.queueNum < 1 || nodeCount < 1) {
+            return (MetaApplyResult.Conflict, None<MQTopicAssignment>)
+        }
+        synchronized(lock) {
+            if (topicIndex.get(meta.topic).isSome()) {
+                return (MetaApplyResult.Duplicated, None<MQTopicAssignment>)
+            }
+            let start = nextStart % nodeCount
+            let assignment = MQAssignment.allocate(meta.topic, meta.queueNum, nodeCount, start,
+                delayingMs: meta.delayingMs, revision: nextRevisionLocked(), origin: origin)
+            let next = MQAssignment.nextStart(start, meta.queueNum, nodeCount)
+            writeAtomically(topicPath(assignment.topic), MQProtocol.encodePayload<MQTopicAssignment>(assignment))
+            topicIndex.add(assignment.topic, assignment)
+            this.nextStart = next
+            writeAtomically("${dir}/assign.meta", encodeNextStart(next))
+            (MetaApplyResult.Applied, Some(assignment))
+        }
+    }
+
+    /** 注册订阅组：主题存在性与组存在性检查、写盘在同一个临界区内完成（A28/A36）。 */
+    protected func registerGroup(meta: MQSubscribeGroupMeta): MetaApplyResult {
+        synchronized(lock) {
+            if (topicIndex.get(meta.topic).isNone()) {
+                return MetaApplyResult.TopicMissing
+            }
+            if (groupExistsLocked(meta.topic, meta.subscribeGroup)) {
+                return MetaApplyResult.Duplicated
+            }
+            let versioned = MQSubscribeGroupMeta(meta.topic, meta.subscribeGroup, revision: nextRevisionLocked(),
+                origin: origin)
+            writeAtomically(groupPath(versioned.topic, versioned.subscribeGroup),
+                MQProtocol.encodePayload<MQSubscribeGroupMeta>(versioned))
+            let list = match (groups.get(versioned.topic)) {
+                case Some(items) => items
+                case None =>
+                    let items = ArrayList<MQSubscribeGroupMeta>()
+                    groups.add(versioned.topic, items)
+                    items
+            }
+            list.add(versioned)
+            MetaApplyResult.Applied
         }
     }
 

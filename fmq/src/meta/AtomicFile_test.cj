@@ -127,10 +127,12 @@ class AtomicFileTest {
         try {
             let store = MetaStore(dir)
             store.load()
-            // 占位：让 rename 的目标是一个目录，写入必然失败
-            let topicPath = "${dir}/${MQFileNames.topicFile("/t")}"
-            Directory.create(Path(topicPath).parent, recursive: true)
-            Directory.create(topicPath)
+            // 占位：把 topics 目录换成普通文件，创建父目录必然失败
+            let topicsDir = "${dir}/topics"
+            if (exists(topicsDir)) {
+                remove(topicsDir, recursive: true)
+            }
+            File.create(topicsDir).close()
             var thrown = false
             try {
                 store.applyTopic(MQTopicAssignment("/t", 1, 0, [0]))
