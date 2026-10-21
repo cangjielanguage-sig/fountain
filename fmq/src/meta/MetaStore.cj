@@ -33,6 +33,8 @@ public enum MetaApplyResult <: Equatable<MetaApplyResult> & ToString {
     | TopicMissing
     /** 载荷结构非法（分配字段越界、组名非法等），不得落盘 */
     | Invalid
+    /** 同 key 的墓碑更新：迟到的旧条目被墓碑挡住，不落盘、不复活 */
+    | Tombstoned
 
     public operator func ==(other: MetaApplyResult): Bool {
         match ((this, other)) {
@@ -41,6 +43,7 @@ public enum MetaApplyResult <: Equatable<MetaApplyResult> & ToString {
             case (Conflict, Conflict) => true
             case (TopicMissing, TopicMissing) => true
             case (Invalid, Invalid) => true
+            case (Tombstoned, Tombstoned) => true
             case _ => false
         }
     }
@@ -52,6 +55,7 @@ public enum MetaApplyResult <: Equatable<MetaApplyResult> & ToString {
             case Conflict => "conflict"
             case TopicMissing => "topic-missing"
             case Invalid => "invalid"
+            case Tombstoned => "tombstoned"
         }
     }
 }
@@ -184,6 +188,7 @@ protected class MetaStore <: Resource {
             let next = MQAssignment.nextStart(start, meta.queueNum, nodeCount)
             writeAtomically(topicPath(assignment.topic), MQProtocol.encodePayload<MQTopicAssignment>(assignment))
             topicIndex.add(assignment.topic, assignment)
+            dropTombstoneLocked(MQMetaTombstone.KIND_TOPIC, assignment.topic, "")
             this.nextStart = next
             writeAtomically("${dir}/assign.meta", encodeNextStart(next))
             (MetaApplyResult.Applied, Some(assignment))
@@ -214,6 +219,7 @@ protected class MetaStore <: Resource {
                     items
             }
             list.add(versioned)
+            dropTombstoneLocked(MQMetaTombstone.KIND_GROUP, versioned.topic, versioned.subscribeGroup)
             MetaApplyResult.Applied
         }
     }
@@ -223,6 +229,13 @@ protected class MetaStore <: Resource {
      */
     protected func applyTopic(assignment: MQTopicAssignment, nextStart!: ?Int64 = None): MetaApplyResult {
         synchronized(lock) {
+            // 墓碑也是一次带版本的变更：迟到的旧分配不能把已删主题带回来（R2-S1）
+            if (!acceptOverTombstoneLocked(MQMetaTombstone.KIND_TOPIC, assignment.topic, "",
+                assignment.revision, assignment.origin)) {
+                log.warn("reject topic '${assignment.topic}' at revision ${assignment.revision}: " +
+                    "blocked by tombstone")
+                return MetaApplyResult.Tombstoned
+            }
             match (topicIndex.get(assignment.topic)) {
                 case Some(existing) =>
                     if (!isNewer(assignment.revision, assignment.origin, existing.revision, existing.origin)) {
@@ -239,6 +252,8 @@ protected class MetaStore <: Resource {
             }
             writeAtomically("${topicPath(assignment.topic)}", MQProtocol.encodePayload<MQTopicAssignment>(assignment))
             topicIndex.add(assignment.topic, assignment)
+            // 活条目已胜出：墓碑只会挡住后续更旧的条目，保留它会压低 tombstoneFloor，必须移除
+            dropTombstoneLocked(MQMetaTombstone.KIND_TOPIC, assignment.topic, "")
             if (let Some(value) <- nextStart) {
                 this.nextStart = value
                 writeAtomically("${dir}/assign.meta", encodeNextStart(value))
@@ -252,6 +267,13 @@ protected class MetaStore <: Resource {
             return MetaApplyResult.Invalid
         }
         synchronized(lock) {
+            // 组墓碑先于主题存在性判定：已删组不得因主题仍在而复活（R2-S1）
+            if (!acceptOverTombstoneLocked(MQMetaTombstone.KIND_GROUP, meta.topic, meta.subscribeGroup,
+                meta.revision, meta.origin)) {
+                log.warn("reject group '${meta.subscribeGroup}' of '${meta.topic}' at revision " +
+                    "${meta.revision}: blocked by tombstone")
+                return MetaApplyResult.Tombstoned
+            }
             if (topicIndex.get(meta.topic).isNone()) {
                 // 组先于主题到达（网络乱序）或主题已删除：拒绝，交给 Syncer 的待应用队列
                 return MetaApplyResult.TopicMissing
@@ -281,6 +303,7 @@ protected class MetaStore <: Resource {
             }
             writeAtomically("${groupPath(meta.topic, meta.subscribeGroup)}",
                 MQProtocol.encodePayload<MQSubscribeGroupMeta>(meta))
+            dropTombstoneLocked(MQMetaTombstone.KIND_GROUP, meta.topic, meta.subscribeGroup)
             MetaApplyResult.Applied
         }
     }
@@ -514,6 +537,54 @@ protected class MetaStore <: Resource {
     private static func isNewer(remoteRevision: Int64, remoteOrigin: Int64, localRevision: Int64,
         localOrigin: Int64): Bool {
         remoteRevision > localRevision || (remoteRevision == localRevision && remoteOrigin > localOrigin)
+    }
+
+    /** 同 key 的墓碑（调用方必须持有 `lock`）。 */
+    private func tombstoneOfLocked(kind: String, topic: String, group: String): ?MQMetaTombstone {
+        let key = if (kind == MQMetaTombstone.KIND_TOPIC) {
+            "${kind}\u{0}${topic}"
+        } else {
+            "${kind}\u{0}${topic}\u{0}${group}"
+        }
+        tombstones.get(key)
+    }
+
+    /**
+     * 条目能否越过同 key 的墓碑（调用方必须持有 `lock`）。
+     *
+     * 与条目之间同一套 `isNewer` 语义：revision 大者胜，同 revision 比 origin；
+     * 完全相等时墓碑胜（删除是终态，迟到重放不得复活）。
+     */
+    private func acceptOverTombstoneLocked(kind: String, topic: String, group: String, revision: Int64,
+        origin: Int64): Bool {
+        match (tombstoneOfLocked(kind, topic, group)) {
+            case Some(tombstone) => isNewer(revision, origin, tombstone.revision, tombstone.origin)
+            case None => true
+        }
+    }
+
+    /**
+     * 删除同 key 的墓碑（条目已以更高版本胜出时）。
+     *
+     * 内存移除是权威结果；文件删除失败只记 ERROR，下次加载按「条目更新 → 删墓碑」再次收敛。
+     */
+    private func dropTombstoneLocked(kind: String, topic: String, group: String): Unit {
+        let key = if (kind == MQMetaTombstone.KIND_TOPIC) {
+            "${kind}\u{0}${topic}"
+        } else {
+            "${kind}\u{0}${topic}\u{0}${group}"
+        }
+        if (tombstones.remove(key).isNone()) {
+            return
+        }
+        let path = tombstonePath(MQMetaTombstone(kind, topic, group, 0, 0, 0))
+        try {
+            if (exists(path)) {
+                remove(path)
+            }
+        } catch (e: Exception) {
+            log.error("cannot remove tombstone file ${path}: ${e.message}")
+        }
     }
 
     private static func sameAssignment(left: MQTopicAssignment, right: MQTopicAssignment): Bool {

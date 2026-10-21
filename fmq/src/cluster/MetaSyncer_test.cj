@@ -337,6 +337,76 @@ class MetaSyncerTest {
         }
     }
 
+    /** 广播路径：墓碑挡住迟到分配，不落盘也不触发 `openTopic` 回调（R2-S1）。 */
+    @TestCase
+    public func lateAssignmentOverTombstoneDoesNotOpenQueue(): Unit {
+        let name = "tombstone_late_broadcast"
+        let (store, _, syncer) = fixture(name)
+        try {
+            let opened = AtomicInt64(0)
+            syncer.onTopicApplied = {_ => opened.fetchAdd(1)}
+            store.applyTombstone(MQMetaTombstone(MQMetaTombstone.KIND_TOPIC, "/t", "", 7, 0, 0))
+            @Assert(syncer.applyRemote(MQTopicAssignment("/t", 1, 0, [0], revision: 2, origin: 1)) ==
+                MetaApplyResult.Tombstoned)
+            @Assert(store.topicOf("/t").isNone())
+            @Assert(opened.load() == 0)
+        } finally {
+            shutdown(store, name)
+        }
+    }
+
+    /** 快照路径：旧 peer 快照里的迟到条目不能借合并复活已被墓碑删除的主题（R2-S1）。 */
+    @TestCase
+    public func snapshotDoesNotResurrectTopicOverTombstone(): Unit {
+        let name = "tombstone_snapshot_revive"
+        let dir = dirOf(name)
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            store.applyTombstone(MQMetaTombstone(MQMetaTombstone.KIND_TOPIC, "/t", "", 7, 0, 0))
+            let transport = FakeTransport(2, 1)
+            let syncer = MetaSyncer(store, transport)
+            let opened = AtomicInt64(0)
+            syncer.onTopicApplied = {_ => opened.fetchAdd(1)}
+            let snapshot = MQMetaSnapshot([MQTopicAssignment("/t", 1, 0, [0], revision: 2, origin: 1)],
+                Array<MQSubscribeGroupMeta>(), 0,
+                tombstones: [MQMetaTombstone(MQMetaTombstone.KIND_TOPIC, "/t", "", 7, 0, 0)], revision: 7)
+            transport.responder = {_, request => Some(MQProtocol.respond<MQMetaSnapshot>(request, snapshot))}
+            syncer.syncFromPeers()
+            @Assert(store.topicOf("/t").isNone())
+            @Assert(opened.load() == 0)
+            @Assert(store.allTombstones().size == 1)
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    /** 快照路径：组墓碑挡住迟到组，`groupExists` 保持为假（R2-S1）。 */
+    @TestCase
+    public func snapshotDoesNotResurrectGroupOverTombstone(): Unit {
+        let dir = dirOf("tombstone_snapshot_group")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 1))
+            store.applyTombstone(MQMetaTombstone(MQMetaTombstone.KIND_GROUP, "/t", "g", 7, 0, 0))
+            let transport = FakeTransport(2, 1)
+            let syncer = MetaSyncer(store, transport)
+            let snapshot = MQMetaSnapshot([MQTopicAssignment("/t", 1, 0, [0], revision: 1)],
+                [MQSubscribeGroupMeta("/t", "g", revision: 2, origin: 1)], 0,
+                tombstones: [MQMetaTombstone(MQMetaTombstone.KIND_GROUP, "/t", "g", 7, 0, 0)], revision: 7)
+            transport.responder = {_, request => Some(MQProtocol.respond<MQMetaSnapshot>(request, snapshot))}
+            syncer.syncFromPeers()
+            @Assert(!store.groupExists("/t", "g"))
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
     /** 快照不带版本（旧 peer）时不做「缺失即删除」，避免互相清空。 */
     @TestCase
     public func legacySnapshotDoesNotWipeLocalMetadata(): Unit {

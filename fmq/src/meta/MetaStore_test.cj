@@ -411,6 +411,60 @@ class MetaStoreTest {
         }
     }
 
+    // ===== 墓碑参与接受判定（R2-S1） =====
+
+    /** 墓碑按版本挡住迟到的主题分配：不落盘、不复活；更高版本才允许复活并回收墓碑。 */
+    @TestCase
+    public func tombstoneBlocksLateTopicAssignment(): Unit {
+        let dir = dirOf("tombstone_late_topic")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            store.applyTombstone(MQMetaTombstone(MQMetaTombstone.KIND_TOPIC, "/t", "", 7, 0, 0))
+            @Assert(store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 2, origin: 1)) ==
+                MetaApplyResult.Tombstoned)
+            @Assert(store.topicOf("/t").isNone())
+            @Assert(!exists("${dir}/${MQFileNames.topicFile("/t")}"))
+            // 同 revision、更低 origin 也算输
+            @Assert(store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 7, origin: 0)) ==
+                MetaApplyResult.Tombstoned)
+            // 更高 revision 胜出：落盘并回收墓碑
+            @Assert(store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 8, origin: 0)) ==
+                MetaApplyResult.Applied)
+            @Assert(store.topicOf("/t").isSome())
+            @Assert(store.topicTombstone("/t").isNone())
+            @Assert(store.allTombstones().size == 0)
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    /** 组墓碑同样挡住迟到组：`groupExists` 保持为假。 */
+    @TestCase
+    public func tombstoneBlocksLateGroup(): Unit {
+        let dir = dirOf("tombstone_late_group")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 1))
+            store.applyTombstone(MQMetaTombstone(MQMetaTombstone.KIND_GROUP, "/t", "g", 7, 0, 0))
+            @Assert(store.applyGroup(MQSubscribeGroupMeta("/t", "g", revision: 2, origin: 1)) ==
+                MetaApplyResult.Tombstoned)
+            @Assert(!store.groupExists("/t", "g"))
+            // 更高版本可以重新恢复
+            @Assert(store.applyGroup(MQSubscribeGroupMeta("/t", "g", revision: 8, origin: 1)) ==
+                MetaApplyResult.Applied)
+            @Assert(store.groupExists("/t", "g"))
+            @Assert(store.allTombstones().size == 0)
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
     // ===== 注册的检查-执行原子化（A28） =====
 
     @TestCase
