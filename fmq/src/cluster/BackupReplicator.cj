@@ -97,7 +97,7 @@ protected class BackupReplicator {
     }
 
     /** 当前待发送条目数（测试与运维观测用）。 */
-    protected prop pendingCount: Int64 {
+    public prop pendingCount: Int64 {
         get() {
             synchronized(lock) {
                 pending.size

@@ -100,9 +100,26 @@ private func runManager(args: Array<String>): Int64 {
 }
 
 private func runServer(): Int64 {
+    runServerWith(
+        {=> MQServer()},
+        {server =>
+            // 只在 server 分支安装：manager / --help 不需要
+            ExitCallbacks.toExitGracefully()
+            installExitHooks(server, {close => ExitCallbacks.atExit(0, close)})
+        },
+        {server => server.run()})
+}
+
+/**
+ * 可注入的服务端启动：装配 → 安装退出钩子 → 阻塞运行。
+ *
+ * 三段拆开是为了让用例断言顺序与「manager 分支不安装钩子」（A68）。
+ */
+func runServerWith(create: () -> MQServer, installHooks: (MQServer) -> Unit,
+    run: (MQServer) -> Int64): Int64 {
     var server: ?MQServer = None
     try {
-        server = Some(MQServer())
+        server = Some(create())
     } catch (e: MQConfigException) {
         eprintln("fmq server: ${e.message}")
         return 2
@@ -111,10 +128,8 @@ private func runServer(): Int64 {
         return 2
     }
     let instance = server.getOrThrow()
-    // 只在 server 分支安装：manager / --help 不需要
-    ExitCallbacks.toExitGracefully()
-    installExitHooks(instance, {close => ExitCallbacks.atExit(0, close)})
-    instance.run()
+    installHooks(instance)
+    run(instance)
 }
 
 private func wantsHelp(args: Array<String>): Bool {

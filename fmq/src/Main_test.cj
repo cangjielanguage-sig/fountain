@@ -16,11 +16,14 @@ limitations under the License.
 package fountain::fmq
 
 import std.collection.ArrayList
+import std.fs.*
 import std.sync.AtomicInt64
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_config.Config
 import fountain::f_mq.base.MQConfigKey
+import fountain::fmq.server.MQServer
+import fountain::fmq.test.TestDirs
 
 @Test
 class MainTest {
@@ -109,15 +112,101 @@ class MainTest {
 
     @TestCase
     public func serverStartupValidationFailureReturnsTwo(): Unit {
-        Config.set([
-            ("mqServer_backup", "-1"),
-            (MQConfigKey.CLIENT_HOSTS, "127.0.0.1:2350"),
-            ("mqServer_port", "2350"),
-            ("mqServer_deadMsgThreshold", "3")
-        ])
-        // 配置非法 ⇒ 装配点返回 2，不进入阻塞监听
-        @Assert(dispatch(["server"]) == 2)
-        // 恢复
-        Config.set([("mqServer_backup", "0")])
+        let sandbox = ConfigSandbox(["mqServer_backup", MQConfigKey.CLIENT_HOSTS, "mqServer_port",
+            "mqServer_deadMsgThreshold"])
+        try {
+            Config.set([
+                ("mqServer_backup", "-1"),
+                (MQConfigKey.CLIENT_HOSTS, "127.0.0.1:2350"),
+                ("mqServer_port", "2350"),
+                ("mqServer_deadMsgThreshold", "3")
+            ])
+            // 配置非法 ⇒ 装配点返回 2，不进入阻塞监听
+            @Assert(dispatch(["server"]) == 2)
+        } finally {
+            sandbox.close()
+        }
+    }
+
+    /** 启动顺序：装配 → 安装退出钩子 → 阻塞运行；装配失败时后两步都不执行（A68）。 */
+    @TestCase
+    public func serverInstallsExitHooksBeforeRun(): Unit {
+        let root = TestDirs.of("main", "run_server")
+        if (exists(root)) {
+            remove(root, recursive: true)
+        }
+        Directory.create(root, recursive: true)
+        let sandbox = ConfigSandbox(["mqServer_port", MQConfigKey.CLIENT_HOSTS,
+            "mqServer_segmentedLogDir", "mqServer_deadMsgDir", "mqServer_backup"])
+        try {
+            Config.set([
+                ("mqServer_port", "29555"),
+                (MQConfigKey.CLIENT_HOSTS, "127.0.0.1:29555"),
+                ("mqServer_segmentedLogDir", "${root}/logs"),
+                ("mqServer_deadMsgDir", "${root}/dead"),
+                ("mqServer_backup", "0")
+            ])
+            let order = ArrayList<String>()
+            let code = runServerWith(
+                {=>
+                    order.add("create")
+                    MQServer()
+                },
+                {_ => order.add("hooks")},
+                {server =>
+                    order.add("run")
+                    server.close()
+                    0
+                })
+            @Assert(code == 0)
+            @Assert(order.toArray() == ["create", "hooks", "run"])
+
+            // 装配失败：返回 2，钩子与运行都不发生
+            let failures = ArrayList<String>()
+            let failed = runServerWith(
+                {=> throw Exception("assembly boom")},
+                {_ => failures.add("hooks")},
+                {_ =>
+                    failures.add("run")
+                    0
+                })
+            @Assert(failed == 2)
+            @Assert(failures.size == 0)
+        } finally {
+            sandbox.close()
+            if (exists(root)) {
+                remove(root, recursive: true)
+            }
+        }
     }
 }
+
+
+/**
+ * 配置沙箱：记录键的「存在性与值」，结束时原样恢复（存在则写回，不存在则删除）。
+ *
+ * 配置是进程级全局状态，用例之间必须互不残留（A24）。
+ */
+private class ConfigSandbox <: Resource {
+    private let saved = ArrayList<(String, ?String)>()
+
+    init(keys: Array<String>) {
+        for (key in keys) {
+            saved.add((key, Config.getString(key)))
+        }
+    }
+
+    public func isClosed(): Bool {
+        false
+    }
+
+    public func close(): Unit {
+        for ((key, value) in saved) {
+            match (value) {
+                case Some(text) => Config.set([(key, text)])
+                case None => Config.remove(key)
+            }
+        }
+    }
+}
+

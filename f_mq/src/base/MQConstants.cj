@@ -33,6 +33,8 @@ public class MQErrorCode {
     public static const ACK_UNKNOWN: Int64 = 9
     public static const FILTER_UNSUPPORTED_BODY: Int64 = 10
     public static const INTERNAL: Int64 = 11
+    /** 订阅 tags 非法（服务端权威校验，R4-G13）。 */
+    public static const INVALID_TAGS: Int64 = 12
 
     /** 未知码返回带数值的兜底文案，避免日志里出现空串。 */
     public static func messageOf(code: Int64): String {
@@ -58,6 +60,8 @@ public class MQErrorCode {
             "ack position does not belong to this subscription"
         } else if (code == FILTER_UNSUPPORTED_BODY) {
             "filter cannot be evaluated on this body"
+        } else if (code == INVALID_TAGS) {
+            "invalid tags"
         } else if (code == INTERNAL) {
             "internal server error"
         } else {

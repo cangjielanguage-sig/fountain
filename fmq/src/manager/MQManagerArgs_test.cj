@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::fmq.manager
 
+import std.collection.ArrayList
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_config.Config
@@ -35,9 +36,18 @@ class MQManagerArgsTest {
 
     @TestCase
     public func defaultServerUsesConfiguredPort(): Unit {
-        Config.set([("mqServer_port", "2350")])
-        let args = MQManagerArgs.parse(["listTopics"]).getOrThrow()
-        @Assert(args.server == "127.0.0.1:2350")
+        // 配置是全局状态：用例结束后必须回到「键不存在」，否则会影响其它用例（A24）
+        let previous = Config.getString("mqServer_port")
+        try {
+            Config.set([("mqServer_port", "2350")])
+            let args = MQManagerArgs.parse(["listTopics"]).getOrThrow()
+            @Assert(args.server == "127.0.0.1:2350")
+        } finally {
+            match (previous) {
+                case Some(text) => Config.set([("mqServer_port", text)])
+                case None => Config.remove("mqServer_port")
+            }
+        }
     }
 
     @TestCase
