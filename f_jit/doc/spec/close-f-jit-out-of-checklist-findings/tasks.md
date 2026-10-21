@@ -36,4 +36,4 @@
 
 - [x] B6.1 全量回归：`cjpm test --parallel 1` 零失败零 error；用例数与基线（1076）对照留档。**（1090/1090 / 0 失败 / 0 error / 0 skipped）**
 - [x] B6.2 `verify.md`：四项发现自己一行，含红→绿证据与落点用例名；另记录 X2 深挖出的两个附带缺陷。**（已出具）**
-- [ ] B6.3 归档：`openspec archive close-f-jit-out-of-checklist-findings --yes`，同步 `f_jit/doc/spec/` 镜像
+- [x] B6.3 归档：`openspec archive close-f-jit-out-of-checklist-findings --yes`（+2 added / ~4 modified），目录归档为 `archive/2026-10-21-close-f-jit-out-of-checklist-findings/`；同步 `f_jit/doc/spec/` 镜像

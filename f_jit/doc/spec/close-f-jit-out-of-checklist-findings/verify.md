@@ -54,3 +54,18 @@ unset CJPM_CONFIG && cjpm test --parallel 1 --no-color --no-progress
 - `mapKeyOf` 只解一层 `JitAnyBox`；盒套盒（`any_box(15, …)`）本就不被前端发射（D12 同型直传），不构成缺口。
 - `CtxFlags.STRICT_FP` 不再有读者，但作为 ctx 线上位保留（ABI 面不动）。
 - 未实现「运行期切换严格浮点」——这是**有意否决**的设计（成本由全部浮点除承担），见 design D2。
+
+## 归档（全流程收尾）
+
+| 项 | 结果 |
+| --- | --- |
+| 命令 | `openspec archive close-f-jit-out-of-checklist-findings --yes` |
+| 增量应用 | **+2 added / ~4 modified / −0 removed / →0 renamed**（2 条新增需求 + 4 条修改） |
+| 归档路径 | `openspec/changes/archive/2026-10-21-close-f-jit-out-of-checklist-findings/` |
+| 活动变更 | `openspec list` → `No active changes found` |
+| 镜像 | `f_jit/doc/spec/close-f-jit-out-of-checklist-findings/` 与归档目录逐文件一致 |
+
+### 规格 lint 变化
+
+`f-jit-facade-bridge` 的超长需求由 3 条降为 2 条：`统一调用包装` 从 962 字符拆成
+325 + 467 + 391 三段（全部 ≤ 500）。其余 4 个规格的既有超长正文不在本次范围，仍登记为债务。
