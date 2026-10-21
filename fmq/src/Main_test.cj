@@ -70,6 +70,18 @@ class MainTest {
         @Assert(managerCalls.load() == 1)
         @Assert(serverCalls.load() == 1)
         @Assert(seenArgs.toArray() == ["listTopics", "--server=127.0.0.1:1"])
+
+        // 配置参数前置时仍能识别子命令（A69）
+        let serverCalled = AtomicInt64(0)
+        let prefixed = dispatchWith(
+            {=>
+                serverCalled.fetchAdd(1)
+                3
+            },
+            {_ => 4},
+            ["--mqServer_port=2400", "server"])
+        @Assert(prefixed == 3)
+        @Assert(serverCalled.load() == 1)
     }
 
     @TestCase

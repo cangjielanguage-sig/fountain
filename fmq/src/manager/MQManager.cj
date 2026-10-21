@@ -145,10 +145,11 @@ public class MQManager {
 
     public func listTopics(): Int64 {
         withClient {client =>
-            let snapshot = requestSnapshot(client)
-            match (snapshot) {
-                case None => connectionFailed()
-                case Some(value) =>
+            match (requestSnapshot(client)) {
+                case SnapshotOutcome.Unreachable => connectionFailed()
+                case SnapshotOutcome.Server(error) => printError(error)
+                case SnapshotOutcome.Protocol(reason) => protocolError(reason)
+                case SnapshotOutcome.Ok(value) =>
                     let rows = ArrayList<Array<String>>()
                     for (assignment in value.topics) {
                         let owners = ArrayList<String>()
@@ -166,10 +167,11 @@ public class MQManager {
 
     public func listSubscribeGroups(topic: String): Int64 {
         withClient {client =>
-            let snapshot = requestSnapshot(client)
-            match (snapshot) {
-                case None => connectionFailed()
-                case Some(value) =>
+            match (requestSnapshot(client)) {
+                case SnapshotOutcome.Unreachable => connectionFailed()
+                case SnapshotOutcome.Server(error) => printError(error)
+                case SnapshotOutcome.Protocol(reason) => protocolError(reason)
+                case SnapshotOutcome.Ok(value) =>
                     let rows = ArrayList<Array<String>>()
                     for (meta in value.groups) {
                         if (meta.topic == topic) {
@@ -269,12 +271,31 @@ public class MQManager {
         }
     }
 
-    private func requestSnapshot(client: Client<DataAny>): ?MQMetaSnapshot {
+    /**
+     * 请求元数据快照。
+     *
+     * 必须区分「连不上」「服务端返回错误」「返回了非快照」三种情况：
+     * 旧实现把后两者都折成 `None`，命令行会把服务端故障报成「无法连接」（A65）。
+     */
+    private func requestSnapshot(client: Client<DataAny>): SnapshotOutcome {
         let response = exchange(client, MQProtocol.metaSync(MQMetaSyncRequest(-1)))
         match (response) {
-            case None => None<MQMetaSnapshot>
-            case Some(message) => MQProtocol.asPayload<MQMetaSnapshot>(message)
+            case None => SnapshotOutcome.Unreachable
+            case Some(message) =>
+                if (message.command == Command.ERROR) {
+                    return SnapshotOutcome.Server(MQProtocol.asResult(message))
+                }
+                match (MQProtocol.asPayload<MQMetaSnapshot>(message)) {
+                    case Some(snapshot) => SnapshotOutcome.Ok(snapshot)
+                    case None => SnapshotOutcome.Protocol("响应不是 MQMetaSnapshot")
+                }
         }
+    }
+
+    /** 协议错误（对端回包但内容不符）：不能报成连接失败。 */
+    private func protocolError(reason: String): Int64 {
+        println(MQManagerOutput.error(reason))
+        1
     }
 
     private func printError(result: MQResult): Int64 {
@@ -309,4 +330,12 @@ class MQServiceFailure <: Exception {
     init(message: String) {
         super(message)
     }
+}
+
+/** 快照请求的四种结局。 */
+private enum SnapshotOutcome {
+    | Ok(MQMetaSnapshot)
+    | Server(MQResult)
+    | Protocol(String)
+    | Unreachable
 }

@@ -21,6 +21,12 @@ import std.net.{TcpSocket, IPSocketAddress}
 import std.sync.AtomicInt64
 import std.unittest.*
 import std.unittest.testmacro.*
+import fountain::f_data.DataAny
+import fountain::f_mq.base.{MQErrorCode, MQProtocol}
+import fountain::f_mq.base.payload.MQResult
+import fountain::f_net.SocketBuffer
+import fountain::f_net.server.Server
+import fountain::f_protocol.default.Message
 import fountain::fmq.manager.{MQManager, MQManagerArgs}
 import fountain::fmq.test.TestDirs
 
@@ -93,6 +99,48 @@ class MQManagerTest {
     }
 
     /** 非法组名在管理端本地被拒：非 0 退出码，且不发请求（A05）。 */
+    /** 服务端回 ERROR 时必须打印服务端错误，而不是「无法连接」（A65）。 */
+    @TestCase
+    public func serverErrorIsNotReportedAsConnectionFailure(): Unit {
+        let port = freePort()
+        let server = Server<DataAny>(bindAt: port, checkDuration: Duration.second * 30, executors: 2,
+            checker: {=> Message.ping()})
+        spawn {
+            server.start({_, request =>
+                Some(MQProtocol.fail(request, MQErrorCode.INTERNAL, "boom from server"))
+            })
+        }
+        try {
+            waitReady(port)
+            let manager = MQManager(MQManagerArgs.parse(
+                ["listTopics", "--server=127.0.0.1:${port}"]).getOrThrow())
+            @Assert(manager.run() == 1)
+        } finally {
+            server.close()
+        }
+    }
+
+    /** 返回 RESP 但不是快照：按协议错误处理，同样不能报成连接失败（A65）。 */
+    @TestCase
+    public func nonSnapshotResponseIsProtocolError(): Unit {
+        let port = freePort()
+        let server = Server<DataAny>(bindAt: port, checkDuration: Duration.second * 30, executors: 2,
+            checker: {=> Message.ping()})
+        spawn {
+            server.start({_, request =>
+                Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            })
+        }
+        try {
+            waitReady(port)
+            let manager = MQManager(MQManagerArgs.parse(
+                ["listTopics", "--server=127.0.0.1:${port}"]).getOrThrow())
+            @Assert(manager.run() == 1)
+        } finally {
+            server.close()
+        }
+    }
+
     @TestCase
     public func invalidGroupIsRejectedLocally(): Unit {
         let (server, address) = startServer("bad_group")

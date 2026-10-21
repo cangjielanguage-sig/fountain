@@ -49,7 +49,24 @@ func dispatchWith(serverFactory: () -> Int64, managerFactory: (Array<String>) ->
         println(MQUsage.root())
         return 2
     }
-    let command = args[0]
+    // 允许配置参数前置：`fmq --mqServer_port=2400 server`（A69）
+    var commandIndex = -1i64
+    for (i in 0..args.size) {
+        if (!args[i].startsWith("-")) {
+            commandIndex = i
+            break
+        }
+    }
+    if (commandIndex < 0) {
+        // 只有选项没有子命令：`--help` 视为请求帮助
+        if (wantsHelp(args)) {
+            println(MQUsage.root())
+            return 0
+        }
+        println(MQUsage.root())
+        return 2
+    }
+    let command = args[commandIndex]
     if (command == "--help" || command == "-h") {
         println(MQUsage.root())
         return 0
@@ -66,7 +83,7 @@ func dispatchWith(serverFactory: () -> Int64, managerFactory: (Array<String>) ->
             println(MQUsage.managerHelp())
             return 0
         }
-        return managerFactory(args[1..])
+        return managerFactory(args[commandIndex + 1..])
     }
     println(MQUsage.root())
     2
