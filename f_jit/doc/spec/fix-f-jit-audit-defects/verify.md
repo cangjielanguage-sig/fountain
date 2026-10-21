@@ -5,9 +5,12 @@
 | 项 | 数值 |
 | --- | --- |
 | 基线（A0.1） | 1026 用例 / 1026 通过 / 0 失败 / 53 s |
-| 终态（A7） | **1076 用例 / 1075 通过 / 0 失败 / 0 error**（唯一例外为负载下假失败的 `PerfOverride_test`，单跑通过） |
+| 终态（归档后复跑） | **1076 用例 / 1076 通过 / 0 失败 / 0 error / 0 skipped**（55 s） |
 | 新增用例 | 50 条（A1 4 + A2 14 + A3 7 + A4 10 + A5 6 + A6 5 + A7 4） |
 | 回归 | 0（既有 1026 条全部保持通过） |
+
+`PerfOverride_test` 曾在高负载下假失败（净成本比较得到 0ns）；单跑与归档后复跑均通过，属负载敏感
+而非缺陷，复跑前建议先确认机器空闲。
 
 复现命令（融合侧）：
 
@@ -45,12 +48,11 @@ unset CJPM_CONFIG && cjpm test --filter PerfOverride_test --parallel 1
 | P3-2 三条推翻表述 | A7.2 | 命令级：`16–255 仍拒绝` / `→ 语法错误` 仅余「已推翻/已作废」历史句 |
 | P3-3 `json_set` 值域 | A7.3 | `p3_3_jsonSetFloat64RejectedAtCompileTime` / `p3_3_jsonSetAcceptsValueDomain` |
 | P3-4 矩阵虚报 | A7.4 | `t48EmptyContainers`（改为逐条断言真值）/ `m3AnyJsonIsTripleEqual` / H65 注释口径统一为 20 |
-| P3-5 `doc/spec/` 缺件 | A7.5 | **未完成**（f-jit-m3 与 m2.1–m2.3 仍缺 proposal/design/tasks） |
+| P3-5 `doc/spec/` 缺件 | A7.5 | `f-jit-m3` / `m2.1` / `m2.2` / `m2.3` 各补 `proposal/design/tasks`（共 12 个文件，归档反写）；四个目录四件套齐全 |
 
 ## 未完成项
 
-- **A7.5**：四个 `doc/spec/` 目录（f-jit-m3、f-jit-m2.1、f-jit-m2.2、f-jit-m2.3）仍缺
-  `proposal.md` / `design.md` / `tasks.md`。此项只影响归档文档的完整性，不影响代码与测试。
+无。39/39 任务全部完成，变更已归档（`archive/2026-10-21-fix-f-jit-audit-defects/`）。
 
 ## 已知边界（已在 design 记录）
 
