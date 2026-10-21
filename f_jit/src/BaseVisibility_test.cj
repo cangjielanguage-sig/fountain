@@ -50,10 +50,11 @@ public class BaseVisibility_test {
         @Assert(TypeToken.LIST, 1u16)
         @Assert(ErrCode.OK, 0)
         @Assert(Version.MAJOR, 1u16)
+        @Assert(Version.LATEST, Version.M3_MAJOR)
         // 公共值类型（spec「公共值类型」）
         @Assert(SourcePos(1, 2).line, 1)
         @Assert(JitMode.Auto == JitMode.Auto, true)
-        @Assert(CallContext().strictFp, false)
+        @Assert(CallContext().deadline.isNone(), true)
         @Assert(SourceUnit(Array<UInt8>(), 0u32).entryFn, 0u32)
         // 两个异常（design D15：统一继承 f_base.BaseException）
         @Assert(JitException(ErrCode.NOT_IMPL, -1, 0, None, 'x').code, ErrCode.NOT_IMPL)

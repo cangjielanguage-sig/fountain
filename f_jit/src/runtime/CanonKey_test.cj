@@ -24,6 +24,7 @@ import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_regex.*
 import fountain::f_jit.base.ErrCode
+import fountain::f_jit.base.LocalType
 import fountain::f_jit.bytecode.CanonKey
 import fountain::f_jit.bytecode.ConstMapKey
 
@@ -55,6 +56,46 @@ public class CanonKey_test {
         @Assert(HandleTable.canonKeyOf(1.5f64) != HandleTable.canonKeyOf(2.5f64), true)
         @Assert(HandleTable.canonKeyOf(JitRegex('abc'.regex(), 0u8)) !=
             HandleTable.canonKeyOf(JitRegex('abc'.regex(), 1u8)), true)
+    }
+
+    /**
+     * X2：值型键只有一种形态。
+     *
+     * 旧实现 `f64` 产出 `f:<bits>`、`cell` 产出 `i:<bits>`：同一个 `Float64` 在裸 cell 与
+     * 装箱两条承载路径上得到两个键。这里把「同值同键」写成对三条代表性位模式的不变式。
+     */
+    @TestCase
+    public func x2_f64KeyEqualsCellKey(): Unit {
+        for (bits in [1.5f64.toBits(), 0x8000000000000000u64, 0x7FF8000000000000u64]) {
+            @Assert(CanonKey.f64(bits), CanonKey.cell(CanonKey.bitsAsI64(bits)))
+        }
+        @Assert(CanonKey.f64(1.5f64.toBits()) != CanonKey.f64(2.5f64.toBits()), true)
+    }
+
+    /**
+     * X2：承载形态无关——同一 `Float64` 以裸 cell 与句柄（装箱）两种形态作 `Map` 键，规范键相同。
+     *
+     * 裸 cell 走 `mapKeyOf` 的 `None` 分支（`cell`）；装箱走 `getAny` 的 `Some` 分支
+     * （`canonKeyOf`）。两条分支必须给出同一 `token`，否则常量 Map 的 Float64 键在装箱承载下永不命中。
+     */
+    @TestCase
+    public func x2_boxedAndRawFloatKeyAgree(): Unit {
+        HandleTable.resetForTest()
+        HandleTable.initialCapacity = 64
+        HandleTable.openWindow(8)
+        let ctx = JitContext.create(hwBase: HandleTable.windowBaseOf(), hwCap: 8,
+            fnId: 1, dbgBase: 0)
+        let raw = CanonKey.bitsAsI64(1.5f64.toBits())
+        let boxed = anyBox(ctx, [Int64(LocalType.F64), raw])
+        let boxed2 = anyBox(ctx, [Int64(LocalType.F64),
+            CanonKey.bitsAsI64(2.5f64.toBits())])
+        @Assert(ctx.errCode, 0)
+        @Assert(mapKeyOf(boxed).token, mapKeyOf(raw).token)
+        @Assert(HandleTable.canonKeyOf(1.5f64), CanonKey.cell(raw))
+        @Assert(mapKeyOf(raw).token != mapKeyOf(CanonKey.bitsAsI64(2.5f64.toBits())).token, true)
+        // 不同盒必须不同键（旧实现两者都是空串）
+        @Assert(mapKeyOf(boxed).token != mapKeyOf(boxed2).token, true)
+        JitContext.free(ctx)
     }
 
     /** 一次「打开 → 推进 → 清空」后：liveCount 归零、旧游标以 99 失败。 */

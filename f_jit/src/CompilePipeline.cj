@@ -50,7 +50,14 @@ import fountain::f_jit.runtime.UserHelperEntry
  */
 protected class CompilePipeline {
     public static func runSource(source: String, c: Compiler): JitFunction {
-        let key = 'src/${CompilePipeline.modeKey(c.opts.jit)}/${Fingerprint.fnv1a128(source)}'
+        let major = c.opts.verMajor
+        if (!Version.supportedMajors().contains(major)) {
+            throw SourceCompileException('UnsupportedVersion', 0, 0, 0, '',
+                '不受支持的 verMajor=${major}（支持：${CompilePipeline.majorsText()}）')
+        }
+        // 版本与严格浮点都是**产物属性**：同源不同配置必须各自成键，否则会互相命中缓存。
+        let key = 'src/${CompilePipeline.modeKey(c.opts.jit)}/v${major}' +
+            '/fp${CompilePipeline.bit(c.opts.strictFp)}/${Fingerprint.fnv1a128(source)}'
         match (CompileCache.lookup(key)) {
             case Some(f) => return f
             case None => ()
@@ -63,7 +70,8 @@ protected class CompilePipeline {
                 // （「局部槽类型码非法: 15」）——M3 的 Any 通道因此只在测试直连
                 // `SourceCompiler` 时可用；A2 端到端验收把这一口径纠正到 M3。
                 let cu = SourceCompiler(snap, DummyDiagnosticsSink(),
-                    verMajor: Version.M3_MAJOR, classes: c.classSnapshot()).compile(source)
+                    verMajor: major, strictFp: c.opts.strictFp,
+                    classes: c.classSnapshot()).compile(source)
                 let unit = FbcReader.load(cu.raw)
                 let fn = CompilePipeline.makeFunctionWith(unit, cu.entryFn, c.opts,
                     Some(snap), cu.ctorHelpers, cu.entryParamClasses, cu.entryParamSigs,
@@ -139,6 +147,30 @@ protected class CompilePipeline {
     }
 
     /** 缓存键的引擎维度：`Off`/`Auto`/`Force` 产物不同，不能互相命中。 */
+    /** 布尔 → 缓存键片段（`1` / `0`）。 */
+    private static func bit(v: Bool): String {
+        if (v) {
+            '1'
+        } else {
+            '0'
+        }
+    }
+
+    /** 支持的主版本清单（错误消息用）。 */
+    private static func majorsText(): String {
+        let ms = Version.supportedMajors()
+        var out = ''
+        var i = 0
+        while (i < ms.size) {
+            if (i > 0) {
+                out = out + '/'
+            }
+            out = out + '${ms[i]}'
+            i = i + 1
+        }
+        out
+    }
+
     private static func modeKey(m: JitMode): String {
         match (m) {
             case JitMode.Off => 'off'

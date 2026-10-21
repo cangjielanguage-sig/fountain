@@ -20,41 +20,20 @@ import std.unittest.*
 import std.unittest.testmacro.*
 
 /**
- * S1.6 `CallContext` 的失败用例（先写红）。
+ * `CallContext` 的调用级契约（X3 改写）。
  *
- * 权威 = design-m1 §2.3.4：`var args: Array<Int64>`（入参 cell 数组，Marshal 结果）、
- * `var literalCopy: Bool = false`（M2 字面量深拷贝开关）、`var strictFp: Bool = false`
- * （bit0 → ctx.flags，`FDIV_CHK` 语义）、`var deadline: ?DateTime`（配合 `interrupt_poll`，
- * 到期 → -2）；默认值契约亦见 spec「公共值类型 / 默认值契约」场景。
- *
- * `strictFp = true` 真正写入 ctx.flags 的验证在 S4.1 / S6.4 联测（plan-m1 S1.6 明写
- * 「后置步骤联测」），本步只钉住**默认值与可写性**。
+ * 旧版还有 `literalCopy` 与 `strictFp`：前者自 M2 起无消费点，后者写进 `ctx.flags` 后无人读取。
+ * 两者都已移除——`strictFp` 归位到 `CompileOptions`（产物级：`FDIV` vs `FDIV_CHK`）。
+ * 本文件只钉住**真正的调用级选项**：`args` 与 `deadline`，以及「不多不少」这条边界。
  */
 @Test
 public class CallContext_test {
-    /** 默认构造：`literalCopy=false`、`strictFp=false`、`deadline=None`（spec 默认值契约）。 */
+    /** 默认构造：`deadline=None`、`args` 为空。 */
     @TestCase
     public func defaultsFollowSpec(): Unit {
-        var ctx = CallContext()
-        @Assert(ctx.literalCopy, false)
-        @Assert(ctx.strictFp, false)
+        let ctx = CallContext()
         @Assert(ctx.deadline.isNone(), true)
         @Assert(ctx.args.size, 0)
-    }
-
-    /** 三个开关可写，且互不干扰（改一个不动另外两个）。 */
-    @TestCase
-    public func flagsAreIndependentlyWritable(): Unit {
-        var ctx = CallContext()
-        ctx.literalCopy = true
-        @Assert(ctx.literalCopy, true)
-        @Assert(ctx.strictFp, false)
-        @Assert(ctx.deadline.isNone(), true)
-
-        ctx.strictFp = true
-        @Assert(ctx.strictFp, true)
-        @Assert(ctx.literalCopy, true)
-        @Assert(ctx.deadline.isNone(), true)
     }
 
     /** `deadline` 可设为具体时刻并原样读回（配合 `interrupt_poll` 的 -2 路径）。 */
@@ -80,8 +59,16 @@ public class CallContext_test {
         @Assert(ctx.args[0], 7)
         @Assert(ctx.args[1], -1)
         @Assert(ctx.args[2], 42)
-        @Assert(ctx.literalCopy, false)
-        @Assert(ctx.strictFp, false)
         @Assert(ctx.deadline.isNone(), true)
+    }
+
+    /** 赋值 `args` 不触碰 `deadline`（两个字段互不干扰）。 */
+    @TestCase
+    public func argsAndDeadlineAreIndependent(): Unit {
+        var ctx = CallContext()
+        ctx.deadline = DateTime.UnixEpoch
+        ctx.args = [1, 2]
+        @Assert(ctx.args.size, 2)
+        @Assert(ctx.deadline.isSome(), true)
     }
 }

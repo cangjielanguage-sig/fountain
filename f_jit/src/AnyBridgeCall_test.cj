@@ -36,7 +36,7 @@ import fountain::f_jit.test.ReflectUser
  * - P0-6：`CallContext.deadline` 原无消费点 ⇒ `−2 INTERRUPT` 生产不可达；本文件验证
  *   过期期限在 `LOOP_BACK` 处变成 `InterruptedException`，且调用后期限**栈式恢复**。
  * - A3.4：`invoke(args, CallContext())` 与 `call(args)` 的结果 / 错误码 / site 逐位一致。
- * - A3.5：`strictFp` 不改变 `FDIV_CHK` 的检查点（`FDIV_CHK` 由 opcode 静态决定）。
+ * - A3.5：桥层不改变除法语义（严格浮点已归位 `CompileOptions`）。
  */
 @Test
 public class AnyBridgeCall_test {
@@ -185,24 +185,21 @@ public class AnyBridgeCall_test {
     }
 
     /**
-     * A3.5（口径探针）：`strictFp` **不改变**浮点除零行为。
+     * A3.5（口径探针，X3 改写）：桥层**不改变**浮点除零语义。
      *
-     * 实测结论：前端对 `Float64` 的 `/` **恒发射 `FDIV`（0x43）**，从不发射 `FDIV_CHK`（0x44）；
-     * `strictFp` 只写 `ctx.flags` bit0，没有任何运行期读取点。故 `÷0` 恒得 `+Inf`、不报错，
-     * 与 `strictFp` 无关。`literalCopy` 自 M2 起同为无消费点占位。两者统一按**未接线**登记，
-     * 不再保留「看起来已接线」的第三态（文档见 `CallContext` 类注释）。
+     * 严格浮点已归位 `CompileOptions.strictFp`（产物级：`FDIV` vs `FDIV_CHK`），
+     * `CallContext` 不再有 `strictFp`。因此无论走 `invoke` 还是 `call`，默认产物（非严格）
+     * 的 `÷0` 都恒得 `+Inf`；严格产物的 1（`DIV_ZERO`）由 `StrictFp_test` 覆盖。
      */
     @TestCase
-    public func a3_5_strictFpDoesNotChangeFdivChk(): Unit {
+    public func a3_5_bridgeKeepsDivisionSemantics(): Unit {
         let c = AnyBridgeCall_test.compiler()
         CompileCache.reset()
         let f = c.compile('{ x: Float64 => 1.0f64 / x }')
-        var strict = CallContext()
-        strict.strictFp = true
-        let withStrict = f.invoke<Float64>([0.0], strict)
+        let viaInvoke = f.invoke<Float64>([0.0], CallContext())
         let plain = f.call<Float64>([0.0])
-        @Assert(withStrict.toBits(), plain.toBits())
+        @Assert(viaInvoke.toBits(), plain.toBits())
         // +Inf（0x7FF0000000000000）：不报错、也不是 ±Max
-        @Assert(Int64(withStrict.toBits()), Int64(0x7FF0000000000000u64))
+        @Assert(Int64(viaInvoke.toBits()), Int64(0x7FF0000000000000u64))
     }
 }

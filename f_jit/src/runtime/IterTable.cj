@@ -235,7 +235,14 @@ internal class IterEntry {
  */
 internal func mapKeyOf(cell: Int64): ConstMapKey {
     match (HandleTable.getAny(cell)) {
-        case Some(v) => ConstMapKey(v, HandleTable.canonKeyOf(v))
+        case Some(v) =>
+            // Any 盒（H78）里装的是 `JitAnyBox`：必须先解包，否则 `canonKeyOf` 落到 `case _`
+            // 返回空串 —— 所有装箱键会塌成同一个键（X2）。
+            let inner = match (v) {
+                case b: JitAnyBox => b.value
+                case _ => v
+            }
+            ConstMapKey(v, HandleTable.canonKeyOf(inner))
         case None => ConstMapKey(cell, CanonKey.cell(cell))
     }
 }

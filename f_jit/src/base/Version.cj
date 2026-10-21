@@ -58,6 +58,9 @@ public class Version {
     /** M3 主版本（M3 规则集已落地：LocalType 合法集 0–19）。 */
     public static const M3_MAJOR: UInt16 = 3u16
 
+    /** 本实现支持的最新主版本（`CompileOptions.verMajor` 的缺省值）。 */
+    public static const LATEST: UInt16 = 3u16
+
     /**
      * 本加载器**已实现**的 `verMajor` 集合：v1（M1）、v2（M2）、v3（M3）。
      *

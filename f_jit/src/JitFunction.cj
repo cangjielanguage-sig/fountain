@@ -121,7 +121,7 @@ public class JitFunction {
      *
      * **deadline 用栈式保存/恢复**而不是每次覆盖：`callMtx` 只串行化顶层调用，同一线程的
      * 重入（宿主闭包体内再调 JIT）不受锁约束，直接 `setDeadline` 会把外层期限冲掉。
-     * `options.strictFp` 写入 `ctx.flags` bit0（`FDIV_CHK` 的实际检查由 opcode 决定，见 A3.5）。
+     * 严格浮点由 `CompileOptions.strictFp` 在**产物层**决定（`FDIV` / `FDIV_CHK`），调用选项不再携带。
      */
     public func invoke<T>(args: Array<Any>, options: CallContext): T {
         let saved = RuntimeEnv.deadlineNanos
@@ -401,10 +401,8 @@ public class JitFunction {
         HandleTable.openWindow(HandleTable.initialCapacity)
         let ctx = JitContext.create(hwBase: HandleTable.windowBaseOf(),
             hwCap: HandleTable.windowCapOf(), fnId: 0, dbgBase: 0)
-        // bit0 = strictFp（§1 flags 布局；FDIV_CHK 的检查点由 opcode 静态决定，见 A3.5）
-        if (options.strictFp) {
-            ctx.flags = ctx.flags | 1
-        }
+        // `ctx.flags` bit0 是历史保留位（X3）：严格浮点已改为产物级 opcode 差异，
+        // 运行期不再有读者；这里不再写入。
         HandleTable.syncTo(ctx)
         let dump = match (this.diagReporter) {
             case Some(_) => DbgDump.allocateDump(this.diagMaxLocals)

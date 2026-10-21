@@ -42,9 +42,29 @@ public class CanonKey {
         'i:${v}'
     }
 
-    /** Float64：按**位模式**取键（NaN 的多个位模式视为不同值，与 `==` 语义一致）。 */
+    /**
+     * Float64：与 `cell` **同形**（X2）。
+     *
+     * 值型键在字节码里是裸 cell，运行期 `mapKeyOf` 拿不到类型码；若这里另立 `f:` 前缀，
+     * 同一个 `Float64` 在「裸 cell」与「Any 盒」两条承载路径上会得到两个键，装箱键永远
+     * 查不到常量条目。NaN 的多个位模式视为不同值（与 `==` 语义一致）。
+     */
     public static func f64(bits: UInt64): String {
-        'f:${bits}'
+        cell(bitsAsI64(bits))
+    }
+
+    /**
+     * `UInt64` 位模式 → `Int64`（重解释，不做数值转换）。
+     *
+     * `Int64(bits)` 是**检查型**转换：负浮点与 NaN 的位模式 ≥ 2^63，会在编译期抛
+     * `OverflowException`（`-0.0` 常量就足以让编译器崩）。这里按补码语义手工折返。
+     */
+    public static func bitsAsI64(bits: UInt64): Int64 {
+        if (bits <= UInt64(Int64.Max)) {
+            Int64(bits)
+        } else {
+            Int64.Min + Int64(bits - 0x8000000000000000u64)
+        }
     }
 
     /** String。 */

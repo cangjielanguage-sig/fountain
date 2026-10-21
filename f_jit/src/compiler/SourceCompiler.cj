@@ -96,13 +96,17 @@ protected class SourceCompiler {
     private let verMajor: UInt16
     /** 类注册表快照（M2：类型注解 / 成员访问 / 构造降低的静态知识）。 */
     private let classes: ClassRegistrySnapshot
+    /** 严格浮点（X3）：`true` 时 `Float64` 的 `/` 发 `FDIV_CHK` 而非 `FDIV`。 */
+    private let strictFp: Bool
 
     public init(registry: PredefinedSnapshot, diagnostics: DiagnosticsSink,
         verMajor!: UInt16 = Version.MAJOR,
+        strictFp!: Bool = false,
         classes!: ClassRegistrySnapshot = ClassRegistrySnapshot.empty()) {
         this.registry = registry
         this.diagnostics = diagnostics
         this.verMajor = verMajor
+        this.strictFp = strictFp
         this.classes = classes
     }
 
@@ -120,7 +124,7 @@ protected class SourceCompiler {
         let _ = da.analyze(lambda)
         let sess = CompileSession(src, this.registry, this.diagnostics,
             verMajor: this.verMajor)
-        let lowerer = Lowerer(sess, resolver, view: view)
+        let lowerer = Lowerer(sess, resolver, view: view, strictFp: this.strictFp)
         let entryFn = lowerer.lowerTop(lambda)
         let raw = Assembler(sess).assemble()
         let h = Fnv128.fnv1a(src)

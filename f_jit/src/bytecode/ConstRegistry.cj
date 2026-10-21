@@ -180,7 +180,7 @@ public class ConstRegistry {
             // 与运行期 `HandleTable.canonKeyOf` 共用 `CanonKey`（D5：单一事实来源）
             case PI64(v) => CanonKey.i64(v)
             // 值型键在运行期是裸 cell：Float64 常量键必须与 `mapKeyOf` 的 cell 键同形
-            case PF64(b) => CanonKey.cell(Int64(b))
+            case PF64(b) => CanonKey.cell(CanonKey.bitsAsI64(b))
             case PStr(s) => CanonKey.str(s)
             case PList(xs) =>
                 var t = 'l['

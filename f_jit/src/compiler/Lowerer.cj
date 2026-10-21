@@ -137,6 +137,8 @@ internal class Lowerer {
     private let resolver: NameResolver
     private let view: ClassRegistryView
     private let src: String
+    /** 严格浮点（X3）：`Float64` 的 `/` 发 `FDIV_CHK`（÷0 → 1）而非 `FDIV`（÷0 → ±Inf）。 */
+    private let strictFp: Bool
     private var ctx: ?FnCtx = None
     private var entryFn: UInt32 = 0u32
     private var topParamTypes: Array<UInt16> = Array<UInt16>()
@@ -160,11 +162,13 @@ internal class Lowerer {
     private static const ALLOW_ESCAPING_HANDLES: Bool = true
 
     public init(sess: CompileSession, resolver: NameResolver,
-        view!: ClassRegistryView = ClassRegistryView(ClassRegistrySnapshot.empty())) {
+        view!: ClassRegistryView = ClassRegistryView(ClassRegistrySnapshot.empty()),
+        strictFp!: Bool = false) {
         this.sess = sess
         this.resolver = resolver
         this.view = view
         this.src = sess.source
+        this.strictFp = strictFp
     }
 
     public func lowerTop(lambda: LambdaAst): UInt32 {
@@ -1388,7 +1392,8 @@ internal class Lowerer {
                 if (t == LocalType.I64 || t == LocalType.DECIMAL) {
                     ctx.builder.setSite(pos)
                 }
-                this.emitArith(t, Op.IDIV, Op.FDIV, Op.DEC_DIV)
+                let fdiv = if (this.strictFp) { Op.FDIV_CHK } else { Op.FDIV }
+                this.emitArith(t, Op.IDIV, fdiv, Op.DEC_DIV)
                 t
             case TokenKind.Percent =>
                 if (t != LocalType.I64) {

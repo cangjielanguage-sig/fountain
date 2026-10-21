@@ -39,13 +39,13 @@ public class NativeMem {
 }
 
 /**
- * ctx 标志位定义（§1：`flags` bit0=strictFp、bit1=trace、bit2=hasLoop、…）。
+ * ctx 标志位定义（§1：`flags` bit0=strictFp（**历史位，运行期不读**）、bit1=trace、bit2=hasLoop、…）。
  *
  * 与 `LocalType` / `ErrCode` / `TypeToken` 同族：这是要写进 ctx 的**线上位**，用
  * 「类 + `static const`」承载（design D3）。
  */
 public class CtxFlags {
-    /** `CallContext.strictFp`：浮点除零按 `FDIV_CHK` 报错（§5 `FDIV_CHK` 行）。 */
+    /** 历史位（X3）：严格浮点已由 `CompileOptions.strictFp` 在产物层表达，运行期不读。 */
     public static const STRICT_FP: Int64 = 1
     /** 执行轨迹（诊断用）。 */
     public static const TRACE: Int64 = 2

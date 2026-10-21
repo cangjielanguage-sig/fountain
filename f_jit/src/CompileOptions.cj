@@ -17,6 +17,7 @@ package fountain::f_jit
 
 import fountain::f_jit.base.JitMode
 import fountain::f_jit.base.DiagnosticsSink
+import fountain::f_jit.base.Version
 
 /**
  * 编译配置（design §7.3.2、plan S6.1）。
@@ -26,6 +27,19 @@ import fountain::f_jit.base.DiagnosticsSink
 public class CompileOptions {
     public var jit: JitMode = JitMode.Auto
     public var cpuFeatures: UInt64 = 0
+    /**
+     * 源码产物的字节码主版本（X1）。
+     *
+     * 缺省 `Version.LATEST`；只允许 `Version.supportedMajors()` 内的值，其余在 `compile` 时
+     * 以 `SourceCompileException` 拒绝。缓存键包含该值——同源不同版本必须产出独立单元。
+     */
+    public var verMajor: UInt16 = Version.LATEST
+    /**
+     * 严格浮点（X3）：决定 `Float64` 的 `/` 发 `FDIV`（÷0 得 ±Inf）还是 `FDIV_CHK`（÷0 → 1）。
+     *
+     * 这是**产物级**选项：同一份源码在两种配置下是两份独立产物，不存在「同一条指令两种行为」。
+     */
+    public var strictFp: Bool = false
     public let diagnostics: DiagnosticsSink
 
     public init(diagnostics: DiagnosticsSink) {

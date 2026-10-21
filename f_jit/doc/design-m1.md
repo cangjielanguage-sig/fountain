@@ -115,7 +115,7 @@
 | `JitException` | class <: `f_base.BaseException` | 运行期错误载体（错误码 + site + 报告文本） | SourcePos、ErrCode、f_base | §2、§8 |
 | `SourceCompileException` | class <: `f_base.BaseException` | 编译期错误载体（不占运行期错误码） | DiagKind、f_base | §8.4、§9.16 |
 | `SourcePos` | struct | 源位置（站点表条目值） | — | §9.16 |
-| `CallContext` | struct | 桥侧调用参数（含 strictFp/deadline/literalCopy） | — | §8 |
+| `CallContext` | struct | 桥侧调用参数（`args` + `deadline`；编译期选项见 `CompileOptions`） | — | §8 |
 | `SourceUnit` | struct | 分发入口输入（`.fbc` 字节 + 入口函数号） | — | §8、§11.6 |
 | `JitMode` | enum | 引擎选择开关 | — | §12.1 |
 | `Engine` | enum（protected） | 实际引擎（解释器/JIT） | — | §12.1 |
@@ -170,9 +170,9 @@
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
 | `var args: Array<Int64>` | 入参 cell 数组（Marshal 结果） | 三态收尾第 2 步 `rawEntry(ctx, &args[0], nargs)` |
-| `var literalCopy: Bool = false` | M2：字面量深拷贝开关 | M2 消费 |
-| `var strictFp: Bool = false` | bit0 → ctx.flags（FDIV_CHK 语义） | `invoke(ctx)` 写 flags |
 | `var deadline: ?DateTime` | 配合 `interrupt_poll`（-2 取消） | LOOP_BACK 安全点查询 |
+
+**只装调用级选项（X3 订正）**：`literalCopy` 与 `strictFp` 已从 `CallContext` 移除。前者从无消费语义（字面量是编译期常量，桥层没有「深拷贝字面量」的时机）；后者是**产物属性**，归 `CompileOptions.strictFp`——`true` 时 `Float64` 的 `/` 发射 `FDIV_CHK`（÷0 → 1），`false` 时发射 `FDIV`（÷0 → ±Inf）。`ctx.flags` bit0 保留为历史位，运行期不读。
 
 #### 2.3.5 `SourceUnit`（struct）
 
