@@ -211,6 +211,34 @@ public class A64Exec_test {
     }
 
     /** 编译整单元 → 单块 CodeBuffer → fnTable/常量镜像回填 → 调用入口。 */
+    /**
+     * A6.3（P2-5 端到端）：≥28 个局部槽（帧偏移越过 imm9）时机器码结果仍 ≡ 解释器。
+     *
+     * 偏移由 `strOff/ldrOff` 的慢路径处理；两遍布局会把变长的访存序列算进跳转偏移，
+     * 这里用含条件分支的求和一并覆盖「前后向跳转」。
+     */
+    @TestCase
+    public func deepFrameExceedsImm9(): Unit {
+        var sb = StringBuilder()
+        sb.append('{ n: Int64 => var a0 = 1\n')
+        var i = 1
+        while (i < 30) {
+            sb.append(' var a${i} = ${i + 1}\n')
+            i = i + 1
+        }
+        sb.append(' var s = 0\n')
+        i = 0
+        while (i < 30) {
+            sb.append(' s = s + a${i}\n')
+            i = i + 1
+        }
+        sb.append(' if (n > 0) { s = s + a29 } else { s = s - a29 }\n s }')
+        let src = sb.toString()
+        // 1..30 求和 = 465；n>0 再加 a29=30 ⇒ 495；n<=0 减 30 ⇒ 435
+        @Assert(A64Exec_test.run(src, [1]), 495)
+        @Assert(A64Exec_test.run(src, [0]), 435)
+    }
+
     private static func run2(src: String, args: Array<Int64>): (Int64, Int64) {
         let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(src)
         A64Exec_test.runUnit(cu, 0, args)

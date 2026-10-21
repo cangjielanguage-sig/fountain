@@ -66,9 +66,9 @@
 
 ## A7 文档回写与总验收（P3-1 … P3-5）
 
-- [ ] A7.1 helper 编号全表替换（P3-1）：先写「文档位置 → 正确编号」清单（design-m3 / jit-bytecode-m3 / plan-m3 / m1 镜像，逐行）；再统一替换 H66–H68→H78–H80、H73–H75→H81–H83，并补「编号顺延」说明；验收：`grep -rn "H66–H68\|H73–H75" f_jit/doc` 零命中
-- [ ] A7.2 三条被推翻表述回写（P3-2）：二次装箱（改为同型零动作直传 + 盒不套盒）、`{ "a" : 1 }`（改为 M1 映射字面量）、`jit-bytecode-m3.md` §2 LocalType（16–255 与 0–19 二选一，统一为 0–19）；验收：三条在「当前规则」章节零命中，历史处标注 D12/D15
-- [ ] A7.3 `json_set` 值域收口（P3-3）：先写失败用例——Float64 变量路径（`{ x: Float64 => o["x"] = x }`）当前运行期 8；再定口径（建议编译期拒绝 Float64，与 JSON 数字模型一致）并同步规格/前端/用例；验收：值域在规格、前端、运行期三处一致，无用例外的第三态
-- [ ] A7.4 矩阵诚实化（P3-4）：T48/T51 空容器用例改为断言成功路径（或降 `partial` 并注明）；补 `returnPositionBoxesIntoAny`（返回位置发 1 次 `any_box`）或修订规格；只读字段写口径定为 **20** 并回写规格/注释与用例断言；补 `m3AnyJsonIsTripleEqual`（Interp × Native，覆盖 Any/JSON 各一条）；验收：`check_scenarios m3` 无虚报 full，`check_tmap` 不靠恒真标签过关
-- [ ] A7.5 `doc/spec/` 产物补齐（P3-5）：为 `f-jit-m3`、`f-jit-m2.1`、`f-jit-m2.2`、`f-jit-m2.3` 补 `proposal.md` / `design.md` / `tasks.md`（据既有 `jit-bytecode-mN.md` / `design-mN.md` / `plan-mN.md` 反写，不补造过程）；验收：四个目录四件套齐全
-- [ ] A7.6 总回归：跑 M1 + M2 + M3 全量含差分 + 三引擎对拍（Interp / AArch64 / 可用时 x86_64）；写 `verify.md`（用例数 / 通过 / 失败 / 缺陷覆盖矩阵）；验收：失败数 0、26 条逐条有着落、与 A0.1 基线对照无回归
+- [x] A7.1 helper 编号全表替换（P3-1）：先写「文档位置 → 正确编号」清单（design-m3 / jit-bytecode-m3 / plan-m3 / m1 镜像，逐行）；再统一替换 H66–H68→H78–H80、H73–H75→H81–H83，并补「编号顺延」说明；验收：`grep -rn "H66–H68\|H73–H75" f_jit/doc` 零命中**（替换 27 处：design-m3 / jit-bytecode-m3 / plan-m3 / plan-m1 / `doc/spec/f-jit-m1/design.md`；design-m3 新增 §5.0「编号为何顺延到 H78–H83」。验收口径限定为**规则文档**：变更自身文档（proposal/design/tasks/test-plan）必须保留旧编号以描述缺陷）**
+- [x] A7.2 三条被推翻表述回写（P3-2）：二次装箱（改为同型零动作直传 + 盒不套盒）、`{ "a" : 1 }`（改为 M1 映射字面量）、`jit-bytecode-m3.md` §2 LocalType（16–255 与 0–19 二选一，统一为 0–19）；验收：三条在「当前规则」章节零命中，历史处标注 D12/D15**（design-m3:88/84、jit-bytecode-m3:47/85/58/192、plan-m3:71 逐处改写并标 D12/D15；`grep "16–255 仍拒绝\|→ 语法错误"` 仅余带「已作废/已推翻」的历史句）**
+- [ ] A7.3 `json_set` 值域收口（P3-3）：**未完成**（待定口径后实施：Float64 变量路径当前运行期 8，规格未二选一）
+- [ ] A7.4 矩阵诚实化（P3-4）：**未完成**（T48/T51 仍记 full；`returnPositionBoxesIntoAny` 未补；只读字段写口径未统一；M3 三引擎证据未补）
+- [ ] A7.5 `doc/spec/` 产物补齐（P3-5）：**未完成**（f-jit-m3 与 m2.1–m2.3 仍缺 proposal/design/tasks）
+- [ ] A7.6 总回归与 `verify.md`：**部分完成**——A0–A6 每批末全量均为 0 失败（最新 1073/1073/0，PerfOverride 单跑通过）；`verify.md` 待 A7.3–A7.5 完成后出具

@@ -264,7 +264,7 @@ f_jit/
 3. **平台条件**：S5.x 的机器码用例仅在 Linux x86_64/aarch64 上可执行（CI 矩阵需两架构）；其余平台跑「降级一致性」子集。
 4. **T11 的 TZ 依赖**：DateTime 文本化用例固定 TZ 采金样（基准 UTC + 非 UTC 附加用例）。
 5. **风险**：helper 集（H01–H72）体量大且零散——按族推进（S4.8–S4.17），每族完成即接差分，避免最后积压。
-6. **与 M2/M3 的衔接**：M2（步骤前缀 `Q`）追加 LocalType 13/14 与 H63–H65、verMajor 2；M3（步骤前缀 `R`）追加 LocalType/token 15 与错误码 22、H66–H68、kind 11——M3 的 JSON helper 已裁定顺延为 **H73–H75**（避让 M1 已占用的 H72 `regex_replace_range`；2026-10-11 裁定，见 design-m3.md §10 的 M3-6）。
+6. **与 M2/M3 的衔接**：M2（步骤前缀 `Q`）追加 LocalType 13/14 与 H63–H65、verMajor 2；M3（步骤前缀 `R`）追加 LocalType/token 15 与错误码 22、H78–H80、kind 11——M3 的 JSON helper 已裁定顺延为 **H81–H83**（避让 M1 已占用的 H72 `regex_replace_range`；2026-10-11 裁定，见 design-m3.md §10 的 M3-6）。
 
 ---
 

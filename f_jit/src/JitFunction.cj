@@ -304,16 +304,30 @@ public class JitFunction {
             return JitFunction.contractFail('callForFn 要求单元返回闭包（retType=12）')
         }
         let typeName = TypeInfo.of<Fn>().name
-        let id = this.call<JitClosureId>(args)
-        let group = match (this.lastClosureGroup) {
-            case Some(g) => g
-            case None => PromotionGroup()
-        }
-        match (JitFunction.parseFnType(typeName)) {
-            case Some(sig) =>
-                JitFunction.wrapClosure(this, id, group, Int64(sig.params.size), sig.ret, sig.params)
-            case None =>
-                JitFunction.wrapClosure(this, id, group, -1, LocalType.NONE, Array<UInt16>())
+        // 整个过程在 `callMtx` 内完成（A6/P2-4）：`lastClosureGroup` 是**单元级**字段，
+        // 锁外读取会让两个线程拿到彼此的提升组（close 一侧会提前释放另一侧的捕获）。
+        // 取完立即清空，禁止跨调用残留。
+        synchronized (JitFunction.callMtx) {
+            this.enter()
+            var id = JitClosureId(JitClosureId.INVALID)
+            var group = PromotionGroup()
+            try {
+                id = this.callLocked<JitClosureId>(args, CallContext())
+                group = match (this.lastClosureGroup) {
+                    case Some(g) => g
+                    case None => PromotionGroup()
+                }
+                this.lastClosureGroup = None
+            } finally {
+                this.exit()
+            }
+            match (JitFunction.parseFnType(typeName)) {
+                case Some(sig) =>
+                    JitFunction.wrapClosure(this, id, group, Int64(sig.params.size), sig.ret,
+                        sig.params)
+                case None =>
+                    JitFunction.wrapClosure(this, id, group, -1, LocalType.NONE, Array<UInt16>())
+            }
         }
     }
 
