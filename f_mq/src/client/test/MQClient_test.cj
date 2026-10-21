@@ -518,6 +518,67 @@ class MQClientTest {
         }
     }
 
+    /** 同一位置只允许一个线程认领：服务端重投窗口内的重复位置不能被两个消费者同时拿走（A20）。 */
+    @TestCase
+    public func sameDeliveryPositionIsClaimedOnce(): Unit {
+        let stub = MQStubServer({buffer, request =>
+            match (request.command) {
+                case CONSUME(_) => Some(MQProtocol.respond<MQConsumeResult>(request, stubMessage("/order", 1, 0)))
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        let client = MQClient([stub.address()])
+        let sid = client.subscribe("/order")
+        let delivered = AtomicInt64(0)
+        try {
+            for (_ in 0..2) {
+                spawn {
+                    try {
+                        client.consume(sid)
+                        delivered.fetchAdd(1)
+                    } catch (_: Exception) {
+                        ()
+                    }
+                    ()
+                }
+            }
+            var waited = 0
+            while (delivered.load() == 0 && waited < 400) {
+                sleep(Duration.millisecond * 10)
+                waited++
+            }
+            // 给另一个线程足够的轮询时间：它必须一直被认领失败挡住
+            sleep(Duration.millisecond * 600)
+            @Assert(delivered.load() == 1)
+        } finally {
+            client.close()
+            stub.close()
+        }
+    }
+
+    /** ack 释放位置后，同一位置可以被重新认领（重投语义）（A20）。 */
+    @TestCase
+    public func ackReleasesPositionForRedelivery(): Unit {
+        let stub = MQStubServer({buffer, request =>
+            match (request.command) {
+                case CONSUME(_) => Some(MQProtocol.respond<MQConsumeResult>(request, stubMessage("/order", 1, 0)))
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let client = MQClient([stub.address()])
+            let sid = client.subscribe("/order")
+            let first = client.consume(sid)
+            client.ack(sid, first.queueIndex, first.segmentedIndex, first.segmentedOffset)
+            let second = client.consume(sid)
+            @Assert(second.segmentedIndex == first.segmentedIndex)
+            @Assert(second.segmentedOffset == first.segmentedOffset)
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+
     @TestCase
     public func consumeWaitsUntilMessageArrives(): Unit {
         let calls = AtomicInt64(0)

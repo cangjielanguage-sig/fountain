@@ -239,8 +239,13 @@ public class MQClient <: Resource {
                                 match (MQMessageRecord.decode(result.record.copyBytes())) {
                                     case Some(content) =>
                                         if (!sub.autoAck) {
-                                            sub.deliveries.add(MQSubscription.keyOf(result.queueIndex,
-                                                result.segmentedIndex, result.segmentedOffset), node)
+                                            let key = MQSubscription.keyOf(result.queueIndex,
+                                                result.segmentedIndex, result.segmentedOffset)
+                                            // 原子认领：服务端重投窗口内同一位置只允许一个线程取走（A20）
+                                            match (sub.deliveries.addIfAbsent(key, node)) {
+                                                case Some(_) => continue
+                                                case None => ()
+                                            }
                                         }
                                         return content.toMessage(result.queueIndex, result.segmentedIndex,
                                             result.segmentedOffset)
