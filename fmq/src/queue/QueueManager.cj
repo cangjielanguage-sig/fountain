@@ -18,7 +18,7 @@ package fountain::fmq.queue
 import std.collection.ArrayList
 import std.collection.concurrent.ConcurrentHashMap
 import std.fs.*
-import std.sync.{AtomicBool, AtomicInt64}
+import std.sync.{AtomicBool, AtomicInt64, Mutex}
 import fountain::fmq.meta.MQFileNames
 import fountain::f_mq.base.payload.MQTopicAssignment
 
@@ -53,6 +53,8 @@ protected class QueueManager <: Resource {
     private let maxFileSize: Int64
     private let syncInterval: Int64
     private let topics = ConcurrentHashMap<String, TopicQueueSet>()
+    /** 每个主题一把打开锁：建 `QueueLog` 是慢操作，不能持有全局锁（A52）。 */
+    private let openLocks = ConcurrentHashMap<String, Mutex>()
     private let closed = AtomicBool(false)
 
     protected init(logRoot: String, maxFileSize: Int64, syncInterval: Int64) {
@@ -61,19 +63,58 @@ protected class QueueManager <: Resource {
         this.syncInterval = syncInterval
     }
 
-    /** 按分配结果建/维护本地队列；重复调用同一主题为空操作。 */
+    /**
+     * 按分配结果建/维护本地队列；重复调用同一主题为空操作。
+     *
+     * 每个主题一把锁、`putIfAbsent` 判归属：并发打开同一主题只会创建一组 `QueueLog`；
+     * 中途失败时关闭已建的日志并删除本次新建的（空）目录，不留半成品（A52）。
+     */
     protected func openTopic(assignment: MQTopicAssignment, selfIndex: Int64): Unit {
         if (topics.contains(assignment.topic)) {
             return
         }
-        let local = ArrayList<(Int64, QueueLog)>()
-        for (i in 0..assignment.owners.size) {
-            if (assignment.owners[i] == selfIndex) {
-                let dir = MQFileNames.queueDir(logRoot, assignment.topic, i)
-                local.add((i, QueueLog(dir, maxFileSize, syncInterval)))
+        let topicLock = match (openLocks.addIfAbsent(assignment.topic, Mutex())) {
+            case Some(existing) => existing
+            case None => openLocks.get(assignment.topic).getOrThrow()
+        }
+        synchronized(topicLock) {
+            if (topics.contains(assignment.topic)) {
+                return
+            }
+            let local = ArrayList<(Int64, QueueLog)>()
+            let createdDirs = ArrayList<String>()
+            try {
+                for (i in 0..assignment.owners.size) {
+                    if (assignment.owners[i] == selfIndex) {
+                        let dir = MQFileNames.queueDir(logRoot, assignment.topic, i)
+                        let existed = exists(dir)
+                        local.add((i, QueueLog(dir, maxFileSize, syncInterval)))
+                        if (!existed) {
+                            createdDirs.add(dir)
+                        }
+                    }
+                }
+                if (topics.addIfAbsent(assignment.topic,
+                    TopicQueueSet(local.toArray(), assignment.queueNum, assignment.delayingMs)).isSome()) {
+                    // 其它线程抢先一步：本次创建的句柄作废
+                    throw IllegalStateException("topic '${assignment.topic}' was opened concurrently")
+                }
+            } catch (e: Exception) {
+                for ((_, log) in local) {
+                    try {
+                        log.close()
+                    } catch (_: Exception) {}
+                }
+                for (dir in createdDirs) {
+                    try {
+                        if (exists(dir)) {
+                            remove(dir, recursive: true)
+                        }
+                    } catch (_: Exception) {}
+                }
+                throw e
             }
         }
-        topics.add(assignment.topic, TopicQueueSet(local.toArray(), assignment.queueNum, assignment.delayingMs))
     }
 
     /**
