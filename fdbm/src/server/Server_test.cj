@@ -15,9 +15,10 @@ limitations under the License.
 */
 package fountain::fdbm.server
 
-import std.collection.HashMap
+import std.collection.{ArrayList, HashMap}
 import std.database.sql.DriverManager
 import std.fs.*
+import std.sync.Mutex
 import std.time.DateTime
 import std.unittest.*
 import std.unittest.testmacro.*
@@ -57,6 +58,19 @@ public class ServerLifecycleTest {
         @Assert(InFlight.await(Duration.millisecond * 100), true)
     }
 
+    /** T04：`leave` 必须唤醒阻塞中的 `await` 并返回 `true`（不是超时 `false`）。 */
+    @TestCase
+    public func inFlightLeaveWakesBlockedAwait(): Unit {
+        InFlight.enter()
+        let awaiting = spawn {
+            InFlight.await(Duration.second * 5)
+        }
+        sleep(Duration.millisecond * 100)
+        InFlight.leave()
+        @Assert(awaiting.get(), true)
+        @Assert(InFlight.count(), 0)
+    }
+
     // ==================== SessionRegistry ====================
 
     @TestCase
@@ -74,6 +88,42 @@ public class ServerLifecycleTest {
             @Assert(harness.sessions.size(), 0)
             let recreated = harness.sessions.of(buffer)
             @Assert(recreated.id == first.id, false)
+        } finally {
+            client.close()
+            harness.close()
+        }
+    }
+
+    /** T04：同一连接并发 `of()` 只创建一个会话（不因竞态重复建）。 */
+    @TestCase
+    public func concurrentOfSameBufferCreatesOneSession(): Unit {
+        let harness = Harness(rows: [1])
+        let client = harness.client()
+        try {
+            client.transfer(Message.consume(once: true, qos: QoS.AtMostOnce,
+                data: SqlPayload('select * from t where id = 1')), Duration.second * 5)
+            let buffer = harness.lastBuffer()
+            let lock = Mutex()
+            let ids = ArrayList<String>()
+            let futures = ArrayList<Future<Unit>>()
+            for (_ in 0..8) {
+                let fut = spawn {
+                    let session = harness.sessions.of(buffer)
+                    synchronized(lock) {
+                        ids.add(session.id)
+                    }
+                }
+                futures.add(fut)
+            }
+            for (fut in futures) {
+                fut.get()
+            }
+            @Assert(ids.size, 8)
+            let first = ids[0]
+            for (id in ids) {
+                @Assert(id, first)
+            }
+            @Assert(harness.sessions.size(), 1)
         } finally {
             client.close()
             harness.close()

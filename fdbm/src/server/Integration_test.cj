@@ -25,6 +25,7 @@ import fountain::f_dbd.common.DbdErrorCode
 import fountain::f_dbd.driver.dbdDriver
 import fountain::f_mockdb.*
 import fountain::fdbm.config.{ConfigSource, FdbmSettings, MapConfigSource}
+import fountain::fdbm.exception.FdbmException
 
 /**
  * 阶段 9 集成：真实 f_dbd 驱动 ↔ 真实 fdbm 服务 ↔ f_mockdb 物理驱动。
@@ -80,6 +81,57 @@ public class IntegrationTest {
             } catch (e: SqlException) {
                 @Assert(e.errorCode, unsupported)
             }
+        } finally {
+            connection.close()
+            fixture.close()
+        }
+    }
+
+    /** T06：物理 `typeName`（int4 / TINYINT(1) / bytea）必须归一成仓颉类型名再发给客户端。 */
+    @TestCase
+    public func columnTypesAreCanonicalizedBeforeSending(): Unit {
+        let fixture = integrationFixture(columnTypes: ['int4', 'TINYINT(1)', 'bytea'])
+        let connection = fixture.connect('db0')
+        try {
+            let query = connection.prepareStatement('select * from t').query()
+            try {
+                @Assert(query.columnInfos[0].typeName, 'Int32')
+                @Assert(query.columnInfos[1].typeName, 'Bool')
+                @Assert(query.columnInfos[2].typeName, 'Array<Byte>')
+            } finally {
+                query.close()
+            }
+        } finally {
+            connection.close()
+            fixture.close()
+        }
+    }
+
+    /** T09：`maxSize=1` 下关游标、DDL 失败后连接都必须归还，否则下一次查询会超时。 */
+    @TestCase
+    public func connectionsAreReturnedUnderSingleSlotPool(): Unit {
+        let fixture = integrationFixture(maxSize: 1)
+        let connection = fixture.connect('db0')
+        try {
+            let first = connection.prepareStatement('select * from t where id = 5').query()
+            @Assert(first.next(), true)
+            first.close()
+
+            let second = connection.prepareStatement('select * from t where id = 5').query()
+            @Assert(second.next(), true)
+            second.close()
+
+            var failed = false
+            try {
+                connection.prepareStatement('create table bad (id bigint)').update()
+            } catch (_: Exception) {
+                failed = true
+            }
+            @Assert(failed, true)
+
+            let third = connection.prepareStatement('select * from t where id = 5').query()
+            @Assert(third.next(), true)
+            third.close()
         } finally {
             connection.close()
             fixture.close()
@@ -184,13 +236,25 @@ public class IntegrationTest {
     // ==================== 夹具 ====================
 
     private func integrationFixture(stream!: ?Array<Byte> = None,
-        bootScript!: String = '/tmp/definitely-missing-boot.sh'): IntegrationFixture {
+        bootScript!: String = '/tmp/definitely-missing-boot.sh',
+        maxSize!: Int64 = 4, columnTypes!: ?Array<String> = None): IntegrationFixture {
         let sqls = ArrayList<String>()
         MOCKDB.clear()
         MOCKDB.execution = {sql, _ =>
             sqls.add(sql)
+            if (sql.startsWith('create table bad')) {
+                throw FdbmException(DbdErrorCode.SQL_SYNTAX, 'injected DDL failure')
+            }
             if (sql.startsWith('select') || sql.startsWith('show')) {
-                if (stream.isSome()) {
+                if (let Some(types) <- columnTypes) {
+                    var index: Int64 = 0
+                    for (typeName in types) {
+                        MOCKDB.addQueryResultColumnInfo(name: 'c${index}', nullable: false,
+                            typeName: typeName)
+                        index += 1
+                    }
+                    MOCKDB.addQueryResultRow([1, true, Array<Byte>(2, repeat: 7u8)])
+                } else if (stream.isSome()) {
                     MOCKDB.addQueryResultColumnInfo(name: 'payload', nullable: false,
                         typeName: 'InputStream')
                     MOCKDB.addQueryResultRow([BytesStream(stream.getOrThrow())])
@@ -203,7 +267,7 @@ public class IntegrationTest {
             }
         }
         let port = uniquePort()
-        let source = mapSource(port, bootScript: bootScript)
+        let source = mapSource(port, bootScript: bootScript, maxSize: maxSize)
         let settings = FdbmSettings.load(source: source)
         let server = FdbmServer(settings, source: source,
             driver: DriverManager.getDriver('mockdb').getOrThrow())
@@ -220,7 +284,8 @@ public class IntegrationTest {
     }
 
     private func mapSource(port: UInt16,
-        bootScript!: String = '/tmp/definitely-missing-boot.sh'): ConfigSource {
+        bootScript!: String = '/tmp/definitely-missing-boot.sh',
+        maxSize!: Int64 = 4): ConfigSource {
         let values = HashMap<String, String>()
         values['fdbm_port'] = port.toString()
         values['fdbm_db'] = 'name0@127.0.0.1:3306'
@@ -235,7 +300,7 @@ public class IntegrationTest {
         values['fdbm_shutdownTimeout'] = '2s'
         values['fdbm_checkDuration'] = '1s'
         values['fdbm_databasePoolInitSize'] = '0'
-        values['fdbm_databasePoolMaxSize'] = '4'
+        values['fdbm_databasePoolMaxSize'] = maxSize.toString()
         values['fdbm_databasePoolCheckOnBorrowing'] = 'false'
         values['fdbm_partition__t'] = 'db0,step,id'
         values['fdbm_partition_step'] = '1000'

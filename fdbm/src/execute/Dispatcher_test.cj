@@ -17,6 +17,7 @@ package fountain::fdbm.execute
 
 import std.collection.{ArrayList, HashMap}
 import std.fs.*
+import std.sync.{AtomicBool, AtomicInt64}
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_dbm.{IdGenerator, IdGeneratorException, PartitionAlgorithm}
@@ -558,6 +559,54 @@ public class DispatcherTest {
             @Assert(session.isPinned(), false)
         } finally {
             session.close()
+            resources.close()
+        }
+    }
+
+    /**
+     * T04：两个请求同时执行互不阻塞。
+     *
+     * 用「两个执行必须在物理层同时到达」作判据：任何全局串行化都会让先到的那个等满超时，
+     * 于是 overlapped 保持 false（不依赖计时阈值，只依赖"有没有真的重叠"）。
+     */
+    @TestCase
+    public func concurrentRequestsDoNotSerialize(): Unit {
+        let resources = resourcesOf(databases: ['db0', 'db1'])
+        let router = routerOf()
+        let dispatcher = ExecutorDispatcher(router, GlobalTableRouter([]), resources,
+            IdMakerConfig('uuid', arg: Some('4')), 'db0', HashMap<String, IdGenerator>(), None)
+        let arrived = AtomicInt64(0)
+        let overlapped = AtomicBool(false)
+        MOCKDB.clear()
+        MOCKDB.execution = {_, _ =>
+            let seq = arrived.fetchAdd(1) + 1
+            var waited = 0
+            while (arrived.load() < 2 && waited < 2000) {
+                sleep(Duration.millisecond * 5)
+                waited += 5
+            }
+            if (seq == 1 && arrived.load() >= 2) {
+                overlapped.store(true)
+            }
+            MOCKDB.addQueryResultColumnInfo(name: 'id', nullable: false, typeName: 'Int64')
+            MOCKDB.addQueryResultRow([1])
+        }
+        let futures = ArrayList<Future<Unit>>()
+        for (index in 0..2) {
+            let session = DbdSession('c${index}', None, 'db0')
+            let fut = spawn {
+                let outcome = dispatcher.execute(session, 'select * from t where id = 5', [])
+                outcome.cursor.getOrThrow().close()
+                session.close()
+            }
+            futures.add(fut)
+        }
+        try {
+            for (fut in futures) {
+                fut.get()
+            }
+            @Assert(overlapped.load(), true)
+        } finally {
             resources.close()
         }
     }

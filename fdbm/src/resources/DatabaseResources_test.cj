@@ -40,6 +40,34 @@ public class DatabaseResourcesTest {
             checkOnReturning: false, connectTimeout: Duration.second, maxWaiting: Duration.second)
     }
 
+    /** T05：有连接被借用时 `closeAndAwait` 必须超时返回 `false`（不能假成功）。 */
+    @TestCase
+    public func closeAndAwaitFailsWhileConnectionBorrowed(): Unit {
+        let single = [DatabaseNodeConfig('name0', '127.0.0.1', 3306u16, 'mockdb', ['db0'], '', '')]
+        let pool = PoolConfig(initSize: 0, minSize: 0, maxSize: 1, checkOnBorrowing: false,
+            checkOnReturning: false, connectTimeout: Duration.second, maxWaiting: Duration.second)
+        let resources = DatabaseResources(single, pool, LoadBalanceConfig())
+        let held = resources.selectRead('db0')
+        @Assert(resources.closeAndAwait(timeout: Duration.millisecond * 1), false)
+        held.close()
+    }
+
+    /** T05：`Zero` / `Max` 超时参数 → `IllegalArgumentException`（与 f_dbpool 同口径）。 */
+    @TestCase
+    public func closeAndAwaitRejectsInvalidTimeouts(): Unit {
+        for (timeout in [Duration.Zero, Duration.Max]) {
+            let single = [DatabaseNodeConfig('name0', '127.0.0.1', 3306u16, 'mockdb', ['db0'], '', '')]
+            let resources = DatabaseResources(single, poolConfig(), LoadBalanceConfig())
+            var threw = false
+            try {
+                resources.closeAndAwait(timeout: timeout)
+            } catch (_: IllegalArgumentException) {
+                threw = true
+            }
+            @Assert(threw, true)
+        }
+    }
+
     /** G07：池耗尽等待超时 → `TIMEOUT`（不是冒泡成 INTERNAL）。 */
     @TestCase
     public func poolExhaustionMapsToTimeout(): Unit {

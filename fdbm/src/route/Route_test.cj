@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::fdbm.route
 
-import std.collection.HashMap
+import std.collection.{ArrayList, HashMap}
 import std.fs.*
 import std.unittest.*
 import std.unittest.testmacro.*
@@ -145,6 +145,35 @@ public class PartitionCacheTest {
             @Assert(cacheCodeOf { cache.get('db0', 't', 'id', '1') } == DbdErrorCode.CACHE, true)
             @Assert(cacheCodeOf { cache.put('db0', 't', 'id', '1', 'p0') } == DbdErrorCode.CACHE, true)
             @Assert(cacheCodeOf { cache.remove('db0', 't', 'id', '1') } == DbdErrorCode.CACHE, true)
+        } finally {
+            removeIfExists(dir, recursive: true)
+        }
+    }
+
+    /** T04：并发写入不同键后 count() 与落盘键数一致（重启后仍一致，不是只在内存里对）。 */
+    @TestCase
+    public func concurrentPutsKeepCountInSyncWithStore(): Unit {
+        let dir = Directory.createTemp('/tmp')
+        try {
+            let cache = PartitionCache(dir.toString(), None, 0)
+            let futures = ArrayList<Future<Unit>>()
+            for (worker in 0..4) {
+                let fut = spawn {
+                    for (i in 0..25) {
+                        cache.put('db0', 't', 'id', '${worker * 100 + i}', 'p0')
+                    }
+                }
+                futures.add(fut)
+            }
+            for (fut in futures) {
+                fut.get()
+            }
+            @Assert(cache.count(), 100)
+            cache.close()
+
+            let reopened = PartitionCache(dir.toString(), None, 0)
+            @Assert(reopened.count(), 100)
+            reopened.close()
         } finally {
             removeIfExists(dir, recursive: true)
         }

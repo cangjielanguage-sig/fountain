@@ -219,6 +219,30 @@ public class QueryResultImplTest {
         @Assert(r.get<DateTime>(6).toString().isEmpty(), false)
     }
 
+    /** T10：`Rune` 只接受单字符；多字符 / 空串 → `CONVERSION`。 */
+    @TestCase
+    public func runeRejectsMultiAndEmptyValues(): Unit {
+        let stub = StubSender()
+        stub.rows = [true]
+        stub.addCell(DataString('AB'))
+        stub.addCell(DataString(''))
+        let r = result(stub, ['String', 'String'])
+        @Assert(r.next(), true)
+        @Assert(codeOf { r.get<Rune>(0) }, CONVERSION)
+        @Assert(codeOf { r.get<Rune>(1) }, CONVERSION)
+    }
+
+    /** T10：块响应不是字节数组 → `CONVERSION`（不能当作 EOF 静默截断）。 */
+    @TestCase
+    public func undecodableStreamBlockIsConversion(): Unit {
+        let stub = StubSender()
+        stub.rows = [true]
+        stub.overrideBlock = Some<Data>(DataDateTime(DateTime.now()))
+        let r = result(stub, ['std.io.InputStream'])
+        @Assert(r.next(), true)
+        @Assert(codeOf { r.get<InputStream>(0) }, CONVERSION)
+    }
+
     /** `Rune` 列按 `String` 传输并还原成单个 `Rune`（§8）。 */
     @TestCase
     public func runeColumnIsRestored(): Unit {
@@ -521,7 +545,7 @@ private class MyStreamImpl <: InputStream {
  *
  * `cells` / `blocks` 按消费顺序取用；`rows` 供 `NEXT_ROW` 依次应答；`failAt` 指定第几个请求抛异常。
  */
-private class StubSender {
+class StubSender {
     var rows: Array<Bool> = []
     var requests: ArrayList<QueryResultColumnPayload> = ArrayList<QueryResultColumnPayload>()
     var closes: ArrayList<QueryResultClosePayload> = ArrayList<QueryResultClosePayload>()
@@ -533,6 +557,8 @@ private class StubSender {
     var closeThrows: Bool = false
     /** `true` 时 NULL 探测（`bufSize < 0`）返回 `DataNone`（模拟 SQL NULL 流列）。 */
     var nullProbe: Bool = false
+    /** 非 `None` 时覆盖块应答（用于"块不是字节"的负例）。 */
+    var overrideBlock: ?Data = None<Data>
     private let cells = ArrayList<Data>()
     private let blocks = ArrayList<Array<Byte>>()
     private var rowCursor: Int64 = 0
@@ -563,6 +589,9 @@ private class StubSender {
             return has.toData()
         }
         if (payload.bufSize != 0) {
+            if (let Some(d) <- overrideBlock) {
+                return d
+            }
             if (payload.bufSize < 0 && nullProbe) {
                 return DataNone.INSTANCE
             }
@@ -584,7 +613,7 @@ private class StubSender {
 }
 
 /** 用桩构造一个结果集（`typeNames` 逐列给出仓颉类型名）。 */
-private func result(stub: StubSender, typeNames: Array<String>, qid!: String = 'q-0',
+func result(stub: StubSender, typeNames: Array<String>, qid!: String = 'q-0',
     chunkSize!: Int64 = 0): QueryResultImpl {
     let infos = ArrayList<ColumnInfoImpl>()
     for (i in 0..typeNames.size) {

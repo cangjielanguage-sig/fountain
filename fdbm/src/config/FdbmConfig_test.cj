@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::fdbm.config
 
-import std.collection.HashMap
+import std.collection.{ArrayList, HashMap}
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_dbd.common.DbdErrorCode
@@ -271,9 +271,8 @@ public class FdbmConfigTest {
         @Assert(fdbmCodeOf {
             FdbmConfig.getIdMaker(source: configOf([('fdbm_idmaker', 'snowflake,1024')]))
         }, DbdErrorCode.CONFIG)
-        @Assert(fdbmCodeOf {
-            FdbmConfig.getIdMaker(source: configOf([('fdbm_idmaker', 'bogus')]))
-        }, DbdErrorCode.CONFIG)
+        // 自定义扩展名在解析期放行（validate 用扩展名单再判定）。
+        @Assert(FdbmConfig.getIdMaker(source: configOf([('fdbm_idmaker', 'bogus')])).kind, 'bogus')
     }
 
     @TestCase
@@ -577,6 +576,44 @@ public class FdbmValidateTest {
         let settings = FdbmSettings.load(source: zero)
         @Assert(fdbmCodeOf { FdbmConfig.validate(settings, [], [], source: zero) },
             DbdErrorCode.CONFIG)
+    }
+
+    /** G29/D09：未知 idmaker 在解析期放行，由 validate 结合自定义扩展名单判定。 */
+    @TestCase
+    public func customIdMakerIsValidatedAfterExtensionsLoad(): Unit {
+        let source = configOf([
+            ('fdbm_db', 'name0@h1:9001'),
+            ('fdbm_db_driver_name0', 'mysql'),
+            ('fdbm_db_database_name0', 'db0'),
+            ('fdbm_idmaker', 'markergen')
+        ])
+        let settings = FdbmSettings.load(source: source)
+        @Assert(settings.idmaker.kind, 'markergen')
+        @Assert(fdbmCodeOf { FdbmConfig.validate(settings, [], [], source: source) },
+            DbdErrorCode.CONFIG)
+        FdbmConfig.validate(settings, [], ['markergen'], source: source)
+    }
+
+    /** T08：§11 的时长类负例逐条覆盖（shutdown / checkDuration / unavailableChecked）。 */
+    @TestCase
+    public func durationSettingsMustBePositiveAndFinite(): Unit {
+        let base = ArrayList<(String, String)>()
+        base.add(('fdbm_db', 'name0@h1:9001'))
+        base.add(('fdbm_db_driver_name0', 'mysql'))
+        base.add(('fdbm_db_database_name0', 'db0'))
+        for (entry in [('fdbm_shutdownTimeout', '0'), ('fdbm_shutdownTimeout', 'max'),
+            ('fdbm_checkDuration', '0'), ('fdbm_unavailableChecked', '0')]) {
+            let entries = ArrayList<(String, String)>()
+            for (existing in base) {
+                entries.add(existing)
+            }
+            entries.add(entry)
+            let source = configOf(entries.toArray())
+            // 有的项在解析期就拒绝，有的在 validate 期拒绝；两者都必须是 CONFIG。
+            @Assert(fdbmCodeOf {
+                FdbmConfig.validate(FdbmSettings.load(source: source), [], [], source: source)
+            }, DbdErrorCode.CONFIG)
+        }
     }
 
     @TestCase
