@@ -530,6 +530,38 @@ public class DispatcherTest {
         }
     }
 
+    /** D03：事务 pin 的目标是逻辑库解析出的物理库，不是逻辑名本身。 */
+    @TestCase
+    public func beginPinsFirstPhysicalDatabase(): Unit {
+        let (executor, accessor, resources) = logicalDispatcher()
+        let session = DbdSession('s', None, 'app')
+        try {
+            executor.execute(session, 'begin', [])
+            @Assert(accessor.writes.toArray(), ['db0'])
+            @Assert(session.isPinned(), true)
+            executor.execute(session, 'commit', [])
+            @Assert((!session.isPinned()), true)
+        } finally {
+            session.close()
+            resources.close()
+        }
+    }
+
+    /** D03：会话逻辑库不在 catalog 中时 `begin` 直接拒绝，不借出任何连接。 */
+    @TestCase
+    public func beginWithUnknownLogicalDatabaseIsRejected(): Unit {
+        let (executor, accessor, resources) = logicalDispatcher()
+        let session = DbdSession('s', None, 'ghost')
+        try {
+            @Assert(codeOf { executor.execute(session, 'begin', []) }, DbdErrorCode.ROUTE_FAILED)
+            @Assert(accessor.writes.isEmpty(), true)
+            @Assert(session.isPinned(), false)
+        } finally {
+            session.close()
+            resources.close()
+        }
+    }
+
     /** D05：`Unroutable` SELECT 只广播到所属逻辑库的物理库。 */
     @TestCase
     public func unroutableSelectStaysInsideLogicalDatabase(): Unit {

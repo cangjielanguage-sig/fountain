@@ -52,7 +52,7 @@ protected class ExecutorDispatcher {
             sequenceDatabase, customIdGenerators)
         this.showExecutor = ShowExecutor(resources, catalog: catalog)
         this.ddlExecutor = DdlExecutor(resources, globals, catalog: catalog)
-        this.sessionExecutor = SessionCtlExecutor(resources)
+        this.sessionExecutor = SessionCtlExecutor(resources, catalog: catalog)
         this.exportExecutor = ExportExecutor(bootScript)
         this.catalog = catalog
     }

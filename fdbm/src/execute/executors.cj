@@ -107,6 +107,17 @@ func dialectOf(resources: NodeAccessor, databases: Array<String>): SqlDialect {
     SqlDialects.ofDriver(resources.driver(databases[0]))
 }
 
+/** 物理库集合的确定性首项（按名称排序后的最小项）。 */
+func smallestName(databases: Array<String>): String {
+    var value = databases[0]
+    for (candidate in databases) {
+        if (candidate < value) {
+            value = candidate
+        }
+    }
+    value
+}
+
 /** G25：全局表写在事务内走独立连接、各自提交（无 2PC），首次发生时记 WARN。 */
 func warnPinnedGlobalWrite(session: DbdSession): Unit {
     if (session.isPinned()) {
@@ -1255,9 +1266,33 @@ protected class DdlExecutor {
 /** 会话控制：begin 时 pin 写连接；commit/rollback 后解 pin。 */
 protected class SessionCtlExecutor {
     private let resources: NodeAccessor
+    private let catalog: ?LogicalCatalog
 
-    public init(resources: NodeAccessor) {
+    public init(resources: NodeAccessor, catalog!: ?LogicalCatalog = None) {
         this.resources = resources
+        this.catalog = catalog
+    }
+
+    /**
+     * 事务 pin 的物理目标：会话逻辑库的**首个物理库**（排序后首项，跨进程确定）。
+     *
+     * pin 只对应一个物理库（D04），因此必须先把逻辑名解析成物理名；未知逻辑库 → `ROUTE_FAILED`。
+     */
+    private func pinTarget(session: DbdSession): String {
+        match (catalog) {
+            case Some(value) =>
+                match (value.physicals(session.database)) {
+                    case Some(databases) => smallestName(databases)
+                    case None => throw FdbmException(DbdErrorCode.ROUTE_FAILED,
+                        'unknown database \'${session.database}\'')
+                }
+            case None =>
+                if (!resources.contains(session.database)) {
+                    throw FdbmException(DbdErrorCode.ROUTE_FAILED,
+                        'unknown database \'${session.database}\'')
+                }
+                session.database
+        }
     }
 
     public func execute(session: DbdSession, statement: SessionCtlStatement): ExecutionOutcome {
@@ -1266,7 +1301,7 @@ protected class SessionCtlExecutor {
                 if (session.isPinned()) {
                     throw FdbmException(DbdErrorCode.TX_STATE, 'the transaction has already begun')
                 }
-                let connection = resources.selectWrite(session.database)
+                let connection = resources.selectWrite(pinTarget(session))
                 // 先让物理库接受 begin，成功后才 pin（G26：失败的 begin 不得留下 pin）
                 try {
                     let result = executeUpdate(connection, statement.sql)

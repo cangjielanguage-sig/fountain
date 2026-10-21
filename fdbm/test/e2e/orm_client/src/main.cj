@@ -91,7 +91,7 @@ main(): Int64 {
     }
     check('driver name follows backend dialect', driver.name == name)
 
-    let url = 'fdbm://fdbm@127.0.0.1:${port()}/db0'
+    let url = 'fdbm://fdbm@127.0.0.1:${port()}/app'
     ORM.register(driver, url, default: true)
     let executor = ORM.executor(name)
     try {

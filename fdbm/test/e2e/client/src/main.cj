@@ -121,6 +121,16 @@ func isMySql(): Bool {
     backend() == 'mysql'
 }
 
+/**
+ * 部署的逻辑库名（`fdbm_db_logicalDatabase_<name>`）。
+ *
+ * e2e 故意让逻辑库名 ≠ 物理库名（`app` vs `db0..db3`），未限定读写必须按路由落到物理库，
+ * 只连接逻辑库名才能暴露「默认库落到物理库名」这类缺陷。
+ */
+func logicalDatabase(): String {
+    'app'
+}
+
 /** 两个后端都接受的文本类型（MySQL 的 `text` 不能做分库键主键）。 */
 func textType(): String {
     'varchar(64)'
@@ -166,7 +176,7 @@ main(): Int64 {
     if (isProbe()) {
         return probe()
     }
-    let base = 'fdbm://fdbm@127.0.0.1:${port()}/db0'
+    let base = 'fdbm://fdbm@127.0.0.1:${port()}/${logicalDatabase()}'
     let datasource = dbdDriver().open(base, [])
     datasource.setOption('query_timeout', '30000')
     datasource.setOption('update_timeout', '30000')
@@ -175,6 +185,7 @@ main(): Int64 {
     try {
         driverAndMetadata(connection)
         ddlAndUnpartitioned(connection)
+        shardProbe(connection)
         stepRouting(connection)
         hashAndSubstring(connection)
         globalTable(connection)
@@ -211,10 +222,11 @@ func isProbe(): Bool {
 
 /** 重启后的最小探针：只证明新进程仍能服务（不重建数据）。 */
 func probe(): Int64 {
-    let datasource = dbdDriver().open('fdbm://fdbm@127.0.0.1:${port()}/db0', [])
+    let datasource = dbdDriver().open(
+        'fdbm://fdbm@127.0.0.1:${port()}/${logicalDatabase()}', [])
     let connection = datasource.connect()
     try {
-        // 逻辑库口径：e2e 部署显式声明逻辑库 db0，物理库不单独出现
+        // 逻辑库口径：e2e 部署显式声明逻辑库 app，物理库不单独出现
         checkInt('probe show databases', rowCount(connection, 'show databases'), 1)
         checkText('probe step select', firstText(connection,
             'select name from t_step where id = 2') ?? '', 'src1')
@@ -234,7 +246,7 @@ func driverAndMetadata(connection: Connection): Unit {
     check('driver.preferredPooling', driver.preferredPooling)
     check('driver.version', !driver.version.isEmpty())
     let meta = connection.getMetaData()
-    checkText('metadata.database', meta.get('database') ?? '', 'db0')
+    checkText('metadata.database', meta.get('database') ?? '', logicalDatabase())
     checkText('metadata.user', meta.get('user') ?? '', 'fdbm')
     check('metadata.no-password', meta.get('password').isNone())
 }
@@ -306,6 +318,40 @@ func ddlAndUnpartitioned(connection: Connection): Unit {
         'delete from t_plain where id = 10'), 1)
     checkInt('plain select after delete', rowCount(connection,
         'select id from t_plain where id = 10'), 0)
+}
+
+/**
+ * 逻辑库 ≠ 物理库时的路由证据（D03 / 任务 1.15）。
+ *
+ * `t_shard_probe` 由 `backends` 下的脚本直接建在物理库里，**每个物理库只放本分片的那一行**
+ * （db0→id=1、db1→id=1001、db2→id=2001、db3→id=3001），因此客户端用未限定名读写时
+ * 命中的物理库由返回值/行数直接暴露：路由错了就查不到行，写错了就读不回新值。
+ */
+func shardProbe(connection: Connection): Unit {
+    checkText('shard probe read db0', firstText(connection,
+        'select tag from t_shard_probe where id = 1') ?? '', 'db0')
+    checkText('shard probe read db1', firstText(connection,
+        'select tag from t_shard_probe where id = 1001') ?? '', 'db1')
+    checkText('shard probe read db2', firstText(connection,
+        'select tag from t_shard_probe where id = 2001') ?? '', 'db2')
+    checkText('shard probe read db3', firstText(connection,
+        'select tag from t_shard_probe where id = 3001') ?? '', 'db3')
+    checkInt('shard probe range spans shards', rowCount(connection,
+        'select tag from t_shard_probe where id between 1 and 3001'), 4)
+
+    // 写：未限定名必须在 db1 上更新（其它库没有 id=1001，写错就回读不到新值）
+    checkInt('shard probe update db1', execUpdate(connection,
+        "update t_shard_probe set tag = 'app-w' where id = 1001"), 1)
+    checkText('shard probe update visible', firstText(connection,
+        'select tag from t_shard_probe where id = 1001') ?? '', 'app-w')
+    checkInt('shard probe insert db2', execUpdate(connection,
+        "insert into t_shard_probe (id, tag) values (2005, 'app-i')"), 1)
+    checkText('shard probe insert visible', firstText(connection,
+        'select tag from t_shard_probe where id = 2005') ?? '', 'app-i')
+    checkInt('shard probe delete db3', execUpdate(connection,
+        'delete from t_shard_probe where id = 3001'), 1)
+    checkInt('shard probe delete verified', rowCount(connection,
+        'select tag from t_shard_probe where id = 3001'), 0)
 }
 
 func stepRouting(connection: Connection): Unit {
@@ -399,14 +445,38 @@ func showAndExport(connection: Connection): Unit {
             rs.close()
         }
         checkInt('show databases count', names.size, 1)
-        check('show databases content', names.contains('db0'))
+        check('show databases content', names.contains(logicalDatabase()))
     } finally {
         st.close()
     }
 
-    let tables = connection.prepareStatement('show tables')
+    let defaultTables = tableNames(connection, 'show tables')
+    check('show tables contains t_step', defaultTables.contains('t_step'))
+    check('show tables contains t_plain', defaultTables.contains('t_plain'))
+    check('show tables column name', rsInfoName(connection) == 'table_name')
+    // 显式逻辑库与默认库（会话默认库 = 唯一逻辑库）给出同一份内省结果
+    let appTables = tableNames(connection, 'show tables ${logicalDatabase()}')
+    check('show tables app contains t_step', appTables.contains('t_step'))
+    checkInt('show tables app equals default', appTables.size, defaultTables.size)
+    // 未知逻辑库 → ROUTE_FAILED
+    check('show tables unknown database', codeOf {
+        rowCount(connection, 'show tables nope')
+    } == DbdErrorCode.ROUTE_FAILED)
+    // 物理库名不是逻辑库命名空间：限定到物理名必须被拒绝，不再静默落到 db0
+    check('physical name is not a logical database', codeOf {
+        rowCount(connection, 'select id from db0.t_step where id = 1')
+    } == DbdErrorCode.ROUTE_FAILED)
+
+    checkInt('export write', execUpdate(connection,
+        "export fdbm_port='19999'"), 0)
+    check('export rejects unknown key',
+        codeOf { execUpdate(connection, "export evil_key='1'") } == DbdErrorCode.CONFIG)
+}
+
+func tableNames(connection: Connection, sql: String): ArrayList<String> {
+    let statement = connection.prepareStatement(sql)
     try {
-        let rs = tables.query()
+        let rs = statement.query()
         let names = ArrayList<String>()
         try {
             while (rs.next()) {
@@ -415,17 +485,10 @@ func showAndExport(connection: Connection): Unit {
         } finally {
             rs.close()
         }
-        check('show tables contains t_step', names.contains('t_step'))
-        check('show tables contains t_plain', names.contains('t_plain'))
-        check('show tables column name', rsInfoName(connection) == 'table_name')
+        names
     } finally {
-        tables.close()
+        statement.close()
     }
-
-    checkInt('export write', execUpdate(connection,
-        "export fdbm_port='19999'"), 0)
-    check('export rejects unknown key',
-        codeOf { execUpdate(connection, "export evil_key='1'") } == DbdErrorCode.CONFIG)
 }
 
 func rsInfoName(connection: Connection): String {
@@ -583,7 +646,8 @@ func sqlExtensions(connection: Connection): Unit {
 }
 
 func multiD(): Unit {
-    let url = 'multidbd://fdbm@127.0.0.1:${port()},fdbm@127.0.0.1:${secondPort()}/db0'
+    let url = 'multidbd://fdbm@127.0.0.1:${port()},fdbm@127.0.0.1:${secondPort()}/' +
+        logicalDatabase()
     let driver = match (DriverManager.getDriver('multidbd')) {
         case Some(value) => value
         case None =>
