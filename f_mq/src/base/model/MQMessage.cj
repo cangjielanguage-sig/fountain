@@ -55,12 +55,35 @@ public class MQMessage {
      * 把 BODY 转换为 `T`。
      *
      * - 支持基本类型与 `@DataAssist` 类（`convert` 同时覆盖两条路径）；
-     * - BODY 为空或类型不匹配时返回 `None`，不抛异常。
+     * - BODY 为空（`None` / `DataNone` / 空字节块）或类型不匹配时返回 `None`，不抛异常；
+     * - 绝不返回「字段全默认的对象」：`SILENCE` 语义会把异类 BODY 静默折成默认值，
+     *   这里用严格转换把不匹配变成异常再折回 `None`（A04）。
      */
     public func get<T>(): ?T where T <: DataFields<T> {
         match (body) {
-            case Some(x) => convert<T>(x.data)
-            case _ => None<T>
+            case Some(x) =>
+                let data = x.data
+                if (let _: DataNone <- data) {
+                    return None<T>
+                }
+                match (data) {
+                    case o: SimpleDataObject =>
+                        // 对象 BODY 必须与目标类型同名，异类对象不做字段拷贝
+                        if (o.typeInfo.qualifiedName != TypeInfo.of<T>().qualifiedName) {
+                            return None<T>
+                        }
+                    case _ =>
+                        // 目标是对象类型（`ObjectData`）却拿到标量/集合 BODY：不能折成默认对象
+                        if (!T.isSimple()) {
+                            return None<T>
+                        }
+                }
+                try {
+                    convert<T>(data)
+                } catch (_: Exception) {
+                    None<T>
+                }
+            case None => None<T>
         }
     }
 }

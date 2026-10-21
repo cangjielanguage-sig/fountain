@@ -10,9 +10,9 @@ ID 生成、分库缓存**。应用侧通过 [f_dbd](../f_dbd) 驱动连接，�
 | --- | --- |
 | `fountain::fdbm.config` | 配置解析与启动自检、`boot.sh` managed 区块读写（`BootScriptWriter`） |
 | `fountain::fdbm.exception` | `FdbmException`（携带 `DbdErrorCode`） |
-| `fountain::fdbm.sql` | SQL 词法/语法、AST、参数绑定、分库键提取、渲染 |
+| `fountain::fdbm.sql` | SQL 词法/语法、AST、参数绑定、分库键提取、方言判定与渲染 |
 | `fountain::fdbm.resources` | `NodeAccessor` 与物理连接池（每 `<host:port> + 库` 一个池） |
-| `fountain::fdbm.route` | 七种分库算法、五态路由、分库缓存、全局表 |
+| `fountain::fdbm.route` | 分库算法（`step` / `hash` / `std` / `crc16` / `crc32` / `crc64` / `murmur` / `substr`）、五态路由、分库缓存、全局表 |
 | `fountain::fdbm.idmaker` | `uuid` / `snowflake` / `sequence` 生成器 |
 | `fountain::fdbm.execute` | 会话、服务端游标、各语句执行器、统一分发 |
 | `fountain::fdbm.server` | 协议 handler、会话注册表、驱动/扩展加载、服务生命周期 |
@@ -34,7 +34,8 @@ fdbm                                                              # 无子命令
 部署目录约定：
 
 - `driver/`：物理数据库驱动动态库，**恰好一个**，其注册名必须等于所有节点的
-  `fdbm_db_driver_<node>`；否则启动报 `NO_DRIVER`。
+  `fdbm_db_driver_<node>`；否则启动报 `NO_DRIVER`。联调使用 `postgres_driver`
+  （注册名 `postgres`）与 `mysql_driver`（注册名 `mysql`；MariaDB 复用该驱动名）。
 - `custom/`：自定义 `PartitionAlgorithm` / `IdGenerator` 扩展库（目录不存在表示没有扩展）。
 - `boot.sh`：配置与进程管理脚本；`export k=v` 会写回其 managed 区块。
 
@@ -98,3 +99,14 @@ cjpm test
 - `src/server/Integration_test.cj` 用真实 f_dbd 客户端跑通建表/增删改查/事务/流列/SHOW/关闭握手；
 - `test/lifecycle_test.sh` 校验真实进程的 `boot.sh` 生命周期与 SIGTERM 优雅停止（需先
   `cjpm build` 与 `cjpm install`）。
+
+真库联调覆盖 `f_dbd ↔ fdbm ↔ PostgreSQL / MySQL 8.0` 的完整链路：
+
+```bash
+bash fdbm/test/e2e/run.sh postgres
+bash fdbm/test/e2e/run.sh mysql
+```
+
+`test/postgres_e2e/run.sh`、`test/mysql_e2e/run.sh` 是兼容入口。环境变量、后端矩阵、
+覆盖范围（路由、全局表、DDL、序列、事务、SHOW/EXPORT、缓存、`RETURNING`/`count(*)`/派生表分页、
+f_orm 实体操作等）与已知边界见 [`test/e2e/README.md`](test/e2e/README.md)。

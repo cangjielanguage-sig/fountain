@@ -15,16 +15,19 @@ limitations under the License.
 */
 package fountain::fmq.server
 
+import std.collection.{ArrayList, HashSet}
 import std.fs.*
-import std.sync.{AtomicBool, Timer}
+import std.sync.{AtomicBool, Mutex, Timer}
+import std.time.DateTime
 import fountain::f_data.DataAny
 import fountain::f_log.*
+import fountain::f_mq.base.payload.MQDeregisterPayload
 import fountain::f_net.server.Server
 import fountain::f_protocol.default.Message
 import fountain::fmq.cluster.{BackupReplicator, LogCleaner, MetaSyncer, NodeRegistry}
 import fountain::fmq.meta.MetaStore
 import fountain::fmq.metrics.MQMetrics
-import fountain::fmq.queue.{CursorStore, DeadLetterQueue, MQMatcher, QueueManager}
+import fountain::fmq.queue.{CursorCatalog, CursorStore, DeadLetterQueue, MQMatcher, QueueManager}
 
 /**
  * 服务端装配与生命周期。
@@ -43,6 +46,7 @@ public class MQServer {
     private let syncer: MetaSyncer
     private let queues: QueueManager
     private let cursorStore: CursorStore
+    private let cursorCatalog: CursorCatalog
     private let deadLetter: DeadLetterQueue
     private let subscribers: SubscriberRegistry
     private let consume: ConsumeService
@@ -54,6 +58,10 @@ public class MQServer {
     private let started = AtomicBool(false)
     private let closed = AtomicBool(false)
     private var cleanupTimer: ?Timer = None
+    private let closeLock = Mutex()
+    private var closeCompleted = false
+    private let closeDone = HashSet<String>()
+    private var closeStepsOverride: ?(() -> Array<(String, () -> Unit)>) = None
 
     /** 从 `mqServer_*` / `mqClient_hosts` 读取配置并装配。 */
     public init() {
@@ -66,8 +74,10 @@ public class MQServer {
         ensureDir(options.segmentedLogDir)
         ensureDir(options.deadMsgDir)
 
-        this.meta = MetaStore(options.metaDir)
+        this.meta = MetaStore(options.metaDir, origin: options.selfIndex, nodeCount: options.nodes.size)
         this.meta.load()
+        // 局部别名：闭包不能捕获尚未完成初始化的 `this`，只能捕获局部变量
+        let metaStore = this.meta
         this.registry = NodeRegistry(options.nodes, options.selfIndex)
         this.syncer = MetaSyncer(meta, registry)
         // 先向 peer 补齐元数据，再按最终分配打开本机队列
@@ -77,23 +87,71 @@ public class MQServer {
         for (assignment in meta.topics()) {
             queues.openTopic(assignment, options.selfIndex)
         }
+        // 元数据落地（注册/广播/快照合并/复活同步）统一走这里打开本机队列（A29）
+        let queueManager = this.queues
+        this.syncer.onTopicApplied = {topic =>
+            match (metaStore.topicOf(topic)) {
+                case Some(assignment) => queueManager.openTopic(assignment, options.selfIndex)
+                case None => ()
+            }
+        }
         this.cursorStore = CursorStore(options.metaDir)
+        this.cursorCatalog = CursorCatalog(cursorStore, metaStore)
         this.deadLetter = DeadLetterQueue(options.deadMsgDir, options.segmentedLogMaxSize, 1)
         this.subscribers = SubscriberRegistry()
         this.backupStore = BackupStore(options.segmentedLogDir, options.segmentedLogMaxSize, 1)
         this.backup = BackupReplicator(registry, options.backup)
-        let consumer = ConsumeService(queues, cursorStore, subscribers, MQMatcher(), deadLetter,
+        let consumer = ConsumeService(queues, cursorCatalog, subscribers, MQMatcher(), deadLetter,
             options.ackTimeout, options.deadMsgThreshold, metrics: MQMetrics())
         this.consume = consumer
-        this.cleaner = LogCleaner(queues, deadLetter,
-            {topic, queueIndex, segmentIndex => consumer.references(topic, queueIndex, segmentIndex)},
-            options.segmentedLogTTL, options.deadMsgTTL)
-        this.executor = MQCommandExecutor(meta, syncer, queues, cursorStore, subscribers, consume, backup,
+        // 备份要携带真实消费状态与位点（A26）
+        this.backup.setStateSource(consumer)
+        this.executor = MQCommandExecutor(meta, syncer, queues, cursorCatalog, subscribers, consume, backup,
             backupStore, options.selfIndex)
+        // peer 墓碑生效后，对端也要清掉队列/游标/订阅/计数器（A25）
+        let commandExecutor = this.executor
+        syncer.onDeleted = {payload => commandExecutor.cleanupAfterDelete(payload)}
         this.server = Server<DataAny>(bindAt: options.port, checkDuration: CHECK_DURATION, executors: 200,
             checker: {=> Message.ping()})
+        // 清理器最后装配：它要闭包捕获 backupStore，必须等全部成员初始化完成
+        let store = this.backupStore
+        this.cleaner = LogCleaner(queues, deadLetter,
+            {topic, queueIndex => consumer.floorOf(topic, queueIndex)},
+            options.segmentedLogTTL, options.deadMsgTTL,
+            backupLogs: {=> store.allLogs()},
+            backupFloor: {owner, topic, queueIndex => store.cursorFloor(owner, topic, queueIndex)})
         // 节点由死转活时补一次全量同步，避免离线期间错过的注册/删除
         this.registry.onRevived = {=> this.syncer.syncFromPeers()}
+        // 离线期间被删除的主题/组：元数据已被墓碑或快照清掉，本机队列目录与游标也要清（A25）
+        reconcileDeletions(commandExecutor)
+    }
+
+    /**
+     * 启动期收敛墓碑：本地条目已不存在时，清掉残留的队列目录、游标、订阅与计数器。
+     *
+     * 启动同步发生在装配完成之前（`onDeleted` 尚未接线），所以这里补一遍，避免重启后
+     * 已删主题的段目录/游标文件跟着留下来。
+     */
+    private func reconcileDeletions(executor: MQCommandExecutor): Unit {
+        for (tombstone in meta.allTombstones()) {
+            let payload = if (tombstone.isTopic()) {
+                if (meta.topicOf(tombstone.topic).isSome()) {
+                    continue
+                }
+                MQDeregisterPayload(MQDeregisterPayload.TOPIC, tombstone.topic)
+            } else {
+                if (meta.groupExists(tombstone.topic, tombstone.subscribeGroup)) {
+                    continue
+                }
+                MQDeregisterPayload(MQDeregisterPayload.GROUP, tombstone.topic,
+                    subscribeGroup: tombstone.subscribeGroup)
+            }
+            try {
+                executor.cleanupAfterDelete(payload)
+            } catch (e: Exception) {
+                log.warn("startup cleanup for '${payload.topic}/${payload.subscribeGroup}' failed: ${e.message}")
+            }
+        }
     }
 
     protected prop port: UInt16 {
@@ -110,11 +168,16 @@ public class MQServer {
         let server = this.server
         let executor = this.executor
         spawn {
-            server.start {buffer, request => executor.execute(Some(buffer), request)}
+            server.start(executor.execute)
         }
         backup.start()
         cleaner.start()
-        cleanupTimer = Some(Timer.repeat(CLEANUP_INTERVAL, CLEANUP_INTERVAL, {=> cleanupSubscribers()}))
+        // 反熵：定时补齐广播丢失/离线期间错过的元数据变更（A31）
+        syncer.startAntiEntropy(options.antiEntropyInterval)
+        cleanupTimer = Some(Timer.repeat(CLEANUP_INTERVAL, CLEANUP_INTERVAL, {=>
+            cleanupSubscribers()
+            sweepTombstones()
+        }))
     }
 
     /** 阻塞运行（生产入口）。 */
@@ -126,27 +189,86 @@ public class MQServer {
         0
     }
 
-    /** 按相反顺序释放资源；幂等。 */
+    /**
+     * 关闭步骤（可覆写以便注入失败）：按相反顺序释放资源。
+     *
+     * 每一步单独 try/catch：单步失败不影响其它资源释放（A59）。
+     */
+    protected func closeSteps(): Array<(String, () -> Unit)> {
+        [
+            ("server", {=> server.close()}),
+            ("cleanupTimer", {=> cancelCleanupTimer()}),
+            ("antiEntropy", {=> syncer.close()}),
+            ("backup", {=> backup.close()}),
+            ("cleaner", {=> cleaner.close()}),
+            ("consume", {=> consume.close()}),
+            ("subscribers", {=> subscribers.clear()}),
+            ("backupStore", {=> backupStore.close()}),
+            ("queues.sync", {=> queues.sync()}),
+            ("queues", {=> queues.close()}),
+            ("deadLetter", {=> deadLetter.close()}),
+            ("meta", {=> meta.close()}),
+            ("registry", {=> registry.close()})
+        ]
+    }
+
+    /**
+     * 关闭：幂等、逐步容错、失败步骤可在下一次调用重试。
+     *
+     * `closed` 先置位让 `run()` 退出；只有全部步骤成功才算 `closeCompleted`。
+     */
     public func close(): Unit {
-        if (!closed.compareAndSwap(false, true)) {
-            return
+        synchronized(closeLock) {
+            if (closeCompleted) {
+                return
+            }
+            closed.store(true)
+            let failures = ArrayList<String>()
+            for ((name, step) in currentCloseSteps()) {
+                if (closeDone.contains(name)) {
+                    continue
+                }
+                try {
+                    step()
+                    closeDone.add(name)
+                } catch (e: Exception) {
+                    failures.add(name)
+                    log.error("close step '${name}' failed: ${e.message}")
+                }
+            }
+            closeCompleted = failures.size == 0
+            if (!closeCompleted) {
+                log.error("close incomplete, retry later: ${failures.toString()}")
+            }
         }
-        server.close()
+    }
+
+    /** 测试用：订阅表（注入断链订阅、断言清理结果）。 */
+    protected prop subscriptionRegistry: SubscriberRegistry {
+        get() {
+            subscribers
+        }
+    }
+
+    /** 测试用：替换关闭步骤（注入失败步骤，验证隔离与重试）。 */
+    protected func setCloseStepsOverride(provider: () -> Array<(String, () -> Unit)>): Unit {
+        this.closeStepsOverride = Some(provider)
+    }
+
+    private func currentCloseSteps(): Array<(String, () -> Unit)> {
+        match (closeStepsOverride) {
+            case Some(provider) => provider()
+            case None => closeSteps()
+        }
+    }
+
+    private func cancelCleanupTimer(): Unit {
         match (cleanupTimer) {
             case Some(timer) =>
                 timer.cancel()
                 cleanupTimer = None
             case None => ()
         }
-        backup.close()
-        cleaner.close()
-        consume.close()
-        backupStore.close()
-        queues.sync()
-        queues.close()
-        deadLetter.close()
-        meta.close()
-        registry.close()
     }
 
     public func isClosed(): Bool {
@@ -154,17 +276,44 @@ public class MQServer {
     }
 
     /** 清理已断开连接名下的订阅，并释放其已分配记录。 */
-    private func cleanupSubscribers(): Unit {
+    /**
+     * 断链巡检：按快照里的代次摘除，摘掉之后才释放记录。
+     *
+     * 期间同 `subscribedId` 被重订阅时 `unregister` 会失败，此时既不能释放记录，
+     * 也不能报告清理成功（A60/A70）。
+     */
+    protected func cleanupSubscribers(): Unit {
         for (info in subscribers.infos()) {
-            if (info.isDisconnected()) {
-                try {
-                    consume.releaseSubscription(info)
-                    subscribers.unregister(info.subscribedId)
-                    log.info("subscription ${info.subscribedId} removed after connection closed")
-                } catch (e: Exception) {
-                    log.warn("failed to cleanup subscription ${info.subscribedId}: ${e.message}")
-                }
+            if (!info.isDisconnected()) {
+                continue
             }
+            let result = subscribers.unregister(info.subscribedId, generation: info.generation)
+            if (result.code != 0) {
+                continue
+            }
+            try {
+                consume.releaseSubscription(info)
+                log.info("subscription ${info.subscribedId} removed after connection closed")
+            } catch (e: Exception) {
+                log.warn("failed to cleanup subscription ${info.subscribedId}: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * 回收过期墓碑：超过 `mqServer_tombstoneTTL` 且同 key 没有更新的活跃条目才删除。
+     *
+     * 单步异常只记 WARN：巡检下一轮继续（A41 同款隔离）。
+     */
+    protected func sweepTombstones(): Unit {
+        try {
+            let nowMs = DateTime.now().toUnixTimeStamp().toMilliseconds()
+            let removed = meta.gcTombstones(nowMs, options.tombstoneTTL.toMilliseconds())
+            if (removed > 0) {
+                log.info("collected ${removed} expired metadata tombstones")
+            }
+        } catch (e: Exception) {
+            log.warn("tombstone collection failed: ${e.message}")
         }
     }
 
@@ -173,4 +322,13 @@ public class MQServer {
             Directory.create(path, recursive: true)
         }
     }
+}
+
+/**
+ * 安装退出钩子：`SIGTERM`/`SIGINT` 时先执行全部 atExit 回调（含 `server.close()`）再退出。
+ *
+ * `install` 可注入，用例据此断言「只注册一次、且回调确实会关闭服务器」，不必真的发信号。
+ */
+public func installExitHooks(server: MQServer, install: (() -> Unit) -> Unit): Unit {
+    install({=> server.close()})
 }

@@ -27,22 +27,27 @@ import fountain::f_mq.base.payload.*
 import fountain::f_protocol.default.*
 import fountain::fmq.cluster.{BackupReplicator, MetaSyncer, NodeRegistry}
 import fountain::fmq.meta.MetaStore
+import fountain::fmq.metrics.MQMetrics
 import fountain::fmq.queue.*
+import fountain::fmq.test.TestDirs
 
 class ExecutorFixture <: Resource {
     let root: String
     let meta: MetaStore
     let queues: QueueManager
-    let cursors: CursorStore
+    let cursorStore: CursorStore
+    let cursors: CursorCatalog
     let dead: DeadLetterQueue
     let subscribers: SubscriberRegistry
+    let metrics: MQMetrics
     let consume: ConsumeService
     let executor: MQCommandExecutor
+    let syncer: MetaSyncer
     private let registry: NodeRegistry
     private let backup: BackupReplicator
 
     init(name: String, selfIndex!: Int64 = 0, nodes!: Array<String> = ["127.0.0.1:1"]) {
-        this.root = "/tmp/fmq_test_executor/${name}"
+        this.root = TestDirs.of("executor", name)
         if (exists(root)) {
             remove(root, recursive: true)
         }
@@ -50,21 +55,27 @@ class ExecutorFixture <: Resource {
         this.meta = MetaStore("${root}/metas")
         meta.load()
         this.registry = NodeRegistry(nodes, selfIndex)
-        let syncer = MetaSyncer(meta, registry)
+        this.syncer = MetaSyncer(meta, registry)
         this.queues = QueueManager("${root}/logs", 1024 * 1024, 1)
-        this.cursors = CursorStore("${root}/metas")
+        this.cursorStore = CursorStore("${root}/metas")
+        this.cursors = CursorCatalog(cursorStore, meta)
         this.dead = DeadLetterQueue("${root}/dead", 1024 * 1024, 1)
         this.subscribers = SubscriberRegistry()
+        let metrics = MQMetrics()
+        this.metrics = metrics
         this.consume = ConsumeService(queues, cursors, subscribers, MQMatcher(), dead,
-            Duration.second * 10, 3)
+            Duration.second * 10, 3, metrics: metrics)
         this.backup = BackupReplicator(registry, 0)
         let backupStore = BackupStore("${root}/logs", 1024 * 1024, 1)
         this.executor = MQCommandExecutor(meta, syncer, queues, cursors, subscribers, consume, backup,
             backupStore, selfIndex)
+        // 与 `MQServer` 的装配保持一致：peer 墓碑生效后清理本机状态（A25）
+        let commandExecutor = this.executor
+        syncer.onDeleted = {payload => commandExecutor.cleanupAfterDelete(payload)}
     }
 
     func call(message: Message): Message {
-        executor.execute(None, message).getOrThrow()
+        executor.execute(message).getOrThrow()
     }
 
     func registerTopic(topic: String, queueNum: Int64, delayingMs!: Int64 = 0): Message {
@@ -119,8 +130,54 @@ class MQCommandExecutorTest {
     }
 
     private static func bodyOf(result: MQConsumeResult): String {
-        let content = MQMessageRecord.decode(result.record).getOrThrow()
+        let content = MQMessageRecord.decode(result.record.copyBytes()).getOrThrow()
         convert<String>(content.body.data).getOrThrow()
+    }
+
+    /** 非法组名在注册入口被拒，且不落盘、不建目录（A05）。 */
+    @TestCase
+    public func registerGroupRejectsInvalidName(): Unit {
+        let fixture = ExecutorFixture("bad_group")
+        try {
+            @Assert(MQProtocol.asPayload<MQTopicAssignment>(fixture.registerTopic("/t", 1)).isSome())
+            for (name in ["g 1", "g:1", "g/1", "g%2F", ".g", "g."]) {
+                @Assert(codeOf(fixture.registerGroup("/t", name)) == MQErrorCode.INVALID_GROUP)
+            }
+            @Assert(!fixture.meta.groupExists("/t", "g 1"))
+            let dir = "${fixture.root}/metas/groups"
+            // 用数组做盒子：闭包不能捕获可变局部变量
+            let files = Array<Int64>(1, repeat: 0)
+            if (exists(dir)) {
+                Directory.walk(dir) {info: FileInfo =>
+                    if (!info.isDirectory()) {
+                        files[0] = files[0] + 1
+                    }
+                    true
+                }
+            }
+            @Assert(files[0] == 0)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** `kind` 拼错/大小写变体不得落到「删除订阅组」分支，也不得删任何东西（A10）。 */
+    @TestCase
+    public func deregisterWithUnknownKindDeletesNothing(): Unit {
+        let fixture = ExecutorFixture("bad_kind")
+        try {
+            @Assert(MQProtocol.asPayload<MQTopicAssignment>(fixture.registerTopic("/t", 1)).isSome())
+            @Assert(codeOf(fixture.registerGroup("/t", "g")) == 0)
+            for (kind in ["", "Topic", "GROUP", "subscriber", "topics"]) {
+                let response = fixture.call(
+                    MQProtocol.deregister(MQDeregisterPayload(kind, "/t", subscribeGroup: "g")))
+                @Assert(codeOf(response) == MQErrorCode.INTERNAL)
+            }
+            @Assert(fixture.meta.topicOf("/t").isSome())
+            @Assert(fixture.meta.groupExists("/t", "g"))
+        } finally {
+            fixture.close()
+        }
     }
 
     @TestCase
@@ -295,7 +352,7 @@ class MQCommandExecutorTest {
             // 空消费不是错误
             let empty = MQProtocol.asConsumeResult(
                 fixture.call(MQProtocol.consume(MQConsumePayload(sid)))).getOrThrow()
-            @Assert(empty.record.size == 0)
+            @Assert(empty.record.size() == 0)
         } finally {
             fixture.close()
         }
@@ -372,6 +429,120 @@ class MQCommandExecutorTest {
         }
     }
 
+    /** 内部 metaSync 的三条变更分支（主题 / 组 / 墓碑）都能落地并生效（A67）。 */
+    @TestCase
+    public func internalMetaSyncAppliesTopicGroupAndTombstone(): Unit {
+        let fixture = ExecutorFixture("internal_apply")
+        try {
+            @Assert(codeOf(fixture.call(MQProtocol.metaSync(
+                MQTopicAssignment("/t", 1, 0, [0], revision: 1)))) == 0)
+            @Assert(fixture.meta.topicOf("/t").isSome())
+            // 广播路径也要为本机打开队列，否则发布得到 NOT_OWNER
+            @Assert(fixture.queues.queueOf("/t", 0).isSome())
+
+            @Assert(codeOf(fixture.call(MQProtocol.metaSync(
+                MQSubscribeGroupMeta("/t", "g", revision: 2)))) == 0)
+            @Assert(fixture.meta.groupExists("/t", "g"))
+
+            let tombstone = MQMetaTombstone(MQMetaTombstone.KIND_TOPIC, "/t", "", 9, 0, 0)
+            @Assert(codeOf(fixture.call(MQProtocol.metaSync(tombstone))) == 0)
+            @Assert(fixture.meta.topicOf("/t").isNone())
+            @Assert(!fixture.meta.groupExists("/t", "g"))
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** peer 的主题墓碑生效后，队列目录 / 游标文件 / 订阅 / 计数器全部清空（A25/F1）。 */
+    @TestCase
+    public func topicTombstoneFromPeerClearsLocalState(): Unit {
+        let fixture = ExecutorFixture("tombstone_topic_cleanup")
+        try {
+            @Assert(MQProtocol.asPayload<MQTopicAssignment>(fixture.registerTopic("/t", 1)).isSome())
+            @Assert(codeOf(fixture.registerGroup("/t", "g")) == 0)
+            let sid = "sid-tomb-topic"
+            @Assert(codeOf(fixture.call(
+                MQProtocol.subscribe(MQSubscribePayload(sid, "/t", "g", [], "", false)))) == 0)
+            fixture.publish("/t", "one".toData())
+            let message = MQProtocol.asConsumeResult(
+                fixture.call(MQProtocol.consume(MQConsumePayload(sid)))).getOrThrow()
+            @Assert(codeOf(fixture.call(MQProtocol.ack(
+                MQAckPayload(sid, message.queueIndex, message.segmentedIndex, message.segmentedOffset)))) == 0)
+
+            let queueDir = "${fixture.root}/logs/%2Ft"
+            let cursorFile = "${fixture.root}/metas/offsets/%2Ft/0/g.cursor"
+            @Assert(exists(queueDir))
+            @Assert(exists(cursorFile))
+            @Assert(fixture.subscribers.of(sid).isSome())
+            @Assert(fixture.metrics.deliveredOf("/t", "g") > 0)
+
+            // peer 广播的墓碑（origin != 本机下标）
+            @Assert(codeOf(fixture.call(MQProtocol.metaSync(
+                MQMetaTombstone(MQMetaTombstone.KIND_TOPIC, "/t", "", 99, 1, 0)))) == 0)
+
+            @Assert(!exists(queueDir))
+            @Assert(!exists(cursorFile))
+            @Assert(fixture.subscribers.of(sid).isNone())
+            @Assert(fixture.metrics.deliveredOf("/t", "g") == 0)
+            @Assert(fixture.metrics.ackedOf("/t", "g") == 0)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** peer 的组墓碑生效后，只清该组的游标/订阅/计数器，主题队列保留（A25/F1）。 */
+    @TestCase
+    public func groupTombstoneFromPeerClearsGroupStateOnly(): Unit {
+        let fixture = ExecutorFixture("tombstone_group_cleanup")
+        try {
+            @Assert(MQProtocol.asPayload<MQTopicAssignment>(fixture.registerTopic("/t", 1)).isSome())
+            @Assert(codeOf(fixture.registerGroup("/t", "g1")) == 0)
+            @Assert(codeOf(fixture.registerGroup("/t", "g2")) == 0)
+            let sid1 = "sid-tomb-g1"
+            let sid2 = "sid-tomb-g2"
+            @Assert(codeOf(fixture.call(
+                MQProtocol.subscribe(MQSubscribePayload(sid1, "/t", "g1", [], "", false)))) == 0)
+            @Assert(codeOf(fixture.call(
+                MQProtocol.subscribe(MQSubscribePayload(sid2, "/t", "g2", [], "", true)))) == 0)
+            fixture.publish("/t", "one".toData())
+            let first = MQProtocol.asConsumeResult(
+                fixture.call(MQProtocol.consume(MQConsumePayload(sid1)))).getOrThrow()
+            @Assert(codeOf(fixture.call(MQProtocol.ack(
+                MQAckPayload(sid1, first.queueIndex, first.segmentedIndex, first.segmentedOffset)))) == 0)
+
+            let g1Cursor = "${fixture.root}/metas/offsets/%2Ft/0/g1.cursor"
+            @Assert(exists(g1Cursor))
+            @Assert(fixture.metrics.deliveredOf("/t", "g1") > 0)
+
+            @Assert(codeOf(fixture.call(MQProtocol.metaSync(
+                MQMetaTombstone(MQMetaTombstone.KIND_GROUP, "/t", "g1", 99, 1, 0)))) == 0)
+
+            @Assert(!exists(g1Cursor))
+            @Assert(fixture.subscribers.of(sid1).isNone())
+            @Assert(fixture.metrics.deliveredOf("/t", "g1") == 0)
+            // 主题与另一个组不受影响
+            @Assert(exists("${fixture.root}/logs/%2Ft"))
+            @Assert(fixture.meta.topicOf("/t").isSome())
+            @Assert(fixture.meta.groupExists("/t", "g2"))
+            @Assert(fixture.subscribers.of(sid2).isSome())
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 未知命令回 `ERROR(INTERNAL)`，不能静默丢弃（A67）。 */
+    @TestCase
+    public func unknownCommandReturnsInternalError(): Unit {
+        let fixture = ExecutorFixture("unknown_cmd")
+        try {
+            let response = fixture.call(Message(Command.PING(0)))
+            @Assert(response.command == Command.ERROR)
+            @Assert(codeOf(response) == MQErrorCode.INTERNAL)
+        } finally {
+            fixture.close()
+        }
+    }
+
     @TestCase
     public func deregisterTopicDeletesFilesAndMetadata(): Unit {
         let fixture = ExecutorFixture("deregister")
@@ -399,7 +570,7 @@ class MQCommandExecutorTest {
             fixture.publish("/t", "one".toData())
             let message = MQProtocol.asConsumeResult(
                 fixture.call(MQProtocol.consume(MQConsumePayload(sid)))).getOrThrow()
-            @Assert(message.record.size > 0)
+            @Assert(message.record.size() > 0)
             @Assert(codeOf(fixture.call(MQProtocol.unsubscribe(MQUnsubscribePayload(sid)))) == 0)
             @Assert(fixture.subscribers.of(sid).isNone())
             // 未知订阅退订

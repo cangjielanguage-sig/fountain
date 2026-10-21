@@ -153,6 +153,7 @@ public struct Message <: Protocol<EncodedMessage, Message> {
     public static func subscribe<T>(data!: T): Message where T <: ToData
     public static func unsubscribe(id: MessageID, data!: T): Message where T <: ToData
     public static func unsubscribe(id: MessageID): Message
+    public static func unsubscribe<T>(data!: T): Message where T <: ToData  // Auto-generated MessageID, with payload
     public static func consume<T>(once!: Bool, qos!: QoS, data!: T): Message where T <: ToData
     public static func resp<T>(id: MessageID, qos!: QoS, ack!: Bool, data!: T): Message where T <: ToData
     public static func ping(): Message
@@ -186,6 +187,10 @@ public class MessageID <: Hashable & Equatable<MessageID> & ToString {
 ```
 
 - The equality/hash of `MessageID` **uses only `time`/`pid`/`tid`** (`hostId` does not participate);
+- `unsubscribe<T>(data!)` mirrors `subscribe<T>(data!)`: it generates a `MessageID` automatically and
+  carries a payload. `f_dbd` uses it to send `QueryResultClosePayload(qid)` when closing a cursor
+  (the server answers with `ACK`). The existing `unsubscribe(id)` / `unsubscribe(id, data!)`
+  overloads are unchanged;
 - `EncodedMessage` implements `Releasable`: **`release()` must be called after writing it out** (idempotent), and also when writing fails;
 - `Message.decode<T>` validates against the `len` in the frame head and `SizeBoundedInput.remainingBytes` before decoding, so that a peer "claiming an oversized length" cannot hang the other side.
 

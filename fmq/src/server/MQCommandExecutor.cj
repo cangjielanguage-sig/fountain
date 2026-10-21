@@ -16,6 +16,8 @@ limitations under the License.
 package fountain::fmq.server
 
 import std.collection.ArrayList
+import fountain::f_base.unsafeZeroValue
+import fountain::f_io.LogPosition
 import fountain::f_log.*
 import fountain::f_mq.base.*
 import fountain::f_mq.base.model.*
@@ -25,8 +27,10 @@ import fountain::f_net.SocketBuffer
 import fountain::f_protocol.default.*
 import fountain::fmq.cluster.{BackupReplicator, MetaSyncer}
 import fountain::fmq.meta.{MetaApplyResult, MetaStore}
-import fountain::fmq.queue.{CursorStore, MQMatcher, QueueManager}
+import fountain::fmq.queue.{CursorCatalog, MQMatcher, QueueManager}
 
+/** 无连接的哨兵值：只允许 `refEq` 比较，禁止解引用。 */
+internal let EMPTY_SOCKET_BUFFER = unsafeZeroValue<SocketBuffer>()
 /**
  * 命令分发：解析 → 校验 → 调服务 → 组装响应。
  *
@@ -38,14 +42,14 @@ protected class MQCommandExecutor {
     private let store: MetaStore
     private let syncer: MetaSyncer
     private let queues: QueueManager
-    private let cursors: CursorStore
+    private let cursors: CursorCatalog
     private let subscribers: SubscriberRegistry
     private let consume: ConsumeService
     private let backup: BackupReplicator
     private let backupStore: BackupStore
     private let selfIndex: Int64
 
-    protected init(store: MetaStore, syncer: MetaSyncer, queues: QueueManager, cursors: CursorStore,
+    protected init(store: MetaStore, syncer: MetaSyncer, queues: QueueManager, cursors: CursorCatalog,
         subscribers: SubscriberRegistry, consume: ConsumeService, backup: BackupReplicator,
         backupStore: BackupStore, selfIndex: Int64) {
         this.store = store
@@ -59,10 +63,20 @@ protected class MQCommandExecutor {
         this.selfIndex = selfIndex
     }
 
-    public func execute(buffer: ?SocketBuffer, request: Message): ?Message {
+    /** 生产入口：`f_net.Server.start` 直接传方法引用，连接恒非空。 */
+    public func execute(buffer: SocketBuffer, request: Message): ?Message {
+        dispatch(buffer, request)
+    }
+
+    /** 无连接入口：仅供单测与内部调用，订阅不绑定连接。 */
+    protected func execute(request: Message): ?Message {
+        dispatch(EMPTY_SOCKET_BUFFER, request)
+    }
+
+    private func dispatch(buffer: SocketBuffer, request: Message): ?Message {
         try {
             match (request.command) {
-                case REGISTER => Some(onRegister(buffer, request))
+                case REGISTER => Some(onRegister(request))
                 case DEREGISTER => Some(onDeregister(request))
                 case PUBLISH(_) => Some(onPublish(request))
                 case SUBSCRIBE => Some(onSubscribe(buffer, request))
@@ -74,6 +88,12 @@ protected class MQCommandExecutor {
                     Some(MQProtocol.fail(request, MQErrorCode.INTERNAL, "unsupported command"))
             }
         } catch (e: MQServiceException) {
+            // 服务端自身故障（INTERNAL）必须留日志；NOT_OWNER/ACK_UNKNOWN 等正常应答只记 DEBUG
+            if (e.code == MQErrorCode.INTERNAL) {
+                log.warn("execute ${request.command} failed with code ${e.code}: ${e.message}")
+            } else {
+                log.debug("execute ${request.command} rejected with code ${e.code}: ${e.message}")
+            }
             Some(MQProtocol.fail(request, e.code, e.message))
         } catch (e: Exception) {
             log.warn("execute ${request.command} failed: ${e.message}")
@@ -81,11 +101,15 @@ protected class MQCommandExecutor {
         }
     }
 
-    private func onRegister(buffer: ?SocketBuffer, request: Message): Message {
+    private func onRegister(request: Message): Message {
         match (MQProtocol.kindOf(request)) {
             case MQPayloadKind.TopicMeta =>
                 let meta = MQProtocol.asPayload<MQTopicMeta>(request).getOrThrow {
                     MQServiceException(MQErrorCode.INTERNAL, "cannot decode MQTopicMeta")
+                }
+                if (!MQTopic.isValid(meta.topic)) {
+                    return MQProtocol.fail(request, MQErrorCode.INVALID_TOPIC,
+                        "invalid topic '${meta.topic}'")
                 }
                 let assignment = syncer.registerTopic(meta)
                 queues.openTopic(assignment, selfIndex)
@@ -93,6 +117,14 @@ protected class MQCommandExecutor {
             case MQPayloadKind.GroupMeta =>
                 let meta = MQProtocol.asPayload<MQSubscribeGroupMeta>(request).getOrThrow {
                     MQServiceException(MQErrorCode.INTERNAL, "cannot decode MQSubscribeGroupMeta")
+                }
+                if (!MQTopic.isValid(meta.topic)) {
+                    return MQProtocol.fail(request, MQErrorCode.INVALID_TOPIC,
+                        "invalid topic '${meta.topic}'")
+                }
+                if (!MQGroup.isValid(meta.subscribeGroup)) {
+                    return MQProtocol.fail(request, MQErrorCode.INVALID_GROUP,
+                        "invalid subscribe group '${meta.subscribeGroup}'")
                 }
                 syncer.registerGroup(meta)
                 MQProtocol.respond<MQResult>(request, MQResult(0, "ok"))
@@ -119,8 +151,8 @@ protected class MQCommandExecutor {
             return MQProtocol.fail(request, MQErrorCode.INTERNAL, "unsupported internal kind '${envelope.kind}'")
         }
         // 子载荷类型由编码时的类型 murmur 决定，逐个尝试即可精确分派
-        if (let Some(syncRequest) <- MQProtocol.decodePayload<MQMetaSyncRequest>(envelope.payload)) {
-            return MQProtocol.respond<MQMetaSnapshot>(request, syncer.snapshotFor(syncRequest.requesterIndex))
+        if (MQProtocol.decodePayload<MQMetaSyncRequest>(envelope.payload).isSome()) {
+            return MQProtocol.respond<MQMetaSnapshot>(request, syncer.snapshotFor())
         }
         if (let Some(assignment) <- MQProtocol.decodePayload<MQTopicAssignment>(envelope.payload)) {
             let result = syncer.applyRemote(assignment)
@@ -133,7 +165,14 @@ protected class MQCommandExecutor {
             syncer.applyRemoteGroup(meta)
             return MQProtocol.respond<MQResult>(request, MQResult(0, "ok"))
         }
+        if (let Some(tombstone) <- MQProtocol.decodePayload<MQMetaTombstone>(envelope.payload)) {
+            syncer.applyRemoteTombstone(tombstone)
+            return MQProtocol.respond<MQResult>(request, MQResult(0, "ok"))
+        }
         if (let Some(payload) <- MQProtocol.decodePayload<MQDeregisterPayload>(envelope.payload)) {
+            if (payload.kindOf() == DeregisterKind.Unknown) {
+                return MQProtocol.fail(request, MQErrorCode.INTERNAL, "invalid deregister kind")
+            }
             syncer.applyRemoteDelete(payload)
             cleanupAfterDelete(payload)
             return MQProtocol.respond<MQResult>(request, MQResult(0, "ok"))
@@ -142,8 +181,27 @@ protected class MQCommandExecutor {
     }
 
     private func onDeregister(request: Message): Message {
+        // 墓碑/旧版删除广播走 `DEREGISTER` + 内部信封（MQProtocol.metaSync 重载），
+        // 必须先按内部消息分派，否则会被当成普通注销载荷解码失败（A25）。
+        if (MQProtocol.kindOf(request) == MQPayloadKind.Internal) {
+            return onInternal(request)
+        }
         let payload = MQProtocol.asPayload<MQDeregisterPayload>(request).getOrThrow {
             MQServiceException(MQErrorCode.INTERNAL, "cannot decode MQDeregisterPayload")
+        }
+        // kind 是封闭枚举：拼错/大小写变体/空串一律拒绝，绝不落到「删除订阅组」分支（A10）
+        match (payload.kindOf()) {
+            case DeregisterKind.Topic =>
+                if (!MQTopic.isValid(payload.topic)) {
+                    return MQProtocol.fail(request, MQErrorCode.INVALID_TOPIC, "invalid topic '${payload.topic}'")
+                }
+            case DeregisterKind.Group =>
+                if (!MQGroup.isValid(payload.subscribeGroup)) {
+                    return MQProtocol.fail(request, MQErrorCode.INVALID_GROUP,
+                        "invalid subscribe group '${payload.subscribeGroup}'")
+                }
+            case DeregisterKind.Unknown =>
+                return MQProtocol.fail(request, MQErrorCode.INTERNAL, "invalid deregister kind")
         }
         syncer.deregister(payload)
         cleanupAfterDelete(payload)
@@ -158,13 +216,18 @@ protected class MQCommandExecutor {
         names.toArray()
     }
 
-    private func cleanupAfterDelete(payload: MQDeregisterPayload): Unit {
-        if (payload.isTopic()) {
+    /**
+     * 删除生效后的本机清理：队列目录、组游标、订阅、指标计数器。
+     *
+     * 直连注销路径由本类调用；peer 收到的墓碑由 `MetaSyncer.onDeleted` 回调到这里（A25）。
+     */
+    protected func cleanupAfterDelete(payload: MQDeregisterPayload): Unit {
+        if (payload.kindOf() == DeregisterKind.Topic) {
             queues.closeTopic(payload.topic, deleteFiles: true)
             consume.removeTopic(payload.topic)
             subscribers.removeByTopic(payload.topic)
             cursors.removeAllOf(payload.topic)
-        } else {
+        } else if (payload.kindOf() == DeregisterKind.Group) {
             consume.removeGroup(payload.topic, payload.subscribeGroup)
             subscribers.removeByGroup(payload.topic, payload.subscribeGroup)
             cursors.removeGroup(payload.topic, payload.subscribeGroup)
@@ -178,8 +241,19 @@ protected class MQCommandExecutor {
                 let payload = MQProtocol.decodePayload<MQBackupPayload>(internal.payload).getOrThrow {
                     MQServiceException(MQErrorCode.INTERNAL, "cannot decode MQBackupPayload")
                 }
+                // 先落记录，再落位点：位点只进不退，重复批次不会回退恢复点（A26）
                 for (i in 0..payload.records.size) {
-                    backupStore.append(payload.ownerIndex, payload.topic, payload.queueIndex, payload.records[i])
+                    backupStore.append(payload.ownerIndex, payload.topic, payload.queueIndex,
+                        payload.records[i].copyBytes())
+                }
+                if (payload.records.size != payload.states.size) {
+                    log.warn("backup batch of ${payload.topic}/${payload.queueIndex} has " +
+                        "${payload.records.size} records but ${payload.states.size} states, cursors are skipped")
+                } else {
+                    for (cursor in payload.cursors) {
+                        backupStore.saveCursor(payload.ownerIndex, payload.topic, payload.queueIndex,
+                            cursor.group, LogPosition(cursor.segmentedIndex, cursor.segmentedOffset))
+                    }
                 }
                 return MQProtocol.respond<MQResult>(request, MQResult(0, "ok"))
             }
@@ -227,12 +301,19 @@ protected class MQCommandExecutor {
         true
     }
 
-    private func onSubscribe(buffer: ?SocketBuffer, request: Message): Message {
+    private func onSubscribe(buffer: SocketBuffer, request: Message): Message {
         let payload = MQProtocol.asPayload<MQSubscribePayload>(request).getOrThrow {
             MQServiceException(MQErrorCode.INTERNAL, "cannot decode MQSubscribePayload")
         }
         if (!MQTopic.isValid(payload.topic)) {
             return MQProtocol.fail(request, MQErrorCode.INVALID_TOPIC, "invalid topic '${payload.topic}'")
+        }
+        if (!MQGroup.isValid(payload.subscribeGroup)) {
+            return MQProtocol.fail(request, MQErrorCode.INVALID_GROUP,
+                "invalid subscribe group '${payload.subscribeGroup}'")
+        }
+        if (!MQTags.isValid(payload.tags)) {
+            return MQProtocol.fail(request, MQErrorCode.INTERNAL, "invalid tags")
         }
         if (store.topicOf(payload.topic).isNone()) {
             return MQProtocol.fail(request, MQErrorCode.TOPIC_NOT_EXIST,

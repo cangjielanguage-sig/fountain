@@ -21,11 +21,12 @@ import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_io.LogPosition
 import fountain::fmq.meta.MQFileNames
+import fountain::fmq.test.TestDirs
 
 @Test
 class CursorStoreTest {
     private static func rootOf(name: String): String {
-        "/tmp/fmq_test_cursor_store/${name}"
+        TestDirs.of("cursor_store", name)
     }
 
     private static func clean(root: String): Unit {

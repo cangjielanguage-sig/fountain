@@ -15,9 +15,10 @@ limitations under the License.
  */
 package fountain::fmq
 
+import fountain::f_base.ExitCallbacks
 import fountain::fmq.config.MQConfigException
 import fountain::fmq.manager.{MQManager, MQManagerArgs}
-import fountain::fmq.server.MQServer
+import fountain::fmq.server.{MQServer, installExitHooks}
 
 /**
  * fmq 可执行文件入口：`server` / `manager` / `--help` 分发。
@@ -34,11 +35,38 @@ main(args: Array<String>): Int64 {
  * - `manager`：解析参数并执行一次管理命令。
  */
 func dispatch(args: Array<String>): Int64 {
+    dispatchWith({=> runServer()}, {rest => runManager(rest)}, args)
+}
+
+/**
+ * 可注入的分发实现：`serverFactory` / `managerFactory` 让启动路径可测（A68）。
+ *
+ * 生产入口 `dispatch` 只是把两个真实工厂传进来。
+ */
+func dispatchWith(serverFactory: () -> Int64, managerFactory: (Array<String>) -> Int64,
+    args: Array<String>): Int64 {
     if (args.size == 0) {
         println(MQUsage.root())
         return 2
     }
-    let command = args[0]
+    // 允许配置参数前置：`fmq --mqServer_port=2400 server`（A69）
+    var commandIndex = -1i64
+    for (i in 0..args.size) {
+        if (!args[i].startsWith("-")) {
+            commandIndex = i
+            break
+        }
+    }
+    if (commandIndex < 0) {
+        // 只有选项没有子命令：`--help` 视为请求帮助
+        if (wantsHelp(args)) {
+            println(MQUsage.root())
+            return 0
+        }
+        println(MQUsage.root())
+        return 2
+    }
+    let command = args[commandIndex]
     if (command == "--help" || command == "-h") {
         println(MQUsage.root())
         return 0
@@ -48,23 +76,26 @@ func dispatch(args: Array<String>): Int64 {
             println(MQUsage.serverHelp())
             return 0
         }
-        return runServer()
+        return serverFactory()
     }
     if (command == "manager") {
         if (wantsHelp(args)) {
             println(MQUsage.managerHelp())
             return 0
         }
-        let parsed = MQManagerArgs.parse(args[1..])
-        match (parsed) {
-            case None =>
-                println(MQManagerArgs.helpText())
-                2
-            case Some(value) => MQManager(value).run()
-        }
-    } else {
-        println(MQUsage.root())
-        2
+        return managerFactory(args[commandIndex + 1..])
+    }
+    println(MQUsage.root())
+    2
+}
+
+/** 管理端子命令：解析参数并执行一次。 */
+private func runManager(args: Array<String>): Int64 {
+    match (MQManagerArgs.parse(args)) {
+        case None =>
+            println(MQManagerArgs.helpText())
+            2
+        case Some(value) => MQManager(value).run()
     }
 }
 
@@ -79,7 +110,11 @@ private func runServer(): Int64 {
         eprintln("fmq server: ${e.message}")
         return 2
     }
-    server.getOrThrow().run()
+    let instance = server.getOrThrow()
+    // 只在 server 分支安装：manager / --help 不需要
+    ExitCallbacks.toExitGracefully()
+    installExitHooks(instance, {close => ExitCallbacks.atExit(0, close)})
+    instance.run()
 }
 
 private func wantsHelp(args: Array<String>): Bool {

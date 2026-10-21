@@ -30,6 +30,22 @@ protected interface MQNodeTransport {
     /** 向指定节点发一次请求；失败返回 `None`（不抛异常）。 */
     func send(index: Int64, message: Message): ?Message
 
+    /**
+     * 该节点是否「已知死亡」（最近一次调用失败）。
+     *
+     * 与 `isAlive` 不同：从未调用过的节点是「未知」，不算已知死亡。广播据此跳过
+     * 已被判定不可达的节点，把补偿交给反熵同步（A40）。
+     */
+    func isKnownDead(index: Int64): Bool
+
+    /**
+     * 该节点最近一次交互确认存活。
+     *
+     * 与 `isKnownDead` 互补：两者都为假表示「未知」（从未成功调用过）。
+     * 反熵据此分层选点：未知 → 存活 → 已知死亡（A40）。
+     */
+    func isAlive(index: Int64): Bool
+
     /** 环形后继节点（用于备份副本）。 */
     func successors(count: Int64): Array<Int64>
 }

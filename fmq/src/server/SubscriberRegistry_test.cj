@@ -19,12 +19,43 @@ import std.sync.AtomicInt64
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_mq.base.{MQErrorCode, MQFilter}
-import fountain::f_net.SocketBuffer
 
 @Test
 class SubscriberRegistryTest {
     private static func info(id: String, topic: String, group: String, tags!: Array<String> = []): MQSubscriptionInfo {
-        MQSubscriptionInfo(id, topic, group, tags, MQFilter.compile(""), false, None<SocketBuffer>)
+        MQSubscriptionInfo(id, topic, group, tags, MQFilter.compile(""), false, EMPTY_SOCKET_BUFFER)
+    }
+
+    /** 每次登记代次自增；旧快照的注销不得删掉新订阅（A60）。 */
+    @TestCase
+    public func generationGuardsReSubscription(): Unit {
+        let registry = SubscriberRegistry()
+        registry.register(info("s1", "/a", "g1"))
+        let firstGeneration = registry.of("s1").getOrThrow().generation
+        // 同一 id 重订阅
+        registry.register(info("s1", "/a", "g1"))
+        let secondGeneration = registry.of("s1").getOrThrow().generation
+        @Assert(secondGeneration > firstGeneration)
+        // 巡检携带旧代次：拒绝
+        @Assert(registry.unregister("s1", generation: firstGeneration).code ==
+            MQErrorCode.SUBSCRIBE_NOT_EXIST)
+        @Assert(registry.of("s1").isSome())
+        // 当前代次可以删
+        @Assert(registry.unregister("s1", generation: secondGeneration).code == 0)
+        @Assert(registry.of("s1").isNone())
+    }
+
+    /** 断链订阅不算活跃：否则其名下记录永远不回组（A55）。 */
+    @TestCase
+    public func activeIdsSkipDisconnectedSubscriptions(): Unit {
+        let registry = SubscriberRegistry()
+        registry.register(info("s1", "/a", "g1"))
+        let dead = MQSubscriptionInfo("s2", "/a", "g1", [], MQFilter.compile(""), false, EMPTY_SOCKET_BUFFER,
+            alive: {=> false})
+        registry.register(dead)
+        let active = registry.activeIds("/a", "g1")
+        @Assert(active == ["s1"])
+        @Assert(registry.byGroupOf("/a", "g1").size == 2)
     }
 
     @TestCase

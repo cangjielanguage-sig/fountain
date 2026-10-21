@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::fmq.metrics
 
+import std.collection.ArrayList
 import std.collection.concurrent.ConcurrentHashMap
 import std.sync.AtomicInt64
 
@@ -41,6 +42,41 @@ protected class MQMetrics {
         match (counters.get(key(topic, group, name))) {
             case Some(counter) => counter.load()
             case None => 0
+        }
+    }
+
+    /** 删除主题时清空计数器，避免同名重建复用旧值（A61）。 */
+    protected func removeTopic(topic: String): Unit {
+        let prefix = "${topic}\u{0}"
+        let victims = ArrayList<String>()
+        for ((key, _) in counters) {
+            if (key.startsWith(prefix)) {
+                victims.add(key)
+            }
+        }
+        for (key in victims) {
+            counters.remove(key)
+        }
+    }
+
+    /** 删除订阅组时清空计数器。 */
+    protected func removeGroup(topic: String, group: String): Unit {
+        let prefix = "${topic}\u{0}${group}\u{0}"
+        let victims = ArrayList<String>()
+        for ((key, _) in counters) {
+            if (key.startsWith(prefix)) {
+                victims.add(key)
+            }
+        }
+        for (key in victims) {
+            counters.remove(key)
+        }
+    }
+
+    /** 当前计数器条目数（用例断言清理效果）。 */
+    protected prop size: Int64 {
+        get() {
+            counters.size
         }
     }
 
