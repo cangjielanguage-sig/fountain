@@ -217,6 +217,35 @@ class MQProtocolTest {
         @Assert(decodedTombstone.subscribeGroup == "g")
     }
 
+    /**
+     * `metaSync(MQDeregisterPayload)` 重载：命令为 `DEREGISTER`，子载荷可解出且字段一致（A06）。
+     */
+    @TestCase
+    public func metaSyncDeregisterPayloadRoundtrips(): Unit {
+        let payload = MQDeregisterPayload(MQDeregisterPayload.TOPIC, "/t")
+        let message = roundtripFrame(MQProtocol.metaSync(payload))
+        @Assert(message.command == DEREGISTER)
+        let internal = MQProtocol.asInternal(message).getOrThrow()
+        @Assert(internal.kind == MQInternalKind.META_SYNC)
+        let decoded = MQProtocol.decodePayload<MQDeregisterPayload>(internal.payload).getOrThrow()
+        @Assert(decoded.kind == MQDeregisterPayload.TOPIC)
+        @Assert(decoded.topic == "/t")
+    }
+
+    /** 五个 `metaSync` 重载的子载荷类型互不串台（A06）。 */
+    @TestCase
+    public func metaSyncSubPayloadsDoNotCrossRead(): Unit {
+        let deregister = MQProtocol.asInternal(
+            MQProtocol.metaSync(MQDeregisterPayload(MQDeregisterPayload.GROUP, "/t", subscribeGroup: "g"))).getOrThrow()
+        @Assert(MQProtocol.decodePayload<MQDeregisterPayload>(deregister.payload).getOrThrow().subscribeGroup == "g")
+        @Assert(MQProtocol.decodePayload<MQSubscribeGroupMeta>(deregister.payload).isNone())
+
+        let assignment = MQProtocol.asInternal(
+            MQProtocol.metaSync(MQTopicAssignment("/t", 1, 0, [0]))).getOrThrow()
+        @Assert(MQProtocol.decodePayload<MQTopicAssignment>(assignment.payload).isSome())
+        @Assert(MQProtocol.decodePayload<MQMetaTombstone>(assignment.payload).isNone())
+    }
+
     /** 标量与字符串载荷必须可读：类型闸门不能把非对象载荷一律判死（R1-S1）。 */
     @TestCase
     public func scalarPayloadsAreReadable(): Unit {
