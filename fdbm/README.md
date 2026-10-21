@@ -75,6 +75,42 @@ fdbm                                                              # 无子命令
 `SHOW TABLES [<logical>]` 按逻辑库解析物理库；会话默认库取排序首个逻辑库（多逻辑库部署用
 `<logical>.<table>` 限定）。
 
+## SQL 能力
+
+fdbm 解析并重写 SQL 子集，方言由物理驱动名决定：含 `postgres` / `pgsql` / `opengauss`
+按 PostgreSQL 家族，含 `mysql` / `mariadb` 按 MySQL 家族，其它按 SQL 标准（双引号引用标识符）。
+
+| 语句 | 支持要点 |
+| --- | --- |
+| `SELECT` | 列清单 / `*` / `DISTINCT` / 多表 / `[INNER\|LEFT\|RIGHT] JOIN ... ON` / `WHERE`（比较、`AND`/`OR`/`NOT`、`IN`、`LIKE`、括号）/ `ORDER BY` / `LIMIT` / `OFFSET` / `?`；`count(*)`；受限派生表 `FROM (<select>) [AS] alias` |
+| `INSERT` | 多行 `VALUES` / `SET` / `INSERT ... SELECT`（拆成 SELECT + 逐行 INSERT）/ `RETURNING <列>`（仅 PostgreSQL 家族、单目标路由） |
+| `UPDATE` | 单表或 JOIN 更新；无分库列条件 → `ROUTE_FAILED` |
+| `DELETE` | 先按条件查出受影响行的分库键，再逐库删除并累加 `rowCount`；无分库列条件 → 拒绝（不做全分片删除） |
+| `SHOW` | `SHOW DATABASES`；`SHOW TABLES [<logical>] [LIKE '...']`（按方言查询，列名统一为 `table_name`） |
+| DDL | `CREATE TABLE` / `ALTER TABLE` 原样透传到逻辑库的全部物理库（不解析 DDL） |
+| 其它 | `EXPORT <key>=<value>` 修改配置并落 `boot.sh`；`BEGIN` / `COMMIT` / `ROLLBACK` / `SAVEPOINT` 透传到会话 pin 住的物理连接 |
+
+本期新增或明确的 SQL 行为：
+
+- **`INSERT ... RETURNING`**：PostgreSQL 家族 + 单目标路由可用；返回列必须是整型，取首行首列作为
+  `lastInsertId`，多行 `VALUES` 取最后一行。非 PostgreSQL 家族 → `UNSUPPORTED_SQL`；广播写或
+  `Multi` 路由 → `ROUTE_FAILED`；`returning *` / 表达式 / `insert ... select ... returning` →
+  `UNSUPPORTED_SQL`。
+- **`count(*)`**：`Single` 按原语句下推；`Multi` / 广播 / `Unroutable` 逐库执行并求和；`Empty`
+  直接返回 `0`；全全局表只读一份副本。事务 pin 下命中多个物理库 → `ROUTE_FAILED`。
+- **派生表分页**：外层只允许「唯一派生表 + 列清单 / 唯一 `count(*)` + 可选 `LIMIT`/`OFFSET`」；
+  带 `LIMIT`/`OFFSET` 且目标库多于一个 → `ROUTE_FAILED`（不做跨分片错页）。
+- **参数化分页**：`LIMIT ?` / `OFFSET ?` 在参数绑定后参与路由与渲染。
+- **十六进制字面量**：`X'...'` 在 MySQL 原样下推，在 PostgreSQL 渲染为 bytea 的 `'\x...'`。
+- **标识符引用**：只重写带引用符的标识符（PostgreSQL `"..."`、MySQL `` `...` ``），裸名保持原样。
+- **全局表写入**：INSERT / UPDATE / DELETE 广播到逻辑库的全部物理库；读只取一份副本。
+- **DDL 部分失败**：广播到多个物理库时若某个库失败，已执行的分支不会自动回滚，错误信息给出失败库。
+
+不支持：除 `count(*)` 外的聚合、`count(<表达式>)`、其它函数调用、派生表以外的子查询、`UNION`、
+`GROUP BY`、`HAVING`、存储过程等，统一报 `UNSUPPORTED_SQL`（错误信息带语句位置）。
+`count(*)` 无 `FROM` 或与 `LIMIT`/`OFFSET`/`DISTINCT`/`ORDER BY` 同用、派生表外层带
+`WHERE` / JOIN / `ORDER BY` / `DISTINCT` / `GROUP BY`，同样报 `UNSUPPORTED_SQL`。
+
 ## 协议口径
 
 与 [f_dbd](../f_dbd) 一致，这里是服务端实现：
