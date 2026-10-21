@@ -30,6 +30,9 @@ public interface IdGenerator {
   `uuid` / `snowflake` ignore the table; `sequence` allocates per `(logical database,
   table)` from the single allocation database. Without a generator, a missing value
   yields `ROUTE_FAILED`.
+- Implementing only one capability is legal: callers fall back to the other method, and map
+  two failing defaults to `ID_GENERATOR`. Custom names must not shadow builtin names
+  (`step`/`hash`/... or `uuid`/`snowflake`/`sequence`); fdbm rejects such extensions at startup.
 - `IdGeneratorException` is the module's own exception type; implementations should
   throw it rather than a bare `Exception`.
 

@@ -19,6 +19,7 @@ import std.collection.{ArrayList, HashMap}
 import std.convert.*
 import std.database.sql.*
 import std.env.getVariable
+import std.env.getVariable
 import fountain::f_dbd.common.DbdErrorCode
 import fountain::f_dbd.driver.*
 import fountain::f_dbd.exception.DbdException
@@ -213,7 +214,8 @@ func probe(): Int64 {
     let datasource = dbdDriver().open('fdbm://fdbm@127.0.0.1:${port()}/db0', [])
     let connection = datasource.connect()
     try {
-        checkInt('probe show databases', rowCount(connection, 'show databases'), 4)
+        // 逻辑库口径：e2e 部署显式声明逻辑库 db0，物理库不单独出现
+        checkInt('probe show databases', rowCount(connection, 'show databases'), 1)
         checkText('probe step select', firstText(connection,
             'select name from t_step where id = 2') ?? '', 'src1')
     } finally {
@@ -227,7 +229,8 @@ func probe(): Int64 {
 
 func driverAndMetadata(connection: Connection): Unit {
     let driver = dbdDriver()
-    checkText('driver.name', driver.name, 'fdbm')
+    // 注册名 = dbd_driverName（后端方言名），fdbm 只作兼容别名
+    checkText('driver.name', driver.name, getVariable('dbd_driverName') ?? '')
     check('driver.preferredPooling', driver.preferredPooling)
     check('driver.version', !driver.version.isEmpty())
     let meta = connection.getMetaData()
@@ -395,8 +398,8 @@ func showAndExport(connection: Connection): Unit {
         } finally {
             rs.close()
         }
-        checkInt('show databases count', names.size, 4)
-        check('show databases content', names.contains('db0') && names.contains('db3'))
+        checkInt('show databases count', names.size, 1)
+        check('show databases content', names.contains('db0'))
     } finally {
         st.close()
     }
@@ -591,7 +594,7 @@ func multiD(): Unit {
     let datasource = driver.open(url, [])
     let connection = datasource.connect()
     try {
-        checkInt('multidb show databases', rowCount(connection, 'show databases'), 4)
+        checkInt('multidb show databases', rowCount(connection, 'show databases'), 1)
         checkText('multidb select', firstText(connection,
             'select name from t_step where id = 2') ?? '', 'src1')
     } finally {

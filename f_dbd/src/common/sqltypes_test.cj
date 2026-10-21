@@ -200,8 +200,9 @@ public class SqlTypesTest {
         @Assert(threw)
     }
 
+    /** `ToData` 兜底：实现 `ToData` 的类型正常编码（不是"不支持"）。 */
     @TestCase
-    public func encodeParameterUnsupportedTypeThrows(): Unit {
+    public func encodeParameterFallsBackToToData(): Unit {
         var threw = false
         try {
             SqlTypes.encodeParameter(SqlPayload('x'))
@@ -209,6 +210,18 @@ public class SqlTypesTest {
             threw = true
         }
         @Assert(!threw)
+    }
+
+    /** 既不在支持表内、也不实现 `ToData` 的类型 → `DataException`（真正的 unsupported 分支）。 */
+    @TestCase
+    public func encodeParameterUnsupportedTypeThrows(): Unit {
+        var threw = false
+        try {
+            SqlTypes.encodeParameter<PlainProbe>(PlainProbe())
+        } catch (_: DataException) {
+            threw = true
+        }
+        @Assert(threw)
     }
 
     // ========== decode<T>：B 口径（越界即报错） ==========
@@ -393,3 +406,6 @@ public class SqlTypesTest {
         @Assert(ByteBuffer().read(Array<Byte>(4, repeat: 0u8)), 0)
     }
 }
+
+/** 既不实现 `ToData`、也不在编码白名单里的探针类型。 */
+private class PlainProbe {}

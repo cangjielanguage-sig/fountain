@@ -78,6 +78,14 @@ Only `fountain::f_dbd.exception.DbdException` (`<: SqlException`) escapes the dr
 Its `code` is the fine-grained `DbdErrorCode`: `CONFIG` / `IO` / `TIMEOUT` /
 `PROTOCOL` / `CURSOR_STATE` / `CONVERSION` / `DB_ERROR` / `INTERNAL`, etc.
 
+- **Stream columns**: the first open sends `CELL(index, -1)` as a NULL probe; SQL NULL makes
+  `getOrNull<InputStream>` return `None` (and `get` throw `CONVERSION`), while an empty BLOB returns
+  `Some(empty stream)`. Scalar reads (`get<Array<Byte>>`/`get<String>`) on a stream column throw
+  `CONVERSION` without sending a request.
+- **Root package**: `import fountain::f_dbd.*` re-exports error codes, exceptions, `DbdUrl`,
+  `dbdDriver`, `MultiDUrl`, ...; `fdBDVersion()` returns the module version. An unconfigured
+  `dbd_driverName` no longer exits the process; `dbdDriver()` throws `CONFIG` when used.
+
 ## Tests
 
 ```bash

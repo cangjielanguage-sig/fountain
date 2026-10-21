@@ -47,7 +47,8 @@ export dbd_driverName=postgres
 
 - 必需。fdbm 是代理、自身没有方言；f_orm 按驱动名选择 SQL 方言，因此应用项目必须把驱动名
   配置成**后端物理库的方言名**（`postgres` / `mysql` / ...）。
-- 未配置或为空：驱动加载时记录 ERROR（说明正确做法）并结束进程。
+- 未配置或为空：包初始化只记 INFO 并跳过注册，**不结束进程**；`dbdDriver()` / `DbdDriver()` 在取用时抛 `DbdException(CONFIG)`。
+  注册名以 `dbd_driverName` 为准，`fdbm` 仅作为兼容别名保留（名字未被占用时注册）。
 - 只影响应用侧注册名；SQL 方言的解析/改写仍只在 fdbm 内完成，URL scheme 仍是 `fdbm://`。
 
 ## 协议口径（与 fdbm 一一对应）
@@ -62,6 +63,11 @@ export dbd_driverName=postgres
   `Array<Byte>` …），NULL 只有 `getOrNull` 返回 `None`，`get` 遇到 NULL 抛 `CONVERSION`。
 - **流列**：仅当物理驱动自报 `InputStream` / `std.io.InputStream` 时才是流；同一行同一列只打开
   一个句柄，按 `fetch_rows` 分块读，空块表示 EOF。
+- **NULL 与空 BLOB**：首次打开流列发送 `CELL(index, -1)` 探测；SQL NULL →
+  `getOrNull<InputStream>` 返回 `None`、`get` 抛 `CONVERSION`，空 BLOB 返回 `Some(空流)`。
+- **流列只按流读**：`get<Array<Byte>>` / `get<String>` 等标量目标直接抛 `CONVERSION`，不发列读请求。
+- **根包重导出**：`import fountain::f_dbd.*` 即可取到错误码、异常、`DbdUrl`、`dbdDriver`、`MultiDUrl` 等；
+  `fdBDVersion()` 返回模块版本。
 
 ## 异常
 
