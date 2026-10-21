@@ -18,6 +18,7 @@ package fountain::fmq.server
 import std.collection.{ArrayList, HashSet}
 import std.fs.*
 import std.sync.{AtomicBool, Mutex, Timer}
+import std.time.DateTime
 import fountain::f_data.DataAny
 import fountain::f_log.*
 import fountain::f_net.server.Server
@@ -85,6 +86,14 @@ public class MQServer {
         for (assignment in meta.topics()) {
             queues.openTopic(assignment, options.selfIndex)
         }
+        // 元数据落地（注册/广播/快照合并/复活同步）统一走这里打开本机队列（A29）
+        let queueManager = this.queues
+        this.syncer.onTopicApplied = {topic =>
+            match (metaStore.topicOf(topic)) {
+                case Some(assignment) => queueManager.openTopic(assignment, options.selfIndex)
+                case None => ()
+            }
+        }
         this.cursorStore = CursorStore(options.metaDir)
         this.cursorCatalog = CursorCatalog(cursorStore, metaStore)
         this.deadLetter = DeadLetterQueue(options.deadMsgDir, options.segmentedLogMaxSize, 1)
@@ -129,7 +138,12 @@ public class MQServer {
         }
         backup.start()
         cleaner.start()
-        cleanupTimer = Some(Timer.repeat(CLEANUP_INTERVAL, CLEANUP_INTERVAL, {=> cleanupSubscribers()}))
+        // 反熵：定时补齐广播丢失/离线期间错过的元数据变更（A31）
+        syncer.startAntiEntropy(options.antiEntropyInterval)
+        cleanupTimer = Some(Timer.repeat(CLEANUP_INTERVAL, CLEANUP_INTERVAL, {=>
+            cleanupSubscribers()
+            sweepTombstones()
+        }))
     }
 
     /** 阻塞运行（生产入口）。 */
@@ -150,6 +164,7 @@ public class MQServer {
         [
             ("server", {=> server.close()}),
             ("cleanupTimer", {=> cancelCleanupTimer()}),
+            ("antiEntropy", {=> syncer.close()}),
             ("backup", {=> backup.close()}),
             ("cleaner", {=> cleaner.close()}),
             ("consume", {=> consume.close()}),
@@ -240,6 +255,23 @@ public class MQServer {
             } catch (e: Exception) {
                 log.warn("failed to cleanup subscription ${info.subscribedId}: ${e.message}")
             }
+        }
+    }
+
+    /**
+     * 回收过期墓碑：超过 `mqServer_tombstoneTTL` 且同 key 没有更新的活跃条目才删除。
+     *
+     * 单步异常只记 WARN：巡检下一轮继续（A41 同款隔离）。
+     */
+    protected func sweepTombstones(): Unit {
+        try {
+            let nowMs = DateTime.now().toUnixTimeStamp().toMilliseconds()
+            let removed = meta.gcTombstones(nowMs, options.tombstoneTTL.toMilliseconds())
+            if (removed > 0) {
+                log.info("collected ${removed} expired metadata tombstones")
+            }
+        } catch (e: Exception) {
+            log.warn("tombstone collection failed: ${e.message}")
         }
     }
 

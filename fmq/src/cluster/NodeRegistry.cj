@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::fmq.cluster
 
 import std.collection.ArrayList
-import std.sync.{AtomicBool, Mutex}
+import std.sync.{AtomicBool, AtomicInt64, Mutex}
 import fountain::f_data.DataAny
 import fountain::f_log.*
 import fountain::f_mq.base.MQHost
@@ -31,12 +31,16 @@ import fountain::f_protocol.default.Message
  */
 protected class NodeRegistry <: MQNodeTransport & Resource {
     private static let log = LoggerFactory.getLogger("fountain::fmq.cluster.NodeRegistry")
+    /** 存活状态三态：未知 / 存活 / 已知死亡。 */
+    private static let STATE_UNKNOWN: Int64 = 0
+    private static let STATE_ALIVE: Int64 = 1
+    private static let STATE_DEAD: Int64 = 2
 
     private let nodes: Array<String>
     private let self: Int64
     private let pingTimeout: Duration
     private let clients: Array<?Client<DataAny>>
-    private let alive: Array<AtomicBool>
+    private let alive: Array<AtomicInt64>
     private let lock = Mutex()
     private let closed = AtomicBool(false)
     private var revivedCallback: ?(() -> Unit) = None
@@ -56,7 +60,7 @@ protected class NodeRegistry <: MQNodeTransport & Resource {
         this.pingTimeout = pingTimeout
         this.clients = Array<?Client<DataAny>>(nodes.size) {_ => None<Client<DataAny>>}
         // 存活标记初值必须是「未知=不存活」：旧实现全真，isAlive 永远为真而没有意义（A40）
-        this.alive = Array<AtomicBool>(nodes.size) {_ => AtomicBool(false)}
+        this.alive = Array<AtomicInt64>(nodes.size) {_ => AtomicInt64(STATE_UNKNOWN)}
         this.checkDuration_ = checkDuration
     }
 
@@ -175,9 +179,9 @@ protected class NodeRegistry <: MQNodeTransport & Resource {
 
     protected func markSeen(index: Int64): Unit {
         if (index >= 0 && index < alive.size) {
-            let wasAlive = alive[index].load()
-            alive[index].store(true)
-            if (!wasAlive) {
+            let previous = alive[index].load()
+            alive[index].store(STATE_ALIVE)
+            if (previous != STATE_ALIVE) {
                 log.info("node ${index} is back online")
                 // 恢复后补齐离线期间错过的元数据变更；回调异常不得影响心跳/调用线程
                 match (revivedCallback) {
@@ -195,7 +199,7 @@ protected class NodeRegistry <: MQNodeTransport & Resource {
 
     protected func markFailed(index: Int64): Unit {
         if (index >= 0 && index < alive.size) {
-            alive[index].store(false)
+            alive[index].store(STATE_DEAD)
         }
     }
 
@@ -203,7 +207,16 @@ protected class NodeRegistry <: MQNodeTransport & Resource {
         if (index < 0 || index >= alive.size) {
             false
         } else {
-            alive[index].load()
+            alive[index].load() == STATE_ALIVE
+        }
+    }
+
+    /** 最近一次调用已失败：广播跳过它，靠反熵补偿（A40）。 */
+    public func isKnownDead(index: Int64): Bool {
+        if (index < 0 || index >= alive.size) {
+            true
+        } else {
+            alive[index].load() == STATE_DEAD
         }
     }
 

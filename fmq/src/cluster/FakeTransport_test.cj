@@ -25,7 +25,10 @@ protected class FakeTransport <: MQNodeTransport {
     private let self: Int64
     private let lock = Mutex()
     private let sent = ArrayList<(Int64, Message)>()
+    private var attempts: Int64 = 0
     let available: Array<Bool>
+    /** 显式标记「已知死亡」：用于验证广播跳过死节点。 */
+    let knownDead: Array<Bool>
     /** 可选应答器：返回 `None` 表示本次调用失败。 */
     var responder: (Int64, Message) -> ?Message = {_, _ => None<Message>}
 
@@ -33,6 +36,7 @@ protected class FakeTransport <: MQNodeTransport {
         this.total = nodeCount
         this.self = selfIndex
         this.available = Array<Bool>(nodeCount, repeat: true)
+        this.knownDead = Array<Bool>(nodeCount, repeat: false)
     }
 
     public prop nodeCount: Int64 {
@@ -48,6 +52,9 @@ protected class FakeTransport <: MQNodeTransport {
     }
 
     public func send(index: Int64, message: Message): ?Message {
+        synchronized(lock) {
+            attempts++
+        }
         if (index == self || index < 0 || index >= total || !available[index]) {
             return None<Message>
         }
@@ -55,6 +62,20 @@ protected class FakeTransport <: MQNodeTransport {
             sent.add((index, message))
         }
         responder(index, message)
+    }
+
+    public func isKnownDead(index: Int64): Bool {
+        if (index < 0 || index >= total) {
+            return true
+        }
+        knownDead[index] || !available[index]
+    }
+
+    /** 发送尝试次数（含被跳过的死节点）。 */
+    func attemptCount(): Int64 {
+        synchronized(lock) {
+            attempts
+        }
     }
 
     public func successors(count: Int64): Array<Int64> {

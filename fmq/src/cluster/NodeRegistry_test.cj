@@ -136,6 +136,24 @@ class NodeRegistryTest {
         }
     }
 
+    /** 只有「最近一次调用失败」才算已知死亡；未知与存活都不算（A40）。 */
+    @TestCase
+    public func knownDeadOnlyAfterFailedCall(): Unit {
+        let registry = NodeRegistry(["127.0.0.1:1", "127.0.0.1:2"], 1,
+            pingTimeout: Duration.millisecond * 100)
+        try {
+            @Assert(!registry.isKnownDead(0))
+            @Assert(!registry.isAlive(0))
+            registry.send(0, Message.ack(MessageID()))
+            @Assert(registry.isKnownDead(0))
+            registry.markSeen(0)
+            @Assert(!registry.isKnownDead(0))
+            @Assert(registry.isAlive(0))
+        } finally {
+            registry.close()
+        }
+    }
+
     @TestCase
     public func invalidSelfIndexRejected(): Unit {
         var threw = false

@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::fmq.meta
 
 import std.collection.{HashMap, Map}
+import fountain::f_mq.base.MQTopic
 import fountain::f_mq.base.payload.MQTopicAssignment
 
 /**
@@ -43,6 +44,35 @@ protected class MQAssignment {
             throw IllegalArgumentException("nodeCount must be at least 1, got ${nodeCount}")
         }
         normalize(start + queueNum, nodeCount)
+    }
+
+    /**
+     * 结构校验：远端/快照里的分配必须自洽，畸形载荷不得落盘（A34）。
+     *
+     * 校验项：主题名、队列数、owners 数量、起点与 owner 范围、延迟非负、版本与来源范围。
+     */
+    protected static func validate(assignment: MQTopicAssignment, nodeCount: Int64): Bool {
+        if (nodeCount < 1 || !MQTopic.isValid(assignment.topic)) {
+            return false
+        }
+        if (assignment.queueNum < 1 || assignment.owners.size != assignment.queueNum) {
+            return false
+        }
+        if (assignment.startNodeIndex < 0 || assignment.startNodeIndex >= nodeCount) {
+            return false
+        }
+        if (assignment.delayingMs < 0 || assignment.revision < 0) {
+            return false
+        }
+        if (assignment.origin < 0 || assignment.origin >= nodeCount) {
+            return false
+        }
+        for (owner in assignment.owners) {
+            if (owner < 0 || owner >= nodeCount) {
+                return false
+            }
+        }
+        true
     }
 
     protected static func ownersOf(assignment: MQTopicAssignment): Map<Int64, Int64> {

@@ -16,25 +16,23 @@ limitations under the License.
 package fountain::fmq.cluster
 
 import std.collection.{ArrayList, HashMap, HashSet}
-import std.sync.Mutex
+import std.sync.{Mutex, Timer}
 import std.time.DateTime
 import fountain::f_log.*
 import fountain::f_mq.base.*
 import fountain::f_mq.base.model.{MQSubscribeGroupMeta, MQTopicMeta}
 import fountain::f_mq.base.payload.*
 import fountain::f_mq.exception.MQServiceException
-import fountain::f_protocol.default.Message
+import fountain::f_protocol.default.{Command, Message}
 import fountain::fmq.meta.{MQAssignment, MetaApplyResult, MetaStore}
 
 /**
  * 元数据复制：本地落盘 → 广播 → 回响应。
  *
- * 冲突按「先到者优先 + WARN」处理；广播失败只记 WARN，peer 恢复后由启动期全量同步补齐。
+ * 冲突按「先到者优先 + WARN」处理；广播失败进入待补偿集合并记 WARN，由反熵定时同步补齐（A31）。
  */
-protected class MetaSyncer {
+protected class MetaSyncer <: Resource {
     private static let log = LoggerFactory.getLogger("fountain::fmq.cluster.MetaSyncer")
-    private static let SYNC_TIMEOUT_MULTIPLIER = 5
-
     private static let PENDING_TTL_MS: Int64 = 5 * 60 * 1000
     private static let MAX_PENDING: Int64 = 1024
 
@@ -43,10 +41,69 @@ protected class MetaSyncer {
     /** 主题未到达的组（有界 + TTL），主题落地后自动应用（A36） */
     private let pendingLock = Mutex()
     private let pendingGroups = HashMap<String, PendingGroup>()
+    /** 广播失败的 peer：反熵同步成功后清空（A31） */
+    private let pendingPeersLock = Mutex()
+    private let pendingPeers = HashSet<Int64>()
+    private var antiEntropyTimer: ?Timer = None
+    private var closed = false
+    /** 主题落地后打开本机队列（A29） */
+    private var topicAppliedCallback: ?(String) -> Unit = None
 
     protected init(store: MetaStore, transport: MQNodeTransport) {
         this.store = store
         this.transport = transport
+    }
+
+    /** 主题落地回调；服务装配里接到 `QueueManager.openTopic`。 */
+    protected mut prop onTopicApplied: ?(String) -> Unit {
+        get() {
+            topicAppliedCallback
+        }
+        set(value) {
+            topicAppliedCallback = value
+        }
+    }
+
+    /**
+     * 启动反熵：每个间隔向 peer 拉一次全量快照，补齐广播丢失的变更。
+     *
+     * 已启动过则忽略，保证幂等。
+     */
+    protected func startAntiEntropy(interval: Duration): Unit {
+        if (antiEntropyTimer.isSome()) {
+            return
+        }
+        antiEntropyTimer = Some(Timer.repeat(interval, interval, {=> antiEntropyOnce()}))
+    }
+
+    /** 单个反熵周期：异常不得让定时器失效。 */
+    protected func antiEntropyOnce(): Unit {
+        try {
+            syncFromPeers()
+        } catch (e: Exception) {
+            log.warn("anti-entropy sync failed: ${e.message}")
+        }
+    }
+
+    /** 待补偿 peer 数量（用例断言）。 */
+    protected func pendingPeerCount(): Int64 {
+        synchronized(pendingPeersLock) {
+            Int64(pendingPeers.size)
+        }
+    }
+
+    public func isClosed(): Bool {
+        closed
+    }
+
+    public func close(): Unit {
+        closed = true
+        match (antiEntropyTimer) {
+            case Some(timer) =>
+                timer.cancel()
+                antiEntropyTimer = None
+            case None => ()
+        }
     }
 
     /** 注册主题：检查/分配/写盘全在 store 的同一临界区，只有落盘成功才广播（A28）。 */
@@ -69,6 +126,7 @@ protected class MetaSyncer {
             case MetaApplyResult.Applied =>
                 let persisted = assignment.getOrThrow()
                 broadcastTopic(persisted)
+                notifyTopicApplied(persisted.topic)
                 persisted
             case MetaApplyResult.Duplicated =>
                 throw MQServiceException(MQErrorCode.TOPIC_ALREADY_EXIST, "topic '${meta.topic}' already exists")
@@ -124,41 +182,68 @@ protected class MetaSyncer {
     }
 
     /** 收到 peer 的 metaSync 请求 → 返回全量快照。 */
-    protected func snapshotFor(requesterIndex: Int64): MQMetaSnapshot {
+    protected func snapshotFor(): MQMetaSnapshot {
         store.snapshot()
     }
 
-    /** 启动期：向第一个可达 peer 拉全量快照并合并。 */
+    /**
+     * 向 peer 拉全量快照并合并（启动同步与反熵共用）。
+     *
+     * 失败原因分开记：无可用 peer / 已知死亡被跳过 / 连接失败 / 服务端返回错误 / 载荷不可解码。
+     */
     protected func syncFromPeers(): Unit {
         let nodeCount = transport.nodeCount
         if (nodeCount <= 1) {
             return
         }
+        var attempted = 0i64
+        var skipped = 0i64
         for (offset in 1..nodeCount) {
             let peer = (transport.selfIndex + offset) % nodeCount
+            if (transport.isKnownDead(peer)) {
+                skipped++
+                log.warn("peer ${peer} is known dead, skipping metadata sync")
+                continue
+            }
+            attempted++
             let response = transport.send(peer, MQProtocol.metaSync(MQMetaSyncRequest(transport.selfIndex)))
-            if (let Some(message) <- response) {
-                if (let Some(snapshot) <- MQProtocol.asPayload<MQMetaSnapshot>(message)) {
-                    mergeSnapshot(snapshot)
-                    return
-                }
+            match (response) {
+                case None =>
+                    log.warn("metadata sync from peer ${peer} failed: connection unavailable")
+                case Some(message) =>
+                    if (message.command == Command.ERROR) {
+                        log.warn("metadata sync from peer ${peer} failed: ${MQProtocol.asResult(message).message}")
+                        continue
+                    }
+                    match (MQProtocol.asPayload<MQMetaSnapshot>(message)) {
+                        case Some(snapshot) =>
+                            mergeSnapshot(snapshot)
+                            clearPendingPeers()
+                            return
+                        case None =>
+                            log.warn("metadata sync from peer ${peer} failed: response is not a snapshot")
+                    }
             }
         }
-        log.warn("no peer reachable during startup sync, using local metadata")
+        if (attempted == 0) {
+            log.warn("no reachable peer for metadata sync (skipped ${skipped} known-dead)")
+        } else {
+            log.warn("no peer returned a usable snapshot, using local metadata")
+        }
     }
 
     protected func applyRemote(assignment: MQTopicAssignment): MetaApplyResult {
-        let nodeCount = transport.nodeCount
-        let nextStart = if (nodeCount < 1) {
-            assignment.startNodeIndex
-        } else {
-            MQAssignment.nextStart(assignment.startNodeIndex, assignment.queueNum, nodeCount)
+        if (!MQAssignment.validate(assignment, transport.nodeCount)) {
+            log.warn("reject malformed assignment for topic '${assignment.topic}' from node ${assignment.origin}")
+            return MetaApplyResult.Invalid
         }
+        let nextStart = MQAssignment.nextStart(assignment.startNodeIndex, assignment.queueNum, transport.nodeCount)
         // 指针只增不减：乱序到达的旧分配不能把轮转指针拉回去（A33）
         let current = store.nextStartNode
         let persisted = if (nextStart > current) { nextStart } else { current }
         let result = store.applyTopic(assignment, nextStart: persisted)
         if (result == MetaApplyResult.Applied) {
+            notifyTopicApplied(assignment.topic)
             flushPendingGroups(assignment.topic)
         }
         result
@@ -255,13 +340,36 @@ protected class MetaSyncer {
         }
         let topicNames = HashSet<String>()
         for (assignment in snapshot.topics) {
+            if (!MQAssignment.validate(assignment, transport.nodeCount)) {
+                log.warn("skip malformed topic '${assignment.topic}' from peer snapshot")
+                continue
+            }
             topicNames.add(assignment.topic)
-            store.applyTopic(assignment)
+            match (store.applyTopic(assignment)) {
+                case MetaApplyResult.Applied => notifyTopicApplied(assignment.topic)
+                case MetaApplyResult.Conflict =>
+                    log.warn("snapshot conflict for topic '${assignment.topic}' at revision " +
+                        "${assignment.revision}: local queueNum=${describeQueueNum(assignment.topic)}, " +
+                        "remote queueNum=${assignment.queueNum}, local is kept")
+                case _ => ()
+            }
         }
         let groupKeys = HashSet<String>()
         for (meta in snapshot.groups) {
+            if (!MQGroup.isValid(meta.subscribeGroup) || !MQTopic.isValid(meta.topic)) {
+                log.warn("skip malformed group '${meta.subscribeGroup}' of '${meta.topic}' from peer snapshot")
+                continue
+            }
             groupKeys.add("${meta.topic}\u{0}${meta.subscribeGroup}")
-            store.applyGroup(meta)
+            match (store.applyGroup(meta)) {
+                case MetaApplyResult.TopicMissing =>
+                    // 快照里主题随后才应用（或在后面批次），先记下待应用
+                    addPendingGroup(meta)
+                case MetaApplyResult.Conflict =>
+                    log.warn("snapshot conflict for group '${meta.subscribeGroup}' of '${meta.topic}' " +
+                        "at revision ${meta.revision}: local is kept")
+                case _ => ()
+            }
         }
         let tombstoneKeys = HashSet<String>()
         for (tombstone in snapshot.tombstones) {
@@ -311,9 +419,49 @@ protected class MetaSyncer {
             if (index == transport.selfIndex) {
                 continue
             }
-            if (transport.send(index, message).isNone()) {
-                log.warn("metadata broadcast to node ${index} failed, peer will catch up on startup")
+            // 已知死亡的 peer 直接跳过：重复发送只会拖慢发布路径，变更由反熵补齐（A31/A40）
+            if (transport.isKnownDead(index)) {
+                markPendingPeer(index)
+                log.warn("metadata broadcast to node ${index} skipped: peer is known dead, " +
+                    "anti-entropy will catch up")
+                continue
             }
+            if (transport.send(index, message).isNone()) {
+                markPendingPeer(index)
+                log.warn("metadata broadcast to node ${index} failed, anti-entropy will catch up")
+            }
+        }
+    }
+
+    private func markPendingPeer(index: Int64): Unit {
+        synchronized(pendingPeersLock) {
+            pendingPeers.add(index)
+        }
+    }
+
+    private func clearPendingPeers(): Unit {
+        synchronized(pendingPeersLock) {
+            pendingPeers.clear()
+        }
+    }
+
+    /** 应用落地后打开本机队列；回调异常不影响元数据路径。 */
+    private func notifyTopicApplied(topic: String): Unit {
+        match (topicAppliedCallback) {
+            case Some(callback) =>
+                try {
+                    callback(topic)
+                } catch (e: Exception) {
+                    log.warn("open queue for applied topic '${topic}' failed: ${e.message}")
+                }
+            case None => ()
+        }
+    }
+
+    private func describeQueueNum(topic: String): Int64 {
+        match (store.topicOf(topic)) {
+            case Some(local) => local.queueNum
+            case None => 0
         }
     }
 }

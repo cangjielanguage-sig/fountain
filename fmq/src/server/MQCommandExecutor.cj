@@ -145,8 +145,8 @@ protected class MQCommandExecutor {
             return MQProtocol.fail(request, MQErrorCode.INTERNAL, "unsupported internal kind '${envelope.kind}'")
         }
         // 子载荷类型由编码时的类型 murmur 决定，逐个尝试即可精确分派
-        if (let Some(syncRequest) <- MQProtocol.decodePayload<MQMetaSyncRequest>(envelope.payload)) {
-            return MQProtocol.respond<MQMetaSnapshot>(request, syncer.snapshotFor(syncRequest.requesterIndex))
+        if (MQProtocol.decodePayload<MQMetaSyncRequest>(envelope.payload).isSome()) {
+            return MQProtocol.respond<MQMetaSnapshot>(request, syncer.snapshotFor())
         }
         if (let Some(assignment) <- MQProtocol.decodePayload<MQTopicAssignment>(envelope.payload)) {
             let result = syncer.applyRemote(assignment)
