@@ -17,7 +17,7 @@ package fountain::f_net.server
 
 import std.collection.concurrent.{ConcurrentHashMap, LinkedBlockingQueue}
 import std.env
-import std.net.{TcpServerSocket, SocketAddress}
+import std.net.{TcpServerSocket, SocketAddress, SocketException}
 import std.sync.{Timer, CatchupStyle}
 import fountain::f_base.ZERO_TIMER
 import fountain::f_concurrent.*
@@ -120,7 +120,19 @@ public class Server<T> <: Resource where T <: DataFields<T> {
         ServerBuilder<T>(bufferQueueSize, checkDuration, checker, bindAt)
     }
     public func start(executor: (SocketBuffer, Message) -> ?Message): Unit {
-        while (let socket <- server.accept()) {
+        while (true) {
+            let socket = try {
+                server.accept()
+            } catch (e: SocketException) {
+                // close() 会关掉监听套接字，阻塞中的 accept() 随即抛 SocketException：
+                // 这是 SIGTERM/正常关闭的收尾路径，不能当成未捕获异常逃到 spawn 线程外。
+                if (isClosed()) {
+                    log.debug{'accept loop stopped: server closed'}
+                } else {
+                    log.error('accept failed', e)
+                }
+                return
+            }
             params.populate(socket)
             let buffer = SocketBuffer(bufferQueueSize, socket)
             this.buffers.add(buffer)
