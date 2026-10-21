@@ -180,15 +180,16 @@ protected class GroupCursor {
                         case _ => continue
                     }
                 }
-                entry.deliverCount++
-                entry.lastDeliverTime = current
-                entry.owner = Some(subscription.subscribedId)
-                entry.delivered = true
+                // 阈值语义：deadMsgThreshold 是「重试次数」，总投递 N+1 次；第 N+2 次扫描才进死信（R3-M5）
                 if (entry.deliverCount > deadMsgThreshold) {
                     writeDeadLetter(entry, bytes, current)
                     entry.decided = true
                     continue
                 }
+                entry.deliverCount++
+                entry.lastDeliverTime = current
+                entry.owner = Some(subscription.subscribedId)
+                entry.delivered = true
                 redelivered = Some((bytes, entry.position))
                 if (let Some(m) <- metrics) {
                     m.incDelivered(topic, group)
@@ -554,6 +555,13 @@ protected class GroupCursor {
      *
      * 发布时间比当前时刻还晚 5 分钟以上，说明 id 由旧版本按本地时区写入（按 UTC 解释会整体后移
      * 一个时区偏移）。这类记录按「已到期」处理，避免延迟组被未来时间卡住（A02）。
+     */
+    /**
+     * 延迟是否到期。
+     *
+     * 发布时间来自 messageId（UTC）。机器时钟回拨或对端时钟超前时，`published` 可能晚于当前时间：
+     * 超前超过 5 分钟按「已到期」立即投递并记 WARN，避免整组被一个坏时间戳永久卡住；
+     * 只有不超过 5 分钟的超前才按正常延迟等待（R3-M12）。
      */
     private func isDue(record: Array<Byte>, current: DateTime): Bool {
         if (delaying <= Duration.Zero) {

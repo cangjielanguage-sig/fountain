@@ -292,8 +292,10 @@ class GroupCursorTest {
             let cursor = fixture.cursorOf()
             let sub = fixture.sub("s1")
             let members = [sub]
+            // 阈值 1 = 重试 1 次：共 2 次投递，第 3 次扫描才进死信（R3-M5）
             cursor.next(sub, members, MQMatcher()).getOrThrow()
-            // 第一次投递 count = 1；超时后再次可投递时 count = 2 > 1 ⇒ 进死信
+            fixture.clock.advance(Duration.second * 11)
+            @Assert(cursor.next(sub, members, MQMatcher()).isSome())
             fixture.clock.advance(Duration.second * 11)
             @Assert(cursor.next(sub, members, MQMatcher()).isNone())
             let letters = fixture.deadLetters()
@@ -301,6 +303,64 @@ class GroupCursorTest {
             @Assert(letters[0].segmentedIndex >= 1)
             @Assert(letters[0].subscribeGroup == "g")
             @Assert(letters[0].deliverCount == 2)
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 阈值 3 = 重试 3 次：共 4 次投递，第 5 次扫描入死信且 deliverCount = 4（R3-M5）。 */
+    @TestCase
+    public func thresholdThreeAllowsFourDeliveries(): Unit {
+        let fixture = CursorFixture("dead_letter_n3", threshold: 3)
+        try {
+            fixture.append([], "one")
+            let cursor = fixture.cursorOf()
+            let sub = fixture.sub("s1")
+            var deliveries = 0i64
+            for (_ in 0..4) {
+                if (cursor.next(sub, [sub], MQMatcher()).isSome()) {
+                    deliveries++
+                }
+                fixture.clock.advance(Duration.second * 11)
+            }
+            @Assert(deliveries == 4)
+            @Assert(cursor.next(sub, [sub], MQMatcher()).isNone())
+            let letters = fixture.deadLetters()
+            @Assert(letters.size == 1)
+            @Assert(letters[0].deliverCount == 4)
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 发布时间超前超过 5 分钟：按已到期立即投递并记 WARN（R3-M12）。 */
+    @TestCase
+    public func farFuturePublishTimeDeliversImmediately(): Unit {
+        CapturingAppender.install()
+        let fixture = CursorFixture("future_publish")
+        try {
+            fixture.appendAt([], "one", DateTime.nowUTC() + Duration.minute * 10)
+            let cursor = fixture.cursorOf(delaying: Duration.minute * 5)
+            let sub = fixture.sub("s1")
+            @Assert(cursor.next(sub, [sub], MQMatcher()).isSome())
+            @Assert(CapturingAppender.waitFor(["in the future by more than 5m", "deliver immediately"]))
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 发布时间超前 1 分钟（容差内）+ 延迟 5 分钟：不得提前投递（R3-M12）。 */
+    @TestCase
+    public func slightlyFuturePublishTimeStillWaitsForDelay(): Unit {
+        let fixture = CursorFixture("slight_future")
+        try {
+            fixture.appendAt([], "one", DateTime.nowUTC() + Duration.minute)
+            let cursor = fixture.cursorOf(delaying: Duration.minute * 5)
+            let sub = fixture.sub("s1")
+            @Assert(cursor.next(sub, [sub], MQMatcher()).isNone())
             cursor.close()
         } finally {
             fixture.close()
@@ -762,9 +822,11 @@ class GroupCursorTest {
             let sub = fixture.sub("s1")
             @Assert(cursor.next(sub, [sub], MQMatcher()).isSome())
             fixture.clock.advance(Duration.second * 11)
-            // 第二次尝试超过阈值：直接进死信，不再返回给订阅者
+            // 阈值 1：第二次仍然投递（重试），第三次扫描才进死信
+            @Assert(cursor.next(sub, [sub], MQMatcher()).isSome())
+            fixture.clock.advance(Duration.second * 11)
             @Assert(cursor.next(sub, [sub], MQMatcher()).isNone())
-            @Assert(metrics.deliveredOf("/t", "g") == 1)
+            @Assert(metrics.deliveredOf("/t", "g") == 2)
             @Assert(metrics.deadLetteredOf("/t", "g") == 1)
             cursor.close()
         } finally {

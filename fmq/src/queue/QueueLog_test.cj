@@ -618,7 +618,7 @@ class QueueLogTest {
             for (_ in 0..100) {
                 log.openRecordsFrom(LogPosition(1, 0)).close()
             }
-            @Assert(CapturingAppender.find(["starts at the next existing segment instead of 1:0"]).size == 1)
+            @Assert(CapturingAppender.find([dir, "starts at the next existing segment instead of 1:0"]).size == 1)
         } finally {
             log.close()
             clean(dir)
