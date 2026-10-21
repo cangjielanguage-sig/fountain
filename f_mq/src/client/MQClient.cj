@@ -179,10 +179,10 @@ public class MQClient <: Resource {
                         continue
                     }
                     if (let Some(result) <- MQProtocol.asConsumeResult(msg)) {
-                        if (result.record.size == 0) {
+                        if (result.record.isEmpty()) {
                             continue
                         }
-                        if (let Some(content) <- MQMessageRecord.decode(result.record)) {
+                        if (let Some(content) <- MQMessageRecord.decode(result.record.copyBytes())) {
                             if (!sub.autoAck) {
                                 sub.deliveries.add(MQSubscription.keyOf(result.queueIndex, result.segmentedIndex,
                                     result.segmentedOffset), node)

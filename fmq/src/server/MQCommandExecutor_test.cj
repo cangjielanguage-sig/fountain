@@ -119,7 +119,7 @@ class MQCommandExecutorTest {
     }
 
     private static func bodyOf(result: MQConsumeResult): String {
-        let content = MQMessageRecord.decode(result.record).getOrThrow()
+        let content = MQMessageRecord.decode(result.record.copyBytes()).getOrThrow()
         convert<String>(content.body.data).getOrThrow()
     }
 
@@ -295,7 +295,7 @@ class MQCommandExecutorTest {
             // 空消费不是错误
             let empty = MQProtocol.asConsumeResult(
                 fixture.call(MQProtocol.consume(MQConsumePayload(sid)))).getOrThrow()
-            @Assert(empty.record.size == 0)
+            @Assert(empty.record.size() == 0)
         } finally {
             fixture.close()
         }
@@ -399,7 +399,7 @@ class MQCommandExecutorTest {
             fixture.publish("/t", "one".toData())
             let message = MQProtocol.asConsumeResult(
                 fixture.call(MQProtocol.consume(MQConsumePayload(sid)))).getOrThrow()
-            @Assert(message.record.size > 0)
+            @Assert(message.record.size() > 0)
             @Assert(codeOf(fixture.call(MQProtocol.unsubscribe(MQUnsubscribePayload(sid)))) == 0)
             @Assert(fixture.subscribers.of(sid).isNone())
             // 未知订阅退订

@@ -66,7 +66,7 @@ class DeadLetterQueueTest {
             @Assert(messages[0].segmentedIndex == 1)
             @Assert(messages[1].segmentedIndex == 2)
             @Assert(messages[2].segmentedIndex == 3)
-            @Assert(messages[1].record == [2u8, 0xAAu8])
+            @Assert(messages[1].record.copyBytes() == [2u8, 0xAAu8])
             @Assert(messages[2].deliverCount == 4)
             @Assert(messages[2].subscribeGroup == "grp")
             @Assert(messages[2].queueIndex == 1)
@@ -110,8 +110,8 @@ class DeadLetterQueueTest {
         try {
             let messages = readAll(second, LogPosition(1, 0))
             @Assert(messages.size == 2)
-            @Assert(messages[0].record == [1u8, 0xAAu8])
-            @Assert(messages[1].record == [2u8, 0xAAu8])
+            @Assert(messages[0].record.copyBytes() == [1u8, 0xAAu8])
+            @Assert(messages[1].record.copyBytes() == [2u8, 0xAAu8])
         } finally {
             second.close()
             clean(root)

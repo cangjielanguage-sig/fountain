@@ -109,7 +109,7 @@ class ConsumeFixture <: Resource {
 @Test
 class ConsumeServiceTest {
     private static func bodyOf(result: MQConsumeResult): String {
-        let content = MQMessageRecord.decode(result.record).getOrThrow()
+        let content = MQMessageRecord.decode(result.record.copyBytes()).getOrThrow()
         convert<String>(content.body.data).getOrThrow()
     }
 
@@ -185,7 +185,7 @@ class ConsumeServiceTest {
             fixture.appendObject(false)
             let info = fixture.register("s1", filter: "$.enabled")
             let result = fixture.service.consume(info).getOrThrow()
-            let content = MQMessageRecord.decode(result.record).getOrThrow()
+            let content = MQMessageRecord.decode(result.record.copyBytes()).getOrThrow()
             @Assert(convert<ConsumeBody>(content.body.data).getOrThrow().enabled)
             // 第二条被过滤器挡住
             @Assert(fixture.service.consume(info).isNone())

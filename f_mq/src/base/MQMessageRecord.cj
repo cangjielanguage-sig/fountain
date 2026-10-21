@@ -23,6 +23,7 @@ import fountain::f_data.*
 import fountain::f_codec.default.DefaultCodec
 import fountain::f_io.ByteBuffer
 import fountain::f_mq.base.model.MQMessageContent
+import fountain::f_mq.base.payload.MQBlob
 
 /**
  * 一条消息记录的编解码。
@@ -184,58 +185,23 @@ public class MQMessageRecord {
  * 否则大消息会被误判成「没有消息」。
  */
 public class MQBytes {
+    /**
+     * 与 `MQBlob` 共用同一实现：字节块 / 大载荷临时文件 / `DataAny` 包装都走一条路径，
+     * 无法识别时返回 `None`，绝不返回空数组。
+     */
     public static func fromData(data: Data): ?Array<Byte> {
-        match (data) {
-            case d: DataCollection<Array<Byte>, Byte> => Some(d.data)
-            case d: DataInputStream =>
-                match (d.data) {
-                    case f: File => readWholeFile(f)
+        // 空载荷不是「空记录」：调用方靠 `None` 区分「没有载荷」与「零字节记录」
+        if (let _: DataNone <- data) {
+            return None<Array<Byte>>
+        }
+        match (MQBlob.tryFromData(data, SILENCE)) {
+            case x: ?MQBlob =>
+                match (x) {
+                    case Some(blob) => Some(blob.copyBytes())
                     case _ => None<Array<Byte>>
                 }
+            case b: MQBlob => Some(b.copyBytes())
             case _ => None<Array<Byte>>
-        }
-    }
-
-    private static func readWholeFile(file: File): ?Array<Byte> {
-        let path = file.info.path
-        let parent = file.info.parentDirectory
-        try {
-            // 解码器返回的大载荷文件停在写端位置，必须先回到文件头
-            file.seek(SeekPosition.Begin(0))
-            let size = file.info.size
-            let out = Array<Byte>(size, repeat: 0u8)
-            var got = 0i64
-            while (got < size) {
-                let n = file.read(out[got..size])
-                if (n <= 0) {
-                    break
-                }
-                got += n
-            }
-            if (!file.isClosed()) {
-                file.close()
-            }
-            // 临时文件与其父目录都是本进程创建的，用完即删（失败不影响结果）
-            try {
-                removeIfExists(path)
-            } catch (_: Exception) {}
-            if (let Some(dir) <- parent) {
-                try {
-                    removeIfExists(dir.path)
-                } catch (_: Exception) {}
-            }
-            if (got != size) {
-                None<Array<Byte>>
-            } else {
-                Some(out)
-            }
-        } catch (_: Exception) {
-            try {
-                if (!file.isClosed()) {
-                    file.close()
-                }
-            } catch (_: Exception) {}
-            None<Array<Byte>>
         }
     }
 }

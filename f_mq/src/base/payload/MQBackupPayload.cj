@@ -25,12 +25,21 @@ public class MQBackupPayload {
     private var ownerIndex: Int64 = 0
     private var topic: String = ''
     private var queueIndex: Int64 = 0
-    private var records: Array<Array<Byte>> = []
+    private var records: Array<MQBlob> = []
     private var states: Array<MQBackupState> = []
 
     public init() {}
 
     public init(ownerIndex: Int64, topic: String, queueIndex: Int64, records: Array<Array<Byte>>,
+        states: Array<MQBackupState>) {
+        this.ownerIndex = ownerIndex
+        this.topic = topic
+        this.queueIndex = queueIndex
+        this.records = Array<MQBlob>(records.size) {i => MQBlob(records[i])}
+        this.states = states
+    }
+
+    public init(ownerIndex: Int64, topic: String, queueIndex: Int64, records: Array<MQBlob>,
         states: Array<MQBackupState>) {
         this.ownerIndex = ownerIndex
         this.topic = topic

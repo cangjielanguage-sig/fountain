@@ -105,13 +105,13 @@ class MQPayloadTest {
         @Assert(back.queueIndex == 2)
         @Assert(back.segmentedIndex == 7)
         @Assert(back.segmentedOffset == 128)
-        @Assert(back.record.size == 0)
+        @Assert(back.record.size() == 0)
         @Assert(!back.hasMessage())
 
         let withRecord = roundtrip<MQConsumeResult>(MQConsumeResult(5, 1, 2, [1u8, 2u8, 3u8])).getOrThrow()
         @Assert(withRecord.hasMessage())
         @Assert(withRecord.queueIndex == 5)
-        @Assert(withRecord.record == [1u8, 2u8, 3u8])
+        @Assert(withRecord.record.copyBytes() == [1u8, 2u8, 3u8])
     }
 
     @TestCase
@@ -119,7 +119,7 @@ class MQPayloadTest {
         let value = MQInternalMessage(MQInternalKind.BACKUP, [9u8, 8u8])
         let back = roundtrip<MQInternalMessage>(value).getOrThrow()
         @Assert(back.kind == "backup")
-        @Assert(back.payload == [9u8, 8u8])
+        @Assert(back.payload.copyBytes() == [9u8, 8u8])
     }
 
     @TestCase
@@ -151,9 +151,9 @@ class MQPayloadTest {
         @Assert(back.topic == "/t")
         @Assert(back.queueIndex == 2)
         @Assert(back.records.size == 3)
-        @Assert(back.records[0] == [1u8])
-        @Assert(back.records[1] == [2u8, 3u8])
-        @Assert(back.records[2].size == 0)
+        @Assert(back.records[0].copyBytes() == [1u8])
+        @Assert(back.records[1].copyBytes() == [2u8, 3u8])
+        @Assert(back.records[2].size() == 0)
         @Assert(back.states.size == 3)
         @Assert(back.states[1].acked)
         @Assert(back.states[1].deliverCount == 2)
@@ -171,7 +171,7 @@ class MQPayloadTest {
         @Assert(back.segmentedOffset == 128)
         @Assert(back.deliverCount == 4)
         @Assert(back.deadTime == time)
-        @Assert(back.record == [1u8, 2u8])
+        @Assert(back.record.copyBytes() == [1u8, 2u8])
     }
 
 

@@ -192,7 +192,8 @@ protected class MQCommandExecutor {
                     MQServiceException(MQErrorCode.INTERNAL, "cannot decode MQBackupPayload")
                 }
                 for (i in 0..payload.records.size) {
-                    backupStore.append(payload.ownerIndex, payload.topic, payload.queueIndex, payload.records[i])
+                    backupStore.append(payload.ownerIndex, payload.topic, payload.queueIndex,
+                        payload.records[i].copyBytes())
                 }
                 return MQProtocol.respond<MQResult>(request, MQResult(0, "ok"))
             }

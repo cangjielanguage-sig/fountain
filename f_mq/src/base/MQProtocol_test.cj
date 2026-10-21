@@ -132,7 +132,7 @@ class MQProtocolTest {
         @Assert(parsed.queueIndex == 3)
         @Assert(parsed.segmentedIndex == 7)
         @Assert(parsed.segmentedOffset == 128)
-        @Assert(parsed.record == [1u8, 2u8])
+        @Assert(parsed.record.copyBytes() == [1u8, 2u8])
     }
 
     @TestCase
@@ -161,7 +161,8 @@ class MQProtocolTest {
         @Assert(backupInternal.kind == MQInternalKind.BACKUP)
         let backupDecoded = MQProtocol.decodePayload<MQBackupPayload>(backupInternal.payload).getOrThrow()
         @Assert(backupDecoded.ownerIndex == 1)
-        @Assert(backupDecoded.records == [[9u8]])
+        @Assert(backupDecoded.records.size == 1)
+        @Assert(backupDecoded.records[0].copyBytes() == [9u8])
     }
 
     @TestCase
