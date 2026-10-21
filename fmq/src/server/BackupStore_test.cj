@@ -31,6 +31,48 @@ import fountain::fmq.test.TestDirs
 
 @Test
 class BackupStoreTest {
+    /** 关闭后写入被丢弃但必须留痕（含 topic/队列），且同秒内限流（R4-G3）。 */
+    @TestCase
+    public func appendsAfterCloseAreLoggedAndRateLimited(): Unit {
+        CapturingAppender.install()
+        let root = TestDirs.of("backup_store", "closed_log")
+        if (exists(root)) {
+            remove(root, recursive: true)
+        }
+        Directory.create(root, recursive: true)
+        let store = BackupStore(root, 1024 * 1024, 1)
+        store.append(0, "/closed-log", 0, [1u8])
+        store.close()
+        for (_ in 0..3) {
+            store.append(0, "/closed-log", 0, [2u8])
+        }
+        @Assert(CapturingAppender.waitFor(["/closed-log", "dropped backup append", "closed"]))
+        // 1 秒限流：连续 3 次只留 1 条
+        @Assert(CapturingAppender.find(["/closed-log", "dropped backup append"]).size == 1)
+        remove(root, recursive: true)
+    }
+
+    /** 底层 QueueLog 被并发关闭时，`LogClosedException` 不得静默（R4-G3）。 */
+    @TestCase
+    public func closedQueueLogIsLoggedInsteadOfSilentDrop(): Unit {
+        CapturingAppender.install()
+        let root = TestDirs.of("backup_store", "closed_queue_log")
+        if (exists(root)) {
+            remove(root, recursive: true)
+        }
+        Directory.create(root, recursive: true)
+        let store = BackupStore(root, 1024 * 1024, 1)
+        store.append(0, "/closed-ql", 0, [1u8])
+        // 直接关掉底层日志，模拟「关闭与写入并发」
+        for ((_, _, _, log) in store.allLogs()) {
+            log.close()
+        }
+        store.append(0, "/closed-ql", 0, [2u8])
+        @Assert(CapturingAppender.waitFor(["/closed-ql", "dropped backup append", "closed concurrently"]))
+        store.close()
+        remove(root, recursive: true)
+    }
+
     @TestCase
     public func concurrentAppendsReuseSingleQueueLog(): Unit {
         let root = TestDirs.of("backup_store", "concurrent")
