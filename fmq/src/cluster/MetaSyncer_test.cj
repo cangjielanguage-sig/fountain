@@ -626,15 +626,19 @@ class MetaSyncerTest {
             let transport = FakeTransport(3, 0)
             transport.knownDead[1] = true
             transport.knownDead[2] = true
+            transport.available[1] = false
+            transport.available[2] = false
             let syncer = MetaSyncer(store, transport)
             syncer.registerTopic(MQTopicMeta("/local", 1))
-            // 两个 peer 都被跳过：没有任何发送，进入待补偿集合
-            @Assert(transport.sentCount() == 0)
+            // 已知死亡不跳过：仍然尝试发送（否则恢复后永远错过变更），失败后进入待补偿集合
+            @Assert(transport.attemptCount() == 2)
             @Assert(syncer.pendingPeerCount() == 2)
 
             // peer 恢复：反熵拉到快照后清空待补偿集合
             transport.knownDead[1] = false
             transport.knownDead[2] = false
+            transport.available[1] = true
+            transport.available[2] = true
             let snapshot = MQMetaSnapshot([MQTopicAssignment("/remote", 1, 0, [0], revision: 1)],
                 Array<MQSubscribeGroupMeta>(), 0, revision: 1)
             transport.responder = {_, request =>

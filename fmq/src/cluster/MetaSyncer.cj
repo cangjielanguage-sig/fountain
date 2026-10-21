@@ -198,11 +198,16 @@ protected class MetaSyncer <: Resource {
         }
         var attempted = 0i64
         var skipped = 0i64
-        for (offset in 1..nodeCount) {
+        // 两趟：先试「未知/存活」的 peer，再试「已知死亡」的 peer。
+        // 直接跳过已知死亡的节点会让它在恢复后永远拿不到同步（反熵反而永不收敛）。
+        for (pass in 0..2) {
+            for (offset in 1..nodeCount) {
             let peer = (transport.selfIndex + offset) % nodeCount
-            if (transport.isKnownDead(peer)) {
-                skipped++
-                log.warn("peer ${peer} is known dead, skipping metadata sync")
+            let knownDead = transport.isKnownDead(peer)
+            if ((pass == 0 && knownDead) || (pass == 1 && !knownDead)) {
+                if (pass == 0 && knownDead) {
+                    skipped++
+                }
                 continue
             }
             attempted++
@@ -223,6 +228,7 @@ protected class MetaSyncer <: Resource {
                         case None =>
                             log.warn("metadata sync from peer ${peer} failed: response is not a snapshot")
                     }
+            }
             }
         }
         if (attempted == 0) {
@@ -419,13 +425,8 @@ protected class MetaSyncer <: Resource {
             if (index == transport.selfIndex) {
                 continue
             }
-            // 已知死亡的 peer 直接跳过：重复发送只会拖慢发布路径，变更由反熵补齐（A31/A40）
-            if (transport.isKnownDead(index)) {
-                markPendingPeer(index)
-                log.warn("metadata broadcast to node ${index} skipped: peer is known dead, " +
-                    "anti-entropy will catch up")
-                continue
-            }
+            // 不按「已知死亡」跳过：该标记只是最近一次调用失败，节点可能已经恢复；
+            // 跳过会让它永久错过变更（反熵要等一个完整周期）。发送失败只登记待补偿（A31）。
             if (transport.send(index, message).isNone()) {
                 markPendingPeer(index)
                 log.warn("metadata broadcast to node ${index} failed, anti-entropy will catch up")
