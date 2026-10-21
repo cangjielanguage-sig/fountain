@@ -364,8 +364,12 @@ public struct SqlTypes {
             case SqlReadType.Duration => cellOf<Duration>(result, index)
             case SqlReadType.Text => cellOf<String>(result, index)
             case SqlReadType.Bytes => cellOf<Array<Byte>>(result, index)
-            // `std.io.InputStream` 列：整块读出（游标路径不用本函数，走 readStream + readChunk）
-            case _ => readStream(result, index, DEFAULT_STREAM_CHUNK).toData()
+            // `std.io.InputStream` 列：读到 EOF 后整块返回（不得截断成首块）
+            case SqlReadType.Stream => readChunk(readStream(result, index), 0).toData()
+            // 未识别拼写：按 `String` 读（`canonicalName` 的兜底口径），原始拼写入日志
+            case SqlReadType.Unknown =>
+                logger.warn('unknown column typeName \'${typeName}\', reading it as String')
+                cellOf<String>(result, index)
         }
     }
 
@@ -393,14 +397,19 @@ public struct SqlTypes {
     /**
      * 从已打开的流里读一块：循环 `read` 直到凑满 `size` 或某次 `read` 返回 0；返回实际字节（可能为空）。
      *
+     * `size <= 0` 表示**读至 EOF**（用于整块物化大对象）。单次临时缓冲不超过
+     * `DEFAULT_STREAM_CHUNK`，总内存上界为「已读字节 + 一块缓冲」，不按剩余长度整块申请。
+     *
      * EOF 的线上表征是**后续请求返回空数组**，调用方**不得**以"短块"判定流结束。
      */
     public static func readChunk(stream: InputStream, size: Int64): Array<Byte> {
-        let want = if (size <= 0) { DEFAULT_STREAM_CHUNK } else { size }
+        let toEnd = size <= 0
         let out = ArrayList<Byte>()
         var got = 0i64
-        while (got < want) {
-            let tmp = Array<Byte>(want - got, repeat: 0u8)
+        while (toEnd || got < size) {
+            let remaining = if (toEnd) { DEFAULT_STREAM_CHUNK } else { size - got }
+            let want = if (remaining < DEFAULT_STREAM_CHUNK) { remaining } else { DEFAULT_STREAM_CHUNK }
+            let tmp = Array<Byte>(want, repeat: 0u8)
             let n = stream.read(tmp)
             if (n <= 0) {
                 break
@@ -449,7 +458,15 @@ public struct SqlTypes {
             case x: DateTime => x.toData()
             case x: Duration => x.toData()
             case x: Array<Byte> => x.toData()
-            case x: InputStream => readChunk(x, Int64.Max).toData()
+            case x: InputStream =>
+                // 读至 EOF；内存上界 = 已读字节 + 一块缓冲（D01）
+                try {
+                    readChunk(x, 0).toData()
+                } catch (e: DataException) {
+                    throw e
+                } catch (e: Exception) {
+                    throw DataException('failed to read InputStream parameter: ${e.message}', e)
+                }
             case x: ToData => x.toData()
             case _ => throw DataException('unsupported parameter type ${TypeInfo.of<T>()}')
         }

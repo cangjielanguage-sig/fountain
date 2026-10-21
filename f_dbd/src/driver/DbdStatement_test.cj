@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_dbd.driver
 
 import std.database.sql.*
-import std.io.InputStream
+import std.io.{IOException, InputStream}
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_data.DataNone
@@ -24,6 +24,13 @@ import fountain::f_data.base.*
 import fountain::f_dbd.common.{ColumnInfoImpl, DbdErrorCode, NEXT_ROW, QueryResultClosePayload,
     UpdateResultPayload, decodeStrict}
 import fountain::f_protocol.default.Message
+
+/** `read` 恒失败的流：`DbdStatement.encode` 必须把它包成 `CONVERSION`（D01）。 */
+private class FailingStream <: InputStream {
+    public func read(buffer: Array<Byte>): Int64 {
+        throw IOException('boom')
+    }
+}
 
 /** Step 3.6 `DbdStatement`（设计 §5.5）：参数、执行、deprecated 重载与选项覆盖。 */
 @Test
@@ -81,6 +88,7 @@ public class DbdStatementTest {
             let statement = connection.prepareStatement('update t set a = ?')
             @Assert(codeOf { statement.set<Int64>(-1, 1) }, DbdErrorCode.CONVERSION)
             @Assert(codeOf { statement.set<NotEncodable>(0, NotEncodable()) }, DbdErrorCode.CONVERSION)
+            @Assert(codeOf { statement.set<InputStream>(0, FailingStream()) }, DbdErrorCode.CONVERSION)
             @Assert(stub.receivedCount(), 0)
         } finally {
             connection.close()
