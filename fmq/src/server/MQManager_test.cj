@@ -27,7 +27,8 @@ import fountain::f_mq.base.payload.MQResult
 import fountain::f_net.SocketBuffer
 import fountain::f_net.server.Server
 import fountain::f_protocol.default.Message
-import fountain::fmq.manager.{MQManager, MQManagerArgs}
+import fountain::f_config.Config
+import fountain::fmq.manager.{MQManager, MQManagerArgs, MQManagerOutput}
 import fountain::fmq.test.TestDirs
 
 /**
@@ -119,6 +120,76 @@ class MQManagerTest {
             out.append(line)
         }
         out.toString()
+    }
+
+    /** `stats` 三个场景都要有可断言的输出行：全部/按主题/未知主题（R4-G1）。 */
+    @TestCase
+    public func statsCommandsPrintExpectedRows(): Unit {
+        let (server, address) = startServer("stats_cli")
+        try {
+            @Assert(MQManager(MQManagerArgs.parse(["registerTopic", "/t", "1",
+                "--server=${address}"]).getOrThrow()).run() == 0)
+            @Assert(MQManager(MQManagerArgs.parse(["registerSubscriber", "/t", "g",
+                "--server=${address}"]).getOrThrow()).run() == 0)
+
+            let (all, allLines) = managerWithOutput(["stats", "--server=${address}"])
+            @Assert(all.run() == 0)
+            let allText = joined(allLines)
+            @Assert(allText.contains("/t"))
+            @Assert(allText.contains("backlog"))
+
+            let (one, oneLines) = managerWithOutput(["stats", "/t", "--server=${address}"])
+            @Assert(one.run() == 0)
+            @Assert(joined(oneLines).contains("/t"))
+
+            let (none, noneLines) = managerWithOutput(["stats", "/nope", "--server=${address}"])
+            @Assert(none.run() == 0)
+            @Assert(joined(noneLines) == MQManagerOutput.EMPTY)
+        } finally {
+            server.close()
+        }
+    }
+
+    /** 非法组名：本地失败，文案含 INVALID_GROUP，绝不能报成「无法连接」（R4-G1）。 */
+    @TestCase
+    public func invalidGroupFailsLocallyBeforeConnecting(): Unit {
+        let (manager, lines) = managerWithOutput(["registerSubscriber", "/t", "g\u{7F}"])
+        // 目标地址不可达，但请求根本不该发出
+        let (manager2, lines2) = managerWithOutput(["registerSubscriber", "/t", "g\u{7F}",
+            "--server=127.0.0.1:1"])
+        @Assert(manager2.run() == 1)
+        let text = joined(lines2)
+        @Assert(text.contains("INVALID_GROUP"))
+        @Assert(!text.contains("无法连接"))
+        @Assert(lines.size == 0)
+        @Assert(manager.run() == 1)
+    }
+
+    /** 缺少 `mqServer_port` 配置：报「无法连接」，退出码 1，不崩溃（R4-G1）。 */
+    @TestCase
+    public func missingServerConfigReportsUnreachable(): Unit {
+        let previous = Config.getString("mqServer_port")
+        Config.remove("mqServer_port")
+        try {
+            let (manager, lines) = managerWithOutput(["listTopics"])
+            @Assert(manager.run() == 1)
+            @Assert(joined(lines).contains("无法连接"))
+        } finally {
+            match (previous) {
+                case Some(value) => Config.set([("mqServer_port", value)])
+                case None => Config.remove("mqServer_port")
+            }
+        }
+    }
+
+    /** 非绝对路径主题：本地校验失败，文案含 INVALID_TOPIC，退出码非 0（R4-G1）。 */
+    @TestCase
+    public func nonAbsoluteTopicFailsWithInvalidTopic(): Unit {
+        let (manager, lines) = managerWithOutput(["registerTopic", "order", "1", "--server=127.0.0.1:1"])
+        @Assert(manager.run() == 1)
+        let text = joined(lines)
+        @Assert(text.contains("INVALID_TOPIC"))
+        @Assert(!text.contains("无法连接"))
     }
 
     /** 服务端回 ERROR 时必须打印服务端错误，而不是「无法连接」（A65）。 */

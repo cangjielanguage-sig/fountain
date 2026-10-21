@@ -102,6 +102,9 @@ public class MQManager {
     }
 
     public func registerTopic(topic: String, queueNum: Int64, delayingMs!: Int64 = 0): Int64 {
+        if (!MQTopic.isValid(topic)) {
+            return invalidTopic(topic)
+        }
         withClient {client =>
             let response = exchange(client, MQProtocol.registerTopic(MQTopicMeta(topic, queueNum,
                 delayingMs: delayingMs)))
@@ -121,6 +124,9 @@ public class MQManager {
     }
 
     public func deleteTopic(topic: String): Int64 {
+        if (!MQTopic.isValid(topic)) {
+            return invalidTopic(topic)
+        }
         withClient {client =>
             let response = exchange(client, MQProtocol.deregister(MQDeregisterPayload("topic", topic)))
             finish(response, {result => emit("${topic} 已删除")})
@@ -128,9 +134,12 @@ public class MQManager {
     }
 
     public func registerSubscriber(topic: String, group: String): Int64 {
+        if (!MQTopic.isValid(topic)) {
+            return invalidTopic(topic)
+        }
         // 组名非法时不发请求：服务端同样会拒，但本地失败能让脚本立刻拿到非 0 退出码
         if (!MQGroup.isValid(group)) {
-            return localError("invalid subscribe group '${group}'")
+            return invalidGroup(group)
         }
         withClient {client =>
             let response = exchange(client, MQProtocol.registerGroup(MQSubscribeGroupMeta(topic, group)))
@@ -139,8 +148,11 @@ public class MQManager {
     }
 
     public func deleteSubscribeGroup(topic: String, group: String): Int64 {
+        if (!MQTopic.isValid(topic)) {
+            return invalidTopic(topic)
+        }
         if (!MQGroup.isValid(group)) {
-            return localError("invalid subscribe group '${group}'")
+            return invalidGroup(group)
         }
         withClient {client =>
             let response = exchange(client,
@@ -163,6 +175,9 @@ public class MQManager {
     }
 
     public func listSubscribeGroups(topic: String): Int64 {
+        if (!MQTopic.isValid(topic)) {
+            return invalidTopic(topic)
+        }
         withClient {client =>
             match (requestSnapshot(client)) {
                 case SnapshotOutcome.Unreachable => connectionFailed()
@@ -187,6 +202,10 @@ public class MQManager {
     }
 
     public func stats(topic: String): Int64 {
+        // 空串表示「全部主题」，非空必须是绝对路径
+        if (!topic.isEmpty() && !MQTopic.isValid(topic)) {
+            return invalidTopic(topic)
+        }
         withClient {client =>
             let response = exchange(client, MQProtocol.stats(topic))
             match (response) {
@@ -281,6 +300,16 @@ public class MQManager {
 
     private func localError(reason: String): Int64 {
         report(Failure.Local(reason))
+    }
+
+    /** 主题非法：请求不发，文案里带错误码，脚本可直接匹配（R4-G1）。 */
+    private func invalidTopic(topic: String): Int64 {
+        localError("INVALID_TOPIC '${topic}', expect an absolute path such as /order")
+    }
+
+    /** 组名非法：同上（R4-G1）。 */
+    private func invalidGroup(group: String): Int64 {
+        localError("INVALID_GROUP '${group}'")
     }
 
     private func connectionFailed(): Int64 {
