@@ -215,16 +215,26 @@ public class MQServer {
     }
 
     /** 清理已断开连接名下的订阅，并释放其已分配记录。 */
-    private func cleanupSubscribers(): Unit {
+    /**
+     * 断链巡检：按快照里的代次摘除，摘掉之后才释放记录。
+     *
+     * 期间同 `subscribedId` 被重订阅时 `unregister` 会失败，此时既不能释放记录，
+     * 也不能报告清理成功（A60/A70）。
+     */
+    protected func cleanupSubscribers(): Unit {
         for (info in subscribers.infos()) {
-            if (info.isDisconnected()) {
-                try {
-                    consume.releaseSubscription(info)
-                    subscribers.unregister(info.subscribedId)
-                    log.info("subscription ${info.subscribedId} removed after connection closed")
-                } catch (e: Exception) {
-                    log.warn("failed to cleanup subscription ${info.subscribedId}: ${e.message}")
-                }
+            if (!info.isDisconnected()) {
+                continue
+            }
+            let result = subscribers.unregister(info.subscribedId, generation: info.generation)
+            if (result.code != 0) {
+                continue
+            }
+            try {
+                consume.releaseSubscription(info)
+                log.info("subscription ${info.subscribedId} removed after connection closed")
+            } catch (e: Exception) {
+                log.warn("failed to cleanup subscription ${info.subscribedId}: ${e.message}")
             }
         }
     }

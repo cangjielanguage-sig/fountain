@@ -96,9 +96,9 @@ class ConsumeFixture <: Resource {
     }
 
     func register(id: String, group!: String = "g", tags!: Array<String> = [], filter!: String = '',
-        autoAck!: Bool = false): MQSubscriptionInfo {
+        autoAck!: Bool = false, alive!: ?() -> Bool = None): MQSubscriptionInfo {
         let info = MQSubscriptionInfo(id, topic, group, tags, MQFilter.compile(filter), autoAck,
-            EMPTY_SOCKET_BUFFER)
+            EMPTY_SOCKET_BUFFER, alive: alive)
         registry.register(info)
         info
     }
@@ -300,6 +300,25 @@ class ConsumeServiceTest {
             }
         }
         Array<String>()
+    }
+
+    /** 断链订阅名下已分配的记录必须退回组内，其它匹配订阅下一轮可取到（A55）。 */
+    @TestCase
+    public func disconnectedSubscriptionDoesNotBlockGroup(): Unit {
+        let fixture = ConsumeFixture("disconnected")
+        try {
+            fixture.append(["b"], "one")
+            // s1 不匹配；s2 匹配但连接已断；s3 匹配且在线
+            let s1 = fixture.register("s1", tags: ["a"])
+            fixture.register("s2", tags: ["b"], alive: {=> false})
+            let s3 = fixture.register("s3", tags: ["b"])
+            // 首轮由 s1 扫描：记录被分配给 s2（delivered = false）
+            @Assert(fixture.service.consume(s1).isNone())
+            // s2 不在活跃集合里 ⇒ sweep 退回组内 ⇒ s3 取到
+            @Assert(fixture.service.consume(s3).isSome())
+        } finally {
+            fixture.close()
+        }
     }
 
     @TestCase

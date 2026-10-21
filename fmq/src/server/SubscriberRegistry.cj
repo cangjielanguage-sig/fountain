@@ -30,6 +30,8 @@ protected class SubscriberRegistry {
     private let lock = Mutex()
     private let byId = HashMap<String, MQSubscriptionInfo>()
     private let byGroup = HashMap<String, ArrayList<String>>()
+    /** 每个 `subscribedId` 最近一次登记的代次（订阅注销后仍保留，避免代次回退）。 */
+    private let generations = HashMap<String, Int64>()
 
     private static func groupKey(topic: String, group: String): String {
         "${topic}\u{0}${group}"
@@ -45,6 +47,12 @@ protected class SubscriberRegistry {
                     removeFromGroup(old.topic, old.subscribeGroup, old.subscribedId)
                 case None => ()
             }
+            let next = match (generations.get(info.subscribedId)) {
+                case Some(value) => value + 1
+                case None => 1
+            }
+            generations.add(info.subscribedId, next)
+            info.generation = next
             byId.add(info.subscribedId, info)
             match (byGroup.get(key)) {
                 case Some(ids) =>
@@ -60,11 +68,22 @@ protected class SubscriberRegistry {
         }
     }
 
-    func unregister(subscribedId: String): MQResult {
+    /**
+     * 注销订阅。
+     *
+     * `generation` 给定时只删「同一代」：断链巡检拿到的是旧快照，
+     * 若期间客户端用同一 `subscribedId` 重订阅，不能把新订阅删掉（A60）。
+     */
+    func unregister(subscribedId: String, generation!: Int64 = -1): MQResult {
         synchronized(lock) {
-            match (byId.remove(subscribedId)) {
-                case Some(info) =>
-                    removeFromGroup(info.topic, info.subscribeGroup, subscribedId)
+            match (byId.get(subscribedId)) {
+                case Some(current) =>
+                    if (generation >= 0 && current.generation != generation) {
+                        return MQResult(MQErrorCode.SUBSCRIBE_NOT_EXIST,
+                            MQErrorCode.messageOf(MQErrorCode.SUBSCRIBE_NOT_EXIST))
+                    }
+                    byId.remove(subscribedId)
+                    removeFromGroup(current.topic, current.subscribeGroup, subscribedId)
                     MQResult(0, "ok")
                 case None => MQResult(MQErrorCode.SUBSCRIBE_NOT_EXIST, MQErrorCode.messageOf(MQErrorCode.SUBSCRIBE_NOT_EXIST))
             }
@@ -162,7 +181,14 @@ protected class SubscriberRegistry {
             match (byGroup.get(groupKey(topic, group))) {
                 case Some(ids) =>
                     for (id in ids) {
-                        result.add(id)
+                        match (byId.get(id)) {
+                            case Some(info) =>
+                                // 断链订阅不是「活跃」：否则它的记录永远不会退回组内（A55）
+                                if (!info.isDisconnected()) {
+                                    result.add(id)
+                                }
+                            case None => ()
+                        }
                     }
                 case None => ()
             }
