@@ -326,11 +326,15 @@ public class QueryResultImpl <: QueryResult {
         let initial = try {
             match (SqlTypes.decode<Array<Byte>>(probe)) {
                 case Some(bytes) => bytes
-                case None => Array<Byte>()
+                case None => throw DbdException(CONVERSION,
+                    'stream probe of column ${index} is not a byte array')
             }
         } catch (e: DataException) {
             throw DbdException(CONVERSION,
                 'stream probe of column ${index} cannot be decoded: ${e.message}', cause: e)
+        } catch (e: Exception) {
+            throw DbdException(CONVERSION,
+                'stream probe of column ${index} is not a byte array: ${e.message}', cause: e)
         }
         let stream = DbdInputStream(this, index, chunkSize_, initial: initial)
         streams_.add(stream)
@@ -358,13 +362,17 @@ public class QueryResultImpl <: QueryResult {
         try {
             match (SqlTypes.decode<Array<Byte>>(data)) {
                 case Some(bytes) => bytes
-                case None => Array<Byte>()
+                case None => throw DbdException(CONVERSION,
+                    'stream block of column ${index} is not a byte array')
             }
         } catch (e: DataException) {
             throw DbdException(CONVERSION, 'stream block of column ${index} cannot be decoded: ${e.message}',
                 cause: e)
         } catch (e: OverflowException) {
             throw DbdException(CONVERSION, 'stream block of column ${index} is out of range: ${e.message}',
+                cause: e)
+        } catch (e: Exception) {
+            throw DbdException(CONVERSION, 'stream block of column ${index} is not a byte array: ${e.message}',
                 cause: e)
         }
     }

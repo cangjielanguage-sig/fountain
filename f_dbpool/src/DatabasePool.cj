@@ -17,7 +17,7 @@ package fountain::f_dbpool
 
 public import std.database.sql.*
 import std.collection.Map
-import std.sync.{AtomicBool, AtomicUInt64, Mutex}
+import std.sync.{AtomicBool, AtomicInt64, AtomicUInt64, Mutex}
 import std.time.MonoTime
 import std.unicode.UnicodeStringExtension
 import fountain::f_log.impl.LoggerFactory
@@ -38,6 +38,8 @@ public class DatabasePool <: Resource & Datasource {
     private var connectTimeout: Duration
     private let datasourceCloseLock = Mutex()
     private var datasourceClosed = false
+    /** 已借出尚未归还的连接数（T05：`closeAndAwait` 必须等它们回来）。 */
+    private let activeLeases = AtomicInt64(0)
 
     public init(
         ds: Datasource,
@@ -193,9 +195,22 @@ public class DatabasePool <: Resource & Datasource {
             throw IllegalArgumentException('pool termination requires a positive finite timeout')
         }
         pool.close()
+        // 借用方可能还在用连接：池的内部线程退出不代表租约已归还，超时即失败（T05）。
+        let deadline = MonoTime.now() + timeout
+        while (activeLeases.load() > 0) {
+            if (MonoTime.now() >= deadline) { return false }
+            sleep(Duration.millisecond)
+        }
         if (!pool.awaitTermination(timeout: timeout)) { return false }
         closeDatasource()
         true
+    }
+
+    /** 当前借出未归还的连接数（诊断/优雅停止用）。 */
+    public prop leased: Int64 {
+        get() {
+            activeLeases.load()
+        }
     }
     private func closeDatasource(): Unit {
         synchronized(datasourceCloseLock) {
@@ -210,7 +225,15 @@ public class DatabasePool <: Resource & Datasource {
         if (isClosed()) {
             throw ConnectionException('database pool is closed')
         }
-        pool.get(timeout: timeout)?.activate(pool.giveBack)
+        match (pool.get(timeout: timeout)) {
+            case Some(connection) =>
+                activeLeases.fetchAdd(1)
+                Some(connection.activate({ pooled =>
+                    activeLeases.fetchSub(1)
+                    pool.giveBack(pooled)
+                }))
+            case None => None<Connection>
+        }
     }
     public func setOption(key: String, value: String): Unit {
         this.ds.setOption(key, value)

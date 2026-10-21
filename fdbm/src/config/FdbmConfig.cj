@@ -222,7 +222,11 @@ protected struct FdbmConfig {
     static func getIdMaker(source!: ConfigSource = EnvConfigSource()): IdMakerConfig {
         let raw = stringOf(source, 'fdbm_idmaker', 'uuid,1')
         let parts = raw.split(',')
-        let kind = parts[0].trimAscii().toLower()
+        let kind = if (parts.size == 0) {
+            ''
+        } else {
+            parts[0].trimAscii().toLower()
+        }
         let arg = if (parts.size > 1) {
             Some(parts[1].trimAscii())
         } else {
@@ -257,7 +261,12 @@ protected struct FdbmConfig {
         if (kind == 'sequence') {
             return IdMakerConfig(kind, arg: arg)
         }
-        throw configError('fdbm_idmaker', raw, 'expect uuid / snowflake / sequence')
+        if (kind.isEmpty()) {
+            throw configError('fdbm_idmaker', raw, 'empty id generator name')
+        }
+        // 可能是自定义扩展（custom/ 动态库）：解析期不拒绝，由 validate(customIdGenerators)
+        // 在扩展加载后判定；未知名字仍以 CONFIG 拒绝。
+        IdMakerConfig(kind, arg: arg)
     }
 
     static func getCache(source!: ConfigSource = EnvConfigSource()): CacheConfig {

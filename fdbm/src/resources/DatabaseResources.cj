@@ -259,6 +259,10 @@ protected class DatabaseResources <: NodeAccessor & Resource {
 
     /** 优雅停止：逐池 `closeAndAwait`（调用方须先归还全部连接）；失败/超时逐池记 WARN（G13）。 */
     public func closeAndAwait(timeout!: Duration): Bool {
+        // 参数错误必须直接暴露，不能被下面的 `catch` 降级成 `false`（T05）。
+        if (timeout <= Duration.Zero || timeout == Duration.Max) {
+            throw IllegalArgumentException('database resources termination requires a positive finite timeout')
+        }
         if (closed.swap(true)) {
             return true
         }
