@@ -232,3 +232,16 @@
 | 记录不修 | 1 | G25（R5G5）：无 2PC，文档化 + WARN + 用例固定（任务 2.30） |
 
 任一 P1 任务被裁剪时，必须在 PR 说明中引用附录 A 的行号并改写「处置」列，不得静默跳过。
+
+
+## 附录 B：已知问题登记（归档时确认，本轮不修）
+
+> 以下 4 项在 verify 阶段确认：K1–K3 实现已完成但缺针对性测试，K4 为 f_orm 范围外缺陷。
+> 按「只登记、不解决」处理，后续变更可据此立项。
+
+| ID | 问题 | 位置 | 现状与根因 | 影响 | 建议后续动作 |
+| --- | --- | --- | --- | --- | --- |
+| K1 | 多 `.so` 的 initialize 顺序无直接用例 | `fdbm/src/server/CustomLoader.cj:58-92`、`f_app/src/Initializer.cj:79-95` | 已实现「全部 load 后只 initialize 一次」并按 `dependencies` 排序；e2e 仅一个 `.so` | `initialize()` 一次性，重复调用返回空列表（扩展被静默忽略）；依赖名无人提供时 `doInit` 可能死循环 | 增两个 `.so` 夹具：跨库依赖顺序、同名拒绝、依赖缺失 |
+| K2 | 建池中途失败的已建池释放无用例 | `fdbm/src/resources/DatabaseResources.cj:61-115` | `catch` 已逐个 `pool.close()`；未覆盖「第二个节点失败」 | `driver.open` 得到的 datasource 在池构造抛错时未关闭（概率低）；该分支无回归保护 | 计数型 mock driver + 第二节点缺失驱动，断言池关闭与 close 计数 |
+| K3 | 跨库 INSERT 分组失败回滚分支无用例 | `fdbm/src/execute/executors.cj:693-760` | 失败时回滚当前组、关连接、抛 `DB_ERROR` 并列出已提交库；现仅测成功路径 | 无 2PC，部分提交为固有语义；回滚、连接归还、错误消息均无回归保护 | 用 MOCKDB 让第 2 组抛错，断言 rollback、`leased == 0`、错误消息 |
+| K4 | `f_orm` 1 例基线失败 | `f_orm/src/wrap/QueryResultWrap_test.cj:81`、`f_orm/src/wrap/QueryResultWrap.cj:63` | `makeReader` 二进制分支未列 `bytea`，落默认 String 分支 → `ORMException` | 仅 f_orm 单测以物理类型名输入时失败；fdbm 经 `canonicalName` 归一为 `Array<Byte>`，生产路径不受影响 | 补 `bytea`/`blob`/`binary`/`varbinary` 映射并跑 f_orm 全量回归 |
