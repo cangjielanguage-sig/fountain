@@ -170,6 +170,7 @@ wait "$CONFLICT_PID"
 CONFLICT_EXIT=$?
 set -e
 [ "$CONFLICT_EXIT" -eq 1 ] || fail "conflicting custom name must exit 1 (got $CONFLICT_EXIT)"
+grep -q "conflicts with a builtin" "$WORK/fdbm_conflict.log" || fail "missing builtin conflict error"
 (ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null) | grep -q ":$PORT4 " && fail "conflicting fdbm must not listen"
 rm -f "$WORK/custom/"libfdbm_custom_ext.so
 
@@ -191,6 +192,7 @@ wait "$BAD_PID"
 BAD_EXIT=$?
 set -e
 [ "$BAD_EXIT" -eq 1 ] || fail "bad config must exit 1 (got $BAD_EXIT)"
+grep -q "ERROR.*CONFIG" "$WORK/fdbm_bad_config.log" || fail "missing CONFIG error log"
 (ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null) | grep -q ":$PORT5 " && fail "bad-config fdbm must not listen"
 
 say "通过：$BACKEND 真库联调全部用例"

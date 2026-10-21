@@ -113,8 +113,8 @@
   - `default(): String`。
 - **装载规则**（`logicalDatabases()` 重写）：
   1. 只收 `fdbm_db_logicalDatabase_<logical>` 显式项；
-  2. 扫描 `fdbm_partition__*` 与 `fdbm_global__*` 引用的逻辑名，未显式配置的补成「全部物理库」（排序去重）
-     —— 落实 §3.1「未配置的逻辑库视为包含全部物理库」；
+  2. 只扫描 `fdbm_partition__*` 引用的逻辑名，未显式配置的补成「全部物理库」（排序去重）；
+     `fdbm_global__*` **不**触发隐式展开，必须显式引用已存在的逻辑库，否则 `validateGlobalTables` 报 `CONFIG`；
   3. 仍为空时：单一物理库 → 以该物理库名作为唯一逻辑命名空间（仅此一处回退，记 WARN）；
      多物理库 → 取排序后的第一个物理库名作命名空间并记 WARN（不阻断启动，兼容旧部署）。
 - **默认库**：`defaultDatabaseOf` 只在逻辑命名空间内选择：`names.size == 1` → 它；否则排序第一个并记 WARN

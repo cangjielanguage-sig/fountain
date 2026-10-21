@@ -210,7 +210,7 @@
 - [x] 4.5 三个 README 的驱动名、逻辑库、SHOW、流列、NULL 口径与代码一致
 - [x] 4.6 全量验收：三模块 `cjpm test`、`[e2e]` 两后端、`f_orm` 回归、`cjpm build` 无新增 warning
 
-  - 结果：`f_dbm` 5/5、`fdbm` 239/239、`f_dbd` 208/208；`cjpm build` 无新增 warning（三模块各有基线 warning）。
+  - 结果：`f_dbm` 5/5、`fdbm` 244/244、`f_dbd` 208/208；`cjpm build` 无新增 warning（三模块各有基线 warning）。
   - e2e：PostgreSQL `126+28+13`、MySQL `124+28+10`，全部 `failures=0`。
   - `f_orm` 64 例中 1 例 `QueryResultWrapTest.testEveryReaderBranchAndAlias` 报 `bytea → Array<UInt8>` 类型不匹配；
     `f_orm` 本次零改动（`git status` 干净），该失败在基线提交即存在，按约束不修，记录为已知问题。
