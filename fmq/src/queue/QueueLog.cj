@@ -108,15 +108,6 @@ protected class QueueLog <: Resource {
         }
     }
 
-    /** 从位置起打开原始顺序流（快照语义：之后新 append 的数据不出现）。 */
-    protected func openFrom(position: LogPosition): InputStream {
-        let segs = segmentsOrEmpty()
-        match (startPositionOf(segs, position)) {
-            case Some(start) => log.openEntryStream(start.seq, start.offset)
-            // 没有任何可读段：按空流处理，调用方读到 EOF，不抛异常（A47）
-            case None => ByteBuffer()
-        }
-    }
 
     /** 从位置起按记录边界顺序读取（游标用）。 */
     protected func openRecordsFrom(position: LogPosition): QueueRecordReader {
@@ -213,6 +204,12 @@ protected class QueueLog <: Resource {
      * 起始段被 TTL 清理时跳到「最接近的更大段」继续并记 WARN；没有任何后继段（或目录不可读）
      * 返回 `(0, None)` 并记 WARN，不把「段缺失」静默解释成「没有积压」。
      */
+    /**
+     * 从 `position` 起统计记录数与首条发布时间（测试与运维观测 API）。
+     *
+     * 生产 `stats` 走单趟扫描（一个队列只读一遍，A62），不复用本方法；
+     * 保留它是为了给用例一条与实现无关的计数口径。
+     */
     protected func scanAfter(position: LogPosition): (Int64, ?DateTime) {
         let segs = segmentsOrEmpty()
         if (segs.size == 0) {
@@ -256,15 +253,6 @@ protected class QueueLog <: Resource {
             return (0, None<DateTime>)
         }
         (count, first)
-    }
-
-    /** 当前队列的记录总数（从现存最老段扫描）。 */
-    protected func countAll(): Int64 {
-        let segs = segmentsOrEmpty()
-        if (segs.size == 0) {
-            return 0
-        }
-        scanFrom(LogPosition(segs[0].index, 0))[0]
     }
 
     /** 现存段中段号 `>= index` 的最小段号；没有则 `None`（段被删或全部缺失）。 */

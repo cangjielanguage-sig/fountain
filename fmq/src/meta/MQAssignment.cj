@@ -96,13 +96,6 @@ protected class MQAssignment {
         true
     }
 
-    protected static func ownersOf(assignment: MQTopicAssignment): Map<Int64, Int64> {
-        let result = HashMap<Int64, Int64>()
-        for (i in 0..assignment.owners.size) {
-            result.add(i, assignment.owners[i])
-        }
-        result
-    }
 
     private static func normalize(value: Int64, nodeCount: Int64): Int64 {
         let remainder = value % nodeCount

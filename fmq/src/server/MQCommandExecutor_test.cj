@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::fmq.server
 
-import std.convert.*
 import std.fs.*
 import std.unittest.*
 import std.unittest.testmacro.*

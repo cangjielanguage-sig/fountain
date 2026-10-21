@@ -107,7 +107,7 @@ class MQProtocolTest {
         }
         @Assert(MQProtocol.asResult(response).code == 0)
 
-        let empty = MQProtocol.respondEmpty(request)
+        let empty = MQProtocol.respond<MQResult>(request, MQResult(0, "ok"))
         @Assert(empty.id == request.id)
         @Assert(MQProtocol.asResult(empty).code == 0)
     }

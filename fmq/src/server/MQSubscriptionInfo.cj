@@ -62,12 +62,6 @@ protected class MQSubscriptionInfo {
         MQSubscriptionView(subscribedId, topic, tags, filter, autoAck)
     }
 
-    func isConnected(): Bool {
-        if(isEmptySocketBuffer(buffer)){
-            return false
-        }
-        !buffer.isClosed()
-    }
 
     /** 连接已断开（无连接的单测订阅不算断开）。 */
     func isDisconnected(): Bool {

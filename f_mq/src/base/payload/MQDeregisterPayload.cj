@@ -67,8 +67,4 @@ public class MQDeregisterPayload {
     public func isTopic(): Bool {
         kindOf() == DeregisterKind.Topic
     }
-
-    public func isGroup(): Bool {
-        kindOf() == DeregisterKind.Group
-    }
 }

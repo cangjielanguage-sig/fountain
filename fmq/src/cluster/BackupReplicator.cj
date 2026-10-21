@@ -136,11 +136,7 @@ protected class BackupReplicator {
     }
 
     /** 取走当前批次并发送；失败批次重新入队。 */
-    protected func flush(): Unit {
-        flushOnce()
-    }
-
-    private func flushOnce(): Unit {
+    protected func flushOnce(): Unit {
         if (backup <= 0) {
             return
         }

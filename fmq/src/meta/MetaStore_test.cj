@@ -359,7 +359,6 @@ class MetaStoreTest {
             @Assert(reloaded.topicOf("/t").isNone())
             @Assert(reloaded.allTombstones().size == 1)
             @Assert(reloaded.snapshot().tombstones.size == 1)
-            @Assert(reloaded.snapshot().tombstoneFloor == tombstone.revision)
             reloaded.close()
         } finally {
             clean(dir)

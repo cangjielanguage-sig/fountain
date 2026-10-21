@@ -44,12 +44,6 @@ public class TestDirs {
         return dir
     }
 
-    /**
-     * 只给 namespace，目录名用自增序号。
-     */
-    public static func unique(namespace: String): String {
-        return of(namespace, "case")
-    }
 
     /**
      * 删除目录树；不存在时静默返回。
@@ -63,12 +57,6 @@ public class TestDirs {
         }
     }
 
-    /**
-     * 删除整个 namespace 根目录；用例内部需要干净目录时调用。
-     */
-    public static func cleanNamespace(namespace: String): Unit {
-        clean("/tmp/fmq_test_${namespace}")
-    }
 
     private static func token(): String {
         let n = seq.fetchAdd(1)

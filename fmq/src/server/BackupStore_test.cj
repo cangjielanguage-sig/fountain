@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::fmq.server
 
-import std.convert.*
 import std.fs.*
 import std.sync.{AtomicBool, AtomicInt64}
 import std.time.DateTime

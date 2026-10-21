@@ -39,7 +39,11 @@ protected class DeadLetterQueue <: Resource {
         log.append(MQProtocol.encodePayload<MQDeadLetterMessage>(message))
     }
 
-    /** 从指定位置顺序读取；专门的死信消费者用它。 */
+    /**
+     * 从指定位置顺序读取（读 API，测试与运维观测使用）。
+     *
+     * 生产路径按 `cleanExpired` 回收段，不在此迭代；保留它是为了用例核对条目内容。
+     */
     protected func iterate(from: LogPosition): Iterator<MQDeadLetterMessage> {
         DeadLetterReader(log.openEntryStream(from.seq, from.offset))
     }

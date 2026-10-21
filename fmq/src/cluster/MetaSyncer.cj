@@ -41,9 +41,6 @@ protected class MetaSyncer <: Resource {
     /** 主题未到达的组（有界 + TTL），主题落地后自动应用（A36） */
     private let pendingLock = Mutex()
     private let pendingGroups = HashMap<String, PendingGroup>()
-    /** 广播失败的 peer：反熵同步成功后清空（A31） */
-    private let pendingPeersLock = Mutex()
-    private let pendingPeers = HashSet<Int64>()
     private var antiEntropyTimer: ?Timer = None
     private var closed = false
     /** 主题落地后打开本机队列（A29） */
@@ -97,12 +94,6 @@ protected class MetaSyncer <: Resource {
         }
     }
 
-    /** 待补偿 peer 数量（用例断言）。 */
-    protected func pendingPeerCount(): Int64 {
-        synchronized(pendingPeersLock) {
-            Int64(pendingPeers.size)
-        }
-    }
 
     public func isClosed(): Bool {
         closed
@@ -246,7 +237,6 @@ protected class MetaSyncer <: Resource {
                     match (MQProtocol.asPayload<MQMetaSnapshot>(message)) {
                         case Some(snapshot) =>
                             mergeSnapshot(snapshot)
-                            clearPendingPeers()
                             return
                         case None =>
                             log.warn("metadata sync from peer ${peer} failed: response is not a snapshot")
@@ -483,23 +473,12 @@ protected class MetaSyncer <: Resource {
             // 不按「已知死亡」跳过：该标记只是最近一次调用失败，节点可能已经恢复；
             // 跳过会让它永久错过变更（反熵要等一个完整周期）。发送失败只登记待补偿（A31）。
             if (transport.send(index, message).isNone()) {
-                markPendingPeer(index)
                 log.warn("metadata broadcast to node ${index} failed, anti-entropy will catch up")
             }
         }
     }
 
-    private func markPendingPeer(index: Int64): Unit {
-        synchronized(pendingPeersLock) {
-            pendingPeers.add(index)
-        }
-    }
 
-    private func clearPendingPeers(): Unit {
-        synchronized(pendingPeersLock) {
-            pendingPeers.clear()
-        }
-    }
 
     /** 应用落地后打开本机队列；回调异常不影响元数据路径。 */
     private func notifyTopicApplied(topic: String): Unit {

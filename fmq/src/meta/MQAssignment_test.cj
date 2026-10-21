@@ -56,13 +56,13 @@ class MQAssignmentTest {
     }
 
     @TestCase
-    public func ownersOfMapsQueueIndex(): Unit {
+    public func ownerLookupMatchesQueueIndex(): Unit {
         let assignment = MQAssignment.allocate("/t", 4, 3, 0)
-        let owners = MQAssignment.ownersOf(assignment)
-        @Assert(owners[0] == 0)
-        @Assert(owners[1] == 1)
-        @Assert(owners[2] == 2)
-        @Assert(owners[3] == 0)
+        @Assert(assignment.owner(0) == Some(0))
+        @Assert(assignment.owner(1) == Some(1))
+        @Assert(assignment.owner(2) == Some(2))
+        @Assert(assignment.owner(3) == Some(0))
+        @Assert(assignment.owner(4).isNone())
     }
     @TestCase
     public func allocateKeepsDelaying(): Unit {

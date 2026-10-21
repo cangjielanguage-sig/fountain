@@ -114,10 +114,6 @@ public class MQProtocol {
         Message.resp<T>(request.id, qos: QoS.AtMostOnce, ack: false, data: data)
     }
 
-    public static func respondEmpty(request: Message): Message {
-        Message.resp<DataNone>(request.id, qos: QoS.AtMostOnce, ack: false, data: DataNone.INSTANCE)
-    }
-
     public static func fail(request: Message, code: Int64, message: String): Message {
         Message.error<MQResult>(request.id, data: MQResult(code, message))
     }

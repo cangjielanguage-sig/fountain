@@ -30,18 +30,15 @@ public class MQMetaSnapshot {
     private var tombstones: Array<MQMetaTombstone> = []
     /** 生成快照时的最大 revision */
     private var revision: Int64 = 0
-    /** 仍保留的最小墓碑 revision */
-    private var tombstoneFloor: Int64 = 0
 
     public init() {}
 
     public init(topics: Array<MQTopicAssignment>, groups: Array<MQSubscribeGroupMeta>, nextStartNode: Int64,
-        tombstones!: Array<MQMetaTombstone> = [], revision!: Int64 = 0, tombstoneFloor!: Int64 = 0) {
+        tombstones!: Array<MQMetaTombstone> = [], revision!: Int64 = 0) {
         this.topics = topics
         this.groups = groups
         this.nextStartNode = nextStartNode
         this.tombstones = tombstones
         this.revision = revision
-        this.tombstoneFloor = tombstoneFloor
     }
 }

@@ -133,23 +133,6 @@ protected class SubscriberRegistry {
         }
     }
 
-    /** 连接断开时清理其名下全部订阅。 */
-    func removeByBuffer(buffer: SocketBuffer): Unit {
-        synchronized(lock) {
-            let victims = ArrayList<String>()
-            for ((id, info) in byId) {
-                if (info.hasBuffer(buffer)) {
-                    victims.add(id)
-                }
-            }
-            for (id in victims) {
-                match (byId.remove(id)) {
-                    case Some(info) => removeFromGroup(info.topic, info.subscribeGroup, id)
-                    case None => ()
-                }
-            }
-        }
-    }
 
     /** 主题被删除时清理相关订阅。 */
     func removeByTopic(topic: String): Unit {

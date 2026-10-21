@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::fmq.manager
 
-import std.collection.ArrayList
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_config.Config

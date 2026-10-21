@@ -300,7 +300,7 @@ protected class MetaStore <: Resource {
             }
             writeAtomically("${topicPath(assignment.topic)}", MQProtocol.encodePayload<MQTopicAssignment>(assignment))
             topicIndex.add(assignment.topic, assignment)
-            // 活条目已胜出：墓碑只会挡住后续更旧的条目，保留它会压低 tombstoneFloor，必须移除
+            // 活条目已胜出：墓碑只会挡住后续更旧的条目，保留它会让「主题已删」判断失真，必须移除
             dropTombstoneLocked(MQMetaTombstone.KIND_TOPIC, assignment.topic, "")
             if (let Some(value) <- nextStart) {
                 this.nextStart = value
@@ -549,16 +549,11 @@ protected class MetaStore <: Resource {
                 }
             }
             let tombstoneList = ArrayList<MQMetaTombstone>()
-            var floor = Int64.Max
             for ((_, tombstone) in tombstones) {
                 tombstoneList.add(tombstone)
-                if (tombstone.revision < floor) {
-                    floor = tombstone.revision
-                }
             }
             MQMetaSnapshot(topicList.toArray(), groupList.toArray(), nextStart,
-                tombstones: tombstoneList.toArray(), revision: maxRevisionLocked(),
-                tombstoneFloor: if (tombstoneList.size == 0) {0} else {floor})
+                tombstones: tombstoneList.toArray(), revision: maxRevisionLocked())
         }
     }
 

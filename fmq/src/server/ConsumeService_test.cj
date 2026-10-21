@@ -377,6 +377,15 @@ class ConsumeServiceTest {
         }
     }
 
+    /** 记录总数：从现存最老段扫一遍（替代生产侧已删除的 `countAll`）。 */
+    private static func countOf(log: QueueLog): Int64 {
+        let segs = log.segmentsOrEmpty()
+        if (segs.size == 0) {
+            return 0
+        }
+        log.scanAfter(LogPosition(segs[0].index, 0))[0]
+    }
+
     private static func statsRow(text: String, topic: String, group: String): Array<String> {
         for (line in text.split("\n")) {
             let fields = line.split("\t")
@@ -693,11 +702,11 @@ class ConsumeServiceTest {
         try {
             fixture.append([], "one")
             @Assert(fixture.store.load("/t", 0, "g").isNone())
-            let before = fixture.queues.queueOf("/t", 0).getOrThrow().countAll()
+            let before = countOf(fixture.queues.queueOf("/t", 0).getOrThrow())
             let text = fixture.service.stats("/t", 0, {_ => ["g"]})
             @Assert(text.contains("R\t/t\tg\t"))
             @Assert(fixture.store.load("/t", 0, "g").isNone())
-            @Assert(fixture.queues.queueOf("/t", 0).getOrThrow().countAll() == before)
+            @Assert(countOf(fixture.queues.queueOf("/t", 0).getOrThrow()) == before)
         } finally {
             fixture.close()
         }

@@ -29,7 +29,7 @@ import fountain::f_protocol.default.Message
  *
  * 用于客户端单测，不启动真实 `fmq`。
  */
-public class MQStubServer <: Resource {
+class MQStubServer <: Resource {
     private static let nextPort = AtomicInt64(25000)
 
     let port: UInt16

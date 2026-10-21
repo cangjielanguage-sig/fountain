@@ -585,9 +585,9 @@ class MQServerTest {
         }
     }
 
-    /** 断链即释放：按连接缓冲区摘除订阅后，同组另一订阅下一次消费取到记录。 */
+    /** 断链即释放：清理器摘除死连接订阅后，同组另一订阅下一次消费取到记录（R2-G4）。 */
     @TestCase
-    public func removeByBufferReleasesRecordToGroup(): Unit {
+    public func cleanupSubscribersReleasesRecordToGroup(): Unit {
         let root = TestDirs.of("server", "cleanup_buffer")
         let port = ServerPortAllocator.freePort()
         let server = MQServer(options(root, port, ["127.0.0.1:${port}"]))
@@ -602,16 +602,22 @@ class MQServerTest {
             first.publish("/t", "held")
             let message = first.consume(sid)
             @Assert(message.get<String>() == Some("held"))
-            // 连接断开回调等价路径：按缓冲区摘除订阅
-            var bufferFound = false
+
+            // 连接断开回调等价路径：把该订阅标成「连接已死」后交给清理器
+            var found = false
             for (info in server.subscriptionRegistry.infos()) {
                 if (info.subscribedId == sid) {
-                    server.subscriptionRegistry.removeByBuffer(info.buffer)
-                    bufferFound = true
+                    server.subscriptionRegistry.register(MQSubscriptionInfo(info.subscribedId, info.topic,
+                        info.subscribeGroup, [], MQFilter.compile(""), false, EMPTY_SOCKET_BUFFER,
+                        alive: {=> false}))
+                    found = true
                 }
             }
-            @Assert(bufferFound)
+            @Assert(found)
+            server.cleanupSubscribers()
             @Assert(server.subscriptionRegistry.count() == 0)
+
+            // 记录已退回组内：新订阅立刻拿到
             let second = MQClient([address])
             try {
                 let other = second.subscribe("/t", subscribeGroup: "g")

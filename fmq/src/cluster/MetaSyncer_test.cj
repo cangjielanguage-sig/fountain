@@ -756,7 +756,7 @@ class MetaSyncerTest {
         }
     }
 
-    /** 广播跳过的死节点进入待补偿集合，反熵成功后清空（A31）。 */
+    /** 广播失败的死节点仍要尝试，反熵成功后拉到快照（A31）。 */
     @TestCase
     public func knownDeadPeerIsSkippedAndCompensatedByAntiEntropy(): Unit {
         let dir = dirOf("anti_entropy")
@@ -771,9 +771,8 @@ class MetaSyncerTest {
             transport.available[2] = false
             let syncer = MetaSyncer(store, transport)
             syncer.registerTopic(MQTopicMeta("/local", 1))
-            // 已知死亡不跳过：仍然尝试发送（否则恢复后永远错过变更），失败后进入待补偿集合
+            // 已知死亡不跳过：仍然尝试发送（否则恢复后永远错过变更）
             @Assert(transport.attemptCount() == 2)
-            @Assert(syncer.pendingPeerCount() == 2)
 
             // peer 恢复：反熵拉到快照后清空待补偿集合
             transport.knownDead[1] = false
@@ -787,7 +786,6 @@ class MetaSyncerTest {
             }
             syncer.antiEntropyOnce()
             @Assert(store.topicOf("/remote").isSome())
-            @Assert(syncer.pendingPeerCount() == 0)
             store.close()
         } finally {
             clean(dir)
@@ -882,8 +880,8 @@ class MetaSyncerTest {
             let assignment = syncer.registerTopic(MQTopicMeta("/t", 1))
             @Assert(store.topicOf("/t").isSome())
             @Assert(assignment.topic == "/t")
-            // 两个 peer 都没有应答器（默认 None）：都进入待补偿集合
-            @Assert(syncer.pendingPeerCount() == 2)
+            // 两个 peer 都没有应答器（默认 None）：广播尝试都发生，反熵后续补齐
+            @Assert(transport.attemptCount() == 2)
         } finally {
             shutdown(store, "broadcast_fail")
         }

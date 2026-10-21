@@ -44,6 +44,15 @@ class QueueLogTest {
         }
     }
 
+    /** 记录总数：从现存最老段扫一遍（替代生产侧已删除的 `countAll`）。 */
+    private static func countOf(log: QueueLog): Int64 {
+        let segs = log.segmentsOrEmpty()
+        if (segs.size == 0) {
+            return 0
+        }
+        log.scanAfter(LogPosition(segs[0].index, 0))[0]
+    }
+
     private static func isCorrupt(log: QueueLog, position: LogPosition): Bool {
         match (log.readAt(position)) {
             case Corrupt => true
@@ -608,7 +617,7 @@ class QueueLogTest {
 
     // ===== 扫描 / 计数 / 重开（A56） =====
 
-    /** `countAll` 与 `scanAfter` 的起点语义：从中间位置只数后面的记录。 */
+    /** `scanAfter` 的起点语义：从中间位置只数后面的记录。 */
     @TestCase
     public func scanAfterCountsFromGivenPosition(): Unit {
         let dir = dirOf("scan_after")
@@ -618,7 +627,7 @@ class QueueLogTest {
             let first = log.append(recordOf(0x11u8, 16))
             let second = log.append(recordOf(0x22u8, 16))
             let third = log.append(recordOf(0x33u8, 16))
-            @Assert(log.countAll() == 3)
+            @Assert(countOf(log) == 3)
             @Assert(log.scanAfter(first)[0] == 3)
             @Assert(log.scanAfter(second)[0] == 2)
             @Assert(log.scanAfter(third)[0] == 1)
@@ -732,7 +741,7 @@ class QueueLogTest {
         first.close()
         let second = QueueLog(dir, 1024 * 1024, 1)
         try {
-            @Assert(second.countAll() == 3)
+            @Assert(countOf(second) == 3)
             let reader = second.openRecordsFrom(LogPosition(1, 0))
             try {
                 for (expected in values) {
@@ -861,7 +870,7 @@ class QueueLogTest {
                 thrown = true
             }
             @Assert(thrown)
-            @Assert(log.countAll() == 0)
+            @Assert(countOf(log) == 0)
         } finally {
             log.close()
             clean(dir)
