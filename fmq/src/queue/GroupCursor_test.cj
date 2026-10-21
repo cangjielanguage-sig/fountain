@@ -19,6 +19,7 @@ import std.collection.ArrayList
 import std.collection.concurrent.ConcurrentHashMap
 import std.convert.*
 import std.fs.*
+import std.io.SeekPosition
 import std.sync.AtomicInt64
 import std.time.DateTime
 import std.unittest.*
@@ -154,6 +155,37 @@ class GroupCursorTest {
 
     private static func recordSize(body: String, tags: Array<String>): Int64 {
         MQMessageRecord.encode("/t", tags, "mid-${body}", body.toData()).size
+    }
+
+
+    /** 记录损坏（段仍在）：游标不标记已决、不推进，也不跳过后续记录（R3-M2）。 */
+    @TestCase
+    public func corruptedRecordDoesNotAdvanceCursor(): Unit {
+        let fixture = CursorFixture("corrupt_record", ackTimeout: Duration.Zero)
+        try {
+            let first = fixture.append([], "first")
+            fixture.append([], "second")
+            let cursor = fixture.cursorOf()
+            let sub = fixture.sub("s1")
+            let delivered = cursor.next(sub, [sub], MQMatcher()).getOrThrow()
+            @Assert(delivered[1].seq == first.seq && delivered[1].offset == first.offset)
+
+            // 把第一条记录的长度头改成非法值（段文件仍在）
+            let file = File("${fixture.root}/logs/log_1.log", OpenMode.ReadWrite)
+            try {
+                file.seek(SeekPosition.Begin(0))
+                file.write([0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8])
+            } finally {
+                file.close()
+            }
+
+            @Assert(cursor.next(sub, [sub], MQMatcher()).isNone())
+            @Assert(cursor.committed.seq == first.seq && cursor.committed.offset == first.offset)
+            @Assert(cursor.unreadableSkipped == 0)
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
     }
 
     @TestCase
@@ -773,19 +805,19 @@ class GroupCursorTest {
             let members = [s1, s2]
             // s1 扫描：记录分配给 s2（entry.position = 记录位置）
             @Assert(cursor.next(s1, members, MQMatcher()).isNone())
-            // 把该段的长度头改成 0：readAt 读不到内容
+            // 真实删段（模拟 TTL 清理）：readAt 按「段缺失」处理，而不是「记录损坏」
             let dir = "${fixture.root}/logs"
-            let rewritten = Array<Bool>(1, repeat: false)
+            let segments = ArrayList<String>()
             Directory.walk(dir) {info: FileInfo =>
-                if (!rewritten[0] && !info.isDirectory() && info.name.startsWith("log_")) {
-                    let file = File(info.path.toString(), OpenMode.Write)
-                    file.write([0u8, 0u8, 0u8, 0u8])
-                    file.close()
-                    rewritten[0] = true
+                if (!info.isDirectory() && info.name.startsWith("log_")) {
+                    segments.add(info.path.toString())
                 }
                 true
             }
-            @Assert(rewritten[0])
+            @Assert(segments.size > 0)
+            for (path in segments) {
+                remove(path)
+            }
             @Assert(cursor.next(s2, members, MQMatcher()).isNone())
             @Assert(cursor.unreadableSkipped == 1)
             @Assert(cursor.committed.seq > position.seq ||

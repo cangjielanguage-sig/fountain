@@ -81,13 +81,23 @@ protected class QueueLog <: Resource {
         log.append(entry)
     }
 
-    /** 从位置起读一条记录；位置无效或记录损坏返回 `None`。 */
-    protected func readAt(position: LogPosition): ?Array<Byte> {
+    /**
+     * 从位置起读一条记录，并区分「读到了」「记录损坏」「段已不存在」。
+     *
+     * 调用方必须能分开处理损坏与段缺失：损坏时不推进游标（否则丢消息），
+     * 段缺失时按恢复语义前移（R3-M1/M2）。
+     */
+    protected func readAt(position: LogPosition): LogReadResult {
         let reader = openRecordsFrom(position)
         try {
             match (reader.next()) {
-                case Some(item) => Some(item[0])
-                case None => None<Array<Byte>>
+                case Some(item) => LogReadResult.Record(item[0])
+                case None =>
+                    if (reader.isCorrupted()) {
+                        LogReadResult.Corrupt
+                    } else {
+                        LogReadResult.SegmentGone
+                    }
             }
         } finally {
             reader.close()
@@ -275,6 +285,13 @@ protected class QueueLog <: Resource {
     }
 }
 
+/** 单条记录读取的三种结局：正常/损坏/段已不存在（R3-M1/M2）。 */
+protected enum LogReadResult {
+    | Record(Array<Byte>)
+    | Corrupt
+    | SegmentGone
+}
+
 /**
  * 按 `[长度][记录]` 的边界从段流中逐条读出记录，并维护每条记录的 `LogPosition`。
  *
@@ -318,9 +335,8 @@ protected class QueueRecordReader {
         }
         let length = QueueLog.getInt32BE(header, 0)
         if (length == 0) {
-            // 零长度条目是「到此为止」的标记，写入侧不会产生；按干净结束处理
-            close()
-            return None<(Array<Byte>, LogPosition)>
+            // 写入侧从不产生零长度条目：出现即说明记录损坏，必须停下而不是当成干净结束（R3-M1）
+            return corrupt(0, -1, "zero-length record header")
         }
         match (segmentOf(seq)) {
             case None =>

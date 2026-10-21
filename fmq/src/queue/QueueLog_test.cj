@@ -38,7 +38,24 @@ class QueueLogTest {
     }
 
     private static func readOne(log: QueueLog, position: LogPosition): Array<Byte> {
-        log.readAt(position).getOrThrow()
+        match (log.readAt(position)) {
+            case Record(data) => data
+            case _ => throw Exception("expected a record at ${position.seq}:${position.offset}")
+        }
+    }
+
+    private static func isCorrupt(log: QueueLog, position: LogPosition): Bool {
+        match (log.readAt(position)) {
+            case Corrupt => true
+            case _ => false
+        }
+    }
+
+    private static func isGone(log: QueueLog, position: LogPosition): Bool {
+        match (log.readAt(position)) {
+            case SegmentGone => true
+            case _ => false
+        }
     }
 
     @TestCase
@@ -392,7 +409,7 @@ class QueueLogTest {
         let log = rawLog("corrupt_huge", [header(0xFFFFFFFF)])
         let dir = dirOf("corrupt_huge")
         try {
-            @Assert(log.readAt(LogPosition(1, 0)).isNone())
+            @Assert(isCorrupt(log, LogPosition(1, 0)))
             var thrown = false
             try {
                 log.scanAfter(LogPosition(1, 0))
@@ -412,7 +429,7 @@ class QueueLogTest {
         let log = rawLog("corrupt_remaining", [segment])
         let dir = dirOf("corrupt_remaining")
         try {
-            @Assert(log.readAt(LogPosition(1, 0)).isNone())
+            @Assert(isCorrupt(log, LogPosition(1, 0)))
             var thrown = false
             try {
                 log.scanAfter(LogPosition(1, 0))
@@ -431,7 +448,7 @@ class QueueLogTest {
         let log = rawLog("exact_remaining", [concat(header(3), [1u8, 2u8, 3u8])])
         let dir = dirOf("exact_remaining")
         try {
-            @Assert(log.readAt(LogPosition(1, 0)).getOrThrow() == [1u8, 2u8, 3u8])
+            @Assert(readOne(log, LogPosition(1, 0)) == [1u8, 2u8, 3u8])
             let scanned = log.scanAfter(LogPosition(1, 0))
             @Assert(scanned[0] == 1)
         } finally {
@@ -445,7 +462,7 @@ class QueueLogTest {
         let log = rawLog("corrupt_header", [[1u8, 2u8]])
         let dir = dirOf("corrupt_header")
         try {
-            @Assert(log.readAt(LogPosition(1, 0)).isNone())
+            @Assert(isCorrupt(log, LogPosition(1, 0)))
             var thrown = false
             try {
                 log.scanAfter(LogPosition(1, 0))
@@ -459,14 +476,43 @@ class QueueLogTest {
         }
     }
 
+    /** 零长度头是损坏而不是干净结束：判损坏、停止读取，扫描抛损坏异常（R3-M1）。 */
     @TestCase
-    public func zeroLengthHeaderEndsTheStream(): Unit {
+    public func zeroLengthHeaderIsCorruption(): Unit {
         let log = rawLog("zero_length", [header(0)])
         let dir = dirOf("zero_length")
         try {
-            @Assert(log.readAt(LogPosition(1, 0)).isNone())
-            let scanned = log.scanAfter(LogPosition(1, 0))
-            @Assert(scanned[0] == 0)
+            @Assert(isCorrupt(log, LogPosition(1, 0)))
+            var thrown = false
+            try {
+                log.scanAfter(LogPosition(1, 0))
+            } catch (_: QueueCorruptionException) {
+                thrown = true
+            }
+            @Assert(thrown)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** 段被真正删除后读取按「段缺失」处理，跳到后继段继续，不判损坏（R3-M2）。 */
+    @TestCase
+    public func missingSegmentResumesAtNextSegmentNotCorruption(): Unit {
+        let dir = dirOf("read_at_gone")
+        clean(dir)
+        // 段上限 50：每条 44 字节的表项独占一段
+        let log = QueueLog(dir, 50, 1)
+        try {
+            let first = log.append(recordOf(0x11u8, 40))
+            let second = log.append(recordOf(0x22u8, 40))
+            let third = log.append(recordOf(0x33u8, 40))
+            @Assert(first.seq == 1 && second.seq == 2 && third.seq == 3)
+            log.removeById(1)
+            // 起点落在被删段：归一化到段 2 的第一条，不报损坏
+            @Assert(readOne(log, LogPosition(1, 0)) == recordOf(0x22u8, 40))
+            // 尾段读完之后没有后继段：按段缺失处理
+            @Assert(isGone(log, LogPosition(3, third.offset + 44)))
         } finally {
             log.close()
             clean(dir)
@@ -480,7 +526,7 @@ class QueueLogTest {
             maxFileSize: 16)
         let dir = dirOf("corrupt_cross")
         try {
-            @Assert(log.readAt(LogPosition(1, 0)).isNone())
+            @Assert(isCorrupt(log, LogPosition(1, 0)))
             var thrown = false
             try {
                 log.scanAfter(LogPosition(1, 0))
@@ -693,10 +739,10 @@ class QueueLogTest {
             let first = log.append(data)
             @Assert(first.seq == 1 && first.offset == 0)
             @Assert(log.segments().size == 1)
-            @Assert(log.readAt(first).getOrThrow() == data)
+            @Assert(readOne(log, first) == data)
             let second = log.append(data)
             @Assert(second.seq == 2 && second.offset == 0)
-            @Assert(log.readAt(second).getOrThrow() == data)
+            @Assert(readOne(log, second) == data)
         } finally {
             log.close()
             clean(dir)

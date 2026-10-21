@@ -149,22 +149,30 @@ protected class GroupCursor {
                         case NoFuture => return None<(Array<Byte>, LogPosition)>
                     }
                 }
-                if (record.isNone()) {
-                    // 记录已不可读（段被清理/记录被截断）：标记已决，但必须留痕（A48）
-                    entry.decided = true
-                    skippedUnreadable_ = skippedUnreadable_ + 1
-                    logger.warn("record at ${topic}/${queueIndex}@${entry.position.seq}:${entry.position.offset} " +
-                        "is unreadable for group '${group}', marked decided")
-                    continue
+                let bytes = match (record) {
+                    case Record(data) => data
+                    case Corrupt =>
+                        // 段还在但记录坏了：不标记已决、不推进，交给运维修段后重试（R3-M2）
+                        logger.error("corrupted record at ${topic}/${queueIndex}@" +
+                            "${entry.position.seq}:${entry.position.offset} for group '${group}', " +
+                            "cursor is not advanced")
+                        return None<(Array<Byte>, LogPosition)>
+                    case SegmentGone =>
+                        // 段被清理、记录已不可读：标记已决，但必须留痕（A48）
+                        entry.decided = true
+                        skippedUnreadable_ = skippedUnreadable_ + 1
+                        logger.warn("record at ${topic}/${queueIndex}@${entry.position.seq}:" +
+                            "${entry.position.offset} is gone for group '${group}', marked decided")
+                        continue
                 }
                 // 已分配但尚未取走：延迟未到期时停在队首（已投递过的重投不受延迟约束）
-                if (!entry.delivered && !isDue(record.getOrThrow(), current)) {
+                if (!entry.delivered && !isDue(bytes, current)) {
                     return None<(Array<Byte>, LogPosition)>
                 }
                 // 已分配给本订阅但尚未取走时，匹配在分配时已判定；退回组内的记录必须重新匹配
                 let needMatch = entry.delivered || entry.owner.isNone()
                 if (needMatch) {
-                    match (MQMatcher.matches(subscription, record.getOrThrow())) {
+                    match (MQMatcher.matches(subscription, bytes)) {
                         case Match => ()
                         case _ => continue
                     }
@@ -174,11 +182,11 @@ protected class GroupCursor {
                 entry.owner = Some(subscription.subscribedId)
                 entry.delivered = true
                 if (entry.deliverCount > deadMsgThreshold) {
-                    writeDeadLetter(entry, record.getOrThrow(), current)
+                    writeDeadLetter(entry, bytes, current)
                     entry.decided = true
                     continue
                 }
-                redelivered = Some((record.getOrThrow(), entry.position))
+                redelivered = Some((bytes, entry.position))
                 if (let Some(m) <- metrics) {
                     m.incDelivered(topic, group)
                     if (entry.deliverCount > 1) {
