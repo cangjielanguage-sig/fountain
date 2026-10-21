@@ -80,7 +80,8 @@ public class MQClient <: Resource {
         let record = MQMessageRecord.encode(topic, tags, id.toString(), body)
         var sawNotOwner = false
         var lastConnectionError: ?Exception = None
-        for (node in candidateNodes(topic)) {
+        let candidates = candidateNodes(topic)
+        for (node in candidates) {
             match (transferOf(node, MQProtocol.publish(record, id: id), PUBLISH_TIMEOUT)) {
                 case TransferOutcome.Response(msg) =>
                     let result = MQProtocol.asResult(msg)
@@ -106,6 +107,7 @@ public class MQClient <: Resource {
         if (sawNotOwner && lastConnectionError.isNone()) {
             throw MQServiceException(MQErrorCode.NOT_OWNER, MQErrorCode.messageOf(MQErrorCode.NOT_OWNER))
         }
+        log.error("publish to topic '${topic}' failed on nodes ${nodeList(candidates)}")
         match (lastConnectionError) {
             case Some(e) => throw MQConnectionException("cannot publish to any node of topic '${topic}'", e)
             case None => throw MQConnectionException("cannot publish to any node of topic '${topic}'")
@@ -251,8 +253,9 @@ public class MQClient <: Resource {
                                             result.segmentedOffset)
                                     case None =>
                                         // 非空记录解不出来：不能当成「没有消息」继续轮询（A16）
-                                        log.error("cannot decode record from ${subscribedId} at " +
-                                            "${result.queueIndex}:${result.segmentedIndex}:${result.segmentedOffset}")
+                                        log.error("cannot decode record from subscription ${subscribedId} at " +
+                                            "${result.queueIndex}:${result.segmentedIndex}:${result.segmentedOffset} " +
+                                            "(${result.record.size()} bytes)")
                                         throw MQServiceException(MQErrorCode.INTERNAL,
                                             "cannot decode consume result at ${result.queueIndex}:" +
                                             "${result.segmentedIndex}:${result.segmentedOffset}")
@@ -270,6 +273,7 @@ public class MQClient <: Resource {
             }
             if (responded == 0) {
                 // 本轮全部节点不可达：明确报错，而不是永久空转（A12）
+                log.error("consume on subscription '${subscribedId}' failed: nodes ${nodeList(sub.owners)} unreachable")
                 match (lastConnectionError) {
                     case Some(e) =>
                         throw MQConnectionException(
@@ -309,8 +313,10 @@ public class MQClient <: Resource {
                         }
                         sub.deliveries.remove(key)
                     case TransferOutcome.Timeout =>
+                        log.error("ack of subscription '${subscribedId}' at ${key} timed out on node ${node}")
                         throw MQConnectionException("ack to node ${node} timed out")
                     case TransferOutcome.Rejected(e) =>
+                        log.error("ack of subscription '${subscribedId}' at ${key} failed on node ${node}: ${e.message}")
                         throw MQConnectionException("cannot ack position ${key} on node ${node}", e)
                 }
             case None =>
@@ -337,6 +343,7 @@ public class MQClient <: Resource {
                     }
                 }
                 if (!accepted) {
+                    log.error("ack of subscription '${subscribedId}' at ${key} failed on nodes ${nodeList(sub.owners)}")
                     match (lastConnectionError) {
                         case Some(e) =>
                             throw MQConnectionException("cannot ack position ${key} on any node", e)
@@ -420,15 +427,36 @@ public class MQClient <: Resource {
         }
     }
 
+    /**
+     * 向单节点发一次请求。
+     *
+     * 超时与连接失败都在这里记 WARN（含节点下标与地址）：全 owner 不可达时排障要能定位到具体节点（A16）。
+     */
     private func transferOf(node: Int64, message: Message, timeout: Duration): TransferOutcome {
+        let address = pool.hostOf(node)
         try {
             match (pool.clientOf(node).transfer(message, timeout)) {
                 case Some(response) => TransferOutcome.Response(response)
-                case None => TransferOutcome.Timeout
+                case None =>
+                    log.warn("request to node ${node} (${address}) timed out after ${timeout}")
+                    TransferOutcome.Timeout
             }
         } catch (e: Exception) {
+            log.warn("request to node ${node} (${address}) failed: ${e.message}")
             TransferOutcome.Rejected(e)
         }
+    }
+
+    /** 节点下标的可读列表，用于日志与异常文案。 */
+    private static func nodeList(nodes: Array<Int64>): String {
+        let buf = StringBuilder()
+        for (i in 0..nodes.size) {
+            if (i > 0) {
+                buf.append(",")
+            }
+            buf.append(nodes[i].toString())
+        }
+        "[${buf.toString()}]"
     }
 
     /** 候选节点：命中所有权缓存时 owner 优先，其余节点随后兜底。 */

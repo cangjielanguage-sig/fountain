@@ -147,10 +147,13 @@ class MQBlobTest {
     }
 
     @TestCase
-    public func dataNoneIsAnEmptyBlob(): Unit {
-        let blob = blobOf(DataNone.INSTANCE).getOrThrow()
-        @Assert(blob.isEmpty())
-        @Assert(blob.size() == 0)
+    public func dataNoneIsNotAnEmptyBlob(): Unit {
+        // 缺字段不是「空载荷」：空记录必须由 DataCollection 表示，否则协议错误会被当成「没有消息」
+        @Assert(blobOf(DataNone.INSTANCE).isNone())
+        // 空字节的合法形态仍然能解出空 blob
+        let empty = blobOf(DataCollection<Array<Byte>, Byte>([])).getOrThrow()
+        @Assert(empty.isEmpty())
+        @Assert(empty.size() == 0)
     }
 
     @TestCase

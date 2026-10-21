@@ -18,6 +18,7 @@ package fountain::f_mq.client
 import std.sync.{Mutex, AtomicBool}
 import std.time.DateTime
 import fountain::f_data.DataAny
+import fountain::f_log.*
 import fountain::f_mq.base.MQHost
 import fountain::f_mq.exception.MQConnectionException
 import fountain::f_net.client.Client
@@ -31,6 +32,7 @@ import fountain::f_protocol.default.Message
  * 退避窗口内立即失败，避免每次调用都去撞一个死节点。
  */
 internal class MQNodePool {
+    private static let log = LoggerFactory.getLogger("fountain::f_mq.client.MQNodePool")
     private static let MAX_BACKOFF_MS: Int64 = 5000
     private static let BASE_BACKOFF_MS: Int64 = 200
 
@@ -93,7 +95,10 @@ internal class MQNodePool {
                     // 连接被对端/心跳关闭：关掉旧句柄后重建，而不是永久报错
                     try {
                         existing.close()
-                    } catch (_: Exception) {}
+                    } catch (e: Exception) {
+                        // 旧句柄关不掉不影响重建，留 DEBUG 便于排查句柄泄漏
+                        log.debug("node ${nodeIndex} (${hosts[nodeIndex]}) old connection close failed: ${e.message}")
+                    }
                     slots[nodeIndex] = None<Client<DataAny>>
                 case None => ()
             }
@@ -170,7 +175,9 @@ internal class MQNodePool {
                     case Some(c) =>
                         try {
                             c.close()
-                        } catch (_: Exception) {}
+                        } catch (e: Exception) {
+                            log.debug("node ${i} (${hosts[i]}) connection close failed: ${e.message}")
+                        }
                         slots[i] = None<Client<DataAny>>
                     case None => ()
                 }

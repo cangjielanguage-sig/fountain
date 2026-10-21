@@ -83,8 +83,10 @@
 ## 7. `fmq` 服务运行时
 
 - [x] 7.1 `main` / `dispatch`：先写 `Main_test.cj`（`server --help`、`manager --help`、空参数返回 2、未知子命令返回 2、`server` 调用装配点），再把 `main` 抽成可测 `dispatch`
-- [x] 7.2 `MQCommandExecutor`：先写 `MQCommandExecutor_test.cj` 全矩阵（注册回分配、非法主题、注销、主题不存在、非 owner、原样落盘、16KB 大记录、备份入队、未注册组、订阅消费确认闭环、空消费、`ACK_UNKNOWN`、metaSync 快照、备份只存不投递、垃圾载荷），再实现分派
-- [x] 7.3 `MQServer` 装配：先写 `MQServer_test.cj`（绑定并接受、负数 backup 拒绝、未知自身拒绝、无 peer 仍启动、只开本地队列、关闭释放端口、重启恢复消费），再实现 `build()` 与 `run()`
+- [x] 7.2 `MQCommandExecutor`：先写 `MQCommandExecutor_test.cj` 全矩阵（注册回分配、非法主题、注销、主题不存在、非 owner、原样落盘、16KB 大记录、未注册组、订阅消费确认闭环、空消费、`ACK_UNKNOWN`、metaSync 快照、备份只存不投递、垃圾载荷），再实现分派
+  > 备份入队本身由 `fmq/src/cluster/BackupReplicator_test.cj` 覆盖；`MQCommandExecutor_test.cj` 里的装配用 `BackupReplicator(registry, 0)`（关闭备份）只为验证「只存不投递」。
+- [x] 7.3 `MQServer` 装配：先写 `MQServer_test.cj`（绑定并接受、无 peer 仍启动、只开本地队列、关闭释放端口、重启恢复消费），再实现 `build()` 与 `run()`
+  > 配置侧的「负数 backup 拒绝」在 `fmq/src/config/MQConfig_test.cj`，「未知自身下标拒绝」在 `fmq/src/Main_test.cj`，不在 `MQServer_test.cj`。
 - [x] 7.4 回归：`cd fmq && cjpm test` 全绿
 - [x] 7.5 手工冒烟：单节点起服务 → 用 `f_mq` 客户端完成注册、发布、订阅、消费、ack（记录命令与输出）
   > 结论：已用真实 `fmq server` 进程 + `fmq manager` + e2e 客户端完成注册、发布 3 条、订阅、消费 3 条；三节点脚本另见 9.x。
@@ -144,7 +146,7 @@
 > 以下各项来自二次 `opsx:verify` 的 warning / suggestion，原本计划另开变更承接；
 > 实际由 `openspec/changes/fix-fmq-full-audit` 一并落地，逐项核对后勾选。
 
-- [x] 11.1 补 `fmq/src/server/MQManager_test.cj`：覆盖任务 8.3 的六个管理子命令（`registerTopic` / `deleteTopic` / `registerSubscriber` / `deleteSubscribeGroup` / `listTopics` / `listSubscribeGroups`）的正常与错误路径，断言错误路径返回非 0 且提示可读
+- [x] 11.1 补 `fmq/src/server/MQManager_test.cj`：覆盖任务 8.3 的六个管理子命令（`registerTopic` / `deleteTopic` / `registerSubscriber` / `deleteSubscribeGroup` / `listTopics` / `listSubscribeGroups`）的正常与错误路径，断言退出码；可读性与列宽由 `fmq/src/manager/MQManagerOutput_test.cj` 对纯函数断言
 - [x] 11.2 补齐 BODY 类型矩阵用例：现有用例未覆盖 `TreeSet` / `HashMap` / `Array` 三类容器的编解码与 filter 求值，补在 `MQPayload_test.cj` 或 `MQMessageRecord_test.cj`
 - [x] 11.3 补备份定时 flush 与并发关闭用例：`BackupStore` 的 100ms 定时 flush 无直接用例；`close()` 与在途 `append` / `flush` 并发无用例，需验证关闭后调用不崩溃且已确认数据不丢
 - [x] 11.4 消除 `fmq → f_mq.client` 分层偏离：`fmq` 为 `parseHost`（`f_mq/src/client/MQClientConfig.cj:48`）依赖 `f_mq.client`，与「`fmq` 只依赖 `f_mq.base`」的设计不一致；把 `parseHost` 下沉到 `f_mq.base` 或改用 `f_net`，同步 `fmq/cjpm.toml` 与依赖图

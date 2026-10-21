@@ -18,6 +18,7 @@ package fountain::f_mq.base.payload
 import std.fs.*
 import std.io.SeekPosition
 import fountain::f_data.*
+import fountain::f_log.*
 
 /**
  * 可承载大载荷的字节字段。
@@ -32,6 +33,7 @@ import fountain::f_data.*
  * 对象类型特征只取类全名，因此替换字段类型不改变字节布局。
  */
 public class MQBlob <: DataFields<MQBlob> {
+    private static let log = LoggerFactory.getLogger("fountain::f_mq.base.payload.MQBlob")
     private var bytes: Array<Byte>
 
     public init() {
@@ -77,7 +79,8 @@ public class MQBlob <: DataFields<MQBlob> {
                         }
                     case _ => None<MQBlob>
                 }
-            case _: DataNone => Some(MQBlob())
+            // 缺字段不是「没有消息」：数据集合才是空载荷的合法表示（A01）
+            case _: DataNone => None<MQBlob>
             case _ => None<MQBlob>
         }
     }
@@ -112,14 +115,18 @@ public class MQBlob <: DataFields<MQBlob> {
             if (!file.isClosed()) {
                 file.close()
             }
-            // 临时文件与其父目录都是本进程创建的，用完即删（失败不影响结果）
+            // 临时文件与其父目录都是本进程创建的，用完即删；清理失败不能影响解码结果，但要留痕
             try {
                 removeIfExists(path)
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                log.warn("cannot remove decoded temp file ${path}: ${e.message}")
+            }
             if (let Some(dir) <- parent) {
                 try {
                     removeIfExists(dir.path)
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    log.warn("cannot remove decoded temp dir ${dir.path}: ${e.message}")
+                }
             }
             if (got != size) {
                 None<Array<Byte>>

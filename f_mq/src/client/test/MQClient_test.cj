@@ -938,4 +938,53 @@ class MQClientTest {
             stub.close()
         }
     }
+
+    /** 全部节点不可达时，每个节点都要留下含下标与地址的 WARN/ERROR（A16）。 */
+    @TestCase
+    public func clientFailsWithPerNodeLogs(): Unit {
+        CapturingAppender.install()
+        let hosts = ["127.0.0.1:1", "127.0.0.1:2"]
+        let client = MQClient(hosts)
+        try {
+            var threw = false
+            try {
+                client.publish("/order", 1i64)
+            } catch (_: MQConnectionException) {
+                threw = true
+            }
+            @Assert(threw)
+            for (i in 0..hosts.size) {
+                @Assert(CapturingAppender.waitFor(["node ${i}", hosts[i]]))
+            }
+        } finally {
+            client.close()
+        }
+    }
+
+    /** 记录解码失败时，ERROR 日志要含订阅 id、队列与位置（A16）。 */
+    @TestCase
+    public func decodeFailureLogsPosition(): Unit {
+        CapturingAppender.install()
+        let stub = MQStubServer({buffer, request =>
+            match (request.command) {
+                case CONSUME(_) =>
+                    Some(MQProtocol.respond<MQConsumeResult>(request,
+                        MQConsumeResult(0, 1, 0, [1u8, 2u8, 3u8])))
+                case _ => Some(MQProtocol.respond<MQResult>(request, MQResult(0, "ok")))
+            }
+        }).start()
+        try {
+            let client = MQClient([stub.address()])
+            let sid = client.subscribe("/order")
+            try {
+                client.consume(sid)
+            } catch (_: MQServiceException) {
+                ()
+            }
+            @Assert(CapturingAppender.waitFor([sid, "0:1:0", "3 bytes"]))
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
 }
