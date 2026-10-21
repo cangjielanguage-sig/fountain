@@ -32,10 +32,23 @@ protected class MQMetrics {
         "${topic}\u{0}${group}\u{0}${name}"
     }
 
+    /**
+     * 自增：用一次 `entryView` 完成「取或建 + 自增」。
+     *
+     * 分两步（`addIfAbsent` 后 `get().getOrThrow()`）会在并发删除时拿到 `None` 并抛异常，
+     * 把指标问题变成消费路径的 `INTERNAL`（R4-G4）。
+     */
     private func bump(topic: String, group: String, name: String): Unit {
-        let key = key(topic, group, name)
-        counters.addIfAbsent(key, AtomicInt64(0))
-        counters.get(key).getOrThrow().fetchAdd(1)
+        counters.entryView(key(topic, group, name)) {view =>
+            match (view.value) {
+                case Some(counter) =>
+                    counter.fetchAdd(1)
+                    ()
+                case None =>
+                    view.value = AtomicInt64(1)
+            }
+        }
+        ()
     }
 
     private func valueOf(topic: String, group: String, name: String): Int64 {
