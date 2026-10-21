@@ -273,14 +273,18 @@ public class MQClient <: Resource {
             }
             if (responded == 0) {
                 // 本轮全部节点不可达：明确报错，而不是永久空转（A12）
-                log.error("consume on subscription '${subscribedId}' failed: nodes ${nodeList(sub.owners)} unreachable")
+                // 文案带节点下标：调用方直接上抛或落业务日志时也能看到是哪些节点失败（A16）
+                let tried = nodeList(sub.owners)
+                log.error("consume on subscription '${subscribedId}' failed: nodes ${tried} unreachable")
                 match (lastConnectionError) {
                     case Some(e) =>
                         throw MQConnectionException(
-                            "all owner nodes of subscription '${subscribedId}' are unreachable", e)
+                            "all owner nodes of subscription '${subscribedId}' are unreachable " +
+                            "(tried nodes ${tried})", e)
                     case None =>
                         throw MQConnectionException(
-                            "all owner nodes of subscription '${subscribedId}' are unreachable")
+                            "all owner nodes of subscription '${subscribedId}' are unreachable " +
+                            "(tried nodes ${tried})")
                 }
             }
             sleep(CONSUME_POLL_INTERVAL)

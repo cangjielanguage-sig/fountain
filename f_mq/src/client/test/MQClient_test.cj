@@ -359,12 +359,16 @@ class MQClientTest {
         let sid = client.subscribe("/order")
         stub.close()
         var threw = false
+        var text = ""
         try {
             client.consume(sid)
-        } catch (_: MQConnectionException) {
+        } catch (e: MQConnectionException) {
             threw = true
+            text = e.message
         }
         @Assert(threw)
+        // 场景「全部 owner 不可达」要求文案包含尝试过的节点：单节点客户端即节点 0
+        @Assert(text.contains("[0]"))
         client.close()
     }
 
