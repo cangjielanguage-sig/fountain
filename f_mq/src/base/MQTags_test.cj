@@ -49,6 +49,22 @@ class MQTagsTest {
         @Assert(!MQTags.isValid(["a\nb"]))
     }
 
+    /** Unicode 空白与控制字符同样非法（R1-G12）。 */
+    @TestCase
+    public func unicodeWhitespaceAndControlAreRejected(): Unit {
+        @Assert(!MQTags.isValid(["a\u{7F}"]))
+        @Assert(!MQTags.isValid(["a\u{00A0}"]))
+        @Assert(!MQTags.isValid(["a\u{3000}"]))
+        @Assert(!MQTags.isValid(["a\u{2028}"]))
+    }
+
+    /** 数量与长度的边界都是闭区间：64 个 128 字节 tags 合法（R1-G12）。 */
+    @TestCase
+    public func countAndLengthBoundariesAreValid(): Unit {
+        @Assert(MQTags.isValid(Array<String>(64, repeat: fill(128))))
+        @Assert(!MQTags.isValid(Array<String>(65, repeat: fill(128))))
+    }
+
     @TestCase
     public func tooManyTagsAreRejected(): Unit {
         @Assert(!MQTags.isValid(Array<String>(65, repeat: "t")))

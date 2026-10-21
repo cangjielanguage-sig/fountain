@@ -34,10 +34,9 @@ public class MQTags {
             if (tag.isEmpty() || tag.size > MAX_LENGTH) {
                 return false
             }
-            for (c in tag) {
-                if (c <= 0x20) {
-                    return false
-                }
+            // 按码点判定：Unicode 空白（NBSP/U+2028/U+3000）同样非法（R1-G12）
+            if (MQChars.containsBlankOrControl(tag)) {
+                return false
             }
         }
         true

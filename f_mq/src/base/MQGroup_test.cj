@@ -46,6 +46,19 @@ class MQGroupTest {
         }
     }
 
+    /** Unicode 空白（NBSP/表意空格）与 DEL 也是非法字符，不能只看 ASCII 字节（R1-G12）。 */
+    @TestCase
+    public func unicodeWhitespaceAndControlAreRejected(): Unit {
+        for (name in ["g\u{7F}", "g\u{00A0}", "g\u{3000}", "g\u{2028}"]) {
+            @Assert(!MQGroup.isValid(name))
+        }
+    }
+
+    @TestCase
+    public func chineseGroupNameIsValid(): Unit {
+        @Assert(MQGroup.isValid("订单组"))
+    }
+
     @TestCase
     public func overlengthIsRejected(): Unit {
         @Assert(MQGroup.isValid(fill(255)))

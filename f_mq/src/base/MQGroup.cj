@@ -18,7 +18,7 @@ package fountain::f_mq.base
 /**
  * 订阅组名校验：与 `MQTopic.isValid` 同级。
  *
- * 空串表示默认组，合法；非空组名长度不超过 255、不含空白与控制字符、不含路径/转义字符
+ * 空串表示默认组，合法；非空组名长度不超过 255、不含空白与控制字符（按 Unicode 码点判定）、不含路径/转义字符
  * `'/'` `'\'` `':'` `'%'`、不以 `'.'` 开头或结尾。
  *
  * 组名会直接变成 `metas/groups/<escaped>.meta` 与 `cursors/<escaped>.cursor` 的文件名，
@@ -37,12 +37,12 @@ public class MQGroup {
         if (group.startsWith(".") || group.endsWith(".")) {
             return false
         }
+        // 按码点判定空白/控制字符：只比 ASCII 字节会漏掉 DEL、NBSP、表意空格（R1-G12）
+        if (MQChars.containsBlankOrControl(group)) {
+            return false
+        }
         for (c in group) {
-            // String 的迭代单位是字节：<= 0x20 视为空白/控制字符
-            if (c <= 0x20) {
-                return false
-            }
-            // '/' '\' ':' '%'
+            // '/' '\' ':' '%'：这三个都是 ASCII，按字节比较等价
             if (c == 0x2F || c == 0x5C || c == 0x3A || c == 0x25) {
                 return false
             }
