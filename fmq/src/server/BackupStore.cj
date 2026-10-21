@@ -142,11 +142,11 @@ protected class BackupStore <: Resource {
         }
     }
 
-    /** 该备份队列全部组位点的最小段号；无位点时返回 `Int64.Max`（不保留历史段）。 */
+    /** 该备份队列全部组位点的最小段号；无位点时返回 1（保留全部历史段）。 */
     protected func cursorFloor(ownerIndex: Int64, topic: String, queueIndex: Int64): Int64 {
         let dir = cursorDir(ownerIndex, topic, queueIndex)
         if (!exists(dir)) {
-            return Int64.Max
+            return 1
         }
         // 用数组做盒子：闭包不能捕获可变局部变量
         let floor = Array<Int64>(1, repeat: Int64.Max)
@@ -168,7 +168,8 @@ protected class BackupStore <: Resource {
         if (seen[0]) {
             floor[0]
         } else {
-            Int64.Max
+            // 目录存在但没有可读位点：与「无位点」同义，保留全部段
+            1
         }
     }
 

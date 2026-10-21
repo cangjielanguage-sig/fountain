@@ -22,11 +22,12 @@ import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_io.LogPosition
 import fountain::f_mq.base.payload.MQDeadLetterMessage
+import fountain::fmq.test.TestDirs
 
 @Test
 class DeadLetterQueueTest {
     private static func rootOf(name: String): String {
-        "/tmp/fmq_test_dead_letter/${name}"
+        TestDirs.of("dead_letter", name)
     }
 
     private static func clean(root: String): Unit {

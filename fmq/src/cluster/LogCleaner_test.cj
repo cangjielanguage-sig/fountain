@@ -25,11 +25,12 @@ import fountain::fmq.meta.{MetaApplyResult, MetaStore}
 import fountain::f_mq.base.model.MQSubscribeGroupMeta
 import fountain::f_io.LogPosition
 import fountain::fmq.queue.{CursorCatalog, CursorStore, DeadLetterQueue, QueueManager}
+import fountain::fmq.test.TestDirs
 
 @Test
 class LogCleanerTest {
     private static func rootOf(name: String): String {
-        "/tmp/fmq_test_log_cleaner/${name}"
+        TestDirs.of("log_cleaner", name)
     }
 
     private static func clean(dir: String): Unit {

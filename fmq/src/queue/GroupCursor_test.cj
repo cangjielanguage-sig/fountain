@@ -31,6 +31,7 @@ import fountain::f_mq.base.payload.MQDeadLetterMessage
 import fountain::fmq.meta.MetaStore
 import fountain::f_mq.base.model.MQSubscribeGroupMeta
 import fountain::fmq.metrics.MQMetrics
+import fountain::fmq.test.TestDirs
 
 class CursorClock {
     var value: DateTime = DateTime.now()
@@ -52,7 +53,7 @@ class CursorFixture <: Resource {
 
     init(name: String, maxFileSize!: Int64 = 1024 * 1024, ackTimeout!: Duration = Duration.second * 10,
         threshold!: Int64 = 3) {
-        this.root = "/tmp/fmq_test_group_cursor/${name}"
+        this.root = TestDirs.of("group_cursor", name)
         if (exists(root)) {
             remove(root, recursive: true)
         }

@@ -23,11 +23,12 @@ import std.unittest.testmacro.*
 import fountain::f_mq.base.model.MQSubscribeGroupMeta
 import fountain::f_mq.base.payload.{MQMetaSnapshot, MQMetaTombstone, MQTopicAssignment}
 import fountain::f_mq.base.MQProtocol
+import fountain::fmq.test.TestDirs
 
 @Test
 class MetaStoreTest {
     private static func dirOf(name: String): String {
-        "/tmp/fmq_test_meta_store/${name}"
+        TestDirs.of("meta_store", name)
     }
 
     private static func clean(dir: String): Unit {

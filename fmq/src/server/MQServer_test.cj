@@ -23,6 +23,7 @@ import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_mq.client.MQClient
 import fountain::fmq.manager.{MQManager, MQManagerArgs}
+import fountain::fmq.test.TestDirs
 
 class ServerPortAllocator {
     private static let next = AtomicInt64(27000)
@@ -85,7 +86,7 @@ class MQServerTest {
 
     @TestCase
     public func bindAcceptPublishSubscribeAck(): Unit {
-        let root = "/tmp/fmq_test_server/flow"
+        let root = TestDirs.of("server", "flow")
         let port = ServerPortAllocator.freePort()
         let options = options(root, port, ["127.0.0.1:${port}"])
         let server = MQServer(options)
@@ -135,7 +136,7 @@ class MQServerTest {
 
     @TestCase
     public func onlyLocalQueuesAreOpened(): Unit {
-        let root = "/tmp/fmq_test_server/local"
+        let root = TestDirs.of("server", "local")
         let port = ServerPortAllocator.freePort()
         // 两节点、本机 0；2 队列 ⇒ owners [0,1]
         let options = options(root, port, ["127.0.0.1:${port}", "127.0.0.1:1"])
@@ -157,7 +158,7 @@ class MQServerTest {
 
     @TestCase
     public func restartRedeliversOnlyUnacked(): Unit {
-        let root = "/tmp/fmq_test_server/restart"
+        let root = TestDirs.of("server", "restart")
         let port = ServerPortAllocator.freePort()
         let options = options(root, port, ["127.0.0.1:${port}"])
         let address = "127.0.0.1:${port}"
@@ -211,7 +212,7 @@ class MQServerTest {
 
     @TestCase
     public func managerCommandsAgainstRunningServer(): Unit {
-        let root = "/tmp/fmq_test_server/manager"
+        let root = TestDirs.of("server", "manager")
         let port = ServerPortAllocator.freePort()
         let options = options(root, port, ["127.0.0.1:${port}"])
         let server = MQServer(options)
@@ -282,7 +283,7 @@ class MQServerTest {
 
     @TestCase
     public func closeIsolatesFailingStep(): Unit {
-        let root = "/tmp/fmq_test_server/close_isolate"
+        let root = TestDirs.of("server", "close_isolate")
         let port = ServerPortAllocator.freePort()
         let server = MQServer(options(root, port, ["127.0.0.1:${port}"]))
         let laterRan = Array<Int64>(1, repeat: 0)
@@ -303,7 +304,7 @@ class MQServerTest {
 
     @TestCase
     public func closeRetriesOnlyFailedStepsUntilComplete(): Unit {
-        let root = "/tmp/fmq_test_server/close_retry"
+        let root = TestDirs.of("server", "close_retry")
         let port = ServerPortAllocator.freePort()
         let server = MQServer(options(root, port, ["127.0.0.1:${port}"]))
         let attempts = Array<Int64>(1, repeat: 0)
@@ -331,7 +332,7 @@ class MQServerTest {
 
     @TestCase
     public func closeMakesRunReturnZero(): Unit {
-        let root = "/tmp/fmq_test_server/close_run"
+        let root = TestDirs.of("server", "close_run")
         let port = ServerPortAllocator.freePort()
         let server = MQServer(options(root, port, ["127.0.0.1:${port}"]))
         server.start()
@@ -345,7 +346,7 @@ class MQServerTest {
 
     @TestCase
     public func installExitHooksClosesServer(): Unit {
-        let root = "/tmp/fmq_test_server/exit_hooks"
+        let root = TestDirs.of("server", "exit_hooks")
         let port = ServerPortAllocator.freePort()
         let server = MQServer(options(root, port, ["127.0.0.1:${port}"]))
         let captured = Array<() -> Unit>(1, repeat: {=> ()})

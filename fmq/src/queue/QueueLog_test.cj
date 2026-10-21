@@ -19,11 +19,12 @@ import std.fs.*
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_io.LogPosition
+import fountain::fmq.test.TestDirs
 
 @Test
 class QueueLogTest {
     private static func dirOf(name: String): String {
-        "/tmp/fmq_test_queue_log/${name}"
+        TestDirs.of("queue_log", name)
     }
 
     private static func clean(dir: String): Unit {

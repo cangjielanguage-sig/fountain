@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::fmq.cluster
 
+import std.sync.{AtomicBool, AtomicInt64}
 import std.time.DateTime
 import std.unittest.*
 import std.unittest.testmacro.*
@@ -232,6 +233,47 @@ class BackupReplicatorTest {
         @Assert(transport.sentCount() == 0)
         @Assert(replicator.pendingCount == 0)
         replicator.close()
+    }
+
+    /** 关闭与发送并发：不抛异常、不丢已入队批次、关闭后队列为空。 */
+    @TestCase
+    public func closeWhileFlushingIsSafe(): Unit {
+        let transport = makeTransport(2, 0)
+        transport.responder = {_, message =>
+            sleep(Duration.millisecond * 5)
+            Some(MQProtocol.respond<MQBackupPayload>(message, MQBackupPayload()))
+        }
+        let replicator = BackupReplicator(transport, 1)
+        replicator.start()
+        // 先发一批，保证「关闭与发送并发」确有其事
+        replicator.record("/t", 0, LogPosition(1, 0), [1u8])
+        replicator.flush()
+        @Assert(transport.sentCount() == 1)
+        let stop = AtomicBool(false)
+        let workers = AtomicInt64(0)
+        for (w in 0..4) {
+            spawn {
+                var i = 0
+                while (!stop.load() && i < 50) {
+                    replicator.record("/t", 0, LogPosition(1, i), [UInt8(i % 251)])
+                    replicator.flush()
+                    i++
+                }
+                workers.fetchAdd(1)
+            }
+        }
+        // 与在途发送并发关闭
+        replicator.close()
+        stop.store(true)
+        var waited = 0
+        while (workers.load() < 4 && waited < 1000) {
+            sleep(Duration.millisecond * 10)
+            waited++
+        }
+        @Assert(workers.load() == 4)
+        // 收尾：并发窗口内可能还有入队，最终必须排空
+        replicator.flush()
+        @Assert(replicator.pendingCount == 0)
     }
 
     /** 64 条由工作线程自动触发（不手动 flush）。 */

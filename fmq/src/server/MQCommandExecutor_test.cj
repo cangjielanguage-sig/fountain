@@ -28,6 +28,7 @@ import fountain::f_protocol.default.*
 import fountain::fmq.cluster.{BackupReplicator, MetaSyncer, NodeRegistry}
 import fountain::fmq.meta.MetaStore
 import fountain::fmq.queue.*
+import fountain::fmq.test.TestDirs
 
 class ExecutorFixture <: Resource {
     let root: String
@@ -43,7 +44,7 @@ class ExecutorFixture <: Resource {
     private let backup: BackupReplicator
 
     init(name: String, selfIndex!: Int64 = 0, nodes!: Array<String> = ["127.0.0.1:1"]) {
-        this.root = "/tmp/fmq_test_executor/${name}"
+        this.root = TestDirs.of("executor", name)
         if (exists(root)) {
             remove(root, recursive: true)
         }

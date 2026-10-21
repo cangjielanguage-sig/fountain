@@ -30,6 +30,7 @@ import fountain::fmq.meta.{MetaApplyResult, MetaStore}
 import fountain::f_mq.base.model.MQSubscribeGroupMeta
 import fountain::fmq.metrics.MQMetrics
 import fountain::fmq.queue.*
+import fountain::fmq.test.TestDirs
 
 @DataAssist[props fields]
 public class ConsumeBody {
@@ -55,7 +56,7 @@ class ConsumeFixture <: Resource {
     private let topic = "/t"
 
     init(name: String, queueCount!: Int64 = 1) {
-        this.root = "/tmp/fmq_test_consume/${name}"
+        this.root = TestDirs.of("consume", name)
         if (exists(root)) {
             remove(root, recursive: true)
         }
@@ -421,7 +422,7 @@ class ConsumeServiceTest {
     /** 段清理边界取自「真实 ConsumeService + CursorCatalog」而不是替身回调。 */
     @TestCase
     public func consumedGroupRaisesCleanerFloor(): Unit {
-        let root = "/tmp/fmq_test_consume/cleaner_floor"
+        let root = TestDirs.of("consume", "cleaner_floor")
         if (exists(root)) {
             remove(root, recursive: true)
         }

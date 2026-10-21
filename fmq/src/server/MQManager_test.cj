@@ -22,6 +22,7 @@ import std.sync.AtomicInt64
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::fmq.manager.{MQManager, MQManagerArgs}
+import fountain::fmq.test.TestDirs
 
 /**
  * 管理端六个子命令的独立用例。
@@ -67,7 +68,7 @@ class MQManagerTest {
     }
 
     private static func startServer(name: String): (MQServer, String) {
-        let root = "/tmp/fmq_test_manager/${name}"
+        let root = TestDirs.of("manager", name)
         if (exists(root)) {
             remove(root, recursive: true)
         }

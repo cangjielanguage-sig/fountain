@@ -24,12 +24,13 @@ import fountain::f_data.*
 import fountain::f_io.LogPosition
 import fountain::f_mq.base.MQMessageRecord
 import fountain::fmq.queue.QueueLog
+import fountain::fmq.test.TestDirs
 
 @Test
 class BackupStoreTest {
     @TestCase
     public func concurrentAppendsReuseSingleQueueLog(): Unit {
-        let root = "/tmp/fmq_test_backup_store/concurrent"
+        let root = TestDirs.of("backup_store", "concurrent")
         if (exists(root)) {
             remove(root, recursive: true)
         }
@@ -87,7 +88,7 @@ class BackupStoreTest {
 
     @TestCase
     public func closeKeepsAcknowledgedWrites(): Unit {
-        let root = "/tmp/fmq_test_backup_store/close-flush"
+        let root = TestDirs.of("backup_store", "close_flush")
         if (exists(root)) {
             remove(root, recursive: true)
         }
@@ -118,7 +119,7 @@ class BackupStoreTest {
 
     @TestCase
     public func closeRacesWithConcurrentAppends(): Unit {
-        let root = "/tmp/fmq_test_backup_store/close-race"
+        let root = TestDirs.of("backup_store", "close_race")
         if (exists(root)) {
             remove(root, recursive: true)
         }
@@ -169,9 +170,47 @@ class BackupStoreTest {
         left.seq == right.seq && left.offset == right.offset
     }
 
+    /** 位点缺失时保留全部段：`cursorFloor` 返回 1，清理器据此不删任何历史段（T25 的前置契约）。 */
+    @TestCase
+    public func cursorFloorIsOneWhenNoCursorExists(): Unit {
+        let root = TestDirs.of("backup_store", "no_cursor")
+        let store = BackupStore(root, 1024 * 1024, 1)
+        try {
+            store.append(0, "/t", 0, [1u8])
+            @Assert(store.cursorFloor(0, "/t", 0) == 1)
+            // 位点写入后才按真实段号回收
+            store.saveCursor(0, "/t", 0, "g", LogPosition(2, 0))
+            @Assert(store.cursorFloor(0, "/t", 0) == 2)
+        } finally {
+            store.close()
+            remove(root, recursive: true)
+        }
+    }
+
+    /** 重复批次幂等：同一批再送一次，位点不回退、日志实例不重复创建。 */
+    @TestCase
+    public func duplicateBatchKeepsCursorAndLogsStable(): Unit {
+        let root = TestDirs.of("backup_store", "duplicate_batch")
+        let store = BackupStore(root, 1024 * 1024, 1)
+        try {
+            let record = MQMessageRecord.encode("/t", [], "mid", "dup".toData())
+            for (_ in 0..2) {
+                store.append(0, "/t", 0, record)
+                store.saveCursor(0, "/t", 0, "g", LogPosition(2, 8))
+            }
+            @Assert(samePosition(store.loadCursor(0, "/t", 0, "g").getOrThrow(), LogPosition(2, 8)))
+            @Assert(store.cursorFloor(0, "/t", 0) == 2)
+            @Assert(store.instanceCount == 1)
+            @Assert(store.allLogs().size == 1)
+        } finally {
+            store.close()
+            remove(root, recursive: true)
+        }
+    }
+
     @TestCase
     public func cursorsOnlyMoveForward(): Unit {
-        let root = "/tmp/fmq_test_backup_store/cursors"
+        let root = TestDirs.of("backup_store", "cursors")
         if (exists(root)) {
             remove(root, recursive: true)
         }

@@ -20,12 +20,13 @@ import std.fs.*
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_mq.base.payload.MQTopicAssignment
+import fountain::fmq.test.TestDirs
 
 /** 原子写（A37/A51）：顺序、失败向上抛、无 `.tmp` 残留。 */
 @Test
 class AtomicFileTest {
     private static func dirOf(name: String): String {
-        "/tmp/fmq_test_atomic_file/${name}"
+        TestDirs.of("atomic_file", name)
     }
 
     private static func clean(dir: String): Unit {

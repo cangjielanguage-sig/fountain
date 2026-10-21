@@ -20,11 +20,12 @@ import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::fmq.meta.MQFileNames
 import fountain::f_mq.base.payload.MQTopicAssignment
+import fountain::fmq.test.TestDirs
 
 @Test
 class QueueManagerTest {
     private static func rootOf(name: String): String {
-        "/tmp/fmq_test_queue_manager/${name}"
+        TestDirs.of("queue_manager", name)
     }
 
     private static func clean(root: String): Unit {

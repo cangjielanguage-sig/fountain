@@ -22,6 +22,7 @@ import fountain::f_mq.base.payload.MQTopicAssignment
 import fountain::f_io.LogPosition
 import fountain::f_mq.base.model.MQSubscribeGroupMeta
 import fountain::fmq.meta.{MQFileNames, MetaApplyResult, MetaStore}
+import fountain::fmq.test.TestDirs
 
 /**
  * 段保留边界（A44）。
@@ -31,15 +32,10 @@ import fountain::fmq.meta.{MQFileNames, MetaApplyResult, MetaStore}
  */
 @Test
 class CursorCatalogTest {
-    private let root = "/tmp/fmq_test_cursor_catalog"
+    private let root = TestDirs.of("cursor_catalog", "root")
 
     private func freshDir(name: String): String {
-        let dir = "${root}/${name}"
-        if (exists(dir)) {
-            remove(dir, recursive: true)
-        }
-        Directory.create(dir, recursive: true)
-        return dir
+        TestDirs.of("cursor_catalog", name)
     }
 
     private static func clean(dir: String): Unit {

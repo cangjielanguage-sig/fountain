@@ -25,11 +25,12 @@ import fountain::f_mq.base.payload.*
 import fountain::f_mq.exception.MQServiceException
 import fountain::fmq.meta.{MetaApplyResult, MetaStore}
 import fountain::f_protocol.default.Message
+import fountain::fmq.test.TestDirs
 
 @Test
 class MetaSyncerTest {
     private static func dirOf(name: String): String {
-        "/tmp/fmq_test_meta_syncer/${name}"
+        TestDirs.of("meta_syncer", name)
     }
 
     private static func clean(dir: String): Unit {
