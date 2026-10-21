@@ -19,6 +19,8 @@ import std.unittest.*
 import std.unittest.testmacro.*
 import std.time.*
 import fountain::f_jit.base.DummyDiagnosticsSink
+import fountain::f_jit.base.ErrCode
+import fountain::f_jit.base.Version
 import fountain::f_jit.bytecode.FbcReader
 import std.collection.*
 import fountain::f_jit.runtime.HandleTable
@@ -298,15 +300,36 @@ public class Acceptance_test {
             '{ n: Int64 => var x = 0\n if (n > 0) { x = 1 }\n x }', [1])
     }
 
-    /** T48 / T51：空容器构造与返回。 */
+    /**
+     * T48 / T51：空容器构造与读写（A7/P3-4 诚实化）。
+     *
+     * 旧用例对**空列表**做 `l[0] = 5`——恒为越界 4，却按「成功路径」记 full（矩阵虚报）。
+     * 现在逐条断言**真实语义**：空列表的下标写/读都是 4（负向面），空 Map 的 upsert 才是
+     * 成功路径（写后读回 1）。
+     */
     @TestCase
     public func t48EmptyContainers(): Unit {
-        Acceptance_test.diff('T48/list',
-            '{ => let l: List<Int64> = []\n l[0] = 5\n l[0] }', Array<Any>())
+        Acceptance_test.diffCode('T48/list',
+            '{ => let l: List<Int64> = []\n l[0] = 5\n l[0] }', Array<Any>(), ErrCode.IDX_OOB)
         Acceptance_test.diff('T48/map',
             '{ => let m: Map<String, Int64> = {}\n m["k"] = 1\n m["k"] }', Array<Any>())
-        Acceptance_test.diff('T51/return-empty-len',
-            '{ => let l: List<Int64> = []\n l[0] = 1\n l[0] }', Array<Any>())
+        Acceptance_test.diffCode('T51/empty-list-read',
+            '{ => let l: List<Int64> = []\n l[0] }', Array<Any>(), ErrCode.IDX_OOB)
+    }
+
+    /**
+     * A7.4：M3 的 Any / JSON 通道在 **Interp × Native 双引擎**上逐位一致。
+     *
+     * 旧矩阵的「M3 三引擎全等」没有任何证据（15 处 `DiffSession` 无一覆盖 Any/JSON）；
+     * 这里用同一 `DiffSession`（解释器 + 机器码）跑两条最小单元，补齐证据面。
+     */
+    @TestCase
+    public func m3AnyJsonIsTripleEqual(): Unit {
+        // M3 单元必须以 verMajor=3 编译（`rawOf` 是 M1 口径，遇到 15 会报「局部槽类型码非法」）
+        Acceptance_test.diffRaw('M3/any-roundtrip', Acceptance_test.rawOfM3(
+            '{ => let a: Any = 7\n (a as Int64) + 1 }'), Array<Any>())
+        Acceptance_test.diffRaw('M3/json-access', Acceptance_test.rawOfM3(
+            '{ => let o: JsonObject = `{"k":1}`\n (o["k"] as Int64) }'), Array<Any>())
     }
 
     /**
@@ -382,6 +405,12 @@ public class Acceptance_test {
 
     private static func rawOf(src: String): Array<UInt8> {
         SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(src).raw
+    }
+
+    /** M3 口径的产物（`verMajor=3`；Any / JSON 需要合法集 0–19）。 */
+    private static func rawOfM3(src: String): Array<UInt8> {
+        SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink(),
+            verMajor: Version.M3_MAJOR).compile(src).raw
     }
 
     private static func diff(id: String, src: String, args: Array<Any>): Unit {

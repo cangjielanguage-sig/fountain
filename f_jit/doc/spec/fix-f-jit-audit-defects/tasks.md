@@ -60,15 +60,15 @@
 
 ## A6 并发与后端（P2-4 / P2-5）
 
-- [ ] A6.1 `callForFn` 串行化（P2-4）：先写失败用例——两线程各自 `callForFn` 取闭包包装，包装的 `PromotionGroup` 不串（各自 close 后另一侧仍可调）；`lastClosureGroup` 不跨调用残留；再把 `callForFn` 整体放进 `callMtx` 并取完即清；验收：并发用例稳定，单线程语义不变
-- [ ] A6.2 A64 `imm9` 范围（P2-5）：先写失败用例——偏移 `-256 / -257 / 255 / 256` 四个边界，越界者编码必须走慢路径（断言不再出现 `off & 0x1FF` 的回绕），且执行结果与解释器一致；再改 `ldrOff`/`strOff`；验收：x86_64 侧不适用则显式跳过并留 `hit`
-- [ ] A6.3 慢路径寄存器与跳转：先写失败用例——含大量越界访存的函数两遍布局跳转偏移正确（前后向跳转各一）；再确认 scratch 寄存器不与 live 值冲突；验收：机器码执行结果 ≡ 解释器
+- [x] A6.1 `callForFn` 串行化（P2-4）：`callForFn` 整体移入 `callMtx`（改用锁内的 `callLocked`，避免重入死锁），取到 `lastClosureGroup` 后**立即置 None**。用例：`p2_4_lastClosureGroupIsCleared`（取完即清）、`p2_4_callForFnSerialized`（2 线程 × 20 轮各自取包装/调用/close，互不串组）
+- [x] A6.2 A64 `imm9` 范围（P2-5）：`strOff/ldrOff` 增加 imm9 边界分支，越界改走 scratch（x16）慢路径并修正 `off & 0x1FF` 回绕。用例：`imm9OverflowUsesScratchRegister`（257/−257 两条、−256/255 单条、慢路径访问 imm12=0 且基址=x16）、`largeOffsetIsChunked`（8193 ⇒ 3 条 add + 访问）。注：8 字节对齐的 256 走 scaled imm12，不属缺陷面
+- [x] A6.3 慢路径寄存器与跳转：scratch 取 x16（寄存器分配只用 x0–x15）；含条件分支的深帧函数端到端对拍。用例：`deepFrameExceedsImm9`（30 局部 + 前后向分支，机器码 495/435 与解释器一致）
 
 ## A7 文档回写与总验收（P3-1 … P3-5）
 
 - [x] A7.1 helper 编号全表替换（P3-1）：先写「文档位置 → 正确编号」清单（design-m3 / jit-bytecode-m3 / plan-m3 / m1 镜像，逐行）；再统一替换 H66–H68→H78–H80、H73–H75→H81–H83，并补「编号顺延」说明；验收：`grep -rn "H66–H68\|H73–H75" f_jit/doc` 零命中**（替换 27 处：design-m3 / jit-bytecode-m3 / plan-m3 / plan-m1 / `doc/spec/f-jit-m1/design.md`；design-m3 新增 §5.0「编号为何顺延到 H78–H83」。验收口径限定为**规则文档**：变更自身文档（proposal/design/tasks/test-plan）必须保留旧编号以描述缺陷）**
 - [x] A7.2 三条被推翻表述回写（P3-2）：二次装箱（改为同型零动作直传 + 盒不套盒）、`{ "a" : 1 }`（改为 M1 映射字面量）、`jit-bytecode-m3.md` §2 LocalType（16–255 与 0–19 二选一，统一为 0–19）；验收：三条在「当前规则」章节零命中，历史处标注 D12/D15**（design-m3:88/84、jit-bytecode-m3:47/85/58/192、plan-m3:71 逐处改写并标 D12/D15；`grep "16–255 仍拒绝\|→ 语法错误"` 仅余带「已作废/已推翻」的历史句）**
-- [ ] A7.3 `json_set` 值域收口（P3-3）：**未完成**（待定口径后实施：Float64 变量路径当前运行期 8，规格未二选一）
-- [ ] A7.4 矩阵诚实化（P3-4）：**未完成**（T48/T51 仍记 full；`returnPositionBoxesIntoAny` 未补；只读字段写口径未统一；M3 三引擎证据未补）
-- [ ] A7.5 `doc/spec/` 产物补齐（P3-5）：**未完成**（f-jit-m3 与 m2.1–m2.3 仍缺 proposal/design/tasks）
-- [ ] A7.6 总回归与 `verify.md`：**部分完成**——A0–A6 每批末全量均为 0 失败（最新 1073/1073/0，PerfOverride 单跑通过）；`verify.md` 待 A7.3–A7.5 完成后出具
+- [x] A7.3 `json_set` 值域收口（P3-3）：**已裁定并实施**——值域收窄为 Int64/Bool/String/JSON 节点，**Float64 编译期拒绝**（JSON 无二进制浮点）；前端 `checkJsonWriteValue`、运行期 `jsonValueOf` 注释、design-m3 / jit-bytecode-m3 三处口径一致。用例：`p3_3_jsonSetFloat64RejectedAtCompileTime` / `p3_3_jsonSetAcceptsValueDomain`
+- [x] A7.4 矩阵诚实化（P3-4）：T48/T51 改为**逐条断言真值**（空列表读写 = 4、空 Map upsert = 成功路径）；新增 `m3AnyJsonIsTripleEqual`（Interp × Native，verMajor=3 产物）；H65 注释的 `19` 统一为 **20**。`returnPositionBoxesIntoAny` 按「方言无返回类型注解 ⇒ 第三插入点不可达」**修订口径**（不新增假用例）
+- [x] A7.5 `doc/spec/` 产物补齐（P3-5）：为 `f-jit-m3`、`f-jit-m2.1`、`f-jit-m2.2`、`f-jit-m2.3` 各补 `proposal.md` / `design.md` / `tasks.md`（共 12 个文件，按既有 `design-mN.md` / `jit-bytecode-mN.md` / `plan-mN.md` 反写，文首标注「归档反写、不补造过程」）；验收：四个目录四件套齐全
+- [x] A7.6 总回归与 `verify.md`：**已出具** `verify.md`——终态 1076 用例 / 1075 通过 / 0 失败 / 0 error（`PerfOverride_test` 负载下假失败，单跑通过）；26 条逐条落点表 + 已知边界

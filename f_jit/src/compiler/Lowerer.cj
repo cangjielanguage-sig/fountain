@@ -1884,12 +1884,21 @@ internal class Lowerer {
     }
 
     /** 写侧值域（m3 §11）：值型 0–2 / String / JSON 节点 16–19；Unit 与 15 均拒绝。 */
+    /**
+     * JSON 写入值域（A7/P3-3 收口）：`Int64` / `Bool` / `String` / JSON 节点（16–19）。
+     *
+     * **Float64 编译期拒绝**，与 JSON 数字模型一致：JSON 只有整数与十进制小数，没有二进制浮点；
+     * 静默转 Decimal 会引入精度/舍入决策（不是无损转换），因此要求显式选用 `Decimal`——而
+     * `Decimal` 同样不在写入值域内（JSON 数字只由 `JsonInt` 承载整数形态），需要小数时写字符串
+     * 或经 JSON 字面量。旧实现放行 Float64、运行期 `jsonValueOf` 无对应分支 ⇒ 以 8 失败（第三态）。
+     */
     private func checkJsonWriteValue(code: UInt16, pos: SourcePos): Unit {
-        let ok = code == LocalType.I64 || code == LocalType.F64 || code == LocalType.BOOL ||
-            code == LocalType.STRING ||
+        let ok = code == LocalType.I64 || code == LocalType.BOOL || code == LocalType.STRING ||
             (code >= LocalType.JSON_VALUE && code <= LocalType.JSON_NULL)
         if (!ok) {
-            let why = if (code == LocalType.ANY) {
+            let why = if (code == LocalType.F64) {
+                '（JSON 无二进制浮点；小数请写 JSON 字面量或字符串）'
+            } else if (code == LocalType.ANY) {
                 '（Any 盒先 `as` 成具体类型）'
             } else if (code == LocalType.NONE) {
                 '（JSON null 写 `JsonNull`；本方言无 `null` 关键字写入面）'
@@ -1897,8 +1906,8 @@ internal class Lowerer {
                 ''
             }
             diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
-                'JSON 写入的值类型是 ${LocalType.name(code)}，不在值域内：只收 Int64 / Float64 / ' +
-                'Bool / String / JSON 节点（m3 §11）' + why)
+                'JSON 写入的值类型是 ${LocalType.name(code)}，不在值域内：只收 Int64 / Bool / ' +
+                'String / JSON 节点（m3 §11）' + why)
         }
     }
 

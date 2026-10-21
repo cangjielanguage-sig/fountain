@@ -182,8 +182,9 @@ private func handleFieldCell(ctx: JitContext, code: UInt16, v: Any): Int64 {
 /**
  * H65 `host_set_field(obj, index, cell)`：值型直存、句柄型 fetch 后存对象引用。
  *
- * **变更型**：不登记槽；`mutable=false` ⇒ 19（语法糖编译期为主防线的运行期兜底）。
- * 失败：`obj` 非 tag 11 ⇒ 8；`let` 写 ⇒ 19；index/类型防御 ⇒ 99。
+ * **变更型**：不登记槽；`mutable=false` ⇒ **20（READONLY）**（语法糖编译期为主防线的运行期兜底）。
+ * 失败：`obj` 非 tag 11 ⇒ 8；`let` 写 ⇒ **20**（A7/P3-4 口径统一：实现与用例一直是 20）；
+ * index/类型防御 ⇒ 99。
  */
 internal func hostSetField(ctx: JitContext, a: Array<Int64>): Int64 {
     let obj = HandleTable.fetchHostObject(argAt(a, 0))

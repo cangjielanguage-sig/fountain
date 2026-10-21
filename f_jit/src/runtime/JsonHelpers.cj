@@ -134,6 +134,13 @@ private func exportJson(v: JsonValue): Any {
 }
 
 /** 写入侧的值域：值型 0–3（Unit/Float64 除外）/ String / JSON 节点。 */
+/**
+ * H82 的值 cell → `JsonValue`（防御分派）。
+ *
+ * 值域与前端 `checkJsonWriteValue` 严格一致：0（Int64）/ 2（Bool）/ 4（String）/ 16–19。
+ * **不含 1（Float64）与 5（Decimal）**——JSON 数字只有 `JsonInt` 形态；越域一律 8（旧实现
+ * 放行 Float64、这里落到 `case _` 报 8，正是 P3-3 的「规格-前端-运行期」三处不一致）。
+ */
 private func jsonValueOf(code: UInt16, cell: Int64): JsonValue {
     match (code) {
         case 0u16 => JsonInt(cell)
