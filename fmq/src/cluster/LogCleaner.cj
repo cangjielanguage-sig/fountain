@@ -19,7 +19,7 @@ import std.collection.ArrayList
 import std.sync.{AtomicBool, Timer}
 import std.time.DateTime
 import fountain::f_log.*
-import fountain::fmq.queue.{DeadLetterQueue, QueueManager}
+import fountain::fmq.queue.{DeadLetterQueue, QueueLog, QueueManager}
 
 /**
  * 段 TTL 清理：普通队列用 `segmentedLogTTL`，死信用独立的 `deadMsgTTL`。
@@ -35,17 +35,25 @@ protected class LogCleaner {
     private let ttl: Duration
     private let deadMsgTTL: Duration
     private let interval: Duration
+    /** 备份队列的段视图（由 server 包注入 `BackupStore.allLogs()`，避免 cluster → server 反向依赖）。 */
+    private let backupLogs: () -> Array<(Int64, String, Int64, QueueLog)>
+    /** 备份队列的保留边界：位点最小值，缺失时返回 1（保留全部）。 */
+    private let backupFloor: (Int64, String, Int64) -> Int64
     private let closed = AtomicBool(false)
     private var timer: ?Timer = None
 
     protected init(queues: QueueManager, deadLetter: DeadLetterQueue, floorOf: (String, Int64) -> Int64,
-        ttl: Duration, deadMsgTTL: Duration, interval!: Duration = Duration.minute * 5) {
+        ttl: Duration, deadMsgTTL: Duration, interval!: Duration = Duration.minute * 5,
+        backupLogs!: () -> Array<(Int64, String, Int64, QueueLog)> = {=> []},
+        backupFloor!: (Int64, String, Int64) -> Int64 = {_, _, _ => 1}) {
         this.queues = queues
         this.deadLetter = deadLetter
         this.floorOf = floorOf
         this.ttl = ttl
         this.deadMsgTTL = deadMsgTTL
         this.interval = interval
+        this.backupLogs = backupLogs
+        this.backupFloor = backupFloor
     }
 
     /**
@@ -75,6 +83,27 @@ protected class LogCleaner {
             } catch (e: Exception) {
                 // 位点查询等前置步骤失败：只跳过该队列，其它对象照常清理
                 failures.add("${topic}/${queueIndex}(${e.message})")
+            }
+        }
+        // 备份副本队列：保留边界取该队列全部组备份位点的最小值，无位点则全部保留（A66）
+        for ((owner, topic, queueIndex, log) in backupLogs()) {
+            try {
+                let floor = backupFloor(owner, topic, queueIndex)
+                for (meta in log.segments()) {
+                    if (meta.last) {
+                        continue
+                    }
+                    if (meta.updateTime + ttl < now && meta.index < floor) {
+                        try {
+                            log.removeById(meta.index)
+                            removed++
+                        } catch (e: Exception) {
+                            failures.add("backup ${owner}/${topic}/${queueIndex}#${meta.index}(${e.message})")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                failures.add("backup ${owner}/${topic}/${queueIndex}(${e.message})")
             }
         }
         try {

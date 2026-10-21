@@ -18,12 +18,14 @@ package fountain::fmq.server
 import std.convert.*
 import std.fs.*
 import std.sync.{AtomicBool, AtomicInt64}
+import std.time.DateTime
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_data.*
 import fountain::f_io.LogPosition
 import fountain::f_mq.base.MQMessageRecord
-import fountain::fmq.queue.QueueLog
+import fountain::fmq.cluster.LogCleaner
+import fountain::fmq.queue.{DeadLetterQueue, QueueLog, QueueManager}
 import fountain::fmq.test.TestDirs
 
 @Test
@@ -168,6 +170,51 @@ class BackupStoreTest {
 
     private static func samePosition(left: LogPosition, right: LogPosition): Bool {
         left.seq == right.seq && left.offset == right.offset
+    }
+
+    /** 备份队列参与 TTL 清理：有备份位点才回收，无位点全部保留（A66）。 */
+    @TestCase
+    public func cleanerReclaimsBackupSegmentsByCursor(): Unit {
+        let root = TestDirs.of("backup_store", "cleanup_ttl")
+        let queues = QueueManager("${root}/logs", 40, 1)
+        let dead = DeadLetterQueue("${root}/dead", 40, 1)
+        let store = BackupStore(root, 40, 1)
+        try {
+            for (i in 0..6) {
+                store.append(0, "/t", 0, Array<Byte>(20, repeat: UInt8(i)))
+            }
+            let logs = store.allLogs()
+            @Assert(logs.size == 1)
+            let log = logs[0][3]
+            let before = log.segments().size
+            @Assert(before >= 3)
+
+            let noCursor = LogCleaner(queues, dead, {_, _ => Int64.Max}, Duration.second * -1,
+                Duration.hour * 72, backupLogs: {=> store.allLogs()},
+                backupFloor: {owner, topic, queueIndex => store.cursorFloor(owner, topic, queueIndex)})
+            try {
+                @Assert(noCursor.cleanOnce(DateTime.now()) == 0)
+            } finally {
+                noCursor.close()
+            }
+            @Assert(log.segments().size == before)
+
+            store.saveCursor(0, "/t", 0, "g", LogPosition(2, 0))
+            let withCursor = LogCleaner(queues, dead, {_, _ => Int64.Max}, Duration.second * -1,
+                Duration.hour * 72, backupLogs: {=> store.allLogs()},
+                backupFloor: {owner, topic, queueIndex => store.cursorFloor(owner, topic, queueIndex)})
+            try {
+                @Assert(withCursor.cleanOnce(DateTime.now()) >= 1)
+            } finally {
+                withCursor.close()
+            }
+            @Assert(log.segments()[0].index == 2)
+        } finally {
+            store.close()
+            queues.close()
+            dead.close()
+            remove(root, recursive: true)
+        }
     }
 
     /** 位点缺失时保留全部段：`cursorFloor` 返回 1，清理器据此不删任何历史段（T25 的前置契约）。 */

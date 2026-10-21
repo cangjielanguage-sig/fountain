@@ -96,13 +96,17 @@ public class MQServer {
         this.consume = consumer
         // 备份要携带真实消费状态与位点（A26）
         this.backup.setStateSource(consumer)
-        this.cleaner = LogCleaner(queues, deadLetter,
-            {topic, queueIndex => consumer.floorOf(topic, queueIndex)},
-            options.segmentedLogTTL, options.deadMsgTTL)
         this.executor = MQCommandExecutor(meta, syncer, queues, cursorCatalog, subscribers, consume, backup,
             backupStore, options.selfIndex)
         this.server = Server<DataAny>(bindAt: options.port, checkDuration: CHECK_DURATION, executors: 200,
             checker: {=> Message.ping()})
+        // 清理器最后装配：它要闭包捕获 backupStore，必须等全部成员初始化完成
+        let store = this.backupStore
+        this.cleaner = LogCleaner(queues, deadLetter,
+            {topic, queueIndex => consumer.floorOf(topic, queueIndex)},
+            options.segmentedLogTTL, options.deadMsgTTL,
+            backupLogs: {=> store.allLogs()},
+            backupFloor: {owner, topic, queueIndex => store.cursorFloor(owner, topic, queueIndex)})
         // 节点由死转活时补一次全量同步，避免离线期间错过的注册/删除
         this.registry.onRevived = {=> this.syncer.syncFromPeers()}
     }
