@@ -19,7 +19,7 @@ import std.collection.HashMap
 import fountain::f_data.DataAny
 import fountain::f_dbd.common.DbdErrorCode
 import fountain::f_dbm.IdGenerator
-import fountain::fdbm.config.{BootScriptWriter, IdMakerConfig}
+import fountain::fdbm.config.{BootScriptWriter, IdMakerConfig, LogicalCatalog}
 import fountain::fdbm.exception.FdbmException
 import fountain::fdbm.resources.NodeAccessor
 import fountain::fdbm.route.{GlobalTableRouter, PartitionRouter}
@@ -39,24 +39,46 @@ protected class ExecutorDispatcher {
     private let ddlExecutor: DdlExecutor
     private let sessionExecutor: SessionCtlExecutor
     private let exportExecutor: ExportExecutor
+    private let catalog: ?LogicalCatalog
 
     public init(router: PartitionRouter, globals: GlobalTableRouter, resources: NodeAccessor,
         idmaker: IdMakerConfig, sequenceDatabase: String,
-        customIdGenerators: HashMap<String, IdGenerator>, bootScript: ?BootScriptWriter) {
-        this.selectExecutor = SelectExecutor(resources, router, globals)
+        customIdGenerators: HashMap<String, IdGenerator>, bootScript: ?BootScriptWriter,
+        catalog!: ?LogicalCatalog = None) {
+        this.selectExecutor = SelectExecutor(resources, router, globals, catalog: catalog)
         this.dmlExecutor = DmlExecutor(resources, router, globals)
         this.deleteExecutor = DeleteExecutor(resources, router, globals)
         this.insertExecutor = InsertExecutor(resources, router, globals, this.selectExecutor, idmaker,
             sequenceDatabase, customIdGenerators)
-        this.showExecutor = ShowExecutor(resources)
-        this.ddlExecutor = DdlExecutor(resources, globals)
+        this.showExecutor = ShowExecutor(resources, catalog: catalog)
+        this.ddlExecutor = DdlExecutor(resources, globals, catalog: catalog)
         this.sessionExecutor = SessionCtlExecutor(resources)
         this.exportExecutor = ExportExecutor(bootScript)
+        this.catalog = catalog
+    }
+
+    /** 语句引用的逻辑库必须在 catalog 中；未知 → `ROUTE_FAILED`（D05 收紧）。 */
+    private func ensureKnownLogicalDatabase(session: DbdSession, statement: SqlStatement): Unit {
+        match (catalog) {
+            case Some(value) =>
+                for (table in statement.tables) {
+                    let logical = match (table.database) {
+                        case Some(database) => database
+                        case None => session.database
+                    }
+                    if (!value.contains(logical)) {
+                        throw FdbmException(DbdErrorCode.ROUTE_FAILED,
+                            'unknown database \'${logical}\'')
+                    }
+                }
+            case None => ()
+        }
     }
 
     public func execute(session: DbdSession, sql: String, params: Array<DataAny>): ExecutionOutcome {
         let parsed = SqlParser.parse(sql, session.database)
         let statement = ParameterBinder.bind(parsed, params)
+        ensureKnownLogicalDatabase(session, statement)
         match (statement) {
             case s: SelectStatement => selectExecutor.execute(session, s)
             case s: UpdateStatement => dmlExecutor.execute(session, s)

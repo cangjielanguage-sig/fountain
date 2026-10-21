@@ -15,11 +15,14 @@ limitations under the License.
 */
 package fountain::fdbm.idmaker
 
-import std.collection.HashMap
+import std.collection.{ArrayList, HashMap, HashSet}
+import std.sync.Mutex
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_dbm.IdGenerator
 import fountain::f_mockdb.*
+import fountain::f_base.fromHex
+import fountain::f_util.UUID
 import fountain::fdbm.config.{DatabaseNodeConfig, IdMakerConfig, LoadBalanceConfig, PoolConfig}
 import fountain::fdbm.resources.DatabaseResources
 
@@ -35,6 +38,54 @@ public class IdMakersTest {
         @Assert(first.isEmpty(), false)
         @Assert(first == second, false)
         @Assert(generator.name, 'uuid')
+    }
+
+    /** D10：v1/v6 必须写入真实时间戳，且同进程内单调不减。 */
+    @TestCase
+    public func uuidV1AndV6CarryTimestamps(): Unit {
+        for (version in [1, 6]) {
+            let generator = UuidIdGenerator(version: version)
+            var last: Int64 = 0
+            var index: Int64 = 0
+            while (index < 1000) {
+                let value = UUID.parse(generator.nextStringId())
+                @Assert(value.version, version)
+                let stamp = hundredNanosOf(value)
+                @Assert(stamp > 0, true)
+                @Assert(stamp >= last, true)
+                last = stamp
+                index += 1
+            }
+        }
+    }
+
+    /** D10：创建生成器不产生临时目录/文件，并发取号不重复。 */
+    @TestCase
+    public func uuidV1IsUniqueUnderConcurrency(): Unit {
+        let generator = UuidIdGenerator(version: 1)
+        let lock = Mutex()
+        let ids = ArrayList<String>()
+        let futures = ArrayList<Future<Unit>>()
+        for (_ in 0..8) {
+            let fut = spawn {
+                for (_ in 0..200) {
+                    let id = generator.nextStringId()
+                    synchronized(lock) {
+                        ids.add(id)
+                    }
+                }
+            }
+            futures.add(fut)
+        }
+        for (fut in futures) {
+            fut.get()
+        }
+        @Assert(ids.size, 1600)
+        let seen = HashSet<String>()
+        for (id in ids) {
+            @Assert(seen.add(id), true)
+            @Assert(hundredNanosOf(UUID.parse(id)) > 0, true)
+        }
     }
 
     @TestCase
@@ -90,5 +141,25 @@ public class IdMakersTest {
         } finally {
             resources.close()
         }
+    }
+}
+
+/** UUID 的 RFC 4122 时间戳（100 ns 单位）；`timestampNanos` 对 1582 年起算会超出 Int64，故单测自行解码。 */
+private func hundredNanosOf(value: UUID): Int64 {
+    let hex = value.toHexString()
+    let bytes = Array<Byte>(16, repeat: 0u8)
+    var i: Int64 = 0
+    while (i < 16) {
+        bytes[i] = fromHex(hex[i * 2..i * 2 + 2])
+        i += 1
+    }
+    if (value.version == 1) {
+        (Int64(bytes[6] & 0xf) << 56) | (Int64(bytes[7]) << 48) | (Int64(bytes[4]) << 40) |
+            (Int64(bytes[5]) << 32) | (Int64(bytes[0]) << 24) | (Int64(bytes[1]) << 16) |
+            (Int64(bytes[2]) << 8) | Int64(bytes[3])
+    } else {
+        (Int64(bytes[0]) << 56) | (Int64(bytes[1]) << 48) | (Int64(bytes[2]) << 40) |
+            (Int64(bytes[3]) << 32) | (Int64(bytes[4]) << 24) | (Int64(bytes[5]) << 16) |
+            (Int64(bytes[6] & 0xf) << 8) | Int64(bytes[7])
     }
 }

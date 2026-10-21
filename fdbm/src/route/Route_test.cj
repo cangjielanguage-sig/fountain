@@ -110,10 +110,13 @@ public class PartitionAlgorithmTest {
                 HashMap<String, PartitionAlgorithm>())
         } == DbdErrorCode.PARTITION_CONFIG, true)
 
+        // 非冲突的自定义名正常生效；内置名仍解析为内置实现（与内置重名由启动自检拒绝，见
+        // `FdbmConfig.validate` 的 `customAlgorithmCannotOverrideBuiltin`）
         let custom = HashMap<String, PartitionAlgorithm>()
-        custom['hash'] = FixedAlgorithm('db1')
-        @Assert(PartitionAlgorithmFactory.create('hash', databases, 10, None, custom)
+        custom['myhash'] = FixedAlgorithm('db1')
+        @Assert(PartitionAlgorithmFactory.create('myhash', databases, 10, None, custom)
             .partition<String>('x'), 'db1')
+        @Assert(PartitionAlgorithmFactory.create('hash', databases, 10, None, custom).name, 'hash')
     }
 }
 

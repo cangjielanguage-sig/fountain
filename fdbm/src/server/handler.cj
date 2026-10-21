@@ -21,6 +21,7 @@ import fountain::f_dbd.common.{DbdErrorCode, DbdErrorPayload, NEXT_ROW, QueryRes
     QueryResultColumnPayload, QueryResultServerPayload, SqlPayload, decodeStrict}
 import fountain::f_net.SocketBuffer
 import fountain::f_protocol.default.*
+import fountain::f_dbm.IdGeneratorException
 import fountain::fdbm.exception.FdbmException
 import fountain::fdbm.execute.{DbdSession, ExecutionOutcome, QueryCursor}
 
@@ -40,6 +41,9 @@ protected struct FdbmHandler {
             return dispatch(context, buffer, message)
         } catch (e: FdbmException) {
             errorOf(message.id, e.code, e.message)
+        } catch (e: IdGeneratorException) {
+            // 扩展直接抛出时也要映射 ID_GENERATOR，不能落到 INTERNAL（D11）
+            errorOf(message.id, DbdErrorCode.ID_GENERATOR, e.message)
         } catch (e: SqlException) {
             errorOf(message.id, DbdErrorCode.DB_ERROR, e.message, sqlState: e.sqlState)
         } catch (e: Exception) {

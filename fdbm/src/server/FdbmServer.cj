@@ -69,7 +69,7 @@ protected class FdbmServer <: Resource {
         }
         let rules = ArrayList<PartitionRule>()
         for (config in settings.partitions) {
-            let databases = match (settings.logicalDatabases.get(config.database)) {
+            let databases = match (settings.catalog.physicals(config.database)) {
                 case Some(value) => value
                 case None => physical
             }
@@ -102,7 +102,7 @@ protected class FdbmServer <: Resource {
         let bootScript = bootScriptOf(settings.bootScript)
         this.sessions = SessionRegistry(settings.sessionSweepInterval, settings.defaultDatabase)
         let dispatcher = ExecutorDispatcher(this.router, globals, this.resources, settings.idmaker,
-            settings.sequenceDatabase, custom.idGenerators, bootScript)
+            settings.sequenceDatabase, custom.idGenerators, bootScript, catalog: settings.catalog)
         this.context = ServerContext(this.sessions, dispatcher, custom, logger)
         logger.info('fdbm is ready on port ${settings.port}: ${physical.size} physical database(s), ' +
             '${settings.partitions.size} partition rule(s)')

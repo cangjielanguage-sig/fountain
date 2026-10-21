@@ -22,13 +22,13 @@ import std.unicode.UnicodeStringExtension
 import fountain::f_data.{Data, DataReal, DataString}
 import fountain::f_dbd.common.{ColumnInfoImpl, DbdErrorCode, SqlTypes, UpdateResultPayload}
 import fountain::f_log.LoggerFactory
-import fountain::fdbm.config.{BootScriptWriter, IdMakerConfig}
+import fountain::fdbm.config.{BootScriptWriter, IdMakerConfig, LogicalCatalog}
 import fountain::fdbm.exception.FdbmException
 import fountain::fdbm.idmaker.IdMakers
 import fountain::fdbm.resources.NodeAccessor
 import fountain::fdbm.route.*
 import fountain::fdbm.sql.*
-import fountain::f_dbm.{IdGenerator, PartitionAlgorithm}
+import fountain::f_dbm.{IdGenerator, IdGeneratorException, PartitionAlgorithm}
 
 private let execLogger = LoggerFactory.getLogger('fountain::fdbm.execute')
 
@@ -81,6 +81,18 @@ func borrow(session: DbdSession, resources: NodeAccessor, database: String,
 
 func allDatabases(resources: NodeAccessor): Array<String> {
     resources.databases()
+}
+
+/**
+ * 事务 pin 只对应一个物理库：需要访问多于一个物理库的语句必须拒绝（D04）。
+ *
+ * 拒绝而不是"在 pin 连接上重复执行"——后者会把同一 SQL 在同一库上执行 N 次并累加 rowCount。
+ */
+func ensurePinnedTargets(session: DbdSession, count: Int64, what: String): Unit {
+    if (session.pinned.isSome() && count > 1) {
+        throw FdbmException(DbdErrorCode.ROUTE_FAILED,
+            '${what} spanning ${count} physical databases is not allowed inside a transaction')
+    }
 }
 
 /**
@@ -151,7 +163,11 @@ func joinNames(names: ArrayList<String>): String {
  */
 func broadcastWrite(resources: NodeAccessor, databases: Array<String>,
     sql: String): UpdateResultPayload {
-    let targets = if (!databases.isEmpty()) { databases } else { resources.databases() }
+    // 广播范围必须由逻辑库解析得出；空集合说明目标逻辑库没有物理库（不得回退到全部署）
+    if (databases.isEmpty()) {
+        throw FdbmException(DbdErrorCode.ROUTE_FAILED, 'the target logical database has no physical database')
+    }
+    let targets = databases
     let succeeded = ArrayList<String>()
     let failed = ArrayList<String>()
     var rowCount: Int64 = 0
@@ -196,11 +212,14 @@ protected class SelectExecutor {
     private let resources: NodeAccessor
     private let router: PartitionRouter
     private let globals: GlobalTableRouter
+    private let catalog: ?LogicalCatalog
 
-    public init(resources: NodeAccessor, router: PartitionRouter, globals: GlobalTableRouter) {
+    public init(resources: NodeAccessor, router: PartitionRouter, globals: GlobalTableRouter,
+        catalog!: ?LogicalCatalog = None) {
         this.resources = resources
         this.router = router
         this.globals = globals
+        this.catalog = catalog
     }
 
     public func execute(session: DbdSession, statement: SelectStatement): ExecutionOutcome {
@@ -215,6 +234,7 @@ protected class SelectExecutor {
         if (databases.isEmpty()) {
             return ExecutionOutcome(cursor: Some(QueryCursor([], [])), columns: [])
         }
+        ensurePinnedTargets(session, databases.size, 'select')
         // 派生表 + 分页只在单目标下推；多库下发 limit/offset 会按分片截断（设计 D6）
         if (hasDerivedTable(statement) &&
             (statement.limit.isSome() || statement.offset.isSome()) && databases.size > 1) {
@@ -266,9 +286,30 @@ protected class SelectExecutor {
             return plan.databases
         }
         if (plan.kind == RouteKind.Unroutable) {
-            return allDatabases(resources)
+            return scopeOf(statement, session)
         }
         plan.databases
+    }
+
+    /**
+     * `Unroutable` 广播范围：该语句所属**逻辑库**的物理库集合，绝不跨到别的逻辑库（D05）。
+     * 未知逻辑库 → `ROUTE_FAILED`（收紧，登记为已知变更）。
+     */
+    private func scopeOf(statement: SelectStatement, session: DbdSession): Array<String> {
+        let logical = if (statement.from.isEmpty()) {
+            session.database
+        } else {
+            DmlExecutor.logicalOf(statement.from[0], session.database)
+        }
+        match (catalog) {
+            case Some(value) =>
+                match (value.physicals(logical)) {
+                    case Some(databases) => databases
+                    case None => throw FdbmException(DbdErrorCode.ROUTE_FAILED,
+                        'unknown database \'${logical}\'')
+                }
+            case None => allDatabases(resources)
+        }
     }
 
     /** `select count(*) ...`：逐库下推并求和，返回一行的内存结果（设计 D6）。 */
@@ -282,11 +323,7 @@ protected class SelectExecutor {
             return countOutcome(0)
         }
         // 事务 pin 只对应一个物理库，跨库求和会得到不完整计数
-        if (session.pinned.isSome() && databases.size > 1) {
-            throw FdbmException(DbdErrorCode.ROUTE_FAILED,
-                'count(*) spanning ${databases.size} physical databases is not allowed inside a ' +
-                'transaction')
-        }
+        ensurePinnedTargets(session, databases.size, 'count(*)')
         let sql = SqlRenderer.render(statement, dialect: dialectOf(resources, databases))
         var total: Int64 = 0
         for (database in databases) {
@@ -361,7 +398,7 @@ protected class SelectExecutor {
     }
 
     private func emptyOutcome(session: DbdSession, statement: SelectStatement): ExecutionOutcome {
-        let databases = allDatabases(resources)
+        let databases = scopeOf(statement, session)
         if (databases.isEmpty()) {
             return ExecutionOutcome(cursor: Some(QueryCursor([], [])), columns: [])
         }
@@ -423,6 +460,7 @@ protected class DmlExecutor {
             throw FdbmException(DbdErrorCode.ROUTE_FAILED,
                 'update/delete requires a partition key condition')
         }
+        ensurePinnedTargets(session, plan.databases.size, 'update')
         let sql = SqlRenderer.render(statement, dialect: dialectOf(resources, plan.databases))
         var rowCount: Int64 = 0
         var lastInsertId: Int64 = 0
@@ -481,6 +519,7 @@ protected class DeleteExecutor {
             throw FdbmException(DbdErrorCode.ROUTE_FAILED,
                 'update/delete requires a partition key condition')
         }
+        ensurePinnedTargets(session, plan.databases.size, 'delete')
         let dialect = dialectOf(resources, plan.databases)
         let rule = router.rule(logical, statement.table.name)
         let keys = match (rule) {
@@ -740,12 +779,50 @@ protected class InsertExecutor {
         false
     }
 
+    /**
+     * 生成器能力按**实际实现**协商（D11）：期望整型的算法先试 `nextIntId`，失败回退字符串；
+     * 期望字符串的算法反之。两者都抛 `IdGeneratorException` → `ID_GENERATOR`（含生成器名）。
+     */
     private func idLiteral(generator: IdGenerator, algorithm: PartitionAlgorithm): Data {
         let name = algorithm.name
-        if (name == 'step' || name == 'snowflake' || name == 'sequence') {
-            return DataReal(generator.nextIntId())
+        let wantsInt = name == 'step' || name == 'snowflake' || name == 'sequence'
+        if (wantsInt) {
+            match (tryIntId(generator)) {
+                case Some(value) => return DataReal(value)
+                case None => ()
+            }
+            match (tryStringId(generator)) {
+                case Some(value) => return DataString(value)
+                case None => ()
+            }
+        } else {
+            match (tryStringId(generator)) {
+                case Some(value) => return DataString(value)
+                case None => ()
+            }
+            match (tryIntId(generator)) {
+                case Some(value) => return DataReal(value)
+                case None => ()
+            }
         }
-        DataString(generator.nextStringId())
+        throw FdbmException(DbdErrorCode.ID_GENERATOR,
+            'id generator \'${generator.name}\' supports neither int nor string id')
+    }
+
+    private static func tryIntId(generator: IdGenerator): ?Int64 {
+        try {
+            Some(generator.nextIntId())
+        } catch (_: IdGeneratorException) {
+            None<Int64>
+        }
+    }
+
+    private static func tryStringId(generator: IdGenerator): ?String {
+        try {
+            Some(generator.nextStringId())
+        } catch (_: IdGeneratorException) {
+            None<String>
+        }
     }
 
     private func executeSingle(session: DbdSession, statement: InsertStatement): UpdateResultPayload {
@@ -849,12 +926,14 @@ protected class InsertExecutor {
     }
 }
 
-/** SHOW：databases 用内存结果；tables 按驱动方言下推（设计 §9.5）。 */
+/** SHOW：databases 用逻辑库清单；tables 按驱动方言下推（设计 §9.5 / D03）。 */
 protected class ShowExecutor {
     private let resources: NodeAccessor
+    private let catalog: ?LogicalCatalog
 
-    public init(resources: NodeAccessor) {
+    public init(resources: NodeAccessor, catalog!: ?LogicalCatalog = None) {
         this.resources = resources
+        this.catalog = catalog
     }
 
     public func execute(session: DbdSession, statement: ShowStatement): ExecutionOutcome {
@@ -865,7 +944,10 @@ protected class ShowExecutor {
                 for (info in concrete) {
                     infos.add(info)
                 }
-                let names = sortedNames(resources.databases())
+                let names = match (catalog) {
+                    case Some(value) => value.names()
+                    case None => sortedNames(resources.databases())
+                }
                 let rows = ArrayList<Array<Data>>()
                 for (database in names) {
                     rows.add([DataString(database)])
@@ -878,17 +960,44 @@ protected class ShowExecutor {
                     case Some(value) => value
                     case None => session.database
                 }
-                if (!resources.contains(database)) {
-                    throw FdbmException(DbdErrorCode.ROUTE_FAILED,
-                        'unknown database \'${database}\'')
+                let physical = match (catalog) {
+                    case Some(value) =>
+                        match (value.physicals(database)) {
+                            case Some(databases) => databases[0]
+                            case None => throw FdbmException(DbdErrorCode.ROUTE_FAILED,
+                                'unknown database \'${database}\'')
+                        }
+                    case None =>
+                        if (!resources.contains(database)) {
+                            throw FdbmException(DbdErrorCode.ROUTE_FAILED,
+                                'unknown database \'${database}\'')
+                        }
+                        database
                 }
-                let sql = tablesSql(resources.driver(database), statement.like)
-                let connection = resources.selectRead(database)
-                let prepared = connection.prepareStatement(sql)
-                let result = prepared.query()
-                let infos = tableColumns(QueryCursor.columnsOf(result))
-                let segment = CursorSegment(prepared, result, connection)
-                ExecutionOutcome(cursor: Some(QueryCursor([segment], infos)), columns: infos)
+                let sql = tablesSql(resources.driver(physical), statement.like)
+                // G23：任一步失败都要归还连接与语句句柄（否则 maxSize=1 时后续请求全部超时）
+                let connection = resources.selectRead(physical)
+                var prepared: ?Statement = None
+                try {
+                    let statement_ = connection.prepareStatement(sql)
+                    prepared = Some(statement_)
+                    let result = statement_.query()
+                    let infos = tableColumns(QueryCursor.columnsOf(result))
+                    let segment = CursorSegment(statement_, result, connection)
+                    ExecutionOutcome(cursor: Some(QueryCursor([segment], infos)), columns: infos)
+                } catch (e: Exception) {
+                    match (prepared) {
+                        case Some(statement_) =>
+                            try {
+                                statement_.close()
+                            } catch (_: Exception) {}
+                        case None => ()
+                    }
+                    try {
+                        connection.close()
+                    } catch (_: Exception) {}
+                    throw e
+                }
         }
     }
 
@@ -973,16 +1082,37 @@ protected class ExportExecutor {
 protected class DdlExecutor {
     private let resources: NodeAccessor
     private let globals: GlobalTableRouter
+    private let catalog: ?LogicalCatalog
 
-    public init(resources: NodeAccessor, globals: GlobalTableRouter) {
+    public init(resources: NodeAccessor, globals: GlobalTableRouter,
+        catalog!: ?LogicalCatalog = None) {
         this.resources = resources
         this.globals = globals
+        this.catalog = catalog
     }
 
     /** DDL 广播到当前逻辑库的全部物理库；部分失败 → `DB_ERROR` 并列出成功/失败库。 */
     public func execute(session: DbdSession, statement: DdlStatement): ExecutionOutcome {
+        // DDL 必须广播到逻辑库全部物理库，无法在单目标事务内完成（D04）
+        if (session.pinned.isSome()) {
+            throw FdbmException(DbdErrorCode.ROUTE_FAILED,
+                'ddl is not allowed inside a transaction: it must be broadcast to every physical database')
+        }
         let configured = globals.physicalDatabases(session.database)
-        let databases = if (!configured.isEmpty()) { configured } else { resources.databases() }
+        let databases = if (!configured.isEmpty()) {
+            configured
+        } else {
+            match (catalog) {
+                case Some(value) =>
+                    match (value.physicals(session.database)) {
+                        case Some(found) => found
+                        case None => throw FdbmException(DbdErrorCode.ROUTE_FAILED,
+                            'unknown database \'${session.database}\'')
+                    }
+                case None => throw FdbmException(DbdErrorCode.ROUTE_FAILED,
+                    'the target logical database has no physical database')
+            }
+        }
         let succeeded = ArrayList<String>()
         let failed = ArrayList<String>()
         var rowCount: Int64 = 0

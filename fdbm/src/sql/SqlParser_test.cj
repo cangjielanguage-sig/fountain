@@ -195,6 +195,36 @@ public class SqlParserTest {
         @Assert(parseCode('select * from t where') == DbdErrorCode.SQL_SYNTAX, true)
     }
 
+    /** D08：派生表位于 JOIN 或 DML 的 JOIN 中 → `UNSUPPORTED_SQL`。 */
+    @TestCase
+    public func derivedTableInJoinIsUnsupported(): Unit {
+        @Assert(parseCode('select * from u join (select * from t where id = 5) c on u.tid = c.id') ==
+            DbdErrorCode.UNSUPPORTED_SQL, true)
+        @Assert(parseCode("update t join (select * from u) x on t.id = x.id set t.name = 'a'") ==
+            DbdErrorCode.UNSUPPORTED_SQL, true)
+        @Assert(parseCode('delete from t join (select * from u) x on t.id = x.id') ==
+            DbdErrorCode.UNSUPPORTED_SQL, true)
+    }
+
+    /** D08 回归：合法的 JOIN 不受形状校验影响。 */
+    @TestCase
+    public func legalJoinsStillParse(): Unit {
+        parseAs<SelectStatement>('select * from a join b on a.id = b.id')
+        parseAs<UpdateStatement>("update t join u on t.id = u.id set t.name = 'a'")
+        parseAs<DeleteStatement>('delete from t join u on t.id = u.id')
+    }
+
+    /** D07：大整数与高精度小数按原文保留，不经 `Float64`。 */
+    @TestCase
+    public func numericLiteralsKeepFullPrecision(): Unit {
+        let big = parseAs<InsertStatement>('insert into t (v) values (12345678901234567890)')
+        @Assert(SqlRenderer.render(big).contains('12345678901234567890'), true)
+        let fraction = parseAs<InsertStatement>('insert into t (v) values (123456789012345678.90)')
+        @Assert(SqlRenderer.render(fraction).contains('123456789012345678.90'), true)
+        let negative = parseAs<InsertStatement>('insert into t (v) values (-12345678901234567890)')
+        @Assert(SqlRenderer.render(negative).contains('-12345678901234567890'), true)
+    }
+
     @TestCase
     public func stringEscapes(): Unit {
         let statement = parseAs<SelectStatement>("select * from t where name = 'a''b'")

@@ -66,7 +66,8 @@ public class IntegrationTest {
                 while (databases.next()) {
                     names.add(databases.get<String>(0))
                 }
-                @Assert(names.toArray(), ['db0', 'db1'])
+                // 逻辑库命名空间：分区规则引用 db0，隐式展开为全部物理库（D03）
+                @Assert(names.toArray(), ['db0'])
             } finally {
                 databases.close()
             }

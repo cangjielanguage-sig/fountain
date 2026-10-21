@@ -15,8 +15,11 @@ limitations under the License.
 */
 package fountain::fdbm.sql
 
-import std.collection.ArrayList
-import fountain::f_data.{Data, DataBool, DataNone, DataReal, DataString}
+import std.reflect.TypeInfo
+import fountain::f_base.toHex
+import fountain::f_data.*
+import fountain::f_dbd.common.DbdErrorCode
+import fountain::fdbm.exception.FdbmException
 
 /**
  * AST → SQL（设计 §8.2 / D3）：按目标方言重建语句，供下推与 `parse → render → parse` 往返。
@@ -32,9 +35,9 @@ protected struct SqlRenderer {
             case s: InsertStatement => renderInsert(s, dialect)
             case s: UpdateStatement => renderUpdate(s, dialect)
             case s: DeleteStatement => renderDelete(s, dialect)
-            case s: ShowStatement => renderShow(s)
+            case s: ShowStatement => renderShow(s, dialect)
             case s: DdlStatement => s.sql
-            case s: ExportStatement => 'export ${s.key}=${quoteText(s.value)}'
+            case s: ExportStatement => 'export ${s.key}=${quoteText(s.value, dialect)}'
             case s: SessionCtlStatement => s.sql
             case _ => ''
         }
@@ -233,7 +236,7 @@ protected struct SqlRenderer {
         builder.toString()
     }
 
-    private static func renderShow(statement: ShowStatement): String {
+    private static func renderShow(statement: ShowStatement, dialect: SqlDialect): String {
         match (statement.showKind) {
             case ShowKind.Databases => 'show databases'
             case ShowKind.Tables =>
@@ -243,7 +246,7 @@ protected struct SqlRenderer {
                     case None => ()
                 }
                 match (statement.like) {
-                    case Some(pattern) => builder.append(' like ${quoteText(pattern)}')
+                    case Some(pattern) => builder.append(' like ${quoteText(pattern, dialect)}')
                     case None => ()
                 }
                 builder.toString()
@@ -301,7 +304,7 @@ protected struct SqlRenderer {
                         '${prefix}.${column}'
                     case None => column
                 }
-            case l: LiteralExpression => literal(l.data)
+            case l: LiteralExpression => literal(l.data, dialect: dialect)
             case h: HexLiteralExpression =>
                 match (dialect) {
                     case SqlDialect.MySql => "X'${h.hex}'"
@@ -345,17 +348,86 @@ protected struct SqlRenderer {
         }
     }
 
+    /** 单参重载：等价于 `dialect = Unknown`（未知方言只翻倍单引号）。 */
     public static func literal(data: Data): String {
+        literal(data, dialect: SqlDialect.Unknown)
+    }
+
+    /**
+     * 参数值 → SQL 字面量（**类型白名单**，D06）。
+     *
+     * 只接受 `String` / `Real` / `Bool` / `None` / `DateTime` / 字节序列；其它类型 fail-closed
+     * （`CONVERSION`），绝不再用 `toString()` 拼出非法 SQL。
+     */
+    public static func literal(data: Data, dialect!: SqlDialect): String {
         match (data) {
-            case s: DataString => quoteText(s.data)
+            case s: DataString => quoteText(s.data, dialect)
             case d: DataReal => d.data.toString()
             case b: DataBool => b.data.toString()
             case _: DataNone => 'null'
-            case other => other.toString()
+            case t: DataDateTime => quoteText(dateTimeText(t.data), dialect)
+            case bytes: DataCollection<Array<Byte>, Byte> => byteLiteral(bytes.data, dialect)
+            case other => throw FdbmException(DbdErrorCode.CONVERSION,
+                'parameter value of type ${TypeInfo.of(other)} cannot be rendered as a SQL literal')
         }
     }
 
-    private static func quoteText(value: String): String {
-        "'${value.replace('\'', '\'\'')}'"
+    /** 该值能否安全表示为 SQL 字面量（`ParameterBinder` 在渲染前用同一判定）。 */
+    public static func isLiteral(data: Data): Bool {
+        match (data) {
+            case _: DataString => true
+            case _: DataReal => true
+            case _: DataBool => true
+            case _: DataNone => true
+            case _: DataDateTime => true
+            case _: DataCollection<Array<Byte>, Byte> => true
+            case _ => false
+        }
+    }
+
+    /** `yyyy-MM-dd HH:mm:ss[.fffffffff]`（本地时区，不做时区转换）。 */
+    private static func dateTimeText(value: DateTime): String {
+        let base = value.format('yyyy-MM-dd HH:mm:ss')
+        let nanos = value.nanosecond
+        if (nanos == 0) {
+            return base
+        }
+        var text = nanos.toString()
+        while (text.size < 9) {
+            text = '0${text}'
+        }
+        while (text.endsWith('0')) {
+            text = text[0..text.size - 1]
+        }
+        '${base}.${text}'
+    }
+
+    private static func byteLiteral(bytes: Array<Byte>, dialect: SqlDialect): String {
+        let hex = StringBuilder()
+        for (byte in bytes) {
+            hex.append(toHex(byte))
+        }
+        if (dialect == SqlDialect.MySql) {
+            "X'${hex}'"
+        } else {
+            "'\\x${hex}'"
+        }
+    }
+
+    /**
+     * 字符串字面量：MySQL 族先转义反斜杠（`\` → `\\`）再翻倍单引号（G21）；其它方言只翻倍单引号。
+     */
+    private static func quoteText(value: String, dialect: SqlDialect): String {
+        let builder = StringBuilder()
+        for (ch in value.toRuneArray()) {
+            if (ch == r'\\' && dialect == SqlDialect.MySql) {
+                builder.append("\\\\")
+            } else if (ch == r'\'') {
+                builder.append("''")
+            } else {
+                builder.append(ch)
+            }
+        }
+        "'${builder.toString()}'"
     }
 }

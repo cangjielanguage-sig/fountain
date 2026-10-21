@@ -20,6 +20,7 @@ import std.convert.*
 import fountain::f_data.{Data, DataBool, DataNone, DataReal, DataString}
 import fountain::f_dbd.common.DbdErrorCode
 import fountain::fdbm.exception.FdbmException
+import fountain::f_log.LoggerFactory
 
 /**
  * 手写递归下降解析器（设计 §8.2）。
@@ -28,6 +29,8 @@ import fountain::fdbm.exception.FdbmException
  * - 语法正确但本期不支持（函数、子查询、`group by`、`union`、存储过程等）→ `UNSUPPORTED_SQL`。
  */
 protected class SqlParser {
+    private static let logger = LoggerFactory.getLogger('fountain::fdbm.sql.SqlParser')
+
     private let tokens: Array<Token>
     private let currentDatabase: String
     private var cursor: Int64 = 0
@@ -244,13 +247,24 @@ protected class SqlParser {
      * 只放行 f_orm 分页固定生成的两类语句，其余组合一律 `UNSUPPORTED_SQL`，
      * 避免「能解析但语义不确定」的语句被静默下推。
      */
-    private func validateSelectShape(statement: SelectStatement): Unit {
-        var derivedCount: Int64 = 0
+    /** 派生表计数：覆盖 `from` 与 `joins` 的所有表引用位置（D08）。 */
+    private static func derivedTablesOf(statement: SelectStatement): Int64 {
+        var count: Int64 = 0
         for (table in statement.from) {
             if (table.derived.isSome()) {
-                derivedCount += 1
+                count += 1
             }
         }
+        for (join in statement.joins) {
+            if (join.table.derived.isSome()) {
+                count += 1
+            }
+        }
+        count
+    }
+
+    private func validateSelectShape(statement: SelectStatement): Unit {
+        let derivedCount = derivedTablesOf(statement)
         var countColumns: Int64 = 0
         for (item in statement.columns) {
             if (item.expression is CountExpression) {
@@ -446,6 +460,19 @@ protected class SqlParser {
         (column, expression())
     }
 
+    /**
+     * `update/delete ... join (select ...)` 一律 `UNSUPPORTED_SQL`（D08）。
+     *
+     * `tableRef` 仍允许解析派生表，由这里统一拒绝，保证错误码一致；错误文案带当前位置。
+     */
+    private func validateNoDerivedInJoins(joins: Array<JoinClause>, kind: String): Unit {
+        for (join in joins) {
+            if (join.table.derived.isSome()) {
+                throw unsupported('a derived table in ${kind} joins is not supported', peek().position)
+            }
+        }
+    }
+
     private func update(): UpdateStatement {
         expectKeyword('update')
         let table = tableRef(allowAlias: true)
@@ -453,6 +480,7 @@ protected class SqlParser {
         while (isJoinStart()) {
             joins.add(joinClause())
         }
+        validateNoDerivedInJoins(joins.toArray(), 'update')
         expectKeyword('set')
         let assignments = ArrayList<(ColumnExpression, SqlExpression)>()
         assignments.add(updateAssignment())
@@ -490,6 +518,7 @@ protected class SqlParser {
         while (isJoinStart()) {
             joins.add(joinClause())
         }
+        validateNoDerivedInJoins(joins.toArray(), 'delete')
         let condition = if (matchKeyword('where')) {
             Some(expression())
         } else {
@@ -739,6 +768,10 @@ protected class SqlParser {
         throw syntax('unexpected token \'${token.text}\'', token.position)
     }
 
+    /**
+     * 数值字面量（D07）：`Int64` 优先；超出范围按**原文**交给 `Decimal`，不经 `Float64` 中转。
+     * `Decimal` 不接受时才回退 `Float64`（记 WARN），仍失败 → `SQL_SYNTAX`。
+     */
     private static func numberOf(token: Token): Data {
         let text = token.text
         if (!text.contains('.') && !text.contains('e') && !text.contains('E')) {
@@ -747,8 +780,14 @@ protected class SqlParser {
                 case None => ()
             }
         }
+        match (decimalOf(text)) {
+            case Some(value) => return value
+            case None => ()
+        }
         match (Float64.tryParse(text)) {
-            case Some(value) => DataReal(value)
+            case Some(value) =>
+                logger.warn('number \'${text}\' is not representable as Decimal, falling back to Float64')
+                DataReal(value)
             case None => throw FdbmException(DbdErrorCode.SQL_SYNTAX,
                 'illegal number \'${text}\' at position ${token.position}')
         }
@@ -762,10 +801,24 @@ protected class SqlParser {
                 case None => ()
             }
         }
+        match (decimalOf('-${text}')) {
+            case Some(value) => return value
+            case None => ()
+        }
         match (Float64.tryParse(text)) {
-            case Some(value) => DataReal(-value)
+            case Some(value) =>
+                logger.warn('number \'-${text}\' is not representable as Decimal, falling back to Float64')
+                DataReal(-value)
             case None => throw FdbmException(DbdErrorCode.SQL_SYNTAX,
                 'illegal number \'${text}\' at position ${token.position}')
+        }
+    }
+
+    private static func decimalOf(text: String): ?Data {
+        try {
+            Some(DataReal(text))
+        } catch (_: Exception) {
+            None<Data>
         }
     }
 

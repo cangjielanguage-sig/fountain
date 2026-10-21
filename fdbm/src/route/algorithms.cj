@@ -285,7 +285,12 @@ protected class SubstringPartition <: PartitionAlgorithm {
     }
 }
 
-/** 算法工厂：先查自定义（同名可覆盖内置），再查内置；未知/缺参数 → `PARTITION_CONFIG`。 */
+/**
+ * 算法工厂：先查自定义，再查内置；未知/缺参数 → `PARTITION_CONFIG`。
+ *
+ * 「自定义优先」**不再承担覆盖语义**：启动自检（`FdbmConfig.validate`）已拒绝与内置重名的扩展，
+ * 因此这里命中自定义时名称必然是非内置名。
+ */
 protected struct PartitionAlgorithmFactory {
     public static func create(name: String, databases: Array<String>, step: Int64,
         substr: ?SubstringSpec, custom: HashMap<String, PartitionAlgorithm>): PartitionAlgorithm {

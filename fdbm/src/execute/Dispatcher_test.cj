@@ -19,10 +19,11 @@ import std.collection.{ArrayList, HashMap}
 import std.fs.*
 import std.unittest.*
 import std.unittest.testmacro.*
-import fountain::f_dbm.{IdGenerator, PartitionAlgorithm}
+import fountain::f_dbm.{IdGenerator, IdGeneratorException, PartitionAlgorithm}
 import fountain::f_dbd.common.DbdErrorCode
 import fountain::f_mockdb.*
-import fountain::fdbm.config.{BootScriptWriter, DatabaseNodeConfig, IdMakerConfig, LoadBalanceConfig, PoolConfig}
+import fountain::fdbm.config.{BootScriptWriter, DatabaseNodeConfig, IdMakerConfig, LoadBalanceConfig,
+    LogicalCatalog, MapConfigSource, PoolConfig}
 import fountain::fdbm.exception.FdbmException
 import fountain::fdbm.resources.{DatabaseResources, NodeAccessor}
 import fountain::fdbm.route.{GlobalTableRouter, GlobalTableRule, PartitionCache, PartitionRouter,
@@ -193,6 +194,42 @@ public class DispatcherTest {
         }
     }
 
+    /** D11：生成器只实现 `nextStringId` 时，step 表回退到字符串 ID（不再回 INTERNAL）。 */
+    @TestCase
+    public func stringOnlyGeneratorFallsBackIntCapability(): Unit {
+        let custom = HashMap<String, IdGenerator>()
+        custom['stringonly'] = StringOnlyIdGenerator()
+        let fixture = recordingDispatcher(idmaker: IdMakerConfig('stringonly'), custom: custom)
+        let session = DbdSession('s', None, 'db0')
+        try {
+            let outcome = fixture.executor.execute(session,
+                "insert into t (name) values ('a')", [])
+            @Assert(outcome.update.getOrThrow().rowCount, 1)
+            @Assert(fixture.sqls.size, 1)
+            @Assert(fixture.sqls[0].contains("'1500'"), true)
+        } finally {
+            session.close()
+            fixture.resources.close()
+        }
+    }
+
+    /** D11：两种能力都抛 `IdGeneratorException` → `ID_GENERATOR`。 */
+    @TestCase
+    public func generatorWithoutCapabilitiesIsIdGeneratorError(): Unit {
+        let custom = HashMap<String, IdGenerator>()
+        custom['broken'] = BrokenIdGenerator()
+        let fixture = recordingDispatcher(idmaker: IdMakerConfig('broken'), custom: custom)
+        let session = DbdSession('s', None, 'db0')
+        try {
+            @Assert(codeOf { fixture.executor.execute(session,
+                "insert into t (name) values ('a')", []) }, DbdErrorCode.ID_GENERATOR)
+            @Assert(fixture.sqls.isEmpty(), true)
+        } finally {
+            session.close()
+            fixture.resources.close()
+        }
+    }
+
     @TestCase
     public func insertWithoutPartitionValueAndGeneratorIsRouteFailed(): Unit {
         let fixture = recordingDispatcher(idmaker: IdMakerConfig('no-such-generator'))
@@ -357,6 +394,129 @@ public class DispatcherTest {
             }
             @Assert(names.toArray(), ['db0', 'db1'])
             cursor.close()
+        } finally {
+            session.close()
+            resources.close()
+        }
+    }
+
+    /** D03：`SHOW DATABASES` 返回逻辑库集合（不含物理库名）。 */
+    @TestCase
+    public func showDatabasesUsesLogicalCatalog(): Unit {
+        let resources = resourcesOf(databases: ['db0', 'db1', 'db2', 'db3'])
+        let accessor = RecordingAccessor(resources)
+        let catalog = logicalCatalogOf()
+        let session = DbdSession('s', None, 'app')
+        try {
+            let outcome = ShowExecutor(accessor, catalog: catalog).execute(session,
+                ShowStatement(ShowKind.Databases, None, None))
+            let cursor = outcome.cursor.getOrThrow()
+            let names = ArrayList<String>()
+            while (cursor.next()) {
+                names.add(cursor.cell(0, 0).toString())
+            }
+            @Assert(names.toArray(), ['app', 'cfg'])
+            cursor.close()
+        } finally {
+            session.close()
+            resources.close()
+        }
+    }
+
+    /** D03：`SHOW TABLES <logical>` 按逻辑库解析物理库；未知逻辑库 → ROUTE_FAILED。 */
+    @TestCase
+    public func showTablesResolvesLogicalDatabase(): Unit {
+        let fixture = showFixture('mysql')
+        let catalog = logicalCatalogOf()
+        let session = DbdSession('s', None, 'app')
+        try {
+            ShowExecutor(fixture.accessor, catalog: catalog).execute(session,
+                ShowStatement(ShowKind.Tables, Some('app'), None)).cursor.getOrThrow().close()
+            @Assert(fixture.accessor.reads.toArray(), ['db0'])
+            @Assert(codeOf {
+                ShowExecutor(fixture.accessor, catalog: catalog).execute(session,
+                    ShowStatement(ShowKind.Tables, Some('nope'), None))
+            }, DbdErrorCode.ROUTE_FAILED)
+        } finally {
+            session.close()
+            fixture.resources.close()
+        }
+    }
+
+    /** D04：事务 pin 下多目标语句必须拒绝（不得在同一 pin 连接上重复执行）。 */
+    @TestCase
+    public func pinnedTransactionRejectsMultiTargetStatements(): Unit {
+        let (executor, resources) = dispatcher()
+        let session = DbdSession('s', None, 'db0')
+        try {
+            executor.execute(session, 'begin', [])
+            @Assert(codeOf {
+                executor.execute(session, 'update t set name = 1 where id in (5, 1500)', [])
+            }, DbdErrorCode.ROUTE_FAILED)
+            @Assert(codeOf {
+                executor.execute(session, 'delete from t where id in (5, 1500)', [])
+            }, DbdErrorCode.ROUTE_FAILED)
+            @Assert(codeOf {
+                executor.execute(session, 'select * from t where id in (5, 1500)', [])
+            }, DbdErrorCode.ROUTE_FAILED)
+            @Assert(codeOf { executor.execute(session, 'create table x (id int64)', []) },
+                DbdErrorCode.ROUTE_FAILED)
+            // 单目标语句照常走 pin 连接
+            let outcome = executor.execute(session, 'update t set name = 1 where id = 5', [])
+            @Assert(outcome.update.getOrThrow().rowCount, 1)
+            executor.execute(session, 'commit', [])
+            @Assert(session.pinned.isNone(), true)
+        } finally {
+            session.close()
+            resources.close()
+        }
+    }
+
+    /** D05：`Unroutable` SELECT 只广播到所属逻辑库的物理库。 */
+    @TestCase
+    public func unroutableSelectStaysInsideLogicalDatabase(): Unit {
+        let (executor, accessor, resources) = logicalDispatcher()
+        let session = DbdSession('s', None, 'app')
+        try {
+            let outcome = executor.execute(session, 'select * from t', [])
+            outcome.cursor.getOrThrow().close()
+            @Assert(accessor.reads.toArray(), ['db0', 'db1'])
+        } finally {
+            session.close()
+            resources.close()
+        }
+    }
+
+    /** D05：`count(*)` 与 DDL 的范围同样限定在逻辑库内。 */
+    @TestCase
+    public func broadcastCountAndDdlStayInsideLogicalDatabase(): Unit {
+        let (executor, accessor, resources) = logicalDispatcher()
+        let session = DbdSession('s', None, 'app')
+        try {
+            let outcome = executor.execute(session, 'select count(*) from t', [])
+            let cursor = outcome.cursor.getOrThrow()
+            @Assert(cursor.next(), true)
+            @Assert(cursor.cell(0, 0).toString(), '2')
+            cursor.close()
+            @Assert(accessor.reads.toArray(), ['db0', 'db1'])
+
+            executor.execute(session, 'create table x (id int64)', [])
+            @Assert(accessor.writes.toArray(), ['db0', 'db1'])
+        } finally {
+            session.close()
+            resources.close()
+        }
+    }
+
+    /** D05：未知逻辑库限定 → ROUTE_FAILED（不再"广播成功"）。 */
+    @TestCase
+    public func unknownLogicalDatabaseBroadcastIsRejected(): Unit {
+        let (executor, accessor, resources) = logicalDispatcher()
+        let session = DbdSession('s', None, 'app')
+        try {
+            @Assert(codeOf { executor.execute(session, 'select * from ghost.t', []) },
+                DbdErrorCode.ROUTE_FAILED)
+            @Assert(accessor.reads.isEmpty(), true)
         } finally {
             session.close()
             resources.close()
@@ -714,11 +874,73 @@ class FixedIdGenerator <: IdGenerator {
     }
 }
 
+/** 只实现字符串 ID 的生成器（step 表需要整型时调用方必须回退）。 */
+class StringOnlyIdGenerator <: IdGenerator {
+    public prop name: String {
+        get() {
+            'stringonly'
+        }
+    }
+
+    public func nextStringId(): String {
+        '1500'
+    }
+}
+
+/** 两种 ID 能力都不可用：默认实现抛 `IdGeneratorException`。 */
+class BrokenIdGenerator <: IdGenerator {
+    public prop name: String {
+        get() {
+            'broken'
+        }
+    }
+
+    public func nextIntId(): Int64 {
+        throw IdGeneratorException('broken generator does not support int id')
+    }
+
+    public func nextStringId(): String {
+        throw IdGeneratorException('broken generator does not support string id')
+    }
+}
+
 func resourcesOf(databases!: Array<String> = ['db0', 'db1']): DatabaseResources {
     let nodes = [DatabaseNodeConfig('name0', '127.0.0.1', 3306u16, 'mockdb', databases, '', '')]
     let poolConfig = PoolConfig(initSize: 0, minSize: 0, maxSize: 2, checkOnBorrowing: false,
         checkOnReturning: false, connectTimeout: Duration.second, maxWaiting: Duration.second)
     DatabaseResources(nodes, poolConfig, LoadBalanceConfig())
+}
+
+/** 两个逻辑库的部署：`app(db0,db1)`、`cfg(db2,db3)`（逻辑名 ≠ 物理名）。 */
+func logicalCatalogOf(): LogicalCatalog {
+    let nodes = [DatabaseNodeConfig('name0', '127.0.0.1', 3306u16, 'mockdb',
+        ['db0', 'db1', 'db2', 'db3'], '', '')]
+    let values = HashMap<String, String>()
+    values['fdbm_db_logicalDatabase_app'] = 'db0,db1'
+    values['fdbm_db_logicalDatabase_cfg'] = 'db2,db3'
+    LogicalCatalog.of(nodes, [], MapConfigSource(values))
+}
+
+/** 逻辑库 `app` 上的分片表 + 注入 catalog 的分发器。 */
+func logicalDispatcher(): (ExecutorDispatcher, RecordingAccessor, DatabaseResources) {
+    MOCKDB.clear()
+    MOCKDB.execution = {sql, _ =>
+        if (sql.startsWith('select') || sql.startsWith('show')) {
+            MOCKDB.addQueryResultColumnInfo(name: 'id', nullable: false, typeName: 'Int64')
+            MOCKDB.addQueryResultRow([1])
+        } else {
+            MOCKDB.rowCount = 1
+        }
+    }
+    let resources = resourcesOf(databases: ['db0', 'db1', 'db2', 'db3'])
+    let accessor = RecordingAccessor(resources)
+    let rules = [PartitionRule('app', 't', 'id', StepPartition(['db0', 'db1'], 1000))]
+    let router = PartitionRouter(rules, None, HashMap<String, PartitionAlgorithm>(),
+        knownDatabases: ['db0', 'db1', 'db2', 'db3'], globalTables: GlobalTableRouter([]))
+    let dispatcher = ExecutorDispatcher(router, GlobalTableRouter([]), accessor,
+        IdMakerConfig('uuid', arg: Some('4')), 'db0', HashMap<String, IdGenerator>(), None,
+        catalog: logicalCatalogOf())
+    (dispatcher, accessor, resources)
 }
 
 func routerOf(): PartitionRouter {

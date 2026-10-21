@@ -148,7 +148,7 @@ protected struct FdbmConfig {
     /** 逻辑库 → 物理库（未配置的逻辑库包含全部物理库）。 */
     static func getLogicalDatabases(nodes: Array<DatabaseNodeConfig>,
         source!: ConfigSource = EnvConfigSource()): HashMap<String, Array<String>> {
-        logicalDatabases(nodes, allDatabases(nodes), source)
+        LogicalCatalog.of(nodes, [], source).toMap()
     }
 
     static func getPartitions(source!: ConfigSource = EnvConfigSource()): Array<PartitionRuleConfig> {
@@ -321,19 +321,41 @@ protected struct FdbmConfig {
         value
     }
 
-    /** `sequence` 的分配库：显式配置优先，否则取第一个节点的第一个物理库。 */
+    /**
+     * `sequence` 的分配库：显式配置优先，接受**逻辑库名或物理库名**；逻辑名解析为其物理库排序首项，
+     * 两者都不是 → `ID_GENERATOR`。未配置时取默认逻辑库的首个物理库（设计 §3.1 / D03）。
+     */
     static func getSequenceDatabase(source!: ConfigSource = EnvConfigSource(),
-        nodes!: ?Array<DatabaseNodeConfig> = None): String {
+        catalog!: LogicalCatalog): String {
         if (let Some(configured) <- source.get('fdbm_sequenceDatabase')) {
-            if (!configured.trimAscii().isEmpty()) {
-                return configured.trimAscii()
+            let name = configured.trimAscii()
+            if (!name.isEmpty()) {
+                match (catalog.physicals(name)) {
+                    case Some(physicals) => return smallest(physicals)
+                    case None =>
+                        if (catalog.allPhysicals().contains(name)) {
+                            return name
+                        }
+                }
+                throw FdbmException(DbdErrorCode.ID_GENERATOR,
+                    'sequence database \'${name}\' is neither a logical nor a physical database')
             }
         }
-        let resolved = match (nodes) {
-            case Some(value) => value
-            case None => getNodes(source: source)
+        match (catalog.physicals(catalog.default())) {
+            case Some(physicals) => smallest(physicals)
+            case None => catalog.allPhysicals()[0]
         }
-        resolved[0].databases[0]
+    }
+
+    /** 排序后取首项（逻辑库的物理库列表按配置顺序保存，取号库要求确定性）。 */
+    private static func smallest(physicals: Array<String>): String {
+        var value = physicals[0]
+        for (candidate in physicals) {
+            if (candidate < value) {
+                value = candidate
+            }
+        }
+        value
     }
 
     // ==================== 启动自检 ====================
@@ -357,17 +379,9 @@ protected struct FdbmConfig {
         }
 
         let databases = allDatabases(confs.nodes)
-        let logicals = logicalDatabases(confs.nodes, databases, source)
-        for ((logical, physicals) in logicals) {
-            for (physical in physicals) {
-                if (!databases.contains(physical)) {
-                    throw FdbmException(DbdErrorCode.CONFIG,
-                        'logical database \'${logical}\' refers to unknown physical database \'${physical}\'')
-                }
-            }
-        }
         validateWeights(confs, databases, source)
-        validatePartitions(confs, logicals, customAlgorithms)
+        validatePartitions(confs, confs.catalog, customAlgorithms)
+        validateGlobalTables(confs, confs.catalog)
         validateIdMaker(confs, databases, customIdGenerators, source)
         if (confs.shutdownTimeout <= Duration.Zero || confs.shutdownTimeout == Duration.Max) {
             throw FdbmException(DbdErrorCode.CONFIG, 'fdbm_shutdownTimeout must be positive and finite')
@@ -375,6 +389,10 @@ protected struct FdbmConfig {
         if (confs.checkDuration <= Duration.Zero || confs.unavailableChecked <= 0) {
             throw FdbmException(DbdErrorCode.CONFIG,
                 'fdbm_checkDuration and fdbm_unavailableChecked must be positive')
+        }
+        if (confs.sessionSweepInterval <= Duration.Zero || confs.sessionSweepInterval == Duration.Max) {
+            throw FdbmException(DbdErrorCode.CONFIG,
+                'fdbm_sessionSweepInterval must be positive and finite')
         }
     }
 
@@ -417,8 +435,16 @@ protected struct FdbmConfig {
         }
     }
 
-    private static func validatePartitions(confs: FdbmSettings, logicals: HashMap<String, Array<String>>,
+    private static func validatePartitions(confs: FdbmSettings, catalog: LogicalCatalog,
         customAlgorithms: Array<String>): Unit {
+        // 内置名不可覆盖（D09）：自定义扩展名与内置算法名冲突 → 启动失败
+        for (name in customAlgorithms) {
+            if (containsName(BUILTIN_ALGORITHMS, name)) {
+                throw FdbmException(DbdErrorCode.PARTITION_CONFIG,
+                    'custom partition algorithm \'${name}\' conflicts with a builtin algorithm; ' +
+                    'a builtin implementation must not be overridden')
+            }
+        }
         let known = HashSet<String>()
         for (name in BUILTIN_ALGORITHMS) {
             known.add(name)
@@ -431,7 +457,7 @@ protected struct FdbmConfig {
                 throw FdbmException(DbdErrorCode.PARTITION_CONFIG,
                     'table \'${rule.table}\': unknown partition algorithm \'${rule.algorithm}\'')
             }
-            if (!logicals.contains(rule.database)) {
+            if (!catalog.contains(rule.database)) {
                 throw FdbmException(DbdErrorCode.PARTITION_CONFIG,
                     'table \'${rule.table}\' refers to unknown logical database \'${rule.database}\'')
             }
@@ -453,8 +479,26 @@ protected struct FdbmConfig {
         }
     }
 
+    /** 全局表的逻辑库引用必须在 catalog 中（G08）。 */
+    private static func validateGlobalTables(confs: FdbmSettings, catalog: LogicalCatalog): Unit {
+        for (table in confs.globalTables) {
+            if (!catalog.contains(table.database)) {
+                throw FdbmException(DbdErrorCode.CONFIG,
+                    'global table \'${table.table}\' refers to unknown logical database \'${table.database}\'')
+            }
+        }
+    }
+
     private static func validateIdMaker(confs: FdbmSettings, databases: HashSet<String>,
         customIdGenerators: Array<String>, source: ConfigSource): Unit {
+        // 内置名不可覆盖（D09）
+        for (name in customIdGenerators) {
+            if (name == 'uuid' || name == 'snowflake' || name == 'sequence') {
+                throw FdbmException(DbdErrorCode.CONFIG,
+                    'custom id generator \'${name}\' conflicts with a builtin generator; ' +
+                    'a builtin implementation must not be overridden')
+            }
+        }
         let idmaker = confs.idmaker
         if (idmaker.kind == 'snowflake') {
             let serial = match (idmaker.arg) {
@@ -502,32 +546,13 @@ protected struct FdbmConfig {
         databases
     }
 
-    /** 逻辑库 → 物理库；未配置的逻辑库视为包含全部物理库。 */
-    private static func logicalDatabases(nodes: Array<DatabaseNodeConfig>,
-        databases: HashSet<String>, source: ConfigSource): HashMap<String, Array<String>> {
-        let logicals = HashMap<String, Array<String>>()
-        for ((key, value) in source.all()) {
-            if (!key.startsWith('fdbm_db_logicalDatabase_')) {
-                continue
-            }
-            let logical = key.removePrefix('fdbm_db_logicalDatabase_').trimAscii()
-            if (logical.isEmpty()) {
-                throw FdbmException(DbdErrorCode.CONFIG, 'fdbm_db_logicalDatabase_ has an empty logical name')
-            }
-            logicals[logical] = splitNonEmpty(value, key)
-        }
-        let all = ArrayList<String>()
-        for (database in databases) {
-            all.add(database)
-        }
-        for (node in nodes) {
-            for (database in node.databases) {
-                if (!logicals.contains(database)) {
-                    logicals[database] = all.toArray()
-                }
+    private static func containsName(names: Array<String>, name: String): Bool {
+        for (candidate in names) {
+            if (candidate == name) {
+                return true
             }
         }
-        logicals
+        false
     }
 
     // ==================== 解析辅助 ====================
