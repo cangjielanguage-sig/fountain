@@ -424,6 +424,30 @@ class GroupCursorTest {
         }
     }
 
+    /** 位点正好落在段末尾（`offset == size`）：继续读后继段，并把 committed 前移落盘（R3-C1）。 */
+    @TestCase
+    public func committedAtSegmentEndContinuesOnNextSegment(): Unit {
+        let sz1 = 4 + recordSize("one", [])
+        let sz2 = 4 + recordSize("two", [])
+        let fixture = CursorFixture("segment_end_cursor", maxFileSize: sz1 + sz2)
+        try {
+            fixture.append([], "one")
+            fixture.append([], "two")
+            fixture.append([], "three")
+            // 段 1 已读满：committed = (1, sz1 + sz2)
+            fixture.store.save("/t", 0, "g", LogPosition(1, sz1 + sz2))
+            let cursor = fixture.cursorOf()
+            let sub = fixture.sub("s1")
+            let next = cursor.next(sub, [sub], MQMatcher()).getOrThrow()
+            @Assert(next[1].seq == 2 && next[1].offset == 0)
+            @Assert(cursor.committed.seq == 2 && cursor.committed.offset == 0)
+            @Assert(fixture.store.load("/t", 0, "g").getOrThrow().seq == 2)
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
     @TestCase
     public func removedCommittedSegmentRecoversToOldestSurvivor(): Unit {
         let sz1 = 4 + recordSize("one", [])

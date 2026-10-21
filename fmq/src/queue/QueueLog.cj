@@ -98,24 +98,38 @@ protected class QueueLog <: Resource {
     }
 
     /**
-     * 起点段被清理时给出实际可读的起点。
+     * 起点归一化：把外部持久化位点映射到「确实还有字节可读」的起点。
      *
-     * 段号 `>= position.seq` 的最小段优先：段号更大说明起点段已被 TTL 清理，从后继段继续；
-     * 没有后继段返回 `None`（调用方按空流处理）。两种恢复都记 WARN，便于发现「读流起点被删」。
+     * - 段存在且 `offset < size`：原样返回；
+     * - 段存在但已读满（`offset >= size`）：落到**编号更大的最近现存段**起点，`offset > size` 记 WARN
+     *   （游标异常），`offset == size` 只是正常的段末尾；
+     * - 段已被清理：同样跳到更大段并 WARN；没有后继段返回 `None`（调用方按空流处理）。
      */
     private func startPositionOf(segments: ArrayList<SegmentedMeta>, position: LogPosition): ?LogPosition {
         for (meta in segments) {
-            if (meta.index == position.seq) {
+            if (meta.index != position.seq) {
+                continue
+            }
+            if (position.offset < meta.size) {
                 return Some(position)
             }
+            if (position.offset > meta.size) {
+                logger.warn("position ${position.seq}:${position.offset} of queue ${label} is past segment end " +
+                    "${meta.size}: continuing at the next segment")
+            }
+            return startAfter(segments, position.seq)
         }
-        match (QueueLog.startSegmentAtOrAfter(segments, position.seq)) {
-            case Some(index) =>
-                logger.warn("stream of queue ${label} starts at ${index}:0 instead of " +
-                    "${position.seq}:${position.offset} because that segment was removed")
-                Some(LogPosition(index, 0))
+        logger.warn("stream of queue ${label} starts at the next existing segment instead of " +
+            "${position.seq}:${position.offset} because that segment was removed")
+        startAfter(segments, position.seq)
+    }
+
+    /** `seq` 之后（不含 `seq`）的最近现存段起点。 */
+    private func startAfter(segments: ArrayList<SegmentedMeta>, seq: Int64): ?LogPosition {
+        match (QueueLog.startSegmentAtOrAfter(segments, seq + 1)) {
+            case Some(index) => Some(LogPosition(index, 0))
             case None =>
-                logger.warn("no segment at or after ${position.seq} on queue ${label}, treated as empty stream")
+                logger.warn("no segment after ${seq} on queue ${label}, treated as empty stream")
                 None<LogPosition>
         }
     }
@@ -302,6 +316,11 @@ protected class QueueRecordReader {
             case Some(meta) =>
                 // 只在通过上界与剩余字节校验后才分配缓冲
                 let remaining = meta.size - offset - QueueLog.PREFIX_SIZE
+                if (remaining < 0) {
+                    // 起点归一化后不应出现：出现即说明调用方绕过了 startPositionOf 或位置被写坏
+                    return corrupt(length, remaining,
+                        "invariant broken: offset ${offset} is past segment ${seq} size ${meta.size}")
+                }
                 if (length < 0 || length > QueueLog.MAX_RECORD_SIZE) {
                     return corrupt(length, remaining,
                         "declared length ${length} exceeds limit ${QueueLog.MAX_RECORD_SIZE}")

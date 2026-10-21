@@ -112,6 +112,73 @@ class QueueLogTest {
         }
     }
 
+    /** 段末尾位点（`offset == size`）必须归一化到后继段，不得判成损坏（R3-C1）。 */
+    @TestCase
+    public func positionAtSegmentEndRollsToNextSegment(): Unit {
+        let dir = dirOf("segment_end")
+        clean(dir)
+        // 每条 entry 32 字节（4 字节头 + 28）⇒ 段上限 64 正好两条
+        let log = QueueLog(dir, 64, 1)
+        try {
+            let first = recordOf(0x11u8, 28)
+            let second = recordOf(0x22u8, 28)
+            let third = recordOf(0x33u8, 28)
+            @Assert(log.append(first).seq == 1)
+            @Assert(log.append(second).seq == 1)
+            // 两条都确认后 committed = (1, 64)，追加第 3 条触发轮转
+            let rotated = log.append(third)
+            @Assert(rotated.seq == 2 && rotated.offset == 0)
+
+            let reader = log.openRecordsFrom(LogPosition(1, 64))
+            let item = reader.next().getOrThrow()
+            @Assert(item[0] == third)
+            @Assert(item[1].seq == rotated.seq && item[1].offset == rotated.offset)
+            @Assert(!reader.isCorrupted())
+            @Assert(reader.next().isNone())
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** 同一位置做统计也必须可用：从段末尾起算 `backlog`，不得抛损坏（R3-C1）。 */
+    @TestCase
+    public func statsFromSegmentEndCountsBacklog(): Unit {
+        let dir = dirOf("segment_end_stats")
+        clean(dir)
+        let log = QueueLog(dir, 64, 1)
+        try {
+            log.append(recordOf(0x11u8, 28))
+            log.append(recordOf(0x22u8, 28))
+            log.append(recordOf(0x33u8, 28))
+            let (count, _) = log.scanAfter(LogPosition(1, 64))
+            @Assert(count == 1)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** 段读满且没有后继段：返回 `None`（干净结束），不报损坏。 */
+    @TestCase
+    public func segmentEndWithoutNextSegmentEndsCleanly(): Unit {
+        let dir = dirOf("segment_end_tail")
+        clean(dir)
+        let log = QueueLog(dir, 64, 1)
+        try {
+            log.append(recordOf(0x11u8, 28))
+            log.append(recordOf(0x22u8, 28))
+            @Assert(log.segments().size == 1)
+            let reader = log.openRecordsFrom(LogPosition(1, 64))
+            @Assert(reader.next().isNone())
+            @Assert(!reader.isCorrupted())
+            @Assert(log.scanAfter(LogPosition(1, 64))[0] == 0)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
     /** 起点段已被清理：从最接近的更大段继续，不抛 `IllegalArgumentException`（A47）。 */
     @TestCase
     public func unknownSegmentResumesAtNextSegment(): Unit {
