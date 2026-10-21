@@ -186,4 +186,49 @@ class MQProtocolTest {
             MQProtocol.encodePayload<MQMetaSyncRequest>(MQMetaSyncRequest(3))).getOrThrow()
         @Assert(request.requesterIndex == 3)
     }
+
+    /** 四个 `metaSync` 重载：命令、内部 kind、子载荷类型都要能经帧往返还原（A06）。 */
+    @TestCase
+    public func allMetaSyncOverloadsRoundtrip(): Unit {
+        let request = roundtripFrame(MQProtocol.metaSync(MQMetaSyncRequest(2)))
+        @Assert(request.command == REGISTER)
+        let requestInternal = MQProtocol.asInternal(request).getOrThrow()
+        @Assert(requestInternal.kind == MQInternalKind.META_SYNC)
+        @Assert(MQProtocol.decodePayload<MQMetaSyncRequest>(requestInternal.payload).getOrThrow().requesterIndex == 2)
+
+        let topic = roundtripFrame(MQProtocol.metaSync(MQTopicAssignment("/t", 2, 1, [1, 2])))
+        @Assert(topic.command == REGISTER)
+        let topicInternal = MQProtocol.asInternal(topic).getOrThrow()
+        @Assert(MQProtocol.decodePayload<MQTopicAssignment>(topicInternal.payload).getOrThrow().owners == [1, 2])
+
+        let group = roundtripFrame(MQProtocol.metaSync(MQSubscribeGroupMeta("/t", "g")))
+        @Assert(group.command == REGISTER)
+        let groupInternal = MQProtocol.asInternal(group).getOrThrow()
+        @Assert(MQProtocol.decodePayload<MQSubscribeGroupMeta>(groupInternal.payload).getOrThrow().subscribeGroup ==
+            "g")
+
+        let tombstone = roundtripFrame(MQProtocol.metaSync(
+            MQMetaTombstone(MQMetaTombstone.KIND_GROUP, "/t", "g", 9, 1, 123)))
+        @Assert(tombstone.command == DEREGISTER)
+        let tombstoneInternal = MQProtocol.asInternal(tombstone).getOrThrow()
+        @Assert(tombstoneInternal.kind == MQInternalKind.META_SYNC)
+        let decodedTombstone = MQProtocol.decodePayload<MQMetaTombstone>(tombstoneInternal.payload).getOrThrow()
+        @Assert(decodedTombstone.revision == 9)
+        @Assert(decodedTombstone.subscribeGroup == "g")
+    }
+
+    /** `publish(record, id!)`：帧 id 必须等于传入的 id，记录里的 MESSAGE_ID 不被改写（A08）。 */
+    @TestCase
+    public func publishWithExplicitIdKeepsFrameAndRecordIds(): Unit {
+        let record = MQMessageRecord.encode("/t", [], "record-mid", 1i64.toData())
+        let mid = MessageID()
+        let message = MQProtocol.publish(record, id: mid)
+        @Assert(message.id == mid)
+        @Assert(message.command == PUBLISH(0))
+        let decoded = roundtripFrame(message)
+        @Assert(decoded.id == mid)
+        let restored = MQProtocol.asRecord(decoded).getOrThrow()
+        @Assert(restored == record)
+        @Assert(MQMessageRecord.messageId(restored) == Some("record-mid"))
+    }
 }

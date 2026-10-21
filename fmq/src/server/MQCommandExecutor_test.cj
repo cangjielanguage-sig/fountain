@@ -421,6 +421,43 @@ class MQCommandExecutorTest {
         }
     }
 
+    /** 内部 metaSync 的三条变更分支（主题 / 组 / 墓碑）都能落地并生效（A67）。 */
+    @TestCase
+    public func internalMetaSyncAppliesTopicGroupAndTombstone(): Unit {
+        let fixture = ExecutorFixture("internal_apply")
+        try {
+            @Assert(codeOf(fixture.call(MQProtocol.metaSync(
+                MQTopicAssignment("/t", 1, 0, [0], revision: 1)))) == 0)
+            @Assert(fixture.meta.topicOf("/t").isSome())
+            // 广播路径也要为本机打开队列，否则发布得到 NOT_OWNER
+            @Assert(fixture.queues.queueOf("/t", 0).isSome())
+
+            @Assert(codeOf(fixture.call(MQProtocol.metaSync(
+                MQSubscribeGroupMeta("/t", "g", revision: 2)))) == 0)
+            @Assert(fixture.meta.groupExists("/t", "g"))
+
+            let tombstone = MQMetaTombstone(MQMetaTombstone.KIND_TOPIC, "/t", "", 9, 0, 0)
+            @Assert(codeOf(fixture.call(MQProtocol.metaSync(tombstone))) == 0)
+            @Assert(fixture.meta.topicOf("/t").isNone())
+            @Assert(!fixture.meta.groupExists("/t", "g"))
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 未知命令回 `ERROR(INTERNAL)`，不能静默丢弃（A67）。 */
+    @TestCase
+    public func unknownCommandReturnsInternalError(): Unit {
+        let fixture = ExecutorFixture("unknown_cmd")
+        try {
+            let response = fixture.call(Message(Command.PING(0)))
+            @Assert(response.command == Command.ERROR)
+            @Assert(codeOf(response) == MQErrorCode.INTERNAL)
+        } finally {
+            fixture.close()
+        }
+    }
+
     @TestCase
     public func deregisterTopicDeletesFilesAndMetadata(): Unit {
         let fixture = ExecutorFixture("deregister")

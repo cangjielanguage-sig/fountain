@@ -68,12 +68,11 @@ class LogCleanerTest {
                 Duration.hour * 72)
             let removed = cleaner.cleanOnce(DateTime.now())
             @Assert(removed >= 1)
-            // 当前段仍在
+            // 精确断言：除当前段外全部回收，剩余段号集合只有一个元素
             let after = log.segments()
-            @Assert(after.size >= 1)
-            for (meta in after) {
-                @Assert(meta.last || after.size == 1)
-            }
+            @Assert(after.size == 1)
+            @Assert(after[0].index == Int64(before))
+            @Assert(after[0].last)
             cleaner.close()
         } finally {
             queues.close()

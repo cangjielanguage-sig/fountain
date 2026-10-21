@@ -44,9 +44,12 @@ protected class NodeRegistry <: MQNodeTransport & Resource {
     private let lock = Mutex()
     private let closed = AtomicBool(false)
     private var revivedCallback: ?(() -> Unit) = None
+    /** 建连函数：生产用真实 `Client.builder`，用例注入替身避免依赖真实端口（0.4 的约定）。 */
+    private let buildClientFn: (String) -> Client<DataAny>
 
     protected init(nodes: Array<String>, selfIndex: Int64, checkDuration!: Duration = Duration.second * 30,
-        pingTimeout!: Duration = Duration.second) {
+        pingTimeout!: Duration = Duration.second,
+        clientBuilder!: ?(String) -> Client<DataAny> = None) {
         if (selfIndex < 0 || selfIndex >= nodes.size) {
             throw IllegalArgumentException("selfIndex ${selfIndex} out of range [0, ${nodes.size})")
         }
@@ -61,10 +64,20 @@ protected class NodeRegistry <: MQNodeTransport & Resource {
         this.clients = Array<?Client<DataAny>>(nodes.size) {_ => None<Client<DataAny>>}
         // 存活标记初值必须是「未知=不存活」：旧实现全真，isAlive 永远为真而没有意义（A40）
         this.alive = Array<AtomicInt64>(nodes.size) {_ => AtomicInt64(STATE_UNKNOWN)}
-        this.checkDuration_ = checkDuration
+        this.buildClientFn = match (clientBuilder) {
+            case Some(fn) => fn
+            case None => {entry =>
+                let (host, port) = MQHost.parseHost(entry).getOrThrow {
+                    IllegalArgumentException("invalid node '${entry}'")
+                }
+                Client<DataAny>.builder(
+                    address: "${host}:${port}",
+                    checkDuration: checkDuration,
+                    checker: {=> Message.ping()}
+                ).pingTimeout(pingTimeout).build()
+            }
+        }
     }
-
-    private let checkDuration_: Duration
 
     public prop selfIndex: Int64 {
         get() {
@@ -123,14 +136,7 @@ protected class NodeRegistry <: MQNodeTransport & Resource {
 
     /** 建连并写槽；调用方必须已持有 `lock`。 */
     private func createClient(index: Int64): Client<DataAny> {
-        let (host, port) = MQHost.parseHost(nodes[index]).getOrThrow {
-            IllegalArgumentException("invalid node '${nodes[index]}'")
-        }
-        let client = Client<DataAny>.builder(
-            address: "${host}:${port}",
-            checkDuration: checkDuration_,
-            checker: {=> Message.ping()}
-        ).pingTimeout(pingTimeout).build()
+        let client = buildClientFn(nodes[index])
         clients[index] = client
         client
     }

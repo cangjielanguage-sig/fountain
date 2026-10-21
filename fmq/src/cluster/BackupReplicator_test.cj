@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::fmq.cluster
 
+import std.collection.HashSet
 import std.sync.{AtomicBool, AtomicInt64}
 import std.time.DateTime
 import std.unittest.*
@@ -296,6 +297,50 @@ class BackupReplicatorTest {
         } finally {
             replicator.close()
         }
+    }
+
+    /** 批次按 `(topic, queueIndex)` 分组：不同主题/队列不合并成一批（A42）。 */
+    @TestCase
+    public func batchesAreGroupedByTopicAndQueue(): Unit {
+        let transport = makeTransport(2, 0)
+        let replicator = BackupReplicator(transport, 1)
+        try {
+            replicator.record("/a", 0, LogPosition(1, 0), [1u8])
+            replicator.record("/a", 1, LogPosition(1, 0), [2u8])
+            replicator.record("/b", 0, LogPosition(1, 0), [3u8])
+            replicator.record("/a", 0, LogPosition(1, 8), [4u8])
+            replicator.flush()
+            let sent = transport.messagesSentTo(1)
+            @Assert(sent.size == 3)
+            let keys = HashSet<String>()
+            for (message in sent) {
+                let payload = payloadOf(message)
+                keys.add("${payload.topic}:${payload.queueIndex}")
+                if (payload.topic == "/a" && payload.queueIndex == 0) {
+                    @Assert(payload.records.size == 2)
+                } else {
+                    @Assert(payload.records.size == 1)
+                }
+            }
+            @Assert(keys.size == 3)
+        } finally {
+            replicator.close()
+        }
+    }
+
+    /** 关闭后不再接受新记录，也不会再发送（定时器已停）。 */
+    @TestCase
+    public func closedReplicatorStopsDispatching(): Unit {
+        let transport = makeTransport(2, 0)
+        let replicator = BackupReplicator(transport, 1)
+        replicator.start()
+        replicator.record("/t", 0, LogPosition(1, 0), [1u8])
+        replicator.close()
+        let afterClose = transport.sentCount()
+        replicator.record("/t", 0, LogPosition(1, 8), [2u8])
+        sleep(Duration.millisecond * 150)
+        @Assert(transport.sentCount() == afterClose)
+        @Assert(replicator.pendingCount == 0)
     }
 }
 

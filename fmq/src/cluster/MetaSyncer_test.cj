@@ -679,4 +679,55 @@ class MetaSyncerTest {
         let syncer = MetaSyncer(store, transport)
         syncer.syncFromPeers()
     }
+
+    /** 旧版 peer 的删除广播（无墓碑）：本地补墓碑并删除条目，避免二次复活（A42）。 */
+    @TestCase
+    public func staleDeleteBroadcastCreatesLocalTombstone(): Unit {
+        let (store, _, syncer) = fixture("remote_delete", nodes: 2, selfIndex: 0)
+        try {
+            syncer.applyRemote(MQTopicAssignment("/t", 1, 0, [0], revision: 1))
+            @Assert(store.topicOf("/t").isSome())
+            @Assert(syncer.applyRemoteDelete(MQDeregisterPayload("topic", "/t")))
+            @Assert(store.topicOf("/t").isNone())
+            @Assert(store.allTombstones().size == 1)
+            // 再次收到同一删除：同 key 墓碑被更高 revision 覆盖，条目仍不存在
+            @Assert(syncer.applyRemoteDelete(MQDeregisterPayload("topic", "/t")))
+            @Assert(store.topicOf("/t").isNone())
+            @Assert(store.allTombstones().size == 1)
+        } finally {
+            shutdown(store, "remote_delete")
+        }
+    }
+
+    /** 广播失败不影响本地注册成功，只进入待补偿集合（A42）。 */
+    @TestCase
+    public func broadcastFailureStillAppliesLocally(): Unit {
+        let (store, transport, syncer) = fixture("broadcast_fail")
+        try {
+            transport.available[1] = false
+            let assignment = syncer.registerTopic(MQTopicMeta("/t", 1))
+            @Assert(store.topicOf("/t").isSome())
+            @Assert(assignment.topic == "/t")
+            // 两个 peer 都没有应答器（默认 None）：都进入待补偿集合
+            @Assert(syncer.pendingPeerCount() == 2)
+        } finally {
+            shutdown(store, "broadcast_fail")
+        }
+    }
+
+    /** 重复到货幂等；更旧的 revision 不覆盖已有条目（A42）。 */
+    @TestCase
+    public func duplicateAndOlderRemoteArrivalsAreIgnored(): Unit {
+        let (store, _, syncer) = fixture("duplicate_remote")
+        try {
+            let current = MQTopicAssignment("/t", 1, 0, [0], revision: 5)
+            @Assert(syncer.applyRemote(current) == MetaApplyResult.Applied)
+            @Assert(syncer.applyRemote(current) == MetaApplyResult.Duplicated)
+            @Assert(syncer.applyRemote(MQTopicAssignment("/t", 1, 0, [1], revision: 2)) ==
+                MetaApplyResult.Duplicated)
+            @Assert(store.topicOf("/t").getOrThrow().owners == [0])
+        } finally {
+            shutdown(store, "duplicate_remote")
+        }
+    }
 }

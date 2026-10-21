@@ -632,4 +632,50 @@ class ConsumeServiceTest {
             }
         }
     }
+
+    /** 不同订阅组各自维护游标：同一条记录两组都能取到（A56）。 */
+    @TestCase
+    public func differentGroupsConsumeIndependently(): Unit {
+        let fixture = ConsumeFixture("cross_group")
+        try {
+            fixture.append([], "shared")
+            fixture.meta.applyGroup(MQSubscribeGroupMeta("/t", "g2"))
+            let first = fixture.register("s1")
+            let second = fixture.register("s2", group: "g2")
+            let one = fixture.service.consume(first).getOrThrow()
+            let two = fixture.service.consume(second).getOrThrow()
+            @Assert(one.segmentedIndex == two.segmentedIndex)
+            @Assert(one.segmentedOffset == two.segmentedOffset)
+            @Assert(bodyOf(one) == "shared")
+            @Assert(bodyOf(two) == "shared")
+            // 一组确认不影响另一组的未决状态
+            @Assert(fixture.service.ack(first,
+                MQAckPayload("s1", one.queueIndex, one.segmentedIndex, one.segmentedOffset)).code == 0)
+            @Assert(fixture.service.consume(second).isNone())
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 组内无人在线时不推进：没有活跃订阅时游标不会越过未投递记录（A57）。 */
+    @TestCase
+    public func groupWithoutOnlineSubscriberKeepsPosition(): Unit {
+        let fixture = ConsumeFixture("offline_group")
+        try {
+            fixture.append([], "pending")
+            let info = fixture.register("s1")
+            let message = fixture.service.consume(info).getOrThrow()
+            // 释放并注销：记录回到组内，游标不得越过
+            fixture.service.releaseSubscription(info)
+            fixture.registry.unregister("s1")
+            @Assert(fixture.catalog.floorOf("/t", 0) == 1)
+            // 重新订阅后仍能取到同一条
+            let again = fixture.register("s2")
+            let redelivered = fixture.service.consume(again).getOrThrow()
+            @Assert(redelivered.segmentedIndex == message.segmentedIndex)
+            @Assert(redelivered.segmentedOffset == message.segmentedOffset)
+        } finally {
+            fixture.close()
+        }
+    }
 }

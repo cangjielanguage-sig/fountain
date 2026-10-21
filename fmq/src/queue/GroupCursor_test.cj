@@ -498,6 +498,8 @@ class GroupCursorTest {
             }
             @Assert(done.load() == 4)
             @Assert(seen.size == 200)
+            // 并发确认后 committed 已推进（单调，不回退到起点）
+            @Assert(cursor.committed.seq > 1 || cursor.committed.offset > 0)
             cursor.close()
         } finally {
             fixture.close()

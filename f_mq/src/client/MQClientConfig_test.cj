@@ -23,22 +23,72 @@ import fountain::f_mq.exception.MQConnectionException
 
 @Test
 class MQClientConfigTest {
-    @TestCase
-    public func configKeepsOrderAndTrimsSpaces(): Unit {
-        Config.set([(MQConfigKey.CLIENT_HOSTS, "127.0.0.1:2350, 127.0.0.1:2351")])
-        let hosts = MQClientConfig.hosts
-        @Assert(hosts == ["127.0.0.1:2350", "127.0.0.1:2351"])
+    /** 配置是进程级全局状态：用例结束后必须还原，避免污染同一进程里的其它用例（A24）。 */
+    private static func withHosts(value: String, body: () -> Unit): Unit {
+        let previous = Config.getString(MQConfigKey.CLIENT_HOSTS)
+        try {
+            Config.set([(MQConfigKey.CLIENT_HOSTS, value)])
+            body()
+        } finally {
+            match (previous) {
+                case Some(text) => Config.set([(MQConfigKey.CLIENT_HOSTS, text)])
+                case None => Config.set([(MQConfigKey.CLIENT_HOSTS, "")])
+            }
+        }
     }
 
     @TestCase
-    public func emptyConfigThrowsWithKeyName(): Unit {
-        Config.set([(MQConfigKey.CLIENT_HOSTS, "")])
-        var message = ""
-        try {
-            MQClientConfig.hosts
-        } catch (e: MQConnectionException) {
-            message = e.message
+    public func configKeepsOrderAndTrimsSpaces(): Unit {
+        withHosts("127.0.0.1:2350, 127.0.0.1:2351") {
+            let hosts = MQClientConfig.hosts
+            @Assert(hosts == ["127.0.0.1:2350", "127.0.0.1:2351"])
         }
-        @Assert(message.contains(MQConfigKey.CLIENT_HOSTS))
+    }
+
+    /** 配置缺失（空值）必须报出配置项名（A24）。 */
+    @TestCase
+    public func emptyConfigThrowsWithKeyName(): Unit {
+        withHosts("") {
+            var message = ""
+            try {
+                MQClientConfig.hosts
+            } catch (e: MQConnectionException) {
+                message = e.message
+            }
+            @Assert(message.contains(MQConfigKey.CLIENT_HOSTS))
+        }
+    }
+
+    /** 非法 `host:port` 不得被静默跳过（A24）。 */
+    @TestCase
+    public func invalidEntryIsRejected(): Unit {
+        withHosts("127.0.0.1:2350,not-a-host") {
+            var message = ""
+            try {
+                MQClientConfig.hosts
+            } catch (e: MQConnectionException) {
+                message = e.message
+            }
+            @Assert(message.contains("not-a-host"))
+        }
+        withHosts("127.0.0.1:99999") {
+            var threw = false
+            try {
+                MQClientConfig.hosts
+            } catch (_: MQConnectionException) {
+                threw = true
+            }
+            @Assert(threw)
+        }
+    }
+
+    /** 用例之间不得互相残留配置（A24）。 */
+    @TestCase
+    public func configIsRestoredAfterTest(): Unit {
+        let before = Config.getString(MQConfigKey.CLIENT_HOSTS)
+        withHosts("10.0.0.1:1") {
+            @Assert(Config.getString(MQConfigKey.CLIENT_HOSTS) == Some("10.0.0.1:1"))
+        }
+        @Assert(Config.getString(MQConfigKey.CLIENT_HOSTS) == before)
     }
 }

@@ -848,4 +848,94 @@ class MQClientTest {
             stub.close()
         }
     }
+
+    /** 全部节点都回 NOT_OWNER：没有 owner，必须明确报错（A21）。 */
+    @TestCase
+    public func subscribeWithNoOwnerThrows(): Unit {
+        let stub = MQStubServer({buffer, request => okBut(buffer, request, MQErrorCode.NOT_OWNER)}).start()
+        try {
+            let client = MQClient([stub.address()])
+            var message = ""
+            try {
+                client.subscribe("/order")
+            } catch (e: MQConnectionException) {
+                message = e.message
+            }
+            @Assert(message.contains("no node owns"))
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+
+    /** 订阅时全部节点不可达：抛连接异常而不是留下半个订阅（A21）。 */
+    @TestCase
+    public func subscribeWithAllNodesUnreachableThrows(): Unit {
+        let stub = MQStubServer(ok).start()
+        let client = MQClient([stub.address()])
+        stub.close()
+        var threw = false
+        try {
+            client.subscribe("/order")
+        } catch (_: MQConnectionException) {
+            threw = true
+        }
+        @Assert(threw)
+        client.close()
+    }
+
+    /** 对端不回应答：publish 超时后抛连接异常，不得永久挂起（A21）。 */
+    @TestCase
+    public func publishTimesOutWhenServerSilent(): Unit {
+        let stub = MQStubServer({_, _ => None<Message>}).start()
+        try {
+            let client = MQClient([stub.address()])
+            var threw = false
+            try {
+                client.publish("/order", 1i64)
+            } catch (_: MQConnectionException) {
+                threw = true
+            }
+            @Assert(threw)
+            client.close()
+        } finally {
+            stub.close()
+        }
+    }
+
+    /** 关闭与在途调用并发：只允许抛 MQ 异常，不得空引用崩溃（A71）。 */
+    @TestCase
+    public func closeIsSafeUnderConcurrentCalls(): Unit {
+        let stub = MQStubServer(ok).start()
+        let client = MQClient([stub.address()])
+        let unexpected = AtomicInt64(0)
+        let completed = AtomicInt64(0)
+        for (_ in 0..8) {
+            spawn {
+                for (_ in 0..50) {
+                    try {
+                        client.publish("/order", 1i64)
+                    } catch (e: Exception) {
+                        if (!(e is MQException)) {
+                            unexpected.fetchAdd(1)
+                        }
+                    }
+                }
+                completed.fetchAdd(1)
+            }
+        }
+        sleep(Duration.millisecond * 20)
+        client.close()
+        var waited = 0
+        while (completed.load() < 8 && waited < 500) {
+            sleep(Duration.millisecond * 10)
+            waited++
+        }
+        try {
+            @Assert(completed.load() == 8)
+            @Assert(unexpected.load() == 0)
+        } finally {
+            stub.close()
+        }
+    }
 }

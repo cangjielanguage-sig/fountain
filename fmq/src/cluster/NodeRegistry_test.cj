@@ -84,12 +84,18 @@ class NodeRegistryTest {
 
     @TestCase
     public func failedSendMarksNodeDead(): Unit {
-        let registry = NodeRegistry(["127.0.0.1:1", "127.0.0.1:2"], 1, pingTimeout: Duration.millisecond * 100)
+        let builds = AtomicInt64(0)
+        let registry = NodeRegistry(["127.0.0.1:1", "127.0.0.1:2"], 1, pingTimeout: Duration.millisecond * 100,
+            clientBuilder: {_ =>
+                builds.fetchAdd(1)
+                throw Exception("unreachable")
+            })
         // 存活标记初值是「未知」：必须靠一次成功调用才变成存活（A40）
         @Assert(!registry.isAlive(0))
         let response = registry.send(0, Message.ack(MessageID()))
         @Assert(response.isNone())
         @Assert(!registry.isAlive(0))
+        @Assert(builds.load() == 1)
         registry.markSeen(0)
         @Assert(registry.isAlive(0))
         // 自身发送恒为 None
@@ -140,7 +146,8 @@ class NodeRegistryTest {
     @TestCase
     public func knownDeadOnlyAfterFailedCall(): Unit {
         let registry = NodeRegistry(["127.0.0.1:1", "127.0.0.1:2"], 1,
-            pingTimeout: Duration.millisecond * 100)
+            pingTimeout: Duration.millisecond * 100,
+            clientBuilder: {_ => throw Exception("unreachable")})
         try {
             @Assert(!registry.isKnownDead(0))
             @Assert(!registry.isAlive(0))

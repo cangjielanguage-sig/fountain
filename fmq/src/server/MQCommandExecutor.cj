@@ -175,6 +175,11 @@ protected class MQCommandExecutor {
     }
 
     private func onDeregister(request: Message): Message {
+        // 墓碑/旧版删除广播走 `DEREGISTER` + 内部信封（MQProtocol.metaSync 重载），
+        // 必须先按内部消息分派，否则会被当成普通注销载荷解码失败（A25）。
+        if (MQProtocol.kindOf(request) == MQPayloadKind.Internal) {
+            return onInternal(request)
+        }
         let payload = MQProtocol.asPayload<MQDeregisterPayload>(request).getOrThrow {
             MQServiceException(MQErrorCode.INTERNAL, "cannot decode MQDeregisterPayload")
         }

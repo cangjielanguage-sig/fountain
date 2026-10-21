@@ -103,4 +103,14 @@ class MQMatcherTest {
         // 无 filter 时只看 topic/tags
         @Assert(MQMatcher.matches(view("/t"), truncated) == Match)
     }
+
+    /** 记录本身不可解（topic/tags 缺失）时一律 `NoMatch`，不能误投递（A56）。 */
+    @TestCase
+    public func undecodableRecordIsNoMatch(): Unit {
+        let garbage: Array<Byte> = [0xFFu8, 0xFEu8, 0x00u8, 0x01u8]
+        @Assert(MQMatcher.matches(view("/t"), garbage) == NoMatch)
+        @Assert(MQMatcher.matches(view("/t", filter: "$.level"), garbage) == NoMatch)
+        // 空记录同样不可解
+        @Assert(MQMatcher.matches(view("/t"), Array<Byte>()) == NoMatch)
+    }
 }

@@ -409,4 +409,122 @@ class QueueLogTest {
             clean(dir)
         }
     }
+
+    // ===== 扫描 / 计数 / 重开（A56） =====
+
+    /** `countAll` 与 `scanAfter` 的起点语义：从中间位置只数后面的记录。 */
+    @TestCase
+    public func scanAfterCountsFromGivenPosition(): Unit {
+        let dir = dirOf("scan_after")
+        clean(dir)
+        let log = QueueLog(dir, 1024 * 1024, 1)
+        try {
+            let first = log.append(recordOf(0x11u8, 16))
+            let second = log.append(recordOf(0x22u8, 16))
+            let third = log.append(recordOf(0x33u8, 16))
+            @Assert(log.countAll() == 3)
+            @Assert(log.scanAfter(first)[0] == 3)
+            @Assert(log.scanAfter(second)[0] == 2)
+            @Assert(log.scanAfter(third)[0] == 1)
+            // 越过末尾：0 条
+            @Assert(log.scanAfter(LogPosition(third.seq, third.offset + 20))[0] == 0)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** 从中间记录开流：只返回该位置及其后的记录。 */
+    @TestCase
+    public func openFromMiddleRecordReturnsRemaining(): Unit {
+        let dir = dirOf("open_middle")
+        clean(dir)
+        let log = QueueLog(dir, 1024 * 1024, 1)
+        try {
+            let a = recordOf(0xA1u8, 8)
+            log.append(a)
+            let b = recordOf(0xB2u8, 8)
+            let pb = log.append(b)
+            log.append(recordOf(0xC3u8, 8))
+            let reader = log.openRecordsFrom(pb)
+            try {
+                let first = reader.next().getOrThrow()
+                @Assert(first[0] == b)
+                @Assert(first[1].offset == pb.offset)
+                @Assert(reader.next().isSome())
+                @Assert(reader.next().isNone())
+            } finally {
+                reader.close()
+            }
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** 关闭后重开：消息与段都可继续读（openTopic 重开不丢数据）。 */
+    @TestCase
+    public func reopenKeepsMessages(): Unit {
+        let dir = dirOf("reopen")
+        clean(dir)
+        let first = QueueLog(dir, 1024 * 1024, 1)
+        let values = [recordOf(0x01u8, 12), recordOf(0x02u8, 12), recordOf(0x03u8, 12)]
+        for (value in values) {
+            first.append(value)
+        }
+        first.close()
+        let second = QueueLog(dir, 1024 * 1024, 1)
+        try {
+            @Assert(second.countAll() == 3)
+            let reader = second.openRecordsFrom(LogPosition(1, 0))
+            try {
+                for (expected in values) {
+                    @Assert(reader.next().getOrThrow()[0] == expected)
+                }
+            } finally {
+                reader.close()
+            }
+        } finally {
+            second.close()
+            clean(dir)
+        }
+    }
+
+    /** 目录整体缺失时 `segmentsOrEmpty` 返回空而不是抛异常。 */
+    @TestCase
+    public func segmentsOrEmptyToleratesMissingDirectory(): Unit {
+        let dir = dirOf("missing_dir")
+        clean(dir)
+        let log = QueueLog(dir, 1024 * 1024, 1)
+        try {
+            log.append(recordOf(0x01u8, 4))
+            remove(dir, recursive: true)
+            @Assert(log.segmentsOrEmpty().size == 0)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** 写入侧同样以 64 MiB 为上界，超限在分配前拒绝（A56）。 */
+    @TestCase
+    public func oversizedRecordIsRejectedBeforeWrite(): Unit {
+        let dir = dirOf("oversized")
+        clean(dir)
+        let log = QueueLog(dir, 1024 * 1024 * 1024, 1)
+        try {
+            @Assert(QueueLog.MAX_RECORD_SIZE == 64 * 1024 * 1024)
+            var thrown = false
+            try {
+                log.append(Array<Byte>(QueueLog.MAX_RECORD_SIZE + 1, repeat: 0u8))
+            } catch (_: IllegalArgumentException) {
+                thrown = true
+            }
+            @Assert(thrown)
+            @Assert(log.countAll() == 0)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
 }

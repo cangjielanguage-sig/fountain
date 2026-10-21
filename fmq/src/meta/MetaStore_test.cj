@@ -502,4 +502,109 @@ class MetaStoreTest {
             clean(dir)
         }
     }
+
+    // ===== 台账补齐（A42） =====
+
+    /** 只删一个组：其它组与主题保留，重载后状态一致。 */
+    @TestCase
+    public func removeGroupKeepsOtherGroups(): Unit {
+        let dir = dirOf("remove_group")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 1))
+            store.applyGroup(MQSubscribeGroupMeta("/t", "g1", revision: 2))
+            store.applyGroup(MQSubscribeGroupMeta("/t", "g2", revision: 3))
+            let tombstone = store.removeGroup("/t", "g1").getOrThrow()
+            @Assert(!tombstone.isTopic())
+            @Assert(!store.groupExists("/t", "g1"))
+            @Assert(store.groupExists("/t", "g2"))
+            @Assert(!exists("${dir}/groups/${MQFileNames.escape("/t")}/${MQFileNames.escape("g1")}.meta"))
+            let reloaded = MetaStore(dir)
+            reloaded.load()
+            @Assert(!reloaded.groupExists("/t", "g1"))
+            @Assert(reloaded.groupExists("/t", "g2"))
+            reloaded.close()
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    /** 删除不存在的主题/组返回 `None`，不产生墓碑（A42）。 */
+    @TestCase
+    public func removingMissingEntriesReturnsNone(): Unit {
+        let dir = dirOf("remove_missing")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            @Assert(store.removeTopic("/missing").isNone())
+            @Assert(store.removeGroup("/missing", "g").isNone())
+            store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 1))
+            @Assert(store.removeGroup("/t", "missing").isNone())
+            @Assert(store.allTombstones().size == 0)
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    /** 坏的 `assign.meta` 不阻断启动，轮转指针从 0 重新起步（A42）。 */
+    @TestCase
+    public func corruptedAssignMetaFallsBackToZero(): Unit {
+        let dir = dirOf("bad_assign")
+        clean(dir)
+        try {
+            Directory.create(dir, recursive: true)
+            let junk = File.create("${dir}/assign.meta")
+            junk.write([0xFFu8, 0x00u8, 0xABu8])
+            junk.close()
+            let store = MetaStore(dir)
+            store.load()
+            @Assert(store.nextStartNode == 0)
+            let (result, maybeAssignment) = store.registerTopic(MQTopicMeta("/t", 1), 1)
+            @Assert(result == MetaApplyResult.Applied)
+            @Assert(maybeAssignment.getOrThrow().startNodeIndex == 0)
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    /** 坏组文件与孤儿组都不进入索引（A42）。 */
+    @TestCase
+    public func corruptedAndOrphanGroupsAreNotIndexed(): Unit {
+        let dir = dirOf("bad_groups")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 1))
+            store.close()
+
+            let groupDir = "${dir}/groups/${MQFileNames.escape("/t")}"
+            Directory.create(groupDir, recursive: true)
+            let junk = File.create("${groupDir}/broken.meta")
+            junk.write([0xFFu8, 0xFEu8])
+            junk.close()
+            // 主题文件不存在的组：加载时丢弃
+            let orphanDir = "${dir}/groups/${MQFileNames.escape("/gone")}"
+            Directory.create(orphanDir, recursive: true)
+            let orphan = File.create("${orphanDir}/${MQFileNames.escape("g")}.meta")
+            orphan.write(MQProtocol.encodePayload<MQSubscribeGroupMeta>(
+                MQSubscribeGroupMeta("/gone", "g", revision: 2)))
+            orphan.close()
+
+            let reloaded = MetaStore(dir)
+            reloaded.load()
+            @Assert(reloaded.groupsOf("/t").size == 0)
+            @Assert(reloaded.groupsOf("/gone").size == 0)
+            @Assert(reloaded.snapshot().groups.size == 0)
+            reloaded.close()
+        } finally {
+            clean(dir)
+        }
+    }
 }

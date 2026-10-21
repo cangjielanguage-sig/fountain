@@ -156,4 +156,73 @@ class DeadLetterQueueTest {
             clean(root)
         }
     }
+
+    /** 组间隔离：同一队列里不同组的死信各自保留组名与原始字节（A72）。 */
+    @TestCase
+    public func entriesFromDifferentGroupsStayIsolated(): Unit {
+        let root = rootOf("groups")
+        clean(root)
+        let queue = DeadLetterQueue(root, 1024 * 1024, 1)
+        try {
+            let a = MQDeadLetterMessage("/t", 0, "gA", 1, 0, 4, DateTime.now(), [0x0Au8, 0x0Bu8])
+            let b = MQDeadLetterMessage("/t", 0, "gB", 1, 10, 4, DateTime.now(), [0x0Cu8, 0x0Du8])
+            queue.append(a)
+            queue.append(b)
+            let messages = readAll(queue, LogPosition(1, 0))
+            @Assert(messages.size == 2)
+            @Assert(messages[0].subscribeGroup == "gA")
+            @Assert(messages[1].subscribeGroup == "gB")
+            @Assert(messages[0].record.copyBytes() == [0x0Au8, 0x0Bu8])
+            @Assert(messages[1].record.copyBytes() == [0x0Cu8, 0x0Du8])
+        } finally {
+            queue.close()
+            clean(root)
+        }
+    }
+
+    /** 大记录（>4KB）进死信后必须逐字节读回（A72）。 */
+    @TestCase
+    public func largeRecordSurvivesDeadLetter(): Unit {
+        let root = rootOf("large")
+        clean(root)
+        let queue = DeadLetterQueue(root, 1024 * 1024, 1)
+        try {
+            let bytes = Array<Byte>(8192, repeat: 0x5Au8)
+            bytes[0] = 0x01u8
+            bytes[8191] = 0x02u8
+            queue.append(MQDeadLetterMessage("/t", 0, "g", 1, 0, 4, DateTime.now(), bytes))
+            let messages = readAll(queue, LogPosition(1, 0))
+            @Assert(messages.size == 1)
+            @Assert(messages[0].record.size() == 8192)
+            @Assert(messages[0].record.copyBytes() == bytes)
+        } finally {
+            queue.close()
+            clean(root)
+        }
+    }
+
+    /** TTL 按「封口段」判定：当前段永不删除，封口段过期才回收。 */
+    @TestCase
+    public func cleanExpiredLeavesOnlyCurrentSegment(): Unit {
+        let root = rootOf("ttl_segments")
+        clean(root)
+        // 每条消息大于段上限 40 字节 ⇒ 每次 append 都轮转，4 条产生 3 个封口段
+        let queue = DeadLetterQueue(root, 40, 1)
+        try {
+            for (i in 0..4) {
+                queue.append(MQDeadLetterMessage("/t", 0, "g", Int64(i), 0, 4, DateTime.now(),
+                    Array<Byte>(20, repeat: UInt8(i))))
+            }
+            // 负 TTL：封口段全部过期被回收，当前段不动
+            let removed = queue.cleanExpired(Duration.second * -1, DateTime.now())
+            @Assert(removed >= 1)
+            // 再跑一次：只剩当前段，无可回收
+            @Assert(queue.cleanExpired(Duration.second * -1, DateTime.now()) == 0)
+            // 大 TTL 同样不误删
+            @Assert(queue.cleanExpired(Duration.hour * 24, DateTime.now()) == 0)
+        } finally {
+            queue.close()
+            clean(root)
+        }
+    }
 }
