@@ -55,7 +55,8 @@ protected class NodeRegistry <: MQNodeTransport & Resource {
         this.self = selfIndex
         this.pingTimeout = pingTimeout
         this.clients = Array<?Client<DataAny>>(nodes.size) {_ => None<Client<DataAny>>}
-        this.alive = Array<AtomicBool>(nodes.size) {_ => AtomicBool(true)}
+        // 存活标记初值必须是「未知=不存活」：旧实现全真，isAlive 永远为真而没有意义（A40）
+        this.alive = Array<AtomicBool>(nodes.size) {_ => AtomicBool(false)}
         this.checkDuration_ = checkDuration
     }
 
@@ -102,23 +103,32 @@ protected class NodeRegistry <: MQNodeTransport & Resource {
         synchronized(lock) {
             match (clients[index]) {
                 case Some(client) =>
-                    if (client.isClosed()) {
-                        throw Exception("connection to node ${index} is closed")
+                    if (!client.isClosed()) {
+                        return client
                     }
-                    client
-                case None =>
-                    let (host, port) = MQHost.parseHost(nodes[index]).getOrThrow {
-                        IllegalArgumentException("invalid node '${nodes[index]}'")
-                    }
-                    let client = Client<DataAny>.builder(
-                        address: "${host}:${port}",
-                        checkDuration: checkDuration_,
-                        checker: {=> Message.ping()}
-                    ).pingTimeout(pingTimeout).build()
-                    clients[index] = client
-                    client
+                    // 连接被关闭（心跳超时/对端断开）：清槽重建，不能让节点永久不可用（A39）
+                    try {
+                        client.close()
+                    } catch (_: Exception) {}
+                    clients[index] = None<Client<DataAny>>
+                    createClient(index)
+                case None => createClient(index)
             }
         }
+    }
+
+    /** 建连并写槽；调用方必须已持有 `lock`。 */
+    private func createClient(index: Int64): Client<DataAny> {
+        let (host, port) = MQHost.parseHost(nodes[index]).getOrThrow {
+            IllegalArgumentException("invalid node '${nodes[index]}'")
+        }
+        let client = Client<DataAny>.builder(
+            address: "${host}:${port}",
+            checkDuration: checkDuration_,
+            checker: {=> Message.ping()}
+        ).pingTimeout(pingTimeout).build()
+        clients[index] = client
+        client
     }
 
     /** 向指定节点发请求；自身或失败返回 `None`。 */

@@ -15,10 +15,34 @@ limitations under the License.
 */
 package fountain::fmq.cluster
 
+import std.net.{IPSocketAddress, TcpServerSocket}
 import std.unittest.*
 import std.unittest.testmacro.*
 import std.sync.AtomicInt64
 import fountain::f_protocol.default.{Message, MessageID}
+
+/** 起一个只接受连接的监听端口：只为让 `Client.build()` 能连上并交出可用句柄。 */
+private func listeningSocket(): (TcpServerSocket, UInt16) {
+    let listener = TcpServerSocket(bindAt: 0)
+    listener.bind()
+    var port: UInt16 = 0
+    match (listener.localAddress) {
+        case addr: IPSocketAddress => port = addr.port
+        case _ => port = 0
+    }
+    let socket = listener
+    spawn {
+        while (true) {
+            try {
+                let accepted = socket.accept()
+                accepted.close()
+            } catch (_: Exception) {
+                break
+            }
+        }
+    }
+    (listener, port)
+}
 
 @Test
 class NodeRegistryTest {
@@ -61,7 +85,8 @@ class NodeRegistryTest {
     @TestCase
     public func failedSendMarksNodeDead(): Unit {
         let registry = NodeRegistry(["127.0.0.1:1", "127.0.0.1:2"], 1, pingTimeout: Duration.millisecond * 100)
-        @Assert(registry.isAlive(0))
+        // 存活标记初值是「未知」：必须靠一次成功调用才变成存活（A40）
+        @Assert(!registry.isAlive(0))
         let response = registry.send(0, Message.ack(MessageID()))
         @Assert(response.isNone())
         @Assert(!registry.isAlive(0))
@@ -78,17 +103,37 @@ class NodeRegistryTest {
         let registry = NodeRegistry(["127.0.0.1:1", "127.0.0.1:2"], 1)
         let revived = AtomicInt64(0)
         registry.onRevived = {=> revived.fetchAdd(1)}
-        // 存活 → 存活：不触发
-        registry.markSeen(0)
-        @Assert(revived.load() == 0)
-        // 死亡 → 复活：触发一次
-        registry.markFailed(0)
+        // 未知 → 存活：首次成功即视为上线，补一次同步
         registry.markSeen(0)
         @Assert(revived.load() == 1)
         // 继续存活：不重复触发
         registry.markSeen(0)
         @Assert(revived.load() == 1)
+        // 死亡 → 复活：再触发一次
+        registry.markFailed(0)
+        registry.markSeen(0)
+        @Assert(revived.load() == 2)
         registry.close()
+    }
+
+    /** 命中已关闭的连接必须重建，而不是把节点永久判死（A39）。 */
+    @TestCase
+    public func clientOfRebuildsClosedConnection(): Unit {
+        let (listener, port) = listeningSocket()
+        let registry = NodeRegistry(["127.0.0.1:${port}", "127.0.0.1:1"], 1,
+            pingTimeout: Duration.millisecond * 200)
+        try {
+            let first = registry.clientOf(0).getOrThrow()
+            @Assert(!first.isClosed())
+            first.close()
+            @Assert(first.isClosed())
+            let second = registry.clientOf(0).getOrThrow()
+            @Assert(!second.isClosed())
+            @Assert(!refEq(first, second))
+        } finally {
+            registry.close()
+            listener.close()
+        }
     }
 
     @TestCase

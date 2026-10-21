@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_mq.client
 
 import std.sync.{Mutex, AtomicBool}
+import std.time.DateTime
 import fountain::f_data.DataAny
 import fountain::f_mq.base.MQHost
 import fountain::f_mq.exception.MQConnectionException
@@ -23,17 +24,28 @@ import fountain::f_net.client.Client
 import fountain::f_protocol.default.Message
 
 /**
- * 到各节点的 `Client<DataAny>` 连接池（懒建，每节点一条）。
+ * 到各节点的 `Client<DataAny>` 连接池。
  *
- * 心跳、重连、失败容忍全部复用 `f_net` 内建实现，MQ 不重复造。
+ * 每节点一个槽位、一把锁：一个节点建连慢不会拖住其它节点（A17）；
+ * 命中已关闭连接时当场重建（A11）；建连失败按 `200ms * 2^(n-1)` 退避、上限 5s，
+ * 退避窗口内立即失败，避免每次调用都去撞一个死节点。
  */
 internal class MQNodePool {
-    private let hosts: Array<String>
-    private var clients: Array<?Client<DataAny>>
-    private let lock = Mutex()
-    private let closed = AtomicBool(false)
+    private static let MAX_BACKOFF_MS: Int64 = 5000
+    private static let BASE_BACKOFF_MS: Int64 = 200
 
-    init(hosts: Array<String>) {
+    private let hosts: Array<String>
+    private var slots: Array<?Client<DataAny>>
+    private let nodeLocks: Array<Mutex>
+    private let retryAt: Array<Int64>
+    private let failures: Array<Int64>
+    private let closed = AtomicBool(false)
+    /** 建连函数：生产用真实 `Client.builder`，用例注入替身以复现慢节点与失败（0.4 的约定）。 */
+    private let build: (String) -> Client<DataAny>
+    private let nowMs: () -> Int64
+
+    init(hosts: Array<String>, build!: ?(String) -> Client<DataAny> = None,
+        nowMs!: () -> Int64 = {=> DateTime.now().toUnixTimeStamp().toMilliseconds()}) {
         if (hosts.size == 0) {
             throw MQConnectionException("node list is empty")
         }
@@ -43,7 +55,15 @@ internal class MQNodePool {
             }
         }
         this.hosts = hosts
-        this.clients = Array<?Client<DataAny>>(hosts.size) {_ => None<Client<DataAny>>}
+        this.slots = Array<?Client<DataAny>>(hosts.size) {_ => None<Client<DataAny>>}
+        this.nodeLocks = Array<Mutex>(hosts.size) {_ => Mutex()}
+        this.retryAt = Array<Int64>(hosts.size, repeat: 0)
+        this.failures = Array<Int64>(hosts.size, repeat: 0)
+        this.build = match (build) {
+            case Some(f) => f
+            case None => {entry => buildClient(entry)}
+        }
+        this.nowMs = nowMs
     }
 
     prop size: Int64 {
@@ -64,28 +84,55 @@ internal class MQNodePool {
         if (closed.load()) {
             throw MQConnectionException("client pool is closed")
         }
-        synchronized(lock) {
-            match (clients[nodeIndex]) {
-                case Some(c) =>
-                    if (c.isClosed()) {
-                        throw MQConnectionException("connection to node ${nodeIndex} (${hosts[nodeIndex]}) is closed")
+        synchronized(nodeLocks[nodeIndex]) {
+            match (slots[nodeIndex]) {
+                case Some(existing) =>
+                    if (!existing.isClosed()) {
+                        return existing
                     }
-                    c
-                case None => createClient(nodeIndex)
+                    // 连接被对端/心跳关闭：关掉旧句柄后重建，而不是永久报错
+                    try {
+                        existing.close()
+                    } catch (_: Exception) {}
+                    slots[nodeIndex] = None<Client<DataAny>>
+                case None => ()
+            }
+            let now = nowMs()
+            if (now < retryAt[nodeIndex]) {
+                throw MQConnectionException("node ${nodeIndex} (${hosts[nodeIndex]}) is backing off for " +
+                    "${retryAt[nodeIndex] - now}ms")
+            }
+            try {
+                let client = build(hosts[nodeIndex])
+                slots[nodeIndex] = Some(client)
+                failures[nodeIndex] = 0
+                retryAt[nodeIndex] = 0
+                client
+            } catch (e: Exception) {
+                failures[nodeIndex] = failures[nodeIndex] + 1
+                let backoff = backoffOf(failures[nodeIndex])
+                retryAt[nodeIndex] = now + backoff
+                throw MQConnectionException("cannot connect to node ${nodeIndex} (${hosts[nodeIndex]})", e)
             }
         }
     }
 
-    private func createClient(nodeIndex: Int64): Client<DataAny> {
-        var created: ?Client<DataAny> = None
-        try {
-            created = Some(buildClient(hosts[nodeIndex]))
-        } catch (e: Exception) {
-            throw MQConnectionException("cannot connect to node ${nodeIndex} (${hosts[nodeIndex]})", e)
+    private static func backoffOf(failures: Int64): Int64 {
+        if (failures <= 0) {
+            return 0
         }
-        let client = created.getOrThrow()
-        clients[nodeIndex] = client
-        client
+        // 200ms * 2^(n-1)，指数在 5s 处封顶
+        var delay = BASE_BACKOFF_MS
+        var i = 1i64
+        while (i < failures && delay < MAX_BACKOFF_MS) {
+            delay = delay * 2
+            i++
+        }
+        if (delay > MAX_BACKOFF_MS) {
+            MAX_BACKOFF_MS
+        } else {
+            delay
+        }
     }
 
     private static func buildClient(entry: String): Client<DataAny> {
@@ -99,41 +146,32 @@ internal class MQNodePool {
         ).pingTimeout(Duration.second).build()
     }
 
-    /** 当前可用节点下标（已建连且未关闭；尚未建连的节点视为可用，由首次调用去探测）。 */
+    /**
+     * 当前可尝试的节点下标。
+     *
+     * 连接池不预判节点死活：已关闭的槽位会在下次调用时重建，因此只要池没关，
+     * 全部下标都返回，让发布/消费在节点恢复后能再次尝试（A11）。
+     */
     func aliveNodes(): Array<Int64> {
         if (closed.load()) {
             return Array<Int64>()
         }
-        let result = Array<Int64>(hosts.size) {_ => 0i64}
-        var count = 0i64
-        synchronized(lock) {
-            for (i in 0..clients.size) {
-                let available = match (clients[i]) {
-                    case Some(c) => !c.isClosed()
-                    case None => true
-                }
-                if (available) {
-                    result[count] = i
-                    count++
-                }
-            }
-        }
-        result[0..count]
+        Array<Int64>(hosts.size) {i => i}
     }
 
-    /** 幂等关闭。 */
+    /** 幂等关闭；逐节点取锁，避免与建连竞态。 */
     func close(): Unit {
         if (!closed.compareAndSwap(false, true)) {
             return
         }
-        synchronized(lock) {
-            for (i in 0..clients.size) {
-                match (clients[i]) {
+        for (i in 0..slots.size) {
+            synchronized(nodeLocks[i]) {
+                match (slots[i]) {
                     case Some(c) =>
                         try {
                             c.close()
                         } catch (_: Exception) {}
-                        clients[i] = None<Client<DataAny>>
+                        slots[i] = None<Client<DataAny>>
                     case None => ()
                 }
             }
