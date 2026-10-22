@@ -138,6 +138,15 @@ Topic names use percent-encoding (only `[A-Za-z0-9._-]`, empty → `%00`); metad
 writes use `.tmp` + `fsync` + rename + parent-directory `fsync`, so a power loss never leaves
 an empty file.
 
+## Naming and length limits
+
+| Item | Rule |
+| --- | --- |
+| Topic | Non-empty, starts with `/`, does not end with `/`, no empty segment (`//`); no control characters or Unicode blanks (`INVALID_TOPIC`) |
+| Group | Empty string is the default group; at most `MQGroup.MAX_LENGTH` (255) bytes; no control characters/Unicode blanks and no `/` `\` `:` `%`; must not start or end with `.` (`INVALID_GROUP`) |
+| Tags | At most `MQTags.MAX_COUNT` (64); each 1..`MQTags.MAX_LENGTH` (128) bytes; no control characters/Unicode blanks (`INVALID_TAGS`) |
+| Single record | At most `min(QueueLog.MAX_RECORD_SIZE, segmentedLogMaxSize - 4)` (i.e. `QueueLog.effectiveMaxRecord`); rejected before write |
+
 ## Known limits
 
 - At-least-once delivery; unacknowledged messages may be redelivered.

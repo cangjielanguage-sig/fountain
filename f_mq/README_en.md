@@ -113,6 +113,15 @@ commands):
 The client API exposes no topic/group registration or stats entry point; use
 `fmq manager` for operations.
 
+## Naming and length limits
+
+| Item | Rule |
+| --- | --- |
+| Topic | Non-empty, starts with `/`, does not end with `/`, no empty segment (`//`); no control characters or Unicode blanks; other checks fail locally with `INVALID_TOPIC` |
+| Group | Empty string is the default group; at most `MQGroup.MAX_LENGTH` (255) bytes; no control characters/Unicode blanks and no `/` `\` `:` `%`; must not start or end with `.` (`INVALID_GROUP`) |
+| Tags | At most `MQTags.MAX_COUNT` (64); each 1..`MQTags.MAX_LENGTH` (128) bytes; no control characters/Unicode blanks (`INVALID_TAGS`) |
+| Single record | At most `min(QueueLog.MAX_RECORD_SIZE, segment size - 4 bytes)` (i.e. `QueueLog.effectiveMaxRecord`); larger records fail before any segment write |
+
 ## Semantics and limits
 
 - Delivery is **at-least-once**: unacknowledged messages may be redelivered after a
