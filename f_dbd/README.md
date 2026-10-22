@@ -13,6 +13,26 @@
 | `fountain::f_dbd.driver` | 单节点驱动：`DbdDriver` / `DbdDatasource` / `DbdConnection` / `DbdStatement` / `DbdTransaction` |
 | `fountain::f_dbd.multid` | 多节点负载均衡驱动（`multidbm://` / `multidbd://`） |
 
+## API
+
+`import fountain::f_dbd.*` 即可拿到下列入口（根包公开重导出）：
+
+| API | 签名 | 说明 |
+| --- | --- | --- |
+| 单节点驱动 | `func dbdDriver(): DbdDriver` | 注册名 = `dbd_driverName`；未配置或为空时抛 `DbdException(CONFIG)` |
+| 多节点驱动 | `func multiDDriver(): MultiD` | 注册名 `multidbd`（首次使用该包时由包级 `static init` 注册） |
+| 打开数据源 | `Driver.open(connectionString: String, opts: Array<(String, String)>): Datasource` | 解析 URL 并构造数据源 |
+| 数据源（单节点） | `DbdDatasource(url: String, opts!: Array<(String, String)> = [])` | `connect()` / `setOption()` / `close()` / `isClosed()` |
+| 数据源（多节点） | `MultiDatasource(url: String, opts!: Array<(String, String)> = [])` | 每节点一个 `f_dbpool` 池 |
+| URL 解析 | `DbdUrl.parse(url) -> DbdUrl`（`user`/`password`/`host`/`port`/`database`） | `fdbm://user:pass@host:port/database`，端口缺省 8112 |
+| 多节点 URL 解析 | `MultiDUrl.parse(url) -> MultiDUrl`（`nodes: Array<DbdUrl>` / `database`） | `multidbm://user:pass@h:p,user:pass@h:p/database` |
+| 版本 | `func fdBDVersion(): String` | 模块版本 |
+| 异常 | `class DbdException <: SqlException`（`code: DbdErrorCode`、`cause: ?Exception`） | 对外唯一异常类型 |
+
+其余标准接口对象（`Connection` / `Statement` / `QueryResult` / `UpdateResult` / `Transaction` /
+`InputStream` / `ColumnInfo` / `Datasource` / `Driver`）都来自 `std.database.sql`；
+`QueryResultImpl` 与 `DbdInputStream` 虽然公开，但由驱动内部构造，应用不需要直接 new。
+
 ## 用法
 
 ```cangjie
@@ -41,32 +61,51 @@ URL 形如 `fdbm://user:password@host:port/database`；端口缺省 `8112`，`da
 驱动本身不解析 SQL：支持的 SQL 子集、方言（PostgreSQL / MySQL 家族）、`INSERT ... RETURNING`、
 `count(*)` 等能力都由 fdbm 决定，见 [fdbm README 的 SQL 能力](../fdbm/README.md#sql-能力)。
 
-## 配置
+## 配置项
 
-```bash
-# 后端物理库是 PostgreSQL（fdbm 的 fdbm_db_driver_* = postgres）
-export dbd_driverName=postgres
-```
+### 应用侧必需配置
 
-- 必需。fdbm 是代理、自身没有方言；f_orm 按驱动名选择 SQL 方言，因此应用项目必须把驱动名
-  配置成**后端物理库的方言名**（`postgres` / `mysql` / ...）。
+| 键 | 默认值 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `dbd_driverName` | 无 | **是** | 驱动的**注册名**，必须是后端物理库的方言名（`postgres` / `mysql` / ...）。fdbm 是代理、自身没有方言，而 f_orm 按驱动名选方言，所以这一项决定 SQL 方言归属 |
+
 - 未配置或为空：包初始化只记 INFO 并跳过注册，**不结束进程**；`dbdDriver()` / `DbdDriver()` 在取用时抛 `DbdException(CONFIG)`。
-  注册名以 `dbd_driverName` 为准，`fdbm` 仅作为兼容别名保留（名字未被占用时注册）。
+- 注册名以 `dbd_driverName` 为准，`fdbm` 仅作为兼容别名保留（名字未被占用时注册）。
 - 只影响应用侧注册名；SQL 方言的解析/改写仍只在 fdbm 内完成，URL scheme 仍是 `fdbm://`。
 
-## 连接选项
+### 连接选项（`opts` / `Datasource.setOption`）
 
-`Driver.open` 的 `opts` 与 `Datasource.setOption` 支持 `std.database.sql` 的标准选项：
+| 选项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `username` / `password` | 取 URL 中的凭据 | 覆盖 URL 凭据（多节点时统一覆盖全部节点） |
+| `connectionTimeout` | 不执行首个 PING | 建链后首个 PING 的往返超时（毫秒） |
+| `queryTimeout` / `updateTimeout` | 驱动默认上限 6 小时 | 每次查询 / 更新请求的超时（毫秒） |
+| `fetchRows` | 驱动默认块大小 | 流列分块大小；`0` 取默认块大小 |
 
-| 选项 | 作用 |
-| --- | --- |
-| `username` / `password` | 覆盖 URL 中的凭据 |
-| `connectionTimeout` | 建立 TCP 后首个 PING 的往返超时（毫秒） |
-| `queryTimeout` / `updateTimeout` | 每次查询 / 更新请求的超时（毫秒） |
-| `fetchRows` | 流列分块大小；`0` 取默认块大小 |
+未识别的选项只记 DEBUG 并忽略；非法超时值记 WARN 并忽略。
 
-未识别的选项只记 DEBUG 并忽略；非法超时值记 WARN 并忽略。查询/更新超时未设置时使用驱动
-默认上限（6 小时）；`connectionTimeout` 未设置时不执行建链后的首个 PING。
+### 多节点客户端配置（`multidbm_*`）
+
+经 `f_config.Config` 读取（环境变量 / `Config.set` 均可），逐项默认值如下：
+
+| 键 | 默认值 | 说明 |
+| --- | --- | --- |
+| `multidbm_loadbalance` | `random` | `random` / `roundrobin`；可带权重（如 `random,1,2,3`，首段为纯数字时按权重列表处理、算法取 `random`） |
+| `multidbm_databasePoolInitSize` | `1` | 每节点池初始连接数 |
+| `multidbm_databasePoolMinSize` | `1` | 最小连接数 |
+| `multidbm_databasePoolMaxSize` | `1` | 最大连接数 |
+| `multidbm_databasePoolCheckOnCreation` | `false` | 建池时检查连接 |
+| `multidbm_databasePoolCheckOnBorrowing` | `true` | 借出时检查 |
+| `multidbm_databasePoolCheckOnReturning` | `false` | 归还时检查 |
+| `multidbm_databasePoolIdleTimeout` | `0`（秒，不过期） | 空闲超时 |
+| `multidbm_databasePoolConnectionLife` | `86400`（秒） | 连接最长存活时间 |
+| `multidbm_databasePoolCheckInterval` | `300`（秒） | 后台检查间隔 |
+| `multidbm_databasePoolConnectTimeout` | `50`（毫秒） | 取连接超时 |
+| `multidbm_databasePoolMaxWaiting` | `30000`（毫秒，`0`=无限等待） | 池耗尽等待上限 |
+| `multidbm_databasePoolCheckSql` | `select 1` | 有效性检查 SQL |
+
+时间单位：`IdleTimeout` / `ConnectionLife` / `CheckInterval` 为**秒**，
+`ConnectTimeout` / `MaxWaiting` 为**毫秒**。
 
 ## 多节点驱动
 
@@ -75,13 +114,8 @@ export dbd_driverName=postgres
 
 - URL 形如 `multidbm://user1:pwd1@h1:p1,user2:pwd2@h2:p2/database`，也接受 `multidbd://`；
   各节点凭据支持 `%XX` 编码，`opts` 的 `username` / `password` 可统一覆盖。
-- `multidbm_loadbalance`：`random` / `roundrobin`，可带权重（如 `random,1,2,3`；首段为纯数字时
-  按权重列表处理、算法取 `random`）。
-- 每个节点一个 `f_dbpool.DatabasePool`，参数为 `multidbm_databasePool*`：
-  `InitSize` / `MinSize` / `MaxSize` / `CheckOnCreation` / `CheckOnBorrowing` / `CheckOnReturning` /
-  `IdleTimeout` / `ConnectionLife` / `CheckInterval` / `ConnectTimeout` / `MaxWaiting` / `CheckSql`。
-  时间项单位：`IdleTimeout` / `ConnectionLife` / `CheckInterval` 为秒，`ConnectTimeout` /
-  `MaxWaiting` 为毫秒；`MaxWaiting=0` 表示真无限等待。
+- 节点顺序 = URL 中出现顺序 = 权重顺序；权重来自 `multidbm_loadbalance`。
+- 每个节点一个 `f_dbpool.DatabasePool`，参数见上表 `multidbm_databasePool*`。
 - `MultiD.preferredPooling = false`：数据源内部已按节点池化，上层不要再套一层。
 - 入口：单节点 `dbdDriver()`，多节点 `multiDDriver()`。
 

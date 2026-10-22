@@ -14,6 +14,27 @@ the `dbd_driverName` setting; `multidbd` for the multi-node variant).
 | `fountain::f_dbd.driver` | Single-node driver: `DbdDriver` / `DbdDatasource` / `DbdConnection` / `DbdStatement` / `DbdTransaction` |
 | `fountain::f_dbd.multid` | Multi-node load-balanced driver (`multidbm://` / `multidbd://`) |
 
+## API
+
+`import fountain::f_dbd.*` exposes the following entry points (root package re-exports):
+
+| API | Signature | Notes |
+| --- | --- | --- |
+| Single-node driver | `func dbdDriver(): DbdDriver` | Registration name = `dbd_driverName`; throws `DbdException(CONFIG)` when unset/empty |
+| Multi-node driver | `func multiDDriver(): MultiD` | Registered as `multidbd` (package-level `static init` on first use) |
+| Open a datasource | `Driver.open(connectionString: String, opts: Array<(String, String)>): Datasource` | Parses the URL and builds a datasource |
+| Datasource (single) | `DbdDatasource(url: String, opts!: Array<(String, String)> = [])` | `connect()` / `setOption()` / `close()` / `isClosed()` |
+| Datasource (multi) | `MultiDatasource(url: String, opts!: Array<(String, String)> = [])` | One `f_dbpool` pool per node |
+| URL parsing | `DbdUrl.parse(url) -> DbdUrl` (`user`/`password`/`host`/`port`/`database`) | `fdbm://user:pass@host:port/database`, default port 8112 |
+| Multi-node URL parsing | `MultiDUrl.parse(url) -> MultiDUrl` (`nodes: Array<DbdUrl>` / `database`) | `multidbm://user:pass@h:p,user:pass@h:p/database` |
+| Version | `func fdBDVersion(): String` | Module version |
+| Exception | `class DbdException <: SqlException` (`code: DbdErrorCode`, `cause: ?Exception`) | The only exception type thrown |
+
+All other objects (`Connection` / `Statement` / `QueryResult` / `UpdateResult` /
+`Transaction` / `InputStream` / `ColumnInfo` / `Datasource` / `Driver`) come from
+`std.database.sql`. `QueryResultImpl` and `DbdInputStream` are public but constructed by
+the driver; applications never create them directly.
+
 ## Usage
 
 ```cangjie
@@ -44,37 +65,55 @@ The driver does not parse SQL: the supported SQL subset, dialect (PostgreSQL / M
 families), `INSERT ... RETURNING` and `count(*)` behavior are all decided by fdbm.
 See [fdbm's SQL capabilities](../fdbm/README_en.md#sql-capabilities).
 
-## Configuration
+## Settings
 
-```bash
-# the backend physical database is PostgreSQL (fdbm's fdbm_db_driver_* = postgres)
-export dbd_driverName=postgres
-```
+### Required application setting
 
-- Required. fdbm is a proxy without a dialect of its own; f_orm selects the SQL dialect
-  by driver name, so the application must set the name to the **backend dialect**
-  (`postgres` / `mysql` / ...).
+| Key | Default | Required | Notes |
+| --- | --- | --- | --- |
+| `dbd_driverName` | none | **yes** | The **registration name**, which must be the backend dialect name (`postgres` / `mysql` / ...). fdbm is a proxy without a dialect of its own, while f_orm selects the SQL dialect by driver name |
+
 - Missing or empty: package initialization logs INFO and skips registration — the process keeps
-  running; `dbdDriver()` / `DbdDriver()` throw `DbdException(CONFIG)` when used. The registration
-  name is always `dbd_driverName`; `fdbm` is kept only as a compatibility alias (registered when free).
-- It only affects the client-side registration name; SQL dialect handling stays inside
-  fdbm, and the URL scheme remains `fdbm://`.
+  running; `dbdDriver()` / `DbdDriver()` throw `DbdException(CONFIG)` when used.
+- The registration name is always `dbd_driverName`; `fdbm` is kept only as a compatibility alias
+  (registered when free).
+- It only affects the client-side registration name; SQL dialect handling stays inside fdbm,
+  and the URL scheme remains `fdbm://`.
 
-## Connection options
+### Connection options (`opts` / `Datasource.setOption`)
 
-`opts` passed to `Driver.open` and `Datasource.setOption` accept the standard
-`std.database.sql` options:
+| Option | Default | Effect |
+| --- | --- | --- |
+| `username` / `password` | credentials from the URL | Override the URL credentials (all nodes for multi-node URLs) |
+| `connectionTimeout` | no initial PING | Round-trip timeout of the first PING after connecting (ms) |
+| `queryTimeout` / `updateTimeout` | driver default cap 6 hours | Per-request timeout for queries / updates (ms) |
+| `fetchRows` | driver default chunk | Stream-column chunk size; `0` uses the default chunk |
 
-| Option | Effect |
-| --- | --- |
-| `username` / `password` | Override the credentials in the URL |
-| `connectionTimeout` | Round-trip timeout of the first PING after the TCP connection is established (ms) |
-| `queryTimeout` / `updateTimeout` | Per-request timeout for queries / updates (ms) |
-| `fetchRows` | Stream-column chunk size; `0` uses the default chunk |
+Unknown options are logged at DEBUG and ignored; invalid timeout values are logged at WARN
+and ignored.
 
-Unknown options are logged at DEBUG and ignored; invalid timeout values are logged at
-WARN and ignored. Without a query/update timeout the driver uses its default upper bound
-(6 hours); without `connectionTimeout` it does not perform the initial PING after connecting.
+### Multi-node client settings (`multidbm_*`)
+
+Read through `f_config.Config` (environment variables or `Config.set`); defaults:
+
+| Key | Default | Notes |
+| --- | --- | --- |
+| `multidbm_loadbalance` | `random` | `random` / `roundrobin`, optionally weighted (e.g. `random,1,2,3`; a numeric first segment is treated as a weight list and the algorithm falls back to `random`) |
+| `multidbm_databasePoolInitSize` | `1` | Initial connections per node pool |
+| `multidbm_databasePoolMinSize` | `1` | Minimum connections |
+| `multidbm_databasePoolMaxSize` | `1` | Maximum connections |
+| `multidbm_databasePoolCheckOnCreation` | `false` | Validate connections when the pool is created |
+| `multidbm_databasePoolCheckOnBorrowing` | `true` | Validate on borrow |
+| `multidbm_databasePoolCheckOnReturning` | `false` | Validate on return |
+| `multidbm_databasePoolIdleTimeout` | `0` (seconds, never) | Idle timeout |
+| `multidbm_databasePoolConnectionLife` | `86400` (seconds) | Maximum connection lifetime |
+| `multidbm_databasePoolCheckInterval` | `300` (seconds) | Background check interval |
+| `multidbm_databasePoolConnectTimeout` | `50` (ms) | Borrow timeout |
+| `multidbm_databasePoolMaxWaiting` | `30000` (ms, `0` = wait forever) | Maximum wait when a pool is exhausted |
+| `multidbm_databasePoolCheckSql` | `select 1` | Validation SQL |
+
+Units: `IdleTimeout` / `ConnectionLife` / `CheckInterval` are **seconds**;
+`ConnectTimeout` / `MaxWaiting` are **milliseconds**.
 
 ## Multi-node driver
 
@@ -84,15 +123,8 @@ across multiple fdbm nodes on the client side:
 - URL: `multidbm://user1:pwd1@h1:p1,user2:pwd2@h2:p2/database`; `multidbd://` is also
   accepted. Per-node credentials support `%XX` encoding, and `opts` `username` / `password`
   override all nodes.
-- `multidbm_loadbalance`: `random` / `roundrobin`, optionally with weights (for example
-  `random,1,2,3`; when the first segment is numeric it is treated as a weight list and the
-  algorithm defaults to `random`).
-- One `f_dbpool.DatabasePool` per node, configured by `multidbm_databasePool*`:
-  `InitSize` / `MinSize` / `MaxSize` / `CheckOnCreation` / `CheckOnBorrowing` /
-  `CheckOnReturning` / `IdleTimeout` / `ConnectionLife` / `CheckInterval` /
-  `ConnectTimeout` / `MaxWaiting` / `CheckSql`.
-  Units: `IdleTimeout` / `ConnectionLife` / `CheckInterval` are seconds;
-  `ConnectTimeout` / `MaxWaiting` are milliseconds; `MaxWaiting=0` means a true infinite wait.
+- Node order = URL order = weight order; weights come from `multidbm_loadbalance`.
+- One `f_dbpool.DatabasePool` per node, configured by the `multidbm_databasePool*` keys above.
 - `MultiD.preferredPooling = false`: the datasource already pools per node; do not wrap it
   in another pool.
 - Entry points: `dbdDriver()` for single-node, `multiDDriver()` for multi-node.
@@ -114,20 +146,20 @@ across multiple fdbm nodes on the client side:
 - **Streams**: a column is a stream only when the physical driver reports
   `InputStream` / `std.io.InputStream`. One handle per row/column; chunks follow
   `fetch_rows`, and an empty chunk means EOF.
+- **NULL and empty BLOB**: the first open sends `CELL(index, -1)` as a NULL probe;
+  SQL NULL makes `getOrNull<InputStream>` return `None` (and `get` throw `CONVERSION`),
+  while an empty BLOB returns `Some(empty stream)`.
+- **Stream columns are stream-only**: scalar targets such as `get<Array<Byte>>` /
+  `get<String>` throw `CONVERSION` without sending a request.
+- **Root package**: `import fountain::f_dbd.*` re-exports error codes, exceptions, `DbdUrl`,
+  `dbdDriver`, `MultiDUrl`, ...; `fdBDVersion()` returns the module version.
 
 ## Errors
 
 Only `fountain::f_dbd.exception.DbdException` (`<: SqlException`) escapes the driver.
 Its `code` is the fine-grained `DbdErrorCode`: `CONFIG` / `IO` / `TIMEOUT` /
 `PROTOCOL` / `CURSOR_STATE` / `CONVERSION` / `DB_ERROR` / `INTERNAL`, etc.
-
-- **Stream columns**: the first open sends `CELL(index, -1)` as a NULL probe; SQL NULL makes
-  `getOrNull<InputStream>` return `None` (and `get` throw `CONVERSION`), while an empty BLOB returns
-  `Some(empty stream)`. Scalar reads (`get<Array<Byte>>`/`get<String>`) on a stream column throw
-  `CONVERSION` without sending a request.
-- **Root package**: `import fountain::f_dbd.*` re-exports error codes, exceptions, `DbdUrl`,
-  `dbdDriver`, `MultiDUrl`, ...; `fdBDVersion()` returns the module version. An unconfigured
-  `dbd_driverName` no longer exits the process; `dbdDriver()` throws `CONFIG` when used.
+A failing `get` maps to `CONVERSION` and keeps the original `cause`.
 
 ## Tests
 

@@ -1,0 +1,13 @@
+[package]
+  cjc-version = "1.2.0"
+  name = "fdbmdemo_client"
+  organization = "fountain"
+  description = "fdbm/f_dbd 演示客户端（动态链接库，由 fboot 启动）"
+  version = "1.3.16"
+  target-dir = ""
+  src-dir = ""
+  output-type = "dynamic"
+  compile-option = "--dy-std"
+  override-compile-option = "--dy-std"
+  link-option = ""
+  package-configuration = {}

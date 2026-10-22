@@ -19,6 +19,20 @@ broadcasting, ID generation and a routing cache**. Clients connect through the
 | `fountain::fdbm.execute` | Sessions, server cursors, statement executors, dispatcher |
 | `fountain::fdbm.server` | Protocol handler, session registry, driver/custom loaders, lifecycle |
 
+## Exposed interfaces
+
+fdbm is a long-running service and exposes no library API. There are four entry points:
+
+| Entry | Form | Notes |
+| --- | --- | --- |
+| Process | `fdbm` | **No subcommands**; starts listening on `fdbm_port` (default 8112). Exit code 0 = clean stop, 1 = startup self-check failed |
+| Start/stop script | `./fdbm.sh start\|stop\|restart` | Shipped with the module; all settings live in the script (see below) |
+| Config persistence | `./boot.sh` | `EXPORT <key>=<value>` writes settings back into its managed block |
+| Protocol | `CONSUME` / `UNSUBSCRIBE` | See [Protocol contract](#protocol-contract); the client side is [f_dbd](../f_dbd) |
+
+The SQL surface visible to applications (`SELECT`/`INSERT`/`UPDATE`/`DELETE`/`SHOW`/DDL/`EXPORT`/transactions)
+is described in [SQL capabilities](#sql-capabilities).
+
 ## Build & deploy
 
 ```bash
@@ -45,7 +59,21 @@ Deployment layout:
 - `boot.sh`: configuration plus process management; `export k=v` is persisted into its
   managed block.
 
-`boot.sh` (shipped with the module):
+### Start/stop script `fdbm.sh`
+
+```bash
+./fdbm.sh start     # setsid start (detached from the session), waits for the port; log fdbm.log, pid file fdbm.pid
+./fdbm.sh stop      # SIGTERM only (graceful shutdown)
+./fdbm.sh restart
+```
+
+All settings are `export`s at the top of the script. Only the **mandatory** ones are left
+active (`fdbm_db` plus per-node `fdbm_db_driver_<node>` and `fdbm_db_database_<node>`);
+every setting that has a default is commented out together with a comment stating its
+default and meaning. Each setting has its own explanatory comment.
+
+`boot.sh` (the other script shipped with the module; `EXPORT` statements maintain its
+managed block) supports:
 
 ```bash
 ./boot.sh start     # nohup start, waits for the port
@@ -59,24 +87,115 @@ On `SIGTERM` fdbm stops accepting connections, waits for in-flight requests up t
 then closes each pool via `closeAndAwait`, closes the routing cache and exits with
 code 0. `test/lifecycle_test.sh` covers start/status/stop and the graceful marker.
 
-## Configuration
+## Settings
 
-All settings are read through `f_config.Config` (environment variables / `Config.set`):
+All settings are read through `f_config.Config` (environment variables / `Config.set`).
+The `Default` column is what happens when the key is absent; keys marked **yes** in
+`Required` abort startup with `CONFIG` when missing.
 
-| Group | Keys |
-| --- | --- |
-| Service/process | `fdbm_port`, `fdbm_bootScript`, `fdbm_driverDir`, `fdbm_customDir`, `fdbm_checkDuration`, `fdbm_unavailableChecked`, `fdbm_sessionSweepInterval`, `fdbm_shutdownTimeout` |
-| Nodes/credentials | `fdbm_db` (`name@host:port;...`), `fdbm_db_driver_<node>`, `fdbm_db_database_<node>`, `fdbm_db_username_<node>`, `fdbm_db_password_<node>` |
-| Logical databases | `fdbm_db_logicalDatabase_<logical>` |
-| Pool | `fdbm_databasePool*` |
-| Load balancing | `fdbm_loadbalance`, `fdbm_loadbalance_weight_<node>[__<db>]` |
-| Sharding/global tables | `fdbm_partition__<table>`, `fdbm_partition_substr__<table>`, `fdbm_partition_step`, `fdbm_global__<table>` |
-| ID generation | `fdbm_idmaker`, `fdbm_sequenceDatabase` |
-| Routing cache | `fdbm_cache`, `fdbm_cache_expire`, `fdbm_cache_size`, `fdbm_cachePath` |
+### Service / process
+
+| Key | Default | Required | Notes |
+| --- | --- | --- | --- |
+| `fdbm_port` | `8112` | no | Listen port, 1..65535 |
+| `fdbm_bootScript` | `./boot.sh` | no | Target script for `EXPORT` statements (managed block) |
+| `fdbm_driverDir` | `./driver` | no | Physical driver directory; exactly one library |
+| `fdbm_customDir` | `./custom` | no | Custom algorithm / ID generator directory; absent means none |
+| `fdbm_checkDuration` | `30s` | no | TCP liveness check period. No heartbeat is read while a statement runs, so statements taking longer than about 3× this value are treated as dead links |
+| `fdbm_unavailableChecked` | `3` | no | Consecutive failure threshold |
+| `fdbm_sessionSweepInterval` | `30s` | no | Stale-session sweep period (f_net has no disconnect callback, so sessions/cursors/connections are reclaimed here) |
+| `fdbm_shutdownTimeout` | `30s` | no | Upper bound for in-flight requests during graceful shutdown |
+
+### Physical nodes and credentials
+
+| Key | Default | Required | Notes |
+| --- | --- | --- | --- |
+| `fdbm_db` | none | **yes** | Node list `<node>@<host>:<port>`, `;`-separated; duplicate names are rejected |
+| `fdbm_db_driver_<node>` | none | **yes** | Physical driver registration name (`postgres` / `mysql` / ...) |
+| `fdbm_db_database_<node>` | none | **yes** | Physical databases hosted by the node, comma-separated (one pool each) |
+| `fdbm_db_username_<node>` | empty | no | Physical database user |
+| `fdbm_db_password_<node>` | empty | no | Physical database password |
+
+### Logical databases
+
+| Key | Default | Required | Notes |
+| --- | --- | --- | --- |
+| `fdbm_db_logicalDatabase_<logical>` | none | no | Logical database → physical database list (comma-separated); an unknown physical name aborts startup |
+
+Semantics (matching `LogicalCatalog`):
+
+- **Only explicitly declared names become logical databases**; physical database names
+  are never registered implicitly.
+- A logical database referenced by `fdbm_partition__<table>` but not declared explicitly
+  implicitly contains **all** physical databases.
+- Global tables do not create namespaces (so a typo in `fdbm_global__<table>` cannot
+  silently create one).
+- With no logical database declared, the first physical database (sorted) becomes the only
+  logical database (WARN is logged).
+- With several logical databases, the session default is the first sorted one and the others
+  must be qualified as `<logical>.<table>` (WARN is logged).
+
+### Connection pool (one per physical database)
+
+| Key | Default | Required | Notes |
+| --- | --- | --- | --- |
+| `fdbm_databasePoolInitSize` | `1` | no | Initial connections |
+| `fdbm_databasePoolMinSize` | `1` | no | Minimum connections |
+| `fdbm_databasePoolMaxSize` | `1` | no | Maximum connections (raise it for many concurrent long cursors/transactions) |
+| `fdbm_databasePoolCheckOnCreation` | `false` | no | Validate connections when the pool is created |
+| `fdbm_databasePoolCheckOnBorrowing` | `true` | no | Validate on borrow |
+| `fdbm_databasePoolCheckOnReturning` | `false` | no | Validate on return |
+| `fdbm_databasePoolIdleTimeout` | `0` (seconds, never) | no | Idle timeout |
+| `fdbm_databasePoolConnectionLife` | `86400` (seconds) | no | Maximum connection lifetime |
+| `fdbm_databasePoolCheckInterval` | `300` (seconds) | no | Background check interval |
+| `fdbm_databasePoolConnectTimeout` | `50` (ms) | no | Borrow timeout |
+| `fdbm_databasePoolMaxWaiting` | `30000` (ms, `0` = wait forever) | no | Maximum wait when the pool is exhausted |
+| `fdbm_databasePoolCheckSql` | `select 1` | no | Validation SQL |
+
+### Load balancing and read/write weights
+
+| Key | Default | Required | Notes |
+| --- | --- | --- | --- |
+| `fdbm_loadbalance` | `random` | no | `random` / `roundrobin`; anything else aborts startup |
+| `fdbm_loadbalance_weight_<node>` | `w,1;r,1` | no | Read/write weights `w,<n>;r,<n>` (also accepts `w=<n>`, `;` or `/` separators); `0` excludes the node from that direction |
+| `fdbm_loadbalance_weight_<node>__<db>` | inherited from the node | no | Per-database weights, taking precedence over node-level ones |
+
+Read/write splitting is expressed with weights: primary `w,1;r,0`, replica `w,0;r,1`
+means writes go to the primary only and reads go to replicas only.
+
+### Sharding and global tables
+
+| Key | Default | Required | Notes |
+| --- | --- | --- | --- |
+| `fdbm_partition_step` | `10000000` | no | Step of the `step` algorithm; must be positive |
+| `fdbm_partition__<table>` | none | no | `<logical>,<algorithm>,<partition-column>`; algorithms: `step` / `hash` / `std` / `crc16` / `crc32` / `crc64` / `murmur` / `substr` |
+| `fdbm_partition_substr__<table>` | none | **required** when the algorithm is `substr` | `<start>,<length>,<hash>`; hash: `std` / `hash` / `crc16` / `crc32` / `crc64` / `murmur` |
+| `fdbm_global__<table>` | none | no | Value is a logical database name; writes broadcast to every physical database, reads use one replica |
+
+### ID generation
+
+| Key | Default | Required | Notes |
+| --- | --- | --- | --- |
+| `fdbm_idmaker` | `uuid,1` | no | `uuid[,1\|4\|6\|7]` / `snowflake[,0..1023]` / `sequence` / custom extension name |
+| `fdbm_sequenceDatabase` | first physical database of the default logical database | no | Allocation database for `sequence`, either a logical or a physical name |
+
+The `sequence` generator requires a `fountain_sequence(table_name, current_value, increment)`
+table in the allocation database; startup self-check verifies it, and allocation runs as
+"transaction + `select ... for update`".
+
+### Routing cache
+
+| Key | Default | Required | Notes |
+| --- | --- | --- | --- |
+| `fdbm_cache` | `true` | no | Enables the partition-key → physical database cache |
+| `fdbm_cache_expire` | never | no | Expiry (`Duration`, e.g. `30s`); empty = never |
+| `fdbm_cache_size` | `0` | no | Capacity limit, `0` = unlimited; beyond the limit no new keys are written (existing hits still work) |
+| `fdbm_cachePath` | `./cache` | no | `f_store` directory |
 
 Startup validates everything before accepting connections (driver uniqueness, custom
 extension loading and name clashes, cross references, algorithm/generator parameters,
-timeouts). A failed `boot.sh` normalization is logged and does not block startup.
+timeouts) and exits with `CONFIG` / `NO_DRIVER` / `PARTITION_CONFIG` / `ID_GENERATOR` on
+failure. A failed `boot.sh` normalization is logged and does not block startup.
 
 ## SQL capabilities
 
