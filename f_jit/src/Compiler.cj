@@ -121,6 +121,17 @@ public class Compiler {
             enabled: enabled, bindings: bindings)
     }
 
+    /**
+     * 注册接口（X）：接口不是 `Object` 子类型，不能复用 `registerType` 的泛型约束。
+     *
+     * 接口方法必须由 `@JitBind` 提供绑定（反射调用抽象方法必失败）。
+     */
+    public func registerInterface<I>(enabled!: Bool = true,
+        bindings!: JitBindings = JitBindings.empty()): Unit {
+        ReflectRegistrar.registerInterface<I>(into: this.classes, diag: this.opts.diagnostics,
+            enabled: enabled, bindings: bindings)
+    }
+
     /** 类是否已注册（诊断/测试）。 */
     public func hasClass(name: String): Bool {
         match (this.classes.resolve(name)) {

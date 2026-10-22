@@ -99,9 +99,10 @@ protected class CallMarshal {
                 case o: Object =>
                     match (className) {
                         case Some(cn) =>
-                            if (!ReflectRegistrar.isInstanceOfClass(o, cn)) {
+                            // 14 的判定：类祖先链 ∪ 接口谓词（接口实参按 `is I` 校验）
+                            if (!ReflectRegistrar.isInstanceOfHost(o, cn)) {
                                 return CallMarshal.contractFail(
-                                    '实参不是声明类「${cn}」的实例（§16.2 is C）')
+                                    '实参不是声明类型「${cn}」的实例（§16.2 is C/is I）')
                             }
                         case None => ()
                     }
