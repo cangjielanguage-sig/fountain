@@ -46,6 +46,14 @@ import fountain::f_jit.runtime.UserHelperTable
 public class JitFunction {
     /** 全局调用窗口：HandleTable 只有一个窗口，桥的 open/body/reset 必须串行。 */
     private static let callMtx: Mutex = Mutex()
+
+    /**
+     * 无参 `call` 的默认调用上下文（`deadline = None`）。
+     *
+     * `CallContext` 是 **struct**（值语义）⇒ 传参时逐值复制，各调用方拿到的是副本，
+     * 不存在"共享可变状态"；这里只是省掉每次构造（`static let` 由运行时惰性初始化，线程安全）。
+     */
+    private static let DEFAULT_CONTEXT = CallContext()
     private let nargs: Int64
     private let retType: UInt16
     private let paramTypes: Array<UInt16>
@@ -112,8 +120,8 @@ public class JitFunction {
 
     /** 六步调用：长度 → 封送 → 执行 → 解包 → `T` 校验 → 返回。 */
     public func call<T>(args: Array<Any>): T {
-        // 薄委托：错误语义与 `invoke` 完全一致（>0 抛 JitException、−2 抛 InterruptedException）
-        this.call<T>(args, CallContext())
+        // 薄委托：错误语义与 `call(args, ctx)` 完全一致（>0 抛 JitException、−2 抛 InterruptedException）
+        this.call<T>(args, JitFunction.DEFAULT_CONTEXT)
     }
 
     /**
@@ -312,7 +320,7 @@ public class JitFunction {
             var id = JitClosureId(JitClosureId.INVALID)
             var group = PromotionGroup()
             try {
-                id = this.callLocked<JitClosureId>(args, CallContext())
+                id = this.callLocked<JitClosureId>(args, JitFunction.DEFAULT_CONTEXT)
                 group = match (this.lastClosureGroup) {
                     case Some(g) => g
                     case None => PromotionGroup()

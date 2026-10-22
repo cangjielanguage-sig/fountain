@@ -28,47 +28,30 @@ import std.unittest.testmacro.*
  */
 @Test
 public class CallContext_test {
-    /** 默认构造：`deadline=None`、`args` 为空。 */
+    /** 默认构造：`deadline = None`。 */
     @TestCase
     public func defaultsFollowSpec(): Unit {
         let ctx = CallContext()
         @Assert(ctx.deadline.isNone(), true)
-        @Assert(ctx.args.size, 0)
     }
 
-    /** `deadline` 可设为具体时刻并原样读回（配合 `interrupt_poll` 的 -2 路径）。 */
+    /** `deadline` 在构造时给定并原样读回（配合 `interrupt_poll` 的 -2 路径）。 */
     @TestCase
     public func deadlineRoundTrips(): Unit {
-        var ctx = CallContext()
-        ctx.deadline = DateTime.UnixEpoch
+        let ctx = CallContext(deadline: Some(DateTime.UnixEpoch))
         @Assert(ctx.deadline.isSome(), true)
         match (ctx.deadline) {
             case Some(v) => @Assert(v, DateTime.UnixEpoch)
-            case None => @Fail('deadline 已被赋值，不应为 None')
+            case None => @Fail('deadline 已给定，不应为 None')
         }
-        // 回置 None 亦生效
-        ctx.deadline = None
-        @Assert(ctx.deadline.isNone(), true)
     }
 
-    /** `args` 是 Marshal 结果的入参 cell 数组：按构造值原样读回，顺序不变。 */
+    /** 值语义：构造后不可变；两个不同 ctx 互不影响（含 None 与非 None 并存）。 */
     @TestCase
-    public func argsRoundTrip(): Unit {
-        let ctx = CallContext([7, -1, 42])
-        @Assert(ctx.args.size, 3)
-        @Assert(ctx.args[0], 7)
-        @Assert(ctx.args[1], -1)
-        @Assert(ctx.args[2], 42)
-        @Assert(ctx.deadline.isNone(), true)
-    }
-
-    /** 赋值 `args` 不触碰 `deadline`（两个字段互不干扰）。 */
-    @TestCase
-    public func argsAndDeadlineAreIndependent(): Unit {
-        var ctx = CallContext()
-        ctx.deadline = DateTime.UnixEpoch
-        ctx.args = [1, 2]
-        @Assert(ctx.args.size, 2)
-        @Assert(ctx.deadline.isSome(), true)
+    public func instancesAreIndependentValues(): Unit {
+        let withDeadline = CallContext(deadline: Some(DateTime.UnixEpoch))
+        let without = CallContext()
+        @Assert(withDeadline.deadline.isSome(), true)
+        @Assert(without.deadline.isNone(), true)
     }
 }

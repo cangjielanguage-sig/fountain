@@ -30,8 +30,7 @@ main() {
 Interruptible call with a deadline:
 
 ```cangjie
-var ctx = CallContext()
-ctx.deadline = Some(DateTime.now() + Duration.second * 1)   // throws InterruptedException
+let ctx = CallContext(deadline: Some(DateTime.now() + Duration.second * 1))   // throws InterruptedException
 let v = f.call<Int64>([Int64(100_000_000)], ctx)
 ```
 

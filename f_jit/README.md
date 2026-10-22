@@ -28,8 +28,7 @@ main() {
 带截止时间的中断式调用：
 
 ```cangjie
-var ctx = CallContext()
-ctx.deadline = Some(DateTime.now() + Duration.second * 1)   // 超时抛 InterruptedException
+let ctx = CallContext(deadline: Some(DateTime.now() + Duration.second * 1))   // 超时抛 InterruptedException
 let v = f.call<Int64>([Int64(100_000_000)], ctx)
 ```
 
