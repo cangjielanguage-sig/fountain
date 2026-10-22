@@ -351,6 +351,31 @@ liburing 的 FFI 封装，所有 API 仅 Linux 可用
 
 **详情请见：**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/fmq/README.md>
 
+### `fountain::f_dbd`
+`std.database.sql` 驱动实现：把 SQL 与参数发给 `fountain::fdbm` 中间件，按需把结果集拉回。
+本身不依赖任何物理数据库驱动，注册名由配置项 `dbd_driverName` 指定（多节点形态为 `multidbd`）。
+
+**详情请见：**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_dbd/README.md>
+
+### `fountain::f_dbm`
+数据库中间件的扩展接口库：分库算法 `PartitionAlgorithm` 与 ID 生成器 `IdGenerator` 的契约。
+第三方扩展只需依赖本模块，编译成动态库放进 fdbm 的 `custom/` 目录即可被发现。
+
+**详情请见：**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_dbm/README.md>
+
+### `fountain::fdbm`
+数据库中间件（可执行模块）：对应用暴露一个逻辑库，对内提供分库路由、读写分离、全局表广播、
+ID 生成与分库缓存。应用通过 `fountain::f_dbd` 驱动连接，物理数据库驱动只从部署目录的 `driver/` 加载。
+
+**详情请见：**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/fdbm/README.md>
+
+### `fountain::f_jit`
+仓颉方言的字节码编译器与 JIT：把方言源码编译为与架构无关的字节码（`.fbc`），由解释器与
+x86_64 / aarch64 机器码后端执行，并以 `JitFunction.call<T>` 与宿主侧类、函数、闭包互通。
+语义以解释器为准，机器码仅支持 Linux，其余平台自动走解释器。
+
+**详情请见：**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_jit/README.md>
+
 ### `fountain::fboot`
 依赖fountain的应用项目启动程序
 
