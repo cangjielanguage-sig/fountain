@@ -32,7 +32,7 @@ protected class DeadLetterQueue <: Resource {
     private let log: SegmentedLog
 
     protected init(dir: String, maxFileSize: Int64, syncInterval: Int64) {
-        this.log = SegmentedLog(LogConfig(dir, "log", maxFileSize, syncInterval))
+        this.log = SegmentedLog(LogConfig(dir, "log", maxFileSize, syncInterval, durableBoundary: true))
     }
 
     protected func append(message: MQDeadLetterMessage): LogPosition {
