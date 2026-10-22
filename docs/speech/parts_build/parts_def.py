@@ -2,7 +2,7 @@
 """25 个课程分册的定义：页码区间 + 首尾页文案 + 讲者备注"""
 
 URL1 = 'https://pkg.cangjie-lang.cn/org/fountain'
-URL2 = 'https://gitcode.com/Cangjie-SIG/fountain'
+URL2 = 'https://gitcode.com/Cangjie-TPC/fountain'
 
 PARTS = [
     dict(a=1, b=8, title='开场与总体介绍',

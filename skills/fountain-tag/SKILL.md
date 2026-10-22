@@ -75,7 +75,7 @@ python "<技能目录>/scripts/check_tag_name.py" <候选 tag 名>    # Windows 
   ### `fountain::<模块>`
   <一句话描述>
 
-  **详情请见：**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/<模块>/README.md>
+  **详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/<模块>/README.md>
   ```
 
   英文版同位置追加，链接指向 `<模块>/README_en.md`、引导语用 `**See details:**`。描述**取自该模块自己 README 的首段**，不要自造；中英两条要对应。
@@ -229,7 +229,7 @@ python "<技能目录>/scripts/bump_version.py" <x.y.z> --old <a.b.c> --root <�
 | `fdemo/`、`frpcdemo/` 下的 `cjpm.toml` | 不论当前值，行首 `version = "…"` → `version = "x.y.z"` |
 | `f_version/src/FountainVersion.cj` | `"a.b.c"` → `"x.y.z"` |
 
-- **根 README.md / README_en.md 不参与替换**：模块文档链接已是版本无关形态（`https://gitcode.com/Cangjie-SIG/fountain/blob/master/<模块>/README.md`），升版时别去改它们，也别做 `/a.b.c/ → /x.y.z/` 全局替换。
+- **根 README.md / README_en.md 不参与替换**：模块文档链接已是版本无关形态（`https://gitcode.com/Cangjie-TPC/fountain/blob/master/<模块>/README.md`），升版时别去改它们，也别做 `/a.b.c/ → /x.y.z/` 全局替换。
 - 复核 `git diff --stat`：文件数应等于「参与发布的 cjpm.toml 总数（含 fdemo / frpcdemo 子树）+ `f_version/src/FountainVersion.cj`」，且除版本号外没有别的改动（Step 1 的文档改动此时已提交入库，不应再出现在 diff 里）。先 `--dry-run` 看一遍也可以。
 - 脚本退出码 2 = 一处都没替换 → 先核对 `--old` 是否等于文件里当前的版本号。
 - 本步只改文件，**不提交**；提交、推送、合入 master 都在 Step 3。

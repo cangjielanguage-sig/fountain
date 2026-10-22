@@ -89,7 +89,7 @@ fdemo 则统一用 `fountain::` 前缀（模块目录 `user` 里是 `fountain::u
   # 2) 本地路径依赖（fountain 源码在本地、或模块未发布时）
   "fountain::f_mvc" = {path = "../fountain/f_mvc"}
   # 3) git 依赖（引用仓库）
-  fountain = {git = "https://gitcode.com/Cangjie-SIG/fountain.git", branch = "master"}
+  fountain = {git = "https://gitcode.com/Cangjie-TPC/fountain.git", branch = "master"}
   # 4) 带属性的第三方依赖（output-type 等）
   "postgres_driver" = {version = "0.0.3", output-type="dynamic"}
 ```

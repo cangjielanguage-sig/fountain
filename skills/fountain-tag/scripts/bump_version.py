@@ -12,7 +12,7 @@
     2. f_version/src/FountainVersion.cj："a.b.c"  ->  "x.y.z"
 
 根 README.md / README_en.md 不参与替换：其模块文档链接已改为版本无关形态
-（https://gitcode.com/Cangjie-SIG/fountain/blob/master/<模块>/README.md）。
+（https://gitcode.com/Cangjie-TPC/fountain/blob/master/<模块>/README.md）。
 
 按字节读写，保留原有换行（LF/CRLF）与 BOM 状态。
 退出码：0 = 有替换；2 = 一个都没替换（多半是 --old 传错）；1 = 参数/环境错误。

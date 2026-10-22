@@ -1,6 +1,6 @@
 # f_rpc
 
-Remote procedure call (RPC) module. See <https://gitcode.com/Cangjie-SIG/fountain/tree/master/frpcdemo> for usage.
+Remote procedure call (RPC) module. See <https://gitcode.com/Cangjie-TPC/fountain/tree/master/frpcdemo> for usage.
 
 `fountain::f_rpc` is built on `fountain::f_net` (the event-driven TCP network module) and `fountain::f_protocol` (the network communication
 protocol) and provides:

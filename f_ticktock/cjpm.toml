@@ -25,7 +25,7 @@
   include = ["src"]
   exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
   authors = ["吴京润"]
-  repository = "https://gitcode.com/Cangjie-SIG/fountain/tree/master/f_ticktock"
+  repository = "https://gitcode.com/Cangjie-TPC/fountain/tree/master/f_ticktock"
 
 [profile.build]
   incremental = true

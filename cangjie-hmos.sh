@@ -34,7 +34,7 @@ cangjie_version(){
   echo '
 ### 问题描述
 ```bash
-git clone https://gitcode.com/Cangjie-SIG/fountain.git
+git clone https://gitcode.com/Cangjie-TPC/fountain.git
 cd fountain'
 echo "git checkout -t origin/issue/<CurrentIssueID>" \# '把<CurrentIssueID>换成当前issue的ID'
 echo 'cd fboot'

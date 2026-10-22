@@ -15,7 +15,7 @@
 
   include = ["src"]
   authors = ["吴京润"]
-  repository = "https://gitcode.com/Cangjie-SIG/fountain/tree/master/f_bloom"
+  repository = "https://gitcode.com/Cangjie-TPC/fountain/tree/master/f_bloom"
 [dependencies]
   "fountain::f_base" = {path = "../f_base"}
   "fountain::f_random" = {path = "../f_random"}

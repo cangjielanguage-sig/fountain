@@ -15,7 +15,7 @@
 
   include = ["src"]
   authors = ["吴京润"]
-  repository = "https://gitcode.com/Cangjie-SIG/fountain/tree/master/f_health"
+  repository = "https://gitcode.com/Cangjie-TPC/fountain/tree/master/f_health"
 [dependencies]
   "fountain::f_app" = {path = "../f_app"}
   "fountain::f_config" = {path = "../f_config"}

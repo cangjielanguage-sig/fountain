@@ -14,7 +14,7 @@
   category = ["Utility", "Developer Tools", "Distributed", "Infrastructure"]
   include = ["src"]
   authors = ["吴京润"]
-  repository = "https://gitcode.com/Cangjie-SIG/fountain/tree/master/fleet"
+  repository = "https://gitcode.com/Cangjie-TPC/fountain/tree/master/fleet"
 [dependencies]
   "fountain::f_app" = "1.3.3"
   "fountain::f_base" = "1.3.3"

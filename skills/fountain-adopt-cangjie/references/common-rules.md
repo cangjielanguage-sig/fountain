@@ -106,7 +106,7 @@
 `scripts/fountain_lookup.py` 按 `--root` > `$FOUNTAIN_ROOT` > 当前目录向上搜索 > 技能相对位置（技能放在 fountain 仓库内时上溯两级）> 技能目录下的克隆副本 `<skill-root>/fountain` 依次定位仓库根。**都找不到时会自动克隆（仅用于查询文档）**：
 
 ```bash
-git clone --depth 1 https://gitcode.com/Cangjie-SIG/fountain.git <skill-root>/fountain
+git clone --depth 1 https://gitcode.com/Cangjie-TPC/fountain.git <skill-root>/fountain
 ```
 
 该克隆副本只作 README / 源码的 API 参考（查询结果里会标注），**不要用它做构建 / 安装**——构建与安装用用户自己的 fountain 源码或中心仓。`--no-clone` 可禁用自动克隆与一切网络操作，`--repo-url` 可换镜像地址。

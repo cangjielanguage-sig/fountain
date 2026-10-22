@@ -19,7 +19,7 @@ cjpm build
 ```
 You may also download the source code from git
 ```bash
-git clone https://gitcode.com/Cangjie-SIG/fountain.git
+git clone https://gitcode.com/Cangjie-TPC/fountain.git
 git checkout -b release-<a.b.c> # Replace <a.b.c> with the latest version
 cd /path/of/fountain/cloned
 cd fboot

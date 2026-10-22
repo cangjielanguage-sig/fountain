@@ -5,7 +5,7 @@
 fountain-developer 联动的技能分六组，它们没装（加载失败）时用本脚本装进**当前 Agent 的
 技能目录**，装完即可按正常方式加载：
 
-    cangjie-coding      <- https://gitcode.com/Cangjie-SIG/CangjieSkills.git（.agents/skills/<名字>）
+    cangjie-coding      <- https://gitcode.com/Cangjie-TPC/CangjieSkills.git（.agents/skills/<名字>）
                            仓颉知识库 / 构建测试规范
     cangjie-doc-lookup  <- 已克隆的 fountain 项目的 skills/cangjie-doc-lookup（本地官方文档查阅）
     opsx-*（12 个）      <- 已克隆的 fountain 项目的 skills/opsx-<工作流>
@@ -285,7 +285,7 @@ def deploy_opsx_runner(fr: Path, force: bool) -> "tuple[bool, str]":
 
 # ---- 来源二：CangjieSkills 仓 ------------------------------------------
 
-CANGJIE_SKILLS_REPO = "https://gitcode.com/Cangjie-SIG/CangjieSkills.git"
+CANGJIE_SKILLS_REPO = "https://gitcode.com/Cangjie-TPC/CangjieSkills.git"
 DEFAULT_REPO_DIR = Path.home() / ".cangjie-skills" / "CangjieSkills"
 
 

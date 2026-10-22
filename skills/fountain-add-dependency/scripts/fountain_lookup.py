@@ -29,7 +29,7 @@
   （判据：存在 f_version/src/FountainVersion.cj）
 
 以上都找不到时，自动执行：
-  git clone --depth 1 https://gitcode.com/Cangjie-SIG/fountain.git <skill-root>/fountain
+  git clone --depth 1 https://gitcode.com/Cangjie-TPC/fountain.git <skill-root>/fountain
 该克隆副本**仅用于查询文档**（README / 源码 API 参考），不要用于构建或安装
 （构建/安装用用户自己的 fountain 源码，或中心仓；--no-clone 可禁用自动克隆，
 --repo-url 可换镜像地址）。
@@ -52,7 +52,7 @@ import sys
 from pathlib import Path
 
 MARKER = Path("f_version") / "src" / "FountainVersion.cj"
-DEFAULT_REPO_URL = "https://gitcode.com/Cangjie-SIG/fountain.git"
+DEFAULT_REPO_URL = "https://gitcode.com/Cangjie-TPC/fountain.git"
 CLONE_DIR_NAME = "fountain"
 SKIP_PARTS = {"target", ".build-logs", ".git", "node_modules", ".assets", ".cache"}
 TOOL_MODULES = {"fboot": "工具", "fcoder": "工具"}
