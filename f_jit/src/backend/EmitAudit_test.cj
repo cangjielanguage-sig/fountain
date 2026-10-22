@@ -63,6 +63,27 @@ public class EmitAudit_test {
         @Assert(BackendX86_64.auditMemBasesSnapshot().size, 0)
     }
 
+    /**
+     * aarch64：**绝对地址载入**不参与审计，普通载入仍被拦截。
+     *
+     * 常量镜像与函数表用 `movImm64` 把宿主地址物化到 x9，再 `ldr [x9]`——这是可信输入；
+     * 若把这类载入也计入审计，`constantHandleMirror` / `factorialViaCallFunc` 会被
+     * `A64Compiler` 判为不合规而整单元退回解释器（实测两条用例报 `compileUnitWith 返回 None`）。
+     */
+    @TestCase
+    public func a64AbsoluteLoadIsAuditExempt(): Unit {
+        let e = A64Emitter()
+        A64Emitter.resetAuditMemBases()
+        e.ldrAbs(9, 9, 0)
+        e.ldrAbs(10, 9, 8)
+        @Assert(A64Emitter.auditMemBasesSnapshot().size, 0)
+        @Assert(A64Emitter.auditAllows(A64Emitter.auditMemBasesSnapshot()), true)
+        // 同一基址走普通载入 ⇒ 仍须被采集并拒绝
+        e.ldrOff(9, 9, 0)
+        @Assert(A64Emitter.auditMemBasesSnapshot().size, 1)
+        @Assert(A64Emitter.auditAllows(A64Emitter.auditMemBasesSnapshot()), false)
+    }
+
     @TestCase
     public func a64NoteAndReset(): Unit {
         A64Emitter.resetAuditMemBases()

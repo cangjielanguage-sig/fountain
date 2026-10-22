@@ -195,7 +195,7 @@ internal class A64Lower {
                 } else {
                     let idx = A64Lower.u16(ops, 0)
                     this.e.movImm64(9, this.constBase + 8 * idx)
-                    this.e.ldrOff(9, 9, 0)
+                    this.e.ldrAbs(9, 9, 0)
                     this.pushX(9)
                 }
             case 0x17 =>
@@ -612,7 +612,7 @@ internal class A64Lower {
             return
         }
         this.e.movImm64(9, this.fnTableBase + 8 * fid)
-        this.e.ldrOff(10, 9, 0)
+        this.e.ldrAbs(10, 9, 0)
         this.e.movReg(0, 19)
         if (argc == 0) {
             this.e.movReg(1, 31)

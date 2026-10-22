@@ -455,6 +455,20 @@ internal class A64Emitter {
 
     func ldrOff(rt: Int64, rn: Int64, off: Int64): Unit {
         A64Emitter.noteMemBase(rn)
+        this.emitLdr(rt, rn, off)
+    }
+
+    /**
+     * 以**宿主绝对地址**为基址的读：基址寄存器由 `movImm64` 物化（常量镜像 / 函数表），
+     * 不是 cell，因此**不参与** G5 审计。
+     *
+     * 审计要防的是「把 helper 返回的 cell 当指针解引用」；这类地址来自桥，属于可信输入。
+     */
+    func ldrAbs(rt: Int64, rn: Int64, off: Int64): Unit {
+        this.emitLdr(rt, rn, off)
+    }
+
+    private func emitLdr(rt: Int64, rn: Int64, off: Int64): Unit {
         if (off >= 0 && off % 8 == 0 && off <= 32760) {
             this.word(0xF9400000u32 | (UInt32(off / 8) << 10) | (UInt32(rn) << 5) | UInt32(rt))
         } else if (off >= -256 && off <= 255) {
