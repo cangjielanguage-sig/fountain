@@ -134,6 +134,31 @@ class MainTest {
         }
     }
 
+    /**
+     * manager 分支不进入 server 装配，因此不安装任何退出钩子（规格「服务端测试资产」）。
+     *
+     * 用可注入工厂计数：manager 路径下 serverFactory 必须为 0 次（钩子安装在 serverFactory 内部），
+     * managerFactory 恰好 1 次。
+     */
+    @TestCase
+    public func managerPathInstallsNoExitHooks(): Unit {
+        let serverCalls = AtomicInt64(0)
+        let managerCalls = AtomicInt64(0)
+        let code = dispatchWith(
+            {=>
+                serverCalls.fetchAdd(1)
+                0
+            },
+            {_ =>
+                managerCalls.fetchAdd(1)
+                0
+            },
+            ["manager", "listTopics"])
+        @Assert(code == 0)
+        @Assert(serverCalls.load() == 0)
+        @Assert(managerCalls.load() == 1)
+    }
+
     /** 启动顺序：装配 → 安装退出钩子 → 阻塞运行；装配失败时后两步都不执行（A68）。 */
     @TestCase
     public func serverInstallsExitHooksBeforeRun(): Unit {
