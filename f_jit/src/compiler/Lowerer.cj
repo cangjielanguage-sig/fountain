@@ -1235,7 +1235,13 @@ internal class Lowerer {
                 ctx.builder.emitU16(Op.PUSH_KH, UInt16(hid))
                 LocalType.DECIMAL
             case TokenKind.F64Lit =>
-                let v = Float64.parse(Lowerer.stripF64Suffix(t.text))
+                // 前导点形态（仓颉 float.md:19 `.123e2f64`）先补 `0` 再解析：`Float64.parse('.1')`
+                // 不接受省略整数部的写法
+                var txt = Lowerer.stripF64Suffix(t.text)
+                if (txt.startsWith('.')) {
+                    txt = '0' + txt
+                }
+                let v = Float64.parse(txt)
                 ctx.builder.emitI64(Op.PUSH_F64, Int64(v.toBits()))
                 LocalType.F64
             case TokenKind.StrLit =>
@@ -1384,6 +1390,16 @@ internal class Lowerer {
                     this.emitArith(t, Op.IMUL, Op.FMUL, Op.DEC_MUL)
                     t
                 }
+            case TokenKind.StarStar =>
+                // 仓颉侧 `**` 是 `Int64 ** UInt64`（指数无符号）；方言无无符号 ⇒ 要求指数非负整数，
+                // 负指数由 H84 在运行期以 14 拒绝，溢出以 3 拒绝（§2 错误码）。
+                if (lt != LocalType.I64 || rt != LocalType.I64) {
+                    diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                        '** 仅支持 (Int64, Int64)（指数须为非负整数）')
+                }
+                ctx.builder.setSite(pos) // 负指数 / 溢出的归因站点
+                ctx.builder.callHelper(HelperCodec.IPOW, 2u8)
+                LocalType.I64
             case TokenKind.Slash =>
                 if (t != LocalType.STRING) {
                     this.coerceOperands(lt, rt, t, pos)

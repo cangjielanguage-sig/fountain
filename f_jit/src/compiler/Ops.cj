@@ -251,6 +251,13 @@ internal class HelperCodec {
     public static const JSON_SET: UInt16 = 82u16
     public static const JSON_NEW: UInt16 = 83u16
 
+    /**
+     * H84 `ipow`：`(Int64, Int64) → Int64`（`**` 的运行时；指数 <0 → 14，溢出 → 3）。
+     *
+     * 走 `CALL_HELPER` 而非新 opcode：三引擎共用同一份实现 ⇒ I7 天然成立，两后端零改动。
+     */
+    public static const IPOW: UInt16 = 84u16
+
     /** 变更型 helper 的 hid 区间（H43–H48，§9.15 / §7 校验 11）。 */
     public static const MUTATION_MIN: UInt16 = 43u16
     public static const MUTATION_MAX: UInt16 = 48u16

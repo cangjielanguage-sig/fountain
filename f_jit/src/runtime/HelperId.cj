@@ -117,6 +117,9 @@ public class HelperId {
     public static const DATETIME_OF: UInt16 = 75u16
     public static const DURATION_PARSE: UInt16 = 76u16
 
+    /** H84 `ipow`：`(Int64, Int64) → Int64`（`**`；指数 <0 → 14，溢出 → 3）。 */
+    public static const IPOW: UInt16 = 84u16
+
     /** M1 登记区间下界 / 上界（`CALL_HELPER` 的 hid 合法值域，§5）。 */
     public static const MIN_FIXED: UInt16 = 1u16
     public static const MAX_FIXED: UInt16 = 72u16

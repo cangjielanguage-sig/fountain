@@ -123,8 +123,7 @@ public class AnyBridgeCall_test {
         let f = c.compile('{ n: Int64 => var i = 0\n while (i < n) { i = i + 1 }\n i }')
         // 无期限：正常完成
         @Assert(f.call<Int64>([Int64(10)]), 10)
-        var opts = CallContext()
-        opts.deadline = Some(DateTime.UnixEpoch)
+        let opts = CallContext(deadline: Some(DateTime.UnixEpoch))
         var interrupted = false
         try {
             let _ = f.call<Int64>([Int64(100000000)], opts)
@@ -140,8 +139,7 @@ public class AnyBridgeCall_test {
         let c = AnyBridgeCall_test.compiler()
         CompileCache.reset()
         let f = c.compile('{ n: Int64 => var i = 0\n while (i < n) { i = i + 1 }\n i }')
-        var expired = CallContext()
-        expired.deadline = Some(DateTime.UnixEpoch)
+        let expired = CallContext(deadline: Some(DateTime.UnixEpoch))
         // 外层无期限：内层中断后必须回到 −1
         RuntimeEnv.clearDeadline()
         try {

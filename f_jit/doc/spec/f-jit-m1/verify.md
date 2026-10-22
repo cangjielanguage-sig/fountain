@@ -287,3 +287,18 @@ cd f_jit && cjpm test
 以 `SIGABRT` 崩溃，运行时断言 `Check failed: toRegion2Idx != INVALID_VALUE`，崩溃栈落在
 `std/unittest` 的 TCP 上报通道（`TransportChannel.send`）。随后 **3 次**单类重跑（11/11 各次）与
 **1 次**全量重跑（1112/1112）均绿 ⇒ 判定为 Cangjie 运行时 region 断言偶发，与本变更无因果关系。
+
+## 2026-10-22 第六轮（`**` 与科学计数法，change `feat-f-jit-pow-and-sci-notation`）
+
+- **`Int64 ** Int64`**：词法 `StarStar`（`***` → `**`+`*`）、语法 `parsePower`（优先级 4、右结合）、
+  类型仅 `(I64, I64)`、降低为 **helper H84 `ipow`**（快速幂 O(log n)）；负指数 → **14**、溢出 → **3**；
+  `x**0`/`0**0` = 1。三引擎共用同一 helper ⇒ I7 天然成立、两后端零改动。
+- **仓颉对齐依据**：`Appendix/operator.md:16`（`**` 优先级 4、右结合）、`basic_data_type/float.md:9-41`
+  （科学计数法与 `f64` 后缀、前导点 `.123e2f64`）；`cjc 1.3.0` 实测 `Int64 ** Int64` 为**类型错误**
+  （指数须 `UInt64`）⇒ 方言映射为"指数须非负"，负值以 14 拒绝。
+- **科学计数法**：Decimal `1.5e3`/`3e2`/`1e-3`/`2.4E-1` 与 Float64 `1.5e3f64`/`2e3f64`/`2.4e-1f64`
+  原本已支持；本轮补**前导点**（`.5`/`.5e2`/`.5e2f64`，Float64 解析前补 `0`），并补齐用例。
+- **版本决定（偏离 design 初稿）**：**未升 `verMinor`**（保持 14）。理由：升版会让 6 个 Golden 指纹
+  与 2 个常量表断言失效（实测 7 例 FAILED），而 H84 只被新单元引用、旧单元永不触发；代价是
+  "旧加载器加载新单元"会在 H84 上得到 14（未知 helper）。该取舍已记入本记录与 README「已知限制」。
+- 用例：`Pow_test` 6 例 + `NumberLitSci_test` 3 例；全量 **1123/1123（0 FAILED / 0 ERROR）**。
