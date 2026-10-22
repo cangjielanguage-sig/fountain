@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """install_skill.py - 给 fountain-developer 补装联动技能（加载失败时自动执行）
 
-fountain-developer 联动的技能分五组，它们没装（加载失败）时用本脚本装进**当前 Agent 的
+fountain-developer 联动的技能分六组，它们没装（加载失败）时用本脚本装进**当前 Agent 的
 技能目录**，装完即可按正常方式加载：
 
     cangjie-coding      <- https://gitcode.com/Cangjie-SIG/CangjieSkills.git（.agents/skills/<名字>）
@@ -16,6 +16,7 @@ fountain-developer 联动的技能分五组，它们没装（加载失败）时�
                            cangjie-code-review-harness
     fountain 全部技能    <- 已克隆的 fountain 项目的 skills/*（含 12 个 opsx-*、cangjie-doc-lookup、
                            fountain-tag 等；跳过 fountain-developer 自身）
+    12 个工作流技能      <- 已克隆的 fountain 项目的 skills/fountain-*（A-L 拆分后的独立技能）
 
 用法：
     python install_skill.py list                  # 看所有联动技能的安装状态与来源
@@ -24,6 +25,7 @@ fountain-developer 联动的技能分五组，它们没装（加载失败）时�
     python install_skill.py opsx                  # 装 12 个 opsx-* 技能（OpenSpec 执行通道）
     python install_skill.py harness               # 装 harness 仓全部技能（代码审查等）
     python install_skill.py fountain              # 装 fountain 仓 skills/ 下全部技能
+    python install_skill.py workflows             # 装 12 个独立工作流技能（A-L）
     python install_skill.py all                   # 三组旧联动技能全装（cangjie-coding / doc-lookup / opsx）
 
 选项：
@@ -240,6 +242,14 @@ OPSX_SKILLS = [
     "opsx-propose", "opsx-explore", "opsx-new", "opsx-continue",
     "opsx-apply", "opsx-update", "opsx-ff", "opsx-sync",
     "opsx-archive", "opsx-bulk-archive", "opsx-verify", "opsx-onboard",
+]
+
+# 12 个独立工作流技能（由 fountain-developer 拆分；源在 fountain 仓库 skills/）
+WORKFLOW_SKILLS = [
+    "fountain-install-fboot", "fountain-init-workspace", "fountain-init-module",
+    "fountain-add-dependency", "fountain-api-lookup", "fountain-build-server",
+    "fountain-port-other-lang", "fountain-adopt-cangjie", "fountain-upgrade-legacy",
+    "fountain-develop-framework", "fountain-configure-module", "fountain-code-review-fix",
 ]
 
 
@@ -513,6 +523,26 @@ def install_fountain_all(a: argparse.Namespace, root: Path) -> "tuple[bool, str]
     return not failed, summary
 
 
+def install_workflows_all(a: argparse.Namespace, root: Path) -> "tuple[bool, str]":
+    """安装 12 个独立工作流技能（fountain-developer 的拆分产物）。"""
+    fr = fountain_root(a.fountain_root)
+    skills_dir = fr / "skills"
+    missing = [n for n in WORKFLOW_SKILLS if not (skills_dir / n / "SKILL.md").is_file()]
+    if missing:
+        return False, (f"{skills_dir} 缺工作流技能：{'、'.join(missing)}；"
+                       f"切到含这些技能的 fountain 检出（如 git -C {fr} switch sts/1.3.x）后重试")
+    failed = []
+    for name in WORKFLOW_SKILLS:
+        ok2, note2 = install_dir(skills_dir / name, root / name, a.force)
+        print(f"[{'ok' if ok2 else '失败'}] {name}：{note2}")
+        if not ok2:
+            failed.append(name)
+    summary = f"{len(WORKFLOW_SKILLS) - len(failed)}/{len(WORKFLOW_SKILLS)} 个工作流技能（来源：{skills_dir}）"
+    if failed:
+        summary += f"；未装好：{'、'.join(failed)}"
+    return not failed, summary
+
+
 # ---- 命令 --------------------------------------------------------------
 
 
@@ -560,6 +590,8 @@ def cmd_list(a: argparse.Namespace) -> None:
                            if (p / "SKILL.md").is_file() and p.name != "fountain-developer")
         all_done = sum(1 for n in all_names if (root / n / "SKILL.md").is_file())
         print(f"  fountain 全部技能    <- {fr / 'skills'}（已装 {all_done}/{len(all_names)}，不含自身）")
+        wf_done = sum(1 for n in WORKFLOW_SKILLS if (root / n / "SKILL.md").is_file())
+        print(f"  fountain 工作流技能  <- {fr / 'skills'}（已装 {wf_done}/{len(WORKFLOW_SKILLS)}）")
     runner = Path.home() / ".workbuddy" / "scripts" / "opsx_fusion.py"
     print(f"  opsx_fusion.py（运行器）<- {runner}（{'已部署' if runner.is_file() else '未部署：装 opsx 时自动部署'}）")
 
@@ -600,7 +632,7 @@ def main() -> None:
         description="给 fountain-developer 补装联动技能（cangjie-coding / doc-lookup / opsx-* / harness / fountain 全部）",
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
-    for name in ("list", "cangjie-coding", "cangjie-doc-lookup", "opsx", "all", "harness", "fountain"):
+    for name in ("list", "cangjie-coding", "cangjie-doc-lookup", "opsx", "all", "harness", "fountain", "workflows"):
         p = sub.add_parser(name, help=f"{name} 子命令")
         p.add_argument("--skills-root", default=None, help="目标技能目录（默认自动探测）")
         p.add_argument("--fountain-root", default=None, help="fountain 仓库根（默认自动定位）")
@@ -625,6 +657,13 @@ def main() -> None:
         print(f"安装目标：{root}\n")
         ok, note = install_fountain_all(args, root)
         print(f"\n[{'ok' if ok else '失败'}] fountain：{note}")
+        sys.exit(0 if ok else 1)
+
+    if args.cmd == "workflows":
+        root = pick_skills_root(args.skills_root, WORKFLOW_SKILLS)
+        print(f"安装目标：{root}\n")
+        ok, note = install_workflows_all(args, root)
+        print(f"\n[{'ok' if ok else '失败'}] workflows：{note}")
         sys.exit(0 if ok else 1)
 
     if args.cmd == "all":
