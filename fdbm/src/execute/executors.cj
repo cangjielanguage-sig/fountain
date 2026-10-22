@@ -32,6 +32,18 @@ import fountain::f_dbm.{IdGenerator, IdGeneratorException, PartitionAlgorithm}
 
 private let execLogger = LoggerFactory.getLogger('fountain::fdbm.execute')
 
+/** 已有执行异常时仍收尾，但不能用收尾异常覆盖首错；单独的收尾失败继续抛出。 */
+func closeAfterExecution(resource: Resource, failed: Bool): Unit {
+    try {
+        resource.close()
+    } catch (e: Exception) {
+        if (!failed) {
+            throw e
+        }
+        execLogger.warn('cleanup failed after execution failure: ${e.message}')
+    }
+}
+
 /** 执行结果（设计 §9.2）：更新结果或游标二选一。 */
 protected class ExecutionOutcome {
     private let update_: ?UpdateResultPayload
@@ -161,8 +173,8 @@ func executeUpdate(connection: Connection, sql: String): UpdateResult {
     } catch (e: Exception) {
         try {
             statement.close()
-        } catch (_: Exception) {
-            ()
+        } catch (cleanup: Exception) {
+            execLogger.warn('resource cleanup failed: ${cleanup.message}')
         }
         throw e
     }
@@ -208,6 +220,7 @@ func broadcastWrite(resources: NodeAccessor, databases: Array<String>,
     var rowCount: Int64 = 0
     var lastInsertId: Int64 = 0
     var firstError = ''
+    var firstCause: ?Exception = None
     for (database in targets) {
         var connections = Array<Connection>()
         try {
@@ -221,15 +234,16 @@ func broadcastWrite(resources: NodeAccessor, databases: Array<String>,
         } catch (e: Exception) {
             failed.add(database)
             execLogger.warn('global table write failed on ${database}: ${detailOf(e)}')
-            if (firstError.isEmpty()) {
+            if (firstCause.isNone()) {
                 firstError = detailOf(e)
+                firstCause = Some(e)
             }
         } finally {
             for (connection in connections) {
                 try {
                     connection.close()
-                } catch (_: Exception) {
-                    ()
+                } catch (cleanup: Exception) {
+                    execLogger.warn('resource cleanup failed: ${cleanup.message}')
                 }
             }
         }
@@ -237,7 +251,7 @@ func broadcastWrite(resources: NodeAccessor, databases: Array<String>,
     if (!failed.isEmpty()) {
         throw FdbmException(DbdErrorCode.DB_ERROR,
             'global table write partially failed; success: [${joinNames(succeeded)}]; ' +
-            'failed: [${joinNames(failed)}]: ${firstError}')
+            'failed: [${joinNames(failed)}]: ${firstError}', firstCause.getOrThrow())
     }
     UpdateResultPayload(rowCount, lastInsertId)
 }
@@ -363,11 +377,15 @@ protected class SelectExecutor {
         var total: Int64 = 0
         for (database in databases) {
             let (connection, owns) = borrow(session, resources, database)
+            var failed = false
             try {
                 total += queryCount(connection, sql)
+            } catch (e: Exception) {
+                failed = true
+                throw e
             } finally {
                 if (owns) {
-                    connection.close()
+                    closeAfterExecution(connection, failed)
                 }
             }
         }
@@ -394,15 +412,15 @@ protected class SelectExecutor {
                 case Some(query) =>
                     try {
                         query.close()
-                    } catch (_: Exception) {
-                        ()
+                    } catch (cleanup: Exception) {
+                        execLogger.warn('resource cleanup failed: ${cleanup.message}')
                     }
                 case None => ()
             }
             try {
                 prepared.close()
-            } catch (_: Exception) {
-                ()
+            } catch (cleanup: Exception) {
+                execLogger.warn('resource cleanup failed: ${cleanup.message}')
             }
         }
     }
@@ -452,15 +470,15 @@ protected class SelectExecutor {
                 let result = statement.query()
                 CursorSegment(statement, result, connection, ownsConnection: owns)
             } catch (e: Exception) {
-                statement.close()
+                closeAfterExecution(statement, true)
                 throw e
             }
         } catch (e: Exception) {
             if (owns) {
                 try {
                     connection.close()
-                } catch (_: Exception) {
-                    ()
+                } catch (cleanup: Exception) {
+                    execLogger.warn('resource cleanup failed: ${cleanup.message}')
                 }
             }
             throw e
@@ -502,13 +520,17 @@ protected class DmlExecutor {
         var lastInsertId: Int64 = 0
         for (database in plan.databases) {
             let (connection, owns) = borrow(session, resources, database, write: true)
+            var failed = false
             try {
                 let result = executeUpdate(connection, sql)
                 rowCount += result.rowCount
                 lastInsertId = result.lastInsertId
+            } catch (e: Exception) {
+                failed = true
+                throw e
             } finally {
                 if (owns) {
-                    connection.close()
+                    closeAfterExecution(connection, failed)
                 }
             }
         }
@@ -568,13 +590,17 @@ protected class DeleteExecutor {
         var lastInsertId: Int64 = 0
         for (database in plan.databases) {
             let (connection, owns) = borrow(session, resources, database, write: true)
+            var failed = false
             try {
                 let result = executeUpdate(connection, sql)
                 rowCount += result.rowCount
                 lastInsertId = result.lastInsertId
+            } catch (e: Exception) {
+                failed = true
+                throw e
             } finally {
                 if (owns) {
-                    connection.close()
+                    closeAfterExecution(connection, failed)
                 }
             }
         }
@@ -599,6 +625,7 @@ protected class DeleteExecutor {
         for (database in databases) {
             let (connection, owns) = borrow(session, resources, database)
             var result: ?QueryResult = None
+            var failed = false
             try {
                 let prepared = connection.prepareStatement(sql)
                 try {
@@ -618,22 +645,25 @@ protected class DeleteExecutor {
                 } finally {
                     try {
                         prepared.close()
-                    } catch (_: Exception) {
-                        ()
+                    } catch (cleanup: Exception) {
+                        execLogger.warn('resource cleanup failed: ${cleanup.message}')
                     }
                 }
+            } catch (e: Exception) {
+                failed = true
+                throw e
             } finally {
                 match (result) {
                     case Some(query) =>
                         try {
                             query.close()
-                        } catch (_: Exception) {
-                            ()
+                        } catch (cleanup: Exception) {
+                            execLogger.warn('resource cleanup failed: ${cleanup.message}')
                         }
                     case None => ()
                 }
                 if (owns) {
-                    connection.close()
+                    closeAfterExecution(connection, failed)
                 }
             }
         }
@@ -741,23 +771,23 @@ protected class InsertExecutor {
                 if (began) {
                     try {
                         executeUpdate(connection, 'rollback')
-                    } catch (_: Exception) {
-                        ()
+                    } catch (cleanup: Exception) {
+                        execLogger.warn('insert rollback failed after execution failure: ${cleanup.message}')
                     }
                 }
                 try {
                     connection.close()
-                } catch (_: Exception) {
-                    ()
+                } catch (cleanup: Exception) {
+                    execLogger.warn('insert connection cleanup failed after execution failure: ${cleanup.message}')
                 }
                 throw FdbmException(DbdErrorCode.DB_ERROR,
                     'insert group on \'${database}\' failed; committed: [${joinNames(committed)}]: ' +
-                    '${detailOf(e)}')
+                    '${detailOf(e)}', e)
             }
             try {
                 connection.close()
-            } catch (_: Exception) {
-                ()
+            } catch (cleanup: Exception) {
+                execLogger.warn('resource cleanup failed: ${cleanup.message}')
             }
         }
         UpdateResultPayload(rowCount, lastInsertId)
@@ -985,13 +1015,17 @@ protected class InsertExecutor {
         var lastInsertId: Int64 = 0
         for (database in plan.databases) {
             let (connection, owns) = borrow(session, resources, database, write: true)
+            var failed = false
             try {
                 let result = executeUpdate(connection, sql)
                 rowCount += result.rowCount
                 lastInsertId = result.lastInsertId
+            } catch (e: Exception) {
+                failed = true
+                throw e
             } finally {
                 if (owns) {
-                    connection.close()
+                    closeAfterExecution(connection, failed)
                 }
             }
         }
@@ -1003,6 +1037,7 @@ protected class InsertExecutor {
         database: String): UpdateResultPayload {
         let (connection, owns) = borrow(session, resources, database, write: true)
         var result: ?QueryResult = None
+        var failed = false
         try {
             let prepared = connection.prepareStatement(sql)
             try {
@@ -1025,22 +1060,25 @@ protected class InsertExecutor {
             } finally {
                 try {
                     prepared.close()
-                } catch (_: Exception) {
-                    ()
+                } catch (cleanup: Exception) {
+                    execLogger.warn('resource cleanup failed: ${cleanup.message}')
                 }
             }
+        } catch (e: Exception) {
+            failed = true
+            throw e
         } finally {
             match (result) {
                 case Some(query) =>
                     try {
                         query.close()
-                    } catch (_: Exception) {
-                        ()
+                    } catch (cleanup: Exception) {
+                        execLogger.warn('resource cleanup failed: ${cleanup.message}')
                     }
                 case None => ()
             }
             if (owns) {
-                connection.close()
+                closeAfterExecution(connection, failed)
             }
         }
     }
@@ -1110,12 +1148,16 @@ protected class ShowExecutor {
                         case Some(statement_) =>
                             try {
                                 statement_.close()
-                            } catch (_: Exception) {}
+                            } catch (cleanup: Exception) {
+                                execLogger.warn('resource cleanup failed: ${cleanup.message}')
+                            }
                         case None => ()
                     }
                     try {
                         connection.close()
-                    } catch (_: Exception) {}
+                    } catch (cleanup: Exception) {
+                        execLogger.warn('resource cleanup failed: ${cleanup.message}')
+                    }
                     throw e
                 }
         }
@@ -1237,6 +1279,7 @@ protected class DdlExecutor {
         let failed = ArrayList<String>()
         var rowCount: Int64 = 0
         var firstError = ''
+        var firstCause: ?Exception = None
         for (database in databases) {
             var connection: ?Connection = None
             var owns = false
@@ -1249,13 +1292,14 @@ protected class DdlExecutor {
             } catch (e: Exception) {
                 failed.add(database)
                 execLogger.warn('ddl failed on ${database}: ${detailOf(e)}')
-                if (firstError.isEmpty()) {
+                if (firstCause.isNone()) {
                     firstError = detailOf(e)
+                    firstCause = Some(e)
                 }
             } finally {
                 if (owns) {
                     match (connection) {
-                        case Some(found) => found.close()
+                        case Some(found) => closeAfterExecution(found, firstCause.isSome())
                         case None => ()
                     }
                 }
@@ -1264,7 +1308,7 @@ protected class DdlExecutor {
         if (!failed.isEmpty()) {
             throw FdbmException(DbdErrorCode.DB_ERROR,
                 'ddl partially failed; success: [${joinNames(succeeded)}]; ' +
-                'failed: [${joinNames(failed)}]: ${firstError}')
+                'failed: [${joinNames(failed)}]: ${firstError}', firstCause.getOrThrow())
         }
         ExecutionOutcome(update: Some(UpdateResultPayload(rowCount, 0)))
     }
@@ -1320,8 +1364,8 @@ protected class SessionCtlExecutor {
                 } catch (e: Exception) {
                     try {
                         connection.close()
-                    } catch (_: Exception) {
-                        ()
+                    } catch (cleanup: Exception) {
+                        execLogger.warn('resource cleanup failed: ${cleanup.message}')
                     }
                     throw e
                 }

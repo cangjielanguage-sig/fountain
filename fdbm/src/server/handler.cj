@@ -25,6 +25,31 @@ import fountain::f_dbm.IdGeneratorException
 import fountain::fdbm.exception.FdbmException
 import fountain::fdbm.execute.{DbdSession, ExecutionOutcome, QueryCursor}
 
+/** 保留最外层分类与消息；SQLSTATE 只取异常链中的真实 SQL 异常，不解析消息文本。 */
+protected func databaseErrorPayload(error: Exception): DbdErrorPayload {
+    let code = if (let e: FdbmException <- error) {
+        e.code
+    } else if (error is IdGeneratorException) {
+        DbdErrorCode.ID_GENERATOR
+    } else if (error is SqlException) {
+        DbdErrorCode.DB_ERROR
+    } else {
+        DbdErrorCode.INTERNAL
+    }
+    var current: ?Exception = Some(error)
+    var sqlState = ''
+    while (let Some(cause) <- current) {
+        if (let sql: SqlException <- cause) {
+            if (!sql.sqlState.isEmpty()) {
+                sqlState = sql.sqlState
+                break
+            }
+        }
+        current = cause.causedBy
+    }
+    DbdErrorPayload(code, error.message, sqlState: sqlState)
+}
+
 /**
  * 协议契约层（设计 §10.2）：判别请求种类 → 执行 → 组织响应；**任何分支都回包**。
  *
@@ -39,16 +64,11 @@ protected struct FdbmHandler {
         InFlight.enter()
         try {
             return dispatch(context, buffer, message)
-        } catch (e: FdbmException) {
-            errorOf(message.id, e.code, e.message)
-        } catch (e: IdGeneratorException) {
-            // 扩展直接抛出时也要映射 ID_GENERATOR，不能落到 INTERNAL（D11）
-            errorOf(message.id, DbdErrorCode.ID_GENERATOR, e.message)
-        } catch (e: SqlException) {
-            errorOf(message.id, DbdErrorCode.DB_ERROR, e.message, sqlState: e.sqlState)
         } catch (e: Exception) {
-            context.logger.error('unhandled failure on request ${message.id}: ${e.message}', e)
-            errorOf(message.id, DbdErrorCode.INTERNAL, e.message)
+            if (!(e is FdbmException) && !(e is IdGeneratorException) && !(e is SqlException)) {
+                context.logger.error('unhandled failure on request ${message.id}: ${e.message}', e)
+            }
+            Message.error(message.id, data: databaseErrorPayload(e))
         } finally {
             InFlight.leave()
         }

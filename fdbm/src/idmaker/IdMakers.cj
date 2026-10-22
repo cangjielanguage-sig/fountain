@@ -22,6 +22,7 @@ import std.sync.Mutex
 import fountain::f_config.Config
 import fountain::f_dbm.IdGenerator
 import fountain::f_dbd.common.DbdErrorCode
+import fountain::f_log.LoggerFactory
 import fountain::f_util.{IdMaker, TimeBasedUUIDBuilder, UUID}
 import fountain::fdbm.config.IdMakerConfig
 import fountain::fdbm.exception.FdbmException
@@ -103,6 +104,7 @@ protected class SnowflakeIdGenerator <: IdGenerator {
  * 首次返回 `current_value + increment`（需求"从 1 开始"要求初始化行时 `current_value=0`）。
  */
 protected class SequenceIdGenerator <: IdGenerator {
+    private static let logger = LoggerFactory.getLogger('fountain::fdbm.idmaker.SequenceIdGenerator')
     private let resources: NodeAccessor
     private let logical: String
     private let table: String
@@ -143,8 +145,8 @@ protected class SequenceIdGenerator <: IdGenerator {
             } catch (e: Exception) {
                 try {
                     transaction.rollback()
-                } catch (_: Exception) {
-                    ()
+                } catch (cleanup: Exception) {
+                    logger.warn('sequence rollback failed after execution failure: ${cleanup.message}')
                 }
                 throw e
             }
@@ -159,41 +161,65 @@ protected class SequenceIdGenerator <: IdGenerator {
         } finally {
             try {
                 connection.close()
-            } catch (_: Exception) {
-                ()
+            } catch (cleanup: Exception) {
+                logger.warn('sequence connection cleanup failed: ${cleanup.message}')
             }
+        }
+    }
+
+    /** 执行失败时保留首错，收尾失败单列日志；只有收尾失败时仍向调用方报告。 */
+    private static func closeResource(resource: Resource, failed: Bool): Unit {
+        try {
+            resource.close()
+        } catch (e: Exception) {
+            if (!failed) {
+                throw e
+            }
+            logger.warn('sequence cleanup failed after execution failure: ${e.message}')
         }
     }
 
     private static func readSequence(connection: Connection, key: String): (Int64, Int64) {
         let statement = connection.prepareStatement(
             'select current_value, increment from fountain_sequence where table_name = ? for update')
+        var statementFailed = false
         try {
             statement.set<String>(0, key)
             let result = statement.query()
+            var resultFailed = false
             try {
                 if (!result.next()) {
                     throw FdbmException(DbdErrorCode.ID_GENERATOR,
                         'sequence row for \'${key}\' does not exist in fountain_sequence')
                 }
                 (result.get<Int64>(0), result.get<Int64>(1))
+            } catch (e: Exception) {
+                resultFailed = true
+                throw e
             } finally {
-                result.close()
+                closeResource(result, resultFailed)
             }
+        } catch (e: Exception) {
+            statementFailed = true
+            throw e
         } finally {
-            statement.close()
+            closeResource(statement, statementFailed)
         }
     }
 
     private static func updateSequence(connection: Connection, key: String, increment: Int64): Unit {
         let statement = connection.prepareStatement(
             'update fountain_sequence set current_value = current_value + ? where table_name = ?')
+        var failed = false
         try {
             statement.set<Int64>(0, increment)
             statement.set<String>(1, key)
             statement.update()
+        } catch (e: Exception) {
+            failed = true
+            throw e
         } finally {
-            statement.close()
+            closeResource(statement, failed)
         }
     }
 }
