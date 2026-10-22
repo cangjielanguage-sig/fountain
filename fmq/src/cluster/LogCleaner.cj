@@ -132,11 +132,12 @@ protected class LogCleaner {
         removed
     }
 
-    protected func start(now!: () -> DateTime = {=> DateTime.now()}): Unit {
-        // 定时回调必须自吞异常，否则一次失败会让后续所有轮次停摆（A41）
+    protected func start(): Unit {
+        // 定时回调必须自吞异常，否则一次失败会让后续所有轮次停摆（A41）。
+        // 时钟不注入：需要固定时间的用例直接调 cleanOnce(now)，不走定时器。
         timer = Some(Timer.repeat(interval, interval, {=>
             try {
-                cleanOnce(now())
+                cleanOnce(DateTime.now())
             } catch (e: Exception) {
                 log.error("cleanup round failed: ${e.message}")
             }

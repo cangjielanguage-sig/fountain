@@ -410,9 +410,6 @@ protected class MetaSyncer <: Resource {
                 case MetaApplyResult.Tombstoned =>
                     log.warn("skip group '${meta.subscribeGroup}' of '${meta.topic}' at revision " +
                         "${meta.revision} from peer snapshot: blocked by tombstone")
-                case MetaApplyResult.Conflict =>
-                    log.warn("snapshot conflict for group '${meta.subscribeGroup}' of '${meta.topic}' " +
-                        "at revision ${meta.revision}: local is kept")
                 case _ => ()
             }
         }
