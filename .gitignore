@@ -62,3 +62,7 @@ __pycache__/
 openspec/
 .workbuddy-memory.tmp
 .workbuddy/
+
+# fmq 启停脚本的运行产物（fmq/fmq.sh start 生成）
+fmq/fmq.pid
+fmq/fmq.log
