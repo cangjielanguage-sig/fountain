@@ -41,6 +41,40 @@ class SegmentedLogTest {
         }
     }
 
+    /** 单条数据超过段上限必须拒绝：不能越过 mmap 长度写入（R3-C2）。 */
+    @TestCase
+    public func oversizedAppendIsRejected(): Unit {
+        cleanDir()
+        atExit { cleanDir() }
+        let config = LogConfig(testDir(), "oversized", 64, 1, fileExt: ".log")
+        let log = SegmentedLog(config)
+        try {
+            var thrown = false
+            try {
+                log.append(Array<Byte>(65, repeat: 0x41u8))
+            } catch (_: LogRecordTooLargeException) {
+                thrown = true
+            }
+            @Assert(thrown)
+            // 恰好填满一段：允许，且独占该段
+            let full = Array<Byte>(64, repeat: 0x42u8)
+            let first = log.append(full)
+            @Assert(first.seq == 1 && first.offset == 0)
+            // 轮转后再追加超限记录：仍必须被挡住（rotate 不改变上限）
+            var thrownAfterRotate = false
+            try {
+                log.append(Array<Byte>(65, repeat: 0x43u8))
+            } catch (_: LogRecordTooLargeException) {
+                thrownAfterRotate = true
+            }
+            @Assert(thrownAfterRotate)
+            // 轮转后正常写入落在新段
+            @Assert(log.append([0x44u8]).seq == 2)
+        } finally {
+            log.close()
+        }
+    }
+
     @TestCase
     public func basicAppendAndRotate(): Unit {
         cleanDir()

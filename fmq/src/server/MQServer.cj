@@ -54,7 +54,7 @@ public class MQServer {
     private let backup: BackupReplicator
     private let cleaner: LogCleaner
     private let executor: MQCommandExecutor
-    private let server: Server<DataAny>
+    private var server: ?Server<DataAny> = None
     private let started = AtomicBool(false)
     private let closed = AtomicBool(false)
     private var cleanupTimer: ?Timer = None
@@ -62,6 +62,10 @@ public class MQServer {
     private var closeCompleted = false
     private let closeDone = HashSet<String>()
     private var closeStepsOverride: ?(() -> Array<(String, () -> Unit)>) = None
+    /** 监听前钩子：用例在这里观察「定时器已启动、端口尚未绑定」（R4-G2）。 */
+    protected var beforeBind: ?() -> Unit = None
+    /** `queues.sync` 的观测钩子：用例统计关闭时是否真的 sync 过（R4-G18）。 */
+    protected var syncQueuesOverride: ?() -> Unit = None
 
     /** 从 `mqServer_*` / `mqClient_hosts` 读取配置并装配。 */
     public init() {
@@ -111,8 +115,6 @@ public class MQServer {
         // peer 墓碑生效后，对端也要清掉队列/游标/订阅/计数器（A25）
         let commandExecutor = this.executor
         syncer.onDeleted = {payload => commandExecutor.cleanupAfterDelete(payload)}
-        this.server = Server<DataAny>(bindAt: options.port, checkDuration: CHECK_DURATION, executors: 200,
-            checker: {=> Message.ping()})
         // 清理器最后装配：它要闭包捕获 backupStore，必须等全部成员初始化完成
         let store = this.backupStore
         this.cleaner = LogCleaner(queues, deadLetter,
@@ -160,15 +162,10 @@ public class MQServer {
         }
     }
 
-    /** 启动监听与定时器（非阻塞；测试用）。 */
+    /** 启动定时器与工作线程，最后才绑定端口并监听（非阻塞；测试用）。 */
     protected func start(): Unit {
         if (!started.compareAndSwap(false, true)) {
             return
-        }
-        let server = this.server
-        let executor = this.executor
-        spawn {
-            server.start(executor.execute)
         }
         backup.start()
         cleaner.start()
@@ -178,6 +175,18 @@ public class MQServer {
             cleanupSubscribers()
             sweepTombstones()
         }))
+        // 端口最后绑定：装配失败或定时器启动失败都不会留下已占用端口（R4-G2）
+        match (beforeBind) {
+            case Some(hook) => hook()
+            case None => ()
+        }
+        let srv = Server<DataAny>(bindAt: options.port, checkDuration: CHECK_DURATION, executors: 200,
+            checker: {=> Message.ping()})
+        this.server = Some(srv)
+        let executor = this.executor
+        spawn {
+            srv.start(executor.execute)
+        }
     }
 
     /** 阻塞运行（生产入口）。 */
@@ -196,7 +205,12 @@ public class MQServer {
      */
     protected func closeSteps(): Array<(String, () -> Unit)> {
         [
-            ("server", {=> server.close()}),
+            ("server", {=>
+                match (server) {
+                    case Some(srv) => srv.close()
+                    case None => ()
+                }
+            }),
             ("cleanupTimer", {=> cancelCleanupTimer()}),
             ("antiEntropy", {=> syncer.close()}),
             ("backup", {=> backup.close()}),
@@ -204,7 +218,12 @@ public class MQServer {
             ("consume", {=> consume.close()}),
             ("subscribers", {=> subscribers.clear()}),
             ("backupStore", {=> backupStore.close()}),
-            ("queues.sync", {=> queues.sync()}),
+            ("queues.sync", {=>
+                match (syncQueuesOverride) {
+                    case Some(hook) => hook()
+                    case None => queues.sync()
+                }
+            }),
             ("queues", {=> queues.close()}),
             ("deadLetter", {=> deadLetter.close()}),
             ("meta", {=> meta.close()}),

@@ -121,9 +121,16 @@ public class MQMessageRecord {
             }
         }
         try {
-            let parsed = DateTime.parse(stamp, "yyyyMMddHHmmssSSS")
-            // parse 按本地时区解释，时间戳本身是 UTC：加回本地偏移得到 UTC 时刻
-            Some(DateTime.fromUnixTimeStamp(parsed.toUnixTimeStamp() + parsed.zoneOffset))
+            // 直接按字段构造 UTC 实例：不经过「按本地时区解析再补偿偏移」，
+            // 进程时区、夏令时都不会影响结果（A02）
+            Some(DateTime.ofUTC(
+                year: Int64.parse(stamp[0..4]),
+                month: Int64.parse(stamp[4..6]),
+                dayOfMonth: Int64.parse(stamp[6..8]),
+                hour: Int64.parse(stamp[8..10]),
+                minute: Int64.parse(stamp[10..12]),
+                second: Int64.parse(stamp[12..14]),
+                nanosecond: Int64.parse(stamp[14..23])))
         } catch (_: Exception) {
             None<DateTime>
         }

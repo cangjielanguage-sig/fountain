@@ -101,13 +101,6 @@ protected class NodeRegistry <: MQNodeTransport & Resource {
         }
     }
 
-    protected func nodeAt(index: Int64): ?(String, UInt16) {
-        if (index < 0 || index >= nodes.size) {
-            None<(String, UInt16)>
-        } else {
-            MQHost.parseHost(nodes[index])
-        }
-    }
 
     /** 本节点返回 `None`；其余节点懒建连接（失败抛 `Exception`）。 */
     protected func clientOf(index: Int64): ?Client<DataAny> {
@@ -174,14 +167,6 @@ protected class NodeRegistry <: MQNodeTransport & Resource {
         result.toArray()
     }
 
-    protected func indexOf(address: String): ?Int64 {
-        for (i in 0..nodes.size) {
-            if (nodes[i] == address) {
-                return Some(i)
-            }
-        }
-        None<Int64>
-    }
 
     protected func markSeen(index: Int64): Unit {
         if (index >= 0 && index < alive.size) {

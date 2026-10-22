@@ -19,6 +19,7 @@ import std.collection.{ArrayList, HashMap}
 import std.collection.concurrent.ConcurrentHashMap
 import std.fs.*
 import std.sync.{AtomicBool, Mutex}
+import std.time.DateTime
 import fountain::f_codec.default.DefaultCodec
 import fountain::f_io.{ByteBuffer, LogPosition}
 import fountain::f_io.LogClosedException
@@ -42,6 +43,9 @@ protected class BackupStore <: Resource {
     /** 保护 `logs` 的 get-or-create：并发的首批备份不得为同一目录创建两个 `QueueLog`。 */
     private let lock = Mutex()
     private let closed = AtomicBool(false)
+    private var lastDropWarnMs: Int64 = 0
+    /** 限流状态单独一把锁：`append` 可能已持有 `lock` 时调用（避免自死锁）。 */
+    private let warnLock = Mutex()
 
     protected init(logRoot: String, maxFileSize: Int64, syncInterval: Int64) {
         this.root = "${logRoot}/backup"
@@ -51,12 +55,15 @@ protected class BackupStore <: Resource {
 
     protected func append(ownerIndex: Int64, topic: String, queueIndex: Int64, record: Array<Byte>): Unit {
         if (closed.load()) {
+            warnDropped(topic, queueIndex, "store is closed")
             return
         }
         let key = "${ownerIndex}\u{0}${topic}\u{0}${queueIndex}"
         let maybeLog: ?QueueLog = synchronized(lock) {
             // 关闭可能发生在第一次检查之后、拿到锁之前
             if (closed.load()) {
+                // 关闭发生在第一次检查之后、拿到锁之前：同样要留痕（R4-G3）
+                warnDropped(topic, queueIndex, "store closed while acquiring the log")
                 None<QueueLog>
             } else {
                 match (logs.get(key)) {
@@ -77,7 +84,8 @@ protected class BackupStore <: Resource {
                 try {
                     log.append(record)
                 } catch (_: LogClosedException) {
-                    // 关闭与写入并发：关闭方已接管，安全丢弃本条
+                    // 关闭与写入并发：关闭方已接管，安全丢弃本条，但不能静默（R4-G3）
+                    warnDropped(topic, queueIndex, "queue log was closed concurrently")
                 }
         }
     }
@@ -221,6 +229,18 @@ protected class BackupStore <: Resource {
                 file.close()
             }
         }
+    }
+
+    /** 关闭后丢弃写入必须留痕；同一秒内只记一条，避免关闭风暴刷屏（R4-G3）。 */
+    private func warnDropped(topic: String, queueIndex: Int64, reason: String): Unit {
+        let now = DateTime.now().toUnixTimeStamp().toMilliseconds()
+        synchronized(warnLock) {
+            if (now - lastDropWarnMs < 1000) {
+                return
+            }
+            lastDropWarnMs = now
+        }
+        log.warn("dropped backup append for '${topic}' queue ${queueIndex}: ${reason}")
     }
 
     /** 当前实例数（并发用例据此断言只创建了一个 `QueueLog`）。 */

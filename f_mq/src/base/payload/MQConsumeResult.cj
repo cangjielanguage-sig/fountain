@@ -46,8 +46,4 @@ public class MQConsumeResult {
         this.segmentedOffset = segmentedOffset
         this.record = record
     }
-
-    public func hasMessage(): Bool {
-        !record.isEmpty()
-    }
 }

@@ -37,17 +37,3 @@ public class QueueCorruptionException <: BaseException {
     }
 }
 
-/** 位点指向的段已被删除（且不是「比最老段还老」的正常滚动场景）。 */
-public class SegmentMissingException <: BaseException {
-    public init(message: String) {
-        super(message)
-    }
-
-    public init(caused: Exception) {
-        super(caused)
-    }
-
-    public init(message: String, caused: Exception) {
-        super(message, caused)
-    }
-}

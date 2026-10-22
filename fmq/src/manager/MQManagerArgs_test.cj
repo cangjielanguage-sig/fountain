@@ -35,9 +35,18 @@ class MQManagerArgsTest {
 
     @TestCase
     public func defaultServerUsesConfiguredPort(): Unit {
-        Config.set([("mqServer_port", "2350")])
-        let args = MQManagerArgs.parse(["listTopics"]).getOrThrow()
-        @Assert(args.server == "127.0.0.1:2350")
+        // 配置是全局状态：用例结束后必须回到「键不存在」，否则会影响其它用例（A24）
+        let previous = Config.getString("mqServer_port")
+        try {
+            Config.set([("mqServer_port", "2350")])
+            let args = MQManagerArgs.parse(["listTopics"]).getOrThrow()
+            @Assert(args.server == "127.0.0.1:2350")
+        } finally {
+            match (previous) {
+                case Some(text) => Config.set([("mqServer_port", text)])
+                case None => Config.remove("mqServer_port")
+            }
+        }
     }
 
     @TestCase
@@ -53,8 +62,26 @@ class MQManagerArgsTest {
         @Assert(MQManagerArgs.parse(["--help"]).isNone())
     }
 
+    /** 帮助文本与子命令表一致：恰好 7 个子命令（R4-G9）。 */
     @TestCase
-    public func sixSubcommandsParse(): Unit {
+    public func helpListsSevenSubcommands(): Unit {
+        let text = MQManagerArgs.helpText()
+        let commands = ["registerTopic", "deleteTopic", "registerSubscriber", "deleteSubscribeGroup",
+            "listTopics", "listSubscribeGroups", "stats"]
+        var counted = 0
+        for (line in text.split("\n")) {
+            let trimmed = line.trimAscii()
+            for (command in commands) {
+                if (trimmed.startsWith(command)) {
+                    counted++
+                }
+            }
+        }
+        @Assert(counted == 7)
+    }
+
+    @TestCase
+    public func sevenSubcommandsParse(): Unit {
         @Assert(MQManagerArgs.parse(["registerTopic", "/t", "2"]).isSome())
         @Assert(MQManagerArgs.parse(["deleteTopic", "/t"]).isSome())
         @Assert(MQManagerArgs.parse(["registerSubscriber", "/t", "g"]).isSome())

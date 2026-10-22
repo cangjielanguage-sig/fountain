@@ -33,6 +33,8 @@ public enum MetaApplyResult <: Equatable<MetaApplyResult> & ToString {
     | TopicMissing
     /** 载荷结构非法（分配字段越界、组名非法等），不得落盘 */
     | Invalid
+    /** 同 key 的墓碑更新：迟到的旧条目被墓碑挡住，不落盘、不复活 */
+    | Tombstoned
 
     public operator func ==(other: MetaApplyResult): Bool {
         match ((this, other)) {
@@ -41,6 +43,7 @@ public enum MetaApplyResult <: Equatable<MetaApplyResult> & ToString {
             case (Conflict, Conflict) => true
             case (TopicMissing, TopicMissing) => true
             case (Invalid, Invalid) => true
+            case (Tombstoned, Tombstoned) => true
             case _ => false
         }
     }
@@ -52,6 +55,7 @@ public enum MetaApplyResult <: Equatable<MetaApplyResult> & ToString {
             case Conflict => "conflict"
             case TopicMissing => "topic-missing"
             case Invalid => "invalid"
+            case Tombstoned => "tombstoned"
         }
     }
 }
@@ -100,7 +104,54 @@ protected class MetaStore <: Resource {
             loadTopics()
             loadGroups()
             loadTombstones()
+            // 崩溃窗口可能留下「条目与墓碑共存」：按 isNewer 收敛，不留复活态（R2-G2）
+            convergeTombstonesLocked()
             revision = maxRevisionLocked()
+        }
+    }
+
+    /**
+     * 加载后收敛「条目与墓碑共存」的状态（调用方必须持有 `lock`）。
+     *
+     * 条目版本更新 → 删墓碑（重新注册胜过旧墓碑）；墓碑版本更新 → 删条目；
+     * 逐条容错：单条失败只记 ERROR，下一次加载会再收敛一遍。
+     */
+    private func convergeTombstonesLocked(): Unit {
+        let pending = ArrayList<MQMetaTombstone>()
+        for ((_, tombstone) in tombstones) {
+            pending.add(tombstone)
+        }
+        for (tombstone in pending) {
+            try {
+                if (tombstone.isTopic()) {
+                    match (topicIndex.get(tombstone.topic)) {
+                        case Some(local) =>
+                            if (isNewer(local.revision, local.origin, tombstone.revision, tombstone.origin)) {
+                                dropTombstoneLocked(MQMetaTombstone.KIND_TOPIC, tombstone.topic, '')
+                            } else {
+                                log.warn("topic '${tombstone.topic}' survived a newer tombstone on disk, " +
+                                    "dropping it")
+                                dropTopicLocked(tombstone.topic)
+                            }
+                        case None => ()
+                    }
+                } else {
+                    match (groupOfLocked(tombstone.topic, tombstone.subscribeGroup)) {
+                        case Some(local) =>
+                            if (isNewer(local.revision, local.origin, tombstone.revision, tombstone.origin)) {
+                                dropTombstoneLocked(MQMetaTombstone.KIND_GROUP, tombstone.topic,
+                                    tombstone.subscribeGroup)
+                            } else {
+                                log.warn("group '${tombstone.subscribeGroup}' of '${tombstone.topic}' " +
+                                    "survived a newer tombstone on disk, dropping it")
+                                dropGroupLocked(tombstone.topic, tombstone.subscribeGroup)
+                            }
+                        case None => ()
+                    }
+                }
+            } catch (e: Exception) {
+                log.error("cannot converge tombstone '${tombstone.key()}': ${e.message}")
+            }
         }
     }
 
@@ -184,6 +235,7 @@ protected class MetaStore <: Resource {
             let next = MQAssignment.nextStart(start, meta.queueNum, nodeCount)
             writeAtomically(topicPath(assignment.topic), MQProtocol.encodePayload<MQTopicAssignment>(assignment))
             topicIndex.add(assignment.topic, assignment)
+            dropTombstoneLocked(MQMetaTombstone.KIND_TOPIC, assignment.topic, "")
             this.nextStart = next
             writeAtomically("${dir}/assign.meta", encodeNextStart(next))
             (MetaApplyResult.Applied, Some(assignment))
@@ -193,6 +245,7 @@ protected class MetaStore <: Resource {
     /** 注册订阅组：主题存在性与组存在性检查、写盘在同一个临界区内完成（A28/A36）。 */
     protected func registerGroup(meta: MQSubscribeGroupMeta): MetaApplyResult {
         if (!MQGroup.isValid(meta.subscribeGroup) || !MQTopic.isValid(meta.topic)) {
+            log.warn("reject group registration '${meta.subscribeGroup}' of '${meta.topic}': ${invalidReason(meta)}")
             return MetaApplyResult.Invalid
         }
         synchronized(lock) {
@@ -214,6 +267,7 @@ protected class MetaStore <: Resource {
                     items
             }
             list.add(versioned)
+            dropTombstoneLocked(MQMetaTombstone.KIND_GROUP, versioned.topic, versioned.subscribeGroup)
             MetaApplyResult.Applied
         }
     }
@@ -223,6 +277,13 @@ protected class MetaStore <: Resource {
      */
     protected func applyTopic(assignment: MQTopicAssignment, nextStart!: ?Int64 = None): MetaApplyResult {
         synchronized(lock) {
+            // 墓碑也是一次带版本的变更：迟到的旧分配不能把已删主题带回来（R2-S1）
+            if (!acceptOverTombstoneLocked(MQMetaTombstone.KIND_TOPIC, assignment.topic, "",
+                assignment.revision, assignment.origin)) {
+                log.warn("reject topic '${assignment.topic}' at revision ${assignment.revision}: " +
+                    "blocked by tombstone")
+                return MetaApplyResult.Tombstoned
+            }
             match (topicIndex.get(assignment.topic)) {
                 case Some(existing) =>
                     if (!isNewer(assignment.revision, assignment.origin, existing.revision, existing.origin)) {
@@ -239,6 +300,8 @@ protected class MetaStore <: Resource {
             }
             writeAtomically("${topicPath(assignment.topic)}", MQProtocol.encodePayload<MQTopicAssignment>(assignment))
             topicIndex.add(assignment.topic, assignment)
+            // 活条目已胜出：墓碑只会挡住后续更旧的条目，保留它会让「主题已删」判断失真，必须移除
+            dropTombstoneLocked(MQMetaTombstone.KIND_TOPIC, assignment.topic, "")
             if (let Some(value) <- nextStart) {
                 this.nextStart = value
                 writeAtomically("${dir}/assign.meta", encodeNextStart(value))
@@ -249,9 +312,17 @@ protected class MetaStore <: Resource {
 
     protected func applyGroup(meta: MQSubscribeGroupMeta): MetaApplyResult {
         if (!MQGroup.isValid(meta.subscribeGroup) || !MQTopic.isValid(meta.topic)) {
+            log.warn("reject group '${meta.subscribeGroup}' of '${meta.topic}': ${invalidReason(meta)}")
             return MetaApplyResult.Invalid
         }
         synchronized(lock) {
+            // 组墓碑先于主题存在性判定：已删组不得因主题仍在而复活（R2-S1）
+            if (!acceptOverTombstoneLocked(MQMetaTombstone.KIND_GROUP, meta.topic, meta.subscribeGroup,
+                meta.revision, meta.origin)) {
+                log.warn("reject group '${meta.subscribeGroup}' of '${meta.topic}' at revision " +
+                    "${meta.revision}: blocked by tombstone")
+                return MetaApplyResult.Tombstoned
+            }
             if (topicIndex.get(meta.topic).isNone()) {
                 // 组先于主题到达（网络乱序）或主题已删除：拒绝，交给 Syncer 的待应用队列
                 return MetaApplyResult.TopicMissing
@@ -281,6 +352,7 @@ protected class MetaStore <: Resource {
             }
             writeAtomically("${groupPath(meta.topic, meta.subscribeGroup)}",
                 MQProtocol.encodePayload<MQSubscribeGroupMeta>(meta))
+            dropTombstoneLocked(MQMetaTombstone.KIND_GROUP, meta.topic, meta.subscribeGroup)
             MetaApplyResult.Applied
         }
     }
@@ -331,41 +403,59 @@ protected class MetaStore <: Resource {
     /**
      * 应用一条墓碑（来自广播或快照）。
      *
-     * 本地同 key 的条目 revision 不高于墓碑时一并删除；墓碑本身按 revision 只进不退。
+     * 胜负与条目之间用同一套 `isNewer` 规则：墓碑只有赢过同 key 的活条目与已有墓碑才生效。
+     * 输掉时零副作用——不写墓碑、不删条目、不回调（R2-S2）。
      */
     protected func applyTombstone(tombstone: MQMetaTombstone): MetaApplyResult {
         synchronized(lock) {
-            let key = tombstone.key()
-            var applied = true
-            match (tombstones.get(key)) {
-                case Some(existing) =>
-                    if (!isNewer(tombstone.revision, tombstone.origin, existing.revision, existing.origin)) {
-                        applied = false
-                    }
-                case None => ()
-            }
-            if (applied) {
-                writeTombstoneLocked(tombstone)
-                tombstones.add(key, tombstone)
-            }
+            // 先判活条目：`(rev 5, origin 9)` 的条目必须挡住 `(rev 5, origin 2)` 的墓碑
             if (tombstone.isTopic()) {
                 match (topicIndex.get(tombstone.topic)) {
                     case Some(local) =>
-                        if (local.revision <= tombstone.revision) {
-                            dropTopicLocked(tombstone.topic)
+                        if (!isNewer(tombstone.revision, tombstone.origin, local.revision, local.origin)) {
+                            return MetaApplyResult.Duplicated
                         }
                     case None => ()
                 }
             } else {
                 match (groupOfLocked(tombstone.topic, tombstone.subscribeGroup)) {
                     case Some(local) =>
-                        if (local.revision <= tombstone.revision) {
-                            dropGroupLocked(tombstone.topic, tombstone.subscribeGroup)
+                        if (!isNewer(tombstone.revision, tombstone.origin, local.revision, local.origin)) {
+                            return MetaApplyResult.Duplicated
                         }
                     case None => ()
                 }
             }
-            if (applied) { MetaApplyResult.Applied } else { MetaApplyResult.Duplicated }
+            // 再判已有墓碑：墓碑之间同样只进不退
+            let key = tombstone.key()
+            match (tombstones.get(key)) {
+                case Some(existing) =>
+                    if (!isNewer(tombstone.revision, tombstone.origin, existing.revision, existing.origin)) {
+                        return MetaApplyResult.Duplicated
+                    }
+                case None => ()
+            }
+            writeTombstoneLocked(tombstone)
+            tombstones.add(key, tombstone)
+            if (tombstone.isTopic()) {
+                match (topicIndex.get(tombstone.topic)) {
+                    case Some(_) =>
+                        for (meta in groupsOfLocked(tombstone.topic)) {
+                            if (meta.revision > tombstone.revision) {
+                                log.warn("group '${meta.subscribeGroup}' of deleted topic '${tombstone.topic}' " +
+                                    "has newer revision ${meta.revision}; dropping it with the topic")
+                            }
+                        }
+                        // 级联删除该主题下的组：主题已不存在，孤儿组只会让后续快照继续扩散
+                        dropTopicLocked(tombstone.topic)
+                    case None => ()
+                }
+            } else {
+                if (groupOfLocked(tombstone.topic, tombstone.subscribeGroup).isSome()) {
+                    dropGroupLocked(tombstone.topic, tombstone.subscribeGroup)
+                }
+            }
+            MetaApplyResult.Applied
         }
     }
 
@@ -459,16 +549,11 @@ protected class MetaStore <: Resource {
                 }
             }
             let tombstoneList = ArrayList<MQMetaTombstone>()
-            var floor = Int64.Max
             for ((_, tombstone) in tombstones) {
                 tombstoneList.add(tombstone)
-                if (tombstone.revision < floor) {
-                    floor = tombstone.revision
-                }
             }
             MQMetaSnapshot(topicList.toArray(), groupList.toArray(), nextStart,
-                tombstones: tombstoneList.toArray(), revision: maxRevisionLocked(),
-                tombstoneFloor: if (tombstoneList.size == 0) {0} else {floor})
+                tombstones: tombstoneList.toArray(), revision: maxRevisionLocked())
         }
     }
 
@@ -511,9 +596,66 @@ protected class MetaStore <: Resource {
         "${dir}/${MQFileNames.groupFile(topic, group)}"
     }
 
+    /** 组载荷非法的原因：区分组名与主题，WARN 里能直接指向失败字段（R2-G10）。 */
+    private static func invalidReason(meta: MQSubscribeGroupMeta): String {
+        if (!MQGroup.isValid(meta.subscribeGroup)) {
+            "invalid group name '${meta.subscribeGroup}'"
+        } else {
+            "invalid topic '${meta.topic}'"
+        }
+    }
+
     private static func isNewer(remoteRevision: Int64, remoteOrigin: Int64, localRevision: Int64,
         localOrigin: Int64): Bool {
         remoteRevision > localRevision || (remoteRevision == localRevision && remoteOrigin > localOrigin)
+    }
+
+    /** 同 key 的墓碑（调用方必须持有 `lock`）。 */
+    private func tombstoneOfLocked(kind: String, topic: String, group: String): ?MQMetaTombstone {
+        let key = if (kind == MQMetaTombstone.KIND_TOPIC) {
+            "${kind}\u{0}${topic}"
+        } else {
+            "${kind}\u{0}${topic}\u{0}${group}"
+        }
+        tombstones.get(key)
+    }
+
+    /**
+     * 条目能否越过同 key 的墓碑（调用方必须持有 `lock`）。
+     *
+     * 与条目之间同一套 `isNewer` 语义：revision 大者胜，同 revision 比 origin；
+     * 完全相等时墓碑胜（删除是终态，迟到重放不得复活）。
+     */
+    private func acceptOverTombstoneLocked(kind: String, topic: String, group: String, revision: Int64,
+        origin: Int64): Bool {
+        match (tombstoneOfLocked(kind, topic, group)) {
+            case Some(tombstone) => isNewer(revision, origin, tombstone.revision, tombstone.origin)
+            case None => true
+        }
+    }
+
+    /**
+     * 删除同 key 的墓碑（条目已以更高版本胜出时）。
+     *
+     * 内存移除是权威结果；文件删除失败只记 ERROR，下次加载按「条目更新 → 删墓碑」再次收敛。
+     */
+    private func dropTombstoneLocked(kind: String, topic: String, group: String): Unit {
+        let key = if (kind == MQMetaTombstone.KIND_TOPIC) {
+            "${kind}\u{0}${topic}"
+        } else {
+            "${kind}\u{0}${topic}\u{0}${group}"
+        }
+        if (tombstones.remove(key).isNone()) {
+            return
+        }
+        let path = tombstonePath(MQMetaTombstone(kind, topic, group, 0, 0, 0))
+        try {
+            if (exists(path)) {
+                remove(path)
+            }
+        } catch (e: Exception) {
+            log.error("cannot remove tombstone file ${path}: ${e.message}")
+        }
     }
 
     private static func sameAssignment(left: MQTopicAssignment, right: MQTopicAssignment): Bool {
@@ -523,6 +665,14 @@ protected class MetaStore <: Resource {
 
     private func groupExistsLocked(topic: String, group: String): Bool {
         groupOfLocked(topic, group).isSome()
+    }
+
+    /** 某主题下的全部组（快照副本，级联删除时安全遍历）。 */
+    private func groupsOfLocked(topic: String): Array<MQSubscribeGroupMeta> {
+        match (groups.get(topic)) {
+            case Some(list) => list.toArray()
+            case None => Array<MQSubscribeGroupMeta>()
+        }
     }
 
     private func groupOfLocked(topic: String, group: String): ?MQSubscribeGroupMeta {

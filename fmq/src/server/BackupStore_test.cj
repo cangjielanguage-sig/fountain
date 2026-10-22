@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::fmq.server
 
-import std.convert.*
 import std.fs.*
 import std.sync.{AtomicBool, AtomicInt64}
 import std.time.DateTime
@@ -31,6 +30,54 @@ import fountain::fmq.test.TestDirs
 
 @Test
 class BackupStoreTest {
+    /** 进程不再注册 `atExit`，整个类的临时目录在收尾时统一回收。 */
+    @AfterAll
+    static func removeTempDirs(): Unit {
+        TestDirs.cleanNamespace("backup_store")
+    }
+
+    /** 关闭后写入被丢弃但必须留痕（含 topic/队列），且同秒内限流（R4-G3）。 */
+    @TestCase
+    public func appendsAfterCloseAreLoggedAndRateLimited(): Unit {
+        CapturingAppender.install()
+        let root = TestDirs.of("backup_store", "closed_log")
+        if (exists(root)) {
+            remove(root, recursive: true)
+        }
+        Directory.create(root, recursive: true)
+        let store = BackupStore(root, 1024 * 1024, 1)
+        store.append(0, "/closed-log", 0, [1u8])
+        store.close()
+        for (_ in 0..3) {
+            store.append(0, "/closed-log", 0, [2u8])
+        }
+        @Assert(CapturingAppender.waitFor(["/closed-log", "dropped backup append", "closed"]))
+        // 1 秒限流：连续 3 次只留 1 条
+        @Assert(CapturingAppender.find(["/closed-log", "dropped backup append"]).size == 1)
+        remove(root, recursive: true)
+    }
+
+    /** 底层 QueueLog 被并发关闭时，`LogClosedException` 不得静默（R4-G3）。 */
+    @TestCase
+    public func closedQueueLogIsLoggedInsteadOfSilentDrop(): Unit {
+        CapturingAppender.install()
+        let root = TestDirs.of("backup_store", "closed_queue_log")
+        if (exists(root)) {
+            remove(root, recursive: true)
+        }
+        Directory.create(root, recursive: true)
+        let store = BackupStore(root, 1024 * 1024, 1)
+        store.append(0, "/closed-ql", 0, [1u8])
+        // 直接关掉底层日志，模拟「关闭与写入并发」
+        for ((_, _, _, log) in store.allLogs()) {
+            log.close()
+        }
+        store.append(0, "/closed-ql", 0, [2u8])
+        @Assert(CapturingAppender.waitFor(["/closed-ql", "dropped backup append", "closed concurrently"]))
+        store.close()
+        remove(root, recursive: true)
+    }
+
     @TestCase
     public func concurrentAppendsReuseSingleQueueLog(): Unit {
         let root = TestDirs.of("backup_store", "concurrent")
@@ -67,7 +114,7 @@ class BackupStoreTest {
         @Assert(store.instanceCount == 1)
         store.close()
 
-        // 关闭后从最老段顺序读回：记录不交错、不丢失
+        // 关闭后从编号最小的现存段顺序读回：记录不交错、不丢失
         let readerLog = QueueLog("${root}/backup/0/%2Ft/0", 1024 * 1024, 1)
         let reader = readerLog.openRecordsFrom(LogPosition(1, 0))
         var count = 0

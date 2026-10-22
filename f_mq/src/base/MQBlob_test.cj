@@ -90,7 +90,7 @@ class MQBlobTest {
             @Assert(back.segmentedOffset == 128)
             @Assert(back.record.size() == size)
             @Assert(back.record.copyBytes() == record)
-            @Assert(back.hasMessage() == (size > 0))
+            @Assert((!back.record.isEmpty()) == (size > 0))
         }
     }
 
@@ -160,7 +160,7 @@ class MQBlobTest {
     public func asConsumeResultSeparatesFailureFromEmpty(): Unit {
         let empty = MQProtocol.asConsumeResult(Message.build<MQConsumeResult>(Command.CONSUME(0), MessageID(),
             Some(MQConsumeResult(1, 2, 3, [])))).getOrThrow()
-        @Assert(!empty.hasMessage())
+        @Assert(empty.record.isEmpty())
 
         // 类型不对 → None（不是「没有消息」）
         @Assert(MQProtocol.asConsumeResult(Message.build<DataString>(Command.CONSUME(0), MessageID(),

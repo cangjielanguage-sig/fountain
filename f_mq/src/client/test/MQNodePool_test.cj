@@ -183,6 +183,62 @@ class MQNodePoolTest {
         pool.close()
     }
 
+    /**
+     * 关闭与「已通过入口检查、尚未拿到节点锁」的建连并发：
+     * `close()` 返回后不得再建出活连接（A11）。
+     */
+    @TestCase
+    public func closeDuringPendingBuildDoesNotLeakConnection(): Unit {
+        let stub = MQStubServer(ok).start()
+        let address = stub.address()
+        let entered = AtomicBool(false)
+        let release = AtomicBool(false)
+        let builds = AtomicInt64(0)
+        let pool = MQNodePool([address],
+            build: {_ =>
+                builds.fetchAdd(1)
+                Client<DataAny>.builder(address: address, checkDuration: Duration.second * 30,
+                    checker: {=> Message.ping()}).pingTimeout(Duration.second).build()
+            },
+            beforeLock: {=>
+                entered.store(true)
+                var waited = 0
+                while (!release.load() && waited < 500) {
+                    sleep(Duration.millisecond * 2)
+                    waited++
+                }
+            })
+        try {
+            let done = AtomicBool(false)
+            spawn {
+                try {
+                    pool.clientOf(0)
+                } catch (_: Exception) {}
+                done.store(true)
+            }
+            var waited = 0
+            while (!entered.load() && waited < 200) {
+                sleep(Duration.millisecond * 5)
+                waited++
+            }
+            @Assert(entered.load())
+            // 关闭在「入口检查已通过、锁未拿到」的窗口内完成
+            pool.close()
+            release.store(true)
+            waited = 0
+            while (!done.load() && waited < 300) {
+                sleep(Duration.millisecond * 5)
+                waited++
+            }
+            @Assert(done.load())
+            // 关闭之后一次建连都不允许发生
+            @Assert(builds.load() == 0)
+            @Assert(pool.aliveNodes().size == 0)
+        } finally {
+            stub.close()
+        }
+    }
+
     @TestCase
     public func invalidHostRejectedAtConstruction(): Unit {
         var threw = false

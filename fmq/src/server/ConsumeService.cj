@@ -164,13 +164,15 @@ protected class ConsumeService <: BackupStateSource {
 
         let out = StringBuilder()
         out.append("#\t${nodeIndex}\t${now().toUnixTimeStamp().toMilliseconds()}\n")
+        out.append("#\ttopic\tgroup\tqueueNum\tdelaying\tbacklog\tlagMs\tdelivered\tacked\tredelivered\t" +
+            "deadLettered\tskippedUnreadable\tskippedNoMatch\tskippedUnsupported\n")
         for (name in topics) {
             let locals = queues.localQueues(name)
             let queueNum = queues.queueNumOf(name)
             let delayingMs = queues.delayingOf(name)
             let groups = groupsOf(name)
             if (groups.size == 0) {
-                out.append("R\t${name}\t\t${queueNum}\t${delayingMs}\t0\t0\t0\t0\t0\t0\n")
+                out.append("R\t${name}\t\t${queueNum}\t${delayingMs}\t0\t0\t0\t0\t0\t0\t0\t0\t0\n")
                 continue
             }
             // 单趟扫描：每个队列只顺序读一遍，按各组位点分桶计数（A62）
@@ -193,10 +195,26 @@ protected class ConsumeService <: BackupStateSource {
                         case Some(position) => position
                         case None => LogPosition(1, 0)
                     }
-                    starts.add(group, committed)
-                    if (before(committed, minStart)) {
-                        minStart = committed
+                    // 严格解析：位点段已缺失且消费路径还没修复时，不能输出偏小的 backlog（R3-M4/M8）
+                    let start = try {
+                        log_.resolveStart(committed, strict: true)
+                    } catch (e: QueueCorruptionException) {
+                        throw MQServiceException(MQErrorCode.INTERNAL,
+                            "stats scan failed on ${name}/${queueIndex}/${group}: ${e.message}")
                     }
+                    let from = match (start) {
+                        case Some(position) => position
+                        // 位点在尾段之后：该组没有积压
+                        case None => LogPosition(Int64.Max, 0)
+                    }
+                    starts.add(group, from)
+                    if (before(from, minStart)) {
+                        minStart = from
+                    }
+                }
+                if (minStart.seq == Int64.Max) {
+                    // 所有组都已在末尾：本队列没有可扫的记录
+                    continue
                 }
                 let reader = try {
                     log_.openRecordsFrom(minStart)
@@ -247,14 +265,21 @@ protected class ConsumeService <: BackupStateSource {
                 var acked = 0i64
                 var redelivered = 0i64
                 var deadLettered = 0i64
+                var skippedUnreadable = 0i64
+                var skippedNoMatch = 0i64
+                var skippedUnsupported = 0i64
                 if (let Some(m) <- metrics) {
                     delivered = m.deliveredOf(name, group)
                     acked = m.ackedOf(name, group)
                     redelivered = m.redeliveredOf(name, group)
                     deadLettered = m.deadLetteredOf(name, group)
+                    skippedUnreadable = m.skippedUnreadableOf(name, group)
+                    skippedNoMatch = m.skippedNoMatchOf(name, group)
+                    skippedUnsupported = m.skippedUnsupportedOf(name, group)
                 }
                 out.append("R\t${name}\t${group}\t${queueNum}\t${delayingMs}\t${groupBacklog}\t${lagMs}\t" +
-                    "${delivered}\t${acked}\t${redelivered}\t${deadLettered}\n")
+                    "${delivered}\t${acked}\t${redelivered}\t${deadLettered}\t" +
+                    "${skippedUnreadable}\t${skippedNoMatch}\t${skippedUnsupported}\n")
             }
         }
         out.toString()

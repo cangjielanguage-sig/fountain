@@ -29,7 +29,8 @@ public class MQManagerOutput {
 
     /** `stats` 表格的表头；列口径与 metrics 规格一致。 */
     public static let STATS_HEADER: Array<String> = ["topic", "group", "queueNum", "delaying", "backlog",
-        "lagMs", "delivered", "acked", "redelivered", "deadLettered"]
+        "lagMs", "delivered", "acked", "redelivered", "deadLettered", "skippedUnreadable", "skippedNoMatch",
+        "skippedUnsupported"]
 
     public static func error(message: String): String {
         "${ERROR_PREFIX}${message}"
@@ -59,8 +60,10 @@ public class MQManagerOutput {
     /**
      * `stats` 表格：把服务端 TSV 里的 `R` 记录解析成表格。
      *
-     * 服务端格式固定为 11 列（`R` + 10 个指标），列顺序见 `STATS_HEADER`；
-     * 其它行（表头、分隔）与非 `R` 行一律跳过。
+     * 服务端当前输出 14 列（`R` + 13 个指标），列顺序见 `STATS_HEADER`；为兼容旧服务端，
+     * 允许 11 列（`R` + 10 个指标）的旧格式，缺失的 3 个跳过计数按 0 处理。
+     * 其它行（表头、分隔）与非 `R` 行一律跳过。`R` 行结构不符或数值列不可解析时抛
+     * `MQServiceFailure`——这属于「服务端响应格式不正确」，不得被上层报成「无法连接」。
      */
     public static func stats(text: String): String {
         let rows = ArrayList<Array<String>>()
@@ -70,18 +73,34 @@ public class MQManagerOutput {
             }
             let fields = line.split("\t")
             if (fields.size < 11) {
-                continue
+                throw MQServiceFailure(
+                    "服务端响应格式不正确: stats 行列数 ${fields.size} < 11（'${line}'）")
             }
             let group = if (fields[2].size == 0) {
                 "（无）"
             } else {
                 fields[2]
             }
-            let delay = (Duration.millisecond * Int64.parse(fields[4])).toString()
+            let delayingMs = match (Int64.tryParse(fields[4])) {
+                case Some(value) => value
+                case None => throw MQServiceFailure(
+                    "服务端响应格式不正确: stats 列 delaying='${fields[4]}' 不是整数")
+            }
+            let delay = (Duration.millisecond * delayingMs).toString()
+            // 旧服务端只有 11 列：新增的跳过计数缺省为 0（向后兼容）
             rows.add([fields[1], group, fields[3], delay, fields[5], fields[6], fields[7], fields[8],
-                fields[9], fields[10]])
+                fields[9], fields[10], columnOf(fields, 11), columnOf(fields, 12), columnOf(fields, 13)])
         }
         table(STATS_HEADER, rows.toArray())
+    }
+
+    /** 取第 `index` 列，缺列（旧服务端）按 `0` 处理。 */
+    private static func columnOf(fields: Array<String>, index: Int64): String {
+        if (index < fields.size) {
+            fields[index]
+        } else {
+            "0"
+        }
     }
 
     /** `0→0,1→2` 形式：队列下标 → owner 节点下标。 */

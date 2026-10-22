@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::fmq.server
 
-import std.convert.*
 import std.fs.*
 import std.unittest.*
 import std.unittest.testmacro.*
@@ -44,9 +43,11 @@ class ExecutorFixture <: Resource {
     let executor: MQCommandExecutor
     let syncer: MetaSyncer
     private let registry: NodeRegistry
-    private let backup: BackupReplicator
+    let backup: BackupReplicator
+    let backupStore: BackupStore
 
-    init(name: String, selfIndex!: Int64 = 0, nodes!: Array<String> = ["127.0.0.1:1"]) {
+    init(name: String, selfIndex!: Int64 = 0, nodes!: Array<String> = ["127.0.0.1:1"],
+        backupCount!: Int64 = 0) {
         this.root = TestDirs.of("executor", name)
         if (exists(root)) {
             remove(root, recursive: true)
@@ -65,8 +66,9 @@ class ExecutorFixture <: Resource {
         this.metrics = metrics
         this.consume = ConsumeService(queues, cursors, subscribers, MQMatcher(), dead,
             Duration.second * 10, 3, metrics: metrics)
-        this.backup = BackupReplicator(registry, 0)
+        this.backup = BackupReplicator(registry, backupCount)
         let backupStore = BackupStore("${root}/logs", 1024 * 1024, 1)
+        this.backupStore = backupStore
         this.executor = MQCommandExecutor(meta, syncer, queues, cursors, subscribers, consume, backup,
             backupStore, selfIndex)
         // 与 `MQServer` 的装配保持一致：peer 墓碑生效后清理本机状态（A25）
@@ -125,6 +127,12 @@ class ExecutorFixture <: Resource {
 
 @Test
 class MQCommandExecutorTest {
+    /** 进程不再注册 `atExit`，整个类的临时目录在收尾时统一回收。 */
+    @AfterAll
+    static func removeTempDirs(): Unit {
+        TestDirs.cleanNamespace("executor")
+    }
+
     private static func codeOf(message: Message): Int64 {
         MQProtocol.asResult(message).code
     }
@@ -409,6 +417,100 @@ class MQCommandExecutorTest {
             @Assert(exists("${fixture.root}/logs/backup/0/%2Ft/0"))
             // 副本不进入本队列
             @Assert(fixture.queues.queueOf("/t", 0).getOrThrow().size == 0)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** `backup >= 1` 时发布一条记录，备份替身恰好收到一次入队（R4-G14）。 */
+    @TestCase
+    public func publishWithBackupEnqueuesOnce(): Unit {
+        let fixture = ExecutorFixture("backup_enqueue", backupCount: 1)
+        try {
+            fixture.registerTopic("/t", 1)
+            @Assert(codeOf(fixture.publish("/t", 1i64.toData())) == 0)
+            @Assert(fixture.backup.pendingCount == 1)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 命令矩阵的六条错误分支：都必须给出确定的错误码，不能挂起（R4-G13）。 */
+    @TestCase
+    public func commandMatrixReturnsDeterministicErrors(): Unit {
+        let fixture = ExecutorFixture("matrix")
+        try {
+            fixture.registerTopic("/t", 1)
+            fixture.registerGroup("/t", "g")
+
+            // 1. SUBSCRIBE 的 tags 非法
+            @Assert(codeOf(fixture.call(MQProtocol.subscribe(
+                MQSubscribePayload("sid", "/t", "g", ["bad tag"], "", false)))) == MQErrorCode.INVALID_TAGS)
+
+            // 2. SUBSCRIBE 时本机没有该主题队列
+            let other = ExecutorFixture("matrix_owner", selfIndex: 1, nodes: ["127.0.0.1:1", "127.0.0.1:2"])
+            try {
+                other.registerTopic("/u", 1)
+                other.registerGroup("/u", "g")
+                @Assert(codeOf(other.call(MQProtocol.subscribe(
+                    MQSubscribePayload("sid2", "/u", "g", [], "", false)))) == MQErrorCode.NOT_OWNER)
+            } finally {
+                other.close()
+            }
+
+            // 3. REGISTER 收到意外载荷
+            @Assert(codeOf(fixture.call(Message(Command.REGISTER, MQResult(0, "ok").toData()))) ==
+                MQErrorCode.INTERNAL)
+
+            // 4. 内部信封的未知 kind
+            @Assert(codeOf(fixture.call(Message.register<MQInternalMessage>(
+                data: MQInternalMessage("weird", Array<Byte>())))) == MQErrorCode.INTERNAL)
+
+            // 5. PUBLISH 收到非 backup 的内部信封
+            @Assert(codeOf(fixture.call(Message.publish<MQInternalMessage>(dup: false, qos: QoS.AtMostOnce,
+                retain: false, data: MQInternalMessage(MQInternalKind.META_SYNC, Array<Byte>())))) ==
+                MQErrorCode.INTERNAL)
+
+            // 6. META_SYNC 收到未知子载荷
+            @Assert(codeOf(fixture.call(Message.register<MQInternalMessage>(
+                data: MQInternalMessage(MQInternalKind.META_SYNC,
+                    MQProtocol.encodePayload<String>("not-a-sub-payload"))))) == MQErrorCode.INTERNAL)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 备份批次的状态数与记录数不匹配：记录照常落盘，位点不更新且留 WARN（R2-G5）。 */
+    @TestCase
+    public func backupStatesMismatchSkipsCursors(): Unit {
+        CapturingAppender.install()
+        let fixture = ExecutorFixture("backup_mismatch")
+        try {
+            fixture.registerTopic("/t", 1)
+            let payload = MQBackupPayload(0, "/t", 0, [[1u8], [2u8]], [MQBackupState(1, 0, 0, true)],
+                cursors: [MQBackupCursor("g", 1, 0)])
+            @Assert(codeOf(fixture.call(MQProtocol.publishBackup(payload))) == 0)
+            @Assert(exists("${fixture.root}/logs/backup/0/%2Ft/0"))
+            @Assert(fixture.backupStore.loadCursor(0, "/t", 0, "g").isNone())
+            @Assert(CapturingAppender.waitFor(["2 records", "1 states"]))
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 状态数匹配时位点才落盘（R2-G5）。 */
+    @TestCase
+    public func backupCursorsAppliedWhenStatesMatch(): Unit {
+        let fixture = ExecutorFixture("backup_cursors")
+        try {
+            fixture.registerTopic("/t", 1)
+            let payload = MQBackupPayload(0, "/t", 0, [[1u8], [2u8]],
+                [MQBackupState(1, 0, 0, true), MQBackupState(1, 8, 0, false)],
+                cursors: [MQBackupCursor("g", 1, 8)])
+            @Assert(codeOf(fixture.call(MQProtocol.publishBackup(payload))) == 0)
+            let cursor = fixture.backupStore.loadCursor(0, "/t", 0, "g").getOrThrow()
+            @Assert(cursor.seq == 1)
+            @Assert(cursor.offset == 8)
         } finally {
             fixture.close()
         }

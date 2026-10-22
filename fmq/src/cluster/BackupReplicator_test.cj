@@ -46,7 +46,7 @@ class BackupReplicatorTest {
         let transport = makeTransport(3, 0)
         let replicator = BackupReplicator(transport, 0)
         replicator.record("/t", 0, LogPosition(1, 0), [1u8])
-        replicator.flush()
+        replicator.flushOnce()
         @Assert(transport.sentCount() == 0)
         replicator.close()
     }
@@ -57,7 +57,7 @@ class BackupReplicatorTest {
         let replicator = BackupReplicator(transport, 2)
         replicator.record("/t", 0, LogPosition(1, 0), [1u8])
         replicator.record("/t", 0, LogPosition(1, 8), [2u8])
-        replicator.flush()
+        replicator.flushOnce()
         @Assert(transport.sentCount() == 2)
         let toNode1 = transport.messagesSentTo(1)
         let toNode2 = transport.messagesSentTo(2)
@@ -80,7 +80,7 @@ class BackupReplicatorTest {
         // 发布线程只入队：不阻塞、不发送（A27）
         @Assert(transport.sentCount() == 0)
         @Assert(replicator.pendingCount == 64)
-        replicator.flush()
+        replicator.flushOnce()
         @Assert(transport.sentCount() == 1)
         let payload = payloadOf(transport.messagesSentTo(1)[0])
         @Assert(payload.records.size == 64)
@@ -95,7 +95,7 @@ class BackupReplicatorTest {
         replicator.record("/t", 0, LogPosition(1, 8), [2u8])
         // 第三条被丢弃
         replicator.record("/t", 0, LogPosition(1, 16), [3u8])
-        replicator.flush()
+        replicator.flushOnce()
         let payload = payloadOf(transport.messagesSentTo(1)[0])
         @Assert(payload.records.size == 2)
         replicator.close()
@@ -107,7 +107,7 @@ class BackupReplicatorTest {
         transport.available[1] = false
         let replicator = BackupReplicator(transport, 2)
         replicator.record("/t", 0, LogPosition(1, 0), [1u8])
-        replicator.flush()
+        replicator.flushOnce()
         @Assert(transport.messagesSentTo(1).size == 0)
         @Assert(transport.messagesSentTo(2).size == 1)
         replicator.close()
@@ -172,7 +172,7 @@ class BackupReplicatorTest {
         replicator.setStateSource(StubStateSource())
         replicator.record("/t", 0, LogPosition(1, 0), [1u8])
         replicator.record("/t", 0, LogPosition(1, 8), [2u8])
-        replicator.flush()
+        replicator.flushOnce()
         let payload = payloadOf(transport.messagesSentTo(1)[0])
         @Assert(payload.states.size == 2)
         @Assert(payload.states[0].acked)
@@ -191,12 +191,12 @@ class BackupReplicatorTest {
         transport.available[1] = false
         let replicator = BackupReplicator(transport, 1)
         replicator.record("/t", 0, LogPosition(1, 0), [1u8])
-        replicator.flush()
+        replicator.flushOnce()
         @Assert(transport.sentCount() == 0)
         @Assert(replicator.pendingCount == 1)
         // 恢复后成功
         transport.available[1] = true
-        replicator.flush()
+        replicator.flushOnce()
         @Assert(transport.sentCount() == 1)
         @Assert(replicator.pendingCount == 0)
 
@@ -206,11 +206,62 @@ class BackupReplicatorTest {
         let dropper = BackupReplicator(flaky, 1)
         dropper.record("/t", 0, LogPosition(1, 0), [1u8])
         for (_ in 0..5) {
-            dropper.flush()
+            dropper.flushOnce()
         }
         @Assert(dropper.pendingCount == 0)
         dropper.close()
         replicator.close()
+    }
+
+    /** 部分目标失败：只重试失败目标，已成功的目标不重复收（R2-G5）。 */
+    @TestCase
+    public func partialTargetFailureRetriesOnlyFailedTarget(): Unit {
+        let transport = makeTransport(3, 0)
+        transport.available[2] = false
+        let replicator = BackupReplicator(transport, 2)
+        try {
+            replicator.record("/t", 0, LogPosition(1, 0), [1u8])
+            replicator.flushOnce()
+            @Assert(transport.messagesSentTo(1).size == 1)
+            @Assert(transport.messagesSentTo(2).size == 0)
+            // 只有失败目标那一条留在队列里
+            @Assert(replicator.pendingCount == 1)
+
+            transport.available[2] = true
+            replicator.flushOnce()
+            // 节点 1 不重复收，节点 2 补齐
+            @Assert(transport.messagesSentTo(1).size == 1)
+            @Assert(transport.messagesSentTo(2).size == 1)
+            @Assert(replicator.pendingCount == 0)
+        } finally {
+            replicator.close()
+        }
+    }
+
+    /** 关闭必须等在途批次发完再 drain：close 返回后不得还有发送在进行（R2-G6）。 */
+    @TestCase
+    public func closeWaitsForInFlightBatch(): Unit {
+        let transport = makeTransport(2, 0)
+        let active = AtomicInt64(0)
+        transport.responder = {_, message =>
+            active.fetchAdd(1)
+            sleep(Duration.millisecond * 700)
+            active.fetchSub(1)
+            Some(MQProtocol.respond<MQBackupPayload>(message, MQBackupPayload()))
+        }
+        let replicator = BackupReplicator(transport, 1)
+        replicator.start()
+        replicator.record("/t", 0, LogPosition(1, 0), [1u8])
+        var waited = 0
+        while (active.load() == 0 && waited < 200) {
+            sleep(Duration.millisecond * 10)
+            waited++
+        }
+        @Assert(active.load() == 1)
+        replicator.close()
+        // close 返回即在途发送已结束，待发队列也排空
+        @Assert(active.load() == 0)
+        @Assert(replicator.pendingCount == 0)
     }
 
     /** 关闭后 record 丢弃且不崩溃。 */
@@ -230,7 +281,7 @@ class BackupReplicatorTest {
         let transport = makeTransport(1, 0)
         let replicator = BackupReplicator(transport, 1)
         replicator.record("/t", 0, LogPosition(1, 0), [1u8])
-        replicator.flush()
+        replicator.flushOnce()
         @Assert(transport.sentCount() == 0)
         @Assert(replicator.pendingCount == 0)
         replicator.close()
@@ -248,7 +299,7 @@ class BackupReplicatorTest {
         replicator.start()
         // 先发一批，保证「关闭与发送并发」确有其事
         replicator.record("/t", 0, LogPosition(1, 0), [1u8])
-        replicator.flush()
+        replicator.flushOnce()
         @Assert(transport.sentCount() == 1)
         let stop = AtomicBool(false)
         let workers = AtomicInt64(0)
@@ -257,7 +308,7 @@ class BackupReplicatorTest {
                 var i = 0
                 while (!stop.load() && i < 50) {
                     replicator.record("/t", 0, LogPosition(1, i), [UInt8(i % 251)])
-                    replicator.flush()
+                    replicator.flushOnce()
                     i++
                 }
                 workers.fetchAdd(1)
@@ -273,7 +324,7 @@ class BackupReplicatorTest {
         }
         @Assert(workers.load() == 4)
         // 收尾：并发窗口内可能还有入队，最终必须排空
-        replicator.flush()
+        replicator.flushOnce()
         @Assert(replicator.pendingCount == 0)
     }
 
@@ -309,7 +360,7 @@ class BackupReplicatorTest {
             replicator.record("/a", 1, LogPosition(1, 0), [2u8])
             replicator.record("/b", 0, LogPosition(1, 0), [3u8])
             replicator.record("/a", 0, LogPosition(1, 8), [4u8])
-            replicator.flush()
+            replicator.flushOnce()
             let sent = transport.messagesSentTo(1)
             @Assert(sent.size == 3)
             let keys = HashSet<String>()

@@ -19,6 +19,7 @@ import std.collection.ArrayList
 import std.collection.concurrent.ConcurrentHashMap
 import std.convert.*
 import std.fs.*
+import std.io.SeekPosition
 import std.sync.AtomicInt64
 import std.time.DateTime
 import std.unittest.*
@@ -148,12 +149,49 @@ class CursorFixture <: Resource {
 
 @Test
 class GroupCursorTest {
+    /** 进程不再注册 `atExit`，整个类的临时目录在收尾时统一回收。 */
+    @AfterAll
+    static func removeTempDirs(): Unit {
+        TestDirs.cleanNamespace("group_cursor")
+    }
+
     private static func posEq(left: LogPosition, right: LogPosition): Bool {
         left.seq == right.seq && left.offset == right.offset
     }
 
     private static func recordSize(body: String, tags: Array<String>): Int64 {
         MQMessageRecord.encode("/t", tags, "mid-${body}", body.toData()).size
+    }
+
+
+    /** 记录损坏（段仍在）：游标不标记已决、不推进，也不跳过后续记录（R3-M2）。 */
+    @TestCase
+    public func corruptedRecordDoesNotAdvanceCursor(): Unit {
+        let fixture = CursorFixture("corrupt_record", ackTimeout: Duration.Zero)
+        try {
+            let first = fixture.append([], "first")
+            fixture.append([], "second")
+            let cursor = fixture.cursorOf()
+            let sub = fixture.sub("s1")
+            let delivered = cursor.next(sub, [sub], MQMatcher()).getOrThrow()
+            @Assert(delivered[1].seq == first.seq && delivered[1].offset == first.offset)
+
+            // 把第一条记录的长度头改成非法值（段文件仍在）
+            let file = File("${fixture.root}/logs/log_1.log", OpenMode.ReadWrite)
+            try {
+                file.seek(SeekPosition.Begin(0))
+                file.write([0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8])
+            } finally {
+                file.close()
+            }
+
+            @Assert(cursor.next(sub, [sub], MQMatcher()).isNone())
+            @Assert(cursor.committed.seq == first.seq && cursor.committed.offset == first.offset)
+            @Assert(cursor.unreadableSkipped == 0)
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
     }
 
     @TestCase
@@ -256,19 +294,205 @@ class GroupCursorTest {
     public func deliveryOverThresholdGoesToDeadLetter(): Unit {
         let fixture = CursorFixture("dead_letter", threshold: 1)
         try {
-            fixture.append([], "one")
+            let position = fixture.append([], "one")
             let cursor = fixture.cursorOf()
             let sub = fixture.sub("s1")
             let members = [sub]
-            cursor.next(sub, members, MQMatcher()).getOrThrow()
-            // 第一次投递 count = 1；超时后再次可投递时 count = 2 > 1 ⇒ 进死信
+            // 阈值 1 = 重试 1 次：共 2 次投递，第 3 次扫描才进死信（R3-M5）
+            @Assert(cursor.next(sub, members, MQMatcher()).isSome())
+            fixture.clock.advance(Duration.second * 11)
+            @Assert(cursor.next(sub, members, MQMatcher()).isSome())
             fixture.clock.advance(Duration.second * 11)
             @Assert(cursor.next(sub, members, MQMatcher()).isNone())
+
             let letters = fixture.deadLetters()
             @Assert(letters.size == 1)
-            @Assert(letters[0].segmentedIndex >= 1)
+            let letter = letters[0]
+            // 死信条目的 7 个字段全部可断言（R3-M11）
+            @Assert(letter.topic == "/t")
+            @Assert(letter.queueIndex == 0)
+            @Assert(letter.subscribeGroup == "g")
+            @Assert(letter.segmentedIndex == position.seq)
+            @Assert(letter.segmentedOffset == position.offset)
+            @Assert(letter.deliverCount == 2)
+            @Assert(letter.deadTime.toUnixTimeStamp() > Duration.Zero)
+            @Assert(letter.record.copyBytes().size > 0)
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 死信按组隔离：一个组进入死信不影响另一个组正常消费（R3-M10）。 */
+    @TestCase
+    public func deadLetterIsIsolatedPerGroup(): Unit {
+        let fixture = CursorFixture("dead_letter_isolation", threshold: 1)
+        try {
+            let position = fixture.append([], "one")
+            let failing = fixture.cursorOf(group: "g")
+            let healthy = fixture.cursorOf(group: "h")
+            let sf = fixture.sub("sf")
+            let sh = fixture.sub("sh")
+            @Assert(failing.next(sf, [sf], MQMatcher()).isSome())
+            @Assert(healthy.next(sh, [sh], MQMatcher()).isSome())
+            @Assert(healthy.ack("sh", position))
+
+            fixture.clock.advance(Duration.second * 11)
+            @Assert(failing.next(sf, [sf], MQMatcher()).isSome())
+            fixture.clock.advance(Duration.second * 11)
+            @Assert(failing.next(sf, [sf], MQMatcher()).isNone())
+
+            let letters = fixture.deadLetters()
+            @Assert(letters.size == 1)
             @Assert(letters[0].subscribeGroup == "g")
-            @Assert(letters[0].deliverCount == 2)
+            // 健康组位点已推进，没有新消息可投
+            @Assert(healthy.next(sh, [sh], MQMatcher()).isNone())
+            failing.close()
+            healthy.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 组内无成员时不扫描；后加入的匹配订阅能拿到尚未越过的消息（R3-M10）。 */
+    @TestCase
+    public func lateMatchingSubscriberReceivesRecord(): Unit {
+        let fixture = CursorFixture("late_subscriber")
+        try {
+            fixture.append(["a"], "one")
+            let cursor = fixture.cursorOf()
+            let early = fixture.sub("early", tags: ["b"])
+            @Assert(cursor.next(early, Array<MQSubscriptionView>(), MQMatcher()).isNone())
+            let late_ = fixture.sub("late", tags: ["a"])
+            @Assert(cursor.next(late_, [late_], MQMatcher()).isSome())
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 已决位置与从未投递位置的 ACK 都被拒绝，且不推进落盘位点（R3-M11）。 */
+    @TestCase
+    public func rejectedAcksKeepPersistedPosition(): Unit {
+        let fixture = CursorFixture("ack_rejected")
+        try {
+            let first = fixture.append([], "one")
+            fixture.append([], "two")
+            let cursor = fixture.cursorOf()
+            let s1 = fixture.sub("s1")
+            let s2 = fixture.sub("s2")
+            let delivered = cursor.next(s1, [s1, s2], MQMatcher()).getOrThrow()
+            @Assert(delivered[1].seq == first.seq && delivered[1].offset == first.offset)
+            // 非归属订阅的 ACK 被拒绝，磁盘上没有位点
+            @Assert(!cursor.ack("s2", first))
+            @Assert(fixture.catalog.positionOf("/t", 0, "g").isNone())
+
+            // 正确 ACK 后位点落盘
+            @Assert(cursor.ack("s1", first))
+            @Assert(fixture.catalog.positionOf("/t", 0, "g").isSome())
+            // 已决位置再 ACK 返回 false（上层映射 ACK_UNKNOWN）
+            @Assert(!cursor.ack("s1", first))
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 并发消费与确认下 `committed` 只增不减（R3-M11）。 */
+    @TestCase
+    public func committedIsMonotonicUnderConcurrency(): Unit {
+        let fixture = CursorFixture("monotonic", ackTimeout: Duration.Zero, threshold: 1000)
+        try {
+            for (i in 0..40) {
+                fixture.append([], "m-${i}")
+            }
+            let cursor = fixture.cursorOf()
+            let done = AtomicInt64(0)
+            let violations = AtomicInt64(0)
+            for (w in 0..4) {
+                spawn {
+                    let sub = fixture.sub("s${w}")
+                    for (_ in 0..10) {
+                        let before = cursor.committed
+                        match (cursor.next(sub, [sub], MQMatcher())) {
+                            case Some(item) =>
+                                cursor.ack(sub.subscribedId, item[1])
+                            case None => ()
+                        }
+                        let after = cursor.committed
+                        if (after.seq < before.seq ||
+                            (after.seq == before.seq && after.offset < before.offset)) {
+                            violations.fetchAdd(1)
+                        }
+                    }
+                    done.fetchAdd(1)
+                }
+            }
+            var waited = 0
+            while (done.load() < 4 && waited < 500) {
+                sleep(Duration.millisecond * 10)
+                waited++
+            }
+            @Assert(done.load() == 4)
+            @Assert(violations.load() == 0)
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 阈值 3 = 重试 3 次：共 4 次投递，第 5 次扫描入死信且 deliverCount = 4（R3-M5）。 */
+    @TestCase
+    public func thresholdThreeAllowsFourDeliveries(): Unit {
+        let fixture = CursorFixture("dead_letter_n3", threshold: 3)
+        try {
+            fixture.append([], "one")
+            let cursor = fixture.cursorOf()
+            let sub = fixture.sub("s1")
+            var deliveries = 0i64
+            for (_ in 0..4) {
+                if (cursor.next(sub, [sub], MQMatcher()).isSome()) {
+                    deliveries++
+                }
+                fixture.clock.advance(Duration.second * 11)
+            }
+            @Assert(deliveries == 4)
+            @Assert(cursor.next(sub, [sub], MQMatcher()).isNone())
+            let letters = fixture.deadLetters()
+            @Assert(letters.size == 1)
+            @Assert(letters[0].deliverCount == 4)
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 发布时间超前超过 5 分钟：按已到期立即投递并记 WARN（R3-M12）。 */
+    @TestCase
+    public func farFuturePublishTimeDeliversImmediately(): Unit {
+        CapturingAppender.install()
+        let fixture = CursorFixture("future_publish")
+        try {
+            fixture.appendAt([], "one", DateTime.nowUTC() + Duration.minute * 10)
+            let cursor = fixture.cursorOf(delaying: Duration.minute * 5)
+            let sub = fixture.sub("s1")
+            @Assert(cursor.next(sub, [sub], MQMatcher()).isSome())
+            @Assert(CapturingAppender.waitFor(["in the future by more than 5m", "deliver immediately"]))
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 发布时间超前 1 分钟（容差内）+ 延迟 5 分钟：不得提前投递（R3-M12）。 */
+    @TestCase
+    public func slightlyFuturePublishTimeStillWaitsForDelay(): Unit {
+        let fixture = CursorFixture("slight_future")
+        try {
+            fixture.appendAt([], "one", DateTime.nowUTC() + Duration.minute)
+            let cursor = fixture.cursorOf(delaying: Duration.minute * 5)
+            let sub = fixture.sub("s1")
+            @Assert(cursor.next(sub, [sub], MQMatcher()).isNone())
             cursor.close()
         } finally {
             fixture.close()
@@ -409,7 +633,7 @@ class GroupCursorTest {
             @Assert(p2.seq > p1.seq)
             let cursor = fixture.cursorOf()
             let sub = fixture.sub("s1")
-            // 组从未消费：边界钉在最老段
+            // 组从未消费：边界钉在编号最小的现存段
             @Assert(fixture.catalog.floorOf("/t", 0) == 1)
             let first = cursor.next(sub, [sub], MQMatcher()).getOrThrow()
             @Assert(cursor.ack("s1", first[1]))
@@ -424,8 +648,32 @@ class GroupCursorTest {
         }
     }
 
+    /** 位点正好落在段末尾（`offset == size`）：继续读后继段，并把 committed 前移落盘（R3-C1）。 */
     @TestCase
-    public func removedCommittedSegmentRecoversToOldestSurvivor(): Unit {
+    public func committedAtSegmentEndContinuesOnNextSegment(): Unit {
+        let sz1 = 4 + recordSize("one", [])
+        let sz2 = 4 + recordSize("two", [])
+        let fixture = CursorFixture("segment_end_cursor", maxFileSize: sz1 + sz2)
+        try {
+            fixture.append([], "one")
+            fixture.append([], "two")
+            fixture.append([], "three")
+            // 段 1 已读满：committed = (1, sz1 + sz2)
+            fixture.store.save("/t", 0, "g", LogPosition(1, sz1 + sz2))
+            let cursor = fixture.cursorOf()
+            let sub = fixture.sub("s1")
+            let next = cursor.next(sub, [sub], MQMatcher()).getOrThrow()
+            @Assert(next[1].seq == 2 && next[1].offset == 0)
+            @Assert(cursor.committed.seq == 2 && cursor.committed.offset == 0)
+            @Assert(fixture.store.load("/t", 0, "g").getOrThrow().seq == 2)
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @TestCase
+    public func removedCommittedSegmentRecoversToNextSurvivor(): Unit {
         let sz1 = 4 + recordSize("one", [])
         let sz2 = 4 + recordSize("two", [])
         let fixture = CursorFixture("segment_gone", maxFileSize: sz1 + sz2)
@@ -439,7 +687,7 @@ class GroupCursorTest {
 
             let cursor = fixture.cursorOf()
             let sub = fixture.sub("s1")
-            // 打开段 1 失败 → 跳到现存最老段 2 继续，不永久报错
+            // 打开段 1 失败 → 跳到现存编号最小的现存段 2 继续，不永久报错
             let recovered = cursor.next(sub, [sub], MQMatcher()).getOrThrow()
             @Assert(recovered[1].seq == 2)
             @Assert(cursor.committed.seq == 2)
@@ -706,9 +954,11 @@ class GroupCursorTest {
             let sub = fixture.sub("s1")
             @Assert(cursor.next(sub, [sub], MQMatcher()).isSome())
             fixture.clock.advance(Duration.second * 11)
-            // 第二次尝试超过阈值：直接进死信，不再返回给订阅者
+            // 阈值 1：第二次仍然投递（重试），第三次扫描才进死信
+            @Assert(cursor.next(sub, [sub], MQMatcher()).isSome())
+            fixture.clock.advance(Duration.second * 11)
             @Assert(cursor.next(sub, [sub], MQMatcher()).isNone())
-            @Assert(metrics.deliveredOf("/t", "g") == 1)
+            @Assert(metrics.deliveredOf("/t", "g") == 2)
             @Assert(metrics.deadLetteredOf("/t", "g") == 1)
             cursor.close()
         } finally {
@@ -749,23 +999,43 @@ class GroupCursorTest {
             let members = [s1, s2]
             // s1 扫描：记录分配给 s2（entry.position = 记录位置）
             @Assert(cursor.next(s1, members, MQMatcher()).isNone())
-            // 把该段的长度头改成 0：readAt 读不到内容
+            // 真实删段（模拟 TTL 清理）：readAt 按「段缺失」处理，而不是「记录损坏」
             let dir = "${fixture.root}/logs"
-            let rewritten = Array<Bool>(1, repeat: false)
+            let segments = ArrayList<String>()
             Directory.walk(dir) {info: FileInfo =>
-                if (!rewritten[0] && !info.isDirectory() && info.name.startsWith("log_")) {
-                    let file = File(info.path.toString(), OpenMode.Write)
-                    file.write([0u8, 0u8, 0u8, 0u8])
-                    file.close()
-                    rewritten[0] = true
+                if (!info.isDirectory() && info.name.startsWith("log_")) {
+                    segments.add(info.path.toString())
                 }
                 true
             }
-            @Assert(rewritten[0])
+            @Assert(segments.size > 0)
+            for (path in segments) {
+                remove(path)
+            }
             @Assert(cursor.next(s2, members, MQMatcher()).isNone())
             @Assert(cursor.unreadableSkipped == 1)
             @Assert(cursor.committed.seq > position.seq ||
                 (cursor.committed.seq == position.seq && cursor.committed.offset > position.offset))
+            cursor.close()
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 跳过计数进指标：两条无匹配记录的越过计入 skippedNoMatch，其余两个不变（R3-M8）。 */
+    @TestCase
+    public func skippedNoMatchIsCountedInMetrics(): Unit {
+        let fixture = CursorFixture("metrics_no_match")
+        try {
+            fixture.append(["a"], "one")
+            fixture.append(["a"], "two")
+            let metrics = MQMetrics()
+            let cursor = fixture.cursorOf(metrics: metrics)
+            let s1 = fixture.sub("s1", tags: ["b"])
+            @Assert(cursor.next(s1, [s1], MQMatcher()).isNone())
+            @Assert(metrics.skippedNoMatchOf("/t", "g") == 2)
+            @Assert(metrics.skippedUnreadableOf("/t", "g") == 0)
+            @Assert(metrics.skippedUnsupportedOf("/t", "g") == 0)
             cursor.close()
         } finally {
             fixture.close()

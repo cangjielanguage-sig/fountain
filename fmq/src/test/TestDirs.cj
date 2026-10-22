@@ -15,75 +15,46 @@ limitations under the License.
 */
 package fountain::fmq.test
 
-import std.collection.concurrent.ConcurrentHashMap
-import std.env.atExit
 import std.fs.{Directory, exists, remove}
 import std.random.Random
-import std.sync.{AtomicBool, AtomicInt64}
+import std.sync.AtomicInt64
 
 /**
- * 测试临时目录工厂。
+ * 测试临时目录工厂：同模块各包的用例共用的测试 helper。
  *
- * 所有用例的临时目录都放在 `/tmp/fmq_test_<namespace>/<name>-<token>`，
- * `token` 由进程内自增序号与随机数拼成，保证并发用例互不干扰；
- * 每个 namespace 的根目录在进程退出时（`atExit`）整棵删除，
- * 不再使用固定的 `/tmp/fmq_test_*` 路径互相覆盖。
+ * 目录位于 `/tmp/fmq_test_<namespace>/<name>-<token>`，`token` 由进程内自增序号与随机数拼成，
+ * 并发用例互不干扰。可见性为 `protected`（模块内可见）：兄弟包可通过
+ * `import fountain::fmq.test.TestDirs` 引用，模块外不可见；生产源集不引用它，因此 `fmq`
+ * 可执行文件不链接该符号（仓颉的 `internal` 只覆盖当前包及子包，`fmq.test` 与 `fmq.queue`
+ * 是兄弟包，所以这里必须用 `protected`）。
+ *
+ * 本类型不注册任何进程级钩子（如 `atExit`）；用例在 `@AfterAll` 中调用
+ * `TestDirs.cleanNamespace` 回收整个 namespace。
  */
-public class TestDirs {
+protected class TestDirs {
     private static let seq = AtomicInt64(0)
-    private static let registered = ConcurrentHashMap<String, AtomicBool>()
 
-    /**
-     * 返回一个已创建且进程退出时自动清理的临时目录。
-     */
-    public static func of(namespace: String, name: String): String {
-        let root = "/tmp/fmq_test_${namespace}"
-        let dir = "${root}/${name}-${token()}"
+    /** 返回一个已创建且由调用方负责清理的临时目录。 */
+    protected static func of(namespace: String, name: String): String {
+        let dir = "/tmp/fmq_test_${namespace}/${name}-${token()}"
         Directory.create(dir, recursive: true)
-        registerCleanup(root)
         return dir
     }
 
-    /**
-     * 只给 namespace，目录名用自增序号。
-     */
-    public static func unique(namespace: String): String {
-        return of(namespace, "case")
-    }
-
-    /**
-     * 删除目录树；不存在时静默返回。
-     */
-    public static func clean(path: String): Unit {
-        if (exists(path)) {
+    /** 删除整个 namespace 根目录；不存在时静默返回。 */
+    protected static func cleanNamespace(namespace: String): Unit {
+        let root = "/tmp/fmq_test_${namespace}"
+        if (exists(root)) {
             try {
-                remove(path, recursive: true)
+                remove(root, recursive: true)
             } catch (_: Exception) {
             }
         }
-    }
-
-    /**
-     * 删除整个 namespace 根目录；用例内部需要干净目录时调用。
-     */
-    public static func cleanNamespace(namespace: String): Unit {
-        clean("/tmp/fmq_test_${namespace}")
     }
 
     private static func token(): String {
         let n = seq.fetchAdd(1)
         let r = Random()
         return "${r.nextUInt64()}-${n}"
-    }
-
-    private static func registerCleanup(root: String): Unit {
-        let flag = AtomicBool(false)
-        let previous = registered.addIfAbsent(root, flag)
-        if (previous.isSome()) {
-            return
-        }
-        atExit {
-            clean(root)
-        }
     }
 }

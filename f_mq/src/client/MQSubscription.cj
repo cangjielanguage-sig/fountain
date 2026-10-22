@@ -17,7 +17,6 @@ package fountain::f_mq.client
 
 import std.collection.concurrent.ConcurrentHashMap
 import std.sync.AtomicInt64
-import fountain::f_mq.base.MQFilter
 
 /**
  * 客户端侧订阅状态。
@@ -25,25 +24,23 @@ import fountain::f_mq.base.MQFilter
  * `deliveries` 记录「队列 + 位置 → 投递该位置的节点下标」，`ack` 据此把确认发回正确节点；
  * 每个队列的段日志位置都会重复，键必须包含 `queueIndex` 才能避免串台。
  * `autoAck` 订阅不记录，显式 ack 走广播路径。
+ *
+ * 只保留运行期要用的状态：`tags`/`filter` 在订阅时已校验并编码进请求，
+ * 服务端才是匹配的权威，客户端不再保存（R1-G2）。
  */
 internal class MQSubscription {
     let subscribedId: String
     let topic: String
     let subscribeGroup: String
-    let tags: Array<String>
-    let filter: MQFilter
     let autoAck: Bool
     let owners: Array<Int64>
     let deliveries = ConcurrentHashMap<String, Int64>()
     private let cursor = AtomicInt64(0)
 
-    init(subscribedId: String, topic: String, subscribeGroup: String, tags: Array<String>, filter: MQFilter,
-        autoAck: Bool, owners: Array<Int64>) {
+    init(subscribedId: String, topic: String, subscribeGroup: String, autoAck: Bool, owners: Array<Int64>) {
         this.subscribedId = subscribedId
         this.topic = topic
         this.subscribeGroup = subscribeGroup
-        this.tags = tags
-        this.filter = filter
         this.autoAck = autoAck
         this.owners = owners
     }

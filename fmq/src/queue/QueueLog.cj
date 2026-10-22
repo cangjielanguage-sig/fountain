@@ -49,15 +49,35 @@ protected class QueueLog <: Resource {
 
     private let log: SegmentedLog
     private let label: String
+    /** 段缺失/越界 WARN 的秒级限流（R3-M9）。 */
+    private let warnLimiter: WarnLimiter
+    /** 单条记录的真实上限：段容量减长度头，再与 `MAX_RECORD_SIZE` 取小。 */
+    private let effectiveMaxRecord: Int64
 
-    protected init(dir: String, maxFileSize: Int64, syncInterval: Int64) {
+    protected init(dir: String, maxFileSize: Int64, syncInterval: Int64,
+        warnNowMs!: () -> Int64 = {=> DateTime.now().toUnixTimeStamp().toMilliseconds()}) {
+        if (maxFileSize <= PREFIX_SIZE) {
+            throw IllegalArgumentException(
+                "segment size ${maxFileSize} must be greater than the ${PREFIX_SIZE}-byte record header")
+        }
         this.log = SegmentedLog(LogConfig(dir, "log", maxFileSize, syncInterval))
         this.label = dir
+        this.warnLimiter = WarnLimiter(nowMs: warnNowMs)
+        let bySegment = maxFileSize - PREFIX_SIZE
+        this.effectiveMaxRecord = if (bySegment < MAX_RECORD_SIZE) {
+            bySegment
+        } else {
+            MAX_RECORD_SIZE
+        }
     }
 
     protected func append(record: Array<Byte>): LogPosition {
-        if (record.size > MAX_RECORD_SIZE) {
-            throw IllegalArgumentException("record too large: ${record.size} bytes, limit ${MAX_RECORD_SIZE}")
+        if (record.size == 0) {
+            throw IllegalArgumentException("empty record is not allowed")
+        }
+        if (record.size > effectiveMaxRecord) {
+            throw IllegalArgumentException(
+                "record too large: ${record.size} bytes, limit ${effectiveMaxRecord}")
         }
         let entry = Array<Byte>(PREFIX_SIZE + record.size, repeat: 0u8)
         QueueLog.putInt32BE(entry, 0, record.size)
@@ -65,28 +85,29 @@ protected class QueueLog <: Resource {
         log.append(entry)
     }
 
-    /** 从位置起读一条记录；位置无效或记录损坏返回 `None`。 */
-    protected func readAt(position: LogPosition): ?Array<Byte> {
+    /**
+     * 从位置起读一条记录，并区分「读到了」「记录损坏」「段已不存在」。
+     *
+     * 调用方必须能分开处理损坏与段缺失：损坏时不推进游标（否则丢消息），
+     * 段缺失时按恢复语义前移（R3-M1/M2）。
+     */
+    protected func readAt(position: LogPosition): LogReadResult {
         let reader = openRecordsFrom(position)
         try {
             match (reader.next()) {
-                case Some(item) => Some(item[0])
-                case None => None<Array<Byte>>
+                case Some(item) => LogReadResult.Record(item[0])
+                case None =>
+                    if (reader.isCorrupted()) {
+                        LogReadResult.Corrupt
+                    } else {
+                        LogReadResult.SegmentGone
+                    }
             }
         } finally {
             reader.close()
         }
     }
 
-    /** 从位置起打开原始顺序流（快照语义：之后新 append 的数据不出现）。 */
-    protected func openFrom(position: LogPosition): InputStream {
-        let segs = segmentsOrEmpty()
-        match (startPositionOf(segs, position)) {
-            case Some(start) => log.openEntryStream(start.seq, start.offset)
-            // 没有任何可读段：按空流处理，调用方读到 EOF，不抛异常（A47）
-            case None => ByteBuffer()
-        }
-    }
 
     /** 从位置起按记录边界顺序读取（游标用）。 */
     protected func openRecordsFrom(position: LogPosition): QueueRecordReader {
@@ -98,24 +119,62 @@ protected class QueueLog <: Resource {
     }
 
     /**
-     * 起点段被清理时给出实际可读的起点。
+     * 起点归一化：把外部持久化位点映射到「确实还有字节可读」的起点。
      *
-     * 段号 `>= position.seq` 的最小段优先：段号更大说明起点段已被 TTL 清理，从后继段继续；
-     * 没有后继段返回 `None`（调用方按空流处理）。两种恢复都记 WARN，便于发现「读流起点被删」。
+     * - 段存在且 `offset < size`：原样返回；
+     * - 段存在但已读满（`offset >= size`）：落到**编号更大的最近现存段**起点，`offset > size` 记 WARN
+     *   （游标异常），`offset == size` 只是正常的段末尾；
+     * - 段已被清理：同样跳到更大段并 WARN；没有后继段返回 `None`（调用方按空流处理）。
      */
-    private func startPositionOf(segments: ArrayList<SegmentedMeta>, position: LogPosition): ?LogPosition {
+    /**
+     * 解析「从该位点开始还能读到的起点」。
+     *
+     * `strict = true` 表示调用方不接受任何恢复：位点所在段不存在时直接抛
+     * [QueueCorruptionException]（`stats` 用它区分「还没被消费路径修复」与「真的读完了」）。
+     */
+    protected func resolveStart(position: LogPosition, strict!: Bool = false): ?LogPosition {
+        let segments = segmentsOrEmpty()
         for (meta in segments) {
             if (meta.index == position.seq) {
-                return Some(position)
+                return startPositionOf(segments, position)
             }
         }
-        match (QueueLog.startSegmentAtOrAfter(segments, position.seq)) {
-            case Some(index) =>
-                logger.warn("stream of queue ${label} starts at ${index}:0 instead of " +
-                    "${position.seq}:${position.offset} because that segment was removed")
-                Some(LogPosition(index, 0))
+        if (strict) {
+            throw QueueCorruptionException(
+                "segment ${position.seq} of queue ${label} is missing (position ${position.seq}:${position.offset})")
+        }
+        return startPositionOf(segments, position)
+    }
+
+    private func startPositionOf(segments: ArrayList<SegmentedMeta>, position: LogPosition): ?LogPosition {
+        for (meta in segments) {
+            if (meta.index != position.seq) {
+                continue
+            }
+            if (position.offset < meta.size) {
+                return Some(position)
+            }
+            if (position.offset > meta.size && warnLimiter.allow("past-end\u{0}${position.seq}:${position.offset}")) {
+                logger.warn("position ${position.seq}:${position.offset} of queue ${label} is past segment end " +
+                    "${meta.size}: continuing at the next segment")
+            }
+            return startAfter(segments, position.seq)
+        }
+        if (warnLimiter.allow("missing\u{0}${position.seq}:${position.offset}")) {
+            logger.warn("stream of queue ${label} starts at the next existing segment instead of " +
+                "${position.seq}:${position.offset} because that segment was removed")
+        }
+        startAfter(segments, position.seq)
+    }
+
+    /** `seq` 之后（不含 `seq`）的最近现存段起点。 */
+    private func startAfter(segments: ArrayList<SegmentedMeta>, seq: Int64): ?LogPosition {
+        match (QueueLog.startSegmentAtOrAfter(segments, seq + 1)) {
+            case Some(index) => Some(LogPosition(index, 0))
             case None =>
-                logger.warn("no segment at or after ${position.seq} on queue ${label}, treated as empty stream")
+                if (warnLimiter.allow("no-successor\u{0}${seq}")) {
+                    logger.warn("no segment after ${seq} on queue ${label}, treated as empty stream")
+                }
                 None<LogPosition>
         }
     }
@@ -144,6 +203,12 @@ protected class QueueLog <: Resource {
      * 用于统计：`backlog` 与 `lagMs` 不依赖内存计数器，重启后仍然准确。
      * 起始段被 TTL 清理时跳到「最接近的更大段」继续并记 WARN；没有任何后继段（或目录不可读）
      * 返回 `(0, None)` 并记 WARN，不把「段缺失」静默解释成「没有积压」。
+     */
+    /**
+     * 从 `position` 起统计记录数与首条发布时间（测试与运维观测 API）。
+     *
+     * 生产 `stats` 走单趟扫描（一个队列只读一遍，A62），不复用本方法；
+     * 保留它是为了给用例一条与实现无关的计数口径。
      */
     protected func scanAfter(position: LogPosition): (Int64, ?DateTime) {
         let segs = segmentsOrEmpty()
@@ -188,15 +253,6 @@ protected class QueueLog <: Resource {
             return (0, None<DateTime>)
         }
         (count, first)
-    }
-
-    /** 当前队列的记录总数（从现存最老段扫描）。 */
-    protected func countAll(): Int64 {
-        let segs = segmentsOrEmpty()
-        if (segs.size == 0) {
-            return 0
-        }
-        scanFrom(LogPosition(segs[0].index, 0))[0]
     }
 
     /** 现存段中段号 `>= index` 的最小段号；没有则 `None`（段被删或全部缺失）。 */
@@ -245,6 +301,13 @@ protected class QueueLog <: Resource {
     }
 }
 
+/** 单条记录读取的三种结局：正常/损坏/段已不存在（R3-M1/M2）。 */
+protected enum LogReadResult {
+    | Record(Array<Byte>)
+    | Corrupt
+    | SegmentGone
+}
+
 /**
  * 按 `[长度][记录]` 的边界从段流中逐条读出记录，并维护每条记录的 `LogPosition`。
  *
@@ -288,9 +351,8 @@ protected class QueueRecordReader {
         }
         let length = QueueLog.getInt32BE(header, 0)
         if (length == 0) {
-            // 零长度条目是「到此为止」的标记，写入侧不会产生；按干净结束处理
-            close()
-            return None<(Array<Byte>, LogPosition)>
+            // 写入侧从不产生零长度条目：出现即说明记录损坏，必须停下而不是当成干净结束（R3-M1）
+            return corrupt(0, -1, "zero-length record header")
         }
         match (segmentOf(seq)) {
             case None =>
@@ -302,6 +364,11 @@ protected class QueueRecordReader {
             case Some(meta) =>
                 // 只在通过上界与剩余字节校验后才分配缓冲
                 let remaining = meta.size - offset - QueueLog.PREFIX_SIZE
+                if (remaining < 0) {
+                    // 起点归一化后不应出现：出现即说明调用方绕过了 startPositionOf 或位置被写坏
+                    return corrupt(length, remaining,
+                        "invariant broken: offset ${offset} is past segment ${seq} size ${meta.size}")
+                }
                 if (length < 0 || length > QueueLog.MAX_RECORD_SIZE) {
                     return corrupt(length, remaining,
                         "declared length ${length} exceeds limit ${QueueLog.MAX_RECORD_SIZE}")

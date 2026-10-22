@@ -45,9 +45,12 @@ internal class MQNodePool {
     /** 建连函数：生产用真实 `Client.builder`，用例注入替身以复现慢节点与失败（0.4 的约定）。 */
     private let build: (String) -> Client<DataAny>
     private let nowMs: () -> Int64
+    /** 测试观测点：在入口 closed 检查之后、节点锁之前插入挂起点（并发关闭用例用）。 */
+    private let beforeLock: ?() -> Unit
 
     init(hosts: Array<String>, build!: ?(String) -> Client<DataAny> = None,
-        nowMs!: () -> Int64 = {=> DateTime.now().toUnixTimeStamp().toMilliseconds()}) {
+        nowMs!: () -> Int64 = {=> DateTime.now().toUnixTimeStamp().toMilliseconds()},
+        beforeLock!: ?() -> Unit = None) {
         if (hosts.size == 0) {
             throw MQConnectionException("node list is empty")
         }
@@ -66,6 +69,7 @@ internal class MQNodePool {
             case None => {entry => buildClient(entry)}
         }
         this.nowMs = nowMs
+        this.beforeLock = beforeLock
     }
 
     prop size: Int64 {
@@ -86,7 +90,15 @@ internal class MQNodePool {
         if (closed.load()) {
             throw MQConnectionException("client pool is closed")
         }
+        match (beforeLock) {
+            case Some(hook) => hook()
+            case None => ()
+        }
         synchronized(nodeLocks[nodeIndex]) {
+            // 入口检查与加锁之间可能被 close() 插入：锁内必须复核，否则 close 返回后仍会建出活连接（T7.1）
+            if (closed.load()) {
+                throw MQConnectionException("client pool is closed")
+            }
             match (slots[nodeIndex]) {
                 case Some(existing) =>
                     if (!existing.isClosed()) {

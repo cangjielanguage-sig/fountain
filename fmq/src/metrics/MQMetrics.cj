@@ -32,10 +32,23 @@ protected class MQMetrics {
         "${topic}\u{0}${group}\u{0}${name}"
     }
 
+    /**
+     * 自增：用一次 `entryView` 完成「取或建 + 自增」。
+     *
+     * 分两步（`addIfAbsent` 后 `get().getOrThrow()`）会在并发删除时拿到 `None` 并抛异常，
+     * 把指标问题变成消费路径的 `INTERNAL`（R4-G4）。
+     */
     private func bump(topic: String, group: String, name: String): Unit {
-        let key = key(topic, group, name)
-        counters.addIfAbsent(key, AtomicInt64(0))
-        counters.get(key).getOrThrow().fetchAdd(1)
+        counters.entryView(key(topic, group, name)) {view =>
+            match (view.value) {
+                case Some(counter) =>
+                    counter.fetchAdd(1)
+                    ()
+                case None =>
+                    view.value = AtomicInt64(1)
+            }
+        }
+        ()
     }
 
     private func valueOf(topic: String, group: String, name: String): Int64 {
@@ -110,5 +123,31 @@ protected class MQMetrics {
 
     protected func deadLetteredOf(topic: String, group: String): Int64 {
         valueOf(topic, group, "deadLettered")
+    }
+
+    // ===== 跳过计数（R3-M4/M8）：只统计「越过」，损坏不计入 =====
+
+    protected func incSkippedUnreadable(topic: String, group: String): Unit {
+        bump(topic, group, "skippedUnreadable")
+    }
+
+    protected func incSkippedNoMatch(topic: String, group: String): Unit {
+        bump(topic, group, "skippedNoMatch")
+    }
+
+    protected func incSkippedUnsupported(topic: String, group: String): Unit {
+        bump(topic, group, "skippedUnsupported")
+    }
+
+    protected func skippedUnreadableOf(topic: String, group: String): Int64 {
+        valueOf(topic, group, "skippedUnreadable")
+    }
+
+    protected func skippedNoMatchOf(topic: String, group: String): Int64 {
+        valueOf(topic, group, "skippedNoMatch")
+    }
+
+    protected func skippedUnsupportedOf(topic: String, group: String): Int64 {
+        valueOf(topic, group, "skippedUnsupported")
     }
 }

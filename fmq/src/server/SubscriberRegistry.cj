@@ -19,7 +19,6 @@ import std.collection.{ArrayList, HashMap}
 import std.sync.Mutex
 import fountain::f_mq.base.MQErrorCode
 import fountain::f_mq.base.payload.MQResult
-import fountain::f_net.SocketBuffer
 
 /**
  * 订阅表：`subscribedId → 订阅`，外加 `(topic, group) → [subscribedId]` 索引。
@@ -133,23 +132,6 @@ protected class SubscriberRegistry {
         }
     }
 
-    /** 连接断开时清理其名下全部订阅。 */
-    func removeByBuffer(buffer: SocketBuffer): Unit {
-        synchronized(lock) {
-            let victims = ArrayList<String>()
-            for ((id, info) in byId) {
-                if (info.hasBuffer(buffer)) {
-                    victims.add(id)
-                }
-            }
-            for (id in victims) {
-                match (byId.remove(id)) {
-                    case Some(info) => removeFromGroup(info.topic, info.subscribeGroup, id)
-                    case None => ()
-                }
-            }
-        }
-    }
 
     /** 主题被删除时清理相关订阅。 */
     func removeByTopic(topic: String): Unit {
@@ -212,12 +194,6 @@ protected class SubscriberRegistry {
                 result.add(info)
             }
             result.toArray()
-        }
-    }
-
-    func count(): Int64 {
-        synchronized(lock) {
-            byId.size
         }
     }
 

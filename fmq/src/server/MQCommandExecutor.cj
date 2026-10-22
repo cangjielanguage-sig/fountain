@@ -313,7 +313,8 @@ protected class MQCommandExecutor {
                 "invalid subscribe group '${payload.subscribeGroup}'")
         }
         if (!MQTags.isValid(payload.tags)) {
-            return MQProtocol.fail(request, MQErrorCode.INTERNAL, "invalid tags")
+            log.warn("SUBSCRIBE with invalid tags for topic '${payload.topic}'")
+            return MQProtocol.fail(request, MQErrorCode.INVALID_TAGS, "invalid tags")
         }
         if (store.topicOf(payload.topic).isNone()) {
             return MQProtocol.fail(request, MQErrorCode.TOPIC_NOT_EXIST,

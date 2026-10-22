@@ -45,6 +45,7 @@ public class MQClient <: Resource {
     private let pool: MQNodePool
     private let ownership: MQOwnershipCache
     private let subscriptions = ConcurrentHashMap<String, MQSubscription>()
+    private let retired = MQRetiredSubscriptions()
     private let closed = AtomicBool(false)
     private let closeLock = Mutex()
 
@@ -133,8 +134,8 @@ public class MQClient <: Resource {
         if (!MQTags.isValid(tags)) {
             throw MQException("invalid tags on topic '${topic}'")
         }
-        // 非法表达式在本地失败，不发请求
-        let compiled = MQFilter.compile(filter)
+        // 非法表达式在本地失败，不发请求；编译结果只用于校验，不随订阅保存（R1-G2）
+        MQFilter.compile(filter)
         let subscribedId = UUID.random().toString()
         let payload = MQSubscribePayload(subscribedId, topic, subscribeGroup, tags, filter, autoAck)
         let accepted = ArrayList<Int64>()
@@ -158,7 +159,7 @@ public class MQClient <: Resource {
             }
         }
         if (let Some(error) <- fatal) {
-            let failedNodes = rollback(subscribedId, accepted)
+            let failedNodes = rollback(subscribedId, topic, accepted)
             let suffix = if (failedNodes.size == 0) {
                 ""
             } else {
@@ -173,14 +174,13 @@ public class MQClient <: Resource {
             throw MQConnectionException("no node owns topic '${topic}'")
         }
         let owners = accepted.toArray()
-        subscriptions.add(subscribedId, MQSubscription(subscribedId, topic, subscribeGroup, tags, compiled,
-            autoAck, owners))
+        subscriptions.add(subscribedId, MQSubscription(subscribedId, topic, subscribeGroup, autoAck, owners))
         ownership.put(topic, owners)
         subscribedId
     }
 
     /** 回滚已接受的节点；返回回滚失败的节点描述（调用方把它拼进异常文案，A15）。 */
-    private func rollback(subscribedId: String, accepted: ArrayList<Int64>): Array<String> {
+    private func rollback(subscribedId: String, topic: String, accepted: ArrayList<Int64>): Array<String> {
         if (accepted.size == 0) {
             return []
         }
@@ -200,7 +200,8 @@ public class MQClient <: Resource {
             }
         }
         if (failed.size > 0) {
-            log.error("rollback of subscription ${subscribedId} failed on nodes: ${String.join(failed.toArray(), delimiter: ",")}")
+            log.error("rollback of subscription '${subscribedId}' (topic '${topic}') failed on nodes: " +
+                "${String.join(failed.toArray(), delimiter: ",")}")
         }
         failed.toArray()
     }
@@ -253,17 +254,21 @@ public class MQClient <: Resource {
                                             result.segmentedOffset)
                                     case None =>
                                         // 非空记录解不出来：不能当成「没有消息」继续轮询（A16）
-                                        log.error("cannot decode record from subscription ${subscribedId} at " +
+                                        log.error("cannot decode record of subscription ${subscribedId} " +
+                                            "(topic ${sub.topic}, group ${groupOf(sub)}) at " +
                                             "${result.queueIndex}:${result.segmentedIndex}:${result.segmentedOffset} " +
                                             "(${result.record.size()} bytes)")
                                         throw MQServiceException(MQErrorCode.INTERNAL,
-                                            "cannot decode consume result at ${result.queueIndex}:" +
+                                            "cannot decode consume result of subscription ${subscribedId} " +
+                                            "(topic ${sub.topic}) at ${result.queueIndex}:" +
                                             "${result.segmentedIndex}:${result.segmentedOffset}")
                                 }
                             case None =>
-                                log.error("consume response of ${subscribedId} is not MQConsumeResult")
+                                log.error("consume response of ${subscribedId} (topic ${sub.topic}) " +
+                                    "is not MQConsumeResult")
                                 throw MQServiceException(MQErrorCode.INTERNAL,
-                                    "consume response is not MQConsumeResult")
+                                    "consume response of subscription ${subscribedId} (topic ${sub.topic}) " +
+                                    "is not MQConsumeResult")
                         }
                     case TransferOutcome.Timeout =>
                         lastConnectionError = MQConnectionException("consume on node ${node} timed out")
@@ -275,16 +280,17 @@ public class MQClient <: Resource {
                 // 本轮全部节点不可达：明确报错，而不是永久空转（A12）
                 // 文案带节点下标：调用方直接上抛或落业务日志时也能看到是哪些节点失败（A16）
                 let tried = nodeList(sub.owners)
-                log.error("consume on subscription '${subscribedId}' failed: nodes ${tried} unreachable")
+                log.error("consume on subscription '${subscribedId}' (topic '${sub.topic}') failed: " +
+                    "nodes ${tried} unreachable")
                 match (lastConnectionError) {
                     case Some(e) =>
                         throw MQConnectionException(
-                            "all owner nodes of subscription '${subscribedId}' are unreachable " +
-                            "(tried nodes ${tried})", e)
+                            "all owner nodes of subscription '${subscribedId}' (topic '${sub.topic}') " +
+                            "are unreachable (tried nodes ${tried})", e)
                     case None =>
                         throw MQConnectionException(
-                            "all owner nodes of subscription '${subscribedId}' are unreachable " +
-                            "(tried nodes ${tried})")
+                            "all owner nodes of subscription '${subscribedId}' (topic '${sub.topic}') " +
+                            "are unreachable (tried nodes ${tried})")
                 }
             }
             sleep(CONSUME_POLL_INTERVAL)
@@ -317,10 +323,12 @@ public class MQClient <: Resource {
                         }
                         sub.deliveries.remove(key)
                     case TransferOutcome.Timeout =>
-                        log.error("ack of subscription '${subscribedId}' at ${key} timed out on node ${node}")
+                        log.error("ack of subscription '${subscribedId}' (topic '${sub.topic}') at ${key} " +
+                            "timed out on node ${node}")
                         throw MQConnectionException("ack to node ${node} timed out")
                     case TransferOutcome.Rejected(e) =>
-                        log.error("ack of subscription '${subscribedId}' at ${key} failed on node ${node}: ${e.message}")
+                        log.error("ack of subscription '${subscribedId}' (topic '${sub.topic}') at ${key} " +
+                            "failed on node ${node}: ${e.message}")
                         throw MQConnectionException("cannot ack position ${key} on node ${node}", e)
                 }
             case None =>
@@ -347,7 +355,8 @@ public class MQClient <: Resource {
                     }
                 }
                 if (!accepted) {
-                    log.error("ack of subscription '${subscribedId}' at ${key} failed on nodes ${nodeList(sub.owners)}")
+                    log.error("ack of subscription '${subscribedId}' (topic '${sub.topic}') at ${key} " +
+                        "failed on nodes ${nodeList(sub.owners)}")
                     match (lastConnectionError) {
                         case Some(e) =>
                             throw MQConnectionException("cannot ack position ${key} on any node", e)
@@ -363,11 +372,22 @@ public class MQClient <: Resource {
     /**
      * 退订：向该订阅的所有 owner 发送 `UNSUBSCRIBE` 并删除本地订阅。
      *
-     * 服务端回 `SUBSCRIBE_NOT_EXIST` 视为成功；本地不存在的 id 直接抛异常且不发请求。
+     * 幂等：同一 id 重复退订返回成功且不再发请求（本地已无该订阅）；
+     * 服务端回 `SUBSCRIBE_NOT_EXIST` 视为成功；从未订阅过的 id 抛异常且不发请求。
+     * 部分节点失败时保留本地订阅，调用方可重试。
      */
     public func unsubscribe(subscribedId: String): Unit {
         ensureOpen()
-        let sub = subscriptionOf(subscribedId)
+        let sub = match (subscriptions.get(subscribedId)) {
+            case Some(s) => s
+            case None =>
+                // 已退订 → 成功空操作；从未订阅 → 未知 id（R5-4）
+                if (retired.contains(subscribedId)) {
+                    return
+                }
+                throw MQServiceException(MQErrorCode.SUBSCRIBE_NOT_EXIST,
+                    "subscription '${subscribedId}' does not exist")
+        }
         let payload = MQUnsubscribePayload(subscribedId)
         let failed = ArrayList<String>()
         for (node in sub.owners) {
@@ -386,11 +406,14 @@ public class MQClient <: Resource {
         }
         if (failed.size > 0) {
             // 本地订阅保留，调用方可重试（A14）
-            log.error("unsubscribe ${subscribedId} failed on nodes: ${String.join(failed.toArray(), delimiter: ",")}")
+            log.error("unsubscribe '${subscribedId}' (topic '${sub.topic}', group '${groupOf(sub)}') " +
+                "failed on nodes: ${String.join(failed.toArray(), delimiter: ",")}")
             throw MQConnectionException(
-                "unsubscribe '${subscribedId}' failed on nodes: ${String.join(failed.toArray(), delimiter: ",")}")
+                "unsubscribe '${subscribedId}' (topic '${sub.topic}') failed on nodes: " +
+                "${String.join(failed.toArray(), delimiter: ",")}")
         }
         subscriptions.remove(subscribedId)
+        retired.add(subscribedId)
     }
 
     /** 幂等关闭：关闭全部节点连接并清空订阅。 */
@@ -448,6 +471,15 @@ public class MQClient <: Resource {
         } catch (e: Exception) {
             log.warn("request to node ${node} (${address}) failed: ${e.message}")
             TransferOutcome.Rejected(e)
+        }
+    }
+
+    /** 订阅组名的日志表示：默认组显示为 `<default>`。 */
+    private static func groupOf(sub: MQSubscription): String {
+        if (sub.subscribeGroup.isEmpty()) {
+            "<default>"
+        } else {
+            sub.subscribeGroup
         }
     }
 

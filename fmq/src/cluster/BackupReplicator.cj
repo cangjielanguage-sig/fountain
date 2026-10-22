@@ -36,6 +36,8 @@ private class BackupItem {
     let position: LogPosition
     let record: Array<Byte>
     var attempts: Int64
+    /** 上一次发送失败的目标；空表示「该批次的全部目标」（R2-G5）。 */
+    var remainingTargets: Array<Int64> = []
 
     init(topic: String, queueIndex: Int64, position: LogPosition, record: Array<Byte>, attempts!: Int64 = 0) {
         this.topic = topic
@@ -43,6 +45,20 @@ private class BackupItem {
         this.position = position
         this.record = record
         this.attempts = attempts
+    }
+}
+
+/** 同一 `(topic, queue)` 且待发目标相同的一组记录：一次发一条消息给每个目标。 */
+private class BackupGroup {
+    let topic: String
+    let queueIndex: Int64
+    let targets: Array<Int64>
+    let items = ArrayList<BackupItem>()
+
+    init(topic: String, queueIndex: Int64, targets: Array<Int64>) {
+        this.topic = topic
+        this.queueIndex = queueIndex
+        this.targets = targets
     }
 }
 
@@ -58,11 +74,15 @@ protected class BackupReplicator {
     private static let FLUSH_INTERVAL_MS: Int64 = 100
     private static let POLL_INTERVAL = Duration.millisecond * 10
     private static let MAX_ATTEMPTS: Int64 = 3
+    /** 关闭等待上限：必须覆盖一次发送的 transport 超时，否则 close 返回时还有在途请求（R2-G6）。 */
+    private static let CLOSE_WAIT_MS: Int64 = 5000
 
     private let transport: MQNodeTransport
     private let backup: Int64
     private let capacity: Int64
     private let lock = Mutex()
+    /** 串行化 flush：工作线程与 close 的 drain 不能同时发同一批（R2-G6）。 */
+    private let flushLock = Mutex()
     private var pending = ArrayList<BackupItem>()
     private var oldestEnqueuedMs: Int64 = 0
     private let closed = AtomicBool(false)
@@ -77,7 +97,7 @@ protected class BackupReplicator {
     }
 
     /** 当前待发送条目数（测试与运维观测用）。 */
-    protected prop pendingCount: Int64 {
+    public prop pendingCount: Int64 {
         get() {
             synchronized(lock) {
                 pending.size
@@ -116,26 +136,24 @@ protected class BackupReplicator {
     }
 
     /** 取走当前批次并发送；失败批次重新入队。 */
-    protected func flush(): Unit {
-        flushOnce()
-    }
-
-    private func flushOnce(): Unit {
+    protected func flushOnce(): Unit {
         if (backup <= 0) {
             return
         }
-        var batch = ArrayList<BackupItem>()
-        synchronized(lock) {
-            if (pending.size == 0) {
-                return
+        synchronized(flushLock) {
+            var batch = ArrayList<BackupItem>()
+            synchronized(lock) {
+                if (pending.size == 0) {
+                    return
+                }
+                batch = pending
+                pending = ArrayList<BackupItem>()
+                oldestEnqueuedMs = 0
             }
-            batch = pending
-            pending = ArrayList<BackupItem>()
-            oldestEnqueuedMs = 0
-        }
-        let retry = sendBatch(batch)
-        if (retry.size > 0) {
-            requeue(retry)
+            let retry = sendBatch(batch)
+            if (retry.size > 0) {
+                requeue(retry)
+            }
         }
     }
 
@@ -147,18 +165,25 @@ protected class BackupReplicator {
             // 单节点：没有副本可发，不算失败（不能凭空丢批次）
             return retry
         }
-        let groups = HashMap<String, ArrayList<BackupItem>>()
+        // 按「待发目标集合」分组：已成功的目标不会再收到同一条记录（R2-G5）
+        let groups = HashMap<String, BackupGroup>()
         for (item in batch) {
-            let key = "${item.topic}\u{0}${item.queueIndex}"
+            let dest = if (item.remainingTargets.size == 0) {
+                targets
+            } else {
+                item.remainingTargets
+            }
+            let key = "${item.topic}\u{0}${item.queueIndex}\u{0}${joinNodes(dest)}"
             match (groups.get(key)) {
-                case Some(items) => items.add(item)
+                case Some(group) => group.items.add(item)
                 case None =>
-                    let items = ArrayList<BackupItem>()
-                    items.add(item)
-                    groups.add(key, items)
+                    let group = BackupGroup(item.topic, item.queueIndex, dest)
+                    group.items.add(item)
+                    groups.add(key, group)
             }
         }
-        for ((_, items) in groups) {
+        for ((_, group) in groups) {
+            let items = group.items
             let first = items[0]
             let records = Array<Array<Byte>>(items.size) {i => items[i].record}
             let states = statesOf(first.topic, first.queueIndex, items)
@@ -166,15 +191,19 @@ protected class BackupReplicator {
             let payload = MQBackupPayload(transport.selfIndex, first.topic, first.queueIndex, records, states,
                 cursors: cursors)
             let message = MQProtocol.publishBackup(payload)
-            var delivered = 0i64
-            for (target in targets) {
+            let failed = ArrayList<Int64>()
+            for (target in group.targets) {
                 match (transport.send(target, message)) {
-                    case Some(_) => delivered++
-                    case None => log.warn("backup to node ${target} failed for ${first.topic}/${first.queueIndex}")
+                    case Some(_) => ()
+                    case None =>
+                        log.warn("backup to node ${target} failed for ${first.topic}/${first.queueIndex}")
+                        failed.add(target)
                 }
             }
-            if (delivered == 0) {
+            if (failed.size > 0) {
+                let dest = failed.toArray()
                 for (item in items) {
+                    item.remainingTargets = dest
                     retry.add(item)
                 }
             }
@@ -264,18 +293,21 @@ protected class BackupReplicator {
         }
     }
 
-    /** 停止工作线程并 drain 剩余批次。 */
+    /** 停止工作线程并 drain 剩余批次；等待上限覆盖一次发送的超时（R2-G6）。 */
     protected func close(): Unit {
         if (!closed.compareAndSwap(false, true)) {
             return
         }
-        // 等待工作线程退出（最多 ~500ms），避免关闭后仍在发送
-        var waited = 0
-        while (workerRunning.load() && waited < 50) {
+        var waited = 0i64
+        while (workerRunning.load() && waited < CLOSE_WAIT_MS) {
             sleep(POLL_INTERVAL)
-            waited++
+            waited += 10
         }
         flushOnce()
+        let left = pendingCount
+        if (left > 0) {
+            log.error("backup replicator closed with ${left} unsent item(s)")
+        }
     }
 
     private func warnRateLimited(message: String): Unit {
@@ -287,6 +319,17 @@ protected class BackupReplicator {
             lastDropWarnMs = now
         }
         log.warn(message)
+    }
+
+    private static func joinNodes(nodes: Array<Int64>): String {
+        let buf = StringBuilder()
+        for (i in 0..nodes.size) {
+            if (i > 0) {
+                buf.append(",")
+            }
+            buf.append(nodes[i].toString())
+        }
+        buf.toString()
     }
 
     private static func nowMs(): Int64 {

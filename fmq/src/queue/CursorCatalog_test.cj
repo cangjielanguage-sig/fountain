@@ -32,6 +32,12 @@ import fountain::fmq.test.TestDirs
  */
 @Test
 class CursorCatalogTest {
+    /** 进程不再注册 `atExit`，整个类的临时目录在收尾时统一回收。 */
+    @AfterAll
+    static func removeTempDirs(): Unit {
+        TestDirs.cleanNamespace("cursor_catalog")
+    }
+
     private let root = TestDirs.of("cursor_catalog", "root")
 
     private func freshDir(name: String): String {

@@ -28,6 +28,12 @@ import fountain::fmq.test.TestDirs
 
 @Test
 class MetaStoreTest {
+    /** 进程不再注册 `atExit`，整个类的临时目录在收尾时统一回收。 */
+    @AfterAll
+    static func removeTempDirs(): Unit {
+        TestDirs.cleanNamespace("meta_store")
+    }
+
     private static func dirOf(name: String): String {
         TestDirs.of("meta_store", name)
     }
@@ -359,7 +365,6 @@ class MetaStoreTest {
             @Assert(reloaded.topicOf("/t").isNone())
             @Assert(reloaded.allTombstones().size == 1)
             @Assert(reloaded.snapshot().tombstones.size == 1)
-            @Assert(reloaded.snapshot().tombstoneFloor == tombstone.revision)
             reloaded.close()
         } finally {
             clean(dir)
@@ -396,15 +401,145 @@ class MetaStoreTest {
         try {
             let store = MetaStore(dir)
             store.load()
-            store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 4))
-            // 墓碑更旧：不能删掉更新的本地条目
+            store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 4, origin: 9))
+            // 墓碑更旧：输给活条目，零副作用（不写墓碑、不删条目）
             @Assert(store.applyTombstone(MQMetaTombstone(MQMetaTombstone.KIND_TOPIC, "/t", "", 3, 0, 0)) ==
-                MetaApplyResult.Applied)
+                MetaApplyResult.Duplicated)
             @Assert(store.topicOf("/t").isSome())
-            // 墓碑更新：删除本地
-            @Assert(store.applyTombstone(MQMetaTombstone(MQMetaTombstone.KIND_TOPIC, "/t", "", 9, 0, 0)) ==
+            @Assert(store.allTombstones().size == 0)
+            // 同 revision、更低 origin：同样输
+            @Assert(store.applyTombstone(MQMetaTombstone(MQMetaTombstone.KIND_TOPIC, "/t", "", 4, 2, 0)) ==
+                MetaApplyResult.Duplicated)
+            @Assert(store.topicOf("/t").isSome())
+            // 同 revision、更高 origin：墓碑胜出
+            @Assert(store.applyTombstone(MQMetaTombstone(MQMetaTombstone.KIND_TOPIC, "/t", "", 4, 10, 0)) ==
                 MetaApplyResult.Applied)
             @Assert(store.topicOf("/t").isNone())
+            @Assert(store.allTombstones().size == 1)
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    // ===== 墓碑参与接受判定（R2-S1） =====
+
+    /** 墓碑按版本挡住迟到的主题分配：不落盘、不复活；更高版本才允许复活并回收墓碑。 */
+    @TestCase
+    public func tombstoneBlocksLateTopicAssignment(): Unit {
+        let dir = dirOf("tombstone_late_topic")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            store.applyTombstone(MQMetaTombstone(MQMetaTombstone.KIND_TOPIC, "/t", "", 7, 0, 0))
+            @Assert(store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 2, origin: 1)) ==
+                MetaApplyResult.Tombstoned)
+            @Assert(store.topicOf("/t").isNone())
+            @Assert(!exists("${dir}/${MQFileNames.topicFile("/t")}"))
+            // 同 revision、更低 origin 也算输
+            @Assert(store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 7, origin: 0)) ==
+                MetaApplyResult.Tombstoned)
+            // 更高 revision 胜出：落盘并回收墓碑
+            @Assert(store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 8, origin: 0)) ==
+                MetaApplyResult.Applied)
+            @Assert(store.topicOf("/t").isSome())
+            @Assert(store.topicTombstone("/t").isNone())
+            @Assert(store.allTombstones().size == 0)
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    /** 组墓碑同样挡住迟到组：`groupExists` 保持为假。 */
+    @TestCase
+    public func tombstoneBlocksLateGroup(): Unit {
+        let dir = dirOf("tombstone_late_group")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 1))
+            store.applyTombstone(MQMetaTombstone(MQMetaTombstone.KIND_GROUP, "/t", "g", 7, 0, 0))
+            @Assert(store.applyGroup(MQSubscribeGroupMeta("/t", "g", revision: 2, origin: 1)) ==
+                MetaApplyResult.Tombstoned)
+            @Assert(!store.groupExists("/t", "g"))
+            // 更高版本可以重新恢复
+            @Assert(store.applyGroup(MQSubscribeGroupMeta("/t", "g", revision: 8, origin: 1)) ==
+                MetaApplyResult.Applied)
+            @Assert(store.groupExists("/t", "g"))
+            @Assert(store.allTombstones().size == 0)
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    // ===== 墓碑删除判定（R2-S2） =====
+
+    /** 墓碑输给「同 revision、更高 origin」的活条目：不写墓碑、不删条目、不留副作用。 */
+    @TestCase
+    public func tombstoneLosingToLiveEntryHasNoSideEffects(): Unit {
+        let dir = dirOf("tombstone_lose")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 5, origin: 9))
+            store.applyGroup(MQSubscribeGroupMeta("/t", "g", revision: 5, origin: 9))
+            @Assert(store.applyTombstone(MQMetaTombstone(MQMetaTombstone.KIND_GROUP, "/t", "g", 5, 2, 0)) ==
+                MetaApplyResult.Duplicated)
+            @Assert(store.groupExists("/t", "g"))
+            // 输掉的墓碑不得落盘：否则会挡住后续 revision 介于两者之间的条目
+            @Assert(store.allTombstones().size == 0)
+            @Assert(!exists("${dir}/tombstones/g_%2Ft_g.meta"))
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    /** 墓碑 revision 更高时删除活条目并落盘。 */
+    @TestCase
+    public func newerTombstoneRemovesLiveEntry(): Unit {
+        let dir = dirOf("tombstone_win")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 4, origin: 9))
+            store.applyGroup(MQSubscribeGroupMeta("/t", "g", revision: 4, origin: 9))
+            @Assert(store.applyTombstone(MQMetaTombstone(MQMetaTombstone.KIND_GROUP, "/t", "g", 5, 2, 0)) ==
+                MetaApplyResult.Applied)
+            @Assert(!store.groupExists("/t", "g"))
+            @Assert(store.allTombstones().size == 1)
+            // 重复到达：已被同 key 墓碑挡住
+            @Assert(store.applyTombstone(MQMetaTombstone(MQMetaTombstone.KIND_GROUP, "/t", "g", 5, 2, 0)) ==
+                MetaApplyResult.Duplicated)
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    /** 主题墓碑胜出时级联删除该主题下的组，包括 revision 更高的组（主题已不存在）。 */
+    @TestCase
+    public func topicTombstoneCascadesAllGroups(): Unit {
+        let dir = dirOf("tombstone_cascade_groups")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            store.applyTopic(MQTopicAssignment("/t", 1, 0, [0], revision: 4, origin: 0))
+            store.applyGroup(MQSubscribeGroupMeta("/t", "old", revision: 3, origin: 0))
+            store.applyGroup(MQSubscribeGroupMeta("/t", "new", revision: 9, origin: 0))
+            @Assert(store.applyTombstone(MQMetaTombstone(MQMetaTombstone.KIND_TOPIC, "/t", "", 5, 0, 0)) ==
+                MetaApplyResult.Applied)
+            @Assert(store.topicOf("/t").isNone())
+            @Assert(!store.groupExists("/t", "old"))
+            @Assert(!store.groupExists("/t", "new"))
+            @Assert(store.groupsOf("/t").size == 0)
             store.close()
         } finally {
             clean(dir)
@@ -655,4 +790,162 @@ class MetaStoreTest {
             clean(dir)
         }
     }
+    /** 删除主题后重新注册：新 revision 必须越过墓碑，墓碑被清除，快照不再带它（R2-G7）。 */
+    @TestCase
+    public func reregisteringTopicAfterDeleteClearsTombstone(): Unit {
+        let dir = dirOf("reregister_topic")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            @Assert(store.applyTopic(MQTopicAssignment("/t", 1, 0, [0])) == MetaApplyResult.Applied)
+            let tombstones = store.removeTopic("/t")
+            @Assert(tombstones.size == 1)
+            let tombstone = tombstones[0]
+            @Assert(store.topicTombstone("/t").isSome())
+
+            let (result, assignment) = store.registerTopic(MQTopicMeta("/t", 2), 1)
+            @Assert(result == MetaApplyResult.Applied)
+            let created = assignment.getOrThrow()
+            @Assert(created.revision > tombstone.revision)
+            @Assert(store.topicTombstone("/t").isNone())
+            @Assert(store.snapshot().tombstones.size == 0)
+            store.close()
+
+            // 重启后依旧没有墓碑
+            let reloaded = MetaStore(dir)
+            reloaded.load()
+            @Assert(reloaded.topicOf("/t").isSome())
+            @Assert(reloaded.topicTombstone("/t").isNone())
+            reloaded.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    /** 删除订阅组后重新注册：逻辑同上（R2-G7）。 */
+    @TestCase
+    public func reregisteringGroupAfterDeleteClearsTombstone(): Unit {
+        let dir = dirOf("reregister_group")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            @Assert(store.applyTopic(MQTopicAssignment("/t", 1, 0, [0])) == MetaApplyResult.Applied)
+            @Assert(store.applyGroup(MQSubscribeGroupMeta("/t", "g1")) == MetaApplyResult.Applied)
+            let tombstone = store.removeGroup("/t", "g1").getOrThrow()
+            @Assert(store.applyGroup(MQSubscribeGroupMeta("/t", "g1")) == MetaApplyResult.Tombstoned)
+
+            let result = store.registerGroup(MQSubscribeGroupMeta("/t", "g1"))
+            @Assert(result == MetaApplyResult.Applied)
+            @Assert(store.groupExists("/t", "g1"))
+            let group = store.groupsOf("/t")[0]
+            @Assert(group.revision > tombstone.revision)
+            @Assert(store.snapshot().tombstones.size == 0)
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    /** 非法组名/主题的载荷返回 `Invalid`，并留下带字段与原因的 WARN（R2-G10）。 */
+    @TestCase
+    public func invalidGroupPayloadLogsWarning(): Unit {
+        CapturingAppender.install()
+        let dir = dirOf("invalid_group_warn")
+        clean(dir)
+        try {
+            let store = MetaStore(dir)
+            store.load()
+            @Assert(store.registerGroup(MQSubscribeGroupMeta("/t", "g\u{7F}")) == MetaApplyResult.Invalid)
+            @Assert(CapturingAppender.waitFor(["g\u{7F}", "invalid group name"]))
+            @Assert(store.applyGroup(MQSubscribeGroupMeta("/t", "g\u{3000}")) == MetaApplyResult.Invalid)
+            @Assert(CapturingAppender.waitFor(["g\u{3000}", "invalid group name"]))
+            // 主题非法时原因指向主题
+            @Assert(store.registerGroup(MQSubscribeGroupMeta("bad", "g1")) == MetaApplyResult.Invalid)
+            @Assert(CapturingAppender.waitFor(["bad", "invalid topic"]))
+            store.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    /**
+     * 墓碑已落盘、条目文件在崩溃窗口里残留：重开后条目必须被墓碑清掉，不得复活（R2-G2）。
+     */
+    @TestCase
+    public func reloadConvergesTombstoneOverStaleEntry(): Unit {
+        let dir = dirOf("converge_tombstone_wins")
+        clean(dir)
+        try {
+            let first = MetaStore(dir)
+            first.load()
+            @Assert(first.applyTopic(MQTopicAssignment("/t", 2, 0, [0, 1], revision: 2)) ==
+                MetaApplyResult.Applied)
+            @Assert(first.applyTombstone(MQMetaTombstone(MQMetaTombstone.KIND_TOPIC, "/t", "", 7, 0, 0)) ==
+                MetaApplyResult.Applied)
+            @Assert(first.topicOf("/t").isNone())
+            first.close()
+
+            // 模拟「删条目失败但墓碑已落盘」的残留文件
+            let path = "${dir}/${MQFileNames.topicFile("/t")}"
+            let file = File.create(path)
+            file.write(MQProtocol.encodePayload<MQTopicAssignment>(
+                MQTopicAssignment("/t", 2, 0, [0, 1], revision: 2)))
+            file.close()
+            @Assert(exists(path))
+
+            let second = MetaStore(dir)
+            second.load()
+            @Assert(second.topicOf("/t").isNone())
+            @Assert(second.topicTombstone("/t").isSome())
+            @Assert(!exists(path))
+            second.close()
+        } finally {
+            clean(dir)
+        }
+    }
+
+    /**
+     * 条目 rev 8 与残留墓碑 rev 5 共存：重开后墓碑必须被删掉，条目保留（R2-G2）。
+     */
+    @TestCase
+    public func reloadDropsTombstoneOlderThanEntry(): Unit {
+        let dir = dirOf("converge_entry_wins")
+        clean(dir)
+        try {
+            let first = MetaStore(dir)
+            first.load()
+            @Assert(first.applyTopic(MQTopicAssignment("/t", 2, 0, [0, 1], revision: 8)) ==
+                MetaApplyResult.Applied)
+            first.close()
+
+            let tombstoneDir = "${dir}/tombstones"
+            if (!exists(tombstoneDir)) {
+                Directory.create(tombstoneDir, recursive: true)
+            }
+            let path = "${tombstoneDir}/t_${MQFileNames.escape("/t")}.meta"
+            let file = File.create(path)
+            file.write(MQProtocol.encodePayload<MQMetaTombstone>(
+                MQMetaTombstone(MQMetaTombstone.KIND_TOPIC, "/t", "", 5, 0, 0)))
+            file.close()
+
+            let second = MetaStore(dir)
+            second.load()
+            @Assert(second.topicOf("/t").isSome())
+            @Assert(second.topicTombstone("/t").isNone())
+            @Assert(!exists(path))
+            second.close()
+
+            // 幂等：再开一次结论不变
+            let third = MetaStore(dir)
+            third.load()
+            @Assert(third.topicOf("/t").isSome())
+            @Assert(third.topicTombstone("/t").isNone())
+            third.close()
+        } finally {
+            clean(dir)
+        }
+    }
 }
+

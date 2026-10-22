@@ -51,11 +51,9 @@ class NodeRegistryTest {
         let registry = NodeRegistry(["h1:2350", "h2:2351", "h3:2352"], 1)
         @Assert(registry.nodeCount == 3)
         @Assert(registry.selfIndex == 1)
-        @Assert(registry.nodeAt(0).getOrThrow()[0] == "h1")
-        @Assert(registry.nodeAt(0).getOrThrow()[1] == 2350)
-        @Assert(registry.nodeAt(9).isNone())
-        @Assert(registry.indexOf("h2:2351") == Some(1))
-        @Assert(registry.indexOf("nope:1").isNone())
+        // 节点表顺序即下标顺序：self=1 的后继依次是 2、0
+        @Assert(registry.successors(2) == [2, 0])
+        @Assert(registry.successors(9) == [2, 0])
         registry.close()
     }
 

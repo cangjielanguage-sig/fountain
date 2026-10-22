@@ -24,20 +24,26 @@ import std.unittest.testmacro.*
 import fountain::f_data.DataAny
 import fountain::f_mq.base.{MQErrorCode, MQProtocol}
 import fountain::f_mq.base.payload.MQResult
-import fountain::f_net.SocketBuffer
 import fountain::f_net.server.Server
 import fountain::f_protocol.default.Message
-import fountain::fmq.manager.{MQManager, MQManagerArgs}
+import fountain::f_config.Config
+import fountain::fmq.manager.{MQManager, MQManagerArgs, MQManagerOutput}
 import fountain::fmq.test.TestDirs
 
 /**
- * 管理端六个子命令的独立用例。
+ * 管理端七个子命令的独立用例。
  *
  * 放在 `fmq.server` 包内是为了复用 `MQServerOptions` / `MQServer` 的测试装配
  * （两者对包外不可见）；`MQManager` 本身是 public，调用方式与真实 CLI 一致。
  */
 @Test
 class MQManagerTest {
+    /** 进程不再注册 `atExit`，整个类的临时目录在收尾时统一回收。 */
+    @AfterAll
+    static func removeTempDirs(): Unit {
+        TestDirs.cleanNamespace("manager")
+    }
+
     private static let nextPort = AtomicInt64(28100)
 
     private static func freePort(): UInt16 {
@@ -98,7 +104,99 @@ class MQManagerTest {
         MQManager(MQManagerArgs.parse(all.toArray()).getOrThrow())
     }
 
-    /** 非法组名在管理端本地被拒：非 0 退出码，且不发请求（A05）。 */
+    /** 注入 sink 的 manager：返回实例与收集到的输出行。 */
+    private static func managerWithOutput(args: Array<String>): (MQManager, ArrayList<String>) {
+        let lines = ArrayList<String>()
+        let all = ArrayList<String>()
+        for (arg in args) {
+            all.add(arg)
+        }
+        let manager = MQManager(MQManagerArgs.parse(all.toArray()).getOrThrow(), {line => lines.add(line)})
+        (manager, lines)
+    }
+
+    /** 输出按行拼接，便于 `contains` 断言。 */
+    private static func joined(lines: ArrayList<String>): String {
+        let out = StringBuilder()
+        for (line in lines) {
+            if (out.size > 0) {
+                out.append('\n')
+            }
+            out.append(line)
+        }
+        out.toString()
+    }
+
+    /** `stats` 三个场景都要有可断言的输出行：全部/按主题/未知主题（R4-G1）。 */
+    @TestCase
+    public func statsCommandsPrintExpectedRows(): Unit {
+        let (server, address) = startServer("stats_cli")
+        try {
+            @Assert(MQManager(MQManagerArgs.parse(["registerTopic", "/t", "1",
+                "--server=${address}"]).getOrThrow()).run() == 0)
+            @Assert(MQManager(MQManagerArgs.parse(["registerSubscriber", "/t", "g",
+                "--server=${address}"]).getOrThrow()).run() == 0)
+
+            let (all, allLines) = managerWithOutput(["stats", "--server=${address}"])
+            @Assert(all.run() == 0)
+            let allText = joined(allLines)
+            @Assert(allText.contains("/t"))
+            @Assert(allText.contains("backlog"))
+
+            let (one, oneLines) = managerWithOutput(["stats", "/t", "--server=${address}"])
+            @Assert(one.run() == 0)
+            @Assert(joined(oneLines).contains("/t"))
+
+            let (none, noneLines) = managerWithOutput(["stats", "/nope", "--server=${address}"])
+            @Assert(none.run() == 0)
+            @Assert(joined(noneLines) == MQManagerOutput.EMPTY)
+        } finally {
+            server.close()
+        }
+    }
+
+    /** 非法组名：本地失败，文案含 INVALID_GROUP，绝不能报成「无法连接」（R4-G1）。 */
+    @TestCase
+    public func invalidGroupFailsLocallyBeforeConnecting(): Unit {
+        let (manager, lines) = managerWithOutput(["registerSubscriber", "/t", "g\u{7F}"])
+        // 目标地址不可达，但请求根本不该发出
+        let (manager2, lines2) = managerWithOutput(["registerSubscriber", "/t", "g\u{7F}",
+            "--server=127.0.0.1:1"])
+        @Assert(manager2.run() == 1)
+        let text = joined(lines2)
+        @Assert(text.contains("INVALID_GROUP"))
+        @Assert(!text.contains("无法连接"))
+        @Assert(lines.size == 0)
+        @Assert(manager.run() == 1)
+    }
+
+    /** 缺少 `mqServer_port` 配置：报「无法连接」，退出码 1，不崩溃（R4-G1）。 */
+    @TestCase
+    public func missingServerConfigReportsUnreachable(): Unit {
+        let previous = Config.getString("mqServer_port")
+        Config.remove("mqServer_port")
+        try {
+            let (manager, lines) = managerWithOutput(["listTopics"])
+            @Assert(manager.run() == 1)
+            @Assert(joined(lines).contains("无法连接"))
+        } finally {
+            match (previous) {
+                case Some(value) => Config.set([("mqServer_port", value)])
+                case None => Config.remove("mqServer_port")
+            }
+        }
+    }
+
+    /** 非绝对路径主题：本地校验失败，文案含 INVALID_TOPIC，退出码非 0（R4-G1）。 */
+    @TestCase
+    public func nonAbsoluteTopicFailsWithInvalidTopic(): Unit {
+        let (manager, lines) = managerWithOutput(["registerTopic", "order", "1", "--server=127.0.0.1:1"])
+        @Assert(manager.run() == 1)
+        let text = joined(lines)
+        @Assert(text.contains("INVALID_TOPIC"))
+        @Assert(!text.contains("无法连接"))
+    }
+
     /** 服务端回 ERROR 时必须打印服务端错误，而不是「无法连接」（A65）。 */
     @TestCase
     public func serverErrorIsNotReportedAsConnectionFailure(): Unit {
@@ -112,9 +210,11 @@ class MQManagerTest {
         }
         try {
             waitReady(port)
-            let manager = MQManager(MQManagerArgs.parse(
-                ["listTopics", "--server=127.0.0.1:${port}"]).getOrThrow())
+            let (manager, lines) = managerWithOutput(["listTopics", "--server=127.0.0.1:${port}"])
             @Assert(manager.run() == 1)
+            let text = joined(lines)
+            @Assert(text.contains("boom from server"))
+            @Assert(!text.contains("无法连接"))
         } finally {
             server.close()
         }
@@ -133,9 +233,64 @@ class MQManagerTest {
         }
         try {
             waitReady(port)
-            let manager = MQManager(MQManagerArgs.parse(
-                ["listTopics", "--server=127.0.0.1:${port}"]).getOrThrow())
+            let (manager, lines) = managerWithOutput(["listTopics", "--server=127.0.0.1:${port}"])
             @Assert(manager.run() == 1)
+            let text = joined(lines)
+            @Assert(text.contains("响应不是 MQMetaSnapshot"))
+            @Assert(!text.contains("无法连接"))
+        } finally {
+            server.close()
+        }
+    }
+
+    /** `stats` 数值列不可解析：报「服务端响应格式不正确」，不得报成连接失败。 */
+    @TestCase
+    public func nonNumericStatsDelayingIsProtocolError(): Unit {
+        let port = freePort()
+        let server = Server<DataAny>(bindAt: port, checkDuration: Duration.second * 30, executors: 2,
+            checker: {=> Message.ping()})
+        spawn {
+            server.start({_, request =>
+                Some(MQProtocol.respond<String>(request, "R\t/t\tg\t1\tabc\t0\t0\t0\t0\t0\t0"))
+            })
+        }
+        try {
+            waitReady(port)
+            let (manager, lines) = managerWithOutput(["stats", "--server=127.0.0.1:${port}"])
+            @Assert(manager.run() == 1)
+            let text = joined(lines)
+            @Assert(text.contains("服务端响应格式不正确"))
+            @Assert(!text.contains("无法连接"))
+        } finally {
+            server.close()
+        }
+    }
+
+    /** 成功输出可断言：注册/列表/统计/空列表都给出关键字段（R4-S1）。 */
+    @TestCase
+    public func successOutputsAreAssertable(): Unit {
+        let (server, address) = startServer("output")
+        try {
+            let (register, registerLines) = managerWithOutput(["registerTopic", "/order", "4",
+                "--server=${address}"])
+            @Assert(register.run() == 0)
+            let registerText = joined(registerLines)
+            @Assert(registerText.contains("/order"))
+            @Assert(registerText.contains("队列 0..3（共 4 个）"))
+            @Assert(registerText.contains("0→"))
+
+            let (list, listLines) = managerWithOutput(["listTopics", "--server=${address}"])
+            @Assert(list.run() == 0)
+            @Assert(joined(listLines).contains("/order"))
+
+            let (stats, statsLines) = managerWithOutput(["stats", "/order", "--server=${address}"])
+            @Assert(stats.run() == 0)
+            @Assert(!joined(statsLines).contains("错误："))
+
+            let (missing, missingLines) = managerWithOutput(["listSubscribeGroups", "/none",
+                "--server=${address}"])
+            @Assert(missing.run() == 0)
+            @Assert(joined(missingLines).contains("（空）"))
         } finally {
             server.close()
         }
@@ -157,7 +312,7 @@ class MQManagerTest {
     }
 
     @TestCase
-    public func sixSubcommandsSucceedAndMutateState(): Unit {
+    public func sevenSubcommandsSucceedAndMutateState(): Unit {
         let (server, address) = startServer("flow")
         try {
             @Assert(manager(address, ["registerTopic", "/t", "2"]).run() == 0)

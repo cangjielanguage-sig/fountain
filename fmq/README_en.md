@@ -46,7 +46,7 @@ replays acknowledged messages; backup segments are reclaimed by those cursors an
 `segmentedLogTTL`. `fmq server --help` prints all options.
 
 `SIGTERM`/`SIGINT` triggers graceful shutdown: the exit hook calls `MQServer.close()`, which
-releases server → timers → anti-entropy → backup → cleaner → consume → backup store → queues
+releases server → timers → anti-entropy → backup → cleaner → consume → subscribers → backup store → queues.sync → queues
 → dead letters → metadata → node connections. A failing step does not block the others, and
 calling `close()` again retries only the failed steps.
 
@@ -138,6 +138,15 @@ Topic names use percent-encoding (only `[A-Za-z0-9._-]`, empty → `%00`); metad
 writes use `.tmp` + `fsync` + rename + parent-directory `fsync`, so a power loss never leaves
 an empty file.
 
+## Naming and length limits
+
+| Item | Rule |
+| --- | --- |
+| Topic | Non-empty, starts with `/`, does not end with `/`, no empty segment (`//`); no control characters or Unicode blanks (`INVALID_TOPIC`) |
+| Group | Empty string is the default group; at most `MQGroup.MAX_LENGTH` (255) bytes; no control characters/Unicode blanks and no `/` `\` `:` `%`; must not start or end with `.` (`INVALID_GROUP`) |
+| Tags | At most `MQTags.MAX_COUNT` (64); each 1..`MQTags.MAX_LENGTH` (128) bytes; no control characters/Unicode blanks (`INVALID_TAGS`) |
+| Single record | At most `min(QueueLog.MAX_RECORD_SIZE, segmentedLogMaxSize - 4)` (i.e. `QueueLog.effectiveMaxRecord`); rejected before write |
+
 ## Known limits
 
 - At-least-once delivery; unacknowledged messages may be redelivered.
@@ -149,12 +158,13 @@ an empty file.
   filters never require the server to decode the BODY.
 - ACK targets the cursor by `(topic, queueIndex, group)`; a missing or non-local queue
   index yields `ACK_UNKNOWN`.
-- If a cursor's segment was removed by TTL cleanup, it jumps to the oldest surviving
-  segment and persists the new position; when no segment is readable it returns empty
-  instead of failing forever.
+- If a cursor's segment was removed by TTL cleanup, it jumps forward to the start of the
+  next existing segment with a larger index and persists the new position (WARN, rate
+  limited per position); when no segment is readable it returns empty instead of failing
+  forever.
 - Backup writes may be dropped during shutdown: writes arriving after `BackupStore` closes
-  are silently discarded so the publish path never blocks; writes acknowledged before
-  close are persisted.
+  are discarded with a WARN trace (rate limited to one per second) so the publish path never
+  blocks; writes acknowledged before close are persisted.
 - Segment retention is bounded by the minimum persisted cursor of every registered group: a
   group that never consumed pins the floor at the oldest segment. Delete the group (or lower
   `segmentedLogTTL` and accept the semantic change) to reclaim history.
@@ -164,6 +174,9 @@ an empty file.
 - Full support for large records (>4096 bytes) requires every node to be upgraded: an old
   node still degrades them to empty, so finish the rolling upgrade before publishing large
   messages.
+- The set of retired subscription ids is bounded (4096 by default, FIFO eviction); an
+  evicted id is treated as an unknown id and throws `MQServiceException`, without touching
+  server state.
 
 ## Tests
 

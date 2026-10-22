@@ -32,7 +32,8 @@ class MQClientConfigTest {
         } finally {
             match (previous) {
                 case Some(text) => Config.set([(MQConfigKey.CLIENT_HOSTS, text)])
-                case None => Config.set([(MQConfigKey.CLIENT_HOSTS, "")])
+                // 恢复「不存在」必须删除键：设成空串会留下 Some("")
+                case None => Config.remove(MQConfigKey.CLIENT_HOSTS)
             }
         }
     }
@@ -80,6 +81,16 @@ class MQClientConfigTest {
             }
             @Assert(threw)
         }
+    }
+
+    /** 修改前键不存在时，用例结束后键必须重新消失，而不是留下空串（A24）。 */
+    @TestCase
+    public func configIsRemovedWhenAbsentBeforeTest(): Unit {
+        Config.remove(MQConfigKey.CLIENT_HOSTS)
+        withHosts("10.0.0.1:1") {
+            @Assert(Config.getString(MQConfigKey.CLIENT_HOSTS) == Some("10.0.0.1:1"))
+        }
+        @Assert(Config.getString(MQConfigKey.CLIENT_HOSTS).isNone())
     }
 
     /** 用例之间不得互相残留配置（A24）。 */

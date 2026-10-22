@@ -149,36 +149,48 @@ protected class GroupCursor {
                         case NoFuture => return None<(Array<Byte>, LogPosition)>
                     }
                 }
-                if (record.isNone()) {
-                    // 记录已不可读（段被清理/记录被截断）：标记已决，但必须留痕（A48）
-                    entry.decided = true
-                    skippedUnreadable_ = skippedUnreadable_ + 1
-                    logger.warn("record at ${topic}/${queueIndex}@${entry.position.seq}:${entry.position.offset} " +
-                        "is unreadable for group '${group}', marked decided")
-                    continue
+                let bytes = match (record) {
+                    case Record(data) => data
+                    case Corrupt =>
+                        // 段还在但记录坏了：不标记已决、不推进，交给运维修段后重试（R3-M2）
+                        logger.error("corrupted record at ${topic}/${queueIndex}@" +
+                            "${entry.position.seq}:${entry.position.offset} for group '${group}', " +
+                            "cursor is not advanced")
+                        return None<(Array<Byte>, LogPosition)>
+                    case SegmentGone =>
+                        // 段被清理、记录已不可读：标记已决，但必须留痕（A48）
+                        entry.decided = true
+                        skippedUnreadable_ = skippedUnreadable_ + 1
+                        if (let Some(m) <- metrics) {
+                            m.incSkippedUnreadable(topic, group)
+                        }
+                        logger.warn("record at ${topic}/${queueIndex}@${entry.position.seq}:" +
+                            "${entry.position.offset} is gone for group '${group}', marked decided")
+                        continue
                 }
                 // 已分配但尚未取走：延迟未到期时停在队首（已投递过的重投不受延迟约束）
-                if (!entry.delivered && !isDue(record.getOrThrow(), current)) {
+                if (!entry.delivered && !isDue(bytes, current)) {
                     return None<(Array<Byte>, LogPosition)>
                 }
                 // 已分配给本订阅但尚未取走时，匹配在分配时已判定；退回组内的记录必须重新匹配
                 let needMatch = entry.delivered || entry.owner.isNone()
                 if (needMatch) {
-                    match (MQMatcher.matches(subscription, record.getOrThrow())) {
+                    match (MQMatcher.matches(subscription, bytes)) {
                         case Match => ()
                         case _ => continue
                     }
+                }
+                // 阈值语义：deadMsgThreshold 是「重试次数」，总投递 N+1 次；第 N+2 次扫描才进死信（R3-M5）
+                if (entry.deliverCount > deadMsgThreshold) {
+                    writeDeadLetter(entry, bytes, current)
+                    entry.decided = true
+                    continue
                 }
                 entry.deliverCount++
                 entry.lastDeliverTime = current
                 entry.owner = Some(subscription.subscribedId)
                 entry.delivered = true
-                if (entry.deliverCount > deadMsgThreshold) {
-                    writeDeadLetter(entry, record.getOrThrow(), current)
-                    entry.decided = true
-                    continue
-                }
-                redelivered = Some((record.getOrThrow(), entry.position))
+                redelivered = Some((bytes, entry.position))
                 if (let Some(m) <- metrics) {
                     m.incDelivered(topic, group)
                     if (entry.deliverCount > 1) {
@@ -300,6 +312,9 @@ protected class GroupCursor {
                     // 该位置只报一次；其它组独立游标，不受影响。
                     entries.add(DeliveryRecord(position, after, None<String>, 0, current, false, decided: true))
                     unsupportedSkipped_ = unsupportedSkipped_ + 1
+                    if (let Some(m) <- metrics) {
+                        m.incSkippedUnsupported(topic, group)
+                    }
                     scanPosition = after
                     reader.getOrThrow().close()
                     reader = None
@@ -312,6 +327,9 @@ protected class GroupCursor {
                     // 组内无人匹配：不适用，允许越过（记 DEBUG + 计数，便于排查「消息被越过」）
                     entries.add(DeliveryRecord(position, after, None<String>, 0, now(), false, decided: true))
                     noMatchSkipped_ = noMatchSkipped_ + 1
+                    if (let Some(m) <- metrics) {
+                        m.incSkippedNoMatch(topic, group)
+                    }
                     logger.debug("record at ${topic}/${queueIndex}@${position.seq}:${position.offset} " +
                         "matches no active subscriber of group '${group}', skipped")
                 }
@@ -533,10 +551,11 @@ protected class GroupCursor {
     }
 
     /**
-     * 延迟到期判定：未配置延迟恒为真；无发布时间时按已到期并告警。
+     * 延迟是否到期：未配置延迟恒为真；无发布时间时按已到期并告警。
      *
-     * 发布时间比当前时刻还晚 5 分钟以上，说明 id 由旧版本按本地时区写入（按 UTC 解释会整体后移
-     * 一个时区偏移）。这类记录按「已到期」处理，避免延迟组被未来时间卡住（A02）。
+     * 发布时间来自 messageId（UTC）。机器时钟回拨或对端时钟超前时，`published` 可能晚于当前时间：
+     * 超前超过 5 分钟按「已到期」立即投递并记 WARN（避免整组被一个坏时间戳永久卡住，A02/R3-M12）；
+     * 只有不超过 5 分钟的超前才按正常延迟等待。
      */
     private func isDue(record: Array<Byte>, current: DateTime): Bool {
         if (delaying <= Duration.Zero) {

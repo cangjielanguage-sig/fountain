@@ -51,8 +51,8 @@ class MQPayloadTest {
         let back = roundtrip<MQResult>(MQResult(7, "nope")).getOrThrow()
         @Assert(back.code == 7)
         @Assert(back.message == "nope")
-        @Assert(!back.isOk())
-        @Assert(MQResult(0, "ok").isOk())
+        @Assert(back.code != 0)
+        @Assert(MQResult(0, "ok").code == 0)
     }
 
     @TestCase
@@ -100,16 +100,16 @@ class MQPayloadTest {
     @TestCase
     public func emptyRecordStaysEmpty(): Unit {
         let value = MQConsumeResult(2, 7, 128, [])
-        @Assert(!value.hasMessage())
+        @Assert(value.record.isEmpty())
         let back = roundtrip<MQConsumeResult>(value).getOrThrow()
         @Assert(back.queueIndex == 2)
         @Assert(back.segmentedIndex == 7)
         @Assert(back.segmentedOffset == 128)
         @Assert(back.record.size() == 0)
-        @Assert(!back.hasMessage())
+        @Assert(back.record.isEmpty())
 
         let withRecord = roundtrip<MQConsumeResult>(MQConsumeResult(5, 1, 2, [1u8, 2u8, 3u8])).getOrThrow()
-        @Assert(withRecord.hasMessage())
+        @Assert(!withRecord.record.isEmpty())
         @Assert(withRecord.queueIndex == 5)
         @Assert(withRecord.record.copyBytes() == [1u8, 2u8, 3u8])
     }
@@ -204,16 +204,14 @@ class MQPayloadTest {
         @Assert(tombstone.key() == MQMetaTombstone(MQMetaTombstone.KIND_GROUP, "/t", "g", 0, 0, 0).key())
 
         let snapshot = roundtrip<MQMetaSnapshot>(MQMetaSnapshot([assignment], [group], 4,
-            tombstones: [tombstone], revision: 9, tombstoneFloor: 9)).getOrThrow()
+            tombstones: [tombstone], revision: 9)).getOrThrow()
         @Assert(snapshot.tombstones.size == 1)
         @Assert(snapshot.revision == 9)
-        @Assert(snapshot.tombstoneFloor == 9)
 
         // 旧数据（无新字段）解码为默认值
         let legacy = roundtrip<MQMetaSnapshot>(MQMetaSnapshot(Array<MQTopicAssignment>(), [], 0)).getOrThrow()
         @Assert(legacy.tombstones.size == 0)
         @Assert(legacy.revision == 0)
-        @Assert(legacy.tombstoneFloor == 0)
         @Assert(roundtrip<MQTopicAssignment>(MQTopicAssignment("/x", 1, 0, [0])).getOrThrow().revision == 0)
     }
 }

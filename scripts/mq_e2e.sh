@@ -62,6 +62,14 @@ echo "==> 构建 f_mq / fmq / e2e client"
 (cd "${ROOT}/fmq" && cjpm build >"${TMP}/build_fmq.log" 2>&1) || { echo "fmq build failed"; tail -20 "${TMP}/build_fmq.log"; exit 1; }
 (cd "${ROOT}/scripts/mq_e2e_client" && cjpm build >"${TMP}/build_client.log" 2>&1) || { echo "client build failed"; tail -20 "${TMP}/build_client.log"; exit 1; }
 
+# 打包边界（R5-3/C1）：测试替身不得进入生产产物
+check "f_mq 动态库不含 MQStubServer 符号" \
+  bash -c "! nm -D '${ROOT}/f_mq/target/release/f_mq@fountain/libf_mq@fountain.so' | grep -q MQStubServer"
+check "fmq 主程序不链接 TestDirs" \
+  bash -c "! nm '${ROOT}/fmq/target/release/bin/main' | grep -q TestDirs"
+check "fmq 主程序不含 TestDirs 字样" \
+  bash -c "! strings '${ROOT}/fmq/target/release/bin/main' | grep -q TestDirs"
+
 FMQ_DIR="${ROOT}/fmq/target/release"
 CLIENT_DIR="${ROOT}/scripts/mq_e2e_client/target/release"
 export LD_LIBRARY_PATH="$(lib_path "${FMQ_DIR}")$(lib_path "${CLIENT_DIR}")${LD_LIBRARY_PATH:-}"
@@ -188,9 +196,10 @@ check "停机后仍可消费" [ "${CON2_RC}" -eq 0 ] && check "停机后消费 1
 echo "==> 超时重投与死信"
 manager registerSubscriber /e2e grp3 >/dev/null 2>&1
 client publish "${NODES}" /e2e 1 >/dev/null 2>&1
-# 每次 consume 之间 sleep 2.5s（ackTimeout=2s），3 次至少 7.5s；高负载下留足 30s，
-# 否则 timeout 会杀掉仍正常推进的客户端，stdout 缓冲丢失被误判为「0 次重投」。
-REDELIVER_OUT=$(timeout 30 env mqClient_hosts="${NODES}" "${CLIENT_BIN}" redeliver "${NODES}" /e2e grp3 3 2>&1)
+# deadMsgThreshold=2 表示「重试 2 次」：共 3 次投递，第 4 次扫描才进死信。
+# 每次 consume 之间 sleep 2.5s（ackTimeout=2s）；第 4 次消费会写死信后继续轮询，
+# 由 timeout 收尾（留足 30s，避免杀掉仍在推进的客户端导致 buffered 输出丢失）。
+REDELIVER_OUT=$(timeout 40 env mqClient_hosts="${NODES}" "${CLIENT_BIN}" redeliver "${NODES}" /e2e grp3 4 2>&1)
 REDELIVER_COUNT=$(echo "${REDELIVER_OUT}" | grep -c '^CONSUMED' || true)
 check "重投次数 >= 2" [ "${REDELIVER_COUNT}" -ge 2 ]
 DEAD_COUNT=$(dead_entry_count)

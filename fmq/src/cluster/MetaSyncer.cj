@@ -41,9 +41,6 @@ protected class MetaSyncer <: Resource {
     /** 主题未到达的组（有界 + TTL），主题落地后自动应用（A36） */
     private let pendingLock = Mutex()
     private let pendingGroups = HashMap<String, PendingGroup>()
-    /** 广播失败的 peer：反熵同步成功后清空（A31） */
-    private let pendingPeersLock = Mutex()
-    private let pendingPeers = HashSet<Int64>()
     private var antiEntropyTimer: ?Timer = None
     private var closed = false
     /** 主题落地后打开本机队列（A29） */
@@ -97,12 +94,6 @@ protected class MetaSyncer <: Resource {
         }
     }
 
-    /** 待补偿 peer 数量（用例断言）。 */
-    protected func pendingPeerCount(): Int64 {
-        synchronized(pendingPeersLock) {
-            Int64(pendingPeers.size)
-        }
-    }
 
     public func isClosed(): Bool {
         closed
@@ -246,7 +237,6 @@ protected class MetaSyncer <: Resource {
                     match (MQProtocol.asPayload<MQMetaSnapshot>(message)) {
                         case Some(snapshot) =>
                             mergeSnapshot(snapshot)
-                            clearPendingPeers()
                             return
                         case None =>
                             log.warn("metadata sync from peer ${peer} failed: response is not a snapshot")
@@ -280,6 +270,10 @@ protected class MetaSyncer <: Resource {
 
     protected func applyRemoteGroup(meta: MQSubscribeGroupMeta): MetaApplyResult {
         let result = store.applyGroup(meta)
+        if (result == MetaApplyResult.Invalid) {
+            // store 侧已记明细 WARN；这里再标出来源是远端广播，便于区分本地注册与对端同步（R2-G10）
+            log.warn("reject remote group '${meta.subscribeGroup}' of '${meta.topic}': payload is invalid")
+        }
         if (result == MetaApplyResult.TopicMissing) {
             // 主题已被墓碑删除时直接拒绝（迟到组不得复活），与「尚未到达」区分开
             if (store.topicTombstone(meta.topic).isSome()) {
@@ -378,15 +372,21 @@ protected class MetaSyncer <: Resource {
                 notifyDeletedIfGone(tombstone)
             }
         }
-        let topicNames = HashSet<String>()
+        let verifiedTopics = HashSet<String>()
+        let skippedTopics = HashSet<String>()
         for (assignment in snapshot.topics) {
             if (!MQAssignment.validate(assignment, transport.nodeCount)) {
                 log.warn("skip malformed topic '${assignment.topic}' from peer snapshot")
+                skippedTopics.add(assignment.topic)
                 continue
             }
-            topicNames.add(assignment.topic)
+            // 通过校验的 key 一律算「已处理」：被墓碑挡下也算，不得进入缺失扫描（否则会误删本地）
+            verifiedTopics.add(assignment.topic)
             match (store.applyTopic(assignment)) {
                 case MetaApplyResult.Applied => notifyTopicApplied(assignment.topic)
+                case MetaApplyResult.Tombstoned =>
+                    log.warn("skip topic '${assignment.topic}' at revision ${assignment.revision} " +
+                        "from peer snapshot: blocked by tombstone")
                 case MetaApplyResult.Conflict =>
                     log.warn("snapshot conflict for topic '${assignment.topic}' at revision " +
                         "${assignment.revision}: local queueNum=${describeQueueNum(assignment.topic)}, " +
@@ -394,20 +394,22 @@ protected class MetaSyncer <: Resource {
                 case _ => ()
             }
         }
-        let groupKeys = HashSet<String>()
+        let verifiedGroups = HashSet<String>()
+        let skippedGroups = HashSet<String>()
         for (meta in snapshot.groups) {
             if (!MQGroup.isValid(meta.subscribeGroup) || !MQTopic.isValid(meta.topic)) {
                 log.warn("skip malformed group '${meta.subscribeGroup}' of '${meta.topic}' from peer snapshot")
+                skippedGroups.add("${meta.topic}\u{0}${meta.subscribeGroup}")
                 continue
             }
-            groupKeys.add("${meta.topic}\u{0}${meta.subscribeGroup}")
+            verifiedGroups.add("${meta.topic}\u{0}${meta.subscribeGroup}")
             match (store.applyGroup(meta)) {
                 case MetaApplyResult.TopicMissing =>
                     // 快照里主题随后才应用（或在后面批次），先记下待应用
                     addPendingGroup(meta)
-                case MetaApplyResult.Conflict =>
-                    log.warn("snapshot conflict for group '${meta.subscribeGroup}' of '${meta.topic}' " +
-                        "at revision ${meta.revision}: local is kept")
+                case MetaApplyResult.Tombstoned =>
+                    log.warn("skip group '${meta.subscribeGroup}' of '${meta.topic}' at revision " +
+                        "${meta.revision} from peer snapshot: blocked by tombstone")
                 case _ => ()
             }
         }
@@ -416,10 +418,11 @@ protected class MetaSyncer <: Resource {
             tombstoneKeys.add(tombstone.key())
         }
         // 兜底：快照里没有、本地更旧的条目视为已删除。只在快照带版本时执行，
-        // 避免与「全是 0 版本的旧数据」互相清空。
+        // 避免与「全是 0 版本的旧数据」互相清空。畸形条目与被墓碑挡下的条目都不算缺失。
         if (snapshot.revision > 0) {
             for (assignment in store.topics()) {
-                if (!topicNames.contains(assignment.topic) &&
+                if (!verifiedTopics.contains(assignment.topic) &&
+                    !skippedTopics.contains(assignment.topic) &&
                     !tombstoneKeys.contains("${MQMetaTombstone.KIND_TOPIC}\u{0}${assignment.topic}") &&
                     assignment.revision <= snapshot.revision) {
                     log.warn("topic '${assignment.topic}' is missing from the peer snapshot, dropping it")
@@ -428,8 +431,10 @@ protected class MetaSyncer <: Resource {
                 }
             }
             for (meta in store.allGroups()) {
-                if (!groupKeys.contains("${meta.topic}\u{0}${meta.subscribeGroup}") &&
-                    !tombstoneKeys.contains("${MQMetaTombstone.KIND_GROUP}\u{0}${meta.topic}\u{0}${meta.subscribeGroup}") &&
+                let groupKey = "${meta.topic}\u{0}${meta.subscribeGroup}"
+                if (!verifiedGroups.contains(groupKey) &&
+                    !skippedGroups.contains(groupKey) &&
+                    !tombstoneKeys.contains("${MQMetaTombstone.KIND_GROUP}\u{0}${groupKey}") &&
                     meta.revision <= snapshot.revision) {
                     log.warn("group '${meta.subscribeGroup}' of '${meta.topic}' is missing from the peer snapshot, dropping it")
                     store.dropGroupLocally(meta.topic, meta.subscribeGroup)
@@ -465,23 +470,12 @@ protected class MetaSyncer <: Resource {
             // 不按「已知死亡」跳过：该标记只是最近一次调用失败，节点可能已经恢复；
             // 跳过会让它永久错过变更（反熵要等一个完整周期）。发送失败只登记待补偿（A31）。
             if (transport.send(index, message).isNone()) {
-                markPendingPeer(index)
                 log.warn("metadata broadcast to node ${index} failed, anti-entropy will catch up")
             }
         }
     }
 
-    private func markPendingPeer(index: Int64): Unit {
-        synchronized(pendingPeersLock) {
-            pendingPeers.add(index)
-        }
-    }
 
-    private func clearPendingPeers(): Unit {
-        synchronized(pendingPeersLock) {
-            pendingPeers.clear()
-        }
-    }
 
     /** 应用落地后打开本机队列；回调异常不影响元数据路径。 */
     private func notifyTopicApplied(topic: String): Unit {

@@ -57,20 +57,20 @@ class ConsumeFixture <: Resource {
     let service: ConsumeService
     private let topic = "/t"
 
-    init(name: String, queueCount!: Int64 = 1) {
+    init(name: String, queueCount!: Int64 = 1, maxFileSize!: Int64 = 1024 * 1024) {
         this.root = TestDirs.of("consume", name)
         if (exists(root)) {
             remove(root, recursive: true)
         }
         Directory.create(root, recursive: true)
-        this.queues = QueueManager("${root}/logs", 1024 * 1024, 1)
+        this.queues = QueueManager("${root}/logs", maxFileSize, 1)
         this.store = CursorStore(root)
         this.meta = MetaStore("${root}/metas")
         meta.load()
         meta.applyTopic(MQTopicAssignment("/t", 1, 0, [0]))
         meta.applyGroup(MQSubscribeGroupMeta("/t", "g"))
         this.catalog = CursorCatalog(store, meta)
-        this.deadLetter = DeadLetterQueue("${root}/dead", 1024 * 1024, 1)
+        this.deadLetter = DeadLetterQueue("${root}/dead", maxFileSize, 1)
         let owners = Array<Int64>(queueCount) {_ => 0}
         this.queues.openTopic(MQTopicAssignment(topic, queueCount, 0, owners), 0)
         this.service = ConsumeService(queues, catalog, registry, MQMatcher(), deadLetter,
@@ -121,9 +121,65 @@ class ConsumeFixture <: Resource {
 
 @Test
 class ConsumeServiceTest {
+    /** 进程不再注册 `atExit`，整个类的临时目录在收尾时统一回收。 */
+    @AfterAll
+    static func removeTempDirs(): Unit {
+        TestDirs.cleanNamespace("consume")
+    }
+
     private static func bodyOf(result: MQConsumeResult): String {
         let content = MQMessageRecord.decode(result.record.copyBytes()).getOrThrow()
         convert<String>(content.body.data).getOrThrow()
+    }
+
+    /**
+     * 备份状态以「全部组的最小 committed」为准，且 committed 必须严格越过该位置（R2-G8）。
+     */
+    @TestCase
+    public func backupStatesUseSmallestCommittedStrictlyGreater(): Unit {
+        let fixture = ConsumeFixture("backup_states")
+        try {
+            let p0 = fixture.append([], "a")
+            let p1 = fixture.append([], "b")
+            let p2 = fixture.append([], "c")
+            let p3 = fixture.append([], "d")
+            @Assert(fixture.meta.applyGroup(MQSubscribeGroupMeta("/t", "slow")) == MetaApplyResult.Applied)
+            // 快组越过 p3；慢组刚好停在 p2 之后
+            fixture.store.save("/t", 0, "g", LogPosition(p3.seq, p3.offset + 1))
+            fixture.store.save("/t", 0, "slow", LogPosition(p2.seq, p2.offset + 1))
+            let states = fixture.service.backupStates("/t", 0, [p0, p1, p2, p3])
+            @Assert(states.size == 4)
+            @Assert(states[0].acked)
+            @Assert(states[1].acked)
+            @Assert(states[2].acked)
+            // p3 还没被慢组越过
+            @Assert(!states[3].acked)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 组位点恰好等于记录位置时不算确认；主题没有组时全部未确认（R2-G8）。 */
+    @TestCase
+    public func backupStatesBoundaryAndNoGroupAreUnacked(): Unit {
+        let fixture = ConsumeFixture("backup_boundary")
+        try {
+            let position = fixture.append([], "a")
+            fixture.store.save("/t", 0, "g", LogPosition(position.seq, position.offset))
+            let states = fixture.service.backupStates("/t", 0, [position])
+            @Assert(!states[0].acked)
+
+            // 无组主题
+            fixture.meta.applyTopic(MQTopicAssignment("/u", 1, 0, [0]))
+            fixture.queues.openTopic(MQTopicAssignment("/u", 1, 0, [0]), 0)
+            let record = MQMessageRecord.encode("/u", [], "mid-u", "x".toData())
+            let orphan = fixture.queues.queueOf("/u", 0).getOrThrow().append(record)
+            let orphanStates = fixture.service.backupStates("/u", 0, [orphan])
+            @Assert(orphanStates.size == 1)
+            @Assert(!orphanStates[0].acked)
+        } finally {
+            fixture.close()
+        }
     }
 
     @TestCase
@@ -294,6 +350,48 @@ class ConsumeServiceTest {
             fixture.close()
         }
     }
+    /** committed 段缺失且未修复 → `stats` 报 INTERNAL；修复后正常，尾部三列是跳过计数（R3-M4/M8）。 */
+    @TestCase
+    public func statsRejectsMissingCommittedSegmentUntilRepaired(): Unit {
+        let fixture = ConsumeFixture("stats_missing_segment", maxFileSize: 50)
+        try {
+            fixture.append([], "a")
+            fixture.append([], "b")
+            fixture.append([], "c")
+            // 人为删掉 committed 所在的段，且不修复位点
+            fixture.queues.queueOf("/t", 0).getOrThrow().removeById(1)
+            fixture.catalog.save("/t", 0, "g", LogPosition(1, 0))
+            var code = -1i64
+            try {
+                fixture.service.stats("/t", 0, {_ => ["g"]})
+            } catch (e: MQServiceException) {
+                code = e.code
+            }
+            @Assert(code == MQErrorCode.INTERNAL)
+
+            // 消费路径把位点前移后，统计恢复正常
+            fixture.catalog.save("/t", 0, "g", LogPosition(2, 0))
+            let text = fixture.service.stats("/t", 0, {_ => ["g"]})
+            @Assert(text.contains("skippedUnreadable"))
+            let row = statsRow(text, "/t", "g")
+            @Assert(row.size == 14)
+            @Assert(row[11] == "0")
+            @Assert(row[12] == "0")
+            @Assert(row[13] == "0")
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 记录总数：从现存编号最小的现存段扫一遍（替代生产侧已删除的 `countAll`）。 */
+    private static func countOf(log: QueueLog): Int64 {
+        let segs = log.segmentsOrEmpty()
+        if (segs.size == 0) {
+            return 0
+        }
+        log.scanAfter(LogPosition(segs[0].index, 0))[0]
+    }
+
     private static func statsRow(text: String, topic: String, group: String): Array<String> {
         for (line in text.split("\n")) {
             let fields = line.split("\t")
@@ -610,11 +708,11 @@ class ConsumeServiceTest {
         try {
             fixture.append([], "one")
             @Assert(fixture.store.load("/t", 0, "g").isNone())
-            let before = fixture.queues.queueOf("/t", 0).getOrThrow().countAll()
+            let before = countOf(fixture.queues.queueOf("/t", 0).getOrThrow())
             let text = fixture.service.stats("/t", 0, {_ => ["g"]})
             @Assert(text.contains("R\t/t\tg\t"))
             @Assert(fixture.store.load("/t", 0, "g").isNone())
-            @Assert(fixture.queues.queueOf("/t", 0).getOrThrow().countAll() == before)
+            @Assert(countOf(fixture.queues.queueOf("/t", 0).getOrThrow()) == before)
         } finally {
             fixture.close()
         }
