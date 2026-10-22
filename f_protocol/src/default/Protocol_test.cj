@@ -122,6 +122,23 @@ public class ProtocolTest {
         @Assert(id1 != id2)
     }
 
+    /**
+     * `toString()` 的 23 位时间戳必须固定是 UTC 墙钟，与 `DateTime` 携带的时区无关（A02）。
+     *
+     * 用 +08:00 的显式时区构造同一绝对时刻：若仍按实例所在时区格式化，尾部会是 18:30。
+     */
+    @TestCase
+    public func messageIdFormatsTimestampInUtc(): Unit {
+        let moment = DateTime.ofUTC(year: 2026, month: 8, dayOfMonth: 21, hour: 10, minute: 30,
+            second: 15, nanosecond: 123000000)
+        let shanghai = moment.inTimeZone(TimeZone("Asia/Shanghai", 8 * Duration.hour))
+        let localId = MessageID(time: shanghai, pid: 7, tid: 8, hostId: 9)
+        @Assert(localId.toString() == "7_8_9_20260821103015123000000")
+        // 同一绝对时刻用 UTC 实例表示，文本必须一致
+        let utcId = MessageID(time: moment, pid: 7, tid: 8, hostId: 9)
+        @Assert(utcId.toString() == localId.toString())
+    }
+
     @TestCase
     public func messageIDEquals(): Unit {
         let dur = Duration.second * 1000

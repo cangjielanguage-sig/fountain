@@ -1,0 +1,55 @@
+[dependencies]
+  "fountain::f_app" = {path = "../f_app"}
+  "fountain::f_config" = {path = "../f_config"}
+  "fountain::f_dbd" = {path = "../f_dbd"}
+  "fountain::f_log" = {path = "../f_log"}
+  "fountain::f_version" = {path = "../f_version"}
+
+# fdbm + f_dbd 演示工程：workspace 下的模块一律编译为**动态链接库**，由 fboot 启动（参考 frpcdemo）。
+[workspace]
+  version = "1.3.16"
+  organization = "fountain"
+  description = "demo for fdbm (middleware) and f_dbd (driver): load balancing, read/write splitting, sharding"
+  members=["./client"]
+  compile-option = "-O2 --dy-std -Woff unused --debug-macro"
+  override-compile-option = "-O2 --dy-std -Woff unused --debug-macro"
+
+[profile.build]
+  incremental = true
+
+[target]
+[target.x86_64-unknown-linux-gnu]
+  compile-option = "-O2 --lto=full --dy-std -Woff unused"
+  override-compile-option = "-O2 --lto=full --dy-std -Woff unused"
+[target.x86_64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.aarch64-unknown-linux-gnu]
+  compile-option = "-O2 --lto=full --dy-std -Woff unused"
+  override-compile-option = "-O2 --lto=full --dy-std -Woff unused"
+[target.aarch64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.x86_64-w64-mingw32]
+  compile-option = "-O2 --dy-std -Woff unused"
+  override-compile-option = "-O2 --dy-std -Woff unused"
+[target.x86_64-w64-mingw32.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.x86_64-apple-darwin]
+  compile-option = "-O2 --dy-std -Woff unused"
+  override-compile-option = "-O2 --dy-std -Woff unused"
+[target.x86_64-apple-darwin.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.aarch64-apple-darwin]
+  compile-option = "-O2 --dy-std -Woff unused"
+  override-compile-option = "-O2 --dy-std -Woff unused"
+[target.aarch64-apple-darwin.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.aarch64-linux-ohos]
+  compile-option = "-O2 --dy-std -ldl"
+  override-compile-option = "-O2 --dy-std -ldl"
+[target.aarch64-linux-ohos.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.x86_64-linux-ohos]
+  compile-option = "-O2 --dy-std -ldl"
+  override-compile-option = "-O2 --dy-std -ldl"
+[target.x86_64-linux-ohos.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]

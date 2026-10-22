@@ -1,0 +1,7 @@
+# 演示运行期产物（由 boot.sh 生成，不入库）
+driver/
+cache_*/
+fdbm_*.log
+fdbm_*.pid
+.fdbm_env_*.sh
+target/

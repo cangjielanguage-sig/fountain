@@ -353,6 +353,48 @@ FFI bindings for liburing; all APIs are available on Linux only
 
 **See details:**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_uring/README_en.md>
 
+### `fountain::f_mq`
+MQ client and the client/server shared API: record codec, protocol payloads, filters, topic validation,
+and `MQClient`.
+
+**See details:**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_mq/README_en.md>
+
+### `fountain::fmq`
+MQ server executable (`fmq server` / `fmq manager`): multi-node queues, consumer-group cursors,
+timeout redelivery and dead letters, full metadata replication, and backup replicas.
+
+**See details:**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/fmq/README_en.md>
+
+### `fountain::f_dbd`
+A `std.database.sql` driver that sends SQL and parameters to the `fountain::fdbm` middleware and pulls
+result rows on demand. It does not depend on any physical database driver; the registration name is the
+`dbd_driverName` setting (`multidbd` for the multi-node variant).
+
+**See details:**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_dbd/README_en.md>
+
+### `fountain::f_dbm`
+Extension interface library for the database middleware: the contracts of `PartitionAlgorithm`
+(sharding) and `IdGenerator`. A third-party extension depends only on this module, is built into a
+dynamic library and dropped into fdbm's `custom/` directory.
+
+**See details:**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_dbm/README_en.md>
+
+### `fountain::fdbm`
+Database middleware shipped as an executable module. Applications see one logical database; inside,
+fdbm provides shard routing, read/write splitting, global-table broadcasting, ID generation and a
+routing cache. Clients connect through the `fountain::f_dbd` driver; physical database drivers are
+loaded from a deployment `driver/` directory.
+
+**See details:**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/fdbm/README_en.md>
+
+### `fountain::f_jit`
+Bytecode compiler and JIT for a Cangjie dialect: source is compiled to architecture-neutral bytecode
+(`.fbc`) and executed by an interpreter plus x86_64 / aarch64 native backends, interoperating with
+host classes, functions and closures through `JitFunction.call<T>`. The interpreter is the semantic
+authority; native code is Linux-only and other platforms fall back to the interpreter.
+
+**See details:**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_jit/README_en.md>
+
 ### `fountain::fboot`
 Application project launcher depending on fountain
 

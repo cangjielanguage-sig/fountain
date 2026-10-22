@@ -1,0 +1,162 @@
+{
+  "name": "skill-generator",
+  "description": "融合技能创作与收口检查：从 RED 基线到发布打包的全生命周期",
+  "version_file": "references/VERSION.txt",
+  "scripts_dir": "scripts",
+  "assets_dir": "assets",
+  "references_dir": "references",
+
+  "version_check": {
+    "enabled": true,
+    "files_to_check": [
+      "SKILL.md",
+      "CHANGELOG.md"
+    ],
+    "pattern": "{VERSION}"
+  },
+
+  "syntax_check": {
+    "enabled": true,
+    "glob": "scripts/*.py"
+  },
+
+  "security_check": {
+    "enabled": true,
+    "checks": {
+      "bare_except": {
+        "pattern": "except:",
+        "glob": "scripts/*.py",
+        "expected_count": 0
+      },
+      "hardcoded_secret": {
+        "pattern": "\"app_secret\"\\s*:\\s*\"[^\"]+\"",
+        "glob": "scripts/*.py assets/*.json",
+        "expected_count": 0,
+        "exclude_empty": true
+      },
+      "eval_exec": {
+        "pattern": "\\beval\\b|\\bexec\\b",
+        "glob": "scripts/*.py",
+        "expected_count": 0
+      },
+      "rm_rf": {
+        "pattern": "rm -rf",
+        "glob": "scripts/* assets/* references/*",
+        "expected_count": 0
+      }
+    }
+  },
+
+  "compatibility_check": {
+    "enabled": true,
+    "os_compat": {
+      "hardcoded_paths": {
+        "pattern": "'/tmp/'|\"/tmp/\"|/Users/|/home/|C:\\\\Users",
+        "glob": "scripts/*.py SKILL.md",
+        "expected_count": 0
+      },
+      "unix_commands": {
+        "pattern": "os\\.system|subprocess\\.run|subprocess\\.call|subprocess\\.Popen",
+        "glob": "scripts/*.py",
+        "expected_count": 0,
+        "allow_list": ["python3", "sys.executable", "py_compile"]
+      },
+      "encoding_utf8": {
+        "pattern": "open\\(",
+        "glob": "scripts/*.py",
+        "must_have": "encoding=",
+        "exclude_patterns": ["open(__file__", "\\.pyc"]
+      },
+      "macos_only": {
+        "pattern": "osascript|CoreFoundation|AppKit|NSUserDefaults",
+        "glob": "scripts/*.py",
+        "expected_count": 0
+      }
+    },
+    "platform_compat": {
+      "ascii_filenames": true,
+      "skill_md_in_root": true,
+      "no_nested_root": true
+    },
+    "dependency_check": {
+      "core_zero_deps": {
+        "file": "scripts/release_engine.py",
+        "allowed_imports": ["os", "sys", "json", "re", "collections", "argparse", "pathlib", "typing", "subprocess", "tempfile", "shutil", "zipfile", "py_compile", "shlex", "__future__"]
+      },
+      "optional_deps_try_wrap": {
+        "patterns": ["from pptx", "import pptx", "from docx", "import docx"],
+        "glob": "scripts/*.py"
+      }
+    }
+  },
+
+  "smoke_test": {
+    "enabled": true,
+    "tests": [
+      {
+        "name": "收口引擎帮助",
+        "command": "python3 scripts/release_engine.py --help",
+        "expect_contains": "skill-path"
+      },
+      {
+        "name": "结构校验器自检",
+        "command": "python3 scripts/quick_validate.py .",
+        "expect_contains": "valid"
+      }
+    ]
+  },
+
+  "zip_pack": {
+    "enabled": true,
+    "output_name": "{name}.zip",
+    "exclude_patterns": ["*.zip", "*/__pycache__/*", "*.DS_Store", "*.pyc"],
+    "require_ascii_filenames": true,
+    "require_skill_md_root": true
+  },
+
+  "colleague_sim": {
+    "enabled": true,
+    "checks": {
+      "zip_extract": true,
+      "file_purity": {
+        "forbidden_keywords": ["telemetry", "usage.log", "dashboard", "report_usage"]
+      },
+      "secret_scan": true,
+      "intent_boundary": false
+    }
+  },
+
+  "trace_eval": {
+    "enabled": true,
+    "dimensions": {
+      "Trust": {
+        "weight": 1.0,
+        "checks": ["zero_data_reflow", "secret_scan", "history_cleanup"]
+      },
+      "Reliability": {
+        "weight": 1.0,
+        "checks": ["zero_deps_core", "error_handling", "graceful_degradation"]
+      },
+      "Adaptability": {
+        "weight": 1.0,
+        "checks": ["multi_install", "cross_platform", "ascii_filenames", "dynamic_paths"]
+      },
+      "Convention": {
+        "weight": 1.0,
+        "checks": ["version_sync", "doc_sync", "release_process"]
+      },
+      "Effectiveness": {
+        "weight": 1.0,
+        "checks": ["core_capabilities", "intent_routing", "knowledge_base"]
+      }
+    }
+  },
+
+  "lessons": {
+    "version_increment": "已有发布记录则必须递增",
+    "fresh_zip_only": "禁止增量更新，必须删掉旧包后全新打包",
+    "ascii_filenames": "所有入 zip 文件名必须是 ASCII",
+    "boundary_testing": "冒烟测试必须包含边界用例",
+    "zero_data_reflow": "零数据回流不仅是行为也是文档承诺"
+  }
+}

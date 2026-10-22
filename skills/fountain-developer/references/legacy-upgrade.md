@@ -64,7 +64,7 @@ grep -n "export " boot.sh                                       # 老配置项�
 ### 3.2 可选：重建骨架（与用户确认后）
 
 项目结构混乱、或用户想顺带对齐 `fdemo` 分层时：`fboot workspace <新目录>` → `fboot module <名>` →
-源码 `git mv` 搬入（同工作流 H 第 3 步）。除用户明确要求，默认不做——重建会打散历史、放大改动面。
+源码 `git mv` 搬入（同工作流 H 步骤 4）。除用户明确要求，默认不做——重建会打散历史、放大改动面。
 
 ## 4. 代码适配（编译驱动，逐条修）
 
@@ -153,7 +153,7 @@ python <skill-root>/scripts/fountain_lookup.py --version <目标版本> search "
   跳过前两步会得到一堆假错误。
 - **聚合根依赖还能留吗**：`fountain = {path = "../"}` 配 `import fountain::fountain.mvc.*` 在本地仍可用，但
   shim 冻结、没有新模块、也不随模块演进 ⇒ 新代码统一用按模块依赖 `"fountain::f_*"` + `fountain::f_*` import。
-- **`cjc-version` 报不匹配**：SDK 没换到位，回第 1 步。
+- **`cjc-version` 报不匹配**：SDK 没换到位，回步骤 1。
 - **错误太多不要慌**：先完成 4.1 的机械替换（能把大部分 import 错误一次消掉），再逐模块 `fboot build`；
   编译错误定位流程加载 `cangjie-coding`。
 - **老项目自带启动脚本一坨 export**：先把「库路径前插 + 三平台 + 编译期参数」三件事做对，配置项是否保留

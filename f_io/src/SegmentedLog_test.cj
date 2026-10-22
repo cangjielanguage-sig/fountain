@@ -41,6 +41,40 @@ class SegmentedLogTest {
         }
     }
 
+    /** 单条数据超过段上限必须拒绝：不能越过 mmap 长度写入（R3-C2）。 */
+    @TestCase
+    public func oversizedAppendIsRejected(): Unit {
+        cleanDir()
+        atExit { cleanDir() }
+        let config = LogConfig(testDir(), "oversized", 64, 1, fileExt: ".log")
+        let log = SegmentedLog(config)
+        try {
+            var thrown = false
+            try {
+                log.append(Array<Byte>(65, repeat: 0x41u8))
+            } catch (_: LogRecordTooLargeException) {
+                thrown = true
+            }
+            @Assert(thrown)
+            // 恰好填满一段：允许，且独占该段
+            let full = Array<Byte>(64, repeat: 0x42u8)
+            let first = log.append(full)
+            @Assert(first.seq == 1 && first.offset == 0)
+            // 轮转后再追加超限记录：仍必须被挡住（rotate 不改变上限）
+            var thrownAfterRotate = false
+            try {
+                log.append(Array<Byte>(65, repeat: 0x43u8))
+            } catch (_: LogRecordTooLargeException) {
+                thrownAfterRotate = true
+            }
+            @Assert(thrownAfterRotate)
+            // 轮转后正常写入落在新段
+            @Assert(log.append([0x44u8]).seq == 2)
+        } finally {
+            log.close()
+        }
+    }
+
     @TestCase
     public func basicAppendAndRotate(): Unit {
         cleanDir()
@@ -683,6 +717,29 @@ class SegmentedLogTest {
         @Assert(metas[1].index == 2)
         @Assert(metas[2].index == 3)
         @Assert(metas[2].last)
+        log.close()
+    }
+
+    @TestCase
+    public func appendPositionIsReadableAndReusable(): Unit {
+        cleanDir()
+        atExit { cleanDir() }
+        // 每段 100 字节，写入 60 字节的数据 ⇒ 第二条必然轮转到新段
+        let log = SegmentedLog(LogConfig(testDir(), "pos", 100, 100, fileExt: ".seg"))
+        let a = Array<Byte>(60, repeat: 0xA1u8)
+        let b = Array<Byte>(60, repeat: 0xB2u8)
+        let posA = log.append(a)
+        let posB = log.append(b)
+
+        // append 返回的位置字段可读（跨模块读取依赖 public 可见性）
+        @Assert(posA.seq == 1)
+        @Assert(posA.offset == 0)
+        @Assert(posB.seq == 2)
+        @Assert(posB.offset == 0)
+
+        // 两个字段可原样回传 openEntryStream 并续读到末尾
+        @Assert(readAll(log.openEntryStream(posA.seq, posA.offset)) == join([a, b]))
+        @Assert(readAll(log.openEntryStream(posB.seq, posB.offset)) == join([b]))
         log.close()
     }
 }
