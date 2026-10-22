@@ -211,6 +211,48 @@ internal class BackendX86_64 <: Backend {
         [0x48u8, 0x83u8, 0xC4u8, 0x08u8]
     }
 
+    /**
+     * 回边 STACK_GUARD 的前缀（`X86Lower` 的 `LOOP_BACK` 使用）：
+     *
+     * ```asm
+     * mov rax, rbp        ; 帧指针
+     * mov rdx, frame      ; 全帧尺寸（frameSize，与序言同一值）
+     * sub rax, rdx        ; rax = rbp - frame（帧底）
+     * sub rax, rsp        ; rax = 操作数栈溢出量 overflow
+     * ```
+     *
+     * 调用方随后以 `mov rdx, 保留区; cmp rax, rdx; jbe ok` 判定：
+     * `overflow <= 8*(maxStack+1)` ⇒ 安全继续，否则 deopt(-1)。
+     * 与 A64 `A64Lower.frame` 对齐：基准点是**帧底**（`frame` 为全帧），不是保留区本身。
+     */
+    internal static func emitLoopBackGuardPrefix(frame: Int64): Array<UInt8> {
+        let out = ArrayList<UInt8>()
+        out.add(0x48u8) // mov rax, rbp
+        out.add(0x89u8)
+        out.add(0xE8u8)
+        out.add(0x48u8) // mov rdx, frame
+        out.add(0xC7u8)
+        out.add(0xC2u8)
+        BackendX86_64.w32(out, BackendX86_64.i32bits(frame))
+        out.add(0x48u8) // sub rax, rdx
+        out.add(0x29u8)
+        out.add(0xD0u8)
+        out.add(0x48u8) // sub rax, rsp
+        out.add(0x29u8)
+        out.add(0xE0u8)
+        out.toArray()
+    }
+
+    /** `jb rel32`（低于/无符号小于；回边守卫的"安全继续"分支）。 */
+    internal static func emitJb(): Array<UInt8> {
+        [0x0Fu8, 0x82u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]
+    }
+
+    /** `jbe rel32`（低于或等于；回边守卫：`overflow <= 保留区` ⇒ 安全继续）。 */
+    internal static func emitJbe(): Array<UInt8> {
+        [0x0Fu8, 0x86u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]
+    }
+
     /** `SWAP`：交换 `[rsp]` 与 `[rsp+8]`。 */
     internal static func emitSwap(): Array<UInt8> {
         [0x48u8, 0x8Bu8, 0x04u8, 0x24u8, 0x48u8, 0x8Bu8, 0x4Cu8, 0x24u8, 0x08u8,

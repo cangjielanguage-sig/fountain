@@ -998,8 +998,22 @@ internal class X86Lower {
                 this.depth = this.depth - 1
             case 0x73u8 => ()
             case 0x74u8 =>
-                // 回边 = 安全点：先 H22 interrupt_poll（与解释器同语义），再跳
-                this.helper(22, 0, 0) // 变体 0：占位结果 + 自动 CHECK_ERR
+                // 回边 = 安全点：STACK_GUARD（overflow >= frame ⇒ deopt -1）→ H22 → 跳
+                this.seq = this.seq + 1
+                let okL = 'sg${this.seq}'
+                // 基准点 = 帧底（rbp - frameSize，与序言同一值）；阈值 = 操作数栈保留区。
+                // x86 帧是预分配的 ⇒ 正常路径 overflow == 8*depth <= 保留区，恒不 deopt
+                //（与 A64 守卫的有效行为一致）；只有违背保留区才 deopt(-1)。
+                let frame = BackendX86_64.frameSize(Int64(this.fn.nLocals), Int64(this.fn.maxStack))
+                let reserve = 8 * (Int64(this.fn.maxStack) + 1)
+                this.add(BackendX86_64.emitLoopBackGuardPrefix(frame))
+                this.movImm(2, reserve)
+                this.add([0x48u8, 0x39u8, 0xD0u8]) // cmp rax, rdx
+                this.rel32(BackendX86_64.emitJbe(), okL)
+                this.movQwordCtx(0, -1) // deopt：写 -1 后直接返回（不转储）
+                this.jumpTo('epilogue')
+                this.bind(okL)
+                this.helper(22, 0, 0) // H22 interrupt_poll（变体 0：占位结果 + 自动 CHECK_ERR）
                 this.addRsp(8)
                 this.depth = this.depth - 1
                 let rel = X86Lower.i32(ops, 0)

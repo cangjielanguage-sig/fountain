@@ -244,3 +244,16 @@ cd f_jit && cjpm test
 - **全量：1098/1098，0 FAILED / 0 ERROR / 0 SKIPPED**
 - 遗留（本变更未做）：x86 `LOOP_BACK` 的 **STACK_GUARD**（`(rbp-frame)-rsp < frame ⇒ -1`）尚未补，
   与 aarch64 存在语义差；已记入 §12.4 口径与后续待办（当前所有用例不受影响）
+
+## 2026-10-22 第三轮回归（x86 回边 STACK_GUARD 与 A64 frame 语义对齐，change `align-x86-loop-back-stack-guard`）
+
+- 语义对齐结论：两侧 `frame` 均为**全帧** `frameSize(nLocals,maxStack)`；基准点 = 帧底。
+  A64 的操作数指针 `x20` 与 `sp` 分离 ⇒ 其同型表达式正常路径不触发；x86 的 `rsp` 兼作操作数指针，
+  必须显式比较「溢出量 ≤ 操作数栈保留区 `8*(maxStack+1)`」，否则会把正常回边判成溢出。
+- 实现：`emitLoopBackGuardPrefix`（`mov rax,rbp; mov rdx,frame; sub rax,rdx; sub rax,rsp`）
+  + `mov rdx,保留区` + `cmp` + **`jbe ok`**（方向反了会恒 deopt）；守卫在 H22 之前，deopt 走 `-1 + jmp epilogue`（不转储）。
+- 回归：全量 **1099/1099（0 ERROR / 0 FAILED）**；`p0_6_deadlineInterruptsLoop` 2.36ms；
+  `X86Lower_test` 49/49（新增守卫字节级断言）。
+- **新发现（非本变更引入）**：`PerfCompare` 的 `jit=119,805,298ns`（native 的 4938%）——每回边的 H22 调用内部
+  **每次分配数组**（`helperEntry`），约 120ns/迭代；上一轮（`cce7cd09`）引入 H22 时未测此项。
+  建议后续在机器码侧加**「无期限则跳过 H22」快速路径**（读 ctx 的期限/标志位），或让 H22 免分配。
