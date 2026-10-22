@@ -5,7 +5,6 @@
   "fountain::f_collection" = {path = "../f_collection"}
   "fountain::f_exception" = {path = "../f_exception"}
   "fountain::f_log" = {path = "../f_log"}
-  "fountain::f_regex" = {path = "../f_regex"}
   "fountain::f_time" = {path = "../f_time"}
   
 [package]
@@ -35,15 +34,25 @@
 [target.x86_64-unknown-linux-gnu]
   compile-option = "--dy-std -ldl"
   override-compile-option = "--dy-std -ldl"
+[target.x86_64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 [target.aarch64-unknown-linux-gnu]
   compile-option = "--dy-std -ldl"
   override-compile-option = "--dy-std -ldl"
+[target.aarch64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 [target.x86_64-w64-mingw32]
   compile-option = "--dy-std -lcrypt32"
   override-compile-option = "--dy-std -lcrypt32"
+[target.x86_64-w64-mingw32.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 [target.x86_64-apple-darwin]
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"
+[target.x86_64-apple-darwin.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 [target.aarch64-apple-darwin]
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"
+[target.aarch64-apple-darwin.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]

@@ -15,13 +15,128 @@ limitations under the License.
  */
 package fountain::fmq
 
+import fountain::f_base.ExitCallbacks
+import fountain::fmq.config.MQConfigException
+import fountain::fmq.manager.{MQManager, MQManagerArgs}
+import fountain::fmq.server.{MQServer, installExitHooks}
+
 /**
- * fmq 可执行文件入口。
- *
- * 设计见 doc/详细设计.md，开发顺序见 doc/开发计划.md。
- * 本文件是占位实现：`fmq server` / `fmq manager` 的真实分发在开发计划「阶段 H」落地。
+ * fmq 可执行文件入口：`server` / `manager` / `--help` 分发。
  */
 main(args: Array<String>): Int64 {
-    eprintln("fmq: not implemented yet (see fmq/doc/开发计划.md 阶段 H)")
-    1
+    dispatch(args)
+}
+
+/**
+ * 可测的分发逻辑：
+ * - `--help` / `-h`：打印用法，返回 0；
+ * - 无参数 / 未知子命令：打印顶层用法，返回 2；
+ * - `server`：阻塞运行服务；
+ * - `manager`：解析参数并执行一次管理命令。
+ */
+func dispatch(args: Array<String>): Int64 {
+    dispatchWith({=> runServer()}, {rest => runManager(rest)}, args)
+}
+
+/**
+ * 可注入的分发实现：`serverFactory` / `managerFactory` 让启动路径可测（A68）。
+ *
+ * 生产入口 `dispatch` 只是把两个真实工厂传进来。
+ */
+func dispatchWith(serverFactory: () -> Int64, managerFactory: (Array<String>) -> Int64,
+    args: Array<String>): Int64 {
+    if (args.size == 0) {
+        println(MQUsage.root())
+        return 2
+    }
+    // 允许配置参数前置：`fmq --mqServer_port=2400 server`（A69）
+    var commandIndex = -1i64
+    for (i in 0..args.size) {
+        if (!args[i].startsWith("-")) {
+            commandIndex = i
+            break
+        }
+    }
+    if (commandIndex < 0) {
+        // 只有选项没有子命令：`--help` 视为请求帮助
+        if (wantsHelp(args)) {
+            println(MQUsage.root())
+            return 0
+        }
+        println(MQUsage.root())
+        return 2
+    }
+    let command = args[commandIndex]
+    if (command == "--help" || command == "-h") {
+        println(MQUsage.root())
+        return 0
+    }
+    if (command == "server") {
+        if (wantsHelp(args)) {
+            println(MQUsage.serverHelp())
+            return 0
+        }
+        return serverFactory()
+    }
+    if (command == "manager") {
+        if (wantsHelp(args)) {
+            println(MQUsage.managerHelp())
+            return 0
+        }
+        return managerFactory(args[commandIndex + 1..])
+    }
+    println(MQUsage.root())
+    2
+}
+
+/** 管理端子命令：解析参数并执行一次。 */
+private func runManager(args: Array<String>): Int64 {
+    match (MQManagerArgs.parse(args)) {
+        case None =>
+            println(MQManagerArgs.helpText())
+            2
+        case Some(value) => MQManager(value).run()
+    }
+}
+
+private func runServer(): Int64 {
+    runServerWith(
+        {=> MQServer()},
+        {server =>
+            // 只在 server 分支安装：manager / --help 不需要
+            ExitCallbacks.toExitGracefully()
+            installExitHooks(server, {close => ExitCallbacks.atExit(0, close)})
+        },
+        {server => server.run()})
+}
+
+/**
+ * 可注入的服务端启动：装配 → 安装退出钩子 → 阻塞运行。
+ *
+ * 三段拆开是为了让用例断言顺序与「manager 分支不安装钩子」（A68）。
+ */
+func runServerWith(create: () -> MQServer, installHooks: (MQServer) -> Unit,
+    run: (MQServer) -> Int64): Int64 {
+    var server: ?MQServer = None
+    try {
+        server = Some(create())
+    } catch (e: MQConfigException) {
+        eprintln("fmq server: ${e.message}")
+        return 2
+    } catch (e: Exception) {
+        eprintln("fmq server: ${e.message}")
+        return 2
+    }
+    let instance = server.getOrThrow()
+    installHooks(instance)
+    run(instance)
+}
+
+private func wantsHelp(args: Array<String>): Bool {
+    for (arg in args) {
+        if (arg == "--help" || arg == "-h") {
+            return true
+        }
+    }
+    false
 }

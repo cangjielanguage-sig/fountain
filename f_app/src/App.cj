@@ -37,11 +37,11 @@ public struct App {
         run(args)
     }
     
-    private func load(): (Path, ArrayList<() -> Unit>) {
+    private func load(): (Path, ArrayList<() -> Initializer>) {
         load(args, dynamic)
     }
     private func run(args: Array<String>): Int64{
-        let (path, starters) = load()
+        let (path, providers) = load()
         //orm 会在初始化第一个DAO时初始化orm包，此时会从配置获得数据库连接配置从而完成orm初始化
         //执行load函数时一定会加载初始化orm的动态链接库从而完成初始化
         //其它模块是工具API没有专门的初始化API
@@ -54,9 +54,10 @@ public struct App {
         stdOut.writeln(
             AppVersion.banner + OS.current.nextLine + 
             '${app}${appver} started by ${versionStr} in ${MonoTime.now() - AppStarts}')
-        for(starter in starters){
+        for(provider in providers){
+            let current = provider
             spawn{
-                starter()
+                current().start()
             }
         }
         while(true){

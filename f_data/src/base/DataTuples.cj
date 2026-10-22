@@ -34,8 +34,9 @@ public class DataTuples <: Data & Collection<(Data, Data)> {
     public static func parse(_: String): Data {
         throw DataException()
     }
+    /** 元组列表不支持从字符串解析：tryParse 与其余 Data* 契约一致，返回 None（parse 仍抛异常）。 */
     public static func tryParse(_: String): ?Data {
-        throw DataException()
+        None<Data>
     }
     public func toString(): String {
         let s = StringGenerator('[')

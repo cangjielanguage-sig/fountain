@@ -77,7 +77,17 @@ internal interface DataFilter {
         }
         set
     }
+    /**
+     * 词法级判断集合字面量里是否有独立的 null 元素。
+     * 此前用 `setStr.contains("null")`，`in ['nullable']`、`nin ['nullify']` 会被误判为含 null。
+     */
     static func containsNull(setStr: String): Bool {
-        setStr.contains("null")
+        for (t in cangjieLex(setStr, true)) {
+            match (t.kind) {
+                case IDENTIFIER where t.value == 'null' => return true
+                case _ => continue
+            }
+        }
+        false
     }
 }

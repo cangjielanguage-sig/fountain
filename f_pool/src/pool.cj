@@ -222,6 +222,9 @@ public struct Pool<V> <: Resource {
     public func close(): Unit {
         pool.close()
     }
+    public func awaitTermination(timeout!: Duration): Bool {
+        pool.awaitTermination(timeout: timeout)
+    }
     public func get(timeout!: Duration = Duration.Max): ?V {
         pool.get((), timeout: timeout)
     }

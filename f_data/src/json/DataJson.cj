@@ -21,6 +21,38 @@ public interface ToJsonString {
     func toJsonString(): String
 }
 
+private let JSON_HEX_DIGITS: Array<Rune> = [r'0', r'1', r'2', r'3', r'4', r'5', r'6', r'7', r'8', r'9', r'a', r'b', r'c', r'd', r'e', r'f']
+
+/**
+ * 按 JSON 字符串规则转义：双引号、反斜杠、换行/回车/制表符，以及其余码位 < 0x20 的字符。
+ * 修复历史缺陷：`ToJsonString` 这条「Data → JSON 文本」路径此前直接拼引号，
+ * 含 `"`/`\`/换行的数据会生成非法 JSON（走 JsonWriter 的 JsonValue.toJsonString 路径不受影响）。
+ */
+internal func escapeJsonString(s: String): String {
+    let builder = StringGenerator()
+    for (r in s.runes()) {
+        if (r == r'"') {
+            builder.append("\\\"")
+        } else if (r == r'\\') {
+            builder.append("\\\\")
+        } else if (r == r'\n') {
+            builder.append("\\n")
+        } else if (r == r'\r') {
+            builder.append("\\r")
+        } else if (r == r'\t') {
+            builder.append("\\t")
+        } else if (r.position() < 0x20) {
+            let cp = r.position()
+            builder.append('\\u00')
+            builder.append(JSON_HEX_DIGITS[cp >> 4])
+            builder.append(JSON_HEX_DIGITS[cp & 0xF])
+        } else {
+            builder.append(r)
+        }
+    }
+    builder.toString()
+}
+
 extend DataBool <: ToJsonString {
     public func toJsonString(): String {
         toString()
@@ -47,7 +79,7 @@ extend DataNone <: ToJsonString {
 
 extend DataString <: ToJsonString {
     public func toJsonString(): String {
-        '"${toString()}"'
+        '"${escapeJsonString(toString())}"'
     }
 }
 
@@ -68,7 +100,7 @@ extend<T> DataObject<T> <: ToJsonString where T <: ObjectData<T> {
             if (builder.size > 1) {
                 builder.append(',')
             }
-            builder.append('"${name}"')
+            builder.append('"${escapeJsonString(name)}"')
             builder.append(':')
             builder.append(valStr)
         }

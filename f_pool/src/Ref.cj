@@ -54,6 +54,6 @@ class Ref<T> {
         pooledTime_ = MonoTime.now()
     }
     func isIdleTimeout(): Bool {
-        MonoTime.now() - pooledTime >= idleTimeout
+        idleTimeout > Duration.Zero && MonoTime.now() - pooledTime >= idleTimeout
     }
 }

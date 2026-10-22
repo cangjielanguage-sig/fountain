@@ -23,8 +23,7 @@ struct UnitKeyPool<K, V> <: IKeyPool<K, V> {
         this.eternity = eternity
         pool = mode.createPool()
     }
-    public func add(_: K, value: V): Unit {
-        // 单键池：入池失败（池已关闭）时这个值由调用方的 `Ref` 终结器兜底销毁
+    public func add(_: K, value: V): Bool {
         pool.add(value)
     }
     public func giveBack(_: K, value: V, checker: (K, V) -> Bool, destroier: (K, V) -> Unit): Unit{
@@ -43,6 +42,9 @@ struct UnitKeyPool<K, V> <: IKeyPool<K, V> {
         // 同 `BaseKeyPool.check`：`size < max` 只约束「补建」，不能当 checker 的与条件
         // （见 .autocode/bugs/bug-pool.md §1.3 POOL-3）
         pool.check(running, {v => checker(eternity, v)}){if (size < max) { taskPusher(eternity) }}
+        if (!running()) {
+            pool.check({=> true}, {v => checker(eternity, v)}){}
+        }
     }
     /**
      * 单键池的 `remove` 等价于「关掉这唯一的池」：关闭 + 销毁池项之后，`get` 一直返回 `None`

@@ -98,8 +98,12 @@ public class CronData <: ToString & Hashable & Equatable<CronData> {
         }
     }
     public func matches(date: DateTime) {
-        if (last && unit.last(date)) { //这一部分不能省，因为不同月份的最后一天不一样
-            return true;
+        if (last) {
+            // `L` 只匹配"该单位的最后一天"：日字段是当月最后一天（28/29/30/31 随月份变化，
+            // 见 MonthDailyTicktockUnit.last），其余单位的 lastRange 是单值（59/23/12/7）。
+            // 不能退化为对 [start, end] 区间的逐日判断——那会命中 28..=31 里每个存在的
+            // 日子（"每月 28 号起每天都触发"），不等于"最后一天"。
+            return unit.last(date)
         }
         let current = unit.current(date)
         (current > start && current <= end && (duration == 1 || ((current - start) % duration == 0))) || current == start

@@ -22,7 +22,7 @@ extend Int8 <: DataFields<Int8> {
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match (data) {
             case x: DataAny => tryFromData(x.data, flag)
-            case x: DataReal where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => x.tryToInt8()
+            case x: DataReal where ignoreNotConvertable(flag) => x.tryToInt8()
             case x: DataReal where (flag & WRAPPING_ON_INT_OVERFLOW) != 0 => x.toInt8(strategy: Wrapping)
             case x: DataReal where (flag & THROWING_ON_INT_OVERFLOW) != 0 => x.toInt8(strategy: Throwing)
             case x: DataReal where (flag & SATURATING_ON_INT_OVERFLOW) != 0 => x.toInt8(strategy: Saturating)
@@ -31,7 +31,7 @@ extend Int8 <: DataFields<Int8> {
                 '(${data}) does not match ${TypeInfo.of<Int8>()}')
             case x: DataString where #'^-?(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
-                .matches(x.toString().trimAscii()) && (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => DataReal(
+                .matches(x.toString().trimAscii()) && ignoreNotConvertable(flag) => DataReal(
                 x.toString().trimAscii()).tryToInt8()
             case x: DataString where #'^-?(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
@@ -59,7 +59,7 @@ extend UInt8 <: DataFields<UInt8> {
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match (data) {
             case x: DataAny => tryFromData(x.data, flag)
-            case x: DataReal where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => x.tryToUInt8()
+            case x: DataReal where ignoreNotConvertable(flag) => x.tryToUInt8()
             case x: DataReal where (flag & WRAPPING_ON_INT_OVERFLOW) != 0 => x.toUInt8(strategy: Wrapping)
             case x: DataReal where (flag & THROWING_ON_INT_OVERFLOW) != 0 => x.toUInt8(strategy: Throwing)
             case x: DataReal where (flag & SATURATING_ON_INT_OVERFLOW) != 0 => x.toUInt8(strategy: Saturating)
@@ -68,7 +68,7 @@ extend UInt8 <: DataFields<UInt8> {
                 '(${data}) does not match ${TypeInfo.of<UInt8>()}')
             case x: DataString where #'^(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
-                .matches(x.toString().trimAscii()) && (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => DataReal(
+                .matches(x.toString().trimAscii()) && ignoreNotConvertable(flag) => DataReal(
                 x.toString().trimAscii()).tryToUInt8()
             case x: DataString where #'^(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
@@ -96,7 +96,7 @@ extend Int16 <: DataFields<Int16> {
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match (data) {
             case x: DataAny => tryFromData(x.data, flag)
-            case x: DataReal where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => x.tryToInt16()
+            case x: DataReal where ignoreNotConvertable(flag) => x.tryToInt16()
             case x: DataReal where (flag & WRAPPING_ON_INT_OVERFLOW) != 0 => x.toInt16(strategy: Wrapping)
             case x: DataReal where (flag & THROWING_ON_INT_OVERFLOW) != 0 => x.toInt16(strategy: Throwing)
             case x: DataReal where (flag & SATURATING_ON_INT_OVERFLOW) != 0 => x.toInt16(strategy: Saturating)
@@ -105,7 +105,7 @@ extend Int16 <: DataFields<Int16> {
                 '(${data}) does not match ${TypeInfo.of<Int16>()}')
             case x: DataString where #'^-?(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
-                .matches(x.toString().trimAscii()) && (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => DataReal(
+                .matches(x.toString().trimAscii()) && ignoreNotConvertable(flag) => DataReal(
                 x.toString().trimAscii()).tryToInt16()
             case x: DataString where #'^-?(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
@@ -133,7 +133,7 @@ extend UInt16 <: DataFields<UInt16> {
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match (data) {
             case x: DataAny => tryFromData(x.data, flag)
-            case x: DataReal where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => x.tryToUInt16()
+            case x: DataReal where ignoreNotConvertable(flag) => x.tryToUInt16()
             case x: DataReal where (flag & WRAPPING_ON_INT_OVERFLOW) != 0 => x.toUInt16(strategy: Wrapping)
             case x: DataReal where (flag & THROWING_ON_INT_OVERFLOW) != 0 => x.toUInt16(strategy: Throwing)
             case x: DataReal where (flag & SATURATING_ON_INT_OVERFLOW) != 0 => x.toUInt16(strategy: Saturating)
@@ -142,7 +142,7 @@ extend UInt16 <: DataFields<UInt16> {
                 '(${data}) does not match ${TypeInfo.of<UInt16>()}')
             case x: DataString where #'^(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
-                .matches(x.toString().trimAscii()) && (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => DataReal(
+                .matches(x.toString().trimAscii()) && ignoreNotConvertable(flag) => DataReal(
                 x.toString().trimAscii()).tryToUInt16()
             case x: DataString where #'^(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
@@ -170,7 +170,7 @@ extend Int32 <: DataFields<Int32> {
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match (data) {
             case x: DataAny => tryFromData(x.data, flag)
-            case x: DataReal where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => x.tryToInt32()
+            case x: DataReal where ignoreNotConvertable(flag) => x.tryToInt32()
             case x: DataReal where (flag & WRAPPING_ON_INT_OVERFLOW) != 0 => x.toInt32(strategy: Wrapping)
             case x: DataReal where (flag & THROWING_ON_INT_OVERFLOW) != 0 => x.toInt32(strategy: Throwing)
             case x: DataReal where (flag & SATURATING_ON_INT_OVERFLOW) != 0 => x.toInt32(strategy: Saturating)
@@ -179,7 +179,7 @@ extend Int32 <: DataFields<Int32> {
                 '(${data}) does not match ${TypeInfo.of<Int32>()}')
             case x: DataString where #'^-?(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
-                .matches(x.toString().trimAscii()) && (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => DataReal(
+                .matches(x.toString().trimAscii()) && ignoreNotConvertable(flag) => DataReal(
                 x.toString().trimAscii()).tryToInt32()
             case x: DataString where #'^-?(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
@@ -207,7 +207,7 @@ extend UInt32 <: DataFields<UInt32> {
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match (data) {
             case x: DataAny => tryFromData(x.data, flag)
-            case x: DataReal where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => x.tryToUInt32()
+            case x: DataReal where ignoreNotConvertable(flag) => x.tryToUInt32()
             case x: DataReal where (flag & WRAPPING_ON_INT_OVERFLOW) != 0 => x.toUInt32(strategy: Wrapping)
             case x: DataReal where (flag & THROWING_ON_INT_OVERFLOW) != 0 => x.toUInt32(strategy: Throwing)
             case x: DataReal where (flag & SATURATING_ON_INT_OVERFLOW) != 0 => x.toUInt32(strategy: Saturating)
@@ -216,7 +216,7 @@ extend UInt32 <: DataFields<UInt32> {
                 '(${data}) does not match ${TypeInfo.of<UInt32>()}')
             case x: DataString where #'^(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
-                .matches(x.toString().trimAscii()) && (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => DataReal(
+                .matches(x.toString().trimAscii()) && ignoreNotConvertable(flag) => DataReal(
                 x.toString().trimAscii()).tryToUInt32()
             case x: DataString where #'^(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
@@ -244,7 +244,7 @@ extend Int64 <: DataFields<Int64> {
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match (data) {
             case x: DataAny => tryFromData(x.data, flag)
-            case x: DataReal where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => x.tryToInt64()
+            case x: DataReal where ignoreNotConvertable(flag) => x.tryToInt64()
             case x: DataReal where (flag & WRAPPING_ON_INT_OVERFLOW) != 0 => x.toInt64(strategy: Wrapping)
             case x: DataReal where (flag & THROWING_ON_INT_OVERFLOW) != 0 => x.toInt64(strategy: Throwing)
             case x: DataReal where (flag & SATURATING_ON_INT_OVERFLOW) != 0 => x.toInt64(strategy: Saturating)
@@ -253,7 +253,7 @@ extend Int64 <: DataFields<Int64> {
                 '(${data}) does not match ${TypeInfo.of<Int64>()}')
             case x: DataString where #'^-?(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
-                .matches(x.toString().trimAscii()) && (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => DataReal(
+                .matches(x.toString().trimAscii()) && ignoreNotConvertable(flag) => DataReal(
                 x.toString().trimAscii()).tryToInt64()
             case x: DataString where #'^-?(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
@@ -281,7 +281,7 @@ extend UInt64 <: DataFields<UInt64> {
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match (data) {
             case x: DataAny => tryFromData(x.data, flag)
-            case x: DataReal where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => x.tryToUInt64()
+            case x: DataReal where ignoreNotConvertable(flag) => x.tryToUInt64()
             case x: DataReal where (flag & WRAPPING_ON_INT_OVERFLOW) != 0 => x.toUInt64(strategy: Wrapping)
             case x: DataReal where (flag & THROWING_ON_INT_OVERFLOW) != 0 => x.toUInt64(strategy: Throwing)
             case x: DataReal where (flag & SATURATING_ON_INT_OVERFLOW) != 0 => x.toUInt64(strategy: Saturating)
@@ -290,7 +290,7 @@ extend UInt64 <: DataFields<UInt64> {
                 '(${data}) does not match ${TypeInfo.of<UInt64>()}')
             case x: DataString where #'^(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
-                .matches(x.toString().trimAscii()) && (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => DataReal(
+                .matches(x.toString().trimAscii()) && ignoreNotConvertable(flag) => DataReal(
                 x.toString().trimAscii()).tryToUInt64()
             case x: DataString where #'^(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
@@ -318,26 +318,26 @@ extend IntNative <: DataFields<IntNative> {
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match (data) {
             case x: DataAny => tryFromData(x.data, flag)
-            case x: DataReal where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => x.tryToIntNative()
+            case x: DataReal where ignoreNotConvertable(flag) => x.tryToIntNative()
             case x: DataReal where (flag & WRAPPING_ON_INT_OVERFLOW) != 0 => x.toIntNative(strategy: Wrapping)
             case x: DataReal where (flag & THROWING_ON_INT_OVERFLOW) != 0 => x.toIntNative(strategy: Throwing)
             case x: DataReal where (flag & SATURATING_ON_INT_OVERFLOW) != 0 => x.toIntNative(strategy: Saturating)
             case _: DataNone => None<IntNative>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
                 '(${data}) does not match ${TypeInfo.of<IntNative>()}')
-            case x: DataString where #'^(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
+            case x: DataString where #'^-?(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
-                .matches(x.toString().trimAscii()) && (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => DataReal(
+                .matches(x.toString().trimAscii()) && ignoreNotConvertable(flag) => DataReal(
                 x.toString().trimAscii()).tryToIntNative()
-            case x: DataString where #'^(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
+            case x: DataString where #'^-?(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
                 .matches(x.toString().trimAscii()) && (flag & WRAPPING_ON_INT_OVERFLOW) != 0 => DataReal(
                 x.toString().trimAscii()).toIntNative(strategy: Wrapping)
-            case x: DataString where #'^(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
+            case x: DataString where #'^-?(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
                 .matches(x.toString().trimAscii()) && (flag & THROWING_ON_INT_OVERFLOW) != 0 => DataReal(
                 x.toString().trimAscii()).toIntNative(strategy: Throwing)
-            case x: DataString where #'^(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
+            case x: DataString where #'^-?(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
                 .matches(x.toString().trimAscii()) && (flag & SATURATING_ON_INT_OVERFLOW) != 0 => DataReal(
                 x.toString().trimAscii()).toIntNative(strategy: Saturating)
@@ -355,7 +355,7 @@ extend UIntNative <: DataFields<UIntNative> {
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match (data) {
             case x: DataAny => tryFromData(x.data, flag)
-            case x: DataReal where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => x.tryToUIntNative()
+            case x: DataReal where ignoreNotConvertable(flag) => x.tryToUIntNative()
             case x: DataReal where (flag & WRAPPING_ON_INT_OVERFLOW) != 0 => x.toUIntNative(strategy: Wrapping)
             case x: DataReal where (flag & THROWING_ON_INT_OVERFLOW) != 0 => x.toUIntNative(strategy: Throwing)
             case x: DataReal where (flag & SATURATING_ON_INT_OVERFLOW) != 0 => x.toUIntNative(strategy: Saturating)
@@ -364,7 +364,7 @@ extend UIntNative <: DataFields<UIntNative> {
                 '(${data}) does not match ${TypeInfo.of<UIntNative>()}')
             case x: DataString where #'^(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
-                .matches(x.toString().trimAscii()) && (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => DataReal(
+                .matches(x.toString().trimAscii()) && ignoreNotConvertable(flag) => DataReal(
                 x.toString().trimAscii()).tryToUIntNative()
             case x: DataString where #'^(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
@@ -396,7 +396,7 @@ extend Float64 <: DataFields<Float64> {
             case _: DataNone => None<Float64>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
                 '(${data}) does not match ${TypeInfo.of<Float64>()}')
-            case x: DataString where #'^(-?((\d+(\.\d+)?|\.\d+)(-?[eE]\d+)?|0[xX][0-9a-fA-F]+(\.[0-9a-fA-F]+)?(-?[pP]\d+)?))$'#
+            case x: DataString where #'^(-?((\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?|0[xX][0-9a-fA-F]+(\.[0-9a-fA-F]+)?([pP][+-]?\d+)?))$'#
                 .regex(solid: true)
                 .matches(x.toString().trimAscii()) => DataReal(x.toString().trimAscii()).tryToFloat64()
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
@@ -417,7 +417,7 @@ extend Float32 <: DataFields<Float32> {
             case _: DataNone => None<Float32>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
                 '(${data}) does not match ${TypeInfo.of<Float32>()}')
-            case x: DataString where #'^(-?((\d+(\.\d+)?|\.\d+)(-?[eE]\d+)?|0[xX][0-9a-fA-F]+(\.[0-9a-fA-F]+)?(-?[pP]\d+)?))$'#
+            case x: DataString where #'^(-?((\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?|0[xX][0-9a-fA-F]+(\.[0-9a-fA-F]+)?([pP][+-]?\d+)?))$'#
                 .regex(solid: true)
                 .matches(x.toString().trimAscii()) => DataReal(x.toString().trimAscii()).tryToFloat32()
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
@@ -438,7 +438,7 @@ extend Float16 <: DataFields<Float16> {
             case _: DataNone => None<Float16>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
                 '(${data}) does not match ${TypeInfo.of<Float16>()}')
-            case x: DataString where #'^(-?((\d+(\.\d+)?|\.\d+)(-?[eE]\d+)?|0[xX][0-9a-fA-F]+(\.[0-9a-fA-F]+)?(-?[pP]\d+)?))$'#
+            case x: DataString where #'^(-?((\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?|0[xX][0-9a-fA-F]+(\.[0-9a-fA-F]+)?([pP][+-]?\d+)?))$'#
                 .regex(solid: true)
                 .matches(x.toString().trimAscii()) => DataReal(x.toString().trimAscii()).tryToFloat16()
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
@@ -478,7 +478,7 @@ extend Decimal <: DataFields<Decimal> {
             case _: DataNone => None<Decimal>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
                 '(${data}) does not match ${TypeInfo.of<Decimal>()}')
-            case x: DataString where #'^(-?((\d+(\.\d+)?|\.\d+)(-?[eE]\d+)?|0[xX][0-9a-fA-F]+(\.[0-9a-fA-F]+)?(-?[pP]\d+)?))$'#
+            case x: DataString where #'^(-?((\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?|0[xX][0-9a-fA-F]+(\.[0-9a-fA-F]+)?([pP][+-]?\d+)?))$'#
                 .regex(solid: true)
                 .matches(x.toString().trimAscii()) => DataReal(x.toString().trimAscii()).tryToDecimal()
             case _ => None<Decimal>

@@ -234,6 +234,18 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
 > returns `None`, `giveBack` destroys directly, and the key table does not grow back. This pool layer no longer has `destroy` (the
 > only destruction entry point is `close`).
 
+`idleTimeout <= Duration.Zero` disables idle expiration. Health checks and `minSize` replenishment can still run when inspection
+is enabled. A positive `idleTimeout` retains the usual idle-expiration behavior.
+
+`Pool` and `KeyPool` provide `public func awaitTermination(timeout!: Duration): Bool`. Call `close()` first, then wait with a
+positive, finite timeout for the creation and inspection tasks to finish. Both tasks share one total deadline. A timeout returns
+`false`, and the caller can wait again. Calling it on an open pool or with a nonpositive timeout or `Duration.Max` throws
+`PoolException`. `close()` requests cancellation and wakes internal waits; it cannot forcibly stop a user `creator` or `checker`.
+Finish borrowers at the application level first. A successful wait also covers disposal of objects created after closing began.
+
+Failed creation and rejected newly created objects retry with a delay starting at 100ms and doubling up to 1s. Successful creation
+resets the delay. Borrower deadlines are independent; extra creation requests do not bypass backoff, and closing wakes that wait.
+
 ## ArrayListPool
 
 `ArrayListPool<T>` is a pool "whose pooled item type is fixed to `ArrayList<T>`": `creator` is fixed to `{=> ArrayList<T>()}` and it
@@ -278,11 +290,12 @@ its meaning is "how long `get()` is willing to wait when the pool is exhausted":
 | `timeout` passed by the caller | Behavior |
 | --- | --- |
 | `<= Duration.Zero` | Do not wait: return `None` immediately when no idle item can be obtained |
-| `Duration.Max` (the default) | Wait in a loop (`sleep(1ms)` per round, **no busy waiting**). On reaching the `maxWaiting` limit it logs the WARN `key pool exhausted but no idle element: size=…/…, keyedSize=…/…, waited …, give up` and returns `None`; the caller decides whether to retry or fail |
+| `Duration.Max` (the default) | Wait for resource-state notifications. On reaching the `maxWaiting` limit it logs the WARN `key pool exhausted but no idle element: size=…/…, keyedSize=…/…, waited …, give up` and returns `None`; the caller decides whether to retry or fail |
 | Any other finite value | Wait for that duration and return `None` if nothing becomes available (the implementation is the third branch of `KeyPool.get`) |
 
-Passing `Duration.Max` as `maxWaiting` itself means **truly waiting forever**: the implementation waits in fixed slices (which avoids
-the overflow of `MonoTime + Duration.Max` and still lets it see changes of `running` in time).
+Passing `Duration.Max` as `maxWaiting` itself means **truly waiting forever**: wait for return, creation, removal or close notifications
+without computing an infinite deadline. Returning a resource wakes borrowers independently of another creation still in progress;
+notifications do not reset a finite borrower's total deadline.
 
 > Where this constraint comes from: the original implementation busy-waited with `while(running)` when "the pool is full but no idle
 > item can be obtained", occupying a whole core and **hanging the caller forever without any log** (see section six / §7.6 of

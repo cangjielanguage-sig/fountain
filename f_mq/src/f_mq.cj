@@ -15,5 +15,13 @@ limitations under the License.
  */
 package fountain::f_mq
 
-// 设计见 doc/详细设计.md，开发顺序见 doc/开发计划.md。
-// 本文件是模块占位：包结构与声明将按开发计划的 Step 逐步落地。
+/**
+ * 门面包：业务侧只需 `import fountain::f_mq.*`。
+ *
+ * 设计见 doc/详细设计.md，开发顺序见 doc/开发计划.md。
+ */
+public import fountain::f_mq.base.*
+public import fountain::f_mq.base.model.*
+public import fountain::f_mq.base.payload.*
+public import fountain::f_mq.exception.*
+public import fountain::f_mq.client.*

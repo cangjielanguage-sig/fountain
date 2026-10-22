@@ -1,0 +1,24 @@
+# capability	scenario	test_case（逗号分隔；N/A = 流程/文档项；GAP = 无对应用例）	强度（full/partial/none/N/A）
+# M2.2 登记本变更改动的 5 条 requirement（3 条 ADDED + 2 条 MODIFIED）的 21 条 scenario。
+f-jit-base-contracts	字段项构造保真	fieldsRoundTrip	full
+f-jit-base-contracts	14 型字段携带 typeRef	hostObjectFieldCarriesTypeRef	full
+f-jit-base-contracts	构造器重载与适配器	multipleCtorOverloadsArePreserved	full
+f-jit-base-contracts	父链用于静态子类型判定	subclassUpcastIsAllowed	full
+f-jit-base-contracts	返回类名驱动静态解析	methodResultChain	partial
+f-jit-compiler-frontend	同类与子类放行	sameClassKeepsValue,subclassUpcastIsAllowed	full
+# 下转型在 M2.3 改为运行期判定（用例 downcast* 见 m2.3 矩阵），本条已作废
+f-jit-compiler-frontend	下转型拒绝	N/A	N/A
+f-jit-compiler-frontend	不相容拒绝	incompatibleTypesAreRejected	full
+# 类名未跟踪在 M2.3 改为走运行期（unknownClassNameUsesRuntimeCheck），本条已作废
+f-jit-compiler-frontend	无法静态判定拒绝	N/A	N/A
+f-jit-compiler-frontend	兜底不求值但受检	fallbackIsNotEvaluatedOnStaticHit,fallbackIsStillTypeChecked	full
+f-jit-compiler-frontend	语法拒绝面	bareAsIsRecognized,bareCoalesceIsRejected,singleQuestionMarkStaysIllegal	full
+f-jit-facade-bridge	契约错误统一码	contractErrorHasNoSite	full
+f-jit-facade-bridge	两形态同接口同行为	t52TwoFormsSameBehavior	full
+f-jit-facade-bridge	闭包包装调用	wrapperCallMatchesDirectClosure	full
+f-jit-facade-bridge	close 协议	closeIsIdempotentAndReleasesGroup	full
+f-jit-facade-bridge	卸载弱语义	unloadThenWrapperCallIsRejected	full
+f-jit-facade-bridge	登记后走适配器	typedAdapterIsUsedWhenRegistered	full
+f-jit-facade-bridge	未登记仍走反射	reflectionPathStaysWhenUnregistered	full
+f-jit-facade-bridge	签名结构不同不命中	differentArityDoesNotMatch	full
+f-jit-facade-bridge	回调循环有收益	adapterBeatsReflectionInCallbackLoop	full
