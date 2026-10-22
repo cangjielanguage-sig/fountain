@@ -208,9 +208,9 @@ func sharding(connection: Connection): Unit {
 // ---------------------------------------------------------------------------
 func globalTable(connection: Connection): Unit {
     println('---- 3. 全局表（fdbm_global__t_dict = demo，广播到 demo_0 与 demo_1）----')
-    // 两个物理库各写一份 → rowCount = 2
+    // 广播到逻辑库 demo 的 2 个物理库 × 本次 2 行 → rowCount = 4
     checkInt('global insert broadcast', execUpdate(connection,
-        "insert into t_dict (code, label) values ('cn', 'China'), ('us', 'USA')"), 2)
+        "insert into t_dict (code, label) values ('cn', 'China'), ('us', 'USA')"), 4)
     // 读只取一个副本（结果集 1 行）
     checkText('global read one replica', firstText(connection,
         "select label from t_dict where code = 'cn'") ?? '', 'China')
@@ -226,7 +226,7 @@ func readWriteSplit(connection: Connection): Unit {
     // postgres 会直接报 permission denied —— 演示能跑通本身就证明分离生效。
     println('  写 → n1（fdbm_w，可写）；读 → n2（fdbm_r，只读）')
     println('  物理库核对：../boot.sh check')
-    check('read path works via read-only role',
+    checkText('read path works via read-only role',
         firstText(connection, "select label from t_dict where code = 'us'") ?? '', 'USA')
 }
 

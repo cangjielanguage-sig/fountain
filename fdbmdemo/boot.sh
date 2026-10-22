@@ -1,12 +1,12 @@
 #!/bin/bash
 # fdbmdemo：fdbm 双实例启动脚本 —— 负载均衡 / 读写分离 / 数据分片 演示的服务端一侧。
 #
-# 拓扑（两个 fdbm 实例，配置一致，仅端口与缓存目录不同）：
+# 拓扑（两个 fdbm 实例，业务配置一致；只有第二个实例多挂了一个逻辑库 spare 作探针）：
 #   fdbm-1 :8112  ┐
 #   fdbm-2 :8113  ┴─> 节点 n1(postgres, 账号 fdbm_w 可写, 权重 w,1;r,0)
 #                    节点 n2(postgres, 账号 fdbm_r 只读, 权重 w,0;r,1)
 #   逻辑库 demo = 物理库 demo_0, demo_1（t_order 按 hash(id) 分片；t_dict 全局表广播）
-#   逻辑库 spare = 物理库 spare_0（仅用于让 `show databases` 能区分两个 fdbm 实例）
+#   逻辑库 spare = 物理库 spare_0（只配在 fdbm-2 上 ⇒ `show databases` 可区分落点）
 #
 # 主场景：WSL Ubuntu 24.04（postgres 与 fdbm 都在 WSL 内），在 WSL 里执行本脚本。
 # 前置：
@@ -116,11 +116,13 @@ init_db() {
     for role in "$WRITE_USER" "$READ_USER"; do
         psql_admin "DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '$role') \
 THEN CREATE ROLE $role LOGIN PASSWORD '$APP_PASSWORD'; \
-ELSE ALTER ROLE $role PASSWORD '$APP_PASSWORD'; END IF; \$\$;" >/dev/null
+ELSE ALTER ROLE $role PASSWORD '$APP_PASSWORD'; END IF; END \$\$;" >/dev/null \
+            || die "创建角色 $role 失败"
     done
     for db in $DATABASES; do
         if [ -z "$(psql_admin "select 1 from pg_database where datname = '$db'")" ]; then
-            psql_admin "create database $db owner $WRITE_USER" >/dev/null
+            psql_admin "create database $db owner $WRITE_USER" >/dev/null \
+                || die "创建物理库 $db 失败"
         fi
     done
     # 只读账号只授 SELECT：写语句若被错误路由到读节点，postgres 直接 permission denied
@@ -128,7 +130,8 @@ ELSE ALTER ROLE $role PASSWORD '$APP_PASSWORD'; END IF; \$\$;" >/dev/null
     for db in $DATABASES; do
         psql_app "$db" "GRANT USAGE ON SCHEMA public TO $READ_USER; \
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO $READ_USER; \
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO $READ_USER;" >/dev/null
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO $READ_USER;" >/dev/null \
+            || die "授权失败（$db）"
     done
     say "init-db 完成：角色 $WRITE_USER(可写)/$READ_USER(只读)；物理库 $DATABASES"
     echo "表（t_order / t_dict）由演示客户端经 DDL 广播创建。"
@@ -141,16 +144,26 @@ fdbm_bin() {
     if [ -n "${FDBM_BIN:-}" ] && [ -x "$FDBM_BIN" ]; then echo "$FDBM_BIN"; return 0; fi
     if command -v fdbm >/dev/null 2>&1; then command -v fdbm; return 0; fi
     if [ -x "$HOME/.cjpm/bin/fdbm" ]; then echo "$HOME/.cjpm/bin/fdbm"; return 0; fi
-    if [ -x "$SCRIPT_DIR/../fdbm/target/release/fdbm" ]; then
-        echo "$SCRIPT_DIR/../fdbm/target/release/fdbm"; return 0
-    fi
+    # cjpm 的产物名取自源码入口：fdbm 的 main.cj → target/release/bin/main
+    for candidate in \
+        "$SCRIPT_DIR/../fdbm/target/release/bin/main" \
+        "$SCRIPT_DIR/../fdbm/target/release/bin/fdbm" \
+        "$SCRIPT_DIR/../fdbm/target/release/fdbm"; do
+        if [ -x "$candidate" ]; then echo "$candidate"; return 0; fi
+    done
     echo "找不到 fdbm 可执行文件：cd ../fdbm && cjpm build，或 export FDBM_BIN=..." >&2
     return 1
 }
 
-# config_env <port> <cache 目录> <输出文件>：单实例的完整 fdbm 配置（环境变量口径）
+# config_env <port> <cache 目录> <输出文件> <是否多挂 spare 库 0|1>
+#   spare 库（逻辑库 spare = 物理库 spare_0）只配在第二个实例上，
+#   于是 `show databases` 的返回就成了"这次连接落在哪个实例"的探针。
 config_env() {
-    local port="$1" cache="$2" out="$3"
+    local port="$1" cache="$2" out="$3" with_spare="${4:-0}"
+    local node_dbs='demo_0,demo_1'
+    if [ "$with_spare" = "1" ]; then
+        node_dbs='demo_0,demo_1,spare_0'
+    fi
     {
         # ---- 服务与进程 ----
         echo "export fdbm_port=$port"
@@ -164,16 +177,18 @@ config_env() {
         # ---- 物理节点与凭据（n1=写角色，n2=读角色；host:port 是 WSL postgres）----
         echo "export fdbm_db=\"n1@$PGHOST:$PGPORT;n2@$PGHOST:$PGPORT\""
         echo "export fdbm_db_driver_n1=postgres"
-        echo "export fdbm_db_database_n1=demo_0,demo_1,spare_0"
+        echo "export fdbm_db_database_n1=$node_dbs"
         echo "export fdbm_db_username_n1=$WRITE_USER"
         echo "export fdbm_db_password_n1=$APP_PASSWORD"
         echo "export fdbm_db_driver_n2=postgres"
-        echo "export fdbm_db_database_n2=demo_0,demo_1,spare_0"
+        echo "export fdbm_db_database_n2=$node_dbs"
         echo "export fdbm_db_username_n2=$READ_USER"
         echo "export fdbm_db_password_n2=$APP_PASSWORD"
         # ---- 逻辑库映射 ----
         echo "export fdbm_db_logicalDatabase_demo=demo_0,demo_1"
-        echo "export fdbm_db_logicalDatabase_spare=spare_0"
+        if [ "$with_spare" = "1" ]; then
+            echo "export fdbm_db_logicalDatabase_spare=spare_0"
+        fi
         # ---- 连接池 ----
         echo "export fdbm_databasePoolInitSize=1"
         echo "export fdbm_databasePoolMinSize=1"
@@ -200,44 +215,64 @@ config_env() {
     } > "$out"
 }
 
+# 仓颉运行时与标准库（stdx）动态库目录；envsetup 已设置 CANGJIE_HOME/CANGJIE_STDX_DYNAMIC_PATH
+cangjie_runtime_libs() {
+    local dirs=''
+    if [ -n "${CANGJIE_HOME:-}" ]; then
+        dirs="$(ls -d "$CANGJIE_HOME"/runtime/lib/*/ 2>/dev/null | tr '\n' ':')"
+    fi
+    printf '%s' "${dirs}${CANGJIE_STDX_DYNAMIC_PATH:-}"
+}
+
 start_fdbm() {
-    local port="$1"
+    local port="$1" with_spare="${2:-0}"
     local cache="$SCRIPT_DIR/cache_$port"
     local log="$SCRIPT_DIR/fdbm_$port.log"
     local envfile="$SCRIPT_DIR/.fdbm_env_$port.sh"
+    # 端口已有人在听：说明该实例已在运行（或别的进程占用了端口），不要盲目再起一个
+    if wait_port "$port"; then
+        echo "fdbm($port) 端口已被占用：若为本 demo 实例见 ./boot.sh status" >&2
+        return 0
+    fi
     mkdir -p "$SCRIPT_DIR/driver" "$SCRIPT_DIR/custom" "$cache"
     if [ -z "$(find "$SCRIPT_DIR/driver" -name '*.so' 2>/dev/null | head -1)" ]; then
         die "driver/ 目录没有驱动库：先执行 ./boot.sh driver"
     fi
-    config_env "$port" "$cache" "$envfile"
+    config_env "$port" "$cache" "$envfile" "$with_spare"
     local bin
     bin="$(fdbm_bin)" || exit 1
+    # cjpm 把 fdbm 的 path 依赖各自编译到 target/release/<pkg>@<org>/，运行时必须都在 LD_LIBRARY_PATH 里
+    local bin_dir dep_libs pidfile
+    bin_dir="$(dirname "$bin")"
+    dep_libs="$(find "$bin_dir/.." -maxdepth 1 -type d -name '*@*' 2>/dev/null | tr '\n' ':')"
+    pidfile="$SCRIPT_DIR/fdbm_$port.pid"
+    # setsid：脱离当前会话，避免启动脚本所在会话结束时把 fdbm 一起带走；
+    # pid 由内层 bash 自己写（setsid 在交互 shell 里可能 fork，$! 不一定是 fdbm 的 pid）
     (
         set -a
         # shellcheck disable=SC1090
         . "$envfile"
         set +a
-        export LD_LIBRARY_PATH="$(dirname "$bin"):${CANGJIE_STDX_DYNAMIC_PATH:-}:${LD_LIBRARY_PATH:-}"
-        exec "$bin"
-    ) > "$log" 2>&1 &
-    local pid=$!
-    echo "$pid" > "$SCRIPT_DIR/fdbm_$port.pid"
+        export LD_LIBRARY_PATH="${bin_dir}:${dep_libs}$(cangjie_runtime_libs):${LD_LIBRARY_PATH:-}"
+        exec setsid bash -c "echo \$\$ > '${pidfile}'; exec '${bin}'"
+    ) > "$log" 2>&1 < /dev/null &
     if ! wait_port "$port"; then
         tail -30 "$log" >&2
         die "fdbm($port) 启动失败"
     fi
-    echo "fdbm 已启动：port=$port pid=$pid log=fdbm_$port.log"
+    echo "fdbm 已启动：port=$port pid=$(cat "$pidfile" 2>/dev/null) log=fdbm_$port.log"
 }
 
 start_all() {
-    start_fdbm "$FDBM_PORT1"
-    start_fdbm "$FDBM_PORT2"
+    start_fdbm "$FDBM_PORT1" 0
+    start_fdbm "$FDBM_PORT2" 1      # 第二个实例多挂逻辑库 spare ⇒ 客户端可据此判断落点
     echo
     echo "两个 fdbm 已就绪。运行演示：./boot.sh demo"
 }
 
 stop_fdbm() {
-    local port="$1" pidfile="$SCRIPT_DIR/fdbm_$port.pid"
+    local port="$1"
+    local pidfile="$SCRIPT_DIR/fdbm_$port.pid"
     [ -f "$pidfile" ] || { echo "fdbm($port) 未在运行"; return 0; }
     local pid
     pid="$(cat "$pidfile")"
@@ -324,9 +359,11 @@ run_demo() {
     # （旧 .so 无 SONAME，链接器按文件名先命中它 → undefined symbol）；规则同 frpcdemo/boot.sh
     local libs
     libs="$(find "$SCRIPT_DIR/target/release" -type d 2>/dev/null | grep -a -v -P '_stAtIc__' | tr '\n' ':')"
+    local fboot_dir
+    fboot_dir="$(dirname "$fboot")"
     say "fboot 启动客户端（动态库 + Initializer.start）"
     ( cd "$SCRIPT_DIR" \
-        && export LD_LIBRARY_PATH="${libs}${LD_LIBRARY_PATH:-}" \
+        && export LD_LIBRARY_PATH="${libs}${fboot_dir}/../libs/fboot:$(cangjie_runtime_libs):${LD_LIBRARY_PATH:-}" \
         && export logger_appender_console=FdbmDemoConsole \
         && export logger_appender_FdbmDemoConsole_level=INFO \
         && export logger_appender_FdbmDemoConsole_pattern='[%level-%name]%m' \
