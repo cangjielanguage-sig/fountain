@@ -27,8 +27,9 @@ import fountain::f_jit.base.DummyDiagnosticsSink
  * 把"必须 JIT"钉成断言，覆盖两条**宿主绝对地址**路径：
  *
  * - 常量镜像（`PUSH_KH`）：字符串字面量；
- * - 函数入口表（`CALL_FUNC`）：方言暂未提供源级触发（`recursive` 未实现），由
- *   `EmitAudit_test.absoluteAddressIsExempt` 以审计哨兵覆盖。
+ * - 函数入口表（`CALL_FUNC`）：`recursive(...)` 自递归（顶层走 `CALL_FUNC <entryFn>`）。
+ *
+ * 注：2026-10-22 订正——此前"方言未提供 `recursive`"为**误判**（检索命令漏 `-Recurse`）。
  */
 @Test
 public class JitBacked_test {
@@ -45,6 +46,16 @@ public class JitBacked_test {
         let f = c.compile('{ x: Int64 => x + 1 }')
         @Assert(f.isJitBacked(), true)
         @Assert(f.call<Int64>([Int64(1)]), 2)
+    }
+
+    /** 自递归（`recursive` ⇒ `CALL_FUNC` + 入口表绝对地址）仍必须 JIT，且结果正确。 */
+    @TestCase
+    public func recursiveUnitStaysJitBacked(): Unit {
+        let c = JitBacked_test.compiler()
+        CompileCache.reset()
+        let f = c.compile('{ n: Int64 => if (n <= 1) { 1 } else { n * recursive(n - 1) } }')
+        @Assert(f.isJitBacked(), true)
+        @Assert(f.call<Int64>([Int64(5)]), 120)
     }
 
     /** 含常量镜像（字符串字面量 ⇒ `PUSH_KH`）仍必须 JIT，且结果正确。 */

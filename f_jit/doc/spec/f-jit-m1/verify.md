@@ -279,7 +279,7 @@ cd f_jit && cjpm test
 |---|---|
 | x86 审计对称化 | `BackendX86_64.noteAbsMem()` 以哨兵 `-1` 登记**宿主绝对地址**；`auditAllows` 接受 `-1`、仍拒绝真实越界。`X86Lower` 在 `PUSH_KH`（常量镜像）与 `callFunc`（入口表）登记 |
 | 新用例 | `EmitAudit_test.absoluteAddressIsExempt`；`src/JitBacked_test.cj` 两例：`plainUnitStaysJitBacked`、`constMirrorUnitStaysJitBacked`（用 `isJitBacked()` 防"审计误判导致整单元静默回退"） |
-| 缺口（已知） | 方言暂无 `recursive`，**无法从源码触发 `CALL_FUNC`** ⇒ 该路径由审计哨兵单测覆盖，源级用例待方言支持后补 |
+| 源级 `CALL_FUNC` 覆盖（**2026-10-22 订正**） | 方言**已支持 `recursive`**（自递归）：顶层 `CALL_FUNC <entryFn>`（`Lowerer.cj:2492/2542`）、闭包层 `LOADL 0 + CALL_CLOSURE`、尾位置 `STOREL` 逆序 + `LOOP_BACK` 帧复用（`:805 tryLowerTailRecursive`）、值化适配器（`:3242 lowerRecursiveValue`）。执行级用例本已存在：`X86Exec_test.recursiveCall`（`:70`）、`A64Exec_test.factorialViaCallFunc`（`:181`）、`DiffExec_test:81`；本轮再补 `JitBacked_test.recursiveUnitStaysJitBacked`（断言 `isJitBacked()`，堵住"审计误判导致整单元回退"）。<br>**勘误**：此前"方言暂无 `recursive`"为**误判**（检索命令漏 `-Recurse`，把空结果当成了不支持） |
 | **f_util 用例首次执行** | WSL Ubuntu-24.04 / x86_64：`cd f_util && cjpm test` ⇒ **45/45 PASSED**（含 FNV 全字宽 14 例；此前 `f_jit` 仅把它当 path 依赖构建，从不执行其测试） |
 | f_jit 全量 | **1112/1112（0 FAILED / 0 ERROR）**，新增 3 例 |
 

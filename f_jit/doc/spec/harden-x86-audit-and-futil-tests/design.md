@@ -46,4 +46,4 @@ cd f_util && cjpm test      # WSL Ubuntu-24.04 / x86_64
 | 项 | 说明 |
 |---|---|
 | 哨兵 `-1` 被滥用 | 只有 `noteAbsMem()` 会写入；`auditAllows` 仍拒绝任何真实越界（如 `rax(0)`） |
-| `CALL_FUNC` 缺源级触发（方言暂无 `recursive`） | 该路径由审计单测覆盖（哨兵）；源级用例待方言支持后补 |
+| ~~`CALL_FUNC` 缺源级触发（方言暂无 `recursive`）~~ **已订正** | 方言**支持** `recursive`（`Lowerer.cj:805/2492/2542/3242`），`CALL_FUNC` 有源级触发；补 `JitBacked_test.recursiveUnitStaysJitBacked` 断言 `isJitBacked()`。原判断系检索命令漏 `-Recurse` 导致的误判 |
