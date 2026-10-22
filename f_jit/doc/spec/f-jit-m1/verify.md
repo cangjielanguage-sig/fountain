@@ -234,3 +234,13 @@ cd f_jit && cjpm test
   `p0_6_deadlineInterruptsLoop`、`defaultIsStrict`、`strictDivisionByZeroFails`、`strictFpIsPartOfCacheKey`
   —— 属 `strictFp`/期限面，另立变更处理）
 - RED 证据：临时回退 `X86Lower.cj` 复跑 `CastOr_test` ⇒ 4 例 ERROR；恢复修复后 0 ERROR
+
+## 2026-10-22 第二轮回归（strictFp ÷0 与回边安全点，change `fix-f-jit-strictfp-deadline-x86`）
+
+- 4 个长期 FAILED 的根因：
+  ① `FDIV_CHK` 谓词写反（`jnp` 有序即跳 ⇒ 零检查被跳过）→ 改 `jp`；
+  ② x86 `LOOP_BACK` 只有 `jmp`，缺 H22 `interrupt_poll`（aarch64 与解释器均有）→ 回边补 H22
+- 修复后：`StrictFp_test` **5/5**、`AnyBridgeCall_test` **7/7**（含 `p0_6_deadlineInterruptsLoop` 1.3ms 中断）
+- **全量：1098/1098，0 FAILED / 0 ERROR / 0 SKIPPED**
+- 遗留（本变更未做）：x86 `LOOP_BACK` 的 **STACK_GUARD**（`(rbp-frame)-rsp < frame ⇒ -1`）尚未补，
+  与 aarch64 存在语义差；已记入 §12.4 口径与后续待办（当前所有用例不受影响）

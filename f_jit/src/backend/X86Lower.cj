@@ -476,7 +476,7 @@ internal class X86Lower {
         let done = 'fdd${this.seq}'
         this.add([0x66u8, 0x0Fu8, 0x57u8, 0xC9u8])
         this.ucomisdRM(1, 0)
-        this.jcc(0x8Bu8, go) // jnp：除数 NaN 不判零
+        this.jcc(0x8Au8, go) // jp：仅除数 NaN（无序，PF=1）跳过零检查
         this.jcc(0x84u8, z)
         this.bind(go)
         this.floatBin(0x5Eu8, false)
@@ -998,6 +998,10 @@ internal class X86Lower {
                 this.depth = this.depth - 1
             case 0x73u8 => ()
             case 0x74u8 =>
+                // 回边 = 安全点：先 H22 interrupt_poll（与解释器同语义），再跳
+                this.helper(22, 0, 0) // 变体 0：占位结果 + 自动 CHECK_ERR
+                this.addRsp(8)
+                this.depth = this.depth - 1
                 let rel = X86Lower.i32(ops, 0)
                 this.rel32([0xE9u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8], 'L${next + rel}')
             case 0x75u8 => this.helper(X86Lower.u16(ops, 0), X86Lower.u8(ops, 2), 0)
