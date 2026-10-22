@@ -136,15 +136,15 @@ user-defined types). Literals and operators:
 
 | Type | Backing (std) | Literals / construction | Main operations |
 |---|---|---|---|
-| **Int64** | scalar | `42`, `-7` | `+ - * / %`, comparisons; `/` and `%` by zero → 3; `Int64(x)` narrowing |
-| **Float64** | scalar | `1.5`, `1.0f64` | `+ - * /`, comparisons; `strictFp` defaults to `true` ⇒ ÷0 fails with 1, otherwise IEEE ±Inf |
+| **Int64** | scalar | `42`, `-7` | `+ - * / % **`, comparisons; `/` and `%` by zero → 3; `Int64(x)` narrowing |
+| **Float64** | scalar | `1.5`, `1.0f64`, `1.5e3f64`, `.123e2f64` | `+ - * /`, comparisons; `strictFp` defaults to `true` ⇒ ÷0 fails with 1, otherwise IEEE ±Inf |
 | **String** | `std.core.String` | `'abc'` / `"abc"`, multi-line `'''…'''` / `"""…"""`, raw `#`×n; interpolation `"v${x}"` | `+` concat, `* 3` repeat, `s[a..=b]` (code-point half-open range) |
 | **Range** | `std.core.Range` | `a..b`, `a..=b`, optional `: step` | `for x in a..b { … }` |
 | **List** | `std.collection.ArrayList` | `[1, 2, 3]` (**constant, shared read-only**), `[]` (fresh **mutable** empty list, needs a contextual type) | `xs[i]`, `xs[i] = v`, `for x in xs`; append/remove are mutating helpers (`LIST_APPEND`/`LIST_REMOVE`; writing a constant → 20) |
 | **Map** | `std.collection.HashMap` | `{k: v}` (constant, read-only), `{}` (mutable, needs a contextual type) | `m[k]`, `m[k] = v`, `for (k, v) in m` |
 | **JSON** | handles 16–19 (`JsonValue` family) | **backtick literal**: `` `{"k": 1}` `` (the only form; parsed once at load time) | `j["k"]` read, `j["k"] = v` write (mutable in-world), member sugar `j.k`, `is`/`as`; `JsonObject(...)` construction → compile error |
 | **Regex** | `std.regex.Regex` | `/pat/flags` (flags ∈ `i m u`, order-independent, idempotent); `s.regex()` builds at run time (no flags) | `re ~ s`, `re !~ s`, `re/s/r/g` (replace all), `re/s/r/n` (replace n times) |
-| **Decimal** | `std.math.numeric.Decimal` | **a bare decimal literal is a Decimal**: `1.23`; `Decimal(...)` | `+ - * /`, comparisons |
+| **Decimal** | `std.math.numeric.Decimal` | **a bare decimal literal is a Decimal**: `1.23`, `1.5e3`, `1e-3`; `Decimal(...)` | `+ - * /`, comparisons |
 | **Duration** | `std.core.Duration` | no literal (from the host, or `DateTime` difference) | `Duration ± Duration`, comparisons; overflow → 12 |
 | **DateTime** | `std.time.DateTime` | no literal (from the host) | `DateTime ± Duration`, `DateTime − DateTime → Duration`; out of range → 11 |
 | **Closure** | handle 12 (`JitClosure`) | `{ x => e }`, captures outer locals | call `f(a)`; escaping returns use `callForFn<Fn>`, then `close()` |
@@ -301,6 +301,29 @@ apply.call<Int64>([bridge, Int64(41)])     // 42
 Key point: the `JitFunction` stays on the **host side**; only the closure value crosses the bridge. If
 the closure escapes the call, the host must keep the captured `JitFunction` alive (make its lifetime
 longer than the closure's).
+
+### 6.6 Exponentiation `**` and scientific notation
+
+| Item | Rule |
+|---|---|
+| `**` types | `(Int64, Int64) → Int64` only; anything else (`1.5 ** 2`, `2 ** 1.5`, `"a" ** 2`) is a compile-time `TYPE_MISMATCH` |
+| Precedence / associativity | **4** (tighter than `*`/`/`/`%`, looser than unary `-`), **right-associative**: `2 ** 3 ** 2` = 512; `-2 ** 2` = 4 |
+| Exponent | must be **non-negative** (Cangjie uses `UInt64`, so a negative exponent is unrepresentable): a runtime negative → `ERR_ARG_MISMATCH(14)` |
+| Overflow | `ERR_OVERFLOW_I64(3)` (`2 ** 63` fails); `x ** 0` = `1`, `0 ** 0` = `1`, `0 ** n` = `0` |
+| Implementation | shared helper **H84 `ipow`** (fast power, O(log n)); identical in all three engines ⇒ bit-identical results/error codes, zero backend change |
+| Scientific (Decimal) | `1.5e3` (=1500), `3e2` (=300), `1e-3` (=0.001), `2.4E-1` |
+| Scientific (Float64) | `1.5e3f64`, `2e3f64`, `2.4e-1f64`, `.123e2f64` (= 12.3) |
+| Leading dot | `.5`, `.5e2` (Decimal), `.5e2f64` (Float64) are all valid |
+| Illegal | `1e`, `1e+`, identifier right after a number, `1.5f32` (no `f32` in the dialect) → lexical error |
+
+```cangjie
+c.compile('{ => 2 ** 10 }')                 // 1024
+c.compile('{ => 2 ** 3 ** 2 }')             // 512 (right-associative)
+c.compile('{ => 2 * 3 ** 2 }')              // 18 (** binds tighter)
+c.compile('{ x: Int64 => 2 ** x }')         // negative x → 14; overflow → 3
+c.compile('{ => 1.5e3 }')                   // Decimal 1500
+c.compile('{ => .123e2f64 }')               // Float64 12.3
+```
 
 ## 7. FAQ
 

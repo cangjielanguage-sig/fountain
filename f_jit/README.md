@@ -129,15 +129,15 @@ JIT 是加速层，遇到以下情况**整单元退解释器**（`ok = false`）
 
 | 类型 | 承载（std） | 字面值 / 构造 | 主要操作 |
 |---|---|---|---|
-| **Int64** | 标量 | `42`、`-7` | `+ - * / %`、`< <= > >= == !=`；`/`、`%` 零除 → 3；`Int64(x)` 窄化 |
-| **Float64** | 标量 | `1.5`、`1.0f64` | `+ - * /`、比较；`strictFp` 缺省 `true` ⇒ ÷0 报 1，关闭则 IEEE ±Inf |
+| **Int64** | 标量 | `42`、`-7` | `+ - * / % **`、`< <= > >= == !=`；`/`、`%` 零除 → 3；`Int64(x)` 窄化（`**` 见 §6.6） |
+| **Float64** | 标量 | `1.5`、`1.0f64`、`1.5e3f64`、`.123e2f64` | `+ - * /`、比较；`strictFp` 缺省 `true` ⇒ ÷0 报 1，关闭则 IEEE ±Inf |
 | **String** | `std.core.String` | `'abc'` / `"abc"`、多行 `'''…'''` / `"""…"""`、`#`×n 原始定界；插值 `"v${x}"` | `+` 拼接、`* 3` 重复、`s[a..=b]`（**码点**索引半开区间） |
 | **Range** | `std.core.Range` | `a..b`、`a..=b`，可带 `: step` | `for x in a..b { … }`、端点/步长 |
 | **List** | `std.collection.ArrayList` | `[1, 2, 3]`（**常量、共享只读**）、`[]`（运行时新建**可变**空表，需上下文类型） | `xs[i]`、`xs[i] = v`、`for x in xs`；追加/删除为变更型 helper（`LIST_APPEND`/`LIST_REMOVE`，写常量 → 20） |
 | **Map** | `std.collection.HashMap` | `{k: v}`（常量只读）、`{}`（可变空表，需上下文类型） | `m[k]` 取、`m[k] = v` 置、`for (k, v) in m` |
 | **JSON** | 句柄 16–19（`JsonValue` 谱系） | **反引号字面量**：`` `{"k": 1}` ``（唯一形态，加载期解析一次） | `j["k"]` 读、`j["k"] = v` 写（世界内可变）、成员糖 `j.k`、`is`/`as` 判定；`JsonObject(...)` 构造写法 → 编译错误 |
 | **Regex** | `std.regex.Regex` | `/pat/flags`（flags ∈ `i m u`，**顺序无关、可重复**）；`s.regex()` 运行期构造（无 flags） | `re ~ s`（匹配）、`re !~ s`、`re/s/r/g`（全部替换）、`re/s/r/n`（替换 n 次） |
-| **Decimal** | `std.math.numeric.Decimal` | **无后缀小数即 Decimal**：`1.23`；`Decimal(...)` | `+ - * /`、比较 |
+| **Decimal** | `std.math.numeric.Decimal` | **无后缀小数即 Decimal**：`1.23`、`1.5e3`、`1e-3`；`Decimal(...)` | `+ - * /`、比较 |
 | **Duration** | `std.core.Duration` | 无字面量（宿主传入或 `DateTime` 差） | `Duration ± Duration`、比较；溢出 → 12 |
 | **DateTime** | `std.time.DateTime` | 无字面量（宿主传入） | `DateTime ± Duration`、`DateTime − DateTime → Duration`；越界 → 11 |
 | **Closure** | 句柄 12（`JitClosure`） | `{ x => e }`，自动捕获外层局部 | 调用 `f(a)`；逃逸返回用 `callForFn<Fn>`，用完 `close()` |
@@ -278,6 +278,29 @@ apply.call<Int64>([bridge, Int64(41)])     // 42
 
 要点：`JitFunction` 留在**宿主侧**，只把闭包值送过桥；闭包一旦逃逸出该次调用，
 其捕获的 `JitFunction` 由宿主保证存活（建议让 `JitFunction` 的生命周期长于闭包）。
+
+### 6.6 幂运算 `**` 与科学计数法
+
+| 项 | 规则 |
+|---|---|
+| `**` 类型 | 仅 `(Int64, Int64) → Int64`；其他组合（`1.5 ** 2`、`2 ** 1.5`、`"a" ** 2`）编译期 `TYPE_MISMATCH` |
+| 优先级 / 结合 | **4**（高于 `*`/`/`/`%`，低于一元 `-`）、**右结合**：`2 ** 3 ** 2` = 512；`-2 ** 2` = 4 |
+| 指数取值 | 必须**非负**（仓颉侧为 `UInt64`，负值类型上不可表达）：运行期负值 → `ERR_ARG_MISMATCH(14)` |
+| 溢出 | `ERR_OVERFLOW_I64(3)`（`2 ** 63` 失败）；`x ** 0` = `1`、`0 ** 0` = `1`、`0 ** n` = `0` |
+| 实现 | 共享 helper **H84 `ipow`**（快速幂 O(log n)）；三引擎同实现 ⇒ 结果/错误码逐位一致，两后端零改动 |
+| 科学计数法（Decimal） | `1.5e3`（=1500）、`3e2`（=300）、`1e-3`（=0.001）、`2.4E-1` |
+| 科学计数法（Float64） | `1.5e3f64`、`2e3f64`、`2.4e-1f64`、`.123e2f64`（= 12.3） |
+| 前导点 | `.5`、`.5e2`（Decimal）、`.5e2f64`（Float64）均合法 |
+| 非法 | `1e`、`1e+`、数字后紧跟标识符、`1.5f32`（方言无 `f32`）→ 词法错误 |
+
+```cangjie
+c.compile('{ => 2 ** 10 }')                 // 1024
+c.compile('{ => 2 ** 3 ** 2 }')             // 512（右结合）
+c.compile('{ => 2 * 3 ** 2 }')              // 18（** 更紧）
+c.compile('{ x: Int64 => 2 ** x }')         // x 为负 → 14；溢出 → 3
+c.compile('{ => 1.5e3 }')                   // Decimal 1500
+c.compile('{ => .123e2f64 }')               // Float64 12.3
+```
 
 ## 7. FAQ
 

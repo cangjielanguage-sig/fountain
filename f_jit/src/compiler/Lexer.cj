@@ -243,6 +243,10 @@ internal class Lexer {
         if (b >= 0x30u8 && b <= 0x39u8) {
             return this.scanNumber(start, startLine, startCol, nl)
         }
+        // 前导点浮点/十进制（仓颉 float.md:19 `.123e2`）：`.` 后紧跟数字才走数字扫描
+        if (b == 0x2Eu8 && this.at(1) >= 0x30u8 && this.at(1) <= 0x39u8) {
+            return this.scanNumber(start, startLine, startCol, nl)
+        }
         if (Lexer.isIdentStart(b)) {
             if (b == 0x5Fu8 && !Lexer.isIdentPart(this.at(1))) {
                 this.bump()
@@ -809,6 +813,10 @@ internal class Lexer {
             len = 2
         } else if (b == 0x3Eu8 && n1 == 0x3Eu8) {
             k = TokenKind.Shr
+            len = 2
+        } else if (b == 0x2Au8 && n1 == 0x2Au8) {
+            // `**`（幂运算）：`***` 按 `**` + `*` 切分；`* *` 仍是两个 Star（语法错误）
+            k = TokenKind.StarStar
             len = 2
         } else if (b == 0x3Fu8 && n1 == 0x3Fu8) {
             // `??`（M2.2）：单 `?` 不属于任何合法词法单元，仍走 ILLEGAL_CHARACTER
