@@ -142,6 +142,7 @@ user-defined types). Literals and operators:
 | **Range** | `std.core.Range` | `a..b`, `a..=b`, optional `: step` | `for x in a..b { … }` |
 | **List** | `std.collection.ArrayList` | `[1, 2, 3]` (**constant, shared read-only**), `[]` (fresh **mutable** empty list, needs a contextual type) | `xs[i]`, `xs[i] = v`, `for x in xs`; append/remove are mutating helpers (`LIST_APPEND`/`LIST_REMOVE`; writing a constant → 20) |
 | **Map** | `std.collection.HashMap` | `{k: v}` (constant, read-only), `{}` (mutable, needs a contextual type) | `m[k]`, `m[k] = v`, `for (k, v) in m` |
+| **JSON** | handles 16–19 (`JsonValue` family) | **backtick literal**: `` `{"k": 1}` `` (the only form; parsed once at load time) | `j["k"]` read, `j["k"] = v` write (mutable in-world), member sugar `j.k`, `is`/`as`; `JsonObject(...)` construction → compile error |
 | **Regex** | `std.regex.Regex` | `/pat/flags` (flags ∈ `i m u`, order-independent, idempotent); `s.regex()` builds at run time (no flags) | `re ~ s`, `re !~ s`, `re/s/r/g` (replace all), `re/s/r/n` (replace n times) |
 | **Decimal** | `std.math.numeric.Decimal` | **a bare decimal literal is a Decimal**: `1.23`; `Decimal(...)` | `+ - * /`, comparisons |
 | **Duration** | `std.core.Duration` | no literal (from the host, or `DateTime` difference) | `Duration ± Duration`, comparisons; overflow → 12 |
@@ -165,6 +166,44 @@ c.compile('{ => 1..=5 }')                    // Range
 shared across calls — writing them fails with `ERR_READONLY(20)`; `[]`/`{}` build a fresh mutable
 container on every evaluation (not in the constant table) and need a contextual type (annotation or
 parameter signature).
+
+**Regex flags (`/pat/flags`)**
+
+| flag | Meaning | Example (result) |
+|---|---|---|
+| `i` | Case-insensitive (`RegexFlag.IgnoreCase`) | `/AbC/i ~ "abc"` → `1`; without `i` → `0` |
+| `m` | Multiline: `^`/`$` match the start/end of **every line** | `/^b/m ~ "a\nb"` → `1`; without `m` → `0` |
+| `u` | Unicode mode (Unicode semantics such as `\p{…}`; `std.regex` is authoritative) | `/^\p{L}+$/u ~ "中文"` → `1` |
+| combining | `i m u` in **any order, repeats idempotent** (`/pat/im` ≡ `/pat/mi` ≡ `/pat/ii`); any other char is illegal | rejected at load time (error 14) |
+
+### 6.0 Multi-line strings and the line-anchor marker `>|`
+
+Multi-line strings use `'''…'''` / `"""…"""` (raw `#`×n strings are separate). When **source
+indentation** conflicts with **content indentation** (typically JSON embedded in a string), use the
+line-anchor marker `>|`: the marker plus its leading indentation is consumed, and the rest of the line is
+the content.
+
+```text
+"""{
+>|  "k": 1,
+>|  "n": [2, 3]
+>|}"""
+```
+
+| Rule | Detail |
+|---|---|
+| Scope | **Multi-line forms only** (`'''` / `"""`); single-line and raw (`#`×n) strings are unaffected (`>\|` is just two characters there) |
+| Valid marker | the `>\|` at the **first non-blank position** of a line (only indentation may precede it) |
+| Mode switch | if **any** line has a valid marker, the **whole string** is in anchor mode; otherwise normal mode (`a>\|b` does not trigger) |
+| Marker line | the marker and its leading indentation are consumed; everything **after** `>\|` is the line content (further `>\|` on that line is literal text; a bare `>\|` line yields an empty string) |
+| Non-marker line | kept **verbatim** (no slicing, no normalisation) |
+| First-only | `>\|>\|abc` → `>\|abc`; `>\|    >\|` → `    >\|` (only the first valid marker is consumed) |
+| Joining | lines are joined with `\n` (`CRLF`/`CR` normalised to `\n` for the whole string first) |
+| Order | anchoring happens **before** escape decoding and before interpolation splitting: `${x}` in `>\|${x}` still interpolates, the `>\|` never enters the text |
+| Non-marker cases | `>>\|`, `a>\|b`, `\|>\|` ⇒ `>\|` is literal content (line kept as-is) |
+
+> Note: `>|` is **not** a global dedent — only lines with a valid marker are sliced; all other lines are
+> preserved verbatim.
 
 ### 6.1 Recursion (`recursive`)
 
@@ -201,7 +240,29 @@ f.call<Int64>([Int64(4)])         // 24
 - **Escaping** a closure: take the wrapper via `callForFn<Fn>` and `close()` it when done (otherwise its
   promotion group stays resident).
 
-### 6.3 ⚠ `JitFunction` cannot be a parameter of a jit lambda
+### 6.3 `as` syntax (cast / fallback / test)
+
+| Form | Semantics | Failure behaviour |
+|---|---|---|
+| `x as T` | downcast; `T` must be compatible with the static type of `x` | incompatible → **rejected at compile time** (message names both types); runtime mismatch → **7 `BAD_CAST`** (not reported as host exception 21) |
+| `x as T ?? fb` | "take the original object on success, otherwise `fb`"; **the fallback is lazy** (never evaluated on success) | mismatch is not an error; `fb` must be `T` or a subtype of `T` |
+| `x is T` | type test returning `Bool` (no cast, no error) | — |
+
+```cangjie
+let pick = c.compile('{ u: User => u as Admin ?? Admin("fallback") }')
+// Admin instance → the object itself; User instance → the fallback value
+```
+
+Additional rules:
+
+- **Untracked class names** (e.g. a 14-returning call without `retName`) ⇒ compiles, decided at **run time**
+  via `$as$<T>`;
+- `??` is legal **only** as `as T ??`; `x ?? 0` and `x ? 0` are syntax/lexical errors;
+- the fallback expression is still lowered (an undefined name inside it is a compile error;
+  `x as Int64 ?? (x / 0)` returns `x` on success and never evaluates the fallback);
+- `Any` uses the Any channel (box 12 → object handle on success; on failure `as` yields 22, bare `as` → 7).
+
+### 6.4 ⚠ `JitFunction` cannot be a parameter of a jit lambda
 
 `JitFunction` is a **bridge-side executable** (code buffer, constant mirror, function table, promotion
 group) — not a dialect value type. `Compiler.registerType()` only accepts host types that map to a
