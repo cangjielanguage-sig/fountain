@@ -198,15 +198,20 @@ public struct InitializerCollection {
      * 注册模块的初始化函数。通常应用APP不需要调用它。
      */
     public static func register(initializer: Initializer): Unit
-    // initialize() 为包内函数，由 App 在加载阶段调用，返回收集到的全部 start 函数
+    /**
+     * 执行全部 Initializer 的 initialize()，返回实例提供器；调用 provider() 可取得实例。
+     * 由 App 在加载阶段调用；需要自定义扩展的宿主也可以直接调用后做模式匹配。
+     */
+    public static func initialize(): ArrayList<() -> Initializer>
 }
 ```
 
 行为说明：
 
 * `register` 线程安全（内部 `Mutex`）；登记时会记录 `dependencies` 的“被依赖”关系。
-* 初始化顺序：只要某个 `Initializer` 的 `dependencies` 里**还存在未完成初始化的模块**，就把它放回队列等待，因此依赖链会自动拓扑排序；`initialize()` 完成后收集其 `start()`。
-* 收集到的 `start()` 由 `App.run()` 逐个 `spawn` 到新线程执行，随后主线程进入永久阻塞；`start()` 是否阻塞由各模块自行决定。
+* 初始化顺序：只要某个 `Initializer` 的 `dependencies` 里**还存在未完成初始化的模块**，就把它放回队列等待，因此依赖链会自动拓扑排序；`initialize()` 完成后返回各实例的提供器。
+* `App.run()` 对每个提供器调用 `provider()` 取得实例，再 `spawn` 其 `start()`；主线程随后进入永久阻塞。`start()` 是否阻塞由各模块自行决定。
+* 需要自定义扩展的宿主（如 fdbm）可以自行调用 `initialize()`，遍历返回的 `ArrayList<() -> Initializer>`，用模式匹配收集需要的接口实现；fdbm 不调用 `start()`。
 * 其它模块的惯用做法：定义 `<模块名>Initializer <: Initializer`，在 `static init()` 中调用 `InitializerCollection.register(...)`（例如 `f_bean` 的 `BeanInitializer`、`f_mvc` 的 `MVCInitializer`、`f_orm` 的 `ORMInitializer`）。动态库在 `run` 阶段被加载时，这些 `static init()` 会自动执行完成注册，应用代码通常无需手工调用。
 * `f_version` 模块的 `AppVersion`（由 `build` 生成 `<模块名>_stAtIc__` 携带）提供启动横幅与应用版本，属于同一套“加载即生效”的机制。
 
@@ -262,7 +267,7 @@ fboot pub <x.y.z> [--skip-test] [--skip-lint]
 
 | 符号 | 说明 |
 | --- | --- |
-| `internal func load(args: Array<String>, dynamic: Bool): (Path, ArrayList<() -> Unit>)` | 确定目标路径（`confirmTargetPath`）→ 按平台选扩展名（Windows `.dll` / macOS `.dylib` / 其它 `.so`；库搜索路径变量并未实际设置）→ `dynamic` 为真时递归扫描并 `PackageInfo.load` 文件名匹配 `^lib.*(<--dylibPattern 的值>\|.+_stAtIc__).*$` 的库 → 调用 `InitializerCollection.initialize()` → 注册 `ExitCallbacks.toExitGracefully()`。注意 `--dylibPattern` 的提取（`extractPattern`）是「取首个非 `--dylibPattern=` 参数的下一个下标」再切片 ⇒ 只有「正则紧跟第一个位置参数」这种写法可用，缺省 `PATH` 或不带位置参数时会下标越界 |
+| `internal func load(args: Array<String>, dynamic: Bool): (Path, ArrayList<() -> Initializer>)` | 确定目标路径（`confirmTargetPath`）→ 按平台选扩展名（Windows `.dll` / macOS `.dylib` / 其它 `.so`；库搜索路径变量并未实际设置）→ `dynamic` 为真时递归扫描并 `PackageInfo.load` 文件名匹配 `^lib.*(<--dylibPattern 的值>\|.+_stAtIc__).*$` 的库 → 调用 `InitializerCollection.initialize()` → 注册 `ExitCallbacks.toExitGracefully()`。注意 `--dylibPattern` 的提取（`extractPattern`）是「取首个非 `--dylibPattern=` 参数的下一个下标」再切片 ⇒ 只有「正则紧跟第一个位置参数」这种写法可用，缺省 `PATH` 或不带位置参数时会下标越界 |
 | `internal const APP_STATIC_RESOURCE_SUFFIX = '_stAtIc__'` | 版本模块的固定后缀，`build` 阶段生成的 `<模块名>_stAtIc__` 会随主库一起被加载，用于携带 `AppVersion` |
 | `internal func confirmTargetPath(args: Array<String>): Path` | `args[1]` 不以 `-` 开头时视为路径（不存在则创建），否则用当前工作目录；返回规范化后的绝对路径 |
 | `internal let log` | `LoggerFactory.getLogger<App>()` |

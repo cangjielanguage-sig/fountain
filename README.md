@@ -76,15 +76,15 @@ fboot help # 显示fboot的其他功能
 
 ## `fountain-developer`
 
-`skills/fountain-developer` 是面向 AI 编程智能体的技能（标准 Agent Skills 布局，不绑定特定工具），把「用 fountain 做项目」的完整流程固化下来，覆盖从起步到交付的九类工作流：
+`skills/fountain-developer` 是面向 AI 编程智能体的技能（标准 Agent Skills 布局，不绑定特定工具），把「用 fountain 做项目」的完整流程固化下来，覆盖从起步到交付的十一类工作流：
 
 - **起步**：安装 `fboot`、初始化 workspace、用 `fboot module` 创建模块、为项目添加中心仓模块依赖；
 - **问答**：回答关于 fountain 配置项与 API 用法的提问（答案标注出处，查不到会直说）；
-- **开发**：按需求文档开发服务器应用（MVC / ORM / Bean / AOP / 认证 / 定时任务等）；把其他语言（Python / Java / Go / Node 等）的项目转换为仓颉项目；把非 fountain 的仓颉项目改造为 fountain 风格；
+- **开发**：按需求文档开发服务器应用（MVC / ORM / Bean / AOP / 认证 / 定时任务等）；把其他语言（Python / Java / Go / Node 等）的项目转换为仓颉项目；把非 fountain 的仓颉项目改造为 fountain 风格；在框架仓库内开发框架自身（加功能 / 修缺陷 / 新建模块）；
 - **演进**：随功能演进为现有项目增改模块依赖与配置（三个平台脚本同步更新）；
-- **交付**：开发类工作流按完整交付流程推进——初始化 → 配置 → 严格 TDD（Red-Green-Refactor）→ 回归测试 + 冒烟测试 → 提交 → 建 tag。
+- **交付**：开发类工作流按完整交付流程推进——初始化 → 配置 → 严格 TDD（Red-Green-Refactor，开工先加载 `test-driven-development` 技能）→ 回归测试 + 冒烟测试 → 提交 → 建 tag。
 
-技能的 API 依据**始终来自本仓库的代码与 README**：内置的 `scripts/fountain_lookup.py` 会定位本仓库并提供模块清单、关键词检索（同时覆盖 README 与源码）与模块公开声明清单；本机没有本仓库源码时会自动克隆一份文档副本（仅用于查询）。遇到 fountain 尚未覆盖的能力时，技能会先与开发者确认方案（简化实现 / 提供第三方依赖 / 缩减范围 / 项目内自行实现）再继续，不会硬编假实现。它还会联动仓颉知识库技能（`cangjie-coding` / `cangjie-doc-lookup`）查证语法与 std/stdx API，并在创建项目时参考 `fdemo` / `frpcdemo` 生成三平台启动脚本（`boot.sh` / `boot-macos.sh` / `boot-win-gitbash.sh`）。
+技能的 API 依据**始终来自本仓库的代码与 README**：内置的 `scripts/fountain_lookup.py` 会定位本仓库并提供模块清单、关键词检索（同时覆盖 README 与源码）与模块公开声明清单；本机没有本仓库源码时会自动克隆一份文档副本（仅用于查询）。遇到 fountain 尚未覆盖的能力时，技能会先与开发者确认方案（简化实现 / 提供第三方依赖 / 缩减范围 / 项目内自行实现）再继续，不会硬编假实现。它还会联动仓颉知识库技能（`cangjie-coding` / `cangjie-doc-lookup`）查证语法与 std/stdx API，并在创建项目时参考 `fdemo` / `frpcdemo` 生成三平台启动脚本（`boot.sh` / `boot-macos.sh` / `boot-win-gitbash.sh`）。按需求文档开发服务器应用（工作流 F）与在框架仓库内新建模块（工作流 J）还会走 OpenSpec 规格驱动流程：`opsx:propose` 生成变更五件套 → 开发者评审 `design.md` / `tasks.md` → `opsx:apply` 按任务 TDD 编码 → `opsx:verify` 校验 → `opsx:archive` 归档（规划阶段只出文档、不改代码；OpenSpec 的产物不替代 TDD / 回归 / 冒烟 / 提交 / 建 tag）。
 
 使用方式：把 `skills/fountain-developer` 放进你所用编程智能体的技能目录（如 CodeBuddy 的 `~/.codebuddy/skills/`、Claude Code 的 `~/.claude/skills/`，或项目内的技能目录）；不支持技能机制的智能体，直接让它阅读 `skills/fountain-developer/SKILL.md` 即可。
 
@@ -339,6 +339,17 @@ RPC实现，服务自注册与发现，实现负载均衡、服务节点权重�
 liburing 的 FFI 封装，所有 API 仅 Linux 可用
 
 **详情请见：**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_uring/README.md>
+
+### `fountain::f_mq`
+消息队列客户端与客户端/服务端共用 API：记录编解码、协议载荷、过滤器、主题校验与 `MQClient`。
+
+**详情请见：**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/f_mq/README.md>
+
+### `fountain::fmq`
+消息队列服务端（`fmq server` / `fmq manager`）：多节点队列、消费组游标、超时重投与死信、
+元数据全量复制与备份副本。
+
+**详情请见：**<https://gitcode.com/Cangjie-SIG/fountain/blob/master/fmq/README.md>
 
 ### `fountain::fboot`
 依赖fountain的应用项目启动程序

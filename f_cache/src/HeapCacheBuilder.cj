@@ -22,7 +22,7 @@ public let DEFAULT_HEAP_CHECK_CHECK_DURATION = Duration.second
 
 public open class HeapCacheBuilder<V> where V <: Object {
     private var maxLife = DEFAULT_HEAP_CACHE_MAX_LIFE
-    private var concurrencyLevel = DEFAULT_HEAP_CACHE_CONCURRENCY_LEVEL
+    private var concurrencyLevel = 0 //0 = 按 maxSize 自动选段数（见 HeapCache.autoConcurrencyLevel）
     private var maxSize = DEFAULT_HEAP_CACHE_MAX_SIZE
     private var checkDuration = DEFAULT_HEAP_CHECK_CHECK_DURATION
     private var evictionCallback: (String, V) -> Unit = {_, _ => ()}
@@ -34,10 +34,11 @@ public open class HeapCacheBuilder<V> where V <: Object {
         this.maxLife = maxLife
         return this
     }
+    /**`concurrencyLevel` 传 0 表示按 `maxSize` 自动选段数；传正数时向上取到 ≥ 该值的最小 2 的幂*/
     public func setConcurrencyLevel(concurrencyLevel: Int64): HeapCacheBuilder<V> {
-        if (concurrencyLevel <= 0) {
+        if (concurrencyLevel < 0) {
             throw IllegalArgumentException(
-                "concurrencyLevel must be greater than zero. however current is ${concurrencyLevel}")
+                "concurrencyLevel must not be less than zero. however current is ${concurrencyLevel}")
         }
         this.concurrencyLevel = concurrencyLevel
         return this

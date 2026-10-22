@@ -6,6 +6,7 @@
   "fountain::f_config" = {path = "../f_config"}
   "fountain::f_data" = {path = "../f_data"}
   "fountain::f_dbd" = {path = "../f_dbd"}
+  "fountain::f_dbm" = {path = "../f_dbm"}
   "fountain::f_dbpool" = {path = "../f_dbpool"}
   "fountain::f_log" = {path = "../f_log"}
   "fountain::f_net" = {path = "../f_net"}
@@ -13,6 +14,9 @@
   "fountain::f_store" = {path = "../f_store"}
   "fountain::f_util" = {path = "../f_util"}
   "fountain::f_version" = {path = "../f_version"}
+
+[test-dependencies]
+  "fountain::f_mockdb" = {path = "../f_mockdb"}
 
 [package]
   cjc-version = "1.2.0"

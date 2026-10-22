@@ -356,6 +356,45 @@ public func murmurHash<T>(text: T, seed!: UInt64 = 0): UInt128 where T <: ToStri
 private func rotl64(x: UInt64, r: Int): UInt64 
 ```
 
+## fnv hash
+
+FNV（Fowler–Noll–Vo）非加密哈希：**FNV-1 与 FNV-1a × 宽度 32 / 64 / 128 / 256**。
+`fnv1a` = 逐字节 `hash = (hash XOR byte) * prime`（推荐变体）；`fnv1` = 先乘后异或。全部运算为
+无符号回绕（实现函数标注 `@OverflowWrapping`）。
+
+**非加密**：可预测、可构造碰撞——不得用于签名 / 防篡改 / 抗洪泛；作缓存键或去重键时须**命中后二次校验原字节**。
+
+```cj
+// 一次算完（8 个变体：Fnv32/Fnv64/Fnv128/Fnv256 × {fnv1, fnv1a}）
+let h32  = Fnv32.fnv1a.compute(bytes)        // UInt32
+let h64  = Fnv64.fnv1a.compute('text')       // UInt64（String 重载 = UTF-8 字节）
+let h128 = Fnv128.fnv1a.compute(bytes)       // UInt128（f_util.UInt128）
+let h256 = Fnv256.fnv1a.compute(bytes)       // Array<Byte>（32 B 大端；无 256 位整数类型）
+
+// 定长十六进制（小写；32/64/128/256 → 8/16/32/64 位）
+let hex = Fnv128.fnv1a.computeHex(bytes)
+
+// 增量：init -> update -> finish（finish 为恒等：FNV 无末尾处理）
+var h = Fnv64.fnv1a.initRegister()
+h = Fnv64.fnv1a.update(h, chunk1)
+h = Fnv64.fnv1a.update(h, chunk2)
+h = Fnv64.fnv1a.finish(h)
+
+// 遍历自检：每个变体携带 checkValue / checkHex（“123456789” 的黄金值）
+for (v in Fnv64.all) { println(v.name + ' -> ' + v.computeHex('123456789')) }
+```
+
+参数（prime = 2^s + 2^8 + c）：
+
+| 宽度 | offset basis | prime | “123456789” 黄金值（fnv1a） |
+|---|---|---|---|
+| 32 | `0x811C9DC5` | `0x01000193` | `bb86b11c` |
+| 64 | `0xCBF29CE484222325` | `0x100000001B3` | `06d5573923c6cdfc` |
+| 128 | `0x6C62272E07BB014262B821756295C58D` | `2^88 + 2^8 + 0x3B` | `da2d42a08d04e4585dd325117f71d504` |
+| 256 | `0xDD268DBCAAC550362D98C384C4E576CCC8B1536847B6BBB31023B4C8CAEE0535` | `2^168 + 2^8 + 0x63` | `0c2033a9bfac21398d7ba2c403a80f659b80c9a5b01178b5cff0ab62e9d53c4c` |
+
+自检见 `src/fnv_test.cj`（8 变体黄金值、空输入 = offset basis、增量 ≡ 一次算完、String ≡ 字节、FNV-1 ≠ FNV-1a）。
+
 ## 路径匹配
 
 ```cj

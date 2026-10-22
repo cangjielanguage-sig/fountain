@@ -40,6 +40,8 @@ f_egraph
 f_bloom
 f_store
 f_uring
+f_mq
+fmq
 fboot
 .
 

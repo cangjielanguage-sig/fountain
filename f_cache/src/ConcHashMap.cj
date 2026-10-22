@@ -326,7 +326,31 @@ class ConcHashMap<V> <: Collection<(String, V)> {
     }
 
     /**
-     * 锁内删除：谓词在段写锁内执行，必须廉价且不得回调本缓存；定时清扫用它保证「判定—删除」原子。
+     * 登记 key 所在段的「最小死亡时间下界」（Unix 纳秒，保守只降不升）。
+     * 定时清扫据此跳过不可能有到期条目的段。
+     */
+    func noteDeath(key: String, nanos: Int64): Unit {
+        segment(key).noteDeathNanos(nanos)
+    }
+
+    /**
+     * 增量清扫：只处理「下界已到」的段（其余段一次原子读即跳过）。
+     * probe 在段锁内执行：返回 (该条目是否已过期/应删除, 该条目的死亡时间纳秒)。
+     */
+    func sweepExpired(nowNanos: Int64, probe: (String, V) -> (Bool, Int64)): Unit {
+        for (segment in segments) {
+            if (segment.minDeathNanos <= nowNanos) {
+                let removed = segment.sweepLocked(probe)
+                if (removed > 0) {
+                    size_.fetchSub(removed)
+                }
+            }
+        }
+    }
+
+    /**
+     * 锁内删除：谓词在段写锁内执行，必须廉价且不得回调本缓存。
+     * 约定与 `Collection.removeIf` 一致：谓词返回 true 的条目被删除。
      */
     func removeIfLocked(predicate: (String, V) -> Bool): Unit {
         for (segment in segments) {

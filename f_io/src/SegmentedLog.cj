@@ -36,8 +36,10 @@ import fountain::f_base.{mcopy, nullptr}
 
 /** 写入位置：segment 序号 + 段内偏移 */
 public struct LogPosition {
-    let seq: Int64
-    let offset: Int64
+    /** segment 序号（对应文件名 `{filePrefix}_{seq}{fileExt}`） */
+    public let seq: Int64
+    /** 段内字节偏移，可直接回传给 `openEntryStream(seq, offset)` 续读 */
+    public let offset: Int64
 
     public init(seq: Int64, offset: Int64) {
         this.seq = seq
@@ -75,6 +77,13 @@ public struct LogConfig {
 public class LogClosedException <: Exception {
     public init() {
         super("SegmentedLog is closed")
+    }
+}
+
+/** 单条数据超过段上限：写入会越过 mmap 长度，必须拒绝。 */
+public class LogRecordTooLargeException <: Exception {
+    public init(size: Int64, limit: Int64) {
+        super("record size ${size} exceeds segment limit ${limit}")
     }
 }
 
@@ -183,9 +192,17 @@ public class SegmentedLog <: Resource {
             if (closed.load()) {
                 throw LogClosedException()
             }
+            // 单条数据本身超过段上限：轮转也无济于事，必须在写前拒绝（否则 mcopy 越界）
+            if (data.size > config.maxFileSize) {
+                throw LogRecordTooLargeException(data.size, config.maxFileSize)
+            }
             // 检查是否超限，超限先轮转
             if (currentSize.load() + data.size > config.maxFileSize) {
                 rotate()
+                // 轮转后复核：上限不随轮转变化，任何绕过前置检查的路径都在这里被挡住
+                if (data.size > config.maxFileSize) {
+                    throw LogRecordTooLargeException(data.size, config.maxFileSize)
+                }
             }
             let pos = currentSize.load()
             // Linux: memcpy 到 mmap 区域，非 Linux: file.write()

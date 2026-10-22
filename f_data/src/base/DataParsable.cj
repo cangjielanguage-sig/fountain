@@ -24,57 +24,92 @@ public interface DataParsable<T> where T <: DataParsable<T> {
 }
 
 /**
- * 各个“整数 + 单位”片段分别带符号，再按顺序相加。
- * 例如 `1m-2s` 为 58 秒，`-1m2s` 为 -58 秒；首段的负号不作用于整串。
+ * 整个 Duration 字符串可带一个正负号前缀，**作用于整个值**；其余是连写的“整数 + 单位”片段，
+ * 例如 `-45s`、`+3s`、`-10d`、`-1m2s`（为 -62 秒）。字符串中不允许空白。
+ * 单位必须从左往右严格变小（`d > h > m > s > ms > us > ns`），每个单位至多出现一次，
+ * 因此 `9h10d`、`1ms1s` 这类顺序错误或重复的串会被拒绝。
+ * 符号只允许出现在字符串开头——`1m-2s`、`1m+2s`、`-1m 2s` 这类段间符号按四则运算拒绝；
+ * `-5`、`+3` 这类没有单位的串也不是合法的 Duration 字符串。
  */
 extend Duration <: DataParsable<Duration> {
     public static func parse(s: String): Duration {
-        tryParse(s).getOrThrow {DataParsableException('${s} cannot be parsed to ${TypeInfo.of<Duration>()}')}
+        doTryParse(s).getOrThrow()
     }
     public static func tryParse(s: String): ?Duration {
-        if (s.isEmpty()) { return None }
+        // 与 Int64.tryParse 对齐（实测其对超长值返回 None，不抛异常）：
+        // 不能解析、或数值超出 Duration 表示范围时返回 None。
+        try {
+            doTryParse(s)
+        } catch (_: ArithmeticException) {
+            None
+        }
+    }
+    // 解析核心：不能解析的字符串返回 None；数值超出 Duration 表示范围时抛 ArithmeticException。
+    // 这里刻意不沿用昨夜合入的「循环内就地 catch 溢出并返回 None」写法：那种写法把溢出无声地
+    // 吞成 None，核心解析与 tryParse 之间的分层就没了。改由本函数抛出、tryParse 统一收敛为 None，
+    // 是为了保持与其他类型的 tryParse 语义一致——Int64/UInt64 等的 tryParse 同样是
+    // 「不能解析、数值超出表示范围 → None」，由底层解析负责报错。
+    private static func doTryParse(value: String): ?Duration {
+        if (value.isEmpty()) { return None }
         var duration = Duration.Zero
         var i = 0
-        while (i < s.size) {
+        var parsed = false
+        var negative = false
+        var lastRank = -1
+        while (i < value.size) {
             let start = i
-            if (s[i] == b'-' || s[i] == b'+') { i++ }
+            if (value[i] == b'-' || value[i] == b'+') {
+                // 正负号只允许出现在字符串最开头，且作用于整个值；段间符号是四则运算（`1m-2s`），拒绝
+                if (start != 0) { return None }
+                negative = value[i] == b'-'
+                i++
+            }
             let digits = i
-            while (i < s.size && s[i] >= b'0' && s[i] <= b'9') { i++ }
-            if (i == digits || i == s.size) { return None }
-            let numberStart = if (s[start] == b'+') { start + 1 } else { start }
-            let value = match (Int64.tryParse(s[numberStart..i])) {
-                case Some(number) => number
+            while (i < value.size && value[i] >= b'0' && value[i] <= b'9') { i++ }
+            if (i == digits || i == value.size) { return None }
+            let numberStart = if (value[start] == b'+') { start + 1 } else { start }
+            let number = match (Int64.tryParse(value[numberStart..i])) {
+                case Some(n) => n
                 case None => return None
             }
-            let unit = s[i]
+            let unit = value[i]
             i++
-            let scale = match (unit) {
-                case b'd' => Duration.day
-                case b'h' => Duration.hour
+            // 单位必须从左往右严格变小：d > h > m > s > ms > us > ns（每个单位至多出现一次）
+            let (scale, rank) = match (unit) {
+                case b'd' => (Duration.day, 0)
+                case b'h' => (Duration.hour, 1)
                 case b'm' =>
-                    if (i < s.size && s[i] == b's') {
+                    if (i < value.size && value[i] == b's') {
                         i++
-                        Duration.millisecond
+                        (Duration.millisecond, 4)
                     } else {
-                        Duration.minute
+                        (Duration.minute, 2)
                     }
-                case b's' => Duration.second
+                case b's' => (Duration.second, 3)
                 case b'u' =>
-                    if (i >= s.size || s[i] != b's') { return None }
+                    if (i >= value.size || value[i] != b's') { return None }
                     i++
-                    Duration.microsecond
+                    (Duration.microsecond, 5)
                 case b'n' =>
-                    if (i >= s.size || s[i] != b's') { return None }
+                    if (i >= value.size || value[i] != b's') { return None }
                     i++
-                    Duration.nanosecond
+                    (Duration.nanosecond, 6)
                 case _ => return None
             }
-            try {
-                duration += scale * value
-            } catch (_: ArithmeticException) {
-                return None
+            if (rank <= lastRank) { return None }
+            lastRank = rank
+            // 开头的负号作用于整串：首段沿用它自己的符号解析，其余片段按负值累加（-(x + y) == -x - y）。
+            // 这里用「加上负值」而不是「减法」：Duration 的减法在结果落到 Int64.Min 秒时会误报溢出
+            // （实测 `(-Max 秒) - 1s` 抛 ArithmeticException，而 `(-Max 秒) + (second * -1)` 正常），
+            // 用加法才能保证 `-106751991167300d15h30m8s` 这类 Min 秒的 toString 输出也被读回
+            if (parsed && negative) {
+                duration += scale * (-number)
+            } else {
+                duration += scale * number
             }
+            parsed = true
         }
+        if (!parsed) { return None }
         duration
     }
 }
