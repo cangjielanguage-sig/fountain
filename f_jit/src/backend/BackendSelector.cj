@@ -243,6 +243,35 @@ internal class BackendX86_64 <: Backend {
         out.toArray()
     }
 
+    // ---- 发射审计（G5）----
+    //
+    // 只用于**测试与自检**：降低期记录每条内存访问的基址寄存器，`lower()` 结束时校验
+    // 必须落在 `{rsp(4), rbp(5), r15(15)}`。这条约束等价于「机器码不得把 helper 返回的
+    // cell 当指针解引用」——任何解引用都必有基址寄存器，而合法基址只有栈/帧/ctx。
+    private static let auditMemBases = ArrayList<Int64>()
+
+    internal static func noteMemBase(reg: Int64): Unit {
+        auditMemBases.add(reg)
+    }
+
+    internal static func resetAuditMemBases(): Unit {
+        auditMemBases.clear()
+    }
+
+    internal static func auditMemBasesSnapshot(): Array<Int64> {
+        auditMemBases.toArray()
+    }
+
+    /** 允许的内存基址：`rsp(4)` / `rbp(5)` / `r15(15)`；其余一律拒绝（整单元退回解释器）。 */
+    internal static func auditAllows(bases: Array<Int64>): Bool {
+        for (b in bases) {
+            if (b != 4 && b != 5 && b != 15) {
+                return false
+            }
+        }
+        true
+    }
+
     /** `jb rel32`（低于/无符号小于；回边守卫的"安全继续"分支）。 */
     internal static func emitJb(): Array<UInt8> {
         [0x0Fu8, 0x82u8, 0x00u8, 0x00u8, 0x00u8, 0x00u8]

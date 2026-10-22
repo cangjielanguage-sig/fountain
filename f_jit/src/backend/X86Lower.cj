@@ -105,6 +105,7 @@ internal class X86Lower {
     func lower(unit: LoadedUnit): Unit {
         let start = Int64(this.fn.codeOff)
         let end = start + Int64(this.fn.codeLen)
+        BackendX86_64.resetAuditMemBases()
 
         // 1) 探针遍：采集逐指令栈增量（不发射任何机器码/标签）
         this.probing = true
@@ -143,6 +144,11 @@ internal class X86Lower {
             }
             this.translate(insn.op, insn.operands, off, next)
             off = next
+        }
+        // G5 审计：机器码只能以栈/帧/ctx 为内存基址（等价于"不得解引用 helper 返回的 cell"）
+        if (!BackendX86_64.auditAllows(BackendX86_64.auditMemBasesSnapshot())) {
+            this.ok = false
+            return
         }
     }
 
@@ -282,11 +288,13 @@ internal class X86Lower {
 
     /** ctx 字段均为 Int64：必须 64 位写，避免高 32 位残留（site/fnId/errCode）。 */
     private func movQwordCtx(off: Int64, v: Int64): Unit {
+        BackendX86_64.noteMemBase(15)
         this.add([0x49u8, 0xC7u8, 0x47u8, UInt8(off)])
         this.w32(v)
     }
 
     private func movRaxMemRsp(disp: Int64): Unit {
+        BackendX86_64.noteMemBase(4)
         this.add([0x48u8, 0x8Bu8, 0x84u8, 0x24u8])
         this.w32(disp)
     }
@@ -297,6 +305,7 @@ internal class X86Lower {
     }
 
     private func leaRdxRsp(disp: Int64): Unit {
+        BackendX86_64.noteMemBase(4)
         this.add([0x48u8, 0x8Du8, 0x94u8, 0x24u8])
         this.w32(disp)
     }
@@ -311,21 +320,25 @@ internal class X86Lower {
     }
 
     private func pushMemRsp(disp: Int64): Unit {
+        BackendX86_64.noteMemBase(4)
         this.add([0xFFu8, 0xB4u8, 0x24u8])
         this.w32(disp)
     }
 
     private func pushMemRbp(disp: Int64): Unit {
+        BackendX86_64.noteMemBase(5)
         this.add([0xFFu8, 0xB5u8])
         this.w32(disp)
     }
 
     private func popMemRbp(disp: Int64): Unit {
+        BackendX86_64.noteMemBase(5)
         this.add([0x48u8, 0x8Fu8, 0x85u8])
         this.w32(disp)
     }
 
     private func moveRaxToMemRsp(disp: Int64): Unit {
+        BackendX86_64.noteMemBase(4)
         this.movMemRspRax(disp)
     }
 
@@ -677,6 +690,7 @@ internal class X86Lower {
     }
 
     private func ucomisdRM(reg: Int64, disp: Int64): Unit {
+        BackendX86_64.noteMemBase(4)
         this.add([0x66u8, 0x0Fu8, 0x2Eu8, UInt8(0x84 | (reg << 3)), 0x24u8])
         this.w32(disp)
     }

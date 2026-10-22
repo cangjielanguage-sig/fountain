@@ -93,9 +93,14 @@ public class A64Compiler {
             e.strOff(9, 29, -40 - 8 * i)
             i = i + 1
         }
+        A64Emitter.resetAuditMemBases()
         let lower = A64Lower(e, fn, frame, constBase, fnTableBase)
         lower.lower(unit)
         if (!lower.success()) {
+            return None
+        }
+        // G5 审计：机器码只能以 sp/fp/x19(ctx)/x20(操作数栈) 为内存基址
+        if (!A64Emitter.auditAllows(A64Emitter.auditMemBasesSnapshot())) {
             return None
         }
         e.bind('epilogue')

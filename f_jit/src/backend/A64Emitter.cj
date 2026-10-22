@@ -413,7 +413,36 @@ internal class A64Emitter {
      */
     private static const SCRATCH: Int64 = 16
 
+    // ---- 发射审计（G5，与 x86 侧同构）----
+    //
+    // 记录每条 `ldr/str` 的**概念基址**（慢路径的 scratch 仍归属 `rn`）；`A64Compiler` 在
+    // 降低结束后校验必须落在 `{x19(19), x20(20), x29(29), sp(31)}`。
+    private static let auditMemBases = ArrayList<Int64>()
+
+    internal static func noteMemBase(reg: Int64): Unit {
+        auditMemBases.add(reg)
+    }
+
+    internal static func resetAuditMemBases(): Unit {
+        auditMemBases.clear()
+    }
+
+    internal static func auditMemBasesSnapshot(): Array<Int64> {
+        auditMemBases.toArray()
+    }
+
+    /** 允许的内存基址：`x19(19)` / `x20(20)` / `x29(29)` / `sp(31)`；其余一律拒绝。 */
+    internal static func auditAllows(bases: Array<Int64>): Bool {
+        for (b in bases) {
+            if (b != 19 && b != 20 && b != 29 && b != 31) {
+                return false
+            }
+        }
+        true
+    }
+
     func strOff(rt: Int64, rn: Int64, off: Int64): Unit {
+        A64Emitter.noteMemBase(rn)
         if (off >= 0 && off % 8 == 0 && off <= 32760) {
             this.word(0xF9000000u32 | (UInt32(off / 8) << 10) | (UInt32(rn) << 5) | UInt32(rt))
         } else if (off >= -256 && off <= 255) {
@@ -425,6 +454,7 @@ internal class A64Emitter {
     }
 
     func ldrOff(rt: Int64, rn: Int64, off: Int64): Unit {
+        A64Emitter.noteMemBase(rn)
         if (off >= 0 && off % 8 == 0 && off <= 32760) {
             this.word(0xF9400000u32 | (UInt32(off / 8) << 10) | (UInt32(rn) << 5) | UInt32(rt))
         } else if (off >= -256 && off <= 255) {

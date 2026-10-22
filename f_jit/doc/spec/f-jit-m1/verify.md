@@ -257,3 +257,16 @@ cd f_jit && cjpm test
 - **新发现（非本变更引入）**：`PerfCompare` 的 `jit=119,805,298ns`（native 的 4938%）——每回边的 H22 调用内部
   **每次分配数组**（`helperEntry`），约 120ns/迭代；上一轮（`cce7cd09`）引入 H22 时未测此项。
   建议后续在机器码侧加**「无期限则跳过 H22」快速路径**（读 ctx 的期限/标志位），或让 H22 免分配。
+
+## 2026-10-22 第四轮（对象生命周期加固，change `harden-f-jit-object-lifetime`）
+
+| 编号 | 结论 / 落点 |
+|---|---|
+| **G1** | `JitFunction.call` 的返回值解包包 `try/catch`，异常路径先 `releaseReturnHandle` 再重抛。**RED 不可得**：`unbox` 之前的静态契约检查（`want`/`retType` 比对）会先拦下多数错误，构造不出"句柄已存在且 unbox 抛错"的路径 ⇒ 本条属**防御性加固**，用例 `Lifetime_test.contractFailDoesNotLeakHandle` 作为"契约失败不泄漏"的回归护栏（修前修后皆绿） |
+| **G2** | **不是缺陷**：`JitFunction.close()` → `PromotionGroup.releaseAll()` → `releaseEscaped` 逐槽回收（`JitFunction.cj:279-292`、`PromotionGroup.cj:92`、`HandleTable.cj:810-826`） |
+| **G3** | **不是缺陷**：容器写入即 `cellToAny`（`getAny`）⇒ 元素是宿主引用、随容器存活，无需级联提升；`Lifetime_test.closureCaptureKeepsContainerElements` 钉住该结论 |
+| **G4** | `isReturnedHandle` 改为 `LocalType.isHandle(code) && code != CLOSURE`（单点派生）；`returnedHandleCodesAreDerived` 覆盖 0–19 完备性 |
+| **G5** | 双后端发射审计：x86 `noteMemBase` 打点 8 个内存发射器 + `auditAllows({4,5,15})`；a64 `ldrOff/strOff` 打点 + `auditAllows({19,20,29,31})`；两侧 `lower()` 结束自检，越界 ⇒ 整单元退回解释器。`EmitAudit_test` 4 例（允许集 ×2 + 采集/重置 ×2）。**说明**：因 backend↔compiler 循环依赖，审计用例只验"判定 + 采集"，不驱动完整降低；生产路径由 `lower()`/`A64Compiler` 自检兜底 |
+| **G6** | `Lifetime_test` 三类出口各 20 次：`liveCount()==基线`、`windowUsed()==0`、`NativeMem.outstanding()` 不增长 |
+
+全量：**1108/1108（0 FAILED / 0 ERROR / 0 SKIPPED）**。

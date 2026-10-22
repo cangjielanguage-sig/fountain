@@ -441,7 +441,15 @@ public class JitFunction {
             }
             let ret = JitReport.finish(ctx, cell, { => this.replay(ctx, cells) }, report)
             // 4. 解包；句柄型返回值已取成宿主对象，立即归还句柄（否则每次调用泄漏 1 槽）
-            let v = marshal.makeRetUnboxer(unboxCode)(ret)
+            // G1：unbox 可能以契约错误抛出，而 `ret` 在此之前已被 `escape`（逃逸槽不受
+            // `resetWindow` 回收）⇒ 异常路径必须同样归还，否则每次契约失败泄漏 1 槽。
+            var v: Any = 0
+            try {
+                v = marshal.makeRetUnboxer(unboxCode)(ret)
+            } catch (e: Exception) {
+                let _ = JitFunction.releaseReturnHandle(ret, unboxCode, this.closureGroup)
+                throw e
+            }
             let _ = JitFunction.releaseReturnHandle(ret, unboxCode, this.closureGroup)
             if (unboxCode == LocalType.CLOSURE) {
                 this.lastClosureGroup = marshal.closureGroupOf()
@@ -487,12 +495,14 @@ public class JitFunction {
         true
     }
 
-    /** 句柄型返回码：4–14 去 12、15、16–19（13 沿用 M2 既有口径）。 */
+    /**
+     * 句柄型返回码：**单点派生**自 `LocalType.isHandle`（4–19）去掉闭包 12。
+     *
+     * 历史上这里是硬编码码集（4–14 去 12 + 15 + 16–19），新增句柄码（如 M3 之后）容易漏 ⇒
+     * 漏释放。改为派生后，"句柄码扩展"与"返回值归还"两件事自动同步。
+     */
     internal static func isReturnedHandle(unboxCode: UInt16): Bool {
-        let hosted = unboxCode >= LocalType.STRING && unboxCode <= LocalType.HOST_OBJECT &&
-            unboxCode != LocalType.CLOSURE
-        hosted || unboxCode == LocalType.ANY ||
-            (unboxCode >= LocalType.JSON_VALUE && unboxCode <= LocalType.JSON_NULL)
+        LocalType.isHandle(unboxCode) && unboxCode != LocalType.CLOSURE
     }
 
     private func classAt(i: Int64): ?String {
