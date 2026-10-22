@@ -14,10 +14,10 @@
 
 ```cangjie
 import fountain::f_jit.*
-import fountain::f_jit.base.DummyDiagnosticsSink
 
 main() {
-    let c = Compiler(CompileOptions(DummyDiagnosticsSink()))
+    let c = Compiler()                                   // 等价于 Compiler(CompileOptions(DummyDiagnosticsSink()))
+    // 需要收集诊断时：Compiler(CompileOptions(MySink()))
     c.registerType<User>()                              // 暴露一个宿主类给方言
     let f = c.compile('{ u: User => u.name }')          // 编译（结果进 CompileCache）
     let name = f.call<String>([User('bob', 1)])         // 调用
@@ -30,7 +30,7 @@ main() {
 ```cangjie
 var ctx = CallContext()
 ctx.deadline = Some(DateTime.now() + Duration.second * 1)   // 超时抛 InterruptedException
-let v = f.invoke<Int64>([Int64(100_000_000)], ctx)
+let v = f.call<Int64>([Int64(100_000_000)], ctx)
 ```
 
 返回闭包（逃逸闭包，用后必须 `close()`）：
@@ -50,7 +50,7 @@ g.close()                             // 释放提升组（唯一释放路径）
 |---|---|---|
 | `Compiler` | 门面：注册宿主能力 + 编译 | `registerType<T>()`、`registerClass(desc)`、`registerFunction(f)`、`compile(src)` |
 | `CompileOptions` | 编译选项 | `jit: JitMode`（`Auto`/`Force`/`Off`）、`strictFp`（缺省 `true`）、`verMajor`、`cpuFeatures`、`diagnostics` |
-| `JitFunction` | 编译产物 / 可调用对象 | `call<T>(args)`、`invoke<T>(args, ctx)`、`callForFn<Fn>(args)`、`close()`、`isClosed` |
+| `JitFunction` | 编译产物 / 可调用对象 | `call<T>(args)`、`call<T>(args, ctx)`、`callForFn<Fn>(args)`、`close()`、`isClosed` |
 | `JitException` | 运行期错误（`base` 包） | `code`（`ErrCode`）、`site`（源码行:列 / 字节偏移）、`report` |
 | `CompileCache` | 编译缓存（键含 `strictFp`/`verMajor` 等标记） | `lookup`、`reset`、`runs` |
 | `CallContext` | 调用上下文 | `deadline`（到期在安全点中断 → `InterruptedException`） |
@@ -123,7 +123,97 @@ JIT 是加速层，遇到以下情况**整单元退解释器**（`ok = false`）
 
 ---
 
-## 6. FAQ
+## 6. 数据类型与语法
+
+方言是**仓颉的一个子集**：类型全部映射到仓颉标准库（不自定义类型），运算符与字面值如下。
+
+| 类型 | 承载（std） | 字面值 / 构造 | 主要操作 |
+|---|---|---|---|
+| **Int64** | 标量 | `42`、`-7` | `+ - * / %`、`< <= > >= == !=`；`/`、`%` 零除 → 3；`Int64(x)` 窄化 |
+| **Float64** | 标量 | `1.5`、`1.0f64` | `+ - * /`、比较；`strictFp` 缺省 `true` ⇒ ÷0 报 1，关闭则 IEEE ±Inf |
+| **String** | `std.core.String` | `'abc'` / `"abc"`、多行 `'''…'''` / `"""…"""`、`#`×n 原始定界；插值 `"v${x}"` | `+` 拼接、`* 3` 重复、`s[a..=b]`（**码点**索引半开区间） |
+| **Range** | `std.core.Range` | `a..b`、`a..=b`，可带 `: step` | `for x in a..b { … }`、端点/步长 |
+| **List** | `std.collection.ArrayList` | `[1, 2, 3]`（**常量、共享只读**）、`[]`（运行时新建**可变**空表，需上下文类型） | `xs[i]`、`xs[i] = v`、`for x in xs`；追加/删除为变更型 helper（`LIST_APPEND`/`LIST_REMOVE`，写常量 → 20） |
+| **Map** | `std.collection.HashMap` | `{k: v}`（常量只读）、`{}`（可变空表，需上下文类型） | `m[k]` 取、`m[k] = v` 置、`for (k, v) in m` |
+| **Regex** | `std.regex.Regex` | `/pat/flags`（flags ∈ `i m u`，**顺序无关、可重复**）；`s.regex()` 运行期构造（无 flags） | `re ~ s`（匹配）、`re !~ s`、`re/s/r/g`（全部替换）、`re/s/r/n`（替换 n 次） |
+| **Decimal** | `std.math.numeric.Decimal` | **无后缀小数即 Decimal**：`1.23`；`Decimal(...)` | `+ - * /`、比较 |
+| **Duration** | `std.core.Duration` | 无字面量（宿主传入或 `DateTime` 差） | `Duration ± Duration`、比较；溢出 → 12 |
+| **DateTime** | `std.time.DateTime` | 无字面量（宿主传入） | `DateTime ± Duration`、`DateTime − DateTime → Duration`；越界 → 11 |
+| **Closure** | 句柄 12（`JitClosure`） | `{ x => e }`，自动捕获外层局部 | 调用 `f(a)`；逃逸返回用 `callForFn<Fn>`，用完 `close()` |
+| **Any** | 句柄 12（`JitAnyBox`） | 由宿主传入，或 `Any` 标注的局部/参数 | 装箱/拆箱（H78/H79）、`is` 判定、作为 `Any` 返回 |
+
+```cangjie
+// 各类字面值一览（作为 jit lambda 的返回/局部）
+c.compile('{ => 42 }')                       // Int64
+c.compile('{ => 1.5 }')                      // Float64
+c.compile('{ => 1.23 }')                     // Decimal（无后缀小数）
+c.compile('{ x: Int64 => "v${x}" }')         // String（插值）
+c.compile('{ => /^[a-z]+$/i }')              // Regex
+c.compile('{ => [1, 2, 3] }')                // List（常量只读）
+c.compile('{ => { "a": 1 } }')               // Map（常量只读）
+c.compile('{ => 1..=5 }')                    // Range
+```
+
+**只读常量 vs 可变容器**：非空字面值在**拼装期**构造一次、跨调用共享，写入 → `ERR_READONLY(20)`；
+`[]`/`{}` 每次求值新建可变容器（不进常量表），必须有上下文类型（局部标注或实参签名）。
+
+### 6.1 递归（`recursive`）
+
+自递归用关键字 `recursive(...)`（不是函数名）：
+
+```cangjie
+let fact = c.compile('{ n: Int64 => if (n <= 1) { 1 } else { n * recursive(n - 1) } }')
+fact.call<Int64>([Int64(5)])      // 120
+```
+
+降低形态（三个位置各不相同）：
+
+| 位置 | 降低 |
+|---|---|
+| 顶层 lambda | `CALL_FUNC <entryFn>`（经**函数入口表**，宿主绝对地址） |
+| 闭包内 | `LOADL 0`（`locals[0]` 是闭包自身句柄）+ `CALL_CLOSURE` |
+| **尾位置** | 实参**逆序 `STOREL`** + `LOOP_BACK <函数入口>`（帧复用，不发 `RET`；尾递归不增长栈） |
+
+### 6.2 嵌套闭包与嵌套闭包递归
+
+```cangjie
+// 嵌套闭包：捕获外层局部；内层用 recursive 指代"自己"
+let f = c.compile('{ n: Int64 =>
+    let inner = { k: Int64 => if (k <= 1) { 1 } else { k * recursive(k - 1) } }
+    inner(n)
+}')
+f.call<Int64>([Int64(4)])         // 24
+```
+
+- 捕获按**值/窗口**分类（`CaptureOrigin`），句柄型捕获在逃逸时随闭包一起**原地提升**；
+- 内层 `recursive` = 该闭包自身（`LOADL 0` + `CALL_CLOSURE`），不是外层 `entryFn`；
+- 内层可继续嵌套（捕获链逐层 `LOAD_CAP`），运行时每层一个闭包对象；
+- 闭包**逃逸返回**：`callForFn<Fn>` 拿包装器，调用完 `close()` 释放提升组（否则常驻）。
+
+### 6.3 ⚠ `JitFunction` 不能作为 jit lambda 的形参
+
+`JitFunction` 是**桥侧执行体**（含 code/常量镜像/入口表/提升组），不是方言值类型：
+`Compiler.registerType()` 只接受能映射到 `LocalType` 的宿主类型，`JitFunction` **没有对应码**，
+因此不能出现在 lambda 的形参/返回值里（编译期就会被拒）。
+
+要"把 JIT 函数传进 lambda"，用**闭包包一层**，传的是宿主闭包（`HOST_CLOSURE`，码 13）：
+
+```cangjie
+let inc = c.compile('{ x: Int64 => x + 1 }')
+
+// ✓ 把 JitFunction 捕获进宿主闭包；跨桥的是"闭包"，不是 JitFunction 本身
+let bridge: (Int64) -> Int64 = { n => inc.call<Int64>([n]) }
+
+// lambda 侧把形参声明为宿主闭包类型；下面一行是**示意**（形参类型名以 Compiler 的
+// host-closure 签名注册为准），之后按普通调用语法使用
+let apply = c.compile('{ f: Fn, n: Int64 => f(n) }')
+apply.call<Int64>([bridge, Int64(41)])     // 42
+```
+
+要点：`JitFunction` 留在**宿主侧**，只把闭包值送过桥；闭包一旦逃逸出该次调用，
+其捕获的 `JitFunction` 由宿主保证存活（建议让 `JitFunction` 的生命周期长于闭包）。
+
+## 7. FAQ
 
 ### Q1 对象由谁维持：JIT 侧还是仓颉侧？
 
@@ -206,7 +296,7 @@ GC 移动对象时更新的是 `objs[i]` 与 helper 栈上的受管局部变量�
 
 ---
 
-## 7. 已知限制
+## 8. 已知限制
 
 - 机器码仅 Linux x86_64 / aarch64（其余平台解释执行）；
 - x86_64 需 SSE4.1（缺则不 JIT 含取整指令的单元）；

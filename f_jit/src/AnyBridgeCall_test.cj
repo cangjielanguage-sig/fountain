@@ -127,7 +127,7 @@ public class AnyBridgeCall_test {
         opts.deadline = Some(DateTime.UnixEpoch)
         var interrupted = false
         try {
-            let _ = f.invoke<Int64>([Int64(100000000)], opts)
+            let _ = f.call<Int64>([Int64(100000000)], opts)
         } catch (_: InterruptedException) {
             interrupted = true
         }
@@ -145,12 +145,12 @@ public class AnyBridgeCall_test {
         // 外层无期限：内层中断后必须回到 −1
         RuntimeEnv.clearDeadline()
         try {
-            let _ = f.invoke<Int64>([Int64(100000000)], expired)
+            let _ = f.call<Int64>([Int64(100000000)], expired)
         } catch (_: InterruptedException) {}
         @Assert(RuntimeEnv.deadlineNanos, -1)
         // 外层有期限：内层成功返回后必须回到外层值
         RuntimeEnv.setDeadline(12345)
-        @Assert(f.invoke<Int64>([Int64(3)], CallContext()), 3)
+        @Assert(f.call<Int64>([Int64(3)], CallContext()), 3)
         @Assert(RuntimeEnv.deadlineNanos, 12345)
         RuntimeEnv.clearDeadline()
     }
@@ -161,14 +161,14 @@ public class AnyBridgeCall_test {
         let c = AnyBridgeCall_test.compiler()
         CompileCache.reset()
         let ok = c.compile('{ x: Int64 => x + 1 }')
-        @Assert(ok.invoke<Int64>([Int64(41)], CallContext()), ok.call<Int64>([Int64(41)]))
+        @Assert(ok.call<Int64>([Int64(41)], CallContext()), ok.call<Int64>([Int64(41)]))
         let bad = c.compile('{ x: Int64 => 100 / x }')
         var ic = 0
         var invokeSite: Int64 = -2
         var cc = 0
         var callSite: Int64 = -2
         try {
-            let _ = bad.invoke<Int64>([Int64(0)], CallContext())
+            let _ = bad.call<Int64>([Int64(0)], CallContext())
         } catch (e: JitException) {
             ic = e.code
             invokeSite = e.site
@@ -199,7 +199,7 @@ public class AnyBridgeCall_test {
         let c = Compiler(opts)
         CompileCache.reset()
         let f = c.compile('{ x: Float64 => 1.0f64 / x }')
-        let viaInvoke = f.invoke<Float64>([0.0], CallContext())
+        let viaInvoke = f.call<Float64>([0.0], CallContext())
         let plain = f.call<Float64>([0.0])
         @Assert(viaInvoke.toBits(), plain.toBits())
         // +Inf（0x7FF0000000000000）：不报错、也不是 ±Max

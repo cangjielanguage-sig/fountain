@@ -17,7 +17,7 @@ package fountain::f_jit
 
 import std.unittest.*
 import std.unittest.testmacro.*
-import fountain::f_jit.base.DummyDiagnosticsSink
+import fountain::f_jit.base.{CallContext, DummyDiagnosticsSink}
 
 /**
  * "单元是否真的被 JIT"（而非整单元静默退回解释器）的守卫。
@@ -56,6 +56,17 @@ public class JitBacked_test {
         let f = c.compile('{ n: Int64 => if (n <= 1) { 1 } else { n * recursive(n - 1) } }')
         @Assert(f.isJitBacked(), true)
         @Assert(f.call<Int64>([Int64(5)]), 120)
+    }
+
+    /** API 形态守卫：`Compiler()` 无参构造 + `call(args, ctx)` 重载。 */
+    @TestCase
+    public func defaultCtorAndCallOverload(): Unit {
+        let c = Compiler()
+        CompileCache.reset()
+        let f = c.compile('{ x: Int64 => x * 2 }')
+        @Assert(f.isJitBacked(), true)
+        @Assert(f.call<Int64>([Int64(21)]), 42)
+        @Assert(f.call<Int64>([Int64(21)], CallContext()), 42)
     }
 
     /** 含常量镜像（字符串字面量 ⇒ `PUSH_KH`）仍必须 JIT，且结果正确。 */

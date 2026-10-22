@@ -21,6 +21,7 @@ import fountain::f_jit.base.ClassDescriptor
 import fountain::f_jit.base.SourceCompileException
 import fountain::f_jit.base.PredefinedFunction
 import fountain::f_jit.base.JitBindings
+import fountain::f_jit.base.DummyDiagnosticsSink
 import fountain::f_jit.compiler.ClassRegistrySnapshot
 import fountain::f_jit.compiler.PredefinedSnapshot
 
@@ -38,6 +39,15 @@ public class Compiler {
     private let fns: ArrayList<PredefinedFunction> = ArrayList<PredefinedFunction>()
     /** 宿主侧类注册表（M2；快照语义与函数注册表同族）。 */
     private let classes: ClassRegistry = ClassRegistry()
+
+    /**
+     * 无参形态：等价于 `Compiler(CompileOptions(DummyDiagnosticsSink()))`。
+     *
+     * 用于"只要编译、不关心诊断"的快速上手场景；需要收集诊断时显式传 `CompileOptions`。
+     */
+    public init() {
+        this(CompileOptions(DummyDiagnosticsSink()))
+    }
 
     public init(opts: CompileOptions) {
         this('compiler', opts, 256)

@@ -16,10 +16,10 @@ interoperate with host classes, functions and closures.
 
 ```cangjie
 import fountain::f_jit.*
-import fountain::f_jit.base.DummyDiagnosticsSink
 
 main() {
-    let c = Compiler(CompileOptions(DummyDiagnosticsSink()))
+    let c = Compiler()                                   // same as Compiler(CompileOptions(DummyDiagnosticsSink()))
+    // to collect diagnostics: Compiler(CompileOptions(MySink()))
     c.registerType<User>()                              // expose a host class to the dialect
     let f = c.compile('{ u: User => u.name }')          // compile (result cached in CompileCache)
     let name = f.call<String>([User('bob', 1)])         // call it
@@ -32,7 +32,7 @@ Interruptible call with a deadline:
 ```cangjie
 var ctx = CallContext()
 ctx.deadline = Some(DateTime.now() + Duration.second * 1)   // throws InterruptedException
-let v = f.invoke<Int64>([Int64(100_000_000)], ctx)
+let v = f.call<Int64>([Int64(100_000_000)], ctx)
 ```
 
 Returning a closure (escaping closure — must be `close()`d):
@@ -52,7 +52,7 @@ g.close()                             // the only release path for the promotion
 |---|---|---|
 | `Compiler` | Facade: register host capabilities + compile | `registerType<T>()`, `registerClass(desc)`, `registerFunction(f)`, `compile(src)` |
 | `CompileOptions` | Compile options | `jit: JitMode` (`Auto`/`Force`/`Off`), `strictFp` (default `true`), `verMajor`, `cpuFeatures`, `diagnostics` |
-| `JitFunction` | Compiled unit / callable object | `call<T>(args)`, `invoke<T>(args, ctx)`, `callForFn<Fn>(args)`, `close()`, `isClosed` |
+| `JitFunction` | Compiled unit / callable object | `call<T>(args)`, `call<T>(args, ctx)`, `callForFn<Fn>(args)`, `close()`, `isClosed` |
 | `JitException` | Runtime failure (`base` package) | `code` (`ErrCode`), `site` (line:column / byte offset), `report` |
 | `CompileCache` | Compile cache (key includes `strictFp`/`verMajor`) | `lookup`, `reset`, `runs` |
 | `CallContext` | Call context | `deadline` (interrupts at safety points → `InterruptedException`) |
@@ -129,7 +129,105 @@ JIT is an accelerator; on any of the following, the **whole unit** falls back to
 
 ---
 
-## 6. FAQ
+## 6. Data types and syntax
+
+The dialect is a **subset of Cangjie**: every type maps to the Cangjie standard library (no
+user-defined types). Literals and operators:
+
+| Type | Backing (std) | Literals / construction | Main operations |
+|---|---|---|---|
+| **Int64** | scalar | `42`, `-7` | `+ - * / %`, comparisons; `/` and `%` by zero → 3; `Int64(x)` narrowing |
+| **Float64** | scalar | `1.5`, `1.0f64` | `+ - * /`, comparisons; `strictFp` defaults to `true` ⇒ ÷0 fails with 1, otherwise IEEE ±Inf |
+| **String** | `std.core.String` | `'abc'` / `"abc"`, multi-line `'''…'''` / `"""…"""`, raw `#`×n; interpolation `"v${x}"` | `+` concat, `* 3` repeat, `s[a..=b]` (code-point half-open range) |
+| **Range** | `std.core.Range` | `a..b`, `a..=b`, optional `: step` | `for x in a..b { … }` |
+| **List** | `std.collection.ArrayList` | `[1, 2, 3]` (**constant, shared read-only**), `[]` (fresh **mutable** empty list, needs a contextual type) | `xs[i]`, `xs[i] = v`, `for x in xs`; append/remove are mutating helpers (`LIST_APPEND`/`LIST_REMOVE`; writing a constant → 20) |
+| **Map** | `std.collection.HashMap` | `{k: v}` (constant, read-only), `{}` (mutable, needs a contextual type) | `m[k]`, `m[k] = v`, `for (k, v) in m` |
+| **Regex** | `std.regex.Regex` | `/pat/flags` (flags ∈ `i m u`, order-independent, idempotent); `s.regex()` builds at run time (no flags) | `re ~ s`, `re !~ s`, `re/s/r/g` (replace all), `re/s/r/n` (replace n times) |
+| **Decimal** | `std.math.numeric.Decimal` | **a bare decimal literal is a Decimal**: `1.23`; `Decimal(...)` | `+ - * /`, comparisons |
+| **Duration** | `std.core.Duration` | no literal (from the host, or `DateTime` difference) | `Duration ± Duration`, comparisons; overflow → 12 |
+| **DateTime** | `std.time.DateTime` | no literal (from the host) | `DateTime ± Duration`, `DateTime − DateTime → Duration`; out of range → 11 |
+| **Closure** | handle 12 (`JitClosure`) | `{ x => e }`, captures outer locals | call `f(a)`; escaping returns use `callForFn<Fn>`, then `close()` |
+| **Any** | handle 12 (`JitAnyBox`) | passed in by the host, or `Any`-annotated local/param | boxing/unboxing (H78/H79), `is` checks, returned as `Any` |
+
+```cangjie
+// one literal per type (as a jit lambda's return / local)
+c.compile('{ => 42 }')                       // Int64
+c.compile('{ => 1.5 }')                      // Float64
+c.compile('{ => 1.23 }')                     // Decimal (bare decimal literal)
+c.compile('{ x: Int64 => "v${x}" }')         // String (interpolation)
+c.compile('{ => /^[a-z]+$/i }')              // Regex
+c.compile('{ => [1, 2, 3] }')                // List (constant, read-only)
+c.compile('{ => { "a": 1 } }')               // Map (constant, read-only)
+c.compile('{ => 1..=5 }')                    // Range
+```
+
+**Read-only constants vs mutable containers**: non-empty literals are built once at assembly time and
+shared across calls — writing them fails with `ERR_READONLY(20)`; `[]`/`{}` build a fresh mutable
+container on every evaluation (not in the constant table) and need a contextual type (annotation or
+parameter signature).
+
+### 6.1 Recursion (`recursive`)
+
+Self-recursion uses the keyword `recursive(...)` (not the function name):
+
+```cangjie
+let fact = c.compile('{ n: Int64 => if (n <= 1) { 1 } else { n * recursive(n - 1) } }')
+fact.call<Int64>([Int64(5)])      // 120
+```
+
+Lowering differs by position:
+
+| Position | Lowering |
+|---|---|
+| Top-level lambda | `CALL_FUNC <entryFn>` (through the **function table**, host absolute address) |
+| Inside a closure | `LOADL 0` (`locals[0]` holds the closure itself) + `CALL_CLOSURE` |
+| **Tail position** | arguments in **reverse order** into `STOREL` + `LOOP_BACK <entry>` (frame reuse, no `RET`; tail recursion does not grow the stack) |
+
+### 6.2 Nested closures and recursive nested closures
+
+```cangjie
+// nested closure: captures outer locals; the inner `recursive` refers to itself
+let f = c.compile('{ n: Int64 =>
+    let inner = { k: Int64 => if (k <= 1) { 1 } else { k * recursive(k - 1) } }
+    inner(n)
+}')
+f.call<Int64>([Int64(4)])         // 24
+```
+
+- Captures are classified by origin (`CaptureOrigin`); handle-typed captures are **promoted in place**
+  together with an escaping closure;
+- The inner `recursive` is that closure itself (`LOADL 0` + `CALL_CLOSURE`), not the outer `entryFn`;
+- Nesting is unbounded (each level is a `LOAD_CAP` chain, one closure object per level);
+- **Escaping** a closure: take the wrapper via `callForFn<Fn>` and `close()` it when done (otherwise its
+  promotion group stays resident).
+
+### 6.3 ⚠ `JitFunction` cannot be a parameter of a jit lambda
+
+`JitFunction` is a **bridge-side executable** (code buffer, constant mirror, function table, promotion
+group) — not a dialect value type. `Compiler.registerType()` only accepts host types that map to a
+`LocalType`, and `JitFunction` has no code, so it cannot appear in a lambda's parameter or return type
+(rejected at compile time).
+
+To "pass a JIT function into a lambda", **wrap it in a closure** and pass the host closure
+(`HOST_CLOSURE`, code 13):
+
+```cangjie
+let inc = c.compile('{ x: Int64 => x + 1 }')
+
+// ✓ capture the JitFunction in a host closure; what crosses the bridge is a closure, not the JitFunction
+let bridge: (Int64) -> Int64 = { n => inc.call<Int64>([n]) }
+
+// the lambda declares the parameter as a host closure; the next line is schematic
+// (the type name follows the host-closure signature registered on the Compiler)
+let apply = c.compile('{ f: Fn, n: Int64 => f(n) }')
+apply.call<Int64>([bridge, Int64(41)])     // 42
+```
+
+Key point: the `JitFunction` stays on the **host side**; only the closure value crosses the bridge. If
+the closure escapes the call, the host must keep the captured `JitFunction` alive (make its lifetime
+longer than the closure's).
+
+## 7. FAQ
 
 ### Q1 Who owns objects created on the JIT side — the JIT or Cangjie?
 
@@ -216,7 +314,7 @@ container.
 
 ---
 
-## 7. Known limitations
+## 8. Known limitations
 
 - Native code only on Linux x86_64 / aarch64 (all other platforms interpret);
 - x86_64 requires SSE4.1 (units with rounding ops are not JITed otherwise);

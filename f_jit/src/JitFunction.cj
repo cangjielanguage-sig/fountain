@@ -113,7 +113,7 @@ public class JitFunction {
     /** 六步调用：长度 → 封送 → 执行 → 解包 → `T` 校验 → 返回。 */
     public func call<T>(args: Array<Any>): T {
         // 薄委托：错误语义与 `invoke` 完全一致（>0 抛 JitException、−2 抛 InterruptedException）
-        this.invoke<T>(args, CallContext())
+        this.call<T>(args, CallContext())
     }
 
     /**
@@ -123,7 +123,7 @@ public class JitFunction {
      * 重入（宿主闭包体内再调 JIT）不受锁约束，直接 `setDeadline` 会把外层期限冲掉。
      * 严格浮点由 `CompileOptions.strictFp` 在**产物层**决定（`FDIV` / `FDIV_CHK`），调用选项不再携带。
      */
-    public func invoke<T>(args: Array<Any>, options: CallContext): T {
+    public func call<T>(args: Array<Any>, options: CallContext): T {
         let saved = RuntimeEnv.deadlineNanos
         RuntimeEnv.setDeadline(RuntimeEnv.deadlineNanosOf(options.deadline))
         try {

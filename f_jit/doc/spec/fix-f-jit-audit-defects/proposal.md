@@ -18,7 +18,7 @@ M1/M2/M3 的能力矩阵在纸面上完整（1026 条用例、T 系列全覆盖�
   - `localTypeOf<T>` 补齐 `Any`（15）与 JSON 谱系（16–19），使 `CallMarshal` 的 15/16–19 行在宿侧可达；`retType=15` 的逃逸/拆盒与 `16–19` 的 tag 11 例外行走同一张表。
   - `BNOT_I` 改为「弹 1 个操作数、压回 `~a`」，与 A64 降低逐位对拍。
   - DEOPT 三态收尾改为「重放前 `errCode = 0` → 重放 → **复查** `errCode`：0 走值路径，>0 走 `throwJit`，−2 抛中断」，重放异常兜底 99 的既有契约不变。
-  - 新增 `JitFunction.invoke<T>(args, options: CallContext)`：按 `options.deadline` 写入 `RuntimeEnv`（栈式保存/恢复，支持重入），`call<T>` 委托为 `invoke(args, CallContext())`。
+  - 新增 `JitFunction.call<T>(args, options: CallContext)`：按 `options.deadline` 写入 `RuntimeEnv`（栈式保存/恢复，支持重入），`call<T>` 委托为 `invoke(args, CallContext())`。
 - **P1 九条纠偏**：词法保留 `flags`；`-` / `*` / `/` / `%` 的 String 组合显式报编译错误，`+` 仍走 `STR_CAT`；尾递归实参改经临时槽求值后再写形参；`else if` 走「先判 `KwIf` 再判块」；IIFE 取闭包真实返回类型；`methodOf/requireMethod` 支持按实参静态类型选重载；常量键统一 `i:` / `f:` / `s:` / `d:` / `t:` / `u:` / `r:` / `x:` 前缀与运行期同构；`lowerExprAs` 末段对不可转换组合 `diagFail`；容器字面值进 `Any` 形参/返回值时整体装箱。
 - **P2 六条收口**：`fetchAnyBox` 补 gen 校验（与 `fetchHostObject` 同构）；`IterTable.clearAll` 进桥的 `finally` 并加锁；`release` 对逃逸槽复位 `escapeFlags` 并归还 `freeSlots`；`callForFn` 进 `callMtx`；A64 `ldrOff/strOff` 越界改走「`movImm64` + 加基址」慢路径；H80 的 14/容器 pin 走 `append` 系（窗口记账）。
 - **P3 五类回写**：helper 编号全表替换；三条推翻表述改为当前规则；`json_set` 值域三处统一；矩阵虚报逐条纠正（T48/T51、③、只读 20、M3 三引擎）；缺件目录补齐三件套。
@@ -43,7 +43,7 @@ M1/M2/M3 的能力矩阵在纸面上完整（1026 条用例、T 系列全覆盖�
 ## Impact
 
 - **代码**：`f_jit/src/runtime`（`AnyHelpers`、`Interp`、`HandleTable`、`IterTable`、`RuntimeEnv`）、`f_jit/src/compiler`（`Lexer`、`Parser`、`Lowerer`、`ClassRegistryView`）、`f_jit/src/bytecode`（`ConstRegistry`）、`f_jit/src/backend`（`A64Emitter`）、`f_jit/src` 根包（`JitReport`、`JitFunction`、`CallMarshal`）、`f_jit/src/base`（`CallContext` 注释口径）。不新增模块，不改根 `cjpm.toml`。
-- **API**：新增 `JitFunction.invoke<T>(args: Array<Any>, options: CallContext)`；`call<T>` 行为不变（等价 `options = CallContext()`）。其余均为内部修正。
+- **API**：新增 `JitFunction.call<T>(args: Array<Any>, options: CallContext)`；`call<T>` 行为不变（等价 `options = CallContext()`）。其余均为内部修正。
 - **格式与兼容**：`.fbc` verMajor 1/2/3 及规则集校验**零变化**；`aux` 的 14 目标编码从「恒 `0xFFFF`」放宽为「`$as$<C>` helper id 或 `0xFFFF`（不核对）」，读写两侧同一版本内自洽，不产生跨版本差异。
 - **错误码**：不新增；22（ANY_CAST）/ 8 / 16 / 99 的既有分工不变，只把「本该 22 却报 8」的口径纠正。
 - **平台**：解释器与 AArch64 为原生证据；x86_64 机器码断言按既有条件跳过策略执行。
