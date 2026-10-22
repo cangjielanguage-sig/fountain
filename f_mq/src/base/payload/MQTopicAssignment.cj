@@ -33,16 +33,22 @@ public class MQTopicAssignment {
     private var owners: Array<Int64> = []
     /** 延迟投递时长（毫秒），0 表示不延迟 */
     private var delayingMs: Int64 = 0
+    /** 元数据版本（Lamport 计数），0 表示旧数据 */
+    private var revision: Int64 = 0
+    /** 版本的产生节点；同 revision 时用于打破平局 */
+    private var origin: Int64 = 0
 
     public init() {}
 
     public init(topic: String, queueNum: Int64, startNodeIndex: Int64, owners: Array<Int64>,
-        delayingMs!: Int64 = 0) {
+        delayingMs!: Int64 = 0, revision!: Int64 = 0, origin!: Int64 = 0) {
         this.topic = topic
         this.queueNum = queueNum
         this.startNodeIndex = startNodeIndex
         this.owners = owners
         this.delayingMs = delayingMs
+        this.revision = revision
+        this.origin = origin
     }
 
     /** 队列对应的 owner 节点下标；越界返回 `None`。 */

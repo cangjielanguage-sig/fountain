@@ -25,11 +25,17 @@ public class MQSubscribeGroupMeta {
     private var topic: String = ''
     /** 订阅组名；空串 = 默认组 */
     private var subscribeGroup: String = ''
+    /** 元数据版本（Lamport 计数），0 表示旧数据 */
+    private var revision: Int64 = 0
+    /** 版本的产生节点；同 revision 时用于打破平局 */
+    private var origin: Int64 = 0
 
     public init() {}
 
-    public init(topic: String, subscribeGroup: String) {
+    public init(topic: String, subscribeGroup: String, revision!: Int64 = 0, origin!: Int64 = 0) {
         this.topic = topic
         this.subscribeGroup = subscribeGroup
+        this.revision = revision
+        this.origin = origin
     }
 }

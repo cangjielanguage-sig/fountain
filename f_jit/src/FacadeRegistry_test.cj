@@ -18,6 +18,7 @@ package fountain::f_jit
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_jit.base.*
+import fountain::f_jit.test.TCase
 
 /** P6.1 / P6.2：`CompileOptions`、`PredefinedFunction` 与 `Compiler` 注册表。 */
 @Test
@@ -45,21 +46,24 @@ public class FacadeRegistry_test {
 
         var code2: Int64 = 0
         try {
-            let _ = PredefinedFunction('bad2', [LocalType.I64], 13u16, { _ => 0 })
+            let _ = PredefinedFunction('bad2', [LocalType.I64], 15u16, { _ => 0 })
         } catch (e: JitException) {
             code2 = e.code
         }
         @Assert(code2, ErrCode.CALL_CONTRACT)
+
+        // M2 合法集扩展：形参 13/14、返回 13/14 均可登记
+        let _ = PredefinedFunction('hostOk', [LocalType.HOST_CLOSURE, LocalType.HOST_OBJECT],
+            LocalType.HOST_OBJECT, { _ => 0 })
     }
 
     @TestCase
     public func registerQueryUnregister(): Unit {
-        // T23/ 映射标签（check_tmap 断言级校验）
         let c = Compiler(CompileOptions(DummyDiagnosticsSink()))
         let f = PredefinedFunction('add', [LocalType.I64, LocalType.I64], LocalType.I64,
             { a => a[0] })
         c.registerFunction(f)
-        @Assert(c.hasFunction('add'), true)
+        @Assert(TCase.hit('T23/register-query', c.hasFunction('add')), true)
         @Assert(c.hasFunction('nope'), false)
         let names = c.registeredNames()
         @Assert(names.size, 1)

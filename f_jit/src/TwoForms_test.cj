@@ -20,13 +20,14 @@ import std.unittest.testmacro.*
 import fountain::f_jit.base.DummyDiagnosticsSink
 import fountain::f_jit.base.JitMode
 import fountain::f_jit.base.JitException
+import fountain::f_jit.test.TCase
 
 /** T52：同源同参的**机器码形态**与**纯字节码形态**同接口、同结果。 */
 @Test
 public class TwoForms_test {
     @TestCase
     public func t52TwoFormsSameBehavior(): Unit {
-        // T52/ 机器码形态 × 纯字节码形态：同接口、同结果、同错误码
+        // 机器码形态 × 纯字节码形态：同接口、同结果、同错误码
         let src = '{ n: Int64 => n * 3 + 1 }'
         var o = CompileOptions(DummyDiagnosticsSink())
         o.jit = JitMode.Force
@@ -37,7 +38,8 @@ public class TwoForms_test {
         let bc = Compiler(b).compile(src)
         @Assert(bc.isJitBacked(), false)
         for (n in [0, 1, 7, 21, 1000]) {
-            @Assert(jit.call<Int64>([n]), bc.call<Int64>([n]))
+            @Assert(TCase.hit('T52/two-forms-same-result',
+                jit.call<Int64>([n]) == bc.call<Int64>([n])), true)
         }
         // 失败语义同样一致：越界/除零
         let src2 = '{ a: Int64 => a / (a - a) }'

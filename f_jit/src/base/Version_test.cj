@@ -81,6 +81,70 @@ public class Version_test {
         @Assert(payload, 40u32)
     }
 
+    // ---------------- Q0.1 多版本常量（M2 兼容基建） ----------------
+
+    /** Q0.1：M1/M2/M3 版本常量逐项与 spec「版本常量」一致。 */
+    @TestCase
+    public func multiVersionConstantsMatchSpec(): Unit {
+        @Assert(Version.M1_MAJOR, 1u16)
+        @Assert(Version.M2_MAJOR, 2u16)
+        @Assert(Version.M2_MINOR, 0u16)
+        @Assert(Version.M3_MAJOR, 3u16)
+    }
+
+    /** Q0.1：`supportedMajors()` 含 v1/v2/v3（三者规则集均已实现）。 */
+    @TestCase
+    public func supportedMajorsCoversImplementedMajors(): Unit {
+        let majors = Version.supportedMajors()
+        var has1 = false
+        var has2 = false
+        var has3 = false
+        for (m in majors) {
+            if (m == 1u16) {
+                has1 = true
+            }
+            if (m == 2u16) {
+                has2 = true
+            }
+            if (m == 3u16) {
+                has3 = true
+            }
+        }
+        @Assert(has1, true)
+        @Assert(has2, true)
+        @Assert(has3, true)
+        @Assert(majors.size, 3)
+    }
+
+    /** Q0.1：legacy `MAJOR/MINOR/HDR_SIZE/MAGIC` 与 M1 读取路径逐项不变。 */
+    @TestCase
+    public func legacyM1ConstantsUnchanged(): Unit {
+        @Assert(Version.MAJOR, 1u16)
+        @Assert(Version.MINOR, 14u16)
+        @Assert(Version.HDR_SIZE, 36u32)
+        @Assert(Version.MAGIC, 0x31434246u32)
+        @Assert(Version.MAGIC_TEXT, 'FBC1')
+        // M2 通过显式版本选择表达，不改写 legacy 写入口径
+        @Assert(Version.MAJOR, Version.M1_MAJOR)
+        @Assert(Version.MAJOR != Version.M2_MAJOR, true)
+    }
+
+    /** Q0.1：用 M2 版本常量构造的最小容器头字段自洽（magic / 头长口径沿用 M1）。 */
+    @TestCase
+    public func m2HeaderBuildsWithM2Constants(): Unit {
+        let hdr = Array<UInt8>(40, repeat: 0u8)
+        putU32(hdr, 0, Version.MAGIC)
+        putU16(hdr, 4, Version.M2_MAJOR)
+        putU16(hdr, 6, Version.M2_MINOR)
+        putU32(hdr, 8, 1u32) // flags.bit0 = UTF-8，恒 1
+        putU32(hdr, 12, Version.HDR_SIZE)
+        @Assert(readU32(hdr, 0), Version.MAGIC)
+        @Assert(readU16(hdr, 4), 2u16)
+        @Assert(readU16(hdr, 6), 0u16)
+        @Assert(readU32(hdr, 12), 36u32)
+        @Assert(UInt32(hdr.size), 4u32 + Version.HDR_SIZE)
+    }
+
     /** 按 §11.6 字段表构造一个最小容器头（显式 LE，禁 memcpy）。 */
     private func buildMinimalHeader(
         codeLen: UInt32,

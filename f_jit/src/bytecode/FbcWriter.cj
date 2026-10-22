@@ -35,12 +35,24 @@ import fountain::f_util.Crc32
 public class FbcWriter {
     private var entryFn: UInt32 = 0u32
     private var flags: UInt32 = FbcFlags.UTF8
+    private var verMajor: UInt16 = Version.MAJOR
+    private var verMinor: UInt16 = Version.MINOR
     private var code: Array<UInt8> = Array<UInt8>()
     private var consts: Array<UInt8> = Array<UInt8>()
     private var site: Array<UInt8> = Array<UInt8>()
     private var name: Array<UInt8> = Array<UInt8>()
 
     public init() {}
+
+    /**
+     * 目标版本（M2 显式选 2/0，design-m2 D12）。
+     *
+     * 缺省仍为 M1 的 1/14：不传即与 M1 产物逐字节一致。
+     */
+    public func setVersion(major: UInt16, minor: UInt16): Unit {
+        this.verMajor = major
+        this.verMinor = minor
+    }
 
     /** 入口函数号（须命中目录，加载期校验）。 */
     public func setEntryFn(fnId: UInt32): Unit {
@@ -94,8 +106,8 @@ public class FbcWriter {
     public func build(): Array<UInt8> {
         let h = FbcHeader(
             Version.MAGIC,
-            Version.MAJOR,
-            Version.MINOR,
+            this.verMajor,
+            this.verMinor,
             this.flags,
             Version.HDR_SIZE,
             UInt32(this.code.size),

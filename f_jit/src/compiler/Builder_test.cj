@@ -246,6 +246,39 @@ public class Builder_test {
         @Assert(b4.finish().flags & FuncFlags.MUTATION, FuncFlags.MUTATION)
     }
 
+    /**
+     * M3 helper 的变更型归属（m3 §5「变更型纪律」）：H82 `json_set` 置 `flags.bit0`；
+     * H78/H79/H80/H81/H83 都不置位（box 不可变、is 纯读、as 与 get/new 只分配）。
+     */
+    @TestCase
+    public func m3HelperFlagsMatchSpec(): Unit {
+        let nonMutating = [
+            (HelperCodec.ANY_BOX, 2u8), (HelperCodec.ANY_IS, 3u8),
+            (HelperCodec.ANY_AS, 3u8), (HelperCodec.JSON_GET, 3u8),
+            (HelperCodec.JSON_NEW, 1u8)
+        ]
+        for ((hid, argc) in nonMutating) {
+            let b = Builder_test.newBuilder()
+            var i: Int64 = 0
+            while (i < Int64(argc)) {
+                b.emitI32(Op.PUSH_I32, 1)
+                i = i + 1
+            }
+            b.callHelper(hid, argc)
+            b.emit(Op.POP)
+            @Assert(b.finish().flags & FuncFlags.MUTATION, 0u16)
+        }
+        let m = Builder_test.newBuilder()
+        var j: Int64 = 0
+        while (j < 4) {
+            m.emitI32(Op.PUSH_I32, 1)
+            j = j + 1
+        }
+        m.callHelper(HelperCodec.JSON_SET, 4u8)
+        m.emit(Op.POP)
+        @Assert(m.finish().flags & FuncFlags.MUTATION, FuncFlags.MUTATION)
+    }
+
     /** `bail(code, pos)`：站点 + 无条件错误码（§5 失败块的字节码形态）。 */
     @TestCase
     public func bailEmitsSiteAndAbort(): Unit {

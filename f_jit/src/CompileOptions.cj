@@ -15,11 +15,9 @@ limitations under the License.
 */
 package fountain::f_jit
 
-import fountain::f_jit.base.JitException
-import fountain::f_jit.base.ErrCode
-import fountain::f_jit.base.LocalType
 import fountain::f_jit.base.JitMode
 import fountain::f_jit.base.DiagnosticsSink
+import fountain::f_jit.base.Version
 
 /**
  * 编译配置（design §7.3.2、plan S6.1）。
@@ -29,50 +27,25 @@ import fountain::f_jit.base.DiagnosticsSink
 public class CompileOptions {
     public var jit: JitMode = JitMode.Auto
     public var cpuFeatures: UInt64 = 0
+    /**
+     * 源码产物的字节码主版本（X1）。
+     *
+     * 缺省 `Version.LATEST`；只允许 `Version.supportedMajors()` 内的值，其余在 `compile` 时
+     * 以 `SourceCompileException` 拒绝。缓存键包含该值——同源不同版本必须产出独立单元。
+     */
+    public var verMajor: UInt16 = Version.LATEST
+    /**
+     * 严格浮点（X3）：决定 `Float64` 的 `/` 发 `FDIV`（÷0 得 ±Inf）还是 `FDIV_CHK`（÷0 → 1）。
+     *
+     * **缺省 `true`（严格）**：÷0 当场以 1（`DIV_ZERO`）失败，不让 `Inf` 静默污染后续计算。
+     * 需要 IEEE 语义（如以 `Inf` 作哨兵）时显式置 `false`。
+     *
+     * 这是**产物级**选项：同一份源码在两种配置下是两份独立产物，不存在「同一条指令两种行为」。
+     */
+    public var strictFp: Bool = true
     public let diagnostics: DiagnosticsSink
 
     public init(diagnostics: DiagnosticsSink) {
         this.diagnostics = diagnostics
-    }
-}
-
-/**
- * 预定义函数注册契约（design §7.3.2、§8.4）。
- *
- * `impl` 收**已解包**的仓颉值，返回须与 `retType` 匹配（返回值校验发生在调用期；
- * 构造期只校验类型码合法集）。
- */
-public class PredefinedFunction {
-    public let name: String
-    public let paramTypes: Array<UInt16>
-    public let retType: UInt16
-    public let impl: (Array<Any>) -> Any
-
-    public init(name: String, paramTypes: Array<UInt16>, retType: UInt16,
-        impl: (Array<Any>) -> Any) {
-        PredefinedFunction.checkParamTypes(name, paramTypes)
-        PredefinedFunction.checkRetType(name, retType)
-        this.name = name
-        this.paramTypes = paramTypes
-        this.retType = retType
-        this.impl = impl
-    }
-
-    /** M1 形参类型：0–8、10–11（不含 Closure=12）。 */
-    private static func checkParamTypes(name: String, ts: Array<UInt16>): Unit {
-        for (t in ts) {
-            let ok = (t <= LocalType.RANGE) || (t == LocalType.LIST) || (t == LocalType.MAP)
-            if (!ok) {
-                throw JitException(ErrCode.CALL_CONTRACT, -1, -1, None,
-                    '预定义函数「${name}」的形参类型码非法: ${t}（M1 允许 0–8/10–11，§8.4）')
-            }
-        }
-    }
-
-    private static func checkRetType(name: String, t: UInt16): Unit {
-        if (t > LocalType.CLOSURE) {
-            throw JitException(ErrCode.CALL_CONTRACT, -1, -1, None,
-                '预定义函数「${name}」的返回类型码非法: ${t}（M1 允许 0–12，§8.4）')
-        }
     }
 }

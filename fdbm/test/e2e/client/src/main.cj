@@ -19,6 +19,7 @@ import std.collection.{ArrayList, HashMap}
 import std.convert.*
 import std.database.sql.*
 import std.env.getVariable
+import std.env.getVariable
 import fountain::f_dbd.common.DbdErrorCode
 import fountain::f_dbd.driver.*
 import fountain::f_dbd.exception.DbdException
@@ -26,6 +27,13 @@ import fountain::f_dbd.multid.MultiD
 
 var checks: Int64 = 0
 var failures: Int64 = 0
+
+func isCustomExtension(): Bool {
+    match (getVariable('FDBM_E2E_CUSTOM')) {
+        case Some(value) => value == '1'
+        case None => false
+    }
+}
 
 func check(name: String, ok: Bool): Unit {
     checks += 1
@@ -35,6 +43,10 @@ func check(name: String, ok: Bool): Unit {
         failures += 1
         println('FAIL ${name}')
     }
+}
+
+func checkOptionalText(name: String, actual: Option<String>, expected: Option<String>): Unit {
+    check('${name} (${actual} == ${expected})', actual == expected)
 }
 
 func checkInt(name: String, actual: Int64, expected: Int64): Unit {
@@ -84,6 +96,17 @@ func firstText(connection: Connection, sql: String): ?String {
     }
 }
 
+/** 执行更新并返回 (rowCount, lastInsertId)。 */
+func execUpdateWithId(connection: Connection, sql: String): (Int64, Int64) {
+    let statement = connection.prepareStatement(sql)
+    try {
+        let result = statement.update()
+        (result.rowCount, result.lastInsertId)
+    } finally {
+        statement.close()
+    }
+}
+
 func rowCount(connection: Connection, sql: String): Int64 {
     let statement = connection.prepareStatement(sql)
     try {
@@ -118,6 +141,16 @@ func backend(): String {
 
 func isMySql(): Bool {
     backend() == 'mysql'
+}
+
+/**
+ * 部署的逻辑库名（`fdbm_db_logicalDatabase_<name>`）。
+ *
+ * e2e 故意让逻辑库名 ≠ 物理库名（`app` vs `db0..db3`），未限定读写必须按路由落到物理库，
+ * 只连接逻辑库名才能暴露「默认库落到物理库名」这类缺陷。
+ */
+func logicalDatabase(): String {
+    'app'
 }
 
 /** 两个后端都接受的文本类型（MySQL 的 `text` 不能做分库键主键）。 */
@@ -161,11 +194,61 @@ func secondPort(): UInt16 {
  * 序列 ID、INSERT…SELECT、SHOW、EXPORT、事务/savepoint、DELETE 三步、大字段、错误码。
  * 覆盖 f_dbd：连接元数据、参数绑定、get/getOrNull、结果集独占与关闭握手、MultiD。
  */
+/** T07 自定义扩展：自定义分区算法 + 自定义 ID 生成器。 */
+func customExtension(): Int64 {
+    let base = 'fdbm://fdbm@127.0.0.1:${port()}/${logicalDatabase()}'
+    let datasource = dbdDriver().open(base, [])
+    datasource.setOption('query_timeout', '30000')
+    datasource.setOption('update_timeout', '30000')
+    let connection = datasource.connect()
+    try {
+        check('custom ddl drop', execUpdate(connection, 'drop table if exists t_custom') >= 0)
+        check('custom ddl create', execUpdate(connection,
+            'create table t_custom (id bigint primary key, name varchar(32))') >= 0)
+        var i: Int64 = 1
+        while (i <= 4) {
+            check('custom insert ${i}', execUpdate(connection,
+                "insert into t_custom (id, name) values (${i}, 'n${i}')") == 1)
+            i += 1
+        }
+        checkOptionalText('custom count', firstText(connection, 'select count(*) from t_custom'), Some('4'))
+
+        let (rows, _) = execUpdateWithId(connection,
+            "insert into t_custom (name) values ('auto')")
+        checkInt('custom auto insert', rows, 1)
+        // 自定义生成器写入的值必须真的落库（落点由 run.sh 逐库核对）
+        checkOptionalText('custom auto id from extension',
+            firstText(connection, "select id from t_custom where name = 'auto'"), Some('7001'))
+        checkOptionalText('custom count after auto',
+            firstText(connection, 'select count(*) from t_custom'), Some('5'))
+
+        // T09：`maxSize=1` 下 returning 也必须归还连接，否则下面的查询会超时（MySQL 无 RETURNING）
+        if (backend() == 'postgres') {
+            let (retRows, retId) = execUpdateWithId(connection,
+                "insert into t_custom (id, name) values (100, 'ret') returning id")
+            checkInt('custom returning insert', retRows, 1)
+            checkInt('custom returning lastInsertId', retId, 100)
+            checkOptionalText('custom query after returning',
+                firstText(connection, 'select count(*) from t_custom'), Some('6'))
+        }
+    } finally {
+        connection.close()
+        datasource.close()
+    }
+    println('----')
+    println('checks=${checks}, failures=${failures}')
+    println('E2E_DONE')
+    if (failures == 0) { 0 } else { 1 }
+}
+
 main(): Int64 {
     if (isProbe()) {
         return probe()
     }
-    let base = 'fdbm://fdbm@127.0.0.1:${port()}/db0'
+    if (isCustomExtension()) {
+        return customExtension()
+    }
+    let base = 'fdbm://fdbm@127.0.0.1:${port()}/${logicalDatabase()}'
     let datasource = dbdDriver().open(base, [])
     datasource.setOption('query_timeout', '30000')
     datasource.setOption('update_timeout', '30000')
@@ -174,6 +257,7 @@ main(): Int64 {
     try {
         driverAndMetadata(connection)
         ddlAndUnpartitioned(connection)
+        shardProbe(connection)
         stepRouting(connection)
         hashAndSubstring(connection)
         globalTable(connection)
@@ -210,10 +294,12 @@ func isProbe(): Bool {
 
 /** 重启后的最小探针：只证明新进程仍能服务（不重建数据）。 */
 func probe(): Int64 {
-    let datasource = dbdDriver().open('fdbm://fdbm@127.0.0.1:${port()}/db0', [])
+    let datasource = dbdDriver().open(
+        'fdbm://fdbm@127.0.0.1:${port()}/${logicalDatabase()}', [])
     let connection = datasource.connect()
     try {
-        checkInt('probe show databases', rowCount(connection, 'show databases'), 4)
+        // 逻辑库口径：e2e 部署显式声明逻辑库 app，物理库不单独出现
+        checkInt('probe show databases', rowCount(connection, 'show databases'), 1)
         checkText('probe step select', firstText(connection,
             'select name from t_step where id = 2') ?? '', 'src1')
     } finally {
@@ -227,11 +313,12 @@ func probe(): Int64 {
 
 func driverAndMetadata(connection: Connection): Unit {
     let driver = dbdDriver()
-    checkText('driver.name', driver.name, 'fdbm')
+    // 注册名 = dbd_driverName（后端方言名），fdbm 只作兼容别名
+    checkText('driver.name', driver.name, getVariable('dbd_driverName') ?? '')
     check('driver.preferredPooling', driver.preferredPooling)
     check('driver.version', !driver.version.isEmpty())
     let meta = connection.getMetaData()
-    checkText('metadata.database', meta.get('database') ?? '', 'db0')
+    checkText('metadata.database', meta.get('database') ?? '', logicalDatabase())
     checkText('metadata.user', meta.get('user') ?? '', 'fdbm')
     check('metadata.no-password', meta.get('password').isNone())
 }
@@ -303,6 +390,40 @@ func ddlAndUnpartitioned(connection: Connection): Unit {
         'delete from t_plain where id = 10'), 1)
     checkInt('plain select after delete', rowCount(connection,
         'select id from t_plain where id = 10'), 0)
+}
+
+/**
+ * 逻辑库 ≠ 物理库时的路由证据（D03 / 任务 1.15）。
+ *
+ * `t_shard_probe` 由 `backends` 下的脚本直接建在物理库里，**每个物理库只放本分片的那一行**
+ * （db0→id=1、db1→id=1001、db2→id=2001、db3→id=3001），因此客户端用未限定名读写时
+ * 命中的物理库由返回值/行数直接暴露：路由错了就查不到行，写错了就读不回新值。
+ */
+func shardProbe(connection: Connection): Unit {
+    checkText('shard probe read db0', firstText(connection,
+        'select tag from t_shard_probe where id = 1') ?? '', 'db0')
+    checkText('shard probe read db1', firstText(connection,
+        'select tag from t_shard_probe where id = 1001') ?? '', 'db1')
+    checkText('shard probe read db2', firstText(connection,
+        'select tag from t_shard_probe where id = 2001') ?? '', 'db2')
+    checkText('shard probe read db3', firstText(connection,
+        'select tag from t_shard_probe where id = 3001') ?? '', 'db3')
+    checkInt('shard probe range spans shards', rowCount(connection,
+        'select tag from t_shard_probe where id between 1 and 3001'), 4)
+
+    // 写：未限定名必须在 db1 上更新（其它库没有 id=1001，写错就回读不到新值）
+    checkInt('shard probe update db1', execUpdate(connection,
+        "update t_shard_probe set tag = 'app-w' where id = 1001"), 1)
+    checkText('shard probe update visible', firstText(connection,
+        'select tag from t_shard_probe where id = 1001') ?? '', 'app-w')
+    checkInt('shard probe insert db2', execUpdate(connection,
+        "insert into t_shard_probe (id, tag) values (2005, 'app-i')"), 1)
+    checkText('shard probe insert visible', firstText(connection,
+        'select tag from t_shard_probe where id = 2005') ?? '', 'app-i')
+    checkInt('shard probe delete db3', execUpdate(connection,
+        'delete from t_shard_probe where id = 3001'), 1)
+    checkInt('shard probe delete verified', rowCount(connection,
+        'select tag from t_shard_probe where id = 3001'), 0)
 }
 
 func stepRouting(connection: Connection): Unit {
@@ -395,15 +516,39 @@ func showAndExport(connection: Connection): Unit {
         } finally {
             rs.close()
         }
-        checkInt('show databases count', names.size, 4)
-        check('show databases content', names.contains('db0') && names.contains('db3'))
+        checkInt('show databases count', names.size, 1)
+        check('show databases content', names.contains(logicalDatabase()))
     } finally {
         st.close()
     }
 
-    let tables = connection.prepareStatement('show tables')
+    let defaultTables = tableNames(connection, 'show tables')
+    check('show tables contains t_step', defaultTables.contains('t_step'))
+    check('show tables contains t_plain', defaultTables.contains('t_plain'))
+    check('show tables column name', rsInfoName(connection) == 'table_name')
+    // 显式逻辑库与默认库（会话默认库 = 唯一逻辑库）给出同一份内省结果
+    let appTables = tableNames(connection, 'show tables ${logicalDatabase()}')
+    check('show tables app contains t_step', appTables.contains('t_step'))
+    checkInt('show tables app equals default', appTables.size, defaultTables.size)
+    // 未知逻辑库 → ROUTE_FAILED
+    check('show tables unknown database', codeOf {
+        rowCount(connection, 'show tables nope')
+    } == DbdErrorCode.ROUTE_FAILED)
+    // 物理库名不是逻辑库命名空间：限定到物理名必须被拒绝，不再静默落到 db0
+    check('physical name is not a logical database', codeOf {
+        rowCount(connection, 'select id from db0.t_step where id = 1')
+    } == DbdErrorCode.ROUTE_FAILED)
+
+    checkInt('export write', execUpdate(connection,
+        "export fdbm_port='19999'"), 0)
+    check('export rejects unknown key',
+        codeOf { execUpdate(connection, "export evil_key='1'") } == DbdErrorCode.CONFIG)
+}
+
+func tableNames(connection: Connection, sql: String): ArrayList<String> {
+    let statement = connection.prepareStatement(sql)
     try {
-        let rs = tables.query()
+        let rs = statement.query()
         let names = ArrayList<String>()
         try {
             while (rs.next()) {
@@ -412,17 +557,10 @@ func showAndExport(connection: Connection): Unit {
         } finally {
             rs.close()
         }
-        check('show tables contains t_step', names.contains('t_step'))
-        check('show tables contains t_plain', names.contains('t_plain'))
-        check('show tables column name', rsInfoName(connection) == 'table_name')
+        names
     } finally {
-        tables.close()
+        statement.close()
     }
-
-    checkInt('export write', execUpdate(connection,
-        "export fdbm_port='19999'"), 0)
-    check('export rejects unknown key',
-        codeOf { execUpdate(connection, "export evil_key='1'") } == DbdErrorCode.CONFIG)
 }
 
 func rsInfoName(connection: Connection): String {
@@ -465,6 +603,17 @@ func transactions(connection: Connection): Unit {
         'select id from t_plain where id = 22'), 1)
 
     check('commit without begin', codeOf { transaction.commit() } == DbdErrorCode.TX_STATE)
+
+    // G25（记录不修）：全局表写在事务内仍走独立连接、各自提交，rollback 不会撤销它。
+    // 4 个物理库各一副本，故 rowCount=4；回滚后仍能读到该行，清理时按 4 行删除。
+    transaction.begin()
+    checkInt('global write inside transaction', execUpdate(connection,
+        "insert into t_global (k, v) values (9, 'tx')"), 4)
+    transaction.rollback()
+    checkInt('global write survives rollback', rowCount(connection,
+        'select v from t_global where k = 9'), 1)
+    checkInt('global write cleanup', execUpdate(connection,
+        'delete from t_global where k = 9'), 4)
 }
 
 func deleteFlow(connection: Connection): Unit {
@@ -580,7 +729,8 @@ func sqlExtensions(connection: Connection): Unit {
 }
 
 func multiD(): Unit {
-    let url = 'multidbd://fdbm@127.0.0.1:${port()},fdbm@127.0.0.1:${secondPort()}/db0'
+    let url = 'multidbd://fdbm@127.0.0.1:${port()},fdbm@127.0.0.1:${secondPort()}/' +
+        logicalDatabase()
     let driver = match (DriverManager.getDriver('multidbd')) {
         case Some(value) => value
         case None =>
@@ -591,7 +741,7 @@ func multiD(): Unit {
     let datasource = driver.open(url, [])
     let connection = datasource.connect()
     try {
-        checkInt('multidb show databases', rowCount(connection, 'show databases'), 4)
+        checkInt('multidb show databases', rowCount(connection, 'show databases'), 1)
         checkText('multidb select', firstText(connection,
             'select name from t_step where id = 2') ?? '', 'src1')
     } finally {

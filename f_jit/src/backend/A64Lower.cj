@@ -371,7 +371,7 @@ internal class A64Lower {
             case 0x76 => this.helperCall(A64Lower.u16(ops, 0), A64Lower.u8(ops, 2), 1)
             case 0x77 => this.helperCall(A64Lower.u16(ops, 0), A64Lower.u8(ops, 2), 2)
             case 0x78 => this.callFunc(A64Lower.u16(ops, 0), A64Lower.u8(ops, 2))
-            case 0x79 => this.bail(18) // CALL_HOST：M1 汇编期即拒绝（§6）
+            case 0x79 => this.helperCall(63, Int64(A64Lower.u8(ops, 0)) + 1, 0)
             case 0x7A => this.bail(18) // HW_OPEN：M1 未启用
             case 0x7B => this.e.nop()   // HW_CLOSE
             case 0x7F => this.callClosure(A64Lower.u8(ops, 0))

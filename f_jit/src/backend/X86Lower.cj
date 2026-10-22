@@ -938,7 +938,7 @@ internal class X86Lower {
             case 0x76u8 => this.helper(X86Lower.u16(ops, 0), X86Lower.u8(ops, 2), 1)
             case 0x77u8 => this.helper(X86Lower.u16(ops, 0), X86Lower.u8(ops, 2), 2)
             case 0x78u8 => this.callFunc(X86Lower.u16(ops, 0), X86Lower.u8(ops, 2))
-            case 0x79u8 => this.bail(18)
+            case 0x79u8 => this.helper(63, Int64(X86Lower.u8(ops, 0)) + 1, 0)
             case 0x7Au8 => this.bail(18)
             case 0x7Bu8 => ()
             case 0x7Cu8 =>

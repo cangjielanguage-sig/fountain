@@ -16,14 +16,54 @@ limitations under the License.
 package fountain::f_dbd.driver
 
 import std.database.sql.*
-import std.io.InputStream
+import std.io.{IOException, InputStream}
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_data.DataNone
 import fountain::f_data.base.*
 import fountain::f_dbd.common.{ColumnInfoImpl, DbdErrorCode, NEXT_ROW, QueryResultClosePayload,
-    UpdateResultPayload, decodeStrict}
+    SqlTypes, UpdateResultPayload, decodeStrict}
 import fountain::f_protocol.default.Message
+
+/** `read` 恒失败的流：`DbdStatement.encode` 必须把它包成 `CONVERSION`（D01）。 */
+private class FailingStream <: InputStream {
+    public func read(buffer: Array<Byte>): Int64 {
+        throw IOException('boom')
+    }
+}
+
+/** 定长内存流：deprecated `SqlBlob` / `SqlClob` 参数用。 */
+private class BytesStream <: InputStream {
+    private let data: Array<Byte>
+    private var pos: Int64 = 0
+
+    init(data: Array<Byte>) {
+        this.data = data
+    }
+
+    public func read(buffer: Array<Byte>): Int64 {
+        if (pos >= data.size || buffer.isEmpty()) {
+            return 0
+        }
+        let n = if (buffer.size < data.size - pos) { buffer.size } else { data.size - pos }
+        var i: Int64 = 0
+        while (i < n) {
+            buffer[i] = data[pos + i]
+            i += 1
+        }
+        pos += n
+        n
+    }
+}
+
+/** `SqlDbType` 的未知实现：`setSqlDbType` 的 `case _` 必须报 `CONVERSION`。 */
+private class UnknownSqlDbType <: SqlDbType {
+    public prop name: String {
+        get() {
+            'unknown'
+        }
+    }
+}
 
 /** Step 3.6 `DbdStatement`（设计 §5.5）：参数、执行、deprecated 重载与选项覆盖。 */
 @Test
@@ -81,6 +121,7 @@ public class DbdStatementTest {
             let statement = connection.prepareStatement('update t set a = ?')
             @Assert(codeOf { statement.set<Int64>(-1, 1) }, DbdErrorCode.CONVERSION)
             @Assert(codeOf { statement.set<NotEncodable>(0, NotEncodable()) }, DbdErrorCode.CONVERSION)
+            @Assert(codeOf { statement.set<InputStream>(0, FailingStream()) }, DbdErrorCode.CONVERSION)
             @Assert(stub.receivedCount(), 0)
         } finally {
             connection.close()
@@ -247,6 +288,61 @@ public class DbdResultWiringTest {
             stub.close()
         }
     }
+
+    /** T10：参数列信息按设计固定为空；关闭后的语句不再执行也不再发包。 */
+    @TestCase
+    public func parameterColumnInfosAreFixedEmptyAndClosedStatementRejects(): Unit {
+        let stub = StubFdbm(handler: {msg => resp(msg.id, data: UpdateResultPayload(0, 0))})
+        let connection = connectTo(stub)
+        try {
+            let statement = connection.prepareStatement('update t set a = ?')
+            @Assert(statement.parameterColumnInfos.size, 0)
+            statement.close()
+            @Assert(codeOf { statement.query() }, DbdErrorCode.CURSOR_STATE)
+            @Assert(codeOf { statement.update() }, DbdErrorCode.CURSOR_STATE)
+            @Assert(stub.receivedCount(), 0)
+        } finally {
+            connection.close()
+            stub.close()
+        }
+    }
+
+    /** T10：deprecated `SqlDbType` 覆盖 `SqlBlob` / `SqlClob`，未知实现 → `CONVERSION` 且不发包。 */
+    @TestCase
+    public func deprecatedSqlDbTypesCoverStreamsAndUnknown(): Unit {
+        let stub = StubFdbm(handler: {msg => resp(msg.id, data: UpdateResultPayload(1, 0))})
+        let connection = connectTo(stub)
+        try {
+            let statement = connection.prepareStatement('update t set a = ?, b = ?')
+            statement.update([SqlBlob(BytesStream([1u8, 2u8])), SqlClob(BytesStream([3u8]))])
+            let payload = sqlOf(stub.received(0)).getOrThrow()
+            @Assert(payload.params.size, 2)
+            match (SqlTypes.decode<Array<Byte>>(payload.params[0].data)) {
+                case Some(bytes) => @Assert(bytes.toString(), [1u8, 2u8].toString())
+                case None => @Assert(false, true)
+            }
+            @Assert(codeOf { statement.update([UnknownSqlDbType()]) }, DbdErrorCode.CONVERSION)
+            @Assert(stub.receivedCount(), 1)
+        } finally {
+            connection.close()
+            stub.close()
+        }
+    }
+
+    /** T10：语句级 `update_timeout` 覆盖连接级；桩不回包时按它超时。 */
+    @TestCase
+    public func statementUpdateTimeoutIsApplied(): Unit {
+        let stub = StubFdbm() // 不回包
+        let connection = connectTo(stub)
+        try {
+            let statement = connection.prepareStatement('update t set a = 1')
+            statement.setOption(SqlOption.UpdateTimeout, '100')
+            @Assert(codeOf { statement.update() }, DbdErrorCode.TIMEOUT)
+        } finally {
+            connection.close()
+            stub.close()
+        }
+    }
 }
 
 /** Step 3.8 流列端到端：分块读、`fetch_rows`、行切换失效。 */
@@ -276,8 +372,8 @@ public class DbdStreamTest {
             @Assert(result.next(), true)
             let before = stub.receivedCount()
             let stream = result.get<InputStream>(1)
-            // `get<InputStream>` 只打开句柄，不发请求
-            @Assert(stub.receivedCount(), before)
+            // 首次打开只发一次 NULL 探测（`bufSize = -1`），首块随探测返回
+            @Assert(stub.receivedCount(), before + 1)
 
             let first = Array<Byte>(8, repeat: 0)
             @Assert(stream.read(first), 2)
@@ -290,9 +386,15 @@ public class DbdStreamTest {
             @Assert(stream.read(third), 0) // EOF
 
             let requests = stub.allReceived()
-            // Sql + NEXT_ROW + 3 次块请求
+            // Sql + NEXT_ROW + 探测 + 2 次块请求
             @Assert(requests.size, 5)
-            var i = 2
+            match (columnOf(requests[2])) {
+                case Some(probe) =>
+                    @Assert(probe.index, 1)
+                    @Assert(probe.bufSize, -1)
+                case None => @Assert(false, true)
+            }
+            var i = 3
             while (i < 5) {
                 match (columnOf(requests[i])) {
                     case Some(column) =>
@@ -302,6 +404,27 @@ public class DbdStreamTest {
                 }
                 i += 1
             }
+            result.close()
+        } finally {
+            connection.close()
+            stub.close()
+        }
+    }
+
+    /** T12：空 buffer 立即返回 0，且不额外发块请求。 */
+    @TestCase
+    public func emptyBufferReadsZeroWithoutRequest(): Unit {
+        let script = QueryScript(streamInfos(), [true, false])
+        script.addBlock([7u8])
+        let stub = StubFdbm(handler: {msg => script.handler(msg)})
+        let connection = connectTo(stub)
+        try {
+            let result = connection.prepareStatement('select id, payload from t').query()
+            @Assert(result.next(), true)
+            let stream = result.get<InputStream>(1)
+            let before = stub.receivedCount()
+            @Assert(stream.read(Array<Byte>()), 0)
+            @Assert(stub.receivedCount(), before)
             result.close()
         } finally {
             connection.close()

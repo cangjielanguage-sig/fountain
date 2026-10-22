@@ -42,10 +42,12 @@ protected enum RouteKind <: Equatable<RouteKind> {
 protected class RoutePlan {
     private let kind_: RouteKind
     private let databases_: Array<String>
+    private let reason_: String
 
-    public init(kind: RouteKind, databases!: Array<String> = []) {
+    public init(kind: RouteKind, databases!: Array<String> = [], reason!: String = '') {
         this.kind_ = kind
         this.databases_ = databases
+        this.reason_ = reason
     }
 
     public prop kind: RouteKind {
@@ -76,8 +78,15 @@ protected class RoutePlan {
         RoutePlan(RouteKind.Empty)
     }
 
-    public static func unroutable(): RoutePlan {
-        RoutePlan(RouteKind.Unroutable)
+    public static func unroutable(reason!: String = ''): RoutePlan {
+        RoutePlan(RouteKind.Unroutable, reason: reason)
+    }
+
+    /** `Unroutable` 的补充说明（G27：列出不同维度/物理库集合）。 */
+    public prop reason: String {
+        get() {
+            reason_
+        }
     }
 }
 
@@ -87,12 +96,16 @@ protected class PartitionRule {
     public let table: String
     public let column: String
     public let algorithm: PartitionAlgorithm
+    /** 该规则的分片空间（物理库集合）；空表示未知（用例构造的规则）。 */
+    public let databases: Array<String>
 
-    public init(database: String, table: String, column: String, algorithm: PartitionAlgorithm) {
+    public init(database: String, table: String, column: String, algorithm: PartitionAlgorithm,
+        databases!: Array<String> = []) {
         this.database = database
         this.table = table
         this.column = column
         this.algorithm = algorithm
+        this.databases = databases
     }
 }
 
@@ -113,7 +126,7 @@ protected class PartitionRouter {
         globalTables!: GlobalTableRouter = GlobalTableRouter([])) {
         let indexed = HashMap<String, PartitionRule>()
         for (rule in rules) {
-            indexed['${rule.database}.${rule.table}'] = rule
+            indexed['${rule.database}.${rule.table}'.toAsciiLower()] = rule
         }
         this.rules = indexed
         this.cache = cache
@@ -175,13 +188,14 @@ protected class PartitionRouter {
         // 同一分库维度取交集；不同维度要求各表都收敛到同一个库
         let sameDimension = constraints.size == 1 || allSameDimension(constraints)
         if (!sameDimension) {
+            let reason = dimensionReason(constraints)
             let first = constraints[0][1]
             if (first.size != 1) {
-                return RoutePlan.unroutable()
+                return RoutePlan.unroutable(reason: reason)
             }
             for ((_, databases) in constraints) {
                 if (databases.size != 1 || databases[0] != first[0]) {
-                    return RoutePlan.unroutable()
+                    return RoutePlan.unroutable(reason: reason)
                 }
             }
             return RoutePlan.single(first[0])
@@ -232,7 +246,7 @@ protected class PartitionRouter {
     }
 
     public func rule(database: String, table: String): ?PartitionRule {
-        rules.get('${database}.${table}')
+        rules.get('${database}.${table}'.toAsciiLower())
     }
 
     /** 删除缓存条目（DELETE 三步顺序的第三步）。 */
@@ -255,7 +269,7 @@ protected class PartitionRouter {
     }
 
     public func isPartitioned(database: String, table: String): Bool {
-        rules.get('${database}.${table}').isSome()
+        rules.get('${database}.${table}'.toAsciiLower()).isSome()
     }
 
     public func close(): Unit {
@@ -271,8 +285,8 @@ protected class PartitionRouter {
         match (statement) {
             case s: InsertStatement => insertConstraint(rule, s)
             case s: SelectStatement => selectConstraint(rule, s)
-            case s: UpdateStatement => expressionConstraint(rule, s.condition)
-            case s: DeleteStatement => expressionConstraint(rule, s.condition)
+            case s: UpdateStatement => expressionConstraint(rule, s, s.condition)
+            case s: DeleteStatement => expressionConstraint(rule, s, s.condition)
             case _ => None<Array<String>>
         }
     }
@@ -289,13 +303,16 @@ protected class PartitionRouter {
                 case None => ()
             }
         }
-        expressionConstraint(rule, statement.condition)
+        expressionConstraint(rule, statement, statement.condition)
     }
 
-    private func expressionConstraint(rule: PartitionRule,
+    private func expressionConstraint(rule: PartitionRule, statement: SqlStatement,
         condition: ?SqlExpression): ?Array<String> {
-        let equals = PartitionKeyExtractor.extract(condition, Some(rule.table), rule.column)
-        let ranges = PartitionKeyExtractor.extractRange(condition, Some(rule.table), rule.column)
+        let qualifiers = qualifiersOf(statement, rule)
+        let equals = PartitionKeyExtractor.extract(condition, Some(rule.table), rule.column,
+            qualifiers: qualifiers)
+        let ranges = PartitionKeyExtractor.extractRange(condition, Some(rule.table), rule.column,
+            qualifiers: qualifiers)
         if (equals.isEmpty() && ranges.isNone()) {
             return None<Array<String>>
         }
@@ -346,7 +363,7 @@ protected class PartitionRouter {
             var index: Int64 = -1
             var i: Int64 = 0
             while (i < statement.columns.size) {
-                if (statement.columns[i].name == rule.column) {
+                if (asciiEquals(statement.columns[i].name, rule.column)) {
                     index = i
                     break
                 }
@@ -367,7 +384,7 @@ protected class PartitionRouter {
         } else {
             var found = false
             for ((column, value) in statement.setPairs) {
-                if (column.name == rule.column) {
+                if (asciiEquals(column.name, rule.column)) {
                     found = true
                     match (PartitionKeyExtractor.literalString(value)) {
                         case Some(text) => values.add(text)
@@ -392,15 +409,82 @@ protected class PartitionRouter {
         databases.toArray()
     }
 
-    /** 同一分库维度：列名与算法（含分片空间）都相同。 */
+    /** 规则的表名 + 语句里该表的别名（G20：别名限定的分库键也要能抽取）。 */
+    private static func qualifiersOf(statement: SqlStatement, rule: PartitionRule): Array<String> {
+        let names = ArrayList<String>()
+        names.add(rule.table)
+        for (table in statement.tables) {
+            if (!asciiEquals(table.name, rule.table)) {
+                continue
+            }
+            match (table.alias) {
+                case Some(alias) =>
+                    if (!names.contains(alias)) {
+                        names.add(alias)
+                    }
+                case None => ()
+            }
+        }
+        names.toArray()
+    }
+
+    /** 同一分库维度：列名、算法与**分片空间（物理库集合）**都相同（G27）。 */
     private static func allSameDimension(constraints: ArrayList<(PartitionRule, Array<String>)>): Bool {
         let first = constraints[0][0]
         for ((rule, _) in constraints) {
             if (rule.column != first.column || rule.algorithm.name != first.algorithm.name) {
                 return false
             }
+            if (!rule.databases.isEmpty() && !first.databases.isEmpty() &&
+                !sameSet(rule.databases, first.databases)) {
+                return false
+            }
         }
         true
+    }
+
+    private static func sameSet(left: Array<String>, right: Array<String>): Bool {
+        if (left.size != right.size) {
+            return false
+        }
+        for (value in left) {
+            if (!right.contains(value)) {
+                return false
+            }
+        }
+        true
+    }
+
+    /** 不同维度时的错误说明：列出两张表的逻辑库/物理库集合（G27）。 */
+    private static func dimensionReason(
+        constraints: ArrayList<(PartitionRule, Array<String>)>): String {
+        let first = constraints[0][0]
+        let left = if (first.databases.isEmpty()) { 'unknown' } else { '[' + joinNames(first.databases) + ']' }
+        for ((rule, _) in constraints) {
+            if (rule.column != first.column || rule.algorithm.name != first.algorithm.name ||
+                (!rule.databases.isEmpty() && !first.databases.isEmpty() &&
+                !sameSet(rule.databases, first.databases))) {
+                let right = if (rule.databases.isEmpty()) { 'unknown' } else {
+                    '[' + joinNames(rule.databases) + ']'
+                }
+                return 'tables ${first.table} ${left} and ${rule.table} ${right} use different ' +
+                    'partition dimensions'
+            }
+        }
+        ''
+    }
+
+    private static func joinNames(values: Array<String>): String {
+        let builder = StringBuilder()
+        var index: Int64 = 0
+        for (value in values) {
+            if (index > 0) {
+                builder.append(',')
+            }
+            builder.append(value)
+            index += 1
+        }
+        builder.toString()
     }
 
     private static func intersect(left: Array<String>, right: Array<String>): Array<String> {

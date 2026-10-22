@@ -219,6 +219,30 @@ public class QueryResultImplTest {
         @Assert(r.get<DateTime>(6).toString().isEmpty(), false)
     }
 
+    /** T10：`Rune` 只接受单字符；多字符 / 空串 → `CONVERSION`。 */
+    @TestCase
+    public func runeRejectsMultiAndEmptyValues(): Unit {
+        let stub = StubSender()
+        stub.rows = [true]
+        stub.addCell(DataString('AB'))
+        stub.addCell(DataString(''))
+        let r = result(stub, ['String', 'String'])
+        @Assert(r.next(), true)
+        @Assert(codeOf { r.get<Rune>(0) }, CONVERSION)
+        @Assert(codeOf { r.get<Rune>(1) }, CONVERSION)
+    }
+
+    /** T10：块响应不是字节数组 → `CONVERSION`（不能当作 EOF 静默截断）。 */
+    @TestCase
+    public func undecodableStreamBlockIsConversion(): Unit {
+        let stub = StubSender()
+        stub.rows = [true]
+        stub.overrideBlock = Some<Data>(DataDateTime(DateTime.now()))
+        let r = result(stub, ['std.io.InputStream'])
+        @Assert(r.next(), true)
+        @Assert(codeOf { r.get<InputStream>(0) }, CONVERSION)
+    }
+
     /** `Rune` 列按 `String` 传输并还原成单个 `Rune`（§8）。 */
     @TestCase
     public func runeColumnIsRestored(): Unit {
@@ -310,7 +334,8 @@ public class DbdInputStreamTest {
         @Assert(out[0], 1u8)
         @Assert(out[3], 4u8)
         @Assert(out[6], 7u8)
-        @Assert(stub.requests[1].bufSize, 3)
+        @Assert(stub.requests[1].bufSize, -1)   // 首次打开是 NULL 探测
+        @Assert(stub.requests[2].bufSize, 3)
     }
 
     /** 桩返回空数组 → `read` 返回 0（EOF）；EOF 后再 `read` 仍为 0 且**不再发包**。 */
@@ -345,7 +370,7 @@ public class DbdInputStreamTest {
         @Assert(small[0], 1u8)
         @Assert(stream.read(small), 1)
         @Assert(small[0], 2u8)
-        @Assert(stub.requests.size, 2) // NEXT_ROW + 1 次块请求
+        @Assert(stub.requests.size, 2) // NEXT_ROW + NULL 探测（首块已随探测返回）
     }
 
     /** 短块**不是** EOF：一次 `read` 未读满块后，下次 `read` 会继续取下一块。 */
@@ -396,6 +421,60 @@ public class DbdInputStreamTest {
         @Assert(buf[0], 2u8)
     }
 
+    /** G04：NULL 流列 → `getOrNull<InputStream>` 返回 `None`，`get` 抛 `CONVERSION`。 */
+    @TestCase
+    public func nullStreamYieldsNone(): Unit {
+        let stub = StubSender()
+        stub.rows = [true]
+        stub.nullProbe = true
+        let r = result(stub, ['std.io.InputStream'])
+        @Assert(r.next(), true)
+        @Assert(r.getOrNull<InputStream>(0).isNone(), true)
+        @Assert(codeOf { r.get<InputStream>(0) }, CONVERSION)
+        // 只有 NEXT_ROW + 一次探测，没有额外的块请求
+        @Assert(stub.requests.size, 2)
+        @Assert(stub.requests[1].bufSize, -1)
+    }
+
+    /** G04：空 BLOB（服务端回空块）与 NULL 可区分：前者是 `Some(空流)`。 */
+    @TestCase
+    public func emptyBlobIsSomeEmptyStream(): Unit {
+        let stub = StubSender()
+        stub.rows = [true]
+        stub.addBlock([])
+        let r = result(stub, ['std.io.InputStream'])
+        @Assert(r.next(), true)
+        let opened = r.getOrNull<InputStream>(0)
+        @Assert(opened.isSome(), true)
+        @Assert(opened.getOrThrow().read(Array<Byte>(4, repeat: 0u8)), 0)
+    }
+
+    /** G04 兼容：旧服务端把 `-1` 当 `<=0` 返回首块（NULL 时为空数组）→ 退化为空流而不报错。 */
+    @TestCase
+    public func probeIsBackwardCompatibleWithOldServer(): Unit {
+        let stub = StubSender()
+        stub.rows = [true]
+        stub.addBlock([])
+        let r = result(stub, ['std.io.InputStream'])
+        @Assert(r.next(), true)
+        let opened = r.getOrNull<InputStream>(0)
+        @Assert(opened.isSome(), true)
+        @Assert(opened.getOrThrow().read(Array<Byte>(4, repeat: 0u8)), 0)
+    }
+
+    /** G05：流列按标量读取 → `CONVERSION`，且**不发**列读请求。 */
+    @TestCase
+    public func scalarReadOfStreamColumnIsRejected(): Unit {
+        let stub = StubSender()
+        stub.rows = [true]
+        stub.addBlock([1u8])
+        let r = result(stub, ['std.io.InputStream'])
+        @Assert(r.next(), true)
+        @Assert(codeOf { r.get<Array<Byte>>(0) }, CONVERSION)
+        @Assert(codeOf { r.get<String>(0) }, CONVERSION)
+        @Assert(stub.requests.size, 1)   // 只有 NEXT_ROW
+    }
+
     /** 非流列上 `get<InputStream>` → `CONVERSION`（列类型不符）。 */
     @TestCase
     public func streamRequestOnNonStreamColumn(): Unit {
@@ -443,8 +522,11 @@ public class DbdInputStreamTest {
         let r = result(stub, ['std.io.InputStream'])
         @Assert(r.next(), true)
         let stream = r.get<InputStream>(0)
+        // 首块随 NULL 探测返回；消费完后才会带 chunkSize 发下一次块请求（此处桩回空 → EOF）
         @Assert(stream.read(Array<Byte>(1, repeat: 0u8)), 1)
-        @Assert(stub.requests[1].bufSize, DEFAULT_STREAM_CHUNK)
+        @Assert(stream.read(Array<Byte>(1, repeat: 0u8)), 0)
+        @Assert(stub.requests[1].bufSize, -1)
+        @Assert(stub.requests[2].bufSize, DEFAULT_STREAM_CHUNK)
     }
 }
 
@@ -463,7 +545,7 @@ private class MyStreamImpl <: InputStream {
  *
  * `cells` / `blocks` 按消费顺序取用；`rows` 供 `NEXT_ROW` 依次应答；`failAt` 指定第几个请求抛异常。
  */
-private class StubSender {
+class StubSender {
     var rows: Array<Bool> = []
     var requests: ArrayList<QueryResultColumnPayload> = ArrayList<QueryResultColumnPayload>()
     var closes: ArrayList<QueryResultClosePayload> = ArrayList<QueryResultClosePayload>()
@@ -473,6 +555,10 @@ private class StubSender {
     /** 非 `None` 时覆盖 `NEXT_ROW` 的应答（用于"响应形状不对"的负例）。 */
     var overrideNext: ?Data = None<Data>
     var closeThrows: Bool = false
+    /** `true` 时 NULL 探测（`bufSize < 0`）返回 `DataNone`（模拟 SQL NULL 流列）。 */
+    var nullProbe: Bool = false
+    /** 非 `None` 时覆盖块应答（用于"块不是字节"的负例）。 */
+    var overrideBlock: ?Data = None<Data>
     private let cells = ArrayList<Data>()
     private let blocks = ArrayList<Array<Byte>>()
     private var rowCursor: Int64 = 0
@@ -502,7 +588,13 @@ private class StubSender {
             rowCursor += 1
             return has.toData()
         }
-        if (payload.bufSize > 0) {
+        if (payload.bufSize != 0) {
+            if (let Some(d) <- overrideBlock) {
+                return d
+            }
+            if (payload.bufSize < 0 && nullProbe) {
+                return DataNone.INSTANCE
+            }
             let block = if (blockCursor < blocks.size) { blocks[blockCursor] } else { Array<Byte>() }
             blockCursor += 1
             return block.toData()
@@ -521,7 +613,7 @@ private class StubSender {
 }
 
 /** 用桩构造一个结果集（`typeNames` 逐列给出仓颉类型名）。 */
-private func result(stub: StubSender, typeNames: Array<String>, qid!: String = 'q-0',
+func result(stub: StubSender, typeNames: Array<String>, qid!: String = 'q-0',
     chunkSize!: Int64 = 0): QueryResultImpl {
     let infos = ArrayList<ColumnInfoImpl>()
     for (i in 0..typeNames.size) {

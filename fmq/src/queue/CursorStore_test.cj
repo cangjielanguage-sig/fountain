@@ -21,11 +21,18 @@ import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_io.LogPosition
 import fountain::fmq.meta.MQFileNames
+import fountain::fmq.test.TestDirs
 
 @Test
 class CursorStoreTest {
+    /** 进程不再注册 `atExit`，整个类的临时目录在收尾时统一回收。 */
+    @AfterAll
+    static func removeTempDirs(): Unit {
+        TestDirs.cleanNamespace("cursor_store")
+    }
+
     private static func rootOf(name: String): String {
-        "/tmp/fmq_test_cursor_store/${name}"
+        TestDirs.of("cursor_store", name)
     }
 
     private static func clean(root: String): Unit {

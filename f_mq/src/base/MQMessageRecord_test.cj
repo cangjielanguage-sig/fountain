@@ -25,6 +25,7 @@ import fountain::f_data.*
 import fountain::f_data.macros.*
 import fountain::f_codec.default.DefaultCodec
 import fountain::f_io.ByteBuffer
+import fountain::f_protocol.default.MessageID
 
 @DataAssist[props fields]
 public class TestRecordBody {
@@ -140,11 +141,36 @@ class MQMessageRecordTest {
         @Assert(convert<Array<Int64>>(MQMessageRecord.body(arrayRecord).getOrThrow().data).getOrThrow().size == 0)
     }
 
+    /** 标准 ID 解析成绝对时刻 `2026-10-18T18:30:00.123456789Z`，且不依赖进程时区（A02）。 */
     @TestCase
-    public func publishTimeParsesStandardMessageId(): Unit {
+    public func publishTimeParsesStandardMessageIdAsUtcInstant(): Unit {
         let record = encode("/t", [], "1_2_3_20261018183000123456789", 1i64.toData())
         let time = MQMessageRecord.publishTime(record).getOrThrow()
-        @Assert(time.format("yyyyMMddHHmmssSSS") == "20261018183000123456789")
+        let expected = DateTime.ofUTC(year: 2026, month: 10, dayOfMonth: 18, hour: 18, minute: 30,
+            second: 0, nanosecond: 123456789)
+        @Assert(time.toUnixTimeStamp() == expected.toUnixTimeStamp())
+        @Assert(time.nanosecond == 123456789)
+        // 解析结果本身是 UTC 表示：进程在任意时区都得到同一时刻
+        @Assert(time.zoneOffset == Duration.Zero)
+    }
+
+    /** 同一绝对时刻不论用哪个时区表示，生成的 id 解析回来都是同一时刻（A02）。 */
+    @TestCase
+    public func publishTimeRoundTripsAcrossTimeZones(): Unit {
+        let moment = DateTime.ofUTC(year: 2026, month: 8, dayOfMonth: 21, hour: 10, minute: 30,
+            second: 15, nanosecond: 123000000)
+        // 同一时刻的 +08:00 表示：墙钟是 18:30，绝对时刻不变
+        let shanghai = DateTime.parse("2026-08-21T18:30:15.123+08:00")
+        @Assert(shanghai.toUnixTimeStamp() == moment.toUnixTimeStamp())
+
+        let idFromUtc = MessageID(time: moment).toString()
+        let idFromShanghai = MessageID(time: shanghai).toString()
+        @Assert(idFromUtc == idFromShanghai)
+
+        let record = encode("/t", [], idFromShanghai, 1i64.toData())
+        let parsed = MQMessageRecord.publishTime(record).getOrThrow()
+        @Assert(parsed.toUnixTimeStamp() == moment.toUnixTimeStamp())
+        @Assert(parsed.zoneOffset == Duration.Zero)
     }
 
     @TestCase

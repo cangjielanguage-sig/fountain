@@ -207,7 +207,7 @@ internal class Op {
 /**
  * `CALL_HELPER` 系列的操作数位置与 hid 编码 —— §5 / §6 / §8.4。
  *
- * hid 的合法值域：`1–62`、`69–72` 为固定 helper；`[0x0100, 0xFFFF]` 为单元私有预定义 helper
+ * hid 的合法值域：`1–62`、`69–83` 为固定 helper；`[0x0100, 0xFFFF]` 为单元私有预定义 helper
  * （user helper，slot = hid − 0x0100）；`63–68` 与 `0` 保留。
  *
  * **为什么本文件自带这几个 hid 而不是 import `runtime.HelperId`**：仓颉禁止包间循环依赖，
@@ -238,6 +238,19 @@ internal class HelperCodec {
     public static const DATETIME_OF: UInt16 = 75u16
     public static const DURATION_PARSE: UInt16 = 76u16
 
+    /** M2：成员访问 helper（m2 §12.2，H64/H65）。 */
+    public static const HOST_GET_FIELD: UInt16 = 64u16
+    public static const HOST_SET_FIELD: UInt16 = 65u16
+    /** H66 `cast_fail`：`as` 转型失败（恒置 7 BAD_CAST）。 */
+    public static const CAST_FAIL: UInt16 = 77u16
+    /** M3：Any 通道与 JSON 世界内可变 API。 */
+    public static const ANY_BOX: UInt16 = 78u16
+    public static const ANY_IS: UInt16 = 79u16
+    public static const ANY_AS: UInt16 = 80u16
+    public static const JSON_GET: UInt16 = 81u16
+    public static const JSON_SET: UInt16 = 82u16
+    public static const JSON_NEW: UInt16 = 83u16
+
     /** 变更型 helper 的 hid 区间（H43–H48，§9.15 / §7 校验 11）。 */
     public static const MUTATION_MIN: UInt16 = 43u16
     public static const MUTATION_MAX: UInt16 = 48u16
@@ -261,10 +274,15 @@ internal class HelperCodec {
      * 该 hid 是否为变更型 helper（§7 校验 11 的保守判定输入）。
      *
      * 除 H43–H48 外，**user helper（§8.4 预定义函数）同样按变更型保守处理**——宿主实现体
-     * 静态不可知，§9.15 的「整函数保守判定」要求把它算进去。
+     * 静态不可知，§9.15 的「整函数保守判定」要求把它算进去。M3 追加 H82（`json_set`），
+     * 其余新增 helper（H78–H81/H83）均非变更型。
      */
     public static func isMutating(hid: UInt16): Bool {
-        (hid >= MUTATION_MIN && hid <= MUTATION_MAX) || hid >= USER_BASE
+        // H82 `json_set` 是 M3 唯一的变更型 helper（m3 §5「变更型纪律」：flags.bit0 +
+        // 拒绝全部 deopt 源）。H78/H79/H80/H81/H83 都不是变更型：box 不可变、is 纯读、
+        // as 与 get/new 只分配。
+        hid == HOST_SET_FIELD || hid == JSON_SET ||
+            (hid >= MUTATION_MIN && hid <= MUTATION_MAX) || hid >= USER_BASE
     }
 }
 
@@ -298,7 +316,7 @@ internal class StackEffect {
         if (op == Op.CALL_HELPER_V) {
             return (arg, 0)
         }
-        if (op == Op.CALL_CLOSURE) {
+        if (op == Op.CALL_CLOSURE || op == Op.CALL_HOST) {
             return (arg + 1, 1)
         }
         TABLE[Int64(op)]

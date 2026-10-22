@@ -104,6 +104,18 @@ internal class AstShape {
             case AstExpr.Index(t, i, _) => 'index[${shapeE(t)},${shapeE(i)}]'
             case AstExpr.IndexTarget(t, i, _) => 'idxTarget[${shapeE(t)},${shapeE(i)}]'
             case AstExpr.MemberName(n, t, _) => 'member(${shapeE(t)}.${n})'
+            case AstExpr.FieldGet(t, f, _) => 'field(${shapeE(t)}.${f})'
+            case AstExpr.FieldSet(t, f, v, _) => 'fieldset(${shapeE(t)}.${f} = ${shapeE(v)})'
+            case AstExpr.MethodCall(t, m, args, _) =>
+                'method(${shapeE(t)}.${m} [${shapeList(args)}])'
+            case AstExpr.CtorCall(c, args, _) => 'ctor(${c} [${shapeList(args)}])'
+            case AstExpr.CastOr(e, t, f, _) =>
+                match (f) {
+                    case Some(v) => 'castor(${shapeE(e)} as ${builtinName(t)} ?? ${shapeE(v)})'
+                    case None => 'castor(${shapeE(e)} as ${builtinName(t)})'
+                }
+            case AstExpr.IsType(e, t, _) => 'is(${shapeE(e)} is ${builtinName(t)})'
+            case AstExpr.JsonLit(_, code, _) => 'json(${LocalType.name(code)})'
         }
     }
 
@@ -158,9 +170,31 @@ internal class AstShape {
         }
     }
 
+    /** 分量显示名：14 用具体类名，其余用 `LocalType.name`。 */
+    internal static func componentName(code: UInt16, name: String): String {
+        if (code == LocalType.HOST_OBJECT && name != '') {
+            name
+        } else {
+            LocalType.name(code)
+        }
+    }
+
     internal static func builtinName(v: TypeRef): String {
         match (v) {
             case TypeRef.Builtin(code) => LocalType.name(code)
+            case TypeRef.AnyT => 'Any'
+            case TypeRef.ListOf(t) => 'List<${AstShape.builtinName(t)}>'
+            case TypeRef.MapOf(k, x) => 'Map<${AstShape.builtinName(k)},${AstShape.builtinName(x)}>'
+            case TypeRef.HostClosureT(params, pns, ret, rn) =>
+                var ps = ''
+                for (i in 0..params.size) {
+                    if (i > 0) {
+                        ps = ps + ','
+                    }
+                    ps = ps + AstShape.componentName(params[i], pns[i])
+                }
+                '(${ps}) -> ${AstShape.componentName(ret, rn)}'
+            case TypeRef.HostObjectT(name) => name
         }
     }
 
@@ -173,6 +207,11 @@ internal class AstShape {
             let pa = l.params[i]
             let t = match (pa.typeAnn) {
                 case TypeRef.Builtin(code) => LocalType.name(code)
+                case TypeRef.AnyT => 'Any'
+                case TypeRef.ListOf(_) => 'List'
+                case TypeRef.MapOf(_, _) => 'Map'
+                case TypeRef.HostClosureT(_, _, _, _) => 'HostClosure'
+                case TypeRef.HostObjectT(n) => n
             }
             ps = ps + pa.name + ':' + t
         }

@@ -17,6 +17,7 @@ package fountain::f_jit.runtime
 
 import std.unittest.*
 import std.unittest.testmacro.*
+import fountain::f_jit.test.TCase
 
 /**
  * S4.1 `JitContext` 的验收用例（偏移 / 复位 / 配对释放 / 跨调用独立）。
@@ -112,7 +113,6 @@ public class JitContext_test {
     /** `create` / `free` 配对（T27 的 malloc/free 计数断言）：正常路径无泄漏。 */
     @TestCase
     public func createFreePairIsBalanced(): Unit {
-        // T27/ 映射标签（check_tmap 断言级校验）
         NativeMem.resetCounters()
         let ctx = JitContext.create(hwBase: 0, hwCap: 0, fnId: 0, dbgBase: 0)
         @Assert(NativeMem.mallocCount, 1)
@@ -121,7 +121,7 @@ public class JitContext_test {
         JitContext.free(ctx)
         @Assert(NativeMem.mallocCount, 1)
         @Assert(NativeMem.freeCount, 1)
-        @Assert(NativeMem.outstanding(), 0)
+        @Assert(TCase.hit('T27/create-free-paired', NativeMem.outstanding() == 0), true)
         NativeMem.resetCounters()
     }
 

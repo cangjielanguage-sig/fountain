@@ -115,7 +115,7 @@
 | `JitException` | class <: `f_base.BaseException` | 运行期错误载体（错误码 + site + 报告文本） | SourcePos、ErrCode、f_base | §2、§8 |
 | `SourceCompileException` | class <: `f_base.BaseException` | 编译期错误载体（不占运行期错误码） | DiagKind、f_base | §8.4、§9.16 |
 | `SourcePos` | struct | 源位置（站点表条目值） | — | §9.16 |
-| `CallContext` | struct | 桥侧调用参数（含 strictFp/deadline/literalCopy） | — | §8 |
+| `CallContext` | struct | 桥侧调用参数（`args` + `deadline`；编译期选项见 `CompileOptions`） | — | §8 |
 | `SourceUnit` | struct | 分发入口输入（`.fbc` 字节 + 入口函数号） | — | §8、§11.6 |
 | `JitMode` | enum | 引擎选择开关 | — | §12.1 |
 | `Engine` | enum（protected） | 实际引擎（解释器/JIT） | — | §12.1 |
@@ -170,9 +170,9 @@
 | 成员 | 意义 | 调用关系 |
 |---|---|---|
 | `var args: Array<Int64>` | 入参 cell 数组（Marshal 结果） | 三态收尾第 2 步 `rawEntry(ctx, &args[0], nargs)` |
-| `var literalCopy: Bool = false` | M2：字面量深拷贝开关 | M2 消费 |
-| `var strictFp: Bool = false` | bit0 → ctx.flags（FDIV_CHK 语义） | `invoke(ctx)` 写 flags |
 | `var deadline: ?DateTime` | 配合 `interrupt_poll`（-2 取消） | LOOP_BACK 安全点查询 |
+
+**只装调用级选项（X3 订正）**：`literalCopy` 与 `strictFp` 已从 `CallContext` 移除。前者从无消费语义（字面量是编译期常量，桥层没有「深拷贝字面量」的时机）；后者是**产物属性**，归 `CompileOptions.strictFp`——**缺省 `true`**（`Float64` 的 `/` 发射 `FDIV_CHK`，÷0 → 1）；显式置 `false` 才走 IEEE（`FDIV`，÷0 → ±Inf）。`ctx.flags` bit0 保留为历史位，运行期不读。
 
 #### 2.3.5 `SourceUnit`（struct）
 
@@ -1073,7 +1073,7 @@ Ready --CAS--> Unloading（拒绝新调用；活跃调用照常完成）--active
 |---|---|---|---|---|
 | 整型算术 | `+` `-` `*` `/` `%` | `IADD`/`ISUB`/`IMUL`/`IDIV`/`IMOD`（溢出 → 3、÷0 → 1、`%` 除以 0 → 2）；**`%` 仅 (Int64, Int64)**，不参与提升 | `0x30`–`0x34` | §5、§11.9 |
 | 整型一元 / 位运算 | `-x`、`&`、`\|`、`^`、`~`、`<<`、`>>`、`>>>` | `INEG`/`IABS`/`IMIN`/`IMAX`/`BAND_I`/`BOR_I`/`BXOR_I`/`BNOT_I`/`SHL_I`/`SHR_I`/`USHR_I`；位计数 `ICLZ`/`IPOPCNT`；显式无检查加 `IADD_WRAP` | `0x35`–`0x3B`、`0x62`–`0x68` | §5 |
-| 浮点算术 | `+` `-` `*` `/`（F64 域） | `FADD`/`FSUB`/`FMUL`/`FDIV`（IEEE，除零得 ±Inf **不报错**）；strictFp 形态 → `FDIV_CHK`（÷0 → 1）；**全程 NaN 规范化** | `0x40`–`0x44` | §5、§11.3 |
+| 浮点算术 | `+` `-` `*` `/`（F64 域） | `FADD`/`FSUB`/`FMUL`/`FDIV`（IEEE，除零得 ±Inf **不报错**）；**缺省严格** → `FDIV_CHK`（÷0 → 1；`CompileOptions.strictFp = false` 才用 `FDIV`）；**全程 NaN 规范化** | `0x40`–`0x44` | §5、§11.3 |
 | 浮点一元 / 取整 | `-x`、`abs`、`min`/`max`、开方、取整族 | `FNEG`/`FABS`/`FMIN`/`FMAX`/`FSQRT`/`FFLOOR`/`FCEIL`/`FTRUNC`/`FROUND`（NaN → canonical NaN） | `0x45`–`0x4D` | §5、§11.3 |
 | 数值比较 | `==` `!=` `<` `<=` `>` `>=` | 整型 → `EQ_I`–`GE_I`；浮点 → `EQ_F`–`GE_F`（NaN 语义冻结）；文本/时间 → `CMP_STR`/`CMP_DEC`/`CMP_DT`/`CMP_DUR`（helper；6/8/11/12） | `0x52`–`0x5D`、`0x6B`–`0x6E` | §5、§11.3 |
 | 句柄等值 | `h == h2`、`h == null` | `EQ_H`/`NE_H`——**同一性比较、不解引用** | `0x69`/`0x6A` | §5 |

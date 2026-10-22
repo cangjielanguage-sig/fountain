@@ -20,17 +20,17 @@ import std.collection.ArrayList
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_jit.base.LocalType
+import fountain::f_jit.test.TCase
 
 /** S6.7：编译缓存状态机与同键并发去重。 */
 @Test
 public class CompileCache_test {
     @TestCase
     public func claimIsExclusive(): Unit {
-        // T16/ 映射标签（check_tmap 断言级校验）
         CompileCache.reset()
         let key = 'S6.7/claim'
-        @Assert(CompileCache.claim(key), true)
-        @Assert(CompileCache.claim(key), false)
+        @Assert(TCase.hit('T16/claim-exclusive', CompileCache.claim(key)), true)
+        @Assert(TCase.hit('T16/claim-twice-blocked', !CompileCache.claim(key)), true)
         CompileCache.finish(key, CompileCache_test.fn())
         @Assert(CompileCache.claim(key), false)
         CompileCache.remove(key)
@@ -40,7 +40,6 @@ public class CompileCache_test {
 
     @TestCase
     public func concurrentPipelineRunsOnce(): Unit {
-        // T17/ 映射标签（check_tmap 断言级校验）
         CompileCache.reset()
         let key = 'S6.7/concurrent'
         let results = ArrayList<JitFunction>()
@@ -68,8 +67,8 @@ public class CompileCache_test {
         for (f in futures) {
             f.get()
         }
-        @Assert(CompileCache.runs(), 1)
-        @Assert(results.size, 3)
+        @Assert(TCase.hit('T17/pipeline-once', CompileCache.runs() == 1), true)
+        @Assert(TCase.hit('T17/waiters-get-result', results.size == 3), true)
         CompileCache.remove(key)
     }
 

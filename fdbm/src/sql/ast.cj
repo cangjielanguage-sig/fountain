@@ -81,13 +81,13 @@ protected class Identifier <: Equatable<Identifier> {
         this.quoted = quoted
     }
 
-    /** 相等按裸名比较（引用符不参与，避免 `"id"` 与 `id` 被当成两列）。 */
+    /** 相等按裸名比较（引用符不参与；ASCII 大小写不敏感，G19）。 */
     public operator func ==(other: Identifier): Bool {
-        name == other.name
+        equalsName(other.name)
     }
 
     public func equalsName(name: String): Bool {
-        this.name == name
+        asciiEquals(this.name, name)
     }
 }
 
@@ -95,13 +95,17 @@ protected class Identifier <: Equatable<Identifier> {
 protected class ColumnExpression <: SqlExpression {
     public let table: ?String
     public let column: String
-    /** 表名 / 列名在原文里是否带引用符。 */
+    /** 列名在原文里是否带引用符。 */
     public let quoted: Bool
+    /** 表限定名在原文里是否带引用符（与列名独立，G18）。 */
+    public let tableQuoted: Bool
 
-    public init(table: ?String, column: String, quoted!: Bool = false) {
+    public init(table: ?String, column: String, quoted!: Bool = false,
+        tableQuoted!: Bool = false) {
         this.table = table
         this.column = column
         this.quoted = quoted
+        this.tableQuoted = tableQuoted
     }
 }
 
@@ -195,17 +199,24 @@ protected class TableRef {
     public let alias: ?String
     /** 表名是否带引用符。 */
     public let quoted: Bool
+    /** 库限定名是否带引用符。 */
+    public let databaseQuoted: Bool
+    /** 别名是否带引用符。 */
+    public let aliasQuoted: Bool
     /** `from ( <select> ) [as] alias` 的内层查询；普通表为 `None`。 */
     public let derived: ?SelectStatement
     private let current: String
 
     public init(database: ?String, name: String, alias: ?String, current: String,
-        quoted!: Bool = false, derived!: ?SelectStatement = None) {
+        quoted!: Bool = false, databaseQuoted!: Bool = false, aliasQuoted!: Bool = false,
+        derived!: ?SelectStatement = None) {
         this.database = database
         this.name = name
         this.alias = alias
         this.current = current
         this.quoted = quoted
+        this.databaseQuoted = databaseQuoted
+        this.aliasQuoted = aliasQuoted
         this.derived = derived
     }
 
@@ -235,7 +246,8 @@ protected class TableRef {
 
     /** 派生表替换内层查询（参数绑定后重建 AST 用）。 */
     public func withDerived(inner: SelectStatement): TableRef {
-        TableRef(database, name, alias, current, quoted: quoted, derived: Some(inner))
+        TableRef(database, name, alias, current, quoted: quoted,
+            databaseQuoted: databaseQuoted, aliasQuoted: aliasQuoted, derived: Some(inner))
     }
 }
 
@@ -268,14 +280,22 @@ protected class JoinClause {
     }
 }
 
+/** ASCII 大小写不敏感的标识符比较（G19：保留原始拼写用于下推）。 */
+public func asciiEquals(left: String, right: String): Bool {
+    left.toAsciiLower() == right.toAsciiLower()
+}
+
 /** SELECT 列项。 */
 protected class SelectItem {
     public let expression: SqlExpression
     public let alias: ?String
+    /** 别名是否带引用符（G18：渲染时按方言重新加）。 */
+    public let aliasQuoted: Bool
 
-    public init(expression: SqlExpression, alias: ?String) {
+    public init(expression: SqlExpression, alias: ?String, aliasQuoted!: Bool = false) {
         this.expression = expression
         this.alias = alias
+        this.aliasQuoted = aliasQuoted
     }
 }
 

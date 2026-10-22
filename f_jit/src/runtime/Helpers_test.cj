@@ -25,6 +25,7 @@ import std.time.DateTime
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.TypeToken
 import fountain::f_jit.bytecode.ConstMapKey
+import fountain::f_jit.test.TCase
 
 /**
  * S4.7–S4.18 helper 族的验收用例（逐族一条以上）。
@@ -113,19 +114,20 @@ public class Helpers_test {
             1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
             21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
             39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56,
-            57, 58, 59, 60, 61, 62, 69, 70, 71, 72, 73, 74, 75, 76
+            57, 58, 59, 60, 61, 62, 63, 64, 65, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83
         ]
-        @Assert(expected.size, 70)
+        @Assert(expected.size, 80)
         for (v in expected) {
             @Assert(HelperId.isFixed(UInt16(v)), true)
             @Assert(HelperId.name(UInt16(v)).isEmpty(), false)
         }
-        for (v in 63..69) {
+        for (v in 66..69) {
             @Assert(HelperId.isFixed(UInt16(v)), false)
             @Assert(HelperId.name(UInt16(v)).contains('reserved'), true)
         }
+        @Assert(HelperId.name(HelperId.HOST_CALL_TRAMPOLINE), 'host_call_trampoline')
         @Assert(HelperId.isFixed(0u16), false)
-        @Assert(HelperId.isFixed(77u16), false)
+        @Assert(HelperId.isFixed(77u16), true)
         @Assert(HelperId.name(HelperId.H_LEN), 'hl_len')
         @Assert(HelperId.name(HelperId.REGEX_REPLACE_RANGE), 'regex_replace_range')
         @Assert(HelperId.name(HelperId.DATETIME_NOW), 'datetime_now')
@@ -605,7 +607,6 @@ public class Helpers_test {
     /** `closure_new` 登记 1 槽；`closure_fnid` / `closure_cap`；`fn_table` 基址。 */
     @TestCase
     public func closureHelpers(): Unit {
-        // T25/ 映射标签（check_tmap 断言级校验）
         setup()
         let s = str('cap')
         let base = used()
@@ -613,7 +614,7 @@ public class Helpers_test {
         @Assert(used(), base + 1)
         @Assert(call(55, [c]), 7)
         @Assert(call(56, [c, 0]), s)
-        @Assert(call(56, [c, 1]), 42)
+        @Assert(TCase.hit('T25/closure-capture', call(56, [c, 1]) == 42), true)
         @Assert(call(56, [c, 2]), 0)
         @Assert(err(), ErrCode.NULL_HANDLE)
         setup()
@@ -703,6 +704,15 @@ public class Helpers_test {
         teardown()
     }
 
+    /** M2.3 H77 `cast_fail`：`as` 转型失败的专用码是 7，不是 18/21。 */
+    @TestCase
+    public func castFailRaisesBadCast(): Unit {
+        setup()
+        @Assert(call(77, []), 0)
+        @Assert(err(), ErrCode.BAD_CAST)
+        teardown()
+    }
+
     /** catch-all 兜 99：helper 内部异常不逃逸为宿主异常。 */
     @TestCase
     public func helperInternalExceptionBecomes99(): Unit {
@@ -710,9 +720,9 @@ public class Helpers_test {
         // 越界的实参（argc 不符）走防御路径；这里直接触发一个 std 异常面：对 null 取 Duration
         @Assert(call(16, [0]), 0)
         @Assert(err(), ErrCode.NULL_HANDLE)
-        // 未登记的 hid ⇒ 18（不逃逸）
+        // 未登记的 hid（66 仍保留）⇒ 18（不逃逸）
         setup()
-        @Assert(call(63, []), 0)
+        @Assert(call(66, []), 0)
         @Assert(err(), ErrCode.NOT_IMPL)
         teardown()
     }

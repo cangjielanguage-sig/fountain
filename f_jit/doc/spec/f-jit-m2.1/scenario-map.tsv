@@ -1,0 +1,16 @@
+# capability	scenario	test_case（逗号分隔；N/A = 流程/文档项；GAP = 无对应用例）	强度（full/partial/none/N/A）
+# M2.1 只登记本变更改动的 3 条 requirement 的 14 条 scenario（9 条新增 + 5 条随 MODIFIED 沿用）。
+f-jit-facade-bridge	重名与超限	duplicateIsRejected	full
+f-jit-facade-bridge	类名冲突拒绝	fourClassNameClashesAreRejected	full
+f-jit-facade-bridge	快照语义	snapshotIsIsolated	full
+f-jit-facade-bridge	类型化绑定优先于反射	overrideReplacesReflectiveBinding	full
+f-jit-facade-bridge	自动登记与显式覆盖	explicitBindingsMergeOverEnrollment	full
+f-jit-facade-bridge	过滤与诊断	skipsStaticMutableMembersWithDiagnostics	full
+f-jit-facade-bridge	JSON 谱系拒绝	jsonFamilyIsRejected	full
+f-jit-facade-bridge	引用型实例方法默认拒绝	reflectiveStringMethodIsRejectedByDefault	full
+f-jit-facade-bridge	提供绑定后放行	overrideSurvivesRepeatedCalls,typedBindingsSurviveRepeatedCalls	full
+f-jit-facade-bridge	类级展开	macroEnrollsAllMemberKinds,allMemberKindsWorkEndToEnd	full
+f-jit-facade-bridge	属性按两次绑定计	macroEnrollsAllMemberKinds	full
+f-jit-facade-bridge	构造器重载	macroEnrollsAllMemberKinds,allMemberKindsWorkEndToEnd	full
+f-jit-facade-bridge	静态成员	macroEnrollsAllMemberKinds,allMemberKindsWorkEndToEnd	full
+f-jit-facade-bridge	类型码在编译期确定	macroEnrollsAllMemberKinds	partial

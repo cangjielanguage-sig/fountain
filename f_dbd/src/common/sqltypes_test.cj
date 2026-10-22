@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_dbd.common
 
-import std.io.ByteBuffer
+import std.io.{ByteBuffer, IOException, InputStream}
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_data.base.*
@@ -34,6 +34,38 @@ private class DribbleStream <: InputStream {
         buffer[0] = 0x41u8
         left--
         1
+    }
+}
+
+/** 记录每次 `read` 的缓冲长度与调用次数：验证分块物化的内存上界（D01）。 */
+private class RecordingStream <: InputStream {
+    private var left: Int64
+    public var maxBuffer: Int64 = 0
+    public var calls: Int64 = 0
+    RecordingStream(left: Int64) {
+        this.left = left
+    }
+    public func read(buffer: Array<Byte>): Int64 {
+        calls += 1
+        if (buffer.size > maxBuffer) {
+            maxBuffer = buffer.size
+        }
+        if (left <= 0) {
+            return 0
+        }
+        let n = if (buffer.size < left) { buffer.size } else { left }
+        for (i in 0..n) {
+            buffer[i] = 0x41u8
+        }
+        left -= n
+        n
+    }
+}
+
+/** 每次 `read` 都失败的流（D01：异常必须包成 `DataException`）。 */
+private class FailingStream <: InputStream {
+    public func read(buffer: Array<Byte>): Int64 {
+        throw IOException('boom')
     }
 }
 
@@ -137,8 +169,40 @@ public class SqlTypesTest {
         @Assert(SqlTypes.encodeParameter<String>('a').toString(), DataAny(DataString('a')).data.toString())
     }
 
+    /**
+     * D01：`InputStream` 参数必须按块读到 EOF 再编码 —— 1 MiB 流既不能按剩余长度整块申请，
+     * 也不能只读首块。当前实现按 `Int64.Max` 申请，会抛分配失败。
+     */
     @TestCase
-    public func encodeParameterUnsupportedTypeThrows(): Unit {
+    public func encodeParameterStreamReadsToEnd(): Unit {
+        let size = 1024 * 1024
+        let src = Array<Byte>(size, repeat: 0u8)
+        for (i in 0..size) {
+            src[i] = UInt8(i % 251)
+        }
+        let data = SqlTypes.encodeParameter<InputStream>(ByteBuffer(src))
+        let back = SqlTypes.decode<Array<Byte>>(data).getOrThrow()
+        @Assert(back.size, size)
+        @Assert(back[0], src[0])
+        @Assert(back[size / 2], src[size / 2])
+        @Assert(back[size - 1], src[size - 1])
+    }
+
+    /** D01：读取期异常包成 `DataException`（不把裸 `IOException` 抛给调用方）。 */
+    @TestCase
+    public func encodeParameterStreamFailureIsDataException(): Unit {
+        var threw = false
+        try {
+            SqlTypes.encodeParameter<InputStream>(FailingStream())
+        } catch (_: DataException) {
+            threw = true
+        }
+        @Assert(threw)
+    }
+
+    /** `ToData` 兜底：实现 `ToData` 的类型正常编码（不是"不支持"）。 */
+    @TestCase
+    public func encodeParameterFallsBackToToData(): Unit {
         var threw = false
         try {
             SqlTypes.encodeParameter(SqlPayload('x'))
@@ -146,6 +210,18 @@ public class SqlTypesTest {
             threw = true
         }
         @Assert(!threw)
+    }
+
+    /** 既不在支持表内、也不实现 `ToData` 的类型 → `DataException`（真正的 unsupported 分支）。 */
+    @TestCase
+    public func encodeParameterUnsupportedTypeThrows(): Unit {
+        var threw = false
+        try {
+            SqlTypes.encodeParameter<PlainProbe>(PlainProbe())
+        } catch (_: DataException) {
+            threw = true
+        }
+        @Assert(threw)
     }
 
     // ========== decode<T>：B 口径（越界即报错） ==========
@@ -222,6 +298,29 @@ public class SqlTypesTest {
         @Assert(SqlTypes.readChunk(DribbleStream(0), 10).size, 0)
     }
 
+    /** D01：`size <= 0` 表示「读至 EOF」，且单次 `read` 的缓冲不超过一块（64 KiB）。 */
+    @TestCase
+    public func readChunkToEndUsesBoundedBuffers(): Unit {
+        let total = 200 * 1024
+        let stream = RecordingStream(total)
+        let out = SqlTypes.readChunk(stream, 0)
+        @Assert(out.size, total)
+        @Assert(stream.maxBuffer <= DEFAULT_STREAM_CHUNK, true)
+        @Assert(stream.calls >= 4, true)
+        @Assert(out[0], 0x41u8)
+        @Assert(out[total - 1], 0x41u8)
+    }
+
+    /** D01：显式 size 仍只读满该长度，且仍然分块。 */
+    @TestCase
+    public func readChunkExplicitSizeIsBounded(): Unit {
+        let stream = RecordingStream(200 * 1024)
+        let out = SqlTypes.readChunk(stream, 70 * 1024)
+        @Assert(out.size, 70 * 1024)
+        @Assert(stream.maxBuffer <= DEFAULT_STREAM_CHUNK, true)
+        @Assert(stream.calls >= 2, true)
+    }
+
     // ========== readData / readStream：真实（mock）结果集 ==========
 
     /** f_mockdb 的 NULL 语义：单元格值必须是 `Option<Any>` 的 None（`Option<String>` 匹配不上）。 */
@@ -250,6 +349,25 @@ public class SqlTypesTest {
         @Assert(SqlTypes.readData(mockResult('String', ['x']), 0, 'String').toString(),
             DataAny(DataString('x')).data.toString())
         @Assert(SqlTypes.readData(mockResult('String', nullRow()), 0, 'String') is DataNone)
+    }
+
+    /** D02：流列必须读到 EOF 整块返回（200 KiB 不得截断成首块 64 KiB）。 */
+    @TestCase
+    public func readDataReadsStreamColumnToEnd(): Unit {
+        let size = 200 * 1024
+        let src = Array<Byte>(size, repeat: 0x42u8)
+        let data = SqlTypes.readData(mockResult('std.io.InputStream', [ByteBuffer(src)]), 0,
+            'std.io.InputStream')
+        let back = SqlTypes.decode<Array<Byte>>(data).getOrThrow()
+        @Assert(back.size, size)
+        @Assert(back[size - 1], 0x42u8)
+    }
+
+    /** D02：`Unknown` 按 `String` 读（不得走流分支），且失败可被调用方识别。 */
+    @TestCase
+    public func readDataUnknownTypeFallsBackToString(): Unit {
+        let data = SqlTypes.readData(mockResult('weird_type', ['x']), 0, 'weird_type')
+        @Assert(data.toString(), DataAny(DataString('x')).data.toString())
     }
 
     /** NULL 列 → 0 字节空流（立即读到 0）。 */
@@ -288,3 +406,6 @@ public class SqlTypesTest {
         @Assert(ByteBuffer().read(Array<Byte>(4, repeat: 0u8)), 0)
     }
 }
+
+/** 既不实现 `ToData`、也不在编码白名单里的探针类型。 */
+private class PlainProbe {}

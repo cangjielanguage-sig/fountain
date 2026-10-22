@@ -60,7 +60,9 @@ public class DiffExec_test {
     }
 
     private static func check(id: String, src: String, args: Array<Any>): Unit {
-        let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(src)
+        // 差分基线是 IEEE 语义（T2/nan）：显式关闭严格浮点
+        let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink(),
+            strictFp: false).compile(src)
         let c = DiffCase(id, cu.raw, args)
         let session = DiffSession([InterpRunner(), NativeRunner()])
         session.assertTripleEqual(c)
@@ -136,7 +138,9 @@ public class GoldenDiff_test {
     }
 
     private static func check(id: String, src: String, args: Array<Any>): Unit {
-        let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(src)
+        // 差分基线是 IEEE 语义（T2/nan）：显式关闭严格浮点
+        let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink(),
+            strictFp: false).compile(src)
         let session = DiffSession([InterpRunner(), NativeRunner()])
         session.assertTripleEqual(DiffCase(id, cu.raw, args))
     }

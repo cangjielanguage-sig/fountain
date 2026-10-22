@@ -17,7 +17,11 @@ package fountain::f_jit
 
 import std.collection.ArrayList
 import std.sync.Mutex
+import fountain::f_jit.base.ClassDescriptor
 import fountain::f_jit.base.SourceCompileException
+import fountain::f_jit.base.PredefinedFunction
+import fountain::f_jit.base.JitBindings
+import fountain::f_jit.compiler.ClassRegistrySnapshot
 import fountain::f_jit.compiler.PredefinedSnapshot
 
 /**
@@ -32,6 +36,8 @@ public class Compiler {
     private let maxPredefined: Int64
     private let mtx: Mutex = Mutex()
     private let fns: ArrayList<PredefinedFunction> = ArrayList<PredefinedFunction>()
+    /** 宿主侧类注册表（M2；快照语义与函数注册表同族）。 */
+    private let classes: ClassRegistry = ClassRegistry()
 
     public init(opts: CompileOptions) {
         this('compiler', opts, 256)
@@ -46,7 +52,7 @@ public class Compiler {
     /** 注册；重名 → `DuplicateRegistration`，超过上限 → `NotImpl`。 */
     public func registerFunction(f: PredefinedFunction): Unit {
         synchronized(this.mtx) {
-            if (this.indexOfLocked(f.name) >= 0) {
+            if (this.indexOfLocked(f.name) >= 0 || this.classes.hasFunction(f.name)) {
                 throw SourceCompileException('DuplicateRegistration', 0, 0, 0, '',
                     '预定义函数重名: ${f.name}')
             }
@@ -55,6 +61,7 @@ public class Compiler {
                     '预定义函数数量超过上限 ${this.maxPredefined}（§8.4）')
             }
             this.fns.add(f)
+            this.classes.noteFunction(f.name)
         }
     }
 
@@ -66,6 +73,7 @@ public class Compiler {
                 return false
             }
             this.fns.remove(at: i)
+            this.classes.removeFunction(name)
             true
         }
     }
@@ -74,6 +82,46 @@ public class Compiler {
         synchronized(this.mtx) {
             this.indexOfLocked(name) >= 0
         }
+    }
+
+    /**
+     * 注册一个类描述符（m2 §12.4）。
+     *
+     * 类名冲突（已注册类/函数名/内建/关键字）→ `RegistrationException` 且不登记；
+     * 方法表的 `bind` 同时进入预定义函数面（`u.m()` 的 hid 来源），同名已存在则复用。
+     */
+    public func registerClass(desc: ClassDescriptor): Unit {
+        this.classes.register(desc)
+        synchronized(this.mtx) {
+            for (m in desc.methods) {
+                if (this.indexOfLocked(m.bind.name) < 0) {
+                    if (!this.classes.hasFunction(m.bind.name)) {
+                        this.fns.add(m.bind)
+                    }
+                    this.classes.noteFunction(m.bind.name)
+                }
+            }
+        }
+    }
+
+    /** 反射自动注册（m2 §12.5）；`enabled=false` 用于关闭反射的构建。 */
+    public func registerType<T>(enabled!: Bool = true,
+        bindings!: JitBindings = JitBindings.empty()): Unit where T <: Object {
+        ReflectRegistrar.registerType<T>(into: this.classes, diag: this.opts.diagnostics,
+            enabled: enabled, bindings: bindings)
+    }
+
+    /** 类是否已注册（诊断/测试）。 */
+    public func hasClass(name: String): Bool {
+        match (this.classes.resolve(name)) {
+            case Some(_) => true
+            case None => false
+        }
+    }
+
+    /** 编译期类快照（注册变更不影响已编译单元）。 */
+    protected func classSnapshot(): ClassRegistrySnapshot {
+        this.classes.snapshot()
     }
 
     /** 注册名（按注册顺序）。 */
@@ -98,13 +146,36 @@ public class Compiler {
             let names = ArrayList<String>()
             let params = ArrayList<Array<UInt16>>()
             let rets = ArrayList<UInt16>()
+            let impls = ArrayList<(Array<Any>) -> Any>()
             for (f in this.fns) {
                 names.add(f.name)
                 params.add(f.paramTypes)
                 rets.add(f.retType)
+                impls.add(f.impl)
             }
-            PredefinedSnapshot(names.toArray(), params.toArray(), rets.toArray())
+            // 反射自动注册生成的包装函数并入同一 slot 空间（与手工注册可混用）。
+            for (f in this.classes.autoFunctions()) {
+                if (!Compiler.containsName(names, f.name)) {
+                    names.add(f.name)
+                    params.add(f.paramTypes)
+                    rets.add(f.retType)
+                    impls.add(f.impl)
+                }
+            }
+            PredefinedSnapshot(names.toArray(), params.toArray(), rets.toArray(),
+                impls: impls.toArray())
         }
+    }
+
+    private static func containsName(names: ArrayList<String>, name: String): Bool {
+        var i = 0
+        while (i < names.size) {
+            if (names[i] == name) {
+                return true
+            }
+            i = i + 1
+        }
+        false
     }
 
     private func indexOfLocked(name: String): Int64 {

@@ -16,7 +16,6 @@ limitations under the License.
 package fountain::f_dbd.driver
 
 import std.database.sql.*
-import std.env.exit
 import fountain::f_config.Config
 import fountain::f_log.LoggerFactory
 import fountain::f_version.FountainVersion
@@ -26,9 +25,8 @@ import fountain::f_dbd.exception.DbdException
 /**
  * 驱动注册名 = 后端物理库的方言名（如 `postgres` / `mysql`）。
  *
- * fdbm 是代理，自身没有方言；f_orm 按驱动名选择方言。应用项目必须显式配置本项，
- * 否则 f_dbd 无法向 f_orm 暴露正确的方言，按约定记录 ERROR 后结束进程。
- * SQL 方言本身仍只在 fdbm 内处理（fdbm 启动时已掌握真实数据库信息）。
+ * fdbm 是代理，自身没有方言；f_orm 按驱动名选择方言。未配置时**不注册、不结束进程**：
+ * 只用 MultiD 的进程不受影响，取用时由 [dbdDriver] / [DbdDriver] 抛 `DbdException(CONFIG)`。
  */
 private const NAME_KEY: String = 'dbd_driverName'
 private let logger = LoggerFactory.getLogger('fountain::f_dbd.driver')
@@ -36,8 +34,8 @@ private let logger = LoggerFactory.getLogger('fountain::f_dbd.driver')
 /**
  * fdbm 的单节点驱动（设计 §5.2）。
  *
- * 注册发生在包级 `static init`（动态库包初始化时触发），应用侧只要 import 到本包即可用
- * `DriverManager.getDriver('fdbm')` 取到它（与 `f_mockdb.MockDriver` 同构）。
+ * 注册发生在包级 `static init`（动态库包初始化时触发）；未配置时跳过注册，并在名字可用时
+ * 额外注册兼容别名 `fdbm`（旧应用 `getDriver('fdbm')` 仍可用）。
  */
 public class DbdDriver <: Driver {
     private let registeredName: String
@@ -51,8 +49,16 @@ public class DbdDriver <: Driver {
     }
 
     static init() {
-        let name = configuredName()
-        DriverManager.register(name, DbdDriver(name))
+        match (configuredNameOrNone()) {
+            case Some(name) =>
+                DriverManager.register(name, DbdDriver(name))
+                if (name != 'fdbm' && DriverManager.getDriver('fdbm').isNone()) {
+                    DriverManager.register('fdbm', DbdDriver('fdbm'))
+                    logger.info('registered compatibility driver alias fdbm for ${name}')
+                }
+            case None =>
+                logger.info('${NAME_KEY} is not configured; DbdDriver is not registered')
+        }
     }
 
     public prop name: String {
@@ -92,28 +98,35 @@ public class DbdDriver <: Driver {
     }
 }
 
-private func configuredName(): String {
+private func configuredNameOrNone(): ?String {
     match (Config.getString(NAME_KEY)) {
         case Some(value) =>
             let name = value.trimAscii()
             if (name.isEmpty()) {
-                missingName()
+                None<String>
             } else {
-                name
+                Some(name)
             }
-        case None => missingName()
+        case None => None<String>
     }
 }
 
-private func missingName(): Nothing {
-    let message = 'dbd_driverName is not configured. f_dbd is a proxy driver and cannot know ' +
-        'the physical database dialect; set export dbd_driverName=<backend dialect> ' +
+private func missingNameError(): DbdException {
+    DbdException(DbdErrorCode.CONFIG, '${NAME_KEY} is not configured. f_dbd is a proxy driver and ' +
+        'cannot know the physical database dialect; set ${NAME_KEY}=<backend dialect> ' +
         '(for example postgres or mysql) so f_orm can select the matching SQL dialect. ' +
-        'SQL dialect handling itself stays inside fdbm.'
-    logger.error(message)
-    // 应用未配置 f_log appender 时也保证错误可见
-    eprintln('ERROR: ${message}')
-    exit(1)
+        'SQL dialect handling itself stays inside fdbm.')
+}
+
+/** 取配置的注册名；未配置 → `DbdException(CONFIG)`（进程继续运行）。 */
+private func configuredName(): String {
+    match (configuredNameOrNone()) {
+        case Some(name) => name
+        case None =>
+            let error = missingNameError()
+            logger.error(error.message)
+            throw error
+    }
 }
 
 /**
@@ -130,6 +143,10 @@ public func dbdDriver(): DbdDriver {
                 case _ => throw DbdException(DbdErrorCode.CONFIG,
                     'the driver registered as ${name} is not a DbdDriver')
             }
-        case None => throw DbdException(DbdErrorCode.CONFIG, 'driver ${name} is not registered')
+        case None =>
+            // 配置可能晚于包初始化写入（用例/嵌入式装配）：按需补注册，避免误报"未注册"
+            let driver = DbdDriver(name)
+            DriverManager.register(name, driver)
+            driver
     }
 }

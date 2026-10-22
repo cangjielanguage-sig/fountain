@@ -160,7 +160,13 @@ public class Interp {
         }
         if (this.constIds[idx] == 0) {
             let wrapped = wrapConst(idx, obj)
-            this.constIds[idx] = HandleTable.pinConst(wrapped)
+            let hid = HandleTable.pinConst(wrapped)
+            // M3 S2.5：JSON 常量（kind 11）登记即 frozen —— H82 写保护与「读/拆箱传播」的起点
+            match (this.unit.consts.get(idx)) {
+                case ConstPayload.PJson(_) => HandleTable.markFrozen(hid)
+                case _ => ()
+            }
+            this.constIds[idx] = hid
         }
         this.constIds[idx]
     }
@@ -483,9 +489,11 @@ public class Interp {
     // ---- 0x50–0x6E 比较 / 逻辑 / 位 ----
 
     private func cmpOp(op: UInt8, f: InterpFrame, ctx: JitContext): Unit {
+        // 一元（NOT 0x5E / BNOT_I 0x65）与二元都先弹 a：一元少弹 b 即可。
+        // 旧实现在 0x65 上既跳过 b 又把 a 硬编成 0，导致 ~x 恒为 -1 且操作数滞留栈上。
         let one = op == 0x5Eu8 || op == 0x65u8
         let b = if (one) { 0 } else { f.pop() }
-        let a = if (one && op == 0x65u8) { 0 } else { if (one) { f.pop() } else { f.pop() } }
+        let a = f.pop()
         match (op) {
             case 0x50u8 => f.push(if (a < b) { -1 } else { if (a > b) { 1 } else { 0 } })
             case 0x51u8 =>
@@ -529,7 +537,7 @@ public class Interp {
             case 0x62u8 => f.push(a & b)
             case 0x63u8 => f.push(a | b)
             case 0x64u8 => f.push(a ^ b)
-            case 0x65u8 => f.push(0 - a - 1)
+            case 0x65u8 => f.push(a ^ Int64(-1))
             case 0x66u8 => f.push(a << (b & 63)) // 取低 6 位（§9 附则 2）
             case 0x67u8 => f.push(a >> (b & 63))
             case 0x68u8 => f.push(fromBits(toBits(a) >> UInt64(b & 63)))
@@ -614,8 +622,15 @@ public class Interp {
                         None
                 }
             case 0x79u8 =>
-                ctx.errCode = ErrCode.NOT_IMPL // CALL_HOST：M1 汇编期即拒绝（§6）
-                None
+                // CALL_HOST：栈 `[h_fn, a1..an]`（h_fn 栈底）；与机器码共用 H63（m2 §5）。
+                let argc = Int64(InsnDecoder.u8(insn, 0))
+                let args = popArgs(f, argc + 1)
+                let r = invokeHelper(ctx, Int64(HelperId.HOST_CALL_TRAMPOLINE), args)
+                if (ctx.errCode != 0) {
+                    return None
+                }
+                f.push(r)
+                Some(pc + insn.size)
             case 0x7Au8 =>
                 ctx.errCode = ErrCode.NOT_IMPL // HW_OPEN：M1 未启用
                 None

@@ -22,6 +22,7 @@ import std.math.numeric.Decimal
 import std.regex.RegexFlag
 import std.time.DateTime
 import fountain::f_base.*
+import fountain::f_data.json.JsonValue
 import fountain::f_regex.*
 
 /** 每秒纳秒数（`DateTime` epochNanos 拆解，§11.5 kind 7）。 */
@@ -165,6 +166,7 @@ public class ConstRegistry {
             case PDuration(nanos) => Duration.nanosecond * nanos
             case PRange(start, end, step, isClosed) => Range<Int64>(start, end, step, true, true, isClosed)
             case PRegex(pattern, flags) => compileRegex(pattern, flags)
+            case PJson(raw) => parseJsonConst(raw)
         }
     }
 
@@ -175,10 +177,11 @@ public class ConstRegistry {
      */
     private func tokenOf(i: Int64): String {
         match (this.payloads[i]) {
-            // 与运行期 `mapKeyOf`/`canonKeyOf` 的规范键**同前缀**（否则常量键与运行时键永不相等）
-            case PI64(v) => 'i:${v}'
-            case PF64(b) => 'f:${b}'
-            case PStr(s) => 's:${s}'
+            // 与运行期 `HandleTable.canonKeyOf` 共用 `CanonKey`（D5：单一事实来源）
+            case PI64(v) => CanonKey.i64(v)
+            // 值型键在运行期是裸 cell：Float64 常量键必须与 `mapKeyOf` 的 cell 键同形
+            case PF64(b) => CanonKey.cell(CanonKey.bitsAsI64(b))
+            case PStr(s) => CanonKey.str(s)
             case PList(xs) =>
                 var t = 'l['
                 for (x in xs) {
@@ -191,11 +194,12 @@ public class ConstRegistry {
                     t = t + tokenOf(Int64(kv[0])) + ':' + tokenOf(Int64(kv[1])) + ','
                 }
                 t + ']'
-            case PDec(sign, scale, coeff) => 'd${sign}|${scale}|${coeff}'
-            case PDateTime(n) => 't${n}'
-            case PDuration(n) => 'u${n}'
-            case PRange(a, b, c, closed) => 'r${a}|${b}|${c}|${closed}'
-            case PRegex(p, f) => 'x${f}|${p}'
+            case PDec(sign, scale, coeff) => CanonKey.dec(sign, scale, coeff)
+            case PDateTime(n) => CanonKey.dateTime(n)
+            case PDuration(n) => CanonKey.duration(n)
+            case PRange(a, b, c, closed) => CanonKey.range(a, b, c, closed)
+            case PRegex(p, f) => CanonKey.regex(p, f)
+            case PJson(raw) => 'j${raw}'
         }
     }
 
@@ -248,6 +252,22 @@ public class ConstRegistry {
     /** 注册 Range 常量（`isClosed` = 左闭右闭 `..=`，§11.5 kind 9）。 */
     public func addRange(start: Int64, end: Int64, step: Int64, isClosed: Bool): Int64 {
         append(ConstPayload.PRange(start, end, step, isClosed))
+    }
+
+    /**
+     * 注册 JSON 常量（M3 §11）：**只登记规范化后的原始字节，拼装期不解析**。
+     *
+     * 空串与超长（> 16 MiB）在这里就被拒绝——空串必定是非法 JSON，超长更可能是拼装错误，
+     * 没必要等到加载期。真正的 JSON 语法校验发生在加载期（`PJson` 实例化）。
+     */
+    public func addJson(raw: String): Int64 {
+        if (raw.isEmpty()) {
+            rejectFormat('JSON 常量载荷为空（M3 §11）')
+        }
+        if (raw.size > 16 * 1024 * 1024) {
+            rejectFormat('JSON 常量超长: ${raw.size} 字节（上限 16 MiB）')
+        }
+        append(ConstPayload.PJson(raw))
     }
 
     /** 值常量（Decimal）→ hid：按 `std` 的文本化结果拆出 `sign / scale / 系数`（§11.4 表示）。 */
@@ -403,6 +423,20 @@ internal func decimalFromParts(sign: UInt8, scale: Int32, coeff: String): Decima
     Decimal(mag, scale)
 }
 
+/**
+ * kind 11 实例化：JSON 文本**只解析一次**（M3 §11），非法即加载期拒绝。
+ *
+ * 与正则同构：解析结果登记进 `instances` 缓存，跨调用同 ID。`f_data` 的解析器把 JSON
+ * 数字一律读成 `JsonDecimal`，本层不做数值域转换（出口解包在 H81 里做）。
+ */
+internal func parseJsonConst(raw: String): Any {
+    try {
+        JsonValue.fromStr(raw)
+    } catch (e: Exception) {
+        rejectFormat('JSON 常量解析失败: ${e.message}（M3 §11 加载期防御拒绝）')
+    }
+}
+
 /** kind 10 实例化：正则**只编译一次**（§3.3）；非法 / 空 pattern ⇒ 加载期 14。 */
 internal func compileRegex(pattern: String, flags: UInt8): Regex {
     if (pattern.isEmpty()) {
@@ -511,6 +545,10 @@ internal func encodePayload(w: ByteWriter, p: ConstPayload): Unit {
             w.wU8(flags)
             w.wU16(UInt16(bs.size))
             w.wBytes(bs)
+        case PJson(raw) =>
+            let bs = raw.unsafeBytes()
+            w.wU32(UInt32(bs.size))
+            w.wBytes(bs)
     }
 }
 
@@ -582,7 +620,17 @@ internal func decodePayload(kind: UInt8, r: ByteReader): ConstPayload {
             let n = r.u16()
             let bs = r.bytes(Int64(n))
             ConstPayload.PRegex(utf8OrReject(bs), flags)
-        case _ => rejectFormat('非法常量 kind: ${kind}（M1 合法 1–10，§11.5）')
+        case 11u8 =>
+            let n = r.u32()
+            if (Int64(n) > r.remaining()) {
+                rejectFormat('JSON 常量长度与字节数不符: n=${n}, 剩余=${r.remaining()}')
+            }
+            let bs = r.bytes(Int64(n))
+            if (bs.isEmpty()) {
+                rejectFormat('JSON 常量载荷为空（M3 §11）')
+            }
+            ConstPayload.PJson(utf8OrReject(bs))
+        case _ => rejectFormat('非法常量 kind: ${kind}（M1 合法 1–10、M3 追加 11，§11.5）')
     }
 }
 

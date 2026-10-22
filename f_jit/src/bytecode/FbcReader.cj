@@ -16,7 +16,6 @@ limitations under the License.
 package fountain::f_jit.bytecode
 
 import std.collection.ArrayList
-import fountain::f_jit.base.LocalType
 import fountain::f_jit.base.Version
 import fountain::f_util.Crc32
 
@@ -36,7 +35,7 @@ internal const OP_SET_SITE: UInt8 = 0x03u8
  * | # | 情形 | 码 |
  * |---|---|---|
  * | ① | 魔数错 | 18 |
- * | ② | 主版本不受支持（verMajor 2/3；verMinor 高于自身） | 18 |
+ * | ② | 主版本不受支持（未知主版本；verMinor 高于自身） | 18 |
  * | ③ | 未知 flags 位 / `bit1`（要求 JIT）= 1 | 18 |
  * | ④ | 段长不符（payload ≠ code+const+site+name） | 18 |
  * | ⑤ | 常量图成环 | 18 |
@@ -51,10 +50,15 @@ internal const OP_SET_SITE: UInt8 = 0x03u8
  * site=-1）」）——它属于**常量语义**而非容器格式。
  */
 public class FbcReader {
-    /** 本加载器支持的 `verMajor`（M1 = 1）。 */
+    /**
+     * legacy 单版本字段：M1 的主版本（= 1）。
+     *
+     * M2 加载器已按 `verMajor` 分派 v1/v2 规则集；本字段保留供 M1 公开调用面零回归
+     * （版本能力请读 `rulesFor` / `minVerMinorOf`）。
+     */
     public static let supportedMajor: UInt16 = Version.MAJOR
 
-    /** 本加载器接受的 `verMinor` **上限**（§11.6「加载器接受 ≤ 自身版本的 verMinor」）。 */
+    /** legacy 单版本字段：M1 的 `verMinor` 上限（= 14）；按主版本的上限见对应规则集。 */
     public static let maxSupportedMinor: UInt16 = Version.MINOR
 
     /**
@@ -67,16 +71,26 @@ public class FbcReader {
      * 兼容矩阵：就给定 `verMajor`，本加载器所能接受的**最小** `verMinor`。
      *
      * - `1` ⇒ 0（v1 全系列，上限 `maxSupportedMinor`）；
-     * - `2` / `3` ⇒ `UNSUPPORTED_MINOR`（M2 / M3 加载器的规则集本次不实现，§13.3）；
+     * - `2` ⇒ 0（M2 产物从 verMinor 0 起算，上限 0）；
+     * - `3` ⇒ 0（M3 产物从 verMinor 0 起算，上限 0）；
      * - 其余主版本 ⇒ `UNSUPPORTED_MINOR`。
      *
      * 拒绝信息里带上它，便于宿主判断「需要哪个版本的加载器」。
      */
     public static func minVerMinorOf(major: UInt16): UInt16 {
-        match (major) {
-            case 1u16 => 0u16
-            case _ => UNSUPPORTED_MINOR
+        match (FbcRuleRegistry.get(major)) {
+            case Some(r) => if (r.implemented) {
+                r.minVerMinor
+            } else {
+                UNSUPPORTED_MINOR
+            }
+            case None => UNSUPPORTED_MINOR
         }
+    }
+
+    /** 按主版本取加载规则集（v1/v2/v3 均已实现）；未登记返回 `None`。 */
+    public static func rulesFor(major: UInt16): ?FbcRuleSet {
+        FbcRuleRegistry.get(major)
     }
 
     /**
@@ -87,7 +101,8 @@ public class FbcReader {
      */
     public static func load(raw: Array<UInt8>): LoadedUnit {
         let header = FbcHeader.read(ByteReader(raw))
-        validate(header, raw)
+        let rules = requireRules(header.verMajor)
+        validate(header, raw, rules)
         let off = header.payloadOff()
         let code = sliceOf(raw, off, Int64(header.codeLen))
         let constBytes = sliceOf(raw, off + Int64(header.codeLen), Int64(header.constLen))
@@ -97,11 +112,12 @@ public class FbcReader {
             off + Int64(header.codeLen) + Int64(header.constLen) + Int64(header.siteLen),
             Int64(header.nameLen))
 
-        let dir = readDir(code)
-        dir.validate(header.codeLen, header.entryFn)
+        let dir = readDir(code, rules)
+        dir.validate(header.codeLen, header.entryFn, verMajor: rules.verMajor)
+        checkInstructionSet(code, dir, rules)
         let types = readTypes(code, dir)
         for (i in 0..dir.size) {
-            types[i].validate(dir, dir.at(i).fnId, header.verMajor)
+            types[i].validate(dir, dir.at(i).fnId, rules)
         }
 
         let consts = ConstRegistry.decode(constBytes)
@@ -120,7 +136,32 @@ public class FbcReader {
             name.validate(dir, types)
         }
 
-        LoadedUnit(header, code, consts, site, name, dir, types)
+        LoadedUnit(header, code, consts, site, name, dir, types, rules)
+    }
+
+    /**
+     * **无注册表分发入口**（design-m2 §11 / m2 §12.4/§15/§16）：装载既有 `.fbc`，不接受宿主
+     * 类注册表上下文。
+     *
+     * 依赖类注册表的单元（14 槽、成员访问/构造物化出的 user helper）在此**加载期拒绝**；
+     * HostClosure（13）与 M3 JSON 内建码（16–19）零注册，不触发本拒绝面。
+     */
+    public static func loadWithoutRegistry(raw: Array<UInt8>): LoadedUnit {
+        let unit = load(raw)
+        if (unit.requiresClassRegistry()) {
+            rejectFormat(
+                '单元依赖宿主类注册表（14 槽或 user helper），无注册表分发入口拒绝（m2 §12.4/§15/§16）')
+        }
+        unit
+    }
+
+    /** 取主版本对应的规则集；未登记的主版本按 18 拒绝（规则集注册表为唯一分派点）。 */
+    private static func requireRules(major: UInt16): FbcRuleSet {
+        match (rulesFor(major)) {
+            case Some(r) => r
+            case None => rejectFormat(
+                '不受支持的 verMajor=${major}（规则集注册表仅登记 v1/v2/v3）')
+        }
     }
 
     /**
@@ -128,19 +169,31 @@ public class FbcReader {
      *
      * 每条检查都是**独立的**——一个只违反其中一条的容器一定走到该条并被拒绝，不会被前面的
      * 检查「顺带」拦下（这是「互不掩盖」的可测定义）。
+     *
+     * Q0.2 起校验规则按 `verMajor` 分派（design-m2 D12）：本重载按注册表取规则集，
+     * 三参数重载允许测试/宿主显式指定规则集（例如以 M1 规则集验证 M1 加载器拒绝 v2 产物）。
      */
     public static func validate(h: FbcHeader, raw: Array<UInt8>): Unit {
+        validate(h, raw, requireRules(h.verMajor))
+    }
+
+    public static func validate(h: FbcHeader, raw: Array<UInt8>, rules: FbcRuleSet): Unit {
         // ① 魔数
         if (h.magic != Version.MAGIC) {
             rejectFormat('容器魔数错: 0x${hexOf32(h.magic)}（应为 "FBC1" = 0x${hexOf32(Version.MAGIC)}）')
         }
-        // ② 版本
-        if (h.verMajor != supportedMajor) {
+        // ② 版本（按规则集分派：主版本一致、规则集已实现、verMinor 落在区间内）
+        if (h.verMajor != rules.verMajor) {
             rejectFormat(
-                '不受支持的 verMajor=${h.verMajor}（本加载器 verMajor=${supportedMajor}, verMinor ≤ ${maxSupportedMinor}；该主版本最小可接受 verMinor=${minVerMinorOf(h.verMajor)}）')
+                '不受支持的 verMajor=${h.verMajor}（当前规则集 verMajor=${rules.verMajor}）')
         }
-        if (h.verMinor > maxSupportedMinor) {
-            rejectFormat('verMinor=${h.verMinor} 高于本加载器上限 ${maxSupportedMinor}（§11.6）')
+        if (!rules.implemented) {
+            rejectFormat(
+                '不受支持的 verMajor=${h.verMajor}（规则集仅登记合法集，未实现加载语义）')
+        }
+        if (!rules.isVerMinorSupported(h.verMinor)) {
+            rejectFormat(
+                'verMinor=${h.verMinor} 超出 verMajor=${h.verMajor} 的接受区间 [${rules.minVerMinor}, ${rules.maxVerMinor}]（§11.6）')
         }
         // ③ flags
         if ((h.flags | FbcFlags.KNOWN_MASK) != FbcFlags.KNOWN_MASK) {
@@ -184,8 +237,8 @@ public class FbcReader {
         }
     }
 
-    /** code 段头 = 函数目录（§11.7）。 */
-    private static func readDir(code: Array<UInt8>): FuncDir {
+    /** code 段头 = 函数目录（§11.7）；返回类型合法集按规则集判定。 */
+    private static func readDir(code: Array<UInt8>, rules: FbcRuleSet): FuncDir {
         let r = ByteReader(code)
         let count = r.u32()
         if (Int64(count) * FuncEntry.SIZE > r.remaining()) {
@@ -194,17 +247,48 @@ public class FbcReader {
         let dir = FuncDir()
         for (_ in 0..Int64(count)) {
             let e = FuncEntry.read(r)
-            if (!LocalType.isLegal(e.retType, Version.MAJOR)) {
-                rejectFormat('非法返回类型: fnId=${e.fnId}, retType=${e.retType}（§11.7 合法值 0–12）')
+            if (!rules.isLocalTypeLegal(e.retType)) {
+                rejectFormat(
+                    '非法返回类型: fnId=${e.fnId}, retType=${e.retType}（verMajor=${rules.verMajor} 合法集 0–${rules.maxLocalType}）')
             }
             dir.add(e)
         }
         dir
     }
 
+    /**
+     * 指令集合法性（design-m2 D12）：逐条扫描函数体，拒绝禁用/保留槽与版本不允许的指令。
+     *
+     * 版本差异唯一在 `CALL_HOST`：v1 规则集拒绝（M1 从不产出），v2 起合法（m2 §2）。
+     * 扫描同时校验指令流严格止于 `codeOff + codeLen`（与 §11.6 的定长口径一致）。
+     */
+    private static func checkInstructionSet(code: Array<UInt8>, dir: FuncDir, rules: FbcRuleSet): Unit {
+        for (i in 0..dir.size) {
+            let e = dir.at(i)
+            var p = Int64(e.codeOff)
+            let end = Int64(e.codeOff) + Int64(e.codeLen)
+            while (p < end) {
+                let op = code[p]
+                let info = OpInfo.OPCODE_TABLE[Int64(op)]
+                if (info.cat == OpInfo.CAT_FORBID || info.cat == OpInfo.CAT_RSVD) {
+                    rejectFormat(
+                        '禁用/保留 opcode 0x${hex2(op)} @${p}（fnId=${e.fnId}，§10.1）')
+                }
+                if (!rules.isInstructionLegal(op)) {
+                    rejectFormat(
+                        'opcode 0x${hex2(op)} 在 verMajor=${rules.verMajor} 规则集下非法 @${p}（fnId=${e.fnId}，m2 §2）')
+                }
+                let insn = InsnDecoder.decode(code, p)
+                p = p + insn.size
+            }
+            if (p != end) {
+                rejectFormat('函数体指令流与 codeLen 不符: fnId=${e.fnId}, 结束于 ${p}, 声明 ${end}')
+            }
+        }
+    }
+
     /** 每个函数一份局部类型表（`localTypesOff` 起 `nLocals` 字节，§11.7）。 */
-    private static func readTypes(code: Array<UInt8>, dir: FuncDir): Array<LocalTypes> {
-        let out = ArrayList<LocalTypes>()
+    private static func readTypes(code: Array<UInt8>, dir: FuncDir): Array<LocalTypes> {        let out = ArrayList<LocalTypes>()
         for (i in 0..dir.size) {
             let e = dir.at(i)
             if (Int64(e.localTypesOff) + Int64(e.nLocals) > code.size) {
@@ -266,6 +350,8 @@ public class LoadedUnit {
     public let dir: FuncDir
     /** 每个函数一份局部类型表，顺序与 `dir` 一致（§11.7）。 */
     public let types: Array<LocalTypes>
+    /** 本次加载实际取用的校验规则集（按 `verMajor` 分派；Q0.2 起可断言）。 */
+    public let rules: FbcRuleSet
 
     public init(
         header: FbcHeader,
@@ -274,7 +360,8 @@ public class LoadedUnit {
         site: SiteTable,
         name: NameTable,
         dir: FuncDir,
-        types: Array<LocalTypes>
+        types: Array<LocalTypes>,
+        rules: FbcRuleSet
     ) {
         this.header = header
         this.code = code
@@ -283,11 +370,54 @@ public class LoadedUnit {
         this.name = name
         this.dir = dir
         this.types = types
+        this.rules = rules
     }
 
     /** 入口函数条目（`entryFn` 已在加载期校验命中目录）。 */
     public func entry(): FuncEntry {
         this.dir.get(this.header.entryFn)
+    }
+
+    /**
+     * 单元是否依赖宿主**类注册表**（design-m2 D12「14 槽注册表依赖校验」）。
+     *
+     * 依赖面只有两种：
+     * - 任一函数的返回类型/局部槽为 14（不透明宿主对象）；
+     * - 任一 `CALL_HELPER` 家族的 hid ≥ `0x0100`（成员访问/构造物化出的 user helper）。
+     *
+     * 13（HostClosure）与 M3 JSON 内建码（16–19）不在其中（零注册）。
+     */
+    public func requiresClassRegistry(): Bool {
+        for (i in 0..this.dir.size) {
+            if (this.rules.isRegistryDependent(this.dir.at(i).retType)) {
+                return true
+            }
+        }
+        for (t in this.types) {
+            for (i in 0..t.size) {
+                if (this.rules.isRegistryDependent(UInt16(t.get(i)))) {
+                    return true
+                }
+            }
+        }
+        for (j in 0..this.dir.size) {
+            let e = this.dir.at(j)
+            var p = Int64(e.codeOff)
+            let end = Int64(e.codeOff) + Int64(e.codeLen)
+            while (p < end) {
+                let op = this.code[p]
+                let insn = InsnDecoder.decode(this.code, p)
+                if ((op == OP_CALL_HELPER || op == OP_CALL_HELPER_NC || op == OP_CALL_HELPER_V) &&
+                    insn.size >= 3) {
+                    let hid = UInt16(this.code[p + 1]) | (UInt16(this.code[p + 2]) << 8)
+                    if (hid >= HELPER_USER_BASE) {
+                        return true
+                    }
+                }
+                p = p + insn.size
+            }
+        }
+        false
     }
 }
 

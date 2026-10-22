@@ -40,7 +40,7 @@
 | `bytecode` | — | `OPCODE_TABLE`（0x79 行）、`FbcReader`（verMajor 分派）、`LocalTypes.validate`（按 verMajor 合法集） | 容器头字段、段模型、crc32、kind 1–10 |
 | `compiler` | `TypeRef`、`ClassRegistryView` | `NameResolver`（解析顺序 + 冲突拒绝）、`Lowerer`（CALL_HOST/成员访问/构造/14 槽）、`AstExpr`（+4 构造器）、`DefiniteAssignment`（14/13 槽规则同型） | 词法、语法基座、既有降低模式 |
 | `runtime` | `HostCallback`、`SignatureDescriptor`、`SignatureVerifier`、`PromotionGroup`、H63/H64/H65（顶层 @C func） | `HandleTable`（条目标签 10/11）、`IterTable`（不变）、`DbgDump`（**大类名呈现**：13 记 `<HostClosure>#idx`、14 记 `<HostObject>#idx`——2026-10-11 裁定） | ctx、迭代器、既有 helper 语义 |
-| `fountain::f_jit`（根） | `ClassRegistry`、`JitClosureId`、`ReflectRegistrar` | `Compiler`（+2 成员）、`CallMarshal`（+行）、**`JitFunction`（+`callFor<Fn>`、闭包包装的 `close`/`isClosed`——M2-8 裁定：不另设包装类）** | 执行六步、卸载状态机、去重缓存 |
+| `fountain::f_jit`（根） | `ClassRegistry`、`JitClosureId`、`ReflectRegistrar` | `Compiler`（+2 成员）、`CallMarshal`（+行）、**`JitFunction`（+`callForFn<Fn>`、闭包包装的 `close`/`isClosed`——M2-8 裁定：不另设包装类）** | 执行六步、卸载状态机、去重缓存 |
 
 ---
 
@@ -238,7 +238,7 @@
 
 #### 6.1.3 `JitClosureId`（public struct，逃逸闭包 ID 的宿主值类型）
 
-**更名（2026-10-11）**：本类型原名 `CFunc`——与仓颉**内建**的 C 函数指针类型 `CFunc<F>`（FFI：`foreign func` / `@C` / `CPointer` 互转、调用需 `unsafe`）**同名**，在本模块满是 `@C` helper 的语境下极易误读。现名 **`JitClosureId`** 直述语义：承接逃逸闭包句柄 ID 的宿主值类型，与闭包包装（`JitFunction.callFor` / `close`，M2-8）成对。
+**更名（2026-10-11）**：本类型原名 `CFunc`——与仓颉**内建**的 C 函数指针类型 `CFunc<F>`（FFI：`foreign func` / `@C` / `CPointer` 互转、调用需 `unsafe`）**同名**，在本模块满是 `@C` helper 的语境下极易误读。现名 **`JitClosureId`** 直述语义：承接逃逸闭包句柄 ID 的宿主值类型，与闭包包装（`JitFunction.callForFn` / `close`，M2-8）成对。
 
 | 成员 | 意义 | 锚点 |
 |---|---|---|
@@ -251,29 +251,29 @@
 
 | 成员（`JitFunction` 增量） | 意义 | 调用关系 |
 |---|---|---|
-| （桥内部）包装构造 | 绑定单元 + 闭包 ID | `CallMarshal` 解包 `retType=12` 与 `callFor<Fn>` 两条路径产出——**产物类型一致** |
+| （桥内部）包装构造 | 绑定单元 + 闭包 ID | `CallMarshal` 解包 `retType=12` 与 `callForFn<Fn>` 两条路径产出——**产物类型一致** |
 | `func call<T>(args: Array<Any>): T` | **闭包包装实例上**：新桥调用（新 ctx + `locals[0]` = 闭包句柄 → **闭包帧格式**）；结果/错误码/site 与直接 `CALL_CLOSURE` 逐位一致；卸载后调用 → 19（site=-1）；**新 ctx 的分配/释放沿用 M1 选型 `std.core.LibC.malloc<T>` / `LibC.free<T>`**（design-m1 §5.3.1）。**入口实例上语义不变**（M1 §8.2 六步，M1 零回归）——**帧格式由实例的绑定内容决定** | m2 §14.3/§14.4 |
 | `func close(): Unit` | **必须显式调用**（唯一释放路径）：提升组计数 −1、归零释放（`gen+1` 可复用）；幂等。**非闭包包装实例 → 19（site=-1）**（fail-loud，避免"以为已释放"） | m2 §14.2/§14.3 |
 | `prop isClosed: Bool` | 闭包包装：是否已 `close`；**非闭包包装实例恒 `false`** | — |
 | `unload` / `isUnloaded` | 不变（M1 §8.7，**单元级**）：包装实例与入口实例共享同一单元——`unload` 卸的是**单元**（闭包逃逸**不阻止**卸载，§14.4） | m1 §8.7 |
 
-#### 6.1.5 `JitFunction.callFor<Fn>`（返回闭包的强类型入口，条件启用）
+#### 6.1.5 `JitFunction.callForFn<Fn>`（返回闭包的强类型入口，条件启用）
 
-**更名（2026-10-12）**：原名 `callWith`。语义是「**调用单元、取回它返回的闭包**」（返回方向、retType=12；*不是*「调用闭包取值」）——`callFor` 直述「调用以取回」，全文档（含规格与计划）同步。
+**更名（2026-10-12）**：原名 `callWith`。语义是「**调用单元、取回它返回的闭包**」（返回方向、retType=12；*不是*「调用闭包取值」）——`callForFn` 直述「调用以取回」，全文档（含规格与计划）同步。
 
 **语义（2026-10-11 澄清）**：**调用 JIT 单元 → 取回它返回的闭包 → 交给宿主**（返回方向，§14 / retType=12）；**不是**"调用一个闭包并取值"。宿主拿到的是**可继续调用的 `JitFunction`**，而不是原生函数值——因此不需要 `Any → Fn` 这类**运行期函数类型判定**，这才是它在 P1 不可用时的兜底价值。
 
 | 成员 | 意义 | 锚点 |
 |---|---|---|
-| `func callFor<Fn>(args: Array<Any>): JitFunction` | `Fn` = **返回闭包的函数类型**（编译期已知）；调用单元并返回承接该闭包的 `JitFunction`（其 `call<T>` 路径照旧）；签名/解包零运行期判定；与 `call<T>` 并存 | m2 §9.1/§14 |
+| `func callForFn<Fn>(args: Array<Any>): JitFunction` | `Fn` = **返回闭包的函数类型**（编译期已知）；调用单元并返回承接该闭包的 `JitFunction`（其 `call<T>` 路径照旧）；签名/解包零运行期判定；与 `call<T>` 并存 | m2 §9.1/§14 |
 
 **释放协议**：返回闭包属逃逸提升组，其计数释放走 **`JitFunction.close()`**（M1 §8.1 规则 6②、§14.2；M2-8 裁定：包装统一为 `JitFunction`，不另设包装类）。
 
 **实参面与 `call<T>` 一致（2026-10-11 补充）**：`args` 的元素按 §4 Marshal 表处理——值型 / 句柄型（含 §11 注册类实例）/ **宿主闭包**（声明为 HostClosure 形参 → §4 验签 → 回调表登记 tag=10 → ID）**均允许**。本入口只改"**返回闭包的承接形态**"（交宿主 `JitFunction` 而非原生函数值），**不改实参面**。
 
-**推论（诚实登记）**：P1 不可用的环境里，`args` 中的闭包实参与主线一样不可用——该限制属 §9.1 面，不因 `callFor` 而改变；此时 `callFor` 的价值仅落在"**返回方向**免运行期判定"。
+**推论（诚实登记）**：P1 不可用的环境里，`args` 中的闭包实参与主线一样不可用——该限制属 §9.1 面，不因 `callForFn` 而改变；此时 `callForFn` 的价值仅落在"**返回方向**免运行期判定"。
 
-**包装值不作实参（2026-10-11 裁定）**：`callFor` / §6.1.4 包装产出的 `JitFunction` 是**桥侧包装（类实例）**，**不能直接作实参**——§4 参数 Marshal 行只接受**仓颉函数值**，直接传入 → 不是函数值 → **19**；**不为此新增 Marshal 行**（新增等于给包装开一条绕过验签的旁路，并把签名归属与生命周期复杂度引进来）。
+**包装值不作实参（2026-10-11 裁定）**：`callForFn` / §6.1.4 包装产出的 `JitFunction` 是**桥侧包装（类实例）**，**不能直接作实参**——§4 参数 Marshal 行只接受**仓颉函数值**，直接传入 → 不是函数值 → **19**；**不为此新增 Marshal 行**（新增等于给包装开一条绕过验签的旁路，并把签名归属与生命周期复杂度引进来）。
 
 **回传的正确写法**：宿主在**自己一侧包一层闭包**（捕获该 `JitFunction`）再作为实参传给另一个 JIT 单元——该闭包是**原生函数值** ⇒ 走 §4 验签（tag=10）⇒ ID；其体内对 JIT 产物的调用属 **§5 已冻结的重入语义**（合法：新 `ctx`、独立事务、内层 fail-fast 不影响外层）。三处须留意：① 包装闭包的**签名**必须与声明形参相容（按 §4 单次 `is` 判定）；② 被捕获的单元**卸载后**调用 → **19（site=-1）**（弱语义同 §14.4）；③ 包装闭包**返回值不得为闭包**（禁高阶：R ∈ 0–8/10–11/14）——即往返只打通**实参方向**，"经闭包把闭包带回来"仍无路径。
 
@@ -283,7 +283,7 @@
 |---|---|---|
 | `Compiler` | `func registerClass(desc: ClassDescriptor): Unit`；`func registerType<T>(): Unit where T <: Object`（内部转 `ReflectRegistrar`） | m2 §12.4/§12.5 |
 | `CallMarshal` | ① **参数 Marshal 表** + 行：声明类型 = 注册类 C → `is C`（含子类、opaque 视图）→ `pin`（tag=11）；null → 19；HostClosure 声明 → 验签（**单次 `is (T1..Tn) -> R`**，§4）→ 回调表登记（tag=10）；② **解包表** + 行：`retType=12 → JitClosureId`、`retType=13 → 原样带回宿主闭包引用`、`retType=14 → get 宿主类实例引用`；③ Closure 行**仅返回方向**（参数方向不加行） | m2 §4/§14.3/§16.2 |
-| `JitFunction` | 内部状态扩展：`ClassRegistry` 快照、`PromotionGroup` 表（per-call 逃逸闭包）、`JitClosureId` 登记；`callFor<Fn>` 公开变体；**`close`/`isClosed`（闭包包装，M2-8 裁定并入）** | m2 §9.1/§14 |
+| `JitFunction` | 内部状态扩展：`ClassRegistry` 快照、`PromotionGroup` 表（per-call 逃逸闭包）、`JitClosureId` 登记；`callForFn<Fn>` 公开变体；**`close`/`isClosed`（闭包包装，M2-8 裁定并入）** | m2 §9.1/§14 |
 | `CompileOptions` | `cpuFeatures` 启用（显式 ISA 开关：如 SSE4.1/4.2 优化；默认 0） | m1 §12.1（`CompileOptions.cpuFeatures` 定义处）+ m2 §2 |
 
 ---
@@ -395,7 +395,7 @@ Compiler.registerType<User>() → ReflectRegistrar：枚举 public 成员（字�
 | M2-5 | 第三档（高阶 + 异常对象回译） | **冻结**（实现时机无限期推迟；重议条件见 m2 §13-2） |
 | M2-6 | 跨进程回调注册协议 | **永久排除**（m2 §13-3） |
 | M2-7 | **规格内部张力对账**：m2 §12.4「继承成员不解析（仅本类声明成员）」vs §12.5/§13-5②「继承成员访问器经反射按继承关系逐级向上解析（v0.8.25，已定位）」 | **已结案（2026-10-13，规格升 v0.8.31）**：设计口径不变——**前端**按**注册表内容**解析（不按继承谱系上溯、不维护类继承图）；**宿主侧**访问器/反射**可**按继承关系逐级向上（v0.8.25）——**解析点不同，不矛盾**。**规格已落**：§12.4 行 386 补「继承成员（限定说明）」+ §12.5 继承行加前端回指；用例把关见 plan-m2 Q3.3/Q3.6/Q6.5。**口径要点**：入表（含反射覆盖面）→ 糖可绑定；未入表 → **编译错误** |
-| M2-8 | **`callFor<Fn>` 返回的 `JitFunction` 与 §6.1.4 `JitClosure` 的关系** | **已结案（2026-10-11）**：**统一用 `JitFunction` 包装，撤销 `JitClosure` 定义**——从 JIT 取回的闭包与 JIT 产出的闭包是**同一表示**（`JitClosureId`），一个类型足够；`close`/`isClosed` 并入 `JitFunction`（非闭包实例：`close` → 19、`isClosed` = false）；`unload` 保持单元级（M1 零回归）；两条产出路径（`CallMarshal` 解包 / `callFor`）产物类型一致。落点：§1 / §6.1.4 / §6.1.5 / §6.2 / §7.4 / §9 / §10；规格 §14.3；plan-m2 Q5.6/Q5.7/Q5.11 |
+| M2-8 | **`callForFn<Fn>` 返回的 `JitFunction` 与 §6.1.4 `JitClosure` 的关系** | **已结案（2026-10-11）**：**统一用 `JitFunction` 包装，撤销 `JitClosure` 定义**——从 JIT 取回的闭包与 JIT 产出的闭包是**同一表示**（`JitClosureId`），一个类型足够；`close`/`isClosed` 并入 `JitFunction`（非闭包实例：`close` → 19、`isClosed` = false）；`unload` 保持单元级（M1 零回归）；两条产出路径（`CallMarshal` 解包 / `callForFn`）产物类型一致。落点：§1 / §6.1.4 / §6.1.5 / §6.2 / §7.4 / §9 / §10；规格 §14.3；plan-m2 Q5.6/Q5.7/Q5.11 |
 | M2-9 | **JSON 谱系类拒绝 `registerType<T>()`（2026-10-12，跨篇裁定，用户要求）** | **已实施**（m2 规格升 **v0.8.29**）：`registerType<JsonValue`/`JsonObject`/`JsonArray`/`JsonNull>()` → **明确报错**（沿 §12.5「关闭反射的构建 → 明确报错」同型形态：宿主侧编译期可判优先、运行期路径则注册期报错且**不登记**）。理由：① JSON 成员面唯一来源 = 宿主库**预定义函数通道**（首参 = 接收类 ⇒ 成员归属，m3 §11）；② 反射注册会与之形成 `o.size` 的「成员 vs 键」二义；③ JSON 类无公有字段 / 构造器可注册（连带：`JsonObject(…)` 类构造写法 → 编译错误）。落点：m2 §12.4/§12.5、本文 §2/§7.2、plan-m2 Q5.2/Q5.4；配套点号分派见 design-m3 §10 **M3-10**。**更新（v0.8.30，跨篇 m3 §11 用户裁定）**：JSON 谱系已升格为 **M3 内建句柄码 16–19**——零注册（可作参数 / 返回 / 局部 / 签名），不经注册表、**不触发**无注册表分发拒绝面（该面限定 14）⇒ 本条理由升级为「结构性无关 + 防哑火」 |
 
 ---
@@ -436,7 +436,7 @@ Compiler.registerType<User>() → ReflectRegistrar：枚举 public 成员（字�
 | 错误码 | 0–20、23 / -1 / -2 / 99 | **+21 `ERR_HOST_EXCEPTION`**：宿主侧调用面执行期异常且未回译（闭包 §5 / 预定义与包装 §8.4、§12.1 / 构造适配器 §15 / 成员访问器 §12.2、§12.5）；`cause` = 原始异常全文（含完整仓颉栈，桥打印）；`site` = 调用指令偏移；`99` 收窄为**引擎侧**兜底 | §2 |
 | 19 语义 | 参数长度 / 元素类型 / 返回 T 不符 / 调用已卸载单元 | **+验签失败**（site=-1） | §2、§4 |
 | 常量 kind | 1–10 | **不新增**（HostClosure / HostObject 均**不可常量化**） | §2、§11 |
-| 句柄条目 tag | 1–9（既有） | **+10（HostCallback：`{fn, sig}`）、+11（HostObject：`{obj}`）** | §1、§5、§11 |
+| 句柄条目 tag | 1–9（既有） | **+10（HostCallback：`{fn, sig, ti?}`——`ti` = 反射签名元数据缓存）、+11（HostObject：`{obj}`）** | §1、§5、§11 |
 | helper | H01–H62、H69–H72 | **+H63** `host_call_trampoline`、**+H64** `host_get_field`、**+H65** `host_set_field`（编号接 H63；**63–68 为 M2/M3 保留区**） | §5、§12.2 |
 | 分配型清单 | 既有 | **+H64**（句柄型字段读）、**+H63**（R 为引用型时登记 1 槽） | §5、§12.2 |
 | 变更型清单 | H43–H48 | **+H65**（§9.15 全路由：常量禁写自然满足 / deopt 禁令 `flags.bit0` / 防御兜底 → 99） | §12.2 |
@@ -445,7 +445,7 @@ Compiler.registerType<User>() → ReflectRegistrar：枚举 public 成员（字�
 
 **H63 `host_call_trampoline` 执行流（§5）**：fetch 栈底句柄 → `HostCallback{fn, sig}`（tag≠10 → 8）→ 按 `sig` **逐参 cell → 仓颉值**（解释性 marshal；句柄型 `get` / 值型原值）→ 调用 `fn`（① 可能触发 GC——与 M1 helper 同一边界；② 可能抛仓颉异常 → `catch-all` → **21 + cause**，fail-fast 写槽返回；③ **可能重入 JIT**——合法，开新 ctx、独立事务）→ 返回值 → cell（R 为引用型 → 窗口登记 1 槽；值型 → 原值返回、不登记）。
 
-**验签（Marshal 时一次性；产物缓存）**：**单次 `is (T1..Tn) -> R` 判定**（子类型语义：入参逆变 / 返回协变——**2026-10-11 实测确认 P1**）→ 通过即**一并覆盖**参数个数、逐参类型与返回类型（**不另设分步核对**：运行期取不出函数类型分量）；失败 → 19；**禁高阶**由类型本身承接（R 取具体非函数类型 ⇒ 返回函数的值不可能匹配）。返回方向按**同一 `is` 判定**解包，不逐位比较。
+**验签（Marshal 时一次性；产物缓存）**：**`FunctionTypeInfo.of(value)` 取真实签名后逐位比对**（v0.8.33 实施订正——原「单次 `is (T1..Tn) -> R`」语言上不可实现：`T`/`R` 是运行期数据、`is` 右侧须静态类型，物化路径为 11^(n+1) 分支）→ 元数、逐参、返回一次覆盖；**14 位置按具体类名逐字相等**；**`Nothing` 仅在整体返回类型时放行**（全部分支抛异常）；失败 → 19；**禁高阶**由类型码承接（R 取具体非函数类型 ⇒ 返回函数的值码不符）。返回方向按**同一逐位比对**解包。调用侧同源：H63 走 **`FunctionTypeInfo.apply(fn, args)`**，元数不限、零类型分派（原 11^(n+1) 分支表已整体删除）。
 
 **不变项（§2）**：ctx 布局（64 B 整数标量）、帧布局、全部 M1 指令语义、fail-fast（I3/I4）、窗口与逃逸机制、W^X 与 IBT——**全部不变**。
 
@@ -461,3 +461,27 @@ Compiler.registerType<User>() → ReflectRegistrar：枚举 public 成员（字�
 | `flags.bit0`（deopt 禁令） | 既有机制（`CALL_CLOSURE` / 变更型 helper 触发） | M2 触发清单 **+H65**（`host_set_field`）；含此调用的函数禁全部 deopt 源 | §12.2、m1 §7 校验 11 |
 
 **生命周期与失效**：HostClosure 条目属 **B pin 路径**（per-call，随 try/finally 释放；`CALL_FUNC` 链内由被调帧窗口存活）；逃逸回桥第 1 步 = **槽级提升**（`PromotionGroup`，**唯一释放路径 = `close`**，调用 `try/finally` 清理豁免提升槽）；HostObject 走 **B/C/D** 句柄路径——**机器码层全部零新增**，deopt 重放安全（字节码零解引用、零副作用）。
+
+---
+
+## §11 实施偏差回写（M2 交付后补记，2026-10-20）
+
+本节只记「设计稿与落地实现不一致」之处，**权威语义以 `jit-bytecode-m2.md` v0.8.33 为准**。
+每条都注明了原因与影响面，避免后来者按设计稿的旧措辞理解现状。
+
+| # | 设计稿原样 | 落地实现 | 原因 / 影响 |
+|---|---|---|---|
+| 1 | 验签 = **单次 `is (T1..Tn) -> R`**（§5.1 验签段） | `FunctionTypeInfo.of(value)` 取真实签名**逐位比对**（`SignatureVerifier.verifyReflective`） | **原方案语言上不可实现**：`T`/`R` 是运行期数据，`is` 右侧须静态类型；物化路径为 11^(n+1) 分支（2 元 1331、3 元 14641、4 元 16 万）。改后**元数不限**、14 按**具体类名**精确 |
+| 2 | 调用 = 按 `sig` 枚举 `invokeN<P..,R>`（§5 H63 第 3 步） | `FunctionTypeInfo.apply(fn, args)` | JIT 运行期无法为宿主函数值单态化 `invokeN`；`HostCallDispatch.cj` 的 **1887 行分派表整体删除** |
+| 3 | 执行路径**零反射**（§12.5 性质） | 成员快照面仍零反射；**H63 对宿主函数值的调用是唯一执行期反射点** | 语言限制（见 #1/#2）。I2 不受影响（机器码仍不解引用句柄） |
+| 4 | 14 槽「只作不透明大类」 | `HostClosureT` 与 `SignatureDescriptor` **携带每个位置的具体类名**；`PublicField` 增可选 `sigParams/sigParamNames/sigRet/sigRetName` | 只带码时 `(User)->R` 与 `(Order)->R` 撞成同一签名；类名是「预先注册 User/Order 才能验签」的落点 |
+| 5 | 反射访问器「可沿继承逐级向上」（M2-7） | 类型判定按 `superClass` 链（**接受子类实例**）；但**执行层** `InstanceVariableInfo.getValue(子类实例)` 抛 `IllegalTypeException`（实测） | 自动注册的字段访问器只对**精确类**有效；有继承的类需手工访问器（`o is C`）或宏。已固化为 `T36/reflect-getvalue-exact-class-only` |
+| 6 | 宿主闭包开销「估算 1.5–3×」（m2 §8） | **实测 4.6–5.8×** user helper（release，同构一元） | 成本在 `apply` 的参数打包与间接分派；用户裁定**接受现状**，规格已按实测修订 |
+| 7 | `FbcHeader` 旧布局按 `verMinor ≤ 13` 判 | 判据改为 **`verMajor == 1`** | M2 的 `verMinor` 从 0 起算，旧判据会把 v2 产物误判成旧布局 |
+| 8 | `FuncDir` 的 `retType` 合法集写死 0–12 | 按 **`verMajor` 参数化**（v2 放行 14） | 否则 M2 产物无法加载 |
+| 9 | `CALL_HOST` 栈布局在 §3 与 §5 自相矛盾 | 定案 **`[h_fn, a1..an]`，`h_fn` 先压（栈底）** | 依据既有 `CALL_HELPER` ABI（`args[0]` = 最先压入；`CALL_CLOSURE` 同样先压闭包句柄）；`Lowerer`/`Assembler` 已按此固化 |
+| 10 | 反射注册的方法绑定视为「注册期产物、执行期纯调用」 | **String 参数/返回上必现 SIGSEGV**（`ApplyCJMethod`/MCC 路径，300 次循环必崩） | `std.reflect` 实现缺陷；已规避（值型方法 + 手工 String 方法）并登记 **GAP-13**；根治 = M2.1 类型化包装闭包（快 36×） |
+
+**未列入本表的项**：`CALL_HOST` 操作数仍为 `u8 argc`（`u16 sigId` 的迁移因「字段形态无签名」而分步推进）、
+`DbgDump` 的 13/14 尖括号（属**实现漏做**，非设计偏差，已在 GAP-06 修正）。
+

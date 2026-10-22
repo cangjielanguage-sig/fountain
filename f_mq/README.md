@@ -1,7 +1,7 @@
 # f_mq
 
 消息队列的客户端与客户端/服务端共用 API（动态库，`fountain::f_mq`）。
-依赖 `f_codec`、`f_data`、`f_protocol`、`f_net`、`f_util`。
+依赖 `f_base`、`f_codec`、`f_config`、`f_data`、`f_io`、`f_log`、`f_net`、`f_protocol`、`f_time`、`f_util`。
 
 ## 快速开始
 
@@ -44,6 +44,9 @@ public class MQClient <: Resource {
 
 - `subscribe` 返回客户端生成的 `subscribedId`；未注册订阅组等错误会回滚已接受的节点并抛
   `MQServiceException`。
+- `unsubscribe` 幂等：已成功退订过的 id 再退订返回成功且不发请求；从未订阅的 id 抛
+  `MQServiceException` 且不发请求。客户端只记住有界的已退订 id 集合（`MQRetiredSubscriptions`，
+  默认 4096，FIFO 淘汰），被淘汰的 id 视同「从未订阅」。
 - `publish` 先选主题的 owner 节点；遇到 `NOT_OWNER` 换下一个节点重试，全部节点不可达时抛
   `MQConnectionException`。
 - `consume` 阻塞直到取到消息：在 owner 节点间轮转，空轮询间隔 200ms；服务端单次 `CONSUME`
@@ -95,6 +98,15 @@ public class MQClient <: Resource {
 
 客户端 API 不提供主题/订阅组注册与统计入口；运维操作使用 `fmq manager`。
 
+## 命名与长度限制
+
+| 项目 | 规则 |
+| --- | --- |
+| 主题 | 非空、以 `/` 开头、不以 `/` 结尾、无空段（`//`）；不含控制字符与 Unicode 空白（`MQChars.isBlankOrControl`）；不是绝对路径时本地直接失败（`INVALID_TOPIC`） |
+| 订阅组 | 空串为默认组；≤ `MQGroup.MAX_LENGTH`（255）字节；不含控制字符/Unicode 空白与 `/` `\` `:` `%`；不以 `.` 开头或结尾（`INVALID_GROUP`） |
+| tags | 最多 `MQTags.MAX_COUNT`（64）个，每个 1..`MQTags.MAX_LENGTH`（128）字节；不含控制字符/Unicode 空白（`INVALID_TAGS`） |
+| 单条记录 | ≤ `min(QueueLog.MAX_RECORD_SIZE, 段上限 - 4 字节)`（即 `QueueLog.effectiveMaxRecord`）；超过时发布本地失败，不会写入段文件 |
+
 ## 语义与限制
 
 - 投递语义为 **at-least-once**：未确认消息在超时或服务重启后会重复投递。
@@ -106,6 +118,10 @@ public class MQClient <: Resource {
   同一命令的不同用途由载荷运行时类型区分。
 - 大于 4096 字节的记录在解码侧可能落临时文件；`MQBytes.fromData` 统一还原为字节数组，
   避免把大消息误判成空消息。
+- 已退订 id 集合有界（`MQRetiredSubscriptions`，默认 4096，FIFO 淘汰）；被淘汰的 id 再退订按
+  「未知 id」处理并抛 `MQServiceException`。
+- 节点离线时间超过墓碑 TTL（默认 7d）后无法靠增量收敛，需要清空该节点 `metas/` 后重启拉全量快照。
+- 大记录（>4096 字节）的完整支持要求集群内**所有节点**升级到本版本。
 
 ## 包结构
 

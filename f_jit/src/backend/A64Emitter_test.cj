@@ -215,6 +215,51 @@ public class A64Emitter_test {
         @Assert(A64Emitter_test.hex(e.finish()), '40013FD6' + '000020D4')
     }
 
+    /**
+     * A6.2（P2-5）：|off| 超出 imm9（−256..255）时必须走 scratch 慢路径。
+     *
+     * 旧实现把偏移截断成 9 位，`+256` 与 `−256`、`−257` 与 `+255` 会编码成**同一个字**——
+     * 这正是「A64 ≥28 局部槽 imm9 截断」的根因。这里直接对拍编码。
+     */
+    @TestCase
+    public func imm9OverflowUsesScratchRegister(): Unit {
+        // 8 字节对齐的偏移走 scaled imm12（合法到 32760），不在本缺陷面内
+        @Assert(A64Emitter_test.ldrHex(1, 29, 256).size, 8)
+        // 非对齐 + 越界 imm9：单条会回绕 ⇒ 必须两条（add/sub + [x16]）
+        let p257 = A64Emitter_test.ldrHex(1, 29, 257)
+        let n257 = A64Emitter_test.ldrHex(1, 29, -257)
+        let n256 = A64Emitter_test.ldrHex(1, 29, -256)
+        let p255 = A64Emitter_test.ldrHex(1, 29, 255)
+        @Assert(n256.size, 8)
+        @Assert(p255.size, 8)
+        @Assert(p257.size, 16)
+        @Assert(n257.size, 16)
+        // 关键：越界偏移不再与「回绕后的合法值」同编码
+        @Assert(n257 != p255, true)
+        // 慢路径的访问指令 imm12 = 0（基址是 scratch，不是原基址 + 回绕偏移）
+        let bs = A64Emitter_test.ldrBytes(1, 29, -257)
+        let w2 = A64Emitter_test.wordAt(bs, 4)
+        @Assert(Int64((w2 >> 10) & 0xFFFu32), 0)
+        @Assert(Int64((w2 >> 5) & 0x1Fu32), 16)
+    }
+
+    /** 大偏移（> 4095，非对齐）分块累加：8193 = 4095+4095+3 ⇒ 3 条 + 访问 = 4 words。 */
+    @TestCase
+    public func largeOffsetIsChunked(): Unit {
+        @Assert(A64Emitter_test.ldrHex(1, 29, 8193).size, 32)
+        @Assert(A64Emitter_test.ldrHex(1, 29, -8193).size, 32)
+    }
+
+    private static func ldrBytes(rt: Int64, rn: Int64, off: Int64): Array<UInt8> {
+        let e = A64Emitter()
+        e.ldrOff(rt, rn, off)
+        e.finish()
+    }
+
+    private static func ldrHex(rt: Int64, rn: Int64, off: Int64): String {
+        A64Emitter_test.hex(A64Emitter_test.ldrBytes(rt, rn, off))
+    }
+
     private static func wordAt(bs: Array<UInt8>, off: Int64): UInt32 {
         var w = 0u32
         var k = 0

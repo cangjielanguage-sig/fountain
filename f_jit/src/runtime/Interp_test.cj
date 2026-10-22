@@ -24,6 +24,7 @@ import fountain::f_jit.bytecode.ByteWriter
 import fountain::f_jit.bytecode.ConstRegistry
 import fountain::f_jit.bytecode.FbcHeader
 import fountain::f_jit.bytecode.FbcFlags
+import fountain::f_jit.bytecode.FbcRuleRegistry
 import fountain::f_jit.bytecode.FuncDir
 import fountain::f_jit.bytecode.FuncEntry
 import fountain::f_jit.bytecode.LoadedUnit
@@ -156,7 +157,7 @@ public class Interp_test {
             Version.MAGIC, Version.MAJOR, Version.MINOR,
             FbcFlags.UTF8 | FbcFlags.VALUE_OPS, UInt32(Version.HDR_SIZE),
             UInt32(code.size), UInt32(0), UInt32(0), 0u32, UInt32(4), 0u32)
-        LoadedUnit(header, code, consts, site, name, dir, typesArr.toArray())
+        LoadedUnit(header, code, consts, site, name, dir, typesArr.toArray(), FbcRuleRegistry.V1)
     }
 
     private func typesOf(ts: Array<UInt8>): Array<UInt8> {
@@ -374,6 +375,28 @@ public class Interp_test {
             // 句柄同一性 EQ_H / NE_H
             @Assert(runBody(ctx, cat([op0(0x15u8), op0(0x17u8), op0(0x69u8), op0(0x7Cu8)])), 1)
             @Assert(runBody(ctx, cat([op0(0x15u8), op0(0x17u8), op0(0x6Au8), op0(0x7Cu8)])), 0)
+        } finally {
+            JitContext.free(ctx)
+        }
+    }
+
+    /**
+     * A1.1（P0-3）：`BNOT_I` 必须弹 1 压 1，结果按位取反。
+     *
+     * 既有 `compareLogicAndBitOps` 只喂操作数 `0`，错误实现恒得 `-1` 与期望同值，
+     * 属构造性恒真；这里用非零操作数与「后续还要用一个操作数」的序列，同时钉住取值与栈纪律。
+     */
+    @TestCase
+    public func bnotInvertsAndPopsOperand(): Unit {
+        let ctx = ctxOf()
+        try {
+            // ~5 = -6，~(-1) = 0，~7 = -8
+            @Assert(runBody(ctx, cat([opI32(0x11u8, 5), op0(0x65u8), op0(0x7Cu8)])), -6)
+            @Assert(runBody(ctx, cat([opI32(0x11u8, -1), op0(0x65u8), op0(0x7Cu8)])), 0)
+            @Assert(runBody(ctx, cat([opI32(0x11u8, 7), op0(0x65u8), op0(0x7Cu8)])), -8)
+            // 栈纪律：~5 后栈上只剩 -6，再 +1 得 -5；若残留 5，则 ADD 取到 1 与 -1 得 0
+            @Assert(runBody(ctx, cat([opI32(0x11u8, 5), op0(0x65u8), opI32(0x11u8, 1),
+                op0(0x30u8), op0(0x7Cu8)])), -5)
         } finally {
             JitContext.free(ctx)
         }

@@ -252,7 +252,7 @@ public struct OpInfo {
         OpInfo(0x76u8, 'OP_CALL_HELPER_NC', 'u16 u8', 4, CAT_CALL),
         OpInfo(0x77u8, 'OP_CALL_HELPER_V', 'u16 u8', 4, CAT_CALL),
         OpInfo(0x78u8, 'OP_CALL_FUNC', 'u16 u8', 4, CAT_CALL),
-        OpInfo(0x79u8, 'OP_CALL_HOST', 'u16 u8', 4, CAT_CALL),
+        OpInfo(0x79u8, 'OP_CALL_HOST', 'u8', 2, CAT_CALL),
         OpInfo(0x7Au8, 'OP_HW_OPEN', 'u16', 3, CAT_CALL),
         OpInfo(0x7Bu8, 'OP_HW_CLOSE', '-', 1, CAT_CALL),
         OpInfo(0x7Cu8, 'OP_RET', '-', 1, CAT_CALL),

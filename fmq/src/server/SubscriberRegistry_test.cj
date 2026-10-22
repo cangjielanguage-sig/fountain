@@ -26,13 +26,45 @@ class SubscriberRegistryTest {
         MQSubscriptionInfo(id, topic, group, tags, MQFilter.compile(""), false, EMPTY_SOCKET_BUFFER)
     }
 
+    /** 每次登记代次自增；旧快照的注销不得删掉新订阅（A60）。 */
+    @TestCase
+    public func generationGuardsReSubscription(): Unit {
+        let registry = SubscriberRegistry()
+        registry.register(info("s1", "/a", "g1"))
+        let firstGeneration = registry.of("s1").getOrThrow().generation
+        // 同一 id 重订阅
+        registry.register(info("s1", "/a", "g1"))
+        let secondGeneration = registry.of("s1").getOrThrow().generation
+        @Assert(secondGeneration > firstGeneration)
+        // 巡检携带旧代次：拒绝
+        @Assert(registry.unregister("s1", generation: firstGeneration).code ==
+            MQErrorCode.SUBSCRIBE_NOT_EXIST)
+        @Assert(registry.of("s1").isSome())
+        // 当前代次可以删
+        @Assert(registry.unregister("s1", generation: secondGeneration).code == 0)
+        @Assert(registry.of("s1").isNone())
+    }
+
+    /** 断链订阅不算活跃：否则其名下记录永远不回组（A55）。 */
+    @TestCase
+    public func activeIdsSkipDisconnectedSubscriptions(): Unit {
+        let registry = SubscriberRegistry()
+        registry.register(info("s1", "/a", "g1"))
+        let dead = MQSubscriptionInfo("s2", "/a", "g1", [], MQFilter.compile(""), false, EMPTY_SOCKET_BUFFER,
+            alive: {=> false})
+        registry.register(dead)
+        let active = registry.activeIds("/a", "g1")
+        @Assert(active == ["s1"])
+        @Assert(registry.byGroupOf("/a", "g1").size == 2)
+    }
+
     @TestCase
     public func registerAndQuery(): Unit {
         let registry = SubscriberRegistry()
         @Assert(registry.register(info("s1", "/a", "g1")).code == 0)
         @Assert(registry.register(info("s2", "/a", "g1")).code == 0)
         @Assert(registry.register(info("s3", "/a", "g2")).code == 0)
-        @Assert(registry.count() == 3)
+        @Assert(registry.infos().size == 3)
         @Assert(registry.of("s1").getOrThrow().topic == "/a")
         @Assert(registry.byGroupOf("/a", "g1").size == 2)
         @Assert(registry.byGroupOf("/a", "g2").size == 1)
@@ -45,7 +77,7 @@ class SubscriberRegistryTest {
         let registry = SubscriberRegistry()
         registry.register(info("s1", "/a", "g1", tags: ["x"]))
         registry.register(info("s1", "/a", "g1", tags: ["y"]))
-        @Assert(registry.count() == 1)
+        @Assert(registry.infos().size == 1)
         @Assert(registry.of("s1").getOrThrow().tags == ["y"])
         @Assert(registry.byGroupOf("/a", "g1").size == 1)
     }
@@ -79,7 +111,7 @@ class SubscriberRegistryTest {
         registry.register(info("s2", "/a", "g2"))
         registry.register(info("s3", "/b", "g1"))
         registry.removeByTopic("/a")
-        @Assert(registry.count() == 1)
+        @Assert(registry.infos().size == 1)
         @Assert(registry.of("s3").isSome())
         @Assert(registry.byGroupOf("/b", "g1").size == 1)
     }
@@ -104,6 +136,6 @@ class SubscriberRegistryTest {
             waited++
         }
         @Assert(done.load() == 4)
-        @Assert(registry.count() == 200)
+        @Assert(registry.infos().size == 200)
     }
 }

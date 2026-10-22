@@ -113,4 +113,25 @@ public class LocalTypes {
             }
         }
     }
+
+    /**
+     * 规则集参数化校验（Q2.3）：与加载器**取用同一规则集对象**，边界只在
+     * `FbcRuleSet.isLocalTypeInLegalSet` 一处。
+     *
+     * 用登记合法集而非 `isLocalTypeLegal`：v3 的合法集（0–19）可用于静态校验，而加载器是否
+     * 启用 v3 由 `FbcReader.validate` 的 `implemented` 开关决定（职责分离）。
+     */
+    public func validate(dir: FuncDir, fnId: UInt32, rules: FbcRuleSet): Unit {
+        let e = dir.get(fnId)
+        if (this.slots.size != Int64(e.nLocals)) {
+            rejectFormat('局部类型表长度不符: fnId=${fnId}, 实际 ${this.slots.size}, 目录 nLocals=${e.nLocals}')
+        }
+        for (i in 0..this.slots.size) {
+            let code = UInt16(this.slots[i])
+            if (!rules.isLocalTypeInLegalSet(code)) {
+                rejectFormat(
+                    '非法局部类型码: fnId=${fnId}, slot=${i}, code=${code}, verMajor=${rules.verMajor}（§11.7）')
+            }
+        }
+    }
 }

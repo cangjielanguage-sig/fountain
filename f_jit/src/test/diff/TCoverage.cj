@@ -92,30 +92,79 @@ public let T_MAP_IN_SCOPE: Array<TMapping> = [
     TMapping('T53', ['S4.15', 'S7.6'], 't18ContainerMutation', 'M1', true)
 ]
 
-/** 范围外编号：T30–T41、T49 归属 M2/M3，不计入本次完成判据。 */
-public let T_MAP_OUT_OF_SCOPE: Array<TMapping> = [
-    TMapping('T30', [], 'M2: 宿主闭包与宿主对象（LocalType 13/14）', 'M2/M3', false),
-    TMapping('T31', [], 'M2: 宿主闭包调用通道', 'M2/M3', false),
-    TMapping('T32', [], 'M2: 宿主对象访问', 'M2/M3', false),
-    TMapping('T33', [], 'M2: 闭包与宿主互操作', 'M2/M3', false),
-    TMapping('T34', [], 'M2: 逃逸与生命周期', 'M2/M3', false),
-    TMapping('T35', [], 'M2: 注册契约扩展', 'M2/M3', false),
-    TMapping('T36', [], 'M2: 类型系统扩展', 'M2/M3', false),
-    TMapping('T37', [], 'M2: 错误通道扩展', 'M2/M3', false),
-    TMapping('T38', [], 'M2: 调试与诊断扩展', 'M2/M3', false),
-    TMapping('T39', [], 'M3: Any 与动态类型', 'M2/M3', false),
-    TMapping('T40', [], 'M3: JSON 互操作', 'M2/M3', false),
-    TMapping('T41', [], 'M3: 扩展 helper 族', 'M2/M3', false),
-    TMapping('T49', [], 'M2/M3: 预留验收项', 'M2/M3', false)
+/**
+ * M2 的 T 编号（14 个，m2 §10 测试矩阵）：T30–T36、T49、T54、T55、T57–T60。
+ *
+ * 与 `T_MAP_IN_SCOPE`（M1）同构——`inScope=true` 表示它们是 **M2 的完成判据**；
+ * `check_tmap.sh` 对两张表做同一套强校验（用例存在 + 用例体以可执行语句引用标签）。
+ * 单独成表而不并入 M1：编号跨里程碑不连续（T37–T41 属 M3），合并会让「谁还没做」失真。
+ */
+public let T_MAP_M2: Array<TMapping> = [
+    // 验签与 Marshal：失败面全 19（site=-1）、一次缓存、禁高阶双拒、同名冲突编译错误
+    TMapping('T30', ['Q4.1', 'Q4.2', 'Q5.10', 'Q6.1'], 'callForFnAcceptsHostClosureArgument',
+        'M2', true),
+    // CALL_HOST 语义：值型/引用型返回、21 + cause、重入、内层错误不污染外层
+    TMapping('T31', ['Q3.5', 'Q4.5', 'Q4.6', 'Q6.2'], 't31CallHostValueAndReference', 'M2', true),
+    // 与既有机制交互：flags.bit0 + deopt 禁令、GC 并发、取消边界
+    TMapping('T32', ['Q4.5', 'Q6.3'], 't32GcDuringHostCall', 'M2', true),
+    // 三引擎差分：确定性宿主闭包 × 全参数类型，结果/错误码/site 逐位一致
+    TMapping('T33', ['Q6.3'], 't33HostCallValueIsTripleEqual', 'M2', true),
+    // 宿主对象通道：同一对象身份往返、null/型别不符 → 19
+    TMapping('T34', ['Q5.9', 'Q6.4'], 't34HostObjectRoundtripKeepsIdentity', 'M2', true),
+    // 成员访问：包装模式 + 字段读写 × 全类型、宿主可见性
+    TMapping('T35', ['Q5.7', 'Q6.5'], 't35FieldTypeMatrixAndDefense', 'M2', true),
+    // 成员访问糖：降级等价、嵌套链、求值顺序、拒绝集全部编译错误
+    TMapping('T36', ['Q5.5', 'Q5.6', 'Q6.5'], 't36RejectSetIsCompileErrors', 'M2', true),
+    // 逃逸闭包回桥：白名单/提升/共享计数/close、包装器调用 ≡ 直接 CALL_CLOSURE
+    TMapping('T49', ['Q5.6', 'Q5.11', 'Q6.6'], 'closureUnboxPromotesGroup', 'M2', true),
+    // 字节码侧构造：全参数组合、重载解析、每次求值新实例、窗口账目
+    TMapping('T54', ['Q5.3', 'Q6.7'], 'manualRegistrationIsEndToEnd', 'M2', true),
+    // 反射自动注册：自动 ≡ 手工、成员全枚举、三类跳过 + diagnostics
+    TMapping('T55', ['Q5.2', 'Q5.3', 'Q5.4', 'Q6.7'], 'autoMatchesManualDescriptor', 'M2', true),
+    // 源入口实参：含子类实例、同一对象身份、多参混排
+    TMapping('T57', ['Q5.9', 'Q5.12', 'Q6.7'], 't57ArgumentFlowsAllChannels', 'M2', true),
+    // 槽 14 链内传参：跨 CALL_FUNC 深度 3、链内返回、嵌套捕获快照
+    TMapping('T58', ['Q5.12', 'Q6.7'], 'chainDepthThreeKeeps14', 'M2', true),
+    // HostClosure 签名含 14：验签、R=14 登记 1 槽、重入
+    TMapping('T59', ['Q5.12', 'Q6.7'], 'hostClosureParam14', 'M2', true),
+    // 宿主异常专用码：三面 → 21、cause 完整栈、并发失败互不串扰
+    TMapping('T60', ['Q4.6', 'Q6.2'], 't60ThreeFacesMapTo21', 'M2', true)
 ]
 
-/** 全量映射（范围内 + 范围外），供空跑校验遍历。 */
+/**
+ * M3 的 T 编号（7 个，m3 §10 测试矩阵）：T37–T41、T56、T61。
+ *
+ * M3 落地后它们从「范围外」转为**完成判据**：`check_tmap.sh` 对三张表做同一套强校验
+ * （用例存在 + 用例体以可执行语句把 `T<id>/` 作为函数实参首字符串）。
+ */
+public let T_MAP_M3: Array<TMapping> = [
+    // 装箱/拆箱往返：四类插入点、桥行、值型逐位、引用型同对象、typecode 防御
+    TMapping('T37', ['R3.1', 'R3.2', 'R5.1', 'R5.2'], 'boxesAtAnyInitialization', 'M3', true),
+    // is/as 语义：三种回答、22 与 7 分列、静态路径免 helper、禁止面编译错误
+    TMapping('T38', ['R3.3', 'R3.4', 'R5.3'], 'asMismatchIs22', 'M3', true),
+    // 异构容器端到端：构造/遍历/分派/容器转型 P2
+    TMapping('T39', ['R3.5', 'R4.4', 'R4.5'], 'listAuxEncodesElementCode', 'M3', true),
+    // T40 对账：deopt 重放、装箱 churn、分配压力、跨线程只读盒
+    TMapping('T40', ['R6.4'], 'boxingChurnHonoursWindowCapacity', 'M3', true),
+    // JSON 字面量：取界、静态类型、空/非空分界、双层拒绝
+    TMapping('T41', ['R3.6', 'R3.7', 'R3.8'], 'objectLiteralBecomesJsonObjectConstant', 'M3', true),
+    // 转发特化：双路径逐位、构建计数、argc 边界、失效面、格式零改动
+    TMapping('T56', ['R4.10', 'R4.11', 'R4.12', 'R5.4', 'R5.5'], 'dualPathIsBitIdentical', 'M3', true),
+    // JSON 世界内可变 API：读写、frozen 传播、点号/下标糖、零注册内建码
+    TMapping('T61', ['R3.9', 'R3.10', 'R4.6', 'R4.7', 'R4.8', 'R4.9'], 'readsObjectKeyByIndex',
+        'M3', true)
+]
+
+/** 全量映射（M1 + M2 + M3），供空跑校验遍历。 */
 public func allTMappings(): Array<TMapping> {
     let out = ArrayList<TMapping>()
     for (m in T_MAP_IN_SCOPE) {
         out.add(m)
     }
-    for (m in T_MAP_OUT_OF_SCOPE) {
+    for (m in T_MAP_M2) {
+        out.add(m)
+    }
+    for (m in T_MAP_M3) {
         out.add(m)
     }
     out.toArray()

@@ -29,7 +29,7 @@ public class MQConsumeResult {
     private var queueIndex: Int64 = 0
     private var segmentedIndex: Int64 = 0
     private var segmentedOffset: Int64 = 0
-    private var record: Array<Byte> = []
+    private var record: MQBlob = MQBlob()
 
     public init() {}
 
@@ -37,10 +37,13 @@ public class MQConsumeResult {
         this.queueIndex = queueIndex
         this.segmentedIndex = segmentedIndex
         this.segmentedOffset = segmentedOffset
-        this.record = record
+        this.record = MQBlob(record)
     }
 
-    public func hasMessage(): Bool {
-        record.size > 0
+    public init(queueIndex: Int64, segmentedIndex: Int64, segmentedOffset: Int64, record: MQBlob) {
+        this.queueIndex = queueIndex
+        this.segmentedIndex = segmentedIndex
+        this.segmentedOffset = segmentedOffset
+        this.record = record
     }
 }

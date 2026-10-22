@@ -18,6 +18,7 @@ package fountain::f_jit
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.InterruptedException
 import fountain::f_jit.base.JitException
+import fountain::f_jit.runtime.HostFault
 import fountain::f_jit.runtime.JitContext
 
 /**
@@ -39,6 +40,17 @@ protected class JitReport {
         if (code == ErrCode.INTERRUPT) {
             throw InterruptedException('调用被中断（-2，§2）')
         }
+        if (code == ErrCode.HOST_EXCEPTION) {
+            // 宿主异常：桥负责打印**完整仓颉栈**（原始异常对象经 cause 旁路带出）。
+            match (HostFault.exceptionOf(ctx)) {
+                case Some(ex) => ex.printStackTrace()
+                case None => ()
+            }
+            match (HostFault.takeCause(ctx)) {
+                case Some(c) => throw JitException(code, ctx.site, ctx.fnId, None, report, c)
+                case None => throw JitException(code, ctx.site, ctx.fnId, None, report)
+            }
+        }
         throw JitException(code, ctx.site, ctx.fnId, None, report)
     }
 
@@ -50,8 +62,21 @@ protected class JitReport {
             return retCell
         }
         if (code == ErrCode.DEOPT) {
+            // 重放复用同一个 ctx：必须先清掉 DEOPT 标记，否则解释器把 `errCode != 0` 当停机条件，
+            // 重放在第一条指令后即中止；重放结束后还必须**重新读**错误槽，否则重放期的真实错误
+            // 会被当作返回值交给宿主（P0-4 / P0-5）。
+            ctx.errCode = 0
+            ctx.site = -1
             try {
-                return replay()
+                let r = replay()
+                let after = ctx.errCode
+                if (after == 0) {
+                    return r
+                }
+                if (after == ErrCode.INTERRUPT) {
+                    throw InterruptedException('调用被中断（-2，§2）')
+                }
+                JitReport.throwJit(ctx, report)
             } catch (e: JitException) {
                 throw e
             } catch (e: InterruptedException) {

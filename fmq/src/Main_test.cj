@@ -15,17 +15,82 @@ limitations under the License.
 */
 package fountain::fmq
 
+import std.collection.ArrayList
+import std.fs.*
+import std.sync.AtomicInt64
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_config.Config
 import fountain::f_mq.base.MQConfigKey
+import fountain::fmq.server.MQServer
+import fountain::fmq.test.TestDirs
 
 @Test
 class MainTest {
+    /** 进程不再注册 `atExit`，整个类的临时目录在收尾时统一回收。 */
+    @AfterAll
+    static func removeTempDirs(): Unit {
+        TestDirs.cleanNamespace("main")
+    }
+
     @TestCase
     public func topLevelHelpReturnsZero(): Unit {
         @Assert(dispatch(["--help"]) == 0)
         @Assert(dispatch(["-h"]) == 0)
+    }
+
+    /** `server` 与 `manager` 都走可注入工厂，方便断言「调用一次 + 返回码透传」（A68）。 */
+    @TestCase
+    public func dispatchWithInjectedFactories(): Unit {
+        let serverCalls = AtomicInt64(0)
+        let managerCalls = AtomicInt64(0)
+        let seenArgs = ArrayList<String>()
+        let code = dispatchWith(
+            {=>
+                serverCalls.fetchAdd(1)
+                7
+            },
+            {args =>
+                managerCalls.fetchAdd(1)
+                for (arg in args) {
+                    seenArgs.add(arg)
+                }
+                9
+            },
+            ["server"])
+        @Assert(code == 7)
+        @Assert(serverCalls.load() == 1)
+        @Assert(managerCalls.load() == 0)
+
+        let managerCode = dispatchWith(
+            {=>
+                serverCalls.fetchAdd(1)
+                7
+            },
+            {args =>
+                managerCalls.fetchAdd(1)
+                for (arg in args) {
+                    seenArgs.add(arg)
+                }
+                9
+            },
+            ["manager", "listTopics", "--server=127.0.0.1:1"])
+        @Assert(managerCode == 9)
+        @Assert(managerCalls.load() == 1)
+        @Assert(serverCalls.load() == 1)
+        @Assert(seenArgs.toArray() == ["listTopics", "--server=127.0.0.1:1"])
+
+        // 配置参数前置时仍能识别子命令（A69）
+        let serverCalled = AtomicInt64(0)
+        let prefixed = dispatchWith(
+            {=>
+                serverCalled.fetchAdd(1)
+                3
+            },
+            {_ => 4},
+            ["--mqServer_port=2400", "server"])
+        @Assert(prefixed == 3)
+        @Assert(serverCalled.load() == 1)
     }
 
     @TestCase
@@ -53,15 +118,126 @@ class MainTest {
 
     @TestCase
     public func serverStartupValidationFailureReturnsTwo(): Unit {
-        Config.set([
-            ("mqServer_backup", "-1"),
-            (MQConfigKey.CLIENT_HOSTS, "127.0.0.1:2350"),
-            ("mqServer_port", "2350"),
-            ("mqServer_deadMsgThreshold", "3")
-        ])
-        // 配置非法 ⇒ 装配点返回 2，不进入阻塞监听
-        @Assert(dispatch(["server"]) == 2)
-        // 恢复
-        Config.set([("mqServer_backup", "0")])
+        let sandbox = ConfigSandbox(["mqServer_backup", MQConfigKey.CLIENT_HOSTS, "mqServer_port",
+            "mqServer_deadMsgThreshold"])
+        try {
+            Config.set([
+                ("mqServer_backup", "-1"),
+                (MQConfigKey.CLIENT_HOSTS, "127.0.0.1:2350"),
+                ("mqServer_port", "2350"),
+                ("mqServer_deadMsgThreshold", "3")
+            ])
+            // 配置非法 ⇒ 装配点返回 2，不进入阻塞监听
+            @Assert(dispatch(["server"]) == 2)
+        } finally {
+            sandbox.close()
+        }
+    }
+
+    /**
+     * manager 分支不进入 server 装配，因此不安装任何退出钩子（规格「服务端测试资产」）。
+     *
+     * 用可注入工厂计数：manager 路径下 serverFactory 必须为 0 次（钩子安装在 serverFactory 内部），
+     * managerFactory 恰好 1 次。
+     */
+    @TestCase
+    public func managerPathInstallsNoExitHooks(): Unit {
+        let serverCalls = AtomicInt64(0)
+        let managerCalls = AtomicInt64(0)
+        let code = dispatchWith(
+            {=>
+                serverCalls.fetchAdd(1)
+                0
+            },
+            {_ =>
+                managerCalls.fetchAdd(1)
+                0
+            },
+            ["manager", "listTopics"])
+        @Assert(code == 0)
+        @Assert(serverCalls.load() == 0)
+        @Assert(managerCalls.load() == 1)
+    }
+
+    /** 启动顺序：装配 → 安装退出钩子 → 阻塞运行；装配失败时后两步都不执行（A68）。 */
+    @TestCase
+    public func serverInstallsExitHooksBeforeRun(): Unit {
+        let root = TestDirs.of("main", "run_server")
+        if (exists(root)) {
+            remove(root, recursive: true)
+        }
+        Directory.create(root, recursive: true)
+        let sandbox = ConfigSandbox(["mqServer_port", MQConfigKey.CLIENT_HOSTS,
+            "mqServer_segmentedLogDir", "mqServer_deadMsgDir", "mqServer_backup"])
+        try {
+            Config.set([
+                ("mqServer_port", "29555"),
+                (MQConfigKey.CLIENT_HOSTS, "127.0.0.1:29555"),
+                ("mqServer_segmentedLogDir", "${root}/logs"),
+                ("mqServer_deadMsgDir", "${root}/dead"),
+                ("mqServer_backup", "0")
+            ])
+            let order = ArrayList<String>()
+            let code = runServerWith(
+                {=>
+                    order.add("create")
+                    MQServer()
+                },
+                {_ => order.add("hooks")},
+                {server =>
+                    order.add("run")
+                    server.close()
+                    0
+                })
+            @Assert(code == 0)
+            @Assert(order.toArray() == ["create", "hooks", "run"])
+
+            // 装配失败：返回 2，钩子与运行都不发生
+            let failures = ArrayList<String>()
+            let failed = runServerWith(
+                {=> throw Exception("assembly boom")},
+                {_ => failures.add("hooks")},
+                {_ =>
+                    failures.add("run")
+                    0
+                })
+            @Assert(failed == 2)
+            @Assert(failures.size == 0)
+        } finally {
+            sandbox.close()
+            if (exists(root)) {
+                remove(root, recursive: true)
+            }
+        }
     }
 }
+
+
+/**
+ * 配置沙箱：记录键的「存在性与值」，结束时原样恢复（存在则写回，不存在则删除）。
+ *
+ * 配置是进程级全局状态，用例之间必须互不残留（A24）。
+ */
+private class ConfigSandbox <: Resource {
+    private let saved = ArrayList<(String, ?String)>()
+
+    init(keys: Array<String>) {
+        for (key in keys) {
+            saved.add((key, Config.getString(key)))
+        }
+    }
+
+    public func isClosed(): Bool {
+        false
+    }
+
+    public func close(): Unit {
+        for ((key, value) in saved) {
+            match (value) {
+                case Some(text) => Config.set([(key, text)])
+                case None => Config.remove(key)
+            }
+        }
+    }
+}
+

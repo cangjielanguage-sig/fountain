@@ -17,9 +17,11 @@ package fountain::f_jit.compiler
 
 import std.collection.ArrayList
 import fountain::f_jit.base.LocalType
-import fountain::f_jit.base.Version
 import fountain::f_jit.bytecode.ByteWriter
+import fountain::f_jit.bytecode.DecodedInsn
 import fountain::f_jit.bytecode.FbcWriter
+import fountain::f_jit.bytecode.FbcRuleRegistry
+import fountain::f_jit.bytecode.FbcRuleSet
 import fountain::f_jit.bytecode.FuncEntry
 import fountain::f_jit.bytecode.FuncFlags
 import fountain::f_jit.bytecode.InsnDecoder
@@ -56,9 +58,10 @@ internal class Assembler {
         if (n == 0) {
             codeFail('汇编期无函数可产出（至少应有入口函数）')
         }
+        let rules = this.rules()
         // 先冻结：校验 4 要求 `PUSH_KH` 的索引落在**已冻结**的常量表内。
         this.sess.consts.freeze()
-        this.validateAll()
+        this.validateAll(rules)
 
         // 1) 计算布局：目录 + (类型表 + 体) × n
         let dirSize = 4 + 26 * n
@@ -121,6 +124,7 @@ internal class Assembler {
 
         // 4) 头 + 四段
         let w = FbcWriter()
+        w.setVersion(rules.verMajor, rules.maxVerMinor)
         w.setEntryFn(this.sess.entryFn)
         w.setCode(codeBytes)
         w.setConst(constBytes)
@@ -129,26 +133,45 @@ internal class Assembler {
         w.build()
     }
 
+    /** 汇编目标规则集：只接受**已实现**的版本（v1/v2/v3 均已实现）。 */
+    private func rules(): FbcRuleSet {
+        match (FbcRuleRegistry.get(this.sess.verMajor)) {
+            case Some(r) => if (r.implemented) {
+                r
+            } else {
+                codeFail('汇编目标 verMajor=${this.sess.verMajor} 未实现（规则集仅登记合法集，design-m2 D12）')
+            }
+            case None => codeFail('汇编目标 verMajor=${this.sess.verMajor} 未登记（design-m2 D12）')
+        }
+    }
+
     /**
      * §7 校验 1–11 的汇编期落地（design-m1 §4.3.7）。
      *
      * 只做**字节流可判定**的部分：结构（1/2/4/5/7/8/9/11）在此统一拒绝；3 由 `BytecodeBuilder`
      * 构建期即时拒绝（sink 前栈平衡）、10 由 `DefiniteAssignment` 前端拒绝（同一口径双保险）。
+     *
+     * Q2.4 起校验按 `FbcRuleSet` 参数化：合法 LocalType 集与 `CALL_HOST` 版本门槛取自同一规则集。
      */
-    private func validateAll(): Unit {
+    private func validateAll(rules: FbcRuleSet): Unit {
         if (Int64(this.sess.entryFn) >= this.sess.funcCount) {
             codeFail('入口函数号越界: ${this.sess.entryFn} / ${this.sess.funcCount}（§11.7）')
         }
         var i: Int64 = 0
         while (i < this.sess.funcCount) {
-            this.validateFunc(this.sess.funcAt(i))
+            this.validateFunc(this.sess.funcAt(i), rules)
             i = i + 1
         }
     }
 
-    private func validateFunc(f: LoweredFunc): Unit {
+    private func validateFunc(f: LoweredFunc, rules: FbcRuleSet): Unit {
         let code = f.body.code
         var off: Int64 = 0
+        // CALL_HOST 的栈布局校验需要「到此为止的栈深」与每个深度上的压栈来源；
+        // 其余指令不据深度拒绝（分支汇合由 BytecodeBuilder 在构建期守）。
+        var depth: Int64 = 0
+        // slots[i] = 第 i 个栈元素由哪条 `LOADL` 压入（槽号）；非 `LOADL` 压入记 -1。
+        var slots = ArrayList<Int64>()
         while (off < code.size) {
             let info = OpInfo.OPCODE_TABLE[Int64(code[off])]
             if (info.cat == OpInfo.CAT_FORBID || info.cat == OpInfo.CAT_RSVD) {
@@ -159,9 +182,13 @@ internal class Assembler {
             }
             let insn = InsnDecoder.decode(code, off)
             let op = insn.op
-            // 8) M2 专属指令在 M1 一律 NotImpl
-            if (op == Op.CALL_HOST || op == Op.HW_OPEN || op == Op.HW_CLOSE) {
-                notImplFail('M2 专属指令 0x${Assembler.hex(op)} @${off} 在 M1 未实现（§7 校验 8）')
+            // 8) M2 专属指令：HW_OPEN/HW_CLOSE 恒 NotImpl；CALL_HOST 由规则集决定
+            if (op == Op.HW_OPEN || op == Op.HW_CLOSE) {
+                notImplFail('M2 专属指令 0x${Assembler.hex(op)} @${off} 在后档专项未实现（§7 校验 8）')
+            }
+            if (op == Op.CALL_HOST && !rules.isInstructionLegal(op)) {
+                notImplFail(
+                    'M2 专属指令 0x${Assembler.hex(op)} @${off} 在 verMajor=${rules.verMajor} 规则集下未启用（§7 校验 8）')
             }
             // 1/6) 每条 CALL_HELPER(_V) 必须紧邻 CHECK_ERR（跨回边也不得被优化掉）
             if (op == Op.CALL_HELPER || op == Op.CALL_HELPER_V) {
@@ -203,6 +230,18 @@ internal class Assembler {
                         'CALL_FUNC argc 不符: fid=${fid} argc=${argc} nargs=${nargs} @${off}（§7 校验 7）')
                 }
             }
+            // 7') Q2.4：CALL_HOST 的 `[h_fn, a1..an]` 栈布局（h_fn 是**最先**压入的那个）
+            if (op == Op.CALL_HOST) {
+                let argc = Int64(InsnDecoder.u8(insn, 0))
+                if (depth < argc + 1 || slots.size < argc + 1) {
+                    codeFail(
+                        'CALL_HOST argc 与栈不符: argc=${argc} 需 ${argc + 1} 槽，实际 ${depth} @${off}（§7 校验 7）')
+                }
+                let base = slots[slots.size - argc - 1]
+                if (!Assembler.isHostClosureSlot(base, f)) {
+                    codeFail('CALL_HOST 调用块栈底非句柄: 须为 13 型 LOADL @${off}（§7 校验 7）')
+                }
+            }
             // 11) 变更型函数禁用 deopt 源（DEC_TO_I64 / TO_I64 的 mode=1）
             if (op == Op.DEC_TO_I64 || op == Op.TO_I64) {
                 let mode = InsnDecoder.u8(insn, 0)
@@ -211,16 +250,67 @@ internal class Assembler {
                         '变更型函数禁用 deopt 模式: op=0x${Assembler.hex(op)} mode=1 @${off}（§7 校验 11）')
                 }
             }
+            // 栈深（仅供 CALL_HOST 判据；分支造成的偏差不在此拒绝）
+            let (pop, push) = StackEffect.of(op, Assembler.effectArgc(op, insn))
+            if (pop >= 0) {
+                var k: Int64 = 0
+                while (k < pop && !slots.isEmpty()) {
+                    slots.remove(at: slots.size - 1)
+                    k = k + 1
+                }
+                let loaded = Assembler.loadedSlotOf(op, insn)
+                var j: Int64 = 0
+                while (j < push) {
+                    slots.add(if (j == 0) { loaded } else { -1 })
+                    j = j + 1
+                }
+                depth = if (depth >= pop) {
+                    depth - pop + push
+                } else {
+                    push
+                }
+            }
             off = off + insn.size
         }
-        // 9) 类型表长度 = nLocals（由 LocalTypes 保证）且值在 M1 合法集 0–12
+        // 9) 类型表长度 = nLocals（由 LocalTypes 保证）且值在规则集合法集内
         var i: Int64 = 0
         while (i < f.types.size) {
-            if (UInt16(f.types.get(i)) > 12u16) {
-                codeFail('局部槽类型码非法: ${f.types.get(i)} @${i}（§7 校验 9）')
+            let t = UInt16(f.types.get(i))
+            if (!rules.isLocalTypeInLegalSet(t)) {
+                codeFail(
+                    '局部槽类型码非法: ${t} @${i}（verMajor=${rules.verMajor} 合法集 0–${rules.maxLocalType}，§7 校验 9）')
             }
             i = i + 1
         }
+    }
+
+    /** `CALL_HOST` 调用块栈底必须是 `LOADL`/`LOADL0-3` 且槽类型为 13（HostClosure）。 */
+    private static func isHostClosureSlot(slot: Int64, f: LoweredFunc): Bool {
+        slot >= 0 && slot < f.types.size &&
+            UInt16(f.types.get(slot)) == LocalType.HOST_CLOSURE
+    }
+
+    /** 栈账所需的 `argc`（`CALL_*` 家族）；其余 0。 */
+    private static func effectArgc(op: UInt8, insn: DecodedInsn): Int64 {
+        if (op == Op.CALL_HELPER || op == Op.CALL_HELPER_NC || op == Op.CALL_HELPER_V ||
+            op == Op.CALL_FUNC) {
+            return Int64(InsnDecoder.u8(insn, 2))
+        }
+        if (op == Op.CALL_CLOSURE || op == Op.CALL_HOST) {
+            return Int64(InsnDecoder.u8(insn, 0))
+        }
+        0
+    }
+
+    /** `LOADL*` 压入的槽号；其余返回 −1。 */
+    private static func loadedSlotOf(op: UInt8, insn: DecodedInsn): Int64 {
+        if (op == Op.LOADL) {
+            return Int64(InsnDecoder.u16(insn, 0))
+        }
+        if (op >= Op.LOADL0 && op <= Op.LOADL3) {
+            return Int64(op - Op.LOADL0)
+        }
+        -1
     }
 
     /** 目录内按 fnId 查形参个数；未命中 → −1。 */

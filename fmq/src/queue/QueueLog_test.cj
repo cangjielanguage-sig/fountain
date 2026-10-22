@@ -19,11 +19,18 @@ import std.fs.*
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_io.LogPosition
+import fountain::fmq.test.TestDirs
 
 @Test
 class QueueLogTest {
+    /** 进程不再注册 `atExit`，整个类的临时目录在收尾时统一回收。 */
+    @AfterAll
+    static func removeTempDirs(): Unit {
+        TestDirs.cleanNamespace("queue_log")
+    }
+
     private static func dirOf(name: String): String {
-        "/tmp/fmq_test_queue_log/${name}"
+        TestDirs.of("queue_log", name)
     }
 
     private static func clean(dir: String): Unit {
@@ -37,7 +44,33 @@ class QueueLogTest {
     }
 
     private static func readOne(log: QueueLog, position: LogPosition): Array<Byte> {
-        log.readAt(position).getOrThrow()
+        match (log.readAt(position)) {
+            case Record(data) => data
+            case _ => throw Exception("expected a record at ${position.seq}:${position.offset}")
+        }
+    }
+
+    /** 记录总数：从现存编号最小的现存段扫一遍（替代生产侧已删除的 `countAll`）。 */
+    private static func countOf(log: QueueLog): Int64 {
+        let segs = log.segmentsOrEmpty()
+        if (segs.size == 0) {
+            return 0
+        }
+        log.scanAfter(LogPosition(segs[0].index, 0))[0]
+    }
+
+    private static func isCorrupt(log: QueueLog, position: LogPosition): Bool {
+        match (log.readAt(position)) {
+            case Corrupt => true
+            case _ => false
+        }
+    }
+
+    private static func isGone(log: QueueLog, position: LogPosition): Bool {
+        match (log.readAt(position)) {
+            case SegmentGone => true
+            case _ => false
+        }
     }
 
     @TestCase
@@ -111,19 +144,103 @@ class QueueLogTest {
         }
     }
 
+    /** 段末尾位点（`offset == size`）必须归一化到后继段，不得判成损坏（R3-C1）。 */
     @TestCase
-    public func unknownSegmentThrows(): Unit {
+    public func positionAtSegmentEndRollsToNextSegment(): Unit {
+        let dir = dirOf("segment_end")
+        clean(dir)
+        // 每条 entry 32 字节（4 字节头 + 28）⇒ 段上限 64 正好两条
+        let log = QueueLog(dir, 64, 1)
+        try {
+            let first = recordOf(0x11u8, 28)
+            let second = recordOf(0x22u8, 28)
+            let third = recordOf(0x33u8, 28)
+            @Assert(log.append(first).seq == 1)
+            @Assert(log.append(second).seq == 1)
+            // 两条都确认后 committed = (1, 64)，追加第 3 条触发轮转
+            let rotated = log.append(third)
+            @Assert(rotated.seq == 2 && rotated.offset == 0)
+
+            let reader = log.openRecordsFrom(LogPosition(1, 64))
+            let item = reader.next().getOrThrow()
+            @Assert(item[0] == third)
+            @Assert(item[1].seq == rotated.seq && item[1].offset == rotated.offset)
+            @Assert(!reader.isCorrupted())
+            @Assert(reader.next().isNone())
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** 同一位置做统计也必须可用：从段末尾起算 `backlog`，不得抛损坏（R3-C1）。 */
+    @TestCase
+    public func statsFromSegmentEndCountsBacklog(): Unit {
+        let dir = dirOf("segment_end_stats")
+        clean(dir)
+        let log = QueueLog(dir, 64, 1)
+        try {
+            log.append(recordOf(0x11u8, 28))
+            log.append(recordOf(0x22u8, 28))
+            log.append(recordOf(0x33u8, 28))
+            let (count, _) = log.scanAfter(LogPosition(1, 64))
+            @Assert(count == 1)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** 段读满且没有后继段：返回 `None`（干净结束），不报损坏。 */
+    @TestCase
+    public func segmentEndWithoutNextSegmentEndsCleanly(): Unit {
+        let dir = dirOf("segment_end_tail")
+        clean(dir)
+        let log = QueueLog(dir, 64, 1)
+        try {
+            log.append(recordOf(0x11u8, 28))
+            log.append(recordOf(0x22u8, 28))
+            @Assert(log.segments().size == 1)
+            let reader = log.openRecordsFrom(LogPosition(1, 64))
+            @Assert(reader.next().isNone())
+            @Assert(!reader.isCorrupted())
+            @Assert(log.scanAfter(LogPosition(1, 64))[0] == 0)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** 起点段已被清理：从最接近的更大段继续，不抛 `IllegalArgumentException`（A47）。 */
+    @TestCase
+    public func unknownSegmentResumesAtNextSegment(): Unit {
         let dir = dirOf("unknown_segment")
         clean(dir)
-        let log = QueueLog(dir, 1024, 1)
+        // 每条 entry 20 字节 ⇒ 段上限 20 时一条一段
+        let log = QueueLog(dir, 20, 1)
         try {
-            var threw = false
-            try {
-                log.openRecordsFrom(LogPosition(999, 0))
-            } catch (_: IllegalArgumentException) {
-                threw = true
+            for (i in 0..8) {
+                log.append(recordOf(UInt8(i), 16))
             }
-            @Assert(threw)
+            // 运维删段 7：位点仍指向 7，读取要从 8 的起点继续
+            log.removeById(7)
+            let reader = log.openRecordsFrom(LogPosition(7, 0))
+            try {
+                let item = reader.next().getOrThrow()
+                @Assert(item[1].seq == 8)
+                @Assert(item[1].offset == 0)
+                @Assert(item[0] == recordOf(7u8, 16))
+                @Assert(reader.next().isNone())
+            } finally {
+                reader.close()
+            }
+            // 没有任何后继段：返回空流，不抛异常
+            let empty = log.openRecordsFrom(LogPosition(999, 0))
+            try {
+                @Assert(empty.next().isNone())
+            } finally {
+                empty.close()
+            }
         } finally {
             log.close()
             clean(dir)
@@ -263,6 +380,503 @@ class QueueLogTest {
             }
             @Assert(rejected)
             reader.close()
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    // ===== 长度头上界（A45） =====
+
+    /** 直接在段文件里写原始字节，模拟损坏段。 */
+    private static func rawLog(name: String, segments: Array<Array<Byte>>, maxFileSize!: Int64 = 1024 * 1024):
+        QueueLog {
+        let dir = dirOf(name)
+        clean(dir)
+        Directory.create(dir, recursive: true)
+        for (i in 0..segments.size) {
+            let file = File.create("${dir}/log_${i + 1}.log")
+            file.write(segments[i])
+            file.close()
+        }
+        QueueLog(dir, maxFileSize, 1)
+    }
+
+    private static func concat(left: Array<Byte>, right: Array<Byte>): Array<Byte> {
+        let out = Array<Byte>(left.size + right.size, repeat: 0u8)
+        left.copyTo(out, 0, 0, left.size)
+        right.copyTo(out, 0, left.size, right.size)
+        out
+    }
+
+    private static func header(value: Int64): Array<Byte> {
+        [
+            UInt8((value >> 24) & 0xff),
+            UInt8((value >> 16) & 0xff),
+            UInt8((value >> 8) & 0xff),
+            UInt8(value & 0xff)
+        ]
+    }
+
+    @TestCase
+    public func hugeDeclaredLengthIsRejectedWithoutAllocation(): Unit {
+        // 长度头 0xFFFFFFFF：绝不能据此申请 4 GiB
+        let log = rawLog("corrupt_huge", [header(0xFFFFFFFF)])
+        let dir = dirOf("corrupt_huge")
+        try {
+            @Assert(isCorrupt(log, LogPosition(1, 0)))
+            var thrown = false
+            try {
+                log.scanAfter(LogPosition(1, 0))
+            } catch (_: QueueCorruptionException) {
+                thrown = true
+            }
+            @Assert(thrown)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    @TestCase
+    public func declaredLengthBeyondRemainingIsRejected(): Unit {
+        let segment = concat(header(100), [1u8, 2u8, 3u8])
+        let log = rawLog("corrupt_remaining", [segment])
+        let dir = dirOf("corrupt_remaining")
+        try {
+            @Assert(isCorrupt(log, LogPosition(1, 0)))
+            var thrown = false
+            try {
+                log.scanAfter(LogPosition(1, 0))
+            } catch (_: QueueCorruptionException) {
+                thrown = true
+            }
+            @Assert(thrown)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    @TestCase
+    public func lengthEqualToRemainingIsValid(): Unit {
+        let log = rawLog("exact_remaining", [concat(header(3), [1u8, 2u8, 3u8])])
+        let dir = dirOf("exact_remaining")
+        try {
+            @Assert(readOne(log, LogPosition(1, 0)) == [1u8, 2u8, 3u8])
+            let scanned = log.scanAfter(LogPosition(1, 0))
+            @Assert(scanned[0] == 1)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    @TestCase
+    public func incompleteHeaderIsCorruption(): Unit {
+        let log = rawLog("corrupt_header", [[1u8, 2u8]])
+        let dir = dirOf("corrupt_header")
+        try {
+            @Assert(isCorrupt(log, LogPosition(1, 0)))
+            var thrown = false
+            try {
+                log.scanAfter(LogPosition(1, 0))
+            } catch (_: QueueCorruptionException) {
+                thrown = true
+            }
+            @Assert(thrown)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** 零长度头是损坏而不是干净结束：判损坏、停止读取，扫描抛损坏异常（R3-M1）。 */
+    @TestCase
+    public func zeroLengthHeaderIsCorruption(): Unit {
+        let log = rawLog("zero_length", [header(0)])
+        let dir = dirOf("zero_length")
+        try {
+            @Assert(isCorrupt(log, LogPosition(1, 0)))
+            var thrown = false
+            try {
+                log.scanAfter(LogPosition(1, 0))
+            } catch (_: QueueCorruptionException) {
+                thrown = true
+            }
+            @Assert(thrown)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** 多字节记录：长度头按字节计，读取与扫描都不截断（R3-M10）。 */
+    @TestCase
+    public func multiByteRecordRoundTrips(): Unit {
+        let dir = dirOf("multibyte")
+        clean(dir)
+        let log = QueueLog(dir, 1024, 1)
+        try {
+            let text = "订单-2026-中文标签".toArray()
+            let first = log.append(text)
+            @Assert(readOne(log, first) == text)
+            @Assert(log.segments()[0].size == 4 + text.size)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** 记录上限随段上限收敛：1024 字节段只接受 1020 字节记录（R3-M10）。 */
+    @TestCase
+    public func recordLimitFollowsSegmentSize(): Unit {
+        let dir = dirOf("record_limit")
+        clean(dir)
+        let log = QueueLog(dir, 1024, 1)
+        try {
+            let atLimit = log.append(recordOf(0x11u8, 1020))
+            @Assert(readOne(log, atLimit).size == 1020)
+            var threw = false
+            try {
+                log.append(recordOf(0x22u8, 1021))
+            } catch (_: IllegalArgumentException) {
+                threw = true
+            }
+            @Assert(threw)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** sync 后重开段日志仍可完整读回（R3-M11）。 */
+    @TestCase
+    public func syncedRecordsSurviveReopen(): Unit {
+        let dir = dirOf("sync_reopen")
+        clean(dir)
+        let first = QueueLog(dir, 1024, 1)
+        let payload = recordOf(0x5Au8, 128)
+        let position = first.append(payload)
+        first.sync()
+        first.close()
+
+        let reopened = QueueLog(dir, 1024, 1)
+        try {
+            @Assert(readOne(reopened, position) == payload)
+            var found = false
+            for (meta in reopened.segments()) {
+                if (meta.index == position.seq) {
+                    found = true
+                }
+            }
+            @Assert(found)
+        } finally {
+            reopened.close()
+            clean(dir)
+        }
+    }
+
+    /** 段被真正删除后读取按「段缺失」处理，跳到后继段继续，不判损坏（R3-M2）。 */
+    @TestCase
+    public func missingSegmentResumesAtNextSegmentNotCorruption(): Unit {
+        let dir = dirOf("read_at_gone")
+        clean(dir)
+        // 段上限 50：每条 44 字节的表项独占一段
+        let log = QueueLog(dir, 50, 1)
+        try {
+            let first = log.append(recordOf(0x11u8, 40))
+            let second = log.append(recordOf(0x22u8, 40))
+            let third = log.append(recordOf(0x33u8, 40))
+            @Assert(first.seq == 1 && second.seq == 2 && third.seq == 3)
+            log.removeById(1)
+            // 起点落在被删段：归一化到段 2 的第一条，不报损坏
+            @Assert(readOne(log, LogPosition(1, 0)) == recordOf(0x22u8, 40))
+            // 尾段读完之后没有后继段：按段缺失处理
+            @Assert(isGone(log, LogPosition(3, third.offset + 44)))
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    @TestCase
+    public func corruptionDoesNotReadIntoNextSegment(): Unit {
+        // 段 1 声明 1000 字节但只剩 3 字节；段 2 有合法记录，不得被读进来充数
+        let log = rawLog("corrupt_cross", [concat(header(1000), [1u8, 2u8, 3u8]), concat(header(2), [9u8, 9u8])],
+            maxFileSize: 16)
+        let dir = dirOf("corrupt_cross")
+        try {
+            @Assert(isCorrupt(log, LogPosition(1, 0)))
+            var thrown = false
+            try {
+                log.scanAfter(LogPosition(1, 0))
+            } catch (_: QueueCorruptionException) {
+                thrown = true
+            }
+            @Assert(thrown)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    // ===== 扫描 / 计数 / 重开（A56） =====
+
+    /** `scanAfter` 的起点语义：从中间位置只数后面的记录。 */
+    @TestCase
+    public func scanAfterCountsFromGivenPosition(): Unit {
+        let dir = dirOf("scan_after")
+        clean(dir)
+        let log = QueueLog(dir, 1024 * 1024, 1)
+        try {
+            let first = log.append(recordOf(0x11u8, 16))
+            let second = log.append(recordOf(0x22u8, 16))
+            let third = log.append(recordOf(0x33u8, 16))
+            @Assert(countOf(log) == 3)
+            @Assert(log.scanAfter(first)[0] == 3)
+            @Assert(log.scanAfter(second)[0] == 2)
+            @Assert(log.scanAfter(third)[0] == 1)
+            // 越过末尾：0 条
+            @Assert(log.scanAfter(LogPosition(third.seq, third.offset + 20))[0] == 0)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /**
+     * 起点段落在空洞里时：从最接近的更大段继续扫描，不得静默返回 0。
+     *
+     * 规格 `queue-storage`「起始段落在空洞」：起点段 5、现存 1/7/8 ⇒ 从段 7 继续并记 WARN。
+     */
+    @TestCase
+    public func scanAfterSkipsGapToNextSegment(): Unit {
+        let dir = dirOf("scan_after_hole")
+        clean(dir)
+        // 每条 entry 20 字节 ⇒ 段上限 20 时一条一段
+        let log = QueueLog(dir, 20, 1)
+        try {
+            for (i in 0..8) {
+                log.append(recordOf(UInt8(i), 16))
+            }
+            // 运维手删中间段：只剩 1、7、8
+            for (i in 2..=6) {
+                log.removeById(i)
+            }
+            @Assert(log.segments().size == 3)
+            @Assert(log.segments()[0].index == 1)
+            @Assert(log.scanAfter(LogPosition(5, 0))[0] == 2)
+            // 不回退到更老的段：从段 5 起读的第一条必须是段 7 的第一条
+            let reader = log.openRecordsFrom(LogPosition(5, 0))
+            try {
+                let item = reader.next().getOrThrow()
+                @Assert(item[0] == recordOf(6u8, 16))
+            } finally {
+                reader.close()
+            }
+            // 没有任何后继段：返回空（并记 WARN），不抛异常
+            @Assert(log.scanAfter(LogPosition(99, 0))[0] == 0)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** 同一位置连续 100 轮不可读：段缺失 WARN 受秒级限流（R3-M9）。 */
+    @TestCase
+    public func missingSegmentWarnIsRateLimited(): Unit {
+        CapturingAppender.install()
+        let dir = dirOf("warn_rate_limit")
+        clean(dir)
+        // 固定时钟：100 轮都落在同一窗口内
+        let log = QueueLog(dir, 50, 1, warnNowMs: {=> 1000i64})
+        try {
+            log.append(recordOf(0x11u8, 40))
+            log.append(recordOf(0x22u8, 40))
+            log.append(recordOf(0x33u8, 40))
+            log.removeById(1)
+            for (_ in 0..100) {
+                log.openRecordsFrom(LogPosition(1, 0)).close()
+            }
+            @Assert(CapturingAppender.find([dir, "starts at the next existing segment instead of 1:0"]).size == 1)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** 从中间记录开流：只返回该位置及其后的记录。 */
+    @TestCase
+    public func openFromMiddleRecordReturnsRemaining(): Unit {
+        let dir = dirOf("open_middle")
+        clean(dir)
+        let log = QueueLog(dir, 1024 * 1024, 1)
+        try {
+            let a = recordOf(0xA1u8, 8)
+            log.append(a)
+            let b = recordOf(0xB2u8, 8)
+            let pb = log.append(b)
+            log.append(recordOf(0xC3u8, 8))
+            let reader = log.openRecordsFrom(pb)
+            try {
+                let first = reader.next().getOrThrow()
+                @Assert(first[0] == b)
+                @Assert(first[1].offset == pb.offset)
+                @Assert(reader.next().isSome())
+                @Assert(reader.next().isNone())
+            } finally {
+                reader.close()
+            }
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** 关闭后重开：消息与段都可继续读（openTopic 重开不丢数据）。 */
+    @TestCase
+    public func reopenKeepsMessages(): Unit {
+        let dir = dirOf("reopen")
+        clean(dir)
+        let first = QueueLog(dir, 1024 * 1024, 1)
+        let values = [recordOf(0x01u8, 12), recordOf(0x02u8, 12), recordOf(0x03u8, 12)]
+        for (value in values) {
+            first.append(value)
+        }
+        first.close()
+        let second = QueueLog(dir, 1024 * 1024, 1)
+        try {
+            @Assert(countOf(second) == 3)
+            let reader = second.openRecordsFrom(LogPosition(1, 0))
+            try {
+                for (expected in values) {
+                    @Assert(reader.next().getOrThrow()[0] == expected)
+                }
+            } finally {
+                reader.close()
+            }
+        } finally {
+            second.close()
+            clean(dir)
+        }
+    }
+
+    /** 目录整体缺失时 `segmentsOrEmpty` 返回空而不是抛异常。 */
+    @TestCase
+    public func segmentsOrEmptyToleratesMissingDirectory(): Unit {
+        let dir = dirOf("missing_dir")
+        clean(dir)
+        let log = QueueLog(dir, 1024 * 1024, 1)
+        try {
+            log.append(recordOf(0x01u8, 4))
+            remove(dir, recursive: true)
+            @Assert(log.segmentsOrEmpty().size == 0)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** 记录上限与段上限联动：超过段容量的记录必须在写入前被拒，段文件长度不变（R3-C2）。 */
+    @TestCase
+    public func recordLargerThanSegmentIsRejectedBeforeWrite(): Unit {
+        let dir = dirOf("record_over_segment")
+        clean(dir)
+        let log = QueueLog(dir, 1024 * 1024, 1)
+        try {
+            log.append(recordOf(0x11u8, 100))
+            let before = log.size
+            var thrown = false
+            try {
+                log.append(Array<Byte>(2 * 1024 * 1024, repeat: 0u8))
+            } catch (_: IllegalArgumentException) {
+                thrown = true
+            }
+            @Assert(thrown)
+            @Assert(log.size == before)
+            @Assert(log.segments().size == 1)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** 空记录不得写入（否则段里会留下 4 字节零长度头）。 */
+    @TestCase
+    public func emptyRecordIsRejected(): Unit {
+        let dir = dirOf("empty_record")
+        clean(dir)
+        let log = QueueLog(dir, 1024, 1)
+        try {
+            var thrown = false
+            try {
+                log.append([])
+            } catch (_: IllegalArgumentException) {
+                thrown = true
+            }
+            @Assert(thrown)
+            @Assert(log.size == 0)
+            @Assert(log.segments().size == 0 || log.segments()[0].size == 0)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** 段上限必须能容纳 4 字节长度头。 */
+    @TestCase
+    public func segmentLimitMustExceedPrefix(): Unit {
+        let dir = dirOf("tiny_segment")
+        clean(dir)
+        var thrown = false
+        try {
+            let log = QueueLog(dir, QueueLog.PREFIX_SIZE, 1)
+            log.close()
+        } catch (_: IllegalArgumentException) {
+            thrown = true
+        }
+        @Assert(thrown)
+        clean(dir)
+    }
+
+    /** 正例：恰好填满一段的记录可写入、独占段、可完整读回；下一条触发轮转（R3-C2）。 */
+    @TestCase
+    public func recordFillingSegmentSucceeds(): Unit {
+        let dir = dirOf("record_fills_segment")
+        clean(dir)
+        let log = QueueLog(dir, 1024 * 1024, 1)
+        try {
+            let data = Array<Byte>(1024 * 1024 - QueueLog.PREFIX_SIZE, repeat: 0x5Au8)
+            let first = log.append(data)
+            @Assert(first.seq == 1 && first.offset == 0)
+            @Assert(log.segments().size == 1)
+            @Assert(readOne(log, first) == data)
+            let second = log.append(data)
+            @Assert(second.seq == 2 && second.offset == 0)
+            @Assert(readOne(log, second) == data)
+        } finally {
+            log.close()
+            clean(dir)
+        }
+    }
+
+    /** 写入侧同样以 64 MiB 为上界，超限在分配前拒绝（A56）。 */
+    @TestCase
+    public func oversizedRecordIsRejectedBeforeWrite(): Unit {
+        let dir = dirOf("oversized")
+        clean(dir)
+        let log = QueueLog(dir, 1024 * 1024 * 1024, 1)
+        try {
+            @Assert(QueueLog.MAX_RECORD_SIZE == 64 * 1024 * 1024)
+            var thrown = false
+            try {
+                log.append(Array<Byte>(QueueLog.MAX_RECORD_SIZE + 1, repeat: 0u8))
+            } catch (_: IllegalArgumentException) {
+                thrown = true
+            }
+            @Assert(thrown)
+            @Assert(countOf(log) == 0)
         } finally {
             log.close()
             clean(dir)

@@ -1,0 +1,20 @@
+# 仅用于 e2e：把自定义扩展打成动态库，放入 fdbm 的 custom/ 目录。
+[dependencies]
+  "fountain::f_dbm" = {path = "../../../../f_dbm"}
+  "fountain::f_app" = {path = "../../../../f_app"}
+
+[package]
+  cjc-version = "1.3.0"
+  name = "fdbm_custom_ext"
+  description = "fdbm 自定义分区算法 / ID 生成器 e2e 夹具"
+  output-type = "dynamic"
+  version = "0.1.0"
+  src-dir = "src"
+  compile-option = "-Woff unused -Woff deprecated"
+
+[target.aarch64-unknown-linux-gnu]
+  compile-option = "--dy-std -ldl"
+  override-compile-option = "--dy-std -ldl"
+
+[target.aarch64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]

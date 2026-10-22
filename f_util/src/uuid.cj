@@ -20,7 +20,7 @@ import std.fs.{File, Directory, OpenMode}
 import std.io.{SeekPosition, StringReader}
 import std.math.numeric.BigInt
 import std.sync.{AtomicUInt16, AtomicInt64, Mutex}
-import std.time.{TimeZone, DateTime}
+import std.time.{DateTime, TimeZone}
 import stdx.crypto.crypto.*
 import stdx.crypto.digest.{MD5, SHA1}
 import fountain::f_base.{HashBuilder, StringGenerator}
@@ -708,7 +708,11 @@ public class TimestampSequenceBuilder <: Resource {
 
     func timestampAndSequence(randomSeq: Bool): (Int64, UInt16) {
         synchronized(mutex) {
-            let timestamp = (DateTime.now() - timeStart).toNanoseconds() / 100
+            // 1582 年至今的纳秒数超过 Int64 上限（约 292 年），必须拆成秒 + 纳秒余数
+            let elapsed = DateTime.now() - timeStart
+            let seconds = elapsed.toSeconds()
+            let nanos = (elapsed - Duration.second * seconds).toNanoseconds()
+            let timestamp = seconds * 10_000_000 + nanos / 100
             if (randomSeq) {
                 (timestamp, ThreadLocalRandom.current.nextUInt16())
             } else {

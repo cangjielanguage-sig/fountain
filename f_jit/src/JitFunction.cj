@@ -15,14 +15,27 @@ limitations under the License.
 */
 package fountain::f_jit
 
+import std.collection.ArrayList
+import std.reflect.ClassTypeInfo
 import std.reflect.TypeInfo
 import std.sync.Mutex
+import fountain::f_base.UnsafeBytes
+import fountain::f_jit.base.CallContext
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.JitException
 import fountain::f_jit.base.LocalType
+import fountain::f_jit.base.TypeToken
+import fountain::f_jit.compiler.ClassRegistrySnapshot
+import fountain::f_jit.compiler.HostClosureSigDecl
 import fountain::f_jit.runtime.DbgDump
 import fountain::f_jit.runtime.HandleTable
+import fountain::f_jit.runtime.IterTable
 import fountain::f_jit.runtime.JitContext
+import fountain::f_jit.runtime.PromotionGroup
+import fountain::f_jit.runtime.RuntimeEnv
+import fountain::f_jit.runtime.SignatureDescriptor
+import fountain::f_jit.runtime.UserHelperEntry
+import fountain::f_jit.runtime.UserHelperTable
 
 /**
  * S6.5 统一函数包装 `call<T>`（§8.2 六步）。
@@ -49,6 +62,24 @@ public class JitFunction {
     private var release: ?(() -> Unit) = None
     /** 产物是否由机器码执行器承载（false = 纯字节码；用于 T52/诊断）。 */
     private var jitBacked: Bool = false
+    /** 本单元的 user helper 表（m2 §15；空 = 无 user helper，调用期不压栈）。 */
+    private var helperEntries: Array<UserHelperEntry> = Array<UserHelperEntry>()
+    // ---- 逃逸闭包包装（§14.3，M2-8：统一 JitFunction）----
+    /** 非 None = 闭包包装实例；指向承载闭包 fnId 的单元入口实例。 */
+    private var owner: ?JitFunction = None
+    private var closureId: Int64 = 0
+    private var closureGroup: ?PromotionGroup = None
+    private var closedFlag: Bool = false
+    /** 桥注入：`(ctx, closureId, args) -> cell`（闭包帧 `locals[0]`）。 */
+    private var closureRunner: ?((JitContext, Int64, Array<Int64>) -> Int64) = None
+    /** 最近一次 `retType=12` 调用产出的提升组。 */
+    private var lastClosureGroup: ?PromotionGroup = None
+    /** 入口形参的 14 声明类名（`is C` 边界校验，§16.2）。 */
+    private var paramClasses: Array<?String> = Array<?String>()
+    /** 入口形参的 HostClosure 声明签名（验签，§4）。 */
+    private var paramSigs: Array<?SignatureDescriptor> = Array<?SignatureDescriptor>()
+    /** 本单元的类注册表快照（Q5.11；桥侧静态知识）。 */
+    private var classSnapshot: ?ClassRegistrySnapshot = None
 
     public init(nargs: Int64, retType: UInt16, paramTypes: Array<UInt16>,
         body: (JitContext, Array<Int64>) -> Int64,
@@ -81,36 +112,67 @@ public class JitFunction {
 
     /** 六步调用：长度 → 封送 → 执行 → 解包 → `T` 校验 → 返回。 */
     public func call<T>(args: Array<Any>): T {
-        // HandleTable 是进程级单窗口：open/执行/reset 必须串行，否则并发调用会互相清窗。
-        synchronized (JitFunction.callMtx) {
-            this.enter()
-            try {
-                return this.callLocked<T>(args)
-            } finally {
-                this.exit()
+        // 薄委托：错误语义与 `invoke` 完全一致（>0 抛 JitException、−2 抛 InterruptedException）
+        this.invoke<T>(args, CallContext())
+    }
+
+    /**
+     * 带调用选项的六步调用（D3）：`deadline` 到期 ⇒ H22 写 −2 ⇒ `InterruptedException`。
+     *
+     * **deadline 用栈式保存/恢复**而不是每次覆盖：`callMtx` 只串行化顶层调用，同一线程的
+     * 重入（宿主闭包体内再调 JIT）不受锁约束，直接 `setDeadline` 会把外层期限冲掉。
+     * 严格浮点由 `CompileOptions.strictFp` 在**产物层**决定（`FDIV` / `FDIV_CHK`），调用选项不再携带。
+     */
+    public func invoke<T>(args: Array<Any>, options: CallContext): T {
+        let saved = RuntimeEnv.deadlineNanos
+        RuntimeEnv.setDeadline(RuntimeEnv.deadlineNanosOf(options.deadline))
+        try {
+            // HandleTable 是进程级单窗口：open/执行/reset 必须串行，否则并发调用会互相清窗。
+            synchronized (JitFunction.callMtx) {
+                this.enter()
+                try {
+                    return this.callLocked<T>(args, options)
+                } finally {
+                    this.exit()
+                }
             }
+        } finally {
+            RuntimeEnv.setDeadline(saved)
         }
     }
 
-    /** 未卸载/未进入卸载态 → 允许调用；否则 19（§8.7）。 */
+    /** 未卸载/未进入卸载态 → 允许调用；否则 19（§8.7）。包装实例委托单元入口。 */
     private func enter(): Unit {
-        synchronized(this.mtx) {
-            if (this.state != 0) {
-                throw JitException(ErrCode.CALL_CONTRACT, -1, 0, None,
-                    '单元已卸载或正在卸载（§8.7）')
-            }
-            this.active = this.active + 1
+        match (this.owner) {
+            case Some(o) =>
+                o.enter()
+            case None =>
+                synchronized(this.mtx) {
+                    if (this.state != 0) {
+                        throw JitException(ErrCode.CALL_CONTRACT, -1, 0, None,
+                            '单元已卸载或正在卸载（§8.7）')
+                    }
+                    this.active = this.active + 1
+                }
         }
     }
 
     private func exit(): Unit {
-        synchronized(this.mtx) {
-            this.active = this.active - 1
+        match (this.owner) {
+            case Some(o) => o.exit()
+            case None =>
+                synchronized(this.mtx) {
+                    this.active = this.active - 1
+                }
         }
     }
 
     /** 卸载：等待活跃调用排空；超时恢复 Ready 返回 false；双卸载幂等。 */
     public func unload(timeoutMs: Int64): Bool {
+        match (this.owner) {
+            case Some(o) => return o.unload(timeoutMs)
+            case None => ()
+        }
         synchronized(this.mtx) {
             if (this.state == 2) {
                 return true
@@ -157,35 +219,190 @@ public class JitFunction {
         this.jitBacked = true
     }
 
+    /** 装载层内部：绑定本单元 user helper 表（slot 0 = hid 0x0100）。 */
+    internal func bindUserHelpers(entries: Array<UserHelperEntry>): Unit {
+        this.helperEntries = entries
+    }
+
+    /** 装载层内部：绑定入口形参的 14 类名 / HostClosure 签名 / 类快照。 */
+    internal func bindEntryMeta(paramClasses: Array<?String>,
+        paramSigs: Array<?HostClosureSigDecl>,
+        classSnap: ?ClassRegistrySnapshot): Unit {
+        this.paramClasses = paramClasses
+        let sigs = ArrayList<?SignatureDescriptor>()
+        for (s in paramSigs) {
+            match (s) {
+                case Some(d) => sigs.add(Some(SignatureDescriptor(d.params, d.ret,
+                    paramNames: d.paramNames, retName: d.retName)))
+                case None => sigs.add(None)
+            }
+        }
+        this.paramSigs = sigs.toArray()
+        this.classSnapshot = classSnap
+    }
+
+    /** 装载层内部：绑定闭包调用器（包装器调用走既有闭包帧，§14.3）。 */
+    internal func bindClosureRunner(r: (JitContext, Int64, Array<Int64>) -> Int64): Unit {
+        this.closureRunner = Some(r)
+    }
+
+    /**
+     * 桥内部构造闭包包装实例（宿主不直接调用）。
+     *
+     * `nargs < 0` / `retType == NONE` 表示签名未知：调用期按实参/`T` 动态封送与解包。
+     */
+    internal static func wrapClosure(owner: JitFunction, id: JitClosureId,
+        group: PromotionGroup, nargs: Int64, retType: UInt16,
+        paramTypes: Array<UInt16>): JitFunction {
+        let body = { ctx: JitContext, cells: Array<Int64> =>
+            owner.invokeClosure(ctx, id.id, cells)
+        }
+        let f = JitFunction(nargs, retType, paramTypes, body, body, '')
+        f.owner = Some(owner)
+        f.closureId = id.id
+        f.closureGroup = Some(group)
+        f
+    }
+
+    /** 闭包包装：是否已 `close`；非包装实例恒 false。 */
+    public prop isClosed: Bool {
+        get() {
+            this.closedFlag
+        }
+    }
+
+    /**
+     * 显式释放闭包包装（唯一释放路径，§14.2）：提升组计数 −1、归零释放；幂等。
+     *
+     * 非闭包包装实例 → 19（site=-1），避免"以为已释放"。
+     */
+    public func close(): Unit {
+        if (this.owner.isNone()) {
+            throw JitException(ErrCode.CALL_CONTRACT, -1, 0, None,
+                '非闭包包装实例不可 close（m2 §14.3）')
+        }
+        if (this.closedFlag) {
+            return
+        }
+        this.closedFlag = true
+        match (this.closureGroup) {
+            case Some(g) => g.releaseAll()
+            case None => ()
+        }
+    }
+
+    /**
+     * 返回闭包的强类型入口（m2 §9.1/§14）：调用单元 → 取回返回闭包 → 交宿主可调用包装。
+     *
+     * `Fn` = 返回闭包的函数类型（编译期已知）；解析失败时退化为动态签名（零运行期函数判定）。
+     */
+    public func callForFn<Fn>(args: Array<Any>): JitFunction {
+        if (this.owner.isSome()) {
+            return JitFunction.contractFail('包装实例不可再 callForFn（m2 §9.1）')
+        }
+        if (this.retType != LocalType.CLOSURE) {
+            return JitFunction.contractFail('callForFn 要求单元返回闭包（retType=12）')
+        }
+        let typeName = TypeInfo.of<Fn>().name
+        // 整个过程在 `callMtx` 内完成（A6/P2-4）：`lastClosureGroup` 是**单元级**字段，
+        // 锁外读取会让两个线程拿到彼此的提升组（close 一侧会提前释放另一侧的捕获）。
+        // 取完立即清空，禁止跨调用残留。
+        synchronized (JitFunction.callMtx) {
+            this.enter()
+            var id = JitClosureId(JitClosureId.INVALID)
+            var group = PromotionGroup()
+            try {
+                id = this.callLocked<JitClosureId>(args, CallContext())
+                group = match (this.lastClosureGroup) {
+                    case Some(g) => g
+                    case None => PromotionGroup()
+                }
+                this.lastClosureGroup = None
+            } finally {
+                this.exit()
+            }
+            match (JitFunction.parseFnType(typeName)) {
+                case Some(sig) =>
+                    JitFunction.wrapClosure(this, id, group, Int64(sig.params.size), sig.ret,
+                        sig.params)
+                case None =>
+                    JitFunction.wrapClosure(this, id, group, -1, LocalType.NONE, Array<UInt16>())
+            }
+        }
+    }
+
     public func unload(): Bool {
         this.unload(0)
     }
 
     public func isUnloaded(): Bool {
-        synchronized(this.mtx) {
-            this.state == 2
+        match (this.owner) {
+            case Some(o) => o.isUnloaded()
+            case None =>
+                synchronized(this.mtx) {
+                    this.state == 2
+                }
         }
     }
 
-    private func callLocked<T>(args: Array<Any>): T {
-        // 1. 参数个数
-        if (Int64(args.size) != this.nargs) {
-            return JitFunction.contractFail('实参个数不符：期望 ${this.nargs}，实际 ${args.size}')
+    /** 桥/测试内部：本单元持有的类注册表快照（Q5.11）。 */
+    internal func classSnapshotOf(): ?ClassRegistrySnapshot {
+        this.classSnapshot
+    }
+
+    /** 桥/测试内部：最近一次 `retType=12` 调用的提升组。 */
+    internal func lastPromotionGroup(): ?PromotionGroup {
+        this.lastClosureGroup
+    }
+
+    private func callLocked<T>(args: Array<Any>, options: CallContext): T {
+        let isWrapper = this.owner.isSome()
+        if (this.closedFlag) {
+            return JitFunction.contractFail('闭包包装已 close（m2 §14.3）')
         }
-        // 5（前置）：`T` 与签名返回类型一致
+        if (isWrapper && !HandleTable.isLiveHandle(this.closureId)) {
+            return JitFunction.contractFail('闭包句柄已失效（旧 ID 校验拦截）')
+        }
+        // 1. 参数个数（包装实例签名未知时按实参个数动态）
+        if (!(isWrapper && this.nargs < 0)) {
+            if (Int64(args.size) != this.nargs) {
+                return JitFunction.contractFail('实参个数不符：期望 ${this.nargs}，实际 ${args.size}')
+            }
+        }
+        // 5（前置）：`T` 与签名返回类型一致（包装实例签名未知时以 `T` 为解包类型）
         let want = JitFunction.localTypeOf<T>()
+        let dynamicRet = isWrapper && this.retType == LocalType.NONE
         match (want) {
             case Some(t) =>
-                if (t != this.retType) {
+                if (!dynamicRet && t != this.retType) {
                     return JitFunction.contractFail('T 与返回类型不符（§8.2 第 5 步）')
                 }
             case None => return JitFunction.contractFail('T 不是可解包类型')
+        }
+        let unboxCode = if (dynamicRet) {
+            match (want) {
+                case Some(t) => t
+                case None => LocalType.NONE
+            }
+        } else {
+            this.retType
+        }
+        let dynamicArgs = isWrapper && Int64(this.paramTypes.size) != Int64(args.size)
+        let helpers = if (isWrapper) {
+            match (this.owner) {
+                case Some(o) => o.helperEntries
+                case None => this.helperEntries
+            }
+        } else {
+            this.helperEntries
         }
         let marshal = CallMarshal()
         // 每次调用独立窗口：执行期分配的句柄在 finally 统一回收（design §9.5 / T27）。
         HandleTable.openWindow(HandleTable.initialCapacity)
         let ctx = JitContext.create(hwBase: HandleTable.windowBaseOf(),
             hwCap: HandleTable.windowCapOf(), fnId: 0, dbgBase: 0)
+        // `ctx.flags` bit0 是历史保留位（X3）：严格浮点已改为产物级 opcode 差异，
+        // 运行期不再有读者；这里不再写入。
         HandleTable.syncTo(ctx)
         let dump = match (this.diagReporter) {
             case Some(_) => DbgDump.allocateDump(this.diagMaxLocals)
@@ -195,11 +412,25 @@ public class JitFunction {
             ctx.attachDump(dump)
         }
         try {
+            if (helpers.size > 0) {
+                UserHelperTable.push(0u16, helpers)
+            }
             // 2. 封送
             let cells = Array<Int64>(args.size, repeat: 0)
             var i = 0
             while (i < args.size) {
-                cells[i] = marshal.marshalArg(this.paramTypes[i], args[i])
+                if (dynamicArgs) {
+                    cells[i] = JitFunction.marshalDynamic(marshal, args[i])
+                } else if (isWrapper) {
+                    cells[i] = JitFunction.marshalDeclared(marshal, this.paramTypes[i], args[i])
+                } else {
+                    let code = this.paramTypes[i]
+                    if (code == LocalType.HOST_CLOSURE) {
+                        cells[i] = marshal.marshalHostClosure(args[i], this.sigAt(i))
+                    } else {
+                        cells[i] = marshal.marshalArg(code, args[i], className: this.classAt(i))
+                    }
+                }
                 i = i + 1
             }
             // 3. 执行 + 三态收尾
@@ -210,9 +441,10 @@ public class JitFunction {
             }
             let ret = JitReport.finish(ctx, cell, { => this.replay(ctx, cells) }, report)
             // 4. 解包；句柄型返回值已取成宿主对象，立即归还句柄（否则每次调用泄漏 1 槽）
-            let v = marshal.makeRetUnboxer(this.retType)(ret)
-            if (this.retType >= LocalType.STRING && this.retType <= LocalType.MAP) {
-                HandleTable.releaseEscaped(ret)
+            let v = marshal.makeRetUnboxer(unboxCode)(ret)
+            let _ = JitFunction.releaseReturnHandle(ret, unboxCode, this.closureGroup)
+            if (unboxCode == LocalType.CLOSURE) {
+                this.lastClosureGroup = marshal.closureGroupOf()
             }
             // 6. 返回 T
             match (v as T) {
@@ -220,7 +452,13 @@ public class JitFunction {
                 case None => return JitFunction.contractFail('返回值与 T 不符')
             }
         } finally {
+            if (helpers.size > 0) {
+                UserHelperTable.pop()
+            }
             marshal.cleanup()
+            // 迭代器表是**调用级**资源：正常返回 / 抛错 / 中断 / DEOPT 重放四条出口都在
+            // finally 收尾，跨调用的陈旧游标一律失效（A5/P2-2）。
+            IterTable.clearAll()
             HandleTable.resetWindow(-1)
             if (!dump.isNull()) {
                 DbgDump.freeDump(dump)
@@ -229,8 +467,232 @@ public class JitFunction {
         }
     }
 
+    /**
+     * 归还返回位置的逃逸句柄（A2/P2-3）。
+     *
+     * 覆盖 4–14（12 除外，闭包有自己的提升组）、**15** 与 **16–19**：后两组此前落在
+     * `4..14` 条件外，每次「返回 Any / 返回 JSON 节点」都泄漏 1 槽（跨调用单调增长）。
+     * 包装闭包返回的句柄若属于提升组（捕获的 14/容器），释放权在 `close`，此处不归。
+     */
+    internal static func releaseReturnHandle(ret: Int64, unboxCode: UInt16,
+        group: ?PromotionGroup): Bool {
+        if (!JitFunction.isReturnedHandle(unboxCode)) {
+            return false
+        }
+        match (group) {
+            case Some(g) => if (g.contains(ret)) { return false }
+            case None => ()
+        }
+        HandleTable.releaseEscaped(ret)
+        true
+    }
+
+    /** 句柄型返回码：4–14 去 12、15、16–19（13 沿用 M2 既有口径）。 */
+    internal static func isReturnedHandle(unboxCode: UInt16): Bool {
+        let hosted = unboxCode >= LocalType.STRING && unboxCode <= LocalType.HOST_OBJECT &&
+            unboxCode != LocalType.CLOSURE
+        hosted || unboxCode == LocalType.ANY ||
+            (unboxCode >= LocalType.JSON_VALUE && unboxCode <= LocalType.JSON_NULL)
+    }
+
+    private func classAt(i: Int64): ?String {
+        if (i >= 0 && i < this.paramClasses.size) {
+            this.paramClasses[i]
+        } else {
+            None
+        }
+    }
+
+    private func sigAt(i: Int64): ?SignatureDescriptor {
+        if (i >= 0 && i < this.paramSigs.size) {
+            this.paramSigs[i]
+        } else {
+            None
+        }
+    }
+
+    /** 包装实例的已声明参数行（13 的验签在 Q5.10 接入；其余同 `call<T>`）。 */
+    private static func marshalDeclared(m: CallMarshal, code: UInt16, v: Any): Int64 {
+        if (code == LocalType.HOST_CLOSURE) {
+            return JitFunction.contractFail('HostClosure 参数缺少声明签名（m2 §4）')
+        }
+        m.marshalArg(code, v)
+    }
+
+    /** 包装实例签名未知时的动态封送（按宿主值大类；包装值本身拒绝作实参）。 */
+    private static func marshalDynamic(m: CallMarshal, v: Any): Int64 {
+        match (v) {
+            case i: Int64 => return i
+            case f: Float64 => return m.marshalArg(LocalType.F64, f)
+            case b: Bool => return m.marshalArg(LocalType.BOOL, b)
+            case u: Unit =>
+                let _ = u
+                return 0
+            case _: JitFunction =>
+                return JitFunction.contractFail('包装值不得直接作实参（m2 §9.1）')
+            case _ => ()
+        }
+        let tok = HandleTable.tokenOf(v)
+        if (tok != TypeToken.RESERVED) {
+            let code = LocalType.fromToken(tok)
+            if (code != LocalType.NONE) {
+                return m.marshalArg(code, v)
+            }
+        }
+        match (v) {
+            case o: Object => return m.marshalArg(LocalType.HOST_OBJECT, o)
+            case _ => return JitFunction.contractFail('该实参类型不可封送（§8.2.1）')
+        }
+    }
+
+    /** 包装器调用：桥注入的闭包帧执行（`locals[0]` = 闭包句柄）。 */
+    private func invokeClosure(ctx: JitContext, ch: Int64, args: Array<Int64>): Int64 {
+        match (this.closureRunner) {
+            case Some(r) => r(ctx, ch, args)
+            case None =>
+                throw JitException(ErrCode.HELPER_PANIC, -1, 0, None,
+                    '闭包包装缺少桥调用器（m2 §14.3）')
+        }
+    }
+
+    /** 解析 `TypeInfo` 的函数类型名（`(T1, T2) -> R`）；失败 → None（退化为动态签名）。 */
+    private static func parseFnType(name: String): ?JitFnSig {
+        let b = name.unsafeBytes()
+        // 本机 `TypeInfo` 的函数类型名形如 `Closure<(Int64)->Int64>`；也兼容裸 `(T) -> R`。
+        var begin = 0
+        var end = b.size
+        if (name.startsWith('Closure<') && end > 9) {
+            begin = 8
+            end = end - 1
+        }
+        var arrow = -1
+        var i = begin
+        while (i + 1 < end) {
+            if (b[i] == 0x2Du8 && b[i + 1] == 0x3Eu8) {
+                arrow = i
+                break
+            }
+            i = i + 1
+        }
+        if (arrow < 0) {
+            return None
+        }
+        var lp = -1
+        var rp = -1
+        i = begin
+        while (i < arrow) {
+            if (b[i] == 0x28u8) {
+                lp = i
+            }
+            if (b[i] == 0x29u8) {
+                rp = i
+            }
+            i = i + 1
+        }
+        if (lp < 0 || rp <= lp) {
+            return None
+        }
+        let params = ArrayList<UInt16>()
+        var start = lp + 1
+        if (rp > start) {
+            i = start
+            while (i <= rp) {
+                if (i == rp || b[i] == 0x2Cu8) {
+                    let part = JitFunction.typeNameOf(b, start, i)
+                    match (JitFunction.codeOfTypeName(part)) {
+                        case Some(c) => params.add(c)
+                        case None => return None
+                    }
+                    start = i + 1
+                }
+                i = i + 1
+            }
+        }
+        let retName = JitFunction.typeNameOf(b, arrow + 2, end)
+        match (JitFunction.codeOfTypeName(retName)) {
+            case Some(r) => Some(JitFnSig(params.toArray(), r))
+            case None => None
+        }
+    }
+
+    /** 取 `[start, end)` 的 ASCII 文本并去掉空白。 */
+    private static func typeNameOf(b: Array<UInt8>, start: Int64, end: Int64): String {
+        let out = ArrayList<UInt8>()
+        var i = start
+        while (i < end) {
+            if (b[i] != 0x20u8 && b[i] != 0x09u8) {
+                out.add(b[i])
+            }
+            i = i + 1
+        }
+        String.fromUtf8(out.toArray())
+    }
+
+    /** 去掉命名空间前缀（`std.collection.ArrayList<Int64>` → `ArrayList<Int64>`）。 */
+    private static func simpleTypeName(name: String): String {
+        let b = name.unsafeBytes()
+        var lastDot = -1
+        var i = 0
+        while (i < b.size) {
+            let c = b[i]
+            if (c == 0x3Cu8) { // '<'：只在前缀段找分隔符
+                break
+            }
+            if (c == 0x2Eu8) { // '.'
+                lastDot = i
+            }
+            i = i + 1
+        }
+        if (lastDot <= 0) {
+            return name
+        }
+        let n = b.size - lastDot - 1
+        var out = Array<UInt8>(n, repeat: 0u8)
+        var j = 0
+        while (j < n) {
+            out[j] = b[lastDot + 1 + j]
+            j = j + 1
+        }
+        String.fromUtf8(out)
+    }
+
+    private static func codeOfTypeName(name: String): ?UInt16 {
+        let sn = JitFunction.simpleTypeName(name)
+        match (sn) {
+            case 'Int64' => Some(LocalType.I64)
+            case 'Float64' => Some(LocalType.F64)
+            case 'Bool' => Some(LocalType.BOOL)
+            case 'Unit' => Some(LocalType.UNIT)
+            case 'String' => Some(LocalType.STRING)
+            case 'Decimal' => Some(LocalType.DECIMAL)
+            case 'DateTime' => Some(LocalType.DATETIME)
+            case 'Duration' => Some(LocalType.DURATION)
+            case 'Regex' => Some(LocalType.REGEX)
+            // M3：与 `localTypeOf` 同表（闭包签名里的 Any / JSON 不能被误记为 14）
+            case 'Any' => Some(LocalType.ANY)
+            case 'JsonValue' => Some(LocalType.JSON_VALUE)
+            case 'JsonObject' => Some(LocalType.JSON_OBJECT)
+            case 'JsonArray' => Some(LocalType.JSON_ARRAY)
+            case 'JsonNull' => Some(LocalType.JSON_NULL)
+            case _ =>
+                if (sn.startsWith('Range')) {
+                    Some(LocalType.RANGE)
+                } else if (sn.startsWith('ArrayList')) {
+                    Some(LocalType.LIST)
+                } else if (sn.startsWith('HashMap')) {
+                    Some(LocalType.MAP)
+                } else if (sn.isEmpty()) {
+                    None
+                } else {
+                    // 注册类（或其它类）统一按 14；具体类由前端/验签静态知识承担。
+                    Some(LocalType.HOST_OBJECT)
+                }
+        }
+    }
+
     private static func localTypeOf<T>(): ?UInt16 {
-        let n = TypeInfo.of<T>().name
+        let info = TypeInfo.of<T>()
+        let n = JitFunction.simpleTypeName(info.name)
         if (n == 'Int64') {
             return Some(LocalType.I64)
         }
@@ -246,10 +708,66 @@ public class JitFunction {
         if (n == 'String') {
             return Some(LocalType.STRING)
         }
-        None
+        if (n == 'Decimal') {
+            return Some(LocalType.DECIMAL)
+        }
+        if (n == 'DateTime') {
+            return Some(LocalType.DATETIME)
+        }
+        if (n == 'Duration') {
+            return Some(LocalType.DURATION)
+        }
+        if (n == 'Regex') {
+            return Some(LocalType.REGEX)
+        }
+        if (n.startsWith('Range')) {
+            return Some(LocalType.RANGE)
+        }
+        if (n.startsWith('ArrayList')) {
+            return Some(LocalType.LIST)
+        }
+        if (n.startsWith('HashMap')) {
+            return Some(LocalType.MAP)
+        }
+        if (n == 'JitClosureId') {
+            return Some(LocalType.CLOSURE)
+        }
+        // M3：Any 与 JSON 谱系（A3.1/D2）——缺这四行时 `call<Any>` / `call<Json*>` 恒报
+        // 「T 不是可解包类型」，P0-2 的宿侧通路完全不可达。
+        if (n == 'Any') {
+            return Some(LocalType.ANY)
+        }
+        if (n == 'JsonValue') {
+            return Some(LocalType.JSON_VALUE)
+        }
+        if (n == 'JsonObject') {
+            return Some(LocalType.JSON_OBJECT)
+        }
+        if (n == 'JsonArray') {
+            return Some(LocalType.JSON_ARRAY)
+        }
+        if (n == 'JsonNull') {
+            return Some(LocalType.JSON_NULL)
+        }
+        // 注册类 / 宿主类实例统一按 14 承接（具体类由 call<T> 的单态化适配器校验）。
+        match (info) {
+            case _: ClassTypeInfo => Some(LocalType.HOST_OBJECT)
+            case _ => None
+        }
     }
 
     private static func contractFail<T>(msg: String): T {
         throw JitException(ErrCode.CALL_CONTRACT, -1, 0, None, msg)
+    }
+}
+
+/** `callForFn<Fn>` 解析出的返回闭包签名（`Fn` 的函数类型名 → LocalType 编码）。 */
+protected class JitFnSig {
+    public let params: Array<UInt16>
+    public let ret: UInt16
+
+    public init(params: Array<UInt16>, ret: UInt16) {
+        this.params = params
+        this.ret = ret
     }
 }

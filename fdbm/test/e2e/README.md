@@ -15,6 +15,10 @@
 
 `run.sh` 会自动创建测试账号与四个物理库（`db0`…`db3`），不需要手工准备。
 
+**部署口径：逻辑库名 ≠ 物理库名**。服务端声明 `fdbm_db_logicalDatabase_app=db0,db1,db2,db3`，
+客户端只连逻辑库 `app`；这样任何「把逻辑库当物理库」的回归都会在联调里直接失败
+（`show databases` 只应返回 `app`，限定 `db0.t` 应被拒绝）。
+
 ## 运行
 
 ```bash
@@ -62,6 +66,7 @@ bash fdbm/test/e2e/run.sh mysql
 | --- | --- |
 | fdbm 路由 | step（点查/多库范围/单侧范围/空区间）、hash、substr、未分库表 Single、读写分离（读走 `fdbm_ro`） |
 | 全局表 | INSERT/UPDATE/DELETE 广播到 4 个物理库、读只取一个副本、逐库副本核对 |
+| 逻辑/物理库隔离 | 未限定名读写命中正确分片（`t_shard_probe` 每个物理库只放本分片一行，返回值即物理库名）、`show databases` 只含 `app`、`show tables app`、`show tables nope` → `ROUTE_FAILED`、`select ... from db0.t` → `ROUTE_FAILED` |
 | DDL | `create/drop table` 广播到全部物理库（PostgreSQL `to_regclass` / MySQL `information_schema` 逐库核对） |
 | ID | `sequence` 生成器（`fountain_sequence`，键 `<logical>.<table>`） |
 | 写路径 | 参数绑定、多行 INSERT、INSERT…SELECT 物化、UPDATE/DELETE 累加 rowCount、DELETE 三步（删后不可见）、大字段（`bytea` / `longblob`） |
@@ -76,8 +81,8 @@ bash fdbm/test/e2e/run.sh mysql
 
 | 后端 | 联调客户端 | f_orm 客户端 | 重启探针 |
 | --- | --- | --- | --- |
-| PostgreSQL | 108 | 28 | 2 |
-| MySQL | 106 | 28 | 2 |
+| PostgreSQL | 123 | 28 | 2 |
+| MySQL | 121 | 28 | 2 |
 
 `run.sh` 额外做逐库 SQL 核对（分片分布、全局表副本、`octet_length` / `length`、缓存文件、EXPORT 内容）。
 

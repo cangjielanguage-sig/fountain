@@ -31,8 +31,4 @@ public class MQResult {
         this.code = code
         this.message = message
     }
-
-    public func isOk(): Bool {
-        code == 0
-    }
 }

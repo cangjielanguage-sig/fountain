@@ -130,6 +130,36 @@ public class DbdUrlTest {
         @Assert(DbdUrl.parse(again).password, 'p:a')
     }
 
+    /** D12：非 ASCII 口令也必须按**字节**下标切片（`lastIndexOf('@')` 返回字节下标）。 */
+    @TestCase
+    public func nonAsciiPasswordKeepsDelimiterBoundary(): Unit {
+        let url = DbdUrl.parse('fdbm://u:密@host:9000/db')
+        @Assert(url.user, 'u')
+        @Assert(url.password, '密')
+    }
+
+    /** D12：用户名 / 口令 / 库名三重非 ASCII 往返。 */
+    @TestCase
+    public func nonAsciiCredentialsAndDatabaseRoundTrip(): Unit {
+        let url = DbdUrl.parse('fdbm://用户:密%40码@host:9000/库')
+        @Assert(url.user, '用户')
+        @Assert(url.password, '密@码')
+        @Assert(url.database, '库')
+        let again = DbdUrl.parse(url.toUrl())
+        @Assert(again.user, url.user)
+        @Assert(again.password, url.password)
+        @Assert(again.database, url.database)
+        @Assert(again.toUrl(), url.toUrl())
+    }
+
+    /** D12：`%XX` 按字节解码后整体还原 UTF-8；非法 UTF-8 / 残缺转义 → `CONFIG`。 */
+    @TestCase
+    public func percentDecodingIsByteWise(): Unit {
+        @Assert(DbdUrl.parse('fdbm://u:p@h/%E5%BA%93').database, '库')
+        @Assert(codeOf { DbdUrl.parse('fdbm://u%FF:p@h/db') }, DbdErrorCode.CONFIG)
+        @Assert(codeOf { DbdUrl.parse('fdbm://u:p@h/db%F') }, DbdErrorCode.CONFIG)
+    }
+
     /** `toUrlMasked()`：密码不出现在元数据/日志串里，但 user / host / database 仍可读。 */
     @TestCase
     public func maskedUrlHidesPassword(): Unit {

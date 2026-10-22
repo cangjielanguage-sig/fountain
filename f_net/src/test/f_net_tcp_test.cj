@@ -45,6 +45,7 @@ public class FNetTcpTest {
     private static let PORT: UInt16 = 20901
     private static let PORT2: UInt16 = 20902
     private static let PORT3: UInt16 = 20903
+    private static let PORT4: UInt16 = 20904
     private static let HOST = "127.0.0.1"
 
     // ================================================================
@@ -148,5 +149,35 @@ public class FNetTcpTest {
         client.close()
         server.close()
         sleep(Duration.millisecond * 200)
+    }
+
+    // ================================================================
+    // 测试 4：close() 后 accept 循环正常退出
+    // ================================================================
+
+    /**
+     * `close()` 关掉监听套接字后，阻塞中的 `accept()` 会抛 `SocketException`。
+     *
+     * 修复前该异常直接逃出 `start()`，落进 spawn 的 Future 里成为「未捕获异常」
+     * （SIGTERM 关闭时退出码偶发非 0 的根因）；修复后 `start()` 正常返回。
+     */
+    @TestCase
+    public func testStartReturnsAfterClose(): Unit {
+        let server = Server<Array<Int64>>.builder(
+            bufferQueueSize: 64, checkDuration: Duration.second * 60, checker: pingChecker, bindAt: PORT4)
+            .reuseAddress(true).build()
+        let accepting = spawn {
+            server.start({ _, msg => msg })
+        }
+        sleep(Duration.millisecond * 300)
+
+        server.close()
+        // Future.get 会把任务体内的异常重新抛给本用例：修复前这条断言会以 SocketException 失败
+        try {
+            accepting.get(Duration.second * 3)
+            @Assert(true)
+        } catch (_: TimeoutException) {
+            @Assert(false)
+        }
     }
 }

@@ -18,7 +18,8 @@ package fountain::fmq.config
 import std.convert.*
 import std.fs.Path
 import fountain::f_config.Config
-import fountain::f_mq.base.MQConfigKey
+import fountain::f_log.*
+import fountain::f_mq.base.{MQConfigKey, MQHost}
 import fountain::f_process.getAbsoluteCommandDir
 
 /** 配置缺失 / 非法。启动期打印后以退出码 2 结束。 */
@@ -36,6 +37,7 @@ public class MQConfigException <: Exception {
  */
 protected struct MQConfig {
     private static const PREFIX = "mqServer"
+    private static let log = LoggerFactory.getLogger("fountain::fmq.config.MQConfig")
 
     static let PORT = "${PREFIX}_port"
     static let ACK_TIMEOUT = "${PREFIX}_ackTimeout"
@@ -46,6 +48,8 @@ protected struct MQConfig {
     static let SEGMENTED_LOG_MAX_SIZE = "${PREFIX}_segmentedLogMaxSize"
     static let SEGMENTED_LOG_TTL = "${PREFIX}_segmentedLogTTL"
     static let BACKUP = "${PREFIX}_backup"
+    static let TOMBSTONE_TTL = "${PREFIX}_tombstoneTTL"
+    static let ANTI_ENTROPY_INTERVAL = "${PREFIX}_antiEntropyInterval"
 
     static let DEFAULT_PORT: UInt16 = 2350
     static let DEFAULT_ACK_TIMEOUT = Duration.second * 10
@@ -56,30 +60,32 @@ protected struct MQConfig {
     static let DEFAULT_SEGMENTED_LOG_MAX_SIZE: Int64 = 1024 * 1024 * 1024
     static let DEFAULT_SEGMENTED_LOG_TTL = Duration.hour * 72
     static let DEFAULT_BACKUP: Int64 = 0
+    static let DEFAULT_TOMBSTONE_TTL = Duration.hour * 24 * 7
+    static let DEFAULT_ANTI_ENTROPY_INTERVAL = Duration.second * 30
 
     private init() {}
 
     protected static prop port: UInt16 {
         get() {
-            Config.getValue<UInt16>(PORT) ?? DEFAULT_PORT
+            strictPort()
         }
     }
 
     protected static prop ackTimeout: Duration {
         get() {
-            Config.getDuration(ACK_TIMEOUT) ?? DEFAULT_ACK_TIMEOUT
+            strictDuration(ACK_TIMEOUT, DEFAULT_ACK_TIMEOUT)
         }
     }
 
     protected static prop deadMsgThreshold: Int64 {
         get() {
-            Config.getValue<Int64>(DEAD_MSG_THRESHOLD) ?? DEFAULT_DEAD_MSG_THRESHOLD
+            strictInt64(DEAD_MSG_THRESHOLD, DEFAULT_DEAD_MSG_THRESHOLD)
         }
     }
 
     protected static prop deadMsgTTL: Duration {
         get() {
-            Config.getDuration(DEAD_MSG_TTL) ?? DEFAULT_DEAD_MSG_TTL
+            strictDuration(DEAD_MSG_TTL, DEFAULT_DEAD_MSG_TTL)
         }
     }
 
@@ -97,25 +103,79 @@ protected struct MQConfig {
 
     protected static prop segmentedLogMaxSize: Int64 {
         get() {
-            var value = DEFAULT_SEGMENTED_LOG_MAX_SIZE
-            if (let Some(text) <- Config.getString(SEGMENTED_LOG_MAX_SIZE)) {
-                if (let Some(parsed) <- parseByteSize(text)) {
-                    value = parsed
-                }
+            match (Config.getString(SEGMENTED_LOG_MAX_SIZE)) {
+                case None => DEFAULT_SEGMENTED_LOG_MAX_SIZE
+                case Some(text) =>
+                    match (parseByteSize(text)) {
+                        case Some(parsed) => parsed
+                        case None => throw MQConfigException(
+                            "${SEGMENTED_LOG_MAX_SIZE} '${text}' is not a byte size")
+                    }
             }
-            value
         }
     }
 
     protected static prop segmentedLogTTL: Duration {
         get() {
-            Config.getDuration(SEGMENTED_LOG_TTL) ?? DEFAULT_SEGMENTED_LOG_TTL
+            strictDuration(SEGMENTED_LOG_TTL, DEFAULT_SEGMENTED_LOG_TTL)
+        }
+    }
+
+    /** 墓碑保留时长：短于节点最长离线时间的节点会漏掉删除，文档要求全量重建（A25）。 */
+    protected static prop tombstoneTTL: Duration {
+        get() {
+            strictDuration(TOMBSTONE_TTL, DEFAULT_TOMBSTONE_TTL)
+        }
+    }
+
+    /** 反熵同步间隔。 */
+    protected static prop antiEntropyInterval: Duration {
+        get() {
+            strictDuration(ANTI_ENTROPY_INTERVAL, DEFAULT_ANTI_ENTROPY_INTERVAL)
         }
     }
 
     protected static prop backup: Int64 {
         get() {
-            Config.getValue<Int64>(BACKUP) ?? DEFAULT_BACKUP
+            strictInt64(BACKUP, DEFAULT_BACKUP)
+        }
+    }
+
+    /**
+     * 严格解析：显式配置项非法时启动失败，而不是静默回落默认值（A63）。
+     *
+     * 旧实现用 `getValue ?? default`，`port=abc`、`maxSize=not-a-size` 都会被悄悄吃掉。
+     */
+    private static func strictPort(): UInt16 {
+        match (Config.getString(PORT)) {
+            case None => DEFAULT_PORT
+            case Some(text) =>
+                match (UInt16.tryParse(text.trimAscii())) {
+                    case Some(value) => value
+                    case None => throw MQConfigException("${PORT} '${text}' is not a valid port")
+                }
+        }
+    }
+
+    private static func strictInt64(key: String, fallback: Int64): Int64 {
+        match (Config.getString(key)) {
+            case None => fallback
+            case Some(text) =>
+                match (Int64.tryParse(text.trimAscii())) {
+                    case Some(value) => value
+                    case None => throw MQConfigException("${key} '${text}' is not an integer")
+                }
+        }
+    }
+
+    private static func strictDuration(key: String, fallback: Duration): Duration {
+        match (Config.getString(key)) {
+            case None => fallback
+            case Some(text) =>
+                match (Config.getDuration(key)) {
+                    case Some(value) => value
+                    case None => throw MQConfigException("${key} '${text}' is not a duration")
+                }
         }
     }
 
@@ -195,8 +255,8 @@ protected struct MQConfig {
             let entries = nodes
             var found = -1i64
             for (i in 0..entries.size) {
-                match (parsePort(entries[i])) {
-                    case Some(p) =>
+                match (MQHost.parseHost(entries[i])) {
+                    case Some((_, p)) =>
                         if (p == port) {
                             if (found >= 0) {
                                 throw MQConfigException("duplicate port ${port} in ${MQConfigKey.CLIENT_HOSTS}")
@@ -213,30 +273,68 @@ protected struct MQConfig {
         }
     }
 
-    private static func parsePort(entry: String): ?UInt16 {
-        let parts = entry.trimAscii().split(":")
-        if (parts.size != 2) {
-            return None<UInt16>
-        }
-        UInt16.tryParse(parts[1].trimAscii())
-    }
-
     /** 启动期校验；失败抛 `MQConfigException`（调用方打印并退出 2）。 */
     protected static func validate(): Unit {
-        if (backup < 0) {
-            throw MQConfigException("${BACKUP} must not be negative, got ${backup}")
+        // 先把所有配置项按严格模式读一遍：任何非法显式值都在这里失败（A63）
+        let checkedPort = port
+        let checkedAck = ackTimeout
+        let checkedThreshold = deadMsgThreshold
+        let checkedDeadTtl = deadMsgTTL
+        let checkedMaxSize = segmentedLogMaxSize
+        let checkedLogTtl = segmentedLogTTL
+        let checkedBackup = backup
+        let checkedTombstoneTtl = tombstoneTTL
+        let checkedAntiEntropy = antiEntropyInterval
+        let entries = nodes
+
+        if (checkedPort == 0) {
+            throw MQConfigException("${PORT} must not be 0")
         }
-        if (nodes.size == 0) {
+        if (checkedAck <= Duration.Zero) {
+            throw MQConfigException("${ACK_TIMEOUT} must be positive, got ${checkedAck}")
+        }
+        if (checkedDeadTtl <= Duration.Zero) {
+            throw MQConfigException("${DEAD_MSG_TTL} must be positive, got ${checkedDeadTtl}")
+        }
+        if (checkedLogTtl <= Duration.Zero) {
+            throw MQConfigException("${SEGMENTED_LOG_TTL} must be positive, got ${checkedLogTtl}")
+        }
+        if (checkedTombstoneTtl <= Duration.Zero) {
+            throw MQConfigException("${TOMBSTONE_TTL} must be positive, got ${checkedTombstoneTtl}")
+        }
+        if (checkedAntiEntropy <= Duration.Zero) {
+            throw MQConfigException("${ANTI_ENTROPY_INTERVAL} must be positive, got ${checkedAntiEntropy}")
+        }
+        if (checkedMaxSize <= 0) {
+            throw MQConfigException("${SEGMENTED_LOG_MAX_SIZE} must be positive, got ${checkedMaxSize}")
+        }
+        // 段上限压低单条记录上限：必须让运维看见真实可用值，而不是等到写入时才发现越界
+        if (checkedMaxSize <= 64 * 1024 * 1024 + 4) {
+            log.warn("${SEGMENTED_LOG_MAX_SIZE}=${checkedMaxSize} limits a single record to " +
+                "${checkedMaxSize - 4} bytes; records above that are rejected at publish time")
+        }
+        if (checkedBackup < 0) {
+            throw MQConfigException("${BACKUP} must not be negative, got ${checkedBackup}")
+        }
+        if (entries.size == 0) {
             throw MQConfigException("${MQConfigKey.CLIENT_HOSTS} is required")
         }
+        for (entry in entries) {
+            if (MQHost.parseHost(entry).isNone()) {
+                throw MQConfigException("invalid node '${entry}' in ${MQConfigKey.CLIENT_HOSTS}, expect host:port")
+            }
+        }
+        // 备份节点数不能超过除自身外的节点数
+        if (checkedBackup > entries.size - 1) {
+            throw MQConfigException("${BACKUP} ${checkedBackup} exceeds node count ${entries.size}")
+        }
         // 任意两个节点端口重复都拒绝启动，不能只校验「重复端口是否等于本机端口」
-        let entries = nodes
         for (i in 0..entries.size) {
-            match (parsePort(entries[i])) {
-                case Some(port) =>
+            match (MQHost.parseHost(entries[i])) {
+                case Some((_, port)) =>
                     for (j in i + 1..entries.size) {
-                        match (parsePort(entries[j])) {
-                            case Some(other) =>
+                        match (MQHost.parseHost(entries[j])) {
+                            case Some((_, other)) =>
                                 if (port == other) {
                                     throw MQConfigException("duplicate port ${port} in ${MQConfigKey.CLIENT_HOSTS}")
                                 }
@@ -246,8 +344,8 @@ protected struct MQConfig {
                 case None => ()
             }
         }
-        if (deadMsgThreshold < 1) {
-            throw MQConfigException("${DEAD_MSG_THRESHOLD} must be at least 1, got ${deadMsgThreshold}")
+        if (checkedThreshold < 1) {
+            throw MQConfigException("${DEAD_MSG_THRESHOLD} must be at least 1, got ${checkedThreshold}")
         }
         // 触发端口定位（缺失 / 重复都会抛）
         selfIndex
@@ -265,6 +363,8 @@ protected struct MQConfig {
   mqServer_segmentedLogMaxSize  单段最大字节数，默认 1G
   mqServer_segmentedLogTTL      消息段保留时长，默认 72h
   mqServer_backup               备份副本数，默认 0（不复制）
+  mqServer_tombstoneTTL         删除墓碑保留时长，默认 7d
+  mqServer_antiEntropyInterval  反熵同步间隔，默认 30s
   mqClient_hosts                节点表，逗号分隔的 host:port（必填）
 """
     }

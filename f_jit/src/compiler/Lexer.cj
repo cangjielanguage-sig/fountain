@@ -256,6 +256,9 @@ internal class Lexer {
         if (b == 0x23u8) {
             return this.scanRawString(start, startLine, startCol, nl)
         }
+        if (b == 0x60u8) {
+            return this.scanJson(start, startLine, startCol, nl)
+        }
         if (b == 0x2Fu8) {
             if (Lexer.canStartRegex(this.prevKind)) {
                 return this.scanRegex(start, startLine, startCol, nl)
@@ -282,9 +285,9 @@ internal class Lexer {
     private static func canStartRegex(prev: TokenKind): Bool {
         match (prev) {
             case TokenKind.Ident | TokenKind.IntLit | TokenKind.DecLit | TokenKind.F64Lit |
-                TokenKind.StrLit | TokenKind.RegexLit | TokenKind.RParen | TokenKind.RBracket |
-                TokenKind.RBrace | TokenKind.Underscore | TokenKind.KwTrue | TokenKind.KwFalse |
-                TokenKind.KwNull => false
+                TokenKind.StrLit | TokenKind.RegexLit | TokenKind.JsonLit | TokenKind.RParen |
+                TokenKind.RBracket | TokenKind.RBrace | TokenKind.Underscore |
+                TokenKind.KwTrue | TokenKind.KwFalse | TokenKind.KwNull => false
             case _ => true
         }
     }
@@ -315,6 +318,8 @@ internal class Lexer {
             case 'true' => TokenKind.KwTrue
             case 'false' => TokenKind.KwFalse
             case 'null' => TokenKind.KwNull
+            case 'as' => TokenKind.KwAs
+            case 'is' => TokenKind.KwIs
             case _ => TokenKind.Ident
         }
     }
@@ -418,6 +423,28 @@ internal class Lexer {
         let anchored = dedentAnchored(raw)
         return Token(TokenKind.StrLit, Lexer.decodeEscapes(anchored, this.source, start, startLine, startCol),
             start, startLine, startCol, nl)
+    }
+
+    /**
+     * 反引号 JSON 字面量（m3 §11 / D4）：`` `{…}` `` / `` `[…]` ``。
+     *
+     * 内容**零宿主转义**——`"`、`\` 原样保留（JSON 自身的转义交给 JSON 解析器消费），可跨行。
+     * 取界 = **下一个反引号**：段内的行注释、块注释、引号、`{}`、行首锚定标记都不进入扫描逻辑，
+     * 因而天然不会被当成注释、字符串或括号配对。
+     */
+    private func scanJson(start: Int64, startLine: Int64, startCol: Int64, nl: Bool): Token {
+        this.bump()
+        let bodyStart = this.cur
+        while (!this.isEof() && this.bs[this.cur] != 0x60u8) {
+            this.bump()
+        }
+        if (this.isEof()) {
+            diagFail(DiagKind.UNTERMINATED_STRING, this.source, start, startLine, startCol,
+                'JSON 字面量缺少闭合反引号（`` `{…}` `` / `` `[…]` ``，m3 §11）')
+        }
+        let text = Lexer.sliceStr(this.bs, bodyStart, this.cur)
+        this.bump()
+        Token(TokenKind.JsonLit, text, start, startLine, startCol, nl)
     }
 
     /**
@@ -737,7 +764,9 @@ internal class Lexer {
             this.bump()
         }
         this.regexFlags = bits
-        Token(TokenKind.RegexLit, pattern, start, startLine, startCol, nl)
+        // flags 必须随 Token 一并送出：Parser 批量取词后 `lastRegexFlags()` 已无意义，
+        // 降低阶段读的是 `token.flags`（A4/P1-1；旧实现漏传 ⇒ 所有正则常量 flags 恒 0）。
+        Token(TokenKind.RegexLit, pattern, start, startLine, startCol, nl, flags: bits)
     }
 
     // ------------------------------------------------------------------
@@ -780,6 +809,10 @@ internal class Lexer {
             len = 2
         } else if (b == 0x3Eu8 && n1 == 0x3Eu8) {
             k = TokenKind.Shr
+            len = 2
+        } else if (b == 0x3Fu8 && n1 == 0x3Fu8) {
+            // `??`（M2.2）：单 `?` 不属于任何合法词法单元，仍走 ILLEGAL_CHARACTER
+            k = TokenKind.QuestionQuestion
             len = 2
         } else if (b == 0x2Eu8 && n1 == 0x2Eu8 && n2 == 0x3Du8) {
             k = TokenKind.DotDotEq

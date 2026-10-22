@@ -18,8 +18,10 @@ package fountain::f_jit.runtime
 import std.collection.ArrayList
 import std.collection.ConcurrentModificationException
 import std.collection.HashMap
+import std.sync.Mutex
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.TypeToken
+import fountain::f_jit.bytecode.CanonKey
 import fountain::f_jit.bytecode.ConstMapKey
 
 /**
@@ -37,6 +39,8 @@ import fountain::f_jit.bytecode.ConstMapKey
 public class IterTable {
     private static let entries: ArrayList<?IterEntry> = ArrayList<?IterEntry>()
     private static let gens: ArrayList<UInt32> = ArrayList<UInt32>()
+    /** 表状态锁（A5/P2-2b）：桥调用虽串行，但宿主多线程可直接调 H49/H62。 */
+    private static let mtx = Mutex()
 
     /**
      * 建立迭代器（H49 `map_iter_begin`）。
@@ -45,27 +49,34 @@ public class IterTable {
      */
     public static func open(h: Int64, elementKind: UInt8): Int64 {
         let m = HandleTable.fetchMap(h)
-        let e = IterEntry(h, m)
-        let idx = entries.size
-        entries.add(Some(e))
-        gens.add(1u32)
-        makeCursor(idx, 1u32)
+        synchronized(mtx) {
+            let e = IterEntry(h, m)
+            let idx = entries.size
+            entries.add(Some(e))
+            gens.add(1u32)
+            makeCursor(idx, 1u32)
+        }
     }
 
     /** 推进（mode 0）：返回 0/1 —— **终止判定的唯一来源**（1 = 已推进至有效条目）。 */
     public static func next(cur: Int64): Bool {
-        let e = entryOf(cur)
-        e.advance()
+        synchronized(mtx) {
+            entryOf(cur).advance()
+        }
     }
 
     /** 取键（mode 1）：未推进 / 已关闭 ⇒ 99 防御。 */
     public static func key(cur: Int64): Int64 {
-        entryOf(cur).keyCellLocked()
+        synchronized(mtx) {
+            entryOf(cur).keyCellLocked()
+        }
     }
 
     /** 取值（mode 2）：未推进 / 已关闭 ⇒ 99 防御。 */
     public static func value(cur: Int64): Int64 {
-        entryOf(cur).valueCellLocked()
+        synchronized(mtx) {
+            entryOf(cur).valueCellLocked()
+        }
     }
 
     /** 关闭（mode 3）：幂等。 */
@@ -74,31 +85,40 @@ public class IterTable {
         if (idx < 0) {
             return
         }
-        match (entries[idx]) {
-            case Some(e) =>
-                if (gens[idx] == genOfCursor(cur)) {
-                    e.close()
-                }
-            case None => ()
+        synchronized(mtx) {
+            if (idx >= entries.size) {
+                return
+            }
+            match (entries[idx]) {
+                case Some(e) =>
+                    if (gens[idx] == genOfCursor(cur)) {
+                        e.close()
+                    }
+                case None => ()
+            }
         }
     }
 
     /** 调用结束与 DEOPT 交接两点清空（旧游标一律失效 ⇒ 99）。 */
     public static func clearAll(): Unit {
-        entries.clear()
-        gens.clear()
+        synchronized(mtx) {
+            entries.clear()
+            gens.clear()
+        }
     }
 
     /** 当前活跃条目数（≤ 嵌套深度；审计用）。 */
     public static func liveCount(): Int64 {
-        var n = 0
-        for (i in 0..entries.size) {
-            match (entries[i]) {
-                case Some(e) => if (!e.closed) { n = n + 1 }
-                case None => ()
+        synchronized(mtx) {
+            var n = 0
+            for (i in 0..entries.size) {
+                match (entries[i]) {
+                    case Some(e) => if (!e.closed) { n = n + 1 }
+                    case None => ()
+                }
             }
+            n
         }
-        n
     }
 
     // ---- 游标编解码 ----
@@ -215,8 +235,15 @@ internal class IterEntry {
  */
 internal func mapKeyOf(cell: Int64): ConstMapKey {
     match (HandleTable.getAny(cell)) {
-        case Some(v) => ConstMapKey(v, HandleTable.canonKeyOf(v))
-        case None => ConstMapKey(cell, 'i:${cell}')
+        case Some(v) =>
+            // Any 盒（H78）里装的是 `JitAnyBox`：必须先解包，否则 `canonKeyOf` 落到 `case _`
+            // 返回空串 —— 所有装箱键会塌成同一个键（X2）。
+            let inner = match (v) {
+                case b: JitAnyBox => b.value
+                case _ => v
+            }
+            ConstMapKey(v, HandleTable.canonKeyOf(inner))
+        case None => ConstMapKey(cell, CanonKey.cell(cell))
     }
 }
 

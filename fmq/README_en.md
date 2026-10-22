@@ -32,12 +32,23 @@ Configuration (environment variables or command-line options):
 | `mqServer_segmentedLogMaxSize` | 1G |
 | `mqServer_segmentedLogTTL` | 72h |
 | `mqServer_backup` | 0 (disabled) |
+| `mqServer_tombstoneTTL` | 7d (delete-tombstone retention) |
+| `mqServer_antiEntropyInterval` | 30s (anti-entropy sync interval) |
 | `mqClient_hosts` | required node table |
 
 With `mqServer_backup = N`, each commit is replicated asynchronously to the next N nodes in
 the ring (excluding itself, at most `nodeCount-1`). Replicas are stored only and never
-delivered. Backup writes are dropped with a WARN when the backup queue is full or the store
-is shutting down, so the publish path never blocks. `fmq server --help` prints all options.
+delivered. The publish path only enqueues; a dedicated worker sends batches of 64 records or
+every 100ms, re-queues failed batches, and drops them after 3 attempts with an ERROR. Backup
+writes are dropped with a WARN when the queue is full or the store is shutting down, so the
+publish path never blocks. Backup payloads carry real per-group cursors, so a restore never
+replays acknowledged messages; backup segments are reclaimed by those cursors and
+`segmentedLogTTL`. `fmq server --help` prints all options.
+
+`SIGTERM`/`SIGINT` triggers graceful shutdown: the exit hook calls `MQServer.close()`, which
+releases server → timers → anti-entropy → backup → cleaner → consume → subscribers → backup store → queues.sync → queues
+→ dead letters → metadata → node connections. A failing step does not block the others, and
+calling `close()` again retries only the failed steps.
 
 ## Manager
 
@@ -73,6 +84,12 @@ exits 1. `listTopics` prints topic, queueNum, delaying and the queue-to-node ass
 - `autoAck` subscriptions advance the cursor on delivery, so clients need not `ack`.
 - Not-yet-due delayed messages are not delivered, do not advance the cursor, and block
   later records in the same queue (FIFO).
+- A record that matches no subscription in the group is marked "not applicable" and skipped
+  (DEBUG log); when no subscription is online the position stays pending and the cursor does
+  not advance.
+- An unevaluable BODY (unregistered object type plus a non-empty filter) is skipped and the
+  consumer that triggered the scan receives one `FILTER_UNSUPPORTED_BODY`; the same position
+  is never reported twice and the group never stalls.
 
 ## Metrics and delayed delivery
 
@@ -83,7 +100,10 @@ exits 1. `listTopics` prints topic, queueNum, delaying and the queue-to-node ass
   (including delivered-but-unacknowledged and not-yet-due delayed records).
 - `lagMs`: age of the oldest backlog record in milliseconds; `0` when there is no backlog.
 - `delivered` / `acked` / `redelivered` / `deadLettered`: process-lifetime counters that
-  reset on restart.
+  reset on restart; `autoAck` deliveries also count as `acked`, and deleting a topic/group
+  clears its counters.
+- If scanning fails (corrupted segment) `stats` returns `ERROR(INTERNAL)` instead of faking
+  `backlog=0`; `lagMs` is clamped to `0`.
 - A topic with no subscribe group yields one zero row with an empty `group`; `stats`
   without a topic aggregates the topics owned by this node.
 
@@ -102,16 +122,30 @@ Records with a non-standard messageId are treated as due and logged at WARN.
 ```
 <exe dir>/metas/
 ├── assign.meta
+├── revision.meta                       # Lamport counter
 ├── topics/<topicEsc>.meta
 ├── groups/<topicEsc>/<groupEsc>.meta
+├── tombstones/t_<topicEsc>.meta         # topic tombstone
+├── tombstones/g_<topicEsc>_<groupEsc>.meta
 └── offsets/<topicEsc>/<queueIndex>/<groupEsc>.cursor
 <segmentedLogDir>/<topicEsc>/<queueIndex>/log_<seq>.log
 <segmentedLogDir>/backup/<ownerIndex>/<topicEsc>/<queueIndex>/log_<seq>.log
+<segmentedLogDir>/backup/<ownerIndex>/<topicEsc>/<queueIndex>/cursors/<groupEsc>.cursor
 <deadMsgDir>/log_<seq>.log
 ```
 
-Topic names use percent-encoding (only `[A-Za-z0-9._-]`, empty → `%00`); metadata writes
-use `.tmp` + rename.
+Topic names use percent-encoding (only `[A-Za-z0-9._-]`, empty → `%00`); metadata and cursor
+writes use `.tmp` + `fsync` + rename + parent-directory `fsync`, so a power loss never leaves
+an empty file.
+
+## Naming and length limits
+
+| Item | Rule |
+| --- | --- |
+| Topic | Non-empty, starts with `/`, does not end with `/`, no empty segment (`//`); no control characters or Unicode blanks (`INVALID_TOPIC`) |
+| Group | Empty string is the default group; at most `MQGroup.MAX_LENGTH` (255) bytes; no control characters/Unicode blanks and no `/` `\` `:` `%`; must not start or end with `.` (`INVALID_GROUP`) |
+| Tags | At most `MQTags.MAX_COUNT` (64); each 1..`MQTags.MAX_LENGTH` (128) bytes; no control characters/Unicode blanks (`INVALID_TAGS`) |
+| Single record | At most `min(QueueLog.MAX_RECORD_SIZE, segmentedLogMaxSize - 4)` (i.e. `QueueLog.effectiveMaxRecord`); rejected before write |
 
 ## Known limits
 
@@ -124,12 +158,25 @@ use `.tmp` + rename.
   filters never require the server to decode the BODY.
 - ACK targets the cursor by `(topic, queueIndex, group)`; a missing or non-local queue
   index yields `ACK_UNKNOWN`.
-- If a cursor's segment was removed by TTL cleanup, it jumps to the oldest surviving
-  segment and persists the new position; when no segment is readable it returns empty
-  instead of failing forever.
+- If a cursor's segment was removed by TTL cleanup, it jumps forward to the start of the
+  next existing segment with a larger index and persists the new position (WARN, rate
+  limited per position); when no segment is readable it returns empty instead of failing
+  forever.
 - Backup writes may be dropped during shutdown: writes arriving after `BackupStore` closes
-  are silently discarded so the publish path never blocks; writes acknowledged before
-  close are persisted.
+  are discarded with a WARN trace (rate limited to one per second) so the publish path never
+  blocks; writes acknowledged before close are persisted.
+- Segment retention is bounded by the minimum persisted cursor of every registered group: a
+  group that never consumed pins the floor at the oldest segment. Delete the group (or lower
+  `segmentedLogTTL` and accept the semantic change) to reclaim history.
+- Tombstones are kept for 7 days by default. A node offline longer than
+  `mqServer_tombstoneTTL` cannot converge incrementally and needs a metadata rebuild (clear
+  its `metas/` and restart to pull a snapshot).
+- Full support for large records (>4096 bytes) requires every node to be upgraded: an old
+  node still degrades them to empty, so finish the rolling upgrade before publishing large
+  messages.
+- The set of retired subscription ids is bounded (4096 by default, FIFO eviction); an
+  evicted id is treated as an unknown id and throws `MQServiceException`, without touching
+  server state.
 
 ## Tests
 

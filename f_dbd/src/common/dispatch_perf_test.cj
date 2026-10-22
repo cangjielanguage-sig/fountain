@@ -122,16 +122,12 @@ public class GetDispatchPerfTest {
      */
     @TestCase
     public func nullShortCircuit(): Unit {
-        let nothing = DataNone.INSTANCE
-        let something = DataString('x')
-        println('')
-        println('=== getOrNull<T> 的 NULL 短路（ns/次，5 轮中位数，10^6 次/轮） ===')
-        println('| T | 短路(DataNone) | 完整分派 A | 完整分派 B |')
-        println(shortCircuitOf<Int64>('Int64', nothing, something))
-        println(shortCircuitOf<String>('String', nothing, something))
-        println(shortCircuitOf<DateTime>('DateTime', nothing, something))
-        println(shortCircuitOf<Array<Byte>>('Array<Byte>', nothing, something))
-        println(shortCircuitOf<MyInputStream>('MyInputStream', nothing, something))
+        // `DataNone` 必须直接短路为 0（不进入任何类型分派）；对每种 T 都成立
+        @Assert(Dispatch.shortCircuitA<Int64>(DataNone.INSTANCE), 0)
+        @Assert(Dispatch.shortCircuitA<String>(DataNone.INSTANCE), 0)
+        @Assert(Dispatch.shortCircuitA<DateTime>(DataNone.INSTANCE), 0)
+        @Assert(Dispatch.shortCircuitA<Array<Byte>>(DataNone.INSTANCE), 0)
+        @Assert(Dispatch.shortCircuitA<MyInputStream>(DataNone.INSTANCE), 0)
     }
 
     /**
@@ -167,12 +163,6 @@ public class GetDispatchPerfTest {
     }
 
     /** NULL 短路与完整分派的三组对照。 */
-    private static func shortCircuitOf<T>(label: String, nothing: Data, something: Data): String {
-        let short = timed<T>(Dispatch.shortCircuitA<T>, nothing)
-        let fullA = timed<T>(Dispatch.canonicalA<T>, something)
-        let fullB = timed<T>(Dispatch.canonicalB<T>, something)
-        '| ${label} | ${short.medianNsPerOp} | ${fullA.medianNsPerOp} | ${fullB.medianNsPerOp} |'
-    }
 
     /**
      * 计时：先预热 `WARMUP` 次，再跑 `ROUNDS` 轮 × `LOOPS` 次，取每轮 ns/次的中位数。

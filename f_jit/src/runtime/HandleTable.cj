@@ -22,6 +22,8 @@ import std.sync.Mutex
 import std.time.DateTime
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.TypeToken
+import fountain::f_data.json.JsonValue
+import fountain::f_jit.bytecode.CanonKey
 import fountain::f_jit.bytecode.ConstMapKey
 
 /**
@@ -42,6 +44,32 @@ public class HelperFail <: Exception {
 /** 抛出一个 helper 失败信号（错误码见 §2）。 */
 public func failWith(code: Int64): Nothing {
     throw HelperFail(code)
+}
+
+/**
+ * 一次调用窗口的完整镜像（重入保存/恢复用，§8.2「各调用窗口互不重叠」）。
+ *
+ * 宿主闭包体内重入 JIT 时会再开一次窗口；外层窗口的**槽清单与计数**必须原样保存，
+ * 否则内层 `resetWindow` 会把外层的分配记账一并清掉（泄漏 + 账目失真）。
+ */
+private class WindowState {
+    let base: Int64
+    let cap: Int64
+    let top: Int64
+    let used: Int64
+    let slots: ArrayList<Int64>
+
+    init(base: Int64, cap: Int64, top: Int64, used: Int64, slots: ArrayList<Int64>) {
+        this.base = base
+        this.cap = cap
+        this.top = top
+        this.used = used
+        let copy = ArrayList<Int64>()
+        for (s in slots) {
+            copy.add(s)
+        }
+        this.slots = copy
+    }
 }
 
 /**
@@ -74,6 +102,8 @@ public class HandleTable {
     /** 路径 A 引用计数：同一常量被多个单元共享时按 pin 次数计数，归零才回收。 */
     private static let constRefs: ArrayList<Int64> = HandleTable.seedI64()
     private static let escapeFlags: ArrayList<Bool> = HandleTable.seedBool()
+    /** M3：常量实例化登记时置位（JSON 写保护）；非常量路径恒 false。 */
+    private static let frozenFlags: ArrayList<Bool> = HandleTable.seedBool()
     private static let freeSlots: ArrayList<Int64> = ArrayList<Int64>()
 
     private static func seedObjs(): ArrayList<Any> {
@@ -107,6 +137,8 @@ public class HandleTable {
     /** 本次窗口实际占用的槽索引（允许复用旧 freeSlots，故不能用连续区间表示）。 */
     private static let windowSlots: ArrayList<Int64> = ArrayList<Int64>()
     private static var windowUsedCount: Int64 = 0
+    /** 嵌套窗口栈：外层状态在 `openWindow` 时压栈、`resetWindow` 时恢复。 */
+    private static let windowStack: ArrayList<WindowState> = ArrayList<WindowState>()
 
     // ---- 槽位三元组编码 ----
 
@@ -159,6 +191,9 @@ public class HandleTable {
             case _: Range<Int64> => TypeToken.RANGE
             case _: JitRegex => TypeToken.REGEX
             case _: JitClosure => TypeToken.CLOSURE
+            case _: HostCallback => TypeToken.HOST_CLOSURE
+            case _: JitAnyBox => TypeToken.ANY
+            case _: JsonValue => TypeToken.HOST_OBJECT
             case _ => TypeToken.RESERVED
         }
     }
@@ -171,13 +206,16 @@ public class HandleTable {
      * 去重**（见 `pin` 的实现说明）。
      */
     public static func canonKeyOf(obj: Any): String {
+        // 与常量表的 `ConstRegistry.tokenOf` 共用 `CanonKey`（D5）：Float64 / Decimal 等
+        // 此前两边前缀不同，常量键在运行期永不命中（P1-7）。
         match (obj) {
-            case v: String => 's:${v}'
-            case v: Decimal => 'd:${v.toString()}'
-            case v: DateTime => 't:${safeNanos(v.toUnixTimeStamp())}'
-            case v: Duration => 'u:${safeNanos(v)}'
-            case v: Range<Int64> => 'r:${v.start}|${v.end}|${v.step}|${v.isClosed}'
-            case v: JitRegex => 'x:${v.re.string()}|${v.flags}'
+            case v: String => CanonKey.str(v)
+            case v: Float64 => CanonKey.f64(v.toBits())
+            case v: Decimal => CanonKey.decFromText(v.toString())
+            case v: DateTime => CanonKey.dateTime(safeNanos(v.toUnixTimeStamp()))
+            case v: Duration => CanonKey.duration(safeNanos(v))
+            case v: Range<Int64> => CanonKey.range(v.start, v.end, v.step, v.isClosed)
+            case v: JitRegex => CanonKey.regex(v.re.string(), v.flags)
             case _ => ''
         }
     }
@@ -206,6 +244,9 @@ public class HandleTable {
      */
     public static func openWindow(cap: Int64): Unit {
         synchronized(mtx) {
+            // 重入：保存外层窗口（基址/容量/已用/槽清单），内层结束后原样恢复。
+            windowStack.add(WindowState(windowBase, windowCap, windowTop, windowUsedCount,
+                windowSlots))
             windowBase = objs.size
             windowTop = windowBase
             windowCap = if (cap <= 0) { initialCapacity } else { cap }
@@ -247,7 +288,28 @@ public class HandleTable {
             failWith(ErrCode.CALL_CONTRACT)
         }
         synchronized(mtx) {
-            if (tok != TypeToken.LIST && tok != TypeToken.MAP) {
+            // 身份型载荷（tag=10 宿主闭包 / tag=12 Any 盒）按**对象身份**去重：两者都没有
+            // 值语义键——闭包即便代码相同也可能捕获不同环境；盒的值可以有等值副本，但盒本身
+            // 有身份（容器里存的就是同一个盒，反复读出必须回到同一句柄，否则窗口会被读操作耗尽）。
+            if (tok == TypeToken.HOST_CLOSURE || tok == TypeToken.ANY) {
+                match (obj) {
+                    case target: Object =>
+                        var i = 1
+                        while (i < objs.size) {
+                            if (alive[i] && !constFlags[i] && tags[i] == tok) {
+                                match (objs[i]) {
+                                    case old: Object =>
+                                        if (refEq(old, target)) {
+                                            return makeId(i, tok, gens[i])
+                                        }
+                                    case _ => ()
+                                }
+                            }
+                            i = i + 1
+                        }
+                    case _ => ()
+                }
+            } else if (tok != TypeToken.LIST && tok != TypeToken.MAP && !(obj is JsonValue)) {
                 let key = canonKeyOf(obj)
                 var i = 1
                 while (i < objs.size) {
@@ -258,6 +320,83 @@ public class HandleTable {
                 }
             }
             newSlotLocked(obj, tok, false)
+        }
+    }
+
+    /**
+     * 路径 B：宿主闭包 → tag=10 句柄（m2 §4/§10）。
+     *
+     * 同函数值 + 同签名 ⇒ 复用同 ID（幂等 Marshal）；签名不同则新槽（避免错用旧条目签名）。
+     */
+    public static func pinHostClosure(fn: Any, sig: SignatureDescriptor): Int64 {
+        synchronized(mtx) {
+            var i = 1
+            while (i < objs.size) {
+                if (alive[i] && !constFlags[i] && tags[i] == TypeToken.HOST_CLOSURE) {
+                    match (objs[i]) {
+                        case old: HostCallback =>
+                            let sameFn = match (old.fn) {
+                                case a: Object =>
+                                    match (fn) {
+                                        case b: Object => refEq(a, b)
+                                        case _ => false
+                                    }
+                                case _ => false
+                            }
+                            if (sameFn) {
+                                match (old.sig) {
+                                    case Some(s) =>
+                                        if (HandleTable.sigEquals(s, sig)) {
+                                            return makeId(i, TypeToken.HOST_CLOSURE, gens[i])
+                                        }
+                                    case None => ()
+                                }
+                            }
+                        case _ => ()
+                    }
+                }
+                i = i + 1
+            }
+            newSlotLocked(HostCallback(fn, sig), TypeToken.HOST_CLOSURE, false)
+        }
+    }
+
+    private static func sigEquals(a: SignatureDescriptor, b: SignatureDescriptor): Bool {
+        if (a.ret != b.ret || a.params.size != b.params.size) {
+            return false
+        }
+        var i = 0
+        while (i < a.params.size) {
+            if (a.params[i] != b.params[i]) {
+                return false
+            }
+            i = i + 1
+        }
+        true
+    }
+
+    /**
+     * 路径 B：宿主注册类实例 → tag=11 句柄 ID（m2 §11/§16.2）。
+     *
+     * 注册类实例没有内建 token（`tokenOf` 对任意类返回 RESERVED），由调用方显式按
+     * **不透明宿主对象**大类登记；同一对象复用同 ID（引用语义、零拷贝）。
+     */
+    public static func pinHostObject(obj: Object): Int64 {
+        synchronized(mtx) {
+            var i = 1
+            while (i < objs.size) {
+                if (alive[i] && !constFlags[i] && tags[i] == TypeToken.HOST_OBJECT) {
+                    match (objs[i]) {
+                        case old: Object =>
+                            if (refEq(old, obj)) {
+                                return makeId(i, TypeToken.HOST_OBJECT, gens[i])
+                            }
+                        case _ => ()
+                    }
+                }
+                i = i + 1
+            }
+            newSlotLocked(obj, TypeToken.HOST_OBJECT, false)
         }
     }
 
@@ -273,7 +412,8 @@ public class HandleTable {
             failWith(ErrCode.CALL_CONTRACT)
         }
         synchronized(mtx) {
-            if (tok != TypeToken.LIST && tok != TypeToken.MAP) {
+            // JSON 节点是可变的，按身份区分（它们的 canonKeyOf 为空，合并会把对象/数组混为一谈）
+            if (tok != TypeToken.LIST && tok != TypeToken.MAP && !(obj is JsonValue)) {
                 let key = canonKeyOf(obj)
                 var i = 1
                 while (i < objs.size) {
@@ -303,6 +443,7 @@ public class HandleTable {
             objs[i] = Int64(0)
             constFlags[i] = false
             escapeFlags[i] = false
+            frozenFlags[i] = false
             constRefs[i] = 0
             gens[i] = gens[i] + UInt16(1)
             freeSlots.add(i)
@@ -344,36 +485,70 @@ public class HandleTable {
      */
     public static func append(ctx: JitContext, obj: Any, tok: UInt16): Int64 {
         synchronized(mtx) {
-            // 扩容触发点：保证追加后「容量 ≥ 2 × 已用数」（plan-m1 S4.3）
-            let need = 2 * (windowUsedCount + 1)
-            if (need > windowCap) {
-                var nc = windowCap * 2
-                if (nc <= 0) {
-                    nc = initialCapacity
-                }
-                if (nc < need) {
-                    nc = need
-                }
-                if (windowBase + nc > capacityLimit) {
-                    nc = capacityLimit - windowBase
-                }
-                if (nc < windowUsedCount + 1) {
-                    // 容量已到全局上限，无法再扩 ⇒ 触顶
-                    syncTo(ctx)
-                    failWith(ErrCode.HANDLE_WINDOW_FULL)
-                }
-                windowCap = nc
+            appendLocked(ctx, obj, tok)
+        }
+    }
+
+    /** `append` 的锁内实现（`Mutex` 不可重入，供 `appendHostObject` 复用）。 */
+    private static func appendLocked(ctx: JitContext, obj: Any, tok: UInt16): Int64 {
+        // 扩容触发点：保证追加后「容量 ≥ 2 × 已用数」（plan-m1 S4.3）
+        let need = 2 * (windowUsedCount + 1)
+        if (need > windowCap) {
+            var nc = windowCap * 2
+            if (nc <= 0) {
+                nc = initialCapacity
             }
-            if (windowBase + windowUsedCount >= capacityLimit) {
+            if (nc < need) {
+                nc = need
+            }
+            if (windowBase + nc > capacityLimit) {
+                nc = capacityLimit - windowBase
+            }
+            if (nc < windowUsedCount + 1) {
+                // 容量已到全局上限，无法再扩 ⇒ 触顶
                 syncTo(ctx)
                 failWith(ErrCode.HANDLE_WINDOW_FULL)
             }
-            let id = newSlotLocked(obj, tok, false)
-            windowSlots.add(idxOf(id))
-            windowUsedCount = windowUsedCount + 1
-            windowTop = windowBase + windowUsedCount
+            windowCap = nc
+        }
+        if (windowBase + windowUsedCount >= capacityLimit) {
             syncTo(ctx)
-            id
+            failWith(ErrCode.HANDLE_WINDOW_FULL)
+        }
+        let id = newSlotLocked(obj, tok, false)
+        windowSlots.add(idxOf(id))
+        windowUsedCount = windowUsedCount + 1
+        windowTop = windowBase + windowUsedCount
+        syncTo(ctx)
+        id
+    }
+
+    /**
+     * 世界内的宿主类实例登记（H80 的 14 分支，tag 恒 **11**）。
+     *
+     * 与 `pinHostObject` 的唯一差异是**窗口记账**：本函数走路径 C（计入 `windowSlots` /
+     * `hwTop`，容量触顶报 16），`pinHostObject` 走路径 B（桥侧参数封送，不占窗口）。
+     * 同一对象在本窗口内复用同 ID（否则每次 `as C` 都新开一槽，窗口被读操作耗尽）；
+     * 去重只看**本窗口已登记的槽**——复用窗口外（含桥侧 pin）的槽会让记账与实际分配脱节。
+     */
+    public static func appendHostObject(ctx: JitContext, obj: Object): Int64 {
+        synchronized(mtx) {
+            var i = 0
+            while (i < windowSlots.size) {
+                let s = windowSlots[i]
+                if (s > 0 && s < objs.size && alive[s] && !constFlags[s] &&
+                    tags[s] == TypeToken.HOST_OBJECT) {
+                    match (objs[s]) {
+                        case old: Object =>
+                            if (refEq(old, obj)) {
+                                return makeId(s, TypeToken.HOST_OBJECT, gens[s])
+                            }
+                        case _ => ()
+                    }
+                }
+                i = i + 1
+            }
+            appendLocked(ctx, obj, TypeToken.HOST_OBJECT)
         }
     }
 
@@ -405,11 +580,17 @@ public class HandleTable {
         }
     }
 
-    /** 宿主侧类型化取回（类型不符 ⇒ `None`）。 */
+    /**
+     * 宿主侧类型化取回（类型不符 ⇒ `None`）。
+     *
+     * 按**槽位 tag** 判定（与 `fetch` 同口径）：tag 11 的宿主类实例没有内建 `tokenOf`
+     * （任意类都返回 RESERVED），故不能按载荷反推大类（m2 §11 / Q4.10）。
+     */
     public static func getAs(id: Int64, tok: UInt16): ?Any {
-        match (getAny(id)) {
-            case Some(v) => if (tokenOf(v) == tok) { Some(v) } else { None }
-            case None => None
+        if (isType(id, tok)) {
+            getAny(id)
+        } else {
+            None
         }
     }
 
@@ -513,6 +694,40 @@ public class HandleTable {
         }
     }
 
+    /** 取宿主闭包条目（tag=10；null → 6、类型不符 → 8）。 */
+    public static func fetchHostCallback(id: Int64): HostCallback {
+        match (fetchAny(id, TypeToken.HOST_CLOSURE)) {
+            case v: HostCallback => v
+            case _ => failWith(ErrCode.HANDLE_TYPE)
+        }
+    }
+
+    /** 取宿主对象引用（tag=11；null → 6、类型不符 → 8）。 */
+    public static func fetchHostObject(id: Int64): Object {
+        // tag 11 是**显式写入**的大类（`pinHostObject`）：任意宿主类都没有内建 token，
+        // 故不能走 `fetchAny` 的 `tokenOf` 校验，改按槽位 tag 判定。
+        if (id == 0) {
+            failWith(ErrCode.NULL_HANDLE)
+        }
+        let i = idxOf(id)
+        if (i <= 0) {
+            failWith(ErrCode.NULL_HANDLE)
+        }
+        let v = synchronized(mtx) {
+            if (i >= objs.size) {
+                failWith(ErrCode.NULL_HANDLE)
+            }
+            if (!alive[i] || gens[i] != genOf(id) || tags[i] != TypeToken.HOST_OBJECT) {
+                failWith(ErrCode.HANDLE_TYPE)
+            }
+            objs[i]
+        }
+        match (v) {
+            case o: Object => o
+            case _ => failWith(ErrCode.HANDLE_TYPE)
+        }
+    }
+
     /** 句柄类型判定（helper H17；null ⇒ false，不失败）。 */
     public static func isType(id: Int64, tok: UInt16): Bool {
         if (id == 0) {
@@ -568,7 +783,12 @@ public class HandleTable {
 
     // ---- 释放 / 逃逸 / 重置 ----
 
-    /** 释放（宿主显式释放逃逸句柄；表项 gen+1 后方可复用 ⇒ 旧 ID 永久失效）。 */
+    /**
+     * 释放（宿主显式释放逃逸句柄；表项 gen+1 后方可复用 ⇒ 旧 ID 永久失效）。
+     *
+     * 逃逸标记必须在此复位并把槽归还 `freeSlots`：逃逸槽的唯一归宿就是宿主 `release`，
+     * 旧实现只对「未逃逸」槽归还 ⇒ 逃逸槽既不可复用也不再可达，逐次调用净泄漏。
+     */
     public static func release(id: Int64): Unit {
         let i = idxOf(id)
         if (i <= 0 || i >= objs.size) {
@@ -578,10 +798,10 @@ public class HandleTable {
             if (alive[i] && gens[i] == genOf(id) && !constFlags[i]) {
                 alive[i] = false
                 objs[i] = Int64(0)
+                escapeFlags[i] = false
+                frozenFlags[i] = false
                 gens[i] = gens[i] + UInt16(1)
-                if (!escapeFlags[i]) {
-                    freeSlots.add(i)
-                }
+                freeSlots.add(i)
             }
         }
     }
@@ -599,6 +819,7 @@ public class HandleTable {
             alive[i] = false
             objs[i] = Int64(0)
             escapeFlags[i] = false
+            frozenFlags[i] = false
             gens[i] = gens[i] + UInt16(1)
             freeSlots.add(i)
         }
@@ -637,15 +858,64 @@ public class HandleTable {
             }
             windowSlots.clear()
             windowUsedCount = 0
-            windowBase = if (hwBase >= 0) { hwBase } else { objs.size }
-            windowTop = windowBase
-            windowCap = initialCapacity
+            // 重入：内层窗口收尾后恢复外层窗口（基址/容量/已用/槽清单原样回填）。
+            if (windowStack.size > 0) {
+                let outer = windowStack.remove(at: windowStack.size - 1)
+                windowBase = outer.base
+                windowCap = outer.cap
+                windowTop = outer.top
+                windowUsedCount = outer.used
+                for (s in outer.slots) {
+                    windowSlots.add(s)
+                }
+            } else {
+                windowBase = if (hwBase >= 0) { hwBase } else { objs.size }
+                windowTop = windowBase
+                windowCap = initialCapacity
+            }
+        }
+    }
+
+    /**
+     * 提升组协作：**原地提升**一组槽（m2 §14.1/§14.2）。
+     *
+     * - 迁出**窗口记账**（从 `windowSlots` 移除并递减已用数；`hwTop` 镜像随之下降）；
+     * - 表项保留，**ID / gen 不变**，并打逃逸标记 ⇒ 窗口重置不释放；
+     * - 不进入对象内部（**槽级、免级联**，§14.6）；参数里没给的槽一律不动。
+     *
+     * 幂等：已迁出的槽不会重复扣减记账。
+     */
+    public static func moveOutGroup(ids: Array<Int64>): Unit {
+        synchronized(mtx) {
+            var n = 0
+            while (n < ids.size) {
+                let id = ids[n]
+                let i = idxOf(id)
+                if (i > 0 && i < objs.size && alive[i] && gens[i] == genOf(id) && !constFlags[i]) {
+                    escapeFlags[i] = true
+                    var k = 0
+                    var removed = false
+                    while (k < windowSlots.size && !removed) {
+                        if (windowSlots[k] == i) {
+                            windowSlots.remove(at: k)
+                            if (windowUsedCount > 0) {
+                                windowUsedCount = windowUsedCount - 1
+                            }
+                            windowTop = windowBase + windowUsedCount
+                            removed = true
+                        } else {
+                            k = k + 1
+                        }
+                    }
+                }
+                n = n + 1
+            }
         }
     }
 
     /** M2 提升组占位：把槽提升为「不受窗口重置影响」的常驻槽（等价逃逸登记）。 */
     public static func promote(id: Int64): Unit {
-        escape(id)
+        moveOutGroup([id])
     }
 
     // ---- 内部 ----
@@ -660,6 +930,7 @@ public class HandleTable {
             constFlags[idx] = isConst
             constRefs[idx] = if (isConst) { 1 } else { 0 }
             escapeFlags[idx] = false
+            frozenFlags[idx] = false
         } else {
             objs.add(obj)
             tags.add(tok)
@@ -668,6 +939,7 @@ public class HandleTable {
             constFlags.add(isConst)
             constRefs.add(if (isConst) { 1 } else { 0 })
             escapeFlags.add(false)
+            frozenFlags.add(false)
             idx = objs.size - 1
         }
         makeId(idx, tok, gens[idx])
@@ -703,8 +975,10 @@ public class HandleTable {
             constFlags.clear()
             constRefs.clear()
             escapeFlags.clear()
+            frozenFlags.clear()
             freeSlots.clear()
             windowSlots.clear()
+            windowStack.clear()
             windowUsedCount = 0
             // idx 0 保留（null 哨兵）
             objs.add(Int64(0))
@@ -714,6 +988,7 @@ public class HandleTable {
             constFlags.add(false)
             constRefs.add(0)
             escapeFlags.add(false)
+            frozenFlags.add(false)
             windowBase = 1
             windowTop = 1
             windowCap = initialCapacity
@@ -743,6 +1018,65 @@ public class HandleTable {
     }
 
     /** 宿主对象 → `cell`（活句柄取 ID；值型按其类型装箱后由调用方解释）。 */
+    /**
+     * M3：把任意宿主值装进 **Any 盒**（tag=12）并返回句柄。
+     *
+     * 盒不可变：存进去的是什么就取什么（值型已在调用侧拷贝、引用型即共享引用）。
+     * 与 `pin` 分开是因为 `pin` 按对象类型选 tag，而盒的 tag 恒为 12；载荷是 `JitAnyBox`
+     * 包装对象（保证盒在容器里保持身份，见 `JitAnyBox` 的类注释）。
+     */
+    public static func pinAnyBox(v: Any): Int64 {
+        synchronized(mtx) {
+            newSlotLocked(JitAnyBox(v), TypeToken.ANY, false)
+        }
+    }
+
+    /**
+     * **世界内**装箱（H78/H81 用）：`JitAnyBox` 走 `append` ⇒ 计入窗口容量（m3 §8 hwCap 对账）。
+     *
+     * 与 `pinAnyBox` 的分工：`pinAnyBox` 是**桥侧**（`CallMarshal` 的 Any 行）路径 B，不占窗口；
+     * 世界内分配必须占窗口，否则 `hwTop` 记账失真、容量触顶永远不触发（T40 抓到的缺陷）。
+     */
+    public static func appendAnyBox(ctx: JitContext, v: Any): Int64 {
+        append(ctx, JitAnyBox(v), TypeToken.ANY)
+    }
+
+    /**
+     * 取 Any 盒内容；tag ≠ 12 / 失效 / **代数不符** → 8（契约类错误）。
+     *
+     * 代数校验与 `fetchHostObject` 同构：槽被释放并复用后，旧 ID 必须失效，不能读到新盒。
+     */
+    public static func fetchAnyBox(id: Int64): Any {
+        let i = idxOf(id)
+        synchronized(mtx) {
+            if (i <= 0 || i >= objs.size || !alive[i] || gens[i] != genOf(id) ||
+                tags[i] != TypeToken.ANY) {
+                failWith(ErrCode.HANDLE_TYPE)
+            }
+            match (objs[i]) {
+                case b: JitAnyBox => b.value
+                case _ => failWith(ErrCode.HANDLE_TYPE)
+            }
+        }
+    }
+
+    /** 标记/查询 frozen（M3 §11：常量实例化登记时置位，H82 写保护判定）。 */
+    public static func markFrozen(id: Int64): Unit {
+        let i = idxOf(id)
+        synchronized(mtx) {
+            if (i > 0 && i < frozenFlags.size) {
+                frozenFlags[i] = true
+            }
+        }
+    }
+
+    public static func isFrozen(id: Int64): Bool {
+        let i = idxOf(id)
+        synchronized(mtx) {
+            i > 0 && i < frozenFlags.size && frozenFlags[i]
+        }
+    }
+
     public static func anyToCell(v: Any): Int64 {
         match (v) {
             case i: Int64 => i

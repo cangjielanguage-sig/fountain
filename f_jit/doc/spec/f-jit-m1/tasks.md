@@ -124,17 +124,17 @@
 - [x] S5.3 `BackendSelector.select`：先写失败用例——矩阵 `{Off,Auto,Force} × {Linux x86_64, Linux aarch64, Linux 其他, Windows, macOS, HarmonyOS}` 结果确定、非 Linux 恒 `Interp` 且不抛异常、有降级诊断记录；再写实现（OS/Arch 判定经 `f_base`）；验收：T7/T9 用例绿
 - [x] S5.4 `BackendX86_64` 框架 + `compile/entryThunk/abiSummary/name`：先写失败用例——prologue/epilogue 序列（r15 保存恢复、hwBase 镜像、fnId 写 ctx、args 拷入 locals、卫生填充）、帧 16 对齐算术；再写实现（发射器）；验收：与 §12.3 一致（机器码断言在非原生架构上条件跳过并计入「非原生跳过」）（本机完成：`X86Frame/Lower/Thunk` 字节断言全绿 + `X86Compiler` 组装 + `Arch` 自动分派；x86 执行证据因 x86 SDK alpha.07 缺 `stdx.effect` 未取，按非原生跳过记录，待同版本 SDK/CI 补）
   - **已完成**：`name`/`abiSummary`/`entryThunkBase`/`entryThunkFor`/`prepareThunks`/`frameSize`/`emitPrologue`/`emitEpilogue`，用例 `X86Frame_test`（4）+ `X86Thunk_test`（2）+ `X86Lower_test`（逐指令字节）。
-  - **未完成（阻塞）**：`compile(unit, sink)` 的整单元编排 = P5.8。现有 x86 片段内部多处 `rel32` 仍是「P5.8 回填」占位（`emitCast`/`emitAssert`/浮点收尾/`emitFDivChk` 等），缺少可重定位的汇编层；在无 x86_64 原生执行证据时不把 `compile` 伪造成可运行。
+  - **已完成（口径更正 2026-10-19）**：`compile(unit, sink)` 的整单元编排由 P5.8 + `X86Lower` 收口，`rel32` 占位全部改为两遍布局回填；字节级 `X86Compile_test` 11 例、执行级 `X86Exec_test` 13 例在**真机 x86_64 全绿**。原「未完成（阻塞）」表述按 INFO-01 更正。
 - [x] S5.5 x86 lowering 0x00–0x3F：先写失败用例——`SET_SITE`、`BAIL` 块（含单次转储）、`CHECK_ERR`、`STACK_GUARD`、`PUSH_*`、`DUP/PICK`、`LOADL/STOREL/LOAD_CAP`、整型组（`jo/bail`、`IDIV` 前置判定、`IMOD INT_MIN/-1`、`ICLZ=bsr`、`IPOPCNT=SWAR`）、NaN/失败收敛块规则；再逐条 lowering；验收：与 §12.4 对照表一致（超界分支改用跳板）
 - [x] S5.6 x86 lowering 0x40–0x8F：先写失败用例——浮点（含 NaN 尾 `CANON`）、比较（`EQ_F` 谓词、`GT` 交换）、逻辑位、跳转（`rel32`）、调用模板 A/B/C、`CAST/TO_I64`（哨兵区分）、`GUARD/ASSERT/ABORT`；再逐条 lowering；验收：与 §12.4 一致
 - [x] S5.7 x86 模板 A/B/C 与镜像：先写失败用例——`CALL_HELPER`（lea rsi/argc 收参 + 自动 `CHECK_ERR`）、`CALL_FUNC`（fnTable 间接 + fnId 重写）、`CALL_CLOSURE`（H55/H57/间接调用 + IBT `endbr64`）、`PUSH_KH`（镜像立即数）；再写实现；验收：三类调用与解释器结果/错误码/站点逐位一致
-- [x] S5.8 `JitCompiler.compileUnit` + `JitArtifacts`（**AArch64 先行**；x86 路径待补）：先写失败用例——最小单元（`{=>1}`）编译 → 执行 → 结果 1、两遍布局与重定位补丁正确；再写实现（编排）；验收：T2 前置就绪（本机为条件跳过证据，CI 补原生证据）
+- [x] S5.8 `JitCompiler.compileUnit` + `JitArtifacts`（AArch64 与 x86_64 均已收口）：先写失败用例——最小单元（`{=>1}`）编译 → 执行 → 结果 1、两遍布局与重定位补丁正确；再写实现（编排）；验收：T2 前置就绪（aarch64 原生 + 真机 x86_64 全绿）
 - [x] S5.9 `BackendAArch64` 框架 + 全量 lowering：先写失败用例——x29/x30 保存、CTX x19、`b.vs` 溢出、`sdiv` 预判、`frint*`、`cset` 谓词、`csel`、`clz`、FPCR.DN、跳板、条件分支 ±1 MB 边界；再逐条实现；验收：**本机原生证据**——与 §12.4 对照表一致（补齐 `PUSH_KH` 常量镜像、`LOAD_CAP`、`IPOPCNT`、`CMP_F`、`CALL_FUNC`、`CALL_CLOSURE`、`0x89`/`0x90–0xBF` helper 路由、FPCR.DN 保存/置位/恢复、`finishOrNull` 分支越界检测；实参方向修正为「x1 指最深实参、第 i 个在 −8i」，闭包帧 ABI 对齐；Linux aarch64 原生 450/450 全绿）
 - [x] S5.10 `JitCompiler` 两遍布局与跳板：先写失败用例——超界条件分支改写为「取反条件 + 无条件 b」跳板且执行语义与短距分支逐位一致、跨函数重定位补丁正确；再写实现（布局阶段两后端共享）；验收：与 §12.4 一致（`A64Emitter(farCond)` 放大条件分支；`A64Compiler` 第一遍短距、越界重编第二遍；编码/执行/CALL_FUNC 自递归共 4 例，454/454 绿）
 - [x] S5.11 后端合规判据（§12.7）：先写失败用例——同一单元同一输入在可用引擎上各跑一次，结果 / NaN 位模式 / errCode / site 四者全部相同；再补齐实现；验收：本机最小集 `Interp × AArch64` 全绿（T2）（RealRunners 真实接入 + 5 例差分：常量/多参数/分支/F64/NaN；统一实参 ABI 为正序区）
 - [x] S5.12 引擎降级一致性：先写失败用例——非 Linux 或不支持的指令集下 `Force` 模式静默降级：不报错、不写错误槽、结果与 Linux 解释器一致、诊断记录 `JitFallback`；再写实现（依赖桥）；验收：T7 用例绿（选择层：`selectForArchName` 覆盖非 Linux × 3 个不支持 arch；降级不触碰 ctx 错误槽。执行层降级随 P6 桥接入）
 - [x] S5.13 代码内存生命周期：先写失败用例——卸载 → `munmap`、编译缓存键 `(arch, cpuFeatures, bytecodeFingerprint)` 仅驻内存（进程重启后重新编译且结果一致）、mmap/mprotect 失败 → 降级解释器且不写错误槽；再写实现；验收：T29 前置就绪（`CompileCacheKey` + 4 例；`CodeBuffer.free` munmap 幂等）
-- [x] S5.14 IBT/BTI：先写失败用例——入口与间接调用着陆点全程发射 `endbr64` / `bti c`、在开启间接分支跟踪的内核上运行无控制保护异常且结果与解释器一致；再写实现；验收：T5 用例绿（AArch64：序言首条 `bti c`，多函数单元逐入口断言；间接调用目标均为函数入口。x86 入口 `endbr64` 待 S5.4 补 compile 路径）
+- [x] S5.14 IBT/BTI：先写失败用例——入口与间接调用着陆点全程发射 `endbr64` / `bti c`、在开启间接分支跟踪的内核上运行无控制保护异常且结果与解释器一致；再写实现；验收：T5 用例绿（AArch64：序言首条 `bti c`，多函数单元逐入口断言；间接调用目标均为函数入口。x86 入口 `endbr64` 已在 P5.8 收口，见 `X86Thunk_test` / `X86Frame_test`）
 
 ## 8. P6 门面 / 桥（包 `fountain::f_jit`，S6.1–S6.12）
 

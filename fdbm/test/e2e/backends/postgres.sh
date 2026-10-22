@@ -10,7 +10,7 @@ DB_READ_USER="${FDBM_E2E_DB_READ_USER:-fdbm_ro}"
 DB_PASSWORD="${FDBM_E2E_DB_PASSWORD:-fdbm_pw}"
 DATABASES=(db0 db1 db2 db3)
 DB_LIST="$(IFS=,; echo "${DATABASES[*]}")"
-DB_TABLES=(t_step t_hash t_substr t_global t_plain t_stream t_orm orm_item)
+DB_TABLES=(t_step t_hash t_substr t_global t_plain t_stream t_orm orm_item t_shard_probe)
 
 admin_sql() {
     psql -h "$PGHOST" -p "$PGPORT" -U "$PGADMIN" -v ON_ERROR_STOP=1 -tAc "$1"
@@ -47,8 +47,17 @@ backend_prepare() {
         db_sql "$db" "$drops" >/dev/null
     done
     db_sql db0 "create table if not exists fountain_sequence (table_name text primary key, current_value bigint not null, increment bigint not null);
-delete from fountain_sequence where table_name = 'db0.t_step';
-insert into fountain_sequence (table_name, current_value, increment) values ('db0.t_step', 500, 1);" >/dev/null
+delete from fountain_sequence where table_name = 'app.t_step';
+insert into fountain_sequence (table_name, current_value, increment) values ('app.t_step', 500, 1);" >/dev/null
+
+    say "准备分片探针表（每个物理库只放本分片的一行）"
+    local index=0
+    for db in "${DATABASES[@]}"; do
+        local id=$((1 + 1000 * index))
+        db_sql "$db" "create table t_shard_probe (id bigint primary key, tag varchar(64));
+insert into t_shard_probe (id, tag) values ($id, '$db');" >/dev/null
+        index=$((index + 1))
+    done
 }
 
 backend_server_env() {
@@ -61,7 +70,7 @@ backend_server_env() {
     echo "export fdbm_db_database_name1=$DB_LIST"
     echo "export fdbm_db_username_name1=$DB_READ_USER"
     echo "export fdbm_db_password_name1=$DB_PASSWORD"
-    echo "export fdbm_db_logicalDatabase_db0=$DB_LIST"
+    echo "export fdbm_db_logicalDatabase_app=$DB_LIST"
 }
 
 backend_driver_so() {
@@ -92,4 +101,10 @@ backend_verify() {
     done
     [ "$(db_sql db0 "select octet_length(data) from t_stream where id = 1")" = "200000" ] || fail "bytea not stored"
     [ "$(db_sql db0 "select name from t_orm where id = 1")" = "updated" ] || fail "orm row missing"
+    # 分片探针：未限定名的读写必须落在路由算出的物理库（其余库不应出现这些行）
+    [ "$(db_sql db0 "select tag from t_shard_probe where id = 1")" = "db0" ] || fail "db0 shard probe row"
+    [ "$(db_sql db1 "select tag from t_shard_probe where id = 1001")" = "app-w" ] || fail "db1 shard probe write"
+    [ "$(db_sql db2 "select tag from t_shard_probe where id = 2005")" = "app-i" ] || fail "db2 shard probe insert"
+    [ "$(db_sql db2 "select count(*) from t_shard_probe")" = "2" ] || fail "db2 shard probe rows"
+    [ "$(db_sql db3 "select count(*) from t_shard_probe")" = "0" ] || fail "db3 shard probe delete"
 }

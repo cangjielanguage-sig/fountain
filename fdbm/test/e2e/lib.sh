@@ -54,10 +54,10 @@ build_fdbm() {
         || { tail -30 "$WORK/fdbm-install.log" >&2; fail "fdbm install failed"; }
 }
 
-# start_server <port> <cache 目录> <export 脚本> <日志>
-# 公共环境 + backend_server_env 输出写入 env_<port>.sh，再以该环境启动 fdbm。
+# start_server <port> <cache 目录> <export 脚本> <日志> [额外 env 文件]
+# 公共环境 + backend_server_env（+ 额外 env）写入 env_<port>.sh，再以该环境启动 fdbm。
 start_server() {
-    local port="$1"; local cache="$2"; local export="$3"; local log="$4"
+    local port="$1"; local cache="$2"; local export="$3"; local log="$4"; local extra="${5:-}"
     local envfile="$WORK/env_$port.sh"
     {
         echo "export fdbm_port=$port"
@@ -78,20 +78,24 @@ start_server() {
         echo 'export fdbm_loadbalance_weight_name0="w,1;r,0"'
         echo 'export fdbm_loadbalance_weight_name1="w,0;r,1"'
         echo "export fdbm_partition_step=1000"
-        echo 'export fdbm_partition__t_step="db0,step,id"'
-        echo 'export fdbm_partition__t_hash="db0,hash,user_id"'
-        echo 'export fdbm_partition__t_substr="db0,substr,account_no"'
+        echo 'export fdbm_partition__t_step="app,step,id"'
+        echo 'export fdbm_partition__t_hash="app,hash,user_id"'
+        echo 'export fdbm_partition__t_substr="app,substr,account_no"'
+        echo 'export fdbm_partition__t_shard_probe="app,step,id"'
         echo 'export fdbm_partition_substr__t_substr="0,2,crc32"'
-        echo 'export fdbm_global__dict="db0"'
-        echo 'export fdbm_global__t_global="db0"'
+        echo 'export fdbm_global__dict="app"'
+        echo 'export fdbm_global__t_global="app"'
         echo "export fdbm_idmaker=sequence"
-        echo "export fdbm_sequenceDatabase=db0"
+        echo "export fdbm_sequenceDatabase=app"
         echo "export fdbm_cache=true"
         echo "export fdbm_cachePath=$cache"
         echo "export fdbm_cache_size=0"
         echo "export logger_appender_console=FdbmConsole"
         echo "export logger_appender_FdbmConsole_level=INFO"
         backend_server_env
+        if [ -n "$extra" ]; then
+            cat "$extra"
+        fi
     } > "$envfile"
     touch "$export"
     (

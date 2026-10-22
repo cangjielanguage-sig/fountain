@@ -51,8 +51,8 @@ class MQPayloadTest {
         let back = roundtrip<MQResult>(MQResult(7, "nope")).getOrThrow()
         @Assert(back.code == 7)
         @Assert(back.message == "nope")
-        @Assert(!back.isOk())
-        @Assert(MQResult(0, "ok").isOk())
+        @Assert(back.code != 0)
+        @Assert(MQResult(0, "ok").code == 0)
     }
 
     @TestCase
@@ -100,18 +100,18 @@ class MQPayloadTest {
     @TestCase
     public func emptyRecordStaysEmpty(): Unit {
         let value = MQConsumeResult(2, 7, 128, [])
-        @Assert(!value.hasMessage())
+        @Assert(value.record.isEmpty())
         let back = roundtrip<MQConsumeResult>(value).getOrThrow()
         @Assert(back.queueIndex == 2)
         @Assert(back.segmentedIndex == 7)
         @Assert(back.segmentedOffset == 128)
-        @Assert(back.record.size == 0)
-        @Assert(!back.hasMessage())
+        @Assert(back.record.size() == 0)
+        @Assert(back.record.isEmpty())
 
         let withRecord = roundtrip<MQConsumeResult>(MQConsumeResult(5, 1, 2, [1u8, 2u8, 3u8])).getOrThrow()
-        @Assert(withRecord.hasMessage())
+        @Assert(!withRecord.record.isEmpty())
         @Assert(withRecord.queueIndex == 5)
-        @Assert(withRecord.record == [1u8, 2u8, 3u8])
+        @Assert(withRecord.record.copyBytes() == [1u8, 2u8, 3u8])
     }
 
     @TestCase
@@ -119,7 +119,7 @@ class MQPayloadTest {
         let value = MQInternalMessage(MQInternalKind.BACKUP, [9u8, 8u8])
         let back = roundtrip<MQInternalMessage>(value).getOrThrow()
         @Assert(back.kind == "backup")
-        @Assert(back.payload == [9u8, 8u8])
+        @Assert(back.payload.copyBytes() == [9u8, 8u8])
     }
 
     @TestCase
@@ -151,9 +151,9 @@ class MQPayloadTest {
         @Assert(back.topic == "/t")
         @Assert(back.queueIndex == 2)
         @Assert(back.records.size == 3)
-        @Assert(back.records[0] == [1u8])
-        @Assert(back.records[1] == [2u8, 3u8])
-        @Assert(back.records[2].size == 0)
+        @Assert(back.records[0].copyBytes() == [1u8])
+        @Assert(back.records[1].copyBytes() == [2u8, 3u8])
+        @Assert(back.records[2].size() == 0)
         @Assert(back.states.size == 3)
         @Assert(back.states[1].acked)
         @Assert(back.states[1].deliverCount == 2)
@@ -171,7 +171,7 @@ class MQPayloadTest {
         @Assert(back.segmentedOffset == 128)
         @Assert(back.deliverCount == 4)
         @Assert(back.deadTime == time)
-        @Assert(back.record == [1u8, 2u8])
+        @Assert(back.record.copyBytes() == [1u8, 2u8])
     }
 
 
@@ -183,5 +183,35 @@ class MQPayloadTest {
             delayingMs: 61000)).getOrThrow()
         @Assert(assignment.delayingMs == 61000)
         @Assert(assignment.owners == [0, 1])
+    }
+
+    @TestCase
+    public func revisionAndTombstoneRoundtrip(): Unit {
+        let assignment = roundtrip<MQTopicAssignment>(
+            MQTopicAssignment("/t", 2, 0, [0, 1], revision: 7, origin: 3)).getOrThrow()
+        @Assert(assignment.revision == 7)
+        @Assert(assignment.origin == 3)
+
+        let group = roundtrip<MQSubscribeGroupMeta>(MQSubscribeGroupMeta("/t", "g", revision: 8, origin: 1)).getOrThrow()
+        @Assert(group.revision == 8)
+        @Assert(group.origin == 1)
+
+        let tombstone = roundtrip<MQMetaTombstone>(
+            MQMetaTombstone(MQMetaTombstone.KIND_GROUP, "/t", "g", 9, 2, 1700000000000)).getOrThrow()
+        @Assert(!tombstone.isTopic())
+        @Assert(tombstone.revision == 9)
+        @Assert(tombstone.deletedAtMs == 1700000000000)
+        @Assert(tombstone.key() == MQMetaTombstone(MQMetaTombstone.KIND_GROUP, "/t", "g", 0, 0, 0).key())
+
+        let snapshot = roundtrip<MQMetaSnapshot>(MQMetaSnapshot([assignment], [group], 4,
+            tombstones: [tombstone], revision: 9)).getOrThrow()
+        @Assert(snapshot.tombstones.size == 1)
+        @Assert(snapshot.revision == 9)
+
+        // 旧数据（无新字段）解码为默认值
+        let legacy = roundtrip<MQMetaSnapshot>(MQMetaSnapshot(Array<MQTopicAssignment>(), [], 0)).getOrThrow()
+        @Assert(legacy.tombstones.size == 0)
+        @Assert(legacy.revision == 0)
+        @Assert(roundtrip<MQTopicAssignment>(MQTopicAssignment("/x", 1, 0, [0])).getOrThrow().revision == 0)
     }
 }

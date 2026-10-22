@@ -27,7 +27,7 @@ package fountain::f_jit.bytecode
  * 一律 `match` 分派（design-m1 §3.3.6）。
  */
 
-/** 常量 kind（M1：1–10；M3 追加 11=Json，本步不登记）。 */
+/** 常量 kind（M1：1–10；M3 追加 11=Json）。 */
 public class ConstKind {
     /** kind 1：Int64，载荷 `i64`。 */
     public static const I64: UInt8 = 1u8
@@ -49,6 +49,8 @@ public class ConstKind {
     public static const RANGE: UInt8 = 9u8
     /** kind 10：Regex，载荷 `u8 flags + u16 长度 + pattern UTF-8 字节`。 */
     public static const REGEX: UInt8 = 10u8
+    /** kind 11（M3）：Json，载荷 `u32 长度 + 规范化后的原始 JSON UTF-8 字节`（与 kind 3 同构）。 */
+    public static const JSON: UInt8 = 11u8
 }
 
 /**
@@ -69,6 +71,7 @@ public enum ConstPayload {
     | PDuration(Int64)
     | PRange(Int64, Int64, Int64, Bool)
     | PRegex(String, UInt8)
+    | PJson(String)
 
     /** 载荷 → kind 码（序列化分派；与 `ConstKind` 一一对应）。 */
     public static func kindOf(p: ConstPayload): UInt8 {
@@ -83,6 +86,7 @@ public enum ConstPayload {
             case PDuration(_) => ConstKind.DURATION
             case PRange(_, _, _, _) => ConstKind.RANGE
             case PRegex(_, _) => ConstKind.REGEX
+            case PJson(_) => ConstKind.JSON
         }
     }
 }

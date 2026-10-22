@@ -16,15 +16,23 @@ limitations under the License.
 package fountain::fmq.queue
 
 import std.fs.*
+import std.sync.AtomicInt64
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::fmq.meta.MQFileNames
 import fountain::f_mq.base.payload.MQTopicAssignment
+import fountain::fmq.test.TestDirs
 
 @Test
 class QueueManagerTest {
+    /** 进程不再注册 `atExit`，整个类的临时目录在收尾时统一回收。 */
+    @AfterAll
+    static func removeTempDirs(): Unit {
+        TestDirs.cleanNamespace("queue_manager")
+    }
+
     private static func rootOf(name: String): String {
-        "/tmp/fmq_test_queue_manager/${name}"
+        TestDirs.of("queue_manager", name)
     }
 
     private static func clean(root: String): Unit {
@@ -50,6 +58,76 @@ class QueueManagerTest {
             // 重复打开不新增队列
             manager.openTopic(assignment, 0)
             @Assert(manager.localQueues("/t").size == 2)
+        } finally {
+            manager.close()
+            clean(root)
+        }
+    }
+
+    /** 8 线程同时打开同一主题只创建一组 QueueLog（A52）。 */
+    @TestCase
+    public func concurrentOpenCreatesSingleSet(): Unit {
+        let root = rootOf("concurrent_open")
+        clean(root)
+        let manager = QueueManager(root, 1024 * 1024, 1)
+        try {
+            let assignment = MQTopicAssignment("/t", 2, 0, [0, 0])
+            let done = AtomicInt64(0)
+            for (_ in 0..8) {
+                spawn {
+                    manager.openTopic(assignment, 0)
+                    done.fetchAdd(1)
+                }
+            }
+            var waited = 0
+            while (done.load() < 8 && waited < 500) {
+                sleep(Duration.millisecond * 10)
+                waited++
+            }
+            @Assert(done.load() == 8)
+            let queues = manager.localQueues("/t")
+            @Assert(queues.size == 2)
+            // 只有一组段文件：每个队列目录下恰好一个 log_*.log
+            for ((index, _) in queues) {
+                let dir = MQFileNames.queueDir(root, "/t", index)
+                let files = Array<Int64>(1, repeat: 0)
+                Directory.walk(dir) {info: FileInfo =>
+                    if (!info.isDirectory() && info.name.endsWith(".log")) {
+                        files[0] = files[0] + 1
+                    }
+                    true
+                }
+                @Assert(files[0] == 1)
+            }
+        } finally {
+            manager.close()
+            clean(root)
+        }
+    }
+
+    /** 第二个队列打开失败时第一个必须被关闭，且不留下半成品主题（A52）。 */
+    @TestCase
+    public func failedOpenRollsBackAndLeavesNoTopic(): Unit {
+        let root = rootOf("open_rollback")
+        clean(root)
+        let manager = QueueManager(root, 1024 * 1024, 1)
+        try {
+            // 把第二个队列的目录名先占成普通文件，令其构造失败
+            let blocked = MQFileNames.queueDir(root, "/t", 1)
+            Directory.create(Path(blocked).parent, recursive: true)
+            let blocker = File(blocked, OpenMode.Write)
+            blocker.write([1u8])
+            blocker.close()
+            var threw = false
+            try {
+                manager.openTopic(MQTopicAssignment("/t", 2, 0, [0, 0]), 0)
+            } catch (_: Exception) {
+                threw = true
+            }
+            @Assert(threw)
+            @Assert(manager.queueOf("/t", 0).isNone())
+            @Assert(manager.localQueues("/t").size == 0)
+            @Assert(manager.localTopics().size == 0)
         } finally {
             manager.close()
             clean(root)

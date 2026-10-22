@@ -21,15 +21,15 @@ import std.unittest.testmacro.*
 import fountain::f_jit.base.ErrCode
 import fountain::f_jit.base.JitException
 import fountain::f_jit.base.LocalType
+import fountain::f_jit.test.TCase
 
 /** S6.5：`call<T>` 六步（§8.2）。 */
 @Test
 public class JitFunction_test {
     @TestCase
     public func returnsT(): Unit {
-        // T15/ 映射标签（check_tmap 断言级校验）
         let f = JitFunction_test.addFn()
-        @Assert(f.call<Int64>([20, 22]), 42)
+        @Assert(TCase.hit('T15/call-returns-t', f.call<Int64>([20, 22]) == 42), true)
     }
 
     @TestCase
@@ -102,11 +102,10 @@ public class JitFunction_test {
 public class JitFunctionLifecycle_test {
     @TestCase
     public func unloadThenCallIsRejected(): Unit {
-        // T29/ 映射标签（check_tmap 断言级校验）
         let f = JitFunctionLifecycle_test.fn()
         @Assert(f.call<Int64>(Array<Any>()), 1)
-        @Assert(f.unload(0), true)
-        @Assert(f.isUnloaded(), true)
+        @Assert(TCase.hit('T29/unload-succeeds', f.unload(0)), true)
+        @Assert(TCase.hit('T29/unloaded-visible', f.isUnloaded()), true)
         try {
             let _ = f.call<Int64>(Array<Any>())
             @Fail('未抛 19')

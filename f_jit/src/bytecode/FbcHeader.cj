@@ -15,6 +15,8 @@ limitations under the License.
 */
 package fountain::f_jit.bytecode
 
+import fountain::f_jit.base.Version
+
 /**
  * `.fbc` 容器头与 flags 位域 —— design-m1 §3.3.8、plan-m1 S2.11。
  *
@@ -35,8 +37,9 @@ package fountain::f_jit.bytecode
  * ```
  *
  * **头布局兼容（v0.18.25）**：`nameLen` 插入 `crc32` 前——`crc32` 偏移 32→36、payload 起始
- * 36→40。加载器按 `verMinor` 分支：≤ 13 = 旧布局（无 `nameLen`、payload 36、无 name 段）；
- * ≥ 14 = 新布局（payload = 4 + `hdrSize` = 40）。
+ * 36→40。加载器对 **M1（verMajor 1）** 按 `verMinor` 分支：≤ 13 = 旧布局（无 `nameLen`、
+ * payload 36、无 name 段）；≥ 14 = 新布局（payload = 4 + `hdrSize` = 40）。M2（verMajor 2）
+ * 从 verMinor 0 起算，但一律使用新布局（不继承 M1 的「minor ≤ 13」判据）。
  */
 
 /** 容器头 flags 位域（§11.6）。 */
@@ -100,9 +103,13 @@ public struct FbcHeader {
     /** 旧布局头长度（无 nameLen）。 */
     public static const LEGACY_HDR_SIZE: UInt32 = 32u32
 
-    /** 是否旧布局（无 name 段、payload = 36）。 */
+    /** 是否旧布局（无 name 段、payload = 36）。
+     *
+     * 旧布局是 **M1（verMajor 1）的 verMinor ≤ 13** 历史产物；M2 从 verMinor 0 起算，
+     * 但头布局沿用新布局（`hdrSize = 36`、含 name 段），因此不能仅凭 verMinor 判断。
+     */
     public func isLegacyLayout(): Bool {
-        this.verMinor <= LEGACY_MINOR
+        this.verMajor == Version.M1_MAJOR && this.verMinor <= LEGACY_MINOR
     }
 
     /** 四段 payload 的起点（= 4 + `hdrSize`，§11.6）。 */
@@ -128,8 +135,9 @@ public struct FbcHeader {
     /**
      * 按 `verMinor` 分支读入（§11.6「头布局兼容」）。
      *
-     * - `verMinor ≤ 13`：**无 `nameLen`**，紧接 `entryFn` 的就是 `crc32`（`nameLen` 记 0）；
-     * - `verMinor ≥ 14`：先 `nameLen` 再 `crc32`。
+     * - **M1（verMajor 1）且 `verMinor ≤ 13`**：**无 `nameLen`**，紧接 `entryFn` 的就是
+     *   `crc32`（`nameLen` 记 0）；
+     * - 其余（M1 `verMinor ≥ 14`、M2/M3）：先 `nameLen` 再 `crc32`。
      *
      * 版本 / flags / magic 的**语义校验**不在这里（见 `FbcReader.validate`，design D11「11 类
      * 非法情形集中在一个 `validate` 里」）——本方法只负责把字节解成字段。
@@ -146,7 +154,7 @@ public struct FbcHeader {
         let entryFn = r.u32()
         var nameLen: UInt32 = 0u32
         var crc32: UInt32 = 0u32
-        if (verMinor <= LEGACY_MINOR) {
+        if (verMajor == Version.M1_MAJOR && verMinor <= LEGACY_MINOR) {
             crc32 = r.u32()
         } else {
             nameLen = r.u32()

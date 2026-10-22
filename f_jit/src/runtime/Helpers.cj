@@ -120,11 +120,44 @@ internal func dispatchHelper(ctx: JitContext, hid: Int64, a: Array<Int64>): Int6
         case 55 => closureFnid(ctx, a)
         case 56 => closureCap(ctx, a)
         case 57 => fnTable(ctx, a)
+        // ---- M2：宿主闭包转发（H63）----
+        case 63 => hostCallTrampoline(ctx, a)
+        // ---- M2：实例字段读写（H64 / H65）----
+        case 64 => hostGetField(ctx, a)
+        case 65 => hostSetField(ctx, a)
+        // ---- M2.3：转型失败（H77）----
+        case 77 => castFail(ctx, a)
+        // ---- M3：Any 通道（H78–H80）----
+        case 78 => anyBox(ctx, a)
+        case 79 => anyIs(ctx, a)
+        case 80 => anyAs(ctx, a)
+        // ---- M3：JSON 世界内可变 API（H81–H83）----
+        case 81 => jsonGet(ctx, a)
+        case 82 => jsonSet(ctx, a)
+        case 83 => jsonNew(ctx, a)
         // ---- 空容器构造（H70 / H71）----
         case 70 => listNew(ctx, a)
         case 71 => mapNew(ctx, a)
-        case _ => failWith(ErrCode.NOT_IMPL)
+        case _ =>
+            if (hid >= Int64(HelperId.USER_BASE)) {
+                invokeUserHelper(ctx, hid, a)
+            } else {
+                failWith(ErrCode.NOT_IMPL)
+            }
     }
+}
+
+/**
+ * H77 `cast_fail`：`as` 转型失败的统一抛错点。
+ *
+ * 为什么单列一个 helper 而不是让 `$as$<C>` 判定函数自己抛：user helper 抛出的普通异常
+ * 会被统一转 21（宿主异常），而转型失败必须是 **7 BAD_CAST**。固定 helper 直接 `failWith`，
+ * 码值不被改写。
+ */
+private func castFail(ctx: JitContext, a: Array<Int64>): Int64 {
+    let unused = (ctx, a)
+    let _ = unused
+    failWith(ErrCode.BAD_CAST)
 }
 
 // ============================================================================

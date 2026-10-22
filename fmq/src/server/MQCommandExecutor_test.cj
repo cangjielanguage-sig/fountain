@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::fmq.server
 
-import std.convert.*
 import std.fs.*
 import std.unittest.*
 import std.unittest.testmacro.*
@@ -27,22 +26,29 @@ import fountain::f_mq.base.payload.*
 import fountain::f_protocol.default.*
 import fountain::fmq.cluster.{BackupReplicator, MetaSyncer, NodeRegistry}
 import fountain::fmq.meta.MetaStore
+import fountain::fmq.metrics.MQMetrics
 import fountain::fmq.queue.*
+import fountain::fmq.test.TestDirs
 
 class ExecutorFixture <: Resource {
     let root: String
     let meta: MetaStore
     let queues: QueueManager
-    let cursors: CursorStore
+    let cursorStore: CursorStore
+    let cursors: CursorCatalog
     let dead: DeadLetterQueue
     let subscribers: SubscriberRegistry
+    let metrics: MQMetrics
     let consume: ConsumeService
     let executor: MQCommandExecutor
+    let syncer: MetaSyncer
     private let registry: NodeRegistry
-    private let backup: BackupReplicator
+    let backup: BackupReplicator
+    let backupStore: BackupStore
 
-    init(name: String, selfIndex!: Int64 = 0, nodes!: Array<String> = ["127.0.0.1:1"]) {
-        this.root = "/tmp/fmq_test_executor/${name}"
+    init(name: String, selfIndex!: Int64 = 0, nodes!: Array<String> = ["127.0.0.1:1"],
+        backupCount!: Int64 = 0) {
+        this.root = TestDirs.of("executor", name)
         if (exists(root)) {
             remove(root, recursive: true)
         }
@@ -50,17 +56,24 @@ class ExecutorFixture <: Resource {
         this.meta = MetaStore("${root}/metas")
         meta.load()
         this.registry = NodeRegistry(nodes, selfIndex)
-        let syncer = MetaSyncer(meta, registry)
+        this.syncer = MetaSyncer(meta, registry)
         this.queues = QueueManager("${root}/logs", 1024 * 1024, 1)
-        this.cursors = CursorStore("${root}/metas")
+        this.cursorStore = CursorStore("${root}/metas")
+        this.cursors = CursorCatalog(cursorStore, meta)
         this.dead = DeadLetterQueue("${root}/dead", 1024 * 1024, 1)
         this.subscribers = SubscriberRegistry()
+        let metrics = MQMetrics()
+        this.metrics = metrics
         this.consume = ConsumeService(queues, cursors, subscribers, MQMatcher(), dead,
-            Duration.second * 10, 3)
-        this.backup = BackupReplicator(registry, 0)
+            Duration.second * 10, 3, metrics: metrics)
+        this.backup = BackupReplicator(registry, backupCount)
         let backupStore = BackupStore("${root}/logs", 1024 * 1024, 1)
+        this.backupStore = backupStore
         this.executor = MQCommandExecutor(meta, syncer, queues, cursors, subscribers, consume, backup,
             backupStore, selfIndex)
+        // 与 `MQServer` 的装配保持一致：peer 墓碑生效后清理本机状态（A25）
+        let commandExecutor = this.executor
+        syncer.onDeleted = {payload => commandExecutor.cleanupAfterDelete(payload)}
     }
 
     func call(message: Message): Message {
@@ -114,13 +127,65 @@ class ExecutorFixture <: Resource {
 
 @Test
 class MQCommandExecutorTest {
+    /** 进程不再注册 `atExit`，整个类的临时目录在收尾时统一回收。 */
+    @AfterAll
+    static func removeTempDirs(): Unit {
+        TestDirs.cleanNamespace("executor")
+    }
+
     private static func codeOf(message: Message): Int64 {
         MQProtocol.asResult(message).code
     }
 
     private static func bodyOf(result: MQConsumeResult): String {
-        let content = MQMessageRecord.decode(result.record).getOrThrow()
+        let content = MQMessageRecord.decode(result.record.copyBytes()).getOrThrow()
         convert<String>(content.body.data).getOrThrow()
+    }
+
+    /** 非法组名在注册入口被拒，且不落盘、不建目录（A05）。 */
+    @TestCase
+    public func registerGroupRejectsInvalidName(): Unit {
+        let fixture = ExecutorFixture("bad_group")
+        try {
+            @Assert(MQProtocol.asPayload<MQTopicAssignment>(fixture.registerTopic("/t", 1)).isSome())
+            for (name in ["g 1", "g:1", "g/1", "g%2F", ".g", "g."]) {
+                @Assert(codeOf(fixture.registerGroup("/t", name)) == MQErrorCode.INVALID_GROUP)
+            }
+            @Assert(!fixture.meta.groupExists("/t", "g 1"))
+            let dir = "${fixture.root}/metas/groups"
+            // 用数组做盒子：闭包不能捕获可变局部变量
+            let files = Array<Int64>(1, repeat: 0)
+            if (exists(dir)) {
+                Directory.walk(dir) {info: FileInfo =>
+                    if (!info.isDirectory()) {
+                        files[0] = files[0] + 1
+                    }
+                    true
+                }
+            }
+            @Assert(files[0] == 0)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** `kind` 拼错/大小写变体不得落到「删除订阅组」分支，也不得删任何东西（A10）。 */
+    @TestCase
+    public func deregisterWithUnknownKindDeletesNothing(): Unit {
+        let fixture = ExecutorFixture("bad_kind")
+        try {
+            @Assert(MQProtocol.asPayload<MQTopicAssignment>(fixture.registerTopic("/t", 1)).isSome())
+            @Assert(codeOf(fixture.registerGroup("/t", "g")) == 0)
+            for (kind in ["", "Topic", "GROUP", "subscriber", "topics"]) {
+                let response = fixture.call(
+                    MQProtocol.deregister(MQDeregisterPayload(kind, "/t", subscribeGroup: "g")))
+                @Assert(codeOf(response) == MQErrorCode.INTERNAL)
+            }
+            @Assert(fixture.meta.topicOf("/t").isSome())
+            @Assert(fixture.meta.groupExists("/t", "g"))
+        } finally {
+            fixture.close()
+        }
     }
 
     @TestCase
@@ -295,7 +360,7 @@ class MQCommandExecutorTest {
             // 空消费不是错误
             let empty = MQProtocol.asConsumeResult(
                 fixture.call(MQProtocol.consume(MQConsumePayload(sid)))).getOrThrow()
-            @Assert(empty.record.size == 0)
+            @Assert(empty.record.size() == 0)
         } finally {
             fixture.close()
         }
@@ -357,6 +422,100 @@ class MQCommandExecutorTest {
         }
     }
 
+    /** `backup >= 1` 时发布一条记录，备份替身恰好收到一次入队（R4-G14）。 */
+    @TestCase
+    public func publishWithBackupEnqueuesOnce(): Unit {
+        let fixture = ExecutorFixture("backup_enqueue", backupCount: 1)
+        try {
+            fixture.registerTopic("/t", 1)
+            @Assert(codeOf(fixture.publish("/t", 1i64.toData())) == 0)
+            @Assert(fixture.backup.pendingCount == 1)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 命令矩阵的六条错误分支：都必须给出确定的错误码，不能挂起（R4-G13）。 */
+    @TestCase
+    public func commandMatrixReturnsDeterministicErrors(): Unit {
+        let fixture = ExecutorFixture("matrix")
+        try {
+            fixture.registerTopic("/t", 1)
+            fixture.registerGroup("/t", "g")
+
+            // 1. SUBSCRIBE 的 tags 非法
+            @Assert(codeOf(fixture.call(MQProtocol.subscribe(
+                MQSubscribePayload("sid", "/t", "g", ["bad tag"], "", false)))) == MQErrorCode.INVALID_TAGS)
+
+            // 2. SUBSCRIBE 时本机没有该主题队列
+            let other = ExecutorFixture("matrix_owner", selfIndex: 1, nodes: ["127.0.0.1:1", "127.0.0.1:2"])
+            try {
+                other.registerTopic("/u", 1)
+                other.registerGroup("/u", "g")
+                @Assert(codeOf(other.call(MQProtocol.subscribe(
+                    MQSubscribePayload("sid2", "/u", "g", [], "", false)))) == MQErrorCode.NOT_OWNER)
+            } finally {
+                other.close()
+            }
+
+            // 3. REGISTER 收到意外载荷
+            @Assert(codeOf(fixture.call(Message(Command.REGISTER, MQResult(0, "ok").toData()))) ==
+                MQErrorCode.INTERNAL)
+
+            // 4. 内部信封的未知 kind
+            @Assert(codeOf(fixture.call(Message.register<MQInternalMessage>(
+                data: MQInternalMessage("weird", Array<Byte>())))) == MQErrorCode.INTERNAL)
+
+            // 5. PUBLISH 收到非 backup 的内部信封
+            @Assert(codeOf(fixture.call(Message.publish<MQInternalMessage>(dup: false, qos: QoS.AtMostOnce,
+                retain: false, data: MQInternalMessage(MQInternalKind.META_SYNC, Array<Byte>())))) ==
+                MQErrorCode.INTERNAL)
+
+            // 6. META_SYNC 收到未知子载荷
+            @Assert(codeOf(fixture.call(Message.register<MQInternalMessage>(
+                data: MQInternalMessage(MQInternalKind.META_SYNC,
+                    MQProtocol.encodePayload<String>("not-a-sub-payload"))))) == MQErrorCode.INTERNAL)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 备份批次的状态数与记录数不匹配：记录照常落盘，位点不更新且留 WARN（R2-G5）。 */
+    @TestCase
+    public func backupStatesMismatchSkipsCursors(): Unit {
+        CapturingAppender.install()
+        let fixture = ExecutorFixture("backup_mismatch")
+        try {
+            fixture.registerTopic("/t", 1)
+            let payload = MQBackupPayload(0, "/t", 0, [[1u8], [2u8]], [MQBackupState(1, 0, 0, true)],
+                cursors: [MQBackupCursor("g", 1, 0)])
+            @Assert(codeOf(fixture.call(MQProtocol.publishBackup(payload))) == 0)
+            @Assert(exists("${fixture.root}/logs/backup/0/%2Ft/0"))
+            @Assert(fixture.backupStore.loadCursor(0, "/t", 0, "g").isNone())
+            @Assert(CapturingAppender.waitFor(["2 records", "1 states"]))
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 状态数匹配时位点才落盘（R2-G5）。 */
+    @TestCase
+    public func backupCursorsAppliedWhenStatesMatch(): Unit {
+        let fixture = ExecutorFixture("backup_cursors")
+        try {
+            fixture.registerTopic("/t", 1)
+            let payload = MQBackupPayload(0, "/t", 0, [[1u8], [2u8]],
+                [MQBackupState(1, 0, 0, true), MQBackupState(1, 8, 0, false)],
+                cursors: [MQBackupCursor("g", 1, 8)])
+            @Assert(codeOf(fixture.call(MQProtocol.publishBackup(payload))) == 0)
+            let cursor = fixture.backupStore.loadCursor(0, "/t", 0, "g").getOrThrow()
+            @Assert(cursor.seq == 1)
+            @Assert(cursor.offset == 8)
+        } finally {
+            fixture.close()
+        }
+    }
+
     @TestCase
     public func garbagePayloadReturnsInternalError(): Unit {
         let fixture = ExecutorFixture("garbage")
@@ -367,6 +526,120 @@ class MQCommandExecutorTest {
             // 连接仍可用：后续正常请求成功
             fixture.registerTopic("/t", 1)
             @Assert(fixture.meta.topicOf("/t").isSome())
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 内部 metaSync 的三条变更分支（主题 / 组 / 墓碑）都能落地并生效（A67）。 */
+    @TestCase
+    public func internalMetaSyncAppliesTopicGroupAndTombstone(): Unit {
+        let fixture = ExecutorFixture("internal_apply")
+        try {
+            @Assert(codeOf(fixture.call(MQProtocol.metaSync(
+                MQTopicAssignment("/t", 1, 0, [0], revision: 1)))) == 0)
+            @Assert(fixture.meta.topicOf("/t").isSome())
+            // 广播路径也要为本机打开队列，否则发布得到 NOT_OWNER
+            @Assert(fixture.queues.queueOf("/t", 0).isSome())
+
+            @Assert(codeOf(fixture.call(MQProtocol.metaSync(
+                MQSubscribeGroupMeta("/t", "g", revision: 2)))) == 0)
+            @Assert(fixture.meta.groupExists("/t", "g"))
+
+            let tombstone = MQMetaTombstone(MQMetaTombstone.KIND_TOPIC, "/t", "", 9, 0, 0)
+            @Assert(codeOf(fixture.call(MQProtocol.metaSync(tombstone))) == 0)
+            @Assert(fixture.meta.topicOf("/t").isNone())
+            @Assert(!fixture.meta.groupExists("/t", "g"))
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** peer 的主题墓碑生效后，队列目录 / 游标文件 / 订阅 / 计数器全部清空（A25/F1）。 */
+    @TestCase
+    public func topicTombstoneFromPeerClearsLocalState(): Unit {
+        let fixture = ExecutorFixture("tombstone_topic_cleanup")
+        try {
+            @Assert(MQProtocol.asPayload<MQTopicAssignment>(fixture.registerTopic("/t", 1)).isSome())
+            @Assert(codeOf(fixture.registerGroup("/t", "g")) == 0)
+            let sid = "sid-tomb-topic"
+            @Assert(codeOf(fixture.call(
+                MQProtocol.subscribe(MQSubscribePayload(sid, "/t", "g", [], "", false)))) == 0)
+            fixture.publish("/t", "one".toData())
+            let message = MQProtocol.asConsumeResult(
+                fixture.call(MQProtocol.consume(MQConsumePayload(sid)))).getOrThrow()
+            @Assert(codeOf(fixture.call(MQProtocol.ack(
+                MQAckPayload(sid, message.queueIndex, message.segmentedIndex, message.segmentedOffset)))) == 0)
+
+            let queueDir = "${fixture.root}/logs/%2Ft"
+            let cursorFile = "${fixture.root}/metas/offsets/%2Ft/0/g.cursor"
+            @Assert(exists(queueDir))
+            @Assert(exists(cursorFile))
+            @Assert(fixture.subscribers.of(sid).isSome())
+            @Assert(fixture.metrics.deliveredOf("/t", "g") > 0)
+
+            // peer 广播的墓碑（origin != 本机下标）
+            @Assert(codeOf(fixture.call(MQProtocol.metaSync(
+                MQMetaTombstone(MQMetaTombstone.KIND_TOPIC, "/t", "", 99, 1, 0)))) == 0)
+
+            @Assert(!exists(queueDir))
+            @Assert(!exists(cursorFile))
+            @Assert(fixture.subscribers.of(sid).isNone())
+            @Assert(fixture.metrics.deliveredOf("/t", "g") == 0)
+            @Assert(fixture.metrics.ackedOf("/t", "g") == 0)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** peer 的组墓碑生效后，只清该组的游标/订阅/计数器，主题队列保留（A25/F1）。 */
+    @TestCase
+    public func groupTombstoneFromPeerClearsGroupStateOnly(): Unit {
+        let fixture = ExecutorFixture("tombstone_group_cleanup")
+        try {
+            @Assert(MQProtocol.asPayload<MQTopicAssignment>(fixture.registerTopic("/t", 1)).isSome())
+            @Assert(codeOf(fixture.registerGroup("/t", "g1")) == 0)
+            @Assert(codeOf(fixture.registerGroup("/t", "g2")) == 0)
+            let sid1 = "sid-tomb-g1"
+            let sid2 = "sid-tomb-g2"
+            @Assert(codeOf(fixture.call(
+                MQProtocol.subscribe(MQSubscribePayload(sid1, "/t", "g1", [], "", false)))) == 0)
+            @Assert(codeOf(fixture.call(
+                MQProtocol.subscribe(MQSubscribePayload(sid2, "/t", "g2", [], "", true)))) == 0)
+            fixture.publish("/t", "one".toData())
+            let first = MQProtocol.asConsumeResult(
+                fixture.call(MQProtocol.consume(MQConsumePayload(sid1)))).getOrThrow()
+            @Assert(codeOf(fixture.call(MQProtocol.ack(
+                MQAckPayload(sid1, first.queueIndex, first.segmentedIndex, first.segmentedOffset)))) == 0)
+
+            let g1Cursor = "${fixture.root}/metas/offsets/%2Ft/0/g1.cursor"
+            @Assert(exists(g1Cursor))
+            @Assert(fixture.metrics.deliveredOf("/t", "g1") > 0)
+
+            @Assert(codeOf(fixture.call(MQProtocol.metaSync(
+                MQMetaTombstone(MQMetaTombstone.KIND_GROUP, "/t", "g1", 99, 1, 0)))) == 0)
+
+            @Assert(!exists(g1Cursor))
+            @Assert(fixture.subscribers.of(sid1).isNone())
+            @Assert(fixture.metrics.deliveredOf("/t", "g1") == 0)
+            // 主题与另一个组不受影响
+            @Assert(exists("${fixture.root}/logs/%2Ft"))
+            @Assert(fixture.meta.topicOf("/t").isSome())
+            @Assert(fixture.meta.groupExists("/t", "g2"))
+            @Assert(fixture.subscribers.of(sid2).isSome())
+        } finally {
+            fixture.close()
+        }
+    }
+
+    /** 未知命令回 `ERROR(INTERNAL)`，不能静默丢弃（A67）。 */
+    @TestCase
+    public func unknownCommandReturnsInternalError(): Unit {
+        let fixture = ExecutorFixture("unknown_cmd")
+        try {
+            let response = fixture.call(Message(Command.PING(0)))
+            @Assert(response.command == Command.ERROR)
+            @Assert(codeOf(response) == MQErrorCode.INTERNAL)
         } finally {
             fixture.close()
         }
@@ -399,7 +672,7 @@ class MQCommandExecutorTest {
             fixture.publish("/t", "one".toData())
             let message = MQProtocol.asConsumeResult(
                 fixture.call(MQProtocol.consume(MQConsumePayload(sid)))).getOrThrow()
-            @Assert(message.record.size > 0)
+            @Assert(message.record.size() > 0)
             @Assert(codeOf(fixture.call(MQProtocol.unsubscribe(MQUnsubscribePayload(sid)))) == 0)
             @Assert(fixture.subscribers.of(sid).isNone())
             // 未知订阅退订

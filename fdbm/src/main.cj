@@ -33,9 +33,12 @@ main(): Int64 {
         return 0
     } catch (e: FdbmException) {
         logger.error('fdbm failed to start: ${e.code}: ${e.message}', e)
+        // 启动失败时异步 appender 可能来不及 flush；同步写 stderr 保证错误可见（T08）
+        eprintln('ERROR: fdbm failed to start: ${e.code}: ${e.message}')
         return 1
     } catch (e: Exception) {
         logger.error('fdbm failed to start: ${e.message}', e)
+        eprintln('ERROR: fdbm failed to start: ${e.message}')
         return 1
     }
 }

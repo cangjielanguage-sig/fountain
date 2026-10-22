@@ -1,0 +1,13 @@
+# capability	scenario	test_case（逗号分隔；N/A = 流程/文档项；GAP = 无对应用例）	强度（full/partial/none/N/A）
+f-jit-compiler-frontend	同类与子类放行	sameClassKeepsValue,subclassUpcastIsAllowed	full
+f-jit-compiler-frontend	下转型按运行期判定	downcastSucceedsWhenRuntimeTypeMatches,downcastFallsBackOnMismatch	full
+f-jit-compiler-frontend	裸 `as` 失败报 7	bareCastFailsWithBadCast	full
+f-jit-compiler-frontend	类名未跟踪走运行期	unknownClassNameUsesRuntimeCheck	full
+f-jit-compiler-frontend	不相容拒绝	incompatibleTypesAreRejected	full
+f-jit-compiler-frontend	兜底的类型与惰性	fallbackMustMatchTarget,classFallbackMustBeClass,fallbackIsNotEvaluatedOnStaticHit,fallbackIsStillTypeChecked	full
+f-jit-compiler-frontend	语法面	bareAsIsRecognized,castOrShapeIsRecognized,coalesceIsLooserThanOr,coalesceIsRightAssociative,classTargetIsAccepted,bareCoalesceIsRejected,singleQuestionMarkStaysIllegal	full
+f-jit-facade-bridge	宏登记声明中的签名	macroRegistersDeclaredSignatures	full
+f-jit-facade-bridge	登记后闭包形参调用走 adapter	typedAdapterDrivesHostClosureCall	full
+f-jit-facade-bridge	未登记仍可回退	reflectionStillWorksWhenUnregistered	full
+f-jit-runtime	恒置 7	castFailRaisesBadCast	full
+f-jit-runtime	编号不越界	helperIdsCoverSpecRange	full

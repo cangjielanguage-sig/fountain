@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::fmq.meta
 
 import std.collection.{HashMap, Map}
+import fountain::f_mq.base.MQTopic
 import fountain::f_mq.base.payload.MQTopicAssignment
 
 /**
@@ -25,7 +26,7 @@ import fountain::f_mq.base.payload.MQTopicAssignment
  */
 protected class MQAssignment {
     protected static func allocate(topic: String, queueNum: Int64, nodeCount: Int64, start: Int64,
-        delayingMs!: Int64 = 0): MQTopicAssignment {
+        delayingMs!: Int64 = 0, revision!: Int64 = 0, origin!: Int64 = 0): MQTopicAssignment {
         if (queueNum < 1) {
             throw IllegalArgumentException("queueNum must be at least 1, got ${queueNum}")
         }
@@ -34,7 +35,8 @@ protected class MQAssignment {
         }
         let normalized = normalize(start, nodeCount)
         let owners = Array<Int64>(queueNum) {i => (normalized + i) % nodeCount}
-        MQTopicAssignment(topic, queueNum, normalized, owners, delayingMs: delayingMs)
+        MQTopicAssignment(topic, queueNum, normalized, owners, delayingMs: delayingMs, revision: revision,
+            origin: origin)
     }
 
     protected static func nextStart(start: Int64, queueNum: Int64, nodeCount: Int64): Int64 {
@@ -44,13 +46,56 @@ protected class MQAssignment {
         normalize(start + queueNum, nodeCount)
     }
 
-    protected static func ownersOf(assignment: MQTopicAssignment): Map<Int64, Int64> {
-        let result = HashMap<Int64, Int64>()
-        for (i in 0..assignment.owners.size) {
-            result.add(i, assignment.owners[i])
+    /**
+     * 与节点数无关的结构校验：磁盘加载时节点数可能未知，先挡掉自相矛盾的条目。
+     */
+    protected static func validateStructure(assignment: MQTopicAssignment): Bool {
+        if (!MQTopic.isValid(assignment.topic)) {
+            return false
         }
-        result
+        if (assignment.queueNum < 1 || assignment.owners.size != assignment.queueNum) {
+            return false
+        }
+        if (assignment.startNodeIndex < 0) {
+            return false
+        }
+        if (assignment.delayingMs < 0 || assignment.revision < 0) {
+            return false
+        }
+        if (assignment.origin < 0) {
+            return false
+        }
+        for (owner in assignment.owners) {
+            if (owner < 0) {
+                return false
+            }
+        }
+        true
     }
+
+    /**
+     * 结构校验：远端/快照里的分配必须自洽，畸形载荷不得落盘（A34）。
+     *
+     * 校验项：主题名、队列数、owners 数量、起点与 owner 范围、延迟非负、版本与来源范围。
+     */
+    protected static func validate(assignment: MQTopicAssignment, nodeCount: Int64): Bool {
+        if (nodeCount < 1 || !validateStructure(assignment)) {
+            return false
+        }
+        if (assignment.startNodeIndex >= nodeCount) {
+            return false
+        }
+        if (assignment.origin >= nodeCount) {
+            return false
+        }
+        for (owner in assignment.owners) {
+            if (owner >= nodeCount) {
+                return false
+            }
+        }
+        true
+    }
+
 
     private static func normalize(value: Int64, nodeCount: Int64): Int64 {
         let remainder = value % nodeCount

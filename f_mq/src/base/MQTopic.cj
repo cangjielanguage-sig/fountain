@@ -18,7 +18,7 @@ package fountain::f_mq.base
 /**
  * 主题名校验。
  *
- * 合法主题：非空、以 `/` 开头、不以 `/` 结尾、无空段（`//`）、无 ASCII 空白字符。
+ * 合法主题：非空、以 `/` 开头、不以 `/` 结尾、无空段（`//`）、无空白与控制字符（按 Unicode 码点判定）。
  * 客户端在 publish/subscribe 前本地快速失败，服务端在注册时再校验一次（权威）。
  */
 public class MQTopic {
@@ -26,11 +26,9 @@ public class MQTopic {
         if (topic.isEmpty() || !topic.startsWith("/") || topic.endsWith("/")) {
             return false
         }
-        // String 的迭代单位是字节：所有 <= 0x20 的字节都视为空白/控制字符
-        for (c in topic) {
-            if (c <= 0x20) {
-                return false
-            }
+        // 按码点判定空白/控制字符：Unicode 空白与 DEL 都要挡住（R1-G12）
+        if (MQChars.containsBlankOrControl(topic)) {
+            return false
         }
         // 空段（"/a//b"）
         !topic.contains("//")

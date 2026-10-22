@@ -404,19 +404,55 @@ internal class A64Emitter {
 
     // ---- 内存 ----
 
+    /**
+     * 慢路径 scratch（IP0 / x16）：寄存器分配只用 x0–x15，x16/x17 是调用约定的临时寄存器。
+     *
+     * 偏移超出 `STUR/LDUR` 的 imm9（−256..255）时，先 `scratch = rn + off` 再访问
+     * `[scratch, #0]`，**不再**把偏移截断成 9 位（旧实现 `off & 0x1FF` 会让 −257 读成 +255、
+     * 256 读成 −256，静默错位）。
+     */
+    private static const SCRATCH: Int64 = 16
+
     func strOff(rt: Int64, rn: Int64, off: Int64): Unit {
         if (off >= 0 && off % 8 == 0 && off <= 32760) {
             this.word(0xF9000000u32 | (UInt32(off / 8) << 10) | (UInt32(rn) << 5) | UInt32(rt))
-        } else {
+        } else if (off >= -256 && off <= 255) {
             this.word(0xF8000000u32 | (UInt32(off & 0x1FF) << 12) | (UInt32(rn) << 5) | UInt32(rt))
+        } else {
+            this.addOff(A64Emitter.SCRATCH, rn, off)
+            this.word(0xF9000000u32 | (UInt32(A64Emitter.SCRATCH) << 5) | UInt32(rt))
         }
     }
 
     func ldrOff(rt: Int64, rn: Int64, off: Int64): Unit {
         if (off >= 0 && off % 8 == 0 && off <= 32760) {
             this.word(0xF9400000u32 | (UInt32(off / 8) << 10) | (UInt32(rn) << 5) | UInt32(rt))
-        } else {
+        } else if (off >= -256 && off <= 255) {
             this.word(0xF8400000u32 | (UInt32(off & 0x1FF) << 12) | (UInt32(rn) << 5) | UInt32(rt))
+        } else {
+            this.addOff(A64Emitter.SCRATCH, rn, off)
+            this.word(0xF9400000u32 | (UInt32(A64Emitter.SCRATCH) << 5) | UInt32(rt))
+        }
+    }
+
+    /** `rd = rn + off`：`add/sub` 的 imm12 只有 4095，按块累加（|off| 可超 4K）。 */
+    private func addOff(rd: Int64, rn: Int64, off: Int64): Unit {
+        var left = off
+        var cur = rn
+        while (left > 4095) {
+            this.addImm(rd, cur, 4095)
+            cur = rd
+            left = left - 4095
+        }
+        while (left < -4095) {
+            this.subImm(rd, cur, 4095)
+            cur = rd
+            left = left + 4095
+        }
+        if (left >= 0) {
+            this.addImm(rd, cur, left)
+        } else {
+            this.subImm(rd, cur, 0 - left)
         }
     }
 

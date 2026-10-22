@@ -312,6 +312,22 @@ internal class BytecodeBuilder {
         this.emitU8(Op.CALL_CLOSURE, argc)
     }
 
+    /**
+     * `CALL_HOST argc`：栈 `[h_fn, a1..an]`（m2 §2/§5：`LOADL fn` 先入栈（栈底），实参左→右）。
+     *
+     * 与 `CALL_HELPER` 同构：自动尾随 `CHECK_ERR`（I3），并因宿主闭包体黑盒而按变更型置位。
+     */
+    /**
+     * `CALL_HOST argc`：宿主闭包调用（栈 `[h_fn, a1..an]`，h_fn 栈底）。
+     *
+     * GAP-05 乙的目标是把操作数换成 `u16 sigId`（元数从签名反推、调用点零类型分派）；
+     * 转换中，暂保留 `u8 argc`。
+     */
+    public func callHost(argc: UInt8): Unit {
+        this.emitU8(Op.CALL_HOST, argc)
+        this.trailCheck()
+    }
+
     /** `RET`：唯一出口（弹出返回值）。 */
     public func ret(): Unit {
         this.emitRaw(Op.RET)
@@ -453,8 +469,9 @@ internal class BytecodeBuilder {
         }
         this.depth = after
         // 变更型调用按**字节流事实**置位（不依赖调用方走 `callHelper`/`callClosure` 便捷方法）：
-        // H43–H48 / user helper（§9.15）与 `CALL_CLOSURE`（§8.6，被调闭包体静态不可知）。
-        if (op == Op.CALL_CLOSURE) {
+        // H43–H48 / user helper（§9.15）与 `CALL_CLOSURE`（§8.6，被调闭包体静态不可知）/
+        // `CALL_HOST`（m2 §2，宿主闭包体黑盒）保守按变更型处理。
+        if (op == Op.CALL_CLOSURE || op == Op.CALL_HOST) {
             this.flags = this.flags | FuncFlags.MUTATION
         } else if (HelperCodec.isCallHelper(op)) {
             let hid = UInt16(this.code[at + 1]) | (UInt16(this.code[at + 2]) << 8)
@@ -469,7 +486,7 @@ internal class BytecodeBuilder {
         if (op == Op.CALL_HELPER || op == Op.CALL_HELPER_NC || op == Op.CALL_HELPER_V || op == Op.CALL_FUNC) {
             return Int64(this.code[at + 3])
         }
-        if (op == Op.CALL_CLOSURE) {
+        if (op == Op.CALL_CLOSURE || op == Op.CALL_HOST) {
             return Int64(this.code[at + 1])
         }
         0

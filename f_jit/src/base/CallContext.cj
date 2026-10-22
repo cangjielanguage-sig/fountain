@@ -23,20 +23,17 @@ import std.time.DateTime
  * | 成员 | 意义 |
  * |---|---|
  * | `args: Array<Int64>` | 入参 cell 数组（Marshal 结果），三态收尾第 2 步 `rawEntry(ctx, &args[0], nargs)` |
- * | `literalCopy: Bool = false` | M2：字面量深拷贝开关（本步只落默认值，M2 消费） |
- * | `strictFp: Bool = false` | bit0 → ctx.flags（`FDIV_CHK` 语义），由 `invoke(ctx)` 写 flags |
  * | `deadline: ?DateTime` | 配合 `interrupt_poll`，到期 → -2（`LOOP_BACK` 安全点查询） |
  *
- * **默认值契约**（spec「公共值类型」）：`literalCopy=false`、`strictFp=false`、`deadline=None`。
- * `strictFp = true` 真正写进 ctx.flags 的验证在 S4.1 / S6.4 联测（plan-m1 S1.6 明写后置联测）。
+ * **默认值契约**（spec「公共值类型」）：`deadline=None`。
+ *
+ * **只装调用级选项（X3）**：`strictFp` 与 `literalCopy` 已移除。前者是**产物属性**，归
+ * `CompileOptions.strictFp`（决定 `/` 发 `FDIV` 还是 `FDIV_CHK`）；后者从无消费语义——
+ * 字面量是编译期常量，桥层不存在「深拷贝字面量」的时机。
  */
 public struct CallContext {
     /** 入参 cell 数组（Marshal 结果）。 */
     public var args: Array<Int64> = Array<Int64>()
-    /** M2：字面量深拷贝开关。 */
-    public var literalCopy: Bool = false
-    /** bit0 → ctx.flags（`FDIV_CHK` 语义）。 */
-    public var strictFp: Bool = false
     /** 截止时间：到期后 `interrupt_poll` 写 -2。 */
     public var deadline: ?DateTime = None
 

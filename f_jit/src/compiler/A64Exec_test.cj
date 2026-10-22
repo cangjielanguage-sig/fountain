@@ -30,6 +30,7 @@ import fountain::f_jit.runtime.h_dispatch
 import fountain::f_jit.runtime.JitContext
 import fountain::f_jit.runtime.MachineEnv
 import fountain::f_jit.runtime.Interp
+import fountain::f_jit.test.TCase
 
 /**
  * S5.8/S5.9 原生执行：源码 → 字节码 → AArch64 机器码 → 直接调用。
@@ -187,7 +188,6 @@ public class A64Exec_test {
     /** S5.14：每个函数入口与间接调用着陆点都以 `bti c` 开始（IBT/BTI）。 */
     @TestCase
     public func allFunctionEntriesStartWithBtiC(): Unit {
-        // T5/ 映射标签（check_tmap 断言级校验）
         let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(
             '{ => let f = { x: Int64 => x + 1 }\n f(41) }')
         let unit = FbcReader.load(cu.raw)
@@ -204,17 +204,45 @@ public class A64Exec_test {
             }
             @Assert(code.size >= 4, true)
             // bti c = 0xD503245F，小端 5F 24 03 D5
-            @Assert(code[0], 0x5Fu8)
-            @Assert(code[1], 0x24u8)
-            @Assert(code[2], 0x03u8)
-            @Assert(code[3], 0xD5u8)
+            @Assert(TCase.hit('T5/bti-c-first-word',
+                code[0] == 0x5Fu8 && code[1] == 0x24u8 && code[2] == 0x03u8 && code[3] == 0xD5u8), true)
             i = i + 1
         }
     }
 
     /** 编译整单元 → 单块 CodeBuffer → fnTable/常量镜像回填 → 调用入口。 */
+    /**
+     * A6.3（P2-5 端到端）：≥28 个局部槽（帧偏移越过 imm9）时机器码结果仍 ≡ 解释器。
+     *
+     * 偏移由 `strOff/ldrOff` 的慢路径处理；两遍布局会把变长的访存序列算进跳转偏移，
+     * 这里用含条件分支的求和一并覆盖「前后向跳转」。
+     */
+    @TestCase
+    public func deepFrameExceedsImm9(): Unit {
+        var sb = StringBuilder()
+        sb.append('{ n: Int64 => var a0 = 1\n')
+        var i = 1
+        while (i < 30) {
+            sb.append(' var a${i} = ${i + 1}\n')
+            i = i + 1
+        }
+        sb.append(' var s = 0\n')
+        i = 0
+        while (i < 30) {
+            sb.append(' s = s + a${i}\n')
+            i = i + 1
+        }
+        sb.append(' if (n > 0) { s = s + a29 } else { s = s - a29 }\n s }')
+        let src = sb.toString()
+        // 1..30 求和 = 465；n>0 再加 a29=30 ⇒ 495；n<=0 减 30 ⇒ 435
+        @Assert(A64Exec_test.run(src, [1]), 495)
+        @Assert(A64Exec_test.run(src, [0]), 435)
+    }
+
     private static func run2(src: String, args: Array<Int64>): (Int64, Int64) {
-        let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink()).compile(src)
+        // IEEE 语义用例（含 0/0 → canonical NaN）：显式关闭严格浮点，不依赖产品缺省
+        let cu = SourceCompiler(PredefinedSnapshot.empty(), DummyDiagnosticsSink(),
+            strictFp: false).compile(src)
         A64Exec_test.runUnit(cu, 0, args)
     }
 

@@ -70,6 +70,11 @@ fdbm                                                              # 无子命令
 启动时先做完整自检（驱动唯一性、扩展加载与重名、跨项引用、算法/生成器参数、超时取值），
 任一失败在**接受连接之前**报错退出；`boot.sh` 整理失败只记日志，不阻塞启动。
 
+**逻辑库口径**：`fdbm_db_logicalDatabase_<logical>` 是逻辑库的唯一显式来源（物理库名不会被注册成逻辑库）；
+被 `fdbm_partition__*` 引用但未显式配置的逻辑库隐式包含全部物理库。`SHOW DATABASES` 返回逻辑库名，
+`SHOW TABLES [<logical>]` 按逻辑库解析物理库；会话默认库取排序首个逻辑库（多逻辑库部署用
+`<logical>.<table>` 限定）。
+
 ## SQL 能力
 
 fdbm 解析并重写 SQL 子集，方言由物理驱动名决定：含 `postgres` / `pgsql` / `opengauss`

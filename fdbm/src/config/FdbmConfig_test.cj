@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::fdbm.config
 
-import std.collection.HashMap
+import std.collection.{ArrayList, HashMap}
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_dbd.common.DbdErrorCode
@@ -271,9 +271,8 @@ public class FdbmConfigTest {
         @Assert(fdbmCodeOf {
             FdbmConfig.getIdMaker(source: configOf([('fdbm_idmaker', 'snowflake,1024')]))
         }, DbdErrorCode.CONFIG)
-        @Assert(fdbmCodeOf {
-            FdbmConfig.getIdMaker(source: configOf([('fdbm_idmaker', 'bogus')]))
-        }, DbdErrorCode.CONFIG)
+        // 自定义扩展名在解析期放行（validate 用扩展名单再判定）。
+        @Assert(FdbmConfig.getIdMaker(source: configOf([('fdbm_idmaker', 'bogus')])).kind, 'bogus')
     }
 
     @TestCase
@@ -337,6 +336,83 @@ public class FdbmConfigTest {
         @Assert(settings.sequenceDatabase, 'db0')
         @Assert(settings.loadBalance.algorithm, 'random')
     }
+
+    /** D03：显式逻辑库之外不得出现物理库键；默认库取逻辑库。 */
+    @TestCase
+    public func logicalCatalogHidesPhysicalNames(): Unit {
+        let source = configOf([
+            ('fdbm_db', 'name0@h1:9001'),
+            ('fdbm_db_driver_name0', 'mysql'),
+            ('fdbm_db_database_name0', 'db0,db1,db2,db3'),
+            ('fdbm_db_logicalDatabase_app', 'db0,db1,db2,db3')
+        ])
+        let settings = FdbmSettings.load(source: source)
+        let names = settings.catalog.names()
+        @Assert(names.size, 1)
+        @Assert(names[0], 'app')
+        @Assert(settings.logicalDatabases.size, 1)
+        @Assert(settings.defaultDatabase, 'app')
+        @Assert(settings.catalog.physicals('app').getOrThrow().size, 4)
+    }
+
+    /** D03：多逻辑库时默认库取排序首项，绝不取物理库名。 */
+    @TestCase
+    public func defaultLogicalDatabaseIsSortedFirstName(): Unit {
+        let source = configOf([
+            ('fdbm_db', 'name0@h1:9001'),
+            ('fdbm_db_driver_name0', 'mysql'),
+            ('fdbm_db_database_name0', 'db0,db1,db2,db3'),
+            ('fdbm_db_logicalDatabase_zeta', 'db2,db3'),
+            ('fdbm_db_logicalDatabase_alpha', 'db0,db1')
+        ])
+        let settings = FdbmSettings.load(source: source)
+        let names = settings.catalog.names()
+        @Assert(names.size, 2)
+        @Assert(names[0], 'alpha')
+        @Assert(names[1], 'zeta')
+        @Assert(settings.defaultDatabase, 'alpha')
+        @Assert(settings.defaultDatabase == 'db0', false)
+    }
+
+    /** D03：只配分库规则时，被引用的逻辑库隐式展开为全部物理库（排序去重）。 */
+    @TestCase
+    public func implicitLogicalDatabaseExpandsToAllPhysicals(): Unit {
+        let source = configOf([
+            ('fdbm_db', 'name0@h1:9001'),
+            ('fdbm_db_driver_name0', 'mysql'),
+            ('fdbm_db_database_name0', 'db3,db1,db0,db2'),
+            ('fdbm_partition__orders', 'order,hash,id')
+        ])
+        let settings = FdbmSettings.load(source: source)
+        let names = settings.catalog.names()
+        @Assert(names.size, 1)
+        @Assert(names[0], 'order')
+        let physicals = settings.catalog.physicals('order').getOrThrow()
+        @Assert(physicals.size, 4)
+        @Assert(physicals[0], 'db0')
+        @Assert(physicals[3], 'db3')
+    }
+
+    /** D03：`sequenceDatabase` 接受逻辑库名，解析为其物理库排序首项；未知 → `ID_GENERATOR`。 */
+    @TestCase
+    public func sequenceDatabaseResolvesLogicalName(): Unit {
+        let source = configOf([
+            ('fdbm_db', 'name0@h1:9001'),
+            ('fdbm_db_driver_name0', 'mysql'),
+            ('fdbm_db_database_name0', 'db4,db5,db6'),
+            ('fdbm_db_logicalDatabase_order', 'db5,db4'),
+            ('fdbm_sequenceDatabase', 'order')
+        ])
+        @Assert(FdbmSettings.load(source: source).sequenceDatabase, 'db4')
+
+        let unknown = configOf([
+            ('fdbm_db', 'name0@h1:9001'),
+            ('fdbm_db_driver_name0', 'mysql'),
+            ('fdbm_db_database_name0', 'db4'),
+            ('fdbm_sequenceDatabase', 'missing')
+        ])
+        @Assert(fdbmCodeOf { FdbmSettings.load(source: unknown) }, DbdErrorCode.ID_GENERATOR)
+    }
 }
 
 /** Step 1.2 `validate`（设计 §11）：跨项自检的负例。 */
@@ -365,9 +441,8 @@ public class FdbmValidateTest {
             ('fdbm_db_database_name0', 'db0'),
             ('fdbm_db_logicalDatabase_order', 'db0,missing')
         ])
-        let settings = FdbmSettings.load(source: source)
-        @Assert(fdbmCodeOf { FdbmConfig.validate(settings, [], [], source: source) },
-            DbdErrorCode.CONFIG)
+        // 显式逻辑库引用的物理库必须存在：装载期即失败（D03）
+        @Assert(fdbmCodeOf { FdbmSettings.load(source: source) }, DbdErrorCode.CONFIG)
     }
 
     @TestCase
@@ -398,8 +473,9 @@ public class FdbmValidateTest {
         FdbmConfig.validate(settings, ['bogus'], [], source: source)
     }
 
+    /** 分库规则引用未显式配置的逻辑库 → 隐式展开为全部物理库（D03）。 */
     @TestCase
-    public func partitionLogicalDatabaseMustExist(): Unit {
+    public func partitionLogicalDatabaseIsImplicit(): Unit {
         let source = configOf([
             ('fdbm_db', 'name0@h1:9001'),
             ('fdbm_db_driver_name0', 'mysql'),
@@ -407,8 +483,8 @@ public class FdbmValidateTest {
             ('fdbm_partition__orders', 'nope,hash,id')
         ])
         let settings = FdbmSettings.load(source: source)
-        @Assert(fdbmCodeOf { FdbmConfig.validate(settings, [], [], source: source) },
-            DbdErrorCode.PARTITION_CONFIG)
+        @Assert(settings.catalog.physicals('nope').getOrThrow(), ['db0'])
+        FdbmConfig.validate(settings, [], [], source: source)
     }
 
     @TestCase
@@ -441,9 +517,103 @@ public class FdbmValidateTest {
             ('fdbm_idmaker', 'sequence'),
             ('fdbm_sequenceDatabase', 'missing')
         ])
+        @Assert(fdbmCodeOf { FdbmSettings.load(source: source) }, DbdErrorCode.ID_GENERATOR)
+    }
+
+    /** G08：全局表引用未知逻辑库 → 启动失败（CONFIG）。 */
+    @TestCase
+    public func globalTableLogicalDatabaseMustExist(): Unit {
+        let source = configOf([
+            ('fdbm_db', 'name0@h1:9001'),
+            ('fdbm_db_driver_name0', 'mysql'),
+            ('fdbm_db_database_name0', 'db0,db1'),
+            ('fdbm_global__dict', 'cfg')
+        ])
         let settings = FdbmSettings.load(source: source)
         @Assert(fdbmCodeOf { FdbmConfig.validate(settings, [], [], source: source) },
-            DbdErrorCode.ID_GENERATOR)
+            DbdErrorCode.CONFIG)
+    }
+
+    /** D09：自定义分区算法不得与内置名冲突。 */
+    @TestCase
+    public func customAlgorithmCannotOverrideBuiltin(): Unit {
+        let source = configOf([
+            ('fdbm_db', 'name0@h1:9001'),
+            ('fdbm_db_driver_name0', 'mysql'),
+            ('fdbm_db_database_name0', 'db0'),
+            ('fdbm_partition__orders', 'db0,hash,id')
+        ])
+        let settings = FdbmSettings.load(source: source)
+        @Assert(fdbmCodeOf { FdbmConfig.validate(settings, ['hash'], [], source: source) },
+            DbdErrorCode.PARTITION_CONFIG)
+        // 非冲突的自定义名仍然生效
+        FdbmConfig.validate(settings, ['myhash'], [], source: source)
+    }
+
+    /** D09：自定义 ID 生成器不得与内置名冲突。 */
+    @TestCase
+    public func customIdGeneratorCannotOverrideBuiltin(): Unit {
+        let source = configOf([
+            ('fdbm_db', 'name0@h1:9001'),
+            ('fdbm_db_driver_name0', 'mysql'),
+            ('fdbm_db_database_name0', 'db0')
+        ])
+        let settings = FdbmSettings.load(source: source)
+        @Assert(fdbmCodeOf { FdbmConfig.validate(settings, [], ['uuid'], source: source) },
+            DbdErrorCode.CONFIG)
+        FdbmConfig.validate(settings, [], ['myuuid'], source: source)
+    }
+
+    /** G29：`sessionSweepInterval` 必须是正且有限的时长。 */
+    @TestCase
+    public func sessionSweepIntervalMustBePositive(): Unit {
+        let zero = configOf([
+            ('fdbm_db', 'name0@h1:9001'),
+            ('fdbm_db_driver_name0', 'mysql'),
+            ('fdbm_db_database_name0', 'db0'),
+            ('fdbm_sessionSweepInterval', '0')
+        ])
+        let settings = FdbmSettings.load(source: zero)
+        @Assert(fdbmCodeOf { FdbmConfig.validate(settings, [], [], source: zero) },
+            DbdErrorCode.CONFIG)
+    }
+
+    /** G29/D09：未知 idmaker 在解析期放行，由 validate 结合自定义扩展名单判定。 */
+    @TestCase
+    public func customIdMakerIsValidatedAfterExtensionsLoad(): Unit {
+        let source = configOf([
+            ('fdbm_db', 'name0@h1:9001'),
+            ('fdbm_db_driver_name0', 'mysql'),
+            ('fdbm_db_database_name0', 'db0'),
+            ('fdbm_idmaker', 'markergen')
+        ])
+        let settings = FdbmSettings.load(source: source)
+        @Assert(settings.idmaker.kind, 'markergen')
+        @Assert(fdbmCodeOf { FdbmConfig.validate(settings, [], [], source: source) },
+            DbdErrorCode.CONFIG)
+        FdbmConfig.validate(settings, [], ['markergen'], source: source)
+    }
+
+    /** T08：§11 的时长类负例逐条覆盖（shutdown / checkDuration / unavailableChecked）。 */
+    @TestCase
+    public func durationSettingsMustBePositiveAndFinite(): Unit {
+        let base = ArrayList<(String, String)>()
+        base.add(('fdbm_db', 'name0@h1:9001'))
+        base.add(('fdbm_db_driver_name0', 'mysql'))
+        base.add(('fdbm_db_database_name0', 'db0'))
+        for (entry in [('fdbm_shutdownTimeout', '0'), ('fdbm_shutdownTimeout', 'max'),
+            ('fdbm_checkDuration', '0'), ('fdbm_unavailableChecked', '0')]) {
+            let entries = ArrayList<(String, String)>()
+            for (existing in base) {
+                entries.add(existing)
+            }
+            entries.add(entry)
+            let source = configOf(entries.toArray())
+            // 有的项在解析期就拒绝，有的在 validate 期拒绝；两者都必须是 CONFIG。
+            @Assert(fdbmCodeOf {
+                FdbmConfig.validate(FdbmSettings.load(source: source), [], [], source: source)
+            }, DbdErrorCode.CONFIG)
+        }
     }
 
     @TestCase

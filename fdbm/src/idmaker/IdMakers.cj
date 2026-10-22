@@ -18,23 +18,39 @@ package fountain::fdbm.idmaker
 import std.collection.HashMap
 import std.convert.*
 import std.database.sql.{Connection, SqlException}
+import std.sync.Mutex
 import fountain::f_config.Config
 import fountain::f_dbm.IdGenerator
 import fountain::f_dbd.common.DbdErrorCode
-import fountain::f_util.{IdMaker, UUID}
+import fountain::f_util.{IdMaker, TimeBasedUUIDBuilder, UUID}
 import fountain::fdbm.config.IdMakerConfig
 import fountain::fdbm.exception.FdbmException
 import fountain::fdbm.resources.NodeAccessor
 
-/** `'uuid'`：按版本生成 UUID 字符串（v1/v4/v6/v7）。 */
+/**
+ * `'uuid'`：按版本生成 UUID 字符串（v1/v4/v6/v7）。
+ *
+ * v1/v6 使用**进程级复用**的 `TimeBasedUUIDBuilder`：构造时注册一次内存序列生成器，
+ * 每次取号先 `serialSeq`（真正写入时间戳与序列）再 `randomNode()`。builder 的
+ * `timestamp`/`seq` 字段非线程安全，`nextStringId()` 必须持锁（D10）。
+ */
 protected class UuidIdGenerator <: IdGenerator {
     private let version: Int64
+    private let lock = Mutex()
+    private let builder: ?TimeBasedUUIDBuilder
 
     public init(version!: Int64 = 1) {
         if (version != 1 && version != 4 && version != 6 && version != 7) {
             throw FdbmException(DbdErrorCode.CONFIG, 'uuid version must be 1, 4, 6 or 7')
         }
         this.version = version
+        this.builder = if (version == 1) {
+            Some(UUID.timeBased(timeLowFirst: true).registerSequenceGenerator())
+        } else if (version == 6) {
+            Some(UUID.timeBased().registerSequenceGenerator())
+        } else {
+            None<TimeBasedUUIDBuilder>
+        }
     }
 
     public prop name: String {
@@ -46,9 +62,15 @@ protected class UuidIdGenerator <: IdGenerator {
     public func nextStringId(): String {
         match (version) {
             case 4 => UUID.random().toString()
-            case 6 => UUID.timeBased().randomNode().toString()
             case 7 => UUID.unixTimeBased().toString()
-            case _ => UUID.timeBased(timeLowFirst: true).registerFileSequenceGenerator().randomNode().toString()
+            case _ =>
+                match (builder) {
+                    case Some(value) =>
+                        synchronized(lock) {
+                            value.serialSeq.randomNode().toString()
+                        }
+                    case None => UUID.random().toString()
+                }
         }
     }
 }

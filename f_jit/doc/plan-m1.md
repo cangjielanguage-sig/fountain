@@ -95,7 +95,7 @@ f_jit/
 | S1.3 | `ErrCode`：`OK/DEOPT/INTERRUPT`、`DIV_ZERO…READONLY`（1–20）、`CONCURRENT_MOD`(23)、`HELPER_PANIC`(99)、`describe`、`isHostSide` | 全码值断言；`describe(-2..99)` 非空且含语义关键词；未知码描述兜底 | 静态表（无宏，硬编码映射） | §2 表逐项一致 |
 | S1.4 | `Version`：`MAJOR/MINOR/HDR_SIZE/MAGIC` | 常量断言（1/14/36/"FBC1"） | 常量 | 与 §11.6 一致 |
 | S1.5 | `SourcePos`、`JitMode`、`Engine`、`JitValue` | 构造/字段读；`match` 穷尽性（四个 JitValue 构造器）；`==` 语义 | struct/enum（`Engine`/`JitValue` 声明为 `protected`） | 10 分钟内可写完（最小成员） |
-| S1.6 | `CallContext` | 默认值断言（`literalCopy=false`、`strictFp=false`、`deadline=None`）；`strictFp=true` 经 `invoke` 写 ctx.flags（后置步骤联测） | struct + 默认值 | 默认值契约正确 |
+| S1.6 | `CallContext` | 默认值断言（`deadline=None`）；`strictFp` 已归位 `CompileOptions`（产物级 `FDIV`/`FDIV_CHK`，见 X3） | struct + 默认值 | 默认值契约正确 |
 | S1.7 | `SourceUnit` | 构造与字段读；entryFn 与容器头不一致的拒绝路径（在 S2.15 联测） | struct | — |
 | S1.8 | `JitException`：`init(code,site,fnId,sourcePos,message,cause)`、`code/site/fnId/sourcePos/message/cause` | 字段保真；`sourcePos=None` 分支；`cause=None`；可 `catch (e: JitException)` 并读回全部字段；**`is fountain::f_base.BaseException` 断言**（统一基类，宿主可统一 catch） | class <: `f_base.BaseException`（`super(message)` 转发报告文本） | 全部字段可用 |
 | S1.9 | `SourceCompileException`：`kind/position/line/column/lineText/hint` | 字段保真；`lineText` 等于对应源码行原文；**`is fountain::f_base.BaseException` 断言** | class <: `f_base.BaseException` | T50 编译期分组前置 |
@@ -264,7 +264,7 @@ f_jit/
 3. **平台条件**：S5.x 的机器码用例仅在 Linux x86_64/aarch64 上可执行（CI 矩阵需两架构）；其余平台跑「降级一致性」子集。
 4. **T11 的 TZ 依赖**：DateTime 文本化用例固定 TZ 采金样（基准 UTC + 非 UTC 附加用例）。
 5. **风险**：helper 集（H01–H72）体量大且零散——按族推进（S4.8–S4.17），每族完成即接差分，避免最后积压。
-6. **与 M2/M3 的衔接**：M2（步骤前缀 `Q`）追加 LocalType 13/14 与 H63–H65、verMajor 2；M3（步骤前缀 `R`）追加 LocalType/token 15 与错误码 22、H66–H68、kind 11——M3 的 JSON helper 已裁定顺延为 **H73–H75**（避让 M1 已占用的 H72 `regex_replace_range`；2026-10-11 裁定，见 design-m3.md §10 的 M3-6）。
+6. **与 M2/M3 的衔接**：M2（步骤前缀 `Q`）追加 LocalType 13/14 与 H63–H65、verMajor 2；M3（步骤前缀 `R`）追加 LocalType/token 15 与错误码 22、H78–H80、kind 11——M3 的 JSON helper 已裁定顺延为 **H81–H83**（避让 M1 已占用的 H72 `regex_replace_range`；2026-10-11 裁定，见 design-m3.md §10 的 M3-6）。
 
 ---
 

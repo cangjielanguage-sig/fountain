@@ -28,6 +28,15 @@ class MQTopicTest {
         @Assert(MQTopic.isValid("/订单"))
     }
 
+    /** Unicode 空白与控制字符在主题里同样非法（R1-G12）。 */
+    @TestCase
+    public func unicodeWhitespaceAndControlRejected(): Unit {
+        @Assert(!MQTopic.isValid("/a\u{7F}"))
+        @Assert(!MQTopic.isValid("/a\u{00A0}"))
+        @Assert(!MQTopic.isValid("/a\u{3000}"))
+        @Assert(!MQTopic.isValid("/a\u{2028}"))
+    }
+
     @TestCase
     public func invalidTopics(): Unit {
         @Assert(!MQTopic.isValid(""))

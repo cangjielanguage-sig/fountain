@@ -105,4 +105,94 @@ grep -E "^(PASS|FAIL) " "$WORK/probe.log" | tail -5
 grep -q "^E2E_DONE$" "$WORK/probe.log" || { echo "probe aborted" >&2; exit 1; }
 stop_server "$PORT1" "$WORK/fdbm_restart_$PORT1.log"
 
+say "T07 自定义扩展：构建真实 .so 并验证分区/ID 生成"
+cd "$E2E/custom_ext"
+CANGJIE_STDX_PATH="$CANGJIE_STDX_DYNAMIC_PATH" cjpm build -j "$BUILD_JOBS" > "$WORK/custom-build.log" 2>&1 \
+    || { tail -30 "$WORK/custom-build.log" >&2; fail "custom extension build failed"; }
+CUSTOM_SO="$(find target/release -name 'libfdbm_custom_ext.so' | head -1)"
+[ -n "$CUSTOM_SO" ] || fail "libfdbm_custom_ext.so not found"
+cp "$CUSTOM_SO" "$WORK/custom/"
+
+PORT3="$(pick_port)"
+cat > "$WORK/custom_env.sh" <<CUSTOM_ENV
+export CUSTOM_EXT_ALGORITHM=marker
+export CUSTOM_EXT_IDGEN=markergen
+export fdbm_partition__t_custom="app,marker,id"
+export fdbm_idmaker=markergen
+export fdbm_databasePoolMaxSize=1
+export fdbm_databasePoolMinSize=1
+export fdbm_databasePoolInitSize=1
+CUSTOM_ENV
+start_server "$PORT3" "$WORK/cache_$PORT3" "$WORK/export_$PORT3.sh" "$WORK/fdbm_custom.log" "$WORK/custom_env.sh"
+grep -q "custom partition algorithm" "$WORK/fdbm_custom.log" || fail "custom extension not loaded"
+
+cd "$E2E/client"
+set +e
+FDBM_E2E_CUSTOM=1 FDBM_E2E_BACKEND="$BACKEND" dbd_driverName=fdbm FDBM_E2E_PORT="$PORT3" cjpm run > "$WORK/custom_client.log" 2>&1
+CUSTOM_EXIT=$?
+set -e
+check_client_log "$WORK/custom_client.log" "custom client"
+[ "$CUSTOM_EXIT" -eq 0 ] || { echo "custom client failed (exit $CUSTOM_EXIT)" >&2; exit 1; }
+
+custom_total=0
+custom_nonempty=0
+for db in "${DATABASES[@]}"; do
+    n="$(db_sql "$db" "select count(*) from t_custom")"
+    custom_total=$((custom_total + n))
+    if [ "$n" -gt 0 ]; then
+        custom_nonempty=$((custom_nonempty + 1))
+    fi
+done
+custom_want=5
+if [ "$BACKEND" = "postgres" ]; then custom_want=6; fi
+[ "$custom_total" -eq "$custom_want" ] || fail "custom partition rows = $custom_total (want $custom_want)"
+[ "$custom_nonempty" -ge 2 ] || fail "custom algorithm kept all rows on one database"
+stop_server "$PORT3" "$WORK/fdbm_custom.log"
+
+say "T07 自定义扩展与内置算法同名 → 启动失败（PARTITION_CONFIG）"
+PORT4="$(pick_port)"
+cat > "$WORK/custom_conflict_env.sh" <<CUSTOM_CONFLICT
+export CUSTOM_EXT_ALGORITHM=hash
+CUSTOM_CONFLICT
+(
+    set -a
+    # shellcheck disable=SC1090
+    . "$WORK/env_$PORT3.sh"
+    . "$WORK/custom_conflict_env.sh"
+    set +a
+    export fdbm_port=$PORT4
+    export LD_LIBRARY_PATH="$WORK/install/libs/fdbm:$CANGJIE_STDX_DYNAMIC_PATH:$CANGJIE_HOME/runtime/lib/linux_aarch64_cjnative:${LD_LIBRARY_PATH:-}"
+    exec "$WORK/install/bin/fdbm"
+) > "$WORK/fdbm_conflict.log" 2>&1 &
+CONFLICT_PID=$!
+set +e
+wait "$CONFLICT_PID"
+CONFLICT_EXIT=$?
+set -e
+[ "$CONFLICT_EXIT" -eq 1 ] || fail "conflicting custom name must exit 1 (got $CONFLICT_EXIT)"
+grep -q "conflicts with a builtin" "$WORK/fdbm_conflict.log" || fail "missing builtin conflict error"
+(ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null) | grep -q ":$PORT4 " && fail "conflicting fdbm must not listen"
+rm -f "$WORK/custom/"libfdbm_custom_ext.so
+
+say "T08 进程级：坏配置启动 → 退出码 1 且端口未监听"
+PORT5="$(pick_port)"
+(
+    set -a
+    # shellcheck disable=SC1090
+    . "$WORK/env_$PORT3.sh"
+    set +a
+    export fdbm_port=$PORT5
+    export fdbm_shutdownTimeout=0
+    export LD_LIBRARY_PATH="$WORK/install/libs/fdbm:$CANGJIE_STDX_DYNAMIC_PATH:$CANGJIE_HOME/runtime/lib/linux_aarch64_cjnative:${LD_LIBRARY_PATH:-}"
+    exec "$WORK/install/bin/fdbm"
+) > "$WORK/fdbm_bad_config.log" 2>&1 &
+BAD_PID=$!
+set +e
+wait "$BAD_PID"
+BAD_EXIT=$?
+set -e
+[ "$BAD_EXIT" -eq 1 ] || fail "bad config must exit 1 (got $BAD_EXIT)"
+grep -q "ERROR.*CONFIG" "$WORK/fdbm_bad_config.log" || fail "missing CONFIG error log"
+(ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null) | grep -q ":$PORT5 " && fail "bad-config fdbm must not listen"
+
 say "通过：$BACKEND 真库联调全部用例"

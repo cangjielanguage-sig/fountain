@@ -142,35 +142,54 @@ public class Diff_test {
         @Assert(got.toArray(), expected)
     }
 
-    /** 范围外编号（T30–T41、T49）明确标注归属 M2/M3，且不计入本次完成判据。 */
+    /**
+     * M3 的 7 个编号（T37–T41、T56、T61）全部登记在案且都计入完成判据。
+     *
+     * 与 `m2ScopeIsFullyCovered` 同构：`check_tmap.sh` 对它们做同一套强校验，本用例钉住集合本身。
+     */
     @TestCase
-    public func outOfScopeIdsAreAttributedToLaterMilestones(): Unit {
-        @Assert(T_MAP_OUT_OF_SCOPE.size, 13)
-        let seen = HashSet<String>()
-        for (m in T_MAP_OUT_OF_SCOPE) {
-            @Assert(m.inScope, false)
-            @Assert(m.owner, 'M2/M3')
-            if (m.caseName.isEmpty()) {
-                @Fail('${m.id} 缺少归属说明')
-            }
-            if (!seen.add(m.id)) {
-                @Fail('${m.id} 重复登记')
-            }
-        }
-        let expected = [
-            'T30', 'T31', 'T32', 'T33', 'T34', 'T35', 'T36', 'T37', 'T38',
-            'T39', 'T40', 'T41', 'T49'
-        ]
+    public func m3ScopeIsFullyCovered(): Unit {
+        @Assert(T_MAP_M3.size, 7)
+        let expected = ['T37', 'T38', 'T39', 'T40', 'T41', 'T56', 'T61']
         let got = ArrayList<String>()
-        for (m in T_MAP_OUT_OF_SCOPE) {
+        for (m in T_MAP_M3) {
+            if (!(m.inScope && m.owner == 'M3')) {
+                @Fail('${m.id} 未计入 M3 完成判据')
+            }
+            @Assert(m.steps.size > 0, true)
+            @Assert(m.caseName.isEmpty(), false)
             got.add(m.id)
         }
         @Assert(got.toArray(), expected)
     }
 
-    /** 全量表 = 范围内 + 范围外，合计 53 项。 */
+    /**
+     * M2 的 14 个编号全部登记在案且都计入完成判据（GAP-02）。
+     *
+     * `check_tmap.sh` 对它们做与 M1 同一套强校验；本用例钉住**集合本身**——
+     * 漏登记一个编号时，映射悬空检查可能仍然通过（少一条自然也少一条悬空）。
+     */
+    @TestCase
+    public func m2ScopeIsFullyCovered(): Unit {
+        @Assert(T_MAP_M2.size, 14)
+        let expected = [
+            'T30', 'T31', 'T32', 'T33', 'T34', 'T35', 'T36',
+            'T49', 'T54', 'T55', 'T57', 'T58', 'T59', 'T60'
+        ]
+        let got = ArrayList<String>()
+        for (m in T_MAP_M2) {
+            if (!(m.inScope && m.owner == 'M2')) {
+                @Fail('${m.id} 未计入 M2 完成判据')
+            }
+            @Assert(m.steps.size > 0, true)
+            got.add(m.id)
+        }
+        @Assert(got.toArray(), expected)
+    }
+
+    /** 全量表 = M1 40 + M2 14 + M3 7，合计 61 项。 */
     @TestCase
     public func allTMappingsIsTheUnion(): Unit {
-        @Assert(allTMappings().size, 53)
+        @Assert(allTMappings().size, 61)
     }
 }

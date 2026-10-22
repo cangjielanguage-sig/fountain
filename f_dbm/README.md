@@ -26,6 +26,10 @@ public interface IdGenerator {
 - ID 生成器只在 INSERT **缺分库列值**时介入；`uuid` / `snowflake` 与表无关，
   `sequence` 按 `(逻辑库, 表)` 在唯一分配库取号。未配置生成器又缺分库列值时返回 `ROUTE_FAILED`。
 - `IdGeneratorException` 是 `f_dbm` 自己的异常类型，生成器实现应抛它而不是裸 `Exception`。
+- **只实现一种能力是合法用法**：例如只实现 `nextStringId()`，调用方在需要整型 ID 时按能力回退；
+  两个默认方法都未实现时调用方映射为 `ID_GENERATOR`。
+- **与内置名重名不允许覆盖**：自定义 `name` 等于 `step`/`hash`/... 或 `uuid`/`snowflake`/`sequence`
+  时，fdbm 启动自检直接失败。
 
 ## 写一个自定义扩展
 
