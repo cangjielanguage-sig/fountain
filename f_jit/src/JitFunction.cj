@@ -112,7 +112,7 @@ public class JitFunction {
 
     /** 六步调用：长度 → 封送 → 执行 → 解包 → `T` 校验 → 返回。 */
     public func call<T>(args: Array<Any>): T {
-        // 薄委托：错误语义与 `invoke` 完全一致（>0 抛 JitException、−2 抛 InterruptedException）
+        // 薄委托：错误语义与带选项重载完全一致（>0 抛 JitException、−2 抛 InterruptedException）
         this.call<T>(args, CallContext())
     }
 

@@ -26,7 +26,7 @@ import std.unittest.testmacro.*
  * - `SourcePos` = `line`（1 起）+ `column`（1 起，Unicode 码点），站点表条目值（§9.16）；
  * - `JitMode` = `Off | Auto | Force`（**输入侧「用户意图」**，§12.1）；
  * - `Engine` = `Interp | Jit`（**输出侧「实际事实」**，§12.1；`protected`，design §8.7 D6 结案）；
- * - `JitValue` = `Int(Int64) | Float(Float64) | Handle(Int64) | Unit`（桥内 `invoke` 结果，§8；
+ * - `JitValue` = `Int(Int64) | Float(Float64) | Handle(Int64) | Unit`（桥内三态收尾结果，§8；
  *   `protected`，design §8.7 D3 结案）。
  *
  * `JitValue` 的分派提醒（§2.3.6）：`Handle` 与 `Int` 载荷同型 ⇒ **按构造器标签分派，

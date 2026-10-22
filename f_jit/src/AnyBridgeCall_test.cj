@@ -35,7 +35,7 @@ import fountain::f_jit.test.ReflectUser
  *   恒报「T 不是可解包类型」；本文件用**真实返回 Any / JSON 的单元**验证宿侧可达与无泄漏。
  * - P0-6：`CallContext.deadline` 原无消费点 ⇒ `−2 INTERRUPT` 生产不可达；本文件验证
  *   过期期限在 `LOOP_BACK` 处变成 `InterruptedException`，且调用后期限**栈式恢复**。
- * - A3.4：`invoke(args, CallContext())` 与 `call(args)` 的结果 / 错误码 / site 逐位一致。
+ * - A3.4：`call(args, CallContext())` 与 `call(args)` 的结果 / 错误码 / site 逐位一致（同名重载）。
  * - A3.5：桥层不改变除法语义（严格浮点已归位 `CompileOptions`）。
  */
 @Test
@@ -155,33 +155,33 @@ public class AnyBridgeCall_test {
         RuntimeEnv.clearDeadline()
     }
 
-    /** A3.4：`invoke(args, CallContext())` 与 `call(args)` 的结果 / 错误码 / site 完全一致。 */
+    /** A3.4：`call(args, CallContext())` 与 `call(args)` 的结果 / 错误码 / site 完全一致（同名重载）。 */
     @TestCase
-    public func a3_4_invokeMatchesCall(): Unit {
+    public func a3_4_callOverloadsAgree(): Unit {
         let c = AnyBridgeCall_test.compiler()
         CompileCache.reset()
         let ok = c.compile('{ x: Int64 => x + 1 }')
         @Assert(ok.call<Int64>([Int64(41)], CallContext()), ok.call<Int64>([Int64(41)]))
         let bad = c.compile('{ x: Int64 => 100 / x }')
         var ic = 0
-        var invokeSite: Int64 = -2
+        var withOptsSite: Int64 = -2
         var cc = 0
-        var callSite: Int64 = -2
+        var plainSite: Int64 = -2
         try {
             let _ = bad.call<Int64>([Int64(0)], CallContext())
         } catch (e: JitException) {
             ic = e.code
-            invokeSite = e.site
+            withOptsSite = e.site
         }
         try {
             let _ = bad.call<Int64>([Int64(0)])
         } catch (e: JitException) {
             cc = e.code
-            callSite = e.site
+            plainSite = e.site
         }
         @Assert(ic, ErrCode.DIV_ZERO)
         @Assert(ic, cc)
-        @Assert(invokeSite, callSite)
+        @Assert(withOptsSite, plainSite)
     }
 
     /**
