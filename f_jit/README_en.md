@@ -167,16 +167,30 @@ shared across calls — writing them fails with `ERR_READONLY(20)`; `[]`/`{}` bu
 container on every evaluation (not in the constant table) and need a contextual type (annotation or
 parameter signature).
 
-**Regex flags (`/pat/flags`)**
+### 6.0 Regex literals and the `i` / `m` / `u` flags
 
-| flag | Meaning | Example (result) |
-|---|---|---|
-| `i` | Case-insensitive (`RegexFlag.IgnoreCase`) | `/AbC/i ~ "abc"` → `1`; without `i` → `0` |
-| `m` | Multiline: `^`/`$` match the start/end of **every line** | `/^b/m ~ "a\nb"` → `1`; without `m` → `0` |
-| `u` | Unicode mode (Unicode semantics such as `\p{…}`; `std.regex` is authoritative) | `/^\p{L}+$/u ~ "中文"` → `1` |
-| combining | `i m u` in **any order, repeats idempotent** (`/pat/im` ≡ `/pat/mi` ≡ `/pat/ii`); any other char is illegal | rejected at load time (error 14) |
+Literal form `/pattern/flags`: `pattern` (UTF-8) sits between the two `/`, and the following `i`/`m`/`u`
+characters are flags.
 
-### 6.0 Multi-line strings and the line-anchor marker `>|`
+| flag | Meaning | Effect | Example (result) |
+|---|---|---|---|
+| `i` | **Case-insensitive** (`RegexFlag.IgnoreCase`; `std.regex` is authoritative) | case-folds literal characters and character classes; escape sequences themselves are unaffected | `/AbC/i ~ "abc"` → `1`; `/AbC/ ~ "abc"` → `0` |
+| `m` | **Multiline** | `^` also matches right after every newline, `$` also matches right before every newline. It does **not** make `.` match newlines (no DOTALL/`s` flag) | `/^b/m ~ "a\nb"` → `1`; `/^b/ ~ "a\nb"` → `0`; `/c$/m ~ "c\nd"` → `1` |
+| `u` | **Unicode mode** | character classes/`\p{…}` match **code points** (one element = one code point, not one byte); `\w`/`\d` use Unicode ranges (`std.regex` is authoritative) | `/^\p{L}+$/u ~ "中文"` → `1` |
+| combining | `i m u` in **any order, repeats idempotent** | normalised to a bitfield at load time (bit0=i bit1=m bit2=u); order/repeats never affect the dedup key, text form or matching behaviour (`/pat/im` ≡ `/pat/mi` ≡ `/pat/ii`) | — |
+| illegal | any character other than `i m u` | **rejected at load time** (`JitException(14)`, `site=-1`, never executed) | `/pat/x` → 14 |
+
+Notes:
+
+- an **illegal or empty pattern** is also rejected at load time with 14 (an empty pattern would cause a
+  zero-width loop, §11.9);
+- the literal is compiled **once at load time** and reused across calls (constant kind 10, deduped by
+  `(pattern, flags)`, same handle ID);
+- building a regex from a string at run time uses `s.regex()` (the `fountain::f_regex` extension), which
+  has **no flags**; use the literal form when flags are needed;
+- operators: `re ~ s` (match), `re !~ s` (negated), `re/s/r/g` (replace all), `re/s/r/n` (replace n times).
+
+### 6.1 Multi-line strings and the line-anchor marker `>|`
 
 Multi-line strings use `'''…'''` / `"""…"""` (raw `#`×n strings are separate). When **source
 indentation** conflicts with **content indentation** (typically JSON embedded in a string), use the
@@ -205,7 +219,7 @@ the content.
 > Note: `>|` is **not** a global dedent — only lines with a valid marker are sliced; all other lines are
 > preserved verbatim.
 
-### 6.1 Recursion (`recursive`)
+### 6.2 Recursion (`recursive`)
 
 Self-recursion uses the keyword `recursive(...)` (not the function name):
 
@@ -222,7 +236,7 @@ Lowering differs by position:
 | Inside a closure | `LOADL 0` (`locals[0]` holds the closure itself) + `CALL_CLOSURE` |
 | **Tail position** | arguments in **reverse order** into `STOREL` + `LOOP_BACK <entry>` (frame reuse, no `RET`; tail recursion does not grow the stack) |
 
-### 6.2 Nested closures and recursive nested closures
+### 6.3 Nested closures and recursive nested closures
 
 ```cangjie
 // nested closure: captures outer locals; the inner `recursive` refers to itself
@@ -240,7 +254,7 @@ f.call<Int64>([Int64(4)])         // 24
 - **Escaping** a closure: take the wrapper via `callForFn<Fn>` and `close()` it when done (otherwise its
   promotion group stays resident).
 
-### 6.3 `as` syntax (cast / fallback / test)
+### 6.4 `as` syntax (cast / fallback / test)
 
 | Form | Semantics | Failure behaviour |
 |---|---|---|
@@ -262,7 +276,7 @@ Additional rules:
   `x as Int64 ?? (x / 0)` returns `x` on success and never evaluates the fallback);
 - `Any` uses the Any channel (box 12 → object handle on success; on failure `as` yields 22, bare `as` → 7).
 
-### 6.4 ⚠ `JitFunction` cannot be a parameter of a jit lambda
+### 6.5 ⚠ `JitFunction` cannot be a parameter of a jit lambda
 
 `JitFunction` is a **bridge-side executable** (code buffer, constant mirror, function table, promotion
 group) — not a dialect value type. `Compiler.registerType()` only accepts host types that map to a
