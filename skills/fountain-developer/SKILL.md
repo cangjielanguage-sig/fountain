@@ -1,6 +1,6 @@
 ---
 name: fountain-developer
-description: 当用户要求用 fountain 框架（仓颉）开发服务器应用、安装/初始化 fountain 环境、添加模块依赖、按需求开发或迁移/升级项目、在 fountain 仓库内开发、修改模块配置，或做代码审查并按报告修复时使用；本技能是 12 个 fountain 工作流技能的统一调度入口，按任务加载对应技能（技能没装先运行 `scripts/install_skill.py workflows`）。
+description: 当用户要求用 fountain 框架（仓颉）开发服务器应用、安装/初始化 fountain 环境、添加模块依赖、按需求开发或迁移/升级项目、在 fountain 仓库内开发、修改模块配置，或做代码审查并按报告修复时使用；fboot 或应用起不来、报 `cannot open shared object file` / `undefined symbol` / `liburing.so.2`、`fboot build` 失败时同样适用。本技能是 12 个 fountain 工作流技能的统一调度入口，按任务加载对应技能（技能没装先运行 `scripts/install_skill.py workflows`）。
 ---
 
 # fountain-developer — fountain 工作流调度
