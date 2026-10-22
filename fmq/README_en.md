@@ -14,6 +14,23 @@ export mqServer_port=2350
 fmq server
 ```
 
+### Start/stop script (recommended)
+
+`fmq.sh` keeps process management and all configuration in one place:
+
+```bash
+bash fmq.sh start     # starts in background; pid in fmq.pid, output appended to fmq.log
+bash fmq.sh stop      # SIGTERM; graceful shutdown via the f_base exit hook
+bash fmq.sh restart   # stop, then start
+```
+
+The script exports every configuration key: `mqClient_hosts` is required and left uncommented,
+while keys with defaults are commented out — uncomment to override; each key has a comment above it.
+The executable is resolved as `$FMQ_BIN` → `fmq` on `PATH` → this repository's
+`target/release/bin/main`; `metas/` still follows the executable directory.
+The default `mqServer_segmentedLogDir` / `mqServer_deadMsgDir` live under `/var/log/fmq`, so a
+non-root user should point them to a writable directory first.
+
 `mqClient_hosts` is both the client node table and the server cluster node table. The
 server matches its own index by `mqServer_port`; a port missing from the table or listed
 twice fails startup. In a multi-node deployment, also set a unique `protocol_hostId` per
@@ -94,7 +111,8 @@ exits 1. `listTopics` prints topic, queueNum, delaying and the queue-to-node ass
 ## Metrics and delayed delivery
 
 `stats [topic]` reports metrics for the **current node**. Columns:
-`topic / group / queueNum / delaying / backlog / lagMs / delivered / acked / redelivered / deadLettered`.
+`topic / group / queueNum / delaying / backlog / lagMs / delivered / acked / redelivered / deadLettered /
+skippedUnreadable / skippedNoMatch / skippedUnsupported`.
 
 - `backlog`: records after the group's `committed` position in the topic's local queues
   (including delivered-but-unacknowledged and not-yet-due delayed records).
@@ -184,3 +202,7 @@ an empty file.
 cd fmq && cjpm build && cjpm test
 cd .. && ./scripts/mq_e2e.sh    # 3-node e2e, prints E2E_OK
 ```
+
+For a minimal single-node walkthrough see [`fmqdemo`](../fmqdemo): both the publisher and the
+consumer are fboot-loaded dynamic libraries, and `bash fmqdemo/run-demo.sh` runs the whole
+"start fmq → register topic/group → publish → consume & ack → verify" flow in one command.

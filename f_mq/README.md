@@ -20,6 +20,16 @@ main() {
 }
 ```
 
+跑这段之前要先有服务端、且主题与订阅组已注册（客户端 API 不提供注册入口）：
+
+```bash
+bash fmq/fmq.sh start                                          # 或在 fmq 目录 cjpm build 后 fmq server
+fmq manager --server=127.0.0.1:2350 registerTopic /order 4
+fmq manager --server=127.0.0.1:2350 registerSubscriber /order g1
+```
+
+完整可运行示例（发布端/消费端都是 fboot 加载的动态库）见 [`fmqdemo`](../fmqdemo)。
+
 `MQClient()` 从配置项 `mqClient_hosts`（逗号分隔的 `host:port`）读取节点表；缺失、为空或
 存在非法项时在构造期抛 `MQConnectionException`。显式构造 `MQClient(hosts)` 用于测试或多集群。
 
@@ -140,4 +150,4 @@ public class MQClient <: Resource {
 cd f_mq && cjpm build && cjpm test
 ```
 
-服务端与真实网络链路的端到端测试见 [`fmq`](../fmq) 的 `scripts/mq_e2e.sh`。
+服务端与真实网络链路的端到端测试见仓库根的 `scripts/mq_e2e.sh`（三节点，成功输出 E2E_OK）。
