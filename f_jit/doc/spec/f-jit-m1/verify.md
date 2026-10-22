@@ -220,3 +220,17 @@ cd f_jit && cjpm test
 - **scenario 矩阵**：`scenario-map.tsv` 从 13 行扩到 **156 行（全 9 capability）**，新增第 4 列「强度」。`check_scenarios.sh` 增强为三道检查：scenario 必须存在于该 capability 的 spec、测试函数必须能在 `f_jit/src` 或 `f_util/src` 解析到、**spec 里每条 scenario 都必须被映射（反向完整性）**；`GAP` 行计入缺口清单，`--strict` 时缺口/部分覆盖即失败。实测：156 条，未映射 0，缺失 0，缺口 7，部分 5。
 - **T 标签行为级**：新增 `src/test/TCase.cj`（`TCase.hit(id, ok)`），13 个单元用例里 `// T<id>/` 注释全部替换为 `TCase.hit('T<id>/<场景>', <真实条件>)` 包裹断言；`TwoForms_test` 的 T52 由注释改为「两形态结果比对」断言。`check_tmap.sh` 改为**先剥离 `//` 与 `/* */` 注释**，再要求 `<函数>( 'T<id>/` 形式的字符串首参——注释标签从此不可能通过校验。实测 40 条范围内映射，悬空 0。
 - **未在融合侧编译验证**：本次编辑（`TCase.cj` + 11 个测试文件 + 2 个脚本）在鸿蒙侧完成，本机无 `cjc`/`cjpm`。静态检查（`check_tmap.sh`、`check_scenarios.sh`）已通过，**仍需在融合环境跑一次 `cjpm build && cjpm test` 确认可编译**。
+
+## 2026-10-22 真机回归（x86_64 栈对齐修复，change `fix-f-jit-x86-stack-align`）
+
+- 环境：WSL Ubuntu-24.04 / `x86_64-unknown-linux-gnu` / Cangjie `1.3.0-alpha.20261015001050`
+- 缺陷：`X86Lower` 用**线性**深度推导栈深，`alignBeforeCall` 以 `depth % 2` 决定 16 字节对齐补丁；
+  `CastOr`（`E as T ?? V`）的失败分支汇合处运行期深度 0、线性深度 1 ⇒ 对齐算反 ⇒ JIT 内 SIGSEGV
+  （3 例：`downcastFallsBackOnMismatch` / `bareCastFailsWithBadCast` / `unknownClassNameUsesRuntimeCheck`）
+- 修复：`X86Depth.analyze` 以**控制流数据流**求逐指令入口深度（增量由 `X86Lower` 探针遍采集），
+  `X86Lower.lower` 三遍（探针 → 数据流 → 发射），不可达区域沿用线性深度；推导失败整单元退回解释器
+- 回归：修复前 **1091 例 / 1084 过 / 3 ERROR / 4 FAILED**；修复后 **1098 例 / 1094 过 / 0 ERROR / 4 FAILED**
+  （新增 7 例：2 个同型行为用例 + 5 个深度分析单测；**剩余 4 个 FAILED 为修复前既有**：
+  `p0_6_deadlineInterruptsLoop`、`defaultIsStrict`、`strictDivisionByZeroFails`、`strictFpIsPartOfCacheKey`
+  —— 属 `strictFp`/期限面，另立变更处理）
+- RED 证据：临时回退 `X86Lower.cj` 复跑 `CastOr_test` ⇒ 4 例 ERROR；恢复修复后 0 ERROR

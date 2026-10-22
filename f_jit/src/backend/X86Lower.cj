@@ -45,6 +45,12 @@ internal class X86Lower {
     /** `roundsd` 需要 SSE4.1；不支持时含取整指令的单元整体降级解释器。 */
     private let sse41: Bool
     private var seq: Int64
+    /** 探针遍：抑制机器码/标签发射，仅采集逐指令栈增量。 */
+    private var probing: Bool
+    /** 逐指令净栈变化（探针遍采集，供 CFG 数据流使用）。 */
+    private let delta = HashMap<Int64, Int64>()
+    /** 每条指令入口深度（CFG 数据流结果）。 */
+    private var depthAt = HashMap<Int64, Int64>()
 
     init(fn: FuncEntry, constBase: Int64, fnTableBase: Int64) {
         this.fn = fn
@@ -55,6 +61,7 @@ internal class X86Lower {
         this.ok = true
         this.sse41 = CpuFeatures.hasSse41
         this.seq = 0
+        this.probing = false
     }
 
     func success(): Bool {
@@ -85,13 +92,55 @@ internal class X86Lower {
         this.add([0x31u8, 0xC0u8])
     }
 
+    /**
+     * 两遍降低：
+     *
+     * 1. **探针遍**：照常走 `translate`，但抑制发射，采集每条指令的净栈变化 `delta[off]`；
+     * 2. **深度遍**：以 `delta` 为输入做控制流数据流（`X86Depth.analyze`），得到每条指令入口深度；
+     *    任一汇合点深度不一致 / 指令未识别 ⇒ 放弃 JIT（`ok = false`，整单元退回解释器）；
+     * 3. **发射遍**：逐指令以 CFG 深度设定栈模型后再降低（`alignBeforeCall` 因而正确）。
+     *
+     * 这样分支汇合后的 `sub rsp, 8` 奇偶与运行期一致（修复 x86_64 栈对齐缺陷）。
+     */
     func lower(unit: LoadedUnit): Unit {
-        var off = Int64(this.fn.codeOff)
-        let end = Int64(this.fn.codeOff) + Int64(this.fn.codeLen)
+        let start = Int64(this.fn.codeOff)
+        let end = start + Int64(this.fn.codeLen)
+
+        // 1) 探针遍：采集逐指令栈增量（不发射任何机器码/标签）
+        this.probing = true
+        this.depth = 0
+        this.delta.clear()
+        var off = start
+        while (off < end) {
+            let before = this.depth
+            let insn = InsnDecoder.decode(unit.code, off)
+            this.translate(insn.op, insn.operands, off, off + insn.size)
+            this.delta[off] = this.depth - before
+            off = off + insn.size
+        }
+        this.probing = false
+
+        // 2) 控制流数据流
+        let analyzed = X86Depth.analyze(unit.code, start, Int64(this.fn.codeLen), this.delta)
+        match (analyzed) {
+            case Some(m) => this.depthAt = m
+            case None =>
+                this.ok = false
+                return
+        }
+
+        // 3) 发射遍
+        off = start
         while (off < end) {
             this.bind('L${off}')
             let insn = InsnDecoder.decode(unit.code, off)
             let next = off + insn.size
+            // 可达偏移以 CFG 深度为准；不可达区域（RET/BAIL 之后的死代码、内联错误块）
+            // 无深度记录，沿用线性累加（与修复前行为一致，且不影响可达汇合点）。
+            match (this.depthAt.get(off)) {
+                case Some(d) => this.depth = d
+                case None => ()
+            }
             this.translate(insn.op, insn.operands, off, next)
             off = next
         }
@@ -123,17 +172,34 @@ internal class X86Lower {
 
     // ---------------------------------------------------------------- emit
 
+    /** 单字节发射（探针遍抑制，供底层编码器共用）。 */
+    private func put(b: UInt8): Unit {
+        if (this.probing) {
+            return
+        }
+        this.code.add(b)
+    }
+
     private func add(bs: Array<UInt8>): Unit {
+        if (this.probing) {
+            return
+        }
         for (b in bs) {
-            this.code.add(b)
+            this.put(b)
         }
     }
 
     private func bind(name: String): Unit {
+        if (this.probing) {
+            return
+        }
         this.labels[name] = this.code.size
     }
 
     private func rel32(op: Array<UInt8>, label: String): Unit {
+        if (this.probing) {
+            return
+        }
         this.add(op)
         this.fixOff.add(this.code.size - 4)
         this.fixLabel.add(label)
@@ -142,7 +208,7 @@ internal class X86Lower {
     private func w64(v: Int64): Unit {
         var k = 0
         while (k < 8) {
-            this.code.add(UInt8((v >> (8 * k)) & 0xFF))
+            this.put(UInt8((v >> (8 * k)) & 0xFF))
             k = k + 1
         }
     }
@@ -150,15 +216,15 @@ internal class X86Lower {
     private func w32(v: Int64): Unit {
         var k = 0
         while (k < 4) {
-            this.code.add(UInt8((v >> (8 * k)) & 0xFF))
+            this.put(UInt8((v >> (8 * k)) & 0xFF))
             k = k + 1
         }
     }
 
     /** `mov r64, imm64`（reg 0–15）。 */
     private func movImm(reg: Int64, v: Int64): Unit {
-        this.code.add(if (reg >= 8) { 0x49u8 } else { 0x48u8 })
-        this.code.add(UInt8(0xB8 + (reg & 7)))
+        this.put(if (reg >= 8) { 0x49u8 } else { 0x48u8 })
+        this.put(UInt8(0xB8 + (reg & 7)))
         this.w64(v)
     }
 
@@ -171,23 +237,23 @@ internal class X86Lower {
         if (dst >= 8) {
             rex = rex | 0x01u8
         }
-        this.code.add(rex)
-        this.code.add(0x89u8)
-        this.code.add(UInt8(0xC0 | ((src & 7) << 3) | (dst & 7)))
+        this.put(rex)
+        this.put(0x89u8)
+        this.put(UInt8(0xC0 | ((src & 7) << 3) | (dst & 7)))
     }
 
     private func pushReg(reg: Int64): Unit {
         if (reg >= 8) {
-            this.code.add(0x41u8)
+            this.put(0x41u8)
         }
-        this.code.add(UInt8(0x50 + (reg & 7)))
+        this.put(UInt8(0x50 + (reg & 7)))
     }
 
     private func popReg(reg: Int64): Unit {
         if (reg >= 8) {
-            this.code.add(0x41u8)
+            this.put(0x41u8)
         }
-        this.code.add(UInt8(0x58 + (reg & 7)))
+        this.put(UInt8(0x58 + (reg & 7)))
     }
 
     private func addRsp(v: Int64): Unit {

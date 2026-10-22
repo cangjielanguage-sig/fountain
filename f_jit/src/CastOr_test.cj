@@ -112,6 +112,30 @@ public class CastOr_test {
         @Assert(f.call<String>(['ann']), 'ann')
     }
 
+    /**
+     * 同型回归（x86_64 栈对齐）：表达式 `if` 的 **else 分支**内含 `argc ≥ 1` 的 helper 调用。
+     *
+     * 汇合点之后线性深度与运行期深度相差 1 ⇒ 修复前 `sub rsp,8` 奇偶算反 ⇒ 调用未对齐。
+     */
+    @TestCase
+    public func ifElseBranchHelperKeepsAlignment(): Unit {
+        let c = CastOr_test.compiler()
+        CompileCache.reset()
+        let f = c.compile('{ b: Bool => if (b) { "hit" } else { ReflectUser("z", 1).name } }')
+        @Assert(f.call<String>([true]), 'hit')
+        @Assert(f.call<String>([false]), 'z')
+    }
+
+    /** 同型回归：`while` 回边之后调用 helper（回边汇合点的深度必须由控制流推导）。 */
+    @TestCase
+    public func loopBodyHelperKeepsAlignment(): Unit {
+        let c = CastOr_test.compiler()
+        CompileCache.reset()
+        let f = c.compile('{ n: Int64 => var i = 0\n var s = ""\n' +
+            ' while (i < n) { s = ReflectUser("x", 1).name + s\n i = i + 1 }\n s }')
+        @Assert(f.call<String>([2]), 'xx')
+    }
+
     /** 不相容（Int64 对 String）→ 编译期错误，与运行期无关。 */
     @TestCase
     public func incompatibleTypesAreRejected(): Unit {
