@@ -500,7 +500,10 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
     private func count(dir: Path, counter: CodeCounter, ext: String, ignoreBrackets: Bool, ignoreComments: Bool): Unit {
         Directory.walk(dir){fi =>
             if (fi.isDirectory()) {
-                if(fi.path.toString().contains('/src/')){
+                let path = fi.path.toString()
+                if(path.contains('/.worktrees/')){
+                    return true
+                }else if(path.contains('/src/')){
                     counter.packages++
                 }
                 count(fi.path, counter, ext, ignoreBrackets, ignoreComments)
