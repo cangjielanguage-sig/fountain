@@ -21,6 +21,18 @@ main() {
 }
 ```
 
+Before running this snippet you need a running server with the topic and subscribe group
+already registered (the client API has no registration entry point):
+
+```bash
+bash fmq/fmq.sh start                                          # or build in fmq/ and run `fmq server`
+fmq manager --server=127.0.0.1:2350 registerTopic /order 4
+fmq manager --server=127.0.0.1:2350 registerSubscriber /order g1
+```
+
+A complete runnable example (publisher and consumer are fboot-loaded dynamic libraries) lives in
+[`fmqdemo`](../fmqdemo).
+
 `MQClient()` reads the node table from `mqClient_hosts` (comma-separated `host:port`).
 A missing/empty value or an invalid entry throws `MQConnectionException` during
 construction. Use `MQClient(hosts)` for tests or multiple clusters.
@@ -163,5 +175,5 @@ The client API exposes no topic/group registration or stats entry point; use
 cd f_mq && cjpm build && cjpm test
 ```
 
-End-to-end tests against a real server and network live in
-[`fmq`](../fmq) under `scripts/mq_e2e.sh`.
+End-to-end tests against a real server and network live in `scripts/mq_e2e.sh` at the repository
+root (three nodes, prints E2E_OK on success).

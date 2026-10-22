@@ -34,7 +34,12 @@ import fountain::f_base.{mcopy, nullptr}
  * - 线程安全（Mutex 保护 append + rotate 临界区）
  */
 
-/** 写入位置：segment 序号 + 段内偏移 */
+/**
+ * 写入位置：segment 序号 + 段内偏移。
+ *
+ * 两个字段是 `public let`：调用方要把位置持久化（确认点追踪）或回传给
+ * `openEntryStream(index, offset)` 续读，都必须能读到它们（MQ 模块即此用法）。
+ */
 public struct LogPosition {
     /** segment 序号（对应文件名 `{filePrefix}_{seq}{fileExt}`） */
     public let seq: Int64
