@@ -262,10 +262,23 @@ internal class BackendX86_64 <: Backend {
         auditMemBases.toArray()
     }
 
-    /** 允许的内存基址：`rsp(4)` / `rbp(5)` / `r15(15)`；其余一律拒绝（整单元退回解释器）。 */
+    /**
+     * 登记一次**宿主绝对地址**解引用（哨兵 `-1`）：常量镜像（`PUSH_KH`）与函数入口表
+     * （`CALL_FUNC`）会把地址物化到寄存器后再 `mov reg,[reg]`，这类访问不属于
+     * "栈/帧/ctx 受控基址"，但它是**受控的地址来源**（编译期烘焙），与 aarch64 对
+     * `movImm64` + `ldr` 的豁免是同一条规则（见 `d2b0b4d8`）。
+     */
+    internal static func noteAbsMem(): Unit {
+        auditMemBases.add(-1)
+    }
+
+    /**
+     * 允许的内存基址：`rsp(4)` / `rbp(5)` / `r15(15)`，以及显式登记的**绝对地址哨兵 `-1`**；
+     * 其余一律拒绝（整单元退回解释器）。
+     */
     internal static func auditAllows(bases: Array<Int64>): Bool {
         for (b in bases) {
-            if (b != 4 && b != 5 && b != 15) {
+            if (b != 4 && b != 5 && b != 15 && b != -1) {
                 return false
             }
         }

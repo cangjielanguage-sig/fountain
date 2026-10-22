@@ -270,3 +270,20 @@ cd f_jit && cjpm test
 | **G6** | `Lifetime_test` 三类出口各 20 次：`liveCount()==基线`、`windowUsed()==0`、`NativeMem.outstanding()` 不增长 |
 
 全量：**1108/1108（0 FAILED / 0 ERROR / 0 SKIPPED）**。
+
+## 2026-10-22 第五轮（x86 审计对称化 + f_util 用例执行，change `harden-x86-audit-and-futil-tests`）
+
+**背景**：对方提交 `d2b0b4d8`（A64 审计豁免宿主绝对地址）揭示 x86 侧存在同构但**未覆盖**的路径。
+
+| 项 | 落点 / 结果 |
+|---|---|
+| x86 审计对称化 | `BackendX86_64.noteAbsMem()` 以哨兵 `-1` 登记**宿主绝对地址**；`auditAllows` 接受 `-1`、仍拒绝真实越界。`X86Lower` 在 `PUSH_KH`（常量镜像）与 `callFunc`（入口表）登记 |
+| 新用例 | `EmitAudit_test.absoluteAddressIsExempt`；`src/JitBacked_test.cj` 两例：`plainUnitStaysJitBacked`、`constMirrorUnitStaysJitBacked`（用 `isJitBacked()` 防"审计误判导致整单元静默回退"） |
+| 缺口（已知） | 方言暂无 `recursive`，**无法从源码触发 `CALL_FUNC`** ⇒ 该路径由审计哨兵单测覆盖，源级用例待方言支持后补 |
+| **f_util 用例首次执行** | WSL Ubuntu-24.04 / x86_64：`cd f_util && cjpm test` ⇒ **45/45 PASSED**（含 FNV 全字宽 14 例；此前 `f_jit` 仅把它当 path 依赖构建，从不执行其测试） |
+| f_jit 全量 | **1112/1112（0 FAILED / 0 ERROR）**，新增 3 例 |
+
+**一次偶发（已排除）**：首轮全量出现 1 例 `ERROR`——`DbgDump_test.reportWithoutSiteHasNoLineOrVariables`
+以 `SIGABRT` 崩溃，运行时断言 `Check failed: toRegion2Idx != INVALID_VALUE`，崩溃栈落在
+`std/unittest` 的 TCP 上报通道（`TransportChannel.send`）。随后 **3 次**单类重跑（11/11 各次）与
+**1 次**全量重跑（1112/1112）均绿 ⇒ 判定为 Cangjie 运行时 region 断言偶发，与本变更无因果关系。

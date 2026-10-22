@@ -52,6 +52,18 @@ public class EmitAudit_test {
         @Assert(A64Emitter.auditAllows([29, 30]), false)
     }
 
+    /** 绝对地址哨兵 `-1`（常量镜像 / 入口表）与 a64 的豁免规则对称：允许；真实越界仍拒绝。 */
+    @TestCase
+    public func absoluteAddressIsExempt(): Unit {
+        @Assert(BackendX86_64.auditAllows([4, -1, 15]), true)
+        @Assert(BackendX86_64.auditAllows([-1]), true)
+        @Assert(BackendX86_64.auditAllows([-1, 0]), false)
+        BackendX86_64.resetAuditMemBases()
+        BackendX86_64.noteAbsMem()
+        @Assert(BackendX86_64.auditMemBasesSnapshot().size, 1)
+        BackendX86_64.resetAuditMemBases()
+    }
+
     /** 采集/重置语义：`noteMemBase` 追加、`reset` 清空（生产路径依赖这一对）。 */
     @TestCase
     public func x86NoteAndReset(): Unit {

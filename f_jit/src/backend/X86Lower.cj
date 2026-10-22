@@ -447,6 +447,7 @@ internal class X86Lower {
         }
         this.movReg(7, 15) // rdi = ctx
         this.movImm(0, this.fnTableBase)
+        BackendX86_64.noteAbsMem() // 函数入口表：宿主绝对地址（与 a64 豁免对称）
         let pad = this.alignBeforeCall()
         this.add([0xFFu8, 0x90u8])
         this.w32(8 * fid)
@@ -786,7 +787,8 @@ internal class X86Lower {
                     this.ok = false
                 } else {
                     this.movImm(0, this.constBase + 8 * X86Lower.u16(ops, 0))
-                    this.add([0x48u8, 0x8Bu8, 0x00u8])
+                        BackendX86_64.noteAbsMem() // 常量镜像：宿主绝对地址（与 a64 豁免对称）
+                        this.add([0x48u8, 0x8Bu8, 0x00u8])
                     this.pushReg(0)
                     this.depth = this.depth + 1
                 }
