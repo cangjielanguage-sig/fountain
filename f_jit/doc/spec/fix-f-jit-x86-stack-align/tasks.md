@@ -2,50 +2,49 @@
 
 ## 1. 红：固化复现与同型用例
 
-- [ ] 1.1 复核 3 个崩溃用例（`CastOr_test`：`downcastFallsBackOnMismatch` / `bareCastFailsWithBadCast` /
-      `unknownClassNameUsesRuntimeCheck`）在 x86_64 上仍以 SIGSEGV 失败，并在用例注释中登记
-      「RED 证据：修复前 1091 例中 3 ERROR」；验证：`cjpm test --filter CastOr_test` 复现崩溃（exit 非 0）
-- [ ] 1.2 新增同型用例（表达式 `if` 的 else 分支内含 `argc ≥ 1` helper；`while` 回边后调用 helper），
-      先确认**修复前失败**；验证：新增用例在 x86_64 上失败、且失败原因是本缺陷（崩溃或错值）
-- [ ] 1.3 在 `X86Lower_test` 增加**字节级**断言：汇合点之后的 helper 调用前有
-      `sub rsp,8`、返回后有 `add rsp,8`，且与汇合深度奇偶一致；验证：该断言修复前失败
+- [x] 1.1 复核 3 个崩溃用例在 x86_64 上仍以 SIGSEGV 失败，并登记「RED 证据」（`CastOr_test` 注释 +
+      `verify.md`）：修复前全量 **1091 例 / 1084 过 / 3 ERROR**；验证：`cjpm test --filter CastOr_test` 复现崩溃
+- [x] 1.2 新增同型用例（表达式 `if` 的 else 分支内含 `argc ≥ 1` helper：`ifElseBranchHelperKeepsAlignment`；
+      `while` 回边后调用 helper：`loopBodyHelperKeepsAlignment`）；验证：修复前 4 例 ERROR（含 2 个新例），
+      修复后 0 ERROR（RED 以临时回退 `X86Lower.cj` 取得，见 verify.md）
+- [x] 1.3 **（实现方式调整）** 原计划的字节级对齐断言改为 `X86Depth` 的 5 个单测
+      （直链 / 条件汇合一致 / 汇合不一致 / 跳转越界 / 缺增量）——直接钉住"深度由控制流推导"这一机制，
+      比字节模式匹配更稳定；行为面由 1.1/1.2 的崩溃用例覆盖。验证：`cjpm test --filter X86Depth_test` 全绿
 
 ## 2. 深度分析器（`X86Depth`）
 
-- [ ] 2.1 实现 `stackEffect(op, operands): ?StackEffect` 并按语义分组登记全部已分配 opcode；
-      新增**表完整性用例**（157 个已分配 opcode 全部非 None 或在终止/零效应白名单中）；
-      验证：完整性用例通过、故意删一条登记时该用例失败
-- [ ] 2.2 实现 `analyzeDepth(code, codeOff, codeLen): ?HashMap<Int64, Int64>`（工作列表数据流，
-      `JMP/JZ/JNZ/LOOP_BACK` 后继正确、终止类不传播、汇合不一致 ⇒ None、未识别指令 ⇒ None）；
-      验证：单测覆盖「直链」「条件汇合」「回边」「汇合不一致」「未识别指令」五形态
+- [x] 2.1 **（实现方式调整）** 不维护手写栈效应表：改由 `X86Lower` 的**探针遍**采集逐指令净栈增量
+      （`delta[off]`，与降低代码同源、不会漂移）；`X86Depth.analyze` 以它为数据流输入。
+      验证：`X86Depth_test` 的直链/汇合用例通过（增量与真实降低一致）
+- [x] 2.2 实现 `analyze(code, codeOff, codeLen, delta)`（工作列表数据流；`JMP/LOOP_BACK` 仅目标、
+      `JZ/JNZ` 目标 + 顺序后继、终止类不传播、`target == end` 视为合法出口、汇合不一致/越界/缺增量 ⇒ `None`）；
+      验证：`X86Depth_test` 五形态全绿
 
 ## 3. 接入 `X86Lower`
 
-- [ ] 3.1 `lower()` 先调 `analyzeDepth`，`None` ⇒ `ok = false` 并直接返回（整单元退回解释器）；
-      循环体内以 `depthAt[off]` 设定 `this.depth`，移除线性累加依赖；
-      验证：`X86Lower_test` 的既有字节断言全绿 + `fallback` 用例（异常单元退回解释器）通过
-- [ ] 3.2 让 §1 的 3 个崩溃用例与 1.2 的同型用例转绿；验证：`cjpm test --filter CastOr_test`
-      **不再崩溃**且断言正确（`fallback` 值、`7` 错误码、运行期判定结果）
-- [ ] 3.3 让 1.3 的字节级对齐断言转绿；验证：`cjpm test --filter X86Lower_test` 通过
+- [x] 3.1 `lower()` 改为三遍（探针 → 数据流 → 发射）：探针遍抑制发射（`put/add/bind/rel32` 统一收口）、
+      发射遍逐指令以 `depthAt[off]` 设定 `this.depth`；**不可达区域沿用线性深度**（等价修复前行为）；
+      数据流失败 ⇒ `ok = false`（整单元退回解释器）。验证：`X86Lower_test`/`X86Frame_test` 全绿
+- [x] 3.2 3 个崩溃用例 + 2 个同型用例转绿；验证：`cjpm test --filter CastOr_test` **14/14 通过、0 ERROR**
+- [x] 3.3 深度分析单测转绿（对应 1.3 的调整）；验证：`cjpm test --filter X86Depth_test` **5/5 通过**
 
 ## 4. 回归与差分
 
-- [ ] 4.1 跑**全量** `cjpm test`：1091/1091、0 ERROR（修前基线 1084/1091、3 ERROR）；
-      验证：`Summary: TOTAL: 1091 / PASSED: 1091 / FAILED: 0 / ERROR: 0`
-- [ ] 4.2 跑三引擎差分（`fountain::f_jit.test.diff`）逐位一致（结果 / 错误码 / site / 报告文本）；
-      验证：差分用例全绿
-- [ ] 4.3 性能抽查：`cjpm test --filter PerfCompare_test --no-capture-output` 记录 JIT/native/interp
-      三档数字，确认预扫开销在噪声内；验证：数字留档于本变更或 `doc/perf-m1.md`
+- [x] 4.1 全量 `cjpm test`：**1098 例 / 1094 过 / 0 ERROR / 4 FAILED**（修前 1091 / 1084 过 / 3 ERROR / 4 FAILED）；
+      **0 ERROR 达成**；4 个 FAILED 经比对为**修复前既有**（`p0_6_deadlineInterruptsLoop`、`defaultIsStrict`、
+      `strictDivisionByZeroFails`、`strictFpIsPartOfCacheKey`，属 `strictFp`/期限面），已记入 `verify.md` 并另立后续变更
+- [x] 4.2 三引擎差分（`fountain::f_jit.test.diff` 11 例）随全量执行全绿（结果 / 错误码 / site / 报告逐位一致）
+- [x] 4.3 性能抽查：`PerfCompare_test` 通过（1/1），真机数字 native=5,807,847ns / **jit=3,435,226ns** / interp=6,896,156,912ns（JIT ≈ native 的 59%）——预扫为 O(n) 一次性开销，未观察到退化
 
 ## 5. 文档同步
 
-- [ ] 5.1 `jit-bytecode-m1.md` §12.3/§12.4 补「深度由控制流推导、对齐补丁由该深度决定」口径；
-      `design-m1` 附 C 若含对齐说明同步；验证：规格文本可被 grep 到该条且与实现一致
-- [ ] 5.2 `f_jit/doc/spec/f-jit-m1/verify.md` 追加本次回归证据（修前 3 ERROR、修后 1091/1091、
-      真机 x86_64 环境与日期）；验证：verify.md 含该条且命令可复跑
+- [x] 5.1 `jit-bytecode-m1.md` §12.3 增「操作数栈深度与对齐（v0.18.37）」条（深度由控制流推导、
+      对齐补丁由该深度决定、推导失败退回解释器、aarch64 无此约束），规格版本 → v0.18.37；`plan-m1.md` 依据版本同步
+- [x] 5.2 `f_jit/doc/spec/f-jit-m1/verify.md` 追加「2026-10-22 真机回归（x86_64 栈对齐修复）」：
+      缺陷、修复、修前/修后数字、RED 证据、4 个既有 FAILED 的归属
 
 ## Workflow follow-up
 
-- 用户评审本 `design.md` / `tasks.md` 后再进入 apply。
+- 用户评审本 `design.md` / `tasks.md` 后再进入 apply。（已完成：2026-10-22 用户确认）
 - 全部任务完成后执行 `opsx:verify`（CRITICAL 清零），再 `opsx:archive`。
 - 提交与推送按仓库既有规范（一次提交只含本修复 + 用例 + 文档）。
