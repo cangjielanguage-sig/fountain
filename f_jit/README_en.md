@@ -49,7 +49,7 @@ g.close()                             // the only release path for the promotion
 
 | Type | Purpose | Key members |
 |---|---|---|
-| `Compiler` | Facade: register host capabilities + compile | `registerType<T>()`, `registerClass(desc)`, `registerFunction(f)`, `compile(src)` |
+| `Compiler` | Facade: register host capabilities + compile | `registerType<T>()`, **`registerInterface<I>()`**, `registerClass(desc)`, `registerFunction(f)`, `compile(src)` |
 | `CompileOptions` | Compile options | `jit: JitMode` (`Auto`/`Force`/`Off`), `strictFp` (default `true`), `verMajor`, `cpuFeatures`, `diagnostics` |
 | `JitFunction` | Compiled unit / callable object | `call<T>(args)`, `call<T>(args, ctx)`, `callForFn<Fn>(args)`, `close()`, `isClosed` |
 | `JitException` | Runtime failure (`base` package) | `code` (`ErrCode`), `site` (line:column / byte offset), `report` |
@@ -64,6 +64,150 @@ Packages (`fountain::f_jit.*`): `base` (contracts, error codes), `bytecode` (`.f
 backends), `test.diff` (three-engine differential tests only).
 
 ---
+
+### 2.1 Host-side macros: `@JitBind` and `@JitSignatures`
+
+Both macros turn runtime reflection calls into static, strongly typed calls **at host compile time**:
+`@JitBind` for **class/interface members**, `@JitSignatures` for **closure parameters**. Semantics are
+unchanged — only the implementation of the registered bindings (performance) differs.
+
+#### `@JitBind`: expand public members of a class/interface into typed bindings
+
+```cangjie
+import fountain::f_jit.*
+import fountain::f_jit.macros.*
+
+@JitBind
+public class User {
+    public var name: String
+    public init(name: String) { this.name = name }
+    public func greet(s: String): String { "hi ${s}" }
+}
+
+main() {
+    let c = Compiler()
+    c.registerType<User>()                    // no explicit bindings needed: registered at package init
+    let f = c.compile('{ u: User => u.greet(u.name) }')
+    println(f.call<String>([User('bob')]))    // hi bob
+}
+```
+
+| Aspect | Rule |
+|---|---|
+| Expansion | the class stays **unchanged**; one package-level `let jitBindEnroll_<Class> = enrollOf<Class>(JitBindings(...))` is generated — no declarations injected, no thunks |
+| Covered | instance methods → `PublicMethod`; instance fields (`var`/`let`) → getter (`var` also setter); properties (`prop`/`mut prop`) → getter + `set<Name>`; each `init` → one `PublicCtor`; **static functions / read-only static fields / read-only static properties** → `PredefinedFunction` |
+| Not covered | private members, generic methods (WARNING), `static var` and `static mut prop` (permanently excluded, WARNING) |
+| Registration | `Compiler.registerType<T>()` / `registerInterface<I>()` pick up the macro's registration when `bindings` is omitted |
+
+**Interfaces must be annotated**: reflection cannot `apply` abstract methods, so an unannotated interface
+makes `registerInterface<I>()` raise `RegistrationException`. Parent-interface methods are merged at
+registration time, so **a sub-interface-typed variable can call parent-interface members**:
+
+```cangjie
+@JitBind public interface Named { func name(): String }
+@JitBind public interface Greeter <: Named { func greet(): String }
+
+@JitBind
+public class Impl <: Greeter {
+    public func name(): String { "n" }
+    public func greet(): String { "g" }
+}
+
+let c = Compiler()
+c.registerInterface<Named>()
+c.registerInterface<Greeter>()
+c.registerType<Impl>()
+c.compile('{ g: Greeter => g.name() }')      // parent-interface member, called natively
+```
+
+#### `@JitSignatures`: register closure parameter signatures
+
+```cangjie
+import fountain::f_jit.JitHost              // generated code uses the short name JitHost
+import fountain::f_jit.macros.*
+
+@JitSignatures[(Int64) -> Int64, (String) -> Bool]
+public func jitSignatures(): Unit {}        // the function itself is untouched; signatures are registered at package init
+```
+
+- Expansion = one package-level `let __jitSig_<func>_<n>` per signature; at run time a table lookup by
+  signature is used instead of `FunctionTypeInfo.apply`;
+- **Boundaries**: flat signatures only (each parameter/return is a single type name; `()` allowed); a
+  `14` position must be a **registered class name**; unregistered signatures keep the reflection path
+  (same behaviour, just slower).
+
+> Both macros are **host-side only**; dialect source (jit lambda) never contains macros.
+
+### 2.2 The three registration entries: `registerType` / `registerInterface` / `registerClass`
+
+| Entry | For | Constraint | Binding source | Guidance |
+|---|---|---|---|---|
+| `registerType<T>()` | **classes** | `where T <: Object` | `@JitBind`'s package-init registration (optional `bindings` **merge** and override individual members); without the macro it falls back to reflection | **Preferred**: annotate the class with `@JitBind`, register with no arguments |
+| `registerInterface<I>()` | **interfaces** | **no** `T <: Object` constraint | **requires** `@JitBind` (reflection cannot `apply` abstract methods) | Always annotate interfaces; parent-interface methods are merged at registration |
+| `registerClass(desc)` | any class (including ones you cannot annotate) | must supply a full `ClassDescriptor` | hand-written `PublicField` / `PublicMethod` / `PublicCtor` | only when macros/reflection are not an option |
+
+#### `registerType<T>()` — reflection-based auto registration (best with `@JitBind`)
+
+```cangjie
+@JitBind
+public class User {
+    public var name: String
+    public init(n: String) { this.name = n }
+}
+
+let c = Compiler()
+c.registerType<User>()          // picks up the @JitBind registration
+```
+
+- reflection collects the **ancestry chain**, used for static subtype checks (the `as` legality test);
+- `bindings:` **merges** on top of the macro registration (same member: explicit wins), it never replaces it;
+- **without `@JitBind`** members fall back to reflection: slower, and reference-typed members are subject to
+  the "reject by default" policy ⇒ annotate in production.
+
+#### `registerInterface<I>()` — interface registration (no `Object` constraint)
+
+```cangjie
+@JitBind public interface Named { func name(): String }
+@JitBind public interface Greeter <: Named { func greet(): String }
+
+let c = Compiler()
+c.registerInterface<Named>()
+c.registerInterface<Greeter>()          // parent-interface members are available: { g: Greeter => g.name() }
+```
+
+- **an unannotated interface raises `RegistrationException`** (abstract methods cannot be invoked reflectively);
+- interfaces have no instance fields/constructors — the front end diagnoses accordingly.
+
+#### `registerClass(desc)` — fully manual (no reflection)
+
+```cangjie
+import fountain::f_jit.base.{
+    ClassDescriptor, LocalType, PredefinedFunction, PublicCtor, PublicField, PublicMethod
+}
+
+let greetFn = PredefinedFunction(
+    name: 'greet',
+    paramTypes: [LocalType.HOST_OBJECT],       // first param must be 14 (this class)
+    retType: LocalType.STRING,
+    impl: { a => 'hi' })
+
+let desc = ClassDescriptor(
+    name: 'LegacyUser',
+    fields: [PublicField(name: 'name', `type`: LocalType.STRING, index: 0, mutable: true,
+                         typeRef: None)],
+    methods: [PublicMethod(name: 'greet', bind: greetFn)],
+    ctors: [PublicCtor(params: [LocalType.STRING],
+                       adapter: { a => LegacyUser(a[0] as String) })],
+    parents: [])                                       // empty ⇒ same-type-only
+c.registerClass(desc)
+```
+
+- a method's `bind` also joins the **predefined function surface** (`u.m()`'s hid source); an existing name is reused;
+- manual registration does **no reflection at all**: field indices, method bindings and ctor adapters are your
+  responsibility (a bad index/type code fails at construction time with `JitCallContract`);
+- `parents` only affects **static subtype checks**; the front end never resolves members through it; empty ⇒ the
+  class is only compatible with itself;
+- name clashes (registered class / function name / builtin / keyword) ⇒ `RegistrationException`, nothing is registered.
 
 ## 3. How it works
 
