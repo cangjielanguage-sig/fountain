@@ -124,14 +124,18 @@ git clone --depth 1 https://gitcode.com/Cangjie-TPC/fountain.git <skill-root>/fo
 ```bash
 python <skill-root>/scripts/fountain_lookup.py root              # 打印仓库根（附版本标注）
 python <skill-root>/scripts/fountain_lookup.py modules           # 全部模块 + 描述 + README 路径
-python <skill-root>/scripts/fountain_lookup.py search "定时任务"  # 在 README 与源码中检索能力
+python <skill-root>/scripts/fountain_lookup.py search "定时任务"  # 在 README / 源码 / 设计文档中检索
 python <skill-root>/scripts/fountain_lookup.py search "GetMapping" --in code
+python <skill-root>/scripts/fountain_lookup.py search "延迟投递" --in docs   # 只查根 docs/ 与各模块 doc/
+python <skill-root>/scripts/fountain_lookup.py search "MQClient" --module fmqdemo --in code  # 示例模块源码
 python <skill-root>/scripts/fountain_lookup.py api f_mvc         # 某模块公开声明清单
 python <skill-root>/scripts/fountain_lookup.py version           # 查询版本与文档副本状态
 python <skill-root>/scripts/fountain_lookup.py switch 1.3.9      # 只把副本切到某版本（latest = 默认分支最新）
 ```
 
-Windows 用 `python`，WSL/Linux 用 `python3`。`search` 只做定位，命中后必须 `read_file` 读原文核对。
+Windows 用 `python`，WSL/Linux 用 `python3`。`search` 只做定位，命中后必须 `read_file` 读原文核对。检索范围：`readme`（根与各模块 README）、`code`（`<模块>/src`，示例模块是 workspace 时含 `<示例>/<子模块>/src`）、`docs`（根 `docs/` 与各模块 `doc/` 的设计、规格、优化方案）。
+
+**没有 shell（跑不了脚本、只能读文件 / 文本检索）时**：直接在 `README.md`、`src/**/*.cj`、`doc/**/*.md` 上按关键词定位（优先整词、符号名），再 `read_file` 核对签名与上下文；结论照常给「文件:行号」出处，并说明「未拿到脚本输出头部，版本按本机源码 / 项目依赖判定」。
 
 信息地图：
 
@@ -140,10 +144,12 @@ Windows 用 `python`，WSL/Linux 用 `python3`。`search` 只做定位，命中�
 | 模块清单 / 一句话介绍 | 根 `README.md`「各模块详细文档」章节（或 `modules` 子命令） |
 | 某版本的 API / 配置 | 先按在用版本切副本（默认已自动切；换版本用 `--version` 或 `switch`），再按下表读 |
 | 某模块的用法、配置、API | `<模块>/README.md`（英文镜像 `<模块>/README_en.md`）；细节进 `<模块>/src/`。内容取自**查询版本**，输出头部有版本标注 |
+| 模块特性语义 / 限制 / 设计取舍 | `<模块>/doc/**/*.md`（`search "<关键词>" --in docs`）；README 只有摘要，冲突时以源码与该模块 `doc/` 为准 |
+| 可运行示例（HTTP / RPC / MQ / 数据库中间件） | `fdemo`、`frpcdemo`、`fmqdemo`、`fdbmdemo`；都是 workspace，代码在 `<示例>/<子模块>/src/`（`search ... --module fmqdemo --in code`） |
 | fboot 全部子命令与行为 | `f_app/README.md` 第 3 节（简版 `fboot/README.md`） |
 | 服务器应用全链路范式 | `fdemo/`（`boot` 初始化 + `user` 业务两模块）、`docs/快速开始/000.get-start.md` |
 | fboot 版本（依赖版本与它相同，也是默认的查询版本） | `fboot version` 直接返回；环境未配置时用 `install_fboot.sh version`（见「查看 fboot 版本」小节） |
-| 哪些模块会发布到中心仓 | 根 `.modules`（`[include]` 发布 / `[detention]` 不发布） |
+| 哪些模块会发布到中心仓 | 根 `.modules`：**`[include]` 才发布**，`[detention]` 明确不发布，两段都没登记 = 不会发布。已登记 ≠ 目标版本已有制品（新模块要等它的发布版本），解析不到时退 path 依赖 |
 | 项目结构 / cjpm.toml 样例 | `fdemo/cjpm.toml`、`fdemo/user/cjpm.toml` |
 | OpenSpec 流程 / 产物 / CLI 对照（工作流 F、J） | `references/openspec-workflow.md`；在途变更用 `openspec list`（产物在仓库根的 `openspec/`） |
 

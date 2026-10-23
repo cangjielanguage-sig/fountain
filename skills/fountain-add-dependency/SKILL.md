@@ -17,7 +17,7 @@ description: 当用户要求为 fountain 项目添加/修改中心仓模块依�
      "fountain::f_mvc" = "1.3.16"
    ```
 
-4. 核对是否发布：`.modules` 的 `[detention]` 段列出的模块（当前为 `f_llm`、`fleet`）不发布中心仓，不能用版本依赖——需要时改 path/git 依赖，或与用户确认替代方案。
+4. 核对是否发布：**只有 `.modules` `[include]` 段里的模块才发布中心仓**（以仓库现场为准）。`[detention]`（当前 `f_llm`、`fleet`）明确不发布；两段都没登记的模块也不会发布。**已登记 ≠ 目标版本已有制品**（`f_jit` / `f_dbd` / `f_dbm` / `fdbm` 这类刚登记的新模块，早于其发布版本的依赖版本里没有）——这类情况改 path/git 依赖，或与用户确认换版本。
 5. 验证：`fboot build`（或 `cjpm update`）能解析依赖。失败先查网络/镜像与版本号，再考虑换 path 依赖。
 
 三种依赖形态（版本 / path / git）的写法与限制见 `references/project-setup.md`。

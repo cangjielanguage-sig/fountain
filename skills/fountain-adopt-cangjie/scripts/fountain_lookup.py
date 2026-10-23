@@ -2,8 +2,13 @@
 # -*- coding: utf-8 -*-
 """fountain 仓库检索工具（供 fountain-developer 技能使用）。
 
-只读工具：按「在用版本」定位 fountain 仓库根、列出模块、按关键词检索 README 与源码声明。
+只读工具：按「在用版本」定位 fountain 仓库根、列出模块、按关键词检索 README / 源码声明 / 设计文档。
 仅依赖 Python 3 标准库，Windows / WSL / Linux 通用。
+
+检索范围：
+  readme  根 README 与各模块 README.md
+  code    <模块>/src/**/*.cj（示例模块是 workspace 时含 <模块>/<子模块>/src/**/*.cj）
+  docs    仓库根 docs/ 与各模块 doc/（设计、规格、优化方案、评审记录）
 
 用法：
   python fountain_lookup.py root [--no-clone]
@@ -56,8 +61,13 @@ DEFAULT_REPO_URL = "https://gitcode.com/Cangjie-TPC/fountain.git"
 CLONE_DIR_NAME = "fountain"
 SKIP_PARTS = {"target", ".build-logs", ".git", "node_modules", ".assets", ".cache"}
 TOOL_MODULES = {"fboot": "工具", "fcoder": "工具"}
-SAMPLE_MODULES = {"fdemo": "示例应用", "frpcdemo": "示例应用"}
-SERVICE_MODULES = {"fleet": "服务"}
+SAMPLE_MODULES = {
+    "fdemo": "示例应用",
+    "frpcdemo": "示例应用",
+    "fmqdemo": "示例应用",
+    "fdbmdemo": "示例应用",
+}
+SERVICE_MODULES = {"fleet": "服务", "fmq": "服务", "fdbm": "服务"}
 CLONE_HINT = "（自动克隆的文档副本，仅用于查询文档；构建/安装请用用户自己的 fountain 源码或中心仓）"
 
 VERSION_MARKER_RE = re.compile(r'public\s+const\s+Version\s*(?::\s*String\s*)?=\s*"([^"]+)"')
@@ -561,15 +571,38 @@ def scan_file(path: Path, pat: re.Pattern[str], limit: int) -> list[tuple[int, s
 
 
 def iter_code_files(root: Path, name: str):
-    src = root / name / "src"
-    if not src.is_dir():
+    """模块源码文件。
+
+    普通模块的源码在 `<模块>/src/`；示例模块（fdemo / frpcdemo / fmqdemo / fdbmdemo）是
+    workspace，代码在子模块里（`<模块>/<子模块>/src/`），此时以 `<模块>/` 为根向下找。
+    """
+    base = root / name
+    if (base / "src").is_dir():
+        srcs = [base / "src"]
+    else:
+        srcs = sorted(p for p in base.glob("*/src") if p.is_dir())
+    for src in srcs:
+        for p in sorted(src.rglob("*.cj")):
+            if any(part in SKIP_PARTS for part in p.parts):
+                continue
+            if p.name.endswith("_test.cj"):
+                continue
+            yield p
+
+
+def add_module_docs(root: Path, name: str, add) -> None:
+    """模块内的设计 / 规格 / 优化方案（`<模块>/doc/**/*.md`）。
+
+    特性语义（延迟投递、持久有效长度、回收策略、降级路径、已知限制）多数只写在这里，
+    模块 README 只给结论摘要；检索时按 `<模块>/doc` 分组输出，便于与大仓 docs/ 区分。
+    """
+    mdoc = root / name / "doc"
+    if not mdoc.is_dir():
         return
-    for p in sorted(src.rglob("*.cj")):
-        if any(part in SKIP_PARTS for part in p.parts):
+    for f in sorted(mdoc.rglob("*.md")):
+        if any(part in SKIP_PARTS for part in f.parts):
             continue
-        if p.name.endswith("_test.cj"):
-            continue
-        yield p
+        add(f"{name}/doc", f)
 
 
 def cmd_root(a: argparse.Namespace) -> None:
@@ -594,7 +627,9 @@ def cmd_modules(a: argparse.Namespace) -> None:
         desc = module_desc(root, name, root_desc)
         if len(desc) > limit:
             desc = desc[: limit - 1] + "…"
-        print(f"{name}\t{module_kind(name)}\t{desc}\t{name}/README.md")
+        has_readme = (root / name / "README.md").is_file()
+        where = f"{name}/README.md" if has_readme else f"{name}/（无 README，读 src 与 doc）"
+        print(f"{name}\t{module_kind(name)}\t{desc}\t{where}")
 
 
 def cmd_search(a: argparse.Namespace) -> None:
@@ -630,11 +665,16 @@ def cmd_search(a: argparse.Namespace) -> None:
         for n in ([a.module] if a.module else names):
             for f in iter_code_files(root, n):
                 add(n, f)
-    if a.domain in ("all", "docs") and not a.module:
-        docs = root / "docs"
-        if docs.is_dir():
-            for f in sorted(docs.rglob("*.md")):
-                add("docs", f)
+    if a.domain in ("all", "docs"):
+        if a.module:
+            add_module_docs(root, a.module, add)
+        else:
+            docs = root / "docs"
+            if docs.is_dir():
+                for f in sorted(docs.rglob("*.md")):
+                    add("docs", f)
+            for n in names:
+                add_module_docs(root, n, add)
 
     total = sum(len(v) for v in groups.values())
     print(root_label(root))
@@ -792,7 +832,7 @@ def main() -> None:
     p_mod.add_argument("--all", action="store_true", help="不截断描述")
 
     p_search = sub.add_parser(
-        "search", parents=[common_sub], help="按关键词检索 README / 源码 / docs"
+        "search", parents=[common_sub], help="按关键词检索 README / 源码 / 设计文档"
     )
     p_search.add_argument("keyword", help="关键词（大小写不敏感，支持中文）")
     p_search.add_argument(
@@ -800,7 +840,7 @@ def main() -> None:
         dest="domain",
         choices=["readme", "code", "docs", "all"],
         default="all",
-        help="检索范围（默认 all=readme+code+docs）",
+        help="检索范围（默认 all=readme+code+docs；docs 覆盖根 docs/ 与各模块 doc/）",
     )
     p_search.add_argument("--module", help="只检索指定模块")
     p_search.add_argument("--max", type=int, default=60, help="最多显示条数（默认 60）")
