@@ -8,6 +8,7 @@
 - 先建最小可跑切片（一个 hello 接口）把「workspace → 模块 → 依赖 → build → run」链路打通，再按批次铺开。
 - 每批转换完就 `fboot build`，不要攒着最后一起编译。
 - 语法、类型系统、标准库/扩展库问题一律用 `cangjie-coding` 与 `cangjie-doc-lookup` 查证后写。
+- 能力有无一律现场核对（`fountain_lookup.py search` / `--in docs` / `api`），尤其别漏掉较新的 `f_mq`+`fmq`、`fdbm`+`f_dbd`、`f_jit`；不凭记忆判断「fountain 没有」。
 - 映射不到的缺口按 SKILL.md 工作流 F 步骤 2 处理（停下问用户），不许造 API。
 
 ## 1. 阶段一：侦察（只读）
@@ -40,7 +41,7 @@
 | --- | --- | --- | --- | --- |
 | 1 | GET /users | app/handlers/user.py:12 | f_mvc Controller | 可映射 |
 | 2 | 每日对账任务 | jobs/daily.py | f_ticktock | 可映射 |
-| 3 | 消息推送 | mq/producer.py | — | 缺口 |
+| 3 | 消息推送 | mq/producer.py | f_mq（发布端）+ fmq（服务端） | 需重写客户端；与外部 Kafka/RabbitMQ 互通仍为缺口 |
 
 **映射参考**（按原技术栈初筛，落到模块前都要按 `module-index.md` 与模块 README 核对）：
 
@@ -49,13 +50,15 @@
 | Flask / FastAPI / Express / Spring MVC / Echo / Gin | `f_mvc` | 路由、参数绑定、JSON 响应重新书写；服务端模板渲染大概率是缺口 |
 | Spring Bean / DI 容器 | `f_bean`（`@Bean` + `lookup`） | 注入范围与生命周期语义不同，逐个核对 |
 | SQLAlchemy / JPA / MyBatis / GORM | `f_orm` | SQL 方言与驱动不同（如 `postgres_driver`）；DDL 可复用但类型映射要逐列核对 |
+| ShardingSphere / 分库分表 / 读写分离 | `fdbm`（服务端）+ `f_dbd`（应用侧驱动） | 分片规则要重写（`f_dbm` 可写自定义分库算法）；需先部署中间件与物理库驱动，示例 `fdbmdemo` |
 | celery / APScheduler / crontab / node-cron | `f_ticktock` | CRON 表达式语义核对 |
 | JWT 认证 | `f_jwt` + `f_security` | 密钥/算法/声明字段核对 |
 | Redis 缓存 | `f_cache`（本地堆缓存） | **分布式缓存是缺口**：需用户提供第三方或降级为本地缓存 |
 | requests / axios / okhttp | `f_httpclient` | — |
 | 日志框架 | `f_log` | 输出配置走 `logger_*` 环境变量 |
 | gRPC / Thrift / 自定义 RPC | `f_rpc` | 协议不兼容，接口要重新定义 |
-| MQ（Kafka/RabbitMQ 等） | — | 缺口（问用户） |
+| MQ（Kafka/RabbitMQ/RocketMQ 等） | `f_mq`（客户端）+ `fmq`（服务端） | **协议不兼容**：客户端代码要按 `MQClient` 重写（`fmqdemo` 是两端示例），与外部 MQ 互通为缺口；`f_mq` 为 at-least-once，需先 `fmq manager` 注册主题/订阅组 |
+| 运行期求值表达式 / 脚本化规则（Python `eval`、动态 DSL） | `f_jit` | 方言是**仓颉子集**，不是原语言；机器码仅 Linux x86_64/aarch64，其余平台解释执行；`JitFunction` 不能作 lambda 形参（用闭包包一层） |
 | WebSocket | 核对 `f_mvc` README（仓库有 WS 相关示例） | 先核对再定状态 |
 | 健康检查 | `f_health` | — |
 | 自定义工具/加密/UUID 等 | `f_util` / `f_crypto` / stdx | 先查 `f_util` README 的公开 API 清单 |

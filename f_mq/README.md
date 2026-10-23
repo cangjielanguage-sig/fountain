@@ -151,3 +151,24 @@ cd f_mq && cjpm build && cjpm test
 ```
 
 服务端与真实网络链路的端到端测试见仓库根的 `scripts/mq_e2e.sh`（三节点，成功输出 E2E_OK）。
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`DeregisterKind`（enum）、`public class MQAckPayload`、`public class MQBackupCursor`、`public class MQBackupPayload`、`public class MQBackupState`、`MQBlob`（class）、`public class MQConsumePayload`、`public class MQConsumeResult`、`public class MQDeadLetterMessage`、`public class MQDeregisterPayload`、`MQFilter`（class）、`MQInternalKind`（class）、`public class MQInternalMessage`、`MQMessageContent`（struct）、`public class MQMetaSnapshot`、`public class MQMetaSyncRequest`、`public class MQMetaTombstone`、`MQPayloadKind`（enum）、`public class MQResult`、`public class MQSubscribePayload`、`MQTopic`（class）、`public class MQTopicAssignment`、`public class MQUnsubscribePayload`
+- `MQBlob`：`copyBytes`（func）、`isEmpty`（func）
+- `MQDeregisterPayload`：`isTopic`（func）、`kindOf`（func）
+- `MQErrorCode`：`messageOf`（func）
+- `MQFilter`：`compile`（func）、`matches`（func）
+- `MQGroup`：`isValid`（func）
+- `MQHost`：`static func parseHost(entry: String): ?(String, UInt16)`
+- `MQMessageContent`：`let messageId: String`
+- `MQMessageRecord`：`decode`（func）、`encode`（func）、`messageId`（func）
+- `MQMetaTombstone`：`isTopic`（func）、`key`（func）
+- `MQProtocol`：`decodePayload`（func）、`deregister`（func）、`encodePayload`（func）、`fail`（func）、`kindOf`（func）、`metaSync`（func）、`publishBackup`（func）、`registerGroup`（func）、`registerTopic`（func）、`respond`（func）
+- `MQTags`：`isValid`（func）
+- `MQTopic`：`static func isValid(topic: String): Bool`
+- `MQTopicAssignment`：`owner`（func）

@@ -21,6 +21,7 @@
 | 日志 | stdx.log / `println` | `f_log`（`logger_*` 配置） |
 | 配置 | 硬编码 / 自读环境变量 / 配置文件 | `f_config` + 环境变量（编译期 / 运行期） |
 | 并发 / 定时 | 手写线程池 / 定时器 | `f_concurrent` / `f_ticktock` |
+| 消息 / 队列 | MQ 客户端、自研队列、（可选）裸 `f_net` + `f_protocol` | `f_mq` + `fmq`（协议不兼容：客户端要按 `MQClient` 重写；与 Kafka/RabbitMQ 互通是缺口） |
 | 序列化 | json / 自定义协议 | `f_codec`；stdx `encoding.json`（以模块 README 推荐为准） |
 | 测试 | `*_test.cj` | 跟随包迁移；用仓颉 unittest |
 

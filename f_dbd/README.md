@@ -155,3 +155,28 @@ cjpm test
 [`fdbm/test/e2e/README.md`](../fdbm/test/e2e/README.md)。
 性能前置实验见 `src/common/dispatch_perf_test.cj`（`get<T>` 分派选型结论在
 `doc/详细设计.md` §10.1）。
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- 模块级：`public class ColumnInfoImpl <: ColumnInfo`、`ColumnRequestSender`（type）、`public class DbdErrorPayload`、`public class QueryResultClosePayload`、`public class QueryResultColumnPayload`、`ResultCloser`（type）、`public class SqlPayload`、`SqlReadType`（enum）、`public class UpdateResultPayload <: UpdateResult`、`decodeStrict`（func）、`getCheckInterval`（func）、`getCheckOnBorrowing`（func）、`getCheckOnCreation`（func）、`getCheckOnReturning`（func）、`getCheckSql`（func）、`getConnectTimeout`（func）、`getConnectionLife`（func）、`getIdleTimeout`（func）、`getInitSize`（func）、`getLoadBalance`（func）、`getMaxSize`（func）、`getMaxWaiting`（func）、`getMinSize`（func）、`getWeights`（func）
+- `ColumnInfoImpl`：`prop displaySize: Int64`、`prop length: Int64`、`prop nullable: Bool`、`prop scale: Int64`、`prop typeName: String`
+- `DbdConnection`：`createTransaction`（func）、`getMetaData`（func）、`state`（prop）
+- `DbdDriver`：`version`（prop）
+- `DbdErrorCode`：`value`（prop）
+- `DbdErrorPayload`：`errorCode`（func）
+- `DbdInputStream`：`read`（func）
+- `DbdStatement`：`parameterColumnInfos`（prop）、`setNull`（func）、`update`（func）
+- `DbdTransaction`：`begin`（func）、`commit`（func）、`release`（func）、`rollback`（func）、`save`（func）
+- `DbdUrl`：`tryParse`（func）
+- `MultiD`：`version`（prop）
+- `MultiDUrl`：`tryParse`（func）
+- `QueryResultColumnPayload`：`cell`（func）、`nextRow`（func）
+- `QueryResultImpl`：`columnInfos`（prop）
+- `SqlPayload`：`add`（func）、`addNull`（func）
+- `SqlReadType`：`of`（func）
+- `SqlTypes`：`canonicalName`（func）、`decode`（func）、`encodeParameter`（func）、`readChunk`（func）、`readData`（func）、`readStream`（func）、`readType`（func）
+- `UpdateResultPayload`：`prop lastInsertId: Int64`、`prop rowCount: Int64`

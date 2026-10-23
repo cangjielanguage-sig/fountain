@@ -162,6 +162,16 @@ cd docs/模块依赖图 && python3 extract_deps.py && python3 gen_layered_svg.py
 **每次建 tag 前按最新代码同步一遍**，否则它会把旧版本的配置项与 API 教给下一次使用；只改 `skills/fountain-developer/` 下的文件，
 不改模块代码与模块 README（那是 1.2 的事）。
 
+`common-rules.md` / `module-index.md` / `porting-guide.md` / `server-development.md` / `fountain_lookup.py` 在每个独立技能目录
+各有一份**内容必须相同的副本**（`fountain-api-lookup` 另带 `module-index.md`）。先改 `skills/fountain-developer/` 里的主副本，
+再把主副本覆盖到所有同名副本，最后核对哈希只剩一个值：
+
+```bash
+# 例：把主副本分发到所有同名副本（其余文件同理）
+find skills -name common-rules.md -exec cp skills/fountain-developer/references/common-rules.md {} \;
+find skills -name common-rules.md -exec md5sum {} \; | awk '{print $1}' | sort -u   # 应只有一行
+```
+
 - **模块清单与选型**（`references/module-index.md`）：用技能自带工具现场取当前模块，再与文件里的表格对比：
 
   ```bash
@@ -172,7 +182,8 @@ cd docs/模块依赖图 && python3 extract_deps.py && python3 gen_layered_svg.py
 - **API 与注解描述**（`references/server-development.md`、`references/porting-guide.md`）：BASE 以来改过代码的模块逐个核对
   （`git log --oneline BASE..HEAD -- <模块>`）：注解名与参数（`@Controller` / `@GetMapping` / `@Bean` / `@DAO` / `@ORMField` /
   `@AspectRoute` 等）、关键函数与用法示例是否仍能在该模块 README 或 `src/` 里对上；改过的符号用
-  `python3 skills/fountain-developer/scripts/fountain_lookup.py search "<符号>" --in code` 复核。
+  `python3 skills/fountain-developer/scripts/fountain_lookup.py search "<符号>" --in code` 复核；特性 / 限制 / 平台前提
+  （如「机器码仅 Linux」「at-least-once」）用 `search "<关键词>" --in docs` 与各模块 `doc/` 对一遍。
 - **配置项描述**（`references/launch-scripts.md`、`references/server-development.md`、`references/environment.md`）：
   `mvc_*` / `orm_*` / `logger_*` / `rpc*` 等环境变量组的名字与默认值以对应模块 README 为准；三平台启动脚本的差异描述与本仓库
   `fdemo` / `frpcdemo` 的三份 boot 脚本保持一致；版本号示例（fboot 版本等）用现场值更新。

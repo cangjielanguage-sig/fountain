@@ -121,6 +121,78 @@ public class HelloController {
 
 - 用 `f_httpclient`；接口细节以其 README 与 `fdemo`（如有用例）为准。
 
+### 3.10 消息队列（f_mq + fmq）
+
+- 两端分离：应用侧用 `fountain::f_mq.*` 的 `MQClient`，服务端是独立的 `fmq`（`fmq server` / `fmq manager`）。
+- **前置**：先起服务端并注册主题与订阅组——客户端 API 不提供注册入口：
+
+  ```bash
+  bash fmq/fmq.sh start
+  fmq manager --server=127.0.0.1:2350 registerTopic /order 4
+  fmq manager --server=127.0.0.1:2350 registerSubscriber /order g1
+  ```
+
+- 最小用法（出处 `f_mq/README.md` 快速开始；Node 表默认读配置项 `mqClient_hosts`）：
+
+  ```cangjie
+  import fountain::f_mq.*
+
+  let client = MQClient(["127.0.0.1:2350"])
+  client.publish("/order", "hello", tags: ["created"])
+  let sid = client.subscribe("/order", subscribeGroup: "g1", tags: ["created"])
+  let message = client.consume(sid)
+  let body = message.get<String>() ?? ""
+  client.ack(sid, message.queueIndex, message.segmentedIndex, message.segmentedOffset)
+  client.unsubscribe(sid)
+  client.close()
+  ```
+
+- 语义与限制：**at-least-once**（未确认消息会重投）；`ack` 必须原样带回 `(queueIndex, segmentedIndex, segmentedOffset)`；
+  `subscribe` 返回客户端生成的 `subscribedId`；`unsubscribe` 幂等且只记有界的已退订 id；`autoAck: true` 时服务端在投递时推进游标。
+- 过滤：`tags` 子集匹配；`filter` 是 `f_data.path` 表达式（空串恒真，`"$.enabled"` 只投 `enabled` 为 true 的消息），非法表达式在 `subscribe` 本地抛错。
+- 延迟投递 / 死信 / 消费组游标由服务端负责（`fmq manager`），配置与限制见 `fmq/README.md` 与 `f_mq/doc/`。
+- 示例：`fmqdemo/fmqpub`（发布端）、`fmqdemo/fmqsub`（消费端），都是 fboot 加载的动态库；端到端脚本 `scripts/mq_e2e.sh`。
+- 不要把它当 Kafka/RabbitMQ 兼容品：协议是 fountain 自己的，跨系统互通属于缺口（问用户）。
+
+### 3.11 数据库中间件（fdbm + f_dbd）
+
+- 形态：应用不直连物理库，`f_dbd`（`std.database.sql` 驱动）把 SQL 与参数发给 `fdbm` 中间件；物理库驱动只从 fdbm 部署目录的 `driver/` 加载。
+- 应用侧必配 `dbd_driverName`（**后端方言名**，如 `postgres` / `mysql`；f_orm 按驱动名选方言）。未配置时包初始化只记日志，`dbdDriver()` 取用时抛 `DbdException(CONFIG)`。
+
+  ```cangjie
+  import std.database.sql.*
+  import fountain::f_dbd.driver.*
+
+  let driver = dbdDriver()                                   // 注册名 = dbd_driverName
+  let datasource = driver.open("fdbm://user:pwd@127.0.0.1:8112/order", [])
+  let connection = datasource.connect()
+  ```
+
+- 多节点：`multiDDriver()` + `multidbm://user:pwd@h1:p1,user:pwd@h2:p2/database`，每节点一个 `f_dbpool` 池，参数 `multidbm_databasePool*`。
+- 协议口径：查询不预读（每次 `next()` 发 `NEXT_ROW`）、列读不缓存、关闭走 `UNSUBSCRIBE(qid)` → `ACK`；NULL 只有 `getOrNull` 返回 `None`，`get` 遇 NULL 抛 `CONVERSION`；流列只能按流读。
+- 扩展：`f_dbm` 提供 `PartitionAlgorithm` / `IdGenerator` 契约，编成动态库放 fdbm 的 `custom/` 目录即可被发现（示例 `fdbmdemo/driver_bundle`）。**名字必须唯一**：与内置（`step`/`hash`/`std`/`crc16`/`crc32`/`crc64`/`murmur`/`substr`，或 `uuid`/`snowflake`/`sequence`）或与另一个扩展同名都会启动失败（`PARTITION_CONFIG` / `CONFIG`），不允许覆盖内置。
+- 示例：`fdbmdemo/client`（客户端）、`fdbmdemo/driver_bundle`（自定义扩展）；SQL 能力与部署见 `fdbm/README.md`。
+- `f_dbd` / `f_dbm` / `fdbm` 已登记 `.modules` `[include]`，可按版本依赖；若目标版本里解析不到制品（新模块早于其发布版本），退 path 依赖。
+
+### 3.12 运行期求值（f_jit）
+
+- 用途：把一段**仓颉方言**源码编译成 `.fbc`，宿主像调普通函数一样调用（`JitFunction.call<T>`），并注册宿主类 / 函数 / 闭包供方言调用。
+- 平台：机器码仅 Linux x86_64 / aarch64；Windows / macOS 自动走解释器，**语义一致**（解释器是唯一权威）。
+- 用法（出处 `f_jit/README.md` §1–2）：
+
+  ```cangjie
+  import fountain::f_jit.*
+
+  let c = Compiler()
+  c.registerType<User>()                              // 暴露宿主类
+  let f = c.compile('{ u: User => u.name }')          // 编译（进 CompileCache）
+  let name = f.call<String>([User('bob', 1)])
+  ```
+
+- 语法要点：JSON 用反引号字面量（`` `{"k": 1}` ``）、自递归用 `recursive(...)`、`**` 仅 `(Int64, Int64)`、`as T ?? 默认值` 惰性兜底；完整子集见 README §6。
+- 生命周期：`call` 的返回值与未逃逸对象在调用结束时清理；**逃逸闭包必须 `close()`**（唯一释放路径）；`JitFunction` 不能作 lambda 形参，需要时用宿主闭包包一层。
+- 超出方言子集（或不支持的平台 / 指令）不会有「差不多能用」的实现——按 README §5 退解释器或报错；不要把它当通用脚本引擎。
+
 ## 4. 构建 / 运行 / 测试
 
 ```bash
@@ -146,7 +218,7 @@ fboot cleanUpdate [PATH]
 ## 5. 需求覆盖检查与缺口处理
 
 1. 功能点 → 模块初筛：`references/module-index.md` 的选型速查。
-2. 命中核对：`python scripts/fountain_lookup.py search "<能力关键词>"`（必要时 `--in code`），再读该模块 README 与 `src/`
+2. 命中核对：`python scripts/fountain_lookup.py search "<能力关键词>"`（源码加 `--in code`，特性/限制加 `--in docs`），再读该模块 README、`src/` 与 `doc/`
    （脚本按项目在用版本切文档副本，读到的即该版本；输出头部有版本标注，换版本用 `--version`）。
 3. 有缺口时的固定动作（不得跳过）：**停下来问用户**，给出四选一（继续用简单方案 / 用户提供第三方依赖 / 缩减范围 /
    在项目内自行实现完整功能和要求的基础设施代码、工具代码），并明确说明缺口是什么、影响哪些需求点。

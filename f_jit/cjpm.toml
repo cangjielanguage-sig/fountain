@@ -5,7 +5,7 @@
   name = "f_jit"
   organization = "fountain"
   description = "JIT编译器（字节码·解释器·JIT后端·桥）"
-  version = "1.3.16"
+  version = "1.3.17"
   target-dir = ""
   output-type = "dynamic"
   package-configuration = {}
