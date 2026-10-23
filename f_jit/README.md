@@ -47,7 +47,7 @@ g.close()                             // 释放提升组（唯一释放路径）
 
 | 类型 | 用途 | 关键成员 |
 |---|---|---|
-| `Compiler` | 门面：注册宿主能力 + 编译 | `registerType<T>()`、`registerClass(desc)`、`registerFunction(f)`、`compile(src)` |
+| `Compiler` | 门面：注册宿主能力 + 编译 | `registerType<T>()`、**`registerInterface<I>()`**、`registerClass(desc)`、`registerFunction(f)`、`compile(src)` |
 | `CompileOptions` | 编译选项 | `jit: JitMode`（`Auto`/`Force`/`Off`）、`strictFp`（缺省 `true`）、`verMajor`、`cpuFeatures`、`diagnostics` |
 | `JitFunction` | 编译产物 / 可调用对象 | `call<T>(args)`、`call<T>(args, ctx)`、`callForFn<Fn>(args)`、`close()`、`isClosed` |
 | `JitException` | 运行期错误（`base` 包） | `code`（`ErrCode`）、`site`（源码行:列 / 字节偏移）、`report` |
@@ -62,6 +62,76 @@ g.close()                             // 释放提升组（唯一释放路径）
 `test.diff`（三引擎差分，只放对照不放单层断言）。
 
 ---
+
+### 2.1 宿主侧宏：`@JitBind` 与 `@JitSignatures`
+
+两个宏都在**宿主编译期**把"运行期反射调用"换成"静态强类型调用"：`@JitBind` 面向**类/接口成员**，
+`@JitSignatures` 面向**闭包形参**。语义不变，只影响注册表里绑定体的实现方式（性能）。
+
+#### `@JitBind`：把类/接口的公共成员展开成类型化绑定
+
+```cangjie
+import fountain::f_jit.*
+import fountain::f_jit.macros.*
+
+@JitBind
+public class User {
+    public var name: String
+    public init(name: String) { this.name = name }
+    public func greet(s: String): String { "hi ${s}" }
+}
+
+main() {
+    let c = Compiler()
+    c.registerType<User>()                    // 不必再手写 bindings：宏已在包初始化期登记
+    let f = c.compile('{ u: User => u.greet(u.name) }')
+    println(f.call<String>([User('bob')]))    // hi bob
+}
+```
+
+| 面 | 规则 |
+|---|---|
+| 展开物 | 原类**不变**，另生成包级 `let jitBindEnroll_<类名> = enrollOf<类名>(JitBindings(...))`——不往类里插声明、不生成中间函数 |
+| 覆盖 | 实例方法 → `PublicMethod`；实例字段（`var`/`let`）→ getter（`var` 另带 setter）；实例属性（`prop`/`mut prop`）→ getter + `set<Name>`；`init` → 每条一个 `PublicCtor`；**静态函数 / 只读静态字段 / 只读静态属性** → `PredefinedFunction` |
+| 不展开 | 私有成员、泛型方法（WARNING）、`static var` 与 `static mut prop`（永久排除，WARNING） |
+| 注册 | `Compiler.registerType<T>()` / `registerInterface<I>()` 不传 `bindings` 时自动取用宏的登记 |
+
+**接口必须标** `@JitBind`：反射无法 `apply` 抽象方法，未标注的接口在 `registerInterface<I>()` 处报
+`RegistrationException`。父接口方法在注册期并入，**子接口变量可直接访问父接口成员**：
+
+```cangjie
+@JitBind public interface Named { func name(): String }
+@JitBind public interface Greeter <: Named { func greet(): String }
+
+@JitBind
+public class Impl <: Greeter {
+    public func name(): String { "n" }
+    public func greet(): String { "g" }
+}
+
+let c = Compiler()
+c.registerInterface<Named>()
+c.registerInterface<Greeter>()
+c.registerType<Impl>()
+c.compile('{ g: Greeter => g.name() }')      // 父接口成员，经机器码直调
+```
+
+#### `@JitSignatures`：登记闭包形参的签名
+
+```cangjie
+import fountain::f_jit.JitHost              // 生成代码用短名 JitHost，标注文件必须导入
+import fountain::f_jit.macros.*
+
+@JitSignatures[(Int64) -> Int64, (String) -> Bool]
+public func jitSignatures(): Unit {}        // 宏不改动该函数，只在包初始化期登记签名
+```
+
+- 生成物 = 每个签名一个包级 `let __jitSig_<函数名>_<序号>`；运行期按签名查表，**不穿**
+  `FunctionTypeInfo.apply`；
+- **边界**：只支持扁平签名（形参/返回是单个类型名，允许 `()`）；14 位置必须写**注册类名**；
+  未登记的签名仍走反射路径（行为不变，只是慢）。
+
+> 两个宏都只在**宿主侧**生效；方言源码（jit lambda）里不出现宏。
 
 ## 3. 核心原理
 

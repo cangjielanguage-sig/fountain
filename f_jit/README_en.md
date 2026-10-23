@@ -49,7 +49,7 @@ g.close()                             // the only release path for the promotion
 
 | Type | Purpose | Key members |
 |---|---|---|
-| `Compiler` | Facade: register host capabilities + compile | `registerType<T>()`, `registerClass(desc)`, `registerFunction(f)`, `compile(src)` |
+| `Compiler` | Facade: register host capabilities + compile | `registerType<T>()`, **`registerInterface<I>()`**, `registerClass(desc)`, `registerFunction(f)`, `compile(src)` |
 | `CompileOptions` | Compile options | `jit: JitMode` (`Auto`/`Force`/`Off`), `strictFp` (default `true`), `verMajor`, `cpuFeatures`, `diagnostics` |
 | `JitFunction` | Compiled unit / callable object | `call<T>(args)`, `call<T>(args, ctx)`, `callForFn<Fn>(args)`, `close()`, `isClosed` |
 | `JitException` | Runtime failure (`base` package) | `code` (`ErrCode`), `site` (line:column / byte offset), `report` |
@@ -64,6 +64,79 @@ Packages (`fountain::f_jit.*`): `base` (contracts, error codes), `bytecode` (`.f
 backends), `test.diff` (three-engine differential tests only).
 
 ---
+
+### 2.1 Host-side macros: `@JitBind` and `@JitSignatures`
+
+Both macros turn runtime reflection calls into static, strongly typed calls **at host compile time**:
+`@JitBind` for **class/interface members**, `@JitSignatures` for **closure parameters**. Semantics are
+unchanged — only the implementation of the registered bindings (performance) differs.
+
+#### `@JitBind`: expand public members of a class/interface into typed bindings
+
+```cangjie
+import fountain::f_jit.*
+import fountain::f_jit.macros.*
+
+@JitBind
+public class User {
+    public var name: String
+    public init(name: String) { this.name = name }
+    public func greet(s: String): String { "hi ${s}" }
+}
+
+main() {
+    let c = Compiler()
+    c.registerType<User>()                    // no explicit bindings needed: registered at package init
+    let f = c.compile('{ u: User => u.greet(u.name) }')
+    println(f.call<String>([User('bob')]))    // hi bob
+}
+```
+
+| Aspect | Rule |
+|---|---|
+| Expansion | the class stays **unchanged**; one package-level `let jitBindEnroll_<Class> = enrollOf<Class>(JitBindings(...))` is generated — no declarations injected, no thunks |
+| Covered | instance methods → `PublicMethod`; instance fields (`var`/`let`) → getter (`var` also setter); properties (`prop`/`mut prop`) → getter + `set<Name>`; each `init` → one `PublicCtor`; **static functions / read-only static fields / read-only static properties** → `PredefinedFunction` |
+| Not covered | private members, generic methods (WARNING), `static var` and `static mut prop` (permanently excluded, WARNING) |
+| Registration | `Compiler.registerType<T>()` / `registerInterface<I>()` pick up the macro's registration when `bindings` is omitted |
+
+**Interfaces must be annotated**: reflection cannot `apply` abstract methods, so an unannotated interface
+makes `registerInterface<I>()` raise `RegistrationException`. Parent-interface methods are merged at
+registration time, so **a sub-interface-typed variable can call parent-interface members**:
+
+```cangjie
+@JitBind public interface Named { func name(): String }
+@JitBind public interface Greeter <: Named { func greet(): String }
+
+@JitBind
+public class Impl <: Greeter {
+    public func name(): String { "n" }
+    public func greet(): String { "g" }
+}
+
+let c = Compiler()
+c.registerInterface<Named>()
+c.registerInterface<Greeter>()
+c.registerType<Impl>()
+c.compile('{ g: Greeter => g.name() }')      // parent-interface member, called natively
+```
+
+#### `@JitSignatures`: register closure parameter signatures
+
+```cangjie
+import fountain::f_jit.JitHost              // generated code uses the short name JitHost
+import fountain::f_jit.macros.*
+
+@JitSignatures[(Int64) -> Int64, (String) -> Bool]
+public func jitSignatures(): Unit {}        // the function itself is untouched; signatures are registered at package init
+```
+
+- Expansion = one package-level `let __jitSig_<func>_<n>` per signature; at run time a table lookup by
+  signature is used instead of `FunctionTypeInfo.apply`;
+- **Boundaries**: flat signatures only (each parameter/return is a single type name; `()` allowed); a
+  `14` position must be a **registered class name**; unregistered signatures keep the reflection path
+  (same behaviour, just slower).
+
+> Both macros are **host-side only**; dialect source (jit lambda) never contains macros.
 
 ## 3. How it works
 
