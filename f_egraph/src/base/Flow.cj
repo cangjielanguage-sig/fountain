@@ -39,6 +39,7 @@ public interface BaseFlow <:Emitter {
      */
     func registerTaskByAsyncFlow(eventName!: String, subCategory!: String, subTag!: String): Unit 
     func emit(eventType!: EventType, name!: String, data!: Any): Unit
+    func doStart(data: Any): Any
 }
 public interface Flow<G> <: BaseFlow & Hashable & Equatable<ImmediateFlow> & Equatable<AsyncFlow> & ToString where G <: EndExecutorGetter {
     func registerTask(task: BarrierTask<G>): Unit {
@@ -83,6 +84,8 @@ public interface Flow<G> <: BaseFlow & Hashable & Equatable<ImmediateFlow> & Equ
     func registerTaskByAsyncFlow(eventName!: String, subCategory!: String, subTag!: String): Unit {
         registerTaskByFlow<AsyncEndExecutorGetter, AsyncFlow>(eventName: eventName, flow: AsyncFlow(category: subCategory, tag: subTag))
     }
-    func start(data: Any): G
+    func start(data: Any): G {
+        (doStart(data) as G).getOrThrow()
+    }
     func emit(eventType!: EventType, name!: String, data!: Any): Unit
 }
