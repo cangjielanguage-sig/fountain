@@ -678,6 +678,19 @@ public class InheritedTaskLocal<T> <: AbstractInheritedTaskLocal {
 }
 ```
 
+## `CpuFeatures`
+
+x86_64 instruction-set capability detection; currently only SSE4.1 is exposed (used by `roundsd`):
+
+```cj
+public class CpuFeatures {
+    public static prop hasSse41: Bool
+}
+```
+
+- Linux + x86_64: reads the `sse4_1` flag from `/proc/cpuinfo`; other platforms always return `false` (conditional compilation).
+- Any read failure is treated as "unsupported" — callers (e.g. `f_jit`) fall back to the interpreter instead of failing.
+
 ## Supplement: public symbols not expanded item by item in this README (the source code is authoritative)
 
 - **std re-exports**: `public import std.collection.* / MathExtension / reflect.* / regex.* / time.*` (`src/public_std_imports.cj`)
