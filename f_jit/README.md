@@ -133,6 +133,74 @@ public func jitSignatures(): Unit {}        // 宏不改动该函数，只在包
 
 > 两个宏都只在**宿主侧**生效；方言源码（jit lambda）里不出现宏。
 
+### 2.2 三个注册入口：`registerType` / `registerInterface` / `registerClass`
+
+| 入口 | 适用对象 | 约束 | 绑定来源 | 建议 |
+|---|---|---|---|---|
+| `registerType<T>()` | **类** | `where T <: Object` | `@JitBind` 的包初始化登记（可再用 `bindings` **合并覆盖**个别成员）；未标注则退回反射收集 | **首选**：类上标 `@JitBind`，注册时不传参 |
+| `registerInterface<I>()` | **接口** | **无** `T <: Object` 约束 | **必须** `@JitBind`（反射无法 `apply` 抽象方法） | 接口一律标 `@JitBind`；父接口方法注册期并入 |
+| `registerClass(desc)` | 任意类（含无法标注宏的） | 需手工给全 `ClassDescriptor` | 手工 `PublicField` / `PublicMethod` / `PublicCtor` | 仅在无法用宏/反射时使用 |
+
+#### `registerType<T>()` —— 反射自动注册（推荐配 `@JitBind`）
+
+```cangjie
+@JitBind
+public class User {
+    public var name: String
+    public init(n: String) { this.name = n }
+}
+
+let c = Compiler()
+c.registerType<User>()          // 自动取用 @JitBind 的登记
+```
+
+- 反射会收集**父类链**（`ancestry`）并据此做静态子类型判定（`as` 的合法性检查）；
+- 可传 `bindings:` 覆盖个别成员——它与宏登记是**合并**关系（同名以显式为准），不会整体取代；
+- **未标 `@JitBind`** 时成员退回反射路径：更慢，且引用型成员受"默认拒绝"策略约束 ⇒ 生产建议标注。
+
+#### `registerInterface<I>()` —— 接口注册（无 `Object` 约束）
+
+```cangjie
+@JitBind public interface Named { func name(): String }
+@JitBind public interface Greeter <: Named { func greet(): String }
+
+let c = Compiler()
+c.registerInterface<Named>()
+c.registerInterface<Greeter>()          // 父接口方法一并可用：{ g: Greeter => g.name() }
+```
+
+- **接口不标 `@JitBind` ⇒ `RegistrationException`**（抽象方法无法反射调用）；
+- 接口没有实例字段/构造器，前端据此给诊断。
+
+#### `registerClass(desc)` —— 完全手工（不走反射）
+
+```cangjie
+import fountain::f_jit.base.{
+    ClassDescriptor, LocalType, PredefinedFunction, PublicCtor, PublicField, PublicMethod
+}
+
+let greetFn = PredefinedFunction(
+    name: 'greet',
+    paramTypes: [LocalType.HOST_OBJECT],       // 首参必须是本类（14）
+    retType: LocalType.STRING,
+    impl: { a => 'hi' })
+
+let desc = ClassDescriptor(
+    name: 'LegacyUser',
+    fields: [PublicField(name: 'name', `type`: LocalType.STRING, index: 0, mutable: true,
+                         typeRef: None)],
+    methods: [PublicMethod(name: 'greet', bind: greetFn)],
+    ctors: [PublicCtor(params: [LocalType.STRING],
+                       adapter: { a => LegacyUser(a[0] as String) })],
+    parents: [])                                       // 不填 ⇒ 只与自身同型
+c.registerClass(desc)
+```
+
+- 方法表的 `bind` 会**同时进入预定义函数面**（`u.m()` 的 hid 来源），同名已存在则复用；
+- 手工注册**不做任何反射**：字段下标、方法绑定、构造适配器全由你保证（下标/类型码用错在构造期就抛 `JitCallContract`）；
+- `parents` 只影响**静态子类型判定**，前端不据此解析成员；不填则该类只与自身同型；
+- 类名冲突（已注册类 / 函数名 / 内建 / 关键字）⇒ `RegistrationException` 且**不登记**。
+
 ## 3. 核心原理
 
 **① 编译**：词法/语法 → AST → 类型检查 → 降低为**栈式字节码**（157 条指令，见
