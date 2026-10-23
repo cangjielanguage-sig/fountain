@@ -31,8 +31,10 @@ public interface IdGenerator {
   table)` from the single allocation database. Without a generator, a missing value
   yields `ROUTE_FAILED`.
 - Implementing only one capability is legal: callers fall back to the other method, and map
-  two failing defaults to `ID_GENERATOR`. Custom names must not shadow builtin names
-  (`step`/`hash`/... or `uuid`/`snowflake`/`sequence`); fdbm rejects such extensions at startup.
+  two failing defaults to `ID_GENERATOR`. **Names must be unique and must not shadow builtin
+  names** (`step`/`hash`/... or `uuid`/`snowflake`/`sequence`); fdbm rejects such extensions at
+  startup. Kept deliberately: with duplicate names the winner depends on load order, which is
+  hard to diagnose — failing fast is easier to trace.
 - `IdGeneratorException` is the module's own exception type; implementations should
   throw it rather than a bare `Exception`.
 
@@ -69,10 +71,10 @@ rules (fdbm design §10.5):
    visible.
 2. Two pattern-matching passes collect `PartitionAlgorithm` and `IdGenerator`
    (one instance may satisfy both).
-3. Duplicate names between custom extensions fail startup with `CONFIG` /
-   `PARTITION_CONFIG`. A custom name that matches a built-in takes precedence: the
-   algorithm/generator factories look up custom implementations first, so a custom
-   extension can override a built-in one.
+3. **Names must be unique.** Duplicate names between custom extensions fail startup with
+   `PARTITION_CONFIG` (algorithm) / `CONFIG` (ID generator); a custom name that matches a
+   built-in fails the same way, so a custom extension **cannot override** a built-in one
+   (the factories do check custom first, but validation rejects duplicates before runtime).
 4. Any load failure or any `initialize()` exception fails startup with `CONFIG`.
 5. A missing `custom/` directory means no extensions. Only extension libraries should
    be placed there (every registered `Initializer` is executed).
