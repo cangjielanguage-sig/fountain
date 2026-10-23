@@ -174,3 +174,28 @@ physical database: `bash fdbm/test/e2e/run.sh postgres|mysql`. See
 [`fdbm/test/e2e/README.md`](../fdbm/test/e2e/README.md) for setup and assertions.
 The `get<T>` dispatch micro-benchmark lives in `src/common/dispatch_perf_test.cj`
 (see `doc/详细设计.md` §10.1).
+
+---
+
+## Other public API
+
+The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
+
+- Module level: `public class ColumnInfoImpl <: ColumnInfo`, `ColumnRequestSender` (type), `public class DbdErrorPayload`, `public class QueryResultClosePayload`, `public class QueryResultColumnPayload`, `ResultCloser` (type), `public class SqlPayload`, `SqlReadType` (enum), `public class UpdateResultPayload <: UpdateResult`, `decodeStrict` (func), `getCheckInterval` (func), `getCheckOnBorrowing` (func), `getCheckOnCreation` (func), `getCheckOnReturning` (func), `getCheckSql` (func), `getConnectTimeout` (func), `getConnectionLife` (func), `getIdleTimeout` (func), `getInitSize` (func), `getLoadBalance` (func), `getMaxSize` (func), `getMaxWaiting` (func), `getMinSize` (func), `getWeights` (func)
+- `ColumnInfoImpl`: `prop displaySize: Int64`, `prop length: Int64`, `prop nullable: Bool`, `prop scale: Int64`, `prop typeName: String`
+- `DbdConnection`: `createTransaction` (func), `getMetaData` (func), `state` (prop)
+- `DbdDriver`: `version` (prop)
+- `DbdErrorCode`: `value` (prop)
+- `DbdErrorPayload`: `errorCode` (func)
+- `DbdInputStream`: `read` (func)
+- `DbdStatement`: `parameterColumnInfos` (prop), `setNull` (func), `update` (func)
+- `DbdTransaction`: `begin` (func), `commit` (func), `release` (func), `rollback` (func), `save` (func)
+- `DbdUrl`: `tryParse` (func)
+- `MultiD`: `version` (prop)
+- `MultiDUrl`: `tryParse` (func)
+- `QueryResultColumnPayload`: `cell` (func), `nextRow` (func)
+- `QueryResultImpl`: `columnInfos` (prop)
+- `SqlPayload`: `add` (func), `addNull` (func)
+- `SqlReadType`: `of` (func)
+- `SqlTypes`: `canonicalName` (func), `decode` (func), `encodeParameter` (func), `readChunk` (func), `readData` (func), `readStream` (func), `readType` (func)
+- `UpdateResultPayload`: `prop lastInsertId: Int64`, `prop rowCount: Int64`

@@ -1,6 +1,6 @@
-# fountain 模块索引与选型
+﻿# fountain 模块索引与选型
 
-索引快照时间：2026-10-23（`sts/1.3.x`，1.3.16 之后的开发分支），取自根 `README.md`「各模块详细文档」。
+索引快照时间：2026-10-23（1.3.17，master），取自根 `README.md`「各模块详细文档」。
 **可能滞后**：以 `fountain_lookup.py modules` 的现场输出与各模块 README 为准；现场查询按**在用版本**（脚本会把文档副本切到该版本，输出头部标注版本，见 SKILL.md「定位 fountain 仓库与查询版本」）。
 每个模块的详细用法读 `<模块>/README.md`（英文镜像 `<模块>/README_en.md`），特性语义与限制读 `<模块>/doc/**/*.md`，细节核对 `<模块>/src/`。
 
@@ -115,7 +115,7 @@
   `f_dbd/README.md`（应用侧驱动 + 配置项）→ `fdbm/README.md`（SQL 能力、分库、部署）→ `f_dbm/README.md`（扩展）；
   `f_jit/README.md`（API / 语法 / 何时不 JIT）→ `f_jit/doc/`（规格与验收）。
 - 想知道某模块的顶层公开声明清单：`python scripts/fountain_lookup.py api f_mvc`。
-- 想查某个具体版本（而非项目在用版本）：加 `--version 1.3.16`（或 `--version release-1.3.16.alpha`）；
+- 想查某个具体版本（而非项目在用版本）：加 `--version 1.3.17`（或 `--version release-1.3.17.alpha`）；
   脚本会先把技能目录下的文档副本切到该版本再检索，输出头部标注实际版本。
 - 模块 README 的「其他公开 API」小节是自动生成的签名清单，适合快速扫 API 面；配置项（环境变量）一般在 README 的配置表中。
 - 依赖关系与分层：根 `README.md` 的两张依赖图；生成脚本在 `docs/模块依赖图/`。

@@ -675,6 +675,19 @@ public class InheritedTaskLocal<T> <: AbstractInheritedTaskLocal {
 }
 ```
 
+## `CpuFeatures`
+
+x86_64 指令集能力探测，目前只暴露 SSE4.1（`roundsd` 用）：
+
+```cj
+public class CpuFeatures {
+    public static prop hasSse41: Bool
+}
+```
+
+- Linux + x86_64：读 `/proc/cpuinfo` 的 `sse4_1` 标志；其它平台恒 `false`（条件编译）。
+- 读取失败一律按「不支持」处理——调用方（如 `f_jit`）据此退回解释器，属于静默降级而不是报错。
+
 ## 补充：README 未逐条展开的公开符号（以源码为准）
 
 - **std 重导出**：`public import std.collection.* / MathExtension / reflect.* / regex.* / time.*`（`src/public_std_imports.cj`）

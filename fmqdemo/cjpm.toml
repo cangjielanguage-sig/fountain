@@ -14,7 +14,7 @@
   "fountain::f_version" = {path = "../f_version"}
 
 [workspace]
-  version = "1.3.16"
+  version = "1.3.17"
   organization = "fountain"
   description = "demo for how to use fountain::f_mq with fmq (fboot 加载的发布端/消费端)"
   members=["./fmqpub", "./fmqsub"]

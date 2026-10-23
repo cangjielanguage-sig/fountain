@@ -3,7 +3,7 @@
   name = "fmqsub"
   organization = "fountain"
   description = "fmq 演示：消息消费端（动态库，由 fboot 加载，启动即消费）"
-  version = "1.3.16"
+  version = "1.3.17"
   output-type = "dynamic"
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"

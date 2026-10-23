@@ -67,3 +67,11 @@ public class DatabasePool <: Resource & Datasource {
 ## 测试
 
 在本模块目录执行 `cjpm test`。`DatabasePool_test.cj` 覆盖借还连接，`PooledConnection_test.cj` 覆盖重复归还，`DatabasePoolTermination_test.cj` 使用屏障和假数据源验证关闭超时、再次等待及资源关闭顺序；测试依赖 `fountain::f_mockdb` 提供的 mock 驱动与 `MockConnection`，无需真实数据库。
+
+---
+
+## 其他公开 API
+
+以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
+
+- `DatabasePool`：`leased`（prop）

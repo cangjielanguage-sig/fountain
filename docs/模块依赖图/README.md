@@ -38,7 +38,7 @@ python3 gen_matrix_svg.py       # → ../../.assets/README/module-dependency-mat
 - **产物可复现**：生成器用固定随机种子，同一脚本连跑两次两张图 md5 应一致；
 - **自检**（必须全部干净）：连线图 `header overflow` / `node crossings`（线压节点，必须 `none`）/
   `overlaps` / `colors unique`，矩阵图 `header overflow` / `colors unique`；
-- **示例应用不进图**：`fdemo`、`fcoder`、`frpcdemo` 列在 `extract_deps.py` 的 `EXCLUDE` 里；
+- **示例应用不进图**：`fdemo`、`fcoder`、`frpcdemo`、`fmqdemo`、`fdbmdemo` 列在 `extract_deps.py` 的 `EXCLUDE` 里；
 - **与技能 fountain-tag 同源**：`fountain-tag/scripts/deps/` 是同一套脚本的技能副本（差别只有「仓库根按
   `FOUNTAIN_ROOT` > git 仓库根 > 当前目录推断」与产物路径），改完这里用
   `python3 <技能目录>/scripts/deps/sync_from_repo.py` 同步、`check_sync.py --run` 校验同源与产物一致。

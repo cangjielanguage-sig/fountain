@@ -592,7 +592,7 @@ for n in nodes:
              f'font-weight="{weight}" fill="{tcolor}" text-anchor="middle">{n}</text></g>')
 
 o.append('</svg>')
-open(OUT, 'w', encoding='utf-8').write('\n'.join(o) + '\n')
+open(OUT, 'w', encoding='utf-8', newline='\n').write('\n'.join(o) + '\n')
 root = ET.parse(OUT).getroot()
 NS = '{http://www.w3.org/2000/svg}'
 over = []
