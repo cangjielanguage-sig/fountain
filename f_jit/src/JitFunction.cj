@@ -17,6 +17,7 @@ package fountain::f_jit
 
 import std.collection.ArrayList
 import std.reflect.ClassTypeInfo
+import std.reflect.InterfaceTypeInfo
 import std.reflect.TypeInfo
 import std.sync.Mutex
 import fountain::f_base.UnsafeBytes
@@ -768,8 +769,10 @@ public class JitFunction {
             return Some(LocalType.JSON_NULL)
         }
         // 注册类 / 宿主类实例统一按 14 承接（具体类由 call<T> 的单态化适配器校验）。
+        // 接口同样是 14：`v as T` 对接口是合法转换（X：接口作为返回类型）。
         match (info) {
             case _: ClassTypeInfo => Some(LocalType.HOST_OBJECT)
+            case _: InterfaceTypeInfo => Some(LocalType.HOST_OBJECT)
             case _ => None
         }
     }

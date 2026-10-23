@@ -173,12 +173,17 @@ public class ClassDescriptor {
      */
     public let parents: Array<String>
 
+    /** 是否为接口描述符（X：接口无字段/构造器；前端据此给诊断）。 */
+    public let isInterface: Bool
+
     public init(name!: String, fields!: Array<PublicField>, methods!: Array<PublicMethod>,
-        ctors!: Array<PublicCtor>, parents!: Array<String> = Array<String>()) {
+        ctors!: Array<PublicCtor>, parents!: Array<String> = Array<String>(),
+        isInterface!: Bool = false) {
         this.name = name
         this.fields = fields.clone()
         this.methods = methods.clone()
         this.ctors = ctors.clone()
         this.parents = parents.clone()
+        this.isInterface = isInterface
     }
 }

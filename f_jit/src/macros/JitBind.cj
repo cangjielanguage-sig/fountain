@@ -19,7 +19,7 @@ import std.ast.*
 import fountain::f_macros.*
 
 /**
- * `@JitBind`（M2.1）：修饰**类**，把它的公共成员一次性展开成类型化绑定。
+ * `@JitBind`（M2.1 / 接口扩展）：修饰**类或接口**，把公共成员一次性展开成类型化绑定。
  *
  * ```
  * @JitBind
@@ -45,12 +45,14 @@ import fountain::f_macros.*
  * 属注册面的「永久排除」（`§12.5` 附 B），宏只发 WARNING、不生成。
  */
 public macro JitBind(input: Tokens): Tokens {
-    let klass = match (parseDecl(input)) {
+    let klass: CompositeDecl = match (parseDecl(input)) {
         case c: ClassDecl => c
+        case i: InterfaceDecl => i
         case _ =>
-            diagReport(ERROR, input, '@JitBind 只能修饰类', '')
+            diagReport(ERROR, input, '@JitBind 只能修饰类或接口', '')
             return input
     }
+    let isIface = klass is InterfaceDecl
     let clsName = klass.identifier
     var methods = quote()
     var fields = quote()
@@ -64,7 +66,7 @@ public macro JitBind(input: Tokens): Tokens {
 
     for (d in klass.body.decls) {
         match (d) {
-            case f: FuncDecl where isPublic(f) && !isStatic(f) =>
+            case f: FuncDecl where (isPublic(f) || isIface) && !isStatic(f) =>
                 if (f.identifier.value == 'init') {
                     if (hasCtor) {
                         ctors += Token(TokenKind.COMMA, ',').toTokens()
@@ -80,7 +82,7 @@ public macro JitBind(input: Tokens): Tokens {
                     methods += buildMethod(f, clsName)
                     hasMethod = true
                 }
-            case f: FuncDecl where isPublic(f) && isStatic(f) =>
+            case f: FuncDecl where isPublic(f) && isStatic(f) && !isIface =>
                 if (f.isGenericDecl) {
                     skippedGeneric = skippedGeneric + 1
                 } else {
@@ -90,7 +92,7 @@ public macro JitBind(input: Tokens): Tokens {
                     statics += buildStaticFunc(f, clsName)
                     hasStatic = true
                 }
-            case v: VarDecl where isPublic(v) && isStatic(v) =>
+            case v: VarDecl where isPublic(v) && isStatic(v) && !isIface =>
                 if (v.isVar()) {
                     diagReport(WARNING, input,
                         '${clsName.value}.${v.identifier.value}：static var 未纳入注册面（附 B），不生成绑定', '')
@@ -101,7 +103,7 @@ public macro JitBind(input: Tokens): Tokens {
                     statics += buildStaticValue(v.identifier, v.declType, clsName, true)
                     hasStatic = true
                 }
-            case p: PropDecl where isPublic(p) && isStatic(p) =>
+            case p: PropDecl where isPublic(p) && isStatic(p) && !isIface =>
                 if (isMut(p)) {
                     diagReport(WARNING, input,
                         '${clsName.value}.${p.identifier.value}：static mut prop 未纳入注册面（附 B），不生成绑定', '')
@@ -112,13 +114,13 @@ public macro JitBind(input: Tokens): Tokens {
                     statics += buildStaticValue(p.identifier, p.declType, clsName, false)
                     hasStatic = true
                 }
-            case v: VarDecl where isPublic(v) && !isStatic(v) =>
+            case v: VarDecl where isPublic(v) && !isStatic(v) && !isIface =>
                 if (hasField) {
                     fields += Token(TokenKind.COMMA, ',').toTokens()
                 }
                 fields += buildField(v, clsName)
                 hasField = true
-            case p: PropDecl where isPublic(p) && !isStatic(p) =>
+            case p: PropDecl where (isPublic(p) || isIface) && !isStatic(p) =>
                 if (hasMethod) {
                     methods += Token(TokenKind.COMMA, ',').toTokens()
                 }
@@ -137,6 +139,24 @@ public macro JitBind(input: Tokens): Tokens {
     }
 
     let enrollName = Token(TokenKind.IDENTIFIER, 'jitBindEnroll_' + clsName.value)
+    if (isIface) {
+        var parents = quote()
+        var hasParent = false
+        for (t in klass.superTypes) {
+            if (hasParent) {
+                parents += Token(TokenKind.COMMA, ',').toTokens()
+            }
+            parents += Token(TokenKind.STRING_LITERAL, typeNameOf(t)).toTokens()
+            hasParent = true
+        }
+        return quote(
+            $input
+            let $enrollName = JitBindSupport.enrollInterfaceOf<$clsName>(
+                JitBindings(methods: [$methods], parents: [$parents]),
+                { o: Object => o is $clsName }
+            )
+        )
+    }
     quote(
         $input
         let $enrollName = JitBindSupport.enrollOf<$clsName>(
@@ -148,6 +168,16 @@ public macro JitBind(input: Tokens): Tokens {
             )
         )
     )
+}
+
+/** 类型节点的首 token 名（接口父类型只需名字，不走 `codeOf` 的 14 判定）。 */
+private func typeNameOf(t: TypeNode): String {
+    let ts = t.toTokens()
+    if (ts.size == 0) {
+        ''
+    } else {
+        ts[0].value
+    }
 }
 
 // ---- 方法 ----

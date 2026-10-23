@@ -39,7 +39,7 @@ protected enum SegmentRecovery {
  *
  * 每条记录在段内以 `[4B 大端长度][记录字节]` 存放：记录本身仍是 `MQMessageRecord` 的原始
  * 字节串（原样落盘），4 字节头只用来在按位置顺序读取时确定单条边界 —— 它不是索引文件，
- * 也不引入第二份写盘。
+ * 有效段长度由 f_io 的持久边界管理，不能从预分配文件大小推导。
  */
 protected class QueueLog <: Resource {
     static let logger = LoggerFactory.getLogger("fountain::fmq.queue.QueueLog")
@@ -60,7 +60,7 @@ protected class QueueLog <: Resource {
             throw IllegalArgumentException(
                 "segment size ${maxFileSize} must be greater than the ${PREFIX_SIZE}-byte record header")
         }
-        this.log = SegmentedLog(LogConfig(dir, "log", maxFileSize, syncInterval))
+        this.log = SegmentedLog(LogConfig(dir, "log", maxFileSize, syncInterval, durableBoundary: true))
         this.label = dir
         this.warnLimiter = WarnLimiter(nowMs: warnNowMs)
         let bySegment = maxFileSize - PREFIX_SIZE
@@ -111,10 +111,15 @@ protected class QueueLog <: Resource {
 
     /** 从位置起按记录边界顺序读取（游标用）。 */
     protected func openRecordsFrom(position: LogPosition): QueueRecordReader {
-        let segs = segmentsOrEmpty()
-        match (startPositionOf(segs, position)) {
-            case Some(start) => QueueRecordReader(log.openEntryStream(start.seq, start.offset), segs, start, label)
-            case None => QueueRecordReader(ByteBuffer(), segs, position, label)
+        try {
+            let view = log.readView()
+            let segs = view.metas()
+            match (startPositionOf(segs, position)) {
+                case Some(start) => QueueRecordReader(view.openStream(start.seq, start.offset), segs, start, label)
+                case None => QueueRecordReader(ByteBuffer(), segs, position, label)
+            }
+        } catch (e: LogBoundaryException) {
+            throw QueueCorruptionException("queue ${label} has no valid storage boundary: ${e.message}")
         }
     }
 
@@ -169,14 +174,16 @@ protected class QueueLog <: Resource {
 
     /** `seq` 之后（不含 `seq`）的最近现存段起点。 */
     private func startAfter(segments: ArrayList<SegmentedMeta>, seq: Int64): ?LogPosition {
-        match (QueueLog.startSegmentAtOrAfter(segments, seq + 1)) {
-            case Some(index) => Some(LogPosition(index, 0))
-            case None =>
-                if (warnLimiter.allow("no-successor\u{0}${seq}")) {
-                    logger.warn("no segment after ${seq} on queue ${label}, treated as empty stream")
-                }
-                None<LogPosition>
+        // 零长度段没有记录，逻辑起点必须与有界流跳过空段的行为一致。
+        for (meta in segments) {
+            if (meta.index > seq && meta.size > 0) {
+                return Some(LogPosition(meta.index, 0))
+            }
         }
+        if (warnLimiter.allow("no-successor\u{0}${seq}")) {
+            logger.warn("no segment after ${seq} on queue ${label}, treated as empty stream")
+        }
+        None<LogPosition>
     }
 
     /** 删除指定段（当前段由 f_io 拒绝）。 */
@@ -188,12 +195,12 @@ protected class QueueLog <: Resource {
         log.logMetas()
     }
 
-    /** 段元数据；目录不可读（例如整个队列目录被删除）时返回空，调用方按「无段可读」处理。 */
+    /** 没有记录可返回空；已登记的边界或目录丢失必须显式报告损坏。 */
     protected func segmentsOrEmpty(): ArrayList<SegmentedMeta> {
         try {
             segments()
-        } catch (_: Exception) {
-            ArrayList<SegmentedMeta>()
+        } catch (e: LogBoundaryException) {
+            throw QueueCorruptionException("queue ${label} has no valid storage boundary: ${e.message}")
         }
     }
 
@@ -201,8 +208,8 @@ protected class QueueLog <: Resource {
      * 从 `position` 起扫描记录：返回记录数与第一条记录的发布时间。
      *
      * 用于统计：`backlog` 与 `lagMs` 不依赖内存计数器，重启后仍然准确。
-     * 起始段被 TTL 清理时跳到「最接近的更大段」继续并记 WARN；没有任何后继段（或目录不可读）
-     * 返回 `(0, None)` 并记 WARN，不把「段缺失」静默解释成「没有积压」。
+     * 起始段被 TTL 清理时跳到「最接近的更大段」继续并记 WARN；没有后继段返回 `(0, None)`。
+     * 已提交边界或目录损坏向上传播，不能解释成没有积压。
      */
     /**
      * 从 `position` 起统计记录数与首条发布时间（测试与运维观测 API）。
@@ -339,6 +346,14 @@ protected class QueueRecordReader {
         if (closed || corrupted) {
             return None<(Array<Byte>, LogPosition)>
         }
+        try {
+            return nextRecord()
+        } catch (e: Exception) {
+            return corrupt(0, -1, "record read failed: ${e.message}")
+        }
+    }
+
+    private func nextRecord(): ?(Array<Byte>, LogPosition) {
         let header = readUpTo(QueueLog.PREFIX_SIZE)
         if (header.size == 0) {
             // 干净结束：本段已读完
@@ -466,7 +481,7 @@ protected class QueueRecordReader {
             return
         }
         var remaining = offset + consumed
-        while (index < segments.size && remaining > segments[index].size) {
+        while (index + 1 < segments.size && remaining >= segments[index].size) {
             remaining -= segments[index].size
             index++
         }

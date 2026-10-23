@@ -231,4 +231,28 @@ class DeadLetterQueueTest {
             clean(root)
         }
     }
+    /** 死信原编码保持不变；预分配旧尾不能阻断后继段。 */
+    @TestCase
+    public func committedBoundarySkipsUnusedPreallocationAfterReopen(): Unit {
+        let root = rootOf("durable_reopen")
+        let capacity = 1024 * 1024
+        let first = DeadLetterQueue(root, capacity, 1)
+        first.append(make(1))
+        first.close()
+        let path = "${root}/log_1.log"
+        let file = File(path, OpenMode.ReadWrite)
+        file.setLength(capacity)
+        file.flush()
+        file.close()
+        let reopened = DeadLetterQueue(root, capacity, 1)
+        try {
+            reopened.append(make(2))
+            let messages = readAll(reopened, LogPosition(1, 0))
+            @Assert(messages.size == 2)
+            @Assert(messages[0].record.copyBytes() == [1u8, 0xAAu8])
+            @Assert(messages[1].record.copyBytes() == [2u8, 0xAAu8])
+            @Assert(FileInfo(path).size == capacity)
+        } finally { reopened.close(); clean(root) }
+    }
+
 }

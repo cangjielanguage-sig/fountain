@@ -742,4 +742,242 @@ class SegmentedLogTest {
         @Assert(readAll(log.openEntryStream(posB.seq, posB.offset)) == join([b]))
         log.close()
     }
+    private static func durableDir(name: String): String {
+        let dir = "/tmp/f_io_test/durable_${name}"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        atExit { if (exists(dir)) { remove(dir, recursive: true) } }
+        dir
+    }
+
+    private static func durableConfig(dir: String, capacity!: Int64 = 128): LogConfig {
+        LogConfig(dir, "commit", capacity, 1, durableBoundary: true)
+    }
+
+    /** 数据已写而边界未提交时，失败关闭不改文件，重开只暴露上次已提交前缀。 */
+    @TestCase
+    public func durableFailureKeepsPreviousBoundaryAndStopsReaders(): Unit {
+        let dir = durableDir("failed_append")
+        let config = durableConfig(dir)
+        let log = SegmentedLog(config)
+        log.append([1u8, 2u8, 3u8])
+        let view = log.readView()
+        log.durableStep = {step =>
+            if (step == "after-data-sync") { throw Exception("injected boundary publication failure") }
+        }
+        var rejected = false
+        try { log.append([4u8, 5u8]) } catch (_: Exception) { rejected = true }
+        @Assert(rejected)
+        rejected = false
+        try { log.append([6u8]) } catch (_: LogBoundaryException) { rejected = true }
+        @Assert(rejected)
+        rejected = false
+        try { view.openStream(1, 0) } catch (_: LogBoundaryException) { rejected = true }
+        @Assert(rejected)
+        let path = "${dir}/commit_1.log"
+        let before = File.readFrom(path)
+        log.close()
+        @Assert(File.readFrom(path) == before)
+        let reopened = SegmentedLog(config)
+        try {
+            @Assert(reopened.logMetas()[0].size == 3)
+            let next = reopened.append([9u8])
+            @Assert(next.seq == 2 && next.offset == 0)
+            let stream = reopened.openEntryStream(1, 0)
+            try {
+                let bytes = Array<Byte>(16, repeat: 0u8)
+                @Assert(stream.read(bytes) == 4)
+                @Assert(bytes[0..4] == [1u8, 2u8, 3u8, 9u8])
+            } finally { (stream as Resource).getOrThrow().close() }
+        } finally { reopened.close() }
+    }
+
+    /** 对确认前的三个阶段分别注入失败；发布后的未知结果允许恢复，但均不能返回成功。 */
+    @TestCase
+    public func durablePublicationOrdersDataBoundaryAndVisibility(): Unit {
+        let stages = ["before-data-sync", "before-boundary-file-sync", "after-boundary-sync"]
+        for (i in 0..stages.size) {
+            let dir = durableDir("publication_${i}")
+            let config = durableConfig(dir)
+            let log = SegmentedLog(config)
+            let seen = ArrayList<String>()
+            log.durableStep = {step =>
+                seen.add(step)
+                if (step == stages[i]) { throw Exception("injected durable publication interruption") }
+            }
+            var rejected = false
+            try { log.append([0x41u8]) } catch (_: Exception) { rejected = true }
+            @Assert(rejected)
+            log.close()
+            let reopened = SegmentedLog(config)
+            try {
+                let expected = if (i == 2) { 1 } else { 0 }
+                @Assert(reopened.logMetas()[0].size == expected)
+                if (i == 2) {
+                    @Assert(seen.toArray() == ["before-data-sync", "after-data-sync", "before-boundary-file-sync",
+                        "before-boundary-rename", "before-boundary-directory-sync", "after-boundary-sync"])
+                }
+                let evidence = "${dir}/commit_1.log.boundary.unpublished.0"
+                if (i == 1) {
+                    @Assert(File.readFrom(evidence) == SegmentBoundary(1, 128, 1, SegmentBoundary.COMMITTED).bytes())
+                }
+                // 旧临时发布不能使重启后的正常保留期清理永久失败。
+                reopened.removeById(1)
+                @Assert(!exists("${dir}/commit_1.log"))
+                @Assert(!exists("${dir}/commit_1.log.boundary"))
+                if (i == 1) { @Assert(exists(evidence)) }
+                @Assert(reopened.append([9u8]).seq == 2)
+            } finally { reopened.close() }
+        }
+    }
+
+    /** 没有数据文件的零边界是已知创建意图；带未知数据的旧目录不属于这种情况。 */
+    @TestCase
+    public func durableInitializationIntentDoesNotReuseOrOverwriteSegment(): Unit {
+        for (withFile in [false, true]) {
+            let dir = durableDir("initialization_${withFile}")
+            SegmentBoundary.ensureDirectory(dir)
+            let path = "${dir}/commit_1.log"
+            SegmentBoundary(1, 128, 0, SegmentBoundary.INITIALIZING).publish(path)
+            if (withFile) { File.writeTo(path, [0x11u8, 0x22u8]) }
+            let log = SegmentedLog(durableConfig(dir))
+            try {
+                @Assert(exists(path) == withFile)
+                if (withFile) { @Assert(File.readFrom(path) == [0x11u8, 0x22u8]) }
+                @Assert(log.append([7u8]).seq == 2)
+                @Assert(SegmentBoundary.load(path, 1, 128).state == SegmentBoundary.INITIALIZING)
+            } finally { log.close() }
+        }
+    }
+
+    /** 缺失、损坏、身份不符和越界边界均拒绝启动，不新增后继段掩盖旧数据。 */
+    @TestCase
+    public func durableInvalidBoundariesAreRejectedWithoutMutation(): Unit {
+        for (kind in 0..5) {
+            let dir = durableDir("invalid_${kind}")
+            SegmentBoundary.ensureDirectory(dir)
+            let path = "${dir}/commit_1.log"
+            if (kind != 2) { File.writeTo(path, [1u8, 2u8, 3u8]) }
+            if (kind != 0) {
+                SegmentBoundary(1, if (kind == 4) { 256 } else { 128 },
+                    if (kind == 1) { 4 } else { 3 }, SegmentBoundary.COMMITTED).publish(path)
+            }
+            if (kind == 3) {
+                let boundaryPath = path + SegmentBoundary.SUFFIX
+                let bytes = File.readFrom(boundaryPath)
+                bytes[24] = bytes[24] ^ 1u8
+                File.writeTo(boundaryPath, bytes)
+            }
+            var rejected = false
+            try { SegmentedLog(durableConfig(dir)).close() } catch (_: LogBoundaryException) { rejected = true }
+            @Assert(rejected)
+            @Assert(!exists("${dir}/commit_2.log"))
+            if (kind != 2) { @Assert(File.readFrom(path) == [1u8, 2u8, 3u8]) }
+        }
+    }
+
+    /** 读取视图取得后发生追加及轮转，原元数据和原流仍保持同一范围。 */
+    @TestCase
+    public func durableReadViewRemainsOneSnapshotAcrossRotation(): Unit {
+        let dir = durableDir("snapshot")
+        let log = SegmentedLog(durableConfig(dir, capacity: 4))
+        try {
+            log.append([1u8, 2u8])
+            let view = log.readView()
+            let writer = spawn {
+                log.append([3u8, 4u8])
+                log.append([5u8, 6u8])
+            }
+            writer.get()
+            @Assert(view.metas().size == 1 && view.metas()[0].size == 2)
+            view.metas().clear()
+            let stream = view.openStream(1, 0)
+            try {
+                let bytes = Array<Byte>(8, repeat: 0u8)
+                @Assert(stream.read(bytes) == 2)
+                @Assert(bytes[0..2] == [1u8, 2u8])
+            } finally { (stream as Resource).getOrThrow().close() }
+            @Assert(log.logMetas().size == 2 && log.logMetas()[0].size == 4)
+        } finally { log.close() }
+    }
+
+    /** 严格流的短读和开段失败都是终态；重复 read 不能跳到后继段取字节。 */
+    @TestCase
+    public func durableStrictReadFailureCannotBorrowFollowingSegment(): Unit {
+        for (missing in [false, true]) {
+            let dir = durableDir("strict_${missing}")
+            let log = SegmentedLog(durableConfig(dir, capacity: 4))
+            log.append([1u8, 2u8, 3u8, 4u8])
+            log.append([5u8, 6u8, 7u8, 8u8])
+            let stream = log.openEntryStream(1, 0)
+            let path = "${dir}/commit_1.log"
+            if (missing) {
+                remove(path)
+            } else {
+                let file = File(path, OpenMode.ReadWrite)
+                file.setLength(1)
+                file.close()
+            }
+            try {
+                let bytes = Array<Byte>(8, repeat: 0u8)
+                var rejected = false
+                try { stream.read(bytes) } catch (_: LogBoundaryException) { rejected = true }
+                @Assert(rejected)
+                @Assert((stream as Resource).getOrThrow().isClosed())
+                @Assert(stream.read(bytes) == 0)
+            } finally {
+                (stream as Resource).getOrThrow().close()
+                log.close()
+            }
+        }
+    }
+
+    /** 只收尾明确的删除意图，不把缺失的 committed 数据文件当成已删除。 */
+    @TestCase
+    public func durableDeleteIntentFinishesAfterInterruptedUnlink(): Unit {
+        let dir = durableDir("delete")
+        let config = durableConfig(dir, capacity: 4)
+        let first = SegmentedLog(config)
+        first.append([1u8, 2u8, 3u8, 4u8])
+        first.append([5u8])
+        first.close()
+        let path = "${dir}/commit_1.log"
+        SegmentBoundary(1, 4, 4, SegmentBoundary.DELETING).publish(path)
+        remove(path)
+        let reopened = SegmentedLog(config)
+        try {
+            @Assert(!exists(path + SegmentBoundary.SUFFIX))
+            @Assert(reopened.logMetas()[0].index == 2)
+            @Assert(reopened.append([9u8]).seq == 3)
+        } finally { reopened.close() }
+    }
+
+    /** 同步策略和消息字节相同的小样本，仅报告增加边界同步的成本，不判断容量。 */
+    @TestCase
+    public func durableAppendReportsSameInputSyncCost(): Unit {
+        let payload = Array<Byte>(64, repeat: 0x41u8)
+        for (enabled in [false, true]) {
+            let dir = durableDir("cost_${enabled}")
+            let log = SegmentedLog(LogConfig(dir, "commit", 8192, 1, durableBoundary: enabled))
+            try {
+                let start = MonoTime.now()
+                for (_ in 0..32) { log.append(payload) }
+                let elapsed = MonoTime.now() - start
+                println("SEGMENT_APPEND_COST durable=${enabled} count=32 bytes=64 elapsedNanoseconds=${elapsed.toNanoseconds()}")
+                @Assert(log.logMetas()[0].size == 2048)
+            } finally { log.close() }
+        }
+    }
+
+    /** 同步确认模式不能接受批量同步配置，也不能退回原默认语义。 */
+    @TestCase
+    public func durableConfigurationRejectsBatchedSync(): Unit {
+        let dir = durableDir("batch_rejected")
+        var rejected = false
+        try {
+            SegmentedLog(LogConfig(dir, "commit", 128, 2, durableBoundary: true)).close()
+        } catch (_: IllegalArgumentException) { rejected = true }
+        @Assert(rejected)
+        @Assert(!exists(dir))
+    }
+
 }

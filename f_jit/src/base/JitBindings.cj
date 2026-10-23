@@ -53,14 +53,19 @@ public class JitBindings {
      */
     public let statics: Array<PredefinedFunction>
 
+    /** 接口的父接口名（`superTypes`，宏登记；类的父类由反射链推导，不在此列）。 */
+    public let parents: Array<String>
+
     public init(methods!: Array<PublicMethod> = Array<PublicMethod>(),
         fields!: Array<JitFieldBinding> = Array<JitFieldBinding>(),
         ctors!: Array<PublicCtor> = Array<PublicCtor>(),
-        statics!: Array<PredefinedFunction> = Array<PredefinedFunction>()) {
+        statics!: Array<PredefinedFunction> = Array<PredefinedFunction>(),
+        parents!: Array<String> = Array<String>()) {
         this.methods = methods
         this.fields = fields
         this.ctors = ctors
         this.statics = statics
+        this.parents = parents
     }
 
     public static func empty(): JitBindings {
@@ -97,7 +102,7 @@ public class JitBindings {
         for (o in over.statics) {
             ss = JitBindings.replaceStatic(ss, o)
         }
-        JitBindings(methods: ms, fields: fs, ctors: cs, statics: ss)
+        JitBindings(methods: ms, fields: fs, ctors: cs, statics: ss, parents: this.parents)
     }
 
     private static func replaceMethod(xs: Array<PublicMethod>, v: PublicMethod)

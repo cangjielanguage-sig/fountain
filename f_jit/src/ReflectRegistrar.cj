@@ -135,6 +135,9 @@ protected class ReflectRegistrar {
         let auto = ArrayList<PredefinedFunction>()
         let pending = ArrayList<() -> Unit>()
         let localNames = ArrayList<String>()
+        // 父类字段先占号再登记自有字段：字段表是全局 index 空间，子类自有 index 必须避开
+        // 父类已用的 0..k-1（否则 bucket 撞车，accepts 先命中父类访问器读错字段）。
+        ReflectRegistrar.mergeAncestorFields(cls, ancestry, fields, pending, diag)
 
         // ---- 实例字段（let / var）----
         for (v in cls.instanceVariables) {
@@ -341,6 +344,9 @@ protected class ReflectRegistrar {
             }
         }
 
+        // 父类方法/属性（X）：子类描述符内重新登记，子类同名成员优先。
+        ReflectRegistrar.mergeAncestorMethods(cls, ancestry, methods, diag)
+
         // 全量构建完成后一次性登记：任何拒绝都不会留下半成品。
         let (mergedMethods, mergedFns) = ReflectRegistrar.applyOverrides(methods.toArray(),
             auto.toArray(), effective.methods)
@@ -364,6 +370,244 @@ protected class ReflectRegistrar {
                     case _ => false
                 }
             }))
+    }
+
+    /**
+     * 注册接口（X）：无 `T <: Object` 约束（接口不是 Object 子类型），方法绑定来自 `@JitBind`。
+     *
+     * 反射能列出接口方法，但它们是**抽象声明**——`InstanceFunctionInfo.apply` 抛
+     * `Cannot invoke abstract function`。因此这里不提供反射回退：没有 `@JitBind` 就拒绝。
+     */
+    public static func registerInterface<I>(into!: ClassRegistry, diag!: DiagnosticsSink,
+        enabled!: Bool = true, bindings!: JitBindings = JitBindings.empty()): Unit {
+        let info = TypeInfo.of<I>()
+        let iface = match (info) {
+            case i: InterfaceTypeInfo => i
+            case _ =>
+                throw RegistrationException(RegistrationRejectKind.ReflectionUnavailable,
+                    info.name, Some('不是接口类型'))
+        }
+        let name = iface.name
+        if (!enabled) {
+            throw RegistrationException(RegistrationRejectKind.ReflectionUnavailable, name, None)
+        }
+        let auto = JitBindSupport.enrolledOf(name)
+        let effective = auto.withOverrides(bindings)
+        if (effective.methods.size == 0) {
+            throw RegistrationException(RegistrationRejectKind.ReflectionUnavailable, name,
+                Some('接口必须用 @JitBind 提供方法绑定（反射无法调用抽象方法）'))
+        }
+        let methods = ArrayList<PublicMethod>()
+        let parents = ArrayList<String>()
+        for (pname in effective.parents) {
+            parents.add(pname)
+            match (into.resolve(pname)) {
+                case Some(pd) =>
+                    for (m in pd.methods) {
+                        if (!ReflectRegistrar.hasMethod(methods, m.name)) {
+                            methods.add(m)
+                        }
+                    }
+                case None => ()
+            }
+        }
+        for (m in effective.methods) {
+            if (!ReflectRegistrar.hasMethod(methods, m.name)) {
+                methods.add(m)
+            }
+        }
+        into.register(ClassDescriptor(name: name, fields: Array<PublicField>(),
+            methods: methods.toArray(), ctors: Array<PublicCtor>(),
+            parents: parents.toArray(), isInterface: true))
+        for (m in methods) {
+            into.addAutoFunction(m.bind)
+        }
+        // 接口的 `$as$<I>`：与类同名的转换判定（`as I` / 14 形参校验共用）
+        into.addAutoFunction(PredefinedFunction('$as$' + name,
+            [LocalType.HOST_OBJECT], LocalType.BOOL,
+            { args =>
+                match (args[0]) {
+                    case o: Object => ReflectRegistrar.isInstanceOfHost(o, name)
+                    case _ => false
+                }
+            }))
+    }
+
+    /** 字段名是否已在描述符中（子类优先，重复即跳过）。 */
+    private static func hasField(fields: ArrayList<PublicField>, name: String): Bool {
+        for (f in fields) {
+            if (f.name == name) {
+                return true
+            }
+        }
+        false
+    }
+
+    /** 方法名是否已在描述符中（注册表以名字为键，重载同名视作同一条）。 */
+    private static func hasMethod(methods: ArrayList<PublicMethod>, name: String): Bool {
+        for (m in methods) {
+            if (m.name == name) {
+                return true
+            }
+        }
+        false
+    }
+
+    private static func findMethod(b: JitBindings, name: String): ?PublicMethod {
+        for (m in b.methods) {
+            if (m.name == name) {
+                return Some(m)
+            }
+        }
+        None
+    }
+
+    /**
+     * 父类字段并入子描述符（X）：**在自有字段之前**调用，先占号。
+     *
+     * 字段表是全局 index 空间（同 index 多访问器靠 `accepts` 区分），子类自有字段若也从 0
+     * 开始编号，bucket 会撞上父类访问器并先命中——读出来的是父类同号字段。
+     */
+    private static func mergeAncestorFields(cls: ClassTypeInfo, ancestry: Array<String>,
+        fields: ArrayList<PublicField>, pending: ArrayList<() -> Unit>, diag: DiagnosticsSink): Unit {
+        var cur = cls.superClass
+        var depth = 0
+        while (depth < 32) {
+            let p = match (cur) {
+                case Some(c) => c
+                case None => return
+            }
+            if (p.name != 'Object') {
+                let pb = JitBindSupport.enrolledOf(p.name)
+                for (v in p.instanceVariables) {
+                    if (ReflectRegistrar.hasField(fields, v.name)) {
+                        continue
+                    }
+                    let codeOpt = ReflectRegistrar.mapType(v.typeInfo)
+                    if (codeOpt.isNone()) {
+                        continue
+                    }
+                    let code = ReflectRegistrar.unwrapCode(codeOpt)
+                    let idx = UInt16(fields.size)
+                    let typeRef: ?String = if (code == LocalType.HOST_OBJECT) {
+                        Some(v.typeInfo.name)
+                    } else {
+                        None
+                    }
+                    let mutable = v.isMutable()
+                    fields.add(PublicField(name: v.name, `type`: code, index: idx,
+                        mutable: mutable, typeRef: typeRef))
+                    let member = v
+                    let rowCode = code
+                    let rowMutable = mutable
+                    let rowIdx = idx
+                    let rowAncestry = ancestry
+                    let typed = pb.fieldOf(v.name)
+                    pending.add({ =>
+                        HostFieldTable.register(index: rowIdx, `type`: rowCode,
+                            mutable: rowMutable,
+                            accepts: { o => ReflectRegistrar.isInstanceOf(o, rowAncestry) },
+                            getter: { o =>
+                                match (typed) {
+                                    case Some(b) => b.get(o)
+                                    case None => member.getValue(o)
+                                }
+                            },
+                            setter: { o, x =>
+                                match (typed) {
+                                    case Some(b) => match (b.set) {
+                                        case Some(s) => s(o, x)
+                                        case None => member.setValue(o, x)
+                                    }
+                                    case None => member.setValue(o, x)
+                                }
+                            })
+                    })
+                }
+            }
+            cur = p.superClass
+            depth = depth + 1
+        }
+    }
+
+    /**
+     * 父类方法/属性并入子描述符（X）：**在自有方法之后**调用，子类同名成员优先。
+     *
+     * 绑定优先取父类的 `@JitBind`（对子实例上转即可调用），否则退回反射（具体方法可 apply）。
+     */
+    private static func mergeAncestorMethods(cls: ClassTypeInfo, ancestry: Array<String>,
+        methods: ArrayList<PublicMethod>, diag: DiagnosticsSink): Unit {
+        var cur = cls.superClass
+        var depth = 0
+        while (depth < 32) {
+            let p = match (cur) {
+                case Some(c) => c
+                case None => return
+            }
+            if (p.name != 'Object') {
+                let pb = JitBindSupport.enrolledOf(p.name)
+                for (f in p.instanceFunctions) {
+                    if (ReflectRegistrar.hasMethod(methods, f.name)) {
+                        continue
+                    }
+                    match (ReflectRegistrar.findMethod(pb, f.name)) {
+                        case Some(pm) => methods.add(PublicMethod(name: f.name, bind: pm.bind))
+                        case None =>
+                            let codeOpt = ReflectRegistrar.mapType(f.returnType)
+                            let paramCodes = ReflectRegistrar.mapParams(f.parameters)
+                            if (codeOpt.isNone() || paramCodes.isNone()) {
+                                ReflectRegistrar.skip(diag, '${p.name}.${f.name}', '父类方法类型不可映射')
+                                continue
+                            }
+                            let sig = ReflectRegistrar.prepend(LocalType.HOST_OBJECT,
+                                ReflectRegistrar.unwrapParams(paramCodes))
+                            let ret = ReflectRegistrar.unwrapCode(codeOpt)
+                            if (ReflectRegistrar.unsafeForReflect(sig, ret)) {
+                                ReflectRegistrar.skip(diag, '${p.name}.${f.name}',
+                                    '引用型参数/返回在反射 apply 上会 SIGSEGV（GAP-13），请给父类加 @JitBind')
+                                continue
+                            }
+                            methods.add(PublicMethod(name: f.name,
+                                bind: PredefinedFunction('${p.name}.${f.name}', sig, ret,
+                                    { args => f.apply(args[0], ReflectRegistrar.tail(args)) },
+                                    retName: ReflectRegistrar.retNameOf(f.returnType, ret))))
+                    }
+                }
+                for (pp in p.instanceProperties) {
+                    let propName = if (pp.isMutable()) {
+                        ReflectRegistrar.lowerFirst(pp.name)
+                    } else {
+                        pp.name
+                    }
+                    if (ReflectRegistrar.hasMethod(methods, propName)) {
+                        continue
+                    }
+                    match (ReflectRegistrar.findMethod(pb, propName)) {
+                        case Some(pm) => methods.add(PublicMethod(name: propName, bind: pm.bind))
+                        case None =>
+                            let codeOpt = ReflectRegistrar.mapType(pp.typeInfo)
+                            if (codeOpt.isNone()) {
+                                continue
+                            }
+                            let ret = ReflectRegistrar.unwrapCode(codeOpt)
+                            methods.add(PublicMethod(name: propName,
+                                bind: PredefinedFunction(propName, [LocalType.HOST_OBJECT], ret,
+                                    { args => pp.getValue(args[0]) },
+                                    retName: ReflectRegistrar.retNameOf(pp.typeInfo, ret))))
+                    }
+                }
+            }
+            cur = p.superClass
+            depth = depth + 1
+        }
+    }
+
+    /** 14 的实例判定：类祖先链 ∪ 已注册接口谓词（X）。 */
+    public static func isInstanceOfHost(o: Object, name: String): Bool {
+        if (ReflectRegistrar.isInstanceOfClass(o, name)) {
+            return true
+        }
+        JitBindSupport.acceptsInterface(o, name)
     }
 
     /**
@@ -521,6 +765,7 @@ protected class ReflectRegistrar {
         }
         match (info) {
             case _: ClassTypeInfo => Some(LocalType.HOST_OBJECT)
+            case _: InterfaceTypeInfo => Some(LocalType.HOST_OBJECT)
             case _ => None
         }
     }

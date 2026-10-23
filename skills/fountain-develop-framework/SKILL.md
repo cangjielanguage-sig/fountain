@@ -12,15 +12,15 @@ description: 当开发对象就是 fountain 仓库自身（修改 `f_*` 模块�
 **全程走 OpenSpec 六步**（新建模块、加功能、修缺陷一律；纯内部修复可在 `.openspec.yaml` 里用 `skip_specs: true` 跳过规格文件，但六步流程照走；展开见 `references/openspec-workflow.md`）；**开工先加载 `test-driven-development` 技能**（**REQUIRED SUB-SKILL:**）。
 
 1. **步骤 1 — 环境与刷新 + 先复用再实现**：`openspec update` + `openspec list --json`。动手写代码前，把要用到的能力逐条在仓库里查证有没有现成实现，命中即用：
-   - 查证链路：`fountain_lookup.py modules` → `search "<能力关键词>"` → 模块 README → `api <模块>` → 读 `src/` 核对签名；
-   - 现有模块能满足的**不重复造轮子**（异常体系、日志、工具函数、集合扩展、时间换算、编解码等，先按 `references/module-index.md` 对号入座再现场核对，不按记忆猜）；
-   - 新增代码遵守仓库既有约定：包与目录结构、可见性、测试布局都参照同层既有代码；README 中英成对同步。
+   - 查证链路：`fountain_lookup.py modules` → `search "<能力关键词>"`（特性类加 `--in docs` 检索各模块 `doc/`）→ 模块 README → `api <模块>` → 读 `src/` 核对签名；
+   - 现有模块能满足的**不重复造轮子**（异常体系、日志、工具函数、集合扩展、时间换算、编解码、段日志 `f_io`、对象池 `f_pool`、MQ `f_mq`、中间件驱动 `f_dbd` 等，先按 `references/module-index.md` 对号入座再现场核对，不按记忆猜）；
+   - 新增代码遵守仓库既有约定：包与目录结构、可见性、测试布局都参照同层既有代码；README 中英成对同步；**特性语义与规格放 `<模块>/doc/`**（对齐 `f_mq` / `f_dbd` / `f_jit` 等既有模块，`search --in docs` 能检索到）。
 2. **步骤 2 — 缺口处理与 propose**：fountain 现有 API 不能满足需求时**停下来问用户**，给出几个建议并询问接下来如何做，等用户拍板再动手——**不擅自新造公开 API、不硬编假实现、不悄悄引入第三方依赖**：
    - 每条建议写清代价与影响面（是否动公开 API、是否破坏兼容、影响哪些调用方、测试与文档成本）；公开 API 变更宁保守（能加参数 / 重载就不改既有签名）；
-   - 典型候选：a) 扩展现有模块（哪个模块、加什么 API 的签名草案）；b) 新建模块（职责边界与发布登记；聚合根包与 `src/<模块>` shim 已冻结，新模块不登记进去）；c) 改用仓颉标准库 / stdx 的现成能力（不新增 fountain API）；d) 在目标模块内部实现（不公开，仅本次需求用）；e) 缩减范围或调整需求；
+   - 典型候选：a) 扩展现有模块（哪个模块、加什么 API 的签名草案）；b) 新建模块（职责边界与发布登记：`.modules` `[include]` 决定是否发中心仓，`[detention]` 明确不发，两段都不写 = 中心仓没有制品；聚合根包与 `src/<模块>` shim 已冻结，新模块不登记进去）；c) 改用仓颉标准库 / stdx 的现成能力（不新增 fountain API）；d) 在目标模块内部实现（不公开，仅本次需求用）；e) 缩减范围或调整需求；
    - 未拍板前不写实现代码。
    - 拍板后执行 `opsx:propose`（新建模块：职责 + 对外 API 草案；加功能 / 修缺陷：行为变化与规格 delta），生成五件套（**只写规划产物**），完成后**落盘到相应模块的 `doc/spec/<变更名>/`**（跨多个模块时各模块放其 `spec.md`，`proposal.md` / `design.md` / `tasks.md` 放主模块），停下等评审。
-3. **步骤 3 — 用户评审（门禁）**：把 `design.md` / `tasks.md` 交用户逐条评审——**新建模块**重点：模块职责边界、公开 API 签名、与既有模块的依赖方向、`.modules` 发布登记、README 中英同步、边界场景与兼容性；**既有模块改动**重点：兼容性（是否动公开 API、破坏调用方）、测试与文档影响。反馈用 `opsx:update` 折回产物并保持一致。**用户明确确认前不进入 apply。**
+3. **步骤 3 — 用户评审（门禁）**：把 `design.md` / `tasks.md` 交用户逐条评审——**新建模块**重点：模块职责边界、公开 API 签名、与既有模块的依赖方向、`.modules` 发布登记、README 中英同步、`doc/` 设计与规格、是否需要示例模块（对齐 `fmqdemo` / `fdbmdemo`：应用侧示例是 fboot 加载的动态库）、边界场景与兼容性；**既有模块改动**重点：兼容性（是否动公开 API、破坏调用方）、测试与文档影响。反馈用 `opsx:update` 折回产物并保持一致。**用户明确确认前不进入 apply。**
 4. **步骤 4 — `opsx:apply`（逐任务 TDD）**：严格跟随 design / tasks（新建模块的目录 / 包结构 / 测试布局以 design 为准，既有约束 `[detention]`、聚合根 shim 冻结不破）；先写失败用例（Red）→ 最小实现（Green）→ 重构（Refactor）；用例放语义所属的层 / 包；**跑绿才勾任务**——不许出现「任务已勾选但没有对应测试」的假进度；公开 API 变化同步该模块 README（中英成对）；实现与 design 冲突时回步骤 3 问用户，不自行改设计。
 5. **步骤 5 — 回归 + `opsx:verify`**：受影响模块 + 全量 `cjpm test` 全绿再提交；涉及 fboot / 应用启动链的改动按 `references/delivery-workflow.md` 第 5 节做冒烟；最后 `opsx:verify`，**CRITICAL 未清零不往下走**（启用与回退见 openspec-workflow 第 6 节）。
 6. **步骤 6 — 交付 + `opsx:archive` + 落盘**：提交与建 tag 按 delivery-workflow 第 6 / 7 节；fountain 自身的升版（各 `cjpm.toml` + `f_version/src/FountainVersion.cj`）与发布文档同步按仓库既有发布流程；执行 `opsx:archive` 归档；最后用最终版**覆盖更新相应模块的 `doc/spec/<变更名>/`**（四件套全量）。仓库里可能有其他会话的并行工作线（`.worktrees/` 工作树与分支）——只操作自己的，不 prune、不删除任何工作树与分支。

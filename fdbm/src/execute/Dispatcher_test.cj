@@ -848,6 +848,12 @@ public class DispatcherTest {
             } catch (e: FdbmException) {
                 message = e.message
                 @Assert(e.code, DbdErrorCode.DB_ERROR)
+                let cause = e.causedBy.getOrThrow()
+                @Assert(cause is SqlException, true)
+                if (let sql: SqlException <- cause) {
+                    @Assert(sql.sqlState, '23505')
+                    @Assert(sql.message, SqlException('simulated failure on db1', '23505', 0).message)
+                }
             }
             @Assert(message.contains('db1'), true)
             @Assert(message.contains('db0'), true)
@@ -914,6 +920,12 @@ public class DispatcherTest {
             } catch (e: FdbmException) {
                 message = e.message
                 @Assert(e.code, DbdErrorCode.DB_ERROR)
+                let cause = e.causedBy.getOrThrow()
+                @Assert(cause is SqlException, true)
+                if (let sql: SqlException <- cause) {
+                    @Assert(sql.sqlState, '23505')
+                    @Assert(sql.message, SqlException('simulated failure on db1', '23505', 0).message)
+                }
             }
             @Assert(message.contains('db0'), true)
             @Assert(message.contains('db1'), true)
@@ -921,6 +933,36 @@ public class DispatcherTest {
             session.close()
             resources.close()
         }
+    }
+
+    @TestCase
+    public func cleanupFailureDoesNotReplaceExecutionFailure(): Unit {
+        let resource = FailingCloseResource()
+        var message = ''
+        try {
+            var failed = false
+            try {
+                throw SqlException('primary SQL failure', '23505', 0)
+            } catch (e: Exception) {
+                failed = true
+                throw e
+            } finally {
+                closeAfterExecution(resource, failed)
+            }
+        } catch (e: SqlException) {
+            message = e.message
+            @Assert(e.sqlState, '23505')
+        }
+        @Assert(message, SqlException('primary SQL failure', '23505', 0).message)
+        @Assert(resource.closed, 1)
+        var closeMessage = ''
+        try {
+            closeAfterExecution(resource, false)
+        } catch (e: Exception) {
+            closeMessage = e.message
+        }
+        @Assert(closeMessage, 'cleanup failure')
+        @Assert(resource.closed, 2)
     }
 
     /** 无分库规则、只配置逻辑库映射的执行器。 */
@@ -1015,14 +1057,14 @@ class FailingAccessor <: NodeAccessor {
 
     public func selectWrite(database: String): Connection {
         if (database == failing) {
-            throw FdbmException(DbdErrorCode.DB_ERROR, 'simulated failure on ${database}')
+            throw SqlException('simulated failure on ${database}', '23505', 0)
         }
         inner.selectWrite(database)
     }
 
     public func selectAllWrite(database: String): Array<Connection> {
         if (database == failing) {
-            throw FdbmException(DbdErrorCode.DB_ERROR, 'simulated failure on ${database}')
+            throw SqlException('simulated failure on ${database}', '23505', 0)
         }
         inner.selectAllWrite(database)
     }
@@ -1261,4 +1303,14 @@ func codeOf<T>(body: () -> T): DbdErrorCode {
         return DbdErrorCode.INTERNAL
     }
     DbdErrorCode.INTERNAL
+}
+
+/** 模拟独立收尾失败，验证首错优先与仍执行收尾。 */
+class FailingCloseResource <: Resource {
+    var closed: Int64 = 0
+    public func isClosed(): Bool { closed > 0 }
+    public func close(): Unit {
+        closed += 1
+        throw Exception('cleanup failure')
+    }
 }

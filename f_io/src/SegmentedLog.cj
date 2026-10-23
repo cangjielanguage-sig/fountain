@@ -66,15 +66,21 @@ public struct LogConfig {
     let startSeq: Int64
     /** 文件扩展名（含前导点），默认 ".log" */
     let fileExt: String
+    /** 明确启用持久有效边界；每次 append 同步提交，旧目录不自动迁移。 */
+    let durableBoundary: Bool
 
     public init(dir: String, filePrefix: String, maxFileSize: Int64, syncInterval: Int64, startSeq!: Int64 = 1,
-        fileExt!: String = ".log") {
+        fileExt!: String = ".log", durableBoundary!: Bool = false) {
         this.dir = dir
         this.filePrefix = filePrefix
         this.maxFileSize = maxFileSize
         this.syncInterval = syncInterval
         this.startSeq = startSeq
         this.fileExt = fileExt
+        if (durableBoundary && (maxFileSize <= 0 || startSeq < 0 || syncInterval > 1)) {
+            throw IllegalArgumentException("durable boundaries require a positive capacity and synchronous appends")
+        }
+        this.durableBoundary = durableBoundary
     }
 }
 
@@ -104,7 +110,7 @@ public class SegmentedMeta {
 }
 
 /** 目录扫描结果（内部使用）：比 SegmentedMeta 多带文件路径 */
-private struct SegmentFile {
+internal struct SegmentFile {
     let index: Int64
     let path: String
     let size: Int64
@@ -122,6 +128,52 @@ private struct SegmentFile {
     }
 }
 
+/** 同一锁内冻结的段边界；调用者取得的元数据副本不能改变输入流的范围。 */
+public class SegmentReadView {
+    private let files: Array<SegmentFile>
+    private let strict: Bool
+    private let check: () -> Unit
+
+    internal init(files: ArrayList<SegmentFile>, strict: Bool, check: () -> Unit) {
+        this.files = files.toArray()
+        this.strict = strict
+        this.check = check
+    }
+
+    public func metas(): ArrayList<SegmentedMeta> {
+        check()
+        let result = ArrayList<SegmentedMeta>()
+        for (f in files) {
+            result.add(SegmentedMeta(f.index, f.size, f.creationTime, f.updateTime, f.last))
+        }
+        result
+    }
+
+    public func openStream(index: Int64, offset: Int64): InputStream {
+        check()
+        if (offset < 0) {
+            throw IllegalArgumentException("offset must not be negative, got ${offset}")
+        }
+        let paths = ArrayList<String>()
+        let sizes = ArrayList<Int64>()
+        var found = false
+        for (f in files) {
+            if (f.index < index) {
+                continue
+            }
+            if (f.index == index) {
+                found = true
+            }
+            paths.add(f.path)
+            sizes.add(f.size)
+        }
+        if (!found) {
+            throw IllegalArgumentException("segment ${index} is absent from the read view")
+        }
+        ChainedSegmentStream(paths, sizes, startOffset: offset, strictRead: strict, check: check)
+    }
+}
+
 public class SegmentedLog <: Resource {
     private let config: LogConfig
 
@@ -130,6 +182,11 @@ public class SegmentedLog <: Resource {
     private var curPath: String
 
     private var mmapPtr: CPointer<Byte> = CPointer<Byte>()
+    private var mapped = false
+    private let failed = AtomicBool(false)
+    private let committedSize = AtomicInt64(0)
+    /** 原生回归在持久步骤之间注入失败；生产默认无操作。 */
+    protected var durableStep: (String) -> Unit = {_ => ()}
 
     // 状态
     private let seq: AtomicInt64
@@ -144,12 +201,21 @@ public class SegmentedLog <: Resource {
         this.config = config
         // 确保目录存在
         let dir = config.dir
-        if (!exists(dir)) {
+        if (config.durableBoundary) {
+            SegmentBoundary.ensureDirectory(dir)
+        } else if (!exists(dir)) {
             Directory.create(dir, recursive: true)
         }
         // 编号单调递增：新段取目录中最新编号 + 1（删除过的编号不再复用）
-        let nextSeq = SegmentedLog.nextSegmentIndex(config)
+        let nextSeq = if (config.durableBoundary) {
+            durableDirectory(config, true)
+        } else {
+            SegmentedLog.nextSegmentIndex(config)
+        }
         let path = "${dir}/${config.filePrefix}_${nextSeq}${config.fileExt}"
+        if (config.durableBoundary) {
+            beginSegment(config, path, nextSeq)
+        }
         this.file = File(path, OpenMode.ReadWrite)
         this.curPath = path
         this.seq = AtomicInt64(nextSeq)
@@ -160,10 +226,24 @@ public class SegmentedLog <: Resource {
         this.oldFilesLock = Mutex()
         this.appendLock = Mutex()
         // Linux: ftruncate + fallocate + mmap，非 Linux 返回 null
-        initFileMapping(this, config.maxFileSize)
+        if (config.durableBoundary) {
+            try {
+                initFileMapping(this, config.maxFileSize)
+                finishSegmentCreation()
+            } catch (e: Exception) {
+                failed.store(true)
+                releaseAfterFailure()
+                throw e
+            }
+        } else {
+            initFileMapping(this, config.maxFileSize)
+        }
     }
     /** 从指定路径创建。rotate() 仍使用 config 生成新文件路径；编号起点不低于目录里已有的最大编号 */
     public init(config: LogConfig, initPath: String) {
+        if (config.durableBoundary) {
+            throw IllegalArgumentException("durable boundaries require managed segment names")
+        }
         this.config = config
         // 确保目录存在
         let dir = config.dir
@@ -201,32 +281,39 @@ public class SegmentedLog <: Resource {
             if (data.size > config.maxFileSize) {
                 throw LogRecordTooLargeException(data.size, config.maxFileSize)
             }
-            // 检查是否超限，超限先轮转
-            if (currentSize.load() + data.size > config.maxFileSize) {
-                rotate()
-                // 轮转后复核：上限不随轮转变化，任何绕过前置检查的路径都在这里被挡住
-                if (data.size > config.maxFileSize) {
-                    throw LogRecordTooLargeException(data.size, config.maxFileSize)
+            ensureHealthy()
+            try {
+                if (currentSize.load() + data.size > config.maxFileSize) {
+                    doRotate()
                 }
+                let pos = currentSize.load()
+                writeImpl(data)
+                currentSize.fetchAdd(data.size)
+                let interval = config.syncInterval
+                if (config.durableBoundary || interval <= 0 || (appendCount.fetchAdd(1) + 1) % interval == 0) {
+                    syncImpl()
+                }
+                LogPosition(seq.load(), pos)
+            } catch (e: Exception) {
+                if (config.durableBoundary) {
+                    failed.store(true)
+                }
+                throw e
             }
-            let pos = currentSize.load()
-            // Linux: memcpy 到 mmap 区域，非 Linux: file.write()
-            writeImpl(data)
-            currentSize.fetchAdd(data.size)
-            // 周期性 fsync
-            let interval = config.syncInterval
-            if (interval <= 0 || (appendCount.fetchAdd(1) + 1) % interval == 0) {
-                syncImpl()
-            }
-            LogPosition(seq.load(), pos)
         }
     }
 
     /** 强制 fsync 当前 segment */
     public func sync(): Unit {
         synchronized(appendLock) {
+            ensureHealthy()
             if (!closed.load()) {
-                syncImpl()
+                try {
+                    syncImpl()
+                } catch (e: Exception) {
+                    if (config.durableBoundary) { failed.store(true) }
+                    throw e
+                }
             }
         }
     }
@@ -237,7 +324,13 @@ public class SegmentedLog <: Resource {
             if (closed.load()) {
                 return
             }
-            doRotate()
+            ensureHealthy()
+            try {
+                doRotate()
+            } catch (e: Exception) {
+                if (config.durableBoundary) { failed.store(true) }
+                throw e
+            }
         }
     }
 
@@ -256,18 +349,20 @@ public class SegmentedLog <: Resource {
     /**
      * 返回日志目录下所有 log 文件的元数据，按编号升序。
      *
-     * - `size` 为文件的有效日志字节数：封口段是被截断后的文件大小，当前段是已写入字节数
+     * - 持久模式的 `size` 来自已提交边界；默认模式保留原文件大小／内存写入长度语义
      * - `last` 标记当前正在写入的段
      * - 不符合 "{filePrefix}_{index}{fileExt}" 命名规则的文件不会被列出（自定义命名的当前段除外）
      */
     public func logMetas(): ArrayList<SegmentedMeta> {
-        let result = ArrayList<SegmentedMeta>()
+        readView().metas()
+    }
+
+    /** 段元数据与流共用这一份快照，追加或轮转不会扩大已取得视图。 */
+    public func readView(): SegmentReadView {
         synchronized(appendLock) {
-            for (f in scanSegments()) {
-                result.add(SegmentedMeta(f.index, f.size, f.creationTime, f.updateTime, f.last))
-            }
+            ensureHealthy()
+            SegmentReadView(scanSegments(), config.durableBoundary, {=> ensureHealthy()})
         }
-        result
     }
 
     /**
@@ -278,6 +373,7 @@ public class SegmentedLog <: Resource {
      */
     public func removeById(index: Int64): Unit {
         synchronized(appendLock) {
+            ensureHealthy()
             if (index == currentSegmentIndex()) {
                 throw IllegalArgumentException("cannot remove the active segment ${index}, call rotate() first")
             }
@@ -328,28 +424,7 @@ public class SegmentedLog <: Resource {
      * 编号不存在（含已被删除）或 offset 为负时抛 IllegalArgumentException。
      */
     public func openEntryStream(index: Int64, offset: Int64): InputStream {
-        if (offset < 0) {
-            throw IllegalArgumentException("offset must not be negative, got ${offset}")
-        }
-        let paths = ArrayList<String>()
-        let sizes = ArrayList<Int64>()
-        var found = false
-        synchronized(appendLock) {
-            for (f in scanSegments()) {
-                if (f.index < index) {
-                    continue
-                }
-                if (f.index == index) {
-                    found = true
-                }
-                paths.add(f.path)
-                sizes.add(f.size)
-            }
-        }
-        if (!found) {
-            throw IllegalArgumentException("segment ${index} not found in ${config.dir}")
-        }
-        ChainedSegmentStream(paths, sizes, startOffset: offset)
+        readView().openStream(index, offset)
     }
 
     // ===== 内部实现 =====
@@ -362,23 +437,80 @@ public class SegmentedLog <: Resource {
         if (!closed.compareAndSwap(false, true)) {
             return
         }
-        // 用 appendLock 确保无正在进行的 append
         synchronized(appendLock) {
-            syncImpl()
-            unmapFile(mmapPtr, config.maxFileSize)
-            if (!file.isClosed()) {
-                truncateFile(file, currentSize.load())
-                file.close()
+            if (!config.durableBoundary) {
+                syncImpl()
+                releaseMapping()
+                if (!file.isClosed()) {
+                    truncateFile(file, currentSize.load())
+                    file.close()
+                }
+                return
             }
+            if (failed.load()) {
+                // 失败结果未知：只释放资源，不同步新边界、不截断证据。
+                releaseAfterFailure()
+                return
+            }
+            try {
+                syncImpl()
+                releaseMapping()
+                if (!file.isClosed()) {
+                    file.setLength(committedSize.load())
+                    file.flush()
+                }
+            } catch (e: Exception) {
+                if (config.durableBoundary) { failed.store(true) }
+                throw e
+            } finally {
+                releaseAfterFailure()
+            }
+        }
+    }
+
+    private func ensureHealthy(): Unit {
+        if (config.durableBoundary && failed.load()) {
+            throw LogBoundaryException("SegmentedLog is stopped after an unresolved storage failure")
+        }
+    }
+
+    private func releaseMapping(): Unit {
+        if (mapped) {
+            unmapFile(mmapPtr, config.maxFileSize, strict: config.durableBoundary)
+            mapped = false
+        }
+    }
+
+    private func releaseAfterFailure(): Unit {
+        try {
+            releaseMapping()
+        } finally {
+            if (!file.isClosed()) { file.close() }
         }
     }
 
     /** 扫描日志目录，返回所有 segment 文件（按编号升序）。当前段总是以 last=true 出现 */
     private func scanSegments(): ArrayList<SegmentFile> {
+        ensureHealthy()
+        try {
+            scanSegmentsUnchecked()
+        } catch (e: Exception) {
+            if (config.durableBoundary) {
+                failed.store(true)
+                throw LogBoundaryException("cannot read committed segment boundaries: ${e.message}")
+            }
+            throw e
+        }
+    }
+
+    private func scanSegmentsUnchecked(): ArrayList<SegmentFile> {
         let prefix = "${config.filePrefix}_"
         let ext = config.fileExt
         let cur = curPath
-        let curSize = currentSize.load()
+        let curSize = if (config.durableBoundary) { committedSize.load() } else { currentSize.load() }
+        if (config.durableBoundary) {
+            durableDirectory(config, false)
+        }
         let files = ArrayList<SegmentFile>()
         Directory.walk(config.dir) {
             fi: FileInfo =>
@@ -386,13 +518,16 @@ public class SegmentedLog <: Resource {
                     if (let Some(index) <- SegmentedLog.parseSegmentIndex(fi.name, prefix, ext)) {
                         let path = fi.path.toString()
                         let isLast = path == cur
-                        // 封口段读文件大小（封口时已截断到实际写入长度），当前段读已写入字节数
+                        var size = if (isLast) { curSize } else { fi.size }
+                        if (config.durableBoundary) {
+                            let boundary = SegmentBoundary.load(path, index, config.maxFileSize)
+                            if (boundary.state == SegmentBoundary.DELETING) {
+                                return true
+                            }
+                            size = boundary.length
+                        }
                         files.add(
-                            SegmentFile(index, path, if (isLast) {
-                                curSize
-                            } else {
-                                fi.size
-                            }, fi.creationTime, fi.lastModificationTime, isLast))
+                            SegmentFile(index, path, size, fi.creationTime, fi.lastModificationTime, isLast))
                     }
                 }
                 true
@@ -427,6 +562,7 @@ public class SegmentedLog <: Resource {
     /** 删除所有满足条件的封口段；当前段始终跳过 */
     private func removeSegmentsMatching(predicate: (SegmentFile) -> Bool): Unit {
         synchronized(appendLock) {
+            ensureHealthy()
             for (f in scanSegments()) {
                 if (f.last) {
                     continue
@@ -440,7 +576,17 @@ public class SegmentedLog <: Resource {
 
     /** 删除文件，并把它从待清理列表里摘掉（外部 clearOldFiles 不会重复处理） */
     private func deleteSegmentFile(path: String): Unit {
-        if (exists(path)) {
+        if (config.durableBoundary) {
+            try {
+                let index = parseSegmentIndex(Path(path).fileName, "${config.filePrefix}_", config.fileExt).getOrThrow()
+                let boundary = SegmentBoundary.load(path, index, config.maxFileSize)
+                SegmentBoundary(index, config.maxFileSize, boundary.length, SegmentBoundary.DELETING).publish(path)
+                finishDelete(config, path)
+            } catch (e: Exception) {
+                failed.store(true)
+                throw e
+            }
+        } else if (exists(path)) {
             remove(path)
         }
         synchronized(oldFilesLock) {
@@ -549,10 +695,14 @@ public class SegmentedLog <: Resource {
     /** 实际轮转：sync → munmap → truncate → close → open new → mmap new */
     private func doRotate(): Unit {
         syncImpl()
-        unmapFile(mmapPtr, config.maxFileSize)
+        releaseMapping()
         if (!file.isClosed()) {
-            // 封口时截断到实际写入长度，封口段的 size 才是有效数据大小
-            truncateFile(file, currentSize.load())
+            if (config.durableBoundary) {
+                file.setLength(committedSize.load())
+                file.flush()
+            } else {
+                truncateFile(file, currentSize.load())
+            }
             file.close()
         }
         // 将旧路径加入待清理列表
@@ -562,11 +712,14 @@ public class SegmentedLog <: Resource {
         // 创建新文件
         let newSeq = seq.fetchAdd(1) + 1
         let newPath = "${config.dir}/${config.filePrefix}_${newSeq}${config.fileExt}"
+        if (config.durableBoundary) { beginSegment(config, newPath, newSeq) }
         this.file = File(newPath, OpenMode.ReadWrite)
         this.curPath = newPath
         initFileMapping(this, config.maxFileSize)
         this.currentSize.store(0)
+        this.committedSize.store(0)
         this.appendCount.store(0)
+        finishSegmentCreation()
     }
 
     // ---- @When[os] 双版本方法 ----
@@ -575,24 +728,35 @@ public class SegmentedLog <: Resource {
     @When[os == "Linux"]
     private static func initFileMapping(segmlog: SegmentedLog, size: Int64): Unit {
         let fd = segmlog.file.fileDescriptor.fileHandle
-        unsafe { ftruncate(Int32(fd), size) }
-        unsafe { fallocate(Int32(fd), 0, 0, size) }
+        let truncated = unsafe { ftruncate(Int32(fd), size) }
+        if (segmlog.config.durableBoundary && truncated != 0) {
+            throw LogBoundaryException("segment preallocation truncate failed")
+        }
+        let allocated = unsafe { fallocate(Int32(fd), 0, 0, size) }
+        if (segmlog.config.durableBoundary && allocated != 0) {
+            throw LogBoundaryException("segment preallocation failed")
+        }
         let protBits = [MMapProt.Read, MMapProt.Write].combine()
         unsafe {
             segmlog.mmapPtr = CPointer<Byte>(
                 mmap(nullptr, UIntNative(size), protBits, MMapFlag.Shared.value, fd, IntNative(0)))
         }
+        if (segmlog.config.durableBoundary && segmlog.mmapPtr.toUIntNative() == UIntNative.Max) {
+            throw LogBoundaryException("segment mapping failed")
+        }
+        segmlog.mapped = true
     }
     @When[os != "Linux"]
     private static func initFileMapping(_: SegmentedLog, _: Int64): Unit {}
 
     /** Linux: munmap。非 Linux: 空操作 */
     @When[os == "Linux"]
-    private static func unmapFile(ptr: CPointer<Byte>, size: Int64): Unit {
-        unsafe { munmap(CPointer<Unit>(ptr), UIntNative(size)) }
+    private static func unmapFile(ptr: CPointer<Byte>, size: Int64, strict!: Bool = false): Unit {
+        let result = unsafe { munmap(CPointer<Unit>(ptr), UIntNative(size)) }
+        if (strict && result != 0) { throw LogBoundaryException("segment unmap failed") }
     }
     @When[os != "Linux"]
-    private static func unmapFile(_: CPointer<Byte>, _: Int64): Unit {}
+    private static func unmapFile(_: CPointer<Byte>, _: Int64, strict!: Bool = false): Unit {}
 
     /** Linux: memcpy 到 mmap 写 page cache。非 Linux: file.write() */
     @When[os == "Linux"]
@@ -611,14 +775,105 @@ public class SegmentedLog <: Resource {
 
     /** fsync 刷盘（统一路径，Linux 下同样 flush mmap 脏页） */
     private func syncImpl(): Unit {
+        if (config.durableBoundary && currentSize.load() != committedSize.load()) {
+            durableStep("before-data-sync")
+        }
         file.flush()
+        if (config.durableBoundary && currentSize.load() != committedSize.load()) {
+            durableStep("after-data-sync")
+            SegmentBoundary(seq.load(), config.maxFileSize, currentSize.load(), SegmentBoundary.COMMITTED)
+                .publish(curPath, step: durableStep)
+            committedSize.store(currentSize.load())
+        }
+    }
+
+    private func finishSegmentCreation(): Unit {
+        if (config.durableBoundary) {
+            file.flush()
+            SegmentBoundary.syncDirectory(config.dir)
+            SegmentBoundary(seq.load(), config.maxFileSize, 0, SegmentBoundary.COMMITTED).publish(curPath)
+        }
+    }
+
+    private static func beginSegment(config: LogConfig, path: String, index: Int64): Unit {
+        if (exists(path) || exists(path + SegmentBoundary.SUFFIX) || exists(path + SegmentBoundary.SUFFIX + ".tmp")) {
+            throw LogBoundaryException("refusing to replace an existing segment: ${path}")
+        }
+        SegmentBoundary(index, config.maxFileSize, 0, SegmentBoundary.INITIALIZING).publish(path)
+        if (exists(path)) {
+            throw LogBoundaryException("segment appeared during initialization: ${path}")
+        }
+    }
+
+    /** 仅已持久登记的删除意图可收尾，路径必须由当前前缀和段号生成。 */
+    private static func finishDelete(config: LogConfig, path: String): Unit {
+        if (exists(path)) { remove(path) }
+        SegmentBoundary.syncDirectory(config.dir)
+        remove(path + SegmentBoundary.SUFFIX)
+        SegmentBoundary.syncDirectory(config.dir)
+    }
+
+    /** 先完整校验所有段，再收尾已登记删除；初始化意图保留且编号不复用。 */
+    private static func durableDirectory(config: LogConfig, finishDeletes: Bool): Int64 {
+        let indexes = ArrayList<Int64>()
+        let deleting = ArrayList<String>()
+        let unpublished = ArrayList<String>()
+        Directory.walk(config.dir) { fi: FileInfo =>
+            if (fi.isDirectory()) { return true }
+            var name = fi.name
+            var isBoundary = false
+            var isTemporary = false
+            if (name.endsWith(SegmentBoundary.SUFFIX + ".tmp")) {
+                name = name[0..name.size - 4]
+                isTemporary = true
+            }
+            if (name.endsWith(SegmentBoundary.SUFFIX)) {
+                name = name[0..name.size - SegmentBoundary.SUFFIX.size]
+                isBoundary = true
+            }
+            if (let Some(index) <- parseSegmentIndex(name, "${config.filePrefix}_", config.fileExt)) {
+                let path = "${config.dir}/${config.filePrefix}_${index}${config.fileExt}"
+                let expected = if (isTemporary) {
+                    path + SegmentBoundary.SUFFIX + ".tmp"
+                } else if (isBoundary) { path + SegmentBoundary.SUFFIX } else { path }
+                if (fi.path.toString() != expected) {
+                    throw LogBoundaryException("noncanonical segment path: ${fi.path}")
+                }
+                let boundary = SegmentBoundary.load(path, index, config.maxFileSize)
+                indexes.add(index)
+                if (boundary.state == SegmentBoundary.COMMITTED) {
+                    if (!exists(path) || FileInfo(path).size < boundary.length || FileInfo(path).size > boundary.capacity) {
+                        throw LogBoundaryException("committed segment is absent or has invalid length: ${path}")
+                    }
+                } else if (boundary.state == SegmentBoundary.INITIALIZING) {
+                    if (exists(path) && FileInfo(path).size > boundary.capacity) {
+                        throw LogBoundaryException("initializing segment exceeds its capacity: ${path}")
+                    }
+                } else if (isBoundary && !isTemporary) {
+                    deleting.add(path)
+                }
+                if (isTemporary) { unpublished.add(path) }
+            }
+            true
+        }
+        var maximum = config.startSeq - 1
+        for (index in indexes) {
+            if (index > maximum) { maximum = index }
+        }
+        if (finishDeletes) {
+            // 所有正式边界及数据先校验完毕，才保留未决发布证据并继续。
+            for (path in unpublished) { SegmentBoundary.preserveTemporary(path) }
+            for (path in deleting) { finishDelete(config, path) }
+        }
+        if (maximum == Int64.Max) { throw LogBoundaryException("segment index is exhausted") }
+        maximum + 1
     }
 }
 
 /**
  * 链式 segment 输入流：按编号升序依次读取多个 segment 文件，读完之后自动关闭当前文件。
  * 首个文件从 startOffset 处起读（其余从 0 起），每个文件最多读 sizes[i] 字节
- * （封口段为文件大小，当前段为已写入长度，因此不会读到预分配区的空洞）。
+ * （持久模式使用已提交长度；默认模式由调用方提供原有长度）。
  * 实现 InputStream 接口，可作为 DefaultCodec.decode 的参数逐条解码 entry。
  */
 public class ChainedSegmentStream <: InputStream & Resource {
@@ -629,8 +884,13 @@ public class ChainedSegmentStream <: InputStream & Resource {
     private var currentFile: ?File = None
     private var remaining: Int64 = 0
     private var closed: Bool = false
+    private let strictRead: Bool
+    private let check: () -> Unit
 
-    public init(filePaths: ArrayList<String>, sizes: ArrayList<Int64>, startOffset!: Int64 = 0) {
+    public init(filePaths: ArrayList<String>, sizes: ArrayList<Int64>, startOffset!: Int64 = 0,
+        strictRead!: Bool = false, check!: () -> Unit = {=> ()}) {
+        this.strictRead = strictRead
+        this.check = check
         this.filePaths = filePaths
         this.sizes = sizes
         this.startOffset = startOffset
@@ -640,6 +900,16 @@ public class ChainedSegmentStream <: InputStream & Resource {
         if (closed || buffer.size == 0) {
             return 0
         }
+        try {
+            check()
+            return readChecked(buffer)
+        } catch (e: Exception) {
+            if (strictRead) { close() }
+            throw e
+        }
+    }
+
+    private func readChecked(buffer: Array<Byte>): Int64 {
         var written: Int64 = 0
         while (written < buffer.size) {
             if (remaining <= 0) {
@@ -657,7 +927,10 @@ public class ChainedSegmentStream <: InputStream & Resource {
                 }
                 let n = f.read(buffer[written..written + take])
                 if (n <= 0) {
-                    remaining = 0 // 文件提前读完，跳到下一段
+                    if (strictRead) {
+                        throw LogBoundaryException("segment ended before its committed boundary")
+                    }
+                    remaining = 0 // 旧模式保留跨段行为
                     continue
                 }
                 written += n
@@ -692,13 +965,18 @@ public class ChainedSegmentStream <: InputStream & Resource {
             }
             try {
                 let f = File(filePaths[i], OpenMode.Read)
+                if (strictRead) { currentFile = Some(f) }
                 if (i == 0 && startOffset > 0) {
                     f.seek(SeekPosition.Begin(startOffset))
                 }
                 currentFile = f
                 remaining = available
                 return true
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                if (strictRead) {
+                    close()
+                    throw LogBoundaryException("cannot open committed segment: ${e.message}")
+                }
                 continue
             }
         }
