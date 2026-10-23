@@ -28,7 +28,7 @@ import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
 # 示例应用不进图（README 的模块清单里只有库模块与 fleet）
-EXCLUDE = {'fdemo', 'fcoder', 'frpcdemo'}
+EXCLUDE = {'fdemo', 'fcoder', 'frpcdemo', 'fmqdemo', 'fdbmdemo'}
 # import 可以带可见性修饰：import / public import / protected import / internal import / private import
 IMPORT_FMT = (r'^\s*(?:(?:public|protected|internal|private)\s+)?import\s+'
               r'fountain::{}(?![A-Za-z0-9_])')
