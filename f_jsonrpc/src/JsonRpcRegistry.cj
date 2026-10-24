@@ -15,15 +15,38 @@ limitations under the License.
 */
 package fountain::f_jsonrpc
 
+import std.reflect.TypeInfo
+import fountain::f_bean.lookup
+
 /** 进程内默认端点的方法注册表。应用在 static init 阶段调 `register`。 */
 public class JsonRpcRegistry {
-    private static let instance = JsonRpcServer.builder().endpoint(JsonRpcProtocol.PATH).build()
+    private static let defaultServer = JsonRpcServer.builder().endpoint(JsonRpcProtocol.PATH).build()
 
     public static func server(): JsonRpcServer {
-        instance
+        defaultServer
     }
 
     public static func register(meta: JsonRpcMethodMeta): Unit {
-        instance.addMethod(meta)
+        defaultServer.addMethod(meta)
+    }
+
+    /**
+     * 读取 `T.funcName` 上的 `@JsonRpcMeta`。
+     *
+     * 没有注解时返回 `JsonRpcMeta('', '500ms')`：无描述，超时默认 500ms。
+     */
+    public static func getMeta<T>(funcName: String): JsonRpcMeta where T <: Object {
+        for (function in TypeInfo.of<T>().getInstanceFunctions(funcName)) {
+            match (function.findAnnotation<JsonRpcMeta>()) {
+                case Some(meta) => return meta
+                case _ => ()
+            }
+        }
+        JsonRpcMeta('', '500ms')
+    }
+
+    /** 从 bean 容器取实例（`@JsonRpc` 展开时给类加了 `@Bean`）。 */
+    public static func instance<T>(): T where T <: Object {
+        lookup<T>()
     }
 }

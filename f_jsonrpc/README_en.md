@@ -63,7 +63,7 @@ public class SearchRPC {
 
 - The class gets `@Bean`; every public instance method is registered as `<topic>.<method>`
 - The second `@JsonRpcMeta` argument is a `Duration` string; use `meta.timeoutDuration` to get a `Duration`
-- `JsonRpcRegister.getMeta<T>(methodName)` returns `JsonRpcMeta` (empty description and a `500ms` timeout when there is no annotation)
+- `JsonRpcRegistry.getMeta<T>(methodName)` returns `JsonRpcMeta` (empty description and a `500ms` timeout when there is no annotation)
 - A single parameter accepts `[value]` or `{"name": value}` per JSON-RPC; multiple parameters require an object
 - A `Unit` return becomes `null`; parameters and results may be any `f_data.DataFields<T>` subtype (including `@DataAssist` objects)
 
