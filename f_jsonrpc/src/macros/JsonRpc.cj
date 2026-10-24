@@ -134,7 +134,7 @@ private func generateMethod(topic: String, klassName: String, f: FuncDecl): Toke
         index++
     }
     let registration = quote(
-        let __jsonrpc_meta = JsonRpcRegister.getMeta<$classToken>($(Token(STRING_LITERAL, fnName)))
+        let __jsonrpc_meta = JsonRpcRegistry.getMeta<$classToken>($(Token(STRING_LITERAL, fnName)))
         JsonRpcRegistry.register(JsonRpcMethodMeta(
             name: $(Token(STRING_LITERAL, fullName)),
             handler: {$ctxVar, $paramsVar =>

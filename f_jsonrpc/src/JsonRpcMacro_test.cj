@@ -156,19 +156,25 @@ class JsonRpcMacro_test {
     public func testGetMetaReadsAnnotation(): Unit {
         let f = TypeInfo.of<JsonRpcMacroTestRPC>().getInstanceFunctions('search')[0]
         @Assert(true, f.findAnnotation<JsonRpcMeta>().isSome())
-        @Assert('知识库检索', JsonRpcRegister.getMeta<JsonRpcMacroTestRPC>('search').description)
+        @Assert('知识库检索', JsonRpcRegistry.getMeta<JsonRpcMacroTestRPC>('search').description)
+    }
+
+    @TestCase
+    public func testRegistryInstance(): Unit {
+        let rpc = JsonRpcRegistry.instance<JsonRpcMacroTestRPC>()
+        @Assert('found:self', rpc.search('self'))
     }
 
     @TestCase
     public func testTimeoutDuration(): Unit {
-        let meta = JsonRpcRegister.getMeta<JsonRpcMacroTestRPC>('search')
+        let meta = JsonRpcRegistry.getMeta<JsonRpcMacroTestRPC>('search')
         @Assert('知识库检索', meta.description)
         @Assert(true, meta.timeoutDuration == Duration.parse('5s'))
     }
 
     @TestCase
     public func testMissingMetaUsesDefaultTimeout(): Unit {
-        let meta = JsonRpcRegister.getMeta<JsonRpcMacroTestRPC>('echo')
+        let meta = JsonRpcRegistry.getMeta<JsonRpcMacroTestRPC>('echo')
         @Assert('', meta.description)
         @Assert('500ms', meta.timeout)
         @Assert(true, meta.timeoutDuration == Duration.parse('500ms'))
