@@ -18,6 +18,8 @@ package fountain::f_egraph.base
 public class ImmediateDispatcher <: Dispatcher {
     private let executors = HashMap<Event, ArrayList<Executor>>()
     private let eventQueue = LinkedBlockingQueue<Event>()
+    /** `category -> tag -> 开始事件名`，供宿主新实例启动已注册流程时回退读取（`design.md` D11）。 */
+    private let startEventNames = HashMap<String, HashMap<String, String>>()
 
     private func doRegister(name: String, executor: Executor){
         let list = executors.computeIfAbsent(executor.acceptable){
@@ -31,6 +33,17 @@ public class ImmediateDispatcher <: Dispatcher {
     }
     public func registerStart(category!: String, tag!: String, eventName!: String): Unit {
         doRegister('StartExecutor', StartExecutor(acceptingEvent: Event(eventType: EventType.Start, category: category, tag: tag, name: eventName), accepter: this))
+        let tags = startEventNames.computeIfAbsent(category){
+            HashMap<String, String>()
+        }
+        tags[tag] = eventName
+    }
+    protected func doStartEventName(category!: String, tag!: String): ?String {
+        if(let Some(tags) <- startEventNames.get(category)){
+            tags.get(tag)
+        }else{
+            None<String>
+        }
     }
     public func registerError(category!: String, tag!: String): Unit {
         doRegister('ErrorExecutor', ErrorExecutor(acceptingEvent: Event(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString())))
@@ -45,6 +58,11 @@ public class ImmediateDispatcher <: Dispatcher {
     }
     public func registerTask(category!: String, tag!: String, eventName!: String, task!: (Event) -> Event): Unit {
         let executor = TaskExecutor(acceptingEvent: Event(eventType: EventType.Task, category: category, tag: tag, name: eventName), 
+            accepter: this, task: task)
+        doRegister('TaskExecutor', executor)
+    }
+    protected func doRegisterMulti(category!: String, tag!: String, task!: (Event) -> Event): Unit {
+        let executor = TaskExecutor(acceptingEvent: Event(eventType: EventType.Multi, category: category, tag: tag, name: EventType.Multi.toString()),
             accepter: this, task: task)
         doRegister(executor)
     }

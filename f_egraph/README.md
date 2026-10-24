@@ -634,38 +634,113 @@ public class AsyncFlow <: Flow<AsyncEndExecutorGetter> {
 }
 ```
 
-### 流程DSL编译器
+### JIT 任务`ClosureTask`
 ```cj
-package fountain::f_egraph
 /**
- * async 表示异步流程，immediate 表示同步流程，StartEvent是类型为Start的事件名
- * async(category, tag): 'StartEvent' => {
- *     task |> {
- *         'out-event' => {
- *              other_task |> {'other-out-event'}
- *         }
- *     }
- *     task1 |> {
- *         event => {task3 |> {END}}
- *         event2 => task4 |> {'in-event'}
- *     }
- *     task2 |> {
- *         END //END 要么是所在花括号的最后一个事件，要么当前花括号没有END
- *     }
- * }
+ * 任务体由 f_jit 脚本生成的任务。
+ * 编译器由宿主注入（FlowInitializer.initialize 会调用 initCompiler），
+ * 未注入时首次 compile 惰性创建一个并完成宿主类型注册。
  */
-public struct FlowDSLCompiler {
+@JitBind
+public class ClosureTask <: Task {
+    public init(name: String, acceptableEvents: Array<String>, producingEvents: Array<String>, body: (Event) -> Event)
     /**
-     * 编译流程编排DSL，返回的是流程的(category, tag)
+     * 宿主专用：注入编译器和宿主类型注册表，不在脚本名空间。
      */
-    public static func compile(dsl: String): (String, String)
+    @IgnoreJitBinding
+    public static func initCompiler(compiler: Compiler): Unit
+    /**
+     * 编译任务体，返回可直接 registerTask 的任务。
+     * exec 是任务体语句序列，包裹为 `{ e: Event => ... }` 后编译，返回值必须是 Event。
+     */
+    public static func compile(name: String, acceptableEvents: ArrayList<Any>, producingEvents: ArrayList<Any>, exec: String): ClosureTask
+    public prop name: String
+    public prop acceptableEvents: Array<String>
+    public prop producingEvents: Array<String>
+    public func exec(e: Event): Event
 }
 ```
+- 两个事件列表形参声明为 `ArrayList<Any>`（f_jit 列表字面量的运行时形态），内部逐元素校验字符串，非字符串抛 `GraphException`；
+- `name`、两个事件列表、`exec` 去空白后为空 → `GraphException`；
+- 编译错误与运行期错误原样上抛，保留 f_jit 的站点与错误码。
+
+### 事件工厂`FlowEventFactory`
+```cj
+@JitBind
+public class FlowEventFactory {
+    public static func flowTaskEvent(category: String, tag: String, name: String, data: String): Event
+    public static func flowEndEvent(category: String, tag: String, data: String): Event
+    public static func flowErrorEvent(category: String, tag: String, message: String): Event
+    public static func flowDummyEvent(): Event
+    /** data 为 String 时返回其值，否则返回空串；非 DataEvent 返回空串。 */
+    public static func flowDataOf(event: Event): String
+}
+```
+事件族的构造器把 `data` 声明为 `Any`，脚本方言没有对应类型码，因此脚本面**不暴露事件构造器**，一律经该工厂以 `String` 载荷构造与读取。
+
+### 流程脚本契约
+`FlowLoader.load()` 的每个元素是**一个流程**的 f_jit 编排脚本（语句序列，执行前包裹为 `{ => ... }`）：
+
+```cj
+let flow = ImmediateFlow("order", "v1")   // 或 AsyncFlow("order", "v1")
+flow.registerStart("created")
+flow.registerEnd()
+flow.registerError()
+
+let validate = compile("validate", ["created"], ["validated"],
+    "flowTaskEvent(\"order\", \"v1\", \"validated\", flowDataOf(e))")
+flow.registerTask(validate)
+
+let pay = compile("pay", ["validated"], ["End"], "flowEndEvent(\"order\", \"v1\", flowDataOf(e))")
+flow.registerTask(pay)
+
+flow.removeExceptCurrentTag()
+```
+
+约束：
+
+1. `registerStart` 必须在第一个 `registerTask` 之前；
+2. 第一个注册的任务必须接受开始事件，否则 `registerTask` 抛 `GraphException`；
+3. 同一事件只能注册一个执行器，重复注册抛 `GraphException`；
+4. 只用 `registerTask(task: Task)` 重载（闭包重载不在脚本名空间，调用会在编译期报「未注册方法」）；
+5. 末行必须是 `flow.removeExceptCurrentTag()`，且末条语句必须是 `Unit` 表达式——f_jit 不支持空括号 `()`，执行器不追加哨兵；
+6. 异步脚本的前提是宿主已调用 `AsyncFlow.initDispatcher(...)`（`FlowInitializer` 不隐式调用，避免覆盖宿主配置）；
+7. 事件与流程类型上不得使用 `is` / `as`；`emit` / `start` / `initDispatcher` 不在脚本名空间，事件载荷用 `flow*` 工厂函数。
+
+空脚本视为配置错误，初始化时抛 `GraphException`；任一脚本失败即终止初始化，后续脚本不执行，已完成的注册不回滚。
+
+`BarrierTask<G>` 是泛型类，**不支持 JIT 绑定**；需要脚本化任务时用 `ClosureTask`。
+
+### 从旧 DSL 迁移
+`FlowDSLCompiler`、`TaskDef`、`ProducingDef` 已删除。旧 DSL 与脚本是两种语言，不是文本兼容关系，需要按下表重写 `FlowLoader`：
+
+| 旧 DSL | 新脚本 |
+|---|---|
+| `immediate(c, t)` / `async(c, t)` | `ImmediateFlow("c", "t")` / `AsyncFlow("c", "t")` |
+| `: 'Start' =>` | `flow.registerStart("Start")` |
+| 隐式结束/错误执行器 | `flow.registerEnd()` / `flow.registerError()` |
+| `task |> { 'out' => { ... } }` | `compile("task", ["<accept>"], ["out"], "<exec>")` + `flow.registerTask(t)` |
+| 嵌套任务 | 按深度优先先序展开为连续语句，顺序即注册顺序 |
+| `END` | 无对应语句，任务返回 `flowEndEvent(...)` 即结束 |
+| 末尾自动清理旧 tag | 脚本末行显式 `flow.removeExceptCurrentTag()` |
+
+例如旧 DSL：
+
+```
+immediate(order, v1): 'created' => {
+    validate |> {
+        'validated' => { pay |> {END} }
+    }
+}
+```
+
+改写为上面的「流程脚本契约」示例即可（`validate` 产出 `validated`，`pay` 返回结束事件）。
 
 ### 流程加载器
 ```cj
 /**
- * load()函数返回的是流程DSL
+ * load() 的每个元素是一个流程的 f_jit 编排脚本（见上节契约）；
+ * 空脚本视为配置错误，初始化时抛 GraphException。
  */
 public interface FlowLoader {
     func load(): ArrayList<String>
@@ -680,5 +755,6 @@ public interface FlowLoader {
 
 以下声明未在上文展开，按「模块级 / 类型」分组列出（`extend` 里的成员归到被扩展的类型）；完整语义见 `src/` 下对应文件。
 
-- 模块级：`BarrierKey`（class）、`ConcurrentEndExecutor`（class）、`FlowInitializer`（interface）、`public struct ProducingDef`、`TaskDef`（struct）
+- 模块级：`BarrierKey`（class）、`ConcurrentEndExecutor`（class）、`FlowInitializer`（interface）、`JitHostRegistry`（class）
 - `BarrierKey`：`let eventName: String`
+- `JitHostRegistry`：`public static func configure(compiler: Compiler): Unit`（把 f_egraph 的宿主类型注册到自定义 `Compiler`，须在执行脚本前调用）
