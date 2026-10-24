@@ -106,6 +106,7 @@ private func generateMethod(topic: String, klassName: String, f: FuncDecl): Toke
     let paramsVar = ident('__jsonrpc_params')
     var argDecls = quote()
     var argList = quote()
+    var argTypes = quote([)
     var index = 0
     for (fp in f.funcParams) {
         let p = match (fp) {
@@ -119,6 +120,10 @@ private func generateMethod(topic: String, klassName: String, f: FuncDecl): Toke
         } else {
             quote(named: false)
         }
+        if (index > 0) {
+            argTypes += `comma`
+        }
+        argTypes += quote(TypeInfo.of<$(p.paramType)>())
         argDecls += `nl` + quote(
             let $argVar = JsonRpcArgs.extract<$(p.paramType)>(
                 $paramsVar, $(Token(STRING_LITERAL, pname)), $named)
@@ -133,8 +138,10 @@ private func generateMethod(topic: String, klassName: String, f: FuncDecl): Toke
         }
         index++
     }
+    argTypes += quote(])
     let registration = quote(
-        let __jsonrpc_meta = JsonRpcRegistry.getMeta<$classToken>($(Token(STRING_LITERAL, fnName)))
+        let __jsonrpc_meta = JsonRpcRegistry.getMeta<$classToken>(
+            $(Token(STRING_LITERAL, fnName)), $argTypes)
         JsonRpcRegistry.register(JsonRpcMethodMeta(
             name: $(Token(STRING_LITERAL, fullName)),
             handler: {$ctxVar, $paramsVar =>

@@ -24,7 +24,7 @@
 2. 为每个 public 实例方法生成加载期注册代码，方法名为 `<topic>.<fnName>` 或 `<fnName>`
 3. 跳过非 public 方法、静态方法与构造函数
 4. 生成的 handler 通过 `lookup<T>()` 取实例并调用方法
-5. 描述与超时从 `JsonRpcRegistry.getMeta<T>(fnName)` 读取
+5. 描述与超时从 `JsonRpcRegistry.getMeta<T>(fnName, argTypes)` 读取
 
 #### Scenario: 带 topic
 
@@ -38,12 +38,12 @@
 
 ### Requirement: `JsonRpcMeta` 与 `getMeta`
 
-`JsonRpcMeta` MUST 作为成员方法注解提供 `description`、`timeout`（字符串）与 `timeoutDuration: Duration`。`timeoutDuration` MUST 用 `f_data` 的 `Duration.parse`。`JsonRpcRegistry.getMeta<T>(funcName: String): JsonRpcMeta` MUST 返回该方法上的注解实例；没有注解时 MUST 返回 `JsonRpcMeta('', '500ms')`。MUST NOT 再提供 `paramCount` 参数、`parseTimeout` 或 `JsonRpcRegisteredMeta`。
+`JsonRpcMeta` MUST 作为成员方法注解提供 `description`、`timeout`（字符串）与 `timeoutDuration: Duration`。`timeoutDuration` MUST 用 `f_data` 的 `Duration.parse`。`JsonRpcRegistry.getMeta<T>(funcName: String, argTypes: Array<TypeInfo>): JsonRpcMeta` MUST 返回参数类型匹配的重载上的注解实例；没有注解时 MUST 返回 `JsonRpcMeta('', '500ms')`。MUST NOT 再提供 `paramCount` 参数、`parseTimeout` 或 `JsonRpcRegisteredMeta`。
 
 #### Scenario: 正常解析
 
 - **WHEN** 方法标注 `@JsonRpcMeta['知识库检索', '5s']`
-- **THEN** `getMeta<T>('search')` 返回描述 `知识库检索`，`timeoutDuration == Duration.parse('5s')`
+- **THEN** `getMeta<T>('search', [TypeInfo.of<String>()])` 返回描述 `知识库检索`，`timeoutDuration == Duration.parse('5s')`
 
 #### Scenario: 无注解
 
