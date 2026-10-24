@@ -355,7 +355,7 @@
   > 变更仅落在 `macros/IgnoreJitBinding.cj`（新增）、`macros/JitBind.cj`、
   > `base/JitBindings.cj`、`ReflectRegistrar.cj` 与 `src/JitBindIgnore_test.cj`。
   > `f_jit` 的 `cjpm test` 见 7.2。`f_egraph/doc/spec/f-egraph-jit-flow-init` 已与本变更目录同步。
-- [ ] 7.7 **合并需用户确认**：验收全绿后向用户汇报，得到确认再执行
+- [x] 7.7 **合并需用户确认**（已确认：`1bd64039` 已 `--no-ff` 合入 `sts/1.3.x`）：验收全绿后向用户汇报，得到确认再执行
   `git merge --no-ff feature/f_egraph` 到 `sts/1.3.x`；合并后是否删除功能分支同样由用户确认。
   本变更的执行过程**不得**自动 merge、不得自动 push。
 
