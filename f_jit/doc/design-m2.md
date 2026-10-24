@@ -40,7 +40,7 @@
 | `bytecode` | — | `OPCODE_TABLE`（0x79 行）、`FbcReader`（verMajor 分派）、`LocalTypes.validate`（按 verMajor 合法集） | 容器头字段、段模型、crc32、kind 1–10 |
 | `compiler` | `TypeRef`、`ClassRegistryView` | `NameResolver`（解析顺序 + 冲突拒绝）、`Lowerer`（CALL_HOST/成员访问/构造/14 槽）、`AstExpr`（+4 构造器）、`DefiniteAssignment`（14/13 槽规则同型） | 词法、语法基座、既有降低模式 |
 | `runtime` | `HostCallback`、`SignatureDescriptor`、`SignatureVerifier`、`PromotionGroup`、H63/H64/H65（顶层 @C func） | `HandleTable`（条目标签 10/11）、`IterTable`（不变）、`DbgDump`（**大类名呈现**：13 记 `<HostClosure>#idx`、14 记 `<HostObject>#idx`——2026-10-11 裁定） | ctx、迭代器、既有 helper 语义 |
-| `fountain::f_jit`（根） | `ClassRegistry`、`JitClosureId`、`ReflectRegistrar` | `Compiler`（+2 成员）、`CallMarshal`（+行）、**`JitFunction`（+`callForFn<Fn>`、闭包包装的 `close`/`isClosed`——M2-8 裁定：不另设包装类）** | 执行六步、卸载状态机、去重缓存 |
+| `fountain::f_jit`（根） | `ClassRegistry`、`JitClosureId`、`ReflectRegistrar` | `Compiler`（+2 成员）、`CallMarshal`（+行）、**`JitFunction`（+`callForFn<Fn>`、闭包包装的 `unloadFn`/`isClosed`——M2-8 裁定：不另设包装类）** | 执行六步、卸载状态机、去重缓存 |
 
 ---
 
@@ -253,8 +253,8 @@
 |---|---|---|
 | （桥内部）包装构造 | 绑定单元 + 闭包 ID | `CallMarshal` 解包 `retType=12` 与 `callForFn<Fn>` 两条路径产出——**产物类型一致** |
 | `func call<T>(args: Array<Any>): T` | **闭包包装实例上**：新桥调用（新 ctx + `locals[0]` = 闭包句柄 → **闭包帧格式**）；结果/错误码/site 与直接 `CALL_CLOSURE` 逐位一致；卸载后调用 → 19（site=-1）；**新 ctx 的分配/释放沿用 M1 选型 `std.core.LibC.malloc<T>` / `LibC.free<T>`**（design-m1 §5.3.1）。**入口实例上语义不变**（M1 §8.2 六步，M1 零回归）——**帧格式由实例的绑定内容决定** | m2 §14.3/§14.4 |
-| `func close(): Unit` | **必须显式调用**（唯一释放路径）：提升组计数 −1、归零释放（`gen+1` 可复用）；幂等。**非闭包包装实例 → 19（site=-1）**（fail-loud，避免"以为已释放"） | m2 §14.2/§14.3 |
-| `prop isClosed: Bool` | 闭包包装：是否已 `close`；**非闭包包装实例恒 `false`** | — |
+| `func unloadFn(): Unit` | **必须显式调用**（闭包包装的唯一释放路径）：提升组计数 −1、归零释放（`gen+1` 可复用）；幂等。**非闭包包装实例 → 19（site=-1）**（fail-loud，避免"以为已释放"）。只释放该函数值的捕获，单元与编译缓存不受影响 | m2 §14.2/§14.3 |
+| `prop isClosed: Bool` | 闭包包装：是否已 `unloadFn`（属性名保留旧称，描述状态而非操作）；**非闭包包装实例恒 `false`** | — |
 | `unload` / `isUnloaded` | 不变（M1 §8.7，**单元级**）：包装实例与入口实例共享同一单元——`unload` 卸的是**单元**（闭包逃逸**不阻止**卸载，§14.4） | m1 §8.7 |
 
 #### 6.1.5 `JitFunction.callForFn<Fn>`（返回闭包的强类型入口，条件启用）
@@ -267,7 +267,7 @@
 |---|---|---|
 | `func callForFn<Fn>(args: Array<Any>): JitFunction` | `Fn` = **返回闭包的函数类型**（编译期已知）；调用单元并返回承接该闭包的 `JitFunction`（其 `call<T>` 路径照旧）；签名/解包零运行期判定；与 `call<T>` 并存 | m2 §9.1/§14 |
 
-**释放协议**：返回闭包属逃逸提升组，其计数释放走 **`JitFunction.close()`**（M1 §8.1 规则 6②、§14.2；M2-8 裁定：包装统一为 `JitFunction`，不另设包装类）。
+**释放协议**：返回闭包属逃逸提升组，其计数释放走 **`JitFunction.unloadFn()`**（M1 §8.1 规则 6②、§14.2；M2-8 裁定：包装统一为 `JitFunction`，不另设包装类）。
 
 **实参面与 `call<T>` 一致（2026-10-11 补充）**：`args` 的元素按 §4 Marshal 表处理——值型 / 句柄型（含 §11 注册类实例）/ **宿主闭包**（声明为 HostClosure 形参 → §4 验签 → 回调表登记 tag=10 → ID）**均允许**。本入口只改"**返回闭包的承接形态**"（交宿主 `JitFunction` 而非原生函数值），**不改实参面**。
 
@@ -283,7 +283,7 @@
 |---|---|---|
 | `Compiler` | `func registerClass(desc: ClassDescriptor): Unit`；`func registerType<T>(): Unit where T <: Object`（内部转 `ReflectRegistrar`） | m2 §12.4/§12.5 |
 | `CallMarshal` | ① **参数 Marshal 表** + 行：声明类型 = 注册类 C → `is C`（含子类、opaque 视图）→ `pin`（tag=11）；null → 19；HostClosure 声明 → 验签（**单次 `is (T1..Tn) -> R`**，§4）→ 回调表登记（tag=10）；② **解包表** + 行：`retType=12 → JitClosureId`、`retType=13 → 原样带回宿主闭包引用`、`retType=14 → get 宿主类实例引用`；③ Closure 行**仅返回方向**（参数方向不加行） | m2 §4/§14.3/§16.2 |
-| `JitFunction` | 内部状态扩展：`ClassRegistry` 快照、`PromotionGroup` 表（per-call 逃逸闭包）、`JitClosureId` 登记；`callForFn<Fn>` 公开变体；**`close`/`isClosed`（闭包包装，M2-8 裁定并入）** | m2 §9.1/§14 |
+| `JitFunction` | 内部状态扩展：`ClassRegistry` 快照、`PromotionGroup` 表（per-call 逃逸闭包）、`JitClosureId` 登记；`callForFn<Fn>` 公开变体；**`unloadFn`/`isClosed`（闭包包装，M2-8 裁定并入）** | m2 §9.1/§14 |
 | `CompileOptions` | `cpuFeatures` 启用（显式 ISA 开关：如 SSE4.1/4.2 优化；默认 0） | m1 §12.1（`CompileOptions.cpuFeatures` 定义处）+ m2 §2 |
 
 ---
@@ -327,7 +327,7 @@ C(args…) → 实参左→右入栈 → CALL_HELPER <ctor-hid>（构造器 = �
   retType=12 → 提升「闭包自身槽 + 全部句柄型捕获」= 原地迁出（ID/gen 不变、不重用）
              → 解包为 JitClosureId（宿主值）
 宿主: 闭包包装实例（`JitFunction`）.call<T>(args) → 新桥调用（新 ctx；locals[0]=闭包句柄 → 闭包帧）
-      卸载后调用 → 19（site=-1）；close() → 计数 −1、归零释放
+      卸载后调用 → 19（site=-1）；unloadFn() → 计数 −1、归零释放
 豁免：调用 try/finally 清理不释放提升槽（唯一释放路径 = close）；路径 A 常量不入组
 捕获描述符：前端静态给出（不入 .fbc、无格式变更）；**级联：无**（容器内部表示 = 宿主对象 ⇒ 槽级提升，m2 §14.6 已裁定）
 ```

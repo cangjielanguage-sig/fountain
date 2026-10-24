@@ -845,14 +845,14 @@ public class Q6Acceptance_test {
         let a = cw.call<Q6Child>([1])
         let b = cw.call<Q6Child>([2])
         let same = refEq(a, b) && a.city == 'keep'
-        cw.close()
+        cw.unloadFn()
         // 路径 C：外层窗口内新建的 14 局部被捕获（提升后跨窗口仍同一对象）。
         let localUnit = c.compile('{ => let ch = Q6Child("local")\n { x: Int64 => ch } }')
         let lw = localUnit.callForFn<(Int64) -> Q6Child>([])
         let la = lw.call<Q6Child>([1])
         let lb = lw.call<Q6Child>([2])
         let localSame = refEq(la, lb) && la.city == 'local'
-        lw.close()
+        lw.unloadFn()
         // 容器捕获（句柄型形参）：窗口重置后元素仍可读。
         let elemUnit = c.compile('{ l: List<Int64> => let f = { x: Int64 => l[x] }\n f }')
         let lst = ArrayList<Any>()
@@ -862,7 +862,7 @@ public class Q6Acceptance_test {
         let w2 = elemUnit.callForFn<(Int64) -> Int64>([lst])
         let v1 = w2.call<Int64>([1])
         let v2 = w2.call<Int64>([1])
-        w2.close()
+        w2.unloadFn()
         let base = HandleTable.liveCount()
         HandleTable.resetForTest()
         @Assert(TCase.hit('T49/no-cascade', same && localSame && v1 == 2 && v2 == 2), true)
@@ -877,13 +877,13 @@ public class Q6Acceptance_test {
         let viaWrapper = w.call<Int64>([41])
         let direct = c.compile('{ => let f = { x: Int64 => x + 1 }\n f(41) }')
         let viaDirect = direct.call<Int64>([])
-        w.close()
+        w.unloadFn()
         let closedErr = Q6Acceptance_test.errOf({ => let _ = w.call<Int64>([1]) })
         let unit2 = c.compile('{ => let f = { x: Int64 => x + 1 }\n f }')
         let w2 = unit2.callForFn<(Int64) -> Int64>([])
         let _ = unit2.unload(0)
         let unloadErr = Q6Acceptance_test.errOf({ => let _ = w2.call<Int64>([1]) })
-        w2.close()
+        w2.unloadFn()
         let ok = viaWrapper == viaDirect && closedErr.code == ErrCode.CALL_CONTRACT &&
             closedErr.site == -1 && unloadErr.code == ErrCode.CALL_CONTRACT &&
             unloadErr.site == -1
