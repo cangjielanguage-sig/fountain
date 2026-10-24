@@ -12,7 +12,7 @@
 
 - 类宏只保留 `@JsonRpc`；删除 `@jsonrpcmeta` 与 `@jsonrpc` 小写别名。
 - `JsonRpcMeta` 增加 `timeoutDuration: Duration`，由 `f_data` 的 `Duration.parse` 扩展解析。
-- `JsonRpcRegistry.getMeta<T>(funcName: String): JsonRpcMeta` 成为唯一读取入口；删除 `paramCount` / `JsonRpcRegisteredMeta` / `parseTimeout`。
+- `JsonRpcRegistry.getMeta<T>(funcName: String, argTypes: Array<TypeInfo>): JsonRpcMeta` 成为唯一读取入口；删除 `paramCount` / `JsonRpcRegisteredMeta` / `parseTimeout`。
 - 宏展开简化为：`@Bean` + 每个 public 实例方法一段 `private let _`，方法体用 `lookup<T>().method(...)`，描述与超时在运行期从 `getMeta` 读取。
 - 删除宏文件里的 `func str` 与编译期注解扫描。
 - 修复 `JsonRpcClient` 在 keep-alive 连接上第二次请求报 `Socket is already closed`：读完 body 后不再调用 `HttpResponse.close()`，只在异常时关闭。

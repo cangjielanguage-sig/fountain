@@ -31,15 +31,34 @@ public class JsonRpcRegistry {
     }
 
     /**
-     * 读取 `T.funcName` 上的 `@JsonRpcMeta`。
+     * 读取 `T.fnName` 上指定参数类型的重载的 `@JsonRpcMeta`。
      *
-     * 没有注解时返回 `JsonRpcMeta('', '500ms')`：无描述，超时默认 500ms。
+     * `argTypes` 是方法声明里的参数类型（不含 `this`）。没有匹配的重载或注解时，
+     * 返回 `JsonRpcMeta('', '500ms')`：无描述，超时默认 500ms。
      */
-    public static func getMeta<T>(funcName: String): JsonRpcMeta where T <: Object {
-        for (function in TypeInfo.of<T>().getInstanceFunctions(funcName)) {
+    public static func getMeta<T>(fnName: String, argTypes: Array<TypeInfo>): JsonRpcMeta where T <: Object {
+        for (function in TypeInfo.of<T>().getInstanceFunctions(fnName)) {
+            let params = function.parameters
+            // 反射的实例方法参数可能把 this 放在第 0 位。
+            let offset = if (params.size == argTypes.size + 1) { 1 } else { 0 }
+            if (params.size - offset != argTypes.size) {
+                continue
+            }
+            var matched = true
+            var i = 0
+            while (i < argTypes.size) {
+                if (params[offset + i].typeInfo != argTypes[i]) {
+                    matched = false
+                    break
+                }
+                i++
+            }
+            if (!matched) {
+                continue
+            }
             match (function.findAnnotation<JsonRpcMeta>()) {
                 case Some(meta) => return meta
-                case _ => ()
+                case _ => return JsonRpcMeta('', '500ms')
             }
         }
         JsonRpcMeta('', '500ms')

@@ -15,7 +15,8 @@ limitations under the License.
  */
 package fountain::f_jsonrpc
 
-// `@JsonRpc` 展开出的 `@Bean` / `lookup` 会出现在用户代码里；
+// `@JsonRpc` 展开出的 `@Bean` / `lookup` / `TypeInfo` 会出现在用户代码里；
 // 用户只 import 了 f_jsonrpc 时也要能解析，因此在这里再导出。
 public import fountain::f_bean.BeanFactory
 public import fountain::f_bean.lookup
+public import std.reflect.TypeInfo

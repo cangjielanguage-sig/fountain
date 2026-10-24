@@ -60,6 +60,18 @@ public class JsonRpcMacroTestRPC {
     }
 }
 
+public class JsonRpcOverloadTestRPC {
+    @JsonRpcMeta['字符串重载', '1s']
+    public func pick(value: String): String {
+        value
+    }
+
+    @JsonRpcMeta['整数重载', '2s']
+    public func pick(value: Int64): Int64 {
+        value
+    }
+}
+
 @Test
 class JsonRpcMacro_test {
     static func call(method: String, params: String, topic!: String = ''): JsonObject {
@@ -156,7 +168,7 @@ class JsonRpcMacro_test {
     public func testGetMetaReadsAnnotation(): Unit {
         let f = TypeInfo.of<JsonRpcMacroTestRPC>().getInstanceFunctions('search')[0]
         @Assert(true, f.findAnnotation<JsonRpcMeta>().isSome())
-        @Assert('知识库检索', JsonRpcRegistry.getMeta<JsonRpcMacroTestRPC>('search').description)
+        @Assert('知识库检索', JsonRpcRegistry.getMeta<JsonRpcMacroTestRPC>('search', [TypeInfo.of<String>()]).description)
     }
 
     @TestCase
@@ -167,17 +179,27 @@ class JsonRpcMacro_test {
 
     @TestCase
     public func testTimeoutDuration(): Unit {
-        let meta = JsonRpcRegistry.getMeta<JsonRpcMacroTestRPC>('search')
+        let meta = JsonRpcRegistry.getMeta<JsonRpcMacroTestRPC>('search', [TypeInfo.of<String>()])
         @Assert('知识库检索', meta.description)
         @Assert(true, meta.timeoutDuration == Duration.parse('5s'))
     }
 
     @TestCase
     public func testMissingMetaUsesDefaultTimeout(): Unit {
-        let meta = JsonRpcRegistry.getMeta<JsonRpcMacroTestRPC>('echo')
+        let meta = JsonRpcRegistry.getMeta<JsonRpcMacroTestRPC>('echo', [TypeInfo.of<MacroEcho>()])
         @Assert('', meta.description)
         @Assert('500ms', meta.timeout)
         @Assert(true, meta.timeoutDuration == Duration.parse('500ms'))
+    }
+
+    @TestCase
+    public func testGetMetaMatchesOverloadByArgTypes(): Unit {
+        let text = JsonRpcRegistry.getMeta<JsonRpcOverloadTestRPC>('pick', [TypeInfo.of<String>()])
+        @Assert('字符串重载', text.description)
+        let number = JsonRpcRegistry.getMeta<JsonRpcOverloadTestRPC>('pick', [TypeInfo.of<Int64>()])
+        @Assert('整数重载', number.description)
+        let missing = JsonRpcRegistry.getMeta<JsonRpcOverloadTestRPC>('pick', [TypeInfo.of<Bool>()])
+        @Assert('', missing.description)
     }
 
     @TestCase
