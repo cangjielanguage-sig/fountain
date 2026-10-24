@@ -526,7 +526,7 @@ public interface BaseFlow <:Emitter {
     /**
      * 向流程注册开始事件执行器，name是开始事件名，必须与流程的第一个任务事件执行器对应的事件名称相同
      */
-    func registerStart(name: String): Unit
+    func registerStart(eventName: String): Unit
     /**
      * 向流程注册结束事件执行器
      */
@@ -538,7 +538,7 @@ public interface BaseFlow <:Emitter {
     /**
      * 向流程注册任务事件执行器
      */
-    func registerTask(name: String, task: (Event) -> Event): Unit
+    func registerTask(eventName: String, task: (Event) -> Event): Unit
     /**
      * 向流程注册任务事件执行器
      */
@@ -577,8 +577,8 @@ public interface Flow<G> <: BaseFlow & Hashable & Equatable<ImmediateFlow> & Equ
      * 使用指定流程作为任务执行器的构造函数参数
      * @param flow 任务事件执行器的逻辑
      */
-    func registerTaskByFlow<G, F>(name!: String, flow!: F): Unit where G <: EndExecutorGetter, F <: Flow<G> {
-        registerTask(name){e => flow.start(((e as DataEvent).getOrThrow()).data).get().get()}
+    func registerTaskByFlow<G, F>(eventName!: String, flow!: F): Unit where G <: EndExecutorGetter, F <: Flow<G> {
+        registerTask(eventName){e => flow.start(((e as DataEvent).getOrThrow()).data).get().get()}
     }
     /**
      * 将data包装成开始事件，开始执行一个流程
@@ -590,22 +590,30 @@ public interface Flow<G> <: BaseFlow & Hashable & Equatable<ImmediateFlow> & Equ
 ### 同步流程`ImmediateFlow`
 ```cj
 /**
- * 一个同步调度器是一个流程，ImmediateFlow维持着若干个流程
+ * 一个同步调度器是一个流程，ImmediateFlow 维持着若干个流程
  */
-public class ImmediateFlow <: Flow<EndExecutorGetter> & Hashable & Equatable<ImmediateFlow> {
-    public ImmediateFlow(private let category!: String, private let tag!: String)
-    public static func remove(category!: String, tag!: String): Unit 
-    public func hashCode(): Int64 
-    public operator func ==(other: ImmediateFlow): Bool 
-    public func registerStart(name: String): Unit 
-    public func registerEnd(): Unit 
-    public func registerError(): Unit 
-    public func registerTask(name: String, task: (Event) -> Event): Unit 
-    public func registerTask(task: Task): Unit 
+public class ImmediateFlow <: Flow<EndExecutorGetter> {
+    public ImmediateFlow(let category!: String, let tag!: String)
+    public func canBeRemoved(): Unit
+    public func remove(): Unit
+    public func removeExceptCurrentTag(): Unit
+    public prop dependencied: ConcurrentHashSet<String>
+    public func hashCode(): Int64
+    public operator func ==(other: ImmediateFlow): Bool
+    public operator func ==(other: AsyncFlow): Bool
+    public func toString(): String
+    public func registerStart(eventName: String): Unit
+    public func registerEnd(): Unit
+    public func registerError(): Unit
+    public func registerTask(eventName: String, task: (Event) -> Event): Unit
+    public func registerTask(task: Task): Unit
+    public func registerMultiEventTask(): Unit
     /**
-     * 将data与本实例的category和tag一起包装为开始事件，并开始执行一个流程
+     * 将 data 与本实例的 category 和 tag 一起包装为开始事件，并开始执行一个流程。
+     * 宿主可用新建的同 (category, tag) 实例启动 initialize() 已注册的流程：开始事件名由
+     * dispatcher 共享记录，本地 registerStart 未调用时自动回退读取。
      */
-    public func start(data: Any): EndExecutorGetter 
+    public func start(data: Any): EndExecutorGetter
     public func emit(eventType!: EventType, name!: String, data!: Any): Unit
 }
 ```
@@ -614,25 +622,38 @@ public class ImmediateFlow <: Flow<EndExecutorGetter> & Hashable & Equatable<Imm
 ```cj
 public class AsyncFlow <: Flow<AsyncEndExecutorGetter> {
     /**
-     * AsyncDispatcher是本类型的实例成员变量，用本参数clearTimerDuration和toThrowIfNoExecutor实例化一个AsyncDispatcher。
-     * 一个AsyncFlow实例会维持多个流程，相同category的执行器构成一个流程，相同的category不应长时间同时存在多个tag。应尽快将旧的tag删除。
+     * AsyncDispatcher 是本类型的实例成员变量，用本参数 clearTimerDuration 和 toThrowIfNoExecutor 实例化一个 AsyncDispatcher。
+     * 一个 AsyncFlow 实例会维持多个流程，相同 category 的执行器构成一个流程，相同的 category 不应长时间同时存在多个 tag。应尽快将旧的 tag 删除。
      */
-    public static func initDispatcher(clearTimerDuration!: Duration = Duration.second, toThrowIfNoExecutor!: Bool = true): Unit 
-    public AsyncFlow(private let category!: String, private let tag!: String){}
-    public static func remove(category!: String, tag!: String): Unit 
-    
-    public func registerStart(name: String): Unit 
-    public func registerEnd(): Unit 
-    public func registerError(): Unit 
-    public func registerTask(name: String, task: (Event) -> Event): Unit 
+    public static func initDispatcher(clearTimerDuration!: Duration = Duration.second, toThrowIfNoExecutor!: Bool = true): Unit
+    public AsyncFlow(let category!: String, let tag!: String)
+    public func canBeRemoved(): Unit
+    public func remove(): Unit
+    public func removeExceptCurrentTag(): Unit
+    public prop dependencied: ConcurrentHashSet<String>
+    public func hashCode(): Int64
+    public operator func ==(other: AsyncFlow): Bool
+    public operator func ==(other: ImmediateFlow): Bool
+    public func toString(): String
+    public func registerStart(eventName: String): Unit
+    public func registerEnd(): Unit
+    public func registerError(): Unit
+    public func registerTask(eventName: String, task: (Event) -> Event): Unit
     public func registerTask(task: Task): Unit
+    public func registerMultiEventTask(): Unit
     /**
-     * 将data跟当前实例的category和tag一起构造开始事件并开始执行一个流程
+     * 将 data 跟当前实例的 category 和 tag 一起构造开始事件并开始执行一个流程。
+     * 开始事件名回退规则同 ImmediateFlow。
      */
-    public func start(data: Any): AsyncEndExecutorGetter 
+    public func start(data: Any): AsyncEndExecutorGetter
     public func emit(eventType!: EventType, name!: String, data!: Any): Unit
 }
 ```
+
+### JIT 注册面
+- `Task`、`ClosureTask`、`FlowEventFactory` 标注 `@JitBind`，由 `Compiler.registerInterface` / `registerType` 直接取用宏登记；
+- `Event` 家族、`Emitter`、`BaseFlow`、`ImmediateFlow`、`AsyncFlow` **不标** `@JitBind`：它们使用命名形参、`operator func` 或函数类型形参，宏无法展开；改由 `JitHostRegistry` 用 `ClassDescriptor` 手工注册（接口 `isInterface = true`），事件字段另经 `HostFieldTable` 暴露；
+- `f_jit` 的 `@IgnoreJitBinding` 只能出现在 `@JitBind` 声明内部；宏展开与 `ReflectRegistrar` 反射注册**两层**都会跳过被标注成员。`ClosureTask.initCompiler` 用它保持 `public`，但不进入脚本名空间。
 
 ### JIT 任务`ClosureTask`
 ```cj
