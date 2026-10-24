@@ -12,7 +12,7 @@
 - handler 内：`lookup<T>().fn(...)`
 - `timeout`：`if (meta.timeout.isEmpty()) { None } else { Some(meta.timeoutDuration) }`
 
-没有注解时 `getMeta` 返回 `JsonRpcMeta('', '')`，与旧的“空描述 + 无超时”行为一致。
+没有注解时 `getMeta` 返回 `JsonRpcMeta('', '500ms')`：无描述，超时默认 500ms。
 
 ## D3. 删除的 API
 

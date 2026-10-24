@@ -136,11 +136,11 @@ class JsonRpcMacro_test {
     }
 
     @TestCase
-    public func testBareMethodHasNoMeta(): Unit {
+    public func testBareMethodUsesDefaultTimeout(): Unit {
         for (m in JsonRpcRegistry.server().methods()) {
             if (m.name == 'kb.echo') {
                 @Assert('', m.description)
-                @Assert(true, m.timeout.isNone())
+                @Assert(true, m.timeout.getOrThrow() == Duration.parse('500ms'))
             }
         }
     }
@@ -167,10 +167,11 @@ class JsonRpcMacro_test {
     }
 
     @TestCase
-    public func testMissingMetaReturnsEmpty(): Unit {
+    public func testMissingMetaUsesDefaultTimeout(): Unit {
         let meta = JsonRpcRegister.getMeta<JsonRpcMacroTestRPC>('echo')
         @Assert('', meta.description)
-        @Assert('', meta.timeout)
+        @Assert('500ms', meta.timeout)
+        @Assert(true, meta.timeoutDuration == Duration.parse('500ms'))
     }
 
     @TestCase

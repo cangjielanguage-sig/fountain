@@ -63,7 +63,7 @@ public class SearchRPC {
 
 - 类上自动加 `@Bean`；每个 public 实例方法注册为 `<topic>.<方法名>`
 - `@JsonRpcMeta['描述', '5s']` 的第二个参数是 `Duration` 字符串，可用 `meta.timeoutDuration` 取 `Duration`
-- `JsonRpcRegister.getMeta<T>(方法名)` 直接返回 `JsonRpcMeta`（无注解时描述与超时都为空串）
+- `JsonRpcRegister.getMeta<T>(方法名)` 直接返回 `JsonRpcMeta`（无注解时描述为空串、超时默认 `500ms`）
 - 单参数按 JSON-RPC 规范传 `[值]` 或 `{"参数名": 值}`；多参数必须传对象
 - 返回 `Unit` 时 `result` 为 `null`；参数/返回值可以是任意 `f_data.DataFields<T>` 子类型（含 `@DataAssist` 对象）
 

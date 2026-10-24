@@ -27,7 +27,7 @@ public class JsonRpcRegister {
     /**
      * 读取 `T.funcName` 上的 `@JsonRpcMeta`。
      *
-     * 没有注解时返回 `JsonRpcMeta('', '')`，对应“无描述、无超时”。
+     * 没有注解时返回 `JsonRpcMeta('', '500ms')`：无描述，超时默认 500ms。
      */
     public static func getMeta<T>(funcName: String): JsonRpcMeta where T <: Object {
         for (function in TypeInfo.of<T>().getInstanceFunctions(funcName)) {
@@ -36,7 +36,7 @@ public class JsonRpcRegister {
                 case _ => ()
             }
         }
-        JsonRpcMeta('', '')
+        JsonRpcMeta('', '500ms')
     }
 
     /** 从 bean 容器取实例（`@JsonRpc` 展开时给类加了 `@Bean`）。 */
