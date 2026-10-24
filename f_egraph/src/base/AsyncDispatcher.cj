@@ -54,6 +54,16 @@ public class AsyncDispatcher <: Dispatcher & AsyncEndExecutorGetter {
             dispatcher.registerTask(category: category, tag: tag, eventName: eventName, task: task)
         }
     }
+    protected func doRegisterMulti(category!: String, tag!: String, task!: (Event) -> Event): Unit {
+        synchronized(mutex){
+            dispatcher.registerMultiTask(category: category, tag: tag, task: task)
+        }
+    }
+    protected func doStartEventName(category!: String, tag!: String): ?String {
+        synchronized(mutex){
+            dispatcher.startEventName(category: category, tag: tag)
+        }
+    }
     public func accept(event: Event): Unit {
         dispatcher.accept(event)
     }
@@ -141,9 +151,15 @@ public class AsyncDispatcher <: Dispatcher & AsyncEndExecutorGetter {
             dispatcher.getExecutors(event)
         }
     }
+    /**
+     * 取下一个事件。
+     *
+     * **不能**在 `mutex` 内取：`LinkedBlockingQueue.remove()` 在队列为空时会一直阻塞，而
+     * dispatch 线程取空队列后正是长期停在这里——持锁阻塞会让后续 `register*` / `removeIf`
+     * 永久等锁（异步流程 `start` 之后的任何登记或清理都会自锁）。
+     * 队列本身线程安全，`getExecutors` 仍在锁内读 map。
+     */
     private func getEvent(): Event {
-        synchronized(mutex){
-            dispatcher.getEvent()
-        }
+        dispatcher.getEvent()
     }
 }

@@ -17,6 +17,8 @@ package fountain::f_egraph
 
 import fountain::f_app.*
 import fountain::f_bean.*
+import fountain::f_jit.{Compiler, CompileOptions}
+import fountain::f_jit.base.DummyDiagnosticsSink
 
 public import fountain::f_egraph.base.*
 public import fountain::f_egraph.loader.*
@@ -33,8 +35,11 @@ public interface FlowInitializer <: Initializer {
         }
     }
     func initialize(): Unit {
-        for(flow in lookup<FlowLoader>().load()) {
-            FlowDSLCompiler.compile(flow)
+        let compiler = Compiler(CompileOptions(DummyDiagnosticsSink()))
+        JitHostRegistry.configure(compiler)
+        ClosureTask.initCompiler(compiler)
+        for(script in lookup<FlowLoader>().load()) {
+            FlowScriptRunner.run(compiler, script)
         }
     }
 }

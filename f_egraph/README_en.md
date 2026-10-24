@@ -656,39 +656,113 @@ public class AsyncFlow <: Flow<AsyncEndExecutorGetter> {
 }
 ```
 
-### Flow DSL compiler
+### JIT task `ClosureTask`
 ```cj
-package fountain::f_egraph
 /**
- * async means an asynchronous flow and immediate means a synchronous flow; StartEvent is the event name of the event
- * whose type is Start
- * async(category, tag): 'StartEvent' => {
- *     task |> {
- *         'out-event' => {
- *              other_task |> {'other-out-event'}
- *         }
- *     }
- *     task1 |> {
- *         event => {task3 |> {END}}
- *         event2 => task4 |> {'in-event'}
- *     }
- *     task2 |> {
- *         END //END must be either the last event of the braces it is in, or the current braces have no END
- *     }
- * }
+ * A task whose body is generated from an f_jit script.
+ * The compiler is injected by the host (FlowInitializer.initialize calls initCompiler);
+ * when it is missing, the first compile lazily creates one and registers the host types.
  */
-public struct FlowDSLCompiler {
+@JitBind
+public class ClosureTask <: Task {
+    public init(name: String, acceptableEvents: Array<String>, producingEvents: Array<String>, body: (Event) -> Event)
     /**
-     * Compile the flow orchestration DSL; returns the (category, tag) of the flow
+     * Host only: injects the compiler and the host type registry; not part of the script namespace.
      */
-    public static func compile(dsl: String): (String, String)
+    @IgnoreJitBinding
+    public static func initCompiler(compiler: Compiler): Unit
+    /**
+     * Compiles a task body and returns a task ready for registerTask.
+     * exec is a statement sequence wrapped as `{ e: Event => ... }`; its result must be an Event.
+     */
+    public static func compile(name: String, acceptableEvents: ArrayList<Any>, producingEvents: ArrayList<Any>, exec: String): ClosureTask
+    public prop name: String
+    public prop acceptableEvents: Array<String>
+    public prop producingEvents: Array<String>
+    public func exec(e: Event): Event
 }
 ```
+- Both event lists are typed `ArrayList<Any>` (the runtime shape of an f_jit list literal); every element is checked to be a string, otherwise `GraphException`;
+- A blank `name`, either empty list, or a blank `exec` raises `GraphException`;
+- Compile and runtime errors are rethrown unchanged, keeping f_jit's source site and error code.
+
+### Event factory `FlowEventFactory`
+```cj
+@JitBind
+public class FlowEventFactory {
+    public static func flowTaskEvent(category: String, tag: String, name: String, data: String): Event
+    public static func flowEndEvent(category: String, tag: String, data: String): Event
+    public static func flowErrorEvent(category: String, tag: String, message: String): Event
+    public static func flowDummyEvent(): Event
+    /** Returns data when it is a String, otherwise an empty string; non-DataEvent yields an empty string. */
+    public static func flowDataOf(event: Event): String
+}
+```
+The event constructors declare `data` as `Any`, which has no type code in the script dialect, so the script surface **does not expose event constructors**; payloads are built and read through this factory with `String` values.
+
+### Flow script contract
+Every element of `FlowLoader.load()` is the f_jit orchestration script of **one flow** (a statement sequence, wrapped as `{ => ... }` before execution):
+
+```cj
+let flow = ImmediateFlow("order", "v1")   // or AsyncFlow("order", "v1")
+flow.registerStart("created")
+flow.registerEnd()
+flow.registerError()
+
+let validate = compile("validate", ["created"], ["validated"],
+    "flowTaskEvent(\"order\", \"v1\", \"validated\", flowDataOf(e))")
+flow.registerTask(validate)
+
+let pay = compile("pay", ["validated"], ["End"], "flowEndEvent(\"order\", \"v1\", flowDataOf(e))")
+flow.registerTask(pay)
+
+flow.removeExceptCurrentTag()
+```
+
+Rules:
+
+1. `registerStart` must come before the first `registerTask`;
+2. The first registered task must accept the start event, otherwise `registerTask` raises `GraphException`;
+3. Only one executor per event; a duplicate registration raises `GraphException`;
+4. Only the `registerTask(task: Task)` overload is available (the closure overload is not in the script namespace; calling it fails at compile time);
+5. The last line must be `flow.removeExceptCurrentTag()`, and the last statement must be a `Unit` expression — f_jit does not parse empty parentheses `()`, so the runner appends no sentinel;
+6. An asynchronous script requires the host to call `AsyncFlow.initDispatcher(...)` first (`FlowInitializer` never calls it implicitly, so host configuration is not overwritten);
+7. `is` / `as` are not allowed on event or flow types; `emit` / `start` / `initDispatcher` are not in the script namespace — use the `flow*` factory functions for payloads.
+
+A blank script is a configuration error and raises `GraphException`; the first failing script aborts initialization, later scripts are not executed, and registrations already done are not rolled back.
+
+`BarrierTask<G>` is generic and **cannot be JIT-bound**; use `ClosureTask` for scripted tasks.
+
+### Migrating from the old DSL
+`FlowDSLCompiler`, `TaskDef` and `ProducingDef` are removed. The old DSL and the scripts are two different languages, not text-compatible; rewrite `FlowLoader` with the mapping below:
+
+| Old DSL | New script |
+|---|---|
+| `immediate(c, t)` / `async(c, t)` | `ImmediateFlow("c", "t")` / `AsyncFlow("c", "t")` |
+| `: 'Start' =>` | `flow.registerStart("Start")` |
+| Implicit end/error executors | `flow.registerEnd()` / `flow.registerError()` |
+| `task |> { 'out' => { ... } }` | `compile("task", ["<accept>"], ["out"], "<exec>")` + `flow.registerTask(t)` |
+| Nested tasks | Flattened depth-first in pre-order; order is registration order |
+| `END` | No statement; return `flowEndEvent(...)` from the task |
+| Automatic old-tag cleanup | Explicit `flow.removeExceptCurrentTag()` as the last line |
+
+For example, the old DSL:
+
+```
+immediate(order, v1): 'created' => {
+    validate |> {
+        'validated' => { pay |> {END} }
+    }
+}
+```
+
+becomes the script shown in "Flow script contract" above (`validate` produces `validated`, `pay` returns the end event).
 
 ### Flow loader
 ```cj
 /**
- * The load() function returns the flow DSL
+ * Every element returned by load() is the f_jit orchestration script of one flow (see the contract above);
+ * a blank script is a configuration error and raises GraphException during initialization.
  */
 public interface FlowLoader {
     func load(): ArrayList<String>
@@ -701,5 +775,6 @@ public interface FlowLoader {
 
 The declarations below are not expanded above; they are grouped by module level and by type (members declared in `extend` blocks are listed under the extended type). See the corresponding files under `src/` for the full semantics.
 
-- Module level: `BarrierKey` (class), `ConcurrentEndExecutor` (class), `FlowInitializer` (interface), `public struct ProducingDef`, `TaskDef` (struct)
+- Module level: `BarrierKey` (class), `ConcurrentEndExecutor` (class), `FlowInitializer` (interface), `JitHostRegistry` (class)
+- `JitHostRegistry`: `public static func configure(compiler: Compiler): Unit` (registers the f_egraph host types into a custom `Compiler`; call it before running any script)
 - `BarrierKey`: `let eventName: String`
