@@ -15,6 +15,8 @@ limitations under the License.
 */
 package fountain::f_jit.base
 
+import std.collection.ArrayList
+
 /**
  * 字段的**类型化绑定**（M2.1）：替代 `InstanceVariableInfo.getValue/setValue` 的反射路径。
  *
@@ -56,16 +58,25 @@ public class JitBindings {
     /** 接口的父接口名（`superTypes`，宏登记；类的父类由反射链推导，不在此列）。 */
     public let parents: Array<String>
 
+    /**
+     * 成员级退出名单（`@IgnoreJitBinding`，D10）：这些名字**既不由宏登记，也不退回反射包装**。
+     *
+     * 只有宏能填写它；默认空数组，老调用方（手工构造 `JitBindings`）行为不变。
+     */
+    public let ignored: Array<String>
+
     public init(methods!: Array<PublicMethod> = Array<PublicMethod>(),
         fields!: Array<JitFieldBinding> = Array<JitFieldBinding>(),
         ctors!: Array<PublicCtor> = Array<PublicCtor>(),
         statics!: Array<PredefinedFunction> = Array<PredefinedFunction>(),
-        parents!: Array<String> = Array<String>()) {
+        parents!: Array<String> = Array<String>(),
+        ignored!: Array<String> = Array<String>()) {
         this.methods = methods
         this.fields = fields
         this.ctors = ctors
         this.statics = statics
         this.parents = parents
+        this.ignored = ignored
     }
 
     public static func empty(): JitBindings {
@@ -102,7 +113,25 @@ public class JitBindings {
         for (o in over.statics) {
             ss = JitBindings.replaceStatic(ss, o)
         }
-        JitBindings(methods: ms, fields: fs, ctors: cs, statics: ss, parents: this.parents)
+        JitBindings(methods: ms, fields: fs, ctors: cs, statics: ss, parents: this.parents,
+            ignored: JitBindings.union(this.ignored, over.ignored))
+    }
+
+    /** 名字数组合并（保持首次出现顺序、去重）：忽略名单可能同时来自自动登记与显式覆盖。 */
+    private static func union(a: Array<String>, b: Array<String>): Array<String> {
+        if (b.size == 0) {
+            return a
+        }
+        let out = ArrayList<String>()
+        for (x in a) {
+            out.add(x)
+        }
+        for (x in b) {
+            if (!out.contains(x)) {
+                out.add(x)
+            }
+        }
+        out.toArray()
     }
 
     private static func replaceMethod(xs: Array<PublicMethod>, v: PublicMethod)

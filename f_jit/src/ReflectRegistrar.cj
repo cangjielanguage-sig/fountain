@@ -141,6 +141,9 @@ protected class ReflectRegistrar {
 
         // ---- 实例字段（let / var）----
         for (v in cls.instanceVariables) {
+            if (ReflectRegistrar.isIgnored(effective, v.name)) {
+                continue
+            }
             // m3 §3/§12-4：HostObject 字段类型**不扩展**至 15（Any）——逐成员跳过 + 诊断。
             if (v.typeInfo.name == 'Any') {
                 ReflectRegistrar.skip(diag, '${name}.${v.name}',
@@ -197,6 +200,17 @@ protected class ReflectRegistrar {
 
         // ---- 实例属性（prop / mut prop）----
         for (p in cls.instanceProperties) {
+            // SDK 1.3.0-alpha 的反射对 mut prop 报首字母大写（如 `Score`）；
+            // 源面成员名仍为声明名，这里统一归一为首字母小写。
+            let propName = if (p.isMutable()) {
+                ReflectRegistrar.lowerFirst(p.name)
+            } else {
+                p.name
+            }
+            if (ReflectRegistrar.isIgnored(effective, p.name) ||
+                ReflectRegistrar.isIgnored(effective, propName)) {
+                continue
+            }
             let codeOpt = ReflectRegistrar.mapType(p.typeInfo)
             if (codeOpt.isNone()) {
                 ReflectRegistrar.skip(diag, '${name}.${p.name}', '属性类型不可映射')
@@ -205,13 +219,6 @@ protected class ReflectRegistrar {
             let code = match (codeOpt) {
                 case Some(c) => c
                 case None => 0u16
-            }
-            // SDK 1.3.0-alpha 的反射对 mut prop 报首字母大写（如 `Score`）；
-            // 源面成员名仍为声明名，这里统一归一为首字母小写。
-            let propName = if (p.isMutable()) {
-                ReflectRegistrar.lowerFirst(p.name)
-            } else {
-                p.name
             }
             let okClaim = ReflectRegistrar.claimName(propName, into, localNames, diag, '${name}.${propName}')
             if (!okClaim) {
@@ -240,6 +247,9 @@ protected class ReflectRegistrar {
 
         // ---- 实例方法（func）----
         for (f in cls.instanceFunctions) {
+            if (ReflectRegistrar.isIgnored(effective, f.name)) {
+                continue
+            }
             let codeOpt = ReflectRegistrar.mapType(f.returnType)
             if (codeOpt.isNone()) {
                 ReflectRegistrar.skip(diag, '${name}.${f.name}', '返回类型不可映射')
@@ -273,6 +283,9 @@ protected class ReflectRegistrar {
 
         // ---- 静态 let / 只读 prop / 静态 func ----
         for (v in cls.staticVariables) {
+            if (ReflectRegistrar.isIgnored(effective, v.name)) {
+                continue
+            }
             if (v.isMutable()) {
                 ReflectRegistrar.skip(diag, '${name}.${v.name}', 'static var 永久排除（附 B）')
                 continue
@@ -292,6 +305,9 @@ protected class ReflectRegistrar {
             })
         }
         for (p in cls.staticProperties) {
+            if (ReflectRegistrar.isIgnored(effective, p.name)) {
+                continue
+            }
             if (p.isMutable()) {
                 ReflectRegistrar.skip(diag, '${name}.${p.name}', 'static mut prop 永久排除（附 B）')
                 continue
@@ -311,6 +327,9 @@ protected class ReflectRegistrar {
             })
         }
         for (f in cls.staticFunctions) {
+            if (ReflectRegistrar.isIgnored(effective, f.name)) {
+                continue
+            }
             let codeOpt = ReflectRegistrar.mapType(f.returnType)
             if (codeOpt.isNone()) {
                 ReflectRegistrar.skip(diag, '${name}.${f.name}', '静态函数返回类型不可映射')
@@ -453,6 +472,21 @@ protected class ReflectRegistrar {
         false
     }
 
+    /**
+     * 成员名是否被 `@IgnoreJitBinding` 排除（D10）。
+     *
+     * 排除是**真不登记**：反射侧看到这个名字就不再生成自动包装，否则宏虽然没给绑定，
+     * 这里会退回反射包装，脚本仍能调用，忽略标记等于没生效。
+     */
+    private static func isIgnored(b: JitBindings, name: String): Bool {
+        for (x in b.ignored) {
+            if (x == name) {
+                return true
+            }
+        }
+        false
+    }
+
     private static func findMethod(b: JitBindings, name: String): ?PublicMethod {
         for (m in b.methods) {
             if (m.name == name) {
@@ -480,7 +514,8 @@ protected class ReflectRegistrar {
             if (p.name != 'Object') {
                 let pb = JitBindSupport.enrolledOf(p.name)
                 for (v in p.instanceVariables) {
-                    if (ReflectRegistrar.hasField(fields, v.name)) {
+                    if (ReflectRegistrar.hasField(fields, v.name) ||
+                        ReflectRegistrar.isIgnored(pb, v.name)) {
                         continue
                     }
                     let codeOpt = ReflectRegistrar.mapType(v.typeInfo)
@@ -547,7 +582,8 @@ protected class ReflectRegistrar {
             if (p.name != 'Object') {
                 let pb = JitBindSupport.enrolledOf(p.name)
                 for (f in p.instanceFunctions) {
-                    if (ReflectRegistrar.hasMethod(methods, f.name)) {
+                    if (ReflectRegistrar.hasMethod(methods, f.name) ||
+                        ReflectRegistrar.isIgnored(pb, f.name)) {
                         continue
                     }
                     match (ReflectRegistrar.findMethod(pb, f.name)) {
@@ -579,7 +615,9 @@ protected class ReflectRegistrar {
                     } else {
                         pp.name
                     }
-                    if (ReflectRegistrar.hasMethod(methods, propName)) {
+                    if (ReflectRegistrar.hasMethod(methods, propName) ||
+                        ReflectRegistrar.isIgnored(pb, pp.name) ||
+                        ReflectRegistrar.isIgnored(pb, propName)) {
                         continue
                     }
                     match (ReflectRegistrar.findMethod(pb, propName)) {
