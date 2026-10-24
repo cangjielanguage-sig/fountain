@@ -116,3 +116,14 @@ Covers discovery, version / legacy, tools / resources / prompts, rate limiting, 
 - Distributed rate limiting is an SPI plus an in-process implementation; cross-instance counting needs a shared backend
 - SSE relies on `f_mvc` streaming; no fboot here, so the HTTP smoke test is pending
 - `prompts/list_changed` is not pushed (capability is `false`)
+
+## End-to-end demo
+
+`fmcpdemo` contains a runnable server / client:
+
+```bash
+cd fmcpdemo
+./boot.sh e2e 18082
+```
+
+The client covers `server/discover`, `tools/list`, `tools/call`, `resources/read` and `prompts/get` over HTTP, then subscribes to `/mcp/sse` and triggers a `notifications/tools/list_changed` event. At startup the server also builds two `McpServer` instances sharing one `RateLimitBackend` and asserts the 4th call returns `-32050`.

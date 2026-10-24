@@ -45,7 +45,7 @@ main() {
 import fountain::f_jsonrpc.*
 import fountain::f_jsonrpc.macros.*
 
-@jsonrpc[topic: kb]
+@JsonRpc[topic: kb]
 public class SearchRPC {
     public init() {}
 
@@ -62,9 +62,21 @@ public class SearchRPC {
 ```
 
 - 类上自动加 `@Bean`；每个 public 实例方法注册为 `<topic>.<方法名>`
-- `@JsonRpcMeta['描述', '5s']` 的第二个参数是 `Duration` 字符串；也可以写 `@jsonrpcmeta[...]`
-- 单参数可以传裸值、`[值]` 或 `{"参数名": 值}`；多参数必须传对象
+- `@JsonRpcMeta['描述', '5s']` 的第二个参数是 `Duration` 字符串，可用 `meta.timeoutDuration` 取 `Duration`
+- `JsonRpcRegister.getMeta<T>(方法名)` 直接返回 `JsonRpcMeta`（无注解时描述与超时都为空串）
+- 单参数按 JSON-RPC 规范传 `[值]` 或 `{"参数名": 值}`；多参数必须传对象
 - 返回 `Unit` 时 `result` 为 `null`；参数/返回值可以是任意 `f_data.DataFields<T>` 子类型（含 `@DataAssist` 对象）
+
+### 1.2 端到端 demo
+
+`fjsonrpcdemo` 提供可运行的 server / client：
+
+```bash
+cd fjsonrpcdemo
+./boot.sh e2e 18080
+```
+
+它会用 `fboot run` 启动服务端，再由客户端走 HTTP 调用 `/rpc`，覆盖单参数、多参数、`@DataAssist` 对象与 `Unit` 返回值。
 
 ### 2. 端点
 

@@ -15,13 +15,21 @@ limitations under the License.
  */
 package fountain::f_jsonrpc
 
+import fountain::f_data.*
+
 /**
- * 方法元数据注解。`timeout` 是 `Duration` 字符串（如 `'5s'`、`'1m30s'`），
- * 由 `JsonRpcRegister.getMeta` 用 `f_data` 的 `Duration.parse` 解析。
+ * 方法元数据注解。`timeout` 是 `Duration` 字符串（如 `'5s'`、`'1m30s'`）。
  *
- * 只对 `@jsonrpc` 修饰的类里的 public 实例方法生效。
+ * 只对 `@JsonRpc` 修饰的类里的 public 实例方法生效。
  */
 @Annotation[target: [MemberFunction]]
 public class JsonRpcMeta {
     public const JsonRpcMeta(public let description: String, public let timeout: String) {}
+
+    /** `timeout` 的 `Duration` 形式。 */
+    public prop timeoutDuration: Duration {
+        get() {
+            Duration.parse(timeout)
+        }
+    }
 }

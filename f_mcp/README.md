@@ -76,7 +76,7 @@ b.rateLimitBackend(myRedisBackend)   // 实现 RateLimitBackend
 
 ### 订阅与 SSE
 
-`subscriptions/listen` 返回 `subscriptionId`；`GET /mcp/sse?topics=tools/list_changed` 返回 `text/event-stream`，每条事件是一个 JSON-RPC 通知。心跳 15 秒，连接最长 30 分钟。
+`subscriptions/listen` 返回 `subscriptionId`；`GET /mcp/sse?topics=tools/list_changed` 返回 `text/event-stream`，每条事件是一个 JSON-RPC 通知。心跳 15 秒，连接最长 30 分钟；响应使用 `Transfer-Encoding: chunked`（长度未知的流）。
 
 ## 客户端
 
@@ -116,3 +116,14 @@ cjpm test
 - 分布式限流只提供 SPI + 进程内实现，跨实例需要注入共享存储后端
 - SSE 依赖 `f_mvc` 的流式响应；本机没有 fboot，HTTP 端到端冒烟未跑
 - 不做 `prompts/list_changed` 推送（能力里固定 `false`）
+
+## 端到端 demo
+
+`fmcpdemo` 提供可运行的 server / client：
+
+```bash
+cd fmcpdemo
+./boot.sh e2e 18082
+```
+
+客户端走 HTTP 覆盖 `server/discover`、`tools/list`、`tools/call`、`resources/read`、`prompts/get`，再订阅 `/mcp/sse` 并触发一条 `notifications/tools/list_changed`。服务端启动时还会用两个共享 `RateLimitBackend` 的 `McpServer` 验证第 4 次调用返回 `-32050`。
