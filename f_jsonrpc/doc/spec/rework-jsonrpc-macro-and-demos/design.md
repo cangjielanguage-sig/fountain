@@ -16,7 +16,7 @@
 
 ## D3. 删除的 API
 
-- `JsonRpcRegister` 类整体删除：`getMeta` / `instance` 迁入 `JsonRpcRegistry`，解析职责下沉到 `JsonRpcMeta.timeoutDuration`
+- `JsonRpcRegister` 类整体删除：`getMeta` 迁入 `JsonRpcRegistry`；`instance` 仅测试使用，一并删除。解析职责下沉到 `JsonRpcMeta.timeoutDuration`
 - `JsonRpcRegisteredMeta`：`getMeta` 直接返回注解对象
 - `paramCount!` 由 `argTypes` 取代：同名重载按参数类型匹配
 - 宏文件里的 `func str` 与 `metaMap` / `isStringToken`
