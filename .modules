@@ -44,8 +44,12 @@ f_jit
 f_mq
 f_dbd
 f_dbm
+f_jsonrpc
+f_mcp
 fmq
 fdbm
+fjsonrpcdemo
+fmcpdemo
 fboot
 .
 

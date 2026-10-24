@@ -34,14 +34,23 @@ let ctx = CallContext(deadline: Some(DateTime.now() + Duration.second * 1))   //
 let v = f.call<Int64>([Int64(100_000_000)], ctx)
 ```
 
-Returning a closure (escaping closure — must be `close()`d):
+Returning a closure (escaping closure — must be `unloadFn()`d):
 
 ```cangjie
 let f = c.compile('{ n: Int64 => let xs = [n, n + 1]\n { i: Int64 => xs[i] } }')
 let g = f.callForFn<(Int64) -> Int64>([Int64(7)])
 println(g.call<Int64>([Int64(1)]))    // 8
-g.close()                             // the only release path for the promotion group
+g.unloadFn()                          // release the promoted slots this closure captured
 ```
+
+When the unit itself is no longer needed, call `unload()`: it enters the terminal state, releases code
+memory, and evicts the unit from the compile cache (recompiling the same source yields a new unit):
+
+```cangjie
+f.unload()                            // unit-level; later calls on f throw JitException(ErrCode.CALL_CONTRACT)
+```
+A bare `unload()` does **not wait** for in-flight calls: if any are still active it returns `false`
+immediately and the unit goes back to usable. Pass `unload(timeoutMs)` to drain.
 
 ---
 
@@ -51,7 +60,7 @@ g.close()                             // the only release path for the promotion
 |---|---|---|
 | `Compiler` | Facade: register host capabilities + compile | `registerType<T>()`, **`registerInterface<I>()`**, `registerClass(desc)`, `registerFunction(f)`, `compile(src)` |
 | `CompileOptions` | Compile options | `jit: JitMode` (`Auto`/`Force`/`Off`), `strictFp` (default `true`), `verMajor`, `cpuFeatures`, `diagnostics` |
-| `JitFunction` | Compiled unit / callable object | `call<T>(args)`, `call<T>(args, ctx)`, `callForFn<Fn>(args)`, `close()`, `isClosed` |
+| `JitFunction` | Compiled unit / callable object | `call<T>(args)`, `call<T>(args, ctx)`, `callForFn<Fn>(args)`, `unload([timeoutMs])` (unit), `unloadFn()` (closure wrapper), `isClosed` |
 | `JitException` | Runtime failure (`base` package) | `code` (`ErrCode`), `site` (line:column / byte offset), `report` |
 | `CompileCache` | Compile cache (key includes `strictFp`/`verMajor`) | `lookup`, `reset`, `runs` |
 | `CallContext` | Call context | `deadline` (interrupts at safety points → `InterruptedException`) |
@@ -65,11 +74,12 @@ backends), `test.diff` (three-engine differential tests only).
 
 ---
 
-### 2.1 Host-side macros: `@JitBind` and `@JitSignatures`
+### 2.1 Host-side macros: `@JitBind`, `@IgnoreJitBinding` and `@JitSignatures`
 
-Both macros turn runtime reflection calls into static, strongly typed calls **at host compile time**:
-`@JitBind` for **class/interface members**, `@JitSignatures` for **closure parameters**. Semantics are
-unchanged — only the implementation of the registered bindings (performance) differs.
+All three macros turn runtime reflection calls into static, strongly typed calls **at host compile time**:
+`@JitBind` expands **class/interface members**, `@IgnoreJitBinding` opts a single member **out** of
+registration, and `@JitSignatures` registers **closure parameter** signatures. Semantics are unchanged —
+only the implementation of the registered bindings (performance) differs.
 
 #### `@JitBind`: expand public members of a class/interface into typed bindings
 
@@ -96,7 +106,7 @@ main() {
 |---|---|
 | Expansion | the class stays **unchanged**; one package-level `let jitBindEnroll_<Class> = enrollOf<Class>(JitBindings(...))` is generated — no declarations injected, no thunks |
 | Covered | instance methods → `PublicMethod`; instance fields (`var`/`let`) → getter (`var` also setter); properties (`prop`/`mut prop`) → getter + `set<Name>`; each `init` → one `PublicCtor`; **static functions / read-only static fields / read-only static properties** → `PredefinedFunction` |
-| Not covered | private members, generic methods (WARNING), `static var` and `static mut prop` (permanently excluded, WARNING) |
+| Not covered | private members, generic methods (WARNING), `static var` and `static mut prop` (permanently excluded, WARNING), members marked `@IgnoreJitBinding` |
 | Registration | `Compiler.registerType<T>()` / `registerInterface<I>()` pick up the macro's registration when `bindings` is omitted |
 
 **Interfaces must be annotated**: reflection cannot `apply` abstract methods, so an unannotated interface
@@ -120,6 +130,22 @@ c.registerType<Impl>()
 c.compile('{ g: Greeter => g.name() }')      // parent-interface member, called natively
 ```
 
+**Member-level opt-out**: `@IgnoreJitBinding`. The member stays **unchanged** in the class body (the host
+can still call it) but is not registered — the dialect cannot see it; ignores are by name, so **all
+overloads of that name are skipped**:
+
+```cangjie
+@JitBind
+public class User {
+    public var name: String
+    @IgnoreJitBinding public var secret: String         // host-only, invisible to scripts
+    @IgnoreJitBinding public func hostOnly(): Unit {}   // same
+}
+```
+
+It is only valid inside a class/interface directly annotated with `@JitBind`; anywhere else
+`assertParentContext` reports a compile error.
+
 #### `@JitSignatures`: register closure parameter signatures
 
 ```cangjie
@@ -136,7 +162,7 @@ public func jitSignatures(): Unit {}        // the function itself is untouched;
   `14` position must be a **registered class name**; unregistered signatures keep the reflection path
   (same behaviour, just slower).
 
-> Both macros are **host-side only**; dialect source (jit lambda) never contains macros.
+> All three macros are **host-side only**; dialect source (jit lambda) never contains macros.
 
 ### 2.2 The three registration entries: `registerType` / `registerInterface` / `registerClass`
 
@@ -236,7 +262,8 @@ to call arbitrary Cangjie APIs.
 **⑤ Window and escaping**: each `call` opens a handle window (`openWindow`); on return `resetWindow`
 releases every **non-escaping** slot. Escaped objects (returned handles, escaping closures and their
 captures) are promoted in place (`moveOutGroup`, same ID/gen) and owned by a `PromotionGroup` whose only
-release path is `JitFunction.close()`.
+release path is `JitFunction.unloadFn()`; a unit-level `unload()` that reaches the terminal state also
+evicts the unit from the compile cache.
 
 **⑥ Fail-and-fallback (deopt)**: `errCode = -1` means "replay this call in the interpreter"; the bridge
 does that transparently. Any other code (1/2/3/6/7/8/16/18/19/21/22…) surfaces as `JitException`.
@@ -290,7 +317,7 @@ user-defined types). Literals and operators:
 | **Decimal** | `std.math.numeric.Decimal` | **a bare decimal literal is a Decimal**: `1.23`, `1.5e3`, `1e-3`; `Decimal(...)` | `+ - * /`, comparisons |
 | **Duration** | `std.core.Duration` | no literal (from the host, or `DateTime` difference) | `Duration ± Duration`, comparisons; overflow → 12 |
 | **DateTime** | `std.time.DateTime` | no literal (from the host) | `DateTime ± Duration`, `DateTime − DateTime → Duration`; out of range → 11 |
-| **Closure** | handle 12 (`JitClosure`) | `{ x => e }`, captures outer locals | call `f(a)`; escaping returns use `callForFn<Fn>`, then `close()` |
+| **Closure** | handle 12 (`JitClosure`) | `{ x => e }`, captures outer locals | call `f(a)`; escaping returns use `callForFn<Fn>`, then `unloadFn()` |
 | **Any** | handle 12 (`JitAnyBox`) | passed in by the host, or `Any`-annotated local/param | boxing/unboxing (H78/H79), `is` checks, returned as `Any` |
 
 ```cangjie
@@ -394,7 +421,7 @@ f.call<Int64>([Int64(4)])         // 24
   together with an escaping closure;
 - The inner `recursive` is that closure itself (`LOADL 0` + `CALL_CLOSURE`), not the outer `entryFn`;
 - Nesting is unbounded (each level is a `LOAD_CAP` chain, one closure object per level);
-- **Escaping** a closure: take the wrapper via `callForFn<Fn>` and `close()` it when done (otherwise its
+- **Escaping** a closure: take the wrapper via `callForFn<Fn>` and `unloadFn()` it when done (otherwise its
   promotion group stays resident).
 
 ### 6.4 `as` syntax (cast / fallback / test)
@@ -506,7 +533,7 @@ tables store **cells and code addresses**, not object pointers.
 |---|---|---|
 | Non-escaping (inside the window) | `call`'s `finally` → `resetWindow(-1)`: `alive=false`, `objs[i]=0`, `gen+1` | No longer referenced by f_jit ⇒ collected by GC |
 | Returned handle | `releaseReturnHandle` releases it right after unboxing (`JitFunction.cj:477-487`) | No |
-| Escaping closures / captures | Owned by `PromotionGroup`; **`JitFunction.close()` is the only release path** | Stays resident until the host calls `close()` (contract, not a bug) |
+| Escaping closures / captures | Owned by `PromotionGroup`; **`JitFunction.unloadFn()` is the only release path** | Stays resident until the host calls `unloadFn()` (contract, not a bug) |
 
 Constant slots (`constFlags`) are never released (unit constant pool, bounded); the underlying
 `HandleTable` arrays only grow, capped by `capacityLimit = 1048576` (`:92`) — a watermark, not a leak.
@@ -516,7 +543,7 @@ Constant slots (`constFlags`) are never released (unit constant pool, bounded); 
 **They die with the call, not with `JitFunction`.** A closure is a `JitClosure(fnId, captured: Array<Int64>)`
 created by H54 (`runtime/Helpers.cj:1010-1021`) inside the call window; captures are **cells (handles)** to
 slots in the same window. `resetWindow` releases them all at return time (IDs invalidated via `gen+1`), and
-the `JitClosure` object is collected afterwards. `JitFunction` only holds compiled artifacts; `close()`
+the `JitClosure` object is collected afterwards. `JitFunction` only holds compiled artifacts; `unloadFn()`
 releases just the promotion group.
 
 ### Q5 Does every call clean up what it produced?
@@ -547,7 +574,7 @@ recursively promotes the closure slot and all handle-typed captures (`CallMarsha
   **keeps ID/gen unchanged** ⇒ `resetWindow` skips it and the slot is never reused;
 - the wrapper `JitFunction` holds `owner + closureId + group`; invoking it goes through
   `owner.invokeClosure` and reads captures via `closure_cap(h,i)`;
-- release: `close()` → `PromotionGroup.releaseAll()` → `releaseEscaped`.
+- release: `unloadFn()` → `PromotionGroup.releaseAll()` → `releaseEscaped`.
 
 Container captures are **slot-level, no cascade** (§14.6): element handles need no promotion because
 elements are converted to host references on write (`cellToAny` = `getAny`) and live as long as the
@@ -561,6 +588,6 @@ container.
 - x86_64 requires SSE4.1 (units with rounding ops are not JITed otherwise);
 - one H22 `interrupt_poll` per loop back-edge; on tight loops this call (which allocates) is costly —
   tracked in `doc/spec/f-jit-m1/verify.md`;
-- escaping closures must be `close()`d, otherwise their promotion group stays resident;
+- escaping closures must be `unloadFn()`d, otherwise their promotion group stays resident;
 - specifications: `doc/jit-bytecode-m1.md` / `doc/design-m1.md` / `doc/plan-m1.md`; acceptance:
   `doc/spec/f-jit-m1/verify.md`; performance: `doc/perf-m1.md`.
