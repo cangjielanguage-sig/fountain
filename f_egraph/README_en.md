@@ -1,5 +1,8 @@
 # `fountain::f_egraph` is an event-driven flow utility library
 All the top-level declarations below are re-exports of `fountain::f_egraph`
+
+Flow scripting relies on `fountain::f_jit`; see the JIT registration surface and script contract below.
+
 ---
 
 ## Event types
@@ -54,12 +57,14 @@ public open class Event <: ToString & Hashable & Equatable<Event> {
      * @param tag Event version number; when a flow changes, tag should be modified and the flows with the same category but
      * a different tag should be deleted; it is the version of the flow
      * @param name Event name; only task events have a name, and events of other types use eventType.toString() instead
+     * @param session Session id, a random UUID by default; keep it consistent within one flow session
      */
     public Event(
         public let eventType!: EventType,
         public let category!: String,
         public let tag!: String,
-        public let name!: String 
+        public let name!: String,
+        public let session!: String = UUID.random().toHexString()
     )
     /**
      * The class of an event instance does not affect event equality; event equality is determined by the four member
@@ -83,8 +88,9 @@ public open class DataEvent <: Event {
         category!: String,
         tag!: String,
         name!: String,
+        session!: String = UUID.random().toHexString(),
         public let data!: Any
-    ) 
+    )
     public func tryGet<T>(): ?T 
 }
 ```
@@ -97,8 +103,9 @@ public class StartEvent <: DataEvent {
      * the flow; for the task executor to receive the event, the name of the start event must equal the event name of
      * the first task executor
      */
-    public init(category!: String, tag!: String, name!: String, data!: Any){
-        super(eventType: Start, category: category, tag: tag, name: name, data: data)
+    public init(category!: String, tag!: String, name!: String, data!: Any,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: Start, category: category, tag: tag, name: name, data: data, session: session)
     }
 }
 ```
@@ -106,8 +113,9 @@ public class StartEvent <: DataEvent {
 ### End event `EndEvent`
 ```cj
 public class EndEvent <: DataEvent {
-    public init(category!: String, tag!: String, data!: Any){
-        super(eventType: End, category: category, tag: tag, name: EventType.End.toString(), data: data)
+    public init(category!: String, tag!: String, data!: Any,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: End, category: category, tag: tag, name: EventType.End.toString(), data: data, session: session)
     }
 }
 ```
@@ -115,8 +123,9 @@ public class EndEvent <: DataEvent {
 ### Task event `TaskEvent`
 ```cj
 public class TaskEvent <: DataEvent {
-    public init(category!: String, tag!: String, name!: String, data!: Any){
-        super(eventType: EventType.Task, category: category, tag: tag, name: name, data: data)
+    public init(category!: String, tag!: String, name!: String, data!: Any,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: EventType.Task, category: category, tag: tag, name: name, data: data, session: session)
     }
 }
 ```
@@ -124,11 +133,13 @@ public class TaskEvent <: DataEvent {
 ### Error event `ErrorEvent`
 ```cj
 public class ErrorEvent <: DataEvent {
-    public init(category!: String, tag!: String, message!: String){
-        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: message)
+    public init(category!: String, tag!: String, message!: String,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: message, session: session)
     }
-    public init(category!: String, tag!: String, error!: Exception){
-        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: error)
+    public init(category!: String, tag!: String, error!: Exception,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: error, session: session)
     }
 }
 ```
@@ -137,9 +148,9 @@ public class ErrorEvent <: DataEvent {
 
 ```cj
 public class MultiEvent <: DataEvent {
-    public init(category!: String, tag!: String, events!: Iterable<Event>, 
+    public init(category!: String, tag!: String, name!: String, events!: Iterable<Event>, 
                 session!: String = UUID.random().toHexString()){
-        super(eventType: EventType.Task, category: category, tag: tag, name: 'multi', data: events, session: session)
+        super(eventType: EventType.Multi, category: category, tag: tag, name: name, data: events, session: session)
     }
 }
 ```
@@ -149,7 +160,7 @@ public class MultiEvent <: DataEvent {
 public class DummyEvent <: Event {
     public static let instance = DummyEvent()
     private init(){
-        super(eventType: EventType.Dummy, category: '', tag: '', name: '')
+        super(eventType: EventType.Dummy, category: '', tag: '', name: '', session: '')
     }
 }
 ```
@@ -496,10 +507,12 @@ public class BarrierTask<G> <: Task where G <: EndExecutorGetter{
      */
     public BarrierTask(
         name!: String,
-        events!: Array<(String, String, Int64)>
+        events!: Array<(String, String, Int64)>,
+        producing!: Array<String>
     )
     public prop name: String 
     public prop acceptableEvents: Array<String> 
+    public prop producingEvents: Array<String> 
     /**
      * Always returns DummyEvent; when the number of data items of the same event reaches the given count, a new event
      * is constructed and emitted once through flow.emit
@@ -791,6 +804,20 @@ public interface FlowLoader {
 ```
 
 ---
+
+## Exceptions
+
+```cj
+/**
+ * Unified exception type of f_egraph, extending BaseException from f_base.
+ */
+public class GraphException <: BaseException {
+    public init()
+    public init(message: String)
+    public init(caused: Exception)
+    public init(message: String, caused: Exception)
+}
+```
 
 ## Other public API
 

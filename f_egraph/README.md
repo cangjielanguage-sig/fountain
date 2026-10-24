@@ -1,5 +1,8 @@
 # `fountain::f_egraph`是一个事件驱动的流程工具库
 下面所有的顶级声明都是`fountain::f_egraph`的重导出
+
+流程脚本能力依赖 `fountain::f_jit`；JIT 注册面与脚本契约见下文对应章节。
+
 ---
 
 ## 事件类型
@@ -51,12 +54,14 @@ public open class Event <: ToString & Hashable & Equatable<Event> {
      * @param category 一个流程内所有事件拥有一致的category
      * @param tag 事件版本号，一个流程发生变更时应当修改tag，同时删除相同category不同tag的流程，相当于流程的版本
      * @param name 事件名称，只有任务事件拥有名字，其它类型的事件使用eventType.toString()代替
+     * @param session 会话标识，缺省为随机 UUID；同一流程会话内保持一致
      */
     public Event(
         public let eventType!: EventType,
         public let category!: String,
         public let tag!: String,
-        public let name!: String 
+        public let name!: String,
+        public let session!: String = UUID.random().toHexString()
     )
     /**
      * 事件实例的类不影响事件相等性，事件相等性由eventType category tag name这四个成员变量决定
@@ -78,8 +83,9 @@ public open class DataEvent <: Event {
         category!: String,
         tag!: String,
         name!: String,
+        session!: String = UUID.random().toHexString(),
         public let data!: Any
-    ) 
+    )
     public func tryGet<T>(): ?T 
 }
 ```
@@ -90,8 +96,9 @@ public class StartEvent <: DataEvent {
     /**
      * 开始事件对应的StartExecutor什么也不做只是把数据转给流程的第一个任务执行器，为了任务执行器能收到事件，开始事件的name必须与第一个任务执行器的事件名一致
      */
-    public init(category!: String, tag!: String, name!: String, data!: Any){
-        super(eventType: Start, category: category, tag: tag, name: name, data: data)
+    public init(category!: String, tag!: String, name!: String, data!: Any,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: Start, category: category, tag: tag, name: name, data: data, session: session)
     }
 }
 ```
@@ -99,8 +106,9 @@ public class StartEvent <: DataEvent {
 ### 结束事件`EndEvent`
 ```cj
 public class EndEvent <: DataEvent {
-    public init(category!: String, tag!: String, data!: Any){
-        super(eventType: End, category: category, tag: tag, name: EventType.End.toString(), data: data)
+    public init(category!: String, tag!: String, data!: Any,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: End, category: category, tag: tag, name: EventType.End.toString(), data: data, session: session)
     }
 }
 ```
@@ -108,8 +116,9 @@ public class EndEvent <: DataEvent {
 ### 任务事件`TaskEvent`
 ```cj
 public class TaskEvent <: DataEvent {
-    public init(category!: String, tag!: String, name!: String, data!: Any){
-        super(eventType: EventType.Task, category: category, tag: tag, name: name, data: data)
+    public init(category!: String, tag!: String, name!: String, data!: Any,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: EventType.Task, category: category, tag: tag, name: name, data: data, session: session)
     }
 }
 ```
@@ -117,11 +126,13 @@ public class TaskEvent <: DataEvent {
 ### 错误事件`ErrorEvent`
 ```cj
 public class ErrorEvent <: DataEvent {
-    public init(category!: String, tag!: String, message!: String){
-        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: message)
+    public init(category!: String, tag!: String, message!: String,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: message, session: session)
     }
-    public init(category!: String, tag!: String, error!: Exception){
-        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: error)
+    public init(category!: String, tag!: String, error!: Exception,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: error, session: session)
     }
 }
 ```
@@ -130,9 +141,9 @@ public class ErrorEvent <: DataEvent {
 
 ```cj
 public class MultiEvent <: DataEvent {
-    public init(category!: String, tag!: String, events!: Iterable<Event>, 
+    public init(category!: String, tag!: String, name!: String, events!: Iterable<Event>, 
                 session!: String = UUID.random().toHexString()){
-        super(eventType: EventType.Task, category: category, tag: tag, name: 'multi', data: events, session: session)
+        super(eventType: EventType.Multi, category: category, tag: tag, name: name, data: events, session: session)
     }
 }
 ```
@@ -142,7 +153,7 @@ public class MultiEvent <: DataEvent {
 public class DummyEvent <: Event {
     public static let instance = DummyEvent()
     private init(){
-        super(eventType: EventType.Dummy, category: '', tag: '', name: '')
+        super(eventType: EventType.Dummy, category: '', tag: '', name: '', session: '')
     }
 }
 ```
@@ -478,13 +489,16 @@ public class BarrierTask<G> <: Task where G <: EndExecutorGetter{
      * @param events 可接收的和输出的事件，可接收的事件是元组的第一个元素，
      *               对应的发射事件是元组的第二个元素，
      *               第三个元素是同一事件的数量达到指定数后发送输出事件
+     * @param producing 本任务可能产生的事件（Task 契约元数据）
      */
     public BarrierTask(
         name!: String,
-        events!: Array<(String, String, Int64)>
+        events!: Array<(String, String, Int64)>,
+        producing!: Array<String>
     )
     public prop name: String 
     public prop acceptableEvents: Array<String> 
+    public prop producingEvents: Array<String> 
     /**
      * 固定返回DummyEvent，同一事件的数据量达到指定数时，构造成新事件调用flow.emit一次发出
      */
@@ -771,6 +785,20 @@ public interface FlowLoader {
 
 
 ---
+
+## 异常
+
+```cj
+/**
+ * f_egraph 的统一异常类型，继承 f_base 的 BaseException。
+ */
+public class GraphException <: BaseException {
+    public init()
+    public init(message: String)
+    public init(caused: Exception)
+    public init(message: String, caused: Exception)
+}
+```
 
 ## 其他公开 API
 
