@@ -39,6 +39,33 @@ main() {
 
 The part before the first `.` in a method name is its namespace (`kb.search` → `kb`). Methods without a dot can only be called through `/rpc`.
 
+### 1.1 Register with the macro (recommended)
+
+```cangjie
+import fountain::f_jsonrpc.*
+import fountain::f_jsonrpc.macros.*
+
+@jsonrpc[topic: kb]
+public class SearchRPC {
+    public init() {}
+
+    @JsonRpcMeta['knowledge base search', '5s']
+    public func search(param: String): String {
+        'found:${param}'
+    }
+
+    @JsonRpcMeta['add', '1s']
+    public func add(a: Int64, b: Int64): Int64 {
+        a + b
+    }
+}
+```
+
+- The class gets `@Bean`; every public instance method is registered as `<topic>.<method>`
+- The second `@JsonRpcMeta` argument is a `Duration` string (`@jsonrpcmeta[...]` is an alias)
+- A single parameter accepts a raw value, `[value]` or `{"name": value}`; multiple parameters require an object
+- A `Unit` return becomes `null`; parameters and results may be any `f_data.DataFields<T>` subtype (including `@DataAssist` objects)
+
 ### 2. Endpoints
 
 The module ships `JsonRpcController`, which registers two routes:

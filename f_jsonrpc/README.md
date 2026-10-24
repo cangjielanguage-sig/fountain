@@ -39,6 +39,33 @@ main() {
 
 方法名里的第一个 `.` 之前是命名空间（`kb.search` → `kb`）。不含 `.` 的方法只能从 `/rpc` 调用。
 
+### 1.1 用宏注册（推荐）
+
+```cangjie
+import fountain::f_jsonrpc.*
+import fountain::f_jsonrpc.macros.*
+
+@jsonrpc[topic: kb]
+public class SearchRPC {
+    public init() {}
+
+    @JsonRpcMeta['知识库检索', '5s']
+    public func search(param: String): String {
+        'found:${param}'
+    }
+
+    @JsonRpcMeta['加法', '1s']
+    public func add(a: Int64, b: Int64): Int64 {
+        a + b
+    }
+}
+```
+
+- 类上自动加 `@Bean`；每个 public 实例方法注册为 `<topic>.<方法名>`
+- `@JsonRpcMeta['描述', '5s']` 的第二个参数是 `Duration` 字符串；也可以写 `@jsonrpcmeta[...]`
+- 单参数可以传裸值、`[值]` 或 `{"参数名": 值}`；多参数必须传对象
+- 返回 `Unit` 时 `result` 为 `null`；参数/返回值可以是任意 `f_data.DataFields<T>` 子类型（含 `@DataAssist` 对象）
+
 ### 2. 端点
 
 模块内置 `JsonRpcController`，自动注册两条路由：

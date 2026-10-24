@@ -75,5 +75,5 @@
 
 - [x] 12.1 `f_jsonrpc/README.md` 与 `README_en.md`（中英成对，公开 API 与用法）
 - [x] 12.2 五件套落盘 `f_jsonrpc/doc/spec/add-f-jsonrpc/` 与 `f_data/doc/spec/add-f-jsonrpc/spec.md`
-- [ ] 12.3 受影响模块 + 仓库全量 `cjpm test` 回归；`opsx:verify` CRITICAL 清零
-- [ ] 12.4 提交、合并回 `sts/1.3.x`、推送
+- [x] 12.3 受影响模块 + 仓库全量 `cjpm test` 回归；`opsx:verify` CRITICAL 清零
+- [x] 12.4 提交、合并回 `sts/1.3.x`、推送

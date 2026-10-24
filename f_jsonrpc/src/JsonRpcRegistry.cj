@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
- */
+*/
 package fountain::f_jsonrpc
 
 /** 进程内默认端点的方法注册表。应用在 static init 阶段调 `register`。 */
