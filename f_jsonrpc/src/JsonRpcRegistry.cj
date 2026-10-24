@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_jsonrpc
 
-import std.reflect.TypeInfo
+import std.reflect.{InfoNotFoundException, TypeInfo}
 import fountain::f_bean.lookup
 
 /** 进程内默认端点的方法注册表。应用在 static init 阶段调 `register`。 */
@@ -37,31 +37,15 @@ public class JsonRpcRegistry {
      * 返回 `JsonRpcMeta('', '500ms')`：无描述，超时默认 500ms。
      */
     public static func getMeta<T>(fnName: String, argTypes: Array<TypeInfo>): JsonRpcMeta where T <: Object {
-        for (function in TypeInfo.of<T>().getInstanceFunctions(fnName)) {
-            let params = function.parameters
-            // 反射的实例方法参数可能把 this 放在第 0 位。
-            let offset = if (params.size == argTypes.size + 1) { 1 } else { 0 }
-            if (params.size - offset != argTypes.size) {
-                continue
-            }
-            var matched = true
-            var i = 0
-            while (i < argTypes.size) {
-                if (params[offset + i].typeInfo != argTypes[i]) {
-                    matched = false
-                    break
-                }
-                i++
-            }
-            if (!matched) {
-                continue
-            }
-            match (function.findAnnotation<JsonRpcMeta>()) {
-                case Some(meta) => return meta
-                case _ => return JsonRpcMeta('', '500ms')
-            }
+        let function = try {
+            TypeInfo.of<T>().getInstanceFunction(fnName, argTypes)
+        } catch (_: InfoNotFoundException) {
+            return JsonRpcMeta('', '500ms')
         }
-        JsonRpcMeta('', '500ms')
+        match (function.findAnnotation<JsonRpcMeta>()) {
+            case Some(meta) => meta
+            case _ => JsonRpcMeta('', '500ms')
+        }
     }
 
     /** 从 bean 容器取实例（`@JsonRpc` 展开时给类加了 `@Bean`）。 */
