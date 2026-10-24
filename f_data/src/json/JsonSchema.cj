@@ -220,6 +220,15 @@ extend JsonObject <: ToJsonSchema {
 
 public sealed abstract class JsonSchema {
     public const init(){}
+
+    /**
+     * 实例校验：按注解自带的约束校验一个值。
+     * 注意 `JsonObjectSchema` 不携带 properties，带成员的对象请用
+     * `JsonSchemaValidator.validate(schema, value)`（静态重载与实例方法不能同名共存）。
+     */
+    public func validate(value: JsonValue, options!: ValidationOptions = ValidationOptions()): ValidationResult {
+        JsonSchemaValidator.validateInstance(this, value, options)
+    }
 }
 
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
