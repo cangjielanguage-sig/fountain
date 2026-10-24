@@ -38,7 +38,7 @@
 
 ### Requirement: `JsonRpcMeta` 与 `getMeta`
 
-`JsonRpcMeta` MUST 作为成员方法注解提供 `description`、`timeout`（字符串）与 `timeoutDuration: Duration`。`timeoutDuration` MUST 用 `f_data` 的 `Duration.parse`。`JsonRpcRegister.getMeta<T>(funcName: String): JsonRpcMeta` MUST 返回该方法上的注解实例；没有注解时 MUST 返回 `JsonRpcMeta('', '')`。MUST NOT 再提供 `paramCount` 参数、`parseTimeout` 或 `JsonRpcRegisteredMeta`。
+`JsonRpcMeta` MUST 作为成员方法注解提供 `description`、`timeout`（字符串）与 `timeoutDuration: Duration`。`timeoutDuration` MUST 用 `f_data` 的 `Duration.parse`。`JsonRpcRegister.getMeta<T>(funcName: String): JsonRpcMeta` MUST 返回该方法上的注解实例；没有注解时 MUST 返回 `JsonRpcMeta('', '500ms')`。MUST NOT 再提供 `paramCount` 参数、`parseTimeout` 或 `JsonRpcRegisteredMeta`。
 
 #### Scenario: 正常解析
 
@@ -48,7 +48,7 @@
 #### Scenario: 无注解
 
 - **WHEN** 方法没有 `@JsonRpcMeta`
-- **THEN** `getMeta` 返回描述与超时都为空串的实例
+- **THEN** `getMeta` 返回描述为空串、`timeout = "500ms"` 的实例
 
 ### Requirement: HTTP 客户端 keep-alive
 
