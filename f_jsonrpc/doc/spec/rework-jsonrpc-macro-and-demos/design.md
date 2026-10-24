@@ -6,7 +6,7 @@
 
 ## D2. 运行期读取注解
 
-`JsonRpcRegistry.getMeta<T>(funcName, argTypes)` 遍历 `TypeInfo.of<T>().getInstanceFunctions(funcName)`，返回 `findAnnotation<JsonRpcMeta>()`。宏不再扫描 `ClassDecl.toTokens()`，也不再生成 description / timeout 字面量。
+`JsonRpcRegistry.getMeta<T>(funcName, argTypes)` 直接调用 `TypeInfo.of<T>().getInstanceFunction(fnName, argTypes)` 定位重载，再返回 `findAnnotation<JsonRpcMeta>()`；未找到时捕获 `InfoNotFoundException` 返回默认值。宏不再扫描 `ClassDecl.toTokens()`，也不再生成 description / timeout 字面量。
 
 - 生成代码：`let __jsonrpc_meta = JsonRpcRegistry.getMeta<T>('fn', [TypeInfo.of<...>()])`
 - handler 内：`lookup<T>().fn(...)`
