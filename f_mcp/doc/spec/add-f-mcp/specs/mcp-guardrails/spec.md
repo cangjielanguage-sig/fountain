@@ -99,3 +99,36 @@
 
 - **WHEN** 注册以 `/mcp/tool-results/` 开头的用户资源
 - **THEN** `build()` 抛异常
+
+### Requirement: 运行期自适应调容
+
+`ToolResultStore` MUST 每窗口统计 `puts` / `rejectedByCount` / `rejectedByBytes` / 占用率；拒绝率超过阈值（默认 1%）且未到 `ceiling` MUST 将 `maxEntries` 上调 25%；连续 `shrinkConfirmWindows`（默认 3）个窗口占用低于 25% 且无字节拒绝 MUST 下调 12.5%（不低于 `floor`）。只调 `maxEntries`，不调 `maxBytes` / TTL。每窗口一条 debug 日志，每次调整一条 info 日志。
+
+#### Scenario: 拒绝率触发扩容
+
+- **WHEN** 某窗口 100 次写入有 3 次因条数被拒，`maxEntries < ceiling`
+- **THEN** 下一个窗口 `maxEntries` 上调 25%
+
+#### Scenario: 连续空闲触发缩容
+
+- **WHEN** 连续 3 个窗口占用低于 25% 且无字节拒绝
+- **THEN** `maxEntries` 下调 12.5%，但不低于 `floor`
+
+#### Scenario: 字节瓶颈不扩容
+
+- **WHEN** 拒绝全部来自 `rejectedByBytes`
+- **THEN** `maxEntries` 不变（应调 `maxBytes`，由人决定）
+
+### Requirement: 分布式限流 SPI
+
+限流 MUST 通过 `RateLimitBackend` 接口执行；默认实现是进程内 `LocalRateLimitBackend`；使用方 MUST 能注入共享后端，使多实例共享计数。
+
+#### Scenario: 注入后端
+
+- **WHEN** Builder 传入自定义 `RateLimitBackend`
+- **THEN** `tools/call` 的限流判定走该后端
+
+#### Scenario: 默认本地
+
+- **WHEN** 未注入后端
+- **THEN** 使用进程内令牌桶，行为与单实例一致

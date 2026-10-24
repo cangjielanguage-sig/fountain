@@ -15,13 +15,10 @@
 - 客户端：HTTP 传输、`_meta` 自动注入、版本重试一次、legacy 检测、分页聚合。
 - 护栏：三层限流 + 并发闸门；大结果转 `resource_link` / 截断；临时结果存储。
 
-**Non-Goals（本变更明确不做）:**
+**Non-Goals:**
 
-- stdio 客户端传输（`f_process` 不在依赖集；设计本身也只把它定位为自测工具）
-- `input_required` 的 `Auto` 多轮（`Manual` 原样透传保留）
-- `ToolResultStore` 的运行期自适应调容（固定参数可配）
-- SSE / `subscriptions/listen`、`prompts`、分布式限流
 - 可配置 HTTP 路由（固定 `/mcp`）
+- 跨进程的强一致分布式限流（提供 SPI + 本地实现，多实例需外部存储后端）
 
 ## Decisions
 
@@ -92,7 +89,31 @@ URI 解析用 `stdx.encoding.url.URL`（`f_jsonrpc` 已在用 `f_mvc`，其 publ
 - `callTool`：返回 `CallToolResult`，`resultType` 原样保留（`input_required` 由调用方处理）
 - `close()`：关闭底层 client
 
-### D10. 部署
+### D10. stdio 客户端
+
+用 `std.process.launch` 起子进程，stdin 写一行一个 JSON-RPC 消息、stdout 按行读；stderr 单独消费避免阻塞。只做客户端侧（设计 3.2.1），不做 server-side 夹具。
+
+### D11. `input_required` 的 Auto 多轮
+
+`CallToolResult.resultType == "input_required"` 时，`McpClient.callToolAuto(handler, maxRounds)` 把 `inputRequired` 交给 handler，拿到 `inputResponses` 后用**新的 id** 再发一次 `tools/call`；超过 `maxRounds` 抛 `McpException`。`Manual` 保持原样返回。
+
+### D12. 自适应调容
+
+`ToolResultStore` 每窗口（默认 5 分钟）统计 `puts` / `rejectedByCount` / `rejectedByBytes` / 占用量：拒绝率 > 1% 且未触顶 → `maxEntries` 上调 25%；连续 3 个窗口占用 < 25% 且本窗口无字节拒绝 → 下调 12.5%（不低于 `floor`）；只调 `maxEntries`，不调 `maxBytes` / TTL。每窗口一条 debug 日志，每次调整一条 info 日志。
+
+### D13. SSE / `subscriptions/listen`
+
+`subscriptions/listen` 注册订阅并返回 `resultType=complete`；`SubscriptionHub` 按 topic 维护订阅者队列。`/mcp/sse` 用 `HttpResponseBuilder.body(InputStream)` 输出 `text/event-stream`，事件是 JSON-RPC 通知。`f_mvc` 的 controller 返回 `Unit` 时不再改写响应，因此不需要改 `f_mvc`。
+
+### D14. prompts
+
+`prompts/list` + `prompts/get`，能力声明 `prompts: {listChanged: false}`；`prompts/get` 的参数按声明校验，未知 prompt → `-32602`，返回 `messages` 数组。
+
+### D15. 分布式限流
+
+定义 `RateLimitBackend` SPI（`tryAcquire(key, limit, windowMs, now): Bool`、`release`），默认 `LocalRateLimitBackend`（进程内令牌桶）。多实例部署时由使用方注入共享后端（Redis / `f_store`），f_mcp 不绑定具体存储。
+
+### D16. 部署
 
 `@Controller` + `@JsonRpcMapping[path:'/mcp']`，方法返回 `Any`（bytes 或 `Unit`）。`McpRegistry.server()` 持有进程内默认 `McpServer`，应用在 static init 注册工具/资源。
 

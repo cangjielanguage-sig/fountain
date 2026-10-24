@@ -18,7 +18,7 @@ MCP 的消息层就是 JSON-RPC 2.0，`f_jsonrpc` 已经提供了消息模型、
   - **客户端**：`McpClient.http`（复用 `f_jsonrpc.JsonRpcClient`），自动注入 `_meta`、`discover`、`listTools` / `listAllTools`、`callTool`、`listResources` / `readResource`；`-32022` 只重试一次；legacy 服务端给出升级提示
   - **部署形态**：`@Controller` 挂在 `/mcp`，由 `fboot run` 加载动态库
 - 设计文档迁入 `f_mcp/doc/`；`.modules` 已登记
-- **非目标（本变更不做，已在 design 记录）**：stdio 客户端传输、`input_required` 的 `Auto` 多轮、`ToolResultStore` 的运行期自适应调容、SSE / `subscriptions/listen`、`prompts`、分布式限流
+- **本轮追加（用户要求）**：stdio 客户端传输、`input_required` 的 `Auto` 多轮、`ToolResultStore` 运行期自适应调容、SSE / `subscriptions/listen`、`prompts`、分布式限流
 
 ## Capabilities
 

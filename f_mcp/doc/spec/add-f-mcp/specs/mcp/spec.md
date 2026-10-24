@@ -137,3 +137,49 @@
 
 - **WHEN** 模块被加载
 - **THEN** `/mcp` 注册为 POST 路由，`consumes` 与 `produces` 均为 `application/json`
+
+### Requirement: prompts
+
+服务端 MUST 提供 `prompts/list` 与 `prompts/get`；`build()` MUST 校验 prompt 名字与参数声明；未知 prompt 或缺少必填参数 MUST 返回 `-32602`；返回 MUST 是 `messages` 数组（role + content）。
+
+#### Scenario: 列表
+
+- **WHEN** 注册两个 prompt
+- **THEN** `prompts/list` 按名字升序返回，能力声明含 `prompts`
+
+#### Scenario: 取 prompt
+
+- **WHEN** `prompts/get` 传入已声明的参数
+- **THEN** 返回渲染后的 `messages`
+
+### Requirement: subscriptions/listen 与 SSE
+
+服务端 MUST 提供 `subscriptions/listen`；订阅后 MUST 通过 `SubscriptionHub` 把通知投递给订阅者。`/mcp/sse` MUST 返回 `text/event-stream`，每条事件是一个 JSON-RPC 通知；连接关闭 MUST 注销订阅。
+
+#### Scenario: 订阅
+
+- **WHEN** 调用 `subscriptions/listen` 订阅 `tools/list_changed`
+- **THEN** 后续发布的通知出现在该订阅者的 SSE 流里
+
+### Requirement: stdio 客户端
+
+`McpClient.stdio(command, args)` MUST 用子进程的 stdin/stdout 按行收发 JSON-RPC 消息；stderr MUST 独立消费；`close()` MUST 关闭子进程。
+
+#### Scenario: 行分帧
+
+- **WHEN** 子进程输出两行 JSON-RPC 响应
+- **THEN** 客户端按行解析，不把 stderr 混进响应
+
+### Requirement: `input_required` Auto 多轮
+
+`callToolAuto(handler, maxRounds)` MUST 在 `resultType == "input_required"` 时调用 handler，拿 `inputResponses` 后用新的 id 重发 `tools/call`；超过 `maxRounds` MUST 抛 `McpException`；`Manual` MUST 原样返回。
+
+#### Scenario: 两轮完成
+
+- **WHEN** 第一轮返回 `input_required`，handler 给出响应，第二轮返回 `complete`
+- **THEN** 返回第二轮结果，且两次请求 id 不同
+
+#### Scenario: 超过轮次
+
+- **WHEN** 每轮都返回 `input_required` 且达到 `maxRounds`
+- **THEN** 抛 `McpException`
