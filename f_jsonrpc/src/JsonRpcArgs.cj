@@ -18,7 +18,7 @@ package fountain::f_jsonrpc
 import fountain::f_data.*
 
 /**
- * `@jsonrpc` 展开出来的参数 / 返回值转换。
+ * `@JsonRpc` 展开出来的参数 / 返回值转换。
  *
  * 单参数直接用整个 `params`；多参数要求 `params` 是对象，按参数名取。
  * 转换失败统一抛 `-32602`。

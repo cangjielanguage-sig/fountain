@@ -15,32 +15,24 @@ limitations under the License.
  */
 macro package fountain::f_jsonrpc.macros
 
-internal import std.collection.{ArrayList, HashMap}
+internal import std.ast.*
+internal import fountain::f_macros.*
 
 /**
- * `@jsonrpc[topic: kb]`：把类里的每个 public 实例方法注册成一个 JSON-RPC 方法。
+ * `@JsonRpc[topic: kb]`：把类里的每个 public 实例方法注册成一个 JSON-RPC 方法。
  *
  * 展开结果：
  * - 类上加 `@Bean`
  * - 每个方法一段 `private let _ = {=> ... }()`，在加载期调用 `JsonRpcRegistry.register`
  * - 方法名是 `<topic>.<fnName>`；没有 topic 时就是 `<fnName>`
+ * - 描述与超时从运行期反射的 `@JsonRpcMeta` 读取
  */
-public macro jsonrpc(input: Tokens): Tokens {
+public macro JsonRpc(input: Tokens): Tokens {
     expand('', input)
 }
 
-public macro jsonrpc(attr: Tokens, input: Tokens): Tokens {
+public macro JsonRpc(attr: Tokens, input: Tokens): Tokens {
     expand(topicOf(attr), input)
-}
-
-/**
- * `@jsonrpcmeta['描述', '5s']`：`@JsonRpcMeta[...]` 的语法糖。
- */
-public macro jsonrpcmeta(attr: Tokens, input: Tokens): Tokens {
-    quote(
-        @JsonRpcMeta[$attr]
-        $input
-    )
 }
 
 private func topicOf(attr: Tokens): String {
@@ -50,7 +42,7 @@ private func topicOf(attr: Tokens): String {
             if (i + 2 < attr.size && attr[i + 1].kind == COLON) {
                 return attr[i + 2].value
             }
-            diagReport(ERROR, attr, "expect @jsonrpc[topic: <name>]", '')
+            diagReport(ERROR, attr, "expect @JsonRpc[topic: <name>]", '')
             return ''
         }
         i++
@@ -65,22 +57,20 @@ private func expand(topic: String, input: Tokens): Tokens {
         case m: MacroExpandDecl => match (extract(m)) {
             case c: ClassDecl => c
             case _ =>
-                diagReport(ERROR, input.toTokens(), '@jsonrpc modify class decl only', '')
+                diagReport(ERROR, input.toTokens(), '@JsonRpc modify class decl only', '')
                 return input.toTokens()
         }
         case _ =>
-            diagReport(ERROR, input.toTokens(), '@jsonrpc modify class decl only', '')
+            diagReport(ERROR, input.toTokens(), '@JsonRpc modify class decl only', '')
             return input.toTokens()
     }
     let klassName = klass.identifier.value
-    let metas = metaMap(klass)
     var registrations = quote()
     for (item in klass.body.decls) {
         match (asFunc(item)) {
             case Some(f) =>
                 if (isPublic(f) && !isStatic(f) && f.identifier.value != 'init') {
-                    let meta = metas.get(f.identifier.value) ?? ('', '')
-                    registrations += generateMethod(topic, klassName, f, meta)
+                    registrations += generateMethod(topic, klassName, f)
                 }
             case _ => ()
         }
@@ -103,40 +93,7 @@ private func asFunc(decl: Decl): Option<FuncDecl> {
     }
 }
 
-/**
- * 从类的 token 流里把 `@JsonRpcMeta[...]` 映射到紧随其后的函数名。
- *
- * 注解在 `FuncDecl.toTokens()` 里不出现，但在 `ClassDecl.toTokens()` 里是完整源码，
- * 所以以类为单位扫描。编译期取值，避免加载期反射时类型元数据尚未就绪。
- */
-private func metaMap(klass: ClassDecl): HashMap<String, (String, String)> {
-    let map = HashMap<String, (String, String)>()
-    let tokens = klass.toTokens()
-    var pending = None<(String, String)>
-    var i = 0
-    while (i < tokens.size) {
-        let token = tokens[i]
-        if (token.kind == IDENTIFIER && (token.value == 'JsonRpcMeta' || token.value == 'jsonrpcmeta') && i + 5 < tokens
-            .size && tokens[i + 1].kind == LSQUARE && tokens[i + 3].kind == COMMA && tokens[i + 5].kind == RSQUARE &&
-            isStringToken(tokens[i + 2]) && isStringToken(tokens[i + 4])) {
-            pending = Some((tokens[i + 2].value, tokens[i + 4].value))
-            i += 6
-            continue
-        }
-        if (token.kind == FUNC && i + 1 < tokens.size && tokens[i + 1].kind == IDENTIFIER) {
-            match (pending) {
-                case Some(meta) =>
-                    map.add(tokens[i + 1].value, meta)
-                    pending = None<(String, String)>
-                case _ => ()
-            }
-        }
-        i++
-    }
-    map
-}
-
-private func generateMethod(topic: String, klassName: String, f: FuncDecl, meta: (String, String)): Tokens {
+private func generateMethod(topic: String, klassName: String, f: FuncDecl): Tokens {
     let fnName = f.identifier.value
     let fullName = if (topic.isEmpty()) {
         fnName
@@ -164,7 +121,7 @@ private func generateMethod(topic: String, klassName: String, f: FuncDecl, meta:
         }
         argDecls += `nl` + quote(
             let $argVar = JsonRpcArgs.extract<$(p.paramType)>(
-                $paramsVar, $(str(pname)), $named)
+                $paramsVar, $(Token(STRING_LITERAL, pname)), $named)
         )
         if (index > 0) {
             argList += `comma`
@@ -176,31 +133,26 @@ private func generateMethod(topic: String, klassName: String, f: FuncDecl, meta:
         }
         index++
     }
-    let (description, timeoutText) = meta
     let registration = quote(
+        let __jsonrpc_meta = JsonRpcRegister.getMeta<$classToken>($(Token(STRING_LITERAL, fnName)))
         JsonRpcRegistry.register(JsonRpcMethodMeta(
-            name: $(str(fullName)),
+            name: $(Token(STRING_LITERAL, fullName)),
             handler: {$ctxVar, $paramsVar =>
-                let __jsonrpc_controller = JsonRpcRegister.instance<$classToken>()
                 $argDecls
-                let __jsonrpc_result = __jsonrpc_controller.$(f.identifier)($argList)
+                let __jsonrpc_result = lookup<$classToken>().$(f.identifier)($argList)
                 JsonRpcArgs.toJson(__jsonrpc_result)
             },
-            description: $(str(description)),
-            timeout: JsonRpcRegister.parseTimeout($(str(timeoutText)))
+            description: __jsonrpc_meta.description,
+            timeout: if (__jsonrpc_meta.timeout.isEmpty()) {
+                None<Duration>
+            } else {
+                Some(__jsonrpc_meta.timeoutDuration)
+            }
         ))
     )
     `nl` + topMacroAnonymousClosure(registration)
 }
 
-private func isStringToken(token: Token): Bool {
-    token.kind == STRING_LITERAL || token.kind == SINGLE_QUOTED_STRING_LITERAL
-}
-
 private func ident(name: String): Token {
     Token(IDENTIFIER, name)
-}
-
-private func str(value: String): Token {
-    Token(STRING_LITERAL, value)
 }

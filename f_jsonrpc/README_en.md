@@ -45,7 +45,7 @@ The part before the first `.` in a method name is its namespace (`kb.search` →
 import fountain::f_jsonrpc.*
 import fountain::f_jsonrpc.macros.*
 
-@jsonrpc[topic: kb]
+@JsonRpc[topic: kb]
 public class SearchRPC {
     public init() {}
 
@@ -62,9 +62,21 @@ public class SearchRPC {
 ```
 
 - The class gets `@Bean`; every public instance method is registered as `<topic>.<method>`
-- The second `@JsonRpcMeta` argument is a `Duration` string (`@jsonrpcmeta[...]` is an alias)
-- A single parameter accepts a raw value, `[value]` or `{"name": value}`; multiple parameters require an object
+- The second `@JsonRpcMeta` argument is a `Duration` string; use `meta.timeoutDuration` to get a `Duration`
+- `JsonRpcRegister.getMeta<T>(methodName)` returns `JsonRpcMeta` (empty strings when there is no annotation)
+- A single parameter accepts `[value]` or `{"name": value}` per JSON-RPC; multiple parameters require an object
 - A `Unit` return becomes `null`; parameters and results may be any `f_data.DataFields<T>` subtype (including `@DataAssist` objects)
+
+### 1.2 End-to-end demo
+
+`fjsonrpcdemo` contains a runnable server / client:
+
+```bash
+cd fjsonrpcdemo
+./boot.sh e2e 18080
+```
+
+It starts the server with `fboot run` and calls `/rpc` over HTTP, covering single/multiple parameters, a `@DataAssist` object and a `Unit` result.
 
 ### 2. Endpoints
 

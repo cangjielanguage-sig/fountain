@@ -34,7 +34,7 @@ public class MacroEcho {
     }
 }
 
-@jsonrpc[topic: kb]
+@JsonRpc[topic: kb]
 public class JsonRpcMacroTestRPC {
     public init() {}
 
@@ -50,11 +50,6 @@ public class JsonRpcMacroTestRPC {
 
     @JsonRpcMeta['通知', '']
     public func touch(): Unit {}
-
-    @jsonrpcmeta['语法糖', '2s']
-    public func sugar(): String {
-        'sugar'
-    }
 
     public func echo(req: MacroEcho): MacroEcho {
         MacroEcho(req.text + '!')
@@ -158,22 +153,24 @@ class JsonRpcMacro_test {
     }
 
     @TestCase
-    public func testJsonrpcmetaSugar(): Unit {
-        for (m in JsonRpcRegistry.server().methods()) {
-            if (m.name == 'kb.sugar') {
-                @Assert('语法糖', m.description)
-                @Assert(true, m.timeout.getOrThrow() == Duration.parse('2s'))
-                return
-            }
-        }
-        @Fail('kb.sugar not registered')
-    }
-
-    @TestCase
     public func testGetMetaReadsAnnotation(): Unit {
         let f = TypeInfo.of<JsonRpcMacroTestRPC>().getInstanceFunctions('search')[0]
         @Assert(true, f.findAnnotation<JsonRpcMeta>().isSome())
-        @Assert('知识库检索', JsonRpcRegister.getMeta<JsonRpcMacroTestRPC>('search', paramCount: 1).description)
+        @Assert('知识库检索', JsonRpcRegister.getMeta<JsonRpcMacroTestRPC>('search').description)
+    }
+
+    @TestCase
+    public func testTimeoutDuration(): Unit {
+        let meta = JsonRpcRegister.getMeta<JsonRpcMacroTestRPC>('search')
+        @Assert('知识库检索', meta.description)
+        @Assert(true, meta.timeoutDuration == Duration.parse('5s'))
+    }
+
+    @TestCase
+    public func testMissingMetaReturnsEmpty(): Unit {
+        let meta = JsonRpcRegister.getMeta<JsonRpcMacroTestRPC>('echo')
+        @Assert('', meta.description)
+        @Assert('', meta.timeout)
     }
 
     @TestCase

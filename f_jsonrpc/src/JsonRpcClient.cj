@@ -240,8 +240,10 @@ class HttpJsonRpcTransport <: JsonRpcTransport {
                     'response body exceeds ${opts.maxResponseBytes} bytes')
             }
             bytes
-        } finally {
+        } catch (e: Exception) {
+            // body 没读完就放弃时才需要关连接；正常读完由连接池复用。
             response.close()
+            throw e
         }
     }
 

@@ -48,6 +48,8 @@ f_jsonrpc
 f_mcp
 fmq
 fdbm
+fjsonrpcdemo
+fmcpdemo
 fboot
 .
 

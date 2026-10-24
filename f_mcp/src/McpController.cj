@@ -29,6 +29,9 @@ public class McpController {
     @GetMapping[path: '/mcp/sse', produces: 'text/event-stream']
     public func sse(): InputStream {
         let http = CurrentHttpContext.instance
+        // 流式响应长度未知，必须显式声明 chunked，否则 stdx http server 会报
+        // "Unknown body size for Content-Length header"。
+        http.responseBuilder.header('Transfer-Encoding', 'chunked')
         return McpSseStream(server.hub(), topicsOf(http.request.url.toString()))
     }
 
