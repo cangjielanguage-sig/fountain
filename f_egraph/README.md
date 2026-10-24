@@ -1,5 +1,8 @@
 # `fountain::f_egraph`是一个事件驱动的流程工具库
 下面所有的顶级声明都是`fountain::f_egraph`的重导出
+
+流程脚本能力依赖 `fountain::f_jit`；JIT 注册面与脚本契约见下文对应章节。
+
 ---
 
 ## 事件类型
@@ -51,12 +54,14 @@ public open class Event <: ToString & Hashable & Equatable<Event> {
      * @param category 一个流程内所有事件拥有一致的category
      * @param tag 事件版本号，一个流程发生变更时应当修改tag，同时删除相同category不同tag的流程，相当于流程的版本
      * @param name 事件名称，只有任务事件拥有名字，其它类型的事件使用eventType.toString()代替
+     * @param session 会话标识，缺省为随机 UUID；同一流程会话内保持一致
      */
     public Event(
         public let eventType!: EventType,
         public let category!: String,
         public let tag!: String,
-        public let name!: String 
+        public let name!: String,
+        public let session!: String = UUID.random().toHexString()
     )
     /**
      * 事件实例的类不影响事件相等性，事件相等性由eventType category tag name这四个成员变量决定
@@ -78,8 +83,9 @@ public open class DataEvent <: Event {
         category!: String,
         tag!: String,
         name!: String,
+        session!: String = UUID.random().toHexString(),
         public let data!: Any
-    ) 
+    )
     public func tryGet<T>(): ?T 
 }
 ```
@@ -90,8 +96,9 @@ public class StartEvent <: DataEvent {
     /**
      * 开始事件对应的StartExecutor什么也不做只是把数据转给流程的第一个任务执行器，为了任务执行器能收到事件，开始事件的name必须与第一个任务执行器的事件名一致
      */
-    public init(category!: String, tag!: String, name!: String, data!: Any){
-        super(eventType: Start, category: category, tag: tag, name: name, data: data)
+    public init(category!: String, tag!: String, name!: String, data!: Any,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: Start, category: category, tag: tag, name: name, data: data, session: session)
     }
 }
 ```
@@ -99,8 +106,9 @@ public class StartEvent <: DataEvent {
 ### 结束事件`EndEvent`
 ```cj
 public class EndEvent <: DataEvent {
-    public init(category!: String, tag!: String, data!: Any){
-        super(eventType: End, category: category, tag: tag, name: EventType.End.toString(), data: data)
+    public init(category!: String, tag!: String, data!: Any,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: End, category: category, tag: tag, name: EventType.End.toString(), data: data, session: session)
     }
 }
 ```
@@ -108,8 +116,9 @@ public class EndEvent <: DataEvent {
 ### 任务事件`TaskEvent`
 ```cj
 public class TaskEvent <: DataEvent {
-    public init(category!: String, tag!: String, name!: String, data!: Any){
-        super(eventType: EventType.Task, category: category, tag: tag, name: name, data: data)
+    public init(category!: String, tag!: String, name!: String, data!: Any,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: EventType.Task, category: category, tag: tag, name: name, data: data, session: session)
     }
 }
 ```
@@ -117,11 +126,13 @@ public class TaskEvent <: DataEvent {
 ### 错误事件`ErrorEvent`
 ```cj
 public class ErrorEvent <: DataEvent {
-    public init(category!: String, tag!: String, message!: String){
-        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: message)
+    public init(category!: String, tag!: String, message!: String,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: message, session: session)
     }
-    public init(category!: String, tag!: String, error!: Exception){
-        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: error)
+    public init(category!: String, tag!: String, error!: Exception,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: error, session: session)
     }
 }
 ```
@@ -130,9 +141,9 @@ public class ErrorEvent <: DataEvent {
 
 ```cj
 public class MultiEvent <: DataEvent {
-    public init(category!: String, tag!: String, events!: Iterable<Event>, 
+    public init(category!: String, tag!: String, name!: String, events!: Iterable<Event>, 
                 session!: String = UUID.random().toHexString()){
-        super(eventType: EventType.Task, category: category, tag: tag, name: 'multi', data: events, session: session)
+        super(eventType: EventType.Multi, category: category, tag: tag, name: name, data: events, session: session)
     }
 }
 ```
@@ -142,7 +153,7 @@ public class MultiEvent <: DataEvent {
 public class DummyEvent <: Event {
     public static let instance = DummyEvent()
     private init(){
-        super(eventType: EventType.Dummy, category: '', tag: '', name: '')
+        super(eventType: EventType.Dummy, category: '', tag: '', name: '', session: '')
     }
 }
 ```
@@ -478,13 +489,16 @@ public class BarrierTask<G> <: Task where G <: EndExecutorGetter{
      * @param events 可接收的和输出的事件，可接收的事件是元组的第一个元素，
      *               对应的发射事件是元组的第二个元素，
      *               第三个元素是同一事件的数量达到指定数后发送输出事件
+     * @param producing 本任务可能产生的事件（Task 契约元数据）
      */
     public BarrierTask(
         name!: String,
-        events!: Array<(String, String, Int64)>
+        events!: Array<(String, String, Int64)>,
+        producing!: Array<String>
     )
     public prop name: String 
     public prop acceptableEvents: Array<String> 
+    public prop producingEvents: Array<String> 
     /**
      * 固定返回DummyEvent，同一事件的数据量达到指定数时，构造成新事件调用flow.emit一次发出
      */
@@ -526,7 +540,7 @@ public interface BaseFlow <:Emitter {
     /**
      * 向流程注册开始事件执行器，name是开始事件名，必须与流程的第一个任务事件执行器对应的事件名称相同
      */
-    func registerStart(name: String): Unit
+    func registerStart(eventName: String): Unit
     /**
      * 向流程注册结束事件执行器
      */
@@ -538,7 +552,7 @@ public interface BaseFlow <:Emitter {
     /**
      * 向流程注册任务事件执行器
      */
-    func registerTask(name: String, task: (Event) -> Event): Unit
+    func registerTask(eventName: String, task: (Event) -> Event): Unit
     /**
      * 向流程注册任务事件执行器
      */
@@ -577,8 +591,8 @@ public interface Flow<G> <: BaseFlow & Hashable & Equatable<ImmediateFlow> & Equ
      * 使用指定流程作为任务执行器的构造函数参数
      * @param flow 任务事件执行器的逻辑
      */
-    func registerTaskByFlow<G, F>(name!: String, flow!: F): Unit where G <: EndExecutorGetter, F <: Flow<G> {
-        registerTask(name){e => flow.start(((e as DataEvent).getOrThrow()).data).get().get()}
+    func registerTaskByFlow<G, F>(eventName!: String, flow!: F): Unit where G <: EndExecutorGetter, F <: Flow<G> {
+        registerTask(eventName){e => flow.start(((e as DataEvent).getOrThrow()).data).get().get()}
     }
     /**
      * 将data包装成开始事件，开始执行一个流程
@@ -590,22 +604,30 @@ public interface Flow<G> <: BaseFlow & Hashable & Equatable<ImmediateFlow> & Equ
 ### 同步流程`ImmediateFlow`
 ```cj
 /**
- * 一个同步调度器是一个流程，ImmediateFlow维持着若干个流程
+ * 一个同步调度器是一个流程，ImmediateFlow 维持着若干个流程
  */
-public class ImmediateFlow <: Flow<EndExecutorGetter> & Hashable & Equatable<ImmediateFlow> {
-    public ImmediateFlow(private let category!: String, private let tag!: String)
-    public static func remove(category!: String, tag!: String): Unit 
-    public func hashCode(): Int64 
-    public operator func ==(other: ImmediateFlow): Bool 
-    public func registerStart(name: String): Unit 
-    public func registerEnd(): Unit 
-    public func registerError(): Unit 
-    public func registerTask(name: String, task: (Event) -> Event): Unit 
-    public func registerTask(task: Task): Unit 
+public class ImmediateFlow <: Flow<EndExecutorGetter> {
+    public ImmediateFlow(let category!: String, let tag!: String)
+    public func canBeRemoved(): Unit
+    public func remove(): Unit
+    public func removeExceptCurrentTag(): Unit
+    public prop dependencied: ConcurrentHashSet<String>
+    public func hashCode(): Int64
+    public operator func ==(other: ImmediateFlow): Bool
+    public operator func ==(other: AsyncFlow): Bool
+    public func toString(): String
+    public func registerStart(eventName: String): Unit
+    public func registerEnd(): Unit
+    public func registerError(): Unit
+    public func registerTask(eventName: String, task: (Event) -> Event): Unit
+    public func registerTask(task: Task): Unit
+    public func registerMultiEventTask(): Unit
     /**
-     * 将data与本实例的category和tag一起包装为开始事件，并开始执行一个流程
+     * 将 data 与本实例的 category 和 tag 一起包装为开始事件，并开始执行一个流程。
+     * 宿主可用新建的同 (category, tag) 实例启动 initialize() 已注册的流程：开始事件名由
+     * dispatcher 共享记录，本地 registerStart 未调用时自动回退读取。
      */
-    public func start(data: Any): EndExecutorGetter 
+    public func start(data: Any): EndExecutorGetter
     public func emit(eventType!: EventType, name!: String, data!: Any): Unit
 }
 ```
@@ -614,25 +636,38 @@ public class ImmediateFlow <: Flow<EndExecutorGetter> & Hashable & Equatable<Imm
 ```cj
 public class AsyncFlow <: Flow<AsyncEndExecutorGetter> {
     /**
-     * AsyncDispatcher是本类型的实例成员变量，用本参数clearTimerDuration和toThrowIfNoExecutor实例化一个AsyncDispatcher。
-     * 一个AsyncFlow实例会维持多个流程，相同category的执行器构成一个流程，相同的category不应长时间同时存在多个tag。应尽快将旧的tag删除。
+     * AsyncDispatcher 是本类型的实例成员变量，用本参数 clearTimerDuration 和 toThrowIfNoExecutor 实例化一个 AsyncDispatcher。
+     * 一个 AsyncFlow 实例会维持多个流程，相同 category 的执行器构成一个流程，相同的 category 不应长时间同时存在多个 tag。应尽快将旧的 tag 删除。
      */
-    public static func initDispatcher(clearTimerDuration!: Duration = Duration.second, toThrowIfNoExecutor!: Bool = true): Unit 
-    public AsyncFlow(private let category!: String, private let tag!: String){}
-    public static func remove(category!: String, tag!: String): Unit 
-    
-    public func registerStart(name: String): Unit 
-    public func registerEnd(): Unit 
-    public func registerError(): Unit 
-    public func registerTask(name: String, task: (Event) -> Event): Unit 
+    public static func initDispatcher(clearTimerDuration!: Duration = Duration.second, toThrowIfNoExecutor!: Bool = true): Unit
+    public AsyncFlow(let category!: String, let tag!: String)
+    public func canBeRemoved(): Unit
+    public func remove(): Unit
+    public func removeExceptCurrentTag(): Unit
+    public prop dependencied: ConcurrentHashSet<String>
+    public func hashCode(): Int64
+    public operator func ==(other: AsyncFlow): Bool
+    public operator func ==(other: ImmediateFlow): Bool
+    public func toString(): String
+    public func registerStart(eventName: String): Unit
+    public func registerEnd(): Unit
+    public func registerError(): Unit
+    public func registerTask(eventName: String, task: (Event) -> Event): Unit
     public func registerTask(task: Task): Unit
+    public func registerMultiEventTask(): Unit
     /**
-     * 将data跟当前实例的category和tag一起构造开始事件并开始执行一个流程
+     * 将 data 跟当前实例的 category 和 tag 一起构造开始事件并开始执行一个流程。
+     * 开始事件名回退规则同 ImmediateFlow。
      */
-    public func start(data: Any): AsyncEndExecutorGetter 
+    public func start(data: Any): AsyncEndExecutorGetter
     public func emit(eventType!: EventType, name!: String, data!: Any): Unit
 }
 ```
+
+### JIT 注册面
+- `Task`、`ClosureTask`、`FlowEventFactory` 标注 `@JitBind`，由 `Compiler.registerInterface` / `registerType` 直接取用宏登记；
+- `Event` 家族、`Emitter`、`BaseFlow`、`ImmediateFlow`、`AsyncFlow` **不标** `@JitBind`：它们使用命名形参、`operator func` 或函数类型形参，宏无法展开；改由 `JitHostRegistry` 用 `ClassDescriptor` 手工注册（接口 `isInterface = true`），事件字段另经 `HostFieldTable` 暴露；
+- `f_jit` 的 `@IgnoreJitBinding` 只能出现在 `@JitBind` 声明内部；宏展开与 `ReflectRegistrar` 反射注册**两层**都会跳过被标注成员。`ClosureTask.initCompiler` 用它保持 `public`，但不进入脚本名空间。
 
 ### JIT 任务`ClosureTask`
 ```cj
@@ -750,6 +785,20 @@ public interface FlowLoader {
 
 
 ---
+
+## 异常
+
+```cj
+/**
+ * f_egraph 的统一异常类型，继承 f_base 的 BaseException。
+ */
+public class GraphException <: BaseException {
+    public init()
+    public init(message: String)
+    public init(caused: Exception)
+    public init(message: String, caused: Exception)
+}
+```
 
 ## 其他公开 API
 

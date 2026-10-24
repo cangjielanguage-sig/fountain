@@ -1,5 +1,8 @@
 # `fountain::f_egraph` is an event-driven flow utility library
 All the top-level declarations below are re-exports of `fountain::f_egraph`
+
+Flow scripting relies on `fountain::f_jit`; see the JIT registration surface and script contract below.
+
 ---
 
 ## Event types
@@ -54,12 +57,14 @@ public open class Event <: ToString & Hashable & Equatable<Event> {
      * @param tag Event version number; when a flow changes, tag should be modified and the flows with the same category but
      * a different tag should be deleted; it is the version of the flow
      * @param name Event name; only task events have a name, and events of other types use eventType.toString() instead
+     * @param session Session id, a random UUID by default; keep it consistent within one flow session
      */
     public Event(
         public let eventType!: EventType,
         public let category!: String,
         public let tag!: String,
-        public let name!: String 
+        public let name!: String,
+        public let session!: String = UUID.random().toHexString()
     )
     /**
      * The class of an event instance does not affect event equality; event equality is determined by the four member
@@ -83,8 +88,9 @@ public open class DataEvent <: Event {
         category!: String,
         tag!: String,
         name!: String,
+        session!: String = UUID.random().toHexString(),
         public let data!: Any
-    ) 
+    )
     public func tryGet<T>(): ?T 
 }
 ```
@@ -97,8 +103,9 @@ public class StartEvent <: DataEvent {
      * the flow; for the task executor to receive the event, the name of the start event must equal the event name of
      * the first task executor
      */
-    public init(category!: String, tag!: String, name!: String, data!: Any){
-        super(eventType: Start, category: category, tag: tag, name: name, data: data)
+    public init(category!: String, tag!: String, name!: String, data!: Any,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: Start, category: category, tag: tag, name: name, data: data, session: session)
     }
 }
 ```
@@ -106,8 +113,9 @@ public class StartEvent <: DataEvent {
 ### End event `EndEvent`
 ```cj
 public class EndEvent <: DataEvent {
-    public init(category!: String, tag!: String, data!: Any){
-        super(eventType: End, category: category, tag: tag, name: EventType.End.toString(), data: data)
+    public init(category!: String, tag!: String, data!: Any,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: End, category: category, tag: tag, name: EventType.End.toString(), data: data, session: session)
     }
 }
 ```
@@ -115,8 +123,9 @@ public class EndEvent <: DataEvent {
 ### Task event `TaskEvent`
 ```cj
 public class TaskEvent <: DataEvent {
-    public init(category!: String, tag!: String, name!: String, data!: Any){
-        super(eventType: EventType.Task, category: category, tag: tag, name: name, data: data)
+    public init(category!: String, tag!: String, name!: String, data!: Any,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: EventType.Task, category: category, tag: tag, name: name, data: data, session: session)
     }
 }
 ```
@@ -124,11 +133,13 @@ public class TaskEvent <: DataEvent {
 ### Error event `ErrorEvent`
 ```cj
 public class ErrorEvent <: DataEvent {
-    public init(category!: String, tag!: String, message!: String){
-        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: message)
+    public init(category!: String, tag!: String, message!: String,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: message, session: session)
     }
-    public init(category!: String, tag!: String, error!: Exception){
-        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: error)
+    public init(category!: String, tag!: String, error!: Exception,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: error, session: session)
     }
 }
 ```
@@ -137,9 +148,9 @@ public class ErrorEvent <: DataEvent {
 
 ```cj
 public class MultiEvent <: DataEvent {
-    public init(category!: String, tag!: String, events!: Iterable<Event>, 
+    public init(category!: String, tag!: String, name!: String, events!: Iterable<Event>, 
                 session!: String = UUID.random().toHexString()){
-        super(eventType: EventType.Task, category: category, tag: tag, name: 'multi', data: events, session: session)
+        super(eventType: EventType.Multi, category: category, tag: tag, name: name, data: events, session: session)
     }
 }
 ```
@@ -149,7 +160,7 @@ public class MultiEvent <: DataEvent {
 public class DummyEvent <: Event {
     public static let instance = DummyEvent()
     private init(){
-        super(eventType: EventType.Dummy, category: '', tag: '', name: '')
+        super(eventType: EventType.Dummy, category: '', tag: '', name: '', session: '')
     }
 }
 ```
@@ -496,10 +507,12 @@ public class BarrierTask<G> <: Task where G <: EndExecutorGetter{
      */
     public BarrierTask(
         name!: String,
-        events!: Array<(String, String, Int64)>
+        events!: Array<(String, String, Int64)>,
+        producing!: Array<String>
     )
     public prop name: String 
     public prop acceptableEvents: Array<String> 
+    public prop producingEvents: Array<String> 
     /**
      * Always returns DummyEvent; when the number of data items of the same event reaches the given count, a new event
      * is constructed and emitted once through flow.emit
@@ -544,7 +557,7 @@ public interface BaseFlow <:Emitter {
      * Register the start event executor with the flow; name is the start event name and must equal the event name
      * corresponding to the first task event executor of the flow
      */
-    func registerStart(name: String): Unit
+    func registerStart(eventName: String): Unit
     /**
      * Register the end event executor with the flow
      */
@@ -556,7 +569,7 @@ public interface BaseFlow <:Emitter {
     /**
      * Register a task event executor with the flow
      */
-    func registerTask(name: String, task: (Event) -> Event): Unit
+    func registerTask(eventName: String, task: (Event) -> Event): Unit
     /**
      * Register a task event executor with the flow
      */
@@ -597,8 +610,8 @@ public interface Flow<G> <: BaseFlow & Hashable & Equatable<ImmediateFlow> & Equ
      * A constructor taking the given flow as the logic of the task executor
      * @param flow The logic of the task event executor
      */
-    func registerTaskByFlow<G, F>(name!: String, flow!: F): Unit where G <: EndExecutorGetter, F <: Flow<G> {
-        registerTask(name){e => flow.start(((e as DataEvent).getOrThrow()).data).get().get()}
+    func registerTaskByFlow<G, F>(eventName!: String, flow!: F): Unit where G <: EndExecutorGetter, F <: Flow<G> {
+        registerTask(eventName){e => flow.start(((e as DataEvent).getOrThrow()).data).get().get()}
     }
     /**
      * Wrap data into a start event and start a flow
@@ -612,20 +625,29 @@ public interface Flow<G> <: BaseFlow & Hashable & Equatable<ImmediateFlow> & Equ
 /**
  * A synchronous dispatcher is a flow; ImmediateFlow keeps several flows
  */
-public class ImmediateFlow <: Flow<EndExecutorGetter> & Hashable & Equatable<ImmediateFlow> {
-    public ImmediateFlow(private let category!: String, private let tag!: String)
-    public static func remove(category!: String, tag!: String): Unit 
-    public func hashCode(): Int64 
-    public operator func ==(other: ImmediateFlow): Bool 
-    public func registerStart(name: String): Unit 
-    public func registerEnd(): Unit 
-    public func registerError(): Unit 
-    public func registerTask(name: String, task: (Event) -> Event): Unit 
-    public func registerTask(task: Task): Unit 
+public class ImmediateFlow <: Flow<EndExecutorGetter> {
+    public ImmediateFlow(let category!: String, let tag!: String)
+    public func canBeRemoved(): Unit
+    public func remove(): Unit
+    public func removeExceptCurrentTag(): Unit
+    public prop dependencied: ConcurrentHashSet<String>
+    public func hashCode(): Int64
+    public operator func ==(other: ImmediateFlow): Bool
+    public operator func ==(other: AsyncFlow): Bool
+    public func toString(): String
+    public func registerStart(eventName: String): Unit
+    public func registerEnd(): Unit
+    public func registerError(): Unit
+    public func registerTask(eventName: String, task: (Event) -> Event): Unit
+    public func registerTask(task: Task): Unit
+    public func registerMultiEventTask(): Unit
     /**
-     * Wrap data together with the category and tag of this instance into a start event and start a flow
+     * Wrap data with this instance's category and tag into a start event and start a flow.
+     * A host may start a flow registered by initialize() with a new instance of the same
+     * (category, tag): the start event name is recorded by the dispatcher and is used as a
+     * fallback when registerStart was not called locally.
      */
-    public func start(data: Any): EndExecutorGetter 
+    public func start(data: Any): EndExecutorGetter
     public func emit(eventType!: EventType, name!: String, data!: Any): Unit
 }
 ```
@@ -634,27 +656,39 @@ public class ImmediateFlow <: Flow<EndExecutorGetter> & Hashable & Equatable<Imm
 ```cj
 public class AsyncFlow <: Flow<AsyncEndExecutorGetter> {
     /**
-     * AsyncDispatcher is an instance member variable of this type; this argument clearTimerDuration and
-     * toThrowIfNoExecutor instantiate an AsyncDispatcher.
-     * One AsyncFlow instance keeps several flows; the executors with the same category form one flow, and several tags
-     * of the same category must not coexist for long. The old tag should be deleted as soon as possible.
+     * AsyncDispatcher is an instance member of this type, instantiated with clearTimerDuration and toThrowIfNoExecutor.
+     * One AsyncFlow instance keeps several flows; executors with the same category form one flow, and several tags of
+     * the same category should not coexist for long. Old tags should be removed as soon as possible.
      */
-    public static func initDispatcher(clearTimerDuration!: Duration = Duration.second, toThrowIfNoExecutor!: Bool = true): Unit 
-    public AsyncFlow(private let category!: String, private let tag!: String){}
-    public static func remove(category!: String, tag!: String): Unit 
-    
-    public func registerStart(name: String): Unit 
-    public func registerEnd(): Unit 
-    public func registerError(): Unit 
-    public func registerTask(name: String, task: (Event) -> Event): Unit 
+    public static func initDispatcher(clearTimerDuration!: Duration = Duration.second, toThrowIfNoExecutor!: Bool = true): Unit
+    public AsyncFlow(let category!: String, let tag!: String)
+    public func canBeRemoved(): Unit
+    public func remove(): Unit
+    public func removeExceptCurrentTag(): Unit
+    public prop dependencied: ConcurrentHashSet<String>
+    public func hashCode(): Int64
+    public operator func ==(other: AsyncFlow): Bool
+    public operator func ==(other: ImmediateFlow): Bool
+    public func toString(): String
+    public func registerStart(eventName: String): Unit
+    public func registerEnd(): Unit
+    public func registerError(): Unit
+    public func registerTask(eventName: String, task: (Event) -> Event): Unit
     public func registerTask(task: Task): Unit
+    public func registerMultiEventTask(): Unit
     /**
-     * Construct a start event from data together with the category and tag of the current instance and start a flow
+     * Wrap data with this instance's category and tag into a start event and start a flow.
+     * The start-event-name fallback is the same as ImmediateFlow.
      */
-    public func start(data: Any): AsyncEndExecutorGetter 
+    public func start(data: Any): AsyncEndExecutorGetter
     public func emit(eventType!: EventType, name!: String, data!: Any): Unit
 }
 ```
+
+### JIT registration surface
+- `Task`, `ClosureTask` and `FlowEventFactory` are annotated with `@JitBind`; `Compiler.registerInterface` / `registerType` pick up the macro enrollment directly;
+- The `Event` family, `Emitter`, `BaseFlow`, `ImmediateFlow` and `AsyncFlow` are **not** annotated: they use named parameters, `operator func` or function-type parameters that the macro cannot expand. `JitHostRegistry` registers them manually with `ClassDescriptor` (`isInterface = true` for interfaces), and event fields are exposed through `HostFieldTable`;
+- `@IgnoreJitBinding` (f_jit) may only appear inside a `@JitBind` declaration; both macro expansion and `ReflectRegistrar` skip the annotated member. `ClosureTask.initCompiler` uses it to stay `public` while remaining outside the script namespace.
 
 ### JIT task `ClosureTask`
 ```cj
@@ -770,6 +804,20 @@ public interface FlowLoader {
 ```
 
 ---
+
+## Exceptions
+
+```cj
+/**
+ * Unified exception type of f_egraph, extending BaseException from f_base.
+ */
+public class GraphException <: BaseException {
+    public init()
+    public init(message: String)
+    public init(caused: Exception)
+    public init(message: String, caused: Exception)
+}
+```
 
 ## Other public API
 
