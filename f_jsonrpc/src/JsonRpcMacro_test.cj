@@ -172,12 +172,6 @@ class JsonRpcMacro_test {
     }
 
     @TestCase
-    public func testRegistryInstance(): Unit {
-        let rpc = JsonRpcRegistry.instance<JsonRpcMacroTestRPC>()
-        @Assert('found:self', rpc.search('self'))
-    }
-
-    @TestCase
     public func testTimeoutDuration(): Unit {
         let meta = JsonRpcRegistry.getMeta<JsonRpcMacroTestRPC>('search', [TypeInfo.of<String>()])
         @Assert('知识库检索', meta.description)

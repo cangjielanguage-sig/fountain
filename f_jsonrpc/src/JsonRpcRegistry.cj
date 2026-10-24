@@ -16,7 +16,6 @@ limitations under the License.
 package fountain::f_jsonrpc
 
 import std.reflect.{InfoNotFoundException, TypeInfo}
-import fountain::f_bean.lookup
 
 /** 进程内默认端点的方法注册表。应用在 static init 阶段调 `register`。 */
 public class JsonRpcRegistry {
@@ -46,10 +45,5 @@ public class JsonRpcRegistry {
             case Some(meta) => meta
             case _ => JsonRpcMeta('', '500ms')
         }
-    }
-
-    /** 从 bean 容器取实例（`@JsonRpc` 展开时给类加了 `@Bean`）。 */
-    public static func instance<T>(): T where T <: Object {
-        lookup<T>()
     }
 }
