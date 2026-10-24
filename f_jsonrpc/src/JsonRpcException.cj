@@ -21,7 +21,7 @@ import fountain::f_data.*
  * JSON-RPC 错误。handler 抛出它时，`code` / `message` / `data` 原样进入响应体。
  * 业务自定义错误码请落在 `-32020 ~ -32099`，不要占用 `-32001 ~ -32004`。
  */
-public class JsonRpcException <: Exception {
+public open class JsonRpcException <: Exception {
     public let code: Int64
     public let data: ?JsonValue
 
