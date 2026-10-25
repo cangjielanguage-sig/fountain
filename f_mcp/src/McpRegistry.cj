@@ -15,7 +15,10 @@ limitations under the License.
  */
 package fountain::f_mcp
 
+import std.collection.ArrayList
+import std.reflect.{InfoNotFoundException, TypeInfo}
 import std.sync.Mutex
+import fountain::f_data.*
 
 /** 进程内默认 MCP server。应用在 static init 阶段用 `configure` 注册工具 / 资源。 */
 public class McpRegistry {
@@ -31,6 +34,167 @@ public class McpRegistry {
             }
             configure(builder)
         }
+    }
+
+    /**
+     * 读取 `T.name` 上的 `@McpToolMeta`；函数不存在或没有注解时返回 `None`。
+     */
+    public static func getToolMeta<T, R>(name: String, args: Array<TypeInfo>): ?McpToolMeta where T <: Object {
+        let function = try {
+            TypeInfo.of<T>().getInstanceFunction(name, args)
+        } catch (_: InfoNotFoundException) {
+            return None<McpToolMeta>
+        }
+        function.findAnnotation<McpToolMeta>()
+    }
+
+    /** 读取 `T.name` 上的 `@McpResourceMeta`；函数不存在或没有注解时返回 `None`。 */
+    public static func getResourceMeta<T, R>(name: String, args: Array<TypeInfo>, fn: (Array<JsonValue>) -> R): ?McpResourceMeta where T <: Object {
+        let function = try {
+            TypeInfo.of<T>().getInstanceFunction(name, args)
+        } catch (_: InfoNotFoundException) {
+            return None<McpResourceMeta>
+        }
+        function.findAnnotation<McpResourceMeta>()
+    }
+
+    /** 读取 `T.name` 上的 `@McpPromptMeta`；函数不存在或没有注解时返回 `None`。 */
+    public static func getPromptMeta<T, R>(name: String, args: Array<TypeInfo>, fn: (Array<JsonValue>) -> R): ?McpPromptMeta where T <: Object {
+        let function = try {
+            TypeInfo.of<T>().getInstanceFunction(name, args)
+        } catch (_: InfoNotFoundException) {
+            return None<McpPromptMeta>
+        }
+        function.findAnnotation<McpPromptMeta>()
+    }
+
+    /**
+     * 注册 tool。函数必须恰好一个参数，参数类型用于生成 `inputSchema`。
+     */
+    public static func registerToolMeta<T, R>(name: String, meta: McpToolMeta, args: Array<TypeInfo>,
+        fn: (Array<JsonValue>) -> R): Unit where T <: Object {
+        if (args.size != 1) {
+            throw McpException(McpProtocol.INTERNAL_ERROR,
+                "tool '${name}' must have exactly one parameter, got ${args.size}")
+        }
+        try {
+            args[0].getStaticFunction('dataFields')
+        } catch (_: InfoNotFoundException) {
+            throw McpException(McpProtocol.INTERNAL_ERROR,
+                "tool '${name}' parameter must be an @DataAssist[props fields] class")
+        }
+        let schema = JsonObject.toJsonSchema(args[0])
+        let toolName = if (meta.name.isEmpty()) {
+            name
+        } else {
+            meta.name
+        }
+        let tool = McpTool.builder(toolName).description(meta.description).inputSchema(schema).handler(
+            {
+                _, jsonArgs =>
+                    let payload = match (jsonArgs) {
+                        case obj: JsonObject => obj
+                        case _ => JsonObject()
+                    }
+                    let raw = ArrayList<JsonValue>()
+                    raw.add(payload)
+                    match (fn(raw.toArray())) {
+                        case result: CallToolResult => result
+                        case _ => throw McpException(McpProtocol.INTERNAL_ERROR,
+                            "tool '${toolName}' must return CallToolResult")
+                    }
+            }
+        ).build()
+        configure({b => b.tool(tool)})
+    }
+
+    /**
+     * 注册 resource。函数必须没有参数；`uri` 不能为空。
+     */
+    public static func registerResourceMeta<T, R>(name: String, meta: McpResourceMeta, args: Array<TypeInfo>,
+        fn: (Array<JsonValue>) -> R): Unit where T <: Object {
+        if (args.size != 0) {
+            throw McpException(McpProtocol.INTERNAL_ERROR,
+                "resource '${name}' must have no parameters, got ${args.size}")
+        }
+        if (meta.uri.isEmpty()) {
+            throw McpException(McpProtocol.INTERNAL_ERROR,
+                "resource '${name}' has no uri; set @McpResourceMeta[uri: ...]")
+        }
+        let resourceName = if (meta.name.isEmpty()) {
+            name
+        } else {
+            meta.name
+        }
+        let builder = McpResource.builder(meta.uri, resourceName).description(meta.description)
+        if (!meta.mediaType.isEmpty()) {
+            builder.mimeType(meta.mediaType)
+        }
+        let resource = builder.handler({
+            _ => match (fn(Array<JsonValue>())) {
+                case result: ArrayList<ResourceContent> => result
+                case _ => throw McpException(McpProtocol.INTERNAL_ERROR,
+                    "resource '${resourceName}' must return ArrayList<ResourceContent>")
+            }
+        }).build()
+        configure({b => b.resource(resource)})
+    }
+
+    /**
+     * 注册 prompt。函数参数即 prompt 参数，`@McpPromptArg` 提供描述与是否必填。
+     */
+    public static func registerPromptMeta<T, R>(name: String, meta: McpPromptMeta, args: Array<TypeInfo>,
+        fn: (Array<JsonValue>) -> R): Unit where T <: Object {
+        let function = try {
+            TypeInfo.of<T>().getInstanceFunction(name, args)
+        } catch (_: InfoNotFoundException) {
+            throw McpException(McpProtocol.INTERNAL_ERROR, "prompt function '${name}' not found")
+        }
+        let promptName = if (meta.name.isEmpty()) {
+            name
+        } else {
+            meta.name
+        }
+        let builder = McpPrompt.builder(promptName).description(meta.description)
+        let params = function.parameters
+        for (param in params) {
+            let argMeta = param.findAnnotation<McpPromptArg>() ?? McpPromptArg()
+            builder.argument(param.name, description: argMeta.description, required: argMeta.required)
+        }
+        let prompt = builder.handler(
+            {
+                jsonArgs =>
+                    let raw = ArrayList<JsonValue>()
+                    for (param in params) {
+                        let argMeta = param.findAnnotation<McpPromptArg>() ?? McpPromptArg()
+                        match (jsonArgs.get(param.name)) {
+                            case Some(value) => raw.add(value)
+                            case _ =>
+                                if (argMeta.required) {
+                                    throw McpException(McpProtocol.INVALID_PARAMS,
+                                        "missing prompt argument '${param.name}'", data: JsonString(param.name))
+                                }
+                                raw.add(JsonNull.instance)
+                        }
+                    }
+                    match (fn(raw.toArray())) {
+                        case result: ArrayList<PromptMessage> => result
+                        case _ => throw McpException(McpProtocol.INTERNAL_ERROR,
+                            "prompt '${promptName}' must return ArrayList<PromptMessage>")
+                    }
+            }
+        ).build()
+        configure({b => b.prompt(prompt)})
+    }
+
+    /** 把单个 JSON 参数转换成函数声明的参数类型。 */
+    public static func convertArg<T>(value: JsonValue): T where T <: DataFields<T> {
+        convert<T>(value.toData()).getOrThrow()
+    }
+
+    /** 触发生成 `McpServer`（已经 build 过则直接返回）。 */
+    public static func build(): Unit {
+        server()
     }
 
     public static func server(): McpServer {

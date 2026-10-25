@@ -58,6 +58,57 @@ A `@DataAssist` class can provide the schema directly:
 McpTool.of<SearchRequest>('kb.search')
 ```
 
+### Register with annotations (`@Mcp`)
+
+```cangjie
+import fountain::f_mcp.*
+import fountain::f_mcp.macros.*
+import fountain::f_data.*
+import fountain::f_data.macros.*
+
+@DataAssist[props fields]
+public class SearchRequest {
+    public var query: String = ''
+
+    public init() {}
+}
+
+@Mcp
+public class KnowledgeService {
+    public init() {}
+
+    @McpToolMeta[name: 'kb.search', description: 'knowledge base search']
+    public func search(req: SearchRequest): CallToolResult {
+        CallToolResult.text('found: ${req.query}')
+    }
+
+    @McpResourceMeta[uri: '/doc', name: 'doc', description: 'docs', mediaType: 'text/plain']
+    public func doc(): ArrayList<ResourceContent> {
+        // return a list of ResourceContent
+    }
+
+    @McpPromptMeta[name: 'greet', description: 'build a greeting']
+    public func greet(name: String, @McpPromptArg[description: 'name'] title: String): ArrayList<PromptMessage> {
+        // return a list of PromptMessage
+    }
+}
+```
+
+- `@Mcp` adds `@Bean`, registers everything at module load, then calls `McpRegistry.build()`; use one `@Mcp` class per process
+- **tool**: exactly one parameter, an `@DataAssist[props fields]` class; `inputSchema` comes from that type and the request JSON is converted to it
+- **resource**: no parameters; `uri` is required; `mediaType` maps to `McpResource.mimeType`; the `/doc` example needs `mcp_publicBaseUrl`
+- **prompt**: the function parameters are the `PromptArgument`s, using the parameter name as `name`; `@McpPromptArg` sets `description` / `required` (default `true`); use `Option<T>` for optional arguments
+- an empty `name` falls back to the function name; public functions without these annotations are ignored
+
+The registry APIs are also available directly:
+
+```cangjie
+McpRegistry.getToolMeta<T, R>(name, argTypes)
+McpRegistry.getResourceMeta<T, R>(name, argTypes, fn)
+McpRegistry.getPromptMeta<T, R>(name, argTypes, fn)
+McpRegistry.build()
+```
+
 ### Public base URL and resource URIs
 
 `publicBaseUrl` is the public root of this server, used to build absolute URLs.
