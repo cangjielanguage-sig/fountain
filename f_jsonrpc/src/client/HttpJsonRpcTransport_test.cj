@@ -147,12 +147,21 @@ private func responseOf(body: String): String {
 
 @Test
 class HttpJsonRpcTransport_test {
+    /** `Content-Length` 预判：超限时一个字节 body 都不读，服务端也不会把 body 写完。 */
     @TestCase
     public func testDeclaredLengthExceedsCapFailsFast(): Unit {
         let server = RawHttpServer({sock, w =>
             writeText(sock, 'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 10485760\r\n\r\n',
                 w)
-            sleep(Duration.second)
+            // 声明 10 MiB，实际按 64 KiB 分片持续写：客户端读完才会全部落地
+            let chunk = Array<Byte>(65536, repeat: UInt8(120))
+            var i = 0
+            while (i < 160) {
+                if (!writeBytes(sock, chunk, w)) {
+                    break
+                }
+                i++
+            }
         })
         let transport = HttpJsonRpcTransport(server.url, ClientOptions(maxResponseBytes: 1024 * 1024))
         let start = MonoTime.now()
@@ -164,9 +173,12 @@ class HttpJsonRpcTransport_test {
         }
         let elapsed = (MonoTime.now() - start).toMilliseconds()
         transport.close()
+        let written = server.written.load()
         server.close()
         @Assert(true, threw)
         @Assert(true, elapsed < 700)
+        // 服务端观测到的落地字节必须远小于声明长度：客户端没有把 body 读完
+        @Assert(true, written < 10 * 1024 * 1024)
     }
 
     @TestCase
