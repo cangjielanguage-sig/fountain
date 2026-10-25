@@ -189,6 +189,7 @@ class McpMacro_test {
     public func testResourceStringResult(): Unit {
         let read = call('resources/read', '"uri":"https://example.com/macro-plain"')['result'].asObject()
         let content = read['contents'].asArray()[0].asObject()
+        @Assert('https://example.com/macro-plain', content['uri'].asString().value)
         @Assert('plain body', content['text'].asString().value)
         @Assert('text/plain', content['mimeType'].asString().value)
     }
