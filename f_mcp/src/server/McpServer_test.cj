@@ -26,6 +26,16 @@ import fountain::f_jsonrpc.base.*
 import fountain::f_jsonrpc.server.*
 import fountain::f_mcp.base.*
 
+/** `toData()` 计数包装：统计结果本体在一次 `tools/call` 中被转成 JSON 的次数。 */
+class CountingPayload <: ToData {
+    var calls = 0
+
+    public func toData(): Data {
+        calls++
+        DataString('payload')
+    }
+}
+
 /** 在途请求计数探针：`max()` 是观测到的峰值。 */
 class InFlight {
     private let mutex = Mutex()
@@ -443,6 +453,95 @@ class McpServer_test {
         @ExpectThrows[McpException](parseSubscriptionId('abc'))
         @ExpectThrows[McpException](parseSubscriptionId('-1'))
         @Assert(7, parseSubscriptionId('7'))
+    }
+
+    /**
+     * 小结果：整个 `tools/call` 只把结果本体转成 JSON 一次。
+     *
+     * 用计数 `ToData` 做探针：handler 里 `JsonValue.from(payload)` 计 1 次；
+     * 服务端若再走一次 typed → JSON 转换（量字节时重新序列化），计数就会增长。
+     */
+    @TestCase
+    public func testToolsCallConvertsResultOnce(): Unit {
+        let payload = CountingPayload()
+        let srv = McpServer.builder()
+            .tool(
+                McpTool.builder('probe').handler(
+                    {_, _ =>
+                        CallToolResult(content: ArrayList<ContentBlock>(), structuredContent: JsonValue.from(payload))
+                    }).build()
+            ).build()
+        let result = call(srv, 'tools/call', metaParams('"name":"probe","arguments":{}'))['result'].asObject()
+        @Assert('payload', result['structuredContent'].asString().value)
+        @Assert(1, payload.calls)
+    }
+
+    /** 大结果 + `publicBaseUrl`：量字节 / 入库 / 返回共用同一次序列化，结果本体只转换一次。 */
+    @TestCase
+    public func testLargeResultConvertsBodyOnce(): Unit {
+        let payload = CountingPayload()
+        let srv = McpServer.builder()
+            .publicBaseUrl('https://mcp.example.com')
+            .tool(
+                McpTool.builder('big').maxResultBytes(64).handler(
+                    {_, _ =>
+                        let blocks = ArrayList<ContentBlock>()
+                        blocks.add(ContentBlock.text(bigText(1024)))
+                        CallToolResult(content: blocks, structuredContent: JsonValue.from(payload))
+                    }).build()
+            ).build()
+        let result = call(srv, 'tools/call', metaParams('"name":"big","arguments":{}'))['result'].asObject()
+        let block = result['content'].asArray()[0].asObject()
+        @Assert('resource_link', block['type'].asString().value)
+        @Assert(1, payload.calls)
+        // 入库文本就是那次序列化的结果：包含完整结果（含 structuredContent）
+        let link = block['uri'].asString().value
+        let stored = call(srv, 'resources/read', metaParams('"uri":"${link}"'))['result'].asObject()['contents']
+            .asArray()[0].asObject()['text'].asString().value
+        @Assert(true, stored.contains('"payload"'))
+    }
+
+    /**
+     * 三类列表的条目 JSON 在首次请求时构造一次，之后请求直接复用同一对象
+     * （实现约定只读，服务端不为此在热路径上拷贝）。
+     */
+    @TestCase
+    public func testListEntriesAreBuiltOnceAndReused(): Unit {
+        let srv = server()
+
+        let toolA = call(srv, 'tools/list', metaParams(''))['result'].asObject()['tools'].asArray()[0].asObject()
+        toolA.add('probe', 'tool')
+        let toolB = call(srv, 'tools/list', metaParams(''))['result'].asObject()['tools'].asArray()[0].asObject()
+        @Assert('tool', toolB['probe'].asString().value)
+
+        let resourceA = call(srv, 'resources/list', metaParams(''))['result'].asObject()['resources'].asArray()[0]
+            .asObject()
+        resourceA.add('probe', 'resource')
+        let resourceB = call(srv, 'resources/list', metaParams(''))['result'].asObject()['resources'].asArray()[0]
+            .asObject()
+        @Assert('resource', resourceB['probe'].asString().value)
+
+        let promptA = call(srv, 'prompts/list', metaParams(''))['result'].asObject()['prompts'].asArray()[0].asObject()
+        promptA.add('probe', 'prompt')
+        let promptB = call(srv, 'prompts/list', metaParams(''))['result'].asObject()['prompts'].asArray()[0].asObject()
+        @Assert('prompt', promptB['probe'].asString().value)
+    }
+
+    /** prompt 参数元数据在注册期算好：连续 10 次 `prompts/get` 不重建列表条目、不改变参数语义。 */
+    @TestCase
+    public func testPromptArgumentsResolvedAtRegistration(): Unit {
+        let srv = server()
+        let entry = call(srv, 'prompts/list', metaParams(''))['result'].asObject()['prompts'].asArray()[0].asObject()
+        @Assert(1, entry['arguments'].asArray().size)
+        @Assert('name', entry['arguments'].asArray()[0].asObject()['name'].asString().value)
+        entry.add('probe', 'prompt')
+        for (_ in 0..10) {
+            let got = call(srv, 'prompts/get', metaParams('"name":"greet","arguments":{"name":"Ada"}'))['result']
+                .asObject()
+            @Assert('hi Ada', got['messages'].asArray()[0].asObject()['content'].asObject()['text'].asString().value)
+        }
+        let again = call(srv, 'prompts/list', metaParams(''))['result'].asObject()['prompts'].asArray()[0].asObject()
+        @Assert('prompt', again['probe'].asString().value)
     }
 
     @TestCase
