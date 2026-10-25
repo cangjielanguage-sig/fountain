@@ -36,9 +36,14 @@ public class McpSseStream <: InputStream {
     private let startedNanos = MonoTime.now()
     private var lastWriteNanos = MonoTime.now()
 
+    /**
+     * 直连路径：`/mcp/sse` 未带 `subscriptionId` 时自己建订阅者。
+     *
+     * 创建后立即 attach——不 attach 的订阅者既无法 `detach`，也无法在 TTL 后被回收。
+     */
     public init(hub: SubscriptionHub, topics: ArrayList<String>) {
         this.hub = hub
-        this.subscriber = hub.subscribe(topics)
+        this.subscriber = hub.subscribeAttached(topics)
     }
 
     /** 绑定 `subscriptions/listen` 已经创建的订阅者。 */
@@ -64,6 +69,13 @@ public class McpSseStream <: InputStream {
         buffer[0..count] = pending[pendingOffset..pendingOffset + count]
         pendingOffset += count
         count
+    }
+
+    /** 该流对应的订阅者 id（测试与诊断用）。 */
+    prop subscriberId: Int64 {
+        get() {
+            subscriber.id
+        }
     }
 
     public func close(): Unit {

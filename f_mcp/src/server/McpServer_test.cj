@@ -300,6 +300,73 @@ class McpServer_test {
         @Assert(true, hub.attach(subscriber.id).isSome())
     }
 
+    /** 未 attach 的订阅者从创建时刻开始计 TTL：到期后被回收，`publish` 不再为它入队。 */
+    @TestCase
+    public func testNeverAttachedSubscriberIsPrunedAfterTtl(): Unit {
+        let hub = SubscriptionHub(detachedTtl: Duration.millisecond * 50)
+        let subscriber = hub.subscribe(ArrayList<String>())
+        @Assert(1, hub.size)
+        sleep(Duration.millisecond * 120)
+        hub.prune()
+        @Assert(0, hub.size)
+        let params = JsonObject()
+        params.add('reason', 'after-prune')
+        hub.publish('tools/list_changed', params)
+        @Assert(0, subscriber.drain().size)
+    }
+
+    /** SSE 直连创建的订阅者必须是 attached：`close()` 后 TTL 内可重连，超时后被回收。 */
+    @TestCase
+    public func testDirectSseStreamIsAttachedAndRecycled(): Unit {
+        let hub = SubscriptionHub(detachedTtl: Duration.millisecond * 50)
+        let stream = McpSseStream(hub, ArrayList<String>())
+        let id = stream.subscriberId
+        // 直连订阅者已 attach，超时也不会被回收
+        sleep(Duration.millisecond * 120)
+        hub.prune()
+        @Assert(1, hub.size)
+        stream.close()
+        // 断流后 TTL 内可用同一 id 重连
+        let reconnected = hub.attach(id).getOrThrow()
+        @Assert(id, reconnected.id)
+        // 再次断开后超过 TTL 即回收，重连也失败
+        hub.detach(reconnected)
+        sleep(Duration.millisecond * 120)
+        hub.prune()
+        @Assert(0, hub.size)
+        @Assert(true, hub.attach(id).isNone())
+    }
+
+    /** 流结束（`close()` 或 30 分钟到点）只 detach：订阅者保留到 TTL，可重连。 */
+    @TestCase
+    public func testStreamEndOnlyDetachesSubscriber(): Unit {
+        let hub = SubscriptionHub(detachedTtl: Duration.second * 60)
+        let stream = McpSseStream(hub, ArrayList<String>())
+        let id = stream.subscriberId
+        stream.close()
+        @Assert(1, hub.size)
+        @Assert(true, hub.attach(id).isSome())
+    }
+
+    /** 回收后 `size` 归零，`maxSubscribers` 名额重新可用。 */
+    @TestCase
+    public func testPrunedSubscribersReleaseCapacity(): Unit {
+        let hub = SubscriptionHub(maxSubscribers: 1, detachedTtl: Duration.millisecond * 50)
+        let _ = hub.subscribe(ArrayList<String>())
+        try {
+            let _ = hub.subscribe(ArrayList<String>())
+            @Fail('expected McpException')
+        } catch (e: McpException) {
+            @Assert(McpProtocol.OVERLOADED, e.code)
+        }
+        sleep(Duration.millisecond * 120)
+        hub.prune()
+        @Assert(0, hub.size)
+        let replacement = hub.subscribe(ArrayList<String>())
+        @Assert(1, hub.size)
+        @Assert(true, hub.attach(replacement.id).isSome())
+    }
+
     @TestCase
     public func testTakeBlocksUntilTimeout(): Unit {
         let hub = SubscriptionHub()

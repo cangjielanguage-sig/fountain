@@ -131,17 +131,40 @@ public class SubscriptionHub {
         this.queueCapacity = queueCapacity
     }
 
+    /**
+     * 创建订阅者（未 attach）。
+     *
+     * detached 计时从**创建时刻**开始：`subscriptions/listen` 只返回 `sseUrl`，
+     * 客户端可能永远不连接；若计时从首次 detach 开始，这类订阅者既不会被回收，
+     * 也无法通过 `detach` 补上时间戳，会永久占用 `maxSubscribers` 与队列内存。
+     */
     public func subscribe(topics: ArrayList<String>): McpSubscriber {
         synchronized(mutex) {
-            pruneLocked(nowNanos())
-            if (subscribers.size >= maxSubscribers) {
-                throw McpException(McpProtocol.OVERLOADED,
-                    'too many subscribers: limit ${maxSubscribers}', data: JsonInt(maxSubscribers))
-            }
-            let subscriber = McpSubscriber(nextId.fetchAdd(1) + 1, topics, capacity: queueCapacity)
-            subscribers.add(subscriber)
+            subscribeLocked(topics)
+        }
+    }
+
+    /** 创建订阅者并立即绑定：`/mcp/sse` 直连（未走 `subscriptions/listen`）用。 */
+    public func subscribeAttached(topics: ArrayList<String>): McpSubscriber {
+        synchronized(mutex) {
+            let subscriber = subscribeLocked(topics)
+            subscriber.attached = true
+            subscriber.detachedAtNanos = 0
             subscriber
         }
+    }
+
+    private func subscribeLocked(topics: ArrayList<String>): McpSubscriber {
+        let now = nowNanos()
+        pruneLocked(now)
+        if (subscribers.size >= maxSubscribers) {
+            throw McpException(McpProtocol.OVERLOADED,
+                'too many subscribers: limit ${maxSubscribers}', data: JsonInt(maxSubscribers))
+        }
+        let subscriber = McpSubscriber(nextId.fetchAdd(1) + 1, topics, capacity: queueCapacity)
+        subscriber.detachedAtNanos = now
+        subscribers.add(subscriber)
+        subscriber
     }
 
     public func unsubscribe(subscriber: McpSubscriber): Unit {
@@ -150,12 +173,14 @@ public class SubscriptionHub {
         }
     }
 
-    /** 断线：保留订阅者一段时间，允许同 id 重连。 */
+    /**
+     * 断线：保留订阅者一段时间，允许同 id 重连。
+     *
+     * 幂等：对已 detach 或从未 attach 的订阅者同样写入 detach 时刻，不报错也不提前返回——
+     * 否则「创建后从未 attach」的订阅者永远拿不到时间戳，`prune` 也就永远回收不掉。
+     */
     public func detach(subscriber: McpSubscriber): Unit {
         synchronized(mutex) {
-            if (!subscriber.attached) {
-                return
-            }
             subscriber.attached = false
             subscriber.detachedAtNanos = nowNanos()
         }
@@ -224,8 +249,7 @@ public class SubscriptionHub {
     }
 
     private func pruneLocked(now: Int64): Unit {
-        subscribers.removeIf({s => !s.attached && s.detachedAtNanos > 0 &&
-            now - s.detachedAtNanos > detachedTtlNanos})
+        subscribers.removeIf({s => !s.attached && now - s.detachedAtNanos > detachedTtlNanos})
     }
 
     private static let origin = MonoTime.now()
