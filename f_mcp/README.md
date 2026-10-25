@@ -58,6 +58,57 @@ main() {
 McpTool.of<SearchRequest>('kb.search')
 ```
 
+### 用注解注册（`@Mcp`）
+
+```cangjie
+import fountain::f_mcp.*
+import fountain::f_mcp.macros.*
+import fountain::f_data.*
+import fountain::f_data.macros.*
+
+@DataAssist[props fields]
+public class SearchRequest {
+    public var query: String = ''
+
+    public init() {}
+}
+
+@Mcp
+public class KnowledgeService {
+    public init() {}
+
+    @McpToolMeta[name: 'kb.search', description: '知识库检索']
+    public func search(req: SearchRequest): CallToolResult {
+        CallToolResult.text('found: ${req.query}')
+    }
+
+    @McpResourceMeta[uri: '/doc', name: 'doc', description: '文档', mediaType: 'text/plain']
+    public func doc(): ArrayList<ResourceContent> {
+        // 返回 ResourceContent 列表
+    }
+
+    @McpPromptMeta[name: 'greet', description: '生成问候']
+    public func greet(name: String, @McpPromptArg[description: '姓名'] title: String): ArrayList<PromptMessage> {
+        // 返回 PromptMessage 列表
+    }
+}
+```
+
+- `@Mcp` 自动给类加 `@Bean`，在模块加载期完成注册并调用 `McpRegistry.build()`；一个进程只应有一个 `@Mcp` 类
+- **tool**：函数必须恰好一个参数，参数是 `@DataAssist[props fields]` 类；`inputSchema` 由该类型生成，请求 JSON 自动转换为该类
+- **resource**：函数必须无参数；`uri` 不能为空；`mediaType` 对应 `McpResource.mimeType`；示例中的 `/doc` 需要配置 `mcp_publicBaseUrl`
+- **prompt**：函数参数就是 `PromptArgument`，参数名即 `name`；`@McpPromptArg` 提供 `description` / `required`（默认 `true`）；可选参数建议用 `Option<T>`
+- 注解里的 `name` 为空时回退到函数名；没有这三个注解的 public 函数会被忽略
+
+对应的注册 API 也可以直接调用：
+
+```cangjie
+McpRegistry.getToolMeta<T, R>(name, argTypes)
+McpRegistry.getResourceMeta<T, R>(name, argTypes, fn)
+McpRegistry.getPromptMeta<T, R>(name, argTypes, fn)
+McpRegistry.build()
+```
+
 ### 公共地址与资源 URI
 
 `publicBaseUrl` 是本服务对外暴露的根地址，用于生成绝对 URL。

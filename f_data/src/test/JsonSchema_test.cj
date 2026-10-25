@@ -40,6 +40,22 @@ public class SchemaTestBean {
     }
 }
 
+@DataAssist[fields props]
+public class SchemaDataAssistBean {
+    @JsonStringSchema[minLength: 2]
+    public var name: String = ''
+}
+
+@Test
+public class JsonSchemaDataAssistTest {
+    @TestCase
+    public func testDataFieldsFallback(): Unit {
+        let schema = JsonObject.toJsonSchema<SchemaDataAssistBean>().toString()
+        @Assert(true, schema.contains('"name"'))
+        @Assert(true, schema.contains('"minLength"'))
+    }
+}
+
 @Test
 public class JsonSchemaFormatTest {
     @TestCase
