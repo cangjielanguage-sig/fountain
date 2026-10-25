@@ -38,7 +38,7 @@ main() {
              .inputSchema(schema)
              .handler({ctx, args => CallToolResult.text('found')})
              .build())
-         .resource(McpResource.builder('https://example.com/doc', 'doc')
+         .resource(McpResource.builder('/doc', 'doc')
              .handler({ctx =>
                  let list = ArrayList<ResourceContent>()
                  list.add(ResourceContent(ctx.uri, Some('text/plain'), Some('content'), None))
@@ -58,13 +58,39 @@ A `@DataAssist` class can provide the schema directly:
 McpTool.of<SearchRequest>('kb.search')
 ```
 
+### Public base URL
+
+`publicBaseUrl` is the public root of this server. `Builder` wins over configuration:
+
+```cangjie
+b.publicBaseUrl('https://mcp.example.com')
+```
+
+```bash
+export mcp_publicBaseUrl=https://mcp.example.com
+```
+
+It is used in three places:
+
+- result links: `${publicBaseUrl}/mcp/tool-results/{token}`
+- the `sseUrl` returned by `subscriptions/listen`
+- relative resource URIs: `McpResource.builder('/doc', 'doc')` → `https://mcp.example.com/doc`
+
+A full URL is also accepted and is not prefixed with `publicBaseUrl`:
+
+```cangjie
+McpResource.builder('https://docs.example.com/doc', 'doc')
+```
+
+Without `publicBaseUrl`: results are truncated, `sseUrl` is relative, and a relative resource URI throws `McpException` while building the server.
+
 ### Methods
 
 | Method | Description |
 |---|---|
 | `server/discover` | versions, capabilities, `serverInfo` |
 | `tools/list` / `tools/call` | tool list and calls |
-| `resources/list` / `resources/read` | resources (http/https/ftp only) |
+| `resources/list` / `resources/read` | resources (full http/https/ftp URL, or a path starting with `/`) |
 | `prompts/list` / `prompts/get` | prompts |
 | `subscriptions/listen` | subscribe to notifications (with `/mcp/sse`) |
 

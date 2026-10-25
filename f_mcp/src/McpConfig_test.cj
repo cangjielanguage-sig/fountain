@@ -62,6 +62,24 @@ class McpConfig_test {
     }
 
     @TestCase
+    public func testPublicBaseUrl(): Unit {
+        Config.set([(McpConfig.PUBLIC_BASE_URL, ' https://mcp.example.com/// ')])
+        try {
+            @Assert('https://mcp.example.com', McpConfig.publicBaseUrl().getOrThrow())
+        } finally {
+            Config.remove(McpConfig.PUBLIC_BASE_URL)
+        }
+        @Assert(true, McpConfig.publicBaseUrl().isNone())
+
+        Config.set([(McpConfig.PUBLIC_BASE_URL, '   ')])
+        try {
+            @Assert(true, McpConfig.publicBaseUrl().isNone())
+        } finally {
+            Config.remove(McpConfig.PUBLIC_BASE_URL)
+        }
+    }
+
+    @TestCase
     public func testAbsentRateLimit(): Unit {
         Config.remove(McpConfig.RATE_LIMIT)
         let policy = McpConfig.rateLimit()

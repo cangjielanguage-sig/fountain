@@ -38,7 +38,7 @@ main() {
              .inputSchema(schema)
              .handler({ctx, args => CallToolResult.text('found')})
              .build())
-         .resource(McpResource.builder('https://example.com/doc', 'doc')
+         .resource(McpResource.builder('/doc', 'doc')
              .handler({ctx =>
                  let list = ArrayList<ResourceContent>()
                  list.add(ResourceContent(ctx.uri, Some('text/plain'), Some('content'), None))
@@ -58,13 +58,39 @@ main() {
 McpTool.of<SearchRequest>('kb.search')
 ```
 
+### 公共地址
+
+`publicBaseUrl` 是本服务对外暴露的根地址，`Builder` 优先于配置：
+
+```cangjie
+b.publicBaseUrl('https://mcp.example.com')
+```
+
+```bash
+export mcp_publicBaseUrl=https://mcp.example.com
+```
+
+它用于三处：
+
+- 结果链接：`${publicBaseUrl}/mcp/tool-results/{token}`
+- `subscriptions/listen` 返回的 `sseUrl`
+- 相对资源 URI：`McpResource.builder('/doc', 'doc')` → `https://mcp.example.com/doc`
+
+资源也可以写完整 URL，此时不会拼接 `publicBaseUrl`：
+
+```cangjie
+McpResource.builder('https://docs.example.com/doc', 'doc')
+```
+
+未配置 `publicBaseUrl` 时：结果截断、`sseUrl` 为相对路径、相对资源 URI 在构建服务时抛 `McpException`。
+
 ### 方法
 
 | 方法 | 说明 |
 |---|---|
 | `server/discover` | 版本、能力、`serverInfo` |
 | `tools/list` / `tools/call` | 工具表与调用 |
-| `resources/list` / `resources/read` | 资源（URI 只接受 http/https/ftp） |
+| `resources/list` / `resources/read` | 资源（完整 http/https/ftp URL，或以 `/` 开头的路径） |
 | `prompts/list` / `prompts/get` | 提示词 |
 | `subscriptions/listen` | 订阅通知（配合 `/mcp/sse`） |
 

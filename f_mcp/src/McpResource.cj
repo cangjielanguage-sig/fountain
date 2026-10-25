@@ -50,6 +50,24 @@ public class McpResource {
     public static func builder(uri: String, name: String): McpResourceBuilder {
         McpResourceBuilder(uri, name)
     }
+
+    /**
+     * 解析相对资源 URI：`/doc` 会拼成 `${publicBaseUrl}/doc`；
+     * 已经是完整 URL 的资源原样返回。
+     */
+    func resolved(baseUrl: ?String): McpResource {
+        if (!uri.startsWith('/')) {
+            return this
+        }
+        let base = match (baseUrl) {
+            case Some(value) => value
+            case _ => throw McpException(McpProtocol.INTERNAL_ERROR,
+                "resource '${uri}' uses a path URI but publicBaseUrl is not configured")
+        }
+        let full = '${base}${uri}'
+        McpResourceBuilder.validateUri(full)
+        McpResource(uri: full, name: name, description: description, mimeType: mimeType, handler: handler)
+    }
 }
 
 public class McpResourceBuilder {
@@ -87,19 +105,32 @@ public class McpResourceBuilder {
         }
     }
 
-    /** 只接受 http / https / ftp，不允许 fragment，不允许占用临时结果前缀。 */
+    /**
+     * 只接受三种形式：
+     * - 完整 `http` / `https` / `ftp` URL
+     * - 以 `/` 开头的绝对路径（构建服务时用 `publicBaseUrl` 拼成完整 URL）
+     *
+     * 不允许 fragment，不允许 `//` 协议相对地址，不允许占用临时结果前缀。
+     */
     public static func validateUri(uri: String): Unit {
         if (uri.contains('#')) {
             throw McpException(McpProtocol.INVALID_PARAMS, "resource uri must not contain a fragment",
                 data: JsonString(uri))
         }
-        if (!(uri.startsWith('http://') || uri.startsWith('https://') || uri.startsWith('ftp://'))) {
-            throw McpException(McpProtocol.INVALID_PARAMS, "resource uri scheme must be http, https or ftp",
-                data: JsonString(uri))
-        }
         if (uri.contains(McpProtocol.TOOL_RESULT_PREFIX)) {
             throw McpException(McpProtocol.INVALID_PARAMS,
                 "resource uri prefix '${McpProtocol.TOOL_RESULT_PREFIX}' is reserved", data: JsonString(uri))
+        }
+        if (uri.startsWith('/')) {
+            if (uri.startsWith('//')) {
+                throw McpException(McpProtocol.INVALID_PARAMS,
+                    "resource uri must be an absolute path or a full http(s)/ftp URL", data: JsonString(uri))
+            }
+            return
+        }
+        if (!(uri.startsWith('http://') || uri.startsWith('https://') || uri.startsWith('ftp://'))) {
+            throw McpException(McpProtocol.INVALID_PARAMS, "resource uri must be an absolute path or a full http(s)/ftp URL",
+                data: JsonString(uri))
         }
     }
 }
