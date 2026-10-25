@@ -29,6 +29,14 @@ import fountain::f_mcp.base.*
 class McpServer_test {
     static let META = '"${McpProtocol.META}":{"${McpProtocol.KEY_PROTOCOL_VERSION}":"${McpProtocol.VERSION}"}'
 
+    static func repeatText(text: String, n: Int64): String {
+        let sb = StringBuilder()
+        for (_ in 0..n) {
+            sb.append(text)
+        }
+        sb.toString()
+    }
+
     static func bigText(size: Int64): String {
         var text = ''
         for (_ in 0..size) {
@@ -424,6 +432,80 @@ class McpServer_test {
             .build()
         let result = call(srv, 'tools/call', metaParams('"name":"big","arguments":{}'))['result'].asObject()
         @Assert(true, result['data'].asObject()['truncated'].asBool().value)
+    }
+
+    @TestCase
+    public func testTruncateUtf8KeepsRuneBoundary(): Unit {
+        @Assert('', McpServer.truncateUtf8('中文', 0))
+        @Assert('中', McpServer.truncateUtf8('中文', 3))
+        @Assert('中', McpServer.truncateUtf8('中文', 5))
+        @Assert('中文', McpServer.truncateUtf8('中文', 6))
+        // 4 字节 emoji 不能被切成半个
+        @Assert('', McpServer.truncateUtf8('😀', 3))
+        @Assert('😀', McpServer.truncateUtf8('😀', 4))
+        // ASCII 截断长度不变
+        @Assert('abc', McpServer.truncateUtf8('abcdef', 3))
+    }
+
+    @TestCase
+    public func testChineseTruncationIsValidUtf8(): Unit {
+        let text = repeatText('中文结果', 64)
+        let srv = McpServer.builder()
+            .tool(McpTool.builder('big').maxResultBytes(40).handler({_, _ => CallToolResult.text(text)}).build())
+            .build()
+        let result = call(srv, 'tools/call', metaParams('"name":"big","arguments":{}'))['result'].asObject()
+        let cut = result['content'].asArray()[0].asObject()['text'].asString().value
+        @Assert(true, cut.unsafeBytes().size <= 40)
+        @Assert(true, cut.unsafeBytes().size > 0)
+    }
+
+    @TestCase
+    public func testEmojiTruncationIsValidUtf8(): Unit {
+        let text = repeatText('😀', 32)
+        let srv = McpServer.builder()
+            .tool(McpTool.builder('big').maxResultBytes(41).handler({_, _ => CallToolResult.text(text)}).build())
+            .build()
+        let result = call(srv, 'tools/call', metaParams('"name":"big","arguments":{}'))['result'].asObject()
+        let cut = result['content'].asArray()[0].asObject()['text'].asString().value
+        @Assert(true, cut.unsafeBytes().size <= 41)
+    }
+
+    @TestCase
+    public func testTruncationKeepsResultFields(): Unit {
+        let state = JsonObject()
+        state.add('cursor', 11)
+        let list = ArrayList<ContentBlock>()
+        list.add(ContentBlock.text(bigText(2048)))
+        let srv = McpServer.builder()
+            .tool(McpTool.builder('big').maxResultBytes(64).handler({_, _ =>
+                CallToolResult(content: list, isError: true, resultType: 'input_required',
+                    inputRequired: JsonString('more'), requestState: state)
+            }).build())
+            .build()
+        let result = call(srv, 'tools/call', metaParams('"name":"big","arguments":{}'))['result'].asObject()
+        @Assert(true, result['isError'].asBool().value)
+        @Assert('input_required', result['resultType'].asString().value)
+        @Assert('more', result['inputRequired'].asString().value)
+        @Assert(11, result['requestState'].asObject()['cursor'].asInt().toInt64())
+        @Assert(true, result['data'].asObject()['truncated'].asBool().value)
+    }
+
+    @TestCase
+    public func testLargeResultStoredTextMatchesSerializedResult(): Unit {
+        let text = bigText(4096)
+        let srv = McpServer.builder()
+            .publicBaseUrl('https://mcp.example.com')
+            .tool(McpTool.builder('big').maxResultBytes(64).handler({_, _ => CallToolResult.text(text)}).build())
+            .build()
+        let result = call(srv, 'tools/call', metaParams('"name":"big","arguments":{}'))['result'].asObject()
+        let link = result['content'].asArray()[0].asObject()['uri'].asString().value
+        let read = call(srv, 'resources/read', metaParams('"uri":"${link}"'))['result'].asObject()
+        let stored = read['contents'].asArray()[0].asObject()['text'].asString().value
+        // 入库的是「一次序列化」的原始结果，解析回来必须与原文一致
+        let parsed = JsonValue.fromStr(stored).asObject()
+        @Assert('text', parsed['content'].asArray()[0].asObject()['type'].asString().value)
+        @Assert(text.size, parsed['content'].asArray()[0].asObject()['text'].asString().value.size)
+        @Assert(false, result['content'].asArray()[0].asObject().contains('text'))
     }
 
     @TestCase

@@ -107,15 +107,19 @@ public class CallToolResult {
     public let inputRequired: ?JsonValue
     /** 多轮协商的游标：原样进入响应，下一轮由客户端带回。 */
     public let requestState: ?JsonValue
+    /** 附加到顶层 `data` 的字段（如 `truncated` / `limit`）。 */
+    public let extra: ?JsonObject
 
     public init(content!: ArrayList<ContentBlock>, structuredContent!: ?JsonValue = None, isError!: Bool = false,
-        resultType!: String = 'complete', inputRequired!: ?JsonValue = None, requestState!: ?JsonValue = None) {
+        resultType!: String = 'complete', inputRequired!: ?JsonValue = None, requestState!: ?JsonValue = None,
+        extra!: ?JsonObject = None) {
         this.content = content
         this.structuredContent = structuredContent
         this.isError = isError
         this.resultType = resultType
         this.inputRequired = inputRequired
         this.requestState = requestState
+        this.extra = extra
     }
 
     public static func text(text: String): CallToolResult {
@@ -155,6 +159,10 @@ public class CallToolResult {
         }
         match (requestState) {
             case Some(value) => obj.add('requestState', value)
+            case _ => ()
+        }
+        match (extra) {
+            case Some(value) => obj.add('data', value)
             case _ => ()
         }
         obj

@@ -794,49 +794,72 @@ public class McpServer {
     private func applyLargeResult(tool: McpTool, result: CallToolResult): JsonValue {
         let limit = tool.maxResultBytes ?? (1024 * 1024)
         let encoded = result.toJson()
-        let bytes = encoded.toString().size
-        if (bytes <= limit) {
+        // 唯一一次完整序列化：量字节 / 入库 / 截断共用同一份字符串
+        let json = encoded.toString()
+        if (json.size <= limit) {
             return encoded
         }
         match (baseUrl) {
             case Some(base) =>
                 let token = resultStore.newToken()
                 let link = '${base}${McpProtocol.TOOL_RESULT_PREFIX}${token}'
-                let content = ResourceContent(link, Some('application/json'), Some(encoded.toString()), None)
+                let content = ResourceContent(link, Some('application/json'), Some(json), None)
                 if (resultStore.put(token, content)) {
                     let blocks = ArrayList<ContentBlock>()
                     blocks.add(
                         ContentBlock.resourceLink(link, tool.name, description: 'tool result exceeds ${limit} bytes',
                             mimeType: 'application/json'))
                     let replaced = CallToolResult(content: blocks, isError: result.isError,
-                        resultType: result.resultType, inputRequired: result.inputRequired)
+                        resultType: result.resultType, inputRequired: result.inputRequired,
+                        requestState: result.requestState)
                     return replaced.toJson()
                 }
-                truncated(tool, result, limit)
-            case _ => truncated(tool, result, limit)
+                truncated(tool, result, json, limit)
+            case _ => truncated(tool, result, json, limit)
         }
     }
 
-    private func truncated(tool: McpTool, result: CallToolResult, limit: Int64): JsonValue {
+    private func truncated(tool: McpTool, result: CallToolResult, json: String, limit: Int64): JsonValue {
         log.append(LogLevel.WARN,
             "mcp tool '${tool.name}' result exceeds ${limit} bytes without publicBaseUrl; truncated", None<Exception>)
-        let text = result.toJson().toString()
-        let cut = if (text.size > limit) {
-            text[0..limit]
-        } else {
-            text
+        let cut = truncateUtf8(json, limit)
+        let blocks = ArrayList<ContentBlock>()
+        blocks.add(ContentBlock.text(cut))
+        let extra = JsonObject()
+        extra.add('truncated', true)
+        extra.add('limit', limit)
+        CallToolResult(content: blocks, isError: result.isError, resultType: result.resultType,
+            inputRequired: result.inputRequired, requestState: result.requestState, extra: extra).toJson()
+    }
+
+    /**
+     * 按 UTF-8 rune 边界截断：结果长度不超过 `limit` 字节，且一定是合法字符串。
+     * （按字节切片会把中文 / emoji 切成半个码点，序列化时直接抛异常。）
+     */
+    static func truncateUtf8(text: String, limit: Int64): String {
+        if (limit <= 0) {
+            return ''
         }
-        let obj = JsonObject()
-        let blocks = JsonArray()
-        blocks.add(ContentBlock.text(cut).toJson())
-        obj.add('content', blocks)
-        obj.add('isError', result.isError)
-        obj.add('resultType', result.resultType)
-        let data = JsonObject()
-        data.add('truncated', true)
-        data.add('limit', limit)
-        obj.add('data', data)
-        obj
+        let builder = StringBuilder()
+        var used: Int64 = 0
+        for (r in text.toRuneArray()) {
+            let code = UInt32(r)
+            let size: Int64 = if (code < 0x80) {
+                1
+            } else if (code < 0x800) {
+                2
+            } else if (code < 0x10000) {
+                3
+            } else {
+                4
+            }
+            if (used + size > limit) {
+                break
+            }
+            builder.append(r)
+            used += size
+        }
+        builder.toString()
     }
 
     private func isResultLink(uri: String): Bool {
