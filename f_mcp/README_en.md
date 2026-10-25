@@ -14,7 +14,13 @@
 | `fountain::f_mcp.base` | `McpProtocol`, `McpException`, content models (`ContentBlock` / `CallToolResult` / `ResourceContent` / `PromptMessage`) |
 | `fountain::f_mcp.client` | `McpClient` |
 | `fountain::f_mcp.server` | Server, tools / resources / prompts, annotations, rate limiting, results and SSE |
+| `fountain::f_mcp.macros` | `@Mcp` macro (separate package) |
 | `fountain::f_mcp` | Facade package: `public import`s the three packages above, keeping `import fountain::f_mcp.*` working |
+
+Server-only code can `import fountain::f_mcp.server.*` + `fountain::f_mcp.base.*`, while clients use
+`fountain::f_mcp.client.*` + `fountain::f_mcp.base.*`. With the `@Mcp` macro, prefer
+`import fountain::f_mcp.*`: the expansion uses `lookup` / `BeanFactory` / `TypeInfo` / `ArrayList` /
+`JsonValue` re-exported by the facade.
 
 ## Specification version
 
@@ -34,7 +40,9 @@ See [`doc/f_mcp模块设计.md`](doc/f_mcp模块设计.md) for the design ration
 ## Server
 
 ```cangjie
-import fountain::f_mcp.*
+import std.collection.ArrayList
+import fountain::f_mcp.server.*
+import fountain::f_mcp.base.*
 import fountain::f_data.*
 
 main() {
@@ -325,6 +333,10 @@ Beyond `maxResultBytes` (1 MB by default):
 ## Client
 
 ```cangjie
+import fountain::f_mcp.client.*
+import fountain::f_mcp.base.*
+import fountain::f_data.*
+
 let client = McpClient.http('http://127.0.0.1:8080/mcp')
 let sub = client.listen(['tools/list_changed'])
 let sseUrl = sub['sseUrl'].asString().value
@@ -355,7 +367,9 @@ let client = McpClient.stdio('/usr/local/bin/my-mcp-server', args: ['--stdio'])
 cjpm test
 ```
 
-Covers discovery, version / legacy, tools / resources / prompts, rate limiting, results and adaptive storage, subscriptions, SSE framing, stdio line framing, client `_meta` and multi-round.
+Tests are split by package: `client` covers the HTTP / stdio clients, `_meta` injection and multi-round
+calls, while `server` covers discovery, version / legacy handling, tools / resources / prompts, rate
+limiting, results and adaptive storage, subscriptions and SSE framing.
 
 ## Known limitations
 

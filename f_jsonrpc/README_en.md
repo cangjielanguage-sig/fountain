@@ -13,10 +13,15 @@
 | `fountain::f_jsonrpc.base` | Protocol constants, error model, method metadata annotation |
 | `fountain::f_jsonrpc.client` | `JsonRpcClient` / `ClientOptions` |
 | `fountain::f_jsonrpc.server` | `JsonRpcServer`, method table, `f_mvc` routes and argument conversion |
+| `fountain::f_jsonrpc.macros` | `@JsonRpc` macro (separate package) |
 | `fountain::f_jsonrpc` | Facade package: `public import`s the three packages above, keeping `import fountain::f_jsonrpc.*` working |
 
 Client-only code can `import fountain::f_jsonrpc.client.*` and server-only code can
 `import fountain::f_jsonrpc.server.*`; both share `base`. The module dependency is still `fountain::f_jsonrpc`.
+
+With the `@JsonRpc` macro, prefer `import fountain::f_jsonrpc.*`: the expansion uses `lookup` /
+`BeanFactory` / `TypeInfo` re-exported by the facade. If you import only `server` / `base`, add those
+three symbols yourself.
 
 ## Specification version
 
@@ -45,7 +50,7 @@ Client-only code can `import fountain::f_jsonrpc.client.*` and server-only code 
 ```cangjie
 package demo
 
-import fountain::f_jsonrpc.*
+import fountain::f_jsonrpc.server.*
 import fountain::f_data.*
 
 main() {
@@ -127,6 +132,9 @@ The namespace is derived from the method name: everything before the first `.`. 
 `@JsonRpcMapping` can also be used in your own `@Controller`. It fixes `method` / `consumes` / `produces` to `POST` + `application/json` and exposes only routing options:
 
 ```cangjie
+import fountain::f_jsonrpc.server.*
+import fountain::f_mvc.*
+
 @Controller
 public class MyRpcController {
     private let server = JsonRpcRegistry.server()
@@ -154,7 +162,7 @@ schema.add('required', JsonArray(list: ArrayList<JsonValue>([JsonString('query')
 
 ### 4. Errors
 
-When a handler throws `JsonRpcException`, its `code` / `message` / `data` are returned as-is:
+When a handler throws `JsonRpcException`, its `code` / `message` / `data` are returned as-is (`JsonRpcException` lives in `fountain::f_jsonrpc.base`):
 
 ```cangjie
 throw JsonRpcException(-32020, 'Knowledge base not found', data: JsonString('kb-1'))
@@ -179,6 +187,9 @@ On timeout the client receives `-32002`, but **the handler is not cancelled** (C
 ## Client
 
 ```cangjie
+import fountain::f_jsonrpc.client.*
+import fountain::f_jsonrpc.base.*   // JsonRpcException
+
 let client = JsonRpcClient('http://127.0.0.1:8080/rpc')
 let result = client.call('kb.search', params: JsonString('fountain'))
 client.notify('kb.reindex')
@@ -202,7 +213,7 @@ client.close()
 cjpm test
 ```
 
-Unit tests cover single requests, batches, notifications, error codes, id fidelity, topic filtering, schema validation, timeouts, annotation routing and client request construction.
+Unit tests are split by package: `client` covers request construction, while `server` covers single requests, batches, notifications, error codes, id fidelity, topic filtering, schema validation, timeouts and annotation routing.
 
 ## License
 

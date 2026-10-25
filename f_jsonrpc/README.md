@@ -13,10 +13,14 @@
 | `fountain::f_jsonrpc.base` | 协议常量、错误模型、方法元数据注解 |
 | `fountain::f_jsonrpc.client` | `JsonRpcClient` / `ClientOptions` |
 | `fountain::f_jsonrpc.server` | `JsonRpcServer`、方法表、`f_mvc` 路由与参数转换 |
+| `fountain::f_jsonrpc.macros` | `@JsonRpc` 宏（独立包） |
 | `fountain::f_jsonrpc` | 门面包：`public import` 以上三个包，兼容 `import fountain::f_jsonrpc.*` |
 
 客户端可以只 `import fountain::f_jsonrpc.client.*`，服务端只 `import fountain::f_jsonrpc.server.*`，共用 `base`；
 模块依赖仍声明 `fountain::f_jsonrpc`。
+
+使用 `@JsonRpc` 宏时建议 `import fountain::f_jsonrpc.*`：宏展开会用到门面包再导出的
+`lookup` / `BeanFactory` / `TypeInfo`，只导入 `server` / `base` 时需要自行补这三个符号。
 
 ## 规范版本
 
@@ -45,7 +49,7 @@
 ```cangjie
 package demo
 
-import fountain::f_jsonrpc.*
+import fountain::f_jsonrpc.server.*
 import fountain::f_data.*
 
 main() {
@@ -127,6 +131,9 @@ cd fjsonrpcdemo
 `@JsonRpcMapping` 也可以直接用在自定义 `@Controller` 里。它把 `method` / `consumes` / `produces` 固定为 `POST` + `application/json`，只暴露路由参数：
 
 ```cangjie
+import fountain::f_jsonrpc.server.*
+import fountain::f_mvc.*
+
 @Controller
 public class MyRpcController {
     private let server = JsonRpcRegistry.server()
@@ -154,7 +161,7 @@ schema.add('required', JsonArray(list: ArrayList<JsonValue>([JsonString('query')
 
 ### 4. 错误
 
-handler 抛 `JsonRpcException` 时，`code` / `message` / `data` 原样返回：
+handler 抛 `JsonRpcException` 时，`code` / `message` / `data` 原样返回（`JsonRpcException` 在 `fountain::f_jsonrpc.base`）：
 
 ```cangjie
 throw JsonRpcException(-32020, 'Knowledge base not found', data: JsonString('kb-1'))
@@ -179,6 +186,9 @@ JsonRpcMethodMeta(name: 'slow', handler: ..., timeout: Duration.millisecond * 20
 ## 客户端
 
 ```cangjie
+import fountain::f_jsonrpc.client.*
+import fountain::f_jsonrpc.base.*   // JsonRpcException
+
 let client = JsonRpcClient('http://127.0.0.1:8080/rpc')
 let result = client.call('kb.search', params: JsonString('fountain'))
 client.notify('kb.reindex')
@@ -202,7 +212,7 @@ client.close()
 cjpm test
 ```
 
-单元测试覆盖单请求、批量、通知、错误码、id 保真、topic 过滤、schema 校验、超时、注解路由与客户端请求构造。
+单元测试按包分布：`client` 覆盖客户端请求构造，`server` 覆盖单请求、批量、通知、错误码、id 保真、topic 过滤、schema 校验、超时与注解路由。
 
 ## 许可
 
