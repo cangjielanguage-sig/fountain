@@ -15,9 +15,11 @@ limitations under the License.
  */
 package fountain::f_mcp
 
-// `@Mcp` 展开出的 `@Bean` / `lookup` / `TypeInfo` / `convert` 会出现在用户代码里；
+// `@Mcp` 展开出的 `@Bean` / `lookup` / `TypeInfo` / `ArrayList` 会出现在用户代码里；
 // 用户只 import 了 f_mcp 时也要能解析，因此在这里再导出。
 public import fountain::f_bean.BeanFactory
 public import fountain::f_bean.lookup
+public import fountain::f_data.JsonValue
 public import fountain::f_data.convert
+public import std.collection.ArrayList
 public import std.reflect.TypeInfo

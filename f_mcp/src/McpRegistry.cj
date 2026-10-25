@@ -49,7 +49,8 @@ public class McpRegistry {
     }
 
     /** 读取 `T.name` 上的 `@McpResourceMeta`；函数不存在或没有注解时返回 `None`。 */
-    public static func getResourceMeta<T, R>(name: String, args: Array<TypeInfo>, fn: (Array<JsonValue>) -> R): ?McpResourceMeta where T <: Object {
+    public static func getResourceMeta<T, R>(name: String, args: Array<TypeInfo>,
+        fn: (McpResourceContext, Array<JsonValue>) -> R): ?McpResourceMeta where T <: Object {
         let function = try {
             TypeInfo.of<T>().getInstanceFunction(name, args)
         } catch (_: InfoNotFoundException) {
@@ -110,9 +111,12 @@ public class McpRegistry {
 
     /**
      * 注册 resource。函数必须没有参数；`uri` 不能为空。
+     *
+     * 处理器返回 `ArrayList<ResourceContent>` 或由 `McpConvert.resourceContents` 包装后的内容；
+     * `meta.mediaType` 非空时覆盖内容里的 `mimeType`。
      */
     public static func registerResourceMeta<T, R>(name: String, meta: McpResourceMeta, args: Array<TypeInfo>,
-        fn: (Array<JsonValue>) -> R): Unit where T <: Object {
+        fn: (McpResourceContext, Array<JsonValue>) -> R): Unit where T <: Object {
         if (args.size != 0) {
             throw McpException(McpProtocol.INTERNAL_ERROR,
                 "resource '${name}' must have no parameters, got ${args.size}")
@@ -131,8 +135,8 @@ public class McpRegistry {
             builder.mimeType(meta.mediaType)
         }
         let resource = builder.handler({
-            _ => match (fn(Array<JsonValue>())) {
-                case result: ArrayList<ResourceContent> => result
+            ctx => match (fn(ctx, Array<JsonValue>())) {
+                case result: ArrayList<ResourceContent> => withMediaType(result, meta.mediaType)
                 case _ => throw McpException(McpProtocol.INTERNAL_ERROR,
                     "resource '${resourceName}' must return ArrayList<ResourceContent>")
             }
@@ -187,14 +191,20 @@ public class McpRegistry {
         configure({b => b.prompt(prompt)})
     }
 
-    /** 把单个 JSON 参数转换成函数声明的参数类型。 */
-    public static func convertArg<T>(value: JsonValue): T where T <: DataFields<T> {
-        convert<T>(value.toData()).getOrThrow()
-    }
-
     /** 触发生成 `McpServer`（已经 build 过则直接返回）。 */
     public static func build(): Unit {
         server()
+    }
+
+    private static func withMediaType(contents: ArrayList<ResourceContent>, mediaType: String): ArrayList<ResourceContent> {
+        if (mediaType.isEmpty()) {
+            return contents
+        }
+        let normalized = ArrayList<ResourceContent>()
+        for (content in contents) {
+            normalized.add(ResourceContent(content.uri, Some(mediaType), content.text, content.blob))
+        }
+        normalized
     }
 
     public static func server(): McpServer {

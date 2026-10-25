@@ -73,13 +73,26 @@ public class SearchRequest {
     public init() {}
 }
 
+@DataAssist[props fields]
+public class SearchResult {
+    public var total: Int64 = 0
+    public var summary: String = ''
+
+    public init() {}
+
+    public init(total: Int64, summary: String) {
+        this.total = total
+        this.summary = summary
+    }
+}
+
 @Mcp
 public class KnowledgeService {
     public init() {}
 
     @McpToolMeta[name: 'kb.search', description: '知识库检索']
-    public func search(req: SearchRequest): CallToolResult {
-        CallToolResult.text('found: ${req.query}')
+    public func search(req: SearchRequest): SearchResult {
+        SearchResult(1, 'found: ${req.query}')
     }
 
     @McpResourceMeta[uri: '/doc', name: 'doc', description: '文档', mediaType: 'text/plain']
@@ -95,10 +108,31 @@ public class KnowledgeService {
 ```
 
 - `@Mcp` 自动给类加 `@Bean`，在模块加载期完成注册并调用 `McpRegistry.build()`；一个进程只应有一个 `@Mcp` 类
-- **tool**：函数必须恰好一个参数，参数是 `@DataAssist[props fields]` 类；`inputSchema` 由该类型生成，请求 JSON 自动转换为该类
+- **tool**：函数必须恰好一个参数，参数是 `@DataAssist[props fields]` 类；`inputSchema` 由该类型生成
 - **resource**：函数必须无参数；`uri` 不能为空；`mediaType` 对应 `McpResource.mimeType`；示例中的 `/doc` 需要配置 `mcp_publicBaseUrl`
 - **prompt**：函数参数就是 `PromptArgument`，参数名即 `name`；`@McpPromptArg` 提供 `description` / `required`（默认 `true`）；可选参数建议用 `Option<T>`
 - 注解里的 `name` 为空时回退到函数名；没有这三个注解的 public 函数会被忽略
+
+#### 入参与返回值转换
+
+入参按 `f_data` 的 `fromJson` 规则从 JSON 转成函数声明的参数类型；返回值按 `toJson` 规则
+（`McpConvert`）转成 MCP 结果，因此方法可以直接返回业务对象：
+
+| 函数 | 返回值 | 结果 |
+|------|--------|------|
+| tool | `CallToolResult` | 原样使用 |
+| tool | `String` | 文本内容 |
+| tool | 其它可转 JSON 的值 | JSON 文本，且是对象时同时写入 `structuredContent` |
+| tool | `Unit` | 空内容 |
+| resource | `ArrayList<ResourceContent>` | 原样使用 |
+| resource | `String` | 一段 `text/plain` 内容 |
+| resource | 其它可转 JSON 的值 | 一段 `application/json` 内容 |
+| resource | `Unit` | 一段空文本内容 |
+| prompt | `ArrayList<PromptMessage>` | 原样使用 |
+| prompt | `String` / 其它可转 JSON 的值 | 一条 `user` 消息 |
+| prompt | `Unit` | 没有消息 |
+
+`@McpResourceMeta` 的 `mediaType` 非空时覆盖内容里的 `mimeType`。
 
 对应的注册 API 也可以直接调用：
 

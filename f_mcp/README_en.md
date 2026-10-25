@@ -73,13 +73,26 @@ public class SearchRequest {
     public init() {}
 }
 
+@DataAssist[props fields]
+public class SearchResult {
+    public var total: Int64 = 0
+    public var summary: String = ''
+
+    public init() {}
+
+    public init(total: Int64, summary: String) {
+        this.total = total
+        this.summary = summary
+    }
+}
+
 @Mcp
 public class KnowledgeService {
     public init() {}
 
     @McpToolMeta[name: 'kb.search', description: 'knowledge base search']
-    public func search(req: SearchRequest): CallToolResult {
-        CallToolResult.text('found: ${req.query}')
+    public func search(req: SearchRequest): SearchResult {
+        SearchResult(1, 'found: ${req.query}')
     }
 
     @McpResourceMeta[uri: '/doc', name: 'doc', description: 'docs', mediaType: 'text/plain']
@@ -95,10 +108,31 @@ public class KnowledgeService {
 ```
 
 - `@Mcp` adds `@Bean`, registers everything at module load, then calls `McpRegistry.build()`; use one `@Mcp` class per process
-- **tool**: exactly one parameter, an `@DataAssist[props fields]` class; `inputSchema` comes from that type and the request JSON is converted to it
+- **tool**: exactly one parameter, an `@DataAssist[props fields]` class; `inputSchema` comes from that type
 - **resource**: no parameters; `uri` is required; `mediaType` maps to `McpResource.mimeType`; the `/doc` example needs `mcp_publicBaseUrl`
 - **prompt**: the function parameters are the `PromptArgument`s, using the parameter name as `name`; `@McpPromptArg` sets `description` / `required` (default `true`); use `Option<T>` for optional arguments
 - an empty `name` falls back to the function name; public functions without these annotations are ignored
+
+#### Argument and result conversion
+
+Arguments are converted from JSON with `f_data`'s `fromJson` rules, and results are converted with
+`toJson` (`McpConvert`), so methods can return business objects directly:
+
+| Function | Return value | Result |
+|----------|--------------|--------|
+| tool | `CallToolResult` | used as is |
+| tool | `String` | text content |
+| tool | any other JSON-convertible value | JSON text, also written to `structuredContent` when it is an object |
+| tool | `Unit` | empty content |
+| resource | `ArrayList<ResourceContent>` | used as is |
+| resource | `String` | one `text/plain` content |
+| resource | any other JSON-convertible value | one `application/json` content |
+| resource | `Unit` | one empty text content |
+| prompt | `ArrayList<PromptMessage>` | used as is |
+| prompt | `String` / any other JSON-convertible value | one `user` message |
+| prompt | `Unit` | no messages |
+
+A non-empty `mediaType` in `@McpResourceMeta` overrides the content `mimeType`.
 
 The registry APIs are also available directly:
 
