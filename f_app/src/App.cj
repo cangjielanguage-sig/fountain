@@ -566,7 +566,13 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
                 ignoreDemos = true
             }
         }
-        stdOut.writeln('path=${path};ext=${ext};ignoreBrackets=${ignoreBrackets};ignoreComments=${ignoreComments};ignoreTests=${ignoreTests};ignoreDemos=${ignoreDemos}')
+        stdOut.writeln('''
+path=${path};
+ext=${ext};
+ignoreBrackets=${ignoreBrackets};
+ignoreComments=${ignoreComments};
+ignoreTests=${ignoreTests};
+ignoreDemos=${ignoreDemos}''')
         let counter = CodeCounter()
         let start = MonoTime.now()
         count(path, counter, ext, ignoreBrackets, ignoreComments, ignoreTests, ignoreDemos)
