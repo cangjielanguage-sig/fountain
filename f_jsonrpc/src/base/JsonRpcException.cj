@@ -15,7 +15,19 @@ limitations under the License.
  */
 package fountain::f_jsonrpc.base
 
+import std.io.IOException
 import fountain::f_data.*
+
+/**
+ * 建连 / 发送阶段失败：**唯一可重试**的传输异常。
+ *
+ * 读响应阶段（服务端可能已经执行）失败必须是普通异常，不能被 `retryOnConnectFailure` 重试。
+ */
+public class JsonRpcConnectException <: IOException {
+    public init(message: String) {
+        super(message)
+    }
+}
 
 /**
  * JSON-RPC 错误。handler 抛出它时，`code` / `message` / `data` 原样进入响应体。

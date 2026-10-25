@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_jsonrpc.client
 
+import std.io.IOException
 import fountain::f_data.*
 import fountain::f_jsonrpc.base.*
 
@@ -35,6 +36,26 @@ class FakeTransport <: JsonRpcTransport {
     public func close(): Unit {
         closed = true
     }
+}
+
+/** 只在 `send` 阶段失败，用于验证重试边界。 */
+class FailingTransport <: JsonRpcTransport {
+    var calls = 0
+    private let connectFailure: Bool
+
+    FailingTransport(connectFailure: Bool) {
+        this.connectFailure = connectFailure
+    }
+
+    public func send(body: Array<Byte>): Array<Byte> {
+        calls++
+        if (connectFailure) {
+            throw JsonRpcConnectException('connect refused')
+        }
+        throw IOException('connection reset while reading response')
+    }
+
+    public func close(): Unit {}
 }
 
 @Test
@@ -111,5 +132,160 @@ class JsonRpcClient_test {
         let t = FakeTransport('')
         JsonRpcClient(t).close()
         @Assert(true, t.closed)
+    }
+
+    // —— T2 重试边界 ——
+
+    @TestCase
+    public func testPlainIOExceptionIsNotRetried(): Unit {
+        let t = FailingTransport(false)
+        let client = JsonRpcClient(t, opts: ClientOptions(retryOnConnectFailure: 3))
+        var failed = false
+        try {
+            client.call('x')
+        } catch (_: IOException) {
+            failed = true
+        }
+        @Assert(true, failed)
+        @Assert(1, t.calls)
+    }
+
+    @TestCase
+    public func testConnectFailureIsRetried(): Unit {
+        let t = FailingTransport(true)
+        let client = JsonRpcClient(t, opts: ClientOptions(retryOnConnectFailure: 3))
+        var failed = false
+        try {
+            client.call('x')
+        } catch (_: JsonRpcConnectException) {
+            failed = true
+        }
+        @Assert(true, failed)
+        @Assert(4, t.calls)
+    }
+
+    @TestCase
+    public func testZeroRetryAttemptsOnce(): Unit {
+        let t = FailingTransport(true)
+        let client = JsonRpcClient(t, opts: ClientOptions(retryOnConnectFailure: 0))
+        try {
+            client.call('x')
+        } catch (_: IOException) {
+            ()
+        }
+        @Assert(1, t.calls)
+    }
+
+    // —— T3 批量单对象错误 ——
+
+    @TestCase
+    public func testBatchSingleErrorObjectThrowsWithCode(): Unit {
+        let t = FakeTransport(
+            '{"jsonrpc":"2.0","id":null,"error":{"code":-32003,"message":"too many","data":{"limit":2,"size":5}}}')
+        let client = JsonRpcClient(t)
+        try {
+            client.batch([JsonRpcCall('a')])
+            @Fail('expected JsonRpcException')
+        } catch (e: JsonRpcException) {
+            @Assert(-32003, e.code)
+            @Assert(2, e.data.getOrThrow().asObject()['limit'].asInt().toInt64())
+        }
+    }
+
+    @TestCase
+    public func testBatchSingleNonErrorObjectThrowsInternalError(): Unit {
+        let t = FakeTransport('{"jsonrpc":"2.0","id":1,"result":1}')
+        let client = JsonRpcClient(t)
+        try {
+            client.batch([JsonRpcCall('a')])
+            @Fail('expected JsonRpcException')
+        } catch (e: JsonRpcException) {
+            @Assert(JsonRpcProtocol.INTERNAL_ERROR, e.code)
+            @Assert(true, e.message.contains('expected an array'))
+        }
+    }
+
+    @TestCase
+    public func testBatchEmptyInputReturnsEmpty(): Unit {
+        let t = FakeTransport('[]')
+        let client = JsonRpcClient(t)
+        @Assert(0, client.batch([]).size)
+    }
+
+    // —— T4 客户端异常封闭 ——
+
+    @TestCase
+    public func testNonNumericCodeIsWrapped(): Unit {
+        let t = FakeTransport('{"jsonrpc":"2.0","id":1,"error":{"code":"-32020","message":"nope"}}')
+        let client = JsonRpcClient(t)
+        try {
+            client.call('x')
+            @Fail('expected JsonRpcException')
+        } catch (e: JsonRpcException) {
+            @Assert(JsonRpcProtocol.INTERNAL_ERROR, e.code)
+            @Assert('nope', e.message)
+        }
+    }
+
+    @TestCase
+    public func testMalformedBodyIsWrapped(): Unit {
+        let t = FakeTransport('{not json')
+        let client = JsonRpcClient(t)
+        try {
+            client.call('x')
+            @Fail('expected JsonRpcException')
+        } catch (e: JsonRpcException) {
+            @Assert(JsonRpcProtocol.INTERNAL_ERROR, e.code)
+            @Assert(true, e.message.contains('malformed'))
+        } catch (_: Exception) {
+            @Fail('JsonException leaked out of the client')
+        }
+    }
+
+    @TestCase
+    public func testErrorNullIsMalformed(): Unit {
+        let t = FakeTransport('{"jsonrpc":"2.0","id":1,"error":null}')
+        let client = JsonRpcClient(t)
+        try {
+            client.call('x')
+            @Fail('expected JsonRpcException')
+        } catch (e: JsonRpcException) {
+            @Assert(JsonRpcProtocol.INTERNAL_ERROR, e.code)
+            @Assert('malformed error object', e.message)
+        }
+    }
+
+    @TestCase
+    public func testErrorArrayIsMalformed(): Unit {
+        let t = FakeTransport('{"jsonrpc":"2.0","id":1,"error":[1,2]}')
+        let client = JsonRpcClient(t)
+        try {
+            client.call('x')
+            @Fail('expected JsonRpcException')
+        } catch (e: JsonRpcException) {
+            @Assert('malformed error object', e.message)
+        }
+    }
+
+    @TestCase
+    public func testDecimalCodeStillWorks(): Unit {
+        let t = FakeTransport('{"jsonrpc":"2.0","id":1,"error":{"code":-32603.0,"message":"x"}}')
+        let client = JsonRpcClient(t)
+        try {
+            client.call('x')
+            @Fail('expected JsonRpcException')
+        } catch (e: JsonRpcException) {
+            @Assert(-32603, e.code)
+        }
+    }
+
+    // —— T5 客户端选项 / 异步 ——
+
+    @TestCase
+    public func testCallAsyncReturnsResult(): Unit {
+        let t = FakeTransport('{"jsonrpc":"2.0","id":1,"result":"later"}')
+        let client = JsonRpcClient(t)
+        let future = client.callAsync('x')
+        @Assert('later', future.get().asString().value)
     }
 }
