@@ -205,8 +205,8 @@ public class McpRegistry {
     /**
      * 按当前累计的注册重建 `McpServer`，新注册的 tool / resource / prompt 立即生效。
      *
-     * 可以重复调用（例如在 `main()` 里继续 `configure` 之后再调一次）；每次都是全量重建，
-     * 因此不能在请求处理中调用——会丢掉结果缓存与订阅状态。
+     * 可以重复调用（`@Mcp` 每个类展开后调用一次，`main()` 里也可以在 `configure` 后手动调用）；
+     * 每次都是全量重建，因此不能在请求处理中调用——会丢掉结果缓存与订阅状态。
      */
     public static func build(): Unit {
         synchronized(mutex) {
