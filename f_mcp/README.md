@@ -1,6 +1,6 @@
 # f_mcp
 
-`f_mcp` 是 MCP（Model Context Protocol）的客户端 / 服务端 SDK。消息层完全复用 `f_jsonrpc`，本模块只实现 MCP 语义：版本与能力、`server/discover`、工具、资源、提示词、订阅、限流与大结果处理。
+`f_mcp` 是 MCP（Model Context Protocol）的客户端 / 服务端 SDK。消息层完全复用 `f_jsonrpc`，本模块只实现 MCP 语义：版本与能力、`server/discover`、工具、资源、提示词、订阅、限流与结果处理。
 
 - 协议版本：`2026-07-28`（无握手；逐请求 `_meta` 校验）
 - 服务端：`/mcp`（JSON-RPC）+ `/mcp/sse`（订阅推送）
@@ -17,7 +17,7 @@
 - 能力声明：`tools.listChanged=false`、`resources.subscribe=true` + `resources.listChanged=false`、`prompts.listChanged=false`
 - 传输：`POST /mcp` 返回单个 JSON 响应，`GET /mcp/sse` 推送订阅通知（`text/event-stream`）；无会话 id，服务端不主动发请求
 - 未实现：`sampling` / `roots` / `logging` / `completions` / `resources/templates/list`；需要向客户端索取信息的场景走 `tools/call` 的 `resultType: "input_required"`
-- 扩展：`-32050` 限流、`-32002` 资源不存在、大结果外链 `/mcp/tool-results/`
+- 扩展：`-32050` 限流、`-32002` 资源不存在、结果外链 `/mcp/tool-results/`
 - legacy 对端：`initialize` / `notifications/initialized` 返回 `-32601`，`data` 带 `legacyMethod` 与 `supportedVersion`，不静默降级
 
 设计取舍见 [`doc/f_mcp模块设计.md`](doc/f_mcp模块设计.md)。
@@ -86,7 +86,20 @@ McpTool.of<SearchRequest>('kb.search')
 
 `Builder.rateLimitBackend(...)` 显式注入优先于配置。名字大小写与 `-` / `_` 不敏感；未知名字在 `build()` 时抛 `IllegalArgumentException`。
 
-开发者可以注册自定义算法：
+#### `RateLimitBackend` 与 `RateLimitBackends`
+
+`RateLimitBackend` 是限流算法 SPI；内置的 5 种实现已在模块加载时注册到 `RateLimitBackends`：
+
+```cangjie
+public interface RateLimitBackend {
+    static prop name: String              // 算法名，也是注册键
+    static func new(): RateLimitBackend   // 创建实例
+    func tryAcquire(key: String, rpm: Int64, nowNanos: Int64): Bool
+    func close(): Unit                    // McpServer.close() 时调用
+}
+```
+
+自定义实现：
 
 ```cangjie
 public class MyRateLimitBackend <: RateLimitBackend {
@@ -98,13 +111,30 @@ public class MyRateLimitBackend <: RateLimitBackend {
         MyRateLimitBackend()
     }
 
-    // tryAcquire / close ...
-}
+    public func tryAcquire(key: String, rpm: Int64, nowNanos: Int64): Bool {
+        // key 已带作用域前缀：c: / ct: / t:
+        // rpm <= 0 表示不限制
+        true
+    }
 
-RateLimitBackends.register<MyRateLimitBackend>()
+    public func close(): Unit {}
+}
 ```
 
-注册后即可用 `mcp_rateLimitBackend=my-algo` 或 `Builder.rateLimitBackend(...)` 使用；同名注册会覆盖内置实现。
+注册与使用：
+
+```cangjie
+// 1. 注册；同名会覆盖内置实现
+RateLimitBackends.register<MyRateLimitBackend>()
+
+// 2a. 配置选择：export mcp_rateLimitBackend=my-algo
+// 2b. 或直接注入
+let server = McpServer.builder()
+    .rateLimitBackend(RateLimitBackends.of('my-algo'))
+    .build()
+```
+
+`RateLimitBackends.of(name)` 按名字创建实例，未注册时抛 `IllegalArgumentException`；名称大小写与 `-` / `_` 不敏感。
 
 全局默认值可由 `mcp_rateLimit` 与 `mcp_rateLimitBackend` 提供：
 
@@ -129,7 +159,7 @@ b.rateLimitBackend(myRedisBackend)   // 多实例共享同一个 Redis / 数据�
 
 并发闸门（`maxConcurrency` / `perCallerConcurrency`）仍是进程内的；跨实例的全局并发需要网关或独立的共享信号量。
 
-### 大结果
+### 结果
 
 超过 `maxResultBytes`（默认 1 MB）时：
 
@@ -180,7 +210,7 @@ let client = McpClient.stdio('/usr/local/bin/my-mcp-server', args: ['--stdio'])
 cjpm test
 ```
 
-覆盖协议发现、版本 / legacy、工具 / 资源 / prompts、限流、大结果与自适应存储、订阅、SSE 格式、stdio 行分帧、客户端 `_meta` 与多轮。
+覆盖协议发现、版本 / legacy、工具 / 资源 / prompts、限流、结果与自适应存储、订阅、SSE 格式、stdio 行分帧、客户端 `_meta` 与多轮。
 
 ## 已知限制
 
