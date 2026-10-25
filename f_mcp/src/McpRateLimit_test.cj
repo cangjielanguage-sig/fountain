@@ -17,18 +17,55 @@ package fountain::f_mcp
 
 import std.unittest.*
 import std.unittest.testmacro.*
+import fountain::f_config.Config
+
+/** 测试用自定义后端：始终放行，验证注册表 + 配置项能选中开发者实现。 */
+class AlwaysAllowRateLimitBackend <: RateLimitBackend {
+    public static prop name: String {
+        get() {
+            'always-allow'
+        }
+    }
+
+    public static func new(): RateLimitBackend {
+        AlwaysAllowRateLimitBackend()
+    }
+
+    public func tryAcquire(_: String, _: Int64, _: Int64): Bool {
+        true
+    }
+
+    public func close(): Unit {}
+}
 
 @Test
 class McpRateLimit_test {
     @TestCase
     public func testFactoryNames(): Unit {
-        @Assert(true, RateLimitBackends.of('token-bucket').getOrThrow() is TokenBucketRateLimitBackend)
-        @Assert(true, RateLimitBackends.of('leaking-bucket').getOrThrow() is LeakingBucketRateLimitBackend)
-        @Assert(true, RateLimitBackends.of('sliding-window').getOrThrow() is SlidingWindowRateLimitBackend)
-        @Assert(true, RateLimitBackends.of('any-moment').getOrThrow() is AnyMomentRateLimitBackend)
-        @Assert(true, RateLimitBackends.of('unlimited').getOrThrow() is UnlimitedRateLimitBackend)
-        @Assert(true, RateLimitBackends.of('Token_Bucket').getOrThrow() is TokenBucketRateLimitBackend)
-        @Assert(true, RateLimitBackends.of('nope').isNone())
+        @Assert(true, RateLimitBackends.of('token-bucket') is TokenBucketRateLimitBackend)
+        @Assert(true, RateLimitBackends.of('leaking-bucket') is LeakingBucketRateLimitBackend)
+        @Assert(true, RateLimitBackends.of('sliding-window') is SlidingWindowRateLimitBackend)
+        @Assert(true, RateLimitBackends.of('any-moment') is AnyMomentRateLimitBackend)
+        @Assert(true, RateLimitBackends.of('unlimited') is UnlimitedRateLimitBackend)
+        @Assert(true, RateLimitBackends.of('Token_Bucket') is TokenBucketRateLimitBackend)
+        @ExpectThrows[IllegalArgumentException](RateLimitBackends.of('nope'))
+    }
+
+    @TestCase
+    public func testRegisterCustomBackend(): Unit {
+        RateLimitBackends.register<AlwaysAllowRateLimitBackend>()
+        @Assert(true, RateLimitBackends.of('Always_Allow') is AlwaysAllowRateLimitBackend)
+    }
+
+    @TestCase
+    public func testConfigSelectsCustomBackend(): Unit {
+        RateLimitBackends.register<AlwaysAllowRateLimitBackend>()
+        Config.set([(McpConfig.RATE_LIMIT_BACKEND, 'always-allow')])
+        try {
+            @Assert(true, RateLimitBackends.fromConfig() is AlwaysAllowRateLimitBackend)
+        } finally {
+            Config.remove(McpConfig.RATE_LIMIT_BACKEND)
+        }
     }
 
     @TestCase
