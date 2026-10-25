@@ -66,3 +66,7 @@ openspec/
 # fmq 启停脚本的运行产物（fmq/fmq.sh start 生成）
 fmq/fmq.pid
 fmq/fmq.log
+
+# jsonrpc / mcp demo 运行日志
+fjsonrpcdemo/*.log
+fmcpdemo/*.log

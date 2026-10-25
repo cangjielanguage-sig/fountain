@@ -142,7 +142,7 @@ cj(){
     cjsetup $2 $3
     ;;
   study)
-    cd $CANGJIE_ROOT/study
+    cd /mnt/linux_share/storage/Users/currentUser/Documents/cangjie/study
     ;;
   fountain)
     cd $FOUNTAIN_HOME

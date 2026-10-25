@@ -40,6 +40,24 @@ public interface BaseFlow <:Emitter {
     func registerTaskByAsyncFlow(eventName!: String, subCategory!: String, subTag!: String): Unit 
     func emit(eventType!: EventType, name!: String, data!: Any): Unit
 }
+/**
+ * Multi 任务体：把 `MultiEvent` 的子事件逐个扇出到当前流程。
+ *
+ * 抽成包内函数供默认实现与两个自带流程类共用，避免两份逻辑漂移（`design.md` D9）。
+ */
+internal func multiEventTaskBody(flow: BaseFlow): (Event) -> Event {
+    {e =>
+        if(let me: MultiEvent <- e && let events: Iterable<Event> <- me.data){
+            for(event in events){
+                let de = (event as DataEvent) ?? throw GraphException("event must be instance of DataEvent")
+                flow.emit(eventType: event.eventType, name: event.name, data: de.data)
+            }
+            DummyEvent.instance
+        }else{
+            throw GraphException("event must be instance of MultiEvent and with data which type is Iterable<Event>")
+        }
+    }
+}
 public interface Flow<G> <: BaseFlow & Hashable & Equatable<ImmediateFlow> & Equatable<AsyncFlow> & ToString where G <: EndExecutorGetter {
     func registerTask(task: BarrierTask<G>): Unit {
         task.flow = this
@@ -47,17 +65,7 @@ public interface Flow<G> <: BaseFlow & Hashable & Equatable<ImmediateFlow> & Equ
         registerTask(t)
     }
     func registerMultiEventTask(): Unit {
-        registerTask(EventType.Multi.toString()){e =>
-            if(let e: MultiEvent <- e && let me: MultiEvent <- e && let events: Iterable<Event> <- me.data){
-                for(event in events){
-                    let de = (event as DataEvent) ?? throw GraphException("event must be instance of DataEvent")
-                    emit(eventType: event.eventType, name: event.name, data: de.data)
-                }
-                DummyEvent.instance
-            }else{
-                throw GraphException("event must be instance of MultiEvent and with data which type is Iterable<Event>")
-            }
-        }
+        registerTask(EventType.Multi.toString(), multiEventTaskBody(this))
     }
     /**
      * 使用指定流程作为任务执行器的构造函数参数
@@ -83,6 +91,6 @@ public interface Flow<G> <: BaseFlow & Hashable & Equatable<ImmediateFlow> & Equ
     func registerTaskByAsyncFlow(eventName!: String, subCategory!: String, subTag!: String): Unit {
         registerTaskByFlow<AsyncEndExecutorGetter, AsyncFlow>(eventName: eventName, flow: AsyncFlow(category: subCategory, tag: subTag))
     }
-    func start(data: Any): G
+    func start(data: Any): G 
     func emit(eventType!: EventType, name!: String, data!: Any): Unit
 }

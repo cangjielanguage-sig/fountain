@@ -15,6 +15,8 @@ limitations under the License.
 */
 package fountain::f_data.json
 
+import std.collection.ArrayList
+
 public interface ToJsonSchema {
     static func toJsonSchema<T>(): JsonObject where T <: ObjectData<T>
 }
@@ -186,7 +188,13 @@ extend JsonObject <: ToJsonSchema {
         }
         property
     }
-    private static func toJsonSchema(typeInfo: TypeInfo): JsonObject {
+    /**
+     * 由 `TypeInfo` 生成对象 schema。
+     *
+     * 优先使用静态 `mutableFields()`（手写或 `@Bean` 生成），
+     * 没有时回退到 `@DataAssist[fields]` 生成的静态 `dataFields()`。
+     */
+    public static func toJsonSchema(typeInfo: TypeInfo): JsonObject {
         let schema = JsonObject()
         schema.add("type", JsonString("object"))
         if(let Some(s) <- typeInfo.findAnnotation<JsonObjectSchema>()) {
@@ -205,11 +213,29 @@ extend JsonObject <: ToJsonSchema {
         }
         let properties = JsonObject()
         schema.add("properties", properties)
-        if(let fields: Iterator<MutableField> <- typeInfo.getStaticFunction('mutableFields').apply(typeInfo)){
-            for(f in fields){
-                let fieldType = f.fieldTypeInfo
-                properties.add(f.name, toJsonSchema(fieldType, f.tryFindAnnotation<JsonSchema>()))
-            }
+        let dataFields = try {
+            typeInfo.getStaticFunction('dataFields').apply(typeInfo)
+        } catch (_: InfoNotFoundException) {
+            ArrayList<ReadableField>()
+        }
+        match (dataFields) {
+            case x: ObjectFields =>
+                for (f in x) {
+                    properties.add(f.name, toJsonSchema(f.fieldTypeInfo, f.tryFindAnnotation<JsonSchema>()))
+                }
+            case _ =>
+                let mutableFields = try {
+                    typeInfo.getStaticFunction('mutableFields').apply(typeInfo)
+                } catch (_: InfoNotFoundException) {
+                    ArrayList<MutableField>()
+                }
+                match (mutableFields) {
+                    case fields: Iterator<MutableField> =>
+                        for (f in fields) {
+                            properties.add(f.name, toJsonSchema(f.fieldTypeInfo, f.tryFindAnnotation<JsonSchema>()))
+                        }
+                    case _ => ()
+                }
         }
         schema
     }
@@ -220,6 +246,15 @@ extend JsonObject <: ToJsonSchema {
 
 public sealed abstract class JsonSchema {
     public const init(){}
+
+    /**
+     * 实例校验：按注解自带的约束校验一个值。
+     * 注意 `JsonObjectSchema` 不携带 properties，带成员的对象请用
+     * `JsonSchemaValidator.validate(schema, value)`（静态重载与实例方法不能同名共存）。
+     */
+    public func validate(value: JsonValue, options!: ValidationOptions = ValidationOptions()): ValidationResult {
+        JsonSchemaValidator.validateInstance(this, value, options)
+    }
 }
 
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]

@@ -37,7 +37,7 @@ public class CallForFnConcurrency_test {
         let w = unit.callForFn<(Int64) -> Int64>([])
         @Assert(w.call<Int64>([41]), 42)
         @Assert(unit.lastPromotionGroup().isNone(), true)
-        w.close()
+        w.unloadFn()
     }
 
     /** 两线程各自 `callForFn` + 调用 + `close`：结果互不串、无提前释放。 */
@@ -53,7 +53,7 @@ public class CallForFnConcurrency_test {
                 while (i < 20) {
                     let w = unit.callForFn<(Int64) -> Int64>([])
                     @Assert(w.call<Int64>([base + i]), base + i + 1)
-                    w.close()
+                    w.unloadFn()
                     i = i + 1
                 }
             })

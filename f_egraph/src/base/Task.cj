@@ -15,6 +15,10 @@ limitations under the License.
 */
 package fountain::f_egraph.base
 
+// 宏导入是文件级的：`@JitBind` 必须在使用它的文件里单独导入（`design.md` §12.1 的回退口径）。
+import fountain::f_jit.macros.*
+
+@JitBind
 public interface Task{
     prop name: String
     prop acceptableEvents: Array<String>

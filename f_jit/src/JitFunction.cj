@@ -66,6 +66,13 @@ public class JitFunction {
     private var diagReporter: ?((JitContext, CPointer<Int64>) -> String) = None
     // ---- 生命周期（S6.10）：0 Ready / 1 Unloading / 2 Unloaded ----
     private let mtx: Mutex = Mutex()
+    /**
+     * 本单元在进程级编译缓存里的键（`CompileCache.finish` 发布时写入）。
+     *
+     * `unload` 进入终态时据此把自己逐出缓存——否则同源再编译会命中已死单元
+     * （H2：规格「卸载状态机与资产清点」早已要求「按未命中重编」）。
+     */
+    private var cacheKey: ?String = None
     private var state: Int64 = 0
     private var active: Int64 = 0
     private var release: ?(() -> Unit) = None
@@ -207,6 +214,14 @@ public class JitFunction {
         }
         synchronized(this.mtx) {
             this.state = 2
+            // 终态即逐出：同键编译此后必须按未命中重编（否则拿到的是已死单元）。
+            // 超时回退路径不走这里 —— 那时单元仍可用，逐出会造出同键的两份产物。
+            match (this.cacheKey) {
+                case Some(k) =>
+                    this.cacheKey = None
+                    CompileCache.remove(k)
+                case None => ()
+            }
             match (this.release) {
                 case Some(f) =>
                     this.release = None
@@ -250,6 +265,13 @@ public class JitFunction {
         this.classSnapshot = classSnap
     }
 
+    /** 装载层内部：绑定本单元在编译缓存里的键（卸载时据此逐出）。 */
+    internal func bindCacheKey(key: String): Unit {
+        synchronized(this.mtx) {
+            this.cacheKey = Some(key)
+        }
+    }
+
     /** 装载层内部：绑定闭包调用器（包装器调用走既有闭包帧，§14.3）。 */
     internal func bindClosureRunner(r: (JitContext, Int64, Array<Int64>) -> Int64): Unit {
         this.closureRunner = Some(r)
@@ -273,7 +295,7 @@ public class JitFunction {
         f
     }
 
-    /** 闭包包装：是否已 `close`；非包装实例恒 false。 */
+    /** 闭包包装：是否已 `unloadFn`；非包装实例恒 false。 */
     public prop isClosed: Bool {
         get() {
             this.closedFlag
@@ -283,12 +305,13 @@ public class JitFunction {
     /**
      * 显式释放闭包包装（唯一释放路径，§14.2）：提升组计数 −1、归零释放；幂等。
      *
-     * 非闭包包装实例 → 19（site=-1），避免"以为已释放"。
+     * 与单元级 `unload()` 的区别：这里只放掉**这个函数值**捕获的提升槽，单元继续可用，
+     * 也不动编译缓存。非闭包包装实例 → 19（site=-1），避免"以为已释放"。
      */
-    public func close(): Unit {
+    public func unloadFn(): Unit {
         if (this.owner.isNone()) {
             throw JitException(ErrCode.CALL_CONTRACT, -1, 0, None,
-                '非闭包包装实例不可 close（m2 §14.3）')
+                '非闭包包装实例不可 unloadFn（m2 §14.3）')
         }
         if (this.closedFlag) {
             return
@@ -367,7 +390,7 @@ public class JitFunction {
     private func callLocked<T>(args: Array<Any>, options: CallContext): T {
         let isWrapper = this.owner.isSome()
         if (this.closedFlag) {
-            return JitFunction.contractFail('闭包包装已 close（m2 §14.3）')
+            return JitFunction.contractFail('闭包包装已 unloadFn（m2 §14.3）')
         }
         if (isWrapper && !HandleTable.isLiveHandle(this.closureId)) {
             return JitFunction.contractFail('闭包句柄已失效（旧 ID 校验拦截）')

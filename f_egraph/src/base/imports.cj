@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_egraph.base
 
-internal import std.collection.{HashMap, HashSet, ArrayList, LinkedList}
+internal import std.collection.{HashMap, ArrayList}
 internal import std.collection.concurrent.{LinkedBlockingQueue, ConcurrentHashMap}
 internal import std.ref.*
 internal import std.reflect.TypeInfo
@@ -27,4 +27,9 @@ internal import fountain::f_collection.*
 internal import fountain::f_concurrent.ConcurrentHashSet
 internal import fountain::f_log.*
 internal import fountain::f_util.*
+internal import fountain::f_jit.{Compiler, CompileOptions, JitFunction}
+internal import fountain::f_jit.{JitBindSupport}
+internal import fountain::f_jit.base.{ClassDescriptor, PublicCtor, PublicField, PublicMethod}
+internal import fountain::f_jit.base.{PredefinedFunction, JitBindings, LocalType, DummyDiagnosticsSink}
+internal import fountain::f_jit.runtime.HostFieldTable
 internal import fountain::f_egraph.exception.*
