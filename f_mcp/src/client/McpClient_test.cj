@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_mcp.client
 
 import std.collection.ArrayList
+import std.sync.AtomicInt64
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_data.*
@@ -100,6 +101,39 @@ class AlwaysInputHandler {
 class McpClient_test {
     static func options(): McpClientOptions {
         McpClientOptions()
+    }
+
+    @TestCase
+    public func testOptionsMapToJsonRpcOptions(): Unit {
+        let options = McpClientOptions()
+        options.timeout = Duration.second * 7
+        options.maxResponseBytes = 1234
+        options.keepAlive = false
+        options.retryOnConnectFailure = 2
+        options.headers.add('Authorization', 'Bearer x')
+        let mapped = options.toJsonRpcOptions()
+        @Assert(Duration.second * 7, mapped.timeout)
+        @Assert(1234, mapped.maxResponseBytes)
+        @Assert(false, mapped.keepAlive)
+        @Assert(2, mapped.retryOnConnectFailure)
+        @Assert('Bearer x', mapped.headers.get('Authorization').getOrThrow())
+    }
+
+    @TestCase
+    public func testNonVersionErrorIsNotRetried(): Unit {
+        let calls = AtomicInt64(0)
+        let rpc = FakeMcpRpc({_, _ =>
+            calls.fetchAdd(1)
+            throw McpException(McpProtocol.INVALID_PARAMS, 'bad')
+        })
+        let client = McpClient(rpc, options())
+        try {
+            client.listTools()
+            @Fail('expected McpException')
+        } catch (e: McpException) {
+            @Assert(McpProtocol.INVALID_PARAMS, e.code)
+        }
+        @Assert(1, calls.load())
     }
 
     @TestCase

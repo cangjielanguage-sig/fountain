@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain::f_mcp.client
 
-import std.collection.ArrayList
+import std.collection.{ArrayList, HashMap}
 import std.io.*
 import std.process.*
 import std.sync.Mutex
@@ -33,8 +33,22 @@ public class McpClientOptions {
     public var clientVersion = '1.0.0'
     public var capabilities: JsonObject = JsonObject()
     public var maxRounds: Int64 = 8
+    /** 每个 HTTP 请求附带的头（如 `Authorization`）；stdio 传输忽略。 */
+    public var headers = HashMap<String, String>()
+    /** 响应体上限，超限抛错；stdio 传输忽略。 */
+    public var maxResponseBytes: Int64 = 8 * 1024 * 1024
+    /** HTTP keep-alive；stdio 传输忽略。 */
+    public var keepAlive = true
+    /** 建连失败重试次数（读响应失败不重试）。 */
+    public var retryOnConnectFailure: Int64 = 0
 
     public init() {}
+
+    /** 映射为 f_jsonrpc 的客户端选项。 */
+    public func toJsonRpcOptions(): ClientOptions {
+        ClientOptions(timeout: timeout, headers: headers, maxResponseBytes: maxResponseBytes, keepAlive: keepAlive,
+            retryOnConnectFailure: retryOnConnectFailure)
+    }
 }
 
 /** 一条 `tools/call` 的结果（客户端视角）。 */
@@ -53,7 +67,7 @@ class HttpMcpRpc <: McpRpc {
     private let client: JsonRpcClient
 
     init(url: String, opts: McpClientOptions) {
-        client = JsonRpcClient(url, opts: f_jsonrpcClientOptions(opts))
+        client = JsonRpcClient(url, opts: opts.toJsonRpcOptions())
     }
 
     public func call(method: String, params: ?JsonValue): JsonValue {
@@ -62,10 +76,6 @@ class HttpMcpRpc <: McpRpc {
 
     public func close(): Unit {
         client.close()
-    }
-
-    private static func f_jsonrpcClientOptions(opts: McpClientOptions): ClientOptions {
-        ClientOptions(timeout: opts.timeout)
     }
 }
 
@@ -142,8 +152,11 @@ class StdioMcpRpc <: McpRpc {
  * 每次请求自动注入 `_meta`，`-32022` 只重试一次。
  */
 public class McpClient {
+    static let log = LoggerFactory.getLogger<McpClient>()
+
     private let rpc: McpRpc
     private let options: McpClientOptions
+    private let versionMutex = Mutex()
     private var protocolVersion: String
 
     public init(url: String, options!: McpClientOptions = McpClientOptions()) {
@@ -305,26 +318,35 @@ public class McpClient {
         rpc.close()
     }
 
-    private func rpcCall(method: String, params: ?JsonValue, retried!: Bool = false): JsonValue {
-        let merged = withMeta(params)
+    private func rpcCall(method: String, params: ?JsonValue, tried!: ?String = None): JsonValue {
+        let version = currentVersion()
+        let merged = withMeta(params, version)
         try {
             return rpc.call(method, merged)
         } catch (e: McpException) {
-            if (e.code == McpProtocol.UNSUPPORTED_VERSION && !retried) {
-                updateVersion(e)
-                return rpcCall(method, params, retried: true)
+            if (e.code == McpProtocol.UNSUPPORTED_VERSION && tried.isNone()) {
+                negotiate(version, e)
+                return rpcCall(method, params, tried: version)
             }
             throw e
         } catch (e: JsonRpcException) {
-            if (e.code == McpProtocol.UNSUPPORTED_VERSION && !retried) {
-                updateVersion(e)
-                return rpcCall(method, params, retried: true)
+            if (e.code == McpProtocol.UNSUPPORTED_VERSION && tried.isNone()) {
+                negotiate(version, e)
+                return rpcCall(method, params, tried: version)
             }
             throw McpException(e.code, e.message, data: e.data)
+        } catch (e: IOException) {
+            throw McpException(McpProtocol.INTERNAL_ERROR, 'transport failed: ${e.message}')
         }
     }
 
-    private func withMeta(params: ?JsonValue): JsonObject {
+    private func currentVersion(): String {
+        synchronized(versionMutex) {
+            protocolVersion
+        }
+    }
+
+    private func withMeta(params: ?JsonValue, version: String): JsonObject {
         let obj = JsonObject()
         match (params) {
             case Some(source: JsonObject) => for ((key, value) in source) {
@@ -333,7 +355,7 @@ public class McpClient {
             case _ => ()
         }
         let meta = JsonObject()
-        meta.add(McpProtocol.KEY_PROTOCOL_VERSION, protocolVersion)
+        meta.add(McpProtocol.KEY_PROTOCOL_VERSION, version)
         let info = JsonObject()
         info.add('name', options.clientName)
         info.add('version', options.clientVersion)
@@ -343,15 +365,29 @@ public class McpClient {
         obj
     }
 
-    private func updateVersion(error: JsonRpcException): Unit {
+    /**
+     * 协商新版本。只有「当前版本还等于本次请求使用的版本」时才改写，
+     * 并发命中 `-32022` 的请求不会各自覆盖一遍。
+     */
+    private func negotiate(usedVersion: String, error: JsonRpcException): Unit {
+        let next = supportedVersionOf(error)
+        synchronized(versionMutex) {
+            if (protocolVersion != usedVersion) {
+                return
+            }
+            protocolVersion = next
+        }
+        log.append(LogLevel.INFO, "mcp protocol version negotiated: ${usedVersion} -> ${next}", None<Exception>)
+    }
+
+    private func supportedVersionOf(error: JsonRpcException): String {
         match (error.data) {
             case Some(data) =>
                 if (let obj: JsonObject <- data) {
                     if (let Some(supported) <- obj.get('supported')) {
                         if (let array: JsonArray <- supported) {
                             if (array.size > 0 && array[0] is JsonString) {
-                                protocolVersion = array[0].asString().value
-                                return
+                                return array[0].asString().value
                             }
                         }
                     }

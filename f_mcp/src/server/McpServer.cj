@@ -523,7 +523,7 @@ public class McpServer {
     // —— 方法实现 ——
 
     private func discover(ctx: JsonRpcContext, params: ?JsonValue): JsonValue {
-        let request = requireMeta(params)
+        let request = requireMeta(ctx, params)
         let root = JsonObject()
         root.add('resultType', 'complete')
         let versions = JsonArray()
@@ -556,7 +556,7 @@ public class McpServer {
     }
 
     private func listTools(ctx: JsonRpcContext, params: ?JsonValue): JsonValue {
-        let request = requireMeta(params)
+        let request = requireMeta(ctx, params)
         let offset = cursorOf(request)
         let result = JsonObject()
         let list = JsonArray()
@@ -576,7 +576,7 @@ public class McpServer {
     }
 
     private func callTool(ctx: JsonRpcContext, params: ?JsonValue): JsonValue {
-        let request = requireMeta(params)
+        let request = requireMeta(ctx, params)
         let name = stringField(request, 'name')
         let arguments = match (request.get('arguments')) {
             case Some(obj: JsonObject) => obj
@@ -615,7 +615,7 @@ public class McpServer {
     }
 
     private func listResources(ctx: JsonRpcContext, params: ?JsonValue): JsonValue {
-        let request = requireMeta(params)
+        let request = requireMeta(ctx, params)
         let offset = cursorOf(request)
         let result = JsonObject()
         let list = JsonArray()
@@ -646,7 +646,7 @@ public class McpServer {
     }
 
     private func readResource(ctx: JsonRpcContext, params: ?JsonValue): JsonValue {
-        let request = requireMeta(params)
+        let request = requireMeta(ctx, params)
         let uri = stringField(request, 'uri')
         let contents = ArrayList<ResourceContent>()
         if (isResultLink(uri)) {
@@ -671,7 +671,7 @@ public class McpServer {
     }
 
     private func listPrompts(ctx: JsonRpcContext, params: ?JsonValue): JsonValue {
-        let request = requireMeta(params)
+        let request = requireMeta(ctx, params)
         let offset = cursorOf(request)
         let result = JsonObject()
         let list = JsonArray()
@@ -702,7 +702,7 @@ public class McpServer {
     }
 
     private func getPrompt(ctx: JsonRpcContext, params: ?JsonValue): JsonValue {
-        let request = requireMeta(params)
+        let request = requireMeta(ctx, params)
         let name = stringField(request, 'name')
         let prompt = promptsByName.get(name) ?? throw McpException(McpProtocol.INVALID_PARAMS,
             "unknown prompt '${name}'", data: JsonString(name))
@@ -729,7 +729,7 @@ public class McpServer {
     }
 
     private func listen(ctx: JsonRpcContext, params: ?JsonValue): JsonValue {
-        let request = requireMeta(params)
+        let request = requireMeta(ctx, params)
         let topics = ArrayList<String>()
         if (let Some(array) <- request.get('topics')) {
             if (let a: JsonArray <- array) {
@@ -764,7 +764,13 @@ public class McpServer {
 
     // —— 辅助 ——
 
-    private func requireMeta(params: ?JsonValue): JsonObject {
+    /**
+     * 校验并剥离 `params._meta`。
+     *
+     * 先校验 body 里的版本，再校验 `MCP-Protocol-Version` 请求头（存在时）：
+     * 头版本不受支持 → `-32022`；头与 body 不一致 → `-32602`。
+     */
+    private func requireMeta(ctx: JsonRpcContext, params: ?JsonValue): JsonObject {
         let obj = match (params) {
             case Some(o: JsonObject) => o
             case _ => throw McpException(McpProtocol.INVALID_PARAMS, 'params must be an object')
@@ -788,16 +794,39 @@ public class McpServer {
             throw McpException(McpProtocol.INVALID_PARAMS, 'missing params._meta protocolVersion')
         }
         if (version != McpProtocol.VERSION) {
-            let data = JsonObject()
-            let supported = JsonArray()
-            supported.add(McpProtocol.VERSION)
-            data.add('supported', supported)
-            data.add('requested', version)
-            throw McpException(McpProtocol.UNSUPPORTED_VERSION, "unsupported MCP protocol version '${version}'",
-                data: data)
+            throw unsupportedVersion(version)
+        }
+        match (ctx.http) {
+            case Some(http) => match (http.request.headers.getFirst('MCP-Protocol-Version')) {
+                    case Some(header) =>
+                        let trimmed = header.trimAscii()
+                        if (!trimmed.isEmpty()) {
+                            if (trimmed != McpProtocol.VERSION) {
+                                throw unsupportedVersion(trimmed)
+                            }
+                            if (trimmed != version) {
+                                let data = JsonObject()
+                                data.add('header', trimmed)
+                                data.add('body', version)
+                                throw McpException(McpProtocol.INVALID_PARAMS,
+                                    'MCP-Protocol-Version header does not match params._meta', data: data)
+                            }
+                        }
+                    case _ => ()
+                }
+            case _ => ()
         }
         obj.remove(McpProtocol.META)
         obj
+    }
+
+    private static func unsupportedVersion(requested: String): McpException {
+        let data = JsonObject()
+        let supported = JsonArray()
+        supported.add(McpProtocol.VERSION)
+        data.add('supported', supported)
+        data.add('requested', requested)
+        McpException(McpProtocol.UNSUPPORTED_VERSION, "unsupported MCP protocol version '${requested}'", data: data)
     }
 
     private func cursorOf(request: JsonObject): Int64 {

@@ -303,6 +303,21 @@ class McpServer_test {
     }
 
     @TestCase
+    public func testResourceNotFoundUsesBusinessCode(): Unit {
+        @Assert(-32040, McpProtocol.RESOURCE_NOT_FOUND)
+        let error = errorOf(call(server(), 'resources/read', metaParams('"uri":"https://example.com/missing"')))
+        @Assert(-32040, error['code'].asInt().toInt64())
+    }
+
+    @TestCase
+    public func testExpiredResultLinkUsesBusinessCode(): Unit {
+        let srv = McpServer.builder().publicBaseUrl('https://mcp.example.com').build()
+        let error = errorOf(call(srv, 'resources/read',
+            metaParams('"uri":"https://mcp.example.com${McpProtocol.TOOL_RESULT_PREFIX}missing"')))
+        @Assert(-32040, error['code'].asInt().toInt64())
+    }
+
+    @TestCase
     public func testCapabilitiesMatchImplementation(): Unit {
         let result = call(server(), 'server/discover', metaParams(''))['result'].asObject()
         let caps = result['capabilities'].asObject()

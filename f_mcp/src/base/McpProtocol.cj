@@ -35,7 +35,8 @@ public class McpProtocol {
     public static const METHOD_NOT_FOUND = -32601
     public static const INVALID_PARAMS = -32602
     public static const INTERNAL_ERROR = -32603
-    public static const RESOURCE_NOT_FOUND = -32002
+    /** 业务段：`-32002` 留给 f_jsonrpc 的超时，避免同进程无法区分。 */
+    public static const RESOURCE_NOT_FOUND = -32040
     public static const UNSUPPORTED_VERSION = -32022
     /** 资源超限（订阅者数量等）：与 f_jsonrpc 的批量超限同码。 */
     public static const OVERLOADED = -32003
