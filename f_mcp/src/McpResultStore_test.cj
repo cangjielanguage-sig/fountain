@@ -109,8 +109,8 @@ class McpResultStore_test {
     }
 
     @TestCase
-    public func testLocalBackendRate(): Unit {
-        let backend = LocalRateLimitBackend()
+    public func testTokenBucketBackendRate(): Unit {
+        let backend = TokenBucketRateLimitBackend()
         let now = DateTime.now().toUnixTimeStamp().toNanoseconds()
         @Assert(true, backend.tryAcquire('k', 2, now))
         @Assert(true, backend.tryAcquire('k', 2, now))

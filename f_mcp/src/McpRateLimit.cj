@@ -17,7 +17,8 @@ package fountain::f_mcp
 
 import std.collection.concurrent.ConcurrentHashMap
 import std.sync.AtomicInt64
-import fountain::f_concurrent.TokenBucketRateLimiter
+import fountain::f_concurrent.{AnyMomentRateLimiter, LeakingBucketRateLimiter, RateLimiter, SlidingWindowRateLimiter,
+    TokenBucketRateLimiter, UnlimitedRateLimiter}
 import fountain::f_data.*
 
 /** 全局默认限流值；`None` 表示该维度不限制。 */
@@ -83,45 +84,155 @@ public interface RateLimitBackend {
     func close(): Unit
 }
 
-class LimiterEntry {
-    let limiter: TokenBucketRateLimiter<Bool>
+/** 每个限流 key 对应一个 limiter；key 上带 `rpm`，配额变化时自动换新桶。 */
+class LimiterPool {
+    private let limiters = ConcurrentHashMap<String, RateLimiter<Bool>>()
+    private let factory: (Int64) -> RateLimiter<Bool>
 
-    init(rpm: Int64) {
-        this.limiter = TokenBucketRateLimiter<Bool>(
-            tokens: rpm,
-            timeout: Duration.millisecond,
-            populationPeriod: Duration.minute)
+    init(factory: (Int64) -> RateLimiter<Bool>) {
+        this.factory = factory
     }
-}
 
-/**
- * 进程内限流后端：每个 key 一个 f_concurrent 令牌桶。
- *
- * 进程内实现无法跨进程共享计数；多实例部署时注入基于 Redis / 数据库的
- * `RateLimitBackend`，本类只作为单实例默认值。
- */
-public class LocalRateLimitBackend <: RateLimitBackend {
-    private let limiters = ConcurrentHashMap<String, LimiterEntry>()
-
-    public func tryAcquire(key: String, rpm: Int64, _: Int64): Bool {
+    func acquire(key: String, rpm: Int64): Bool {
         if (rpm <= 0) {
             return true
         }
         let bucketKey = '${key}#${rpm}'
-        var entry = limiters.get(bucketKey)
-        if (entry.isNone()) {
-            limiters.addIfAbsent(bucketKey, LimiterEntry(rpm))
-            entry = limiters.get(bucketKey)
+        var limiter = limiters.get(bucketKey)
+        if (limiter.isNone()) {
+            limiters.addIfAbsent(bucketKey, factory(rpm))
+            limiter = limiters.get(bucketKey)
         }
-        entry.getOrThrow().limiter.exec(Some(false), {=> Some(true)}) ?? false
+        limiter.getOrThrow().exec(Some(false), {=> Some(true)}) ?? false
     }
 
-    public func close(): Unit {
-        // f_concurrent 的令牌桶没有 close 接口；这里只清空映射，
+    func close(): Unit {
+        // f_concurrent 的限流器没有 close 接口；这里只清空映射，
         // 定时器在进程退出时由 f_concurrent 的 atExit 统一取消。
         for ((key, _) in limiters) {
             limiters.remove(key)
         }
+    }
+}
+
+/**
+ * 令牌桶：容量 = `rpm`，每分钟补满，允许一次性用完一分钟配额。
+ */
+public class TokenBucketRateLimitBackend <: RateLimitBackend {
+    private let pool = LimiterPool({
+        rpm: Int64 => TokenBucketRateLimiter<Bool>(tokens: rpm, timeout: Duration.millisecond,
+            populationPeriod: Duration.minute)
+    })
+
+    public func tryAcquire(key: String, rpm: Int64, _: Int64): Bool {
+        pool.acquire(key, rpm)
+    }
+
+    public func close(): Unit {
+        pool.close()
+    }
+}
+
+/**
+ * 漏桶：每分钟漏出 `rpm` 个，等待队列上限也是 `rpm`。
+ */
+public class LeakingBucketRateLimitBackend <: RateLimitBackend {
+    private let pool = LimiterPool({
+        rpm: Int64 => LeakingBucketRateLimiter<Bool>(timeout: Duration.millisecond * 5, maxWaitings: rpm,
+            leakingPerDuration: rpm, leakingDuration: Duration.minute)
+    })
+
+    public func tryAcquire(key: String, rpm: Int64, _: Int64): Bool {
+        pool.acquire(key, rpm)
+    }
+
+    public func close(): Unit {
+        pool.close()
+    }
+}
+
+/**
+ * 滑动窗口：窗口 1 分钟、上限 `rpm`。
+ */
+public class SlidingWindowRateLimitBackend <: RateLimitBackend {
+    private let pool = LimiterPool({
+        rpm: Int64 => SlidingWindowRateLimiter<Bool>(window: Duration.minute, timeout: Duration.millisecond * 5,
+            limit: rpm)
+    })
+
+    public func tryAcquire(key: String, rpm: Int64, _: Int64): Bool {
+        pool.acquire(key, rpm)
+    }
+
+    public func close(): Unit {
+        pool.close()
+    }
+}
+
+/**
+ * 任意时刻限流：把 `rpm` 当作**瞬时并发上限**，不是每分钟配额。
+ *
+ * `RateLimitBackend` 只有 acquire 没有 release，而 `AnyMomentRateLimiter`
+ * 限制的是同时执行的任务数，因此这里只能在判定期间短暂占用槽位；
+ * 它适合对比/实验，不建议用来表达「每分钟 rpm 次」。
+ */
+public class AnyMomentRateLimitBackend <: RateLimitBackend {
+    private let pool = LimiterPool({
+        rpm: Int64 => AnyMomentRateLimiter<Bool>(maxTokens: rpm, timeout: Duration.millisecond)
+    })
+
+    public func tryAcquire(key: String, rpm: Int64, _: Int64): Bool {
+        pool.acquire(key, rpm)
+    }
+
+    public func close(): Unit {
+        pool.close()
+    }
+}
+
+/** 不限制：始终放行。 */
+public class UnlimitedRateLimitBackend <: RateLimitBackend {
+    private let limiter = UnlimitedRateLimiter<Bool>()
+
+    public func tryAcquire(_: String, _: Int64, _: Int64): Bool {
+        limiter.exec(Some(false), {=> Some(true)}) ?? false
+    }
+
+    public func close(): Unit {}
+}
+
+/** 内置 `RateLimitBackend` 的工厂与配置解析。 */
+public class RateLimitBackends {
+    /**
+     * 按名字创建后端，大小写与 `-` / `_` 不敏感：
+     * `token-bucket` / `leaking-bucket` / `sliding-window` / `any-moment` / `unlimited`。
+     */
+    public static func of(name: String): ?RateLimitBackend {
+        match (normalize(name)) {
+            case 'tokenbucket' => Some(TokenBucketRateLimitBackend())
+            case 'leakingbucket' => Some(LeakingBucketRateLimitBackend())
+            case 'slidingwindow' => Some(SlidingWindowRateLimitBackend())
+            case 'anymoment' => Some(AnyMomentRateLimitBackend())
+            case 'unlimited' => Some(UnlimitedRateLimitBackend())
+            case _ => None<RateLimitBackend>
+        }
+    }
+
+    /** 读取 `mcp_rateLimitBackend`；未配置时返回令牌桶。未知名字直接报错。 */
+    public static func fromConfig(): RateLimitBackend {
+        let name = McpConfig.rateLimitBackendName()
+        if (name.isEmpty()) {
+            return TokenBucketRateLimitBackend()
+        }
+        match (of(name)) {
+            case Some(backend) => backend
+            case _ => throw IllegalArgumentException(
+                "unknown ${McpConfig.RATE_LIMIT_BACKEND} '${name}'; expected token-bucket|leaking-bucket|sliding-window|any-moment|unlimited")
+        }
+    }
+
+    private static func normalize(name: String): String {
+        name.trimAscii().toAsciiLower().replace('-', '').replace('_', '')
     }
 }
 

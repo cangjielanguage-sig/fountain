@@ -288,6 +288,34 @@ class McpServer_test {
     }
 
     @TestCase
+    public func testConfigRateLimitBackend(): Unit {
+        Config.set([(McpConfig.RATE_LIMIT, '1'), (McpConfig.RATE_LIMIT_BACKEND, 'unlimited')])
+        try {
+            let tool = McpTool.builder('ping')
+                .handler({_, _ => CallToolResult.text('pong')})
+                .build()
+            let srv = McpServer.builder().tool(tool).build()
+            for (_ in 0..3) {
+                let result = call(srv, 'tools/call', metaParams('"name":"ping","arguments":{}'))
+                @Assert(true, result.contains('result'))
+            }
+        } finally {
+            Config.remove(McpConfig.RATE_LIMIT)
+            Config.remove(McpConfig.RATE_LIMIT_BACKEND)
+        }
+    }
+
+    @TestCase
+    public func testUnknownRateLimitBackend(): Unit {
+        Config.set([(McpConfig.RATE_LIMIT_BACKEND, 'bogus')])
+        try {
+            @ExpectThrows[IllegalArgumentException](McpServer.builder().build())
+        } finally {
+            Config.remove(McpConfig.RATE_LIMIT_BACKEND)
+        }
+    }
+
+    @TestCase
     public func testSubscriptionsListenAndPublish(): Unit {
         let srv = server()
         let listen = call(srv, 'subscriptions/listen', metaParams('"topics":["tools/list_changed"]'))['result'].asObject()

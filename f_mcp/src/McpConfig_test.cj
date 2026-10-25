@@ -51,6 +51,17 @@ class McpConfig_test {
     }
 
     @TestCase
+    public func testRateLimitBackendName(): Unit {
+        Config.set([(McpConfig.RATE_LIMIT_BACKEND, ' sliding-window ')])
+        try {
+            @Assert('sliding-window', McpConfig.rateLimitBackendName())
+        } finally {
+            Config.remove(McpConfig.RATE_LIMIT_BACKEND)
+        }
+        @Assert('', McpConfig.rateLimitBackendName())
+    }
+
+    @TestCase
     public func testAbsentRateLimit(): Unit {
         Config.remove(McpConfig.RATE_LIMIT)
         let policy = McpConfig.rateLimit()

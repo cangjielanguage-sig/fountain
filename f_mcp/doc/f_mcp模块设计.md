@@ -56,7 +56,7 @@
 > - **大结果一律转 `resource_link`**（文本也转，不再"文本截断、二进制转 link"）；
 >   新增 `publicBaseUrl` 与临时结果资源（5.6.6）
 > - **URI scheme 白名单**：只接受 `http` / `https` / `ftp`，`file://` 等一律 `-32602`（5.6.1）
-> - **限流桶用 `f_concurrent.TokenBucketRateLimiter` 保存**：每个限流 key 一个令牌桶（7.2.6）
+> - **限流器用 `f_concurrent` 的 5 种实现**：`token-bucket`（默认）/ `leaking-bucket` / `sliding-window` / `any-moment` / `unlimited`，由 `mcp_rateLimitBackend` 选择（7.2.6 / 7.2.7）
 >
 > v0.2 → v0.3（七项决策落定，补上 v0.2 遗留的待确认）：
 >
@@ -92,7 +92,7 @@
 | schema       | **统一走 `f_data.json.JsonSchema`**：`toJsonSchema<T>()` 生成、`JsonSchema.validate` 校验（5.3）                                       |
 | 首版不做 SSE | 响应一律返回单个 JSON 对象（规范允许）；声明`listChanged: false`                                                                       |
 | 多轮重试     | **单轮优先**；`input_required` 多轮默认 `Manual`，可配 `Auto(handler, maxRounds)`（4.4）                                               |
-| 限流         | **三层**：全局默认 → 服务级配置 → **每工具覆盖**；桶用 `f_concurrent` 令牌桶，跨进程走 `RateLimitBackend` SPI                  |
+| 限流         | **三层**：全局默认 → 服务级配置 → **每工具覆盖**；内置 5 种 `f_concurrent` 限流器，`mcp_rateLimitBackend` 选择，跨进程走 `RateLimitBackend` SPI |
 | 大结果       | 超过 **1 MB**（可配）**一律转 `resource_link`**；临时结果自管理（256 条 / 256 MB / TTL 10 分钟）（5.6.6） |
 | 容量自适应   | **默认开启**。只调 `maxEntries`（不调 `maxBytes` / TTL）；按 `rejectedByCount` 触发，调大敏捷调小迟钝（5.6.6.5） |
 | 可观测性     | **每个窗口一条 `debug`**（含未调整原因）+ **每次调整一条 `info`**；13 项参数全部可配（5.6.6.5.3 / 5.6.6.5.6） |
@@ -2186,8 +2186,20 @@ public class McpServer {
 
 | 部署形态 | 存储 |
 | -------- | ---- |
-| 单实例 | `f_concurrent.TokenBucketRateLimiter`，每个 key 一个令牌桶 |
+| 单实例 | 5 种内置 `RateLimitBackend`，每个 key 一个 `f_concurrent` 限流器；`mcp_rateLimitBackend` 选择算法 |
 | 多实例 | 注入 `RateLimitBackend`，由使用方实现共享存储 |
+
+内置算法与配置值：
+
+| 配置值 | 限流器 | 说明 |
+| --- | --- | --- |
+| `token-bucket`（默认） | `TokenBucketRateLimiter` | 每分钟 `rpm`，允许突发 |
+| `leaking-bucket` | `LeakingBucketRateLimiter` | 每分钟漏出 `rpm` |
+| `sliding-window` | `SlidingWindowRateLimiter` | 1 分钟滑动窗口 |
+| `any-moment` | `AnyMomentRateLimiter` | 瞬时并发上限，不是每分钟配额 |
+| `unlimited` | `UnlimitedRateLimiter` | 不限制 |
+
+名字大小写与 `-` / `_` 不敏感；未知值在构建时抛 `IllegalArgumentException`。
 
 `RateLimitBackend.tryAcquire(key, rpm, nowNanos)` 的 `key` 已带 `c:` / `ct:` / `t:` 作用域前缀，直接作为共享存储的键：
 
@@ -2196,7 +2208,7 @@ public class McpServer {
 - 网关：把全局限流放在 nginx / API 网关，f_mcp 只做单实例自保
 
 `f_concurrent` 的限流器是进程内的，不能跨进程。f_mcp 不内置 Redis 客户端，避免绑定具体存储。
-全局默认值由 `mcp_rateLimit` 配置；`Builder.rateLimit()` 优先于配置。并发闸门仍是进程内的。
+全局默认值由 `mcp_rateLimit` / `mcp_rateLimitBackend` 配置；`Builder.rateLimit()` / `Builder.rateLimitBackend()` 优先于配置。并发闸门仍是进程内的。
 
 ---
 
