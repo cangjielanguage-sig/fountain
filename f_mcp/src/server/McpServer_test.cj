@@ -318,6 +318,13 @@ class McpServer_test {
     }
 
     @TestCase
+    public func testCallerAddressDropsPort(): Unit {
+        @Assert('10.0.0.9', McpServer.withoutPort('10.0.0.9:53211'))
+        @Assert('10.0.0.9', McpServer.withoutPort('10.0.0.9'))
+        @Assert('[::1]', McpServer.withoutPort('[::1]:8080'))
+    }
+
+    @TestCase
     public func testCapabilitiesMatchImplementation(): Unit {
         let result = call(server(), 'server/discover', metaParams(''))['result'].asObject()
         let caps = result['capabilities'].asObject()

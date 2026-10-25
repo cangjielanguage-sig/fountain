@@ -156,25 +156,32 @@ public class McpRegistry {
         }
         let builder = McpPrompt.builder(promptName).description(meta.description)
         let params = function.parameters
+        // 注册期把参数元数据算好：请求路径不再反射查 @McpPromptArg
+        let argNames = ArrayList<String>()
+        let argRequired = ArrayList<Bool>()
         for (param in params) {
             let argMeta = param.findAnnotation<McpPromptArg>() ?? McpPromptArg()
+            argNames.add(param.name)
+            argRequired.add(argMeta.required)
             builder.argument(param.name, description: argMeta.description, required: argMeta.required)
         }
         let prompt = builder.handler(
             {
                 jsonArgs =>
                     let raw = ArrayList<JsonValue>()
-                    for (param in params) {
-                        let argMeta = param.findAnnotation<McpPromptArg>() ?? McpPromptArg()
-                        match (jsonArgs.get(param.name)) {
+                    var index = 0
+                    while (index < argNames.size) {
+                        let name = argNames[index]
+                        match (jsonArgs.get(name)) {
                             case Some(value) => raw.add(value)
                             case _ =>
-                                if (argMeta.required) {
+                                if (argRequired[index]) {
                                     throw McpException(McpProtocol.INVALID_PARAMS,
-                                        "missing prompt argument '${param.name}'", data: JsonString(param.name))
+                                        "missing prompt argument '${name}'", data: JsonString(name))
                                 }
                                 raw.add(JsonNull.instance)
                         }
+                        index++
                     }
                     fn(raw.unsafeData())
             }

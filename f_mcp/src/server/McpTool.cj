@@ -47,6 +47,8 @@ public class McpTool {
     public let handler: McpToolHandler
     public let rateLimit: ?ToolRateLimit
     public let maxResultBytes: ?Int64
+    /** `listTools` 条目 JSON 的构建期缓存（请求期只做切片）。 */
+    var listJson: ?JsonObject = None
 
     init(name!: String, description!: String, inputSchema!: JsonObject, handler!: McpToolHandler,
         rateLimit!: ?ToolRateLimit = None, maxResultBytes!: ?Int64 = None) {

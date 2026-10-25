@@ -44,6 +44,9 @@ public class PromptArgument {
 public type McpPromptHandler = (JsonObject) -> ArrayList<PromptMessage>
 
 public class McpPrompt {
+    /** `listPrompts` 条目 JSON 的构建期缓存。 */
+    var listJson: ?JsonObject = None
+
     public let name: String
     public let description: String
     public let arguments: ArrayList<PromptArgument>

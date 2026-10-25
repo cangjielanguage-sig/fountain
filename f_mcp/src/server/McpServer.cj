@@ -622,18 +622,7 @@ public class McpServer {
         var index = offset
         var emitted = 0
         while (index < resourcesSorted.size && emitted < pageSize) {
-            let resource = resourcesSorted[index]
-            let obj = JsonObject()
-            obj.add('uri', resource.uri)
-            obj.add('name', resource.name)
-            if (!resource.description.isEmpty()) {
-                obj.add('description', resource.description)
-            }
-            match (resource.mimeType) {
-                case Some(m) => obj.add('mimeType', m)
-                case _ => ()
-            }
-            list.add(obj)
+            list.add(resourceJson(resourcesSorted[index]))
             index++
             emitted++
         }
@@ -678,18 +667,7 @@ public class McpServer {
         var index = offset
         var emitted = 0
         while (index < promptsSorted.size && emitted < pageSize) {
-            let prompt = promptsSorted[index]
-            let obj = JsonObject()
-            obj.add('name', prompt.name)
-            if (!prompt.description.isEmpty()) {
-                obj.add('description', prompt.description)
-            }
-            let args = JsonArray()
-            for (arg in prompt.arguments) {
-                args.add(arg.toJson())
-            }
-            obj.add('arguments', args)
-            list.add(obj)
+            list.add(promptJson(promptsSorted[index]))
             index++
             emitted++
         }
@@ -854,12 +832,54 @@ public class McpServer {
         }
     }
 
-    private func toolJson(tool: McpTool): JsonObject {
-        let obj = JsonObject()
-        obj.add('name', tool.name)
-        obj.add('description', tool.description)
-        obj.add('inputSchema', tool.inputSchema)
-        obj
+    private static func toolJson(tool: McpTool): JsonObject {
+        // 构建期缓存：条目对象序列化后不再修改，请求期只把它加进页数组
+        match (tool.listJson) {
+            case Some(cached) => cached
+            case _ =>
+                let obj = JsonObject()
+                obj.add('name', tool.name)
+                obj.add('description', tool.description)
+                obj.add('inputSchema', tool.inputSchema)
+                tool.listJson = Some(obj)
+                obj
+        }
+    }
+
+    private static func resourceJson(resource: McpResource): JsonObject {
+        match (resource.listJson) {
+            case Some(cached) => cached
+            case _ =>
+                let obj = JsonObject()
+                obj.add('uri', resource.uri)
+                obj.add('name', resource.name)
+                if (!resource.description.isEmpty()) {
+                    obj.add('description', resource.description)
+                }
+                match (resource.mimeType) {
+                    case Some(m) => obj.add('mimeType', m)
+                    case _ => ()
+                }
+                resource.listJson = Some(obj)
+                obj
+        }
+    }
+
+    private static func promptJson(prompt: McpPrompt): JsonObject {
+        match (prompt.listJson) {
+            case Some(cached) => cached
+            case _ =>
+                let obj = JsonObject()
+                obj.add('name', prompt.name)
+                obj.add('description', prompt.description)
+                let args = JsonArray()
+                for (arg in prompt.arguments) {
+                    args.add(arg.toJson())
+                }
+                obj.add('arguments', args)
+                prompt.listJson = Some(obj)
+                obj
+        }
     }
 
     /**
@@ -891,7 +911,7 @@ public class McpServer {
         }
     }
 
-    private static func withoutPort(addr: String): String {
+    static func withoutPort(addr: String): String {
         let text = addr.trimAscii()
         if (text.startsWith('[')) {
             match (text.indexOf(']')) {
