@@ -98,6 +98,100 @@ class McpResultStore_test {
         store.close()
     }
 
+    static func text(size: Int64): String {
+        let sb = StringBuilder()
+        for (_ in 0..size) {
+            sb.append('x')
+        }
+        sb.toString()
+    }
+
+    @TestCase
+    public func testExpiredEntriesAreSweptBeforeRejecting(): Unit {
+        let store = ToolResultStore(options: ResultStoreOptions(
+            maxEntries: 256, ttlMillis: 1, adaptive: false))
+        for (i in 0..256) {
+            @Assert(true, store.put(content('v${i}')).isSome())
+        }
+        busySleep(5)
+        @Assert(true, store.put(content('fresh')).isSome())
+        @Assert(1, store.size)
+        store.close()
+    }
+
+    @TestCase
+    public func testExpiredBytesAreReleasedBeforeRejecting(): Unit {
+        let store = ToolResultStore(options: ResultStoreOptions(
+            maxEntries: 256, maxBytes: 1000, ttlMillis: 1, adaptive: false))
+        for (i in 0..10) {
+            @Assert(true, store.put(content(text(70))).isSome())
+        }
+        busySleep(5)
+        @Assert(true, store.put(content(text(70))).isSome())
+        @Assert(1, store.size)
+        store.close()
+    }
+
+    @TestCase
+    public func testSweepIsRateLimited(): Unit {
+        let store = ToolResultStore(options: ResultStoreOptions(
+            maxEntries: 1, ttlMillis: 600_000, adaptive: false))
+        @Assert(true, store.put(content('keep')).isSome())
+        for (i in 0..100) {
+            @Assert(true, store.put(content('overflow-${i}')).isNone())
+        }
+        @Assert(true, store.sweepCount <= 2)
+        store.close()
+    }
+
+    @TestCase
+    public func testEvaluateSkipsWindowLockWithinWindow(): Unit {
+        let store = ToolResultStore(options: ResultStoreOptions(
+            maxEntries: 1000, windowMillis: 600_000, adaptive: true))
+        for (i in 0..100) {
+            @Assert(true, store.put(content('v${i}')).isSome())
+        }
+        @Assert(0, store.windowLockCount)
+        store.close()
+    }
+
+    @TestCase
+    public func testEvaluateTakesWindowLockWhenWindowElapsed(): Unit {
+        let store = ToolResultStore(options: ResultStoreOptions(
+            maxEntries: 1000, windowMillis: 1, adaptive: true))
+        let _ = store.put(content('one'))
+        busySleep(3)
+        let _ = store.put(content('two'))
+        @Assert(true, store.windowLockCount >= 1)
+        store.close()
+    }
+
+    @TestCase
+    public func testDuplicateTokenReleasesOldBytes(): Unit {
+        let store = ToolResultStore(options: ResultStoreOptions(maxEntries: 10, adaptive: false))
+        @Assert(true, store.put('same', content(text(100))))
+        let afterFirst = store.usedBytes
+        @Assert(true, store.put('same', content(text(200))))
+        @Assert(1, store.size)
+        @Assert(afterFirst + 100, store.usedBytes)
+        store.close()
+    }
+
+    @TestCase
+    public func testRepeatedDuplicateTokenDoesNotGrow(): Unit {
+        let store = ToolResultStore(options: ResultStoreOptions(maxEntries: 10, adaptive: false))
+        @Assert(true, store.put('same', content(text(100))))
+        let afterFirst = store.usedBytes
+        for (_ in 0..100) {
+            @Assert(true, store.put('same', content(text(100))))
+        }
+        @Assert(1, store.size)
+        @Assert(afterFirst, store.usedBytes)
+        @Assert(true, store.get('missing').isNone())
+        store.close()
+        @Assert(0, store.usedBytes)
+    }
+
     @TestCase
     public func testConcurrencyGate(): Unit {
         let gate = ConcurrencyGate()

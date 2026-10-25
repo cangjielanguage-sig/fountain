@@ -86,7 +86,10 @@ public class ToolResultStore {
     private let rejectedByBytes = AtomicInt64(0)
 
     private let windowMutex = Mutex()
-    private var windowStartNanos = nowNanos()
+    private let windowStartNanos = AtomicInt64(nowNanos())
+    private let lastSweepNanos = AtomicInt64(0)
+    private let sweeps = AtomicInt64(0)
+    private let windowLocks = AtomicInt64(0)
     private var lastPuts = 0
     private var lastRejectedByCount = 0
     private var lastRejectedByBytes = 0
@@ -110,17 +113,28 @@ public class ToolResultStore {
     public func put(token: String, content: ResourceContent): Bool {
         let bytes = estimateBytes(content)
         if (count.load() >= maxEntries.load()) {
-            rejectedByCount.fetchAdd(1)
-            evaluate()
-            return false
+            // 满额先回收过期条目，否则过期数据会永久占着配额
+            sweepIfDue()
+            if (count.load() >= maxEntries.load()) {
+                rejectedByCount.fetchAdd(1)
+                evaluate()
+                return false
+            }
         }
         if (!budget.reserve(bytes, options.maxBytes)) {
-            rejectedByBytes.fetchAdd(1)
-            evaluate()
-            return false
+            sweepIfDue()
+            if (!budget.reserve(bytes, options.maxBytes)) {
+                rejectedByBytes.fetchAdd(1)
+                evaluate()
+                return false
+            }
         }
-        entries.add(token, ResultEntry(content, bytes, nowNanos()))
-        count.fetchAdd(1)
+        // 同一个 token 被覆盖时只换内容：不重复计数，并释放旧字节
+        let previous = entries.add(token, ResultEntry(content, bytes, nowNanos()))
+        match (previous) {
+            case Some(prev) => budget.release(prev.bytes)
+            case _ => count.fetchAdd(1)
+        }
         puts.fetchAdd(1)
         evaluate()
         true
@@ -140,6 +154,8 @@ public class ToolResultStore {
 
     public func sweep(): Unit {
         let now = nowNanos()
+        lastSweepNanos.store(now)
+        sweeps.fetchAdd(1)
         let expired = ArrayList<String>()
         for ((token, entry) in entries) {
             if (now - entry.createdAtNanos > options.ttlMillis * 1_000_000) {
@@ -149,6 +165,19 @@ public class ToolResultStore {
         for (token in expired) {
             removeEntry(token)
         }
+    }
+
+    /** 至多每秒真正扫一次表：满额写入是热路径，不能每次都全表遍历。 */
+    private func sweepIfDue(): Unit {
+        let now = nowNanos()
+        let last = lastSweepNanos.load()
+        if (now - last < 1_000_000_000) {
+            return
+        }
+        if (!lastSweepNanos.compareAndSwap(last, now)) {
+            return
+        }
+        sweep()
     }
 
     public func close(): Unit {
@@ -174,6 +203,20 @@ public class ToolResultStore {
     public prop usedBytes: Int64 {
         get() {
             budget.value()
+        }
+    }
+
+    /** 全表扫描次数，用于确认限频生效。 */
+    public prop sweepCount: Int64 {
+        get() {
+            sweeps.load()
+        }
+    }
+
+    /** 进入窗口锁的次数，用于确认窗口未到期时走了无锁快路径。 */
+    public prop windowLockCount: Int64 {
+        get() {
+            windowLocks.load()
         }
     }
 
@@ -208,8 +251,17 @@ public class ToolResultStore {
         }
         let now = nowNanos()
         let windowNanos = options.windowMillis * 1_000_000
+        // 无锁快路径：窗口未到期时连窗口锁都不碰
+        if (now - windowStartNanos.load() < windowNanos) {
+            return
+        }
+        var snapshot = ''
+        var resizedFrom = 0
+        var resizedTo = 0
+        var resizeReason = ''
         synchronized(windowMutex) {
-            if (now - windowStartNanos < windowNanos) {
+            windowLocks.fetchAdd(1)
+            if (now - windowStartNanos.load() < windowNanos) {
                 return
             }
             let putTotal = puts.load()
@@ -221,7 +273,7 @@ public class ToolResultStore {
             lastPuts = putTotal
             lastRejectedByCount = rejectCount
             lastRejectedByBytes = rejectBytes
-            windowStartNanos = now
+            windowStartNanos.store(now)
 
             let current = maxEntries.load()
             let rejectTotal = dCount + dBytes
@@ -265,15 +317,21 @@ public class ToolResultStore {
                     'below_threshold'
                 }
             }
-            let snapshot = 'puts=${dPuts} rej_count=${dCount} rej_bytes=${dBytes} ' +
+            snapshot = 'puts=${dPuts} rej_count=${dCount} rej_bytes=${dBytes} ' +
                 'reject_rate=${rejectRate} occupancy=${occupancy} max_entries=${current} ' +
                 'decision=${decision} reason=${reason}'
-            log.append(LogLevel.DEBUG, 'mcp.resultstore.eval ${snapshot}', None<Exception>)
             if (target != current) {
                 maxEntries.store(target)
-                log.append(LogLevel.INFO, 'mcp.resultstore.resize from=${current} to=${target} reason=${reason}',
-                    None<Exception>)
+                resizedFrom = current
+                resizedTo = target
+                resizeReason = reason
             }
+        }
+        // 格式化与日志都在锁外
+        log.append(LogLevel.DEBUG, 'mcp.resultstore.eval ${snapshot}', None<Exception>)
+        if (resizedTo != 0) {
+            log.append(LogLevel.INFO, 'mcp.resultstore.resize from=${resizedFrom} to=${resizedTo} reason=${resizeReason}',
+                None<Exception>)
         }
     }
 
