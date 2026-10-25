@@ -78,7 +78,7 @@ F / G / H / I / J / L 的功能开发与适配一律按 TDD 循环推进，**先
 
 ## 7. 建 tag（发布标记）
 
-- 前置门禁（缺一不可）：本轮提交已 **推送**（`git push origin <分支>` 成功）；工作区干净；单元测试 / 回归 / 冒烟全部通过。
+- 前置门禁（缺一不可）：本轮提交已 **推送**（`git push origin <分支>` 成功）；工作区干净；单元测试 / 回归 / 冒烟全部通过；在 fountain 仓库内发布（`fountain-tag` 技能）时，`CHANGELOG` 已按「上一个 tag → `origin/master`」汇总并按时间倒序更新（最新在前）且合入 master，见 `fountain-tag` 的 Step 3.5。
 - 命名：**以用户项目的既有 tag 规范为准**——先 `git tag --sort=-creatordate` 看历史；无历史或规范不明时**与用户确认**，
   不要自行发明格式。
 - 附注 tag（必须 `-a`，便于 `git tag -l -n` 查看消息）：

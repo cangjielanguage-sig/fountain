@@ -1,27 +1,28 @@
 ---
 name: fountain-tag
-description: Use when asked to create a new release tag and push it (打 tag、创建 tag、新建版本 tag、release tag、new tag), or when a tag message must summarize the commits merged into master since the previous tag.
+description: Use when asked to create a new release tag and push it (打 tag、创建 tag、新建版本 tag、release tag、new tag), or when CHANGELOG must be updated from the previous tag to the latest master commit in reverse chronological order (newest first) before tagging.
 ---
 
 # fountain-tag
 
 ## Overview
 
-先做文档与技能同步（各模块 README 对照代码、依赖图按最新依赖重生成、`skills/fountain-developer` 的配置与 API 描述按最新代码同步、上一 tag 以来受影响文件与本轮改动文件的换行符统一为 LF），再升版本号并**提交推送**（这些提交都要落进 `master`），最后用「上一个 tag → master 最新提交」这段区间的提交汇总作为附注 tag 信息，创建并推送新 tag。
+先做文档与技能同步（各模块 README 对照代码、依赖图按最新依赖重生成、`skills/fountain-developer` 的配置与 API 描述按最新代码同步、上一 tag 以来受影响文件与本轮改动文件的换行符统一为 LF），再升版本号并**提交推送**（这些提交都要落进 `master`）；随后按「上一个 tag → master 最新提交」汇总并**按时间倒序更新 `CHANGELOG`（越近越靠前）**，把 CHANGELOG 提交也合入 master；最后用同一区间汇总作为附注 tag 信息，创建并推送新 tag。
 
-流水线：**Step 0 定名（`scripts/check_tag_name.py` 校验：数字版本 a.b.c 三段 / 全 tag 唯一 / 大于最新 tag）→ Step 1 同步文档（README / 依赖图 / fountain-developer / 换行符）→ Step 2 改版本号 → Step 3 提交并推送（含合入 master）→ Step 4 定区间 → Step 5 汇总 → Step 6 建 tag → Step 7 推送**。版本号替换由 `scripts/bump_version.py` 完成（脚本只改文件；提交、推送、合并、打 tag 由本技能后续步骤做）。
+流水线：**Step 0 定名（`scripts/check_tag_name.py` 校验：数字版本 a.b.c 三段 / 全 tag 唯一 / 大于最新 tag）→ Step 1 同步文档（README / 依赖图 / fountain-developer / 换行符）→ Step 2 改版本号 → Step 3 提交并推送（含合入 master）→ Step 3.5 更新 CHANGELOG（BASE..origin/master，时间倒序）→ Step 4 定区间 → Step 5 汇总 → Step 6 建 tag → Step 7 推送**。版本号替换由 `scripts/bump_version.py` 完成（脚本只改文件；提交、推送、合并、打 tag 由本技能后续步骤做）。
 
-四条硬约束：
+五条硬约束：
 1. **tag 名必须匹配 `^release-\d+(\.\d+){2}(\.(alpha|beta))?$`，且数字版本 `a.b.c` 在所有 tag 中唯一、大于当前最新 tag，并经用户确认** —— 这三条由 `scripts/check_tag_name.py` 一次判定，全过才能往下走（Step 0）。
 2. **提交区间只能取自 master**。
-3. **建 tag 前，本次要发布的提交（文档同步 + 升版）必须已经在 `origin/master` 上**——顺序绝不能颠倒：先提交推送、合入 master、推 master，再打 tag。tag 打在 master 的旧 tip 上就会出现「tag 信息写着新版本号、代码树还是旧版本号」。
+3. **建 tag 前，本次要发布的提交（文档同步 + 升版 + CHANGELOG）必须已经在 `origin/master` 上**——顺序绝不能颠倒：先提交推送、合入 master、推 master，再打 tag。tag 打在 master 的旧 tip 上就会出现「tag 信息写着新版本号、代码树还是旧版本号」。
 4. **建 tag 前，根 README（中英两份）的模块清单必须与代码里的库模块集合一致**：代码里有、README 没引用的追加进去；README 有、代码里已不存在的删掉（见 Step 1.1）。
+5. **建 tag 前，`CHANGELOG` 必须已按 `BASE..origin/master` 更新、按时间倒序（最新日期在最上、同日内也最新在前），并已提交合入 `origin/master`**——只改文件不提交、或把新条目追加到末尾，都算没更新（见 Step 3.5）。
 
 ## 适用 / 不适用
 
 - 适用：用户要求新建并推送版本 tag（如 `release-1.3.12.alpha`），tag 信息由提交汇总生成，且仓库内各模块版本号要同步升到新版本、README、依赖图与 `fountain-developer` 要跟着代码更新。
 - 不适用：删除 / 移动 / 重打已有 tag；给 feature 分支打 tag；发布制品（那是 `fboot pub`）；只改版本号不建 tag（直接跑 `scripts/bump_version.py`）；只想同步文档不打 tag（按 Step 1 做完即可）。
-- 会动这几处：各模块 README、依赖图产物、`skills/fountain-developer` 的配置与 API 描述、区间文件与本轮改动文件的换行符、当前开发分支（最多四个文档/工程提交 + 升版提交 + 推送）、`master`（`--no-ff` 合并 + 推送）、一个新 tag。开工前先 `git status` 确认工作区是否干净、当前分支是不是预期的开发分支。
+- 会动这几处：各模块 README、依赖图产物、`skills/fountain-developer` 的配置与 API 描述、`CHANGELOG`、区间文件与本轮改动文件的换行符、当前开发分支（最多四个文档/工程提交 + 升版提交 + CHANGELOG 提交 + 推送）、`master`（`--no-ff` 合并 + 推送）、一个新 tag。开工前先 `git status` 确认工作区是否干净、当前分支是不是预期的开发分支。
 
 ## Step 0 — 门禁：确定 tag 名（会阻断）
 
@@ -278,6 +279,75 @@ python "<技能目录>/scripts/bump_version.py" <x.y.z> --old <a.b.c> --root <�
 6. **门禁复核（不通过就别往下走）**：`git merge-base --is-ancestor <升版提交 sha> origin/master` 必须 exit 0。这里用升版提交的 sha（Step 3.3 的 `HEAD`），不是 `DEV` 的 tip；有 Step 1 的文档提交时，对它的 sha 也跑一遍同样的检查。
 7. 复核 master 已推送：`git rev-list --count origin/master..master` 应为 0。
 
+## Step 3.5 — 更新 CHANGELOG（建 tag 前，会改文件 + 提交 + 合入 master）
+
+**位置**：Step 3 已把文档 + 升版提交推入 `origin/master` 之后、Step 4 定 tag 区间之前。`CHANGELOG` 必须覆盖 `BASE..origin/master`（BASE = Step 0 的最新 tag，目标 = 当前 `origin/master` 的 tip），并且它自己也要进入 master，才能被本次 tag 覆盖。
+
+1. **取区间与日期**（只读）：
+
+   ```bash
+   git fetch origin --tags
+   BASE=<Step 0 记录的最新 tag>        # 替换成 tag 名（占位符，不是 shell 变量语法）
+   git rev-parse origin/master
+   git show -s --format=%ad --date=short origin/master
+   git log --format="%h|%ad|%s" --date=short BASE..origin/master   # 新→旧
+   git rev-list --count --merges BASE..origin/master                 # 合并数
+   git diff --stat BASE..origin/master
+   ```
+
+   - 先按每个提交的 `%ad` 取日期，同一天的提交合并到同一日期段；**不要把区间内所有条目都塞到目标提交日期**。目标提交日期（`git show -s --format=%ad --date=short origin/master`）用于本次升版条目与判断新段位置。
+   - 区间为空 → 不更新 CHANGELOG，按 Step 4 的「无新提交」处理（不建 tag）。
+   - 区间里应能看到 Step 2/3 的升版提交；看不到说明 master 还没推上去，回 Step 3。
+
+2. **读现有 `CHANGELOG`**：从头读，记录已有日期段、已有条目与格式（日期行顶格、条目 4 空格缩进、`type(module): 摘要`、长行 6 空格续行）。已有条目视为「已记录」，不得重复添加；同一变更已有更宽的总结时，不拆成多条。
+
+3. **归并条目**（按主题，不逐条抄提交）：
+   - 先按提交日期分组，再按主题：新增与接口变化 / 修复 / 文档 / 工程；`refactor!` / 破坏性变更必须在摘要里标 `!` 或「不兼容」。
+   - 每条写「模块：做了什么——动机/影响」，不写提交号；纯合并提交不单列。
+   - 功能性 / 行为性描述必须回到 `git diff` 核对（与 Step 5 同一口径）；提交信息与 diff 冲突时以代码为准。
+   - 工程段至少写本次升版：所有模块 `cjpm.toml`（含 fdemo / frpcdemo 工作区）与 `f_version/src/FountainVersion.cj` 由 a.b.c 升到 x.y.z；已有同版本条目则跳过。
+   - 只把**缺失**的条目插入；已有条目保持原文，不重写、不删改（除非日期段乱序需要整段移动）。
+
+4. **写入 `CHANGELOG`（时间倒序，越近越靠前）**：
+   - 每个日期段按 `YYYY-MM-DD` **倒序插入到正确位置**：比它旧的段之前、比它新的段之后；已有该日期段时把新条目放在该段**最前面**，没有则新建。最新日期段自然在文件最顶部。
+   - 本次升版条目放在目标提交日期段（没有就新建该日期段）。
+   - 日期段发现乱序时，只移动整段，不改段内内容。
+   - 格式对齐现有文件：UTF-8、LF、无尾随空格、条目 4 空格缩进、续行 6 空格。
+   - 示例（只示意顺序）：
+
+     ```
+     2026-10-25
+         feat(f_mcp): 新增 @Mcp 宏与三个元数据注解
+         fix(f_mq): 死信阈值改重试次数语义
+     2026-10-24
+         新增 f_jsonrpc 模块（JSON-RPC 2.0）
+     ```
+
+   - 禁止把新条目追加到文件末尾、按正序排、或把旧日期段整体倒序重写。
+
+5. **提交并合入 master**（与 Step 3 同一套推送 / 合并 / 门禁）：
+
+   ```bash
+   git status --short                 # 只应出现 CHANGELOG
+   git add CHANGELOG
+   git diff --cached --stat           # 只应有 CHANGELOG
+   git commit -m "docs(CHANGELOG): 汇总 <BASE>..<target 短 sha> 的变更"
+   git push origin <DEV>
+   git rev-parse HEAD                 # 记为 CL_SHA
+   ```
+
+   - `DEV` 就是 `master` → 跳过合并；否则：
+     ```bash
+     git checkout master
+     git merge --no-ff <DEV> -m "Merge branch '<DEV>'"
+     git push origin master
+     git checkout <DEV>
+     ```
+   - 门禁：`git merge-base --is-ancestor <CL_SHA> origin/master` 必须 exit 0；`git rev-list --count origin/master..master` 必须为 0。
+   - 无新增条目（`git diff --stat` 为空）→ 不建空提交、不合并；在汇报里写明「CHANGELOG 已包含本区间全部变更」，`CL_SHA` 记为空。
+   - `CHANGELOG` 改动**单独提交**，不要混进 Step 1 的文档提交或 Step 2 的升版提交。
+   - 有冲突 → 停在冲突现场，把冲突文件列给用户，不自行取舍。
+
 ## Step 4 — 定位基线与目标提交
 
 ```bash
@@ -291,6 +361,7 @@ git log --oneline BASE..origin/master            # 本次要总结的提交集�
 
 - 目标提交 = **`origin/master` 的 tip**。本地 `master` 上尚未推送的提交不进区间，也**不要**为它们询问用户。
 - 区间里**必须能看到 Step 3 的升版提交**（以及 Step 1 的文档提交）；看不到说明 master 还没推上去 → 回 Step 3 第 6、7 步。
+- 若 Step 3.5 产生了 CHANGELOG 提交，区间里**也必须能看到 `docs(CHANGELOG)` 提交**，且目标提交包含它；看不到说明 CHANGELOG 没合入 master → 回 Step 3.5 第 5 步。
 - fetch 后最新 tag 与 Step 0 推导候选时所依据的不一致 → 回到 Step 0 重新推导并征求同意，再用新的 `a.b.c` 重做 Step 2（此时 `--old` 传文件里当前的版本号）；区间若因此扩大，Step 1.2 的「改过代码的模块」清单按新 BASE 重新核一遍。
 - 区间为空 → 汇报「无新提交」，不建 tag。
 - 禁止：拿 `HEAD`、当前分支或别的分支当目标提交；禁止用 `BASE..HEAD` 当范围——未合并到 master 的提交不得进入 tag 信息。
@@ -305,12 +376,12 @@ git log --oneline BASE..origin/master            # 本次要总结的提交集�
    - 头部：`自 BASE（短 sha，YYYY-MM-DD）至本次提交（短 sha，YYYY-MM-DD），共 N 个提交（含 M 个合并）。` 下一行为 `以下按主题汇总。`
    - 分节：一、新增与接口变化；二、修复；三、文档；四、工程（空分节删掉）。
    - 每条一行：`- 模块：做了什么——动机/影响`；写模块与行为，不写提交号。
-   - 「三、文档」要涵盖 Step 1 的 README、依赖图与 fountain-developer 同步改动（每条同样回到 diff 核对）。
+   - 「三、文档」要涵盖 Step 1 的 README、依赖图、fountain-developer 同步改动与 Step 3.5 的 CHANGELOG 更新（每条同样回到 diff 核对；CHANGELOG 条目与 tag 信息不能互相矛盾）。
    - 工程分节必须写到本次升版：全部模块 `cjpm.toml`（含 fdemo / frpcdemo 工作区）与 `f_version/src/FountainVersion.cj` 由 a.b.c 升到 x.y.z（根 README 的链接与版本无关，不在列）。
 
 ## Step 6 — 建附注 tag
 
-0. 建 tag 前再确认一次：`git rev-parse origin/master` 与 Step 4 记录的目标 sha 相同，且 Step 3 第 6 步的门禁已通过（Step 1 的文档提交——含 1.4 的 fountain-developer 同步——与升版提交都在 master 上）。
+0. 建 tag 前再确认一次：`git rev-parse origin/master` 与 Step 4 记录的目标 sha 相同，且 Step 3 第 6 步的门禁已通过（Step 1 的文档提交——含 1.4 的 fountain-developer 同步——与升版提交都在 master 上）；若 Step 3.5 产生了 CHANGELOG 提交，`git merge-base --is-ancestor <CL_SHA> origin/master` 也必须 exit 0，且目标 sha 已包含它。
 1. 用编辑器工具把 tag 信息写到**仓库外**的临时文件（UTF-8 无 BOM）。禁用 PowerShell here-string / `Out-File -Encoding utf8`：引号会被吞、BOM 会写进 tag。
    - **写完先核对文件非空**再往下走：`(Get-Item <路径>).Length` 应 > 0，首行应是 tag 名。编辑器工具偶发写出 0 字节文件，而 `git tag -a -F` 对空文件照样 exit 0，会静默产出空消息的 tag。是 0 字节 → **换个文件名重写**（同名路径刚被删过时容易再写空），不要直接重试同名。
 2. 文件内容格式（git 会剥掉首尾空行）：
@@ -341,7 +412,7 @@ git push origin refs/tags/<tag 名>              # 显式 refspec；不加 --for
 git --no-pager ls-remote --tags origin <tag 名> # 必须回显 tag 对象 sha
 ```
 
-汇报：BASE tag、目标提交、升版提交 sha 与合并提交 sha（若有）、`DEV` 与 `master` 的推送结果、提交数、Step 0 的 tag 名校验结论（三条是否全过 / 最新 tag / 是否撞过名）、Step 1.1 的模块清单对齐结果（追加 / 删除了哪些条目，或「无差异，共 M 个模块」）、Step 1 的其余改动清单（改了哪些 README / 图 / fountain-developer 文件、换行符修正了几个文件、改了什么）、Step 2 的版本号替换统计（改了哪些文件、多少处）、tag 信息全文、推送结果（本地 tag 对象 sha 与远端 sha）。只推这一个 tag，其余推送只限 Step 3 的 `DEV` 与 `master`。
+汇报：BASE tag、目标提交、升版提交 sha 与合并提交 sha（若有）、`DEV` 与 `master` 的推送结果、提交数、Step 0 的 tag 名校验结论（三条是否全过 / 最新 tag / 是否撞过名）、Step 1.1 的模块清单对齐结果（追加 / 删除了哪些条目，或「无差异，共 M 个模块」）、Step 1 的其余改动清单（改了哪些 README / 图 / fountain-developer 文件、换行符修正了几个文件、改了什么）、Step 2 的版本号替换统计（改了哪些文件、多少处）、Step 3.5 的 CHANGELOG 更新（新增 / 合并了哪些日期段与条目、按时间倒序是否满足、是否产生提交与合并、`CL_SHA`、或「已包含全部变更」）、tag 信息全文、推送结果（本地 tag 对象 sha 与远端 sha）。只推这一个 tag，其余推送只限 Step 3 / 3.5 的 `DEV` 与 `master`。
 
 ## Red Flags — 命中就停下重来
 
@@ -352,7 +423,7 @@ git --no-pager ls-remote --tags origin <tag 名> # 必须回显 tag 对象 sha
 | 用户给的名字版本号已被别的 tag 用过却照用（最新是 `release-1.3.15.alpha`，还要建 `release-1.3.15` 或 `.beta`） | 同一 `a.b.c` 出第二个 tag 后，「这个版本对应哪个 tag」没法回答；Step 0 的唯一性校验必须跑，脚本会指出被哪个 tag 占用 |
 | 用户给的名字版本号比当前最新 tag 小（最新 `1.3.15` 却要建 `release-1.3.9.alpha`） | 升版会从 1.3.15 倒退到 1.3.9 并一路进 master；Step 0 的递增校验必须跑，报给用户换名而不是照做 |
 | 靠肉眼比版本号、跳过校验脚本 | 创建时间新 ≠ 版本号大；`git tag` 默认还是字典序（`1.3.9` 排在 `1.3.10` 之后），唯一性还得对全量 tag 看；跑一次脚本（正则 + 唯一 + 递增）比人眼快也更稳 |
-| 升版改动没提交就建 tag | tag 停在 master 旧 tip：tag 信息写着新版本号、代码树仍是旧版本号（2026-10-07 `release-1.3.10.alpha` 首版即如此，只能删掉重打）。顺序永远是 Step 3 → Step 6 |
+| 升版改动没提交就建 tag | tag 停在 master 旧 tip：tag 信息写着新版本号、代码树仍是旧版本号（2026-10-07 `release-1.3.10.alpha` 首版即如此，只能删掉重打）。顺序永远是 Step 3 → Step 3.5 → Step 6 |
 | 升版提交只推到开发分支、没合进 master | 区间取自 master，tag 里不会有升版提交；Step 3 第 6 步的门禁不能跳 |
 | README 没对照代码就建 tag | 发出去的是旧说明；Step 1.2 的逐条核对不能跳，BASE 以来改过代码的模块尤其 |
 | 没同步 fountain-developer 就建 tag | 它的配置 / API 描述停留在旧版本，下一次用它开发会按旧描述写出错代码；Step 1.4 不能跳（BASE 以来改过代码的模块尤其），`docs(skills)` 提交也要落进 master |
@@ -362,6 +433,12 @@ git --no-pager ls-remote --tags origin <tag 名> # 必须回显 tag 对象 sha
 | 手改 SVG 成品、或不跑生成器就提交依赖图 | 下次重生成即被覆盖，且与 `cjpm.toml` 脱节；只跑 `scripts/deps/`（技能副本）或 `docs/模块依赖图/`（仓库版）里的生成器 |
 | 生成器自检有告警（页眉越界 / 线压节点 / 节点重叠 / 色相重复）仍提交 | 图本身有问题，先修脚本或数据，再重跑；`node crossings` 必须为 none |
 | 依赖图出现与本轮无关的大范围 diff | 生成器或环境不一致；停下查清，别把噪声当更新提交 |
+| 建 tag 前没更新 CHANGELOG | Step 3.5 是硬步骤：必须按 `BASE..origin/master` 汇总，否则 tag 与 CHANGELOG 脱节 |
+| CHANGELOG 新条目追加在文件末尾 / 日期按正序排 | 必须时间倒序：最新日期段在最上、同日内最新条目在前；新条目追加到末尾算没更新 |
+| CHANGELOG 改了但没提交 / 没合入 master | 只在工作区改文件不算更新；必须单独提交、推送 `DEV`、合入并推送 `master`，否则本次 tag 不包含它 |
+| CHANGELOG 把已有条目重复一遍 / 直接抄提交信息 | 先读现有 CHANGELOG，已有条目（或更宽的总结）不重复；按主题归并，功能性描述回到 diff 核对 |
+| CHANGELOG 改动混进升版提交 | 必须单独 `docs(CHANGELOG): …` 提交；混进升版提交会破坏 Step 2 的「只有版本号」复核 |
+| CHANGELOG 日期段乱序 | 日期段按 `YYYY-MM-DD` 从新到旧；发现乱序时只移动整段，不改段内内容 |
 | 文档改动与版本号改动混在一个提交 | Step 2 的「除版本号外没有别的改动」复核会失效；两类改动各自成提交 |
 | 文档提交没进 master 就打 tag | 区间取自 master，未合并的文档不进 tag；同升版提交的约束 |
 | 用 `git add -A` 暂存 | 会捎带未跟踪文件与无关改动；用 `git add -u`，并在 commit 前复核 `git diff --cached --stat` |
