@@ -90,7 +90,14 @@ public class McpRegistry {
         } else {
             meta.name
         }
-        let tool = McpTool.builder(toolName).description(meta.description).inputSchema(schema).handler(
+        let toolBuilder = McpTool.builder(toolName).description(meta.description).inputSchema(schema)
+        match (toolRateLimitOf(meta)) {
+            case Some(limit) =>
+                toolBuilder.rateLimit(limit)
+                ()
+            case _ => ()
+        }
+        let tool = toolBuilder.handler(
             {
                 _, jsonArgs =>
                     let payload = match (jsonArgs) {
@@ -187,6 +194,27 @@ public class McpRegistry {
     /** 触发生成 `McpServer`（已经 build 过则直接返回）。 */
     public static func build(): Unit {
         server()
+    }
+
+    private static func toolRateLimitOf(meta: McpToolMeta): ?ToolRateLimit {
+        if (meta.perCallerRpm <= 0 && meta.perCallerToolRpm <= 0 && meta.perToolRpm <= 0 &&
+            meta.maxConcurrency <= 0 && meta.perCallerConcurrency <= 0) {
+            return None<ToolRateLimit>
+        }
+        ToolRateLimit(
+            perCallerRpm: positiveOrNone(meta.perCallerRpm),
+            perCallerToolRpm: positiveOrNone(meta.perCallerToolRpm),
+            perToolRpm: positiveOrNone(meta.perToolRpm),
+            maxConcurrency: positiveOrNone(meta.maxConcurrency),
+            perCallerConcurrency: positiveOrNone(meta.perCallerConcurrency))
+    }
+
+    private static func positiveOrNone(value: Int64): ?Int64 {
+        if (value > 0) {
+            Some(value)
+        } else {
+            None<Int64>
+        }
     }
 
     private static func withContext(contents: ArrayList<ResourceContent>, uri: String,

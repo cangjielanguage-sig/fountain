@@ -127,6 +127,7 @@ public class KnowledgeService {
 - 属性 `@Mcp['kb-server']` 或 `@Mcp[kbServer]` 指定 `serverInfo.name`（字符串常量或标识符）；不写属性时 name 为 `fountain-mcp`
 - `serverInfo.version` 取配置项 `mcp_version`，未配置时为 `1.0.0`
 - **tool**：函数必须恰好一个参数，参数是 `@DataAssist[props fields]` 类；`inputSchema` 由该类型生成
+- `@McpToolMeta` 的 `perCallerRpm` / `perCallerToolRpm` / `perToolRpm` / `maxConcurrency` / `perCallerConcurrency` 直接映射为 `ToolRateLimit`，`0` 表示不限制
 - **resource**：函数必须无参数；`uri` 不能为空；`mediaType` 对应 `McpResource.mimeType`；示例中的 `/doc` 需要配置 `mcp_publicBaseUrl`
 - **prompt**：函数参数就是 `PromptArgument`，参数名即 `name`；`@McpPromptArg` 提供 `description` / `required`（默认 `true`）；可选参数建议用 `Option<T>`
 - 注解里的 `name` 为空时回退到函数名；没有这三个注解的 public 函数会被忽略

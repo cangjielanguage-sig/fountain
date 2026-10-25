@@ -18,7 +18,7 @@ package fountain::jsonrpcclient
 import std.env.{exit, getVariable}
 import fountain::f_app.{Initializer, InitializerCollection}
 import fountain::f_data.*
-import fountain::f_jsonrpc.*
+import fountain::f_jsonrpc.client.*
 
 private func runDemo(): Unit {
     let port = getVariable('rpc_demo_port') ?? '18080'

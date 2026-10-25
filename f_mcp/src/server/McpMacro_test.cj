@@ -77,6 +77,12 @@ public class MacroMcpService {
     @McpToolMeta[name: 'macro.void']
     public func quiet(req: MacroSearchRequest): Unit {}
 
+    /** 注解配置的限流：每调用方×工具每分钟 2 次。 */
+    @McpToolMeta[name: 'macro.limited', perCallerToolRpm: 2]
+    public func limited(req: MacroSearchRequest): CallToolResult {
+        CallToolResult.text('limited')
+    }
+
     /** 没有被 MCP 注解修饰的公共函数应被忽略。 */
     public func helper(ctx: McpToolContext): String {
         ctx.callerId
@@ -187,6 +193,20 @@ class McpMacro_test {
 
         let quiet = call('tools/call', '"name":"macro.void","arguments":{"query":"hi"}')['result'].asObject()
         @Assert(0, quiet['content'].asArray().size)
+    }
+
+    @TestCase
+    public func testToolRateLimitFromMeta(): Unit {
+        call('tools/call', '"name":"macro.limited","arguments":{"query":"hi"}')
+        call('tools/call', '"name":"macro.limited","arguments":{"query":"hi"}')
+        var failed = false
+        try {
+            call('tools/call', '"name":"macro.limited","arguments":{"query":"hi"}')
+        } catch (e: McpException) {
+            failed = true
+            @Assert(McpProtocol.RATE_LIMITED, e.code)
+        }
+        @Assert(true, failed)
     }
 
     @TestCase
