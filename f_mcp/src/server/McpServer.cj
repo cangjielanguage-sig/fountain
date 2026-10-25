@@ -863,7 +863,7 @@ public class McpServer {
     }
 
     private static func toolJson(tool: McpTool): JsonObject {
-        // 构建期缓存：条目对象序列化后不再修改，请求期只把它加进页数组
+        // 首次 list 请求时缓存：条目对象序列化后不再修改，请求期只把它加进页数组
         match (tool.listJson) {
             case Some(cached) => cached
             case _ =>
