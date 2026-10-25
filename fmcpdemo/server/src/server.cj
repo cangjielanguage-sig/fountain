@@ -28,6 +28,16 @@ import fountain::f_mcp.*
  * 真实部署中把这里换成 Redis / f_store 等共享存储即可；接口不变。
  */
 public class SharedWindowBackend <: RateLimitBackend {
+    public static prop name: String {
+        get() {
+            'shared-window'
+        }
+    }
+
+    public static func new(): RateLimitBackend {
+        SharedWindowBackend()
+    }
+
     private let counters = ConcurrentHashMap<String, AtomicInt64>()
 
     public func tryAcquire(key: String, rpm: Int64, nowNanos: Int64): Bool {

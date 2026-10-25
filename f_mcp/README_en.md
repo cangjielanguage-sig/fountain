@@ -86,6 +86,26 @@ Five `RateLimitBackend` implementations are built in, all backed by `f_concurren
 
 An explicit `Builder.rateLimitBackend(...)` wins over configuration. Names are case-insensitive and ignore `-` / `_`; an unknown name throws `IllegalArgumentException` at `build()`.
 
+Custom algorithms can be registered:
+
+```cangjie
+public class MyRateLimitBackend <: RateLimitBackend {
+    public static prop name: String {
+        get() { 'my-algo' }
+    }
+
+    public static func new(): RateLimitBackend {
+        MyRateLimitBackend()
+    }
+
+    // tryAcquire / close ...
+}
+
+RateLimitBackends.register<MyRateLimitBackend>()
+```
+
+Then select it with `mcp_rateLimitBackend=my-algo` or `Builder.rateLimitBackend(...)`. Registering the same name overrides the existing implementation.
+
 The global default comes from `mcp_rateLimit` and `mcp_rateLimitBackend`:
 
 ```bash

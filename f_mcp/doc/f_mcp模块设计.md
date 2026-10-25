@@ -2201,6 +2201,8 @@ public class McpServer {
 
 名字大小写与 `-` / `_` 不敏感；未知值在构建时抛 `IllegalArgumentException`。
 
+自定义算法：实现 `RateLimitBackend` 的静态 `name` / `new()`，再调用 `RateLimitBackends.register<T>()`；配置项按 `name` 选择，同名注册会覆盖内置实现。
+
 `RateLimitBackend.tryAcquire(key, rpm, nowNanos)` 的 `key` 已带 `c:` / `ct:` / `t:` 作用域前缀，直接作为共享存储的键：
 
 - Redis：`INCR key` + `EXPIRE 60`（固定窗口），或 Lua 脚本实现令牌桶

@@ -79,6 +79,12 @@ struct RateVerdict {
  * 限流后端 SPI。默认实现是进程内令牌桶；多实例部署时注入共享存储实现。
  */
 public interface RateLimitBackend {
+    /** 算法名；`RateLimitBackends.register<T>()` 用它作为注册键。 */
+    static prop name: String
+
+    /** 创建一个新的后端实例。 */
+    static func new(): RateLimitBackend
+
     /** 消耗一个令牌；`rpm` 为每分钟配额。 */
     func tryAcquire(key: String, rpm: Int64, nowNanos: Int64): Bool
     func close(): Unit
@@ -119,6 +125,16 @@ class LimiterPool {
  * 令牌桶：容量 = `rpm`，每分钟补满，允许一次性用完一分钟配额。
  */
 public class TokenBucketRateLimitBackend <: RateLimitBackend {
+    public static prop name: String {
+        get() {
+            'token-bucket'
+        }
+    }
+
+    public static func new(): RateLimitBackend {
+        TokenBucketRateLimitBackend()
+    }
+
     private let pool = LimiterPool({
         rpm: Int64 => TokenBucketRateLimiter<Bool>(tokens: rpm, timeout: Duration.millisecond,
             populationPeriod: Duration.minute)
@@ -137,6 +153,16 @@ public class TokenBucketRateLimitBackend <: RateLimitBackend {
  * 漏桶：每分钟漏出 `rpm` 个，等待队列上限也是 `rpm`。
  */
 public class LeakingBucketRateLimitBackend <: RateLimitBackend {
+    public static prop name: String {
+        get() {
+            'leaking-bucket'
+        }
+    }
+
+    public static func new(): RateLimitBackend {
+        LeakingBucketRateLimitBackend()
+    }
+
     private let pool = LimiterPool({
         rpm: Int64 => LeakingBucketRateLimiter<Bool>(timeout: Duration.millisecond * 5, maxWaitings: rpm,
             leakingPerDuration: rpm, leakingDuration: Duration.minute)
@@ -155,6 +181,16 @@ public class LeakingBucketRateLimitBackend <: RateLimitBackend {
  * 滑动窗口：窗口 1 分钟、上限 `rpm`。
  */
 public class SlidingWindowRateLimitBackend <: RateLimitBackend {
+    public static prop name: String {
+        get() {
+            'sliding-window'
+        }
+    }
+
+    public static func new(): RateLimitBackend {
+        SlidingWindowRateLimitBackend()
+    }
+
     private let pool = LimiterPool({
         rpm: Int64 => SlidingWindowRateLimiter<Bool>(window: Duration.minute, timeout: Duration.millisecond * 5,
             limit: rpm)
@@ -177,6 +213,16 @@ public class SlidingWindowRateLimitBackend <: RateLimitBackend {
  * 它适合对比/实验，不建议用来表达「每分钟 rpm 次」。
  */
 public class AnyMomentRateLimitBackend <: RateLimitBackend {
+    public static prop name: String {
+        get() {
+            'any-moment'
+        }
+    }
+
+    public static func new(): RateLimitBackend {
+        AnyMomentRateLimitBackend()
+    }
+
     private let pool = LimiterPool({
         rpm: Int64 => AnyMomentRateLimiter<Bool>(maxTokens: rpm, timeout: Duration.millisecond)
     })
@@ -192,6 +238,16 @@ public class AnyMomentRateLimitBackend <: RateLimitBackend {
 
 /** 不限制：始终放行。 */
 public class UnlimitedRateLimitBackend <: RateLimitBackend {
+    public static prop name: String {
+        get() {
+            'unlimited'
+        }
+    }
+
+    public static func new(): RateLimitBackend {
+        UnlimitedRateLimitBackend()
+    }
+
     private let limiter = UnlimitedRateLimiter<Bool>()
 
     public func tryAcquire(_: String, _: Int64, _: Int64): Bool {
@@ -201,20 +257,34 @@ public class UnlimitedRateLimitBackend <: RateLimitBackend {
     public func close(): Unit {}
 }
 
-/** 内置 `RateLimitBackend` 的工厂与配置解析。 */
+/** 内置 `RateLimitBackend` 的注册表与工厂。 */
 public class RateLimitBackends {
+    public static const DEFAULT_NAME = 'token-bucket'
+
+    private static let backends = ConcurrentHashMap<String, () -> RateLimitBackend>()
+
+    static init() {
+        register<TokenBucketRateLimitBackend>()
+        register<LeakingBucketRateLimitBackend>()
+        register<SlidingWindowRateLimitBackend>()
+        register<AnyMomentRateLimitBackend>()
+        register<UnlimitedRateLimitBackend>()
+    }
+
     /**
-     * 按名字创建后端，大小写与 `-` / `_` 不敏感：
-     * `token-bucket` / `leaking-bucket` / `sliding-window` / `any-moment` / `unlimited`。
+     * 注册自定义后端；同名重复注册会覆盖。
+     *
+     * 注册键是 `T.name`，大小写与 `-` / `_` 不敏感。
      */
-    public static func of(name: String): ?RateLimitBackend {
-        match (normalize(name)) {
-            case 'tokenbucket' => Some(TokenBucketRateLimitBackend())
-            case 'leakingbucket' => Some(LeakingBucketRateLimitBackend())
-            case 'slidingwindow' => Some(SlidingWindowRateLimitBackend())
-            case 'anymoment' => Some(AnyMomentRateLimitBackend())
-            case 'unlimited' => Some(UnlimitedRateLimitBackend())
-            case _ => None<RateLimitBackend>
+    public static func register<T>(): Unit where T <: RateLimitBackend {
+        backends.add(normalize(T.name), T.new)
+    }
+
+    /** 按名字创建后端；未注册时抛 `IllegalArgumentException`。 */
+    public static func of(name: String): RateLimitBackend {
+        match (backends.get(normalize(name))) {
+            case Some(factory) => factory()
+            case _ => throw IllegalArgumentException("unknown rate limit backend '${name}'")
         }
     }
 
@@ -222,12 +292,11 @@ public class RateLimitBackends {
     public static func fromConfig(): RateLimitBackend {
         let name = McpConfig.rateLimitBackendName()
         if (name.isEmpty()) {
-            return TokenBucketRateLimitBackend()
+            return of(DEFAULT_NAME)
         }
-        match (of(name)) {
-            case Some(backend) => backend
-            case _ => throw IllegalArgumentException(
-                "unknown ${McpConfig.RATE_LIMIT_BACKEND} '${name}'; expected token-bucket|leaking-bucket|sliding-window|any-moment|unlimited")
+        match (backends.get(normalize(name))) {
+            case Some(factory) => factory()
+            case _ => throw IllegalArgumentException("unknown ${McpConfig.RATE_LIMIT_BACKEND} '${name}'")
         }
     }
 

@@ -86,6 +86,26 @@ McpTool.of<SearchRequest>('kb.search')
 
 `Builder.rateLimitBackend(...)` 显式注入优先于配置。名字大小写与 `-` / `_` 不敏感；未知名字在 `build()` 时抛 `IllegalArgumentException`。
 
+开发者可以注册自定义算法：
+
+```cangjie
+public class MyRateLimitBackend <: RateLimitBackend {
+    public static prop name: String {
+        get() { 'my-algo' }
+    }
+
+    public static func new(): RateLimitBackend {
+        MyRateLimitBackend()
+    }
+
+    // tryAcquire / close ...
+}
+
+RateLimitBackends.register<MyRateLimitBackend>()
+```
+
+注册后即可用 `mcp_rateLimitBackend=my-algo` 或 `Builder.rateLimitBackend(...)` 使用；同名注册会覆盖内置实现。
+
 全局默认值可由 `mcp_rateLimit` 与 `mcp_rateLimitBackend` 提供：
 
 ```bash
