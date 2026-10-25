@@ -28,7 +28,7 @@ import fountain::f_data.*
  * 省略的字段表示不限制。
  *
  * `mcp_rateLimitBackend` 选择进程内限流算法：
- * `token-bucket`（默认）/ `leaking-bucket` / `sliding-window` / `any-moment` / `unlimited`。
+ * `token-bucket`（默认）/ `leaking-bucket` / `sliding-window` / `unlimited`。
  *
  * `mcp_publicBaseUrl` 是本服务对外暴露的根地址，用于大结果链接、SSE 地址与相对资源 URI。
  *

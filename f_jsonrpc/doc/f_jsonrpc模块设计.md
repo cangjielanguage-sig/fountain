@@ -1099,7 +1099,7 @@ public struct ClientOptions {
 | `Content-Type` | `application/json; charset=utf-8` | 带 charset，避免服务端按 ISO-8859-1 猜 |
 | `Accept` | `application/json` | |
 | 连接复用 | 默认开 | 客户端持有 `Client` 实例，不要每次 new |
-| 响应体读取 | 先查 `Content-Length`，再按 `maxResponseBytes` 截断 | 防超大响应打爆内存 |
+| 响应体读取 | 先查 `Content-Length` 预判，再流式累计；超 `maxResponseBytes` 立即抛错并关闭响应（不截断、不返回部分内容） | 防超大响应打爆内存 |
 
 **`Client` 实例必须复用。** `stdx.net.http` 的 `Client` 内部维护连接池，每次调用新建 `Client`
 会让 keep-alive 完全失效，在批量场景下延迟翻几倍。
