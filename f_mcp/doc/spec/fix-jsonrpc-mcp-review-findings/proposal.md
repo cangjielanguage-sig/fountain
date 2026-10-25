@@ -95,6 +95,7 @@
 - 测试证据：补齐 T41 / T11 / T32 / T33 / T29 / T36 / T38 / T27 / T1.1 缺失用例。
 - 文档：设计文档清除 MCP 侧 `-32002`、`AdaptivePolicy`、`subscribe`、`any-moment` 残留；`McpConfig` / `Mcp` 宏注释同步。
 - 规划卫生：补齐 7 个 MODIFIED 块缺失的既有场景，使 `openspec validate` 归零。
+- 规划产物布局：`f_mcp/doc/spec/<change>/` 只放 MCP 侧（`specs/mcp`、`specs/mcp-guardrails`）与 proposal / design / tasks；`specs/json-rpc` 与 `.openspec.yaml` 不进该副本，`json-rpc` spec 的唯一副本在 `f_jsonrpc/doc/spec/<change>/`。
 
 > 「头与 body 不一致 → `-32602`」与「CSV 中间空段报错」两条 spec 场景保持原文，本阶段只改实现与测试。
 

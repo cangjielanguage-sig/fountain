@@ -72,7 +72,7 @@ MUST NOT 声明任何没有对应方法的能力；新增能力时 MUST 同时�
 
 `build()` MUST 校验工具名（1~128 字符，仅 `A-Za-z0-9_.-`，服务端内唯一）；工具 `inputSchema` MUST 是合法 JSON Schema 对象，含 `$ref` / `$defs` MUST 在构建时报错并指出位置。`tools/list` MUST 按工具名升序返回，支持 `cursor` 分页，`nextCursor` 不透明。
 
-工具描述 JSON MUST 在 `build()` 后冻结并缓存；`tools/list` MUST NOT 为每个工具重新构造 `JsonObject`。返回的条目 MUST NOT 让调用方修改后污染注册表（实现可选择返回缓存引用并约定只读，或返回拷贝；本版本采用「缓存引用 + 序列化后不再保留引用」）。
+工具描述 JSON MUST 在**首次 `tools/list` 请求时**构造一次并冻结，此后只读复用；`build()` MUST NOT 预生成条目 JSON，`tools/list` MUST NOT 为每个工具重新构造 `JsonObject`。返回的条目 MUST NOT 让调用方修改后污染注册表（实现可选择返回缓存引用并约定只读，或返回拷贝；本版本采用「缓存引用 + 序列化后不再保留引用」）。
 
 #### Scenario: 非法工具名
 
@@ -91,14 +91,14 @@ MUST NOT 声明任何没有对应方法的能力；新增能力时 MUST 同时�
 
 #### Scenario: 描述缓存
 
-- **WHEN** 连续调用 `tools/list` 10 次
-- **THEN** 工具描述 JSON 构造次数为 1（构建期），请求期只做切片
+- **WHEN** 注册 3 个工具后先调用 1 次 `tools/list`，再连续调用 9 次
+- **THEN** `build()` 期间条目 JSON 构造 0 次；第 1 次 `tools/list` 构造 3 次（每个工具一次）；其后 9 次构造 0 次，返回的条目为同一对象且只做切片
 
 ### Requirement: 资源表与 URI 规则
 
 资源 URI MUST 满足：完整 `http(s)/ftp` URL，或以 `/` 开头的绝对路径（构建时用 `publicBaseUrl` 拼成完整 URI）；不含 fragment；不占用 `/mcp/tool-results/` 前缀。
 
-`resources/list` 的条目 JSON MUST 在 `build()` 后缓存；请求期 MUST NOT 重新构造。
+`resources/list` 的条目 JSON MUST 在**首次 `resources/list` 请求时**构造一次并冻结；`build()` MUST NOT 预生成，请求期 MUST NOT 重新构造。
 
 读取不存在的资源或已过期的大结果 MUST 返回 MCP 业务段错误码 `-32040`（`RESOURCE_NOT_FOUND`），`error.data` 含 `uri` 与 `reason`（`unknown` / `expired`）。MUST NOT 再使用 `f_jsonrpc` 保留的 `-32002`。
 
@@ -133,7 +133,7 @@ MUST NOT 声明任何没有对应方法的能力；新增能力时 MUST 同时�
 
 prompt 参数的 `description` / `required` MUST 在注册期从 `@McpPromptArg` 计算一次；`prompts/get` MUST NOT 再次反射查找注解。注册路径 MUST 只做一次 `getInstanceFunction` 查找。
 
-`prompts/list` 的条目 JSON MUST 在 `build()` 后缓存。
+`prompts/list` 的条目 JSON MUST 在**首次 `prompts/list` 请求时**构造一次并冻结；`build()` MUST NOT 预生成，请求期 MUST NOT 重新构造。
 
 #### Scenario: 必填缺失
 

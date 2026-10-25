@@ -369,7 +369,8 @@
 
 - [x] 36.1 Red：`prompts/get` 10 次，`findAnnotation<McpPromptArg>` 次数等于参数个数
 - [x] 36.2 Red：`registerPromptMeta` 只做一次 `getInstanceFunction`
-- [x] 36.3 Red：`tools/list` / `resources/list` / `prompts/list` 连续 10 次，条目 JSON 构造次数为 1
+- [x] 36.3 Red：`tools/list` / `resources/list` / `prompts/list` 连续 10 次，每个条目 JSON 构造次数为 1
+      （发生在首次请求，`build()` 期间为 0）
 - [x] 36.4 Green：注册期汇总参数元数据；宏改调合并后的注册函数；条目 JSON 在**首次 `list` 请求时**惰性
       构造并写入 `listJson`（`build()` 不预生成），此后只读复用；`listXxx` 只引用不拷贝，本地 `handle()` /
       `invoke()` 返回的条目同样是只读约定，调用方不得修改
@@ -449,6 +450,10 @@
 - [x] Z2 `fboot build` 通过
 - [x] Z3 按 `design.md` 第 5 节逐条验证破坏性变更的迁移说明已落地
 - [x] Z4 复核 55 条问题全部有对应代码改动或文档改动，且都有测试或校对证据
+- [x] Z7 规划产物去重：删除 `f_mcp/doc/spec/fix-jsonrpc-mcp-review-findings/` 下的 `specs/json-rpc/`
+      与 `.openspec.yaml`；`json-rpc` spec 只在 `f_jsonrpc/doc/spec/fix-jsonrpc-mcp-review-findings/specs/json-rpc/`
+      保留一份；两侧副本按 `openspec/changes/fix-jsonrpc-mcp-review-findings/` 逐文件同步（含本次 `specs/mcp`
+      缓存口径修订）
 - [ ] Z5 运行 `/opsx:verify`（或按 `openspec validate` + 人工三对齐回退）
 - [ ] Z6 合并回 `master`（`--no-ff`），删除功能分支；按需建 tag
 

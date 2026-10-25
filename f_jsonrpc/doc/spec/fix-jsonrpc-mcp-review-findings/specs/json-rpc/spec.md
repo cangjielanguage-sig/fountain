@@ -177,9 +177,9 @@
 
 `JsonRpcContext` MUST 暴露 deadline 供 handler 自查。
 
-#### Scenario: 默认无超时
+#### Scenario: 未配超时
 
-- **WHEN** 方法没有 `@JsonRpcMeta`
+- **WHEN** 方法没有 `@JsonRpcMeta`，或注解的 timeout 为空串
 - **THEN** `getMeta` 返回空 timeout，handler 在请求线程执行，不产生 `-32002`
 
 #### Scenario: 默认路径 ThreadLocal 可用
@@ -192,10 +192,10 @@
 - **WHEN** 方法标注 `@JsonRpcMeta['通知', '']`
 - **THEN** `timeout` 为 `None`，handler 内联执行，不触发 `Duration.parse`
 
-#### Scenario: 显式超时返回
+#### Scenario: 超时返回
 
-- **WHEN** handler 阻塞时间超过其 `timeout = 100ms`
-- **THEN** 调用方收到 `-32002`，响应耗时接近 100ms
+- **WHEN** handler 阻塞时间超过其显式 `timeout`
+- **THEN** 调用方收到 `-32002`，响应耗时接近该超时值
 
 #### Scenario: 显式超时下 ThreadLocal 仍可用
 

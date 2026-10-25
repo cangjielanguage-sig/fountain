@@ -397,7 +397,7 @@ match request.get('cursor'):
 
 #### 4.4.4 缓存条目
 
-`build()` 只建索引，**不**预生成条目 JSON。条目对象在**首次 `list` 请求时**惰性构造（`toolJson` / `resourceJson` / `promptJson`），写入 `McpTool.listJson` / `McpResource.listJson` / `McpPrompt.listJson`，之后同一对象被复用；连续 N 次 `list` 只构造 1 次。spec 的「`build()` 后冻结并缓存」按「`build()` 之后、首次请求时填充并冻结」实现，构造次数口径（连续 10 次 = 1 次）一致。
+`build()` 只建索引，**不**预生成条目 JSON。条目对象在**首次 `list` 请求时**惰性构造（`toolJson` / `resourceJson` / `promptJson`），写入 `McpTool.listJson` / `McpResource.listJson` / `McpPrompt.listJson`，之后同一对象被复用；连续 N 次 `list` 只构造 1 次。`specs/mcp` 的三条缓存要求（`tools/list` / `resources/list` / `prompts/list`）与本设计同口径：`build()` 零构造，首次请求逐条目构造一次，之后只读复用——不存在「构建期预热」的中间形态。
 
 缓存条目**只读**：`listXxx` 只把缓存对象追加进页数组，不做拷贝；HTTP 路径序列化后即丢弃引用，安全。但本地 `handle()` / `invoke()` 路径直接返回 `JsonValue`，拿到的是**同一个引用**，未经序列化——调用方 MUST NOT 修改返回的条目（改了就写穿到注册表，污染后续所有 `list` 响应）。需要可变副本的调用方自行深拷贝，服务端不为此在热路径上做拷贝。
 
