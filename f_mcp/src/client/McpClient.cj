@@ -259,6 +259,13 @@ public class McpClient {
     private let options: McpClientOptions
     private let versionMutex = Mutex()
     private var protocolVersion: String
+    /**
+     * 版本协商真正改写 `protocolVersion` 的次数。
+     *
+     * 并发命中 `-32022` 时各请求都拿着旧版本进入 `negotiate`，但只有一个能改写；
+     * 这个计数是「只改写一次」的可观测出口（同时对应唯一一条 INFO 日志）。
+     */
+    var versionRewrites = 0
 
     public init(url: String, options!: McpClientOptions = McpClientOptions()) {
         this.rpc = JsonRpcMcpRpc(JsonRpcClient(url, opts: options.toJsonRpcOptions()))
@@ -449,8 +456,11 @@ public class McpClient {
     }
 
     /**
-     * 协商新版本。只有「当前版本还等于本次请求使用的版本」时才改写，
-     * 并发命中 `-32022` 的请求不会各自覆盖一遍。
+     * 协商新版本。
+     *
+     * 只有「当前版本还等于本次请求使用的版本」并且「目标版本确实不同」时才改写：
+     * 并发命中 `-32022` 的请求不会各自覆盖一遍；服务端继续拒绝已协商的版本时
+     * 也不会反复写同一个值、反复刷 INFO 日志。
      */
     private func negotiate(usedVersion: String, error: JsonRpcException): Unit {
         let next = supportedVersionOf(error)
@@ -458,7 +468,11 @@ public class McpClient {
             if (protocolVersion != usedVersion) {
                 return
             }
+            if (protocolVersion == next) {
+                return
+            }
             protocolVersion = next
+            versionRewrites++
         }
         log.append(LogLevel.INFO, "mcp protocol version negotiated: ${usedVersion} -> ${next}", None<Exception>)
     }

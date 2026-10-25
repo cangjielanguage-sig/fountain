@@ -16,11 +16,137 @@ limitations under the License.
 package fountain::f_mcp.client
 
 import std.collection.ArrayList
-import std.sync.AtomicInt64
+import std.net.{IPSocketAddress, TcpServerSocket, TcpSocket}
+import std.sync.{AtomicInt64, Mutex}
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_data.*
 import fountain::f_mcp.base.*
+
+/**
+ * 原始 TCP 上的最小 MCP 端点：记录请求头原文，响应完全由用例决定。
+ *
+ * 用来验证 `McpClientOptions` 真的透传到每个 HTTP 请求（真实 `HttpJsonRpcTransport`），
+ * 而不是只验证选项映射。
+ */
+class RawMcpServer {
+    let listener: TcpServerSocket
+    let port: UInt16
+    let accepted = AtomicInt64(0)
+    private let requestHeads = ArrayList<String>()
+    private let mutex = Mutex()
+
+    init(handler: (TcpSocket) -> Unit) {
+        let l = TcpServerSocket(bindAt: 0)
+        l.bind()
+        var p: UInt16 = 0
+        match (l.localAddress) {
+            case a: IPSocketAddress => p = a.port
+            case _ => ()
+        }
+        this.listener = l
+        this.port = p
+        let heads = requestHeads
+        let guard = mutex
+        let counter = accepted
+        spawn {
+            while (true) {
+                let sock = try {
+                    l.accept()
+                } catch (_: Exception) {
+                    break
+                }
+                counter.fetchAdd(1)
+                spawn {
+                    try {
+                        match (readRequestHead(sock)) {
+                            case Some(head) => synchronized(guard) {
+                                    heads.add(head)
+                                }
+                            case _ => ()
+                        }
+                        handler(sock)
+                    } catch (_: Exception) {
+                        ()
+                    }
+                    try {
+                        sock.close()
+                    } catch (_: Exception) {
+                        ()
+                    }
+                }
+            }
+        }
+    }
+
+    prop url: String {
+        get() {
+            'http://127.0.0.1:${port}/mcp'
+        }
+    }
+
+    prop requestCount: Int64 {
+        get() {
+            synchronized(mutex) {
+                requestHeads.size
+            }
+        }
+    }
+
+    func requestAt(index: Int64): String {
+        synchronized(mutex) {
+            requestHeads[index]
+        }
+    }
+
+    func close(): Unit {
+        try {
+            listener.close()
+        } catch (_: Exception) {
+            ()
+        }
+    }
+}
+
+private func readRequestHead(sock: TcpSocket): ?String {
+    let buffer = Array<Byte>(1024, repeat: 0)
+    let data = ArrayList<Byte>()
+    while (data.size < 65536) {
+        let n = try {
+            sock.read(buffer)
+        } catch (_: Exception) {
+            -1
+        }
+        if (n <= 0) {
+            return None<String>
+        }
+        data.add(all: buffer[0..n])
+        let text = String.fromUtf8(data.toArray())
+        if (text.contains('\r\n\r\n')) {
+            return Some(text)
+        }
+    }
+    None<String>
+}
+
+private func writeText(sock: TcpSocket, text: String): Bool {
+    try {
+        sock.write(text.unsafeBytes())
+        true
+    } catch (_: Exception) {
+        false
+    }
+}
+
+/** 始终 `Connection: close`：每个请求一条连接，便于统计。 */
+private func jsonRpcReply(body: String): String {
+    'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n' +
+        'Content-Length: ${body.unsafeBytes().size}\r\nConnection: close\r\n\r\n${body}'
+}
+
+private func emptyToolsReply(): String {
+    jsonRpcReply('{"jsonrpc":"2.0","id":1,"result":{"tools":[],"resultType":"complete"}}')
+}
 
 class FakeMcpRpc <: McpRpc {
     let requests = ArrayList<JsonObject>()
@@ -95,6 +221,33 @@ class AlwaysInputHandler {
         result.add('inputRequired', JsonObject())
         result
     }
+}
+
+/** 永远返回 `-32022`：用于并发协商用例（计数与请求列表都要线程安全）。 */
+class AlwaysUnsupportedRpc <: McpRpc {
+    private let mutex = Mutex()
+    private var callCount = 0
+
+    prop calls: Int64 {
+        get() {
+            synchronized(mutex) {
+                callCount
+            }
+        }
+    }
+
+    public func call(method: String, params: ?JsonValue): JsonValue {
+        synchronized(mutex) {
+            callCount++
+        }
+        let data = JsonObject()
+        let supported = JsonArray()
+        supported.add('2026-07-28-next')
+        data.add('supported', supported)
+        throw McpException(McpProtocol.UNSUPPORTED_VERSION, 'retry', data: data)
+    }
+
+    public func close(): Unit {}
 }
 
 @Test
@@ -350,6 +503,118 @@ class McpClient_test {
         } catch (e: McpException) {
             @Assert(true, e.message.contains('requires input'))
         }
+    }
+
+    /** 每个 HTTP 请求都带 `McpClientOptions.headers`。 */
+    @TestCase
+    public func testHeadersAreSentOnEveryRequest(): Unit {
+        let server = RawMcpServer({sock => writeText(sock, emptyToolsReply())})
+        let options = McpClientOptions()
+        options.headers.add('Authorization', 'Bearer x')
+        let client = McpClient(server.url, options: options)
+        try {
+            let _ = client.listTools()
+            let _ = client.listTools()
+            @Assert(2, server.requestCount)
+            @Assert(true, server.requestAt(0).toAsciiLower().contains('authorization: bearer x'))
+            @Assert(true, server.requestAt(1).toAsciiLower().contains('authorization: bearer x'))
+        } finally {
+            client.close()
+            server.close()
+        }
+    }
+
+    /** `maxResponseBytes` 透传到传输层：超过上限抛错，而不是读完整个 body。 */
+    @TestCase
+    public func testMaxResponseBytesFromOptions(): Unit {
+        let padding = String.fromUtf8(Array<Byte>(8192, repeat: 120))
+        let server = RawMcpServer({sock =>
+            writeText(sock, jsonRpcReply('{"jsonrpc":"2.0","id":1,"result":{"tools":[],"pad":"${padding}"}}'))
+        })
+        let options = McpClientOptions()
+        options.maxResponseBytes = 1024
+        let client = McpClient(server.url, options: options)
+        try {
+            client.listTools()
+            @Fail('expected McpException')
+        } catch (e: McpException) {
+            @Assert(McpProtocol.INTERNAL_ERROR, e.code)
+            @Assert(true, e.message.contains('exceeds'))
+        } finally {
+            client.close()
+            server.close()
+        }
+    }
+
+    /** `keepAlive = false` 时每个请求带 `Connection: close`；默认不带。 */
+    @TestCase
+    public func testKeepAliveMapsToConnectionHeader(): Unit {
+        let closing = RawMcpServer({sock => writeText(sock, emptyToolsReply())})
+        let closeOptions = McpClientOptions()
+        closeOptions.keepAlive = false
+        let closeClient = McpClient(closing.url, options: closeOptions)
+        try {
+            let _ = closeClient.listTools()
+            @Assert(true, closing.requestAt(0).toAsciiLower().contains('connection: close'))
+        } finally {
+            closeClient.close()
+            closing.close()
+        }
+
+        let reusing = RawMcpServer({sock => writeText(sock, emptyToolsReply())})
+        let reuseClient = McpClient(reusing.url, options: McpClientOptions())
+        try {
+            let _ = reuseClient.listTools()
+            @Assert(false, reusing.requestAt(0).toAsciiLower().contains('connection: close'))
+        } finally {
+            reuseClient.close()
+            reusing.close()
+        }
+    }
+
+    /** `retryOnConnectFailure = 2` 透传：建连/发送失败重试，总尝试 3 次。 */
+    @TestCase
+    public func testRetryOnConnectFailureFromOptions(): Unit {
+        let server = RawMcpServer({_ => ()}) // 立刻关闭连接：发送阶段失败
+        let options = McpClientOptions()
+        options.retryOnConnectFailure = 2
+        let client = McpClient(server.url, options: options)
+        var failed = false
+        try {
+            client.listTools()
+        } catch (_: McpException) {
+            failed = true
+        } finally {
+            sleep(Duration.millisecond * 200)
+            client.close()
+            server.close()
+        }
+        @Assert(true, failed)
+        @Assert(3, server.accepted.load())
+    }
+
+    /** 8 线程同时命中 `-32022`：版本只改写一次，每个请求最多重试一次。 */
+    @TestCase
+    public func testConcurrentVersionNegotiationRewritesOnce(): Unit {
+        let rpc = AlwaysUnsupportedRpc()
+        let client = McpClient(rpc, options())
+        let futures = ArrayList<Future<Unit>>()
+        for (_ in 0..8) {
+            futures.add(
+                spawn {
+                    try {
+                        let _ = client.listTools()
+                    } catch (_: McpException) {
+                        ()
+                    }
+                }
+            )
+        }
+        for (future in futures) {
+            future.get()
+        }
+        @Assert(1, client.versionRewrites)
+        @Assert(16, rpc.calls)
     }
 
     @TestCase
