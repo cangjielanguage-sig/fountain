@@ -58,9 +58,13 @@ main() {
 McpTool.of<SearchRequest>('kb.search')
 ```
 
-### 公共地址
+### 公共地址与资源 URI
 
-`publicBaseUrl` 是本服务对外暴露的根地址，`Builder` 优先于配置：
+`publicBaseUrl` 是本服务对外暴露的根地址，用于生成绝对 URL。
+
+#### 配置方式
+
+`Builder` 优先于配置项：
 
 ```cangjie
 b.publicBaseUrl('https://mcp.example.com')
@@ -70,19 +74,34 @@ b.publicBaseUrl('https://mcp.example.com')
 export mcp_publicBaseUrl=https://mcp.example.com
 ```
 
-它用于三处：
+两处都会去掉末尾 `/`；为空表示未配置。
+
+它影响三处：
 
 - 结果链接：`${publicBaseUrl}/mcp/tool-results/{token}`
 - `subscriptions/listen` 返回的 `sseUrl`
-- 相对资源 URI：`McpResource.builder('/doc', 'doc')` → `https://mcp.example.com/doc`
+- `McpResource.builder` 的相对 URI 补全
 
-资源也可以写完整 URL，此时不会拼接 `publicBaseUrl`：
+#### `McpResource.builder` 的 uri
+
+第一个参数支持两种写法：
+
+| 传入 | 结果 |
+|---|---|
+| `/doc` | `${publicBaseUrl}/doc` |
+| `https://docs.example.com/doc` | 原样使用，不拼接 `publicBaseUrl` |
 
 ```cangjie
+// 相对路径：需要 publicBaseUrl
+McpResource.builder('/doc', 'doc')
+
+// 完整 URL：与 publicBaseUrl 无关
 McpResource.builder('https://docs.example.com/doc', 'doc')
 ```
 
-未配置 `publicBaseUrl` 时：结果截断、`sseUrl` 为相对路径、相对资源 URI 在构建服务时抛 `McpException`。
+`//example.com/doc`、`file://`、不带 `/` 的相对路径、含 `#fragment` 的 URI 都会在构建期抛 `McpException`。
+
+未配置 `publicBaseUrl` 时：结果截断、`sseUrl` 为相对路径、`McpResource.builder('/doc', ...)` 在构建服务时抛 `McpException`。
 
 ### 方法
 
