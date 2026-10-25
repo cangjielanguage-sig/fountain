@@ -14,7 +14,12 @@
 | `fountain::f_mcp.base` | `McpProtocol`、`McpException`、内容模型（`ContentBlock` / `CallToolResult` / `ResourceContent` / `PromptMessage`） |
 | `fountain::f_mcp.client` | `McpClient` |
 | `fountain::f_mcp.server` | 服务端、工具 / 资源 / 提示词、注解、限流、结果与 SSE |
+| `fountain::f_mcp.macros` | `@Mcp` 宏（独立包） |
 | `fountain::f_mcp` | 门面包：`public import` 以上三个包，兼容 `import fountain::f_mcp.*` |
+
+只写服务端时可 `import fountain::f_mcp.server.*` + `fountain::f_mcp.base.*`，客户端用
+`fountain::f_mcp.client.*` + `fountain::f_mcp.base.*`。使用 `@Mcp` 宏时建议 `import fountain::f_mcp.*`：
+宏展开会用到门面包再导出的 `lookup` / `BeanFactory` / `TypeInfo` / `ArrayList` / `JsonValue`。
 
 ## 规范版本
 
@@ -34,7 +39,9 @@
 ## 服务端
 
 ```cangjie
-import fountain::f_mcp.*
+import std.collection.ArrayList
+import fountain::f_mcp.server.*
+import fountain::f_mcp.base.*
 import fountain::f_data.*
 
 main() {
@@ -332,6 +339,10 @@ let sseUrl = sub['sseUrl'].asString().value
 ## 客户端
 
 ```cangjie
+import fountain::f_mcp.client.*
+import fountain::f_mcp.base.*
+import fountain::f_data.*
+
 let client = McpClient.http('http://127.0.0.1:8080/mcp')
 let tools = client.listAllTools()
 let result = client.callTool('kb.search', arguments: args)
@@ -360,7 +371,7 @@ let client = McpClient.stdio('/usr/local/bin/my-mcp-server', args: ['--stdio'])
 cjpm test
 ```
 
-覆盖协议发现、版本 / legacy、工具 / 资源 / prompts、限流、结果与自适应存储、订阅、SSE 格式、stdio 行分帧、客户端 `_meta` 与多轮。
+测试按包分布：`client` 覆盖 HTTP / stdio 客户端、`_meta` 注入与多轮调用，`server` 覆盖协议发现、版本 / legacy、工具 / 资源 / prompts、限流、结果与自适应存储、订阅与 SSE 格式。
 
 ## 已知限制
 
