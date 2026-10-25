@@ -431,7 +431,8 @@ public class McpServer {
         if (!acquire.ok) {
             throw rateLimitError(acquire)
         }
-        let toolCtx = McpToolContext(caller, requestId: ctx.id)
+        let toolCtx = McpToolContext(caller, requestId: ctx.id, inputResponses: request.get('inputResponses'),
+            requestState: request.get('requestState'))
         var callResult = CallToolResult.text('')
         try {
             let validation = JsonSchemaValidator.validate(tool.inputSchema, arguments)

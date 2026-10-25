@@ -40,7 +40,8 @@ public class McpClientOptions {
 /** 一条 `tools/call` 的结果（客户端视角）。 */
 public struct McpCallToolResult {
     public const McpCallToolResult(public let content: JsonArray, public let structuredContent: ?JsonValue,
-        public let isError: Bool, public let resultType: String, public let inputRequired: ?JsonValue) {}
+        public let isError: Bool, public let resultType: String, public let inputRequired: ?JsonValue,
+        public let requestState!: ?JsonValue = None) {}
 }
 
 interface McpRpc {
@@ -231,6 +232,7 @@ public class McpClient {
             options.maxRounds
         }
         var inputResponses: ?JsonValue = None
+        var requestState: ?JsonValue = None
         var round = 0
         while (round < limit) {
             let params = JsonObject()
@@ -240,12 +242,18 @@ public class McpClient {
                 case Some(value) => params.add('inputResponses', value)
                 case _ => ()
             }
+            match (requestState) {
+                case Some(value) => params.add('requestState', value)
+                case _ => ()
+            }
             let result = toCallToolResult(rpcCall('tools/call', params).asObject())
             if (result.resultType != 'input_required') {
                 return result
             }
             let input = result.inputRequired ?? JsonNull.instance
             inputResponses = Some(handler(input))
+            // 下一轮必须把服务端给的状态原样带回去，多轮才能收敛
+            requestState = result.requestState
             round++
         }
         throw McpException(McpProtocol.INTERNAL_ERROR, "tool '${name}' still requires input after ${limit} rounds")
@@ -376,6 +384,7 @@ public class McpClient {
                 }
             case _ => 'complete'
         }
-        McpCallToolResult(content, obj.get('structuredContent'), isError, resultType, obj.get('inputRequired'))
+        McpCallToolResult(content, obj.get('structuredContent'), isError, resultType, obj.get('inputRequired'),
+            requestState: obj.get('requestState'))
     }
 }

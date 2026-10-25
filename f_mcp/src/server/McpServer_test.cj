@@ -96,6 +96,83 @@ class McpServer_test {
         obj['error'].asObject()
     }
 
+    static func toolServer(handler: McpToolHandler): McpServer {
+        McpServer.builder()
+            .tool(McpTool.builder('echo').description('echo').inputSchema(textSchema()).handler(handler).build())
+            .build()
+    }
+
+    @TestCase
+    public func testInputResponsesAndRequestStateReachHandler(): Unit {
+        let seenResponses = Box<String>('')
+        let seenState = Box<String>('')
+        let srv = toolServer({ctx, args =>
+            seenResponses.value = (ctx.inputResponses ?? JsonNull.instance).toString()
+            seenState.value = (ctx.requestState ?? JsonNull.instance).toString()
+            CallToolResult.text('ok')
+        })
+        let extra = '"name":"echo","arguments":{"text":"a"},"inputResponses":{"confirm":true},"requestState":{"cursor":7}'
+        let obj = call(srv, 'tools/call', metaParams(extra))
+        @Assert(true, obj.contains('result'))
+        @Assert('{"confirm":true}', seenResponses.value)
+        @Assert('{"cursor":7}', seenState.value)
+    }
+
+    @TestCase
+    public func testMissingRoundStateIsNone(): Unit {
+        let responsesNone = Box<Bool>(false)
+        let stateNone = Box<Bool>(false)
+        let srv = toolServer({ctx, args =>
+            responsesNone.value = ctx.inputResponses.isNone()
+            stateNone.value = ctx.requestState.isNone()
+            CallToolResult.text('ok')
+        })
+        let _ = call(srv, 'tools/call', metaParams('"name":"echo","arguments":{"text":"a"}'))
+        @Assert(true, responsesNone.value)
+        @Assert(true, stateNone.value)
+    }
+
+    @TestCase
+    public func testInputResponsesPassThroughAsAnyJson(): Unit {
+        let seen = ArrayList<String>()
+        let srv = toolServer({ctx, args =>
+            seen.add((ctx.inputResponses ?? JsonNull.instance).toString())
+            CallToolResult.text('ok')
+        })
+        let _ = call(srv, 'tools/call',
+            metaParams('"name":"echo","arguments":{"text":"a"},"inputResponses":["x","y"]'))
+        let _ = call(srv, 'tools/call',
+            metaParams('"name":"echo","arguments":{"text":"a"},"inputResponses":"plain"'))
+        @Assert(2, seen.size)
+        @Assert('["x","y"]', seen[0])
+        @Assert('"plain"', seen[1])
+    }
+
+    @TestCase
+    public func testHandlerRequestStateIsReturned(): Unit {
+        let state = JsonObject()
+        state.add('cursor', 9)
+        let srv = toolServer({_, _ => CallToolResult(content: ArrayList<ContentBlock>(), requestState: state)})
+        let obj = call(srv, 'tools/call', metaParams('"name":"echo","arguments":{"text":"a"}'))
+        let result = obj['result'].asObject()
+        @Assert(9, result['requestState'].asObject()['cursor'].asInt().toInt64())
+    }
+
+    @TestCase
+    public func testInputRequiredKeepsAllFields(): Unit {
+        let state = JsonObject()
+        state.add('cursor', 3)
+        let list = ArrayList<ContentBlock>()
+        list.add(ContentBlock.text('need input'))
+        let srv = toolServer({_, _ => CallToolResult(content: list, resultType: 'input_required',
+            inputRequired: JsonString('confirm?'), requestState: state)})
+        let result = call(srv, 'tools/call', metaParams('"name":"echo","arguments":{"text":"a"}'))['result']
+            .asObject()
+        @Assert('input_required', result['resultType'].asString().value)
+        @Assert('confirm?', result['inputRequired'].asString().value)
+        @Assert(3, result['requestState'].asObject()['cursor'].asInt().toInt64())
+    }
+
     @TestCase
     public func testDiscover(): Unit {
         let obj = call(server(), 'server/discover', metaParams(''))

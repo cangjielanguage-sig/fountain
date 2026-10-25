@@ -78,6 +78,9 @@ class AutoToolHandler {
             let required = JsonObject()
             required.add('prompt', 'confirm?')
             result.add('inputRequired', required)
+            let state = JsonObject()
+            state.add('cursor', 7)
+            result.add('requestState', state)
         }
         result
     }
@@ -161,6 +164,33 @@ class McpClient_test {
         let secondParams = rpc.requests[1]['params'].asObject()
         @Assert(true, secondParams.contains('inputResponses'))
         @Assert(true, secondParams.contains('arguments'))
+    }
+
+    @TestCase
+    public func testAutoRoundsForwardRequestState(): Unit {
+        let handler = AutoToolHandler()
+        let rpc = FakeMcpRpc({method, params => handler.handle(method, params)})
+        let client = McpClient(rpc, options())
+        let result = client.callToolAuto('tool', handler: {input => JsonObject()}, maxRounds: 3)
+        @Assert('complete', result.resultType)
+        let firstParams = rpc.requests[0]['params'].asObject()
+        @Assert(false, firstParams.contains('requestState'))
+        let secondParams = rpc.requests[1]['params'].asObject()
+        @Assert(7, secondParams['requestState'].asObject()['cursor'].asInt().toInt64())
+        @Assert(true, secondParams.contains('inputResponses'))
+    }
+
+    @TestCase
+    public func testCallToolParsesRequestState(): Unit {
+        let rpc = FakeMcpRpc({_, _ =>
+            let result = JsonObject()
+            result.add('content', JsonArray())
+            result.add('requestState', JsonString('st-1'))
+            result
+        })
+        let client = McpClient(rpc, options())
+        let result = client.callTool('tool')
+        @Assert('st-1', result.requestState.getOrThrow().asString().value)
     }
 
     @TestCase

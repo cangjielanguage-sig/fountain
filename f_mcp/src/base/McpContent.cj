@@ -105,14 +105,17 @@ public class CallToolResult {
     public let isError: Bool
     public let resultType: String
     public let inputRequired: ?JsonValue
+    /** 多轮协商的游标：原样进入响应，下一轮由客户端带回。 */
+    public let requestState: ?JsonValue
 
     public init(content!: ArrayList<ContentBlock>, structuredContent!: ?JsonValue = None, isError!: Bool = false,
-        resultType!: String = 'complete', inputRequired!: ?JsonValue = None) {
+        resultType!: String = 'complete', inputRequired!: ?JsonValue = None, requestState!: ?JsonValue = None) {
         this.content = content
         this.structuredContent = structuredContent
         this.isError = isError
         this.resultType = resultType
         this.inputRequired = inputRequired
+        this.requestState = requestState
     }
 
     public static func text(text: String): CallToolResult {
@@ -148,6 +151,10 @@ public class CallToolResult {
         obj.add('resultType', resultType)
         match (inputRequired) {
             case Some(value) => obj.add('inputRequired', value)
+            case _ => ()
+        }
+        match (requestState) {
+            case Some(value) => obj.add('requestState', value)
             case _ => ()
         }
         obj
