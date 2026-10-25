@@ -115,7 +115,7 @@ public class SubscriptionHub {
 
 public class McpServerBuilder {
     private var serverName = 'fountain-mcp'
-    private var serverVersion = '1.0.0'
+    private var serverVersion: ?String = None
     private var rateLimitPolicy: ?RateLimitPolicy = None
     private var publicBaseUrl_: ?String = None
     private var pageSize_ = 100
@@ -125,9 +125,14 @@ public class McpServerBuilder {
     private let resources = ArrayList<McpResource>()
     private let prompts = ArrayList<McpPrompt>()
 
+    /** 设置 `serverInfo`；`version` 为空时取 `mcp_version`（默认 `1.0.0`）。 */
     public func serverInfo(name: String, version: String): McpServerBuilder {
         serverName = name
-        serverVersion = version
+        serverVersion = if (version.trimAscii().isEmpty()) {
+            None<String>
+        } else {
+            Some(version)
+        }
         this
     }
 
@@ -182,7 +187,7 @@ public class McpServerBuilder {
     }
 
     public func build(): McpServer {
-        McpServer(serverName, serverVersion, rateLimitPolicy ?? McpConfig.rateLimit(),
+        McpServer(serverName, serverVersion ?? McpConfig.version(), rateLimitPolicy ?? McpConfig.rateLimit(),
             publicBaseUrl_ ?? McpConfig.publicBaseUrl(), pageSize_, resultOptions, backend, tools, resources, prompts)
     }
 }

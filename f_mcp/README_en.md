@@ -5,7 +5,7 @@
 - Protocol version: `2026-07-28` (no handshake; per-request `_meta` validation)
 - Server: `/mcp` (JSON-RPC) + `/mcp/sse` (subscriptions)
 - Client: HTTP (reuses `JsonRpcClient`) and stdio (subprocess)
-- Dependencies: `f_jsonrpc` / `f_data` / `f_log` / `f_mvc` (controller), `f_concurrent` (rate limiting), `f_config` (`mcp_rateLimit`)
+- Dependencies: `f_jsonrpc` / `f_data` / `f_log` / `f_mvc` (controller), `f_concurrent` (rate limiting), `f_config` (`mcp_rateLimit` / `mcp_version`)
 
 ## Specification version
 
@@ -86,7 +86,7 @@ public class SearchResult {
     }
 }
 
-@Mcp
+@Mcp['kb-server']
 public class KnowledgeService {
     public init() {}
 
@@ -108,10 +108,21 @@ public class KnowledgeService {
 ```
 
 - `@Mcp` adds `@Bean`, registers everything at module load, then calls `McpRegistry.build()`; use one `@Mcp` class per process
+- `@Mcp['kb-server']` or `@Mcp[kbServer]` sets `serverInfo.name` (string literal or identifier); without an attribute the name is `fountain-mcp`
+- `serverInfo.version` comes from `mcp_version`, defaulting to `1.0.0`
 - **tool**: exactly one parameter, an `@DataAssist[props fields]` class; `inputSchema` comes from that type
 - **resource**: no parameters; `uri` is required; `mediaType` maps to `McpResource.mimeType`; the `/doc` example needs `mcp_publicBaseUrl`
 - **prompt**: the function parameters are the `PromptArgument`s, using the parameter name as `name`; `@McpPromptArg` sets `description` / `required` (default `true`); use `Option<T>` for optional arguments
 - an empty `name` falls back to the function name; public functions without these annotations are ignored
+
+`server/discover` reports `serverInfo` like this:
+
+```json
+{"_meta":{"io.modelcontextprotocol/serverInfo":{"name":"kb-server","version":"1.0.0"}}}
+```
+
+When using the `Builder` directly, pass an empty `version` to `serverInfo(name, version)` to use
+`mcp_version`; a non-empty explicit value wins.
 
 #### Argument and result conversion
 

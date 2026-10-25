@@ -31,11 +31,24 @@ import fountain::f_data.*
  * `token-bucket`（默认）/ `leaking-bucket` / `sliding-window` / `any-moment` / `unlimited`。
  *
  * `mcp_publicBaseUrl` 是本服务对外暴露的根地址，用于大结果链接、SSE 地址与相对资源 URI。
+ *
+ * `mcp_version` 是 `server/discover` 返回的 `serverInfo.version`，未配置时 `1.0.0`。
  */
 public class McpConfig {
     public static const RATE_LIMIT = 'mcp_rateLimit'
     public static const RATE_LIMIT_BACKEND = 'mcp_rateLimitBackend'
     public static const PUBLIC_BASE_URL = 'mcp_publicBaseUrl'
+    public static const VERSION = 'mcp_version'
+
+    /** `mcp_version`，去掉首尾空白；未配置或为空时返回 `1.0.0`。 */
+    public static func version(): String {
+        let value = Config.getString(VERSION)?.trimAscii() ?? ''
+        if (value.isEmpty()) {
+            '1.0.0'
+        } else {
+            value
+        }
+    }
 
     /** `mcp_publicBaseUrl`，去掉首尾空白与末尾 `/`；未配置或为空时返回 `None`。 */
     public static func publicBaseUrl(): ?String {

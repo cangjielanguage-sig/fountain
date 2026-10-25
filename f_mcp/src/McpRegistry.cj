@@ -191,6 +191,15 @@ public class McpRegistry {
         configure({b => b.prompt(prompt)})
     }
 
+    /**
+     * 设置 `serverInfo.name`；版本取 `mcp_version`，未配置时 `1.0.0`。
+     *
+     * `@Mcp[...]` 展开时会自动调用。
+     */
+    public static func serverInfo(name: String): Unit {
+        configure({b => b.serverInfo(name, McpConfig.version())})
+    }
+
     /** 触发生成 `McpServer`（已经 build 过则直接返回）。 */
     public static func build(): Unit {
         server()

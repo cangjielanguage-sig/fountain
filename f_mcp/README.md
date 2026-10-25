@@ -5,7 +5,7 @@
 - 协议版本：`2026-07-28`（无握手；逐请求 `_meta` 校验）
 - 服务端：`/mcp`（JSON-RPC）+ `/mcp/sse`（订阅推送）
 - 客户端：HTTP（复用 `JsonRpcClient`）与 stdio（子进程）
-- 依赖：`f_jsonrpc` / `f_data` / `f_log` / `f_mvc`（controller）、`f_concurrent`（限流）、`f_config`（`mcp_rateLimit`）
+- 依赖：`f_jsonrpc` / `f_data` / `f_log` / `f_mvc`（controller）、`f_concurrent`（限流）、`f_config`（`mcp_rateLimit` / `mcp_version`）
 
 ## 规范版本
 
@@ -86,7 +86,7 @@ public class SearchResult {
     }
 }
 
-@Mcp
+@Mcp['kb-server']
 public class KnowledgeService {
     public init() {}
 
@@ -108,10 +108,21 @@ public class KnowledgeService {
 ```
 
 - `@Mcp` 自动给类加 `@Bean`，在模块加载期完成注册并调用 `McpRegistry.build()`；一个进程只应有一个 `@Mcp` 类
+- 属性 `@Mcp['kb-server']` 或 `@Mcp[kbServer]` 指定 `serverInfo.name`（字符串常量或标识符）；不写属性时 name 为 `fountain-mcp`
+- `serverInfo.version` 取配置项 `mcp_version`，未配置时为 `1.0.0`
 - **tool**：函数必须恰好一个参数，参数是 `@DataAssist[props fields]` 类；`inputSchema` 由该类型生成
 - **resource**：函数必须无参数；`uri` 不能为空；`mediaType` 对应 `McpResource.mimeType`；示例中的 `/doc` 需要配置 `mcp_publicBaseUrl`
 - **prompt**：函数参数就是 `PromptArgument`，参数名即 `name`；`@McpPromptArg` 提供 `description` / `required`（默认 `true`）；可选参数建议用 `Option<T>`
 - 注解里的 `name` 为空时回退到函数名；没有这三个注解的 public 函数会被忽略
+
+`server/discover` 返回的 `serverInfo` 形如：
+
+```json
+{"_meta":{"io.modelcontextprotocol/serverInfo":{"name":"kb-server","version":"1.0.0"}}}
+```
+
+直接使用 `Builder` 时，`serverInfo(name, version)` 的 `version` 传空串表示取 `mcp_version`；
+显式传入非空值则以显式值为准。
 
 #### 入参与返回值转换
 

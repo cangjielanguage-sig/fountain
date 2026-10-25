@@ -43,7 +43,7 @@ public class MacroAnswer {
     }
 }
 
-@Mcp
+@Mcp['macro-server']
 public class MacroMcpService {
     public init() {}
 
@@ -121,6 +121,14 @@ class McpMacro_test {
         let obj = JsonObject()
         obj.add('result', result)
         obj
+    }
+
+    @TestCase
+    public func testServerInfo(): Unit {
+        let result = call('server/discover', '')['result'].asObject()
+        let info = result['_meta'].asObject()[McpProtocol.KEY_SERVER_INFO].asObject()
+        @Assert('macro-server', info['name'].asString().value)
+        @Assert('1.0.0', info['version'].asString().value)
     }
 
     @TestCase
