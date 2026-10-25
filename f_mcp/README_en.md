@@ -1,6 +1,6 @@
 # f_mcp
 
-`f_mcp` is a client / server SDK for MCP (Model Context Protocol). The message layer is `f_jsonrpc`; this module implements only MCP semantics: version and capabilities, `server/discover`, tools, resources, prompts, subscriptions, rate limiting and large results.
+`f_mcp` is a client / server SDK for MCP (Model Context Protocol). The message layer is `f_jsonrpc`; this module implements only MCP semantics: version and capabilities, `server/discover`, tools, resources, prompts, subscriptions, rate limiting and results.
 
 - Protocol version: `2026-07-28` (no handshake; per-request `_meta` validation)
 - Server: `/mcp` (JSON-RPC) + `/mcp/sse` (subscriptions)
@@ -17,7 +17,7 @@
 - Capabilities: `tools.listChanged=false`, `resources.subscribe=true` + `resources.listChanged=false`, `prompts.listChanged=false`
 - Transport: `POST /mcp` returns a single JSON response; `GET /mcp/sse` pushes subscription notifications (`text/event-stream`). There is no session id and the server never sends requests
 - Not implemented: `sampling` / `roots` / `logging` / `completions` / `resources/templates/list`; asking the client for input uses `tools/call` with `resultType: "input_required"`
-- Extensions: `-32050` rate limited, `-32002` resource not found, large results linked from `/mcp/tool-results/`
+- Extensions: `-32050` rate limited, `-32002` resource not found, results linked from `/mcp/tool-results/`
 - Legacy peers: `initialize` / `notifications/initialized` return `-32601` with `legacyMethod` and `supportedVersion` in `data`; there is no silent downgrade
 
 See [`doc/f_mcp模块设计.md`](doc/f_mcp模块设计.md) for the design rationale.
@@ -86,7 +86,20 @@ Five `RateLimitBackend` implementations are built in, all backed by `f_concurren
 
 An explicit `Builder.rateLimitBackend(...)` wins over configuration. Names are case-insensitive and ignore `-` / `_`; an unknown name throws `IllegalArgumentException` at `build()`.
 
-Custom algorithms can be registered:
+#### `RateLimitBackend` and `RateLimitBackends`
+
+`RateLimitBackend` is the rate-limit algorithm SPI; the five built-in implementations are registered in `RateLimitBackends` at module load:
+
+```cangjie
+public interface RateLimitBackend {
+    static prop name: String              // algorithm name, also the registry key
+    static func new(): RateLimitBackend   // create an instance
+    func tryAcquire(key: String, rpm: Int64, nowNanos: Int64): Bool
+    func close(): Unit                    // called by McpServer.close()
+}
+```
+
+A custom implementation:
 
 ```cangjie
 public class MyRateLimitBackend <: RateLimitBackend {
@@ -98,13 +111,30 @@ public class MyRateLimitBackend <: RateLimitBackend {
         MyRateLimitBackend()
     }
 
-    // tryAcquire / close ...
-}
+    public func tryAcquire(key: String, rpm: Int64, nowNanos: Int64): Bool {
+        // key is already scoped: c: / ct: / t:
+        // rpm <= 0 means unlimited
+        true
+    }
 
-RateLimitBackends.register<MyRateLimitBackend>()
+    public func close(): Unit {}
+}
 ```
 
-Then select it with `mcp_rateLimitBackend=my-algo` or `Builder.rateLimitBackend(...)`. Registering the same name overrides the existing implementation.
+Register and use it:
+
+```cangjie
+// 1. register; the same name overrides the built-in implementation
+RateLimitBackends.register<MyRateLimitBackend>()
+
+// 2a. select through configuration: export mcp_rateLimitBackend=my-algo
+// 2b. or inject directly
+let server = McpServer.builder()
+    .rateLimitBackend(RateLimitBackends.of('my-algo'))
+    .build()
+```
+
+`RateLimitBackends.of(name)` creates an instance by name and throws `IllegalArgumentException` when unregistered. Names are case-insensitive and ignore `-` / `_`.
 
 The global default comes from `mcp_rateLimit` and `mcp_rateLimitBackend`:
 
@@ -129,7 +159,7 @@ The `key` passed to `tryAcquire(key, rpm, nowNanos)` is already scoped (`c:` / `
 
 Concurrency gates (`maxConcurrency` / `perCallerConcurrency`) remain process-local; a cross-instance concurrency cap needs a gateway or a shared semaphore.
 
-### Large results
+### Results
 
 Beyond `maxResultBytes` (1 MB by default):
 
@@ -175,7 +205,7 @@ let client = McpClient.stdio('/usr/local/bin/my-mcp-server', args: ['--stdio'])
 cjpm test
 ```
 
-Covers discovery, version / legacy, tools / resources / prompts, rate limiting, large results and adaptive storage, subscriptions, SSE framing, stdio line framing, client `_meta` and multi-round.
+Covers discovery, version / legacy, tools / resources / prompts, rate limiting, results and adaptive storage, subscriptions, SSE framing, stdio line framing, client `_meta` and multi-round.
 
 ## Known limitations
 
