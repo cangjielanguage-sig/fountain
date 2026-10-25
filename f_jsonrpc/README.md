@@ -98,6 +98,20 @@ cd fjsonrpcdemo
 | `/rpc` | 不过滤命名空间 |
 | `/rpc/{topic}` | 只允许 `topic` 命名空间下的方法；该 topic 没有任何方法时返回 `-32004` |
 
+`{topic}` 是内置 `JsonRpcController` 的路径变量（`@JsonRpcMapping[path: '/rpc/{topic}']` + `@PathVariable topic`），它对应的就是宏里的 `namespace`：宏属性叫 `namespace`，路由变量叫 `topic`，两者是同一个值。
+
+`@JsonRpc[namespace: knowledge]` 注册出的方法名是 `knowledge.search`，因此：
+
+| 请求 | 结果 |
+|---|---|
+| `POST /rpc/knowledge` + `{"method":"knowledge.search"}` | 命中 |
+| `POST /rpc` + `{"method":"knowledge.search"}` | 命中（`/rpc` 不过滤命名空间） |
+| `POST /rpc/knowledge` + `{"method":"search"}` | `-32601`（不做前缀补全） |
+| `POST /rpc/other` + `{"method":"knowledge.search"}` | `-32601`（跨命名空间） |
+| `POST /rpc/unknown` + 任意 method | `-32004`（该命名空间下没有任何方法） |
+
+命名空间从方法名反推：第一个 `.` 之前的部分；不含 `.` 的方法属于默认命名空间，只能从 `/rpc` 调用。
+
 `@JsonRpcMapping` 也可以直接用在自定义 `@Controller` 里。它把 `method` / `consumes` / `produces` 固定为 `POST` + `application/json`，只暴露路由参数：
 
 ```cangjie

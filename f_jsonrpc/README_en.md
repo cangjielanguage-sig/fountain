@@ -98,6 +98,20 @@ The module ships `JsonRpcController`, which registers two routes:
 | `/rpc` | no namespace filtering |
 | `/rpc/{topic}` | only methods under `topic`; returns `-32004` when the topic has no methods |
 
+`{topic}` is a path variable of the built-in `JsonRpcController` (`@JsonRpcMapping[path: '/rpc/{topic}']` + `@PathVariable topic`). It carries the same value as the macro's `namespace`: the macro attribute is called `namespace`, while the route variable is called `topic`.
+
+`@JsonRpc[namespace: knowledge]` registers `knowledge.search`, so:
+
+| Request | Result |
+|---|---|
+| `POST /rpc/knowledge` + `{"method":"knowledge.search"}` | matches |
+| `POST /rpc` + `{"method":"knowledge.search"}` | matches (`/rpc` does not filter) |
+| `POST /rpc/knowledge` + `{"method":"search"}` | `-32601` (no prefix completion) |
+| `POST /rpc/other` + `{"method":"knowledge.search"}` | `-32601` (different namespace) |
+| `POST /rpc/unknown` + any method | `-32004` (no method in that namespace) |
+
+The namespace is derived from the method name: everything before the first `.`. Methods without a dot belong to the default namespace and can only be called through `/rpc`.
+
 `@JsonRpcMapping` can also be used in your own `@Controller`. It fixes `method` / `consumes` / `produces` to `POST` + `application/json` and exposes only routing options:
 
 ```cangjie
