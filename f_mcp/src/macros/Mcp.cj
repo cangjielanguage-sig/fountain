@@ -47,7 +47,7 @@ private func serverNameOf(attr: Tokens): String {
             return attr[0].value
         }
     }
-    diagReport(ERROR, attr, "expect @Mcp[<name>] where <name> is a string literal or identifier", '')
+    diagReport(WARNING, attr, "expect @Mcp[<name>] where <name> is a string literal or identifier", '')
     'fountain-mcp'
 }
 
