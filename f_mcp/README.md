@@ -7,6 +7,15 @@
 - 客户端：HTTP（复用 `JsonRpcClient`）与 stdio（子进程）
 - 依赖：`f_jsonrpc` / `f_data` / `f_log` / `f_mvc`（controller）、`f_concurrent`（限流）、`f_config`（`mcp_rateLimit` / `mcp_version`）
 
+## 包结构
+
+| 包 | 内容 |
+|----|------|
+| `fountain::f_mcp.base` | `McpProtocol`、`McpException`、内容模型（`ContentBlock` / `CallToolResult` / `ResourceContent` / `PromptMessage`） |
+| `fountain::f_mcp.client` | `McpClient` |
+| `fountain::f_mcp.server` | 服务端、工具 / 资源 / 提示词、注解、限流、结果与 SSE |
+| `fountain::f_mcp` | 门面包：`public import` 以上三个包，兼容 `import fountain::f_mcp.*` |
+
 ## 规范版本
 
 - **MCP 2026-07-28**（[规范](https://modelcontextprotocol.io/specification/2026-07-28)），只实现这一版，不做多版本共存

@@ -7,6 +7,15 @@
 - Client: HTTP (reuses `JsonRpcClient`) and stdio (subprocess)
 - Dependencies: `f_jsonrpc` / `f_data` / `f_log` / `f_mvc` (controller), `f_concurrent` (rate limiting), `f_config` (`mcp_rateLimit` / `mcp_version`)
 
+## Package layout
+
+| Package | Contents |
+|---------|----------|
+| `fountain::f_mcp.base` | `McpProtocol`, `McpException`, content models (`ContentBlock` / `CallToolResult` / `ResourceContent` / `PromptMessage`) |
+| `fountain::f_mcp.client` | `McpClient` |
+| `fountain::f_mcp.server` | Server, tools / resources / prompts, annotations, rate limiting, results and SSE |
+| `fountain::f_mcp` | Facade package: `public import`s the three packages above, keeping `import fountain::f_mcp.*` working |
+
 ## Specification version
 
 - **MCP 2026-07-28** ([specification](https://modelcontextprotocol.io/specification/2026-07-28)); only this version is implemented, with no multi-version coexistence

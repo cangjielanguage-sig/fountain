@@ -19,7 +19,7 @@ import std.collection.ArrayList
 import std.collection.concurrent.ConcurrentHashMap
 import std.sync.AtomicInt64
 import fountain::f_data.*
-import fountain::f_jsonrpc.JsonRpcException
+import fountain::f_jsonrpc.base.JsonRpcException
 import fountain::f_mcp.*
 
 /**

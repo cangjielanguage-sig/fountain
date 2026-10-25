@@ -6,6 +6,18 @@
 - 支持单请求、批量、通知、topic 命名空间、单方法超时、JSON Schema 参数校验
 - 不修改 `f_mvc` 任何公开 API（`@JsonRpcMapping` 是 `RequestMapping` 的子类）
 
+## 包结构
+
+| 包 | 内容 |
+|----|------|
+| `fountain::f_jsonrpc.base` | 协议常量、错误模型、方法元数据注解 |
+| `fountain::f_jsonrpc.client` | `JsonRpcClient` / `ClientOptions` |
+| `fountain::f_jsonrpc.server` | `JsonRpcServer`、方法表、`f_mvc` 路由与参数转换 |
+| `fountain::f_jsonrpc` | 门面包：`public import` 以上三个包，兼容 `import fountain::f_jsonrpc.*` |
+
+客户端可以只 `import fountain::f_jsonrpc.client.*`，服务端只 `import fountain::f_jsonrpc.server.*`，共用 `base`；
+模块依赖仍声明 `fountain::f_jsonrpc`。
+
 ## 规范版本
 
 - **JSON-RPC 2.0**（[规范原文](https://www.jsonrpc.org/specification)，2013-01-04 发布）
