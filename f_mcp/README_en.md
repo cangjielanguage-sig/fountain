@@ -128,6 +128,7 @@ public class KnowledgeService {
 - `@Mcp['kb-server']` or `@Mcp[kbServer]` sets `serverInfo.name` (string literal or identifier); without an attribute the name is `fountain-mcp`
 - `serverInfo.version` comes from `mcp_version`, defaulting to `1.0.0`
 - **tool**: exactly one parameter, an `@DataAssist[props fields]` class; `inputSchema` comes from that type
+- `@McpToolMeta`'s `perCallerRpm` / `perCallerToolRpm` / `perToolRpm` / `maxConcurrency` / `perCallerConcurrency` map directly to `ToolRateLimit`; `0` means unlimited
 - **resource**: no parameters; `uri` is required; `mediaType` maps to `McpResource.mimeType`; the `/doc` example needs `mcp_publicBaseUrl`
 - **prompt**: the function parameters are the `PromptArgument`s, using the parameter name as `name`; `@McpPromptArg` sets `description` / `required` (default `true`); use `Option<T>` for optional arguments
 - an empty `name` falls back to the function name; public functions without these annotations are ignored
