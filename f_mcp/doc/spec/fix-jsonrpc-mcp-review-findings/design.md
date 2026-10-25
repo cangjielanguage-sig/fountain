@@ -128,7 +128,7 @@ P1（一般）
 | R4-3 | 订阅者 / 队列无上限无过期 | `maxSubscribers` / `queueCapacity` / detached TTL；队列满丢最旧并计数；`close()` 清空 | `McpServer.cj`、`McpSse.cj` |
 | R4-4 | prompt 每请求反射查注解；注册重复查找 | 注册期算好参数元数据；合并为一次查找 | `McpRegistry.cj` |
 | R4-5 | `tools/call` 重复序列化 2~3 次 | 只序列化一次，量字节 / 入库 / 截断共用 | `McpServer.cj` |
-| R4-6 | `tools/list` 每请求重建 JSON | 构建期缓存条目 JSON，请求期只切片 | `McpServer.cj` |
+| R4-6 | `tools/list` 每请求重建 JSON | 首次请求惰性缓存条目 JSON（构造一次后只读复用），请求期只切片 | `McpServer.cj` |
 | R4-7 | 每工具 `maxConcurrency` 共用 key `'g'` | 全局并发只取服务级；工具并发独立 key；语义写入 README | `McpServer.cj`、`McpRateLimit.cj` |
 
 #### R5 — f_mcp 限流 / 结果 / SSE / 配置（10）
@@ -198,7 +198,7 @@ send(body):
   catch e -> response.close(); throw e                         // 不可重试
 ```
 
-`readCapped`：8 KiB 缓冲循环 `read`，累计 `total`；`total > cap` 立即 `throw JsonRpcException(INTERNAL_ERROR, "response body exceeds ...")`。`ArrayList<Byte>` 预分配（`Content-Length` 已知时按声明值），最终 `unsafeData()` 只做一次拷贝。
+`readCapped`：8 KiB 定长缓冲循环 `read`，累计 `total`；`total > cap` 立即 `throw JsonRpcException(INTERNAL_ERROR, "response body exceeds ...")`。`ArrayList<Byte>` 按 `Content-Length` 预分配（已知且 `<= cap` 时按声明值，减少扩容重分配），每轮把 `buffer[0..size]` 切片 `add(all:)` 进列表——body 字节在这里搬运**一次**；结束后 `unsafeData()` 直接交出底层数组，不再有「`ArrayList` → `Array`」的整体拷贝。即：省掉的是整包副本，逐段切片搬运这一趟保留（缓冲复用，无法省）。
 
 `sendWithRetry`：
 
@@ -343,6 +343,8 @@ requireMeta(ctx, params):
   剥离 _meta，返回 params
 ```
 
+校验顺序 MUST 固定为「header 受支持性 → header 与 body 一致性 → body 受支持性」。若先判 body，则 body 非法时提前 `-32022`，header 与 body 不一致的分支永远不可达（当前实现即此问题）。
+
 `capabilities()`：`tools.listChanged=false`、`resources.subscribe=false, listChanged=false`、`prompts.listChanged=false`。
 
 `McpProtocol` 新增 `OVERLOADED = -32003`（订阅者总量超限时使用），与 `f_jsonrpc` 的同名保留码语义一致。
@@ -395,7 +397,9 @@ match request.get('cursor'):
 
 #### 4.4.4 缓存条目
 
-`build()` 后为每个 tool / resource / prompt 生成一次 `JsonObject`，存放在 `McpTool.json` / `McpResource.json` / `McpPrompt.json`；`listXxx` 只把这些对象加入页数组。条目对象视为只读（序列化后即不再被修改）。
+`build()` 只建索引，**不**预生成条目 JSON。条目对象在**首次 `list` 请求时**惰性构造（`toolJson` / `resourceJson` / `promptJson`），写入 `McpTool.listJson` / `McpResource.listJson` / `McpPrompt.listJson`，之后同一对象被复用；连续 N 次 `list` 只构造 1 次。spec 的「`build()` 后冻结并缓存」按「`build()` 之后、首次请求时填充并冻结」实现，构造次数口径（连续 10 次 = 1 次）一致。
+
+缓存条目**只读**：`listXxx` 只把缓存对象追加进页数组，不做拷贝；HTTP 路径序列化后即丢弃引用，安全。但本地 `handle()` / `invoke()` 路径直接返回 `JsonValue`，拿到的是**同一个引用**，未经序列化——调用方 MUST NOT 修改返回的条目（改了就写穿到注册表，污染后续所有 `list` 响应）。需要可变副本的调用方自行深拷贝，服务端不为此在热路径上做拷贝。
 
 #### 4.4.5 大结果
 
@@ -624,11 +628,29 @@ close(): 全部 close
 
 `rateLimitError(ctx, verdict)`：`ctx.http` 存在时 `status(429)` + `Retry-After: max(1, ceil(retryAfterMs/1000))`。
 
+`verdict.scope` 与拒绝维度一一对应（6 个取值，对应 `specs/mcp-guardrails/spec.md` 的表和 README）：`concurrency`（全局并发）/ `concurrency_tool`（工具并发）/ `concurrency_caller`（调用方×工具并发，gate key `conc:ct:<caller>\0<tool>`）/ `caller` / `caller_tool` / `tool`（三档 rpm）。scope 与是否走 HTTP 无关，HTTP 只额外决定 429 + `Retry-After`。
+
 `callerId(ctx)` 按 spec 的 4 级顺序；`mcp_trustForwardedFor` 默认 `false`，可通过配置项或 `McpServerBuilder.trustForwardedFor(Bool)` 开启。
 
 #### 4.6.6 后端集合
 
 删除 `AnyMomentRateLimitBackend` 与其注册；`fromConfig` 对未知名保留现有 `IllegalArgumentException`，消息列出 `RateLimitBackends` 全部可用名。
+
+#### 4.6.7 `mcp_rateLimit` CSV 解析
+
+CSV 是**按位置**覆盖的 5 段：`perCallerRpm,perCallerToolRpm,perToolRpm,maxConcurrency,perCallerConcurrency`。判定规则：
+
+```
+parts = raw.split(',')
+if parts.size > 5 -> 报错（尾部多余段）
+for i in 0..parts.size:
+    empty = parts[i].trim().isEmpty()
+    empty && 存在 j > i 且 parts[j] 非空 -> 报错（中间空段，消息含 FIELDS[i]）
+    empty -> None
+    else -> 非负整数 / <= 1_000_000 / 0 -> None / >0 -> 值
+```
+
+尾部空段等价于省略（`'1,,,'` 与 `'1'` 等价），保持既有部署与既有用例兼容；`'1,,120'` 这类「空段后仍有值」的输入无法区分「省略」与「写错」，必须报错而不是静默当作省略。
 
 ### 4.7 结果存储
 
@@ -671,7 +693,7 @@ if target != current: maxEntries.store(target); log.info(...)
 
 ```
 McpSubscriber {
-   id, topics, attached, detachedAtNanos
+   id, topics, attached, detachedAtNanos(创建即 = now)
    queue: ArrayList<JsonObject>, queueMutex, sem
    offer(n): lock { if queue.size >= cap { queue.remove(0); dropped++ } queue.add(n) } sem.release()
    take(timeout): sem.acquire(timeout) -> lock { drain all }
@@ -679,14 +701,17 @@ McpSubscriber {
 SubscriptionHub {
    subscribers: ArrayList, mutex
    maxSubscribers = 1024, detachedTtl = 60s, queueCapacity = 256
-   subscribe(topics): prune(); if size >= max -> throw -32003; add
-   detach(sub): attached=false; detachedAt=now
-   attach(id): find !attached -> attached=true
+   subscribe(topics): prune(); if size >= max -> throw -32003; add(attached=false, detachedAt=now)
+   detach(sub): 幂等；无论 attached 与否都 attached=false, detachedAt=now
+   attach(id): find !attached 且未超 TTL -> attached=true, detachedAt=0
    publish(topic, params): snapshot under lock; offer outside lock
-   prune(): remove detached 超过 TTL
+   prune(): remove !attached && now-detachedAt > TTL
    close(): clear
 }
+McpSseStream(hub, topics): sub = hub.subscribe(topics); hub.attach(sub.id)   // 直连也必须 attach
 ```
+
+`detachedAt` 的起点是创建时刻而不是首次 detach：否则从未 attach 的订阅者既不满足 `detachedAt > 0`，也无法通过 `detach()`（旧实现 `!attached` 直接 return）写入时间戳，最终永久驻留且继续占用 `maxSubscribers` 与队列内存。`attach` 必须清 `detachedAt`，否则重连后的订阅者会在下一次 `prune` 被误删。
 
 三个上限可通过 `McpServerBuilder.maxSubscribers(n)` / `subscriberQueueCapacity(n)` / `subscriberDetachedTtl(d)` 配置（默认即上表），供测试与按部署调整；`McpServer.close()` MUST 调用 `hub.close()`。
 
@@ -720,6 +745,14 @@ SubscriptionHub {
 - `f_jsonrpc/README.md` / `README_en.md`：客户端选项、错误码表（`-32001` 保留、`-32003` 仅批量）、`/rpc/{topic}` 示例、`maxBatchSize` / `maxBodyBytes`、超时默认值与 `''` 语义、重试边界、`Content-Type`。
 - `f_mcp/README.md` / `README_en.md`：客户端选项与返回类型、`input_required` / `requestState`、能力表（`subscribe=false`）、错误码（`-32040`）、限流顺序 / 三层合并 / caller 规则 / 429、`any-moment` 移除、订阅上限与重连、`-1/0/>0` 语义。
 - `f_jsonrpc/doc/f_jsonrpc模块设计.md`、`f_mcp/doc/f_mcp模块设计.md`：文首加「实现为准」横幅；逐条修正被点名的 API / 配置 / 错误码 / 能力段落；删除 `onExceed` / `RateLimitAction` / `AdaptivePolicy` 等未实现声明。
+- `f_mcp/doc/f_mcp模块设计.md` 的定点清理（T43 / T44 收口）：
+  - 资源不存在 / 过期链接：`-32002` → `-32040`（接口表、错误表、流程图、测试矩阵共 9 处：:716、:923、:926、:1208、:1256、:2248、:2259、:2281、:2349）；
+  - 删除 `AdaptivePolicy` 类与 13 项配置表（:1299-1342），`ResultStoreOptions` 按实际 9 个字段重写，修 :1286「8 个字段」；
+  - :937「`resources/subscribe` ❌ 不做…首版无 SSE」改为「SSE 已实现；未实现的是逐资源 `resources/subscribe` / `unsubscribe`」；
+  - :526 `JsonRpcContext.meta`、:536-543 `JsonRpcMethodMeta.inputSchema/outputSchema` 的旧声明删除，与 :1314「不再有」保持一致。
+- `f_jsonrpc/doc/f_jsonrpc模块设计.md:1102`：`maxResponseBytes` 的「截断」改为「超限立即抛错并关闭响应」。
+- 代码注释同步：`f_mcp/src/server/McpConfig.cj:31` 删除 `any-moment`；`f_mcp/src/macros/Mcp.cj:30` 删除「最后调用 `McpRegistry.build()`」。
+- 验收口径：`f_mcp/doc` 中 `AdaptivePolicy` / `any-moment` / MCP 侧 `-32002` 零命中；文档出现的公开符号都能在源码找到。
 
 ## 5. 兼容性与迁移
 
@@ -748,12 +781,26 @@ SubscriptionHub {
 | 超时 | handler 内读 `CurrentHttpContext` + 睡眠 | 默认内联、显式超时 `-32002`、子线程 ThreadLocal |
 | MCP 服务端 | 构造 `McpServer` + 直接调方法 | 多轮 `inputResponses`/`requestState`、游标非法、能力一致性、截断中文、缓存条目、限流顺序 |
 | 限流 | 直接操作 `LimiterPool` / `ConcurrencyGate` / `ToolResultStore` | 容量淘汰、close 取消 Timer、release 竞态、重复 token、压力 sweep |
-| SSE | `McpSseStream.poll` + 假 hub | 无事件不空转（调用计数）、阻塞等待、重连、解码、400 |
+| SSE | `McpSseStream.poll` + 假 hub | 无事件不空转（调用计数）、阻塞等待、重连、未 attach 订阅者 TTL 回收、30 分钟只 detach、解码、400 |
 | stdio | bash 脚本模拟子进程 | 通知、噪声行、id 匹配、读超时、id 单调 |
 | 宏 | 编译期诊断用例（沿用 `f_macros` 现有机制）；无机制时以「注册结果 + 构建日志」验证 | 重名报错、全限定注解、无警告 |
 | 文档 | 人工核对 + 关键示例变成测试 | README 代码片段可编译 |
 
-回归门禁：`f_jsonrpc`、`f_mcp`、`f_data`、`f_mvc`、`f_concurrent` 各自 `cjpm test` 全绿；`fboot build` 通过。
+回归门禁：`f_jsonrpc`、`f_mcp`、`f_data`、`f_mvc`、`f_concurrent` 各自 `cjpm test` 全绿；`fboot build` 通过；`openspec validate fix-jsonrpc-mcp-review-findings` 0 错。
+
+补测清单（verify 复审要求：勾选任一任务前必须先有对应用例）：
+
+| 任务 | 用例要点 |
+| --- | --- |
+| T41.1–41.3 | 头/body 不一致 `-32602`（`data.header/body`）、头不受支持 `-32022`、无头只按 body |
+| T11.1–11.2 | `tools/call` 全路径序列化计数：小结果 1 次；大结果 + `publicBaseUrl` ≤ 2 次 |
+| T32.1–32.4 | 真 HTTP：`headers` 逐请求命中、`maxResponseBytes` 超限、`keepAlive=false`、建连失败重试 |
+| T33.1 | 8 线程并发协商：版本只改写 1 次、单请求最多重试 1 次、INFO 日志 1 条 |
+| T29.1–29.4 | 编码 topic 能收到通知、`?topics=a, b` 两项、`?topics=` 400、无效 id 400 且无 chunked |
+| T36.1–36.3 | `findAnnotation` 次数 = 参数个数、`getInstanceFunction` 1 次、条目 JSON 构造 1 次 |
+| T38.1–38.3 | 全限定注解、与 `McpRegistry.configure` 共存、重名编译期报错 |
+| T27.2 / T27.5 | 未 attach 订阅者 TTL 回收、30 分钟只 detach |
+| T1.1 | 服务端未读完 body（已落地字节 < `Content-Length`） |
 
 ## 7. 替代方案与取舍
 
@@ -779,8 +826,9 @@ SubscriptionHub {
 9. **P1-D 客户端模型与 stdio**（R3-3、R3-4、R3-5、R3-6、R3-7、R3-8、R3-9、R4-4、R4-6）
 10. **P1-E 宏与注册**（R1-7、R2-6、R3-10、R3-12）
 11. **P1-F 文档与契约**（R1-5、R1-6、R2-7、R3-11、R4-2 文档部分、R6-1、R6-3、R6-4）
+12. **P1-G verify 收口**（V3–V8）：订阅者生命周期 → 版本头校验顺序 → CSV 空段 → 补测 → 文档残留 → `openspec validate` 归零
 
-P0 未全绿不得进入 P1；P1 每阶段结束后跑对应模块全量回归。
+P0 未全绿不得进入 P1；P1 每阶段结束后跑对应模块全量回归。P1-G 未收敛前不得进入 archive，`tasks.md` 的 Z5 / Z6 保持未勾选。
 
 ## 9. 风险
 

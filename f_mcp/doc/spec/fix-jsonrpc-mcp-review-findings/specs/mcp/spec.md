@@ -102,10 +102,20 @@ MUST NOT 声明任何没有对应方法的能力；新增能力时 MUST 同时�
 
 读取不存在的资源或已过期的大结果 MUST 返回 MCP 业务段错误码 `-32040`（`RESOURCE_NOT_FOUND`），`error.data` 含 `uri` 与 `reason`（`unknown` / `expired`）。MUST NOT 再使用 `f_jsonrpc` 保留的 `-32002`。
 
-#### Scenario: 未知资源
+#### Scenario: 资源不存在
 
 - **WHEN** `resources/read` 请求未注册的 `uri`
-- **THEN** 返回 `-32040`，`data.reason = "unknown"`
+- **THEN** 返回 `-32040`，`data.uri` 为原值，`data.reason = "unknown"`
+
+#### Scenario: file:// 被拒
+
+- **WHEN** 注册或读取 `file:///etc/passwd`
+- **THEN** 读取返回 `-32602`；注册时 `build()` 抛异常
+
+#### Scenario: 二进制资源
+
+- **WHEN** handler 返回 `blob`
+- **THEN** `contents[0].blob` 为 base64 字符串
 
 #### Scenario: 过期的大结果
 
@@ -135,9 +145,21 @@ prompt 参数的 `description` / `required` MUST 在注册期从 `@McpPromptArg`
 - **WHEN** 连续调用 `prompts/get` 10 次
 - **THEN** `findAnnotation<McpPromptArg>` 调用次数为注册期的参数个数，不随请求增长
 
+#### Scenario: 列表
+
+- **WHEN** 注册两个 prompt
+- **THEN** `prompts/list` 按名字升序返回，能力声明含 `prompts`
+
+#### Scenario: 取 prompt
+
+- **WHEN** `prompts/get` 传入已声明的参数
+- **THEN** 返回渲染后的 `messages`
+
 ### Requirement: subscriptions/listen 与 SSE
 
 `subscriptions/listen` MUST 创建订阅者并返回 `subscriptionId`、`subscribedTopics`、`sseUrl`。服务端 MUST 约束订阅者总量与每订阅者队列长度；未建立 SSE 连接的订阅者 MUST 在 detached TTL（默认 60 秒）后回收；`McpServer.close()` MUST 清空订阅中心。
+
+未连接状态的起点 MUST 是订阅者**创建时刻**：`subscriptions/listen` 创建后即进入 detached 计时；由 `/mcp/sse` 直接创建（未走 `subscriptions/listen`）的订阅者 MUST 在创建后立即绑定（attach），MUST NOT 存在「永远未 attach、因而永不回收」的订阅者。`detach` MUST 幂等：对已 detach 或从未 attach 的订阅者都 MUST 写入 detach 时刻而不报错。
 
 `subscriptionId` MUST 支持在 SSE 断开后于 detached TTL 内重连；同一订阅者同时只允许一条活动流。30 分钟上限到达时 MUST 结束当前流并 detach（保留至 TTL），MUST NOT 立即永久删除订阅者。
 
@@ -179,6 +201,13 @@ SSE 流 MUST 在无事件时阻塞等待（带超时），MUST NOT 以固定 100
 
 - **WHEN** `subscriptionId` 不存在
 - **THEN** 响应为 400，且不含 `Transfer-Encoding: chunked`
+
+#### Scenario: 订阅
+
+- **WHEN** 调用 `subscriptions/listen` 订阅 `tools/list_changed`，再连接返回的 `sseUrl`
+- **THEN** 后续发布的通知出现在该订阅者的 SSE 流里
+- **WHEN** 同一个 `subscriptionId` 再次建立 SSE 连接
+- **THEN** 拒绝建立 SSE 连接，不再新建订阅者
 
 ### Requirement: 客户端
 
@@ -224,6 +253,21 @@ SSE 流 MUST 在无事件时阻塞等待（带超时），MUST NOT 以固定 100
 - **WHEN** `McpClientOptions.headers = {"Authorization": "Bearer x"}` 连接 HTTP 端点
 - **THEN** 每个请求都带该头
 
+#### Scenario: 自动注入 `_meta`
+
+- **WHEN** 调用 `listTools`
+- **THEN** 请求 `params._meta` 含 `protocolVersion`、`clientInfo`、`clientCapabilities`
+
+#### Scenario: 版本重试一次
+
+- **WHEN** 服务端返回 `-32022` 且 `supported` 非空
+- **THEN** 客户端换用 `supported[0]` 重试一次；再失败则抛 `McpException`
+
+#### Scenario: 分页聚合
+
+- **WHEN** 服务端分两页返回工具
+- **THEN** `listAllTools` 返回两页合并结果；超过轮次上限时抛异常
+
 ### Requirement: stdio 客户端
 
 stdio 传输 MUST 复用 `f_jsonrpc` 的消息层（`JsonRpcTransport` + `JsonRpcClient`），MUST NOT 自建请求 / 响应编解码。
@@ -257,6 +301,11 @@ stdio 传输 MUST：
 - **WHEN** 连续调用两次 `callTool`
 - **THEN** 两个请求的 JSON-RPC id 分别为 1、2
 
+#### Scenario: 行分帧
+
+- **WHEN** 子进程输出两行 JSON-RPC 响应
+- **THEN** 客户端按行解析，不把 stderr 混进响应
+
 ### Requirement: `input_required` Auto 多轮
 
 `tools/call` 第二轮及以后 MUST 读取 `params.inputResponses` 与 `params.requestState`，并通过 `McpToolContext` 交给 handler；handler MUST 能读到完整原值。
@@ -279,6 +328,16 @@ stdio 传输 MUST：
 
 - **WHEN** 服务端第二轮返回 `complete`
 - **THEN** `callToolAuto` 返回该结果，不因缺少 `requestState` 反复触发第一轮
+
+#### Scenario: 两轮完成
+
+- **WHEN** 第一轮返回 `input_required`，handler 给出响应，第二轮返回 `complete`
+- **THEN** 返回第二轮结果，且两次请求 id 不同
+
+#### Scenario: 超过轮次
+
+- **WHEN** 每轮都返回 `input_required` 且达到 `maxRounds`
+- **THEN** 抛 `McpException`
 
 ## ADDED Requirements
 

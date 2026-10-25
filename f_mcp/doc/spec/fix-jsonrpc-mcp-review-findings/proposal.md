@@ -78,7 +78,7 @@
 
 ### I. 缓存与热路径
 
-- `tools/list` / `resources/list` / `prompts/list` 在构建期生成并缓存条目 JSON，请求只做切片。
+- `tools/list` / `resources/list` / `prompts/list` 的条目 JSON 在**首次请求时惰性生成并固化**（每次启动只构造一次，之后只读复用），请求只做切片。
 - prompt 参数在注册期算好 `required`，`prompts/get` 不再反射查注解；注册路径合并为一次函数查找。
 - SSE 改为事件驱动的阻塞等待（信号量 + 超时），空闲连接不再 10 次/秒空转；拼接用 `StringBuilder`，字节用批量拷贝。
 
@@ -86,6 +86,17 @@
 
 - `f_jsonrpc/README.md`、`README_en.md`、`f_mcp/README.md`、`README_en.md` 改正错误码、topic 示例、Content-Type、批量 / 请求体上限、`ClientOptions` / `McpClientOptions`、限流派生规则、`subscribe` 声明。
 - 两份模块设计文档加「以实现为准」标注，逐条修正被点名的过期 API / 配置 / 错误码 / 能力声明。
+
+### K. verify 复审收口（不改变 A2 / A3 的 spec 语义）
+
+- 订阅中心：`/mcp/sse` 直连创建的订阅者立即 attach；未连接状态以**创建时刻**起算，TTL 到点必回收；`detach` 幂等，30 分钟到点只 detach。
+- 版本头：校验顺序改为「头受支持性 → 头与 body 一致性 → body 受支持性」，使「头与 body 不一致 → `-32602`」可达。
+- 限流配置：CSV **中间空段**报错（空段后仍有非空段），尾部空段仍视为省略。
+- 测试证据：补齐 T41 / T11 / T32 / T33 / T29 / T36 / T38 / T27 / T1.1 缺失用例。
+- 文档：设计文档清除 MCP 侧 `-32002`、`AdaptivePolicy`、`subscribe`、`any-moment` 残留；`McpConfig` / `Mcp` 宏注释同步。
+- 规划卫生：补齐 7 个 MODIFIED 块缺失的既有场景，使 `openspec validate` 归零。
+
+> 「头与 body 不一致 → `-32602`」与「CSV 中间空段报错」两条 spec 场景保持原文，本阶段只改实现与测试。
 
 ## Impact
 
@@ -116,6 +127,7 @@
 - JSON-RPC 2.0 线协议（方法名、id 保真、错误对象形态）不变。
 - MCP `2026-07-28` 的请求 / 响应结构（除新增可选 `requestState` 与错误码迁移）不变。
 - HTTP 路由、注解名、包名不变。
+- A2 / A3 的 spec 场景文本不变：`MCP-Protocol-Version` 头与 body 不一致仍返回 `-32602`；`mcp_rateLimit` CSV 中间空段仍须报错。
 
 ## 非目标
 

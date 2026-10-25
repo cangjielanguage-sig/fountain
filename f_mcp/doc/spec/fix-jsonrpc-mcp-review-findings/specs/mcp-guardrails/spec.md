@@ -62,7 +62,18 @@
 
 并发先于令牌桶：被并发拒绝的请求 MUST NOT 消耗任何令牌桶配额；任一后续检查失败时 MUST 释放已获得的并发租约（lease）。
 
-超限 MUST 返回 `-32050`，`error.data` 含 `scope`（`caller` / `caller_tool` / `tool` / `concurrency` / `concurrency_tool`）、`limit`、`retryAfterMs`。HTTP 场景 MUST 同时返回状态码 `429` 与 `Retry-After`（秒，向上取整，最小 1）。
+超限 MUST 返回 `-32050`，`error.data` 含 `scope`、`limit`、`retryAfterMs`。`scope` MUST 与拒绝维度一一对应，取值只允许这 6 个：
+
+| `scope` | 拒绝维度 |
+| --- | --- |
+| `concurrency` | 服务级全局并发（`RateLimitPolicy.maxConcurrency`） |
+| `concurrency_tool` | 工具并发（`ToolRateLimit.maxConcurrency`） |
+| `concurrency_caller` | 调用方×工具并发（`perCallerConcurrency`） |
+| `caller` | `perCallerRpm` |
+| `caller_tool` | `perCallerToolRpm` |
+| `tool` | `perToolRpm` |
+
+HTTP 场景 MUST 同时返回状态码 `429` 与 `Retry-After`（秒，向上取整，最小 1）；`scope` 的取值与是否 HTTP 无关。
 
 调用方标识 MUST 按以下顺序派生并写入 README：
 
@@ -83,7 +94,12 @@
 
 #### Scenario: 并发子限额
 
-- **WHEN** 调用方对工具 A 的在途数超过 `perCallerConcurrency`，但总并发未满
+- **WHEN** 调用方对工具 A 的在途数超过 `perCallerConcurrency`，但总并发与工具并发都未满
+- **THEN** 返回 `-32050`，`data.scope = "concurrency_caller"`
+
+#### Scenario: 工具并发子限额
+
+- **WHEN** 工具 A 的在途数超过其 `maxConcurrency`，但全局并发未满
 - **THEN** 返回 `-32050`，`data.scope = "concurrency_tool"`
 
 #### Scenario: 被并发拒绝不烧令牌
