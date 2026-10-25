@@ -96,7 +96,7 @@ private func startRpcServer(rpc: JsonRpcServer, wrap: (HttpContext, () -> Unit) 
         let body = readBody(ctx)
         wrap(ctx, {=>
             match (rpc.handle(body, ctx: JsonRpcContext(http: Some(ctx)))) {
-                case Some(bytes) => ctx.responseBuilder.body(bytes)
+                case Some(value) => ctx.responseBuilder.body(value.toString())
                 case _ => ()
             }
         })

@@ -15,7 +15,6 @@ limitations under the License.
  */
 package fountain::f_jsonrpc.server
 
-import std.collection.HashMap
 import fountain::f_mvc.*
 import fountain::f_mvc.macros.*
 import fountain::f_jsonrpc.base.*
@@ -45,20 +44,14 @@ public class JsonRpcController {
 
     private func dispatch(raw: Array<Byte>, topic: String): Any {
         let http = CurrentHttpContext.instance
-        let meta = HashMap<String, String>()
-        for ((k, _) in http.request.headers) {
-            if (let Some(v) <- http.request.headers.getFirst(k)) {
-                meta.add(k, v)
-            }
-        }
         let endpoint = if (topic.isEmpty()) {
             JsonRpcProtocol.PATH
         } else {
             '${JsonRpcProtocol.PATH}/${topic}'
         }
-        let ctx = JsonRpcContext(http: Some(http), endpoint: endpoint, topic: topic, meta: meta)
+        let ctx = JsonRpcContext(http: Some(http), endpoint: endpoint, topic: topic)
         match (server.handle(raw, ctx: ctx)) {
-            case Some(bytes) => bytes
+            case Some(value) => value
             case None => ()
         }
     }

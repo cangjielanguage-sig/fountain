@@ -81,7 +81,7 @@ class JsonRpcMacro_test {
         let body = '{"jsonrpc":"2.0","id":1,"method":"${method}","params":${params}}'
         let ctx = JsonRpcContext(topic: topic)
         let bytes = JsonRpcRegistry.server().handle(body.unsafeBytes(), ctx: ctx).getOrThrow()
-        JsonValue.fromBytes(bytes).asObject()
+        bytes.asObject()
     }
 
     static func errorCode(obj: JsonObject): Int64 {

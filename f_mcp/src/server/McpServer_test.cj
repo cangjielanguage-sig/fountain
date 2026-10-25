@@ -88,8 +88,7 @@ class McpServer_test {
 
     static func call(srv: McpServer, method: String, params: String): JsonObject {
         let body = '{"jsonrpc":"2.0","id":1,"method":"${method}","params":${params}}'
-        let bytes = srv.jsonRpcServer().handle(body.unsafeBytes(), ctx: JsonRpcContext()).getOrThrow()
-        JsonValue.fromBytes(bytes).asObject()
+        srv.jsonRpcServer().handle(body.unsafeBytes(), ctx: JsonRpcContext()).getOrThrow().asObject()
     }
 
     static func metaParams(extra: String): String {

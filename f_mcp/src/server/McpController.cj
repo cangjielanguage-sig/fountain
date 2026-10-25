@@ -52,15 +52,9 @@ public class McpController {
     @JsonRpcMapping[path: '/mcp']
     public func handle(@RequestBody raw: Array<Byte>): Any {
         let http = CurrentHttpContext.instance
-        let meta = HashMap<String, String>()
-        for ((key, _) in http.request.headers) {
-            if (let Some(value) <- http.request.headers.getFirst(key)) {
-                meta.add(key, value)
-            }
-        }
-        let ctx = JsonRpcContext(http: Some(http), endpoint: McpProtocol.PATH, meta: meta)
+        let ctx = JsonRpcContext(http: Some(http), endpoint: McpProtocol.PATH)
         match (server.jsonRpcServer().handle(raw, ctx: ctx)) {
-            case Some(bytes) => bytes
+            case Some(value) => value
             case None => ()
         }
     }
