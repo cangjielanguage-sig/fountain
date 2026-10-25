@@ -102,6 +102,20 @@ public class McpConfig {
             throw IllegalArgumentException(
                 "${RATE_LIMIT} accepts at most ${FIELDS.size} comma separated fields, got ${parts.size}")
         }
+        // 尾部空段等价于省略；中间空段无法区分「省略」与「写错」，必须报错
+        for (index in 0..parts.size) {
+            if (!parts[index].trimAscii().isEmpty()) {
+                continue
+            }
+            var later = index + 1
+            while (later < parts.size) {
+                if (!parts[later].trimAscii().isEmpty()) {
+                    throw IllegalArgumentException(
+                        "invalid ${RATE_LIMIT}.${FIELDS[index]}: empty field before '${parts[later].trimAscii()}'")
+                }
+                later++
+            }
+        }
         RateLimitPolicy(perCallerRpm: valueAt(parts, 0), perCallerToolRpm: valueAt(parts, 1),
             perToolRpm: valueAt(parts, 2), maxConcurrency: valueAt(parts, 3), perCallerConcurrency: valueAt(parts, 4))
     }
