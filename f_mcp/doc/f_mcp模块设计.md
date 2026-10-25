@@ -2436,4 +2436,4 @@ ResultStoreOptions(
 | SSE | 空闲阻塞等待（Condition），15 秒心跳，字符串用 `StringBuilder` |
 | 客户端 | `McpClientOptions` 含 `headers` / `maxResponseBytes` / `keepAlive` / `retryOnConnectFailure`；版本协商加锁 |
 | 配置 | `mcp_rateLimit` 拒绝负数/小数/未知键/超上限；`mcp_trustForwardedFor` 只接受 true/false |
-| 注册时机 | `@Mcp` 不再在模块加载期 build，首次 `server()` 懒构建 |
+| 注册时机 | `@Mcp` 在加载期注册后调用 `McpRegistry.build()`；`build()` 可重复调用，每次按累计注册重建，新注册项立即生效 |

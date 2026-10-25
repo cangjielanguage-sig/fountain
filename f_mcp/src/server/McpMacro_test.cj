@@ -117,6 +117,17 @@ public class MacroMcpService {
     }
 }
 
+/** 第二个 `@Mcp` 类：验证多次展开时后一次的 build 不会丢掉前一个类的注册项。 */
+@Mcp['macro-server']
+public class MacroSecondService {
+    public init() {}
+
+    @McpToolMeta[name: 'macro.second', description: 'second macro class']
+    public func second(req: MacroSearchRequest): CallToolResult {
+        CallToolResult.text('second:${req.query}')
+    }
+}
+
 @Test
 class McpMacro_test {
     static let META = '"${McpProtocol.META}":{"${McpProtocol.KEY_PROTOCOL_VERSION}":"${McpProtocol.VERSION}"}'
@@ -164,6 +175,24 @@ class McpMacro_test {
             }
         }
         @Assert(true, fallback)
+    }
+
+    /** 两个 @Mcp 类各自 build 一次，前一个类的工具不能丢。 */
+    @TestCase
+    public func testMultipleMcpClasses(): Unit {
+        var first = false
+        var second = false
+        for (tool in call('tools/list', '')['result'].asObject()['tools'].asArray()) {
+            let name = tool.asObject()['name'].asString().value
+            if (name == 'macro.search') {
+                first = true
+            }
+            if (name == 'macro.second') {
+                second = true
+            }
+        }
+        @Assert(true, first)
+        @Assert(true, second)
     }
 
     @TestCase

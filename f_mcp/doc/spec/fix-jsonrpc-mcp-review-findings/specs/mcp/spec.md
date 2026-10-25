@@ -376,7 +376,7 @@ stdio 传输 MUST：
 
 `@Mcp` 宏 MUST 按注解**末段名**匹配 `McpToolMeta` / `McpResourceMeta` / `McpPromptMeta`，支持 `@fountain::f_mcp::server::McpToolMeta[...]` 等全限定写法。
 
-`@Mcp` 展开 MUST NOT 在模块加载期调用 `McpRegistry.build()`；构建 MUST 延迟到首次 `McpRegistry.server()`（即首次 HTTP 请求 / controller 实例化）。因此「`@Mcp` 类 + `main()` 里 `McpRegistry.configure(...)`」MUST 可以共存。
+`@Mcp` 展开 MUST 在模块加载期完成注册后调用 `McpRegistry.build()`。`McpRegistry.build()` MUST 可重复调用：每次按当前累计的注册重建 `McpServer`，新注册的 tool / resource / prompt MUST 立即生效，且 MUST NOT 抛出「已初始化」类错误。因此「多个 `@Mcp` 类」以及「`@Mcp` 类 + `main()` 里 `McpRegistry.configure(...)`」MUST 可以共存。
 
 同一方法名被重复注册 MUST 在编译期报错（与 `@JsonRpc` 一致），MUST NOT 静默跳过第二个。
 
@@ -385,10 +385,15 @@ stdio 传输 MUST：
 - **WHEN** 方法标注 `@fountain::f_mcp::server::McpToolMeta[name: 'x']`
 - **THEN** 该工具被注册，`tools/list` 可见
 
+#### Scenario: 多个 @Mcp 类
+
+- **WHEN** 工程里有两个 `@Mcp` 类，各自声明工具
+- **THEN** 启动不抛异常，两个类的工具都出现在 `tools/list`
+
 #### Scenario: 注解与手工注册共存
 
 - **WHEN** 工程里有一个 `@Mcp` 类，`main()` 里再调用 `McpRegistry.configure({b => b.tool(...)})`
-- **THEN** 启动不抛 `McpRegistry is already initialized`，两个来源的工具都出现
+- **THEN** 启动不抛异常，两个来源的工具都出现
 
 #### Scenario: 重复工具名
 
