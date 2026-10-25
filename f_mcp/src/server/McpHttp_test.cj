@@ -164,9 +164,21 @@ private func callerTool(): McpTool {
         .handler({ctx, _ => CallToolResult.text(ctx.callerId)}).build()
 }
 
-private func toolCallBody(name: String): String {
+private func pingTool(): McpTool {
+    McpTool.builder('ping').handler({_, _ => CallToolResult.text('pong')}).build()
+}
+
+private func toolCallBody(name: String, version!: String = McpProtocol.VERSION): String {
     '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"${McpProtocol.META}":' +
-        '{"${McpProtocol.KEY_PROTOCOL_VERSION}":"${McpProtocol.VERSION}"},' + '"name":"${name}","arguments":{}}}'
+        '{"${McpProtocol.KEY_PROTOCOL_VERSION}":"${version}"},' + '"name":"${name}","arguments":{}}}'
+}
+
+private func errorOf(response: String): JsonObject {
+    JsonValue.fromStr(bodyOf(response)).asObject()['error'].asObject()
+}
+
+private func codeOf(response: String): Int64 {
+    errorOf(response)['code'].asInt().toInt64()
 }
 
 @Test
@@ -232,6 +244,68 @@ class McpHttp_test {
                 let hex = (c >= r'0' && c <= r'9') || (c >= r'a' && c <= r'f')
                 @Assert(true, hex)
             }
+        } finally {
+            http.closeGracefully()
+        }
+    }
+
+    /** 头与 body 不一致优先 `-32602`，`data.header` / `data.body` 为原值。 */
+    @TestCase
+    public func testHeaderBodyVersionMismatchIsInvalidParams(): Unit {
+        let server = McpServer.builder().tool(pingTool()).build()
+        let (port, http) = startMcpHttp(server)
+        try {
+            let response = mcpRequest(port, 'MCP-Protocol-Version: ${McpProtocol.VERSION}\r\n',
+                toolCallBody('ping', version: '2025-11-25'))
+            @Assert(McpProtocol.INVALID_PARAMS, codeOf(response))
+            let data = errorOf(response)['data'].asObject()
+            @Assert(McpProtocol.VERSION, data['header'].asString().value)
+            @Assert('2025-11-25', data['body'].asString().value)
+        } finally {
+            http.closeGracefully()
+        }
+    }
+
+    /** 头版本不受支持 → `-32022`，与 body 是否合法无关。 */
+    @TestCase
+    public func testUnsupportedHeaderVersionIsRejected(): Unit {
+        let server = McpServer.builder().tool(pingTool()).build()
+        let (port, http) = startMcpHttp(server)
+        try {
+            let response = mcpRequest(port, 'MCP-Protocol-Version: 1900-01-01\r\n', toolCallBody('ping'))
+            @Assert(McpProtocol.UNSUPPORTED_VERSION, codeOf(response))
+            @Assert('1900-01-01', errorOf(response)['data'].asObject()['requested'].asString().value)
+        } finally {
+            http.closeGracefully()
+        }
+    }
+
+    /** 头与 body 都不受支持时，先报头（校验顺序：头受支持性优先于一致性）。 */
+    @TestCase
+    public func testUnsupportedHeaderWinsOverMismatch(): Unit {
+        let server = McpServer.builder().tool(pingTool()).build()
+        let (port, http) = startMcpHttp(server)
+        try {
+            let response = mcpRequest(port, 'MCP-Protocol-Version: 1900-01-01\r\n',
+                toolCallBody('ping', version: '2025-11-25'))
+            @Assert(McpProtocol.UNSUPPORTED_VERSION, codeOf(response))
+            @Assert('1900-01-01', errorOf(response)['data'].asObject()['requested'].asString().value)
+        } finally {
+            http.closeGracefully()
+        }
+    }
+
+    /** 头缺失：只按 body 校验——body 合法受理，body 非法 `-32022`。 */
+    @TestCase
+    public func testMissingHeaderFallsBackToBody(): Unit {
+        let server = McpServer.builder().tool(pingTool()).build()
+        let (port, http) = startMcpHttp(server)
+        try {
+            let accepted = mcpRequest(port, '', toolCallBody('ping'))
+            @Assert(true, statusLineOf(accepted).contains('200'))
+            let rejected = mcpRequest(port, '', toolCallBody('ping', version: '2025-11-25'))
+            @Assert(McpProtocol.UNSUPPORTED_VERSION, codeOf(rejected))
+            @Assert('2025-11-25', errorOf(rejected)['data'].asObject()['requested'].asString().value)
         } finally {
             http.closeGracefully()
         }

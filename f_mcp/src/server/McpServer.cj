@@ -769,8 +769,14 @@ public class McpServer {
     /**
      * 校验并剥离 `params._meta`。
      *
-     * 先校验 body 里的版本，再校验 `MCP-Protocol-Version` 请求头（存在时）：
-     * 头版本不受支持 → `-32022`；头与 body 不一致 → `-32602`。
+     * 校验顺序固定为「头受支持性 → 头与 body 一致性 → body 受支持性」：
+     * 先判 body 会让「头与 body 不一致」在 body 非法时提前变成 `-32022`，
+     * `-32602` 分支永远不可达。
+     *
+     * - `MCP-Protocol-Version` 头存在且不受支持 → `-32022`；
+     * - 头与 body 版本不一致 → `-32602`（`data.header` / `data.body` 为原值）；
+     * - body 版本不受支持 → `-32022`；
+     * - 头缺失时只按 body 校验（兼容不带该头的客户端）。
      */
     private func requireMeta(ctx: JsonRpcContext, params: ?JsonValue): JsonObject {
         let obj = match (params) {
@@ -795,9 +801,6 @@ public class McpServer {
         if (version.isEmpty()) {
             throw McpException(McpProtocol.INVALID_PARAMS, 'missing params._meta protocolVersion')
         }
-        if (version != McpProtocol.VERSION) {
-            throw unsupportedVersion(version)
-        }
         match (ctx.http) {
             case Some(http) => match (http.request.headers.getFirst('MCP-Protocol-Version')) {
                     case Some(header) =>
@@ -817,6 +820,9 @@ public class McpServer {
                     case _ => ()
                 }
             case _ => ()
+        }
+        if (version != McpProtocol.VERSION) {
+            throw unsupportedVersion(version)
         }
         obj.remove(McpProtocol.META)
         obj
