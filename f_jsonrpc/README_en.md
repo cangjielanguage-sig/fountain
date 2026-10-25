@@ -124,7 +124,8 @@ The module ships `JsonRpcController`, which registers two routes:
 | `POST /rpc/knowledge` + `{"method":"knowledge.search"}` | matches |
 | `POST /rpc` + `{"method":"knowledge.search"}` | matches (`/rpc` does not filter) |
 | `POST /rpc/knowledge` + `{"method":"search"}` | `-32601` (no prefix completion) |
-| `POST /rpc/other` + `{"method":"knowledge.search"}` | `-32601` (different namespace) |
+| `POST /rpc/other` + `{"method":"knowledge.search"}` | `-32004` (`other` has no methods) |
+| `POST /rpc/knowledge` + `{"method":"crm.list"}` (with `crm` registered) | `-32601` (method belongs to another namespace) |
 | `POST /rpc/unknown` + any method | `-32004` (no method in that namespace) |
 
 The namespace is derived from the method name: everything before the first `.`. Methods without a dot belong to the default namespace and can only be called through `/rpc`.
@@ -142,8 +143,9 @@ public class MyRpcController {
     @JsonRpcMapping[path: '/my-rpc']
     public func handle(@RequestBody raw: Array<Byte>): Any {
         let ctx = CurrentHttpContext.instance
+        // handle returns a JsonValue; f_mvc renders it as application/json
         match (server.handle(raw, ctx: JsonRpcContext(http: Some(ctx)))) {
-            case Some(bytes) => bytes
+            case Some(value) => value
             case None => ()
         }
     }
@@ -152,7 +154,7 @@ public class MyRpcController {
 
 ### 3. Parameter validation
 
-`JsonRpcMethodMeta.paramsSchema` takes a JSON Schema `JsonObject`. `params` is validated with `JsonSchemaValidator.validate` before the handler runs; failure returns `-32602` and `error.data` is `ValidationResult.toJson()`.
+`JsonRpcMethodMeta.paramsSchema` takes a JSON Schema `JsonObject`. At registration time it is checked and its `pattern`s are pre-compiled by `f_data.CompiledSchema.compile` (a broken schema fails at startup); requests reuse the compiled result. Failure returns `-32602` with `error.data = ValidationResult.toJson()`.
 
 ```cangjie
 let schema = JsonObject()
@@ -171,10 +173,13 @@ throw JsonRpcException(-32020, 'Knowledge base not found', data: JsonString('kb-
 | Range | Owner |
 |---|---|
 | `-32700 ~ -32603` | JSON-RPC 2.0 standard errors |
-| `-32001 ~ -32004` | reserved by f_jsonrpc (Server error / Timeout / Overloaded / Unknown topic) |
+| `-32001` | reserved, never produced by the current implementation |
+| `-32002` | timeout (only when `timeout` is configured explicitly) |
+| `-32003` | batch size exceeded (batches only, `data = {limit, size}`) |
+| `-32004` | unknown topic (no method under `/rpc/{topic}`) |
 | `-32020 ~ -32099` | available for applications |
 
-Except for oversized bodies (HTTP 413) and framework-level failures, protocol errors always use HTTP 200 with the error object in the body.
+Except for oversized bodies (HTTP 413) and framework-level failures, protocol errors always use HTTP 200 with the error object in the body. The response `Content-Type` is always `application/json` (rendered by f_mvc from a `JsonValue`); the request `Accept` header is no longer copied into it.
 
 ### 5. Timeouts
 
@@ -182,7 +187,11 @@ Except for oversized bodies (HTTP 413) and framework-level failures, protocol er
 JsonRpcMethodMeta(name: 'slow', handler: ..., timeout: Duration.millisecond * 200)
 ```
 
-On timeout the client receives `-32002`, but **the handler is not cancelled** (Cangjie has no preemptive cancellation). Poll `ctx.isExpired()` in long loops and keep side-effecting operations idempotent.
+- **No timeout by default**: without `@JsonRpcMeta`, or with an empty second argument, the handler runs inline on the
+  request thread, so request-scoped ThreadLocals such as `CurrentHttpContext` work
+- An explicit timeout spawns a worker thread and restores the context with `CurrentHttpContext.scoped`
+- On timeout the client receives `-32002`, but **the handler is not cancelled** (Cangjie has no preemptive
+  cancellation). Poll `ctx.isExpired()` in long loops and keep side-effecting operations idempotent.
 
 ## Client
 
@@ -200,12 +209,55 @@ client.close()
 - Request: `POST` + `Content-Type: application/json; charset=utf-8`, compact serialization
 - One `Client` instance reuses the connection pool; no retries by default
 - A server `error` throws `JsonRpcException`; only transport failures throw `IOException`
+- **Retry boundary**: only connect/send failures (`JsonRpcConnectException`) are retried up to
+  `retryOnConnectFailure`; read-stage failures are never retried (the server may have executed the call)
+- **Response cap**: `Content-Length` is checked first, then bytes are counted while streaming; exceeding
+  `maxResponseBytes` stops reading and closes the connection immediately
+- A batch rejected as a whole (`-32003` or `-32600`) throws `JsonRpcException` carrying the server `code` / `data`;
+  a non-array / non-error response yields `-32603`
+- A non-numeric `error.code` or an unparsable body is wrapped into `JsonRpcException`; `JsonException` never leaks
+
+### Client options
+
+```cangjie
+let client = JsonRpcClient('http://127.0.0.1:8080/rpc', opts: ClientOptions(
+    timeout: Duration.second * 10,            // default 30s
+    headers: headers,                         // extra headers, e.g. Authorization
+    maxResponseBytes: 4 * 1024 * 1024,        // default 8 MiB; exceeding it fails fast
+    keepAlive: false,                         // default true; false sends Connection: close
+    retryOnConnectFailure: 2                  // default 0; connect failures only
+))
+```
+
+### Batch and body limits
+
+| Limit | Default | Configure | Response |
+|---|---|---|---|
+| Batch size `maxBatchSize` | 100 | `JsonRpcServer.builder().maxBatchSize(n)` | `-32003`, `data = {limit, size}` |
+| Body bytes `maxBodyBytes` | `MVCConfig.maxRequestBodySize` (2 MiB) | `maxBodyBytes(n)` or MVC config | `-32600` + HTTP 413, `data = {limit}` |
+
+An explicit `maxBodyBytes(n)` wins; otherwise the MVC config is read per request, so a config loaded after the
+server is built still takes effect.
+
+Custom transports (stdio / test doubles) implement `JsonRpcTransport` and are injected with
+`JsonRpcClient(transport, opts: ...)`.
 
 ## Out of scope
 
 - SSE / WebSocket or any other transport
 - `$ref` / `allOf` / `anyOf` / `oneOf` / `not` resolution (schema validation fails closed)
 - UTF-8 only; no charset detection
+
+
+## Migration (1.3.17 → next)
+
+| Change | Impact | Migration |
+|---|---|---|
+| Default timeout 500 ms → none | Calls that relied on the default no longer time out | Set `@JsonRpcMeta['desc', '5s']` explicitly |
+| `JsonRpcServer.handle` returns `?JsonValue` | Callers asserting on bytes fail to compile | Use `value.toString().unsafeBytes()` |
+| `JsonRpcContext.meta` removed | Code reading it fails to compile | Read `ctx.http?.request.headers.getFirst(...)` |
+| `JsonRpcMethodMeta.inputSchema` / `outputSchema` removed | Constructor calls fail to compile | Take it from `McpTool` |
+| A non-numeric `error.code` no longer throws `JsonException` | Behaviour changes for that catch | Catch `JsonRpcException` |
 
 ## Testing
 

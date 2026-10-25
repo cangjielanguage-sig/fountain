@@ -31,6 +31,7 @@ public class JsonRpcProtocol {
     public static const INTERNAL_ERROR = -32603
 
     // —— 框架保留段（业务不要占用）——
+    /** 保留：当前实现不产生这个码（只为兼容客户端的老分支保留常量）。 */
     public static const SERVER_ERROR = -32001
     public static const TIMEOUT = -32002
     public static const OVERLOADED = -32003

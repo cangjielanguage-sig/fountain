@@ -1,5 +1,8 @@
 # f_mcp —— 仓颉 MCP 客户端 / 服务端 SDK 设计
 
+> **以实现为准**：本文档描述设计意图，任何与源码不一致的地方以 `f_mcp/src` 为准。
+> 关键差异见文末「文档与实现对照」，最近一次对齐：`fix-jsonrpc-mcp-review-findings`。
+>
 > 版本 **v1.0** ｜ 2026-10-24 ｜ 状态：待评审
 >
 > 定位：fountain 模块。**MCP 客户端实现**为主，同时提供**构建 MCP 服务**的 API。
@@ -56,7 +59,7 @@
 > - **大结果一律转 `resource_link`**（文本也转，不再"文本截断、二进制转 link"）；
 >   新增 `publicBaseUrl` 与临时结果资源（5.6.6）
 > - **URI 规则**：完整 URI 只接受 `http` / `https` / `ftp`；`/path` 由 `publicBaseUrl` 补全，`file://` 等一律 `-32602`（5.6.1）
-> - **限流器用 `f_concurrent` 的 5 种实现**：`token-bucket`（默认）/ `leaking-bucket` / `sliding-window` / `any-moment` / `unlimited`，由 `mcp_rateLimitBackend` 选择（7.2.6 / 7.2.7）
+> - **限流器用 `f_concurrent` 的 4 种实现**：`token-bucket`（默认）/ `leaking-bucket` / `sliding-window` / `unlimited`，由 `mcp_rateLimitBackend` 选择（7.2.6 / 7.2.7）；`any-moment` 已移除
 >
 > v0.2 → v0.3（七项决策落定，补上 v0.2 遗留的待确认）：
 >
@@ -1282,18 +1285,17 @@ put 失败时：
 **没有写死的魔数。** 下面每一项都是 `public var`，通过 `Builder.resultStore()` 传入。
 
 ```cangjie
-public class ResultStoreOptions {
-    // —— 容量与生命周期 ——
-    /// 起始容量。**运行期会被自适应调整**，不是固定上限
-    public var maxEntries: Int64 = 256
-    /// 字节硬上限。**不自动调**（内存安全参数，见 5.6.6.5.1）
-    public var maxBytes: Int64 = 256 * 1024 * 1024
-    /// 过期时间。**不自动调**（业务语义）
-    public var ttl: Duration = Duration.minute * 10
-
-    // —— 自适应开关 ——
-    /// 默认开启；传 None 退回固定容量
-    public var adaptive: ?AdaptivePolicy = AdaptivePolicy()
+/// 实际实现（8 个字段）：自适应参数平铺在同一个结构里，没有独立的 AdaptivePolicy 类型
+public struct ResultStoreOptions {
+    public let maxEntries!: Int64 = 256            // 起始容量，运行期可被自适应调整
+    public let maxBytes!: Int64 = 256 * 1024 * 1024 // 字节硬上限，不自动调
+    public let ttlMillis!: Int64 = 10 * 60 * 1000   // 过期时间，不自动调
+    public let adaptive!: Bool = true               // false 退回固定容量
+    public let windowMillis!: Int64 = 5 * 60 * 1000 // 评估窗口
+    public let rejectRateThreshold!: Float64 = 0.01 // 拒绝率阈值
+    public let floor!: Int64 = 128                  // 可调下界
+    public let ceiling!: Int64 = 1024               // 可调上界
+    public let shrinkConfirmWindows!: Int64 = 3     // 连续多少个空闲窗口才缩容
 }
 
 public class AdaptivePolicy {
@@ -1805,10 +1807,8 @@ public class RateLimitPolicy {
     public var perToolRpm: Int64 = 6000
     /// 单个调用方的并发上限（在途请求数）
     public var perCallerConcurrency: Int64 = 8
-    /// 单次结果大小阈值，超过转 resource_link（5.6.6）
-    public var maxResultBytes: Int64 = 1024 * 1024
-    /// 超限行为
-    public var onExceed: RateLimitAction = RateLimitAction.Reject
+    // 注意：`maxResultBytes` 不在这里，它属于 `McpTool`（单工具覆盖），
+    // `RateLimitPolicy` 只表达限流维度。
 }
 
 /// 第二层：服务级配置（Builder.rateLimit）
@@ -2198,7 +2198,6 @@ public class McpServer {
 | `token-bucket`（默认） | `TokenBucketRateLimiter` | 每分钟 `rpm`，允许突发 |
 | `leaking-bucket` | `LeakingBucketRateLimiter` | 每分钟漏出 `rpm` |
 | `sliding-window` | `SlidingWindowRateLimiter` | 1 分钟滑动窗口 |
-| `any-moment` | `AnyMomentRateLimiter` | 瞬时并发上限，不是每分钟配额 |
 | `unlimited` | `UnlimitedRateLimiter` | 不限制 |
 
 名字大小写与 `-` / `_` 不敏感；未知值在构建时抛 `IllegalArgumentException`。
@@ -2448,3 +2447,23 @@ ResultStoreOptions(
 | 统计快照的差值算法 | 用"当前累计 − 上次快照"，**不清零**。清零会在多线程并发时丢数 |
 | `maxEntries` 的读 | 被多个线程读（`put` 的判断、`get` 的占用率计算）。用 `AtomicInt64` 或接受短暂不一致——**不要加锁**，否则热路径变临界区 |
 | debug 日志的开销 | 每 5 分钟一条、单行拼接，成本可忽略。但**不要在 `get` 热路径上打**——只在评估时打 |
+
+
+---
+
+## 文档与实现对照（fix-jsonrpc-mcp-review-findings）
+
+| 主题 | 实现（以此为准） |
+|---|---|
+| 能力声明 | `resources.subscribe = false`（未实现 `resources/subscribe`）；`prompts` 保留 |
+| 错误码 | `RESOURCE_NOT_FOUND = -32040`（`-32002` 留给 f_jsonrpc 超时）；订阅者超限用 `-32003` |
+| 多轮 | `inputResponses` / `requestState` 贯通 `McpToolContext` → `CallToolResult` → `callToolAuto` |
+| 截断 | 按 UTF-8 rune 边界；保留 `isError` / `resultType` / `inputRequired` / `requestState` + `data.truncated` |
+| 限流 | 三层逐字段 merge；顺序 = 并发优先；拒绝 429 + `Retry-After`；`-1/0/>0` 语义 |
+| 后端 | 4 种（移除 `any-moment`）；`LimiterPool` 有界 + TTL，淘汰时 `close()` |
+| 并发闸门 | 条目化，`release` 只减计数，空闲 TTL 回收 |
+| 订阅 | 上限 1024 / 队列 256 / detached 60s；断线与 30 分钟都只 detach，可重连 |
+| SSE | 空闲阻塞等待（Condition），15 秒心跳，字符串用 `StringBuilder` |
+| 客户端 | `McpClientOptions` 含 `headers` / `maxResponseBytes` / `keepAlive` / `retryOnConnectFailure`；版本协商加锁 |
+| 配置 | `mcp_rateLimit` 拒绝负数/小数/未知键/超上限；`mcp_trustForwardedFor` 只接受 true/false |
+| 注册时机 | `@Mcp` 不再在模块加载期 build，首次 `server()` 懒构建 |
