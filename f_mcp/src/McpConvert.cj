@@ -68,28 +68,28 @@ public class McpConvert {
     }
 
     /** resource 返回 `ArrayList<ResourceContent>`：原样使用。 */
-    public static func resourceContents(uri: String, value: ArrayList<ResourceContent>): ArrayList<ResourceContent> {
+    public static func resourceContents(value: ArrayList<ResourceContent>): ArrayList<ResourceContent> {
         value
     }
 
     /** resource 返回 `String`：一段 `text/plain` 内容。 */
-    public static func resourceContents(uri: String, value: String): ArrayList<ResourceContent> {
+    public static func resourceContents(value: String): ArrayList<ResourceContent> {
         let list = ArrayList<ResourceContent>()
-        list.add(ResourceContent(uri, Some('text/plain'), Some(value), None))
+        list.add(ResourceContent('', Some('text/plain'), Some(value), None))
         list
     }
 
     /** resource 返回 `Unit`：一段空文本内容。 */
-    public static func resourceContents(uri: String, value: Unit): ArrayList<ResourceContent> {
+    public static func resourceContents(value: Unit): ArrayList<ResourceContent> {
         let list = ArrayList<ResourceContent>()
-        list.add(ResourceContent(uri, Some('text/plain'), Some(''), None))
+        list.add(ResourceContent('', Some('text/plain'), Some(''), None))
         list
     }
 
     /** resource 返回其它可转 JSON 的值：一段 `application/json` 内容。 */
-    public static func resourceContents<T>(uri: String, value: T): ArrayList<ResourceContent> where T <: ToData {
+    public static func resourceContents<T>(value: T): ArrayList<ResourceContent> where T <: ToData {
         let list = ArrayList<ResourceContent>()
-        list.add(ResourceContent(uri, Some('application/json'), Some(toJson(value)), None))
+        list.add(ResourceContent('', Some('application/json'), Some(toJson(value)), None))
         list
     }
 

@@ -39,7 +39,7 @@ public class McpRegistry {
     /**
      * 读取 `T.name` 上的 `@McpToolMeta`；函数不存在或没有注解时返回 `None`。
      */
-    public static func getToolMeta<T, R>(name: String, args: Array<TypeInfo>): ?McpToolMeta where T <: Object {
+    public static func getToolMeta<T>(name: String, args: Array<TypeInfo>): ?McpToolMeta where T <: Object {
         let function = try {
             TypeInfo.of<T>().getInstanceFunction(name, args)
         } catch (_: InfoNotFoundException) {
@@ -49,8 +49,7 @@ public class McpRegistry {
     }
 
     /** 读取 `T.name` 上的 `@McpResourceMeta`；函数不存在或没有注解时返回 `None`。 */
-    public static func getResourceMeta<T, R>(name: String, args: Array<TypeInfo>,
-        fn: (McpResourceContext, Array<JsonValue>) -> R): ?McpResourceMeta where T <: Object {
+    public static func getResourceMeta<T>(name: String, args: Array<TypeInfo>): ?McpResourceMeta where T <: Object {
         let function = try {
             TypeInfo.of<T>().getInstanceFunction(name, args)
         } catch (_: InfoNotFoundException) {
@@ -60,7 +59,7 @@ public class McpRegistry {
     }
 
     /** 读取 `T.name` 上的 `@McpPromptMeta`；函数不存在或没有注解时返回 `None`。 */
-    public static func getPromptMeta<T, R>(name: String, args: Array<TypeInfo>, fn: (Array<JsonValue>) -> R): ?McpPromptMeta where T <: Object {
+    public static func getPromptMeta<T>(name: String, args: Array<TypeInfo>): ?McpPromptMeta where T <: Object {
         let function = try {
             TypeInfo.of<T>().getInstanceFunction(name, args)
         } catch (_: InfoNotFoundException) {
@@ -72,8 +71,8 @@ public class McpRegistry {
     /**
      * 注册 tool。函数必须恰好一个参数，参数类型用于生成 `inputSchema`。
      */
-    public static func registerToolMeta<T, R>(name: String, meta: McpToolMeta, args: Array<TypeInfo>,
-        fn: (Array<JsonValue>) -> R): Unit where T <: Object {
+    public static func registerToolMeta<T>(name: String, meta: McpToolMeta, args: Array<TypeInfo>,
+        fn: (JsonValue) -> CallToolResult): Unit where T <: Object {
         if (args.size != 1) {
             throw McpException(McpProtocol.INTERNAL_ERROR,
                 "tool '${name}' must have exactly one parameter, got ${args.size}")
@@ -97,13 +96,7 @@ public class McpRegistry {
                         case obj: JsonObject => obj
                         case _ => JsonObject()
                     }
-                    let raw = ArrayList<JsonValue>()
-                    raw.add(payload)
-                    match (fn(raw.toArray())) {
-                        case result: CallToolResult => result
-                        case _ => throw McpException(McpProtocol.INTERNAL_ERROR,
-                            "tool '${toolName}' must return CallToolResult")
-                    }
+                    fn(payload)
             }
         ).build()
         configure({b => b.tool(tool)})
@@ -112,11 +105,11 @@ public class McpRegistry {
     /**
      * 注册 resource。函数必须没有参数；`uri` 不能为空。
      *
-     * 处理器返回 `ArrayList<ResourceContent>` 或由 `McpConvert.resourceContents` 包装后的内容；
+     * 处理器返回 `ArrayList<ResourceContent>`；内容的 `uri` 为空时用实际请求的 `ctx.uri` 补全，
      * `meta.mediaType` 非空时覆盖内容里的 `mimeType`。
      */
-    public static func registerResourceMeta<T, R>(name: String, meta: McpResourceMeta, args: Array<TypeInfo>,
-        fn: (McpResourceContext, Array<JsonValue>) -> R): Unit where T <: Object {
+    public static func registerResourceMeta<T>(name: String, meta: McpResourceMeta, args: Array<TypeInfo>,
+        fn: () -> ArrayList<ResourceContent>): Unit where T <: Object {
         if (args.size != 0) {
             throw McpException(McpProtocol.INTERNAL_ERROR,
                 "resource '${name}' must have no parameters, got ${args.size}")
@@ -134,21 +127,15 @@ public class McpRegistry {
         if (!meta.mediaType.isEmpty()) {
             builder.mimeType(meta.mediaType)
         }
-        let resource = builder.handler({
-            ctx => match (fn(ctx, Array<JsonValue>())) {
-                case result: ArrayList<ResourceContent> => withMediaType(result, meta.mediaType)
-                case _ => throw McpException(McpProtocol.INTERNAL_ERROR,
-                    "resource '${resourceName}' must return ArrayList<ResourceContent>")
-            }
-        }).build()
+        let resource = builder.handler({ctx => withContext(fn(), ctx.uri, meta.mediaType)}).build()
         configure({b => b.resource(resource)})
     }
 
     /**
      * 注册 prompt。函数参数即 prompt 参数，`@McpPromptArg` 提供描述与是否必填。
      */
-    public static func registerPromptMeta<T, R>(name: String, meta: McpPromptMeta, args: Array<TypeInfo>,
-        fn: (Array<JsonValue>) -> R): Unit where T <: Object {
+    public static func registerPromptMeta<T>(name: String, meta: McpPromptMeta, args: Array<TypeInfo>,
+        fn: (Array<JsonValue>) -> ArrayList<PromptMessage>): Unit where T <: Object {
         let function = try {
             TypeInfo.of<T>().getInstanceFunction(name, args)
         } catch (_: InfoNotFoundException) {
@@ -181,11 +168,7 @@ public class McpRegistry {
                                 raw.add(JsonNull.instance)
                         }
                     }
-                    match (fn(raw.toArray())) {
-                        case result: ArrayList<PromptMessage> => result
-                        case _ => throw McpException(McpProtocol.INTERNAL_ERROR,
-                            "prompt '${promptName}' must return ArrayList<PromptMessage>")
-                    }
+                    fn(raw.unsafeData())
             }
         ).build()
         configure({b => b.prompt(prompt)})
@@ -205,13 +188,21 @@ public class McpRegistry {
         server()
     }
 
-    private static func withMediaType(contents: ArrayList<ResourceContent>, mediaType: String): ArrayList<ResourceContent> {
-        if (mediaType.isEmpty()) {
-            return contents
-        }
+    private static func withContext(contents: ArrayList<ResourceContent>, uri: String,
+        mediaType: String): ArrayList<ResourceContent> {
         let normalized = ArrayList<ResourceContent>()
         for (content in contents) {
-            normalized.add(ResourceContent(content.uri, Some(mediaType), content.text, content.blob))
+            let contentUri = if (content.uri.isEmpty()) {
+                uri
+            } else {
+                content.uri
+            }
+            let contentMime = if (mediaType.isEmpty()) {
+                content.mimeType
+            } else {
+                Some(mediaType)
+            }
+            normalized.add(ResourceContent(contentUri, contentMime, content.text, content.blob))
         }
         normalized
     }

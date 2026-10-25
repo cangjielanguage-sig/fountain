@@ -148,9 +148,9 @@ public class KnowledgeService {
 对应的注册 API 也可以直接调用：
 
 ```cangjie
-McpRegistry.getToolMeta<T, R>(name, argTypes)
-McpRegistry.getResourceMeta<T, R>(name, argTypes, fn)
-McpRegistry.getPromptMeta<T, R>(name, argTypes, fn)
+McpRegistry.getToolMeta<T>(name, argTypes)
+McpRegistry.getResourceMeta<T>(name, argTypes)
+McpRegistry.getPromptMeta<T>(name, argTypes)
 McpRegistry.build()
 ```
 

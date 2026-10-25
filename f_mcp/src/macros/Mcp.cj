@@ -124,7 +124,8 @@ private func annotationKinds(decl: Decl): ArrayList<String> {
 private func generateFunction(classToken: Token, f: FuncDecl, index: Int64, kinds: ArrayList<String>): Tokens {
     let fnName = f.identifier.value
     var argTypes = quote([)
-    var conversions = quote()
+    var toolArgs = quote()
+    var promptArgs = quote()
     var count = 0
     for (fp in f.funcParams) {
         let p = match (fp) {
@@ -133,67 +134,64 @@ private func generateFunction(classToken: Token, f: FuncDecl, index: Int64, kind
         }
         if (count > 0) {
             argTypes += `comma`
-            conversions += `comma`
+            toolArgs += `comma`
+            promptArgs += `comma`
         }
         argTypes += quote(TypeInfo.of<$(p.paramType)>())
-        conversions += quote(McpConvert.argument<$(p.paramType)>(__mcp_raw[$count]))
+        toolArgs += quote(McpConvert.argument<$(p.paramType)>(__mcp_raw))
+        promptArgs += quote(McpConvert.argument<$(p.paramType)>(__mcp_raw[$count]))
         count++
     }
     argTypes += quote(])
-    let retType = try {
-        f.declType.toTokens()
-    } catch (_: Exception) {
-        quote(Unit)
-    }
     let nameToken = Token(STRING_LITERAL, fnName)
-    let call = if (count == 0) {
-        quote(__mcp_service.$(f.identifier)())
+    let plainCall = quote(__mcp_service.$(f.identifier)())
+    let toolCall = if (count == 0) {
+        plainCall
     } else {
-        quote(__mcp_service.$(f.identifier)($conversions))
+        quote(__mcp_service.$(f.identifier)($toolArgs))
+    }
+    let promptCall = if (count == 0) {
+        plainCall
+    } else {
+        quote(__mcp_service.$(f.identifier)($promptArgs))
     }
     var generated = quote()
     if (kinds.contains('McpToolMeta')) {
         let toolId = Token(IDENTIFIER, '__mcp_tool_${index}')
         generated += quote(
-            let $toolId = McpRegistry.getToolMeta<$classToken, $retType>($nameToken, $argTypes)
+            let $toolId = McpRegistry.getToolMeta<$classToken>($nameToken, $argTypes)
             if ($toolId.isSome()) {
-                McpRegistry.registerToolMeta<$classToken, CallToolResult>($nameToken, $toolId.getOrThrow(),
-                    $argTypes,
-                    {__mcp_raw: Array<JsonValue> =>
-                        McpConvert.toolResult($call)
+                McpRegistry.registerToolMeta<$classToken>($nameToken, $toolId.getOrThrow(), $argTypes,
+                    {__mcp_raw: JsonValue =>
+                        McpConvert.toolResult($toolCall)
                     })
             }
         )
     }
     if (kinds.contains('McpResourceMeta')) {
         let resourceId = Token(IDENTIFIER, '__mcp_resource_${index}')
+        let resourceCall = if (count == 0) {
+            quote({=> McpConvert.resourceContents($plainCall)})
+        } else {
+            // 参数个数不合法时 registerResourceMeta 会在注册期报错；这里保持闭包可编译。
+            quote({=> ArrayList<ResourceContent>()})
+        }
         generated += quote(
-            let $resourceId = McpRegistry.getResourceMeta<$classToken, $retType>($nameToken, $argTypes,
-                {__mcp_ctx: McpResourceContext, __mcp_raw: Array<JsonValue> =>
-                    $call
-                })
+            let $resourceId = McpRegistry.getResourceMeta<$classToken>($nameToken, $argTypes)
             if ($resourceId.isSome()) {
-                McpRegistry.registerResourceMeta<$classToken, ArrayList<ResourceContent>>($nameToken,
-                    $resourceId.getOrThrow(),
-                    $argTypes,
-                    {__mcp_ctx: McpResourceContext, __mcp_raw: Array<JsonValue> =>
-                        McpConvert.resourceContents(__mcp_ctx.uri, $call)
-                    })
+                McpRegistry.registerResourceMeta<$classToken>($nameToken, $resourceId.getOrThrow(), $argTypes,
+                    $resourceCall)
             }
         )
     }
     if (kinds.contains('McpPromptMeta')) {
         let promptId = Token(IDENTIFIER, '__mcp_prompt_${index}')
         generated += quote(
-            let $promptId = McpRegistry.getPromptMeta<$classToken, $retType>($nameToken, $argTypes,
-                {__mcp_raw: Array<JsonValue> =>
-                    $call
-                })
+            let $promptId = McpRegistry.getPromptMeta<$classToken>($nameToken, $argTypes)
             if ($promptId.isSome()) {
-                McpRegistry.registerPromptMeta<$classToken, ArrayList<PromptMessage>>($nameToken,
-                    $promptId.getOrThrow(), $argTypes,
+                McpRegistry.registerPromptMeta<$classToken>($nameToken, $promptId.getOrThrow(), $argTypes,
                     {__mcp_raw: Array<JsonValue> =>
-                        McpConvert.promptMessages($call)
+                        McpConvert.promptMessages($promptCall)
                     })
             }
         )

@@ -148,9 +148,9 @@ A non-empty `mediaType` in `@McpResourceMeta` overrides the content `mimeType`.
 The registry APIs are also available directly:
 
 ```cangjie
-McpRegistry.getToolMeta<T, R>(name, argTypes)
-McpRegistry.getResourceMeta<T, R>(name, argTypes, fn)
-McpRegistry.getPromptMeta<T, R>(name, argTypes, fn)
+McpRegistry.getToolMeta<T>(name, argTypes)
+McpRegistry.getResourceMeta<T>(name, argTypes)
+McpRegistry.getPromptMeta<T>(name, argTypes)
 McpRegistry.build()
 ```
 
