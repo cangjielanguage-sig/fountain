@@ -30,6 +30,19 @@ public class MacroSearchRequest {
     public init() {}
 }
 
+@DataAssist[props fields]
+public class MacroAnswer {
+    public var total: Int64 = 0
+    public var message: String = ''
+
+    public init() {}
+
+    public init(total: Int64, message: String) {
+        this.total = total
+        this.message = message
+    }
+}
+
 @Mcp
 public class MacroMcpService {
     public init() {}
@@ -44,6 +57,22 @@ public class MacroMcpService {
         CallToolResult.text(req.query)
     }
 
+    /** 返回 `@DataAssist` 对象：文本块 + `structuredContent`。 */
+    @McpToolMeta[name: 'macro.structured']
+    public func structured(req: MacroSearchRequest): MacroAnswer {
+        MacroAnswer(req.query.size, 'ok:${req.query}')
+    }
+
+    /** 返回 `String`：只有文本块。 */
+    @McpToolMeta[name: 'macro.plain']
+    public func plain(req: MacroSearchRequest): String {
+        'plain:${req.query}'
+    }
+
+    /** 返回 `Unit`：空内容。 */
+    @McpToolMeta[name: 'macro.void']
+    public func quiet(req: MacroSearchRequest): Unit {}
+
     /** 没有被 MCP 注解修饰的公共函数应被忽略。 */
     public func helper(ctx: McpToolContext): String {
         ctx.callerId
@@ -57,12 +86,24 @@ public class MacroMcpService {
         list
     }
 
+    /** 返回 `String` 的资源，自动包成 `text/plain` 内容。 */
+    @McpResourceMeta[uri: 'https://example.com/macro-plain', name: 'macro-plain', description: 'plain resource']
+    public func plainDoc(): String {
+        'plain body'
+    }
+
     @McpPromptMeta[name: 'macro-greet', description: 'macro prompt']
     public func greet(name: String, @McpPromptArg[description: 'user name', required: true] title: String):
         ArrayList<PromptMessage> {
         let list = ArrayList<PromptMessage>()
         list.add(PromptMessage('user', ContentBlock.text('${title} ${name}')))
         list
+    }
+
+    /** 返回 `String` 的 prompt，自动包成一条 user 消息；`count` 用于验证入参转换。 */
+    @McpPromptMeta[name: 'macro-typed', description: 'typed prompt']
+    public func typed(name: String, @McpPromptArg[description: 'count', required: true] count: Int64): String {
+        '${name}:${count}'
     }
 }
 
@@ -112,6 +153,52 @@ class McpMacro_test {
         let result = call('tools/call', '"name":"macro.search","arguments":{"query":"hello"}')['result'].asObject()
         let text = result['content'].asArray()[0].asObject()['text'].asString().value
         @Assert('found:hello', text)
+    }
+
+    @TestCase
+    public func testToolStructuredResult(): Unit {
+        let result = call('tools/call', '"name":"macro.structured","arguments":{"query":"hello"}')['result']
+            .asObject()
+        let structured = result['structuredContent'].asObject()
+        @Assert(5, structured['total'].asInt().toInt64())
+        @Assert('ok:hello', structured['message'].asString().value)
+        let text = result['content'].asArray()[0].asObject()['text'].asString().value
+        @Assert(true, text.contains('"total":5'))
+        @Assert(true, text.contains('"message":"ok:hello"'))
+    }
+
+    @TestCase
+    public func testToolStringAndUnitResult(): Unit {
+        let plain = call('tools/call', '"name":"macro.plain","arguments":{"query":"hi"}')['result'].asObject()
+        @Assert('plain:hi', plain['content'].asArray()[0].asObject()['text'].asString().value)
+        @Assert(false, plain.contains('structuredContent'))
+
+        let quiet = call('tools/call', '"name":"macro.void","arguments":{"query":"hi"}')['result'].asObject()
+        @Assert(0, quiet['content'].asArray().size)
+    }
+
+    @TestCase
+    public func testResourceStringResult(): Unit {
+        let read = call('resources/read', '"uri":"https://example.com/macro-plain"')['result'].asObject()
+        let content = read['contents'].asArray()[0].asObject()
+        @Assert('plain body', content['text'].asString().value)
+        @Assert('text/plain', content['mimeType'].asString().value)
+    }
+
+    @TestCase
+    public func testPromptStringResultAndArgError(): Unit {
+        let got = call('prompts/get', '"name":"macro-typed","arguments":{"name":"Ada","count":3}')['result']
+            .asObject()
+        @Assert('Ada:3', got['messages'].asArray()[0].asObject()['content'].asObject()['text'].asString().value)
+
+        var failed = false
+        try {
+            call('prompts/get', '"name":"macro-typed","arguments":{"name":"Ada","count":"abc"}')
+        } catch (e: McpException) {
+            failed = true
+            @Assert(McpProtocol.INVALID_PARAMS, e.code)
+        }
+        @Assert(true, failed)
     }
 
     @TestCase
