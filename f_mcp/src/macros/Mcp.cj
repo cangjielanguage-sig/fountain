@@ -21,20 +21,37 @@ internal import fountain::f_macros.*
 /**
  * `@Mcp`：把类里每个 public 实例函数按注解注册为 tool / resource / prompt。
  *
+ * 属性写法 `@Mcp['kb-server']` 或 `@Mcp[kbServer]`，作为 `serverInfo` 的 name；
+ * 不写属性时 name 为 `fountain-mcp`。version 取配置项 `mcp_version`，默认 `1.0.0`。
+ *
  * 展开结果：
  * - 类上加 `@Bean`
- * - 一个加载期闭包：对每个函数调用 `get*Meta`，有注解时调用对应 `register*Meta`
+ * - 一个加载期闭包：设置 `serverInfo`，对每个函数调用 `get*Meta`，有注解时调用对应 `register*Meta`
  * - 最后调用 `McpRegistry.build()`
  */
 public macro Mcp(input: Tokens): Tokens {
-    expand(input)
+    expand('fountain-mcp', input)
 }
 
 public macro Mcp(attr: Tokens, input: Tokens): Tokens {
-    expand(input)
+    expand(serverNameOf(attr), input)
 }
 
-private func expand(input: Tokens): Tokens {
+private func serverNameOf(attr: Tokens): String {
+    if (attr.size == 0) {
+        return 'fountain-mcp'
+    }
+    if (attr.size == 1) {
+        let kind = attr[0].kind
+        if (kind == IDENTIFIER || kind == STRING_LITERAL || kind == SINGLE_QUOTED_STRING_LITERAL) {
+            return attr[0].value
+        }
+    }
+    diagReport(ERROR, attr, "expect @Mcp[<name>] where <name> is a string literal or identifier", '')
+    'fountain-mcp'
+}
+
+private func expand(serverName: String, input: Tokens): Tokens {
     let (decl, _) = extractFirstDecl(input)
     let klass = match (decl) {
         case c: ClassDecl => c
@@ -50,7 +67,10 @@ private func expand(input: Tokens): Tokens {
     }
     let klassName = klass.identifier.value
     let classToken = Token(IDENTIFIER, klassName)
+    let serverNameToken = Token(STRING_LITERAL, serverName)
     var body = quote(let __mcp_service = lookup<$classToken>())
+    body += `nl`
+    body += quote(McpRegistry.serverInfo($serverNameToken))
     body += `nl`
     let processed = HashSet<String>()
     var index = 0

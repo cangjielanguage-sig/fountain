@@ -108,6 +108,27 @@ class McpServer_test {
     }
 
     @TestCase
+    public func testServerInfoNameAndVersion(): Unit {
+        Config.set([(McpConfig.VERSION, '9.9.9')])
+        try {
+            let explicit = call(McpServer.builder().serverInfo('explicit', '2.0.0').build(),
+                'server/discover', metaParams(''))
+            let info = explicit['result'].asObject()['_meta'].asObject()[McpProtocol.KEY_SERVER_INFO].asObject()
+            @Assert('explicit', info['name'].asString().value)
+            @Assert('2.0.0', info['version'].asString().value)
+
+            let configured = call(McpServer.builder().serverInfo('configured', '').build(),
+                'server/discover', metaParams(''))
+            let configuredInfo = configured['result'].asObject()['_meta'].asObject()[McpProtocol.KEY_SERVER_INFO]
+                .asObject()
+            @Assert('configured', configuredInfo['name'].asString().value)
+            @Assert('9.9.9', configuredInfo['version'].asString().value)
+        } finally {
+            Config.remove(McpConfig.VERSION)
+        }
+    }
+
+    @TestCase
     public func testUnsupportedVersion(): Unit {
         let params = '{"_meta":{"${McpProtocol.KEY_PROTOCOL_VERSION}":"1900-01-01"}}'
         let error = errorOf(call(server(), 'tools/list', params))

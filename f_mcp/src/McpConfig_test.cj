@@ -80,6 +80,26 @@ class McpConfig_test {
     }
 
     @TestCase
+    public func testVersion(): Unit {
+        Config.remove(McpConfig.VERSION)
+        @Assert('1.0.0', McpConfig.version())
+
+        Config.set([(McpConfig.VERSION, ' 2.1.0 ')])
+        try {
+            @Assert('2.1.0', McpConfig.version())
+        } finally {
+            Config.remove(McpConfig.VERSION)
+        }
+
+        Config.set([(McpConfig.VERSION, '   ')])
+        try {
+            @Assert('1.0.0', McpConfig.version())
+        } finally {
+            Config.remove(McpConfig.VERSION)
+        }
+    }
+
+    @TestCase
     public func testAbsentRateLimit(): Unit {
         Config.remove(McpConfig.RATE_LIMIT)
         let policy = McpConfig.rateLimit()
