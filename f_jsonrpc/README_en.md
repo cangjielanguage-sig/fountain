@@ -6,12 +6,23 @@
 - Single requests, batches, notifications, topic namespaces, per-method timeouts and JSON Schema validation
 - No `f_mvc` API change (`@JsonRpcMapping` is a `RequestMapping` subclass)
 
+## Specification version
+
+- **JSON-RPC 2.0** ([specification](https://www.jsonrpc.org/specification), published 2013-01-04)
+- Transport: HTTP(S) `POST` with `application/json`, UTF-8
+- Implemented: requests / responses, batches, notifications (no response when `id` is absent), positional and named parameters, `id` echoed verbatim (string / number / `null`), standard errors `-32700` / `-32600` / `-32601` / `-32602` / `-32603`
+- Extensions: `-32001 ~ -32004` are reserved by this module and `-32020 ~ -32099` are left for applications; `/rpc/{topic}` is a path-level namespace extension and does not change the message format
+- Differences from the specification: protocol errors always return HTTP 200 (413 when the request body is too large) with the error in the response body; HTTP POST is the only transport (no GET / SSE / WebSocket)
+- A single parameter is written as `[value]` or `{"name": value}` per the specification; bare scalars are rejected
+
 ## Dependencies
 
 ```toml
 [dependencies]
+  "fountain::f_bean" = {path = "../f_bean"}
   "fountain::f_data" = {path = "../f_data"}
   "fountain::f_log" = {path = "../f_log"}
+  "fountain::f_macros" = {path = "../f_macros"}
   "fountain::f_mvc" = {path = "../f_mvc"}
 ```
 

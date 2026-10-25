@@ -6,12 +6,23 @@
 - 支持单请求、批量、通知、topic 命名空间、单方法超时、JSON Schema 参数校验
 - 不修改 `f_mvc` 任何公开 API（`@JsonRpcMapping` 是 `RequestMapping` 的子类）
 
+## 规范版本
+
+- **JSON-RPC 2.0**（[规范原文](https://www.jsonrpc.org/specification)，2013-01-04 发布）
+- 传输：HTTP(S) `POST` + `application/json`，UTF-8
+- 已实现：请求 / 响应、批量、通知（无 `id` 不回包）、位置参数与命名参数、`id` 原样回传（字符串 / 数字 / `null`）、标准错误码 `-32700` / `-32600` / `-32601` / `-32602` / `-32603`
+- 扩展：`-32001 ~ -32004` 为模块保留码段，`-32020 ~ -32099` 留给业务；`/rpc/{topic}` 是 HTTP 路径层的命名空间扩展，不改变消息格式
+- 与规范的差异：协议错误统一返回 HTTP 200（请求体超限返回 413），错误放在响应体的 `error` 对象；传输只做 HTTP POST，不提供 GET / SSE / WebSocket
+- 单参数也按规范写成 `[值]` 或 `{"名": 值}`，不接受裸标量
+
 ## 依赖
 
 ```toml
 [dependencies]
+  "fountain::f_bean" = {path = "../f_bean"}
   "fountain::f_data" = {path = "../f_data"}
   "fountain::f_log" = {path = "../f_log"}
+  "fountain::f_macros" = {path = "../f_macros"}
   "fountain::f_mvc" = {path = "../f_mvc"}
 ```
 
