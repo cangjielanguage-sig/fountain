@@ -158,7 +158,7 @@ class McpClient_test {
         let client = McpClient(rpc, options())
         let result = client.listTools()
         @Assert(2, handler.calls)
-        @Assert(true, result.contains('tools'))
+        @Assert(0, result.tools.size)
         let second = rpc.requests[1]['params'].asObject()['_meta'].asObject()
         @Assert('2026-07-28-next', second[McpProtocol.KEY_PROTOCOL_VERSION].asString().value)
     }
@@ -184,6 +184,118 @@ class McpClient_test {
         let client = McpClient(rpc, options())
         let all = client.listAllTools()
         @Assert(2, all.size)
+        @Assert('t1', all[0].name)
+        @Assert('t2', all[1].name)
+    }
+
+    @TestCase
+    public func testDiscoverReturnsStrongTypes(): Unit {
+        let rpc = FakeMcpRpc({_, _ =>
+            let result = JsonObject()
+            let versions = JsonArray()
+            versions.add(McpProtocol.VERSION)
+            result.add('supportedVersions', versions)
+            let caps = JsonObject()
+            let resources = JsonObject()
+            resources.add('subscribe', false)
+            resources.add('listChanged', false)
+            caps.add('resources', resources)
+            let tools = JsonObject()
+            tools.add('listChanged', false)
+            caps.add('tools', tools)
+            result.add('capabilities', caps)
+            let meta = JsonObject()
+            let info = JsonObject()
+            info.add('name', 'demo')
+            info.add('version', '9.9.9')
+            meta.add(McpProtocol.KEY_SERVER_INFO, info)
+            result.add(McpProtocol.META, meta)
+            result
+        })
+        let client = McpClient(rpc, options())
+        let discover = client.discover()
+        @Assert(1, discover.supportedVersions.size)
+        @Assert(McpProtocol.VERSION, discover.supportedVersions[0])
+        @Assert(false, discover.capabilities.resourcesSubscribe)
+        @Assert(false, discover.capabilities.toolsListChanged)
+        @Assert('demo', discover.serverInfo.getOrThrow().name)
+        @Assert('9.9.9', discover.serverInfo.getOrThrow().version)
+    }
+
+    @TestCase
+    public func testListToolsReturnsDescriptors(): Unit {
+        let rpc = FakeMcpRpc({_, _ =>
+            let result = JsonObject()
+            let tools = JsonArray()
+            let tool = JsonObject()
+            tool.add('name', 'echo')
+            tool.add('description', 'echo text')
+            let schema = JsonObject()
+            schema.add('type', 'object')
+            tool.add('inputSchema', schema)
+            tools.add(tool)
+            result.add('tools', tools)
+            result
+        })
+        let client = McpClient(rpc, options())
+        let page = client.listTools()
+        @Assert(1, page.tools.size)
+        @Assert('echo', page.tools[0].name)
+        @Assert('object', page.tools[0].inputSchema['type'].asString().value)
+        @Assert(true, page.nextCursor.isNone())
+    }
+
+    @TestCase
+    public func testReadResourceAndGetPromptStrongTypes(): Unit {
+        let rpc = FakeMcpRpc({method, _ =>
+            let result = JsonObject()
+            if (method == 'resources/read') {
+                let contents = JsonArray()
+                let item = JsonObject()
+                item.add('uri', 'file:///a.txt')
+                item.add('mimeType', 'text/plain')
+                item.add('text', 'hello')
+                contents.add(item)
+                result.add('contents', contents)
+            } else {
+                result.add('description', 'greet')
+                let messages = JsonArray()
+                let message = JsonObject()
+                message.add('role', 'user')
+                message.add('content', ContentBlock.text('hi').toJson())
+                messages.add(message)
+                result.add('messages', messages)
+            }
+            result
+        })
+        let client = McpClient(rpc, options())
+        let resource = client.readResource('file:///a.txt')
+        @Assert(1, resource.contents.size)
+        @Assert('hello', resource.contents[0].text.getOrThrow())
+        @Assert('text/plain', resource.contents[0].mimeType.getOrThrow())
+        let prompt = client.getPrompt('greet')
+        @Assert('greet', prompt.description)
+        @Assert(1, prompt.messages.size)
+        @Assert('user', prompt.messages[0].role)
+        @Assert('text', prompt.messages[0].content.kind())
+    }
+
+    @TestCase
+    public func testListenReturnsStrongTypes(): Unit {
+        let rpc = FakeMcpRpc({_, _ =>
+            let result = JsonObject()
+            result.add('subscriptionId', 42)
+            let topics = JsonArray()
+            topics.add('tools/list_changed')
+            result.add('subscribedTopics', topics)
+            result.add('sseUrl', '/mcp/sse?subscriptionId=42')
+            result
+        })
+        let client = McpClient(rpc, options())
+        let listen = client.listen(['tools/list_changed'])
+        @Assert(42, listen.subscriptionId)
+        @Assert(1, listen.subscribedTopics.size)
+        @Assert('/mcp/sse?subscriptionId=42', listen.sseUrl)
     }
 
     @TestCase

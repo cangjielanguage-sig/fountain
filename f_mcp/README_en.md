@@ -360,7 +360,7 @@ import fountain::f_data.*
 
 let client = McpClient.http('http://127.0.0.1:8080/mcp')
 let sub = client.listen(['tools/list_changed'])
-let sseUrl = sub['sseUrl'].asString().value
+let sseUrl = sub.sseUrl
 let tools = client.listAllTools()
 let result = client.callTool('kb.search', arguments: args)
 
@@ -383,6 +383,24 @@ let client = McpClient.stdio('/usr/local/bin/my-mcp-server', args: ['--stdio'])
   concurrent hits rewrite it only once
 - `Manual` (`callTool`) passes `input_required` through; `Auto` uses `callToolAuto`, forwarding `requestState`
   into the next round
+
+The client returns strongly typed models (all from `f_mcp.base`), so fields are directly accessible; use
+`.toJson()` (or `DiscoverResult.raw` / `McpToolDescriptor.raw`) when you need the wire form:
+
+| Method | Returns |
+|---|---|
+| `discover` | `DiscoverResult` |
+| `listTools` | `ToolPage` |
+| `listAllTools` | `Array<McpToolDescriptor>` |
+| `callTool` / `callToolAuto` | `CallToolResult` (source-compatible alias `McpCallToolResult`) |
+| `listResources` | `ResourcePage` |
+| `readResource` | `ReadResourceResult` |
+| `listPrompts` | `PromptPage` |
+| `getPrompt` | `GetPromptResult` |
+| `listen` | `ListenResult` |
+
+`CallToolResult.content` holds `ContentBlock` values; unknown block types are preserved (`kind()` returns the
+server-side `type`, `toJson()` restores it).
 
 ### Client options
 
@@ -410,6 +428,8 @@ mapping); stdio ignores `headers` / `keepAlive` / `maxResponseBytes` and uses `t
 | `ToolRateLimit.maxConcurrency` semantics | It used to act as the global cap | Use `RateLimitPolicy.maxConcurrency` for the global cap |
 | `@McpToolMeta` numeric default `0` → `-1` | An explicit `0` means "unlimited" now | Omit the field to inherit |
 | Stricter `mcp_rateLimit` validation | Invalid config fails at startup | Fix the config as the error message says |
+| MCP client returns strongly typed models | Code relying on `JsonObject` indexing | Use model fields (e.g. `page.tools[0].name`) or `.toJson()` / `.raw` |
+| `McpCallToolResult.content` elements are `ContentBlock` | Code reading `text` via array indexing | Use `content[0].toJson()['text']` or `kind()` |
 
 ## Testing
 

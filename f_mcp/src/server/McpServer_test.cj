@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_mcp.server
 
 import std.collection.ArrayList
+import std.sync.Mutex
 import std.time.MonoTime
 import std.unittest.*
 import std.unittest.testmacro.*
@@ -24,6 +25,34 @@ import fountain::f_config.Config
 import fountain::f_jsonrpc.base.*
 import fountain::f_jsonrpc.server.*
 import fountain::f_mcp.base.*
+
+/** 在途请求计数探针：`max()` 是观测到的峰值。 */
+class InFlight {
+    private let mutex = Mutex()
+    private var current = 0
+    private var peak = 0
+
+    func enter(): Unit {
+        synchronized(mutex) {
+            current++
+            if (current > peak) {
+                peak = current
+            }
+        }
+    }
+
+    func leave(): Unit {
+        synchronized(mutex) {
+            current--
+        }
+    }
+
+    func max(): Int64 {
+        synchronized(mutex) {
+            peak
+        }
+    }
+}
 
 @Test
 class McpServer_test {
@@ -705,6 +734,75 @@ class McpServer_test {
         } finally {
             Config.remove(McpConfig.RATE_LIMIT)
         }
+    }
+
+    @TestCase
+    public func testToolConcurrencyIsSeparateFromGlobal(): Unit {
+        // 全局 8 + 工具 A 2：A 的在途数受工具闸门限制，A+B 的总在途数受全局闸门限制
+        let aProbe = InFlight()
+        let allProbe = InFlight()
+        let toolA = McpTool.builder('a')
+            .rateLimit(ToolRateLimit(maxConcurrency: 2))
+            .handler({_, _ =>
+                aProbe.enter()
+                allProbe.enter()
+                try {
+                    sleep(Duration.millisecond * 150)
+                    CallToolResult.text('a')
+                } finally {
+                    allProbe.leave()
+                    aProbe.leave()
+                }
+            }).build()
+        let toolB = McpTool.builder('b')
+            .handler({_, _ =>
+                allProbe.enter()
+                try {
+                    sleep(Duration.millisecond * 150)
+                    CallToolResult.text('b')
+                } finally {
+                    allProbe.leave()
+                }
+            }).build()
+        let srv = McpServer.builder()
+            .rateLimit(RateLimitPolicy(maxConcurrency: 8))
+            .tool(toolA)
+            .tool(toolB)
+            .build()
+
+        let onlyA = ArrayList<Future<JsonObject>>()
+        for (_ in 0..4) {
+            onlyA.add(spawn {
+                call(srv, 'tools/call', metaParams('"name":"a","arguments":{}'))
+            })
+        }
+        var toolRejections = 0
+        for (future in onlyA) {
+            let response = future.get()
+            if (response.contains('error')) {
+                if (errorOf(response)['data'].asObject()['scope'].asString().value == 'concurrency_tool') {
+                    toolRejections++
+                }
+            }
+        }
+        @Assert(2, toolRejections)
+        @Assert(true, aProbe.max() <= 2)
+
+        let mixed = ArrayList<Future<JsonObject>>()
+        for (_ in 0..3) {
+            mixed.add(spawn {
+                call(srv, 'tools/call', metaParams('"name":"a","arguments":{}'))
+            })
+        }
+        for (_ in 0..10) {
+            mixed.add(spawn {
+                call(srv, 'tools/call', metaParams('"name":"b","arguments":{}'))
+            })
+        }
+        for (future in mixed) {
+            let _ = future.get()
+        }
+        @Assert(true, allProbe.max() <= 8)
     }
 
     @TestCase

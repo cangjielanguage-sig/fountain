@@ -351,7 +351,7 @@ b.rateLimitBackend(myRedisBackend)   // 多实例共享同一个 Redis / 数据�
 
 ```cangjie
 let sub = client.listen(['tools/list_changed'])
-let sseUrl = sub['sseUrl'].asString().value
+let sseUrl = sub.sseUrl
 ```
 
 ## 客户端
@@ -383,6 +383,22 @@ let client = McpClient.stdio('/usr/local/bin/my-mcp-server', args: ['--stdio'])
 - 服务端返回 `-32022` 时换用 `supported[0]` 只重试一次；版本由 `Mutex` 保护，并发命中只改写一次
 - `Manual`（`callTool`）原样返回 `input_required`；`Auto` 用 `callToolAuto`，并把 `requestState` 原样带回下一轮
 
+客户端返回强类型（都来自 `f_mcp.base`），字段可直接访问；需要原文时用 `.toJson()`（或 `DiscoverResult.raw` / `McpToolDescriptor.raw`）：
+
+| 方法 | 返回 |
+|---|---|
+| `discover` | `DiscoverResult` |
+| `listTools` | `ToolPage` |
+| `listAllTools` | `Array<McpToolDescriptor>` |
+| `callTool` / `callToolAuto` | `CallToolResult`（源兼容别名 `McpCallToolResult`） |
+| `listResources` | `ResourcePage` |
+| `readResource` | `ReadResourceResult` |
+| `listPrompts` | `PromptPage` |
+| `getPrompt` | `GetPromptResult` |
+| `listen` | `ListenResult` |
+
+`CallToolResult.content` 是 `ContentBlock`；未知内容块类型不会被丢弃（`kind()` 返回服务端原文，`toJson()` 可还原）。
+
 ### 客户端选项
 
 ```cangjie
@@ -409,6 +425,8 @@ stdio 忽略 `headers` / `keepAlive` / `maxResponseBytes`，读超时由 `timeou
 | `ToolRateLimit.maxConcurrency` 语义 | 以前被当成全局上限 | 全局用 `RateLimitPolicy.maxConcurrency` |
 | `@McpToolMeta` 数值默认 `0` → `-1` | 显式写 `0` 从「继承」变「不限制」 | 想继承就不写该字段 |
 | `JsonRpcContext.meta` / `mcp_rateLimit` 校验收紧 | 非法配置启动失败 | 按错误消息修正配置 |
+| MCP 客户端返回强类型 | 依赖 `JsonObject` 与下标取值的代码 | 改用模型字段（如 `page.tools[0].name`），或 `.toJson()` / `.raw` |
+| `McpCallToolResult.content` 元素变为 `ContentBlock` | 原来按数组下标读 `text` | 用 `content[0].toJson()['text']` 或 `kind()` |
 
 ## 测试
 

@@ -322,7 +322,7 @@ MCP-Protocol-Version: 2026-07-28
 | ------------------- | ---- | ------------------------ |
 | 启动子进程          | ✅   | 仅 Linux / OHOS          |
 | 换行分帧            | ✅   | 一行一条消息             |
-| 写请求 / 读响应     | ✅   | 按`id` 匹配，超时丢弃    |
+| 写请求 / 读响应     | ✅   | 按 `id` 匹配；跳过通知与噪声行；读超时抛 `IOException` |
 | stderr 转发         | ✅   | 原样打到日志             |
 | 进程退出            | ✅   | 关闭 stdin，等待退出     |
 | 重连 / 进程崩溃恢复 | ❌   | 进程没了就报错           |
@@ -412,10 +412,8 @@ public class McpClient {
 
     // ---- 工具 ----
     public func listTools(cursor!: ?String = None): ToolPage
-    public func listAllTools(): ArrayList<McpTool>          // 自动翻页
+    public func listAllTools(): Array<McpToolDescriptor>   // 自动翻页（100 页 / 1000 条上限）
     public func callTool(name: String, arguments!: JsonValue = JsonObject()): CallToolResult
-    public func callToolWithInput(name: String, arguments!: JsonValue,
-                                  inputResponses!: JsonObject, requestState!: ?String): CallToolResult
 
     // ---- 资源 / 提示（按需）----
     public func listResources(cursor!: ?String = None): ResourcePage
