@@ -304,10 +304,10 @@ public class JsonRpcServer {
     }
 
     private func checkParamsEx(meta: JsonRpcMethodMeta, params: ?JsonValue): ?JsonArray {
-        match (meta.paramsSchema) {
+        match (meta.compiledSchema()) {
             case Some(schema) =>
                 let value = params ?? JsonNull.instance
-                let result = JsonSchemaValidator.validate(schema, value)
+                let result = schema.validate(value)
                 if (result.isValid) {
                     None<JsonArray>
                 } else {

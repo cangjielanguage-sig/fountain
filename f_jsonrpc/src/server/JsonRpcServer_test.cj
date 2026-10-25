@@ -464,6 +464,19 @@ class JsonRpcServer_test {
     }
 
     @TestCase
+    public func testInvalidParamsSchemaFailsAtRegistration(): Unit {
+        let schema = JsonObject()
+        schema.add('type', 'object')
+        schema.add('pattern', 1)
+        try {
+            let _ = JsonRpcMethodMeta(name: 'bad', handler: {_, _ => JsonNull.instance}, paramsSchema: schema)
+            @Fail('expected IllegalArgumentException')
+        } catch (_: IllegalArgumentException) {
+            ()
+        }
+    }
+
+    @TestCase
     public func testMethodMetaFields(): Unit {
         let schema = JsonObject()
         schema.add('type', 'object')

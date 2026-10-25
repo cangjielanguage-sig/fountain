@@ -32,6 +32,8 @@ public class JsonRpcMethodMeta {
     public let description: String
     public let timeout: ?Duration
     public let paramsSchema: ?JsonObject
+    /** 注册期编译好的参数 schema：结构错误当场暴露，正则不再每请求编译。 */
+    private let compiledParams: ?CompiledSchema
     /** 命名空间在构造期算好，请求期不再切片方法名。 */
     private let ns: String
 
@@ -42,7 +44,15 @@ public class JsonRpcMethodMeta {
         this.description = description
         this.timeout = timeout
         this.paramsSchema = paramsSchema
+        this.compiledParams = match (paramsSchema) {
+            case Some(schema) => Some(CompiledSchema.compile(schema))
+            case _ => None<CompiledSchema>
+        }
         this.ns = JsonRpcMethodMeta.namespaceOf(name)
+    }
+
+    func compiledSchema(): ?CompiledSchema {
+        compiledParams
     }
 
     /** 方法名的命名空间：第一个 `.` 之前的部分；不含 `.` 时为空串。 */
