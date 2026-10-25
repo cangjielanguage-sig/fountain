@@ -56,22 +56,35 @@ public class McpProtocol {
         toBase64String("offset:${offset}".toArray())
     }
 
-    public static func decodeCursor(cursor: String): Int64 {
+    /**
+     * 解码游标；非法输入返回 `None`（调用方必须回 `-32602`，不能静默退回首页）。
+     *
+     * 空串视为首页偏移（`Some(0)`）：「游标缺失」由调用方区分。
+     */
+    public static func decodeCursor(cursor: String): ?Int64 {
         if (cursor.isEmpty()) {
-            return 0
+            return Some(0)
         }
         match (fromBase64String(cursor)) {
             case Some(bytes) =>
                 let text = try {
                     String.fromUtf8(bytes)
                 } catch (_: Exception) {
-                    return 0
+                    return None<Int64>
                 }
-                if (text.startsWith('offset:')) {
-                    return Int64.tryParse(text[7..]) ?? 0
+                if (!text.startsWith('offset:')) {
+                    return None<Int64>
                 }
-                0
-            case _ => 0
+                match (Int64.tryParse(text[7..])) {
+                    case Some(offset) =>
+                        if (offset < 0 || offset > 10_000_000) {
+                            None<Int64>
+                        } else {
+                            Some(offset)
+                        }
+                    case _ => None<Int64>
+                }
+            case _ => None<Int64>
         }
     }
 }

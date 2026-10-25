@@ -196,24 +196,29 @@ public class McpRegistry {
         server()
     }
 
+    /**
+     * 注解数值语义：`-1` 继承服务级、`0` 不限制、`>0` 限额。
+     * 全部继承时返回 `None`，等价于没有工具级覆盖。
+     */
     private static func toolRateLimitOf(meta: McpToolMeta): ?ToolRateLimit {
-        if (meta.perCallerRpm <= 0 && meta.perCallerToolRpm <= 0 && meta.perToolRpm <= 0 &&
-            meta.maxConcurrency <= 0 && meta.perCallerConcurrency <= 0) {
+        let perCallerRpm = mapLimit(meta.perCallerRpm)
+        let perCallerToolRpm = mapLimit(meta.perCallerToolRpm)
+        let perToolRpm = mapLimit(meta.perToolRpm)
+        let maxConcurrency = mapLimit(meta.maxConcurrency)
+        let perCallerConcurrency = mapLimit(meta.perCallerConcurrency)
+        if (perCallerRpm.isNone() && perCallerToolRpm.isNone() && perToolRpm.isNone() && maxConcurrency.isNone() &&
+            perCallerConcurrency.isNone()) {
             return None<ToolRateLimit>
         }
-        ToolRateLimit(
-            perCallerRpm: positiveOrNone(meta.perCallerRpm),
-            perCallerToolRpm: positiveOrNone(meta.perCallerToolRpm),
-            perToolRpm: positiveOrNone(meta.perToolRpm),
-            maxConcurrency: positiveOrNone(meta.maxConcurrency),
-            perCallerConcurrency: positiveOrNone(meta.perCallerConcurrency))
+        ToolRateLimit(perCallerRpm: perCallerRpm, perCallerToolRpm: perCallerToolRpm, perToolRpm: perToolRpm,
+            maxConcurrency: maxConcurrency, perCallerConcurrency: perCallerConcurrency)
     }
 
-    private static func positiveOrNone(value: Int64): ?Int64 {
-        if (value > 0) {
-            Some(value)
-        } else {
+    private static func mapLimit(value: Int64): ?Int64 {
+        if (value < 0) {
             None<Int64>
+        } else {
+            Some(value)
         }
     }
 

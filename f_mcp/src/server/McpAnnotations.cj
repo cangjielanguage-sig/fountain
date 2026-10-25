@@ -20,14 +20,14 @@ package fountain::f_mcp.server
  *
  * `name` / `description` 为空时分别回退到函数名与空描述；
  * `inputSchema` 由函数唯一参数的类型生成（参数应为 `@DataAssist[props fields]` 类）。
- * 限流字段直接映射为 `ToolRateLimit`，`0` 表示不限制。
+ * 限流字段：`-1`（默认）沿用服务级配置，`0` 表示不限制，`>0` 表示限额。
  */
 @Annotation[target: [MemberFunction]]
 public class McpToolMeta {
     public const McpToolMeta(public let name!: String = '', public let description!: String = '',
-        public let perCallerRpm!: Int64 = 0, public let perCallerToolRpm!: Int64 = 0,
-        public let perToolRpm!: Int64 = 0, public let maxConcurrency!: Int64 = 0,
-        public let perCallerConcurrency!: Int64 = 0) {}
+        public let perCallerRpm!: Int64 = -1, public let perCallerToolRpm!: Int64 = -1,
+        public let perToolRpm!: Int64 = -1, public let maxConcurrency!: Int64 = -1,
+        public let perCallerConcurrency!: Int64 = -1) {}
 }
 
 /**

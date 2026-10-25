@@ -193,14 +193,38 @@ class McpResultStore_test {
     }
 
     @TestCase
-    public func testConcurrencyGate(): Unit {
+    public func testConcurrencyGateKeepsKeyAfterRelease(): Unit {
         let gate = ConcurrencyGate()
         @Assert(true, gate.tryAcquire('k', 1))
         @Assert(false, gate.tryAcquire('k', 1))
         gate.release('k')
-        @Assert(0, gate.size())
+        // release 只减计数、不删 key：删 key 会和并发 acquire 抢同一个槽位
+        @Assert(1, gate.size())
         @Assert(true, gate.tryAcquire('k', 1))
+        @Assert(false, gate.tryAcquire('k', 1))
+        gate.release('k')
         gate.close()
+        @Assert(0, gate.size())
+    }
+
+    @TestCase
+    public func testConcurrencyGateZeroLimitDoesNotOccupy(): Unit {
+        let gate = ConcurrencyGate()
+        // limit <= 0 表示不限制：返回 false 表示「没占槽」，计数也不该变
+        @Assert(false, gate.tryAcquire('k', 0))
+        @Assert(false, gate.tryAcquire('k', -1))
+        @Assert(0, gate.size())
+    }
+
+    @TestCase
+    public func testConcurrencyGateReclaimsIdleEntries(): Unit {
+        let gate = ConcurrencyGate(idleTtl: Duration.millisecond * 20)
+        @Assert(true, gate.tryAcquire('k', 1))
+        gate.release('k')
+        @Assert(1, gate.size())
+        busySleep(60)
+        gate.sweepNow()
+        @Assert(0, gate.size())
     }
 
     @TestCase

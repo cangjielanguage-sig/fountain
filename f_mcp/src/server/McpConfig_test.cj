@@ -50,6 +50,102 @@ class McpConfig_test {
         }
     }
 
+    static func expectRejected(raw: String, field: String): Unit {
+        Config.set([(McpConfig.RATE_LIMIT, raw)])
+        try {
+            try {
+                let _ = McpConfig.rateLimit()
+                @Fail("expected IllegalArgumentException for '${raw}'")
+            } catch (e: IllegalArgumentException) {
+                @Assert(true, e.message.contains(field))
+            }
+        } finally {
+            Config.remove(McpConfig.RATE_LIMIT)
+        }
+    }
+
+    @TestCase
+    public func testNegativeRateLimitIsRejected(): Unit {
+        expectRejected('-1', 'perCallerRpm')
+    }
+
+    @TestCase
+    public func testDecimalRateLimitIsRejected(): Unit {
+        expectRejected('1.5', 'perCallerRpm')
+    }
+
+    @TestCase
+    public func testTooManySegmentsAreRejected(): Unit {
+        expectRejected('1,2,3,4,5,6', 'mcp_rateLimit')
+    }
+
+    @TestCase
+    public func testUnknownJsonKeyIsRejected(): Unit {
+        expectRejected('{"bogus":1}', 'bogus')
+    }
+
+    @TestCase
+    public func testJsonDecimalIsRejected(): Unit {
+        expectRejected('{"perCallerRpm":1.5}', 'perCallerRpm')
+    }
+
+    @TestCase
+    public func testOutOfRangeRateLimitIsRejected(): Unit {
+        expectRejected('1000001', 'perCallerRpm')
+    }
+
+    @TestCase
+    public func testZeroMeansUnlimited(): Unit {
+        Config.set([(McpConfig.RATE_LIMIT, '0,0,0,0,0')])
+        try {
+            let policy = McpConfig.rateLimit()
+            @Assert(true, policy.perCallerRpm.isNone())
+            @Assert(true, policy.perToolRpm.isNone())
+            @Assert(true, policy.maxConcurrency.isNone())
+        } finally {
+            Config.remove(McpConfig.RATE_LIMIT)
+        }
+    }
+
+    @TestCase
+    public func testCsvAndJsonAreEquivalent(): Unit {
+        Config.set([(McpConfig.RATE_LIMIT, '11,12,13,14,15')])
+        let csv = try {
+            McpConfig.rateLimit()
+        } finally {
+            Config.remove(McpConfig.RATE_LIMIT)
+        }
+        Config.set([(McpConfig.RATE_LIMIT,
+            '{"perCallerRpm":11,"perCallerToolRpm":12,"perToolRpm":13,"maxConcurrency":14,"perCallerConcurrency":15}')])
+        let json = try {
+            McpConfig.rateLimit()
+        } finally {
+            Config.remove(McpConfig.RATE_LIMIT)
+        }
+        @Assert(csv.perCallerRpm, json.perCallerRpm)
+        @Assert(csv.perCallerToolRpm, json.perCallerToolRpm)
+        @Assert(csv.perToolRpm, json.perToolRpm)
+        @Assert(csv.maxConcurrency, json.maxConcurrency)
+        @Assert(csv.perCallerConcurrency, json.perCallerConcurrency)
+    }
+
+    @TestCase
+    public func testTrustForwardedForValidation(): Unit {
+        Config.set([(McpConfig.TRUST_FORWARDED_FOR, 'yes')])
+        try {
+            @ExpectThrows[IllegalArgumentException](McpConfig.trustForwardedFor())
+        } finally {
+            Config.remove(McpConfig.TRUST_FORWARDED_FOR)
+        }
+        Config.set([(McpConfig.TRUST_FORWARDED_FOR, ' TRUE ')])
+        try {
+            @Assert(true, McpConfig.trustForwardedFor())
+        } finally {
+            Config.remove(McpConfig.TRUST_FORWARDED_FOR)
+        }
+        @Assert(false, McpConfig.trustForwardedFor())
+    }
+
     @TestCase
     public func testRateLimitBackendName(): Unit {
         Config.set([(McpConfig.RATE_LIMIT_BACKEND, ' sliding-window ')])

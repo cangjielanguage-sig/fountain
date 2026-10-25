@@ -110,7 +110,6 @@ class McpRateLimit_test {
         @Assert(true, RateLimitBackends.of('token-bucket') is TokenBucketRateLimitBackend)
         @Assert(true, RateLimitBackends.of('leaking-bucket') is LeakingBucketRateLimitBackend)
         @Assert(true, RateLimitBackends.of('sliding-window') is SlidingWindowRateLimitBackend)
-        @Assert(true, RateLimitBackends.of('any-moment') is AnyMomentRateLimitBackend)
         @Assert(true, RateLimitBackends.of('unlimited') is UnlimitedRateLimitBackend)
         @Assert(true, RateLimitBackends.of('Token_Bucket') is TokenBucketRateLimitBackend)
         @ExpectThrows[IllegalArgumentException](RateLimitBackends.of('nope'))
@@ -181,19 +180,12 @@ class McpRateLimit_test {
     }
 
     @TestCase
-    public func testAnyMoment(): Unit {
-        let backend = AnyMomentRateLimitBackend()
+    public func testAnyMomentBackendIsRemoved(): Unit {
         try {
-            // 瞬时并发语义：顺序调用不会累积配额，所以永远放行。
-            var passed = 0
-            for (_ in 0..5) {
-                if (backend.tryAcquire('k', 2, 0)) {
-                    passed++
-                }
-            }
-            @Assert(5, passed)
-        } finally {
-            backend.close()
+            let _ = RateLimitBackends.of('any-moment')
+            @Fail('expected IllegalArgumentException')
+        } catch (e: IllegalArgumentException) {
+            @Assert(true, e.message.contains('any-moment'))
         }
     }
 

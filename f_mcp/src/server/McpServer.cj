@@ -123,6 +123,7 @@ public class McpServerBuilder {
     private var pageSize_ = 100
     private var resultOptions = ResultStoreOptions()
     private var backend: ?RateLimitBackend = None
+    private var trustForwardedFor_ = false
     private let tools = ArrayList<McpTool>()
     private let resources = ArrayList<McpResource>()
     private let prompts = ArrayList<McpPrompt>()
@@ -168,6 +169,12 @@ public class McpServerBuilder {
         this
     }
 
+    /** 是否信任 `X-Forwarded-For`（默认关闭：伪造该头即可绕过按调用方限流）。 */
+    public func trustForwardedFor(trust: Bool): McpServerBuilder {
+        trustForwardedFor_ = trust
+        this
+    }
+
     public func rateLimitBackend(backend: RateLimitBackend): McpServerBuilder {
         this.backend = Some(backend)
         this
@@ -189,8 +196,11 @@ public class McpServerBuilder {
     }
 
     public func build(): McpServer {
-        McpServer(serverName, serverVersion ?? McpConfig.version(), rateLimitPolicy ?? McpConfig.rateLimit(),
-            publicBaseUrl_ ?? McpConfig.publicBaseUrl(), pageSize_, resultOptions, backend, tools, resources, prompts)
+        // 逐字段合并：配置先落地，Builder 只覆盖显式写过的字段
+        let merged = McpConfig.rateLimit().overlay(rateLimitPolicy ?? RateLimitPolicy())
+        McpServer(serverName, serverVersion ?? McpConfig.version(), merged,
+            publicBaseUrl_ ?? McpConfig.publicBaseUrl(), pageSize_, resultOptions, backend,
+            trustForwardedFor_ || McpConfig.trustForwardedFor(), tools, resources, prompts)
     }
 }
 
@@ -216,8 +226,10 @@ public class McpServer {
     private let promptsByName = HashMap<String, McpPrompt>()
     private let promptsSorted = ArrayList<McpPrompt>()
 
+    private let trustForwardedFor: Bool
+
     init(serverName: String, serverVersion: String, policy: RateLimitPolicy, baseUrl: ?String, pageSize: Int64,
-        resultOptions: ResultStoreOptions, backend: ?RateLimitBackend, tools: ArrayList<McpTool>,
+        resultOptions: ResultStoreOptions, backend: ?RateLimitBackend, trustForwardedFor: Bool, tools: ArrayList<McpTool>,
         resources: ArrayList<McpResource>, prompts: ArrayList<McpPrompt>) {
         this.serverName = serverName
         this.serverVersion = serverVersion
@@ -226,6 +238,7 @@ public class McpServer {
         this.pageSize = pageSize
         this.resultStore = ToolResultStore(options: resultOptions)
         this.backend = backend ?? RateLimitBackends.fromConfig()
+        this.trustForwardedFor = trustForwardedFor
         registerTools(tools)
         registerResources(resources)
         registerPrompts(prompts)
@@ -380,7 +393,8 @@ public class McpServer {
         tools.add('listChanged', false)
         caps.add('tools', tools)
         let resources = JsonObject()
-        resources.add('subscribe', true)
+        // 没有实现 resources/subscribe：能力声明必须与实现一致
+        resources.add('subscribe', false)
         resources.add('listChanged', false)
         caps.add('resources', resources)
         let prompts = JsonObject()
@@ -423,13 +437,15 @@ public class McpServer {
 
         let resolved = resolveLimit(tool)
         let caller = callerId(ctx)
+        // 先占并发槽位：并发拒绝的请求不消耗 rpm 令牌
+        let lease = acquireConcurrency(resolved, caller, tool.name)
+        if (!lease.verdict.ok) {
+            throw rateLimitError(ctx, lease.verdict)
+        }
         let verdict = checkLimits(resolved, caller, tool.name)
         if (!verdict.ok) {
-            throw rateLimitError(verdict)
-        }
-        let acquire = acquireConcurrency(resolved, caller, tool.name)
-        if (!acquire.ok) {
-            throw rateLimitError(acquire)
+            releaseConcurrency(lease)
+            throw rateLimitError(ctx, verdict)
         }
         let toolCtx = McpToolContext(caller, requestId: ctx.id, inputResponses: request.get('inputResponses'),
             requestState: request.get('requestState'))
@@ -441,7 +457,7 @@ public class McpServer {
             }
             callResult = tool.handler(toolCtx, arguments)
         } finally {
-            releaseConcurrency(resolved, caller, tool.name)
+            releaseConcurrency(lease)
         }
         applyLargeResult(tool, callResult)
     }
@@ -634,11 +650,12 @@ public class McpServer {
 
     private func cursorOf(request: JsonObject): Int64 {
         match (request.get('cursor')) {
-            case Some(value) =>
-                if (value is JsonString) {
-                    McpProtocol.decodeCursor(value.asString().value)
-                } else {
-                    0
+            case Some(value) => match (value) {
+                    case text: JsonString =>
+                        McpProtocol.decodeCursor(text.value) ?? throw McpException(McpProtocol.INVALID_PARAMS,
+                            'invalid cursor', data: text)
+                    case other => throw McpException(McpProtocol.INVALID_PARAMS, 'cursor must be a string',
+                        data: other)
                 }
             case _ => 0
         }
@@ -664,18 +681,46 @@ public class McpServer {
         obj
     }
 
+    /**
+     * 调用方标识，按优先级：
+     * 1. `X-Forwarded-For` 第一段（仅当显式信任代理）；
+     * 2. `Authorization` 的 SHA-256 前 16 字节（32 位十六进制）；
+     * 3. `remoteAddr` 去掉端口；
+     * 4. `anonymous` / 本地调用为 `local`。
+     */
     private func callerId(ctx: JsonRpcContext): String {
         match (ctx.http) {
             case Some(http) =>
-                if (let Some(auth) <- http.request.headers.getFirst('Authorization')) {
-                    return sha256Hex(auth)
+                if (trustForwardedFor && let Some(xff) <- http.request.headers.getFirst('X-Forwarded-For')) {
+                    let first = xff.split(',')[0].trimAscii()
+                    if (!first.isEmpty()) {
+                        return first
+                    }
                 }
-                let addr = http.request.remoteAddr
+                if (let Some(auth) <- http.request.headers.getFirst('Authorization')) {
+                    let digest = sha256Hex(auth)
+                    return digest[0..32]
+                }
+                let addr = withoutPort(http.request.remoteAddr)
                 if (!addr.isEmpty()) {
                     return addr
                 }
                 'anonymous'
             case _ => 'local'
+        }
+    }
+
+    private static func withoutPort(addr: String): String {
+        let text = addr.trimAscii()
+        if (text.startsWith('[')) {
+            match (text.indexOf(']')) {
+                case Some(index) => return text[0..index + 1]
+                case _ => ()
+            }
+        }
+        match (text.lastIndexOf(':')) {
+            case Some(index) => text[0..index]
+            case _ => text
         }
     }
 
@@ -713,14 +758,15 @@ public class McpServer {
     }
 
     private func resolveLimit(tool: McpTool): ResolvedRateLimit {
-        match (tool.rateLimit) {
-            case Some(t) => ResolvedRateLimit(firstNotNull(t.perCallerRpm, policy.perCallerRpm),
-                firstNotNull(t.perCallerToolRpm, policy.perCallerToolRpm), firstNotNull(t.perToolRpm, policy.perToolRpm),
-                firstNotNull(t.maxConcurrency, policy.maxConcurrency),
-                firstNotNull(t.perCallerConcurrency, policy.perCallerConcurrency))
-            case _ => ResolvedRateLimit(policy.perCallerRpm, policy.perCallerToolRpm, policy.perToolRpm,
-                policy.maxConcurrency, policy.perCallerConcurrency)
+        let toolLimit = match (tool.rateLimit) {
+            case Some(limit) => limit
+            case _ => ToolRateLimit()
         }
+        // 全局并发只取服务级；工具并发单独一档，避免两个语义挤同一个 key
+        ResolvedRateLimit(firstNotNull(toolLimit.perCallerRpm, policy.perCallerRpm),
+            firstNotNull(toolLimit.perCallerToolRpm, policy.perCallerToolRpm),
+            firstNotNull(toolLimit.perToolRpm, policy.perToolRpm), policy.maxConcurrency, toolLimit.maxConcurrency,
+            firstNotNull(toolLimit.perCallerConcurrency, policy.perCallerConcurrency))
     }
 
     private static func firstNotNull(a: ?Int64, b: ?Int64): ?Int64 {
@@ -757,37 +803,61 @@ public class McpServer {
         60_000 / rpm
     }
 
-    private func acquireConcurrency(limit: ResolvedRateLimit, caller: String, tool: String): RateVerdict {
-        if (let Some(max) <- limit.maxConcurrency) {
-            if (!gates.tryAcquire('g', max)) {
-                return RateVerdict.reject('concurrency', max, 0)
+    private func acquireConcurrency(limit: ResolvedRateLimit, caller: String, tool: String): ConcurrencyLease {
+        var acquiredGlobal = false
+        var toolKey = ''
+        var callerKey = ''
+        if (let Some(max) <- limit.globalConcurrency) {
+            if (!gates.tryAcquire('conc:g', max)) {
+                return ConcurrencyLease(RateVerdict.reject('concurrency', max, 0), false, toolKey: '', callerKey: '')
+            }
+            acquiredGlobal = true
+        }
+        if (let Some(max) <- limit.toolConcurrency) {
+            toolKey = 'conc:t:${tool}'
+            if (!gates.tryAcquire(toolKey, max)) {
+                releaseConcurrency(ConcurrencyLease(RateVerdict.pass(), acquiredGlobal, toolKey: '', callerKey: ''))
+                return ConcurrencyLease(RateVerdict.reject('concurrency_tool', max, 0), false, toolKey: '', callerKey: '')
             }
         }
         if (let Some(max) <- limit.perCallerConcurrency) {
-            if (!gates.tryAcquire('ct:${caller}\u{0}${tool}', max)) {
-                if (limit.maxConcurrency.isSome()) {
-                    gates.release('g')
-                }
-                return RateVerdict.reject('concurrency_tool', max, 0)
+            callerKey = 'conc:ct:${caller}\u{0}${tool}'
+            if (!gates.tryAcquire(callerKey, max)) {
+                releaseConcurrency(ConcurrencyLease(RateVerdict.pass(), acquiredGlobal, toolKey: toolKey, callerKey: ''))
+                return ConcurrencyLease(RateVerdict.reject('concurrency_caller', max, 0), false, toolKey: '', callerKey: '')
             }
         }
-        RateVerdict.pass()
+        ConcurrencyLease(RateVerdict.pass(), acquiredGlobal, toolKey: toolKey, callerKey: callerKey)
     }
 
-    private func releaseConcurrency(limit: ResolvedRateLimit, caller: String, tool: String): Unit {
-        if (limit.perCallerConcurrency.isSome()) {
-            gates.release('ct:${caller}\u{0}${tool}')
+    private func releaseConcurrency(lease: ConcurrencyLease): Unit {
+        if (!lease.callerKey.isEmpty()) {
+            gates.release(lease.callerKey)
         }
-        if (limit.maxConcurrency.isSome()) {
-            gates.release('g')
+        if (!lease.toolKey.isEmpty()) {
+            gates.release(lease.toolKey)
+        }
+        if (lease.global) {
+            gates.release('conc:g')
         }
     }
 
-    private static func rateLimitError(verdict: RateVerdict): McpException {
+    private func rateLimitError(ctx: JsonRpcContext, verdict: RateVerdict): McpException {
         let data = JsonObject()
         data.add('scope', verdict.scope)
         data.add('limit', verdict.limit)
         data.add('retryAfterMs', verdict.retryAfterMs)
+        match (ctx.http) {
+            case Some(http) =>
+                http.responseBuilder.status(429)
+                let seconds = if (verdict.retryAfterMs <= 0) {
+                    1
+                } else {
+                    (verdict.retryAfterMs + 999) / 1000
+                }
+                http.responseBuilder.header('Retry-After', '${seconds}')
+            case _ => ()
+        }
         McpException(McpProtocol.RATE_LIMITED, "Rate limit exceeded: ${verdict.scope} (${verdict.limit})", data: data)
     }
 
