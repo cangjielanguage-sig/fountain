@@ -6,6 +6,18 @@
 - Single requests, batches, notifications, topic namespaces, per-method timeouts and JSON Schema validation
 - No `f_mvc` API change (`@JsonRpcMapping` is a `RequestMapping` subclass)
 
+## Package layout
+
+| Package | Contents |
+|---------|----------|
+| `fountain::f_jsonrpc.base` | Protocol constants, error model, method metadata annotation |
+| `fountain::f_jsonrpc.client` | `JsonRpcClient` / `ClientOptions` |
+| `fountain::f_jsonrpc.server` | `JsonRpcServer`, method table, `f_mvc` routes and argument conversion |
+| `fountain::f_jsonrpc` | Facade package: `public import`s the three packages above, keeping `import fountain::f_jsonrpc.*` working |
+
+Client-only code can `import fountain::f_jsonrpc.client.*` and server-only code can
+`import fountain::f_jsonrpc.server.*`; both share `base`. The module dependency is still `fountain::f_jsonrpc`.
+
 ## Specification version
 
 - **JSON-RPC 2.0** ([specification](https://www.jsonrpc.org/specification), published 2013-01-04)
