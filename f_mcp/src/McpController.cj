@@ -32,7 +32,20 @@ public class McpController {
         // 流式响应长度未知，必须显式声明 chunked，否则 stdx http server 会报
         // "Unknown body size for Content-Length header"。
         http.responseBuilder.header('Transfer-Encoding', 'chunked')
-        return McpSseStream(server.hub(), topicsOf(http.request.url.toString()))
+        let url = http.request.url.toString()
+        if (hasSubscriptionId(url)) {
+            let id = match (subscriptionIdOf(url)) {
+                case Some(value) => value
+                case _ => throw McpException(McpProtocol.INVALID_PARAMS, 'invalid subscriptionId')
+            }
+            match (server.hub().attach(id)) {
+                case Some(subscriber) => McpSseStream(server.hub(), subscriber)
+                case _ => throw McpException(McpProtocol.INVALID_PARAMS,
+                    "unknown or already attached subscriptionId '${id}'")
+            }
+        } else {
+            McpSseStream(server.hub(), topicsOf(url))
+        }
     }
 
     @JsonRpcMapping[path: '/mcp']
@@ -50,6 +63,30 @@ public class McpController {
             case None => ()
         }
     }
+}
+
+private func hasSubscriptionId(url: String): Bool {
+    match (url.indexOf('?')) {
+        case Some(index) => for (pair in url[index + 1..].split('&')) {
+            if (pair.startsWith('subscriptionId=')) {
+                return true
+            }
+        }
+        case _ => ()
+    }
+    false
+}
+
+private func subscriptionIdOf(url: String): ?Int64 {
+    match (url.indexOf('?')) {
+        case Some(index) => for (pair in url[index + 1..].split('&')) {
+            if (pair.startsWith('subscriptionId=')) {
+                return Int64.tryParse(pair[15..])
+            }
+        }
+        case _ => ()
+    }
+    None<Int64>
 }
 
 private func topicsOf(url: String): ArrayList<String> {

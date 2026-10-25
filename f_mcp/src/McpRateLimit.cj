@@ -15,9 +15,9 @@ limitations under the License.
  */
 package fountain::f_mcp
 
-import std.collection.ArrayList
 import std.collection.concurrent.ConcurrentHashMap
-import std.sync.{AtomicInt64, Mutex}
+import std.sync.AtomicInt64
+import fountain::f_concurrent.TokenBucketRateLimiter
 import fountain::f_data.*
 
 /** 全局默认限流值；`None` 表示该维度不限制。 */
@@ -83,71 +83,44 @@ public interface RateLimitBackend {
     func close(): Unit
 }
 
-class BucketEntry {
-    var tokens: Float64
-    var lastRefillNanos: Int64
-    var lastUsedNanos: Int64
-    let mutex = Mutex()
+class LimiterEntry {
+    let limiter: TokenBucketRateLimiter<Bool>
 
-    init(capacity: Float64, nowNanos: Int64) {
-        tokens = capacity
-        lastRefillNanos = nowNanos
-        lastUsedNanos = nowNanos
+    init(rpm: Int64) {
+        this.limiter = TokenBucketRateLimiter<Bool>(
+            tokens: rpm,
+            timeout: Duration.millisecond,
+            populationPeriod: Duration.minute)
     }
 }
 
-/** 进程内令牌桶，10 分钟未用即回收。 */
+/**
+ * 进程内限流后端：每个 key 一个 f_concurrent 令牌桶。
+ *
+ * 进程内实现无法跨进程共享计数；多实例部署时注入基于 Redis / 数据库的
+ * `RateLimitBackend`，本类只作为单实例默认值。
+ */
 public class LocalRateLimitBackend <: RateLimitBackend {
-    private let buckets = ConcurrentHashMap<String, BucketEntry>()
-    private let calls = AtomicInt64(0)
-    private let idleNanos: Int64 = 10 * 60 * 1_000_000_000
+    private let limiters = ConcurrentHashMap<String, LimiterEntry>()
 
-    public func tryAcquire(key: String, rpm: Int64, nowNanos: Int64): Bool {
+    public func tryAcquire(key: String, rpm: Int64, _: Int64): Bool {
         if (rpm <= 0) {
             return true
         }
-        var entry = buckets.get(key)
+        let bucketKey = '${key}#${rpm}'
+        var entry = limiters.get(bucketKey)
         if (entry.isNone()) {
-            buckets.addIfAbsent(key, BucketEntry(Float64(rpm), nowNanos))
-            entry = buckets.get(key)
+            limiters.addIfAbsent(bucketKey, LimiterEntry(rpm))
+            entry = limiters.get(bucketKey)
         }
-        let bucket = entry.getOrThrow()
-        let ok = synchronized(bucket.mutex) {
-            let capacity = Float64(rpm)
-            let elapsed = nowNanos - bucket.lastRefillNanos
-            let refillPerNano = capacity / 60.0 / 1_000_000_000.0
-            bucket.tokens = min(capacity, bucket.tokens + Float64(elapsed) * refillPerNano)
-            bucket.lastRefillNanos = nowNanos
-            bucket.lastUsedNanos = nowNanos
-            if (bucket.tokens >= 1.0) {
-                bucket.tokens -= 1.0
-                true
-            } else {
-                false
-            }
-        }
-        maybeSweep(nowNanos)
-        ok
+        entry.getOrThrow().limiter.exec(Some(false), {=> Some(true)}) ?? false
     }
 
     public func close(): Unit {
-        for ((key, _) in buckets) {
-            buckets.remove(key)
-        }
-    }
-
-    private func maybeSweep(nowNanos: Int64): Unit {
-        if (calls.fetchAdd(1) % 1024 != 1023) {
-            return
-        }
-        let stale = ArrayList<String>()
-        for ((key, entry) in buckets) {
-            if (nowNanos - entry.lastUsedNanos > idleNanos) {
-                stale.add(key)
-            }
-        }
-        for (key in stale) {
-            buckets.remove(key)
+        // f_concurrent 的令牌桶没有 close 接口；这里只清空映射，
+        // 定时器在进程退出时由 f_concurrent 的 atExit 统一取消。
+        for ((key, _) in limiters) {
+            limiters.remove(key)
         }
     }
 }
