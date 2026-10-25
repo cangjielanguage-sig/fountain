@@ -454,7 +454,7 @@
       与 `.openspec.yaml`；`json-rpc` spec 只在 `f_jsonrpc/doc/spec/fix-jsonrpc-mcp-review-findings/specs/json-rpc/`
       保留一份；两侧副本按 `openspec/changes/fix-jsonrpc-mcp-review-findings/` 逐文件同步（含本次 `specs/mcp`
       缓存口径修订）
-- [ ] Z5 运行 `/opsx:verify`（或按 `openspec validate` + 人工三对齐回退）
+- [x] Z5 运行 `/opsx:verify`（已执行；F1 的 T38.1–38.3 自动化测试受仓颉 1.3 语言/基建限制，见 T38 注）
 - [ ] Z6 合并回 `master`（`--no-ff`），删除功能分支；按需建 tag
 
 ## 遗留（verify 复审未收敛，已在 apply 阶段收敛）
