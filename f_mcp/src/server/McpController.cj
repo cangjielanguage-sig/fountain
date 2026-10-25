@@ -31,30 +31,24 @@ public class McpController {
     public func sse(): InputStream {
         let http = CurrentHttpContext.instance
         let query = queryOf(http.request.url.toString())
-        let stream = match (query.get('subscriptionId')) {
-            case Some(text) =>
-                // 先校验，再写 chunked 头：错误路径不能留下半个流式响应
-                let id = match (Int64.tryParse(text)) {
-                    case Some(value) =>
-                        if (value < 0) {
-                            badRequest(http, "invalid subscriptionId '${text}'")
-                        }
-                        value
-                    case _ => badRequest(http, "invalid subscriptionId '${text}'")
-                }
-                match (server.hub().attach(id)) {
-                    case Some(subscriber) => McpSseStream(server.hub(), subscriber)
-                    case _ => badRequest(http, "unknown or already attached subscriptionId '${id}'")
-                }
-            case _ => McpSseStream(server.hub(), topicsOf(query, http))
+        // 先校验、后写 chunked：错误路径不能留下半个流式响应（400 且无 Transfer-Encoding）
+        let stream = try {
+            match (query.get('subscriptionId')) {
+                case Some(text) =>
+                    let id = parseSubscriptionId(text)
+                    match (server.hub().attach(id)) {
+                        case Some(subscriber) => McpSseStream(server.hub(), subscriber)
+                        case _ => throw McpException(McpProtocol.INVALID_PARAMS,
+                                "unknown or already attached subscriptionId '${id}'")
+                    }
+                case _ => McpSseStream(server.hub(), parseTopics(query.get('topics')))
+            }
+        } catch (e: McpException) {
+            http.responseBuilder.status(400)
+            throw e
         }
         http.responseBuilder.header('Transfer-Encoding', 'chunked')
         stream
-    }
-
-    private func badRequest(http: HttpContext, message: String): Nothing {
-        http.responseBuilder.status(400)
-        throw McpException(McpProtocol.INVALID_PARAMS, message)
     }
 
     @JsonRpcMapping[path: '/mcp']
@@ -68,16 +62,30 @@ public class McpController {
     }
 }
 
-private func topicsOf(query: HashMap<String, String>, http: HttpContext): ArrayList<String> {
-    let topics = ArrayList<String>()
-    match (query.get('topics')) {
+/** `subscriptionId` 必须是非负整数；否则 400（由调用方设置状态码）。 */
+func parseSubscriptionId(text: String): Int64 {
+    match (Int64.tryParse(text)) {
         case Some(value) =>
-            if (value.isEmpty()) {
-                // 显式 `topics=` 不能反转成「订阅全部」
-                http.responseBuilder.status(400)
+            if (value < 0) {
+                throw McpException(McpProtocol.INVALID_PARAMS, "invalid subscriptionId '${text}'")
+            }
+            value
+        case _ => throw McpException(McpProtocol.INVALID_PARAMS, "invalid subscriptionId '${text}'")
+    }
+}
+
+/**
+ * `topics` 语义：缺省 = 订阅全部；显式空串 = 400（不能反转成「订阅全部」）；
+ * 其余按 `,` 拆分、trim、丢弃空项。
+ */
+func parseTopics(value: ?String): ArrayList<String> {
+    let topics = ArrayList<String>()
+    match (value) {
+        case Some(raw) =>
+            if (raw.isEmpty()) {
                 throw McpException(McpProtocol.INVALID_PARAMS, 'topics must not be empty')
             }
-            for (topic in value.split(',')) {
+            for (topic in raw.split(',')) {
                 let trimmed = topic.trimAscii()
                 if (!trimmed.isEmpty()) {
                     topics.add(trimmed)

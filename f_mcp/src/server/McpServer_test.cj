@@ -398,6 +398,53 @@ class McpServer_test {
         @Assert('a, b', multi.get('topics').getOrThrow())
     }
 
+    /** 百分号解码后的 topic 真的能订阅到对应通知。 */
+    @TestCase
+    public func testEncodedTopicReceivesNotification(): Unit {
+        let query = queryOf('/mcp/sse?topics=tools%2Flist_changed')
+        let hub = SubscriptionHub()
+        let stream = McpSseStream(hub, parseTopics(query.get('topics')))
+        let params = JsonObject()
+        params.add('reason', 'encoded')
+        hub.publish('tools/list_changed', params)
+        let text = String.fromUtf8(stream.poll().getOrThrow())
+        @Assert(true, text.contains('notifications/tools/list_changed'))
+        stream.close()
+    }
+
+    /** `?topics=a, b` 按逗号拆成两项并 trim。 */
+    @TestCase
+    public func testTopicsAreSplitAndTrimmed(): Unit {
+        let query = queryOf('/mcp/sse?topics=a, b')
+        let topics = parseTopics(query.get('topics'))
+        @Assert(2, topics.size)
+        @Assert('a', topics[0])
+        @Assert('b', topics[1])
+        // 缺省 = 订阅全部
+        @Assert(0, parseTopics(queryOf('/mcp/sse').get('topics')).size)
+    }
+
+    /**
+     * 显式空 `topics=` 必须报错（不能反转成「订阅全部」）。
+     *
+     * 400 由 controller 在捕获后设置，且 `Transfer-Encoding: chunked` 只在解析成功后写入——
+     * 该顺序由 `McpController.sse` 的「先 try 建流、后写头」保证（HttpContext 无法在测试里构造）。
+     */
+    @TestCase
+    public func testEmptyTopicsIsRejected(): Unit {
+        let query = queryOf('/mcp/sse?topics=')
+        @Assert(true, query.contains('topics'))
+        @ExpectThrows[McpException](parseTopics(query.get('topics')))
+    }
+
+    /** 无效 `subscriptionId` 必须报错（controller 转 400），合法值原样返回。 */
+    @TestCase
+    public func testInvalidSubscriptionIdIsRejected(): Unit {
+        @ExpectThrows[McpException](parseSubscriptionId('abc'))
+        @ExpectThrows[McpException](parseSubscriptionId('-1'))
+        @Assert(7, parseSubscriptionId('7'))
+    }
+
     @TestCase
     public func testResourceNotFoundUsesBusinessCode(): Unit {
         @Assert(-32040, McpProtocol.RESOURCE_NOT_FOUND)
