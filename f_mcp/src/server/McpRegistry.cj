@@ -27,13 +27,17 @@ public class McpRegistry {
     private static let builder = McpServer.builder()
     private static var built: ?McpServer = None
 
+    /**
+     * 追加注册项。已经 `build()` 过时立即重建，新注册的 tool / resource / prompt 马上生效。
+     *
+     * 仅用于启动阶段（`fboot` 串行加载 dylib），不要在请求处理中调用。
+     */
     public static func configure(configure: (McpServerBuilder) -> Unit): Unit {
         synchronized(mutex) {
-            if (built.isSome()) {
-                throw McpException(McpProtocol.INTERNAL_ERROR,
-                    'McpRegistry is already initialized; configure before first server()')
-            }
             configure(builder)
+            if (built.isSome()) {
+                built = Some(builder.build())
+            }
         }
     }
 
@@ -198,9 +202,16 @@ public class McpRegistry {
         configure({b => b.serverInfo(name, McpConfig.version())})
     }
 
-    /** 触发生成 `McpServer`（已经 build 过则直接返回）。 */
+    /**
+     * 按当前累计的注册重建 `McpServer`，新注册的 tool / resource / prompt 立即生效。
+     *
+     * 可以重复调用（例如在 `main()` 里继续 `configure` 之后再调一次）；每次都是全量重建，
+     * 因此不能在请求处理中调用——会丢掉结果缓存与订阅状态。
+     */
     public static func build(): Unit {
-        server()
+        synchronized(mutex) {
+            built = Some(builder.build())
+        }
     }
 
     /**

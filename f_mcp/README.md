@@ -123,7 +123,8 @@ public class KnowledgeService {
 }
 ```
 
-- `@Mcp` 自动给类加 `@Bean`，在模块加载期完成注册并调用 `McpRegistry.build()`；一个进程只应有一个 `@Mcp` 类
+- `@Mcp` 自动给类加 `@Bean`，在模块加载期完成注册；构建延迟到首次 `McpRegistry.server()`（首次请求 / controller 实例化），也可以在 `main()` 里手动 `McpRegistry.build()`
+- `McpRegistry.build()` 可以重复调用：每次按当前累计的注册重建 `McpServer`，新注册的 tool / resource / prompt 立即生效；因此一个进程可以有多个 `@Mcp` 类，也允许 `@Mcp` 注册与 `main()` 里的手工 `configure` 共存。只应在启动阶段调用（会重建结果缓存、订阅与限流状态）
 - 属性 `@Mcp['kb-server']` 或 `@Mcp[kbServer]` 指定 `serverInfo.name`（字符串常量或标识符）；不写属性时 name 为 `fountain-mcp`
 - `serverInfo.version` 取配置项 `mcp_version`，未配置时为 `1.0.0`
 - **tool**：函数必须恰好一个参数，参数是 `@DataAssist[props fields]` 类；`inputSchema` 由该类型生成
