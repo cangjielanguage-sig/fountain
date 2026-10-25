@@ -273,6 +273,17 @@ public class McpClient {
         rpcCall('prompts/list', params).asObject()
     }
 
+    /** 注册订阅；返回结果里的 `sseUrl` 可直接用于建立 SSE 连接。 */
+    public func listen(topics: Array<String>): JsonObject {
+        let params = JsonObject()
+        let array = JsonArray()
+        for (topic in topics) {
+            array.add(topic)
+        }
+        params.add('topics', array)
+        rpcCall('subscriptions/listen', params).asObject()
+    }
+
     public func getPrompt(name: String, arguments!: JsonObject = JsonObject()): JsonObject {
         let params = JsonObject()
         params.add('name', name)

@@ -57,13 +57,27 @@ Legacy methods such as `initialize` return `-32601` with `data.legacyMethod`, te
 
 ### Rate limiting
 
-Three layers: global `RateLimitPolicy` → `Builder.rateLimit` → per-tool `ToolRateLimit`. Dimensions: caller / caller×tool / tool token buckets, plus global and per-tool concurrency gates. Over-limit returns `-32050` with `data.scope` in `caller` / `caller_tool` / `tool` / `concurrency` / `concurrency_tool`.
+Three layers: global `RateLimitPolicy` → `Builder.rateLimit` → per-tool `ToolRateLimit`. Dimensions: caller / caller×tool / tool, plus global and per-tool concurrency gates. Over-limit returns `-32050` with `data.scope` in `caller` / `caller_tool` / `tool` / `concurrency` / `concurrency_tool`.
 
-For multi-instance deployments, inject a shared backend:
+The single-instance default uses `f_concurrent.TokenBucketRateLimiter`, one bucket per rate-limit key. The global default can come from `mcp_rateLimit` (an explicit `Builder.rateLimit()` wins):
+
+```bash
+# perCallerRpm,perCallerToolRpm,perToolRpm,maxConcurrency,perCallerConcurrency
+export mcp_rateLimit=600,120,6000,64,8
+
+# or JSON; omitted fields mean unlimited
+export mcp_rateLimit='{"perCallerRpm":600,"perCallerToolRpm":120,"perToolRpm":6000}'
+```
+
+**Cross-process limiting**: `f_concurrent` limiters are process-local. Implement `RateLimitBackend` against shared storage and inject it:
 
 ```cangjie
-b.rateLimitBackend(myRedisBackend)   // implements RateLimitBackend
+b.rateLimitBackend(myRedisBackend)   // shared by all instances
 ```
+
+The `key` passed to `tryAcquire(key, rpm, nowNanos)` is already scoped (`c:` / `ct:` / `t:`), so it can be used directly as a Redis key. Use `INCR` + `EXPIRE 60` for a fixed window, a Lua script for a token bucket, or a row lock / `UPDATE ... RETURNING` in a database. f_mcp does not bundle a Redis client, so it stays storage-agnostic.
+
+Concurrency gates (`maxConcurrency` / `perCallerConcurrency`) remain process-local; a cross-instance concurrency cap needs a gateway or a shared semaphore.
 
 ### Large results
 
@@ -76,12 +90,14 @@ Beyond `maxResultBytes` (1 MB by default):
 
 ### Subscriptions and SSE
 
-`subscriptions/listen` returns a `subscriptionId`; `GET /mcp/sse?topics=tools/list_changed` returns `text/event-stream` where each event is a JSON-RPC notification. Heartbeat every 15 s; connection lives up to 30 minutes.
+`subscriptions/listen` returns a `subscriptionId` and a ready-to-use `sseUrl`; `GET` that URL (`/mcp/sse?subscriptionId=N`) binds the SSE connection to the same subscriber. Each event is a JSON-RPC notification. The legacy `?topics=tools/list_changed` form still works. Heartbeat every 15 s; connection lives up to 30 minutes.
 
 ## Client
 
 ```cangjie
 let client = McpClient.http('http://127.0.0.1:8080/mcp')
+let sub = client.listen(['tools/list_changed'])
+let sseUrl = sub['sseUrl'].asString().value
 let tools = client.listAllTools()
 let result = client.callTool('kb.search', arguments: args)
 

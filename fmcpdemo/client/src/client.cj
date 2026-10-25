@@ -67,12 +67,24 @@ private func verifyResourceAndPrompt(client: McpClient): Unit {
 }
 
 private func verifySse(url: String, baseUrl: String): Unit {
+    let listener = McpClient.http(url)
+    let subscription = try {
+        listener.listen(['tools/list_changed'])
+    } finally {
+        listener.close()
+    }
+    let ssePath = subscription['sseUrl'].asString().value
+    let sseUrl = if (ssePath.startsWith('http://') || ssePath.startsWith('https://')) {
+        ssePath
+    } else {
+        '${baseUrl}${ssePath}'
+    }
     let sseClient = ClientBuilder().readTimeout(Duration.second * 15).build()
     let future = spawn {
         sseClient.send(
             HttpRequestBuilder()
                 .method('GET')
-                .url('${baseUrl}/mcp/sse?topics=tools/list_changed')
+                .url(sseUrl)
                 .header('Accept', 'text/event-stream')
                 .build())
     }

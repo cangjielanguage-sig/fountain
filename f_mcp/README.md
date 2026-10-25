@@ -57,13 +57,27 @@ McpTool.of<SearchRequest>('kb.search')
 
 ### 限流
 
-三层：全局 `RateLimitPolicy` → `Builder.rateLimit` → 每工具 `ToolRateLimit`。维度：调用方 / 调用方×工具 / 工具全局的令牌桶，加上全局总并发与工具子并发。超限返回 `-32050`，`data.scope` 为 `caller` / `caller_tool` / `tool` / `concurrency` / `concurrency_tool`。
+三层：全局 `RateLimitPolicy` → `Builder.rateLimit` → 每工具 `ToolRateLimit`。维度：调用方 / 调用方×工具 / 工具全局，加上全局总并发与工具子并发。超限返回 `-32050`，`data.scope` 为 `caller` / `caller_tool` / `tool` / `concurrency` / `concurrency_tool`。
 
-多实例部署可注入共享后端：
+单实例默认用 `f_concurrent.TokenBucketRateLimiter`，每个限流 key 一个令牌桶。全局默认值可由配置项 `mcp_rateLimit` 提供（`Builder.rateLimit()` 优先）：
+
+```bash
+# perCallerRpm,perCallerToolRpm,perToolRpm,maxConcurrency,perCallerConcurrency
+export mcp_rateLimit=600,120,6000,64,8
+
+# 或 JSON，省略的字段表示不限制
+export mcp_rateLimit='{"perCallerRpm":600,"perCallerToolRpm":120,"perToolRpm":6000}'
+```
+
+**跨进程限流**：`f_concurrent` 的限流器是进程内的，不能直接跨进程。需要实现 `RateLimitBackend` 并注入：
 
 ```cangjie
-b.rateLimitBackend(myRedisBackend)   // 实现 RateLimitBackend
+b.rateLimitBackend(myRedisBackend)   // 多实例共享同一个 Redis / 数据库
 ```
+
+`tryAcquire(key, rpm, nowNanos)` 的 `key` 已经带了作用域前缀（`c:` / `ct:` / `t:`），可以直接作为共享存储的键。Redis 可用 `INCR key` + `EXPIRE 60` 做固定窗口，或用 Lua 脚本做令牌桶；数据库可用单行 `UPDATE ... RETURNING` / 行锁。f_mcp 不内置 Redis 客户端，避免绑定具体存储。
+
+并发闸门（`maxConcurrency` / `perCallerConcurrency`）仍是进程内的；跨实例的全局并发需要网关或独立的共享信号量。
 
 ### 大结果
 
@@ -76,7 +90,14 @@ b.rateLimitBackend(myRedisBackend)   // 实现 RateLimitBackend
 
 ### 订阅与 SSE
 
-`subscriptions/listen` 返回 `subscriptionId`；`GET /mcp/sse?topics=tools/list_changed` 返回 `text/event-stream`，每条事件是一个 JSON-RPC 通知。心跳 15 秒，连接最长 30 分钟；响应使用 `Transfer-Encoding: chunked`（长度未知的流）。
+`subscriptions/listen` 返回 `subscriptionId` 和可直接连接的 `sseUrl`；`GET` 该 URL（`/mcp/sse?subscriptionId=N`）会绑定到同一个订阅者，每条事件是一个 JSON-RPC 通知。也兼容 `?topics=tools/list_changed` 的旧用法。心跳 15 秒，连接最长 30 分钟；响应使用 `Transfer-Encoding: chunked`（长度未知的流）。
+
+客户端可直接用 `McpClient.listen(topics)` 获取订阅结果：
+
+```cangjie
+let sub = client.listen(['tools/list_changed'])
+let sseUrl = sub['sseUrl'].asString().value
+```
 
 ## 客户端
 

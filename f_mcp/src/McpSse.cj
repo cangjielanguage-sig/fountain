@@ -40,6 +40,12 @@ public class McpSseStream <: InputStream {
         this.subscriber = hub.subscribe(topics)
     }
 
+    /** 绑定 `subscriptions/listen` 已经创建的订阅者。 */
+    public init(hub: SubscriptionHub, subscriber: McpSubscriber) {
+        this.hub = hub
+        this.subscriber = subscriber
+    }
+
     public func read(buffer: Array<Byte>): Int64 {
         if (closed) {
             return -1

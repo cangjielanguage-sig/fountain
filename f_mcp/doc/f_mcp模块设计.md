@@ -56,7 +56,7 @@
 > - **大结果一律转 `resource_link`**（文本也转，不再"文本截断、二进制转 link"）；
 >   新增 `publicBaseUrl` 与临时结果资源（5.6.6）
 > - **URI scheme 白名单**：只接受 `http` / `https` / `ftp`，`file://` 等一律 `-32602`（5.6.1）
-> - **限流桶用 `f_cache.HeapCache` 保存**：容量 10 万 key + TTL 淘汰，不再自己写 HashMap（7.2.6）
+> - **限流桶用 `f_concurrent.TokenBucketRateLimiter` 保存**：每个限流 key 一个令牌桶（7.2.6）
 >
 > v0.2 → v0.3（七项决策落定，补上 v0.2 遗留的待确认）：
 >
@@ -92,13 +92,13 @@
 | schema       | **统一走 `f_data.json.JsonSchema`**：`toJsonSchema<T>()` 生成、`JsonSchema.validate` 校验（5.3）                                       |
 | 首版不做 SSE | 响应一律返回单个 JSON 对象（规范允许）；声明`listChanged: false`                                                                       |
 | 多轮重试     | **单轮优先**；`input_required` 多轮默认 `Manual`，可配 `Auto(handler, maxRounds)`（4.4）                                               |
-| 限流         | **三层**：全局默认 → 服务级配置 → **每工具覆盖**；桶存 `f_cache`（10 万 key + TTL）                                                  |
+| 限流         | **三层**：全局默认 → 服务级配置 → **每工具覆盖**；桶用 `f_concurrent` 令牌桶，跨进程走 `RateLimitBackend` SPI                  |
 | 大结果       | 超过 **1 MB**（可配）**一律转 `resource_link`**；临时结果自管理（256 条 / 256 MB / TTL 10 分钟）（5.6.6） |
 | 容量自适应   | **默认开启**。只调 `maxEntries`（不调 `maxBytes` / TTL）；按 `rejectedByCount` 触发，调大敏捷调小迟钝（5.6.6.5） |
 | 可观测性     | **每个窗口一条 `debug`**（含未调整原因）+ **每次调整一条 `info`**；13 项参数全部可配（5.6.6.5.3 / 5.6.6.5.6） |
 | 资源 URI     | **只接受 `http` / `https` / `ftp`**，其他 scheme 一律 `-32602`（5.6.1）                                                                |
 | 部署         | `output-type = "dynamic"` + `--dy-std`，`fboot run --dylibPattern=<模块名>`                                                            |
-| 依赖         | `fountain::f_jsonrpc`、`fountain::f_mvc`、`fountain::f_data`、`fountain::f_cache`（限流桶 / 临时结果）、`fountain::f_process`（stdio） |
+| 依赖         | `fountain::f_jsonrpc`、`fountain::f_mvc`、`fountain::f_data`、`fountain::f_concurrent`（限流）、`fountain::f_config`（配置）、`fountain::f_process`（stdio） |
 
 ---
 
@@ -304,9 +304,9 @@ MCP-Protocol-Version: 2026-07-28
 | 取消                      | HTTP 侧通过**关闭响应流**表达取消                                       |
 | 通知                      | 返回`202 Accepted`，**空 body**                                         |
 
-**首版只实现「单个 JSON 对象」响应。** 规范允许，代价是不能在调用过程中推送进度、
-也不能维持 `subscriptions/listen` 流——所以能力声明里必须写 `listChanged: false`，
-并且不实现 `subscriptions/listen`。
+**已实现「单个 JSON 对象」+ `/mcp/sse` 长连接响应。** `subscriptions/listen` 返回 `subscriptionId`
+和可直接连接的 `sseUrl`；`GET /mcp/sse?subscriptionId=N` 会绑定到同一个订阅者。
+`tools/list` 等列表仍是静态快照，能力声明里的 `listChanged` 保持 `false`；订阅用于自定义通知。
 
 ### 3.2 stdio：内置简化实现，仅用于测试
 
@@ -713,9 +713,9 @@ throw McpException("inputSchema 含 $ref（/properties/query/$ref），本版本
 | `tools/call`                       | 同上                        | 参数校验（`JsonSchema.validate`）、超时、错误包装              |
 | `resources/list`                   | **声明了 resources 就必须** | 支持`cursor`，顺序确定                                         |
 | `resources/read`                   | **同上（与 list 成对）**    | 返回`contents[]`；不存在的 URI → `-32002`，不是空数组         |
-| `prompts/list` / `prompts/get`     | **首版不声明**              | 见 5.4.1                                                       |
-| `subscriptions/listen`             | ❌ 不做                     | 因为没有 SSE                                                   |
-| `notifications/tools/list_changed` | ❌ 不发                     | 因为`listChanged: false`                                       |
+| `prompts/list` / `prompts/get`     | ✅ 已实现                   | 能力声明含 `prompts`；未知 prompt / 缺必填参数返回 `-32602`    |
+| `subscriptions/listen`             | ✅ 已实现                   | 返回 `subscriptionId` + `sseUrl`；SSE 按 `subscriptionId` 绑定 |
+| `notifications/tools/list_changed` | ✅ 可发                     | `SubscriptionHub.publish` 发布；demo 的 `notify` 工具触发        |
 
 `tools/list` 的**确定性排序**容易被忽略：规范要求"同一工具集在多次请求间顺序一致"，
 理由是客户端会缓存工具列表、LLM 的 prompt cache 也依赖稳定前缀。用 `HashMap` 遍历顺序会漂，
@@ -2181,17 +2181,22 @@ public class McpServer {
 前三个（`caller` / `caller_tool` / `tool`）是"你太快了"，后两个是"你同时发太多了"——
 **令牌类限流看频率，并发类限流看在途数**，两者的重试策略根本不同。
 
-#### 7.2.7 明确不做分布式限流
+#### 7.2.7 分布式限流：单实例默认 + 跨进程 SPI
 
 
-| 部署形态 | 存储                                                            |
-| -------- | --------------------------------------------------------------- |
-| 单实例   | 进程内`HeapCache`（上面这套）                                   |
-| 多实例   | **不做分布式限流**。各实例独立计数，总量 = 单实例配额 × 实例数 |
+| 部署形态 | 存储 |
+| -------- | ---- |
+| 单实例 | `f_concurrent.TokenBucketRateLimiter`，每个 key 一个令牌桶 |
+| 多实例 | 注入 `RateLimitBackend`，由使用方实现共享存储 |
 
-**为什么不做**：需要共享存储（Redis / `f_store`）+ 原子计数器 + 时钟同步，
-复杂度远超 f_mcp 的范围。多实例部署时，调用方应该在前置网关（nginx / API 网关）做全局限流，
-`f_mcp` 的限流只作为"单实例自保"。
+`RateLimitBackend.tryAcquire(key, rpm, nowNanos)` 的 `key` 已带 `c:` / `ct:` / `t:` 作用域前缀，直接作为共享存储的键：
+
+- Redis：`INCR key` + `EXPIRE 60`（固定窗口），或 Lua 脚本实现令牌桶
+- 数据库：单行 `UPDATE ... RETURNING` / 行锁
+- 网关：把全局限流放在 nginx / API 网关，f_mcp 只做单实例自保
+
+`f_concurrent` 的限流器是进程内的，不能跨进程。f_mcp 不内置 Redis 客户端，避免绑定具体存储。
+全局默认值由 `mcp_rateLimit` 配置；`Builder.rateLimit()` 优先于配置。并发闸门仍是进程内的。
 
 ---
 
@@ -2335,7 +2340,7 @@ public class McpServer {
 | 6 | 能力声明 | **不声明空壳**；`prompts` 完全不声明 | 5.4.1 |
 | 7 | 限流配置 | **三层**：全局默认 → 服务级 → 每工具覆盖（`None` 沿用上层） | 7.2.1 |
 | 8 | 限流维度 | 调用方总配额 / 调用方×工具 / 工具全局 + **全局总并发 + 工具子并发** | 7.2.2 |
-| 9 | 限流存储 | 令牌桶用 **`HeapCache`**（10 万 key / TTL 10min）；工具全局级用 `ConcurrentHashMap` | 7.2.4 |
+| 9 | 限流存储 | 令牌桶用 **`f_concurrent.TokenBucketRateLimiter`**，每 key 一个；跨进程用 `RateLimitBackend` SPI | 7.2.4 |
 | 10 | `maxLife` 语义 | **最后一次访问后**，`get()` 自动续期，**不需要 prolong** | 7.2.4.1 |
 | 11 | 并发计数器 | **独立 `ConcurrencyGate`**（`ConcurrentHashMap` + `AtomicInt64`），归零即回收 key | 7.2.2 |
 | 12 | 工具级并发 | **是"子限额"不是"覆盖"**：全局闸门与工具闸门同时生效 | 7.2.2 |

@@ -20,6 +20,7 @@ import std.time.MonoTime
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_data.*
+import fountain::f_config.Config
 import fountain::f_jsonrpc.*
 
 @Test
@@ -270,18 +271,36 @@ class McpServer_test {
     }
 
     @TestCase
+    public func testConfigRateLimit(): Unit {
+        Config.set([(McpConfig.RATE_LIMIT, '1,1,1')])
+        try {
+            let tool = McpTool.builder('ping')
+                .handler({_, _ => CallToolResult.text('pong')})
+                .build()
+            let srv = McpServer.builder().tool(tool).build()
+            let first = call(srv, 'tools/call', metaParams('"name":"ping","arguments":{}'))
+            @Assert(true, first.contains('result'))
+            let second = call(srv, 'tools/call', metaParams('"name":"ping","arguments":{}'))
+            @Assert(McpProtocol.RATE_LIMITED, errorOf(second)['code'].asInt().toInt64())
+        } finally {
+            Config.remove(McpConfig.RATE_LIMIT)
+        }
+    }
+
+    @TestCase
     public func testSubscriptionsListenAndPublish(): Unit {
         let srv = server()
         let listen = call(srv, 'subscriptions/listen', metaParams('"topics":["tools/list_changed"]'))['result'].asObject()
-        @Assert(true, listen.contains('subscriptionId'))
+        let id = listen['subscriptionId'].asInt().toInt64()
+        @Assert(true, listen['sseUrl'].asString().value.contains('subscriptionId=${id}'))
+        let subscriber = srv.hub().attach(id).getOrThrow()
+        let stream = McpSseStream(srv.hub(), subscriber)
         let params = JsonObject()
         params.add('reason', 'test')
         srv.hub().publish('tools/list_changed', params)
-        // 订阅者由 hub 持有；这里直接再订阅一个用于断言
-        let topics = ArrayList<String>()
-        topics.add('tools/list_changed')
-        let subscriber = srv.hub().subscribe(topics)
-        srv.hub().publish('tools/list_changed', params)
-        @Assert(1, subscriber.drain().size)
+        let text = String.fromUtf8(stream.poll().getOrThrow())
+        @Assert(true, text.contains('notifications/tools/list_changed'))
+        stream.close()
+        @Assert(true, srv.hub().attach(id).isNone())
     }
 }

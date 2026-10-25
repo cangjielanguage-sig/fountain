@@ -27,6 +27,7 @@ import fountain::f_log.impl.*
 public class McpSubscriber {
     let id: Int64
     let topics: ArrayList<String>
+    var attached = false
     let queue = ArrayList<JsonObject>()
     let mutex = Mutex()
 
@@ -78,6 +79,25 @@ public class SubscriptionHub {
         }
     }
 
+    /**
+     * 把 SSE 连接绑定到 `subscriptions/listen` 创建的订阅者。
+     *
+     * 同一个订阅者只能绑定一次；绑定成功后 SSE 流直接消费它的队列。
+     */
+    public func attach(id: Int64): ?McpSubscriber {
+        var found: ?McpSubscriber = None
+        synchronized(mutex) {
+            for (subscriber in subscribers) {
+                if (subscriber.id == id && !subscriber.attached) {
+                    subscriber.attached = true
+                    found = Some(subscriber)
+                    break
+                }
+            }
+        }
+        found
+    }
+
     public func publish(topic: String, params: JsonValue): Unit {
         let notification = JsonObject()
         notification.add('jsonrpc', '2.0')
@@ -96,7 +116,7 @@ public class SubscriptionHub {
 public class McpServerBuilder {
     private var serverName = 'fountain-mcp'
     private var serverVersion = '1.0.0'
-    private var rateLimitPolicy = RateLimitPolicy()
+    private var rateLimitPolicy: ?RateLimitPolicy = None
     private var publicBaseUrl_: ?String = None
     private var pageSize_ = 100
     private var resultOptions = ResultStoreOptions()
@@ -112,7 +132,7 @@ public class McpServerBuilder {
     }
 
     public func rateLimit(policy: RateLimitPolicy): McpServerBuilder {
-        rateLimitPolicy = policy
+        rateLimitPolicy = Some(policy)
         this
     }
 
@@ -158,8 +178,8 @@ public class McpServerBuilder {
     }
 
     public func build(): McpServer {
-        McpServer(serverName, serverVersion, rateLimitPolicy, publicBaseUrl_, pageSize_, resultOptions, backend, tools,
-            resources, prompts)
+        McpServer(serverName, serverVersion, rateLimitPolicy ?? McpConfig.rateLimit(), publicBaseUrl_, pageSize_,
+            resultOptions, backend, tools, resources, prompts)
     }
 }
 
@@ -540,10 +560,16 @@ public class McpServer {
             }
         }
         let subscriber = hub_.subscribe(topics)
+        let path = '${McpProtocol.SSE_PATH}?subscriptionId=${subscriber.id}'
+        let sseUrl = match (baseUrl) {
+            case Some(base) => '${base}${path}'
+            case _ => path
+        }
         let result = JsonObject()
         result.add('resultType', 'complete')
         result.add('subscriptionId', subscriber.id)
         result.add('subscribedTopics', JsonArray(list: topicsToJson(topics)))
+        result.add('sseUrl', sseUrl)
         result
     }
 
