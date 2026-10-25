@@ -18,18 +18,18 @@
 
 ### Requirement: `@JsonRpc` 类级注册
 
-类宏 MUST 只叫 `JsonRpc`，支持 `@JsonRpc` 与 `@JsonRpc[topic: <name>]`；MUST NOT 再提供 `jsonrpc` / `jsonrpcmeta` 小写别名。展开后 MUST：
+类宏 MUST 只叫 `JsonRpc`，支持 `@JsonRpc` 与 `@JsonRpc[namespace: <name>]`；MUST NOT 再提供 `jsonrpc` / `jsonrpcmeta` 小写别名。展开后 MUST：
 
 1. 给类加上 `@Bean`
-2. 为每个 public 实例方法生成加载期注册代码，方法名为 `<topic>.<fnName>` 或 `<fnName>`
+2. 为每个 public 实例方法生成加载期注册代码，方法名为 `<namespace>.<fnName>` 或 `<fnName>`
 3. 跳过非 public 方法、静态方法与构造函数
 4. 生成的 handler 通过 `lookup<T>()` 取实例并调用方法
 5. 描述与超时从 `JsonRpcRegistry.getMeta<T>(fnName, argTypes)` 读取
 
-#### Scenario: 带 topic
+#### Scenario: 带 namespace
 
-- **WHEN** `@JsonRpc[topic: kb]` 修饰含 `public func search(...)` 的类
-- **THEN** 注册名为 `kb.search`；`/rpc/kb` 与 `/rpc` 都可调用
+- **WHEN** `@JsonRpc[namespace: knowledge]` 修饰含 `public func search(...)` 的类
+- **THEN** 注册名为 `knowledge.search`；`/rpc/knowledge` 与 `/rpc` 都可调用
 
 #### Scenario: 旧写法
 

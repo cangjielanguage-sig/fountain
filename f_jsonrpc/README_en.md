@@ -48,7 +48,7 @@ main() {
 }
 ```
 
-The part before the first `.` in a method name is its namespace (`kb.search` → `kb`). Methods without a dot can only be called through `/rpc`.
+The part before the first `.` in a method name is its namespace (`knowledge.search` → `knowledge`). Methods without a dot can only be called through `/rpc`.
 
 ### 1.1 Register with the macro (recommended)
 
@@ -56,7 +56,7 @@ The part before the first `.` in a method name is its namespace (`kb.search` →
 import fountain::f_jsonrpc.*
 import fountain::f_jsonrpc.macros.*
 
-@JsonRpc[topic: kb]
+@JsonRpc[namespace: knowledge]
 public class SearchRPC {
     public init() {}
 
@@ -72,7 +72,7 @@ public class SearchRPC {
 }
 ```
 
-- The class gets `@Bean`; every public instance method is registered as `<topic>.<method>`
+- The class gets `@Bean`; every public instance method is registered as `<namespace>.<method>`
 - The second `@JsonRpcMeta` argument is a `Duration` string; use `meta.timeoutDuration` to get a `Duration`
 - `JsonRpcRegistry.getMeta<T>(methodName, argTypes)` returns `JsonRpcMeta`; `argTypes` selects the overload (empty description and a `500ms` timeout when there is no annotation)
 - A single parameter accepts `[value]` or `{"name": value}` per JSON-RPC; multiple parameters require an object

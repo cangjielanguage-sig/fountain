@@ -19,12 +19,12 @@ internal import std.ast.*
 internal import fountain::f_macros.*
 
 /**
- * `@JsonRpc[topic: kb]`：把类里的每个 public 实例方法注册成一个 JSON-RPC 方法。
+ * `@JsonRpc[namespace: knowledge]`：把类里的每个 public 实例方法注册成一个 JSON-RPC 方法。
  *
  * 展开结果：
  * - 类上加 `@Bean`
  * - 每个方法一段 `private let _ = {=> ... }()`，在加载期调用 `JsonRpcRegistry.register`
- * - 方法名是 `<topic>.<fnName>`；没有 topic 时就是 `<fnName>`
+ * - 方法名是 `<namespace>.<fnName>`；没有 namespace 时就是 `<fnName>`
  * - 描述与超时从运行期反射的 `@JsonRpcMeta` 读取
  */
 public macro JsonRpc(input: Tokens): Tokens {
@@ -32,25 +32,29 @@ public macro JsonRpc(input: Tokens): Tokens {
 }
 
 public macro JsonRpc(attr: Tokens, input: Tokens): Tokens {
-    expand(topicOf(attr), input)
+    expand(namespaceOf(attr), input)
 }
 
-private func topicOf(attr: Tokens): String {
+private func namespaceOf(attr: Tokens): String {
     var i = 0
     while (i < attr.size) {
-        if (attr[i].kind == IDENTIFIER && attr[i].value == 'topic') {
+        if (attr[i].kind == IDENTIFIER && attr[i].value == 'namespace') {
             if (i + 2 < attr.size && attr[i + 1].kind == COLON) {
                 return attr[i + 2].value
             }
-            diagReport(ERROR, attr, "expect @JsonRpc[topic: <name>]", '')
+            diagReport(ERROR, attr, "expect @JsonRpc[namespace: <name>]", '')
             return ''
         }
         i++
     }
+    if (attr.size > 0) {
+        // 旧写法 `@JsonRpc[topic: ...]` 也会走到这里：直接报错，避免静默丢掉命名空间。
+        diagReport(ERROR, attr, "expect @JsonRpc[namespace: <name>]", '')
+    }
     ''
 }
 
-private func expand(topic: String, input: Tokens): Tokens {
+private func expand(ns: String, input: Tokens): Tokens {
     let (decl, _) = extractFirstDecl(input)
     let klass = match (decl) {
         case c: ClassDecl => c
@@ -70,7 +74,7 @@ private func expand(topic: String, input: Tokens): Tokens {
         match (asFunc(item)) {
             case Some(f) =>
                 if (isPublic(f) && !isStatic(f) && f.identifier.value != 'init') {
-                    registrations += generateMethod(topic, klassName, f)
+                    registrations += generateMethod(ns, klassName, f)
                 }
             case _ => ()
         }
@@ -93,12 +97,12 @@ private func asFunc(decl: Decl): Option<FuncDecl> {
     }
 }
 
-private func generateMethod(topic: String, klassName: String, f: FuncDecl): Tokens {
+private func generateMethod(ns: String, klassName: String, f: FuncDecl): Tokens {
     let fnName = f.identifier.value
-    let fullName = if (topic.isEmpty()) {
+    let fullName = if (ns.isEmpty()) {
         fnName
     } else {
-        '${topic}.${fnName}'
+        '${ns}.${fnName}'
     }
     let multi = f.funcParams.size > 1
     let classToken = ident(klassName)
