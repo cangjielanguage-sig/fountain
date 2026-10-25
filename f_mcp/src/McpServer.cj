@@ -214,7 +214,7 @@ public class McpServer {
         this.baseUrl = baseUrl
         this.pageSize = pageSize
         this.resultStore = ToolResultStore(options: resultOptions)
-        this.backend = backend ?? LocalRateLimitBackend()
+        this.backend = backend ?? RateLimitBackends.fromConfig()
         registerTools(tools)
         registerResources(resources)
         registerPrompts(prompts)

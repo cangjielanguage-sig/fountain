@@ -26,9 +26,18 @@ import fountain::f_data.*
  * - JSON：`{"perCallerRpm":600,"perCallerToolRpm":120,"perToolRpm":6000}`
  *
  * 省略的字段表示不限制。
+ *
+ * `mcp_rateLimitBackend` 选择进程内限流算法：
+ * `token-bucket`（默认）/ `leaking-bucket` / `sliding-window` / `any-moment` / `unlimited`。
  */
 public class McpConfig {
     public static const RATE_LIMIT = 'mcp_rateLimit'
+    public static const RATE_LIMIT_BACKEND = 'mcp_rateLimitBackend'
+
+    /** `mcp_rateLimitBackend` 的原始值；未配置时为空串。 */
+    public static func rateLimitBackendName(): String {
+        Config.getString(RATE_LIMIT_BACKEND)?.trimAscii() ?? ''
+    }
 
     public static func rateLimit(): RateLimitPolicy {
         let raw = Config.getString(RATE_LIMIT)?.trimAscii() ?? ''

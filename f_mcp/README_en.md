@@ -74,7 +74,19 @@ Legacy methods such as `initialize` return `-32601` with `data.legacyMethod`, te
 
 Three layers: global `RateLimitPolicy` → `Builder.rateLimit` → per-tool `ToolRateLimit`. Dimensions: caller / caller×tool / tool, plus global and per-tool concurrency gates. Over-limit returns `-32050` with `data.scope` in `caller` / `caller_tool` / `tool` / `concurrency` / `concurrency_tool`.
 
-The single-instance default uses `f_concurrent.TokenBucketRateLimiter`, one bucket per rate-limit key. The global default can come from `mcp_rateLimit` (an explicit `Builder.rateLimit()` wins):
+Five `RateLimitBackend` implementations are built in, all backed by `f_concurrent` limiters with one limiter per rate-limit key:
+
+| `mcp_rateLimitBackend` | Limiter | Semantics |
+|---|---|---|
+| `token-bucket` (default) | `TokenBucketRateLimiter` | `rpm` per minute, bursts up to `rpm` |
+| `leaking-bucket` | `LeakingBucketRateLimiter` | leaks `rpm` per minute, queue capped at `rpm` |
+| `sliding-window` | `SlidingWindowRateLimiter` | 1-minute sliding window, limit `rpm` |
+| `any-moment` | `AnyMomentRateLimiter` | `rpm` as an instantaneous concurrency cap, not a per-minute quota |
+| `unlimited` | `UnlimitedRateLimiter` | no limiting |
+
+An explicit `Builder.rateLimitBackend(...)` wins over configuration. Names are case-insensitive and ignore `-` / `_`; an unknown name throws `IllegalArgumentException` at `build()`.
+
+The global default comes from `mcp_rateLimit` and `mcp_rateLimitBackend`:
 
 ```bash
 # perCallerRpm,perCallerToolRpm,perToolRpm,maxConcurrency,perCallerConcurrency
@@ -82,6 +94,9 @@ export mcp_rateLimit=600,120,6000,64,8
 
 # or JSON; omitted fields mean unlimited
 export mcp_rateLimit='{"perCallerRpm":600,"perCallerToolRpm":120,"perToolRpm":6000}'
+
+# rate-limit algorithm
+export mcp_rateLimitBackend=sliding-window
 ```
 
 **Cross-process limiting**: `f_concurrent` limiters are process-local. Implement `RateLimitBackend` against shared storage and inject it:

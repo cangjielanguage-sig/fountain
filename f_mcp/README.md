@@ -74,7 +74,19 @@ McpTool.of<SearchRequest>('kb.search')
 
 三层：全局 `RateLimitPolicy` → `Builder.rateLimit` → 每工具 `ToolRateLimit`。维度：调用方 / 调用方×工具 / 工具全局，加上全局总并发与工具子并发。超限返回 `-32050`，`data.scope` 为 `caller` / `caller_tool` / `tool` / `concurrency` / `concurrency_tool`。
 
-单实例默认用 `f_concurrent.TokenBucketRateLimiter`，每个限流 key 一个令牌桶。全局默认值可由配置项 `mcp_rateLimit` 提供（`Builder.rateLimit()` 优先）：
+单实例内置 5 种 `RateLimitBackend`，都基于 `f_concurrent` 的限流器，每个限流 key 一个 limiter：
+
+| `mcp_rateLimitBackend` | 算法 | 语义 |
+|---|---|---|
+| `token-bucket`（默认） | `TokenBucketRateLimiter` | 每分钟 `rpm`，允许突发到 `rpm` |
+| `leaking-bucket` | `LeakingBucketRateLimiter` | 每分钟漏出 `rpm`，等待队列上限 `rpm` |
+| `sliding-window` | `SlidingWindowRateLimiter` | 1 分钟滑动窗口，上限 `rpm` |
+| `any-moment` | `AnyMomentRateLimiter` | `rpm` 作为瞬时并发上限，不是每分钟配额 |
+| `unlimited` | `UnlimitedRateLimiter` | 不限制 |
+
+`Builder.rateLimitBackend(...)` 显式注入优先于配置。名字大小写与 `-` / `_` 不敏感；未知名字在 `build()` 时抛 `IllegalArgumentException`。
+
+全局默认值可由 `mcp_rateLimit` 与 `mcp_rateLimitBackend` 提供：
 
 ```bash
 # perCallerRpm,perCallerToolRpm,perToolRpm,maxConcurrency,perCallerConcurrency
@@ -82,6 +94,9 @@ export mcp_rateLimit=600,120,6000,64,8
 
 # 或 JSON，省略的字段表示不限制
 export mcp_rateLimit='{"perCallerRpm":600,"perCallerToolRpm":120,"perToolRpm":6000}'
+
+# 限流算法
+export mcp_rateLimitBackend=sliding-window
 ```
 
 **跨进程限流**：`f_concurrent` 的限流器是进程内的，不能直接跨进程。需要实现 `RateLimitBackend` 并注入：
