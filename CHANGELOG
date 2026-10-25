@@ -75,13 +75,15 @@
     perf(f_ticktock): 运行期时间索引与表达式编译驻留、L 按候选区间入值桶（对外行为不变）
     docs(dbware): 类型映射三组口径、SqlTypes 与 QueryResultImpl 设计
 2026-10-13
-    fix(f_rpc): 移除对 f_collection / f_process / f_util / f_store 的依赖（cjpm.toml 与中英 README 同步）
+    chore(f_rpc): 移除对 f_collection / f_process / f_util / f_store 的依赖（cjpm.toml 与中英 README 同步）
+    chore(f_rpc): 包分类标签调整为「分布式」，cjpm.toml 的 category 移除 Distributed 与 Network
     chore(fdemo): postgres_driver 依赖版本升级至 0.1.0
 2026-10-12
     docs(f_jit): JSON 谱系升格为内建句柄类型（LocalType 16-19，零注册）；裁定下标自动收窄与点号键访问糖
     fix(f_io): LogPosition 的 seq/offset 改为 public let，供 MQ 按位置续读
     feat(skill-generator): 合并技能脚手架与 TDD 编写流程
 2026-10-11
+    chore(release): 全模块版本连升 1.3.14 → 1.3.15 → 1.3.16（含 f_rpc）
     feat(f_util): 新增 FNV 哈希（FNV-1/FNV-1a × 32/64/128/256）与自检
     docs(f_jit): 设计补语法→字节码、指令定义、字节码↔机器码三张对照表
 2026-10-10
