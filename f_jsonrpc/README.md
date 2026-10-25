@@ -48,7 +48,7 @@ main() {
 }
 ```
 
-方法名里的第一个 `.` 之前是命名空间（`kb.search` → `kb`）。不含 `.` 的方法只能从 `/rpc` 调用。
+方法名里的第一个 `.` 之前是命名空间（`knowledge.search` → `knowledge`）。不含 `.` 的方法只能从 `/rpc` 调用。
 
 ### 1.1 用宏注册（推荐）
 
@@ -56,7 +56,7 @@ main() {
 import fountain::f_jsonrpc.*
 import fountain::f_jsonrpc.macros.*
 
-@JsonRpc[topic: kb]
+@JsonRpc[namespace: knowledge]
 public class SearchRPC {
     public init() {}
 
@@ -72,7 +72,7 @@ public class SearchRPC {
 }
 ```
 
-- 类上自动加 `@Bean`；每个 public 实例方法注册为 `<topic>.<方法名>`
+- 类上自动加 `@Bean`；每个 public 实例方法注册为 `<namespace>.<方法名>`
 - `@JsonRpcMeta['描述', '5s']` 的第二个参数是 `Duration` 字符串，可用 `meta.timeoutDuration` 取 `Duration`
 - `JsonRpcRegistry.getMeta<T>(方法名, argTypes)` 返回 `JsonRpcMeta`；`argTypes` 用来匹配重载（无注解时描述为空串、超时默认 `500ms`）
 - 单参数按 JSON-RPC 规范传 `[值]` 或 `{"参数名": 值}`；多参数必须传对象

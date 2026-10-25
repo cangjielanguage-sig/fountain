@@ -34,7 +34,7 @@ public class MacroEcho {
     }
 }
 
-@JsonRpc[topic: kb]
+@JsonRpc[namespace: knowledge]
 public class JsonRpcMacroTestRPC {
     public init() {}
 
@@ -91,46 +91,46 @@ class JsonRpcMacro_test {
         for (m in JsonRpcRegistry.server().methods()) {
             names.add(m.name)
         }
-        @Assert(true, names.contains('kb.search'))
-        @Assert(true, names.contains('kb.add'))
-        @Assert(true, names.contains('kb.touch'))
-        @Assert(true, names.contains('kb.echo'))
-        @Assert(false, names.contains('kb.hidden'))
+        @Assert(true, names.contains('knowledge.search'))
+        @Assert(true, names.contains('knowledge.add'))
+        @Assert(true, names.contains('knowledge.touch'))
+        @Assert(true, names.contains('knowledge.echo'))
+        @Assert(false, names.contains('knowledge.hidden'))
     }
 
     @TestCase
     public func testSingleParam(): Unit {
-        let obj = call('kb.search', '["hello"]')
+        let obj = call('knowledge.search', '["hello"]')
         @Assert('found:hello', obj['result'].asString().value)
     }
 
     @TestCase
     public func testMultiParams(): Unit {
-        let obj = call('kb.add', '{"a":1,"b":2}')
+        let obj = call('knowledge.add', '{"a":1,"b":2}')
         @Assert(3, obj['result'].asInt().toInt64())
     }
 
     @TestCase
     public func testMissingParam(): Unit {
-        let obj = call('kb.add', '{"a":1}')
+        let obj = call('knowledge.add', '{"a":1}')
         @Assert(JsonRpcProtocol.INVALID_PARAMS, errorCode(obj))
     }
 
     @TestCase
     public func testInvalidType(): Unit {
-        let obj = call('kb.search', '[null]')
+        let obj = call('knowledge.search', '[null]')
         @Assert(JsonRpcProtocol.INVALID_PARAMS, errorCode(obj))
     }
 
     @TestCase
     public func testUnitResultIsNull(): Unit {
-        let obj = call('kb.touch', '{}')
+        let obj = call('knowledge.touch', '{}')
         @Assert(JsonKind.JsonNull, obj['result'].kind)
     }
 
     @TestCase
     public func testObjectParamAndResult(): Unit {
-        let obj = call('kb.echo', '{"text":"hi"}')
+        let obj = call('knowledge.echo', '{"text":"hi"}')
         @Assert('hi!', obj['result'].asObject()['text'].asString().value)
     }
 
@@ -138,7 +138,7 @@ class JsonRpcMacro_test {
     public func testMetaDescriptionAndTimeout(): Unit {
         var found = false
         for (m in JsonRpcRegistry.server().methods()) {
-            if (m.name == 'kb.search') {
+            if (m.name == 'knowledge.search') {
                 found = true
                 @Assert('知识库检索', m.description)
                 @Assert(true, m.timeout.getOrThrow() == Duration.parse('5s'))
@@ -150,7 +150,7 @@ class JsonRpcMacro_test {
     @TestCase
     public func testBareMethodUsesDefaultTimeout(): Unit {
         for (m in JsonRpcRegistry.server().methods()) {
-            if (m.name == 'kb.echo') {
+            if (m.name == 'knowledge.echo') {
                 @Assert('', m.description)
                 @Assert(true, m.timeout.getOrThrow() == Duration.parse('500ms'))
             }
@@ -198,9 +198,9 @@ class JsonRpcMacro_test {
 
     @TestCase
     public func testTopicRouting(): Unit {
-        let ok = call('kb.search', '["x"]', topic: 'kb')
+        let ok = call('knowledge.search', '["x"]', topic: 'knowledge')
         @Assert(true, ok.contains('result'))
-        let other = call('kb.search', '["x"]', topic: 'other')
+        let other = call('knowledge.search', '["x"]', topic: 'other')
         @Assert(JsonRpcProtocol.UNKNOWN_TOPIC, errorCode(other))
     }
 }

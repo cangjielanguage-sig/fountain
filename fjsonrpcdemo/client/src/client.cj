@@ -26,7 +26,7 @@ private func runDemo(): Unit {
     try {
         let searchParams = JsonArray()
         searchParams.add('hello')
-        let search = client.call('kb.search', params: searchParams).asString().value
+        let search = client.call('knowledge.search', params: searchParams).asString().value
         if (search != 'found:hello') {
             throw Exception('unexpected search result: ${search}')
         }
@@ -34,19 +34,19 @@ private func runDemo(): Unit {
         let addParams = JsonObject()
         addParams.add('a', 2)
         addParams.add('b', 3)
-        let sum = client.call('kb.add', params: addParams).asInt().toInt64()
+        let sum = client.call('knowledge.add', params: addParams).asInt().toInt64()
         if (sum != 5) {
             throw Exception('unexpected add result: ${sum}')
         }
 
         let echoParams = JsonObject()
         echoParams.add('text', 'hi')
-        let echoed = client.call('kb.echo', params: echoParams).asObject()['text'].asString().value
+        let echoed = client.call('knowledge.echo', params: echoParams).asObject()['text'].asString().value
         if (echoed != 'hi!') {
             throw Exception('unexpected echo result: ${echoed}')
         }
 
-        let touch = client.call('kb.touch', params: JsonObject())
+        let touch = client.call('knowledge.touch', params: JsonObject())
         if (touch.kind != JsonKind.JsonNull) {
             throw Exception('unexpected touch result: ${touch.toString()}')
         }
