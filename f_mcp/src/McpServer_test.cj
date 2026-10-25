@@ -210,6 +210,62 @@ class McpServer_test {
         }
     }
 
+    static func pathResource(): McpResource {
+        McpResource.builder('/doc', 'doc')
+            .description('doc').mimeType('text/plain')
+            .handler({ctx =>
+                let list = ArrayList<ResourceContent>()
+                list.add(ResourceContent(ctx.uri, Some('text/plain'), Some('content'), None))
+                list
+            }).build()
+    }
+
+    @TestCase
+    public func testRelativeResourceUsesBuilderBaseUrl(): Unit {
+        let srv = McpServer.builder().publicBaseUrl('https://mcp.example.com/').resource(pathResource()).build()
+        let list = call(srv, 'resources/list', metaParams(''))['result'].asObject()
+        @Assert('https://mcp.example.com/doc', list['resources'].asArray()[0].asObject()['uri'].asString().value)
+        let read = call(srv, 'resources/read', metaParams('"uri":"https://mcp.example.com/doc"'))['result'].asObject()
+        @Assert('https://mcp.example.com/doc', read['contents'].asArray()[0].asObject()['uri'].asString().value)
+    }
+
+    @TestCase
+    public func testRelativeResourceUsesConfigBaseUrl(): Unit {
+        Config.set([(McpConfig.PUBLIC_BASE_URL, 'https://cfg.example.com/')])
+        try {
+            let srv = McpServer.builder().resource(pathResource()).build()
+            let list = call(srv, 'resources/list', metaParams(''))['result'].asObject()
+            @Assert('https://cfg.example.com/doc', list['resources'].asArray()[0].asObject()['uri'].asString().value)
+        } finally {
+            Config.remove(McpConfig.PUBLIC_BASE_URL)
+        }
+    }
+
+    @TestCase
+    public func testBuilderBaseUrlOverridesConfig(): Unit {
+        Config.set([(McpConfig.PUBLIC_BASE_URL, 'https://cfg.example.com')])
+        try {
+            let srv = McpServer.builder().publicBaseUrl('https://builder.example.com').resource(pathResource()).build()
+            let list = call(srv, 'resources/list', metaParams(''))['result'].asObject()
+            @Assert('https://builder.example.com/doc', list['resources'].asArray()[0].asObject()['uri'].asString().value)
+        } finally {
+            Config.remove(McpConfig.PUBLIC_BASE_URL)
+        }
+    }
+
+    @TestCase
+    public func testRelativeResourceRequiresBaseUrl(): Unit {
+        Config.remove(McpConfig.PUBLIC_BASE_URL)
+        @ExpectThrows[McpException](McpServer.builder().resource(pathResource()).build())
+    }
+
+    @TestCase
+    public func testProtocolRelativeResourceRejected(): Unit {
+        @ExpectThrows[McpException](McpResource.builder('//example.com/doc', 'doc').handler({_ =>
+            ArrayList<ResourceContent>()
+        }).build())
+    }
+
     @TestCase
     public func testPromptsListAndGet(): Unit {
         let srv = server()

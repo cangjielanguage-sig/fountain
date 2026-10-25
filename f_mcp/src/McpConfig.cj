@@ -29,10 +29,30 @@ import fountain::f_data.*
  *
  * `mcp_rateLimitBackend` 选择进程内限流算法：
  * `token-bucket`（默认）/ `leaking-bucket` / `sliding-window` / `any-moment` / `unlimited`。
+ *
+ * `mcp_publicBaseUrl` 是本服务对外暴露的根地址，用于大结果链接、SSE 地址与相对资源 URI。
  */
 public class McpConfig {
     public static const RATE_LIMIT = 'mcp_rateLimit'
     public static const RATE_LIMIT_BACKEND = 'mcp_rateLimitBackend'
+    public static const PUBLIC_BASE_URL = 'mcp_publicBaseUrl'
+
+    /** `mcp_publicBaseUrl`，去掉首尾空白与末尾 `/`；未配置或为空时返回 `None`。 */
+    public static func publicBaseUrl(): ?String {
+        match (Config.getString(PUBLIC_BASE_URL)) {
+            case Some(value) =>
+                var url = value.trimAscii()
+                while (url.endsWith('/') && !url.isEmpty()) {
+                    url = url[0..url.size - 1]
+                }
+                if (url.isEmpty()) {
+                    None<String>
+                } else {
+                    Some(url)
+                }
+            case _ => None<String>
+        }
+    }
 
     /** `mcp_rateLimitBackend` 的原始值；未配置时为空串。 */
     public static func rateLimitBackendName(): String {

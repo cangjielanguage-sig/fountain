@@ -133,7 +133,7 @@ private func limitedTool(): McpTool {
 
 private func greetingResource(): McpResource {
     McpResource
-        .builder('https://example.com/greeting', 'greeting')
+        .builder('/greeting', 'greeting')
         .description('演示资源')
         .mimeType('text/plain')
         .handler(

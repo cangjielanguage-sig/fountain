@@ -50,8 +50,8 @@ private func verifyTools(client: McpClient): Unit {
     }
 }
 
-private func verifyResourceAndPrompt(client: McpClient): Unit {
-    let resource = client.readResource('https://example.com/greeting')
+private func verifyResourceAndPrompt(client: McpClient, baseUrl: String): Unit {
+    let resource = client.readResource('${baseUrl}/greeting')
     let contents = resource['contents'].asArray()
     if (contents.size != 1 || !contents[0].asObject()['text'].asString().value.startsWith('hello ')) {
         fail('unexpected resource contents')
@@ -135,7 +135,7 @@ private func runDemo(): Unit {
         if (textOf(echo) != 'echo:hello mcp') {
             fail('unexpected echo result: ${textOf(echo)}')
         }
-        verifyResourceAndPrompt(client)
+        verifyResourceAndPrompt(client, baseUrl)
     } finally {
         client.close()
     }

@@ -137,11 +137,15 @@ public class McpServerBuilder {
     }
 
     public func publicBaseUrl(url: String): McpServerBuilder {
-        publicBaseUrl_ = Some(if (url.endsWith('/')) {
-            url[0..url.size - 1]
+        var normalized = url.trimAscii()
+        while (normalized.endsWith('/') && !normalized.isEmpty()) {
+            normalized = normalized[0..normalized.size - 1]
+        }
+        publicBaseUrl_ = if (normalized.isEmpty()) {
+            None<String>
         } else {
-            url
-        })
+            Some(normalized)
+        }
         this
     }
 
@@ -178,8 +182,8 @@ public class McpServerBuilder {
     }
 
     public func build(): McpServer {
-        McpServer(serverName, serverVersion, rateLimitPolicy ?? McpConfig.rateLimit(), publicBaseUrl_, pageSize_,
-            resultOptions, backend, tools, resources, prompts)
+        McpServer(serverName, serverVersion, rateLimitPolicy ?? McpConfig.rateLimit(),
+            publicBaseUrl_ ?? McpConfig.publicBaseUrl(), pageSize_, resultOptions, backend, tools, resources, prompts)
     }
 }
 
@@ -258,11 +262,12 @@ public class McpServer {
 
     private func registerResources(resources: ArrayList<McpResource>): Unit {
         for (resource in resources) {
-            if (resourcesByUri.contains(resource.uri)) {
-                throw McpException(McpProtocol.INTERNAL_ERROR, "duplicate resource '${resource.uri}'")
+            let resolved = resource.resolved(baseUrl)
+            if (resourcesByUri.contains(resolved.uri)) {
+                throw McpException(McpProtocol.INTERNAL_ERROR, "duplicate resource '${resolved.uri}'")
             }
-            resourcesByUri.add(resource.uri, resource)
-            resourcesSorted.add(resource)
+            resourcesByUri.add(resolved.uri, resolved)
+            resourcesSorted.add(resolved)
         }
         sortResources()
     }

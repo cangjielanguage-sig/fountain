@@ -55,7 +55,7 @@
 > - **限流改三层**：全局默认值 → 服务级配置 → **每个工具可声明覆盖**（7.2.1）
 > - **大结果一律转 `resource_link`**（文本也转，不再"文本截断、二进制转 link"）；
 >   新增 `publicBaseUrl` 与临时结果资源（5.6.6）
-> - **URI scheme 白名单**：只接受 `http` / `https` / `ftp`，`file://` 等一律 `-32602`（5.6.1）
+> - **URI 规则**：完整 URI 只接受 `http` / `https` / `ftp`；`/path` 由 `publicBaseUrl` 补全，`file://` 等一律 `-32602`（5.6.1）
 > - **限流器用 `f_concurrent` 的 5 种实现**：`token-bucket`（默认）/ `leaking-bucket` / `sliding-window` / `any-moment` / `unlimited`，由 `mcp_rateLimitBackend` 选择（7.2.6 / 7.2.7）
 >
 > v0.2 → v0.3（七项决策落定，补上 v0.2 遗留的待确认）：
@@ -96,7 +96,7 @@
 | 大结果       | 超过 **1 MB**（可配）**一律转 `resource_link`**；临时结果自管理（256 条 / 256 MB / TTL 10 分钟）（5.6.6） |
 | 容量自适应   | **默认开启**。只调 `maxEntries`（不调 `maxBytes` / TTL）；按 `rejectedByCount` 触发，调大敏捷调小迟钝（5.6.6.5） |
 | 可观测性     | **每个窗口一条 `debug`**（含未调整原因）+ **每次调整一条 `info`**；13 项参数全部可配（5.6.6.5.3 / 5.6.6.5.6） |
-| 资源 URI     | **只接受 `http` / `https` / `ftp`**，其他 scheme 一律 `-32602`（5.6.1）                                                                |
+| 资源 URI     | **完整 URI 只接受 `http` / `https` / `ftp`**；也允许 `/path`，由 `publicBaseUrl` 补全（5.6.1）                                                                |
 | 部署         | `output-type = "dynamic"` + `--dy-std`，`fboot run --dylibPattern=<模块名>`                                                            |
 | 依赖         | `fountain::f_jsonrpc`、`fountain::f_mvc`、`fountain::f_data`、`fountain::f_concurrent`（限流）、`fountain::f_config`（配置）、`fountain::f_process`（stdio） |
 
@@ -818,7 +818,9 @@ public type McpResourceHandler = (String) -> ResourceContent
 
 #### 5.6.1.1 URI scheme 白名单：只接受 http / https / ftp
 
-**规则：`uri` 的 scheme 必须是 `http`、`https`、`ftp` 三者之一，其余一律 `-32602`。**
+**规则：完整 `uri` 的 scheme 必须是 `http`、`https`、`ftp` 三者之一，其余一律 `-32602`。**
+
+也允许以 `/` 开头的绝对路径（如 `/doc`）：构建 `McpServer` 时用 `publicBaseUrl`（`Builder.publicBaseUrl()` 或 `mcp_publicBaseUrl`）补全成完整 URL；未配置 `publicBaseUrl` 时构建失败。`//host/path` 这类协议相对地址仍然拒绝。
 
 
 | scheme                            | 接受 | 理由                                                                                      |
