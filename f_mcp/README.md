@@ -5,7 +5,22 @@
 - 协议版本：`2026-07-28`（无握手；逐请求 `_meta` 校验）
 - 服务端：`/mcp`（JSON-RPC）+ `/mcp/sse`（订阅推送）
 - 客户端：HTTP（复用 `JsonRpcClient`）与 stdio（子进程）
-- 依赖：`f_jsonrpc` / `f_data` / `f_log` / `f_mvc`（controller 需要）
+- 依赖：`f_jsonrpc` / `f_data` / `f_log` / `f_mvc`（controller）、`f_concurrent`（限流）、`f_config`（`mcp_rateLimit`）
+
+## 规范版本
+
+- **MCP 2026-07-28**（[规范](https://modelcontextprotocol.io/specification/2026-07-28)），只实现这一版，不做多版本共存
+- 消息格式：**JSON-RPC 2.0**，消息层由 `f_jsonrpc` 提供
+- 无握手：不实现 `initialize` / `notifications/initialized`；每个请求在 `params._meta` 携带 `io.modelcontextprotocol/protocolVersion`、`clientInfo`、`clientCapabilities`，`server/discover` 的响应 `_meta` 回 `serverInfo`
+- 发现：`server/discover`；版本不匹配返回 `-32022`，`error.data.supported` 给出支持列表
+- 已实现方法：`server/discover`、`tools/list`、`tools/call`、`resources/list`、`resources/read`、`prompts/list`、`prompts/get`、`subscriptions/listen`
+- 能力声明：`tools.listChanged=false`、`resources.subscribe=true` + `resources.listChanged=false`、`prompts.listChanged=false`
+- 传输：`POST /mcp` 返回单个 JSON 响应，`GET /mcp/sse` 推送订阅通知（`text/event-stream`）；无会话 id，服务端不主动发请求
+- 未实现：`sampling` / `roots` / `logging` / `completions` / `resources/templates/list`；需要向客户端索取信息的场景走 `tools/call` 的 `resultType: "input_required"`
+- 扩展：`-32050` 限流、`-32002` 资源不存在、大结果外链 `/mcp/tool-results/`
+- legacy 对端：`initialize` / `notifications/initialized` 返回 `-32601`，`data` 带 `legacyMethod` 与 `supportedVersion`，不静默降级
+
+设计取舍见 [`doc/f_mcp模块设计.md`](doc/f_mcp模块设计.md)。
 
 ## 服务端
 
@@ -134,8 +149,8 @@ cjpm test
 
 ## 已知限制
 
-- 分布式限流只提供 SPI + 进程内实现，跨实例需要注入共享存储后端
-- SSE 依赖 `f_mvc` 的流式响应；本机没有 fboot，HTTP 端到端冒烟未跑
+- 分布式限流提供 `RateLimitBackend` SPI；默认实现基于 `f_concurrent` 令牌桶，仍是进程内，跨实例需注入共享存储后端
+- SSE 依赖 `f_mvc` 的流式响应，并且必须声明 `Transfer-Encoding: chunked`；端到端由 `fmcpdemo/boot.sh e2e` 覆盖
 - 不做 `prompts/list_changed` 推送（能力里固定 `false`）
 
 ## 端到端 demo

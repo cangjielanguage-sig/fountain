@@ -5,7 +5,22 @@
 - Protocol version: `2026-07-28` (no handshake; per-request `_meta` validation)
 - Server: `/mcp` (JSON-RPC) + `/mcp/sse` (subscriptions)
 - Client: HTTP (reuses `JsonRpcClient`) and stdio (subprocess)
-- Dependencies: `f_jsonrpc` / `f_data` / `f_log` / `f_mvc` (for the controller)
+- Dependencies: `f_jsonrpc` / `f_data` / `f_log` / `f_mvc` (controller), `f_concurrent` (rate limiting), `f_config` (`mcp_rateLimit`)
+
+## Specification version
+
+- **MCP 2026-07-28** ([specification](https://modelcontextprotocol.io/specification/2026-07-28)); only this version is implemented, with no multi-version coexistence
+- Message format: **JSON-RPC 2.0**, provided by `f_jsonrpc`
+- No handshake: `initialize` / `notifications/initialized` are not implemented; every request carries `io.modelcontextprotocol/protocolVersion`, `clientInfo` and `clientCapabilities` in `params._meta`, and the `server/discover` response returns `serverInfo` in `_meta`
+- Discovery: `server/discover`; a version mismatch returns `-32022` with `error.data.supported`
+- Methods implemented: `server/discover`, `tools/list`, `tools/call`, `resources/list`, `resources/read`, `prompts/list`, `prompts/get`, `subscriptions/listen`
+- Capabilities: `tools.listChanged=false`, `resources.subscribe=true` + `resources.listChanged=false`, `prompts.listChanged=false`
+- Transport: `POST /mcp` returns a single JSON response; `GET /mcp/sse` pushes subscription notifications (`text/event-stream`). There is no session id and the server never sends requests
+- Not implemented: `sampling` / `roots` / `logging` / `completions` / `resources/templates/list`; asking the client for input uses `tools/call` with `resultType: "input_required"`
+- Extensions: `-32050` rate limited, `-32002` resource not found, large results linked from `/mcp/tool-results/`
+- Legacy peers: `initialize` / `notifications/initialized` return `-32601` with `legacyMethod` and `supportedVersion` in `data`; there is no silent downgrade
+
+See [`doc/f_mcp模块设计.md`](doc/f_mcp模块设计.md) for the design rationale.
 
 ## Server
 
@@ -129,8 +144,8 @@ Covers discovery, version / legacy, tools / resources / prompts, rate limiting, 
 
 ## Known limitations
 
-- Distributed rate limiting is an SPI plus an in-process implementation; cross-instance counting needs a shared backend
-- SSE relies on `f_mvc` streaming; no fboot here, so the HTTP smoke test is pending
+- Distributed rate limiting ships a `RateLimitBackend` SPI; the default implementation is a process-local `f_concurrent` token bucket, so cross-instance counting needs a shared backend
+- SSE relies on `f_mvc` streaming and must declare `Transfer-Encoding: chunked`; end-to-end coverage lives in `fmcpdemo/boot.sh e2e`
 - `prompts/list_changed` is not pushed (capability is `false`)
 
 ## End-to-end demo
