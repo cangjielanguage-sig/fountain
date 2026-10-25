@@ -31,7 +31,7 @@ private func textOf(result: McpCallToolResult): String {
     if (result.content.size == 0) {
         return ''
     }
-    match (result.content[0].asObject().get('text')) {
+    match (result.content[0].toJson().get('text')) {
         case Some(value) => value.asString().value
         case _ => ''
     }
@@ -41,7 +41,7 @@ private func verifyTools(client: McpClient): Unit {
     let tools = client.listAllTools()
     let names = ArrayList<String>()
     for (tool in tools) {
-        names.add(tool.asObject()['name'].asString().value)
+        names.add(tool.name)
     }
     for (name in ['echo', 'notify', 'limited']) {
         if (!names.contains(name)) {
@@ -52,16 +52,15 @@ private func verifyTools(client: McpClient): Unit {
 
 private func verifyResourceAndPrompt(client: McpClient, baseUrl: String): Unit {
     let resource = client.readResource('${baseUrl}/greeting')
-    let contents = resource['contents'].asArray()
-    if (contents.size != 1 || !contents[0].asObject()['text'].asString().value.startsWith('hello ')) {
+    if (resource.contents.size != 1 ||
+        !resource.contents[0].text.getOrThrow().startsWith('hello ')) {
         fail('unexpected resource contents')
     }
 
     let args = JsonObject()
     args.add('name', 'mcp')
     let prompt = client.getPrompt('greet', arguments: args)
-    let messages = prompt['messages'].asArray()
-    if (messages.size != 1 || messages[0].asObject()['role'].asString().value != 'user') {
+    if (prompt.messages.size != 1 || prompt.messages[0].role != 'user') {
         fail('unexpected prompt messages')
     }
 }
@@ -73,7 +72,7 @@ private func verifySse(url: String, baseUrl: String): Unit {
     } finally {
         listener.close()
     }
-    let ssePath = subscription['sseUrl'].asString().value
+    let ssePath = subscription.sseUrl
     let sseUrl = if (ssePath.startsWith('http://') || ssePath.startsWith('https://')) {
         ssePath
     } else {
@@ -123,9 +122,11 @@ private func runDemo(): Unit {
     let client = McpClient.http('${baseUrl}/mcp')
     try {
         let discover = client.discover()
-        let info = discover['_meta'].asObject()[McpProtocol.KEY_SERVER_INFO].asObject()
-        if (info['name'].asString().value != 'fmcpdemo') {
-            fail('unexpected server name')
+        match (discover.serverInfo) {
+            case Some(info) => if (info.name != 'fmcpdemo') {
+                fail('unexpected server name')
+            }
+            case _ => fail('missing server info')
         }
 
         verifyTools(client)

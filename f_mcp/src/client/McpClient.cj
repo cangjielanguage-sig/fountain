@@ -19,10 +19,11 @@ import std.collection.{ArrayList, HashMap}
 import std.io.*
 import std.process.*
 import std.sync.Mutex
+import std.time.MonoTime
 import stdx.log.LogLevel
 import fountain::f_data.*
-import fountain::f_jsonrpc.base.{JsonRpcException, JsonRpcProtocol}
-import fountain::f_jsonrpc.client.{ClientOptions, JsonRpcClient}
+import fountain::f_jsonrpc.base.JsonRpcException
+import fountain::f_jsonrpc.client.{ClientOptions, JsonRpcClient, JsonRpcTransport}
 import fountain::f_log.impl.*
 import fountain::f_mcp.base.*
 
@@ -51,23 +52,20 @@ public class McpClientOptions {
     }
 }
 
-/** 一条 `tools/call` 的结果（客户端视角）。 */
-public struct McpCallToolResult {
-    public const McpCallToolResult(public let content: JsonArray, public let structuredContent: ?JsonValue,
-        public let isError: Bool, public let resultType: String, public let inputRequired: ?JsonValue,
-        public let requestState!: ?JsonValue = None) {}
-}
+/** `tools/call` 的结果：与 base 模型同源，`McpCallToolResult` 保留为源兼容别名。 */
+public type McpCallToolResult = CallToolResult
 
 interface McpRpc {
     func call(method: String, params: ?JsonValue): JsonValue
     func close(): Unit
 }
 
-class HttpMcpRpc <: McpRpc {
+/** HTTP 与 stdio 共用的 RPC 接缝：只包一个 `JsonRpcClient`，不重复实现消息层。 */
+class JsonRpcMcpRpc <: McpRpc {
     private let client: JsonRpcClient
 
-    init(url: String, opts: McpClientOptions) {
-        client = JsonRpcClient(url, opts: opts.toJsonRpcOptions())
+    init(client: JsonRpcClient) {
+        this.client = client
     }
 
     public func call(method: String, params: ?JsonValue): JsonValue {
@@ -79,54 +77,82 @@ class HttpMcpRpc <: McpRpc {
     }
 }
 
-/** stdio 传输：一行一个 JSON-RPC 消息，stderr 单独消费。 */
-class StdioMcpRpc <: McpRpc {
-    static let log = LoggerFactory.getLogger<StdioMcpRpc>()
+/**
+ * stdio 传输：一行一个 JSON-RPC 消息。
+ *
+ * 只负责「写一行、等 id 匹配的一行」，请求 id 由 `JsonRpcClient` 分配（单调递增）；
+ * 服务端通知 / 请求 / 非 JSON 噪声行一律跳过，读超时抛 `IOException`。
+ */
+class StdioJsonRpcTransport <: JsonRpcTransport {
+    static let log = LoggerFactory.getLogger<StdioJsonRpcTransport>()
 
     private let process: SubProcess
-    private let reader: StringReader<InputStream>
+    private let timeout: Duration
     private let mutex = Mutex()
+    private let cond = synchronized(mutex) {
+        mutex.condition()
+    }
+    private let writeMutex = Mutex()
+    private let lines = ArrayList<String>()
+    private var closed = false
 
-    init(command: String, args: Array<String>) {
-        process = launch(command, args, stdIn: ProcessRedirect.Pipe, stdOut: ProcessRedirect.Pipe,
+    init(command: String, args: Array<String>, timeout: Duration) {
+        this.process = launch(command, args, stdIn: ProcessRedirect.Pipe, stdOut: ProcessRedirect.Pipe,
             stdErr: ProcessRedirect.Pipe)
-        reader = StringReader<InputStream>(process.stdOutPipe)
+        this.timeout = timeout
+        let stdout = process.stdOutPipe
+        spawn {
+            consumeStdout(stdout)
+        }
         spawn {
             consumeStderr(process.stdErrPipe)
         }
     }
 
-    public func call(method: String, params: ?JsonValue): JsonValue {
-        synchronized(mutex) {
-            let request = JsonObject()
-            request.add('jsonrpc', JsonRpcProtocol.VERSION)
-            request.add('id', 1)
-            request.add('method', method)
-            match (params) {
-                case Some(value) => request.add('params', value)
-                case _ => ()
-            }
-            process.stdInPipe.write((request.toString() + '\n').toArray())
+    public func send(body: Array<Byte>): Array<Byte> {
+        let requestId = idOf(body)
+        synchronized(writeMutex) {
+            process.stdInPipe.write(body)
+            process.stdInPipe.write('\n'.unsafeBytes())
             process.stdInPipe.flush()
-            match (reader.readln()) {
-                case Some(line) =>
-                    let value = JsonValue.fromStr(line)
-                    match (value) {
-                        case obj: JsonObject =>
-                            if (let Some(error) <- obj.get('error')) {
-                                let e = error.asObject()
-                                throw McpException(e['code'].asInt().toInt64(), e['message'].asString().value,
-                                    data: e.get('data'))
-                            }
-                            obj.get('result') ?? JsonNull.instance
-                        case _ => throw McpException(McpProtocol.INTERNAL_ERROR, 'malformed stdio response')
+        }
+        // 通知没有响应，写完即可返回
+        match (requestId) {
+            case None => return Array<Byte>()
+            case _ => ()
+        }
+        let expected = requestId.getOrThrow()
+        let start = MonoTime.now()
+        synchronized(mutex) {
+            while (true) {
+                while (!lines.isEmpty()) {
+                    let line = lines.remove(at: 0)
+                    match (classify(line, expected)) {
+                        case Response => return line.unsafeBytes()
+                        case Skip => continue
                     }
-                case _ => throw McpException(McpProtocol.INTERNAL_ERROR, 'stdio server closed the stream')
+                }
+                if (closed) {
+                    throw IOException('stdio server closed the stream')
+                }
+                let elapsed = MonoTime.now() - start
+                if (elapsed >= timeout) {
+                    throw IOException('stdio response timeout')
+                }
+                cond.wait(timeout: timeout - elapsed)
             }
+            throw IOException('unreachable')
         }
     }
 
     public func close(): Unit {
+        synchronized(mutex) {
+            if (closed) {
+                return
+            }
+            closed = true
+            cond.notifyAll()
+        }
         try {
             match (process.stdInPipe) {
                 case resource: Resource => resource.close()
@@ -139,16 +165,91 @@ class StdioMcpRpc <: McpRpc {
         let _ = process.wait(timeout: Duration.second * 2)
     }
 
+    /** 判断一行是本次请求的响应，还是应跳过的通知 / 噪声。 */
+    private func classify(line: String, expected: JsonValue): SkipKind {
+        let parsed = try {
+            JsonValue.fromStr(line)
+        } catch (_: Exception) {
+            log.append(LogLevel.WARN, 'non-json stdio output: ${line}', None<Exception>)
+            return Skip
+        }
+        let obj = match (parsed) {
+            case value: JsonObject => value
+            case _ =>
+                log.append(LogLevel.WARN, 'unexpected stdio output: ${line}', None<Exception>)
+                return Skip
+        }
+        match (obj.get('id')) {
+            case Some(id) =>
+                if (id.toString() == expected.toString()) {
+                    return Response
+                }
+                log.append(LogLevel.WARN, "stale stdio response id=${id.toString()}", None<Exception>)
+                Skip
+            case _ => match (obj.get('method')) {
+                    case Some(method) =>
+                        if (method is JsonString) {
+                            let name = method.asString().value
+                            if (name.startsWith('notifications/')) {
+                                log.append(LogLevel.DEBUG, "stdio notification: ${name}", None<Exception>)
+                            } else {
+                                log.append(LogLevel.DEBUG, "ignored stdio request: ${name}", None<Exception>)
+                            }
+                        }
+                        Skip
+                    case _ =>
+                        log.append(LogLevel.WARN, 'unexpected stdio output: ${line}', None<Exception>)
+                        Skip
+                }
+        }
+    }
+
+    private func consumeStdout(stream: InputStream): Unit {
+        let reader = StringReader<InputStream>(stream)
+        try {
+            while (let Some(line) <- reader.readln()) {
+                synchronized(mutex) {
+                    lines.add(line)
+                    cond.notify()
+                }
+            }
+        } catch (_: Exception) {
+            ()
+        }
+        synchronized(mutex) {
+            closed = true
+            cond.notifyAll()
+        }
+    }
+
     private static func consumeStderr(stream: InputStream): Unit {
         let reader = StringReader<InputStream>(stream)
         while (let Some(line) <- reader.readln()) {
             log.append(LogLevel.WARN, 'mcp stdio stderr: ${line}', None<Exception>)
         }
     }
+
+    private func idOf(body: Array<Byte>): ?JsonValue {
+        let parsed = try {
+            JsonValue.fromBytes(body)
+        } catch (e: Exception) {
+            throw IOException('malformed stdio request: ${e.message}')
+        }
+        match (parsed) {
+            case obj: JsonObject => obj.get('id')
+            case _ => throw IOException('malformed stdio request: expected an object')
+        }
+    }
+}
+
+/** `classify` 的判定结果。 */
+enum SkipKind {
+    | Response
+    | Skip
 }
 
 /**
- * MCP 客户端。HTTP 用 `f_jsonrpc.JsonRpcClient`；stdio 用子进程；
+ * MCP 客户端。HTTP 与 stdio 都走 `f_jsonrpc.JsonRpcClient`；
  * 每次请求自动注入 `_meta`，`-32022` 只重试一次。
  */
 public class McpClient {
@@ -160,7 +261,7 @@ public class McpClient {
     private var protocolVersion: String
 
     public init(url: String, options!: McpClientOptions = McpClientOptions()) {
-        this.rpc = HttpMcpRpc(url, options)
+        this.rpc = JsonRpcMcpRpc(JsonRpcClient(url, opts: options.toJsonRpcOptions()))
         this.options = options
         this.protocolVersion = options.protocolVersion
     }
@@ -171,7 +272,8 @@ public class McpClient {
 
     public static func stdio(command: String, args!: Array<String> = Array<String>(),
         options!: McpClientOptions = McpClientOptions()): McpClient {
-        McpClient(StdioMcpRpc(command, args), options)
+        let transport = StdioJsonRpcTransport(command, args, options.timeout)
+        McpClient(JsonRpcMcpRpc(JsonRpcClient(transport, opts: options.toJsonRpcOptions())), options)
     }
 
     init(rpc: McpRpc, options: McpClientOptions) {
@@ -180,41 +282,24 @@ public class McpClient {
         this.protocolVersion = options.protocolVersion
     }
 
-    public func discover(): JsonObject {
-        rpcCall('server/discover', None).asObject()
+    public func discover(): DiscoverResult {
+        DiscoverResult.fromJson(rpcCall('server/discover', None).asObject())
     }
 
-    public func listTools(cursor!: ?String = None): JsonObject {
-        let params = JsonObject()
-        match (cursor) {
-            case Some(value) => params.add('cursor', value)
-            case _ => ()
-        }
-        rpcCall('tools/list', params).asObject()
+    public func listTools(cursor!: ?String = None): ToolPage {
+        ToolPage.fromJson(rpcCall('tools/list', cursorParams(cursor)).asObject())
     }
 
-    public func listAllTools(): ArrayList<JsonValue> {
-        let all = ArrayList<JsonValue>()
+    public func listAllTools(): Array<McpToolDescriptor> {
+        let all = ArrayList<McpToolDescriptor>()
         var cursor: ?String = None
         var rounds = 0
         while (rounds < 100 && all.size < 1000) {
             let page = listTools(cursor: cursor)
-            if (let Some(tools) <- page.get('tools')) {
-                if (let array: JsonArray <- tools) {
-                    for (tool in array) {
-                        all.add(tool)
-                    }
-                }
+            for (tool in page.tools) {
+                all.add(tool)
             }
-            match (page.get('nextCursor')) {
-                case Some(value) =>
-                    if (value is JsonString) {
-                        cursor = Some(value.asString().value)
-                    } else {
-                        cursor = None
-                    }
-                case _ => cursor = None
-            }
+            cursor = page.nextCursor
             if (cursor.isNone()) {
                 break
             }
@@ -223,15 +308,14 @@ public class McpClient {
         if (cursor.isSome()) {
             throw McpException(McpProtocol.INTERNAL_ERROR, 'tools/list pagination exceeded 100 pages')
         }
-        all
+        all.toArray()
     }
 
     public func callTool(name: String, arguments!: JsonValue = JsonObject()): McpCallToolResult {
         let params = JsonObject()
         params.add('name', name)
         params.add('arguments', arguments)
-        let result = rpcCall('tools/call', params).asObject()
-        toCallToolResult(result)
+        CallToolResult.fromJson(rpcCall('tools/call', params).asObject())
     }
 
     /**
@@ -259,7 +343,7 @@ public class McpClient {
                 case Some(value) => params.add('requestState', value)
                 case _ => ()
             }
-            let result = toCallToolResult(rpcCall('tools/call', params).asObject())
+            let result = CallToolResult.fromJson(rpcCall('tools/call', params).asObject())
             if (result.resultType != 'input_required') {
                 return result
             }
@@ -272,50 +356,49 @@ public class McpClient {
         throw McpException(McpProtocol.INTERNAL_ERROR, "tool '${name}' still requires input after ${limit} rounds")
     }
 
-    public func listResources(cursor!: ?String = None): JsonObject {
-        let params = JsonObject()
-        match (cursor) {
-            case Some(value) => params.add('cursor', value)
-            case _ => ()
-        }
-        rpcCall('resources/list', params).asObject()
+    public func listResources(cursor!: ?String = None): ResourcePage {
+        ResourcePage.fromJson(rpcCall('resources/list', cursorParams(cursor)).asObject())
     }
 
-    public func readResource(uri: String): JsonObject {
+    public func readResource(uri: String): ReadResourceResult {
         let params = JsonObject()
         params.add('uri', uri)
-        rpcCall('resources/read', params).asObject()
+        ReadResourceResult.fromJson(rpcCall('resources/read', params).asObject())
     }
 
-    public func listPrompts(cursor!: ?String = None): JsonObject {
-        let params = JsonObject()
-        match (cursor) {
-            case Some(value) => params.add('cursor', value)
-            case _ => ()
-        }
-        rpcCall('prompts/list', params).asObject()
+    public func listPrompts(cursor!: ?String = None): PromptPage {
+        PromptPage.fromJson(rpcCall('prompts/list', cursorParams(cursor)).asObject())
     }
 
     /** 注册订阅；返回结果里的 `sseUrl` 可直接用于建立 SSE 连接。 */
-    public func listen(topics: Array<String>): JsonObject {
+    public func listen(topics: Array<String>): ListenResult {
         let params = JsonObject()
         let array = JsonArray()
         for (topic in topics) {
             array.add(topic)
         }
         params.add('topics', array)
-        rpcCall('subscriptions/listen', params).asObject()
+        ListenResult.fromJson(rpcCall('subscriptions/listen', params).asObject())
     }
 
-    public func getPrompt(name: String, arguments!: JsonObject = JsonObject()): JsonObject {
+    public func getPrompt(name: String, arguments!: JsonObject = JsonObject()): GetPromptResult {
         let params = JsonObject()
         params.add('name', name)
         params.add('arguments', arguments)
-        rpcCall('prompts/get', params).asObject()
+        GetPromptResult.fromJson(rpcCall('prompts/get', params).asObject())
     }
 
     public func close(): Unit {
         rpc.close()
+    }
+
+    private func cursorParams(cursor: ?String): JsonObject {
+        let params = JsonObject()
+        match (cursor) {
+            case Some(value) => params.add('cursor', value)
+            case _ => ()
+        }
+        params
     }
 
     private func rpcCall(method: String, params: ?JsonValue, tried!: ?String = None): JsonValue {
@@ -395,32 +478,5 @@ public class McpClient {
                 throw McpException(error.code, error.message, data: error.data)
             case _ => throw McpException(error.code, error.message)
         }
-    }
-
-    private static func toCallToolResult(obj: JsonObject): McpCallToolResult {
-        let content = match (obj.get('content')) {
-            case Some(array: JsonArray) => array
-            case _ => JsonArray()
-        }
-        let isError = match (obj.get('isError')) {
-            case Some(value) =>
-                if (value is JsonBool) {
-                    value.asBool().value
-                } else {
-                    false
-                }
-            case _ => false
-        }
-        let resultType = match (obj.get('resultType')) {
-            case Some(value) =>
-                if (value is JsonString) {
-                    value.asString().value
-                } else {
-                    'complete'
-                }
-            case _ => 'complete'
-        }
-        McpCallToolResult(content, obj.get('structuredContent'), isError, resultType, obj.get('inputRequired'),
-            requestState: obj.get('requestState'))
     }
 }
