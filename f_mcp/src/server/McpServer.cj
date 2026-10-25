@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_mcp.server
 
 import std.collection.{ArrayList, HashMap}
-import std.sync.{AtomicInt64, Mutex}
+import std.sync.{AtomicInt64, Condition, Mutex}
 import stdx.crypto.digest.SHA256
 import stdx.log.LogLevel
 import fountain::f_data.*
@@ -30,49 +30,118 @@ public class McpSubscriber {
     let id: Int64
     let topics: ArrayList<String>
     var attached = false
-    let queue = ArrayList<JsonObject>()
-    let mutex = Mutex()
+    var detachedAtNanos: Int64 = 0
+    private let queue = ArrayList<JsonObject>()
+    private let mutex = Mutex()
+    private let signal: Condition
+    private let capacity: Int64
+    private var dropped = 0
 
-    init(id: Int64, topics: ArrayList<String>) {
+    init(id: Int64, topics: ArrayList<String>, capacity!: Int64 = 256) {
         this.id = id
         this.topics = topics
+        this.capacity = capacity
+        this.signal = synchronized(mutex) {
+            mutex.condition()
+        }
     }
 
     func matches(topic: String): Bool {
         topics.isEmpty() || topics.contains(topic)
     }
 
+    /** 入队；队列满时丢最旧的一条并计数（不阻塞发布方）。 */
     func offer(notification: JsonObject): Unit {
         synchronized(mutex) {
+            if (queue.size >= capacity && !queue.isEmpty()) {
+                queue.remove(at: 0)
+                dropped++
+            }
             queue.add(notification)
+            signal.notifyAll()
         }
+    }
+
+    private func drainLocked(): ArrayList<JsonObject> {
+        let result = ArrayList<JsonObject>()
+        for (item in queue) {
+            result.add(item)
+        }
+        queue.clear()
+        result
     }
 
     /** 取走全部待发送通知；没有则返回空。 */
     public func drain(): ArrayList<JsonObject> {
-        let result = ArrayList<JsonObject>()
         synchronized(mutex) {
-            for (item in queue) {
-                result.add(item)
-            }
-            queue.clear()
+            drainLocked()
         }
-        result
+    }
+
+    /**
+     * 带超时阻塞等待：有事件立即返回，超时返回空。
+     *
+     * SSE 连接用它替代 100ms 轮询——空转时 CPU 占用从「每秒 10 次」降到 0。
+     */
+    public func take(timeout: Duration): ArrayList<JsonObject> {
+        synchronized(mutex) {
+            if (queue.isEmpty()) {
+                let _ = signal.wait(timeout: timeout)
+            }
+            drainLocked()
+        }
+    }
+
+    /** 被丢弃的通知数（队列容量压力下的可观测指标）。 */
+    public prop droppedCount: Int64 {
+        get() {
+            synchronized(mutex) {
+                dropped
+            }
+        }
+    }
+
+    prop queued: Int64 {
+        get() {
+            synchronized(mutex) {
+                queue.size
+            }
+        }
     }
 }
 
-/** 进程内订阅中心。SSE 端点从订阅者队列取通知。 */
+/**
+ * 进程内订阅中心。
+ *
+ * 三个上限都可配：订阅者总量、单订阅者队列容量、未连接时的保留时长。
+ * `attach` / `detach` 支持 SSE 断线后在 grace 内用同一 id 重连。
+ */
 public class SubscriptionHub {
     private let subscribers = ArrayList<McpSubscriber>()
     private let mutex = Mutex()
     private let nextId = AtomicInt64(0)
+    private let maxSubscribers: Int64
+    private let detachedTtlNanos: Int64
+    private let queueCapacity: Int64
+
+    public init(maxSubscribers!: Int64 = 1024, detachedTtl!: Duration = Duration.second * 60,
+        queueCapacity!: Int64 = 256) {
+        this.maxSubscribers = maxSubscribers
+        this.detachedTtlNanos = detachedTtl.toNanoseconds()
+        this.queueCapacity = queueCapacity
+    }
 
     public func subscribe(topics: ArrayList<String>): McpSubscriber {
-        let subscriber = McpSubscriber(nextId.fetchAdd(1) + 1, topics)
         synchronized(mutex) {
+            pruneLocked(nowNanos())
+            if (subscribers.size >= maxSubscribers) {
+                throw McpException(McpProtocol.OVERLOADED,
+                    'too many subscribers: limit ${maxSubscribers}', data: JsonInt(maxSubscribers))
+            }
+            let subscriber = McpSubscriber(nextId.fetchAdd(1) + 1, topics, capacity: queueCapacity)
             subscribers.add(subscriber)
+            subscriber
         }
-        subscriber
     }
 
     public func unsubscribe(subscriber: McpSubscriber): Unit {
@@ -81,17 +150,30 @@ public class SubscriptionHub {
         }
     }
 
+    /** 断线：保留订阅者一段时间，允许同 id 重连。 */
+    public func detach(subscriber: McpSubscriber): Unit {
+        synchronized(mutex) {
+            if (!subscriber.attached) {
+                return
+            }
+            subscriber.attached = false
+            subscriber.detachedAtNanos = nowNanos()
+        }
+    }
+
     /**
      * 把 SSE 连接绑定到 `subscriptions/listen` 创建的订阅者。
      *
-     * 同一个订阅者只能绑定一次；绑定成功后 SSE 流直接消费它的队列。
+     * 同一个订阅者同一时间只能绑定一次；detached 且在 TTL 内的可以重连。
      */
     public func attach(id: Int64): ?McpSubscriber {
         var found: ?McpSubscriber = None
         synchronized(mutex) {
+            pruneLocked(nowNanos())
             for (subscriber in subscribers) {
                 if (subscriber.id == id && !subscriber.attached) {
                     subscriber.attached = true
+                    subscriber.detachedAtNanos = 0
                     found = Some(subscriber)
                     break
                 }
@@ -105,13 +187,51 @@ public class SubscriptionHub {
         notification.add('jsonrpc', '2.0')
         notification.add('method', 'notifications/${topic}')
         notification.add('params', params)
-        synchronized(mutex) {
+        // 快照在锁内、入队在锁外：慢订阅者不能拖住发布方
+        let targets = synchronized(mutex) {
+            let list = ArrayList<McpSubscriber>()
             for (subscriber in subscribers) {
                 if (subscriber.matches(topic)) {
-                    subscriber.offer(notification)
+                    list.add(subscriber)
                 }
             }
+            list
         }
+        for (subscriber in targets) {
+            subscriber.offer(notification)
+        }
+    }
+
+    /** 清理超过 grace 的 detached 订阅者。 */
+    public func prune(): Unit {
+        synchronized(mutex) {
+            pruneLocked(nowNanos())
+        }
+    }
+
+    public func close(): Unit {
+        synchronized(mutex) {
+            subscribers.clear()
+        }
+    }
+
+    public prop size: Int64 {
+        get() {
+            synchronized(mutex) {
+                subscribers.size
+            }
+        }
+    }
+
+    private func pruneLocked(now: Int64): Unit {
+        subscribers.removeIf({s => !s.attached && s.detachedAtNanos > 0 &&
+            now - s.detachedAtNanos > detachedTtlNanos})
+    }
+
+    private static let origin = MonoTime.now()
+
+    private static func nowNanos(): Int64 {
+        (MonoTime.now() - origin).toNanoseconds()
     }
 }
 
@@ -124,6 +244,9 @@ public class McpServerBuilder {
     private var resultOptions = ResultStoreOptions()
     private var backend: ?RateLimitBackend = None
     private var trustForwardedFor_ = false
+    private var maxSubscribers_ = 1024
+    private var subscriberQueueCapacity_ = 256
+    private var subscriberDetachedTtl_ = Duration.second * 60
     private let tools = ArrayList<McpTool>()
     private let resources = ArrayList<McpResource>()
     private let prompts = ArrayList<McpPrompt>()
@@ -175,6 +298,30 @@ public class McpServerBuilder {
         this
     }
 
+    /** 订阅者总量上限。 */
+    public func maxSubscribers(n: Int64): McpServerBuilder {
+        if (n > 0) {
+            maxSubscribers_ = n
+        }
+        this
+    }
+
+    /** 单个订阅者的通知队列容量（满了丢最旧）。 */
+    public func subscriberQueueCapacity(n: Int64): McpServerBuilder {
+        if (n > 0) {
+            subscriberQueueCapacity_ = n
+        }
+        this
+    }
+
+    /** SSE 断线后订阅者的保留时长（grace）。 */
+    public func subscriberDetachedTtl(ttl: Duration): McpServerBuilder {
+        if (ttl > Duration.Zero) {
+            subscriberDetachedTtl_ = ttl
+        }
+        this
+    }
+
     public func rateLimitBackend(backend: RateLimitBackend): McpServerBuilder {
         this.backend = Some(backend)
         this
@@ -200,7 +347,8 @@ public class McpServerBuilder {
         let merged = McpConfig.rateLimit().overlay(rateLimitPolicy ?? RateLimitPolicy())
         McpServer(serverName, serverVersion ?? McpConfig.version(), merged,
             publicBaseUrl_ ?? McpConfig.publicBaseUrl(), pageSize_, resultOptions, backend,
-            trustForwardedFor_ || McpConfig.trustForwardedFor(), tools, resources, prompts)
+            trustForwardedFor_ || McpConfig.trustForwardedFor(), maxSubscribers_, subscriberQueueCapacity_,
+            subscriberDetachedTtl_, tools, resources, prompts)
     }
 }
 
@@ -216,7 +364,7 @@ public class McpServer {
     private let resultStore: ToolResultStore
     private let backend: RateLimitBackend
     private let gates = ConcurrencyGate()
-    private let hub_ = SubscriptionHub()
+    private let hub_: SubscriptionHub
     private var jsonRpc: JsonRpcServer = JsonRpcServer.builder().build()
 
     private let toolsByName = HashMap<String, McpTool>()
@@ -229,7 +377,8 @@ public class McpServer {
     private let trustForwardedFor: Bool
 
     init(serverName: String, serverVersion: String, policy: RateLimitPolicy, baseUrl: ?String, pageSize: Int64,
-        resultOptions: ResultStoreOptions, backend: ?RateLimitBackend, trustForwardedFor: Bool, tools: ArrayList<McpTool>,
+        resultOptions: ResultStoreOptions, backend: ?RateLimitBackend, trustForwardedFor: Bool,
+        maxSubscribers: Int64, subscriberQueueCapacity: Int64, subscriberDetachedTtl: Duration, tools: ArrayList<McpTool>,
         resources: ArrayList<McpResource>, prompts: ArrayList<McpPrompt>) {
         this.serverName = serverName
         this.serverVersion = serverVersion
@@ -239,6 +388,8 @@ public class McpServer {
         this.resultStore = ToolResultStore(options: resultOptions)
         this.backend = backend ?? RateLimitBackends.fromConfig()
         this.trustForwardedFor = trustForwardedFor
+        this.hub_ = SubscriptionHub(maxSubscribers: maxSubscribers, detachedTtl: subscriberDetachedTtl,
+            queueCapacity: subscriberQueueCapacity)
         registerTools(tools)
         registerResources(resources)
         registerPrompts(prompts)
@@ -265,6 +416,7 @@ public class McpServer {
         resultStore.close()
         gates.close()
         backend.close()
+        hub_.close()
     }
 
     // —— 注册与校验 ——

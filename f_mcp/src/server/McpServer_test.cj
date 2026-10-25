@@ -221,6 +221,88 @@ class McpServer_test {
     }
 
     @TestCase
+    public func testSubscriptionHubMaxSubscribers(): Unit {
+        let hub = SubscriptionHub(maxSubscribers: 2)
+        let _ = hub.subscribe(ArrayList<String>())
+        let _ = hub.subscribe(ArrayList<String>())
+        try {
+            let _ = hub.subscribe(ArrayList<String>())
+            @Fail('expected McpException')
+        } catch (e: McpException) {
+            @Assert(McpProtocol.OVERLOADED, e.code)
+        }
+        @Assert(2, hub.size)
+    }
+
+    @TestCase
+    public func testSubscriberQueueDropsOldest(): Unit {
+        let hub = SubscriptionHub(queueCapacity: 2)
+        let subscriber = hub.subscribe(ArrayList<String>())
+        for (i in 0..5) {
+            let params = JsonObject()
+            params.add('n', i)
+            hub.publish('tools/list_changed', params)
+        }
+        @Assert(3, subscriber.droppedCount)
+        let drained = subscriber.drain()
+        @Assert(2, drained.size)
+        @Assert(3, drained[0]['params'].asObject()['n'].asInt().toInt64())
+        @Assert(4, drained[1]['params'].asObject()['n'].asInt().toInt64())
+    }
+
+    @TestCase
+    public func testDetachedSubscriberIsPrunedAfterTtl(): Unit {
+        let hub = SubscriptionHub(detachedTtl: Duration.millisecond * 50)
+        let subscriber = hub.subscribe(ArrayList<String>())
+        hub.attach(subscriber.id)
+        hub.detach(subscriber)
+        @Assert(1, hub.size)
+        sleep(Duration.millisecond * 120)
+        hub.prune()
+        @Assert(0, hub.size)
+    }
+
+    @TestCase
+    public func testReconnectWithinGrace(): Unit {
+        let hub = SubscriptionHub(detachedTtl: Duration.second * 60)
+        let subscriber = hub.subscribe(ArrayList<String>())
+        @Assert(true, hub.attach(subscriber.id).isSome())
+        hub.detach(subscriber)
+        @Assert(true, hub.attach(subscriber.id).isSome())
+    }
+
+    @TestCase
+    public func testTakeBlocksUntilTimeout(): Unit {
+        let hub = SubscriptionHub()
+        let subscriber = hub.subscribe(ArrayList<String>())
+        let begin = MonoTime.now()
+        let events = subscriber.take(Duration.millisecond * 80)
+        let elapsed = (MonoTime.now() - begin).toMilliseconds()
+        @Assert(0, events.size)
+        // 阻塞等待而不是 100ms 轮询：应该接近超时时长
+        @Assert(true, elapsed >= 60)
+    }
+
+    @TestCase
+    public func testServerCloseClearsHub(): Unit {
+        let srv = server()
+        let _ = srv.hub().subscribe(ArrayList<String>())
+        @Assert(true, srv.hub().size > 0)
+        srv.close()
+        @Assert(0, srv.hub().size)
+    }
+
+    @TestCase
+    public func testQueryStringDecoding(): Unit {
+        let query = queryOf('/mcp/sse?topics=tools%2Flist_changed&subscriptionId=7&x=a+b')
+        @Assert('tools/list_changed', query.get('topics').getOrThrow())
+        @Assert('7', query.get('subscriptionId').getOrThrow())
+        @Assert('a b', query.get('x').getOrThrow())
+        let multi = queryOf('/mcp/sse?topics=a,+b')
+        @Assert('a, b', multi.get('topics').getOrThrow())
+    }
+
+    @TestCase
     public func testCapabilitiesMatchImplementation(): Unit {
         let result = call(server(), 'server/discover', metaParams(''))['result'].asObject()
         let caps = result['capabilities'].asObject()
@@ -701,6 +783,7 @@ class McpServer_test {
         let text = String.fromUtf8(stream.poll().getOrThrow())
         @Assert(true, text.contains('notifications/tools/list_changed'))
         stream.close()
-        @Assert(true, srv.hub().attach(id).isNone())
+        // 断线只 detach：grace 内允许用同一个 id 重连
+        @Assert(true, srv.hub().attach(id).isSome())
     }
 }

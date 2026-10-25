@@ -37,6 +37,8 @@ public class McpProtocol {
     public static const INTERNAL_ERROR = -32603
     public static const RESOURCE_NOT_FOUND = -32002
     public static const UNSUPPORTED_VERSION = -32022
+    /** 资源超限（订阅者数量等）：与 f_jsonrpc 的批量超限同码。 */
+    public static const OVERLOADED = -32003
     public static const RATE_LIMITED = -32050
 
     public static func isToolName(name: String): Bool {
