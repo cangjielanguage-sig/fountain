@@ -21,7 +21,7 @@ import std.time.MonoTime
 import stdx.log.LogLevel
 import fountain::f_data.*
 import fountain::f_log.impl.*
-import fountain::f_mvc.MVCConfig
+import fountain::f_mvc.{CurrentHttpContext, MVCConfig}
 import fountain::f_jsonrpc.base.*
 
 /**
@@ -262,8 +262,12 @@ public class JsonRpcServer {
     private func invokeHandler(meta: JsonRpcMethodMeta, params: ?JsonValue, ctx: JsonRpcContext): JsonValue {
         match (meta.timeout) {
             case Some(t) =>
+                // 子线程没有父线程的 ThreadLocal，必须显式恢复请求上下文
+                let http = ctx.http
                 let future = spawn {
-                    meta.handler(ctx, params)
+                    CurrentHttpContext.scoped(http) {
+                        meta.handler(ctx, params)
+                    }
                 }
                 try {
                     future.get(t)
