@@ -17,6 +17,7 @@ package fountain::f_mcp.server
 
 import std.collection.concurrent.ConcurrentHashMap
 import std.sync.AtomicInt64
+import std.time.MonoTime
 import fountain::f_concurrent.{AnyMomentRateLimiter, LeakingBucketRateLimiter, RateLimiter, SlidingWindowRateLimiter,
     TokenBucketRateLimiter, UnlimitedRateLimiter}
 import fountain::f_data.*
@@ -90,13 +91,36 @@ public interface RateLimitBackend {
     func close(): Unit
 }
 
-/** 每个限流 key 对应一个 limiter；key 上带 `rpm`，配额变化时自动换新桶。 */
-class LimiterPool {
-    private let limiters = ConcurrentHashMap<String, RateLimiter<Bool>>()
-    private let factory: (Int64) -> RateLimiter<Bool>
+/** 池内条目：limiter 本体 + 最近使用时间（相对池创建时刻的纳秒数）。 */
+class LimiterEntry {
+    let limiter: RateLimiter<Bool>
+    let lastUsed: AtomicInt64
 
-    init(factory: (Int64) -> RateLimiter<Bool>) {
+    LimiterEntry(limiter: RateLimiter<Bool>, now: Int64) {
+        this.limiter = limiter
+        this.lastUsed = AtomicInt64(now)
+    }
+}
+
+/**
+ * 每个限流 key 对应一个 limiter；key 上带 `rpm`，配额变化时自动换新桶。
+ *
+ * 有界 + 空闲 TTL：以调用方为 key 的容器如果只增不删，每个 key 都会常驻一个
+ * 定时器和队列，进程跑久了就是内存与线程泄漏。
+ */
+class LimiterPool {
+    private let limiters = ConcurrentHashMap<String, LimiterEntry>()
+    private let factory: (Int64) -> RateLimiter<Bool>
+    private let maxSize: Int64
+    private let idleTtlNanos: Int64
+    private let origin = MonoTime.now()
+    private let ops = AtomicInt64(0)
+
+    init(factory: (Int64) -> RateLimiter<Bool>, maxSize!: Int64 = 10_000,
+        idleTtl!: Duration = Duration.minute * 10) {
         this.factory = factory
+        this.maxSize = maxSize
+        this.idleTtlNanos = idleTtl.toNanoseconds()
     }
 
     func acquire(key: String, rpm: Int64): Bool {
@@ -104,19 +128,65 @@ class LimiterPool {
             return true
         }
         let bucketKey = '${key}#${rpm}'
-        var limiter = limiters.get(bucketKey)
-        if (limiter.isNone()) {
-            limiters.addIfAbsent(bucketKey, factory(rpm))
-            limiter = limiters.get(bucketKey)
+        let now = (MonoTime.now() - origin).toNanoseconds()
+        var entry = limiters.get(bucketKey)
+        if (entry.isNone()) {
+            limiters.addIfAbsent(bucketKey, LimiterEntry(factory(rpm), now))
+            entry = limiters.get(bucketKey)
         }
-        limiter.getOrThrow().exec(Some(false), {=> Some(true)}) ?? false
+        let e = entry.getOrThrow()
+        e.lastUsed.store(now)
+        if (ops.fetchAdd(1) % 256 == 0) {
+            sweep(now)
+        }
+        e.limiter.exec(Some(false), {=> Some(true)}) ?? false
+    }
+
+    prop size: Int64 {
+        get() {
+            limiters.size
+        }
+    }
+
+    /** 主动清理（测试与 `close` 兼容用）：淘汰的 limiter 必须 `close()`。 */
+    func sweepNow(): Unit {
+        sweep((MonoTime.now() - origin).toNanoseconds())
     }
 
     func close(): Unit {
-        // f_concurrent 的限流器没有 close 接口；这里只清空映射，
-        // 定时器在进程退出时由 f_concurrent 的 atExit 统一取消。
         for ((key, _) in limiters) {
-            limiters.remove(key)
+            if (let Some(removed) <- limiters.remove(key)) {
+                removed.limiter.close()
+            }
+        }
+    }
+
+    private func sweep(now: Int64): Unit {
+        for ((key, entry) in limiters) {
+            if (now - entry.lastUsed.load() > idleTtlNanos) {
+                if (let Some(removed) <- limiters.remove(key)) {
+                    removed.limiter.close()
+                }
+            }
+        }
+        while (limiters.size > maxSize) {
+            var oldestKey = ''
+            var oldest = Int64.Max
+            for ((key, entry) in limiters) {
+                let used = entry.lastUsed.load()
+                if (used < oldest) {
+                    oldest = used
+                    oldestKey = key
+                }
+            }
+            if (oldestKey.isEmpty()) {
+                break
+            }
+            if (let Some(removed) <- limiters.remove(oldestKey)) {
+                removed.limiter.close()
+            } else {
+                break
+            }
         }
     }
 }
