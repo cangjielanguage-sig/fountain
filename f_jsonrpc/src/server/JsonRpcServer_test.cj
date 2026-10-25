@@ -18,8 +18,10 @@ package fountain::f_jsonrpc.server
 import std.collection.ArrayList
 import std.time.MonoTime
 import std.sync.AtomicBool
+import fountain::f_config.Config
 import fountain::f_data.*
 import fountain::f_jsonrpc.base.*
+import fountain::f_mvc.MVCConfig
 
 @Test
 class JsonRpcServer_test {
@@ -43,12 +45,13 @@ class JsonRpcServer_test {
         serverWith(JsonRpcMethodMeta(name: 'ping', handler: {_, _ => JsonString('pong')}))
     }
 
-    static func parse(bytes: Array<Byte>): JsonValue {
-        JsonValue.fromBytes(bytes)
+    /** `handle` 直接返回 `JsonValue`；保留这个接缝让用例读起来不变。 */
+    static func parse(value: JsonValue): JsonValue {
+        value
     }
 
-    static func errorOf(bytes: Array<Byte>): JsonObject {
-        parse(bytes).asObject()['error'].asObject()
+    static func errorOf(value: JsonValue): JsonObject {
+        value.asObject()['error'].asObject()
     }
 
     @TestCase
@@ -392,6 +395,87 @@ class JsonRpcServer_test {
         @Assert('b', methods[1].name)
     }
 
+    static func padded(size: Int64): String {
+        let sb = StringBuilder()
+        for (_ in 0..size) {
+            sb.append('x')
+        }
+        sb.toString()
+    }
+
+    @TestCase
+    public func testTopicIndexResolvesAmongManyMethods(): Unit {
+        let builder = JsonRpcServer.builder()
+        for (i in 0..1000) {
+            builder.addMethod(JsonRpcMethodMeta(name: 'ns${i}.m', handler: {_, _ => JsonString('${i}')}))
+        }
+        let server = builder.build()
+        let hit = server.handle(text('{"jsonrpc":"2.0","id":1,"method":"ns500.m"}'),
+            ctx: JsonRpcContext(endpoint: '/rpc/ns500', topic: 'ns500')).getOrThrow()
+        @Assert('500', hit.asObject()['result'].asString().value)
+        let miss = server.handle(text('{"jsonrpc":"2.0","id":1,"method":"nope"}'),
+            ctx: JsonRpcContext(endpoint: '/rpc/nope', topic: 'nope')).getOrThrow()
+        @Assert(-32004, errorOf(miss)['code'].asInt().toInt64())
+    }
+
+    @TestCase
+    public func testBodyLimitReadsConfigAtRequestTime(): Unit {
+        Config.set([(MVCConfig.MAX_REQUEST_BODY_SIZE, Int64(4 * 1024 * 1024))])
+        try {
+            // server 先于配置构造：修复前会永久快照 2 MiB
+            let server = pingServer()
+            let body = '{"jsonrpc":"2.0","id":1,"method":"ping","params":{"pad":"' + padded(3 * 1024 * 1024) + '"}}'
+            let response = server.handle(text(body), ctx: JsonRpcContext()).getOrThrow()
+            @Assert('pong', response.asObject()['result'].asString().value)
+        } finally {
+            Config.remove(MVCConfig.MAX_REQUEST_BODY_SIZE)
+        }
+    }
+
+    @TestCase
+    public func testExplicitBodyLimitWinsOverConfig(): Unit {
+        Config.set([(MVCConfig.MAX_REQUEST_BODY_SIZE, Int64(4 * 1024 * 1024))])
+        try {
+            let server = JsonRpcServer.builder()
+                .maxBodyBytes(1024)
+                .addMethod(JsonRpcMethodMeta(name: 'ping', handler: {_, _ => JsonString('pong')}))
+                .build()
+            let body = '{"jsonrpc":"2.0","id":1,"method":"ping","params":{"pad":"' + padded(2048) + '"}}'
+            let value = server.handle(text(body), ctx: JsonRpcContext()).getOrThrow()
+            let error = value.asObject()['error'].asObject()
+            @Assert(-32600, error['code'].asInt().toInt64())
+            @Assert(1024, error['data'].asObject()['limit'].asInt().toInt64())
+        } finally {
+            Config.remove(MVCConfig.MAX_REQUEST_BODY_SIZE)
+        }
+    }
+
+    @TestCase
+    public func testBatchLimitCarriesSizeAndLimit(): Unit {
+        let server = JsonRpcServer.builder()
+            .maxBatchSize(1)
+            .addMethod(JsonRpcMethodMeta(name: 'ping', handler: {_, _ => JsonString('pong')}))
+            .build()
+        let body = '[{"jsonrpc":"2.0","id":1,"method":"ping"},{"jsonrpc":"2.0","id":2,"method":"ping"}]'
+        let error = errorOf(server.handle(text(body), ctx: JsonRpcContext()).getOrThrow())
+        @Assert(-32003, error['code'].asInt().toInt64())
+        @Assert(1, error['data'].asObject()['limit'].asInt().toInt64())
+        @Assert(2, error['data'].asObject()['size'].asInt().toInt64())
+    }
+
+    @TestCase
+    public func testInvalidParamsSchemaFailsAtRegistration(): Unit {
+        let schema = JsonObject()
+        schema.add('type', 'object')
+        schema.add('pattern', 1)
+        try {
+            let _ = JsonRpcMethodMeta(name: 'bad', handler: {_, _ => JsonNull.instance}, paramsSchema: schema)
+            @Fail('expected IllegalArgumentException')
+        } catch (_: IllegalArgumentException) {
+            ()
+        }
+    }
+
     @TestCase
     public func testMethodMetaFields(): Unit {
         let schema = JsonObject()
@@ -400,11 +484,9 @@ class JsonRpcServer_test {
             name: 'x.y',
             handler: {_, _ => JsonNull.instance},
             description: 'desc',
-            inputSchema: schema,
             timeout: Duration.second)
         @Assert('x', meta.namespace())
         @Assert('desc', meta.description)
-        @Assert(true, meta.inputSchema.isSome())
         @Assert(true, meta.timeout.isSome())
     }
 }

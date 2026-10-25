@@ -34,17 +34,17 @@ public class JsonRpcRegistry {
      * 读取 `T.fnName` 上指定参数类型的重载的 `@JsonRpcMeta`。
      *
      * `argTypes` 是方法声明里的参数类型（不含 `this`）。没有匹配的重载或注解时，
-     * 返回 `JsonRpcMeta('', '500ms')`：无描述，超时默认 500ms。
+     * 返回 `JsonRpcMeta('', '')`：无描述、**不设超时**（handler 在请求线程内联执行）。
      */
     public static func getMeta<T>(fnName: String, argTypes: Array<TypeInfo>): JsonRpcMeta where T <: Object {
         let function = try {
             TypeInfo.of<T>().getInstanceFunction(fnName, argTypes)
         } catch (_: InfoNotFoundException) {
-            return JsonRpcMeta('', '500ms')
+            return JsonRpcMeta('', '')
         }
         match (function.findAnnotation<JsonRpcMeta>()) {
             case Some(meta) => meta
-            case _ => JsonRpcMeta('', '500ms')
+            case _ => JsonRpcMeta('', '')
         }
     }
 }

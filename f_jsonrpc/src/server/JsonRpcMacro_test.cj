@@ -81,7 +81,7 @@ class JsonRpcMacro_test {
         let body = '{"jsonrpc":"2.0","id":1,"method":"${method}","params":${params}}'
         let ctx = JsonRpcContext(topic: topic)
         let bytes = JsonRpcRegistry.server().handle(body.unsafeBytes(), ctx: ctx).getOrThrow()
-        JsonValue.fromBytes(bytes).asObject()
+        bytes.asObject()
     }
 
     static func errorCode(obj: JsonObject): Int64 {
@@ -151,13 +151,16 @@ class JsonRpcMacro_test {
     }
 
     @TestCase
-    public func testBareMethodUsesDefaultTimeout(): Unit {
+    public func testBareMethodHasNoTimeout(): Unit {
+        var found = false
         for (m in JsonRpcRegistry.server().methods()) {
             if (m.name == 'knowledge.echo') {
+                found = true
                 @Assert('', m.description)
-                @Assert(true, m.timeout.getOrThrow() == Duration.parse('500ms'))
+                @Assert(true, m.timeout.isNone())
             }
         }
+        @Assert(true, found)
     }
 
     @TestCase
@@ -182,11 +185,19 @@ class JsonRpcMacro_test {
     }
 
     @TestCase
-    public func testMissingMetaUsesDefaultTimeout(): Unit {
+    public func testMissingMetaHasNoTimeout(): Unit {
         let meta = JsonRpcRegistry.getMeta<JsonRpcMacroTestRPC>('echo', [TypeInfo.of<MacroEcho>()])
         @Assert('', meta.description)
-        @Assert('500ms', meta.timeout)
-        @Assert(true, meta.timeoutDuration == Duration.parse('500ms'))
+        @Assert('', meta.timeout)
+    }
+
+    @TestCase
+    public func testEmptyTimeoutMeansNoTimeout(): Unit {
+        for (m in JsonRpcRegistry.server().methods()) {
+            if (m.name == 'knowledge.echo') {
+                @Assert(true, m.timeout.isNone())
+            }
+        }
     }
 
     @TestCase

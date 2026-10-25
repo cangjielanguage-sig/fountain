@@ -19,31 +19,12 @@ import std.collection.ArrayList
 import fountain::f_data.*
 import fountain::f_mcp.base.*
 
-public class PromptArgument {
-    public let name: String
-    public let description: String
-    public let required: Bool
-
-    public init(name: String, description!: String = '', required!: Bool = false) {
-        this.name = name
-        this.description = description
-        this.required = required
-    }
-
-    public func toJson(): JsonObject {
-        let obj = JsonObject()
-        obj.add('name', name)
-        if (!description.isEmpty()) {
-            obj.add('description', description)
-        }
-        obj.add('required', required)
-        obj
-    }
-}
-
 public type McpPromptHandler = (JsonObject) -> ArrayList<PromptMessage>
 
 public class McpPrompt {
+    /** `listPrompts` 条目 JSON 的构建期缓存。 */
+    var listJson: ?JsonObject = None
+
     public let name: String
     public let description: String
     public let arguments: ArrayList<PromptArgument>

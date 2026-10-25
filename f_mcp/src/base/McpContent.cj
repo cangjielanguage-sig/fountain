@@ -37,6 +37,14 @@ public class ContentBlock {
         payload
     }
 
+    /**
+     * 从服务端 JSON 还原。未知 `type` 原样保留（`kind()` 返回原文，`toJson()` 可还原），
+     * 不因客户端不认识该类型而丢弃内容。
+     */
+    public static func fromJson(obj: JsonObject): ContentBlock {
+        ContentBlock(stringOf(obj, 'type'), obj)
+    }
+
     public static func text(text: String): ContentBlock {
         let obj = JsonObject()
         obj.add('type', 'text')
@@ -105,14 +113,21 @@ public class CallToolResult {
     public let isError: Bool
     public let resultType: String
     public let inputRequired: ?JsonValue
+    /** 多轮协商的游标：原样进入响应，下一轮由客户端带回。 */
+    public let requestState: ?JsonValue
+    /** 附加到顶层 `data` 的字段（如 `truncated` / `limit`）。 */
+    public let extra: ?JsonObject
 
     public init(content!: ArrayList<ContentBlock>, structuredContent!: ?JsonValue = None, isError!: Bool = false,
-        resultType!: String = 'complete', inputRequired!: ?JsonValue = None) {
+        resultType!: String = 'complete', inputRequired!: ?JsonValue = None, requestState!: ?JsonValue = None,
+        extra!: ?JsonObject = None) {
         this.content = content
         this.structuredContent = structuredContent
         this.isError = isError
         this.resultType = resultType
         this.inputRequired = inputRequired
+        this.requestState = requestState
+        this.extra = extra
     }
 
     public static func text(text: String): CallToolResult {
@@ -125,6 +140,28 @@ public class CallToolResult {
         let list = ArrayList<ContentBlock>()
         list.add(ContentBlock.text(text))
         CallToolResult(content: list, isError: true)
+    }
+
+    /** 从服务端 `tools/call` 结果还原；`requestState` 与 `data` 原样带回，供下一轮使用。 */
+    public static func fromJson(obj: JsonObject): CallToolResult {
+        let blocks = ArrayList<ContentBlock>()
+        match (obj.get('content')) {
+            case Some(array: JsonArray) => for (item in array) {
+                if (let value: JsonObject <- item) {
+                    blocks.add(ContentBlock.fromJson(value))
+                }
+            }
+            case _ => ()
+        }
+        let kind = stringOf(obj, 'resultType')
+        let resultType = if (kind.isEmpty()) {
+            'complete'
+        } else {
+            kind
+        }
+        CallToolResult(content: blocks, structuredContent: obj.get('structuredContent'), isError: boolOf(obj, 'isError'),
+            resultType: resultType, inputRequired: obj.get('inputRequired'), requestState: obj.get('requestState'),
+            extra: objectOf(obj, 'data'))
     }
 
     public func toJson(): JsonObject {
@@ -150,6 +187,14 @@ public class CallToolResult {
             case Some(value) => obj.add('inputRequired', value)
             case _ => ()
         }
+        match (requestState) {
+            case Some(value) => obj.add('requestState', value)
+            case _ => ()
+        }
+        match (extra) {
+            case Some(value) => obj.add('data', value)
+            case _ => ()
+        }
         obj
     }
 }
@@ -158,6 +203,18 @@ public class CallToolResult {
 public struct ResourceContent {
     public const ResourceContent(public let uri: String, public let mimeType: ?String, public let text: ?String,
         public let blob: ?Array<Byte>) {}
+
+    public static func fromJson(obj: JsonObject): ResourceContent {
+        let blob = match (obj.get('blob')) {
+            case Some(value) => if (value is JsonString) {
+                fromBase64String(value.asString().value)
+            } else {
+                None<Array<Byte>>
+            }
+            case _ => None<Array<Byte>>
+        }
+        ResourceContent(stringOf(obj, 'uri'), optionalStringOf(obj, 'mimeType'), optionalStringOf(obj, 'text'), blob)
+    }
 
     public func toJson(): JsonObject {
         let obj = JsonObject()
@@ -181,6 +238,18 @@ public struct ResourceContent {
 /** `prompts/get` 的一条消息。 */
 public struct PromptMessage {
     public const PromptMessage(public let role: String, public let content: ContentBlock) {}
+
+    public static func fromJson(obj: JsonObject): PromptMessage {
+        let block = match (obj.get('content')) {
+            case Some(value) => if (let inner: JsonObject <- value) {
+                ContentBlock.fromJson(inner)
+            } else {
+                ContentBlock.text(value.toString())
+            }
+            case _ => ContentBlock.text('')
+        }
+        PromptMessage(stringOf(obj, 'role'), block)
+    }
 
     public func toJson(): JsonObject {
         let obj = JsonObject()

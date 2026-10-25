@@ -1,5 +1,8 @@
 # f_jsonrpc —— 仓颉 JSON-RPC 2.0 over HTTP 模块设计
 
+> **以实现为准**：本文档描述设计意图，任何与源码不一致的地方以 `f_jsonrpc/src` 为准。
+> 关键差异见文末「文档与实现对照」，最近一次对齐：`fix-jsonrpc-mcp-review-findings`。
+>
 > 版本 **v0.6** ｜ 2026-10-24 ｜ 状态：待评审
 >
 > 定位：fountain 模块。在 `f_mvc` 之上提供 **JSON-RPC 2.0 over HTTP** 的服务端与客户端能力，
@@ -688,9 +691,9 @@ JSON-RPC 2.0 的五个标准错误码，加四个项目自定义：
 | -32601 | Method not found | ⑤ | **200** |
 | -32602 | Invalid params | ⑥ | **200** |
 | -32603 | Internal error | ⑦ 未捕获异常 | **200** |
-| -32001 | Server error | handler 抛通用 `JsonRpcException` | **200** |
-| -32002 | Timeout | 执行超时 | **200** |
-| -32003 | Overloaded | 批量过大 / 并发超限 | **200** 或 429 |
+| -32001 | Server error | **保留，当前实现不产生** | — |
+| -32002 | Timeout | 显式配置的 `timeout` 到点 | **200** |
+| -32003 | Overloaded | **仅批量条数超限**（`data = {limit, size}`） | **200** |
 | -32004 | Unknown topic | `{topic}` 下没有任何方法 | **200** |
 
 **除了「请求体超限（413）」和「框架级异常（5xx）」，一律 HTTP 200。**
@@ -1036,7 +1039,9 @@ match (server.handle(raw, ctx: rpcCtx)) {
 `f_mvc` 有业务线程池配置（`mvc_servicePoolCapacity` / `mvc_servicePoolQueueCapacity` / `mvc_servicePoolPreheat`，
 三个键必须同时指定才生效）。`f_jsonrpc` 不另建线程池，直接跑在 MVC 的池里。
 
-单方法超时用 `JsonRpcMethodMeta.timeout`：handler 在独立 `spawn` 里跑，超时返回 `-32002`。
+单方法超时用 `JsonRpcMethodMeta.timeout`：**默认不设超时**，handler 在请求线程内联执行（请求级
+ThreadLocal 可用）；只有显式配置了 `timeout` 才在独立 `spawn` 里跑，并用 `CurrentHttpContext.scoped`
+恢复上下文，超时返回 `-32002`。
 
 **语义已确认：只提前返回错误，不终止 handler。** 仓颉没有抢占式取消，超时后那个 `spawn`
 仍在跑完。这条必须在使用文档里写明，否则会有人把"超时=已停止"当成事实，
@@ -1094,7 +1099,7 @@ public struct ClientOptions {
 | `Content-Type` | `application/json; charset=utf-8` | 带 charset，避免服务端按 ISO-8859-1 猜 |
 | `Accept` | `application/json` | |
 | 连接复用 | 默认开 | 客户端持有 `Client` 实例，不要每次 new |
-| 响应体读取 | 先查 `Content-Length`，再按 `maxResponseBytes` 截断 | 防超大响应打爆内存 |
+| 响应体读取 | 先查 `Content-Length` 预判，再流式累计；超 `maxResponseBytes` 立即抛错并关闭响应（不截断、不返回部分内容） | 防超大响应打爆内存 |
 
 **`Client` 实例必须复用。** `stdx.net.http` 的 `Client` 内部维护连接池，每次调用新建 `Client`
 会让 keep-alive 完全失效，在批量场景下延迟翻几倍。
@@ -1289,3 +1294,21 @@ JSON-RPC 的 `id` 允许是数字或字符串，**回填时必须原样返回**�
 
 > 这五项都不需要改 `f_mvc`，全部是对现有行为的确认。任何一项不符合预期，
 > 优先调整 f_jsonrpc 自己的实现，而不是回头去改框架。
+
+
+---
+
+## 文档与实现对照（fix-jsonrpc-mcp-review-findings）
+
+| 主题 | 实现（以此为准） |
+|---|---|
+| 默认超时 | 无。`JsonRpcRegistry.getMeta` 无注解时返回 `JsonRpcMeta('', '')`；`''` = 不设超时 |
+| 超时线程模型 | 显式超时才 `spawn`，子线程内 `CurrentHttpContext.scoped(ctx.http)` 建立/清理上下文 |
+| `-32001` | 保留常量，当前不产生 |
+| `-32003` | 只有批量条数超限会产生 |
+| `JsonRpcServer.handle` | 返回 `?JsonValue`；`Content-Type` 由 f_mvc 按 `application/json` 输出 |
+| `maxBodyBytes` | 每次请求解析 `MVCConfig.maxRequestBodySize`，显式配置优先，不在 `build()` 快照 |
+| `ClientOptions` | `timeout` / `headers` / `maxResponseBytes` / `keepAlive` / `retryOnConnectFailure` |
+| 重试边界 | 只有 `JsonRpcConnectException`（建连/发送）可重试；读响应失败永不重试 |
+| 参数 schema | 注册期 `CompiledSchema.compile`（结构校验 + 正则预编译） |
+| `JsonRpcContext` | 不再有 `meta` 字段；`JsonRpcMethodMeta` 不再有 `inputSchema` / `outputSchema` |

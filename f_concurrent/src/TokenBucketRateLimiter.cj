@@ -20,6 +20,7 @@ package fountain::f_concurrent
  */
 public class TokenBucketRateLimiter<T> <: RateLimiter<T> {
     private let tokens: LinkedBlockingQueue<Unit>
+    private var timer: ?Timer = None
     /**
      * @param tokens 令牌总数
      * @param timeout 阻塞时长
@@ -45,6 +46,7 @@ public class TokenBucketRateLimiter<T> <: RateLimiter<T> {
             } while (next <= Duration.Zero)
             next
         }
+        this.timer = Some(timer)
         atExit(timer.cancel)
     }
     public func exec(default: ?T, task: () -> ?T): ?T {
@@ -52,6 +54,13 @@ public class TokenBucketRateLimiter<T> <: RateLimiter<T> {
             x
         } else {
             default
+        }
+    }
+
+    public func close(): Unit {
+        match (timer) {
+            case Some(t) => t.cancel()
+            case _ => ()
         }
     }
 }

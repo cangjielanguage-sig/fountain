@@ -17,7 +17,8 @@ package fountain::f_mcp.server
 
 import std.collection.concurrent.ConcurrentHashMap
 import std.sync.AtomicInt64
-import fountain::f_concurrent.{AnyMomentRateLimiter, LeakingBucketRateLimiter, RateLimiter, SlidingWindowRateLimiter,
+import std.time.MonoTime
+import fountain::f_concurrent.{LeakingBucketRateLimiter, RateLimiter, SlidingWindowRateLimiter,
     TokenBucketRateLimiter, UnlimitedRateLimiter}
 import fountain::f_data.*
 
@@ -26,6 +27,16 @@ public struct RateLimitPolicy {
     public const RateLimitPolicy(public let perCallerRpm!: ?Int64 = None, public let perCallerToolRpm!: ?Int64 = None,
         public let perToolRpm!: ?Int64 = None, public let maxConcurrency!: ?Int64 = None,
         public let perCallerConcurrency!: ?Int64 = None) {}
+
+    /** 逐字段合并：`override` 有值的字段覆盖 `this`，没写的字段继承。 */
+    public func overlay(override: RateLimitPolicy): RateLimitPolicy {
+        RateLimitPolicy(
+            perCallerRpm: override.perCallerRpm ?? perCallerRpm,
+            perCallerToolRpm: override.perCallerToolRpm ?? perCallerToolRpm,
+            perToolRpm: override.perToolRpm ?? perToolRpm,
+            maxConcurrency: override.maxConcurrency ?? maxConcurrency,
+            perCallerConcurrency: override.perCallerConcurrency ?? perCallerConcurrency)
+    }
 }
 
 /** 工具级覆盖；字段为 `None` 时沿用服务级 / 全局。 */
@@ -39,15 +50,19 @@ struct ResolvedRateLimit {
     let perCallerRpm: ?Int64
     let perCallerToolRpm: ?Int64
     let perToolRpm: ?Int64
-    let maxConcurrency: ?Int64
+    /** 服务级全局并发上限：只取 `RateLimitPolicy.maxConcurrency`。 */
+    let globalConcurrency: ?Int64
+    /** 工具并发上限：只取 `ToolRateLimit.maxConcurrency`。 */
+    let toolConcurrency: ?Int64
     let perCallerConcurrency: ?Int64
 
-    const init(perCallerRpm: ?Int64, perCallerToolRpm: ?Int64, perToolRpm: ?Int64, maxConcurrency: ?Int64,
-        perCallerConcurrency: ?Int64) {
+    const init(perCallerRpm: ?Int64, perCallerToolRpm: ?Int64, perToolRpm: ?Int64, globalConcurrency: ?Int64,
+        toolConcurrency: ?Int64, perCallerConcurrency: ?Int64) {
         this.perCallerRpm = perCallerRpm
         this.perCallerToolRpm = perCallerToolRpm
         this.perToolRpm = perToolRpm
-        this.maxConcurrency = maxConcurrency
+        this.globalConcurrency = globalConcurrency
+        this.toolConcurrency = toolConcurrency
         this.perCallerConcurrency = perCallerConcurrency
     }
 }
@@ -90,13 +105,36 @@ public interface RateLimitBackend {
     func close(): Unit
 }
 
-/** 每个限流 key 对应一个 limiter；key 上带 `rpm`，配额变化时自动换新桶。 */
-class LimiterPool {
-    private let limiters = ConcurrentHashMap<String, RateLimiter<Bool>>()
-    private let factory: (Int64) -> RateLimiter<Bool>
+/** 池内条目：limiter 本体 + 最近使用时间（相对池创建时刻的纳秒数）。 */
+class LimiterEntry {
+    let limiter: RateLimiter<Bool>
+    let lastUsed: AtomicInt64
 
-    init(factory: (Int64) -> RateLimiter<Bool>) {
+    LimiterEntry(limiter: RateLimiter<Bool>, now: Int64) {
+        this.limiter = limiter
+        this.lastUsed = AtomicInt64(now)
+    }
+}
+
+/**
+ * 每个限流 key 对应一个 limiter；key 上带 `rpm`，配额变化时自动换新桶。
+ *
+ * 有界 + 空闲 TTL：以调用方为 key 的容器如果只增不删，每个 key 都会常驻一个
+ * 定时器和队列，进程跑久了就是内存与线程泄漏。
+ */
+class LimiterPool {
+    private let limiters = ConcurrentHashMap<String, LimiterEntry>()
+    private let factory: (Int64) -> RateLimiter<Bool>
+    private let maxSize: Int64
+    private let idleTtlNanos: Int64
+    private let origin = MonoTime.now()
+    private let ops = AtomicInt64(0)
+
+    init(factory: (Int64) -> RateLimiter<Bool>, maxSize!: Int64 = 10_000,
+        idleTtl!: Duration = Duration.minute * 10) {
         this.factory = factory
+        this.maxSize = maxSize
+        this.idleTtlNanos = idleTtl.toNanoseconds()
     }
 
     func acquire(key: String, rpm: Int64): Bool {
@@ -104,19 +142,65 @@ class LimiterPool {
             return true
         }
         let bucketKey = '${key}#${rpm}'
-        var limiter = limiters.get(bucketKey)
-        if (limiter.isNone()) {
-            limiters.addIfAbsent(bucketKey, factory(rpm))
-            limiter = limiters.get(bucketKey)
+        let now = (MonoTime.now() - origin).toNanoseconds()
+        var entry = limiters.get(bucketKey)
+        if (entry.isNone()) {
+            limiters.addIfAbsent(bucketKey, LimiterEntry(factory(rpm), now))
+            entry = limiters.get(bucketKey)
         }
-        limiter.getOrThrow().exec(Some(false), {=> Some(true)}) ?? false
+        let e = entry.getOrThrow()
+        e.lastUsed.store(now)
+        if (ops.fetchAdd(1) % 256 == 0) {
+            sweep(now)
+        }
+        e.limiter.exec(Some(false), {=> Some(true)}) ?? false
+    }
+
+    prop size: Int64 {
+        get() {
+            limiters.size
+        }
+    }
+
+    /** 主动清理（测试与 `close` 兼容用）：淘汰的 limiter 必须 `close()`。 */
+    func sweepNow(): Unit {
+        sweep((MonoTime.now() - origin).toNanoseconds())
     }
 
     func close(): Unit {
-        // f_concurrent 的限流器没有 close 接口；这里只清空映射，
-        // 定时器在进程退出时由 f_concurrent 的 atExit 统一取消。
         for ((key, _) in limiters) {
-            limiters.remove(key)
+            if (let Some(removed) <- limiters.remove(key)) {
+                removed.limiter.close()
+            }
+        }
+    }
+
+    private func sweep(now: Int64): Unit {
+        for ((key, entry) in limiters) {
+            if (now - entry.lastUsed.load() > idleTtlNanos) {
+                if (let Some(removed) <- limiters.remove(key)) {
+                    removed.limiter.close()
+                }
+            }
+        }
+        while (limiters.size > maxSize) {
+            var oldestKey = ''
+            var oldest = Int64.Max
+            for ((key, entry) in limiters) {
+                let used = entry.lastUsed.load()
+                if (used < oldest) {
+                    oldest = used
+                    oldestKey = key
+                }
+            }
+            if (oldestKey.isEmpty()) {
+                break
+            }
+            if (let Some(removed) <- limiters.remove(oldestKey)) {
+                removed.limiter.close()
+            } else {
+                break
+            }
         }
     }
 }
@@ -205,37 +289,6 @@ public class SlidingWindowRateLimitBackend <: RateLimitBackend {
     }
 }
 
-/**
- * 任意时刻限流：把 `rpm` 当作**瞬时并发上限**，不是每分钟配额。
- *
- * `RateLimitBackend` 只有 acquire 没有 release，而 `AnyMomentRateLimiter`
- * 限制的是同时执行的任务数，因此这里只能在判定期间短暂占用槽位；
- * 它适合对比/实验，不建议用来表达「每分钟 rpm 次」。
- */
-public class AnyMomentRateLimitBackend <: RateLimitBackend {
-    public static prop name: String {
-        get() {
-            'any-moment'
-        }
-    }
-
-    public static func new(): RateLimitBackend {
-        AnyMomentRateLimitBackend()
-    }
-
-    private let pool = LimiterPool({
-        rpm: Int64 => AnyMomentRateLimiter<Bool>(maxTokens: rpm, timeout: Duration.millisecond)
-    })
-
-    public func tryAcquire(key: String, rpm: Int64, _: Int64): Bool {
-        pool.acquire(key, rpm)
-    }
-
-    public func close(): Unit {
-        pool.close()
-    }
-}
-
 /** 不限制：始终放行。 */
 public class UnlimitedRateLimitBackend <: RateLimitBackend {
     public static prop name: String {
@@ -267,7 +320,6 @@ public class RateLimitBackends {
         register<TokenBucketRateLimitBackend>()
         register<LeakingBucketRateLimitBackend>()
         register<SlidingWindowRateLimitBackend>()
-        register<AnyMomentRateLimitBackend>()
         register<UnlimitedRateLimitBackend>()
     }
 
@@ -305,26 +357,57 @@ public class RateLimitBackends {
     }
 }
 
-/** 并发闸门：全局总并发 + 调用方（或调用方×工具）子并发。 */
-public class ConcurrencyGate {
-    private let counts = ConcurrentHashMap<String, AtomicInt64>()
+/** 并发闸门条目：计数 + 最近使用时间，`release` 到 0 也不删 key。 */
+class GateEntry {
+    let count: AtomicInt64
+    let lastUsed: AtomicInt64
 
+    GateEntry(now: Int64) {
+        this.count = AtomicInt64(0)
+        this.lastUsed = AtomicInt64(now)
+    }
+}
+
+/**
+ * 并发闸门：全局总并发 / 工具并发 / 调用方（或调用方×工具）子并发。
+ *
+ * `release` 只减计数、不删 key：删 key 会与并发的 `tryAcquire` 竞态，
+ * 导致新条目从 0 开始计数、别人的计数被吞掉。空闲条目由 TTL / 容量回收。
+ */
+public class ConcurrencyGate {
+    private let counts = ConcurrentHashMap<String, GateEntry>()
+    private let maxSize: Int64
+    private let idleTtlNanos: Int64
+    private let origin = MonoTime.now()
+    private let ops = AtomicInt64(0)
+
+    public init(maxSize!: Int64 = 10_000, idleTtl!: Duration = Duration.minute * 10) {
+        this.maxSize = maxSize
+        this.idleTtlNanos = idleTtl.toNanoseconds()
+    }
+
+    /** `limit <= 0` 表示不限制，返回 `false`（未占槽，调用方不要释放）。 */
     public func tryAcquire(key: String, limit: Int64): Bool {
         if (limit <= 0) {
-            return true
+            return false
         }
-        var counter = counts.get(key)
-        if (counter.isNone()) {
-            counts.addIfAbsent(key, AtomicInt64(0))
-            counter = counts.get(key)
+        let now = (MonoTime.now() - origin).toNanoseconds()
+        var entry = counts.get(key)
+        if (entry.isNone()) {
+            counts.addIfAbsent(key, GateEntry(now))
+            entry = counts.get(key)
         }
-        let atomic = counter.getOrThrow()
+        let found = entry.getOrThrow()
+        found.lastUsed.store(now)
+        if (ops.fetchAdd(1) % 256 == 0) {
+            sweep(now)
+        }
         while (true) {
-            let current = atomic.load()
+            let current = found.count.load()
             if (current >= limit) {
                 return false
             }
-            if (atomic.compareAndSwap(current, current + 1)) {
+            if (found.count.compareAndSwap(current, current + 1)) {
                 return true
             }
         }
@@ -333,10 +416,15 @@ public class ConcurrencyGate {
 
     public func release(key: String): Unit {
         match (counts.get(key)) {
-            case Some(atomic) =>
-                let remaining = atomic.fetchAdd(-1) - 1
-                if (remaining <= 0) {
-                    counts.remove(key)
+            case Some(entry) =>
+                while (true) {
+                    let current = entry.count.load()
+                    if (current <= 0) {
+                        return
+                    }
+                    if (entry.count.compareAndSwap(current, current - 1)) {
+                        return
+                    }
                 }
             case _ => ()
         }
@@ -348,7 +436,50 @@ public class ConcurrencyGate {
         }
     }
 
+    /** 当前 key 数（不含已经回收的空闲条目）。 */
     public func size(): Int64 {
         counts.size
+    }
+
+    /** 主动回收空闲条目（测试用）。 */
+    public func sweepNow(): Unit {
+        sweep((MonoTime.now() - origin).toNanoseconds())
+    }
+
+    private func sweep(now: Int64): Unit {
+        for ((key, entry) in counts) {
+            if (entry.count.load() == 0 && now - entry.lastUsed.load() > idleTtlNanos) {
+                counts.remove(key)
+            }
+        }
+        while (counts.size > maxSize) {
+            var oldestKey = ''
+            var oldest = Int64.Max
+            for ((key, entry) in counts) {
+                let used = entry.lastUsed.load()
+                if (used < oldest) {
+                    oldest = used
+                    oldestKey = key
+                }
+            }
+            if (oldestKey.isEmpty() || !counts.remove(oldestKey).isSome()) {
+                break
+            }
+        }
+    }
+}
+
+/** 并发槽位的释放凭据：只释放真正占到的 key（key 自带，避免释放时丢参数）。 */
+struct ConcurrencyLease {
+    let verdict: RateVerdict
+    let global: Bool
+    let toolKey: String
+    let callerKey: String
+
+    const init(verdict: RateVerdict, global: Bool, toolKey!: String = '', callerKey!: String = '') {
+        this.verdict = verdict
+        this.global = global
+        this.toolKey = toolKey
+        this.callerKey = callerKey
     }
 }

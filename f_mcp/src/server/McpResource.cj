@@ -34,6 +34,9 @@ public type McpResourceHandler = (McpResourceContext) -> ArrayList<ResourceConte
 
 /** 一个静态资源。 */
 public class McpResource {
+    /** `listResources` 条目 JSON 的构建期缓存。 */
+    var listJson: ?JsonObject = None
+
     public let uri: String
     public let name: String
     public let description: String

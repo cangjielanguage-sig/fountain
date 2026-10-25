@@ -26,7 +26,7 @@ public struct ClientOptions {
     public ClientOptions(public let timeout!: Duration = Duration.second * 30,
         public let headers!: HashMap<String, String> = HashMap<String, String>(),
         public let maxResponseBytes!: Int64 = 8 * 1024 * 1024, public let keepAlive!: Bool = true,
-        /** 只对连接建立失败重试；超时不重试（可能已经执行过） */
+        /** 只对连接建立失败重试；读响应阶段的失败不重试（服务端可能已经执行过） */
         public let retryOnConnectFailure!: Int64 = 0) {}
 }
 
@@ -47,7 +47,11 @@ public struct JsonRpcResponse {
     }
 }
 
-interface JsonRpcTransport {
+/**
+ * 传输 SPI。`send` 只负责「把请求体发出去、把响应体读回来」，
+ * 建连 / 发送阶段失败抛 `JsonRpcConnectException`（可重试），读响应阶段失败抛普通异常（不可重试）。
+ */
+public interface JsonRpcTransport {
     func send(body: Array<Byte>): Array<Byte>
     func close(): Unit
 }
@@ -66,9 +70,10 @@ public class JsonRpcClient {
         this.maxRetries = opts.retryOnConnectFailure
     }
 
-    init(transport: JsonRpcTransport) {
+    /** 注入自定义传输（stdio / 测试替身）。`maxRetries` 取自 `opts.retryOnConnectFailure`。 */
+    public init(transport: JsonRpcTransport, opts!: ClientOptions = ClientOptions()) {
         this.transport = transport
-        this.maxRetries = 0
+        this.maxRetries = opts.retryOnConnectFailure
     }
 
     public func call(method: String, params!: ?JsonValue = None): JsonValue {
@@ -108,18 +113,29 @@ public class JsonRpcClient {
             requests.add(requestBody(call.method, call.params, Some(id)))
         }
         let bytes = sendWithRetry(JsonArray(list: requests).toString().unsafeBytes())
-        let parsed = JsonValue.fromBytes(bytes)
+        let parsed = parseValue(bytes)
         let byId = HashMap<String, JsonRpcResponse>()
-        if (let array: JsonArray <- parsed) {
-            for (item in array) {
-                if (let obj: JsonObject <- item) {
-                    let response = toResponse(obj)
-                    match (response.id) {
-                        case Some(id) => byId.add(id.toString(), response)
-                        case _ => ()
+        match (parsed) {
+            case array: JsonArray =>
+                for (item in array) {
+                    if (let obj: JsonObject <- item) {
+                        let response = toResponse(obj)
+                        match (response.id) {
+                            case Some(id) => byId.add(id.toString(), response)
+                            case _ => ()
+                        }
                     }
                 }
-            }
+            case obj: JsonObject => match (obj.get('error')) {
+                    // 服务端整体拒绝（-32003 批量超限 / -32600 空批量）：原样抛出，不合成 N 条 -32603
+                    case Some(errorValue) =>
+                        let error = toError(errorValue)
+                        throw JsonRpcException(error.code, error.message, data: error.data)
+                    case _ => throw JsonRpcException(JsonRpcProtocol.INTERNAL_ERROR,
+                        'malformed batch response: expected an array')
+                }
+            case _ => throw JsonRpcException(JsonRpcProtocol.INTERNAL_ERROR,
+                'malformed batch response: expected an array')
         }
         let responses = ArrayList<JsonRpcResponse>()
         for (id in ids) {
@@ -139,13 +155,13 @@ public class JsonRpcClient {
         transport.close()
     }
 
-    /** 只对连接建立失败重试（IOException）；超时不重试——可能已经执行过。 */
+    /** 只对建连 / 发送阶段失败重试；读响应失败不重试——服务端可能已经执行过。 */
     private func sendWithRetry(body: Array<Byte>): Array<Byte> {
         var attempt = 0
         while (true) {
             try {
                 return transport.send(body)
-            } catch (e: IOException) {
+            } catch (e: JsonRpcConnectException) {
                 if (attempt >= maxRetries) {
                     throw e
                 }
@@ -174,8 +190,17 @@ public class JsonRpcClient {
         obj
     }
 
+    /** 解析响应体：任何解析失败都转成 `JsonRpcException`，不让 `JsonException` 穿透。 */
+    private func parseValue(bytes: Array<Byte>): JsonValue {
+        try {
+            JsonValue.fromBytes(bytes)
+        } catch (e: Exception) {
+            throw JsonRpcException(JsonRpcProtocol.INTERNAL_ERROR, 'malformed json-rpc response: ${e.message}')
+        }
+    }
+
     private func parseObject(bytes: Array<Byte>): JsonObject {
-        match (JsonValue.fromBytes(bytes)) {
+        match (parseValue(bytes)) {
             case obj: JsonObject => obj
             case _ => throw JsonRpcException(JsonRpcProtocol.INTERNAL_ERROR,
                 'malformed json-rpc response: expected an object')
@@ -185,28 +210,29 @@ public class JsonRpcClient {
     private func toResponse(obj: JsonObject): JsonRpcResponse {
         let id = obj.get('id')
         match (obj.get('error')) {
-            case Some(errorValue) =>
-                if (let errorObj: JsonObject <- errorValue) {
-                    let code = match (errorObj.get('code')) {
-                        case Some(value) => value.asInt().toInt64()
-                        case _ => JsonRpcProtocol.INTERNAL_ERROR
-                    }
-                    let message = match (errorObj.get('message')) {
-                        case Some(value) =>
-                            if (value is JsonString) {
-                                value.asString().value
-                            } else {
-                                'Error'
-                            }
-                        case _ => 'Error'
-                    }
-                    JsonRpcResponse(id, None, Some(JsonRpcError(code, message, errorObj.get('data'))))
-                } else {
-                    JsonRpcResponse(id, None,
-                        Some(JsonRpcError(JsonRpcProtocol.INTERNAL_ERROR, 'malformed error object', None)))
-                }
+            case Some(errorValue) => JsonRpcResponse(id, None, Some(toError(errorValue)))
             case _ => JsonRpcResponse(id, obj.get('result'), None)
         }
+    }
+
+    /** `error` 必须是对象；`code` 必须是数字。非法形态一律收敛成 `-32603`。 */
+    private func toError(value: JsonValue): JsonRpcError {
+        var errorObj: JsonObject
+        match (value) {
+            case obj: JsonObject => errorObj = obj
+            case _ => return JsonRpcError(JsonRpcProtocol.INTERNAL_ERROR, 'malformed error object', None)
+        }
+        let message = match (errorObj.get('message')) {
+            case Some(m: JsonString) => m.value
+            case _ => 'Error'
+        }
+        var code = JsonRpcProtocol.INTERNAL_ERROR
+        match (errorObj.get('code')) {
+            case Some(i: JsonInt) => code = i.toInt64()
+            case Some(d: JsonDecimal) => code = d.toInt64()
+            case _ => return JsonRpcError(JsonRpcProtocol.INTERNAL_ERROR, message, errorObj.get('data'))
+        }
+        JsonRpcError(code, message, errorObj.get('data'))
     }
 }
 
@@ -233,17 +259,31 @@ class HttpJsonRpcTransport <: JsonRpcTransport {
         for ((name, value) in opts.headers) {
             builder = builder.header(name, value)
         }
-        let response = client.send(builder.body(body).build())
+        // 建连 / 发送阶段失败才可重试
+        let response = try {
+            client.send(builder.body(body).build())
+        } catch (e: Exception) {
+            throw JsonRpcConnectException('${e.message}')
+        }
+        // 读响应阶段失败不重试：服务端可能已经执行过
         try {
-            let bytes = readAll(response)
-            if (bytes.size > opts.maxResponseBytes) {
-                throw JsonRpcException(JsonRpcProtocol.INTERNAL_ERROR,
-                    'response body exceeds ${opts.maxResponseBytes} bytes')
+            let cap = opts.maxResponseBytes
+            match (declaredLength(response)) {
+                case Some(declared) =>
+                    if (declared > cap) {
+                        throw JsonRpcException(JsonRpcProtocol.INTERNAL_ERROR,
+                            'response body exceeds ${cap} bytes (declared ${declared})')
+                    }
+                case _ => ()
             }
-            bytes
+            readCapped(response, cap)
         } catch (e: Exception) {
             // body 没读完就放弃时才需要关连接；正常读完由连接池复用。
-            response.close()
+            try {
+                response.close()
+            } catch (_: Exception) {
+                ()
+            }
             throw e
         }
     }
@@ -252,13 +292,39 @@ class HttpJsonRpcTransport <: JsonRpcTransport {
         client.close()
     }
 
-    private func readAll(response: HttpResponse): Array<Byte> {
-        let bytes = ArrayList<Byte>()
+    private func declaredLength(response: HttpResponse): ?Int64 {
+        match (response.headers.getFirst('Content-Length')) {
+            case Some(text) =>
+                try {
+                    Some(Int64.parse(text.trimAscii()))
+                } catch (_: Exception) {
+                    None<Int64>
+                }
+            case _ => None<Int64>
+        }
+    }
+
+    /** 流式读取并累计字节数，超过 `cap` 立即停止（不分配整包内存）。 */
+    private func readCapped(response: HttpResponse, cap: Int64): Array<Byte> {
+        var initial: Int64 = 8192
+        match (declaredLength(response)) {
+            case Some(declared) =>
+                if (declared > 0 && declared <= cap) {
+                    initial = declared
+                }
+            case _ => ()
+        }
+        let bytes = ArrayList<Byte>(initial)
         let buffer = Array<Byte>(8192, repeat: 0)
+        var total: Int64 = 0
         while (true) {
             let size = response.body.read(buffer)
             if (size <= 0) {
                 break
+            }
+            total += size
+            if (total > cap) {
+                throw JsonRpcException(JsonRpcProtocol.INTERNAL_ERROR, 'response body exceeds ${cap} bytes')
             }
             bytes.add(all: buffer[0..size])
         }

@@ -30,14 +30,13 @@ import fountain::f_mcp.base.*
  * 时原样使用；`String` 作为文本；其它可转 JSON 的类型序列化后放入文本内容。
  */
 public class McpConvert {
-    /** 把单个 JSON 参数转换成函数声明的参数类型。 */
-    public static func argument<T>(value: JsonValue): T where T <: FromData {
-        let parsed = try {
-            fromJson<T>(value.toString())
-        } catch (_: DataException) {
-            throw McpException(McpProtocol.INVALID_PARAMS, 'invalid argument: ${value.toString()}')
-        }
-        match (parsed) {
+    /**
+     * 把单个 JSON 参数转换成函数声明的参数类型。
+     *
+     * 走 `JsonValue → Data → T`，不再 `toString()` 后重新解析（每参数多一次序列化 + 解析）。
+     */
+    public static func argument<T>(value: JsonValue): T where T <: DataFields<T> {
+        match (convert<T>(value.toData())) {
             case Some(v) => v
             case _ => throw McpException(McpProtocol.INVALID_PARAMS, 'invalid argument: ${value.toString()}')
         }
@@ -60,12 +59,12 @@ public class McpConvert {
         CallToolResult(content: ArrayList<ContentBlock>())
     }
 
-    /** tool 返回其它可转 JSON 的值：文本内容 +（对象时）`structuredContent`。 */
+    /** tool 返回其它可转 JSON 的值：只序列化一次，文本与 `structuredContent` 共用。 */
     public static func toolResult<T>(value: T): CallToolResult where T <: ToData {
-        let text = toJson(value)
+        let json = JsonValue.from(value.toData())
         let content = ArrayList<ContentBlock>()
-        content.add(ContentBlock.text(text))
-        CallToolResult(content: content, structuredContent: structuredOf(text))
+        content.add(ContentBlock.text(json.toString()))
+        CallToolResult(content: content, structuredContent: structuredOf(json))
     }
 
     /** resource 返回 `ArrayList<ResourceContent>`：原样使用。 */
@@ -114,8 +113,8 @@ public class McpConvert {
         messagesOf(toJson(value))
     }
 
-    private static func structuredOf(text: String): ?JsonValue {
-        match (JsonValue.fromStr(text)) {
+    private static func structuredOf(json: JsonValue): ?JsonValue {
+        match (json) {
             case obj: JsonObject => Some(obj)
             case _ => None<JsonValue>
         }

@@ -29,10 +29,10 @@ Server-only code can `import fountain::f_mcp.server.*` + `fountain::f_mcp.base.*
 - No handshake: `initialize` / `notifications/initialized` are not implemented; every request carries `io.modelcontextprotocol/protocolVersion`, `clientInfo` and `clientCapabilities` in `params._meta`, and the `server/discover` response returns `serverInfo` in `_meta`
 - Discovery: `server/discover`; a version mismatch returns `-32022` with `error.data.supported`
 - Methods implemented: `server/discover`, `tools/list`, `tools/call`, `resources/list`, `resources/read`, `prompts/list`, `prompts/get`, `subscriptions/listen`
-- Capabilities: `tools.listChanged=false`, `resources.subscribe=true` + `resources.listChanged=false`, `prompts.listChanged=false`
+- Capabilities: `tools.listChanged=false`, `resources.subscribe=false` + `resources.listChanged=false`, `prompts.listChanged=false` (`resources/subscribe` is not implemented, so it is not advertised)
 - Transport: `POST /mcp` returns a single JSON response; `GET /mcp/sse` pushes subscription notifications (`text/event-stream`). There is no session id and the server never sends requests
 - Not implemented: `sampling` / `roots` / `logging` / `completions` / `resources/templates/list`; asking the client for input uses `tools/call` with `resultType: "input_required"`
-- Extensions: `-32050` rate limited, `-32002` resource not found, results linked from `/mcp/tool-results/`
+- Extensions: `-32050` rate limited, `-32040` resource not found (`-32002` is reserved for f_jsonrpc timeouts), results linked from `/mcp/tool-results/`
 - Legacy peers: `initialize` / `notifications/initialized` return `-32601` with `legacyMethod` and `supportedVersion` in `data`; there is no silent downgrade
 
 See [`doc/f_mcp模块设计.md`](doc/f_mcp模块设计.md) for the design rationale.
@@ -231,7 +231,20 @@ Legacy methods such as `initialize` return `-32601` with `data.legacyMethod`, te
 
 ### Rate limiting
 
-Three layers: global `RateLimitPolicy` → `Builder.rateLimit` → per-tool `ToolRateLimit`. Dimensions: caller / caller×tool / tool, plus global and per-tool concurrency gates. Over-limit returns `-32050` with `data.scope` in `caller` / `caller_tool` / `tool` / `concurrency` / `concurrency_tool`.
+Three layers merged field by field: `mcp_rateLimit` config → `Builder.rateLimit` → per-tool `ToolRateLimit`
+(fields you omit are inherited; layers are no longer replaced as a whole).
+
+Dimensions: caller / caller×tool / tool, plus service-level global concurrency and per-tool concurrency.
+
+The check order is fixed: global concurrency → tool concurrency → caller concurrency → perCallerRpm →
+perCallerToolRpm → perToolRpm. A request rejected by a concurrency gate **does not consume** an rpm token, and an
+rpm rejection releases the concurrency slots it already holds. Over-limit returns `-32050` with `data.scope` in
+`concurrency` / `concurrency_tool` / `concurrency_caller` / `caller` / `caller_tool` / `tool`; over HTTP the
+response is also `429` with `Retry-After`.
+
+The caller identity is derived in this order: first `X-Forwarded-For` entry (trusted only with
+`mcp_trustForwardedFor=true` or `Builder.trustForwardedFor(true)`) → first 16 bytes of the SHA-256 of
+`Authorization` → `remoteAddr` without the port → `anonymous` (`local` for in-process calls).
 
 Five `RateLimitBackend` implementations are built in, all backed by `f_concurrent` limiters with one limiter per rate-limit key:
 
@@ -240,7 +253,6 @@ Five `RateLimitBackend` implementations are built in, all backed by `f_concurren
 | `token-bucket` (default) | `TokenBucketRateLimiter` | `rpm` per minute, bursts up to `rpm` |
 | `leaking-bucket` | `LeakingBucketRateLimiter` | leaks `rpm` per minute, queue capped at `rpm` |
 | `sliding-window` | `SlidingWindowRateLimiter` | 1-minute sliding window, limit `rpm` |
-| `any-moment` | `AnyMomentRateLimiter` | `rpm` as an instantaneous concurrency cap, not a per-minute quota |
 | `unlimited` | `UnlimitedRateLimiter` | no limiting |
 
 An explicit `Builder.rateLimitBackend(...)` wins over configuration. Names are case-insensitive and ignore `-` / `_`; an unknown name throws `IllegalArgumentException` at `build()`.
@@ -323,13 +335,21 @@ Concurrency gates (`maxConcurrency` / `perCallerConcurrency`) remain process-loc
 Beyond `maxResultBytes` (1 MB by default):
 
 - with `publicBaseUrl`: a single `resource_link`; the content is kept in `ToolResultStore` (256 entries / 256 MB / 10 minutes by default) and readable through `resources/read`
-- without: truncate and set `data.truncated = true`
+- without: truncate on a UTF-8 rune boundary (never splits a CJK character or emoji), keep `isError` /
+  `resultType` / `inputRequired` / `requestState`, and set `data.truncated = true` plus `data.limit`
 
 `ToolResultStore` adapts `maxEntries` at runtime per window (reject rate / occupancy; `ResultStoreOptions` exposes `floor` / `ceiling` / thresholds).
 
 ### Subscriptions and SSE
 
-`subscriptions/listen` returns a `subscriptionId` and a ready-to-use `sseUrl`; `GET` that URL (`/mcp/sse?subscriptionId=N`) binds the SSE connection to the same subscriber. Each event is a JSON-RPC notification. The legacy `?topics=tools/list_changed` form still works. Heartbeat every 15 s; connection lives up to 30 minutes.
+`subscriptions/listen` returns a `subscriptionId` and a ready-to-use `sseUrl`; `GET` that URL (`/mcp/sse?subscriptionId=N`) binds the SSE connection to the same subscriber. Each event is a JSON-RPC notification. The `?topics=tools/list_changed` form is also supported (the query string is percent-decoded and trimmed; an explicit `topics=` returns 400 instead of silently subscribing to everything).
+
+- At most 1024 subscribers, 256 queued notifications per subscriber (oldest dropped and counted), and 60 s of
+  retention while detached; tune with `McpServerBuilder.maxSubscribers(...)` / `subscriberQueueCapacity(...)` /
+  `subscriberDetachedTtl(...)`
+- Both a disconnect and the 30-minute cap only detach the subscriber: the same `subscriptionId` can reconnect
+  within the grace period
+- Heartbeat every 15 s; idle connections block on a condition variable (no 100 ms polling)
 
 ## Client
 
@@ -340,7 +360,7 @@ import fountain::f_data.*
 
 let client = McpClient.http('http://127.0.0.1:8080/mcp')
 let sub = client.listen(['tools/list_changed'])
-let sseUrl = sub['sseUrl'].asString().value
+let sseUrl = sub.sseUrl
 let tools = client.listAllTools()
 let result = client.callTool('kb.search', arguments: args)
 
@@ -359,8 +379,57 @@ let client = McpClient.stdio('/usr/local/bin/my-mcp-server', args: ['--stdio'])
 ```
 
 - Every request injects `_meta` (version, `clientInfo`, `clientCapabilities`)
-- On `-32022` the client switches to `supported[0]` and retries once
-- `Manual` (`callTool`) passes `input_required` through; `Auto` uses `callToolAuto`
+- On `-32022` the client switches to `supported[0]` and retries once; the version is guarded by a `Mutex`, so
+  concurrent hits rewrite it only once
+- `Manual` (`callTool`) passes `input_required` through; `Auto` uses `callToolAuto`, forwarding `requestState`
+  into the next round
+
+The client returns strongly typed models (all from `f_mcp.base`), so fields are directly accessible; use
+`.toJson()` (or `DiscoverResult.raw` / `McpToolDescriptor.raw`) when you need the wire form:
+
+| Method | Returns |
+|---|---|
+| `discover` | `DiscoverResult` |
+| `listTools` | `ToolPage` |
+| `listAllTools` | `Array<McpToolDescriptor>` |
+| `callTool` / `callToolAuto` | `CallToolResult` (source-compatible alias `McpCallToolResult`) |
+| `listResources` | `ResourcePage` |
+| `readResource` | `ReadResourceResult` |
+| `listPrompts` | `PromptPage` |
+| `getPrompt` | `GetPromptResult` |
+| `listen` | `ListenResult` |
+
+`CallToolResult.content` holds `ContentBlock` values; unknown block types are preserved (`kind()` returns the
+server-side `type`, `toJson()` restores it).
+
+### Client options
+
+```cangjie
+let options = McpClientOptions()
+options.timeout = Duration.second * 10            // default 30s
+options.headers.add('Authorization', 'Bearer x')  // HTTP only; ignored by stdio
+options.maxResponseBytes = 4 * 1024 * 1024        // HTTP only; 8 MiB by default
+options.keepAlive = false                         // HTTP only; false sends Connection: close
+options.retryOnConnectFailure = 2                 // connect failures only; 0 by default
+let client = McpClient.http('http://127.0.0.1:8080/mcp', options: options)
+```
+
+HTTP and stdio share the `f_jsonrpc.JsonRpcClient` message layer (monotonic ids, response id matching, error
+mapping); stdio ignores `headers` / `keepAlive` / `maxResponseBytes` and uses `timeout` as the read timeout.
+
+
+## Migration (1.3.17 → next)
+
+| Change | Impact | Migration |
+|---|---|---|
+| `RESOURCE_NOT_FOUND` moves from `-32002` to `-32040` | Clients branching on the code | Check `-32040` |
+| `decodeCursor` returns `?Int64` | Code using the old value | Handle `None` → `-32602` |
+| `mcp_rateLimitBackend=any-moment` removed | Config referencing it fails at startup | Use `token-bucket` / `sliding-window` |
+| `ToolRateLimit.maxConcurrency` semantics | It used to act as the global cap | Use `RateLimitPolicy.maxConcurrency` for the global cap |
+| `@McpToolMeta` numeric default `0` → `-1` | An explicit `0` means "unlimited" now | Omit the field to inherit |
+| Stricter `mcp_rateLimit` validation | Invalid config fails at startup | Fix the config as the error message says |
+| MCP client returns strongly typed models | Code relying on `JsonObject` indexing | Use model fields (e.g. `page.tools[0].name`) or `.toJson()` / `.raw` |
+| `McpCallToolResult.content` elements are `ContentBlock` | Code reading `text` via array indexing | Use `content[0].toJson()['text']` or `kind()` |
 
 ## Testing
 

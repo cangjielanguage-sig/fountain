@@ -23,10 +23,17 @@ import fountain::f_mcp.base.*
 public class McpToolContext {
     public let callerId: String
     public let requestId: ?JsonValue
+    /** 上一轮 `input_required` 的响应，原样透传（服务端不解释）。 */
+    public let inputResponses: ?JsonValue
+    /** 上一轮返回的 `requestState`，原样透传（服务端不解释）。 */
+    public let requestState: ?JsonValue
 
-    public init(callerId: String, requestId!: ?JsonValue = None) {
+    public init(callerId: String, requestId!: ?JsonValue = None, inputResponses!: ?JsonValue = None,
+        requestState!: ?JsonValue = None) {
         this.callerId = callerId
         this.requestId = requestId
+        this.inputResponses = inputResponses
+        this.requestState = requestState
     }
 }
 
@@ -40,6 +47,8 @@ public class McpTool {
     public let handler: McpToolHandler
     public let rateLimit: ?ToolRateLimit
     public let maxResultBytes: ?Int64
+    /** `listTools` 条目 JSON 的构建期缓存（请求期只做切片）。 */
+    var listJson: ?JsonObject = None
 
     init(name!: String, description!: String, inputSchema!: JsonObject, handler!: McpToolHandler,
         rateLimit!: ?ToolRateLimit = None, maxResultBytes!: ?Int64 = None) {

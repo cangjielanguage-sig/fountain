@@ -50,6 +50,142 @@ class McpConfig_test {
         }
     }
 
+    static func expectRejected(raw: String, field: String): Unit {
+        Config.set([(McpConfig.RATE_LIMIT, raw)])
+        try {
+            try {
+                let _ = McpConfig.rateLimit()
+                @Fail("expected IllegalArgumentException for '${raw}'")
+            } catch (e: IllegalArgumentException) {
+                @Assert(true, e.message.contains(field))
+            }
+        } finally {
+            Config.remove(McpConfig.RATE_LIMIT)
+        }
+    }
+
+    @TestCase
+    public func testNegativeRateLimitIsRejected(): Unit {
+        expectRejected('-1', 'perCallerRpm')
+    }
+
+    @TestCase
+    public func testDecimalRateLimitIsRejected(): Unit {
+        expectRejected('1.5', 'perCallerRpm')
+    }
+
+    @TestCase
+    public func testTooManySegmentsAreRejected(): Unit {
+        expectRejected('1,2,3,4,5,6', 'mcp_rateLimit')
+    }
+
+    @TestCase
+    public func testUnknownJsonKeyIsRejected(): Unit {
+        expectRejected('{"bogus":1}', 'bogus')
+    }
+
+    /** 中间空段：后面还有非空段时无法区分「省略」与「写错」，必须报错并指出字段。 */
+    @TestCase
+    public func testInnerEmptySegmentIsRejected(): Unit {
+        expectRejected('1,,120', 'perCallerToolRpm')
+        expectRejected(',1', 'perCallerRpm')
+        expectRejected('1,2,,4', 'perToolRpm')
+    }
+
+    /** 尾部空段等价于省略：`1,,,` 与 `1` 同义。 */
+    @TestCase
+    public func testTrailingEmptySegmentsAreOmitted(): Unit {
+        Config.set([(McpConfig.RATE_LIMIT, '1,,,')])
+        let trailing = try {
+            McpConfig.rateLimit()
+        } finally {
+            Config.remove(McpConfig.RATE_LIMIT)
+        }
+        @Assert(1, trailing.perCallerRpm.getOrThrow())
+        @Assert(true, trailing.perCallerToolRpm.isNone())
+        @Assert(true, trailing.perToolRpm.isNone())
+        @Assert(true, trailing.maxConcurrency.isNone())
+        @Assert(true, trailing.perCallerConcurrency.isNone())
+
+        Config.set([(McpConfig.RATE_LIMIT, '1')])
+        let single = try {
+            McpConfig.rateLimit()
+        } finally {
+            Config.remove(McpConfig.RATE_LIMIT)
+        }
+        @Assert(single.perCallerRpm, trailing.perCallerRpm)
+
+        Config.set([(McpConfig.RATE_LIMIT, '0,,,')])
+        let zero = try {
+            McpConfig.rateLimit()
+        } finally {
+            Config.remove(McpConfig.RATE_LIMIT)
+        }
+        @Assert(true, zero.perCallerRpm.isNone())
+    }
+
+    @TestCase
+    public func testJsonDecimalIsRejected(): Unit {
+        expectRejected('{"perCallerRpm":1.5}', 'perCallerRpm')
+    }
+
+    @TestCase
+    public func testOutOfRangeRateLimitIsRejected(): Unit {
+        expectRejected('1000001', 'perCallerRpm')
+    }
+
+    @TestCase
+    public func testZeroMeansUnlimited(): Unit {
+        Config.set([(McpConfig.RATE_LIMIT, '0,0,0,0,0')])
+        try {
+            let policy = McpConfig.rateLimit()
+            @Assert(true, policy.perCallerRpm.isNone())
+            @Assert(true, policy.perToolRpm.isNone())
+            @Assert(true, policy.maxConcurrency.isNone())
+        } finally {
+            Config.remove(McpConfig.RATE_LIMIT)
+        }
+    }
+
+    @TestCase
+    public func testCsvAndJsonAreEquivalent(): Unit {
+        Config.set([(McpConfig.RATE_LIMIT, '11,12,13,14,15')])
+        let csv = try {
+            McpConfig.rateLimit()
+        } finally {
+            Config.remove(McpConfig.RATE_LIMIT)
+        }
+        Config.set([(McpConfig.RATE_LIMIT,
+            '{"perCallerRpm":11,"perCallerToolRpm":12,"perToolRpm":13,"maxConcurrency":14,"perCallerConcurrency":15}')])
+        let json = try {
+            McpConfig.rateLimit()
+        } finally {
+            Config.remove(McpConfig.RATE_LIMIT)
+        }
+        @Assert(csv.perCallerRpm, json.perCallerRpm)
+        @Assert(csv.perCallerToolRpm, json.perCallerToolRpm)
+        @Assert(csv.perToolRpm, json.perToolRpm)
+        @Assert(csv.maxConcurrency, json.maxConcurrency)
+        @Assert(csv.perCallerConcurrency, json.perCallerConcurrency)
+    }
+
+    @TestCase
+    public func testTrustForwardedForValidation(): Unit {
+        Config.set([(McpConfig.TRUST_FORWARDED_FOR, 'yes')])
+        try {
+            @ExpectThrows[IllegalArgumentException](McpConfig.trustForwardedFor())
+        } finally {
+            Config.remove(McpConfig.TRUST_FORWARDED_FOR)
+        }
+        Config.set([(McpConfig.TRUST_FORWARDED_FOR, ' TRUE ')])
+        try {
+            @Assert(true, McpConfig.trustForwardedFor())
+        } finally {
+            Config.remove(McpConfig.TRUST_FORWARDED_FOR)
+        }
+        @Assert(false, McpConfig.trustForwardedFor())
+    }
+
     @TestCase
     public func testRateLimitBackendName(): Unit {
         Config.set([(McpConfig.RATE_LIMIT_BACKEND, ' sliding-window ')])

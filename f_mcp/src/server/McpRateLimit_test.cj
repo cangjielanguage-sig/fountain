@@ -15,8 +15,11 @@ limitations under the License.
 */
 package fountain::f_mcp.server
 
+import std.collection.ArrayList
+import std.sync.AtomicBool
 import std.unittest.*
 import std.unittest.testmacro.*
+import fountain::f_concurrent.RateLimiter
 import fountain::f_config.Config
 
 /** 测试用自定义后端：始终放行，验证注册表 + 配置项能选中开发者实现。 */
@@ -38,14 +41,75 @@ class AlwaysAllowRateLimitBackend <: RateLimitBackend {
     public func close(): Unit {}
 }
 
+/** 可观测的限流器：只用于确认池淘汰/关闭时真的调用了 `close()`。 */
+class ObservableLimiter <: RateLimiter<Bool> {
+    let closed = AtomicBool(false)
+
+    init() {
+        super(Duration.millisecond)
+    }
+
+    public func exec(default: ?Bool, task: () -> ?Bool): ?Bool {
+        task()
+    }
+
+    public override func close(): Unit {
+        closed.store(true)
+    }
+}
+
 @Test
 class McpRateLimit_test {
+    @TestCase
+    public func testLimiterPoolIsBounded(): Unit {
+        let created = ArrayList<ObservableLimiter>()
+        let pool = LimiterPool({_ => 
+            let limiter = ObservableLimiter()
+            created.add(limiter)
+            limiter
+        }, maxSize: 100, idleTtl: Duration.minute)
+        for (i in 0..1000) {
+            pool.acquire('caller-${i}', 60)
+        }
+        pool.sweepNow()
+        @Assert(true, pool.size <= 100)
+        var closed = 0
+        for (limiter in created) {
+            if (limiter.closed.load()) {
+                closed++
+            }
+        }
+        @Assert(true, closed >= created.size - 100)
+        pool.close()
+        @Assert(0, pool.size)
+    }
+
+    @TestCase
+    public func testLimiterPoolReclaimsIdleEntries(): Unit {
+        let created = ArrayList<ObservableLimiter>()
+        let pool = LimiterPool({_ =>
+            let limiter = ObservableLimiter()
+            created.add(limiter)
+            limiter
+        }, maxSize: 100, idleTtl: Duration.millisecond * 20)
+        for (i in 0..3) {
+            pool.acquire('caller-${i}', 60)
+        }
+        @Assert(3, pool.size)
+        sleep(Duration.millisecond * 60)
+        pool.sweepNow()
+        @Assert(0, pool.size)
+        for (limiter in created) {
+            @Assert(true, limiter.closed.load())
+        }
+        pool.close()
+    }
+
     @TestCase
     public func testFactoryNames(): Unit {
         @Assert(true, RateLimitBackends.of('token-bucket') is TokenBucketRateLimitBackend)
         @Assert(true, RateLimitBackends.of('leaking-bucket') is LeakingBucketRateLimitBackend)
         @Assert(true, RateLimitBackends.of('sliding-window') is SlidingWindowRateLimitBackend)
-        @Assert(true, RateLimitBackends.of('any-moment') is AnyMomentRateLimitBackend)
         @Assert(true, RateLimitBackends.of('unlimited') is UnlimitedRateLimitBackend)
         @Assert(true, RateLimitBackends.of('Token_Bucket') is TokenBucketRateLimitBackend)
         @ExpectThrows[IllegalArgumentException](RateLimitBackends.of('nope'))
@@ -116,19 +180,12 @@ class McpRateLimit_test {
     }
 
     @TestCase
-    public func testAnyMoment(): Unit {
-        let backend = AnyMomentRateLimitBackend()
+    public func testAnyMomentBackendIsRemoved(): Unit {
         try {
-            // 瞬时并发语义：顺序调用不会累积配额，所以永远放行。
-            var passed = 0
-            for (_ in 0..5) {
-                if (backend.tryAcquire('k', 2, 0)) {
-                    passed++
-                }
-            }
-            @Assert(5, passed)
-        } finally {
-            backend.close()
+            let _ = RateLimitBackends.of('any-moment')
+            @Fail('expected IllegalArgumentException')
+        } catch (e: IllegalArgumentException) {
+            @Assert(true, e.message.contains('any-moment'))
         }
     }
 

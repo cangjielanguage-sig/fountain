@@ -35,8 +35,11 @@ public class McpProtocol {
     public static const METHOD_NOT_FOUND = -32601
     public static const INVALID_PARAMS = -32602
     public static const INTERNAL_ERROR = -32603
-    public static const RESOURCE_NOT_FOUND = -32002
+    /** 业务段：`-32002` 留给 f_jsonrpc 的超时，避免同进程无法区分。 */
+    public static const RESOURCE_NOT_FOUND = -32040
     public static const UNSUPPORTED_VERSION = -32022
+    /** 资源超限（订阅者数量等）：与 f_jsonrpc 的批量超限同码。 */
+    public static const OVERLOADED = -32003
     public static const RATE_LIMITED = -32050
 
     public static func isToolName(name: String): Bool {
@@ -56,22 +59,35 @@ public class McpProtocol {
         toBase64String("offset:${offset}".toArray())
     }
 
-    public static func decodeCursor(cursor: String): Int64 {
+    /**
+     * 解码游标；非法输入返回 `None`（调用方必须回 `-32602`，不能静默退回首页）。
+     *
+     * 空串视为首页偏移（`Some(0)`）：「游标缺失」由调用方区分。
+     */
+    public static func decodeCursor(cursor: String): ?Int64 {
         if (cursor.isEmpty()) {
-            return 0
+            return Some(0)
         }
         match (fromBase64String(cursor)) {
             case Some(bytes) =>
                 let text = try {
                     String.fromUtf8(bytes)
                 } catch (_: Exception) {
-                    return 0
+                    return None<Int64>
                 }
-                if (text.startsWith('offset:')) {
-                    return Int64.tryParse(text[7..]) ?? 0
+                if (!text.startsWith('offset:')) {
+                    return None<Int64>
                 }
-                0
-            case _ => 0
+                match (Int64.tryParse(text[7..])) {
+                    case Some(offset) =>
+                        if (offset < 0 || offset > 10_000_000) {
+                            None<Int64>
+                        } else {
+                            Some(offset)
+                        }
+                    case _ => None<Int64>
+                }
+            case _ => None<Int64>
         }
     }
 }

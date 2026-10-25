@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain::f_concurrent
 
-abstract sealed class RateLimiter<T> {
+public abstract class RateLimiter<T> {
     public RateLimiter(protected let timeout: Duration) {
         if (timeout <= Duration.Zero) {
             throw RateLimiterException('timeout must be greater than zero, but current is ${timeout}')
@@ -25,6 +25,13 @@ abstract sealed class RateLimiter<T> {
         exec(None<T>, task)
     }
     public func exec(default: ?T, task: () -> ?T): ?T
+
+    /**
+     * 释放限流器持有的资源（定时器 / 队列）。
+     *
+     * 默认空实现；定时器型限流器必须覆盖，否则从池里淘汰后定时器仍在跑。
+     */
+    public open func close(): Unit {}
 }
 
 public class UnlimitedRateLimiter<T> <: RateLimiter<T> {

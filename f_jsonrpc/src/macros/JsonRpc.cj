@@ -16,6 +16,7 @@ limitations under the License.
 macro package fountain::f_jsonrpc.macros
 
 internal import std.ast.*
+internal import std.collection.HashSet
 internal import fountain::f_macros.*
 
 /**
@@ -70,11 +71,23 @@ private func expand(ns: String, input: Tokens): Tokens {
     }
     let klassName = klass.identifier.value
     var registrations = quote()
+    let seen = HashSet<String>()
     for (item in klass.body.decls) {
         match (asFunc(item)) {
             case Some(f) =>
                 if (isPublic(f) && !isStatic(f) && f.identifier.value != 'init') {
-                    registrations += generateMethod(ns, klassName, f)
+                    let fullName = if (ns.isEmpty()) {
+                        f.identifier.value
+                    } else {
+                        '${ns}.${f.identifier.value}'
+                    }
+                    if (seen.contains(fullName)) {
+                        diagReport(ERROR, f.identifier.toTokens(),
+                            "duplicate json-rpc method '${fullName}': overloaded public methods need distinct names", '')
+                    } else {
+                        seen.add(fullName)
+                        registrations += generateMethod(ns, klassName, f)
+                    }
                 }
             case _ => ()
         }
@@ -106,8 +119,13 @@ private func generateMethod(ns: String, klassName: String, f: FuncDecl): Tokens 
     }
     let multi = f.funcParams.size > 1
     let classToken = ident(klassName)
-    let ctxVar = ident('__jsonrpc_ctx')
     let paramsVar = ident('__jsonrpc_params')
+    // 未使用的形参用 `_`，避免宏生成的代码在构建日志里刷 unused variable 警告
+    let handlerHead = if (f.funcParams.size > 0) {
+        quote(_, $paramsVar)
+    } else {
+        quote(_, _)
+    }
     var argDecls = quote()
     var argList = quote()
     var argTypes = quote([)
@@ -148,7 +166,7 @@ private func generateMethod(ns: String, klassName: String, f: FuncDecl): Tokens 
             $(Token(STRING_LITERAL, fnName)), $argTypes)
         JsonRpcRegistry.register(JsonRpcMethodMeta(
             name: $(Token(STRING_LITERAL, fullName)),
-            handler: {$ctxVar, $paramsVar =>
+            handler: {$handlerHead =>
                 $argDecls
                 let __jsonrpc_result = lookup<$classToken>().$(f.identifier)($argList)
                 JsonRpcArgs.toJson(__jsonrpc_result)

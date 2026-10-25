@@ -27,7 +27,8 @@ internal import fountain::f_macros.*
  * 展开结果：
  * - 类上加 `@Bean`
  * - 一个加载期闭包：设置 `serverInfo`，对每个函数调用 `get*Meta`，有注解时调用对应 `register*Meta`
- * - 最后调用 `McpRegistry.build()`
+ * - 不调用 `McpRegistry.build()`：构建延迟到首次 `McpRegistry.server()`，
+ *   这样 `main()` 里再 `McpRegistry.configure(...)` 不会撞上 `already initialized`
  */
 public macro Mcp(input: Tokens): Tokens {
     expand('fountain-mcp', input)
@@ -73,6 +74,7 @@ private func expand(serverName: String, input: Tokens): Tokens {
     body += quote(McpRegistry.serverInfo($serverNameToken))
     body += `nl`
     let processed = HashSet<String>()
+    let toolNames = HashSet<String>()
     var index = 0
     for (item in klass.body.decls) {
         let kinds = annotationKinds(item)
@@ -83,13 +85,22 @@ private func expand(serverName: String, input: Tokens): Tokens {
             case Some(f) =>
                 if (isPublic(f) && !isStatic(f) && f.identifier.value != 'init' && !processed.contains(f.identifier.value)) {
                     processed.add(f.identifier.value)
+                    if (kinds.contains('McpToolMeta')) {
+                        let toolName = declaredName(item, 'McpToolMeta') ?? f.identifier.value
+                        if (toolNames.contains(toolName)) {
+                            diagReport(ERROR, f.identifier.toTokens(),
+                                "duplicate mcp tool name '${toolName}': two methods resolve to the same tool", '')
+                        } else {
+                            toolNames.add(toolName)
+                        }
+                    }
                     body += generateFunction(classToken, f, index, kinds) + `nl`
                     index++
                 }
             case _ => ()
         }
     }
-    body += quote(McpRegistry.build())
+    // 不在模块加载期 build：否则 main() 里再 configure 会撞上 already initialized
     quote(
         @Bean
         $input
@@ -107,11 +118,19 @@ private func asFunc(decl: Decl): Option<FuncDecl> {
     }
 }
 
+private func shortName(full: String): String {
+    match (full.lastIndexOf('::')) {
+        case Some(index) => full[(index + 2)..]
+        case _ => full
+    }
+}
+
 private func annotationKinds(decl: Decl): ArrayList<String> {
     let kinds = ArrayList<String>()
     match (decl) {
         case m: MacroExpandDecl =>
-            let name = m.fullIdentifier.value
+            // 支持全限定注解：@fountain::f_mcp::server::McpToolMeta
+            let name = shortName(m.fullIdentifier.value)
             if (name == 'McpToolMeta' || name == 'McpResourceMeta' || name == 'McpPromptMeta') {
                 kinds.add(name)
             }
@@ -119,6 +138,28 @@ private func annotationKinds(decl: Decl): ArrayList<String> {
         case _ => ()
     }
     kinds
+}
+
+/** 从注解属性里取 `name:`，没有则返回 `None`（由调用方回落到函数名）。 */
+private func declaredName(decl: Decl, kind: String): ?String {
+    match (decl) {
+        case m: MacroExpandDecl =>
+            if (shortName(m.fullIdentifier.value) == kind) {
+                let attrs = m.macroAttrs
+                var i = 0
+                while (i + 2 < attrs.size) {
+                    if (attrs[i].kind == IDENTIFIER && attrs[i].value == 'name' && attrs[i + 1].kind == COLON) {
+                        if (attrs[i + 2].kind == STRING_LITERAL) {
+                            return Some(attrs[i + 2].value)
+                        }
+                    }
+                    i++
+                }
+                return None<String>
+            }
+            declaredName(m.macroInputDecl, kind)
+        case _ => None<String>
+    }
 }
 
 private func generateFunction(classToken: Token, f: FuncDecl, index: Int64, kinds: ArrayList<String>): Tokens {

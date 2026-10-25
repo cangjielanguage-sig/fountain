@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_mcp.server
 
 import std.collection.{ArrayList, HashMap}
-import std.sync.{AtomicInt64, Mutex}
+import std.sync.{AtomicInt64, Condition, Mutex}
 import stdx.crypto.digest.SHA256
 import stdx.log.LogLevel
 import fountain::f_data.*
@@ -30,48 +30,140 @@ public class McpSubscriber {
     let id: Int64
     let topics: ArrayList<String>
     var attached = false
-    let queue = ArrayList<JsonObject>()
-    let mutex = Mutex()
+    var detachedAtNanos: Int64 = 0
+    private let queue = ArrayList<JsonObject>()
+    private let mutex = Mutex()
+    private let signal: Condition
+    private let capacity: Int64
+    private var dropped = 0
 
-    init(id: Int64, topics: ArrayList<String>) {
+    init(id: Int64, topics: ArrayList<String>, capacity!: Int64 = 256) {
         this.id = id
         this.topics = topics
+        this.capacity = capacity
+        this.signal = synchronized(mutex) {
+            mutex.condition()
+        }
     }
 
     func matches(topic: String): Bool {
         topics.isEmpty() || topics.contains(topic)
     }
 
+    /** 入队；队列满时丢最旧的一条并计数（不阻塞发布方）。 */
     func offer(notification: JsonObject): Unit {
         synchronized(mutex) {
+            if (queue.size >= capacity && !queue.isEmpty()) {
+                queue.remove(at: 0)
+                dropped++
+            }
             queue.add(notification)
+            signal.notifyAll()
         }
+    }
+
+    private func drainLocked(): ArrayList<JsonObject> {
+        let result = ArrayList<JsonObject>()
+        for (item in queue) {
+            result.add(item)
+        }
+        queue.clear()
+        result
     }
 
     /** 取走全部待发送通知；没有则返回空。 */
     public func drain(): ArrayList<JsonObject> {
-        let result = ArrayList<JsonObject>()
         synchronized(mutex) {
-            for (item in queue) {
-                result.add(item)
-            }
-            queue.clear()
+            drainLocked()
         }
-        result
+    }
+
+    /**
+     * 带超时阻塞等待：有事件立即返回，超时返回空。
+     *
+     * SSE 连接用它替代 100ms 轮询——空转时 CPU 占用从「每秒 10 次」降到 0。
+     */
+    public func take(timeout: Duration): ArrayList<JsonObject> {
+        synchronized(mutex) {
+            if (queue.isEmpty()) {
+                let _ = signal.wait(timeout: timeout)
+            }
+            drainLocked()
+        }
+    }
+
+    /** 被丢弃的通知数（队列容量压力下的可观测指标）。 */
+    public prop droppedCount: Int64 {
+        get() {
+            synchronized(mutex) {
+                dropped
+            }
+        }
+    }
+
+    prop queued: Int64 {
+        get() {
+            synchronized(mutex) {
+                queue.size
+            }
+        }
     }
 }
 
-/** 进程内订阅中心。SSE 端点从订阅者队列取通知。 */
+/**
+ * 进程内订阅中心。
+ *
+ * 三个上限都可配：订阅者总量、单订阅者队列容量、未连接时的保留时长。
+ * `attach` / `detach` 支持 SSE 断线后在 grace 内用同一 id 重连。
+ */
 public class SubscriptionHub {
     private let subscribers = ArrayList<McpSubscriber>()
     private let mutex = Mutex()
     private let nextId = AtomicInt64(0)
+    private let maxSubscribers: Int64
+    private let detachedTtlNanos: Int64
+    private let queueCapacity: Int64
 
+    public init(maxSubscribers!: Int64 = 1024, detachedTtl!: Duration = Duration.second * 60,
+        queueCapacity!: Int64 = 256) {
+        this.maxSubscribers = maxSubscribers
+        this.detachedTtlNanos = detachedTtl.toNanoseconds()
+        this.queueCapacity = queueCapacity
+    }
+
+    /**
+     * 创建订阅者（未 attach）。
+     *
+     * detached 计时从**创建时刻**开始：`subscriptions/listen` 只返回 `sseUrl`，
+     * 客户端可能永远不连接；若计时从首次 detach 开始，这类订阅者既不会被回收，
+     * 也无法通过 `detach` 补上时间戳，会永久占用 `maxSubscribers` 与队列内存。
+     */
     public func subscribe(topics: ArrayList<String>): McpSubscriber {
-        let subscriber = McpSubscriber(nextId.fetchAdd(1) + 1, topics)
         synchronized(mutex) {
-            subscribers.add(subscriber)
+            subscribeLocked(topics)
         }
+    }
+
+    /** 创建订阅者并立即绑定：`/mcp/sse` 直连（未走 `subscriptions/listen`）用。 */
+    public func subscribeAttached(topics: ArrayList<String>): McpSubscriber {
+        synchronized(mutex) {
+            let subscriber = subscribeLocked(topics)
+            subscriber.attached = true
+            subscriber.detachedAtNanos = 0
+            subscriber
+        }
+    }
+
+    private func subscribeLocked(topics: ArrayList<String>): McpSubscriber {
+        let now = nowNanos()
+        pruneLocked(now)
+        if (subscribers.size >= maxSubscribers) {
+            throw McpException(McpProtocol.OVERLOADED,
+                'too many subscribers: limit ${maxSubscribers}', data: JsonInt(maxSubscribers))
+        }
+        let subscriber = McpSubscriber(nextId.fetchAdd(1) + 1, topics, capacity: queueCapacity)
+        subscriber.detachedAtNanos = now
+        subscribers.add(subscriber)
         subscriber
     }
 
@@ -82,16 +174,31 @@ public class SubscriptionHub {
     }
 
     /**
+     * 断线：保留订阅者一段时间，允许同 id 重连。
+     *
+     * 幂等：对已 detach 或从未 attach 的订阅者同样写入 detach 时刻，不报错也不提前返回——
+     * 否则「创建后从未 attach」的订阅者永远拿不到时间戳，`prune` 也就永远回收不掉。
+     */
+    public func detach(subscriber: McpSubscriber): Unit {
+        synchronized(mutex) {
+            subscriber.attached = false
+            subscriber.detachedAtNanos = nowNanos()
+        }
+    }
+
+    /**
      * 把 SSE 连接绑定到 `subscriptions/listen` 创建的订阅者。
      *
-     * 同一个订阅者只能绑定一次；绑定成功后 SSE 流直接消费它的队列。
+     * 同一个订阅者同一时间只能绑定一次；detached 且在 TTL 内的可以重连。
      */
     public func attach(id: Int64): ?McpSubscriber {
         var found: ?McpSubscriber = None
         synchronized(mutex) {
+            pruneLocked(nowNanos())
             for (subscriber in subscribers) {
                 if (subscriber.id == id && !subscriber.attached) {
                     subscriber.attached = true
+                    subscriber.detachedAtNanos = 0
                     found = Some(subscriber)
                     break
                 }
@@ -105,13 +212,50 @@ public class SubscriptionHub {
         notification.add('jsonrpc', '2.0')
         notification.add('method', 'notifications/${topic}')
         notification.add('params', params)
-        synchronized(mutex) {
+        // 快照在锁内、入队在锁外：慢订阅者不能拖住发布方
+        let targets = synchronized(mutex) {
+            let list = ArrayList<McpSubscriber>()
             for (subscriber in subscribers) {
                 if (subscriber.matches(topic)) {
-                    subscriber.offer(notification)
+                    list.add(subscriber)
                 }
             }
+            list
         }
+        for (subscriber in targets) {
+            subscriber.offer(notification)
+        }
+    }
+
+    /** 清理超过 grace 的 detached 订阅者。 */
+    public func prune(): Unit {
+        synchronized(mutex) {
+            pruneLocked(nowNanos())
+        }
+    }
+
+    public func close(): Unit {
+        synchronized(mutex) {
+            subscribers.clear()
+        }
+    }
+
+    public prop size: Int64 {
+        get() {
+            synchronized(mutex) {
+                subscribers.size
+            }
+        }
+    }
+
+    private func pruneLocked(now: Int64): Unit {
+        subscribers.removeIf({s => !s.attached && now - s.detachedAtNanos > detachedTtlNanos})
+    }
+
+    private static let origin = MonoTime.now()
+
+    private static func nowNanos(): Int64 {
+        (MonoTime.now() - origin).toNanoseconds()
     }
 }
 
@@ -123,6 +267,10 @@ public class McpServerBuilder {
     private var pageSize_ = 100
     private var resultOptions = ResultStoreOptions()
     private var backend: ?RateLimitBackend = None
+    private var trustForwardedFor_ = false
+    private var maxSubscribers_ = 1024
+    private var subscriberQueueCapacity_ = 256
+    private var subscriberDetachedTtl_ = Duration.second * 60
     private let tools = ArrayList<McpTool>()
     private let resources = ArrayList<McpResource>()
     private let prompts = ArrayList<McpPrompt>()
@@ -168,6 +316,36 @@ public class McpServerBuilder {
         this
     }
 
+    /** 是否信任 `X-Forwarded-For`（默认关闭：伪造该头即可绕过按调用方限流）。 */
+    public func trustForwardedFor(trust: Bool): McpServerBuilder {
+        trustForwardedFor_ = trust
+        this
+    }
+
+    /** 订阅者总量上限。 */
+    public func maxSubscribers(n: Int64): McpServerBuilder {
+        if (n > 0) {
+            maxSubscribers_ = n
+        }
+        this
+    }
+
+    /** 单个订阅者的通知队列容量（满了丢最旧）。 */
+    public func subscriberQueueCapacity(n: Int64): McpServerBuilder {
+        if (n > 0) {
+            subscriberQueueCapacity_ = n
+        }
+        this
+    }
+
+    /** SSE 断线后订阅者的保留时长（grace）。 */
+    public func subscriberDetachedTtl(ttl: Duration): McpServerBuilder {
+        if (ttl > Duration.Zero) {
+            subscriberDetachedTtl_ = ttl
+        }
+        this
+    }
+
     public func rateLimitBackend(backend: RateLimitBackend): McpServerBuilder {
         this.backend = Some(backend)
         this
@@ -189,8 +367,12 @@ public class McpServerBuilder {
     }
 
     public func build(): McpServer {
-        McpServer(serverName, serverVersion ?? McpConfig.version(), rateLimitPolicy ?? McpConfig.rateLimit(),
-            publicBaseUrl_ ?? McpConfig.publicBaseUrl(), pageSize_, resultOptions, backend, tools, resources, prompts)
+        // 逐字段合并：配置先落地，Builder 只覆盖显式写过的字段
+        let merged = McpConfig.rateLimit().overlay(rateLimitPolicy ?? RateLimitPolicy())
+        McpServer(serverName, serverVersion ?? McpConfig.version(), merged,
+            publicBaseUrl_ ?? McpConfig.publicBaseUrl(), pageSize_, resultOptions, backend,
+            trustForwardedFor_ || McpConfig.trustForwardedFor(), maxSubscribers_, subscriberQueueCapacity_,
+            subscriberDetachedTtl_, tools, resources, prompts)
     }
 }
 
@@ -206,7 +388,7 @@ public class McpServer {
     private let resultStore: ToolResultStore
     private let backend: RateLimitBackend
     private let gates = ConcurrencyGate()
-    private let hub_ = SubscriptionHub()
+    private let hub_: SubscriptionHub
     private var jsonRpc: JsonRpcServer = JsonRpcServer.builder().build()
 
     private let toolsByName = HashMap<String, McpTool>()
@@ -216,8 +398,11 @@ public class McpServer {
     private let promptsByName = HashMap<String, McpPrompt>()
     private let promptsSorted = ArrayList<McpPrompt>()
 
+    private let trustForwardedFor: Bool
+
     init(serverName: String, serverVersion: String, policy: RateLimitPolicy, baseUrl: ?String, pageSize: Int64,
-        resultOptions: ResultStoreOptions, backend: ?RateLimitBackend, tools: ArrayList<McpTool>,
+        resultOptions: ResultStoreOptions, backend: ?RateLimitBackend, trustForwardedFor: Bool,
+        maxSubscribers: Int64, subscriberQueueCapacity: Int64, subscriberDetachedTtl: Duration, tools: ArrayList<McpTool>,
         resources: ArrayList<McpResource>, prompts: ArrayList<McpPrompt>) {
         this.serverName = serverName
         this.serverVersion = serverVersion
@@ -226,6 +411,9 @@ public class McpServer {
         this.pageSize = pageSize
         this.resultStore = ToolResultStore(options: resultOptions)
         this.backend = backend ?? RateLimitBackends.fromConfig()
+        this.trustForwardedFor = trustForwardedFor
+        this.hub_ = SubscriptionHub(maxSubscribers: maxSubscribers, detachedTtl: subscriberDetachedTtl,
+            queueCapacity: subscriberQueueCapacity)
         registerTools(tools)
         registerResources(resources)
         registerPrompts(prompts)
@@ -252,6 +440,7 @@ public class McpServer {
         resultStore.close()
         gates.close()
         backend.close()
+        hub_.close()
     }
 
     // —— 注册与校验 ——
@@ -358,7 +547,7 @@ public class McpServer {
     // —— 方法实现 ——
 
     private func discover(ctx: JsonRpcContext, params: ?JsonValue): JsonValue {
-        let request = requireMeta(params)
+        let request = requireMeta(ctx, params)
         let root = JsonObject()
         root.add('resultType', 'complete')
         let versions = JsonArray()
@@ -380,7 +569,8 @@ public class McpServer {
         tools.add('listChanged', false)
         caps.add('tools', tools)
         let resources = JsonObject()
-        resources.add('subscribe', true)
+        // 没有实现 resources/subscribe：能力声明必须与实现一致
+        resources.add('subscribe', false)
         resources.add('listChanged', false)
         caps.add('resources', resources)
         let prompts = JsonObject()
@@ -390,7 +580,7 @@ public class McpServer {
     }
 
     private func listTools(ctx: JsonRpcContext, params: ?JsonValue): JsonValue {
-        let request = requireMeta(params)
+        let request = requireMeta(ctx, params)
         let offset = cursorOf(request)
         let result = JsonObject()
         let list = JsonArray()
@@ -410,7 +600,7 @@ public class McpServer {
     }
 
     private func callTool(ctx: JsonRpcContext, params: ?JsonValue): JsonValue {
-        let request = requireMeta(params)
+        let request = requireMeta(ctx, params)
         let name = stringField(request, 'name')
         let arguments = match (request.get('arguments')) {
             case Some(obj: JsonObject) => obj
@@ -423,15 +613,18 @@ public class McpServer {
 
         let resolved = resolveLimit(tool)
         let caller = callerId(ctx)
+        // 先占并发槽位：并发拒绝的请求不消耗 rpm 令牌
+        let lease = acquireConcurrency(resolved, caller, tool.name)
+        if (!lease.verdict.ok) {
+            throw rateLimitError(ctx, lease.verdict)
+        }
         let verdict = checkLimits(resolved, caller, tool.name)
         if (!verdict.ok) {
-            throw rateLimitError(verdict)
+            releaseConcurrency(lease)
+            throw rateLimitError(ctx, verdict)
         }
-        let acquire = acquireConcurrency(resolved, caller, tool.name)
-        if (!acquire.ok) {
-            throw rateLimitError(acquire)
-        }
-        let toolCtx = McpToolContext(caller, requestId: ctx.id)
+        let toolCtx = McpToolContext(caller, requestId: ctx.id, inputResponses: request.get('inputResponses'),
+            requestState: request.get('requestState'))
         var callResult = CallToolResult.text('')
         try {
             let validation = JsonSchemaValidator.validate(tool.inputSchema, arguments)
@@ -440,31 +633,20 @@ public class McpServer {
             }
             callResult = tool.handler(toolCtx, arguments)
         } finally {
-            releaseConcurrency(resolved, caller, tool.name)
+            releaseConcurrency(lease)
         }
         applyLargeResult(tool, callResult)
     }
 
     private func listResources(ctx: JsonRpcContext, params: ?JsonValue): JsonValue {
-        let request = requireMeta(params)
+        let request = requireMeta(ctx, params)
         let offset = cursorOf(request)
         let result = JsonObject()
         let list = JsonArray()
         var index = offset
         var emitted = 0
         while (index < resourcesSorted.size && emitted < pageSize) {
-            let resource = resourcesSorted[index]
-            let obj = JsonObject()
-            obj.add('uri', resource.uri)
-            obj.add('name', resource.name)
-            if (!resource.description.isEmpty()) {
-                obj.add('description', resource.description)
-            }
-            match (resource.mimeType) {
-                case Some(m) => obj.add('mimeType', m)
-                case _ => ()
-            }
-            list.add(obj)
+            list.add(resourceJson(resourcesSorted[index]))
             index++
             emitted++
         }
@@ -477,7 +659,7 @@ public class McpServer {
     }
 
     private func readResource(ctx: JsonRpcContext, params: ?JsonValue): JsonValue {
-        let request = requireMeta(params)
+        let request = requireMeta(ctx, params)
         let uri = stringField(request, 'uri')
         let contents = ArrayList<ResourceContent>()
         if (isResultLink(uri)) {
@@ -502,25 +684,14 @@ public class McpServer {
     }
 
     private func listPrompts(ctx: JsonRpcContext, params: ?JsonValue): JsonValue {
-        let request = requireMeta(params)
+        let request = requireMeta(ctx, params)
         let offset = cursorOf(request)
         let result = JsonObject()
         let list = JsonArray()
         var index = offset
         var emitted = 0
         while (index < promptsSorted.size && emitted < pageSize) {
-            let prompt = promptsSorted[index]
-            let obj = JsonObject()
-            obj.add('name', prompt.name)
-            if (!prompt.description.isEmpty()) {
-                obj.add('description', prompt.description)
-            }
-            let args = JsonArray()
-            for (arg in prompt.arguments) {
-                args.add(arg.toJson())
-            }
-            obj.add('arguments', args)
-            list.add(obj)
+            list.add(promptJson(promptsSorted[index]))
             index++
             emitted++
         }
@@ -533,7 +704,7 @@ public class McpServer {
     }
 
     private func getPrompt(ctx: JsonRpcContext, params: ?JsonValue): JsonValue {
-        let request = requireMeta(params)
+        let request = requireMeta(ctx, params)
         let name = stringField(request, 'name')
         let prompt = promptsByName.get(name) ?? throw McpException(McpProtocol.INVALID_PARAMS,
             "unknown prompt '${name}'", data: JsonString(name))
@@ -560,7 +731,7 @@ public class McpServer {
     }
 
     private func listen(ctx: JsonRpcContext, params: ?JsonValue): JsonValue {
-        let request = requireMeta(params)
+        let request = requireMeta(ctx, params)
         let topics = ArrayList<String>()
         if (let Some(array) <- request.get('topics')) {
             if (let a: JsonArray <- array) {
@@ -595,7 +766,19 @@ public class McpServer {
 
     // —— 辅助 ——
 
-    private func requireMeta(params: ?JsonValue): JsonObject {
+    /**
+     * 校验并剥离 `params._meta`。
+     *
+     * 校验顺序固定为「头受支持性 → 头与 body 一致性 → body 受支持性」：
+     * 先判 body 会让「头与 body 不一致」在 body 非法时提前变成 `-32022`，
+     * `-32602` 分支永远不可达。
+     *
+     * - `MCP-Protocol-Version` 头存在且不受支持 → `-32022`；
+     * - 头与 body 版本不一致 → `-32602`（`data.header` / `data.body` 为原值）；
+     * - body 版本不受支持 → `-32022`；
+     * - 头缺失时只按 body 校验（兼容不带该头的客户端）。
+     */
+    private func requireMeta(ctx: JsonRpcContext, params: ?JsonValue): JsonObject {
         let obj = match (params) {
             case Some(o: JsonObject) => o
             case _ => throw McpException(McpProtocol.INVALID_PARAMS, 'params must be an object')
@@ -618,26 +801,50 @@ public class McpServer {
         if (version.isEmpty()) {
             throw McpException(McpProtocol.INVALID_PARAMS, 'missing params._meta protocolVersion')
         }
+        match (ctx.http) {
+            case Some(http) => match (http.request.headers.getFirst('MCP-Protocol-Version')) {
+                    case Some(header) =>
+                        let trimmed = header.trimAscii()
+                        if (!trimmed.isEmpty()) {
+                            if (trimmed != McpProtocol.VERSION) {
+                                throw unsupportedVersion(trimmed)
+                            }
+                            if (trimmed != version) {
+                                let data = JsonObject()
+                                data.add('header', trimmed)
+                                data.add('body', version)
+                                throw McpException(McpProtocol.INVALID_PARAMS,
+                                    'MCP-Protocol-Version header does not match params._meta', data: data)
+                            }
+                        }
+                    case _ => ()
+                }
+            case _ => ()
+        }
         if (version != McpProtocol.VERSION) {
-            let data = JsonObject()
-            let supported = JsonArray()
-            supported.add(McpProtocol.VERSION)
-            data.add('supported', supported)
-            data.add('requested', version)
-            throw McpException(McpProtocol.UNSUPPORTED_VERSION, "unsupported MCP protocol version '${version}'",
-                data: data)
+            throw unsupportedVersion(version)
         }
         obj.remove(McpProtocol.META)
         obj
     }
 
+    private static func unsupportedVersion(requested: String): McpException {
+        let data = JsonObject()
+        let supported = JsonArray()
+        supported.add(McpProtocol.VERSION)
+        data.add('supported', supported)
+        data.add('requested', requested)
+        McpException(McpProtocol.UNSUPPORTED_VERSION, "unsupported MCP protocol version '${requested}'", data: data)
+    }
+
     private func cursorOf(request: JsonObject): Int64 {
         match (request.get('cursor')) {
-            case Some(value) =>
-                if (value is JsonString) {
-                    McpProtocol.decodeCursor(value.asString().value)
-                } else {
-                    0
+            case Some(value) => match (value) {
+                    case text: JsonString =>
+                        McpProtocol.decodeCursor(text.value) ?? throw McpException(McpProtocol.INVALID_PARAMS,
+                            'invalid cursor', data: text)
+                    case other => throw McpException(McpProtocol.INVALID_PARAMS, 'cursor must be a string',
+                        data: other)
                 }
             case _ => 0
         }
@@ -655,26 +862,96 @@ public class McpServer {
         }
     }
 
-    private func toolJson(tool: McpTool): JsonObject {
-        let obj = JsonObject()
-        obj.add('name', tool.name)
-        obj.add('description', tool.description)
-        obj.add('inputSchema', tool.inputSchema)
-        obj
+    private static func toolJson(tool: McpTool): JsonObject {
+        // 首次 list 请求时缓存：条目对象序列化后不再修改，请求期只把它加进页数组
+        match (tool.listJson) {
+            case Some(cached) => cached
+            case _ =>
+                let obj = JsonObject()
+                obj.add('name', tool.name)
+                obj.add('description', tool.description)
+                obj.add('inputSchema', tool.inputSchema)
+                tool.listJson = Some(obj)
+                obj
+        }
     }
 
+    private static func resourceJson(resource: McpResource): JsonObject {
+        match (resource.listJson) {
+            case Some(cached) => cached
+            case _ =>
+                let obj = JsonObject()
+                obj.add('uri', resource.uri)
+                obj.add('name', resource.name)
+                if (!resource.description.isEmpty()) {
+                    obj.add('description', resource.description)
+                }
+                match (resource.mimeType) {
+                    case Some(m) => obj.add('mimeType', m)
+                    case _ => ()
+                }
+                resource.listJson = Some(obj)
+                obj
+        }
+    }
+
+    private static func promptJson(prompt: McpPrompt): JsonObject {
+        match (prompt.listJson) {
+            case Some(cached) => cached
+            case _ =>
+                let obj = JsonObject()
+                obj.add('name', prompt.name)
+                obj.add('description', prompt.description)
+                let args = JsonArray()
+                for (arg in prompt.arguments) {
+                    args.add(arg.toJson())
+                }
+                obj.add('arguments', args)
+                prompt.listJson = Some(obj)
+                obj
+        }
+    }
+
+    /**
+     * 调用方标识，按优先级：
+     * 1. `X-Forwarded-For` 第一段（仅当显式信任代理）；
+     * 2. `Authorization` 的 SHA-256 前 16 字节（32 位十六进制）；
+     * 3. `remoteAddr` 去掉端口；
+     * 4. `anonymous` / 本地调用为 `local`。
+     */
     private func callerId(ctx: JsonRpcContext): String {
         match (ctx.http) {
             case Some(http) =>
-                if (let Some(auth) <- http.request.headers.getFirst('Authorization')) {
-                    return sha256Hex(auth)
+                if (trustForwardedFor && let Some(xff) <- http.request.headers.getFirst('X-Forwarded-For')) {
+                    let first = xff.split(',')[0].trimAscii()
+                    if (!first.isEmpty()) {
+                        return first
+                    }
                 }
-                let addr = http.request.remoteAddr
+                if (let Some(auth) <- http.request.headers.getFirst('Authorization')) {
+                    let digest = sha256Hex(auth)
+                    return digest[0..32]
+                }
+                let addr = withoutPort(http.request.remoteAddr)
                 if (!addr.isEmpty()) {
                     return addr
                 }
                 'anonymous'
             case _ => 'local'
+        }
+    }
+
+    static func withoutPort(addr: String): String {
+        let text = addr.trimAscii()
+        if (text.startsWith('[')) {
+            match (text.indexOf(']')) {
+                case Some(index) => return text[0..index + 1]
+                case _ => ()
+            }
+        }
+        match (text.lastIndexOf(':')) {
+            case Some(index) => text[0..index]
+            case _ => text
         }
     }
 
@@ -712,14 +989,15 @@ public class McpServer {
     }
 
     private func resolveLimit(tool: McpTool): ResolvedRateLimit {
-        match (tool.rateLimit) {
-            case Some(t) => ResolvedRateLimit(firstNotNull(t.perCallerRpm, policy.perCallerRpm),
-                firstNotNull(t.perCallerToolRpm, policy.perCallerToolRpm), firstNotNull(t.perToolRpm, policy.perToolRpm),
-                firstNotNull(t.maxConcurrency, policy.maxConcurrency),
-                firstNotNull(t.perCallerConcurrency, policy.perCallerConcurrency))
-            case _ => ResolvedRateLimit(policy.perCallerRpm, policy.perCallerToolRpm, policy.perToolRpm,
-                policy.maxConcurrency, policy.perCallerConcurrency)
+        let toolLimit = match (tool.rateLimit) {
+            case Some(limit) => limit
+            case _ => ToolRateLimit()
         }
+        // 全局并发只取服务级；工具并发单独一档，避免两个语义挤同一个 key
+        ResolvedRateLimit(firstNotNull(toolLimit.perCallerRpm, policy.perCallerRpm),
+            firstNotNull(toolLimit.perCallerToolRpm, policy.perCallerToolRpm),
+            firstNotNull(toolLimit.perToolRpm, policy.perToolRpm), policy.maxConcurrency, toolLimit.maxConcurrency,
+            firstNotNull(toolLimit.perCallerConcurrency, policy.perCallerConcurrency))
     }
 
     private static func firstNotNull(a: ?Int64, b: ?Int64): ?Int64 {
@@ -756,86 +1034,133 @@ public class McpServer {
         60_000 / rpm
     }
 
-    private func acquireConcurrency(limit: ResolvedRateLimit, caller: String, tool: String): RateVerdict {
-        if (let Some(max) <- limit.maxConcurrency) {
-            if (!gates.tryAcquire('g', max)) {
-                return RateVerdict.reject('concurrency', max, 0)
+    private func acquireConcurrency(limit: ResolvedRateLimit, caller: String, tool: String): ConcurrencyLease {
+        var acquiredGlobal = false
+        var toolKey = ''
+        var callerKey = ''
+        if (let Some(max) <- limit.globalConcurrency) {
+            if (!gates.tryAcquire('conc:g', max)) {
+                return ConcurrencyLease(RateVerdict.reject('concurrency', max, 0), false, toolKey: '', callerKey: '')
+            }
+            acquiredGlobal = true
+        }
+        if (let Some(max) <- limit.toolConcurrency) {
+            toolKey = 'conc:t:${tool}'
+            if (!gates.tryAcquire(toolKey, max)) {
+                releaseConcurrency(ConcurrencyLease(RateVerdict.pass(), acquiredGlobal, toolKey: '', callerKey: ''))
+                return ConcurrencyLease(RateVerdict.reject('concurrency_tool', max, 0), false, toolKey: '', callerKey: '')
             }
         }
         if (let Some(max) <- limit.perCallerConcurrency) {
-            if (!gates.tryAcquire('ct:${caller}\u{0}${tool}', max)) {
-                if (limit.maxConcurrency.isSome()) {
-                    gates.release('g')
-                }
-                return RateVerdict.reject('concurrency_tool', max, 0)
+            callerKey = 'conc:ct:${caller}\u{0}${tool}'
+            if (!gates.tryAcquire(callerKey, max)) {
+                releaseConcurrency(ConcurrencyLease(RateVerdict.pass(), acquiredGlobal, toolKey: toolKey, callerKey: ''))
+                return ConcurrencyLease(RateVerdict.reject('concurrency_caller', max, 0), false, toolKey: '', callerKey: '')
             }
         }
-        RateVerdict.pass()
+        ConcurrencyLease(RateVerdict.pass(), acquiredGlobal, toolKey: toolKey, callerKey: callerKey)
     }
 
-    private func releaseConcurrency(limit: ResolvedRateLimit, caller: String, tool: String): Unit {
-        if (limit.perCallerConcurrency.isSome()) {
-            gates.release('ct:${caller}\u{0}${tool}')
+    private func releaseConcurrency(lease: ConcurrencyLease): Unit {
+        if (!lease.callerKey.isEmpty()) {
+            gates.release(lease.callerKey)
         }
-        if (limit.maxConcurrency.isSome()) {
-            gates.release('g')
+        if (!lease.toolKey.isEmpty()) {
+            gates.release(lease.toolKey)
+        }
+        if (lease.global) {
+            gates.release('conc:g')
         }
     }
 
-    private static func rateLimitError(verdict: RateVerdict): McpException {
+    private func rateLimitError(ctx: JsonRpcContext, verdict: RateVerdict): McpException {
         let data = JsonObject()
         data.add('scope', verdict.scope)
         data.add('limit', verdict.limit)
         data.add('retryAfterMs', verdict.retryAfterMs)
+        match (ctx.http) {
+            case Some(http) =>
+                http.responseBuilder.status(429)
+                let seconds = if (verdict.retryAfterMs <= 0) {
+                    1
+                } else {
+                    (verdict.retryAfterMs + 999) / 1000
+                }
+                http.responseBuilder.header('Retry-After', '${seconds}')
+            case _ => ()
+        }
         McpException(McpProtocol.RATE_LIMITED, "Rate limit exceeded: ${verdict.scope} (${verdict.limit})", data: data)
     }
 
     private func applyLargeResult(tool: McpTool, result: CallToolResult): JsonValue {
         let limit = tool.maxResultBytes ?? (1024 * 1024)
         let encoded = result.toJson()
-        let bytes = encoded.toString().size
-        if (bytes <= limit) {
+        // 唯一一次完整序列化：量字节 / 入库 / 截断共用同一份字符串
+        let json = encoded.toString()
+        if (json.size <= limit) {
             return encoded
         }
         match (baseUrl) {
             case Some(base) =>
                 let token = resultStore.newToken()
                 let link = '${base}${McpProtocol.TOOL_RESULT_PREFIX}${token}'
-                let content = ResourceContent(link, Some('application/json'), Some(encoded.toString()), None)
+                let content = ResourceContent(link, Some('application/json'), Some(json), None)
                 if (resultStore.put(token, content)) {
                     let blocks = ArrayList<ContentBlock>()
                     blocks.add(
                         ContentBlock.resourceLink(link, tool.name, description: 'tool result exceeds ${limit} bytes',
                             mimeType: 'application/json'))
                     let replaced = CallToolResult(content: blocks, isError: result.isError,
-                        resultType: result.resultType, inputRequired: result.inputRequired)
+                        resultType: result.resultType, inputRequired: result.inputRequired,
+                        requestState: result.requestState)
                     return replaced.toJson()
                 }
-                truncated(tool, result, limit)
-            case _ => truncated(tool, result, limit)
+                truncated(tool, result, json, limit)
+            case _ => truncated(tool, result, json, limit)
         }
     }
 
-    private func truncated(tool: McpTool, result: CallToolResult, limit: Int64): JsonValue {
+    private func truncated(tool: McpTool, result: CallToolResult, json: String, limit: Int64): JsonValue {
         log.append(LogLevel.WARN,
             "mcp tool '${tool.name}' result exceeds ${limit} bytes without publicBaseUrl; truncated", None<Exception>)
-        let text = result.toJson().toString()
-        let cut = if (text.size > limit) {
-            text[0..limit]
-        } else {
-            text
+        let cut = truncateUtf8(json, limit)
+        let blocks = ArrayList<ContentBlock>()
+        blocks.add(ContentBlock.text(cut))
+        let extra = JsonObject()
+        extra.add('truncated', true)
+        extra.add('limit', limit)
+        CallToolResult(content: blocks, isError: result.isError, resultType: result.resultType,
+            inputRequired: result.inputRequired, requestState: result.requestState, extra: extra).toJson()
+    }
+
+    /**
+     * 按 UTF-8 rune 边界截断：结果长度不超过 `limit` 字节，且一定是合法字符串。
+     * （按字节切片会把中文 / emoji 切成半个码点，序列化时直接抛异常。）
+     */
+    static func truncateUtf8(text: String, limit: Int64): String {
+        if (limit <= 0) {
+            return ''
         }
-        let obj = JsonObject()
-        let blocks = JsonArray()
-        blocks.add(ContentBlock.text(cut).toJson())
-        obj.add('content', blocks)
-        obj.add('isError', result.isError)
-        obj.add('resultType', result.resultType)
-        let data = JsonObject()
-        data.add('truncated', true)
-        data.add('limit', limit)
-        obj.add('data', data)
-        obj
+        let builder = StringBuilder()
+        var used: Int64 = 0
+        for (r in text.toRuneArray()) {
+            let code = UInt32(r)
+            let size: Int64 = if (code < 0x80) {
+                1
+            } else if (code < 0x800) {
+                2
+            } else if (code < 0x10000) {
+                3
+            } else {
+                4
+            }
+            if (used + size > limit) {
+                break
+            }
+            builder.append(r)
+            used += size
+        }
+        builder.toString()
     }
 
     private func isResultLink(uri: String): Bool {

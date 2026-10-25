@@ -259,4 +259,23 @@ class McpMacro_test {
             .asObject()
         @Assert('Dr Ada', got['messages'].asArray()[0].asObject()['content'].asObject()['text'].asString().value)
     }
+
+    @TestCase
+    public func testArgumentConvertsFromDataDirectly(): Unit {
+        let args = JsonObject()
+        args.add('query', 'hello')
+        let payload = McpConvert.argument<MacroSearchRequest>(args)
+        @Assert('hello', payload.query)
+    }
+
+    @TestCase
+    public func testToolResultSerializesObjectOnce(): Unit {
+        let payload = MacroAnswer(1, 'x')
+        let result = McpConvert.toolResult(payload)
+        @Assert(1, result.content.size)
+        let text = result.content[0].toJson()['text'].asString().value
+        @Assert(true, text.contains('"x"'))
+        @Assert(true, result.structuredContent.isSome())
+        @Assert('x', result.structuredContent.getOrThrow().asObject()['message'].asString().value)
+    }
 }

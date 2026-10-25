@@ -1,5 +1,8 @@
 # f_mcp —— 仓颉 MCP 客户端 / 服务端 SDK 设计
 
+> **以实现为准**：本文档描述设计意图，任何与源码不一致的地方以 `f_mcp/src` 为准。
+> 关键差异见文末「文档与实现对照」，最近一次对齐：`fix-jsonrpc-mcp-review-findings`。
+>
 > 版本 **v1.0** ｜ 2026-10-24 ｜ 状态：待评审
 >
 > 定位：fountain 模块。**MCP 客户端实现**为主，同时提供**构建 MCP 服务**的 API。
@@ -18,8 +21,8 @@
 > - 明确**两级日志分工**：`debug` 记"每次评估"（调参期开），`info` 记"实际调整"（始终开）
 >
 > v0.8 → v0.9（自适应改为默认开启）：
-> - **自适应调容默认开启**：`maxEntries` 是"起点"不是"配置值"；`adaptive: None` 可关掉
-> - 参数改名：`AdaptivePolicy.minEntries/maxEntries` → **`floor`/`ceiling`**（避免与外层 `maxEntries` 撞名）
+> - **自适应调容默认开启**：`maxEntries` 是"起点"不是"配置值"；`adaptive: false` 可关掉
+> - 可调区间叫 **`floor`/`ceiling`**（避免与外层 `maxEntries` 撞名）
 > - 新增**非对称策略**：调大 25% / 调小 12.5%，调小需连续 3 个窗口确认
 > - 调小的附加条件：`rejectedByBytes == 0`（字节没压力才缩）
 >
@@ -56,7 +59,7 @@
 > - **大结果一律转 `resource_link`**（文本也转，不再"文本截断、二进制转 link"）；
 >   新增 `publicBaseUrl` 与临时结果资源（5.6.6）
 > - **URI 规则**：完整 URI 只接受 `http` / `https` / `ftp`；`/path` 由 `publicBaseUrl` 补全，`file://` 等一律 `-32602`（5.6.1）
-> - **限流器用 `f_concurrent` 的 5 种实现**：`token-bucket`（默认）/ `leaking-bucket` / `sliding-window` / `any-moment` / `unlimited`，由 `mcp_rateLimitBackend` 选择（7.2.6 / 7.2.7）
+> - **限流器用 `f_concurrent` 的 4 种实现**：`token-bucket`（默认）/ `leaking-bucket` / `sliding-window` / `unlimited`，由 `mcp_rateLimitBackend` 选择（7.2.6 / 7.2.7）；后端的完整清单见 7.2.6
 >
 > v0.2 → v0.3（七项决策落定，补上 v0.2 遗留的待确认）：
 >
@@ -264,7 +267,7 @@ server/discover, or use an older server.
 | 标准错误码 -32700~-32603      | ✅                            | —                  |
 | HTTP 端点（MVC 集成）         | ✅                            | —                  |
 | 方法表与分发                  | ✅                            | 只往里注册 MCP 方法 |
-| `_meta` 校验与回填            | 透传（`JsonRpcContext.meta`） | ✅ 定义键名与语义   |
+| `_meta` 校验与回填            | 透传（`JsonRpcContext`）      | ✅ 定义键名与语义   |
 | `resultType` 字段             | 不关心                        | ✅ 生成与校验       |
 | 协议版本协商 /`-32022`        | —                            | ✅                  |
 | 能力声明与判断                | —                            | ✅                  |
@@ -319,7 +322,7 @@ MCP-Protocol-Version: 2026-07-28
 | ------------------- | ---- | ------------------------ |
 | 启动子进程          | ✅   | 仅 Linux / OHOS          |
 | 换行分帧            | ✅   | 一行一条消息             |
-| 写请求 / 读响应     | ✅   | 按`id` 匹配，超时丢弃    |
+| 写请求 / 读响应     | ✅   | 按 `id` 匹配；跳过通知与噪声行；读超时抛 `IOException` |
 | stderr 转发         | ✅   | 原样打到日志             |
 | 进程退出            | ✅   | 关闭 stdin，等待退出     |
 | 重连 / 进程崩溃恢复 | ❌   | 进程没了就报错           |
@@ -409,10 +412,8 @@ public class McpClient {
 
     // ---- 工具 ----
     public func listTools(cursor!: ?String = None): ToolPage
-    public func listAllTools(): ArrayList<McpTool>          // 自动翻页
+    public func listAllTools(): Array<McpToolDescriptor>   // 自动翻页（100 页 / 1000 条上限）
     public func callTool(name: String, arguments!: JsonValue = JsonObject()): CallToolResult
-    public func callToolWithInput(name: String, arguments!: JsonValue,
-                                  inputResponses!: JsonObject, requestState!: ?String): CallToolResult
 
     // ---- 资源 / 提示（按需）----
     public func listResources(cursor!: ?String = None): ResourcePage
@@ -592,13 +593,13 @@ public class McpServer {
 ```cangjie
 public class McpTool {
     public let name: String                  // 1~128 字符，[A-Za-z0-9_.-]
-    public let title: ?String
     public let description: String
-    public let inputSchema: JsonValue        // 必须是合法 JSON Schema 对象，不能是 null
-    public let outputSchema: ?JsonValue
-    public let annotations: ?JsonValue
+    public let inputSchema: JsonObject       // 必须是合法 JSON Schema 对象，不能是 null
+    public let handler: McpToolHandler
     /// 该工具的限流覆盖。None = 完全沿用全局策略（7.2.1）
     public let rateLimit: ?ToolRateLimit
+    /// 单个工具的结果字节上限，None = 1 MiB
+    public let maxResultBytes: ?Int64
 }
 
 public type McpToolHandler = (McpToolContext, JsonValue) -> CallToolResult
@@ -620,7 +621,7 @@ public type McpToolHandler = (McpToolContext, JsonValue) -> CallToolResult
 
 ### 5.3 schema：统一走 `f_data.json.JsonSchema`
 
-**决定：不再"混用手写 schema"。所有 `inputSchema` / `outputSchema` 都必须是 `JsonSchema` 能表达的对象。**
+**决定：不再"混用手写 schema"。所有 `inputSchema` 都必须是 `JsonSchema` 能表达的对象。**
 
 ```cangjie
 public class McpToolBuilder {
@@ -712,7 +713,7 @@ throw McpException("inputSchema 含 $ref（/properties/query/$ref），本版本
 | `tools/list`                       | 声明了 tools 就必须         | 支持`cursor`，顺序必须**确定**（同一工具集多次请求顺序一致）   |
 | `tools/call`                       | 同上                        | 参数校验（`JsonSchema.validate`）、超时、错误包装              |
 | `resources/list`                   | **声明了 resources 就必须** | 支持`cursor`，顺序确定                                         |
-| `resources/read`                   | **同上（与 list 成对）**    | 返回`contents[]`；不存在的 URI → `-32002`，不是空数组         |
+| `resources/read`                   | **同上（与 list 成对）**    | 返回`contents[]`；不存在的 URI → `-32040`，不是空数组         |
 | `prompts/list` / `prompts/get`     | ✅ 已实现                   | 能力声明含 `prompts`；未知 prompt / 缺必填参数返回 `-32602`    |
 | `subscriptions/listen`             | ✅ 已实现                   | 返回 `subscriptionId` + `sseUrl`；SSE 按 `subscriptionId` 绑定 |
 | `notifications/tools/list_changed` | ✅ 可发                     | `SubscriptionHub.publish` 发布；demo 的 `notify` 工具触发        |
@@ -796,12 +797,10 @@ public class McpResource {
     public let uri: String
     /// 人类可读名，用于 UI 展示
     public let name: String
-    public let title: ?String
-    public let description: ?String
+    public let description: String
     /// MIME 类型，如 "text/markdown"、"application/pdf"
     public let mimeType: ?String
-    /// 原始大小（未 base64 前的字节数）。未知时 None
-    public let size: ?Int64
+    public let handler: McpResourceHandler
 }
 
 public class ResourceContent {
@@ -919,10 +918,9 @@ func validateUri(uri: String): Unit {
 
 | 情况                                   | 返回                                                     |
 | -------------------------------------- | -------------------------------------------------------- |
-| URI 不在资源表里                       | **`-32002`**（Resource not found），`data.uri` 带原值    |
+| URI 不在资源表里                       | **`-32040`**（Resource not found），`data.uri` 带原值、`data.reason = "unknown"` |
 | URI 格式非法（不是 URI、含 fragment）  | `-32602`（Invalid params）                               |
 | handler 内部抛异常                     | `-32603`（Internal error），消息脱敏（不回显堆栈）       |
-| 资源存在但暂时不可读（如正在重建索引） | 返回`-32002` + `data.reason = "temporarily_unavailable"` |
 | 结果超过`maxResultBytes`               | 截断 +`data.truncated = true`，并记 warning（见 7.2.4）  |
 
 **不存在就是错误，不是空数组。** 返回 `contents: []` 会让客户端以为"这个资源是空的"，
@@ -933,7 +931,7 @@ func validateUri(uri: String): Unit {
 
 | 特性                                   | 决定                                                | 理由                                                                               |
 | -------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `resources/subscribe`                  | ❌ 不做，`capabilities.resources.subscribe = false` | 需要 SSE 推送变更，首版无 SSE                                                      |
+| `resources/subscribe`                  | ❌ 不做，`capabilities.resources.subscribe = false` | SSE 已实现；未实现的是逐资源 `resources/subscribe` / `unsubscribe`                 |
 | `resources/templates/list`             | ❌ 不做                                             | URI 模板（`https://kb.example.com/docs/{id}`）需要额外一套匹配引擎，首版用扁平列表 |
 | `notifications/resources/list_changed` | ❌ 不发                                             | `listChanged: false`；资源表在 `build()` 后冻结                                    |
 | 资源内容缓存                           | ❌ 不做                                             | 由 handler 自己决定（它可以查`f_store` 的缓存）                                    |
@@ -1204,7 +1202,7 @@ func estimateBytes(c: ResourceContent): Int64 {
 1. 前缀匹配 publicBaseUrl + "/mcp/tool-results/"
 2. 提取 token，查 resultStore
 3. 命中 → 返回 ResourceContent（原 MIME 类型）
-4. 未命中/已过期 → -32002 + data.reason = "expired"
+4. 未命中/已过期 → -32040 + data.reason = "expired"
 ```
 
 这一步由 f_mcp **内置的 handler 处理，优先于用户注册的资源**。用户不能注册同前缀的 URI
@@ -1252,7 +1250,7 @@ public class RateLimitPolicy {
 |---|---|---|
 | `maxEntries` | ✅ **能** | "使用体验"参数：调大只是多留几条结果 |
 | `maxBytes` | ❌ **不能** | **内存安全参数**。因为"结果被拒多了"就悄悄多占 100 MB，是拿稳定性换体验，运维再也说不清进程会吃多少内存 |
-| `TTL` | ❌ **不能** | **业务语义**（"LLM 几秒内会来取"）。过期规则变了，`-32002 expired` 的含义也变了 |
+| `TTL` | ❌ **不能** | **业务语义**（"LLM 几秒内会来取"）。过期规则变了，`-32040 expired` 的含义也变了 |
 
 **这条边界很重要**：自动调"条数"是优化体验，自动调"字节"是偷偷扩大内存占用。
 
@@ -1277,49 +1275,23 @@ put 失败时：
 
 只看 `rejectedByCount` 就不会：一旦主因变成字节，这个计数器归零，自适应自然停。
 
-##### 5.6.6.5.3 完整配置项（13 项，全部可配）
+##### 5.6.6.5.3 完整配置项（9 项，全部可配）
 
-**没有写死的魔数。** 下面每一项都是 `public var`，通过 `Builder.resultStore()` 传入。
+**没有写死的魔数。** 下面每一项都是 `ResultStoreOptions` 的具名参数，通过
+`Builder.resultStore()` 传入；自适应参数平铺在同一个结构里，没有单独的策略类型。
 
 ```cangjie
-public class ResultStoreOptions {
-    // —— 容量与生命周期 ——
-    /// 起始容量。**运行期会被自适应调整**，不是固定上限
-    public var maxEntries: Int64 = 256
-    /// 字节硬上限。**不自动调**（内存安全参数，见 5.6.6.5.1）
-    public var maxBytes: Int64 = 256 * 1024 * 1024
-    /// 过期时间。**不自动调**（业务语义）
-    public var ttl: Duration = Duration.minute * 10
-
-    // —— 自适应开关 ——
-    /// 默认开启；传 None 退回固定容量
-    public var adaptive: ?AdaptivePolicy = AdaptivePolicy()
-}
-
-public class AdaptivePolicy {
-    // —— 区间 ——
-    /// 可调下界
-    public var floor: Int64 = 128
-    /// 可调上界
-    public var ceiling: Int64 = 1024
-
-    // —— 节奏 ——
-    /// 评估窗口
-    public var evaluationWindow: Duration = Duration.minute * 5
-    /// 两次调整之间的最短间隔
-    public var cooldown: Duration = Duration.minute * 5
-    /// 调大步长（25%）
-    public var growRatio: Float64 = 0.25
-    /// 调小步长（12.5%，比调大更谨慎）
-    public var shrinkRatio: Float64 = 0.125
-
-    // —— 触发条件 ——
-    /// 触发调大的拒绝率阈值
-    public var rejectRateThreshold: Float64 = 0.01
-    /// 触发调小的占用率阈值
-    public var idleOccupancyThreshold: Float64 = 0.25
-    /// 调小需要连续满足的窗口数（防日周期震荡）
-    public var shrinkConfirmWindows: Int64 = 3
+public struct ResultStoreOptions {
+    public const ResultStoreOptions(
+        public let maxEntries!: Int64 = 256,               // 起始容量，运行期可被自适应调整
+        public let maxBytes!: Int64 = 256 * 1024 * 1024,   // 字节硬上限，不自动调
+        public let ttlMillis!: Int64 = 10 * 60 * 1000,     // 过期时间，不自动调
+        public let adaptive!: Bool = true,                 // false 退回固定容量
+        public let windowMillis!: Int64 = 5 * 60 * 1000,   // 评估窗口
+        public let rejectRateThreshold!: Float64 = 0.01,   // 拒绝率阈值
+        public let floor!: Int64 = 128,                    // 可调下界
+        public let ceiling!: Int64 = 1024,                 // 可调上界
+        public let shrinkConfirmWindows!: Int64 = 3) {}    // 连续多少个空闲窗口才缩容
 }
 ```
 
@@ -1327,19 +1299,18 @@ public class AdaptivePolicy {
 
 | # | 配置项 | 默认 | 作用 | 什么时候改 |
 |---|---|---|---|---|
-| 1 | `maxEntries` | 256 | 起始容量 | 已知量级时直接给准值（自适应就没多少活干） |
+| 1 | `maxEntries` | 256 | 当前生效容量（自适应会改它） | 已知量级时直接给准值（自适应就没多少活干） |
 | 2 | `maxBytes` | 256 MB | 字节硬上限 | 单条结果大 / 需要并存更多条 |
-| 3 | `ttl` | 10 min | 过期时间 | 客户端取结果慢（如移动网络） |
-| 4 | `adaptive` | `AdaptivePolicy()` | 传 `None` 关闭 | 压测、容量规划、需要绝对可预测 |
+| 3 | `ttlMillis` | 10 min | 过期时间 | 客户端取结果慢（如移动网络） |
+| 4 | `adaptive` | `true` | 传 `false` 关闭自适应 | 压测、容量规划、需要绝对可预测 |
 | 5 | `floor` | 128 | 调容下界 | 不愿缩太小 / 日周期业务 |
 | 6 | `ceiling` | 1024 | 调容上界 | 峰值很高 |
-| 7 | `evaluationWindow` | 5 min | 评估窗口 | 想更快/更慢响应 |
-| 8 | `cooldown` | 5 min | 调整最短间隔 | 防抖 |
-| 9 | `growRatio` | 0.25 | 调大步长 | 峰值来得快、涨得不够快 |
-| 10 | `shrinkRatio` | 0.125 | 调小步长 | 想更保守 |
-| 11 | `rejectRateThreshold` | 0.01 | 触发调大的拒绝率 | 对结果完整性敏感就调低（0.001） |
-| 12 | `idleOccupancyThreshold` | 0.25 | 触发调小的占用率 | 想更省内存就调高 |
-| 13 | `shrinkConfirmWindows` | 3 | 调小需连续窗口数 | 业务有周期性就调大（5~6） |
+| 7 | `windowMillis` | 5 min | 评估窗口 | 想更快/更慢响应 |
+| 8 | `rejectRateThreshold` | 0.01 | 触发调大的拒绝率 | 对结果完整性敏感就调低（0.001） |
+| 9 | `shrinkConfirmWindows` | 3 | 调小需连续窗口数 | 业务有周期性就调大（5~6） |
+
+调大步长固定 25%、调小步长固定 12.5%、两次调整之间至少间隔一个评估窗口——这三项是
+实现内常量，不作为配置项暴露。
 
 **传入方式**：
 
@@ -1348,25 +1319,23 @@ McpServer.builder()
     .resultStore(ResultStoreOptions(
         maxEntries: 512,                                  // 起点给准一点
         maxBytes: 512 * 1024 * 1024,
-        adaptive: AdaptivePolicy(
-            floor: 256,
-            ceiling: 2048,
-            rejectRateThreshold: 0.001,                   // 对截断更敏感
-            shrinkConfirmWindows: 6                       // 夜间不轻易缩
-        )
+        floor: 256,
+        ceiling: 2048,
+        rejectRateThreshold: 0.001,                       // 对截断更敏感
+        shrinkConfirmWindows: 6                           // 夜间不轻易缩
     ))
     .build()
 ```
 
-**为什么把 `floor` / `ceiling` 起这两个名字**：如果也叫 `minEntries` / `maxEntries`，
+**为什么把可调区间叫 `floor` / `ceiling`**：如果也叫 `minEntries` / `maxEntries`，
 就会和外层的 `maxEntries`（当前生效值）撞名——三个 `maxEntries` 在同一上下文里，
 读代码的人根本分不清哪个是"现在用的"、哪个是"能调到多高"。
 
 | 名字 | 含义 |
 |---|---|
 | `ResultStoreOptions.maxEntries` | **当前生效值**，运行期会变 |
-| `AdaptivePolicy.floor` | 可调区间的**下界**，不会低于它 |
-| `AdaptivePolicy.ceiling` | 可调区间的**上界**，不会高于它 |
+| `ResultStoreOptions.floor` | 可调区间的**下界**，不会低于它 |
+| `ResultStoreOptions.ceiling` | 可调区间的**上界**，不会高于它 |
 
 ##### 5.6.6.5.4 非对称策略：调大敏捷，调小迟钝
 
@@ -1393,7 +1362,7 @@ McpServer.builder()
 **所以再加一条**：调小只在"当前值明显高于实际需要"时才做——
 
 ```
-if (occupancy < idleOccupancyThreshold
+if (occupancy < 0.25               // 占用率阈值是常量
     && w.rejectedByCount == 0
     && w.rejectedByBytes == 0          // ← 字节也没压力
     && consecutiveIdleWindows >= shrinkConfirmWindows
@@ -1422,24 +1391,26 @@ put 成功后调 maybeEvaluateCapacity()：
   rejectRate = Float64(w.rejectedByCount) / Float64(totalPuts)
   occupancy  = Float64(count.load()) / Float64(maxEntries)
 
-  if (rejectRate > policy.rejectRateThreshold):
-      consecutiveIdleWindows = 0
-      if (now - lastAdjust >= cooldown):
-          grow()                                  // 立即响应
-      return
+  if (w.rejectedByBytes > 0):                     // 字节闸门在挡：说明需求很旺，不缩
+      shrinkStreak = 0
+      return hold
 
-  if (occupancy < policy.idleOccupancyThreshold
-      && w.rejectedByBytes == 0):
-      consecutiveIdleWindows += 1
-  else:
-      consecutiveIdleWindows = 0
-      return
+  if (rejectRate > options.rejectRateThreshold && maxEntries < options.ceiling):
+      target = min(options.ceiling, maxEntries + max(1, maxEntries / 4))   // +25%
+      return grow
 
-  if (consecutiveIdleWindows >= policy.shrinkConfirmWindows
-      && maxEntries > policy.floor
-      && now - lastAdjust >= cooldown):
-      shrink()
+  if (occupancy < 0.25 && maxEntries > options.floor):
+      shrinkStreak += 1
+      if (shrinkStreak >= options.shrinkConfirmWindows):
+          target = max(options.floor, maxEntries - max(1, maxEntries / 8)) // -12.5%
+          return shrink
+      return hold(idle_pending)
+
+  shrinkStreak = 0
+  return hold
 ```
+
+评估本身按 `windowMillis` 限频：窗口未到期时只有一次原子读，不抢锁、不计算。
 
 ##### 5.6.6.5.6 日志：两个级别，各管一件事
 
@@ -1805,10 +1776,8 @@ public class RateLimitPolicy {
     public var perToolRpm: Int64 = 6000
     /// 单个调用方的并发上限（在途请求数）
     public var perCallerConcurrency: Int64 = 8
-    /// 单次结果大小阈值，超过转 resource_link（5.6.6）
-    public var maxResultBytes: Int64 = 1024 * 1024
-    /// 超限行为
-    public var onExceed: RateLimitAction = RateLimitAction.Reject
+    // 注意：`maxResultBytes` 不在这里，它属于 `McpTool`（单工具覆盖），
+    // `RateLimitPolicy` 只表达限流维度。
 }
 
 /// 第二层：服务级配置（Builder.rateLimit）
@@ -2198,7 +2167,6 @@ public class McpServer {
 | `token-bucket`（默认） | `TokenBucketRateLimiter` | 每分钟 `rpm`，允许突发 |
 | `leaking-bucket` | `LeakingBucketRateLimiter` | 每分钟漏出 `rpm` |
 | `sliding-window` | `SlidingWindowRateLimiter` | 1 分钟滑动窗口 |
-| `any-moment` | `AnyMomentRateLimiter` | 瞬时并发上限，不是每分钟配额 |
 | `unlimited` | `UnlimitedRateLimiter` | 不限制 |
 
 名字大小写与 `-` / `_` 不敏感；未知值在构建时抛 `IllegalArgumentException`。
@@ -2248,7 +2216,7 @@ public class McpServer {
 | `_meta`     | 缺失`_meta` → 拒绝；`MCP-Protocol-Version` 与 body 不一致 → 拒绝                                               |
 | 工具        | `tools/list` 分页、顺序稳定；`tools/call` 参数校验、`isError` 语义                                               |
 | schema      | `$ref` → `build()` 就抛；`pattern` / `minimum` 约束生效；无参工具用 `additionalProperties: false`               |
-| 资源        | `resources/list` 分页 + 顺序稳定；`resources/read` 文本 / 二进制两种；不存在的 URI → `-32002`                   |
+| 资源        | `resources/list` 分页 + 顺序稳定；`resources/read` 文本 / 二进制两种；不存在的 URI → `-32040`                   |
 | 资源边界    | URI 含`#` → `-32602`；重复 URI → `build()` 抛；`contents` 多段返回                                             |
 | 能力声明    | 声明了`resources` 后 `read` 必须可用；未声明 `prompts` 时 `prompts/list` 返回 `-32601`                           |
 | 内容块      | text / image / resource 三种各一条；`structuredContent` + text 双写                                              |
@@ -2259,7 +2227,7 @@ public class McpServer {
 | 限流分层    | 全局默认生效；服务级覆盖全局；**工具级覆盖服务级**；只给部分字段时其余沿用上层                                   |
 | 限流存储    | 桶数超过 10 万后旧桶被淘汰；桶空闲 10 分钟后过期；`prolong` 续期生效                                             |
 | URI 白名单  | `http`/`https`/`ftp` 通过；`file://`/`data:`/`javascript:`/`kb://` 全部 `-32602`；含 `#` 的 `-32602`             |
-| 大结果      | 文本超 1 MB → 单个`resource_link`；二进制同样；取回内容逐字节一致；过期后 `-32002` + `reason=expired`         |
+| 大结果      | 文本超 1 MB → 单个`resource_link`；二进制同样；取回内容逐字节一致；过期后 `-32040` + `reason=expired`         |
 | 大结果降级  | 未配`publicBaseUrl` 时截断 + `data.truncated = true` + warning                                                   |
 | 大小上限    | 结果超 1 MB 被截断且`data.truncated = true`；二进制超限转 `resource_link`                                      |
 | 互操作      | 用真实 MCP 客户端（桌面端/CLI）连一遍，跑`tools/list` + `tools/call` + `resources/read`                          |
@@ -2281,7 +2249,7 @@ public class McpServer {
 | **P-1**  | 两个验证：①`f_mvc` 的空 body 能力（6.6）；② `@JsonRpcMapping` 端点能取到原始 body 并返回字节（f_jsonrpc P0） | 通知能返回真空白 body；`/mcp` 能被路由到且 `Content-Type` 缺失时确认是 415                           |
 | **P0**   | `McpServer` 骨架 + `server/discover` + `tools/list` + legacy 提示                                              | curl 拿到合法响应；`initialize` 返回带升级提示的 `-32601`                                            |
 | **P1**   | `tools/call` **单轮** + `JsonSchema.validate` 参数校验 + `CallToolResult`                                      | 三种内容块都能产出；`isError` 语义正确；`$ref` 在 build 时被拒                                       |
-| **P1.5** | **`resources/list` + `resources/read`**                                                                        | 文本与二进制两种资源可读；不存在的 URI 返回`-32002`；分页正确                                        |
+| **P1.5** | **`resources/list` + `resources/read`**                                                                        | 文本与二进制两种资源可读；不存在的 URI 返回`-32040`；分页正确                                        |
 | **P2**   | `McpClient`（HTTP）+ 版本探测                                                                                  | 与 P1/P1.5 的服务端互通；`-32022` 重试一次；legacy 服务端给出升级提示                                |
 | **P3**   | 动态库打包 +`fboot run --dylibPattern` 启动                                                                    | `libmcp_kb.so` 被加载，端口可访问                                                                    |
 | **P4**   | 内置 stdio**客户端** + `input_required` 多轮（`Manual` + `Auto`）                                              | 能连一个外部 MCP server 跑`tools/list`；两轮 `input_required` 能自动完成                             |
@@ -2349,7 +2317,7 @@ public class McpServer {
 | # | 事项 | 结论 | 落点 |
 |---|---|---|---|
 | 1 | legacy 对端 | **友好提示升级**：`-32601` + `data.legacyMethod` + 文档链接；**不做协议降级** | 1.2.1 |
-| 2 | resources | **`list` + `read` 一起做**；`contents` 是数组；不存在的 URI → `-32002` | 5.6 |
+| 2 | resources | **`list` + `read` 一起做**；`contents` 是数组；不存在的 URI → `-32040` | 5.6 |
 | 3 | stdio 范围 | **只做客户端侧**，不做 server-side 测试夹具 | 3.2.1 |
 | 4 | `input_required` | **单轮优先**；多轮 `Manual` 默认、`Auto(handler, maxRounds)` 可配 | 4.4 |
 | 5 | schema | **统一走 `f_data.json.JsonSchema`**；`$ref` 在 `build()` 拒绝 | 5.3 |
@@ -2433,7 +2401,8 @@ public class McpServer {
 ```cangjie
 ResultStoreOptions(
     maxEntries: 256,
-    adaptive: AdaptivePolicy(floor: 256, ceiling: 256)   // floor == ceiling ⇒ 调不动
+    floor: 256,
+    ceiling: 256                                         // floor == ceiling ⇒ 调不动
 )
 ```
 
@@ -2448,3 +2417,23 @@ ResultStoreOptions(
 | 统计快照的差值算法 | 用"当前累计 − 上次快照"，**不清零**。清零会在多线程并发时丢数 |
 | `maxEntries` 的读 | 被多个线程读（`put` 的判断、`get` 的占用率计算）。用 `AtomicInt64` 或接受短暂不一致——**不要加锁**，否则热路径变临界区 |
 | debug 日志的开销 | 每 5 分钟一条、单行拼接，成本可忽略。但**不要在 `get` 热路径上打**——只在评估时打 |
+
+
+---
+
+## 文档与实现对照（fix-jsonrpc-mcp-review-findings）
+
+| 主题 | 实现（以此为准） |
+|---|---|
+| 能力声明 | `resources.subscribe = false`（未实现 `resources/subscribe`）；`prompts` 保留 |
+| 错误码 | `RESOURCE_NOT_FOUND = -32040`（`-32002` 留给 f_jsonrpc 超时）；订阅者超限用 `-32003` |
+| 多轮 | `inputResponses` / `requestState` 贯通 `McpToolContext` → `CallToolResult` → `callToolAuto` |
+| 截断 | 按 UTF-8 rune 边界；保留 `isError` / `resultType` / `inputRequired` / `requestState` + `data.truncated` |
+| 限流 | 三层逐字段 merge；顺序 = 并发优先；拒绝 429 + `Retry-After`；`-1/0/>0` 语义 |
+| 后端 | 4 种（`token-bucket` / `leaking-bucket` / `sliding-window` / `unlimited`）；`LimiterPool` 有界 + TTL，淘汰时 `close()` |
+| 并发闸门 | 条目化，`release` 只减计数，空闲 TTL 回收 |
+| 订阅 | 上限 1024 / 队列 256 / detached 60s；断线与 30 分钟都只 detach，可重连 |
+| SSE | 空闲阻塞等待（Condition），15 秒心跳，字符串用 `StringBuilder` |
+| 客户端 | `McpClientOptions` 含 `headers` / `maxResponseBytes` / `keepAlive` / `retryOnConnectFailure`；版本协商加锁 |
+| 配置 | `mcp_rateLimit` 拒绝负数/小数/未知键/超上限；`mcp_trustForwardedFor` 只接受 true/false |
+| 注册时机 | `@Mcp` 不再在模块加载期 build，首次 `server()` 懒构建 |

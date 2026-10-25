@@ -15,7 +15,6 @@ limitations under the License.
  */
 package fountain::f_jsonrpc.server
 
-import std.collection.HashMap
 import std.time.MonoTime
 import fountain::f_data.*
 import fountain::f_mvc.HttpContext
@@ -32,16 +31,14 @@ public class JsonRpcContext {
     public let id: ?JsonValue
     public let endpoint: String
     public let topic: String
-    public let meta: HashMap<String, String>
     public let deadline: ?MonoTime
 
     public init(http!: ?HttpContext = None, id!: ?JsonValue = None, endpoint!: String = JsonRpcProtocol.PATH,
-        topic!: String = '', meta!: HashMap<String, String> = HashMap<String, String>(), deadline!: ?MonoTime = None) {
+        topic!: String = '', deadline!: ?MonoTime = None) {
         this.http = http
         this.id = id
         this.endpoint = endpoint
         this.topic = topic
-        this.meta = meta
         this.deadline = deadline
     }
 
@@ -62,6 +59,6 @@ public class JsonRpcContext {
     }
 
     func derive(id: ?JsonValue, deadline: ?MonoTime): JsonRpcContext {
-        JsonRpcContext(http: http, id: id, endpoint: endpoint, topic: topic, meta: meta, deadline: deadline)
+        JsonRpcContext(http: http, id: id, endpoint: endpoint, topic: topic, deadline: deadline)
     }
 }
