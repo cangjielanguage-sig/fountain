@@ -58,9 +58,13 @@ A `@DataAssist` class can provide the schema directly:
 McpTool.of<SearchRequest>('kb.search')
 ```
 
-### Public base URL
+### Public base URL and resource URIs
 
-`publicBaseUrl` is the public root of this server. `Builder` wins over configuration:
+`publicBaseUrl` is the public root of this server, used to build absolute URLs.
+
+#### Configuration
+
+`Builder` wins over the configuration key:
 
 ```cangjie
 b.publicBaseUrl('https://mcp.example.com')
@@ -70,19 +74,34 @@ b.publicBaseUrl('https://mcp.example.com')
 export mcp_publicBaseUrl=https://mcp.example.com
 ```
 
-It is used in three places:
+Both strip trailing `/`; an empty value means unset.
+
+It affects three places:
 
 - result links: `${publicBaseUrl}/mcp/tool-results/{token}`
 - the `sseUrl` returned by `subscriptions/listen`
-- relative resource URIs: `McpResource.builder('/doc', 'doc')` → `https://mcp.example.com/doc`
+- relative URI resolution for `McpResource.builder`
 
-A full URL is also accepted and is not prefixed with `publicBaseUrl`:
+#### The `McpResource.builder` uri
+
+The first argument accepts two forms:
+
+| Input | Result |
+|---|---|
+| `/doc` | `${publicBaseUrl}/doc` |
+| `https://docs.example.com/doc` | used verbatim, no prefix |
 
 ```cangjie
+// relative path: requires publicBaseUrl
+McpResource.builder('/doc', 'doc')
+
+// full URL: independent of publicBaseUrl
 McpResource.builder('https://docs.example.com/doc', 'doc')
 ```
 
-Without `publicBaseUrl`: results are truncated, `sseUrl` is relative, and a relative resource URI throws `McpException` while building the server.
+`//example.com/doc`, `file://`, a relative path without `/`, and URIs containing `#fragment` throw `McpException` at build time.
+
+Without `publicBaseUrl`: results are truncated, `sseUrl` is relative, and `McpResource.builder('/doc', ...)` throws `McpException` when the server is built.
 
 ### Methods
 
