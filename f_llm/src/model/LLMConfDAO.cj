@@ -25,28 +25,31 @@ import fountain::f_llm.model.po.*
 /**
  * llm_conf 的数据库访问。
  *
- * 用 f_orm 的 @DAO：接口体里直接用 `executor`，宏负责生成实现，
- * 因此 SQL 由 f_orm 按当前驱动生成，应用侧不写方言相关 SQL。
+ * 用 f_orm 的 @DAO：SQL 由 f_orm 按当前驱动生成，应用侧不写方言 SQL。
+ *
+ * 每个方法都用 `ORM.executor()` 取当前线程的执行器，而不是复用调用方传进来的实例：
+ * 一次语句执行结束（尤其自动提交）后，f_orm 会清空线程内的 current 执行器，
+ * 复用旧实例会在拼列名时抛 NoneValueException。
  */
 @DAO
 public interface LLMConfDAO <: RootDAO {
     /** 装载用：只取启用且权重大于 0 的配置（`enabled = true` 在 PG / MySQL 上都成立） */
     func listEnabled(): ArrayList<LLMConf> {
-        executor.setSql('SELECT * FROM llm_conf WHERE enabled = true AND weight > 0').list<LLMConf>()
+        ORM.executor().setSql('SELECT * FROM llm_conf WHERE enabled = true AND weight > 0').list<LLMConf>()
     }
 
     func findById(id: Int64): Option<LLMConf> {
-        executor.setSql('SELECT * FROM llm_conf WHERE id = ${id}').first<LLMConf>()
+        ORM.executor().setSql('SELECT * FROM llm_conf WHERE id = ${id}').first<LLMConf>()
     }
 
-    /** 返回自增主键（方法名不能叫 insert：SqlExecutor 已有同名属性） */
+    /** 返回自增主键（方法名不能叫 insert：SqlExecutor 已有同名属性）；id 交给数据库生成 */
     func insertConf(conf: LLMConf): Int64 {
-        executor.INSERT_INTO<LLMConf>(conf)
+        ORM.executor().INSERT_INTO<LLMConf>(conf, ignoreColumns: [LLMConf.tableColumns().id])
     }
 
-    /** 以主键为 WHERE 条件整行更新（conf 列由 codec 转成 JSON 文本后再写入） */
+    /** 以主键为 WHERE 条件整行更新 */
     func updateById(conf: LLMConf): Int64 {
-        executor.UPDATE<LLMConf>(
+        ORM.executor().UPDATE<LLMConf>(
             conf,
             ignoredColumns: HashSet<String>(),
             includingColumns: HashSet<String>(),
@@ -55,6 +58,6 @@ public interface LLMConfDAO <: RootDAO {
     }
 
     func deleteAll(): Int64 {
-        executor.setSql('DELETE FROM llm_conf').delete
+        ORM.executor().setSql('DELETE FROM llm_conf').delete
     }
 }

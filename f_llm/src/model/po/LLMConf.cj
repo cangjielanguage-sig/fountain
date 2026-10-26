@@ -68,7 +68,6 @@ public class LLMConf {
      * 对外用下面的 conf 属性读写 Map。切换由此处一次性完成，调用方无需感知。
      */
     @ORMField['conf']
-    @DataExclude[field]
     private var confJson: String = '{}'
 
     @DataExclude[prop field]

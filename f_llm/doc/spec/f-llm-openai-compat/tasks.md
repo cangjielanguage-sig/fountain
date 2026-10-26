@@ -6,7 +6,7 @@
 
 - [x] 1.1 `LLMConf` 改为评审给定字段（含 `HashMap` 形式的 `conf`、`temperature = -1.0`），`@DataAssist` + `@QueryMappersGenerator` 能编译通过；先写一个"字段可读写 + toData 含全部键"的用例
 - [x] 1.2 `LLMConfCodec`：`toColumn` / `fromColumn` 往返用例（空表、中文、含引号、超长值、非法 JSON 回退空表）
-- [ ] 1.3 用真实数据库跑一条 `读 → 改 conf → 写 → 再读`，确认列内容是合法 JSON 文本；不通过则改为 `confJson: String` + 懒解析访问器，并记录结论
+- [x] 1.3 用真实数据库跑一条 `读 → 改 conf → 写 → 再读`，确认列内容是合法 JSON 文本；不通过则改为 `confJson: String` + 懒解析访问器，并记录结论
 
 ## 2. `f_httpclient` SSE 客户端
 
