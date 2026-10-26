@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_llm.model
+package fountain::f_llm.model.po
 
 import std.collection.HashMap
 import fountain::f_data.*

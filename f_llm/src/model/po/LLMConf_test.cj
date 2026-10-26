@@ -19,8 +19,6 @@ import std.collection.HashMap
 import std.unittest.*
 import std.unittest.testmacro.*
 
-import fountain::f_llm.model.LLMConfCodec
-
 @Test
 public class LLMConfTest {
 

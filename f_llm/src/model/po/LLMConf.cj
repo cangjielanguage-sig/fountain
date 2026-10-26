@@ -21,8 +21,6 @@ import fountain::f_data.macros.*
 import fountain::f_orm.*
 import fountain::f_orm.macros.*
 
-import fountain::f_llm.model.LLMConfCodec
-
 /**
  * 一个平台上的一个大模型配置。
  *
