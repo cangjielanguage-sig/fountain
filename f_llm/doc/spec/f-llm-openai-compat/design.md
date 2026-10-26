@@ -256,13 +256,23 @@ LLM.respondStream(req: LLMRequest, onEvent: (ResponsesEvent) -> Unit): LLMRespon
 - 各家 `usage` / `thinking` / `tools` 真实字段：联调前按假设写 fixture，联调时以实测为准并回填文档。
 - DeepSeek 余额接口字段（`is_available` / `balance_infos[].{currency,total_balance,granted_balance,topped_up_balance}`）以实调为准；金额是字符串，需定点解析。
 
-**已知阻塞（2026-10-26）**：真库往返验证被驱动打包问题挡住——`postgres_driver` 0.1.0（中心仓与 `repository/git/pgsql` 副本一致）的 `cjpm.toml` **没有声明 `stdx.crypto`**，而源码 `src/pg_scram.cj` 等直接 `import stdx.crypto.*`；cjpm 1.3.0 对每个 root package 做「import 必须在 dependencies 里」检查，于是 `cjpm build` / `cjpm test` 直接失败：
+**已知阻塞（2026-10-26）**：真库往返验证被驱动打包问题挡住——`postgres_driver` 0.1.0 的 `cjpm.toml` **没有声明 stdx 依赖**（`[dependencies]` 段为空），而源码 `src/pg_scram.cj` 等直接 `import stdx.crypto.*`；当前 cjpm（1.2.0 与 1.3.0 均实测）对每个 root package 做「import 必须在 dependencies 里」检查：
 
 ```
 Error: root package 'postgres_driver' imports package 'stdx.crypto.common'
        in its source code, but it is not added as a dependency in cjpm.toml
 ```
 
-试过 `"stdx.crypto"` / `"stdx.crypto.crypto"` 两种声明都被 cjpm 判为非法依赖名（点分名不允许），因此**无法在应用侧绕过**，只能等驱动发包方修 manifest 或把 stdx 依赖改为随 SDK 解析。
+证据链（同一个错误，排除用法问题）：
 
-在此之前：`LLMConfDAO_test.cj` 与临时探针（`doc/sql` + `@DAO`）保持可编译、`FLLM_DB_TEST=1` 时才连库；真实往返验证挂起，**不拿它当已完成**。
+| 场景 | 声明方式 | 结果 |
+|---|---|---|
+| `fdemo`（仓库内既有工程） | `"postgres_driver" = {version="0.1.0", output-type="dynamic"}` | **同样失败** |
+| 最小探针工程 | 同上 | 失败 |
+| 最小探针工程 | `{version="0.1.0"}`（继承驱动的 static） | 失败 |
+| 驱动源码本地副本（path 依赖） | 同上 | 失败 |
+| 补 `"stdx.crypto"` / `"stdx.crypto.crypto"` 声明 | — | cjpm 判为**非法依赖名**（点分名不允许） |
+
+结论：**不是 static/dynamic 的问题**（两种都试过），是驱动 manifest 与当前 cjpm 的校验规则不兼容；应用侧无法绕过（stdx 在 fountain 各模块里靠 SDK 路径提供，从不写进 cjpm.toml）。需要驱动作者改 manifest 或去掉对 `stdx.crypto.*` 的直接 import。
+
+在此之前：`doc/sql` 双库 DDL 与 `LLMConfDAO`（`@DAO`）已落地且可编译；真实往返验证挂起，**不拿它当已完成**。
