@@ -27,6 +27,9 @@ import fountain::f_data.macros.*
 import fountain::f_http.*
 import fountain::f_http.exception.MediaTypeException
 
+import fountain::f_httpclient.sse.*
+public import fountain::f_httpclient.sse.*
+
 public interface ExtendHttpResponse {
     func readToEnd(): Array<Byte>
     func reader(): StringReader<InputStream>
@@ -59,6 +62,18 @@ extend HttpResponse <: ExtendHttpResponse {
     }
     public func reader(): StringReader<InputStream> {
         StringReader<InputStream>(this.body)
+    }
+
+    /**
+     * 把响应体当作 SSE（text/event-stream）读取。
+     *
+     * 只做语法解析：不解释 `[DONE]`、不解析 JSON、不自动重连；业务语义交给调用方。
+     */
+    public func sseReader(
+        maxLineBytes!: Int64 = 1024 * 1024,
+        idleTimeout!: Duration = Duration.second * 120
+    ): SseReader {
+        SseReader(this.body, maxLineBytes: maxLineBytes, idleTimeout: idleTimeout)
     }
     public func reader(charset: Charset): TextReader {
         TextReader(this.body, charset: charset)
