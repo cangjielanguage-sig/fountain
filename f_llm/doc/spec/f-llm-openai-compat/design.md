@@ -215,6 +215,8 @@ LLM.respondStream(req: LLMRequest, onEvent: (ResponsesEvent) -> Unit): LLMRespon
 
 破坏性变更（无兼容期）：删除 `GLMContext`、旧 `access(llmType, ...)` 系列、`AbstractSearcher`/`SearchMediator.register`；`LLMFinder.listConfs` 改无参；`llm_conf` 重建；**删除 `fcoder` 整个模块**（无引用、不发布，不再做签名适配）。
 
+**内部结构可自由重构**：除「§8 裁剪语义契约」与「公开 API 契约」外，`f_llm` 的包结构、类层次、`AbstractLLMContext` 等中间层都可以按实现需要重写或删除，不受既有代码形状约束。
+
 配置来源改为可插拔后，只用数据库的部署行为不变（默认 `database` 源）；环境变量/文件源是新增路径，不改变既有部署。
 
 ## 11. 实施顺序
