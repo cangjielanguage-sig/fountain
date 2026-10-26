@@ -12,24 +12,28 @@
 
 - **BREAKING**：`LLMConf` 改为 `provider / llmName / actualLlmName / url / auth / temperature / alwaysThinking / conf / enabled / weight`；删除 `llmType` / `threshold` / `priority`（分别迁到 `conf` 键与 `weight`）；`llm_conf` 表按新结构重建，不做数据迁移。
 - **BREAKING**：删除 `GLMContext`、`LLMRouter` 计划、旧 `access(agentId, session, llmType, params)` 系列签名、`AbstractSearcher` / `SearchMediator.register`；`LLMFinder.listConfs(llmTypes)` 改为无参 `listConfs()`。
+- **BREAKING**：删除 `fcoder` 模块（`description = "nothing here"` 的遗留脚手架，全仓无引用、不在 `.modules`、不在根 package），不再做签名适配。
+- **配置来源可插拔**：数据库只是可选来源之一。新增 `LLMConfSource` 抽象，内置数据库源，另支持环境变量/配置文件/静态注册；由 `llm_confSource` 选择。
+- **上下文裁剪允许重写**：除"语义不变"这一约束外可重新实现，也可以新增算法；同时提供可插拔的 token 计数。
 - 新增 `OpenAIContext`（唯一平台实现）+ `ProviderDialect` 表驱动方言 + `LLMApiKind`（Chat Completions / Responses API），四种调用形态：非流式 Chat、流式 Chat、非流式 Responses、流式 Responses。
 - 新增 `ThinkingCapability`（`None` / `Always` / `Toggle`）与 `ModelCapabilities`：**思考由模型决定，平台只决定字段形态**。
 - 新增配置快照 + 懒式周期刷新（`llm_confRefreshSeconds`）、`f_concurrent.LoadBalance` 权重调度、连续可重试失败熔断（`llm_failureThreshold` / `llm_cooldownSeconds`，仅内存）。
 - 新增对外门面 `LLM.chat / chatStream / respond / respondStream`，以及 `LLMDelta` / `LLMResponse` 稳定契约。
 - 工具：保留 `FunctionCalling` / `FunctionMediator`；新增内置 `currentTime`、`webSearch`、`webFetch`（抓取带 SSRF 防护）；新增 MCP 工具来源（`f_mcp` 客户端）。
 - 搜索/抓取能力改为可注册的 `SearchProvider`（内置智谱与 DeepSeek），凭据从任意启用的 `LLMConf` 取；无可用配置时抛异常。
-- 保留 8 个上下文裁剪策略，仅 `SaturationContextPruner` 改为按 conf 取阈值；`tokenize` 改为可插拔 `TokenCounter`。
+- 上下文裁剪：8 个策略的**对外语义保持不变**，实现可重写，并允许新增算法；`tokenize` 改为可插拔 `TokenCounter`；`SaturationContextPruner` 改为按 conf 取阈值。
 - `f_httpclient` 新增 SSE 客户端：`SseEvent` / `SseReader` / `HttpResponse.sseReader()`。
-- 余额查询只落 `BalanceQuerier` 接口 + `BalanceMediator`，平台实现后置；CodeBuddy / Qoder 明确不做。
+- 余额查询：`BalanceQuerier` 接口 + `BalanceMediator` 中介者；**先实现 DeepSeek**（`GET /user/balance`），其余平台先落可编译占位（调用即抛「不支持」），后续按 JAVA 参考逐个补齐；CodeBuddy / Qoder 不做。
 
 ## Capabilities
 
 ### New Capabilities
 
 - `llm-protocol-compat`: OpenAI Chat Completions 与 Responses API 的流式/非流式兼容，以及平台方言与模型思考能力解析。
-- `llm-conf-routing`: `LLMConf` 模型、配置装载与周期刷新、按权重调度、连续失败熔断、饱和 token 阈值。
+- `llm-conf-routing`: `LLMConf` 模型、可插拔配置来源、装载与周期刷新、按权重调度、连续失败熔断、饱和 token 阈值。
+- `llm-context-pruning`: 上下文压缩/裁剪的对外语义契约（8 个既有策略的行为不变）与新增算法的扩展方式。
 - `llm-tool-calling`: tool_call 保留与扩展、三个内置函数、MCP 工具来源、工具命名与冲突规则。
-- `llm-balance-query`: 余额查询统一接口与中介者（平台实现后置）。
+- `llm-balance-query`: 余额查询统一接口与中介者，先实现 DeepSeek，其余平台可编译占位。
 - `http-sse-client`: `f_httpclient` 提供通用 SSE 客户端，供 `f_llm` 等模块消费。
 
 ### Modified Capabilities
@@ -38,9 +42,9 @@
 
 ## Impact
 
-- **代码**：`f_llm/src/**`（llm / tool / search / mcp / balance / config / model / util）、`f_httpclient/src/**`（新增 `sse/`，扩展 `ExtendHttpResponse`）。
-- **依赖**：`f_llm/cjpm.toml` 新增 `fountain::f_mcp`、`fountain::f_concurrent`（均已确认无反向依赖，无环）。
-- **数据库**：`llm_conf` 表重建；`llm_token_usage` 增列 `reasoning_tokens`（TokenUsage 只进日志，不再默认落库）。
-- **调用方**：`fcoder` 的 `LLMService` / `LLMServiceImpl` / `LLMDAO` / `KnowledgeServiceImpl` 需同步改签名；`ContextPruner` 与 `AgentTask` 内部调用点同步。
+- **代码**：`f_llm/src/**`（llm / tool / search / mcp / balance / config / model / util）、`f_httpclient/src/**`（新增 `sse/`，扩展 `ExtendHttpResponse`）；删除 `fcoder/`（含 `src` / `docs` / `README*` / `cjpm.toml`）。
+- **依赖**：`f_llm/cjpm.toml` 新增 `fountain::f_mcp`、`fountain::f_concurrent`（均已确认无反向依赖，无环）；删除 `fcoder` 后无模块依赖它。
+- **数据库**：数据库只是配置来源之一（`llm_conf` 表按新结构重建）；`llm_token_usage` 增列 `reasoning_tokens`（TokenUsage 只进日志，不再默认落库）。
+- **调用方**：`ContextPruner` 与 `AgentTask` 的内部调用点同步；`fcoder` 整体删除，不做适配。
 - **文档**：`f_llm/README.md` + `README_en.md` 需按新公开 API 更新；`f_httpclient/README` 增补 SSE 客户端一节；设计文档已在 `f_llm/doc/f_llm.md`。
-- **不做**：HTTP 服务端（不注册路由）、余额平台实现、CodeBuddy/Qoder 余额、Anthropic 协议。
+- **不做**：HTTP 服务端（不注册路由）、CodeBuddy/Qoder 余额、Anthropic 协议；除 DeepSeek 外的平台余额与方言联调排到最后。

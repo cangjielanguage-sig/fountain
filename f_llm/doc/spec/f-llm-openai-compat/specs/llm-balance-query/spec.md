@@ -18,6 +18,34 @@
 - **WHEN** 平台返回的「总额」已包含信用额度
 - **THEN** 快照原样保留该值与原始响应，不跨平台做统一换算
 
+### Requirement: 实现分级
+
+余额实现 SHALL 分两级：已实现平台返回真实数据；未实现平台 SHALL 存在一个可编译的占位实现，被调用时抛「不支持」异常，SHALL NOT 伪造数据。
+
+#### Scenario: 已实现平台
+- **WHEN** 查询 DeepSeek 余额且凭据有效
+- **THEN** 返回真实余额快照，不含占位标记
+
+#### Scenario: 占位实现被调用
+- **WHEN** 查询一个只有占位的平台
+- **THEN** 抛出「不支持」异常，消息说明该平台待实现
+
+### Requirement: DeepSeek 余额映射
+
+DeepSeek 余额查询 SHALL 使用 `GET /user/balance`，把每个币种条目映射为一条快照：总额取 `total_balance`、赠金取 `granted_balance`、充值余额取 `topped_up_balance`；金额是字符串，SHALL 按定点数解析。
+
+#### Scenario: 单币种
+- **WHEN** 响应为 `{"is_available":true,"balance_infos":[{"currency":"CNY","total_balance":"110.00","granted_balance":"10.00","topped_up_balance":"100.00"}]}`
+- **THEN** 快照币种为 `CNY`、可用余额 110.00、信用 10.00、现金 100.00，且未标记低余额
+
+#### Scenario: 多币种
+- **WHEN** `balance_infos` 同时含 CNY 与 USD 两条
+- **THEN** 每个币种各产出一条快照，不取下标 0 覆盖
+
+#### Scenario: 账户不可用
+- **WHEN** 响应 `is_available = false`
+- **THEN** 快照标记为低余额/不可用，并记录告警日志
+
 ### Requirement: 不支持的平台显式失败
 
 未实现或无法查询的平台 SHALL 抛出明确的「不支持」异常，SHALL NOT 返回 0 或空快照。

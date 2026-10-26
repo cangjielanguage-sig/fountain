@@ -28,6 +28,8 @@
 - [ ] 3.6 熔断：连续 5 次可重试失败后跳过该 conf；冷却到期恢复；成功一次清零；400 不计入
 - [ ] 3.7 刷新后清理已删除 `conf.id` 的熔断状态
 - [ ] 3.8 `peekNext` / `getTokenThreshold(conf)` / `saturated(conf, msgs)` / `isCircuitOpen` / `refreshNow` 的用例
+- [ ] 3.9 `LLMConfSource` 抽象 + 内置四个来源（数据库 / 环境变量 / 文件 / 静态）：文件源与数据库源产出同一份候选列表；来源名未知时启动失败
+- [ ] 3.10 `llm_confSource` 选择与装载失败回退：文件不存在/JSON 非法时保留上次成功配置；首次失败则调用报错
 
 ## 4. 协议层（非流式，先 DeepSeek）
 
@@ -63,19 +65,23 @@
 
 ## 7. 裁剪、日志与余额接口
 
-- [ ] 7.1 `SaturationContextPruner` 改为 `peekNext` + 按 conf 阈值；其余 7 个策略单测不改一行仍全绿
-- [ ] 7.2 `TokenCounter`：远端（tokenizerUrl）与启发式两种实现；不可精确计数时返回 -1 且不抛
-- [ ] 7.3 `Redactor`：前 4 + `****` + 后 4；长度 < 12 全掩码；对 JSON 与 conf 选项表递归生效
-- [ ] 7.4 调用日志：默认 `info` 一条汇总，含 provider / actualLlmName / 耗时 / TTFT / TokenUsage / finish_reason；日志中无明文 KEY（正则断言）
-- [ ] 7.5 `BalanceQuerier` + `BalanceMediator`：未实现平台抛 `BalanceUnsupportedException`；重复注册失败；`@Bean` 自动发现可用
-- [ ] 7.6 低余额：快照标记 + 一条告警日志，不产生任何外部通知
+- [ ] 7.1 裁剪语义回归基线：为 8 个既有策略各写一条"输出语义"用例（不依赖内部实现），作为重写前后的对照
+- [ ] 7.2 裁剪实现整理：允许重写内部实现（如统一成组合器），8 条语义用例全绿；`SaturationContextPruner` 改为 `peekNext` + 按 conf 阈值
+- [ ] 7.3 新增算法：注册 `TokenBudget_4000`（按 token 预算裁剪）验证可扩展；同名注册失败；未知策略名显式失败并列出可用名
+- [ ] 7.4 `TokenCounter`：远端（tokenizerUrl）与启发式两种实现；不可精确计数时返回 -1 且不抛
+- [ ] 7.5 `Redactor`：前 4 + `****` + 后 4；长度 < 12 全掩码；对 JSON 与 conf 选项表递归生效
+- [ ] 7.6 调用日志：默认 `info` 一条汇总，含 provider / actualLlmName / 耗时 / TTFT / TokenUsage / finish_reason；日志中无明文 KEY（正则断言）
+- [ ] 7.7 `BalanceQuerier` + `BalanceMediator`：未实现平台抛 `BalanceUnsupportedException`；重复注册失败；`@Bean` 自动发现可用
+- [ ] 7.8 DeepSeek 余额实现：`GET /user/balance`，多币种各出一条快照，金额按定点解析；`is_available = false` 标记不可用并告警
+- [ ] 7.9 其余平台可编译占位：各家一个实现类，调用即抛「不支持」并标注待实现；不得返回 0 或伪造数据
+- [ ] 7.10 低余额：快照标记 + 一条告警日志，不产生任何外部通知
 
 ## 8. 文档与回归
 
 - [ ] 8.1 `f_llm/README.md` 与 `README_en.md` 按新公开 API 更新（中英成对）
 - [ ] 8.2 `f_httpclient/README.md` 增补「SSE 客户端」一节（含 10 条实现要求）
-- [ ] 8.3 `fcoder` 调用方同步改：`LLMService` / `LLMServiceImpl` / `LLMDAO` / `KnowledgeServiceImpl`
-- [ ] 8.4 全量回归：`f_httpclient`、`f_llm`、`fcoder` 模块测试全绿；`f_llm` 源码无路由注解、无 `f_mvc` 导入
+- [ ] 8.3 删除 `fcoder` 整个模块目录（`src` / `docs` / `README*` / `cjpm.toml`），并清理文档中相关引用
+- [ ] 8.4 全量回归：`f_httpclient`、`f_llm` 模块测试全绿；`f_llm` 源码无路由注解、无 `f_mvc` 导入
 
 ## 9. 平台联调（最后做）
 
