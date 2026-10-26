@@ -22,10 +22,10 @@ public class GLMSearcher <: AbstractSearcher {
     private let engine: String
     public init(conf: LLMConf){
         super(conf)
-        this.engine = super.name.split('|')[1]
+        this.engine = conf.option('searchEngine', 'search_pro')
     }
     public func search(keywords: String, count: Int64): ArrayList<SearchResult> {
-        http(url, conf){http =>//'https://open.bigmodel.cn/api/paas/v4/web_search'
+        http(url, auth){http =>//'https://open.bigmodel.cn/api/paas/v4/web_search'
             let start = MonoTime.now()
             let params = SearchParams()
             try{

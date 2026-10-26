@@ -97,7 +97,7 @@ public class GLMContext <: AbstractLLMContext {
             glm.max_tokens = params.max_tokens
             glm
         }
-        http(url, conf){http =>
+        http(url, auth){http =>
             let start = MonoTime.now()
             var json = None<JsonValue>
             try{
@@ -134,7 +134,7 @@ public class GLMContext <: AbstractLLMContext {
     }
     public func tokenize(model: String, messages: ArrayList<ChatMessage>): Int64 {
         let params = TokenizerParams(model: model, messages: messages)
-        http('https://open.bigmodel.cn/api/paas/v4/tokenizer', conf){http =>
+        http('https://open.bigmodel.cn/api/paas/v4/tokenizer', auth){http =>
             let json = http.post('application/json', params).readJson()
             let jsonObj = json.asObject()
             jsonObj.get('total_tokens').getOrThrow().asInt().toInt64()

@@ -20,10 +20,10 @@ public abstract class AbstractEmbeddingContext {
         protected let id: Int64,
         protected let name: String,
         protected let url: String,
-        protected let conf: String
+        protected let auth: String
     ){}
     public init(conf: LLMConf){
-        this(conf.id, conf.name, conf.url, conf.conf)
+        this(conf.id, conf.llmName, conf.url, conf.auth)
     }
     public func access(param: EmbeddingParam): EmbeddingResp
 }

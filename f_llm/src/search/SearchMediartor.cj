@@ -52,7 +52,7 @@ public class SearchMediator {
                 return x
             }
             for(conf in lookup<LLMFinder>().listConfs([LLM_TYPE_SEARCH])){
-                let key = '${conf.name}+${conf.llmType}'
+                let key = '${conf.llmName}+${conf.option('llmType', LLM_TYPE_SEARCH)}'
                 if(let Some(newer) <- contextCreators.get(key)){
                     contexts[key] = newer(conf)
                 }

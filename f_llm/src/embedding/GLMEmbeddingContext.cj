@@ -23,7 +23,7 @@ public class GLMEmbeddingContext <: AbstractEmbeddingContext {
         super(conf)
     }
     public func access(param: EmbeddingParam): EmbeddingResp {
-        http(url, conf){http => 
+        http(url, auth){http => 
             let start = MonoTime.now()
             let params = JsonObject()
             try{

@@ -21,11 +21,11 @@ public abstract class AbstractLLMContext {
         protected let name: String,
         protected let llmType: String,
         protected let url: String,
-        protected let conf: String,
+        protected let auth: String,
         protected let threshold: Int64
     ) {}
     public init(conf: LLMConf){
-        this(conf.id, conf.name, conf.llmType, conf.url, conf.conf, conf.threshold)
+        this(conf.id, conf.llmName, conf.option('llmType', 'text'), conf.url, conf.auth, conf.tokenThreshold)
     }
 
     public func access(agentId: Int64, session: String, params: LLMParams): LLMResp

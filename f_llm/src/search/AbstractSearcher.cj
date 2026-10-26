@@ -47,12 +47,12 @@ public class SearchParams {
 public abstract class AbstractSearcher {
     public AbstractSearcher(
         protected let id!: Int64,
-        protected let url!: String, 
+        protected let url!: String,
         protected let name!: String,
-        protected let conf!: String
+        protected let auth!: String
     ){}
     public init(conf: LLMConf){
-        this(id: conf.id, url: conf.url, name: conf.name, conf: conf.conf)
+        this(id: conf.id, url: conf.url, name: conf.llmName, auth: conf.auth)
     }
     public func search(keywords: String, count: Int64): ArrayList<SearchResult>
 }
