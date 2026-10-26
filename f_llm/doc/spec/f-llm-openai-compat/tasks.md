@@ -4,19 +4,19 @@
 
 ## 1. 前置验证与骨架
 
-- [ ] 1.1 `LLMConf` 改为评审给定字段（含 `HashMap` 形式的 `conf`、`temperature = -1.0`），`@DataAssist` + `@QueryMappersGenerator` 能编译通过；先写一个"字段可读写 + toData 含全部键"的用例
-- [ ] 1.2 `LLMConfCodec`：`toColumn` / `fromColumn` 往返用例（空表、中文、含引号、超长值、非法 JSON 回退空表）
+- [x] 1.1 `LLMConf` 改为评审给定字段（含 `HashMap` 形式的 `conf`、`temperature = -1.0`），`@DataAssist` + `@QueryMappersGenerator` 能编译通过；先写一个"字段可读写 + toData 含全部键"的用例
+- [x] 1.2 `LLMConfCodec`：`toColumn` / `fromColumn` 往返用例（空表、中文、含引号、超长值、非法 JSON 回退空表）
 - [ ] 1.3 用真实数据库跑一条 `读 → 改 conf → 写 → 再读`，确认列内容是合法 JSON 文本；不通过则改为 `confJson: String` + 懒解析访问器，并记录结论
 
 ## 2. `f_httpclient` SSE 客户端
 
-- [ ] 2.1 `SseEvent` 与 `SseReader.next()` 骨架：喂 `data: a` + 空行，断言得到一条事件、字段正确（Red 先行）
-- [ ] 2.2 行尾兼容：`\r\n` 与 `\n` 解析结果一致
-- [ ] 2.3 注释/心跳行（`: ping`）被丢弃且不产生事件
-- [ ] 2.4 多行 `data` 以换行拼接；字段值去掉一个前导空格；未知字段忽略
-- [ ] 2.5 边界：单行超上限抛 `SseLineTooLongException`；空闲超时抛 `SseTimeoutException`；半行结束不抛解析错误
-- [ ] 2.6 `HttpResponse.sseReader()` 便利入口 + `SseReader` 实现 `Resource`，`close()` 后底层流关闭、再次 `next()` 返回空
-- [ ] 2.7 增量性验证：用可分段写入的假流，断言第一条事件在第二条写入前就返回
+- [x] 2.1 `SseEvent` 与 `SseReader.next()` 骨架：喂 `data: a` + 空行，断言得到一条事件、字段正确（Red 先行）
+- [x] 2.2 行尾兼容：`\r\n` 与 `\n` 解析结果一致
+- [x] 2.3 注释/心跳行（`: ping`）被丢弃且不产生事件
+- [x] 2.4 多行 `data` 以换行拼接；字段值去掉一个前导空格；未知字段忽略
+- [x] 2.5 边界：单行超上限抛 `SseLineTooLongException`；空闲超时抛 `SseTimeoutException`；半行结束不抛解析错误
+- [x] 2.6 `HttpResponse.sseReader()` 便利入口 + `SseReader` 实现 `Resource`，`close()` 后底层流关闭、再次 `next()` 返回空
+- [x] 2.7 增量性验证：用可分段写入的假流，断言第一条事件在第二条写入前就返回
 
 ## 3. 配置装载、刷新与调度
 
