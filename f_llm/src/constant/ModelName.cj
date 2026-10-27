@@ -16,10 +16,20 @@ limitations under the License.
 package fountain::f_llm.constant
 
 public type ModelName = String
-public const MODEL_NAME_GLM4_7_FLASH = 'glm-4.7-flash'
+
+// ===== DeepSeek（默认供应商）=====
+/** 默认模型：便宜、够快，装配与日常对话都用它 */
+public const MODEL_NAME_DEEPSEEK_FLASH = 'deepseek-flash'
+public const MODEL_NAME_DEEPSEEK_CHAT = 'deepseek-chat'
+public const MODEL_NAME_DEEPSEEK_REASONER = 'deepseek-reasoner'
+
+// ===== 智谱 =====
 public const MODEL_NAME_GLM5 = 'glm-5'
 public const MODEL_NAME_GLM5_CODE = 'glm-5-code'
+public const MODEL_NAME_GLM5_FLASH = 'glm-5-flash'
 public const MODEL_NAME_GLM_EMBEDDING3 = 'embedding-3'
+
+// ===== 搜索（仅作为 conf 里的 llmType=search 标记，不参与对话）=====
 public const MODEL_NAME_GLM_SEARCH_STD = 'glm|search-std'
 public const MODEL_NAME_GLM_SEARCH_PRO = 'glm|search-pro'
 public const MODEL_NAME_GLM_SEARCH_PRO_QUARK = 'glm|search-pro-quark'

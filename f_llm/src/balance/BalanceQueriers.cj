@@ -15,28 +15,46 @@ limitations under the License.
 */
 package fountain::f_llm.balance
 
-import std.collection.ArrayList
+import std.collection.{ArrayList, HashMap}
+import std.time.DateTime
+import stdx.net.tls.common.*
 
 import fountain::f_bean.*
 import fountain::f_bean.macros.*
 import fountain::f_data.*
 import fountain::f_httpclient.*
+import fountain::f_time.*
 
+import fountain::f_llm.balance.sign.*
 import fountain::f_llm.model.po.*
 import fountain::f_llm.util.*
+
+/** HTTP POST 的抽象：单测注入假实现，验签名与解析，不发真请求 */
+public type BalancePoster = (String, HashMap<String, String>, String) -> String
+
+func defaultPost(url: String, headers: HashMap<String, String>, body: String): String {
+    let client = HttpClient(url)
+    for((key, value) in headers){
+        client.header(key, value)
+    }
+    var tls = TlsClientConfig()
+    tls.verifyMode = CertificateVerifyMode.TrustAll
+    client.tlsConfig(tls)
+    resource(client){http =>
+        http.post(body).readEntire()
+    }
+}
 
 /**
  * DeepSeek 余额：`GET /user/balance`。
  *
- * 响应形如 `{"is_available":true,"balance_infos":[{currency,total_balance,granted_balance,topped_up_balance}]}`，
- * 金额是**字符串**（如 `"110.00"`）——原样保留在快照里，另给一个 `Float64` 视图供阈值比较。
- * 多币种各出一条，不取下标 0。
+ * 响应 `{"is_available":bool,"balance_infos":[{currency,total_balance,granted_balance,topped_up_balance}]}`，
+ * 金额是**字符串**（如 `"110.00"`）——原样保留，另给 `Float64` 视图做阈值比较；多币种各出一条。
  */
 @Bean
 public class DeepSeekBalanceQuerier <: BalanceQuerier {
     private let getter: (String, String) -> String
 
-    /** getter 可注入，单测喂固定 JSON，不发真请求 */
     public init(getter!: (String, String) -> String = defaultBalanceGet) {
         this.getter = getter
     }
@@ -49,8 +67,7 @@ public class DeepSeekBalanceQuerier <: BalanceQuerier {
 
     public func query(conf: LLMConf): ArrayList<BalanceSnapshot> {
         let url = conf.option('balanceUrl', 'https://api.deepseek.com/user/balance')
-        let body = getter(url, conf.auth)
-        parseBalance(body, 'deepseek')
+        parseDeepSeekBalance(getter(url, conf.auth), 'deepseek')
     }
 }
 
@@ -60,8 +77,7 @@ func defaultBalanceGet(url: String, auth: String): String {
     }
 }
 
-/** 解析 DeepSeek 的余额响应；`is_available=false` 时所有快照标为不可用 */
-public func parseBalance(body: String, provider: String): ArrayList<BalanceSnapshot> {
+public func parseDeepSeekBalance(body: String, provider: String): ArrayList<BalanceSnapshot> {
     let snapshots = ArrayList<BalanceSnapshot>()
     let json = JsonValue.fromStr(body).asObject()
     let available = if(let Some(value) <- json.get('is_available')){
@@ -88,15 +104,143 @@ public func parseBalance(body: String, provider: String): ArrayList<BalanceSnaps
     snapshots
 }
 
+/**
+ * 腾讯云余额：`DescribeAccountBalance`（billing，2018-07-09）。
+ *
+ * 注意单位：**所有金额字段都是「分」**，除以 100 才是元。
+ * `Balance` 是历史兼容字段，与 `RealBalance` 相同，新代码只读后者。
+ */
+@Bean
+public class TencentCloudBalanceQuerier <: BalanceQuerier {
+    private let poster: BalancePoster
+
+    public init(poster!: BalancePoster = defaultPost) {
+        this.poster = poster
+    }
+
+    public prop provider: String {
+        get() {
+            'tencent'
+        }
+    }
+
+    public func query(conf: LLMConf): ArrayList<BalanceSnapshot> {
+        let (secretId, secretKey) = cloudCredentials(conf)
+        let payload = '{"TempCredit":true}'
+        let timestamp = DateTime.now().toUnixEpochSeconds()
+        let headers = TencentSigner.headers(secretId, secretKey, 'DescribeAccountBalance', '2018-07-09', payload, timestamp)
+        let body = poster('https://billing.tencentcloudapi.com', headers, payload)
+        parseTencentBalance(body)
+    }
+}
+
+public func parseTencentBalance(body: String): ArrayList<BalanceSnapshot> {
+    let json = JsonValue.fromStr(body).asObject()
+    let response = json.get('Response')?.asObject() ?? JsonObject()
+    if(let Some(rawError) <- response.get('Error')){
+        let error = rawError.asObject()
+        throw BalanceUnsupportedException(
+            'tencent balance query failed: ${balanceTextOf(error, "Code")} ${balanceTextOf(error, "Message")}'
+        )
+    }
+    let snapshots = ArrayList<BalanceSnapshot>()
+    let real = numberOf(response, 'RealBalance')
+    snapshots.add(BalanceSnapshot(
+        provider: 'tencent',
+        currency: 'CNY',
+        total: moneyFromFen(real),
+        granted: moneyFromFen(numberOf(response, 'PresentAccountBalance')),
+        toppedUp: moneyFromFen(numberOf(response, 'CashAccountBalance')),
+        available: true,
+        low: false,
+        totalValue: real / 100.0f64
+    ))
+    snapshots
+}
+
+/**
+ * 火山引擎余额：`QueryBalanceAcct`（BillingCenter，2022-01-01，Service=`billing`）。
+ *
+ * 金额是**字符串、单位元**，原样保留。
+ */
+@Bean
+public class VolcengineBalanceQuerier <: BalanceQuerier {
+    private let poster: BalancePoster
+
+    public init(poster!: BalancePoster = defaultPost) {
+        this.poster = poster
+    }
+
+    public prop provider: String {
+        get() {
+            'volcengine'
+        }
+    }
+
+    public func query(conf: LLMConf): ArrayList<BalanceSnapshot> {
+        let (accessKey, secretKey) = cloudCredentials(conf)
+        let payload = '{}'
+        let timestamp = DateTime.now().toUnixEpochSeconds()
+        let headers = VolcSigner.headers(accessKey, secretKey, 'QueryBalanceAcct', '2022-01-01', payload, timestamp)
+        let url = 'https://open.volcengineapi.com?Action=QueryBalanceAcct&Version=2022-01-01'
+        let body = poster(url, headers, payload)
+        parseVolcengineBalance(body)
+    }
+}
+
+public func parseVolcengineBalance(body: String): ArrayList<BalanceSnapshot> {
+    let json = JsonValue.fromStr(body).asObject()
+    if(let Some(rawMeta) <- json.get('ResponseMetadata')){
+        if(let Some(rawError) <- rawMeta.asObject().get('Error')){
+            let error = rawError.asObject()
+            throw BalanceUnsupportedException(
+                'volcengine balance query failed: ${balanceTextOf(error, "Code")} ${balanceTextOf(error, "Message")}'
+            )
+        }
+    }
+    let result = json.get('Result')?.asObject() ?? JsonObject()
+    let available = balanceTextOf(result, 'AvailableBalance')
+    let snapshots = ArrayList<BalanceSnapshot>()
+    snapshots.add(BalanceSnapshot(
+        provider: 'volcengine',
+        currency: 'CNY',
+        total: available,
+        granted: '',
+        toppedUp: balanceTextOf(result, 'CashBalance'),
+        available: true,
+        low: false,
+        totalValue: decimalValue(available)
+    ))
+    snapshots
+}
+
+/** AK/SK：优先 `conf['accessKeyId']` + `conf['secretKey']`，否则按 `auth = AK:SK` 拆 */
+func cloudCredentials(conf: LLMConf): (String, String) {
+    let accessKey = conf.option('accessKeyId', '')
+    let secretKey = conf.option('secretKey', '')
+    if(!accessKey.isEmpty() && !secretKey.isEmpty()){
+        return (accessKey, secretKey)
+    }
+    if(let Some(index) <- conf.auth.indexOf(':')){
+        return (conf.auth[0 .. index], conf.auth[(index + 1) ..])
+    }
+    throw BalanceUnsupportedException('cloud balance requires accessKeyId/secretKey in conf or auth as AK:SK')
+}
+
 func balanceTextOf(obj: JsonObject, key: String): String {
     if(let Some(value) <- obj.get(key)){
         match(value){
+            case text: JsonString => text.value
             case _: JsonNull => ''
-            case _ => value.asString().value
+            case other => other.toString()
         }
     }else{
         ''
     }
+}
+
+func numberOf(obj: JsonObject, key: String): Float64 {
+    decimalValue(balanceTextOf(obj, key))
 }
 
 func decimalValue(text: String): Float64 {
@@ -107,7 +251,17 @@ func decimalValue(text: String): Float64 {
     }
 }
 
-/** 金山云、腾讯云、阿里云、智谱、硅基流动：本期只留可编译占位，调用即抛「不支持」 */
+/** 分 → 元，保留两位小数（避免 `100.0` 这种展示） */
+func moneyFromFen(fen: Float64): String {
+    let cents = Int64(fen + 0.5f64)
+    let sign = if(cents < 0){ '-' }else{ '' }
+    let absolute = if(cents < 0){ -cents }else{ cents }
+    let yuan = absolute / 100
+    let rest = absolute % 100
+    '${sign}${yuan}.${if(rest < 10){ "0${rest}" }else{ "${rest}" }}'
+}
+
+/** 智谱 / 硅基流动 / 阿里云：本期只留可编译占位，调用即抛「不支持」 */
 @Bean
 public class ZhipuBalanceQuerier <: BalanceQuerier {
     public prop provider: String {
@@ -129,30 +283,6 @@ public class SiliconFlowBalanceQuerier <: BalanceQuerier {
     }
     public func query(conf: LLMConf): ArrayList<BalanceSnapshot> {
         throw BalanceUnsupportedException('balance query for siliconflow is not implemented yet')
-    }
-}
-
-@Bean
-public class VolcengineBalanceQuerier <: BalanceQuerier {
-    public prop provider: String {
-        get() {
-            'volcengine'
-        }
-    }
-    public func query(conf: LLMConf): ArrayList<BalanceSnapshot> {
-        throw BalanceUnsupportedException('balance query for volcengine is not implemented yet')
-    }
-}
-
-@Bean
-public class TencentCloudBalanceQuerier <: BalanceQuerier {
-    public prop provider: String {
-        get() {
-            'tencent'
-        }
-    }
-    public func query(conf: LLMConf): ArrayList<BalanceSnapshot> {
-        throw BalanceUnsupportedException('balance query for tencent is not implemented yet')
     }
 }
 
