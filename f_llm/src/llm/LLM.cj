@@ -36,6 +36,21 @@ import fountain::f_llm.model.po.*
 public class LLM {
     private static let mutex = Mutex()
     private static var transport: LLMTransport = DefaultHttpTransport()
+    private static var streamTransport: LLMStreamTransport = DefaultStreamTransport()
+    private static var counter: Int64 = 0
+
+    /** 测试注入用；生产不调用 */
+    public static func setStreamTransport(value: LLMStreamTransport): Unit {
+        synchronized(mutex){
+            streamTransport = value
+        }
+    }
+
+    public static func getStreamTransport(): LLMStreamTransport {
+        synchronized(mutex){
+            streamTransport
+        }
+    }
 
     /** 测试注入用；生产不调用 */
     public static func setTransport(value: LLMTransport): Unit {
@@ -106,5 +121,111 @@ public class LLM {
             throw error
         }
         throw LLMException('no llm candidate available, tried: [${details}]')
+    }
+
+    public static func chatStream(
+        candidates: ArrayList<LLMConf>,
+        params: LLMParams,
+        onDelta: (LLMDelta) -> Unit
+    ): LLMResp {
+        stream(LLMApiKind.Chat, candidates, params, onDelta)
+    }
+
+    public static func respondStream(
+        candidates: ArrayList<LLMConf>,
+        params: LLMParams,
+        onDelta: (LLMDelta) -> Unit
+    ): LLMResp {
+        stream(LLMApiKind.Responses, candidates, params, onDelta)
+    }
+
+    /**
+     * 流式公共流程：与非流式共用「按候选转移、4xx 立即失败」的规则。
+     *
+     * 中途异常（连接断、`SseTimeoutException`）包成 `LLMException` 并带 `requestId` 与阶段信息，
+     * 便于在日志里把「哪次请求、哪个平台、哪一步坏了」对上。
+     */
+    private static func stream(
+        kind: LLMApiKind,
+        candidates: ArrayList<LLMConf>,
+        params: LLMParams,
+        onDelta: (LLMDelta) -> Unit
+    ): LLMResp {
+        let requestId = nextRequestId()
+        let tried = ArrayList<String>()
+        var lastError: ?LLMException = None<LLMException>
+        for(conf in candidates){
+            let dialect = DialectRegistry.resolve(conf.provider)
+            tried.add('${conf.provider}:${conf.actualLlmName}')
+            let body = match(kind){
+                case LLMApiKind.Chat => ChatCompletionsMapper.build(conf, params, true)
+                case LLMApiKind.Responses => ResponsesMapper.build(conf, params, true)
+            }
+            dialect.decorate(conf, body)
+
+            let chatAccumulator = ChatStreamAccumulator()
+            let responsesAccumulator = ResponsesStreamAccumulator()
+            var status = 0
+            try{
+                status = getStreamTransport().stream(
+                    dialect.endpoint(kind, conf),
+                    dialect.headers(conf),
+                    body.toString()
+                ){data =>
+                    match(kind){
+                        case LLMApiKind.Chat =>
+                            if(let Some(delta) <- chatAccumulator.feed(data)){
+                                onDelta(delta)
+                            }
+                        case LLMApiKind.Responses =>
+                            if(let Some(delta) <- responsesAccumulator.feed(data)){
+                                onDelta(delta)
+                            }
+                    }
+                }
+            }catch(e: Exception){
+                lastError = LLMException(
+                    'llm stream failed, requestId: ${requestId}, phase: read, provider: ${conf.provider}, model: ${conf.actualLlmName}',
+                    e
+                )
+                continue
+            }
+
+            if(status >= 400){
+                let error = LLMException(
+                    'llm stream failed, requestId: ${requestId}, phase: connect, provider: ${conf.provider}, model: ${conf.actualLlmName}, status: ${status}'
+                )
+                if(LLMErrorClassifier.isRetryable(status)){
+                    lastError = error
+                    continue
+                }
+                throw error
+            }
+
+            let result = match(kind){
+                case LLMApiKind.Chat => chatAccumulator.result()
+                case LLMApiKind.Responses => responsesAccumulator.result()
+            }
+            result.usage.llmId = conf.id
+            return result
+        }
+        if(let Some(error) <- lastError){
+            throw error
+        }
+        let details = StringBuilder()
+        for(item in tried){
+            if(details.size > 0){
+                details.append(', ')
+            }
+            details.append(item)
+        }
+        throw LLMException('no llm candidate available, requestId: ${requestId}, tried: [${details}]')
+    }
+
+    private static func nextRequestId(): String {
+        synchronized(mutex){
+            counter++
+            'llm-${counter}'
+        }
     }
 }

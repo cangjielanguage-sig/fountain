@@ -76,6 +76,19 @@ public struct LLMConfig {
     public static func getCooldownDuration(): Duration {
         Duration.second * (Config.getValue<Int64>(LLM_COOLDOWN_SECONDS) ?? 60)
     }
+
+    /** 流式无数据超时（秒） */
+    public static const LLM_STREAM_IDLE_TIMEOUT = LLM + '_streamIdleTimeout'
+    /** SSE 单行上限（字节） */
+    public static const LLM_STREAM_MAX_LINE = LLM + '_streamMaxLineBytes'
+
+    public static func getStreamIdleTimeout(): Duration {
+        Duration.second * (Config.getValue<Int64>(LLM_STREAM_IDLE_TIMEOUT) ?? 120)
+    }
+
+    public static func getStreamMaxLineBytes(): Int64 {
+        Config.getValue<Int64>(LLM_STREAM_MAX_LINE) ?? 1024 * 1024
+    }
     private static func getPath(key: String, join!: String = ''){
         var path =  if(let Some(p) <- Config.getString(key)){
             Path(p)

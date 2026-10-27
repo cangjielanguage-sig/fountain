@@ -43,12 +43,12 @@
 
 ## 5. 流式
 
-- [ ] 5.1 `StreamAccumulator`（Chat）：`content` 拼接、`reasoning_content|reasoning` 兼容、`[DONE]` 结束
-- [ ] 5.2 `tool_calls` 分片归并：`arguments` 拆成两块后仍能解析为 JSON
-- [ ] 5.3 `usage` 只在末块：聚合结果与末块一致；缺失时按启发式估算并标 `estimated`
-- [ ] 5.4 `LLM.chatStream`：回调按增量触发，返回聚合结果与非流式字段一致（同输入比对）
-- [ ] 5.5 `LLM.respondStream`：`response.completed` 为准（delta 累计与 completed 不一致时取后者）；`response.failed` 抛异常
-- [ ] 5.6 流中断与空闲超时：包装为 LLM 异常并带 `requestId` 与阶段信息
+- [x] 5.1 `StreamAccumulator`（Chat）：`content` 拼接、`reasoning_content|reasoning` 兼容、`[DONE]` 结束
+- [x] 5.2 `tool_calls` 分片归并：`arguments` 拆成两块后仍能解析为 JSON
+- [x] 5.3 `usage` 只在末块：聚合结果与末块一致；缺失时按启发式估算并标 `estimated`
+- [x] 5.4 `LLM.chatStream`：回调按增量触发，返回聚合结果与非流式字段一致（同输入比对）
+- [x] 5.5 `LLM.respondStream`：`response.completed` 为准（delta 累计与 completed 不一致时取后者）；`response.failed` 抛异常
+- [x] 5.6 流中断与空闲超时：包装为 LLM 异常并带 `requestId` 与阶段信息
 
 ## 6. 工具与 MCP
 

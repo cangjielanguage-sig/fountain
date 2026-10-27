@@ -42,6 +42,8 @@ public interface ExtendHttpResponse {
     }
     func readJson(): JsonValue
     func readJson(charset: Charset): JsonValue
+    /** 把响应体当作 SSE（text/event-stream）读取；抽象函数不支持默认值，参数必须显式传 */
+    func sseReader(maxLineBytes!: Int64, idleTimeout!: Duration): SseReader
 }
 
 extend HttpResponse <: ExtendHttpResponse {
@@ -69,10 +71,7 @@ extend HttpResponse <: ExtendHttpResponse {
      *
      * 只做语法解析：不解释 `[DONE]`、不解析 JSON、不自动重连；业务语义交给调用方。
      */
-    public func sseReader(
-        maxLineBytes!: Int64 = 1024 * 1024,
-        idleTimeout!: Duration = Duration.second * 120
-    ): SseReader {
+    public func sseReader(maxLineBytes!: Int64, idleTimeout!: Duration): SseReader {
         SseReader(this.body, maxLineBytes: maxLineBytes, idleTimeout: idleTimeout)
     }
     public func reader(charset: Charset): TextReader {
