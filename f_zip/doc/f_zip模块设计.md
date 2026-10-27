@@ -1,6 +1,6 @@
 # f_zip —— 仓颉 ZIP 模块设计
 
-> 版本 **v0.7** ｜ 2026-10-24 ｜ 状态：待评审
+> 版本 **v0.7** ｜ 2026-10-24 ｜ 状态：已实现（2026-10-28，实现偏差见文末「实现落位说明」）
 >
 > 定位：fountain 模块，提供 ZIP 格式的压缩与解压。
 > deflate 部分复用 `stdx.compress.zlib`，容器层（头、中央目录、CRC）自己实现。
@@ -52,6 +52,10 @@
    不属于"第三方 ZIP 实现"，长期约束（无外部 ZIP 库 / 无 FFI / 无 native 链接）不受影响。
 2. **§3.2 `ZipWriter` 构造增加 `options!` 参数**：落盘阈值、临时目录、压缩方法需要一个入口，
    默认 `ZipWriterOptions()` 与原签名 `ZipWriter(out)` 等价。
+3. **§3.4.2 的 `@When` 条件补上 `env`**：只写 `os == "Linux"` 会让 **OHOS 也命中服务器档**
+   （鸿蒙目标的 `os` 同样是 `"Linux"`，差异在 `env == "ohos"`），与"OHOS 用 16 MB"的意图相反。
+   实际实现为 `@When[os == "Linux" && env == "gnu"]` / `@When[os != "Linux" || env != "gnu"]`，
+   与 `f_base/src/OS.cj` 的既有写法一致。
 
 另外两处实现细节的选择（不改变契约）：
 
@@ -643,15 +647,20 @@ public class ZipWriterOptions {
     public var method: CompressionMethod = CompressionMethod.Deflate
 }
 
-@When[os == "Linux"]
+@When[os == "Linux" && env == "gnu"]
 private func defaultMemoryEntryThreshold(): Int64 { 64 * 1024 * 1024 }
 
-@When[os != "Linux"]
+@When[os != "Linux" || env != "gnu"]
 private func defaultMemoryEntryThreshold(): Int64 { 16 * 1024 * 1024 }
 ```
 
-**为什么分两档**：
+> **实现修正（2026-10-28，v0.7 原文只写了 `os`）**：鸿蒙的编译目标 `aarch64-linux-ohos`
+> 在 `@When` 里 **`os` 也是 `"Linux"`**，区别在 `env`（`gnu` / `ohos`）。
+> 只按 `os` 分档会让 OHOS 拿到服务器档的 64 MB，与本节的意图相反（参考 `f_base/src/OS.cj`
+> 的既有写法：`@When[os == "Linux" && env == "gnu"]` 与 `@When[os == "Linux" && env == 'ohos']`）。
+> 因此条件必须是 `os == "Linux" && env == "gnu"`，另一半取反 `os != "Linux" || env != "gnu"`。
 
+**为什么分两档**：
 
 | 平台                      | 默认  | 理由                                                                         |
 | ------------------------- | ----- | ---------------------------------------------------------------------------- |
@@ -682,9 +691,9 @@ private func defaultMemoryEntryThreshold(): Int64 { 16 * 1024 * 1024 }
 
 ```cangjie
 // ✅ 可以：同一签名两份声明，各带一个 @When
-@When[os == "Linux"]
+@When[os == "Linux" && env == "gnu"]
 private func threshold(): Int64 { 64 * 1024 * 1024 }
-@When[os != "Linux"]
+@When[os != "Linux" || env != "gnu"]
 private func threshold(): Int64 { 16 * 1024 * 1024 }
 
 // ❌ 不可以：条件写在函数体里
@@ -1265,7 +1274,7 @@ public class ZipException <: Exception {
 | 9 | 符号链接 | **跳过**（`unzip` / `zip` 都跳过）；`addFile` 跟随 | 7.1.1 |
 | 10 | `maxEntries` | **只服务读取**（安全上限 65535）；**写入侧无上限，越界自动写 ZIP64** | 7.2.1 |
 | 11 | `add` 大条目 | **平台相关阈值**（Linux 64 MB / 其他 16 MB），超过自动落临时文件 | 3.4 |
-| 12 | 阈值默认值 | **按 `os` 编译期分档**；**就两个 `@When` 分支，任一时刻只有一个存在** | 3.4.2 |
+| 12 | 阈值默认值 | **按 `os` + `env` 编译期分档**（`os == "Linux" && env == "gnu"` 为服务器档，其余 16 MB）；**就两个 `@When` 分支，任一时刻只有一个存在** | 3.4.2 |
 | 13 | 不做内存探测 | 不按可用内存动态算阈值。**容器内进程读到的是容器 cgroup limit（不是宿主机内存）**，所以"容器里读错"这个担心不成立；不做是因为**行为不可复现**，不是读不到 | 3.4.2 |
 | 14 | 预设形态 | `forServer()` / `forLowMemory()` 是**静态工厂**，返回实例**可自由修改**；每次返回新对象 | 3.4.2 |
 | 15 | 改名后缀 | **从 `_2` 起**（"第二个"），不做 `_1` | 3.3 |
