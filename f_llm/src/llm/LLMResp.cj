@@ -21,4 +21,7 @@ import fountain::f_data.macros.*
 public class LLMResp {
     private let usage: TokenUsage = TokenUsage()
     private let messages: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
+    /** 上游的 finish_reason（stop / tool_calls / length ...） */
+    @FieldAlias['finish_reason']
+    private var finishReason: String = ''
 }
