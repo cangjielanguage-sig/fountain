@@ -65,12 +65,12 @@
 
 ## 7. 裁剪、日志与余额接口
 
-- [ ] 7.1 裁剪语义回归基线：为 8 个既有策略各写一条"输出语义"用例（不依赖内部实现），作为重写前后的对照
-- [ ] 7.2 裁剪实现整理：允许重写内部实现（如统一成组合器），8 条语义用例全绿；`SaturationContextPruner` 改为 `peekNext` + 按 conf 阈值
-- [ ] 7.3 新增算法：注册 `TokenBudget_4000`（按 token 预算裁剪）验证可扩展；同名注册失败；未知策略名显式失败并列出可用名
-- [ ] 7.4 `TokenCounter`：远端（tokenizerUrl）与启发式两种实现；不可精确计数时返回 -1 且不抛
-- [ ] 7.5 `Redactor`：前 4 + `****` + 后 4；长度 < 12 全掩码；对 JSON 与 conf 选项表递归生效
-- [ ] 7.6 调用日志：默认 `info` 一条汇总，含 provider / actualLlmName / 耗时 / TTFT / TokenUsage / finish_reason；日志中无明文 KEY（正则断言）
+- [x] 7.1 裁剪语义回归基线：为 8 个既有策略各写一条"输出语义"用例（不依赖内部实现），作为重写前后的对照
+- [x] 7.2 裁剪实现整理：允许重写内部实现（如统一成组合器），8 条语义用例全绿；`SaturationContextPruner` 改为 `peekNext` + 按 conf 阈值
+- [x] 7.3 新增算法：注册 `TokenBudget_4000`（按 token 预算裁剪）验证可扩展；同名注册失败；未知策略名显式失败并列出可用名
+- [x] 7.4 `TokenCounter`：远端（tokenizerUrl）与启发式两种实现；不可精确计数时返回 -1 且不抛
+- [x] 7.5 `Redactor`：前 4 + `****` + 后 4；长度 < 12 全掩码；对 JSON 与 conf 选项表递归生效
+- [x] 7.6 调用日志：默认 `info` 一条汇总，含 provider / actualLlmName / 耗时 / TTFT / TokenUsage / finish_reason；日志中无明文 KEY（正则断言）
 - [ ] 7.7 `BalanceQuerier` + `BalanceMediator`：未实现平台抛 `BalanceUnsupportedException`；重复注册失败；`@Bean` 自动发现可用
 - [ ] 7.8 DeepSeek 余额实现：`GET /user/balance`，多币种各出一条快照，金额按定点解析；`is_available = false` 标记不可用并告警
 - [ ] 7.9 其余平台可编译占位：各家一个实现类，调用即抛「不支持」并标注待实现；不得返回 0 或伪造数据

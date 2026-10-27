@@ -291,4 +291,6 @@ PostgreSQL 18.4（WSL，`postgres://fountain:fountain@127.0.0.1:5432/fountain_te
 | 映射器放 `llm/protocol/` 子包 | 与 `llm` 同包（`src/llm/*.cj`） | `llm` ↔ `llm.protocol` 循环依赖，cjpm 拒绝构建 |
 | 门面直接调 `f_httpclient` | 抽 `LLMTransport` 接口 + `DefaultHttpTransport` | 需要脱离网络验证「转移 / 错误分类」，否则只能靠真网络测 |- 工具循环 `LLMToolLoop` 放在 **`tool` 包**：它要用 `FunctionMediator`（tool → llm 已有单向依赖），放进 `llm` 会形成包循环。
 - MCP 侧只依赖一个**最小接口** `McpToolClient`（`listAllTools` / `callTool`），`McpClientAdapter` 适配 `f_mcp.McpClient`；好处是单测用假客户端即可覆盖 schema 清洗与错误文本化，不需要真起 server。
-- `inputSchema` 清洗规则收敛成一条：**剥掉所有以 `$` 开头的键**（`$schema` / `$ref` / `$defs` …）+ `additionalProperties`，递归生效。
+- `inputSchema` 清洗规则收敛成一条：**剥掉所有以 `$` 开头的键**（`$schema` / `$ref` / `$defs` …）+ `additionalProperties`，递归生效。- `SaturationContextPruner` 的阈值来源改为**可注入的 conf 选择器**（`confSelector: () -> ?LLMConf`，默认取 `LLMCandidateProvider` 第一条）：这样单测不用造数据库，也能验证「按 conf 阈值」和「0 表示不限制」。
+- `ContextSummaryPruner` / `ContextKeywordsPruner` 标成 `open` 并在基类抽出 `protected open func respond(...)`：语义用例（输出一条 user 消息）与走哪家模型无关，不该为了测它连库。
+- `ContextPrunerMediator` 增加 `register` / `names`，未知策略名抛 `IllegalArgumentException` 并带可用列表；`AtomicBool` 在 `llm` 包的 imports 里不可见，改成 mutex 保护的普通 `Bool`。
