@@ -78,10 +78,10 @@
 
 ## 8. 文档与回归
 
-- [ ] 8.1 `f_llm/README.md` 与 `README_en.md` 按新公开 API 更新（中英成对）
-- [ ] 8.2 `f_httpclient/README.md` 增补「SSE 客户端」一节（含 10 条实现要求）
+- [x] 8.1 `f_llm/README.md` 与 `README_en.md` 按新公开 API 更新（中英成对）
+- [x] 8.2 `f_httpclient/README.md` 增补「SSE 客户端」一节（含 10 条实现要求）
 - [x] 8.3 删除 `fcoder` 整个模块目录（`src` / `docs` / `README*` / `cjpm.toml`），并清理文档中相关引用
-- [ ] 8.4 全量回归：`f_httpclient`、`f_llm` 模块测试全绿；`f_llm` 源码无路由注解、无 `f_mvc` 导入
+- [x] 8.4 全量回归：`f_httpclient`、`f_llm` 模块测试全绿；`f_llm` 源码无路由注解、无 `f_mvc` 导入
 
 ## 9. 平台联调（最后做）
 

@@ -1,6 +1,8 @@
 # f_llm
 
 
+> The public API of the current branch is described in the "v2 public API" section at the end of this file; earlier sections come from `sts/1.3.x`.
+
 ## STDX dependency
 
 Configure the environment variable: `export CANGJIE_STDX_DYNAMIC_PATH=/path/to/dynamic_stdx`
@@ -1527,3 +1529,65 @@ public static const LLM_MAKING_MEMORY = LLM + '_makingMemory'
  */
 public static const SUMMARISING_MODEL = LLM + '_summarisingModel'
 ```
+
+---
+
+## v2 public API (branch `feature/f_llm`, change `f-llm-openai-compat`)
+
+> This section describes the public API of the current branch. Earlier sections come from `sts/1.3.x` and are kept for reference; on conflict this section wins.
+
+### Configuration: `LLMConf`
+
+Fields: `provider / llmName / actualLlmName / url / auth / temperature / alwaysThinking / conf / enabled / weight`.
+
+- `conf` is a `HashMap<String, String>`: **read-only prop plus `setConf()`**; the column stores JSON text (column name is still `conf`);
+- only rows with `enabled = true AND weight > 0` are loaded (filtered in SQL);
+- pluggable sources: `llm_confSource = database` (default) / `env` / `file:<path>`; unknown names fail at startup;
+- default model constant is DeepSeek: `MODEL_NAME_DEEPSEEK_FLASH = 'deepseek-flash'`.
+
+Key settings: `llm_confRefreshSeconds`(60), `llm_loadBalanceAlgo`(`randomWeight`/`roundRobin`), `llm_failureThreshold`(5), `llm_cooldownSeconds`(60), `llm_streamIdleTimeout`(120), `llm_streamMaxLineBytes`(1 MiB), `llm_toolResultMaxBytes`(64 KiB), `llm_fetchMaxBytes`(256 KiB), `llm_balanceLowThreshold`(100).
+
+### Facade
+
+```cj
+LLM.chat(candidates: ArrayList<LLMConf>, params: LLMParams): LLMResp
+LLM.chatStream(candidates, params, onDelta: (LLMDelta) -> Unit): LLMResp
+LLM.respond(candidates, params): LLMResp
+LLM.respondStream(candidates, params, onDelta): LLMResp
+```
+
+- 429/408/409/425/5xx fail over to the next candidate; other 4xx fail immediately;
+- streaming errors are wrapped into `LLMException` with `requestId` / `phase` / `provider` / `model`;
+- `LLMToolLoop.run(candidates, params, enabled: true)` enables the tool loop, capped at 8 rounds (`finishReason=rounds_exceeded`).
+
+### Loading, scheduling and circuit breaking
+
+`LLMConfsHolder` (immutable snapshot + lazy refresh + weighted scheduling + breaker), `LLMConfSource`, `CircuitBreaker`, `LLMCandidateProvider`, `LLMConfsSnapshot`. Refresh uses a lazy TTL (`llm_confRefreshSeconds`) and keeps the old snapshot on failure; the breaker counts per `conf.id`, only retryable failures, and prunes deleted configs after each refresh.
+
+### Tools
+
+- `FunctionMediator.register / definition / names / getDefinitions / call`;
+- built-ins: `currentTime` (iso/epoch), `webSearch` (borrows credentials from an enabled conf), `webFetch` (SSRF guard: scheme allow-list + private address families rejected);
+- MCP: `McpToolSource(alias, client).load()`; names are `mcp__{alias}__{tool}` and **never truncated** — over 64 chars or illegal characters fail at registration; `inputSchema` drops every `$`-prefixed key and `additionalProperties`;
+- search providers are pluggable: `SearchProvider` + `SearchProviderRegistry`; no usable conf throws `SearchUnavailableException`.
+
+### Context pruning
+
+The eight existing strategies keep their **observable semantics**; `ContextPrunerMediator.register/names` rejects duplicates and reports available names for unknown ones; a sample `TokenBudget_{budget}` strategy is included; `Saturation_{inner}` now checks the **per-conf `tokenThreshold`** (0 means unlimited).
+
+### Balance
+
+`BalanceQuerier` + `BalanceMediator` (`@Bean` discovery plus explicit registration; duplicates fail):
+
+| Provider | Status |
+|---|---|
+| DeepSeek | `GET /user/balance`, one snapshot per currency, amount strings kept verbatim |
+| Tencent Cloud | `DescribeAccountBalance` (TC3-HMAC-SHA256, **amounts are cents**, divided by 100 for display) |
+| Volcengine | `QueryBalanceAcct` (V4 signature, Service=`billing`, Region=`cn-north-1`) |
+| Zhipu / SiliconFlow / Aliyun | compilable placeholders that throw `BalanceUnsupportedException` |
+
+When the total is below `llm_balanceLowThreshold` or the account is unavailable, the snapshot is flagged `low = true` and a `warn` is logged.
+
+### Database
+
+`LLMConfDAO` (`@DAO <: RootDAO`, via `f_orm`) plus `LLMConfService` (`<: RootService` with a `@Bean` implementation); DDL lives in `doc/sql/llm_conf.postgres.sql` and `llm_conf.mysql.sql`.

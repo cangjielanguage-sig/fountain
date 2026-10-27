@@ -1,6 +1,8 @@
 # f_llm
 
 
+> 当前分支的公开 API 见文末「v2 公开 API」一节；旧章节来自 `sts/1.3.x`，冲突时以新节为准。
+
 ## STDX依赖
 
 配置环境变量：`export CANGJIE_STDX_DYNAMIC_PATH=/path/to/dynamic_stdx`
@@ -1507,3 +1509,65 @@ public static const SUMMARISING_MODEL = LLM + '_summarisingModel'
 ```
 
 
+
+---
+
+## v2 公开 API（分支 `feature/f_llm`，变更 `f-llm-openai-compat`）
+
+> 本节是当前分支的公开 API。下文旧章节来自 `sts/1.3.x`，保留作历史参考；与新 API 冲突时以本节为准。
+
+### 配置：`LLMConf`
+
+字段：`provider / llmName / actualLlmName / url / auth / temperature / alwaysThinking / conf / enabled / weight`。
+
+- `conf` 是 `HashMap<String, String>`：**只读 prop + `setConf()` 写入**，库里存 JSON 文本（列名仍是 `conf`）；
+- 只装载 `enabled = true AND weight > 0`，其余在 SQL 层过滤；
+- 配置来源可插拔：`llm_confSource = database`（默认）/ `env` / `file:<path>`；未知来源启动失败；
+- 默认模型常量已切到 DeepSeek：`MODEL_NAME_DEEPSEEK_FLASH = 'deepseek-flash'`。
+
+主要配置项：`llm_confRefreshSeconds`(60)、`llm_loadBalanceAlgo`(`randomWeight`/`roundRobin`)、`llm_failureThreshold`(5)、`llm_cooldownSeconds`(60)、`llm_streamIdleTimeout`(120)、`llm_streamMaxLineBytes`(1 MiB)、`llm_toolResultMaxBytes`(64 KiB)、`llm_fetchMaxBytes`(256 KiB)、`llm_balanceLowThreshold`(100)。
+
+### 门面
+
+```cj
+LLM.chat(candidates: ArrayList<LLMConf>, params: LLMParams): LLMResp
+LLM.chatStream(candidates, params, onDelta: (LLMDelta) -> Unit): LLMResp
+LLM.respond(candidates, params): LLMResp
+LLM.respondStream(candidates, params, onDelta): LLMResp
+```
+
+- 429/408/409/425/5xx 换下一个候选，其余 4xx 立即失败；
+- 流式异常统一包成 `LLMException`，消息带 `requestId` / `phase` / `provider` / `model`；
+- `LLMToolLoop.run(candidates, params, enabled: true)` 才开自动工具循环，上限 8 轮（超限 `finishReason=rounds_exceeded`）。
+
+### 装载、调度与熔断
+
+`LLMConfsHolder`（不可变快照 + 懒刷新 + 权重调度 + 熔断）、`LLMConfSource`、`CircuitBreaker`、`LLMCandidateProvider`、`LLMConfsSnapshot`。刷新按 `llm_confRefreshSeconds` 懒式 TTL，失败保留旧快照；熔断按 `conf.id` 计数，只计可重试失败，刷新后清理已删配置。
+
+### 工具
+
+- `FunctionMediator.register / definition / names / getDefinitions / call`；
+- 内置：`currentTime`（iso/epoch）、`webSearch`（借启用 conf 的凭据）、`webFetch`（SSRF 防护：协议白名单 + 内网地址族 + 非 http(s) 拒绝）；
+- MCP：`McpToolSource(alias, client).load()`，工具名 `mcp__{alias}__{tool}`，**超 64 字符或非法字符直接失败，不截断**；`inputSchema` 剥掉所有 `$` 开头的键与 `additionalProperties`；
+- 搜索能力可注册：`SearchProvider` + `SearchProviderRegistry`，无可用配置抛 `SearchUnavailableException`。
+
+### 上下文裁剪
+
+8 个既有策略的**对外语义不变**；`ContextPrunerMediator.register/names`，未知策略名抛异常并列出可用名；新增示例 `TokenBudget_{budget}`；`Saturation_{inner}` 改为按 **conf 的 `tokenThreshold`** 判断（0 表示不限制）。
+
+### 余额
+
+`BalanceQuerier` + `BalanceMediator`（`@Bean` 自动发现 + 显式注册，同名失败）：
+
+| 平台 | 状态 |
+|---|---|
+| DeepSeek | `GET /user/balance`，多币种各一条，金额字符串原样保留 |
+| 腾讯云 | `DescribeAccountBalance`（TC3-HMAC-SHA256，**金额单位是分**，展示前 ÷100） |
+| 火山引擎 | `QueryBalanceAcct`（V4 签名，Service=`billing`，Region=`cn-north-1`） |
+| 智谱 / 硅基流动 / 阿里云 | 可编译占位，调用抛 `BalanceUnsupportedException` |
+
+低于 `llm_balanceLowThreshold` 或账户不可用时快照 `low = true` 并记一条 `warn`。
+
+### 数据库
+
+`LLMConfDAO`（`@DAO <: RootDAO`，走 `f_orm`）+ `LLMConfService`（`<: RootService` + `@Bean` 实现）；建表脚本见 `doc/sql/llm_conf.postgres.sql` 与 `llm_conf.mysql.sql`。
