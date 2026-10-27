@@ -42,6 +42,19 @@ public struct LLMConfig {
     public static func isDatabaseEnabled(): Bool {
         Config.getValue<Bool>(LLM_DB) ?? false
     }
+
+    /** 配置来源名：database（默认）/ file / static */
+    public static const LLM_CONF_SOURCE = LLM + '_confSource'
+    /** 配置刷新周期（秒），懒式 TTL */
+    public static const LLM_CONF_REFRESH_SECONDS = LLM + '_confRefreshSeconds'
+
+    public static func getConfSource(): String {
+        Config.getString(LLM_CONF_SOURCE) ?? 'database'
+    }
+
+    public static func getConfRefreshInterval(): Duration {
+        Duration.second * (Config.getValue<Int64>(LLM_CONF_REFRESH_SECONDS) ?? 60)
+    }
     private static func getPath(key: String, join!: String = ''){
         var path =  if(let Some(p) <- Config.getString(key)){
             Path(p)

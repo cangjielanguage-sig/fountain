@@ -21,15 +21,15 @@
 ## 3. 配置装载、刷新与调度
 
 - [ ] 3.1 `LLMFinder.listConfs()` 改为无参全量；`LLMDAO` 查询条件改为 `enabled = true AND weight > 0`，用例覆盖 `weight = 0/-1` 被过滤
-- [ ] 3.2 `LLMConfsSnapshot`：构建时按 `llmName` 分组、丢弃残缺行并记 `warn`；用例断言残缺行不进快照
-- [ ] 3.3 `ensureFresh()`：周期内 10 次调用只查库 1 次（计数桩）
-- [ ] 3.4 刷新成功：新增平台在下一周期参与调度；刷新失败：旧快照仍可用且记 `error`
+- [x] 3.2 `LLMConfsSnapshot`：构建时按 `llmName` 分组、丢弃残缺行并记 `warn`；用例断言残缺行不进快照
+- [x] 3.3 `ensureFresh()`：周期内 10 次调用只查库 1 次（计数桩）
+- [x] 3.4 刷新成功：新增平台在下一周期参与调度；刷新失败：旧快照仍可用且记 `error`
 - [ ] 3.5 权重调度：权重 3:1 的分布近似 3:1；轮询算法严格交替
 - [ ] 3.6 熔断：连续 5 次可重试失败后跳过该 conf；冷却到期恢复；成功一次清零；400 不计入
 - [ ] 3.7 刷新后清理已删除 `conf.id` 的熔断状态
 - [ ] 3.8 `peekNext` / `getTokenThreshold(conf)` / `saturated(conf, msgs)` / `isCircuitOpen` / `refreshNow` 的用例
-- [ ] 3.9 `LLMConfSource` 抽象 + 内置四个来源（数据库 / 环境变量 / 文件 / 静态）：文件源与数据库源产出同一份候选列表；来源名未知时启动失败
-- [ ] 3.10 `llm_confSource` 选择与装载失败回退：文件不存在/JSON 非法时保留上次成功配置；首次失败则调用报错
+- [x] 3.9 `LLMConfSource` 抽象 + 内置四个来源（数据库 / 环境变量 / 文件 / 静态）：文件源与数据库源产出同一份候选列表；来源名未知时启动失败
+- [x] 3.10 `llm_confSource` 选择与装载失败回退：文件不存在/JSON 非法时保留上次成功配置；首次失败则调用报错
 
 ## 4. 协议层（非流式，先 DeepSeek）
 
