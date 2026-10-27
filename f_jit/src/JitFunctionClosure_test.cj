@@ -52,7 +52,7 @@ public class JitFunctionClosure_test {
             '{ => let f = { x: Int64 => x + 1 }\n f(41) }')
         @Assert(direct.call<Int64>([]), 42)
         @Assert(TCase.hit('T49/wrapper-equals-direct', w.call<Int64>([41]) == 42), true)
-        w.unloadFn()
+        w.unload()
     }
 
     /** 失败路径：错误码与 site 与直接调用逐位一致。 */
@@ -67,7 +67,7 @@ public class JitFunctionClosure_test {
         let want = JitFunctionClosure_test.catchCall(direct, -1)
         @Assert(got.code, want.code)
         @Assert(got.site, want.site)
-        w.unloadFn()
+        w.unload()
     }
 
     /** 重入 ≥3：包装闭包体内嵌套调用三层闭包。 */
@@ -80,7 +80,7 @@ public class JitFunctionClosure_test {
         let w = unit.callForFn<(Int64) -> Int64>([])
         @Assert(w.call<Int64>([39]), 42)
         @Assert(TCase.hit('T49/wrapper-depth3', w.call<Int64>([39]) == 42), true)
-        w.unloadFn()
+        w.unload()
     }
 
     /** 卸载后调用 → 19（site=-1），包装器不阻止单元卸载（弱语义）。 */
@@ -93,21 +93,21 @@ public class JitFunctionClosure_test {
         let e = JitFunctionClosure_test.catchCall(w, 1)
         @Assert(e.code, ErrCode.CALL_CONTRACT)
         @Assert(e.site, -1)
-        w.unloadFn()
+        w.unload()
     }
 
-    /** close 幂等、释放提升组、close 后调用 → 19。 */
+    /** 释放幂等、归还提升组、释放后调用 → 19。 */
     @TestCase
-    public func unloadFnIsIdempotentAndReleasesGroup(): Unit {
+    public func wrapperUnloadIsIdempotentAndReleasesGroup(): Unit {
         HandleTable.resetForTest()
         let unit = JitFunctionClosure_test.closureUnit()
         let base = HandleTable.liveCount()
         let w = unit.callForFn<(Int64) -> Int64>([])
         @Assert(HandleTable.liveCount() > base, true)
         @Assert(w.isClosed, false)
-        w.unloadFn()
+        w.unload()
         @Assert(w.isClosed, true)
-        w.unloadFn()
+        w.unload()
         @Assert(HandleTable.liveCount(), base)
         let e = JitFunctionClosure_test.catchCall(w, 1)
         @Assert(e.code, ErrCode.CALL_CONTRACT)
@@ -115,39 +115,31 @@ public class JitFunctionClosure_test {
         @Assert(TCase.hit('T49/wrapper-close', w.isClosed && HandleTable.liveCount() == base), true)
     }
 
-    /** 旧 ID 校验拦截：unloadFn 后的 ID 再包装 → 19。 */
+    /** 旧 ID 校验拦截：释放后的 ID 再包装 → 19。 */
     @TestCase
     public func staleClosureIdIsRejected(): Unit {
         let unit = JitFunctionClosure_test.closureUnit()
         let id = unit.call<JitClosureId>([])
-        let group = match (unit.lastPromotionGroup()) {
-            case Some(g) => g
-            case None => @Fail('提升组缺失')
+        let entry = match (unit.lastEscapedClosure()) {
+            case Some(e) => e
+            case None => @Fail('逃逸条目缺失')
         }
-        let w = JitFunction.wrapClosure(unit, id, group, -1, LocalType.NONE, Array<UInt16>())
-        w.unloadFn()
-        let stale = JitFunction.wrapClosure(unit, id, PromotionGroup(), -1,
+        let w = JitFunction.wrapClosure(unit, id, entry, -1, LocalType.NONE, Array<UInt16>())
+        w.unload()
+        let stale = JitFunction.wrapClosure(unit, id, unit.newEscapedClosure(PromotionGroup()), -1,
             LocalType.NONE, Array<UInt16>())
         let e = JitFunctionClosure_test.catchCall(stale, 1)
         @Assert(e.code, ErrCode.CALL_CONTRACT)
         @Assert(e.site, -1)
     }
 
-    /** 非闭包包装：unloadFn → 19（site=-1），isClosed 恒 false。 */
+    /** 入口实例的 `unload()` 是单元卸载（不是闭包释放），`isClosed` 恒 false。 */
     @TestCase
-    public func unloadFnOnEntryInstanceIsRejected(): Unit {
+    public func entryUnloadIsUnitLevelAndIsClosedStaysFalse(): Unit {
         let f = JitFunctionClosure_test.compiler().compile('{ => 1 }')
         @Assert(f.isClosed, false)
-        var code: Int64 = 0
-        var site: Int64 = 0
-        try {
-            f.unloadFn()
-        } catch (e: JitException) {
-            code = e.code
-            site = e.site
-        }
-        @Assert(code, ErrCode.CALL_CONTRACT)
-        @Assert(site, -1)
+        @Assert(f.unload(), true)
+        @Assert(f.isUnloaded(), true)
         @Assert(f.isClosed, false)
     }
 
@@ -163,8 +155,8 @@ public class JitFunctionClosure_test {
         @Assert(e.site, -1)
         let labelOk = w.call<Int64>([5]) == 6 && e.code == ErrCode.CALL_CONTRACT &&
             e.site == -1
-        w.unloadFn()
-        nested.unloadFn()
+        w.unload()
+        nested.unload()
         @Assert(TCase.hit('T49/call-for-wrapper', labelOk), true)
     }
 
@@ -177,7 +169,7 @@ public class JitFunctionClosure_test {
         let w = unit.callForFn<(Int64) -> Int64>([f])
         @Assert(w.call<Int64>([41]), 43)
         let labelOk = w.call<Int64>([41]) == 43
-        w.unloadFn()
+        w.unload()
         @Assert(TCase.hit('T30/call-for-host-closure-arg', labelOk), true)
     }
 

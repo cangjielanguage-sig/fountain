@@ -24,7 +24,7 @@ import fountain::f_jit.runtime.HandleTable
  * 卸载与编译缓存的关系（本变更 H2）。
  *
  * `unload()` 是**单元**级终态：缓存必须同步逐出，否则同源再编译会命中已卸载的旧单元，
- * 任何调用都以 19 失败。`unloadFn()` 是**闭包包装**级释放：只放掉提升组，缓存必须保留。
+ * 任何调用都以 19 失败。包装实例上的 `unload()` 是**闭包**级释放：只放掉提升组，缓存必须保留。
  */
 @Test
 public class refineUnload_test {
@@ -75,11 +75,11 @@ public class refineUnload_test {
     }
 
     /**
-     * `unloadFn()` **不得**逐出单元：它只释放闭包包装的提升组，单元仍然可用，
+     * 包装实例的 `unload()` **不得**逐出单元：它只释放该闭包的提升组，单元仍然可用，
      * 同源再编译必须命中缓存（否则每次取闭包都会重编一份）。
      */
     @TestCase
-    public func unloadFnKeepsUnitInCache(): Unit {
+    public func closureUnloadKeepsUnitInCache(): Unit {
         HandleTable.resetForTest()
         CompileCache.reset()
         let c = refineUnload_test.compiler()
@@ -87,7 +87,7 @@ public class refineUnload_test {
         @Assert(CompileCache.runs(), 1)
         let w = unit.callForFn<(Int64) -> Int64>([])
         @Assert(w.call<Int64>([41]), 42)
-        w.unloadFn()
+        w.unload()
         @Assert(w.isClosed, true)
         let again = c.compile(refineUnload_test.CLOSURE_SRC)
         @Assert(CompileCache.runs(), 1)
