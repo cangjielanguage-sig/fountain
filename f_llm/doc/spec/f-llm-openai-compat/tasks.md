@@ -37,9 +37,9 @@
 - [x] 4.2 `ChatCompletionsMapper` 请求构造：`model = actualLlmName`、`temperature < 0` 不出现在报文、工具定义形态正确
 - [x] 4.3 非流式响应解析：助手文本、`tool_calls`、`usage`、`finish_reason`
 - [x] 4.4 `DeepSeekDialect`：端点与鉴权头；用录制响应回放验证普通对话与工具调用
-- [ ] 4.5 `ResponsesMapper` 非流式：`input`、`instructions` 映射；`output` 按 `type` 分派（message / function_call）
+- [x] 4.5 `ResponsesMapper` 非流式：`input`、`instructions` 映射；`output` 按 `type` 分派（message / function_call）
 - [x] 4.6 错误分类：400 立即失败不转移；429/5xx 触发转移并最终成功
-- [ ] 4.7 门面 `LLM.chat` / `LLM.respond` 接入，`LLMResponse` 字段齐全
+- [x] 4.7 门面 `LLM.chat` / `LLM.respond` 接入，`LLMResponse` 字段齐全
 
 ## 5. 流式
 

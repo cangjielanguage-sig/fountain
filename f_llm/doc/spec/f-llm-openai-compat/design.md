@@ -282,3 +282,11 @@ PostgreSQL 18.4（WSL，`postgres://fountain:fountain@127.0.0.1:5432/fountain_te
 3. **`insert` 必须 `ignoreColumns: [tableColumns().id]`**，否则把 `id = 0` 显式插进 identity 列，PG 报 `duplicate key value violates unique constraint`；另外 `confJson` 字段**不能**加 `@DataExclude[field]`，否则 ORM 读行时报 `current value for confJson must not be None`。
 
 运行方式：`.autocode/tmp/fllm_db_test.sh`（设 `FLLM_DB_TEST=1` + 上述环境变量 + `LD_LIBRARY_PATH` 指向驱动 `.so`）。
+
+## 附录：apply 期间的实现偏差（2026-10-27）
+
+| 计划 | 实际 | 原因 |
+|---|---|---|
+| 门面返回新建的 `LLMResponse` | **直接复用 `LLMResp`**（已补 `finishReason`） | 评审确认「直接暴露 LLMResp」，不造平行类型 |
+| 映射器放 `llm/protocol/` 子包 | 与 `llm` 同包（`src/llm/*.cj`） | `llm` ↔ `llm.protocol` 循环依赖，cjpm 拒绝构建 |
+| 门面直接调 `f_httpclient` | 抽 `LLMTransport` 接口 + `DefaultHttpTransport` | 需要脱离网络验证「转移 / 错误分类」，否则只能靠真网络测 |

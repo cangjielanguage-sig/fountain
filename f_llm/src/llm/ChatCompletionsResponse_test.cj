@@ -13,14 +13,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_llm.llm.protocol
+package fountain::f_llm.llm
 
+import std.collection.ArrayList
 import std.unittest.*
 import std.unittest.testmacro.*
 
 import fountain::f_data.*
 
-import fountain::f_llm.llm.*
 
 let TEXT_RESP = '''
 {
@@ -120,6 +120,41 @@ public class ChatCompletionsResponseTest {
         let resp = ChatCompletionsMapper.parse(JsonValue.fromStr(REASONING_RESP).asObject())
         @Expect(resp.usage.prompt, 0)
         @Expect(resp.usage.total, 0)
+    }
+
+    @TestCase
+    func testResponsesBuildSplitsInstructions(): Unit {
+        let params = LLMParams(model: 'chat-pro', messages: ArrayList<ChatMessage>())
+        params.messages.add(SystemMessage('你是助手'))
+        params.messages.add(UserMessage('你好'))
+        let body = ResponsesMapper.build(facadeConf(1, 'deepseek', 'deepseek-chat'), params, false)
+        @Expect(body.get('instructions')?.asString().value ?? '', '你是助手')
+        let input = body.get('input')?.asArray() ?? JsonArray()
+        @Expect(input.getItems().size, 1)
+        @Expect(input.getItems()[0].asObject().get('role')?.asString().value ?? '', 'user')
+    }
+
+    @TestCase
+    func testResponsesParseFunctionCall(): Unit {
+        let json = JsonValue.fromStr('''
+        {
+          "status": "completed",
+          "output": [
+            {"type": "function_call", "call_id": "call_9", "name": "webSearch", "arguments": "{\\"query\\":\\"x\\"}"}
+          ],
+          "usage": {"input_tokens": 8, "output_tokens": 2, "total_tokens": 10}
+        }''').asObject()
+        let resp = ResponsesMapper.parse(json)
+        @Expect(resp.finishReason, 'completed')
+        if(let tool: ToolCallMessage <- resp.messages[0]){
+            @Expect(tool.tool_calls.size, 1)
+            @Expect(tool.tool_calls[0].id, 'call_9')
+            @Expect(tool.tool_calls[0].function.name, 'webSearch')
+            @Expect(tool.tool_calls[0].function.arguments, '{"query":"x"}')
+        }else{
+            @Expect('ToolCallMessage expected', 'got other')
+        }
+        @Expect(resp.usage.total, 10)
     }
 
     @TestCase

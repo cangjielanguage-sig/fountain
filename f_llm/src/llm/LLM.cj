@@ -1,0 +1,110 @@
+/*
+Copyright (c) 2026 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package fountain::f_llm.llm
+
+import std.collection.ArrayList
+import std.sync.Mutex
+
+import fountain::f_data.*
+
+import fountain::f_llm.exception.*
+import fountain::f_llm.llm.openai.*
+import fountain::f_llm.model.po.*
+
+/**
+ * 门面：把「选平台 → 建报文 → 发请求 → 解析」串起来。
+ *
+ * 候选列表由调用方（中介者/编排层）给定，本类只负责：
+ * - 按 `ProviderDialect` 拼端点与鉴权头；
+ * - 可重试状态码（408/409/425/429/5xx）或传输异常 → 换下一个候选；
+ * - 其余 4xx 立即抛出（换平台也一样错）；
+ * - 全部候选失败 → 抛出最后一个异常，消息里带 `tried=[provider:model, ...]`。
+ */
+public class LLM {
+    private static let mutex = Mutex()
+    private static var transport: LLMTransport = DefaultHttpTransport()
+
+    /** 测试注入用；生产不调用 */
+    public static func setTransport(value: LLMTransport): Unit {
+        synchronized(mutex){
+            transport = value
+        }
+    }
+
+    public static func getTransport(): LLMTransport {
+        synchronized(mutex){
+            transport
+        }
+    }
+
+    public static func chat(candidates: ArrayList<LLMConf>, params: LLMParams): LLMResp {
+        call(LLMApiKind.Chat, candidates, params)
+    }
+
+    public static func respond(candidates: ArrayList<LLMConf>, params: LLMParams): LLMResp {
+        call(LLMApiKind.Responses, candidates, params)
+    }
+
+    private static func call(kind: LLMApiKind, candidates: ArrayList<LLMConf>, params: LLMParams): LLMResp {
+        let tried = ArrayList<String>()
+        var lastError: ?LLMException = None<LLMException>
+        for(conf in candidates){
+            let dialect = DialectRegistry.resolve(conf.provider)
+            tried.add('${conf.provider}:${conf.actualLlmName}')
+            let body = match(kind){
+                case LLMApiKind.Chat => ChatCompletionsMapper.build(conf, params, false)
+                case LLMApiKind.Responses => ResponsesMapper.build(conf, params, false)
+            }
+            dialect.decorate(conf, body)
+
+            var response = LLMHttpResponse(0, '')
+            try{
+                response = getTransport().post(dialect.endpoint(kind, conf), dialect.headers(conf), body.toString())
+            }catch(e: Exception){
+                lastError = LLMException('llm transport failed, provider: ${conf.provider}, model: ${conf.actualLlmName}', e)
+                continue
+            }
+
+            if(response.status >= 400){
+                let error = LLMException('llm call failed, provider: ${conf.provider}, model: ${conf.actualLlmName}, status: ${response.status}')
+                if(LLMErrorClassifier.isRetryable(response.status)){
+                    lastError = error
+                    continue
+                }
+                throw error
+            }
+
+            let json = JsonValue.fromStr(response.body).asObject()
+            let result = match(kind){
+                case LLMApiKind.Chat => ChatCompletionsMapper.parse(json)
+                case LLMApiKind.Responses => ResponsesMapper.parse(json)
+            }
+            result.usage.llmId = conf.id
+            return result
+        }
+        let details = StringBuilder()
+        for(item in tried){
+            if(details.size > 0){
+                details.append(', ')
+            }
+            details.append(item)
+        }
+        if(let Some(error) <- lastError){
+            throw error
+        }
+        throw LLMException('no llm candidate available, tried: [${details}]')
+    }
+}

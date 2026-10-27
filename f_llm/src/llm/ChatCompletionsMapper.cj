@@ -13,14 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_llm.llm.protocol
+package fountain::f_llm.llm
 
 import std.collection.ArrayList
 
 import fountain::f_data.*
 
 import fountain::f_llm.constant.*
-import fountain::f_llm.llm.*
 import fountain::f_llm.model.po.*
 
 /**
