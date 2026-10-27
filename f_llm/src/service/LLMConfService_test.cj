@@ -13,15 +13,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_llm.model
+package fountain::f_llm.service
 
 import std.collection.HashMap
-import std.env.getVariables
 import std.unittest.*
 import std.unittest.testmacro.*
 
+import fountain::f_bean.*
 import fountain::f_orm.*
 
+import fountain::f_llm.config.*
 import fountain::f_llm.model.po.*
 
 // 触发驱动的包级注册（registerPostgresDriver），否则 ORM 报 "driver postgres does not initialize"
@@ -42,36 +43,24 @@ CREATE TABLE IF NOT EXISTS llm_conf (
   weight           BIGINT       NOT NULL DEFAULT 1
 )'''
 
-/** 只有显式打开 FLLM_DB_TEST=1 时才连真库，无库环境直接跳过 */
-func dbReady(): Bool {
-    for(item in getVariables()){
-        if(item[0] == 'FLLM_DB_TEST' && item[1] == '1'){
-            return true
-        }
-    }
-    false
-}
-
-func prepareTable(): Unit {
-    ORM.executor().setSql(CREATE_LLM_CONF).update
-    ORM.executor().deleteAll()
-}
-
 /**
  * 任务 1.3：真实数据库上的 读 → 改 conf → 写 → 再读。
  *
- * 运行：`.autocode/tmp/fllm_db_test.sh`（PostgreSQL 18，库 fountain_test）。
+ * 开关走 f_config：`llm_db=true`（无库环境不设即跳过）。
+ * 建表属于测试夹具，直接走 ORM；配置读写一律经 LLMConfService。
  */
 @Test
-public class LLMConfDAOTest {
+public class LLMConfServiceTest {
 
     @TestCase
     func testInsertReadUpdateRead(): Unit {
-        if(!dbReady()){
+        if(!LLMConfig.isDatabaseEnabled()){
             return
         }
         ORM.initialize()
-        prepareTable()
+        ORM.executor().setSql(CREATE_LLM_CONF).update
+        let service = lookup<LLMConfService>()
+        service.clear()
 
         let conf = LLMConf()
         conf.provider = 'deepseek'
@@ -85,10 +74,10 @@ public class LLMConfDAOTest {
         conf.weight = 3
         conf.setConf(HashMap<String, String>([('tokenThreshold', '80000'), ('thinking', 'toggle')]))
 
-        let id = ORM.executor().insertConf(conf)
+        let id = service.save(conf)
         @Expect(id > 0, true)
 
-        let loaded = ORM.executor().findById(id).getOrThrow()
+        let loaded = service.findById(id).getOrThrow()
         @Expect(loaded.provider, 'deepseek')
         @Expect(loaded.llmName, 'chat-pro')
         @Expect(loaded.actualLlmName, 'deepseek-chat')
@@ -103,24 +92,26 @@ public class LLMConfDAOTest {
 
         loaded.setConf(HashMap<String, String>([('tokenThreshold', '64000'), ('note', '中文 and "quote"')]))
         loaded.weight = 5
-        ORM.executor().updateById(loaded)
+        service.update(loaded)
 
-        let again = ORM.executor().findById(id).getOrThrow()
+        let again = service.findById(id).getOrThrow()
         @Expect(again.weight, 5)
         @Expect(again.conf.get('tokenThreshold') ?? '', '64000')
         @Expect(again.conf.get('note') ?? '', '中文 and "quote"')
         @Expect(again.conf.get('thinking').isNone(), true)
 
-        ORM.executor().deleteAll()
+        service.clear()
     }
 
     @TestCase
     func testListEnabledFiltersDisabledAndZeroWeight(): Unit {
-        if(!dbReady()){
+        if(!LLMConfig.isDatabaseEnabled()){
             return
         }
         ORM.initialize()
-        prepareTable()
+        ORM.executor().setSql(CREATE_LLM_CONF).update
+        let service = lookup<LLMConfService>()
+        service.clear()
 
         let base = {w: Int64, e: Bool =>
             let c = LLMConf()
@@ -133,12 +124,12 @@ public class LLMConfDAOTest {
             c.enabled = e
             c
         }
-        ORM.executor().insertConf(base(3, true))
-        ORM.executor().insertConf(base(1, true))
-        ORM.executor().insertConf(base(0, true))
-        ORM.executor().insertConf(base(2, false))
+        service.save(base(3, true))
+        service.save(base(1, true))
+        service.save(base(0, true))
+        service.save(base(2, false))
 
-        let enabled = ORM.executor().listEnabled()
+        let enabled = service.listEnabled()
         @Expect(enabled.size, 2)
         var sum = 0
         for(c in enabled){
@@ -146,6 +137,6 @@ public class LLMConfDAOTest {
         }
         @Expect(sum, 4)
 
-        ORM.executor().deleteAll()
+        service.clear()
     }
 }

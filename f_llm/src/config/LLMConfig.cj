@@ -31,9 +31,16 @@ public struct LLMConfig {
     public static const LLM_MAKING_MEMORY = LLM + '_makingMemory'
     public static const SUMMARISING_MODEL = LLM + '_summarisingModel'
     public static const SUMMARISING_ACTION_KIND = LLM + '_summarisingActionKind'
+    /** 配置是否从数据库读取；false 时走其它来源（文件 / 环境变量 / 静态注册） */
+    public static const LLM_DB = LLM + '_db'
 
     public static func isAuto(): Bool {
         Config.getValue<Bool>(AUTO) ?? false
+    }
+
+    /** 数据库配置源开关：`llm_db=true` */
+    public static func isDatabaseEnabled(): Bool {
+        Config.getValue<Bool>(LLM_DB) ?? false
     }
     private static func getPath(key: String, join!: String = ''){
         var path =  if(let Some(p) <- Config.getString(key)){
