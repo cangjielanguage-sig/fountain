@@ -52,11 +52,11 @@
 
 ## 6. 工具与 MCP
 
-- [ ] 6.1 `FunctionMediator.register`：内置函数可注册且出现在工具定义里；未注册名调用失败
-- [ ] 6.2 `currentTime`：默认 ISO + epoch；非法时区返回错误文本不抛
-- [ ] 6.3 `SearchProvider` 注册表：注册假 provider 后 `webSearch` 可用；同名重复注册抛异常
-- [ ] 6.4 `webSearch` 借凭据：有可用配置时成功；无可用配置抛 `SearchUnavailableException`；指定 provider 无配置时不跨平台回退
-- [ ] 6.5 `webSearch` 结果归一与长度截断（含 `[已截断]` 标注）
+- [x] 6.1 `FunctionMediator.register`：内置函数可注册且出现在工具定义里；未注册名调用失败
+- [x] 6.2 `currentTime`：默认 ISO + epoch；非法时区返回错误文本不抛
+- [x] 6.3 `SearchProvider` 注册表：注册假 provider 后 `webSearch` 可用；同名重复注册抛异常
+- [x] 6.4 `webSearch` 借凭据：有可用配置时成功；无可用配置抛 `SearchUnavailableException`；指定 provider 无配置时不跨平台回退
+- [x] 6.5 `webSearch` 结果归一与长度截断（含 `[已截断]` 标注）
 - [ ] 6.6 `webFetch` 正常路径：公网地址返回标题与正文，超 256 KiB 截断
 - [ ] 6.7 `webFetch` SSRF：内网地址族、`file:` 协议、跳转到内网 三类用例全部拒绝
 - [ ] 6.8 MCP 工具加载：`listAllTools` → 定义清洗（`$schema`/`$ref`/联合类型/`additionalProperties`）→ 调用转发；`isError` 作为文本回给模型

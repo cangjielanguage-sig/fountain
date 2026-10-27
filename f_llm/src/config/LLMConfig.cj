@@ -89,6 +89,13 @@ public struct LLMConfig {
     public static func getStreamMaxLineBytes(): Int64 {
         Config.getValue<Int64>(LLM_STREAM_MAX_LINE) ?? 1024 * 1024
     }
+
+    /** 单次工具结果进上下文的上限（字节） */
+    public static const LLM_TOOL_RESULT_LIMIT = LLM + '_toolResultMaxBytes'
+
+    public static func getToolResultMaxBytes(): Int64 {
+        Config.getValue<Int64>(LLM_TOOL_RESULT_LIMIT) ?? 64 * 1024
+    }
     private static func getPath(key: String, join!: String = ''){
         var path =  if(let Some(p) <- Config.getString(key)){
             Path(p)
