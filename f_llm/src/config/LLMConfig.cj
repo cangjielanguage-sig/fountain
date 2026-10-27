@@ -103,6 +103,13 @@ public struct LLMConfig {
     public static func getFetchMaxBytes(): Int64 {
         Config.getValue<Int64>(LLM_FETCH_MAX_BYTES) ?? 256 * 1024
     }
+
+    /** 低余额告警阈值（与余额同币种口径） */
+    public static const LLM_BALANCE_LOW_THRESHOLD = LLM + '_balanceLowThreshold'
+
+    public static func getBalanceLowThreshold(): Int64 {
+        Config.getValue<Int64>(LLM_BALANCE_LOW_THRESHOLD) ?? 100
+    }
     private static func getPath(key: String, join!: String = ''){
         var path =  if(let Some(p) <- Config.getString(key)){
             Path(p)

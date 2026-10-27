@@ -71,10 +71,10 @@
 - [x] 7.4 `TokenCounter`：远端（tokenizerUrl）与启发式两种实现；不可精确计数时返回 -1 且不抛
 - [x] 7.5 `Redactor`：前 4 + `****` + 后 4；长度 < 12 全掩码；对 JSON 与 conf 选项表递归生效
 - [x] 7.6 调用日志：默认 `info` 一条汇总，含 provider / actualLlmName / 耗时 / TTFT / TokenUsage / finish_reason；日志中无明文 KEY（正则断言）
-- [ ] 7.7 `BalanceQuerier` + `BalanceMediator`：未实现平台抛 `BalanceUnsupportedException`；重复注册失败；`@Bean` 自动发现可用
-- [ ] 7.8 DeepSeek 余额实现：`GET /user/balance`，多币种各出一条快照，金额按定点解析；`is_available = false` 标记不可用并告警
-- [ ] 7.9 其余平台可编译占位：各家一个实现类，调用即抛「不支持」并标注待实现；不得返回 0 或伪造数据
-- [ ] 7.10 低余额：快照标记 + 一条告警日志，不产生任何外部通知
+- [x] 7.7 `BalanceQuerier` + `BalanceMediator`：未实现平台抛 `BalanceUnsupportedException`；重复注册失败；`@Bean` 自动发现可用
+- [x] 7.8 DeepSeek 余额实现：`GET /user/balance`，多币种各出一条快照，金额按定点解析；`is_available = false` 标记不可用并告警
+- [x] 7.9 其余平台可编译占位：各家一个实现类，调用即抛「不支持」并标注待实现；不得返回 0 或伪造数据
+- [x] 7.10 低余额：快照标记 + 一条告警日志，不产生任何外部通知
 
 ## 8. 文档与回归
 
