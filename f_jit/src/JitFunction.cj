@@ -44,7 +44,7 @@ import fountain::f_jit.runtime.UserHelperTable
  * 执行器由装载层注入（机器码或纯字节码同一接口）：
  * `body(ctx, cells)` 返回结果 cell；`replay(ctx, cells)` 供 `-1 DEOPT` 透明重跑。
  */
-public class JitFunction {
+public class JitFunction <: Resource {
     /** 全局调用窗口：HandleTable 只有一个窗口，桥的 open/body/reset 必须串行。 */
     private static let callMtx: Mutex = Mutex()
 
@@ -204,9 +204,9 @@ public class JitFunction {
      *
      * 单元进入终态时**先**级联释放登记在册的逃逸闭包（含未承接的组），**再**释放代码内存/常量。
      */
-    public func unload(timeoutMs: Int64): Bool {
+    public func close(timeoutMs: Int64): Bool {
         if (this.owner.isSome()) {
-            return this.unloadFn(timeoutMs)
+            return this.closeClosure(timeoutMs)
         }
         synchronized(this.mtx) {
             if (this.state == 2) {
@@ -267,11 +267,11 @@ public class JitFunction {
     }
 
     /**
-     * 闭包包装释放（原 public `unloadFn`，M2 §14.3；现为 `unload()` 的私有实现）。
+     * 闭包包装释放（原 public `unloadFn`，M2 §14.3；现为 `close()` 的私有实现）。
      *
      * 只放掉**这个函数值**捕获的提升槽：单元继续可用、不动编译缓存。
      */
-    private func unloadFn(timeoutMs: Int64): Bool {
+    private func closeClosure(timeoutMs: Int64): Bool {
         match (this.owner) {
             case Some(o) => o.unloadClosure(this.entryOrFail(), timeoutMs)
             case None => false
@@ -430,17 +430,23 @@ public class JitFunction {
         f
     }
 
-    /** 闭包包装：本函数值是否已释放（级联释放也算）；非包装实例恒 false。 */
-    public prop isClosed: Bool {
-        get() {
-            match (this.entry) {
-                case Some(e) =>
-                    match (this.owner) {
-                        case Some(o) => o.closureReleased(e)
-                        case None => false
-                    }
-                case None => false
-            }
+    /**
+     * 是否已关闭（`std.core.Resource`，§8.7/§14.3）。
+     *
+     * 入口实例：单元已卸载（终态 `state=2`）；闭包包装实例：本函数值已释放（含单元卸载级联）。
+     */
+    public func isClosed(): Bool {
+        match (this.owner) {
+            case None =>
+                let closed = synchronized(this.mtx) {
+                    this.state == 2
+                }
+                return closed
+            case Some(o) =>
+                match (this.entry) {
+                    case Some(e) => return o.closureReleased(e)
+                    case None => return false
+                }
         }
     }
 
@@ -485,18 +491,9 @@ public class JitFunction {
         }
     }
 
-    public func unload(): Bool {
-        this.unload(0)
-    }
-
-    public func isUnloaded(): Bool {
-        match (this.owner) {
-            case Some(o) => this.isClosed || o.isUnloaded()
-            case None =>
-                synchronized(this.mtx) {
-                    this.state == 2
-                }
-        }
+    /** `Resource.close()`：不等待在飞调用（等价 `close(0)`，丢弃排空结果）。 */
+    public func close(): Unit {
+        let _ = this.close(0)
     }
 
     /** 桥/测试内部：本单元持有的类注册表快照（Q5.11）。 */
