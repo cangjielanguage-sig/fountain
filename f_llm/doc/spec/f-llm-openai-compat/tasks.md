@@ -85,7 +85,7 @@
 
 ## 9. 平台联调（最后做）
 
-- [ ] 9.1 DeepSeek：非流式/流式/工具调用/usage/reasoning 五项打勾，结果回填 `f_llm/doc/f_llm.md` 附录 B
+- [x] 9.1 DeepSeek：非流式/流式/工具调用/usage/reasoning 五项打勾，结果回填 `f_llm/doc/f_llm.md` 附录 B
 - [ ] 9.2 智谱：同上五项；确认 `thinking` 开关对可开关模型生效
 - [ ] 9.3 火山方舟：端点与 `ep-` 模型名；确认是否支持 Responses API
 - [ ] 9.4 阿里百炼：`enable_thinking` 形态与 `compatible-mode` 路径

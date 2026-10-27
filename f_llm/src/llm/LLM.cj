@@ -94,7 +94,8 @@ public class LLM {
             }
 
             if(response.status >= 400){
-                let error = LLMException('llm call failed, provider: ${conf.provider}, model: ${conf.actualLlmName}, status: ${response.status}')
+                // 把上游错误体带进异常：400 的 body 才说得清是哪个参数不对
+                let error = LLMException('llm call failed, provider: ${conf.provider}, model: ${conf.actualLlmName}, status: ${response.status}, body: ${previewOf(response.body)}')
                 if(LLMErrorClassifier.isRetryable(response.status)){
                     lastError = error
                     continue
@@ -220,6 +221,14 @@ public class LLM {
             details.append(item)
         }
         throw LLMException('no llm candidate available, requestId: ${requestId}, tried: [${details}]')
+    }
+
+    /** 错误体预览：只留前 400 字节，避免异常消息过长 */
+    private static func previewOf(body: String): String {
+        if(body.size <= 400){
+            return body
+        }
+        body[0 .. 400] + '...'
     }
 
     private static func nextRequestId(): String {

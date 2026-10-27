@@ -54,6 +54,15 @@ public struct ChatCompletionsMapper {
             body.remove('stream')
         }
 
+        // 只有显式要求 json_object 才发 response_format；纯文本请求带上它
+        // 会被 DeepSeek 拒绝（"Prompt must contain the word 'json'"）
+        if(let Some(rawFormat) <- body.get('response_format')){
+            let kind = stringOf(rawFormat.asObject(), 'type')
+            if(kind != 'json_object'){
+                body.remove('response_format')
+            }
+        }
+
         if(let tool: LLMToolParams <- params){
             let tools = ArrayList<JsonValue>()
             for(function in tool.functions){

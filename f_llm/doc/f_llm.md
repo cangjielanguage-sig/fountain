@@ -1871,7 +1871,7 @@ f_httpclient/src/
 | provider | chat 路径 | responses 路径 | 思考字段形态 | tools 形态 | usage 差异 | 联调状态 |
 |---|---|---|---|---|---|---|
 | zhipu | `/chat/completions` | 无 | `thinking:{type,clear_thinking}`（是否支持取决于模型，见 5.8） | 标准 | `prompt_tokens_details.cached_tokens` | 未联调 |
-| deepseek | `/chat/completions` | 无 | 无该字段（模型自带时不能开关） | 标准 | `prompt_cache_hit_tokens`（假设值） | 未联调 |
+| deepseek | `/chat/completions` | 无 | 无该字段（模型自带思考，`deepseek-flash` 直接返回 `reasoning_content`） | 标准（`type:'function'` + 嵌套 `function`） | `prompt_tokens_details.cached_tokens`、`completion_tokens_details.reasoning_tokens`、`prompt_cache_hit_tokens/miss_tokens` | **已联调（2026-10-27）**：非流式 / 流式 / 工具调用 / usage / reasoning 五项通过 |
 | ark | `/chat/completions` | 未知（可能无） | `thinking:{type}` | 标准 | 标准 | 未联调 |
 | dashscope | `/compatible-mode/v1/chat/completions` | 无 | `enable_thinking` | 标准 | 标准 | 未联调 |
 | siliconflow | `/v1/chat/completions` | 无 | 依模型 | 标准 | 标准 | 未联调 |
@@ -1884,6 +1884,18 @@ f_httpclient/src/
 3. 思考：`capability=Toggle` 时"开/关"各一次，确认关掉后确实不返回推理内容；
 4. `temperature`：设 `0.3` 与 `-1`（不传）各一次，确认被接受/被忽略；
 5. 错误：一个 4xx（错误模型名）与一个 429/5xx（如果有办法构造），确认错误体结构。
+
+**DeepSeek 联调记录（2026-10-27，真实 Key，余额 CNY 14.03）**
+
+| 项 | 结果 |
+|---|---|
+| 余额 | `GET /user/balance` → 200，`{"is_available":true,"balance_infos":[{currency:"CNY",total_balance:"14.03",granted_balance:"0.00",topped_up_balance:"14.03"}]}`，与实现解析一致 |
+| 非流式 | 200；`deepseek-chat` 的响应里 `model` 回显为 `deepseek-flash`（**别名**）；`deepseek-flash` 直连同样 200 |
+| 思考 | `deepseek-flash` **自带思考**：返回 `reasoning_content`，`usage.completion_tokens_details.reasoning_tokens` 有值；无开关字段 |
+| 流式 | `data:` 分块正常，增量在 `delta.content`；末块带 `usage`（我们的 `usageEstimated=false`） |
+| 工具调用 | `tools:[{type:'function',function:{name,description,parameters}}]` 被接受，返回 `finish_reason=tool_calls` + `tool_calls[].function.arguments`（JSON 字符串） |
+| usage | `prompt_tokens / completion_tokens / total_tokens`，另有 `prompt_tokens_details.cached_tokens`、`prompt_cache_hit_tokens`、`prompt_cache_miss_tokens` |
+| 踩到的 400 | 首轮请求被拒：`Prompt must contain the word 'json' to use 'response_format' of type 'json_object'`——**默认不该发 `response_format`**，已修（默认文本、仅显式 `ResponseFormat.json` 才发），并把上游错误体带进 `LLMException` 便于排障 |
 
 工具类端点（与 chat 无关，独立于上表）：
 

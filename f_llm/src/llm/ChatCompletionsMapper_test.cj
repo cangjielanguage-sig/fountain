@@ -76,6 +76,18 @@ public class ChatCompletionsMapperTest {
     }
 
     @TestCase
+    func testResponseFormatOnlyWhenJsonRequested(): Unit {
+        // 默认文本请求不带 response_format（DeepSeek 会因缺少 json 关键词直接 400）
+        let plain = ChatCompletionsMapper.build(mapperConf(-1.0f64), mapperParams(0.5f64), false)
+        @Expect(plain.get('response_format').isNone(), true)
+
+        let params = mapperParams(0.5f64)
+        params.response_format = ResponseFormat.json
+        let json = ChatCompletionsMapper.build(mapperConf(-1.0f64), params, false)
+        @Expect(json.get('response_format')?.asObject().get('type')?.asString().value ?? '', 'json_object')
+    }
+
+    @TestCase
     func testToolsFromFunctions(): Unit {
         let params = LLMToolParams(model: 'chat-pro', messages: ArrayList<ChatMessage>())
         let function = FunctionCall()
