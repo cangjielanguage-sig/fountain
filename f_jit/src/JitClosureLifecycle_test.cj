@@ -59,8 +59,8 @@ public class JitClosureLifecycle_test {
         let w2 = unit.callForFn<(Int64) -> Int64>([])
         @Assert(w1.call<Int64>([41]), 42)
         @Assert(HandleTable.liveCount() > base, true)
-        @Assert(unit.unload(0), true)
-        let closed = w1.isClosed && w2.isClosed
+        @Assert(unit.close(0), true)
+        let closed = w1.isClosed() && w2.isClosed()
         let freed = HandleTable.liveCount() == base
         let e = JitClosureLifecycle_test.catchCall(w1, 1)
         @Assert(closed, true)
@@ -79,7 +79,7 @@ public class JitClosureLifecycle_test {
         let _ = unit.call<JitClosureId>([])
         let _ = unit.call<JitClosureId>([])
         @Assert(HandleTable.liveCount() > base, true)
-        @Assert(unit.unload(0), true)
+        @Assert(unit.close(0), true)
         @Assert(HandleTable.liveCount(), base)
     }
 
@@ -92,14 +92,14 @@ public class JitClosureLifecycle_test {
         let base = HandleTable.liveCount()
         let w = unit.callForFn<(Int64) -> Int64>([])
         @Assert(w.call<Int64>([41]), 42)
-        @Assert(w.unload(), true)
-        @Assert(w.isClosed, true)
+        @Assert(w.close(0), true)
+        @Assert(w.isClosed(), true)
         @Assert(HandleTable.liveCount(), base)
         let w2 = unit.callForFn<(Int64) -> Int64>([])
         @Assert(w2.call<Int64>([1]), 2)
         let _ = c.compile(JitClosureLifecycle_test.CLOSURE_SRC)
         @Assert(CompileCache.runs(), 1)
-        @Assert(w2.unload(), true)
+        @Assert(w2.close(0), true)
     }
 
     /** B2/B5：闭包自身在飞时 `unload(0)` 回退为可用、返回 false；调用结束后可释放。 */
@@ -112,7 +112,7 @@ public class JitClosureLifecycle_test {
         let flag = ArrayList<Bool>()
         flag.add(true)
         let cb: () -> Int64 = { =>
-            flag[0] = box[0].unload(0)
+            flag[0] = box[0].close(0)
             7
         }
         let beforeWrap = HandleTable.liveCount()
@@ -121,10 +121,10 @@ public class JitClosureLifecycle_test {
         @Assert(HandleTable.liveCount() > beforeWrap, true)
         @Assert(w.call<Int64>([]), 7)
         @Assert(flag[0], false)
-        @Assert(w.isClosed, false)
+        @Assert(w.isClosed(), false)
         @Assert(HandleTable.liveCount() > beforeWrap, true)
-        @Assert(w.unload(), true)
-        @Assert(w.isClosed, true)
+        @Assert(w.close(0), true)
+        @Assert(w.isClosed(), true)
         @Assert(HandleTable.liveCount(), beforeWrap)
     }
 
@@ -136,10 +136,10 @@ public class JitClosureLifecycle_test {
         let unit = c.compile(JitClosureLifecycle_test.CLOSURE_SRC)
         let base = HandleTable.liveCount()
         let w = unit.callForFn<(Int64) -> Int64>([])
-        @Assert(unit.unload(0), true)
+        @Assert(unit.close(0), true)
         let after = HandleTable.liveCount()
-        @Assert(w.unload(), true)
-        @Assert(w.unload(), true)
+        @Assert(w.close(0), true)
+        @Assert(w.close(0), true)
         @Assert(HandleTable.liveCount(), after)
         @Assert(after, base)
     }
@@ -154,12 +154,12 @@ public class JitClosureLifecycle_test {
         let wa = ua.callForFn<(Int64) -> Int64>([])
         let wb = ub.callForFn<(Int64) -> Int64>([])
         let afterBoth = HandleTable.liveCount()
-        @Assert(ua.unload(0), true)
-        @Assert(wa.isClosed, true)
-        @Assert(wb.isClosed, false)
+        @Assert(ua.close(0), true)
+        @Assert(wa.isClosed(), true)
+        @Assert(wb.isClosed(), false)
         @Assert(wb.call<Int64>([1]), 3)
-        @Assert(ub.unload(0), true)
-        @Assert(wb.isClosed, true)
+        @Assert(ub.close(0), true)
+        @Assert(wb.isClosed(), true)
         @Assert(HandleTable.liveCount() < afterBoth, true)
     }
 
@@ -173,18 +173,18 @@ public class JitClosureLifecycle_test {
         let flag = ArrayList<Bool>()
         flag.add(true)
         let cb: () -> Int64 = { =>
-            flag[0] = unit.unload(0)
+            flag[0] = unit.close(0)
             9
         }
         let w = unit.callForFn<() -> Int64>([cb])
         box.add(w)
         @Assert(w.call<Int64>([]), 9)
         @Assert(flag[0], false)
-        @Assert(unit.isUnloaded(), false)
-        @Assert(w.isClosed, false)
+        @Assert(unit.isClosed(), false)
+        @Assert(w.isClosed(), false)
         @Assert(w.call<Int64>([]), 9)
-        @Assert(unit.unload(0), true)
-        @Assert(w.isClosed, true)
+        @Assert(unit.close(0), true)
+        @Assert(w.isClosed(), true)
     }
 
     /** 状态谓词与释放来源一致。 */
@@ -194,13 +194,31 @@ public class JitClosureLifecycle_test {
         let c = JitClosureLifecycle_test.compiler()
         let unit = c.compile(JitClosureLifecycle_test.CLOSURE_SRC)
         let w = unit.callForFn<(Int64) -> Int64>([])
-        let before = !w.isClosed && !w.isUnloaded()
-        @Assert(w.unload(), true)
-        let afterSelf = w.isClosed && w.isUnloaded()
+        let before = !w.isClosed() && !w.isClosed()
+        @Assert(w.close(0), true)
+        let afterSelf = w.isClosed() && w.isClosed()
         let unit2 = c.compile(JitClosureLifecycle_test.CLOSURE_SRC2)
         let w2 = unit2.callForFn<(Int64) -> Int64>([])
-        @Assert(unit2.unload(0), true)
-        let afterCascade = w2.isClosed && w2.isUnloaded()
+        @Assert(unit2.close(0), true)
+        let afterCascade = w2.isClosed() && w2.isClosed()
         @Assert(before && afterSelf && afterCascade, true)
+    }
+
+    /** `std.core.Resource` 契约：单元与包装都能按接口 `close()` / `isClosed()` 使用。 */
+    @TestCase
+    public func resourceContractOnUnitAndWrapper(): Unit {
+        HandleTable.resetForTest()
+        let c = JitClosureLifecycle_test.compiler()
+        let unit = c.compile(JitClosureLifecycle_test.CLOSURE_SRC)
+        let w = unit.callForFn<(Int64) -> Int64>([])
+        let rw: Resource = w
+        let beforeWrap = !rw.isClosed()
+        rw.close()
+        let afterWrap = rw.isClosed() && w.isClosed()
+        let ru: Resource = unit
+        let beforeUnit = !ru.isClosed()
+        ru.close()
+        let afterUnit = ru.isClosed() && unit.isClosed()
+        @Assert(beforeWrap && afterWrap && beforeUnit && afterUnit, true)
     }
 }

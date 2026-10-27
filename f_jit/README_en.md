@@ -34,23 +34,23 @@ let ctx = CallContext(deadline: Some(DateTime.now() + Duration.second * 1))   //
 let v = f.call<Int64>([Int64(100_000_000)], ctx)
 ```
 
-Returning a closure (escaping closure — must be `unload()`d):
+Returning a closure (escaping closure — must be `close()`d):
 
 ```cangjie
 let f = c.compile('{ n: Int64 => let xs = [n, n + 1]\n { i: Int64 => xs[i] } }')
 let g = f.callForFn<(Int64) -> Int64>([Int64(7)])
 println(g.call<Int64>([Int64(1)]))    // 8
-g.unload()                          // release the promoted slots this closure captured
+g.close()                          // release the promoted slots this closure captured
 ```
 
-When the unit itself is no longer needed, call `unload()`: it enters the terminal state, releases code
+When the unit itself is no longer needed, call `close()`: it enters the terminal state, releases code
 memory, and evicts the unit from the compile cache (recompiling the same source yields a new unit):
 
 ```cangjie
-f.unload()                            // unit-level; later calls on f throw JitException(ErrCode.CALL_CONTRACT)
+f.close()                            // unit-level; later calls on f throw JitException(ErrCode.CALL_CONTRACT)
 ```
-A bare `unload()` does **not wait** for in-flight calls: if any are still active it returns `false`
-immediately and the unit goes back to usable. Pass `unload(timeoutMs)` to drain.
+A bare `close()` does **not wait** for in-flight calls: if any are still active it returns `false`
+immediately and the unit goes back to usable. Pass `close(timeoutMs)` to drain.
 
 ---
 
@@ -60,7 +60,7 @@ immediately and the unit goes back to usable. Pass `unload(timeoutMs)` to drain.
 |---|---|---|
 | `Compiler` | Facade: register host capabilities + compile | `registerType<T>()`, **`registerInterface<I>()`**, `registerClass(desc)`, `registerFunction(f)`, `compile(src)` |
 | `CompileOptions` | Compile options | `jit: JitMode` (`Auto`/`Force`/`Off`), `strictFp` (default `true`), `verMajor`, `cpuFeatures`, `diagnostics` |
-| `JitFunction` | Compiled unit / callable object | `call<T>(args)`, `call<T>(args, ctx)`, `callForFn<Fn>(args)`, `unload([timeoutMs])` (unit), `unload()` (closure wrapper), `isClosed` |
+| `JitFunction` | Compiled unit / callable object (implements `std.core.Resource`) | `call<T>(args)`, `call<T>(args, ctx)`, `callForFn<Fn>(args)`, `close()` / `close(timeoutMs): Bool` (entry = unload unit; wrapper = release this closure), `isClosed()` |
 | `JitException` | Runtime failure (`base` package) | `code` (`ErrCode`), `site` (line:column / byte offset), `report` |
 | `CompileCache` | Compile cache (key includes `strictFp`/`verMajor`) | `lookup`, `reset`, `runs` |
 | `CallContext` | Call context | `deadline` (interrupts at safety points → `InterruptedException`) |
@@ -262,7 +262,7 @@ to call arbitrary Cangjie APIs.
 **⑤ Window and escaping**: each `call` opens a handle window (`openWindow`); on return `resetWindow`
 releases every **non-escaping** slot. Escaped objects (returned handles, escaping closures and their
 captures) are promoted in place (`moveOutGroup`, same ID/gen) and owned by a `PromotionGroup` whose only
-release path is `JitFunction.unload()`; a unit-level `unload()` that reaches the terminal state also
+release path is `JitFunction.close()`; a unit-level `close()` that reaches the terminal state also
 evicts the unit from the compile cache.
 
 **⑥ Fail-and-fallback (deopt)**: `errCode = -1` means "replay this call in the interpreter"; the bridge
@@ -317,7 +317,7 @@ user-defined types). Literals and operators:
 | **Decimal** | `std.math.numeric.Decimal` | **a bare decimal literal is a Decimal**: `1.23`, `1.5e3`, `1e-3`; `Decimal(...)` | `+ - * /`, comparisons |
 | **Duration** | `std.core.Duration` | no literal (from the host, or `DateTime` difference) | `Duration ± Duration`, comparisons; overflow → 12 |
 | **DateTime** | `std.time.DateTime` | no literal (from the host) | `DateTime ± Duration`, `DateTime − DateTime → Duration`; out of range → 11 |
-| **Closure** | handle 12 (`JitClosure`) | `{ x => e }`, captures outer locals | call `f(a)`; escaping returns use `callForFn<Fn>`, then `unload()` |
+| **Closure** | handle 12 (`JitClosure`) | `{ x => e }`, captures outer locals | call `f(a)`; escaping returns use `callForFn<Fn>`, then `close()` |
 | **Any** | handle 12 (`JitAnyBox`) | passed in by the host, or `Any`-annotated local/param | boxing/unboxing (H78/H79), `is` checks, returned as `Any` |
 
 ```cangjie
@@ -421,7 +421,7 @@ f.call<Int64>([Int64(4)])         // 24
   together with an escaping closure;
 - The inner `recursive` is that closure itself (`LOADL 0` + `CALL_CLOSURE`), not the outer `entryFn`;
 - Nesting is unbounded (each level is a `LOAD_CAP` chain, one closure object per level);
-- **Escaping** a closure: take the wrapper via `callForFn<Fn>` and `unload()` it when done (otherwise its
+- **Escaping** a closure: take the wrapper via `callForFn<Fn>` and `close()` it when done (otherwise its
   promotion group stays resident).
 
 ### 6.4 `as` syntax (cast / fallback / test)
@@ -533,7 +533,7 @@ tables store **cells and code addresses**, not object pointers.
 |---|---|---|
 | Non-escaping (inside the window) | `call`'s `finally` → `resetWindow(-1)`: `alive=false`, `objs[i]=0`, `gen+1` | No longer referenced by f_jit ⇒ collected by GC |
 | Returned handle | `releaseReturnHandle` releases it right after unboxing (`JitFunction.cj:477-487`) | No |
-| Escaping closures / captures | Owned by `PromotionGroup`; **released by the wrapper's `unload()`, with unit `unload()` cascading at terminal state** | Stays resident until the host releases it, for as long as the unit lives (contract, not a bug) |
+| Escaping closures / captures | Owned by `PromotionGroup`; **released by the wrapper's `close()`, with unit `close()` cascading at terminal state** | Stays resident until the host releases it, for as long as the unit lives (contract, not a bug) |
 
 Constant slots (`constFlags`) are never released (unit constant pool, bounded); the underlying
 `HandleTable` arrays only grow, capped by `capacityLimit = 1048576` (`:92`) — a watermark, not a leak.
@@ -543,7 +543,7 @@ Constant slots (`constFlags`) are never released (unit constant pool, bounded); 
 **They die with the call, not with `JitFunction`.** A closure is a `JitClosure(fnId, captured: Array<Int64>)`
 created by H54 (`runtime/Helpers.cj:1010-1021`) inside the call window; captures are **cells (handles)** to
 slots in the same window. `resetWindow` releases them all at return time (IDs invalidated via `gen+1`), and
-the `JitClosure` object is collected afterwards. `JitFunction` only holds compiled artifacts; `unload()`
+the `JitClosure` object is collected afterwards. `JitFunction` only holds compiled artifacts; `close()`
 releases just the promotion group.
 
 ### Q5 Does every call clean up what it produced?
@@ -574,7 +574,7 @@ recursively promotes the closure slot and all handle-typed captures (`CallMarsha
   **keeps ID/gen unchanged** ⇒ `resetWindow` skips it and the slot is never reused;
 - the wrapper `JitFunction` holds `owner + closureId + group`; invoking it goes through
   `owner.invokeClosure` and reads captures via `closure_cap(h,i)`;
-- release: `unload()` → `PromotionGroup.releaseAll()` → `releaseEscaped`.
+- release: `close()` → `PromotionGroup.releaseAll()` → `releaseEscaped`.
 
 Container captures are **slot-level, no cascade** (§14.6): element handles need no promotion because
 elements are converted to host references on write (`cellToAny` = `getAny`) and live as long as the
@@ -588,6 +588,6 @@ container.
 - x86_64 requires SSE4.1 (units with rounding ops are not JITed otherwise);
 - one H22 `interrupt_poll` per loop back-edge; on tight loops this call (which allocates) is costly —
   tracked in `doc/spec/f-jit-m1/verify.md`;
-- escaping closures should be `unload()`ed explicitly; skipping it is recovered by the cascading unit `unload()`, but a long-lived unit keeps the promotion group resident;
+- escaping closures should be `close()`ed explicitly; skipping it is recovered by the cascading unit `close()`, but a long-lived unit keeps the promotion group resident;
 - specifications: `doc/jit-bytecode-m1.md` / `doc/design-m1.md` / `doc/plan-m1.md`; acceptance:
   `doc/spec/f-jit-m1/verify.md`; performance: `doc/perf-m1.md`.

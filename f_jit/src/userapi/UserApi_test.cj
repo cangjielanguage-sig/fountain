@@ -27,8 +27,8 @@ public class UserApi_test {
         let c = Compiler(CompileOptions(DummyDiagnosticsSink()))
         let f: JitFunction = c.compile('{ n: Int64 => n + 1 }')
         @Assert(f.call<Int64>([41]), 42)
-        @Assert(f.unload(), true)
-        @Assert(f.isUnloaded(), true)
+        @Assert(f.close(0), true)
+        @Assert(f.isClosed(), true)
     }
 
     @TestCase

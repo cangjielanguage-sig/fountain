@@ -36,7 +36,7 @@ public class ConstantReclaimFacade_test {
             o.jit = JitMode.Off
             let f = Compiler(o).compile('{ => "off-' + i.toString() + '" + "!" }')
             let _ = f.call<String>(Array<Any>())
-            @Assert(f.unload(), true)
+            @Assert(f.close(0), true)
             i = i + 1
         }
         @Assert(HandleTable.liveCount(), base)
