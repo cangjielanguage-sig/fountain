@@ -34,7 +34,7 @@
 ## 4. 协议层（非流式，先 DeepSeek）
 
 - [x] 4.1 `ProviderDialect` + `DialectRegistry`：未知 provider 回退标准实现；同 provider 重复注册抛异常
-- [ ] 4.2 `ChatCompletionsMapper` 请求构造：`model = actualLlmName`、`temperature < 0` 不出现在报文、工具定义形态正确
+- [x] 4.2 `ChatCompletionsMapper` 请求构造：`model = actualLlmName`、`temperature < 0` 不出现在报文、工具定义形态正确
 - [ ] 4.3 非流式响应解析：助手文本、`tool_calls`、`usage`、`finish_reason`
 - [ ] 4.4 `DeepSeekDialect`：端点与鉴权头；用录制响应回放验证普通对话与工具调用
 - [ ] 4.5 `ResponsesMapper` 非流式：`input`、`instructions` 映射；`output` 按 `type` 分派（message / function_call）
