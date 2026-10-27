@@ -298,6 +298,12 @@ crc16/密钥交换协议/命名风格转换/常用设计模式/geohash/snowflake
 
 **详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_version/README.md>
 
+### `fountain::f_zip`
+ZIP 容器读写：ZIP64 双向、流式写入（24 字节 ZIP64 descriptor）、大条目落盘、Zip Slip / 符号链接 / 炸弹防护
+也可以使用`fountain::fountain.zip`包使用本模块的同名API。
+
+**详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_zip/README.md>
+
 ### `fountain::f_egraph`
 事件驱动的流程库
 

@@ -311,6 +311,13 @@ You can also use the same-named APIs of this module through the `fountain::fount
 
 **See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_version/README_en.md>
 
+### `fountain::f_zip`
+ZIP container reader/writer: ZIP64 in both directions, streaming writes (24-byte ZIP64 descriptor),
+large-entry spilling, Zip Slip / symlink / bomb protection.
+Also available as `fountain::fountain.zip`.
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_zip/README_en.md>
+
 ### `fountain::f_egraph`
 Event-driven flow library
 
