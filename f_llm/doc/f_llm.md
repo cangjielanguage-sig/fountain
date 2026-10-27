@@ -1902,7 +1902,7 @@ f_httpclient/src/
 | 平台 | 搜索 | 抓取 | 联调状态 |
 |---|---|---|---|
 | zhipu | `POST {base}/web_search`（`search_query` / `search_engine` / `count`）——现有代码跑通过 | 无 | 搜索：现有实现可用；字段仍需按上方清单复核 |
-| deepseek | `POST https://api.deepseek.com/v1/tools/search`（`query` / `count` / `need_content`） | `POST https://api.deepseek.com/v1/tools/fetch`（`{url}`） | 未联调（契约来自官方文档） |
+| deepseek | `POST https://api.deepseek.com/v1/tools/search`（`query` / `count` / `need_content`）；响应 `results[]`：`title` / `url` / `date` / `snippet` / `summary` / `content` / `rerank_score` / `authority` / `site_name` | `POST https://api.deepseek.com/v1/tools/fetch`（`{url}`）→ `{title, content}` | **已实调（2026-10-27）**：搜索 3 条、抓取 example.com 均 200；摘要优先 `snippet`，`need_content=true` 时取 `content`，`summary` 可能是整页正文故只作兜底 |
 
 ## 附录 C 对外 API 一览
 

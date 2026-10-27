@@ -90,4 +90,4 @@
 - [ ] 9.3 火山方舟：端点与 `ep-` 模型名；确认是否支持 Responses API
 - [ ] 9.4 阿里百炼：`enable_thinking` 形态与 `compatible-mode` 路径
 - [ ] 9.5 硅基流动与 OpenAI：标准兼容性抽查
-- [ ] 9.6 搜索/抓取：智谱 `web_search` 字段复核；DeepSeek `tools/search` 与 `tools/fetch` 实调
+- [ ] 9.6 搜索/抓取：智谱 `web_search` 字段复核（未做）；DeepSeek `tools/search` 与 `tools/fetch` 已实调通过（2026-10-27）

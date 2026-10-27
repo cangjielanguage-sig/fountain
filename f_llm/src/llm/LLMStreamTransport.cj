@@ -44,6 +44,7 @@ public class DefaultStreamTransport <: LLMStreamTransport {
         for((key, value) in headers){
             client.header(key, value)
         }
+        client.header('Accept-Encoding', 'identity')
         var tls = TlsClientConfig()
         tls.verifyMode = CertificateVerifyMode.TrustAll
         client.tlsConfig(tls)

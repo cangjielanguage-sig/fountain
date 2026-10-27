@@ -50,9 +50,22 @@ extend HttpResponse <: ExtendHttpResponse {
     public func readToEnd(): Array<Byte> {
         let input = this.body
         if(let Some(size) <- this.bodySize){
+            // 一次 read 不保证读满：已知长度也要循环，否则尾部是 0 字节（JSON 解析会报
+            // “Unescaped control character"，看起来像上游发了非法 JSON）
             let buf = Array<Byte>(size, repeat: 0)
-            input.read(buf)
-            buf
+            var offset = 0
+            while(offset < size){
+                let read = input.read(buf[offset ..])
+                if(read <= 0){
+                    break
+                }
+                offset += read
+            }
+            if(offset == size){
+                buf
+            }else{
+                buf[0 .. offset]
+            }
         }else{
             let bytes = ArrayList<Byte>()
             let buf = Array<Byte>(1024, repeat: 0)

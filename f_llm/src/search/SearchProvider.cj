@@ -18,6 +18,7 @@ package fountain::f_llm.search
 import std.collection.{ArrayList, HashMap}
 import std.sync.Mutex
 
+import fountain::f_bean.*
 import fountain::f_data.macros.*
 
 import fountain::f_llm.model.po.*
@@ -66,14 +67,16 @@ public class SearchUnavailableException <: Exception {
     }
 }
 
-/** 搜索能力注册表：同名重复注册直接失败，新增平台只要加一个 @Bean */
+/** 搜索能力注册表：同名重复注册直接失败；`@Bean` 自动发现 + 显式注册两条路 */
 public class SearchProviderRegistry {
     private static let mutex = Mutex()
     private static let providers = HashMap<String, SearchProvider>()
+    private static var loaded = false
 
     private init(){}
 
     public static func register(provider: SearchProvider): Unit {
+        ensureLoaded()
         synchronized(mutex){
             if(providers.contains(provider.provider)){
                 throw IllegalArgumentException('search provider already registered: ${provider.provider}')
@@ -83,18 +86,37 @@ public class SearchProviderRegistry {
     }
 
     public static func get(provider: String): ?SearchProvider {
+        ensureLoaded()
         synchronized(mutex){
             providers.get(provider)
         }
     }
 
     public static func names(): ArrayList<String> {
+        ensureLoaded()
         synchronized(mutex){
             let result = ArrayList<String>()
             for((name, _) in providers){
                 result.add(name)
             }
             result
+        }
+    }
+
+    /** 扫描 @Bean；单个 provider 构造失败只跳过，不影响其他平台 */
+    private static func ensureLoaded(): Unit {
+        synchronized(mutex){
+            if(loaded){
+                return
+            }
+            try{
+                for(provider in lookupList<SearchProvider>()){
+                    providers[provider.provider] = provider
+                }
+            }catch(_: Exception){
+                // 没有 bean 容器（或扫描失败）时退化为纯显式注册
+            }
+            loaded = true
         }
     }
 }

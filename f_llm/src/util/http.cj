@@ -20,6 +20,8 @@ public func http<T>(url: String, auth: String, callback: (HttpClient) -> T): T {
     client.header("Authorization", 'Bearer ${auth}')
     client.header("Content-Type", "application/json")
     client.header("Accept", "application/json")
+    // 客户端不自动解压：必须显式要未压缩的响应，否则 readEntire() 会把 gzip 字节当 UTF-8
+    client.header("Accept-Encoding", "identity")
     var tls = TlsClientConfig()
     tls.verifyMode = CertificateVerifyMode.TrustAll
     client.tlsConfig(tls)
