@@ -53,6 +53,7 @@ public struct FunctionMediator {
      * 这种不确定性比启动失败更难查。
      */
     public static func register(calling: CommonFunctionCalling): Unit {
+        ToolName.validate(calling.name)
         ensureLoaded()
         synchronized(mutex){
             if(functions.contains(calling.name)){

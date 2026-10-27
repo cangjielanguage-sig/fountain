@@ -96,6 +96,13 @@ public struct LLMConfig {
     public static func getToolResultMaxBytes(): Int64 {
         Config.getValue<Int64>(LLM_TOOL_RESULT_LIMIT) ?? 64 * 1024
     }
+
+    /** webFetch 单页正文上限（字节） */
+    public static const LLM_FETCH_MAX_BYTES = LLM + '_fetchMaxBytes'
+
+    public static func getFetchMaxBytes(): Int64 {
+        Config.getValue<Int64>(LLM_FETCH_MAX_BYTES) ?? 256 * 1024
+    }
     private static func getPath(key: String, join!: String = ''){
         var path =  if(let Some(p) <- Config.getString(key)){
             Path(p)

@@ -57,11 +57,11 @@
 - [x] 6.3 `SearchProvider` 注册表：注册假 provider 后 `webSearch` 可用；同名重复注册抛异常
 - [x] 6.4 `webSearch` 借凭据：有可用配置时成功；无可用配置抛 `SearchUnavailableException`；指定 provider 无配置时不跨平台回退
 - [x] 6.5 `webSearch` 结果归一与长度截断（含 `[已截断]` 标注）
-- [ ] 6.6 `webFetch` 正常路径：公网地址返回标题与正文，超 256 KiB 截断
-- [ ] 6.7 `webFetch` SSRF：内网地址族、`file:` 协议、跳转到内网 三类用例全部拒绝
-- [ ] 6.8 MCP 工具加载：`listAllTools` → 定义清洗（`$schema`/`$ref`/联合类型/`additionalProperties`）→ 调用转发；`isError` 作为文本回给模型
-- [ ] 6.9 工具命名冲突：跨来源重名、别名重复、超 64 字符 三种情形均在建表时失败
-- [ ] 6.10 自动工具循环：默认关闭；开启后 8 轮上限生效并标记轮数超限
+- [x] 6.6 `webFetch` 正常路径：公网地址返回标题与正文，超 256 KiB 截断
+- [x] 6.7 `webFetch` SSRF：内网地址族、`file:` 协议、跳转到内网 三类用例全部拒绝
+- [x] 6.8 MCP 工具加载：`listAllTools` → 定义清洗（`$schema`/`$ref`/联合类型/`additionalProperties`）→ 调用转发；`isError` 作为文本回给模型
+- [x] 6.9 工具命名冲突：跨来源重名、别名重复、超 64 字符 三种情形均在建表时失败
+- [x] 6.10 自动工具循环：默认关闭；开启后 8 轮上限生效并标记轮数超限
 
 ## 7. 裁剪、日志与余额接口
 
