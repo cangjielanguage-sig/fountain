@@ -107,12 +107,45 @@ public class DialectRegistry {
 
     /** 取方言，未知 provider 回退标准 OpenAI 实现 */
     public static func resolve(provider: String): ProviderDialect {
+        ensureBuiltins()
         if(let Some(dialect) <- get(provider)){
             dialect
         }else{
             StandardDialect()
         }
     }
+
+    /**
+     * 内建方言只在这里注册一次。
+     *
+     * 用「不存在才写」而不是 `register()`：调用方可能已显式注册过同名自定义方言（比如把 deepseek
+     * 指到自建代理），此时内建实现不能把启动搞崩；`register()` 的重复检查留给显式注册用。
+     */
+    private static func ensureBuiltins(): Unit {
+        if(builtinsLoaded){
+            return
+        }
+        synchronized(mutex){
+            if(builtinsLoaded){
+                return
+            }
+            let builtins: Array<ProviderDialect> = [
+                DeepSeekDialect(),
+                ZhipuDialect(),
+                VolcengineDialect(),
+                AliyunDialect(),
+                SiliconFlowDialect()
+            ]
+            for(dialect in builtins){
+                if(!dialects.contains(dialect.provider)){
+                    dialects[dialect.provider] = dialect
+                }
+            }
+            builtinsLoaded = true
+        }
+    }
+
+    private static var builtinsLoaded = false
 
     public static func providers(): ArrayList<String> {
         synchronized(mutex){

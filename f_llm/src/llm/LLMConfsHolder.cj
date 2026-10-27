@@ -122,6 +122,20 @@ public class LLMConfsHolder {
         snapshot.all()
     }
 
+    /** 该 conf 的上下文阈值；0 表示不限制 */
+    public func getTokenThreshold(conf: LLMConf): Int64 {
+        conf.tokenThreshold
+    }
+
+    /** 上下文是否已达该 conf 的阈值（0 表示永不溢出） */
+    public func saturated(conf: LLMConf, messages: ArrayList<ChatMessage>): Bool {
+        let threshold = conf.tokenThreshold
+        if(threshold <= 0){
+            return false
+        }
+        HeuristicTokenCounter().count(conf, messages) >= threshold
+    }
+
     /** 熔断状态查询（编排层用来决定是否跳过） */
     public func isCircuitOpen(confId: Int64): Bool {
         breaker.isOpen(confId)

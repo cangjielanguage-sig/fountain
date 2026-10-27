@@ -66,14 +66,61 @@ public class LLM {
     }
 
     public static func chat(candidates: ArrayList<LLMConf>, params: LLMParams): LLMResp {
-        call(LLMApiKind.Chat, candidates, params)
+        call(LLMApiKind.Chat, candidates, params, LLMHooks())
+    }
+
+    public static func chat(candidates: ArrayList<LLMConf>, params: LLMParams, hooks: LLMHooks): LLMResp {
+        call(LLMApiKind.Chat, candidates, params, hooks)
     }
 
     public static func respond(candidates: ArrayList<LLMConf>, params: LLMParams): LLMResp {
-        call(LLMApiKind.Responses, candidates, params)
+        call(LLMApiKind.Responses, candidates, params, LLMHooks())
     }
 
-    private static func call(kind: LLMApiKind, candidates: ArrayList<LLMConf>, params: LLMParams): LLMResp {
+    public static func respond(candidates: ArrayList<LLMConf>, params: LLMParams, hooks: LLMHooks): LLMResp {
+        call(LLMApiKind.Responses, candidates, params, hooks)
+    }
+
+    /**
+     * 按 `llmName` 从全局快照里挑候选并发请求（生产的默认入口）。
+     *
+     * 选号、熔断、失败转移在这里串起来：候选按权重挑起点、跳过已熔断的，
+     * 成功后清失败计数，可重试失败累加——编排层不用自己维护这些状态。
+     */
+    public static func chatByName(llmName: String, params: LLMParams): LLMResp {
+        callByName(llmName, params, LLMApiKind.Chat)
+    }
+
+    public static func respondByName(llmName: String, params: LLMParams): LLMResp {
+        callByName(llmName, params, LLMApiKind.Responses)
+    }
+
+    private static func callByName(llmName: String, params: LLMParams, kind: LLMApiKind): LLMResp {
+        let holder = LLMConfs.holder()
+        let available = ArrayList<LLMConf>()
+        let all = holder.candidates(llmName)
+        // 从权重命中的位置开始，绕一圈，尽量让被熔断的排到最后
+        var startId: Int64 = -1
+        if(let Some(start) <- holder.peekNext(llmName)){
+            available.add(start)
+            startId = start.id
+        }
+        for(conf in all){
+            if(conf.id != startId && !holder.isCircuitOpen(conf.id)){
+                available.add(conf)
+            }
+        }
+        if(available.isEmpty()){
+            throw LLMException('no available llm conf for: ${llmName}')
+        }
+        let hooks = LLMHooks(
+            onSuccess: {id => holder.recordSuccess(id)},
+            onRetryableFailure: {id => holder.recordRetryableFailure(id)}
+        )
+        call(kind, available, params, hooks)
+    }
+
+    private static func call(kind: LLMApiKind, candidates: ArrayList<LLMConf>, params: LLMParams, hooks: LLMHooks): LLMResp {
         let tried = ArrayList<String>()
         var lastError: ?LLMException = None<LLMException>
         for(conf in candidates){
@@ -89,6 +136,7 @@ public class LLM {
             try{
                 response = getTransport().post(dialect.endpoint(kind, conf), dialect.headers(conf), body.toString())
             }catch(e: Exception){
+                hooks.onRetryableFailure(conf.id)
                 lastError = LLMException('llm transport failed, provider: ${conf.provider}, model: ${conf.actualLlmName}', e)
                 continue
             }
@@ -97,6 +145,7 @@ public class LLM {
                 // 把上游错误体带进异常：400 的 body 才说得清是哪个参数不对
                 let error = LLMException('llm call failed, provider: ${conf.provider}, model: ${conf.actualLlmName}, status: ${response.status}, body: ${previewOf(response.body)}')
                 if(LLMErrorClassifier.isRetryable(response.status)){
+                    hooks.onRetryableFailure(conf.id)
                     lastError = error
                     continue
                 }
@@ -109,6 +158,7 @@ public class LLM {
                 case LLMApiKind.Responses => ResponsesMapper.parse(json)
             }
             result.usage.llmId = conf.id
+            hooks.onSuccess(conf.id)
             return result
         }
         let details = StringBuilder()
