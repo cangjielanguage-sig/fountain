@@ -55,6 +55,25 @@ public struct LLMConfig {
     public static func getConfRefreshInterval(): Duration {
         Duration.second * (Config.getValue<Int64>(LLM_CONF_REFRESH_SECONDS) ?? 60)
     }
+
+    /** 权重调度算法：randomWeight（默认）/ roundRobin */
+    public static const LLM_LOAD_BALANCE_ALGO = LLM + '_loadBalanceAlgo'
+    /** 连续可重试失败多少次触发临时下线 */
+    public static const LLM_FAILURE_THRESHOLD = LLM + '_failureThreshold'
+    /** 临时下线时长（秒） */
+    public static const LLM_COOLDOWN_SECONDS = LLM + '_cooldownSeconds'
+
+    public static func getLoadBalanceAlgo(): String {
+        Config.getString(LLM_LOAD_BALANCE_ALGO) ?? 'randomWeight'
+    }
+
+    public static func getFailureThreshold(): Int64 {
+        Config.getValue<Int64>(LLM_FAILURE_THRESHOLD) ?? 5
+    }
+
+    public static func getCooldownDuration(): Duration {
+        Duration.second * (Config.getValue<Int64>(LLM_COOLDOWN_SECONDS) ?? 60)
+    }
     private static func getPath(key: String, join!: String = ''){
         var path =  if(let Some(p) <- Config.getString(key)){
             Path(p)

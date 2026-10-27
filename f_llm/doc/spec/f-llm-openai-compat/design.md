@@ -158,6 +158,11 @@ for(c in candidates){ balancer.add(c.weight){call => doAccess(c, call)} }
 
 **不用** `call(data, maxRetrying)`（它对任何异常都继续试）；用 `iterator()` 自行遍历，只对可重试错误前进。
 
+实测得到两条必须遵守的实现细节：
+
+- **取值区间是 `[1, total]`，不是 `[0, total-1]`**：`add(weight)` 把权重累加成 TreeMap 键（3、1 → 键 3、4），`forward(v, inclusive: true)` 取第一个 ≥ v 的键。用 `[0, total-1]` 会让所有取值都落在第一个键上（权重比例完全失真），用 `[1, total]` 才是精确的 3:1。
+- **调度器必须按 llmName 缓存、随快照版本重建**：`RoundRobin` 的游标在实例里，每次 `peekNext` 新建实例会永远选同一个平台；缓存的 `version` 变化时清空即可。
+
 ### 3.4 熔断（仅内存）
 
 `ConcurrentHashMap<Int64, BreakerState>`，键为 `conf.id`；可重试失败累加，达 `llm_failureThreshold`（5）置 `openUntil = now + llm_cooldownSeconds`（60s）；成功清零；4xx 不计入；选择时跳过 `openUntil > now` 的节点，到期清零复活；刷新后清理已不存在的 `conf.id`。

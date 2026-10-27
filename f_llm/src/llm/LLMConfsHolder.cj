@@ -15,10 +15,11 @@ limitations under the License.
 */
 package fountain::f_llm.llm
 
-import std.collection.{ArrayList, HashMap}
+import std.collection.{ArrayList, HashMap, HashSet}
 import std.sync.Mutex
 import std.time.MonoTime
 
+import fountain::f_concurrent.*
 import fountain::f_log.*
 
 import fountain::f_llm.config.*
@@ -72,13 +73,22 @@ public class LLMConfsHolder {
     private var snapshot: LLMConfsSnapshot
     private let source: LLMConfSource
     private let refreshInterval: Duration
+    private let breaker: CircuitBreaker
+    private let algorithm: String
+    private let balancerMutex = Mutex()
+    private let balancers = HashMap<String, LoadBalance<Int64, Unit, LLMConf>>()
+    private var balancersVersion: Int64 = -1
 
     public init(
         source!: LLMConfSource,
-        refreshInterval!: Duration = LLMConfig.getConfRefreshInterval()
+        refreshInterval!: Duration = LLMConfig.getConfRefreshInterval(),
+        breaker!: CircuitBreaker = CircuitBreaker(),
+        algorithm!: String = LLMConfig.getLoadBalanceAlgo()
     ){
         this.source = source
         this.refreshInterval = refreshInterval
+        this.breaker = breaker
+        this.algorithm = algorithm
         snapshot = LLMConfsSnapshot(0, HashMap<Int64, LLMConf>(), HashMap<String, ArrayList<LLMConf>>(), MonoTime.now())
     }
 
@@ -110,6 +120,82 @@ public class LLMConfsHolder {
     public func all(): ArrayList<LLMConf> {
         ensureFresh()
         snapshot.all()
+    }
+
+    /** 熔断状态查询（编排层用来决定是否跳过） */
+    public func isCircuitOpen(confId: Int64): Bool {
+        breaker.isOpen(confId)
+    }
+
+    public func recordSuccess(confId: Int64): Unit {
+        breaker.recordSuccess(confId)
+    }
+
+    /** 只对可重试失败调用（连接失败/超时/429/5xx/流中断） */
+    public func recordRetryableFailure(confId: Int64): Unit {
+        breaker.recordRetryableFailure(confId)
+    }
+
+    /**
+     * 按权重选出"下一次会用到"的 conf；跳过已熔断的。
+     *
+     * 调度器按 llmName 缓存、随快照版本重建（轮询算法靠实例内的游标，不能每次都新建）；
+     * 用 iterator() 而不是 call(maxRetrying)：后者会把 4xx 也当故障转移。
+     */
+    public func peekNext(llmName: String): ?LLMConf {
+        ensureFresh()
+        if(let Some(balancer) <- balancerFor(llmName)){
+            let count = snapshot.candidates(llmName).size
+            let it = balancer.iterator()
+            var i = 0
+            while(i < count){
+                i++
+                match(it.next()){
+                    case Some(pick) =>
+                        let conf = pick(())
+                        if(!breaker.isOpen(conf.id)){
+                            return Some(conf)
+                        }
+                    case None => break
+                }
+            }
+        }
+        None<LLMConf>
+    }
+
+    private func balancerFor(llmName: String): ?LoadBalance<Int64, Unit, LLMConf> {
+        synchronized(balancerMutex){
+            if(balancersVersion != snapshot.version){
+                balancers.clear()
+                balancersVersion = snapshot.version
+            }
+            if(let Some(exist) <- balancers.get(llmName)){
+                return Some(exist)
+            }
+            let usable = ArrayList<LLMConf>()
+            var total = 0
+            for(conf in snapshot.candidates(llmName)){
+                if(conf.weight > 0){
+                    usable.add(conf)
+                    total += conf.weight
+                }
+            }
+            if(usable.isEmpty()){
+                return None<LoadBalance<Int64, Unit, LLMConf>>
+            }
+            // 键是累加权重（3、4…），取值区间 [1, total]：每个权重正好占到自己那份槽位
+            let algo: LoadBalanceAlgo<Int64> = match(algorithm){
+                case 'roundRobin' => RoundRobin<Int64>(1, 1, total)
+                case _ => Int64Weight(1, total)
+            }
+            let balancer = LoadBalance<Int64, Unit, LLMConf>(0, algo)
+            for(conf in usable){
+                let chosen = conf
+                balancer.add(chosen.weight){_ => chosen}
+            }
+            balancers[llmName] = balancer
+            Some(balancer)
+        }
     }
 
     private func refresh(old: LLMConfsSnapshot): Unit {
@@ -144,6 +230,8 @@ public class LLMConfsHolder {
                 log.warn{'llm conf: ${droppedCount} record(s) dropped, provider/actualLlmName/url empty'}
             }
             snapshot = LLMConfsSnapshot(old.version + 1, byId, byName, MonoTime.now())
+            // 已删除的配置不再需要熔断状态，顺手清理，避免内存缓慢增长
+            breaker.cleanup(HashSet<Int64>(byId.keys()))
             log.info{'llm conf refreshed, version: ${snapshot.version}, confs: ${byId.size}, source: ${source.name}, elapsed: ${MonoTime.now() - start}'}
         }catch(e: Exception){
             log.error(e){'llm conf refresh failed, keep version ${old.version}, source: ${source.name}'}
