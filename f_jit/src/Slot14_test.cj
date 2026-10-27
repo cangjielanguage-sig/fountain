@@ -83,7 +83,7 @@ public class Slot14_test {
         let w = unit.callForFn<(Int64) -> ManualUser>([u])
         @Assert(refEq(w.call<ManualUser>([1]), u), true)
         let labelOk = refEq(w.call<ManualUser>([1]), u)
-        w.unloadFn()
+        w.unload()
         @Assert(TCase.hit('T58/capture14-promoted', labelOk), true)
     }
 
