@@ -1586,7 +1586,7 @@ The eight existing strategies keep their **observable semantics**; `ContextPrune
 | Volcengine | `QueryBalanceAcct` (V4 signature, Service=`billing`, Region=`cn-north-1`) |
 | Zhipu / SiliconFlow / Aliyun | compilable placeholders that throw `BalanceUnsupportedException` |
 
-When the total is below `llm_balanceLowThreshold` or the account is unavailable, the snapshot is flagged `low = true` and a `warn` is logged.
+**All amounts are in yuan** (Tencent Cloud returns cents and is divided by 100 during parsing; override with `conf['balanceUnit'] = yuan|fen` when a proxy changes the unit), rendered with two decimals plus a `totalValue` in yuan. When the total is below `llm_balanceLowThreshold` or the account is unavailable, the snapshot is flagged `low = true` and a `warn` is logged.
 
 ### Database
 

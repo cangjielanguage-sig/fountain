@@ -77,3 +77,19 @@ DeepSeek 余额查询 SHALL 使用 `GET /user/balance`，把每个币种条目�
 #### Scenario: 低于阈值
 - **WHEN** 可用余额低于阈值
 - **THEN** 快照的低余额标记为真，并产生一条告警日志；不产生任何外部通知
+
+### Requirement: 金额单位统一为元
+
+所有平台的余额快照 SHALL 以**元**为金额单位，上游按分返回的平台（如腾讯云）必须在解析时换算；金额以两位小数字符串呈现，同时给出 `Float64` 视图用于阈值比较。
+
+#### Scenario: 上游按分返回
+- **WHEN** 腾讯云返回 `RealBalance = 1000000`（分）
+- **THEN** 快照 `total` 为 `"10000.00"`（元），`totalValue` 为 `10000.0`
+
+#### Scenario: 上游按元返回
+- **WHEN** DeepSeek 返回 `total_balance = "110.00"`
+- **THEN** 快照 `total` 仍为 `"110.00"`，不做二次换算
+
+#### Scenario: 单位覆盖
+- **WHEN** 代理把元口径改成按分返回，且配置 `conf['balanceUnit'] = 'fen'`
+- **THEN** 快照按分换算为元，例如 `11000` → `"110.00"`

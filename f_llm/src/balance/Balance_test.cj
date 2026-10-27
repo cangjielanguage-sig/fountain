@@ -127,7 +127,7 @@ public class BalanceTest {
 
     @TestCase
     func testDeepSeekMultiCurrency(): Unit {
-        let snapshots = parseDeepSeekBalance(DEEPSEEK_JSON, 'deepseek')
+        let snapshots = parseDeepSeekBalance(DEEPSEEK_JSON, 'deepseek', BalanceUnits.YUAN)
         @Expect(snapshots.size, 2)
         @Expect(snapshots[0].currency, 'CNY')
         @Expect(snapshots[0].total, '110.00')
@@ -139,7 +139,7 @@ public class BalanceTest {
 
     @TestCase
     func testDeepSeekUnavailable(): Unit {
-        let snapshots = parseDeepSeekBalance(DEEPSEEK_UNAVAILABLE, 'deepseek')
+        let snapshots = parseDeepSeekBalance(DEEPSEEK_UNAVAILABLE, 'deepseek', BalanceUnits.YUAN)
         @Expect(snapshots.size, 1)
         @Expect(snapshots[0].available, false)
     }
@@ -168,7 +168,7 @@ public class BalanceTest {
 
     @TestCase
     func testVolcengineParsesYuan(): Unit {
-        let snapshots = parseVolcengineBalance(VOLC_JSON)
+        let snapshots = parseVolcengineBalance(VOLC_JSON, BalanceUnits.YUAN)
         @Expect(snapshots.size, 1)
         @Expect(snapshots[0].provider, 'volcengine')
         @Expect(snapshots[0].total, '100.00')
@@ -180,7 +180,7 @@ public class BalanceTest {
     func testVolcengineErrorThrows(): Unit {
         var thrown = false
         try{
-            parseVolcengineBalance(VOLC_ERROR)
+            parseVolcengineBalance(VOLC_ERROR, BalanceUnits.YUAN)
         }catch(_: BalanceUnsupportedException){
             thrown = true
         }
@@ -229,6 +229,29 @@ public class BalanceTest {
             }
         }
         @Expect(thrown, 3)
+    }
+
+    @TestCase
+    func testUnitNormalization(): Unit {
+        // 元：补齐两位小数
+        @Expect(BalanceUnits.format(110.0f64), '110.00')
+        @Expect(BalanceUnits.format(0.05f64), '0.05')
+        // 分 → 元
+        let (text, value) = BalanceUnits.toYuan('11000', BalanceUnits.FEN)
+        @Expect(text, '110.00')
+        @Expect(value, 110.0f64)
+        @Expect(BalanceUnits.unitOf(BalanceUnits.YUAN, '分'), BalanceUnits.FEN)
+        @Expect(BalanceUnits.unitOf(BalanceUnits.FEN, ''), BalanceUnits.FEN)
+    }
+
+    @TestCase
+    func testDeepSeekFenOverride(): Unit {
+        let json = '{"is_available":true,"balance_infos":[{"currency":"CNY","total_balance":"11000","granted_balance":"1000","topped_up_balance":"10000"}]}'
+        let snapshots = parseDeepSeekBalance(json, 'deepseek', BalanceUnits.FEN)
+        @Expect(snapshots[0].total, '110.00')
+        @Expect(snapshots[0].granted, '10.00')
+        @Expect(snapshots[0].toppedUp, '100.00')
+        @Expect(snapshots[0].totalValue, 110.0f64)
     }
 
     @TestCase

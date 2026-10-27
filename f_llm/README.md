@@ -1566,7 +1566,7 @@ LLM.respondStream(candidates, params, onDelta): LLMResp
 | 火山引擎 | `QueryBalanceAcct`（V4 签名，Service=`billing`，Region=`cn-north-1`） |
 | 智谱 / 硅基流动 / 阿里云 | 可编译占位，调用抛 `BalanceUnsupportedException` |
 
-低于 `llm_balanceLowThreshold` 或账户不可用时快照 `low = true` 并记一条 `warn`。
+**金额一律以元为单位**（腾讯云上游是分，解析时 ÷100；可用 `conf['balanceUnit'] = yuan|fen` 覆盖代理口径），两位小数字符串 + `totalValue` 元数值。低于 `llm_balanceLowThreshold` 或账户不可用时快照 `low = true` 并记一条 `warn`。
 
 ### 数据库
 

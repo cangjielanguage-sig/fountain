@@ -67,7 +67,8 @@ public class DeepSeekBalanceQuerier <: BalanceQuerier {
 
     public func query(conf: LLMConf): ArrayList<BalanceSnapshot> {
         let url = conf.option('balanceUrl', 'https://api.deepseek.com/user/balance')
-        parseDeepSeekBalance(getter(url, conf.auth), 'deepseek')
+        let unit = BalanceUnits.unitOf(BalanceUnits.YUAN, conf.option('balanceUnit', ''))
+        parseDeepSeekBalance(getter(url, conf.auth), 'deepseek', unit)
     }
 }
 
@@ -77,7 +78,8 @@ func defaultBalanceGet(url: String, auth: String): String {
     }
 }
 
-public func parseDeepSeekBalance(body: String, provider: String): ArrayList<BalanceSnapshot> {
+/** `unit` 是上游口径：DeepSeek 官方用元，个别代理会按分返回，可用 `conf['balanceUnit']` 覆盖 */
+public func parseDeepSeekBalance(body: String, provider: String, unit: String): ArrayList<BalanceSnapshot> {
     let snapshots = ArrayList<BalanceSnapshot>()
     let json = JsonValue.fromStr(body).asObject()
     let available = if(let Some(value) <- json.get('is_available')){
@@ -88,16 +90,18 @@ public func parseDeepSeekBalance(body: String, provider: String): ArrayList<Bala
     if(let Some(rawInfos) <- json.get('balance_infos')){
         for(item in rawInfos.asArray().getItems()){
             let obj = item.asObject()
-            let total = balanceTextOf(obj, 'total_balance')
+            let (total, totalValue) = BalanceUnits.toYuan(balanceTextOf(obj, 'total_balance'), unit)
+            let (granted, _) = BalanceUnits.toYuan(balanceTextOf(obj, 'granted_balance'), unit)
+            let (toppedUp, _) = BalanceUnits.toYuan(balanceTextOf(obj, 'topped_up_balance'), unit)
             snapshots.add(BalanceSnapshot(
                 provider: provider,
                 currency: balanceTextOf(obj, 'currency'),
                 total: total,
-                granted: balanceTextOf(obj, 'granted_balance'),
-                toppedUp: balanceTextOf(obj, 'topped_up_balance'),
+                granted: granted,
+                toppedUp: toppedUp,
                 available: available,
                 low: false,
-                totalValue: decimalValue(total)
+                totalValue: totalValue
             ))
         }
     }
@@ -144,16 +148,19 @@ public func parseTencentBalance(body: String): ArrayList<BalanceSnapshot> {
         )
     }
     let snapshots = ArrayList<BalanceSnapshot>()
-    let real = numberOf(response, 'RealBalance')
+    // 腾讯云所有金额都是「分」：统一在 BalanceUnits 里换算成元
+    let (total, totalValue) = BalanceUnits.toYuan(balanceTextOf(response, 'RealBalance'), BalanceUnits.FEN)
+    let (granted, _) = BalanceUnits.toYuan(balanceTextOf(response, 'PresentAccountBalance'), BalanceUnits.FEN)
+    let (toppedUp, _) = BalanceUnits.toYuan(balanceTextOf(response, 'CashAccountBalance'), BalanceUnits.FEN)
     snapshots.add(BalanceSnapshot(
         provider: 'tencent',
         currency: 'CNY',
-        total: moneyFromFen(real),
-        granted: moneyFromFen(numberOf(response, 'PresentAccountBalance')),
-        toppedUp: moneyFromFen(numberOf(response, 'CashAccountBalance')),
+        total: total,
+        granted: granted,
+        toppedUp: toppedUp,
         available: true,
         low: false,
-        totalValue: real / 100.0f64
+        totalValue: totalValue
     ))
     snapshots
 }
@@ -184,11 +191,12 @@ public class VolcengineBalanceQuerier <: BalanceQuerier {
         let headers = VolcSigner.headers(accessKey, secretKey, 'QueryBalanceAcct', '2022-01-01', payload, timestamp)
         let url = 'https://open.volcengineapi.com?Action=QueryBalanceAcct&Version=2022-01-01'
         let body = poster(url, headers, payload)
-        parseVolcengineBalance(body)
+        let unit = BalanceUnits.unitOf(BalanceUnits.YUAN, conf.option('balanceUnit', ''))
+        parseVolcengineBalance(body, unit)
     }
 }
 
-public func parseVolcengineBalance(body: String): ArrayList<BalanceSnapshot> {
+public func parseVolcengineBalance(body: String, unit: String): ArrayList<BalanceSnapshot> {
     let json = JsonValue.fromStr(body).asObject()
     if(let Some(rawMeta) <- json.get('ResponseMetadata')){
         if(let Some(rawError) <- rawMeta.asObject().get('Error')){
@@ -199,17 +207,18 @@ public func parseVolcengineBalance(body: String): ArrayList<BalanceSnapshot> {
         }
     }
     let result = json.get('Result')?.asObject() ?? JsonObject()
-    let available = balanceTextOf(result, 'AvailableBalance')
+    let (total, totalValue) = BalanceUnits.toYuan(balanceTextOf(result, 'AvailableBalance'), unit)
+    let (toppedUp, _) = BalanceUnits.toYuan(balanceTextOf(result, 'CashBalance'), unit)
     let snapshots = ArrayList<BalanceSnapshot>()
     snapshots.add(BalanceSnapshot(
         provider: 'volcengine',
         currency: 'CNY',
-        total: available,
+        total: total,
         granted: '',
-        toppedUp: balanceTextOf(result, 'CashBalance'),
+        toppedUp: toppedUp,
         available: true,
         low: false,
-        totalValue: decimalValue(available)
+        totalValue: totalValue
     ))
     snapshots
 }
@@ -240,25 +249,7 @@ func balanceTextOf(obj: JsonObject, key: String): String {
 }
 
 func numberOf(obj: JsonObject, key: String): Float64 {
-    decimalValue(balanceTextOf(obj, key))
-}
-
-func decimalValue(text: String): Float64 {
-    try{
-        Float64.parse(text)
-    }catch(_: Exception){
-        0.0f64
-    }
-}
-
-/** 分 → 元，保留两位小数（避免 `100.0` 这种展示） */
-func moneyFromFen(fen: Float64): String {
-    let cents = Int64(fen + 0.5f64)
-    let sign = if(cents < 0){ '-' }else{ '' }
-    let absolute = if(cents < 0){ -cents }else{ cents }
-    let yuan = absolute / 100
-    let rest = absolute % 100
-    '${sign}${yuan}.${if(rest < 10){ "0${rest}" }else{ "${rest}" }}'
+    BalanceUnits.parse(balanceTextOf(obj, key))
 }
 
 /** 智谱 / 硅基流动 / 阿里云：本期只留可编译占位，调用即抛「不支持」 */
