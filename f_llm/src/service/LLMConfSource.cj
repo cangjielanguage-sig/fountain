@@ -20,8 +20,10 @@ import std.collection.HashMap
 import std.fs.{File, Path}
 
 import fountain::f_bean.*
+import fountain::f_config.*
 import fountain::f_data.*
 
+import fountain::f_llm.config.*
 import fountain::f_llm.model.po.*
 
 /**
@@ -111,11 +113,57 @@ public func parseConfJson(text: String): ArrayList<LLMConf> {
     confs
 }
 
-/** 按名字创建来源；未知名字抛异常（启动阶段就该失败，而不是运行期才发现） */
-public func createConfSource(name: String): LLMConfSource {
-    match(name){
-        case 'database' => DatabaseConfSource()
-        case 'file' => throw IllegalArgumentException('file source requires a path: use llm_confSource=file:<path>')
-        case _ => throw IllegalArgumentException('unknown llm conf source: ${name}')
+/**
+ * 环境变量 / 配置项来源：把 JSON 数组文本直接写在配置里。
+ *
+ * 适合容器与小规模部署（一份配置几个模型，不值得为它连库）。
+ */
+public class EnvConfSource <: LLMConfSource {
+    private let text: String
+
+    /** text 为空时从 `llm_confs` 配置项读 */
+    public init(text!: String = '') {
+        this.text = text
     }
+
+    public prop name: String {
+        get() {
+            'env'
+        }
+    }
+
+    public func load(): ArrayList<LLMConf> {
+        let raw = if(text.isEmpty()){
+            Config.getString(LLMConfig.LLM_CONFS) ?? ''
+        }else{
+            text
+        }
+        if(raw.trimAscii().isEmpty()){
+            throw IllegalArgumentException('llm conf env source is empty: set ${LLMConfig.LLM_CONFS}')
+        }
+        parseConfJson(raw)
+    }
+}
+
+/**
+ * 按名字创建来源；未知名字抛异常（启动阶段就该失败，而不是运行期才发现）。
+ *
+ * 支持的写法：`database`（默认）/ `env` / `file:<path>`。
+ */
+public func createConfSource(name: String): LLMConfSource {
+    let trimmed = name.trimAscii()
+    if(trimmed.isEmpty() || trimmed == 'database'){
+        return DatabaseConfSource()
+    }
+    if(trimmed == 'env'){
+        return EnvConfSource()
+    }
+    if(trimmed.startsWith('file:')){
+        let path = trimmed[5 ..].trimAscii()
+        if(path.isEmpty()){
+            throw IllegalArgumentException('llm conf source file: path is empty')
+        }
+        return FileConfSource(path)
+    }
+    throw IllegalArgumentException('unknown llm conf source: ${trimmed}, available: database / env / file:<path>')
 }

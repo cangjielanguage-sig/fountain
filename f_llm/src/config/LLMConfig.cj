@@ -43,8 +43,10 @@ public struct LLMConfig {
         Config.getValue<Bool>(LLM_DB) ?? false
     }
 
-    /** 配置来源名：database（默认）/ file / static */
+    /** 配置来源名：database（默认）/ env / file:<path> */
     public static const LLM_CONF_SOURCE = LLM + '_confSource'
+    /** env 来源内联的配置 JSON 数组 */
+    public static const LLM_CONFS = LLM + '_confs'
     /** 配置刷新周期（秒），懒式 TTL */
     public static const LLM_CONF_REFRESH_SECONDS = LLM + '_confRefreshSeconds'
 

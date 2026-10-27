@@ -45,8 +45,12 @@ public class LLMContextMediator {
             if(let Some(x) <- contexts.get(key)){
                 return x
             }
-            for(conf in lookup<LLMFinder>().listConfs([LLM_TYPE_TEXT, LLM_TYPE_CODE])){
-                let key = '${conf.llmName}+${conf.option('llmType', LLM_TYPE_TEXT)}'
+            for(conf in lookup<LLMFinder>().listConfs()){
+                let llmType = conf.option('llmType', LLM_TYPE_TEXT)
+                if(llmType != LLM_TYPE_TEXT && llmType != LLM_TYPE_CODE){
+                    continue
+                }
+                let key = '${conf.llmName}+${llmType}'
                 if(let Some(newer) <- contextCreators.get(key)){
                     contexts[key] = newer(conf)
                 }

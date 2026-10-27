@@ -20,7 +20,7 @@
 
 ## 3. 配置装载、刷新与调度
 
-- [ ] 3.1 `LLMFinder.listConfs()` 改为无参全量；`LLMDAO` 查询条件改为 `enabled = true AND weight > 0`，用例覆盖 `weight = 0/-1` 被过滤
+- [x] 3.1 `LLMFinder.listConfs()` 改为无参全量；`LLMDAO` 查询条件改为 `enabled = true AND weight > 0`，用例覆盖 `weight = 0/-1` 被过滤
 - [x] 3.2 `LLMConfsSnapshot`：构建时按 `llmName` 分组、丢弃残缺行并记 `warn`；用例断言残缺行不进快照
 - [x] 3.3 `ensureFresh()`：周期内 10 次调用只查库 1 次（计数桩）
 - [x] 3.4 刷新成功：新增平台在下一周期参与调度；刷新失败：旧快照仍可用且记 `error`
@@ -33,7 +33,7 @@
 
 ## 4. 协议层（非流式，先 DeepSeek）
 
-- [ ] 4.1 `ProviderDialect` + `DialectRegistry`：未知 provider 回退标准实现；同 provider 重复注册抛异常
+- [x] 4.1 `ProviderDialect` + `DialectRegistry`：未知 provider 回退标准实现；同 provider 重复注册抛异常
 - [ ] 4.2 `ChatCompletionsMapper` 请求构造：`model = actualLlmName`、`temperature < 0` 不出现在报文、工具定义形态正确
 - [ ] 4.3 非流式响应解析：助手文本、`tool_calls`、`usage`、`finish_reason`
 - [ ] 4.4 `DeepSeekDialect`：端点与鉴权头；用录制响应回放验证普通对话与工具调用
@@ -80,7 +80,7 @@
 
 - [ ] 8.1 `f_llm/README.md` 与 `README_en.md` 按新公开 API 更新（中英成对）
 - [ ] 8.2 `f_httpclient/README.md` 增补「SSE 客户端」一节（含 10 条实现要求）
-- [ ] 8.3 删除 `fcoder` 整个模块目录（`src` / `docs` / `README*` / `cjpm.toml`），并清理文档中相关引用
+- [x] 8.3 删除 `fcoder` 整个模块目录（`src` / `docs` / `README*` / `cjpm.toml`），并清理文档中相关引用
 - [ ] 8.4 全量回归：`f_httpclient`、`f_llm` 模块测试全绿；`f_llm` 源码无路由注解、无 `f_mvc` 导入
 
 ## 9. 平台联调（最后做）

@@ -15,6 +15,14 @@ limitations under the License.
 */
 package fountain::f_llm.finder
 
+import fountain::f_llm.model.po.*
+
+/**
+ * 数据库配置源的查询入口。
+ *
+ * 只返回可用配置（`enabled = true AND weight > 0`）；按能力维度（llmType）的过滤
+ * 由调用方按 `conf.option('llmType', ...)` 自行判断，接口本身不再带过滤参数。
+ */
 public interface LLMFinder {
-    func listConfs(llmTypes: Array<String>): ArrayList<LLMConf>
+    func listConfs(): ArrayList<LLMConf>
 }

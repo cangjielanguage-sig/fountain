@@ -91,4 +91,40 @@ public class LLMConfSourceTest {
         }
         @Expect(thrown, true)
     }
+
+    @TestCase
+    func testEnvSourceParsesInlineJson(): Unit {
+        let source = EnvConfSource(text: SAMPLE_CONF_JSON)
+        @Expect(source.name, 'env')
+        let confs = source.load()
+        @Expect(confs.size, 2)
+        @Expect(confs[0].llmName, 'chat-pro')
+        @Expect(confs[1].conf.get('searchEngine') ?? '', 'search_pro')
+    }
+
+    @TestCase
+    func testEnvSourceEmptyTextThrows(): Unit {
+        var thrown = false
+        try{
+            EnvConfSource(text: '  ').load()
+        }catch(e: IllegalArgumentException){
+            thrown = true
+        }
+        @Expect(thrown, true)
+    }
+
+    @TestCase
+    func testCreateConfSourceByScheme(): Unit {
+        @Expect(createConfSource('').name, 'database')
+        @Expect(createConfSource('database').name, 'database')
+        @Expect(createConfSource('env').name, 'env')
+        @Expect(createConfSource('file:/tmp/llm.json').name, 'file')
+        var thrown = false
+        try{
+            createConfSource('file:')
+        }catch(e: IllegalArgumentException){
+            thrown = true
+        }
+        @Expect(thrown, true)
+    }
 }
