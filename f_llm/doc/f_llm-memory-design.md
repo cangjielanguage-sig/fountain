@@ -35,7 +35,7 @@
 | 5 | 标题、正文分别建向量索引 | §6.3（`title_dense` / `content_dense` 两套） |
 | 6 | 记忆表结构（修正草案）+ 一个调用记忆 API 的 tool_call | §6.1、§8.1 |
 | 7 | 文件记忆按用户+工作空间/全局分目录 | §5.3 |
-| 8 | 人设 API + 表 + 5 实现 + 12 个预定义人设；首条 system 消息不裁剪 | §7 |
+| 8 | 人设 API + 表 + 5 实现 + 13 个预定义人设；首条 system 消息不裁剪 | §7 |
 | 9 | `loom` 包：文本 → ClosureTask/Flow → JIT；预览确认；执行/删除 tool_call | §9 |
 | 10 | 技能 zip → skills 表记录；脚本改 tool_call/MCP/JIT；导入 tool_call | §10 |
 | 11 | `f_ticktock` 增加 f_jit 依赖 + `JitTicktockTask`；f_llm 定时任务工具 | §11 |
@@ -568,9 +568,9 @@ public interface CharacterStore <: Resource {
 
 ### 7.2 预定义人设（固化在代码）
 
-`PredefinedCharacters`（`f_llm/src/character/PredefinedCharacters.cj`）提供 12 个条目：
+`PredefinedCharacters`（`f_llm/src/character/PredefinedCharacters.cj`）提供 13 个条目：
 `default`（空）、`rigorous`、`friendly`、`blunt`、`imaginative`、`pragmatic`、`sarcastic`、
-`coaching`、`gentle`、`sweet`、`aloof`、`sunny`。
+`coaching`、`gentle`、`sweet`、`aloof`、`sunny`、`whimsical`。
 
 ### 7.3 注入与「压缩也保留」
 
@@ -841,7 +841,7 @@ public class JitTicktockTask <: CronTicktockTask {
 > 设计原则（prompt-engineering-expert）：角色一句话、硬约束编号、输出格式固定、给反例、
 > 不写「尽量/酌情」这类不可判定词；技术准确性优先于人设，人设只影响措辞。
 
-### 12.1 十二个人设（`character/PredefinedCharacters.cj`）
+### 12.1 十三个人设（`character/PredefinedCharacters.cj`）
 
 | key | 名称 | 提示词（system 正文） |
 |---|---|---|
@@ -857,6 +857,7 @@ public class JitTicktockTask <: CronTicktockTask {
 | `sweet` | 软萌甜妹 | `你说话软萌活泼，适度使用语气词与颜文字，句子短。技术内容保持准确完整，不因萌化而省略关键步骤；不装幼稚，不使用叠词表达专业术语。` |
 | `aloof` | 高冷御姐 | `你话少、笃定、不寒暄。直接给结论和必要依据，不解释常识，不主动扩展话题。语气平静克制，不冷淡到无礼；用户追问时再展开细节。` |
 | `sunny` | 阳光开朗 | `你积极、明快、有行动力。回答先肯定可做之处，再给步骤；用短句和明确的下一步收尾。鼓励要具体（指出做到了什么），不空喊口号；风险与限制照常说清。` |
+| `whimsical` | 鬼灵精怪 | `你机灵、俏皮，喜欢从刁钻角度切入问题。可以用反问、文字梗和“反直觉小实验”勾起兴趣，但每个玩笑后面必须给出准确结论；不装可爱、不卖萌、不油腻。不确定的内容照常标注，技术准确性永远优先于机灵。` |
 | `custom` | 自定义 | 用户自定义文本，原样作为 system 消息 |
 
 ### 12.2 `MEMORY_EXTRACT_PROMPT`（记忆抽取）
@@ -993,7 +994,7 @@ public class JitTicktockTask <: CronTicktockTask {
 | Embedding | 三路返回解析；batch 部分失败重试；超时熔断 |
 | Memory | 5 个实现跑同一套 conformance 用例（增删改查+检索+分页+越权） |
 | 分层 | 工作空间记忆在另一工作空间不可见；全局记忆跨空间可见 |
-| Character | 12 个预定义 key 可解析；custom 覆盖；`reset` 回落 default |
+| Character | 13 个预定义 key 可解析；custom 覆盖；`reset` 回落 default |
 | 裁剪 | 8 策略 + TokenBudget 下首条 system 始终保留 |
 | SQL | 同一份 DDL 在 PG/MySQL 各建一次；向量索引 `EXPLAIN` 命中 |
 | 工具 | `memoryCall` 四动作；`callWithTimeout` 超时返回 `{}` 且标记取消 |
@@ -1009,7 +1010,7 @@ public class JitTicktockTask <: CronTicktockTask {
 |---|---|---|
 | P1 | `tables-pg.sql` / `tables-mysql.sql`、`MemoryStore` 抽象 + 内存/文件实现 | 无 |
 | P2 | PG/MySQL 实现（SQL + 向量/倒排） | P1；MySQL 9.2+ 安装放 P6 |
-| P3 | 人设 API + 12 提示词 + 首条 system 保护 | P1 |
+| P3 | 人设 API + 13 提示词 + 首条 system 保护 | P1 |
 | P4 | `memoryCall` / `knowledgeIngest` / `skillImport` / `schedule*` / `callWithTimeout` | P1–P3 |
 | P5 | `loom` 包（计划/代码生成/两级 JIT/预览） | P4 |
 | P6 | 安装 MySQL 最新版 + 向量索引，跑 MySQL 相关用例 | P2 |
