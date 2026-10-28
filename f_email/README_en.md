@@ -31,6 +31,49 @@ Per-task progress and acceptance criteria: `openspec/changes/add-f-email-client/
 
 ## Usage
 
+### Unified facade (`fountain::f_email.Email`)
+
+One class owns SMTP / IMAP / POP3: send, list, read body, fetch attachments, delete.
+The `SmtpClient` / `ImapClient` / `Pop3Client` types below are its building blocks.
+
+```cangjie
+let email = Email.builder()
+    .smtp("smtp.example.com", port: 465)
+    .imap("imap.example.com", port: 993)      // or .pop3(...) + receiveVia(ReceiveProtocol.Pop3)
+    .auth("user@example.com", Secret.of("password"))
+    .build()                                   // lazy: no connection yet
+
+// send
+let report = email.send(
+    MailMessage.builder()
+        .from("user@example.com")
+        .to("friend@example.com")
+        .subject("hello")
+        .text("body")
+        .attach("report.pdf", FileBodySource(Path("report.pdf")))
+        .build()
+)
+
+// list: subject + received time + unread flag (IMAP uses EXAMINE, never sets \Seen)
+let summaries = email.list(limit: 20)
+
+// read body and attachments (read-only)
+let body = email.body(summaries[0])
+for (attachment in body.attachments) {
+    attachment.saveTo(Path("download/${attachment.filename}"))
+}
+
+// delete: IMAP deletes by UID; POP3 commits with DELE + QUIT
+email.delete(summaries[0])
+email.close()
+```
+
+| Contract | Behaviour |
+|---|---|
+| Lazy connections | `build()` connects to nothing; `send` opens SMTP, `list` / `fetch` / `delete` open the receive protocol |
+| Locate by summary | `list` returns `MailSummary`; IMAP locates by UID so an `EXPUNGE` between calls cannot delete the wrong mail |
+| Reads are read-only | `list` / `body` use `EXAMINE` + `BODY.PEEK[]`; deleting is always an explicit `delete` |
+
 ### Sending (SMTP)
 
 ```cangjie

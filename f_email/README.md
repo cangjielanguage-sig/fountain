@@ -29,6 +29,61 @@
 
 ## 用法
 
+### 统一门面（`fountain::f_email.Email`）
+
+一个类管住 SMTP / IMAP / POP3：发信、列信、读正文、取附件、删信都在这里，
+下面的 `SmtpClient` / `ImapClient` / `Pop3Client` 是它的实现细节。
+
+```cangjie
+let email = Email.builder()
+    .smtp("smtp.example.com", port: 465)
+    .imap("imap.example.com", port: 993)      // 或 .pop3(...) + receiveVia(ReceiveProtocol.Pop3)
+    .auth("user@example.com", Secret.of("password"))
+    .build()                                   // 懒连接：这里不建连
+
+// 发信
+let report = email.send(
+    MailMessage.builder()
+        .from("user@example.com")
+        .to("friend@example.com")
+        .subject("你好")
+        .text("正文")
+        .attach("report.pdf", FileBodySource(Path("report.pdf")))
+        .build()
+)
+
+// 收信：标题 + 接收时间 + 已读状态（IMAP 用 EXAMINE，不会置 \Seen）
+let summaries = email.list(limit: 20)
+for (summary in summaries) {
+    var received = "?"
+    match (summary.receivedAt) {
+        case Some(value) => received = value.toString()
+        case None => ()
+    }
+    println("${summary.subject}  ${received}  unread=${summary.isUnread()}")
+}
+
+// 读正文与附件（只读）
+let body = email.body(summaries[0])
+let text = body.text ?? ""
+for (attachment in body.attachments) {
+    println("${attachment.filename} ${attachment.size} B")
+    attachment.saveTo(Path("download/${attachment.filename}"))
+}
+
+// 删信：IMAP 按 UID 只删这一封；POP3 是 DELE + QUIT 提交
+email.delete(summaries[0])
+email.close()
+```
+
+`Email` 的三条行为约定：
+
+| 约定 | 说明 |
+|---|---|
+| 懒连接 | `build()` 不建连；第一次 `send` 才连 SMTP，第一次 `list` / `fetch` / `delete` 才连收件协议。只发信不需要 IMAP 可达 |
+| 用摘要定位 | `list` 返回 `MailSummary`，后续读/删都传它；IMAP 用 UID，不会因 `EXPUNGE` 导致序号移动而删错信 |
+| 读是只读的 | `list` / `body` 走 `EXAMINE` + `BODY.PEEK[]`，不改 `\Seen`；删除必须显式调 `delete` |
+
 ### 发信（SMTP）
 
 ```cangjie
