@@ -121,17 +121,27 @@ public class McpFunctionCalling <: CommonFunctionCalling {
     }
 }
 
-/** 递归剥掉模型侧不认的 JSON Schema 关键字 */
+/**
+ * 递归清洗 JSON Schema。
+ *
+ * 规则只有两条：
+ * 1. 剥掉以 `$` 开头的元信息键（`$schema` / `$ref` / `$defs` …）；`additionalProperties`
+ *    **保留**（模型侧能接受，且它表达了 MCP server 的额外字段约束）；
+ * 2. `type` 是数组（联合类型）时取第一个非空字符串，例如 `['null','string']` → `string`。
+ */
 public func sanitizeSchema(value: JsonValue): JsonValue {
     match(value){
         case obj: JsonObject =>
             let cleaned = JsonObject()
             for((key, item) in obj){
-                // `$schema` / `$ref` / `$defs` 一律剥掉：以 `$` 开头的键都是 schema 元信息
-                if((key.size > 0 && key[0] == b'$') || key == 'additionalProperties'){
+                if(key.size > 0 && key[0] == b'$'){
                     continue
                 }
-                cleaned.add(key, sanitizeSchema(item))
+                if(key == 'type'){
+                    cleaned.add(key, firstTypeOf(item))
+                }else{
+                    cleaned.add(key, sanitizeSchema(item))
+                }
             }
             cleaned
         case array: JsonArray =>
@@ -140,6 +150,25 @@ public func sanitizeSchema(value: JsonValue): JsonValue {
                 list.add(sanitizeSchema(item))
             }
             JsonArray(list: list)
+        case other => other
+    }
+}
+
+/** 联合类型取第一个非空字符串；不是数组就原样返回 */
+func firstTypeOf(value: JsonValue): JsonValue {
+    match(value){
+        case array: JsonArray =>
+            for(item in array){
+                match(item){
+                    case text: JsonString =>
+                        // `null` 也是字符串，但它不是可用类型，跳过
+                        if(!text.value.isEmpty() && text.value != 'null'){
+                            return text
+                        }
+                    case _ => ()
+                }
+            }
+            value
         case other => other
     }
 }

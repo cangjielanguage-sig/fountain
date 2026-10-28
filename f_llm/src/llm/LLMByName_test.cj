@@ -100,6 +100,23 @@ public class LLMByNameTest {
     }
 
     @TestCase
+    func testZeroWeightConfIsNotACandidate(): Unit {
+        // weight <= 0 与停用等价：不得进入任何候选列表
+        let holder = byNameHolder(ArrayList<LLMConf>([byNameConf(701, 'zero-weight', 0)]))
+        LLMConfs.setHolder(holder)
+        @Expect(holder.candidates('zero-weight').size, 0)
+        @Expect(holder.all().size, 0)
+        var message = ''
+        try{
+            LLM.chatByName('zero-weight', facadeParams(0.5f64))
+        }catch(e: LLMException){
+            message = e.message
+        }
+        @Expect(message.contains('no available llm conf'), true)
+        @Expect(message.contains('available:'), true)
+    }
+
+    @TestCase
     func testChatByNameUnknownNameThrows(): Unit {
         let holder = byNameHolder(ArrayList<LLMConf>([byNameConf(301, 'only-name', 1)]))
         LLMConfs.setHolder(holder)
@@ -110,6 +127,7 @@ public class LLMByNameTest {
             message = e.message
         }
         @Expect(message.contains('no available llm conf'), true)
+        @Expect(message.contains('available:'), true)
     }
 
     @TestCase

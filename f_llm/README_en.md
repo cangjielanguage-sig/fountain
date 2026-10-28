@@ -1569,8 +1569,8 @@ LLM.respondByName(llmName: String, params): LLMResp
 ### Tools
 
 - `FunctionMediator.register / definition / names / getDefinitions / call`;
-- built-ins: `currentTime` (iso/epoch), `webSearch` (borrows credentials from an enabled conf), `webFetch` (SSRF guard: scheme allow-list + private address families rejected);
-- MCP: `McpToolSource(alias, client).load()`; names are `mcp__{alias}__{tool}` and **never truncated** — over 64 chars or illegal characters fail at registration; `inputSchema` drops every `$`-prefixed key and `additionalProperties`;
+- built-ins: `currentTime` (iso / epoch millis), `webSearch` (borrows credentials from an enabled conf), `webFetch` (SSRF guard: scheme allow-list + private address families rejected);
+- MCP: `McpToolSource(alias, client).load()`; names are `mcp__{alias}__{tool}` and **never truncated** — over 64 chars or illegal characters fail at registration; `inputSchema` drops every `$`-prefixed metadata key and **keeps `additionalProperties`**; union types collapse to the first non-`null` type;
 - search providers are pluggable: `SearchProvider` + `SearchProviderRegistry`; no usable conf throws `SearchUnavailableException`.
 
 ### Context pruning

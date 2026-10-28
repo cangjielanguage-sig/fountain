@@ -157,6 +157,22 @@ public class ToolFunctionsTest {
         params.format = 'epoch'
         let epoch = textOf(function.call(params))
         @Expect(Int64.tryParse(epoch).isSome(), true)
+        // 毫秒时间戳（13 位），不是秒
+        @Expect(epoch.size >= 13, true)
+    }
+
+    @TestCase
+    func testCurrentTimeFixedOffsetZone(): Unit {
+        let function = CurrentTimeFunction()
+        let params = CurrentTimeParams()
+        params.nextEvent = 'next'
+        params.timezone = '+08:00'
+        let text = textOf(function.call(params))
+        @Expect(text.endsWith('+08:00'), true)
+        // 同一时刻，只是换了渲染时区
+        params.format = 'epoch'
+        let epoch = textOf(function.call(params))
+        @Expect(epoch.size >= 13, true)
     }
 
     @TestCase
@@ -186,16 +202,19 @@ public class ToolFunctionsTest {
     func testWebSearchWithoutConfThrows(): Unit {
         registerSearchQuietly(FakeSearchProvider('fake-empty', true))
         LLMCandidateProvider.setSupplier({=> ArrayList<LLMConf>()})
-        var thrown = false
+        var message = ''
         try{
             let params = WebSearchParams()
             params.nextEvent = 'next'
             params.query = 'x'
+            params.needContent = true
             WebSearchFunction().call(params)
         }catch(e: SearchUnavailableException){
-            thrown = true
+            message = e.message
         }
-        @Expect(thrown, true)
+        // 异常消息要说明「是否需要抓取能力」与已注册平台，便于定位是配置问题还是能力缺失
+        @Expect(message.contains('needContent: true'), true)
+        @Expect(message.contains('registered:'), true)
     }
 
     @TestCase

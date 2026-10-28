@@ -87,7 +87,7 @@ func pickConf(provider: String, needFetch: Bool): LLMConf {
     }
     if(candidates.isEmpty()){
         throw SearchUnavailableException(
-            'no llm conf available for search, provider: ${provider}, registered: ${SearchProviderRegistry.names()}'
+            'no llm conf available for search, provider: ${provider}, needContent: ${needFetch}, registered: ${SearchProviderRegistry.names()}'
         )
     }
     candidates[0]

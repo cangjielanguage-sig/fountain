@@ -45,14 +45,23 @@ public class LLMConfsSnapshot {
         this.loadedAt = loadedAt
     }
 
+    /** 候选列表：`weight <= 0` 与停用等价，任何来源（库/文件/环境变量）都不得进入候选 */
     public func candidates(llmName: String): ArrayList<LLMConf> {
-        byName.get(llmName) ?? ArrayList<LLMConf>()
+        let list = ArrayList<LLMConf>()
+        for(conf in byName.get(llmName) ?? ArrayList<LLMConf>()){
+            if(conf.weight > 0){
+                list.add(conf)
+            }
+        }
+        list
     }
 
     public func all(): ArrayList<LLMConf> {
         let list = ArrayList<LLMConf>()
         for((_, conf) in byId){
-            list.add(conf)
+            if(conf.weight > 0){
+                list.add(conf)
+            }
         }
         list
     }

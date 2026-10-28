@@ -72,7 +72,8 @@ public class McpToolSourceTest {
         let definition = FunctionMediator.definition('mcp__fs__read_file')
         let parameters = definition.get('function')?.asObject().get('parameters')?.asObject() ?? JsonObject()
         @Expect(parameters.get('type')?.asString().value ?? '', 'object')
-        @Expect(parameters.get('additionalProperties').isNone(), true)
+        // additionalProperties 是模型侧能接受的约束，必须保留
+        @Expect(parameters.get('additionalProperties')?.asBool().value ?? true, false)
         // 顶层 `$schema` 已剥掉；嵌套的 `$ref` 也不在
         var hasDollar = false
         for((key, _) in parameters){
@@ -83,6 +84,13 @@ public class McpToolSourceTest {
         @Expect(hasDollar, false)
         let properties = parameters.get('properties')?.asObject().get('path')?.asObject() ?? JsonObject()
         @Expect(properties.get('type')?.asString().value ?? '', 'string')
+    }
+
+    @TestCase
+    func testUnionTypeTakesFirstNonNull(): Unit {
+        let raw = JsonValue.fromStr('{"type":["null","string"],"properties":{}}').asObject()
+        let cleaned = sanitizeSchema(raw).asObject()
+        @Expect(cleaned.get('type')?.asString().value ?? '', 'string')
     }
 
     @TestCase

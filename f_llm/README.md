@@ -1549,8 +1549,8 @@ LLM.respondStream(candidates, params, onDelta): LLMResp
 ### 工具
 
 - `FunctionMediator.register / definition / names / getDefinitions / call`；
-- 内置：`currentTime`（iso/epoch）、`webSearch`（借启用 conf 的凭据）、`webFetch`（SSRF 防护：协议白名单 + 内网地址族 + 非 http(s) 拒绝）；
-- MCP：`McpToolSource(alias, client).load()`，工具名 `mcp__{alias}__{tool}`，**超 64 字符或非法字符直接失败，不截断**；`inputSchema` 剥掉所有 `$` 开头的键与 `additionalProperties`；
+- 内置：`currentTime`（iso / epoch 毫秒）、`webSearch`（借启用 conf 的凭据）、`webFetch`（SSRF 防护：协议白名单 + 内网地址族 + 非 http(s) 拒绝）；
+- MCP：`McpToolSource(alias, client).load()`，工具名 `mcp__{alias}__{tool}`，**超 64 字符或非法字符直接失败，不截断**；`inputSchema` 剥掉所有 `$` 开头的元信息键、**保留 `additionalProperties`**；联合类型取第一个非 `null` 类型；
 - 搜索能力可注册：`SearchProvider` + `SearchProviderRegistry`，无可用配置抛 `SearchUnavailableException`。
 
 ### 上下文裁剪

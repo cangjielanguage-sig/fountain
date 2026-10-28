@@ -111,7 +111,14 @@ public class LLM {
             }
         }
         if(available.isEmpty()){
-            throw LLMException('no available llm conf for: ${llmName}')
+            // 消息里带上当前可用的 llmName：否则「打错了名字」和「配置全熔断」分不清
+            let names = ArrayList<String>()
+            for(conf in holder.all()){
+                if(!names.contains(conf.llmName)){
+                    names.add(conf.llmName)
+                }
+            }
+            throw LLMException('no available llm conf for: ${llmName}, available: ${names}')
         }
         let hooks = LLMHooks(
             onSuccess: {id => holder.recordSuccess(id)},

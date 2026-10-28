@@ -291,7 +291,7 @@ PostgreSQL 18.4（WSL，`postgres://fountain:fountain@127.0.0.1:5432/fountain_te
 | 映射器放 `llm/protocol/` 子包 | 与 `llm` 同包（`src/llm/*.cj`） | `llm` ↔ `llm.protocol` 循环依赖，cjpm 拒绝构建 |
 | 门面直接调 `f_httpclient` | 抽 `LLMTransport` 接口 + `DefaultHttpTransport` | 需要脱离网络验证「转移 / 错误分类」，否则只能靠真网络测 |- 工具循环 `LLMToolLoop` 放在 **`tool` 包**：它要用 `FunctionMediator`（tool → llm 已有单向依赖），放进 `llm` 会形成包循环。
 - MCP 侧只依赖一个**最小接口** `McpToolClient`（`listAllTools` / `callTool`），`McpClientAdapter` 适配 `f_mcp.McpClient`；好处是单测用假客户端即可覆盖 schema 清洗与错误文本化，不需要真起 server。
-- `inputSchema` 清洗规则收敛成一条：**剥掉所有以 `$` 开头的键**（`$schema` / `$ref` / `$defs` …）+ `additionalProperties`，递归生效。- `SaturationContextPruner` 的阈值来源改为**可注入的 conf 选择器**（`confSelector: () -> ?LLMConf`，默认取 `LLMCandidateProvider` 第一条）：这样单测不用造数据库，也能验证「按 conf 阈值」和「0 表示不限制」。
+- `inputSchema` 清洗规则（2026-10-28 修正）：**只剥掉以 `$` 开头的元信息键**（`$schema` / `$ref` / `$defs` …），`additionalProperties` **保留原值**；`type` 为数组时取第一个非 `null` 类型。- `SaturationContextPruner` 的阈值来源改为**可注入的 conf 选择器**（`confSelector: () -> ?LLMConf`，默认取 `LLMCandidateProvider` 第一条）：这样单测不用造数据库，也能验证「按 conf 阈值」和「0 表示不限制」。
 - `ContextSummaryPruner` / `ContextKeywordsPruner` 标成 `open` 并在基类抽出 `protected open func respond(...)`：语义用例（输出一条 user 消息）与走哪家模型无关，不该为了测它连库。
 - `ContextPrunerMediator` 增加 `register` / `names`，未知策略名抛 `IllegalArgumentException` 并带可用列表；`AtomicBool` 在 `llm` 包的 imports 里不可见，改成 mutex 保护的普通 `Bool`。- **模型常量（2026-10-27 更新）**：`ModelName` 增加 DeepSeek 系列（`deepseek-flash` 默认 / `deepseek-chat` / `deepseek-reasoner`），GLM 只保留 glm-5 系列；`ContextSummaryPruner` / `ContextKeywordsPruner` 的默认模型改为 `MODEL_NAME_DEEPSEEK_FLASH`。
 - **余额实现按官方文档落地**：DeepSeek `GET /user/balance`（金额字符串、多币种）；腾讯云 `DescribeAccountBalance`（TC3-HMAC-SHA256，**金额单位是分**，展示前 ÷100）；火山引擎 `QueryBalanceAcct`（V4 签名，`Action/Version` 走 query、Service=`billing`、Region=`cn-north-1`，金额是元）。**签名算法正确性待真实 AK/SK 联调验证**（归入第 9 组）。- **余额单位统一为元**：新增 `BalanceUnits`（`toYuan` / `format` / `unitOf`）。DeepSeek 与火山引擎默认按元，腾讯云固定按分（÷100）；平台口径异常时可用 `conf['balanceUnit'] = yuan|fen` 覆盖。快照金额一律两位小数（`"110.00"`），`totalValue` 也是元。- **首轮真机 400（已修）**：`LLMParams.response_format` 默认是 `json_object`，请求里就带上了 `response_format`，而 prompt 没有 `json` 关键词，DeepSeek 直接 400。改为**默认文本、只有显式 `ResponseFormat.json` 才发**；同时 `LLMException` 里带上游错误体（截断 400 字节），否则这类 400 只能靠抓包猜。
@@ -352,4 +352,10 @@ PostgreSQL 18.4（WSL，`postgres://fountain:fountain@127.0.0.1:5432/fountain_te
 2. **余额快照补齐**：`BalanceSnapshot` 增加 `account / creditLimit / frozen / queriedAt / raw`，DeepSeek、腾讯云、火山三处解析分别填值；用例断言新字段。
 3. **webFetch 拒绝重定向**：`SearchPoster` 改为返回 `(状态码, body)`，`defaultSearchPost` 调 `client.autoRedirect(false)`，`ensureOk` 对 3xx 抛 `SearchHttpException('refused redirect')`，4xx/5xx 也直接失败；新增两条用例（302、500）。
 
-未修的 WARNING（消息文案、`epoch` 单位、MCP schema 取舍、`weight=0` 候选列表）保持原样，等待下一批处理。
+未修的 WARNING（消息文案、`epoch` 单位、MCP schema 取舍、`weight=0` 候选列表）保持原样，等待下一批处理。### verify WARNING 修复（2026-10-28）
+
+- **未知 `llmName` 的异常带可用列表**：`LLM.chatByName` 失败时消息为 `no available llm conf for: X, available: [...]`，把「名字打错」与「全被熔断」区分开。
+- **`weight <= 0` 不进候选**：过滤放到 `LLMConfsSnapshot.candidates/all`，任何来源（库/文件/env）一致；之前只在调度层过滤，`chatByName` 仍会尝试它。
+- **`currentTime` 对齐规格**：`epoch` 改为毫秒；时区支持固定偏移（`UTC`、`+08:00`、`-05:00`）与少数无夏令时的常见时区，不推算 DST，不认识的名字仍返回说明文本。
+- **`webSearch` 异常补上下文**：消息带 `needContent` 与已注册 provider 列表。
+- **MCP schema 清洗修正**：`additionalProperties` **保留**（原先被剥掉，与规格相反）；`type` 为数组时取第一个非 `null` 类型。

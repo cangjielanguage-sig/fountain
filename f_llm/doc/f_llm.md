@@ -1149,27 +1149,19 @@ public struct FunctionMediator {
 @DataAssist[props fields]
 public class CurrentTimeParams {
     @JsonStringSchema[description:'流程下一步的事件名称']
-    private var event: String = ''
-    @JsonStringSchema[description:'IANA 时区名，如 Asia/Shanghai；空串表示本机时区']
+    private var nextEvent: String = ''
+    @JsonStringSchema[description:'返回格式：iso（默认）或 epoch（Unix 毫秒）']
+    private var format: String = 'iso'
+    @JsonStringSchema[description:'时区：留空/local 用本机；支持 UTC、+08:00、-05:00 与 Asia/Shanghai 等无夏令时时区']
     private var timezone: String = ''
-    @JsonStringSchema[description:'输出格式：iso8601（默认）或 human']
-    private var format: String = 'iso8601'
-}
-
-@Bean
-public class CurrentTimeFunction <: FunctionCalling<CurrentTimeParams> {
-    public prop name: String { get(){ 'currentTime' } }
-    public prop description: String { get(){ '返回本机当前时间，用于需要"现在"的场景（日期换算、时效判断）' } }
-    public func call(params: CurrentTimeParams): FunctionResult
 }
 ```
 
 实现要点：
 
-- 基准是**本机时间**（`DateTime.now()`），带 `zoneOffset`；
-- `timezone` 非空时用 `Asia/Shanghai` 这类 IANA 名做偏移换算；不支持的名字返回错误文本（不抛），让模型自己改参数；
-- `format='human'` 输出 `2026-10-26 14:03:21 +08:00 (Monday)`；
-- 返回值里**同时给 ISO 与 epoch 毫秒**，模型算差值时更稳。
+- 基准是 `DateTime.now()`；`iso` 带偏移量（`2026-10-28T13:40:00+08:00`），`epoch` 是**毫秒**，不是秒；
+- 时区只做**固定偏移**（显式 `+HH:MM` 或少数无夏令时的常见时区：Asia/Shanghai、Asia/Tokyo、Asia/Seoul、Asia/Kolkata、Australia/Sydney、UTC），不推算夏令时——猜错时区比报「不支持」更糟；
+- 不支持的名字返回错误文本（不抛异常），让模型自己改参数重试。
 
 ### 7.4 内置函数 `webSearch`
 
@@ -1413,8 +1405,9 @@ public struct McpTool {
 
 | 风险 | 处置 |
 |---|---|
-| 带 `$schema` / `$id` / `definitions` / `$ref` | 只保留 `type/properties/required/additionalProperties` 白名单；`$ref` 无法解析时降级为 `{type:'object'}` |
-| `additionalProperties: true` | 部分模型直接 400，改为 `false` |
+| 带 `$schema` / `$id` / `definitions` / `$ref` | 剥掉所有 `$` 开头的元信息键（递归）；`$ref` 无法解析时降级为 `{type:'object'}` |
+| `additionalProperties` | **保留原值**——它表达 MCP server 的额外字段约束，模型侧能接受 |
+| `type` 是数组（联合类型） | 取第一个非 `null` 的非空字符串（`['null','string']` → `string`） |
 | `required` 缺失 | 补 `[]` |
 | 属性 `description` 过长（> 1024） | 截断 |
 | 属性类型是 MCP 扩展（如 `type: ['string','null']` 联合） | 取第一个非 `null` |
