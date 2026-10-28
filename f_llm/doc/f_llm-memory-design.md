@@ -305,6 +305,23 @@ public class MemoryKinds {
 **与检索的关系**：`MemoryQuery.kinds` 过滤时按 `(userId, kind)` 先 `validate` 再下推；未知 kind 返回空结果而不是报错
 （查询不该因为拼错一个过滤值就 500），但写入必须报错。
 
+**权重**：每个 kind 带一个 `weight`（0~1，存 `llm_memory_kind.weight`，见 §6.1）。
+默认值让「人工写的记忆」优先于「自动记忆」：
+
+| kind | weight | 说明 |
+|---|---|---|
+| `preference` / `fact` | 1.0 | 用户明确表达的，最可信 |
+| `note` | 0.9 | 人工记录 |
+| `doc` / `knowledge` | 0.8 | 文档类 |
+| `task` | 0.6 | 自动抽取的经验 |
+| `session` | 0.3 | 会话流水，量最大、噪声最高 |
+| 自定义 | 0.8 | 可改 |
+
+检索打分：`final = normalize(向量分数) × weight`；**先取 `topK × 2` 再乘权重截断**，避免低权重记忆被提前挤掉。
+
+**权重是固定值**：以代码常量为准（与种子行一致），**不提供按请求、按 collection、按用户的覆盖**。
+调权重属于改代码 + 改种子 SQL，不做运行期配置——避免「同一个库在不同请求下排序不同」这种不可复现的问题。
+
 **新增的两个预定义 kind 的含义**（自动记忆，见 §5.5）：
 
 | kind | 含义 | 写入方 |
@@ -350,6 +367,20 @@ public class MemoryRecorderTask <: Task {
 - 消费协程独立于请求线程；进程退出时把未消费事件留在表里，下次启动继续；
 - **不做确认交互**：`task`/`session` 是自动记忆，写入与更新都不需要用户确认；
   用户/开发者通过开放 API 主动增删改查（`memoryCall` 或直接 `MemoryService`）时，删除也不二次确认（见 §8.1）。
+
+**session 滚动摘要（不设硬上限）**：
+
+- 每个 session 一条 `session` 记忆；每轮追加后检查长度，超过 32K 字触发滚动：
+  保留最近 20 轮原文 + 对更早内容生成摘要合并进正文的「摘要」段，旧原文删除；
+- **不按条数/天数强制淘汰**：会话历史的价值随时间下降但不设硬阈值，靠 `weight=0.3` 在检索中自然降权。
+
+**task → skill 反哺（三次成技能）**：
+
+- 同类任务判定：`taskName` 相同 **或** 主题相同（与已有经验标题/正文的余弦相似度 ≥ 0.85）；
+- 同一 `taskName` 的 task 记忆累计 **≥ 3 条** → 调 `TASK_SKILL_PROMPT`（§12.6）合成技能，写 `skills` 表，
+  `metadata = {"promotedFrom":"task:{taskName}","evidence":3}`、`skill_type='auto'`；
+- 之后每来一条新的同类 task 记忆：若技能已存在，用同一提示词做**增量更新**（保留原步骤，只补差异），不重复建；
+- 技能更新失败不回滚记忆；记忆与技能是弱一致，允许人工编辑覆盖。
 
 **历史表**（§6.1 的 `llm_memory_event`）：事件本体 + 处理状态 + 重试次数，保留 30 天后归档/清理。
 
@@ -400,15 +431,16 @@ create table llm_memory_kind (
     user_id     bigint      not null default 0,
     kind        varchar(32) not null,
     predefined  boolean     not null default false,
-    create_time datetime    not null default current_timestamp,
+    weight      double      not null default 0.8,   -- 检索打分权重 0~1，自动记忆更低
+    create_time datetime    not null default (utc now),
     primary key (user_id, kind)
 );
 
 -- 启动时幂等补种，预定义行不允许被删除（API 层拒绝，见 §5.4）
-insert into llm_memory_kind (user_id, kind, predefined) values
-    (0, 'note', true), (0, 'fact', true), (0, 'preference', true),
-    (0, 'task', true), (0, 'doc', true), (0, 'knowledge', true),
-    (0, 'session', true)
+insert into llm_memory_kind (user_id, kind, predefined, weight) values
+    (0, 'note', true, 0.9), (0, 'fact', true, 1.0), (0, 'preference', true, 1.0),
+    (0, 'task', true, 0.6), (0, 'doc', true, 0.8), (0, 'knowledge', true, 0.8),
+    (0, 'session', true, 0.3)
 on conflict (user_id, kind) do nothing;   -- MySQL: insert ignore into …
 ```
 
@@ -896,6 +928,24 @@ public class JitTicktockTask <: CronTicktockTask {
 4. functions 只能使用 {{ALLOWED_TOOLS}} 与 {{ALLOWED_MCPS}} 中的名字。
 ```
 
+### 12.6 `TASK_SKILL_PROMPT`（task 记忆 → 技能）
+
+```
+把同一任务的多次执行经验合成一个可复用技能。只输出 JSON，不要解释：
+{"title":"≤64 字","accepted_event":"next","returned_event":"next",
+ "details":"Markdown：触发条件、步骤、注意事项、失败案例",
+ "functions":["tool:webSearch","jit:normalize"],
+ "skill_type":"auto",
+ "evidence":3}
+
+规则：
+1. 只依据输入里的 task 记忆，不补充外部知识；不足 3 条证据时返回 {"error":"证据不足"}；
+2. 步骤要能直接执行（工具名 + 参数形态），不写“适当处理”这类空话；
+3. 已有技能时做增量更新：保留仍然有效的步骤，只补充/修正差异，不整篇重写；
+4. functions 只能使用 {{ALLOWED_TOOLS}} 与 {{ALLOWED_MCPS}} 中的名字；
+5. details 不得出现本地绝对路径、密钥、内网地址。
+```
+
 ---
 
 ## 13. 配置项（新增）
@@ -971,6 +1021,8 @@ public class JitTicktockTask <: CronTicktockTask {
 
 ## 17. 决策记录（2026-10-28 定稿）
 
+> 下表是**已定稿**的决策，不再作为待确认项；后续只讨论文末「剩余未决」。
+
 | 问题 | 决定 |
 |---|---|
 | 标题是否需要独立 colbert | **需要**：标题与正文各存一份 colbert，重排时两路加权（§6.2） |
@@ -983,9 +1035,10 @@ public class JitTicktockTask <: CronTicktockTask {
 | 预定义 kind 的种子方式 | **代码固化 + 启动幂等写入**；预定义 7 值，自定义 kind **归属用户**（§5.4） |
 | 时间与时区 | **存 UTC、算本地**：落库统一 UTC，API 与按日过滤按服务端时区换算（§5.6） |
 | task / session 记忆怎么来 | **自动**：`MemoryRecorderTask` 接收 `llm.turn` / `task.step` / `task.end` 事件，异步写入与抽取（§5.5） |
+| `session` 记忆的保留策略 | **滚动摘要，不设硬上限**：超 32K 字时保留最近 20 轮 + 摘要（§5.5） |
+| `task` 记忆要不要反哺技能 | **要**：同类任务累计 3 条经验 → 生成 skill；之后每条新记忆做增量更新（§5.5、§12.6） |
+| 同类任务如何判定 | `taskName` 相同 **或** 主题向量相似度 ≥ 0.85（§5.5） |
+| 自动记忆是否参与默认检索 | **参与**，按 kind 权重降权：`session=0.3`、`task=0.6`；检索支持权重查询（§5.4） |
+| 权重是否可配 | **固定值**：代码常量 + 种子行，不提供请求/collection/用户级覆盖（§5.4） |
 
-剩余未决：
-
-1. `session` 记忆的保留策略：按条数（最近 N 场）还是按时间（90 天）？当前是「按会话一条 + 滚动摘要」，未设上限。
-2. `task` 记忆与 `skills` 表的关系：经验是否要反哺成技能（自动生成 skill）？本期只写记忆。
-3. 自动记忆（`session`/`task`）是否参与默认检索？当前默认参与，可能挤压人工记忆——是否需要 `kinds` 默认排除。
+剩余未决：**无**（本轮问题全部收敛；后续如出现新问题再单列）。

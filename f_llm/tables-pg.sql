@@ -116,13 +116,14 @@ CREATE TABLE IF NOT EXISTS llm_memory_kind (
   user_id     BIGINT      NOT NULL DEFAULT 0,
   kind        VARCHAR(32) NOT NULL,
   predefined  BOOLEAN     NOT NULL DEFAULT FALSE,
+  weight      DOUBLE PRECISION NOT NULL DEFAULT 0.8,   -- 检索打分权重 0~1，自动记忆更低
   create_time TIMESTAMP   NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
   PRIMARY KEY (user_id, kind)
 );
-INSERT INTO llm_memory_kind (user_id, kind, predefined) VALUES
-  (0, 'note', TRUE), (0, 'fact', TRUE), (0, 'preference', TRUE),
-  (0, 'task', TRUE), (0, 'doc', TRUE), (0, 'knowledge', TRUE),
-  (0, 'session', TRUE)
+INSERT INTO llm_memory_kind (user_id, kind, predefined, weight) VALUES
+  (0, 'note', TRUE, 0.9), (0, 'fact', TRUE, 1.0), (0, 'preference', TRUE, 1.0),
+  (0, 'task', TRUE, 0.6), (0, 'doc', TRUE, 0.8), (0, 'knowledge', TRUE, 0.8),
+  (0, 'session', TRUE, 0.3)
 ON CONFLICT (user_id, kind) DO NOTHING;
 
 -- 记忆事件（§5.5 事件溯源）：先落事件再异步消费，processed=false 的会被重试

@@ -118,8 +118,13 @@ public interface VectorIndex {
 3. sparse → 倒排 posting 拉取 → 权重累加 → top-100
 4. 融合：分数归一化（min-max）+ 加权（默认 dense 0.7 / sparse 0.3）+ 按 id 去重 → top-50
 5. [可选] colbert 对 top-20 重排 → top-K
-6. 返回 payload + 三路分量分数
+6. **业务权重**：`score ×= weight(payload.kind)`；权重来自请求的 `kind_weights`，缺省 1.0；
+   先取 `topK × 2` 再乘权重，避免低权重记忆被提前挤掉
+7. 返回 payload + 三路分量分数 + 生效权重
 ```
+
+**权重查询不是 ANN 的一部分**：向量索引只负责「相似度」，kind 权重是检索后的标量调整。
+放在 ANN 内部会把权重揉进距离度量，换权重就得重建索引——不可接受。
 
 融合权重可在 collection 级配置（`{c}:m:cfg.weights`），默认 0.7/0.3。
 
@@ -241,14 +246,15 @@ POST /v1/collections/{collection}/search
     "save_day": "2026-10-28",                // 服务端时区的本地日；内部展开成 1~2 个 UTC 日键
     "tags": ["cangjie", "llm"],              // AND：两个 tag 都要有
     "tags_any": ["draft", "wip"]             // OR：命中任一即可
-  }
+  },
+  "kind_weights": {"session": 0.3, "task": 0.6}   // 可选：按 payload.kind 乘权重，缺省 1.0；固定值由调用方传，无 collection 级配置
 }
 →
 {
   "results": [
-    {"id":"mem-1001","score":0.83,
+    {"id":"mem-1001","score":0.83,"weight":0.3,
      "components":{"dense":0.81,"sparse":0.42,"colbert":0.77},
-     "payload":{"title":"…","content":"…"}}
+     "payload":{"title":"…","content":"…","kind":"session"}}
   ]
 }
 ```
@@ -273,15 +279,14 @@ POST   /v1/collections/import                → 202 multipart/zip（同 §3.7 �
 ```
 {collection}-{yyyyMMddHHmmss}.zip
 ├── README.md                  # 集合索引：记录数、字段说明、生成时间、fhydra 版本
-├── manifest.json              # 机器可读：每条记录 id/文件名/是否有向量/校验和
-├── docs/{id}.md               # YAML front matter（id/title/kind/save_time/tags）+ 正文
-├── vectors/{id}.dense.f32     # 可选：f32 小端
-├── vectors/{id}.colbert.f32   # 可选：count + count*dim
-└── vectors/{id}.sparse.jsonl  # 可选：{"token":123,"weight":0.42} 每行一条
+├── manifest.json              # 机器可读：每条记录 id / 文件名 / 正文校验和
+└── docs/{id}.md               # YAML front matter（id/title/kind/save_time/tags）+ 正文
 ```
 
-- 正文与元数据放 Markdown，向量放旁挂二进制——**文档可读性**与**向量精度**各取所需；
-- 导入时按 `manifest.json` 逐条 upsert；缺向量的记录由调用方（f_llm）重新 embedding，fhydra 不猜；
+- **导出物不含任何向量**（dense / sparse / colbert 都不带）：向量是「由 embedding 模型 + 当前版本」算出来的派生数据，
+  跨机器、跨模型版本搬运会悄悄失真；导入时统一由调用方（f_llm）重新 embedding，fhydra 不猜；
+- 正文与元数据放 Markdown，导出物可被人直接读、能进 Git、能被其它工具处理；
+- 导入时按 `manifest.json` 逐条 upsert；缺向量就是缺，不构造占位向量；
 - 打包依赖 `f_zip`（另一台机器开发中；按计划做到导出功能时已就绪）。**不另写 zip 容器、也不做 tar 兜底**，
   读写 zip 统一走 `f_zip`，避免两套实现与两套测试。
 
@@ -337,8 +342,16 @@ public class FhydraMemoryStore <: MemoryStore { /* 见 ../../f_llm/doc/f_llm-mem
 | 同步 WAL 间隔 | 500 次写 | `fhydra_sync_every` |
 | 索引策略 | auto | `fhydra_index_policy`（auto/bruteforce/ivf_flat/ivf_pq） |
 | 单 collection 上限 | 500 万条 | `fhydra_max_records`（超限拒绝写，不静默丢） |
+| 时区 | 系统时区 | `fhydra_timezone`（如 `Asia/Shanghai`；存 UTC，按此换算本地日） |
 
 启动：`fboot build && ./fhydra`；`fhydra --version` 打印版本与 f_store 版本。
+**启动日志必须显式打印生效时区**，格式固定为一行，便于排查「跨日查询差一天」：
+
+```
+[timezone] effective=Asia/Shanghai source=fhydra_timezone system=Etc/UTC
+```
+
+`source` 为 `system`（未配置）或 `fhydra_timezone`（被覆盖）；两者不一致时这一行就是唯一线索。
 备份：停写 → 拷数据目录；在线备份用 `POST /v1/collections/{c}/export` 导出 **Markdown 集合 + zip**（§3.7，打包器等 `f_zip` 就绪后接入）。
 会话级集合不必备份：用 `u{uid}:s-{sessionId}` + TTL，会话结束即消失。
 
@@ -367,10 +380,11 @@ public class FhydraMemoryStore <: MemoryStore { /* 见 ../../f_llm/doc/f_llm-mem
 | `save_day` 用哪个时区 | **存 UTC 日、算服务端本地日**：写入归一 UTC；查询把本地日换算成 1~2 个 UTC 日键取并集（§2.4） |
 | colbert 存 JSON 还是 f32[] | **f32[] 二进制**；线上 JSON 用 `colbert_b64` 承载（§3.2） |
 | collection 级 TTL | **支持**；用于会话级集合，`u{uid}:s-{sessionId}` + `ttl`，会话结束即消失（§2.5） |
-| 导出/导入格式 | **Markdown 文档集合 + zip**（`README.md` + `docs/*.md` + 向量旁挂），打包统一走 `f_zip`（§3.7） |
-| 导出是否默认带向量 | **默认不带**；`include_vectors=true` 才写入 `vectors/*`，导入时缺向量由调用方重算（§3.7） |
+| 导出/导入格式 | **Markdown 文档集合 + zip**（`README.md` + `docs/*.md` + `manifest.json`），打包统一走 `f_zip`（§3.7） |
+| 导出是否带向量 | **一律不带**：dense / sparse / colbert 都不导出，导入时由 f_llm 重新 embedding（§3.7） |
+| 生效时区如何观测 | **启动日志打印一行**：`effective=… source=system\|fhydra_timezone`（§6） |
+| 导出物记不记模型名/维度 | **不记**：`README.md` 只记元数据（记录数、生成时间、版本），不记模型名与维度，也不记向量（§3.7） |
+| 检索是否支持权重 | **支持**：`kind_weights` 在融合后乘到分数上，不进 ANN（§2.3、§3.4） |
+| `kind_weights` 是否要 collection 级默认 | **不要**：权重是固定值，由调用方每次传入，不定义集合级/多维配置（§3.4） |
 
-剩余未决：
-
-1. `include_vectors=true` 时，colbert 是否也要带？当前只带 dense + sparse，colbert 体积最大。
-2. `fhydra_timezone` 覆盖与系统时区不一致时，日志里是否要显式打印当前生效时区？建议启动打一行。
+剩余未决：**无**（本轮问题全部收敛）。

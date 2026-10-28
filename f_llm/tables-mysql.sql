@@ -125,13 +125,14 @@ CREATE TABLE IF NOT EXISTS llm_memory_kind (
   user_id     BIGINT      NOT NULL DEFAULT 0,
   kind        VARCHAR(32) NOT NULL,
   predefined  TINYINT(1)  NOT NULL DEFAULT 0,
+  weight      DOUBLE      NOT NULL DEFAULT 0.8,   -- 检索打分权重 0~1，自动记忆更低
   create_time DATETIME    NOT NULL DEFAULT (UTC_TIMESTAMP()),
   PRIMARY KEY (user_id, kind)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-INSERT IGNORE INTO llm_memory_kind (user_id, kind, predefined) VALUES
-  (0, 'note', 1), (0, 'fact', 1), (0, 'preference', 1),
-  (0, 'task', 1), (0, 'doc', 1), (0, 'knowledge', 1), (0, 'session', 1);
+INSERT IGNORE INTO llm_memory_kind (user_id, kind, predefined, weight) VALUES
+  (0, 'note', 1, 0.9), (0, 'fact', 1, 1.0), (0, 'preference', 1, 1.0),
+  (0, 'task', 1, 0.6), (0, 'doc', 1, 0.8), (0, 'knowledge', 1, 0.8), (0, 'session', 1, 0.3);
 
 -- 记忆事件（§5.5 事件溯源）：先落事件再异步消费，processed=0 的会被重试
 CREATE TABLE IF NOT EXISTS llm_memory_event (
