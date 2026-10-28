@@ -18,7 +18,7 @@ package fountain::f_email.transport
 import std.collection.ArrayList
 import std.io.{InputStream, OutputStream}
 import std.net.SocketTimeoutException
-import fountain::f_email.{IoStage, LimitKind, MailIoException, MailLimitException, MailProtocolException}
+import fountain::f_email.model.{IoStage, LimitKind, MailIoException, MailLimitException, MailProtocolException}
 
 /**
  * 行通道：字节行，不是 String 行。

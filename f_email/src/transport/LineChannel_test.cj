@@ -17,7 +17,7 @@ package fountain::f_email.transport
 
 import std.unittest.*
 import std.unittest.testmacro.*
-import fountain::f_email.{LimitKind, MailIoException, MailLimitException, MailProtocolException}
+import fountain::f_email.model.{LimitKind, MailIoException, MailLimitException, MailProtocolException}
 
 @Test
 public class LineChannel_test {

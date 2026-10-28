@@ -19,7 +19,7 @@ import std.io.{InputStream, OutputStream}
 import std.net.TcpSocket
 import std.sync.Mutex
 import stdx.net.tls.{TlsClientConfig, TlsSocket}
-import fountain::f_email.{IoStage, MailIoException, MailProtocolException, MailTlsException}
+import fountain::f_email.model.{IoStage, MailIoException, MailProtocolException, MailTlsException}
 
 /**
  * 唯一知道 `TcpSocket` / `TlsSocket` 的类。

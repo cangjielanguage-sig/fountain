@@ -19,7 +19,7 @@ import std.net.{TcpServerSocket, TcpSocket}
 import std.sync.AtomicBool
 import std.unittest.*
 import std.unittest.testmacro.*
-import fountain::f_email.{IoStage, MailIoException}
+import fountain::f_email.model.{IoStage, MailIoException}
 
 @Test
 public class MailConnection_test {

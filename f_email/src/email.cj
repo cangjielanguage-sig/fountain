@@ -15,9 +15,10 @@ limitations under the License.
 */
 package fountain::f_email
 
+public import fountain::f_email.model.*
+public import fountain::f_email.transport.*
+
 /**
  * f_email 模块版本。
- *
- * 具体 API 由 OpenSpec 变更逐步加入；此常量只用于确认模块骨架可编译、可被应用加载。
  */
 public let F_EMAIL_VERSION: String = "0.1.0"

@@ -33,15 +33,15 @@
 
 ## 3. M1-a 消息模型
 
-- [ ] 3.1 `HeaderMap.cj`：保序 + 大小写不敏感查找、`set`/`add`/`remove`/`entries`/`names`、折行展开、998 octets 上限、字段名与值校验；值按字节保留、允许裸 UTF-8（RFC 6532），只拒绝 `\r`/`\n`
-- [ ] 3.2 `MailAddress.cj`：`EmailAddress` 与 `AddressList` 的解析（addr-spec / name-addr / 引号名 / 注释 / 组 / 域字面量 / 引号本地部分）与生成（RFC 2047、拒绝废弃路由、拒绝 `\r\n<>`）
-- [ ] 3.3 `MailDate.cj`：RFC 5322 解析（两位年份、月份大小写、时区缩写、缺失时区告警）与生成
-- [ ] 3.4 `BodySource.cj`：`BodySource` 接口 + `MemoryBodySource` / `FileBodySource` / `StreamBodySource`（一次性来源二次 `open` 抛异常）
-- [ ] 3.5 `Spool.cj`：临时目录四级解析、随机文件名、0600、`close()` 删除、全部失败抛 `MimeException`
-- [ ] 3.6 `MimePart.cj`：`MimePart` / `PartBody` / `Multipart`，`text()`/`source()`/`children()`/`isMultipart()`/`isAttachment()`
-- [ ] 3.7 `MailMessage.cj`：`MailMessage` 与 `MailMessageBuilder`（`text`+`html` 自动 `alternative`，有附件外层 `mixed`）、`text()`/`html()`/`attachments()` 选取语义
-- [ ] 3.8 `Envelope.cj`：`fromMessage` 的 `Resent-*` 优先与缺失校验
-- [ ] 3.9 单测：地址往返、组语法、注入拒绝、日期两位年份与缺失时区、`text`/`html` 选取、临时文件权限
+- [x] 3.1 `HeaderMap.cj`：保序 + 大小写不敏感查找、`set`/`add`/`remove`/`entries`/`names`、折行展开、998 octets 上限、字段名与值校验；值按字节保留、允许裸 UTF-8（RFC 6532），只拒绝 `\r`/`\n`
+- [x] 3.2 `MailAddress.cj`：`EmailAddress` 与 `AddressList` 的解析（addr-spec / name-addr / 引号名 / 注释 / 组 / 域字面量 / 引号本地部分）与生成（RFC 2047、拒绝废弃路由、拒绝 `\r\n<>`）
+- [x] 3.3 `MailDate.cj`：RFC 5322 解析（两位年份、月份大小写、时区缩写、缺失时区告警）与生成
+- [x] 3.4 `BodySource.cj`：`BodySource` 接口 + `MemoryBodySource` / `FileBodySource` / `StreamBodySource`（一次性来源二次 `open` 抛异常）
+- [x] 3.5 `Spool.cj`：临时目录四级解析、随机文件名、0600、`close()` 删除、全部失败抛 `MimeException`
+- [x] 3.6 `MimePart.cj`：`MimePart` / `PartBody` / `Multipart`，`text()`/`source()`/`children()`/`isMultipart()`/`isAttachment()`
+- [x] 3.7 `MailMessage.cj`：`MailMessage` 与 `MailMessageBuilder`（`text`+`html` 自动 `alternative`，有附件外层 `mixed`）、`text()`/`html()`/`attachments()` 选取语义
+- [x] 3.8 `Envelope.cj`：`fromMessage` 的 `Resent-*` 优先与缺失校验
+- [x] 3.9 单测：地址往返、组语法、注入拒绝、日期两位年份与缺失时区、`text`/`html` 选取、临时文件权限
 
 验收：RFC 5322 语料解析正确；地址 parse → toString → parse 幂等；注入用例全部被拒。
 
