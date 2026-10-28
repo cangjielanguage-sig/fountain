@@ -44,6 +44,7 @@ f_jit
 f_mq
 f_dbd
 f_dbm
+f_email
 f_jsonrpc
 f_mcp
 f_zip
