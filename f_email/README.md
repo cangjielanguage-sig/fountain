@@ -24,8 +24,13 @@
 - **M4 IMAP 扩展七组**：`ENABLE` 协商、`IDLE`（读线程 + 有界队列 + 25 分钟重建）、
   `MOVE`（含非原子回退）、`SPECIAL-USE`、`NAMESPACE`、`UTF8=ACCEPT`、
   `CONDSTORE`/`QRESYNC`、`SORT`/`THREAD`。
+- **统一门面**：`Email` 一个类管住三种协议——发送、列表（标题 + 接收时间）、读正文、
+  取附件、删除指定邮件；懒连接，读走 `EXAMINE` + `BODY.PEEK[]`，删除按 UID 精确到单封。
 
-进度与逐条验收见 `openspec/changes/add-f-email-client/tasks.md`。
+全量 `cjpm test`：**275 通过 / 0 失败**。真实服务器验证：QQ 邮箱 SMTP 465 发信、
+IMAP 993 列信/读正文/取附件均通过（含 1.6 MB pptx 附件与长中文标题）。
+
+逐条验收见 `doc/spec/add-f-email-client/tasks.md`，验证记录见同目录 `verification.md`。
 
 ## 用法
 

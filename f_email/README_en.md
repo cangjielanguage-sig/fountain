@@ -26,8 +26,14 @@ Milestones M0 → M4 are implemented, each with unit tests.
 - **M4 IMAP extensions**: `ENABLE` negotiation, `IDLE` (reader thread + bounded queue +
   25-minute rebuild), `MOVE` (with explicit non-atomic fallback), `SPECIAL-USE`,
   `NAMESPACE`, `UTF8=ACCEPT`, `CONDSTORE`/`QRESYNC`, `SORT`/`THREAD`.
+- **Unified facade**: `Email` owns all three protocols — send, list (subject + received
+  time), read body, fetch attachments, delete a specific mail. Lazy connections; reads use
+  `EXAMINE` + `BODY.PEEK[]`; deletion targets a single UID.
 
-Per-task progress and acceptance criteria: `openspec/changes/add-f-email-client/tasks.md`.
+Full `cjpm test`: **275 passed / 0 failed**. Verified against a real server: QQ Mail SMTP 465
+send, IMAP 993 list/body/attachment (including a 1.6 MB pptx and a long non-ASCII subject).
+
+Per-task acceptance: `doc/spec/add-f-email-client/tasks.md`; verification log in the same folder.
 
 ## Usage
 
