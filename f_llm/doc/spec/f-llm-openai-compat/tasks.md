@@ -1,6 +1,8 @@
 # Tasks
 
 > 每个任务按 TDD 推进：先写失败用例（Red，确认失败原因是功能缺失）→ 最小实现（Green）→ 重构；跑绿才勾选。各平台真实联调整体排在最后，实现阶段**优先适配 DeepSeek**。
+>
+> **状态（2026-10-28）**：**58/63**。9.2–9.6 是其他平台联调（需要外部 Key），其余全部完成；9.6 的 DeepSeek 部分已实调通过。少数任务在实现中换了做法或类型名，均以「注：」标在原条目后；提案里没写、但为了可用性补做的工作见文末「计划外完成项」。
 
 ## 1. 前置验证与骨架
 
@@ -20,7 +22,7 @@
 
 ## 3. 配置装载、刷新与调度
 
-- [x] 3.1 `LLMFinder.listConfs()` 改为无参全量；`LLMDAO` 查询条件改为 `enabled = true AND weight > 0`，用例覆盖 `weight = 0/-1` 被过滤
+- [x] 3.1 `LLMFinder.listConfs()` 改为无参全量；`LLMDAO` 查询条件改为 `enabled = true AND weight > 0`，用例覆盖 `weight = 0/-1` 被过滤（注：`LLMFinder` 后续整体删除，统一由 `LLMConfs.holder()` 提供候选）
 - [x] 3.2 `LLMConfsSnapshot`：构建时按 `llmName` 分组、丢弃残缺行并记 `warn`；用例断言残缺行不进快照
 - [x] 3.3 `ensureFresh()`：周期内 10 次调用只查库 1 次（计数桩）
 - [x] 3.4 刷新成功：新增平台在下一周期参与调度；刷新失败：旧快照仍可用且记 `error`
@@ -39,11 +41,11 @@
 - [x] 4.4 `DeepSeekDialect`：端点与鉴权头；用录制响应回放验证普通对话与工具调用
 - [x] 4.5 `ResponsesMapper` 非流式：`input`、`instructions` 映射；`output` 按 `type` 分派（message / function_call）
 - [x] 4.6 错误分类：400 立即失败不转移；429/5xx 触发转移并最终成功
-- [x] 4.7 门面 `LLM.chat` / `LLM.respond` 接入，`LLMResponse` 字段齐全
+- [x] 4.7 门面 `LLM.chat` / `LLM.respond` 接入（注：直接复用现有 `LLMResp`，未新建 `LLMResponse`；后补 `chatByName` / `respondByName` 与 `LLMHooks`）
 
 ## 5. 流式
 
-- [x] 5.1 `StreamAccumulator`（Chat）：`content` 拼接、`reasoning_content|reasoning` 兼容、`[DONE]` 结束
+- [x] 5.1 `StreamAccumulator`（Chat）：`content` 拼接、`reasoning_content|reasoning` 兼容、`[DONE]` 结束（注：落地为 `ChatStreamAccumulator` + `ResponsesStreamAccumulator` 两个类）
 - [x] 5.2 `tool_calls` 分片归并：`arguments` 拆成两块后仍能解析为 JSON
 - [x] 5.3 `usage` 只在末块：聚合结果与末块一致；缺失时按启发式估算并标 `estimated`
 - [x] 5.4 `LLM.chatStream`：回调按增量触发，返回聚合结果与非流式字段一致（同输入比对）
@@ -66,14 +68,14 @@
 ## 7. 裁剪、日志与余额接口
 
 - [x] 7.1 裁剪语义回归基线：为 8 个既有策略各写一条"输出语义"用例（不依赖内部实现），作为重写前后的对照
-- [x] 7.2 裁剪实现整理：允许重写内部实现（如统一成组合器），8 条语义用例全绿；`SaturationContextPruner` 改为 `peekNext` + 按 conf 阈值
+- [x] 7.2 裁剪实现整理：允许重写内部实现（如统一成组合器），8 条语义用例全绿；`SaturationContextPruner` 改为按 conf 阈值（注：没有用 `peekNext`，而是注入 `confSelector: () -> ?LLMConf`，便于单测不连库）
 - [x] 7.3 新增算法：注册 `TokenBudget_4000`（按 token 预算裁剪）验证可扩展；同名注册失败；未知策略名显式失败并列出可用名
 - [x] 7.4 `TokenCounter`：远端（tokenizerUrl）与启发式两种实现；不可精确计数时返回 -1 且不抛
-- [x] 7.5 `Redactor`：前 4 + `****` + 后 4；长度 < 12 全掩码；对 JSON 与 conf 选项表递归生效
+- [x] 7.5 `Redactor`：前 4 + `****` + 后 4；长度 ≤ 8 全掩码（注：原计划写的是 < 12，实现取更保守的「短于等于前后可见位数就不露」）；对 JSON 与 conf 选项表递归生效
 - [x] 7.6 调用日志：默认 `info` 一条汇总，含 provider / actualLlmName / 耗时 / TTFT / TokenUsage / finish_reason；日志中无明文 KEY（正则断言）
 - [x] 7.7 `BalanceQuerier` + `BalanceMediator`：未实现平台抛 `BalanceUnsupportedException`；重复注册失败；`@Bean` 自动发现可用
 - [x] 7.8 DeepSeek 余额实现：`GET /user/balance`，多币种各出一条快照，金额按定点解析；`is_available = false` 标记不可用并告警
-- [x] 7.9 其余平台可编译占位：各家一个实现类，调用即抛「不支持」并标注待实现；不得返回 0 或伪造数据
+- [x] 7.9 其余平台可编译占位：各家一个实现类，调用即抛「不支持」并标注待实现；不得返回 0 或伪造数据（注：腾讯云 `DescribeAccountBalance`（TC3 签名）、火山引擎 `QueryBalanceAcct`（V4 签名）已按官方文档实现；智谱/硅基流动/阿里云仍为占位）
 - [x] 7.10 低余额：快照标记 + 一条告警日志，不产生任何外部通知
 
 ## 8. 文档与回归
@@ -85,9 +87,26 @@
 
 ## 9. 平台联调（最后做）
 
-- [x] 9.1 DeepSeek：非流式/流式/工具调用/usage/reasoning 五项打勾，结果回填 `f_llm/doc/f_llm.md` 附录 B
+- [x] 9.1 DeepSeek：非流式/流式/工具调用/usage/reasoning 五项打勾，结果回填 `f_llm/doc/f_llm.md` 附录 B（实测 `deepseek-chat` 已回显为 `deepseek-flash`；`deepseek-flash` 自带思考；同批还实测了余额、搜索/抓取、`/responses`）
 - [ ] 9.2 智谱：同上五项；确认 `thinking` 开关对可开关模型生效
 - [ ] 9.3 火山方舟：端点与 `ep-` 模型名；确认是否支持 Responses API
 - [ ] 9.4 阿里百炼：`enable_thinking` 形态与 `compatible-mode` 路径
 - [ ] 9.5 硅基流动与 OpenAI：标准兼容性抽查
 - [ ] 9.6 搜索/抓取：智谱 `web_search` 字段复核（未做）；DeepSeek `tools/search` 与 `tools/fetch` 已实调通过（2026-10-27）
+
+## 计划外完成项（提案未列，apply 期间补做）
+
+| 项 | 说明 |
+|---|---|
+| Chat 多模态 | `ContentPart` + `ChatMessage.addText/addImage`；`ChatCompletionsMapper` 把内部 `parts` 改写成 `{type:'text'}/{type:'image_url',image_url:{url,detail}}` |
+| Responses 多模态 | `input_text` / `input_image`（`image_url` 是字符串）；**DeepSeek `/responses` 实测可用**（原先误判为不支持，已修 `DeepSeekDialect`） |
+| Responses `reasoning` 解析 | `output[].type=="reasoning"` → `AssistantMessage.reasoningContent` |
+| 内建方言注册 | 此前 `DialectRegistry` 只有显式注册、内建方言从未生效；现 `resolve()` 自动注册 deepseek/zhipu/volcengine/aliyun/siliconflow |
+| 按 llmName 调用 | `LLM.chatByName` / `respondByName` + `LLMHooks`，把权重选号、熔断、失败转移串起来 |
+| embedding 迁移 | 新增 `Embedding.embed(llmName, param)`；删除 `EmbeddingContextMediator` / `AbstractEmbeddingContext` / `GLMEmbeddingContext` |
+| 旧链路清理 | 删除 `LLMContextMediator` / `GLMContext` / `AbstractLLMContext` / `SearchMediartor` / `AbstractSearcher` / `GLMSearcher` / `LLMFinder` |
+| 余额单位统一 | 一律元（腾讯云分→元）；可用 `conf['balanceUnit']` 覆盖 |
+| `f_httpclient.readToEnd()` 修复 | 已知长度时只读一次会留 0 字节，症状是 JSON 解析报 `Unescaped control character`；改为循环读满 |
+| 默认模型 | `MODEL_NAME_DEEPSEEK_FLASH = 'deepseek-flash'`，智谱常量改为 glm-5 系列 |
+
+> 仍未做：`llm_token_usage` 增列 `reasoning_tokens`（TokenUsage 当前只进日志）；Responses 的服务端会话（`previous_response_id` / `store`）与 `function_call_output` 回填。
