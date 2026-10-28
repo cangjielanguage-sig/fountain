@@ -4,16 +4,16 @@
 
 ```
 $ cd f_email && cjpm build      # 成功，无新增告警
-$ cd f_email && cjpm test       # 254 通过 / 0 失败 / 0 错误
+$ cd f_email && cjpm test       # 259 通过 / 0 失败 / 0 错误
 ```
 
-测试分布：model 75、mime 22、transport 26、smtp 28、pop3 25、imap 78，合计 254。
+测试分布：model 75、mime 22、transport 26、smtp 28、pop3 25、imap 83，合计 259。
 
 ## G1 — 单元测试与编解码往返
 
 | 项 | 结论 | 证据 |
 |---|---|---|
-| 全部单元测试通过 | ✅ | `cjpm test`：254 通过、0 失败 |
+| 全部单元测试通过 | ✅ | `cjpm test`：259 通过、0 失败 |
 | QP / base64 / RFC 2047 / RFC 2231 往返 100% | ✅ | `Codec_test`（往返幂等、跨块边界、异常样本）、`ContentType_test`、`MimeParser_test.roundTrips*` |
 
 ## G2 — 三协议脚本测试
@@ -52,8 +52,21 @@ $ cd f_email && cjpm test       # 254 通过 / 0 失败 / 0 错误
 
 ## G6 — 真实服务器互操作
 
-❌ **未执行**。本机没有可用的 Postfix / Dovecot / 163 测试账号，也没有 OHOS 设备。
-`tasks.md` 的 9.x/10.x 中标注「互操作（G6 手工）」的条目（10.18）保持未勾选。
+✅ **QQ 邮箱实测通过**（2026-10-29，Linux aarch64）：
+
+| 项 | 结果 |
+|---|---|
+| IMAP 993 隐式 TLS + 授权码登录 | ✅ 7 个文件夹、INBOX 11 封 |
+| SMTP 465 隐式 TLS + AUTH LOGIN 发信 | ✅ `SendReport.isCompleteSuccess()` |
+| 发信 → 收信 → `SEARCH` → `FETCH BODY.PEEK[]` → 标 `\Seen` | ✅ 同一封邮件 subject 一致 |
+| `NAMESPACE` | ✅ 返回个人前缀 |
+| `IDLE` | ✅ `+ idling` 后正常 `DONE` |
+| `SPECIAL-USE` / `SORT` | QQ 未广告，按能力位跳过（未验证） |
+| Dovecot / 仅 M3 服务器的扩展错误矩阵 | 未执行，后续补 |
+
+**实测发现并修复的真实缺陷**：QQ 邮件的 `Authentication-Results` 等头部展开后超过 998 octets，
+`HeaderMap` 把「物理行上限」误用在「展开后的值」上，导致真实邮件解析失败。已改为只校验 CR/LF，
+998 由 `MimeWriter` 生成折行时保证；新增 `unfoldedValueMayExceedPhysicalLineLimit`。
 
 ## 本次实施的偏差与说明
 

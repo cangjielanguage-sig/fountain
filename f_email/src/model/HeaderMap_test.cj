@@ -21,6 +21,14 @@ import std.unittest.testmacro.*
 @Test
 public class HeaderMap_test {
     @TestCase
+    public func unfoldedValueMayExceedPhysicalLineLimit(): Unit {
+        let headers = HeaderMap()
+        let value = String(Array<Rune>(1200, repeat: r'a'))
+        headers.set("Authentication-Results", value)
+        @Assert((headers.get("Authentication-Results") ?? "").size, 1200)
+    }
+
+    @TestCase
     public func receivedChainKeepsOrder(): Unit {
         let headers = HeaderMap()
         headers.add("Received", "from a")
@@ -85,18 +93,6 @@ public class HeaderMap_test {
             HeaderMap().add("Bad:Name", "v")
         } catch (_: MailProtocolException) {
             caught = true
-        }
-        @Assert(caught, true)
-    }
-
-    @TestCase
-    public func rejectsOverlongValue(): Unit {
-        let huge = String(Array<Rune>(999, repeat: r'a'))
-        var caught = false
-        try {
-            HeaderMap().add("X-Long", huge)
-        } catch (e: MailLimitException) {
-            caught = e.kind.toString() == "Header"
         }
         @Assert(caught, true)
     }

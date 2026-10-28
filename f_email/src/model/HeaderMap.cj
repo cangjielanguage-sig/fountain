@@ -30,7 +30,7 @@ import std.collection.ArrayList
  * 生成侧的 78 octets 折行由 `MimeWriter` 负责。
  */
 public class HeaderMap {
-    /** 单行硬上限（RFC 5322 §2.1.1）。 */
+    /** 单行硬上限（RFC 5322 §2.1.1），由 MimeWriter 在生成时保证。 */
     public static let MAX_LINE_OCTETS: Int64 = 998
 
     private let items = ArrayList<(String, String)>()
@@ -196,8 +196,8 @@ public class HeaderMap {
                 throw MailProtocolException("头字段值含 CR/LF，拒绝写入（头注入防线）")
             }
         }
-        if (bytes.size > MAX_LINE_OCTETS) {
-            throw MailLimitException(LimitKind.Header, MAX_LINE_OCTETS, bytes.size)
-        }
+        // 998 是**物理行**上限，不是展开后字段值的上限：现实邮件里
+        // Authentication-Results / DKIM-Signature 展开后常超过 998。
+        // 行上限由 MimeWriter 生成时的折行保证。
     }
 }

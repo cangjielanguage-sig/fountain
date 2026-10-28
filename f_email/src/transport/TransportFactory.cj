@@ -17,7 +17,9 @@ package fountain::f_email.transport
 
 import std.collection.ArrayList
 import std.io.{InputStream, OutputStream}
+import std.net.SocketTimeoutException
 import std.sync.Mutex
+import std.time.MonoTime
 import stdx.net.tls.TlsClientConfig
 import fountain::f_email.model.MailProtocolException
 
@@ -77,6 +79,7 @@ public class ScriptedTransport <: TransportFactory {
     private let chunkSize: Int64
     private var blockAtEnd: Bool
     private var eofAtEnd = true
+    private var readTimeout: ?Duration = None
 
     /**
      * @param server 预置的服务器字节
@@ -147,13 +150,19 @@ public class ScriptedTransport <: TransportFactory {
         }
         if (available <= 0) {
             if (blockAtEnd) {
-                // 模拟"连接还在但服务器不说话"：阻塞到有数据为止
+                // 模拟"连接还在但服务器不说话"：阻塞到有数据，或按设置的读超时抛超时
+                let start = MonoTime.now()
                 while (true) {
                     synchronized(mutex) {
                         available = serverBytes.size - readPos
                     }
                     if (available > 0) {
                         break
+                    }
+                    if (let Some(limit) <- readTimeout) {
+                        if (MonoTime.now() - start >= limit) {
+                            throw SocketTimeoutException("scripted read timeout")
+                        }
                     }
                     sleep(Duration.millisecond * 2)
                 }
@@ -187,9 +196,15 @@ public class ScriptedTransport <: TransportFactory {
             }
         }
     }
+
+    func setReadTimeout(timeout: ?Duration): Unit {
+        synchronized(mutex) {
+            readTimeout = timeout
+        }
+    }
 }
 
-class ScriptedInput <: InputStream {
+class ScriptedInput <: InputStream & IoTimeout {
     private let transport: ScriptedTransport
 
     init(transport: ScriptedTransport) {
@@ -199,6 +214,12 @@ class ScriptedInput <: InputStream {
     public func read(buffer: Array<Byte>): Int64 {
         transport.readServer(buffer)
     }
+
+    public func setReadTimeout(timeout: ?Duration): Unit {
+        transport.setReadTimeout(timeout)
+    }
+
+    public func setWriteTimeout(timeout: ?Duration): Unit {}
 }
 
 class ScriptedOutput <: OutputStream {

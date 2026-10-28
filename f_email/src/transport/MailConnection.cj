@@ -169,6 +169,12 @@ public class MailConnection <: Resource & IoTimeout {
         if (let Some(s) <- tcp) {
             s.readTimeout = timeout
         }
+        // 内存/脚本流也支持超时（IDLE 的软超时测试要用）
+        if (let Some(stream) <- input) {
+            if (let io: IoTimeout <- stream) {
+                io.setReadTimeout(timeout)
+            }
+        }
     }
 
     public func setWriteTimeout(timeout: ?Duration): Unit {
@@ -177,6 +183,11 @@ public class MailConnection <: Resource & IoTimeout {
         }
         if (let Some(s) <- tcp) {
             s.writeTimeout = timeout
+        }
+        if (let Some(stream) <- output) {
+            if (let io: IoTimeout <- stream) {
+                io.setWriteTimeout(timeout)
+            }
         }
     }
 

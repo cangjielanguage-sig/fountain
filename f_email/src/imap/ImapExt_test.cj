@@ -503,6 +503,91 @@ public class ImapIdle_test {
     }
 
     @TestCase
+    public func rebuildsIdleAfterSilence(): Unit {
+        let transport = ScriptedTransport(
+            server: greeting() + CAPABILITY_LINE +
+                "A0001 OK LOGIN completed\r\n* 1 EXISTS\r\nA0002 OK [READ-WRITE] SELECT completed\r\n" +
+                "+ idling\r\n",
+            blockAtEnd: true
+        )
+        let client = ImapClient.builder("localhost", port: 143)
+            .requireEncryption(false)
+            .allowPlaintextAuth(true)
+            .transport(transport)
+            .build()
+        client.login("alice", Secret.of("pw"))
+        client.select("INBOX")
+        let session = ImapIdle(client)
+            .withRebuildAfter(Duration.millisecond * 30)
+            .withPollInterval(Duration.millisecond * 5)
+            .start()
+        sleep(Duration.millisecond * 60)
+        transport.pushServer("A0003 OK IDLE terminated\r\n+ idling\r\n")
+        sleep(Duration.millisecond * 60)
+        @Assert(session.rebuildCount >= 1, true)
+        session.done()
+        client.close()
+    }
+
+    @TestCase
+    public func enableEmptyListIsNoop(): Unit {
+        let (client, transport) = openSelected("")
+        let enabled = ImapEnable(client).enable([])
+        @Assert(enabled.size, 0)
+        @Assert(transport.recordedText().contains("ENABLE"), false)
+        client.close()
+    }
+
+    @TestCase
+    public func sortKeepsDuplicateSequences(): Unit {
+        let (client, _) = openSelected("* SORT 3 3 1\r\nA0003 OK SORT completed\r\n")
+        let order = ImapSort(client).sort([SortKey(SortCriterion.Date)], "UTF-8", SearchCriteria.all())
+        @Assert(order.size, 3)
+        @Assert(order[0], 3)
+        @Assert(order[1], 3)
+        @Assert(order[2], 1)
+        client.close()
+    }
+
+    @TestCase
+    public func sortWorksWithOneByteStream(): Unit {
+        let (client, transport) = openSelected(
+            "* SORT 2 1\r\nA0003 OK SORT completed\r\n",
+            chunkSize: 1
+        )
+        let order = ImapSort(client).sort([SortKey(SortCriterion.Arrival)], "US-ASCII", SearchCriteria.all())
+        @Assert(order.size, 2)
+        @Assert(transport.recordedText().contains("SORT (ARRIVAL) US-ASCII ALL"), true)
+        client.close()
+    }
+
+    @TestCase
+    public func crossThreadCloseEndsIdle(): Unit {
+        let transport = ScriptedTransport(
+            server: greeting() + CAPABILITY_LINE +
+                "A0001 OK LOGIN completed\r\n* 1 EXISTS\r\nA0002 OK [READ-WRITE] SELECT completed\r\n" +
+                "+ idling\r\n",
+            blockAtEnd: true
+        )
+        let client = ImapClient.builder("localhost", port: 143)
+            .requireEncryption(false)
+            .allowPlaintextAuth(true)
+            .transport(transport)
+            .build()
+        client.login("alice", Secret.of("pw"))
+        client.select("INBOX")
+        let session = ImapIdle(client).withPollInterval(Duration.millisecond * 5).start()
+        spawn {
+            =>
+                sleep(Duration.millisecond * 30)
+                session.close()
+        }
+        sleep(Duration.millisecond * 120)
+        @Assert(session.isFinished(), true)
+        client.close()
+    }
+
+    @TestCase
     public func idleWithoutCapabilityFails(): Unit {
         let (client, _) = openBasicSelected("")
         var caught = false
