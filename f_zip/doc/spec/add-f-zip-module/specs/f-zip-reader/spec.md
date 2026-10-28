@@ -46,7 +46,7 @@
 
 ### Requirement: 按名读取与全部读取
 
-`ZipReader.read(name: String): ?Array<Byte>` SHALL 返回该名字**最后一个**匹配条目解压后的数据；名字不存在时返回 `None`。`readAll(name: String): Array<Array<Byte>>` SHALL 按中央目录顺序返回全部同名条目解压后的数据。`contains(name: String): Bool` SHALL 报告是否存在该名字。
+`ZipReader.read(name: String): ?Array<Byte>` SHALL 返回该名字**最后一个**匹配条目解压后的数据；名字不存在时返回 `None`。`readAll(name: String): Array<Array<Byte>>` SHALL 按中央目录顺序返回全部同名**文件**条目解压后的数据（目录条目不入结果）。`contains(name: String): Bool` SHALL 报告是否存在该名字。
 
 #### Scenario: 同名取最后一个
 
@@ -57,6 +57,7 @@
 
 - **WHEN** 同上 ZIP
 - **THEN** `readAll("x.txt")` 返回长度 2 的数组，元素依次为 `A`、`B`
+- **AND** 目录条目（`isDirectory` 为真，如 `sub/`）不进结果，即使名字匹配也返回空数组
 
 #### Scenario: 名字不存在
 
@@ -119,10 +120,12 @@
 
 `ZipLimits` SHALL 是可覆盖的只读配置，含四个字段与默认值：`maxEntrySize = 512 MB`、`maxTotalSize = 2 GB`、`maxEntries = 65535`、`ratioWarnThreshold = 1000`。
 
-- 单条目解压超过 `maxEntrySize` → 中断并报错，不返回部分数据
+- 单条目解压超过 `maxEntrySize` → 中断并报错，不返回部分数据（先用中央目录的 `uncompressedSize` 提前拒绝，再按实际解压字节兜底）
 - 本次累计解压超过 `maxTotalSize` → 中断；计数按**实际解压出的字节**累加，不采信 header 的 `uncompressedSize`
 - 中央目录条目数超过 `maxEntries` → **在解析中央目录的过程中**拒绝，不先建完整列表
 - 压缩比超过 `ratioWarnThreshold` → 记 warning 日志后继续
+
+头部声明值只用于提前拒绝，超过上限的判定以实际解压字节为准。
 
 #### Scenario: 单条目超限
 
@@ -138,6 +141,12 @@
 
 - **WHEN** 一个条目的 header 声称 `uncompressedSize` 为 1，实际解压出超过 `maxTotalSize` 的字节
 - **THEN** 在累计超过上限时立即中断，不因为 header 的 1 而放行
+
+#### Scenario: 头部声明值只用于提前拒绝
+
+- **WHEN** 一个条目的中央目录 `uncompressedSize` 超过 `maxEntrySize`
+- **THEN** 不启动解压，直接抛出超限异常
+- **AND** 另一个条目声明值在上限内、实际解压字节超过上限时，仍按实际字节中断
 
 #### Scenario: 条目数在解析期拒绝
 

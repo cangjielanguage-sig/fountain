@@ -79,9 +79,9 @@
 
 ### Requirement: ZIP 炸弹四道上限
 
-`unzip` SHALL 透传 `ZipLimits` 的四条规则，且 SHALL 在写盘前完成大小判定，避免"先写满磁盘再报错"：
+`unzip` SHALL 透传 `ZipLimits` 的四条规则，并在解压过程中**持续计数**：超限立即中断，同时删除已写出的半截文件（避免"先把磁盘写满再报错"）。SHALL NOT 要求"落盘前预知大小"——流式解压只有解完才知道实际大小，能承诺的只是"超限即停 + 清理半截文件"：
 
-1. 单条目解压超过 `maxEntrySize` → 中断并报错，**不落盘部分文件**
+1. 单条目解压超过 `maxEntrySize` → 中断并报错，已写出的半截文件 SHALL 被删除
 2. 本次累计解压超过 `maxTotalSize` → 中断
 3. 条目数超过 `maxEntries` → **解析中央目录时**拒绝
 4. 压缩比超过 `ratioWarnThreshold` → 记 warning 日志后继续
@@ -111,7 +111,13 @@
 
 ### Requirement: 加密 ZIP 拒绝
 
-`f_zip` SHALL 在读取阶段检查 general purpose flag 的 bit 0 与 bit 6，任一置位即抛 `ZipException`，消息形如 `不支持加密 ZIP（${name}）`。`unzip` SHALL NOT 产生"解出来一半是对的"的部分结果。
+`f_zip` SHALL 在读取阶段检查 general purpose flag 的 bit 0 与 bit 6，任一置位即抛 `ZipException`，消息形如 `不支持加密 ZIP（${name}）`。
+
+`unzip` 的承诺按**可观察行为**表述，而不是"整包原子性"——`unzip()` 是逐条边解边写：
+
+- 遇到加密条目 SHALL 抛出 `ZipException`，SHALL NOT 跳过它继续解其余条目
+- 该加密条目本身 SHALL NOT 写出任何字节（目标目录下不出现该名字对应的文件）
+- **已落盘的前序条目允许保留**：本模块不承诺回滚（不删已写出的前序文件、也不承诺"要么全对要么全无"）
 
 #### Scenario: 解压加密条目
 
@@ -122,6 +128,8 @@
 
 - **WHEN** 一个 ZIP 含一条加密条目与两条普通条目
 - **THEN** 抛出 `ZipException`，不得"跳过加密条目继续解其余"
+- **AND** 加密条目本身不写出任何字节，目标目录下不存在该条目名对应的文件
+- **AND** 位于它之前、已解出的条目允许保留（不承诺回滚）
 
 ### Requirement: 可诊断的错误信息
 

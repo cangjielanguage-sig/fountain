@@ -109,7 +109,7 @@
 
 ### Requirement: ZIP64 写入仅在越界时启用
 
-`f_zip` SHALL 在写入时逐字段判断：单条目的 `uncompressedSize` / `compressedSize` / `localHeaderOffset` 任一 ≥ `0xFFFFFFFF` 时，该条目走 ZIP64（对应字段写哨兵 + extra `0x0001` 只放越界项 + `version needed = 45`）；`close()` 时条目数 > `0xFFFF` 或 CD 大小 / 偏移 ≥ `0xFFFFFFFF` 时，写 EOCD64 + 定位器并在普通 EOCD 对应字段填哨兵。都不越界时 SHALL NOT 写任何 ZIP64 结构。
+`f_zip` SHALL 在写入时逐字段判断：单条目的 `uncompressedSize` / `compressedSize` / `localHeaderOffset` 任一 ≥ `0xFFFFFFFF` 时，该条目走 ZIP64（对应字段写哨兵 + extra `0x0001` 只放越界项 + `version needed = 45`）；`close()` 时条目数 ≥ `0xFFFF` 或 CD 大小 / 偏移 ≥ `0xFFFFFFFF` 时，写 EOCD64 + 定位器并在普通 EOCD 对应字段填哨兵（`0xFFFF` 本身是读取侧的哨兵值，写侧不能把它当真实值）。都不越界时 SHALL NOT 写任何 ZIP64 结构。
 
 #### Scenario: 小文件不产生 ZIP64 字节
 
@@ -119,7 +119,7 @@
 
 #### Scenario: 条目数越界自动升级
 
-- **WHEN** 写入超过 `0xFFFF` 个条目后调用 `close()`
+- **WHEN** 写入的条目数达到 `0xFFFF`（恰好 65535 或更多）后调用 `close()`
 - **THEN** 输出包含 EOCD64 与定位器
 - **AND** 普通 EOCD 的条目数字段为 `0xFFFF`，真实值出现在 EOCD64 中
 - **AND** 不抛异常、不告警

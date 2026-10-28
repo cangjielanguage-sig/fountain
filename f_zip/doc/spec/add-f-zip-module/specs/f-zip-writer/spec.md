@@ -4,6 +4,8 @@
 
 为 `fountain::f_zip` 提供写入侧能力：内存路径与流式路径的双轨写入、data descriptor、ZIP64 自动升级、同名条目消解、目录条目、`position` / `spilling` 进度语义、平台分档的落盘阈值，以及 `zip` 便捷打包。目标是"小条目写得干净、大条目不吃内存、产出的包能被外部工具认可"。
 
+> **外部工具证据口径**：`7za t` / `7za l` 与 Python `zipfile.testzip()` 为必做项；`unzip`（Info-ZIP）为**可选**——当前融合开发环境未安装且无免密 sudo，具备时补跑，缺失不视为失败。文中把 `unzip` 写成唯一证据的场景一律按此口径解读。
+
 ## ADDED Requirements
 
 ### Requirement: 构造与选项
@@ -103,8 +105,9 @@
 
 #### Scenario: 混合样本被外部工具认可
 
-- **WHEN** 把该混合样本交给 `unzip -t` 与 Python `zipfile.testzip()`
+- **WHEN** 把该混合样本交给 `7za t` 与 Python `zipfile.testzip()`
 - **THEN** 两者都报告无错误
+- **AND** 环境具备 `unzip` 时补跑 `unzip -t`，结果同样无错误；缺失 `unzip` 时该补跑不参与判定
 
 ### Requirement: 同名条目写入侧消解
 
@@ -173,8 +176,9 @@
 
 #### Scenario: 外部工具识别为目录
 
-- **WHEN** 用 `unzip -l` 列出含目录条目的包
-- **THEN** 该条目显示为目录
+- **WHEN** 用 `7za l` 列出含目录条目的包
+- **THEN** 该条目以 `/` 结尾、大小为 0，被显示为目录
+- **AND** 环境具备 `unzip` 时补跑 `unzip -l`，结果一致
 
 ### Requirement: addFile 与 addDirectory 的返回值
 
@@ -231,16 +235,18 @@
 
 ### Requirement: 平台分档的内存阈值
 
-`ZipWriterOptions.memoryEntryThreshold` 的默认值 SHALL 按 `os` 编译期分档：Linux 为 `64 * 1024 * 1024`，其他平台（含 OHOS）为 `16 * 1024 * 1024`。分档 SHALL 通过两份互补的 `@When` 声明实现（`@When[os == "Linux"]` 与 `@When[os != "Linux"]`），SHALL NOT 在函数体内做条件分支——`@When` 只能修饰声明。
+`ZipWriterOptions.memoryEntryThreshold` 的默认值 SHALL 按 `os` **与 `env`** 编译期分档：`os == "Linux" && env == "gnu"`（Linux 服务器 / 桌面）为 `64 * 1024 * 1024`，其余目标（含 OHOS）为 `16 * 1024 * 1024`。分档 SHALL 通过两份互补的 `@When` 声明实现（`@When[os == "Linux" && env == "gnu"]` 与 `@When[os != "Linux" || env != "gnu"]`），SHALL NOT 在函数体内做条件分支——`@When` 只能修饰声明。
 
-#### Scenario: Linux 默认 64 MB
+> 必须带 `env` 的原因：鸿蒙目标（`aarch64-linux-ohos`）在 `@When` 里的 `os` 同样是 `"Linux"`，区别在 `env`（`gnu` / `ohos`）。只判 `os` 会让 OHOS 拿到服务器档 64 MB，与"低内存设备用 16 MB"的设计意图相反。
 
-- **WHEN** 在 Linux 上取 `ZipWriterOptions().memoryEntryThreshold`
+#### Scenario: Linux(gnu) 默认 64 MB
+
+- **WHEN** 在 `os == "Linux" && env == "gnu"` 的目标上取 `ZipWriterOptions().memoryEntryThreshold`
 - **THEN** 等于 `67108864`
 
-#### Scenario: 非 Linux 默认 16 MB
+#### Scenario: 其他目标默认 16 MB
 
-- **WHEN** 在 OHOS 或其他平台上取默认值
+- **WHEN** 在 OHOS（`os == "Linux" && env == "ohos"`）或其他平台上取默认值
 - **THEN** 等于 `16777216`
 
 #### Scenario: 互补分支只存在一份
@@ -264,8 +270,10 @@
 
 #### Scenario: 临时目录按序解析
 
-- **WHEN** 显式设置 `tempDir`
-- **THEN** 临时文件落在该目录，不读 `TMPDIR` 与系统临时目录
+- **WHEN** 显式设置 `tempDir` 且该目录可写
+- **THEN** 临时文件落在该目录
+- **AND** `tempDir` 是**首选目录**而非排他项：该目录不可用（不存在 / 不可写）时，按
+  `TMPDIR` → 系统临时目录 → `./.fountain_tmp/` 的顺序继续回退，四级全失败才抛 `ZipException`
 
 #### Scenario: 全部失败即报错
 
@@ -299,12 +307,24 @@
 
 ### Requirement: 写入失败进入脏状态
 
-`addFileStream` / `addFile` 过程中抛异常时，`ZipWriter` SHALL 进入脏状态；此后任何 `add*` 或 `close()` SHALL 抛出 `ZipException`，消息形如 `条目 ${name} 写入中断，ZIP 结构不完整`。SHALL NOT 尝试续写或修补。
+`add` / `addFileStream` / `addFile` 过程中**任一阶段**抛异常时，`ZipWriter` SHALL 进入脏状态。三个阶段同等对待，不得只在其中一段加保护：
+
+1. local header 写入失败
+2. 压缩数据泵送失败（含 `input` 读失败、压缩器写失败）
+3. data descriptor 写入失败
+
+此后任何 `add*` 或 `close()` SHALL 抛出 `ZipException`，消息形如 `条目 ${name} 写入中断，ZIP 结构不完整`。SHALL NOT 尝试续写或修补。
 
 #### Scenario: 输入流中途抛错
 
 - **WHEN** 一个 `InputStream` 在读第 N 字节时抛异常
 - **THEN** `addFileStream` 抛出异常，随后 `close()` 也抛 `ZipException`
+
+#### Scenario: 三个阶段各自失败都进脏状态
+
+- **WHEN** 输出流分别在 ① local header 写入 ② 压缩数据泵送 ③ data descriptor 写入 三个阶段抛异常
+- **THEN** 三种情况下 writer 都进入脏状态
+- **AND** 之后调用 `add("x", bytes)` 或 `close()` 都抛 `条目 ${name} 写入中断，ZIP 结构不完整`
 
 #### Scenario: 脏状态下不能继续加条目
 
