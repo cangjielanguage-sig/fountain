@@ -67,6 +67,18 @@ public class SearchUnavailableException <: Exception {
     }
 }
 
+/**
+ * 搜索/抓取的 HTTP 层失败（含**拒绝重定向**）。
+ *
+ * 单独一个类型是为了让调用方能把「协议层拒绝」与「业务无数据」区分开：
+ * 3xx 必须当成失败，不能跟随——跳转目标没有经过 `SsrfGuard` 校验。
+ */
+public class SearchHttpException <: Exception {
+    public init(message: String) {
+        super(message)
+    }
+}
+
 /** 搜索能力注册表：同名重复注册直接失败；`@Bean` 自动发现 + 显式注册两条路 */
 public class SearchProviderRegistry {
     private static let mutex = Mutex()

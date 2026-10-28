@@ -53,17 +53,24 @@ let FETCH_JSON = '''
 {"content":"该域名仅用于文档示例。\\nLearn more","title":"Example Domain"}'''
 
 class FakePoster {
-    FakePoster(private let response: String){}
+    private let status: Int64
+    private let response: String
+
+    FakePoster(response: String, status!: Int64 = 200) {
+        this.status = status
+        this.response = response
+    }
+
     var calls: Int64 = 0
     var lastUrl: String = ''
     var lastBody: String = ''
     var lastAuth: String = ''
-    public func post(url: String, headers: HashMap<String, String>, body: String): String {
+    public func post(url: String, headers: HashMap<String, String>, body: String): (Int64, String) {
         calls++
         lastUrl = url
         lastBody = body
         lastAuth = headers.get('Authorization') ?? ''
-        response
+        (status, response)
     }
 }
 
@@ -131,6 +138,33 @@ public class DeepSeekSearchProviderTest {
         conf.setConf(HashMap<String, String>([('searchUrl', 'https://proxy.example/search')]))
         provider.search(conf, 'x', 1, false)
         @Expect(poster.lastUrl, 'https://proxy.example/search')
+    }
+
+    @TestCase
+    func testFetchRefusesRedirect(): Unit {
+        // 3xx 必须直接失败：跳转目标没有经过 SSRF 校验
+        let poster = FakePoster('', status: 302)
+        let provider = DeepSeekSearchProvider(poster: {url, headers, body => poster.post(url, headers, body)})
+        var message = ''
+        try{
+            provider.fetch(searchConf(), 'https://public.example/redirect')
+        }catch(e: SearchHttpException){
+            message = e.message
+        }
+        @Expect(message.contains('refused redirect'), true)
+    }
+
+    @TestCase
+    func testSearchFailsOnServerError(): Unit {
+        let poster = FakePoster('', status: 500)
+        let provider = DeepSeekSearchProvider(poster: {url, headers, body => poster.post(url, headers, body)})
+        var thrown = false
+        try{
+            provider.search(searchConf(), 'x', 1, false)
+        }catch(_: SearchHttpException){
+            thrown = true
+        }
+        @Expect(thrown, true)
     }
 
     @TestCase

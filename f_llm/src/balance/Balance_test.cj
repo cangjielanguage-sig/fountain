@@ -41,9 +41,10 @@ let TENCENT_JSON = '''
     "RealBalance": 1000000,
     "CashAccountBalance": 1200000,
     "PresentAccountBalance": 30000,
-    "CreditAmount": 0,
-    "FreezeAmount": 0,
+    "CreditAmount": 500000,
+    "FreezeAmount": 1500,
     "OweAmount": 0,
+    "Uin": 600000561284,
     "RequestId": "req-1"
   }
 }'''
@@ -135,6 +136,9 @@ public class BalanceTest {
         @Expect(snapshots[0].toppedUp, '100.00')
         @Expect(snapshots[1].currency, 'USD')
         @Expect(snapshots[1].total, '5.00')
+        // DeepSeek 不提供账号标识，但查询时间与原始响应必须有
+        @Expect(snapshots[0].queriedAt.isEmpty(), false)
+        @Expect(snapshots[0].raw.contains('balance_infos'), true)
     }
 
     @TestCase
@@ -153,6 +157,12 @@ public class BalanceTest {
         @Expect(snapshots[0].toppedUp, '12000.00')
         @Expect(snapshots[0].granted, '300.00')
         @Expect(snapshots[0].totalValue, 10000.0f64)
+        // 快照字段齐全：账号、信用额度、冻结金额、查询时间、原始响应
+        @Expect(snapshots[0].account, '600000561284')
+        @Expect(snapshots[0].creditLimit, '5000.00')
+        @Expect(snapshots[0].frozen, '15.00')
+        @Expect(snapshots[0].queriedAt.isEmpty(), false)
+        @Expect(snapshots[0].raw.contains('RealBalance'), true)
     }
 
     @TestCase
@@ -174,6 +184,11 @@ public class BalanceTest {
         @Expect(snapshots[0].total, '100.00')
         @Expect(snapshots[0].toppedUp, '120.00')
         @Expect(snapshots[0].totalValue, 100.0f64)
+        @Expect(snapshots[0].account, '2100')
+        @Expect(snapshots[0].creditLimit, '0.00')
+        @Expect(snapshots[0].frozen, '20.00')
+        @Expect(snapshots[0].queriedAt.isEmpty(), false)
+        @Expect(snapshots[0].raw.contains('AvailableBalance'), true)
     }
 
     @TestCase

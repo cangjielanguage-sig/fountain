@@ -19,6 +19,7 @@ import std.collection.HashMap
 
 import fountain::f_data.*
 
+import fountain::f_llm.constant.*
 import fountain::f_llm.model.po.*
 
 /**
@@ -54,8 +55,14 @@ public class DeepSeekDialect <: ProviderDialect {
         map
     }
 
-    /** DeepSeek 不接受思考开关：调用方传了也不写进报文 */
-    public func decorate(conf: LLMConf, body: JsonObject): Unit {
+    /**
+     * DeepSeek 不接受思考开关：调用方传了也不写进报文。
+     *
+     * 恒思考模型（`deepseek-flash` / `deepseek-reasoner`）的 `temperature` 由
+     * `ThinkingPolicy.apply` 统一剥掉——这里只负责字段形态。
+     */
+    public func decorate(conf: LLMConf, body: JsonObject, mode: ThinkingMode): Unit {
         body.remove('thinking')
+        body.remove('enable_thinking')
     }
 }

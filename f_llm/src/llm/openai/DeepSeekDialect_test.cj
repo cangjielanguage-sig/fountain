@@ -21,6 +21,7 @@ import std.unittest.testmacro.*
 
 import fountain::f_data.*
 
+import fountain::f_llm.constant.*
 import fountain::f_llm.model.po.*
 
 @Test
@@ -55,7 +56,7 @@ public class DeepSeekDialectTest {
         let body = JsonObject()
         body.add('thinking', 'enabled')
         body.add('model', 'deepseek-chat')
-        DeepSeekDialect().decorate(mkConf('https://api.deepseek.com', 'sk'), body)
+        DeepSeekDialect().decorate(mkConf('https://api.deepseek.com', 'sk'), body, ThinkingMode.Toggle)
         @Expect(body.get('thinking').isNone(), true)
         @Expect(body.get('model')?.asString().value ?? '', 'deepseek-chat')
     }

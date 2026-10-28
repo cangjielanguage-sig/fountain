@@ -909,12 +909,15 @@ func decorate(conf: LLMConf, params: LLMParams, body: JsonObject): Unit {
 
 `temperature` 与思考的冲突：`capability=Always` 的模型普遍不接受 `temperature != 1`，规则是**丢弃 `temperature` 并记 `warn`**，不把请求打回去——业务侧不该为了温度去改一遍全部调用点。
 
-### 5.8 模型能力：`ThinkingCapability`
+### 5.8 模型能力：`ThinkingMode`
 
-> **未实现**：`ModelCapabilities` / `ThinkingCapability` 没有进代码。当前的思考开关只有两个来源：
-> ① `conf.alwaysThinking`（`true` 时智谱/火山写 `enabled`、百炼写 `enable_thinking=true`）；
-> ② 调用方在报文里要求过 `thinking` 时，智谱/火山改 `disabled`、百炼与硅基流动直接剥掉。
-> 下面这一节保留为「按模型推断能力」的设计思路。
+> **已实现（2026-10-28）**：`ModelCapabilities.resolve(conf)` 按「配置覆盖 → 模型能力表 → 默认可开关」三级解析，返回 `ThinkingMode`（`None` / `Always` / `Toggle`，定义在 `constant` 包，方言包无需反向依赖 `llm`）。
+>
+> - 覆盖：`conf['thinking'] = none|always|toggle`；
+> - 能力表：`deepseek-flash` / `deepseek-reasoner` → `Always`；`embedding-3` → `None`；其余（含 `deepseek-chat`、`glm-5` 系列、未知模型）→ `Toggle`；
+> - 落地：`ThinkingPolicy.apply` 在 `dialect.decorate` 之后执行——`Always` 剥掉 `temperature`，`None` 剥掉全部思考字段并在 `alwaysThinking=true` 时记一条 `warn`，`Toggle` 交给方言按 `conf.alwaysThinking`/调用方意图写字段。
+>
+> 实现时踩到一个仓颉坑：`match` 的 `case 常量名` 会被当成**绑定模式**（所有模型都落到第一个分支），能力表因此改用 `if` 比较。
 
 评审明确：**思考是模型属性，不是平台属性**。同一个智谱账号下，`glm-5` 可开关思考，某些纯生成模型压根没有思考通道；同一家的 `deepseek-reasoner` 恒思考、`deepseek-chat` 不思考。所以按平台建表一定会错。
 

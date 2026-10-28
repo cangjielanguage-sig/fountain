@@ -344,4 +344,12 @@ PostgreSQL 18.4（WSL，`postgres://fountain:fountain@127.0.0.1:5432/fountain_te
 
 - **已实调**：DeepSeek（Chat / 流式 / 工具 / usage / reasoning / 余额 / 搜索 / 抓取 / Responses 多模态）、腾讯云 tokenhub（最小 chat）。
 - **deferred**：智谱、火山方舟、阿里百炼、硅基流动、OpenAI —— 这些平台没有免费额度，保持现有实现（端点、方言、报文清洗都有单测），**不做付费联调**。任务 9.2–9.6 保留未勾选并标 deferred，不阻塞归档。
-- 余额同理：腾讯云/火山已按官方文档实现签名与解析，但**签名数学未用真实 AK/SK 验证**（归入 deferred）。
+- 余额同理：腾讯云/火山已按官方文档实现签名与解析，但**签名数学未用真实 AK/SK 验证**（归入 deferred）。### verify 修复（2026-10-28）
+
+针对 openspec verify 报出的 3 个 CRITICAL 已修复并补测（`f_llm` 164/164 PASSED）：
+
+1. **思考能力落地**：新增 `ModelCapabilities.resolve()` + `ThinkingPolicy.apply()`，`ThinkingMode` 放在 `constant` 包（方言包 `openai` 不能反向依赖 `llm`，否则包循环）。`decorate(conf, body, mode)` 多一个参数，方言只负责字段形态。顺带记录了仓颉 `case 常量` 是绑定模式的坑（能力表改用 `if`）。
+2. **余额快照补齐**：`BalanceSnapshot` 增加 `account / creditLimit / frozen / queriedAt / raw`，DeepSeek、腾讯云、火山三处解析分别填值；用例断言新字段。
+3. **webFetch 拒绝重定向**：`SearchPoster` 改为返回 `(状态码, body)`，`defaultSearchPost` 调 `client.autoRedirect(false)`，`ensureOk` 对 3xx 抛 `SearchHttpException('refused redirect')`，4xx/5xx 也直接失败；新增两条用例（302、500）。
+
+未修的 WARNING（消息文案、`epoch` 单位、MCP schema 取舍、`weight=0` 候选列表）保持原样，等待下一批处理。

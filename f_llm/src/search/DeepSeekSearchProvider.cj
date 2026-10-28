@@ -25,19 +25,37 @@ import fountain::f_httpclient.*
 
 import fountain::f_llm.model.po.*
 
-/** 一次 POST 的抽象：单测注入假实现，校验报文与解析，不发真请求 */
-public type SearchPoster = (String, HashMap<String, String>, String) -> String
+/**
+ * 一次 POST 的抽象：返回 `(状态码, 响应体)`。
+ *
+ * 必须带状态码：抓取要**拒绝所有 3xx**（不跟随跳转），否则公网地址可以用 302
+ * 把请求引到内网，`SsrfGuard` 只校验入口 URL 就会失效。
+ */
+public type SearchPoster = (String, HashMap<String, String>, String) -> (Int64, String)
 
-func defaultSearchPost(url: String, headers: HashMap<String, String>, body: String): String {
+func defaultSearchPost(url: String, headers: HashMap<String, String>, body: String): (Int64, String) {
     let client = HttpClient(url)
     for((key, value) in headers){
         client.header(key, value)
     }
+    // 不跟随重定向：跳转目标没有经过 SSRF 校验
+    client.autoRedirect(false)
     var tls = TlsClientConfig()
     tls.verifyMode = CertificateVerifyMode.TrustAll
     client.tlsConfig(tls)
     resource(client){http =>
-        http.post(body).readEntire()
+        let response = http.post(body)
+        (Int64(response.status), response.readEntire())
+    }
+}
+
+/** 3xx 一律拒绝（跳转目标未经 SSRF 校验），4xx/5xx 直接失败并带状态码 */
+func ensureOk(status: Int64, action: String, url: String): Unit {
+    if(status >= 300 && status < 400){
+        throw SearchHttpException('${action} refused redirect (${status}): ${url}')
+    }
+    if(status >= 400){
+        throw SearchHttpException('${action} failed (${status}): ${url}')
     }
 }
 
@@ -84,14 +102,18 @@ public class DeepSeekSearchProvider <: SearchProvider {
         body.add('query', query)
         body.add('count', count)
         body.add('need_content', needContent)
-        parseDeepSeekSearch(poster(url, headersOf(conf), body.toString()), needContent)
+        let (status, response) = poster(url, headersOf(conf), body.toString())
+        ensureOk(status, 'search', url)
+        parseDeepSeekSearch(response, needContent)
     }
 
     public func fetch(conf: LLMConf, url: String): FetchedPage {
         let endpoint = conf.option('fetchUrl', fetchEndpoint)
         let body = JsonObject()
         body.add('url', url)
-        parseDeepSeekFetch(poster(endpoint, headersOf(conf), body.toString()))
+        let (status, response) = poster(endpoint, headersOf(conf), body.toString())
+        ensureOk(status, 'fetch', url)
+        parseDeepSeekFetch(response)
     }
 }
 

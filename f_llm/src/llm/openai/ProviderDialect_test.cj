@@ -21,6 +21,7 @@ import std.unittest.testmacro.*
 
 import fountain::f_data.*
 
+import fountain::f_llm.constant.*
 import fountain::f_llm.model.po.*
 
 func mkConf(url: String, auth: String): LLMConf {
@@ -46,7 +47,7 @@ class FakeDialect <: ProviderDialect {
     public func headers(conf: LLMConf): HashMap<String, String> {
         HashMap<String, String>()
     }
-    public func decorate(conf: LLMConf, body: JsonObject): Unit {}
+    public func decorate(conf: LLMConf, body: JsonObject, mode: ThinkingMode): Unit {}
 }
 
 @Test

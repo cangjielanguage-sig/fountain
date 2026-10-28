@@ -130,7 +130,9 @@ public class LLM {
                 case LLMApiKind.Chat => ChatCompletionsMapper.build(conf, params, false)
                 case LLMApiKind.Responses => ResponsesMapper.build(conf, params, false)
             }
-            dialect.decorate(conf, body)
+            dialect.decorate(conf, body, ModelCapabilities.resolve(conf))
+            // 思考能力是模型属性：恒思考模型不带 temperature，无思考能力的模型不留任何思考字段
+            ThinkingPolicy.apply(conf, body)
 
             var response = LLMHttpResponse(0, '')
             try{
@@ -212,7 +214,9 @@ public class LLM {
                 case LLMApiKind.Chat => ChatCompletionsMapper.build(conf, params, true)
                 case LLMApiKind.Responses => ResponsesMapper.build(conf, params, true)
             }
-            dialect.decorate(conf, body)
+            dialect.decorate(conf, body, ModelCapabilities.resolve(conf))
+            // 思考能力是模型属性：恒思考模型不带 temperature，无思考能力的模型不留任何思考字段
+            ThinkingPolicy.apply(conf, body)
 
             let chatAccumulator = ChatStreamAccumulator()
             let responsesAccumulator = ResponsesStreamAccumulator()

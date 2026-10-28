@@ -102,7 +102,12 @@ public func parseDeepSeekBalance(body: String, provider: String, unit: String): 
                 toppedUp: toppedUp,
                 available: available,
                 low: false,
-                totalValue: totalValue
+                totalValue: totalValue,
+                account: '',
+                creditLimit: '',
+                frozen: '',
+                queriedAt: DateTime.now().toString(),
+                raw: body
             ))
         }
     }
@@ -153,6 +158,8 @@ public func parseTencentBalance(body: String): ArrayList<BalanceSnapshot> {
     let (total, totalValue) = BalanceUnits.toYuan(balanceTextOf(response, 'RealBalance'), BalanceUnits.FEN)
     let (granted, _) = BalanceUnits.toYuan(balanceTextOf(response, 'PresentAccountBalance'), BalanceUnits.FEN)
     let (toppedUp, _) = BalanceUnits.toYuan(balanceTextOf(response, 'CashAccountBalance'), BalanceUnits.FEN)
+    let (creditLimit, _) = BalanceUnits.toYuan(balanceTextOf(response, 'CreditAmount'), BalanceUnits.FEN)
+    let (frozen, _) = BalanceUnits.toYuan(balanceTextOf(response, 'FreezeAmount'), BalanceUnits.FEN)
     snapshots.add(BalanceSnapshot(
         provider: 'tencent',
         currency: 'CNY',
@@ -161,7 +168,12 @@ public func parseTencentBalance(body: String): ArrayList<BalanceSnapshot> {
         toppedUp: toppedUp,
         available: true,
         low: false,
-        totalValue: totalValue
+        totalValue: totalValue,
+        account: balanceTextOf(response, 'Uin'),
+        creditLimit: creditLimit,
+        frozen: frozen,
+        queriedAt: DateTime.now().toString(),
+        raw: body
     ))
     snapshots
 }
@@ -210,6 +222,8 @@ public func parseVolcengineBalance(body: String, unit: String): ArrayList<Balanc
     let result = json.get('Result')?.asObject() ?? JsonObject()
     let (total, totalValue) = BalanceUnits.toYuan(balanceTextOf(result, 'AvailableBalance'), unit)
     let (toppedUp, _) = BalanceUnits.toYuan(balanceTextOf(result, 'CashBalance'), unit)
+    let (creditLimit, _) = BalanceUnits.toYuan(balanceTextOf(result, 'CreditLimit'), unit)
+    let (frozen, _) = BalanceUnits.toYuan(balanceTextOf(result, 'FreezeAmount'), unit)
     let snapshots = ArrayList<BalanceSnapshot>()
     snapshots.add(BalanceSnapshot(
         provider: 'volcengine',
@@ -219,7 +233,12 @@ public func parseVolcengineBalance(body: String, unit: String): ArrayList<Balanc
         toppedUp: toppedUp,
         available: true,
         low: false,
-        totalValue: totalValue
+        totalValue: totalValue,
+        account: balanceTextOf(result, 'AccountID'),
+        creditLimit: creditLimit,
+        frozen: frozen,
+        queriedAt: DateTime.now().toString(),
+        raw: body
     ))
     snapshots
 }

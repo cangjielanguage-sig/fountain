@@ -48,8 +48,8 @@ public class ZhipuDialect <: ProviderDialect {
         bearerHeaders(conf)
     }
 
-    public func decorate(conf: LLMConf, body: JsonObject): Unit {
-        applyThinkingObject(conf, body)
+    public func decorate(conf: LLMConf, body: JsonObject, mode: ThinkingMode): Unit {
+        applyThinkingObject(conf, body, mode)
     }
 }
 
@@ -74,8 +74,8 @@ public class VolcengineDialect <: ProviderDialect {
         bearerHeaders(conf)
     }
 
-    public func decorate(conf: LLMConf, body: JsonObject): Unit {
-        applyThinkingObject(conf, body)
+    public func decorate(conf: LLMConf, body: JsonObject, mode: ThinkingMode): Unit {
+        applyThinkingObject(conf, body, mode)
     }
 }
 
@@ -100,12 +100,17 @@ public class AliyunDialect <: ProviderDialect {
         bearerHeaders(conf)
     }
 
-    public func decorate(conf: LLMConf, body: JsonObject): Unit {
+    public func decorate(conf: LLMConf, body: JsonObject, mode: ThinkingMode): Unit {
         body.remove('thinking')
-        if(conf.alwaysThinking){
-            body.add('enable_thinking', true)
-        }else{
-            body.remove('enable_thinking')
+        match(mode){
+            case ThinkingMode.Always => body.add('enable_thinking', true)
+            case ThinkingMode.None => body.remove('enable_thinking')
+            case ThinkingMode.Toggle =>
+                if(conf.alwaysThinking){
+                    body.add('enable_thinking', true)
+                }else{
+                    body.remove('enable_thinking')
+                }
         }
     }
 }
@@ -131,7 +136,7 @@ public class SiliconFlowDialect <: ProviderDialect {
         bearerHeaders(conf)
     }
 
-    public func decorate(conf: LLMConf, body: JsonObject): Unit {
+    public func decorate(conf: LLMConf, body: JsonObject, mode: ThinkingMode): Unit {
         body.remove('thinking')
         body.remove('enable_thinking')
     }
@@ -148,16 +153,24 @@ func bearerHeaders(conf: LLMConf): HashMap<String, String> {
     map
 }
 
-func applyThinkingObject(conf: LLMConf, body: JsonObject): Unit {
-    if(conf.alwaysThinking){
-        let thinking = JsonObject()
-        thinking.add('type', THINGKING_ENABLED)
-        body.add('thinking', thinking)
-        return
+func applyThinkingObject(conf: LLMConf, body: JsonObject, mode: ThinkingMode): Unit {
+    match(mode){
+        case ThinkingMode.Always =>
+            // 恒思考：开关无效，直接写 enabled
+            setThinkingType(body, THINGKING_ENABLED)
+        case ThinkingMode.None =>
+            body.remove('thinking')
+        case ThinkingMode.Toggle =>
+            if(conf.alwaysThinking){
+                setThinkingType(body, THINGKING_ENABLED)
+            }else if(body.get('thinking').isSome()){
+                setThinkingType(body, THINGKING_DISABLED)
+            }
     }
-    if(let Some(raw) <- body.get('thinking')){
-        let thinking = JsonObject()
-        thinking.add('type', THINGKING_DISABLED)
-        body.add('thinking', thinking)
-    }
+}
+
+func setThinkingType(body: JsonObject, value: String): Unit {
+    let thinking = JsonObject()
+    thinking.add('type', value)
+    body.add('thinking', thinking)
 }

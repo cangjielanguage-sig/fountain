@@ -21,6 +21,7 @@ import std.unittest.testmacro.*
 
 import fountain::f_data.*
 
+import fountain::f_llm.constant.*
 import fountain::f_llm.model.po.*
 
 func dialectConf(provider: String, baseUrl: String): LLMConf {
@@ -85,12 +86,12 @@ public class ProviderDialectsTest {
     func testZhipuThinkingSwitch(): Unit {
         let conf = dialectConf('zhipu', 'https://x.example')
         let body = JsonObject()
-        ZhipuDialect().decorate(conf, body)
+        ZhipuDialect().decorate(conf, body, ThinkingMode.Toggle)
         // 没要求思考且报文里没有该字段 ⇒ 不凭空添加
         @Expect(body.get('thinking').isNone(), true)
 
         conf.alwaysThinking = true
-        ZhipuDialect().decorate(conf, body)
+        ZhipuDialect().decorate(conf, body, ThinkingMode.Toggle)
         @Expect(body.get('thinking')?.asObject().get('type')?.asString().value ?? '', 'enabled')
     }
 
@@ -101,7 +102,7 @@ public class ProviderDialectsTest {
         let requested = JsonObject()
         requested.add('type', 'enabled')
         body.add('thinking', requested)
-        ZhipuDialect().decorate(conf, body)
+        ZhipuDialect().decorate(conf, body, ThinkingMode.Toggle)
         @Expect(body.get('thinking')?.asObject().get('type')?.asString().value ?? '', 'disabled')
     }
 
@@ -113,7 +114,7 @@ public class ProviderDialectsTest {
         let legacy = JsonObject()
         legacy.add('type', 'enabled')
         body.add('thinking', legacy)
-        AliyunDialect().decorate(conf, body)
+        AliyunDialect().decorate(conf, body, ThinkingMode.Toggle)
         @Expect(body.get('thinking').isNone(), true)
         @Expect(body.get('enable_thinking')?.asBool().value ?? false, true)
     }
@@ -126,7 +127,7 @@ public class ProviderDialectsTest {
         let legacy = JsonObject()
         legacy.add('type', 'enabled')
         body.add('thinking', legacy)
-        SiliconFlowDialect().decorate(conf, body)
+        SiliconFlowDialect().decorate(conf, body, ThinkingMode.Toggle)
         @Expect(body.get('thinking').isNone(), true)
         @Expect(body.get('enable_thinking').isNone(), true)
     }

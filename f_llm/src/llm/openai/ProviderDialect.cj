@@ -20,6 +20,7 @@ import std.sync.Mutex
 
 import fountain::f_data.*
 
+import fountain::f_llm.constant.*
 import fountain::f_llm.model.po.*
 
 /** 一次调用用的是哪套 OpenAI 协议 */
@@ -43,7 +44,7 @@ public interface ProviderDialect {
     func headers(conf: LLMConf): HashMap<String, String>
 
     /** 对标准 OpenAI 报文做平台补丁（温度、思考、额外字段）；默认什么都不做 */
-    func decorate(conf: LLMConf, body: JsonObject): Unit
+    func decorate(conf: LLMConf, body: JsonObject, mode: ThinkingMode): Unit
 }
 
 /** 未注册 provider 的回退实现：标准 OpenAI 报文，路径取 conf 或默认 */
@@ -72,7 +73,7 @@ public class StandardDialect <: ProviderDialect {
         map
     }
 
-    public func decorate(conf: LLMConf, body: JsonObject): Unit {}
+    public func decorate(conf: LLMConf, body: JsonObject, mode: ThinkingMode): Unit {}
 }
 
 func trimTrailingSlash(url: String): String {

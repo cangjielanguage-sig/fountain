@@ -40,7 +40,17 @@ public class BalanceSnapshot {
         private var toppedUp!: String = '',
         private var available!: Bool = true,
         private var low!: Bool = false,
-        private var totalValue!: Float64 = 0.0f64
+        private var totalValue!: Float64 = 0.0f64,
+        /** 账号标识（腾讯云 Uin / 火山 AccountID；DeepSeek 不提供则为空） */
+        private var account!: String = '',
+        /** 信用额度（元） */
+        private var creditLimit!: String = '',
+        /** 冻结金额（元） */
+        private var frozen!: String = '',
+        /** 查询时间（ISO 8601） */
+        private var queriedAt!: String = '',
+        /** 该平台的原始响应，排障用 */
+        private var raw!: String = ''
     ){}
 }
 
