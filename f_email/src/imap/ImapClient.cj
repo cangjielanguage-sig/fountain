@@ -1287,20 +1287,31 @@ public class ImapClient <: Resource {
     }
 
     /**
-     * tag 生成：`A0001`…`A9999`，然后 `B0001`。**不回绕**——回绕会让"上一条命令的
-     * 迟到回复"和"新命令的回复"撞在同一个 tag 上，那种错误几乎无法复现。
+     * tag 生成：`A0001`…`AFFFF`（四位十六进制），然后 `B0001`。**不回绕**——
+     * 回绕会让"上一条命令的迟到回复"和"新命令的回复"撞在同一个 tag 上。
      */
+    private func hex4(value: Int64): String {
+        let digits = "0123456789ABCDEF".toRuneArray()
+        var number = value
+        let out = Array<Rune>(4, repeat: r'0')
+        var index: Int64 = 3
+        while (index >= 0) {
+            out[index] = digits[number % 16]
+            number /= 16
+            index -= 1
+        }
+        String(out)
+    }
+
     func nextTag(): String {
         tagCounter += 1
-        let index = (tagCounter - 1) / 9999
-        let number = (tagCounter - 1) % 9999 + 1
-        let letter = String([Rune(UInt32(r'A') + UInt32(index % 26))])
-        let digits = number.toString()
-        var padded = digits
-        while (padded.size < 4) {
-            padded = "0" + padded
+        let group = (tagCounter - 1) / 65535
+        if (group >= 26) {
+            throw MailProtocolException("IMAP tag 空间耗尽")
         }
-        "${letter}${padded}"
+        let number = (tagCounter - 1) % 65535 + 1
+        let letter = String([Rune(UInt32(r'A') + UInt32(group))])
+        "${letter}${hex4(number)}"
     }
 
     // ---------- 参数编码 ----------

@@ -731,6 +731,16 @@ public class ImapClient_test {
     }
 
     @TestCase
+    public func tagsUseHexDigits(): Unit {
+        let (client, _) = openImap(greeting() + CAPABILITY_LINE)
+        for (_ in 0..15) {
+            client.nextTag()
+        }
+        @Assert(client.nextTag(), "A0010")
+        client.close()
+    }
+
+    @TestCase
     public func tagsIncrementMonotonically(): Unit {
         let (client, transport) = openImap(
             greeting() + CAPABILITY_LINE +

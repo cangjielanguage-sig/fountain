@@ -85,6 +85,23 @@ public class SmtpClient_test {
     }
 
     @TestCase
+    public func authConfiguredButNotAdvertisedFails(): Unit {
+        let transport = ScriptedTransport(server: "220 ready\r\n250 smtp.example.com\r\n")
+        var caught = false
+        try {
+            SmtpClient.builder("localhost", port: 25)
+                .requireEncryption(false)
+                .allowPlaintextAuth(true)
+                .auth(SmtpAuthMechanism.Login, "u", Secret.of("p"))
+                .transport(transport)
+                .build()
+        } catch (_: MailAuthException) {
+            caught = true
+        }
+        @Assert(caught, true)
+    }
+
+    @TestCase
     public func buildNegotiatesCapabilities(): Unit {
         let transport = ScriptedTransport(
             server: "220 ready\r\n" +

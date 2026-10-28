@@ -4,16 +4,16 @@
 
 ```
 $ cd f_email && cjpm build      # 成功，无新增告警
-$ cd f_email && cjpm test       # 266 通过 / 0 失败 / 0 错误
+$ cd f_email && cjpm test       # 268 通过 / 0 失败 / 0 错误
 ```
 
-测试分布：model 75、mime 22、transport 26、smtp 28、pop3 25、imap 90，合计 266。
+测试分布：model 75、mime 22、transport 26、smtp 29、pop3 25、imap 91，合计 268。
 
 ## G1 — 单元测试与编解码往返
 
 | 项 | 结论 | 证据 |
 |---|---|---|
-| 全部单元测试通过 | ✅ | `cjpm test`：266 通过、0 失败 |
+| 全部单元测试通过 | ✅ | `cjpm test`：268 通过、0 失败 |
 | QP / base64 / RFC 2047 / RFC 2231 往返 100% | ✅ | `Codec_test`（往返幂等、跨块边界、异常样本）、`ContentType_test`、`MimeParser_test.roundTrips*` |
 
 ## G2 — 三协议脚本测试
@@ -76,7 +76,7 @@ $ cd f_email && cjpm test       # 266 通过 / 0 失败 / 0 错误
 4. **`FetchSink` 的回调顺序**：正文块先到、`onComplete(meta)` 后到。反过来需要先把正文缓存下来才能凑齐元信息，与流式目标冲突。
 5. **`ImapClient.append`** 用「序列化两遍」拿精确长度（第一遍只计数），不落临时文件；语义与设计文档的「先得精确大小」一致，少一次磁盘往返。
 6. **`ImapEnable` / `ImapIdle` / `ImapMove` / `ImapSpecialUse` / `ImapNamespace` / `ImapCondStore` / `ImapSort`** 是独立类（`ImapXxx(client)`），不是 `ImapClient` 的方法：Cangjie 不支持分部类，拆开也让 M4 的七个能力边界在类型层面可见。
-7. **IDLE 的 25 分钟重建**只做了实现级覆盖：脚本化传输无法模拟「服务器 25 分钟不说话」，`tasks.md` 10.17 保持未勾选。
+7. **IDLE 的 25 分钟重建**已由 `rebuildsIdleAfterSilence` 用 30ms 重建窗口 + 可注入 poll 覆盖，`tasks.md` 10.17 已勾选。
 
 ## 2026-10-29 verify 复审后的修复
 

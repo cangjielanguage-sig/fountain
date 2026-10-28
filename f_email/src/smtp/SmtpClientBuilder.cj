@@ -158,7 +158,14 @@ public class SmtpClientBuilder {
                 channel.withDeadline(timeouts.greeting)
                 capabilities = ehlo(channel, hello)
             }
-            if (mechanism.isSome() && !capabilities.authMechanisms.isEmpty()) {
+            if (mechanism.isSome()) {
+                if (capabilities.authMechanisms.isEmpty()) {
+                    throw MailAuthException(
+                        mechanism.getOrThrow().toString(),
+                        None<Int64>,
+                        "服务器未广告任何 AUTH 机制，拒绝构建未认证客户端"
+                    )
+                }
                 authenticate(channel, capabilities, timeouts)
             }
             SmtpClient(
