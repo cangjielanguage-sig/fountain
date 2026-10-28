@@ -32,7 +32,7 @@ import fountain::f_email.model.{IoStage, LimitKind, MailIoException, MailLimitEx
  * 2. `readExact` 必须消费行缓冲里的残留——IMAP literal 紧跟在 `{n}` 所在行的 CRLF 之后；
  * 3. `buffered=false` 时按单字节读，供 STARTTLS 升级前使用，避免把 TLS 握手字节吞进缓冲区。
  */
-public class LineChannel <: InputStream & Resource {
+public class LineChannel <: InputStream & OutputStream & Resource {
     private let input: InputStream
     private let output: OutputStream
     private let maxLine: Int64

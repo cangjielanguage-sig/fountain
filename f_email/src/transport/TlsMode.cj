@@ -18,13 +18,21 @@ package fountain::f_email.transport
 import std.time.MonoTime
 
 /** 传输层的三种 TLS 模式。 */
-public enum TlsMode {
+public enum TlsMode <: ToString {
     /** 明文。 */
     | None
     /** 先明文，再由 STARTTLS / STLS 命令升级。 */
     | StartTls
     /** 连上即 TLS（SMTPS 465 / POP3S 995 / IMAPS 993）。 */
     | Implicit
+
+    public func toString(): String {
+        match (this) {
+            case None => "None"
+            case StartTls => "StartTls"
+            case Implicit => "Implicit"
+        }
+    }
 }
 
 /**

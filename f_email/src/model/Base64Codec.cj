@@ -89,7 +89,7 @@ public class Base64Codec {
 
     public static func decodeBytes(bytes: Array<Byte>, strict!: Bool = false): Array<Byte> {
         let out = ArrayList<Byte>()
-        var group = Array<Byte>(4, repeat: 0)
+        var group = Array<Int64>(4, repeat: 0)
         var count = 0
         var padded = false
         for (b in bytes) {
@@ -98,6 +98,10 @@ public class Base64Codec {
             }
             if (b == PAD) {
                 padded = true
+                if (count >= 2) {
+                    emitQuad(group, count - 1, out)
+                    count = 0
+                }
                 continue
             }
             if (padded && strict) {
@@ -106,32 +110,23 @@ public class Base64Codec {
             let value = charValue(b)
             if (value < 0) {
                 if (strict) {
-                    throw MimeException("base64 含非法字符：${Rune(UInt32(b))}")
+                    throw MimeException("base64 含非法字符")
                 }
                 continue
             }
-            group[count] = UInt8(value)
+            group[count] = value
             count += 1
             if (count == 4) {
-                emitGroup(group, 4, out)
+                emitQuad(group, 3, out)
                 count = 0
             }
         }
-        if (count > 0) {
-            if (count == 1) {
-                if (strict) {
-                    throw MimeException("base64 尾部只剩 1 个字符")
-                }
-            } else {
-                // 缺 padding：当作补足 '=' 处理
-                group[count] = PAD
-                count += 1
-                while (count < 4) {
-                    group[count] = PAD
-                    count += 1
-                }
-                emitGroup(group, 4, out)
+        if (count == 1) {
+            if (strict) {
+                throw MimeException("base64 尾部只剩 1 个字符")
             }
+        } else if (count >= 2) {
+            emitQuad(group, count - 1, out)
         }
         out.toArray()
     }
@@ -161,21 +156,21 @@ public class Base64Codec {
         -1
     }
 
-    static func emitGroup(group: Array<Byte>, size: Int64, out: ArrayList<Byte>): Unit {
-        let a = Int64(group[0]) & 0x3F
-        let b = Int64(group[1]) & 0x3F
-        let c = Int64(group[2]) & 0x3F
-        let d = Int64(group[3]) & 0x3F
+    static func emitQuad(group: Array<Int64>, produced: Int64, out: ArrayList<Byte>): Unit {
+        let a = group[0] & 0x3F
+        let b = group[1] & 0x3F
+        let c = group[2] & 0x3F
+        let d = group[3] & 0x3F
         let n = (a << 18) | (b << 12) | (c << 6) | d
-        out.add(UInt8((n >> 16) & 0xFF))
-        if (size < 3 || group[2] == PAD) {
-            return
+        if (produced >= 1) {
+            out.add(UInt8((n >> 16) & 0xFF))
         }
-        out.add(UInt8((n >> 8) & 0xFF))
-        if (size < 4 || group[3] == PAD) {
-            return
+        if (produced >= 2) {
+            out.add(UInt8((n >> 8) & 0xFF))
         }
-        out.add(UInt8(n & 0xFF))
+        if (produced >= 3) {
+            out.add(UInt8(n & 0xFF))
+        }
     }
 
     /**
@@ -269,7 +264,7 @@ public class Base64Decoder <: InputStream {
     private var inputPos = 0
     private var inputLimit = 0
     private var eof = false
-    private var group = Array<Byte>(4, repeat: 0)
+    private var group = Array<Int64>(4, repeat: 0)
     private var groupSize = 0
     private var padded = false
     private var finished = false
@@ -327,10 +322,10 @@ public class Base64Decoder <: InputStream {
                 }
                 continue
             }
-            group[groupSize] = UInt8(v)
+            group[groupSize] = v
             groupSize += 1
             if (groupSize == 4) {
-                Base64Codec.emitGroup(group, 4, pending)
+                Base64Codec.emitQuad(group, 3, pending)
                 groupSize = 0
                 if (pending.size > 0) {
                     return
@@ -352,14 +347,7 @@ public class Base64Decoder <: InputStream {
             finished = true
             return
         }
-        let padding = Base64Codec.PAD
-        group[groupSize] = padding
-        groupSize += 1
-        while (groupSize < 4) {
-            group[groupSize] = padding
-            groupSize += 1
-        }
-        Base64Codec.emitGroup(group, 4, pending)
+        Base64Codec.emitQuad(group, groupSize - 1, pending)
         groupSize = 0
         finished = true
     }

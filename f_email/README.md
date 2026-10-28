@@ -8,9 +8,16 @@
 
 ## 当前状态
 
-按里程碑推进（M0 → M1 → M2 → M3 → M4）。已实现：M0 传输骨架
-（`MailConnection` / `LineChannel` / `DotStuff` / `MailTrace` / `TransportFactory`，
-含脚本化测试传输）。其余里程碑按 `openspec/changes/add-f-email-client/tasks.md` 顺序落地。
+按里程碑推进（M0 → M1 → M2 → M3 → M4）。
+
+- **M0 传输骨架**：`MailConnection` / `LineChannel` / `DotStuff` / `MailTrace` /
+  `TransportFactory`（含脚本化测试传输）。
+- **M1 消息模型与 MIME**：`HeaderMap`、地址/日期、`CharsetResolver`、base64/QP、
+  RFC 2047/2231、`MimePart`/`MailMessage`、流式 `MimeParser` 与 `MimeWriter`。
+- **M1-e SMTP**：`SmtpClient` 建连/EHLO/STARTTLS/AUTH 与投递事务、PIPELINING、
+  逐收件人 `SendReport`、Bcc 剥离、SIZE 预检。
+
+POP3、IMAP 与 M4 扩展尚未实现，进度见 `openspec/changes/add-f-email-client/tasks.md`。
 
 ## 环境要求
 

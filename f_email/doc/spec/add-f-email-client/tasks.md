@@ -85,18 +85,18 @@
 
 ## 7. M1-e SMTP 客户端
 
-- [ ] 7.1 `smtp/SmtpReply.cj`：多行 `250-` 解析、`code` 取最后一行、`enhanced` 提取
-- [ ] 7.2 `smtp/SmtpCapabilities.cj`：`SIZE`/`8BITMIME`/`SMTPUTF8`/`PIPELINING`/`STARTTLS`/`AUTH`/`ENHANCEDSTATUSCODES`/`DSN`
-- [ ] 7.3 `smtp/SmtpClient.cj` builder：`tls`/`tlsConfig`/`auth`/`oauth2`/`helloName`/`timeouts`/`requireEncryption`/`allowPlaintextAuth`/`sendPolicy`/`maxMessageBytes`/`precomputeSize`/`dsn`
-- [ ] 7.4 builder 校验：默认加密要求、明文认证拒绝、`helloName` 缺省
+- [x] 7.1 `smtp/SmtpReply.cj`：多行 `250-` 解析、`code` 取最后一行、`enhanced` 提取
+- [x] 7.2 `smtp/SmtpCapabilities.cj`：`SIZE`/`8BITMIME`/`SMTPUTF8`/`PIPELINING`/`STARTTLS`/`AUTH`/`ENHANCEDSTATUSCODES`/`DSN`
+- [x] 7.3 `smtp/SmtpClient.cj` builder：`tls`/`tlsConfig`/`auth`/`oauth2`/`helloName`/`timeouts`/`requireEncryption`/`allowPlaintextAuth`/`sendPolicy`/`maxMessageBytes`/`precomputeSize`/`dsn`
+- [x] 7.4 builder 校验：默认加密要求、明文认证拒绝、`helloName` 缺省
 - [ ] 7.5 `build()` 建连流程：greeting → EHLO（失败回退 HELO）→ STARTTLS → 重新 EHLO → AUTH
 - [ ] 7.6 `smtp/SmtpAuth.cj`：PLAIN / LOGIN / CRAM-MD5 / XOAUTH2 编码与挑战处理；XOAUTH2 失败发空行再读最终码；不自动降级
-- [ ] 7.7 投递事务：MAIL FROM（`SIZE=`/`BODY=8BITMIME`/`SMTPUTF8`/`RET=`）、逐收件人 RCPT（`NOTIFY=`/`ORCPT=`）、DATA
-- [ ] 7.8 `SendPolicy`：BestEffort 与 AllOrNothing 的进入 DATA 判定与 `aborted` 语义
-- [ ] 7.9 PIPELINING：BestEffort 批量写出按序消费；无有效收件人但收到 354 时写 `.\r\n` 再 RSET；AllOrNothing 不 pipeline DATA
-- [ ] 7.10 `smtp/SendReport.cj`：`accepted`/`rejected`/`reply`/`aborted`/`isCompleteSuccess`/`isRetryable`
-- [ ] 7.11 自动补齐 `Date`/`Message-ID`/`MIME-Version`；`From` 缺失报错；发送时剥离 `Bcc` 且不改原 message
-- [ ] 7.12 SIZE：默认不发；`precomputeSize` 或 `maxMessageBytes>0` 时先计数，超限在 MAIL FROM 前失败
+- [x] 7.7 投递事务：MAIL FROM（`SIZE=`/`BODY=8BITMIME`/`SMTPUTF8`/`RET=`）、逐收件人 RCPT（`NOTIFY=`/`ORCPT=`）、DATA
+- [x] 7.8 `SendPolicy`：BestEffort 与 AllOrNothing 的进入 DATA 判定与 `aborted` 语义
+- [x] 7.9 PIPELINING：BestEffort 批量写出按序消费；无有效收件人但收到 354 时写 `.\r\n` 再 RSET；AllOrNothing 不 pipeline DATA
+- [x] 7.10 `smtp/SendReport.cj`：`accepted`/`rejected`/`reply`/`aborted`/`isCompleteSuccess`/`isRetryable`
+- [x] 7.11 自动补齐 `Date`/`Message-ID`/`MIME-Version`；`From` 缺失报错；发送时剥离 `Bcc` 且不改原 message
+- [x] 7.12 SIZE：默认不发；`precomputeSize` 或 `maxMessageBytes>0` 时先计数，超限在 MAIL FROM 前失败
 - [ ] 7.13 8BITMIME / SMTPUTF8 分支与错误
 - [ ] 7.14 `isRetryable(error)` 分类表
 - [ ] 7.15 脚本测试：EHLO 多行、STARTTLS 后重新 EHLO、未广告 STARTTLS、四种 AUTH 逐字节、部分/全部 RCPT 被拒、PIPELINING 顺序、dot-stuffing、SIZE 超限、无 8BITMIME、非 ASCII 地址、Bcc 剥离、421 中途断开

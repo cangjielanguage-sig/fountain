@@ -18,6 +18,7 @@ package fountain::f_email
 public import fountain::f_email.model.*
 public import fountain::f_email.transport.*
 public import fountain::f_email.mime.*
+public import fountain::f_email.smtp.*
 
 /**
  * f_email 模块版本。
