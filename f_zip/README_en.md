@@ -17,6 +17,7 @@ export CANGJIE_STDX_DYNAMIC_PATH=/path/to/dynamic_stdx
 f_zip
 ├── stdx.compress.zlib   DecompressInputStream / CompressOutputStream
 ├── f_util               crc32(data: Array<Byte>): UInt32
+├── f_base               BaseException (base class of ZipException)
 ├── f_io                 ByteBuffer (random access for the in-memory mode)
 ├── f_log                LoggerFactory (spill debug log, ratio warning, skipped symlinks)
 ├── charset4cj           GBK decoding (file name fallback chain)

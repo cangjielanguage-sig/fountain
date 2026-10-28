@@ -105,6 +105,47 @@ public class Eocd_test {
         let bytes = buildZip64Sample(true)
         assertZipError({=> readerOf(bytes)}, "ZIP64 定位器")
     }
+
+    /**
+     * 场景「分卷 ZIP 读到即报错」：普通 EOCD 的 *disk number*（+4）与
+     * *disk with CD*（+6）非 0 时直接拒绝，不往下解析。
+     */
+    @TestCase
+    public func splitArchiveEocdDiskFieldsRejected(): Unit {
+        let base = buildRawZip([RawEntrySpec("a.txt", "abc".toArray())])
+        let eocd = Int64(base.size) - 22
+        var offset: Int64 = 4
+        while (offset <= 6) {
+            let corrupted = cloneBytes(base)
+            corrupted[eocd + offset] = 1
+            assertZipError({=> readerOf(corrupted)}, "分卷")
+            offset += 2
+        }
+    }
+
+    /**
+     * 场景「带 ZIP64 的分卷 ZIP 读到即报错」：EOCD64 的两个 4 字节 disk 字段
+     * （+16 / +20）非 0 时同样拒绝。
+     */
+    @TestCase
+    public func splitArchiveZip64DiskFieldsRejected(): Unit {
+        let base = buildZip64Sample(false)
+        // 布局：EOCD64(56) → 定位器(20) → 普通 EOCD(22)
+        let eocd64 = Int64(base.size) - 22 - 20 - 56
+        var offset: Int64 = 16
+        while (offset <= 20) {
+            let corrupted = cloneBytes(base)
+            corrupted[eocd64 + offset] = 1
+            assertZipError({=> readerOf(corrupted)}, "分卷")
+            offset += 4
+        }
+    }
+}
+
+private func cloneBytes(bytes: Array<Byte>): Array<Byte> {
+    let copy = Array<Byte>(bytes.size, repeat: 0)
+    bytes.copyTo(copy, 0, 0, bytes.size)
+    copy
 }
 
 /** 构造一个 ZIP64 样本：1 条 Stored 条目 + EOCD64 + 定位器 + 带哨兵的普通 EOCD。 */

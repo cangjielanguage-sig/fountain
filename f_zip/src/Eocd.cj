@@ -92,6 +92,18 @@ internal func locateEocd(source: EntrySource): EocdInfo {
     }
 
     let eocdOffset = start + found
+    // 分卷 / 多磁盘 ZIP 的盘号字段：单卷包必须为 0。这里不像条目数那样有哨兵语义，
+    // 非 0 就是"把包拆在了多张盘上"，我们没有跨盘拼接的能力，读到就报。
+    let thisDisk = Int64(u16At(tail, found + 4))
+    let cdDisk = Int64(u16At(tail, found + 6))
+    if (thisDisk != 0 || cdDisk != 0) {
+        let disk = if (thisDisk != 0) {
+            thisDisk
+        } else {
+            cdDisk
+        }
+        throw ZipException("不支持分卷 ZIP（disk ${disk}）")
+    }
     let entriesThisDisk = Int64(u16At(tail, found + 8))
     let totalEntries = Int64(u16At(tail, found + 10))
     let cdSize = Int64(u32At(tail, found + 12))
@@ -126,6 +138,17 @@ internal func readZip64Eocd(source: EntrySource, eocdOffset: Int64, size: Int64)
     let record = readFullyAt(source, eocd64Offset, ZipLayout.EOCD64_SIZE)
     if (u32At(record, 0) != ZipLayout.SIGNATURE_EOCD64) {
         throw ZipException("ZIP64 EOCD 签名不是 0x06064b50")
+    }
+    // EOCD64 的 *disk number*（+16）与 *disk with CD*（+20）同样必须是 0。
+    let zodDisk = Int64(u32At(record, 16))
+    let zodCdDisk = Int64(u32At(record, 20))
+    if (zodDisk != 0 || zodCdDisk != 0) {
+        let disk = if (zodDisk != 0) {
+            zodDisk
+        } else {
+            zodCdDisk
+        }
+        throw ZipException("不支持分卷 ZIP（disk ${disk}）")
     }
     // 跳过 sig(4) + size(8) + versionMadeBy(2) + versionNeeded(2) + disk(4) + cdDisk(4) + entriesThisDisk(8)
     let recordBuf = ByteBuffer(record)

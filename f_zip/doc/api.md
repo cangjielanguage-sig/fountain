@@ -27,7 +27,7 @@ let r = ZipReader("a.zip")          // init(path: String, limits!: ZipLimits = Z
 r.entries(): ArrayList<ZipEntry>    // 中央目录顺序，不合并同名、不排序；每次返回独立列表
 r.contains(name): Bool
 r.read(name): ?Array<Byte>          // 同名取**最后一个**；不存在返回 None
-r.readAll(name): Array<Array<Byte>> // 全部同名条目，按中央目录顺序
+r.readAll(name): Array<Array<Byte>> // 全部同名**文件**条目，按中央目录顺序（目录条目不返回）
 r.open(name): ?InputStream          // 每次另开独立游标，可并发读；读到 EOF 才校验 CRC
 r.close(): Unit                     // 幂等；关闭后 entries/read/open 抛 ZipException
 ```
@@ -55,6 +55,9 @@ w.close(): Unit                    // 必须调用；幂等
 ```
 
 - 所有 `add*` 返回**实际写入的名字**（同名冲突会被改名：`a.txt → a_2.txt`）。
+- **`tempDir` 是首选目录，不是排他项**：`add()` 超阈值落盘时按
+  `ZipWriterOptions.tempDir` → `TMPDIR` → 系统临时目录 → `./.fountain_tmp/`（自动创建）逐级回退，
+  某一级不可用就试下一级；四级都不可写才抛 `无法创建临时文件，且条目大小 ...`，**不降级回内存**。
 - **`ZipWriter` 不是线程安全的**：单条 `OutputStream` 顺序写，同一个 writer 不得并发调用。
   `spilling` 是 `AtomicBool`，可以跨线程读。
 - **`spilling` 与 `position` 不保证原子一致**，二者只用于展示，不要拿来做逻辑判断。

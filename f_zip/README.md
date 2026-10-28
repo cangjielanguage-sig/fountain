@@ -14,6 +14,7 @@ deflate 数据流复用 `stdx.compress.zlib`（`WrapType.DeflateFormat`）。
 f_zip
 ├── stdx.compress.zlib   DecompressInputStream / CompressOutputStream
 ├── f_util               crc32(data: Array<Byte>): UInt32
+├── f_base               BaseException（ZipException 的基类）
 ├── f_io                 ByteBuffer（流模式的随机访问缓冲）
 ├── f_log                LoggerFactory（落盘 debug 日志 / 压缩比告警 / 符号链接跳过）
 ├── charset4cj           GBK 解码（文件名回退链）

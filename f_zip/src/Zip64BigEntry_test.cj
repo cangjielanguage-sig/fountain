@@ -41,7 +41,7 @@ public class Zip64BigEntry_test {
     @TestCase
     public func singleEntryOverFourGigabytes(): Unit {
         if (!slowEnabled()) {
-            println("SKIP: 未设置 F_ZIP_SLOW=1，跳过慢用例 9.7b（单条目 > 4 GB）")
+            skipGated("未设置 F_ZIP_SLOW=1，跳过慢用例 9.7b（单条目 > 4 GB）")
             return
         }
         let size: Int64 = 4 * 1024 * 1024 * 1024 + 4096

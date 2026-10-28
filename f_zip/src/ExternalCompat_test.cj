@@ -33,21 +33,6 @@ import std.unittest.testmacro.*
  */
 @Test
 public class ExternalCompat_test {
-    /**
-     * 外部工具缺失时的统一出口：默认打印 `SKIP` 让用例返回，
-     * `F_ZIP_EXTERNAL=1` 时改为失败（发布前的必跑档）。
-     */
-    private static func skipMissingTool(tool: String, scenario: String): Unit {
-        let forced = match (env.getVariable("F_ZIP_EXTERNAL")) {
-            case Some(v) => v == "1"
-            case None => false
-        }
-        if (forced) {
-            @Fail("外部工具 ${tool} 未安装，F_ZIP_EXTERNAL=1 要求必跑（${scenario}）")
-        }
-        println("SKIP: 未安装 ${tool}，跳过 ${scenario}")
-    }
-
     private static func samples(dir: Path): Array<Path> {
         let plain = dir.join("plain.zip")
         let streaming = dir.join("stream.zip")

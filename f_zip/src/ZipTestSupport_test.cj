@@ -32,6 +32,32 @@ internal func slowEnabled(): Bool {
 }
 
 /**
+ * 门控 / 缺工具用例的统一出口：打印一行 `SKIP: <原因>`，由调用方随后 `return`。
+ *
+ * 测试框架把"提前 `return`"记成 PASSED，所以这行输出是判断"这条到底跑没跑"的
+ * 唯一凭据：统计用例数时，带 `SKIP` 的条目要从"真跑通过"里扣掉。
+ * 所有门控（`F_ZIP_SLOW` / `F_ZIP_RESOURCE`）与外部工具缺失分支都必须走这里，
+ * 不要再各自 `println`。
+ */
+internal func skipGated(reason: String): Unit {
+    println("SKIP: ${reason}")
+}
+
+/**
+ * 外部工具缺失出口：默认走 [skipGated]；`F_ZIP_EXTERNAL=1`（发布前必跑档）时改为失败。
+ */
+internal func skipMissingTool(tool: String, scenario: String): Unit {
+    let forced = match (env.getVariable("F_ZIP_EXTERNAL")) {
+        case Some(v) => v == "1"
+        case None => false
+    }
+    if (forced) {
+        @Fail("外部工具 ${tool} 未安装，F_ZIP_EXTERNAL=1 要求必跑（${scenario}）")
+    }
+    skipGated("未安装 ${tool}，跳过 ${scenario}")
+}
+
+/**
  * 大样本的工作目录：默认 `env.getTempDirectory()`，可用 `F_ZIP_TMP` 改道。
  *
  * 9.7b 要写 4 GB 以上的包，`/tmp` 在不少环境里是 tmpfs（等于吃内存），

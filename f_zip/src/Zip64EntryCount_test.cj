@@ -26,7 +26,7 @@ import std.unittest.testmacro.*
  * 慢用例：条目数越过 `0xFFFF` 时 `close()` 自动升级 ZIP64。
  *
  * 只有发布前才需要跑全量：设置环境变量 `F_ZIP_SLOW=1`。
- * 其余时候直接返回，不拖慢日常 `cjpm test`。
+ * 其余时候打印一行 `SKIP` 后返回，不拖慢日常 `cjpm test`。
  */
 @Test
 public class Zip64EntryCount_test {
@@ -34,7 +34,7 @@ public class Zip64EntryCount_test {
     @TestCase
     public func entryCountOver65535WritesZip64(): Unit {
         if (!slowEnabled()) {
-            println("SKIP: 未设置 F_ZIP_SLOW=1，跳过慢用例 9.7a（65537 条目）")
+            skipGated("未设置 F_ZIP_SLOW=1，跳过慢用例 9.7a（65537 条目）")
             return
         }
         let total: Int64 = 65536 + 1
@@ -52,7 +52,7 @@ public class Zip64EntryCount_test {
     @TestCase
     public func exactly65535EntriesWritesZip64(): Unit {
         if (!slowEnabled()) {
-            println("SKIP: 未设置 F_ZIP_SLOW=1，跳过慢用例 9.7a 边界（65535 条目）")
+            skipGated("未设置 F_ZIP_SLOW=1，跳过慢用例 9.7a 边界（65535 条目）")
             return
         }
         checkZip64AroundEntryLimit(Int64(0xFFFF))
@@ -91,15 +91,63 @@ public class Zip64EntryCount_test {
             let (code, _, err) = try {
                 executeWithOutput("7za", ["t", path.toString()])
             } catch (_: ProcessException) {
+                skipMissingTool("7za", "7za t/l 校验 ${total} 条目的 ZIP64 包")
                 return
             }
             if (code != 0) {
                 @Fail("7za 拒绝了 ${total} 条目的 ZIP64 包：${String.fromUtf8(err)}")
+            }
+            // `7za l` 的汇总行也要认这个包：不只"能解开"，列出的条目数也要对。
+            let (listCode, listOut, listErr) = try {
+                executeWithOutput("7za", ["l", path.toString()])
+            } catch (_: ProcessException) {
+                skipMissingTool("7za", "7za l 条目计数（${total} 条）")
+                return
+            }
+            if (listCode != 0) {
+                @Fail("7za l 失败：${String.fromUtf8(listErr)}")
+            }
+            let listed = sevenZipListedFiles(String.fromUtf8(listOut))
+            if (listed != total) {
+                @Fail("7za l 汇总的条目数是 ${listed}，预期 ${total}")
             }
         } finally {
             try {
                 removeIfExists(work, recursive: true)
             } catch (_: Exception) {}
         }
+    }
+}
+
+/** 从 `7za l` 的汇总行（`... 2 files, 1 folders` / `... 65537 files`）里取条目数；取不到返回 -1。 */
+private func sevenZipListedFiles(listing: String): Int64 {
+    for (line in listing.split("\n")) {
+        if (let Some(pos) <- line.indexOf(" files")) {
+            return numberBefore(line, pos)
+        }
+    }
+    -1
+}
+
+/** 取 `line[0..end)` 里紧挨着 `end` 的那串十进制数字（跳过空格）。 */
+private func numberBefore(line: String, end: Int64): Int64 {
+    let chars = line.toArray()
+    var i = end - 1
+    while (i >= 0 && chars[i] == UInt8(32)) {
+        i -= 1
+    }
+    var value: Int64 = 0
+    var scale: Int64 = 1
+    var seen = false
+    while (i >= 0 && chars[i] >= UInt8(48) && chars[i] <= UInt8(57)) {
+        value += Int64(chars[i] - UInt8(48)) * scale
+        scale *= 10
+        seen = true
+        i -= 1
+    }
+    if (seen) {
+        value
+    } else {
+        -1
     }
 }

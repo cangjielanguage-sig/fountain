@@ -44,7 +44,7 @@ public class ResourceWriter_test {
     @TestCase
     public func addHundredMegabytesStaysUnder110Mb(): Unit {
         if (!resourceEnabled()) {
-            println("SKIP: 未设置 F_ZIP_RESOURCE=1，跳过资源用例 11.13")
+            skipGated("未设置 F_ZIP_RESOURCE=1，跳过资源用例 11.13")
             return
         }
         let before = peakRssKb()
@@ -81,7 +81,7 @@ public class ResourceReader_test {
     @TestCase
     public func pathReaderStaysSmallOnGigabyteArchive(): Unit {
         if (!resourceEnabled()) {
-            println("SKIP: 未设置 F_ZIP_RESOURCE=1，跳过资源用例 5.5")
+            skipGated("未设置 F_ZIP_RESOURCE=1，跳过资源用例 5.5")
             return
         }
         let size: Int64 = 1024 * 1024 * 1024
@@ -134,7 +134,7 @@ public class ResourceUnzip_test {
     @TestCase
     public func unzipGigabyteArchiveStaysSmall(): Unit {
         if (!resourceEnabled()) {
-            println("SKIP: 未设置 F_ZIP_RESOURCE=1，跳过资源用例 12.3")
+            skipGated("未设置 F_ZIP_RESOURCE=1，跳过资源用例 12.3")
             return
         }
         let size: Int64 = 1024 * 1024 * 1024
@@ -179,7 +179,7 @@ public class ResourceZipTree_test {
     @TestCase
     public func zipTwoGigabyteTreeStaysSmall(): Unit {
         if (!resourceEnabled()) {
-            println("SKIP: 未设置 F_ZIP_RESOURCE=1，跳过资源用例 12.1")
+            skipGated("未设置 F_ZIP_RESOURCE=1，跳过资源用例 12.1")
             return
         }
         let perFile: Int64 = 512 * 1024 * 1024
