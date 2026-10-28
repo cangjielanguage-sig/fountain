@@ -132,6 +132,7 @@ descriptor 有无、目录属性位）就由不得自己——而这些恰恰是
 ```
 f_zip
 ├── stdx.compress.zlib   CompressInputStream / CompressOutputStream
+├── f_base               BaseException（`ZipException` 的基类）
 ├── f_util               crc32(data: Array<Byte>): UInt32
 ├── f_io                 ByteBuffer（流模式的随机访问缓冲）
 ├── f_log                LoggerFactory（落盘分支的 debug 日志，§3.4.3）
@@ -140,7 +141,7 @@ f_zip
 ```
 
 **没有第三方 ZIP 实现。** 无第三方 ZIP 库、无 FFI、无 native 链接——整条链路只到仓颉标准库、stdx、
-仓库内模块（`f_util` / `f_io` / `f_log`）与 TPC 的 `charset4cj`（只用来解 GBK 文件名，不参与容器编解码）。
+仓库内模块（`f_base` / `f_util` / `f_io` / `f_log`）与 TPC 的 `charset4cj`（只用来解 GBK 文件名，不参与容器编解码）。
 
 **zlib 关键 API**（已核实）：
 
@@ -319,7 +320,7 @@ date:  bit15-9 年-1980   | bit8-5 月(1-12)  | bit4-0 日(1-31)
 
 ### 2.4 ZIP64
 
-当任一字段越界（> 4 GB、条目数 > 65535、偏移 > 4 GB）时启用。**读取与写入都支持。**
+当任一字段越界（≥ 4 GB、条目数 ≥ 65535、偏移 ≥ 4 GB）时启用。**读取与写入都支持。**
 
 **读取**
 
@@ -335,8 +336,13 @@ date:  bit15-9 年-1980   | bit8-5 月(1-12)  | bit4-0 日(1-31)
 | 场景                                              | 做法                                                                                      |
 | ------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | 单条目大小或偏移 ≥`0xFFFFFFFF`                   | header 里对应字段写`0xFFFFFFFF`，extra 放 `0x0001` 的真实 8 字节值；`version needed` = 45 |
-| 条目数 >`0xFFFF`，或 CD 大小/偏移 ≥ `0xFFFFFFFF` | 追加 EOCD64 + 定位器；EOCD 对应字段写哨兵                                                 |
+| 条目数 ≥`0xFFFF`，或 CD 大小/偏移 ≥ `0xFFFFFFFF` | 追加 EOCD64 + 定位器；EOCD 对应字段写哨兵                                                 |
 | 都不越界                                          | **不写 ZIP64**。不要"总是写"——那会让小文件凭空多出几十字节，也让老工具多一层解析        |
+
+**条目数用 `≥` 不用 `>`。** `0xFFFF` 在**读取侧是哨兵**：写侧若按 `> 0xFFFF` 才升级，
+恰好 65535 条的包会在普通 EOCD 里写下 `0xFFFF` 这个"真实值"，而读端把它当成"去读 ZIP64"的信号，
+于是去找一个不存在的定位器 —— 自家产出的包自己读不回来。这条边界由
+`Zip64EntryCount_test.exactly65535EntriesWritesZip64` 钉住。
 
 **extra 里只放越界的字段。** 全放虽然多数解压器也能接受，但会让"这段 extra 到底有几个值"
 依赖读取方的宽容度；只放必要的，读端按哨兵值个数就能判定。
@@ -860,7 +866,7 @@ bit 3（data descriptor）置位时，local header 里的 crc 和 size 可能是
 【收尾 close()】
   cdStart = 当前写入位置
   逐条写 central directory header（流式条目的真实 crc / 大小在这里）
-  if 条目数 > 0xFFFF 或 cdStart / cdSize 越界 → 写 EOCD64 + 定位器
+  if 条目数 >= 0xFFFF 或 cdStart / cdSize 越界 → 写 EOCD64 + 定位器
   写 EOCD（必要时填哨兵）
 ```
 
@@ -1067,7 +1073,7 @@ public struct ZipLimits {
 **原设计的问题**：`maxEntries` 同时被当成"安全上限"和"非 ZIP64 的格式上限"，两个语义混在一个参数里。
 
 - 作为**安全上限**：读一个恶意 ZIP 时，防止中央目录里声明 40 亿条目把我们撑爆
-- 作为**格式上限**：非 ZIP64 的 EOCD 里条目数字段只有 2 字节，最大 65535；超过就必须写 ZIP64
+- 作为**格式上限**：非 ZIP64 的 EOCD 里条目数字段只有 2 字节，能表示到 65535；但 65535 本身是读取侧的哨兵，所以**达到 65535 就必须写 ZIP64**
 
 这两件事的触发条件、处置方式、责任方都不同。**现在彻底分开：**
 
@@ -1083,7 +1089,7 @@ public struct ZipLimits {
 
 ```
 写 close() 时：
-  if (entryCount <= 0xFFFF && cdOffset <= 0xFFFFFFFF && cdSize <= 0xFFFFFFFF && 无条目需要 ZIP64):
+  if (entryCount < 0xFFFF && cdOffset < 0xFFFFFFFF && cdSize < 0xFFFFFFFF && 无条目需要 ZIP64):
       写普通 EOCD
   else:
       写 EOCD64 + EOCD64 定位器 + 普通 EOCD（其中的字段填哨兵值 0xFFFF / 0xFFFFFFFF）
@@ -1169,8 +1175,8 @@ public class ZipException <: Exception {
 | -------------------------- | -------------------------------------------------------------------------- |
 | `addFileStream` 单条目     | local header bit 3 = 1、version = 45、extra 含`0x0001`、descriptor 24 字节 |
 | 内存路径 + 流式路径混合    | 同一文件里两种条目并存，中央目录里 sizes 都对                              |
-| 单条目 > 4 GB              | 稀疏文件或重复数据构造；外部工具能列出并校验                               |
-| 条目数 > 65535             | EOCD64 + 定位器被写出；`unzip -l` 计数正确                                 |
+| 单条目 > 4 GB              | 稀疏文件或重复数据构造；外部工具能列出并校验（暂未跑通，见 tasks.md 9.7b）  |
+| 条目数 ≥ 65535（含恰好 65535）| EOCD64 + 定位器被写出；`unzip -l` 计数正确；自家 reader 能读回             |
 | 流式条目但内容很小         | 仍然按 ZIP64 形式写，不能"优化"成 4 字节 descriptor                        |
 | `init(path)` 解压 1 GB 包  | 进程 RSS 不随文件大小线性增长                                              |
 | `open(name)` 并发 4 个条目 | 各自独立句柄，数据不串                                                     |
@@ -1232,6 +1238,8 @@ public class ZipException <: Exception {
 | ------------------------------------------------------- | ---------------------------------------------------------- |
 | `add` 一条 100 MB 不可压缩数据（默认 64 MB 阈值 → 落盘） | 总增量 134.1 MB（51.9 → 189.2 MB），其中 `add` 自身 +30.8 MB |
 | `ZipReader(path)` 解压 1 GB 条目                         | 增量 3.6 MB（90.2 → 93.9 MB）                               |
+| `unzip(path, dir)` 全量解压 1 GB 包（12.3）              | 增量 2.75 MB（90.3 → 93.1 MB），耗时 551 s                  |
+| `zip(output, dir)` 打包 2 GB 目录（12.1）                | 增量 43.5 MB（52.2 → 96.8 MB），耗时 509 s                  |
 
 > 100 MB 条目的绝对峰值达不到 110 MB：仓颉运行时给 100 MB 数组分配的是一个 **128 MB 的 region**
 > （光数组就把峰值顶到 ~124 MB），再叠加 GC 首次为 deflate 路径抬高水线的 ~30 MB。
@@ -1240,6 +1248,11 @@ public class ZipException <: Exception {
 > 默认跳过，`F_ZIP_RESOURCE=1` 才跑。
 
 **瓶颈在 deflate 本身，容器层开销可忽略。** 如果要优化，方向是 `BestSpeed` 级别 + 更大的 `bufLen`。
+
+> **实测补充（2026-10-28，融合引擎）**：这台机器上 **CRC 比 deflate 更慢**——`f_util.crc32`
+> （`CrcEngine.update` 里的 `for (b in data)`）只有约 **4.2 MB/s**，同机 C 版表驱动 CRC 在 `-O2` 下 175 MB/s。
+> 上面两个资源用例的耗时（509 s / 551 s）几乎全花在这一处。`for` 改成索引遍历实测 3.3x，
+> 但真正的数量级差距要 slicing-by-N 才能补上；这是 `f_util` 的优化，不在本模块的改动范围。
 
 ---
 
@@ -1255,7 +1268,7 @@ public class ZipException <: Exception {
 | P3       | `ZipWriter.add` + 中央目录 + EOCD                             | 写出的 ZIP 能被`unzip -t` 通过                                                                                                    |
 | P4       | 多条目 + 目录 + 中文名                                        | 中文名在 Windows/macOS 都正常                                                                                                     |
 | **P4.5** | **`addFileStream` + data descriptor**                         | descriptor 被`unzip -t` / `zipfile.testzip()` / `7z t` 三家认可                                                                   |
-| **P4.6** | **ZIP64 写入**（extra + EOCD64）。含"条目数 > 65535 自动升级" | > 4 GB 条目、> 65535 条目两个样本外部工具可读                                                                                     |
+| **P4.6** | **ZIP64 写入**（extra + EOCD64）。含"条目数 ≥ 65535 自动升级" | > 4 GB 条目、≥ 65535 条目两个样本外部工具可读                                                                                     |
 | P5       | 安全校验（Zip Slip、ZipLimits、炸弹样本、符号链接跳过）       | 恶意样本被拒绝；上限可覆盖；符号链接不落地                                                                                        |
 | **P6**   | **同名消解 + `position` + `add` 大条目落盘 + 平台阈值**       | 连续`add("a.txt")` 三次得到 `a.txt`/`a_2.txt`/`a_3.txt`；`position` 单调；100 MB 条目在 Linux 上峰值 < 110 MB，在 OHOS 上 < 30 MB |
 
