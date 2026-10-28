@@ -2,7 +2,7 @@
 
 > 每个任务按 TDD 推进：先写失败用例（Red，确认失败原因是功能缺失）→ 最小实现（Green）→ 重构；跑绿才勾选。各平台真实联调整体排在最后，实现阶段**优先适配 DeepSeek**。
 >
-> **状态（2026-10-28）**：**59/64 完成，5 项 deferred（9.2–9.6）**。9.2–9.6 是其他平台的真实联调，这些平台**没有免费额度**，保持现有实现现状、不做付费验证；9.6 的 DeepSeek 部分已实调通过。少数任务在实现中换了做法或类型名，均以「注：」标在原条目后；提案里没写、但为了可用性补做的工作见文末「计划外完成项」。
+> **状态（2026-10-28）**：**59/64 完成，5 项 deferred（9.2–9.6，条目带 `**deferred**` 标签）**。9.2–9.6 是其他平台的真实联调，这些平台**没有免费额度**，保持现有实现现状、不做付费验证；9.6 的 DeepSeek 部分已实调通过。少数任务在实现中换了做法或类型名，均以「注：」标在原条目后；提案里没写、但为了可用性补做的工作见文末「计划外完成项」。
 
 ## 1. 前置验证与骨架
 
@@ -88,12 +88,12 @@
 ## 9. 平台联调（最后做）
 
 - [x] 9.1 DeepSeek：非流式/流式/工具调用/usage/reasoning 五项打勾，结果回填 `f_llm/doc/f_llm.md` 附录 B（实测 `deepseek-chat` 已回显为 `deepseek-flash`；`deepseek-flash` 自带思考；同批还实测了余额、搜索/抓取、`/responses`）
-- [ ] 9.2 智谱：同上五项；确认 `thinking` 开关对可开关模型生效（**deferred：无免费额度**，实现保留、不做付费联调）
-- [ ] 9.3 火山方舟：端点与 `ep-` 模型名；确认是否支持 Responses API（**deferred：无免费额度**）
-- [ ] 9.4 阿里百炼：`enable_thinking` 形态与 `compatible-mode` 路径（**deferred：无免费额度**）
-- [ ] 9.5 硅基流动与 OpenAI：标准兼容性抽查（**deferred：无免费额度**）
+- [ ] **deferred** 9.2 智谱：同上五项；确认 `thinking` 开关对可开关模型生效（**deferred：无免费额度**，实现保留、不做付费联调）
+- [ ] **deferred** 9.3 火山方舟：端点与 `ep-` 模型名；确认是否支持 Responses API（**deferred：无免费额度**）
+- [ ] **deferred** 9.4 阿里百炼：`enable_thinking` 形态与 `compatible-mode` 路径（**deferred：无免费额度**）
+- [ ] **deferred** 9.5 硅基流动与 OpenAI：标准兼容性抽查（**deferred：无免费额度**）
 - [x] 9.7 腾讯云 tokenhub：`/v1/chat/completions`，模型 ID `deepseek/deepseek-flash` 归一为 `MODEL_NAME_DEEPSEEK_FLASH`；最小请求实测通过（免费额度，省着用）
-- [ ] 9.6 搜索/抓取：智谱 `web_search` 字段复核（**deferred：无免费额度**）；DeepSeek `tools/search` 与 `tools/fetch` 已实调通过（2026-10-27）
+- [ ] **deferred** 9.6 搜索/抓取：智谱 `web_search` 字段复核（**deferred：无免费额度**）；DeepSeek `tools/search` 与 `tools/fetch` 已实调通过（2026-10-27）
 
 ## 计划外完成项（提案未列，apply 期间补做）
 
