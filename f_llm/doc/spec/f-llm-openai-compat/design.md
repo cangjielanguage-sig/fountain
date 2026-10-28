@@ -340,4 +340,8 @@ PostgreSQL 18.4（WSL，`postgres://fountain:fountain@127.0.0.1:5432/fountain_te
 - 端点 `https://tokenhub.tencentmaas.com/v1/chat/completions`，鉴权 `Authorization: Bearer <key>`，模型 ID 是 **带厂商前缀** 的 `deepseek/deepseek-flash`。这类 OpenAI 兼容网关用 `provider = 'tokenhub'` + `StandardDialect` 即可，不需要新方言。
 - 新增 `ModelNames.normalize()`：把 `deepseek/deepseek-flash`、`deepseek-ai/DeepSeek-V3`、`zhipu/glm-5` 等写法归一成 `MODEL_NAME_*` 常量，**只用于能力判断与日志分类**；`conf.actualLlmName` 必须原样发（改掉前缀会 404）。
 - 走我们自己的代码路径实测：`LLM.chat` 返回「收到」，`finish=stop`，`usage.total=37`，`ModelNames.normalize('deepseek/deepseek-flash') == 'deepseek-flash'`。
-- 该账号当前是**免费额度**，联调时只发最小请求（`max_tokens=32`），不做批量压测。
+- 该账号当前是**免费额度**，联调时只发最小请求（`max_tokens=32`），不做批量压测。### 联调边界（2026-10-28 定稿）
+
+- **已实调**：DeepSeek（Chat / 流式 / 工具 / usage / reasoning / 余额 / 搜索 / 抓取 / Responses 多模态）、腾讯云 tokenhub（最小 chat）。
+- **deferred**：智谱、火山方舟、阿里百炼、硅基流动、OpenAI —— 这些平台没有免费额度，保持现有实现（端点、方言、报文清洗都有单测），**不做付费联调**。任务 9.2–9.6 保留未勾选并标 deferred，不阻塞归档。
+- 余额同理：腾讯云/火山已按官方文档实现签名与解析，但**签名数学未用真实 AK/SK 验证**（归入 deferred）。

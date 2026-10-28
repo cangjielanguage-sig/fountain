@@ -72,3 +72,4 @@
 | 未提 Chat 多模态 | `ChatMessage.addImage/addText` + `ContentPart` | 与 Responses 多模态对齐 |
 | 未提 embedding | `Embedding.embed(llmName, param)`，旧链路删除 | 旧 mediator 已无人引用 |
 | `llm_token_usage.reasoning_tokens` | 未加列 | 本期 TokenUsage 只进日志 |
+| 智谱/火山/百炼/硅基流动/OpenAI 的真实联调 | 保持现有实现，标 **deferred**（任务 9.2–9.6） | 这些平台**没有免费额度**，不做付费验证；结构与报文由单测覆盖 |
