@@ -1962,3 +1962,19 @@ BalanceMediator.instance.register(provider, creator)
 BalanceMediator.instance.query(provider, conf): BalanceSnapshot
 BalanceMediator.instance.queryAll(): ArrayList<BalanceSnapshot>
 ```
+
+---
+
+## 附录 C：已删除的旧 API（2026-10-28）
+
+以下类型/链路已从 `f_llm` 移除，替代方案见「v2 公开 API」或 `README.md`：
+
+| 已删除 | 替代 |
+|---|---|
+| `LLMContextMediator`（含 `register` / `access` / `saturated`） | `LLM.chatByName(llmName, params)`、`LLMConfsHolder.saturated(conf, msgs)` |
+| `GLMContext`、`AbstractLLMContext` | `LLM` 门面 + `ProviderDialect`（内建 deepseek/zhipu/volcengine/aliyun/siliconflow） |
+| `EmbeddingContextMediator`、`AbstractEmbeddingContext`、`GLMEmbeddingContext` | `Embedding.embed(llmName, param)` |
+| `SearchMediartor`、`AbstractSearcher`、`GLMSearcher` | `SearchProvider` + `SearchProviderRegistry`（内置 `DeepSeekSearchProvider`） |
+| `LLMFinder`（`listConfs()`） | `LLMConfs.holder().all()` / `candidates(llmName)` |
+
+保留但仅作兼容：`search.SearchResult`（`KnowledgeEntity` 的注入签名仍在用），新代码请用 `SearchResultItem`。
