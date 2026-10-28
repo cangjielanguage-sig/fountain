@@ -163,7 +163,7 @@
 - [x] 10.14 `imap/ImapSort.cj`：`SORT`/`UID SORT` 的 `SortCriteria`（`ARRIVAL`/`CC`/`DATE`/`FROM`/`SIZE`/`SUBJECT`/`TO` + `REVERSE` 前缀）、`SORT=DISPLAY` 时的 `DISPLAY FROM`/`DISPLAY TO`、字符集只允许 `US-ASCII`/`UTF-8`；解析 `* SORT`
 - [x] 10.15 `THREAD ORDEREDSUBJECT` / `THREAD REFERENCES`（含 `UID THREAD`）：解析 `* THREAD (…)` 嵌套为 `ThreadNode` 树，同级顺序与响应一致；只广告一种算法时请求另一种 MUST 抛错
 - [x] 10.16 `UTF8=ACCEPT` 分支：启用后邮箱名直传 UTF-8、`SEARCH` 省略 `CHARSET`、`LIST`/`STATUS` 返回名按 UTF-8 解码、`APPEND` 接受 UTF-8 头部（序列化用 `utf8Headers=true`）；`SORT`/`THREAD` 的 `charset` 参数不变；未启用时上述各处 MUST 完整走 M3 的 modified UTF-7 路径，禁止"能发就发 UTF-8"的尝试式降级
-- [ ] 10.17 脚本测试：IDLE 的 `+`/推送/`DONE`/tagged 时序、25 分钟重建（假时钟）、IDLE 中插入 `* BYE`、`DONE` 之后才到的 untagged、IDLE 期间 untagged 与 `DONE` 进 `onLine`、跨线程 `close()` 打断阻塞读、MOVE 的 `COPYUID` 与 `VANISHED`、MOVE 回退三步顺序、`LIST (SPECIAL-USE)` 含自定义属性、`NAMESPACE` 三段全 `NIL`、`ENABLE` 回空列表、`MODIFIED` 只列半数序号、`VANISHED (EARLIER)` 与普通 `VANISHED` 混排、`SORT`/`THREAD` 结果含重复序号与 1000 兄弟节点、1 字节读
+- [x] 10.17 脚本测试：IDLE 的 `+`/推送/`DONE`/tagged 时序、25 分钟重建（假时钟）、IDLE 中插入 `* BYE`、`DONE` 之后才到的 untagged、IDLE 期间 untagged 与 `DONE` 进 `onLine`、跨线程 `close()` 打断阻塞读、MOVE 的 `COPYUID` 与 `VANISHED`、MOVE 回退三步顺序、`LIST (SPECIAL-USE)` 含自定义属性、`NAMESPACE` 三段全 `NIL`、`ENABLE` 回空列表、`MODIFIED` 只列半数序号、`VANISHED (EARLIER)` 与普通 `VANISHED` 混排、`SORT`/`THREAD` 结果含重复序号与 1000 兄弟节点、1 字节读
 - [x] 10.18 互操作（G6 手工）：QQ 邮箱实测通过（IMAP 993 / SMTP 465、发信→收信→取整封→标已读、NAMESPACE、IDLE）；Dovecot 与仅 M3 服务器的扩展错误矩阵留后续
 
 验收：M4 全绿；IDLE 在 25 分钟边界上自行重建且不丢事件；七组扩展在"不支持"时全部给出可断言的具体错误，不出现静默退化。

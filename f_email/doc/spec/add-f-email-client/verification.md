@@ -4,16 +4,16 @@
 
 ```
 $ cd f_email && cjpm build      # 成功，无新增告警
-$ cd f_email && cjpm test       # 261 通过 / 0 失败 / 0 错误
+$ cd f_email && cjpm test       # 263 通过 / 0 失败 / 0 错误
 ```
 
-测试分布：model 75、mime 22、transport 26、smtp 28、pop3 25、imap 85，合计 261。
+测试分布：model 75、mime 22、transport 26、smtp 28、pop3 25、imap 87，合计 263。
 
 ## G1 — 单元测试与编解码往返
 
 | 项 | 结论 | 证据 |
 |---|---|---|
-| 全部单元测试通过 | ✅ | `cjpm test`：261 通过、0 失败 |
+| 全部单元测试通过 | ✅ | `cjpm test`：263 通过、0 失败 |
 | QP / base64 / RFC 2047 / RFC 2231 往返 100% | ✅ | `Codec_test`（往返幂等、跨块边界、异常样本）、`ContentType_test`、`MimeParser_test.roundTrips*` |
 
 ## G2 — 三协议脚本测试
@@ -91,5 +91,7 @@ $ cd f_email && cjpm test       # 261 通过 / 0 失败 / 0 错误
 | IDLE 事件队列无界 | 1024 条上限，满时丢最旧并压缩 | 代码路径，未单测 |
 | IMAP literal 无上限 | `maxLiteralBytes`（默认 64 MB）超限关闭连接并抛 `MailLimitException(Literal)` | `literalOverLimitClosesConnection` |
 | multipart epilogue 丢失 | `MultipartScanner.readEpilogue()` 保留结束 boundary 之后的内容 | `keepsPreambleAndEpilogue` |
+| `walk` 仍是“建树后重放” | 改为 visitor 驱动的 `walkEntity`，边解析边回调、不建树；`parse` 保持建树路径 | `walkSkipsPartButStillEnds`、全量 MIME 用例 |
+| 10.17 两项 IDLE 边界 | 补 `DONE` 前后 untagged 入队与 `onLine` 跟踪用例 | `untaggedAroundDoneIsStillQueued`、`idleLinesAreTraced` |
 
-仍未解决：10.17 的 DONE 后 untagged 与 IDLE onLine 两个用例、`walk` 仍先建树，以及 verify 报告中的其余 WARNING 与 SUGGESTION。G6 已用 QQ 邮箱实测通过（见上）。
+剩余 verify WARNING（大 literal 无 sink 时的 `sections`、`MailboxInfo.specialUse` 字段、流式编码采样、一次性来源双序列化、AUTH 自动选择、TLS 自动化）记录为后续；不影响本次归档。

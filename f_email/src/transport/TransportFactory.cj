@@ -80,16 +80,23 @@ public class ScriptedTransport <: TransportFactory {
     private var blockAtEnd: Bool
     private var eofAtEnd = true
     private var readTimeout: ?Duration = None
+    private let trace: ?MailTrace
 
     /**
      * @param server 预置的服务器字节
      * @param chunkSize 每次 read 最多返回多少字节；1 = 慢速流
      * @param blockAtEnd 脚本耗尽后是否一直"没有数据"（阻塞）而不是 EOF
      */
-    public init(server!: String = "", chunkSize!: Int64 = 0, blockAtEnd!: Bool = false) {
+    public init(
+        server!: String = "",
+        chunkSize!: Int64 = 0,
+        blockAtEnd!: Bool = false,
+        trace!: ?MailTrace = None
+    ) {
         this.serverBytes = ArrayList<Byte>(server.toArray())
         this.chunkSize = chunkSize
         this.blockAtEnd = blockAtEnd
+        this.trace = trace
     }
 
     public static func of(server: String, chunkSize!: Int64 = 0): ScriptedTransport {
@@ -135,6 +142,7 @@ public class ScriptedTransport <: TransportFactory {
             ScriptedInput(this),
             ScriptedOutput(this),
             remote: "${host}:${port}",
+            trace: trace,
             maxLine: 8192
         )
     }

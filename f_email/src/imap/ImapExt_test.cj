@@ -621,6 +621,43 @@ public class ImapIdle_test {
     }
 
     @TestCase
+    public func untaggedAroundDoneIsStillQueued(): Unit {
+        let (client, transport) = openSelected("+ idling\r\n")
+        let session = ImapIdle(client).withPollInterval(Duration.millisecond * 5).start()
+        transport.pushServer("* 7 EXISTS\r\nA0003 OK IDLE terminated\r\n")
+        session.done()
+        let event = session.nextEvent(timeout: Duration.millisecond * 500)
+        @Assert(event.isSome(), true)
+        @Assert(event.getOrThrow().kind.toString(), "EXISTS")
+        @Assert(event.getOrThrow().sequence ?? 0, 7)
+        client.close()
+    }
+
+    @TestCase
+    public func idleLinesAreTraced(): Unit {
+        let trace = IdleTrace()
+        let transport = ScriptedTransport(
+            server: greeting() + CAPABILITY_LINE +
+                "A0001 OK LOGIN completed\r\n* 1 EXISTS\r\nA0002 OK [READ-WRITE] SELECT completed\r\n" +
+                "+ idling\r\n* 5 EXISTS\r\nA0003 OK IDLE terminated\r\n",
+            trace: trace
+        )
+        let client = ImapClient.builder("localhost", port: 143)
+            .requireEncryption(false)
+            .allowPlaintextAuth(true)
+            .transport(transport)
+            .build()
+        client.login("alice", Secret.of("pw"))
+        client.select("INBOX")
+        let session = ImapIdle(client).withPollInterval(Duration.millisecond * 5).start()
+        @Assert(session.nextEvent(timeout: Duration.millisecond * 500).isSome(), true)
+        session.done()
+        @Assert(trace.lines.contains("* 5 EXISTS"), true)
+        @Assert(trace.lines.contains("DONE"), true)
+        client.close()
+    }
+
+    @TestCase
     public func idleWithoutCapabilityFails(): Unit {
         let (client, _) = openBasicSelected("")
         var caught = false
@@ -632,4 +669,14 @@ public class ImapIdle_test {
         @Assert(caught, true)
         client.close()
     }
+}
+
+class IdleTrace <: MailTrace {
+    let lines = ArrayList<String>()
+
+    public func onLine(direction: Rune, line: String): Unit {
+        lines.add(line)
+    }
+
+    public func onBytes(direction: Rune, count: Int64): Unit {}
 }

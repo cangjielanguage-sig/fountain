@@ -18,7 +18,6 @@ package fountain::f_email.mime
 import std.collection.ArrayList
 import std.fs.{File, OpenMode, Path, removeIfExists}
 import std.io.InputStream
-import cangjie_tpc::charset4cj.charset.Charsets
 import fountain::f_email.model.*
 
 /** `walk` 在回调里表达的意图。 */
@@ -78,11 +77,134 @@ public class MimeParser {
         visitor: MimeVisitor,
         options!: MimeParseOptions = MimeParseOptions()
     ): Unit {
-        let message = parse(input, options: options)
+        let state = ParseState(options)
         try {
-            replay(message.root, "", visitor)
+            walkEntity(input, visitor, options, state, 0, "", false)
         } catch (_: StopWalk) {
             // 正常终止
+        }
+    }
+
+    /**
+     * 真正的流式遍历：不建 `MimePart` 树，正文解码后按块直接交给 visitor。
+     *
+     * `SkipPart` 会跳过当前 part 的正文与子树，但仍然回调 `onPartEnd`；
+     * `Stop` 通过内部异常终止整次遍历。
+     */
+    private static func walkEntity(
+        input: InputStream,
+        visitor: MimeVisitor,
+        options: MimeParseOptions,
+        state: ParseState,
+        depth: Int64,
+        path: String,
+        defaultToRfc822: Bool
+    ): Unit {
+        if (depth > options.maxDepth) {
+            throw MailLimitException(LimitKind.Depth, options.maxDepth, depth)
+        }
+        state.parts += 1
+        if (state.parts > options.maxParts) {
+            throw MailLimitException(LimitKind.Parts, options.maxParts, state.parts)
+        }
+        let source = ByteSource(input)
+        let headers = readHeaders(source, options)
+        let action = visitor.onPartStart(path, headers)
+        if (action.toString() == "Stop") {
+            throw StopWalk()
+        }
+        if (action.toString() == "SkipPart") {
+            drain(source)
+            if (visitor.onPartEnd(path).toString() == "Stop") {
+                throw StopWalk()
+            }
+            return
+        }
+
+        let contentType = ContentType.parse(headers.get("Content-Type") ?? "text/plain")
+        if (defaultToRfc822 && !headers.contains("Content-Type")) {
+            walkEntity(source, visitor, options, state, depth + 1, path, false)
+            endPart(visitor, path)
+            return
+        }
+
+        if (contentType.isMultipart()) {
+            let boundary = contentType.boundary()
+            if (boundary.isNone() || !validBoundary(boundary.getOrThrow())) {
+                streamLeaf(source, headers, visitor, options, path)
+                endPart(visitor, path)
+                return
+            }
+            let scanner = MultipartScanner(source, boundary.getOrThrow())
+            let isDigest = contentType.subtype == "digest"
+            scanner.skipToFirstBoundary()
+            var index = 0
+            while (!scanner.closed) {
+                let stream = scanner.nextPart()
+                let childPath = if (path.size == 0) {
+                    "${index + 1}"
+                } else {
+                    "${path}.${index + 1}"
+                }
+                walkEntity(stream, visitor, options, state, depth + 1, childPath, isDigest)
+                drain(stream)
+                if (options.strict && !stream.sawBoundary) {
+                    throw MimeException("multipart 缺少结束 boundary：${path}")
+                }
+                if (stream.closing || !stream.sawBoundary) {
+                    scanner.closed = true
+                }
+                index += 1
+            }
+            scanner.readEpilogue()
+            endPart(visitor, path)
+            return
+        }
+
+        if (contentType.mediaType == "message/rfc822") {
+            walkEntity(source, visitor, options, state, depth + 1, path, false)
+            endPart(visitor, path)
+            return
+        }
+
+        streamLeaf(source, headers, visitor, options, path)
+        endPart(visitor, path)
+    }
+
+    private static func streamLeaf(
+        source: InputStream,
+        headers: HeaderMap,
+        visitor: MimeVisitor,
+        options: MimeParseOptions,
+        path: String
+    ): Unit {
+        let encoding = TransferEncoding.parse(headers.get("Content-Transfer-Encoding"))
+        let decoded = TransferDecoder.stream(source, encoding, strict: options.strict)
+        let chunk = Array<Byte>(65536, repeat: 0)
+        var total: Int64 = 0
+        while (true) {
+            let n = decoded.read(chunk)
+            if (n <= 0) {
+                break
+            }
+            total += n
+            if (options.maxBodyBytes > 0 && total > options.maxBodyBytes) {
+                throw MailLimitException(LimitKind.Body, options.maxBodyBytes, total)
+            }
+            let action = visitor.onBodyData(path, chunk[0..n])
+            if (action.toString() == "Stop") {
+                throw StopWalk()
+            }
+            if (action.toString() == "SkipPart") {
+                drain(source)
+                break
+            }
+        }
+    }
+
+    private static func endPart(visitor: MimeVisitor, path: String): Unit {
+        if (visitor.onPartEnd(path).toString() == "Stop") {
+            throw StopWalk()
         }
     }
 
@@ -286,64 +408,6 @@ public class MimeParser {
         }
     }
 
-    // ---------- walk ----------
-
-    private static func replay(part: MimePart, path: String, visitor: MimeVisitor): Unit {
-        let action = visitor.onPartStart(path, part.headers)
-        if (action.toString() == "Stop") {
-            throw StopWalk()
-        }
-        if (action.toString() != "SkipPart") {
-            match (part.body) {
-                case PartBody.Text(content) =>
-                    let bytes = CharsetResolver.encode(content, part.contentType.charset() ?? Charsets.UTF8)
-                    chunked(path, bytes, visitor)
-                case PartBody.Data(source) =>
-                    let input = source.open()
-                    let buffer = Array<Byte>(65536, repeat: 0)
-                    while (true) {
-                        let n = input.read(buffer)
-                        if (n <= 0) {
-                            break
-                        }
-                        if (visitor.onBodyData(path, buffer[0..n]).toString() == "Stop") {
-                            throw StopWalk()
-                        }
-                    }
-                case PartBody.Parts(multipart) =>
-                    var index = 0
-                    for (child in multipart.parts) {
-                        let childPath = if (path.size == 0) {
-                            "${index + 1}"
-                        } else {
-                            "${path}.${index + 1}"
-                        }
-                        replay(child, childPath, visitor)
-                        index += 1
-                    }
-                case PartBody.Embedded(message) => replay(message.root, path, visitor)
-                case PartBody.Empty => ()
-            }
-        }
-        if (visitor.onPartEnd(path).toString() == "Stop") {
-            throw StopWalk()
-        }
-    }
-
-    private static func chunked(path: String, bytes: Array<Byte>, visitor: MimeVisitor): Unit {
-        var offset = 0
-        while (offset < bytes.size) {
-            let end = if (offset + 65536 < bytes.size) {
-                offset + 65536
-            } else {
-                bytes.size
-            }
-            if (visitor.onBodyData(path, bytes[offset..end]).toString() == "Stop") {
-                throw StopWalk()
-            }
-            offset = end
-        }
-    }
 }
 
 private class ParseState {
