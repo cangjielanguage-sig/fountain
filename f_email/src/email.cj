@@ -19,6 +19,8 @@ public import fountain::f_email.model.*
 public import fountain::f_email.transport.*
 public import fountain::f_email.mime.*
 public import fountain::f_email.smtp.*
+public import fountain::f_email.pop3.*
+public import fountain::f_email.imap.*
 
 /**
  * f_email 模块版本。

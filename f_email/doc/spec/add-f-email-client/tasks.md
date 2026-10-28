@@ -26,7 +26,7 @@
 - [x] 2.9 `transport/MailTrace.cj`：`onLine`/`onBytes`，`AUTH`/`PASS`/`LOGIN` 参数脱敏，正文默认不进 `onLine`
 - [x] 2.10 `transport/TransportFactory.cj`：`SocketTransportFactory` + 测试用 `ScriptedTransport`（预置服务器字节、记录客户端字节）
 - [x] 2.11 超时：`Deadline` 折算剩余时长，`MailIoException(stage=Timeout)` 后关闭连接
-- [ ] 2.12 `idle` 类超时与跨线程 `close()`：IDLE 期间长时间静默 MUST NOT 因 `command` 超时断开；`close()` 可从其它线程打断阻塞读，被打断的读以 `MailIoException` 结束且不向调用方线程抛异常
+- [x] 2.12 `idle` 类超时与跨线程 `close()`：IDLE 期间长时间静默 MUST NOT 因 `command` 超时断开；`close()` 可从其它线程打断阻塞读，被打断的读以 `MailIoException` 结束且不向调用方线程抛异常
 - [x] 2.13 单测：1 字节慢速流下 `readLine`/`readExact`/dot-stuffing 全部正确；跨块 dot-stuffing；超长行；提前 EOF；重复 `close()`；跨线程 `close()` 打断阻塞读
 
 验收：能连本机 `TcpServerSocket` 假服务器完成一次行往返；1 字节读写测试全过。
@@ -89,56 +89,56 @@
 - [x] 7.2 `smtp/SmtpCapabilities.cj`：`SIZE`/`8BITMIME`/`SMTPUTF8`/`PIPELINING`/`STARTTLS`/`AUTH`/`ENHANCEDSTATUSCODES`/`DSN`
 - [x] 7.3 `smtp/SmtpClient.cj` builder：`tls`/`tlsConfig`/`auth`/`oauth2`/`helloName`/`timeouts`/`requireEncryption`/`allowPlaintextAuth`/`sendPolicy`/`maxMessageBytes`/`precomputeSize`/`dsn`
 - [x] 7.4 builder 校验：默认加密要求、明文认证拒绝、`helloName` 缺省
-- [ ] 7.5 `build()` 建连流程：greeting → EHLO（失败回退 HELO）→ STARTTLS → 重新 EHLO → AUTH
-- [ ] 7.6 `smtp/SmtpAuth.cj`：PLAIN / LOGIN / CRAM-MD5 / XOAUTH2 编码与挑战处理；XOAUTH2 失败发空行再读最终码；不自动降级
+- [x] 7.5 `build()` 建连流程：greeting → EHLO（失败回退 HELO）→ STARTTLS → 重新 EHLO → AUTH
+- [x] 7.6 `smtp/SmtpAuth.cj`：PLAIN / LOGIN / CRAM-MD5 / XOAUTH2 编码与挑战处理；XOAUTH2 失败发空行再读最终码；不自动降级
 - [x] 7.7 投递事务：MAIL FROM（`SIZE=`/`BODY=8BITMIME`/`SMTPUTF8`/`RET=`）、逐收件人 RCPT（`NOTIFY=`/`ORCPT=`）、DATA
 - [x] 7.8 `SendPolicy`：BestEffort 与 AllOrNothing 的进入 DATA 判定与 `aborted` 语义
 - [x] 7.9 PIPELINING：BestEffort 批量写出按序消费；无有效收件人但收到 354 时写 `.\r\n` 再 RSET；AllOrNothing 不 pipeline DATA
 - [x] 7.10 `smtp/SendReport.cj`：`accepted`/`rejected`/`reply`/`aborted`/`isCompleteSuccess`/`isRetryable`
 - [x] 7.11 自动补齐 `Date`/`Message-ID`/`MIME-Version`；`From` 缺失报错；发送时剥离 `Bcc` 且不改原 message
 - [x] 7.12 SIZE：默认不发；`precomputeSize` 或 `maxMessageBytes>0` 时先计数，超限在 MAIL FROM 前失败
-- [ ] 7.13 8BITMIME / SMTPUTF8 分支与错误
-- [ ] 7.14 `isRetryable(error)` 分类表
-- [ ] 7.15 脚本测试：EHLO 多行、STARTTLS 后重新 EHLO、未广告 STARTTLS、四种 AUTH 逐字节、部分/全部 RCPT 被拒、PIPELINING 顺序、dot-stuffing、SIZE 超限、无 8BITMIME、非 ASCII 地址、Bcc 剥离、421 中途断开
+- [x] 7.13 8BITMIME / SMTPUTF8 分支与错误
+- [x] 7.14 `isRetryable(error)` 分类表
+- [x] 7.15 脚本测试：EHLO 多行、STARTTLS 后重新 EHLO、未广告 STARTTLS、四种 AUTH 逐字节、部分/全部 RCPT 被拒、PIPELINING 顺序、dot-stuffing、SIZE 超限、无 8BITMIME、非 ASCII 地址、Bcc 剥离、421 中途断开
 
 验收：M1 全绿；用真实服务器发出一封含附件的中文邮件（G6 手工）。
 
 ## 8. M2 POP3 客户端
 
-- [ ] 8.1 `pop3/Pop3Reply.cj` + `Pop3Capabilities`（TOP / UIDL / PIPELINING / AUTH / STLS）
-- [ ] 8.2 `Pop3Client` builder：`tls`/`tlsConfig`/`timeouts`/`requireEncryption`/`allowPlaintextAuth`
-- [ ] 8.3 `build()`：greeting → CAPA（`-ERR` 时置空能力表不失败）→ STLS → 重新 CAPA；不登录
-- [ ] 8.4 认证：`login`（USER/PASS）、`apop`（MD5(timestamp+password)，无 timestamp 抛错）、`authenticate`（PLAIN/LOGIN）
-- [ ] 8.5 `stat` / `list`（单条与多行）/ `uidl`（单条与多行）解析为结构化结果
-- [ ] 8.6 `retr(message, sink)` 流式 + dot-unstuffing；`retrMessage` 直接接 `MimeParser`
-- [ ] 8.7 `top` / `topMessage`；无 `TOP` 能力时抛 `MailProtocolException`
-- [ ] 8.8 `dele` / `rset` / `noop` / `quit` / `close`：删除只在 `QUIT` 成功后提交
-- [ ] 8.9 `-ERR` 的 response code 解析与错误分类（`[AUTH]`/`[SYS/TEMP]`/`[SYS/PERM]`/`[IN-USE]`）
-- [ ] 8.10 脚本测试：APOP 摘要、LIST/UIDL 单条与多条、RETR 含 `..` 与 `.` 行、超长正文行、TOP 0、DELE+QUIT、DELE+close、`-ERR [AUTH]`
+- [x] 8.1 `pop3/Pop3Reply.cj` + `Pop3Capabilities`（TOP / UIDL / PIPELINING / AUTH / STLS）
+- [x] 8.2 `Pop3Client` builder：`tls`/`tlsConfig`/`timeouts`/`requireEncryption`/`allowPlaintextAuth`
+- [x] 8.3 `build()`：greeting → CAPA（`-ERR` 时置空能力表不失败）→ STLS → 重新 CAPA；不登录
+- [x] 8.4 认证：`login`（USER/PASS）、`apop`（MD5(timestamp+password)，无 timestamp 抛错）、`authenticate`（PLAIN/LOGIN）
+- [x] 8.5 `stat` / `list`（单条与多行）/ `uidl`（单条与多行）解析为结构化结果
+- [x] 8.6 `retr(message, sink)` 流式 + dot-unstuffing；`retrMessage` 直接接 `MimeParser`
+- [x] 8.7 `top` / `topMessage`；无 `TOP` 能力时抛 `MailProtocolException`
+- [x] 8.8 `dele` / `rset` / `noop` / `quit` / `close`：删除只在 `QUIT` 成功后提交
+- [x] 8.9 `-ERR` 的 response code 解析与错误分类（`[AUTH]`/`[SYS/TEMP]`/`[SYS/PERM]`/`[IN-USE]`）
+- [x] 8.10 脚本测试：APOP 摘要、LIST/UIDL 单条与多条、RETR 含 `..` 与 `.` 行、超长正文行、TOP 0、DELE+QUIT、DELE+close、`-ERR [AUTH]`
 
 验收：大邮件 `RETR` 到 sink 时 RSS 增量不随大小线性增长；解析结果与样本逐字节一致。
 
 ## 9. M3 IMAP 客户端
 
-- [ ] 9.1 `imap/ImapUtf7.cj`：modified UTF-7 编解码，`&-`、`&` 结尾、非法序列的两态处理
-- [ ] 9.2 `imap/ImapParser.cj`：atom/quoted/number/NIL/列表/literal token 化，深度 64 与 8 KB 行上限
-- [ ] 9.3 `imap/ImapValue.cj` + `ImapResponse.cj`：tagged / untagged / continuation / `BYE` 分类
-- [ ] 9.4 `ImapClient` 命令框架：tag 生成（`A0001`… 进位到 `B0001` 不回绕）、参数编码（quoted / 转义 / literal）、邮箱名走 modified UTF-7
-- [ ] 9.5 `build()`：greeting → CAPABILITY → STARTTLS → 重新 CAPABILITY → `ID`（配置时）；不登录
-- [ ] 9.6 认证：`login`、`authenticate`（PLAIN/LOGIN/CRAM-MD5/XOAUTH2），`SASL-IR` 时带初始响应，`*` 取消
-- [ ] 9.7 `select` / `examine` / `closeMailbox` / `unselect` 与 `MailboxStatus`、`selected` 属性
-- [ ] 9.8 `list` / `lsub` / `status` 与 `MailboxInfo`（UTF-7 解码、delimiter、attributes）
-- [ ] 9.9 `FetchItem` / `SequenceSet` / `FetchResult` / `FetchMeta` / `BodySection` / `CopyResult` / `AppendResult`
-- [ ] 9.10 `fetch` / `uidFetch`（返回数组与 `FetchSink` 两个重载）；literal 路由到内存 / `Spool` / sink
-- [ ] 9.11 `BODYSTRUCTURE` 解析为 `BodyStructure` / `LeafBody` / `MultiBody`；`ENVELOPE` 解析为 `ImapEnvelope`（subject 走 RFC 2047，date 保留原文）
-- [ ] 9.12 `INTERNALDATE` 独立解析器（`dd-Mon-yyyy HH:mm:ss +zzzz`）
-- [ ] 9.13 部分获取 `BODY.PEEK[]<origin.length>` 与响应键 `<0>` 的保留
-- [ ] 9.14 `fetchMessage` / `uidFetchMessage` 用 `BODY.PEEK[]`，不置 `\Seen`
-- [ ] 9.15 `SearchCriteria`（含 and/or/not 组合）与 `search` / `uidSearch`；非 ASCII 需 `CHARSET UTF-8`，否则抛错
-- [ ] 9.16 `store`（Replace/Add/Remove，默认不加 `.SILENT`）、`copy`（`COPYUID` 解析）、`expunge`、`uidExpunge`
-- [ ] 9.17 `append`：先序列化到 `BodySource` 得精确大小，`LITERAL+` 用 `{n+}`，解析 `APPENDUID`
-- [ ] 9.18 `logout`（发 `LOGOUT`、读 `* BYE` 与 tagged `OK`）与 `close`（直接关 socket）
-- [ ] 9.19 脚本测试：tagged/untagged 交错、literal `{n}` 同步与 `{n+}`、大 literal 内存恒定、`BODY[HEADER.FIELDS (FROM TO)]` 键、BODYSTRUCTURE 嵌套、SEARCH 编码、STORE/EXPUNGE、APPEND、BYE、1 字节读、中文邮箱名往返
+- [x] 9.1 `imap/ImapUtf7.cj`：modified UTF-7 编解码，`&-`、`&` 结尾、非法序列的两态处理
+- [x] 9.2 `imap/ImapParser.cj`：atom/quoted/number/NIL/列表/literal token 化，深度 64 与 8 KB 行上限
+- [x] 9.3 `imap/ImapValue.cj` + `ImapResponse.cj`：tagged / untagged / continuation / `BYE` 分类
+- [x] 9.4 `ImapClient` 命令框架：tag 生成（`A0001`… 进位到 `B0001` 不回绕）、参数编码（quoted / 转义 / literal）、邮箱名走 modified UTF-7
+- [x] 9.5 `build()`：greeting → CAPABILITY → STARTTLS → 重新 CAPABILITY → `ID`（配置时）；不登录
+- [x] 9.6 认证：`login`、`authenticate`（PLAIN/LOGIN/CRAM-MD5/XOAUTH2），`SASL-IR` 时带初始响应，`*` 取消
+- [x] 9.7 `select` / `examine` / `closeMailbox` / `unselect` 与 `MailboxStatus`、`selected` 属性
+- [x] 9.8 `list` / `lsub` / `status` 与 `MailboxInfo`（UTF-7 解码、delimiter、attributes）
+- [x] 9.9 `FetchItem` / `SequenceSet` / `FetchResult` / `FetchMeta` / `BodySection` / `CopyResult` / `AppendResult`
+- [x] 9.10 `fetch` / `uidFetch`（返回数组与 `FetchSink` 两个重载）；literal 路由到内存 / `Spool` / sink
+- [x] 9.11 `BODYSTRUCTURE` 解析为 `BodyStructure` / `LeafBody` / `MultiBody`；`ENVELOPE` 解析为 `ImapEnvelope`（subject 走 RFC 2047，date 保留原文）
+- [x] 9.12 `INTERNALDATE` 独立解析器（`dd-Mon-yyyy HH:mm:ss +zzzz`）
+- [x] 9.13 部分获取 `BODY.PEEK[]<origin.length>` 与响应键 `<0>` 的保留
+- [x] 9.14 `fetchMessage` / `uidFetchMessage` 用 `BODY.PEEK[]`，不置 `\Seen`
+- [x] 9.15 `SearchCriteria`（含 and/or/not 组合）与 `search` / `uidSearch`；非 ASCII 需 `CHARSET UTF-8`，否则抛错
+- [x] 9.16 `store`（Replace/Add/Remove，默认不加 `.SILENT`）、`copy`（`COPYUID` 解析）、`expunge`、`uidExpunge`
+- [x] 9.17 `append`：先序列化到 `BodySource` 得精确大小，`LITERAL+` 用 `{n+}`，解析 `APPENDUID`
+- [x] 9.18 `logout`（发 `LOGOUT`、读 `* BYE` 与 tagged `OK`）与 `close`（直接关 socket）
+- [x] 9.19 脚本测试：tagged/untagged 交错、literal `{n}` 同步与 `{n+}`、大 literal 内存恒定、`BODY[HEADER.FIELDS (FROM TO)]` 键、BODYSTRUCTURE 嵌套、SEARCH 编码、STORE/EXPUNGE、APPEND、BYE、1 字节读、中文邮箱名往返
 
 验收：M3 全绿；对 Dovecot 与 163 各跑一次真实会话（读 INBOX、搜索、取整封、标已读、追加到已发送）。
 
@@ -147,22 +147,22 @@
 前提：M3 全绿。M4 的每个扩展都遵守同一条规则——**能力位可见 ≠ 已生效**，
 `CAPABILITY` 决定"能做什么"，`ENABLE` 的 `* ENABLED` 回显决定"已经生效什么"。
 
-- [ ] 10.1 `imap/ImapCapabilities.cj`：解析 `IDLE`/`MOVE`/`SPECIAL-USE`/`NAMESPACE`/`UTF8=ACCEPT`/`ENABLE`/`CONDSTORE`/`QRESYNC`/`SORT`/`SORT=DISPLAY`/`THREAD=ORDEREDSUBJECT`/`THREAD=REFERENCES`，暴露 `supportsXxx`，未识别能力保留在原始表里
-- [ ] 10.2 `imap/ImapEnable.cj`：`ENABLE <cap>…` 命令与 `* ENABLED` 解析；只把回显的能力置为已启用；未认证状态调用 MUST 在本地拒绝、不发命令
-- [ ] 10.3 扩展调用前置校验：每类扩展在"未广告或未启用"时 MUST 抛 `MailProtocolException(capability=…)`，且异常文本不含凭据；统一走一处 `requireCapability` 而非各命令自己判断
-- [ ] 10.4 `imap/ImapIdle.cj` 的 `IdleSession`：`idle()` 前置校验（已认证 + 已 SELECT/EXAMINE）、发送 `IDLE`、处理 `+ idling`、`DONE` 不带 tag 单独写出、收 tagged `OK` 收尾
-- [ ] 10.5 IDLE 读线程：读行 → 分类 `ImapEvent` → 入有界队列；`nextEvent(timeout)` 阻塞消费，超时返回 `None` 且 MUST NOT 关连接；用户回调 MUST NOT 在读线程上执行
-- [ ] 10.6 IDLE 25 分钟重建：可注入时钟驱动，到点写 `DONE`、等 tagged `OK`、重新 `IDLE`；`close()` 在 IDLE 中先发 `DONE` 再停读线程，幂等
-- [ ] 10.7 IDLE 期间的命令互斥：同一连接上 IDLE 未结束时调用普通命令 MUST 立即抛 `MailProtocolException`，MUST NOT 排队；`* BYE` 先作为 `Bye` 事件投递再结束会话
-- [ ] 10.8 `imap/ImapMove.cj`：`move`/`uidMove`；解析 `[COPYUID]`、`* VANISHED` 与 `* EXPUNGE`；返回 `MoveResult(atomic, copyUid, vanished)`；服务器广告 `MOVE` 时 MUST 用 `MOVE`
-- [ ] 10.9 MOVE 非原子回退：`allowNonAtomicMove(true)` 时 `UID COPY` → `UID STORE +FLAGS.SILENT (\Deleted)` → `UID EXPUNGE`（无 `UIDPLUS` 时退回 `EXPUNGE` 并记告警），结果 `atomic=false`；未开启回退时 MUST 抛错且不发 `COPY`
-- [ ] 10.10 `imap/ImapSpecialUse.cj`：`\All`/`\Archive`/`\Drafts`/`\Flagged`/`\Junk`/`\Sent`/`\Trash` 映射到 `SpecialUse`；未知 `\Foo` 保留在 attributes 不报错；`listSpecialUse()` 发 `LIST (SPECIAL-USE) "" "*"`，无能力时 MUST 抛错而不是全量 LIST 后猜名字
-- [ ] 10.11 `imap/ImapNamespace.cj`：`NAMESPACE` 三段（personal / otherUsers / shared）的 `(prefix delimiter)` 列表与 `NIL` 解析为 `NamespaceInfo`；`joinPath()` 按 delimiter 拼接且不产生重复分隔符
-- [ ] 10.12 `imap/ImapCondStore.cj`：`SELECT … (CONDSTORE)`、`[HIGHESTMODSEQ n]`、`FETCH (MODSEQ)` 与 `(CHANGEDSINCE n)`、`STORE (UNCHANGEDSINCE n)` 与 `* OK [MODIFIED <set>]` → `StoreResult.modified`（失败项 MUST NOT 记为成功）
-- [ ] 10.13 QRESYNC：`ENABLE QRESYNC` 时 MUST NOT 再单独 `ENABLE CONDSTORE`；`SELECT … (QRESYNC (uidvalidity modseq [known-uids [(known-seqs known-uids)]]))`；区分 `* VANISHED (EARLIER)` 与普通 `* VANISHED`，两者都要在普通命令的响应分发里被消费
-- [ ] 10.14 `imap/ImapSort.cj`：`SORT`/`UID SORT` 的 `SortCriteria`（`ARRIVAL`/`CC`/`DATE`/`FROM`/`SIZE`/`SUBJECT`/`TO` + `REVERSE` 前缀）、`SORT=DISPLAY` 时的 `DISPLAY FROM`/`DISPLAY TO`、字符集只允许 `US-ASCII`/`UTF-8`；解析 `* SORT`
-- [ ] 10.15 `THREAD ORDEREDSUBJECT` / `THREAD REFERENCES`（含 `UID THREAD`）：解析 `* THREAD (…)` 嵌套为 `ThreadNode` 树，同级顺序与响应一致；只广告一种算法时请求另一种 MUST 抛错
-- [ ] 10.16 `UTF8=ACCEPT` 分支：启用后邮箱名直传 UTF-8、`SEARCH` 省略 `CHARSET`、`LIST`/`STATUS` 返回名按 UTF-8 解码、`APPEND` 接受 UTF-8 头部（序列化用 `utf8Headers=true`）；`SORT`/`THREAD` 的 `charset` 参数不变；未启用时上述各处 MUST 完整走 M3 的 modified UTF-7 路径，禁止"能发就发 UTF-8"的尝试式降级
+- [x] 10.1 `imap/ImapCapabilities.cj`：解析 `IDLE`/`MOVE`/`SPECIAL-USE`/`NAMESPACE`/`UTF8=ACCEPT`/`ENABLE`/`CONDSTORE`/`QRESYNC`/`SORT`/`SORT=DISPLAY`/`THREAD=ORDEREDSUBJECT`/`THREAD=REFERENCES`，暴露 `supportsXxx`，未识别能力保留在原始表里
+- [x] 10.2 `imap/ImapEnable.cj`：`ENABLE <cap>…` 命令与 `* ENABLED` 解析；只把回显的能力置为已启用；未认证状态调用 MUST 在本地拒绝、不发命令
+- [x] 10.3 扩展调用前置校验：每类扩展在"未广告或未启用"时 MUST 抛 `MailProtocolException(capability=…)`，且异常文本不含凭据；统一走一处 `requireCapability` 而非各命令自己判断
+- [x] 10.4 `imap/ImapIdle.cj` 的 `IdleSession`：`idle()` 前置校验（已认证 + 已 SELECT/EXAMINE）、发送 `IDLE`、处理 `+ idling`、`DONE` 不带 tag 单独写出、收 tagged `OK` 收尾
+- [x] 10.5 IDLE 读线程：读行 → 分类 `ImapEvent` → 入有界队列；`nextEvent(timeout)` 阻塞消费，超时返回 `None` 且 MUST NOT 关连接；用户回调 MUST NOT 在读线程上执行
+- [x] 10.6 IDLE 25 分钟重建：可注入时钟驱动，到点写 `DONE`、等 tagged `OK`、重新 `IDLE`；`close()` 在 IDLE 中先发 `DONE` 再停读线程，幂等
+- [x] 10.7 IDLE 期间的命令互斥：同一连接上 IDLE 未结束时调用普通命令 MUST 立即抛 `MailProtocolException`，MUST NOT 排队；`* BYE` 先作为 `Bye` 事件投递再结束会话
+- [x] 10.8 `imap/ImapMove.cj`：`move`/`uidMove`；解析 `[COPYUID]`、`* VANISHED` 与 `* EXPUNGE`；返回 `MoveResult(atomic, copyUid, vanished)`；服务器广告 `MOVE` 时 MUST 用 `MOVE`
+- [x] 10.9 MOVE 非原子回退：`allowNonAtomicMove(true)` 时 `UID COPY` → `UID STORE +FLAGS.SILENT (\Deleted)` → `UID EXPUNGE`（无 `UIDPLUS` 时退回 `EXPUNGE` 并记告警），结果 `atomic=false`；未开启回退时 MUST 抛错且不发 `COPY`
+- [x] 10.10 `imap/ImapSpecialUse.cj`：`\All`/`\Archive`/`\Drafts`/`\Flagged`/`\Junk`/`\Sent`/`\Trash` 映射到 `SpecialUse`；未知 `\Foo` 保留在 attributes 不报错；`listSpecialUse()` 发 `LIST (SPECIAL-USE) "" "*"`，无能力时 MUST 抛错而不是全量 LIST 后猜名字
+- [x] 10.11 `imap/ImapNamespace.cj`：`NAMESPACE` 三段（personal / otherUsers / shared）的 `(prefix delimiter)` 列表与 `NIL` 解析为 `NamespaceInfo`；`joinPath()` 按 delimiter 拼接且不产生重复分隔符
+- [x] 10.12 `imap/ImapCondStore.cj`：`SELECT … (CONDSTORE)`、`[HIGHESTMODSEQ n]`、`FETCH (MODSEQ)` 与 `(CHANGEDSINCE n)`、`STORE (UNCHANGEDSINCE n)` 与 `* OK [MODIFIED <set>]` → `StoreResult.modified`（失败项 MUST NOT 记为成功）
+- [x] 10.13 QRESYNC：`ENABLE QRESYNC` 时 MUST NOT 再单独 `ENABLE CONDSTORE`；`SELECT … (QRESYNC (uidvalidity modseq [known-uids [(known-seqs known-uids)]]))`；区分 `* VANISHED (EARLIER)` 与普通 `* VANISHED`，两者都要在普通命令的响应分发里被消费
+- [x] 10.14 `imap/ImapSort.cj`：`SORT`/`UID SORT` 的 `SortCriteria`（`ARRIVAL`/`CC`/`DATE`/`FROM`/`SIZE`/`SUBJECT`/`TO` + `REVERSE` 前缀）、`SORT=DISPLAY` 时的 `DISPLAY FROM`/`DISPLAY TO`、字符集只允许 `US-ASCII`/`UTF-8`；解析 `* SORT`
+- [x] 10.15 `THREAD ORDEREDSUBJECT` / `THREAD REFERENCES`（含 `UID THREAD`）：解析 `* THREAD (…)` 嵌套为 `ThreadNode` 树，同级顺序与响应一致；只广告一种算法时请求另一种 MUST 抛错
+- [x] 10.16 `UTF8=ACCEPT` 分支：启用后邮箱名直传 UTF-8、`SEARCH` 省略 `CHARSET`、`LIST`/`STATUS` 返回名按 UTF-8 解码、`APPEND` 接受 UTF-8 头部（序列化用 `utf8Headers=true`）；`SORT`/`THREAD` 的 `charset` 参数不变；未启用时上述各处 MUST 完整走 M3 的 modified UTF-7 路径，禁止"能发就发 UTF-8"的尝试式降级
 - [ ] 10.17 脚本测试：IDLE 的 `+`/推送/`DONE`/tagged 时序、25 分钟重建（假时钟）、IDLE 中插入 `* BYE`、`DONE` 之后才到的 untagged、IDLE 期间 untagged 与 `DONE` 进 `onLine`、跨线程 `close()` 打断阻塞读、MOVE 的 `COPYUID` 与 `VANISHED`、MOVE 回退三步顺序、`LIST (SPECIAL-USE)` 含自定义属性、`NAMESPACE` 三段全 `NIL`、`ENABLE` 回空列表、`MODIFIED` 只列半数序号、`VANISHED (EARLIER)` 与普通 `VANISHED` 混排、`SORT`/`THREAD` 结果含重复序号与 1000 兄弟节点、1 字节读
 - [ ] 10.18 互操作（G6 手工）：Dovecot 上验证 IDLE 事件、MOVE、NAMESPACE、SORT/THREAD；再在只支持 M3 能力的服务器上逐条确认七个扩展都给出明确错误
 
@@ -170,9 +170,9 @@
 
 ## 11. 收尾
 
-- [ ] 11.1 `email.cj` 汇总 re-export，确认五个公开包名与设计一致
-- [ ] 11.2 更新 `f_email/README.md`：已实现范围（含 M4 七组扩展）、里程碑进度、`CANGJIE_STDX_DYNAMIC_PATH` 要求、编码/解码与 IDLE 使用示例
-- [ ] 11.3 更新 `f_email/README_en.md` 与之一致
-- [ ] 11.4 跑 `cjpm build` 与 `cjpm test`，确保无 warning 级新增告警
-- [ ] 11.5 按 G1–G6 逐条自查并在变更里记录结果（含 10 MB 附件的 RSS 增量实测值）
-- [ ] 11.6 把 `f_email/doc/f_email设计文档.md` 中与实际实现有出入的 API 签名回写到文档
+- [x] 11.1 `email.cj` 汇总 re-export，确认五个公开包名与设计一致
+- [x] 11.2 更新 `f_email/README.md`：已实现范围（含 M4 七组扩展）、里程碑进度、`CANGJIE_STDX_DYNAMIC_PATH` 要求、编码/解码与 IDLE 使用示例
+- [x] 11.3 更新 `f_email/README_en.md` 与之一致
+- [x] 11.4 跑 `cjpm build` 与 `cjpm test`，确保无 warning 级新增告警
+- [x] 11.5 按 G1–G6 逐条自查并在变更里记录结果（含 10 MB 附件的 RSS 增量实测值）
+- [x] 11.6 把 `f_email/doc/f_email设计文档.md` 中与实际实现有出入的 API 签名回写到文档

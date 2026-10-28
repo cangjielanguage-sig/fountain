@@ -132,6 +132,27 @@ public class DotUnstuffReader <: InputStream {
         this.input = input
     }
 
+    /**
+     * 读到结束行之后、已经离开底层流但尚未交付的字节。
+     *
+     * 本类内部按块预读（否则每个字节一次系统调用），所以结束标记之后的字节可能已经在
+     * 自己的缓冲里。调用方必须把它们退回 [LineChannel.pushBack]——POP3 的 `RETR` 之后
+     * 连接还要继续用，丢一个字节就会让下一条命令读到正文的尾巴。
+     *
+     * 返回的字节不会被重复交付；`done` 之后恒为空。
+     */
+    public func unread(): Array<Byte> {
+        if (limit <= pos) {
+            return []
+        }
+        let out = Array<Byte>(limit - pos, repeat: 0)
+        for (i in 0..(limit - pos)) {
+            out[i] = buffer[pos + i]
+        }
+        pos = limit
+        out
+    }
+
     public func read(target: Array<Byte>): Int64 {
         if (target.size == 0 || done) {
             return 0

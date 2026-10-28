@@ -2413,3 +2413,80 @@ POP3 的 `-ERR` 文本没有标准结构；优先解析 `[...]` response code（
 ---
 
 *本文档为设计稿，API 签名在实现阶段可微调，但「客户端优先」的边界与开头的三条底线不变。*
+
+---
+
+# 附录 A：实现后的公开 API（2026-10-29）
+
+本附录以**代码实际形态**为准；正文中晚于实现的假设以这里为准。
+
+## A.1 包与文件布局的实际差异
+
+正文 §3 把编解码器放在 `mime/`，实现时改放到 `model/`：`ContentType`、`ContentDisposition`、
+`MimeParameter`、`TransferEncoding`、`QuotedPrintable`、`Base64Codec`、`EncodedWord`、
+`CharsetResolver` 都在 `fountain::f_email.model`。原因是它们与 `HeaderMap`/`MailMessage`
+同属"消息层"，`mime/` 只保留真正需要流式与递归的两件：`MimeParser`、`MimeWriter`
+（外加 `MimeParseOptions`/`MimeWriteOptions`/`Boundary`）。
+
+## A.2 公开类型
+
+| 包 | 公开类型 |
+|---|---|
+| `f_email.model` | `MailException` `MailIoException` `MailProtocolException` `MailAuthException` `MailLimitException` `MimeException` `MailTlsException`、`IoStage` `LimitKind`、`Secret`、`HeaderMap`、`EmailAddress` `AddressList`、`MailDate`、`MailMessage` `MailMessageBuilder`、`MimePart` `PartBody` `Multipart`、`BodySource` `MemoryBodySource` `FileBodySource` `StreamBodySource`、`Spool`、`Envelope`、`ContentType` `ContentDisposition` `MimeParameter` `MimeParameters`、`TransferEncoding` `QuotedPrintable` `QuotedPrintableEncoder` `QuotedPrintableDecoder` `Base64Codec` `Base64Encoder` `Base64Decoder` `EncodedWord` `CharsetResolver` |
+| `f_email.mime` | `MimeParser` `MimeWriter` `MimeVisitor` `MimeAction` `MimeParseOptions` `MimeWriteOptions` `BoundaryScanner` |
+| `f_email.transport` | `MailConnection` `LineChannel` `DotStuffWriter` `DotUnstuffReader` `MailTrace` `TlsMode` `MailTimeouts` `Deadline`(internal) `IoTimeout` `TransportFactory` `SocketTransportFactory` `ScriptedTransport` |
+| `f_email.smtp` | `SmtpClient` `SmtpClientBuilder` `SmtpReply` `SmtpCapabilities` `SmtpAuth` `SmtpAuthMechanism` `SendPolicy` `SendReport` `RecipientStatus` `DsnReturn` `DsnNotify`、`isRetryable(report)` `isRetryable(error)` |
+| `f_email.pop3` | `Pop3Client` `Pop3ClientBuilder` `Pop3Reply` `Pop3Capabilities` `Pop3Capability` `Pop3ErrorKind` `Pop3AuthMechanism` `Pop3Stat` `Pop3MessageInfo` `Pop3Uidl` |
+| `f_email.imap` | `ImapClient` `ImapClientBuilder`、`ImapCapabilities`、`ImapParser` `ImapValue` `ImapResponse` `ImapResponseKind` `ImapUtf7`、`SequenceSet` `FetchItem` `BodySection` `FetchResult` `FetchMeta` `FetchSink` `BodyStructure` `LeafBody` `MultiBody` `ImapEnvelope` `ImapAddress` `CopyResult` `AppendResult` `MailboxStatus` `MailboxInfo` `ImapDate`、`SearchCriteria`、`ImapEnable` `ImapIdle` `ImapIdleSession` `ImapEvent` `ImapEventKind` `ImapMove` `MoveResult` `ImapSpecialUse` `SpecialUse` `ImapNamespace` `NamespaceInfo` `NamespaceEntry` `ImapCondStore` `QResyncParams` `StoreOperation` `StoreResult`、`ImapSort` `SortCriterion` `SortKey` `ThreadAlgorithm` `ThreadNode`、`ImapAuthMechanism` |
+
+## A.3 关键签名
+
+```cangjie
+// SMTP
+SmtpClient.builder(host, port!: UInt16 = 587): SmtpClientBuilder
+SmtpClient.send(message: MailMessage): SendReport
+SmtpClient.send(envelope: Envelope, message: MailMessage): SendReport
+
+// POP3
+Pop3Client.builder(host, port!: UInt16 = 110): Pop3ClientBuilder
+Pop3Client.login(user: String, secret: Secret): Unit
+Pop3Client.apop(user: String, secret: Secret): Unit
+Pop3Client.authenticate(mechanism: Pop3AuthMechanism, user: String, secret: Secret): Unit
+Pop3Client.retr(message: Int64, sink: OutputStream): Int64
+Pop3Client.retrMessage(message: Int64, options!: MimeParseOptions = MimeParseOptions()): MailMessage
+
+// IMAP
+ImapClient.builder(host, port!: UInt16 = 143): ImapClientBuilder
+ImapClient.login(user: String, secret: Secret): Unit
+ImapClient.authenticate(mechanism: ImapAuthMechanism, user: String, secret: Secret): Unit
+ImapClient.select(mailbox: String): MailboxStatus
+ImapClient.fetch(set: SequenceSet, items: Array<FetchItem>): Array<FetchResult>
+ImapClient.fetch(set: SequenceSet, items: Array<FetchItem>, sink: FetchSink): Array<FetchMeta>
+ImapClient.search(criteria: SearchCriteria): Array<Int64>
+ImapClient.store(set, operation, flags, silent!: Bool = false, unchangedSince!: ?Int64 = None): StoreResult
+ImapClient.append(mailbox, message, flags!: Array<String> = [], date!: ?String = None, utf8Headers!: Bool = false): AppendResult
+
+// M4 扩展
+ImapEnable(client).enable(capabilities: Array<String>): Array<String>
+ImapIdle(client).start(): ImapIdleSession
+ImapIdleSession.nextEvent(timeout!: Duration = 30s): ?ImapEvent
+ImapMove(client).uidMove(set, mailbox, allowNonAtomic!: Bool = false): MoveResult
+ImapSpecialUse(client).listSpecialUse(): Array<MailboxInfo>
+ImapNamespace(client).fetch(): NamespaceInfo
+ImapCondStore(client).select(mailbox, qresync!: ?QResyncParams = None): MailboxStatus
+ImapSort(client).sort(keys: Array<SortKey>, charset: String, criteria: SearchCriteria): Array<Int64>
+ImapSort(client).thread(algorithm: ThreadAlgorithm, charset: String, criteria: SearchCriteria): Array<ThreadNode>
+```
+
+## A.4 与正文不一致/新增的约定
+
+| 位置 | 实际做法 | 原因 |
+|---|---|---|
+| `FetchSink` | `onBodyChunk(chunk)` 先到、`onComplete(meta)` 后到 | 先给完整元信息就必须缓存整段正文，与流式目标冲突 |
+| `LineChannel` | 新增 `pushBack(bytes)`、`readLineSoft(timeout)`、`lastReadTimedOut()` | 前者收回 dot-unstuffing 的预读残留（否则 `RETR` 之后的下一条命令读到正文尾巴）；后两者给 IDLE 提供"超时不等于断线"的读 |
+| `DotUnstuffReader` | 新增 `unread()` | 同上，与 `pushBack` 配对 |
+| M4 扩展 | 独立类 `ImapEnable/ImapIdle/ImapMove/ImapSpecialUse/ImapNamespace/ImapCondStore/ImapSort`，构造时注入 `ImapClient` | Cangjie 无分部类；拆开让七个能力边界在类型层面可见 |
+| `ImapClient.append` | 序列化两遍（第一遍只计数）拿精确 `{n}` | 不落临时文件，语义与"先得精确大小"一致 |
+| `MimeParser` 叶子正文 | `LeafBuffer` 流式分流：超阈值立即落盘 | 先 `readAll` 再落盘会让 10 MB 附件峰值内存翻倍，G4 不达标 |
+| `isRetryable(MailException)` | 仅 `Connect` / `Timeout` / TLS 可重试，其余 `false` | 与正文 §8 的错误映射表对齐；原实现对未匹配类型默认 `true` |
+| `ImapValue.number()` | 对 `Atom("123")` 也返回数字 | 个别服务器把序号发成 atom |

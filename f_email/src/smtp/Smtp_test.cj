@@ -333,3 +333,236 @@ public class SmtpClient_test {
         client.close()
     }
 }
+
+@Test
+public class SmtpAuthDialogue_test {
+    /** LOGIN 是两段 base64：先用户名、后密码，顺序不能反。 */
+    @TestCase
+    public func loginWritesUserThenPassword(): Unit {
+        let transport = ScriptedTransport(
+            server: "220 ready\r\n" +
+                "250-smtp.example.com\r\n250 AUTH LOGIN\r\n" +
+                "334 VXNlcm5hbWU6\r\n" +
+                "334 UGFzc3dvcmQ6\r\n" +
+                "235 authenticated\r\n"
+        )
+        let client = SmtpClient.builder("localhost", port: 25)
+            .requireEncryption(false)
+            .allowPlaintextAuth(true)
+            .auth(SmtpAuthMechanism.Login, "user", Secret.of("pass"))
+            .transport(transport)
+            .build()
+        let recorded = transport.recordedText()
+        let userIndex = recorded.indexOf(Base64Codec.encodeUnwrapped("user".toArray())) ?? -1
+        let passIndex = recorded.indexOf(Base64Codec.encodeUnwrapped("pass".toArray())) ?? -1
+        @Assert(userIndex >= 0, true)
+        @Assert(userIndex < passIndex, true)
+        client.close()
+    }
+
+    /** CRAM-MD5 的挑战是 base64 原文，响应里不能出现明文密码。 */
+    @TestCase
+    public func cramMd5RespondsWithDigest(): Unit {
+        let challenge = "<1896.697170952@postoffice.reston.mci.net>"
+        let encoded = Base64Codec.encodeUnwrapped(challenge.toArray())
+        let transport = ScriptedTransport(
+            server: "220 ready\r\n" +
+                "250-smtp.example.com\r\n250 AUTH CRAM-MD5\r\n" +
+                "334 ${encoded}\r\n" +
+                "235 authenticated\r\n"
+        )
+        let client = SmtpClient.builder("localhost", port: 25)
+            .requireEncryption(false)
+            .allowPlaintextAuth(true)
+            .auth(SmtpAuthMechanism.CramMd5, "tim", Secret.of("tanstaaftanstaaf"))
+            .transport(transport)
+            .build()
+        let expected = SmtpAuth.cramMd5Response("tim", Secret.of("tanstaaftanstaaf"), challenge)
+        @Assert(transport.recordedText().contains(expected), true)
+        @Assert(transport.recordedText().contains("tanstaaftanstaaf"), false)
+        client.close()
+    }
+
+    /** XOAUTH2 失败时服务器先回 334，必须补空行才能读到最终 reply。 */
+    @TestCase
+    public func xoauth2FailureSendsEmptyLine(): Unit {
+        let transport = ScriptedTransport(
+            server: "220 ready\r\n" +
+                "250-smtp.example.com\r\n250 AUTH XOAUTH2\r\n" +
+                "334 eyJzdGF0dXMiOiI0MDEifQ==\r\n" +
+                "535 authentication failed\r\n"
+        )
+        var caught = false
+        try {
+            SmtpClient.builder("localhost", port: 25)
+                .requireEncryption(false)
+                .allowPlaintextAuth(true)
+                .oauth2("u@example.com", Secret.of("tok"))
+                .transport(transport)
+                .build()
+        } catch (_: MailAuthException) {
+            caught = true
+        }
+        @Assert(caught, true)
+        // 334 之后必须写出一行空内容（CRLF 紧跟 CRLF）
+        @Assert(transport.recordedText().contains("\r\n\r\n"), true)
+    }
+}
+
+@Test
+public class SmtpExtensions_test {
+    @TestCase
+    public func eightBitMimeAddsBodyParameter(): Unit {
+        let transport = ScriptedTransport(
+            server: "220 ready\r\n250-smtp.example.com\r\n250-8BITMIME\r\n250 PIPELINING\r\n" +
+                "250 sender ok\r\n250 rcpt ok\r\n354 go\r\n250 queued\r\n"
+        )
+        let client = SmtpClient.builder("localhost", port: 25)
+            .requireEncryption(false)
+            .transport(transport)
+            .build()
+        let message = MailMessage.builder().from("a@x.com").to("b@y.com").text("hi").build()
+        client.send(message)
+        @Assert(transport.recordedText().contains("MAIL FROM:<a@x.com> BODY=8BITMIME"), true)
+        client.close()
+    }
+
+    @TestCase
+    public func withoutEightBitMimeNoBodyParameter(): Unit {
+        let transport = ScriptedTransport(
+            server: "220 ready\r\n250-smtp.example.com\r\n" +
+                "250 sender ok\r\n250 rcpt ok\r\n354 go\r\n250 queued\r\n"
+        )
+        let client = SmtpClient.builder("localhost", port: 25)
+            .requireEncryption(false)
+            .transport(transport)
+            .build()
+        let message = MailMessage.builder().from("a@x.com").to("b@y.com").text("hi").build()
+        client.send(message)
+        @Assert(transport.recordedText().contains("BODY=8BITMIME"), false)
+        client.close()
+    }
+
+    /** 非 ASCII 信封地址没有 SMTPUTF8 时必须报错，绝不能把裸 UTF-8 发出去。 */
+    @TestCase
+    public func nonAsciiAddressWithoutSmtpUtf8Fails(): Unit {
+        let transport = ScriptedTransport(server: "220 ready\r\n250 smtp.example.com\r\n")
+        let client = SmtpClient.builder("localhost", port: 25)
+            .requireEncryption(false)
+            .transport(transport)
+            .build()
+        let message = MailMessage.builder().from("a@x.com").to("张三@example.com").text("hi").build()
+        var caught = false
+        try {
+            client.send(message)
+        } catch (_: MailProtocolException) {
+            caught = true
+        }
+        @Assert(caught, true)
+        @Assert(transport.recordedText().contains("MAIL FROM"), false)
+        client.close()
+    }
+
+    @TestCase
+    public func smtpUtf8IsAdvertisedInMailFrom(): Unit {
+        let transport = ScriptedTransport(
+            server: "220 ready\r\n250-smtp.example.com\r\n250-SMTPUTF8\r\n250 PIPELINING\r\n" +
+                "250 sender ok\r\n250 rcpt ok\r\n354 go\r\n250 queued\r\n"
+        )
+        let client = SmtpClient.builder("localhost", port: 25)
+            .requireEncryption(false)
+            .transport(transport)
+            .build()
+        let message = MailMessage.builder().from("a@x.com").to("张三@example.com").text("hi").build()
+        let report = client.send(message)
+        @Assert(report.isCompleteSuccess(), true)
+        @Assert(transport.recordedText().contains("SMTPUTF8"), true)
+        @Assert(transport.recordedText().contains("RCPT TO:<张三@example.com>"), true)
+        client.close()
+    }
+
+    @TestCase
+    public func precomputeWritesSizeParameter(): Unit {
+        let transport = ScriptedTransport(server: "220 ready\r\n250 smtp.example.com\r\n")
+        let client = SmtpClient.builder("localhost", port: 25)
+            .requireEncryption(false)
+            .precomputeSize(true)
+            .transport(transport)
+            .build()
+        var caught = false
+        try {
+            // 服务器没有后续应答，MANIFEST 之前就会因 SIZE 计算完成而写出 MAIL FROM；
+            // 这里只关心命令里带 SIZE=，所以吞掉后续异常
+            let message = MailMessage.builder().from("a@x.com").to("b@y.com").text("hi").build()
+            client.send(message)
+        } catch (_: Exception) {
+            caught = true
+        }
+        @Assert(transport.recordedText().contains("MAIL FROM:<a@x.com> SIZE="), true)
+        client.close()
+    }
+
+    /** 421 中途断开：不抛异常，落在 SendReport 里。 */
+    @TestCase
+    public func server421MidTransactionYieldsFailedReport(): Unit {
+        let transport = ScriptedTransport(
+            server: "220 ready\r\n250 smtp.example.com\r\n421 service not available\r\n"
+        )
+        let client = SmtpClient.builder("localhost", port: 25)
+            .requireEncryption(false)
+            .transport(transport)
+            .build()
+        let message = MailMessage.builder().from("a@x.com").to("b@y.com").text("hi").build()
+        let report = client.send(message)
+        @Assert(report.isCompleteSuccess(), false)
+        @Assert(report.rejected.size, 1)
+        @Assert(report.reply.code, 421)
+        client.close()
+    }
+
+    @TestCase
+    public func startTlsNotAdvertisedIsRejected(): Unit {
+        let transport = ScriptedTransport(server: "220 ready\r\n250 smtp.example.com\r\n")
+        var caught = false
+        try {
+            SmtpClient.builder("localhost", port: 25)
+                .tls(TlsMode.StartTls)
+                .transport(transport)
+                .build()
+        } catch (_: MailProtocolException) {
+            caught = true
+        }
+        @Assert(caught, true)
+    }
+}
+
+@Test
+public class RetryClassification_test {
+    @TestCase
+    public func classifiesExceptions(): Unit {
+        @Assert(isRetryable(MailIoException(IoStage.Timeout, "t")), true)
+        @Assert(isRetryable(MailIoException(IoStage.Read, "r")), false)
+        @Assert(isRetryable(MailTlsException("tls")), true)
+        @Assert(isRetryable(MailAuthException("PLAIN", None<Int64>, "auth")), false)
+        @Assert(isRetryable(MailProtocolException("bad")), false)
+        @Assert(isRetryable(MailLimitException(LimitKind.Size, 1, 2)), false)
+    }
+
+    @TestCase
+    public func classifiesReports(): Unit {
+        let retryable = SendReport(
+            "mid",
+            rejected: [RecipientStatus("a@b", 451, text: "try later")],
+            reply: SmtpReply(451, ["try later"])
+        )
+        @Assert(retryable.isRetryable(), true)
+        let permanent = SendReport(
+            "mid",
+            rejected: [RecipientStatus("a@b", 550, text: "no user")],
+            reply: SmtpReply(550, ["no user"])
+        )
+        @Assert(permanent.isRetryable(), false)
+        let success = SendReport("mid", accepted: [RecipientStatus("a@b", 250, accepted: true)], reply: SmtpReply(250, ["ok"]))
+        @Assert(success.isRetryable(), false)
+    }
+}

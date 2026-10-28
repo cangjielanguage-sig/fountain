@@ -111,25 +111,16 @@ public func isRetryable(report: SendReport): Bool {
 /**
  * 异常分类。
  *
- * 只有连接 / 超时 / TLS 与 4xx 增强码可重试；认证失败与 5xx 不可重试。
+ * 只有连接 / 超时 / TLS 可重试；认证失败、5xx、协议错误与各类超限都不可重试。
  * 客户端**不自动重试**——`250` 可能已在断网前到达服务器，库内重试等于重复投递。
  */
 public func isRetryable(error: MailException): Bool {
-    match (error as MailIoException) {
-        case Some(io) => return io.stage.toString() == "Timeout"
-        case None => ()
+    if (let Some(io) <- (error as MailIoException)) {
+        let stage = io.stage.toString()
+        return stage == "Timeout" || stage == "Connect"
     }
-    match (error as MailTlsException) {
-        case Some(_) => return true
-        case None => ()
+    if (let Some(_) <- (error as MailTlsException)) {
+        return true
     }
-    match (error as MailAuthException) {
-        case Some(_) => return false
-        case None => ()
-    }
-    match (error as MailProtocolException) {
-        case Some(_) => return false
-        case None => ()
-    }
-    true
+    false
 }

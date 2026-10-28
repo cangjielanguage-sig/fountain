@@ -48,6 +48,9 @@ public class LineChannel <: InputStream & OutputStream & Resource {
     private var replaced = false
     private var sensitive = false
     private var deadline: ?Deadline = None
+    /** IDLE 用：读超时视为"暂时没数据"，既不关连接也不抛异常。 */
+    private var softTimeout = false
+    private var timedOutFlag = false
 
     public init(
         input: InputStream,
@@ -77,6 +80,31 @@ public class LineChannel <: InputStream & OutputStream & Resource {
     /** 清除命令总超时（用于 IDLE：静默不算超时）。 */
     public func clearDeadline(): Unit {
         deadline = None
+    }
+
+    /**
+     * IDLE 专用：单次读超时返回 `None` 且**不关闭连接**。
+     *
+     * 普通的 `readLine` 把超时当作致命错误（命令总超时后流不可信）；
+     * 而 IDLE 期间"服务器一直不说话"是正常状态，必须能区分"超时"与"EOF"。
+     * 区分方式：返回 `None` 后再问 [lastReadTimedOut]。
+     */
+    public func readLineSoft(timeout: Duration): ?Array<Byte> {
+        timedOutFlag = false
+        softTimeout = true
+        if (let Some(t) <- timeouts) {
+            t.setReadTimeout(timeout)
+        }
+        try {
+            readLine()
+        } finally {
+            softTimeout = false
+        }
+    }
+
+    /** 上一次 [readLineSoft] 是否因超时返回 `None`（false 表示 EOF）。 */
+    public func lastReadTimedOut(): Bool {
+        timedOutFlag
     }
 
     /** 进入凭据敏感模式：期间写出的每一行在跟踪里都是 `<redacted>`。 */
@@ -135,6 +163,10 @@ public class LineChannel <: InputStream & OutputStream & Resource {
             }
             searchFrom = pending.size
             if (!fill()) {
+                if (timedOutFlag) {
+                    // 软超时：不设 eof、不关连接，把控制权交回调用方
+                    return None
+                }
                 // EOF：把残留当最后一行返回；彻底空则 None
                 if (pendingPos >= pending.size) {
                     eof = true
@@ -240,6 +272,28 @@ public class LineChannel <: InputStream & OutputStream & Resource {
             eof = true
         }
         n
+    }
+
+    /**
+     * 把已读出但未消费的字节退回缓冲的最前面。
+     *
+     * 供带前瞻的读取器（[DotUnstuffReader]）使用：它在内部按块预读，遇到结束标记时
+     * 后面的字节已经离开了底层流，不退回来就会被下一条命令读到。
+     */
+    public func pushBack(bytes: Array<Byte>): Unit {
+        if (bytes.size == 0) {
+            return
+        }
+        let merged = ArrayList<Byte>()
+        for (b in bytes) {
+            merged.add(b)
+        }
+        for (i in pendingPos..pending.size) {
+            merged.add(pending[i])
+        }
+        pending = merged
+        pendingPos = 0
+        eof = false
     }
 
     // ---------- 写 ----------
@@ -356,6 +410,10 @@ public class LineChannel <: InputStream & OutputStream & Resource {
         let n = try {
             input.read(tmp)
         } catch (e: SocketTimeoutException) {
+            if (softTimeout) {
+                timedOutFlag = true
+                return false
+            }
             throw timeoutException()
         } catch (e: Exception) {
             throw ioFailure(IoStage.Read, e)

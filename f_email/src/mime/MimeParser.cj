@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_email.mime
 
 import std.collection.ArrayList
-import std.fs.{File, OpenMode}
+import std.fs.{File, OpenMode, Path, removeIfExists}
 import std.io.InputStream
 import cangjie_tpc::charset4cj.charset.Charsets
 import fountain::f_email.model.*
@@ -172,11 +172,34 @@ public class MimeParser {
     ): PartBody {
         let encoding = TransferEncoding.parse(part.headers.get("Content-Transfer-Encoding"))
         let decodedStream = TransferDecoder.stream(source, encoding, strict: options.strict)
-        let decoded = readAll(decodedStream, options.maxBodyBytes)
+        // 边解码边分流：超过 spoolThreshold 立刻转文件，绝不先攒出整段正文。
+        // 10 MB 附件如果先 readAll 再落盘，峰值内存就是正文的两倍以上（G4 直接不达标）。
+        let buffer = LeafBuffer(options.spoolThreshold, options.spoolDir)
+        let chunk = Array<Byte>(65536, repeat: 0)
+        while (true) {
+            let n = try {
+                decodedStream.read(chunk)
+            } catch (e: Exception) {
+                buffer.discard()
+                throw e
+            }
+            if (n <= 0) {
+                break
+            }
+            let slice = Array<Byte>(n, repeat: 0)
+            for (i in 0..n) {
+                slice[i] = chunk[i]
+            }
+            buffer.write(slice)
+            if (options.maxBodyBytes > 0 && buffer.total > options.maxBodyBytes) {
+                buffer.discard()
+                throw MailLimitException(LimitKind.Body, options.maxBodyBytes, buffer.total)
+            }
+        }
         let charsetName = contentType.charsetName()
-        if (contentType.isText() && decoded.size <= options.inlineTextLimit) {
+        if (contentType.isText() && !buffer.spilled && buffer.total <= options.inlineTextLimit) {
             let text = CharsetResolver.decode(
-                decoded,
+                buffer.bytes(),
                 charsetName,
                 options: CharsetOptions(strict: options.strict),
                 defaultCharset: options.defaultCharset
@@ -184,21 +207,10 @@ public class MimeParser {
             part.markCharset(Some(text.charset), text.lossy)
             return PartBody.Text(text.text)
         }
-        if (decoded.size > options.spoolThreshold) {
-            return PartBody.Data(spoolBytes(decoded, options))
+        if (buffer.spilled) {
+            return PartBody.Data(buffer.intoSource())
         }
-        PartBody.Data(MemoryBodySource(decoded))
-    }
-
-    private static func spoolBytes(bytes: Array<Byte>, options: MimeParseOptions): BodySource {
-        let path = Spool.createFile(spoolDir: options.spoolDir)
-        let file = File(path, OpenMode.Write)
-        try {
-            file.write(bytes)
-        } finally {
-            file.close()
-        }
-        FileBodySource(path, owned: true)
+        PartBody.Data(MemoryBodySource(buffer.bytes()))
     }
 
     private static func readHeaders(source: ByteSource, options: MimeParseOptions): HeaderMap {
@@ -248,24 +260,6 @@ public class MimeParser {
     private static func validBoundary(boundary: String): Bool {
         let size = boundary.toArray().size
         size >= 1 && size <= 70
-    }
-
-    private static func readAll(input: InputStream, maxBytes: Int64): Array<Byte> {
-        let out = ArrayList<Byte>()
-        let buffer = Array<Byte>(65536, repeat: 0)
-        while (true) {
-            let n = input.read(buffer)
-            if (n <= 0) {
-                break
-            }
-            for (i in 0..n) {
-                out.add(buffer[i])
-            }
-            if (maxBytes > 0 && out.size > maxBytes) {
-                throw MailLimitException(LimitKind.Body, maxBytes, out.size)
-            }
-        }
-        out.toArray()
     }
 
     private static func drain(input: InputStream): Unit {
@@ -358,5 +352,86 @@ private class ParseState {
         if (options.maxParts <= 0) {
             throw MimeException("maxParts 必须为正数")
         }
+    }
+}
+
+/**
+ * 叶子正文的分流缓冲：先攒在内存里，超过阈值就整段落盘，之后的块直接写文件。
+ *
+ * 这样峰值内存是「阈值 + 一个 64 KB 块」，而不是「正文大小」。
+ */
+class LeafBuffer {
+    private let limit: Int64
+    private let spoolDir: ?Path
+    private let memory = ArrayList<Byte>()
+    private var file: ?File = None
+    private var path: ?Path = None
+    var total: Int64 = 0
+    var spilled = false
+
+    init(limit: Int64, spoolDir: ?Path) {
+        this.limit = limit
+        this.spoolDir = spoolDir
+    }
+
+    func write(bytes: Array<Byte>): Unit {
+        total += bytes.size
+        if (!spilled && total > limit) {
+            spill()
+        }
+        match (file) {
+            case Some(target) => target.write(bytes)
+            case None =>
+                for (b in bytes) {
+                    memory.add(b)
+                }
+        }
+    }
+
+    func bytes(): Array<Byte> {
+        memory.toArray()
+    }
+
+    /** 转成文件来源；调用方接管所有权（关闭时删除）。 */
+    func intoSource(): BodySource {
+        if (let Some(target) <- file) {
+            target.close()
+            file = None
+        }
+        let target = match (path) {
+            case Some(value) => value
+            case None => throw MimeException("叶子正文未落盘")
+        }
+        path = None
+        FileBodySource(target, owned: true)
+    }
+
+    /** 出错时清理临时文件。 */
+    func discard(): Unit {
+        if (let Some(target) <- file) {
+            try {
+                target.close()
+            } catch (_: Exception) {}
+            file = None
+        }
+        if (let Some(target) <- path) {
+            try {
+                removeIfExists(target)
+            } catch (_: Exception) {}
+            path = None
+        }
+        memory.clear()
+    }
+
+    private func spill(): Unit {
+        let target = Spool.createFile(spoolDir: spoolDir)
+        let output = File(target, OpenMode.Write)
+        if (memory.size > 0) {
+            output.write(memory.toArray())
+            memory.clear()
+        }
+        file = Some(output)
+        path = Some(target)
+        spilled = true
     }
 }
