@@ -107,8 +107,13 @@ public class ZipWriter {
         header.nameBytes = nameBytes
 
         let offset = position
-        writeLocalHeader(out, header)
-        out.write(payload)
+        try {
+            writeLocalHeader(out, header)
+            out.write(payload)
+        } catch (e: Exception) {
+            markDirty(realName)
+            throw e
+        }
         record(
             nameBytes,
             utf8,
@@ -152,11 +157,16 @@ public class ZipWriter {
         header.streaming = true
 
         let offset = position
-        writeLocalHeader(out, header)
-
         let crcStream = Crc32InputStream(input)
         let compressedCounter = CountingOutputStream(out)
+        var crc: UInt32 = 0
+        var compressedSize: Int64 = 0
+        var uncompressedSize: Int64 = 0
+        // 三个阶段（header / 数据泵送 / descriptor）同等保护：任一阶段失败都进脏状态，
+        // 半截的 local header 无法修补，续写出来的包结构合法但内容错。
         try {
+            writeLocalHeader(out, header)
+
             if (method == 8) {
                 let compressor = CompressOutputStream(compressedCounter, wrap: WrapType.DeflateFormat, bufLen: 8192)
                 pump(crcStream, compressor)
@@ -164,20 +174,19 @@ public class ZipWriter {
             } else {
                 pump(crcStream, compressedCounter)
             }
+
+            crc = crcStream.checksum()
+            compressedSize = compressedCounter.count
+            uncompressedSize = crcStream.count
+
+            writeU32LE(out, ZipLayout.SIGNATURE_DATA_DESCRIPTOR)
+            writeU32LE(out, crc)
+            writeU64LE(out, UInt64(compressedSize))
+            writeU64LE(out, UInt64(uncompressedSize))
         } catch (e: Exception) {
-            dirty = true
-            dirtyEntry = realName
+            markDirty(realName)
             throw e
         }
-
-        let crc = crcStream.checksum()
-        let compressedSize = compressedCounter.count
-        let uncompressedSize = crcStream.count
-
-        writeU32LE(out, ZipLayout.SIGNATURE_DATA_DESCRIPTOR)
-        writeU32LE(out, crc)
-        writeU64LE(out, UInt64(compressedSize))
-        writeU64LE(out, UInt64(uncompressedSize))
 
         record(
             nameBytes,
@@ -241,7 +250,12 @@ public class ZipWriter {
         header.dosDate = encodeDosDate(now)
         header.nameBytes = nameBytes
         let offset = position
-        writeLocalHeader(out, header)
+        try {
+            writeLocalHeader(out, header)
+        } catch (e: Exception) {
+            markDirty(allocated)
+            throw e
+        }
         record(
             nameBytes,
             utf8,
@@ -333,6 +347,12 @@ public class ZipWriter {
         if (dirty) {
             throw ZipException("条目 ${dirtyEntry} 写入中断，ZIP 结构不完整")
         }
+    }
+
+    /** 三个阶段（header / 数据泵送 / descriptor）任一失败都走这里。 */
+    private func markDirty(name: String): Unit {
+        dirty = true
+        dirtyEntry = name
     }
 
     /** 超阈值条目：先落临时文件（`spilling` 置位），再走流式路径，最后删临时文件。 */

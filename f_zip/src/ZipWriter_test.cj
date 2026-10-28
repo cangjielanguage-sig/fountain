@@ -17,7 +17,7 @@ package fountain::f_zip
 
 import std.env
 import std.fs.{Directory, File, Path, SymbolicLink, removeIfExists}
-import std.io.{ByteBuffer, InputStream}
+import std.io.{ByteBuffer, InputStream, OutputStream}
 import std.sync.AtomicBool
 import std.unittest.*
 import std.unittest.testmacro.*
@@ -406,6 +406,48 @@ public class ZipWriter_test {
         assertZipError({=> w.close()}, "写入中断")
     }
 
+    /**
+     * 场景「三个阶段各自失败都进脏状态」：底层输出流分别打在
+     * ① local header ② 压缩数据泵送 ③ data descriptor 上，
+     * 三种情况都必须进脏状态，不能只保护泵送阶段。
+     */
+    @TestCase
+    public func dirtyStateCoversHeaderPumpAndDescriptor(): Unit {
+        let name = "a.bin"
+        let data = text("payload")
+        let options = ZipWriterOptions(method: CompressionMethod.Stored)
+        // 流式 local header = 30 固定 + name + 20 字节 ZIP64 extra 占位（见 LocalHeader.cj）
+        let headerLen = ZipLayout.LOCAL_HEADER_SIZE + Int64(name.toArray().size) + 20
+        let dataEnd = headerLen + Int64(data.size)
+
+        // 先用不失败的输出确认分段边界：Stored 不膨胀，descriptor 固定 24 字节
+        let probe = CountingSink()
+        let probeWriter = ZipWriter(probe, options: options)
+        probeWriter.addFileStream(name, ByteBuffer(data))
+        @Assert(probe.count, dataEnd + ZipLayout.DATA_DESCRIPTOR_SIZE)
+        probeWriter.close()
+
+        let failPoints = [0, headerLen, dataEnd]
+        for (failAt in failPoints) {
+            let sink = FailingOutputStream(failAt)
+            let w = ZipWriter(sink, options: options)
+            assertZipError({=> w.addFileStream(name, ByteBuffer(data))}, "sink boom")
+            @Assert(sink.count, failAt)
+            assertZipError({=> w.add("x.txt", text("x"))}, "写入中断")
+            assertZipError({=> w.close()}, "写入中断")
+        }
+    }
+
+    /** 场景「内存路径写失败也进脏状态」：header 与数据写入必须同等保护。 */
+    @TestCase
+    public func memoryPathWriteFailureMarksDirty(): Unit {
+        let sink = FailingOutputStream(0)
+        let w = ZipWriter(sink)
+        assertZipError({=> w.add("a.txt", text("abc"))}, "sink boom")
+        assertZipError({=> w.add("b.txt", text("b"))}, "写入中断")
+        assertZipError({=> w.close()}, "写入中断")
+    }
+
     // ---- ZIP64 ----
 
     /** 场景「小文件不产生 ZIP64 字节」。 */
@@ -428,8 +470,7 @@ public class ZipWriter_test {
     }
 }
 
-/** 读到第 `failAfter` 个字节后抛异常的输入流（模拟传输中断）。 */
-internal class FailingInputStream <: InputStream {
+/** 读到第 `failAfter` 个字节后抛异常的输入流（模拟传输中断）。 */internal class FailingInputStream <: InputStream {
     private let data: Array<Byte>
     private let failAfter: Int64
     private var position: Int64 = 0
@@ -454,5 +495,48 @@ internal class FailingInputStream <: InputStream {
         data.copyTo(buffer, position, 0, n)
         position += n
         n
+    }
+}
+
+/** 只计数不落字节的输出流：用来确认分段边界。 */
+internal class CountingSink <: OutputStream {
+    private var written: Int64 = 0
+
+    public prop count: Int64 {
+        get() {
+            written
+        }
+    }
+
+    public func write(buffer: Array<Byte>): Unit {
+        written += buffer.size
+    }
+}
+
+/**
+ * 在第 `failAt` 字节处抛异常的输出流（模拟磁盘写失败）。
+ *
+ * 每次 `write` 前判累计字节数：`failAt` 落在某个 write 的边界上时，
+ * 失败就发生在该 write 所属的阶段，不会撕开一次写入。
+ */
+internal class FailingOutputStream <: OutputStream {
+    private let failAt: Int64
+    private var written: Int64 = 0
+
+    public init(failAt: Int64) {
+        this.failAt = failAt
+    }
+
+    public prop count: Int64 {
+        get() {
+            written
+        }
+    }
+
+    public func write(buffer: Array<Byte>): Unit {
+        if (written >= failAt) {
+            throw ZipException("sink boom")
+        }
+        written += buffer.size
     }
 }

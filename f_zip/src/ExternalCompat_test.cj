@@ -24,12 +24,30 @@ import std.unittest.testmacro.*
 
 /**
  * 外部工具交叉验证：自己读自己写可能互相容忍同一个错误，所以写出来的包必须过
- * 第三方校验。工具不存在时用例直接返回（不算失败），在 CI 里装了工具就会真正跑。
+ * 第三方校验。
+ *
+ * **工具缺失时显式 skip，不静默 PASSED**：打印一行 `SKIP:` 供人看；发布前把
+ * `F_ZIP_EXTERNAL=1` 设上跑，此时任何工具缺失都会直接失败。
  *
  * 覆盖四类样本：普通 / 纯流式 / 混合 / ZIP64 形式 descriptor。
  */
 @Test
 public class ExternalCompat_test {
+    /**
+     * 外部工具缺失时的统一出口：默认打印 `SKIP` 让用例返回，
+     * `F_ZIP_EXTERNAL=1` 时改为失败（发布前的必跑档）。
+     */
+    private static func skipMissingTool(tool: String, scenario: String): Unit {
+        let forced = match (env.getVariable("F_ZIP_EXTERNAL")) {
+            case Some(v) => v == "1"
+            case None => false
+        }
+        if (forced) {
+            @Fail("外部工具 ${tool} 未安装，F_ZIP_EXTERNAL=1 要求必跑（${scenario}）")
+        }
+        println("SKIP: 未安装 ${tool}，跳过 ${scenario}")
+    }
+
     private static func samples(dir: Path): Array<Path> {
         let plain = dir.join("plain.zip")
         let streaming = dir.join("stream.zip")
@@ -76,9 +94,10 @@ public class ExternalCompat_test {
         try {
             let script = "import sys, zipfile\nz = zipfile.ZipFile(sys.argv[1])\nbad = z.testzip()\nsys.exit(0 if bad is None else 1)\n"
             for (sample in samples(work)) {
-                let (code, out, err) = try {
+                let (code, _, err) = try {
                     executeWithOutput("python3", ["-c", script, sample.toString()])
                 } catch (_: ProcessException) {
+                    skipMissingTool("python3", "python zipfile.testzip() 反向校验")
                     return
                 }
                 @Assert(code, 0)
@@ -111,6 +130,7 @@ public class ExternalCompat_test {
             let (code, out, err) = try {
                 executeWithOutput("7za", ["l", archive.toString()])
             } catch (_: ProcessException) {
+                skipMissingTool("7za", "7za l 中文名")
                 return
             }
             if (code != 0) {
@@ -136,6 +156,7 @@ public class ExternalCompat_test {
                 let (code, _, err) = try {
                     executeWithOutput("7za", ["t", sample.toString()])
                 } catch (_: ProcessException) {
+                    skipMissingTool("7za", "7za t 反向校验")
                     return
                 }
                 if (code != 0) {
@@ -158,6 +179,7 @@ public class ExternalCompat_test {
                 let (code, _, err) = try {
                     executeWithOutput("unzip", ["-t", sample.toString()])
                 } catch (_: ProcessException) {
+                    skipMissingTool("unzip", "unzip -t 反向校验")
                     return
                 }
                 if (code != 0) {
@@ -182,6 +204,7 @@ public class ExternalCompat_test {
             let (code, _, err) = try {
                 executeWithOutput("zip", ["-q", "-X", archive.toString(), "a.txt", "b.txt"], workingDirectory: work)
             } catch (_: ProcessException) {
+                skipMissingTool("zip", "读取 Info-ZIP 样本")
                 return
             }
             if (code != 0) {
@@ -213,6 +236,7 @@ public class ExternalCompat_test {
             let (code, _, err) = try {
                 executeWithOutput("7za", ["a", "-tzip", archive.toString(), "a.txt", "b.txt"], workingDirectory: work)
             } catch (_: ProcessException) {
+                skipMissingTool("7za", "读取 7-Zip 样本")
                 return
             }
             if (code != 0) {
@@ -248,6 +272,7 @@ public class ExternalCompat_test {
             let (code, _, err) = try {
                 executeWithOutput("python3", ["-c", script, archive.toString()])
             } catch (_: ProcessException) {
+                skipMissingTool("python3", "读取 Python zipfile 样本")
                 return
             }
             if (code != 0) {
