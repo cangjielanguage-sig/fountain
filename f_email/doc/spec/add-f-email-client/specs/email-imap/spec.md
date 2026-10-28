@@ -1,3 +1,7 @@
+## Purpose
+
+提供 IMAP4rev1 客户端能力：tagged/untagged/continuation 分发、literal 收发、邮箱选择与列表、FETCH、SEARCH、STORE/EXPUNGE、COPY/APPEND，并扩展 IDLE 事件会话、MOVE、SPECIAL-USE、NAMESPACE、UTF8=ACCEPT、CONDSTORE/QRESYNC 与 SORT/THREAD。
+
 ## ADDED Requirements
 
 ### Requirement: 会话与响应分发

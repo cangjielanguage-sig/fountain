@@ -1,3 +1,7 @@
+## Purpose
+
+把 TCP 与 TLS 连接、行协议的字节通道、dot-stuffing、literal 传输、超时与连接生命周期收敛成一层可注入的传输抽象，供 SMTP、POP3、IMAP 复用，并把 CRLF 注入防线与脱敏跟踪集中在一处实现。
+
 ## ADDED Requirements
 
 ### Requirement: TLS 模式与默认验证

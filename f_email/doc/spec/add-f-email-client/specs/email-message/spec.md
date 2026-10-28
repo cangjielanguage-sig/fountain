@@ -1,3 +1,7 @@
+## Purpose
+
+定义"一封信是什么"的最小模型：头字段容器、地址与日期的解析生成、消息与正文来源、信封推导、凭据包装与异常层次。它不碰 socket，也不做 MIME 编解码，为协议层与 MIME 层提供共享的数据结构。
+
 ## ADDED Requirements
 
 ### Requirement: 头字段容器

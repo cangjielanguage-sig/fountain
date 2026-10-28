@@ -1,3 +1,7 @@
+## Purpose
+
+负责 MIME 的解析与生成：Content-Type/Content-Disposition 参数、传输编码、RFC 2047 与 RFC 2231、multipart 递归、字符集回退链、解析限额与临时文件暂存，并提供建树解析与不建树的流式遍历两种读取方式。
+
 ## ADDED Requirements
 
 ### Requirement: Content-Type 与 Content-Disposition 解析

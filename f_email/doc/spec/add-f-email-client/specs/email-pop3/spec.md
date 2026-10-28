@@ -1,3 +1,7 @@
+## Purpose
+
+提供 POP3 收信能力：USER/PASS、APOP 与 AUTH 认证、CAPA/STLS 能力协商、邮件列表与唯一标识、流式 RETR 与 TOP，以及 DELE/QUIT 的删除提交语义，并把服务器错误映射成统一的异常。
+
 ## ADDED Requirements
 
 ### Requirement: 会话状态与删除提交

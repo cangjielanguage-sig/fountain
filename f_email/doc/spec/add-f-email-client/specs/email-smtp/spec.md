@@ -1,3 +1,7 @@
+## Purpose
+
+提供基于 SMTP 的发信能力：EHLO 能力协商与回退、STARTTLS 升级、四种 AUTH 机制、MAIL/RCPT/DATA 投递事务、PIPELINING 顺序、Bcc 剥离与逐收件人的投递结果报告，并对错误做不自动重试的分类。
+
 ## ADDED Requirements
 
 ### Requirement: 建连时机与 builder 校验
