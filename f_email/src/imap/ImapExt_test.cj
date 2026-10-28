@@ -340,6 +340,24 @@ public class ImapSort_test {
     }
 
     @TestCase
+    public func threadHandlesThousandSiblings(): Unit {
+        var raw = "* THREAD"
+        for (i in 1..=1000) {
+            raw = raw + "(${i})"
+        }
+        raw = raw + "\r\nA0003 OK THREAD completed\r\n"
+        let (client, _) = openSelected(raw)
+        let roots = ImapSort(client).thread(
+            ThreadAlgorithm.References,
+            "UTF-8",
+            SearchCriteria.all()
+        )
+        @Assert(roots.size, 1000)
+        @Assert(roots[999].flatten()[0], 1000)
+        client.close()
+    }
+
+    @TestCase
     public func threadAlgorithmMustBeAdvertised(): Unit {
         let (client, _) = openBasicSelected("")
         var caught = false
@@ -558,6 +576,21 @@ public class ImapIdle_test {
         let order = ImapSort(client).sort([SortKey(SortCriterion.Arrival)], "US-ASCII", SearchCriteria.all())
         @Assert(order.size, 2)
         @Assert(transport.recordedText().contains("SORT (ARRIVAL) US-ASCII ALL"), true)
+        client.close()
+    }
+
+    @TestCase
+    public func vanishedEarlierIsDistinguished(): Unit {
+        let (client, _) = openSelected(
+            "+ idling\r\n* VANISHED (EARLIER) 1:3\r\n* VANISHED 4:5\r\nA0003 OK IDLE terminated\r\n"
+        )
+        let session = ImapIdle(client).withPollInterval(Duration.millisecond * 5).start()
+        let first = session.nextEvent(timeout: Duration.millisecond * 500)
+        @Assert(first.getOrThrow().kind.toString(), "VANISHED")
+        @Assert(first.getOrThrow().earlier, true)
+        let second = session.nextEvent(timeout: Duration.millisecond * 500)
+        @Assert(second.getOrThrow().earlier, false)
+        session.done()
         client.close()
     }
 

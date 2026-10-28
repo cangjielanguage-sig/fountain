@@ -134,7 +134,8 @@ public class ScriptedTransport <: TransportFactory {
         MailConnection.fromStreams(
             ScriptedInput(this),
             ScriptedOutput(this),
-            remote: "${host}:${port}"
+            remote: "${host}:${port}",
+            maxLine: 8192
         )
     }
 

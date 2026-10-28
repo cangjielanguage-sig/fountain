@@ -52,11 +52,19 @@ public struct ImapEvent {
     public let kind: ImapEventKind
     public let sequence: ?Int64
     public let raw: String
+    /** `* VANISHED (EARLIER)` 的离线删除标记。 */
+    public let earlier: Bool
 
-    public init(kind: ImapEventKind, sequence!: ?Int64 = None, raw!: String = "") {
+    public init(
+        kind: ImapEventKind,
+        sequence!: ?Int64 = None,
+        raw!: String = "",
+        earlier!: Bool = false
+    ) {
         this.kind = kind
         this.sequence = sequence
         this.raw = raw
+        this.earlier = earlier
     }
 }
 
@@ -310,11 +318,27 @@ public class ImapIdleSession <: Resource {
             case "EXPUNGE" => ImapEvent(ImapEventKind.Expunge, sequence: response.numberOf(), raw: line)
             case "RECENT" => ImapEvent(ImapEventKind.Recent, sequence: response.numberOf(), raw: line)
             case "FETCH" => ImapEvent(ImapEventKind.Fetch, sequence: response.numberOf(), raw: line)
-            case "VANISHED" => ImapEvent(ImapEventKind.Vanished, raw: line)
+            case "VANISHED" =>
+                ImapEvent(ImapEventKind.Vanished, raw: line, earlier: hasEarlier(response))
             case "FLAGS" => ImapEvent(ImapEventKind.Flags, raw: line)
             case "BYE" => ImapEvent(ImapEventKind.Bye, raw: line)
             case _ => ImapEvent(ImapEventKind.Other, raw: line)
         }
+    }
+
+    private func hasEarlier(response: ImapResponse): Bool {
+        for (value in response.values) {
+            match (value) {
+                case List(items) =>
+                    for (item in items) {
+                        if (item.text().toAsciiUpper() == "EARLIER") {
+                            return true
+                        }
+                    }
+                case _ => ()
+            }
+        }
+        false
     }
 
     private func isTagged(line: String, expected: String): Bool {
