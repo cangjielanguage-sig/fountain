@@ -65,6 +65,19 @@ public struct LLMConfig {
     /** 临时下线时长（秒） */
     public static const LLM_COOLDOWN_SECONDS = LLM + '_cooldownSeconds'
 
+    /** 裁剪策略（Summary/Keywords）调用 LLM 时用的逻辑配置名 */
+    public static const LLM_PRUNER_LLM_NAME = LLM + '_prunerLlmName'
+    /** 记忆摘要调用 LLM 时用的逻辑配置名 */
+    public static const LLM_SUMMARISING_LLM_NAME = LLM + '_summarisingLlmName'
+
+    public static func getPrunerLlmName(): String {
+        Config.getString(LLM_PRUNER_LLM_NAME) ?? 'chat-pro'
+    }
+
+    public static func getSummarisingLlmName(): String {
+        Config.getString(LLM_SUMMARISING_LLM_NAME) ?? 'chat-pro'
+    }
+
     public static func getLoadBalanceAlgo(): String {
         Config.getString(LLM_LOAD_BALANCE_ALGO) ?? 'randomWeight'
     }

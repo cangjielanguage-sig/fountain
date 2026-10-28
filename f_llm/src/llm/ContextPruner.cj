@@ -17,6 +17,8 @@ package fountain::f_llm.llm
 
 import fountain::f_bean.macros.*
 
+import fountain::f_llm.config.*
+
 public interface ContextPruner {
     prop name: String
     func prune(agentId: Int64, session: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>
@@ -57,7 +59,8 @@ public abstract class ContextLLMPruner <: ContextPruner {
     public ContextLLMPruner(
         protected let llmType!: LLMType,
         protected let model!: ModelName,
-        private let promptsGenerator!: (ArrayList<ChatMessage>) -> String
+        private let promptsGenerator!: (ArrayList<ChatMessage>) -> String,
+        private let llmName!: String = LLMConfig.getPrunerLlmName()
     ){}
     public func prune(agentId: Int64, session: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>{
         let params = LLMParams(
@@ -79,20 +82,22 @@ public abstract class ContextLLMPruner <: ContextPruner {
      * （一条 user 消息）与具体走哪家模型无关，不该为了测它去连数据库。
      */
     protected open func respond(agentId: Int64, session: String, params: LLMParams): LLMResp {
-        LLMContextMediator.instance.access(agentId, session, llmType, params)
+        // 新门面：按 llmName 选平台；agentId/session 只在本类内部用于日志与命名，不再参与选号
+        LLM.chatByName(llmName, params)
     }
 }
 public open class ContextSummaryPruner <: ContextLLMPruner {
     public init(
         llmType!: LLMType = LLM_TYPE_TEXT,
         model!: ModelName = MODEL_NAME_DEEPSEEK_FLASH,
+        llmName!: String = LLMConfig.getPrunerLlmName(),
         promptsGenerator!: (ArrayList<ChatMessage>) -> String = {messages => '''
 - 总结下面的JSON所描述的内容，从中提取内容**要点**、**关键**内容，并以MARKDOWN格式返回。
 ```json
 ${(JsonValue.fromData(messages.toData()) as JsonValue).getOrThrow()}
 ```'''}
     ){
-        super(llmType: llmType, model: model, promptsGenerator: promptsGenerator)
+        super(llmType: llmType, model: model, promptsGenerator: promptsGenerator, llmName: llmName)
     }
     public prop name: String{
         get(){
@@ -104,13 +109,14 @@ public open class ContextKeywordsPruner <: ContextLLMPruner {
     public init(
         llmType!: LLMType = LLM_TYPE_TEXT,
         model!: ModelName = MODEL_NAME_DEEPSEEK_FLASH,
+        llmName!: String = LLMConfig.getPrunerLlmName(),
         promptsGenerator!: (ArrayList<ChatMessage>) -> String = {messages => '''
 - 从下面的JSON所描述的内容中提取**关键词**，关键词之间以逗号分隔。
 ```json
 ${(JsonValue.fromData(messages.toData()) as JsonValue).getOrThrow()}
 ```'''}
     ){
-        super(llmType: llmType, model: model, promptsGenerator: promptsGenerator)
+        super(llmType: llmType, model: model, promptsGenerator: promptsGenerator, llmName: llmName)
     }
     public prop name: String{
         get(){

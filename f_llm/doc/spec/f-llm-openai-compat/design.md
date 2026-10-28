@@ -302,4 +302,22 @@ PostgreSQL 18.4（WSL，`postgres://fountain:fountain@127.0.0.1:5432/fountain_te
 - **内建方言真正注册**：此前 `DialectRegistry` 只有显式注册，`DeepSeekDialect` 从未进入注册表（线上一直走 `StandardDialect`）。现在 `resolve()` 先 `ensureBuiltins()`，一次注册 deepseek / zhipu / volcengine / aliyun / siliconflow；用「不存在才写」避免把用户自定义同名方言搞崩。
 - **新增四个方言**：智谱（`thinking:{type}`，仅在调用方要求过思考或 `alwaysThinking` 时写）、火山方舟（同对象开关，`model` 可为 `ep-` 接入点）、阿里百炼（布尔 `enable_thinking`，且必须剥掉 `thinking`）、硅基流动（两者都剥）。四者都不支持 Responses。
 - **门面按 llmName 调用**：`LLM.chatByName / respondByName` + `LLMHooks(onSuccess, onRetryableFailure)`，把「权重选号 → 跳过熔断 → 失败转移 → 记录成功/失败」串起来；`LLMConfs.holder()` 懒建全局快照（`llm_confSource` 决定来源），测试用 `setHolder` 注入静态来源。
-- **补齐 3.8 的两项**：`LLMConfsHolder.candidates(llmName)` / `getTokenThreshold(conf)` / `saturated(conf, messages)`（复用 `HeuristicTokenCounter`）。
+- **补齐 3.8 的两项**：`LLMConfsHolder.candidates(llmName)` / `getTokenThreshold(conf)` / `saturated(conf, messages)`（复用 `HeuristicTokenCounter`）。### 旧链路迁移（2026-10-28）
+
+`LLMContextMediator` 这条旧链路（依赖 `LLMFinder` 选号 + `GLMContext` 发请求）已整体删除，三处调用点迁到新门面：
+
+| 调用点 | 之前 | 现在 |
+|---|---|---|
+| `AgentTask` 主循环 | `LLMContextMediator.instance.access(agent.id, e.session, agent.llmType, params)` | `LLM.chatByName(agent.llmName, params)` |
+| `ContextLLMPruner.respond`（Summary/Keywords） | 同上（按 llmType） | `LLM.chatByName(llmName, params)`，`llmName` 新增构造参数，默认 `llm_prunerLlmName='chat-pro'` |
+| `Memory` 摘要 | 同上 | `LLM.chatByName(LLMConfig.getSummarisingLlmName(), params)`，默认 `llm_summarisingLlmName='chat-pro'` |
+
+删除的文件：`LLMContextMediator.cj`、`GLMContext.cj`、`AbstractLLMContext.cj`（embedding/search 各有自己的 context，不受影响）。新增用例 `testSummaryPrunerGoesThroughFacade` 证明裁剪已经走门面（一次请求、输出一条 user 消息）。
+
+### deepseek-flash 识图（2026-10-28 实测）
+
+`GET /models` 返回 `deepseek-flash`（DeepSeek-V4.1-Flash）：`context_window=1048576`、`max_output_tokens=393216`、`input_modalities=["text","image"]`；`deepseek-v4-pro` 只有 text。
+
+图片按 OpenAI 多模态格式放在 `content` 数组里：`{"type":"image_url","image_url":{"url":"data:image/png;base64,..."}}`（支持 webp/png/jpeg/gif；`.ico` 会被拒）。实测：上传一张 32×32 纯红 PNG 问颜色，返回 `content="红色"`（reasoning 227 字符），**识图可用**。
+
+注意：当前 `ChatMessage` 只承载 `String` 内容，要发图片需要给消息模型加 content parts（尚未实现，归入多模态接入）。

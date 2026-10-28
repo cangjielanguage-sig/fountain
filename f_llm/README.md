@@ -1532,6 +1532,8 @@ public static const SUMMARISING_MODEL = LLM + '_summarisingModel'
 ```cj
 LLM.chat(candidates: ArrayList<LLMConf>, params: LLMParams): LLMResp
 LLM.chatStream(candidates, params, onDelta: (LLMDelta) -> Unit): LLMResp
+LLM.chatByName(llmName: String, params): LLMResp     // 从配置快照选平台（含权重与熔断）
+LLM.respondByName(llmName: String, params): LLMResp
 LLM.respond(candidates, params): LLMResp
 LLM.respondStream(candidates, params, onDelta): LLMResp
 ```

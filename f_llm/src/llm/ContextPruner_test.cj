@@ -176,6 +176,20 @@ public class ContextPrunerTest {
     }
 
     @TestCase
+    func testSummaryPrunerGoesThroughFacade(): Unit {
+        // 迁移验证：Summary 裁剪走 LLM.chatByName，而不是已删除的 LLMContextMediator
+        LLMConfs.setHolder(byNameHolder(ArrayList<LLMConf>([byNameConf(501, 'pruner-chat', 1)])))
+        let transport = FixedTransport(ArrayList<Int64>([200]))
+        LLM.setTransport(transport)
+        let pruner = ContextSummaryPruner(llmName: 'pruner-chat')
+        let pruned = pruner.prune(0, '', prunerMessages())
+        @Expect(transport.calls, 1)
+        @Expect(pruned.size, 1)
+        @Expect(pruned[0].role, 'user')
+        @Expect(pruned[0].content, 'ok')
+    }
+
+    @TestCase
     func testHeuristicTokenCounter(): Unit {
         let counter = HeuristicTokenCounter()
         @Expect(counter.count(confWithThreshold('0'), prunerMessages()) > 0, true)

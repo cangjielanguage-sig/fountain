@@ -67,7 +67,7 @@ ${content}
         summarising.add(system)
         summarising.add(user)
         let params = LLMParams(model: LLMConfig.getSummarisingModel(), messages: summarising)
-        let respmsg = LLMContextMediator.instance.access(SummarisingAgentId, session, LLM_TYPE_TEXT, params).messages[0].content
+        let respmsg = LLM.chatByName(LLMConfig.getSummarisingLlmName(), params).messages[0].content
         if(let Some(start) <- respmsg.indexOf('```') && 
            let Some(end) <- respmsg.lastIndexOf('```', start + 3) &&
            let sub <- respmsg[start + 3 .. end].trimAscii()){

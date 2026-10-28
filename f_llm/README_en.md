@@ -1554,6 +1554,8 @@ LLM.chat(candidates: ArrayList<LLMConf>, params: LLMParams): LLMResp
 LLM.chatStream(candidates, params, onDelta: (LLMDelta) -> Unit): LLMResp
 LLM.respond(candidates, params): LLMResp
 LLM.respondStream(candidates, params, onDelta): LLMResp
+LLM.chatByName(llmName: String, params): LLMResp     // pick a provider from the conf snapshot (weights + breaker)
+LLM.respondByName(llmName: String, params): LLMResp
 ```
 
 - 429/408/409/425/5xx fail over to the next candidate; other 4xx fail immediately;

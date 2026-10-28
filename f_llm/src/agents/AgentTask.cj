@@ -423,7 +423,8 @@ ${eventDesc}
                 var resp: LLMResp = unsafeZeroValue<LLMResp>()
                 while(count < maxCount && elapsed < maxElapsed){
                     try{
-                        resp = LLMContextMediator.instance.access(agent.id, e.session, agent.llmType, params)
+                        // 新门面：按 llmName 从配置快照里选平台，失败转移与熔断由 LLM 内部处理
+                        resp = LLM.chatByName(agent.llmName, params)
                         break
                     }catch(ex: Exception){
                         elapsed = MonoTime.now() - start
