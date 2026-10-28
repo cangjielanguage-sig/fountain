@@ -106,6 +106,12 @@ public class MimePart {
         }
     }
 
+    /** 由解析器回填字符集使用情况。 */
+    public func markCharset(charset: ?Charset, lossy: Bool): Unit {
+        charsetUsedValue = charset
+        charsetLossyValue = lossy
+    }
+
     /** 实际用于解码正文的字符集。 */
     public prop charsetUsed: ?Charset {
         get() {

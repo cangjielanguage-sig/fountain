@@ -47,39 +47,39 @@
 
 ## 4. M1-b MIME 编解码
 
-- [ ] 4.1 `mime/MimeParameter.cj`：RFC 2231 单段 `name*=`、续行 `name*0*`、优先级、percent-decode、生成侧策略
-- [ ] 4.2 `mime/ContentType.cj`：引号参数、转义、注释跳过、默认值、大小写归一、`charset()`/`boundary()`
-- [ ] 4.3 `mime/ContentDisposition.cj`：`filename` 的 RFC 2231 / RFC 2047 兼容解码
-- [ ] 4.4 `mime/TransferEncoding.cj` + `QuotedPrintable.cj`：流式状态机，跨块残留、行尾空格、软换行不落在 `=XX` 中间、非法序列宽容/严格两态
-- [ ] 4.5 `mime/Base64Codec.cj`：76 列 + CRLF 编码、忽略空白解码、缺 padding 容错、非法字符两态
-- [ ] 4.6 `mime/EncodedWord.cj`：B/Q 解码、相邻 word 空白丢弃、混排保留空白、编码侧不切断多字节字符且每个 word ≤ 75 字符
-- [ ] 4.7 `mime/CharsetResolver.cj`：别名表 + 四级回退链，`charsetUsed`/`charsetLossy`
-- [ ] 4.8 单测：QP/base64/RFC 2047/RFC 2231 往返幂等（G1 要求 100%）、跨块边界、异常样本
+- [x] 4.1 `mime/MimeParameter.cj`：RFC 2231 单段 `name*=`、续行 `name*0*`、优先级、percent-decode、生成侧策略
+- [x] 4.2 `mime/ContentType.cj`：引号参数、转义、注释跳过、默认值、大小写归一、`charset()`/`boundary()`
+- [x] 4.3 `mime/ContentDisposition.cj`：`filename` 的 RFC 2231 / RFC 2047 兼容解码
+- [x] 4.4 `mime/TransferEncoding.cj` + `QuotedPrintable.cj`：流式状态机，跨块残留、行尾空格、软换行不落在 `=XX` 中间、非法序列宽容/严格两态
+- [x] 4.5 `mime/Base64Codec.cj`：76 列 + CRLF 编码、忽略空白解码、缺 padding 容错、非法字符两态
+- [x] 4.6 `mime/EncodedWord.cj`：B/Q 解码、相邻 word 空白丢弃、混排保留空白、编码侧不切断多字节字符且每个 word ≤ 75 字符
+- [x] 4.7 `mime/CharsetResolver.cj`：别名表 + 四级回退链，`charsetUsed`/`charsetLossy`
+- [x] 4.8 单测：QP/base64/RFC 2047/RFC 2231 往返幂等（G1 要求 100%）、跨块边界、异常样本
 
 验收：编解码往返 100% 一致；`gb2312` 实为 GBK 的样本能正确解码。
 
 ## 5. M1-c multipart 解析
 
-- [ ] 5.1 `mime/Boundary.cj`：`BoundaryScanner` 滚动窗口，只认行首 `CRLF + "--" + boundary`，支持空 preamble 与 `--boundary--`
-- [ ] 5.2 `mime/MimeParser.cj`：`MimeParseOptions`、头/正文分离、叶子正文按 `inlineTextLimit` 与 `spoolThreshold` 分流
-- [ ] 5.3 嵌套解析：`multipart/*` 递归、`message/rfc822` 为 `Embedded`、`multipart/digest` 子 part 默认为 `message/rfc822`
-- [ ] 5.4 缺失结束 boundary 的宽松/严格两态；preamble/epilogue 保留
-- [ ] 5.5 限制：`maxHeaderBytes`、`maxHeaderLine`、`maxParts`、`maxDepth`、`maxBodyBytes`，超限抛 `MailLimitException`
-- [ ] 5.6 `MimeParser.walk` + `MimeVisitor` + `MimeAction`：`SkipPart` 仍回调 `onPartEnd`，`Stop` 终止
-- [ ] 5.7 单测：真实语料（Gmail alternative+related、Outlook winmail.dat、转发、中文 GBK、缺失 boundary）、10 层嵌套、1 字节流下 parse 与 walk 结果一致、大附件落盘
+- [x] 5.1 `mime/Boundary.cj`：`BoundaryScanner` 滚动窗口，只认行首 `CRLF + "--" + boundary`，支持空 preamble 与 `--boundary--`
+- [x] 5.2 `mime/MimeParser.cj`：`MimeParseOptions`、头/正文分离、叶子正文按 `inlineTextLimit` 与 `spoolThreshold` 分流
+- [x] 5.3 嵌套解析：`multipart/*` 递归、`message/rfc822` 为 `Embedded`、`multipart/digest` 子 part 默认为 `message/rfc822`
+- [x] 5.4 缺失结束 boundary 的宽松/严格两态；preamble/epilogue 保留
+- [x] 5.5 限制：`maxHeaderBytes`、`maxHeaderLine`、`maxParts`、`maxDepth`、`maxBodyBytes`，超限抛 `MailLimitException`
+- [x] 5.6 `MimeParser.walk` + `MimeVisitor` + `MimeAction`：`SkipPart` 仍回调 `onPartEnd`，`Stop` 终止
+- [x] 5.7 单测：真实语料（Gmail alternative+related、Outlook winmail.dat、转发、中文 GBK、缺失 boundary）、10 层嵌套、1 字节流下 parse 与 walk 结果一致、大附件落盘
 
 验收：嵌套样本解析正确；2 MB 附件落临时文件且权限 0600；深度/数量炸弹被拒。
 
 ## 6. M1-d MimeWriter
 
-- [ ] 6.1 `mime/MimeWriter.cj` 骨架 + `MimeWriteOptions`（含 `utf8Headers`）+ `bytesWritten()`
-- [ ] 6.2 传输编码选择（7bit / QP / base64 / 8bit 规则）与 `forceEncoding` 硬约束
-- [ ] 6.3 头部折行：78 octets、不在引号内与 encoded-word 内断行、续行单空格开头
-- [ ] 6.4 boundary 生成（`=_fountain_{32hex}`）与 `ContentType.toString()` 的引号规则
-- [ ] 6.5 换行归一（CRLF / 裸 LF / 裸 CR → CRLF）
-- [ ] 6.6 `Bcc` 原样写出（删除由 `SmtpClient` 负责）
-- [ ] 6.7 单测：生成的报文可被 `MimeParser` 读回且内容一致；`forceEncoding` 冲突抛 `MimeException`；折行后每行 ≤ 78 octets
-- [ ] 6.8 头部编码两态：`utf8Headers=false`（默认）非 ASCII 头走 RFC 2047；`true` 时直写裸 UTF-8 且不混 encoded-word；单测断言两种输出都能被 `MimeParser` 读回成同一文本
+- [x] 6.1 `mime/MimeWriter.cj` 骨架 + `MimeWriteOptions`（含 `utf8Headers`）+ `bytesWritten()`
+- [x] 6.2 传输编码选择（7bit / QP / base64 / 8bit 规则）与 `forceEncoding` 硬约束
+- [x] 6.3 头部折行：78 octets、不在引号内与 encoded-word 内断行、续行单空格开头
+- [x] 6.4 boundary 生成（`=_fountain_{32hex}`）与 `ContentType.toString()` 的引号规则
+- [x] 6.5 换行归一（CRLF / 裸 LF / 裸 CR → CRLF）
+- [x] 6.6 `Bcc` 原样写出（删除由 `SmtpClient` 负责）
+- [x] 6.7 单测：生成的报文可被 `MimeParser` 读回且内容一致；`forceEncoding` 冲突抛 `MimeException`；折行后每行 ≤ 78 octets
+- [x] 6.8 头部编码两态：`utf8Headers=false`（默认）非 ASCII 头走 RFC 2047；`true` 时直写裸 UTF-8 且不混 encoded-word；单测断言两种输出都能被 `MimeParser` 读回成同一文本
 
 验收：中文主题 + HTML + 二进制附件的邮件 write → parse 往返一致。
 

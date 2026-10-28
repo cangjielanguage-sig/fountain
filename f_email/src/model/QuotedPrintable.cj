@@ -55,6 +55,16 @@ public class QuotedPrintable {
         out.toArray()
     }
 
+    /** 流式编码器工厂（跨包使用；构造函数保持包内可见）。 */
+    public static func encoder(output: OutputStream, lineLength!: Int64 = 76): QuotedPrintableEncoder {
+        QuotedPrintableEncoder(output, lineLength: lineLength)
+    }
+
+    /** 流式解码器工厂。 */
+    public static func decoder(input: InputStream, strict!: Bool = false): QuotedPrintableDecoder {
+        QuotedPrintableDecoder(input, strict: strict)
+    }
+
     static func hexValue(b: Byte): Int64 {
         if (b >= b'0' && b <= b'9') {
             return Int64(b - b'0')
