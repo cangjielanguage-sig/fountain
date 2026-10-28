@@ -841,7 +841,7 @@ public class JitTicktockTask <: CronTicktockTask {
 > 设计原则（prompt-engineering-expert）：角色一句话、硬约束编号、输出格式固定、给反例、
 > 不写「尽量/酌情」这类不可判定词；技术准确性优先于人设，人设只影响措辞。
 
-### 12.1 十三个人设（`character/PredefinedCharacters.cj`）
+### 12.1 十三个人格（`character/PredefinedCharacters.cj`）
 
 | key | 名称 | 提示词（system 正文） |
 |---|---|---|
