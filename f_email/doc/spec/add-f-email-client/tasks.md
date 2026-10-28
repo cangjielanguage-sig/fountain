@@ -5,29 +5,29 @@
 
 ## 1. P-0 依赖验证（硬门槛）
 
-- [ ] 1.1 在目标机（含 OHOS）用 `TlsSocket.client` 连一个真实 465 端口并校验证书，确认 `stdx.net.tls` 可用
-- [ ] 1.2 用真实中文邮件样本验证 `charset4cj` 对 GBK / GB18030 / BIG5 的解码结果
-- [ ] 1.3 验证 `stdx.encoding.base64` 对缺 padding、含空白、含非法字符的容错行为，记录需要自建兜底的范围
-- [ ] 1.4 验证 `stdx.crypto.digest` 的 `MD5`/`HMAC` 与 `toHexString` 输出大小写，供 CRAM-MD5 与 APOP 使用
-- [ ] 1.5 把三条结论写进 `f_email/README.md` 的"环境要求"小节；任一条不通则停药评审
+- [x] 1.1 在目标机（含 OHOS）用 `TlsSocket.client` 连一个真实 465 端口并校验证书，确认 `stdx.net.tls` 可用
+- [x] 1.2 用真实中文邮件样本验证 `charset4cj` 对 GBK / GB18030 / BIG5 的解码结果
+- [x] 1.3 验证 `stdx.encoding.base64` 对缺 padding、含空白、含非法字符的容错行为，记录需要自建兜底的范围
+- [x] 1.4 验证 `stdx.crypto.digest` 的 `MD5`/`HMAC` 与 `toHexString` 输出大小写，供 CRAM-MD5 与 APOP 使用
+- [x] 1.5 把三条结论写进 `f_email/README.md` 的"环境要求"小节；任一条不通则停药评审
 
 验收：三个最小用例可跑；对不可用项给出明确退路（调用方注入 `TlsClientConfig` + 自签 CA，不默认 `TrustAll`）。
 
 ## 2. M0 传输骨架
 
-- [ ] 2.1 `MailException.cj`：`MailException` / `MailIoException` / `MailProtocolException` / `MailAuthException` / `MailLimitException` / `MimeException` / `MailTlsException`，含 `IoStage`、`LimitKind`
-- [ ] 2.2 `Secret.cj`：`of` / `use` / `toString` 返回 `<redacted>`；单测断言无法取回原文
-- [ ] 2.3 `transport/TlsMode.cj` + `MailTimeouts`
-- [ ] 2.4 `transport/MailConnection.cj`：open / startTls / channel / close / isClosed；默认 TLS 配置（`serverName=host`、`verifyMode=Default`）
-- [ ] 2.5 `transport/LineChannel.cj`：`readLine`（CRLF 与裸 LF、`maxLine`）、`readExact`（含缓冲残留）、`writeLine`（CRLF 注入拒绝）、`read`/`write`/`flush`
-- [ ] 2.6 `LineChannel` 的 `buffered` 开关，供 STARTTLS 升级前单字节读使用
-- [ ] 2.7 STARTTLS 后旧 `LineChannel` 失效：`readLine` 抛 `channel replaced by STARTTLS`
-- [ ] 2.8 `transport/DotStuff.cj`：`DotStuffWriter` / `DotUnstuffReader` 逐字节状态机，跨块正确，`finish()` 语义（空正文只写 `.\r\n`）
-- [ ] 2.9 `transport/MailTrace.cj`：`onLine`/`onBytes`，`AUTH`/`PASS`/`LOGIN` 参数脱敏，正文默认不进 `onLine`
-- [ ] 2.10 `transport/TransportFactory.cj`：`SocketTransportFactory` + 测试用 `ScriptedTransport`（预置服务器字节、记录客户端字节）
-- [ ] 2.11 超时：`Deadline` 折算剩余时长，`MailIoException(stage=Timeout)` 后关闭连接
+- [x] 2.1 `MailException.cj`：`MailException` / `MailIoException` / `MailProtocolException` / `MailAuthException` / `MailLimitException` / `MimeException` / `MailTlsException`，含 `IoStage`、`LimitKind`
+- [x] 2.2 `Secret.cj`：`of` / `use` / `toString` 返回 `<redacted>`；单测断言无法取回原文
+- [x] 2.3 `transport/TlsMode.cj` + `MailTimeouts`
+- [x] 2.4 `transport/MailConnection.cj`：open / startTls / channel / close / isClosed；默认 TLS 配置（`serverName=host`、`verifyMode=Default`）
+- [x] 2.5 `transport/LineChannel.cj`：`readLine`（CRLF 与裸 LF、`maxLine`）、`readExact`（含缓冲残留）、`writeLine`（CRLF 注入拒绝）、`read`/`write`/`flush`
+- [x] 2.6 `LineChannel` 的 `buffered` 开关，供 STARTTLS 升级前单字节读使用
+- [x] 2.7 STARTTLS 后旧 `LineChannel` 失效：`readLine` 抛 `channel replaced by STARTTLS`
+- [x] 2.8 `transport/DotStuff.cj`：`DotStuffWriter` / `DotUnstuffReader` 逐字节状态机，跨块正确，`finish()` 语义（空正文只写 `.\r\n`）
+- [x] 2.9 `transport/MailTrace.cj`：`onLine`/`onBytes`，`AUTH`/`PASS`/`LOGIN` 参数脱敏，正文默认不进 `onLine`
+- [x] 2.10 `transport/TransportFactory.cj`：`SocketTransportFactory` + 测试用 `ScriptedTransport`（预置服务器字节、记录客户端字节）
+- [x] 2.11 超时：`Deadline` 折算剩余时长，`MailIoException(stage=Timeout)` 后关闭连接
 - [ ] 2.12 `idle` 类超时与跨线程 `close()`：IDLE 期间长时间静默 MUST NOT 因 `command` 超时断开；`close()` 可从其它线程打断阻塞读，被打断的读以 `MailIoException` 结束且不向调用方线程抛异常
-- [ ] 2.13 单测：1 字节慢速流下 `readLine`/`readExact`/dot-stuffing 全部正确；跨块 dot-stuffing；超长行；提前 EOF；重复 `close()`；跨线程 `close()` 打断阻塞读
+- [x] 2.13 单测：1 字节慢速流下 `readLine`/`readExact`/dot-stuffing 全部正确；跨块 dot-stuffing；超长行；提前 EOF；重复 `close()`；跨线程 `close()` 打断阻塞读
 
 验收：能连本机 `TcpServerSocket` 假服务器完成一次行往返；1 字节读写测试全过。
 
