@@ -1591,3 +1591,14 @@ resp.embedding   // Array<Float64>
 ```
 
 旧链路 `EmbeddingContextMediator` / `GLMEmbeddingContext` / `AbstractEmbeddingContext` 已删除；`KnowledgeEntity` 的 `embeddingAccessor` 传 `Embedding.embed` 即可。
+**腾讯云 tokenhub（OpenAI 兼容网关）**：
+
+```cj
+let conf = LLMConf()
+conf.provider = 'tokenhub'                                    // 走 StandardDialect，无需新方言
+conf.actualLlmName = ModelNames.TENCENT_DEEPSEEK_FLASH        // 'deepseek/deepseek-flash'，必须原样发
+conf.url = 'https://tokenhub.tencentmaas.com/v1'
+conf.auth = '<key>'
+```
+
+模型名归一：`ModelNames.normalize('deepseek/deepseek-flash') == MODEL_NAME_DEEPSEEK_FLASH`（也认 `deepseek-ai/DeepSeek-V3`、`zhipu/glm-5` 等聚合平台写法）。**归一只用于能力判断与日志，报文里的 `model` 永远是 `actualLlmName` 原文**——改掉前缀会 404。

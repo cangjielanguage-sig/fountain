@@ -1593,3 +1593,14 @@ The eight existing strategies keep their **observable semantics**; `ContextPrune
 ### Database
 
 `LLMConfDAO` (`@DAO <: RootDAO`, via `f_orm`) plus `LLMConfService` (`<: RootService` with a `@Bean` implementation); DDL lives in `doc/sql/llm_conf.postgres.sql` and `llm_conf.mysql.sql`.
+**Tencent Cloud tokenhub (OpenAI-compatible gateway)**:
+
+```cj
+let conf = LLMConf()
+conf.provider = 'tokenhub'                                    // StandardDialect is enough
+conf.actualLlmName = ModelNames.TENCENT_DEEPSEEK_FLASH        // 'deepseek/deepseek-flash', sent verbatim
+conf.url = 'https://tokenhub.tencentmaas.com/v1'
+conf.auth = '<key>'
+```
+
+Model normalisation: `ModelNames.normalize('deepseek/deepseek-flash') == MODEL_NAME_DEEPSEEK_FLASH` (also accepts aggregator spellings such as `deepseek-ai/DeepSeek-V3`, `zhipu/glm-5`). **Normalisation is for capability checks and logs only — the wire `model` stays `actualLlmName`, otherwise the gateway returns 404.**

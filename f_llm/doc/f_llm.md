@@ -1868,6 +1868,7 @@ f_httpclient/src/
 | ark | `/chat/completions` | 未知（可能无） | `thinking:{type}` | 标准 | 标准 | 未联调 |
 | dashscope | `/compatible-mode/v1/chat/completions` | 无 | `enable_thinking` | 标准 | 标准 | 未联调 |
 | siliconflow | `/v1/chat/completions` | 无 | 依模型 | 标准 | 标准 | 未联调 |
+| tokenhub（腾讯云 MaaS） | `/v1/chat/completions` | 未验证 | 无开关（`deepseek-flash` 自带思考，返回 `reasoning_content`） | 标准 | 同 deepseek（`prompt_cache_hit_tokens` 等） | **已实调（2026-10-28，免费额度）**：模型 ID `deepseek/deepseek-flash`，`provider='tokenhub'` 走 `StandardDialect`；`ModelNames.normalize` 把该 ID 归一到 `deepseek-flash` |
 | openai | `/chat/completions` | `/responses` | `reasoning:{effort,summary}` | 标准 | `*_tokens_details` | 未联调 |
 
 **联调清单**（每平台一条，逐项打勾才能把该行状态改成"已确认"）：

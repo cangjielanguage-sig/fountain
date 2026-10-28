@@ -335,4 +335,9 @@ PostgreSQL 18.4（WSL，`postgres://fountain:fountain@127.0.0.1:5432/fountain_te
 - **推翻了「DeepSeek 没有 Responses」的假设**：实测 `POST https://api.deepseek.com/responses` 返回标准 `object:"response"`（`/v1/responses` 也可用）。`DeepSeekDialect` 的 Responses 端点已改为 `base + /responses`（可被 `conf['responsesPath']` 覆盖），不再抛「不支持」。
 - **Responses 的多模态与 Chat 不同**：内容片段是 `input_text` / `input_image`，且 `image_url` 是**字符串**（Chat 是 `{url, detail}` 对象）；`ResponsesMapper.contentOf` 负责这个改写。
 - **reasoning 输出**：Responses 的 `output[].type == "reasoning"`，正文在 `content[].type == "reasoning_text"`；解析时先累积、挂到紧随其后的 `message` 上（`AssistantMessage.reasoningContent`）。
-- 真机验证（同一把 DeepSeek Key）：Chat 路径返回 "solid, uniform block of bright red color"，Responses 路径返回 "solid red image"，`status=completed` — 两条多模态链路都通。
+- 真机验证（同一把 DeepSeek Key）：Chat 路径返回 "solid, uniform block of bright red color"，Responses 路径返回 "solid red image"，`status=completed` — 两条多模态链路都通。### 腾讯云 tokenhub（2026-10-28 实调）
+
+- 端点 `https://tokenhub.tencentmaas.com/v1/chat/completions`，鉴权 `Authorization: Bearer <key>`，模型 ID 是 **带厂商前缀** 的 `deepseek/deepseek-flash`。这类 OpenAI 兼容网关用 `provider = 'tokenhub'` + `StandardDialect` 即可，不需要新方言。
+- 新增 `ModelNames.normalize()`：把 `deepseek/deepseek-flash`、`deepseek-ai/DeepSeek-V3`、`zhipu/glm-5` 等写法归一成 `MODEL_NAME_*` 常量，**只用于能力判断与日志分类**；`conf.actualLlmName` 必须原样发（改掉前缀会 404）。
+- 走我们自己的代码路径实测：`LLM.chat` 返回「收到」，`finish=stop`，`usage.total=37`，`ModelNames.normalize('deepseek/deepseek-flash') == 'deepseek-flash'`。
+- 该账号当前是**免费额度**，联调时只发最小请求（`max_tokens=32`），不做批量压测。
