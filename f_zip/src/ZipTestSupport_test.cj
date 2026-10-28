@@ -15,11 +15,52 @@ limitations under the License.
 */
 package fountain::f_zip
 
-import std.io.ByteBuffer
+import std.env
+import std.fs.{Directory, File, OpenMode, Path, exists}
+import std.io.{ByteBuffer, SeekPosition}
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_io.ByteBuffer as FByteBuffer
 import fountain::f_base.OS
+
+/** 慢用例门控：只有 `F_ZIP_SLOW=1` 才真正执行，其余时候直接返回。 */
+internal func slowEnabled(): Bool {
+    match (env.getVariable("F_ZIP_SLOW")) {
+        case Some(v) => v == "1"
+        case None => false
+    }
+}
+
+/**
+ * 大样本的工作目录：默认 `env.getTempDirectory()`，可用 `F_ZIP_TMP` 改道。
+ *
+ * 9.7b 要写 4 GB 以上的包，`/tmp` 在不少环境里是 tmpfs（等于吃内存），
+ * 所以留一个环境变量把样本挪到大磁盘。
+ */
+internal func bigWorkDir(): Path {
+    let base = match (env.getVariable("F_ZIP_TMP")) {
+        case Some(v) => Path(v)
+        case None => env.getTempDirectory()
+    }
+    if (!exists(base)) {
+        Directory.create(base, recursive: true)
+    }
+    Directory.createTemp(base)
+}
+
+/** 建一个大小恰好 `size` 的稀疏文件：只写最后一个字节，中间是文件系统空洞。 */
+internal func createSparseFile(path: Path, size: Int64): Unit {
+    let file = File(path.toString(), OpenMode.Write)
+    try {
+        file.seek(Begin(size - 1))
+        file.write([UInt8(0)])
+        file.flush()
+    } finally {
+        try {
+            file.close()
+        } catch (_: Exception) {}
+    }
+}
 
 /** 用一段构造逻辑产出完整 ZIP 字节。 */
 internal func buildZipBytes(action: (ZipWriter) -> Unit, options!: ZipWriterOptions = ZipWriterOptions()): Array<Byte> {

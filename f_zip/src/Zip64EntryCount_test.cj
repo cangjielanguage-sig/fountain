@@ -30,20 +30,36 @@ import std.unittest.testmacro.*
  */
 @Test
 public class Zip64EntryCount_test {
-    private static func slowEnabled(): Bool {
-        match (env.getVariable("F_ZIP_SLOW")) {
-            case Some(v) => v == "1"
-            case None => false
-        }
-    }
-
     /** 场景「条目数越界自动升级」。 */
     @TestCase
     public func entryCountOver65535WritesZip64(): Unit {
         if (!slowEnabled()) {
+            println("SKIP: 未设置 F_ZIP_SLOW=1，跳过慢用例 9.7a（65537 条目）")
             return
         }
         let total: Int64 = 65536 + 1
+        checkZip64AroundEntryLimit(total)
+    }
+
+    /**
+     * 场景「条目数越界自动升级」的**边界**：恰好 65535 条。
+     *
+     * 65535 既是 2 字节字段能表示的最大值，又是读取侧认的哨兵值。
+     * 写侧若按"`> 0xFFFF` 才升级"，就会写出条目数字段等于 `0xFFFF` 的普通 EOCD，
+     * 读取侧当成哨兵去找 ZIP64 定位器 → 自家产出的包自己读不回来。
+     * 所以判定必须是 `>= 0xFFFF`。
+     */
+    @TestCase
+    public func exactly65535EntriesWritesZip64(): Unit {
+        if (!slowEnabled()) {
+            println("SKIP: 未设置 F_ZIP_SLOW=1，跳过慢用例 9.7a 边界（65535 条目）")
+            return
+        }
+        checkZip64AroundEntryLimit(Int64(0xFFFF))
+    }
+
+    /** 写 `total` 条条目，断言 ZIP64 结构存在、普通 EOCD 填哨兵、自身读得回来。 */
+    private func checkZip64AroundEntryLimit(total: Int64): Unit {
         let out = ByteBuffer()
         let writer = ZipWriter(out)
         var i: Int64 = 0
@@ -61,8 +77,11 @@ public class Zip64EntryCount_test {
         @Assert(u16At(bytes, eocd + 10), 0xFFFFu16)
 
         let reader = readerOf(bytes, limits: ZipLimits(maxEntries: 200000))
-        @Assert(Int64(reader.entries().size), total)
-        @Assert(reader.read("e65536.txt").getOrThrow().size, 1)
+        let entries = reader.entries()
+        @Assert(Int64(entries.size), total)
+        @Assert(entries[0].name, "e0.txt")
+        @Assert(entries[entries.size - 1].name, "e${total - 1}.txt")
+        @Assert(reader.read("e${total - 1}.txt").getOrThrow().size, 1)
 
         // 外部工具也认这个 ZIP64 包（装了才有得跑）
         let work = Directory.createTemp(env.getTempDirectory())
@@ -75,7 +94,7 @@ public class Zip64EntryCount_test {
                 return
             }
             if (code != 0) {
-                @Fail("7za 拒绝了 65537 条目的 ZIP64 包：${String.fromUtf8(err)}")
+                @Fail("7za 拒绝了 ${total} 条目的 ZIP64 包：${String.fromUtf8(err)}")
             }
         } finally {
             try {

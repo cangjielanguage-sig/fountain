@@ -274,7 +274,8 @@ public class ZipWriter {
 
     /**
      * 写中央目录（必要时写 EOCD64 与定位器）与 EOCD。必须调用，否则文件不完整。
-     * 幂等：第二次调用不重复写、不抛异常。
+     * 幂等：第二次调用不重复写、不抛异常；但**写失败时不算已关闭**，
+     * 再次调用会重试（而不是静默返回、留下半截文件）。
      */
     public func close(): Unit {
         if (closed) {
@@ -283,13 +284,15 @@ public class ZipWriter {
         if (dirty) {
             throw ZipException("条目 ${dirtyEntry} 写入中断，ZIP 结构不完整")
         }
-        closed = true
         let cdStart = position
         for (e in entries) {
             writeCentralHeader(out, e)
         }
         let cdSize = position - cdStart
-        let needZip64 = Int64(entries.size) > ZipLayout.ZIP64_MAX_U16 || cdSize >= ZipLayout.ZIP64_MAX_U32 ||
+        // 条目数的判定是 `>=`：`0xFFFF` 在读取侧是哨兵，恰好 65535 条也必须升级 ZIP64，
+        // 否则普通 EOCD 里写下的"真实值 0xFFFF"会被读端当成哨兵去找 ZIP64 定位器。
+        let zip64Entries = Int64(entries.size) >= ZipLayout.ZIP64_MAX_U16
+        let needZip64 = zip64Entries || cdSize >= ZipLayout.ZIP64_MAX_U32 ||
             cdStart >= ZipLayout.ZIP64_MAX_U32
 
         if (needZip64) {
@@ -314,12 +317,12 @@ public class ZipWriter {
         writeU32LE(out, ZipLayout.SIGNATURE_EOCD)
         writeU16LE(out, 0)
         writeU16LE(out, 0)
-        writeU16LE(out, if (Int64(entries.size) > ZipLayout.ZIP64_MAX_U16) {
+        writeU16LE(out, if (zip64Entries) {
             ZipLayout.SENTINEL_U16
         } else {
             UInt16(entries.size)
         })
-        writeU16LE(out, if (Int64(entries.size) > ZipLayout.ZIP64_MAX_U16) {
+        writeU16LE(out, if (zip64Entries) {
             ZipLayout.SENTINEL_U16
         } else {
             UInt16(entries.size)
@@ -336,6 +339,9 @@ public class ZipWriter {
         })
         writeU16LE(out, 0)               // comment length
         out.flush()
+        // 置位放在最后：写中央目录 / EOCD 抛异常时 writer 仍是"未关闭"，
+        // 第二次 close() 会重试并再次报错，不会静默成功。
+        closed = true
     }
 
     // ---- 内部 ----

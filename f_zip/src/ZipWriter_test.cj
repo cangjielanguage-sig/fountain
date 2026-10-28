@@ -107,6 +107,29 @@ public class ZipWriter_test {
         @Assert(out.bytes().size, first)
     }
 
+    /**
+     * 场景「重复 close」的失败分支：写中央目录失败时 `close()` **不能**先把
+     * 自己置成已关闭，否则第二次 `close()` 静默返回，磁盘上留下半截文件。
+     */
+    @TestCase
+    public func closeFailureDoesNotMarkClosed(): Unit {
+        let options = ZipWriterOptions(method: CompressionMethod.Stored)
+        // 先探出中央目录起点：条目字节数固定（Stored 不膨胀）
+        let probe = CountingSink()
+        let probeWriter = ZipWriter(probe, options: options)
+        probeWriter.add("a.txt", text("abc"))
+        let cdStart = probeWriter.position
+        probeWriter.close()
+
+        let sink = FailingOutputStream(cdStart)
+        let writer = ZipWriter(sink, options: options)
+        writer.add("a.txt", text("abc"))
+        assertZipError({=> writer.close()}, "sink boom")
+        @Assert(sink.count, cdStart)
+        // 第二次仍然要抛：不静默成功
+        assertZipError({=> writer.close()}, "sink boom")
+    }
+
     /** 未 close 的产物不可读（没有 EOCD）。 */
     @TestCase
     public func unclosedOutputIsUnreadable(): Unit {

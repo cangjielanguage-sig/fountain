@@ -96,7 +96,12 @@ internal struct ZipLayout {
     /** EOCD 尾部窗口上界：22 字节 EOCD + 65535 字节注释。 */
     static const EOCD_WINDOW_LIMIT: Int64 = EOCD_SIZE + 65535
 
-    /** 条目数 / 大小 / 偏移超过它就升级 ZIP64。 */
+    /**
+     * 条目数 / 大小 / 偏移**达到**它就必须升级 ZIP64（写成哨兵）。
+     *
+     * 条目数取 `>=`：`0xFFFF` 本身在读取侧是"去看 ZIP64"的哨兵，
+     * 恰好 65535 条若还写普通 EOCD，读端会去找不存在的定位器。
+     */
     static const ZIP64_MAX_U16: Int64 = 0xFFFF
     static const ZIP64_MAX_U32: Int64 = 0xFFFFFFFF
 }
