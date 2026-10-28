@@ -97,4 +97,4 @@ $ cd f_email && cjpm test       # 266 通过 / 0 失败 / 0 错误
 | `store(unchangedSince)` 绕门禁 | 参数存在时先 `requireEnabled("CONDSTORE")` | `storeUnchangedSinceRequiresCondstoreEnabled` |
 | IDLE EOF 语义 | EOF 记为 `MailIoException` 并关闭连接，`isClosed()` 为真 | `eofDuringIdleIsIoAndCloses` |
 
-剩余 verify WARNING（大 literal 无 sink 时的 `sections`、`MailboxInfo.specialUse` 字段、流式编码采样、一次性来源双序列化、AUTH 自动选择、TLS 自动化）记录为后续；不影响本次归档。
+剩余 WARNING 场景（TLS 自签证书自动化、SMTP STARTTLS 后 re-EHLO、POP3 STLS 后 CAPA、IMAP 登录前 ID、`maxParts` 炸弹、大 literal 无 sink 的 `sections`）记录为后续；本次已用 QQ 真实服务器覆盖 SMTP/IMAP 主链路，不阻塞归档。
