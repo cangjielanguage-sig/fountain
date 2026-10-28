@@ -311,6 +311,12 @@ You can also use the same-named APIs of this module through the `fountain::fount
 
 **See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_version/README_en.md>
 
+### `fountain::f_xml`
+Generic XML 1.0 parser and generator: streaming events (push / pull), DOM, namespaces,
+DTD internal entities, security limits.
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_xml/README_en.md>
+
 ### `fountain::f_zip`
 ZIP container reader/writer: ZIP64 in both directions, streaming writes (24-byte ZIP64 descriptor),
 large-entry spilling, Zip Slip / symlink / bomb protection.
