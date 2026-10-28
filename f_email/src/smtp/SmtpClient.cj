@@ -147,13 +147,13 @@ public class SmtpClient <: Resource {
         let mailFrom = buildMailFrom(envelope.from, sizeArg, plaintextAddress)
         let rcptCommands = ArrayList<String>()
         for (recipient in envelope.recipients) {
-            rcptCommands.add(buildRcpt(recipient, plaintextAddress))
+            rcptCommands.add(buildRcpt(recipient))
         }
 
         if (policy.toString() == "BestEffort" && capabilitiesValue.supportsPipelining) {
-            return transactPipelined(channel, prepared, mailFrom, rcptCommands, plaintextAddress)
+            return transactPipelined(channel, prepared, mailFrom, rcptCommands)
         }
-        return transactSequential(channel, prepared, mailFrom, rcptCommands, plaintextAddress)
+        return transactSequential(channel, prepared, mailFrom, rcptCommands)
     }
 
     public func noop(): SmtpReply {
@@ -192,8 +192,7 @@ public class SmtpClient <: Resource {
         channel: LineChannel,
         prepared: PreparedMessage,
         mailFrom: String,
-        rcptCommands: ArrayList<String>,
-        smtpUtf8: Bool
+        rcptCommands: ArrayList<String>
     ): SendReport {
         channel.writeLine(mailFrom)
         let mailReply = SmtpReply.read(channel)
@@ -207,15 +206,14 @@ public class SmtpClient <: Resource {
             let reply = SmtpReply.read(channel)
             handleRcpt(reply, command, accepted, rejected)
         }
-        return finishTransaction(channel, prepared, accepted, rejected, smtpUtf8)
+        return finishTransaction(channel, prepared, accepted, rejected)
     }
 
     private func transactPipelined(
         channel: LineChannel,
         prepared: PreparedMessage,
         mailFrom: String,
-        rcptCommands: ArrayList<String>,
-        smtpUtf8: Bool
+        rcptCommands: ArrayList<String>
     ): SendReport {
         channel.writeLine(mailFrom)
         for (command in rcptCommands) {
@@ -269,8 +267,7 @@ public class SmtpClient <: Resource {
         channel: LineChannel,
         prepared: PreparedMessage,
         accepted: ArrayList<RecipientStatus>,
-        rejected: ArrayList<RecipientStatus>,
-        smtpUtf8: Bool
+        rejected: ArrayList<RecipientStatus>
     ): SendReport {
         if (policy.toString() == "AllOrNothing" && rejected.size > 0) {
             sendReset(channel)
@@ -461,7 +458,7 @@ public class SmtpClient <: Resource {
         command
     }
 
-    private func buildRcpt(address: String, smtpUtf8: Bool): String {
+    private func buildRcpt(address: String): String {
         var command = "RCPT TO:<${address}>"
         if (dsnNotify.size > 0 && capabilitiesValue.supportsDsn) {
             command = command + " NOTIFY=${notifyList()}"

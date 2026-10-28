@@ -19,6 +19,7 @@ import std.collection.ArrayList
 import std.io.{InputStream, OutputStream}
 import std.sync.Mutex
 import stdx.net.tls.TlsClientConfig
+import fountain::f_email.model.MailProtocolException
 
 /**
  * 传输工厂：协议客户端只依赖这个接口，因此测试可以注入字节脚本，
@@ -122,6 +123,11 @@ public class ScriptedTransport <: TransportFactory {
     }
 
     public func connect(host: String, port: UInt16, tls: TlsMode): MailConnection {
+        match (tls) {
+            case TlsMode.Implicit =>
+                throw MailProtocolException("ScriptedTransport 不支持隐式 TLS")
+            case _ => ()
+        }
         MailConnection.fromStreams(
             ScriptedInput(this),
             ScriptedOutput(this),

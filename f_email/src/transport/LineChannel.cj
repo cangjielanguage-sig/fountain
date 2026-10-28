@@ -93,10 +93,6 @@ public class LineChannel <: InputStream & OutputStream & Resource {
         replaced = true
     }
 
-    func isReplaced(): Bool {
-        replaced
-    }
-
     // ---------- 读 ----------
 
     /**
