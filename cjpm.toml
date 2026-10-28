@@ -33,6 +33,7 @@
   "fountain::f_time" = {path = "./f_time"}
   "fountain::f_util" = {path = "./f_util"}
   "fountain::f_version" = {path = "./f_version"}
+  "fountain::f_zip" = {path = "./f_zip"}
 
 [package]
   cjc-version = "1.2.0"
