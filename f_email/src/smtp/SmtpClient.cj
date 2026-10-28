@@ -196,6 +196,7 @@ public class SmtpClient <: Resource {
     ): SendReport {
         channel.writeLine(mailFrom)
         let mailReply = SmtpReply.read(channel)
+        abortIf421(mailReply)
         if (!mailReply.isSuccess()) {
             return failAll(prepared, rcptCommands, mailReply)
         }
@@ -204,6 +205,7 @@ public class SmtpClient <: Resource {
         for (command in rcptCommands) {
             channel.writeLine(command)
             let reply = SmtpReply.read(channel)
+            abortIf421(reply)
             handleRcpt(reply, command, accepted, rejected)
         }
         return finishTransaction(channel, prepared, accepted, rejected)
@@ -223,6 +225,7 @@ public class SmtpClient <: Resource {
         channel.flush()
 
         let mailReply = SmtpReply.read(channel)
+        abortIf421(mailReply)
         if (!mailReply.isSuccess()) {
             // 按序把剩余回复读掉，避免流错位
             for (_ in 0..rcptCommands.size) {
@@ -236,10 +239,12 @@ public class SmtpClient <: Resource {
         var index = 0
         for (command in rcptCommands) {
             let reply = SmtpReply.read(channel)
+            abortIf421(reply)
             handleRcpt(reply, command, accepted, rejected)
             index += 1
         }
         let dataReply = SmtpReply.read(channel)
+        abortIf421(dataReply)
         if (!dataReply.isIntermediate()) {
             sendReset(channel)
             return SendReport(
@@ -295,6 +300,7 @@ public class SmtpClient <: Resource {
         }
         channel.writeLine("DATA")
         let dataReply = SmtpReply.read(channel)
+        abortIf421(dataReply)
         if (!dataReply.isIntermediate()) {
             sendReset(channel)
             return SendReport(
@@ -320,6 +326,7 @@ public class SmtpClient <: Resource {
         stuffer.finish()
         channel.flush()
         let finalReply = SmtpReply.read(channel)
+        abortIf421(finalReply)
         if (!finalReply.isSuccess()) {
             // 拿到整封邮件的最终回复就算事务结束；是否成功看 report
             return SendReport(
@@ -335,6 +342,14 @@ public class SmtpClient <: Resource {
             rejected: rejected.toArray(),
             reply: finalReply
         )
+    }
+
+    /** RFC 5321：421 表示服务关闭传输通道，当前事务不能再继续。 */
+    private func abortIf421(reply: SmtpReply): Unit {
+        if (reply.code == 421) {
+            connection.close()
+            throw MailIoException(IoStage.Read, "SMTP 421 服务关闭传输通道：${lastLine(reply)}")
+        }
     }
 
     private func handleRcpt(

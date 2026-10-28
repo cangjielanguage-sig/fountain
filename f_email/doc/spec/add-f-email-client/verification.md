@@ -4,16 +4,16 @@
 
 ```
 $ cd f_email && cjpm build      # 成功，无新增告警
-$ cd f_email && cjpm test       # 247 通过 / 0 失败 / 0 错误
+$ cd f_email && cjpm test       # 252 通过 / 0 失败 / 0 错误
 ```
 
-测试分布：model 74、mime 90（含 10 MB 附件与 1 字节流）、transport 26、smtp 32、pop3 25、imap 47（核心 24 + 扩展 23）。
+测试分布：model 75、mime 20、transport 26、smtp 28、pop3 25、imap 78，合计 252。
 
 ## G1 — 单元测试与编解码往返
 
 | 项 | 结论 | 证据 |
 |---|---|---|
-| 全部单元测试通过 | ✅ | `cjpm test`：247 通过、0 失败 |
+| 全部单元测试通过 | ✅ | `cjpm test`：252 通过、0 失败 |
 | QP / base64 / RFC 2047 / RFC 2231 往返 100% | ✅ | `Codec_test`（往返幂等、跨块边界、异常样本）、`ContentType_test`、`MimeParser_test.roundTrips*` |
 
 ## G2 — 三协议脚本测试
@@ -64,3 +64,17 @@ $ cd f_email && cjpm test       # 247 通过 / 0 失败 / 0 错误
 5. **`ImapClient.append`** 用「序列化两遍」拿精确长度（第一遍只计数），不落临时文件；语义与设计文档的「先得精确大小」一致，少一次磁盘往返。
 6. **`ImapEnable` / `ImapIdle` / `ImapMove` / `ImapSpecialUse` / `ImapNamespace` / `ImapCondStore` / `ImapSort`** 是独立类（`ImapXxx(client)`），不是 `ImapClient` 的方法：Cangjie 不支持分部类，拆开也让 M4 的七个能力边界在类型层面可见。
 7. **IDLE 的 25 分钟重建**只做了实现级覆盖：脚本化传输无法模拟「服务器 25 分钟不说话」，`tasks.md` 10.17 保持未勾选。
+
+## 2026-10-29 verify 复审后的修复
+
+| 问题 | 修复 | 测试 |
+|---|---|---|
+| `SORT=DISPLAY` 未实现 | `SortCriterion` 增加 `DisplayFrom`/`DisplayTo`；无 `SORT=DISPLAY` 时明确抛 `MailProtocolException` | `sortDisplayKeysUseDisplayCapability`、`sortDisplayKeysRequireSortDisplayCapability` |
+| IDLE 软超时被 `applyReadTimeout` 清空 | `softTimeout` 期间保留 `pollInterval`，不再改回无限阻塞 | `softReadTimeoutSurvivesFill` |
+| boundary 固定复用 | `MailMessage` 每次 `build()` 生成 `=_fountain_{32hex}` | `boundariesAreUniquePerMessage` |
+| `MailboxStatus` 缺 `UNSEEN`/`FLAGS`/`PERMANENTFLAGS`/`readOnly` | SELECT 解析补齐四组响应 | `selectFillsFullMailboxStatus` |
+| 命令期间 `* BYE` 不失败 | 非 `LOGOUT` 命令收到 BYE 立即关闭并抛异常 | `byeDuringCommandFailsAndCloses` |
+| SMTP 421 被当成普通拒收 | 事务中 421 关闭连接并抛 `MailIoException` | `server421MidTransactionClosesConnection` |
+| IDLE 事件队列无界 | 1024 条上限，满时丢最旧并压缩 | 代码路径，未单测 |
+
+仍未解决：10.17 的完整 IDLE 矩阵、10.18 G6 互操作，以及 verify 报告中的 WARNING 1/3/4/7/8/9/14 与 SUGGESTION。

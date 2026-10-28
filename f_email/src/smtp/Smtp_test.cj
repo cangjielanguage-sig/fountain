@@ -502,9 +502,9 @@ public class SmtpExtensions_test {
         client.close()
     }
 
-    /** 421 中途断开：不抛异常，落在 SendReport 里。 */
+    /** 421 中途断开：抛 MailIoException 并关闭连接，不能当成普通拒收。 */
     @TestCase
-    public func server421MidTransactionYieldsFailedReport(): Unit {
+    public func server421MidTransactionClosesConnection(): Unit {
         let transport = ScriptedTransport(
             server: "220 ready\r\n250 smtp.example.com\r\n421 service not available\r\n"
         )
@@ -513,11 +513,14 @@ public class SmtpExtensions_test {
             .transport(transport)
             .build()
         let message = MailMessage.builder().from("a@x.com").to("b@y.com").text("hi").build()
-        let report = client.send(message)
-        @Assert(report.isCompleteSuccess(), false)
-        @Assert(report.rejected.size, 1)
-        @Assert(report.reply.code, 421)
-        client.close()
+        var caught = false
+        try {
+            client.send(message)
+        } catch (_: MailIoException) {
+            caught = true
+        }
+        @Assert(caught, true)
+        @Assert(client.isClosed(), true)
     }
 
     @TestCase

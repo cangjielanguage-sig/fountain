@@ -699,6 +699,9 @@ public struct MailboxStatus {
     public let uidNext: ?Int64
     public let uidValidity: ?Int64
     public let highestModSeq: ?Int64
+    public let flags: Array<String>
+    public let permanentFlags: Array<String>
+    public let readOnly: Bool
 
     public init(
         mailbox: String,
@@ -707,7 +710,10 @@ public struct MailboxStatus {
         unseen!: ?Int64 = None,
         uidNext!: ?Int64 = None,
         uidValidity!: ?Int64 = None,
-        highestModSeq!: ?Int64 = None
+        highestModSeq!: ?Int64 = None,
+        flags!: Array<String> = [],
+        permanentFlags!: Array<String> = [],
+        readOnly!: Bool = false
     ) {
         this.mailbox = mailbox
         this.messages = messages
@@ -716,6 +722,9 @@ public struct MailboxStatus {
         this.uidNext = uidNext
         this.uidValidity = uidValidity
         this.highestModSeq = highestModSeq
+        this.flags = flags
+        this.permanentFlags = permanentFlags
+        this.readOnly = readOnly
     }
 }
 

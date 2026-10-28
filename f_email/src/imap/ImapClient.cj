@@ -128,6 +128,9 @@ public class ImapClient <: Resource {
     private var mailboxUidValidity: ?Int64 = None
     private var mailboxUidNext: ?Int64 = None
     private var mailboxHighestModSeq: ?Int64 = None
+    private var mailboxUnseen: ?Int64 = None
+    private var mailboxFlags: Array<String> = []
+    private var mailboxPermanentFlags: Array<String> = []
     private var tagCounter: Int64 = 0
     private var idleActive = false
     private let enabledList = ArrayList<String>()
@@ -449,9 +452,13 @@ public class ImapClient <: Resource {
             mailbox,
             messages: Some(mailboxExists),
             recent: Some(mailboxRecent),
+            unseen: mailboxUnseen,
             uidNext: mailboxUidNext,
             uidValidity: mailboxUidValidity,
-            highestModSeq: mailboxHighestModSeq
+            highestModSeq: mailboxHighestModSeq,
+            flags: mailboxFlags,
+            permanentFlags: mailboxPermanentFlags,
+            readOnly: selectedReadOnly
         )
     }
 
@@ -1096,7 +1103,14 @@ public class ImapClient <: Resource {
         let channel = channelRef
         channel.withDeadline(timeouts.command)
         channel.writeLine("${tag} ${command}")
-        collect(tag)
+        let result = collect(tag)
+        if (byeSeen && command.toAsciiUpper() != "LOGOUT") {
+            // BYE 意味着服务器即将关闭连接；当前命令不能装作成功。
+            closedFlag = true
+            connection.close()
+            throw MailProtocolException("命令 ${command} 期间服务器发送 BYE")
+        }
+        result
     }
 
     /**
@@ -1144,6 +1158,11 @@ public class ImapClient <: Resource {
                         throw MailProtocolException("收到不匹配的 tag：${response.tag ?? ""}")
                     }
                     let result = ImapCommandResult(response, untagged: untagged.toArray())
+                    if (byeSeen && command.toAsciiUpper() != "LOGOUT") {
+                        closedFlag = true
+                        connection.close()
+                        throw MailProtocolException("命令 ${command} 期间服务器发送 BYE")
+                    }
                     expectOk(result, command)
                     return result
             }
@@ -1193,6 +1212,15 @@ public class ImapClient <: Resource {
             mailboxRecent = response.numberOf() ?? mailboxRecent
             return
         }
+        if (name == "FLAGS") {
+            for (value in response.values) {
+                match (value) {
+                    case List(items) => mailboxFlags = toStrings(items)
+                    case _ => ()
+                }
+            }
+            return
+        }
         match (response.code ?? "") {
             case "UIDVALIDITY" =>
                 if (response.codeArgs.size > 0) {
@@ -1206,6 +1234,25 @@ public class ImapClient <: Resource {
                 if (response.codeArgs.size > 0) {
                     mailboxHighestModSeq = ImapParser.parseNumber(response.codeArgs[0])
                 }
+            case "UNSEEN" =>
+                if (response.codeArgs.size > 0) {
+                    mailboxUnseen = ImapParser.parseNumber(response.codeArgs[0])
+                }
+            case "PERMANENTFLAGS" =>
+                let parsed = ArrayList<String>()
+                for (arg in response.codeArgs) {
+                    var text = arg
+                    if (text.startsWith("(")) {
+                        text = text[1..]
+                    }
+                    if (text.endsWith(")")) {
+                        text = text[0..(text.size - 1)]
+                    }
+                    if (text.size > 0) {
+                        parsed.add(text)
+                    }
+                }
+                mailboxPermanentFlags = parsed.toArray()
             case _ => ()
         }
     }

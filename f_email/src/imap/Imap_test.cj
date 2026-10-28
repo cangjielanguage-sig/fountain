@@ -433,6 +433,60 @@ public class ImapClient_test {
     }
 
     @TestCase
+    public func byeDuringCommandFailsAndCloses(): Unit {
+        let transport = ScriptedTransport(
+            server: greeting() + CAPABILITY_LINE +
+                "A0001 OK LOGIN completed\r\n* 1 EXISTS\r\nA0002 OK [READ-WRITE] SELECT completed\r\n" +
+                "* BYE server shutting down\r\nA0003 OK NOOP completed\r\n"
+        )
+        let client = ImapClient.builder("localhost", port: 143)
+            .requireEncryption(false)
+            .allowPlaintextAuth(true)
+            .transport(transport)
+            .build()
+        client.login("alice", Secret.of("pw"))
+        client.select("INBOX")
+        var caught = false
+        try {
+            client.noop()
+        } catch (_: MailProtocolException) {
+            caught = true
+        }
+        @Assert(caught, true)
+        @Assert(client.isClosed(), true)
+    }
+
+    @TestCase
+    public func selectFillsFullMailboxStatus(): Unit {
+        let transport = ScriptedTransport(
+            server: greeting() + CAPABILITY_LINE +
+                "A0001 OK LOGIN completed\r\n" +
+                "* 12 EXISTS\r\n* 2 RECENT\r\n* OK [UNSEEN 3] first unseen\r\n" +
+                "* OK [UIDVALIDITY 1] ok\r\n* OK [UIDNEXT 13] ok\r\n" +
+                "* FLAGS (\\Seen \\Answered)\r\n" +
+                "* OK [PERMANENTFLAGS (\\Seen \\Deleted)] ok\r\n" +
+                "A0002 OK [READ-ONLY] SELECT completed\r\n"
+        )
+        let client = ImapClient.builder("localhost", port: 143)
+            .requireEncryption(false)
+            .allowPlaintextAuth(true)
+            .transport(transport)
+            .build()
+        client.login("alice", Secret.of("pw"))
+        let status = client.select("INBOX")
+        @Assert(status.messages ?? 0, 12)
+        @Assert(status.recent ?? 0, 2)
+        @Assert(status.unseen ?? 0, 3)
+        @Assert(status.uidNext ?? 0, 13)
+        @Assert(status.uidValidity ?? 0, 1)
+        @Assert(status.flags.size, 2)
+        @Assert(status.flags[0], "\\Seen")
+        @Assert(status.permanentFlags.size, 2)
+        @Assert(status.readOnly, true)
+        client.close()
+    }
+
+    @TestCase
     public func statusParsesKeyValuePairs(): Unit {
         let (client, _) = openSelected(
             "* STATUS \"INBOX\" (MESSAGES 231 UIDNEXT 44292 UNSEEN 0 UIDVALIDITY 1 HIGHESTMODSEQ 7)\r\n" +
