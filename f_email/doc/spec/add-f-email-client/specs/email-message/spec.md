@@ -6,7 +6,7 @@
 `set()` MUST 覆盖第一个同名项并删除其余同名项，`add()` MUST 追加。解析时 MUST 把
 `CRLF + WSP` 折行展开为单个空格；生成时按 78 octets 重新折行。
 任何值含 `\r` 或 `\n` MUST 抛 `MailProtocolException`；字段名 MUST 只允许可见 ASCII 中除
-`:` 以外的字符；单行超过 998 octets MUST 抛 `MailLimitException(kind=Header)`。
+`:` 以外的字符。998 octets 是**物理行**上限，由 `MimeWriter` 生成时折行保证；`HeaderMap` 只校验 CR/LF，解析后的展开值可以超过 998。
 字段值 MUST 按字节保留原样：允许出现非 ASCII 的 UTF-8 字节（RFC 6532，`UTF8=ACCEPT` 与
 `SMTPUTF8` 场景下合法），解析层 MUST NOT 因值不是 ASCII 而拒绝、替换或丢弃字符。
 

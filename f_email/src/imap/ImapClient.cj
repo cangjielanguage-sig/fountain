@@ -186,6 +186,14 @@ public class ImapClient <: Resource {
             if (entry == wanted) {
                 return true
             }
+            // RFC 7162：QRESYNC 蕴含 CONDSTORE，不要求再单独 ENABLE。
+            if (wanted == "CONDSTORE" && entry == "QRESYNC") {
+                return true
+            }
+            // RFC 6855：UTF8=ONLY 的服务器天然启用 UTF8=ACCEPT。
+            if (wanted == "UTF8=ACCEPT" && entry == "UTF8=ONLY") {
+                return true
+            }
         }
         false
     }
@@ -873,6 +881,7 @@ public class ImapClient <: Resource {
         args = args + ")"
         var suffix = ""
         if (let Some(modseq) <- unchangedSince) {
+            requireEnabled("CONDSTORE")
             suffix = " (UNCHANGEDSINCE ${modseq})"
         }
         let result = execute("STORE ${set} ${command}${suffix} ${args}")
@@ -1505,6 +1514,12 @@ public class ImapClient <: Resource {
     }
 
     // ---------- 守卫 ----------
+
+    /** IDLE 读线程在连接层 EOF 时调用：连接已不可用。 */
+    func markConnectionClosed(): Unit {
+        closedFlag = true
+        connection.close()
+    }
 
     func requireConnection(): Unit {
         if (isClosed()) {

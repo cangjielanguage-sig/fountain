@@ -221,8 +221,13 @@ public class ImapIdleSession <: Resource {
                         continue
                     }
                     // EOF：连接没了，按 Bye 处理
+                    let error = MailIoException(IoStage.Read, "IDLE 连接被服务器关闭")
+                    synchronized(mutex) {
+                        lastFailure = Some(error)
+                    }
                     enqueue(ImapEvent(ImapEventKind.Bye, raw: "connection closed"))
                     setBye()
+                    client.markConnectionClosed()
                     break
                 }
                 let line = String.fromUtf8(raw.getOrThrow())

@@ -126,5 +126,5 @@ export CANGJIE_STDX_DYNAMIC_PATH=/path/to/dynamic_stdx
 ## 已知未验证项
 
 - OHOS 目标机上的 TLS 与 `Spool` 目录（无设备）。
-- 真实服务商互操作（Postfix / Dovecot / 163）：`tasks.md` 的 G6 手工项仍待执行。
-- IDLE 的 25 分钟重建只做了实现级覆盖，脚本测试无法模拟"服务器静默 25 分钟"。
+- Dovecot / 163 的扩展错误矩阵（QQ 邮箱的 IMAP/SMTP 往返已验证通过）。
+- TLS 自签证书的自动化用例（当前由 G6 与 P-0 的手工验证覆盖）。

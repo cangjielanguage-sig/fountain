@@ -83,6 +83,14 @@ public class ImapEnable_test {
         client.close()
     }
 
+    @TestCase
+    public func qresyncImpliesCondstore(): Unit {
+        let (client, _) = openSelected("* ENABLED QRESYNC\r\nA0003 OK ENABLE completed\r\n")
+        ImapEnable(client).enableQResync()
+        @Assert(client.isEnabled("CONDSTORE"), true)
+        client.close()
+    }
+
     /** 未 ENABLE 就调用扩展：必须报出具体能力名。 */
     @TestCase
     public func disabledExtensionIsRejected(): Unit {
@@ -191,6 +199,20 @@ public class ImapCondStore_test {
         @Assert(result.modified[0], 3)
         @Assert(result.isPartialFailure(), true)
         @Assert(transport.recordedText().contains("STORE 1,3 +FLAGS (UNCHANGEDSINCE 4) (\\Seen)"), true)
+        client.close()
+    }
+
+    @TestCase
+    public func storeUnchangedSinceRequiresCondstoreEnabled(): Unit {
+        let (client, transport) = openSelected("")
+        var caught = false
+        try {
+            client.store(SequenceSet.single(1), StoreOperation.Add, ["\\Seen"], unchangedSince: Some(7))
+        } catch (e: MailProtocolException) {
+            caught = (e.capability ?? "") == "CONDSTORE"
+        }
+        @Assert(caught, true)
+        @Assert(transport.recordedText().contains("UNCHANGEDSINCE"), false)
         client.close()
     }
 
@@ -654,6 +676,23 @@ public class ImapIdle_test {
         session.done()
         @Assert(trace.lines.contains("* 5 EXISTS"), true)
         @Assert(trace.lines.contains("DONE"), true)
+        client.close()
+    }
+
+    @TestCase
+    public func eofDuringIdleIsIoAndCloses(): Unit {
+        let (client, _) = openSelected("+ idling\r\n")
+        let session = ImapIdle(client).withPollInterval(Duration.millisecond * 5).start()
+        let event = session.nextEvent(timeout: Duration.millisecond * 500)
+        @Assert(event.getOrThrow().kind.toString(), "BYE")
+        var caught = false
+        try {
+            session.nextEvent(timeout: Duration.millisecond * 50)
+        } catch (_: MailIoException) {
+            caught = true
+        }
+        @Assert(caught, true)
+        @Assert(client.isClosed(), true)
         client.close()
     }
 

@@ -4,16 +4,16 @@
 
 ```
 $ cd f_email && cjpm build      # 成功，无新增告警
-$ cd f_email && cjpm test       # 263 通过 / 0 失败 / 0 错误
+$ cd f_email && cjpm test       # 266 通过 / 0 失败 / 0 错误
 ```
 
-测试分布：model 75、mime 22、transport 26、smtp 28、pop3 25、imap 87，合计 263。
+测试分布：model 75、mime 22、transport 26、smtp 28、pop3 25、imap 90，合计 266。
 
 ## G1 — 单元测试与编解码往返
 
 | 项 | 结论 | 证据 |
 |---|---|---|
-| 全部单元测试通过 | ✅ | `cjpm test`：263 通过、0 失败 |
+| 全部单元测试通过 | ✅ | `cjpm test`：266 通过、0 失败 |
 | QP / base64 / RFC 2047 / RFC 2231 往返 100% | ✅ | `Codec_test`（往返幂等、跨块边界、异常样本）、`ContentType_test`、`MimeParser_test.roundTrips*` |
 
 ## G2 — 三协议脚本测试
@@ -93,5 +93,8 @@ $ cd f_email && cjpm test       # 263 通过 / 0 失败 / 0 错误
 | multipart epilogue 丢失 | `MultipartScanner.readEpilogue()` 保留结束 boundary 之后的内容 | `keepsPreambleAndEpilogue` |
 | `walk` 仍是“建树后重放” | 改为 visitor 驱动的 `walkEntity`，边解析边回调、不建树；`parse` 保持建树路径 | `walkSkipsPartButStillEnds`、全量 MIME 用例 |
 | 10.17 两项 IDLE 边界 | 补 `DONE` 前后 untagged 入队与 `onLine` 跟踪用例 | `untaggedAroundDoneIsStillQueued`、`idleLinesAreTraced` |
+| QRESYNC 蕴含 CONDSTORE | `isEnabled("CONDSTORE")` 在已启用 QRESYNC 时返回 true；`UTF8=ONLY` 同理 | `qresyncImpliesCondstore` |
+| `store(unchangedSince)` 绕门禁 | 参数存在时先 `requireEnabled("CONDSTORE")` | `storeUnchangedSinceRequiresCondstoreEnabled` |
+| IDLE EOF 语义 | EOF 记为 `MailIoException` 并关闭连接，`isClosed()` 为真 | `eofDuringIdleIsIoAndCloses` |
 
 剩余 verify WARNING（大 literal 无 sink 时的 `sections`、`MailboxInfo.specialUse` 字段、流式编码采样、一次性来源双序列化、AUTH 自动选择、TLS 自动化）记录为后续；不影响本次归档。

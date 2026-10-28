@@ -100,7 +100,5 @@ export CANGJIE_STDX_DYNAMIC_PATH=/path/to/dynamic_stdx
 ## Not yet verified
 
 - TLS and `Spool` behaviour on OHOS (no device available).
-- Real-server interoperability (Postfix / Dovecot / 163): the G6 manual items in `tasks.md`
-  are still outstanding.
-- The IDLE 25-minute rebuild is covered by implementation only; the scripted transport cannot
-  simulate a server that stays silent for 25 minutes.
+- Dovecot / 163 extension error matrix (QQ Mail IMAP/SMTP round trip has been verified).
+- Automated self-signed TLS cases (currently covered by the G6 / P-0 manual probes).
