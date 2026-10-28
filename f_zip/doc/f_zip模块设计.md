@@ -1249,10 +1249,19 @@ public class ZipException <: Exception {
 
 **瓶颈在 deflate 本身，容器层开销可忽略。** 如果要优化，方向是 `BestSpeed` 级别 + 更大的 `bufLen`。
 
-> **实测补充（2026-10-28，融合引擎）**：这台机器上 **CRC 比 deflate 更慢**——`f_util.crc32`
-> （`CrcEngine.update` 里的 `for (b in data)`）只有约 **4.2 MB/s**，同机 C 版表驱动 CRC 在 `-O2` 下 175 MB/s。
-> 上面两个资源用例的耗时（509 s / 551 s）几乎全花在这一处。`for` 改成索引遍历实测 3.3x，
-> 但真正的数量级差距要 slicing-by-N 才能补上；这是 `f_util` 的优化，不在本模块的改动范围。
+> **实测补充（2026-10-28，融合引擎）**：这台机器上 **CRC 曾是比 deflate 更慢的环节**——`f_util.crc32`
+> 原实现（`CrcEngine.update` 里的 `for (b in data)`）只有约 **4.2~7.1 MB/s**（同一段 1 MiB 样本，两次测量口径不同），
+> 同机 C 版表驱动 CRC 在 `-O2` 下 175 MB/s。上面两个资源用例的耗时（509 s / 551 s）几乎全花在这一处。
+>
+> 这个瓶颈已在 `add-f-zip-module` §18（`f_util` D16）修掉，`f_util` 侧 1 MiB 单遍实测：
+> 逐字节迭代 ≈ **7.1 MB/s** → 索引遍历 ≈ **21 MB/s** → 加 slicing-by-4 仍 ≈ **21 MB/s**（下标访问本身
+> 约 25 ns/次，换表不减少次数）→ 再把热循环换成 `acquireArrayRawData` 裸指针 ≈ **51~58 MB/s**。
+> 端到端：`9.7b`（单条目 4 GiB + 4096 字节的 Stored 往返）**200 s**（写出 94 s、读回 105 s，两次 CRC 共 8.6 GB），
+> 此前按 4.2 MB/s 推算需要 ~35 分钟。剩余成本是「未优化构建里每次 `CPointer.read()` 的方法调用」，
+> 不是 CRC 算法本身。
+>
+> 顺带记一笔环境坑：`9.7b` 若用 `F_ZIP_TMP` 指到 `/mnt/linux_share/...`（myfs2），**8 KB 写入只有 ~22 MB/s**，
+> 写 2.8 GB 要 8 分钟，会让人误以为 CRC 没提速；同一份包写到 `/tmp`（tmpfs）才是上面的 200 s。
 
 ---
 
