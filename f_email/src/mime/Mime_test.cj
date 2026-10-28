@@ -63,6 +63,25 @@ public class MimeWriter_test {
         @Assert(out.text().contains("Bcc: hidden@example.com"), true)
     }
 
+    /** 长中文标题必须折在 encoded-word 之间，不能把 base64 拆断。 */
+    @TestCase
+    public func longChineseSubjectSurvivesFolding(): Unit {
+        let subject = "fountain-f_email 往返校验 " + String(Array<Rune>(40, repeat: r'验'))
+        let message = MailMessage.builder()
+            .from("a@x.com")
+            .to("b@y.com")
+            .subject(subject)
+            .text("hi")
+            .build()
+        let out = BufferOutput()
+        MimeWriter(out).write(message)
+        for (line in out.text().split("\r\n")) {
+            @Assert(line.toArray().size <= 78, true)
+        }
+        let parsed = MimeParser.parse(BufferInput(out.bytes()))
+        @Assert(parsed.subject() ?? "", subject)
+    }
+
     @TestCase
     public func headersFoldWithinLimit(): Unit {
         let longSubject = String(Array<Rune>(120, repeat: r'x'))

@@ -248,11 +248,41 @@ public class MimeWriter {
             var text = value
             if (!options.utf8Headers && EncodedWord.needsEncoding(text) &&
                 !name.toAsciiLower().startsWith("content-")) {
-                text = EncodedWord.encode(text)
+                // encoded-word 连同 "Name: " 必须一起放进一行：否则 foldHeader
+                // 只能在 base64/Q 中间硬断，收件端解码出空格与乱码。
+                let budget = options.maxLineLength - Int64(name.size) - 2
+                let wordLength = if (budget < 20) {
+                    20
+                } else if (budget > 75) {
+                    75
+                } else {
+                    budget
+                }
+                text = EncodedWord.encode(text, maxWordLength: wordLength)
             }
             foldHeader(name, text)
         }
         emit([b'\r', b'\n'])
+    }
+
+    /** 当前已累积的字节是否停在一个未闭合的 encoded-word 内部。 */
+    private func insideEncodedWord(bytes: ArrayList<Byte>): Bool {
+        var open = false
+        var k = 0
+        while (k + 1 < bytes.size) {
+            if (bytes[k] == b'=' && bytes[k + 1] == b'?') {
+                open = true
+                k += 2
+                continue
+            }
+            if (bytes[k] == b'?' && bytes[k + 1] == b'=') {
+                open = false
+                k += 2
+                continue
+            }
+            k += 1
+        }
+        open
     }
 
     private func foldHeader(name: String, value: String): Unit {
@@ -283,11 +313,19 @@ public class MimeWriter {
             if (b == b'"') {
                 inQuote = !inQuote
             }
-            // 已带显式折行（encoded-word 之间）时直接换行，不再二次折
+            // 已带显式折行（encoded-word 之间）时直接换行，不再二次折。
+            // 必须立刻把上一行刷出去并重置缓冲：否则行宽统计会跨行累加，
+            // 折行后的空格还会被当成软断点，写出 \r\n\r\n。
             if (b == b'\r' && i + 1 < bytes.size && bytes[i + 1] == b'\n') {
                 current.add(b'\r')
                 current.add(b'\n')
+                emit(current.toArray())
+                current = ArrayList<Byte>()
                 i += 2
+                if (i < bytes.size && bytes[i] == b' ') {
+                    current.add(b' ')
+                    i += 1
+                }
                 lastBreak = -1
                 continue
             }
@@ -297,6 +335,11 @@ public class MimeWriter {
             }
             if (current.size > options.maxLineLength) {
                 if (lastBreak <= 0) {
+                    if (insideEncodedWord(current)) {
+                        // 宁可行超 78，也不在 encoded-word 内部断行
+                        i += 1
+                        continue
+                    }
                     lastBreak = options.maxLineLength
                 }
                 let separator: Int64 = if (current[lastBreak] == b' ') {
