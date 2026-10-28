@@ -27,8 +27,7 @@ internal import fountain::f_macros.*
  * 展开结果：
  * - 类上加 `@Bean`
  * - 一个加载期闭包：设置 `serverInfo`，对每个函数调用 `get*Meta`，有注解时调用对应 `register*Meta`
- * - 不调用 `McpRegistry.build()`：构建延迟到首次 `McpRegistry.server()`，
- *   这样 `main()` 里再 `McpRegistry.configure(...)` 不会撞上 `already initialized`
+ * - 最后调用 `McpRegistry.build()`；该方法可重复调用，多个 `@Mcp` 类的注册项会累计生效
  */
 public macro Mcp(input: Tokens): Tokens {
     expand('fountain-mcp', input)
@@ -100,7 +99,8 @@ private func expand(serverName: String, input: Tokens): Tokens {
             case _ => ()
         }
     }
-    // 不在模块加载期 build：否则 main() 里再 configure 会撞上 already initialized
+    // build() 可重复调用：每个 @Mcp 类展开后重建一次，后续类的注册项累计生效
+    body += quote(McpRegistry.build())
     quote(
         @Bean
         $input

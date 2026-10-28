@@ -32,21 +32,21 @@ let ctx = CallContext(deadline: Some(DateTime.now() + Duration.second * 1))   //
 let v = f.call<Int64>([Int64(100_000_000)], ctx)
 ```
 
-返回闭包（逃逸闭包，用后必须 `unloadFn()`）：
+返回闭包（逃逸闭包，用后必须 `close()`）：
 
 ```cangjie
 let f = c.compile('{ n: Int64 => let xs = [n, n + 1]\n { i: Int64 => xs[i] } }')
 let g = f.callForFn<(Int64) -> Int64>([Int64(7)])
 println(g.call<Int64>([Int64(1)]))    // 8
-g.unloadFn()                          // 释放该闭包捕获的提升槽（单元仍可用）
+g.close()                          // 释放该闭包捕获的提升槽（单元仍可用）
 ```
 
-单元本身用完后 `unload()`：进入终态、释放代码内存，并从编译缓存逐出（同源再编译得到新单元）：
+单元本身用完后 `close()`：先级联释放它产出的逃逸闭包，再进入终态、释放代码内存并从编译缓存逐出（同源再编译得到新单元）：
 
 ```cangjie
-f.unload()                            // 单元级卸载；此后调用 f 抛 JitException(ErrCode.CALL_CONTRACT)
+f.close()                            // 单元级卸载；此后调用 f 抛 JitException(ErrCode.CALL_CONTRACT)
 ```
-无参 `unload()` **不等待**在飞调用：未排空时立即返回 `false` 并恢复可用；要排空用 `unload(timeoutMs)`。
+`close()`（`Resource` 契约）**不等待**在飞调用，丢弃排空结果；要排空并拿到结果用 `close(timeoutMs)`——未排空时返回 `false` 并恢复可用。`isClosed()` 对入口实例表示「单元已卸载」，对包装实例表示「本闭包已释放」。
 
 ---
 
@@ -56,7 +56,7 @@ f.unload()                            // 单元级卸载；此后调用 f 抛 Ji
 |---|---|---|
 | `Compiler` | 门面：注册宿主能力 + 编译 | `registerType<T>()`、**`registerInterface<I>()`**、`registerClass(desc)`、`registerFunction(f)`、`compile(src)` |
 | `CompileOptions` | 编译选项 | `jit: JitMode`（`Auto`/`Force`/`Off`）、`strictFp`（缺省 `true`）、`verMajor`、`cpuFeatures`、`diagnostics` |
-| `JitFunction` | 编译产物 / 可调用对象 | `call<T>(args)`、`call<T>(args, ctx)`、`callForFn<Fn>(args)`、`unload([timeoutMs])`（单元级）、`unloadFn()`（闭包包装级）、`isClosed` |
+| `JitFunction` | 编译产物 / 可调用对象（实现 `std.core.Resource`） | `call<T>(args)`、`call<T>(args, ctx)`、`callForFn<Fn>(args)`、`close()` / `close(timeoutMs): Bool`（入口 = 单元卸载；包装 = 释放本闭包）、`isClosed()` |
 | `JitException` | 运行期错误（`base` 包） | `code`（`ErrCode`）、`site`（源码行:列 / 字节偏移）、`report` |
 | `CompileCache` | 编译缓存（键含 `strictFp`/`verMajor` 等标记） | `lookup`、`reset`、`runs` |
 | `CallContext` | 调用上下文 | `deadline`（到期在安全点中断 → `InterruptedException`） |
@@ -246,7 +246,7 @@ c.registerClass(desc)
 
 **⑤ 窗口与逃逸**：每次 `call` 开一个句柄窗口（`openWindow`），返回时 `resetWindow` 释放**未逃逸**槽；
 逃逸对象（返回的句柄、逃逸闭包及其捕获）走"原地提升"（`moveOutGroup`，ID/gen 不变）并由
-`PromotionGroup` 持有，闭包包装的唯一释放路径是 `JitFunction.unloadFn()`；单元级 `unload()` 进入终态时还会把自己从编译缓存逐出。
+`PromotionGroup` 持有，闭包包装的唯一释放路径是 `JitFunction.close()`；单元级 `close()` 进入终态时还会把自己从编译缓存逐出。
 
 **⑥ 失败即回退（deopt）**：`errCode = -1` 表示"这次没算完，请用解释器重放"，桥透明重跑，调用方
 无感；其余错误码（1/2/3/6/7/8/16/18/19/21/22…）按 `JitException` 抛出。
@@ -298,7 +298,7 @@ JIT 是加速层，遇到以下情况**整单元退解释器**（`ok = false`）
 | **Decimal** | `std.math.numeric.Decimal` | **无后缀小数即 Decimal**：`1.23`、`1.5e3`、`1e-3`；`Decimal(...)` | `+ - * /`、比较 |
 | **Duration** | `std.core.Duration` | 无字面量（宿主传入或 `DateTime` 差） | `Duration ± Duration`、比较；溢出 → 12 |
 | **DateTime** | `std.time.DateTime` | 无字面量（宿主传入） | `DateTime ± Duration`、`DateTime − DateTime → Duration`；越界 → 11 |
-| **Closure** | 句柄 12（`JitClosure`） | `{ x => e }`，自动捕获外层局部 | 调用 `f(a)`；逃逸返回用 `callForFn<Fn>`，用完 `unloadFn()` |
+| **Closure** | 句柄 12（`JitClosure`） | `{ x => e }`，自动捕获外层局部 | 调用 `f(a)`；逃逸返回用 `callForFn<Fn>`，用完 `close()` |
 | **Any** | 句柄 12（`JitAnyBox`） | 由宿主传入，或 `Any` 标注的局部/参数 | 装箱/拆箱（H78/H79）、`is` 判定、作为 `Any` 返回 |
 
 ```cangjie
@@ -392,7 +392,7 @@ f.call<Int64>([Int64(4)])         // 24
 - 捕获按**值/窗口**分类（`CaptureOrigin`），句柄型捕获在逃逸时随闭包一起**原地提升**；
 - 内层 `recursive` = 该闭包自身（`LOADL 0` + `CALL_CLOSURE`），不是外层 `entryFn`；
 - 内层可继续嵌套（捕获链逐层 `LOAD_CAP`），运行时每层一个闭包对象；
-- 闭包**逃逸返回**：`callForFn<Fn>` 拿包装器，调用完 `unloadFn()` 释放提升组（否则常驻）。
+- 闭包**逃逸返回**：`callForFn<Fn>` 拿包装器，调用完 `close()` 释放提升组（否则常驻）。
 
 ### 6.4 `as` 语法（转型 / 兜底 / 判定）
 
@@ -498,7 +498,7 @@ GC 移动对象时更新的是 `objs[i]` 与 helper 栈上的受管局部变量�
 |---|---|---|
 | 未逃逸（窗口内） | `call` 的 `finally` → `resetWindow(-1)`：`alive=false`、`objs[i]=0`、`gen+1` | 不再被 f_jit 引用 ⇒ 由 GC 回收 |
 | 返回值句柄 | `releaseReturnHandle` 在解包后立刻归还（`JitFunction.cj:477-487`） | 否 |
-| 逃逸闭包 / 其捕获 | `PromotionGroup` 持有；**`JitFunction.unloadFn()` 是唯一释放路径** | 宿主不 `unloadFn` 就一直驻留（契约，非 bug） |
+| 逃逸闭包 / 其捕获 | `PromotionGroup` 持有；**包装实例 `close()` 释放，单元 `close()` 终态时级联兜底** | 单元存活期间宿主不释放就一直驻留（契约，非 bug） |
 
 常量槽（`constFlags`）永不释放（单元常量池，数量有界）；`HandleTable` 的底层数组只增不减，
 上限 `capacityLimit = 1048576`（`:92`），属容量水位而非泄漏。
@@ -508,7 +508,7 @@ GC 移动对象时更新的是 `objs[i]` 与 helper 栈上的受管局部变量�
 **随"这次调用"销毁，而不是随 `JitFunction`。** 闭包是 H54 创建的 `JitClosure(fnId, captured: Array<Int64>)`
 （`runtime/Helpers.cj:1010-1021`），进本次调用窗口；捕获是 **cell（句柄）**，指向的槽也在同一窗口。
 调用结束 `resetWindow` 一次性释放 ⇒ 旧 ID 失效（`gen+1`），`JitClosure` 失去引用后被 GC 回收。
-`JitFunction` 只持编译产物，`unloadFn()` 只释放提升组。
+`JitFunction` 只持编译产物，`close()` 只释放提升组。
 
 ### Q5 每次调用返回时，是否清除本次产生的数据？
 
@@ -536,16 +536,16 @@ GC 移动对象时更新的是 `objs[i]` 与 helper 栈上的受管局部变量�
   ⇒ `resetWindow` 跳过、槽不被复用；
 - 包装器 `JitFunction` 持 `owner + closureId + group`，调用时经 `owner.invokeClosure` 用
   `closure_cap(h,i)` 逐个取捕获；
-- 释放：`unloadFn()` → `PromotionGroup.releaseAll()` → `releaseEscaped`。
+- 释放：`close()` → `PromotionGroup.releaseAll()` → `releaseEscaped`。
 
 容器捕获是**槽级、不级联**（§14.6）：容器元素的句柄不需要提升——元素在写入时已经
 `cellToAny`（= `getAny`）转成宿主引用，随容器存活。
 
-### Q7 `unload()` 之后还能再编译同一份源码吗？
+### Q7 `close()` 之后还能再编译同一份源码吗？
 
-能。`unload()` 成功进入终态时会把单元从 `CompileCache` 逐出，同源再编译会重新走管线并返回**新**单元；
-旧句柄仍然失效（调用 → 19）。`unloadFn()` **不碰缓存**——它只释放闭包捕获，单元继续可用。
-若 `unload(timeoutMs)` 因排空超时返回 `false`，单元恢复可用、缓存条目保留（不逐出，避免同键两份产物）。
+能。`close()` 成功进入终态时会把单元从 `CompileCache` 逐出，同源再编译会重新走管线并返回**新**单元；
+旧句柄仍然失效（调用 → 19）。`close()` **不碰缓存**——它只释放闭包捕获，单元继续可用。
+若 `close(timeoutMs)` 因排空超时返回 `false`，单元恢复可用、缓存条目保留（不逐出，避免同键两份产物）。
 
 ---
 
@@ -555,6 +555,6 @@ GC 移动对象时更新的是 `objs[i]` 与 helper 栈上的受管局部变量�
 - x86_64 需 SSE4.1（缺则不 JIT 含取整指令的单元）；
 - 回边每轮一次 H22 `interrupt_poll`；紧循环上该调用（内部含一次分配）成本显著，已记入
   `doc/spec/f-jit-m1/verify.md` 待优化；
-- 逃逸闭包必须 `unloadFn()`，否则提升组常驻；
+- 逃逸闭包建议显式 `close()`；漏调时单元卸载会级联释放，单元长期存活则提升组一直驻留；
 - 细节规格见 `doc/jit-bytecode-m1.md` / `doc/design-m1.md` / `doc/plan-m1.md`，验收见
   `doc/spec/f-jit-m1/verify.md`，性能见 `doc/perf-m1.md`。

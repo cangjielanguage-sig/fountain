@@ -124,7 +124,8 @@ public class KnowledgeService {
 }
 ```
 
-- `@Mcp` adds `@Bean`, registers everything at module load, then calls `McpRegistry.build()`; use one `@Mcp` class per process
+- `@Mcp` adds `@Bean`, registers everything at module load, then calls `McpRegistry.build()`
+- `McpRegistry.build()` may be called repeatedly: each call rebuilds `McpServer` from everything registered so far, so newly registered tools / resources / prompts take effect immediately. Multiple `@Mcp` classes per process are supported, and `configure` calls in `main()` still work (the next `build()` or `configure` rebuilds). Call it during startup only (it resets result cache, subscriptions and rate-limit state)
 - `@Mcp['kb-server']` or `@Mcp[kbServer]` sets `serverInfo.name` (string literal or identifier); without an attribute the name is `fountain-mcp`
 - `serverInfo.version` comes from `mcp_version`, defaulting to `1.0.0`
 - **tool**: exactly one parameter, an `@DataAssist[props fields]` class; `inputSchema` comes from that type
