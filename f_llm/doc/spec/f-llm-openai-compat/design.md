@@ -325,4 +325,9 @@ PostgreSQL 18.4（WSL，`postgres://fountain:fountain@127.0.0.1:5432/fountain_te
 - `ChatMessage` 增加 `parts: ArrayList<ContentPart>` 与 `addText/addImage`；报文侧由 `ChatCompletionsMapper.rewriteMultimodal` 把内部扁平结构改写成 `{"type":"image_url","image_url":{url,detail}}`，并把内部 `parts` 字段从报文里删掉。响应侧 `content` 可能是数组，统一走 `contentTextOf` 拼文本。
 - 真机验证：`UserMessage.addImage(dataUri, detail:'high')` → DeepSeek 返回「这是一张纯红色的图片」，说明改写后的报文被接受且模型确实看图。
 - embedding 旧链路（`EmbeddingContextMediator` / `AbstractEmbeddingContext` / `GLMEmbeddingContext`）删除，改为 `Embedding.embed(llmName, param)`：从 `LLMConfs` 取 `llmType=embedding` 的候选、按权重/熔断选号、429/5xx 转移、解析 `data[0].embedding` 与 `usage`；`llmName` 未命中时按 `actualLlmName` 兜底（兼容传 `embedding-3` 的老调用）。
-- `EmbeddingResp` 增加带参构造（`embedding` / `usage`），`usage` 由 `let` 改 `var` 以兼容 `DataAssist` 生成代码。
+- `EmbeddingResp` 增加带参构造（`embedding` / `usage`），`usage` 由 `let` 改 `var` 以兼容 `DataAssist` 生成代码。### 旧搜索链路清理（2026-10-28）
+
+删除 `SearchMediartor` / `AbstractSearcher` / `GLMSearcher`（旧的「按引擎名 new 一个 Searcher」链路），搜索能力现在只有 `SearchProvider` 一条路（`DeepSeekSearchProvider` 已实调）。
+
+- `SearchResult`（`title/content/link/...`）单独保留在 `search/SearchResult.cj`：`KnowledgeEntity` 的 `searcher: (String) -> ArrayList<SearchResult>` 是公开注入点，直接删会破坏下游编译；新代码用 `SearchResultItem`。
+- `LLMFinder` 一并删除（只剩 `LLMCandidateProvider` 一处引用），后者改为从 `LLMConfs.holder().all()` 取配置——工具借凭据的来源与门面完全一致，不再有「finder 查一次库、holder 查一次库」两套。

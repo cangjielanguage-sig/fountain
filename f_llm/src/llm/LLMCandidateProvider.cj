@@ -20,7 +20,6 @@ import std.sync.Mutex
 
 import fountain::f_bean.*
 
-import fountain::f_llm.finder.*
 import fountain::f_llm.model.po.*
 
 /**
@@ -36,8 +35,9 @@ public class LLMCandidateProvider {
     private init(){}
 
     private static func defaultSupplier(): ArrayList<LLMConf> {
+        // 新配置快照已经按 enabled/weight>0 过滤并丢弃残缺行，不再走旧的 LLMFinder
         try{
-            lookup<LLMFinder>().listConfs()
+            LLMConfs.holder().all()
         }catch(_: Exception){
             ArrayList<LLMConf>()
         }
