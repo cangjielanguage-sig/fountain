@@ -74,7 +74,73 @@ public struct ChatCompletionsMapper {
                 body.remove('tools')
             }
         }
+        rewriteMultimodal(body)
         body
+    }
+
+    /**
+     * 把内部 `parts` 改写成 OpenAI 的 content parts。
+     *
+     * 内部模型是扁平结构（`{type,text,imageUrl,detail}`），线上格式要求
+     * `{"type":"image_url","image_url":{"url":…,"detail":…}}`——只在这一层转换，
+     * `DataAssist` 自动生成的报文不能直接发。
+     */
+    private static func rewriteMultimodal(body: JsonObject): Unit {
+        if(let Some(rawMessages) <- body.get('messages')){
+            for(item in rawMessages.asArray().getItems()){
+                let message = item.asObject()
+                let rawParts = message.get('parts')
+                message.remove('parts')
+                if(let Some(parts) <- rawParts){
+                    let content = ArrayList<JsonValue>()
+                    for(part in parts.asArray().getItems()){
+                        content.add(toWirePart(part.asObject()))
+                    }
+                    if(content.size > 0){
+                        message.add('content', JsonArray(list: content))
+                    }
+                }
+            }
+        }
+    }
+
+    private static func toWirePart(part: JsonObject): JsonValue {
+        let wire = JsonObject()
+        if(stringOf(part, 'type') == PART_TYPE_IMAGE){
+            let image = JsonObject()
+            image.add('url', stringOf(part, 'imageUrl'))
+            let detail = stringOf(part, 'detail')
+            if(!detail.isEmpty()){
+                image.add('detail', detail)
+            }
+            wire.add('type', PART_TYPE_IMAGE)
+            wire.add('image_url', image)
+        }else{
+            wire.add('type', PART_TYPE_TEXT)
+            wire.add('text', stringOf(part, 'text'))
+        }
+        wire
+    }
+
+    /** 响应里的 `content` 可能是字符串，也可能是 content parts 数组（多模态模型） */
+    private static func contentTextOf(value: ?JsonValue): String {
+        match(value){
+            case Some(raw) =>
+                match(raw){
+                    case array: JsonArray =>
+                        let builder = StringBuilder()
+                        for(item in array.getItems()){
+                            let part = item.asObject()
+                            if(stringOf(part, 'type') == PART_TYPE_TEXT){
+                                builder.append(stringOf(part, 'text'))
+                            }
+                        }
+                        builder.toString()
+                    case _: JsonNull => ''
+                    case other => other.asString().value
+                }
+            case None => ''
+        }
     }
 
     /** Chat Completions 响应 → 内部模型（文本 / 推理内容 / 工具调用 / usage / finish_reason） */
@@ -97,7 +163,7 @@ public struct ChatCompletionsMapper {
     }
 
     private static func appendMessage(out: LLMResp, message: JsonObject): Unit {
-        let content = stringOf(message, 'content')
+        let content = contentTextOf(message.get('content'))
         let reasoning = stringOf(message, 'reasoning_content')
         if(let Some(rawCalls) <- message.get('tool_calls')){
             let toolMessage = ToolCallMessage()

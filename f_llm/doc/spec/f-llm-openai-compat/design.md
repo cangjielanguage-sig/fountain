@@ -320,4 +320,9 @@ PostgreSQL 18.4（WSL，`postgres://fountain:fountain@127.0.0.1:5432/fountain_te
 
 图片按 OpenAI 多模态格式放在 `content` 数组里：`{"type":"image_url","image_url":{"url":"data:image/png;base64,..."}}`（支持 webp/png/jpeg/gif；`.ico` 会被拒）。实测：上传一张 32×32 纯红 PNG 问颜色，返回 `content="红色"`（reasoning 227 字符），**识图可用**。
 
-注意：当前 `ChatMessage` 只承载 `String` 内容，要发图片需要给消息模型加 content parts（尚未实现，归入多模态接入）。
+注意：当前 `ChatMessage` 只承载 `String` 内容，要发图片需要给消息模型加 content parts（尚未实现，归入多模态接入）。### 多模态与 embedding 迁移（2026-10-28）
+
+- `ChatMessage` 增加 `parts: ArrayList<ContentPart>` 与 `addText/addImage`；报文侧由 `ChatCompletionsMapper.rewriteMultimodal` 把内部扁平结构改写成 `{"type":"image_url","image_url":{url,detail}}`，并把内部 `parts` 字段从报文里删掉。响应侧 `content` 可能是数组，统一走 `contentTextOf` 拼文本。
+- 真机验证：`UserMessage.addImage(dataUri, detail:'high')` → DeepSeek 返回「这是一张纯红色的图片」，说明改写后的报文被接受且模型确实看图。
+- embedding 旧链路（`EmbeddingContextMediator` / `AbstractEmbeddingContext` / `GLMEmbeddingContext`）删除，改为 `Embedding.embed(llmName, param)`：从 `LLMConfs` 取 `llmType=embedding` 的候选、按权重/熔断选号、429/5xx 转移、解析 `data[0].embedding` 与 `usage`；`llmName` 未命中时按 `actualLlmName` 兜底（兼容传 `embedding-3` 的老调用）。
+- `EmbeddingResp` 增加带参构造（`embedding` / `usage`），`usage` 由 `let` 改 `var` 以兼容 `DataAssist` 生成代码。

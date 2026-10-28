@@ -1573,3 +1573,21 @@ LLM.respondStream(candidates, params, onDelta): LLMResp
 ### 数据库
 
 `LLMConfDAO`（`@DAO <: RootDAO`，走 `f_orm`）+ `LLMConfService`（`<: RootService` + `@Bean` 实现）；建表脚本见 `doc/sql/llm_conf.postgres.sql` 与 `llm_conf.mysql.sql`。
+### 多模态与向量化
+
+```cj
+// 图片：data URI 或公网 URL；支持 webp/png/jpeg/gif
+let user = UserMessage('这张图是什么颜色？')
+user.addImage('data:image/png;base64,...', detail: 'high')   // detail: auto|low|high
+let resp = LLM.chat(candidates, LLMParams(model: 'chat-pro', messages: ArrayList<ChatMessage>([user])))
+```
+
+`deepseek-flash` 实测支持图片输入（`input_modalities=["text","image"]`，32×32 纯红图能答出"红色"）。`Responses` 路径暂未做图片。
+
+```cj
+// 向量化：按 llmName 选配置（llmType=embedding），失败转移与熔断与 chat 同构
+let resp = Embedding.embed('embed-pro', EmbeddingParam(agentId: 1, session: 's', input: '仓颉编程语言'))
+resp.embedding   // Array<Float64>
+```
+
+旧链路 `EmbeddingContextMediator` / `GLMEmbeddingContext` / `AbstractEmbeddingContext` 已删除；`KnowledgeEntity` 的 `embeddingAccessor` 传 `Embedding.embed` 即可。

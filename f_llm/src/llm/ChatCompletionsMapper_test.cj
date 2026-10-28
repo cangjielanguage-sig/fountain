@@ -110,3 +110,55 @@ public class ChatCompletionsMapperTest {
         @Expect(body.get('tools').isNone(), true)
     }
 }
+
+@Test
+public class MultimodalTest {
+
+    @TestCase
+    func testBuildsContentParts(): Unit {
+        let params = mapperParams(0.5f64)
+        let user = UserMessage('看图')
+        user.addImage('data:image/png;base64,AAA', detail: 'high')
+        params.messages.add(user)
+        let body = ChatCompletionsMapper.build(mapperConf(-1.0f64), params, false)
+        let messages = itemsOf(body.get('messages'))
+        let last = messages[messages.size - 1].asObject()
+        // 内部的 parts 字段不能出现在报文里
+        @Expect(last.get('parts').isNone(), true)
+        let parts = itemsOf(last.get('content'))
+        @Expect(parts.size, 1)
+        @Expect(parts[0].asObject().get('type')?.asString().value ?? '', 'image_url')
+        let image = parts[0].asObject().get('image_url')?.asObject() ?? JsonObject()
+        @Expect(image.get('url')?.asString().value ?? '', 'data:image/png;base64,AAA')
+        @Expect(image.get('detail')?.asString().value ?? '', 'high')
+    }
+
+    @TestCase
+    func testTextPartsAndPlainMessageCoexist(): Unit {
+        let params = mapperParams(0.5f64)
+        let user = UserMessage('说明')
+        user.addText('第一段')
+        user.addText('第二段')
+        params.messages.add(user)
+        let body = ChatCompletionsMapper.build(mapperConf(-1.0f64), params, false)
+        let messages = itemsOf(body.get('messages'))
+        // 多模态消息的 content 是数组，两段文本各占一项
+        let parts = itemsOf(messages[messages.size - 1].asObject().get('content'))
+        @Expect(parts.size, 2)
+        @Expect(parts[0].asObject().get('text')?.asString().value ?? '', '第一段')
+        @Expect(parts[0].asObject().get('type')?.asString().value ?? '', 'text')
+    }
+
+    @TestCase
+    func testParsesArrayContent(): Unit {
+        let resp = JsonValue.fromStr('{"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":[{"type":"text","text":"你好"},{"type":"text","text":"世界"}]}}]}').asObject()
+        let parsed = ChatCompletionsMapper.parse(resp)
+        @Expect(parsed.messages[0].content, '你好世界')
+    }
+}
+func itemsOf(value: ?JsonValue): ArrayList<JsonValue> {
+    if(let Some(raw) <- value){
+        return raw.asArray().getItems()
+    }
+    ArrayList<JsonValue>()
+}
