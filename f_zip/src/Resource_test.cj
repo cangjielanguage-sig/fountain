@@ -16,25 +16,27 @@ limitations under the License.
 package fountain::f_zip
 
 import std.env
-import std.fs.{Directory, File, OpenMode, exists, removeIfExists}
+import std.fs.{Directory, File, OpenMode, Path, exists, removeIfExists}
 import std.io.InputStream
 import std.random.Random
 import std.unittest.*
 import std.unittest.testmacro.*
 
 /**
- * 资源用例：断言的是**峰值内存**，跑一次几十秒到几分钟，还会临时占掉几百 MB 磁盘，
+ * 资源用例：断言的是**峰值内存**，跑一次几分钟，还会临时占掉几 GB 磁盘，
  * 所以默认跳过，只有 `F_ZIP_RESOURCE=1` 才真正执行。
  *
  * 峰值取 `/proc/self/status` 的 `VmHWM`（high-water mark，Linux 专用）。
- * `VmHWM` 只增不减，两个用例又都很大，所以**必须一次只跑一个类**：
+ * `VmHWM` 只增不减，每个用例又都很大，所以**必须一次只跑一个类**：
  *
  * ```
  * F_ZIP_RESOURCE=1 cjpm test --filter 'ResourceWriter_test'
  * F_ZIP_RESOURCE=1 cjpm test --filter 'ResourceReader_test'
+ * F_ZIP_RESOURCE=1 cjpm test --filter 'ResourceUnzip_test'
+ * F_ZIP_RESOURCE=1 cjpm test --filter 'ResourceZipTree_test'
  * ```
  *
- * 两个类默认分开写在同一个文件里，就是为了能被 `--filter` 单独选中。
+ * 四个类写在同一个文件里，就是为了能被 `--filter` 单独选中。
  */
 @Test
 public class ResourceWriter_test {
@@ -90,16 +92,7 @@ public class ResourceReader_test {
             // 触发 zlib 的解压安全阀（Decompressed output exceeds safety compression ratio）
             let block = Array<Byte>(64 * 1024, repeat: 0)
             Random(20261028).nextBytes(block)
-            let file = File(archive.toString(), OpenMode.Write)
-            let writer = ZipWriter(file)
-            try {
-                writer.addFileStream("huge.bin", RepeatingBlockInputStream(block, size))
-                writer.close()
-            } finally {
-                try {
-                    file.close()
-                } catch (_: Exception) {}
-            }
+            buildBigArchive(archive, block, size)
 
             let before = peakRssKb()
             var read: Int64 = 0
@@ -127,6 +120,133 @@ public class ResourceReader_test {
                 removeIfExists(work, recursive: true)
             } catch (_: Exception) {}
         }
+    }
+}
+
+/**
+ * 场景「`unzip(path, dir)` 解大包不爆内存」：1 GB 包全量解压到磁盘，
+ * `VmHWM` 增量必须远小于包内数据量。
+ *
+ * 与 5.5 的区别是走的是便捷函数（含路径校验、逐条落盘），不是 `open()`。
+ */
+@Test
+public class ResourceUnzip_test {
+    @TestCase
+    public func unzipGigabyteArchiveStaysSmall(): Unit {
+        if (!resourceEnabled()) {
+            println("SKIP: 未设置 F_ZIP_RESOURCE=1，跳过资源用例 12.3")
+            return
+        }
+        let size: Int64 = 1024 * 1024 * 1024
+        let work = Directory.createTemp(env.getTempDirectory())
+        try {
+            let archive = work.join("huge.zip")
+            let block = Array<Byte>(64 * 1024, repeat: 0)
+            Random(20261028).nextBytes(block)
+            buildBigArchive(archive, block, size)
+
+            let target = work.join("out")
+            let before = peakRssKb()
+            let limits = ZipLimits(maxEntrySize: 2 * size, maxTotalSize: 2 * size)
+            let count = unzip(archive.toString(), target, limits: limits)
+            let after = peakRssKb()
+            let deltaMb = Float64(after - before) / 1024.0
+
+            let restored = File(target.join("huge.bin").toString(), OpenMode.Read)
+            let restoredSize = restored.length
+            restored.close()
+            println(
+                "资源用例 12.3：VmHWM ${before} kB → ${after} kB，增量 ${deltaMb} MB" +
+                "（包内条目 1024 MB，解压出 ${restoredSize} 字节）"
+            )
+            @Assert(count, 1)
+            @Assert(restoredSize, size)
+            @Assert(deltaMb < 256.0, true)
+        } finally {
+            try {
+                removeIfExists(work, recursive: true)
+            } catch (_: Exception) {}
+        }
+    }
+}
+
+/**
+ * 场景「`zip(output, dir)` 打包大目录不线性涨内存」：总量 2 GB 的目录
+ * （稀疏文件，读出来是重复的 0 字节）打包后 `VmHWM` 增量远小于 2 GB。
+ */
+@Test
+public class ResourceZipTree_test {
+    @TestCase
+    public func zipTwoGigabyteTreeStaysSmall(): Unit {
+        if (!resourceEnabled()) {
+            println("SKIP: 未设置 F_ZIP_RESOURCE=1，跳过资源用例 12.1")
+            return
+        }
+        let perFile: Int64 = 512 * 1024 * 1024
+        let files: Int64 = 4
+        let total = perFile * files
+        let work = Directory.createTemp(env.getTempDirectory())
+        try {
+            let src = work.join("src")
+            Directory.create(src, recursive: true)
+            var i: Int64 = 0
+            while (i < files) {
+                createSparseFile(src.join("f${i}.bin"), perFile)
+                i += 1
+            }
+
+            let archive = work.join("tree.zip")
+            let before = peakRssKb()
+            let file = File(archive.toString(), OpenMode.Write)
+            let count = try {
+                zip(file, src)
+            } finally {
+                try {
+                    file.close()
+                } catch (_: Exception) {}
+            }
+            let after = peakRssKb()
+            let deltaMb = Float64(after - before) / 1024.0
+
+            // 从产物反查"真的走过了 2 GB 数据"（压缩后很小，不能拿文件大小断言）
+            let reader = ZipReader(archive.toString(), limits: ZipLimits(maxEntrySize: total, maxTotalSize: total))
+            var declared: Int64 = 0
+            try {
+                for (e in reader.entries()) {
+                    declared += e.uncompressedSize
+                }
+            } finally {
+                reader.close()
+            }
+            let archiveFile = File(archive.toString(), OpenMode.Read)
+            let archiveSize = archiveFile.length
+            archiveFile.close()
+            println(
+                "资源用例 12.1：VmHWM ${before} kB → ${after} kB，增量 ${deltaMb} MB" +
+                "（目录总量 ${total} 字节，压缩后 ${archiveSize} 字节）"
+            )
+            @Assert(count, files)
+            @Assert(declared, total)
+            @Assert(deltaMb < 256.0, true)
+        } finally {
+            try {
+                removeIfExists(work, recursive: true)
+            } catch (_: Exception) {}
+        }
+    }
+}
+
+/** 造一个"解压后 `size` 字节"的包：内容由 `block` 重复而成，测试进程不持有整份数据。 */
+private func buildBigArchive(archive: Path, block: Array<Byte>, size: Int64): Unit {
+    let file = File(archive.toString(), OpenMode.Write)
+    try {
+        let writer = ZipWriter(file)
+        writer.addFileStream("huge.bin", RepeatingBlockInputStream(block, size))
+        writer.close()
+    } finally {
+        try {
+            file.close()
+        } catch (_: Exception) {}
     }
 }
 
