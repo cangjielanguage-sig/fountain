@@ -116,6 +116,7 @@ public class ImapClient <: Resource {
     private let allowPlaintextAuthValue: Bool
     private let idName: ?String
     private let idVersion: ?String
+    private let maxLiteralBytes: Int64
     private var channelRef: LineChannel
     private var capabilitiesValue: ImapCapabilities
     private var authenticated = false
@@ -146,7 +147,8 @@ public class ImapClient <: Resource {
         tlsMode: TlsMode,
         allowPlaintextAuth: Bool,
         idName: ?String,
-        idVersion: ?String
+        idVersion: ?String,
+        maxLiteralBytes: Int64
     ) {
         this.connection = connection
         this.channelRef = channel
@@ -156,6 +158,7 @@ public class ImapClient <: Resource {
         this.allowPlaintextAuthValue = allowPlaintextAuth
         this.idName = idName
         this.idVersion = idVersion
+        this.maxLiteralBytes = maxLiteralBytes
     }
 
     public static func builder(host: String, port!: UInt16 = 143): ImapClientBuilder {
@@ -697,11 +700,19 @@ public class ImapClient <: Resource {
     }
 
     private func valReadLiteralBytes(length: Int64): Array<Byte> {
+        if (length > maxLiteralBytes) {
+            connection.close()
+            throw MailLimitException(LimitKind.Literal, maxLiteralBytes, length)
+        }
         channelRef.withDeadline(timeouts.data)
         channelRef.readExact(length)
     }
 
     private func valReadLiteral(length: Int64, consumer: (Array<Byte>) -> Unit): Unit {
+        if (length > maxLiteralBytes) {
+            connection.close()
+            throw MailLimitException(LimitKind.Literal, maxLiteralBytes, length)
+        }
         var remaining = length
         let chunkSize: Int64 = 8192
         while (remaining > 0) {
@@ -1625,6 +1636,7 @@ public class ImapClientBuilder {
     private var allowPlaintextAuthValue = false
     private var idNameValue: ?String = None
     private var idVersionValue: ?String = None
+    private var maxLiteralBytesValue: Int64 = 64 * 1024 * 1024
     private var factory: ?TransportFactory = None
 
     init(host: String, port: UInt16) {
@@ -1654,6 +1666,12 @@ public class ImapClientBuilder {
 
     public func allowPlaintextAuth(allow: Bool): This {
         allowPlaintextAuthValue = allow
+        this
+    }
+
+    /** 单个 IMAP literal 的最大字节数，默认 64 MB；超限断开连接。 */
+    public func maxLiteralBytes(limit: Int64): This {
+        maxLiteralBytesValue = limit
         this
     }
 
@@ -1696,7 +1714,8 @@ public class ImapClientBuilder {
                 tlsModeValue,
                 allowPlaintextAuthValue,
                 idNameValue,
-                idVersionValue
+                idVersionValue,
+                maxLiteralBytesValue
             )
             if ((greeting.status ?? "").toAsciiUpper() == "PREAUTH") {
                 client.markAuthenticated()
@@ -1718,7 +1737,8 @@ public class ImapClientBuilder {
                     tlsModeValue,
                     allowPlaintextAuthValue,
                     idNameValue,
-                    idVersionValue
+                    idVersionValue,
+                    maxLiteralBytesValue
                 )
                 if ((greeting.status ?? "").toAsciiUpper() == "PREAUTH") {
                     client.markAuthenticated()

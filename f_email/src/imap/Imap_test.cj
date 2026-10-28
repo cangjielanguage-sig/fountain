@@ -502,6 +502,31 @@ public class ImapClient_test {
 
     /** literal 把一条响应拆成多行：解析必须跨片段拼接。 */
     @TestCase
+    public func literalOverLimitClosesConnection(): Unit {
+        let transport = ScriptedTransport(
+            server: greeting() + CAPABILITY_LINE +
+                "A0001 OK LOGIN completed\r\n* 1 EXISTS\r\nA0002 OK [READ-WRITE] SELECT completed\r\n" +
+                "* 1 FETCH (BODY[] {100}\r\n" + String(Array<Rune>(100, repeat: r'x')) + ")\r\nA0003 OK FETCH completed\r\n"
+        )
+        let client = ImapClient.builder("localhost", port: 143)
+            .requireEncryption(false)
+            .allowPlaintextAuth(true)
+            .maxLiteralBytes(10)
+            .transport(transport)
+            .build()
+        client.login("alice", Secret.of("pw"))
+        client.select("INBOX")
+        var kind = LimitKind.Header
+        try {
+            client.fetch(SequenceSet.single(1), [FetchItem.body()])
+        } catch (e: MailLimitException) {
+            kind = e.kind
+        }
+        @Assert(kind.toString(), "Literal")
+        @Assert(client.isClosed(), true)
+    }
+
+    @TestCase
     public func fetchWithLiteralReadsBody(): Unit {
         let (client, _) = openSelected(
             "* 1 FETCH (UID 9 FLAGS (\\Seen) RFC822.SIZE 120 BODY[] {5}\r\n" +

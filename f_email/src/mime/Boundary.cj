@@ -276,6 +276,7 @@ class MultipartScanner {
     private let boundary: String
     var closed = false
     var preamble: ?String = None
+    var epilogue: ?String = None
 
     init(source: ByteSource, boundary: String) {
         this.source = source
@@ -317,6 +318,21 @@ class MultipartScanner {
     /** 下一个 part 的字节流；调用方解析完后必须把流读空，再看 [PartStream.closing]。 */
     func nextPart(): PartStream {
         PartStream(source, boundary)
+    }
+
+    /** 读完结束 boundary 之后的剩余字节（epilogue）。 */
+    func readEpilogue(): Unit {
+        let lines = ArrayList<String>()
+        while (true) {
+            let line = source.readLine(8192)
+            if (line.isNone()) {
+                break
+            }
+            lines.add(String.fromUtf8(line.getOrThrow()))
+        }
+        if (lines.size > 0) {
+            epilogue = Some(joinLines(lines.toArray()))
+        }
     }
 }
 

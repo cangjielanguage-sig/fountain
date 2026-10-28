@@ -144,11 +144,13 @@ public class MimeParser {
                 }
                 index += 1
             }
+            scanner.readEpilogue()
             part.body = PartBody.Parts(
                 Multipart(
                     boundary.getOrThrow(),
                     parts: children.toArray(),
-                    preamble: scanner.preamble
+                    preamble: scanner.preamble,
+                    epilogue: scanner.epilogue
                 )
             )
             return part

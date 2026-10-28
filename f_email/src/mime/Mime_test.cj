@@ -168,6 +168,26 @@ public class MimeParser_test {
     }
 
     @TestCase
+    public func keepsPreambleAndEpilogue(): Unit {
+        let raw = "Content-Type: multipart/mixed; boundary=b\r\n" +
+            "\r\n" +
+            "preamble text\r\n" +
+            "--b\r\n" +
+            "Content-Type: text/plain; charset=utf-8\r\n" +
+            "\r\n" +
+            "body\r\n" +
+            "--b--\r\n" +
+            "epilogue text\r\n"
+        let message = MimeParser.parse(BufferInput(raw.toArray()))
+        match (message.root.body) {
+            case Parts(multipart) =>
+                @Assert((multipart.preamble ?? "").contains("preamble text"), true)
+                @Assert((multipart.epilogue ?? "").contains("epilogue text"), true)
+            case _ => @Assert(false, true)
+        }
+    }
+
+    @TestCase
     public func oneByteStreamMatchesBulkParse(): Unit {
         let raw = "Subject: hi\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nbody text"
         let bulk = MimeParser.parse(BufferInput(raw.toArray()))
