@@ -26,13 +26,14 @@
 - [ ] 2.9 `transport/MailTrace.cj`：`onLine`/`onBytes`，`AUTH`/`PASS`/`LOGIN` 参数脱敏，正文默认不进 `onLine`
 - [ ] 2.10 `transport/TransportFactory.cj`：`SocketTransportFactory` + 测试用 `ScriptedTransport`（预置服务器字节、记录客户端字节）
 - [ ] 2.11 超时：`Deadline` 折算剩余时长，`MailIoException(stage=Timeout)` 后关闭连接
-- [ ] 2.12 单测：1 字节慢速流下 `readLine`/`readExact`/dot-stuffing 全部正确；跨块 dot-stuffing；超长行；提前 EOF；重复 `close()`
+- [ ] 2.12 `idle` 类超时与跨线程 `close()`：IDLE 期间长时间静默 MUST NOT 因 `command` 超时断开；`close()` 可从其它线程打断阻塞读，被打断的读以 `MailIoException` 结束且不向调用方线程抛异常
+- [ ] 2.13 单测：1 字节慢速流下 `readLine`/`readExact`/dot-stuffing 全部正确；跨块 dot-stuffing；超长行；提前 EOF；重复 `close()`；跨线程 `close()` 打断阻塞读
 
 验收：能连本机 `TcpServerSocket` 假服务器完成一次行往返；1 字节读写测试全过。
 
 ## 3. M1-a 消息模型
 
-- [ ] 3.1 `HeaderMap.cj`：保序 + 大小写不敏感查找、`set`/`add`/`remove`/`entries`/`names`、折行展开、998 octets 上限、字段名与值校验
+- [ ] 3.1 `HeaderMap.cj`：保序 + 大小写不敏感查找、`set`/`add`/`remove`/`entries`/`names`、折行展开、998 octets 上限、字段名与值校验；值按字节保留、允许裸 UTF-8（RFC 6532），只拒绝 `\r`/`\n`
 - [ ] 3.2 `MailAddress.cj`：`EmailAddress` 与 `AddressList` 的解析（addr-spec / name-addr / 引号名 / 注释 / 组 / 域字面量 / 引号本地部分）与生成（RFC 2047、拒绝废弃路由、拒绝 `\r\n<>`）
 - [ ] 3.3 `MailDate.cj`：RFC 5322 解析（两位年份、月份大小写、时区缩写、缺失时区告警）与生成
 - [ ] 3.4 `BodySource.cj`：`BodySource` 接口 + `MemoryBodySource` / `FileBodySource` / `StreamBodySource`（一次性来源二次 `open` 抛异常）
@@ -71,13 +72,14 @@
 
 ## 6. M1-d MimeWriter
 
-- [ ] 6.1 `mime/MimeWriter.cj` 骨架 + `MimeWriteOptions` + `bytesWritten()`
+- [ ] 6.1 `mime/MimeWriter.cj` 骨架 + `MimeWriteOptions`（含 `utf8Headers`）+ `bytesWritten()`
 - [ ] 6.2 传输编码选择（7bit / QP / base64 / 8bit 规则）与 `forceEncoding` 硬约束
 - [ ] 6.3 头部折行：78 octets、不在引号内与 encoded-word 内断行、续行单空格开头
 - [ ] 6.4 boundary 生成（`=_fountain_{32hex}`）与 `ContentType.toString()` 的引号规则
 - [ ] 6.5 换行归一（CRLF / 裸 LF / 裸 CR → CRLF）
 - [ ] 6.6 `Bcc` 原样写出（删除由 `SmtpClient` 负责）
 - [ ] 6.7 单测：生成的报文可被 `MimeParser` 读回且内容一致；`forceEncoding` 冲突抛 `MimeException`；折行后每行 ≤ 78 octets
+- [ ] 6.8 头部编码两态：`utf8Headers=false`（默认）非 ASCII 头走 RFC 2047；`true` 时直写裸 UTF-8 且不混 encoded-word；单测断言两种输出都能被 `MimeParser` 读回成同一文本
 
 验收：中文主题 + HTML + 二进制附件的邮件 write → parse 往返一致。
 
@@ -140,11 +142,37 @@
 
 验收：M3 全绿；对 Dovecot 与 163 各跑一次真实会话（读 INBOX、搜索、取整封、标已读、追加到已发送）。
 
-## 10. 收尾
+## 10. M4 IMAP 扩展
 
-- [ ] 10.1 `email.cj` 汇总 re-export，确认五个公开包名与设计一致
-- [ ] 10.2 更新 `f_email/README.md`：已实现范围、里程碑进度、`CANGJIE_STDX_DYNAMIC_PATH` 要求、编码/解码使用示例
-- [ ] 10.3 更新 `f_email/README_en.md` 与之一致
-- [ ] 10.4 跑 `cjpm build` 与 `cjpm test`，确保无 warning 级新增告警
-- [ ] 10.5 按 G1–G6 逐条自查并在变更里记录结果（含 10 MB 附件的 RSS 增量实测值）
-- [ ] 10.6 把 `f_email/doc/f_email设计文档.md` 中与实际实现有出入的 API 签名回写到文档
+前提：M3 全绿。M4 的每个扩展都遵守同一条规则——**能力位可见 ≠ 已生效**，
+`CAPABILITY` 决定"能做什么"，`ENABLE` 的 `* ENABLED` 回显决定"已经生效什么"。
+
+- [ ] 10.1 `imap/ImapCapabilities.cj`：解析 `IDLE`/`MOVE`/`SPECIAL-USE`/`NAMESPACE`/`UTF8=ACCEPT`/`ENABLE`/`CONDSTORE`/`QRESYNC`/`SORT`/`SORT=DISPLAY`/`THREAD=ORDEREDSUBJECT`/`THREAD=REFERENCES`，暴露 `supportsXxx`，未识别能力保留在原始表里
+- [ ] 10.2 `imap/ImapEnable.cj`：`ENABLE <cap>…` 命令与 `* ENABLED` 解析；只把回显的能力置为已启用；未认证状态调用 MUST 在本地拒绝、不发命令
+- [ ] 10.3 扩展调用前置校验：每类扩展在"未广告或未启用"时 MUST 抛 `MailProtocolException(capability=…)`，且异常文本不含凭据；统一走一处 `requireCapability` 而非各命令自己判断
+- [ ] 10.4 `imap/ImapIdle.cj` 的 `IdleSession`：`idle()` 前置校验（已认证 + 已 SELECT/EXAMINE）、发送 `IDLE`、处理 `+ idling`、`DONE` 不带 tag 单独写出、收 tagged `OK` 收尾
+- [ ] 10.5 IDLE 读线程：读行 → 分类 `ImapEvent` → 入有界队列；`nextEvent(timeout)` 阻塞消费，超时返回 `None` 且 MUST NOT 关连接；用户回调 MUST NOT 在读线程上执行
+- [ ] 10.6 IDLE 25 分钟重建：可注入时钟驱动，到点写 `DONE`、等 tagged `OK`、重新 `IDLE`；`close()` 在 IDLE 中先发 `DONE` 再停读线程，幂等
+- [ ] 10.7 IDLE 期间的命令互斥：同一连接上 IDLE 未结束时调用普通命令 MUST 立即抛 `MailProtocolException`，MUST NOT 排队；`* BYE` 先作为 `Bye` 事件投递再结束会话
+- [ ] 10.8 `imap/ImapMove.cj`：`move`/`uidMove`；解析 `[COPYUID]`、`* VANISHED` 与 `* EXPUNGE`；返回 `MoveResult(atomic, copyUid, vanished)`；服务器广告 `MOVE` 时 MUST 用 `MOVE`
+- [ ] 10.9 MOVE 非原子回退：`allowNonAtomicMove(true)` 时 `UID COPY` → `UID STORE +FLAGS.SILENT (\Deleted)` → `UID EXPUNGE`（无 `UIDPLUS` 时退回 `EXPUNGE` 并记告警），结果 `atomic=false`；未开启回退时 MUST 抛错且不发 `COPY`
+- [ ] 10.10 `imap/ImapSpecialUse.cj`：`\All`/`\Archive`/`\Drafts`/`\Flagged`/`\Junk`/`\Sent`/`\Trash` 映射到 `SpecialUse`；未知 `\Foo` 保留在 attributes 不报错；`listSpecialUse()` 发 `LIST (SPECIAL-USE) "" "*"`，无能力时 MUST 抛错而不是全量 LIST 后猜名字
+- [ ] 10.11 `imap/ImapNamespace.cj`：`NAMESPACE` 三段（personal / otherUsers / shared）的 `(prefix delimiter)` 列表与 `NIL` 解析为 `NamespaceInfo`；`joinPath()` 按 delimiter 拼接且不产生重复分隔符
+- [ ] 10.12 `imap/ImapCondStore.cj`：`SELECT … (CONDSTORE)`、`[HIGHESTMODSEQ n]`、`FETCH (MODSEQ)` 与 `(CHANGEDSINCE n)`、`STORE (UNCHANGEDSINCE n)` 与 `* OK [MODIFIED <set>]` → `StoreResult.modified`（失败项 MUST NOT 记为成功）
+- [ ] 10.13 QRESYNC：`ENABLE QRESYNC` 时 MUST NOT 再单独 `ENABLE CONDSTORE`；`SELECT … (QRESYNC (uidvalidity modseq [known-uids [(known-seqs known-uids)]]))`；区分 `* VANISHED (EARLIER)` 与普通 `* VANISHED`，两者都要在普通命令的响应分发里被消费
+- [ ] 10.14 `imap/ImapSort.cj`：`SORT`/`UID SORT` 的 `SortCriteria`（`ARRIVAL`/`CC`/`DATE`/`FROM`/`SIZE`/`SUBJECT`/`TO` + `REVERSE` 前缀）、`SORT=DISPLAY` 时的 `DISPLAY FROM`/`DISPLAY TO`、字符集只允许 `US-ASCII`/`UTF-8`；解析 `* SORT`
+- [ ] 10.15 `THREAD ORDEREDSUBJECT` / `THREAD REFERENCES`（含 `UID THREAD`）：解析 `* THREAD (…)` 嵌套为 `ThreadNode` 树，同级顺序与响应一致；只广告一种算法时请求另一种 MUST 抛错
+- [ ] 10.16 `UTF8=ACCEPT` 分支：启用后邮箱名直传 UTF-8、`SEARCH` 省略 `CHARSET`、`LIST`/`STATUS` 返回名按 UTF-8 解码、`APPEND` 接受 UTF-8 头部（序列化用 `utf8Headers=true`）；`SORT`/`THREAD` 的 `charset` 参数不变；未启用时上述各处 MUST 完整走 M3 的 modified UTF-7 路径，禁止"能发就发 UTF-8"的尝试式降级
+- [ ] 10.17 脚本测试：IDLE 的 `+`/推送/`DONE`/tagged 时序、25 分钟重建（假时钟）、IDLE 中插入 `* BYE`、`DONE` 之后才到的 untagged、IDLE 期间 untagged 与 `DONE` 进 `onLine`、跨线程 `close()` 打断阻塞读、MOVE 的 `COPYUID` 与 `VANISHED`、MOVE 回退三步顺序、`LIST (SPECIAL-USE)` 含自定义属性、`NAMESPACE` 三段全 `NIL`、`ENABLE` 回空列表、`MODIFIED` 只列半数序号、`VANISHED (EARLIER)` 与普通 `VANISHED` 混排、`SORT`/`THREAD` 结果含重复序号与 1000 兄弟节点、1 字节读
+- [ ] 10.18 互操作（G6 手工）：Dovecot 上验证 IDLE 事件、MOVE、NAMESPACE、SORT/THREAD；再在只支持 M3 能力的服务器上逐条确认七个扩展都给出明确错误
+
+验收：M4 全绿；IDLE 在 25 分钟边界上自行重建且不丢事件；七组扩展在"不支持"时全部给出可断言的具体错误，不出现静默退化。
+
+## 11. 收尾
+
+- [ ] 11.1 `email.cj` 汇总 re-export，确认五个公开包名与设计一致
+- [ ] 11.2 更新 `f_email/README.md`：已实现范围（含 M4 七组扩展）、里程碑进度、`CANGJIE_STDX_DYNAMIC_PATH` 要求、编码/解码与 IDLE 使用示例
+- [ ] 11.3 更新 `f_email/README_en.md` 与之一致
+- [ ] 11.4 跑 `cjpm build` 与 `cjpm test`，确保无 warning 级新增告警
+- [ ] 11.5 按 G1–G6 逐条自查并在变更里记录结果（含 10 MB 附件的 RSS 增量实测值）
+- [ ] 11.6 把 `f_email/doc/f_email设计文档.md` 中与实际实现有出入的 API 签名回写到文档

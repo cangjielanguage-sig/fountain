@@ -96,13 +96,27 @@ IMAP 的 `{n}` literal SHALL 由 `LineChannel.readExact(n)` 按字节精确读�
 
 传输层 SHALL 提供 `connect` / `greeting` / `command` / `data` / `idle` 五类超时；
 命令总超时 MUST 由 deadline 折算成每次读写的剩余时长，而不是依赖单次系统调用超时。
+`idle` 超时 MUST 只用于 IDLE 期间的读等待与事件轮询判断，MUST NOT 在 IDLE 期间因为
+长时间没有数据而关闭连接（健康的长连接本来就长时间静默）。
 超时 MUST 映射为 `MailIoException(stage=Timeout)` 并关闭连接。任何协议错误、超时、
-EOF 都必须关闭连接，MUST NOT 尝试"跳过一行继续"。`close()` MUST 幂等。
+EOF 都必须关闭连接，MUST NOT 尝试"跳过一行继续"。`close()` MUST 幂等，
+且 MUST 允许从其它线程调用以打断阻塞中的读——被打断的读 MUST 以 `MailIoException` 结束，
+MUST NOT 返回伪数据，也不得把异常抛到调用 `close()` 的线程上。
 
 #### Scenario: 命令总超时
 
 - **WHEN** 服务器每 50 ms 返回一个字节，持续超过 `command` 超时
 - **THEN** 抛 `MailIoException(stage=Timeout)`，且 `isClosed()` 为真
+
+#### Scenario: IDLE 静默不算超时
+
+- **WHEN** 连接处于 IDLE，连续 20 分钟没有任何服务器数据
+- **THEN** 连接不被关闭，`command` 超时不生效，仅有 `idle` 超时按配置让 `nextEvent` 返回 `None`
+
+#### Scenario: 跨线程 close
+
+- **WHEN** 一个线程阻塞在读上，另一个线程对该连接调用 `close()`
+- **THEN** 阻塞的读在有限时间内以 `MailIoException` 结束，连接状态为已关闭，调用 `close()` 的线程不收到异常
 
 #### Scenario: 重复 close
 
@@ -114,6 +128,8 @@ EOF 都必须关闭连接，MUST NOT 尝试"跳过一行继续"。`close()` MUST
 传输层 SHALL 暴露 `TransportFactory`，使测试可以注入字节脚本（`ScriptedTransport`）
 而不依赖真实网络。`MailTrace` SHALL 只能拿到已脱敏的行：`AUTH`、`PASS`、`LOGIN`
 的参数一律替换为 `<redacted>`；正文默认不回调 `onLine`，只在 `onBytes` 报告字节数。
+IDLE 期间的 untagged 行（`* 173 EXISTS` 等）与 `DONE` MUST 走 `onLine`——它们不含凭据，
+且是排查"事件为什么没来"的唯一线索。
 
 #### Scenario: 凭据不进跟踪
 
@@ -124,3 +140,8 @@ EOF 都必须关闭连接，MUST NOT 尝试"跳过一行继续"。`close()` MUST
 
 - **WHEN** 测试用 `ScriptedTransport` 预置 `220 ready\r\n` 后构建 SMTP 客户端
 - **THEN** 客户端成功完成握手，且测试能逐字节断言客户端后续写出的内容
+
+#### Scenario: IDLE 行进跟踪
+
+- **WHEN** 连接处于 IDLE 且收到 `* 173 EXISTS`，随后客户端写出 `DONE`
+- **THEN** `onLine` 依次收到该 untagged 行与 `DONE`，两者都未被脱敏或丢弃

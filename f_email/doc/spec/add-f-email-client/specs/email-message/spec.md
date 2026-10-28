@@ -7,6 +7,8 @@
 `CRLF + WSP` 折行展开为单个空格；生成时按 78 octets 重新折行。
 任何值含 `\r` 或 `\n` MUST 抛 `MailProtocolException`；字段名 MUST 只允许可见 ASCII 中除
 `:` 以外的字符；单行超过 998 octets MUST 抛 `MailLimitException(kind=Header)`。
+字段值 MUST 按字节保留原样：允许出现非 ASCII 的 UTF-8 字节（RFC 6532，`UTF8=ACCEPT` 与
+`SMTPUTF8` 场景下合法），解析层 MUST NOT 因值不是 ASCII 而拒绝、替换或丢弃字符。
 
 #### Scenario: Received 链保序
 
@@ -22,6 +24,11 @@
 
 - **WHEN** 解析 `Subject: hello\r\n world`
 - **THEN** `get("Subject")` 返回 `hello world`
+
+#### Scenario: 裸 UTF-8 头部值
+
+- **WHEN** 解析一封头部含裸 UTF-8 的 `Subject: 中文主题`（RFC 6532）
+- **THEN** `get("Subject")` 返回 `中文主题`，无替换字符，`entries()` 保序不变
 
 ### Requirement: 地址解析与生成
 

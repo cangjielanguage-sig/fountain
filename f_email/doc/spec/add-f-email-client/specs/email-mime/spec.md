@@ -6,6 +6,8 @@
 类型与子类型 MUST 统一小写后比较，参数名小写、参数值保留原样。缺失 `Content-Type` 时
 MUST 默认 `text/plain; charset=us-ascii`；缺失 `Content-Transfer-Encoding` 时 MUST 默认 `7bit`。
 未知类型 MUST 保留原样并按 `application/octet-stream` 处理正文。
+头部 MUST 按字节切分 `CRLF + WSP`；MUST NOT 假设头部是 ASCII——RFC 6532 允许值为裸 UTF-8
+（`UTF8=ACCEPT` / `SMTPUTF8` 场景），这类值 MUST 原样透传给 `HeaderMap`，MUST NOT 替换或丢弃。
 
 #### Scenario: 引号内分号
 
@@ -16,6 +18,11 @@ MUST 默认 `text/plain; charset=us-ascii`；缺失 `Content-Transfer-Encoding` 
 
 - **WHEN** 解析一个没有 `Content-Type` 的 part
 - **THEN** `contentType` 为 `text/plain`，`charset()` 返回 us-ascii 对应的字符集
+
+#### Scenario: 裸 UTF-8 头不丢字节
+
+- **WHEN** 解析一个 `Subject` 值含裸 UTF-8 字节的报文（RFC 6532）
+- **THEN** 头部值按字节原样保留，不经 ASCII 校验，不产生替换字符
 
 ### Requirement: RFC 2231 参数解析与生成
 
@@ -130,13 +137,12 @@ MUST NOT 在多字节字符中间切断。
 
 ### Requirement: 生成
 
-`MimeWriter` SHALL 流式写出报文并提供 `bytesWritten()`。编码选择规则为：正文全部
-`<= 0x7F` 且行 `<= 998` 时用 `7bit`；文本且非 ASCII 字节占比低于 20% 时用
-`quoted-printable`；其余用 `base64`；服务器支持 `8BITMIME` 且 `allow8Bit=true` 时文本可用 `8bit`。
-`forceEncoding` MUST 是硬约束，与内容冲突时直接抛 `MimeException`，MUST NOT 静默换编码。
-写入前 MUST 把 `\r\n`、裸 `\n`、裸 `\r` 统一为 CRLF。头部折行 MUST 不在引号字符串内部、
-不在 encoded-word 内部断开，续行以单个空格开头，每行不超过 78 octets。
-`MimeWriter` MUST 原样写出 `Bcc`（是否删除由 SMTP 客户端决定）。
+`MimeWriter` SHALL 流式写出并提供 `bytesWritten()`。编码规则：全 ASCII 且行 ≤998 用 `7bit`；
+文本且非 ASCII <20% 用 `quoted-printable`；其余用 `base64`；`allow8Bit=true` 且服务器支持
+`8BITMIME` 时文本可用 `8bit`。`forceEncoding` 是硬约束，冲突 MUST 抛 `MimeException`。
+写入前 MUST 把 `\r\n`/裸 `\n`/裸 `\r` 统一为 CRLF。头部折行 MUST 避开引号与 encoded-word，
+续行单空格开头，每行 ≤78 octets。`utf8Headers=true` 时 MUST 直接写 UTF-8 且不混 encoded-word；
+默认 false 时非 ASCII 头 MUST 用 RFC 2047。`Bcc` MUST 原样写出。
 
 #### Scenario: forceEncoding 冲突
 
@@ -153,6 +159,16 @@ MUST NOT 在多字节字符中间切断。
 
 - **WHEN** 直接用 `MimeWriter` 写一封带 `Bcc` 的邮件
 - **THEN** 输出中包含 `Bcc` 头
+
+#### Scenario: UTF-8 头部直写
+
+- **WHEN** 以 `utf8Headers=true` 写出 `Subject: 中文主题`
+- **THEN** 输出中是裸 UTF-8 字节、不含 `=?utf-8?`，且被 `MimeParser` 读回后仍为 `中文主题`
+
+#### Scenario: 默认仍走 encoded-word
+
+- **WHEN** 未设置 `utf8Headers`（默认 false）写出同一个中文主题
+- **THEN** 输出中该头部使用 RFC 2047 encoded-word，整行不含 8 位字节
 
 ### Requirement: 字符集解析与回退链
 

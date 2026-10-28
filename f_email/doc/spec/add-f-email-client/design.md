@@ -17,6 +17,14 @@
 | SMTP 建连时机 | `build()` 内完成连接 + EHLO + STARTTLS + AUTH | 配置错误在启动期暴露，而不是在业务请求里；`send()` 只做事务 |
 | Bcc | `SmtpClient` 剥离，`MimeWriter` 保留 | writer 是通用序列化器（保存草稿要用），发送路径才需要剥离 |
 | 并发 | 每连接一线程，客户端不声明线程安全 | 邮件协议状态机是串行的；共享连接加锁只会把状态错位变成随机失败 |
+| M4 扩展的取舍 | 只做七组"改变调用方代码形状"的扩展：`IDLE`、`MOVE`、`SPECIAL-USE`、`NAMESPACE`、`UTF8=ACCEPT`、`CONDSTORE`/`QRESYNC`、`SORT`/`THREAD` | 这七组分别对应阻塞等事件、搬邮件、发现系统文件夹、非 ASCII 邮箱名、增量同步、服务器端排序；`METADATA`/`QUOTA`/`CHUNKING`/`NOTIFY` 不改变客户端用法，留在能力位里不实现 |
+| IDLE 的事件投递 | 内部读线程 + 有界队列 + `nextEvent(timeout)` | 服务器推送是异步的，命令 API 是同步的；事件进队列，调用方回调就永远不跑在读线程上，一次慢回调不会让服务器判超时 |
+| IDLE 的重发节奏 | 25 分钟主动 `DONE` 后重建 `IDLE` | RFC 2177 允许服务器 30 分钟后断开；固定 25 分钟留 5 分钟余量，比"赌服务器不踢"可靠 |
+| 不支持 `MOVE` 时的回退 | 默认不回退；`allowNonAtomicMove(true)` 才走 `COPY` → `STORE +FLAGS.SILENT (\Deleted)` → `UID EXPUNGE` | 回退是三步非原子操作，中途失败会留下两份副本或零副本；无 `UIDPLUS` 时 `EXPUNGE` 还会连带删掉别的 `\Deleted` |
+| `UTF8=ACCEPT` 的生效点 | 必须 `ENABLE UTF8=ACCEPT` 并收到 `* ENABLED` 回显后才切换 | `CAPABILITY` 里有能力位不等于已生效；抢在 `ENABLED` 之前发 UTF-8 邮箱名会被当作非法 atom |
+| `CONDSTORE` 与 `QRESYNC` | `QRESYNC` 蕴含 `CONDSTORE`，启用 `QRESYNC` 时不再单独 `ENABLE CONDSTORE` | RFC 7162 规定 QRESYNC 包含 CONDSTORE 语义，重复 `ENABLE` 会让部分服务器回 `BAD` |
+| `SORT`/`THREAD` 的字符集 | 只允许 `US-ASCII` 与 `UTF-8`，不做字符集协商 | RFC 5256 要求服务器 MUST 支持这两个字符集，客户端既不转换也不发别的字符集；`UTF8=ACCEPT` 只影响邮箱名与 `SEARCH`，不改变这里的参数 |
+| 扩展缺失时的错误 | 统一 `MailProtocolException(capability=…)`，不新增异常类型 | 能力缺失是协议层"这条路不存在"，与 POP3 无 `TOP`、SMTP 无 `8BITMIME` 的处理保持一致；新增异常会让调用方的 `catch` 分支膨胀 |
 
 ## 2. 分层与依赖方向
 
@@ -96,11 +104,20 @@ f_email/src/
 └── imap/
     ├── ImapClient.cj
     ├── ImapResponse.cj
-    ├── ImapParser.cj            # token / ImapValue
+    ├── ImapParser.cj            # token
+    ├── ImapValue.cj             # ImapValue（解析产物，与解析器分开）
+    ├── ImapCapabilities.cj      # 能力位与 supportsXxx
     ├── ImapFetch.cj             # FetchItem / FetchResult / BodyStructure
     ├── ImapSearch.cj            # SearchCriteria / SequenceSet
     ├── ImapAppend.cj
-    └── ImapUtf7.cj
+    ├── ImapUtf7.cj
+    ├── ImapEnable.cj            # ENABLE / * ENABLED（M4）
+    ├── ImapIdle.cj              # IdleSession / ImapEvent（M4）
+    ├── ImapMove.cj              # MoveResult 与非原子回退（M4）
+    ├── ImapSpecialUse.cj        # SpecialUse 属性（M4）
+    ├── ImapNamespace.cj         # NamespaceInfo / joinPath（M4）
+    ├── ImapCondStore.cj         # ModSeq / CHANGEDSINCE / UNCHANGEDSINCE（M4）
+    └── ImapSort.cj              # SortCriteria / ThreadAlgorithm / ThreadNode（M4）
 ```
 
 公开包名：`fountain::f_email`、`fountain::f_email.mime`、`fountain::f_email.smtp`、
@@ -225,6 +242,91 @@ base64/QP 的输出本来按 CRLF 生成，不重复归一。
 `EXPUNGE` 的序号移动是调用方最容易踩的坑：文档与返回结果都要提示，`UIDPLUS` 可用时优先
 `UID EXPUNGE`。
 
+### 7.4 IMAP 扩展（M4）
+
+七组扩展不是七个彼此独立的开关，而是一条**能力协商链**：`CAPABILITY` 给"能做什么"，
+`ENABLE` 给"已经生效什么"，两者 MUST 分开保存。`capabilities.supportsXxx` 只读前者，
+扩展 API 的放行条件是后者。
+
+#### ENABLE
+
+`ENABLE UTF8=ACCEPT QRESYNC` 一次发完，回来看 `* ENABLED` 的列表逐项置位。
+服务器回 `BAD`/`NO` 不算致命：只是对应能力保持"未启用"，后续调用该扩展时报
+`MailProtocolException(capability=…)`。**只有回显的能力才置位**——这是防止"客户端以为开了
+QRESYNC、服务器实际只发 EXPUNGE"的唯一屏障。
+
+`ENABLE` MUST 在已认证状态发送。未认证时调用走本地校验直接抛错，不浪费一次往返。
+
+#### IDLE
+
+```
+C: A0010 IDLE
+S: + idling
+S: * 173 EXISTS
+S: * 5 EXPUNGE
+C: DONE
+S: A0010 OK IDLE terminated
+```
+
+- 一个读线程只做三件事：读行、分类成 `ImapEvent`、入队。调用方通过
+  `nextEvent(timeout)` 取，**用户代码永不在读线程上执行**。
+- `DONE` 是唯一不带 tag 的命令，必须单独一条路径写出；在 IDLE 中调用任何普通命令
+  立即抛 `MailProtocolException("connection is idle")`，不排队——排队会把"用户以为并发、
+  实际串行"变成难以复现的超时。
+- 25 分钟计时器由可注入的时钟驱动，到点写 `DONE`、等 tagged `OK`、重新 `IDLE`。
+  测试里把时钟拨快，就能在毫秒内验证这条最容易被写错的逻辑。
+- `* BYE` 先作为 `Bye` 事件投递，再结束会话；此后 `nextEvent` 抛 `MailProtocolException`。
+- `close()` 走"发出 `DONE` → 等 tagged 回复（有上限）→ 停读线程"；从其它线程调用时，
+  底层 `close()` 会打断阻塞读，那条读以 `MailIoException` 结束，不会变成未捕获异常。
+
+#### MOVE
+
+服务器广告 `MOVE` 时用 `UID MOVE <set> <mailbox>`，一次往返完成"复制 + 标记删除 + 清除"，
+并解析 `[COPYUID]` 与 `* VANISHED`（QRESYNC 生效时）或 `* EXPUNGE`。
+
+没广告时的回退是三步：`UID COPY` → `UID STORE +FLAGS.SILENT (\Deleted)` →
+`UID EXPUNGE`（无 `UIDPLUS` 时退回 `EXPUNGE` 并记告警）。三步之间任何一步失败都会留下
+不一致状态，所以**默认不做**，要调用方写 `allowNonAtomicMove(true)` 才启用；
+`MoveResult.atomic` 如实回报。
+
+#### SPECIAL-USE / NAMESPACE
+
+`LIST` 的 attributes 里可能带 `\Sent` `\Drafts` `\Junk` `\Trash` `\Archive` `\All` `\Flagged`，
+解析到 `SpecialUse` 枚举；不认识的 `\Foo` 留在 attributes 里、不报错——服务器自定义属性是常态。
+`listSpecialUse()` 发 `LIST (SPECIAL-USE) "" "*"`，**不靠名字猜**（"Sent Items"/"已发送"/"Sent"
+三种都存在，猜必错）。
+
+`NAMESPACE` 给的是"前缀 + 分隔符"的树：`* NAMESPACE (("" "/")) NIL NIL` 表示个人命名空间从
+根开始、分隔符是 `/`，没有其它用户与共享命名空间。拼接走 `joinPath()`，避免出现
+`INBOX..Sent` 或 `INBOX//Sent`。
+
+#### UTF8=ACCEPT
+
+启用后三件事同时改变：邮箱名直传 UTF-8（不再 modified UTF-7）、`SEARCH` 的字符串直接 UTF-8
+且不再带 `CHARSET`、`APPEND` 接受 UTF-8 头部（`MimeWriter` 用 `utf8Headers=true` 序列化）。
+`SORT`/`THREAD` 的 `charset` 参数不受影响——那两个命令本来就必须显式声明字符集。
+反过来，未启用时必须完整走 M3 的 modified UTF-7 路径——**这个分支只有一个开关，不允许
+"能发就发 UTF-8"的尝试式降级**，否则一封邮件会在不同服务器上得到不同的邮箱名。
+
+#### CONDSTORE / QRESYNC
+
+`HIGHESTMODSEQ` 是邮箱级版本号：`FETCH (CHANGEDSINCE n)` 拿增量，`STORE (UNCHANGEDSINCE n)`
+做乐观并发控制。后者部分失败时服务器回 `* OK [MODIFIED <set>]`，这些项 MUST 进
+`StoreResult.modified` 且 MUST NOT 被当成成功——并发改标记的场景全靠它。
+
+QRESYNC 在 `SELECT` 的括号参数里带 `(uidvalidity modseq [known-uids [(known-seqs known-uids)]])`，
+服务器用 `* VANISHED (EARLIER) <set>` 补齐"你不在线时被删的"。`VANISHED` 与 `EXPUNGE`
+的区别是前者报 UID、后者报序号，两者都必须在普通命令的响应分发里被消费。
+
+#### SORT / THREAD
+
+`SORT` 的关键字集合固定（`ARRIVAL` `CC` `DATE` `FROM` `SIZE` `SUBJECT` `TO` + `REVERSE` 前缀），
+`SORT=DISPLAY` 时多出 `DISPLAY FROM`/`DISPLAY TO`。字符集只允许 `US-ASCII` 与 `UTF-8`
+（RFC 5256 要求服务器 MUST 支持这两者），不发别的字符集，也不做字符集转换。
+`THREAD` 的算法只有 `ORDEREDSUBJECT` 与 `REFERENCES` 两种，能力位分别是
+`THREAD=ORDEREDSUBJECT` / `THREAD=REFERENCES`——只广告一种时请求另一种 MUST 抛错，
+不能悄悄换成另一种算法给出"看起来对"的线程树。
+
 ## 8. 错误映射
 
 | 场景 | 异常 | 可重试 |
@@ -239,6 +341,10 @@ base64/QP 的输出本来按 CRLF 生成，不重复归一。
 | 头部/正文/literal 超限 | `MailLimitException(kind=…)` | ❌ |
 | MIME 结构损坏（严格模式） | `MimeException` | ❌ |
 | 已关闭连接上操作 | `MailProtocolException("client is closed")` | ❌ |
+| 扩展未广告或被 `ENABLE` 拒绝后仍被调用 | `MailProtocolException(capability=…)` | ❌ |
+| IDLE 中调用普通命令 | `MailProtocolException("connection is idle")` | ❌ |
+| IDLE 期间服务器断开 / 读失败 | `IdleSession` 以 `MailIoException` 结束，连接置为不可用 | ✅ |
+| `STORE (UNCHANGEDSINCE)` 部分失败 | 不抛，失败的序号进 `StoreResult.modified` | — |
 
 `send()` 的分界：拿到整封邮件的最终回复就返回 `SendReport`（含部分失败）；
 只有连接/协议/认证层面的失败才抛异常。这样调用方一个 `try` 管网络问题、一个 `report` 管业务拒收。
@@ -249,6 +355,7 @@ base64/QP 的输出本来按 CRLF 生成，不重复归一。
 |---|---|---|
 | 单元 | 纯函数 | base64/QP/RFC 2047/RFC 2231/地址/日期/头折行/boundary 扫描 |
 | 协议 | `ScriptedTransport` | 逐字节断言命令、多行回复、literal、dot-stuffing、错误码、1 字节读 |
+| IDLE | 读线程 + 可注入时钟 | `+`/推送/`DONE`/tagged 时序、25 分钟重发、事件顺序、跨线程 `close()` 打断阻塞读、服务器断连 |
 | 集成 | 本机 `TcpServerSocket` 假服务器 | 真实 socket、超时、断连、TLS 握手 |
 | TLS | 自签证书 + `TlsSocket.server`（工具链支持时） | 证书校验成功/失败、STARTTLS、主机名不匹配 |
 | 互操作 | 手工（Postfix / Dovecot / 163） | 真实服务商差异 |
@@ -261,6 +368,11 @@ QP 软换行与行尾空格、10 层嵌套、单行 10 KB 头部。
 恶意样本单列一组测试：头注入、地址注入、100 层嵌套、10 万 part、100 MB literal、
 base64 炸弹、递归 `message/rfc822`、POP3 正文含 `.\r\n`、SMTP 正文含裸 LF。
 
+M4 的脚本语料单列一组：IDLE 期间插入 `* BYE`、`DONE` 之后才到的 untagged、
+`ENABLE` 回空列表、`MOVE` 回 `COPYUID` 但无 `VANISHED`、`LIST (SPECIAL-USE)` 带自定义属性、
+`NAMESPACE` 三段全 `NIL`、`MODIFIED` 列出半数序号、`VANISHED (EARLIER)` 与普通 `VANISHED` 混排、
+`SORT` 结果含重复序号、`THREAD` 一棵树里 1000 个兄弟节点。
+
 ## 10. 里程碑与验收
 
 | 里程碑 | 范围 | 出口 |
@@ -269,9 +381,12 @@ base64 炸弹、递归 `message/rfc822`、POP3 正文含 `.\r\n`、SMTP 正文�
 | M1 | 消息模型 + MIME + SMTP | 能发纯文本/HTML/附件；语料全过；注入测试全过 |
 | M2 | POP3 | 登录、列表、UIDL、流式 RETR、TOP、DELE/QUIT；大邮件内存恒定 |
 | M3 | IMAP 核心（含 `ID`、`UIDPLUS`、`UNSELECT`） | 读 INBOX、条件搜索、取整封、标记已读、追加已发送 |
+| M4 | IMAP 扩展七组（`IDLE`/`MOVE`/`SPECIAL-USE`/`NAMESPACE`/`UTF8=ACCEPT`/`CONDSTORE`+`QRESYNC`/`SORT`+`THREAD`，外加支撑它们的 `ENABLE` 协商） | IDLE 事件流可用且 25 分钟重建正确；七组扩展在不支持的服务器上全部给出明确错误；Dovecot 真机跑通 IDLE + MOVE + NAMESPACE + SORT |
 
 验收门槛沿用设计文档 G1–G6：单元全过、三协议脚本全过、1 字节压力全过、
 10 MB 附件 RSS 增量 < 10 MB、注入与炸弹样本全被拒、至少两个真实服务器互操作通过。
+M4 追加两条：IDLE 在 25 分钟边界上能自行重建且不丢事件；七组扩展在"服务器不支持"时
+全部给出可断言的具体错误，而不是静默退化。
 
 ## 11. P-0：动工前的三个硬验证
 
@@ -287,6 +402,9 @@ base64 炸弹、递归 `message/rfc822`、POP3 正文含 `.\r\n`、SMTP 正文�
 ## 12. 本设计明确不做
 
 S/MIME/PGP 验签解密、HTML 渲染与清洗、代理与连接池、OAuth2 token 刷新、
-IDN/punycode、IMAP IDLE/MOVE/SPECIAL-USE/UTF8=ACCEPT（M4 另立变更）。
+IDN/punycode、IMAP `METADATA`/`QUOTA`/`NOTIFY`/`CHUNKING`、`SCRAM-SHA-256` 认证、自动重连。
 这些不是"以后再说"，而是**接口上已经留好位置**：`TransportFactory` 可换代理实现，
-`MimeAction` 可扩展，`ImapCapabilities.supportsXxx` 已能读到能力位。
+`MimeAction` 可扩展，`ImapCapabilities.supportsXxx` 已能读到这些能力位，
+`METADATA`/`QUOTA` 只需在 `ImapClient` 上加两条命令而不改现有 API。
+`IDLE`/`MOVE`/`SPECIAL-USE`/`NAMESPACE`/`UTF8=ACCEPT`/`CONDSTORE`/`QRESYNC`/`SORT`/`THREAD`
+在 M4 已实现，不再是排除项。

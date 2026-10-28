@@ -147,9 +147,9 @@ MUST NOT 在 DATA 状态下发送 `RSET`。`AllOrNothing` 策略 MUST NOT 将 `D
 
 正文含 8 位字节且服务器支持 `8BITMIME` 时 SHALL 使用 `BODY=8BITMIME`；不支持时
 MUST 由 `MimeWriter` 强制 QP/base64，MUST NOT 发送裸 8 位字节。
-信封地址含非 ASCII 且服务器支持 `SMTPUTF8` 时 MUST 附加 `SMTPUTF8` 并保持头部 UTF-8；
-不支持时 MUST 抛 `MailProtocolException`。仅显示名或主题含非 ASCII 时 MUST 走 RFC 2047，
-MUST NOT 要求 `SMTPUTF8`。
+信封地址含非 ASCII 且服务器支持 `SMTPUTF8` 时 MUST 附加 `SMTPUTF8` 并保持头部 UTF-8
+（序列化时以 `MimeWriteOptions.utf8Headers=true` 写出）；不支持时 MUST 抛 `MailProtocolException`。
+仅显示名或主题含非 ASCII 时 MUST 走 RFC 2047，MUST NOT 要求 `SMTPUTF8`。
 
 #### Scenario: 无 8BITMIME
 
