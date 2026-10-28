@@ -4,16 +4,16 @@
 
 ```
 $ cd f_email && cjpm build      # 成功，无新增告警
-$ cd f_email && cjpm test       # 259 通过 / 0 失败 / 0 错误
+$ cd f_email && cjpm test       # 261 通过 / 0 失败 / 0 错误
 ```
 
-测试分布：model 75、mime 22、transport 26、smtp 28、pop3 25、imap 83，合计 259。
+测试分布：model 75、mime 22、transport 26、smtp 28、pop3 25、imap 85，合计 261。
 
 ## G1 — 单元测试与编解码往返
 
 | 项 | 结论 | 证据 |
 |---|---|---|
-| 全部单元测试通过 | ✅ | `cjpm test`：259 通过、0 失败 |
+| 全部单元测试通过 | ✅ | `cjpm test`：261 通过、0 失败 |
 | QP / base64 / RFC 2047 / RFC 2231 往返 100% | ✅ | `Codec_test`（往返幂等、跨块边界、异常样本）、`ContentType_test`、`MimeParser_test.roundTrips*` |
 
 ## G2 — 三协议脚本测试
@@ -92,4 +92,4 @@ $ cd f_email && cjpm test       # 259 通过 / 0 失败 / 0 错误
 | IMAP literal 无上限 | `maxLiteralBytes`（默认 64 MB）超限关闭连接并抛 `MailLimitException(Literal)` | `literalOverLimitClosesConnection` |
 | multipart epilogue 丢失 | `MultipartScanner.readEpilogue()` 保留结束 boundary 之后的内容 | `keepsPreambleAndEpilogue` |
 
-仍未解决：10.17 的完整 IDLE 矩阵、10.18 G6 互操作、`walk` 仍先建树，以及 verify 报告中的其余 WARNING 与 SUGGESTION。
+仍未解决：10.17 的 DONE 后 untagged 与 IDLE onLine 两个用例、`walk` 仍先建树，以及 verify 报告中的其余 WARNING 与 SUGGESTION。G6 已用 QQ 邮箱实测通过（见上）。
