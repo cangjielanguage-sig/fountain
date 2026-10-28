@@ -39,8 +39,8 @@ public class DeepSeekDialect <: ProviderDialect {
         let base = trimTrailingSlash(conf.url)
         match(kind){
             case LLMApiKind.Chat => base + conf.option('chatPath', '/chat/completions')
-            case LLMApiKind.Responses =>
-                throw IllegalArgumentException('deepseek does not support the responses api, use chat instead')
+            // 实测（2026-10-28）：DeepSeek 提供 `/responses`，支持 input_image 与 reasoning 输出
+            case LLMApiKind.Responses => base + conf.option('responsesPath', '/responses')
         }
     }
 

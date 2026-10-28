@@ -1871,7 +1871,7 @@ f_httpclient/src/
 | provider | chat 路径 | responses 路径 | 思考字段形态 | tools 形态 | usage 差异 | 联调状态 |
 |---|---|---|---|---|---|---|
 | zhipu | `/chat/completions` | 无 | `thinking:{type,clear_thinking}`（是否支持取决于模型，见 5.8） | 标准 | `prompt_tokens_details.cached_tokens` | 未联调 |
-| deepseek | `/chat/completions` | 无（`deepseek-flash` 支持图片输入，`input_modalities=[text,image]`，实测可识图） | 无该字段（模型自带思考，`deepseek-flash` 直接返回 `reasoning_content`） | 标准（`type:'function'` + 嵌套 `function`） | `prompt_tokens_details.cached_tokens`、`completion_tokens_details.reasoning_tokens`、`prompt_cache_hit_tokens/miss_tokens` | **已联调（2026-10-27）**：非流式 / 流式 / 工具调用 / usage / reasoning 五项通过 |
+| deepseek | `/chat/completions` | `/responses`（实测 2026-10-28 可用，支持 `input_image` 与 `reasoning` 输出） | 无该字段（模型自带思考，`deepseek-flash` 直接返回 `reasoning_content`） | 标准（`type:'function'` + 嵌套 `function`） | `prompt_tokens_details.cached_tokens`、`completion_tokens_details.reasoning_tokens`、`prompt_cache_hit_tokens/miss_tokens` | **已联调（2026-10-27）**：非流式 / 流式 / 工具调用 / usage / reasoning 五项通过 |
 | ark | `/chat/completions` | 未知（可能无） | `thinking:{type}` | 标准 | 标准 | 未联调 |
 | dashscope | `/compatible-mode/v1/chat/completions` | 无 | `enable_thinking` | 标准 | 标准 | 未联调 |
 | siliconflow | `/v1/chat/completions` | 无 | 依模型 | 标准 | 标准 | 未联调 |

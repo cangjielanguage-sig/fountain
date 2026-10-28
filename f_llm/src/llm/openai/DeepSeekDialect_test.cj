@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_llm.llm.openai
 
+import std.collection.HashMap
 import std.unittest.*
 import std.unittest.testmacro.*
 
@@ -34,14 +35,13 @@ public class DeepSeekDialectTest {
     }
 
     @TestCase
-    func testResponsesNotSupported(): Unit {
-        var thrown = false
-        try{
-            DeepSeekDialect().endpoint(LLMApiKind.Responses, mkConf('https://api.deepseek.com', 'sk-1'))
-        }catch(e: IllegalArgumentException){
-            thrown = true
-        }
-        @Expect(thrown, true)
+    func testResponsesEndpoint(): Unit {
+        // 实测（2026-10-28）：DeepSeek 有 `/responses`，且支持 input_image
+        let dialect = DeepSeekDialect()
+        let conf = mkConf('https://api.deepseek.com', 'sk-1')
+        @Expect(dialect.endpoint(LLMApiKind.Responses, conf), 'https://api.deepseek.com/responses')
+        conf.setConf(HashMap<String, String>([('responsesPath', '/v1/responses')]))
+        @Expect(dialect.endpoint(LLMApiKind.Responses, conf), 'https://api.deepseek.com/v1/responses')
     }
 
     @TestCase

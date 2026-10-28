@@ -93,11 +93,18 @@ public struct ResponsesMapper {
     public static func parse(resp: JsonObject): LLMResp {
         let out = LLMResp()
         out.finishReason = stringOf(resp, 'status')
+        var reasoning = ''
         if(let Some(rawOutput) <- resp.get('output')){
             for(item in rawOutput.asArray().getItems()){
                 let obj = item.asObject()
                 match(stringOf(obj, 'type')){
-                    case 'message' => out.messages.add(AssistantMessage(textOfMessage(obj)))
+                    case 'reasoning' => reasoning += textOfReasoning(obj)
+                    case 'message' =>
+                        let assistant = AssistantMessage(textOfMessage(obj))
+                        if(!reasoning.isEmpty()){
+                            assistant.reasoningContent = reasoning
+                        }
+                        out.messages.add(assistant)
                     case 'function_call' =>
                         let toolMessage = ToolCallMessage()
                         toolMessage.addFunctionCall(
@@ -120,6 +127,20 @@ public struct ResponsesMapper {
         out
     }
 
+    /** `output[].type == "reasoning"` 的正文在 `content[].type == "reasoning_text"` */
+    private static func textOfReasoning(obj: JsonObject): String {
+        let text = StringBuilder()
+        if(let Some(rawContent) <- obj.get('content')){
+            for(part in rawContent.asArray().getItems()){
+                let item = part.asObject()
+                if(stringOf(item, 'type') == 'reasoning_text'){
+                    text.append(stringOf(item, 'text'))
+                }
+            }
+        }
+        text.toString()
+    }
+
     private static func textOfMessage(obj: JsonObject): String {
         let text = StringBuilder()
         if(let Some(rawContent) <- obj.get('content')){
@@ -133,10 +154,36 @@ public struct ResponsesMapper {
         text.toString()
     }
 
+    /**
+     * Responses 的多模态与 Chat 不同：内容片段类型是 `input_text` / `input_image`，
+     * 且 `image_url` 是**字符串**（Chat 那边是 `{url, detail}` 对象）。
+     */
+    private static func contentOf(message: ChatMessage): JsonValue {
+        if(!message.multimodal){
+            return JsonString(message.content)
+        }
+        let items = ArrayList<JsonValue>()
+        for(part in message.parts){
+            let wire = JsonObject()
+            if(part.`type` == PART_TYPE_IMAGE){
+                wire.add('type', 'input_image')
+                wire.add('image_url', part.imageUrl)
+                if(!part.detail.isEmpty()){
+                    wire.add('detail', part.detail)
+                }
+            }else{
+                wire.add('type', 'input_text')
+                wire.add('text', part.text)
+            }
+            items.add(wire)
+        }
+        JsonArray(list: items)
+    }
+
     private static func messageToJson(message: ChatMessage): JsonObject {
         let obj = JsonObject()
         obj.add('role', message.role)
-        obj.add('content', message.content)
+        obj.add('content', contentOf(message))
         match(message){
             case tool: ToolCallMessage =>
                 let calls = ArrayList<JsonValue>()

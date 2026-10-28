@@ -123,6 +123,38 @@ public class ChatCompletionsResponseTest {
     }
 
     @TestCase
+    func testResponsesBuildsMultimodalInput(): Unit {
+        let params = LLMParams(model: 'chat-pro', messages: ArrayList<ChatMessage>())
+        let user = UserMessage('看图')
+        user.addImage('data:image/png;base64,AAA', detail: 'low')
+        params.messages.add(user)
+        let body = ResponsesMapper.build(facadeConf(1, 'openai', 'gpt-4o'), params, false)
+        let input = body.get('input')?.asArray() ?? JsonArray()
+        let content = input.getItems()[0].asObject().get('content')?.asArray() ?? JsonArray()
+        @Expect(content.getItems().size, 1)
+        let part = content.getItems()[0].asObject()
+        @Expect(part.get('type')?.asString().value ?? '', 'input_image')
+        // Responses 的 image_url 是字符串，不是 Chat 那种对象
+        @Expect(part.get('image_url')?.asString().value ?? '', 'data:image/png;base64,AAA')
+        @Expect(part.get('detail')?.asString().value ?? '', 'low')
+    }
+
+    @TestCase
+    func testResponsesBuildsTextParts(): Unit {
+        let params = LLMParams(model: 'chat-pro', messages: ArrayList<ChatMessage>())
+        let user = UserMessage('说明')
+        user.addText('第一段')
+        user.addText('第二段')
+        params.messages.add(user)
+        let body = ResponsesMapper.build(facadeConf(1, 'openai', 'gpt-4o'), params, false)
+        let input = body.get('input')?.asArray() ?? JsonArray()
+        let content = input.getItems()[0].asObject().get('content')?.asArray() ?? JsonArray()
+        @Expect(content.getItems().size, 2)
+        @Expect(content.getItems()[0].asObject().get('type')?.asString().value ?? '', 'input_text')
+        @Expect(content.getItems()[1].asObject().get('text')?.asString().value ?? '', '第二段')
+    }
+
+    @TestCase
     func testResponsesBuildSplitsInstructions(): Unit {
         let params = LLMParams(model: 'chat-pro', messages: ArrayList<ChatMessage>())
         params.messages.add(SystemMessage('你是助手'))
@@ -132,6 +164,19 @@ public class ChatCompletionsResponseTest {
         let input = body.get('input')?.asArray() ?? JsonArray()
         @Expect(input.getItems().size, 1)
         @Expect(input.getItems()[0].asObject().get('role')?.asString().value ?? '', 'user')
+    }
+
+    @TestCase
+    func testResponsesParsesReasoning(): Unit {
+        let json = JsonValue.fromStr('{"status":"completed","output":[{"type":"reasoning","content":[{"type":"reasoning_text","text":"想一下"}]},{"type":"message","content":[{"type":"output_text","text":"红色"}]}],"usage":{"input_tokens":3,"output_tokens":1,"total_tokens":4}}').asObject()
+        let resp = ResponsesMapper.parse(json)
+        @Expect(resp.messages.size, 1)
+        @Expect(resp.messages[0].content, '红色')
+        if(let assistant: AssistantMessage <- resp.messages[0]){
+            @Expect(assistant.reasoningContent, '想一下')
+        }else{
+            @Expect('AssistantMessage expected', 'got other')
+        }
     }
 
     @TestCase

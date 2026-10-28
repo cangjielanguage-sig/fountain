@@ -330,4 +330,9 @@ PostgreSQL 18.4（WSL，`postgres://fountain:fountain@127.0.0.1:5432/fountain_te
 删除 `SearchMediartor` / `AbstractSearcher` / `GLMSearcher`（旧的「按引擎名 new 一个 Searcher」链路），搜索能力现在只有 `SearchProvider` 一条路（`DeepSeekSearchProvider` 已实调）。
 
 - `SearchResult`（`title/content/link/...`）单独保留在 `search/SearchResult.cj`：`KnowledgeEntity` 的 `searcher: (String) -> ArrayList<SearchResult>` 是公开注入点，直接删会破坏下游编译；新代码用 `SearchResultItem`。
-- `LLMFinder` 一并删除（只剩 `LLMCandidateProvider` 一处引用），后者改为从 `LLMConfs.holder().all()` 取配置——工具借凭据的来源与门面完全一致，不再有「finder 查一次库、holder 查一次库」两套。
+- `LLMFinder` 一并删除（只剩 `LLMCandidateProvider` 一处引用），后者改为从 `LLMConfs.holder().all()` 取配置——工具借凭据的来源与门面完全一致，不再有「finder 查一次库、holder 查一次库」两套。### Responses 多模态与 DeepSeek Responses 实测（2026-10-28）
+
+- **推翻了「DeepSeek 没有 Responses」的假设**：实测 `POST https://api.deepseek.com/responses` 返回标准 `object:"response"`（`/v1/responses` 也可用）。`DeepSeekDialect` 的 Responses 端点已改为 `base + /responses`（可被 `conf['responsesPath']` 覆盖），不再抛「不支持」。
+- **Responses 的多模态与 Chat 不同**：内容片段是 `input_text` / `input_image`，且 `image_url` 是**字符串**（Chat 是 `{url, detail}` 对象）；`ResponsesMapper.contentOf` 负责这个改写。
+- **reasoning 输出**：Responses 的 `output[].type == "reasoning"`，正文在 `content[].type == "reasoning_text"`；解析时先累积、挂到紧随其后的 `message` 上（`AssistantMessage.reasoningContent`）。
+- 真机验证（同一把 DeepSeek Key）：Chat 路径返回 "solid, uniform block of bright red color"，Responses 路径返回 "solid red image"，`status=completed` — 两条多模态链路都通。

@@ -1582,7 +1582,7 @@ user.addImage('data:image/png;base64,...', detail: 'high')   // detail: auto|low
 let resp = LLM.chat(candidates, LLMParams(model: 'chat-pro', messages: ArrayList<ChatMessage>([user])))
 ```
 
-`deepseek-flash` 实测支持图片输入（`input_modalities=["text","image"]`，32×32 纯红图能答出"红色"）。`Responses` 路径暂未做图片。
+`deepseek-flash` 实测支持图片输入（`input_modalities=["text","image"]`，32×32 纯红图能答出"红色"）。`Responses` 路径同样支持多模态（`input_image`，`image_url` 是字符串）：DeepSeek 的 `/responses` 实测可用，`LLM.respond` 直接发图即可。
 
 ```cj
 // 向量化：按 llmName 选配置（llmType=embedding），失败转移与熔断与 chat 同构
