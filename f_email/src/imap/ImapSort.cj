@@ -27,6 +27,9 @@ public enum SortCriterion <: ToString {
     | Size
     | Subject
     | To
+    /** `SORT=DISPLAY`：按显示名排序（RFC 5957）。 */
+    | DisplayFrom
+    | DisplayTo
 
     public func toString(): String {
         match (this) {
@@ -37,6 +40,15 @@ public enum SortCriterion <: ToString {
             case Size => "SIZE"
             case Subject => "SUBJECT"
             case To => "TO"
+            case DisplayFrom => "DISPLAY FROM"
+            case DisplayTo => "DISPLAY TO"
+        }
+    }
+
+    public func requiresDisplayCapability(): Bool {
+        match (this) {
+            case DisplayFrom | DisplayTo => true
+            case _ => false
         }
     }
 }
@@ -131,7 +143,22 @@ public class ImapSort {
         charset: String,
         criteria: SearchCriteria
     ): Array<Int64> {
-        client.requireCapability("SORT")
+        if (!client.capabilities.supportsSort) {
+            throw MailProtocolException("服务器未广告 SORT 能力", capability: "SORT")
+        }
+        var display = false
+        for (key in keys) {
+            if (key.criterion.requiresDisplayCapability()) {
+                display = true
+                break
+            }
+        }
+        if (display && !client.capabilities.supportsSortDisplay) {
+            throw MailProtocolException(
+                "服务器未广告 SORT=DISPLAY，不能使用 DISPLAY FROM / DISPLAY TO",
+                capability: "SORT=DISPLAY"
+            )
+        }
         client.requireSelected(prefix)
         let keysText = renderKeys(keys)
         let result = client.execute("${prefix} (${keysText}) ${requireCharset(charset)} ${criteria}")

@@ -369,6 +369,11 @@ public class LineChannel <: InputStream & OutputStream & Resource {
     }
 
     private func applyReadTimeout(): Unit {
+        if (softTimeout) {
+            // readLineSoft 已经把 socket 超时设成 pollInterval；这里不能再用
+            // "无 deadline ⇒ None" 覆盖它，否则 IDLE 的软超时永远不会触发。
+            return
+        }
         if (let Some(t) <- timeouts) {
             if (let Some(d) <- deadline) {
                 let remaining = d.remaining()

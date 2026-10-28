@@ -262,6 +262,47 @@ public class ImapSort_test {
         client.close()
     }
 
+    @TestCase
+    public func sortDisplayKeysUseDisplayCapability(): Unit {
+        let (client, transport) = openSelected("* SORT 2\r\nA0003 OK SORT completed\r\n")
+        let order = ImapSort(client).sort(
+            [SortKey(SortCriterion.DisplayFrom)],
+            "UTF-8",
+            SearchCriteria.all()
+        )
+        @Assert(order.size, 1)
+        @Assert(order[0], 2)
+        @Assert(
+            transport.recordedText().contains("A0003 SORT (DISPLAY FROM) UTF-8 ALL"),
+            true
+        )
+        client.close()
+    }
+
+    @TestCase
+    public func sortDisplayKeysRequireSortDisplayCapability(): Unit {
+        let transport = ScriptedTransport(
+            server: greeting() + "* CAPABILITY IMAP4rev1 SORT\r\nA0000 OK CAPABILITY completed\r\n" +
+                "A0001 OK LOGIN completed\r\n* 1 EXISTS\r\nA0002 OK [READ-WRITE] SELECT completed\r\n"
+        )
+        let client = ImapClient.builder("localhost", port: 143)
+            .requireEncryption(false)
+            .allowPlaintextAuth(true)
+            .transport(transport)
+            .build()
+        client.login("alice", Secret.of("pw"))
+        client.select("INBOX")
+        var capability: ?String = None
+        try {
+            ImapSort(client).sort([SortKey(SortCriterion.DisplayTo)], "UTF-8", SearchCriteria.all())
+        } catch (e: MailProtocolException) {
+            capability = e.capability
+        }
+        @Assert(capability ?? "", "SORT=DISPLAY")
+        @Assert(transport.recordedText().contains("DISPLAY TO"), false)
+        client.close()
+    }
+
     /** 只允许 US-ASCII 与 UTF-8，别的字符集本地就拒掉。 */
     @TestCase
     public func otherCharsetsAreRejected(): Unit {

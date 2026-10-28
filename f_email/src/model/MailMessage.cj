@@ -18,6 +18,7 @@ package fountain::f_email.model
 import std.collection.ArrayList
 import cangjie_tpc::charset4cj.charset.Charsets
 import cangjie_tpc::charset4cj.charset.encoding.Charset
+import fountain::f_random.RandomString
 
 /**
  * 一封邮件：根 [MimePart] 的薄包装。
@@ -256,13 +257,13 @@ public class MailMessageBuilder {
             body = leaves[0].body
             currentType = leaves[0].headers.get("Content-Type") ?? "text/plain; charset=utf-8"
         } else if (leaves.size > 1) {
-            let boundary = "=_fountain_alternative"
+            let boundary = newBoundary()
             currentType = "multipart/alternative; boundary=\"${boundary}\""
             body = PartBody.Parts(Multipart(boundary, parts: leaves.toArray()))
         }
 
         if (attachmentList.size > 0) {
-            let boundary = "=_fountain_mixed"
+            let boundary = newBoundary()
             let mixedParts = ArrayList<MimePart>()
             if (currentType.size > 0) {
                 let mainHeaders = HeaderMap()
@@ -303,6 +304,11 @@ public class MailMessageBuilder {
         let headers = HeaderMap()
         headers.set("Content-Type", "text/${subtype}; charset=${charset.toString().toAsciiLower()}")
         MimePart(headers: headers, body: PartBody.Text(content))
+    }
+
+    /** 流式生成无法预读全文，32 位随机 + 固定前缀的碰撞概率可以忽略。 */
+    private func newBoundary(): String {
+        "=_fountain_${RandomString().randomLowerHex(32)}"
     }
 
 }

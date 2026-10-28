@@ -113,6 +113,27 @@ public class MailMessage_test {
     }
 
     @TestCase
+    public func boundariesAreUniquePerMessage(): Unit {
+        let first = MailMessage.builder()
+            .from("a@x.com")
+            .to("b@y.com")
+            .text("plain")
+            .html("<b>html</b>")
+            .build()
+        let second = MailMessage.builder()
+            .from("a@x.com")
+            .to("b@y.com")
+            .text("plain")
+            .html("<b>html</b>")
+            .build()
+        let firstBoundary = first.contentType().boundary() ?? ""
+        let secondBoundary = second.contentType().boundary() ?? ""
+        @Assert(firstBoundary.startsWith("=_fountain_"), true)
+        @Assert(firstBoundary.size, 43)
+        @Assert(firstBoundary != secondBoundary, true)
+    }
+
+    @TestCase
     public func headerOnlyMessageHasNoText(): Unit {
         let message = MailMessage.builder().from("a@x.com").to("b@y.com").build()
         @Assert(message.text().isNone(), true)

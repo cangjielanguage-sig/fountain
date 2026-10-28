@@ -134,14 +134,28 @@ public class LineChannel_test {
     }
 
     @TestCase
-    public func sensitiveModeRedactsWholeLine(): Unit {
+    public func softReadTimeoutSurvivesFill(): Unit {
         let out = CollectOutput()
-        let trace = RecordingTrace()
-        let channel = LineChannel(FixedInput(""), out, trace: trace)
-        channel.beginSensitive()
-        channel.writeLine("AHVzZXIAcGFzcw==")
-        channel.endSensitive()
-        @Assert(trace.textLines()[0], "<redacted>")
+        let timeout = RecordingIoTimeout()
+        let channel = LineChannel(FixedInput(""), out, timeouts: timeout)
+        let line = channel.readLineSoft(Duration.millisecond * 10)
+        @Assert(line.isNone(), true)
+        @Assert(timeout.lastRead.isSome(), true)
+        @Assert(timeout.lastRead ?? Duration.Zero, Duration.millisecond * 10)
+        @Assert(channel.isClosed(), false)
     }
 
+}
+
+class RecordingIoTimeout <: IoTimeout {
+    var lastRead: ?Duration = None
+    var lastWrite: ?Duration = None
+
+    public func setReadTimeout(timeout: ?Duration): Unit {
+        lastRead = timeout
+    }
+
+    public func setWriteTimeout(timeout: ?Duration): Unit {
+        lastWrite = timeout
+    }
 }

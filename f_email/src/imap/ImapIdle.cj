@@ -77,6 +77,7 @@ public class ImapIdleSession <: Resource {
     private let channel: LineChannel
     private let queue = ArrayList<ImapEvent>()
     private var head: Int64 = 0
+    private let maxQueuedEvents: Int64 = 1024
     private let mutex: Mutex
     private let notEmpty: Condition
     private let writeMutex = Mutex()
@@ -325,6 +326,21 @@ public class ImapIdleSession <: Resource {
 
     private func enqueue(event: ImapEvent): Unit {
         synchronized(mutex) {
+            if (queue.size - head >= maxQueuedEvents) {
+                // 有界队列：消费者长期不取时丢弃最旧事件，避免内存无限增长。
+                head += 1
+                if (head > maxQueuedEvents && head * 2 > queue.size) {
+                    let rest = ArrayList<ImapEvent>()
+                    for (i in head..queue.size) {
+                        rest.add(queue[i])
+                    }
+                    queue.clear()
+                    for (item in rest) {
+                        queue.add(item)
+                    }
+                    head = 0
+                }
+            }
             queue.add(event)
             notEmpty.notify()
         }

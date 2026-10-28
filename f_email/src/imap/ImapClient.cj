@@ -1629,7 +1629,7 @@ public class ImapClientBuilder {
         let timeouts = timeoutsValue
         let transport = match (factory) {
             case Some(value) => value
-            case None => SocketTransportFactory(timeouts: timeouts, tlsConfig: tlsConfigValue)
+            case None => SocketTransportFactory(timeouts: timeouts, tlsConfig: tlsConfigValue, maxLine: 8192)
         }
         let connection = transport.connect(host, port, tlsModeValue)
         var channel = connection.channel()
