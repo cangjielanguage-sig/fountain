@@ -43,7 +43,7 @@
 
 | 项 | 结论 |
 |---|---|
-| 协议兼容 | 一个 `OpenAIContext` 同时支持 **Chat Completions（流式/非流式）** 与 **Responses API（流式/非流式）**，协议差异收敛在 `LLMApiKind` + 报文映射层 |
+| 协议兼容 | `LLM` 门面同时支持 **Chat Completions（流式/非流式）** 与 **Responses API（流式/非流式）**；协议差异收敛在 `LLMApiKind` + `ProviderDialect` + 报文映射层（`ChatCompletionsMapper` / `ResponsesMapper`） |
 | 流式底座 | **SSE 客户端由 `f_httpclient` 提供**（`HttpResponse.sseReader()` + `SseReader`），`f_llm` 只消费增量、做归并；本模块不复制解析器 |
 | 供应商差异 | 不按供应商继承子类，`ProviderDialect` **表驱动**（补丁式改写报文、自定端点、自定鉴权头）。所有平台都兼容 OpenAI 报文，只是取值不同 |
 | 思考能力 | **由模型决定，不由平台决定**：`ThinkingCapability`（`None` / `Always` / `Toggle`）按 `actualLlmName` 解析；`ProviderDialect` 只负责"用哪个字段表达"（5.8） |
@@ -93,7 +93,7 @@ LLMContextMediator.access(agentId, session, llmType, params)
 | C2 | `LLMConf` 只有 6 列，没有供应商/开关/温度/鉴权 | `f_llm/src/model/po/LLMConf.cj:25-37`：`id / llm_name / llm_type / llm_url / conf / threshold` |
 | C3 | `conf` 列被当 Bearer Token 用 | `AbstractLLMContext.cj:28` → `util/http.cj:20` `client.header("Authorization", 'Bearer ${auth}')` |
 | C4 | 没有任何流式路径 | 4 处调用全是 `post(...).readJson()`：`GLMContext.cj:104`、`:138`、`search/GLMSearcher.cj:35`、`embedding/GLMEmbeddingContext.cj:33` |
-| C5 | 没有 Responses API 概念 | 全仓 `openai\|responses` 只命中 `LLMParams.response_format`（`LLMParams.cj:27`） |
+| C5 | 没有 Responses API 概念（**改造前基线**；2026-10-28 实测 DeepSeek 已提供 `/responses`，本模块已实现） | 全仓 `openai\|responses` 只命中 `LLMParams.response_format`（`LLMParams.cj:27`） |
 | C6 | 搜索"引擎"藏在模型名里 | `GLMSearcher.cj:25` `this.engine = super.name.split('\|')[1]`，即 `name='glm\|search-pro'` |
 | C7 | 没有 MCP、没有余额查询 | `f_llm/cjpm.toml:21-35` 无 `f_mcp`；全仓 `balance\|余额` 在 `f_llm` 下零命中 |
 
@@ -178,7 +178,7 @@ LLMContextMediator.access(agentId, session, llmType, params)
 2. **不做全局可变状态**。所有共享结构（conf 索引、context 缓存、工具表、余额缓存）都走 `ConcurrentHashMap` + `Mutex` 双检，与既有 `LLMContextMediator.load` 的写法一致；除工具表首次构建外，不做跨请求持有锁。多会话并发是**常态**，不是边界情况。
 3. **资源所有权清晰**。`HttpClient` / `McpClient` / SSE 响应体一律 `resource(...)` 或显式 `close()` 收尾；`chatStream` 中途抛异常也必须关闭底层流——`f_httpclient` 每次请求都新建底层 client（`httpclient.cj:133-137`），漏关的代价比常规连接池更高。
 
-取消语义（M2 引入）：`LLMRequest` 加 `cancelToken: ?CancelToken`，只承诺"尽快停止读流并关闭连接"，**不承诺**上游停止计费；回调里抛异常即视为取消，原始异常向上传播，不被吞成 `LLMException`。
+取消语义（**设计稿，未实现**）：`LLMRequest` 加 `cancelToken: ?CancelToken`，只承诺"尽快停止读流并关闭连接"，**不承诺**上游停止计费；回调里抛异常即视为取消，原始异常向上传播，不被吞成 `LLMException`。当前流式入口没有取消参数，只能靠 `idleTimeout` 收尾。
 
 ---
 
@@ -405,25 +405,23 @@ executor.???.SET('conf', LLMConfCodec.toColumn(conf.conf))   // 具体 DAO 写�
 
 `conf` 是"平台方言 + 运维开关"的开放口袋，**只放字符串**，键名小驼峰。已约定的键：
 
-| 键 | 用途 | 谁读 |
-|---|---|---|
-| `apiStyle` | `chat`（默认）/ `responses` | `ProviderDialect.endpoint` |
-| `chatPath` / `responsesPath` | 覆盖默认路径（默认 `/chat/completions`、`/responses`） | 同上 |
-| `organization` / `project` | OpenAI 组织/项目头 | `OpenAIDialect` |
-| `extraHeaders` | JSON 对象串，原样并入请求头 | `authHeaders` |
-| `stream` | `false` 时该 conf 禁流式（老网关不支持） | `LLMConf.streamable` |
-| `llmType` | 默认 `text`；embedding 等非文本模型必须显式标注 | `EmbeddingContextMediator` |
-| `thinking` | 覆盖模型思考能力：`none` / `always` / `toggle`；不写则按 5.8 的解析顺序推断 | `ModelCapabilities` |
-| `tokenThreshold` | 该平台该模型的饱和 token 数，`0` 表示不限制；**每平台各存一份，不跨平台聚合** | `SaturationContextPruner` |
-| `timeoutMs` | 单次调用超时，默认 120000 | `OpenAIContext` |
-| `idleTimeoutMs` | 流式无数据超时，默认 120000（传给 `f_httpclient` 的 `sseReader`） | `OpenAIContext` |
-| `tokenizerUrl` | 远端 token 计数端点（智谱有，多数平台没有） | `RemoteTokenCounter` |
-| `maxTokens` / `maxOutputTokens` | 默认上限 | 报文映射 |
-| `searchUrl` | 搜索端点覆盖（默认取 `SearchProvider` 注册的实现里的常量） | `WebSearchFunction` |
-| `searchEngine` | 智谱 `search_engine`（如 `search_pro`） | `ZhipuSearchProvider` |
-| `fetchUrl` | 抓取端点覆盖（默认取 `SearchProvider` 的 `fetchEndpoint`） | `WebFetchFunction` |
-| `balanceUrl` / `balanceMethod` | 余额端点（见 11） | `BalanceQuerier` |
-| `accessKeyId` / `secretRef` / `region` / `service` / `apiVersion` | 云厂商签名参数 | `BalanceQuerier` |
+| 键 | 用途 | 谁读 | 状态 |
+|---|---|---|---|
+| `chatPath` / `responsesPath` | 覆盖默认路径（默认 `/chat/completions`、`/responses`） | `ProviderDialect.endpoint` | 已实现 |
+| `stream` | `false` 时该 conf 禁流式 | `LLMConf.streamable` | 已实现 |
+| `llmType` | 默认 `text`；embedding 必须显式标注 | `Embedding.candidatesOf` | 已实现 |
+| `tokenThreshold` | 该平台的饱和 token 数，`0` 表示不限制（每平台各存一份） | `SaturationContextPruner` / `LLMConfsHolder.saturated` | 已实现 |
+| `tokenizerUrl` | 远端 token 计数端点 | `RemoteTokenCounter` | 已实现 |
+| `searchUrl` / `fetchUrl` | 搜索/抓取端点覆盖 | `DeepSeekSearchProvider` | 已实现 |
+| `balanceUrl` / `balanceUnit` | 余额端点覆盖、金额单位（`yuan`/`fen`） | `BalanceQuerier` | 已实现 |
+| `embeddingPath` | 向量化路径覆盖（默认 `/embeddings`） | `Embedding.endpointOf` | 已实现 |
+| `accessKeyId` / `secretKey` | 腾讯云/火山的签名凭据（也可写成 `auth = AK:SK`） | 余额签名 | 已实现 |
+| `apiStyle` | `chat` / `responses` 强制协议 | —— | **未实现**（协议由调用 `chat`/`respond` 决定） |
+| `organization` / `project` / `extraHeaders` | OpenAI 组织头、附加请求头 | —— | **未实现** |
+| `timeoutMs` / `idleTimeoutMs` | 单次/流式超时 | —— | **未实现**（流式超时走全局配置 `llm_streamIdleTimeout`） |
+| `maxTokens` / `maxOutputTokens` | 默认上限 | —— | **未实现** |
+| `thinking` | 覆盖模型思考能力（`none`/`always`/`toggle`） | —— | **未实现**（目前用 `conf.alwaysThinking`） |
+| `searchEngine` | 智谱 `search_engine` | —— | **未实现**（智谱搜索 provider 未做） |
 
 ### 3.6 凭据治理
 
@@ -630,8 +628,10 @@ let resp = mediator.access(agent.id, session, agent.llmName, params)   // 内部
 |---|---|---|---|---|
 | Chat Completions 非流式 | `POST {base}/chat/completions` | `{model, messages, tools, ...}` | — | `role=tool` 消息 |
 | Chat Completions 流式 | 同上 + `stream:true` | 同上 | `data: [DONE]` | 组装完整 `tool_calls` 后回填 |
-| Responses 非流式 | `POST {base}/responses` | `{model, input, tools, ...}` | — | `function_call_output` 输入项 |
-| Responses 流式 | 同上 + `stream:true` | 同上 | `response.completed` 事件 | 同上 |
+| Responses 非流式 | `POST {base}/responses` | `{model, input, tools, ...}` | — | `function_call_output` 输入项（**未实现**，当前仍按 Chat 的 `role=tool` 写） |
+| Responses 流式 | 同上 + `stream:true` | 同上 | `response.completed` 事件（已实现） | 同上 |
+
+> Responses 已实测可用（DeepSeek `2026-10-28`）：非流式 / 流式 / 工具定义 / `input_text` / **`input_image`** / `reasoning` 输出都通；未实现的是服务端会话（`previous_response_id`、`store`）与 `function_call_output` 回填。
 
 `LLMApiKind`：
 
@@ -644,25 +644,27 @@ public const LLM_API_RESPONSES = 'responses'  // OpenAI Responses API
 ### 5.2 Chat Completions 非流式
 
 复用现有 f_data 通路，只补字段：
-
 ```cangjie
 @DataAssist[props fields]
-public open class LLMRequest {
-    public LLMRequest(
-        private let llmName!: String = '',
+public class LLMParams {
+    public LLMParams(
+        private let model!: String = '',
         private var messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
     ){}
-    private var temperature: Float64 = -1.0f64   // <0 表示不覆盖
-    private var max_tokens: Int64 = 0            // 0 表示不指定
     private let thinking: Thinking = Thinking()
-    private var response_format: ResponseFormat = ResponseFormat.text
-    private let functions: ArrayList<FunctionCall> = ArrayList<FunctionCall>()
-    private let responses: ResponsesOptions = ResponsesOptions()  // 仅 respond/respondStream 生效
-    private let toolLoop: ToolLoopOptions = ToolLoopOptions()     // 见 7.5
-    @DataExclude[prop field]
-    private let extra: JsonObject = JsonObject() // 方言扩展，原样并入报文
+    private var response_format: ResponseFormat = ResponseFormat.text  // 只有显式 json_object 才发
+    private var temperature: Float64 = 1.0
+    private var max_tokens: Int64 = 65536
+}
+
+@DataAssist[props fields]
+public open class LLMToolParams <: LLMParams {
+    private let functions: HashSet<FunctionCall> = HashSet<FunctionCall>()
+    public func addFunctions<I>(functions: I): Unit where I <: Iterable<FunctionCall>
 }
 ```
+
+> 设计稿里的 `LLMRequest` / `ResponsesOptions` / `ToolLoopOptions` / `extra` 都**没有进代码**；工具定义放在 `LLMToolParams`（`LLMParams` 的子类），自动工具循环由 `LLMToolLoop.run(...)` 的参数控制。
 
 要点：
 
@@ -771,19 +773,32 @@ httpStream(url, auth){http =>
 
 ### 5.4 Responses API
 
-请求侧映射（`ChatMessage` → `input` items）：
+**实现现状（2026-10-28）**：下表是 `LLM.respond` 的真实能力；标「未实现」的是设计稿目标，当前**不会**发送这些字段。
+
+| 能力 | 状态 |
+|---|---|
+| 非流式 / 流式 | 已实现（`LLM.respond` / `LLM.respondStream`） |
+| system → 顶层 `instructions` | 已实现 |
+| 工具定义扁平化 `{type,name,description,parameters}` | 已实现 |
+| 文本输入 `input_text` | 已实现 |
+| 图片输入 `input_image`（`image_url` 是**字符串**） | 已实现；**DeepSeek `/responses` 实测可用（2026-10-28）** |
+| `reasoning` 输出 → `AssistantMessage.reasoningContent` | 已实现 |
+| `function_call` 输出 → `ToolCallMessage` | 已实现 |
+| 工具结果回填 `function_call_output` | **未实现**（仍按 Chat 的 `role=tool` 语义写） |
+| `previous_response_id` / `store` / `text.format` / `max_output_tokens` | **未实现**（`ResponsesOptions` 只在设计稿里） |
+| 流式以 `response.completed` 为准 | 已实现（`ResponsesStreamAccumulator`） |
+
+请求侧映射（`ChatMessage` → `input` items；**加粗**的是当前实现，其余为目标设计）：
 
 | 内部类型 | Responses `input` 项 |
 |---|---|
-| `SystemMessage` | 提到顶层 `instructions`（官方语义），其余 system 保留为 `{role:'system', content:[{type:'input_text', text}]}` |
-| `UserMessage` | `{role:'user', content:[{type:'input_text', text}]}` |
-| `AssistantMessage` | `{role:'assistant', content:[{type:'output_text', text}]}` |
-| `ToolCallMessage` | `{type:'function_call', call_id, name, arguments}` |
-| `ToolMessage` | `{type:'function_call_output', call_id, output}` |
+| **`SystemMessage`** | 合并进顶层 `instructions`（当前实现） |
+| **`UserMessage` / `AssistantMessage`** | `{role, content}`，`content` 为字符串；带 `parts` 时是 `[{type:'input_text'}, {type:'input_image', image_url}]`（当前实现） |
+| **`ToolCallMessage` / `ToolMessage`** | 仍按 Chat 形状写 `tool_calls` / `tool_call_id`（当前实现，Responses 的 `function_call` / `function_call_output` 输入项**未实现**） |
 
 响应侧：`output` 是**异构数组**，按 `type` 分派——`message`（内含 `content[].type='output_text'`）、`function_call`（`call_id` / `name` / `arguments`）、`reasoning`（摘要）。**不能**用 `DataObject<LLMResp>.populate` 一把转，必须手写 `type` 分派。
 
-流式事件（`ResponsesEvent`）：
+流式事件（**设计稿中的 `ResponsesEvent` 未实现**；当前只解析 `response.output_text.delta` 用于展示，并以 `response.completed` 为准重建最终响应）：
 
 | 事件 | 处理 |
 |---|---|
@@ -797,18 +812,7 @@ httpStream(url, auth){http =>
 
 **关键设计决定**：最终响应**以 `response.completed` 为准**，不是以累积的 delta 为准。理由是 delta 可能丢事件（网络抖动）而 `completed` 携带权威快照；这样"流式"与"非流式"的结果在字段上严格一致，业务侧可以只写一套解析。
 
-Responses 专属选项：
-
-```cangjie
-@DataAssist[props fields]
-public class ResponsesOptions {
-    private var previous_response_id: String = ''
-    private var instructions: String = ''
-    private var store: Bool = false
-    private var max_output_tokens: Int64 = 0
-    private let reasoning: ReasoningOptions = ReasoningOptions()  // effort / summary
-}
-```
+**Responses 专属选项（未实现）**：设计稿里的 `ResponsesOptions`（`previous_response_id` / `store` / `max_output_tokens` / `reasoning.effort`）**没有进代码**——`LLMParams` 目前只有 `model / messages / temperature / thinking / response_format`。要做服务端会话（多轮只传 `previous_response_id`）时，需要先补这个类型并在 `ResponsesMapper.build` 里落地。
 
 ### 5.5 报文字段映射总表
 
@@ -876,15 +880,14 @@ public class DialectRegistry {
 
 内置方言只描述**报文语法**（字段长什么样、放哪里），**不描述"模型支不支持思考"**——那是模型的能力，见 5.8。
 
-| provider | 端点路径 | 思考字段形态（语法） | 备注 |
+| provider | 端点路径 | 思考字段处理（当前实现） | 备注 |
 |---|---|---|---|
-| `zhipu` | `/chat/completions` | `thinking:{ type: 'enabled'\|'disabled', clear_thinking }` | 还带 `do_sample` / `request_id` |
-| `deepseek` | `/chat/completions` | 无该字段（模型自带时也不能开关） | `capability=Always` 时什么也不写 |
-| `ark`（火山方舟） | `/chat/completions` | `thinking:{ type }` | |
-| `dashscope`（百炼） | `/compatible-mode/v1/chat/completions` | `enable_thinking: Bool` | 形态与上面两家完全不同 |
-| `siliconflow` | `/v1/chat/completions` | 透传 `thinking` | |
-| `openai` | `/chat/completions`、`/responses` | `reasoning:{ effort, summary }` | `capability=Toggle` 时用 `effort` 表达"关/开" |
-| 未注册 provider | `/chat/completions`、`/responses` | 透传原样 | |
+| `deepseek` | `/chat/completions`、`/responses` | **剥掉** `thinking`（模型自带思考） | `/responses` 实测可用（支持 `input_image` 与 `reasoning` 输出） |
+| `zhipu` | `/chat/completions`（`responses` 抛不支持） | `thinking:{type}`：`alwaysThinking=true` → `enabled`；否则仅当报文原本要求过思考时改 `disabled`，**不凭空添加** | 非推理模型收到 `thinking` 会 400 |
+| `volcengine`（火山方舟） | `/chat/completions`（`responses` 抛不支持） | 同上（`thinking:{type}`） | `model` 可以是 `ep-` 接入点 |
+| `aliyun`（百炼） | `/chat/completions`（`responses` 抛不支持） | 剥 `thinking`，用布尔 `enable_thinking` | 与前三家形态不同 |
+| `siliconflow` | `/chat/completions`（`responses` 抛不支持） | `thinking` 与 `enable_thinking` **都剥掉** | 纯标准 OpenAI |
+| `openai` / 未注册 provider | `/chat/completions`、`/responses` | 透传原样（`StandardDialect`） | 方言由 `DialectRegistry.resolve` 回退 |
 
 `decorate` 的判定顺序：
 
@@ -907,6 +910,11 @@ func decorate(conf: LLMConf, params: LLMParams, body: JsonObject): Unit {
 `temperature` 与思考的冲突：`capability=Always` 的模型普遍不接受 `temperature != 1`，规则是**丢弃 `temperature` 并记 `warn`**，不把请求打回去——业务侧不该为了温度去改一遍全部调用点。
 
 ### 5.8 模型能力：`ThinkingCapability`
+
+> **未实现**：`ModelCapabilities` / `ThinkingCapability` 没有进代码。当前的思考开关只有两个来源：
+> ① `conf.alwaysThinking`（`true` 时智谱/火山写 `enabled`、百炼写 `enable_thinking=true`）；
+> ② 调用方在报文里要求过 `thinking` 时，智谱/火山改 `disabled`、百炼与硅基流动直接剥掉。
+> 下面这一节保留为「按模型推断能力」的设计思路。
 
 评审明确：**思考是模型属性，不是平台属性**。同一个智谱账号下，`glm-5` 可开关思考，某些纯生成模型压根没有思考通道；同一家的 `deepseek-reasoner` 恒思考、`deepseek-chat` 不思考。所以按平台建表一定会错。
 
@@ -984,67 +992,50 @@ f_httpclient（HttpClient + sseReader）/ f_data / f_log
 package fountain::f_llm.llm
 
 public class LLM {
-    private init(){}
+    /** 按 llmName 从配置快照选平台（权重 + 熔断 + 失败转移）：生产默认入口 */
+    public static func chatByName(llmName: String, params: LLMParams): LLMResp
+    public static func respondByName(llmName: String, params: LLMParams): LLMResp
 
-    /** Chat Completions 非流式 */
-    public static func chat(req: LLMRequest): LLMResponse
+    /** 直接给候选；带 hooks 的重载用于把成功/可重试失败回写给熔断器 */
+    public static func chat(candidates: ArrayList<LLMConf>, params: LLMParams): LLMResp
+    public static func chat(candidates: ArrayList<LLMConf>, params: LLMParams, hooks: LLMHooks): LLMResp
+    public static func respond(candidates: ArrayList<LLMConf>, params: LLMParams): LLMResp
+    public static func respond(candidates: ArrayList<LLMConf>, params: LLMParams, hooks: LLMHooks): LLMResp
 
-    /** Chat Completions 流式：每个增量回调一次；返回聚合后的完整响应 */
-    public static func chatStream(req: LLMRequest, onDelta: (LLMDelta) -> Unit): LLMResponse
-
-    /** Responses API 非流式 */
-    public static func respond(req: LLMRequest): LLMResponse
-
-    /** Responses API 流式：每个 SSE 事件回调一次；返回聚合后的完整响应 */
-    public static func respondStream(req: LLMRequest, onEvent: (ResponsesEvent) -> Unit): LLMResponse
+    /** 流式：每块增量回调一次；返回值与非流式同构（可直接入库/比较） */
+    public static func chatStream(candidates: ArrayList<LLMConf>, params: LLMParams, onDelta: (LLMDelta) -> Unit): LLMResp
+    public static func respondStream(candidates: ArrayList<LLMConf>, params: LLMParams, onDelta: (LLMDelta) -> Unit): LLMResp
 }
 ```
+
+> 注：`LLMRequest` / `LLMResponse` / `ResponsesEvent` 是早期的设计稿类型，**没有进代码**；实际用的是 `LLMParams` / `LLMResp` / `LLMDelta`。
 
 为什么是四个方法而不是一个带 `api` 字段的方法：`chat` 与 `respond` 的**请求语义不同**（`messages` vs `input`+`instructions`+`previous_response_id`），合成一个入口会让调用方一半字段永远用不上，且无法在编译期区分"流式/非流式"的误用。四个方法各自只有一个参数组合要记。
 
-为什么流式用**回调**而不是 `Iterator`：仓颉里把阻塞读包装成迭代器，要么用 `Channel`（生产者线程 + 消费线程，超时/取消路径要自己管），要么退化成"先读完再迭代"（那就不是流式）。回调把生命周期压在调用栈上，实现 30 行，语义最清楚。需要收集时用 `LLMDeltaCollector`：
+为什么流式用**回调**而不是 `Iterator`：仓颉里把阻塞读包装成迭代器，要么用 `Channel`（生产者线程 + 消费线程，超时/取消路径要自己管），要么退化成"先读完再迭代"（那就不是流式）。回调把生命周期压在调用栈上，实现 30 行，语义最清楚。
 
-```cangjie
-public class LLMDeltaCollector {
-    public func on(delta: LLMDelta): Unit
-    public func text(): String
-    public func reasoning(): String
-    public func toolCalls(): ArrayList<ToolCall>
-    public func firstChunkElapsed(): Duration   // TTFT
-}
-```
+> `LLMDeltaCollector` 是设计稿，未实现。需要收集时由调用方自己攒（注意：**捕获可变变量的 lambda 不能作为回调传递**，用 `ArrayList` 收集）；`LLMDelta` 本身只有 `kind` 与 `content`，`kind` 取 `Text` / `Reasoning` / `ToolCall`。
 
 ### 6.3 响应与增量类型
 
 ```cangjie
+// 门面直接返回已有的 LLMResp（不另造 LLMResponse）
 @DataAssist[props fields]
-public class LLMResponse {
-    private let id: String = ''
-    private let provider: String = ''
-    private let actualLlmName: String = ''
-    private let api: LLMApiKind = LLM_API_CHAT
+public class LLMResp {
     private let messages: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
-    private let usage: TokenUsage = TokenUsage()
-    private let finishReason: String = ''
-    private let elapsed: Duration = Duration.Zero
-    private let raw: JsonValue = JsonObject()    // 原始报文，排障用；默认不进日志
+    private let usage: TokenUsage = TokenUsage()      // usage.llmId 回填实际使用的 conf.id
+    private let finishReason: String = ''             // stop / tool_calls / length / completed / rounds_exceeded
+    private let usageEstimated: Bool = false          // 上游没给 usage、由启发式估算时为 true
 }
 
 public enum LLMDeltaKind {
-    | Start        // 首块，带 id / model
-    | Text         // content 增量
-    | Reasoning    // 思考增量
-    | ToolCall     // 工具参数已完整
-    | Usage        // 用量（末块）
-    | Done         // 结束
+    | Text        // 正文增量
+    | Reasoning   // 思考增量
+    | ToolCall    // 工具调用参数片段（归并器已拼接完整）
 }
 
-@DataAssist[props fields]
 public class LLMDelta {
-    private let kind: LLMDeltaKind = LLMDeltaKind.Text
-    private let content: String = ''
-    private let toolCall: ?ToolCall = None<ToolCall>
-    private let usage: ?TokenUsage = None<TokenUsage>
+    public LLMDelta(public let kind: LLMDeltaKind, public let content: String)
 }
 ```
 
@@ -1053,17 +1044,14 @@ public class LLMDelta {
 **非流式 + 工具（最常用）**：
 
 ```cangjie
-let req = LLMRequest(llmName: 'qwen-plus', messages: messages)
-req.temperature = 0.3f64
-for(def in FunctionMediator.getDefinitions(['currentTime', 'webSearch'])){
-    req.functions.add(def)
-}
-let resp = LLM.chat(req)
+let params = LLMParams(model: 'chat-pro', messages: messages)
+params.addFunctions(FunctionMediator.getDefinitions(['currentTime', 'webSearch']))
+let resp = LLM.chatByName('chat-pro', params)
 for(msg in resp.messages){
     if(let t: ToolCallMessage <- msg){
         for(call in t.tool_calls){
             let result = FunctionMediator.call(call.function.name, JsonValue.fromStr(call.function.arguments).asObject())
-            // 把 result 包成 ToolMessage 后再次 LLM.chat
+            // 把 result 包成 ToolMessage 后再次 LLM.chatByName
         }
     }
 }
@@ -1072,29 +1060,33 @@ for(msg in resp.messages){
 **流式（控制台增量输出）**：
 
 ```cangjie
-let req = LLMRequest(llmName: 'glm-5', messages: messages)
-req.messages.add(UserMessage('用三句话说明 SSE 与 WebSocket 的区别'))
-let resp = LLM.chatStream(req){delta =>
+let params = LLMParams(
+    model: 'chat-pro',
+    messages: ArrayList<ChatMessage>([UserMessage('用三句话说明 SSE 与 WebSocket 的区别')])
+)
+let collected = ArrayList<String>()
+let resp = LLM.chatStream(ArrayList<LLMConf>([conf]), params){delta =>
     match(delta.kind){
-        case LLMDeltaKind.Text => print(delta.content)
-        case LLMDeltaKind.Reasoning => ()
+        case LLMDeltaKind.Text => collected.add(delta.content)
         case _ => ()
     }
 }
-println()
-println('tokens: ${resp.usage.total}, 耗时: ${resp.elapsed}')
+println('tokens: ${resp.usage.total}, finish: ${resp.finishReason}')
 ```
 
-**Responses API（多轮 + 服务端状态）**：
+**Responses + 多模态（已实调）**：
 
 ```cangjie
-let req = LLMRequest(llmName: 'gpt-5', messages: ArrayList<ChatMessage>([UserMessage('继续上一轮')]))
-req.responses.previous_response_id = lastResponseId
-req.responses.store = true
-let resp = LLM.respondStream(req){event => /* 按 event.type 展示 */ ()}
+let user = UserMessage('这张图片整体是什么颜色？只回答一个颜色词。')
+user.addImage('data:image/png;base64,...', detail: 'high')   // 也支持公网 URL
+let params = LLMParams(model: 'chat-pro', messages: ArrayList<ChatMessage>([user]))
+let resp = LLM.respondByName('chat-pro', params)             // POST {base}/responses
+println('${resp.finishReason}: ${resp.messages[0].content}')
 ```
 
-### 6.5 破坏性变更清单
+> 多轮服务端状态（`previous_response_id` / `store`）尚未实现；要续接上一轮，只能把历史消息一并放进 `messages`。
+
+### 6.5 破坏性变更清单（已完成，保留作变更记录）
 
 不做兼容期，旧 API 直接删。改动范围可枚举（全仓 grep 后只有这些）：
 
@@ -1550,7 +1542,7 @@ public struct Redactor {
 | 场景 | 做法 |
 |---|---|
 | 非流式请求 | 手拼 `JsonObject`（因为要按值排除 `temperature=-1`）；值本身用 `JsonValue.fromData` / `toData` |
-| 非流式响应 | `DataObject<LLMResponse>.populate(json.toData())`；异构部分（`choices[]`）按 `finish_reason` / `message` 字段分派 |
+| 非流式响应 | 手写解析（不用 `DataObject.populate`）：`choices[]` 按 `finish_reason` / `message` 分派，结果落进 `LLMResp` |
 | 流式增量 | **手工 `JsonObject.get`**。`DataObject.populate` 是整对象覆盖语义，不能表达"拼接" |
 | 工具定义 | `FunctionCalling.definition`（已有 `JsonObject.toJsonSchema<T>()`，`tool/FunctionCalling.cj:48-59`） |
 | 配置/PO | `@DataAssist[props fields]` + `@QueryMappersGenerator`，与既有 PO 一致 |
@@ -1671,28 +1663,29 @@ public class MyCloudBalanceQuerier <: BalanceQuerier {
 
 ### 12.1 包与文件
 
+> 下图为**实际落地**的布局；`protocol/` 子包因 `llm` ↔ `llm.protocol` 循环依赖被取消，映射器与 `llm` 同包。
+> `AbstractLLMContext` / `LLMContextMediator` / `GLMContext` / `ModelCapabilities` 最终**没有保留**，已删除。
+
 ```
 f_llm/src/
 ├── llm/
-│   ├── (保留) ChatMessage.cj LLMParams.cj LLMResp.cj TokenizerParams.cj advanced_params.cj
-│   ├── (保留) ContextPruner.cj ContextPrunerMediator.cj ContextPrunerName.cj
-│   ├── (改造) AbstractLLMContext.cj       改持 LLMConf；新增 accessStream
-│   ├── (改造) LLMContextMediator.cj       中介者：快照 / 刷新 / LoadBalance / 熔断
-│   ├── (删除) GLMContext.cj               由 provider='zhipu' 的 OpenAIContext 取代
-│   ├── LLMConfsSnapshot.cj                不可变快照（含 byName 与 balancers）   [新]
-│   ├── CircuitBreaker.cj                  失败计数与临时下线（仅内存）           [新]
-│   ├── LLM.cj                             门面（4 个入口）                       [新]
-│   ├── LLMRequest.cj / LLMResponse.cj / LLMDelta.cj                            [新]
-│   ├── protocol/
-│   │   ├── ChatCompletionsMapper.cj       内部模型 ↔ chat 报文                 [新]
-│   │   └── ResponsesMapper.cj             内部模型 ↔ responses 报文            [新]
-│   ├── openai/
-│   │   ├── OpenAIContext.cj               唯一的平台实现                       [新]
-│   │   └── ProviderDialect.cj / DialectRegistry.cj                             [新]
-│   ├── ModelCapabilities.cj               ThinkingCapability 解析（模型属性）  [新]
-│   └── stream/
-│       └── StreamAccumulator.cj           chat / responses 两套归并            [新]
-│                                          （SSE 解析在 f_httpclient，不在这里）
+│   ├── ChatMessage.cj / ContentPart.cj    消息与多模态片段
+│   ├── LLMParams.cj / LLMResp.cj / LLMDelta.cj / LLMHooks.cj
+│   ├── ContextPruner.cj / ContextPrunerMediator.cj / TokenCounter.cj
+│   ├── LLM.cj                             门面：chat/respond/chatStream/respondStream/chatByName
+│   ├── LLMConfs.cj                        全局快照持有者（懒建、可注入）
+│   ├── LLMConfsHolder.cj                  快照 / 懒刷新 / 权重调度 / 熔断
+│   ├── LLMConfsSnapshot.cj                不可变快照（含 byName 与 balancers）
+│   ├── CircuitBreaker.cj                  失败计数与临时下线（仅内存）
+│   ├── ChatCompletionsMapper.cj           内部模型 ↔ chat 报文（与 llm 同包）
+│   ├── ResponsesMapper.cj                 内部模型 ↔ responses 报文
+│   ├── ChatStreamAccumulator.cj           chat 流式归并
+│   ├── ResponsesStreamAccumulator.cj      responses 流式归并
+│   ├── LLMTransport.cj / LLMStreamTransport.cj
+│   ├── LLMErrorClassifier.cj / CallLogger.cj
+│   └── openai/
+│       ├── ProviderDialect.cj / DialectRegistry.cj / ProviderDialects.cj
+│       └── DeepSeekDialect.cj             deepseek 方言（chat + responses）
 ├── tool/
 │   ├── (保留) 全部现有文件
 │   ├── (改造) FunctionMediator.cj         + register / registerMcp
@@ -1907,61 +1900,51 @@ f_httpclient/src/
 ## 附录 C 对外 API 一览
 
 ```cangjie
-// 门面
-LLM.chat(req: LLMRequest): LLMResponse
-LLM.chatStream(req: LLMRequest, onDelta: (LLMDelta) -> Unit): LLMResponse
-LLM.respond(req: LLMRequest): LLMResponse
-LLM.respondStream(req: LLMRequest, onEvent: (ResponsesEvent) -> Unit): LLMResponse
+// 门面（fountain::f_llm.llm）
+LLM.chatByName(llmName: String, params: LLMParams): LLMResp          // 生产默认入口
+LLM.respondByName(llmName: String, params: LLMParams): LLMResp
+LLM.chat(candidates: ArrayList<LLMConf>, params: LLMParams): LLMResp
+LLM.chat(candidates: ArrayList<LLMConf>, params: LLMParams, hooks: LLMHooks): LLMResp
+LLM.respond(candidates: ArrayList<LLMConf>, params: LLMParams): LLMResp
+LLM.chatStream(candidates, params, onDelta: (LLMDelta) -> Unit): LLMResp
+LLM.respondStream(candidates, params, onDelta: (LLMDelta) -> Unit): LLMResp
 
-// 中介者（编排层用）
-LLMContextMediator.instance.access(agentId, session, llmName, params): LLMResp
-LLMContextMediator.instance.accessStream(agentId, session, llmName, params, onDelta): LLMResp
-LLMContextMediator.instance.candidates(): ArrayList<LLMConf>
-LLMContextMediator.instance.candidates(llmName): ArrayList<LLMConf>
-LLMContextMediator.instance.isCircuitOpen(confId): Bool
-LLMContextMediator.instance.peekNext(llmName): ?LLMConf
-LLMContextMediator.instance.getTokenThreshold(conf): Int64
-LLMContextMediator.instance.tokenize(conf, messages): Int64
-LLMContextMediator.instance.saturated(conf, messages): Bool
-LLMContextMediator.instance.refreshNow(): Unit
+// 配置快照与来源
+LLMConfs.holder(): LLMConfsHolder
+LLMConfs.setHolder(holder): Unit                                      // 仅测试注入
+LLMConfsHolder.candidates(llmName) / all() / peekNext(llmName)
+LLMConfsHolder.isCircuitOpen(confId) / recordSuccess(confId) / recordRetryableFailure(confId)
+LLMConfsHolder.getTokenThreshold(conf) / saturated(conf, messages) / refreshNow()
+createConfSource(name: String): LLMConfSource                          // database / env / file:<path>
 
-// 上下文
-ContextPrunerMediator.instance.prune(name, agentId:, session:, messages:): ArrayList<ChatMessage>
-
-// 模型能力
-ModelCapabilities.thinking(conf: LLMConf): ThinkingCapability
-ModelCapabilities.supportsTemperature(actualLlmName: String): Bool
+// 裁剪
+ContextPrunerMediator.instance.prune(name, agentId:, session:, messages:)
+ContextPrunerMediator.instance.register(pruner) / names()
 
 // 工具
-FunctionMediator.register(calling: CommonFunctionCalling): Unit
-FunctionMediator.registerMcp(alias: String, client: McpClient): Unit
-FunctionMediator.getDefinitions(names): Iterator<FunctionCall>
-FunctionMediator.call(name, args: JsonObject): FunctionResult
-// 内置工具：currentTime、webSearch、webFetch（无需注册，随工具表自动加载）
+FunctionMediator.register(calling: CommonFunctionCalling) / definition(name) / names()
+FunctionMediator.getDefinitions(names) / call(name, args: JsonObject): FunctionResult
+McpToolSource(alias, client).load() / tools() / call(name, args)
+ToolName.validate(name) / ToolName.mcpName(alias, tool)
+// 内置工具：currentTime、webSearch、webFetch（随 @Bean 自动加载）
 
-// 搜索 / 抓取：能力由 provider 声明，可注册扩展
-SearchProviderRegistry.instance.register(provider: SearchProvider)
-SearchProviderRegistry.instance.get(provider): ?SearchProvider
-SearchProvider.search(conf, query, count, needContent): ArrayList<SearchResultItem>
-SearchProvider.fetch(conf, url): FetchedPage
+// 搜索 / 抓取
+SearchProviderRegistry.register(provider) / get(provider) / names()
+SearchProvider.search(conf, query, count, needContent) / fetch(conf, url)
+DeepSeekSearchProvider()                                              // 已实调
 
-// MCP
-McpToolSource(conf).load() / tools() / call(name, args) / close()
+// 向量化
+Embedding.embed(llmName: String, params: EmbeddingParam): EmbeddingResp
+
+// 余额
+BalanceMediator.instance.register(querier) / query(provider, conf) / queryAll(confs) / names()
 
 // 配置编码
 LLMConfCodec.toColumn(conf: HashMap<String, String>): String
 LLMConfCodec.fromColumn(text: String): HashMap<String, String>
-
-// 依赖的 f_httpclient 能力（不在本模块）
-HttpResponse.sseReader(maxLineBytes!, idleTimeout!): SseReader
-SseReader.next(): ?SseEvent
-SseReader.close(): Unit
-
-// 余额（M4，接口先定）
-BalanceMediator.instance.register(provider, creator)
-BalanceMediator.instance.query(provider, conf): BalanceSnapshot
-BalanceMediator.instance.queryAll(): ArrayList<BalanceSnapshot>
 ```
+
+`ModelCapabilities` / `registerMcp` / `LLMRequest` / `LLMResponse` / `LLMDeltaCollector` 属于设计稿，未实现。
 
 ---
 
