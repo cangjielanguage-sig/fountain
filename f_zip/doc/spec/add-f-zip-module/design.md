@@ -2,7 +2,7 @@
 
 ## Context
 
-**当前状态**：仓库里没有 `f_zip` 目录，ZIP 能力为零。`docs/f_zip模块设计.md` v0.7 已冻结：21 项决策全部拍板、无阻塞项、并给出 P0–P6 的实施顺序与验收口径。可复用的地基均已就绪并实读确认：
+**当前状态**：仓库里没有 `f_zip` 目录，ZIP 能力为零。`f_zip/doc/f_zip模块设计.md` v0.7 已冻结：21 项决策全部拍板、无阻塞项、并给出 P0–P6 的实施顺序与验收口径。可复用的地基均已就绪并实读确认：
 
 - `f_util.crc32(data: Array<Byte>): UInt32`（`f_util/src/crc32.cj:114`，等价 `Crc32.isoHdlc`，即 zlib/PKZIP 口径）；**它的吞吐原本只有 ~4.2 MB/s，是本变更必须一并修掉的瓶颈（D16，已修到 51~58 MB/s）**
 - `f_io.ByteBuffer`（`f_io/src/ByteBuffer.cj:22`）：`seekReading` / `seekWriting` / `readByte(): ?Byte` / `read(buf): Int64` / `writeByte` / `write(buf)` / `bytes()` / `reserve()`

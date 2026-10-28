@@ -54,7 +54,7 @@
   > UTF-8 严格校验自己写：`charset4cj` 的 UTF-8 解码器遇到非法序列会替换成 U+FFFD 而不报错，那样"回退到 GBK"永远不会触发。
 - [x] 3.9 红：`ZipReader_test.cj` —— `entries()` 顺序等于中央目录顺序；同名条目全部保留；每次返回独立列表
 - [x] 3.10 绿：`ZipReader.cj` —— `init(input)`、`entries()`、`contains()`、`close()`（幂等、关闭后调用报错）
-- [x] 3.11 验收：用 `docs/f_zip模块设计.md §9` 的外部样本（Linux `zip` 产出）列出全部条目
+- [x] 3.11 验收：用 `f_zip/doc/f_zip模块设计.md §9` 的外部样本（Linux `zip` 产出）列出全部条目
   > `ExternalCompat_test.readInfoZipSample` 用 `zip` CLI 现造样本再读，避免往仓库塞二进制。
 
 > **门禁**：能列出外部 ZIP 的全部条目，才进入解压。

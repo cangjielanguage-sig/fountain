@@ -188,7 +188,7 @@ v0.2 曾论证"用 `f_io.ByteBuffer` 做序列化后端"，理由是它比标准
 
 | 原以为需要的能力 | 实际是否需要 |
 |---|---|
-| `seekReading` / `seekWriting`（回填长度） | **不需要**。回填发生在 ZIP 层，由 `f_zip` 的 data descriptor 解决（见 `f_zip模块设计.md` 3.2） |
+| `seekReading` / `seekWriting`（回填长度） | **不需要**。回填发生在 ZIP 层，由 `f_zip` 的 data descriptor 解决（见 `f_zip/doc/f_zip模块设计.md` 3.2） |
 | `bytes(): Array<Byte>` 零拷贝给 ZipWriter | **不需要**。`ZipWriter.addFileStream(name, input)` 直接吃 `InputStream` |
 | `<: IOStream` 双向 | **不需要**。读写是两个独立入口，不共享同一个对象 |
 | `reserve` / `clone` | **不需要** |
