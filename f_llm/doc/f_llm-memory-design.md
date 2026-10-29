@@ -896,6 +896,8 @@ public class LoomRequest {
     public let tools: Array<String> = []    // 整个流程可用
     public let mcps: Array<String> = []
     public let persona: String = ''         // 人格 key；空则按 §7.4 的绑定链回退
+    public let answers: HashMap<String, JsonValue> = []   // 上一轮澄清的回答：{questionId: value}
+    public let onUnresolved: String = 'ask' // ask | default | abort（澄清轮次用尽时的策略，§9.11）
     public let dryRun: Bool = true          // 默认只产出闭包，不编译执行
 }
 ```
@@ -925,6 +927,28 @@ public class LoomRequest {
 **LLM 不生成仓颉代码**——只产出 JSON 计划，代码由 `CodeGen` 模板生成。这是刻意的：
 让模型写 `ClosureTask` 语句序列的失败率远高于写结构化计划，且错误只能在编译期暴露。
 
+**另一种合法输出：需要澄清**（§9.11）。描述有歧义时不要硬猜，返回：
+
+```json
+{
+  "status": "need_clarification",
+  "round": 1,
+  "questions": [
+    {"id": "q1", "question": "日报发给谁？",
+     "why": "决定 send 步骤的收件人，影响是否需要审批步骤",
+     "options": [{"label": "只发我自己", "value": "self"},
+                 {"label": "发团队群", "value": "team"}],
+     "default": "self", "blocking": true}
+  ],
+  "assumptions": [
+    {"field": "执行时间", "value": "每天 09:00", "reason": "描述未写，按常见习惯暂定"}
+  ],
+  "partial_plan": {"name": "daily-report", "steps": [], "edges": []}
+}
+```
+
+`partial_plan` 让开发者看到「已经拆到哪一步」，而不是只收到一个问题列表。
+
 ### 9.4 代码生成（两级 JIT）
 
 1. **步骤级**：每个 step 生成一段语句序列（形参固定 `e: Event`，返回 `Event`），
@@ -952,10 +976,10 @@ public class LoomRequest {
 
 `loomExecute(name, confirm=false)`：
 
-1. 调 `Planner` 得 `FlowPlan`；
-2. `CodeGen` 产出：计划 JSON + 每个步骤源码 + 流程源码（**不编译**）；
-3. 存入 `LoomRegistry`（状态 `pending`），返回给调用方/开发者；
-4. `confirm=true` 时：`Compiler` 编译步骤与流程 → 失败返回诊断（文件:行:列 + 期望 token）→ 成功注册 `compiled` 并可选立即执行。
+0. 调 `Planner`：可能返回 `need_clarification`（§9.11），此时**不进入代码生成**，直接把这轮问题返回；
+1. 拿到完整 `FlowPlan` 后，`CodeGen` 产出：计划 JSON + 每个步骤源码 + 流程源码（**不编译**）；
+2. 存入 `LoomRegistry`（状态 `pending`），返回给调用方/开发者；
+3. `confirm=true` 时：`Compiler` 编译步骤与流程 → 失败返回诊断（文件:行:列 + 期望 token）→ 成功注册 `compiled` 并可选立即执行。
 
 **编译前返回闭包原文**是硬要求：错误信息要能让开发者直接看出「第几步的哪一行不对」。
 
@@ -963,7 +987,7 @@ public class LoomRequest {
 
 | 工具 | 参数 | 行为 |
 |---|---|---|
-| `loomExecute` | `name, description, tools?, mcps?, persona?, confirm?` | 生成/编译/注册流程；`confirm=false` 只返回闭包；`persona` 写入 `Flow(name)` 绑定（§7.4） |
+| `loomExecute` | `name, description, tools?, mcps?, persona?, confirm?, answers?, onUnresolved?` | 生成/编译/注册流程；`confirm=false` 只返回闭包；`persona` 写入 `Flow(name)` 绑定（§7.4）；有歧义时返回 `need_clarification`，带 `answers` 再次调用继续（§9.11） |
 | `loomDelete` | `name` | `JitFunction.unload` + 从注册表移除 + 解绑 `Flow(name)`；正在运行的实例等待结束 |
 
 ### 9.8 不访问大模型的流程
@@ -982,7 +1006,9 @@ create table llm_loom_flow (
     plan_json     text        not null,   -- Planner 产出的计划
     flow_source   text        not null,   -- 流程级 JIT 源码
     step_sources  text        not null,   -- JSON: {"stepId": "<语句序列>"}
-    status        varchar(16) not null,   -- pending | compiled | failed
+    status        varchar(16) not null,   -- clarifying | pending | compiled | failed | blocked
+    round         int         not null default 0,  -- 已进行的澄清轮次
+    questions_json text,                  -- 本轮待回答的问题（status=clarifying 时非空）
     tools         text,                   -- 逗号分隔的白名单
     mcps          text,
     created_time  datetime    not null default current_timestamp,
@@ -992,13 +1018,16 @@ create table llm_loom_flow (
 
 | 时机 | 动作 |
 |---|---|
+| Planner 返回澄清 | upsert `status=clarifying`，存 `questions_json` 与 `round`；不生成源码 |
+| 收到 `answers` 后继续 | 追加轮次；仍不完整则更新 `questions_json`，完整则转 `pending` |
 | `loomExecute(confirm=false)` | upsert `status=pending`，保存计划与源码（此时还没编译） |
 | 编译成功 / 失败 | 更新 `status=compiled` / `failed`；诊断只写日志不落库（源码已可复现） |
 | 启动 | 载入 `status=compiled` 的行，**重新编译**进 `LoomRegistry`；单条失败标 `failed`，不影响其它流程 |
 | `loomDelete` | 先删库再 `JitFunction.unload`，避免重启又加载回来 |
 
 配置 `llm_loomPersist=true`（默认）时启用；关掉则退化为纯内存（仅测试用）。
-`status=pending` 的行超过 7 天由后台清理，避免「预览了没确认」的流程越积越多。
+`status=pending` 的行超过 7 天、`status=clarifying` 的行超过 24 小时由后台清理，
+避免「预览了没确认」「问了一半没人回」的流程越积越多。
 
 ### 9.10 人格与「灵魂提示词」
 
@@ -1013,7 +1042,7 @@ loom 只负责把计划里的 `persona` 落成 `Flow` 绑定，**不自己拼 sy
 | You're not a chatbot. You're becoming someone. | 角色是「流程编排器」，不是客服；不写寒暄、不写「很高兴为您服务」 |
 | Be genuinely helpful, not performatively helpful. Skip the "Great question!"… | 禁止开场奉承与填充语；第一句就是计划或结论 |
 | Have opinions. You're allowed to disagree… | 允许否决不合理的要求（如「一步调三个模型做同一件事」），但必须给替代方案 |
-| Be resourceful before asking… Then ask if you're stuck. | 能从描述里推断的就推断；缺关键参数才返回 `{"error": …}`，并说明缺什么 |
+| Be resourceful before asking… Then ask if you're stuck. | 能推断的就推断、能查的先查；真正缺关键参数时返回澄清问题（§9.11），而不是硬猜或直接失败 |
 | Earn trust through competence… Be careful with external actions… Be bold with internal ones. | 读/整理类步骤可以直接排；`send`/`publish`/`delete` 类外部副作用步骤必须 `async=false` 且标 `external=true`，执行前要确认 |
 | Remember you're a guest. Private things stay private. | 不把用户隐私写进步骤参数模板；示例里用占位符 |
 | Never send half-baked replies to messaging surfaces. | 对外发送步骤前必须有「生成 → 自检」两步，不允许直接发草稿 |
@@ -1022,6 +1051,55 @@ loom 只负责把计划里的 `persona` 落成 `Flow` 绑定，**不自己拼 sy
 
 **这些是提示词规则，不是运行时强制**：`external=true` 的确认由 `loomExecute` 与工具层双重校验，
 提示词只能降低模型写出「未确认就外发」计划的概率——真正的安全阀在代码里（§8.7 的 `auto_send`）。
+
+### 9.11 交互式澄清（可能多轮）
+
+任务描述天然会缺东西（发给谁、什么时候、处理哪些数据）；「猜一个」比「问一句」代价高得多。
+所以拆解过程是一个**可多轮的会话**，不是一次问答。
+
+```
+describe ──▶ planning ──need_clarification──▶ clarifying ──answers──▶ planning
+                  │                              ▲                      │
+                  │                              └──────────────────────┘
+                  └── plan_ready ──▶ preview(pending) ──confirm──▶ compiled
+```
+
+**返回契约**（`loomExecute` 的响应）：
+
+```json
+{"status": "need_clarification", "round": 2, "session": "loom:42:daily-report",
+ "questions": [{"id": "q1", "question": "…", "why": "…",
+                "options": [{"label": "…", "value": "…"}], "default": "self", "blocking": true}],
+ "assumptions": [{"field": "时间", "value": "每天 09:00", "reason": "…"}],
+ "partial_plan": {"name": "daily-report", "steps": [], "edges": []}}
+```
+
+**提问规则**：
+
+| 该问 | 不该问 |
+|---|---|
+| 缺关键参数：收件人、目标地址、时间、预算、数据源 | 能推断的（「日报」默认每天一次） |
+| 指令冲突（「每天」+「只跑一次」） | 纯风格偏好（人格有默认值，§7.4） |
+| 范围歧义（「处理所有邮件」vs「只处理未读」） | 已经答过的问题（按 `id` 去重） |
+| 多个相似工具无法区分（`email.send` vs `feishu.send`） | 能通过 `searchTools` / `memoryCall` 查到的事实——**先去查，再问** |
+| 外部副作用的目标不明确（发给谁、发到哪个群） | 问题本身不改变计划结构（不影响步骤/边/工具）的 |
+
+**约束**：
+
+- 每轮 ≤5 个问题；每题**必须**带 `why`（影响哪一步）与 `default`；选项 ≤5 且互斥；
+- 只问 `blocking=true` 的问题；非阻塞项直接写进 `assumptions`，让开发者一眼看到「系统替你定了什么」；
+- 最多 `llm_loomMaxClarifyRounds`（默认 5）轮。用尽后按 `onUnresolved` 处理：
+  - `ask`（默认）：返回 `{"status":"blocked","unresolved":[...]}`，等人工介入；
+  - `default`：按 `assumptions` 继续，计划里对应步骤标 `"assumed": true`；
+  - `abort`：丢弃本轮，返回已收集的问题与半成品计划。
+- **防循环**：同一 `id` 第二次仍未回答 → 自动采用 `default` 并记为 assumption（不无限追问）；
+- 回答校验：给 `options` 的问题只接受 option 的 `value`；自由文本限长 500 字；未知 `id` 直接忽略并 `warn`。
+
+**持久化**：`llm_loom_flow` 增加 `status='clarifying'`、`questions_json`、`round`（§9.9 表结构同步），
+会话按 `(userId, name)` 定位，24 小时未继续则清理。
+
+**为什么放在 Planner 之后、CodeGen 之前**：澄清只影响「拆解」，不应触碰已生成的源码；
+一旦进入 `pending`（源码已生成），再改需求就是重新规划，而不是回答问题。
 
 ---
 
@@ -1198,7 +1276,8 @@ public class JitTicktockTask <: CronTicktockTask {
 ### 12.4 `LOOM_PLAN_PROMPT`（文本 → 流程计划，含人格）
 
 > 按 `prompt-engineering-expert` 的「改写既有提示词」流程处理：先列验收台账，再改，最后对照台账复核。
-> 原提示词 6 条硬规则全部保留（下面的 C1–C6），新增人格（C7）、外部动作（C8）、灵魂提示词风格（C9–C11）。
+> 原提示词 6 条硬规则全部保留（下面的 C1–C6），新增人格（C7）、外部动作（C8）、灵魂提示词风格（C9–C11）、
+> **交互式澄清（C12–C13，2026-10-29 追加）**。
 
 **验收台账**（改写前，来源＝原提示词 + 本次需求）：
 
@@ -1209,12 +1288,14 @@ public class JitTicktockTask <: CronTicktockTask {
 | C3 | id 唯一、小写、无空格；edges 无环且覆盖每个 id | 原规则 1 |
 | C4 | 只有点名模型才写 `model`；未点名留空 | 原规则 2 |
 | C5 | 显式「并行/异步」→ `async=true`；有副作用步骤 `async=false` | 原规则 3 |
-| C6 | 工具只能取 `{{ALLOWED_TOOLS}}` / `{{ALLOWED_MCPS}}`，越界失败；数据依赖 `$ {id.output}`；缺关键参数返回 `{"error"}` | 原规则 4–6 |
-| C7 | 任务描述里可指定人格，计划写入 `persona` | 本次需求「loom 可在任务描述中指定人格」 |
+| C6 | 工具只能取 `{{ALLOWED_TOOLS}}` / `{{ALLOWED_MCPS}}`，越界即失败；数据依赖 `${id.output}` | 原规则 4–6 |
+| C7 | 任务描述里可指定人格，计划写入 `persona` | 需求「loom 可在任务描述中指定人格」 |
 | C8 | 外部副作用（发消息/发布/删除）标 `external=true`、`async=false`，且前置「生成→自检」 | 灵魂提示词「外发前确认、不发半成品」 |
 | C9 | 禁止奉承/填充语，第一句就是计划 | 灵魂提示词「Skip the 'Great question!'」 |
-| C10 | 允许否决不合理做法并给替代方案；能推断就不提问，缺关键参数才 error | 灵魂提示词「Have opinions / Be resourceful before asking」 |
-| C11 | 中文；步骤标题 ≤16 字、单条 `system` ≤200 字；需要上下文先排 `searchTools`/`memoryCall` | 本次需求「灵魂提示词要使用中文」+「Concise / memory continuity」 |
+| C10 | 允许否决不合理做法并给替代方案；能推断就不提问 | 灵魂提示词「Have opinions / Be resourceful before asking」 |
+| C11 | 中文；步骤标题 ≤16 字、单条 `system` ≤200 字；需要上下文先排 `searchTools`/`memoryCall` | 需求「灵魂提示词要使用中文」+「Concise / memory continuity」 |
+| C12 | 遇到歧义/模糊**必须发问**，允许多轮；每轮 ≤5 题，总轮次 ≤`{{MAX_CLARIFY_ROUNDS}}`；轮次用尽按 `{{ON_UNRESOLVED}}` 处理 | 本次需求「返回询问用户/开发者，可能交互多次」 |
+| C13 | 每题必须带 `why`/`default`/`options`；不重复已答；同一问题第二次无答案则采用默认并记 assumption | 本次需求（可交互性）+ 防循环 |
 
 ```
 你是流程编排器，不是聊天机器人。唯一产物是一份可执行计划：中文、纯 JSON、不写解释、不写代码、不写寒暄。
@@ -1225,13 +1306,23 @@ public class JitTicktockTask <: CronTicktockTask {
 - 可用工具：{{ALLOWED_TOOLS}}
 - 可用 MCP：{{ALLOWED_MCPS}}
 - 步骤上限：{{MAX_STEPS}}
+- 已答问题：{{ANSWERS}}（可能为空）
+- 澄清轮次上限：{{MAX_CLARIFY_ROUNDS}}；用尽策略：{{ON_UNRESOLVED}}（ask|default|abort）
 
-输出结构：
+输出 A（信息足够）：
 {"name":"daily-report","persona":"whimsical",
  "steps":[{"id":"fetch","kind":"llm|tool|mcp|jit","model":"chat-pro","tool":"webSearch",
    "args":{},"system":"…","input":"${fetch.output}","async":"auto|true|false","external":false}],
  "edges":[["fetch","sum"]],
  "notes":"可选：替代方案或风险，一句话"}
+
+输出 B（有歧义，必须问）：
+{"status":"need_clarification","round":1,
+ "questions":[{"id":"q1","question":"日报发给谁？","why":"决定 send 步骤的收件人",
+   "options":[{"label":"只发我自己","value":"self"},{"label":"发团队群","value":"team"}],
+   "default":"self","blocking":true}],
+ "assumptions":[{"field":"时间","value":"每天 09:00","reason":"描述未写，按常见习惯暂定"}],
+ "partial_plan":{"name":"daily-report","steps":[],"edges":[]}}
 
 硬规则：
 1. id 唯一、小写、只用字母数字和连字符；edges 无环、每个 id 至少出现一次；steps 不超过 {{MAX_STEPS}} 步。
@@ -1243,13 +1334,18 @@ public class JitTicktockTask <: CronTicktockTask {
 6. 人格：描述里点名人格时写 persona；没点名留空（走用户默认）。某一步需要不同人格时，在该 step 上写 persona 覆盖。
 7. 外部动作：send / publish / delete / 支付类步骤写 external=true 且 async=false，并在它前面插入一个“生成→自检”步骤；
    不允许把草稿直接外发。
-8. 缺关键参数（收件人、地址、时间、预算）不要编造，返回 {"error":"缺少：<字段>","need":"<一句话>"}。
+8. 遇到歧义或模糊时**不要猜、也不要返回 error**，返回输出 B：
+   每轮 ≤5 题，只问 blocking；每题必须给 why（影响哪一步）、default、options（≤5 且互斥）。
 9. 不确定的事实不要写进 args，用 ${...} 引用上游结果。
+10. {{ANSWERS}} 里已答的问题不要重复问；同一问题第二次仍无答案时，采用 default 并写进 assumptions。
+11. 最多 {{MAX_CLARIFY_ROUNDS}} 轮。用尽后按 {{ON_UNRESOLVED}} 处理：
+    ask → 返回 {"status":"blocked","unresolved":[...]}；default → 按 assumptions 出计划并给对应步骤标 assumed:true；
+    abort → 返回已收集的问题与 partial_plan。
 
 风格：
 - 不要“好的/没问题/很高兴为您服务”，第一条字符就是 JSON 的 {。
 - 允许否决：做法明显不可行时（例如让三个模型重复做同一件事），在该步骤 system 里写清理由，并在 notes 给替代方案。
-- 先推断再提问：能从描述推出的参数就推断，只在缺关键参数时返回 error。
+- 先查再问：能推断就推断，能通过 searchTools/memoryCall 查到的先排一步去查；只有真正影响计划结构（步骤/边/工具/外部动作）时才发问，且问题要具体到可选项。
 - 步骤标题（system 首句）≤16 字；单个 system ≤200 字；一个步骤只做一件事。
 - 需要上下文时先排一步 searchTools 或 memoryCall，不要假设自己记得上一次会话。
 ```
@@ -1263,12 +1359,14 @@ public class JitTicktockTask <: CronTicktockTask {
 | C3 | 硬规则 1 | kept |
 | C4 | 硬规则 2 | kept |
 | C5 | 硬规则 3（补充「纯计算默认 false」） | rewritten（原语义保留，补默认值） |
-| C6 | 硬规则 4、5、8、9 | kept（拆成 4 条，语义不变） |
+| C6 | 硬规则 4、5、9 | rewritten（原规则 8 的「缺参返回 error」改为输出 B，见 C12/C13） |
 | C7 | 输出结构 `persona` + 硬规则 6 | added |
 | C8 | 硬规则 7 | added |
 | C9 | 风格第 1 条 | added |
-| C10 | 风格第 2、3 条 | added |
+| C10 | 风格第 2、3 条（第 3 条改为「先查再问」） | added |
 | C11 | 首段「中文」+ 风格第 4、5 条 | added |
+| C12 | 输出 B + 硬规则 8、11（多轮、轮次上限、三策略） | added |
+| C13 | 硬规则 8（why/default/options）、10（去重、二次用默认） | added |
 
 **不承诺的部分**：提示词只能降低模型写出「未确认就外发」计划的概率，真正的强制在 `loomExecute`（`external=true` 必须 `confirm=true`）
 与通道工具的 `auto_send`（§8.7）。
@@ -1336,6 +1434,7 @@ public class JitTicktockTask <: CronTicktockTask {
 | `llm_skillEvolvePerDay` | 1 | 单技能每天最多自动升级次数 |
 | `llm_loomAutoConfirm` | `false` | 是否跳过预览（生产禁止 true） |
 | `llm_loomMaxSteps` | 16 | 单流程步骤上限 |
+| `llm_loomMaxClarifyRounds` | 5 | 拆解阶段最多澄清轮次（§9.11） |
 | `llm_serverTimezone` | 空（系统时区） | 服务端时区覆盖，如 `Asia/Shanghai`；存 UTC、边界换算见 §5.6 |
 | `llm_ticktockEnabled` | `false` | 定时任务工具开关 |
 
@@ -1379,6 +1478,7 @@ public class JitTicktockTask <: CronTicktockTask {
 | SQL | 同一份 DDL 在 PG/MySQL 各建一次；向量索引 `EXPLAIN` 命中 |
 | 工具 | `memoryCall` 四动作；`callWithTimeout` 超时返回 `{}` 且标记取消 |
 | loom | 计划生成→源码预览→编译→执行；环检测；越界工具拒绝；删除后 `unload` |
+| loom 澄清 | 歧义描述返回 `need_clarification`；带 `answers` 继续；重复问题自动取默认；轮次用尽三种策略（ask/default/abort）；`clarifying` 状态可恢复；24h 清理 |
 | 技能导入 | 含 sh 的包被拒；纯工具包成功入库；details 不含路径 |
 | 定时 | cron 非法拒绝；注册后可触发；删除后不再触发 |
 | 人格绑定 | 优先级 flow>task>workspace>user；解绑后回落；loom 计划里的 persona 落成 Flow 绑定 |
@@ -1445,5 +1545,6 @@ public class JitTicktockTask <: CronTicktockTask {
 | 技能自演进对**所有**技能生效（导入/反哺/人工），带版本与回滚 | §10.4 |
 | 人格可绑定到工作空间/任务/流程，优先级 flow > task > workspace > user | §7.4 |
 | loom 计划新增 `persona`；planner 提示词按「灵魂提示词」重写（中文） | §9.10、§12.4 |
+| loom 拆解遇歧义必须发问，可多轮（默认 5 轮、每轮 ≤5 题，ask/default/abort 三策略兜底） | §9.11、§12.4 |
 
 剩余未决：**无**（本轮问题全部收敛；后续如出现新问题再单列）。

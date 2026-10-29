@@ -240,7 +240,9 @@ CREATE TABLE IF NOT EXISTS llm_loom_flow (
   plan_json    TEXT        NOT NULL,
   flow_source  TEXT        NOT NULL,
   step_sources TEXT        NOT NULL,
-  status       VARCHAR(16) NOT NULL DEFAULT 'pending',   -- pending | compiled | failed
+  status       VARCHAR(16) NOT NULL DEFAULT 'pending',   -- clarifying | pending | compiled | failed | blocked
+  round        INT         NOT NULL DEFAULT 0,           -- 已进行的澄清轮次
+  questions_json TEXT,                                   -- status=clarifying 时的待答问题
   tools        TEXT,
   mcps         TEXT,
   created_time TIMESTAMP   NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
