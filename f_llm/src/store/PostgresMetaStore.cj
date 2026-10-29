@@ -80,6 +80,21 @@ class PostgresLLMConfStore <: LLMConfStore {
         result
     }
 
+    public func put(view: LLMConfView): Int64 {
+        let row = executor.setSql('''
+            INSERT INTO llm_conf (provider, llm_name, actual_llm_name, enabled, weight)
+            VALUES (?, ?, ?, ?, ?)
+            RETURNING id
+        ''')
+            .add(view.provider)
+            .add(view.llmName)
+            .add(view.actualLlmName)
+            .add(view.enabled)
+            .add(view.weight)
+            .firstToMap()
+        intOf(row.get('id') ?? 0)
+    }
+
     private static func textOf(value: Any): String {
         match(value){
             case text: String => text

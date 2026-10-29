@@ -79,4 +79,6 @@ public interface LLMConfStore {
     func names(): ArrayList<String>
     /** 候选：enabled=true 且 weight>0，按 llmName 过滤（3.3） */
     func candidates(llmName: String): ArrayList<LLMConfView>
+    /** 新增/覆盖一条配置，返回 id；f_store 用它落 byname 索引（3.3） */
+    func put(view: LLMConfView): Int64
 }

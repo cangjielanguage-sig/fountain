@@ -232,12 +232,40 @@ class InMemoryPromptStore <: PromptStore {
 }
 
 class InMemoryLLMConfStore <: LLMConfStore {
+    private let views = ArrayList<LLMConfView>()
+
     public func names(): ArrayList<String> {
-        ArrayList<String>()
+        let names = ArrayList<String>()
+        for(view in views){
+            if(view.enabled && view.weight > 0 && !contains(names, view.llmName)){
+                names.add(view.llmName)
+            }
+        }
+        names
     }
 
     public func candidates(llmName: String): ArrayList<LLMConfView> {
-        ArrayList<LLMConfView>()
+        let result = ArrayList<LLMConfView>()
+        for(view in views){
+            if(view.enabled && view.weight > 0 && view.llmName == llmName){
+                result.add(view)
+            }
+        }
+        result
+    }
+
+    public func put(view: LLMConfView): Int64 {
+        views.add(view)
+        Int64(views.size)
+    }
+
+    private static func contains(values: ArrayList<String>, target: String): Bool {
+        for(value in values){
+            if(value == target){
+                return true
+            }
+        }
+        false
     }
 }
 
