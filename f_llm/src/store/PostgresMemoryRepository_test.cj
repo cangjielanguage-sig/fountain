@@ -21,6 +21,8 @@ import std.unittest.testmacro.*
 
 import fountain::f_orm.*
 
+import postgres_driver.registerPostgresDriver
+
 /** 集成用例用：固定 1024 维，避免 vector(1024) 列宽不匹配 */
 class Fixed1024Embedder <: Embedder {
     public func embed(text: String): Array<Float64> {
@@ -45,7 +47,9 @@ public class PostgresMemoryRepositoryTest {
 
     private func repository(): ?PostgresMemoryRepository {
         try{
-            ORM.register('postgres', URL, default: true)
+            registerPostgresDriver()
+            let driver = DriverManager.getDriver('postgres').getOrThrow()
+            ORM.register(driver, URL, default: true)
             let executor = ORM.executor('postgres')
             executor.setSql('''
                 CREATE TABLE IF NOT EXISTS llm_memory (
