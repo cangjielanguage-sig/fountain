@@ -37,7 +37,7 @@
 - [x] 4.2 验证 MySQL 向量能力：`VECTOR(1024)` 建表、`CREATE VECTOR INDEX ... USING HNSW`、`VECTOR_DISTANCE` 查询三步可用；不可用时记录降级结论
 - [x] 4.3 实现 `MySqlMemoryStore`：写与 PG 同构的 DAO（记忆/kind/向量/倒排），先写用例（复用 conformance）跑出 Red，再实现转绿
 - [x] 4.4 实现 `MySqlMetaStore`：人格/配置/技能/提示词，复用 3.x 用例在 MySQL 上跑绿
-- [ ] 4.5 跑 MySQL 侧完整 conformance：topK 与 PG 一致（浮点容差）、无向量索引时降级 `warn`、迁移 DDL 幂等
+- [x] 4.5 跑 MySQL 侧完整 conformance：topK 与 PG 一致（浮点容差）、无向量索引时降级 `warn`、迁移 DDL 幂等
 - [ ] 4.6 在 `f_llm/README.md` / `README_en.md` 增补 MySQL 版本要求与降级说明；记录实测版本
 
 ## 5. 集成与回归
