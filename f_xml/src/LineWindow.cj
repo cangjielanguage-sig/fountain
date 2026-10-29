@@ -153,6 +153,17 @@ public class LineWindow {
 
     /** 向前看第 `offset` 个字符的码点；`-1` 表示流结束。热路径不分配 `Option`。 */
     public func peekFast(offset: Int64): Int64 {
+        // 快路径：块内命中时不做 ensure 调用与边界循环（词法器逐字符调用的主路径）。
+        if (offset >= 0 && offset <= 8) {
+            let index = this.pos + offset
+            if (index < this.len) {
+                return Int64(this.block[index])
+            }
+        }
+        return this.peekFastSlow(offset)
+    }
+
+    private func peekFastSlow(offset: Int64): Int64 {
         if (offset < 0 || offset > 8) {
             return -1
         }
@@ -167,6 +178,22 @@ public class LineWindow {
 
     /** 消费当前字符并返回码点；`-1` 表示流结束。热路径不分配 `Option`。 */
     public func advanceFast(): Int64 {
+        // 快路径：块内命中时只做下标推进与行列号更新，不进入 ensure。
+        if (this.pos < this.len) {
+            let cp = Int64(this.block[this.pos])
+            this.pos++
+            if (cp == 0x0A) {
+                this.line++
+                this.column = 1
+            } else {
+                this.column++
+            }
+            return cp
+        }
+        return this.advanceFastSlow()
+    }
+
+    private func advanceFastSlow(): Int64 {
         if (!this.ensure(1)) {
             if (this.pendingError.isSome()) {
                 this.raisePendingError()
