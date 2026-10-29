@@ -260,3 +260,14 @@ CREATE TABLE IF NOT EXISTS llm_loom_flow (
   PRIMARY KEY (name),
   KEY idx_loom_status (status, update_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- -----------------------------------------------------------------------------
+-- 6. 提示词版本（元数据族）
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS llm_prompt (
+  name        VARCHAR(128) NOT NULL,
+  version     INT          NOT NULL,
+  content     LONGTEXT     NOT NULL,
+  update_time DATETIME     NOT NULL DEFAULT (UTC_TIMESTAMP()),
+  PRIMARY KEY (name, version)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

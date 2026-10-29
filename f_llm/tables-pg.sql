@@ -249,3 +249,14 @@ CREATE TABLE IF NOT EXISTS llm_loom_flow (
   update_time  TIMESTAMP   NOT NULL DEFAULT (now() AT TIME ZONE 'utc')
 );
 CREATE INDEX IF NOT EXISTS idx_loom_status ON llm_loom_flow (status, update_time);
+
+-- -----------------------------------------------------------------------------
+-- 6. 提示词版本（元数据族，PG/MySQL/f_store 三实现）
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS llm_prompt (
+  name        VARCHAR(128) NOT NULL,
+  version     INT          NOT NULL,
+  content     TEXT         NOT NULL,
+  update_time TIMESTAMP    NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
+  PRIMARY KEY (name, version)
+);
