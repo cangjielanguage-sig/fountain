@@ -45,7 +45,7 @@ public interface MemoryRepository {
     func searchDense(query: MemoryQuery, vector: Array<Float64>, limit: Int64): ArrayList<MemoryHit>
 
     /** sparse 召回：按 token 命中累加权重；没有倒排数据时返回空列表（由 store 标 degraded） */
-    func searchSparse(query: MemoryQuery, limit: Int64): ArrayList<MemoryHit>
+    func searchSparse(query: MemoryQuery, tokens: HashMap<Int64, Float64>, limit: Int64): ArrayList<MemoryHit>
 
     /** 覆盖写稀疏倒排：先删旧 token，再写新 token */
     func upsertSparse(memoryId: Int64, userId: Int64, namespace: String, tokens: HashMap<Int64, Float64>): Unit

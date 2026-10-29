@@ -75,7 +75,8 @@ public class PostgresMemoryStore <: MemoryStore {
         // 两路各取 topK 的 2 倍，融合后乘权重再截断
         let limit = query.topK * 2
         let dense = repo.searchDense(query, vector, limit)
-        let sparse = repo.searchSparse(query, limit)
+        let queryTokens = embedder.tokenize(query.text)
+        let sparse = repo.searchSparse(query, queryTokens, limit)
         // 没有倒排数据（或对方未提供 sparse）时，只由 dense 打分，并标记降级
         let degraded = sparse.isEmpty()
 

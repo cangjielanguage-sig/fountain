@@ -93,7 +93,8 @@ class FakeMemoryRepository <: MemoryRepository {
     public var colbertCalls: Int64 = 0
     private let colbertVectors = HashMap<Int64, ColbertVectors>()
 
-    public func searchSparse(query: MemoryQuery, limit: Int64): ArrayList<MemoryHit> {
+    public func searchSparse(query: MemoryQuery, tokens: HashMap<Int64, Float64>,
+                             limit: Int64): ArrayList<MemoryHit> {
         sparseHits
     }
 

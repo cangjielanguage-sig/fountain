@@ -122,8 +122,47 @@ public class PostgresMemoryRepository <: MemoryRepository {
         // 重排会因 colbert(id) 返回 None 自动跳过，不影响召回。
     }
 
-    public func searchSparse(query: MemoryQuery, limit: Int64): ArrayList<MemoryHit> {
-        ArrayList<MemoryHit>()
+    public func searchSparse(query: MemoryQuery, tokens: HashMap<Int64, Float64>,
+                             limit: Int64): ArrayList<MemoryHit> {
+        if(tokens.isEmpty()){
+            return ArrayList<MemoryHit>()
+        }
+        var namespaceClause = ''
+        if(query.namespaces.size > 0){
+            let placeholders = ArrayList<String>()
+            for(_ in query.namespaces){
+                placeholders.add('?')
+            }
+            namespaceClause = ' AND t.namespace IN (${join(placeholders)})'
+        }
+        let tokenPlaceholders = ArrayList<String>()
+        for(_ in tokens.keys()){
+            tokenPlaceholders.add('?')
+        }
+        let sql = '''
+            SELECT m.id, m.user_id, m.namespace, m.title, m.content, m.kind,
+                   SUM(t.weight) AS score
+            FROM llm_memory_token t
+            JOIN llm_memory m ON m.id = t.memory_id
+            WHERE t.user_id = ?${namespaceClause} AND t.token IN (${join(tokenPlaceholders)})
+            GROUP BY m.id, m.user_id, m.namespace, m.title, m.content, m.kind
+            ORDER BY score DESC
+            LIMIT ?
+        '''
+        var statement = executor.setSql(sql).add(query.userId)
+        for(namespace in query.namespaces){
+            statement = statement.add(namespace)
+        }
+        for((token, _) in tokens){
+            statement = statement.add(token)
+        }
+        statement = statement.add(limit)
+
+        let hits = ArrayList<MemoryHit>()
+        for(row in statement.mapList()){
+            hits.add(MemoryHit(recordOf(row), floatOf(row.get('score') ?? 0.0f64)))
+        }
+        hits
     }
 
     public func colbert(recordId: Int64): ?ColbertVectors {
