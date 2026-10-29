@@ -96,6 +96,16 @@ public interface MetaStore <: Resource {
 - 旧配置键 `llm_memoryBackend` / `llm_characterBackend` / `llm_memoryPath` 启动 `warn` 并忽略；
 - 新增表为纯增量，不删旧表；旧 `f_store` 记忆数据不自动迁移（`FaithfulMemory` 的 key 继续可读）。
 
+### D11 驱动隔离：两个实现包 + 适配器注册（2026-10-29 追加）
+
+- `postgres` 与 `mysql` 各自独立包：`f_llm/src/store/postgres/`、`f_llm/src/store/mysql/`，包内**各自导入驱动**（`postgres_driver` / `mariadb`），并各自实现 `ContentStore` / `MetaStore`；
+- 业务代码只 `import fountain::f_llm.store.*`，**看不到实现类型**；实现包在初始化时调用 `Stores.registerContent('postgres', …)` / `registerMeta`；
+- `Stores` 是适配器：只认注册名，不 import 任何实现包；`llm_contentStore` / `llm_metaStore` 选中哪个就实例化哪个；
+- 驱动以 `output-type = "dynamic"` 加入 `f_llm/cjpm.toml`，**运行时只需驱动在 `LD_LIBRARY_PATH`**，不把驱动源码打进 f_llm；
+- 好处：换驱动/换数据库不动业务层；驱动缺失时启动报「适配器未注册」，而不是链接期失败。
+
+**待确认**：MySQL 侧中心仓包名是 `mysql_driver`（仓库内 e2e 用这个名字）还是 `mariadb`；两者驱动名与 URL scheme 不同，必须与用户确认后再写依赖。
+
 ## Risks / Trade-offs
 
 - `f_store` 无事务 → 两阶段写可能留下孤儿索引；缓解：启动补索引、删除顺序反转、单进程互斥。
