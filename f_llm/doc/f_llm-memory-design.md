@@ -253,8 +253,28 @@ f_llm 的持久化分成**两个互不相干的选择**，各自三选一，组�
 
 | 族 | 存什么 | 可选实现（三选一） | 能不能没有数据库 |
 |---|---|---|---|
-| **内容族** `ContentStore` | 记忆、经验、知识、文档 | `PostgresContentStore` / `MySqlContentStore` / `FhydraContentStore` | 只有 fhydra 可以 |
+| **内容族** `ContentStore` | 记忆、经验、知识、文档 | `PostgresContentStore` / `MySqlContentStore` / `FHydraContentStore` | 只有 f_hydra 可以 |
 | **元数据族** `MetaStore` | 人格、技能、提示词、模型配置 | `PostgresMetaStore` / `MySqlMetaStore` / `FStoreMetaStore` | **f_store 可以** |
+
+**无库（不装 PostgreSQL/MySQL）时的默认组合**：
+
+```ini
+llm_contentStore = f_hydra      # 向量检索走 f_hydra（进程内动态库，另有 fhydra 可执行服务可远程调用）
+llm_metaStore    = f_store      # 人格/技能/提示词/配置落 f_store
+llm_hydraPath    = ./data/f_hydra
+```
+
+**向量查询与非向量查询的分工**（f_llm 内部的路由规则，不是两个后端）：
+
+| 查询 | 走哪 | 说明 |
+|---|---|---|
+| 向量检索（memory/knowledge 的 search、searchTools） | `f_hydra` | dense/sparse/colbert 与 ANN 索引都在 f_hydra 内 |
+| 非向量读写（按 id get、list、count、分页、kind/标签过滤） | `f_store` | 避免为了「取一条记录」启动向量索引 |
+| 两者一致性 | 同一次写入同时落两侧 | 以 `recordId` 对齐；`f_store` 是权威数据，`f_hydra` 可重建 |
+
+> `f_hydra` 是动态链接库（`output-type = "dynamic"`），f_llm 直接在进程内调用；`fhydra` 是独立可执行文件，
+> 依赖 `f_hydra` + `f_mvc` 提供 HTTP 服务。二者共用同一套存储布局与索引实现，**不是两套代码**。
+> 需要解耦部署时把 `llm_contentStore` 指向 `fhydra`（HTTP）；单机无库时指向 `f_hydra`（进程内）。
 
 ```cangjie
 public interface ContentStore <: Resource {
@@ -1413,7 +1433,8 @@ public class JitTicktockTask <: CronTicktockTask {
 
 | 键 | 默认 | 说明 |
 |---|---|---|
-| `llm_contentStore` | `fhydra` | `postgres` / `mysql` / `fhydra`（记忆/经验/知识/文档） |
+| `llm_contentStore` | `f_hydra` | `postgres` / `mysql` / `f_hydra` / `fhydra`（记忆/经验/知识/文档；`f_hydra` 进程内、`fhydra` 走 HTTP） |
+| `llm_hydraPath` | `./data/f_hydra` | 仅 `f_hydra` 用：数据目录（与元数据的 `llm_metaStorePath` 分开） |
 | `llm_metaStore` | `f_store` | `postgres` / `mysql` / `f_store`（人格/技能/提示词/模型配置） |
 | `llm_metaStorePath` | `./data/f_llm-meta` | 仅 `f_store` 用 |
 | `llm_contentStoreUrl` | 空 | pg/mysql 连接串或 fhydra base url |

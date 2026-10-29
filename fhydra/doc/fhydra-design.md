@@ -12,8 +12,9 @@
 
 | 项 | 结论 |
 |---|---|
-| 形态 | 独立可执行模块 `fhydra/`，HTTP 服务，`fboot build` 产出二进制 |
-| 依赖 | `f_store`（字节 KV）、`f_mvc`（HTTP 路由）、`f_data`/`f_log`/`f_config`/`f_concurrent` |
+| 形态 | **拆成两个模块**：`f_hydra/` 动态链接库（`output-type = "dynamic"`，向量与数据 CRUD）+ `fhydra/` 可执行文件（HTTP 服务，`fboot build` 产出二进制） |
+| 依赖 | `f_hydra` → `f_store` + `f_data`/`f_log`/`f_config`/`f_concurrent`；`fhydra` → `f_hydra` + `f_mvc`（只管路由/鉴权/序列化） |
+| 无库默认 | f_llm 不装 PG/MySQL 时：**向量查询默认 `f_hydra`（进程内库）**，**非向量查询默认 `f_store`**；需要解耦部署时才用 `fhydra` 的 HTTP 接口 |
 | **不依赖** | `f_llm`、任何 embedding 模型、pandoc —— 向量由调用方算好传入 |
 | 调用方 | `f_llm` 的 `FhydraVectorStore` / `FhydraMemoryStore`；也可被其它项目直接 HTTP 调用 |
 | 与数据库的关系 | fhydra 自身只用 `f_store` 落盘；`postgres/mysql/opengauss/mariadb` 是**并列的另一种选择**，由 f_llm 的存储实现直接连库，不经过 fhydra |
