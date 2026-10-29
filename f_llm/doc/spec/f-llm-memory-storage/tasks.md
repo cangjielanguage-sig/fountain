@@ -25,7 +25,7 @@
 ## 3. 元数据族：PostgreSQL 与 f_store
 
 - [ ] 3.1 写 `FStoreMetaStore` 用例：写入后重建实例仍可读、主体存在而索引缺失时启动补索引、删除先删索引；实现后转绿
-- [ ] 3.2 写 `CharacterStore` 用例：一人一条覆盖、13 个预定义 key 可解析、`custom` 原样保存、未知 key 拒绝、`reset` 回落 `default`；在 f_store 与 PG 上分别跑绿
+- [x] 3.2 写 `CharacterStore` 用例：一人一条覆盖、13 个预定义 key 可解析、`custom` 原样保存、未知 key 拒绝、`reset` 回落 `default`；在 f_store 与 PG 上分别跑绿
 - [ ] 3.3 写 `LLMConfStore` 用例：`enabled=false` 与 `weight<=0` 不进候选、按 `llmName` 查询、`setHolder` 兼容；实现 PG 与 f_store 后转绿
 - [ ] 3.4 写 `SkillStore` / `PromptStore` 契约用例：技能 `version` 默认 1、提示词按 `(name, version)` 存取、未知记录返回空值；实现 f_store 后转绿
 - [ ] 3.5 把 1.2 的 conformance 用例接 PG / f_store 跑绿
