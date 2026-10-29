@@ -86,7 +86,7 @@ Gate A 的五条排除规则复核（`python3` 统计 `.cache/xmlconf/unsupporte
 | 自定义 RuneSource 走回退路径 | `LineWindow_test.customSourceFallsBack` |
 | 扫描路径无 Option | task 3.6 静态检查（白名单见 `design.md` §4.2）——**无运行期用例** |
 | 固定串匹配不分配数组 | `Lexer_test.manyProcessingInstructions`（10 万个 `?>`） |
-| 块大小与编码矩阵等价 | `CharLayerParity_test.utf8Strict/utf8Replace/gbk/utf16AndUtf32/errorPositionAcrossBufSizes` |
+| 块大小与编码矩阵等价 | `CharLayerParity_test.utf8Strict/utf8Replace/gbk/utf16AndUtf32AcrossBufSizes/errorPositionAcrossBufSizes` |
 | 公开声明零变更 | task 10.4 `grep '^public '` diff（见 §5） |
 
 ### 4.2 `f-xml-conformance`

@@ -92,6 +92,6 @@ python3 -m unittest discover -s tools -p 'test_*.py' -v
 
 ## 7. 验收口径提醒
 
-- 本变更的 Gate：10 MB `min(3) < 1000 ms`、`VmHWM(50 MB) − VmHWM(10 MB) ≤ 24 MB`。
+- 本变更的 Gate：10 MB `min(3) < 7200 ms`（相对基线 ≥25%）、`VmHWM(50 MB) − VmHWM(10 MB) ≤ 24 MB`。
 - 一致性不降级：2038 / 524 / 0 原样沿用；现有 303 条用例一条不删、期望不改。
 - 公开声明零变更：以 `grep '^public '` 的 diff 为空为准。

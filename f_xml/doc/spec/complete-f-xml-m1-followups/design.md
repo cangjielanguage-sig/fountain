@@ -249,7 +249,7 @@ var codepointsYielded: Int64 = 0 // 累计码点数
 
 `RuneFeed` 增加码点入口，实现三个帧：
 
-| 帧 | 存储 | `peekCpFast` / `advanceCpFast` |
+| 帧 | 存储 | `peekCp` / `advanceCp` |
 |---|---|---|
 | `WindowFeed` | 无（转调 `LineWindow`） | 直接转调 `window.peekFast` / `advanceFast` |
 | `StringFeed` | `Array<Int32>`（原 `Array<Rune>`） | 下标读写，`-1` = EOF |
@@ -288,9 +288,9 @@ var codepointsYielded: Int64 = 0 // 累计码点数
 在 PI / 声明 / 注释循环里是**每字符一次**。改为：
 
 - 在 `Lexer` 里定义一组 `static let` 常量（`Array<Int64>`）：
-  `kCommentOpen`("<!--")、`kCommentClose`("-->")、`kCdataOpen`("<![CDATA[")、
+  `kCommentOpen`("<!--")、`kCommentClose`("-->")、`kCdataBody`("[CDATA[")、
   `kCdataClose`("]]>")、`kPiClose`("?>")、`kDoctype`("DOCTYPE")、`kPublic`("PUBLIC")、
-  `kSystem`("SYSTEM")、`kDoubleHyphen`("--")、`kConditionalOpen`("<![")、`kAmp`("&")。
+  `kSystem`("SYSTEM")、`kDoubleHyphen`("--")、`kConditionalOpen`("<![")；`&` 用 `0x26` 字面量。
 - `startsWithCp(pattern: Array<Int64>): Bool`、`consumeCp(pattern)`、`expectCp(pattern)`。
 - 全部调用点换成常量版本；`startsWith(String)` / `consume(String)` / `expect(String)`
   只保留给错误消息与极少数动态串（若最终无用可删，`internal` 不受 API 约束）。

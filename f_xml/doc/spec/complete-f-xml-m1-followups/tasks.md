@@ -39,9 +39,9 @@
 - [x] 1.2 实现 `BufferedRuneSource` 块化：`decodeInto` 默认实现（循环 `pull()`）+
   `ownBlock` 惰性分配 + `peekFast` / `advanceFast` 块内寻址 + `blocksFilled` /
   `codepointsYielded` 计数。**`protected pull()` / `pulledRune` 保留**，不破坏第三方子类。
-  三个内置子类中：`Utf8RuneSource`（strict / replace）与 `BlockRuneSource`（UTF-16/32）
-  覆写 `decodeInto` 走批量；`CharsetRuneSource` 用默认实现（逐字符 `read()`，保留 §3.8
-  例外）。→ 1.1 转绿。
+  `decodeInto` 按具体类型分派到 `decodeBatch`：`Utf8RuneSource`（strict / replace）与
+  `BlockRuneSource`（UTF-16/32）走批量；`CharsetRuneSource` 用默认实现（逐字符 `read()`，
+  保留 §3.8 例外）。→ 1.1 转绿。
 - [x] 1.3 `ByteDecoder.decodeBlock(dest, start, capacity)` + `ByteReader.copyAsciiRun`；
   UTF-8 连续 ASCII 批量搬运，多字节仍走 `next()`；块尾回退不变。
   用例：`InvalidByteMode_test` 追加「`bufSize = 4/8/16` 下块解码与整块读取逐字符一致」。
@@ -74,7 +74,7 @@
 
 ## 3. Lexer 热路径
 
-- [x] 3.1 `RuneFeed` 增加 `peekCpFast` / `advanceCpFast`；`WindowFeed` / `StringFeed` /
+- [x] 3.1 `RuneFeed` 增加 `peekCp` / `advanceCp` 码点入口；`WindowFeed` / `StringFeed` /
   `SinkFeed` 实现；`StringFeed` 改 `Array<Int32>`，`SinkFeed` 改 `Array<Int32>` 块。
 - [x] 3.2 **先写失败用例** `src/Lexer_test.cj` 追加：一份覆盖「标签 / 属性 / 文本 / CDATA /
   注释 / PI / 声明 / DOCTYPE / 内部子集」的文档，断言事件序列与错误位置与改动前一致
@@ -165,7 +165,7 @@
   五条排除规则的条数仍是 313 / 95 / 59 / 47 / 10（`unsupported.json` 复核）。
 - [x] 10.4 **公开声明零变更**：`grep -rn '^public ' f_xml/src --include='*.cj' | sort >
   /tmp/f_xml_public_after.txt && diff /tmp/f_xml_public_before.txt /tmp/f_xml_public_after.txt`
-  无输出。
+  无输出（`public class *_test` 测试类除外，用 `--test-only`/文件名过滤排除）。
 - [x] 10.5 推拉一致性：`PushPullParity_test` 全绿；`FormatSamples_test` 全绿；
   `WriterEncoding_test` 全绿（写方向不该被本次改动影响，跑它是为了证明边界干净）。
 - [x] 10.6 新增 `CharLayerParity_test`：`bufSize ∈ {4, 8, 16, 64, 8192, 65536}` ×
