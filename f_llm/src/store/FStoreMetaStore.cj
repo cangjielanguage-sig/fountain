@@ -72,6 +72,9 @@ class FStoreCharacterStore <: CharacterStore {
     }
 
     public func set(character: Character): Unit {
+        if(!PredefinedCharacters.isKnown(character.characterKey)){
+            throw IllegalArgumentException('unknown character key: ${character.characterKey}')
+        }
         let text = '${character.characterKey}\n${character.prompts}'
         store.add(key(character.userId), text.toArray())
     }

@@ -43,4 +43,32 @@ public class FStoreMetaStoreTest {
         meta.characters.reset(7)
         @Expect(meta.characters.get(7).isNone(), true)
     }
+
+    @TestCase
+    func testPredefinedKeysAccepted(): Unit {
+        let meta = FStoreMetaStore('/tmp/fllm-meta-test')
+        @Expect(PredefinedCharacters.keys().size, 13)
+        for(key in PredefinedCharacters.keys()){
+            meta.characters.set(Character(100, key, ''))
+        }
+    }
+
+    @TestCase
+    func testUnknownKeyRejected(): Unit {
+        let meta = FStoreMetaStore('/tmp/fllm-meta-test')
+        var thrown = false
+        try{
+            meta.characters.set(Character(101, 'not-exist', ''))
+        }catch(_: IllegalArgumentException){
+            thrown = true
+        }
+        @Expect(thrown, true)
+    }
+
+    @TestCase
+    func testCustomPromptsPreserved(): Unit {
+        let meta = FStoreMetaStore('/tmp/fllm-meta-test')
+        meta.characters.set(Character(102, 'custom', '你是猫娘'))
+        @Expect(meta.characters.get(102).getOrThrow().prompts, '你是猫娘')
+    }
 }
