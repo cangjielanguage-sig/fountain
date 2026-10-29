@@ -20,7 +20,7 @@
 - [x] 2.6 写 colbert 重排用例：`rerank=true` 改变排序但不改候选集、`rerank=false` 不读 colbert 列；实现 max-sim 重排后转绿
 - [x] 2.7 写隔离用例：跨用户不可见、`global` 跨工作空间可见、`ws-*` 互不可见；实现查询条件后转绿
 - [x] 2.8 把 1.2 的 conformance 用例接 PostgreSQL 实现跑绿；无 PG 环境时跳过并打印原因
-- [ ] 2.9 在 `f_llm/doc/` 增补「内容族存储」说明（表、三路检索流程、权重），与设计文档 §5/§6 对齐
+- [x] 2.9 在 `f_llm/doc/` 增补「内容族存储」说明（表、三路检索流程、权重），与设计文档 §5/§6 对齐
 
 ## 3. 元数据族：PostgreSQL 与 f_store
 
