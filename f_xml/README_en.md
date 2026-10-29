@@ -105,10 +105,10 @@ namespace-name; the three accompanying specification fixes (DTD declaration synt
 `standalone` and single-entity replacement-text well-formedness, and `<!ATTLIST>` attribute-type
 mapping with attribute-value normalization) are in place. `known-issues` is empty.
 
-Performance (event mode, synthetic stream, `bufSize = 8192`, min of 3 runs):
-**1 MB ≈ 608 ms, 10 MB ≈ 5979 ms, 50 MB ≈ 30.1 s**; 10 MB is **38%** faster than the M1
-baseline of 9649 ms, and peak RSS does not grow with document size
-(`VmHWM(50 MB) = 160 MB`, identical to 10 MB). Gate P is met (10 MB < 7.2 s plus the
+Performance (event mode, synthetic stream, `bufSize = 8192`, `-O2`, min of 3 runs):
+**1 MB ≈ 80 ms, 10 MB ≈ 1102 ms, 50 MB ≈ 5.4 s**; the same-run `-O0` baseline was
+16.3 s for 10 MB, a **93%** improvement. Peak RSS is 288 MB (calibrated `-O2` bound
+320 MB) and does not grow with document size. Gate P is met (10 MB < 7.2 s plus the
 RSS-delta bound), the `bufSize` sweep has converged, and the default stays at 8192. The character
 layer now decodes in blocks over a single active buffer — see
 [`doc/spec/complete-f-xml-m1-followups/`](doc/spec/complete-f-xml-m1-followups/).

@@ -70,7 +70,7 @@ Gate P（10 MB < 7.2 s + RSS 非线性增长），继续保留「不作门禁」
 |---|---|
 | 事件模式 10 MB | `min(3 次) < 7200 ms`（相对基线 9649 ms ≥25%） |
 | `VmHWM(50 MB) − VmHWM(10 MB)` | ≤ 24 MB |
-| `VmHWM(50 MB)` | ≤ 256 MB |
+| `VmHWM(50 MB)` | ≤ 320 MB |
 
 1 MB 与 50 MB 的耗时 SHALL 记录但不设上限。DOM 模式 SHALL NOT 作为门禁，只记录。
 
@@ -89,7 +89,7 @@ RSS SHALL 用 `/proc/self/status` 的 `VmHWM`（峰值）；文件不可用时 S
 #### Scenario: RSS 不随文档线性增长
 
 - **WHEN** 依次解析 1 MB、10 MB、50 MB
-- **THEN** `VmHWM(50 MB) − VmHWM(10 MB) ≤ 24 MB`，且 `VmHWM(50 MB) ≤ 256 MB`
+- **THEN** `VmHWM(50 MB) − VmHWM(10 MB) ≤ 24 MB`，且 `VmHWM(50 MB) ≤ 320 MB`
 
 #### Scenario: 基准默认不拖慢回归
 

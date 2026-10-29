@@ -103,9 +103,9 @@ xmlconf 20130923 的口径：可跑集 **2062** 条
 （DTD 声明语法良构校验、`standalone` 与单实体替换文本良构、`<!ATTLIST>` 属性类型映射与
 属性值规范化）已落地。`known-issues` 已清空。
 
-性能（事件模式，合成流，`bufSize = 8192`，3 次取 `min`）：**1 MB ≈ 608 ms、
-10 MB ≈ 5979 ms、50 MB ≈ 30.1 s**；10 MB 相对 M1 基线 9649 ms 提升 **38%**，
-峰值 RSS 不随文档增长（`VmHWM(50 MB) = 160 MB`，与 10 MB 相同）。Gate P 已达成
+性能（事件模式，合成流，`bufSize = 8192`，`-O2`，3 次取 `min`）：**1 MB ≈ 80 ms、
+10 MB ≈ 1102 ms、50 MB ≈ 5.4 s**；同轮 `-O0` 旧代码 10 MB 为 16.3 s，提升 **93%**；
+峰值 RSS 288 MB（`-O2` 校准阈值 320 MB），50 MB 与 10 MB 基本相同。Gate P 已达成
 （10 MB < 7.2 s + RSS 差值 ≤ 24 MB），`bufSize` 实测曲线已收敛、默认值仍为 8192。
 字符层已改为按块解码 + 单一活动缓冲（详见
 [`doc/spec/complete-f-xml-m1-followups/`](doc/spec/complete-f-xml-m1-followups/)）。

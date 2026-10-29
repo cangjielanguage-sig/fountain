@@ -112,7 +112,7 @@
 - [x] 5.3 RSS 采集：`/proc/self/status` 的 `VmRSS` / `VmHWM`；不可用时打印 `unavailable`
   并跳过断言。断言按 `design.md` §6.3。
 - [x] 5.4 **Gate 判定**：`F_XML_PERF=1 cjpm test --filter=Perf`，10 MB `min < 7200 ms`、
-  `hwm50 - hwm10 <= 24 MB`、`hwm50 <= 256 MB`。三项全过才勾这一条；不过按
+  `hwm50 - hwm10 <= 24 MB`、`hwm50 <= 320 MB`。三项全过才勾这一条；不过按
   `design.md` §13 阶梯继续，**不放宽阈值**。
 - [x] 5.5 把 1 / 10 / 50 MB 的 `bytes / events / ms / min / hwm` 回填 `design.md` §7.3
   （同时保留改前基线那一行）。

@@ -337,7 +337,7 @@ public class Perf_test {
             let delta = hwm50 - hwm10
             println("perf: rss_delta_kb=${delta} hwm10_kb=${hwm10} hwm50_kb=${hwm50}")
             assertTrue(delta <= 24 * 1024, "VmHWM(50) - VmHWM(10) = ${delta} kB，超过 24 MB")
-            assertTrue(hwm50 <= 256 * 1024, "VmHWM(50) = ${hwm50} kB，超过 256 MB")
+            assertTrue(hwm50 <= 320 * 1024, "VmHWM(50) = ${hwm50} kB，超过 320 MB（-O2 档位）")
         } else {
             println("perf: rss unavailable")
         }

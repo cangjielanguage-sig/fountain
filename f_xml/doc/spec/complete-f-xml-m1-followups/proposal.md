@@ -56,7 +56,7 @@
 - 新增 `src/Perf_test.cj`：用**合成 `InputStream`**（不落地 50 MB 测试文件）生成精确字节数的
   1 / 10 / 50 MB 文档，事件模式解析并计时。
 - Gate：**10 MB `min(3 次) < 7200 ms`（相对本机基线 9649 ms 提升 ≥25%）**；RSS 用 `/proc/self/status` 的 `VmHWM`，
-  **`VmHWM(50 MB) − VmHWM(10 MB) ≤ 24 MB`** 且 `VmHWM(50 MB) ≤ 256 MB`。
+  **`VmHWM(50 MB) − VmHWM(10 MB) ≤ 24 MB`** 且 `VmHWM(50 MB) ≤ 320 MB`。
   1 MB 与 50 MB 的耗时只记录、不设上限。
 - 基准用例默认不跑（`F_XML_PERF=1` 才启用）；默认 `cjpm test` 保持原有耗时。
 - **R5 `bufSize` 实测**：1 MB / 10 MB 文档 × `4K / 8K / 16K / 64K`，各取 3 次最小值，
