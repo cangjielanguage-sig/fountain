@@ -15,8 +15,11 @@ limitations under the License.
 */
 package fountain::f_llm.store
 
+import std.time.DateTime
 import std.unittest.*
 import std.unittest.testmacro.*
+
+import fountain::f_store.Store
 
 @Test
 public class FStoreMetaStoreTest {
@@ -70,5 +73,29 @@ public class FStoreMetaStoreTest {
         let meta = FStoreMetaStore('/tmp/fllm-meta-test')
         meta.characters.set(Character(102, 'custom', '你是猫娘'))
         @Expect(meta.characters.get(102).getOrThrow().prompts, '你是猫娘')
+    }
+
+    @TestCase
+    func testConfPutAndFilter(): Unit {
+        // 每次跑用独立目录，避免上一轮的残留配置把候选数抬高
+        let meta = FStoreMetaStore('/tmp/fllm-conf-${DateTime.now().toUnixTimeStamp().toSeconds()}')
+        meta.confs.put(LLMConfView('p1', 'chat-pro', 'pro', 10, true))
+        meta.confs.put(LLMConfView('p2', 'chat-pro', 'off', 10, false))
+        meta.confs.put(LLMConfView('p3', 'chat-pro', 'zero', 0, true))
+        @Expect(meta.confs.candidates('chat-pro').size, 1)
+        @Expect(meta.confs.names().size, 1)
+    }
+
+    @TestCase
+    func testRepairRebuildsMissingIndex(): Unit {
+        let path = '/tmp/fllm-conf-repair-${DateTime.now().toUnixTimeStamp().toSeconds()}'
+        // 同一个 Store 实例内模拟半写：写主体 → 删掉索引 → repair 补回
+        let store = Store(path)
+        let confs = FStoreLLMConfStore(store)
+        let id = confs.put(LLMConfView('p1', 'chat-x', 'x', 10, true))
+        store.remove('f_llm:meta:conf:byname:chat-x:${id}'.toArray())
+        @Expect(confs.candidates('chat-x').size, 0)
+        confs.repair()
+        @Expect(confs.candidates('chat-x').size, 1)
     }
 }

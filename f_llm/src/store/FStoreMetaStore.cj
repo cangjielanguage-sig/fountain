@@ -15,6 +15,9 @@ limitations under the License.
 */
 package fountain::f_llm.store
 
+import std.collection.*
+import std.convert.*
+
 import fountain::f_store.Store
 
 /**
@@ -28,10 +31,12 @@ public class FStoreMetaStore <: MetaStore {
 
     private let store: Store
     private let characterStore: FStoreCharacterStore
+    private let confStore: FStoreLLMConfStore
 
     public init(path: String) {
         this.store = Store(path)
         this.characterStore = FStoreCharacterStore(store, CHARACTER_PREFIX)
+        this.confStore = FStoreLLMConfStore(store)
     }
 
     public prop characters: CharacterStore {
@@ -44,7 +49,115 @@ public class FStoreMetaStore <: MetaStore {
         get() { throw IllegalArgumentException('FStorePromptStore not implemented (3.4)') }
     }
     public prop confs: LLMConfStore {
-        get() { throw IllegalArgumentException('FStoreLLMConfStore not implemented (3.3)') }
+        get() { confStore }
+    }
+}
+
+/**
+ * f_store 模型配置（3.1 / 3.3）：主体 + byname 索引，两阶段写。
+ *
+ * 主体：`f_llm:meta:conf:{id}` = provider\nllmName\nactual\nweight\nenabled
+ * 索引：`f_llm:meta:conf:byname:{llmName}:{id}`
+ *
+ * f_store 没有事务：先写主体、再写索引；启动时扫主体补索引。
+ */
+class FStoreLLMConfStore <: LLMConfStore {
+    private static let PREFIX = 'f_llm:meta:conf:'
+    private static let BYNAME = 'f_llm:meta:conf:byname:'
+    private static let SEQ = 'f_llm:meta:seq:conf'
+
+    private let store: Store
+
+    public init(store: Store) {
+        this.store = store
+        repair()
+    }
+
+    public func put(view: LLMConfView): Int64 {
+        let id = nextId()
+        let body = '${view.provider}\n${view.llmName}\n${view.actualLlmName}\n${view.weight}\n${view.enabled}'
+        store.add('${PREFIX}${id}'.toArray(), body.toArray())
+        store.add('${BYNAME}${view.llmName}:${id}'.toArray(), [])
+        id
+    }
+
+    public func names(): ArrayList<String> {
+        let names = ArrayList<String>()
+        for((key, _) in store.prefix(BYNAME.toArray())){
+            let segments = String.fromUtf8(key).split(':')
+            if(segments.size >= 5 && !has(names, segments[4])){
+                names.add(segments[4])
+            }
+        }
+        names
+    }
+
+    public func candidates(llmName: String): ArrayList<LLMConfView> {
+        let result = ArrayList<LLMConfView>()
+        let prefix = '${BYNAME}${llmName}:'
+        for((key, _) in store.prefix(prefix.toArray())){
+            let segments = String.fromUtf8(key).split(':')
+            if(segments.size < 6){
+                continue
+            }
+            let id = segments[5]
+            match(store.get('${PREFIX}${id}'.toArray())){
+                case Some(bytes) =>
+                    let view = parse(String.fromUtf8(bytes))
+                    if(view.enabled && view.weight > 0){
+                        result.add(view)
+                    }
+                case None => ()
+            }
+        }
+        result
+    }
+
+    /** 扫主体补索引；seq 键与 byname 键跳过 */
+    public func repair(): Unit {
+        for((key, value) in store.prefix(PREFIX.toArray())){
+            let keyText = String.fromUtf8(key)
+            if(keyText.startsWith(BYNAME) || keyText == SEQ){
+                continue
+            }
+            // 主体 key 形如 f_llm:meta:conf:{id}，split 后 4 段；byname 键已在上面跳过
+            let segments = keyText.split(':')
+            if(segments.size < 4){
+                continue
+            }
+            let id = segments[3]
+            let view = parse(String.fromUtf8(value))
+            let indexKey = '${BYNAME}${view.llmName}:${id}'
+            if(store.get(indexKey.toArray()).isNone()){
+                store.add(indexKey.toArray(), Array<Byte>())
+            }
+        }
+    }
+
+    private func nextId(): Int64 {
+        let next = match(store.get(SEQ.toArray())){
+            case Some(bytes) => Int64.parse(String.fromUtf8(bytes)) + 1
+            case None => 1
+        }
+        store.add(SEQ.toArray(), '${next}'.toArray())
+        next
+    }
+
+    private static func parse(text: String): LLMConfView {
+        let parts = text.split('\n')
+        if(parts.size < 5){
+            return LLMConfView('', '', '', 0, false)
+        }
+        LLMConfView(parts[0], parts[1], parts[2], Int64.parse(parts[3]), parts[4] == 'true')
+    }
+
+    private static func has(values: ArrayList<String>, target: String): Bool {
+        for(value in values){
+            if(value == target){
+                return true
+            }
+        }
+        false
     }
 }
 
