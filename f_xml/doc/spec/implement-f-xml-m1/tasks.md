@@ -14,40 +14,40 @@
 
 ## 0. 前置
 
-- [ ] 0.1 记录基线：`f_xml` 的 `cjpm build` / `cjpm test` 现状（预期：build 通过，0 用例）；
+- [x] 0.1 记录基线：`f_xml` 的 `cjpm build` / `cjpm test` 现状（预期：build 通过，0 用例）；
   `git branch --show-current` 记录当前分支。
-- [ ] 0.2 建包骨架 `f_xml/src/f_xml.cj` 的导入约定：`f_base` 与 `charset4cj` 的公开再导出
+- [x] 0.2 建包骨架 `f_xml/src/f_xml.cj` 的导入约定：`f_base` 与 `charset4cj` 的公开再导出
   （`public import cangjie_tpc::charset4cj.charset.encoding.Charset`、
   `public import cangjie_tpc::charset4cj.charset.Charsets`），`cjpm build` 通过。
-- [ ] 0.3 **R1–R3 实测**（`StringGenerator` 的三条前提，见 `design.md` §10）：
+- [x] 0.3 **R1–R3 实测**（`StringGenerator` 的三条前提，见 `design.md` §10）：
   - 10 万次 `append("x")` 的耗时曲线（线性 / 二次）；
   - `ArrayList<Byte>` 扩容倍数（连续 append 记录底层数组换新时机）；
   - `unsafeBytes()` 连续两次取是否同一数组（`===`），以及 `unsafeBytes().size == size`。
   结论回填 `design.md` §10；不达标则先调整 `XmlWriter` 的缓冲策略再继续。
-- [ ] 0.4 **R4 实测**：`charset4cj` 的 `Encoder.encode` 对不可映射字符的行为（GBK 写 emoji：
+- [x] 0.4 **R4 实测**：`charset4cj` 的 `Encoder.encode` 对不可映射字符的行为（GBK 写 emoji：
   抛 / 替换 `?` / 跳过）。结论回填 `design.md` §10 与 §6.9（决定往返校验是否保留）。
-- [ ] 0.5 **R6 实测**：`cjpm test` 的工作目录。结论决定 `TestDataRoot` 的候选顺序。
+- [x] 0.5 **R6 实测**：`cjpm test` 的工作目录。结论决定 `TestDataRoot` 的候选顺序。
 
 ## 1. P-1 字符层
 
-- [ ] 1.1 **先写测试** `src/PrefixStream_test.cj`：前缀 + 剩余连续读出；EOF 返回 `-1`；
+- [x] 1.1 **先写测试** `src/PrefixStream_test.cj`：前缀 + 剩余连续读出；EOF 返回 `-1`；
   `close()` 关闭底层（用计数流断言）。→ 实现 `src/PrefixStream.cj`。
-- [ ] 1.2 **先写测试** `src/ByteSniffer_test.cj`：UTF-8 BOM / UTF-16LE BOM / UTF-16BE BOM /
+- [x] 1.2 **先写测试** `src/ByteSniffer_test.cj`：UTF-8 BOM / UTF-16LE BOM / UTF-16BE BOM /
   UTF-32LE BOM 优先于 UTF-16LE / 无 BOM 的 `3C 00 3F 00` 与 `00 3C 00 3F` / 声明 `encoding`
   单双引号 / BOM 与声明冲突以 BOM 为准 / 无任何线索默认 UTF-8。
   → 实现 `src/ByteSniffer.cj`（嗅探上限 4 + 1024 字节）。
-- [ ] 1.3 **先写测试** `src/RuneSource_test.cj`：`peek(0..4)` 不移动游标；`advance` 语义；
+- [x] 1.3 **先写测试** `src/RuneSource_test.cj`：`peek(0..4)` 不移动游标；`advance` 语义；
   行列号 1-based；无 `byteOffset`。→ 实现 `src/RuneSource.cj` 的接口 + `SourcePosition` +
   `Utf8RuneSource`。
-- [ ] 1.4 **先写测试** `src/CharsetRuneSource_test.cj`：GBK 文档逐字符读出；`bufSize` 变化结果一致。
+- [x] 1.4 **先写测试** `src/CharsetRuneSource_test.cj`：GBK 文档逐字符读出；`bufSize` 变化结果一致。
   → 实现 `CharsetRuneSource`。
-- [ ] 1.5 **先写测试** `src/BlockRuneSource_test.cj`：UTF-16LE 含 U+0A00 不被当换行；
+- [x] 1.5 **先写测试** `src/BlockRuneSource_test.cj`：UTF-16LE 含 U+0A00 不被当换行；
   `bufSize = 16` 解析 4 KB UTF-16 文档无丢字；UTF-32BE 同理。
   → 实现 `BlockRuneSource`（固定块解码 + 块尾回退 ≤3 字节）。
-- [ ] 1.6 **先写测试** `src/LineWindow_test.cj`：空行补 `\n` 而 EOF 不补；孤立 `\r` 归一；
+- [x] 1.6 **先写测试** `src/LineWindow_test.cj`：空行补 `\n` 而 EOF 不补；孤立 `\r` 归一；
   `\r\n` 只归一一次；跨行 token 拼接。
   → 实现 `src/LineWindow.cj`（8 槽环形前瞻 + 行列号）。
-- [ ] 1.7 **先写测试** `src/InvalidByteMode_test.cj`，两模式输出分别钉住：
+- [x] 1.7 **先写测试** `src/InvalidByteMode_test.cj`，两模式输出分别钉住：
   - `Strict`：走 `std.io.StringReader`；坏字节抛 `XmlException`，消息含行号、列号、坏字节偏移；
     合法 UTF-8 的逐字符输出用 golden 字符串固定。
   - `Replace`：走自研 `Utf8ReplaceDecoder`（与 `BlockRuneSource` 共用 `ByteDecoder`）；

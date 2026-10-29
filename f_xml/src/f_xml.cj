@@ -15,9 +15,15 @@ limitations under the License.
 */
 package fountain::f_xml
 
+public import cangjie_tpc::charset4cj.charset.encoding.Charset
+public import cangjie_tpc::charset4cj.charset.Charsets
+
 /**
  * f_xml —— 通用 XML 1.0 解析与生成模块。
  *
  * 设计见 `doc/f_xml模块设计.md`。模块不绑定任何业务格式：
  * 提供流式事件解析（推 / 拉）、DOM 构建、命名空间、DTD 内部实体与序列化。
+ *
+ * `Charset` / `Charsets` 由本包公开再导出：`XmlWriterOptions.charset` 属于公开 API，
+ * 调用方必须能在不额外声明依赖的前提下命名该类型。
  */
