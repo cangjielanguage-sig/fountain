@@ -70,11 +70,16 @@ public class PostgresMemoryRepositoryTest {
                   model VARCHAR(64) NOT NULL,
                   title_dense vector(1024),
                   content_dense vector(1024),
+                  title_colbert BYTEA,
+                  content_colbert BYTEA,
                   has_sparse BOOLEAN NOT NULL DEFAULT FALSE,
                   has_colbert BOOLEAN NOT NULL DEFAULT FALSE,
                   update_time TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc')
                 )
             ''').update
+            // 早期测试建过没有 colbert 列的表：IF NOT EXISTS 不会补列，这里显式 ALTER
+            executor.setSql('ALTER TABLE llm_memory_vector ADD COLUMN IF NOT EXISTS title_colbert BYTEA').update
+            executor.setSql('ALTER TABLE llm_memory_vector ADD COLUMN IF NOT EXISTS content_colbert BYTEA').update
             executor.setSql('''
                 CREATE TABLE IF NOT EXISTS llm_memory_token (
                   memory_id BIGINT NOT NULL,
@@ -103,6 +108,19 @@ public class PostgresMemoryRepositoryTest {
                 @Expect(store.list(9001, 'ws-9', 0, 10).size >= 1, true)
                 @Expect(store.remove(9001, record.id), true)
                 @Expect(store.get(9001, record.id).isNone(), true)
+            case None => ()
+        }
+    }
+
+    @TestCase
+    func testColbertRoundTrip(): Unit {
+        match(repository()){
+            case Some(repo) =>
+                let store = PostgresMemoryStore(repo, Fixed1024Embedder())
+                let record = store.add(MemoryWrite(9003, 'ws-9', 'colbert', '二进制', 'note'))
+                let vectors = repo.colbert(record.id)
+                @Expect(vectors.isSome(), true)
+                @Expect(vectors.getOrThrow().title.size, 1)
             case None => ()
         }
     }

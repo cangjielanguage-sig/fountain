@@ -118,8 +118,17 @@ public class PostgresMemoryRepository <: MemoryRepository {
 
     public func upsertColbert(memoryId: Int64, titleVectors: Array<Array<Float64>>,
                               contentVectors: Array<Array<Float64>>): Unit {
-        // TODO(2.8c)：二进制 f32[] 编码（count + count*dim*4）待补；当前不写 colbert 列，
-        // 重排会因 colbert(id) 返回 None 自动跳过，不影响召回。
+        let titleBytes = ColbertCodec.encode(titleVectors)
+        let contentBytes = ColbertCodec.encode(contentVectors)
+        executor.setSql('''
+            UPDATE llm_memory_vector
+            SET title_colbert = ?, content_colbert = ?, has_colbert = true, update_time = now()
+            WHERE memory_id = ?
+        ''')
+            .add(titleBytes)
+            .add(contentBytes)
+            .add(memoryId)
+            .update
     }
 
     public func searchSparse(query: MemoryQuery, tokens: HashMap<Int64, Float64>,
@@ -166,8 +175,29 @@ public class PostgresMemoryRepository <: MemoryRepository {
     }
 
     public func colbert(recordId: Int64): ?ColbertVectors {
-        // TODO(2.8c)：读取并解码 title_colbert / content_colbert
-        None
+        let row = executor.setSql(
+            'SELECT title_colbert, content_colbert FROM llm_memory_vector WHERE memory_id = ?'
+        ).add(recordId).firstToMap()
+        if(row.isEmpty()){
+            return None
+        }
+        let title = bytesOf(row.get('title_colbert'))
+        let content = bytesOf(row.get('content_colbert'))
+        if(title.size == 0 && content.size == 0){
+            return None
+        }
+        Some(ColbertVectors(ColbertCodec.decode(title), ColbertCodec.decode(content)))
+    }
+
+    private static func bytesOf(value: ?Any): Array<Byte> {
+        match(value){
+            case Some(raw) =>
+                match(raw){
+                    case bytes: Array<Byte> => bytes
+                    case _ => Array<Byte>()
+                }
+            case None => Array<Byte>()
+        }
     }
 
     public func get(userId: Int64, id: Int64): ?MemoryRecord {
