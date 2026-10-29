@@ -138,21 +138,21 @@
 
 ## 8. P3-b：两个解析器计数独立
 
-- [ ] 8.1 **先写失败用例** `src/EntityCounterIsolation_test.cj`：
+- [x] 8.1 **先写失败用例** `src/EntityCounterIsolation_test.cj`：
   - 交错：两个 `XmlPullParser` 交替 `nextEvent()`，断言 `totalExpanded()` 只随自身变化；
   - 双线程：`spawn` 两个线程，各解析展开量 0.8 × `maxExpandedTotal` 的文档，两份都成功。
-- [ ] 8.2 若用例暴露共享状态（预期不会），修 `ParserEngine` / `EntityCounter` 的持有关系；
+- [x] 8.2 若用例暴露共享状态（预期不会），修 `ParserEngine` / `EntityCounter` 的持有关系；
   否则只提交用例。**不加锁、不改计数语义。**
-- [ ] 8.3 用例连跑 5 次（线程调度抖动），全绿才算完成。
+- [x] 8.3 用例连跑 5 次（线程调度抖动），全绿才算完成。
 
 ## 9. P3-c：`xmlconf_gen.py` SHA-256 分支
 
-- [ ] 9.1 **先写失败用例** `tools/test_xmlconf_gen.py`（`unittest`）：
+- [x] 9.1 **先写失败用例** `tools/test_xmlconf_gen.py`（`unittest`）：
   函数级匹配 / 不匹配 + 端到端 `--offline` 损坏包（退出码、stderr、无 `cases.json`、
   无 `suite/`）。
-- [ ] 9.2 抽 `ensure_sha256(path, expected=SUITE_SHA256) -> int`；`download()` 与 `main()`
+- [x] 9.2 抽 `ensure_sha256(path, expected=SUITE_SHA256) -> int`；`download()` 与 `main()`
   改为调用它，保持「不匹配不继续」的原行为。→ 9.1 转绿。
-- [ ] 9.3 跑 `python3 -m unittest discover -s f_xml/tools -p 'test_*.py' -v` 全绿；
+- [x] 9.3 跑 `python3 -m unittest discover -s f_xml/tools -p 'test_*.py' -v` 全绿；
   再跑一次真实 `--offline`（缓存完好）确认脚本行为未变：仍输出 `total / unsupported /
   runnable / assertions` 且 `assertions == 2038`。
 
