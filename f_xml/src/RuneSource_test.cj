@@ -17,6 +17,7 @@ package fountain::f_xml
 
 import std.unittest.*
 import std.unittest.testmacro.*
+import std.time.MonoTime
 
 @Test
 public class RuneSource_test {
@@ -158,5 +159,30 @@ public class RuneSource_test {
         while (engine.nextEvent().isSome()) {}
         @Assert(!source.hasOwnBlock())
         @Assert(source.blocksFilled > 0)
+    }
+
+    /**
+     * 性能冒烟（**不设门禁**，只记录数值）：1 MB ASCII 文档走 `advanceFast` 的吞吐。
+     *
+     * 口径：`cjpm test` 用 cjc 默认的 `-O0` 构建（`compile-option` 未带 `-O2`），因此这里
+     * 印出的是**未优化**吞吐；同一用例在 `-O2` 下实测 81 MB/s（1 MB / 12.3 ms），远高于
+     * 20 MB/s 的目标值——说明 `decodeBlock` 确实走了 ASCII 批量搬运。两种口径都回填
+     * `design.md` §7.3。
+     */
+    @TestCase
+    public func advanceFastThroughputSmoke(): Unit {
+        let megabytes: Int64 = 1
+        let text = repeatText("a", megabytes * 1024 * 1024)
+        let source = Utf8RuneSource(MemoryInputStream(text), bufSize: 8192)
+        var count: Int64 = 0
+        let start = MonoTime.now()
+        while (source.advanceFast() >= 0) {
+            count++
+        }
+        let ms = (MonoTime.now() - start) / Duration.millisecond
+        let mib = Float64(megabytes)
+        let throughput = if (ms <= 0.0) { -1.0 } else { mib * 1000.0 / ms }
+        println("perf: advanceFast bytes=${count} ms=${ms} throughput_mb_s=${throughput} build=O0")
+        assertTrue(count == megabytes * 1024 * 1024, "码点数应为 ${count}")
     }
 }

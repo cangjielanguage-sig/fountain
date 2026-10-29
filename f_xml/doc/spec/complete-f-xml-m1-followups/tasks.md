@@ -47,7 +47,7 @@
   用例：`InvalidByteMode_test` 追加「`bufSize = 4/8/16` 下块解码与整块读取逐字符一致」。
 - [x] 1.4 `ByteCodec` 的 UTF-16/32 块入口：`decodeBlock` 循环调 `next()`；用例复用
   `BlockRuneSource_test`（含 `bufSize = 16` 的 4 KB 文档、U+0A00、代理对跨块）。
-- [ ] 1.5 性能冒烟（不设门禁）：1 MB 文档 `advanceFast` 吞吐 ≥ 20 MB/s；低于此值先查
+- [x] 1.5 性能冒烟（不设门禁）：1 MB 文档 `advanceFast` 吞吐 ≥ 20 MB/s；低于此值先查
   `decodeBlock` 是否真的走了 ASCII 批量。记录到 `design.md` §7.3 备注。
 - [x] 1.6 **先写失败用例**（解码错误延迟抛出，`design.md` §3.5）：
   - `bufSize = 8192`，文档在 3 个合法元素后出现非法 UTF-8 字节；
@@ -111,18 +111,18 @@
   计时口径按 `design.md` §6.2：预热、3 次、只计 `nextEvent` 循环、`min`。
 - [x] 5.3 RSS 采集：`/proc/self/status` 的 `VmRSS` / `VmHWM`；不可用时打印 `unavailable`
   并跳过断言。断言按 `design.md` §6.3。
-- [ ] 5.4 **Gate 判定**：`F_XML_PERF=1 cjpm test --filter=Perf`，10 MB `min < 7200 ms`、
+- [x] 5.4 **Gate 判定**：`F_XML_PERF=1 cjpm test --filter=Perf`，10 MB `min < 7200 ms`、
   `hwm50 - hwm10 <= 24 MB`、`hwm50 <= 256 MB`。三项全过才勾这一条；不过按
   `design.md` §13 阶梯继续，**不放宽阈值**。
-- [ ] 5.5 把 1 / 10 / 50 MB 的 `bytes / events / ms / min / hwm` 回填 `design.md` §7.3
+- [x] 5.5 把 1 / 10 / 50 MB 的 `bytes / events / ms / min / hwm` 回填 `design.md` §7.3
   （同时保留改前基线那一行）。
 
 ## 6. R5 `bufSize` 实测
 
 - [x] 6.1 在 `Perf_test` 增加矩阵用例（`F_XML_PERF=1`）：1 MB / 10 MB × 4096 / 8192 /
   16384 / 65536，各 3 次取最小，输出统一格式。
-- [ ] 6.2 跑完把 8 个值回填 `design.md` §8.2，并写一句结论（是否收敛、拐点在哪）。
-- [ ] 6.3 回填 `f_xml/doc/f_xml模块设计.md` §15.1 与 `f_xml/README.md` 状态段；
+- [x] 6.2 跑完把 8 个值回填 `design.md` §8.2，并写一句结论（是否收敛、拐点在哪）。
+- [x] 6.3 回填 `f_xml/doc/f_xml模块设计.md` §15.1 与 `f_xml/README.md` 状态段；
   把 `implement-f-xml-m1/design.md` §10.1 的 R5 行从「未做」改为「已实测，见
   `complete-f-xml-m1-followups/design.md` §8.2」。**默认值仍是 8192。**
 
@@ -161,7 +161,7 @@
 - [x] 10.1 `cjpm clean && cjpm build`：不新增 WARNING（现有 20 条在
   `doc/build-warnings.md`）。
 - [x] 10.2 `cjpm test`：现有 303 条 + 新增用例全部通过；记录总数。
-- [ ] 10.3 **Gate A**：xmlconf 全量 `pass=2038 fail=0 unsupported=524 known=0`；
+- [x] 10.3 **Gate A**：xmlconf 全量 `pass=2038 fail=0 unsupported=524 known=0`；
   五条排除规则的条数仍是 313 / 95 / 59 / 47 / 10（`unsupported.json` 复核）。
 - [x] 10.4 **公开声明零变更**：`grep -rn '^public ' f_xml/src --include='*.cj' | sort >
   /tmp/f_xml_public_after.txt && diff /tmp/f_xml_public_before.txt /tmp/f_xml_public_after.txt`
@@ -174,25 +174,25 @@
 
 ## 11. 文档与副本
 
-- [ ] 11.1 更新 `f_xml/README.md`：状态段的性能数字改成实测值、用例数校正为实际值、
+- [x] 11.1 更新 `f_xml/README.md`：状态段的性能数字改成实测值、用例数校正为实际值、
   指向本变更；`README_en.md` 同步同一口径。
-- [ ] 11.2 更新 `f_xml/doc/f_xml模块设计.md` §15.1：把「1 MB ≈ 1.5 s / 10 MB ≈ 15.8 s、
+- [x] 11.2 更新 `f_xml/doc/f_xml模块设计.md` §15.1：把「1 MB ≈ 1.5 s / 10 MB ≈ 15.8 s、
   已移出 M1 出口」改成本变更的达成值与 Gate 口径；§13.2 的 P6 注明「已由
   complete-f-xml-m1-followups 达成」。
-- [ ] 11.3 新增本变更 `verification.md`：结果总览（Gate P / A / R）、verify 轮次、
+- [x] 11.3 新增本变更 `verification.md`：结果总览（Gate P / A / R）、verify 轮次、
   性能与 R5 表、遗留项（必须为空或经用户裁定）。
-- [ ] 11.4 同步工作副本：
+- [x] 11.4 同步工作副本：
   `rsync -a --delete f_xml/doc/spec/complete-f-xml-m1-followups/ openspec/changes/complete-f-xml-m1-followups/`
   然后 `diff -ru …` 无输出。
-- [ ] 11.5 在 `implement-f-xml-m1/verification.md` §3 末尾补一行：三项 P3 已由
+- [x] 11.5 在 `implement-f-xml-m1/verification.md` §3 末尾补一行：三项 P3 已由
   `complete-f-xml-m1-followups` 承接（只加指向，不改历史结论）。
 
 ## 12. 收尾
 
-- [ ] 12.1 逐条核对 `specs/**/spec.md` 的每个 Scenario 都有对应用例（新建或既有），
+- [x] 12.1 逐条核对 `specs/**/spec.md` 的每个 Scenario 都有对应用例（新建或既有），
   缺一补一；把「Scenario → 用例名」对照表写进 `verification.md`。
-- [ ] 12.2 确认没有把 50 MB 测试数据、`/tmp` 产物、`openspec/` 提交进版本库
+- [x] 12.2 确认没有把 50 MB 测试数据、`/tmp` 产物、`openspec/` 提交进版本库
   （`git status --porcelain` 人工过一遍）。
-- [ ] 12.3 分支内提交（按任务独立提交，不合并、不推送），提交信息写明 Gate 实测值。
+- [x] 12.3 分支内提交（按任务独立提交，不合并、不推送），提交信息写明 Gate 实测值。
 - [ ] 12.4 交付给用户：Gate P / A / R 的数字、R5 曲线、新增用例数、以及
   「哪些优化做了、哪些按设计留作例外（GBK 的逐字符 Option）」。

@@ -95,12 +95,18 @@ XmlWriter(output, options: XmlWriterOptions(indent: Some("  "))).write(element)
 
 ## 状态
 
-M1 已实现并通过 298 条单元测试。xmlconf 20130923 的口径：可跑集 **2062** 条
+已实现并通过 **337** 条单元测试（其中 `complete-f-xml-m1-followups` 新增 34 条）。
+xmlconf 20130923 的口径：可跑集 **2062** 条
 （`unsupported` **524** = `edition` 313 + 外部实体 95 + XML 1.1 59 + 外部子集 47 +
 命名空间名 10），断言 **2038** 条，实测 **2038 通过 / 0 失败**（Gate A 达成）。
 五条排除规则是 `edition` / 外部实体 / XML 1.1 / 外部子集 / 命名空间名；配套的三项规范修正
 （DTD 声明语法良构校验、`standalone` 与单实体替换文本良构、`<!ATTLIST>` 属性类型映射与
 属性值规范化）已落地。`known-issues` 已清空。
-性能（1 MB ≈ 1.5 s / 10 MB ≈ 15.8 s）只记录、**不作门禁**，字符层重写另开
-`optimize-f-xml-char-layer`。详见
-[`doc/spec/implement-f-xml-m1/baseline.md`](doc/spec/implement-f-xml-m1/baseline.md)。
+
+性能（事件模式，合成流，`bufSize = 8192`，3 次取 `min`）：**1 MB ≈ 608 ms、
+10 MB ≈ 5979 ms、50 MB ≈ 30.1 s**；10 MB 相对 M1 基线 9649 ms 提升 **38%**，
+峰值 RSS 不随文档增长（`VmHWM(50 MB) = 160 MB`，与 10 MB 相同）。Gate P 已达成
+（10 MB < 7.2 s + RSS 差值 ≤ 24 MB），`bufSize` 实测曲线已收敛、默认值仍为 8192。
+字符层已改为按块解码 + 单一活动缓冲（详见
+[`doc/spec/complete-f-xml-m1-followups/`](doc/spec/complete-f-xml-m1-followups/)）。
+

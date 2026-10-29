@@ -31,6 +31,10 @@
 - 两个解析器实例的实体计数互不影响：当前由实例字段（非全局）保证，缺并发用例。
 - `xmlconf_gen.py` 的 SHA-256 不匹配分支：脚本实现存在，缺自动化（需要伪造套件）。
 
+> **后续**：以上三项已由 `complete-f-xml-m1-followups` 全部承接并补齐用例
+> （`SpillDirFallback_test.cj` / `EntityCounterIsolation_test.cj` /
+> `tools/test_xmlconf_gen.py`），本节的历史结论保留不改。
+
 ## 4. 性能（已移出本变更）
 
 事件模式实测：1 MB ≈ 1.5 s、10 MB ≈ 15.8 s；根因是字符层逐字符 `Option` 分配与三层缓冲。
