@@ -257,7 +257,7 @@ internal func tokenText(token: Token): String {
         case Token.TPi(target, data) => "PI ${target}|${data}"
         case Token.TDecl(version, encoding, standalone) =>
             "DECL ${version} ${encoding ?? "-"} ${standalone ?? false}"
-        case Token.TDoctype(name, publicId, systemId, subset) =>
+        case Token.TDoctype(name, publicId, systemId, subset, _) =>
             "DOCTYPE ${name} ${publicId ?? "-"} ${systemId ?? "-"} ${subset.isSome()}"
         case Token.TEof => "EOF"
     }

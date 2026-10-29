@@ -22,7 +22,7 @@ f_xml
 
 | 里程碑 | 范围 |
 |---|---|
-| M1 | 推 / 拉 / 单回调三种解析前端、DOM、生成器、DTD 内部实体与溢出策略、安全上限 |
+| M1 | 推 / 拉 / 单回调三种解析前端、DOM、生成器、DTD 内部子集（含声明语法校验）与溢出策略、安全上限 |
 | M2 | XPath 1.0 子集（含命名空间前缀） |
 | M3 | XML 1.1、C14N（inclusive 1.0/1.1 + exclusive 1.0） |
 
@@ -35,7 +35,7 @@ f_xml
 | 单回调 | `XmlParser.parse(input) { e => … }` | 不建 DOM |
 | DOM | `XmlParser.parse(input / bytes / text / path)` | 4 个重载，`parse(text)` 跳过字节嗅探 |
 | 命名空间 | 内建 | 默认命名空间继承、`xmlns=""` 重置、属性不受默认命名空间影响 |
-| DTD 内部实体 | `<!ENTITY>`（普通 + 参数） | 外部实体与外部子集**永不加载** |
+| DTD 内部子集 | `<!ENTITY>`（普通 + 参数）+ 四类声明的语法良构校验 | 外部实体与外部子集**永不加载**；不做 DTD 有效性校验 |
 | 生成 | `XmlWriter` | 紧凑 / 缩进、CDATA 三模式、自定义实体引用、输出编码 |
 
 ## 用法示例
@@ -95,6 +95,13 @@ XmlWriter(output, options: XmlWriterOptions(indent: Some("  "))).write(element)
 
 ## 状态
 
-M1 已实现并通过 236 条单元测试。xmlconf 20130923 的 Gate A **尚未达成**：
-可跑集 2178 条中 1696 通过、458 失败，失败集中在 DTD 语法校验（本变更非目标）与
-XML 1.1（M3 范围）。详见 [`doc/spec/implement-f-xml-m1/baseline.md`](doc/spec/implement-f-xml-m1/baseline.md)。
+M1 已实现并通过 236 条单元测试。xmlconf 20130923 的口径：可跑集 **2062** 条
+（`unsupported` **524** = `edition` 313 + 外部实体 95 + XML 1.1 59 + 外部子集 48 +
+命名空间名 9），断言 **2038** 条。
+Gate A 待复跑：旧口径（可跑 2178）实测 1696 通过 / 458 失败，缺口已归为五条排除规则
+（`edition` / 外部实体 / XML 1.1 / 外部子集 / 命名空间名）加三项规范修正——
+DTD 声明语法良构校验、`standalone` 与单实体替换文本良构、`<!ATTLIST>` 属性类型映射与
+属性值规范化。`known-issues` 默认清空。
+性能（1 MB ≈ 1.5 s / 10 MB ≈ 15.8 s）只记录、**不作门禁**，字符层重写另开
+`optimize-f-xml-char-layer`。详见
+[`doc/spec/implement-f-xml-m1/baseline.md`](doc/spec/implement-f-xml-m1/baseline.md)。

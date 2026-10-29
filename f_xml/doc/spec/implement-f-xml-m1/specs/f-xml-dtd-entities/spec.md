@@ -8,7 +8,7 @@
 
 | 语法 | 行为 |
 |---|---|
-| `<!ENTITY name "值">` / `'值'` | 支持，值里可嵌套引用已声明实体 |
+| `<!ENTITY name "值">` / `'值'` | 支持；值里的引用**延迟到使用时展开**，声明时只存原文 |
 | `<!ENTITY % name "值">` | 支持，只能在 DTD 内部以 `%name;` 使用 |
 | `<!ENTITY name SYSTEM "uri">` | 声明可识别，**引用即报错**，SHALL NOT 读文件 |
 | `<!ENTITY % name SYSTEM "uri">` | 同上 |
@@ -24,10 +24,15 @@
 - **WHEN** `<!ENTITY a "x"><!ENTITY b "&a;y">`，正文 `&b;`
 - **THEN** 文本为 `xy`
 
-#### Scenario: 前向引用报错
+#### Scenario: 前向引用在使用时已声明则成功
 
-- **WHEN** `<!ENTITY b "&a;y"><!ENTITY a "x">`
-- **THEN** 抛 `XmlException`（引用了尚未声明的实体）
+- **WHEN** `<!ENTITY b "&a;y"><!ENTITY a "x">`，正文 `&b;`
+- **THEN** 文本为 `xy`（声明 `b` 时不解析 `&a;`，等 `&b;` 被使用时 `a` 已声明）
+
+#### Scenario: 使用时仍未声明才报错
+
+- **WHEN** `<!ENTITY b "&a;y">`，正文 `&b;`，且全文没有声明 `a`
+- **THEN** 抛 `XmlException`（WFC: Entity Declared），消息含实体名 `a` 与行列号
 
 #### Scenario: 外部实体引用即报错且不开文件
 
@@ -39,20 +44,57 @@
 - **WHEN** 同一实体声明两次（值不同）
 - **THEN** 使用第一个值，不报错
 
-### Requirement: 其余 DTD 声明与条件段
+### Requirement: DTD 声明语法良构校验
 
-`<!ELEMENT>` / `<!ATTLIST>` / `<!NOTATION>` SHALL 识别并跳过（跳过器须理解引号与内部 `>`），
-SHALL NOT 校验其合法性。条件段 `<![INCLUDE[ … ]]>` / `<![IGNORE[ … ]]>` SHALL 按标志位选择分支。
+内部子集的四类声明 SHALL 解析并校验**声明语法**（良构性，WFC）。非法声明 SHALL 抛
+`XmlException`，消息 SHALL 含**声明类型**与行列号。`<!ENTITY>` / `<!ELEMENT>` /
+`<!ATTLIST>` / `<!NOTATION>` 的逐条语法矩阵见 `design.md` §6.7，实现 SHALL 覆盖该表每一行。
 
-#### Scenario: ELEMENT/ATTLIST 被正确跳过
+SHALL NOT 校验有效性（VC）：SHALL NOT 比对内容模型与文档实际结构，SHALL NOT 建立「元素 → 属性
+类型」映射，SHALL NOT 注入默认属性值，SHALL NOT 使用 NOTATION 语义。`TYPE="invalid"` 的用例
+（良构但不合 DTD）仍 SHALL 解析成功。
+
+**条件段只属于外部子集**：XML 1.0 §3.4 的 `intSubset` 产生式不含 `conditionalSect`，因此内部子集里
+出现 `<![INCLUDE[ … ]]>` 或 `<![IGNORE[ … ]]>` SHALL 抛 `XmlException`，消息 SHALL 含
+「条件段只能出现在外部子集」与行列号。SHALL NOT 提供「按标志位选分支」的路径，
+也 SHALL NOT 为 `IGNORE` 分支实现「配对跳过、不校验内部声明」——外部子集永不加载，M1 没有
+合法入口能到达条件段。
+
+#### Scenario: 四类合法声明全部通过
+
+- **WHEN** 内部子集含 `<!ELEMENT a (b|c)*>`、`<!ATTLIST a x (p|q) #FIXED "p" y ID #IMPLIED>`、
+  `<!NOTATION n PUBLIC "pub-id">`、`<!ENTITY e "v">`
+- **THEN** 解析成功
+
+#### Scenario: 声明内含 `>` 与引号不提前结束
 
 - **WHEN** 内部子集含 `<!ELEMENT a (b*)>`、`<!ATTLIST a x CDATA "1>2">`
-- **THEN** 不报错，且内部的 `>` 与引号不导致提前结束
+- **THEN** 不报错，且内部的 `>` 与引号不导致声明提前结束
 
-#### Scenario: 条件段 IGNORE 分支不生效
+#### Scenario: 非法内容模型报错
 
-- **WHEN** `<!ENTITY e "x"><![IGNORE[<!ENTITY e "y">]]>`，正文 `&e;`
-- **THEN** 文本为 `x`
+- **WHEN** 内部子集含 `<!ELEMENT a ((b) ?)>`
+- **THEN** 抛 `XmlException`，消息含 `ELEMENT` 与行列号
+
+#### Scenario: 非法属性类型报错
+
+- **WHEN** 内部子集含 `<!ATTLIST a x NUTOKEN #IMPLIED>`
+- **THEN** 抛 `XmlException`，消息含 `ATTLIST` 与 `NUTOKEN`
+
+#### Scenario: NOTATION 缺外部标识符报错
+
+- **WHEN** 内部子集含 `<!NOTATION n>`
+- **THEN** 抛 `XmlException`，消息含 `NOTATION`
+
+#### Scenario: 内部子集的 INCLUDE 条件段报错
+
+- **WHEN** `<!DOCTYPE a [<![INCLUDE[<!ENTITY e "x">]]>]><a>&e;</a>`
+- **THEN** 抛 `XmlException`，消息含「条件段只能出现在外部子集」与行列号
+
+#### Scenario: 内部子集的 IGNORE 条件段报错
+
+- **WHEN** `<!DOCTYPE a [<!ENTITY e "x"><![IGNORE[<!ELEMENT a ((b) ?)>]]>]><a>&e;</a>`
+- **THEN** 抛 `XmlException`（不因「在 IGNORE 里」而放行），消息含条件段与行列号
 
 ### Requirement: 外部子集不加载
 
@@ -73,7 +115,7 @@ SHALL NOT 校验其合法性。条件段 `<![INCLUDE[ … ]]>` / `<![IGNORE[ …
 | 属性值 | 展开 |
 | CDATA | 不展开（`&name;` 是字面量） |
 | 注释 / PI | 不展开 |
-| 实体值内部 | 展开，只能引用已声明实体 |
+| 实体值内部 | 使用时展开（声明时只存原文）；此时仍未声明才报错 |
 
 #### Scenario: CDATA 内不展开
 
@@ -85,20 +127,89 @@ SHALL NOT 校验其合法性。条件段 `<![INCLUDE[ … ]]>` / `<![IGNORE[ …
 - **WHEN** 正文 `<!-- &e; -->`
 - **THEN** 注释内容为 ` &e; `
 
-### Requirement: 属性值处理顺序
+### Requirement: 单实体替换文本良构
 
-属性值 SHALL 按「字符引用 + 实体引用展开 → 换行/制表归一成空格」的顺序处理。
-SHALL NOT 先归一化再展开。SHALL NOT 去首尾空格（M1 不解析 `<!ATTLIST>`，一律按 CDATA 类型处理）。
+内部一般实体的替换文本 SHALL 匹配 XML 1.0 的 `content` 产生式（WFC: Parsed Entity）。
+展开内部实体时 SHALL 校验其标签**在实体内部配平**：
+
+- 实体里开始的元素 SHALL 在实体内部结束，SHALL NOT 把开始标签留在实体外去配对；
+- SHALL NOT 出现孤立的结束标签（实体里多一个 `</x>`、或关掉实体外的元素）；
+- SHALL NOT 借实体把同一个元素拆成「实体里开、实体外关」或反向。
+
+违规 SHALL 抛 `XmlException`，消息 SHALL 含**实体名**与展开点的行列号。这条校验与 DTD 内容模型
+无关——不需要任何 `<!ELEMENT>` 声明，`<!ENTITY e "<b>">` 配 `<a>&e;</a>` 就已经不良构。
+属性值位置使用实体时，替换文本 SHALL NOT 含 `<`（既有规则，与本条并列）。
+
+#### Scenario: 实体里的开始标签未闭合
+
+- **WHEN** `<!DOCTYPE a [<!ENTITY e "<b>">]><a>&e;</a>`
+- **THEN** 抛 `XmlException`，消息含实体名 `e` 与行列号
+
+#### Scenario: 实体里的孤立结束标签
+
+- **WHEN** `<!DOCTYPE a [<!ENTITY e "</a>">]><a>&e;</a>`
+- **THEN** 抛 `XmlException`，消息含实体名 `e`
+
+#### Scenario: 实体内部配平的标签合法
+
+- **WHEN** `<!DOCTYPE a [<!ENTITY e "<b>x</b>">]><a>&e;</a>`
+- **THEN** 解析成功，`a` 下有一个 `b` 子元素，文本为 `x`
+
+#### Scenario: 属性值位置的替换文本含小于号
+
+- **WHEN** `<!DOCTYPE a [<!ENTITY e "<b>">]><a x="&e;"/>`
+- **THEN** 抛 `XmlException`，消息含属性名 `x` 与实体名 `e`
+
+#### Scenario: 参数实体不受此约束
+
+- **WHEN** `<!DOCTYPE a [<!ENTITY % p "<!ENTITY e 'v'>">%p;]><a>&e;</a>`
+- **THEN** 解析成功，文本为 `v`（参数实体的替换文本是 DTD 片段，不是内容）
+
+### Requirement: 属性值规范化
+
+属性值 SHALL 按 XML 1.0 §3.3.3 的顺序处理：
+
+1. 字符引用与实体引用展开（递归）；
+2. 空白字符归一：`#x9` / `#xA` / `#xD` 一律变 `#x20`；
+3. **仅当属性类型不是 `CDATA` 时**，再去首尾空格并把内部连续空格折叠成单个 `#x20`。
+
+SHALL NOT 先归一化再展开。解析 `<!ATTLIST>` 时 SHALL 建立「元素名 → 属性名 → `AttType`」映射
+（同名重复声明取第一个），SHALL 按**元素的字面名**（`prefix:local` 原文）匹配，SHALL NOT 按展开名
+匹配（DTD 不认识命名空间）。未在 `<!ATTLIST>` 中声明的属性 SHALL 按 `CDATA` 处理。
+
+该映射 SHALL 只服务规范化，SHALL NOT 支撑有效性校验：不检查 `ID` 唯一性、不检查 `IDREF`
+指向、不检查枚举取值、不注入默认值 / `#FIXED` 值。
 
 #### Scenario: 实体值里的换行被归一
 
 - **WHEN** `<!ENTITY e "a&#10;b">`，属性 `x="&e;"`
 - **THEN** 属性值为 `a b`（换行变成空格），不是 `a\nb`
 
-#### Scenario: 首尾空格保留
+#### Scenario: 未声明类型的属性保留首尾空格
 
-- **WHEN** `<a x=" v "/>`
+- **WHEN** `<a x=" v "/>`（无 `<!ATTLIST>` 声明，按 `CDATA`）
 - **THEN** 属性值为 `" v "`
+
+#### Scenario: 非 CDATA 类型去首尾并折叠空白
+
+- **WHEN** `<!DOCTYPE a [<!ATTLIST a x NMTOKENS #IMPLIED>]><a x="  p   q  "/>`
+- **THEN** 属性值为 `"p q"`（去首尾 + 内部连续空格折叠为一个）
+
+#### Scenario: 声明为 CDATA 时不折叠
+
+- **WHEN** `<!DOCTYPE a [<!ATTLIST a x CDATA #IMPLIED>]><a x="  p   q  "/>`
+- **THEN** 属性值为 `"  p   q  "`（只做空白归一，不做首尾与折叠）
+
+#### Scenario: 规范化顺序（展开先于折叠）
+
+- **WHEN** `<!DOCTYPE a [<!ATTLIST a x NMTOKENS #IMPLIED><!ENTITY e "&#10;p&#10;">]><a x="q&e;"/>`
+- **THEN** 先展开成 `q\np\n`、再把换行归一成空格、最后折叠，属性值为 `"q p"`；
+  不是 `"q\np"` 也不是 `"q\n\np"`
+
+#### Scenario: 映射按字面名匹配
+
+- **WHEN** `<!DOCTYPE p:a [<!ATTLIST p:a x NMTOKENS #IMPLIED>]><p:a xmlns:p="u" x="  p   q  "/>`
+- **THEN** 属性值为 `"p q"`（`p:a` 与声明里的字面名一致即命中，不因命名空间展开而错过）
 
 ### Requirement: 三层上限
 
@@ -214,14 +325,20 @@ SHALL NOT 降级回内存。
 - **WHEN** 四级都不可写
 - **THEN** 抛 `XmlException`，消息含 `spillDir`
 
-### Requirement: standalone 与外部声明的实体
+### Requirement: standalone 与未声明实体
 
-引用「只在外部子集声明」的实体时，解析器 SHALL 按下表处理 `standalone` 取值：
+引用**未声明**的实体时（含「只在外部子集声明」的情况——外部子集永不加载），解析器 SHALL 先判断
+「有没有可能从本文件以外声明」，再按 `standalone` 处理：
 
-| `standalone` | 引用「只在外部子集声明」的实体时的行为 |
-|---|---|
-| `"yes"` | 报错（文档自称自包含，却引用了外部声明的东西） |
-| `"no"` 或省略 | **不报错**，跳过该实体，记一条告警 |
+| 前提 | `standalone` | 行为 |
+|---|---|---|
+| — | `"yes"` | 抛 `XmlException`（文档自称自包含，却引用了未声明的东西） |
+| 无外部子集（`DOCTYPE` 无 `SYSTEM` / `PUBLIC`）**且**全文无参数实体引用 | `"no"` 或省略 | 抛 `XmlException`（WFC: Entity Declared）——连「可能声明在别处」的通道都没有 |
+| 有外部子集，**或**有参数实体引用 | `"no"` 或省略 | **不报错**：内容位置产出空文本、属性值里去掉该引用，并写一条告警 |
+
+判定 SHALL NOT 只看 `standalone`：`standalone` 为 `no` / 缺省并不自动意味着「未声明实体可以跳过」，
+必须有「外部子集或参数实体引用」这个前提。告警 SHALL 可从解析器实例的告警列表取到
+（`XmlPullParser.warnings()`）。
 
 #### Scenario: standalone=yes 报错
 
@@ -231,7 +348,27 @@ SHALL NOT 降级回内存。
 #### Scenario: standalone 缺省跳过不报错
 
 - **WHEN** 同上但无 `standalone`
-- **THEN** 解析成功（`ext` 的位置为空），且产生一条告警
+- **THEN** 解析成功（`ext` 的位置为空文本），且产生一条告警
+
+#### Scenario: standalone=no 时属性值里的未声明实体被去掉
+
+- **WHEN** `<?xml version="1.0" standalone="no"?><!DOCTYPE a SYSTEM "x.dtd"><a x="1&ext;2"/>`
+- **THEN** 解析成功，属性值为 `12`，且产生一条告警（有外部子集才允许走跳过档）
+
+#### Scenario: 没有外部子集时报错（不是跳过）
+
+- **WHEN** `<?xml version="1.0"?><a>&ext;</a>`（无 `DOCTYPE`，也未声明 `ext`）
+- **THEN** 抛 `XmlException`，消息含实体名 `ext` 与行列号；SHALL NOT 产出空文本后放过
+
+#### Scenario: 有参数实体引用时按跳过处理
+
+- **WHEN** `<?xml version="1.0"?><!DOCTYPE a [<!ENTITY % p "<!ENTITY e 'v'>">%p;]><a>&ext;</a>`
+- **THEN** 解析成功（`ext` 位置为空文本），并产生一条告警（有参数实体引用即打开跳过档）
+
+#### Scenario: 无外部子集但实体已声明则正常展开
+
+- **WHEN** `<?xml version="1.0"?><!DOCTYPE a [<!ENTITY ext "v">]><a>&ext;</a>`
+- **THEN** 文本为 `v`，不产生告警
 
 ### Requirement: 错误分类与降级重试
 

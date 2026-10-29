@@ -42,7 +42,9 @@
 3. 再读至多 1024 字节查找 `<?xml ... encoding="..."?>`，接受单双引号。
 4. 以上都无结论时按 UTF-8。
 
-BOM 与声明冲突时 SHALL 以 **BOM** 为准，SHALL NOT 报错。
+BOM 与 `encoding` 声明**冲突**时 SHALL 抛 `XmlException`（致命错误），SHALL NOT 以「BOM 为准」
+静默改写，也 SHALL NOT 反过来以声明为准。消息 SHALL 同时带出两个编码名与行列号。
+无 BOM 时 `encoding` 声明才是决定性线索。
 嗅探消费的字节 SHALL 全部进入 `PrefixStream` 回放，SHALL NOT 丢弃。
 
 #### Scenario: UTF-8 BOM 被跳过
@@ -65,10 +67,16 @@ BOM 与声明冲突时 SHALL 以 **BOM** 为准，SHALL NOT 报错。
 - **WHEN** 输入为 `00 3C 00 3F` 开头的 UTF-16BE 文档
 - **THEN** 按 UTF-16BE 解码成功
 
-#### Scenario: BOM 与声明冲突以 BOM 为准
+#### Scenario: BOM 与声明冲突报致命错误
 
 - **WHEN** 输入为 UTF-8 BOM + `<?xml version="1.0" encoding="GBK"?><a>中</a>`（内容实为 UTF-8）
-- **THEN** 按 UTF-8 解析成功，中文正确
+- **THEN** 抛 `XmlException`，消息含 `GBK`、`UTF-8` 与行列号；SHALL NOT 按任何一种编码
+  把文档解析成功
+
+#### Scenario: 无 BOM 时声明决定编码
+
+- **WHEN** 输入无 BOM，`<?xml version="1.0" encoding="GBK"?>`，内容为 GBK 字节
+- **THEN** 按 GBK 解析成功（此时声明是唯一线索，不构成冲突）
 
 ### Requirement: 前缀回放流
 

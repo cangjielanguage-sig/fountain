@@ -28,13 +28,16 @@ internal class EntityExpander {
     private let table: EntityTable
     private let limits: EntityLimits
     private let counter: EntityCounter
+    /** 未声明实体的处置策略（standalone 决定报错还是跳过并告警）。 */
+    private let policy: ?EntityRefPolicy
     /** 实体展开后的字符数（含嵌套），按名字缓存。 */
     private let sizes = HashMap<String, Int64>()
 
-    init(table: EntityTable, limits: EntityLimits, counter: EntityCounter) {
+    init(table: EntityTable, limits: EntityLimits, counter: EntityCounter, policy!: ?EntityRefPolicy = None) {
         this.table = table
         this.limits = limits
         this.counter = counter
+        this.policy = policy
     }
 
     /**
@@ -56,7 +59,12 @@ internal class EntityExpander {
         }
         let decl = match (this.table.general(name)) {
             case Some(d) => d
-            case None => throw XmlException("实体「&${name};」未声明", line, column)
+            case None => match (this.policy) {
+                case Some(p) =>
+                    p.undeclared(name, line, column)
+                    return MemoryExpandReader(runesOf(""))
+                case None => throw XmlException("实体「&${name};」未声明", line, column)
+            }
         }
         let value = match (decl.value) {
             case Some(v) => v
@@ -213,7 +221,12 @@ internal class EntityExpander {
         }
         let decl = match (this.table.general(name)) {
             case Some(d) => d
-            case None => throw XmlException("实体「&${name};」未声明", line, column)
+            case None => match (this.policy) {
+                case Some(p) =>
+                    p.undeclared(name, line, column)
+                    return
+                case None => throw XmlException("实体「&${name};」未声明", line, column)
+            }
         }
         let value = match (decl.value) {
             case Some(v) => v

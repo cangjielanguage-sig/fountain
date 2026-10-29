@@ -90,10 +90,29 @@ public class EntityExpansion_test {
         @Assert(doc.root.getOrThrow().text() == "xy")
     }
 
-    /** 前向引用报错。 */
+    /** 实体值里的引用**延迟到使用时**展开：前向引用合法。 */
     @TestCase
-    public func forwardReferenceRejected(): Unit {
-        assertXmlError({=> parseText("<!DOCTYPE a [<!ENTITY b \"&a;y\"><!ENTITY a \"x\">]><a>&b;</a>")}, "尚未声明")
+    public func forwardReferenceSucceeds(): Unit {
+        let doc = parseText("<!DOCTYPE a [<!ENTITY b \"&a;y\"><!ENTITY a \"x\">]><a>&b;</a>")
+        @Assert(doc.root.getOrThrow().text() == "xy")
+    }
+
+    /** 声明时不解析引用，只有**使用时**仍未声明才报错。 */
+    @TestCase
+    public func undeclaredAtUseRejected(): Unit {
+        let error = assertXmlError({
+            => parseText(
+                "<?xml version=\"1.0\" standalone=\"yes\"?><!DOCTYPE a [<!ENTITY b \"&missing;y\">]><a>&b;</a>"
+            )
+        }, "missing")
+        @Assert(error.line > 0)
+    }
+
+    /** 自引用在使用时由深度上限拦住，不会无限递归。 */
+    @TestCase
+    public func selfReferenceHitsDepthLimit(): Unit {
+        let error = assertXmlError({=> parseText("<!DOCTYPE a [<!ENTITY e \"&e;\">]><a>&e;</a>")}, "深度")
+        @Assert(error.entityLimitKind == Some(EntityLimitKind.Depth))
     }
 
     /** 实体内容可以含标记。 */
@@ -149,5 +168,49 @@ public class EntityExpansion_test {
         }
         @Assert(parser.warnings().size == 1)
         @Assert(parser.warnings()[0].contains("ext"))
+    }
+
+    /** standalone="no" 时内容位置的未声明实体产出空文本。 */
+    @TestCase
+    public func standaloneNoSkipsInContent(): Unit {
+        let parser = XmlPullParser(text: "<?xml version=\"1.0\" standalone=\"no\"?><a>&ext;</a>", options: XmlParserOptions())
+        var done = false
+        while (!done) {
+            match (parser.nextEvent()) {
+                case Some(_) => ()
+                case None => done = true
+            }
+        }
+        @Assert(parser.warnings().size == 1)
+        @Assert(parser.warnings()[0].contains("ext"))
+    }
+
+    /** standalone="no" 时属性值里的未声明实体被去掉。 */
+    @TestCase
+    public func standaloneNoRemovesAttributeRef(): Unit {
+        let parser = XmlPullParser(
+            text: "<?xml version=\"1.0\" standalone=\"no\"?><a x=\"1&ext;2\"/>",
+            options: XmlParserOptions()
+        )
+        var done = false
+        while (!done) {
+            match (parser.nextEvent()) {
+                case Some(_) => ()
+                case None => done = true
+            }
+        }
+        @Assert(parser.warnings().size == 1)
+        @Assert(parser.warnings()[0].contains("ext"))
+    }
+
+    /**
+     * 既没有外部子集、也没有参数实体引用时，未声明实体按 WFC 报错。
+     *
+     * 这条与「standalone 缺省就跳过」的区别：没有任何可能的外部声明来源时，
+     * `&nbsp;` 这类笔误必须暴露出来，而不是被当成空文本吞掉。
+     */
+    @TestCase
+    public func noDoctypeUndeclaredRejected(): Unit {
+        assertXmlError({=> parseText("<?xml version=\"1.0\"?><a>&ext;</a>")}, "未声明")
     }
 }

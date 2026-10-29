@@ -74,7 +74,7 @@ internal enum Token {
     | TComment(String)
     | TPi(String, String)
     | TDecl(String, ?String, ?Bool)
-    | TDoctype(String, ?String, ?String, ?String)
+    | TDoctype(String, ?String, ?String, ?String, SourcePosition)
     | TEof
 }
 
@@ -91,6 +91,8 @@ internal class Lexer {
     /** DOCTYPE 解析完成后由上层注入；属性值里的实体展开要用。 */
     var entityTable: ?EntityTable = None
     var expander: ?EntityExpander = None
+    /** 未声明实体的处置策略（由上层按 standalone 配置）。 */
+    var entityRefPolicy: ?EntityRefPolicy = None
     /** 单个属性值（含展开）的长度上限。 */
     var maxAttributeValueLength: Int64 = 1024 * 1024
 
@@ -553,11 +555,17 @@ internal class Lexer {
                     } else if (r == r'<') {
                         throw this.error("属性值里不能出现裸「<」，请使用 &lt;")
                     } else if (r == r'&') {
+                        let refPos = this.position()
                         match (this.readReference()) {
                             // 字符引用 / 预定义实体：不参与空白归一。
                             case RefValue.CharText(text) => gen.append<String>(text)
                             case RefValue.EntityName(entity) =>
-                                gen.append<String>(this.expandAttributeValue(entity, name.local))
+                                let expanded = this.expandAttributeValue(entity, name.local, refPos)
+                                // WFC: No `<` in Attribute Values——实体替换文本里也不能含裸 `<`。
+                                if (expanded.contains("<")) {
+                                    throw this.error("属性「${name.local}」的值里出现裸「<」（来自实体「&${entity};」）")
+                                }
+                                gen.append<String>(expanded)
                         }
                     } else if (r == r'\n' || r == r'\t' || r == r'\r') {
                         gen.append<String>(" ")
@@ -595,7 +603,11 @@ internal class Lexer {
                     break
                 }
                 match (this.advance()) {
-                    case Some(r) => gen.append(r)
+                    case Some(r) =>
+                        if (!XmlChars.isXmlChar(r.position())) {
+                            throw XmlException("处理指令里出现 XML 1.0 不允许的字符", start.line, start.column)
+                        }
+                        gen.append(r)
                     case None => throw XmlException("处理指令未闭合", start.line, start.column)
                 }
             }
@@ -612,11 +624,16 @@ internal class Lexer {
         var encoding: ?String = None
         var standalone: ?Bool = None
         var seen: ArrayList<String> = ArrayList<String>()
+        // `XMLDecl ::= '<?xml' VersionInfo EncodingDecl? SDDecl? S? '?>'`：顺序固定，每项前都有 S。
+        var stage: Int64 = 0
         while (true) {
-            this.skipWhitespace()
+            let hadWhitespace = this.trySkipWhitespace()
             if (this.startsWith("?>")) {
                 this.consume("?>")
                 break
+            }
+            if (!hadWhitespace) {
+                throw XmlException("XML 声明里缺少空白", start.line, start.column)
             }
             let attrName = this.readName()
             this.skipWhitespace()
@@ -633,14 +650,30 @@ internal class Lexer {
             }
             seen.add(attrName.local)
             match (attrName.local) {
-                case "version" => version = Some(value)
+                case "version" =>
+                    if (stage != 0) {
+                        throw XmlException("XML 声明里 version 必须是第一项", start.line, start.column)
+                    }
+                    stage = 1
+                    version = Some(value)
                 case "encoding" =>
-                    // EncName 不允许首尾空白，也不允许空串。
-                    if (value.isEmpty() || value.trimAscii() != value) {
+                    if (stage == 0) {
+                        throw XmlException("XML 声明里 encoding 之前必须有 version", start.line, start.column)
+                    }
+                    if (stage >= 2) {
+                        throw XmlException("XML 声明里 encoding 必须在 standalone 之前", start.line, start.column)
+                    }
+                    // `EncName ::= [A-Za-z] ([A-Za-z0-9._] | '-')*`
+                    if (!isEncName(value)) {
                         throw XmlException("encoding 名字非法「${value}」", start.line, start.column)
                     }
+                    stage = 2
                     encoding = Some(value)
                 case "standalone" =>
+                    if (stage == 0) {
+                        throw XmlException("XML 声明里 standalone 之前必须有 version", start.line, start.column)
+                    }
+                    stage = 3
                     if (value == "yes") {
                         standalone = Some(true)
                     } else if (value == "no") {
@@ -658,8 +691,8 @@ internal class Lexer {
         if (v == "1.1") {
             throw XmlException("XML 1.1 尚未支持（M3）", start.line, start.column)
         }
-        // XML 1.0 §2.8：处理器可以接受 1.x 并当作 1.0 处理；1.1 是 M3 的范围，明确拒绝。
-        if (!v.startsWith("1.")) {
+        // `VersionNum ::= '1.' [0-9]+`：不允许尾随空白或其他字符。
+        if (!isVersionNum(v)) {
             throw XmlException("不支持的 XML 版本「${v}」", start.line, start.column)
         }
         Token.TDecl(v, encoding, standalone)
@@ -754,27 +787,43 @@ internal class Lexer {
     }
 
     private func readDoctype(start: SourcePosition): Token {
-        this.skipWhitespace()
+        if (!this.trySkipWhitespace()) {
+            throw XmlException("<!DOCTYPE 之后缺少空白", start.line, start.column)
+        }
         let name = this.readName()
         this.skipWhitespace()
         var publicId: ?String = None
         var systemId: ?String = None
         if (this.startsWith("PUBLIC")) {
             this.consume("PUBLIC")
-            this.skipWhitespace()
+            if (!this.trySkipWhitespace()) {
+                throw XmlException("「PUBLIC」之后缺少空白", start.line, start.column)
+            }
             publicId = Some(this.readQuoted(start))
-            this.skipWhitespace()
+            // `PubidLiteral ::= '"' PubidChar* '"'`：`[` 之类的字符不在 PubidChar 里。
+            if (!isPubidLiteral(publicId.getOrThrow())) {
+                throw XmlException("PubidLiteral 里有非法字符", start.line, start.column)
+            }
+            // `ExternalID ::= 'PUBLIC' S PubidLiteral S SystemLiteral`
+            if (!this.trySkipWhitespace()) {
+                throw XmlException("PubidLiteral 之后缺少空白（缺少 SystemLiteral）", start.line, start.column)
+            }
             systemId = Some(this.readQuoted(start))
             this.skipWhitespace()
         } else if (this.startsWith("SYSTEM")) {
             this.consume("SYSTEM")
-            this.skipWhitespace()
+            if (!this.trySkipWhitespace()) {
+                throw XmlException("「SYSTEM」之后缺少空白", start.line, start.column)
+            }
             systemId = Some(this.readQuoted(start))
             this.skipWhitespace()
         }
         var subset: ?String = None
+        var subsetStart = start
         if (this.peek(0) == Some(r'[')) {
             this.advance()
+            // 内部子集第一个字符的位置：DTD 报错要把内部偏移换算成文档行列号。
+            subsetStart = this.position()
             subset = Some(this.readInternalSubset(start))
             this.skipWhitespace()
         }
@@ -782,7 +831,7 @@ internal class Lexer {
             throw XmlException("DOCTYPE 未闭合", start.line, start.column)
         }
         this.advance()
-        Token.TDoctype(name.local, publicId, systemId, subset)
+        Token.TDoctype(name.local, publicId, systemId, subset, subsetStart)
     }
 
     private func readQuoted(start: SourcePosition): String {
@@ -885,7 +934,19 @@ internal class Lexer {
      * 属性值必须在开始标签解析完后整体在内存（要参与命名空间解析与 `xml:space` 判定），
      * 所以单实体超限时即便 `Spill` 也抛 `AttributeValue`。
      */
-    private func expandAttributeValue(name: String, attrName: String): String {
+    private func expandAttributeValue(name: String, attrName: String, origin: SourcePosition): String {
+        match (this.entityTable) {
+            case Some(table) => if (table.general(name).isNone()) {
+                // 未声明：按 standalone 决定报错还是去掉该引用（属性值不产出空节点）。
+                match (this.entityRefPolicy) {
+                    case Some(policy) =>
+                        policy.undeclared(name, origin.line, origin.column)
+                        return ""
+                    case None => throw this.error("实体「&${name};」未声明")
+                }
+            }
+            case None => throw this.error("实体「&${name};」未声明")
+        }
         let expander = match (this.expander) {
             case Some(e) => e
             case None => throw this.error("实体「&${name};」未声明")
@@ -978,4 +1039,57 @@ internal class StringFeed <: RuneFeed {
     public func origin(): SourcePosition {
         this.originPos
     }
+}
+
+/** `EncName ::= [A-Za-z] ([A-Za-z0-9._] | '-')*` */
+internal func isEncName(value: String): Bool {
+    var first = true
+    for (r in value.runes()) {
+        let cp = r.position()
+        let letter = (cp >= 0x41 && cp <= 0x5A) || (cp >= 0x61 && cp <= 0x7A)
+        let digit = cp >= 0x30 && cp <= 0x39
+        let ok = if (first) {
+            letter
+        } else {
+            letter || digit || r == r'.' || r == r'_' || r == r'-'
+        }
+        if (!ok) {
+            return false
+        }
+        first = false
+    }
+    !first
+}
+
+/** `VersionNum ::= '1.' [0-9]+` */
+internal func isVersionNum(value: String): Bool {
+    let runes = runesOf(value)
+    if (runes.size < 3 || runes[0] != r'1' || runes[1] != r'.') {
+        return false
+    }
+    for (i in 2..runes.size) {
+        if (!XmlChars.isDigit(runes[i])) {
+            return false
+        }
+    }
+    true
+}
+
+/** `PubidChar ::= #x20 | #xD | #xA | [a-zA-Z0-9] | [-'()+,./:=?;!*#@$_%]` */
+internal func isPubidLiteral(value: String): Bool {
+    for (r in value.runes()) {
+        let cp = r.position()
+        let ok = cp == 0x20 || cp == 0x0D || cp == 0x0A ||
+            (cp >= 0x30 && cp <= 0x39) ||
+            (cp >= 0x41 && cp <= 0x5A) ||
+            (cp >= 0x61 && cp <= 0x7A) ||
+            r == r'-' || r == r'\'' || r == r'(' || r == r')' || r == r'+' || r == r',' ||
+            r == r'.' || r == r'/' || r == r':' || r == r'=' || r == r'?' || r == r';' ||
+            r == r'!' || r == r'*' || r == r'#' || r == r'@' || r == r'$' || r == r'_' ||
+            r == r'%'
+        if (!ok) {
+            return false
+        }
+    }
+    true
 }

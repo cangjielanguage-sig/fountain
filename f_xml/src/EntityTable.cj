@@ -30,6 +30,8 @@ internal class EntityTable {
     private let parameterTable = HashMap<String, EntityDecl>()
     private let ordered = ArrayList<EntityDecl>()
     private let limit: Int64
+    /** 内部子集里是否出现过参数实体引用（决定未声明实体能否按「外部声明」原谅）。 */
+    var sawParameterRef = false
 
     init(limit: Int64) {
         this.limit = limit

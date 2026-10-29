@@ -14,14 +14,19 @@
 1. `f_xml` 成为通用的 XML 1.0（含 Namespaces 1.0）解析 / 生成模块，**不绑定任何业务格式**。
 2. 三个解析前端共用**一套词法器、一种事件序列**：拉模式（`nextEvent`）、单回调、多回调。
 3. DOM 由事件流累积而成；生成器从 DOM 序列化，紧凑模式为默认。
-4. 支持 DTD **内部子集**实体（普通 + 参数），外部实体与外部子集**永不加载**。
+4. 支持 DTD **内部子集**（实体 + 声明语法良构校验 + 属性类型映射与属性值规范化），外部实体与
+   外部子集**永不加载**。
 5. 实体膨胀的三层上限与溢出策略可配置、可分类、可降级重试。
-6. xmlconf 20130923 的 2154 条断言全过（Gate A），`unsupported` 清单可复核。
+6. xmlconf 20130923 的 2038 条断言全过（Gate A），`unsupported`（524 条）清单可复核。
 
 ### 非目标
 
 - M2（XPath 1.0 子集）与 M3（XML 1.1、C14N inclusive/exclusive）：本次不写任何相关公开 API。
-- DTD 校验、默认属性注入、外部子集加载、NOTATION。
+- DTD **有效性**校验（内容模型与文档匹配、`ID`/`IDREF` 唯一与引用一致性、NOTATION 语义、
+  枚举取值是否落在声明列表内、默认属性注入）、外部子集加载。
+  **声明语法良构校验属于良构性，已纳入本变更**（§6.7）；`<!ATTLIST>` 的属性类型映射也只服务
+  属性值规范化，不服务有效性（§6.7）。
+- 性能优化：本变更只记录现状，字符层重写另开 `optimize-f-xml-char-layer`（§13）。
 - 不为了「多支持一点」放宽 XML 1.0 的严格性——不合法的输入必须报错，不猜。
 
 ## 2. 范围边界
@@ -30,6 +35,8 @@
 |---|---|---|---|
 | 推 / 拉 / 单回调、`skipElement` | ✅ | | |
 | DOM、命名空间解析、生成器、内部实体、安全上限 | ✅ | | |
+| DTD 声明语法良构校验（`ELEMENT` / `ATTLIST` / `NOTATION` / `ENTITY`） | ✅ | | |
+| `<!ATTLIST>` 属性类型映射 + 属性值规范化（非 CDATA 去首尾、内部空白折叠） | ✅ | | |
 | XPath 1.0 子集 + `XPathContext` | | ✅ | |
 | XML 1.1、`canonicalize`（inclusive 1.0/1.1 + exclusive 1.0） | | | ✅ |
 
@@ -50,6 +57,10 @@ M1 的 API 形状需保证不阻碍 M2/M3：`XmlNode` 保留注释 / PI 节点�
 **XML 1.1 的失败语义**：M1 遇到 `<?xml version="1.1"?>` 直接抛
 `XmlException("XML 1.1 尚未支持（M3）", line, column)`，**不降级按 1.0 解析**。
 理由是 1.1 放宽了字符范围，按 1.0 解析会把合法文档判成非法，错误信息会误导。
+
+与这条语义配套：xmlconf 里测试文件声明 `version="1.1"` 的 **59 条**用例整体移出可跑集
+（`unsupported` 原因 `xml-1.1`）。它们与「1.1 报错」互斥，留在可跑集只会制造必然失败；
+把「拒绝 1.1」与「通过 1.1 用例」同时写进验收，本身就是矛盾。
 
 ## 3. 依赖与复用查证
 
@@ -148,7 +159,7 @@ public init(message: String, line: Int64, column: Int64, kind!: ?EntityLimitKind
 | `SkipScanner.cj` | `skipElement` 的标签级扫描 |
 | `NamespaceScope.cj` | 命名空间作用域栈 |
 | `EntityTable.cj` | 实体声明表（普通 / 参数） |
-| `DoctypeParser.cj` | 内部子集解析与跳过 |
+| `DoctypeParser.cj` | 内部子集解析：四类声明（`ENTITY` / `ELEMENT` / `ATTLIST` / `NOTATION`）的语法校验 + 条件段拒绝 + 属性类型映射 |
 | `EntityExpander.cj` | 递归展开 + 计数 + 溢出判定 |
 | `ExpandSink.cj` | `MemorySink` / `FileSink` / 读回 |
 | `SpillDir.cj` | 四级临时目录解析 |
@@ -187,7 +198,7 @@ public static func XmlParser.parse(input: InputStream, handler: XmlEventHandler,
                                    options!: XmlParserOptions = XmlParserOptions()): Unit
 ```
 
-其余类型严格按设计文档 §3 / §4 / §5.4 / §7 / §9 落地，差异仅 §8 登记的六项。
+其余类型严格按设计文档 §3 / §4 / §5.4 / §7 / §9 落地，差异仅 §8 登记的七项。
 
 ## 6. 关键实现路线
 
@@ -202,9 +213,15 @@ InputStream
   → Lexer
 ```
 
-**嗅探优先级**：BOM > 声明 > UTF-8。BOM 与声明冲突时以 BOM 为准（不做「报错」——
-设计文档 §12.2 H 写的是「以 BOM 为准，或按规范报错」，M1 选前者，理由是现实文档里
-「UTF-8 BOM + 声明 latin1」极常见，报错会把大量可读文件判死）。
+**嗅探优先级**：BOM > 声明 > UTF-8。**BOM 与 `encoding` 声明冲突时报 fatal error**
+（XML 1.0 §4.3.3：BOM 已经确定了实体的编码，声明却写了另一种，属编码层致命错误，
+SHALL NOT 用「以 BOM 为准」悄悄把冲突抹平）。错误 SHALL 带行列号（定位到 `<?xml?>` 所在行）
+并同时带出两个编码名，形如
+`编码声明 'GBK' 与字节序标记确定的 'UTF-8' 冲突（第 1 行第 1 列）`。
+设计文档 §12.2 H 写的是「以 BOM 为准，或按规范报错」；M1 选后者——猜编码会让「声明与实际不符」
+的错误文档静默通过，而这类文档本该被拒。
+
+只有「无 BOM」时声明才具有决定性：那时 `encoding` 声明就是唯一线索（§6.1 嗅探第 3 步）。
 
 **读取字节上限**：嗅探最多消费 4 + 1024 字节，全部进 `PrefixStream` 回放；`PrefixStream`
 不做编码判断，纯字节搬运。
@@ -348,17 +365,56 @@ public enum XmlNode {
 
 ### 6.7 DTD 内部子集
 
-`DoctypeParser` 只理解 `<!ENTITY>`，其余声明**跳过但必须跳对**（能识别引号与内部 `>`）。
-条件段 `<![INCLUDE[ ]]>` / `<![IGNORE[ ]]>` 按标志位选择分支。
+`DoctypeParser` 解析内部子集中的**四类声明**，并对每类做**声明语法良构校验**：
+
+| 声明 | 校验内容（只验产生式） | 不校验 |
+|---|---|---|
+| `<!ENTITY>` | `Name` + `EntityDef`（`EntityValue` / `ExternalID` / `NDataDecl`）+ 可选空白 | 外部实体不加载（引用即报错） |
+| `<!ELEMENT>` | `Name` + `contentspec`：`EMPTY` / `ANY` / `Mixed` / `children`；`children` 里 `choice` / `seq` 与 `?` `*` `+` 的**紧邻规则**（`(a) ?` 这种空白摆放非法） | 内容模型与文档实际结构是否匹配 |
+| `<!ATTLIST>` | `Name` + 若干 `AttDef`：`AttType`（`CDATA` / `ID` / `IDREF` / `IDREFS` / `ENTITY` / `ENTITIES` / `NMTOKEN` / `NMTOKENS` / `NOTATION` 枚举 / 普通枚举）+ `DefaultDecl`（`#REQUIRED` / `#IMPLIED` / `#FIXED` + `AttValue` / `AttValue`） | 属性类型语义（如 `ID` 唯一性）、默认值注入 |
+| `<!NOTATION>` | `Name` + `ExternalID` 或 `PublicID`，之后可选空白 | NOTATION 的任何语义用途 |
+
+判定口径：**「声明写得合不合法」是良构性（WFC），「声明与文档是否一致」是有效性（VC）**。
+前者必须报错，后者不做——`invalid` 类用例仍然期望解析成功。报错 SHALL 带行列号与声明类型
+（如 `<!ATTLIST> 的属性类型 'NUTOKEN' 不是合法记号`、`<!ELEMENT> 的 '?' 必须紧跟在内容粒子后`）。
+
+**条件段只允许出现在外部子集**：XML 1.0 §3.4 的 `intSubset` 产生式里没有 `conditionalSect`，
+`<![INCLUDE[` / `<![IGNORE[` 只属于外部子集（及外部参数实体）。因此 M1 遇到内部子集里的条件段
+SHALL 直接抛 `XmlException`，消息写明「条件段只能出现在外部子集」并带行列号。外部子集永不加载，
+所以 M1 **不存在**「按标志位选分支」这条路径——上一轮设计的 `INCLUDE` / `IGNORE` 分支选择
+整体删除，`IGNORE` 分支的「不校验其内部声明」也随之作废。
+
+**单实体替换文本必须自身良构**（WFC: Parsed Entity）：内部一般实体的替换文本 SHALL 匹配
+`content` 产生式。展开时把替换文本按内容片段解析，并断言其中的标签**在实体内部配平**：
+
+- 标签不得跨实体边界——实体里开的元素必须在实体里关，实体外开的元素不能在实体里关；
+- 替换文本里出现孤立的结束标签、或多出未配对的开始标签，都是良构性错误；
+- 属性值位置使用的实体只要求替换文本不含 `<`（那条规则本就存在）。
+
+违规 SHALL 抛 `XmlException`，消息带**实体名**与行列号（展开点位置）。
+这条不是有效性校验，与 DTD 内容模型无关——`<a>&e;</a>` 配 `<!ENTITY e "<b>">` 不需要任何
+`<!ELEMENT>` 声明就已经不良构。
 
 **属性值处理顺序**（做反了会留下本不该有的 `\n`）：
 
 ```
-字符引用 + 实体引用展开  →  换行/制表归一成空格
+字符引用 + 实体引用展开  →  空白字符归一并（非 CDATA 类型时）折叠
 ```
 
-**不做首尾 trim**：XML 只对**非 CDATA 类型**的属性值去首尾空格，而 M1 不解析 `<!ATTLIST>`
-（因此拿不到属性类型），一律按 CDATA 处理。这是规范行为，不是遗漏。
+**属性类型映射（只服务规范化，不服务有效性）**：解析 `<!ATTLIST>` 时 SHALL 建立
+「元素名 → 属性名 → `AttType`」映射（同名重复声明取**第一个**，与实体一致），用于
+XML 1.0 §3.3.3 的属性值规范化：
+
+| 属性类型 | 空白处理 |
+|---|---|
+| `CDATA` | 只做字符级归一：`#x9` / `#xA` / `#xD` 一律变 `#x20`；**不去首尾、不折叠连续空格** |
+| 非 `CDATA`（`ID` / `IDREF(S)` / `ENTITY(IES)` / `NMTOKEN(S)` / 枚举 / `NOTATION`） | 先做同上归一，再**去首尾空格**并把内部连续空格折叠成单个 `#x20` |
+| 未在 `<!ATTLIST>` 中声明的属性 | 按 `CDATA` 处理（这是规范默认，不是遗漏） |
+
+映射 SHALL 只用于规范化。SHALL NOT 因此做有效性校验：不检查 `ID` 唯一性、不检查 `IDREF`
+能否解析到目标、不检查枚举取值是否落在声明的候选列表里、不注入默认值 / `#FIXED` 值。
+映射的键 SHALL 按**元素的字面名**（QName 的 `prefix:local` 原文）匹配，不做命名空间解析——
+DTD 本身不认识命名空间，用展开名匹配会得到与规范相反的结果。
 
 **M1 的实体展开发生在字符层之上**：展开结果已经是 `String`，不再回到字节层。
 
@@ -389,8 +445,26 @@ public enum XmlNode {
 `env.getTempDirectory()` → `env.getWorkingDirectory().join(".fountain_tmp")`（自动创建）。
 四级全失败抛 `XmlException("无法创建实体溢出文件，请显式指定 spillDir")`，**不降级回内存**。
 
-**`standalone` 语义**：`"yes"` 且引用了只有外部子集才声明的实体 → 报错；`"no"` 或省略 →
-跳过该实体并记一条告警（不报错）。不区分会让 xmlconf 里一批带外部 DTD 的**合法**文档被误判。
+**实体值内的引用延迟展开**：`<!ENTITY b "&a;y">` 在**声明时**不解析 `&a;`，只把原文存进
+`EntityTable`；等 `&b;` 真正被使用时才按 `a → …` 递归展开。因此
+`<!ENTITY b "&a;y"><!ENTITY a "x">` 合法（使用时 `a` 已声明），只有**使用时仍未声明**才报错
+（WFC: Entity Declared）。声明时就展开会把一批合法文档判死——那正是当前 5 条
+`sa02` / `sa03` / `sa04` / `not-sa04` / `valid-sa-115` 失败的原因。
+
+**`standalone` 语义**（WFC: Entity Declared）：判定分两步，**先看有没有可能从本文件以外声明**，
+再看 `standalone`。
+
+| 前提 | `standalone` | 行为 |
+|---|---|---|
+| — | `"yes"` | **报错**（文档自称自包含，却引用了未声明的东西） |
+| 无外部子集（`DOCTYPE` 没有 `SYSTEM`/`PUBLIC`）且全文无参数实体引用 | `"no"` / 省略 | **报错**：连「可能声明在别处」的通道都没有，未声明就是未声明 |
+| 有外部子集，或有参数实体引用 | `"no"` / 省略 | 跳过该实体（内容位置产出空、属性值里去掉该引用）并记一条告警，不报错 |
+
+不报错的那一档，理由是「声明可能在永不加载的外部子集里」，所以只能跳过；
+`standalone="no"` 的文档与「省略」同等对待。告警写入解析器实例的告警列表
+（`XmlPullParser.warnings()`，包内可见），不打断解析。这条分档让
+`not-sa03` / `rmt-e3e-13` 这类带外部 DTD 的**合法**文档不被误判，同时不再把
+「无 `DOCTYPE` 且引用未声明实体」这种真错误放过。
 
 ### 6.9 生成器
 
@@ -429,9 +503,9 @@ DOM → token 序列 → StringGenerator（UTF-8 字节缓冲，8~64 KB 冲一�
 
 | # | 决策 | M1 落地 | 验收 |
 |---|---|---|---|
-| 1 | 支持 DTD 内部子集实体（普通 + 参数），外部不加载，三层上限 | §6.7 / §6.8 | `f-xml-dtd-entities` 全部 Scenario |
+| 1 | 支持 DTD 内部子集（实体 + 声明语法良构校验），外部不加载，三层上限 | §6.7 / §6.8（含属性类型映射与属性值规范化） | `f-xml-dtd-entities` 全部 Scenario |
 | 2 | XPath 做，M2 | **不做** | — |
-| 3 | XML 1.1 做，M3 | **不做**；`version="1.1"` 报错 | `f-xml-stream-parser`「1.1 拒绝」 |
+| 3 | XML 1.1 做，M3 | **不做**；`version="1.1"` 报错，xmlconf 的 59 条 1.1 用例按 `xml-1.1` 移出可跑集 | `f-xml-stream-parser`「1.1 拒绝」+ 可跑集 2062 统计 |
 | 4 | 自定义实体 / CDATA 输出都做 | `CdataMode` + `XmlEntityRef` + `Doctype` | `f-xml-writer` |
 | 5 | pull parser 做，推建立在它之上 | `XmlPullParser` 是唯一内核 | 推拉事件日志 diff |
 | 6 | `skipElement()` 做 | 推 `SkipSubtree` / 拉 `skipElement()` | §6.4 四个边界各一条 |
@@ -440,7 +514,7 @@ DOM → token 序列 → StringGenerator（UTF-8 字节缓冲，8~64 KB 冲一�
 | 9 | C14N 做，M3 | **不做** | — |
 | 10 | 只认 `InputStream`，不 import ByteBuffer | 4 个 `parse` 重载 + 构造器 | `f-xml-char-layer` |
 | 11 | 读 `InvalidByteMode` / 写 `InvalidCharMode`，默认严格 | §6.1 / §6.9 | 两种模式各一条 |
-| 12 | 软阈值溢出续跑，硬限制拦截 | §6.8 | 20 MB 展开量 RSS 恒定 |
+| 12 | 软阈值溢出续跑，硬限制拦截 | §6.8 | 20 MB 展开量 `retainedBytes` 恒定 |
 | 13 | 保留 `XmlAction`；默认实现；单回调重载；**不加 `stop()`** | §6.3 | `XmlEventHandler` 零空方法用例 |
 | 14 | XPath 命名空间，M2 | **不做** | — |
 | 15 | C14N 三模式，M3 | **不做** | — |
@@ -456,7 +530,7 @@ DOM → token 序列 → StringGenerator（UTF-8 字节缓冲，8~64 KB 冲一�
 | 25 | `xml` / `xmlns` 四处跳过 | M1 承担**解析侧两处**（元素名、属性名）；C14N 三处归 M3 | `xmlns` 作前缀报错用例 |
 | 26 | `AttributeValue` 消息带属性名 | §6.8 | 消息含 `属性 'r'` |
 
-## 8. 与设计文档的差异（6 项，逐条给理由）
+## 8. 与设计文档的差异（7 项，逐条给理由）
 
 | # | 差异 | 理由 | 影响 |
 |---|---|---|---|
@@ -466,6 +540,7 @@ DOM → token 序列 → StringGenerator（UTF-8 字节缓冲，8~64 KB 冲一�
 | 4 | `XmlDocument.builder` 为 `internal` | 建成后 builder 栈已空；外露会诱导「继续往文档里追加」这种没有语义的操作 | 公开 API 少一个字段 |
 | 5 | 新增 `maxElementDepth`（4096）与 `maxAttributeValueLength`（1 MiB） | 设计 §12.8 要求「超深嵌套报错」「超长属性有上限」，但未给配置项 | 新增 2 个选项、2 类错误 |
 | 6 | 新增 `BlockRuneSource` 与共享 `ByteDecoder` | 设计 §2.5 要求 UTF-16/32 不走 `readln()`，§2.6 却只给两个实现；`InvalidByteMode.Replace` 也需要字节级解码 | 字符层多一个实现，`peek`/`position` 语义不变；`Replace` 复用同一字节层 |
+| 7 | `<!ELEMENT>` / `<!ATTLIST>` / `<!NOTATION>` 从「识别并跳过、不校验」升级为「声明语法良构校验」 | xmlconf 385 条 `not-wf` 用例的不良构出在声明产生式本身（`(a) ?`、`NUTOKEN`、`NotationDecl` 缺标识符）；只跳过等于放弃良构性，缺口永远收不拢 | 新增纯语法校验；`<!ATTLIST>` 另建「元素 + 属性 → 类型」映射，**仅**用于属性值规范化（不注入默认值、不做 `ID` 唯一性等有效性检查）；四类声明非法即报错，`invalid` 类用例仍期望成功 |
 
 ## 9. 测试策略
 
@@ -478,7 +553,7 @@ DOM → token 序列 → StringGenerator（UTF-8 字节缓冲，8~64 KB 冲一�
 | 往返（§12.6） | DOM → 序列化 → 解析 → DOM 逐节点比语义 | ~10 |
 | 推拉一致 | 同一输入，两份事件日志逐行 diff | ~15 |
 | 恶意样本（§12.8） | 全部固定 `EntityOverflowPolicy.Strict` | ~12 |
-| xmlconf | 缓存内 `cases.json` 驱动；缓存缺失直接 fail | 2154 断言 |
+| xmlconf | 缓存内 `cases.json` 驱动；缓存缺失直接 fail | 2038 断言（可跑 2062，`error` 24 不判定） |
 
 ### 9.2 溢出策略的测试分工
 
@@ -486,7 +561,7 @@ DOM → token 序列 → StringGenerator（UTF-8 字节缓冲，8~64 KB 冲一�
 - **Billion Laughs 类**：固定 `Strict`。否则炸弹会先写满 2 GB 磁盘才停，CI 直接炸。
 - **`Spill` 的语义验证**用「构造一份展开量 20 MB 的合法文档」，断言：切换到 `FileSink` 后
   `retainedBytes`（内存侧保留字节）**不随展开量增长**，且 `onText` 内容与 `Strict` 路径逐字节一致。
-  RSS 由人工在 P6 记录（单测不做 RSS 断言）。
+  进程 RSS 只做人工记录、不作门禁——性能已移出本变更（§13）。
 
 ### 9.3 测试数据（套件与派生 JSON 不入库）
 
@@ -495,8 +570,31 @@ DOM → token 序列 → StringGenerator（UTF-8 字节缓冲，8~64 KB 冲一�
 | 路径 | 内容 |
 |---|---|
 | `f_xml/tools/xmlconf_gen.py` | 下载 `xmlts20130923.tar.gz` → 校验 SHA-256 → 解压 → 解析 catalog → 生成 `cases.json` / `unsupported.json`；`--offline` 只用缓存，`--force` 重新下载 |
-| `f_xml/tools/known-issues.json` | ≤ 5 条人工裁定，每条写理由 + 规范章节 |
-| `f_xml/doc/xmlconf-unsupported.md` | 408 条排除清单（人读版，由脚本从 `unsupported.json` 生成后提交） |
+| `f_xml/tools/known-issues.json` | 人工裁定清单，上限 5 条，**默认清空（0 条）**。第三轮之前登记的 5 条「命名空间感知 vs XML 1.0 允许多冒号名」已全部改由 `namespace-name` 排除规则移出可跑集，不再占用例外额度；此后只允许登记真正的套件争议（判定口径与 XML 1.0 文本相悖、且无法归入任何一条排除规则的情形） |
+| `f_xml/doc/xmlconf-unsupported.md` | 524 条排除清单（`edition` 313 + `external-entity` 95 + `xml-1.1` 59 + `external-subset` 48 + `namespace-name` 9；人读版，由脚本从 `unsupported.json` 生成后提交） |
+
+**可跑集五规则**（生成脚本与 harness 共用同一口径，按此顺序去重）：
+
+1. `EDITION` 含 `1`/`2`/`3`/`4` → 排除（313 条），原因 `edition`；
+2. 测试文件出现 `<!ENTITY … SYSTEM|PUBLIC>` → 排除（95 条），原因 `external-entity`；
+3. 测试文件声明 `version="1.1"` → 排除（59 条），原因 `xml-1.1`——M1 明确拒绝 1.1，
+   这些用例留在可跑集只会制造必然失败；
+4. 测试文件的 `<!DOCTYPE … SYSTEM|PUBLIC …>` 引用了**外部子集** → 排除（48 条），原因
+   `external-subset`——这 48 条是「不良构只存在于外部 DTD」的 `not-wf` 用例：测试文件本身良构，
+   错误写在永不加载的 `.dtd` 里，M1 不可能检出，留在可跑集必然 fail；
+5. 元素名 / 属性名含**多个冒号**或前缀位置不合法（XML 1.0 的 `Name` 允许，但违反 Namespaces 1.0
+   的 `QName` 约束）→ 排除（9 条），原因 `namespace-name`：`valid-sa-012`、
+   `x-ibm-1-0.5-valid-P04-ibm04v01.xml`、`x-ibm-1-0.5-valid-P05-ibm05v01.xml` /
+   `ibm05v02.xml` / `ibm05v03.xml`、`o-p04pass1`、`o-p05pass1`、`rmt-ns10-043`、`rmt-ns10-044`。
+
+规则 4 与规则 2 不重叠：规则 2 排除的是**测试文件自己声明**外部实体，规则 4 排除的是
+`DOCTYPE` 指向外部子集。规则 5 是「M1 一律做命名空间解析」的直接代价——这 9 条文档在 XML 1.0
+下合法，在命名空间感知处理器里必然报错，两者互斥。
+
+合计 `unsupported` 524、可跑 2062、断言 2038（`error` 24 不判定）。`TYPE` 分布 SHALL 由生成脚本
+实测回填（`not-wf` = 1155 − 48 = **1107**；`valid` / `invalid` 各自减去 `namespace-name` 中
+实际归属的条数，合计 −9，脚本输出前不写死）。上一轮把 `valid` / `invalid` 按 708 / 232 估算，
+实测是 711 / 229——本轮不重犯，只写可推导的部分。
 
 **不入库**（`.gitignore` 覆盖，`git check-ignore` 必须命中）：原始套件解压结果、`cases.json`、
 `unsupported.json`，统一落在 `f_xml/.cache/xmlconf/`。根 `.gitignore` 的 `.cache/` 规则已覆盖子目录；
@@ -527,7 +625,7 @@ DOM → token 序列 → StringGenerator（UTF-8 字节缓冲，8~64 KB 冲一�
 | R2 | `ArrayList<Byte>` 扩容倍数 | 连续 append 记录底层数组换新时机 | 约 ×2 | 同上 |
 | R3 | `unsafeBytes()` 是否零拷贝 | 同一 gen 连续取两次比 `===`；并断言长度 == `size` | 同一数组 | 若做了裁剪拷贝，回写设计文档 §10.2 |
 | R4 | `charset4cj` 对不可映射字符的行为 | GBK 写 emoji，看是抛 / 替换 `?` / 跳过 | 三者之一，有定论 | 定论决定 §6.9 往返校验是否必须（保守起见先实现） |
-| R5 | `bufSize` 最优值 | 1 MB / 20 万行文档扫 4K/8K/16K/64K | 记录耗时曲线 | 只调默认值，不改结构 |
+| R5 | `bufSize` 最优值 | 1 MB / 20 万行文档扫 4K/8K/16K/64K | 记录耗时曲线 | 移出本变更，随字符层重写一并实测（§13） |
 | R6 | `cjpm test` 的工作目录 | 在用例里打印 `env.getWorkingDirectory()` | 模块根 | 若否，`TestDataRoot` 增加 `CJPM_MODULE_ROOT` 候选 |
 
 ### 10.1 实测记录（2026-10-29，本 worktree）
@@ -538,7 +636,7 @@ DOM → token 序列 → StringGenerator（UTF-8 字节缓冲，8~64 KB 冲一�
 | R2 | **扩容倍数约 ×1.5**（16 → 24 → 36 → 54 → 81 → …），不是 ×2，但仍是几何增长，摊还 O(1)。 |
 | R3 | `unsafeBytes()` 返回的数组长度**恒等于 `size`**（5 → 5、10 → 10），无尾部冗余、无 `NUL`。连续两次取值内容一致。是否能靠 `===` 判同一对象：仓颉没有引用相等运算符，改为「长度 == size + 追加后旧数组长度不变」的行为断言；结论满足「长度语义可直接依赖」。 |
 | R4 | **`charset4cj` 对不可映射字符静默替换成 `?`（0x3F），不抛异常**：GBK 编码 `😀` 得到单字节 `0x3F`，解码回来是 `?`，`back == emoji` 为 `false`。→ 写方向的 `Throw` **必须**用往返校验实现，不能等编码器抛错；`Replace` 直接用 `?`，与编码器行为一致。§6.9 的往返校验保留。 |
-| R5 | 待解析器落地后实测（任务 1.8）。 |
+| R5 | 未做。字符层被判为需要整体重写，`bufSize` 微调在结构性瓶颈下没有意义；留待 `optimize-f-xml-char-layer`。 |
 | R6 | **`cjpm test` 的工作目录 = 模块根**（`.../f_xml`）。`TestDataRoot` 的第二候选 `<module>/.cache/xmlconf/` 可直接用工作目录拼接，不需要 `CJPM_MODULE_ROOT`。 |
 
 **实现修正 2（Strict 路径改用自研严格 UTF-8 解码器）**
@@ -555,14 +653,15 @@ DOM → token 序列 → StringGenerator（UTF-8 字节缓冲，8~64 KB 冲一�
 `XmlException`，带字节偏移）。`Replace` 分支保持不变，两条路径仍然互不替代。
 GR 与 GBK 路径不受影响（`CharsetRuneSource` 仍走 `charset4cj.TextReader`）。
 
-**实现修正 3（性能未达标）**
+**实现修正 3（性能：只记录现状，移出本变更）**
 
-事件模式解析耗时（开发机，单线程）：1 MB ≈ 1.5 s、10 MB ≈ 15.8 s，**远高于**
-`10 MB < 1 s` 的出口要求。瓶颈已定位为字符层的逐字符 `Option` 分配与三层缓冲
-（`RuneSource` → `LineWindow` → `Lexer`）。本轮已把 `peek`/`advance` 换成码点直返的
-`peekFast`/`advanceFast` 并去掉两层 `ArrayList`，收益约 15%，不足以达到目标；
-要达标需要把词法器改成「按块扫描 + 只在出错时回退定位」的结构，属于一次独立的
-字符层重写，不在本变更剩余范围内。
+事件模式解析耗时（开发机，单线程）：1 MB ≈ 1.5 s、10 MB ≈ 15.8 s。瓶颈已定位为字符层的
+**逐字符 `Option` 分配**（仓颉 `Option` 是引用类型，每字符一次堆分配）与**三层缓冲**
+（`RuneSource` → `LineWindow` → `Lexer`）。已把 `peek` / `advance` 换成码点直返的
+`peekFast` / `advanceFast` 并去掉两层 `ArrayList`，收益约 15%，不改变量级。
+
+结论：性能**不再作为 M1 的出口约束**，只记录现状。要达标需把词法器改成「按块扫描 + 只在出错时
+回退定位」，属于一次独立的字符层重写，另开变更 `optimize-f-xml-char-layer`（见 §13）。
 
 **实现修正 1（`PrefixStream` 的 EOF 返回值）**：`tasks.md` 1.1 与 `f-xml-char-layer` spec 写的是
 「读完后返回 `-1`」，但仓颉 `InputStream` 的契约是 **EOF 返回 `0`**，且 `charset4cj.TextReader`
@@ -580,7 +679,95 @@ GR 与 GBK 路径不受影响（`CharsetRuneSource` 仍走 `charset4cj.TextReade
 | P2 | `XmlPullParser` | 推 / 拉事件日志逐行一致 |
 | P2.5 | xmlconf harness + 基线 | 输出 `pass / fail / unsupported`；缓存缺失时 fail 并提示运行生成脚本；基线入档（此时允许 fail） |
 | P3 | 命名空间作用域栈 | 带前缀文档正确；属性不受默认命名空间影响 |
-| P3.5 | DTD 内部实体 + 上限 + 溢出 | 228 条实体用例通过；`Strict` 下炸弹 1 MB 内中断；`Spill` 下 20 MB 展开 RSS 恒定 |
+| P3.5 | DTD 内部子集：实体 + 四类声明语法良构校验 + 上限 + 溢出 | 228 条实体用例通过；非法声明报错且带行列号与声明类型；`Strict` 下炸弹 1 MB 内中断；`Spill` 下 20 MB 展开 `retainedBytes` 恒定 |
 | P4 | `XmlWriter` | 往返语义一致；`]]>` 拆分正确；未声明实体报错 |
-| P5 | 安全收尾 + Gate A | 恶意样本被拒；2154 条全过；`known-issues` ≤ 5 |
-| P6 | 性能 | 10 MB 文档 < 1 s；事件模式 RSS 平稳 |
+| P5 | 安全收尾 + Gate A | 恶意样本被拒；2038 条断言全过（`known` 默认 0，≤ 5）；`unsupported` 524 |
+
+**P6（性能）已移出本变更**：1 MB ≈ 1.5 s / 10 MB ≈ 15.8 s 的现状只做记录，不作为出口条件；
+字符层重写另开 `optimize-f-xml-char-layer`（§13）。
+
+## 12. 第二轮评审修订登记（2026-10-29）
+
+> **§14 覆盖本文的 C、D 两条**：C 的 `standalone` 口径已改成「先看有无外部子集 / 参数实体引用，
+> 再看 `standalone`」，D 的 5 条 `known-issues` 已由 `namespace-name` 排除规则整体移出可跑集。
+> 本节保留第二轮当时的决策记录，当前有效口径以 §6.7 / §6.8 / §9.3 / §14 为准。
+
+本轮只改规划产物（`proposal.md` / `specs/**` / `design.md` / `tasks.md` / `baseline.md` 与文档口径），
+不动 `src/`。五条修订与落点：
+
+| # | 修订 | 主要落点 |
+|---|---|---|
+| A | 扩范围：`<!ELEMENT>` / `<!ATTLIST>` / `<!NOTATION>` / `<!ENTITY>` 的**声明语法良构校验**（良构性，不是 DTD 有效性） | §1、§2、§6.7、§8 差异 7、`f-xml-dtd-entities`、tasks 8.11 |
+| B | XML 1.1 用例移出可跑集（59 条）：`unsupported` 408 → **467**、可跑 2178 → **2119**、断言 2154 → **2095**；`TYPE` `not-wf` 1155 / `valid` 708 / `invalid` 232 / `error` 24 | §2、§9.1、§9.3、proposal Impact、`f-xml-conformance`、tasks 6.2/10.2、README、`xmlconf-unsupported.md` |
+| C | 实体值内的前向引用改为**延迟展开**（使用时仍未声明才报错）；`standalone` 为 `no` / 缺省时未声明实体**跳过并告警**，`yes` 才报错 | §6.7 / §6.8、`f-xml-dtd-entities`、tasks 8.2/8.9 |
+| D | `known-issues` 重新核定：总量 ≤ 5，登记 5 条「命名空间 vs XML 1.0 多冒号名」冲突；`o-p04pass1` / `o-p05pass1` 移出 | §9.3、`f-xml-conformance` Gate B、tasks 10.3、`tools/known-issues.json` |
+| E | 性能移出本变更：记录现状与根因，删除 P6 出口约束 | §9.2、§10/§10.1、§11、§13、proposal Impact、`f-xml-conformance`、tasks（删除 11.x） |
+
+**缺口收敛推算**（以旧基线 `fail = 458` 为起点）：
+
+```
+458 − 59（B：1.1 用例移出可跑集）− 385（A：声明语法校验）− 7（C：5 条前向引用 + 2 条 standalone）= 7
+```
+
+剩余 7 条：`valid-sa-012`、`x-ibm-1-0.5-valid-P04-ibm04v01.xml`、`P05-ibm05v01.xml`、
+`P05-ibm05v02.xml`、`P05-ibm05v03.xml`（登记 `known-issues`）与 `o-p04pass1` / `o-p05pass1`。
+后两条若复跑通过则无需例外；若仍失败，它们与已登记 5 条同类，按 Gate B 的 5 条上限必须提交
+用户裁定替换方案。
+
+## 13. 后续变更登记：`optimize-f-xml-char-layer`
+
+| 项 | 内容 |
+|---|---|
+| 现状 | 事件模式 1 MB ≈ 1.5 s、10 MB ≈ 15.8 s（开发机、单线程） |
+| 根因 | 字符层逐字符 `Option` 分配（`Option` 是引用类型，每字符一次堆分配）+ 三层缓冲（`RuneSource` → `LineWindow` → `Lexer`） |
+| 已试 | `peekFast` / `advanceFast`、去掉两层 `ArrayList`，合计约 15% 收益，量级不变 |
+| 目标方案 | 词法器改为「按块扫描 + 只在出错时回退定位」；补做 `bufSize` 实测（R5）；必要时合并 `LineWindow` 与 `Lexer` 的前瞻层 |
+| 边界 | 不改公开 API、不改事件序列、不改错误语义；`InvalidByteMode` 两条路径的输出逐字符保持 |
+| 何时开 | 本变更验收通过后单独立项 |
+
+本变更**不再**对性能设门禁；`f-xml-conformance` 的性能条目只要求「有记录」。
+
+## 14. 第三轮评审修订登记（2026-10-29）
+
+本轮同样**只改规划产物**（`proposal.md` / `specs/**` / `design.md` / `tasks.md` / `baseline.md`、
+`f_xml/README.md` / `README_en.md`、`f_xml/doc/xmlconf-unsupported.md`），不动 `src/`。
+本轮修订覆盖 §12 的 C（`standalone` 口径）与 D（`known-issues` 5 条）。
+
+| # | 修订 | 主要落点 |
+|---|---|---|
+| A1 | 可跑集新增**第四条**排除规则 `external-subset`（48 条）：不良构只存在于外部 DTD | §9.3、`f-xml-conformance`「可跑集过滤」、tasks 6.2 |
+| A2 | 可跑集新增**第五条**排除规则 `namespace-name`（9 条）：XML 1.0 合法但非命名空间良构 | §9.3、`f-xml-conformance`「可跑集过滤」/ Gate B、tasks 6.2 / 10.3 |
+| A3 | 口径变更：`unsupported` 467 → **524**、可跑 2119 → **2062**、断言 2095 → **2038**；`TYPE` 分布由生成脚本实测回填 | §1、§7 决策 1/3、§9.1、§9.3、§11、proposal、`f-xml-conformance`、tasks 6.2 / 10.2、README、baseline、`xmlconf-unsupported.md` |
+| B1 | BOM 与 `encoding` 声明冲突改报 **fatal error**（原「以 BOM 为准」作废） | §6.1、`f-xml-char-layer`「字节嗅探」、tasks 1.2 |
+| B2 | 内部子集出现条件段 `<![INCLUDE[` / `<![IGNORE[` 改**报错**（规范只允许外部子集） | §6.7、`f-xml-dtd-entities`、tasks 8.1 / 8.11 |
+| B3 | 修正 `standalone` 口径：无外部子集且无参数实体引用时，未声明实体**仍报错** | §6.8、`f-xml-dtd-entities`「standalone 与未声明实体」、tasks 8.9 |
+| B4 | 新增 tasks **8.12**：单实体替换文本良构校验（6 条 `sa-104` / `sa-116` / `sa-117` / `sa-119` / `sa-181` / `sa-182`） | §6.7、`f-xml-dtd-entities`、tasks 8.12 |
+| B5 | 新增 tasks **8.13**：`<!ATTLIST>` 属性类型映射与属性值规范化（`rmt-ns10-012`）；同时删除原 §6.7 / §8 差异 7 的旧口径「不建「元素 → 属性类型」映射、一律按 CDATA」 | §6.7、§8 差异 7、`f-xml-dtd-entities`「属性值规范化」、tasks 8.13 |
+| C | 全部规划产物与文档口径同步，两份副本逐文件字节一致 | tasks 12.3 / 12.7 |
+
+**缺口收敛推算**（以旧基线 `fail = 458` 为起点，逐项对齐上一轮实测）：
+
+```
+458（旧口径 fail = 385 条 not-wf 被接受 + 59 条 XML 1.1 + 14 条 valid/invalid 失败）
+ − 59（规则 3：XML 1.1 用例移出可跑集）
+ − 325（8.11 声明语法良构校验命中：385 − 60；余下 60 条仍被接受）
+ −   7（8.2 / 8.9：5 条前向引用 + 2 条 standalone）
+ −   7（规则 5：5 条命名空间冲突 + o-p04pass1 / o-p05pass1）
+ −  48（规则 4：不良构只在外部 DTD）
+ −  12（B3 / B4 / B5：8.9 口径修正 + 单实体替换文本良构 + 属性值规范化）
+ =   0
+```
+
+其中 12 条残差的点名部分是 8.12 的 6 条（`sa-104` / `sa-116` / `sa-117` / `sa-119` /
+`sa-181` / `sa-182`），其余 6 条在 8.9 / 8.13 落地后逐条复核归位；复跑若仍有残留，只允许
+登记为**真正的套件争议**并受 Gate B 的 5 条上限约束，**默认 0 条**。
+
+**四份产物自洽检查点**：
+
+1. `proposal.md` 的 `unsupported` / 可跑 / 断言三个数字与 §9.3、`f-xml-conformance`、
+   `baseline.md`、README、`xmlconf-unsupported.md` 完全一致（524 / 2062 / 2038）；
+2. 排除规则在 §9.3、`f-xml-conformance`、tasks 6.2 三处**都是五条、同顺序、同原因名**；
+3. 「属性值一律按 CDATA」这句旧口径只允许出现在本文 §14 与 tasks 8.13 的作废登记里，
+   其余产物（`proposal.md`、`specs/**`、`baseline.md`、README、`xmlconf-unsupported.md`）应为空；
+4. 同理，「条件段按标志位选分支」只允许出现在 §14 / tasks 8.1 的作废登记里，其余产物应为空；
+5. tasks 8.9 / 8.12 / 8.13 的验收场景逐条可执行（见各任务下的 `→` 说明与 spec Scenario）。

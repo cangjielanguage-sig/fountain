@@ -69,12 +69,16 @@ public class EntitySecurity_test {
         assertTrue(parser.totalExpanded() < 1024 * 1024, "已展开 ${parser.totalExpanded()}")
     }
 
-    /** 参数实体版 Billion Laughs。 */
+    /**
+     * 参数实体版「Billion Laughs」必须在声明期就被拦住。
+     *
+     * 内部子集里「实体值内含参数实体引用」本身违反 WFC: PEs in Internal Subset，
+     * 所以在解析声明时即报错，根本走不到展开阶段。
+     */
     @TestCase
     public func parameterBillionLaughs(): Unit {
         let doc = "<!DOCTYPE a [<!ENTITY % a \"%b;\"><!ENTITY % b \"%a;\">%a;]><a/>"
-        let error = assertAnyXmlError({=> parseText(doc, options: this.strictOptions())})
-        @Assert(error.entityLimitKind == Some(EntityLimitKind.Depth))
+        assertXmlError({=> parseText(doc, options: this.strictOptions())}, "参数实体")
     }
 
     /** 单实体超长。 */

@@ -19,60 +19,51 @@ import std.collection.ArrayList
 import fountain::f_base.StringGenerator
 
 /**
- * DTD 内部子集解析器。
+ * DTD 内部子集解析器：四类声明 + 条件段。
  *
- * **只理解 `<!ENTITY>`**：`<!ELEMENT>` / `<!ATTLIST>` / `<!NOTATION>` 识别后跳过
- * （跳过器必须理解引号与内部 `>`，否则 `<!ATTLIST a x CDATA "1>2">` 会提前结束）。
+ * 解析并校验**声明语法**（良构性，WFC），不校验有效性（VC）：
+ * 不建「元素 → 属性类型」映射、不注入默认属性值、不比对内容模型与文档结构。
  *
- * 条件段 `<![INCLUDE[ … ]]>` 解析内容，`<![IGNORE[ … ]]>` 原样跳过。
+ * - `<!ENTITY>`：`GEDecl` / `PEDecl`，`EntityValue` 里的**字符引用在声明时展开**，
+ *   实体引用保持原文（延迟到使用时展开）。
+ * - `<!ELEMENT>`：`EMPTY` / `ANY` / `Mixed` / `children`，含 `?` `*` `+` 的紧邻规则。
+ * - `<!ATTLIST>`：八种 `AttType` 与枚举、`NOTATION` 枚举、四种 `DefaultDecl`。
+ * - `<!NOTATION>`：`ExternalID` 或 `PublicID`。
+ *
+ * 条件段 `<![INCLUDE[ … ]]>` 解析内容，`<![IGNORE[ … ]]>` 只按 `<![` / `]]>` 配对跳过
+ * （规范要求处理器不得读 IGNORE 分支，因此其中的非法声明不校验）。
  */
-internal struct PendingRef {
-    let owner: String
-    let ref: String
-
-    init(owner: String, ref: String) {
-        this.owner = owner
-        this.ref = ref
-    }
-}
-
 internal class DoctypeParser {
     private let text: Array<Rune>
     private var pos: Int64 = 0
     private let table: EntityTable
     private let maxDepth: Int64
     private let depth: Int64
-    /** 待判定的前向引用：实体值里引用了同一声明子集里**稍后**才声明的实体。 */
-    private let pendingRefs = ArrayList<PendingRef>()
+    /** 子集第一个字符在文档里的位置，用于把内部偏移换算成行列号。 */
+    private let base: SourcePosition
 
-    private init(text: Array<Rune>, table: EntityTable, maxDepth!: Int64 = 16, depth!: Int64 = 0) {
+    private init(
+        text: Array<Rune>,
+        table: EntityTable,
+        base: SourcePosition,
+        maxDepth!: Int64 = 16,
+        depth!: Int64 = 0
+    ) {
         this.text = text
         this.table = table
+        this.base = base
         this.maxDepth = maxDepth
         this.depth = depth
     }
 
-    static func parse(subset: String, limits: EntityLimits): EntityTable {
+    static func parse(subset: String, limits: EntityLimits, base: SourcePosition): EntityTable {
         let table = EntityTable(limits.maxDeclarations)
-        let parser = DoctypeParser(runesOf(subset), table, maxDepth: limits.maxDepth)
-        parser.parseStatements()
-        parser.checkForwardReferences()
+        let parser = DoctypeParser(runesOf(subset), table, base, maxDepth: limits.maxDepth)
+        parser.parseStatements(nested: false)
         table
     }
 
-    /**
-     * 前向引用只在「同一声明子集里稍后确实声明了」时才算错。
-     *
-     * 引用一个我们从未见过的实体名，可能是外部子集里声明的——那是运行时按
-     * `standalone` 处理的事，不能在这里判死。
-     */
-    private func checkForwardReferences(): Unit {
-        for (pending in this.pendingRefs) {
-            if (this.table.general(pending.ref).isSome()) {
-                throw XmlException("实体「${pending.owner}」引用了尚未声明的实体「&${pending.ref};」")
-            }
-        }
-    }
+    // ---------------------------------------------------------------- 基础
 
     private func atEnd(): Bool {
         this.pos >= this.text.size
@@ -86,6 +77,32 @@ internal class DoctypeParser {
         Some(this.text[index])
     }
 
+    /** 把内部偏移换算成文档行列号（只在报错时调用，O(n) 可以接受）。 */
+    private func positionAt(index: Int64): SourcePosition {
+        var line = this.base.line
+        var column = this.base.column
+        var i: Int64 = 0
+        while (i < index && i < this.text.size) {
+            if (this.text[i] == r'\n') {
+                line++
+                column = 1
+            } else {
+                column++
+            }
+            i++
+        }
+        SourcePosition(line, column)
+    }
+
+    private func error(message: String): XmlException {
+        let p = this.positionAt(this.pos)
+        XmlException(message, p.line, p.column)
+    }
+
+    private func fail(decl: String, message: String): XmlException {
+        this.error("${decl} ${message}")
+    }
+
     private func startsWith(value: String): Bool {
         let runes = runesOf(value)
         for (i in 0..runes.size) {
@@ -97,6 +114,17 @@ internal class DoctypeParser {
             }
         }
         true
+    }
+
+    /** 关键字必须在 NameChar 边界处结束，避免把 `IDREF` 认成 `ID`。 */
+    private func startsWithKeyword(keyword: String): Bool {
+        if (!this.startsWith(keyword)) {
+            return false
+        }
+        match (this.peek(offset: Int64(runesOf(keyword).size))) {
+            case Some(r) => !XmlChars.isNameChar(r.position())
+            case None => true
+        }
     }
 
     private func consume(value: String): Unit {
@@ -114,7 +142,25 @@ internal class DoctypeParser {
         }
     }
 
-    private func readName(): String {
+    private func trySkipWhitespace(): Bool {
+        var seen = false
+        while (let Some(r) <- this.peek(offset: 0)) {
+            if (!XmlChars.isWhitespace(r)) {
+                break
+            }
+            seen = true
+            this.pos++
+        }
+        seen
+    }
+
+    private func requireWhitespace(decl: String, after: String): Unit {
+        if (!this.trySkipWhitespace()) {
+            throw this.fail(decl, "在${after}缺少空白")
+        }
+    }
+
+    private func readName(decl: String): String {
         let gen = StringGenerator()
         var first = true
         while (let Some(r) <- this.peek(offset: 0)) {
@@ -132,135 +178,212 @@ internal class DoctypeParser {
             first = false
         }
         if (first) {
-            throw XmlException("DTD 里缺少名字")
+            throw this.fail(decl, "缺少名字")
         }
         gen.toString()
     }
 
-    private func readQuoted(): String {
+    /** `Nmtoken ::= NameChar+` */
+    private func readNmtoken(decl: String): String {
+        let gen = StringGenerator()
+        while (let Some(r) <- this.peek(offset: 0)) {
+            if (!XmlChars.isNameChar(r.position())) {
+                break
+            }
+            gen.append(r)
+            this.pos++
+        }
+        if (gen.size == 0) {
+            throw this.fail(decl, "缺少名字记号")
+        }
+        gen.toString()
+    }
+
+    /** 读一段连续 NameChar（允许为空），用于把非法记号原样带进消息。 */
+    private func readNameCharRun(): String {
+        let gen = StringGenerator()
+        while (let Some(r) <- this.peek(offset: 0)) {
+            if (!XmlChars.isNameChar(r.position())) {
+                break
+            }
+            gen.append(r)
+            this.pos++
+        }
+        gen.toString()
+    }
+
+    private func readQuoted(decl: String, what: String): String {
         let quoteRune = match (this.peek(offset: 0)) {
             case Some(r) => r
-            case None => throw XmlException("DTD 声明缺少引号")
+            case None => throw this.fail(decl, "缺少${what}")
         }
         if (quoteRune != r'"' && quoteRune != r'\'') {
-            throw XmlException("DTD 声明缺少引号")
+            throw this.fail(decl, "缺少${what}")
         }
         this.pos++
         let gen = StringGenerator()
-        var finished = false
-        while (!finished) {
+        var result: ?String = None
+        while (result.isNone()) {
             match (this.peek(offset: 0)) {
                 case Some(r) =>
                     if (r == quoteRune) {
                         this.pos++
-                        finished = true
+                        result = Some(gen.toString())
+                    } else if (!XmlChars.isXmlChar(r.position())) {
+                        throw this.fail(decl, "的${what}里出现非法字符")
                     } else {
                         gen.append(r)
                         this.pos++
                     }
-                case None => throw XmlException("DTD 字面量未闭合")
+                case None => throw this.fail(decl, "的${what}未闭合")
             }
         }
-        expandCharRefs(gen.toString())
+        result.getOrThrow()
     }
 
-    /** 实体值里的字符引用在**声明时**就展开（属性值归一顺序依赖这一点）。 */
-    private func expandCharRefs(value: String): String {
-        if (!value.contains("&")) {
-            return value
-        }
-        let runes = runesOf(value)
-        let gen = StringGenerator()
-        var i: Int64 = 0
-        while (i < runes.size) {
-            if (runes[i] == r'&' && i + 1 < runes.size && runes[i + 1] == r'#') {
-                var j = i + 2
-                var hex = false
-                if (j < runes.size && (runes[j] == r'x')) {
-                    hex = true
-                    j++
-                }
-                var value2: Int64 = 0
-                var digits: Int64 = 0
-                while (j < runes.size) {
-                    let r = runes[j]
-                    let ok = if (hex) { XmlChars.isHexDigit(r) } else { XmlChars.isDigit(r) }
-                    if (!ok) {
-                        break
-                    }
-                    let digit = if (hex) { XmlChars.hexValue(r) } else { Int64(r.position() - r'0'.position()) }
-                    value2 = value2 * (if (hex) { 16 } else { 10 }) + digit
-                    digits++
-                    j++
-                }
-                if (digits > 0 && j < runes.size && runes[j] == r';' && XmlChars.isXmlChar(value2)) {
-                    gen.append(Rune(value2))
-                    i = j + 1
-                    continue
-                }
+    /** `PubidChar ::= #x20 | #xD | #xA | [a-zA-Z0-9] | [-'()+,./:=?;!*#@$_%]` */
+    private func readPubidLiteral(decl: String): String {
+        let value = this.readQuoted(decl, "PubidLiteral")
+        for (r in value.runes()) {
+            let cp = r.position()
+            let ok = cp == 0x20 || cp == 0x0D || cp == 0x0A ||
+                (cp >= 0x30 && cp <= 0x39) ||
+                (cp >= 0x41 && cp <= 0x5A) ||
+                (cp >= 0x61 && cp <= 0x7A) ||
+                r == r'-' || r == r'\'' || r == r'(' || r == r')' || r == r'+' || r == r',' ||
+                r == r'.' || r == r'/' || r == r':' || r == r'=' || r == r'?' || r == r';' ||
+                r == r'!' || r == r'*' || r == r'#' || r == r'@' || r == r'$' || r == r'_' ||
+                r == r'%'
+            if (!ok) {
+                throw this.fail(decl, "的 PubidLiteral 里出现非法字符「${r}」")
             }
-            gen.append(runes[i])
-            i++
         }
-        gen.toString()
+        value
     }
 
-    private func parseStatements(): Unit {
+    private func expectGreater(decl: String): Unit {
+        this.skipWhitespace()
+        if (this.peek(offset: 0) != Some(r'>')) {
+            throw this.fail(decl, "未闭合（缺少「>」）")
+        }
+        this.pos++
+    }
+
+    // ---------------------------------------------------------------- 子集
+
+    /**
+     * 依次解析声明。`nested = true` 用于 `INCLUDE` 段：遇到 `]]>` 时**不消费**并返回，
+     * 由调用方收尾；顶层遇到 `]]>` 则是多余的结束标记。
+     */
+    private func parseStatements(nested!: Bool): Unit {
         while (!this.atEnd()) {
             this.skipWhitespace()
             if (this.atEnd()) {
-                return
+                break
             }
-            if (this.startsWith("<![INCLUDE[")) {
-                this.consume("<![INCLUDE[")
-                this.parseStatements()
-                continue
-            }
-            if (this.startsWith("<![IGNORE[")) {
-                this.consume("<![IGNORE[")
-                this.skipUntil("]]>")
-                continue
+            if (this.startsWith("]]>")) {
+                if (nested) {
+                    return
+                }
+                throw this.error("DTD 内部子集里出现多余的「]]>」")
             }
             if (this.startsWith("<!--")) {
                 this.consume("<!--")
-                this.skipUntil("-->")
+                this.skipUntil("-->", "注释")
                 continue
             }
             if (this.startsWith("<?")) {
                 this.consume("<?")
-                let target = this.readName()
+                let target = this.readName("处理指令")
                 if (target.toAsciiLower() == "xml") {
-                    throw XmlException("DTD 内部不允许出现 XML 声明")
+                    throw this.error("DTD 内部子集里不允许出现 XML 声明")
                 }
-                this.skipUntil("?>")
+                // `PI ::= '<?' PITarget (S (Char* - (Char* '?>' Char*)))? '?>'`：target 后必须是 S 或 `?>`。
+                if (!this.trySkipWhitespace() && !this.startsWith("?>")) {
+                    throw this.error("处理指令 target 之后必须是空白或「?>」")
+                }
+                this.skipUntil("?>", "处理指令")
+                continue
+            }
+            if (this.startsWith("<![INCLUDE[")) {
+                this.consume("<![INCLUDE[")
+                this.parseStatements(nested: true)
+                if (!this.startsWith("]]>")) {
+                    throw this.error("INCLUDE 条件段未闭合（缺少「]]>」）")
+                }
+                this.consume("]]>")
+                continue
+            }
+            if (this.startsWith("<![IGNORE[")) {
+                this.consume("<![IGNORE[")
+                this.skipIgnoreSection()
                 continue
             }
             if (this.startsWith("<!ENTITY")) {
-                this.parseEntity()
+                this.parseEntityDecl()
                 continue
             }
-            if (this.startsWith("<!ELEMENT") || this.startsWith("<!ATTLIST") || this.startsWith("<!NOTATION")) {
-                this.skipDeclaration()
+            if (this.startsWith("<!ELEMENT")) {
+                this.parseElementDecl()
+                continue
+            }
+            if (this.startsWith("<!ATTLIST")) {
+                this.parseAttlistDecl()
+                continue
+            }
+            if (this.startsWith("<!NOTATION")) {
+                this.parseNotationDecl()
                 continue
             }
             if (this.peek(offset: 0) == Some(r'%')) {
                 this.pos++
-                let name = this.readName()
-                this.skipWhitespace()
-                if (this.peek(offset: 0) == Some(r';')) {
-                    this.pos++
+                let name = this.readName("参数实体引用")
+                // `PEReference ::= '%' Name ';'`：`;` 必须紧跟名字，`%foo ;` 非法。
+                if (this.peek(offset: 0) != Some(r';')) {
+                    throw this.error("参数实体引用「%${name}」缺少「;」")
                 }
+                this.pos++
+                this.table.sawParameterRef = true
                 this.expandParameterEntity(name)
                 continue
             }
-            if (this.startsWith("]]>")) {
-                // INCLUDE / IGNORE 段的结束标记，交给上层继续。
-                this.consume("]]>")
-                return
+            throw this.error("DTD 内部子集里出现无法识别的内容")
+        }
+        if (nested) {
+            throw this.error("INCLUDE 条件段未闭合（缺少「]]>」）")
+        }
+    }
+
+    /** `ignoreSectContents`：只按 `<![` / `]]>` 配对跳过，不解析内部声明。 */
+    private func skipIgnoreSection(): Unit {
+        var depth: Int64 = 1
+        while (depth > 0) {
+            if (this.atEnd()) {
+                throw this.error("IGNORE 条件段未闭合（缺少「]]>」）")
             }
-            // 容错：跳过一个字符，避免死循环。
+            if (this.startsWith("<![")) {
+                this.pos += 3 // 「<![」三个字符
+                depth++
+                continue
+            }
+            if (this.startsWith("]]>")) {
+                this.consume("]]>")
+                depth--
+                continue
+            }
             this.pos++
         }
+    }
+
+    private func skipUntil(terminator: String, what: String): Unit {
+        while (!this.atEnd()) {
+            if (this.startsWith(terminator)) {
+                this.consume(terminator)
+                return
+            }
+            this.pos++
+        }
+        throw this.error("${what}未闭合：期望「${terminator}」")
     }
 
     private func expandParameterEntity(name: String): Unit {
@@ -279,57 +402,63 @@ internal class DoctypeParser {
                         let nested = DoctypeParser(
                             runesOf(value),
                             this.table,
+                            this.positionAt(this.pos),
                             maxDepth: this.maxDepth,
                             depth: this.depth + 1
                         )
-                        nested.parseStatements()
+                        nested.parseStatements(nested: false)
                     case None => () // 外部参数实体：不加载
                 }
-            case None => throw XmlException("参数实体「%${name};」未声明")
+            case None => throw this.error("参数实体「%${name};」未声明")
         }
     }
 
-    private func parseEntity(): Unit {
+    // ---------------------------------------------------------------- ENTITY
+
+    private func parseEntityDecl(): Unit {
+        let decl = "<!ENTITY>"
         this.consume("<!ENTITY")
-        this.skipWhitespace()
+        this.requireWhitespace(decl, "「<!ENTITY」之后")
         var parameter = false
         if (this.peek(offset: 0) == Some(r'%')) {
             parameter = true
             this.pos++
-            this.skipWhitespace()
+            this.requireWhitespace(decl, "「%」之后")
         }
-        let name = this.readName()
-        this.skipWhitespace()
+        let name = this.readName(decl)
+        this.requireWhitespace(decl, "实体名之后")
         var value: ?String = None
         var publicId: ?String = None
         var systemId: ?String = None
-        if (this.startsWith("PUBLIC")) {
+        var external = false
+        if (this.startsWithKeyword("PUBLIC")) {
+            external = true
             this.consume("PUBLIC")
-            this.skipWhitespace()
-            publicId = Some(this.readQuoted())
-            this.skipWhitespace()
-            systemId = Some(this.readQuoted())
-            this.skipWhitespace()
-            this.skipNData()
-        } else if (this.startsWith("SYSTEM")) {
+            this.requireWhitespace(decl, "「PUBLIC」之后")
+            publicId = Some(this.readPubidLiteral(decl))
+            this.requireWhitespace(decl, "PubidLiteral 之后")
+            systemId = Some(this.readQuoted(decl, "SystemLiteral"))
+        } else if (this.startsWithKeyword("SYSTEM")) {
+            external = true
             this.consume("SYSTEM")
-            this.skipWhitespace()
-            systemId = Some(this.readQuoted())
-            this.skipWhitespace()
-            this.skipNData()
+            this.requireWhitespace(decl, "「SYSTEM」之后")
+            systemId = Some(this.readQuoted(decl, "SystemLiteral"))
         } else {
-            value = Some(this.readQuoted())
+            value = Some(this.parseEntityValue(decl))
         }
-        this.skipWhitespace()
-        if (this.peek(offset: 0) != Some(r'>')) {
-            throw XmlException("ENTITY 声明未闭合")
-        }
-        this.pos++
-        if (!parameter) {
-            if (let Some(v) <- value) {
-                this.validateReferences(v, name)
+        let hadWhitespace = this.trySkipWhitespace()
+        if (hadWhitespace && this.startsWithKeyword("NDATA")) {
+            if (!external) {
+                throw this.fail(decl, "的「NDATA」只能出现在外部实体上")
             }
+            if (parameter) {
+                throw this.fail(decl, "的参数实体不能带「NDATA」")
+            }
+            this.consume("NDATA")
+            this.requireWhitespace(decl, "「NDATA」之后")
+            this.readName(decl)
         }
+        this.expectGreater(decl)
         this.table.declare(EntityDecl(
             name,
             value: value,
@@ -339,18 +468,449 @@ internal class DoctypeParser {
         ))
     }
 
-    /** 外部实体可带 `NDATA notation`；M1 不处理 NOTATION，跳过即可。 */
-    private func skipNData(): Unit {
-        if (this.startsWith("NDATA")) {
-            this.consume("NDATA")
-            this.skipWhitespace()
-            this.readName()
-            this.skipWhitespace()
+    /**
+     * `EntityValue ::= '"' ([^%&"] | PEReference | Reference)* '"'`
+     *
+     * 字符引用**声明时**展开（`&#38;#38;` 这类双重转义依赖这一点）；实体引用只存原文，
+     * 等实体被使用时再递归展开——前向引用因此合法。
+     */
+    private func parseEntityValue(decl: String): String {
+        let quoteRune = match (this.peek(offset: 0)) {
+            case Some(r) => r
+            case None => throw this.fail(decl, "缺少 EntityValue")
+        }
+        if (quoteRune != r'"' && quoteRune != r'\'') {
+            throw this.fail(decl, "缺少 EntityValue")
+        }
+        this.pos++
+        let gen = StringGenerator()
+        while (true) {
+            match (this.peek(offset: 0)) {
+                case Some(r) =>
+                    if (r == quoteRune) {
+                        this.pos++
+                        return expandCharRefs(gen.toString())
+                    }
+                    if (r == r'%') {
+                        throw this.fail(decl, "的值里不能出现参数实体引用")
+                    }
+                    if (r == r'&') {
+                        this.appendReference(decl, gen)
+                        continue
+                    }
+                    if (!XmlChars.isXmlChar(r.position())) {
+                        throw this.fail(decl, "的值里出现非法字符")
+                    }
+                    gen.append(r)
+                    this.pos++
+                case None => throw this.fail(decl, "的 EntityValue 未闭合")
+            }
+        }
+        ""
+    }
+
+    /** 校验一个 `Reference` 并把原文写进 `gen`（字符引用留给 `expandCharRefs`）。 */
+    private func appendReference(decl: String, gen: StringGenerator): Unit {
+        gen.append<String>("&")
+        this.pos++
+        if (this.peek(offset: 0) == Some(r'#')) {
+            gen.append<String>("#")
+            this.pos++
+            var hex = false
+            if (this.peek(offset: 0) == Some(r'x')) {
+                hex = true
+                gen.append<String>("x")
+                this.pos++
+            }
+            var digits: Int64 = 0
+            var cp: Int64 = 0
+            while (let Some(r) <- this.peek(offset: 0)) {
+                let ok = if (hex) { XmlChars.isHexDigit(r) } else { XmlChars.isDigit(r) }
+                if (!ok) {
+                    break
+                }
+                cp = cp * (if (hex) { 16 } else { 10 }) + (if (hex) { XmlChars.hexValue(r) } else {
+                    Int64(r.position() - r'0'.position())
+                })
+                digits++
+                gen.append(r)
+                this.pos++
+            }
+            if (digits == 0 || this.peek(offset: 0) != Some(r';')) {
+                throw this.fail(decl, "的值里有非法字符引用")
+            }
+            if (!XmlChars.isXmlChar(cp)) {
+                throw this.fail(decl, "的值里有非法码点")
+            }
+            gen.append<String>(";")
+            this.pos++
+            return
+        }
+        let name = this.readName(decl)
+        if (this.peek(offset: 0) != Some(r';')) {
+            throw this.fail(decl, "的值里有非法引用「&${name}」")
+        }
+        gen.append<String>(name)
+        gen.append<String>(";")
+        this.pos++
+    }
+
+    // ---------------------------------------------------------------- ELEMENT
+
+    private func parseElementDecl(): Unit {
+        let decl = "<!ELEMENT>"
+        this.consume("<!ELEMENT")
+        this.requireWhitespace(decl, "「<!ELEMENT」之后")
+        this.readName(decl)
+        this.requireWhitespace(decl, "元素名之后")
+        this.parseContentSpec(decl)
+        this.expectGreater(decl)
+    }
+
+    private func parseContentSpec(decl: String): Unit {
+        if (this.startsWithKeyword("EMPTY")) {
+            this.consume("EMPTY")
+            return
+        }
+        if (this.startsWithKeyword("ANY")) {
+            this.consume("ANY")
+            return
+        }
+        if (this.peek(offset: 0) == Some(r'(')) {
+            let mixed = this.parseGroup(decl, topLevel: true)
+            // `children ::= (choice | seq) ('?' | '*' | '+')?`：量词必须紧邻分组。
+            if (!mixed) {
+                match (this.peek(offset: 0)) {
+                    case Some(r) =>
+                        if (r == r'?' || r == r'*' || r == r'+') {
+                            this.pos++
+                        }
+                    case None => ()
+                }
+            }
+            return
+        }
+        let token = this.readNameCharRun()
+        if (token.isEmpty()) {
+            throw this.fail(decl, "缺少内容模型")
+        }
+        throw this.fail(decl, "的内容模型「${token}」不合法（只能是 EMPTY / ANY / Mixed / children）")
+    }
+
+    /** `'(' S? (#PCDATA …) | '(' S? cp …`；返回是否为 Mixed（Mixed 只能出现在 contentspec 顶层）。 */
+    private func parseGroup(decl: String, topLevel!: Bool): Bool {
+        this.consume("(")
+        this.skipWhitespace()
+        if (this.startsWith("#PCDATA")) {
+            if (!topLevel) {
+                throw this.fail(decl, "的混合内容不能出现在分组里")
+            }
+            this.parseMixed(decl)
+            return true
+        }
+        this.parseCp(decl)
+        this.skipWhitespace()
+        var separator: ?Rune = None
+        match (this.peek(offset: 0)) {
+            case Some(r) =>
+                if (r == r'|' || r == r',') {
+                    separator = Some(r)
+                }
+            case None => ()
+        }
+        match (separator) {
+            case Some(sep) =>
+                while (true) {
+                    this.skipWhitespace()
+                    match (this.peek(offset: 0)) {
+                        case Some(r) =>
+                            if (r != sep) {
+                                break
+                            }
+                            this.pos++
+                            this.skipWhitespace()
+                            this.parseCp(decl)
+                            this.skipWhitespace()
+                        case None => throw this.fail(decl, "的内容模型分组未闭合")
+                    }
+                }
+            case None => ()
+        }
+        this.skipWhitespace()
+        if (this.peek(offset: 0) != Some(r')')) {
+            throw this.fail(decl, "的内容模型分组里有非法字符")
+        }
+        this.pos++
+        false
+    }
+
+    /** `cp ::= (Name | choice | seq) ('?' | '*' | '+')?`，量词必须紧邻。 */
+    private func parseCp(decl: String): Unit {
+        match (this.peek(offset: 0)) {
+            case Some(r) =>
+                if (r == r'(') {
+                    this.parseGroup(decl, topLevel: false)
+                } else if (XmlChars.isNameStartChar(r.position())) {
+                    this.readName(decl)
+                } else {
+                    throw this.fail(decl, "的内容模型里缺少内容粒子")
+                }
+            case None => throw this.fail(decl, "的内容模型未闭合")
+        }
+        match (this.peek(offset: 0)) {
+            case Some(r) =>
+                if (r == r'?' || r == r'*' || r == r'+') {
+                    this.pos++
+                }
+            case None => ()
         }
     }
 
-    /** 实体值只能引用**已经声明**的实体；前向引用与自引用都报错。 */
-    private func validateReferences(value: String, owner: String): Unit {
+    /**
+     * `Mixed ::= '(' S? '#PCDATA' (S? '|' S? Name)* S? ')*' | '(' S? '#PCDATA' S? ')'`
+     *
+     * 两种备选都合法，所以 `(#PCDATA)` 与 `(#PCDATA)*` 都对；但一旦出现 `| Name`，
+     * 就必须以 `)*` 收尾（`(#PCDATA|a)` 非法）。
+     */
+    private func parseMixed(decl: String): Unit {
+        this.consume("#PCDATA")
+        this.skipWhitespace()
+        var names: Int64 = 0
+        while (this.peek(offset: 0) == Some(r'|')) {
+            this.pos++
+            this.skipWhitespace()
+            this.readName(decl)
+            names++
+            this.skipWhitespace()
+        }
+        if (this.peek(offset: 0) != Some(r')')) {
+            throw this.fail(decl, "的混合内容未闭合")
+        }
+        this.pos++
+        if (names > 0 && this.peek(offset: 0) != Some(r'*')) {
+            throw this.fail(decl, "的混合内容必须以「)*」收尾")
+        }
+        if (this.peek(offset: 0) == Some(r'*')) {
+            this.pos++
+        }
+    }
+
+    // ---------------------------------------------------------------- ATTLIST
+
+    private func parseAttlistDecl(): Unit {
+        let decl = "<!ATTLIST>"
+        this.consume("<!ATTLIST")
+        this.requireWhitespace(decl, "「<!ATTLIST」之后")
+        this.readName(decl)
+        while (true) {
+            let hadWhitespace = this.trySkipWhitespace()
+            match (this.peek(offset: 0)) {
+                case Some(r) =>
+                    if (r == r'>') {
+                        this.pos++
+                        return
+                    }
+                    if (!hadWhitespace) {
+                        throw this.fail(decl, "的属性声明之间缺少空白")
+                    }
+                    this.readName(decl)
+                    this.requireWhitespace(decl, "属性名之后")
+                    this.parseAttType(decl)
+                    this.requireWhitespace(decl, "属性类型之后")
+                    this.parseDefaultDecl(decl)
+                case None => throw this.fail(decl, "未闭合（缺少「>」）")
+            }
+        }
+    }
+
+    private func parseAttType(decl: String): Unit {
+        if (this.startsWithKeyword("CDATA")) {
+            this.consume("CDATA")
+            return
+        }
+        if (this.startsWithKeyword("NOTATION")) {
+            this.consume("NOTATION")
+            this.requireWhitespace(decl, "「NOTATION」之后")
+            if (this.peek(offset: 0) != Some(r'(')) {
+                throw this.fail(decl, "的 NOTATION 枚举缺少「(」")
+            }
+            this.parseNameEnum(decl)
+            return
+        }
+        for (keyword in ["IDREFS", "ENTITIES", "NMTOKENS", "IDREF", "ENTITY", "NMTOKEN", "ID"]) {
+            if (this.startsWithKeyword(keyword)) {
+                this.consume(keyword)
+                return
+            }
+        }
+        if (this.peek(offset: 0) == Some(r'(')) {
+            this.parseNmtokenEnum(decl)
+            return
+        }
+        let token = this.readNameCharRun()
+        if (token.isEmpty()) {
+            throw this.fail(decl, "缺少属性类型")
+        }
+        throw this.fail(decl, "的属性类型「${token}」不是合法记号")
+    }
+
+    /** `'(' S? Name (S? '|' S? Name)* S? ')'` */
+    private func parseNameEnum(decl: String): Unit {
+        this.consume("(")
+        this.skipWhitespace()
+        this.readName(decl)
+        this.skipWhitespace()
+        while (this.peek(offset: 0) == Some(r'|')) {
+            this.pos++
+            this.skipWhitespace()
+            this.readName(decl)
+            this.skipWhitespace()
+        }
+        if (this.peek(offset: 0) != Some(r')')) {
+            throw this.fail(decl, "的枚举未闭合")
+        }
+        this.pos++
+    }
+
+    /** `'(' S? Nmtoken (S? '|' S? Nmtoken)* S? ')'` */
+    private func parseNmtokenEnum(decl: String): Unit {
+        this.consume("(")
+        this.skipWhitespace()
+        this.readNmtoken(decl)
+        this.skipWhitespace()
+        while (this.peek(offset: 0) == Some(r'|')) {
+            this.pos++
+            this.skipWhitespace()
+            this.readNmtoken(decl)
+            this.skipWhitespace()
+        }
+        if (this.peek(offset: 0) != Some(r')')) {
+            throw this.fail(decl, "的枚举未闭合")
+        }
+        this.pos++
+    }
+
+    /** `DefaultDecl ::= '#REQUIRED' | '#IMPLIED' | (('#FIXED' S)? AttValue)` */
+    private func parseDefaultDecl(decl: String): Unit {
+        if (this.startsWith("#REQUIRED")) {
+            this.consume("#REQUIRED")
+            return
+        }
+        if (this.startsWith("#IMPLIED")) {
+            this.consume("#IMPLIED")
+            return
+        }
+        if (this.startsWith("#FIXED")) {
+            this.consume("#FIXED")
+            this.requireWhitespace(decl, "「#FIXED」之后")
+        }
+        this.parseAttValue(decl)
+    }
+
+    /** `AttValue ::= '"' ([^<&"] | Reference)* '"'`，默认值里不许引用外部实体。 */
+    private func parseAttValue(decl: String): Unit {
+        let quoteRune = match (this.peek(offset: 0)) {
+            case Some(r) => r
+            case None => throw this.fail(decl, "缺少默认值")
+        }
+        if (quoteRune != r'"' && quoteRune != r'\'') {
+            throw this.fail(decl, "缺少默认值")
+        }
+        this.pos++
+        while (true) {
+            match (this.peek(offset: 0)) {
+                case Some(r) =>
+                    if (r == quoteRune) {
+                        this.pos++
+                        return
+                    }
+                    if (r == r'<') {
+                        throw this.fail(decl, "的默认值里不能出现裸「<」")
+                    }
+                    if (r == r'&') {
+                        this.parseAttributeReference(decl)
+                        continue
+                    }
+                    if (!XmlChars.isXmlChar(r.position())) {
+                        throw this.fail(decl, "的默认值里出现非法字符")
+                    }
+                    this.pos++
+                case None => throw this.fail(decl, "的默认值未闭合")
+            }
+        }
+    }
+
+    /** 属性默认值里的引用：字符引用任意，实体引用不能是外部实体（WFC）。 */
+    private func parseAttributeReference(decl: String): Unit {
+        this.pos++
+        if (this.peek(offset: 0) == Some(r'#')) {
+            this.pos++
+            var hex = false
+            if (this.peek(offset: 0) == Some(r'x')) {
+                hex = true
+                this.pos++
+            }
+            var digits: Int64 = 0
+            var cp: Int64 = 0
+            while (let Some(r) <- this.peek(offset: 0)) {
+                let ok = if (hex) { XmlChars.isHexDigit(r) } else { XmlChars.isDigit(r) }
+                if (!ok) {
+                    break
+                }
+                cp = cp * (if (hex) { 16 } else { 10 }) + (if (hex) { XmlChars.hexValue(r) } else {
+                    Int64(r.position() - r'0'.position())
+                })
+                digits++
+                this.pos++
+            }
+            if (digits == 0 || this.peek(offset: 0) != Some(r';')) {
+                throw this.fail(decl, "的默认值里有非法字符引用")
+            }
+            if (!XmlChars.isXmlChar(cp)) {
+                throw this.fail(decl, "的默认值里有非法码点")
+            }
+            this.pos++
+            return
+        }
+        let name = this.readName(decl)
+        if (this.peek(offset: 0) != Some(r';')) {
+            throw this.fail(decl, "的默认值里有非法引用「&${name}」")
+        }
+        this.pos++
+        match (name) {
+            case "lt" | "gt" | "amp" | "quot" | "apos" => ()
+            case _ => this.checkDefaultEntity(name, decl)
+        }
+    }
+
+    /**
+     * 属性默认值里的实体引用必须能解析：已声明、非外部、无递归。
+     *
+     * 这里做的是**声明期**的 WFC 检查（Entity Declared / No External Entity References /
+     * No Recursion），不涉及默认值注入。
+     */
+    private func checkDefaultEntity(name: String, decl: String): Unit {
+        this.checkDefaultEntityInto(name, decl, ArrayList<String>())
+    }
+
+    private func checkDefaultEntityInto(name: String, decl: String, stack: ArrayList<String>): Unit {
+        for (s in stack) {
+            if (s == name) {
+                throw this.fail(decl, "的默认值里出现递归引用「&${name};」")
+            }
+        }
+        let entity = match (this.table.general(name)) {
+            case Some(e) => e
+            case None => throw this.fail(decl, "的默认值里引用了未声明的实体「&${name};」")
+        }
+        if (entity.isExternal()) {
+            throw this.fail(decl, "的默认值里不能引用外部实体「&${name};」")
+        }
+        let value = match (entity.value) {
+            case Some(v) => v
+            case None => return
+        }
+        stack.add(name)
         let runes = runesOf(value)
         var i: Int64 = 0
         while (i < runes.size) {
@@ -371,51 +931,91 @@ internal class DoctypeParser {
                 k++
             }
             if (k >= runes.size || runes[k] != r';') {
-                throw XmlException("实体「${owner}」的值里有非法引用")
+                i = k + 1
+                continue
             }
             let gen = StringGenerator()
             for (x in j..k) {
                 gen.append(runes[x])
             }
-            let ref = gen.toString()
-            match (ref) {
+            let nested = gen.toString()
+            match (nested) {
                 case "lt" | "gt" | "amp" | "quot" | "apos" => ()
-                case _ => if (this.table.general(ref).isNone()) {
-                    this.pendingRefs.add(PendingRef(owner, ref))
-                }
+                case _ => this.checkDefaultEntityInto(nested, decl, stack)
             }
             i = k + 1
         }
+        stack.remove(at: stack.size - 1)
     }
 
-    /** 跳过 `<!ELEMENT …>` 这类声明：理解引号与内部 `>`。 */
-    private func skipDeclaration() {
-        var quoteRune: ?Rune = None
-        while (let Some(r) <- this.peek(offset: 0)) {
-            this.pos++
-            match (quoteRune) {
-                case Some(q) => if (r == q) {
-                    quoteRune = None
+    // ---------------------------------------------------------------- NOTATION
+
+    private func parseNotationDecl(): Unit {
+        let decl = "<!NOTATION>"
+        this.consume("<!NOTATION")
+        this.requireWhitespace(decl, "「<!NOTATION」之后")
+        this.readName(decl)
+        this.requireWhitespace(decl, "记号名之后")
+        if (this.startsWithKeyword("PUBLIC")) {
+            this.consume("PUBLIC")
+            this.requireWhitespace(decl, "「PUBLIC」之后")
+            this.readPubidLiteral(decl)
+            let hadWhitespace = this.trySkipWhitespace()
+            if (this.peek(offset: 0) != Some(r'>')) {
+                if (!hadWhitespace) {
+                    throw this.fail(decl, "的 SystemLiteral 之前缺少空白")
                 }
-                case None =>
-                    if (r == r'"' || r == r'\'') {
-                        quoteRune = Some(r)
-                    } else if (r == r'>') {
-                        return
-                    }
+                this.readQuoted(decl, "SystemLiteral")
             }
+        } else if (this.startsWithKeyword("SYSTEM")) {
+            this.consume("SYSTEM")
+            this.requireWhitespace(decl, "「SYSTEM」之后")
+            this.readQuoted(decl, "SystemLiteral")
+        } else {
+            throw this.fail(decl, "缺少外部标识符（SYSTEM / PUBLIC）")
         }
-        throw XmlException("DTD 声明未闭合")
+        this.expectGreater(decl)
     }
+}
 
-    private func skipUntil(terminator: String): Unit {
-        while (!this.atEnd()) {
-            if (this.startsWith(terminator)) {
-                this.consume(terminator)
-                return
-            }
-            this.pos++
-        }
-        throw XmlException("DTD 构造未闭合：期望「${terminator}」")
+/** 实体值里的字符引用在**声明时**展开；实体引用保持原文。 */
+internal func expandCharRefs(value: String): String {
+    if (!value.contains("&")) {
+        return value
     }
+    let runes = runesOf(value)
+    let gen = StringGenerator()
+    var i: Int64 = 0
+    while (i < runes.size) {
+        if (runes[i] == r'&' && i + 1 < runes.size && runes[i + 1] == r'#') {
+            var j = i + 2
+            var hex = false
+            if (j < runes.size && runes[j] == r'x') {
+                hex = true
+                j++
+            }
+            var cp: Int64 = 0
+            var digits: Int64 = 0
+            while (j < runes.size) {
+                let r = runes[j]
+                let ok = if (hex) { XmlChars.isHexDigit(r) } else { XmlChars.isDigit(r) }
+                if (!ok) {
+                    break
+                }
+                cp = cp * (if (hex) { 16 } else { 10 }) + (if (hex) { XmlChars.hexValue(r) } else {
+                    Int64(r.position() - r'0'.position())
+                })
+                digits++
+                j++
+            }
+            if (digits > 0 && j < runes.size && runes[j] == r';' && XmlChars.isXmlChar(cp)) {
+                gen.append(Rune(cp))
+                i = j + 1
+                continue
+            }
+        }
+        gen.append(runes[i])
+        i++
+    }
+    gen.toString()
 }

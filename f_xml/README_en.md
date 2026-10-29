@@ -24,7 +24,7 @@ f_xml
 
 | Milestone | Scope |
 |---|---|
-| M1 | Push / pull / single-callback parsers, DOM, writer, DTD internal entities with spill policy, security limits |
+| M1 | Push / pull / single-callback parsers, DOM, writer, DTD internal subset (with declaration syntax checks) and spill policy, security limits |
 | M2 | XPath 1.0 subset with namespace prefixes |
 | M3 | XML 1.1, C14N (inclusive 1.0/1.1 + exclusive 1.0) |
 
@@ -37,7 +37,7 @@ f_xml
 | Single callback | `XmlParser.parse(input) { e => … }` | No DOM is built |
 | DOM | `XmlParser.parse(input / bytes / text / path)` | Four overloads; `parse(text)` skips byte sniffing |
 | Namespaces | Built in | Default namespace inheritance, `xmlns=""` reset, attributes unaffected by the default namespace |
-| DTD internal entities | `<!ENTITY>` (general + parameter) | External entities and external subsets are **never loaded** |
+| DTD internal subset | `<!ENTITY>` (general + parameter) plus well-formedness checks on all four declaration types | External entities and external subsets are **never loaded**; no DTD validity checking |
 | Writer | `XmlWriter` | Compact / indented, three CDATA modes, custom entity refs, output encoding |
 
 ## Examples
@@ -96,6 +96,14 @@ XmlWriter(output, options: XmlWriterOptions(indent: Some("  "))).write(element)
 
 ## Status
 
-M1 is implemented and covered by 236 unit tests. The xmlconf 20130923 Gate A is **not yet met**:
-of 2178 runnable cases, 1696 pass and 458 fail, mostly DTD syntax validation (out of scope for this
-change) and XML 1.1 (M3). See [`doc/spec/implement-f-xml-m1/baseline.md`](doc/spec/implement-f-xml-m1/baseline.md).
+M1 is implemented and covered by 236 unit tests. The xmlconf 20130923 figures are: 2062 runnable
+cases (`unsupported` 524 = 313 `edition` + 95 external-entity + 59 XML 1.1 + 48 external-subset +
+9 namespace-name), 2038 assertions.
+Gate A is pending a re-run: under the old figures (2178 runnable) 1696 passed and 458 failed, and the
+gap is accounted for by five exclusion rules (`edition` / external-entity / XML 1.1 / external-subset /
+namespace-name) plus three specification fixes — DTD declaration syntax well-formedness checks,
+`standalone` and single-entity replacement-text well-formedness, and `<!ATTLIST>` attribute-type
+mapping with attribute-value normalization. `known-issues` is empty by default.
+Performance (1 MB ≈ 1.5 s / 10 MB ≈ 15.8 s) is recorded but is **not a gate**; the character-layer
+rewrite is tracked separately as `optimize-f-xml-char-layer`. See
+[`doc/spec/implement-f-xml-m1/baseline.md`](doc/spec/implement-f-xml-m1/baseline.md).

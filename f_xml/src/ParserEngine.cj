@@ -18,6 +18,49 @@ package fountain::f_xml
 import std.collection.ArrayList
 
 /**
+ * 未声明实体的处置策略。
+ *
+ * 外部子集永不加载，所以「未声明」有两种可能：文档确实漏了声明，或声明在外部子集里。
+ * 判定按 XML 1.0 的 WFC「Entity Declared」与其补充说明（`design.md` §6.8）：
+ * - `standalone="yes"`：文档自称自包含，引用未声明实体即抛 `XmlException`；
+ * - `standalone="no"`：不报错，跳过该实体（内容位置空文本、属性值去掉该引用）并写一条告警；
+ * - `standalone` 省略：只有在「可能存在外部声明」时（有外部子集，或内部子集里出现过参数实体
+ *   引用）才按跳过处理；否则按 WFC 报错——`<a>&nbsp;</a>` 这种笔误必须被报出来。
+ */
+internal class EntityRefPolicy {
+    private let warnings: ArrayList<String>
+    private var strict = false
+    private var standaloneValue: ?Bool = None
+
+    init(warnings: ArrayList<String>) {
+        this.warnings = warnings
+    }
+
+    /**
+     * @param standalone 声明的 standalone 取值
+     * @param canBeExternallyDeclared 文档是否存在「未加载的声明来源」
+     */
+    func configure(standalone: ?Bool, canBeExternallyDeclared: Bool): Unit {
+        this.standaloneValue = standalone
+        match (standalone) {
+            case Some(v) => this.strict = v
+            case None => this.strict = !canBeExternallyDeclared
+        }
+    }
+
+    func undeclared(name: String, line: Int64, column: Int64): Unit {
+        if (this.strict) {
+            match (this.standaloneValue) {
+                case Some(true) =>
+                    throw XmlException("standalone=\"yes\" 但引用了未声明的实体「&${name};」", line, column)
+                case _ => throw XmlException("实体「&${name};」未声明", line, column)
+            }
+        }
+        this.warnings.add("跳过未声明的实体「&${name};」（第 ${line} 行第 ${column} 列）")
+    }
+}
+
+/**
  * 状态机 + 名称栈 + 命名空间 + 实体展开。
  *
  * 只回答「当前位置允许出现什么」；元素配对靠名称栈（按展开名比较，不按字面名）。
@@ -44,20 +87,28 @@ internal class ParserEngine {
     private var lastStartName: ?QName = None
 
     private var entityTable = EntityTable(1024)
+    private var standalone: ?Bool = None
     private let counter = EntityCounter()
     private var expander = EntityExpander(EntityTable(1024), EntityLimits(), EntityCounter())
-    private var standalone: ?Bool = None
-    private var hasExternalSubset = false
     private let warningList = ArrayList<String>()
+    private let policy = EntityRefPolicy(this.warningList)
 
     init(window: LineWindow, options: XmlParserOptions) {
         this.options = options
         this.lexer = Lexer(window, limits: options.entityLimits)
         this.lexer.maxAttributeValueLength = options.maxAttributeValueLength
         this.entityTable = EntityTable(options.entityLimits.maxDeclarations)
-        this.expander = EntityExpander(this.entityTable, options.entityLimits, this.counter)
+        this.expander = EntityExpander(
+            this.entityTable,
+            options.entityLimits,
+            this.counter,
+            policy: this.policy
+        )
         this.lexer.entityTable = this.entityTable
         this.lexer.expander = this.expander
+        this.lexer.entityRefPolicy = this.policy
+        // 没有 XML 声明、也没有 DOCTYPE 时按最严处理：未声明实体就是笔误。
+        this.policy.configure(None, false)
     }
 
     func totalExpanded(): Int64 {
@@ -114,8 +165,8 @@ internal class ParserEngine {
                 this.firstThing = false
                 this.emitMisc(XmlEvent.ProcessingInstruction(target, data))
             case Token.TDecl(version, encoding, standalone) => this.handleDeclaration(version, encoding, standalone)
-            case Token.TDoctype(name, publicId, systemId, subset) =>
-                this.handleDoctype(name, publicId, systemId, subset)
+            case Token.TDoctype(name, publicId, systemId, subset, position) =>
+                this.handleDoctype(name, publicId, systemId, subset, position)
             case Token.TStartTag(name, attrs, selfClosing) =>
                 if (this.state == ParserState.Epilog) {
                     throw XmlException("文档只能有一个根元素", name.line, name.column)
@@ -148,6 +199,8 @@ internal class ParserEngine {
                 this.firstThing = false
                 Some(XmlEvent.Text(text))
             case ParserState.Prolog | ParserState.Epilog =>
+                // 前导区出现任何字符（含空白）都意味着 XML 声明已不可能在最前面。
+                this.firstThing = false
                 if (!isWhitespaceOnly(text)) {
                     let message = if (this.state == ParserState.Prolog) {
                         "根元素之前不允许出现文本"
@@ -176,11 +229,18 @@ internal class ParserEngine {
         }
         this.sawDeclaration = true
         this.standalone = standalone
+        this.policy.configure(standalone, false)
         this.firstThing = false
         Some(XmlEvent.XmlDeclaration(version, encoding, standalone))
     }
 
-    private func handleDoctype(name: String, publicId: ?String, systemId: ?String, subset: ?String): ?XmlEvent {
+    private func handleDoctype(
+        name: String,
+        publicId: ?String,
+        systemId: ?String,
+        subset: ?String,
+        position: SourcePosition
+    ): ?XmlEvent {
         if (this.sawDoctype) {
             throw XmlException("DOCTYPE 只能出现一次")
         }
@@ -189,11 +249,18 @@ internal class ParserEngine {
         }
         this.sawDoctype = true
         this.firstThing = false
-        this.hasExternalSubset = publicId.isSome() || systemId.isSome()
         if (let Some(text) <- subset) {
-            this.entityTable = DoctypeParser.parse(text, this.options.entityLimits)
+            this.entityTable = DoctypeParser.parse(text, this.options.entityLimits, position)
         }
-        this.expander = EntityExpander(this.entityTable, this.options.entityLimits, this.counter)
+        // 「可能有外部声明」= 有外部子集，或内部子集里出现过参数实体引用。
+        let canBeExternallyDeclared = publicId.isSome() || systemId.isSome() || this.entityTable.sawParameterRef
+        this.policy.configure(this.standalone, canBeExternallyDeclared)
+        this.expander = EntityExpander(
+            this.entityTable,
+            this.options.entityLimits,
+            this.counter,
+            policy: this.policy
+        )
         this.lexer.entityTable = this.entityTable
         this.lexer.expander = this.expander
         Some(XmlEvent.DocType(name, publicId, systemId))
@@ -307,6 +374,14 @@ internal class ParserEngine {
                 if (uri.isEmpty()) {
                     this.ns.declare(None, None)
                 } else {
+                    // 默认命名空间不能是 xml / xmlns 两个保留 URI。
+                    if (uri == XML_NS_URI || uri == XMLNS_NS_URI) {
+                        throw XmlException(
+                            "默认命名空间不能绑定到保留 URI「${uri}」",
+                            attribute.name.line,
+                            attribute.name.column
+                        )
+                    }
                     this.ns.declare(None, Some(uri))
                 }
             case Some(_) =>
@@ -318,9 +393,9 @@ internal class ParserEngine {
                     if (uri != XML_NS_URI) {
                         throw XmlException("「xml」前缀只能绑定到 ${XML_NS_URI}", attribute.name.line, attribute.name.column)
                     }
-                } else if (uri == XML_NS_URI) {
+                } else if (uri == XML_NS_URI || uri == XMLNS_NS_URI) {
                     throw XmlException(
-                        "只有「xml」前缀可以绑定到 ${XML_NS_URI}",
+                        "只有「xml」前缀可以绑定到 ${XML_NS_URI}，任何前缀都不能绑定到 ${XMLNS_NS_URI}",
                         attribute.name.line,
                         attribute.name.column
                     )
@@ -375,17 +450,9 @@ internal class ParserEngine {
             throw XmlException("实体引用只能出现在元素内容里（&${name};）", line, column)
         }
         if (this.entityTable.general(name).isNone()) {
-            // 只可能在外部子集里声明的实体：standalone="yes" 报错，否则跳过并告警。
-            if (this.hasExternalSubset) {
-                match (this.standalone) {
-                    case Some(true) =>
-                        throw XmlException("standalone=\"yes\" 但引用了只在外部子集声明的实体「&${name};」", line, column)
-                    case _ =>
-                        this.warningList.add("跳过只在外部子集声明的实体「&${name};」（第 ${line} 行第 ${column} 列）")
-                        return None
-                }
-            }
-            throw XmlException("实体「&${name};」未声明", line, column)
+            // 外部子集永不加载：未声明实体只看 standalone，缺省按「跳过并告警」处理。
+            this.policy.undeclared(name, line, column)
+            return None
         }
         let reader = this.expander.feed(name, line, column, this.options.bufSize, this.lexer.depth() + 1)
         this.lexer.pushFeed(SinkFeed(reader, SourcePosition(line, column)))

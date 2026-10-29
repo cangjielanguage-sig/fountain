@@ -17,13 +17,15 @@
    SSRF via DTD（外部子集）。设计已经给出「支持内部实体 + 三层上限 + 软阈值溢出到临时文件 +
    外部实体引用即报错」的方案，这套方案不能事后补——它决定了词法器与实体展开器的结构。
 4. **通用性需要可复核的验收基准**：不能用「五个格式跑通」当验收，必须用 W3C xmlconf
-   20130923 的断言集（可跑 2178 条 / 断言 2154 条）。生成脚本与 `unsupported` 人读清单要入库，
+   20130923 的断言集（可跑 2062 条 / 断言 2038 条；`unsupported` 524 条按五条规则排除：
+   `edition` / 外部实体 / XML 1.1 / 外部子集 / 命名空间名）。生成脚本与
+   `unsupported` 人读清单要入库，
    套件本体与派生 JSON 走缓存，否则通过率无法复核、仓库又会被 20 MB 测试数据撑大。
 
 ## What Changes
 
-本次只做 **M1**。M2（XPath 1.0 子集）与 M3（XML 1.1 + C14N）另开变更，本变更不为它们预留
-半成品 API。
+本次只做 **M1**。M2（XPath 1.0 子集）与 M3（XML 1.1 + C14N）另开变更；字符层性能重写另开
+`optimize-f-xml-char-layer`。本变更不为它们预留半成品 API。
 
 - **字符层（全部 f_xml 自实现）**：字节嗅探（BOM → `<?xml encoding?>` → UTF-8，含附录 F 的
   UTF-16/32 魔数）、`PrefixStream`（把嗅探吃掉的前缀接回流头）、`RuneSource` 三个实现
@@ -45,9 +47,17 @@
   `trimWhitespaceOnly` 与 `xml:space` 生效。
 - **命名空间**：作用域栈、`xml` 保留前缀固定绑定、`xmlns` 不可作元素前缀、`xmlns=""` 重置、
   **属性不受默认命名空间影响**、未声明前缀报错、重复展开名报错。
-- **DTD 内部子集实体**：普通实体 + 参数实体、条件段 `INCLUDE`/`IGNORE`、`<!ELEMENT>` /
-  `<!ATTLIST>` / `<!NOTATION>` 识别并跳过、首个声明生效；外部实体与外部子集**一律不加载**，
-  引用即报错。
+- **DTD 内部子集**：普通实体 + 参数实体、首个声明生效；
+  `<!ELEMENT>` / `<!ATTLIST>` / `<!NOTATION>` / `<!ENTITY>` 做**声明语法良构校验**——这是良构性，
+  不是 DTD 有效性校验：非法声明必须报错，但不做内容模型与文档匹配、不做 ID/IDREF 一致性、
+  不做默认属性注入。条件段 `<![INCLUDE[` / `<![IGNORE[` **只允许出现在外部子集**，内部子集里
+  出现即报错（外部子集不加载，故 M1 永远不认条件段）。实体值里的引用**延迟到真正使用时展开**，
+  使用时仍未声明才报错；未声明实体只在「存在外部子集或参数实体引用且 `standalone` 不是 `yes`」
+  时按跳过处理并告警，否则一律报错（含无 `DOCTYPE` 的情形）。
+  **单实体替换文本必须自身良构**（标签在实体内部配平，不得让实体跨越元素边界）。
+  `<!ATTLIST>` 的属性类型**要建「元素 + 属性 → 类型」映射**，只用于属性值规范化（非 CDATA 类型
+  去首尾空白并把内部空白折叠成单个空格），不用于有效性校验。
+  外部实体与外部子集**一律不加载**，引用即报错。
 - **三层膨胀上限 + 溢出策略**：`maxExpandedPerEntity` / `maxExpandedTotal`（软，`Spill` 时转
   临时文件续跑）、`maxDepth` / `maxDeclarations` / `maxExpandedHardLimit`（硬，直接抛）；
   `XmlException.entityLimitKind` 六值分类；**属性值不支持溢出**（`AttributeValue`）。
@@ -57,8 +67,11 @@
 - **错误处理**：`XmlException <: f_base.BaseException`，全部带行列号；实体类错误带
   `entityLimitKind`、实体名与已展开量。
 - **验收**：xmlconf 20130923 由 `f_xml/tools/xmlconf_gen.py` 按需下载、校验 SHA-256 并生成
-  `cases.json` / `unsupported.json` 到 **`f_xml/.cache/xmlconf/`（gitignore，不入库）**；harness 输出
-  `pass / fail / unsupported`；Gate A 2154 条断言全过，`known-issues` ≤ 5 条；仓库只保留生成脚本、
+  `cases.json` / `unsupported.json` 到 **`f_xml/.cache/xmlconf/`（gitignore，不入库）**；可跑集按
+  **五条**规则排除（`edition` 313 + `external-entity` 95 + `xml-1.1` 59 + `external-subset` 48 +
+  `namespace-name` 9 = 524），可跑 2062 条、断言 2038 条；`TYPE` 分布由生成脚本实测回填；
+  harness 输出 `pass / fail / unsupported`；Gate A 2038 条断言全过，`known-issues`
+  **默认清空（0 条）**、只允许登记真正的套件争议且 ≤ 5 条；仓库只保留生成脚本、
   `f_xml/tools/known-issues.json` 与 `f_xml/doc/xmlconf-unsupported.md`。离线且无缓存时测试
   **fail**（不是 skip）并提示先运行生成脚本。
 - **单测**：按仓颉 `cjpm test` 的 `@Test` / `@TestCase` 组织，覆盖语法矩阵、组合矩阵、恶意样本、
@@ -69,18 +82,21 @@
 - **新增代码**：`f_xml/src/*.cj`（约 20 个文件，单包 `fountain::f_xml`）。
 - **新增测试**：`f_xml/src/*_test.cj`。
 - **入库的工具与清单**：`f_xml/tools/xmlconf_gen.py`（下载 + SHA-256 校验 + 解压 + 生成
-  `cases.json` / `unsupported.json`）、`f_xml/tools/known-issues.json`（≤ 5 条人工裁定）、
-  `f_xml/doc/xmlconf-unsupported.md`（408 条排除清单）。**原始套件与派生 JSON SHALL NOT 入库**，
+  `cases.json` / `unsupported.json`）、`f_xml/tools/known-issues.json`（真正的套件争议，≤ 5 条，
+  默认 0 条）、
+  `f_xml/doc/xmlconf-unsupported.md`（524 条排除清单）。**原始套件与派生 JSON SHALL NOT 入库**，
   运行时落在 `f_xml/.cache/xmlconf/`。
 - **依赖**：**不改**。`f_xml/cjpm.toml` 已有 `fountain::f_base` 与 `cangjie_tpc::charset4cj = "1.0.5"`，
   本次不新增依赖、不升级版本、不改 `f_io` / `f_base` / `f_zip`。
 - **对外 API**：`f_xml` 从「零公开声明」变为「约 20 个公开类型 + 6 个静态 `parse` 重载」；
   无既有调用方，不存在破坏性变更。
 - **文档**：`f_xml/README.md` / `README_en.md` 由「骨架」改写为能力与示例；新增
-  `f_xml/doc/xmlconf-unsupported.md`（408 条 `unsupported` 清单）。套件下载与缓存重建方式写进该文档
+  `f_xml/doc/xmlconf-unsupported.md`（524 条 `unsupported` 清单）。套件下载与缓存重建方式写进该文档
   与 `xmlconf_gen.py` 的 `--help`。
-- **性能**：事件模式 O(嵌套深度) 内存；DOM 模式约 XML 体积的 5~10 倍。M1 出口要求事件模式下
-  10 MB 文档 < 1 s、RSS 不随文档规模增长。
+- **性能**：事件模式 O(嵌套深度) 内存；DOM 模式约 XML 体积的 5~10 倍。当前实测
+  1 MB ≈ 1.5 s / 10 MB ≈ 15.8 s，根因是字符层逐字符 `Option` 分配与三层缓冲
+  （`RuneSource` → `LineWindow` → `Lexer`）。**性能在本变更只记录现状、不作门禁**；
+  字符层重写另开 `optimize-f-xml-char-layer`，不属于本变更的出口条件。
 - **磁盘**：溢出的临时文件峰值 = 该次展开总量（用完即删）；无 `spillDir` 时落到
   `TMPDIR` → 系统临时目录 → `./.fountain_tmp`。
 
@@ -97,13 +113,16 @@
 | 4 | §4 `XmlDocument.builder: DomBuilder` 为 `public let` | 建成后 builder 栈已空，外露只会诱导继续追加 | 改为 `internal`，公开 API 不含 `builder` |
 | 5 | §12.8 要求「超深嵌套 1 万层应报错」「超长属性 100 MB 应有上限」 | 设计未给对应配置项 | 新增 `maxElementDepth`（默认 4096）与 `maxAttributeValueLength`（默认 1 MB） |
 | 6 | §2.5 要求 UTF-16/32 不走 `readln()`，§2.6 只给两个 `RuneSource` 实现 | 缺一个实现；`InvalidByteMode.Replace` 也需要字节级解码 | 新增 `BlockRuneSource` 与共享 `ByteDecoder`（固定块解码 + 跨块字符边界回退） |
+| 7 | §5.4 `<!ELEMENT>` / `<!ATTLIST>` / `<!NOTATION>`「识别并跳过，不校验」 | xmlconf 385 条 `not-wf` 用例的不良构出在声明语法本身；只跳过不校验，良构性缺口永远收不拢 | 升级为**声明语法良构校验**：只验声明产生式，仍不做有效性校验（内容模型与文档匹配、`ID`/`IDREF` 一致性、默认属性注入都不做）；`<!ATTLIST>` 额外建「元素 + 属性 → 类型」映射，**仅**用于属性值规范化 |
 
 ## Out of Scope
 
 - **M2（XPath）**：不实现 `selectNodes` / `evaluate` / `XPathContext`；决策 2/14/17 本次不落地。
 - **M3（XML 1.1 + C14N）**：不实现 `canonicalize` / `C14nOptions` / `C14nMode`；决策 3/9/15/18/21
   本次不落地；决策 25（保留前缀四处跳过）在 M1 只承担解析侧的两处（元素名 / 属性名）。
-- **不做**：DTD 校验（`<!ELEMENT>` / `<!ATTLIST>` 合法性）、DTD 默认属性注入、外部子集加载、
-  NOTATION 处理、XInclude、xml:base。
+- **不做**：DTD **有效性**校验（内容模型与文档匹配、`ID`/`IDREF` 唯一与引用一致性、NOTATION 语义、
+  枚举取值是否落在声明列表内、默认属性注入）、外部子集加载、
+  NOTATION 语义处理（声明语法良构校验已纳入）、XInclude、xml:base。
+- **不做**：性能门槛与字符层重写——现状记录在案，另开 `optimize-f-xml-char-layer`。
 - **不比对** xmlconf 的 432 条 `OUTPUT`（需要 C14N，M3）。
 - **不改** `f_io` / `f_base` / `f_zip`；临时目录探测按设计 §5.4.2 各模块私有实现，不抽公用工具。

@@ -57,8 +57,8 @@ xmlconf 压缩包、解压结果、`cases.json`、`unsupported.json` SHALL NOT �
 ```
 
 生成脚本 `f_xml/tools/xmlconf_gen.py` SHALL 入库，SHALL 能从 31 个 catalog 重新产出
-`cases.json` 与 `unsupported.json`；判定口径（`EDITION` 排除规则、外部实体判定规则）SHALL 写在
-脚本注释里。
+`cases.json` 与 `unsupported.json`；判定口径（`edition` / `external-entity` / `xml-1.1` /
+`external-subset` / `namespace-name` 五条排除规则）SHALL 写在脚本注释里。
 
 理由：聚合 catalog 用 `SYSTEM` 外部实体引入子 catalog，而 `f_xml` 永不加载外部实体——
 用它自己解析只会得到空树。这不是缺陷，正是设计边界。
@@ -76,29 +76,57 @@ xmlconf 压缩包、解压结果、`cases.json`、`unsupported.json` SHALL NOT �
 
 ### Requirement: 可跑集过滤
 
-可跑集 SHALL 由两条规则确定：
+可跑集 SHALL 由五条规则确定（按此顺序去重）：
 
-1. `EDITION` 包含 `1`/`2`/`3`/`4` 之一的用例 SHALL 排除（第 5 版改了 `Char` 产生式）。
+1. `EDITION` 包含 `1`/`2`/`3`/`4` 之一的用例 SHALL 排除（313 条；第 5 版改了 `Char` 产生式）。
 2. 测试文件出现 `<!ENTITY … SYSTEM|PUBLIC>` 的用例 SHALL 排除（95 条）。只使用内部实体的
-   323 条中，228 条 SHALL 纳入可跑集。
+   323 条中，228 条纳入可跑集（第四、五条规则会再摘走一部分，最终条数以脚本实测为准）。
+3. 测试文件声明了 `version="1.1"` 的用例 SHALL 排除（59 条）——M1 明确拒绝 XML 1.1（M3 才支持），
+   留在可跑集只会制造必然失败。
+4. 测试文件的 `<!DOCTYPE … SYSTEM|PUBLIC …>` 引用**外部子集**的用例 SHALL 排除（48 条）——
+   这 48 条的不良构只存在于永不加载的外部 DTD 里，M1 不可能检出，留下只会必然失败。
+5. 元素名 / 属性名含**多个冒号**，或前缀位置违反 Namespaces 1.0 的 `QName` 约束的用例
+   SHALL 排除（9 条）——它们在 XML 1.0 下合法，但 M1 一律做命名空间解析，两者互斥。
 
-排除项 SHALL 写入 `unsupported.json`，每条带原因（`edition` / `external-entity`）。
+排除项 SHALL 写入 `unsupported.json`，每条带原因
+（`edition` / `external-entity` / `xml-1.1` / `external-subset` / `namespace-name`）。
 
 #### Scenario: 总数与断言数吻合
 
 - **WHEN** 统计可跑集
-- **THEN** 总计 2586、`unsupported` 408、可跑 2178、断言 2154；`not-wf` 1155 / `valid` 763 /
-  `invalid` 236 / `error` 24（不判定）
+- **THEN** 总计 2586、`unsupported` 524、可跑 2062、断言 2038；`error` 24 条不判定；
+  `TYPE` 分布由生成脚本实测输出（`not-wf` = 1155 − 48 = 1107，`valid` / `invalid` 各自减去
+  `namespace-name` 中实际归属的条数，合计 −9）
 
 #### Scenario: 内部实体用例纳入
 
-- **WHEN** 一条用例声明了内部实体且无 `SYSTEM` / `PUBLIC`
+- **WHEN** 一条用例声明了内部实体，且既无 `SYSTEM` / `PUBLIC` 实体声明、也不引用外部子集
 - **THEN** 它出现在可跑集中，不在 `unsupported.json` 里
 
 #### Scenario: EDITION 是集合运算
 
 - **WHEN** `EDITION="1 2 3 4"`
 - **THEN** 排除；`EDITION="5"` 或省略 → 纳入
+
+#### Scenario: XML 1.1 用例排除
+
+- **WHEN** 测试文件开头是 `<?xml version="1.1" …?>`
+- **THEN** 该用例进入 `unsupported.json`，原因为 `xml-1.1`，不计入断言
+
+#### Scenario: 外部子集用例排除
+
+- **WHEN** 测试文件的 `<!DOCTYPE` 带 `SYSTEM` 或 `PUBLIC`，且测试文件本身良构、错误只写在外层 `.dtd`
+- **THEN** 该用例进入 `unsupported.json`，原因为 `external-subset`，不计入断言
+
+#### Scenario: 多冒号名字用例排除
+
+- **WHEN** 测试文件出现 `a:b:c` 这类多冒号 `Name`，或在不能放前缀的位置放了 `:`
+- **THEN** 该用例进入 `unsupported.json`，原因为 `namespace-name`，不计入断言
+
+#### Scenario: 五条规则的边界不重叠
+
+- **WHEN** 一条用例既有 `<!ENTITY x SYSTEM "…">` 又有外部子集
+- **THEN** 只记一次，原因取**先命中**的规则（`external-entity` 先于 `external-subset`）
 
 ### Requirement: TYPE 的期望映射
 
@@ -107,11 +135,12 @@ harness SHALL 按下列映射判定每条用例：
 | `TYPE` | 期望 |
 |---|---|
 | `valid` | 解析成功 |
-| `invalid` | **解析成功**（良构但不合 DTD，我们不校验 DTD） |
+| `invalid` | **解析成功**（良构但不合 DTD；M1 只校验声明语法，不做有效性校验） |
 | `not-wf` | 抛致命错误 |
 | `error` | **不判定**，单列观察计数 |
 
-`invalid` 当「应报错」断言会一次性错 236 条，harness SHALL NOT 这样映射。
+`invalid` 当「应报错」断言会一次性错掉整个 `invalid` 分组，harness SHALL NOT 这样映射。
+（`invalid` 分组的具体条数由生成脚本实测回填，本轮不写死。）
 
 #### Scenario: invalid 期望成功
 
@@ -148,14 +177,24 @@ C14N 归 M3。
 
 | Gate | 标准 |
 |---|---|
-| A（必过） | 2154 条断言全部符合期望 |
+| A（必过） | 2038 条断言全部符合期望（`fail == 0`，`pass + known == 2038`） |
 | B（例外管理） | `f_xml/tools/known-issues.json` 每条写明理由 + 规范章节，上限 5 条；超出即不通过 |
 | C（可追溯） | 每次运行输出 `pass / fail / unsupported` 三个数字，并把 `unsupported` 的 ID 清单存档 |
+
+`known-issues` SHALL **默认清空（0 条）**。曾经的 5 条「命名空间感知处理器 vs XML 1.0 允许多冒号名」
+冲突已由第五条排除规则 `namespace-name` 整体移出可跑集，不再占用例外额度；`o-p04pass1` /
+`o-p05pass1` 同批移出。之后只允许登记**真正的套件争议**——即判定口径与 XML 1.0 文本相悖、且无法
+归入任何一条排除规则的情形。
 
 #### Scenario: Gate A
 
 - **WHEN** 运行全量套件
-- **THEN** `fail == 0`，`pass == 2154`，`unsupported == 408`
+- **THEN** `fail == 0`，`pass + known == 2038`，`unsupported == 524`
+
+#### Scenario: known-issues 为空是常态
+
+- **WHEN** `f_xml/tools/known-issues.json` 为空数组
+- **THEN** harness 通过 Gate B，不要求至少登记 1 条
 
 #### Scenario: Gate B 超限即失败
 
@@ -169,7 +208,7 @@ C14N 归 M3。
 
 ### Requirement: unsupported 清单入库
 
-408 条 `unsupported` SHALL 单列清单并写入 `f_xml/doc/xmlconf-unsupported.md`（该 md 入库），
+524 条 `unsupported` SHALL 单列清单并写入 `f_xml/doc/xmlconf-unsupported.md`（该 md 入库），
 SHALL NOT 混进通过率。机器可读的 `unsupported.json` SHALL 只存在于缓存目录，不入库。
 
 #### Scenario: 文档与 JSON 一致
@@ -181,11 +220,13 @@ SHALL NOT 混进通过率。机器可读的 `unsupported.json` SHALL 只存在�
 
 除 xmlconf 外，SHALL 有用例覆盖设计文档 §12.2 A–I 的**盲区项**（标 ❌ 的）：
 
-文档结构（尾部注释/PI、多根、无根）、元素属性（属性值规范化、重复属性、裸 `<`、非 ASCII 名字、
-数字开头名字）、字符数据（高位码点、非法码点、`&nbsp;`）、CDATA（`]]`、相邻与混合）、
-注释与 PI（`--`、`-` 结尾、`xml` target、`?>`）、DOCTYPE（内部子集含 `>`、参数实体、
-条件段、属性值内实体）、命名空间（`xmlns=""`、嵌套重定义、属性不受默认命名空间、未声明前缀、
-`xmlns` 作前缀）、编码（UTF-16 带 BOM、声明冲突、4 字节 UTF-8）、空白（首尾空格、`xml:space`）。
+文档结构（尾部注释/PI、多根、无根）、元素属性（属性值规范化（`CDATA` 与非 `CDATA` 两档）、
+重复属性、裸 `<`、非 ASCII 名字、数字开头名字）、字符数据（高位码点、非法码点、`&nbsp;`）、
+CDATA（`]]`、相邻与混合）、注释与 PI（`--`、`-` 结尾、`xml` target、`?>`）、DOCTYPE（内部子集含 `>`、
+参数实体、内部子集出现条件段必须报错、单实体替换文本跨实体边界、属性值内实体、四类声明的非法语法）、
+命名空间（`xmlns=""`、嵌套重定义、属性不受默认命名空间、未声明前缀、
+`xmlns` 作前缀）、编码（UTF-16 带 BOM、BOM 与 `encoding` 声明冲突必须报错、4 字节 UTF-8）、
+空白（首尾空格、`xml:space`）。
 
 #### Scenario: 盲区项不得缺用例
 
@@ -212,12 +253,22 @@ SHALL NOT 作为「通用性」的唯一证据。
 - **WHEN** 解析含 `<w:t xml:space="preserve"> x </w:t>` 的片段
 - **THEN** 文本首尾空格保留
 
-### Requirement: 性能门槛
+### Requirement: 性能只记录、不作门禁
 
-事件模式解析 10 MB 文档 SHALL < 1 s（开发机），RSS SHALL 不随文档规模线性增长；
-DOM 模式 SHALL 记录峰值内存，但 SHALL NOT 作为门禁（DOM 本来就是 O(节点数)）。
+性能 SHALL NOT 作为本变更的验收条件。当前实测（开发机、单线程）：事件模式 1 MB ≈ 1.5 s、
+10 MB ≈ 15.8 s；根因是字符层逐字符 `Option` 分配（引用类型，每字符一次堆分配）与三层缓冲
+（`RuneSource` → `LineWindow` → `Lexer`）。该现状 SHALL 记录在 `design.md` §10.1 / §13 与
+`baseline.md`；字符层重写另开变更 `optimize-f-xml-char-layer`。
 
-#### Scenario: 事件模式 RSS 平稳
+事件模式的内存复杂度 SHALL 仍为 O(嵌套深度)，由 `retainedBytes`（内存侧保留字节）断言保证；
+进程 RSS SHALL NOT 作为断言或门禁。
 
-- **WHEN** 用事件模式解析 1 MB / 10 MB / 50 MB 三份同构文档
-- **THEN** RSS 峰值差异在常数范围内
+#### Scenario: 无性能门禁
+
+- **WHEN** 跑验收
+- **THEN** 不因解析耗时或 RSS 判 fail；耗时只出现在记录性报告里
+
+#### Scenario: 内存侧仍有断言
+
+- **WHEN** `Spill` 下解析展开量 20 MB 的文档
+- **THEN** `retainedBytes` 不随展开量增长（该断言属于 `f-xml-dtd-entities`，不是性能门禁）

@@ -85,6 +85,29 @@ public class ParserState_test {
         assertXmlError({=> parseEventLog("<!--c--><?xml version=\"1.0\"?><a/>")}, "最前面")
     }
 
+    /** 声明前哪怕只有一个空白也非法（XMLDecl 只能在实体最开头）。 */
+    @TestCase
+    public func declarationAfterWhitespaceRejected(): Unit {
+        assertXmlError({=> parseEventLog(" <?xml version=\"1.0\"?><a/>")}, "最前面")
+        assertXmlError({=> parseEventLog("\n\n<?xml version=\"1.0\"?><a/>")}, "最前面")
+    }
+
+    /** `EncName` 必须是字母开头、只含字母数字与 `._-`。 */
+    @TestCase
+    public func invalidEncodingNames(): Unit {
+        assertXmlError({=> parseEventLog("<?xml version=\"1.0\" encoding=\"a/b\"?><a/>")}, "encoding")
+        assertXmlError({=> parseEventLog("<?xml version=\"1.0\" encoding=\"_UTF-8\"?><a/>")}, "encoding")
+        assertXmlError({=> parseEventLog("<?xml version=\"1.0\" encoding=\"\"?><a/>")}, "encoding")
+    }
+
+    /** 声明的项顺序固定：version → encoding → standalone，且每项前必须有空白。 */
+    @TestCase
+    public func declarationItemOrder(): Unit {
+        assertXmlError({=> parseEventLog("<?xml encoding=\"UTF-8\" version=\"1.0\"?><a/>")}, "version")
+        assertXmlError({=> parseEventLog("<?xml version=\"1.0\"standalone=\"yes\"?><a/>")}, "空白")
+        assertXmlError({=> parseEventLog("<?xml version=\"1.0\" standalone=\"no\" encoding=\"UTF-8\"?><a/>")}, "standalone")
+    }
+
     /** 正常文档的事件顺序。 */
     @TestCase
     public func standardOrder(): Unit {

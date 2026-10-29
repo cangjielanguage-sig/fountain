@@ -18,7 +18,10 @@
    第 5 版改了 `Char` 产生式，我们要验的是 1.0 第 5 版。
 2. 测试文件里出现 `<!ENTITY … SYSTEM|PUBLIC …>` 的用例排除：外部实体引用即报错，
    这不是「跑不过」，而是设计边界。
-3. `TYPE` 只决定期望：`valid` / `invalid` 期望解析成功（`invalid` 是良构但不合 DTD，
+3. 测试文件声明 `version="1.1"` 的用例排除（原因 `xml-1.1`）：M1 明确拒绝 XML 1.1
+   （M3 才支持），留在可跑集只会制造必然失败。判定只看**测试文件自身**的 XML 声明，
+   不看它引用的外部子集（外部子集永不加载，不存在「读到 1.1 声明」这回事）。
+4. `TYPE` 只决定期望：`valid` / `invalid` 期望解析成功（`invalid` 是良构但不合 DTD，
    我们不校验 DTD），`not-wf` 期望抛错，`error` 不判定。
 
 用法：
@@ -99,6 +102,7 @@ def extract(cache: str, archive: str, force: bool) -> str:
 
 
 ENTITY_SYSTEM = re.compile(r"<!ENTITY\s+%?\s*[\w.:-]+\s+(?:SYSTEM|PUBLIC)\s+['\"]([^'\"]+)['\"]")
+XML_11_DECL = re.compile(r"^<\?xml[^>]*?\bversion\s*=\s*['\"]1\.1['\"]", re.S)
 TEST_TAG = re.compile(r"<TEST\b([^>]*)>", re.S | re.I)
 ATTR = re.compile(r"([\w.:-]+)\s*=\s*(?:\"([^\"]*)\"|'([^']*)')")
 
@@ -149,6 +153,19 @@ def file_has_external_entity(path: str) -> bool:
     return re.search(r"<!ENTITY\s+%?\s*[\w.:-]+\s+(?:SYSTEM|PUBLIC)\b", text) is not None
 
 
+def file_declares_xml11(path: str) -> bool:
+    """测试文件自身是否声明 `version="1.1"`。只看文件开头，不追外部子集。"""
+    if not os.path.exists(path):
+        return False
+    try:
+        with open(path, "rb") as handle:
+            head = handle.read(4096)
+    except OSError:
+        return False
+    text = head.decode("utf-8", errors="replace").lstrip("\ufeff")
+    return XML_11_DECL.search(text) is not None
+
+
 def edition_excluded(edition: str) -> bool:
     if not edition:
         return False
@@ -191,6 +208,11 @@ def collect(suite: str) -> tuple:
             if entry["entities"] != "none" and file_has_external_entity(absolute):
                 unsupported.append({"id": test_id, "reason": "external-entity"})
                 continue
+            # XML 1.1 只排除**期望解析成功**的用例（`valid` / `invalid`）：M1 明确拒绝 1.1，
+            # 这类用例必然失败。`not-wf` 的 1.1 用例仍可跑——「拒绝 1.1」正好满足「期望失败」。
+            if entry["type"] in ("valid", "invalid") and file_declares_xml11(absolute):
+                unsupported.append({"id": test_id, "reason": "xml-1.1"})
+                continue
             cases.append(entry)
     cases.sort(key=lambda c: c["id"])
     unsupported.sort(key=lambda c: c["id"])
@@ -209,8 +231,11 @@ def write_markdown(path: str, unsupported: list, stats: dict) -> None:
     lines.append("")
     lines.append("> 由 `f_xml/tools/xmlconf_gen.py` 生成，**不要手改**。")
     lines.append(">")
-    lines.append("> 口径：`EDITION` 含 1/2/3/4（第 5 版改了 `Char` 产生式）；或测试文件里出现外部实体声明")
-    lines.append("> （`SYSTEM` / `PUBLIC`）——外部实体与外部子集永不加载，这是设计边界，不是缺陷。")
+    lines.append("> 口径（按此顺序去重）：")
+    lines.append("> 1. `EDITION` 含 1/2/3/4（第 5 版改了 `Char` 产生式）；")
+    lines.append("> 2. 测试文件出现外部实体声明（`SYSTEM` / `PUBLIC`）——外部实体与外部子集永不加载，")
+    lines.append(">    这是设计边界，不是缺陷；")
+    lines.append("> 3. 测试文件声明 `version=\"1.1\"`——M1 明确拒绝 XML 1.1（M3 才支持）。")
     lines.append("")
     lines.append("## 统计")
     lines.append("")
