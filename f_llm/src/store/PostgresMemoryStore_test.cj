@@ -31,6 +31,10 @@ class FakeEmbedder <: Embedder {
         }
         [0.1f64, 0.2f64, 0.3f64]
     }
+
+    public func embedColbert(text: String): Array<Array<Float64>> {
+        [[1.0f64]]
+    }
 }
 
 class FakeMemoryRepository <: MemoryRepository {
@@ -62,9 +66,20 @@ class FakeMemoryRepository <: MemoryRepository {
     }
 
     public var sparseHits = ArrayList<MemoryHit>()
+    public var colbertCalls: Int64 = 0
+    private let colbertVectors = HashMap<Int64, ColbertVectors>()
 
     public func searchSparse(query: MemoryQuery, limit: Int64): ArrayList<MemoryHit> {
         sparseHits
+    }
+
+    public func setColbert(id: Int64, vectors: ColbertVectors): Unit {
+        colbertVectors[id] = vectors
+    }
+
+    public func colbert(recordId: Int64): ?ColbertVectors {
+        colbertCalls++
+        colbertVectors.get(recordId)
     }
 }
 
@@ -169,6 +184,33 @@ public class PostgresMemoryStoreTest {
 
         let results = store.search(MemoryQuery(1, ['global'], [], 'q', topK: 5))
         @Expect(results.size, 1)
+    }
+
+    @TestCase
+    func testRerankChangesOrderNotCandidateSet(): Unit {
+        let repo = FakeMemoryRepository()
+        repo.hits.add(MemoryHit(memoryRecord(1, 'note'), 0.9f64))
+        repo.hits.add(MemoryHit(memoryRecord(2, 'note'), 0.5f64))
+        // A 的 colbert 相似度低，B 高：重排后 B 在前
+        repo.setColbert(1, ColbertVectors([[0.1f64]], [[0.1f64]]))
+        repo.setColbert(2, ColbertVectors([[0.9f64]], [[0.9f64]]))
+        let store = PostgresMemoryStore(repo, FakeEmbedder())
+
+        let results = store.search(MemoryQuery(1, ['global'], [], 'q', topK: 5, rerank: true))
+        @Expect(results.size, 2)
+        @Expect(results[0].record.id, 2)
+        @Expect(results[1].record.id, 1)
+        // 分数保持融合值（A = 0.7 × 0.9）
+        @Expect(results[1].score < 0.64f64 && results[1].score > 0.62f64, true)
+    }
+
+    @TestCase
+    func testRerankFalseSkipsColbert(): Unit {
+        let repo = FakeMemoryRepository()
+        repo.hits.add(MemoryHit(memoryRecord(1, 'note'), 0.9f64))
+        let store = PostgresMemoryStore(repo, FakeEmbedder())
+        store.search(MemoryQuery(1, ['global'], [], 'q', topK: 5))
+        @Expect(repo.colbertCalls, 0)
     }
 
     @TestCase

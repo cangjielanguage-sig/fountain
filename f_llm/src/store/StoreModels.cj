@@ -64,14 +64,17 @@ public class MemoryQuery {
     public let kinds: Array<String>
     public let text: String
     public let topK: Int64
+    /** true 时对候选做 colbert 重排（只改排序，不改候选集） */
+    public let rerank: Bool
 
     public init(userId: Int64, namespaces: Array<String>, kinds: Array<String>,
-                text: String, topK!: Int64 = 5) {
+                text: String, topK!: Int64 = 5, rerank!: Bool = false) {
         this.userId = userId
         this.namespaces = namespaces
         this.kinds = kinds
         this.text = text
         this.topK = topK
+        this.rerank = rerank
     }
 }
 
@@ -128,6 +131,17 @@ public class PromptEntry {
     public init(name: String, version: Int64, content: String) {
         this.name = name
         this.version = version
+        this.content = content
+    }
+}
+
+/** colbert 多头向量：每个 token 一个向量，重排时做 max-sim */
+public class ColbertVectors {
+    public let title: Array<Array<Float64>>
+    public let content: Array<Array<Float64>>
+
+    public init(title: Array<Array<Float64>>, content: Array<Array<Float64>>) {
+        this.title = title
         this.content = content
     }
 }

@@ -24,6 +24,8 @@ import std.collection.ArrayList
  */
 public interface Embedder {
     func embed(text: String): Array<Float64>
+    /** 多头向量：每个 token 一个 1024 维向量；本变更只用于重排 */
+    func embedColbert(text: String): Array<Array<Float64>>
 }
 
 /**
@@ -42,4 +44,7 @@ public interface MemoryRepository {
 
     /** sparse 召回：按 token 命中累加权重；没有倒排数据时返回空列表（由 store 标 degraded） */
     func searchSparse(query: MemoryQuery, limit: Int64): ArrayList<MemoryHit>
+
+    /** 取某条记忆的 colbert 向量；没有则返回 None（重排时跳过） */
+    func colbert(recordId: Int64): ?ColbertVectors
 }

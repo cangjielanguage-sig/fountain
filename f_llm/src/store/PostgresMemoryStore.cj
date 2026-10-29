@@ -79,6 +79,20 @@ public class PostgresMemoryStore <: MemoryStore {
             scored.add(MemoryHit(record, fused * MemoryKinds.weightOf(record.kind), degraded: degraded))
         }
 
+        // colbert 重排：只改顺序，不改候选集，也不改 hit.score
+        let rerankScores = HashMap<Int64, Float64>()
+        if(query.rerank){
+            let queryVectors = embedder.embedColbert(query.text)
+            for(hit in scored){
+                match(repo.colbert(hit.record.id)){
+                    case Some(vectors) =>
+                        rerankScores[hit.record.id] = 0.4f64 * maxSim(queryVectors, vectors.title) +
+                                                      0.6f64 * maxSim(queryVectors, vectors.content)
+                    case None => rerankScores[hit.record.id] = 0.0f64
+                }
+            }
+        }
+
         // 选择排序取前 topK（不依赖 ArrayList 的插入/交换 API）
         let used = ArrayList<Bool>()
         for(_ in scored){
@@ -92,7 +106,16 @@ public class PostgresMemoryStore <: MemoryStore {
                 if(used[index]){
                     continue
                 }
-                if(best < 0 || scored[index].score > scored[best].score){
+                var better = false
+                if(best < 0){
+                    better = true
+                }else if(query.rerank){
+                    better = rerankScores.get(scored[index].record.id).getOrThrow() >
+                             rerankScores.get(scored[best].record.id).getOrThrow()
+                }else{
+                    better = scored[index].score > scored[best].score
+                }
+                if(better){
                     best = index
                 }
             }
@@ -104,6 +127,34 @@ public class PostgresMemoryStore <: MemoryStore {
             picked++
         }
         results
+    }
+
+    /** colbert max-sim：每个 query token 取与文档 token 的最大点积，再对 query 取平均 */
+    private static func maxSim(query: Array<Array<Float64>>, doc: Array<Array<Float64>>): Float64 {
+        if(query.size == 0 || doc.size == 0){
+            return 0.0f64
+        }
+        var total = 0.0f64
+        for(queryToken in query){
+            var best = 0.0f64
+            for(docToken in doc){
+                let score = dot(queryToken, docToken)
+                if(score > best){
+                    best = score
+                }
+            }
+            total += best
+        }
+        total / Float64(query.size)
+    }
+
+    private static func dot(left: Array<Float64>, right: Array<Float64>): Float64 {
+        let size = if(left.size < right.size){ left.size } else { right.size }
+        var sum = 0.0f64
+        for(index in 0..size){
+            sum += left[index] * right[index]
+        }
+        sum
     }
 
     private static func collect(hits: ArrayList<MemoryHit>, ids: ArrayList<Int64>,
