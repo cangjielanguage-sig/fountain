@@ -49,4 +49,10 @@ public interface MemoryRepository {
 
     /** 取某条记忆的 colbert 向量；没有则返回 None（重排时跳过） */
     func colbert(recordId: Int64): ?ColbertVectors
+
+    func get(userId: Int64, id: Int64): ?MemoryRecord
+
+    func list(userId: Int64, namespace: String, offset: Int64, limit: Int64): ArrayList<MemoryRecord>
+
+    func remove(userId: Int64, id: Int64): Bool
 }

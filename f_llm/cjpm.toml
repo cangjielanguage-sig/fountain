@@ -35,11 +35,14 @@
   "fountain::f_store" = {path = "../f_store"}
   "fountain::f_time" = {path = "../f_time"}
   "fountain::f_util" = {path = "../f_util"}
+  "postgres_driver" = {version = "0.1.0", output-type = "dynamic"}
+  "mysql_driver" = {version = "0.1.0", output-type = "dynamic"}
 
 [test-dependencies]
   # 只用于真库集成测试（FLLM_DB_TEST=1 时启用）；不影响下游依赖
   # 需要同时 export CANGJIE_STDX_PATH=$CANGJIE_STDX_DYNAMIC_PATH（驱动的 bin-dependencies 用它）
   "postgres_driver" = {version = "0.1.0", output-type = "dynamic"}
+  "mysql_driver" = {version = "0.1.0", output-type = "dynamic"}
 
 [target]
 [target.x86_64-unknown-linux-gnu]

@@ -93,6 +93,18 @@ class FakeMemoryRepository <: MemoryRepository {
         colbertCalls++
         colbertVectors.get(recordId)
     }
+
+    public func get(userId: Int64, id: Int64): ?MemoryRecord {
+        None
+    }
+
+    public func list(userId: Int64, namespace: String, offset: Int64, limit: Int64): ArrayList<MemoryRecord> {
+        ArrayList<MemoryRecord>()
+    }
+
+    public func remove(userId: Int64, id: Int64): Bool {
+        false
+    }
 }
 
 @Test
