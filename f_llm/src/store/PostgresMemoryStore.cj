@@ -42,15 +42,15 @@ public class PostgresMemoryStore <: MemoryStore {
     }
 
     public func get(userId: Int64, id: Int64): ?MemoryRecord {
-        throw IllegalArgumentException('not implemented')
+        repo.get(userId, id)
     }
 
     public func remove(userId: Int64, id: Int64): Bool {
-        throw IllegalArgumentException('not implemented')
+        repo.remove(userId, id)
     }
 
     public func list(userId: Int64, namespace: String, offset: Int64, limit: Int64): ArrayList<MemoryRecord> {
-        throw IllegalArgumentException('not implemented')
+        repo.list(userId, namespace, offset, limit)
     }
 
     public func search(query: MemoryQuery): ArrayList<MemoryHit> {
