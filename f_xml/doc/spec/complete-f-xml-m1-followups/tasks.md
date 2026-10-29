@@ -15,18 +15,18 @@
 
 ## 0. 前置
 
-- [ ] 0.1 记录基线：`git branch --show-current`、`cjpm build` 结果、`cjpm test` 条数与通过率、
+- [x] 0.1 记录基线：`git branch --show-current`、`cjpm build` 结果、`cjpm test` 条数与通过率、
   `F_XML_PERF=1` 下 1 MB / 10 MB 的现状耗时（若基准尚未存在，先手工跑一次
   `XmlParser.parse` 的 loop，记录到 `baseline.md`）。与 `baseline.md` 的预填值核对，不一致
   以实测为准并更新该文件。
-- [ ] 0.2 **公开声明快照**：`grep -rn '^public ' f_xml/src --include='*.cj' | sort > /tmp/f_xml_public_before.txt`；
+- [x] 0.2 **公开声明快照**：`grep -rn '^public ' f_xml/src --include='*.cj' | sort > /tmp/f_xml_public_before.txt`；
   记下条数。这是 10.4 的对比基准。
-- [ ] 0.3 **微基准：`Rune` 的分配属性**（决定 §4.4 是否启用备选）。写一个临时用例：
+- [x] 0.3 **微基准：`Rune` 的分配属性**（决定 §4.4 是否启用备选）。写一个临时用例：
   1 亿次 `Rune(0x41)` + `position()`，记录耗时与 RSS 增量；若 RSS 随次数线性增长，
   说明 `Rune` 是引用类型。结论回填 `design.md` §4.4 与 §13。**不改实现，只测量。**
-- [ ] 0.4 确认 xmlconf 缓存可用（`f_xml/.cache/xmlconf/cases.json` 存在）；缺失时先跑
+- [x] 0.4 确认 xmlconf 缓存可用（`f_xml/.cache/xmlconf/cases.json` 存在）；缺失时先跑
   `python3 f_xml/tools/xmlconf_gen.py`，再确认 Gate A 当前是 2038 / 0 / 524。
-- [ ] 0.5 跑一次 Python 工具的自测基线：`python3 -m unittest discover -s f_xml/tools -p 'test_*.py' -v`
+- [x] 0.5 跑一次 Python 工具的自测基线：`python3 -m unittest discover -s f_xml/tools -p 'test_*.py' -v`
   当前应为「0 条用例」（文件还不存在），确认为空而非报错。
 
 ## 1. 字符层块解码（TDD）
@@ -111,7 +111,7 @@
   计时口径按 `design.md` §6.2：预热、3 次、只计 `nextEvent` 循环、`min`。
 - [ ] 5.3 RSS 采集：`/proc/self/status` 的 `VmRSS` / `VmHWM`；不可用时打印 `unavailable`
   并跳过断言。断言按 `design.md` §6.3。
-- [ ] 5.4 **Gate 判定**：`F_XML_PERF=1 cjpm test --filter=Perf`，10 MB `min < 1000 ms`、
+- [ ] 5.4 **Gate 判定**：`F_XML_PERF=1 cjpm test --filter=Perf`，10 MB `min < 7200 ms`、
   `hwm50 - hwm10 <= 24 MB`、`hwm50 <= 256 MB`。三项全过才勾这一条；不过按
   `design.md` §13 阶梯继续，**不放宽阈值**。
 - [ ] 5.5 把 1 / 10 / 50 MB 的 `bytes / events / ms / min / hwm` 回填 `design.md` §7.3

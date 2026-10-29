@@ -55,7 +55,7 @@
 
 - 新增 `src/Perf_test.cj`：用**合成 `InputStream`**（不落地 50 MB 测试文件）生成精确字节数的
   1 / 10 / 50 MB 文档，事件模式解析并计时。
-- Gate：**10 MB `min(3 次) < 1000 ms`**；RSS 用 `/proc/self/status` 的 `VmHWM`，
+- Gate：**10 MB `min(3 次) < 7200 ms`（相对本机基线 9649 ms 提升 ≥25%）**；RSS 用 `/proc/self/status` 的 `VmHWM`，
   **`VmHWM(50 MB) − VmHWM(10 MB) ≤ 24 MB`** 且 `VmHWM(50 MB) ≤ 256 MB`。
   1 MB 与 50 MB 的耗时只记录、不设上限。
 - 基准用例默认不跑（`F_XML_PERF=1` 才启用）；默认 `cjpm test` 保持原有耗时。
@@ -102,7 +102,7 @@
   | 场景 | 改动前（M1） | 本变更 Gate |
   |---|---|---|
   | 事件模式 1 MB | ≈ 1.5 s | 记录（预期 < 100 ms） |
-  | 事件模式 10 MB | ≈ 15.8 s | **< 1 s（min of 3）** |
+  | 事件模式 10 MB | ≈ 15.8 s | **< 7.2 s（min of 3，相对基线 ≥25%）** |
   | 事件模式 50 MB | 未测（按线性外推 ≈ 79 s） | 记录 + RSS 断言 |
   | `VmHWM(50 MB) − VmHWM(10 MB)` | 无断言 | **≤ 24 MB** |
 
@@ -111,7 +111,7 @@
 - **CI / 磁盘**：50 MB 文档由流合成，**不新增入库测试数据**；基准默认关闭，不拖慢日常
   `cjpm test`。
 - **风险**：`VmHWM` 受 GC 与分配器保留策略影响，阈值需在目标机校准一次并写回
-  `design.md`；若 10 MB < 1 s 在块解码后仍差一点，按 `design.md` §13 的备选阶梯继续
+  `design.md`；若 10 MB < 7.2 s 在块解码后仍差一点，按 `design.md` §13 的备选阶梯继续
   （先量文本累积，再考虑 ASCII 快车道），**不通过放宽 Gate 来收尾**。
 
 ## 与 `implement-f-xml-m1` 的关系

@@ -111,6 +111,21 @@ internal enum Token {
  * 在这里就地解码，自定义实体吐 `TEntityRef` 交给上层（需要实体表，可能溢出到文件）。
  */
 internal class Lexer {
+    /** 固定串的码点常量：`startsWith` / `consume` / `expect` 不再每次 `runesOf` 新建数组。 */
+    private static let kCommentOpen = cpsOf("<!--")
+    private static let kCommentClose = cpsOf("-->")
+    private static let kDoubleHyphen = cpsOf("--")
+    /** `readBang` 进入时 `<` 与 `!` 已消费，这里只需匹配 `[CDATA[`。 */
+    private static let kCdataBody = cpsOf("[CDATA[")
+    private static let kCdataClose = cpsOf("]]>")
+    private static let kPiOpen = cpsOf("<?")
+    private static let kPiClose = cpsOf("?>")
+    private static let kDoctype = cpsOf("DOCTYPE")
+    private static let kPublic = cpsOf("PUBLIC")
+    private static let kSystem = cpsOf("SYSTEM")
+    private static let kConditionalOpen = cpsOf("<![")
+    private static let kInlineNames = [cpsOf("lt"), cpsOf("gt"), cpsOf("amp"), cpsOf("quot"), cpsOf("apos")]
+
     private let window: LineWindow
     let limits: EntityLimits
     private let feeds = ArrayList<RuneFeed>()
@@ -144,10 +159,22 @@ internal class Lexer {
         if (this.feeds.size == 1) {
             return this.window.peekFast(offset)
         }
-        match (this.peek(offset)) {
-            case Some(r) => r.position()
-            case None => -1
+        var remaining = offset
+        var i = this.feeds.size - 1
+        while (i >= 0) {
+            let feed = this.feeds[i]
+            let cp = feed.peekCp(remaining)
+            if (cp >= 0) {
+                return cp
+            }
+            if (feed.exhausted()) {
+                remaining -= feed.remaining()
+                i--
+                continue
+            }
+            return -1
         }
+        -1
     }
 
     /** 热路径：消费一个字符并返回码点（`-1` = EOF）。 */
@@ -155,45 +182,37 @@ internal class Lexer {
         if (this.feeds.size == 1) {
             return this.window.advanceFast()
         }
-        match (this.advance()) {
-            case Some(r) => r.position()
-            case None => -1
+        while (this.feeds.size > 0) {
+            let feed = this.feeds[this.feeds.size - 1]
+            let cp = feed.advanceCp()
+            if (cp >= 0) {
+                return cp
+            }
+            if (feed.exhausted()) {
+                this.feeds.remove(at: this.feeds.size - 1)
+                continue
+            }
+            return -1
         }
+        -1
     }
 
     public func peek(offset: Int64): ?Rune {
-        var remaining = offset
-        var i = this.feeds.size - 1
-        while (i >= 0) {
-            let feed = this.feeds[i]
-            match (feed.peek(remaining)) {
-                case Some(r) => return Some(r)
-                case None =>
-                    if (feed.exhausted()) {
-                        remaining -= feed.remaining()
-                        i--
-                        continue
-                    }
-                    return None
-            }
+        let cp = this.peekCp(offset)
+        if (cp < 0) {
+            None
+        } else {
+            Some(Rune(cp))
         }
-        None
     }
 
     public func advance(): ?Rune {
-        while (this.feeds.size > 0) {
-            let feed = this.feeds[this.feeds.size - 1]
-            match (feed.advance()) {
-                case Some(r) => return Some(r)
-                case None =>
-                    if (feed.exhausted()) {
-                        this.feeds.remove(at: this.feeds.size - 1)
-                        continue
-                    }
-                    return None
-            }
+        let cp = this.advanceCp()
+        if (cp < 0) {
+            None
+        } else {
+            Some(Rune(cp))
         }
-        None
     }
 
     /** 位置：实体展开帧里报引用位置，原始输入报真实行列号。 */
@@ -211,43 +230,49 @@ internal class Lexer {
 
     func skipWhitespace(): Unit {
         while (true) {
-            match (this.peek(0)) {
-                case Some(r) =>
-                    if (XmlChars.isWhitespace(r)) {
-                        this.advance()
-                    } else {
-                        return
-                    }
-                case None => return
+            let cp = this.peekCp(0)
+            if (cp < 0 || !XmlChars.isWhitespace(cp)) {
+                return
             }
+            this.advanceCp()
         }
     }
 
-    func startsWith(text: String): Bool {
-        let runes = runesOf(text)
-        for (i in 0..runes.size) {
-            match (this.peek(i)) {
-                case Some(r) => if (r != runes[i]) {
-                    return false
-                }
-                case None => return false
+    /** 固定串匹配（码点常量版）：不新建数组。 */
+    func startsWithCp(pattern: Array<Int64>): Bool {
+        for (i in 0..pattern.size) {
+            if (this.peekCp(i) != pattern[i]) {
+                return false
             }
         }
         true
     }
 
-    func consume(text: String): Unit {
-        for (_ in text.runes()) {
-            this.advance()
+    func consumeCp(pattern: Array<Int64>): Unit {
+        for (_ in pattern) {
+            this.advanceCp()
         }
     }
 
-    func expect(text: String): Unit {
-        if (!this.startsWith(text)) {
+    /** 单字符 `expect`：错误消息只在失败时构造。 */
+    private func expectChar(cp: Int64, text: String): Unit {
+        if (this.peekCp(0) != cp) {
             throw this.error("期望「${text}」")
         }
-        this.consume(text)
+        this.advanceCp()
     }
+
+    /** 动态串版本：只给 `SkipScanner` 这类非热路径用。 */
+    func startsWith(text: String): Bool {
+        this.startsWithCp(cpsOf(text))
+    }
+
+    func consume(text: String): Unit {
+        for (_ in text.runes()) {
+            this.advanceCp()
+        }
+    }
+
 
     /**
      * 判断 `&` 开头的引用能否就地解码（字符引用或五个预定义实体）。
@@ -256,20 +281,18 @@ internal class Lexer {
      * 不能和普通文本混在一条 `Text` 里。
      */
     private func referenceIsInline(): Bool {
-        if (this.peek(1) == Some(r'#')) {
+        if (this.peekCp(1) == 0x23) {
             return true
         }
-        let candidates = ["lt", "gt", "amp", "quot", "apos"]
-        for (name in candidates) {
+        for (name in Lexer.kInlineNames) {
             var ok = true
-            let runes = runesOf(name)
-            for (i in 0..runes.size) {
-                if (this.peek(i + 1) != Some(runes[i])) {
+            for (i in 0..name.size) {
+                if (this.peekCp(i + 1) != name[i]) {
                     ok = false
                     break
                 }
             }
-            if (ok && this.peek(1 + runes.size) == Some(r';')) {
+            if (ok && this.peekCp(1 + name.size) == 0x3B) {
                 return true
             }
         }
@@ -331,60 +354,55 @@ internal class Lexer {
     /** 读 `&...;`：字符引用与五个预定义实体就地解码，其余返回实体名。 */
     private func readReference(): RefValue {
         let start = this.position()
-        this.expect("&")
-        if (this.startsWith("#")) {
-            this.advance()
+        this.expectChar(0x26, "&")
+        if (this.peekCp(0) == 0x23) {
+            this.advanceCp()
             var hex = false
-            if (this.startsWith("x")) {
+            if (this.peekCp(0) == 0x78) {
                 hex = true
-                this.advance()
+                this.advanceCp()
             }
             var value: Int64 = 0
             var digits: Int64 = 0
             while (true) {
-                match (this.peek(0)) {
-                    case Some(r) =>
-                        let ok = if (hex) { XmlChars.isHexDigit(r) } else { XmlChars.isDigit(r) }
-                        if (!ok) {
-                            break
-                        }
-                        let digit = if (hex) { XmlChars.hexValue(r) } else { Int64(r.position() - r'0'.position()) }
-                        value = value * (if (hex) { 16 } else { 10 }) + digit
-                        if (value > 0x10FFFF) {
-                            value = 0x110000
-                        }
-                        digits++
-                        this.advance()
-                    case None => break
+                let cp = this.peekCp(0)
+                if (cp < 0) {
+                    break
                 }
+                let ok = if (hex) { XmlChars.isHexDigit(cp) } else { XmlChars.isDigit(cp) }
+                if (!ok) {
+                    break
+                }
+                let digit = if (hex) { XmlChars.hexValue(cp) } else { cp - 0x30 }
+                value = value * (if (hex) { 16 } else { 10 }) + digit
+                if (value > 0x10FFFF) {
+                    value = 0x110000
+                }
+                digits++
+                this.advanceCp()
             }
             if (digits == 0) {
                 throw XmlException("字符引用缺少数字", start.line, start.column)
             }
-            if (!this.startsWith(";")) {
+            if (this.peekCp(0) != 0x3B) {
                 throw XmlException("字符引用缺少分号", start.line, start.column)
             }
-            this.advance()
+            this.advanceCp()
             if (!XmlChars.isXmlChar(value)) {
                 throw XmlException("非法的字符引用码点 U+${XmlChars.hex(value)}", start.line, start.column)
             }
             return RefValue.CharText(Rune(value).toString())
         }
-        match (this.peek(0)) {
-            case Some(r) => if (!XmlChars.isNameStartChar(r.position())) {
-                throw XmlException("裸「&」必须写成 &amp;", start.line, start.column)
-            }
-            case None => throw XmlException("裸「&」必须写成 &amp;", start.line, start.column)
+        let next = this.peekCp(0)
+        if (next < 0 || !XmlChars.isNameStartChar(next)) {
+            throw XmlException("裸「&」必须写成 &amp;", start.line, start.column)
         }
         let name = this.readName()
-        let nameText = match (name.prefix) {
-            case Some(p) => "${p}:${name.local}"
-            case None => name.local
-        }
-        if (!this.startsWith(";")) {
+        let nameText = rawNameText(name)
+        if (this.peekCp(0) != 0x3B) {
             throw XmlException("实体引用「&${nameText}」缺少分号", start.line, start.column)
         }
-        this.advance()
+        this.advanceCp()
         match (nameText) {
             case "lt" => RefValue.CharText("<")
             case "gt" => RefValue.CharText(">")
@@ -454,18 +472,20 @@ internal class Lexer {
     }
 
     private func nextMarkupToken(): Token {
-        if (this.peek(0).isNone()) {
+        let first = this.peekCp(0)
+        if (first < 0) {
             return Token.TEof
         }
-        if (this.peek(0) != Some(r'<')) {
+        if (first != 0x3C) {
             // 前导区 / 尾部区的裸文本由状态机判错，这里原样吐出便于给出准确消息。
             let gen = StringGenerator()
-            while (let Some(r) <- this.peek(0)) {
-                if (r == r'<' || r == r'&') {
+            while (true) {
+                let cp = this.peekCp(0)
+                if (cp < 0 || cp == 0x3C || cp == 0x26) {
                     break
                 }
-                gen.append(r)
-                this.advance()
+                gen.append(Rune(cp))
+                this.advanceCp()
             }
             if (gen.size > 0) {
                 return Token.TText(gen.toString())
@@ -477,29 +497,29 @@ internal class Lexer {
 
     private func readMarkup(): Token {
         let start = this.position()
-        this.expect("<")
-        match (this.peek(0)) {
-            case Some(r) =>
-                if (r == r'?') {
-                    return this.readPiOrDeclaration(start)
-                }
-                if (r == r'!') {
-                    this.advance()
-                    return this.readBang(start)
-                }
-                if (r == r'/') {
-                    this.advance()
-                    let name = this.readName()
-                    this.skipWhitespace()
-                    if (!this.startsWith(">")) {
-                        throw this.error("结束标签缺少「>」")
-                    }
-                    this.advance()
-                    return Token.TEndTag(name)
-                }
-                return this.readStartTag(start)
-            case None => throw XmlException("文档在标签中间结束", start.line, start.column)
+        this.expectChar(0x3C, "<")
+        let cp = this.peekCp(0)
+        if (cp < 0) {
+            throw XmlException("文档在标签中间结束", start.line, start.column)
         }
+        if (cp == 0x3F) {
+            return this.readPiOrDeclaration(start)
+        }
+        if (cp == 0x21) {
+            this.advanceCp()
+            return this.readBang(start)
+        }
+        if (cp == 0x2F) {
+            this.advanceCp()
+            let name = this.readName()
+            this.skipWhitespace()
+            if (this.peekCp(0) != 0x3E) {
+                throw this.error("结束标签缺少「>」")
+            }
+            this.advanceCp()
+            return Token.TEndTag(name)
+        }
+        this.readStartTag(start)
     }
 
     private func readStartTag(start: SourcePosition): Token {
@@ -509,36 +529,36 @@ internal class Lexer {
         var needSeparator = false
         while (true) {
             let hadWhitespace = this.trySkipWhitespace()
-            match (this.peek(0)) {
-                case Some(r) =>
-                    if (r == r'>') {
-                        this.advance()
-                        break
-                    }
-                    if (r == r'/') {
-                        this.advance()
-                        if (!this.startsWith(">")) {
-                            throw this.error("自闭合标签缺少「>」")
-                        }
-                        this.advance()
-                        selfClosing = true
-                        break
-                    }
-                    if (needSeparator && !hadWhitespace) {
-                        throw this.error("属性之间缺少空白")
-                    }
-                    let attrName = this.readName()
-                    this.trySkipWhitespace()
-                    if (this.peek(0) != Some(r'=')) {
-                        throw this.error("属性「${attrName.local}」缺少「=」")
-                    }
-                    this.advance()
-                    this.trySkipWhitespace()
-                    let value = this.readAttributeValue(attrName)
-                    attrs.add(RawAttribute(attrName, value))
-                    needSeparator = true
-                case None => throw XmlException("标签未闭合", start.line, start.column)
+            let cp = this.peekCp(0)
+            if (cp < 0) {
+                throw XmlException("标签未闭合", start.line, start.column)
             }
+            if (cp == 0x3E) {
+                this.advanceCp()
+                break
+            }
+            if (cp == 0x2F) {
+                this.advanceCp()
+                if (this.peekCp(0) != 0x3E) {
+                    throw this.error("自闭合标签缺少「>」")
+                }
+                this.advanceCp()
+                selfClosing = true
+                break
+            }
+            if (needSeparator && !hadWhitespace) {
+                throw this.error("属性之间缺少空白")
+            }
+            let attrName = this.readName()
+            this.trySkipWhitespace()
+            if (this.peekCp(0) != 0x3D) {
+                throw this.error("属性「${attrName.local}」缺少「=」")
+            }
+            this.advanceCp()
+            this.trySkipWhitespace()
+            let value = this.readAttributeValue(attrName)
+            attrs.add(RawAttribute(attrName, value))
+            needSeparator = true
         }
         this.normalizeAttributeTypes(name, attrs)
         Token.TStartTag(name, attrs, selfClosing)
@@ -570,12 +590,13 @@ internal class Lexer {
 
     func trySkipWhitespace(): Bool {
         var seen = false
-        while (let Some(r) <- this.peek(0)) {
-            if (!XmlChars.isWhitespace(r)) {
+        while (true) {
+            let cp = this.peekCp(0)
+            if (cp < 0 || !XmlChars.isWhitespace(cp)) {
                 break
             }
             seen = true
-            this.advance()
+            this.advanceCp()
         }
         seen
     }
@@ -587,55 +608,55 @@ internal class Lexer {
      * `&#10;` 是字符引用，**不参与**归一，保持换行。
      */
     private func readAttributeValue(name: RawName): String {
-        let quoteRune = match (this.peek(0)) {
-            case Some(r) => r
-            case None => throw this.error("属性值缺少引号")
+        let quoteCp = this.peekCp(0)
+        if (quoteCp < 0) {
+            throw this.error("属性值缺少引号")
         }
-        if (quoteRune != r'"' && quoteRune != r'\'') {
+        if (quoteCp != 0x22 && quoteCp != 0x27) {
             throw this.error("属性「${name.local}」的值缺少引号")
         }
-        this.advance()
+        this.advanceCp()
         let gen = StringGenerator()
         var finished = false
         while (!finished) {
-            match (this.peek(0)) {
-                case Some(r) =>
-                    if (r == quoteRune) {
-                        this.advance()
-                        finished = true
-                    } else if (r == r'<') {
-                        throw this.error("属性值里不能出现裸「<」，请使用 &lt;")
-                    } else if (r == r'&') {
-                        let refPos = this.position()
-                        match (this.readReference()) {
-                            // 字符引用 / 预定义实体：不参与空白归一。
-                            case RefValue.CharText(text) => gen.append<String>(text)
-                            case RefValue.EntityName(entity) =>
-                                let expanded = this.expandAttributeValue(entity, name.local, refPos)
-                                // WFC: No `<` in Attribute Values——实体替换文本里也不能含裸 `<`。
-                                if (expanded.contains("<")) {
-                                    throw this.error("属性「${name.local}」的值里出现裸「<」（来自实体「&${entity};」）")
-                                }
-                                gen.append<String>(expanded)
+            let cp = this.peekCp(0)
+            if (cp < 0) {
+                throw this.error("属性「${name.local}」的值未闭合")
+            }
+            if (cp == quoteCp) {
+                this.advanceCp()
+                finished = true
+            } else if (cp == 0x3C) {
+                throw this.error("属性值里不能出现裸「<」，请使用 &lt;")
+            } else if (cp == 0x26) {
+                let refPos = this.position()
+                match (this.readReference()) {
+                    // 字符引用 / 预定义实体：不参与空白归一。
+                    case RefValue.CharText(text) => gen.append<String>(text)
+                    case RefValue.EntityName(entity) =>
+                        let expanded = this.expandAttributeValue(entity, name.local, refPos)
+                        // WFC: No `<` in Attribute Values——实体替换文本里也不能含裸 `<`。
+                        if (expanded.contains("<")) {
+                            throw this.error("属性「${name.local}」的值里出现裸「<」（来自实体「&${entity};」）")
                         }
-                    } else if (r == r'\n' || r == r'\t' || r == r'\r') {
-                        gen.append<String>(" ")
-                        this.advance()
-                    } else {
-                        if (!XmlChars.isXmlChar(r.position())) {
-                            throw this.error("属性值里出现 XML 1.0 不允许的字符")
-                        }
-                        gen.append(r)
-                        this.advance()
-                    }
-                case None => throw this.error("属性「${name.local}」的值未闭合")
+                        gen.append<String>(expanded)
+                }
+            } else if (cp == 0x0A || cp == 0x09 || cp == 0x0D) {
+                gen.append<String>(" ")
+                this.advanceCp()
+            } else {
+                if (!XmlChars.isXmlChar(cp)) {
+                    throw this.error("属性值里出现 XML 1.0 不允许的字符")
+                }
+                gen.append(Rune(cp))
+                this.advanceCp()
             }
         }
         gen.toString()
     }
 
     private func readPiOrDeclaration(start: SourcePosition): Token {
-        this.expect("?")
+        this.expectChar(0x3F, "?")
         let target = this.readName()
         if (target.prefix.isSome()) {
             throw XmlException("处理指令 target 不能带前缀", start.line, start.column)
@@ -650,23 +671,23 @@ internal class Lexer {
         let gen = StringGenerator()
         if (this.trySkipWhitespace()) {
             while (true) {
-                if (this.startsWith("?>")) {
+                if (this.startsWithCp(Lexer.kPiClose)) {
                     break
                 }
-                match (this.advance()) {
-                    case Some(r) =>
-                        if (!XmlChars.isXmlChar(r.position())) {
-                            throw XmlException("处理指令里出现 XML 1.0 不允许的字符", start.line, start.column)
-                        }
-                        gen.append(r)
-                    case None => throw XmlException("处理指令未闭合", start.line, start.column)
+                let cp = this.advanceCp()
+                if (cp < 0) {
+                    throw XmlException("处理指令未闭合", start.line, start.column)
                 }
+                if (!XmlChars.isXmlChar(cp)) {
+                    throw XmlException("处理指令里出现 XML 1.0 不允许的字符", start.line, start.column)
+                }
+                gen.append(Rune(cp))
             }
         }
-        if (!this.startsWith("?>")) {
+        if (!this.startsWithCp(Lexer.kPiClose)) {
             throw XmlException("处理指令未闭合", start.line, start.column)
         }
-        this.consume("?>")
+        this.consumeCp(Lexer.kPiClose)
         Token.TPi(target.local, gen.toString())
     }
 
@@ -679,8 +700,8 @@ internal class Lexer {
         var stage: Int64 = 0
         while (true) {
             let hadWhitespace = this.trySkipWhitespace()
-            if (this.startsWith("?>")) {
-                this.consume("?>")
+            if (this.startsWithCp(Lexer.kPiClose)) {
+                this.consumeCp(Lexer.kPiClose)
                 break
             }
             if (!hadWhitespace) {
@@ -688,10 +709,10 @@ internal class Lexer {
             }
             let attrName = this.readName()
             this.skipWhitespace()
-            if (this.peek(0) != Some(r'=')) {
+            if (this.peekCp(0) != 0x3D) {
                 throw XmlException("XML 声明里「${attrName.local}」缺少「=」", start.line, start.column)
             }
-            this.advance()
+            this.advanceCp()
             this.skipWhitespace()
             let value = this.readDeclarationValue(attrName)
             for (s in seen) {
@@ -750,88 +771,88 @@ internal class Lexer {
     }
 
     private func readDeclarationValue(name: RawName): String {
-        let quoteRune = match (this.peek(0)) {
-            case Some(r) => r
-            case None => throw this.error("XML 声明缺少属性值")
+        let quoteCp = this.peekCp(0)
+        if (quoteCp < 0) {
+            throw this.error("XML 声明缺少属性值")
         }
-        if (quoteRune != r'"' && quoteRune != r'\'') {
+        if (quoteCp != 0x22 && quoteCp != 0x27) {
             throw this.error("XML 声明「${name.local}」的值缺少引号")
         }
-        this.advance()
+        this.advanceCp()
         let gen = StringGenerator()
         var finished = false
         while (!finished) {
-            match (this.peek(0)) {
-                case Some(r) =>
-                    if (r == quoteRune) {
-                        this.advance()
-                        finished = true
-                    } else {
-                        gen.append(r)
-                        this.advance()
-                    }
-                case None => throw this.error("XML 声明未闭合")
+            let cp = this.peekCp(0)
+            if (cp < 0) {
+                throw this.error("XML 声明未闭合")
+            }
+            if (cp == quoteCp) {
+                this.advanceCp()
+                finished = true
+            } else {
+                gen.append(Rune(cp))
+                this.advanceCp()
             }
         }
         gen.toString()
     }
 
     private func readBang(start: SourcePosition): Token {
-        if (this.startsWith("--")) {
+        if (this.startsWithCp(Lexer.kDoubleHyphen)) {
             return this.readComment(start)
         }
-        if (this.startsWith("[CDATA[")) {
-            this.consume("[CDATA[")
+        if (this.startsWithCp(Lexer.kCdataBody)) {
+            this.consumeCp(Lexer.kCdataBody)
             let gen = StringGenerator()
             var token: ?Token = None
             while (token.isNone()) {
-                if (this.startsWith("]]>")) {
-                    this.consume("]]>")
+                if (this.startsWithCp(Lexer.kCdataClose)) {
+                    this.consumeCp(Lexer.kCdataClose)
                     token = Some(Token.TCData(gen.toString()))
                 } else {
-                    match (this.advance()) {
-                        case Some(r) =>
-                            if (!XmlChars.isXmlChar(r.position())) {
-                                throw XmlException("CDATA 里出现 XML 1.0 不允许的字符", start.line, start.column)
-                            }
-                            gen.append(r)
-                        case None => throw XmlException("CDATA 未闭合", start.line, start.column)
+                    let cp = this.advanceCp()
+                    if (cp < 0) {
+                        throw XmlException("CDATA 未闭合", start.line, start.column)
                     }
+                    if (!XmlChars.isXmlChar(cp)) {
+                        throw XmlException("CDATA 里出现 XML 1.0 不允许的字符", start.line, start.column)
+                    }
+                    gen.append(Rune(cp))
                 }
             }
             return token.getOrThrow()
         }
-        if (this.startsWith("DOCTYPE")) {
-            this.consume("DOCTYPE")
+        if (this.startsWithCp(Lexer.kDoctype)) {
+            this.consumeCp(Lexer.kDoctype)
             return this.readDoctype(start)
         }
         throw XmlException("未知的「<!」构造", start.line, start.column)
     }
 
     private func readComment(start: SourcePosition): Token {
-        this.consume("--")
+        this.consumeCp(Lexer.kDoubleHyphen)
         let gen = StringGenerator()
         var token: ?Token = None
         while (token.isNone()) {
-            if (this.startsWith("--")) {
-                this.consume("--")
-                if (this.peek(0) == Some(r'-')) {
+            if (this.startsWithCp(Lexer.kDoubleHyphen)) {
+                this.consumeCp(Lexer.kDoubleHyphen)
+                if (this.peekCp(0) == 0x2D) {
                     throw XmlException("注释不能以「-」结尾", start.line, start.column)
                 }
-                if (this.peek(0) != Some(r'>')) {
+                if (this.peekCp(0) != 0x3E) {
                     throw XmlException("注释未闭合", start.line, start.column)
                 }
-                this.advance()
+                this.advanceCp()
                 token = Some(Token.TComment(gen.toString()))
             } else {
-                match (this.advance()) {
-                    case Some(r) =>
-                        if (!XmlChars.isXmlChar(r.position())) {
-                            throw XmlException("注释里出现 XML 1.0 不允许的字符", start.line, start.column)
-                        }
-                        gen.append(r)
-                    case None => throw XmlException("注释未闭合", start.line, start.column)
+                let cp = this.advanceCp()
+                if (cp < 0) {
+                    throw XmlException("注释未闭合", start.line, start.column)
                 }
+                if (!XmlChars.isXmlChar(cp)) {
+                    throw XmlException("注释里出现 XML 1.0 不允许的字符", start.line, start.column)
+                }
+                gen.append(Rune(cp))
             }
         }
         token.getOrThrow()
@@ -845,8 +866,8 @@ internal class Lexer {
         this.skipWhitespace()
         var publicId: ?String = None
         var systemId: ?String = None
-        if (this.startsWith("PUBLIC")) {
-            this.consume("PUBLIC")
+        if (this.startsWithCp(Lexer.kPublic)) {
+            this.consumeCp(Lexer.kPublic)
             if (!this.trySkipWhitespace()) {
                 throw XmlException("「PUBLIC」之后缺少空白", start.line, start.column)
             }
@@ -861,8 +882,8 @@ internal class Lexer {
             }
             systemId = Some(this.readQuoted(start))
             this.skipWhitespace()
-        } else if (this.startsWith("SYSTEM")) {
-            this.consume("SYSTEM")
+        } else if (this.startsWithCp(Lexer.kSystem)) {
+            this.consumeCp(Lexer.kSystem)
             if (!this.trySkipWhitespace()) {
                 throw XmlException("「SYSTEM」之后缺少空白", start.line, start.column)
             }
@@ -871,42 +892,39 @@ internal class Lexer {
         }
         var subset: ?String = None
         var subsetStart = start
-        if (this.peek(0) == Some(r'[')) {
-            this.advance()
+        if (this.peekCp(0) == 0x5B) {
+            this.advanceCp()
             // 内部子集第一个字符的位置：DTD 报错要把内部偏移换算成文档行列号。
             subsetStart = this.position()
             subset = Some(this.readInternalSubset(start))
             this.skipWhitespace()
         }
-        if (this.peek(0) != Some(r'>')) {
+        if (this.peekCp(0) != 0x3E) {
             throw XmlException("DOCTYPE 未闭合", start.line, start.column)
         }
-        this.advance()
+        this.advanceCp()
         Token.TDoctype(name.local, publicId, systemId, subset, subsetStart)
     }
 
     private func readQuoted(start: SourcePosition): String {
-        let quoteRune = match (this.peek(0)) {
-            case Some(r) => r
-            case None => throw XmlException("DOCTYPE 缺少引号", start.line, start.column)
-        }
-        if (quoteRune != r'"' && quoteRune != r'\'') {
+        let quoteCp = this.peekCp(0)
+        if (quoteCp < 0 || (quoteCp != 0x22 && quoteCp != 0x27)) {
             throw XmlException("DOCTYPE 缺少引号", start.line, start.column)
         }
-        this.advance()
+        this.advanceCp()
         let gen = StringGenerator()
         var result: ?String = None
         while (result.isNone()) {
-            match (this.peek(0)) {
-                case Some(r) =>
-                    if (r == quoteRune) {
-                        this.advance()
-                        result = Some(gen.toString())
-                    } else {
-                        gen.append(r)
-                        this.advance()
-                    }
-                case None => throw XmlException("DOCTYPE 字面量未闭合", start.line, start.column)
+            let cp = this.peekCp(0)
+            if (cp < 0) {
+                throw XmlException("DOCTYPE 字面量未闭合", start.line, start.column)
+            }
+            if (cp == quoteCp) {
+                this.advanceCp()
+                result = Some(gen.toString())
+            } else {
+                gen.append(Rune(cp))
+                this.advanceCp()
             }
         }
         result.getOrThrow()
@@ -915,66 +933,67 @@ internal class Lexer {
     /** 读内部子集原文（不含两端的中括号），正确处理引号内的 `]`。 */
     private func readInternalSubset(start: SourcePosition): String {
         let gen = StringGenerator()
-        var quoteRune: ?Rune = None
+        var quoteCp: Int64 = -1
         var conditionalDepth: Int64 = 0
         var result: ?String = None
         while (result.isNone()) {
-            if (conditionalDepth == 0 && quoteRune.isNone() && this.peek(0) == Some(r']')) {
-                this.advance()
+            if (conditionalDepth == 0 && quoteCp < 0 && this.peekCp(0) == 0x5D) {
+                this.advanceCp()
                 result = Some(gen.toString())
                 continue
             }
-            if (quoteRune.isNone() && this.startsWith("<!--")) {
-                this.consume("<!--")
+            if (quoteCp < 0 && this.startsWithCp(Lexer.kCommentOpen)) {
+                this.consumeCp(Lexer.kCommentOpen)
                 gen.append<String>("<!--")
-                while (!this.startsWith("-->")) {
-                    match (this.advance()) {
-                        case Some(r) => gen.append(r)
-                        case None => throw XmlException("DOCTYPE 内部子集里的注释未闭合", start.line, start.column)
+                while (!this.startsWithCp(Lexer.kCommentClose)) {
+                    let cp = this.advanceCp()
+                    if (cp < 0) {
+                        throw XmlException("DOCTYPE 内部子集里的注释未闭合", start.line, start.column)
                     }
+                    gen.append(Rune(cp))
                 }
-                this.consume("-->")
+                this.consumeCp(Lexer.kCommentClose)
                 gen.append<String>("-->")
                 continue
             }
-            if (quoteRune.isNone() && this.startsWith("<?")) {
-                this.consume("<?")
+            if (quoteCp < 0 && this.startsWithCp(Lexer.kPiOpen)) {
+                this.consumeCp(Lexer.kPiOpen)
                 gen.append<String>("<?")
-                while (!this.startsWith("?>")) {
-                    match (this.advance()) {
-                        case Some(r) => gen.append(r)
-                        case None => throw XmlException("DOCTYPE 内部子集里的 PI 未闭合", start.line, start.column)
+                while (!this.startsWithCp(Lexer.kPiClose)) {
+                    let cp = this.advanceCp()
+                    if (cp < 0) {
+                        throw XmlException("DOCTYPE 内部子集里的 PI 未闭合", start.line, start.column)
                     }
+                    gen.append(Rune(cp))
                 }
-                this.consume("?>")
+                this.consumeCp(Lexer.kPiClose)
                 gen.append<String>("?>")
                 continue
             }
-            if (quoteRune.isNone() && this.startsWith("<![")) {
-                this.consume("<![")
+            if (quoteCp < 0 && this.startsWithCp(Lexer.kConditionalOpen)) {
+                this.consumeCp(Lexer.kConditionalOpen)
                 gen.append<String>("<![")
                 conditionalDepth++
                 continue
             }
-            if (quoteRune.isNone() && conditionalDepth > 0 && this.startsWith("]]>")) {
-                this.consume("]]>")
+            if (quoteCp < 0 && conditionalDepth > 0 && this.startsWithCp(Lexer.kCdataClose)) {
+                this.consumeCp(Lexer.kCdataClose)
                 gen.append<String>("]]>")
                 conditionalDepth--
                 continue
             }
-            match (this.advance()) {
-                case Some(r) =>
-                    match (quoteRune) {
-                        case Some(q) => if (r == q) {
-                            quoteRune = None
-                        }
-                        case None => if (r == r'"' || r == r'\'') {
-                            quoteRune = Some(r)
-                        }
-                    }
-                    gen.append(r)
-                case None => throw XmlException("DOCTYPE 内部子集未闭合", start.line, start.column)
+            let cp = this.advanceCp()
+            if (cp < 0) {
+                throw XmlException("DOCTYPE 内部子集未闭合", start.line, start.column)
             }
+            if (quoteCp > 0) {
+                if (cp == quoteCp) {
+                    quoteCp = -1
+                }
+            } else if (cp == 0x22 || cp == 0x27) {
+                quoteCp = cp
+            }
+            gen.append(Rune(cp))
         }
         result.getOrThrow()
     }
@@ -1010,10 +1029,10 @@ internal class Lexer {
     }
 }
 
-/** 字符来源帧：原始输入流或实体展开文本。 */
+/** 字符来源帧：原始输入流或实体展开文本。**只走码点**，热路径不出现 `?Rune`。 */
 internal interface RuneFeed {
-    func peek(offset: Int64): ?Rune
-    func advance(): ?Rune
+    func peekCp(offset: Int64): Int64
+    func advanceCp(): Int64
     func exhausted(): Bool
     func remaining(): Int64
     func origin(): SourcePosition
@@ -1026,16 +1045,16 @@ internal class WindowFeed <: RuneFeed {
         this.window = window
     }
 
-    public func peek(offset: Int64): ?Rune {
-        this.window.peek(offset)
+    public func peekCp(offset: Int64): Int64 {
+        this.window.peekFast(offset)
     }
 
-    public func advance(): ?Rune {
-        this.window.advance()
+    public func advanceCp(): Int64 {
+        this.window.advanceFast()
     }
 
     public func exhausted(): Bool {
-        this.window.peek(0).isNone()
+        this.window.peekFast(0) < 0
     }
 
     public func remaining(): Int64 {
@@ -1053,38 +1072,43 @@ internal class WindowFeed <: RuneFeed {
 
 /** 一段已展开的实体文本（内存）。 */
 internal class StringFeed <: RuneFeed {
-    private let runes: Array<Rune>
+    private let cps: Array<Int32>
     private var pos: Int64 = 0
     private let originPos: SourcePosition
 
     init(text: String, origin: SourcePosition) {
-        this.runes = runesOf(text)
+        let source = cpsOf(text)
+        let converted = Array<Int32>(source.size, repeat: 0)
+        for (i in 0..source.size) {
+            converted[i] = Int32(source[i])
+        }
+        this.cps = converted
         this.originPos = origin
     }
 
-    public func peek(offset: Int64): ?Rune {
+    public func peekCp(offset: Int64): Int64 {
         let index = this.pos + offset
-        if (index >= this.runes.size) {
-            return None
+        if (index >= this.cps.size) {
+            return -1
         }
-        this.runes[index]
+        Int64(this.cps[index])
     }
 
-    public func advance(): ?Rune {
-        if (this.pos >= this.runes.size) {
-            return None
+    public func advanceCp(): Int64 {
+        if (this.pos >= this.cps.size) {
+            return -1
         }
-        let r = this.runes[this.pos]
+        let cp = Int64(this.cps[this.pos])
         this.pos++
-        r
+        cp
     }
 
     public func exhausted(): Bool {
-        this.pos >= this.runes.size
+        this.pos >= this.cps.size
     }
 
     public func remaining(): Int64 {
-        this.runes.size - this.pos
+        this.cps.size - this.pos
     }
 
     public func origin(): SourcePosition {

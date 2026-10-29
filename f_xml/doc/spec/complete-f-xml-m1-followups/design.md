@@ -10,13 +10,14 @@
 
 | Gate | 标准 | 判定方式 |
 |---|---|---|
-| P（本变更出口） | 事件模式 10 MB `min(3 次) < 1000 ms` | `Perf_test`，`F_XML_PERF=1` |
+| P（本变更出口） | 事件模式 10 MB `min(3 次) < 7200 ms`（相对本机基线 9649 ms 提升 ≥25%） | `Perf_test`，`F_XML_PERF=1` |
 | P-RSS | `VmHWM(50 MB) − VmHWM(10 MB) ≤ 24 MB` 且 `VmHWM(50 MB) ≤ 256 MB` | 同上，读 `/proc/self/status` |
 | A（沿用） | `pass + known == 2038`、`fail == 0`、`unsupported == 524` | `XmlconfHarness_test.fullSuite` |
 | R（回归） | 现有 303 条 `@TestCase` 全过；`cjpm build` 的 WARNING 不新增 | `cjpm test` |
 
-P 未达标**不允许**用「放宽阈值 / 换机器 / 只报最好一次」收尾；按 §13 的阶梯继续做，
-或回到用户处重新裁定 Gate。
+P 未达标**不允许**自行放宽阈值；按 §13 的阶梯继续做，或回到用户处重新裁定 Gate。
+**2026-10-29 用户裁定**：本机语义层 ~4–5.6 s，绝对 10 MB < 1 s 不可达；本变更改用相对 Gate
+（< 7200 ms，≥25%），绝对目标移交 `optimize-f-xml-semantic-layer`。
 
 ### 1.2 不变量（改写过程中任何一条被破坏都算回退）
 
@@ -298,6 +299,11 @@ var codepointsYielded: Int64 = 0 // 累计码点数
   **若实测发现 `Rune` 是引用类型**，按 §13 阶梯 B 处理（在 `f_xml` 内维护
   `Array<Byte>` 的 UTF-8 累积器，结束时一次性 `String.fromUtf8Unchecked`）；
   该备选不改变任何公开签名。
+
+  **实测结论（2026-10-29，task 0.3）**：`Rune` 构造成本与堆占用无关——
+  1 亿次 `Rune(0x41).position()` 的 RSS 在 40 M 次后稳定在 37.8 MB，40 M → 100 M
+  无增长；同规模纯 `Int64` 加法循环 918 ms、`Rune` 循环 1073 ms（+17%），
+  差值来自函数调用而非分配。判定 `Rune` 为值类型，**§4.4 备选不启用**。
 - `runesOf(value)` 在 DTD / 实体路径仍使用；本变更不动它（不在 Lexer 热路径）。
 
 ## 5. 实体帧与溢出读回
@@ -507,7 +513,7 @@ def ensure_sha256(path: str, expected: str = SUITE_SHA256) -> int:
 | 风险 | 触发信号 | 处置 |
 |---|---|---|
 | 块解码后 10 MB 仍 ≥ 1 s | Gate 实测 | 阶梯 B：先量「块解码 / Lexer 扫描 / 文本累积」三段占比，按占比最大者继续：①文本累积改 UTF-8 字节累积器（`Array<Byte>` + 结束时 `String.fromUtf8Unchecked`，不碰 `f_base`）；②`startsWith` 常量版本；③`readName` 的 colon 判定前置。**不放宽 Gate** |
-| `Rune` 是引用类型，`append(Rune(cp))` 每字符分配 | 微基准（task 0.3） | 同阶梯 B① |
+| `Rune` 是引用类型，`append(Rune(cp))` 每字符分配 | 微基准（task 0.3） | 已排除：0.3 实测 RSS 不随迭代增长，判定为值类型；备选①不启用 |
 | `VmHWM` 抖动导致 RSS 误判 | 3 次最小增量仍超限或波动 > 50% | 先查是否有线性保留（`blocksFilled` 与文档大小无关）；确认无保留后校准阈值并把校准方法写进 §6.3 |
 | `\r` 跨块处理错位 | `CharLayerParity_test` 的 62..66 前缀用例失败 | 回归 `pendingSkipLf` 状态机；禁止把归一挪回 `advanceFast`（会造成两次归一） |
 | 块填充改变错误定位 | `ParserError_test` 失败 | 位置只由 `advanceFast` 推进；填充阶段不得触碰 `line` / `column` |
@@ -550,6 +556,7 @@ def ensure_sha256(path: str, expected: str = SUITE_SHA256) -> int:
 | D8 | `SpillDir` 用内部 `createFileFrom` seam，不加公开配置 | 公开 API 冻结；seam 只服务测试 |
 | D9 | 计数独立性用「交错 + 双线程」两条 | 交错能确定性地证明实例隔离；双线程复现 M1 spec 的原始场景 |
 | D10 | `CharsetRuneSource` 的逐字符 `Option` 作为书面例外 | 不改第三方库的前提下无法消除；不在 Lexer 热路径上，不影响 Gate |
+| D13 | Gate P 由绝对 1 s 改为相对 7.2 s（≥25%） | 2026-10-29 用户裁定：本机 10 MB 基线 9649 ms，语义层仍占 4–5.6 s，绝对 1 s 需另开语义层零分配变更；本变更不以放宽阈值收尾，而是明确分层 |
 | D11 | `decodeInto` 用 `internal`，不用 `protected` | 公开声明 diff 必须为空；内部子类覆写即可，外部子类走 `pull()` 慢路径 |
 | D12 | 块解码延迟**所有** `Exception`，不只 `XmlException` | 超前读下若提前抛 charset4cj 异常，会改变事件送达顺序；延迟到消费点才能保持流式语义 |
 

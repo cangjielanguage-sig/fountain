@@ -221,10 +221,12 @@ internal class ExpandSink {
     func readAll(bufSize: Int64): String {
         let reader = this.openReader(bufSize)
         let gen = StringGenerator()
-        var current = reader.next()
-        while (let Some(r) <- current) {
-            gen.append(r)
-            current = reader.next()
+        while (true) {
+            let cp = reader.nextCp()
+            if (cp < 0) {
+                break
+            }
+            gen.append(Rune(cp))
         }
         reader.close()
         gen.toString()
@@ -256,7 +258,7 @@ internal class ExpandSink {
                 file.flush()
                 file.seek(SeekPosition.Begin(0))
                 FileExpandReader(file, this.filePath, ByteDecoder(file, ByteCodec.Utf8Replace, bufSize))
-            case None => MemoryExpandReader(runesOf(this.memory.toString()))
+            case None => MemoryExpandReader(cps32Of(this.memory.toString()))
         }
     }
 }
@@ -284,27 +286,37 @@ internal class EntityCounter {
 }
 
 
-/** 溢出内容的逐字符读回器。 */
+/** 溢出内容的逐字符读回器（码点入口；`next()` 只是包装）。 */
 internal interface ExpandReader {
+    func nextCp(): Int64
     func next(): ?Rune
     func close(): Unit
 }
 
 internal class MemoryExpandReader <: ExpandReader {
-    private let runes: Array<Rune>
+    private let cps: Array<Int32>
     private var pos: Int64 = 0
 
-    init(runes: Array<Rune>) {
-        this.runes = runes
+    init(cps: Array<Int32>) {
+        this.cps = cps
+    }
+
+    public func nextCp(): Int64 {
+        if (this.pos >= this.cps.size) {
+            return -1
+        }
+        let cp = Int64(this.cps[this.pos])
+        this.pos++
+        cp
     }
 
     public func next(): ?Rune {
-        if (this.pos >= this.runes.size) {
-            return None
+        let cp = this.nextCp()
+        if (cp < 0) {
+            None
+        } else {
+            Some(Rune(cp))
         }
-        let r = this.runes[this.pos]
-        this.pos++
-        Some(r)
     }
 
     public func close(): Unit {}
@@ -322,10 +334,17 @@ internal class FileExpandReader <: ExpandReader {
         this.decoder = decoder
     }
 
-    public func next(): ?Rune {
+    public func nextCp(): Int64 {
         let cp = this.decoder.next()
         if (cp < 0) {
             this.close()
+        }
+        cp
+    }
+
+    public func next(): ?Rune {
+        let cp = this.nextCp()
+        if (cp < 0) {
             None
         } else {
             Some(Rune(cp))

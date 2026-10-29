@@ -11,7 +11,7 @@
 ### Requirement: 性能只记录、不作门禁
 
 **Reason**: M1 把性能移出出口是临时安排；本变更承接字符层重写后，性能成为可判定的
-Gate P（10 MB < 1 s + RSS 非线性增长），继续保留「不作门禁」会与新 Gate 直接冲突。
+Gate P（10 MB < 7.2 s + RSS 非线性增长），继续保留「不作门禁」会与新 Gate 直接冲突。
 
 **Migration**: 由本文件 ADDED 的「性能门禁」替代。原口径里的「内存 O(嵌套深度)」
 「RSS 不作断言」两条约束不放宽：前者由 `retainedBytes` + `VmHWM` 差值保证，后者改为
@@ -28,7 +28,7 @@ Gate P（10 MB < 1 s + RSS 非线性增长），继续保留「不作门禁」�
 | A（必过） | 2038 条断言全部符合期望（`fail == 0`，`pass + known == 2038`） |
 | B（例外管理） | `f_xml/tools/known-issues.json` 每条写明理由 + 规范章节，上限 5 条；超出即不通过 |
 | C（可追溯） | 每次运行输出 `pass / fail / unsupported / observed`，并把 `unsupported` 的 ID 清单存档 |
-| P（性能） | 10 MB `min(3) < 1000 ms`；`VmHWM(50 MB) − VmHWM(10 MB) ≤ 24 MB` |
+| P（性能） | 10 MB `min(3) < 7200 ms`（相对基线 9649 ms ≥25%）；`VmHWM(50 MB) − VmHWM(10 MB) ≤ 24 MB` |
 
 `known-issues` SHALL **默认清空（0 条）**。Gate A 的五条排除规则
 （`edition` 313 / `external-entity` 95 / `xml-1.1` 59 / `external-subset` 47 /
@@ -68,7 +68,7 @@ Gate P（10 MB < 1 s + RSS 非线性增长），继续保留「不作门禁」�
 
 | 指标 | 标准 |
 |---|---|
-| 事件模式 10 MB | `min(3 次) < 1000 ms` |
+| 事件模式 10 MB | `min(3 次) < 7200 ms`（相对基线 9649 ms ≥25%） |
 | `VmHWM(50 MB) − VmHWM(10 MB)` | ≤ 24 MB |
 | `VmHWM(50 MB)` | ≤ 256 MB |
 
@@ -84,7 +84,7 @@ RSS SHALL 用 `/proc/self/status` 的 `VmHWM`（峰值）；文件不可用时 S
 #### Scenario: 10 MB 事件解析达标
 
 - **WHEN** `F_XML_PERF=1`，解析合成 10 MB 文档，事件回调为空操作
-- **THEN** 3 次计时（去掉预热）的最小值 < 1000 ms
+- **THEN** 3 次计时（去掉预热）的最小值 < 7200 ms
 
 #### Scenario: RSS 不随文档线性增长
 

@@ -64,7 +64,7 @@ internal class EntityExpander {
             case None => match (this.policy) {
                 case Some(p) =>
                     p.undeclared(name, line, column)
-                    return MemoryExpandReader(runesOf(""))
+                    return MemoryExpandReader(cps32Of(""))
                 case None => throw XmlException("实体「&${name};」未声明", line, column)
             }
         }
@@ -111,7 +111,7 @@ internal class EntityExpander {
             sink.write(value)
             return sink.openReader(bufSize)
         }
-        MemoryExpandReader(runesOf(value))
+        MemoryExpandReader(cps32Of(value))
     }
 
     /**
@@ -393,8 +393,9 @@ internal class EntityExpander {
 /** 把溢出内容当作字符帧接回词法流；读到 EOF 时关闭读回器（删除临时文件）。 */
 internal class SinkFeed <: RuneFeed {
     private let reader: ExpandReader
-    private let buffer = ArrayList<Rune>()
-    private var head: Int64 = 0
+    private var block = Array<Int32>(256, repeat: 0)
+    private var pos: Int64 = 0
+    private var len: Int64 = 0
     private let originPos: SourcePosition
     private var finished = false
 
@@ -403,44 +404,59 @@ internal class SinkFeed <: RuneFeed {
         this.originPos = origin
     }
 
-    private func fillTo(count: Int64): Bool {
-        while (this.buffer.size - this.head < count) {
+    /** 块填充：只调用 `nextCp()`，不再逐字符包 `Option`。 */
+    private func fillTo(target: Int64): Bool {
+        while (this.len - this.pos < target) {
             if (this.finished) {
                 return false
             }
-            match (this.reader.next()) {
-                case Some(r) => this.buffer.add(r)
-                case None =>
+            if (this.pos > 0) {
+                let remain = this.len - this.pos
+                for (i in 0..remain) {
+                    this.block[i] = this.block[this.pos + i]
+                }
+                this.pos = 0
+                this.len = remain
+            }
+            if (this.len >= this.block.size) {
+                return this.len - this.pos >= target
+            }
+            while (this.len < this.block.size) {
+                let cp = this.reader.nextCp()
+                if (cp < 0) {
                     this.finished = true
                     this.reader.close()
-                    return false
+                    break
+                }
+                this.block[this.len] = Int32(cp)
+                this.len++
             }
         }
         true
     }
 
-    public func peek(offset: Int64): ?Rune {
+    public func peekCp(offset: Int64): Int64 {
         if (!this.fillTo(offset + 1)) {
-            return None
+            return -1
         }
-        this.buffer[this.head + offset]
+        Int64(this.block[this.pos + offset])
     }
 
-    public func advance(): ?Rune {
+    public func advanceCp(): Int64 {
         if (!this.fillTo(1)) {
-            return None
+            return -1
         }
-        let r = this.buffer[this.head]
-        this.head++
-        Some(r)
+        let cp = Int64(this.block[this.pos])
+        this.pos++
+        cp
     }
 
     public func exhausted(): Bool {
-        this.peek(0).isNone()
+        this.peekCp(0) < 0
     }
 
     public func remaining(): Int64 {
-        this.buffer.size - this.head
+        this.len - this.pos
     }
 
     public func origin(): SourcePosition {
