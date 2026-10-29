@@ -356,8 +356,8 @@
   - 校验：`diff -ru f_xml/doc/spec/implement-f-xml-m1 openspec/changes/implement-f-xml-m1`
     必须无输出；文件清单含 `proposal.md`、`design.md`、`tasks.md`、`specs/**`、`.openspec.yaml`。
   - 只改一侧视为未完成；`openspec validate --strict implement-f-xml-m1` 必须 0 WARNING。
-- [ ] 12.8 **合并需用户确认**：向用户汇报验收结果，得到确认后再执行
-  `git merge --no-ff`；是否删除分支由用户决定。本变更执行过程**不得**自动 merge / push。
+- [x] 12.8 **合并需用户确认**：验收结果已汇报，用户确认「合并但保留分支」。
+  已执行 `git merge --no-ff` 合回 `sts/1.3.x`；`feature/f_xml` 分支保留。本变更执行过程**不得**自动 merge / push。
 
 ## 13. 遗留（实施中产生的问题登记在此，不在本变更强补）
 
