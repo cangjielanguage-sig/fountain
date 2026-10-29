@@ -47,13 +47,61 @@ public interface RuneSource {
     func advanceFast(): Int64
 }
 
-/** 三个具体实现的公共缓冲与行列号推进逻辑（固定 16 槽环形缓冲，避免逐字符分配）。 */
+/** 一次块填充的结果：`count` 个有效码点；`error` 非 `None` 表示「这 `count` 个之后就是坏字节」。 */
+internal struct BlockFill {
+    let count: Int64
+    let error: ?Exception
+
+    init(count: Int64, error!: ?Exception = None) {
+        this.count = count
+        this.error = error
+    }
+}
+
+/** 码点块容量：`bufSize` 是字节块，码点数不会超过它；下限 64 保证 `peek(≤ 8)`。 */
+internal func blockCapacityOf(bufSize: Int64): Int64 {
+    if (bufSize < 64) {
+        return 64
+    }
+    if (bufSize > 1024 * 1024) {
+        return 1024 * 1024
+    }
+    bufSize
+}
+
+/**
+ * 三个具体实现的公共块缓冲与行列号推进逻辑。
+ *
+ * 活动路径由 `LineWindow` 通过 `readCodePointBlock` 驱动：码点直接写进调用方的
+ * `Array<Int32>`，本类的 `ownBlock` 只在调用方**直接**使用 `RuneSource` 的
+ * `peek` / `advance` 时才惰性分配。
+ */
 public abstract class BufferedRuneSource <: RuneSource {
-    private let ring = Array<Rune>(16, repeat: r'\0')
-    private var head: Int64 = 0
-    private var count: Int64 = 0
+    private let capacity: Int64
+    private var ownBlock: ?Array<Int32> = None
+    private var ownPos: Int64 = 0
+    private var ownLen: Int64 = 0
+    private var ownError: ?Exception = None
+    private var ownEof: Bool = false
     private var line: Int64 = 1
     private var column: Int64 = 1
+    /** 解码游标：填充时推进，用来算「坏字节自身」的行列号，与消费游标分离。 */
+    private var decLine: Int64 = 1
+    private var decColumn: Int64 = 1
+
+    /** 块填充次数（`count > 0` 计一次）。内部可读，仅供用例断言「确实按块解码」。 */
+    var blocksFilled: Int64 = 0
+    /** 累计产出的码点数。 */
+    var codepointsYielded: Int64 = 0
+
+    /** 兼容无参 `super()`：容量取默认块大小。 */
+    protected init() {
+        this.capacity = blockCapacityOf(8192)
+    }
+
+    protected init(bufSize: Int64) {
+        this.capacity = blockCapacityOf(bufSize)
+    }
 
     /** 从底层取下一个字符写进 `pulledRune`；`false` 表示流结束。 */
     protected func pull(): Bool
@@ -61,40 +109,166 @@ public abstract class BufferedRuneSource <: RuneSource {
     /** `pull()` 的落点：避免每字符一个 `Option` 分配。 */
     protected var pulledRune: Rune = r'\0'
 
-    private func fillTo(target: Int64): Bool {
-        while (this.count < target) {
-            if (!this.pull()) {
-                return false
-            }
-            this.ring[(this.head + this.count) & 15] = this.pulledRune
-            this.count++
+    internal func blockCapacity(): Int64 {
+        this.capacity
+    }
+
+    /** 自有块是否已分配：`LineWindow` 驱动的路径必须保持 `false`（不分配第二份块）。 */
+    internal func hasOwnBlock(): Bool {
+        this.ownBlock.isSome()
+    }
+
+    /**
+     * 把至多 `capacity` 个码点写进 `dest[start..]`。
+     *
+     * 内置的 UTF-8 / UTF-16 / UTF-32 源走各自的批量路径；`CharsetRuneSource` 与第三方
+     * 子类走默认的 `pull()` 循环。解码异常装进 `BlockFill` 延迟到消费点抛出，避免超前
+     * 解码把「坏字节之前的事件」提前吞掉。
+     *
+     * 说明：`internal` 成员在仓颉里不能是 `open`，而 `protected open` 又不允许返回
+     * `internal` 类型（`BlockFill`），所以这里用「基类按具体类型分派」代替虚方法——
+     * 对外仍然是 `internal` seam，不新增任何公开 / 受保护签名。
+     */
+    internal func decodeInto(dest: Array<Int32>, start: Int64, capacity: Int64): BlockFill {
+        match (this) {
+            case source: Utf8RuneSource => source.decodeBatch(dest, start, capacity)
+            case source: BlockRuneSource => source.decodeBatch(dest, start, capacity)
+            case _ => this.decodeViaPull(dest, start, capacity)
         }
-        true
+    }
+
+    private func decodeViaPull(dest: Array<Int32>, start: Int64, capacity: Int64): BlockFill {
+        var i = start
+        let end = start + capacity
+        try {
+            while (i < end) {
+                if (!this.pull()) {
+                    break
+                }
+                dest[i] = Int32(this.pulledRune.position())
+                i++
+            }
+        } catch (e: Exception) {
+            return BlockFill(i - start, error: Some(e))
+        }
+        BlockFill(i - start)
+    }
+
+    /** 块读入口：`LineWindow` 通过它把码点直接写进自己的数组（不分配第二份块）。 */
+    internal func readCodePointBlock(dest: Array<Int32>, start: Int64, capacity: Int64): BlockFill {
+        this.finishFill(this.decodeInto(dest, start, capacity), dest, start)
+    }
+
+    /** 推进解码游标、累计计数，并给没有位置的解码异常补上「坏字符自身」的行列号。 */
+    private func finishFill(fill: BlockFill, dest: Array<Int32>, start: Int64): BlockFill {
+        for (i in 0..fill.count) {
+            if (dest[start + i] == 0x0A) {
+                this.decLine++
+                this.decColumn = 1
+            } else {
+                this.decColumn++
+            }
+        }
+        this.codepointsYielded += fill.count
+        if (fill.count > 0) {
+            this.blocksFilled++
+        }
+        match (fill.error) {
+            case Some(e) => BlockFill(fill.count, error: Some(this.positionedError(e)))
+            case None => fill
+        }
+    }
+
+    /**
+     * 解码异常补位置：只有「位置未知」的 `XmlException` 才包装（补一次行列号），
+     * 其他异常类型（如 charset4cj 自己的异常）原样保留，不包装、不改消息。
+     */
+    private func positionedError(error: Exception): Exception {
+        match (error) {
+            case e: XmlException =>
+                if (e.line == 0 && e.column == 0) {
+                    XmlException(e.message, this.decLine, this.decColumn)
+                } else {
+                    e
+                }
+            case e => e
+        }
+    }
+
+    private func ownBuffer(): Array<Int32> {
+        match (this.ownBlock) {
+            case Some(block) => block
+            case None =>
+                let block = Array<Int32>(this.capacity, repeat: 0)
+                this.ownBlock = Some(block)
+                block
+        }
+    }
+
+    /** 自有块补充到至少 `target` 个可读码点；`false` 表示不再有数据。 */
+    private func ensureOwn(target: Int64): Bool {
+        while (this.ownLen - this.ownPos < target && this.ownError.isNone() && !this.ownEof) {
+            let block = this.ownBuffer()
+            if (this.ownPos > 0) {
+                let remain = this.ownLen - this.ownPos
+                for (i in 0..remain) {
+                    block[i] = block[this.ownPos + i]
+                }
+                this.ownPos = 0
+                this.ownLen = remain
+            }
+            let fill = this.finishFill(this.decodeInto(block, this.ownLen, this.capacity - this.ownLen), block, this.ownLen)
+            this.ownLen += fill.count
+            if (fill.count == 0) {
+                if (fill.error.isSome()) {
+                    this.ownError = fill.error
+                } else {
+                    this.ownEof = true
+                }
+            }
+        }
+        this.ownLen - this.ownPos >= target
+    }
+
+    private func raiseOwnError(): Unit {
+        match (this.ownError) {
+            case Some(e) => throw e
+            case None => ()
+        }
     }
 
     /** 向前看第 `offset` 个字符的码点；`-1` 表示流结束。**热路径**，不走 `Option`。 */
     public func peekFast(offset: Int64): Int64 {
-        if (offset < 0 || offset > 8 || !this.fillTo(offset + 1)) {
+        if (offset < 0 || offset > 8) {
             return -1
         }
-        this.ring[(this.head + offset) & 15].position()
+        if (!this.ensureOwn(offset + 1)) {
+            if (this.ownError.isSome() && this.ownLen - this.ownPos == offset) {
+                this.raiseOwnError()
+            }
+            return -1
+        }
+        if (this.ownPos + offset == this.ownLen && this.ownError.isSome()) {
+            this.raiseOwnError()
+        }
+        Int64(this.ownBuffer()[this.ownPos + offset])
     }
 
     /** 消费当前字符并返回码点；`-1` 表示流结束。**热路径**，不走 `Option`。 */
     public func advanceFast(): Int64 {
-        if (this.count == 0 && !this.fillTo(1)) {
+        if (!this.ensureOwn(1)) {
+            this.raiseOwnError()
             return -1
         }
-        let r = this.ring[this.head]
-        this.head = (this.head + 1) & 15
-        this.count--
-        if (r == r'\n') {
+        let cp = Int64(this.ownBuffer()[this.ownPos])
+        this.ownPos++
+        if (cp == 0x0A) {
             this.line++
             this.column = 1
         } else {
             this.column++
         }
-        r.position()
+        cp
     }
 
     public func peek(offset: Int64): ?Rune {
@@ -133,12 +307,18 @@ public class Utf8RuneSource <: BufferedRuneSource {
     private let strict: Bool
 
     public init(input: InputStream, mode!: InvalidByteMode = InvalidByteMode.Strict, bufSize!: Int64 = 8192) {
+        super(bufSize)
         this.strict = mode == InvalidByteMode.Strict
         this.decoder = ByteDecoder(
             input,
             if (this.strict) { ByteCodec.Utf8Strict } else { ByteCodec.Utf8Replace },
             bufSize
         )
+    }
+
+    /** 批量解码：连续 ASCII 一次搬运，多字节走既有单字符路径。 */
+    internal func decodeBatch(dest: Array<Int32>, start: Int64, capacity: Int64): BlockFill {
+        this.decoder.decodeBlock(dest, start, capacity)
     }
 
     protected func pull(): Bool {
@@ -163,6 +343,7 @@ public class CharsetRuneSource <: BufferedRuneSource {
     private let reader: TextReader
 
     public init(input: InputStream, charset!: Charset = Charsets.UTF8, bufSize!: Int64 = 8192) {
+        super(bufSize)
         this.reader = TextReader(input, charset: charset, bufSize: bufSize)
     }
 
@@ -196,7 +377,13 @@ public class BlockRuneSource <: BufferedRuneSource {
     private let decoder: ByteDecoder
 
     internal init(input: InputStream, codec!: ByteCodec, bufSize!: Int64 = 8192) {
+        super(bufSize)
         this.decoder = ByteDecoder(input, codec, bufSize)
+    }
+
+    /** UTF-16 / UTF-32：块内仍逐个 `next()`，但只发生在填充，Lexer 热路径看不到。 */
+    internal func decodeBatch(dest: Array<Int32>, start: Int64, capacity: Int64): BlockFill {
+        this.decoder.decodeBlock(dest, start, capacity)
     }
 
     protected func pull(): Bool {
@@ -237,6 +424,55 @@ internal class ByteDecoder {
             case Utf32Le => nextUtf32(true)
             case Utf32Be => nextUtf32(false)
         }
+    }
+
+    /**
+     * 按块解码：把至多 `capacity` 个码点写进 `dest[start..]`。
+     *
+     * UTF-8 的连续 ASCII 段一次搬运（不做每字节一次 `ensure` / 分支），多字节序列仍走
+     * `nextUtf8`（含块尾回退）。UTF-16 / UTF-32 块内循环 `next()`。
+     * 解码异常不向上抛，装进 `BlockFill.error` 延迟到消费点。
+     */
+    func decodeBlock(dest: Array<Int32>, start: Int64, capacity: Int64): BlockFill {
+        var i = start
+        let end = start + capacity
+        try {
+            match (this.codec) {
+                case Utf8Strict | Utf8Replace =>
+                    let strict = match (this.codec) {
+                        case Utf8Strict => true
+                        case _ => false
+                    }
+                    while (i < end) {
+                        if (!this.reader.ensure(1)) {
+                            break
+                        }
+                        let n = this.reader.copyAsciiRun(dest, i, end - i)
+                        if (n > 0) {
+                            i += n
+                            continue
+                        }
+                        let cp = this.nextUtf8(strict)
+                        if (cp < 0) {
+                            break
+                        }
+                        dest[i] = Int32(cp)
+                        i++
+                    }
+                case _ =>
+                    while (i < end) {
+                        let cp = this.next()
+                        if (cp < 0) {
+                            break
+                        }
+                        dest[i] = Int32(cp)
+                        i++
+                    }
+            }
+        } catch (e: Exception) {
+            return BlockFill(i - start, error: Some(e))
+        }
+        BlockFill(i - start)
     }
 
     private func nextUtf8(strict: Bool): Int64 {
@@ -471,6 +707,29 @@ internal class ByteReader {
 
     func peekByte(offset: Int64): Byte {
         this.buf[this.pos + offset]
+    }
+
+    /**
+     * 把当前连续的 ASCII 字节一次搬进 `dest`，返回搬运数量。
+     *
+     * 走私有字段而不是 `consume()`，避免每字节一次函数调用；非 ASCII 字节留给
+     * `ByteDecoder.nextUtf8` 的多字节路径。
+     */
+    func copyAsciiRun(dest: Array<Int32>, dstStart: Int64, limit: Int64): Int64 {
+        var written: Int64 = 0
+        var index = dstStart
+        while (this.pos < this.len && written < limit && UInt32(this.buf[this.pos]) < 0x80) {
+            dest[index] = Int32(this.buf[this.pos])
+            this.pos++
+            this.consumed++
+            written++
+            index++
+        }
+        if (this.pos == this.len) {
+            this.pos = 0
+            this.len = 0
+        }
+        written
     }
 
     func consume(count: Int64): Unit {

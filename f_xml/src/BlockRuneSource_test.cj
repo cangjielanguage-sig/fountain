@@ -52,6 +52,17 @@ public class BlockRuneSource_test {
         @Assert(drainRunes(source) == doc)
     }
 
+    /** 代理对跨块边界仍拼成一个码点（走块读入口路径）。 */
+    @TestCase
+    public func surrogatePairAcrossBlocks(): Unit {
+        let doc = "a😀b"
+        for (size in [4, 6, 8]) {
+            let source = BlockRuneSource(MemoryInputStream(utf16leBytes(doc)), codec: ByteCodec.Utf16Le, bufSize: size)
+            let text = drainWindow(LineWindow(source))
+            assertTrue(text == doc, "bufSize=${size} 实际为「${text}」")
+        }
+    }
+
     /** UTF-16BE 基本路径。 */
     @TestCase
     public func utf16beBasic(): Unit {

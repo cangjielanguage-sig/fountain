@@ -96,13 +96,19 @@ XmlWriter(output, options: XmlWriterOptions(indent: Some("  "))).write(element)
 
 ## Status
 
-M1 is implemented and covered by 298 unit tests. The xmlconf 20130923 figures are: 2062 runnable
+M1 is implemented and covered by **337** unit tests (34 of them added by
+`complete-f-xml-m1-followups`). The xmlconf 20130923 figures are: 2062 runnable
 cases (`unsupported` 524 = 313 `edition` + 95 external-entity + 59 XML 1.1 + 47 external-subset +
 10 namespace-name), 2038 assertions, and the measured result is 2038 passed / 0 failed (Gate A met).
 The five exclusion rules are `edition` / external-entity / XML 1.1 / external-subset /
 namespace-name; the three accompanying specification fixes (DTD declaration syntax well-formedness,
 `standalone` and single-entity replacement-text well-formedness, and `<!ATTLIST>` attribute-type
 mapping with attribute-value normalization) are in place. `known-issues` is empty.
-Performance (1 MB ≈ 1.5 s / 10 MB ≈ 15.8 s) is recorded but is **not a gate**; the character-layer
-rewrite is tracked separately as `optimize-f-xml-char-layer`. See
-[`doc/spec/implement-f-xml-m1/baseline.md`](doc/spec/implement-f-xml-m1/baseline.md).
+
+Performance (event mode, synthetic stream, `bufSize = 8192`, `-O2`, min of 3 runs):
+**1 MB ≈ 80 ms, 10 MB ≈ 1102 ms, 50 MB ≈ 5.4 s**; the same-run `-O0` baseline was
+16.3 s for 10 MB, a **93%** improvement. Peak RSS is 288 MB (calibrated `-O2` bound
+320 MB) and does not grow with document size. Gate P is met (10 MB < 7.2 s plus the
+RSS-delta bound), the `bufSize` sweep has converged, and the default stays at 8192. The character
+layer now decodes in blocks over a single active buffer — see
+[`doc/spec/complete-f-xml-m1-followups/`](doc/spec/complete-f-xml-m1-followups/).

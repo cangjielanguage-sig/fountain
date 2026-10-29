@@ -83,6 +83,15 @@ def sha256_of(path: str) -> str:
     return digest.hexdigest()
 
 
+def ensure_sha256(path: str, expected: str = SUITE_SHA256) -> int:
+    """校验压缩包摘要：0 = 通过，2 = 不匹配（打印期望值与实际值，不退出进程）。"""
+    actual = sha256_of(path)
+    if actual != expected:
+        sys.stderr.write("SHA-256 不匹配\n  期望: %s\n  实际: %s\n" % (expected, actual))
+        return 2
+    return 0
+
+
 def download(cache: str, force: bool) -> str:
     download_dir = os.path.join(cache, "download")
     os.makedirs(download_dir, exist_ok=True)
@@ -93,9 +102,7 @@ def download(cache: str, force: bool) -> str:
             data = response.read()
         with open(archive, "wb") as handle:
             handle.write(data)
-    actual = sha256_of(archive)
-    if actual != SUITE_SHA256:
-        sys.stderr.write("SHA-256 不匹配\n  期望: %s\n  实际: %s\n" % (SUITE_SHA256, actual))
+    if ensure_sha256(archive):
         sys.exit(2)
     return archive
 
@@ -415,9 +422,7 @@ def main() -> int:
         archive = download(cache, args.force)
 
     if os.path.exists(archive):
-        actual = sha256_of(archive)
-        if actual != SUITE_SHA256:
-            sys.stderr.write("SHA-256 不匹配\n  期望: %s\n  实际: %s\n" % (SUITE_SHA256, actual))
+        if ensure_sha256(archive):
             return 2
         suite = extract(cache, archive, args.force)
 

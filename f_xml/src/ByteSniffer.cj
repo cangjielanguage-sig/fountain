@@ -204,14 +204,20 @@ internal class ByteSniffer {
                 var i = offset
                 while (i + 1 < bytes.size) {
                     let unit = Int64(bytes[i]) | (Int64(bytes[i + 1]) << 8)
-                    out.add(Rune(unit))
+                    // 代理对的两个半区都不是合法标量值；声明扫描只需要 ASCII，跳过即可。
+                    if (XmlChars.isXmlChar(unit)) {
+                        out.add(Rune(unit))
+                    }
                     i += 2
                 }
             case DetectedEncoding.Utf16Be =>
                 var i = offset
                 while (i + 1 < bytes.size) {
                     let unit = (Int64(bytes[i]) << 8) | Int64(bytes[i + 1])
-                    out.add(Rune(unit))
+                    // 同 UTF-16LE：跳过代理区半区，避免 Rune() 对非标量值抛异常。
+                    if (XmlChars.isXmlChar(unit)) {
+                        out.add(Rune(unit))
+                    }
                     i += 2
                 }
             case DetectedEncoding.Utf32Le =>

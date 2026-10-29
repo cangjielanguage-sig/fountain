@@ -36,6 +36,11 @@ internal class XmlChars {
         r == r' ' || r == r'\t' || r == r'\n' || r == r'\r'
     }
 
+    /** 码点重载：词法器热路径直接判定，不构造 `Rune`。 */
+    static func isWhitespace(cp: Int64): Bool {
+        cp == 0x20 || cp == 0x09 || cp == 0x0A || cp == 0x0D
+    }
+
     /** `NameStartChar`（含 `:`，命名空间层再单独限制）。 */
     static func isNameStartChar(cp: Int64): Bool {
         cp == 0x3A || cp == 0x5F ||
@@ -68,9 +73,17 @@ internal class XmlChars {
         r >= r'0' && r <= r'9'
     }
 
+    static func isDigit(cp: Int64): Bool {
+        cp >= 0x30 && cp <= 0x39
+    }
+
     /** 十六进制数字（`&#xHHH;`）。 */
     static func isHexDigit(r: Rune): Bool {
         (r >= r'0' && r <= r'9') || (r >= r'a' && r <= r'f') || (r >= r'A' && r <= r'F')
+    }
+
+    static func isHexDigit(cp: Int64): Bool {
+        (cp >= 0x30 && cp <= 0x39) || (cp >= 0x61 && cp <= 0x66) || (cp >= 0x41 && cp <= 0x46)
     }
 
     static func hexValue(r: Rune): Int64 {
@@ -80,6 +93,16 @@ internal class XmlChars {
             Int64(r.position() - r'a'.position()) + 10
         } else {
             Int64(r.position() - r'A'.position()) + 10
+        }
+    }
+
+    static func hexValue(cp: Int64): Int64 {
+        if (cp >= 0x30 && cp <= 0x39) {
+            cp - 0x30
+        } else if (cp >= 0x61 && cp <= 0x66) {
+            cp - 0x61 + 10
+        } else {
+            cp - 0x41 + 10
         }
     }
 
@@ -105,6 +128,24 @@ internal func runesOf(text: String): Array<Rune> {
     let out = ArrayList<Rune>()
     for (r in text.runes()) {
         out.add(r)
+    }
+    out.toArray()
+}
+
+/** 把字符串拆成码点数组（固定串匹配常量与内存帧用）。 */
+internal func cpsOf(text: String): Array<Int64> {
+    let out = ArrayList<Int64>()
+    for (r in text.runes()) {
+        out.add(r.position())
+    }
+    out.toArray()
+}
+
+/** 把字符串拆成 `Int32` 码点块（实体内存帧用）。 */
+internal func cps32Of(text: String): Array<Int32> {
+    let out = ArrayList<Int32>()
+    for (r in text.runes()) {
+        out.add(Int32(r.position()))
     }
     out.toArray()
 }
