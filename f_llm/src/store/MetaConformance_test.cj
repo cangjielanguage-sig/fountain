@@ -21,6 +21,7 @@ import std.unittest.*
 import std.unittest.testmacro.*
 
 import fountain::f_orm.*
+import mysql_driver.registerMysqlDriver
 import postgres_driver.registerPostgresDriver
 
 /**
@@ -79,8 +80,73 @@ public class MetaConformanceTest {
 
     @TestCase
     func testMySqlConformance(): Unit {
-        // MySQL 9.2+ 尚未安装（P6）；显式跳过并说明原因
-        println("SKIP MetaConformanceTest(MySQL): 本机未安装 MySQL 9.2+")
+        match(mysqlMeta()){
+            case Some(meta) => assertMeta(meta)
+            case None => ()
+        }
+    }
+
+    private func mysqlMeta(): ?MySqlMetaStore {
+        try{
+            registerMysqlDriver()
+            let driver = DriverManager.getDriver('mysql').getOrThrow()
+            ORM.register(driver, 'mysql://fllm_test:fllm_test@127.0.0.1:3306/fllm_test', default: true)
+            let executor = ORM.executor('mysql')
+            // 每次跑重建，避免上一轮数据把候选数抬高
+            for(table in ['llm_character', 'skills', 'llm_prompt', 'llm_conf']){
+                executor.setSql('DROP TABLE IF EXISTS ${table}').update
+            }
+            executor.setSql('''
+                CREATE TABLE IF NOT EXISTS llm_character (
+                  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                  user_id BIGINT NOT NULL,
+                  character_key VARCHAR(32) NOT NULL DEFAULT 'default',
+                  prompts TEXT,
+                  update_time DATETIME NOT NULL DEFAULT (UTC_TIMESTAMP()),
+                  UNIQUE KEY uk_character_user (user_id)
+                )
+            ''').update
+            executor.setSql('''
+                CREATE TABLE IF NOT EXISTS skills (
+                  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                  agent_id BIGINT NOT NULL DEFAULT 0,
+                  accepted_event VARCHAR(64) NOT NULL DEFAULT '',
+                  returned_event VARCHAR(64) NOT NULL DEFAULT '',
+                  title VARCHAR(256) NOT NULL DEFAULT '',
+                  metadata TEXT, details TEXT, functions TEXT,
+                  version INT NOT NULL DEFAULT 1,
+                  skill_type VARCHAR(32) NOT NULL DEFAULT ''
+                )
+            ''').update
+            executor.setSql('''
+                CREATE TABLE IF NOT EXISTS llm_prompt (
+                  name VARCHAR(128) NOT NULL,
+                  version INT NOT NULL,
+                  content LONGTEXT NOT NULL,
+                  update_time DATETIME NOT NULL DEFAULT (UTC_TIMESTAMP()),
+                  PRIMARY KEY (name, version)
+                )
+            ''').update
+            executor.setSql('''
+                CREATE TABLE IF NOT EXISTS llm_conf (
+                  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                  provider VARCHAR(64) NOT NULL DEFAULT '',
+                  llm_name VARCHAR(128) NOT NULL DEFAULT '',
+                  actual_llm_name VARCHAR(128) NOT NULL DEFAULT '',
+                  llm_url VARCHAR(512) NOT NULL DEFAULT '',
+                  auth VARCHAR(512) NOT NULL DEFAULT '',
+                  temperature DOUBLE NOT NULL DEFAULT -1,
+                  always_thinking TINYINT(1) NOT NULL DEFAULT 0,
+                  conf TEXT,
+                  enabled TINYINT(1) NOT NULL DEFAULT 1,
+                  weight BIGINT NOT NULL DEFAULT 1
+                )
+            ''').update
+            Some(MySqlMetaStore(executor))
+        }catch(e: Exception){
+            println("SKIP MetaConformanceTest(MySQL): ${e.message}")
+            None
+        }
     }
 
     private func postgresMeta(): ?PostgresMetaStore {
