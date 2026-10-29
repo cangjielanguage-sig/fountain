@@ -29,7 +29,7 @@
 - [x] 3.3 写 `LLMConfStore` 用例：`enabled=false` 与 `weight<=0` 不进候选、按 `llmName` 查询、`setHolder` 兼容；实现 PG 与 f_store 后转绿
 - [x] 3.4 写 `SkillStore` / `PromptStore` 契约用例：技能 `version` 默认 1、提示词按 `(name, version)` 存取、未知记录返回空值；实现 f_store 后转绿
 - [ ] 3.5 把 1.2 的 conformance 用例接 PG / f_store 跑绿
-- [ ] 3.6 在 `f_llm/README.md` / `README_en.md` 补「仅 f_store 运行」示例（配置 + 启动 + 冒烟命令），核对可照抄执行
+- [x] 3.6 在 `f_llm/README.md` / `README_en.md` 补「仅 f_store 运行」示例（配置 + 启动 + 冒烟命令），核对可照抄执行
 
 ## 4. MySQL：安装、实现与验证
 

@@ -1516,6 +1516,24 @@ Config.set<String>([
 
 Legacy keys `llm_memoryBackend` / `llm_characterBackend` / `llm_memoryPath` are still detected, but only emit a `warn` and take no effect.
 
+### Running without any database (f_store metadata)
+
+Switch the metadata family to `f_store`; characters, skills, prompts and model configs are stored under a local directory:
+
+```cj
+Config.set<String>([
+    ('llm_metaStore', 'f_store'),
+    ('llm_metaStorePath', './data/f_llm-meta')
+])
+```
+
+Notes:
+
+- The directory is created on first start and must be writable;
+- One character per user (overwrite), skills carry a `version`, prompts are stored per `(name, version)` with a `latest` pointer;
+- Writes go body-first, index-second; startup scans bodies and rebuilds missing indexes (`f_store` has no transactions);
+- The content family still requires `postgres` / `mysql` / `f_hydra` / `fhydra` — memories and knowledge need vector search, which `f_store` does not provide.
+
 ## Configuration items
 
 All configuration items are environment variables

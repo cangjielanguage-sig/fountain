@@ -1495,6 +1495,28 @@ Config.set<String>([
 
 旧键 `llm_memoryBackend` / `llm_characterBackend` / `llm_memoryPath` 仍会被识别，但只打 `warn`、不生效。
 
+### 完全不用数据库（f_store 元数据）
+
+只需把元数据族切到 `f_store`，人格/技能/提示词/模型配置都会落到本地目录：
+
+```cj
+Config.set<String>([
+    ('llm_metaStore', 'f_store'),
+    ('llm_metaStorePath', './data/f_llm-meta')
+])
+```
+
+```text
+./data/f_llm-meta/                 # f_store 数据目录（自动创建）
+```
+
+约束与语义：
+
+- 首次启动自动建目录；目录必须可写，否则启动失败；
+- 人格一人一条（覆盖写），技能带 `version`，提示词按 `(name, version)` 存并保留 `latest`；
+- 写入顺序是「先主体、后索引」，启动时扫描主体补建缺失索引（`f_store` 没有事务）；
+- 内容族仍需在 `postgres` / `mysql` / `f_hydra` / `fhydra` 中选一个——记忆与知识要向量检索，`f_store` 不承担这部分。
+
 ## 配置项
 
 所有配置项都是环境变量
