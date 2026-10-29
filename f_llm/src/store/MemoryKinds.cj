@@ -109,6 +109,25 @@ public class MemoryKinds {
         }
     }
 
+    /**
+     * 固定权重（§5.4）：人工记忆优先于自动记忆，不提供请求级/集合级覆盖。
+     */
+    public static func weightOf(kind: String): Float64 {
+        if(kind == FACT || kind == PREFERENCE){
+            1.0
+        }else if(kind == NOTE){
+            0.9
+        }else if(kind == DOC || kind == KNOWLEDGE){
+            0.8
+        }else if(kind == TASK){
+            0.6
+        }else if(kind == SESSION){
+            0.3
+        }else{
+            0.8
+        }
+    }
+
     public static func validate(userId: Int64, kind: String): Bool {
         if(contains(predefined(), kind)){
             return true

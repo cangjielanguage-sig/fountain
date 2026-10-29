@@ -15,6 +15,8 @@ limitations under the License.
 */
 package fountain::f_llm.store
 
+import std.collection.ArrayList
+
 /**
  * 向量化入口：生产环境包 BGE-M3，测试注入假实现。
  *
@@ -31,4 +33,10 @@ public interface Embedder {
  */
 public interface MemoryRepository {
     func upsert(write: MemoryWrite, titleVector: Array<Float64>, contentVector: Array<Float64>): Int64
+
+    /**
+     * dense 召回：只负责「按相似度取 limit 条」，不乘 kind 权重、不排序截断。
+     * 权重与 topK 在 store 层做，保证不同后端打分口径一致。
+     */
+    func searchDense(query: MemoryQuery, vector: Array<Float64>, limit: Int64): ArrayList<MemoryHit>
 }
