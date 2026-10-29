@@ -127,4 +127,12 @@ public class InvalidByteMode_test {
         let runes = runesOf(text)
         @Assert(runes[runes.size - 1] == r'!')
     }
+
+    /** Replace 产出的 U+FFFD 作为 1 个字符参与长度。 */
+    @TestCase
+    public func replacementCountsAsOneRune(): Unit {
+        let text = drainRunes(replaceSource([0x61, 0xFF, 0x62]))
+        assertTrue(text.toRuneArray().size == 3, "应为 3 个字符，实际 ${text.toRuneArray().size}")
+        assertTrue(countReplacement(text) == 1, "应含 1 个 U+FFFD")
+    }
 }

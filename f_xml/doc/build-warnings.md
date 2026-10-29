@@ -3,11 +3,10 @@
 `cjpm build` 在本模块内产生以下 WARNING（stdlib / `f_base` 自身的警告不计）。每条都给出原因，
 不允许出现「未说明的 WARNING」。
 
-## 1. 仅被测试使用的观测器（6 条）
+## 1. 仅被测试使用的观测器（5 条）
 
 | 位置 | 警告 | 原因 |
 |---|---|---|
-| `XmlPullParser.cj` `warnings()` | unused function | `standalone` 语义的告警列表，只有 `DoctypeParser_test` 断言它；release 构建无调用方。**保留**是为了让「跳过实体」这件事可被观测，删掉就只能靠猜。 |
 | `XmlPullParser.cj` `totalExpanded()` | unused function | 实体展开总量的观测点，`EntitySecurity_test` 用它断言「Billion Laughs 在 1 MB 内被中断」。 |
 | `ExpandSink.cj` `spillPath()` | unused function | `Spill_test` 用它断言「溢出文件用完即删」。 |
 | `ExpandSink.cj` `retainedBytes()` | unused function | `Spill_test` 用它断言「内存侧保留字节不随展开量增长」。 |

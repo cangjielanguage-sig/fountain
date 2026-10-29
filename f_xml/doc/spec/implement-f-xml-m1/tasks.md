@@ -30,7 +30,7 @@
 
 ## 1. P-1 字符层
 
-- [x] 1.1 **先写测试** `src/PrefixStream_test.cj`：前缀 + 剩余连续读出；EOF 返回 `-1`；
+- [x] 1.1 **先写测试** `src/PrefixStream_test.cj`：前缀 + 剩余连续读出；EOF 返回 `0`；
   `close()` 关闭底层（用计数流断言）。→ 实现 `src/PrefixStream.cj`。
 - [x] 1.2 **先写测试** `src/ByteSniffer_test.cj`：UTF-8 BOM / UTF-16LE BOM / UTF-16BE BOM /
   UTF-32LE BOM 优先于 UTF-16LE / 无 BOM 的 `3C 00 3F 00` 与 `00 3C 00 3F` / 声明 `encoding`
@@ -144,8 +144,8 @@
 - [x] 6.3 写 `src/XmlconfHarness_test.cj` + `src/TestDataRoot.cj`：缓存解析顺序
   `F_XML_XMLCONF_CACHE` → `<module>/.cache/xmlconf/`；缺失时用例 **fail**（禁止 skip），
   消息含 `python3 f_xml/tools/xmlconf_gen.py`。按 `TYPE` 映射判定（`invalid` 期望成功、
-  `error` 不判定）；输出 `pass / fail / unsupported` 三数字；从缓存内 `unsupported.json`
-  生成并更新 `f_xml/doc/xmlconf-unsupported.md`（md 入库，json 不入库）。
+  `error` 不判定）；输出 `pass / fail / unsupported` 三数字；`f_xml/doc/xmlconf-unsupported.md` 由
+  `tools/xmlconf_gen.py` 生成（md 入库，json 与套件不入库），harness 只读缓存并计数。
   验证 `git check-ignore -v f_xml/.cache/xmlconf/suite` 命中，且 `git ls-files` 不出现套件路径。
 - [x] 6.4 跑一次基线（先 `python3 f_xml/tools/xmlconf_gen.py`），把 `fail` 清单入档
   （P2.5 允许失败），并在 `f_xml/doc/spec/implement-f-xml-m1/` 下新增 `baseline.md` 记录首个
@@ -313,8 +313,8 @@
     条件段报错）、G（`xmlns=""` / 嵌套重定义 / 属性不受默认命名空间 / 未声明前缀 /
     `xmlns` 作前缀）、H（UTF-16 双字节序 / BOM 冲突 / 4 字节 UTF-8）、I（`xml:space="default"`）
     均已有用例。
-  → 补齐两处缺口：`NameSyntax_test.nonAsciiNames`（非 ASCII 名字）与
-    `NameSyntax_test.nameMayNotStartWithDigit`（数字开头报错）；§12.2 的 F / H 两行口径同步为
+  → 补齐两处缺口：`ParserError_test.nonAsciiNames`（非 ASCII 名字）与
+    `ParserError_test.nameMayNotStartWithDigit`（数字开头报错）；§12.2 的 F / H 两行口径同步为
     「条件段必须报错」「BOM 冲突必须报错」。
 - [x] 10.6 组合矩阵与五格式样本用例补齐。
 
