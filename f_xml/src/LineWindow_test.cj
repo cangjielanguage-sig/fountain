@@ -17,6 +17,7 @@ package fountain::f_xml
 
 import std.unittest.*
 import std.unittest.testmacro.*
+import std.collection.ArrayList
 
 @Test
 public class LineWindow_test {
@@ -77,5 +78,121 @@ public class LineWindow_test {
         }
         let pos = w.position()
         assertTrue(pos.line == 2 && pos.column == 1, "实际为第 ${pos.line} 行第 ${pos.column} 列")
+    }
+
+    /** `\r` 落在块尾、`\n` 落在下一块时只归一一次（前缀 62..66 覆盖 64 码点块的两侧）。 */
+    @TestCase
+    public func crlfAcrossBlockBoundary(): Unit {
+        for (size in [4, 8, 16, 64]) {
+            for (prefix in 62..67) {
+                let text = repeatText("a", prefix) + "\r\nb"
+                let w = LineWindow(Utf8RuneSource(MemoryInputStream(text), bufSize: size))
+                let expected = repeatText("a", prefix) + "\nb"
+                let actual = drainWindow(w)
+                assertTrue(actual == expected, "bufSize=${size} prefix=${prefix} 实际为「${actual}」")
+            }
+        }
+    }
+
+    /** `\r\r\n` 仍产出两个换行；跨块同样成立。 */
+    @TestCase
+    public func consecutiveCrProducesTwoNewlines(): Unit {
+        for (size in [4, 8, 16, 64]) {
+            for (prefix in [63, 64, 65]) {
+                let text = repeatText("a", prefix) + "\r\r\nb"
+                let w = LineWindow(Utf8RuneSource(MemoryInputStream(text), bufSize: size))
+                let expected = repeatText("a", prefix) + "\n\nb"
+                let actual = drainWindow(w)
+                assertTrue(actual == expected, "bufSize=${size} prefix=${prefix} 实际为「${actual}」")
+            }
+        }
+    }
+
+    /** 位置只在消费时推进：填充（`peek` 跨块）不改变行列号。 */
+    @TestCase
+    public func positionMovesOnlyOnAdvance(): Unit {
+        let w = window(repeatText("a", 64) + "\nb")
+        @Assert(w.peek(4).isSome())
+        let before = w.position()
+        assertTrue(before.line == 1 && before.column == 1, "填充后位置不该变化")
+        for (_ in 0..64) {
+            w.advance()
+        }
+        @Assert(w.peek(1).isSome())
+        let after = w.position()
+        assertTrue(after.line == 1 && after.column == 65, "实际为第 ${after.line} 行第 ${after.column} 列")
+        w.advance()
+        let next = w.position()
+        assertTrue(next.line == 2 && next.column == 1, "实际为第 ${next.line} 行第 ${next.column} 列")
+    }
+
+    /** 自定义 `RuneSource`（不继承 `BufferedRuneSource`）走逐字符回退路径，结果一致。 */
+    @TestCase
+    public func customSourceFallsBack(): Unit {
+        let text = repeatText("a", 70) + "\r\n<b>x</b>"
+        let expected = drainWindow(LineWindow(Utf8RuneSource(MemoryInputStream(text), bufSize: 4)))
+        let actual = drainWindow(LineWindow(PlainRuneSource(text)))
+        assertTrue(actual == expected, "回退路径结果不一致：「${actual}」vs「${expected}」")
+    }
+}
+
+/** 只实现 `RuneSource` 五个方法、不继承 `BufferedRuneSource` 的最小源。 */
+internal class PlainRuneSource <: RuneSource {
+    private let cps: Array<Int64>
+    private var pos: Int64 = 0
+    private var line: Int64 = 1
+    private var column: Int64 = 1
+
+    init(text: String) {
+        let out = ArrayList<Int64>()
+        for (r in text.runes()) {
+            out.add(r.position())
+        }
+        this.cps = out.toArray()
+    }
+
+    public func peekFast(offset: Int64): Int64 {
+        let index = this.pos + offset
+        if (offset < 0 || index >= this.cps.size) {
+            return -1
+        }
+        this.cps[index]
+    }
+
+    public func advanceFast(): Int64 {
+        if (this.pos >= this.cps.size) {
+            return -1
+        }
+        let cp = this.cps[this.pos]
+        this.pos++
+        if (cp == 0x0A) {
+            this.line++
+            this.column = 1
+        } else {
+            this.column++
+        }
+        cp
+    }
+
+    public func peek(offset: Int64): ?Rune {
+        let cp = this.peekFast(offset)
+        if (cp < 0) {
+            None
+        } else {
+            Some(Rune(cp))
+        }
+    }
+
+    public func advance(): ?Rune {
+        let cp = this.advanceFast()
+        if (cp < 0) {
+            None
+        } else {
+            Some(Rune(cp))
+        }
+    }
+
+    public func position(): SourcePosition {
+        SourcePosition(this.line, this.column)
     }
 }

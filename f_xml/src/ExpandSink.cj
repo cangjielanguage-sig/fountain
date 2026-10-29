@@ -49,11 +49,21 @@ internal class SpillDir {
 
     /** 按序尝试创建溢出文件；全部失败抛含 `spillDir` 的异常。 */
     static func createFile(limits: EntityLimits): File {
-        let fallback = fallbackDirectory().toString()
-        for (candidate in candidates(limits)) {
+        createFileFrom(candidates(limits), fallbackDirectory())
+    }
+
+    /**
+     * 可注入候选与回落点的创建入口（只为测试四级失败分支而存在）。
+     *
+     * 语义与原来的单函数版本逐条等价：候选不存在时只有回落点会被创建，其余直接跳过；
+     * 任何一次创建异常都 `continue` 试下一个；全失败抛含 `spillDir` 的 `XmlException`。
+     */
+    static func createFileFrom(candidates: ArrayList<Path>, fallback: Path): File {
+        let fallbackText = fallback.toString()
+        for (candidate in candidates) {
             try {
                 if (!exists(candidate)) {
-                    if (candidate.toString() != fallback) {
+                    if (candidate.toString() != fallbackText) {
                         continue
                     }
                     Directory.create(candidate, recursive: true)
@@ -86,19 +96,23 @@ internal class ExpandSink {
     private var filePath: ?Path = None
     private var bytes: Int64 = 0
     private var forcedSpill: Bool
+    /** 测试注入：四级失败分支无法在真实文件系统上稳定复现，用它替换 `SpillDir.createFile`。 */
+    private let spillHook: ?() -> File
 
     init(
         limits: EntityLimits,
         counter: EntityCounter,
         attribute!: Bool = false,
         attrName!: ?String = None,
-        forcedSpill!: Bool = false
+        forcedSpill!: Bool = false,
+        spillHook!: ?() -> File = None
     ) {
         this.limits = limits
         this.counter = counter
         this.attribute = attribute
         this.attrName = attrName
         this.forcedSpill = forcedSpill
+        this.spillHook = spillHook
     }
 
     /** 溢出文件路径（测试用）。 */
@@ -203,7 +217,10 @@ internal class ExpandSink {
         if (this.isSpilled()) {
             return
         }
-        let file = SpillDir.createFile(this.limits)
+        let file = match (this.spillHook) {
+            case Some(hook) => hook()
+            case None => SpillDir.createFile(this.limits)
+        }
         this.filePath = Some(file.info.path)
         // File.createTemp 已经创建了文件句柄；先写内存里已有的内容。
         if (this.memory.size > 0) {

@@ -113,6 +113,11 @@ public abstract class BufferedRuneSource <: RuneSource {
         this.capacity
     }
 
+    /** 自有块是否已分配：`LineWindow` 驱动的路径必须保持 `false`（不分配第二份块）。 */
+    internal func hasOwnBlock(): Bool {
+        this.ownBlock.isSome()
+    }
+
     /**
      * 把至多 `capacity` 个码点写进 `dest[start..]`。
      *

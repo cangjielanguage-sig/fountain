@@ -274,6 +274,14 @@ var codepointsYielded: Int64 = 0 // 累计码点数
 `XmlChars` 补 `Int64` 重载：`isWhitespace(cp: Int64)`、`isDigit(cp: Int64)`、
 `isHexDigit(cp: Int64)`、`hexValue(cp: Int64)`。原 `Rune` 重载保留（写方向与 DTD 仍用）。
 
+**静态检查白名单（task 3.6，2026-10-29 实测）**：`grep -n 'peek(\|advance(\|\.position()' src/Lexer.cj`
+只剩下列三类，均不在扫描循环内：
+
+1. `Lexer.peek` / `Lexer.advance` 的公开 `Option` 包装定义（第 200 / 209 行）；
+2. `this.position()` —— 取当前行列号用于错误消息与 token 位置，不是 `Rune.position()`；
+3. `isEncName` / `isPubidLiteral` 里对 `String.runes()` 的 `r.position()`（第 1123 / 1156 行）——
+   这两个是声明合法性校验，输入是已构造好的 `String`，不在逐字符扫描路径上。
+
 ### 4.3 固定串匹配不再每次分配
 
 `startsWith(text)` 现在每次 `runesOf(text)` 都新建 `ArrayList`，而 `startsWith("?>")`

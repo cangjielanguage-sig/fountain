@@ -128,6 +128,74 @@ public class InvalidByteMode_test {
         @Assert(runes[runes.size - 1] == r'!')
     }
 
+    /** 块解码路径（`LineWindow` 驱动）在 4 / 8 / 16 下与整块读取逐字符一致。 */
+    @TestCase
+    public func blockDecodeMatchesWholeBuffer(): Unit {
+        let text = "<a>中文😀abc</a>"
+        let bytes = text.toArray()
+        let whole = drainWindow(LineWindow(Utf8RuneSource(MemoryInputStream(bytes), bufSize: 8192)))
+        assertTrue(whole == text, "整块读取应为「${text}」，实际「${whole}」")
+        for (size in [4, 8, 16]) {
+            let split = drainWindow(
+                LineWindow(Utf8RuneSource(MemoryInputStream(bytes), mode: InvalidByteMode.Replace, bufSize: size))
+            )
+            assertTrue(split == whole, "bufSize=${size} 时不一致：「${split}」vs「${whole}」")
+        }
+    }
+
+    /** 解码错误延迟到消费点：坏字节之前的事件先送达，位置指向坏字符自身。 */
+    @TestCase
+    public func decodeErrorIsDeferredToConsumePoint(): Unit {
+        var bytes = ArrayList<Byte>()
+        for (b in "<root><a/><b/><c/>".toArray()) {
+            bytes.add(b)
+        }
+        bytes.add(0xFF)
+        for (b in "</root>".toArray()) {
+            bytes.add(b)
+        }
+        let parser = XmlPullParser(MemoryInputStream(bytes.toArray()))
+        var started: Int64 = 0
+        var ended: Int64 = 0
+        var failure: ?XmlException = None
+        try {
+            while (true) {
+                match (parser.nextEvent()) {
+                    case Some(event) =>
+                        match (event) {
+                            case XmlEvent.StartElement(_, _, _) => started++
+                            case XmlEvent.EndElement(_) => ended++
+                            case _ => ()
+                        }
+                    case None => break
+                }
+            }
+        } catch (e: XmlException) {
+            failure = Some(e)
+        }
+        assertTrue(failure.isSome(), "应在消费坏字节时抛出 XmlException")
+        // 坏字节之前：root / a / b / c 四个开始标签与 a / b / c 三个结束标签都先送达。
+        assertTrue(started == 4, "坏字节前应送达 4 个开始标签，实际 ${started}")
+        assertTrue(ended == 3, "坏字节前应送达 3 个结束标签，实际 ${ended}")
+        let error = failure.getOrThrow()
+        assertTrue(error.message.contains("字节偏移"), "消息应含字节偏移：「${error.message}」")
+        assertTrue(error.line == 1 && error.column == 19, "位置应为第 1 行第 19 列，实际第 ${error.line} 行第 ${error.column} 列")
+    }
+
+    /** `peekFast` 命中错误点同样抛错，不返回 `-1` 伪装 EOF。 */
+    @TestCase
+    public func peekAtBadByteRaises(): Unit {
+        let bytes: Array<Byte> = [0x61, 0x62, 0x63, 0xFF]
+        let source = Utf8RuneSource(MemoryInputStream(bytes), mode: InvalidByteMode.Strict)
+        for (_ in 0..3) {
+            @Assert(source.advanceFast() >= 0)
+        }
+        let fromPeek = assertXmlError({=> let _ = source.peekFast(0) }, "字节偏移")
+        @Assert(fromPeek.line == 1 && fromPeek.column == 4)
+        let fromAdvance = assertXmlError({=> let _ = source.advanceFast() }, "字节偏移")
+        @Assert(fromAdvance.line == 1 && fromAdvance.column == 4)
+    }
+
     /** Replace 产出的 U+FFFD 作为 1 个字符参与长度。 */
     @TestCase
     public func replacementCountsAsOneRune(): Unit {

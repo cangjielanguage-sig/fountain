@@ -19,6 +19,7 @@ import std.unittest.*
 import std.unittest.testmacro.*
 import std.fs.{exists, Path}
 import std.env
+import std.collection.ArrayList
 
 @Test
 public class Spill_test {
@@ -151,5 +152,65 @@ public class XmlException_test {
                 @Assert((kinds[i] == kinds[j]) == (i == j))
             }
         }
+    }
+
+    /** 溢出读回块的填充只走 `nextCp()`：不再逐字符包 `Option`。 */
+    @TestCase
+    public func sinkFeedFillsThroughCodePoints(): Unit {
+        let reader = CountingExpandReader("溢出内容 abc")
+        let feed = SinkFeed(reader, SourcePosition(1, 1))
+        let out = ArrayList<Int64>()
+        while (true) {
+            let cp = feed.advanceCp()
+            if (cp < 0) {
+                break
+            }
+            out.add(cp)
+        }
+        assertTrue(reader.nextCalls == 0, "填充不应调用 next()，实际调用 ${reader.nextCalls} 次")
+        assertTrue(reader.nextCpCalls >= out.size, "nextCp() 调用 ${reader.nextCpCalls} 次，码点 ${out.size} 个")
+        assertTrue(reader.closed, "读到 EOF 后应关闭读回器")
+    }
+}
+
+/** 统计 `next()` / `nextCp()` 调用的读回器。 */
+internal class CountingExpandReader <: ExpandReader {
+    private let cps: Array<Int32>
+    private var pos: Int64 = 0
+    var nextCalls: Int64 = 0
+    var nextCpCalls: Int64 = 0
+    var closed: Bool = false
+
+    init(text: String) {
+        let source = cpsOf(text)
+        let converted = Array<Int32>(source.size, repeat: 0)
+        for (i in 0..source.size) {
+            converted[i] = Int32(source[i])
+        }
+        this.cps = converted
+    }
+
+    public func nextCp(): Int64 {
+        this.nextCpCalls++
+        if (this.pos >= this.cps.size) {
+            return -1
+        }
+        let cp = Int64(this.cps[this.pos])
+        this.pos++
+        cp
+    }
+
+    public func next(): ?Rune {
+        this.nextCalls++
+        let cp = this.nextCp()
+        if (cp < 0) {
+            None
+        } else {
+            Some(Rune(cp))
+        }
+    }
+
+    public func close(): Unit {
+        this.closed = true
     }
 }

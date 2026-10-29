@@ -20,6 +20,82 @@ import std.unittest.testmacro.*
 
 @Test
 public class RuneSource_test {
+    /** 逐字符比较 `peek` / `peekFast`、`advance` / `advanceFast` 与行列号。 */
+    private func assertFastParity(text: String, bufSize: Int64): Unit {
+        let slow = Utf8RuneSource(MemoryInputStream(text), bufSize: bufSize)
+        let fast = Utf8RuneSource(MemoryInputStream(text), bufSize: bufSize)
+        while (true) {
+            for (offset in 0..5) {
+                let slowCp = match (slow.peek(offset)) {
+                    case Some(r) => r.position()
+                    case None => -1
+                }
+                assertTrue(
+                    slowCp == fast.peekFast(offset),
+                    "bufSize=${bufSize} offset=${offset} 前瞻不一致：${slowCp} vs ${fast.peekFast(offset)}"
+                )
+            }
+            let slowPos = slow.position()
+            let fastPos = fast.position()
+            assertTrue(
+                slowPos.line == fastPos.line && slowPos.column == fastPos.column,
+                "bufSize=${bufSize} 位置不一致：(${slowPos.line},${slowPos.column}) vs (${fastPos.line},${fastPos.column})"
+            )
+            match (slow.advance()) {
+                case Some(r) =>
+                    assertTrue(fast.advanceFast() == r.position(), "bufSize=${bufSize} advance 不一致")
+                case None =>
+                    assertTrue(fast.advanceFast() < 0, "bufSize=${bufSize} EOF 不一致")
+                    break
+            }
+        }
+    }
+
+    /** 两个版本在 4 / 8 / 16 / 8192 的块大小下逐字符一致。 */
+    @TestCase
+    public func fastAgreesWithOptionVersions(): Unit {
+        let text = "<a x=\"中文\">😀\r\n tail</a>"
+        for (size in [4, 8, 16, 8192]) {
+            this.assertFastParity(text, size)
+        }
+    }
+
+    /** 块边界上 `peekFast(0..4)` 仍然有效（前缀长度 62..66 覆盖 64 码点块的两侧）。 */
+    @TestCase
+    public func peekFastAcrossBlockBoundary(): Unit {
+        for (prefix in [62, 63, 64, 65, 66]) {
+            let text = repeatText("a", prefix) + "<bcd>"
+            let source = Utf8RuneSource(MemoryInputStream(text), bufSize: 8)
+            for (_ in 0..prefix) {
+                @Assert(source.advanceFast() == r'a'.position())
+            }
+            let expected = [r'<', r'b', r'c', r'd', r'>']
+            for (offset in 0..5) {
+                assertTrue(
+                    source.peekFast(offset) == expected[offset].position(),
+                    "prefix=${prefix} offset=${offset} 期望 ${expected[offset].position()}，实际 ${source.peekFast(offset)}"
+                )
+            }
+        }
+    }
+
+    /** 1 MB ASCII 文档确实按块解码：块填充次数与码点数成数量级差。 */
+    @TestCase
+    public func blocksAreFilledByBlock(): Unit {
+        let text = repeatText("a", 1024 * 1024)
+        let source = Utf8RuneSource(MemoryInputStream(text), bufSize: 8192)
+        var count: Int64 = 0
+        while (source.advanceFast() >= 0) {
+            count++
+        }
+        assertTrue(count == 1024 * 1024, "码点数应为 1048576，实际 ${count}")
+        assertTrue(source.codepointsYielded == count, "累计码点数应为 ${count}，实际 ${source.codepointsYielded}")
+        assertTrue(
+            source.blocksFilled <= count / 64 + 1,
+            "块填充 ${source.blocksFilled} 次，超过 ${count} / 64 + 1"
+        )
+    }
+
     /** `peek` 不移动游标；连续两次结果相同。 */
     @TestCase
     public func peekDoesNotAdvance(): Unit {
@@ -71,5 +147,16 @@ public class RuneSource_test {
     public func fourByteRune(): Unit {
         let source = Utf8RuneSource(MemoryInputStream("😀"))
         @Assert(drainRunes(source) == "😀")
+    }
+
+    /** 主路径不分配第二份块：`LineWindow` 驱动时源的自有块始终为空。 */
+    @TestCase
+    public func lineWindowDoesNotAllocateSecondBlock(): Unit {
+        let text = "<root><item id=\"1\">文本 😀</item></root>"
+        let source = Utf8RuneSource(MemoryInputStream(text))
+        let engine = ParserEngine(LineWindow(source), XmlParserOptions())
+        while (engine.nextEvent().isSome()) {}
+        @Assert(!source.hasOwnBlock())
+        @Assert(source.blocksFilled > 0)
     }
 }
