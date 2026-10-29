@@ -49,6 +49,13 @@ public class MetaConformanceTest {
         @Expect(meta.prompts.get('conf.prompt', 1).getOrThrow().content, 'v1')
         @Expect(meta.prompts.get('missing', 1).isNone(), true)
 
+        // 删除：技能先删索引再删主体；提示词删 latest 后回落到上一版
+        @Expect(meta.skills.remove(1), true)
+        @Expect(meta.skills.get(1).isNone(), true)
+        meta.prompts.put(PromptEntry('conf.prompt', 3, 'v3'))
+        @Expect(meta.prompts.remove('conf.prompt', 3), true)
+        @Expect(meta.prompts.latest('conf.prompt').getOrThrow().content, 'v2')
+
         // 配置：过滤 enabled / weight
         meta.confs.put(LLMConfView('p1', 'conf-llm', 'ok', 10, true))
         meta.confs.put(LLMConfView('p2', 'conf-llm', 'off', 10, false))

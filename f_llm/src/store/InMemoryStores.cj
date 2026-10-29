@@ -190,6 +190,15 @@ class InMemorySkillStore <: SkillStore {
         }
         result
     }
+
+    public func remove(id: Int64): Bool {
+        match(skills.get(id)){
+            case Some(_) =>
+                skills.remove(id)
+                true
+            case None => false
+        }
+    }
 }
 
 class InMemoryPromptStore <: PromptStore {
@@ -227,6 +236,19 @@ class InMemoryPromptStore <: PromptStore {
                     bucket.get(latestVersion)
                 }
             case None => None
+        }
+    }
+
+    public func remove(name: String, version: Int64): Bool {
+        match(versions.get(name)){
+            case Some(bucket) =>
+                match(bucket.get(version)){
+                    case Some(_) =>
+                        bucket.remove(version)
+                        true
+                    case None => false
+                }
+            case None => false
         }
     }
 }

@@ -245,6 +245,18 @@ class FStoreSkillStore <: SkillStore {
         skills
     }
 
+    public func remove(id: Int64): Bool {
+        match(store.get('${PREFIX}${id}'.toArray())){
+            case Some(bytes) =>
+                let title = parse(id, String.fromUtf8(bytes)).title
+                // 先删索引，再删主体
+                store.remove('${TITLE}${title}'.toArray())
+                store.remove('${PREFIX}${id}'.toArray())
+                true
+            case None => false
+        }
+    }
+
     private static func parse(id: Int64, text: String): Skill {
         let parts = text.split('|')
         if(parts.size < 4){
@@ -282,5 +294,31 @@ class FStorePromptStore <: PromptStore {
                 get(name, version)
             case None => None
         }
+    }
+
+    public func remove(name: String, version: Int64): Bool {
+        let key = '${PREFIX}${name}:${version}'
+        if(store.get(key.toArray()).isNone()){
+            return false
+        }
+        store.remove(key.toArray())
+        // 删除后重算 latest：扫剩余版本取最大值，没有则清掉指针
+        var maxVersion: Int64 = -1
+        for((item, _) in store.prefix('${PREFIX}${name}:'.toArray())){
+            let segments = String.fromUtf8(item).split(':')
+            if(segments.size < 5 || segments[4] == 'latest'){
+                continue
+            }
+            let candidate = Int64.parse(segments[4])
+            if(candidate > maxVersion){
+                maxVersion = candidate
+            }
+        }
+        if(maxVersion > 0){
+            store.add('${PREFIX}${name}:latest'.toArray(), '${maxVersion}'.toArray())
+        }else{
+            store.remove('${PREFIX}${name}:latest'.toArray())
+        }
+        true
     }
 }

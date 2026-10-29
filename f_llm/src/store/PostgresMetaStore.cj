@@ -217,6 +217,10 @@ class PostgresSkillStore <: SkillStore {
         }
         skills
     }
+
+    public func remove(id: Int64): Bool {
+        executor.setSql('DELETE FROM skills WHERE id = ?').add(id).delete > 0
+    }
 }
 
 class PostgresPromptStore <: PromptStore {
@@ -255,6 +259,13 @@ class PostgresPromptStore <: PromptStore {
         }else{
             Some(PromptEntry(name, intOf(row.get('version') ?? 1), textOf(row.get('content') ?? '')))
         }
+    }
+
+    public func remove(name: String, version: Int64): Bool {
+        executor.setSql('DELETE FROM llm_prompt WHERE name = ? AND version = ?')
+            .add(name)
+            .add(version)
+            .delete > 0
     }
 }
 private func textOf(value: Any): String {

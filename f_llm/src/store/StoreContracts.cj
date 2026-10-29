@@ -65,6 +65,8 @@ public interface SkillStore {
     func upsert(skill: Skill): Unit
     func get(id: Int64): ?Skill
     func list(): ArrayList<Skill>
+    /** 删除：先删 title 索引、再删主体（3.1） */
+    func remove(id: Int64): Bool
 }
 
 /** 提示词（按 name + version 存，保留最新指针） */
@@ -72,6 +74,8 @@ public interface PromptStore {
     func put(entry: PromptEntry): Unit
     func get(name: String, version: Int64): ?PromptEntry
     func latest(name: String): ?PromptEntry
+    /** 删除：若删的是 latest，先清 latest 指针、再删主体（3.1） */
+    func remove(name: String, version: Int64): Bool
 }
 
 /** 模型配置：1.2 先保留最小的名字查询，3.3 再补候选过滤 */
