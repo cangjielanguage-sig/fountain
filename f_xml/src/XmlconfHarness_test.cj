@@ -108,6 +108,8 @@ public class XmlconfHarness_test {
 
         let unsupported = countUnsupported(cache)
         println("xmlconf: pass=${passed} fail=${failed} unsupported=${unsupported} observed=${observed} known=${knownHits}")
+        assertTrue(passed + knownHits == 2038, "pass+known=${passed + knownHits}，期望 2038")
+        assertTrue(unsupported == 524, "unsupported=${unsupported}，期望 524")
 
         let reportPath = cache.join("failures.txt")
         let reportFile = File(reportPath.toString(), OpenMode.Write)

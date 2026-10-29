@@ -163,3 +163,16 @@ internal class LoggingHandler <: XmlEventHandler {
         XmlAction.Continue
     }
 }
+
+@Test
+public class XmlParserBufSize_test {
+    /** bufSize 不影响 DOM 结果。 */
+    @TestCase
+    public func bufSizeInvariantAtParserLevel(): Unit {
+        let doc = "<a x=\"1\"><b>中文</b><b>text</b></a>"
+        let d1 = XmlParser.parse(doc.toArray(), options: XmlParserOptions(bufSize: 512))
+        let d2 = XmlParser.parse(doc.toArray(), options: XmlParserOptions(bufSize: 65536))
+        assertTrue(d1.root?.text() == d2.root?.text(), "bufSize 不应改变文本")
+        assertTrue(d1.root?.childrenOf("b").size == 2, "应有 2 个 b")
+    }
+}

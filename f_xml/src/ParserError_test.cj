@@ -157,4 +157,13 @@ public class NameSyntax_test {
         assertAnyXmlError({=> parseText("<a 1x=\"v\"/>")})
         parseText("<a1/>")
     }
+
+    /** 单行超长文档也能定位。 */
+    @TestCase
+    public func positionOnLongSingleLine(): Unit {
+        let prefix = String(Array<Rune>(200000, repeat: r'a'))
+        let error = assertAnyXmlError({=> parseEventLog("<a>" + prefix + "<>")})
+        assertTrue(error.line == 1, "行号应为 1，实际 ${error.line}")
+        assertTrue(error.column > 200000, "列号应超过 200000，实际 ${error.column}")
+    }
 }

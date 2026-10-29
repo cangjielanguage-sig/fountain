@@ -56,7 +56,7 @@ xmlconf 压缩包、解压结果、`cases.json`、`unsupported.json` SHALL NOT �
 {"id":"o-p01pass2","type":"valid","uri":"oasis/p01pass2.xml","edition":null,"entities":"none","sections":"2.2 [1]"}
 ```
 
-生成脚本 `f_xml/tools/xmlconf_gen.py` SHALL 入库，SHALL 能从 31 个 catalog 重新产出
+生成脚本 `f_xml/tools/xmlconf_gen.py` SHALL 入库，SHALL 能从 31 个 catalog 文件（根 index 可达 22 个）重新产出
 `cases.json` 与 `unsupported.json`；判定口径（`edition` / `external-entity` / `xml-1.1` /
 `external-subset` / `namespace-name` 五条排除规则）SHALL 写在脚本注释里。
 
