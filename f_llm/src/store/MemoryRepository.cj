@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_llm.store
 
-import std.collection.ArrayList
+import std.collection.*
 
 /**
  * 向量化入口：生产环境包 BGE-M3，测试注入假实现。
@@ -26,6 +26,8 @@ public interface Embedder {
     func embed(text: String): Array<Float64>
     /** 多头向量：每个 token 一个 1024 维向量；本变更只用于重排 */
     func embedColbert(text: String): Array<Array<Float64>>
+    /** 稀疏向量：BGE-M3 token id → 权重；sparse 倒排的写入与召回都依赖它 */
+    func tokenize(text: String): HashMap<Int64, Float64>
 }
 
 /**

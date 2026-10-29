@@ -35,6 +35,18 @@ class FakeEmbedder <: Embedder {
     public func embedColbert(text: String): Array<Array<Float64>> {
         [[1.0f64]]
     }
+
+    public func tokenize(text: String): HashMap<Int64, Float64> {
+        let tokens = HashMap<Int64, Float64>()
+        var index: Int64 = 0
+        for(part in text.split(' ')){
+            if(!part.isEmpty()){
+                index++
+                tokens[index] = 1.0f64
+            }
+        }
+        tokens
+    }
 }
 
 class FakeMemoryRepository <: MemoryRepository {
@@ -234,6 +246,12 @@ public class PostgresMemoryStoreTest {
 
         let results = store.search(MemoryQuery(1, ['global', 'ws-1'], [], 'q', topK: 5))
         @Expect(results.size, 2)
+    }
+
+    @TestCase
+    func testTokenizeReturnsTokenWeights(): Unit {
+        let tokens = FakeEmbedder().tokenize('ab cd')
+        @Expect(tokens.size, 2)
     }
 
     @TestCase
