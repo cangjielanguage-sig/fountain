@@ -58,7 +58,7 @@
 > - `PrefixStream` 归入 `f_io`（1.4）；`bufSize` 可配（`XmlParserOptions`）——**其中 PrefixStream 的归属在 v0.5 已改回 f_xml**
 > - 引入 **M1 / M2 / M3 里程碑**：XPath 进 M2，XML 1.1 与 C14N 进 M3（13 章）
 > - xmlconf 可断言数从 1937 提升到 **2154**（内部实体用例 228 条进可跑集，12.4）；
->   v1.2 起再按第三条排除规则（XML 1.1）调整为 **2095**，见 12.4
+>   最终（五条排除规则）为 **可跑 2062 / 断言 2038**，实测全部通过，见 12.4
 >
 > v0.4 → v0.5：
 > - **输入只认 `std.io.InputStream`**：`Array<Byte>` / `String` / 文件 / TCP / UDP 都行，
@@ -89,7 +89,7 @@
 | 数据源 | 只认 `std.io.InputStream`：`Array<Byte>` / `String` / 文件 / TCP / UDP / 任意 ByteBuffer 实现；**不依赖 `f_io.ByteBuffer`** |
 | 失败策略 | 读 `InvalidByteMode`（Strict / Replace）、写 `InvalidCharMode`（Throw / Replace），默认都严格（2.7） |
 | 依赖 | `charset4cj`（包 `charset4cj.charset`，跟随最新发布版）+ 标准库，**无其他第三方依赖** |
-| 验收基准 | W3C xmlconf **20130923**：2586 条用例中可跑 **2119** 条，**断言 2095 条**（三条排除规则，详见 12.4） |
+| 验收基准 | W3C xmlconf **20130923**：2586 条用例中可跑 **2062** 条，**断言 2038 条**（五条排除规则，Gate A 实测全过，详见 12.4） |
 
 **两种用法并存，不是二选一——按文档规模选**：
 
@@ -158,17 +158,18 @@
 
 ```toml
 [dependencies]
-charset4cj = "1.0.6"
+"fountain::f_base" = {path = "../f_base"}
+"cangjie_tpc::charset4cj" = "1.0.5"
 ```
 
 | 项 | 实测值 | 说明 |
 |---|---|---|
-| 中心仓版本 | **v1.0.6** | 最新标签 |
-| 包名 | `charset4cj.charset` | v1.0.6 起改为标准 cjpm 布局（旧版是 `module.json` + `charset` 包名） |
-| 声明工具链 | `cjc-version = "1.2.0"` | 本地 1.3.0-alpha 应可编译，仍须实跑验证（见 13 章 P-1） |
-| 传输形态 | `output-type = "dynamic"` | 产出动态库，需要随应用一起分发 |
+| 中心仓版本 | **v1.0.5** | 与仓库其它 9 个模块统一（`f_base` / `f_zip` / `f_process` / `f_httpclient` …） |
+| 包名 | `charset4cj.charset` | 1.0.5 的导入路径**已经**是 `charset4cj.charset.*`；「1.0.6 才改布局」不成立 |
+| 公开再导出 | `Charset` / `Charsets` | `XmlWriterOptions.charset` 出现在公开 API，`f_xml` 需 `public import` 这两个类型，否则调用方无法命名它 |
+| 声明工具链 | `cjc-version = "1.2.0"` | 本地 1.3.0 实跑通过 |
 
-> **一个必须知道的历史包袱**：`charset4cj` 的 master 分支停留在 `cjc_version 0.39.8`，代码里用的是 0.x 时代的 `Char` 类型。**仓颉 1.x 没有 `Char`，只有 `Rune`**（实测 `cjc` 报 `undeclared type name 'Char'`）。v1.0.6 标签已全部改为 `Rune`，但**必须锁定标签/版本，不能取 master**。
+> **一个必须知道的历史包袱**：`charset4cj` 的 master 分支停留在 `cjc_version 0.39.8`，代码里用的是 0.x 时代的 `Char` 类型。**仓颉 1.x 没有 `Char`，只有 `Rune`**（实测 `cjc` 报 `undeclared type name 'Char'`）。1.0.5 标签已全部改为 `Rune`，但**必须锁定标签/版本，不能取 master**。
 
 ### 1.4 输入抽象：只认 `InputStream`
 
@@ -380,12 +381,18 @@ public struct SourcePosition {
 }
 ```
 
-两个实现，按编码选：
+三个实现，按编码选：
 
 | 实现 | 包装 | 适用 |
 |---|---|---|
-| `Utf8RuneSource` | `std.io.StringReader<T>` | UTF-8（默认路径） |
-| `CharsetRuneSource` | `charset4cj.TextReader` | 其他编码 |
+| `Utf8RuneSource` | `std.io.StringReader<T>`（`Strict`）/ 自研 `Utf8Strict` + `Utf8ReplaceDecoder`（`Replace`） | UTF-8（默认路径） |
+| `CharsetRuneSource` | `charset4cj.TextReader` | GBK 等单 / 多字节字符集 |
+| `BlockRuneSource` | 共享 `ByteDecoder` + UTF-16 / UTF-32 解码器 | UTF-16 / UTF-32 |
+
+`BlockRuneSource` 是 M1 新增的第三个实现：`readln()` 按**字节**找 `0x0A`，而 UTF-16 里
+`U+0A00` 的低字节就是 `0x0A`，会在字符中间断行；固定块解码还要处理「块尾半个字符」。
+块读取、块尾回退（≤ 3 字节）、坏字节分类、行列号推进统一收在 `RuneSource.cj` 的 `ByteDecoder`
+里，`Utf8` 的两个分支与 `BlockRuneSource` 共用，不各写一份。
 
 `peek(offset)` 的语义要写死：**只保证 `offset ≤ 4` 时有效**（XML 最长前瞻是 `<!--` / `<![CDATA[` 这类 4 字符前缀）。这样实现可以用固定大小的环形窗口，不必无限缓冲。
 
@@ -811,6 +818,7 @@ public enum XmlNode {
     | CDataNode(String)
     | CommentNode(String)
     | PiNode(String, String)                         // target, data
+    | EntityRefNode(String)                         // 显式实体引用（写侧输出 &name;）
 }
 
 public class XmlDocument {
@@ -819,9 +827,12 @@ public class XmlDocument {
     public prop doctype: ?DocTypeInfo
     public prop prolog: ArrayList<XmlNode>           // 前导区的注释/PI
     public prop epilog: ArrayList<XmlNode>           // 结束后的注释/PI
-    public let builder: DomBuilder
 }
 ```
+
+> **`builder` 不外露**（M1 落地时的差异）：`DomBuilder` 在文档建成后栈已空，公开字段只会诱导
+> 「继续往文档里追加节点」这种没有语义的操作，所以它是 `internal`。需要构造文档请用
+> `XmlElement` / `XmlEntityRef` 这些公开类型。
 
 ### 4.1 为什么用 `QName` 而不是裸字符串
 
@@ -906,8 +917,9 @@ XML 只有那五个预定义实体。`&nbsp;` 是 HTML 的，出现说明文档�
 | `<!ENTITY % name "值">` | ✅ | 参数实体，只能在 DTD 内部以 `%name;` 使用 |
 | `<!ENTITY name SYSTEM "uri">` | ❌ **不加载** | 声明可识别，**引用即报错**，绝不读文件 |
 | `<!ENTITY % name SYSTEM "uri">` | ❌ 同上 | |
-| `<!ELEMENT>` / `<!ATTLIST>` / `<!NOTATION>` | ✅ 只校验**声明语法** | 良构性校验：产生式合法才通过，非法声明报错；不做有效性校验（不比对内容模型与文档结构、不建「元素 → 属性类型」映射、不注入默认值）；必须能正确处理内部的 `>` 与引号 |
-| 条件段 `<![INCLUDE[ ]]>` / `<![IGNORE[ ]]>` | ✅ | 内部子集里常见，按标志位选择分支 |
+| `<!ELEMENT>` / `<!ATTLIST>` / `<!NOTATION>` | ✅ 只校验**声明语法** | 良构性校验：产生式合法才通过，非法声明报错；不做有效性校验（不比对内容模型与文档结构、不注入默认值）；必须能正确处理内部的 `>` 与引号 |
+| `<!ATTLIST>` 的属性类型 | ✅ 只服务**属性值规范化** | 建「元素字面名 → 属性名 → `AttType`」映射，非 `CDATA` 类型去首尾并折叠空白；不检查 `ID` 唯一性、不检查 `IDREF` 指向、不检查枚举取值、不注入默认值 / `#FIXED` 值 |
+| 条件段 `<![INCLUDE[ ]]>` / `<![IGNORE[ ]]>` | ❌ **报错** | `intSubset` 产生式里没有 `conditionalSect`，条件段只属于外部子集；外部子集永不加载，M1 不存在「按标志位选分支」的路径 |
 | 同一实体重复声明 | 第一个生效 | 规范如此，不报错 |
 
 #### 展开规则
@@ -923,10 +935,18 @@ XML 只有那五个预定义实体。`&nbsp;` 是 HTML 的，出现说明文档�
 **顺序细节（很容易做反）**：属性值处理是
 
 ```
-字符引用 + 实体引用展开  →  换行 / 制表归一成空格  →  （非 CDATA 类型时）去首尾空格
+字符引用 + 实体引用展开  →  空白字符归一（#x9/#xA/#xD → #x20）  →  （非 CDATA 类型时）去首尾 + 折叠
 ```
 
 先规范化再展开，会让实体值里的换行逃过归一化，属性值里就会留下本不该存在的 `\n`。
+第三步只对 `#x20` 生效（规范措辞就是 space），所以直接写在属性里的 `&#10;` 不会被折叠；
+而实体值里的 `&#10;` 在**声明时**就变成了真正的换行字符，使用时先归一成空格、再被折叠。
+
+**单实体替换文本必须自身良构**（WFC: Parsed Entity）：内容位置使用的内部一般实体，其替换文本
+必须匹配 `content` 产生式——标签要在**实体内部**配平，不能「实体里开、实体外关」，也不能有
+孤立结束标签。M1 的实现是在展开前用词法器在独立输入上把替换文本重扫一遍（实体表为空，
+嵌套引用只当引用、不展开），校验失败报 `XmlException`，消息带实体名与展开点行列号。
+属性值位置另有更严的规则：替换文本不得含裸 `<`。
 
 #### 三层膨胀上限
 
@@ -1054,17 +1074,17 @@ XmlException("属性 'r' 的值中实体展开超过 64 KB，属性值不支持�
 #### 与 `standalone` 的关系（一个必须说明的边界）
 
 引用**未声明**的实体时（外部子集永不加载，所以「只在外部子集里声明」的实体也落在这一类），
-规范允许非验证处理器不报错：
+判定分两步——**先看有没有可能从本文件以外声明，再看 `standalone`**：
 
-| `standalone` | 行为 |
-|---|---|
-| `"yes"` | 报错——文档自称自包含，却引用了未声明的东西 |
-| `"no"` 或缺省 | **不能报错**，按"跳过该实体"处理：内容位置为空、属性值里去掉该引用，记一条告警 |
+| 前提 | `standalone` | 行为 |
+|---|---|---|
+| — | `"yes"` | 报错——文档自称自包含，却引用了未声明的东西 |
+| 无外部子集（`DOCTYPE` 没有 `SYSTEM`/`PUBLIC`）**且**全文无参数实体引用 | `"no"` 或省略 | **报错**（WFC: Entity Declared）——连「可能声明在别处」的通道都没有 |
+| 有外部子集，**或**有参数实体引用 | `"no"` 或省略 | **不报错**：内容位置为空、属性值里去掉该引用，记一条告警 |
 
-判定只看 `standalone`，不附加「是否存在外部子集」的条件——`no` / 缺省时即使没有外部子集，
-也按跳过处理。
-
-不区分的话，`xmlconf` 里 `not-sa03` / `rmt-e3e-13` 这类带外部 DTD 的**合法**文档会被误判成错误。
+`standalone="no"` 并不自动等于「未声明实体可以跳过」：必须有「外部子集或参数实体引用」这个前提。
+不区分的话，`xmlconf` 里 `not-sa03` / `rmt-e3e-13` 这类带外部 DTD 的**合法**文档会被误判成错误；
+反过来无条件放过，`<a>&nbsp;</a>` 这种笔误就会被静默吞成空文本。
 
 ---
 
@@ -1228,22 +1248,23 @@ public enum CdataMode {
 | **显式节点 `XmlEntityRef(name)`** | ✅ 只有显式构造才输出 |
 
 ```cangjie
-public class XmlEntityRef <: XmlNode {
-    public let name: String          // 不含 & 和 ;
+// 仓颉不允许类继承 enum，所以这里是**工厂函数**，返回 XmlNode.EntityRefNode
+public func XmlEntityRef(name: String): XmlNode
+
+public class EntityDecl {
+    public let name: String
+    public let value: ?String        // 外部实体为 None
+    public let publicId: ?String
+    public let systemId: ?String
+    public let parameter: Bool
 }
 
-public struct EntityDecl {
+public class Doctype {
     public let name: String
-    public let value: String
-    public let isParameter!: Bool = false
-}
-
-public struct Doctype {
-    public let name: String
-    public let publicId!: ?String = None
-    public let systemId!: ?String = None
+    public let publicId: ?String = None
+    public let systemId: ?String = None
     /// 内部子集里的实体声明，按声明顺序写出
-    public let entities!: Array<EntityDecl> = []
+    public let entities: Array<EntityDecl> = []
 }
 ```
 
@@ -1581,8 +1602,8 @@ while (let Some(e) <- pull.nextEvent()) {
 | 重复属性 | 必须报错 | ❌ 需自造 |
 | 属性值含裸 `<` | 必须报错 | ❌ 需自造 |
 | 元素名大小写敏感 | `<A>` ≠ `<a>` | ⚠️ 需自造 |
-| 名字里的非 ASCII | XML 1.0 允许大量 Unicode 字母 | ❌ **盲区** |
-| 名字不能以数字开头 | 必须报错 | ❌ 需自造 |
+| 名字里的非 ASCII | XML 1.0 允许大量 Unicode 字母 | ❌ 已自造（`NameSyntax_test.nonAsciiNames`） |
+| 名字不能以数字开头 | 必须报错 | ❌ 已自造（`NameSyntax_test.nameMayNotStartWithDigit`） |
 
 #### C. 字符数据与实体
 
@@ -1627,7 +1648,7 @@ while (let Some(e) <- pull.nextEvent()) {
 | 参数实体 `<!ENTITY % p "v">` | 只在 DTD 内部可用 | ⚠️ 部分覆盖 |
 | 实体递归 / 指数膨胀 | 深度/声明数硬限制立即报错；软阈值按 5.4.1 溢出 | ❌ **必须自造**（Billion Laughs）。注意 `Spill` 模式下炸弹会先写到 2 GB 才停，恶意样本测试固定用 `Strict` |
 | 外部实体 / 外部子集 | **不加载**，引用即报错 | ⚠️ XXE 类有覆盖 |
-| 条件段 `<![INCLUDE[` / `IGNORE[` | 按标志位选择分支 | ⚠️ 少见 |
+| 条件段 `<![INCLUDE[` / `IGNORE[` | 内部子集里**必须报错**（`intSubset` 不含 `conditionalSect`，条件段只属于外部子集） | ❌ 已自造（`DtdIgnoreSection_test` / `DoctypeParser_test`） |
 | 实体引用出现在属性值 | 先展开再做空白规范化 | ❌ **盲区**（顺序极易做反） |
 
 #### G. 命名空间
@@ -1653,7 +1674,7 @@ while (let Some(e) <- pull.nextEvent()) {
 | UTF-8 无 BOM | 基础 | ✅ |
 | UTF-8 带 BOM | 跳过 BOM | ⚠️ |
 | **UTF-16LE / BE 带 BOM** | 按 BOM 判字节序 | ❌ **盲区**（这五个格式几乎都是 UTF-8） |
-| 声明与实际编码冲突 | 以 BOM 为准，或按规范报错 | ❌ **盲区** |
+| 声明与实际编码冲突 | **必须报致命错误**，消息带两个编码名与行列号 | ❌ 已自造（`ByteSniffer_test.bomConflictsWithDeclaration`） |
 | 非 ASCII 内容 | 中文、日文、阿拉伯文 | ✅ |
 | 4 字节 UTF-8（emoji） | 正确解出 1 个码点 | ❌ **盲区** |
 
@@ -1703,7 +1724,7 @@ SHA-256  9b61db9f5dbffa545f4b8d78422167083a8568c59bd1129f94138f936cf6fc1f
 
 #### 可跑集与 unsupported
 
-按三条规则（按此顺序去重）过滤后剩下的才是断言集：
+按**五条**规则（按此顺序去重）过滤后剩下的才是断言集：
 
 1. **`EDITION` 含 1/2/3/4 的排除**（313 条）。第 5 版改了 `Char` 产生式，旧版用例的期望与之冲突。
 2. **依赖外部实体的排除**（95 条）。`ENTITIES` 为 `parameter` / `general` / `both` 的共 323 条，
@@ -1711,23 +1732,29 @@ SHA-256  9b61db9f5dbffa545f4b8d78422167083a8568c59bd1129f94138f936cf6fc1f
    因为外部实体永远不加载）。
 3. **XML 1.1 用例的排除**（59 条）。M1 明确拒绝 `version="1.1"`（M3 才支持），这些用例留在
    可跑集只会制造必然失败；按原因 `xml-1.1` 写进 `unsupported`。
+4. **外部子集用例的排除**（实测 47 条）。`TYPE=not-wf`、`DOCTYPE` 指向外部 DTD、且测试文件自身
+   良构（用 `xml.parsers.expat` 以不加载外部子集的方式试解析可判定）——不良构只写在永不加载的
+   `.dtd` 里，M1 不可能检出；按原因 `external-subset` 排除。
+5. **命名空间名冲突的排除**（实测 10 条）。名字违反 Namespaces 1.0 的 `QName` 约束
+   （多冒号 / 冒号在首尾 / 前缀未声明）——XML 1.0 合法但与命名空间感知处理器互斥；
+   按原因 `namespace-name` 排除。
 
 | 项 | 数量 |
 |---|---|
 | 套件总计 | 2586 |
-| `unsupported`（EDITION 313 + 外部实体 95 + XML 1.1 59） | **467** |
-| **可跑** | **2119** |
-| ├ `not-wf` | 1155 |
-| ├ `valid` | 708 |
-| ├ `invalid` | 232 |
+| `unsupported`（313 + 95 + 59 + 47 + 10） | **524** |
+| **可跑** | **2062** |
+| ├ `not-wf` | 1106 |
+| ├ `valid` | 705 |
+| ├ `invalid` | 227 |
 | └ `error`（不判定） | 24 |
-| **实际断言数** | **2095** |
+| **实际断言数** | **2038** |
+| 实测结果 | **2038 通过 / 0 失败**（Gate A 达成） |
 
-> 拆分来源：三条规则互不重复计数，合计 `unsupported` 467；XML 1.1 的 59 条中
-> `valid` 55 / `invalid` 4，因此可跑集从 `763 / 236` 降到 `708 / 232`。
-> 228 条内部实体用例仍在可跑集内（它们只用内部实体）。
-> 这些数字是按"测试文件里是否出现 `<!ENTITY … SYSTEM|PUBLIC>`、是否声明 `version="1.1"`"
-> 逐条判定出来的，**不是估算**——判定脚本与判定口径要一起进仓库，否则以后没人能复核这个数字。
+> 前三轮口径的演进：两规则（2178 可跑 / 458 fail）→ 三规则（2119 / 2095 断言）→
+> 五规则（2062 / 2038 断言）。第四、五条规则的条数是脚本实测值（47 / 10），不是估算：
+> 早先按 48 / 9 估算，互补后总额相同（467 + 47 + 10 = 524）。
+> 判定脚本 `f_xml/tools/xmlconf_gen.py` 与判定口径一起进仓库，否则以后没人能复核这个数字。
 
 `unsupported` 必须单列清单并写入本模块文档，**不能混进通过率**——否则一个"支持 75% XML"的数字既看不出是真缺陷还是设计边界。
 
@@ -1789,7 +1816,7 @@ SHA-256  9b61db9f5dbffa545f4b8d78422167083a8568c59bd1129f94138f936cf6fc1f
 
 | Gate | 标准 |
 |---|---|
-| **A（必过）** | 2095 条断言全部符合期望：`valid`/`invalid` 解析成功，`not-wf` 报 fatal error |
+| **A（必过）** | 2038 条断言全部符合期望：`valid`/`invalid` 解析成功，`not-wf` 报 fatal error |
 | **B（例外管理）** | 允许一份 `known-issues.json`，每条必须写明理由 + 规范章节；上限 5 条，超出即视为不通过 |
 | **C（可追溯）** | 每次跑测试输出三个数字：`pass / fail / unsupported`，并把 `unsupported` 的 ID 清单存档 |
 
@@ -1816,7 +1843,7 @@ SHA-256  9b61db9f5dbffa545f4b8d78422167083a8568c59bd1129f94138f936cf6fc1f
 所以定位是：
 
 ```
-12.2 语法矩阵 + 12.4 xmlconf（2095 条断言）  →  保证"通用"
+12.2 语法矩阵 + 12.4 xmlconf（2038 条断言）  →  保证"通用"
 12.5 五个格式样本              →  验收"真实文档能跑通"
 ```
 
@@ -1869,8 +1896,11 @@ DOM → 序列化 → 解析 → DOM
 - 深度刚好在上限内 / 刚好超限（边界两条）
 - XXE（`SYSTEM "file:///etc/passwd"`，应报错且**不打开文件**）
 - 外部子集 `<!DOCTYPE x SYSTEM "http://…">`（应**不发请求**）
-- 超深嵌套（1 万层，应报错而不是栈溢出）
-- 超长属性（单属性 100 MB，应有上限）
+- 超深嵌套（1 万层，应报错而不是栈溢出；上限是 `maxElementDepth`，默认 4096）
+- 超长属性（单属性 100 MB，应有上限；上限是 `maxAttributeValueLength`，默认 1 MiB）
+
+这两个上限是 M1 新增的选项（原设计只写「要有上限」没给配置项），超限抛 `XmlException` 并带元素名
+/ 属性名与行列号。
 
 ---
 
@@ -1880,7 +1910,7 @@ DOM → 序列化 → 解析 → DOM
 
 | 里程碑 | 范围 | 出口标准 |
 |---|---|---|
-| **M1** | 解析（推 + 拉 + 单回调）、DOM、生成（紧凑/缩进、CDATA、自定义实体）、DTD 内部子集（实体 + 声明语法校验，含溢出策略）、安全上限 | xmlconf **Gate A：2095 条断言全过**（`known` ≤ 5）；`unsupported` 467 条清单存档；20 MB 展开量文档在 `Spill` 下 `retainedBytes` 恒定；性能不是出口条件 |
+| **M1** | 解析（推 + 拉 + 单回调）、DOM、生成（紧凑/缩进、CDATA、自定义实体）、DTD 内部子集（实体 + 声明语法校验，含溢出策略）、安全上限 | xmlconf **Gate A：2038 条断言全过**（`known` ≤ 5）；`unsupported` 524 条清单存档；20 MB 展开量文档在 `Spill` 下 `retainedBytes` 恒定；性能不是出口条件 |
 | **M2** | **XPath 1.0 子集（含命名空间前缀）** | 13.3 的范围表内全部可用；超范围表达式**报错**而不是返回空集；`ns:item` / `@ns:attr` / `defaultNamespace` 三类用例全过 |
 | **M3** | **XML 1.1** + **C14N（inclusive 1.0/1.1 + exclusive 1.0）** | XML 1.1 用例进可跑集；inclusive 使 xmlconf 的 432 条 `OUTPUT` 可断言；exclusive 的命名空间裁剪用例对照 W3C 测试集 |
 
@@ -1897,7 +1927,7 @@ DOM → 序列化 → 解析 → DOM
 | **P3** | 命名空间作用域栈 | 带前缀的文档样本能正确解析 |
 | **P3.5** | **DTD 内部子集**：实体表、参数实体、四类声明的语法校验、三层上限 + 溢出策略、属性值展开顺序 | 228 条实体用例通过；非法声明报错且带行列号；Billion Laughs 在 1 MB 内被中断（`Strict`）；`Spill` 模式下 20 MB 展开量的文档能读完且 `retainedBytes` 恒定 |
 | **P4** | `XmlWriter`：紧凑/缩进、转义、输出缓冲、**CDATA 模式**、**自定义实体** | 往返语义一致；`]]>` 拆分正确；未声明实体报错 |
-| **P5** | 安全收尾 + **Gate A** | 恶意样本被拒绝；2095 条断言全过；`known-issues` ≤ 5 |
+| **P5** | 安全收尾 + **Gate A** | 恶意样本被拒绝；2038 条断言全过；`known-issues` ≤ 5 |
 | ~~P6~~ | 性能：**已移出本变更**，另开 `optimize-f-xml-char-layer` | 只记录现状：1 MB ≈ 1.5 s / 10 MB ≈ 15.8 s，不作门禁 |
 
 **为什么 P2.5 排在 P3.5 之前**：先拿到"能跑、能分类、有基线"，再补实体。
@@ -2326,9 +2356,14 @@ C14N 的收益很具体：`xmlconf` 里 **432 条带 `OUTPUT`** 的用例可升�
 | 7 | §9 `class XmlException <: Exception` | `XmlException <: f_base.BaseException` | 仓库统一异常基类。 |
 | 8 | §5.4 `<!ELEMENT>` / `<!ATTLIST>` / `<!NOTATION>`「识别并跳过，不校验」 | 四类声明都做**声明语法良构校验**，非法声明报错 | 声明语法属良构性（WFC），有效性（VC）另说；不校验会让 xmlconf 385 条 `not-wf` 永远失败。 |
 | 9 | §5.4「实体值内部只能引用已声明实体，前向引用 fatal」 | **延迟展开**：声明时只存原文，实体被使用时才展开；此时仍未声明才报错 | 声明时展开会把 `sa02` / `sa03` / `sa04` / `not-sa04` / `valid-sa-115` 这批合法文档判死。 |
-| 10 | §5.4.3 `standalone` 只对「外部子集声明的实体」生效 | 扩展到所有**未声明实体**；只看 `standalone`，`no` / 缺省跳过并告警 | 规范允许非验证处理器不报 WFC 违例；否则 `not-sa03` / `rmt-e3e-13` 被误判成错误。 |
-| 11 | §12.4 / §13 的「2154 断言、408 unsupported」 | **2095 断言 / 467 unsupported**：新增 `xml-1.1` 排除规则（59 条） | XML 1.1 与「1.1 报错」互斥，留在可跑集必然失败。 |
-| 12 | §13.2 P6「10 MB < 1 s」 | 性能移出 M1 出口，只记录 1 MB ≈ 1.5 s / 10 MB ≈ 15.8 s | 瓶颈在字符层逐字符 `Option` 分配与三层缓冲，需整体重写，另开 `optimize-f-xml-char-layer`。 |
+| 10 | §5.4.3 `standalone` 只对「外部子集声明的实体」生效 | 扩展到所有**未声明实体**，分三档：`yes` 报错；**无外部子集且无参数实体引用时报错**；有外部子集或参数实体引用且非 `yes` 时跳过并告警 | 只看 `standalone` 会把 `<a>&nbsp;</a>` 这类笔误吞成空文本；反过来无条件放过会让 `not-sa03` / `rmt-e3e-13` 被误判成错误。 |
+| 11 | §12.4 / §13 的「2154 断言、408 unsupported」 | **2038 断言 / 524 unsupported**：新增 `xml-1.1`（59）、`external-subset`（实测 47）、`namespace-name`（实测 10）三条排除规则 | 前两条：外部子集永不加载、XML 1.1 明确拒绝，留在可跑集必然失败；第三条：M1 一律做命名空间解析。 |
+| 12 | §12.2 H「BOM 与声明冲突：以 BOM 为准，或按规范报错」 | **报 fatal error**，消息带两个编码名与行列号；`UTF-16` / `UTF-32` 不指定字节序，与两种 BOM 都相容 | 猜编码会让「声明与实际不符」的错误文档静默通过，而这类文档本该被拒（XML 1.0 §4.3.3）。 |
+| 13 | §5.4「条件段按标志位选分支」 | 内部子集出现 `<![INCLUDE[` / `<![IGNORE[` **一律报错** | `intSubset` 产生式里没有 `conditionalSect`，外部子集又永不加载，M1 不存在合法入口能到达条件段。 |
+| 14 | §5.4 只要求「非法声明报错」 | 追加 **单实体替换文本良构校验**（WFC: Parsed Entity）：标签必须在实体内部配平，孤立结束标签 / 未闭合标签报错并带实体名 | 否则 `<a>&e;</a>` 配 `<!ENTITY e "<b>">` 会静默接受，`sa-104` / `sa-116` 这批 `not-wf` 永远失败。 |
+| 15 | §5.4 属性值「非 CDATA 去首尾」但未说类型从哪来 | 建「元素**字面名** → 属性名 → `AttType`」映射，未声明属性按 `CDATA`；映射**只**服务规范化，不做有效性 | 不做映射就只能一律按 `CDATA`，`rmt-ns10-012` 这类「规范化后命名空间绑定相同」的用例检不出。 |
+| 16 | — | `known-issues.json` **清空为 0 条** | 原 5 条「命名空间 vs XML 1.0 多冒号名」已由 `namespace-name` 排除规则整体移出可跑集，不再占用例外额度。 |
+| 17 | §13.2 P6「10 MB < 1 s」 | 性能移出 M1 出口，只记录 1 MB ≈ 1.5 s / 10 MB ≈ 15.8 s | 瓶颈在字符层逐字符 `Option` 分配与三层缓冲，需整体重写，另开 `optimize-f-xml-char-layer`。 |
 
 ### 15.1 性能现状（已移出 M1 出口）
 
@@ -2344,8 +2379,8 @@ C14N 的收益很具体：`xmlconf` 里 **432 条带 `OUTPUT`** 的用例可升�
 
 ### 15.2 一致性验收
 
-xmlconf 20130923 的可跑集与断言数（2586 / 467 / 2119 / 2095）与 §12.4 一致，
-但 **Gate A 仍待复跑**：旧口径（可跑 2178）实测 1696 pass / 458 fail，缺口 = 385（声明语法
-校验，已纳入）+ 59（XML 1.1，已移出可跑集）+ 14（前向引用 / `standalone` / 命名空间口径，
-其中 5 条登记 `known-issues`）。详见
+xmlconf 20130923 的可跑集与断言数（2586 / 524 / 2062 / 2038）与 §12.4 一致，**Gate A 已达成**：
+实测 `pass=2038 fail=0 unsupported=524 known=0`。旧口径（可跑 2178）的 458 条 fail 的收口路径是
+385（声明语法校验）+ 59（XML 1.1 移出可跑集）+ 47（外部子集）+ 10（命名空间名）+
+19（前向引用 / `standalone` / 单实体替换文本 / 属性值规范化 / BOM 冲突 / 条件段）。详见
 [`doc/spec/implement-f-xml-m1/baseline.md`](spec/implement-f-xml-m1/baseline.md)。

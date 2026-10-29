@@ -12,16 +12,29 @@
 缓存目录固定为 `f_xml/.cache/xmlconf/`（仓库根 `.gitignore` 的 `.cache/` 规则覆盖），
 可用环境变量 `F_XML_XMLCONF_CACHE` 覆盖。**套件与派生 JSON 一律不入库**。
 
-判定口径（与 `design.md` §9.1 对齐）：
+判定口径（与 `design.md` §9.3 对齐，五条规则按此顺序去重）：
 
 1. `EDITION` 是集合：只要包含 `1`/`2`/`3`/`4` 中任意一个就排除——
    第 5 版改了 `Char` 产生式，我们要验的是 1.0 第 5 版。
 2. 测试文件里出现 `<!ENTITY … SYSTEM|PUBLIC …>` 的用例排除：外部实体引用即报错，
    这不是「跑不过」，而是设计边界。
-3. 测试文件声明 `version="1.1"` 的用例排除（原因 `xml-1.1`）：M1 明确拒绝 XML 1.1
-   （M3 才支持），留在可跑集只会制造必然失败。判定只看**测试文件自身**的 XML 声明，
-   不看它引用的外部子集（外部子集永不加载，不存在「读到 1.1 声明」这回事）。
-4. `TYPE` 只决定期望：`valid` / `invalid` 期望解析成功（`invalid` 是良构但不合 DTD，
+3. 测试文件声明 `version="1.1"` 且期望成功（`valid` / `invalid`）的用例排除
+   （原因 `xml-1.1`）：M1 明确拒绝 XML 1.1（M3 才支持），留在可跑集只会制造必然失败。
+   判定只看**测试文件自身**的 XML 声明，不看它引用的外部子集（外部子集永不加载，
+   不存在「读到 1.1 声明」这回事）。`not-wf` 的 1.1 用例仍可跑——「拒绝 1.1」正好满足
+   「期望失败」。
+4. `not-wf` 用例的 `<!DOCTYPE … SYSTEM|PUBLIC …>` 指向外部子集、且**测试文件本身良构**时排除
+   （原因 `external-subset`）：这种用例的不良构只写在永不加载的 `.dtd` 里，M1 不可能检出。
+   「测试文件本身良构」由标准库 `xml.parsers.expat` 判定——以「不加载外部实体 / 不解析参数
+   实体」的方式试解析，能通过就说明错误不在测试文件自身。已经能被本地规则拦下的
+   `not-wf` 用例不在此列（它们本来就能过断言，排除掉反而少一条有效断言）。
+5. 文档里出现**违反 Namespaces 1.0 `QName` 约束**的 `Name` 时排除（原因 `namespace-name`）：
+   冒号数量 > 1、冒号在开头（空前缀）或结尾（空本地名）、或者用到的前缀从未经
+   `xmlns:` 声明。判定范围是「期望成功的用例」（`valid` / `invalid`）里的元素名 / 属性名 /
+   PI target，以及 `not-wf` 用例里 **DTD 声明名**（`<!ENTITY>` / `<!NOTATION>`）——
+   后者在 XML 1.0 的 `Name` 下合法，但命名空间感知处理器必须拒绝。M1 一律做命名空间解析，
+   两者互斥。
+6. `TYPE` 只决定期望：`valid` / `invalid` 期望解析成功（`invalid` 是良构但不合 DTD，
    我们不校验 DTD），`not-wf` 期望抛错，`error` 不判定。
 
 用法：
@@ -40,6 +53,7 @@ import shutil
 import sys
 import tarfile
 import urllib.request
+import xml.parsers.expat
 
 SUITE_URL = "https://www.w3.org/XML/Test/xmlts20130923.tar.gz"
 SUITE_SHA256 = "9b61db9f5dbffa545f4b8d78422167083a8568c59bd1129f94138f936cf6fc1f"
@@ -166,6 +180,112 @@ def file_declares_xml11(path: str) -> bool:
     return XML_11_DECL.search(text) is not None
 
 
+DOCTYPE_EXTERNAL_SUBSET = re.compile(r"<!DOCTYPE\s+[^\s\[>]+\s*(?:SYSTEM|PUBLIC)\b")
+
+
+def file_references_external_subset(path: str) -> bool:
+    """`<!DOCTYPE … SYSTEM|PUBLIC …>` 指向外部子集（注释里的不算）。"""
+    if not os.path.exists(path):
+        return False
+    try:
+        with open(path, "rb") as handle:
+            text = handle.read().decode("utf-8", errors="replace")
+    except OSError:
+        return False
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.S)
+    return DOCTYPE_EXTERNAL_SUBSET.search(text) is not None
+
+
+def file_is_well_formed_on_its_own(path: str) -> bool:
+    """测试文件自身是否良构：用 expat 以「不加载外部实体 / 不解析参数实体」的方式试解析。
+
+    通过就说明不良构不在测试文件本身（只可能在永不加载的外部子集里）。这一判定不依赖
+    `f_xml` 的实现，规则 4 因此是可重现的静态口径。
+    """
+    if not os.path.exists(path):
+        return False
+    try:
+        with open(path, "rb") as handle:
+            data = handle.read()
+    except OSError:
+        return False
+    parser = xml.parsers.expat.ParserCreate()
+    parser.ExternalEntityRefHandler = lambda *args: 1
+    parser.SetParamEntityParsing(xml.parsers.expat.XML_PARAM_ENTITY_PARSING_NEVER)
+    try:
+        parser.Parse(data, True)
+        return True
+    except Exception:
+        return False
+
+
+# --------------------------------------------------------------------------- 规则 5
+
+NCNAME_TAIL = r"[\w.:\-\u00b7\u0300-\u036f\u203f-\u2040]*"
+QNAME = r"[A-Za-z_:]" + NCNAME_TAIL
+ELEMENT_NAME = re.compile(r"</?(" + QNAME + r")")
+ATTRIBUTE_NAME = re.compile(r"(" + QNAME + r")\s*=\s*[\"']")
+PI_TARGET = re.compile(r"<\?(" + QNAME + r")")
+DTD_DECL_ELEMENT = re.compile(r"<!ELEMENT\s+(" + QNAME + r")")
+DTD_DECL_ATTLIST = re.compile(r"<!ATTLIST\s+(" + QNAME + r")((?:[^>\"']|\"[^\"]*\"|'[^']*')*)")
+DTD_DECL_ENTITY = re.compile(r"<!ENTITY\s+(?:%\s*)?(" + QNAME + r")")
+DTD_DECL_NOTATION = re.compile(r"<!NOTATION\s+(" + QNAME + r")")
+XMLNS_DECL = re.compile(r"xmlns:(" + QNAME + r")\s*=")
+ATTLIST_ATTDEF = re.compile(
+    r"(" + QNAME + r")\s+(?:CDATA|ID|IDREF|IDREFS|ENTITY|ENTITIES|NMTOKEN|NMTOKENS|NOTATION|\()"
+)
+
+
+def qname_violates(name: str, prefixes: set) -> bool:
+    """`Name` 是否违反 Namespaces 1.0 的 `QName` 约束。"""
+    parts = name.split(":")
+    if len(parts) > 2:
+        return True
+    if len(parts) == 1:
+        return False
+    prefix, local = parts
+    if not prefix or not local:
+        return True
+    if prefix in ("xml", "xmlns"):
+        return False
+    return prefix not in prefixes
+
+
+def scan_names(text: str) -> tuple:
+    """返回 (所有名字, DTD 声明名)。注释与 CDATA 先剔除。"""
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.S)
+    text = re.sub(r"<!\[CDATA\[.*?\]\]>", "", text, flags=re.S)
+    prefixes = set(XMLNS_DECL.findall(text))
+    names = []
+    for pattern in (ELEMENT_NAME, ATTRIBUTE_NAME, PI_TARGET, DTD_DECL_ELEMENT, DTD_DECL_ENTITY, DTD_DECL_NOTATION):
+        names.extend(match.group(1) for match in pattern.finditer(text))
+    for match in DTD_DECL_ATTLIST.finditer(text):
+        names.append(match.group(1))
+        names.extend(attr.group(1) for attr in ATTLIST_ATTDEF.finditer(match.group(2)))
+    declared = []
+    for pattern in (DTD_DECL_ENTITY, DTD_DECL_NOTATION):
+        declared.extend(match.group(1) for match in pattern.finditer(text))
+    return names, declared, prefixes
+
+
+def namespace_name_excluded(path: str, case_type: str) -> bool:
+    """规则 5：`QName` 约束冲突。"""
+    if not os.path.exists(path):
+        return False
+    try:
+        with open(path, "rb") as handle:
+            text = handle.read().decode("utf-8", errors="replace")
+    except OSError:
+        return False
+    names, declared, prefixes = scan_names(text)
+    bad_declared = any(qname_violates(name, prefixes) for name in declared)
+    if case_type == "not-wf":
+        return bad_declared
+    if case_type in ("valid", "invalid"):
+        return any(qname_violates(name, prefixes) for name in names)
+    return False
+
+
 def edition_excluded(edition: str) -> bool:
     if not edition:
         return False
@@ -213,6 +333,17 @@ def collect(suite: str) -> tuple:
             if entry["type"] in ("valid", "invalid") and file_declares_xml11(absolute):
                 unsupported.append({"id": test_id, "reason": "xml-1.1"})
                 continue
+            # 规则 4：`not-wf` + 外部子集 + 测试文件自身良构 → 不良构只可能在永不加载的 `.dtd` 里。
+            if (entry["type"] == "not-wf"
+                    and not file_declares_xml11(absolute)
+                    and file_references_external_subset(absolute)
+                    and file_is_well_formed_on_its_own(absolute)):
+                unsupported.append({"id": test_id, "reason": "external-subset"})
+                continue
+            # 规则 5：违反 Namespaces 1.0 的 QName 约束（M1 一律做命名空间解析）。
+            if namespace_name_excluded(absolute, entry["type"]):
+                unsupported.append({"id": test_id, "reason": "namespace-name"})
+                continue
             cases.append(entry)
     cases.sort(key=lambda c: c["id"])
     unsupported.sort(key=lambda c: c["id"])
@@ -233,9 +364,13 @@ def write_markdown(path: str, unsupported: list, stats: dict) -> None:
     lines.append(">")
     lines.append("> 口径（按此顺序去重）：")
     lines.append("> 1. `EDITION` 含 1/2/3/4（第 5 版改了 `Char` 产生式）；")
-    lines.append("> 2. 测试文件出现外部实体声明（`SYSTEM` / `PUBLIC`）——外部实体与外部子集永不加载，")
-    lines.append(">    这是设计边界，不是缺陷；")
-    lines.append("> 3. 测试文件声明 `version=\"1.1\"`——M1 明确拒绝 XML 1.1（M3 才支持）。")
+    lines.append("> 2. 测试文件出现外部实体声明（`SYSTEM` / `PUBLIC`）——外部实体永不加载；")
+    lines.append("> 3. 测试文件声明 `version=\"1.1\"` 且期望成功——M1 明确拒绝 XML 1.1（M3 才支持）；")
+    lines.append("> 4. `not-wf` 且 `<!DOCTYPE … SYSTEM|PUBLIC …>` 指向外部子集，"
+                 "测试文件自身良构（expat 不加载外部子集时可解析）——")
+    lines.append(">    不良构只写在永不加载的 `.dtd` 里；")
+    lines.append("> 5. 名字违反 Namespaces 1.0 的 `QName` 约束（多冒号 / 冒号在首尾 / 前缀未声明）"
+                 "——M1 一律做命名空间解析。")
     lines.append("")
     lines.append("## 统计")
     lines.append("")

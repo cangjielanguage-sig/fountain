@@ -68,8 +68,8 @@
   `entityLimitKind`、实体名与已展开量。
 - **验收**：xmlconf 20130923 由 `f_xml/tools/xmlconf_gen.py` 按需下载、校验 SHA-256 并生成
   `cases.json` / `unsupported.json` 到 **`f_xml/.cache/xmlconf/`（gitignore，不入库）**；可跑集按
-  **五条**规则排除（`edition` 313 + `external-entity` 95 + `xml-1.1` 59 + `external-subset` 48 +
-  `namespace-name` 9 = 524），可跑 2062 条、断言 2038 条；`TYPE` 分布由生成脚本实测回填；
+  **五条**规则排除（`edition` 313 + `external-entity` 95 + `xml-1.1` 59 + `external-subset` 47 +
+  `namespace-name` 10 = 524），可跑 2062 条、断言 2038 条；`TYPE` 分布由生成脚本实测回填；
   harness 输出 `pass / fail / unsupported`；Gate A 2038 条断言全过，`known-issues`
   **默认清空（0 条）**、只允许登记真正的套件争议且 ≤ 5 条；仓库只保留生成脚本、
   `f_xml/tools/known-issues.json` 与 `f_xml/doc/xmlconf-unsupported.md`。离线且无缓存时测试

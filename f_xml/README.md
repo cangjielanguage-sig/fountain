@@ -95,13 +95,12 @@ XmlWriter(output, options: XmlWriterOptions(indent: Some("  "))).write(element)
 
 ## 状态
 
-M1 已实现并通过 236 条单元测试。xmlconf 20130923 的口径：可跑集 **2062** 条
-（`unsupported` **524** = `edition` 313 + 外部实体 95 + XML 1.1 59 + 外部子集 48 +
-命名空间名 9），断言 **2038** 条。
-Gate A 待复跑：旧口径（可跑 2178）实测 1696 通过 / 458 失败，缺口已归为五条排除规则
-（`edition` / 外部实体 / XML 1.1 / 外部子集 / 命名空间名）加三项规范修正——
-DTD 声明语法良构校验、`standalone` 与单实体替换文本良构、`<!ATTLIST>` 属性类型映射与
-属性值规范化。`known-issues` 默认清空。
+M1 已实现并通过 298 条单元测试。xmlconf 20130923 的口径：可跑集 **2062** 条
+（`unsupported` **524** = `edition` 313 + 外部实体 95 + XML 1.1 59 + 外部子集 47 +
+命名空间名 10），断言 **2038** 条，实测 **2038 通过 / 0 失败**（Gate A 达成）。
+五条排除规则是 `edition` / 外部实体 / XML 1.1 / 外部子集 / 命名空间名；配套的三项规范修正
+（DTD 声明语法良构校验、`standalone` 与单实体替换文本良构、`<!ATTLIST>` 属性类型映射与
+属性值规范化）已落地。`known-issues` 已清空。
 性能（1 MB ≈ 1.5 s / 10 MB ≈ 15.8 s）只记录、**不作门禁**，字符层重写另开
 `optimize-f-xml-char-layer`。详见
 [`doc/spec/implement-f-xml-m1/baseline.md`](doc/spec/implement-f-xml-m1/baseline.md)。

@@ -129,17 +129,18 @@
   期望 / 实际值）、解压到 `f_xml/.cache/xmlconf/suite/`；支持 `--offline`（只用缓存）与
   `--force`（重新下载）。缓存缺失且离线时以非 0 退出，提示先联网运行本脚本。
 - [x] 6.2 同一脚本解析 31 个 catalog → 缓存内 `cases.json`；按**五条**规则产出 `unsupported.json`
-  （`edition` 313 / `external-entity` 95 / `xml-1.1` 59 / `external-subset` 48 /
-  `namespace-name` 9）；判定口径写进脚本注释。跑出
+  （`edition` 313 / `external-entity` 95 / `xml-1.1` 59 / `external-subset` 47 /
+  `namespace-name` 10）；判定口径写进脚本注释。跑出
   2586 / 524 / 2062 / 2038 与 `TYPE` 实测分布，与 `design.md` §9.3 对齐。
   JSON 键序固定、无时间戳，重复运行逐字节一致。
   → 已重跑（三条规则时）：2586 / 467 / 2119 / 2095 与 `edition` 313 / `external-entity` 95 /
     `xml-1.1` 59 全部吻合。`TYPE` 实测 **not-wf 1155 / valid 711 / invalid 229 / error 24**：
     规划里的 708 / 232 是估算，实际「声明了 1.1 且期望成功」的是 52 条 `valid` + 7 条 `invalid`，
     合计仍是 59，断言数不变。
-  → **第三轮待办**：补第 4、5 条规则后重跑，回填 `TYPE` 分布（`not-wf` 应为 1107；`valid` /
-    `invalid` 各自减去 `namespace-name` 中实际归属的条数，合计 −9）。**不许估算**，
-    脚本输出什么写什么。
+  → **第三轮已完成**：补第 4、5 条规则后重跑，实测 `edition` 313 / `external-entity` 95 /
+    `xml-1.1` 59 / `external-subset` 47 / `namespace-name` 10；`TYPE`（可跑集内）
+    not-wf 1106 / valid 705 / invalid 227 / error 24。规则 4 与估算的 48、规则 5 与估算的 9
+    各差 1 条，互补后总额仍是 524——差异原因见 `design.md` §9.3 与 `baseline.md` §1。
 - [x] 6.3 写 `src/XmlconfHarness_test.cj` + `src/TestDataRoot.cj`：缓存解析顺序
   `F_XML_XMLCONF_CACHE` → `<module>/.cache/xmlconf/`；缺失时用例 **fail**（禁止 skip），
   消息含 `python3 f_xml/tools/xmlconf_gen.py`。按 `TYPE` 映射判定（`invalid` 期望成功、
@@ -188,7 +189,7 @@
   非实体错误为 `None`；`Strict` 捕获 `Some(Total)` 后改 `Spill` 重试成功；`Some(Depth)` 重试仍同分类。
 - [x] 8.8 **先写测试** `src/EntitySecurity_test.cj`（全部 `Strict`）：Billion Laughs、
   参数实体版、单实体超长、深度边界两条、XXE（不读文件）、外部子集（不发请求）。
-- [ ] 8.9 `standalone` 与未声明实体的三档语义（WFC: Entity Declared），**先看有无外部子集 /
+- [x] 8.9 `standalone` 与未声明实体的三档语义（WFC: Entity Declared），**先看有无外部子集 /
   参数实体引用，再看 `standalone`**：
   - `standalone="yes"` → 报错（不论有没有外部子集）；
   - 无外部子集（`DOCTYPE` 无 `SYSTEM`/`PUBLIC`）**且**全文无参数实体引用 → **报错**
@@ -208,8 +209,14 @@
   6. `not-sa03` / `rmt-e3e-13` 转通过（带外部 DTD + `standalone` 缺省）。
 
   → 修正后「无 `DOCTYPE` 且未声明实体」不再被放过——上一轮把它当跳过处理是错的。
-- [ ] 8.10 跑全量 xmlconf，确认「只用内部实体」的用例进入可跑集且有断言；更新基线。
+  → 已实现：`EntityRefPolicy.configure` 改成 `strict = standalone==yes || 无外部声明通道`；
+    6 条验收场景见 `DoctypeParser_test`（`standaloneYesRejected` / `standaloneDefaultSkips` /
+    `standaloneNoWithoutDoctypeRejected` / `parameterReferenceOpensSkipTier` /
+    `declaredEntityWithoutExternalSubset` / `noDoctypeUndeclaredRejected`）。
+- [x] 8.10 跑全量 xmlconf，确认「只用内部实体」的用例进入可跑集且有断言；更新基线。
   条数以五条规则重算结果为准（旧三规则口径下是 228 条，第四、五条规则会再摘走一部分）。
+  → 已达成：全量 harness `pass=2038 fail=0 unsupported=524 observed=24 known=0`；
+    内部实体用例全部落在可跑集内（`ENTITIES≠none` 且未声明外部实体、未引用外部子集）。
 - [x] 8.11 **先写测试** `src/DtdDeclSyntax_test.cj`（四类声明的语法矩阵，良构性而非有效性）：
   - `<!ELEMENT>`：`EMPTY` / `ANY` / `Mixed`（`(#PCDATA)`、`(#PCDATA|a|b)*`）/ `children`
     （`seq` / `choice` / `?` / `*` / `+` / 嵌套）；非法例：`((a) ?)`（`?` 前有空白）、`(a|)`、
@@ -224,12 +231,12 @@
   - 断言错误消息含**声明类型**与行列号；**内部子集里的条件段必须报错**（原「`IGNORE` 内的非法
     声明不报错」作废，见 8.1）。
   → 已在 `src/DoctypeParser.cj` 实现：四类声明按产生式递归下降；只验产生式，不注入默认值、
-    不比对内容模型与文档结构。`not-wf` 被接受从 385 条降到 60 条；其中 48 条的不良构只存在于
+    不比对内容模型与文档结构。`not-wf` 被接受从 385 条降到 60 条；其中 47 条的不良构只存在于
     **外部 DTD**（由第四条例外规则 `external-subset` 移出可跑集），余下 12 条由 8.9 / 8.12 /
     8.13 收敛（见 10.2）。
   → 第三轮追加：条件段拒绝 + 属性类型映射（映射本身在 8.13 建，本任务只负责把 `AttType` 解析
     出来并交给 8.13 的映射表）。
-- [ ] 8.12 **先写测试** `src/EntityReplacementWf_test.cj`：单实体替换文本良构校验
+- [x] 8.12 **先写测试** `src/EntityReplacementWf_test.cj`：单实体替换文本良构校验
   （WFC: Parsed Entity）——展开内部一般实体时，标签必须在**实体内部配平**。
   **验收场景**：
   1. `<!ENTITY e "<b>">` + `<a>&e;</a>` → 抛 `XmlException`，消息含实体名 `e` 与行列号；
@@ -242,9 +249,10 @@
   6. 嵌套：`<!ENTITY i "</b>">`、`<!ENTITY o "<b>">`，`<a>&o;&i;</a>` → 抛错（跨实体边界配对
      不允许）。
   → 对应 xmlconf 的 6 条 `not-wf`：`sa-104` / `sa-116` / `sa-117` / `sa-119` / `sa-181` /
-    `sa-182`。实现放在 `EntityExpander` 展开内部实体时的内容片段校验（与 `DomBuilder` 的
-    深度计数复用同一套栈检查，不另写一份）。
-- [ ] 8.13 **先写测试** `src/AttrNormalize_test.cj`：`<!ATTLIST>` 属性类型映射与属性值规范化
+    `sa-182`。实现放在 `EntityExpander.checkReplacement()`：用词法器在**独立输入**上把替换文本
+    重扫一遍（实体表为空，嵌套引用不展开），标签必须在实体内部配平；6 条验收场景见
+    `EntityReplacementWf_test`（含 `sa-074` 的孤立结束标签与 4 条半截引用 / 未闭合 CDATA）。
+- [x] 8.13 **先写测试** `src/AttrNormalize_test.cj`：`<!ATTLIST>` 属性类型映射与属性值规范化
   （XML 1.0 §3.3.3），对应 xmlconf 的 `rmt-ns10-012`。
   **验收场景**：
   1. 未声明属性（按 `CDATA`）：`<a x=" v "/>` → `" v "`（不改）；
@@ -257,9 +265,10 @@
   6. 重复 `AttDef` 取第一个；未声明的元素走 `CDATA` 默认；
   7. **反向断言（不许越界做有效性）**：`ID` 重复、`IDREF` 悬空、枚举值不在候选列表里、
      缺 `#FIXED` 值——全部**解析成功**，不因这些原因报错，也不注入默认值。
-  → 实现：`DoctypeParser` 产出 `Map<元素字面名, Map<属性名, AttType>>`，`Lexer` 在开始标签解析完
-    属性后按表做规范化。删除旧口径「不建「元素 → 属性类型」映射、一律按 CDATA」——
-    该口径在第三轮作废，登记在 `design.md` §14 的 B5 行。
+  → 实现：`DoctypeParser` 产出 `AttTypeMap`（元素字面名 → 属性名 → `AttType`），`Lexer` 在开始
+    标签解析完属性后按表做第三步（去首尾 + 折叠）；未声明属性按 `CDATA`。删除旧口径
+    「不建「元素 → 属性类型」映射、一律按 CDATA」——该口径在第三轮作废，登记在
+    `design.md` §14 的 B5 行。7 条验收场景见 `AttrNormalize_test`。
 
 ## 9. P4 XmlWriter
 
@@ -282,22 +291,31 @@
 ## 10. P5 安全收尾与 Gate A
 
 - [x] 10.1 恶意样本全量回归（`Strict`），确认全部在硬限制内中断、无 OOM、无栈溢出。
-- [ ] 10.2 全量 xmlconf（缓存由 `xmlconf_gen.py` 按**五条**规则重新生成）：`fail == 0`、
+- [x] 10.2 全量 xmlconf（缓存由 `xmlconf_gen.py` 按**五条**规则重新生成）：`fail == 0`、
   `pass + known == 2038`、`unsupported == 524`、`known <= 5`（默认 0）。
-  → **未达成**：旧口径实测 pass=1696 / fail=458 / unsupported=408（可跑 2178）。
-    缺口 458 = 385（声明语法校验，8.11 已实现）+ 59（XML 1.1，第三条例外规则）+ 14（5 条前向
-    引用 / 2 条 standalone / 7 条命名空间名）。按 `design.md` §14 推算，五条规则 + 8.9 / 8.12 /
-    8.13 落地后归零；复跑若仍有残留，只允许登记为真正的套件争议（≤ 5，默认 0）。
-- [ ] 10.3 `f_xml/tools/known-issues.json` 重置为**空数组**：第三轮之前登记的 5 条
+  → **已达成**：实测 `pass=2038 fail=0 unsupported=524 observed=24 known=0`。
+    旧口径 458 条 fail 的收口路径见 `baseline.md` §3；规则 4 / 5 的实测条数是 47 / 10
+    （估算 48 / 9，互补后总额不变）。
+- [x] 10.3 `f_xml/tools/known-issues.json` 重置为**空数组**：第三轮之前登记的 5 条
   「命名空间 vs XML 1.0 多冒号名」（`valid-sa-012`、`x-ibm-1-0.5-valid-P04-ibm04v01.xml`、
   `P05-ibm05v01/02/03.xml`）连同 `o-p04pass1` / `o-p05pass1` 已由第五条例外规则
   `namespace-name` 整体移出可跑集，不再需要例外额度。
   → 复跑后若出现无法归入任何一条排除规则的残留，才允许登记，每条写理由 + 规范章节，
     上限 5 条。该文件入库。
+  → 已重置为 `[]`，复跑后 `known=0`，无需任何例外条目。
 - [x] 10.4 `f_xml/doc/xmlconf-unsupported.md` 落盘，ID 集合与缓存内 `unsupported.json` 一致；
   **只提交 md**，`unsupported.json` 与套件本体留在 `f_xml/.cache/xmlconf/`。
-- [ ] 10.5 语法矩阵自查（`design.md` §9.1）：逐条对照 §12.2 的 ❌ 行，确认每条至少一个用例；
+- [x] 10.5 语法矩阵自查（`design.md` §9.1）：逐条对照 §12.2 的 ❌ 行，确认每条至少一个用例；
   补缺口。
+  → 逐条核对结果：A（epilog / 多根 / 无根）、B（属性值规范化 / 重复属性 / 裸 `<`）、
+    C（高位码点 / 非法码点 / 非法引用）、D（空 CDATA / `]]` / 相邻 / 混排）、E（`--` / `-` 结尾 /
+    `xml` target / PI data 含 `?`）、F（内部子集含 `>` / 递归膨胀 / 属性值内实体 /
+    条件段报错）、G（`xmlns=""` / 嵌套重定义 / 属性不受默认命名空间 / 未声明前缀 /
+    `xmlns` 作前缀）、H（UTF-16 双字节序 / BOM 冲突 / 4 字节 UTF-8）、I（`xml:space="default"`）
+    均已有用例。
+  → 补齐两处缺口：`NameSyntax_test.nonAsciiNames`（非 ASCII 名字）与
+    `NameSyntax_test.nameMayNotStartWithDigit`（数字开头报错）；§12.2 的 F / H 两行口径同步为
+    「条件段必须报错」「BOM 冲突必须报错」。
 - [x] 10.6 组合矩阵与五格式样本用例补齐。
 
 ## 11. 性能（已移出本变更）
@@ -316,7 +334,7 @@
 - [x] 12.1 改写 `f_xml/README.md` 与 `README_en.md`：能力表、三种用法示例、安全边界
   （外部实体不加载 / 三层上限 / 溢出策略）、`close()` 后不得调用、`indent` 只用于人看。
 - [x] 12.2 更新 `f_xml/src/f_xml.cj` 的包注释：模块定位与「不绑定业务格式」。
-- [ ] 12.3 `f_xml/doc/f_xml模块设计.md` 回填差异：§1.3 依赖版本（1.0.5）、§7.6 `XmlEntityRef`、
+- [x] 12.3 `f_xml/doc/f_xml模块设计.md` 回填差异：§1.3 依赖版本（1.0.5）、§7.6 `XmlEntityRef`、
   §4 `builder`、§12.8 新增的两个上限选项、§2.6 第三个 `RuneSource`、§5.4 声明语法校验与
   前向引用 / standalone 口径、§12.4 与 §13 / §15 的断言数与性能定位。
   这些是本变更 `design.md` §8 登记的七项 + §12 登记的五条修订。
@@ -324,6 +342,10 @@
     内部子集条件段必须报错（§5.4）、`standalone` 三档口径（§5.4）、单实体替换文本良构校验
     （§5.4）、`<!ATTLIST>` 属性类型映射与属性值规范化（§5.4 / §12.4），以及断言数
     2095 → 2038、`unsupported` 467 → 524。
+  → 已回填：§1.3（依赖 1.0.5 + 公开再导出）、§2.6（第三个 `RuneSource`）、§4（`builder` 内部化、
+    `EntityRefNode`）、§5.4（查询 / 展开 / 条件段 / 单实体替换文本 / 属性类型映射 / `standalone`
+    三档）、§7.6（工厂函数 + `EntityDecl` / `Doctype` 形状）、§12.2 F/H 两行、§12.4
+    （2586 / 524 / 2062 / 2038）、§12.8（两个新上限）、§15 回填表（1–17 行）。
 - [x] 12.4 `cjpm build`：无错误；WARNING 逐条记录原因（不允许「新增未说明的 WARNING」）。 见 `f_xml/doc/build-warnings.md`。
 - [x] 12.5 `cjpm test`：单测全绿、连续两次结果一致；xmlconf 的 Gate A 未达成（见 10.2 与 `baseline.md`）。
 - [x] 12.6 覆盖率自查：每个 `public` 声明至少一个正向用例；每个会抛异常的分支至少一个负向用例。
@@ -341,8 +363,8 @@
 
 - **性能**：1 MB ≈ 1.5 s / 10 MB ≈ 15.8 s，根因见 `design.md` §13；另开
   `optimize-f-xml-char-layer`，本变更只记录现状。
-- **12 条 not-wf 残差**：8.11 落地后 385 → 60 条仍被接受，其中 48 条由 `external-subset` 排除
-  规则移出，余下 12 条要靠 8.9 / 8.12 / 8.13 收敛（已点名的 6 条是 8.12 的 `sa-104` / `sa-116` /
-  `sa-117` / `sa-119` / `sa-181` / `sa-182`）。复跑后若仍有残留，按 Gate B 登记为真正的套件争议，
-  不得靠「放宽判定」抹平。
+- **not-wf 残差已收敛（第三轮关闭）**：8.11 落地后 385 → 60 条仍被接受，其中 47 条由
+  `external-subset` 排除规则移出；余下 13 条里 11 条由实现修正收掉（B1 2 + B2 1 + B4 7 + B5 1）、
+  2 条（`rmt-ns10-043` / `rmt-ns10-044`）由 `namespace-name` 排除。复跑 `fail = 0`，
+  `known-issues` 为空，未动用 Gate B 的例外额度。
 - **`known-issues` 已清空**：原 5 条命名空间冲突改由第五条例外规则处理，不再占用例外额度。

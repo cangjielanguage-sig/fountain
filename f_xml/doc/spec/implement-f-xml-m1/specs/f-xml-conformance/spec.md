@@ -81,12 +81,18 @@ xmlconf 压缩包、解压结果、`cases.json`、`unsupported.json` SHALL NOT �
 1. `EDITION` 包含 `1`/`2`/`3`/`4` 之一的用例 SHALL 排除（313 条；第 5 版改了 `Char` 产生式）。
 2. 测试文件出现 `<!ENTITY … SYSTEM|PUBLIC>` 的用例 SHALL 排除（95 条）。只使用内部实体的
    323 条中，228 条纳入可跑集（第四、五条规则会再摘走一部分，最终条数以脚本实测为准）。
-3. 测试文件声明了 `version="1.1"` 的用例 SHALL 排除（59 条）——M1 明确拒绝 XML 1.1（M3 才支持），
-   留在可跑集只会制造必然失败。
-4. 测试文件的 `<!DOCTYPE … SYSTEM|PUBLIC …>` 引用**外部子集**的用例 SHALL 排除（48 条）——
-   这 48 条的不良构只存在于永不加载的外部 DTD 里，M1 不可能检出，留下只会必然失败。
-5. 元素名 / 属性名含**多个冒号**，或前缀位置违反 Namespaces 1.0 的 `QName` 约束的用例
-   SHALL 排除（9 条）——它们在 XML 1.0 下合法，但 M1 一律做命名空间解析，两者互斥。
+3. 测试文件声明了 `version="1.1"` 且期望成功的用例 SHALL 排除（59 条）——M1 明确拒绝 XML 1.1
+   （M3 才支持），留在可跑集只会制造必然失败。`not-wf` 的 1.1 用例仍可跑：拒绝 1.1 正好满足
+   「期望失败」。
+4. `TYPE` 为 `not-wf`、测试文件的 `<!DOCTYPE … SYSTEM|PUBLIC …>` 引用**外部子集**、且测试文件
+   自身良构（用标准库 `xml.parsers.expat` 以不加载外部实体的方式试解析可判定）的用例
+   SHALL 排除（47 条）——这种用例的不良构只存在于永不加载的外部 DTD 里，M1 不可能检出，
+   留下只会必然失败。已经能被本地规则拦下的 `not-wf` 用例 SHALL NOT 被本条排除（排除它们
+   只会少一条有效断言）。
+5. 名字违反 Namespaces 1.0 的 `QName` 约束的用例 SHALL 排除（10 条）：冒号多于一个、冒号在
+   开头或结尾（空前缀 / 空本地名）、前缀未经 `xmlns:` 声明。判定范围是期望成功用例的元素名 /
+   属性名 / PI target，以及 `not-wf` 用例里的 DTD 声明名（`<!ENTITY>` / `<!NOTATION>`）——
+   它们在 XML 1.0 下合法，但 M1 一律做命名空间解析，两者互斥。
 
 排除项 SHALL 写入 `unsupported.json`，每条带原因
 （`edition` / `external-entity` / `xml-1.1` / `external-subset` / `namespace-name`）。
@@ -95,8 +101,7 @@ xmlconf 压缩包、解压结果、`cases.json`、`unsupported.json` SHALL NOT �
 
 - **WHEN** 统计可跑集
 - **THEN** 总计 2586、`unsupported` 524、可跑 2062、断言 2038；`error` 24 条不判定；
-  `TYPE` 分布由生成脚本实测输出（`not-wf` = 1155 − 48 = 1107，`valid` / `invalid` 各自减去
-  `namespace-name` 中实际归属的条数，合计 −9）
+  `TYPE` 分布由生成脚本实测输出（`not-wf` 1106、`valid` 705、`invalid` 227）
 
 #### Scenario: 内部实体用例纳入
 

@@ -96,14 +96,13 @@ XmlWriter(output, options: XmlWriterOptions(indent: Some("  "))).write(element)
 
 ## Status
 
-M1 is implemented and covered by 236 unit tests. The xmlconf 20130923 figures are: 2062 runnable
-cases (`unsupported` 524 = 313 `edition` + 95 external-entity + 59 XML 1.1 + 48 external-subset +
-9 namespace-name), 2038 assertions.
-Gate A is pending a re-run: under the old figures (2178 runnable) 1696 passed and 458 failed, and the
-gap is accounted for by five exclusion rules (`edition` / external-entity / XML 1.1 / external-subset /
-namespace-name) plus three specification fixes — DTD declaration syntax well-formedness checks,
+M1 is implemented and covered by 298 unit tests. The xmlconf 20130923 figures are: 2062 runnable
+cases (`unsupported` 524 = 313 `edition` + 95 external-entity + 59 XML 1.1 + 47 external-subset +
+10 namespace-name), 2038 assertions, and the measured result is 2038 passed / 0 failed (Gate A met).
+The five exclusion rules are `edition` / external-entity / XML 1.1 / external-subset /
+namespace-name; the three accompanying specification fixes (DTD declaration syntax well-formedness,
 `standalone` and single-entity replacement-text well-formedness, and `<!ATTLIST>` attribute-type
-mapping with attribute-value normalization. `known-issues` is empty by default.
+mapping with attribute-value normalization) are in place. `known-issues` is empty.
 Performance (1 MB ≈ 1.5 s / 10 MB ≈ 15.8 s) is recorded but is **not a gate**; the character-layer
 rewrite is tracked separately as `optimize-f-xml-char-layer`. See
 [`doc/spec/implement-f-xml-m1/baseline.md`](doc/spec/implement-f-xml-m1/baseline.md).

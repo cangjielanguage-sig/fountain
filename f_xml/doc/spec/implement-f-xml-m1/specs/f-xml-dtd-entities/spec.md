@@ -50,8 +50,9 @@
 `XmlException`，消息 SHALL 含**声明类型**与行列号。`<!ENTITY>` / `<!ELEMENT>` /
 `<!ATTLIST>` / `<!NOTATION>` 的逐条语法矩阵见 `design.md` §6.7，实现 SHALL 覆盖该表每一行。
 
-SHALL NOT 校验有效性（VC）：SHALL NOT 比对内容模型与文档实际结构，SHALL NOT 建立「元素 → 属性
-类型」映射，SHALL NOT 注入默认属性值，SHALL NOT 使用 NOTATION 语义。`TYPE="invalid"` 的用例
+SHALL NOT 校验有效性（VC）：SHALL NOT 比对内容模型与文档实际结构，SHALL NOT 注入默认属性值，
+SHALL NOT 使用 NOTATION 语义。`<!ATTLIST>` 的属性类型映射**只**服务属性值规范化
+（见「属性值规范化」），SHALL NOT 支撑有效性检查。`TYPE="invalid"` 的用例
 （良构但不合 DTD）仍 SHALL 解析成功。
 
 **条件段只属于外部子集**：XML 1.0 §3.4 的 `intSubset` 产生式不含 `conditionalSect`，因此内部子集里

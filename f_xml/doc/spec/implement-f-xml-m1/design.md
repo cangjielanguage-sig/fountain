@@ -571,30 +571,36 @@ DOM → token 序列 → StringGenerator（UTF-8 字节缓冲，8~64 KB 冲一�
 |---|---|
 | `f_xml/tools/xmlconf_gen.py` | 下载 `xmlts20130923.tar.gz` → 校验 SHA-256 → 解压 → 解析 catalog → 生成 `cases.json` / `unsupported.json`；`--offline` 只用缓存，`--force` 重新下载 |
 | `f_xml/tools/known-issues.json` | 人工裁定清单，上限 5 条，**默认清空（0 条）**。第三轮之前登记的 5 条「命名空间感知 vs XML 1.0 允许多冒号名」已全部改由 `namespace-name` 排除规则移出可跑集，不再占用例外额度；此后只允许登记真正的套件争议（判定口径与 XML 1.0 文本相悖、且无法归入任何一条排除规则的情形） |
-| `f_xml/doc/xmlconf-unsupported.md` | 524 条排除清单（`edition` 313 + `external-entity` 95 + `xml-1.1` 59 + `external-subset` 48 + `namespace-name` 9；人读版，由脚本从 `unsupported.json` 生成后提交） |
+| `f_xml/doc/xmlconf-unsupported.md` | 524 条排除清单（`edition` 313 + `external-entity` 95 + `xml-1.1` 59 + `external-subset` 47 + `namespace-name` 10；人读版，由脚本从 `unsupported.json` 生成后提交） |
 
 **可跑集五规则**（生成脚本与 harness 共用同一口径，按此顺序去重）：
 
 1. `EDITION` 含 `1`/`2`/`3`/`4` → 排除（313 条），原因 `edition`；
 2. 测试文件出现 `<!ENTITY … SYSTEM|PUBLIC>` → 排除（95 条），原因 `external-entity`；
-3. 测试文件声明 `version="1.1"` → 排除（59 条），原因 `xml-1.1`——M1 明确拒绝 1.1，
-   这些用例留在可跑集只会制造必然失败；
-4. 测试文件的 `<!DOCTYPE … SYSTEM|PUBLIC …>` 引用了**外部子集** → 排除（48 条），原因
-   `external-subset`——这 48 条是「不良构只存在于外部 DTD」的 `not-wf` 用例：测试文件本身良构，
-   错误写在永不加载的 `.dtd` 里，M1 不可能检出，留在可跑集必然 fail；
-5. 元素名 / 属性名含**多个冒号**或前缀位置不合法（XML 1.0 的 `Name` 允许，但违反 Namespaces 1.0
-   的 `QName` 约束）→ 排除（9 条），原因 `namespace-name`：`valid-sa-012`、
-   `x-ibm-1-0.5-valid-P04-ibm04v01.xml`、`x-ibm-1-0.5-valid-P05-ibm05v01.xml` /
-   `ibm05v02.xml` / `ibm05v03.xml`、`o-p04pass1`、`o-p05pass1`、`rmt-ns10-043`、`rmt-ns10-044`。
+3. 测试文件声明 `version="1.1"` 且期望成功 → 排除（59 条），原因 `xml-1.1`——M1 明确拒绝 1.1，
+   这些用例留在可跑集只会制造必然失败；`not-wf` 的 1.1 用例仍可跑（「拒绝 1.1」正好满足期望）；
+4. `TYPE` 为 `not-wf`、`<!DOCTYPE … SYSTEM|PUBLIC …>` 引用**外部子集**、且**测试文件自身良构** →
+   排除（47 条），原因 `external-subset`——不良构只写在永不加载的 `.dtd` 里，M1 不可能检出。
+   「测试文件自身良构」由标准库 `xml.parsers.expat` 以「不加载外部实体 / 不解析参数实体」的
+   方式试解析判定；已经能被本地规则拦下的 `not-wf` 用例不在此列（排除它们只会少一条有效断言）。
+   判定还要求测试文件自身不声明 1.1——那一档已被规则 3 覆盖；
+5. 名字违反 Namespaces 1.0 的 `QName` 约束（多个冒号 / 冒号在开头或结尾 / 前缀未声明）→ 排除
+   （10 条），原因 `namespace-name`：`valid-sa-012`、`x-ibm-1-0.5-valid-P04-ibm04v01.xml`、
+   `x-ibm-1-0.5-valid-P05-ibm05v01.xml` / `ibm05v02.xml` / `ibm05v03.xml` / `ibm05v05.xml`、
+   `o-p04pass1`、`o-p05pass1`、`rmt-ns10-043`、`rmt-ns10-044`。判定范围是「期望成功的用例」
+   （`valid` / `invalid`）里的元素名 / 属性名 / PI target，以及 `not-wf` 用例里 **DTD 声明名**
+   （`<!ENTITY>` / `<!NOTATION>`）：前者是「本地名字约束」的必然冲突，后者在 XML 1.0 的 `Name`
+   下合法但违反 `QName`。
 
 规则 4 与规则 2 不重叠：规则 2 排除的是**测试文件自己声明**外部实体，规则 4 排除的是
-`DOCTYPE` 指向外部子集。规则 5 是「M1 一律做命名空间解析」的直接代价——这 9 条文档在 XML 1.0
+`DOCTYPE` 指向外部子集。规则 5 是「M1 一律做命名空间解析」的直接代价——这 10 条文档在 XML 1.0
 下合法，在命名空间感知处理器里必然报错，两者互斥。
 
-合计 `unsupported` 524、可跑 2062、断言 2038（`error` 24 不判定）。`TYPE` 分布 SHALL 由生成脚本
-实测回填（`not-wf` = 1155 − 48 = **1107**；`valid` / `invalid` 各自减去 `namespace-name` 中
-实际归属的条数，合计 −9，脚本输出前不写死）。上一轮把 `valid` / `invalid` 按 708 / 232 估算，
-实测是 711 / 229——本轮不重犯，只写可推导的部分。
+合计 `unsupported` 524、可跑 2062、断言 2038（`error` 24 不判定）。`TYPE` 分布由生成脚本实测回填：
+`not-wf` **1106**（1155 − 47 − 2）、`valid` **705**（711 − 6）、`invalid` **227**（229 − 2）、
+`error` **24**。上一轮把规则 4 / 规则 5 的条数按 48 / 9 估算，实测是 **47 / 10**（前者多算了 1 条
+已被本地规则拦下的 `not-wf`，后者漏掉了 `ibm05v05` 的 `<!ENTITY Name: …>`）——总数不变，
+逐条数字以脚本输出为准。
 
 **不入库**（`.gitignore` 覆盖，`git check-ignore` 必须命中）：原始套件解压结果、`cases.json`、
 `unsupported.json`，统一落在 `f_xml/.cache/xmlconf/`。根 `.gitignore` 的 `.cache/` 规则已覆盖子目录；
@@ -735,8 +741,8 @@ GR 与 GBK 路径不受影响（`CharsetRuneSource` 仍走 `charset4cj.TextReade
 
 | # | 修订 | 主要落点 |
 |---|---|---|
-| A1 | 可跑集新增**第四条**排除规则 `external-subset`（48 条）：不良构只存在于外部 DTD | §9.3、`f-xml-conformance`「可跑集过滤」、tasks 6.2 |
-| A2 | 可跑集新增**第五条**排除规则 `namespace-name`（9 条）：XML 1.0 合法但非命名空间良构 | §9.3、`f-xml-conformance`「可跑集过滤」/ Gate B、tasks 6.2 / 10.3 |
+| A1 | 可跑集新增**第四条**排除规则 `external-subset`（实测 47 条）：不良构只存在于外部 DTD | §9.3、`f-xml-conformance`「可跑集过滤」、tasks 6.2 |
+| A2 | 可跑集新增**第五条**排除规则 `namespace-name`（实测 10 条）：XML 1.0 合法但非命名空间良构 | §9.3、`f-xml-conformance`「可跑集过滤」/ Gate B、tasks 6.2 / 10.3 |
 | A3 | 口径变更：`unsupported` 467 → **524**、可跑 2119 → **2062**、断言 2095 → **2038**；`TYPE` 分布由生成脚本实测回填 | §1、§7 决策 1/3、§9.1、§9.3、§11、proposal、`f-xml-conformance`、tasks 6.2 / 10.2、README、baseline、`xmlconf-unsupported.md` |
 | B1 | BOM 与 `encoding` 声明冲突改报 **fatal error**（原「以 BOM 为准」作废） | §6.1、`f-xml-char-layer`「字节嗅探」、tasks 1.2 |
 | B2 | 内部子集出现条件段 `<![INCLUDE[` / `<![IGNORE[` 改**报错**（规范只允许外部子集） | §6.7、`f-xml-dtd-entities`、tasks 8.1 / 8.11 |
@@ -745,7 +751,7 @@ GR 与 GBK 路径不受影响（`CharsetRuneSource` 仍走 `charset4cj.TextReade
 | B5 | 新增 tasks **8.13**：`<!ATTLIST>` 属性类型映射与属性值规范化（`rmt-ns10-012`）；同时删除原 §6.7 / §8 差异 7 的旧口径「不建「元素 → 属性类型」映射、一律按 CDATA」 | §6.7、§8 差异 7、`f-xml-dtd-entities`「属性值规范化」、tasks 8.13 |
 | C | 全部规划产物与文档口径同步，两份副本逐文件字节一致 | tasks 12.3 / 12.7 |
 
-**缺口收敛推算**（以旧基线 `fail = 458` 为起点，逐项对齐上一轮实测）：
+**缺口收敛推算**（以旧基线 `fail = 458` 为起点；§14 当时是按估算写的，实测值见括号）：
 
 ```
 458（旧口径 fail = 385 条 not-wf 被接受 + 59 条 XML 1.1 + 14 条 valid/invalid 失败）
@@ -758,9 +764,19 @@ GR 与 GBK 路径不受影响（`CharsetRuneSource` 仍走 `charset4cj.TextReade
  =   0
 ```
 
-其中 12 条残差的点名部分是 8.12 的 6 条（`sa-104` / `sa-116` / `sa-117` / `sa-119` /
-`sa-181` / `sa-182`），其余 6 条在 8.9 / 8.13 落地后逐条复核归位；复跑若仍有残留，只允许
-登记为**真正的套件争议**并受 Gate B 的 5 条上限约束，**默认 0 条**。
+**实测复核（2026-10-29，第三轮落地后）**——旧基线 `fail = 458` 拆成
+「385 条 `not-wf` 被接受 + 59 条 1.1 失败 + 14 条 `valid` / `invalid` 失败」，收口路径：
+
+- 规则 3 去掉 59 条；
+- 8.11 声明语法校验命中 325 条（385 → 60）；
+- 余下 60 条：规则 4（47）+ 规则 5 的 `rmt-ns10-043` / `rmt-ns10-044`（2）+ 实现修正 11
+  （B1 2 + B2 1 + B4 7 + B5 1）全部归零；
+- 14 条 `valid` / `invalid` 失败：8.2 / 8.9 修掉 7 条（5 条前向引用 + 2 条 `standalone`），
+  其余 7 条连同 `ibm05v05` 由规则 5 移出可跑集。
+
+与 §14 估算不同的两处：规则 4 实测 **47**（估算 48，多算的那条不良构在测试文件自身）、
+规则 5 实测 **10**（估算 9，漏登了 `ibm05v05` 的空本地名）。总数不变：
+`313 + 95 + 59 + 47 + 10 = 524`，断言 **2038**，`fail = 0`、`known = 0`。
 
 **四份产物自洽检查点**：
 
