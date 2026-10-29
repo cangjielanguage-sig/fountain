@@ -2,13 +2,13 @@
 
 ## Purpose
 
-为记忆、经验、知识与文档提供统一的内容存取契约，使 f_llm 可以在 PostgreSQL、MySQL 与 fhydra 之间按配置切换，且调用方不感知具体后端。
+为记忆、经验、知识与文档提供统一的内容存取契约，使 f_llm 可以在 PostgreSQL、MySQL、f_hydra（进程内）与 fhydra（HTTP）之间按配置切换，且调用方不感知具体后端。
 
 ## ADDED Requirements
 
 ### Requirement: 内容后端由配置选择
 
-系统 SHALL 读取 `llm_contentStore` 决定内容族实现，合法值为 `postgres`、`mysql`、`fhydra`；取值未知或未注册时 MUST 启动失败并列出可选值，不得静默回退到默认实现。
+系统 SHALL 读取 `llm_contentStore` 决定内容族实现，合法值为 `postgres`、`mysql`、`f_hydra`、`fhydra`；取值未知或未注册时 MUST 启动失败并列出可选值，不得静默回退到默认实现。
 
 #### Scenario: 合法配置装载对应实现
 - **WHEN** `llm_contentStore=postgres` 且该实现已注册
@@ -16,7 +16,7 @@
 
 #### Scenario: 未知配置拒绝启动
 - **WHEN** `llm_contentStore=sqlite`
-- **THEN** 启动失败，错误信息包含 `sqlite` 与 `postgres, mysql, fhydra`
+- **THEN** 启动失败，错误信息包含 `sqlite` 与 `postgres, mysql, f_hydra, fhydra`
 
 ### Requirement: 记忆按用户与命名空间隔离
 
@@ -116,4 +116,4 @@
 
 #### Scenario: 测试替身不作为可选值
 - **WHEN** 检查 `llm_contentStore` 的合法值列表
-- **THEN** 列表为 `postgres`、`mysql`、`fhydra`，不含 `memory`
+- **THEN** 列表为 `postgres`、`mysql`、`f_hydra`、`fhydra`，不含 `memory`

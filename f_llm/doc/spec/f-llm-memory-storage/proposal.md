@@ -8,7 +8,7 @@
 
 ## What Changes
 
-- 新增 **内容族** `ContentStore`：记忆/经验/知识/文档，三个实现 `PostgresContentStore` / `MySqlContentStore` / `FhydraContentStore`，由 `llm_contentStore` 选择。
+- 新增 **内容族** `ContentStore`：记忆/经验/知识/文档，三个实现 `PostgresContentStore` / `MySqlContentStore` / `FHydraContentStore`（进程内）/ `FhydraContentStore`（HTTP），由 `llm_contentStore` 选择。
   - 本变更交付接口、内存测试替身、**PostgreSQL 与 MySQL 两个实现**；fhydra 内容族仍按引用方后续变更实现（HTTP 契约已在 `fhydra-design.md`）。
   - 记忆检索**一次做全三路**：dense（pgvector/MySQL VECTOR）+ sparse（倒排表）+ colbert（多头重排），并按 kind 固定权重打分。
 - 新增 **元数据族** `MetaStore`：人格/技能/提示词/模型配置，三个实现 `PostgresMetaStore` / `MySqlMetaStore` / `FStoreMetaStore`，由 `llm_metaStore` 选择。
