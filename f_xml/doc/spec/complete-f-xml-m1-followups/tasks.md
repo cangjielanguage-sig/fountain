@@ -105,11 +105,11 @@
 
 ## 5. 性能基准与 Gate
 
-- [ ] 5.1 新增 `src/Perf_test.cj`：`SyntheticXmlStream`（按整条记录凑数、精确到 < 单条
+- [x] 5.1 新增 `src/Perf_test.cj`：`SyntheticXmlStream`（按整条记录凑数、精确到 < 单条
   记录长度的误差、跨记录边界、良构）+ 字节数自检用例。
-- [ ] 5.2 1 MB 冒烟用例（默认执行，目标 < 100 ms）+ 10 MB / 50 MB 用例（`F_XML_PERF=1`）。
+- [x] 5.2 1 MB 冒烟用例（默认执行，目标 < 100 ms）+ 10 MB / 50 MB 用例（`F_XML_PERF=1`）。
   计时口径按 `design.md` §6.2：预热、3 次、只计 `nextEvent` 循环、`min`。
-- [ ] 5.3 RSS 采集：`/proc/self/status` 的 `VmRSS` / `VmHWM`；不可用时打印 `unavailable`
+- [x] 5.3 RSS 采集：`/proc/self/status` 的 `VmRSS` / `VmHWM`；不可用时打印 `unavailable`
   并跳过断言。断言按 `design.md` §6.3。
 - [ ] 5.4 **Gate 判定**：`F_XML_PERF=1 cjpm test --filter=Perf`，10 MB `min < 7200 ms`、
   `hwm50 - hwm10 <= 24 MB`、`hwm50 <= 256 MB`。三项全过才勾这一条；不过按
@@ -119,7 +119,7 @@
 
 ## 6. R5 `bufSize` 实测
 
-- [ ] 6.1 在 `Perf_test` 增加矩阵用例（`F_XML_PERF=1`）：1 MB / 10 MB × 4096 / 8192 /
+- [x] 6.1 在 `Perf_test` 增加矩阵用例（`F_XML_PERF=1`）：1 MB / 10 MB × 4096 / 8192 /
   16384 / 65536，各 3 次取最小，输出统一格式。
 - [ ] 6.2 跑完把 8 个值回填 `design.md` §8.2，并写一句结论（是否收敛、拐点在哪）。
 - [ ] 6.3 回填 `f_xml/doc/f_xml模块设计.md` §15.1 与 `f_xml/README.md` 状态段；
@@ -158,17 +158,17 @@
 
 ## 10. 全量回归
 
-- [ ] 10.1 `cjpm clean && cjpm build`：不新增 WARNING（现有 20 条在
+- [x] 10.1 `cjpm clean && cjpm build`：不新增 WARNING（现有 20 条在
   `doc/build-warnings.md`）。
-- [ ] 10.2 `cjpm test`：现有 303 条 + 新增用例全部通过；记录总数。
+- [x] 10.2 `cjpm test`：现有 303 条 + 新增用例全部通过；记录总数。
 - [ ] 10.3 **Gate A**：xmlconf 全量 `pass=2038 fail=0 unsupported=524 known=0`；
   五条排除规则的条数仍是 313 / 95 / 59 / 47 / 10（`unsupported.json` 复核）。
-- [ ] 10.4 **公开声明零变更**：`grep -rn '^public ' f_xml/src --include='*.cj' | sort >
+- [x] 10.4 **公开声明零变更**：`grep -rn '^public ' f_xml/src --include='*.cj' | sort >
   /tmp/f_xml_public_after.txt && diff /tmp/f_xml_public_before.txt /tmp/f_xml_public_after.txt`
   无输出。
-- [ ] 10.5 推拉一致性：`PushPullParity_test` 全绿；`FormatSamples_test` 全绿；
+- [x] 10.5 推拉一致性：`PushPullParity_test` 全绿；`FormatSamples_test` 全绿；
   `WriterEncoding_test` 全绿（写方向不该被本次改动影响，跑它是为了证明边界干净）。
-- [ ] 10.6 新增 `CharLayerParity_test`：`bufSize ∈ {4, 8, 16, 64, 8192, 65536}` ×
+- [x] 10.6 新增 `CharLayerParity_test`：`bufSize ∈ {4, 8, 16, 64, 8192, 65536}` ×
   6 份文档（UTF-8 strict / replace、GBK、UTF-16LE、UTF-16BE、UTF-32LE）的事件日志 /
   文本 / `position()` / 错误消息全一致。
 

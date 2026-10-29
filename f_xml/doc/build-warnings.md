@@ -3,7 +3,7 @@
 `cjpm build` 在本模块内产生以下 WARNING（stdlib / `f_base` 自身的警告不计）。每条都给出原因，
 不允许出现「未说明的 WARNING」。
 
-## 1. 仅被测试使用的观测器（5 条）
+## 1. 仅被测试使用的观测器（6 条）
 
 | 位置 | 警告 | 原因 |
 |---|---|---|
@@ -12,6 +12,7 @@
 | `ExpandSink.cj` `retainedBytes()` | unused function | `Spill_test` 用它断言「内存侧保留字节不随展开量增长」。 |
 | `ExpandSink.cj` `size()` | unused function | 便于诊断溢出大小的只读访问器，测试与人工排查用。 |
 | `ExpandSink.cj` `readAll()` | unused function | 一次性读回全部展开结果，供测试把溢出路径与内存路径逐字节比较。 |
+| `RuneSource.cj` `hasOwnBlock()` | unused function | `RuneSource_test` 用它做**结构性断言**：`LineWindow` 驱动的路径不得再分配第二份码点块（设计 §3.2 / spec「三层缓冲合并」）。只读、不进公开 API。 |
 
 ## 2. `XmlEventHandler` 默认实现的形参（15 条）
 
