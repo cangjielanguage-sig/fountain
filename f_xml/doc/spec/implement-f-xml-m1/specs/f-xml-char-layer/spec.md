@@ -33,18 +33,9 @@
 
 ### Requirement: 字节嗅探
 
-嗅探 SHALL 按 `BOM → XML 声明 → UTF-8` 的优先级确定字符集。
-
-1. 前 4 字节判 BOM：`EF BB BF`（UTF-8）、`FF FE`（UTF-16LE）、`FE FF`（UTF-16BE）、
-   `00 00 FE FF`（UTF-32BE）、`FF FE 00 00`（UTF-32LE，须优先于 UTF-16LE 判定）。
-2. 无 BOM 时按 XML 1.0 附录 F 魔数判字节序：`3C 00 3F 00`（UTF-16LE）、
-   `00 3C 00 3F`（UTF-16BE）、`3C 3F 78 6D`（UTF-8/ASCII）。
-3. 再读至多 1024 字节查找 `<?xml ... encoding="..."?>`，接受单双引号。
-4. 以上都无结论时按 UTF-8。
-
-BOM 与 `encoding` 声明**冲突**时 SHALL 抛 `XmlException`（致命错误），SHALL NOT 以「BOM 为准」
-静默改写，也 SHALL NOT 反过来以声明为准。消息 SHALL 同时带出两个编码名与行列号。
-无 BOM 时 `encoding` 声明才是决定性线索。
+嗅探 SHALL 按 `BOM → XML 声明 → UTF-8` 的优先级确定字符集（BOM / 附录 F 魔数 / 声明的具体
+字节模式见 `design.md` §6.1）。BOM 与 `encoding` 声明**冲突**时 SHALL 抛 `XmlException`
+（致命错误），消息 SHALL 带出两个编码名与行列号；无 BOM 时声明才是决定性线索。
 嗅探消费的字节 SHALL 全部进入 `PrefixStream` 回放，SHALL NOT 丢弃。
 
 #### Scenario: UTF-8 BOM 被跳过

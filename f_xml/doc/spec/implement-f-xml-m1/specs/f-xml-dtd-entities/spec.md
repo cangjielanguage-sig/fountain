@@ -46,20 +46,10 @@
 
 ### Requirement: DTD 声明语法良构校验
 
-内部子集的四类声明 SHALL 解析并校验**声明语法**（良构性，WFC）。非法声明 SHALL 抛
-`XmlException`，消息 SHALL 含**声明类型**与行列号。`<!ENTITY>` / `<!ELEMENT>` /
-`<!ATTLIST>` / `<!NOTATION>` 的逐条语法矩阵见 `design.md` §6.7，实现 SHALL 覆盖该表每一行。
-
-SHALL NOT 校验有效性（VC）：SHALL NOT 比对内容模型与文档实际结构，SHALL NOT 注入默认属性值，
-SHALL NOT 使用 NOTATION 语义。`<!ATTLIST>` 的属性类型映射**只**服务属性值规范化
-（见「属性值规范化」），SHALL NOT 支撑有效性检查。`TYPE="invalid"` 的用例
-（良构但不合 DTD）仍 SHALL 解析成功。
-
-**条件段只属于外部子集**：XML 1.0 §3.4 的 `intSubset` 产生式不含 `conditionalSect`，因此内部子集里
-出现 `<![INCLUDE[ … ]]>` 或 `<![IGNORE[ … ]]>` SHALL 抛 `XmlException`，消息 SHALL 含
-「条件段只能出现在外部子集」与行列号。SHALL NOT 提供「按标志位选分支」的路径，
-也 SHALL NOT 为 `IGNORE` 分支实现「配对跳过、不校验内部声明」——外部子集永不加载，M1 没有
-合法入口能到达条件段。
+内部子集的 `<!ENTITY>` / `<!ELEMENT>` / `<!ATTLIST>` / `<!NOTATION>` SHALL 解析并校验**声明
+语法**（良构性，WFC）；非法声明 SHALL 抛 `XmlException`，消息含声明类型与行列号。逐条语法
+矩阵见 `design.md` §6.7。SHALL NOT 校验有效性（VC）、SHALL NOT 注入默认属性值；`TYPE="invalid"`
+仍 SHALL 解析成功。
 
 #### Scenario: 四类合法声明全部通过
 
@@ -86,6 +76,18 @@ SHALL NOT 使用 NOTATION 语义。`<!ATTLIST>` 的属性类型映射**只**服�
 
 - **WHEN** 内部子集含 `<!NOTATION n>`
 - **THEN** 抛 `XmlException`，消息含 `NOTATION`
+
+### Requirement: 内部子集拒绝条件段
+
+XML 1.0 §3.4 的 `intSubset` 产生式不含 `conditionalSect`，因此内部子集里出现
+`<![INCLUDE[ … ]]>` 或 `<![IGNORE[ … ]]>` SHALL 抛 `XmlException`，消息含「条件段只能出现在
+外部子集」与行列号。SHALL NOT 提供「按标志位选分支」的路径；外部子集永不加载，M1 没有合法
+入口能到达条件段。
+
+#### Scenario: 内部子集条件段报错
+
+- **WHEN** 内部子集含 `<![INCLUDE[ <!ENTITY e "v"> ]]>`
+- **THEN** 抛 `XmlException`，消息含「条件段」与行列号
 
 #### Scenario: 内部子集的 INCLUDE 条件段报错
 
@@ -328,18 +330,10 @@ SHALL NOT 降级回内存。
 
 ### Requirement: standalone 与未声明实体
 
-引用**未声明**的实体时（含「只在外部子集声明」的情况——外部子集永不加载），解析器 SHALL 先判断
-「有没有可能从本文件以外声明」，再按 `standalone` 处理：
-
-| 前提 | `standalone` | 行为 |
-|---|---|---|
-| — | `"yes"` | 抛 `XmlException`（文档自称自包含，却引用了未声明的东西） |
-| 无外部子集（`DOCTYPE` 无 `SYSTEM` / `PUBLIC`）**且**全文无参数实体引用 | `"no"` 或省略 | 抛 `XmlException`（WFC: Entity Declared）——连「可能声明在别处」的通道都没有 |
-| 有外部子集，**或**有参数实体引用 | `"no"` 或省略 | **不报错**：内容位置产出空文本、属性值里去掉该引用，并写一条告警 |
-
-判定 SHALL NOT 只看 `standalone`：`standalone` 为 `no` / 缺省并不自动意味着「未声明实体可以跳过」，
-必须有「外部子集或参数实体引用」这个前提。告警 SHALL 可从解析器实例的告警列表取到
-（`XmlPullParser.warnings()`）。
+引用**未声明**实体时，解析器 SHALL 先判断「有没有可能从本文件以外声明」，再按 `standalone`
+处理：`"yes"` SHALL 报错；无外部子集且无参数实体引用时 SHALL 报错（WFC: Entity Declared）；
+有外部子集或参数实体引用且 `standalone="no"`/缺省时 SHALL 跳过并写告警。三种情形见下方
+Scenario，判定细节见 `design.md` §6.8。告警 SHALL 可从 `XmlPullParser.warnings()` 取到。
 
 #### Scenario: standalone=yes 报错
 
