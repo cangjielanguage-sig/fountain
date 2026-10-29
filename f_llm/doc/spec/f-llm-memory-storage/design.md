@@ -126,7 +126,7 @@ public interface MetaStore <: Resource {
 
 无。
 
-### D12 MySQL 实测结论（2026-10-29）
+### D12 MySQL 实测结论（2026-10-29，**已被 D13 取代**）
 
 WSL Ubuntu 24.04 从官方 APT 源（`mysql-innovation` 组件）安装到 **MySQL 26.10.0**（年度版本号，晚于 9.2）。
 实测结果：
@@ -142,3 +142,31 @@ WSL Ubuntu 24.04 从官方 APT 源（`mysql-innovation` 组件）安装到 **MyS
 1. 向量列用 `BLOB` 存 `f32` 小端（不依赖 `VECTOR` 类型，兼容 MySQL 8.x/MariaDB）；
 2. `searchDense` 取候选后在应用层算 cosine，并 `warn` 一次「降级为暴力检索」；
 3. 若后续换到真正支持 `VECTOR INDEX` 的 9.2+ 构建，只改 DDL 与一条 SQL，不动接口。
+### D13 MySQL Community + MyVector：真 ANN 可用（2026-10-29 追加）
+
+MySQL Community 本身没有 `VECTOR INDEX` / `VECTOR_DISTANCE`（D12 的结论仍然成立），
+但 **MyVector 组件**（`askdba/myvector`，commit `98c8269`）可以在 Community 上提供 HNSW：
+
+| 项 | 实测 |
+|---|---|
+| MySQL | 9.7.4 LTS（官方 tarball，`/opt/mysql97`，socket `/tmp/mysql97.sock`，port 3306） |
+| MyVector | 组件构建（`libmyvector_component.so` → `component_myvector.so`），`INSTALL COMPONENT 'file://myvector'` |
+| 列类型 | `MYVECTOR(type=HNSW,dim=1024,size=…,dist=L2,m=16,ef=100)`（组件改写 DDL，不是 MySQL `VECTOR`） |
+| 建索引 | `CALL mysql.myvector_index_build('db.table.col','pk')` |
+| ANN 查询 | `WHERE MYVECTOR_IS_ANN('db.table.col','pk', myvector_construct('[…]'), k)` |
+| 写入 | `INSERT … VALUES (myvector_construct('[…]'))` |
+| 状态 | `CALL mysql.myvector_index_status('db.table.col')` |
+
+冒烟结果（3 行数据）：建索引 `SUCCESS rows: 3`；`MYVECTOR_IS_ANN` 返回 `wordid=1,2`。
+
+**运行前提**：
+
+1. 数据目录放 `myvector.cnf`（`myvector_user_id` / `myvector_user_password` / `myvector_socket`），文件 `chown mysql` + `chmod 600`；
+2. 该账号需要 `SELECT, LOCK TABLES, REPLICATION CLIENT, REPLICATION SLAVE`（缺 `LOCK TABLES` 会在建索引时报 `Access denied`）；
+3. 索引随 binlog 增量更新，文件落在 `myvector_index_dir`；重启后 `CALL …_index_load` 恢复。
+
+**对 f_llm 的影响**：MySQL 内容族不再需要「BLOB + 应用层 cosine」的降级实现，
+改为 `MYVECTOR` 列 + `MYVECTOR_IS_ANN` 查询；隔离过滤（user/namespace）仍由 SQL 的 `WHERE` 条件完成，
+需确认 MyVector 的 ANN 结果能否与普通 `WHERE` 条件组合（若不行，则先 ANN 取大候选再在外层过滤）。
+
+**待验证**：`MYVECTOR_IS_ANN` 与 `WHERE user_id=? AND namespace=?` 的组合语义、1024 维下的建索引耗时。
