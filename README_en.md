@@ -311,6 +311,13 @@ You can also use the same-named APIs of this module through the `fountain::fount
 
 **See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_version/README_en.md>
 
+### `fountain::f_email`
+Email client: SMTP / POP3 / IMAP4rev1 + MIME parsing and generation, a unified `Email`
+facade (send / list / body / attachments / delete), streaming attachments, TLS and
+credential redaction.
+
+**See details:**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_email/README_en.md>
+
 ### `fountain::f_xml`
 Generic XML 1.0 parser and generator: streaming events (push / pull), DOM, namespaces,
 DTD internal entities, security limits.
