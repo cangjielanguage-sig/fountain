@@ -60,6 +60,12 @@ class FakeMemoryRepository <: MemoryRepository {
         lastLimit = limit
         hits
     }
+
+    public var sparseHits = ArrayList<MemoryHit>()
+
+    public func searchSparse(query: MemoryQuery, limit: Int64): ArrayList<MemoryHit> {
+        sparseHits
+    }
 }
 
 @Test
@@ -102,8 +108,9 @@ public class PostgresMemoryStoreTest {
         @Expect(results.size, 2)
         @Expect(results[0].record.kind, 'fact')
         @Expect(results[1].record.kind, 'session')
-        // fact=1.0 → 0.5；session=0.3 → 0.15
-        @Expect(results[1].score < 0.16f64 && results[1].score > 0.14f64, true)
+        // 两条 dense 同分 → 归一化都为 1.0；融合 0.7、再乘权重：fact=0.7，session=0.21
+        @Expect(results[0].score < 0.71f64 && results[0].score > 0.69f64, true)
+        @Expect(results[1].score < 0.22f64 && results[1].score > 0.20f64, true)
     }
 
     @TestCase
@@ -124,6 +131,44 @@ public class PostgresMemoryStoreTest {
         let store = PostgresMemoryStore(repo, FakeEmbedder())
         let results = store.search(MemoryQuery(1, ['global'], [], 'q', topK: 2))
         @Expect(results.size, 2)
+    }
+
+    @TestCase
+    func testSparseFusionUsesWeights(): Unit {
+        let repo = FakeMemoryRepository()
+        repo.hits.add(MemoryHit(memoryRecord(1, 'note'), 0.9f64))
+        repo.hits.add(MemoryHit(memoryRecord(2, 'note'), 0.1f64))
+        repo.sparseHits.add(MemoryHit(memoryRecord(1, 'note'), 0.6f64))
+        repo.sparseHits.add(MemoryHit(memoryRecord(3, 'note'), 1.0f64))
+        let store = PostgresMemoryStore(repo, FakeEmbedder())
+
+        let results = store.search(MemoryQuery(1, ['global'], [], 'q', topK: 5))
+        // dense 归一化后 A=1/B=0；sparse A=0/C=1 → A=0.7, C=0.3, B=0
+        @Expect(results.size, 3)
+        @Expect(results[0].record.id, 1)
+        @Expect(results[1].record.id, 3)
+    }
+
+    @TestCase
+    func testEmptySparseMarksDegraded(): Unit {
+        let repo = FakeMemoryRepository()
+        repo.hits.add(MemoryHit(memoryRecord(1, 'note'), 0.9f64))
+        let store = PostgresMemoryStore(repo, FakeEmbedder())
+
+        let results = store.search(MemoryQuery(1, ['global'], [], 'q', topK: 5))
+        @Expect(results.size, 1)
+        @Expect(results[0].degraded, true)
+    }
+
+    @TestCase
+    func testFusionDeduplicatesById(): Unit {
+        let repo = FakeMemoryRepository()
+        repo.hits.add(MemoryHit(memoryRecord(1, 'note'), 0.9f64))
+        repo.sparseHits.add(MemoryHit(memoryRecord(1, 'note'), 0.6f64))
+        let store = PostgresMemoryStore(repo, FakeEmbedder())
+
+        let results = store.search(MemoryQuery(1, ['global'], [], 'q', topK: 5))
+        @Expect(results.size, 1)
     }
 
     @TestCase

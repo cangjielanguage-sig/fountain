@@ -16,7 +16,7 @@
 - [x] 2.2 写 `MemoryKinds` 用例：预定义 7 值、自定义归属用户、删除预定义抛 `IllegalArgumentException`、启动补种幂等；实现后转绿
 - [x] 2.3 写记忆写入用例：标题/正文分别向量化、同 `(user_id,namespace,title)` 覆盖、向量服务失败拒绝写入；实现 `PostgresMemoryStore.add` 后转绿
 - [x] 2.4 写 dense 检索用例：相似度排序、`topK×2` 超取后截断、kind 权重乘算、`topK` 上限；实现后转绿
-- [ ] 2.5 写 sparse 检索用例：query token 命中倒排、权重累加、与 dense 融合（0.7/0.3）、无 sparse 时 `degraded=true`；实现倒排读写与融合后转绿
+- [x] 2.5 写 sparse 检索用例：query token 命中倒排、权重累加、与 dense 融合（0.7/0.3）、无 sparse 时 `degraded=true`；实现倒排读写与融合后转绿
 - [ ] 2.6 写 colbert 重排用例：`rerank=true` 改变排序但不改候选集、`rerank=false` 不读 colbert 列；实现 max-sim 重排后转绿
 - [ ] 2.7 写隔离用例：跨用户不可见、`global` 跨工作空间可见、`ws-*` 互不可见；实现查询条件后转绿
 - [ ] 2.8 把 1.2 的 conformance 用例接 PostgreSQL 实现跑绿；无 PG 环境时跳过并打印原因

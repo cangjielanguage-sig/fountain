@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_llm.store
 
-import std.collection.ArrayList
+import std.collection.*
 import std.time.DateTime
 
 /**
@@ -55,11 +55,28 @@ public class PostgresMemoryStore <: MemoryStore {
 
     public func search(query: MemoryQuery): ArrayList<MemoryHit> {
         let vector = embedder.embed(query.text)
-        // 先按 topK 的 2 倍召回，乘权重后再截断，避免低权重记忆被提前挤掉
-        let candidates = repo.searchDense(query, vector, query.topK * 2)
+        // 两路各取 topK 的 2 倍，融合后乘权重再截断
+        let limit = query.topK * 2
+        let dense = repo.searchDense(query, vector, limit)
+        let sparse = repo.searchSparse(query, limit)
+        // 没有倒排数据（或对方未提供 sparse）时，只由 dense 打分，并标记降级
+        let degraded = sparse.isEmpty()
+
+        let denseScores = normalize(dense)
+        let sparseScores = normalize(sparse)
+
+        let ids = ArrayList<Int64>()
+        let records = HashMap<Int64, MemoryRecord>()
+        collect(dense, ids, records)
+        collect(sparse, ids, records)
+
         let scored = ArrayList<MemoryHit>()
-        for(hit in candidates){
-            scored.add(MemoryHit(hit.record, hit.score * MemoryKinds.weightOf(hit.record.kind)))
+        for(id in ids){
+            let denseScore = denseScores.get(id) ?? 0.0f64
+            let sparseScore = sparseScores.get(id) ?? 0.0f64
+            let record = records.get(id).getOrThrow()
+            let fused = 0.7f64 * denseScore + 0.3f64 * sparseScore
+            scored.add(MemoryHit(record, fused * MemoryKinds.weightOf(record.kind), degraded: degraded))
         }
 
         // 选择排序取前 topK（不依赖 ArrayList 的插入/交换 API）
@@ -87,5 +104,43 @@ public class PostgresMemoryStore <: MemoryStore {
             picked++
         }
         results
+    }
+
+    private static func collect(hits: ArrayList<MemoryHit>, ids: ArrayList<Int64>,
+                                records: HashMap<Int64, MemoryRecord>): Unit {
+        for(hit in hits){
+            let id = hit.record.id
+            if(!records.contains(id)){
+                records[id] = hit.record
+                ids.add(id)
+            }
+        }
+    }
+
+    /** min-max 归一化；单条候选或全部同分时统一按 1.0 处理，避免除零 */
+    private static func normalize(hits: ArrayList<MemoryHit>): HashMap<Int64, Float64> {
+        let scores = HashMap<Int64, Float64>()
+        if(hits.isEmpty()){
+            return scores
+        }
+        var min = hits[0].score
+        var max = min
+        for(hit in hits){
+            if(hit.score < min){
+                min = hit.score
+            }
+            if(hit.score > max){
+                max = hit.score
+            }
+        }
+        let range = max - min
+        for(hit in hits){
+            if(range <= 0.0f64){
+                scores[hit.record.id] = 1.0f64
+            }else{
+                scores[hit.record.id] = (hit.score - min) / range
+            }
+        }
+        scores
     }
 }

@@ -79,10 +79,13 @@ public class MemoryQuery {
 public class MemoryHit {
     public let record: MemoryRecord
     public let score: Float64
+    /** true 表示该次检索缺了某一路（当前是 sparse 缺失），分数只由剩余通路融合 */
+    public let degraded: Bool
 
-    public init(record: MemoryRecord, score: Float64) {
+    public init(record: MemoryRecord, score: Float64, degraded!: Bool = false) {
         this.record = record
         this.score = score
+        this.degraded = degraded
     }
 }
 

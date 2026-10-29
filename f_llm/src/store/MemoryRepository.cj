@@ -39,4 +39,7 @@ public interface MemoryRepository {
      * 权重与 topK 在 store 层做，保证不同后端打分口径一致。
      */
     func searchDense(query: MemoryQuery, vector: Array<Float64>, limit: Int64): ArrayList<MemoryHit>
+
+    /** sparse 召回：按 token 命中累加权重；没有倒排数据时返回空列表（由 store 标 degraded） */
+    func searchSparse(query: MemoryQuery, limit: Int64): ArrayList<MemoryHit>
 }
