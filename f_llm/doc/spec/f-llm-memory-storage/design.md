@@ -170,3 +170,17 @@ MySQL Community 本身没有 `VECTOR INDEX` / `VECTOR_DISTANCE`（D12 的结论�
 需确认 MyVector 的 ANN 结果能否与普通 `WHERE` 条件组合（若不行，则先 ANN 取大候选再在外层过滤）。
 
 **待验证**：`MYVECTOR_IS_ANN` 与 `WHERE user_id=? AND namespace=?` 的组合语义、1024 维下的建索引耗时。
+#### D13.1 过滤与 ANN 的组合语义（实测）
+
+| 写法 | 结果 |
+|---|---|
+| `WHERE user_id=1 AND ns='g' AND MYVECTOR_IS_ANN(…, k)` | **先 ANN 取 k 条、再过滤**：k=2 时只返回 1 条（另一条被过滤掉） |
+| `WHERE MYVECTOR_IS_ANN(…, k, (SELECT JSON_ARRAYAGG(id) FROM t WHERE user_id=1 AND ns='g'))` | **先限定 key 集合再 ANN**：k=2 时稳定返回 2 条 |
+| 过滤为空 | 返回空结果，不报错 |
+
+因此 MySQL 内容族的 `searchDense` 必须用**第五参数**（`JSON_ARRAYAGG` 子查询）表达隔离条件，
+不能把 `user_id` / `namespace` 直接写在 `WHERE` 里。
+
+副作用：key 列表由子查询产生，过滤面很大（例如单用户全部记忆）时这一步本身要扫表；
+设计上先取 `topK × 2` 再进 ANN，避免「过滤后不足 k 条」；后续若表变大，再考虑给
+`(user_id, namespace)` 建联合索引降低子查询成本。
