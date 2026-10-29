@@ -56,7 +56,7 @@ public class Stores {
 
     /** 按配置选择内容族实现 */
     public static func content(): ContentStore {
-        let name = Config.getString(CONTENT_KEY) ?? DEFAULT_CONTENT
+        let name = StoreSettings.load().contentStore
         content(name)
     }
 
@@ -72,7 +72,7 @@ public class Stores {
 
     /** 按配置选择元数据族实现 */
     public static func meta(): MetaStore {
-        let name = Config.getString(META_KEY) ?? DEFAULT_META
+        let name = StoreSettings.load().metaStore
         meta(name)
     }
 

@@ -1470,6 +1470,31 @@ public macro WeavedToolCall(input: Tokens): Tokens
 ```
 
 
+## 存储选型：内容族 / 元数据族
+
+f_llm 的持久化分两族，各自三选一，可交叉组合：
+
+| 族 | 存什么 | 可选实现 | 配置键 |
+|---|---|---|---|
+| 内容族 | 记忆、经验、知识、文档 | `postgres` / `mysql` / `fhydra` | `llm_contentStore` |
+| 元数据族 | 人格、技能、提示词、模型配置 | `postgres` / `mysql` / `f_store` | `llm_metaStore` |
+
+- 未知配置值**启动失败**并打印可选列表，不静默回退；
+- 元数据走 `f_store` 时无需任何数据库，数据落在 `llm_metaStorePath`；
+- 开发者可实现 `ContentStore` / `MetaStore`，用 `Stores.registerContent` / `Stores.registerMeta` 注册后按名字选中。
+
+```cj
+// 元数据不依赖数据库；内容族仍需在 postgres / mysql / fhydra 中选一个
+Config.set<String>([
+    ('llm_contentStore', 'fhydra'),
+    ('llm_metaStore', 'f_store'),
+    ('llm_metaStorePath', './data/f_llm-meta'),
+    ('llm_contentStoreUrl', 'http://127.0.0.1:8848')
+])
+```
+
+旧键 `llm_memoryBackend` / `llm_characterBackend` / `llm_memoryPath` 仍会被识别，但只打 `warn`、不生效。
+
 ## 配置项
 
 所有配置项都是环境变量

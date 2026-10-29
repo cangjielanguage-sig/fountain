@@ -1491,6 +1491,31 @@ public macro WeavedToolCall(input: Tokens): Tokens
 ```
 
 
+## Storage selection: content family / metadata family
+
+Persistence is split into two independent families, each with three choices:
+
+| Family | Stores | Implementations | Config key |
+|---|---|---|---|
+| Content | memories, experience, knowledge, documents | `postgres` / `mysql` / `fhydra` | `llm_contentStore` |
+| Metadata | characters, skills, prompts, model configs | `postgres` / `mysql` / `f_store` | `llm_metaStore` |
+
+- An unknown value **fails startup** with the list of available implementations; there is no silent fallback.
+- With `llm_metaStore=f_store` no database is required for metadata; data lives under `llm_metaStorePath`.
+- Developers can implement `ContentStore` / `MetaStore` and register them via `Stores.registerContent` / `Stores.registerMeta`.
+
+```cj
+// Metadata without a database; content still needs postgres / mysql / fhydra
+Config.set<String>([
+    ('llm_contentStore', 'fhydra'),
+    ('llm_metaStore', 'f_store'),
+    ('llm_metaStorePath', './data/f_llm-meta'),
+    ('llm_contentStoreUrl', 'http://127.0.0.1:8848')
+])
+```
+
+Legacy keys `llm_memoryBackend` / `llm_characterBackend` / `llm_memoryPath` are still detected, but only emit a `warn` and take no effect.
+
 ## Configuration items
 
 All configuration items are environment variables
