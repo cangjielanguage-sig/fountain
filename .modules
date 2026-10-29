@@ -47,6 +47,7 @@ f_dbm
 f_email
 f_jsonrpc
 f_mcp
+f_xml
 f_zip
 fmq
 fdbm
