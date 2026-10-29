@@ -92,8 +92,9 @@ public class PostgresMemoryRepositoryTest {
                 )
             ''').update
             Some(PostgresMemoryRepository(executor))
-        }catch(_: Exception){
-            // 没有 PG 环境时跳过（CI 上允许）
+        }catch(e: Exception){
+            // 没有 PG 环境时显式跳过，并打印原因（CI 日志里能看到，而不是静默通过）
+            println("SKIP PostgresMemoryRepositoryTest: ${e.message}")
             None
         }
     }
