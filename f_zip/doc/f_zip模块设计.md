@@ -1,6 +1,6 @@
 # f_zip —— 仓颉 ZIP 模块设计
 
-> 版本 **v0.7** ｜ 2026-10-24 ｜ 状态：待评审
+> 版本 **v0.7** ｜ 2026-10-24 ｜ 状态：已实现（2026-10-28，实现偏差见文末「实现落位说明」）
 >
 > 定位：fountain 模块，提供 ZIP 格式的压缩与解压。
 > deflate 部分复用 `stdx.compress.zlib`，容器层（头、中央目录、CRC）自己实现。
@@ -41,6 +41,27 @@
 > - **ZIP64 写入**纳入首版（原先只有读取）
 > - 解压上限保留默认值，改为 `ZipLimits` 可覆盖
 > - 「不引入第三方 ZIP 实现」升级为**长期约束**
+
+---
+
+## 实现落位说明（2026-10-28）
+
+本文是 v0.7 设计稿在 `f_zip/doc/` 的落位版本。实现与设计稿共有两处偏差，均已回写到对应章节：
+
+1. **§1 依赖表增加 `f_log`**：§3.4.3 要求落盘分支打 debug 日志，必须有日志出口。`f_log` 是仓库内模块，
+   不属于"第三方 ZIP 实现"，长期约束（无外部 ZIP 库 / 无 FFI / 无 native 链接）不受影响。
+2. **§3.2 `ZipWriter` 构造增加 `options!` 参数**：落盘阈值、临时目录、压缩方法需要一个入口，
+   默认 `ZipWriterOptions()` 与原签名 `ZipWriter(out)` 等价。
+3. **§3.4.2 的 `@When` 条件补上 `env`**：只写 `os == "Linux"` 会让 **OHOS 也命中服务器档**
+   （鸿蒙目标的 `os` 同样是 `"Linux"`，差异在 `env == "ohos"`），与"OHOS 用 16 MB"的意图相反。
+   实际实现为 `@When[os == "Linux" && env == "gnu"]` / `@When[os != "Linux" || env != "gnu"]`，
+   与 `f_base/src/OS.cj` 的既有写法一致。
+
+另外两处实现细节的选择（不改变契约）：
+
+- `EntrySource.openRange` 的 `BufferSource` 用**共享字节数组 + 独立游标**实现，不复制整块缓冲——
+  语义与"clone 起点"一致，但并发 `open` 不必为每个流复制整个 ZIP。
+- `ZipReader` 读 EOCD64 记录时复用 `skipBytes` / `readU64LE` 原语，保证 D12 的函数集全部在正式路径上被使用。
 
 ---
 
@@ -111,21 +132,24 @@ descriptor 有无、目录属性位）就由不得自己——而这些恰恰是
 ```
 f_zip
 ├── stdx.compress.zlib   CompressInputStream / CompressOutputStream
+├── f_base               BaseException（`ZipException` 的基类）
 ├── f_util               crc32(data: Array<Byte>): UInt32
 ├── f_io                 ByteBuffer（流模式的随机访问缓冲）
+├── f_log                LoggerFactory（落盘分支的 debug 日志，§3.4.3）
+├── charset4cj           GBK 解码（文件名回退链，§6.2）
 └── std.fs               File / Seekable（文件模式的窗口读，标准库，不算依赖项）
 ```
 
-**没有第三方依赖。** 无第三方 ZIP 库、无 FFI、无 native 链接——整条链路只到仓颉标准库和 stdx。
+**没有第三方 ZIP 实现。** 无第三方 ZIP 库、无 FFI、无 native 链接——整条链路只到仓颉标准库、stdx、
+仓库内模块（`f_base` / `f_util` / `f_io` / `f_log`）与 TPC 的 `charset4cj`（只用来解 GBK 文件名，不参与容器编解码）。
 
 **zlib 关键 API**（已核实）：
 
 ```cangjie
-// 解压
-CompressInputStream(
+// 解压（注意：解压用的是 DecompressInputStream，不是 CompressInputStream）
+DecompressInputStream(
     inputStream: InputStream,
     wrap!: WrapType = DeflateFormat,          // ZIP 用 DeflateFormat（裸 deflate，无 zlib/gzip 头）
-    compressLevel!: CompressLevel = DefaultCompression,
     bufLen!: Int64 = 512
 )
 
@@ -296,7 +320,7 @@ date:  bit15-9 年-1980   | bit8-5 月(1-12)  | bit4-0 日(1-31)
 
 ### 2.4 ZIP64
 
-当任一字段越界（> 4 GB、条目数 > 65535、偏移 > 4 GB）时启用。**读取与写入都支持。**
+当任一字段越界（≥ 4 GB、条目数 ≥ 65535、偏移 ≥ 4 GB）时启用。**读取与写入都支持。**
 
 **读取**
 
@@ -312,8 +336,13 @@ date:  bit15-9 年-1980   | bit8-5 月(1-12)  | bit4-0 日(1-31)
 | 场景                                              | 做法                                                                                      |
 | ------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | 单条目大小或偏移 ≥`0xFFFFFFFF`                   | header 里对应字段写`0xFFFFFFFF`，extra 放 `0x0001` 的真实 8 字节值；`version needed` = 45 |
-| 条目数 >`0xFFFF`，或 CD 大小/偏移 ≥ `0xFFFFFFFF` | 追加 EOCD64 + 定位器；EOCD 对应字段写哨兵                                                 |
+| 条目数 ≥`0xFFFF`，或 CD 大小/偏移 ≥ `0xFFFFFFFF` | 追加 EOCD64 + 定位器；EOCD 对应字段写哨兵                                                 |
 | 都不越界                                          | **不写 ZIP64**。不要"总是写"——那会让小文件凭空多出几十字节，也让老工具多一层解析        |
+
+**条目数用 `≥` 不用 `>`。** `0xFFFF` 在**读取侧是哨兵**：写侧若按 `> 0xFFFF` 才升级，
+恰好 65535 条的包会在普通 EOCD 里写下 `0xFFFF` 这个"真实值"，而读端把它当成"去读 ZIP64"的信号，
+于是去找一个不存在的定位器 —— 自家产出的包自己读不回来。这条边界由
+`Zip64EntryCount_test.exactly65535EntriesWritesZip64` 钉住。
 
 **extra 里只放越界的字段。** 全放虽然多数解压器也能接受，但会让"这段 extra 到底有几个值"
 依赖读取方的宽容度；只放必要的，读端按哨兵值个数就能判定。
@@ -391,7 +420,7 @@ public class ZipReader {
 
 ```cangjie
 public class ZipWriter {
-    public init(output: OutputStream)
+    public init(output: OutputStream, options!: ZipWriterOptions = ZipWriterOptions())
 
     /// 已写入 output 的字节数（local header + 压缩数据 + descriptor）。
     /// 不含尚未写出的中央目录。见下方"进度语义"
@@ -624,15 +653,20 @@ public class ZipWriterOptions {
     public var method: CompressionMethod = CompressionMethod.Deflate
 }
 
-@When[os == "Linux"]
+@When[os == "Linux" && env == "gnu"]
 private func defaultMemoryEntryThreshold(): Int64 { 64 * 1024 * 1024 }
 
-@When[os != "Linux"]
+@When[os != "Linux" || env != "gnu"]
 private func defaultMemoryEntryThreshold(): Int64 { 16 * 1024 * 1024 }
 ```
 
-**为什么分两档**：
+> **实现修正（2026-10-28，v0.7 原文只写了 `os`）**：鸿蒙的编译目标 `aarch64-linux-ohos`
+> 在 `@When` 里 **`os` 也是 `"Linux"`**，区别在 `env`（`gnu` / `ohos`）。
+> 只按 `os` 分档会让 OHOS 拿到服务器档的 64 MB，与本节的意图相反（参考 `f_base/src/OS.cj`
+> 的既有写法：`@When[os == "Linux" && env == "gnu"]` 与 `@When[os == "Linux" && env == 'ohos']`）。
+> 因此条件必须是 `os == "Linux" && env == "gnu"`，另一半取反 `os != "Linux" || env != "gnu"`。
 
+**为什么分两档**：
 
 | 平台                      | 默认  | 理由                                                                         |
 | ------------------------- | ----- | ---------------------------------------------------------------------------- |
@@ -663,9 +697,9 @@ private func defaultMemoryEntryThreshold(): Int64 { 16 * 1024 * 1024 }
 
 ```cangjie
 // ✅ 可以：同一签名两份声明，各带一个 @When
-@When[os == "Linux"]
+@When[os == "Linux" && env == "gnu"]
 private func threshold(): Int64 { 64 * 1024 * 1024 }
-@When[os != "Linux"]
+@When[os != "Linux" || env != "gnu"]
 private func threshold(): Int64 { 16 * 1024 * 1024 }
 
 // ❌ 不可以：条件写在函数体里
@@ -832,7 +866,7 @@ bit 3（data descriptor）置位时，local header 里的 crc 和 size 可能是
 【收尾 close()】
   cdStart = 当前写入位置
   逐条写 central directory header（流式条目的真实 crc / 大小在这里）
-  if 条目数 > 0xFFFF 或 cdStart / cdSize 越界 → 写 EOCD64 + 定位器
+  if 条目数 >= 0xFFFF 或 cdStart / cdSize 越界 → 写 EOCD64 + 定位器
   写 EOCD（必要时填哨兵）
 ```
 
@@ -1039,7 +1073,7 @@ public struct ZipLimits {
 **原设计的问题**：`maxEntries` 同时被当成"安全上限"和"非 ZIP64 的格式上限"，两个语义混在一个参数里。
 
 - 作为**安全上限**：读一个恶意 ZIP 时，防止中央目录里声明 40 亿条目把我们撑爆
-- 作为**格式上限**：非 ZIP64 的 EOCD 里条目数字段只有 2 字节，最大 65535；超过就必须写 ZIP64
+- 作为**格式上限**：非 ZIP64 的 EOCD 里条目数字段只有 2 字节，能表示到 65535；但 65535 本身是读取侧的哨兵，所以**达到 65535 就必须写 ZIP64**
 
 这两件事的触发条件、处置方式、责任方都不同。**现在彻底分开：**
 
@@ -1055,7 +1089,7 @@ public struct ZipLimits {
 
 ```
 写 close() 时：
-  if (entryCount <= 0xFFFF && cdOffset <= 0xFFFFFFFF && cdSize <= 0xFFFFFFFF && 无条目需要 ZIP64):
+  if (entryCount < 0xFFFF && cdOffset < 0xFFFFFFFF && cdSize < 0xFFFFFFFF && 无条目需要 ZIP64):
       写普通 EOCD
   else:
       写 EOCD64 + EOCD64 定位器 + 普通 EOCD（其中的字段填哨兵值 0xFFFF / 0xFFFFFFFF）
@@ -1141,8 +1175,8 @@ public class ZipException <: Exception {
 | -------------------------- | -------------------------------------------------------------------------- |
 | `addFileStream` 单条目     | local header bit 3 = 1、version = 45、extra 含`0x0001`、descriptor 24 字节 |
 | 内存路径 + 流式路径混合    | 同一文件里两种条目并存，中央目录里 sizes 都对                              |
-| 单条目 > 4 GB              | 稀疏文件或重复数据构造；外部工具能列出并校验                               |
-| 条目数 > 65535             | EOCD64 + 定位器被写出；`unzip -l` 计数正确                                 |
+| 单条目 > 4 GB              | 稀疏文件或重复数据构造；外部工具能列出并校验（暂未跑通，见 tasks.md 9.7b）  |
+| 条目数 ≥ 65535（含恰好 65535）| EOCD64 + 定位器被写出；`unzip -l` 计数正确；自家 reader 能读回             |
 | 流式条目但内容很小         | 仍然按 ZIP64 形式写，不能"优化"成 4 字节 descriptor                        |
 | `init(path)` 解压 1 GB 包  | 进程 RSS 不随文件大小线性增长                                              |
 | `open(name)` 并发 4 个条目 | 各自独立句柄，数据不串                                                     |
@@ -1197,7 +1231,37 @@ public class ZipException <: Exception {
 **`add` 的内存是 `2 × 条目大小` 而不是 `1 ×`**：`data` 本身在内存，`deflate(data)` 又产出一份。
 所以超过 `memoryEntryThreshold` 的条目自动落到临时文件走流式路径（3.4），峰值降回 `1 ×`。
 
+**实测（2026-10-28，融合引擎 / Linux，取 `/proc/self/status` 的 `VmHWM`）**
+
+
+| 场景                                                    | 实测                                                       |
+| ------------------------------------------------------- | ---------------------------------------------------------- |
+| `add` 一条 100 MB 不可压缩数据（默认 64 MB 阈值 → 落盘） | 总增量 134.1 MB（51.9 → 189.2 MB），其中 `add` 自身 +30.8 MB |
+| `ZipReader(path)` 解压 1 GB 条目                         | 增量 3.6 MB（90.2 → 93.9 MB）                               |
+| `unzip(path, dir)` 全量解压 1 GB 包（12.3）              | 增量 2.75 MB（90.3 → 93.1 MB），耗时 551 s                  |
+| `zip(output, dir)` 打包 2 GB 目录（12.1）                | 增量 43.5 MB（52.2 → 96.8 MB），耗时 509 s                  |
+
+> 100 MB 条目的绝对峰值达不到 110 MB：仓颉运行时给 100 MB 数组分配的是一个 **128 MB 的 region**
+> （光数组就把峰值顶到 ~124 MB），再叠加 GC 首次为 deflate 路径抬高水线的 ~30 MB。
+> "约 `1 ×` 条目大小"这个承诺在**活性数据**口径上成立（没有第二份拷贝），但进程 RSS 峰值要
+> 按 region 取整后再加 GC 水线。资源用例 `ResourceWriter_test` / `ResourceReader_test` 分别钉住这两条，
+> 默认跳过，`F_ZIP_RESOURCE=1` 才跑。
+
 **瓶颈在 deflate 本身，容器层开销可忽略。** 如果要优化，方向是 `BestSpeed` 级别 + 更大的 `bufLen`。
+
+> **实测补充（2026-10-28，融合引擎）**：这台机器上 **CRC 曾是比 deflate 更慢的环节**——`f_util.crc32`
+> 原实现（`CrcEngine.update` 里的 `for (b in data)`）只有约 **4.2~7.1 MB/s**（同一段 1 MiB 样本，两次测量口径不同），
+> 同机 C 版表驱动 CRC 在 `-O2` 下 175 MB/s。上面两个资源用例的耗时（509 s / 551 s）几乎全花在这一处。
+>
+> 这个瓶颈已在 `add-f-zip-module` §18（`f_util` D16）修掉，`f_util` 侧 1 MiB 单遍实测：
+> 逐字节迭代 ≈ **7.1 MB/s** → 索引遍历 ≈ **21 MB/s** → 加 slicing-by-4 仍 ≈ **21 MB/s**（下标访问本身
+> 约 25 ns/次，换表不减少次数）→ 再把热循环换成 `acquireArrayRawData` 裸指针 ≈ **51~58 MB/s**。
+> 端到端：`9.7b`（单条目 4 GiB + 4096 字节的 Stored 往返）**200 s**（写出 94 s、读回 105 s，两次 CRC 共 8.6 GB），
+> 此前按 4.2 MB/s 推算需要 ~35 分钟。剩余成本是「未优化构建里每次 `CPointer.read()` 的方法调用」，
+> 不是 CRC 算法本身。
+>
+> 顺带记一笔环境坑：`9.7b` 若用 `F_ZIP_TMP` 指到 `/mnt/linux_share/...`（myfs2），**8 KB 写入只有 ~22 MB/s**，
+> 写 2.8 GB 要 8 分钟，会让人误以为 CRC 没提速；同一份包写到 `/tmp`（tmpfs）才是上面的 200 s。
 
 ---
 
@@ -1213,7 +1277,7 @@ public class ZipException <: Exception {
 | P3       | `ZipWriter.add` + 中央目录 + EOCD                             | 写出的 ZIP 能被`unzip -t` 通过                                                                                                    |
 | P4       | 多条目 + 目录 + 中文名                                        | 中文名在 Windows/macOS 都正常                                                                                                     |
 | **P4.5** | **`addFileStream` + data descriptor**                         | descriptor 被`unzip -t` / `zipfile.testzip()` / `7z t` 三家认可                                                                   |
-| **P4.6** | **ZIP64 写入**（extra + EOCD64）。含"条目数 > 65535 自动升级" | > 4 GB 条目、> 65535 条目两个样本外部工具可读                                                                                     |
+| **P4.6** | **ZIP64 写入**（extra + EOCD64）。含"条目数 ≥ 65535 自动升级" | > 4 GB 条目、≥ 65535 条目两个样本外部工具可读                                                                                     |
 | P5       | 安全校验（Zip Slip、ZipLimits、炸弹样本、符号链接跳过）       | 恶意样本被拒绝；上限可覆盖；符号链接不落地                                                                                        |
 | **P6**   | **同名消解 + `position` + `add` 大条目落盘 + 平台阈值**       | 连续`add("a.txt")` 三次得到 `a.txt`/`a_2.txt`/`a_3.txt`；`position` 单调；100 MB 条目在 Linux 上峰值 < 110 MB，在 OHOS 上 < 30 MB |
 
@@ -1246,7 +1310,7 @@ public class ZipException <: Exception {
 | 9 | 符号链接 | **跳过**（`unzip` / `zip` 都跳过）；`addFile` 跟随 | 7.1.1 |
 | 10 | `maxEntries` | **只服务读取**（安全上限 65535）；**写入侧无上限，越界自动写 ZIP64** | 7.2.1 |
 | 11 | `add` 大条目 | **平台相关阈值**（Linux 64 MB / 其他 16 MB），超过自动落临时文件 | 3.4 |
-| 12 | 阈值默认值 | **按 `os` 编译期分档**；**就两个 `@When` 分支，任一时刻只有一个存在** | 3.4.2 |
+| 12 | 阈值默认值 | **按 `os` + `env` 编译期分档**（`os == "Linux" && env == "gnu"` 为服务器档，其余 16 MB）；**就两个 `@When` 分支，任一时刻只有一个存在** | 3.4.2 |
 | 13 | 不做内存探测 | 不按可用内存动态算阈值。**容器内进程读到的是容器 cgroup limit（不是宿主机内存）**，所以"容器里读错"这个担心不成立；不做是因为**行为不可复现**，不是读不到 | 3.4.2 |
 | 14 | 预设形态 | `forServer()` / `forLowMemory()` 是**静态工厂**，返回实例**可自由修改**；每次返回新对象 | 3.4.2 |
 | 15 | 改名后缀 | **从 `_2` 起**（"第二个"），不做 `_1` | 3.3 |
