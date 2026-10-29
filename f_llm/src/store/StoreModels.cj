@@ -163,3 +163,20 @@ public class KnowledgeDoc {
 public func emptySkills(): ArrayList<Skill> {
     ArrayList<Skill>()
 }
+
+/** 模型配置的存储视图（3.3）：只保留检索/选型需要的字段 */
+public class LLMConfView {
+    public let provider: String
+    public let llmName: String
+    public let actualLlmName: String
+    public let weight: Int64
+    public let enabled: Bool
+
+    public init(provider: String, llmName: String, actualLlmName: String, weight: Int64, enabled: Bool) {
+        this.provider = provider
+        this.llmName = llmName
+        this.actualLlmName = actualLlmName
+        this.weight = weight
+        this.enabled = enabled
+    }
+}

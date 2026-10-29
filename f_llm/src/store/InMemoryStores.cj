@@ -235,6 +235,10 @@ class InMemoryLLMConfStore <: LLMConfStore {
     public func names(): ArrayList<String> {
         ArrayList<String>()
     }
+
+    public func candidates(llmName: String): ArrayList<LLMConfView> {
+        ArrayList<LLMConfView>()
+    }
 }
 
 func containsText(values: Array<String>, target: String): Bool {

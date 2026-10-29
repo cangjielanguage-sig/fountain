@@ -77,4 +77,6 @@ public interface PromptStore {
 /** 模型配置：1.2 先保留最小的名字查询，3.3 再补候选过滤 */
 public interface LLMConfStore {
     func names(): ArrayList<String>
+    /** 候选：enabled=true 且 weight>0，按 llmName 过滤（3.3） */
+    func candidates(llmName: String): ArrayList<LLMConfView>
 }

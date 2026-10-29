@@ -24,9 +24,11 @@ import fountain::f_orm.*
  */
 public class PostgresMetaStore <: MetaStore {
     private let characterStore: PostgresCharacterStore
+    private let confStore: PostgresLLMConfStore
 
     public init(executor: SqlExecutor) {
         this.characterStore = PostgresCharacterStore(executor)
+        this.confStore = PostgresLLMConfStore(executor)
     }
 
     public prop characters: CharacterStore {
@@ -39,7 +41,58 @@ public class PostgresMetaStore <: MetaStore {
         get() { throw IllegalArgumentException('PostgresPromptStore not implemented (3.4)') }
     }
     public prop confs: LLMConfStore {
-        get() { throw IllegalArgumentException('PostgresLLMConfStore not implemented (3.3)') }
+        get() { confStore }
+    }
+}
+
+class PostgresLLMConfStore <: LLMConfStore {
+    private let executor: SqlExecutor
+
+    public init(executor: SqlExecutor) {
+        this.executor = executor
+    }
+
+    public func names(): ArrayList<String> {
+        let names = ArrayList<String>()
+        for(row in executor.setSql(
+            'SELECT DISTINCT llm_name FROM llm_conf WHERE enabled = true AND weight > 0'
+        ).mapList()){
+            names.add(textOf(row.get('llm_name') ?? ''))
+        }
+        names
+    }
+
+    public func candidates(llmName: String): ArrayList<LLMConfView> {
+        let result = ArrayList<LLMConfView>()
+        for(row in executor.setSql('''
+            SELECT provider, llm_name, actual_llm_name, weight, enabled
+            FROM llm_conf
+            WHERE enabled = true AND weight > 0 AND llm_name = ?
+        ''').add(llmName).mapList()){
+            result.add(LLMConfView(
+                textOf(row.get('provider') ?? ''),
+                textOf(row.get('llm_name') ?? ''),
+                textOf(row.get('actual_llm_name') ?? ''),
+                intOf(row.get('weight') ?? 0),
+                true
+            ))
+        }
+        result
+    }
+
+    private static func textOf(value: Any): String {
+        match(value){
+            case text: String => text
+            case _ => ''
+        }
+    }
+
+    private static func intOf(value: Any): Int64 {
+        match(value){
+            case number: Int64 => number
+            case number: Int32 => Int64(number)
+            case _ => 0
+        }
     }
 }
 
