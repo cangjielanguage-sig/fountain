@@ -47,6 +47,13 @@ public interface MemoryRepository {
     /** sparse 召回：按 token 命中累加权重；没有倒排数据时返回空列表（由 store 标 degraded） */
     func searchSparse(query: MemoryQuery, limit: Int64): ArrayList<MemoryHit>
 
+    /** 覆盖写稀疏倒排：先删旧 token，再写新 token */
+    func upsertSparse(memoryId: Int64, userId: Int64, namespace: String, tokens: HashMap<Int64, Float64>): Unit
+
+    /** 覆盖写 colbert 多头向量；空数组表示没有 */
+    func upsertColbert(memoryId: Int64, titleVectors: Array<Array<Float64>>,
+                       contentVectors: Array<Array<Float64>>): Unit
+
     /** 取某条记忆的 colbert 向量；没有则返回 None（重排时跳过） */
     func colbert(recordId: Int64): ?ColbertVectors
 

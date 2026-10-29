@@ -75,6 +75,17 @@ public class PostgresMemoryRepositoryTest {
                   update_time TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc')
                 )
             ''').update
+            executor.setSql('''
+                CREATE TABLE IF NOT EXISTS llm_memory_token (
+                  memory_id BIGINT NOT NULL,
+                  user_id   BIGINT NOT NULL,
+                  namespace VARCHAR(32) NOT NULL,
+                  field     CHAR(1) NOT NULL,
+                  token     BIGINT NOT NULL,
+                  weight    DOUBLE PRECISION NOT NULL,
+                  PRIMARY KEY (memory_id, field, token)
+                )
+            ''').update
             Some(PostgresMemoryRepository(executor))
         }catch(_: Exception){
             // 没有 PG 环境时跳过（CI 上允许）

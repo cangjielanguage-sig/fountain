@@ -98,11 +98,36 @@ public class PostgresMemoryRepository <: MemoryRepository {
         hits
     }
 
+    public func upsertSparse(memoryId: Int64, userId: Int64, namespace: String,
+                             tokens: HashMap<Int64, Float64>): Unit {
+        // 覆盖写：先清旧 token，再批量插入；field='m' 表示标题+正文合并后的稀疏向量
+        executor.setSql('DELETE FROM llm_memory_token WHERE memory_id = ?').add(memoryId).delete
+        for((token, weight) in tokens){
+            executor.setSql('''
+                INSERT INTO llm_memory_token (memory_id, user_id, namespace, field, token, weight)
+                VALUES (?, ?, ?, 'm', ?, ?)
+            ''')
+                .add(memoryId)
+                .add(userId)
+                .add(namespace)
+                .add(token)
+                .add(weight)
+                .update
+        }
+    }
+
+    public func upsertColbert(memoryId: Int64, titleVectors: Array<Array<Float64>>,
+                              contentVectors: Array<Array<Float64>>): Unit {
+        // TODO(2.8c)：二进制 f32[] 编码（count + count*dim*4）待补；当前不写 colbert 列，
+        // 重排会因 colbert(id) 返回 None 自动跳过，不影响召回。
+    }
+
     public func searchSparse(query: MemoryQuery, limit: Int64): ArrayList<MemoryHit> {
         ArrayList<MemoryHit>()
     }
 
     public func colbert(recordId: Int64): ?ColbertVectors {
+        // TODO(2.8c)：读取并解码 title_colbert / content_colbert
         None
     }
 

@@ -38,11 +38,10 @@ class FakeEmbedder <: Embedder {
 
     public func tokenize(text: String): HashMap<Int64, Float64> {
         let tokens = HashMap<Int64, Float64>()
-        var index: Int64 = 0
         for(part in text.split(' ')){
             if(!part.isEmpty()){
-                index++
-                tokens[index] = 1.0f64
+                // 用首字节当伪 token id，保证不同词不同 id（真实实现是 BGE token id）
+                tokens[Int64(part[0])] = 1.0f64
             }
         }
         tokens
@@ -70,6 +69,19 @@ class FakeMemoryRepository <: MemoryRepository {
                 ids[key] = seq
                 seq
         }
+    }
+
+    public var sparseWrites: Int64 = 0
+    public var lastTokens = HashMap<Int64, Float64>()
+
+    public func upsertSparse(memoryId: Int64, userId: Int64, namespace: String,
+                             tokens: HashMap<Int64, Float64>): Unit {
+        sparseWrites++
+        lastTokens = tokens
+    }
+
+    public func upsertColbert(memoryId: Int64, titleVectors: Array<Array<Float64>>,
+                              contentVectors: Array<Array<Float64>>): Unit {
     }
 
     public func searchDense(query: MemoryQuery, vector: Array<Float64>, limit: Int64): ArrayList<MemoryHit> {
@@ -134,6 +146,17 @@ public class PostgresMemoryStoreTest {
         let second = store.add(MemoryWrite(1, 'global', '标题', '正文二', 'note'))
         @Expect(repo.upserts, 2)
         @Expect(first.id, second.id)
+    }
+
+    @TestCase
+    func testAddWritesSparseTokens(): Unit {
+        let embedder = FakeEmbedder()
+        let repo = FakeMemoryRepository()
+        let store = PostgresMemoryStore(repo, embedder)
+        store.add(MemoryWrite(1, 'global', 'ab', 'cd', 'note'))
+        @Expect(repo.sparseWrites, 1)
+        // 'ab' 与 'cd' 各一个 token
+        @Expect(repo.lastTokens.size, 2)
     }
 
     @TestCase

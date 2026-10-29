@@ -37,6 +37,23 @@ public class PostgresMemoryStore <: MemoryStore {
         let titleVector = embedder.embed(write.title)
         let contentVector = embedder.embed(write.content)
         let id = repo.upsert(write, titleVector, contentVector)
+        // 稀疏倒排：标题与正文的 token 合并，同一 token 取较大权重
+        let tokens = HashMap<Int64, Float64>()
+        for((token, weight) in embedder.tokenize(write.title)){
+            tokens[token] = weight
+        }
+        for((token, weight) in embedder.tokenize(write.content)){
+            let existing = tokens.get(token) ?? 0.0f64
+            if(weight > existing){
+                tokens[token] = weight
+            }
+        }
+        repo.upsertSparse(id, write.userId, write.namespace, tokens)
+        // 多头向量：重排用，失败不影响主流程（colbert 是可选能力）
+        try{
+            repo.upsertColbert(id, embedder.embedColbert(write.title), embedder.embedColbert(write.content))
+        }catch(_: Exception){
+        }
         MemoryRecord(id, write.userId, write.namespace, write.title, write.content,
                      write.kind, DateTime.now())
     }
