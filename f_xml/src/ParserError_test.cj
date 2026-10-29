@@ -136,3 +136,25 @@ public class ParserError_test {
         @Assert(error.line == 1)
     }
 }
+
+/** `Name` 的字符集边界（设计文档 §12.2 B 的两条盲区）。 */
+@Test
+public class NameSyntax_test {
+    /** 非 ASCII 名字合法：XML 1.0 的 `NameStartChar` 覆盖大量 Unicode 字母。 */
+    @TestCase
+    public func nonAsciiNames(): Unit {
+        let doc = parseText("<根 属性=\"值\">文本</根>")
+        let root = doc.root.getOrThrow()
+        @Assert(root.name.local == "根")
+        @Assert(root.attr("属性") == Some("值"))
+        @Assert(root.text() == "文本")
+    }
+
+    /** 名字不能以数字开头（元素名与属性名都一样）。 */
+    @TestCase
+    public func nameMayNotStartWithDigit(): Unit {
+        assertAnyXmlError({=> parseText("<1a/>")})
+        assertAnyXmlError({=> parseText("<a 1x=\"v\"/>")})
+        parseText("<a1/>")
+    }
+}

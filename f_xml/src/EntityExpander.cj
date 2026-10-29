@@ -32,6 +32,8 @@ internal class EntityExpander {
     private let policy: ?EntityRefPolicy
     /** 实体展开后的字符数（含嵌套），按名字缓存。 */
     private let sizes = HashMap<String, Int64>()
+    /** 已通过「替换文本自身良构」校验的实体名。 */
+    private let validated = HashMap<String, Bool>()
 
     init(table: EntityTable, limits: EntityLimits, counter: EntityCounter, policy!: ?EntityRefPolicy = None) {
         this.table = table
@@ -70,6 +72,8 @@ internal class EntityExpander {
             case Some(v) => v
             case None => throw XmlException("外部实体「&${name};」永不加载", line, column)
         }
+        // WFC: Parsed Entity——内容位置使用的实体，替换文本必须自身良构。
+        this.checkReplacement(name, value, line, column)
         let size = Int64(runesOf(value).size)
         // 投影大小（含嵌套）用于提前判定指数膨胀，不需要真把文本生成出来。
         let projected = this.expandedSize(name, 1)
@@ -108,6 +112,62 @@ internal class EntityExpander {
             return sink.openReader(bufSize)
         }
         MemoryExpandReader(runesOf(value))
+    }
+
+    /**
+     * WFC: Parsed Entity——内部一般实体的替换文本必须匹配 `content` 产生式。
+     *
+     * 做法是用词法器在**独立的输入**上把替换文本重新切一遍（实体表为空，嵌套引用只当
+     * 引用、不展开），再检查标签是否在实体内部配平：
+     * - `<b>` 留在实体外去配对 → 错；
+     * - 实体里多一个 `</a>`（孤立结束标签、或关掉实体外的元素）→ 错；
+     * - CDATA / 注释 / PI / 引用没闭合 → 词法器直接抛错，这里补上实体名与展开点位置。
+     *
+     * 参数实体不适用：它的替换文本是 DTD 片段，不是内容。
+     */
+    private func checkReplacement(name: String, value: String, line: Int64, column: Int64): Unit {
+        if (!value.contains("<") && !value.contains("&") && !value.contains("]]>")) {
+            // 纯文本实体：不会出现标签、半截引用或非法的 `]]>`，无需重扫。
+            this.validated[name] = true
+            return
+        }
+        if (this.validated.contains(name)) {
+            return
+        }
+        let stack = ArrayList<String>()
+        try {
+            let lexer = Lexer(LineWindow(Utf8RuneSource(TextInputStream(value))))
+            var done = false
+            while (!done) {
+                match (lexer.nextToken(ParserState.Content)) {
+                    case Token.TEof => done = true
+                    case Token.TStartTag(raw, _, selfClosing) =>
+                        if (!selfClosing) {
+                            stack.add(rawNameText(raw))
+                        }
+                    case Token.TEndTag(raw) =>
+                        let local = rawNameText(raw)
+                        if (stack.size == 0) {
+                            throw XmlException("有孤立的结束标签「${local}」")
+                        }
+                        let top = stack[stack.size - 1]
+                        if (top != local) {
+                            throw XmlException("「${local}」与「${top}」没有在实体内部配平")
+                        }
+                        stack.remove(at: stack.size - 1)
+                    case Token.TDecl(_, _, _) | Token.TDoctype(_, _, _, _, _) =>
+                        throw XmlException("替换文本里不能出现 XML 声明或 DOCTYPE")
+                    case _ => ()
+                }
+            }
+            if (stack.size > 0) {
+                let top = stack[stack.size - 1]
+                throw XmlException("元素「${top}」没有在实体内部结束")
+            }
+        } catch (e: XmlException) {
+            throw XmlException("实体「&${name};」的替换文本不良构：${e.message}", line, column)
+        }
+        this.validated[name] = true
     }
 
     /**

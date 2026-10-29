@@ -59,6 +59,32 @@ internal struct RawAttribute {
     }
 }
 
+/** 字面名（`prefix:local` 原文）。 */
+internal func rawNameText(name: RawName): String {
+    match (name.prefix) {
+        case Some(p) => "${p}:${name.local}"
+        case None => name.local
+    }
+}
+
+/** 去首尾空格并把内部连续空格折叠成一个（只有 `#x20`，见 XML 1.0 §3.3.3）。 */
+internal func collapseSpaces(value: String): String {
+    let gen = StringGenerator()
+    var pendingSpace = false
+    for (r in value.runes()) {
+        if (r == r' ') {
+            pendingSpace = true
+            continue
+        }
+        if (pendingSpace && gen.size > 0) {
+            gen.append<String>(" ")
+        }
+        pendingSpace = false
+        gen.append(r)
+    }
+    gen.toString()
+}
+
 /** 一个引用的解码结果：字符（字符引用 / 预定义实体）或自定义实体名。 */
 internal enum RefValue {
     | CharText(String)
@@ -514,7 +540,32 @@ internal class Lexer {
                 case None => throw XmlException("标签未闭合", start.line, start.column)
             }
         }
+        this.normalizeAttributeTypes(name, attrs)
         Token.TStartTag(name, attrs, selfClosing)
+    }
+
+    /**
+     * XML 1.0 §3.3.3 的第三步：`CDATA` 之外的类型去首尾空格并折叠内部连续空格。
+     *
+     * 前两步（引用展开、空白字符归一）已在 `readAttributeValue` 里完成；类型表由
+     * `<!ATTLIST>` 建好，未声明的属性按 `CDATA` 处理（规范默认，不是遗漏）。
+     */
+    private func normalizeAttributeTypes(element: RawName, attrs: ArrayList<RawAttribute>): Unit {
+        let table = match (this.entityTable) {
+            case Some(t) => t
+            case None => return
+        }
+        let elementName = rawNameText(element)
+        for (i in 0..attrs.size) {
+            let attribute = attrs[i]
+            let attType = match (table.attTypes.lookup(elementName, rawNameText(attribute.name))) {
+                case Some(t) => t
+                case None => AttType.Cdata
+            }
+            if (attType.isTokenized()) {
+                attrs[i] = RawAttribute(attribute.name, collapseSpaces(attribute.value))
+            }
+        }
     }
 
     func trySkipWhitespace(): Bool {

@@ -21,11 +21,12 @@ import std.collection.ArrayList
  * 未声明实体的处置策略。
  *
  * 外部子集永不加载，所以「未声明」有两种可能：文档确实漏了声明，或声明在外部子集里。
- * 判定按 XML 1.0 的 WFC「Entity Declared」与其补充说明（`design.md` §6.8）：
+ * 判定分两步——**先看有没有可能从本文件以外声明，再看 `standalone`**（`design.md` §6.8）：
  * - `standalone="yes"`：文档自称自包含，引用未声明实体即抛 `XmlException`；
- * - `standalone="no"`：不报错，跳过该实体（内容位置空文本、属性值去掉该引用）并写一条告警；
- * - `standalone` 省略：只有在「可能存在外部声明」时（有外部子集，或内部子集里出现过参数实体
- *   引用）才按跳过处理；否则按 WFC 报错——`<a>&nbsp;</a>` 这种笔误必须被报出来。
+ * - 无外部子集（`DOCTYPE` 没有 `SYSTEM` / `PUBLIC`）**且**全文无参数实体引用：连
+ *   「可能声明在别处」的通道都没有，按 WFC 报错（`standalone="no"` 也不例外）；
+ * - 有外部子集或参数实体引用，且 `standalone` 不是 `yes`：跳过该实体（内容位置空文本、
+ *   属性值去掉该引用）并写一条告警，不报错。
  */
 internal class EntityRefPolicy {
     private let warnings: ArrayList<String>
@@ -42,10 +43,13 @@ internal class EntityRefPolicy {
      */
     func configure(standalone: ?Bool, canBeExternallyDeclared: Bool): Unit {
         this.standaloneValue = standalone
-        match (standalone) {
-            case Some(v) => this.strict = v
-            case None => this.strict = !canBeExternallyDeclared
+        // 「自称自包含」与「没有任何外部声明通道」都必须报错；只有「可能有外部声明且未自称
+        // 自包含」这一档才允许跳过。
+        let explicitlyStandalone = match (standalone) {
+            case Some(v) => v
+            case None => false
         }
+        this.strict = explicitlyStandalone || !canBeExternallyDeclared
     }
 
     func undeclared(name: String, line: Int64, column: Int64): Unit {

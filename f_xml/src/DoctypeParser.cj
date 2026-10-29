@@ -15,23 +15,98 @@ limitations under the License.
 */
 package fountain::f_xml
 
-import std.collection.ArrayList
+import std.collection.{ArrayList, HashMap}
 import fountain::f_base.StringGenerator
 
 /**
- * DTD 内部子集解析器：四类声明 + 条件段。
+ * `<!ATTLIST>` 的属性类型。
+ *
+ * 只服务 XML 1.0 §3.3.3 的属性值规范化（区分 `CDATA` 与非 `CDATA`），**不**服务有效性：
+ * 不检查 `ID` 唯一性、不检查 `IDREF` 指向、不检查枚举取值、不注入默认值。
+ */
+internal enum AttType <: ToString {
+    | Cdata
+    | Id
+    | IdRef
+    | IdRefs
+    | Entity
+    | Entities
+    | Nmtoken
+    | Nmtokens
+    | Notation
+    | Enumeration
+
+    /** 非 `CDATA` 类型要「去首尾空格 + 内部连续空格折叠」。 */
+    func isTokenized(): Bool {
+        match (this) {
+            case Cdata => false
+            case _ => true
+        }
+    }
+
+    public func toString(): String {
+        match (this) {
+            case Cdata => "CDATA"
+            case Id => "ID"
+            case IdRef => "IDREF"
+            case IdRefs => "IDREFS"
+            case Entity => "ENTITY"
+            case Entities => "ENTITIES"
+            case Nmtoken => "NMTOKEN"
+            case Nmtokens => "NMTOKENS"
+            case Notation => "NOTATION"
+            case Enumeration => "枚举"
+        }
+    }
+}
+
+/**
+ * 「元素字面名 → 属性名 → `AttType`」映射。
+ *
+ * 键按**字面名**（`prefix:local` 原文）匹配，不做命名空间解析——DTD 不认识命名空间，
+ * 用展开名匹配会得到与规范相反的结果。同名重复声明取**第一个**。
+ */
+internal class AttTypeMap {
+    private let table = HashMap<String, HashMap<String, AttType>>()
+
+    func declare(element: String, attribute: String, attType: AttType): Unit {
+        match (this.table.get(element)) {
+            case Some(attributes) =>
+                if (attributes.contains(attribute)) {
+                    return
+                }
+                attributes[attribute] = attType
+            case None =>
+                let attributes = HashMap<String, AttType>()
+                attributes[attribute] = attType
+                this.table[element] = attributes
+        }
+    }
+
+    func lookup(element: String, attribute: String): ?AttType {
+        match (this.table.get(element)) {
+            case Some(attributes) => attributes.get(attribute)
+            case None => None
+        }
+    }
+}
+
+/**
+ * DTD 内部子集解析器：四类声明 + 属性类型映射。
  *
  * 解析并校验**声明语法**（良构性，WFC），不校验有效性（VC）：
- * 不建「元素 → 属性类型」映射、不注入默认属性值、不比对内容模型与文档结构。
+ * 不注入默认属性值、不比对内容模型与文档结构。
  *
  * - `<!ENTITY>`：`GEDecl` / `PEDecl`，`EntityValue` 里的**字符引用在声明时展开**，
  *   实体引用保持原文（延迟到使用时展开）。
  * - `<!ELEMENT>`：`EMPTY` / `ANY` / `Mixed` / `children`，含 `?` `*` `+` 的紧邻规则。
- * - `<!ATTLIST>`：八种 `AttType` 与枚举、`NOTATION` 枚举、四种 `DefaultDecl`。
+ * - `<!ATTLIST>`：八种 `AttType` 与枚举、`NOTATION` 枚举、四种 `DefaultDecl`；
+ *   顺带建立「元素字面名 → 属性名 → `AttType`」映射，**只**用于属性值规范化。
  * - `<!NOTATION>`：`ExternalID` 或 `PublicID`。
  *
- * 条件段 `<![INCLUDE[ … ]]>` 解析内容，`<![IGNORE[ … ]]>` 只按 `<![` / `]]>` 配对跳过
- * （规范要求处理器不得读 IGNORE 分支，因此其中的非法声明不校验）。
+ * **条件段只属于外部子集**：XML 1.0 §3.4 的 `intSubset` 产生式里没有 `conditionalSect`，
+ * 所以内部子集里出现 `<![INCLUDE[` / `<![IGNORE[` 一律报错——外部子集永不加载，
+ * M1 不存在「按标志位选分支」的路径。
  */
 internal class DoctypeParser {
     private let text: Array<Rune>
@@ -59,7 +134,7 @@ internal class DoctypeParser {
     static func parse(subset: String, limits: EntityLimits, base: SourcePosition): EntityTable {
         let table = EntityTable(limits.maxDeclarations)
         let parser = DoctypeParser(runesOf(subset), table, base, maxDepth: limits.maxDepth)
-        parser.parseStatements(nested: false)
+        parser.parseStatements()
         table
     }
 
@@ -272,19 +347,16 @@ internal class DoctypeParser {
     // ---------------------------------------------------------------- 子集
 
     /**
-     * 依次解析声明。`nested = true` 用于 `INCLUDE` 段：遇到 `]]>` 时**不消费**并返回，
-     * 由调用方收尾；顶层遇到 `]]>` 则是多余的结束标记。
+     * 依次解析声明。内部子集里不允许条件段：`intSubset` 产生式不含 `conditionalSect`，
+     * 外部子集又永不加载，所以这里遇到 `<![` 一律报错。
      */
-    private func parseStatements(nested!: Bool): Unit {
+    private func parseStatements(): Unit {
         while (!this.atEnd()) {
             this.skipWhitespace()
             if (this.atEnd()) {
                 break
             }
             if (this.startsWith("]]>")) {
-                if (nested) {
-                    return
-                }
                 throw this.error("DTD 内部子集里出现多余的「]]>」")
             }
             if (this.startsWith("<!--")) {
@@ -305,19 +377,8 @@ internal class DoctypeParser {
                 this.skipUntil("?>", "处理指令")
                 continue
             }
-            if (this.startsWith("<![INCLUDE[")) {
-                this.consume("<![INCLUDE[")
-                this.parseStatements(nested: true)
-                if (!this.startsWith("]]>")) {
-                    throw this.error("INCLUDE 条件段未闭合（缺少「]]>」）")
-                }
-                this.consume("]]>")
-                continue
-            }
-            if (this.startsWith("<![IGNORE[")) {
-                this.consume("<![IGNORE[")
-                this.skipIgnoreSection()
-                continue
+            if (this.startsWith("<![")) {
+                throw this.error("条件段只能出现在外部子集")
             }
             if (this.startsWith("<!ENTITY")) {
                 this.parseEntityDecl()
@@ -348,30 +409,6 @@ internal class DoctypeParser {
                 continue
             }
             throw this.error("DTD 内部子集里出现无法识别的内容")
-        }
-        if (nested) {
-            throw this.error("INCLUDE 条件段未闭合（缺少「]]>」）")
-        }
-    }
-
-    /** `ignoreSectContents`：只按 `<![` / `]]>` 配对跳过，不解析内部声明。 */
-    private func skipIgnoreSection(): Unit {
-        var depth: Int64 = 1
-        while (depth > 0) {
-            if (this.atEnd()) {
-                throw this.error("IGNORE 条件段未闭合（缺少「]]>」）")
-            }
-            if (this.startsWith("<![")) {
-                this.pos += 3 // 「<![」三个字符
-                depth++
-                continue
-            }
-            if (this.startsWith("]]>")) {
-                this.consume("]]>")
-                depth--
-                continue
-            }
-            this.pos++
         }
     }
 
@@ -406,7 +443,7 @@ internal class DoctypeParser {
                             maxDepth: this.maxDepth,
                             depth: this.depth + 1
                         )
-                        nested.parseStatements(nested: false)
+                        nested.parseStatements()
                     case None => () // 外部参数实体：不加载
                 }
             case None => throw this.error("参数实体「%${name};」未声明")
@@ -701,7 +738,8 @@ internal class DoctypeParser {
         let decl = "<!ATTLIST>"
         this.consume("<!ATTLIST")
         this.requireWhitespace(decl, "「<!ATTLIST」之后")
-        this.readName(decl)
+        // 元素名按**字面名**进映射：DTD 不认识命名空间，用展开名匹配会得到相反结果。
+        let element = this.readName(decl)
         while (true) {
             let hadWhitespace = this.trySkipWhitespace()
             match (this.peek(offset: 0)) {
@@ -713,20 +751,22 @@ internal class DoctypeParser {
                     if (!hadWhitespace) {
                         throw this.fail(decl, "的属性声明之间缺少空白")
                     }
-                    this.readName(decl)
+                    let attribute = this.readName(decl)
                     this.requireWhitespace(decl, "属性名之后")
-                    this.parseAttType(decl)
+                    let attType = this.parseAttType(decl)
                     this.requireWhitespace(decl, "属性类型之后")
                     this.parseDefaultDecl(decl)
+                    // 映射只服务属性值规范化；同名重复声明取第一个。
+                    this.table.attTypes.declare(element, attribute, attType)
                 case None => throw this.fail(decl, "未闭合（缺少「>」）")
             }
         }
     }
 
-    private func parseAttType(decl: String): Unit {
+    private func parseAttType(decl: String): AttType {
         if (this.startsWithKeyword("CDATA")) {
             this.consume("CDATA")
-            return
+            return AttType.Cdata
         }
         if (this.startsWithKeyword("NOTATION")) {
             this.consume("NOTATION")
@@ -735,17 +775,17 @@ internal class DoctypeParser {
                 throw this.fail(decl, "的 NOTATION 枚举缺少「(」")
             }
             this.parseNameEnum(decl)
-            return
+            return AttType.Notation
         }
         for (keyword in ["IDREFS", "ENTITIES", "NMTOKENS", "IDREF", "ENTITY", "NMTOKEN", "ID"]) {
             if (this.startsWithKeyword(keyword)) {
                 this.consume(keyword)
-                return
+                return attTypeOf(keyword)
             }
         }
         if (this.peek(offset: 0) == Some(r'(')) {
             this.parseNmtokenEnum(decl)
-            return
+            return AttType.Enumeration
         }
         let token = this.readNameCharRun()
         if (token.isEmpty()) {
@@ -979,8 +1019,7 @@ internal class DoctypeParser {
 }
 
 /** 实体值里的字符引用在**声明时**展开；实体引用保持原文。 */
-internal func expandCharRefs(value: String): String {
-    if (!value.contains("&")) {
+internal func expandCharRefs(value: String): String {    if (!value.contains("&")) {
         return value
     }
     let runes = runesOf(value)
@@ -1018,4 +1057,18 @@ internal func expandCharRefs(value: String): String {
         i++
     }
     gen.toString()
+}
+
+/** `<!ATTLIST>` 的具名属性类型 → `AttType`。 */
+internal func attTypeOf(keyword: String): AttType {
+    match (keyword) {
+        case "ID" => AttType.Id
+        case "IDREF" => AttType.IdRef
+        case "IDREFS" => AttType.IdRefs
+        case "ENTITY" => AttType.Entity
+        case "ENTITIES" => AttType.Entities
+        case "NMTOKEN" => AttType.Nmtoken
+        case "NMTOKENS" => AttType.Nmtokens
+        case _ => AttType.Cdata
+    }
 }

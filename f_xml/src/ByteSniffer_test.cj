@@ -125,14 +125,45 @@ public class ByteSniffer_test {
         })
     }
 
-    /** BOM 与声明冲突以 BOM 为准，且不报错。 */
+    /** BOM 与声明冲突报致命错误（XML 1.0 §4.3.3），消息带两个编码名与行列号。 */
     @TestCase
-    public func bomWinsOverDeclaration(): Unit {
+    public func bomConflictsWithDeclaration(): Unit {
         let bom: Array<Byte> = [0xEF, 0xBB, 0xBF]
         let body = "<?xml version=\"1.0\" encoding=\"GBK\"?><a>中</a>".toArray()
+        let error = assertXmlError({=> sniffText(concat(bom, body))}, "冲突")
+        assertTrue(error.message.contains("GBK"), "消息应带声明里的编码：${error.message}")
+        assertTrue(error.message.contains("UTF-8"), "消息应带 BOM 确定的编码：${error.message}")
+        assertTrue(error.line == 1 && error.column == 1, "位置应为声明的行列号，实际 ${error.line}:${error.column}")
+    }
+
+    /** UTF-16LE BOM 与 `encoding='utf-8'` 声明冲突同样报错。 */
+    @TestCase
+    public func utf16BomConflictsWithDeclaration(): Unit {
+        let bytes = utf16leBytes("<?xml version='1.0' encoding='utf-8'?><a/>", withBom: true)
+        let error = assertXmlError({=> sniffText(bytes)}, "冲突")
+        assertTrue(error.message.toAsciiLower().contains("utf-8"), "消息应带声明里的编码：${error.message}")
+        assertTrue(error.message.contains("UTF-16LE"), "消息应带 BOM 确定的编码：${error.message}")
+    }
+
+    /** BOM 与声明一致时不报错。 */
+    @TestCase
+    public func bomAgreesWithDeclaration(): Unit {
+        let bom: Array<Byte> = [0xEF, 0xBB, 0xBF]
+        let body = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><a/>".toArray()
         let result = sniffText(concat(bom, body))
         @Assert(match (result.encoding) {
             case DetectedEncoding.Utf8 => true
+            case _ => false
+        })
+    }
+
+    /** `encoding="UTF-16"` 不指定字节序，与 UTF-16BE 的 BOM 不冲突。 */
+    @TestCase
+    public func utf16NameAcceptsEitherByteOrder(): Unit {
+        let bytes = utf16beBytes("<?xml version=\"1.0\" encoding=\"UTF-16\"?><a/>", withBom: true)
+        let result = sniffText(bytes)
+        @Assert(match (result.encoding) {
+            case DetectedEncoding.Utf16Be => true
             case _ => false
         })
     }

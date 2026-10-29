@@ -201,8 +201,32 @@ internal func utf16leBytes(text: String, withBom!: Bool = false): Array<Byte> {
     out.toArray()
 }
 
-/** 把字符串按 UTF-32BE 编码（不含 BOM）。 */
-internal func utf32beBytes(text: String, withBom!: Bool = false): Array<Byte> {
+/** 把字符串按 UTF-16BE 编码（不含 BOM）。 */
+internal func utf16beBytes(text: String, withBom!: Bool = false): Array<Byte> {
+    let out = ArrayList<Byte>()
+    if (withBom) {
+        out.add(0xFE)
+        out.add(0xFF)
+    }
+    for (r in text.runes()) {
+        var cp = r.position()
+        if (cp >= 0x10000) {
+            let v = cp - 0x10000
+            let high = 0xD800 + (v >> 10)
+            let low = 0xDC00 + (v & 0x3FF)
+            out.add(UInt8((high >> 8) & 0xFF))
+            out.add(UInt8(high & 0xFF))
+            out.add(UInt8((low >> 8) & 0xFF))
+            out.add(UInt8(low & 0xFF))
+        } else {
+            out.add(UInt8((cp >> 8) & 0xFF))
+            out.add(UInt8(cp & 0xFF))
+        }
+    }
+    out.toArray()
+}
+
+/** 把字符串按 UTF-32BE 编码（不含 BOM）。 */internal func utf32beBytes(text: String, withBom!: Bool = false): Array<Byte> {
     let out = ArrayList<Byte>()
     if (withBom) {
         out.add(0x00)

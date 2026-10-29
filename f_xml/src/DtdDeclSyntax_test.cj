@@ -195,13 +195,15 @@ public class DtdEntityDeclSyntax_test {
 
 @Test
 public class DtdIgnoreSection_test {
-    /** IGNORE 段内的非法声明不校验（规范要求处理器不得读它）。 */
+    /** IGNORE 段在内部子集里不合法：整段声明必须报错，而不是跳过。 */
     @TestCase
-    public func ignoreSectionNotValidated(): Unit {
-        let doc = parseText(
-            "<!DOCTYPE a [<!ENTITY e \"x\"><![IGNORE[<!ELEMENT a ((b) ?)><!ATTLIST a x NUTOKEN #IMPLIED>]]>]><a>&e;</a>"
-        )
-        @Assert(doc.root.getOrThrow().text() == "x")
+    public func ignoreSectionRejected(): Unit {
+        let error = assertXmlError({
+            => parseText(
+                "<!DOCTYPE a [<!ENTITY e \"x\"><![IGNORE[<!ELEMENT a ((b) ?)><!ATTLIST a x NUTOKEN #IMPLIED>]]>]><a>&e;</a>"
+            )
+        }, "条件段只能出现在外部子集")
+        @Assert(error.line > 0)
     }
 }
 

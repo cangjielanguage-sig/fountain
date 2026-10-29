@@ -60,8 +60,10 @@ internal struct SniffResult {
 /**
  * 字节序与字符集嗅探。
  *
- * 优先级固定为 **BOM → XML 声明 → UTF-8**。BOM 与声明冲突时以 BOM 为准，不报错：
- * 现实里「UTF-8 BOM + 声明 latin1」大量存在，报错会把能读的文件判死。
+ * 优先级固定为 **BOM → XML 声明 → UTF-8**，但 BOM 与 `encoding` 声明**冲突**时按
+ * XML 1.0 §4.3.3 抛致命错误：BOM 已经确定了实体的编码，声明却写了另一种，属于编码层
+ * 错误。用「以 BOM 为准」把它悄悄抹平，会让「声明与实际不符」的错误文档静默通过。
+ * 只有无 BOM 时，声明才是决定性线索。
  *
  * 最多消费 `4 + 1024` 字节，全部经 `PrefixStream` 回放，不丢弃。
  */
@@ -76,23 +78,23 @@ internal class ByteSniffer {
         let isUtf32Le = head.size >= 4 && head[0] == 0xFF && head[1] == 0xFE && head[2] == 0x00 && head[3] == 0x00
         if (isUtf32Be) {
             fill(input, head, 4 + EXTRA_SCAN)
-            return SniffResult(DetectedEncoding.Utf32Be, head.toArray(), 4)
+            return fromBom(DetectedEncoding.Utf32Be, head.toArray(), 4)
         }
         if (isUtf32Le) {
             fill(input, head, 4 + EXTRA_SCAN)
-            return SniffResult(DetectedEncoding.Utf32Le, head.toArray(), 4)
+            return fromBom(DetectedEncoding.Utf32Le, head.toArray(), 4)
         }
         if (head.size >= 3 && head[0] == 0xEF && head[1] == 0xBB && head[2] == 0xBF) {
             fill(input, head, 4 + EXTRA_SCAN)
-            return SniffResult(DetectedEncoding.Utf8, head.toArray(), 3)
+            return fromBom(DetectedEncoding.Utf8, head.toArray(), 3)
         }
         if (head.size >= 2 && head[0] == 0xFF && head[1] == 0xFE) {
             fill(input, head, 4 + EXTRA_SCAN)
-            return SniffResult(DetectedEncoding.Utf16Le, head.toArray(), 2)
+            return fromBom(DetectedEncoding.Utf16Le, head.toArray(), 2)
         }
         if (head.size >= 2 && head[0] == 0xFE && head[1] == 0xFF) {
             fill(input, head, 4 + EXTRA_SCAN)
-            return SniffResult(DetectedEncoding.Utf16Be, head.toArray(), 2)
+            return fromBom(DetectedEncoding.Utf16Be, head.toArray(), 2)
         }
 
         // 无 BOM：按 XML 1.0 附录 F 的魔数判字节序。
@@ -145,12 +147,131 @@ internal class ByteSniffer {
     }
 
     /**
+     * BOM 已确定编码：再读声明，冲突即致命错误。
+     *
+     * 报错位置按 `<?xml` 在文档里的行列号给出（声明通常在第 1 行第 1 列，但前面可能有
+     * 空白或注释之外的空行）。
+     */
+    private static func fromBom(encoding: DetectedEncoding, bytes: Array<Byte>, bomLength: Int64): SniffResult {
+        let text = decodeHead(bytes, bomLength, encoding)
+        if (let Some(name) <- findDeclaredEncodingInText(text)) {
+            if (declaredConflicts(encoding, name)) {
+                let at = declarationPosition(text)
+                throw XmlException(
+                    "编码声明「${name}」与字节序标记确定的「${encoding.toString()}」冲突",
+                    at.line,
+                    at.column
+                )
+            }
+        }
+        SniffResult(encoding, bytes, bomLength)
+    }
+
+    /**
+     * 声明与 BOM 是否冲突。
+     *
+     * `UTF-16` / `UTF-32` 本身就**不指定字节序**（字节序由 BOM 给出），所以它们与两种
+     * 字节序的 BOM 都相容；具体名字（`UTF-16BE` / `GBK` …）必须与 BOM 一致。
+     */
+    private static func declaredConflicts(bom: DetectedEncoding, declaredName: String): Bool {
+        let declared = match (resolveCharset(declaredName)) {
+            case Some(e) => e
+            case None => return false // 认不出的名字交给解码层，不在这里判冲突
+        }
+        // `UTF-16` / `UTF-32` 不指定字节序（字节序由 BOM 给出），与两种字节序都相容。
+        match (declaredName.trimAscii().toAsciiUpper()) {
+            case "UTF-16" =>
+                match (bom) {
+                    case DetectedEncoding.Utf16Le | DetectedEncoding.Utf16Be => return false
+                    case _ => return true
+                }
+            case "UTF-32" =>
+                match (bom) {
+                    case DetectedEncoding.Utf32Le | DetectedEncoding.Utf32Be => return false
+                    case _ => return true
+                }
+            case _ => ()
+        }
+        declared.toString() != bom.toString()
+    }
+
+    /** 把 BOM 之后的字节按 BOM 确定的编码粗略解成文本（只用来读 ASCII 声明）。 */
+    private static func decodeHead(bytes: Array<Byte>, offset: Int64, encoding: DetectedEncoding): String {
+        let out = ArrayList<Rune>()
+        match (encoding) {
+            case DetectedEncoding.Utf8 => return asciiOf(bytes[offset..])
+            case DetectedEncoding.Utf16Le =>
+                var i = offset
+                while (i + 1 < bytes.size) {
+                    let unit = Int64(bytes[i]) | (Int64(bytes[i + 1]) << 8)
+                    out.add(Rune(unit))
+                    i += 2
+                }
+            case DetectedEncoding.Utf16Be =>
+                var i = offset
+                while (i + 1 < bytes.size) {
+                    let unit = (Int64(bytes[i]) << 8) | Int64(bytes[i + 1])
+                    out.add(Rune(unit))
+                    i += 2
+                }
+            case DetectedEncoding.Utf32Le =>
+                var i = offset
+                while (i + 3 < bytes.size) {
+                    let cp = Int64(bytes[i]) | (Int64(bytes[i + 1]) << 8) |
+                        (Int64(bytes[i + 2]) << 16) | (Int64(bytes[i + 3]) << 24)
+                    if (XmlChars.isXmlChar(cp)) {
+                        out.add(Rune(cp))
+                    }
+                    i += 4
+                }
+            case DetectedEncoding.Utf32Be =>
+                var i = offset
+                while (i + 3 < bytes.size) {
+                    let cp = (Int64(bytes[i]) << 24) | (Int64(bytes[i + 1]) << 16) |
+                        (Int64(bytes[i + 2]) << 8) | Int64(bytes[i + 3])
+                    if (XmlChars.isXmlChar(cp)) {
+                        out.add(Rune(cp))
+                    }
+                    i += 4
+                }
+            case DetectedEncoding.Other(_) => return asciiOf(bytes[offset..])
+        }
+        String(out.toArray())
+    }
+
+    /** `<?xml` 在文本里的 1-based 行列号。 */
+    private static func declarationPosition(text: String): SourcePosition {
+        let start = match (text.indexOf("<?xml")) {
+            case Some(i) => i
+            case None => 0
+        }
+        let runes = runesOf(text)
+        var line: Int64 = 1
+        var column: Int64 = 1
+        var i: Int64 = 0
+        while (i < start && i < runes.size) {
+            if (runes[i] == r'\n') {
+                line++
+                column = 1
+            } else {
+                column++
+            }
+            i++
+        }
+        SourcePosition(line, column)
+    }
+
+    /**
      * 在已读字节里找 `<?xml ... encoding="..."?>`，单双引号都接受。
      *
      * 只扫描 ASCII 兼容编码：UTF-16/32 在魔数阶段已经确定，不会再走到这里。
      */
     static func findDeclaredEncoding(bytes: Array<Byte>): ?String {
-        let text = asciiOf(bytes)
+        findDeclaredEncodingInText(asciiOf(bytes))
+    }
+
+    /** 在已解码的文本里找 `<?xml ... encoding="..."?>`，单双引号都接受。 */
+    static func findDeclaredEncodingInText(text: String): ?String {
         if (let Some(start) <- text.indexOf("<?xml")) {
             let declEnd = match (text.indexOf("?>", start)) {
                 case Some(e) => e

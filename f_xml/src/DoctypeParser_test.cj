@@ -43,18 +43,22 @@ public class DoctypeParser_test {
         @Assert(doc.root.getOrThrow().text() == "v")
     }
 
-    /** 条件段 IGNORE 分支不生效。 */
+    /** 内部子集里的 INCLUDE 条件段必须报错（`intSubset` 产生式不含 `conditionalSect`）。 */
     @TestCase
-    public func ignoreSection(): Unit {
-        let doc = parseText("<!DOCTYPE a [<!ENTITY e \"x\"><![IGNORE[<!ENTITY e \"y\">]]>]><a>&e;</a>")
-        @Assert(doc.root.getOrThrow().text() == "x")
+    public func includeSectionRejected(): Unit {
+        let error = assertXmlError({
+            => parseText("<!DOCTYPE a [<![INCLUDE[<!ENTITY e \"y\">]]>]><a/>")
+        }, "条件段只能出现在外部子集")
+        @Assert(error.line > 0 && error.column > 0)
     }
 
-    /** 条件段 INCLUDE 分支生效。 */
+    /** 内部子集里的 IGNORE 条件段同样报错，不因「在 IGNORE 里」而放行。 */
     @TestCase
-    public func includeSection(): Unit {
-        let doc = parseText("<!DOCTYPE a [<![INCLUDE[<!ENTITY e \"y\">]]>]><a>&e;</a>")
-        @Assert(doc.root.getOrThrow().text() == "y")
+    public func ignoreSectionRejected(): Unit {
+        let error = assertXmlError({
+            => parseText("<!DOCTYPE a [<!ENTITY e \"x\"><![IGNORE[<!ELEMENT a ((b) ?)>]]>]><a>&e;</a>")
+        }, "条件段只能出现在外部子集")
+        @Assert(error.line > 0 && error.column > 0)
     }
 
     /** 同一实体重复声明，第一个生效。 */
@@ -170,26 +174,72 @@ public class EntityExpansion_test {
         @Assert(parser.warnings()[0].contains("ext"))
     }
 
-    /** standalone="no" 时内容位置的未声明实体产出空文本。 */
+    /**
+     * `standalone="no"` 且有外部子集时，内容位置的未声明实体产出空文本并告警。
+     *
+     * 跳过档的前提是「声明可能落在外部子集里」——没有外部子集时 `standalone="no"` 也报错。
+     */
     @TestCase
     public func standaloneNoSkipsInContent(): Unit {
-        let parser = XmlPullParser(text: "<?xml version=\"1.0\" standalone=\"no\"?><a>&ext;</a>", options: XmlParserOptions())
+        let parser = XmlPullParser(
+            text: "<?xml version=\"1.0\" standalone=\"no\"?><!DOCTYPE a SYSTEM \"x.dtd\"><a>&ext;</a>",
+            options: XmlParserOptions()
+        )
+        var text = ""
         var done = false
         while (!done) {
             match (parser.nextEvent()) {
+                case Some(XmlEvent.Text(t)) => text += t
                 case Some(_) => ()
                 case None => done = true
             }
         }
+        @Assert(text == "")
         @Assert(parser.warnings().size == 1)
         @Assert(parser.warnings()[0].contains("ext"))
     }
 
-    /** standalone="no" 时属性值里的未声明实体被去掉。 */
+    /** `standalone="no"` 且有外部子集时，属性值里的未声明实体被去掉。 */
     @TestCase
     public func standaloneNoRemovesAttributeRef(): Unit {
         let parser = XmlPullParser(
-            text: "<?xml version=\"1.0\" standalone=\"no\"?><a x=\"1&ext;2\"/>",
+            text: "<?xml version=\"1.0\" standalone=\"no\"?><!DOCTYPE a SYSTEM \"x.dtd\"><a x=\"1&ext;2\"/>",
+            options: XmlParserOptions()
+        )
+        var value = ""
+        var done = false
+        while (!done) {
+            match (parser.nextEvent()) {
+                case Some(XmlEvent.StartElement(_, attrs, _)) =>
+                    if (attrs.size > 0) {
+                        value = attrs[0].value
+                    }
+                case Some(_) => ()
+                case None => done = true
+            }
+        }
+        @Assert(value == "12")
+        @Assert(parser.warnings().size == 1)
+        @Assert(parser.warnings()[0].contains("ext"))
+    }
+
+    /**
+     * 没有外部子集时 `standalone="no"` 也报错——连「可能声明在别处」的通道都没有。
+     *
+     * 上一轮把它当「跳过」处理是错的：`<?xml version="1.0" standalone="no"?><a x="1&ext;2"/>`
+     * 会把笔误 `&ext;` 静默抹成空串。
+     */
+    @TestCase
+    public func standaloneNoWithoutDoctypeRejected(): Unit {
+        assertXmlError({=> parseText("<?xml version=\"1.0\" standalone=\"no\"?><a x=\"1&ext;2\"/>")}, "ext")
+        assertXmlError({=> parseText("<?xml version=\"1.0\" standalone=\"no\"?><a>&ext;</a>")}, "ext")
+    }
+
+    /** 有参数实体引用即打开跳过档：即使没有外部子集也允许跳过并告警。 */
+    @TestCase
+    public func parameterReferenceOpensSkipTier(): Unit {
+        let parser = XmlPullParser(
+            text: "<?xml version=\"1.0\"?><!DOCTYPE a [<!ENTITY % p \"<!ENTITY e 'v'>\">%p;]><a>&ext;</a>",
             options: XmlParserOptions()
         )
         var done = false
@@ -201,6 +251,26 @@ public class EntityExpansion_test {
         }
         @Assert(parser.warnings().size == 1)
         @Assert(parser.warnings()[0].contains("ext"))
+    }
+
+    /** 无外部子集但实体已声明：正常展开，不产生告警。 */
+    @TestCase
+    public func declaredEntityWithoutExternalSubset(): Unit {
+        let parser = XmlPullParser(
+            text: "<?xml version=\"1.0\"?><!DOCTYPE a [<!ENTITY ext \"v\">]><a>&ext;</a>",
+            options: XmlParserOptions()
+        )
+        var text = ""
+        var done = false
+        while (!done) {
+            match (parser.nextEvent()) {
+                case Some(XmlEvent.Text(t)) => text += t
+                case Some(_) => ()
+                case None => done = true
+            }
+        }
+        @Assert(text == "v")
+        @Assert(parser.warnings().size == 0)
     }
 
     /**
