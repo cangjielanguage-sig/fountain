@@ -298,6 +298,16 @@ crc16/密钥交换协议/命名风格转换/常用设计模式/geohash/snowflake
 
 **详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_version/README.md>
 
+### `fountain::f_email`
+邮件客户端：SMTP / POP3 / IMAP4rev1 + MIME 解析与生成，统一 `Email` 门面（发信/列信/读正文/取附件/删信），流式附件、TLS 与凭据脱敏
+
+**详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_email/README.md>
+
+### `fountain::f_zip`
+ZIP 容器读写：ZIP64 双向、流式写入（24 字节 ZIP64 descriptor）、大条目落盘、Zip Slip / 符号链接 / 炸弹防护
+
+**详情请见：**<https://gitcode.com/Cangjie-TPC/fountain/blob/master/f_zip/README.md>
+
 ### `fountain::f_egraph`
 事件驱动的流程库
 
