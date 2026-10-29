@@ -125,3 +125,20 @@ public interface MetaStore <: Resource {
 ## Open Questions
 
 无。
+
+### D12 MySQL 实测结论（2026-10-29）
+
+WSL Ubuntu 24.04 从官方 APT 源（`mysql-innovation` 组件）安装到 **MySQL 26.10.0**（年度版本号，晚于 9.2）。
+实测结果：
+
+| 能力 | 结果 |
+|---|---|
+| `VECTOR(1024)` 列 | ✅ 可建表、可写入（`STRING_TO_VECTOR('[1,2,3]')`） |
+| `CREATE VECTOR INDEX … USING HNSW` | ❌ 语法不支持（`ALTER TABLE … ADD VECTOR INDEX`、`CREATE INDEX … USING HNSW` 同样失败） |
+| `VECTOR_DISTANCE` / `DISTANCE` / `COSINE_DISTANCE` | ❌ 函数不存在 |
+
+结论：该构建只有 VECTOR 类型，没有 ANN 索引与距离函数。MySQL 实现按设计降级：
+
+1. 向量列用 `BLOB` 存 `f32` 小端（不依赖 `VECTOR` 类型，兼容 MySQL 8.x/MariaDB）；
+2. `searchDense` 取候选后在应用层算 cosine，并 `warn` 一次「降级为暴力检索」；
+3. 若后续换到真正支持 `VECTOR INDEX` 的 9.2+ 构建，只改 DDL 与一条 SQL，不动接口。
