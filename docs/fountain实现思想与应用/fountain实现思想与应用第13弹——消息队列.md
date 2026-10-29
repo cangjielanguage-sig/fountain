@@ -286,7 +286,7 @@ export mqServer_deadMsgDir=/data/fmq/deadMsgs
 
 - `mqClient_hosts` 是**同一份表**给两端用：服务端按 `mqServer_port` 在表里匹配本机下标，端口不在表中或重复出现会启动报错；
 - 默认日志目录在 `/var/log/fmq` 下，普通用户先改成可写目录；
-- 多节点部署要给每台机器设置唯一的 `protocol_hostId`，否则 `MessageID` 无法区分节点。
+- `protocol_hostId` **必填且每台机器唯一**（脚本里默认导出 `1`）：它是 `MessageID` 身份的一部分，配 0 直接抛异常；`(pid, tid, 时间戳)` 跨机器会重复，集群维度只能靠它。
 
 **限制（照抄前先看）**
 

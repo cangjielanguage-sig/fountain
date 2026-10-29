@@ -254,7 +254,7 @@ public struct Message <: Protocol<EncodedMessage, Message> {
 
 `Message` 不区分 Request / Response，靠 `command` 区分，靠 `id` 配对。这个选择让「回包」变成一件没有歧义的事：`RESP(id, ...)`、`ERROR(id, ...)`、`ACK(id)` 全都带着原请求的 `MessageID`。
 
-`MessageID` 由 `time + pid + tid + hostId` 组成，但**相等和哈希只用前三项**——`hostId` 只是给运维看的，不参与身份判定。按 `hostId` 做去重会得到和框架不一致的结论。
+`MessageID` 由 `hostId + pid + tid + time` 组成，**四项都参与相等和哈希**。原因很直接：`(pid, tid, 时间戳)` 只在单机内唯一，跨机器 pid/tid 会重复（容器里通常都是 1），集群维度只能靠 `hostId`。`hostId` 因此是**必填**的：构造时给它 0 直接抛 `IllegalArgumentException`，不再静默退化成「单机唯一」。解码一帧时用的是编码侧写进来的 hostId，不是本机配置，所以只要往返期间配置不变，请求与回包的 id 就永远相等。
 
 工厂方法都返回 `Message`，因为 `EncodedMessage` 只由 `encode()` 产出：
 
@@ -300,7 +300,7 @@ public interface MessageCopier {
 
 | 配置项 | 默认 | 说明 |
 | --- | --- | --- |
-| `protocol_hostId` | `0` | 主机 ID，集群内每台主机唯一（写进 `MessageID`） |
+| `protocol_hostId` | 无（**必填**） | 主机 ID，集群内每台主机唯一（写进 `MessageID`，参与相等/哈希） |
 | `protocol_maxFramePayload` | `1 << 30` | 单帧 payload 上限，收发两侧校验 |
 
 配置在**首次使用时**读取并缓存，不能在包初始化期读——那时 `Config` 可能还没就绪。这个「延迟读配置」的模式在 fountain 里是通用约定，后面几篇还会遇到。
@@ -456,8 +456,8 @@ public func close(): Unit
 5. **CRC 的库加载顺序**：`f_util` 必须先于 `f_protocol`。
 6. **`pingTimeout` 默认 1s**：太短会引发拆链重连风暴。
 7. **`MultiClient` 的 `origin` / `min` 要对齐桶内部**，否则永远命中第一个节点。
-8. **`MessageID` 的 `hostId` 不参与相等/哈希**，别拿它做去重。
-9. **`protocol_hostId` 要在集群内唯一**，否则多节点的 `MessageID` 无法区分。
+8. **`protocol_hostId` 必填且集群内唯一**：配 0 或漏配，构造 `MessageID` 直接抛异常（`(pid, tid, 时间戳)` 跨机器会重复，别指望它兜底）。
+9. **别用 `toString()` 反建 `MessageID`**：字符串里的时间戳只到毫秒，纳秒精度丢了；要比较就用对象。
 10. **协议错位必须断链**：`CodecException` 之后继续读只会得到垃圾。
 
 ---
