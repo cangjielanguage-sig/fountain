@@ -288,7 +288,7 @@ POST   /v1/collections/import                → 202 multipart/zip（同 §3.7 �
   跨机器、跨模型版本搬运会悄悄失真；导入时统一由调用方（f_llm）重新 embedding，fhydra 不猜；
 - 正文与元数据放 Markdown，导出物可被人直接读、能进 Git、能被其它工具处理；
 - 导入时按 `manifest.json` 逐条 upsert；缺向量就是缺，不构造占位向量；
-- 打包依赖 `f_zip`（另一台机器开发中；按计划做到导出功能时已就绪）。**不另写 zip 容器、也不做 tar 兜底**，
+- 打包依赖 `f_zip`（**模块已就绪**，2026-10-29 从 `sts/1.3.x` 合入）。**不另写 zip 容器、也不做 tar 兜底**，
   读写 zip 统一走 `f_zip`，避免两套实现与两套测试。
 
 ### 3.6 鉴权
@@ -353,7 +353,7 @@ public class FhydraMemoryStore <: MemoryStore { /* 见 ../../f_llm/doc/f_llm-mem
 ```
 
 `source` 为 `system`（未配置）或 `fhydra_timezone`（被覆盖）；两者不一致时这一行就是唯一线索。
-备份：停写 → 拷数据目录；在线备份用 `POST /v1/collections/{c}/export` 导出 **Markdown 集合 + zip**（§3.7，打包器等 `f_zip` 就绪后接入）。
+备份：停写 → 拷数据目录；在线备份用 `POST /v1/collections/{c}/export` 导出 **Markdown 集合 + zip**（§3.7，打包走 `f_zip`）。
 会话级集合不必备份：用 `u{uid}:s-{sessionId}` + TTL，会话结束即消失。
 
 ---

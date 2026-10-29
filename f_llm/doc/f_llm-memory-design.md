@@ -79,8 +79,9 @@
                     └────────────────────────────┘
 ```
 
-**依赖方向**：`f_llm → (f_store|f_orm|f_mcp|f_concurrent|f_ticktock|f_jit|f_egraph)`；
-`fhydra → (f_store, f_mvc)`，**不反向依赖 f_llm**。
+**依赖方向**：`f_llm → (f_store|f_orm|f_mcp|f_concurrent|f_ticktock|f_jit|f_egraph|f_email)`；
+`fhydra → (f_store, f_mvc, f_zip)`，**不反向依赖 f_llm**。
+（`f_email` / `f_zip` 已于 2026-10-29 从 `sts/1.3.x` 合入，不再是外部依赖。）
 
 ---
 
