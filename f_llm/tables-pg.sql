@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS skills (
   metadata       TEXT         NULL,
   details        TEXT         NULL,
   functions      TEXT         NULL,
+  version        INT          NOT NULL DEFAULT 1,   -- 技能自演进版本（§10.4）
   skill_type     VARCHAR(32)  NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_skills_agent ON skills (agent_id, accepted_event);
@@ -188,6 +189,45 @@ CREATE TABLE IF NOT EXISTS llm_character (
   prompts       TEXT        NULL,
   update_time   TIMESTAMP   NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
   CONSTRAINT uk_character_user UNIQUE (user_id)
+);
+
+-- -----------------------------------------------------------------------------
+-- 4.1 人格绑定（工作空间/任务/流程），只存 key 不存提示词正文
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS llm_character_binding (
+  user_id       BIGINT      NOT NULL,
+  scope_type    VARCHAR(16) NOT NULL,   -- workspace | task | flow
+  scope_id      VARCHAR(64) NOT NULL,
+  character_key VARCHAR(32) NOT NULL,
+  update_time   TIMESTAMP   NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
+  PRIMARY KEY (user_id, scope_type, scope_id)
+);
+
+-- -----------------------------------------------------------------------------
+-- 4.2 通道绑定（微信/企微/飞书/钉钉/QQ/邮件）
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS llm_channel_binding (
+  user_id      BIGINT       NOT NULL,
+  channel      VARCHAR(16)  NOT NULL,
+  external_id  VARCHAR(128) NOT NULL,
+  display_name VARCHAR(128) NOT NULL DEFAULT '',
+  auto_send    BOOLEAN      NOT NULL DEFAULT FALSE,
+  enabled      BOOLEAN      NOT NULL DEFAULT TRUE,
+  update_time  TIMESTAMP    NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
+  PRIMARY KEY (user_id, channel, external_id)
+);
+
+-- -----------------------------------------------------------------------------
+-- 4.3 技能版本（升级前存旧版本，支持回滚）
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS llm_skill_version (
+  skill_id     BIGINT       NOT NULL,
+  version      INT          NOT NULL,
+  details      TEXT         NOT NULL,
+  functions    TEXT         NOT NULL,
+  change_note  VARCHAR(256) NOT NULL DEFAULT '',
+  created_time TIMESTAMP    NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
+  PRIMARY KEY (skill_id, version)
 );
 
 -- -----------------------------------------------------------------------------

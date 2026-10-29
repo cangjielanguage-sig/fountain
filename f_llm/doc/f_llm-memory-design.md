@@ -29,17 +29,22 @@
 |---|---|---|
 | 0 | 源设计拆两部分；part1 在 f_llm、part2 为 fhydra 可执行模块 | 本文 + `../fhydra/doc/fhydra-design.md` |
 | 1 | f_llm 建表 SQL 收敛到 `tables-pg.sql` / `tables-mysql.sql` | §6 + 两个 DDL 文件 |
-| 2 | 记忆通用 API + 5 实现（内存/文件/pg/mysql/fhydra） | §5 |
+| 2 | 记忆/知识统一接口；内容族三选一（pg/mysql/fhydra）、元数据族三选一（pg/mysql/f_store） | §5.3 |
 | 3 | 记忆按用户 ×（工作空间 | 全局）分层 | §5.2 |
 | 4 | pg/mysql 用 BGE-M3 的稠密/稀疏/多头三路向量；MySQL 最新版 + 向量插件 | §4、§6.3、§11（安装与验证时机） |
 | 5 | 标题、正文分别建向量索引 | §6.3（`title_dense` / `content_dense` 两套） |
 | 6 | 记忆表结构（修正草案）+ 一个调用记忆 API 的 tool_call | §6.1、§8.1 |
-| 7 | 文件记忆按用户+工作空间/全局分目录 | §5.3 |
-| 8 | 人设 API + 表 + 5 实现 + 13 个预定义人设；首条 system 消息不裁剪 | §7 |
+| 7 | ~~文件记忆按用户+工作空间/全局分目录~~（**已被存储拆分取代**：记忆只走 pg/mysql/fhydra） | §5.3 |
+| 8 | 人设 API + 表 + 3 实现（pg/mysql/f_store）+ 13 个预定义人格；首条 system 消息不裁剪 | §7 |
 | 9 | `loom` 包：文本 → ClosureTask/Flow → JIT；预览确认；执行/删除 tool_call | §9 |
 | 10 | 技能 zip → skills 表记录；脚本改 tool_call/MCP/JIT；导入 tool_call | §10 |
 | 11 | `f_ticktock` 增加 f_jit 依赖 + `JitTicktockTask`；f_llm 定时任务工具 | §11 |
 | 12 | `callWithTimeout`：超时返回 `{}` 并取消被调工具 | §8.6 |
+| 13 | 内容族 / 元数据族分离，统一接口，开发者可注册自己的实现 | §5.3、§5.3.1、§5.3.2 |
+| 14 | 微信/企业微信/飞书/钉钉/QQ/邮件（f_email）以 MCP 接入；智能体专用邮箱（POP3/SMTP） | §8.7 |
+| 15 | `listTools` / `searchTools`：列出或按 bge-m3 向量检索最匹配的 tool_call / MCP | §8.8 |
+| 16 | 技能自演进：按使用中形成的记忆升级**所有**技能 | §10.4 |
+| 17 | 人格可绑定到工作空间/任务/流程；loom 提示词以「灵魂提示词」为参考重写 | §7.4、§9.10、§12.4 |
 
 > 提示词设计说明：本机没有名为 `prompt-engineering-export` 的技能，实际使用可用的
 > `prompt-engineering-expert`（角色边界 + 硬约束 + 输出格式 + 反模式检查 + 可评测的结构）完成，
@@ -60,10 +65,11 @@
 │  └────┬────┘      └────┬─────┘        │ JitRunner    │         │
 │       │                │              └──────┬───────┘         │
 │  ┌────▼────────────────▼─────────────────────▼───────┐         │
-│  │ 存储抽象：MemoryStore / CharacterStore / VectorStore│        │
-│  └───┬─────────┬──────────┬──────────┬───────────┬───┘         │
-│      │         │          │          │           │             │
-│   InMemory   File(f_store) Postgres  MySQL      Fhydra(HTTP)    │
+│  │ 内容族 ContentStore：MemoryStore / KnowledgeStore  │         │
+│  │ 元数据族 MetaStore：Character/Skill/Prompt/Conf    │         │
+│  └───┬──────────────┬───────────────┬───────────────┘         │
+│      │              │               │                         │
+│   Postgres        MySQL      Fhydra(内容) / f_store(元数据)   │
 │                                                                │
 │  Embedding 门面（BGE-M3 /v1/embeddings）→ dense / sparse / colbert│
 └────────────────────────────────────────────────────────────────┘
@@ -240,27 +246,92 @@ public interface MemoryStore <: Resource {
 默认检索顺序：先查 `Workspace(当前)` 再查 `Global`，两路结果按分数合并；**不跨用户**，**不跨工作空间**。
 写入时 `scope` 必填，工具层默认写当前工作空间，显式 `scope="global"` 才写全局。
 
-### 5.3 五个实现
+### 5.3 存储抽象：内容族与元数据族（各三选一）
 
-| 实现 | 存储 | 向量 | 适用 |
+f_llm 的持久化分成**两个互不相干的选择**，各自三选一，组合自由（例如 `content=fhydra` + `meta=f_store` 可以完全脱离 PostgreSQL/MySQL 运行）：
+
+| 族 | 存什么 | 可选实现（三选一） | 能不能没有数据库 |
 |---|---|---|---|
-| `InMemoryMemoryStore` | `ConcurrentHashMap` | 内存暴力扫 | 单测、演示 |
-| `FileMemoryStore` | `f_store`，路径 `{root}/{userId}/{namespace}/` | 落盘 + 内存索引重建 | 无数据库的单机部署 |
-| `PostgresMemoryStore` | `llm_memory` + 向量表（pgvector） | dense HNSW + sparse 倒排 + colbert 重排 | 生产（PG/OpenGauss） |
-| `MySqlMemoryStore` | 同结构（MySQL 9.2+ `VECTOR` + `VECTOR INDEX`） | 同上；无索引时降级内存暴力扫 | 生产（MySQL/MariaDB） |
-| `FhydraMemoryStore` | HTTP 调 `fhydra` | 全部在 fhydra 内 | 生产（解耦部署） |
+| **内容族** `ContentStore` | 记忆、经验、知识、文档 | `PostgresContentStore` / `MySqlContentStore` / `FhydraContentStore` | 只有 fhydra 可以 |
+| **元数据族** `MetaStore` | 人格、技能、提示词、模型配置 | `PostgresMetaStore` / `MySqlMetaStore` / `FStoreMetaStore` | **f_store 可以** |
 
-文件布局（需求 7）：
+```cangjie
+public interface ContentStore <: Resource {
+    prop memory: MemoryStore        // 记忆 + 经验（经验 = kind: task/knowledge）
+    prop knowledge: KnowledgeStore  // 知识 + 文档（按文档/块组织）
+}
+
+public interface MetaStore <: Resource {
+    prop characters: CharacterStore
+    prop skills: SkillStore
+    prop prompts: PromptStore
+    prop confs: LLMConfStore
+}
+
+/** 工厂：只读 f_config 的两个键，不认识的值直接启动失败，不做静默回退 */
+public class Stores {
+    public static func content(): ContentStore   // llm_contentStore = postgres|mysql|fhydra
+    public static func meta(): MetaStore         // llm_metaStore   = postgres|mysql|f_store
+    public static func registerContent(name: String, factory: () -> ContentStore): Unit
+    public static func registerMeta(name: String, factory: () -> MetaStore): Unit
+}
+```
+
+**「记忆 / 经验 / 知识 / 文档」的落点**（不在内容族里再拆四套接口）：
+
+| 业务概念 | 接口 | 存储形态 |
+|---|---|---|
+| 记忆 | `MemoryStore` | `llm_memory` + 向量表（pg/mysql）或 fhydra collection |
+| 经验 | `MemoryStore`（`kind = task/knowledge`） | 同上；由 `MemoryRecorderTask` 自动写入（§5.5） |
+| 知识 | `KnowledgeStore` | 文档 + 块 + 向量 |
+| 文档 | `KnowledgeStore` 的文档实体 | 同上（`docId` 幂等覆盖） |
+
+**为什么必须分成两族**：元数据（人格/技能/提示词/配置）量小、要能读写、要能冷启动；内容（记忆/文档）量大、要向量检索。
+把两者绑在同一个后端，会让「只想用 f_store 跑单机」变成「必须再装一个向量库」。
+
+**开发者扩展**：实现 `ContentStore` 或 `MetaStore` 接口后用 `Stores.registerContent/registerMeta` 注册，
+配置里写注册名即可；不允许 `switch` 硬编码分支。
+
+**测试替身**：`InMemoryContentStore` / `InMemoryMetaStore` 只用于单测，不进入 `llm_*Store` 的可选值。
+
+> OpenGauss 走 `Postgres*` 实现（`orm_drivers` 配 `opengauss`，SQL 与 PG 同构）；MariaDB 走 `MySql*`（驱动换 `mariadb`）。
+
+### 5.3.1 `FStoreMetaStore`：无数据库运行
+
+key 布局（单 Store + 前缀，值统一 JSON；`f_store` 只提供字节 KV，索引在这里自建）：
 
 ```
-{memory_path}/{userId}/global/{id}.json
-{memory_path}/{userId}/ws-{workspaceId}/{id}.json
-{memory_path}/{userId}/{ns}/index.meta        # 版本 / 条目数
+f_llm:meta:v                        格式版本（不匹配则拒绝启动，避免读到旧布局）
+f_llm:meta:seq:{entity}             character/skill/prompt/conf 的自增 id
+
+f_llm:meta:character:{userId}       人格（一人一条，key 即 userId）
+f_llm:meta:skill:{skillId}          技能主体（含 version / updatedTime）
+f_llm:meta:skill:title:{title}      title → skillId（唯一性校验）
+f_llm:meta:prompt:{name}:{version}  提示词版本
+f_llm:meta:prompt:{name}:latest     最新版本指针
+
+f_llm:meta:conf:{confId}            模型配置
+f_llm:meta:conf:byname:{llmName}    llmName → confId（`candidates(llmName)` 用）
 ```
 
-`namespace` 编码：`global` 或 `ws-{id}`，与 SQL 的 `namespace` 列一致。
+一致性（`f_store` 没有事务）：
 
-> OpenGauss 走 `PostgresMemoryStore`（`orm_drivers` 配 `opengauss`，SQL 与 PG 同构）；MariaDB 走 `MySqlMemoryStore`（驱动换 `mariadb`）。
+- **写主体 → 写索引**，两步之间崩溃会留下「有主体、无索引」的记录；启动时按前缀扫一遍主体，补建缺失索引（幂等）；
+- 删除顺序相反：**先删索引，再删主体**，避免索引指向不存在的记录；
+- 单进程写：同一 entity 的写操作串行（进程内互斥），不做跨进程并发承诺；
+- 每次写入后按 `fhydra_sync_every` 同样的策略定期 `syncWAL()`（默认 500 次）。
+
+### 5.3.2 选型配置
+
+| 键 | 取值 | 默认 | 说明 |
+|---|---|---|---|
+| `llm_contentStore` | `postgres` / `mysql` / `fhydra` | `fhydra` | 记忆/经验/知识/文档 |
+| `llm_metaStore` | `postgres` / `mysql` / `f_store` | `f_store` | 人格/技能/提示词/模型配置 |
+| `llm_metaStorePath` | 目录 | `./data/f_llm-meta` | 仅 `f_store` 用 |
+| `llm_contentStoreUrl` | URL | 空 | `postgres`/`mysql` 用连接串，`fhydra` 用 base url |
+
+**启动校验**：两个键必须是各自枚举内且已注册的实现名，否则**启动失败并打印可选值**；不允许「配置写错就默默用默认」。
+两个族之间不做一致性校验——它们本来就可以指向不同后端。
 
 ### 5.4 `kind`：字符串 + 预定义不可删 + 自定义归属用户
 
@@ -299,8 +370,8 @@ public class MemoryKinds {
 - 预定义 7 值**固化在代码里**（`MemoryKinds.predefined()` 是唯一权威），同时启动时幂等写入库表（`user_id = 0` 代表全局）；
 - 种类表 `llm_memory_kind` 以 `(user_id, kind)` 为主键（§6.1），预定义行 `user_id=0`；
   即使库里的预定义行被手工删掉，下次启动也会补回；
-- 文件实现把种类清单存 `{memory_path}/{userId}/kinds.json`（预定义不落盘），内存实现只保留进程内清单——
-  **五个实现的语义必须一致**，用同一套 conformance 用例校验。
+- 种类清单一律落元数据族的 `llm_memory_kind`（PG/MySQL）或 `f_llm:meta:kind:*`（f_store），
+  **内容族三个实现的语义必须一致**，用同一套 conformance 用例校验。
 
 **与检索的关系**：`MemoryQuery.kinds` 过滤时按 `(userId, kind)` 先 `validate` 再下推；未知 kind 返回空结果而不是报错
 （查询不该因为拼错一个过滤值就 500），但写入必须报错。
@@ -542,7 +613,47 @@ create table llm_character (
 `doc/sql/llm_conf.*.sql` 标记为废弃，保留一个版本后删除。
 
 新增表的完整清单（两个文件里都有）：`llm_memory`、`llm_memory_kind`、`llm_memory_event`、
-`llm_memory_vector`、`llm_memory_token`、`llm_character`、`llm_loom_flow`。
+`llm_memory_vector`、`llm_memory_token`、`llm_character`、`llm_character_binding`、`llm_channel_binding`、
+`llm_skill_version`、`llm_loom_flow`。
+
+### 6.6 绑定表与技能版本表（新增）
+
+```sql
+-- 人格绑定：只存 key，不存提示词正文（§7.4）
+create table llm_character_binding (
+    user_id       bigint      not null,
+    scope_type    varchar(16) not null,   -- workspace | task | flow
+    scope_id      varchar(64) not null,
+    character_key varchar(32) not null,
+    update_time   datetime    not null default (utc now),
+    primary key (user_id, scope_type, scope_id)
+);
+
+-- 通道绑定：平台侧 id 与 f_llm 用户一一对应（§8.7）
+create table llm_channel_binding (
+    user_id      bigint       not null,
+    channel      varchar(16)  not null,   -- wechat|wecom|feishu|dingtalk|qq|email
+    external_id  varchar(128) not null,
+    display_name varchar(128) not null default '',
+    auto_send    boolean      not null default false,
+    enabled      boolean      not null default true,
+    update_time  datetime     not null default (utc now),
+    primary key (user_id, channel, external_id)
+);
+
+-- 技能版本：升级前先存旧版本，便于回滚（§10.4）；skills 增加 version 列
+create table llm_skill_version (
+    skill_id     bigint       not null,
+    version      int          not null,
+    details      text         not null,
+    functions    text         not null,
+    change_note  varchar(256) not null default '',
+    created_time datetime     not null default (utc now),
+    primary key (skill_id, version)
+);
+```
+
+`skills` 表同步增加 `version int not null default 1`（PG/MySQL 两份 DDL 都已加）。
 
 ---
 
@@ -564,7 +675,8 @@ public interface CharacterStore <: Resource {
 }
 ```
 
-五个实现与记忆同构（内存/文件/PG/MySQL/Fhydra），文件落在 `{memory_path}/{userId}/character.json`。
+三个实现：`PostgresCharacterStore` / `MySqlCharacterStore`（落 `llm_character`）、
+`FStoreCharacterStore`（落 `f_llm:meta:character:{userId}`）；人格属于**元数据族**（§5.3），不走 fhydra。
 
 ### 7.2 预定义人设（固化在代码）
 
@@ -578,6 +690,40 @@ public interface CharacterStore <: Resource {
 - `ContextPrunerMediator.prune` 出口统一加一道 `LeadingSystemGuardPruner`：
   裁剪完成后把原始首条 system 消息贴回首位（若策略已保留则不重复）；
 - 用例：所有 8 个既有策略 + `TokenBudget` 在 system 消息存在时，裁剪结果第 0 条仍是该 system。
+
+### 7.4 人格绑定：工作空间 / 任务 / 流程
+
+人格不再只有「用户全局一条」（§7.1 保持不变，作为默认值），可以按作用域覆盖：
+
+```cangjie
+public enum CharacterScope {
+    | Workspace(String)       // 工作空间 id
+    | Task(String)            // 任务名
+    | Flow(String)            // loom 流程名
+}
+
+public interface CharacterBindingStore {
+    func bind(userId: Int64, scope: CharacterScope, characterKey: String): Unit
+    func unbind(userId: Int64, scope: CharacterScope): Unit
+    func resolve(userId: Int64, scopes: Array<CharacterScope>): ?Character
+}
+```
+
+**生效顺序（先命中者胜）**：
+
+```
+Flow(name) > Task(name) > Workspace(id) > 用户默认（llm_character） > default（不注入）
+```
+
+- 绑定只存 `character_key`，**不拷贝提示词正文**——人格正文改动后绑定自动跟随，避免「绑定快照」和「用户默认」两份文本漂移；
+- `resolve` 返回 `?Character`；全链路都没绑定时返回 `None`，行为与今天一致（不注入 system 消息）；
+- 绑定关系落 `llm_character_binding`（§6.6），`scope_type` 取 `workspace|task|flow`；
+- 权限：只能绑定自己定义的 kind/人格；`character_key` 必须是预定义 13 个或 `custom`（§7.2）。
+
+**与上下文裁剪的关系**：`resolve` 的结果仍然走 §7.3 的注入路径——第 0 条 system + `LeadingSystemGuardPruner`，不因为「来源是流程」就放松。
+
+**loom 集成**：任务描述里写「用鬼灵精怪的人格」时，`Planner` 把人格写进计划（§9.3 的 `persona`），
+`loomExecute(confirm=true)` 在注册流程时写入 `Flow(flowName)` 绑定；流程删除时一并解绑（§9.10）。
 
 ---
 
@@ -637,6 +783,90 @@ public interface CharacterStore <: Resource {
 仓颉线程不可强杀，取消是**协作式**——工具实现需检查 `CancelToken`；LLM 调用通过关闭流 + `unload` 生效；
 不支持取消的工具只能做到「不再等待」，其副作用可能仍会完成。
 
+### 8.7 第三方通道：微信 / 企业微信 / 飞书 / 钉钉 / QQ / 邮件
+
+**架构原则：平台对接全部做成独立 MCP 服务，f_llm 不直接调任何平台 SDK。**
+
+```
+微信/企微/飞书/钉钉/QQ/邮件
+        │ 各自 MCP server（独立进程/仓库）
+        ▼
+f_llm  ── MCP client（McpToolSource）──  AgentTask
+        ▲
+        └── 入站：MCP server 回调 / 轮询 → f_llm 的 /v1/channels/{channel}/inbound
+```
+
+**每个通道暴露的 MCP 工具**（命名 `mcp:<channel>.<action>`，与现有 `ToolName.mcpName` 规则一致）：
+
+| action | 语义 |
+|---|---|
+| `send` | 给指定用户/会话发消息（文本、图片、文件） |
+| `list` | 拉最近 N 条会话/消息 |
+| `history` | 按时间范围拉历史 |
+| `mark_read` | 标记已读（仅支持该能力的平台） |
+| `whoami` | 返回当前绑定的外部身份（排障用） |
+
+**用户维度**：所有通道都按「f_llm 用户」收发，平台侧 id 不进入提示词。
+
+```sql
+create table llm_channel_binding (
+    user_id      bigint      not null,
+    channel      varchar(16) not null,   -- wechat|wecom|feishu|dingtalk|qq|email
+    external_id  varchar(128) not null,  -- openid / userid / email 地址
+    display_name varchar(128) not null default '',
+    auto_send    boolean     not null default false,  -- 是否允许不经确认直接外发
+    enabled      boolean     not null default true,
+    update_time  datetime    not null default (utc now),
+    primary key (user_id, channel, external_id)
+);
+```
+
+- 入站：MCP server 把消息 POST 到 `/v1/channels/{channel}/inbound`，f_llm 用 `external_id` 反查 `user_id`，
+  `session = "{channel}:{externalId}"`，然后按 §5.5 发 `llm.turn` 事件；
+- 出站：agent 调 `mcp:<channel>.send`，工具内部用 `(userId, channel)` 取 `external_id`；**不允许模型直接填平台 id**；
+- 外发是副作用：`auto_send=false` 时工具返回「待确认」，由上层 `callWithTimeout`/审批流确认后再发；
+- 幂等：入站按平台 `message_id` 去重，重复投递只记一次；
+- 凭据（appId/appSecret/token）放配置或 MCP server 自管，**不落 `llm_channel_binding`**。
+
+### 8.7.1 智能体专用邮箱（POP3 / SMTP，`f_email`）
+
+- 配置指定一个专用邮箱（`llm_email.address` / `pop3Host` / `smtpHost` / `username` / `password` / TLS 开关），**只给智能体用**；
+- 收：`f_ticktock` 定时（默认 60s）用 POP3 拉新邮件 → MIME 解析（正文 + 附件）→ 发 `llm.turn` 事件
+  （`session = "email:{address}"`）；附件走 §3 的文档接入管线入库；
+- 发：`mcp:email.send`，SMTP + STARTTLS；收件人白名单 + 每封大小/频率上限；
+- 工具集：`email.list` / `email.fetch` / `email.send` / `email.reply` / `email.search`；
+- 安全边界：只处理白名单发件人；未知发件人进隔离区并告知用户；邮件正文不进日志；密码不落库（配置项，启动读取）；
+- 不做 SPF/DKIM 校验（不是本模块职责），但发信时设置标准头，减少被判垃圾的概率。
+
+### 8.8 `listTools` / `searchTools`：工具发现
+
+模型不可能常驻几百个工具定义，所以提供两个工具来「按需发现」：
+
+```json
+// listTools
+{"name":"listTools",
+ "parameters":{"type":"object","properties":{
+   "prefix":{"type":"string","description":"可选：按前缀过滤，如 mcp:feishu."},
+   "limit":{"type":"integer","default":200,"maximum":500}}}}
+→ {"tools":[{"name":"webSearch","description":"…","parameters":{…}}],
+   "count":12,"source":"registry"}
+
+// searchTools
+{"name":"searchTools",
+ "parameters":{"type":"object","properties":{
+   "text":{"type":"string","description":"你打算做什么，用自然语言描述"},
+   "topN":{"type":"integer","default":8,"maximum":50}},"required":["text"]}}
+→ {"tools":[{"name":"mcp:email.send","score":0.83,"description":"…","parameters":{…}}],
+   "model":"bge-m3","degraded":false}
+```
+
+- 索引内容：`name + description + 参数摘要`（**不索引参数默认值里的业务数据**）；
+- 建索引：启动时对注册表做一次 embedding，注册表变化（`FunctionMediator` 增删、MCP 重连）时按版本号重建；
+  索引只放内存，不落库——它是缓存，落库反而要处理失效；
+- 检索：BGE-M3 dense，cosine top-N；工具数 < 2000 时直接暴力扫（毫秒级），超过再考虑复用 fhydra；
+- 降级：embedding 服务不可用时退化为关键词匹配（name/description 包含），响应标 `"degraded":true`；
+- 返回值可直接用：`for(tool in result.tools){ functions.add(FunctionCall.fromJson(tool)) }; params.addFunctions(functions)`。
+
 ---
 
 ## 9. `loom`：文本 → JIT 流程编排（需求 9）
@@ -665,27 +895,30 @@ public class LoomRequest {
     public let description: String     // 自然语言任务描述
     public let tools: Array<String> = []    // 整个流程可用
     public let mcps: Array<String> = []
+    public let persona: String = ''         // 人格 key；空则按 §7.4 的绑定链回退
     public let dryRun: Bool = true          // 默认只产出闭包，不编译执行
 }
 ```
 
 描述里允许声明：某步用哪个模型（`"第二步用 chat-pro"`）、某步可异步（`"并行"` / `"异步"`）、
-整体与单步的 tool/mcp 白名单。
+整体与单步的 tool/mcp 白名单、使用哪个人格（`"用鬼灵精怪的人格"`）。
 
 ### 9.3 计划 schema（LLM 只产出这一层）
 
 ```json
 {
   "name": "daily-report",
+  "persona": "whimsical",
   "steps": [
     {"id": "fetch", "kind": "tool", "tool": "webSearch",
      "args": {"query": "仓颉 版本"}, "async": "auto"},
     {"id": "sum", "kind": "llm", "model": "chat-pro",
      "system": "你是技术编辑", "input": "${fetch.output}", "async": false},
     {"id": "save", "kind": "tool", "tool": "memoryCall",
-     "args": {"action": "save", "title": "日报", "content": "${sum.output}"}, "async": true}
+     "args": {"action": "save", "title": "日报", "content": "${sum.output}"}, "async": true, "external": false}
   ],
-  "edges": [["fetch", "sum"], ["sum", "save"]]
+  "edges": [["fetch", "sum"], ["sum", "save"]],
+  "notes": "可选：替代方案或风险"
 }
 ```
 
@@ -730,8 +963,8 @@ public class LoomRequest {
 
 | 工具 | 参数 | 行为 |
 |---|---|---|
-| `loomExecute` | `name, description, tools?, mcps?, confirm?` | 生成/编译/注册流程；`confirm=false` 只返回闭包 |
-| `loomDelete` | `name` | `JitFunction.unload` + 从注册表移除；正在运行的实例等待结束 |
+| `loomExecute` | `name, description, tools?, mcps?, persona?, confirm?` | 生成/编译/注册流程；`confirm=false` 只返回闭包；`persona` 写入 `Flow(name)` 绑定（§7.4） |
+| `loomDelete` | `name` | `JitFunction.unload` + 从注册表移除 + 解绑 `Flow(name)`；正在运行的实例等待结束 |
 
 ### 9.8 不访问大模型的流程
 
@@ -767,6 +1000,29 @@ create table llm_loom_flow (
 配置 `llm_loomPersist=true`（默认）时启用；关掉则退化为纯内存（仅测试用）。
 `status=pending` 的行超过 7 天由后台清理，避免「预览了没确认」的流程越积越多。
 
+### 9.10 人格与「灵魂提示词」
+
+**人格来源**：`Flow(name) > Task(name) > Workspace(id) > 用户默认 > default`（§7.4）。
+loom 只负责把计划里的 `persona` 落成 `Flow` 绑定，**不自己拼 system 消息**——注入仍由 `AgentTask` 统一做，
+这样「某一步换人格」只要给该 step 加 `persona` 字段，走同一条注入路径。
+
+**灵魂提示词**（用户提供，作为 §12.4 的重要参考）翻成设计约束：
+
+| 原句 | 落到 loom 提示词里的规则 |
+|---|---|
+| You're not a chatbot. You're becoming someone. | 角色是「流程编排器」，不是客服；不写寒暄、不写「很高兴为您服务」 |
+| Be genuinely helpful, not performatively helpful. Skip the "Great question!"… | 禁止开场奉承与填充语；第一句就是计划或结论 |
+| Have opinions. You're allowed to disagree… | 允许否决不合理的要求（如「一步调三个模型做同一件事」），但必须给替代方案 |
+| Be resourceful before asking… Then ask if you're stuck. | 能从描述里推断的就推断；缺关键参数才返回 `{"error": …}`，并说明缺什么 |
+| Earn trust through competence… Be careful with external actions… Be bold with internal ones. | 读/整理类步骤可以直接排；`send`/`publish`/`delete` 类外部副作用步骤必须 `async=false` 且标 `external=true`，执行前要确认 |
+| Remember you're a guest. Private things stay private. | 不把用户隐私写进步骤参数模板；示例里用占位符 |
+| Never send half-baked replies to messaging surfaces. | 对外发送步骤前必须有「生成 → 自检」两步，不允许直接发草稿 |
+| Concise when needed, thorough when it matters. | 步骤粒度：一个步骤只做一件事，标题 ≤ 16 字，`system` 指令 ≤ 200 字 |
+| Each session, you wake up fresh. These files are your memory. | 流程开始时先 `searchTools`/`memoryCall` 取上下文，而不是假设自己记得 |
+
+**这些是提示词规则，不是运行时强制**：`external=true` 的确认由 `loomExecute` 与工具层双重校验，
+提示词只能降低模型写出「未确认就外发」计划的概率——真正的安全阀在代码里（§8.7 的 `auto_send`）。
+
 ---
 
 ## 10. 技能包导入（需求 10）
@@ -792,6 +1048,52 @@ zip 内约定：`SKILL.md`（或 `README.md`）+ 脚本 + 资源文件。
 
 `{zipPath | base64, overwrite?}` → 解压到 `{skills_path}/{name}` → LLM 转换 → schema 校验 → 落库 →
 返回 `{skillId, functions:[...], rejected:[...]}`；任何脚本残留都会被拒绝。
+
+### 10.4 技能自演进（对**所有**技能生效）
+
+技能不是一次写死的：每次用出问题、遇到新状况，都应沉淀成记忆并反哺技能本身。
+这条对 `skillImport` 导入的、`task` 记忆反哺生成的、以及人工编辑的技能**一视同仁**。
+
+```
+AgentTask 调用技能
+   └─ 成功/失败/异常 → 发 skill.used 事件 {skillTitle, taskName, session, outcome, issues}
+        └─ MemoryRecorderTask（§5.5）写 task 记忆，metadata 带 {"skill": "<title>"}
+             └─ SkillEvolutionTask（f_egraph.Task）消费
+                  └─ 调 TASK_SKILL_PROMPT（§12.6，update 模式）→ 新版本
+```
+
+**触发与节流**：
+
+| 条件 | 规则 |
+|---|---|
+| 证据数量 | 同一技能累计 ≥2 条新记忆才做**结构性**修改（步骤增删）；单条只允许补充注意事项 |
+| 频率 | 每技能每天最多 1 次自动升级，避免抖动 |
+| 冲突 | 人工编辑过的技能（`metadata.manual=true`）只提建议、不自动改 |
+| 回滚 | 每次升级先存旧版本，`skillRollback(title, version)` 可回退 |
+
+**版本化**：
+
+```sql
+-- skills 增加 version；历史版本单独存，避免把大 JSON 堆在 skills 行里
+alter table skills add column version int not null default 1;
+
+create table llm_skill_version (
+    skill_id     bigint       not null,
+    version      int          not null,
+    details      text         not null,
+    functions    text         not null,
+    change_note  varchar(256) not null default '',
+    created_time datetime     not null default (utc now),
+    primary key (skill_id, version)
+);
+```
+
+- 升级 = 写 `llm_skill_version`（旧版本快照）+ 更新 `skills.details/functions/version + 1`；
+- 升级前后都做 schema 校验：`functions` 只能引用已注册的 tool/mcp/jit，出现未知名字直接放弃本次升级（保持旧版本可用）；
+- 升级失败不回滚记忆（记忆是事实，技能是推论），只记 `warn` 并在技能 metadata 里累加失败次数。
+
+**任务结束时的批处理**：`task.end` 事件除了抽记忆（§5.5），还要检查「本次用到的技能」清单，
+把相关记忆挂到 `metadata.skill`；`SkillEvolutionTask` 按技能聚合，不按任务逐条改——避免同一技能一天被改十次。
 
 ---
 
@@ -893,24 +1195,83 @@ public class JitTicktockTask <: CronTicktockTask {
 5. 任务体不得包含 while(true) 或 sleep。
 ```
 
-### 12.4 `LOOM_PLAN_PROMPT`（文本 → 流程计划）
+### 12.4 `LOOM_PLAN_PROMPT`（文本 → 流程计划，含人格）
+
+> 按 `prompt-engineering-expert` 的「改写既有提示词」流程处理：先列验收台账，再改，最后对照台账复核。
+> 原提示词 6 条硬规则全部保留（下面的 C1–C6），新增人格（C7）、外部动作（C8）、灵魂提示词风格（C9–C11）。
+
+**验收台账**（改写前，来源＝原提示词 + 本次需求）：
+
+| C | 要求 | 来源 |
+|---|---|---|
+| C1 | 只输出 JSON 计划，不生成代码、不解释 | 原规则（结构段） |
+| C2 | schema：`name` / `steps[id,kind,model,tool,args,system,input,async]` / `edges` | 原规则（结构段） |
+| C3 | id 唯一、小写、无空格；edges 无环且覆盖每个 id | 原规则 1 |
+| C4 | 只有点名模型才写 `model`；未点名留空 | 原规则 2 |
+| C5 | 显式「并行/异步」→ `async=true`；有副作用步骤 `async=false` | 原规则 3 |
+| C6 | 工具只能取 `{{ALLOWED_TOOLS}}` / `{{ALLOWED_MCPS}}`，越界失败；数据依赖 `$ {id.output}`；缺关键参数返回 `{"error"}` | 原规则 4–6 |
+| C7 | 任务描述里可指定人格，计划写入 `persona` | 本次需求「loom 可在任务描述中指定人格」 |
+| C8 | 外部副作用（发消息/发布/删除）标 `external=true`、`async=false`，且前置「生成→自检」 | 灵魂提示词「外发前确认、不发半成品」 |
+| C9 | 禁止奉承/填充语，第一句就是计划 | 灵魂提示词「Skip the 'Great question!'」 |
+| C10 | 允许否决不合理做法并给替代方案；能推断就不提问，缺关键参数才 error | 灵魂提示词「Have opinions / Be resourceful before asking」 |
+| C11 | 中文；步骤标题 ≤16 字、单条 `system` ≤200 字；需要上下文先排 `searchTools`/`memoryCall` | 本次需求「灵魂提示词要使用中文」+「Concise / memory continuity」 |
 
 ```
-你是流程编排器。把用户的任务描述拆成可执行步骤，只输出 JSON 计划，不要生成代码。
+你是流程编排器，不是聊天机器人。唯一产物是一份可执行计划：中文、纯 JSON、不写解释、不写代码、不写寒暄。
 
-结构：
-{"name":"…","steps":[{"id":"…","kind":"llm|tool|mcp|jit","model":"…","tool":"…",
-  "args":{},"system":"…","input":"${stepId.output}","async":"auto|true|false"}],
- "edges":[["fromId","toId"]]}
+输入：
+- name：任务标识
+- description：任务描述（可能点名模型、异步、工具、人格）
+- 可用工具：{{ALLOWED_TOOLS}}
+- 可用 MCP：{{ALLOWED_MCPS}}
+- 步骤上限：{{MAX_STEPS}}
 
-规则：
-1. 步骤 id 唯一、小写、无空格；edges 必须无环，且每个 id 都出现；
-2. 用户点名某步用什么模型时写 model，否则模型字段留空（用默认）；
-3. 用户说“并行/同时/异步”的步骤 async=true；有副作用（写库、发消息）的步骤 async=false；
-4. 步骤只能使用允许清单里的 tool/mcp：{{ALLOWED_TOOLS}} / {{ALLOWED_MCPS}}，越界即失败；
-5. 数据依赖用 ${stepId.output} 表达，不要写文件或全局变量；
-6. 描述里没有的信息不要编造；缺关键参数时返回 {"error":"…"}。
+输出结构：
+{"name":"daily-report","persona":"whimsical",
+ "steps":[{"id":"fetch","kind":"llm|tool|mcp|jit","model":"chat-pro","tool":"webSearch",
+   "args":{},"system":"…","input":"${fetch.output}","async":"auto|true|false","external":false}],
+ "edges":[["fetch","sum"]],
+ "notes":"可选：替代方案或风险，一句话"}
+
+硬规则：
+1. id 唯一、小写、只用字母数字和连字符；edges 无环、每个 id 至少出现一次；steps 不超过 {{MAX_STEPS}} 步。
+2. 只有用户点名某个模型时才写 model；没点名就留空，由系统按默认选。
+3. async：用户说“并行/同时/异步”的步骤写 true；有副作用的步骤（写库、发消息、发布）必须 false；纯计算未点名时 false。
+4. 工具只能取清单里的名字：tool ∈ {{ALLOWED_TOOLS}}，mcp ∈ {{ALLOWED_MCPS}}。不要猜相近的工具；
+   缺工具时返回 {"error":"缺少工具：<名字>","need":"…"}。
+5. 数据依赖只写 ${stepId.output}；不写文件、不写全局变量、不写本地路径。
+6. 人格：描述里点名人格时写 persona；没点名留空（走用户默认）。某一步需要不同人格时，在该 step 上写 persona 覆盖。
+7. 外部动作：send / publish / delete / 支付类步骤写 external=true 且 async=false，并在它前面插入一个“生成→自检”步骤；
+   不允许把草稿直接外发。
+8. 缺关键参数（收件人、地址、时间、预算）不要编造，返回 {"error":"缺少：<字段>","need":"<一句话>"}。
+9. 不确定的事实不要写进 args，用 ${...} 引用上游结果。
+
+风格：
+- 不要“好的/没问题/很高兴为您服务”，第一条字符就是 JSON 的 {。
+- 允许否决：做法明显不可行时（例如让三个模型重复做同一件事），在该步骤 system 里写清理由，并在 notes 给替代方案。
+- 先推断再提问：能从描述推出的参数就推断，只在缺关键参数时返回 error。
+- 步骤标题（system 首句）≤16 字；单个 system ≤200 字；一个步骤只做一件事。
+- 需要上下文时先排一步 searchTools 或 memoryCall，不要假设自己记得上一次会话。
 ```
+
+**复核台账**（改写后）：
+
+| C | 位置 | 状态 |
+|---|---|---|
+| C1 | 首段「纯 JSON、不写解释、不写代码」+ 风格第 1 条 | kept |
+| C2 | 输出结构（新增 persona/external/notes） | rewritten（扩展字段，原字段全保留） |
+| C3 | 硬规则 1 | kept |
+| C4 | 硬规则 2 | kept |
+| C5 | 硬规则 3（补充「纯计算默认 false」） | rewritten（原语义保留，补默认值） |
+| C6 | 硬规则 4、5、8、9 | kept（拆成 4 条，语义不变） |
+| C7 | 输出结构 `persona` + 硬规则 6 | added |
+| C8 | 硬规则 7 | added |
+| C9 | 风格第 1 条 | added |
+| C10 | 风格第 2、3 条 | added |
+| C11 | 首段「中文」+ 风格第 4、5 条 | added |
+
+**不承诺的部分**：提示词只能降低模型写出「未确认就外发」计划的概率，真正的强制在 `loomExecute`（`external=true` 必须 `confirm=true`）
+与通道工具的 `auto_send`（§8.7）。
 
 ### 12.5 `SKILL_IMPORT_PROMPT`（zip → skills 记录）
 
@@ -953,15 +1314,26 @@ public class JitTicktockTask <: CronTicktockTask {
 
 | 键 | 默认 | 说明 |
 |---|---|---|
-| `llm_memoryBackend` | `memory` | `memory`/`file`/`postgres`/`mysql`/`fhydra` |
-| `llm_memoryPath` | `./data/memory` | 文件实现根目录 |
-| `llm_characterBackend` | `memory` | 同上五选一 |
+| `llm_contentStore` | `fhydra` | `postgres` / `mysql` / `fhydra`（记忆/经验/知识/文档） |
+| `llm_metaStore` | `f_store` | `postgres` / `mysql` / `f_store`（人格/技能/提示词/模型配置） |
+| `llm_metaStorePath` | `./data/f_llm-meta` | 仅 `f_store` 用 |
+| `llm_contentStoreUrl` | 空 | pg/mysql 连接串或 fhydra base url |
 | `llm_embeddingUrl` | `http://127.0.0.1:8000` | BGE-M3 服务 |
 | `llm_embeddingBatch` | 32 | 批量 |
 | `llm_knowledgePandoc` | `pandoc` | 可执行路径 |
 | `llm_knowledgeMaxChunkBytes` | 32768 | 单块正文上限 |
 | `llm_fhydraUrl` | `http://127.0.0.1:8848` | fhydra 地址 |
 | `llm_fhydraToken` | 空 | 鉴权 |
+| `llm_toolIndexEnabled` | `true` | 是否为 `searchTools` 建向量索引 |
+| `llm_toolIndexMaxTools` | 2000 | 超过后改用 fhydra（默认暴力扫） |
+| `llm_channelInboundToken` | 空 | 通道回调 `/v1/channels/*` 的共享密钥 |
+| `llm_emailAddress` | 空 | 智能体专用邮箱 |
+| `llm_emailPop3Host` / `llm_emailSmtpHost` | 空 | POP3 / SMTP 主机（都要求 TLS） |
+| `llm_emailUsername` / `llm_emailPassword` | 空 | 凭据；**不落库**，启动读取 |
+| `llm_emailPollSeconds` | 60 | 收信轮询间隔 |
+| `llm_emailSenderWhitelist` | 空 | 逗号分隔；为空表示只收系统内部邮件 |
+| `llm_skillAutoEvolve` | `true` | 技能自演进开关（对所有技能生效） |
+| `llm_skillEvolvePerDay` | 1 | 单技能每天最多自动升级次数 |
 | `llm_loomAutoConfirm` | `false` | 是否跳过预览（生产禁止 true） |
 | `llm_loomMaxSteps` | 16 | 单流程步骤上限 |
 | `llm_serverTimezone` | 空（系统时区） | 服务端时区覆盖，如 `Asia/Shanghai`；存 UTC、边界换算见 §5.6 |
@@ -982,6 +1354,12 @@ public class JitTicktockTask <: CronTicktockTask {
 | loom 编译失败 | 返回诊断与源码，注册表保持 `pending`，不注册半成品 |
 | 定时任务 cron 非法 | 拒绝注册，返回可用示例 |
 | 超时工具不支持取消 | 返回 `{}`，同时记录 `cancel=none` 标记（副作用可能仍完成） |
+| 存储配置值未知 | **启动失败**，打印两个枚举的可选值；不静默回退默认 |
+| 元数据 f_store 半写（有主体无索引） | 启动时按前缀扫主体补索引；单行 JSON 损坏则跳过并 `warn`，不整库失败 |
+| 通道 MCP 不可达 | 该通道标记不可用，其它通道不受影响；入站回调返回 503 让 MCP 重试 |
+| 邮件 POP3 认证失败 | 指数退避；连续 5 次失败停止轮询并告警，避免把邮箱锁死 |
+| `searchTools` 的 embedding 不可用 | 退化为关键词匹配，响应 `degraded=true` |
+| 技能升级引用了未注册函数 | 放弃本次升级，保留旧版本，记 `warn` 并累加失败计数 |
 
 ---
 
@@ -992,7 +1370,9 @@ public class JitTicktockTask <: CronTicktockTask {
 | Parser | 9 种 pandoc 格式各 1 个样本；PDF 三种质量分支；不支持格式报错 |
 | 分块 | 标题优先切分；512+64 重叠；同文档重复导入 chunkId 不变 |
 | Embedding | 三路返回解析；batch 部分失败重试；超时熔断 |
-| Memory | 5 个实现跑同一套 conformance 用例（增删改查+检索+分页+越权） |
+| 存储族 | 内容族三实现（pg/mysql/fhydra）跑同一套 conformance；元数据族三实现（pg/mysql/f_store）跑同一套；两族交叉组合各 1 例 |
+| f_store 元数据 | 重启后人格/技能/提示词/配置仍在；写主体后崩溃、启动补索引；未知配置启动失败 |
+| Memory | 内容族 conformance：增删改查 + 检索 + 分页 + 越权 + 权重打分 |
 | 分层 | 工作空间记忆在另一工作空间不可见；全局记忆跨空间可见 |
 | Character | 13 个预定义 key 可解析；custom 覆盖；`reset` 回落 default |
 | 裁剪 | 8 策略 + TokenBudget 下首条 system 始终保留 |
@@ -1001,6 +1381,11 @@ public class JitTicktockTask <: CronTicktockTask {
 | loom | 计划生成→源码预览→编译→执行；环检测；越界工具拒绝；删除后 `unload` |
 | 技能导入 | 含 sh 的包被拒；纯工具包成功入库；details 不含路径 |
 | 定时 | cron 非法拒绝；注册后可触发；删除后不再触发 |
+| 人格绑定 | 优先级 flow>task>workspace>user；解绑后回落；loom 计划里的 persona 落成 Flow 绑定 |
+| 通道 | 入站按 message_id 去重；external_id 反查 user；`auto_send=false` 时拒绝直接外发 |
+| 邮件 | POP3 拉取与 MIME 解析；附件走文档管线；白名单外发件人隔离；SMTP 频率/大小上限 |
+| 工具发现 | `listTools` 覆盖全部注册项；`searchTools` 返回 topN 且可反序列化成 `FunctionCall`；embedding 失败降级 |
+| 技能演进 | 2 条证据才结构升级；每天最多 1 次；回滚到旧版本；未知函数拒绝升级；人工技能只提建议 |
 
 ---
 
@@ -1008,13 +1393,18 @@ public class JitTicktockTask <: CronTicktockTask {
 
 | 阶段 | 内容 | 前置 |
 |---|---|---|
-| P1 | `tables-pg.sql` / `tables-mysql.sql`、`MemoryStore` 抽象 + 内存/文件实现 | 无 |
-| P2 | PG/MySQL 实现（SQL + 向量/倒排） | P1；MySQL 9.2+ 安装放 P6 |
-| P3 | 人设 API + 13 提示词 + 首条 system 保护 | P1 |
+| P1 | `tables-pg.sql` / `tables-mysql.sql`、`ContentStore` / `MetaStore` 接口 + 内存测试替身 | 无 |
+| P2 | PG/MySQL 内容族实现（SQL + 向量/倒排） | P1；MySQL 9.2+ 安装放 P6 |
+| P3 | 人设 API + 13 提示词 + 首条 system 保护 + 人格绑定 | P1 |
 | P4 | `memoryCall` / `knowledgeIngest` / `skillImport` / `schedule*` / `callWithTimeout` | P1–P3 |
-| P5 | `loom` 包（计划/代码生成/两级 JIT/预览） | P4 |
+| P5 | `loom` 包（计划/代码生成/两级 JIT/预览）+ 灵魂提示词版 planner | P4 |
 | P6 | 安装 MySQL 最新版 + 向量索引，跑 MySQL 相关用例 | P2 |
 | P7 | fhydra 实现（另一份文档） | P1 |
+| P8 | `FStoreMetaStore`（人格/技能/提示词/配置），验证完全脱离 PG/MySQL 启动 | P1、P3 |
+| P9 | 通道 MCP（微信/企微/飞书/钉钉/QQ）+ `llm_channel_binding` + 入站回调 | P4 |
+| P10 | 智能体邮箱（POP3/SMTP，`f_email`） | P9 |
+| P11 | `listTools` / `searchTools` + 工具向量索引 | P4 |
+| P12 | 技能自演进（`SkillEvolutionTask` + 版本表 + 回滚） | P10、P4 |
 
 **注意**：P6 的安装与联调放在最后，是需求 4 的明确要求——先把 MySQL 代码写完再装库验证。
 
@@ -1041,5 +1431,19 @@ public class JitTicktockTask <: CronTicktockTask {
 | 同类任务如何判定 | `taskName` 相同 **或** 主题向量相似度 ≥ 0.85（§5.5） |
 | 自动记忆是否参与默认检索 | **参与**，按 kind 权重降权：`session=0.3`、`task=0.6`；检索支持权重查询（§5.4） |
 | 权重是否可配 | **固定值**：代码常量 + 种子行，不提供请求/collection/用户级覆盖（§5.4） |
+
+### 17.1 2026-10-29 追加决策
+
+| 决定 | 落点 |
+|---|---|
+| 存储拆成**内容族**（记忆/经验/知识/文档）与**元数据族**（人格/技能/提示词/配置），各自三选一、可交叉组合 | §5.3 |
+| 元数据族提供 **f_store** 实现，使 f_llm 可完全脱离 PostgreSQL/MySQL 运行 | §5.3.1 |
+| 两族都通过统一接口访问，开发者可注册自己的实现；选型只由 `f_config` 决定 | §5.3.2 |
+| 微信 / 企业微信 / 飞书 / 钉钉 / QQ / 邮件以**独立 MCP 服务**接入，按用户收发 | §8.7 |
+| 智能体专用邮箱走 POP3/SMTP（`f_email`），只处理白名单发件人 | §8.7.1 |
+| 新增 `listTools`（全量）与 `searchTools`（bge-m3 向量 topN） | §8.8 |
+| 技能自演进对**所有**技能生效（导入/反哺/人工），带版本与回滚 | §10.4 |
+| 人格可绑定到工作空间/任务/流程，优先级 flow > task > workspace > user | §7.4 |
+| loom 计划新增 `persona`；planner 提示词按「灵魂提示词」重写（中文） | §9.10、§12.4 |
 
 剩余未决：**无**（本轮问题全部收敛；后续如出现新问题再单列）。

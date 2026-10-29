@@ -28,7 +28,8 @@
 ### 1.1 逻辑模型
 
 ```
-Collection（= f_llm 的一个 用户+命名空间）
+Collection（= f_llm 的一个 用户+命名空间；命名示例：记忆 `u{uid}:ws-{id}` / `u{uid}:global`、
+会话 `u{uid}:s-{sessionId}`、知识库 `u{uid}:kb-{namespace}`）
   └── Record（一条记忆 / 一个文档块）
         ├── id: String           调用方生成的稳定 id（幂等写入）
         ├── payload: JSON        业务字段（title/content/save_time/kind…）

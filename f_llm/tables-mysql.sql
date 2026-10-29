@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS skills (
   metadata       LONGTEXT     NULL,
   details        LONGTEXT     NULL,
   functions      LONGTEXT     NULL,
+  version        INT          NOT NULL DEFAULT 1,   -- 技能自演进版本（§10.4）
   skill_type     VARCHAR(32)  NOT NULL DEFAULT '',
   PRIMARY KEY (id),
   KEY idx_skills_agent (agent_id, accepted_event)
@@ -188,6 +189,45 @@ CREATE TABLE IF NOT EXISTS llm_character (
   update_time   DATETIME    NOT NULL DEFAULT (UTC_TIMESTAMP()),
   PRIMARY KEY (id),
   UNIQUE KEY uk_character_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- -----------------------------------------------------------------------------
+-- 4.1 人格绑定（工作空间/任务/流程），只存 key 不存提示词正文
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS llm_character_binding (
+  user_id       BIGINT      NOT NULL,
+  scope_type    VARCHAR(16) NOT NULL,   -- workspace | task | flow
+  scope_id      VARCHAR(64) NOT NULL,
+  character_key VARCHAR(32) NOT NULL,
+  update_time   DATETIME    NOT NULL DEFAULT (UTC_TIMESTAMP()),
+  PRIMARY KEY (user_id, scope_type, scope_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- -----------------------------------------------------------------------------
+-- 4.2 通道绑定（微信/企微/飞书/钉钉/QQ/邮件）
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS llm_channel_binding (
+  user_id      BIGINT       NOT NULL,
+  channel      VARCHAR(16)  NOT NULL,
+  external_id  VARCHAR(128) NOT NULL,
+  display_name VARCHAR(128) NOT NULL DEFAULT '',
+  auto_send    TINYINT(1)   NOT NULL DEFAULT 0,
+  enabled      TINYINT(1)   NOT NULL DEFAULT 1,
+  update_time  DATETIME     NOT NULL DEFAULT (UTC_TIMESTAMP()),
+  PRIMARY KEY (user_id, channel, external_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- -----------------------------------------------------------------------------
+-- 4.3 技能版本（升级前存旧版本，支持回滚）
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS llm_skill_version (
+  skill_id     BIGINT       NOT NULL,
+  version      INT          NOT NULL,
+  details      LONGTEXT     NOT NULL,
+  functions    LONGTEXT     NOT NULL,
+  change_note  VARCHAR(256) NOT NULL DEFAULT '',
+  created_time DATETIME     NOT NULL DEFAULT (UTC_TIMESTAMP()),
+  PRIMARY KEY (skill_id, version)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- -----------------------------------------------------------------------------
