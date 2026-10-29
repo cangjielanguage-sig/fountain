@@ -71,13 +71,13 @@
 
 ### Requirement: 前缀回放流
 
-`PrefixStream` SHALL 实现 `InputStream`，把 `prefix` 先输出、`rest` 后接；读完后返回 `-1`；
+`PrefixStream` SHALL 实现 `InputStream`，把 `prefix` 先输出、`rest` 后接；读完后返回 `0`（`InputStream` 契约）；
 `close()` SHALL 关闭 `rest`。`prefix` 类型 SHALL 为 `Array<Byte>`，SHALL NOT 做任何编码判断。
 
 #### Scenario: 前缀与剩余拼成连续流
 
 - **WHEN** `prefix = [0x3C, 0x61]`、`rest` 提供 `>x</a>`
-- **THEN** 连续读出 `<a>x</a>`，EOF 后返回 `-1`
+- **THEN** 连续读出 `<a>x</a>`，EOF 后返回 `0`
 
 #### Scenario: close 关闭底层流
 
@@ -86,7 +86,7 @@
 
 ### Requirement: 字符来源与位置
 
-`RuneSource` SHALL 提供 `peek(offset!: Int64 = 0): ?Rune`、`advance(): ?Rune`、
+`RuneSource` SHALL 提供 `peek(offset: Int64): ?Rune`（`0` = 当前字符）、`advance(): ?Rune`、
 `position(): SourcePosition`。`peek` SHALL 只在 `offset ≤ 4` 时保证有效（实现可用固定
 8 槽环形缓冲）。SHALL NOT 提供 `byteOffset`。
 
@@ -106,7 +106,7 @@
 
 三个实现 SHALL 存在：`Utf8RuneSource`、`CharsetRuneSource`（`charset4cj.TextReader`）、
 `BlockRuneSource`（固定块解码）。`Utf8RuneSource` SHALL 按 `InvalidByteMode` 选择解码策略：
-`Strict` 用 `std.io.StringReader`；`Replace` 用自研 UTF-8 字节解码，并与 `BlockRuneSource`
+`Strict` 与 `Replace` 均走自研 UTF-8 字节解码（`Utf8Strict` / `Utf8ReplaceDecoder`），并与 `BlockRuneSource`
 共用同一 `ByteDecoder`（固定块读取、块尾回退、行列号推进）。两条策略 SHALL NOT 互相替代。
 
 #### Scenario: 三种字符来源都能构造
@@ -164,7 +164,7 @@ GBK 等多字节编码 SHALL 仍走 `readln()`（尾字节范围不含 `0x0A`）
 
 `InvalidByteMode` SHALL 有两个值，且两条路径 SHALL 由不同解码实现承担：
 
-- `Strict`（默认）：UTF-8 走 `std.io.StringReader`；字节序列不符合声明字符集时抛
+- `Strict`（默认）：UTF-8 走自研 `Utf8Strict` 字节解码；字节序列不符合声明字符集时抛
   `XmlException`，消息带行号、列号、坏字节偏移。
 - `Replace`：UTF-8 走自研 `Utf8ReplaceDecoder`，按 RFC 3629 maximal subpart 消费，每个最大
   子部分产出**恰好一个** `U+FFFD`；该解码器 SHALL 与 `BlockRuneSource` 共用 `ByteDecoder`。

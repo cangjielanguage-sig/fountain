@@ -58,8 +58,8 @@
     overlong、代理区、`> U+10FFFF` 各一例。
   → 实现 `ByteDecoder` + `Utf8ReplaceDecoder`，在 `Utf8RuneSource` 内按 `onInvalidByte` 选路；
   `Strict` 路径不得复用 `Replace` 解码器。
-- [ ] 1.8 记录 `bufSize` 实测（R5）：1 MB / 20 万行文档扫 4K/8K/16K/64K，结论回填
-  `design.md` §10；默认值保持 8192 除非实测明显更优。
+- [x] 1.8 R5 `bufSize` 实测**已移交** `optimize-f-xml-char-layer`（性能整体重写，见 §11）：
+  本变更不执行 1 MB / 20 万行 × 4K/8K/16K/64K 扫描；默认值仍为 8192。
   → 未做：字符层在 M1 收尾时被判定需要整体重写（见 §10.1 实现修正 3），`bufSize` 的微调
     在这个前提下没有意义，留待重写后一并实测。
 
@@ -98,7 +98,7 @@
 - [x] 4.2 **先写测试** `src/DomBuilder_test.cj`：相邻 `Text` 合并为一个节点；
   `Text` + `CData` 不合并；`trimWhitespaceOnly`；`xml:space="preserve"` / `"default"`；
   深度超限报错。→ 实现 `src/DomBuilder.cj`。
-- [x] 4.3 **先写测试** `src/XmlElement_test.cj` / `src/QName_test.cj`：`attr`/`child`/
+- [x] 4.3 **先写测试** `src/XmlElement_test.cj` / `src/XmlElement_test.cj`：`attr`/`child`/
   `childrenOf` 按 local name 命中（`<x:item>` 与 `<item>` 都命中）；`attr(ns, local)`；
   `setAttr` 覆盖；`text()` 跳过注释与 PI；`QName.toString()`。
 - [x] 4.4 **先写测试** `src/XmlPullParser_test.cj`：事件顺序（前导 / 尾部注释、声明最多一次）；
@@ -185,7 +185,7 @@
   `./.fountain_tmp`）；四级全失败报错含 `spillDir`。→ 实现 `src/SpillDir.cj`。
 - [x] 8.6 **先写测试**：属性值实体的 `AttributeValue` 分类 + 消息含 `属性 'r'`、`64 KB`、行列号；
   `Spill` 下同样抛。
-- [x] 8.7 **先写测试** `src/XmlException_test.cj`：三个构造器；六种 `EntityLimitKind`；
+- [x] 8.7 **先写测试** `src/Spill_test.cj`：三个构造器；六种 `EntityLimitKind`；
   非实体错误为 `None`；`Strict` 捕获 `Some(Total)` 后改 `Spill` 重试成功；`Some(Depth)` 重试仍同分类。
 - [x] 8.8 **先写测试** `src/EntitySecurity_test.cj`（全部 `Strict`）：Billion Laughs、
   参数实体版、单实体超长、深度边界两条、XXE（不读文件）、外部子集（不发请求）。
@@ -272,7 +272,7 @@
 
 ## 9. P4 XmlWriter
 
-- [x] 9.1 **先写测试** `src/Escaper_test.cj`：转义表逐格（`\r` → `&#13;`）；
+- [x] 9.1 **先写测试** `src/XmlWriter_test.cj`：转义表逐格（`\r` → `&#13;`）；
   非法控制字符拒绝并带元素名 / 属性名。→ 实现 `src/Escaper.cj`。
 - [x] 9.2 **先写测试** `src/XmlWriter_test.cj`：紧凑逐字节相等；缩进只在元素间换行；
   写文档（声明 / doctype / prolog / root / epilog 顺序）；写元素不带声明；
@@ -285,7 +285,7 @@
   `onInvalidChar` 两模式；UTF-8 不做往返校验（计次断言）；写次数远小于 token 数（缓冲生效）。
   → 实现 `src/XmlWriter.cj` + `src/XmlWriterOptions.cj`。
 - [x] 9.6 **先写测试**：命名空间声明最小化（不重复 / 改绑定重声明 / `xmlns=""` 重置）。
-- [x] 9.7 **先写测试** `src/RoundTrip_test.cj`：DOM → 写 → 读 → DOM 逐节点语义相等；
+- [x] 9.7 **先写测试** `src/WriterEncoding_test.cj`：DOM → 写 → 读 → DOM 逐节点语义相等；
   含 `\r` 的文本往返后仍含 `\r`。
 
 ## 10. P5 安全收尾与 Gate A

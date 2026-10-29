@@ -84,7 +84,7 @@
 | 跳过子树 | `skipElement()`，推 / 拉两种模式都可用 |
 | 编码（解析） | 字节层嗅探：BOM → 声明 → 默认 UTF-8；覆盖 UTF-8 / UTF-16 / UTF-32 / GBK 等 |
 | 编码（生成） | 由 `charset4cj` 指定，默认 UTF-8 |
-| 字符层（读） | UTF-8 → `std.io.StringReader`；其他编码 → `charset4cj.TextReader` |
+| 字符层（读） | UTF-8 → 自研 `Utf8Strict` / `Utf8ReplaceDecoder` 字节解码；其他编码 → `charset4cj.TextReader` |
 | 字符层（写） | UTF-8 → `std.io.StringWriter`；其他编码 → `charset4cj.TextWriter` |
 | 数据源 | 只认 `std.io.InputStream`：`Array<Byte>` / `String` / 文件 / TCP / UDP / 任意 ByteBuffer 实现；**不依赖 `f_io.ByteBuffer`** |
 | 失败策略 | 读 `InvalidByteMode`（Strict / Replace）、写 `InvalidCharMode`（Throw / Replace），默认都严格（2.7） |
@@ -145,7 +145,7 @@
 
 | 层 | 谁实现 |
 |---|---|
-| 字节 → 字符 | `std.io.StringReader`（UTF-8）/ `charset4cj.TextReader`（其他编码） |
+| 字节 → 字符 | 自研 `Utf8Strict` / `Utf8ReplaceDecoder`（UTF-8）/ `charset4cj.TextReader`（其他编码） |
 | 字符 → 语法元素 | **f_xml** |
 | 语法元素 → 事件 | **f_xml** |
 | 事件 → DOM | **f_xml** |
@@ -281,7 +281,7 @@ PrefixStream（f_xml 实现，见 1.4）
    ▼
  ┌──────────────────────────────┐
  │ UTF-8 ？                      │
- │   是 → std.io.StringReader    │
+ │   是 → Utf8Strict / Replace   │
  │   否 → charset4cj.TextReader  │
  └──────────────────────────────┘
    │  readln() 逐行取 String
@@ -385,7 +385,7 @@ public struct SourcePosition {
 
 | 实现 | 包装 | 适用 |
 |---|---|---|
-| `Utf8RuneSource` | `std.io.StringReader<T>`（`Strict`）/ 自研 `Utf8Strict` + `Utf8ReplaceDecoder`（`Replace`） | UTF-8（默认路径） |
+| `Utf8RuneSource` | `Utf8Strict`（`Strict`）/ `Utf8ReplaceDecoder`（`Replace`），共享 `ByteDecoder` | UTF-8（默认路径） |
 | `CharsetRuneSource` | `charset4cj.TextReader` | GBK 等单 / 多字节字符集 |
 | `BlockRuneSource` | 共享 `ByteDecoder` + UTF-16 / UTF-32 解码器 | UTF-16 / UTF-32 |
 

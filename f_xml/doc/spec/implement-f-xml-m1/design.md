@@ -144,7 +144,7 @@ public init(message: String, line: Int64, column: Int64, kind!: ?EntityLimitKind
 |---|---|
 | `f_xml.cj` | 包文档 |
 | `XmlException.cj` | `XmlException`、`EntityLimitKind` |
-| `XmlOptions.cj` | `XmlParserOptions`、`EntityLimits`、`EntityOverflowPolicy`、`InvalidByteMode`、`InvalidCharMode` |
+| `XmlOptions.cj` | `XmlParserOptions`、`EntityLimits`、`EntityOverflowPolicy`、`InvalidByteMode` |
 | `QName.cj` | `QName`、`XmlAttribute`、`SourcePosition` |
 | `XmlNode.cj` | `XmlNode`（enum）、`XmlElement`、`XmlDeclaration`、`DocTypeInfo`、`XmlDocument`、`EntityDecl`、`XmlEntityRef`（工厂函数） |
 | `XmlEvent.cj` | `XmlEvent`、`XmlAction`、`XmlEventHandler` |
@@ -156,15 +156,16 @@ public init(message: String, line: Int64, column: Int64, kind!: ?EntityLimitKind
 | `RuneSource.cj` | `RuneSource` 接口 + `ByteDecoder` + `Utf8ReplaceDecoder` + `Utf8RuneSource` + `CharsetRuneSource` + `BlockRuneSource` |
 | `LineWindow.cj` | 行拼接、行尾归一、≤4 前瞻、行列号 |
 | `Lexer.cj` | 词法 + 状态机 + 名称栈 |
+| `ParserEngine.cj` | 解析引擎：状态机推进、名称栈、命名空间、实体展开编排 |
+| `XmlChars.cj` | XML 1.0 字符分类（NameChar / 空白 / PubidChar 等） |
 | `SkipScanner.cj` | `skipElement` 的标签级扫描 |
 | `NamespaceScope.cj` | 命名空间作用域栈 |
 | `EntityTable.cj` | 实体声明表（普通 / 参数） |
 | `DoctypeParser.cj` | 内部子集解析：四类声明（`ENTITY` / `ELEMENT` / `ATTLIST` / `NOTATION`）的语法校验 + 条件段拒绝 + 属性类型映射 |
 | `EntityExpander.cj` | 递归展开 + 计数 + 溢出判定 |
-| `ExpandSink.cj` | `MemorySink` / `FileSink` / 读回 |
-| `SpillDir.cj` | 四级临时目录解析 |
+| `ExpandSink.cj` | `MemorySink` / `FileSink` / 读回 / 四级临时目录解析（`SpillDir` 逻辑并入） |
 | `XmlWriter.cj` | 序列化 + 输出缓冲 + 编码 |
-| `XmlWriterOptions.cj` | `XmlWriterOptions`、`CdataMode`、`Doctype` |
+| `XmlWriterOptions.cj` | `XmlWriterOptions`、`InvalidCharMode`、`CdataMode`、`Doctype` |
 | `Escaper.cj` | 文本 / 属性值转义与非法字符检查 |
 
 ## 5. 公开 API
@@ -462,7 +463,7 @@ DTD 本身不认识命名空间，用展开名匹配会得到与规范相反的�
 
 不报错的那一档，理由是「声明可能在永不加载的外部子集里」，所以只能跳过；
 `standalone="no"` 的文档与「省略」同等对待。告警写入解析器实例的告警列表
-（`XmlPullParser.warnings()`，包内可见），不打断解析。这条分档让
+（`XmlPullParser.warnings()`，公开可读），不打断解析。这条分档让
 `not-sa03` / `rmt-e3e-13` 这类带外部 DTD 的**合法**文档不被误判，同时不再把
 「无 `DOCTYPE` 且引用未声明实体」这种真错误放过。
 
