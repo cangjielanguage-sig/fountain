@@ -15,16 +15,66 @@ limitations under the License.
 */
 package fountain::f_llm.store
 
+import std.collection.ArrayList
+
 /**
  * 内容族：记忆、经验、知识、文档。
  *
- * 具体读写方法在 1.2 落地；这里先固定工厂类型，避免 `Stores` 依赖未定义类型。
+ * 调用方只依赖这两个属性，不感知后端是 PostgreSQL、MySQL 还是 fhydra。
  */
 public interface ContentStore {
+    prop memory: MemoryStore
+    prop knowledge: KnowledgeStore
 }
 
 /**
  * 元数据族：人格、技能、提示词、模型配置。
  */
 public interface MetaStore {
+    prop characters: CharacterStore
+    prop skills: SkillStore
+    prop prompts: PromptStore
+    prop confs: LLMConfStore
+}
+
+/** 记忆与经验（经验用 kind=task/knowledge 表达，不另开接口） */
+public interface MemoryStore {
+    func add(write: MemoryWrite): MemoryRecord
+    func get(userId: Int64, id: Int64): ?MemoryRecord
+    func remove(userId: Int64, id: Int64): Bool
+    func list(userId: Int64, namespace: String, offset: Int64, limit: Int64): ArrayList<MemoryRecord>
+    func search(query: MemoryQuery): ArrayList<MemoryHit>
+}
+
+/** 知识与文档（按文档/块组织） */
+public interface KnowledgeStore {
+    func upsert(doc: KnowledgeDoc): Unit
+    func get(docId: String): ?KnowledgeDoc
+    func remove(docId: String): Bool
+}
+
+/** 人格：一个用户至多一条 */
+public interface CharacterStore {
+    func get(userId: Int64): ?Character
+    func set(character: Character): Unit
+    func reset(userId: Int64): Unit
+}
+
+/** 技能 */
+public interface SkillStore {
+    func upsert(skill: Skill): Unit
+    func get(id: Int64): ?Skill
+    func list(): ArrayList<Skill>
+}
+
+/** 提示词（按 name + version 存，保留最新指针） */
+public interface PromptStore {
+    func put(entry: PromptEntry): Unit
+    func get(name: String, version: Int64): ?PromptEntry
+    func latest(name: String): ?PromptEntry
+}
+
+/** 模型配置：1.2 先保留最小的名字查询，3.3 再补候选过滤 */
+public interface LLMConfStore {
+    func names(): ArrayList<String>
 }

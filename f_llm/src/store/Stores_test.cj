@@ -21,9 +21,27 @@ import std.unittest.testmacro.*
 import fountain::f_config.*
 
 class FakeContentStore <: ContentStore {
+    public prop memory: MemoryStore {
+        get() { throw IllegalArgumentException('fake content store') }
+    }
+    public prop knowledge: KnowledgeStore {
+        get() { throw IllegalArgumentException('fake content store') }
+    }
 }
 
 class FakeMetaStore <: MetaStore {
+    public prop characters: CharacterStore {
+        get() { throw IllegalArgumentException('fake meta store') }
+    }
+    public prop skills: SkillStore {
+        get() { throw IllegalArgumentException('fake meta store') }
+    }
+    public prop prompts: PromptStore {
+        get() { throw IllegalArgumentException('fake meta store') }
+    }
+    public prop confs: LLMConfStore {
+        get() { throw IllegalArgumentException('fake meta store') }
+    }
 }
 
 @Test

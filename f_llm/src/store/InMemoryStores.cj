@@ -1,0 +1,247 @@
+/*
+Copyright (c) 2026 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package fountain::f_llm.store
+
+import std.collection.*
+import std.time.DateTime
+
+/**
+ * 内存实现：只用于单测与本地演示，**不注册进 Stores**（§5.3）。
+ *
+ * 检索是「包含匹配」，不代表真实向量检索；生产实现由 PG/MySQL/fhydra 提供。
+ */
+public class InMemoryContentStore <: ContentStore {
+    private let memoryStore = InMemoryMemoryStore()
+    private let knowledgeStore = InMemoryKnowledgeStore()
+
+    public prop memory: MemoryStore {
+        get() { memoryStore }
+    }
+    public prop knowledge: KnowledgeStore {
+        get() { knowledgeStore }
+    }
+}
+
+public class InMemoryMetaStore <: MetaStore {
+    private let characterStore = InMemoryCharacterStore()
+    private let skillStore = InMemorySkillStore()
+    private let promptStore = InMemoryPromptStore()
+    private let confStore = InMemoryLLMConfStore()
+
+    public prop characters: CharacterStore {
+        get() { characterStore }
+    }
+    public prop skills: SkillStore {
+        get() { skillStore }
+    }
+    public prop prompts: PromptStore {
+        get() { promptStore }
+    }
+    public prop confs: LLMConfStore {
+        get() { confStore }
+    }
+}
+
+class InMemoryMemoryStore <: MemoryStore {
+    private let records = HashMap<Int64, MemoryRecord>()
+    private var seq: Int64 = 0
+
+    public func add(write: MemoryWrite): MemoryRecord {
+        seq++
+        let record = MemoryRecord(seq, write.userId, write.namespace, write.title,
+                                  write.content, write.kind, DateTime.now())
+        records[record.id] = record
+        record
+    }
+
+    public func get(userId: Int64, id: Int64): ?MemoryRecord {
+        match(records.get(id)){
+            case Some(record) => if(record.userId == userId) { Some(record) } else { None }
+            case None => None
+        }
+    }
+
+    public func remove(userId: Int64, id: Int64): Bool {
+        match(records.get(id)){
+            case Some(record) =>
+                if(record.userId == userId){
+                    records.remove(id)
+                    true
+                }else{
+                    false
+                }
+            case None => false
+        }
+    }
+
+    public func list(userId: Int64, namespace: String, offset: Int64, limit: Int64): ArrayList<MemoryRecord> {
+        let matched = ArrayList<MemoryRecord>()
+        for((_, record) in records){
+            if(record.userId == userId && record.namespace == namespace){
+                matched.add(record)
+            }
+        }
+        slice(matched, offset, limit)
+    }
+
+    public func search(query: MemoryQuery): ArrayList<MemoryHit> {
+        let hits = ArrayList<MemoryHit>()
+        for((_, record) in records){
+            if(record.userId != query.userId){
+                continue
+            }
+            if(query.namespaces.size > 0 && !containsText(query.namespaces, record.namespace)){
+                continue
+            }
+            if(query.kinds.size > 0 && !containsText(query.kinds, record.kind)){
+                continue
+            }
+            let matched = query.text.isEmpty() || record.title.contains(query.text) ||
+                          record.content.contains(query.text)
+            if(matched){
+                hits.add(MemoryHit(record, 1.0f64))
+            }
+        }
+        let limited = ArrayList<MemoryHit>()
+        var index = 0
+        while(index < hits.size && index < query.topK){
+            limited.add(hits[index])
+            index++
+        }
+        limited
+    }
+
+    private func slice(source: ArrayList<MemoryRecord>, offset: Int64, limit: Int64): ArrayList<MemoryRecord> {
+        let result = ArrayList<MemoryRecord>()
+        var index = offset
+        while(index < source.size && index < offset + limit){
+            result.add(source[index])
+            index++
+        }
+        result
+    }
+}
+
+class InMemoryKnowledgeStore <: KnowledgeStore {
+    private let docs = HashMap<String, KnowledgeDoc>()
+
+    public func upsert(doc: KnowledgeDoc): Unit {
+        docs[doc.docId] = doc
+    }
+
+    public func get(docId: String): ?KnowledgeDoc {
+        docs.get(docId)
+    }
+
+    public func remove(docId: String): Bool {
+        match(docs.get(docId)){
+            case Some(_) =>
+                docs.remove(docId)
+                true
+            case None => false
+        }
+    }
+}
+
+class InMemoryCharacterStore <: CharacterStore {
+    private let characters = HashMap<Int64, Character>()
+
+    public func get(userId: Int64): ?Character {
+        characters.get(userId)
+    }
+
+    public func set(character: Character): Unit {
+        characters[character.userId] = character
+    }
+
+    public func reset(userId: Int64): Unit {
+        characters.remove(userId)
+    }
+}
+
+class InMemorySkillStore <: SkillStore {
+    private let skills = HashMap<Int64, Skill>()
+
+    public func upsert(skill: Skill): Unit {
+        skills[skill.id] = skill
+    }
+
+    public func get(id: Int64): ?Skill {
+        skills.get(id)
+    }
+
+    public func list(): ArrayList<Skill> {
+        let result = ArrayList<Skill>()
+        for((_, skill) in skills){
+            result.add(skill)
+        }
+        result
+    }
+}
+
+class InMemoryPromptStore <: PromptStore {
+    private let versions = HashMap<String, HashMap<Int64, PromptEntry>>()
+
+    public func put(entry: PromptEntry): Unit {
+        match(versions.get(entry.name)){
+            case Some(bucket) => bucket[entry.version] = entry
+            case None =>
+                let bucket = HashMap<Int64, PromptEntry>()
+                bucket[entry.version] = entry
+                versions[entry.name] = bucket
+        }
+    }
+
+    public func get(name: String, version: Int64): ?PromptEntry {
+        match(versions.get(name)){
+            case Some(bucket) => bucket.get(version)
+            case None => None
+        }
+    }
+
+    public func latest(name: String): ?PromptEntry {
+        match(versions.get(name)){
+            case Some(bucket) =>
+                var latestVersion: Int64 = -1
+                for((version, _) in bucket){
+                    if(version > latestVersion){
+                        latestVersion = version
+                    }
+                }
+                if(latestVersion < 0){
+                    None
+                }else{
+                    bucket.get(latestVersion)
+                }
+            case None => None
+        }
+    }
+}
+
+class InMemoryLLMConfStore <: LLMConfStore {
+    public func names(): ArrayList<String> {
+        ArrayList<String>()
+    }
+}
+
+func containsText(values: Array<String>, target: String): Bool {
+    for(value in values){
+        if(value == target){
+            return true
+        }
+    }
+    false
+}

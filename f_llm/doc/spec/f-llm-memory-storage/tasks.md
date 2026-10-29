@@ -6,7 +6,7 @@
 ## 1. 契约与工厂
 
 - [x] 1.1 为 `Stores.content()/meta()` 写失败用例：未知配置抛错并列出可选值，合法值返回对应实现；跑出 Red 后实现注册表与工厂，用例转绿
-- [ ] 1.2 定义 `ContentStore` / `MetaStore` 及六个子接口（`MemoryStore` / `KnowledgeStore` / `CharacterStore` / `SkillStore` / `PromptStore` / `LLMConfStore`），配 `InMemory*` 测试替身；conformance 用例在内存实现上跑绿
+- [x] 1.2 定义 `ContentStore` / `MetaStore` 及六个子接口（`MemoryStore` / `KnowledgeStore` / `CharacterStore` / `SkillStore` / `PromptStore` / `LLMConfStore`），配 `InMemory*` 测试替身；conformance 用例在内存实现上跑绿
 - [ ] 1.3 新增配置键 `llm_contentStore` / `llm_metaStore` / `llm_metaStorePath` / `llm_contentStoreUrl`，旧键 `llm_memoryBackend` / `llm_characterBackend` / `llm_memoryPath` 启动 `warn` 并忽略；用例断言告警与默认值
 - [ ] 1.4 在 `f_llm/README.md` / `README_en.md` 增补存储选型与扩展点说明；核对示例命令与接口名一致
 
