@@ -1495,6 +1495,28 @@ Config.set<String>([
 
 旧键 `llm_memoryBackend` / `llm_characterBackend` / `llm_memoryPath` 仍会被识别，但只打 `warn`、不生效。
 
+### MySQL（9.7 LTS + MyVector）
+
+MySQL Community 版**没有**向量索引（`CREATE VECTOR INDEX` / `VECTOR_DISTANCE` 都不存在），
+需要额外安装 [MyVector](https://github.com/askdba/myvector) 组件：
+
+| 项 | 要求 |
+|---|---|
+| MySQL | 9.7 LTS（实测 9.7.4，官方 tarball 或 APT） |
+| MyVector | 组件模式，`INSTALL COMPONENT 'file://myvector'` |
+| 向量列 | `MYVECTOR(type=HNSW,dim=1024,size=…,dist=COSINE,m=16,ef=100)` |
+| 建索引 | `CALL mysql.myvector_index_build('db.table.col','pk')` |
+| 查询 | `MYVECTOR_IS_ANN('db.table.col','pk', myvector_construct('[…]'), k, (SELECT JSON_ARRAYAGG(id) …))` |
+
+**权限**：MyVector 的 binlog 账号需要 `SELECT, LOCK TABLES, REPLICATION CLIENT, REPLICATION SLAVE`；
+应用账号需要 `EXECUTE ON mysql.*`（建索引/状态/删除都是存储过程）。
+
+**隔离**：`user_id` / `namespace` 必须放进 `MYVECTOR_IS_ANN` 的第五参数（`JSON_ARRAYAGG` 子查询），
+写在 `WHERE` 里会变成「先取 k 条再过滤」，结果可能少于 k 条。
+
+**限制**：MyVector 的查询改写不认预处理占位符（`myvector_construct(?)`、`k=?` 都会 1064），
+故 MySQL 实现的 ANN SQL 使用字面量拼接（向量只含数字，namespace 做引号转义）。
+
 ### 完全不用数据库（f_store 元数据）
 
 只需把元数据族切到 `f_store`，人格/技能/提示词/模型配置都会落到本地目录：

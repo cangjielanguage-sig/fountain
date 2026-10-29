@@ -1516,6 +1516,28 @@ Config.set<String>([
 
 Legacy keys `llm_memoryBackend` / `llm_characterBackend` / `llm_memoryPath` are still detected, but only emit a `warn` and take no effect.
 
+### MySQL (9.7 LTS + MyVector)
+
+MySQL Community does **not** ship vector indexes (`CREATE VECTOR INDEX` / `VECTOR_DISTANCE` are absent),
+so the [MyVector](https://github.com/askdba/myvector) component is required:
+
+| Item | Requirement |
+|---|---|
+| MySQL | 9.7 LTS (verified on 9.7.4) |
+| MyVector | component mode, `INSTALL COMPONENT 'file://myvector'` |
+| Vector column | `MYVECTOR(type=HNSW,dim=1024,size=…,dist=COSINE,m=16,ef=100)` |
+| Build index | `CALL mysql.myvector_index_build('db.table.col','pk')` |
+| Query | `MYVECTOR_IS_ANN('db.table.col','pk', myvector_construct('[…]'), k, (SELECT JSON_ARRAYAGG(id) …))` |
+
+**Privileges**: the binlog account needs `SELECT, LOCK TABLES, REPLICATION CLIENT, REPLICATION SLAVE`;
+the application account needs `EXECUTE ON mysql.*` (index build/status/drop are stored procedures).
+
+**Isolation**: `user_id` / `namespace` must go into the fifth argument of `MYVECTOR_IS_ANN`
+(a `JSON_ARRAYAGG` subquery). Putting them in `WHERE` filters *after* the top-k cut and may return fewer rows.
+
+**Limitation**: MyVector's query rewrite rejects prepared placeholders (`myvector_construct(?)`, `k=?` → 1064),
+so the MySQL backend builds ANN SQL with literals (vectors are numeric, namespaces are quote-escaped).
+
 ### Running without any database (f_store metadata)
 
 Switch the metadata family to `f_store`; characters, skills, prompts and model configs are stored under a local directory:
