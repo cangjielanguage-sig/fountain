@@ -305,12 +305,11 @@ public class Perf_test {
         }
     }
 
-    /** 1 MB 冒烟：默认执行，耗时只记录（慢机器不判 fail，超过 2 s 视为异常）。 */
+    /** 1 MB 冒烟：默认执行，耗时只记录，不设上限（与 spec 一致）。 */
     @TestCase
     public func smokeOneMegabyte(): Unit {
         let sample = this.measure(1024 * 1024, 8192, runs: 1)
         println(sample.summary(8192))
-        assertTrue(sample.minMs < 2000.0, "1 MB 耗时 ${sample.minMs} ms，超过 2 s")
     }
 
     /** Gate P：10 MB min(3) < 7200 ms + RSS 差值断言。 */

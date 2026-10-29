@@ -74,7 +74,7 @@ Gate A 的五条排除规则复核（`python3` 统计 `.cache/xmlconf/unsupporte
 | 属性值跨行 | `Lexer_test.attributeWhitespaceNormalized` |
 | UTF-16 文档跨块边界 | `BlockRuneSource_test.smallBlocksAcrossLargeDocument`（`bufSize = 16`，4 KB 文档） |
 | UTF-16 的 U+0A00 不被当换行 | `BlockRuneSource_test.utf16ua000NotLineBreak` |
-| 两种 bufSize 结果一致 | `XmlParserBufSize_test.bufSizeInvariantAtParserLevel` |
+| 两种 bufSize 结果一致 | `XmlParser_test.bufSizeInvariantAtParserLevel` |
 | 极小 bufSize 仍然正确 | `CharLayerParity_test.utf8StrictAcrossBufSizes`（`bufSize = 4` 起） |
 | 大文本不出现二次复杂度 | `Perf_test.smokeOneMegabyte`（1 MB，默认执行） |
 | 块填充次数与字符数成数量级差 | `RuneSource_test.blocksAreFilledByBlock` |

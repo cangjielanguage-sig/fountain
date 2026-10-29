@@ -96,7 +96,7 @@
 - **公开 API**：**0 处变更**。`RuneSource` / `LineWindow` / `XmlParser` /
   `XmlPullParser` / `XmlParserOptions` / `EntityLimits` 的方法签名与默认值全部不动；
   新增的块 seam 与计数全部 `internal`。
-- **依赖**：不改。`cjpm.toml` 不动，不升级 `charset4cj`。
+- **依赖**：不改。仅 `f_xml/cjpm.toml` 增加 `-O2` 交付档位；不升级 `charset4cj`。
 - **性能**（开发机、单线程、release）：
 
   | 场景 | 改动前（M1） | 本变更 Gate |

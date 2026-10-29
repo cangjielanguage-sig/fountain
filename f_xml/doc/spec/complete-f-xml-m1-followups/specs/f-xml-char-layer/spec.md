@@ -188,19 +188,11 @@ SHALL 回退到逐字符填充，结果 SHALL 与块路径逐字符一致。
 
 ### Requirement: 热路径零 Option 分配
 
-词法器扫描 SHALL 只使用 `peekCp` / `advanceCp`（`Int64` 码点），SHALL NOT 在下列位置
-出现 `?Rune`、`match (Some/None)` 或 `Rune.position()`：
-
-- 文本 / 标签 / 属性值 / 注释 / CDATA / PI / 声明 / DOCTYPE / 内部子集的扫描循环；
-- `startsWith` / `consume` / `expect` 的固定串匹配；
-- 实体输入帧（`StringFeed` / `SinkFeed`）与溢出文件读回。
-
-固定串匹配 SHALL 使用预置的码点常量（`Array<Int64>`），SHALL NOT 每次调用
-`runesOf(text)` 新建数组。
-
-`CharsetRuneSource` 因 `charset4cj.TextReader` 只提供 `read(): ?Rune`，SHALL 允许在
-**块填充循环**内保留逐字符 `Option`；该分配 SHALL NOT 出现在 Lexer 的
-`peekCp` / `advanceCp` 路径上。
+词法器扫描 SHALL 只用 `peekCp` / `advanceCp`（`Int64`），SHALL NOT 在扫描循环、固定串匹配、
+实体帧与溢出读回中出现 `?Rune`、`match (Some/None)` 或 `Rune.position()`。固定串匹配 SHALL
+使用预置码点常量（`Array<Int64>`），SHALL NOT 每次调用 `runesOf(text)`。例外
+（`CharsetRuneSource` 块填充、`DoctypeParser` / `SkipScanner` 冷路径）见 `design.md`
+§3.8 / §4.2，且 SHALL NOT 出现在 Lexer 的 `peekCp` / `advanceCp` 路径上。
 
 #### Scenario: 扫描路径无 Option
 
