@@ -4,9 +4,9 @@
 
 项目链接：https://gitcode.com/Cangjie-TPC/fountain
 
-先说结论：**fountain 的通讯栈只做三件事——把对象压成字节、把字节装进帧、把帧送上连接。** 这三件事分别由 `f_codec`、`f_protocol`、`f_net` 负责，三层之间靠两个极小的接口咬合，任何一层都可以单独换掉。
+**fountain 的通讯栈只做三件事——把对象压成字节、把字节装进帧、把帧送上连接。** 这三件事分别由 `f_codec`、`f_protocol`、`f_net` 负责，三层之间靠两个极小的接口咬合，任何一层都可以单独换掉。
 
-这句话听起来像广告，但它解决的是一个很具体的痛点：大多数框架把「序列化 / 协议 / 网络」糊在一起，于是换个序列化格式要改协议，改协议要动网络层，最后没人敢动。fountain 的选择是把它们切成三层，每层只回答一个问题：
+这套分层解决的是一个具体问题：大多数框架把「序列化 / 协议 / 网络」放在一层，换个序列化格式要改协议，改协议要动网络层。fountain 把它们切成三层，每层只回答一个问题：
 
 ```
    业务对象                  字节                    帧                   连接
@@ -47,7 +47,7 @@
 | 6 | `DECIMAL1` | 14 | `OBJECT` |
 | 7 | `DECIMAL2` | 15 | `INPUTSTREAM` |
 
-**收益**：字节流是自描述的。解码方不需要事先知道「下一个值是 Int64 还是 String」，也不需要一份外部 schema 或 IDL 注册中心。对于 RPC 这种「方法参数按声明顺序排列」的场景，这一点让协议实现变得非常短：读 head、读长度、读 body、按类型构造值，循环即可。
+**收益**：字节流是自描述的。解码方不需要事先知道「下一个值是 Int64 还是 String」，也不需要外部 schema 或 IDL 注册中心。对于 RPC 这种「方法参数按声明顺序排列」的场景，协议实现只有四步：读 head、读长度、读 body、按类型构造值，然后循环。
 
 **代价**：长度只有 4 位。所以低 4 位不能直接表示长度，只能表示「后面还有几个字节用来表示长度」。
 
@@ -106,7 +106,7 @@ public interface Decoder {
 public interface Codec <: Encoder & Decoder {}
 ```
 
-两个细节值得注意：
+接口有两处设计细节：
 
 1. **`Encoder` 返回自身**，所以可以一路 `.encode(a).encode(b).encode(c)` 写成一帧。编码顺序就是协议顺序，没有字段名、没有分隔符。
 2. **`decode<T>` 的 `T` 只是「期望类型」**，不是「唯一类型」。同一个字节流，按 `Int64` 解出来是整数，按 `DataAny` 解出来是一个 `Data` 对象——后者叫中性解码，RPC 和 `f_net` 的读取循环用的就是这一档，因为它们在读的那一刻还不知道载荷该是什么类型。
@@ -233,7 +233,7 @@ public enum Command {
 | `ELECT` | `VOTE` | `APPROVE` | `ASSUME` | `ACK` |
 | `RESP` | 0 | QoS1 | QoS0 | `ACK` |
 
-为什么能这么省？因为命令本身已经确定了上下文的解释框架：`PUBLISH` 的低位只可能是 QoS 和 retain，`ELECT` 的低位只可能是投票语义。**用「命令隐含的语义空间」换取一个字节**，这是协议设计里典型的密度优化。
+能这么省，是因为命令本身已经确定了上下文的解释框架：`PUBLISH` 的低位只可能是 QoS 和 retain，`ELECT` 的低位只可能是投票语义。**用「命令隐含的语义空间」换取一个字节**，这是协议设计里典型的密度优化。
 
 代价是「同一个 bit 在不同命令下含义不同」，所以这个表必须写进文档、且在 `Command.parse` 里对未知命令号直接抛 `CommandException`——宁可炸，也不要猜。
 
@@ -254,7 +254,7 @@ public struct Message <: Protocol<EncodedMessage, Message> {
 
 `Message` 不区分 Request / Response，靠 `command` 区分，靠 `id` 配对。这个选择让「回包」变成一件没有歧义的事：`RESP(id, ...)`、`ERROR(id, ...)`、`ACK(id)` 全都带着原请求的 `MessageID`。
 
-`MessageID` 由 `time + pid + tid + hostId` 组成，但**相等和哈希只用前三项**——`hostId` 只是给运维看的，不参与身份判定。这是个容易忽略的细节：如果你按 `hostId` 做去重，会得到和框架不一致的结论。
+`MessageID` 由 `time + pid + tid + hostId` 组成，但**相等和哈希只用前三项**——`hostId` 只是给运维看的，不参与身份判定。按 `hostId` 做去重会得到和框架不一致的结论。
 
 工厂方法都返回 `Message`，因为 `EncodedMessage` 只由 `encode()` 产出：
 
@@ -268,7 +268,7 @@ let ping = Message.ping()
 
 ### 协议是接口，不是结构
 
-这是 `f_protocol` 最值得说的一点：
+`Protocol` 只约束编码与解码两个动作：
 
 ```cj
 public interface Protocol<EN, DE> where EN <: MessageCopier {
@@ -292,7 +292,7 @@ public interface MessageCopier {
 | 首字节就读不到（对端干净关闭） | `InputClosedException` | 正常断链，DEBUG 日志 |
 | 版本不符 / 载荷没读尽 / CRC 不符 / 中途 EOF | `CodecException` | 字节流已错位，必须断链 |
 
-这两类必须分开：前者是「对方走了」，后者是「数据坏了」。如果混成一个异常，你要么对正常关闭刷一堆 ERROR，要么把协议错位当成正常关闭——后者更危险，因为流已经错位，继续读只会解出垃圾。
+这两类必须分开：前者是「对方走了」，后者是「数据坏了」。如果混成一个异常，正常关闭会刷 ERROR；更危险的是把协议错位当成正常关闭——流已经错位，继续读只会解出垃圾。
 
 > 一个部署坑：CRC 实现在 `f_util`，动态库加载顺序必须 **f_util 先于 f_protocol**，否则报 `undefined symbol: crc32Update`。
 
@@ -346,7 +346,7 @@ public class MessageFuture<DE> {
 响应.id == 请求.id && 响应.command == Command.ACK
 ```
 
-而且**连续 3 次失败（`CHECK_FAILURE_TOLERANCE`）才拆链重建**。为什么要容忍？因为一次 ping 超时可能只是瞬时抖动或对端 GC，立刻拆链会引发「拆链 → 重连 → 再抖 → 再拆」的风暴。反过来，容忍次数太多又会让坏连接长期占着不放——3 是一个偏保守的折中值。
+而且**连续 3 次失败（`CHECK_FAILURE_TOLERANCE`）才拆链重建**。容忍的原因是：一次 ping 超时可能只是瞬时抖动或对端 GC，立刻拆链会引发「拆链 → 重连 → 再抖 → 再拆」的风暴。反过来，容忍次数太多又会让坏连接长期占着不放——3 是一个偏保守的折中值。
 
 `ClientBuilder` 里还有一条与它相关的坑：`pingTimeout` **默认 1s**，设得太短会造成拆链重连风暴。
 
@@ -372,7 +372,7 @@ for (client in multiClient) {
 
 权重用的是**累计权重桶**：内部 `TreeMap` 以各节点的累计权重为键（`origin + w₁ + … + wᵢ`），取节点 = 第一个键 ≥ 算法给出的值，节点 i 覆盖 `(K_{i-1}, K_i]`。
 
-这里有一个非常隐蔽的坑，值得单独说：**如果 `origin` 和 `min` 相同，取值序列会与桶边界对齐，永远命中第一个节点。** 正确用法是 `origin = 0`、`min` 落在第一个桶内部（例如 `step / 2`）、`max = Σw`。负载均衡「看起来配了但不生效」，十有八九是踩了这个。
+`MultiClient` 有一个隐蔽的坑：**如果 `origin` 和 `min` 相同，取值序列会与桶边界对齐，永远命中第一个节点。** 正确用法是 `origin = 0`、`min` 落在第一个桶内部（例如 `step / 2`）、`max = Σw`。负载均衡「看起来配了但不生效」，通常就是这一处。
 
 另外，`W` 只支持 `Int64` / `Float64`，其它类型抛 `LoadBalanceException`——泛型不是为了任意数值类型，只是为了「权重可以是整数计数，也可以是浮点比例」。
 
@@ -399,11 +399,11 @@ public class Server<T> where T <: DataFields<T> {
 4. executor 返回 `None` 时用 `defaultResp(req.id)` 兜底，仍为 `None` 就不回包；
 5. 同一连接 ping 计数超过 `unavailableChecked` 判不可用并关闭。
 
-第 2 步是最有价值的设计：心跳和业务共享一条连接，但**不共享线程池**。如果 ping 也排队进业务线程池，那么一次业务洪峰就会让 ping 超时，进而触发客户端拆链——雪崩就是这么开始的。
+第 2 步让心跳和业务共享一条连接，但**不共享线程池**。如果 ping 也排队进业务线程池，一次业务洪峰就会让 ping 超时，进而触发客户端拆链，引发重连风暴。
 
 第 3 步的限流只作用于业务路径，`PING`/`ACK` 不受限，理由同上。
 
-`ServerBuilder` 的参数分两层，这个划分很容易搞混：
+`ServerBuilder` 的参数分两层，这个划分容易搞混：
 
 - 无前缀（`bindToDevice` / `receiveBufferSize` / `sendBufferSize` / `reuseAddress` / `backlogSize`）作用于**监听 socket**；
 - `socket*` 前缀（`socketNoDelay` / `socketLinger` / `socketKeepalive`）作用于 **accept 之后的每条连接**。
@@ -419,7 +419,7 @@ public class Server<T> where T <: DataFields<T> {
 public func close(): Unit
 ```
 
-如果不这么做，对端可能读到半个帧头，然后按 `len` 去读一个不存在的 payload，最后以 `CodecException` 告终——一个正常的关闭动作，在对端变成了「协议错误」。这类细节不写进文档就没人知道，但它决定了排障时你看到的是 DEBUG 还是 ERROR。
+如果不这么做，对端可能读到半个帧头，然后按 `len` 去读一个不存在的 payload，最后以 `CodecException` 告终——一个正常的关闭动作，在对端变成了「协议错误」。这类细节决定了排障时看到的是 DEBUG 还是 ERROR。
 
 ---
 
@@ -466,7 +466,7 @@ public func close(): Unit
 
 `f_codec` 用 1 个字节换掉了 schema，`f_protocol` 用 1 个字节换掉了命令表，`f_net` 用 3 次容忍换掉了重连风暴。
 
-**好的通讯栈不是功能多，而是每一层都只花该花的字节、只做该做的判断。**
+**这套通讯栈的取舍集中在两处：每一层只花该花的字节，只做该做的判断。**
 
 ---
 

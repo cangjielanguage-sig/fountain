@@ -4,9 +4,7 @@
 
 项目链接：https://gitcode.com/Cangjie-TPC/fountain
 
-如果要选一个「最被低估的协议」，我会投 JSON-RPC 2.0。
-
-它只有几页纸：请求是 `{jsonrpc, method, params, id}`，响应是 `{jsonrpc, result, id}` 或 `{jsonrpc, error, id}`。没有 schema、没有 IDL、没有代码生成、没有传输层规定。但正因为什么都没有，它可以跑在 HTTP 上、stdio 上、WebSocket 上，可以被 `curl` 调、被脚本拼、被模型生成。
+JSON-RPC 2.0 的规范只有几页：请求是 `{jsonrpc, method, params, id}`，响应是 `{jsonrpc, result, id}` 或 `{jsonrpc, error, id}`。没有 schema、没有 IDL、没有代码生成、没有传输层规定。因为没有这些约束，它可以跑在 HTTP 上、stdio 上、WebSocket 上，可以被 `curl` 调、被脚本拼、被模型生成。
 
 fountain 用它做了两件事：
 
@@ -133,7 +131,7 @@ JSON-RPC 允许 `id` 是字符串、数字或 `null`。很多实现会「统一�
 
 ## 四、超时：默认不设，设了也不杀
 
-这是 `f_jsonrpc` 里最容易被误解的设计。
+超时的语义容易被误解。
 
 ```cangjie
 @JsonRpcMeta['慢查询', '5s']     // 显式超时
@@ -143,13 +141,13 @@ JSON-RPC 允许 `id` 是字符串、数字或 `null`。很多实现会「统一�
 - **默认不设超时**：`@JsonRpcMeta` 没写、或第二参数是空串时，handler 在**请求线程内联执行**，`CurrentHttpContext` 等请求级 ThreadLocal 完整可用；
 - **只有显式配置超时才会 `spawn` 子线程**，并在子线程内用 `CurrentHttpContext.scoped` 恢复上下文。
 
-为什么默认不设？因为「超时」在服务端本质上是个假概念：**你没法真的杀掉一个正在跑的 handler**（仓颉没有抢占式取消）。超时能做的只是「不再等它」，然后返回 `-32002`。
+默认不设超时的原因：服务端无法真正取消一个正在执行的 handler（仓颉没有抢占式取消）。超时能做的只是停止等待并返回 `-32002`。
 
-于是就有了这条必须写进文档的警告：
+这条限制需要明确：
 
 > 超时后返回 `-32002`，**但 handler 不会终止**。长循环里用 `ctx.isExpired()` 自查，带副作用的操作必须幂等。
 
-如果默认就开 500ms 超时，业务会大面积出现「客户端收到超时、服务端还在写库」——这比不设超时危险得多。**默认不做半吊子的事**，这是这个设计的核心。
+如果默认开启 500ms 超时，会出现「客户端收到超时、服务端仍在写库」的情况。默认不设超时，避免这种只完成一半的语义。
 
 ---
 
@@ -183,7 +181,7 @@ let client = JsonRpcClient('http://127.0.0.1:8080/rpc', opts: ClientOptions(
 ))
 ```
 
-最重要的一条是**重试边界**：
+**重试边界**分三种情况：
 
 | 阶段 | 失败 | 是否重试 |
 | --- | --- | --- |
@@ -199,7 +197,7 @@ let client = JsonRpcClient('http://127.0.0.1:8080/rpc', opts: ClientOptions(
 
 ## 七、`f_mcp`：MCP 不是新协议
 
-MCP（Model Context Protocol）经常被描述成「AI 的工具协议」，听起来像要重造一套 RPC。但拆开看，它的消息层就是 JSON-RPC 2.0：
+MCP（Model Context Protocol）常被描述成「AI 的工具协议」，但它的消息层就是 JSON-RPC 2.0：
 
 ```
    McpClient ──── JSON-RPC 2.0 (POST /mcp) ────► McpServer
@@ -210,7 +208,7 @@ MCP（Model Context Protocol）经常被描述成「AI 的工具协议」，听�
 
 ### 版本：无握手，逐请求校验
 
-`f_mcp` 只实现 **MCP 2026-07-28** 这一版，不搞多版本共存。
+`f_mcp` 只实现 **MCP 2026-07-28** 这一版，不做多版本共存。
 
 它**不实现** `initialize` / `notifications/initialized` 握手。取而代之的是：每个请求在 `params._meta` 里带上
 
@@ -222,7 +220,7 @@ clientCapabilities
 
 服务端逐请求校验；`server/discover` 的响应 `_meta` 回 `serverInfo`。版本不匹配返回 `-32022`，`error.data.supported` 给出支持列表。
 
-为什么去掉握手？因为握手是**有状态**的：一旦协商完成，服务端就要为每个会话记住「这个客户端支持什么」。而无状态的逐请求校验让服务端可以水平扩展、可以随时重启。代价是每个请求多带几十字节。
+去掉握手的原因是：握手是**有状态**的，一旦协商完成，服务端就要为每个会话记住「这个客户端支持什么」。无状态的逐请求校验让服务端可以水平扩展、随时重启，代价是每个请求多带几十字节。
 
 对 legacy 对端，`initialize` 返回 `-32601`，`data` 里带 `legacyMethod` 与 `supportedVersion`——**明确告知，不静默降级**。静默降级会让客户端以为功能可用，然后在某个能力上突然失败。
 
@@ -281,7 +279,7 @@ public class KnowledgeService {
 
 ### 限流：三层合并 + 一个 SPI
 
-MCP 的调用方是「模型」，最容易被一条循环调用打爆，所以限流是刚需。
+MCP 的调用方是「模型」，一条循环调用就可能打满服务，限流是必需的。
 
 配置分三层，**逐字段合并**（不是整体替换）：
 
@@ -322,7 +320,7 @@ public interface RateLimitBackend {
 
 `key` 已经带了作用域前缀（`c:` / `ct:` / `t:`），可以直接当共享存储的键——Redis 用 `INCR` + `EXPIRE 60` 做固定窗口，或 Lua 做令牌桶；数据库用单行 `UPDATE ... RETURNING` / 行锁。f_mcp 不内置 Redis 客户端，**避免绑定具体存储**。
 
-一个诚实的边界：**并发闸门仍然是进程内的**。跨实例的全局并发需要网关或独立共享信号量。
+边界：**并发闸门仍然是进程内的**。跨实例的全局并发需要网关或独立共享信号量。
 
 ### 结果太大怎么办
 
@@ -418,7 +416,7 @@ stdio 传输：`McpClient.stdio('/usr/local/bin/my-mcp-server', args: ['--stdio'
 
 `f_jsonrpc` 把 JSON-RPC 2.0 接进 MVC，而不是另起一套 Web 框架；`f_mcp` 把 MCP 的语义接进 JSON-RPC，而不是另起一套协议。
 
-**协议设计的高级感，不在于定义了多少方法，而在于每一层都只说这一层该说的话。**
+**分层的价值在于：消息层只处理消息，语义层只处理语义。**
 
 ---
 
