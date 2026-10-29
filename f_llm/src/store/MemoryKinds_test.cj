@@ -1,0 +1,118 @@
+/*
+Copyright (c) 2026 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package fountain::f_llm.store
+
+import std.collection.*
+import std.unittest.*
+import std.unittest.testmacro.*
+
+class FakeKindPersistence <: KindPersistence {
+    public var inserted: Int64 = 0
+    private let rows = HashMap<String, Bool>()
+
+    public func has(kind: String): Bool {
+        rows.contains(kind)
+    }
+
+    public func insert(kind: String, predefined: Bool): Unit {
+        rows[kind] = predefined
+        inserted++
+    }
+}
+
+@Test
+public class MemoryKindsTest {
+
+    @TestCase
+    func testPredefinedAreFixed(): Unit {
+        MemoryKinds.resetForTest()
+        let kinds = MemoryKinds.predefined()
+        @Expect(kinds.size, 7)
+        @Expect(kinds[0], 'note')
+        @Expect(kinds[6], 'session')
+    }
+
+    @TestCase
+    func testCustomKindBelongsToUser(): Unit {
+        MemoryKinds.resetForTest()
+        @Expect(MemoryKinds.register(1, 'meeting'), true)
+        @Expect(has(MemoryKinds.all(1), 'meeting'), true)
+        @Expect(has(MemoryKinds.all(2), 'meeting'), false)
+        @Expect(MemoryKinds.validate(1, 'meeting'), true)
+        @Expect(MemoryKinds.validate(2, 'meeting'), false)
+    }
+
+    @TestCase
+    func testPredefinedCannotBeRemoved(): Unit {
+        MemoryKinds.resetForTest()
+        var thrown = false
+        try{
+            MemoryKinds.remove(1, 'note')
+        }catch(_: IllegalArgumentException){
+            thrown = true
+        }
+        @Expect(thrown, true)
+        @Expect(MemoryKinds.validate(1, 'note'), true)
+    }
+
+    @TestCase
+    func testRegisterIsIdempotent(): Unit {
+        MemoryKinds.resetForTest()
+        @Expect(MemoryKinds.register(1, 'meeting'), true)
+        @Expect(MemoryKinds.register(1, 'meeting'), false)
+        @Expect(MemoryKinds.register(1, 'note'), false)
+    }
+
+    @TestCase
+    func testRemoveOnlyOwnCustomKind(): Unit {
+        MemoryKinds.resetForTest()
+        MemoryKinds.register(1, 'meeting')
+        @Expect(MemoryKinds.remove(2, 'meeting'), false)
+        @Expect(MemoryKinds.remove(1, 'meeting'), true)
+        @Expect(MemoryKinds.validate(1, 'meeting'), false)
+    }
+
+    @TestCase
+    func testSeedIsIdempotent(): Unit {
+        MemoryKinds.resetForTest()
+        let persistence = FakeKindPersistence()
+        MemoryKinds.seed(persistence)
+        @Expect(persistence.inserted, 7)
+        MemoryKinds.seed(persistence)
+        @Expect(persistence.inserted, 7)
+    }
+
+    @TestCase
+    func testInvalidKindIsRejected(): Unit {
+        MemoryKinds.resetForTest()
+        var thrown = false
+        try{
+            MemoryKinds.register(1, 'bad kind!')
+        }catch(_: IllegalArgumentException){
+            thrown = true
+        }
+        @Expect(thrown, true)
+    }
+}
+
+private func has(values: ArrayList<String>, target: String): Bool {
+    for(value in values){
+        if(value == target){
+            return true
+        }
+    }
+    false
+}
