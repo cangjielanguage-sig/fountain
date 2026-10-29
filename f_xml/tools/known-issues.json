@@ -1,0 +1,12 @@
+[
+  {
+    "id": "o-p04pass1",
+    "reason": "非命名空间感知用例：XML 1.0 允许名字里出现多个冒号，Namespaces 1.0 把前缀限制为一个 QName 且要求前缀已声明。f_xml 始终按命名空间感知处理，因此报错是预期行为，不是缺陷。",
+    "section": "Namespaces in XML 1.0 §3（QName / 前缀声明）"
+  },
+  {
+    "id": "o-p05pass1",
+    "reason": "同上：oasis 的 p05 用例属于 XML 1.0 非命名空间语料，元素名带未声明前缀在 Namespaces 1.0 下非法。",
+    "section": "Namespaces in XML 1.0 §3"
+  }
+]

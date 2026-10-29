@@ -63,8 +63,4 @@ internal class EntityTable {
     func declarations(): Array<EntityDecl> {
         this.ordered.toArray()
     }
-
-    func size(): Int64 {
-        this.ordered.size
-    }
 }

@@ -541,6 +541,29 @@ DOM → token 序列 → StringGenerator（UTF-8 字节缓冲，8~64 KB 冲一�
 | R5 | 待解析器落地后实测（任务 1.8）。 |
 | R6 | **`cjpm test` 的工作目录 = 模块根**（`.../f_xml`）。`TestDataRoot` 的第二候选 `<module>/.cache/xmlconf/` 可直接用工作目录拼接，不需要 `CJPM_MODULE_ROOT`。 |
 
+**实现修正 2（Strict 路径改用自研严格 UTF-8 解码器）**
+
+`std.io.StringReader` 在 1.3.0 上只有两个按字符 API：`read()` 和 `readln()`。实测结论：
+
+- `read()` 每字符返回 `?Rune`，而仓颉的 `Option` 是**引用类型**，等于每字符一次堆分配，
+  实测 **~400 ns/字符**（1.5 MB 文本光解码就要 0.6 s）；
+- `readln()` 会吃掉行尾的 `\r\n`，无法区分「这一行本来带换行」和「文件在行尾结束」，
+  `"<a>\n"` 会被还原成 `"<a>"`——字符层契约直接破掉。
+
+因此 `InvalidByteMode.Strict` 改为走 `ByteDecoder` 的 **`Utf8Strict`** 分支：与 `Replace`
+共用固定块读取与块尾回退，但**不复用** maximal-subpart 替换逻辑（非法字节直接抛
+`XmlException`，带字节偏移）。`Replace` 分支保持不变，两条路径仍然互不替代。
+GR 与 GBK 路径不受影响（`CharsetRuneSource` 仍走 `charset4cj.TextReader`）。
+
+**实现修正 3（性能未达标）**
+
+事件模式解析耗时（开发机，单线程）：1 MB ≈ 1.5 s、10 MB ≈ 15.8 s，**远高于**
+`10 MB < 1 s` 的出口要求。瓶颈已定位为字符层的逐字符 `Option` 分配与三层缓冲
+（`RuneSource` → `LineWindow` → `Lexer`）。本轮已把 `peek`/`advance` 换成码点直返的
+`peekFast`/`advanceFast` 并去掉两层 `ArrayList`，收益约 15%，不足以达到目标；
+要达标需要把词法器改成「按块扫描 + 只在出错时回退定位」的结构，属于一次独立的
+字符层重写，不在本变更剩余范围内。
+
 **实现修正 1（`PrefixStream` 的 EOF 返回值）**：`tasks.md` 1.1 与 `f-xml-char-layer` spec 写的是
 「读完后返回 `-1`」，但仓颉 `InputStream` 的契约是 **EOF 返回 `0`**，且 `charset4cj.TextReader`
 的 `checkEOF()` 只在 `len == 0` 时判定结束——返回 `-1` 会让 GBK 路径死循环。

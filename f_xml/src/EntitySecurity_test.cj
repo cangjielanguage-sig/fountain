@@ -36,14 +36,14 @@ public class EntitySecurity_test {
     private func billionLaughsDoc(): String {
         let gen = StringBuilder()
         gen.append("<!DOCTYPE a [<!ENTITY e0 \"lol\">")
-        for (i in 1..=5) {
+        for (i in 1..=8) {
             gen.append("<!ENTITY e${i} \"")
             for (_ in 0..10) {
                 gen.append("&e${i - 1};")
             }
             gen.append("\">")
         }
-        gen.append("]><a>&e5;</a>")
+        gen.append("]><a>&e8;</a>")
         gen.toString()
     }
 

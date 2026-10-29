@@ -28,7 +28,74 @@ f_xml
 | M2 | XPath 1.0 subset with namespace prefixes |
 | M3 | XML 1.1, C14N (inclusive 1.0/1.1 + exclusive 1.0) |
 
+## Capabilities (M1)
+
+| Capability | Entry point | Notes |
+|---|---|---|
+| Pull parser | `XmlPullParser.nextEvent()` / `skipElement()` | The only kernel; `None` means end of document |
+| Multi-callback | `XmlParser.parse(input, handler)` | Override only the methods you care about |
+| Single callback | `XmlParser.parse(input) { e => … }` | No DOM is built |
+| DOM | `XmlParser.parse(input / bytes / text / path)` | Four overloads; `parse(text)` skips byte sniffing |
+| Namespaces | Built in | Default namespace inheritance, `xmlns=""` reset, attributes unaffected by the default namespace |
+| DTD internal entities | `<!ENTITY>` (general + parameter) | External entities and external subsets are **never loaded** |
+| Writer | `XmlWriter` | Compact / indented, three CDATA modes, custom entity refs, output encoding |
+
+## Examples
+
+### 1. Stream a large document (no DOM)
+
+```cangjie
+let parser = XmlPullParser(File("rss.xml", OpenMode.Read))
+while (let Some(event) <- parser.nextEvent()) {
+    match (event) {
+        case XmlEvent.StartElement(name, _, _) => if (name.local == "item") {
+            parser.skipElement()   // skip the whole subtree
+        }
+        case _ => ()
+    }
+}
+```
+
+### 2. Build a DOM and read values
+
+```cangjie
+let doc = XmlParser.parse(File("pom.xml", OpenMode.Read))
+let groupId = doc.root.getOrThrow().child("groupId").getOrThrow().text()
+```
+
+### 3. Generate
+
+```cangjie
+let element = XmlElement("rss")
+element.setAttr("version", "2.0")
+element.appendChild(XmlNode.ElementNode(XmlElement("channel").withText("my feed")))
+let output = ByteBuffer()
+XmlWriter(output, options: XmlWriterOptions(indent: Some("  "))).write(element)
+```
+
+## Security boundaries
+
+- **External entities are never loaded**: `<!ENTITY x SYSTEM "…">` is recognized but *referencing*
+  it throws; an external subset (`SYSTEM` / `PUBLIC` `.dtd`) is never opened and no network request
+  is ever issued.
+- **Three layers of limits**: per entity 64 KB / total 8 MB (soft: `Spill` continues in a temp file),
+  depth 16 / declarations 1024 / hard cap 2 GB (hard: throws). `entityLimitKind` tells the caller
+  whether a retry with `Spill` can succeed.
+- **Attribute values never spill**: they must stay in memory for namespace resolution; exceeding the
+  limit throws `entityLimitKind = AttributeValue`.
+- `maxElementDepth` (4096) and `maxAttributeValueLength` (1 MiB) guard against deep nesting and huge
+  attribute values.
+
+## Contract
+
+- No method may be called after `XmlWriter.close()` (undefined behavior).
+- `indent` is for humans: it inserts whitespace text nodes between elements.
+- Text may be delivered in several `Text` events (entity / CDATA / buffer boundaries);
+  `DomBuilder` merges them for you.
+- `parse(text)` takes characters and does not sniff bytes or complain about `encoding` mismatches.
+
 ## Status
 
-The module skeleton exists; implementation proceeds through OpenSpec changes, with specs and
-records under `doc/spec/`.
+M1 is implemented and covered by 236 unit tests. The xmlconf 20130923 Gate A is **not yet met**:
+of 2178 runnable cases, 1696 pass and 458 fail, mostly DTD syntax validation (out of scope for this
+change) and XML 1.1 (M3). See [`doc/spec/implement-f-xml-m1/baseline.md`](doc/spec/implement-f-xml-m1/baseline.md).

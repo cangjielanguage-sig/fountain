@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_xml
 
+import std.collection.ArrayList
 import fountain::f_base.StringGenerator
 
 /**
@@ -25,12 +26,24 @@ import fountain::f_base.StringGenerator
  *
  * 条件段 `<![INCLUDE[ … ]]>` 解析内容，`<![IGNORE[ … ]]>` 原样跳过。
  */
+internal struct PendingRef {
+    let owner: String
+    let ref: String
+
+    init(owner: String, ref: String) {
+        this.owner = owner
+        this.ref = ref
+    }
+}
+
 internal class DoctypeParser {
     private let text: Array<Rune>
     private var pos: Int64 = 0
     private let table: EntityTable
     private let maxDepth: Int64
     private let depth: Int64
+    /** 待判定的前向引用：实体值里引用了同一声明子集里**稍后**才声明的实体。 */
+    private let pendingRefs = ArrayList<PendingRef>()
 
     private init(text: Array<Rune>, table: EntityTable, maxDepth!: Int64 = 16, depth!: Int64 = 0) {
         this.text = text
@@ -43,7 +56,22 @@ internal class DoctypeParser {
         let table = EntityTable(limits.maxDeclarations)
         let parser = DoctypeParser(runesOf(subset), table, maxDepth: limits.maxDepth)
         parser.parseStatements()
+        parser.checkForwardReferences()
         table
+    }
+
+    /**
+     * 前向引用只在「同一声明子集里稍后确实声明了」时才算错。
+     *
+     * 引用一个我们从未见过的实体名，可能是外部子集里声明的——那是运行时按
+     * `standalone` 处理的事，不能在这里判死。
+     */
+    private func checkForwardReferences(): Unit {
+        for (pending in this.pendingRefs) {
+            if (this.table.general(pending.ref).isSome()) {
+                throw XmlException("实体「${pending.owner}」引用了尚未声明的实体「&${pending.ref};」")
+            }
+        }
     }
 
     private func atEnd(): Bool {
@@ -200,6 +228,10 @@ internal class DoctypeParser {
             }
             if (this.startsWith("<?")) {
                 this.consume("<?")
+                let target = this.readName()
+                if (target.toAsciiLower() == "xml") {
+                    throw XmlException("DTD 内部不允许出现 XML 声明")
+                }
                 this.skipUntil("?>")
                 continue
             }
@@ -271,16 +303,20 @@ internal class DoctypeParser {
         var value: ?String = None
         var publicId: ?String = None
         var systemId: ?String = None
-        if (this.startsWith("SYSTEM")) {
-            this.consume("SYSTEM")
-            this.skipWhitespace()
-            systemId = Some(this.readQuoted())
-        } else if (this.startsWith("PUBLIC")) {
+        if (this.startsWith("PUBLIC")) {
             this.consume("PUBLIC")
             this.skipWhitespace()
             publicId = Some(this.readQuoted())
             this.skipWhitespace()
             systemId = Some(this.readQuoted())
+            this.skipWhitespace()
+            this.skipNData()
+        } else if (this.startsWith("SYSTEM")) {
+            this.consume("SYSTEM")
+            this.skipWhitespace()
+            systemId = Some(this.readQuoted())
+            this.skipWhitespace()
+            this.skipNData()
         } else {
             value = Some(this.readQuoted())
         }
@@ -301,6 +337,16 @@ internal class DoctypeParser {
             systemId: systemId,
             parameter: parameter
         ))
+    }
+
+    /** 外部实体可带 `NDATA notation`；M1 不处理 NOTATION，跳过即可。 */
+    private func skipNData(): Unit {
+        if (this.startsWith("NDATA")) {
+            this.consume("NDATA")
+            this.skipWhitespace()
+            this.readName()
+            this.skipWhitespace()
+        }
     }
 
     /** 实体值只能引用**已经声明**的实体；前向引用与自引用都报错。 */
@@ -335,7 +381,7 @@ internal class DoctypeParser {
             match (ref) {
                 case "lt" | "gt" | "amp" | "quot" | "apos" => ()
                 case _ => if (this.table.general(ref).isNone()) {
-                    throw XmlException("实体「${owner}」引用了尚未声明的实体「&${ref};」")
+                    this.pendingRefs.add(PendingRef(owner, ref))
                 }
             }
             i = k + 1

@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::f_xml
 
-import std.collection.ArrayList
 import std.io.InputStream
 
 /**

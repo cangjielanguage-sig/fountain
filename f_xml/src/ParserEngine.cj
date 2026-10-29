@@ -387,8 +387,8 @@ internal class ParserEngine {
             }
             throw XmlException("实体「&${name};」未声明", line, column)
         }
-        let sink = this.expander.expand(name, line, column)
-        this.lexer.pushFeed(SinkFeed(sink.openReader(this.options.bufSize), SourcePosition(line, column)))
+        let reader = this.expander.feed(name, line, column, this.options.bufSize, this.lexer.depth() + 1)
+        this.lexer.pushFeed(SinkFeed(reader, SourcePosition(line, column)))
         // 实体的替换文本可能含标记，继续按内容状态读。
         None
     }

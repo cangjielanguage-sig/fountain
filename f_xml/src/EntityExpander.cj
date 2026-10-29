@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_xml
 
-import std.collection.ArrayList
+import std.collection.{ArrayList, HashMap}
 import fountain::f_base.StringGenerator
 
 /**
@@ -28,11 +28,153 @@ internal class EntityExpander {
     private let table: EntityTable
     private let limits: EntityLimits
     private let counter: EntityCounter
+    /** 实体展开后的字符数（含嵌套），按名字缓存。 */
+    private let sizes = HashMap<String, Int64>()
 
     init(table: EntityTable, limits: EntityLimits, counter: EntityCounter) {
         this.table = table
         this.limits = limits
         this.counter = counter
+    }
+
+    /**
+     * 内容里的实体：**不在展开器里预先展开**，只做上限判定后把替换文本接回词法流。
+     *
+     * 替换文本里可能有标记（`<b>`）、CDATA（`<![CDATA[&x;]]>` 保护引用）、
+     * 以及「被转义过一次」的引用（`&lt;foo>` 必须变成文本 `<foo>`，不能变成标签）——
+     * 这些只有在词法层重新扫描才分得清。嵌套引用由词法器的输入栈自然处理，
+     * 深度就是栈深。
+     */
+    func feed(name: String, line: Int64, column: Int64, bufSize: Int64, depth: Int64): ExpandReader {
+        if (depth > this.limits.maxDepth) {
+            throw XmlException(
+                "实体递归深度 ${depth} 超过上限 ${this.limits.maxDepth}（实体「&${name};」）",
+                line,
+                column,
+                kind: EntityLimitKind.Depth
+            )
+        }
+        let decl = match (this.table.general(name)) {
+            case Some(d) => d
+            case None => throw XmlException("实体「&${name};」未声明", line, column)
+        }
+        let value = match (decl.value) {
+            case Some(v) => v
+            case None => throw XmlException("外部实体「&${name};」永不加载", line, column)
+        }
+        let size = Int64(runesOf(value).size)
+        // 投影大小（含嵌套）用于提前判定指数膨胀，不需要真把文本生成出来。
+        let projected = this.expandedSize(name, 1)
+        let nextTotal = this.counter.total + (if (projected > size) { projected } else { size })
+        // 判定顺序按「最先越过的阈值」：单实体原文超长 → 单实体；否则总量；最后才是硬限制。
+        if (size > this.limits.maxExpandedPerEntity) {
+            throw XmlException(
+                "单实体展开量 ${size} 超过 ${kbText(this.limits.maxExpandedPerEntity)}（实体「&${name};」）",
+                line,
+                column,
+                kind: EntityLimitKind.PerEntity
+            )
+        }
+        if (nextTotal > this.limits.maxExpandedTotal &&
+            this.limits.overflowPolicy == EntityOverflowPolicy.Strict) {
+            throw XmlException(
+                "实体展开总量 ${nextTotal} 超过 ${kbText(this.limits.maxExpandedTotal)}",
+                line,
+                column,
+                kind: EntityLimitKind.Total
+            )
+        }
+        if (nextTotal > this.limits.maxExpandedHardLimit) {
+            throw XmlException(
+                "实体展开总量超过硬限制 ${this.limits.maxExpandedHardLimit}",
+                line,
+                column,
+                kind: EntityLimitKind.HardLimit
+            )
+        }
+        this.counter.total = nextTotal
+        if (size > this.limits.maxExpandedPerEntity) {
+            // 单个实体的替换文本本身就超过软阈值：落到溢出文件，内存不随它增长。
+            let sink = ExpandSink(this.limits, EntityCounter())
+            sink.write(value)
+            return sink.openReader(bufSize)
+        }
+        MemoryExpandReader(runesOf(value))
+    }
+
+    /**
+     * 实体展开后的字符数（含嵌套引用），带缓存。
+     *
+     * 用它做「投影判定」而不是等真展开完再数：Billion Laughs 这类指数膨胀能在
+     * 毫秒级被判定为超限，不需要先把 8 MB 文本生成出来。
+     */
+    private func expandedSize(name: String, depth: Int64): Int64 {
+        match (this.sizes.get(name)) {
+            case Some(value) => return value
+            case None => ()
+        }
+        if (depth > this.limits.maxDepth) {
+            throw XmlException(
+                "实体递归深度 ${depth} 超过上限 ${this.limits.maxDepth}",
+                0,
+                0,
+                kind: EntityLimitKind.Depth
+            )
+        }
+        let decl = match (this.table.general(name)) {
+            case Some(d) => d
+            case None => return 0
+        }
+        let value = match (decl.value) {
+            case Some(v) => v
+            case None => return 0
+        }
+        let runes = runesOf(value)
+        var total: Int64 = 0
+        var i: Int64 = 0
+        while (i < runes.size) {
+            if (runes[i] != r'&') {
+                total++
+                i++
+                continue
+            }
+            var j = i + 1
+            if (j < runes.size && runes[j] == r'#') {
+                total++
+                while (j < runes.size && runes[j] != r';') {
+                    j++
+                }
+                i = j + 1
+                continue
+            }
+            var k = j
+            while (k < runes.size && XmlChars.isNameChar(runes[k].position())) {
+                k++
+            }
+            if (k >= runes.size || runes[k] != r';') {
+                return total + 1
+            }
+            let gen = StringGenerator()
+            for (x in j..k) {
+                gen.append(runes[x])
+            }
+            let ref = gen.toString()
+            match (ref) {
+                case "lt" | "gt" | "amp" | "quot" | "apos" => total++
+                case _ =>
+                    let child = this.expandedSize(ref, depth + 1)
+                    if (child > this.limits.maxExpandedHardLimit - total) {
+                        return this.limits.maxExpandedHardLimit + 1
+                    }
+                    total += child
+            }
+            if (total > this.limits.maxExpandedHardLimit) {
+                return this.limits.maxExpandedHardLimit + 1
+            }
+            i = k + 1
+        }
+        this.sizes[name] = total
+        total
     }
 
     /** 展开一个实体引用，返回落点（内存或溢出文件）。 */

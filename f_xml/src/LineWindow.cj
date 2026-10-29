@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::f_xml
 
-import std.collection.ArrayList
 
 /**
  * 行拼接与行尾归一。
@@ -29,8 +28,9 @@ import std.collection.ArrayList
  */
 public class LineWindow {
     private let source: RuneSource
-    private let pending = ArrayList<Rune>()
+    private let ring = Array<Rune>(16, repeat: r'\0')
     private var head: Int64 = 0
+    private var count: Int64 = 0
     private var line: Int64 = 1
     private var column: Int64 = 1
 
@@ -38,77 +38,79 @@ public class LineWindow {
         this.source = source
     }
 
-    private func pullNormalized(): ?Rune {
-        match (this.source.advance()) {
-            case Some(r) =>
-                if (r == r'\r') {
-                    // \r\n 只吃一次；孤立 \r 也归一成 \n。
-                    if (let Some(next) <- this.source.peek(0)) {
-                        if (next == r'\n') {
-                            this.source.advance()
-                        }
-                    }
-                    Some(r'\n')
-                } else {
-                    Some(r)
-                }
-            case None => None
+    private func pullNormalized(): Int64 {
+        let cp = this.source.advanceFast()
+        if (cp < 0) {
+            return -1
         }
+        if (cp == 0x0D) {
+            // \r\n 只吃一次；孤立 \r 也归一成 \n。
+            if (this.source.peekFast(0) == 0x0A) {
+                this.source.advanceFast()
+            }
+            this.pulled = 0x0A
+            return 0
+        }
+        this.pulled = cp
+        0
     }
 
-    private func fillTo(count: Int64): Bool {
-        while (this.pending.size - this.head < count) {
-            match (this.pullNormalized()) {
-                case Some(r) => this.pending.add(r)
-                case None => return false
+    private var pulled: Int64 = 0
+
+    private func fillTo(target: Int64): Bool {
+        while (this.count < target) {
+            if (this.pullNormalized() < 0) {
+                return false
             }
+            this.ring[(this.head + this.count) & 15] = Rune(this.pulled)
+            this.count++
         }
         true
     }
 
-    private func compact(): Unit {
-        if (this.head >= this.pending.size) {
-            this.pending.clear()
-            this.head = 0
-        } else if (this.head > 64) {
-            let rest = ArrayList<Rune>()
-            for (i in this.head..this.pending.size) {
-                rest.add(this.pending[i])
-            }
-            this.pending.clear()
-            for (r in rest) {
-                this.pending.add(r)
-            }
-            this.head = 0
+    /** 向前看第 `offset` 个字符的码点；`-1` 表示流结束。热路径不分配 `Option`。 */
+    public func peekFast(offset: Int64): Int64 {
+        if (offset < 0 || offset > 8 || !this.fillTo(offset + 1)) {
+            return -1
         }
+        this.ring[(this.head + offset) & 15].position()
     }
 
-    /** 向前看第 `offset` 个字符（0 = 当前），不移动游标。 */
-    public func peek(offset: Int64): ?Rune {
-        if (offset < 0 || offset > 8) {
-            return None
+    /** 消费当前字符并返回码点；`-1` 表示流结束。热路径不分配 `Option`。 */
+    public func advanceFast(): Int64 {
+        if (this.count == 0 && !this.fillTo(1)) {
+            return -1
         }
-        if (!fillTo(offset + 1)) {
-            return None
-        }
-        this.pending[this.head + offset]
-    }
-
-    /** 消费并返回当前字符。 */
-    public func advance(): ?Rune {
-        if (!fillTo(1)) {
-            return None
-        }
-        let r = this.pending[this.head]
-        this.head++
+        let r = this.ring[this.head]
+        this.head = (this.head + 1) & 15
+        this.count--
         if (r == r'\n') {
             this.line++
             this.column = 1
         } else {
             this.column++
         }
-        this.compact()
-        r
+        r.position()
+    }
+
+    /** 向前看第 `offset` 个字符（0 = 当前），不移动游标。 */
+    public func peek(offset: Int64): ?Rune {
+        let cp = this.peekFast(offset)
+        if (cp < 0) {
+            None
+        } else {
+            Some(Rune(cp))
+        }
+    }
+
+    /** 消费并返回当前字符。 */
+    public func advance(): ?Rune {
+        let cp = this.advanceFast()
+        if (cp < 0) {
+            None
+        } else {
+            Some(Rune(cp))
+        }
     }
 
     /** 下一个待读字符的 1-based 行列号。 */
@@ -116,8 +118,8 @@ public class LineWindow {
         SourcePosition(this.line, this.column)
     }
 
-    /** 当前字符是否已到流末尾。 */
+/** 当前字符是否已到流末尾。 */
     public func isEof(): Bool {
-        this.peek(0).isNone()
+        this.peekFast(0) < 0
     }
 }

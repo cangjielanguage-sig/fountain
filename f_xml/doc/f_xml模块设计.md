@@ -2298,3 +2298,38 @@ C14N 的收益很具体：`xmlconf` 里 **432 条带 `OUTPUT`** 的用例可升�
 | `StringGenerator` append 复杂度 | 10 万次 `append("x")`，看耗时是否线性 | 线性（总耗时 ~ 1e5 × 常数） |
 | `ArrayList<Byte>` 的扩容倍数 | 连续 append，记录底层数组的换新时机 | 约 ×2 增长 |
 | `unsafeBytes()` 是否零拷贝 | 同一 gen 连续取两次，比 `a === b` | 大概率 **true**（同一数组）；若 false 则说明每次做了裁剪拷贝，性能结论要修正 |
+
+---
+
+## 15. 实施回填（M1，`implement-f-xml-m1`）
+
+本节记录设计与最终实现之间的**事实差异**，避免后来者按旧描述改代码。完整理由见
+[`doc/spec/implement-f-xml-m1/design.md`](spec/implement-f-xml-m1/design.md) §8 与 §10.1。
+
+| # | 设计原文 | 实施结果 | 原因 |
+|---|---|---|---|
+| 1 | §1.3 依赖 `charset4cj = "1.0.6"` | **保持 `1.0.5`** | 仓库 9 个模块统一；1.0.5 的包路径已是 `charset4cj.charset.*`。 |
+| 2 | §7.6 `class XmlEntityRef <: XmlNode` | `XmlNode.EntityRefNode(String)` + 工厂函数 `XmlEntityRef(name)` | 仓颉不允许类继承 enum。 |
+| 3 | §4 `XmlDocument.builder` 公开 | `internal`，公开 API 不含 `builder` | 建成后 builder 栈已空，外露只会诱导误用。 |
+| 4 | §12.8 要求超深嵌套 / 超长属性有上限但未给配置 | 新增 `maxElementDepth`（4096）与 `maxAttributeValueLength`（1 MiB） | 补上缺失的配置项与两类错误。 |
+| 5 | §2.6 只有两个 `RuneSource` 实现 | **三个**：新增 `BlockRuneSource`（UTF-16/32 固定块）与共享 `ByteDecoder` | `readln()` 按字节找 `0x0A`，UTF-16 的 U+0A00 会被误判为换行。 |
+| 6 | §2.7 读方向 `Strict` 走 `std.io.StringReader` | 改走自研 `Utf8Strict` 字节解码（**不复用** `Replace` 的 maximal-subpart 逻辑） | `StringReader.read()` 每个字符一次 `Option` 堆分配（实测 ~400 ns/字符）；`readln()` 又无法区分「行尾换行」与「文件结束」。 |
+| 7 | §9 `class XmlException <: Exception` | `XmlException <: f_base.BaseException` | 仓库统一异常基类。 |
+
+### 15.1 性能实测（M1 出口未达标）
+
+| 场景 | 实测 | 出口要求 |
+|---|---|---|
+| 事件模式 1 MB | ≈ 1.5 s | — |
+| 事件模式 10 MB | ≈ 15.8 s | **< 1 s** |
+| DOM 模式 10 MB | 与事件模式同量级（DOM 本身另占内存） | 只记录 |
+
+瓶颈在字符层逐字符的 `Option` 分配与三层缓冲。已做的优化（`peekFast` / `advanceFast`、
+环形缓冲、去掉一层 `ArrayList`）约 15% 收益，不足以达标；要达标需要把词法器改成
+「按块扫描 + 只在出错时回退定位」，属于一次独立重写。
+
+### 15.2 一致性验收
+
+xmlconf 20130923 的可跑集与断言数（2586 / 408 / 2178 / 2154）与 §9.1 完全一致，
+但 **Gate A 未达成**：1696 pass / 458 fail，缺口来自 DTD 语法校验（本设计的非目标）
+与 XML 1.1（M3）。详见 [`doc/spec/implement-f-xml-m1/baseline.md`](spec/implement-f-xml-m1/baseline.md)。

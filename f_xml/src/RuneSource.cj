@@ -15,8 +15,7 @@ limitations under the License.
 */
 package fountain::f_xml
 
-import std.collection.ArrayList
-import std.io.{InputStream, StringReader, ContentFormatException}
+import std.io.InputStream
 import cangjie_tpc::charset4cj.charset.TextReader
 
 /**
@@ -36,92 +35,88 @@ public interface RuneSource {
 
     /** 下一个待读字符的 1-based 行列号。 */
     func position(): SourcePosition
+
+    /**
+     * `peek` 的热路径版本：直接给码点，`-1` 表示流结束。
+     *
+     * 仓颉的 `Option` 是引用类型，`?Rune` 每字符一次分配；词法器逐字符扫描时必须走这两个
+     * 版本，否则吞吐会被分配压到 1 MB/s 以下。语义与 `peek` / `advance` 完全一致。
+     */
+    func peekFast(offset: Int64): Int64
+
+    func advanceFast(): Int64
 }
 
-/** 三个具体实现的公共缓冲与行列号推进逻辑。 */
+/** 三个具体实现的公共缓冲与行列号推进逻辑（固定 16 槽环形缓冲，避免逐字符分配）。 */
 public abstract class BufferedRuneSource <: RuneSource {
-    private let pending = ArrayList<Rune>()
+    private let ring = Array<Rune>(16, repeat: r'\0')
     private var head: Int64 = 0
+    private var count: Int64 = 0
     private var line: Int64 = 1
     private var column: Int64 = 1
 
-    /** 从底层取下一个字符；`None` 表示流结束。 */
-    protected func pull(): ?Rune
+    /** 从底层取下一个字符写进 `pulledRune`；`false` 表示流结束。 */
+    protected func pull(): Bool
 
-    private func fillTo(count: Int64): Bool {
-        while (this.pending.size - this.head < count) {
-            match (this.pull()) {
-                case Some(r) => this.pending.add(r)
-                case None => return false
+    /** `pull()` 的落点：避免每字符一个 `Option` 分配。 */
+    protected var pulledRune: Rune = r'\0'
+
+    private func fillTo(target: Int64): Bool {
+        while (this.count < target) {
+            if (!this.pull()) {
+                return false
             }
+            this.ring[(this.head + this.count) & 15] = this.pulledRune
+            this.count++
         }
         true
     }
 
-    private func compact(): Unit {
-        if (this.head == 0) {
-            return
+    /** 向前看第 `offset` 个字符的码点；`-1` 表示流结束。**热路径**，不走 `Option`。 */
+    public func peekFast(offset: Int64): Int64 {
+        if (offset < 0 || offset > 8 || !this.fillTo(offset + 1)) {
+            return -1
         }
-        if (this.head >= this.pending.size) {
-            this.pending.clear()
-            this.head = 0
-            return
-        }
-        if (this.head > 64) {
-            let rest = ArrayList<Rune>()
-            for (i in this.head..this.pending.size) {
-                rest.add(this.pending[i])
-            }
-            this.pending.clear()
-            for (r in rest) {
-                this.pending.add(r)
-            }
-            this.head = 0
-        }
+        this.ring[(this.head + offset) & 15].position()
     }
 
-    public func peek(offset: Int64): ?Rune {
-        if (offset < 0 || offset > 8) {
-            return None
+    /** 消费当前字符并返回码点；`-1` 表示流结束。**热路径**，不走 `Option`。 */
+    public func advanceFast(): Int64 {
+        if (this.count == 0 && !this.fillTo(1)) {
+            return -1
         }
-        if (!fillTo(offset + 1)) {
-            return None
-        }
-        this.pending[this.head + offset]
-    }
-
-    public func advance(): ?Rune {
-        if (!fillTo(1)) {
-            return None
-        }
-        let r = this.pending[this.head]
-        this.head++
+        let r = this.ring[this.head]
+        this.head = (this.head + 1) & 15
+        this.count--
         if (r == r'\n') {
             this.line++
             this.column = 1
         } else {
             this.column++
         }
-        this.compact()
-        r
+        r.position()
+    }
+
+    public func peek(offset: Int64): ?Rune {
+        let cp = this.peekFast(offset)
+        if (cp < 0) {
+            None
+        } else {
+            Some(Rune(cp))
+        }
+    }
+
+    public func advance(): ?Rune {
+        let cp = this.advanceFast()
+        if (cp < 0) {
+            None
+        } else {
+            Some(Rune(cp))
+        }
     }
 
     public func position(): SourcePosition {
         SourcePosition(this.line, this.column)
-    }
-}
-
-/** UTF-8 单个码点的字节长度；用于 Strict 路径的字节偏移统计与转义。 */
-internal func utf8Length(r: Rune): Int64 {
-    let cp = r.position()
-    if (cp < 0x80) {
-        1
-    } else if (cp < 0x800) {
-        2
-    } else if (cp < 0x10000) {
-        3
-    } else {
-        4
     }
 }
 
@@ -134,39 +129,31 @@ internal func utf8Length(r: Rune): Int64 {
  * 两条路径**互不替代**：`Strict` 不经过 `Replace` 解码器。
  */
 public class Utf8RuneSource <: BufferedRuneSource {
-    private var strictReader: ?StringReader<InputStream> = None
-    private var decoder: ?ByteDecoder = None
-    private var bytesConsumed: Int64 = 0
+    private let decoder: ByteDecoder
+    private let strict: Bool
 
     public init(input: InputStream, mode!: InvalidByteMode = InvalidByteMode.Strict, bufSize!: Int64 = 8192) {
-        match (mode) {
-            case InvalidByteMode.Strict => this.strictReader = StringReader(input)
-            case InvalidByteMode.Replace => this.decoder = ByteDecoder(input, ByteCodec.Utf8Replace, bufSize)
-        }
+        this.strict = mode == InvalidByteMode.Strict
+        this.decoder = ByteDecoder(
+            input,
+            if (this.strict) { ByteCodec.Utf8Strict } else { ByteCodec.Utf8Replace },
+            bufSize
+        )
     }
 
-    protected func pull(): ?Rune {
-        match (this.strictReader) {
-            case Some(reader) =>
-                try {
-                    match (reader.read()) {
-                        case Some(r) =>
-                            this.bytesConsumed += utf8Length(r)
-                            Some(r)
-                        case None => None
-                    }
-                } catch (e: ContentFormatException) {
-                    let pos = this.position()
-                    throw XmlException(
-                        "非法 UTF-8 字节序列（字节偏移 ${this.bytesConsumed}）",
-                        pos.line,
-                        pos.column
-                    )
-                }
-            case None => match (this.decoder) {
-                case Some(dec) => dec.next()
-                case None => None
+    protected func pull(): Bool {
+        try {
+            let cp = this.decoder.next()
+            if (cp < 0) {
+                false
+            } else {
+                this.pulledRune = Rune(cp)
+                true
             }
+        } catch (e: XmlException) {
+            // 解码器不知道行列号，这里补上。
+            let pos = this.position()
+            throw XmlException(e.message, pos.line, pos.column)
         }
     }
 }
@@ -179,13 +166,19 @@ public class CharsetRuneSource <: BufferedRuneSource {
         this.reader = TextReader(input, charset: charset, bufSize: bufSize)
     }
 
-    protected func pull(): ?Rune {
-        this.reader.read()
+    protected func pull(): Bool {
+        match (this.reader.read()) {
+            case Some(r) =>
+                this.pulledRune = r
+                true
+            case None => false
+        }
     }
 }
 
 /** 固定块解码器承载的编码。 */
 internal enum ByteCodec {
+    | Utf8Strict
     | Utf8Replace
     | Utf16Le
     | Utf16Be
@@ -206,8 +199,14 @@ public class BlockRuneSource <: BufferedRuneSource {
         this.decoder = ByteDecoder(input, codec, bufSize)
     }
 
-    protected func pull(): ?Rune {
-        this.decoder.next()
+    protected func pull(): Bool {
+        let cp = this.decoder.next()
+        if (cp < 0) {
+            false
+        } else {
+            this.pulledRune = Rune(cp)
+            true
+        }
     }
 }
 
@@ -228,13 +227,11 @@ internal class ByteDecoder {
         this.codec = codec
     }
 
-    func byteOffset(): Int64 {
-        this.reader.consumedBytes()
-    }
-
-    func next(): ?Rune {
+    /** 下一个码点；`-1` 表示流结束（热路径不分配 `Option`）。 */
+    func next(): Int64 {
         match (this.codec) {
-            case Utf8Replace => nextUtf8()
+            case Utf8Strict => nextUtf8(true)
+            case Utf8Replace => nextUtf8(false)
             case Utf16Le => nextUtf16(true)
             case Utf16Be => nextUtf16(false)
             case Utf32Le => nextUtf32(true)
@@ -242,18 +239,21 @@ internal class ByteDecoder {
         }
     }
 
-    private func nextUtf8(): ?Rune {
+    private func nextUtf8(strict: Bool): Int64 {
         if (!this.reader.ensure(1)) {
-            return None
+            return -1
         }
         let b0 = Int64(this.reader.peekByte(0))
         if (b0 < 0x80) {
             this.reader.consume(1)
-            return Some(Rune(b0))
+            return b0
         }
         if (b0 < 0xC2 || b0 > 0xF4) {
+            if (strict) {
+                throw XmlException("非法 UTF-8 字节序列（字节偏移 ${this.reader.consumedBytes()}）")
+            }
             this.reader.consume(1)
-            return Some(Rune(0xFFFD))
+            return 0xFFFD
         }
         let need: Int64 = if (b0 < 0xE0) {
             2
@@ -264,29 +264,36 @@ internal class ByteDecoder {
         }
         if (this.reader.ensure(need)) {
             // 整个序列都在缓冲里，逐字节校验后再决定消费多少。
-            if (let Some(r) <- decodeCompleteUtf8(b0, need, this.reader)) {
-                return Some(r)
+            let cp = decodeCompleteUtf8(b0, need, this.reader, strict)
+            if (cp < 0) {
+                return 0xFFFD
             }
-            return Some(Rune(0xFFFD))
+            return cp
         }
         // 真 EOF 处的截断序列：整段剩余字节就是一个 maximal subpart。
+        if (strict) {
+            throw XmlException("非法 UTF-8 字节序列：序列被截断（字节偏移 ${this.reader.consumedBytes()}）")
+        }
         let remaining = this.reader.available()
         this.reader.consume(remaining)
-        Some(Rune(0xFFFD))
+        0xFFFD
     }
 
     /**
      * 在「整个序列都在缓冲里」时判定；成功则消费并返回码点，失败则按 maximal subpart
      * 消费后缀并返回 `None`（由调用方产出 `U+FFFD`）。
      */
-    private func decodeCompleteUtf8(b0: Int64, need: Int64, reader: ByteReader): ?Rune {
+    private func decodeCompleteUtf8(b0: Int64, need: Int64, reader: ByteReader, strict: Bool): Int64 {
         var cp: Int64 = 0
         var validLen: Int64 = 1
         if (need == 2) {
             let b1 = Int64(reader.peekByte(1))
             if (!isContinuation(b1)) {
+                if (strict) {
+                    throw XmlException("非法 UTF-8 字节序列（字节偏移 ${reader.consumedBytes()}）")
+                }
                 reader.consume(1)
-                return None
+                return -1
             }
             cp = ((b0 & 0x1F) << 6) | (b1 & 0x3F)
             validLen = 2
@@ -295,13 +302,19 @@ internal class ByteDecoder {
             let lowBound: Int64 = if (b0 == 0xE0) { 0xA0 } else { 0x80 }
             let highBound: Int64 = if (b0 == 0xED) { 0x9F } else { 0xBF }
             if (b1 < lowBound || b1 > highBound) {
+                if (strict) {
+                    throw XmlException("非法 UTF-8 字节序列（字节偏移 ${reader.consumedBytes()}）")
+                }
                 consumeBroken(reader, 1, need)
-                return None
+                return -1
             }
             let b2 = Int64(reader.peekByte(2))
             if (!isContinuation(b2)) {
+                if (strict) {
+                    throw XmlException("非法 UTF-8 字节序列（字节偏移 ${reader.consumedBytes()}）")
+                }
                 consumeBroken(reader, 2, need)
-                return None
+                return -1
             }
             cp = ((b0 & 0x0F) << 12) | ((b1 & 0x3F) << 6) | (b2 & 0x3F)
             validLen = 3
@@ -310,27 +323,36 @@ internal class ByteDecoder {
             let lowBound: Int64 = if (b0 == 0xF0) { 0x90 } else { 0x80 }
             let highBound: Int64 = if (b0 == 0xF4) { 0x8F } else { 0xBF }
             if (b1 < lowBound || b1 > highBound) {
+                if (strict) {
+                    throw XmlException("非法 UTF-8 字节序列（字节偏移 ${reader.consumedBytes()}）")
+                }
                 consumeBroken(reader, 1, need)
-                return None
+                return -1
             }
             let b2 = Int64(reader.peekByte(2))
             if (!isContinuation(b2)) {
+                if (strict) {
+                    throw XmlException("非法 UTF-8 字节序列（字节偏移 ${reader.consumedBytes()}）")
+                }
                 consumeBroken(reader, 2, need)
-                return None
+                return -1
             }
             let b3 = Int64(reader.peekByte(3))
             if (!isContinuation(b3)) {
+                if (strict) {
+                    throw XmlException("非法 UTF-8 字节序列（字节偏移 ${reader.consumedBytes()}）")
+                }
                 consumeBroken(reader, 3, need)
-                return None
+                return -1
             }
             cp = ((b0 & 0x07) << 18) | ((b1 & 0x3F) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F)
             validLen = 4
         }
         reader.consume(validLen)
-        Some(Rune(cp))
+        cp
     }
 
-    private func nextUtf16(littleEndian: Bool): ?Rune {
+    private func nextUtf16(littleEndian: Bool): Int64 {
         if (!this.reader.ensure(2)) {
             return truncatedOrNone()
         }
@@ -340,46 +362,45 @@ internal class ByteDecoder {
                 let second = readUnit16(this.reader, 2, littleEndian)
                 if (second >= 0xDC00 && second <= 0xDFFF) {
                     this.reader.consume(4)
-                    let cp = 0x10000 + ((first - 0xD800) << 10) + (second - 0xDC00)
-                    return Some(Rune(cp))
+                    return 0x10000 + ((first - 0xD800) << 10) + (second - 0xDC00)
                 }
             }
             this.reader.consume(2)
-            return Some(Rune(0xFFFD))
+            return 0xFFFD
         }
         if (first >= 0xDC00 && first <= 0xDFFF) {
             this.reader.consume(2)
-            return Some(Rune(0xFFFD))
+            return 0xFFFD
         }
         this.reader.consume(2)
-        Some(Rune(first))
+        first
     }
 
-    private func nextUtf32(littleEndian: Bool): ?Rune {
+    private func nextUtf32(littleEndian: Bool): Int64 {
         if (!this.reader.ensure(4)) {
             return truncatedOrNone()
         }
         let value = readUnit32(this.reader, littleEndian)
         this.reader.consume(4)
         if (value > 0x10FFFF || (value >= 0xD800 && value <= 0xDFFF)) {
-            return Some(Rune(0xFFFD))
+            return 0xFFFD
         }
-        Some(Rune(value))
+        value
     }
 
     /** 块尾不足一个完整字符：整体消费剩余字节并只报一次 `U+FFFD`。 */
-    private func truncatedOrNone(): ?Rune {
+    private func truncatedOrNone(): Int64 {
         let remaining = this.reader.available()
         if (remaining == 0) {
-            return None
+            return -1
         }
         if (this.truncatedReported) {
             this.reader.consume(remaining)
-            return None
+            return -1
         }
         this.truncatedReported = true
         this.reader.consume(remaining)
-        Some(Rune(0xFFFD))
+        0xFFFD
     }
 
     /**

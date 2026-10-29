@@ -111,6 +111,28 @@ internal class Lexer {
         this.feeds.size - 1
     }
 
+    /** 热路径：直接给码点（`-1` = EOF），单帧时直连 `LineWindow`。 */
+    func peekCp(offset: Int64): Int64 {
+        if (this.feeds.size == 1) {
+            return this.window.peekFast(offset)
+        }
+        match (this.peek(offset)) {
+            case Some(r) => r.position()
+            case None => -1
+        }
+    }
+
+    /** 热路径：消费一个字符并返回码点（`-1` = EOF）。 */
+    func advanceCp(): Int64 {
+        if (this.feeds.size == 1) {
+            return this.window.advanceFast()
+        }
+        match (this.advance()) {
+            case Some(r) => r.position()
+            case None => -1
+        }
+    }
+
     public func peek(offset: Int64): ?Rune {
         var remaining = offset
         var i = this.feeds.size - 1
@@ -233,34 +255,29 @@ internal class Lexer {
         let pos = this.position()
         let gen = StringGenerator()
         var colonSeen = false
-        var localStart = 0
         var first = true
         while (true) {
-            match (this.peek(0)) {
-                case Some(r) =>
-                    let cp = r.position()
-                    let ok = if (first) {
-                        XmlChars.isNameStartChar(cp)
-                    } else {
-                        XmlChars.isNameChar(cp)
-                    }
-                    if (!ok) {
-                        break
-                    }
-                    if (r == r':') {
-                        if (colonSeen || first) {
-                            throw this.error("名字里出现非法的冒号")
-                        }
-                        colonSeen = true
-                    }
-                    gen.append(r)
-                    if (colonSeen && localStart == 0) {
-                        localStart = gen.size
-                    }
-                    this.advance()
-                    first = false
-                case None => break
+            let cp = this.peekCp(0)
+            if (cp < 0) {
+                break
             }
+            let ok = if (first) {
+                XmlChars.isNameStartChar(cp)
+            } else {
+                XmlChars.isNameChar(cp)
+            }
+            if (!ok) {
+                break
+            }
+            if (cp == 0x3A) {
+                if (colonSeen || first) {
+                    throw this.error("名字里出现非法的冒号")
+                }
+                colonSeen = true
+            }
+            gen.append(Rune(cp))
+            this.advanceCp()
+            first = false
         }
         if (first) {
             throw this.error("缺少名字")
@@ -361,48 +378,46 @@ internal class Lexer {
     }
 
     private func nextContentToken(): Token {
-        if (this.peek(0).isNone()) {
+        let first = this.peekCp(0)
+        if (first < 0) {
             return Token.TEof
         }
-        if (this.peek(0) == Some(r'<')) {
+        if (first == 0x3C) {
             return this.readMarkup()
         }
         let gen = StringGenerator()
         while (true) {
-            match (this.peek(0)) {
-                case Some(r) =>
-                    if (r == r'<') {
-                        break
-                    }
-                    if (r == r']' && this.peek(1) == Some(r']') && this.peek(2) == Some(r'>')) {
-                        throw this.error("文本里不能出现「]]>」")
-                    }
-                    if (r == r'&') {
-                        if (this.referenceIsInline()) {
-                            match (this.readReference()) {
-                                case RefValue.CharText(text) => gen.append<String>(text)
-                                case RefValue.EntityName(_) => ()
-                            }
-                            continue
-                        }
-                        if (gen.size > 0) {
-                            break
-                        }
-                        let posBefore = this.position()
-                        match (this.readReference()) {
-                            case RefValue.CharText(text) => gen.append<String>(text)
-                            case RefValue.EntityName(name) =>
-                                return Token.TEntityRef(name, posBefore.line, posBefore.column)
-                        }
-                        continue
-                    }
-                    if (!XmlChars.isXmlChar(r.position())) {
-                        throw this.error("文本中出现 XML 1.0 不允许的字符 U+${XmlChars.hex(r.position())}")
-                    }
-                    gen.append(r)
-                    this.advance()
-                case None => break
+            let cp = this.peekCp(0)
+            if (cp < 0 || cp == 0x3C) {
+                break
             }
+            if (cp == 0x5D && this.peekCp(1) == 0x5D && this.peekCp(2) == 0x3E) {
+                throw this.error("文本里不能出现「]]>」")
+            }
+            if (cp == 0x26) {
+                if (this.referenceIsInline()) {
+                    match (this.readReference()) {
+                        case RefValue.CharText(text) => gen.append<String>(text)
+                        case RefValue.EntityName(_) => ()
+                    }
+                    continue
+                }
+                if (gen.size > 0) {
+                    break
+                }
+                let posBefore = this.position()
+                match (this.readReference()) {
+                    case RefValue.CharText(text) => gen.append<String>(text)
+                    case RefValue.EntityName(name) =>
+                        return Token.TEntityRef(name, posBefore.line, posBefore.column)
+                }
+                continue
+            }
+            if (!XmlChars.isXmlChar(cp)) {
+                throw this.error("文本中出现 XML 1.0 不允许的字符 U+${XmlChars.hex(cp)}")
+            }
+            gen.append(Rune(cp))
+            this.advanceCp()
         }
         if (gen.size == 0) {
             return Token.TEof
@@ -619,7 +634,12 @@ internal class Lexer {
             seen.add(attrName.local)
             match (attrName.local) {
                 case "version" => version = Some(value)
-                case "encoding" => encoding = Some(value)
+                case "encoding" =>
+                    // EncName 不允许首尾空白，也不允许空串。
+                    if (value.isEmpty() || value.trimAscii() != value) {
+                        throw XmlException("encoding 名字非法「${value}」", start.line, start.column)
+                    }
+                    encoding = Some(value)
                 case "standalone" =>
                     if (value == "yes") {
                         standalone = Some(true)
@@ -638,7 +658,8 @@ internal class Lexer {
         if (v == "1.1") {
             throw XmlException("XML 1.1 尚未支持（M3）", start.line, start.column)
         }
-        if (v != "1.0") {
+        // XML 1.0 §2.8：处理器可以接受 1.x 并当作 1.0 处理；1.1 是 M3 的范围，明确拒绝。
+        if (!v.startsWith("1.")) {
             throw XmlException("不支持的 XML 版本「${v}」", start.line, start.column)
         }
         Token.TDecl(v, encoding, standalone)
@@ -735,9 +756,6 @@ internal class Lexer {
     private func readDoctype(start: SourcePosition): Token {
         this.skipWhitespace()
         let name = this.readName()
-        if (name.prefix.isSome()) {
-            throw XmlException("DOCTYPE 名字不能带前缀", start.line, start.column)
-        }
         this.skipWhitespace()
         var publicId: ?String = None
         var systemId: ?String = None
@@ -806,6 +824,32 @@ internal class Lexer {
                 result = Some(gen.toString())
                 continue
             }
+            if (quoteRune.isNone() && this.startsWith("<!--")) {
+                this.consume("<!--")
+                gen.append<String>("<!--")
+                while (!this.startsWith("-->")) {
+                    match (this.advance()) {
+                        case Some(r) => gen.append(r)
+                        case None => throw XmlException("DOCTYPE 内部子集里的注释未闭合", start.line, start.column)
+                    }
+                }
+                this.consume("-->")
+                gen.append<String>("-->")
+                continue
+            }
+            if (quoteRune.isNone() && this.startsWith("<?")) {
+                this.consume("<?")
+                gen.append<String>("<?")
+                while (!this.startsWith("?>")) {
+                    match (this.advance()) {
+                        case Some(r) => gen.append(r)
+                        case None => throw XmlException("DOCTYPE 内部子集里的 PI 未闭合", start.line, start.column)
+                    }
+                }
+                this.consume("?>")
+                gen.append<String>("?>")
+                continue
+            }
             if (quoteRune.isNone() && this.startsWith("<![")) {
                 this.consume("<![")
                 gen.append<String>("<![")
@@ -854,30 +898,13 @@ internal class Lexer {
     }
 }
 
-/** 把字符串里的 `\t` `\r` `\n` 换成空格（属性值归一）。 */
-internal func normalizeWhitespace(text: String): String {
-    if (!text.contains("\t") && !text.contains("\r") && !text.contains("\n")) {
-        return text
-    }
-    let gen = StringGenerator()
-    for (r in text.runes()) {
-        match (r) {
-            case r'\t' => gen.append<String>(" ")
-            case r'\r' => gen.append<String>(" ")
-            case r'\n' => gen.append<String>(" ")
-            case _ => gen.append(r)
-        }
-    }
-    gen.toString()
-}
-
 /** 字符来源帧：原始输入流或实体展开文本。 */
 internal interface RuneFeed {
-    public func peek(offset: Int64): ?Rune
-    public func advance(): ?Rune
-    public func exhausted(): Bool
-    public func remaining(): Int64
-    public func origin(): SourcePosition
+    func peek(offset: Int64): ?Rune
+    func advance(): ?Rune
+    func exhausted(): Bool
+    func remaining(): Int64
+    func origin(): SourcePosition
 }
 
 internal class WindowFeed <: RuneFeed {

@@ -187,12 +187,17 @@ internal class ByteSniffer {
         None
     }
 
+    /** 只保留 ASCII 字节（非 ASCII 一律当分隔符）。用 `String.fromUtf8` 会因为非 UTF-8 报错。 */
     private static func asciiOf(bytes: Array<Byte>): String {
-        let out = ArrayList<Byte>()
+        let out = ArrayList<Rune>()
         for (b in bytes) {
-            out.add(b)
+            if (b < 0x80) {
+                out.add(Rune(Int64(b)))
+            } else {
+                out.add(r' ')
+            }
         }
-        String.fromUtf8(out.toArray())
+        String(out.toArray())
     }
 
     private static func isAsciiSpaceByte(b: Byte): Bool {

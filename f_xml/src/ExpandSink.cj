@@ -18,7 +18,7 @@ package fountain::f_xml
 import std.collection.ArrayList
 import std.env
 import std.fs.{Directory, File, Path, exists, removeIfExists}
-import std.io.{InputStream, SeekPosition}
+import std.io.SeekPosition
 import fountain::f_base.StringGenerator
 
 /**
@@ -213,11 +213,6 @@ internal class ExpandSink {
         this.file = Some(file)
     }
 
-    /** 溢出后切换为「整个文档都走文件」。 */
-    func markForcedSpill(): Unit {
-        this.forcedSpill = true
-    }
-
     /**
      * 读回全部内容：内存态直接给字符串；文件态按 `bufSize` 分块解码。
      *
@@ -328,11 +323,12 @@ internal class FileExpandReader <: ExpandReader {
     }
 
     public func next(): ?Rune {
-        match (this.decoder.next()) {
-            case Some(r) => Some(r)
-            case None =>
-                this.close()
-                None
+        let cp = this.decoder.next()
+        if (cp < 0) {
+            this.close()
+            None
+        } else {
+            Some(Rune(cp))
         }
     }
 

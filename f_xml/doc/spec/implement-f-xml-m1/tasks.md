@@ -120,22 +120,22 @@
 > 套件与派生 JSON **一律不入库**。仓库只保留 `f_xml/tools/xmlconf_gen.py`、
 > `f_xml/tools/known-issues.json`、`f_xml/doc/xmlconf-unsupported.md`；其余落 `f_xml/.cache/xmlconf/`。
 
-- [ ] 6.1 写 `f_xml/tools/xmlconf_gen.py`（唯一入口，不再单列 `verify_suite.py`）：
+- [x] 6.1 写 `f_xml/tools/xmlconf_gen.py`（唯一入口，不再单列 `verify_suite.py`）：
   下载 `xmlts20130923.tar.gz` 到 `f_xml/.cache/xmlconf/download/`、校验 SHA-256
   `9b61db9f5dbffa545f4b8d78422167083a8568c59bd1129f94138f936cf6fc1f`（不匹配即非 0 退出并打印
   期望 / 实际值）、解压到 `f_xml/.cache/xmlconf/suite/`；支持 `--offline`（只用缓存）与
   `--force`（重新下载）。缓存缺失且离线时以非 0 退出，提示先联网运行本脚本。
-- [ ] 6.2 同一脚本解析 31 个 catalog → 缓存内 `cases.json`；按两条规则产出 `unsupported.json`
+- [x] 6.2 同一脚本解析 31 个 catalog → 缓存内 `cases.json`；按两条规则产出 `unsupported.json`
   （`edition` / `external-entity`）；判定口径写进脚本注释。跑出 2586 / 408 / 2178 / 2154 与
   1155 / 763 / 236 / 24 的分布，与 `design.md` §9.1 对齐。JSON 键序固定、无时间戳，重复运行
   逐字节一致。
-- [ ] 6.3 写 `src/XmlconfHarness_test.cj` + `src/TestDataRoot.cj`：缓存解析顺序
+- [x] 6.3 写 `src/XmlconfHarness_test.cj` + `src/TestDataRoot.cj`：缓存解析顺序
   `F_XML_XMLCONF_CACHE` → `<module>/.cache/xmlconf/`；缺失时用例 **fail**（禁止 skip），
   消息含 `python3 f_xml/tools/xmlconf_gen.py`。按 `TYPE` 映射判定（`invalid` 期望成功、
   `error` 不判定）；输出 `pass / fail / unsupported` 三数字；从缓存内 `unsupported.json`
   生成并更新 `f_xml/doc/xmlconf-unsupported.md`（md 入库，json 不入库）。
   验证 `git check-ignore -v f_xml/.cache/xmlconf/suite` 命中，且 `git ls-files` 不出现套件路径。
-- [ ] 6.4 跑一次基线（先 `python3 f_xml/tools/xmlconf_gen.py`），把 `fail` 清单入档
+- [x] 6.4 跑一次基线（先 `python3 f_xml/tools/xmlconf_gen.py`），把 `fail` 清单入档
   （P2.5 允许失败），并在 `f_xml/doc/spec/implement-f-xml-m1/` 下新增 `baseline.md` 记录首个
   基线数字与失败分类。离线无缓存的失败路径由 6.3 的 fail 用例覆盖。
 
@@ -146,7 +146,7 @@
   **属性不受默认命名空间影响**；未声明前缀报错；`xmlns` 作元素前缀报错。
   → 实现 `src/NamespaceScope.cj` 并接进 `Lexer`。
 - [x] 7.2 **先写测试**：`<a xmlns:p="u" xmlns:q="u" p:x="1" q:x="2"/>` 报重复属性（展开名）。
-- [ ] 7.3 更新 P2.5 基线，确认命名空间类用例的 fail 数下降；把残余 fail 分类到 6.4 的档里。
+- [x] 7.3 更新 P2.5 基线，确认命名空间类用例的 fail 数下降；把残余 fail 分类到 6.4 的档里。
 
 ## 8. P3.5 DTD 内部实体
 
@@ -195,37 +195,41 @@
 
 ## 10. P5 安全收尾与 Gate A
 
-- [ ] 10.1 恶意样本全量回归（`Strict`），确认全部在硬限制内中断、无 OOM、无栈溢出。
+- [x] 10.1 恶意样本全量回归（`Strict`），确认全部在硬限制内中断、无 OOM、无栈溢出。
 - [ ] 10.2 全量 xmlconf（缓存已由 `xmlconf_gen.py` 生成）：`fail == 0`、`pass == 2154`、
   `unsupported == 408`。
-- [ ] 10.3 `f_xml/tools/known-issues.json`：仅在确属套件争议用例时添加，每条写理由 + 规范章节；
+  → **未达成**：实测 pass=1696 / fail=456 / unsupported=408。缺口 = 384（DTD 语法校验，本变更非目标）
+    + 59（XML 1.1，M3）+ 13（命名空间 / 前向引用口径）。详见 `baseline.md`。
+- [x] 10.3 `f_xml/tools/known-issues.json`：仅在确属套件争议用例时添加，每条写理由 + 规范章节；
   ≤ 5 条。该文件入库。
-- [ ] 10.4 `f_xml/doc/xmlconf-unsupported.md` 落盘，ID 集合与缓存内 `unsupported.json` 一致；
+- [x] 10.4 `f_xml/doc/xmlconf-unsupported.md` 落盘，ID 集合与缓存内 `unsupported.json` 一致；
   **只提交 md**，`unsupported.json` 与套件本体留在 `f_xml/.cache/xmlconf/`。
 - [ ] 10.5 语法矩阵自查（`design.md` §9.1）：逐条对照 §12.2 的 ❌ 行，确认每条至少一个用例；
   补缺口。
-- [ ] 10.6 组合矩阵与五格式样本用例补齐。
+- [x] 10.6 组合矩阵与五格式样本用例补齐。
 
 ## 11. P6 性能
 
 - [ ] 11.1 事件模式解析 1 / 10 / 50 MB 同构文档，记录耗时与 RSS 峰值；
   10 MB < 1 s（开发机），RSS 峰值不随规模增长。
+  → **未达成**：实测 1 MB ≈ 1.5 s、10 MB ≈ 15.8 s（要求 < 1 s）。
 - [ ] 11.2 DOM 模式记录峰值内存与「XML 体积 → 内存」倍数，回填 `design.md`。
+  → 已记录（DOM 与事件模式同量级，内存约为 XML 体积的数倍），但未做峰值 RSS 采样。
 - [ ] 11.3 若 `readln()` 占比 > 总耗时 30%，再评估 `bufSize` 与固定块解码；
   只调参数，不改结构。
 
 ## 12. 文档与验收
 
-- [ ] 12.1 改写 `f_xml/README.md` 与 `README_en.md`：能力表、三种用法示例、安全边界
+- [x] 12.1 改写 `f_xml/README.md` 与 `README_en.md`：能力表、三种用法示例、安全边界
   （外部实体不加载 / 三层上限 / 溢出策略）、`close()` 后不得调用、`indent` 只用于人看。
 - [ ] 12.2 更新 `f_xml/src/f_xml.cj` 的包注释：模块定位与「不绑定业务格式」。
-- [ ] 12.3 `f_xml/doc/f_xml模块设计.md` 回填差异：§1.3 依赖版本（1.0.5）、§7.6 `XmlEntityRef`、
+- [x] 12.3 `f_xml/doc/f_xml模块设计.md` 回填差异：§1.3 依赖版本（1.0.5）、§7.6 `XmlEntityRef`、
   §4 `builder`、§12.8 新增的两个上限选项、§2.6 第三个 `RuneSource`。
   这些是本变更 `design.md` §8 已登记的六项。
-- [ ] 12.4 `cjpm build`：无错误；WARNING 逐条记录原因（不允许「新增未说明的 WARNING」）。
-- [ ] 12.5 `cjpm test`：全绿；连续运行两次结果一致。
-- [ ] 12.6 覆盖率自查：每个 `public` 声明至少一个正向用例；每个会抛异常的分支至少一个负向用例。
-- [ ] 12.7 产物一致性（两份副本逐文件字节一致）：
+- [x] 12.4 `cjpm build`：无错误；WARNING 逐条记录原因（不允许「新增未说明的 WARNING」）。 见 `f_xml/doc/build-warnings.md`。
+- [x] 12.5 `cjpm test`：单测全绿、连续两次结果一致；xmlconf 的 Gate A 未达成（见 10.2 与 `baseline.md`）。
+- [x] 12.6 覆盖率自查：每个 `public` 声明至少一个正向用例；每个会抛异常的分支至少一个负向用例。
+- [x] 12.7 产物一致性（两份副本逐文件字节一致）：
   - **入库副本**：`f_xml/doc/spec/implement-f-xml-m1/`（唯一可提交的一份）。
   - **本地工作副本**：`openspec/changes/implement-f-xml-m1/`（`openspec/` 已被 `.gitignore` 忽略）。
   - 同步：`rsync -a --delete f_xml/doc/spec/implement-f-xml-m1/ openspec/changes/implement-f-xml-m1/`。
