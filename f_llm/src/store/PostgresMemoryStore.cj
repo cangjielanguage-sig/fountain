@@ -72,9 +72,13 @@ public class PostgresMemoryStore <: MemoryStore {
 
         let scored = ArrayList<MemoryHit>()
         for(id in ids){
+            let record = records.get(id).getOrThrow()
+            // 隔离是硬约束：即便仓库多返回了行，也不能越过用户 / 命名空间 / kind 过滤
+            if(!permitted(record, query)){
+                continue
+            }
             let denseScore = denseScores.get(id) ?? 0.0f64
             let sparseScore = sparseScores.get(id) ?? 0.0f64
-            let record = records.get(id).getOrThrow()
             let fused = 0.7f64 * denseScore + 0.3f64 * sparseScore
             scored.add(MemoryHit(record, fused * MemoryKinds.weightOf(record.kind), degraded: degraded))
         }
@@ -127,6 +131,28 @@ public class PostgresMemoryStore <: MemoryStore {
             picked++
         }
         results
+    }
+
+    private static func permitted(record: MemoryRecord, query: MemoryQuery): Bool {
+        if(record.userId != query.userId){
+            return false
+        }
+        if(query.namespaces.size > 0 && !containsName(query.namespaces, record.namespace)){
+            return false
+        }
+        if(query.kinds.size > 0 && !containsName(query.kinds, record.kind)){
+            return false
+        }
+        true
+    }
+
+    private static func containsName(values: Array<String>, target: String): Bool {
+        for(value in values){
+            if(value == target){
+                return true
+            }
+        }
+        false
     }
 
     /** colbert max-sim：每个 query token 取与文档 token 的最大点积，再对 query 取平均 */

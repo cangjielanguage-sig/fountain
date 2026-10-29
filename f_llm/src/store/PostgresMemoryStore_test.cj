@@ -214,6 +214,29 @@ public class PostgresMemoryStoreTest {
     }
 
     @TestCase
+    func testSearchFiltersOtherUsers(): Unit {
+        let repo = FakeMemoryRepository()
+        // 仓库越权返回了别人的记忆，store 必须再挡一次
+        repo.hits.add(MemoryHit(memoryRecordIn(1, 2, 'global', 'note'), 0.9f64))
+        let store = PostgresMemoryStore(repo, FakeEmbedder())
+
+        let results = store.search(MemoryQuery(1, ['global'], [], 'q', topK: 5))
+        @Expect(results.size, 0)
+    }
+
+    @TestCase
+    func testSearchFiltersNamespaces(): Unit {
+        let repo = FakeMemoryRepository()
+        repo.hits.add(MemoryHit(memoryRecordIn(1, 1, 'global', 'note'), 0.9f64))
+        repo.hits.add(MemoryHit(memoryRecordIn(2, 1, 'ws-1', 'note'), 0.8f64))
+        repo.hits.add(MemoryHit(memoryRecordIn(3, 1, 'ws-2', 'note'), 0.7f64))
+        let store = PostgresMemoryStore(repo, FakeEmbedder())
+
+        let results = store.search(MemoryQuery(1, ['global', 'ws-1'], [], 'q', topK: 5))
+        @Expect(results.size, 2)
+    }
+
+    @TestCase
     func testEmbeddingFailureRejectsWrite(): Unit {
         let embedder = FakeEmbedder()
         embedder.fail = true
@@ -234,4 +257,7 @@ public class PostgresMemoryStoreTest {
 
 func memoryRecord(id: Int64, kind: String): MemoryRecord {
     MemoryRecord(id, 1, 'global', 't${id}', 'c${id}', kind, DateTime.now())
+}
+func memoryRecordIn(id: Int64, userId: Int64, namespace: String, kind: String): MemoryRecord {
+    MemoryRecord(id, userId, namespace, 't${id}', 'c${id}', kind, DateTime.now())
 }
