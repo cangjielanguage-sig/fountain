@@ -121,13 +121,13 @@ class FakeMemoryRepository <: MemoryRepository {
 }
 
 @Test
-public class PostgresMemoryStoreTest {
+public class SqlMemoryStoreTest {
 
     @TestCase
     func testAddEmbedsTitleAndContent(): Unit {
         let embedder = FakeEmbedder()
         let repo = FakeMemoryRepository()
-        let store = PostgresMemoryStore(repo, embedder)
+        let store = SqlMemoryStore(repo, embedder)
 
         let record = store.add(MemoryWrite(1, 'global', '标题', '正文', 'note'))
         @Expect(record.title, '标题')
@@ -141,7 +141,7 @@ public class PostgresMemoryStoreTest {
     func testSameTitleOverwrites(): Unit {
         let embedder = FakeEmbedder()
         let repo = FakeMemoryRepository()
-        let store = PostgresMemoryStore(repo, embedder)
+        let store = SqlMemoryStore(repo, embedder)
 
         let first = store.add(MemoryWrite(1, 'global', '标题', '正文一', 'note'))
         let second = store.add(MemoryWrite(1, 'global', '标题', '正文二', 'note'))
@@ -153,7 +153,7 @@ public class PostgresMemoryStoreTest {
     func testAddWritesSparseTokens(): Unit {
         let embedder = FakeEmbedder()
         let repo = FakeMemoryRepository()
-        let store = PostgresMemoryStore(repo, embedder)
+        let store = SqlMemoryStore(repo, embedder)
         store.add(MemoryWrite(1, 'global', 'ab', 'cd', 'note'))
         @Expect(repo.sparseWrites, 1)
         // 'ab' 与 'cd' 各一个 token
@@ -165,7 +165,7 @@ public class PostgresMemoryStoreTest {
         let repo = FakeMemoryRepository()
         repo.hits.add(MemoryHit(memoryRecord(1, 'session'), 0.5f64))
         repo.hits.add(MemoryHit(memoryRecord(2, 'fact'), 0.5f64))
-        let store = PostgresMemoryStore(repo, FakeEmbedder())
+        let store = SqlMemoryStore(repo, FakeEmbedder())
 
         let results = store.search(MemoryQuery(1, ['global'], [], 'q', topK: 5))
         @Expect(results.size, 2)
@@ -179,7 +179,7 @@ public class PostgresMemoryStoreTest {
     @TestCase
     func testSearchOverFetchesBeforeTruncation(): Unit {
         let repo = FakeMemoryRepository()
-        let store = PostgresMemoryStore(repo, FakeEmbedder())
+        let store = SqlMemoryStore(repo, FakeEmbedder())
         store.search(MemoryQuery(1, ['global'], [], 'q', topK: 2))
         // 先取 2 倍候选，再乘权重截断
         @Expect(repo.lastLimit, 4)
@@ -191,7 +191,7 @@ public class PostgresMemoryStoreTest {
         repo.hits.add(MemoryHit(memoryRecord(1, 'note'), 0.5f64))
         repo.hits.add(MemoryHit(memoryRecord(2, 'note'), 0.4f64))
         repo.hits.add(MemoryHit(memoryRecord(3, 'note'), 0.3f64))
-        let store = PostgresMemoryStore(repo, FakeEmbedder())
+        let store = SqlMemoryStore(repo, FakeEmbedder())
         let results = store.search(MemoryQuery(1, ['global'], [], 'q', topK: 2))
         @Expect(results.size, 2)
     }
@@ -203,7 +203,7 @@ public class PostgresMemoryStoreTest {
         repo.hits.add(MemoryHit(memoryRecord(2, 'note'), 0.1f64))
         repo.sparseHits.add(MemoryHit(memoryRecord(1, 'note'), 0.6f64))
         repo.sparseHits.add(MemoryHit(memoryRecord(3, 'note'), 1.0f64))
-        let store = PostgresMemoryStore(repo, FakeEmbedder())
+        let store = SqlMemoryStore(repo, FakeEmbedder())
 
         let results = store.search(MemoryQuery(1, ['global'], [], 'q', topK: 5))
         // dense 归一化后 A=1/B=0；sparse A=0/C=1 → A=0.7, C=0.3, B=0
@@ -216,7 +216,7 @@ public class PostgresMemoryStoreTest {
     func testEmptySparseMarksDegraded(): Unit {
         let repo = FakeMemoryRepository()
         repo.hits.add(MemoryHit(memoryRecord(1, 'note'), 0.9f64))
-        let store = PostgresMemoryStore(repo, FakeEmbedder())
+        let store = SqlMemoryStore(repo, FakeEmbedder())
 
         let results = store.search(MemoryQuery(1, ['global'], [], 'q', topK: 5))
         @Expect(results.size, 1)
@@ -228,7 +228,7 @@ public class PostgresMemoryStoreTest {
         let repo = FakeMemoryRepository()
         repo.hits.add(MemoryHit(memoryRecord(1, 'note'), 0.9f64))
         repo.sparseHits.add(MemoryHit(memoryRecord(1, 'note'), 0.6f64))
-        let store = PostgresMemoryStore(repo, FakeEmbedder())
+        let store = SqlMemoryStore(repo, FakeEmbedder())
 
         let results = store.search(MemoryQuery(1, ['global'], [], 'q', topK: 5))
         @Expect(results.size, 1)
@@ -242,7 +242,7 @@ public class PostgresMemoryStoreTest {
         // A 的 colbert 相似度低，B 高：重排后 B 在前
         repo.setColbert(1, ColbertVectors([[0.1f64]], [[0.1f64]]))
         repo.setColbert(2, ColbertVectors([[0.9f64]], [[0.9f64]]))
-        let store = PostgresMemoryStore(repo, FakeEmbedder())
+        let store = SqlMemoryStore(repo, FakeEmbedder())
 
         let results = store.search(MemoryQuery(1, ['global'], [], 'q', topK: 5, rerank: true))
         @Expect(results.size, 2)
@@ -256,7 +256,7 @@ public class PostgresMemoryStoreTest {
     func testRerankFalseSkipsColbert(): Unit {
         let repo = FakeMemoryRepository()
         repo.hits.add(MemoryHit(memoryRecord(1, 'note'), 0.9f64))
-        let store = PostgresMemoryStore(repo, FakeEmbedder())
+        let store = SqlMemoryStore(repo, FakeEmbedder())
         store.search(MemoryQuery(1, ['global'], [], 'q', topK: 5))
         @Expect(repo.colbertCalls, 0)
     }
@@ -266,7 +266,7 @@ public class PostgresMemoryStoreTest {
         let repo = FakeMemoryRepository()
         // 仓库越权返回了别人的记忆，store 必须再挡一次
         repo.hits.add(MemoryHit(memoryRecordIn(1, 2, 'global', 'note'), 0.9f64))
-        let store = PostgresMemoryStore(repo, FakeEmbedder())
+        let store = SqlMemoryStore(repo, FakeEmbedder())
 
         let results = store.search(MemoryQuery(1, ['global'], [], 'q', topK: 5))
         @Expect(results.size, 0)
@@ -278,7 +278,7 @@ public class PostgresMemoryStoreTest {
         repo.hits.add(MemoryHit(memoryRecordIn(1, 1, 'global', 'note'), 0.9f64))
         repo.hits.add(MemoryHit(memoryRecordIn(2, 1, 'ws-1', 'note'), 0.8f64))
         repo.hits.add(MemoryHit(memoryRecordIn(3, 1, 'ws-2', 'note'), 0.7f64))
-        let store = PostgresMemoryStore(repo, FakeEmbedder())
+        let store = SqlMemoryStore(repo, FakeEmbedder())
 
         let results = store.search(MemoryQuery(1, ['global', 'ws-1'], [], 'q', topK: 5))
         @Expect(results.size, 2)
@@ -295,7 +295,7 @@ public class PostgresMemoryStoreTest {
         let embedder = FakeEmbedder()
         embedder.fail = true
         let repo = FakeMemoryRepository()
-        let store = PostgresMemoryStore(repo, embedder)
+        let store = SqlMemoryStore(repo, embedder)
 
         var message = ''
         try{

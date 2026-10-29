@@ -103,7 +103,7 @@ public class PostgresMemoryRepositoryTest {
     func testAddGetListRemove(): Unit {
         match(repository()){
             case Some(repo) =>
-                let store = PostgresMemoryStore(repo, Fixed1024Embedder())
+                let store = SqlMemoryStore(repo, Fixed1024Embedder())
                 let record = store.add(MemoryWrite(9001, 'ws-9', '标题', '正文', 'note'))
                 @Expect(store.get(9001, record.id).isSome(), true)
                 @Expect(store.list(9001, 'ws-9', 0, 10).size >= 1, true)
@@ -242,7 +242,7 @@ public class PostgresMemoryRepositoryTest {
     func testColbertRoundTrip(): Unit {
         match(repository()){
             case Some(repo) =>
-                let store = PostgresMemoryStore(repo, Fixed1024Embedder())
+                let store = SqlMemoryStore(repo, Fixed1024Embedder())
                 let record = store.add(MemoryWrite(9003, 'ws-9', 'colbert', '二进制', 'note'))
                 let vectors = repo.colbert(record.id)
                 @Expect(vectors.isSome(), true)
@@ -255,7 +255,7 @@ public class PostgresMemoryRepositoryTest {
     func testDenseSearchReturnsAddedRecord(): Unit {
         match(repository()){
             case Some(repo) =>
-                let store = PostgresMemoryStore(repo, Fixed1024Embedder())
+                let store = SqlMemoryStore(repo, Fixed1024Embedder())
                 let record = store.add(MemoryWrite(9002, 'ws-9', '仓颉记忆', '仓颉正文', 'note'))
                 let hits = store.search(MemoryQuery(9002, ['ws-9'], [], '仓颉', topK: 5))
                 @Expect(hits.size >= 1, true)

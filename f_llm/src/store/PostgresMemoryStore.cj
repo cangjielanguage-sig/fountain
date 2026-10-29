@@ -23,7 +23,7 @@ import std.time.DateTime
  *
  * 2.3 的 Red 阶段：`add` 未实现；其余方法在 2.4/2.5 补。
  */
-public class PostgresMemoryStore <: MemoryStore {
+public class SqlMemoryStore <: MemoryStore {
     private let repo: MemoryRepository
     private let embedder: Embedder
 
