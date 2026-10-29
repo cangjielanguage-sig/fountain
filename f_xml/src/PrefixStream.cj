@@ -17,6 +17,35 @@ package fountain::f_xml
 
 import std.io.InputStream
 
+/** 已经解码好的文本（`parse(text)` 入口）当作字节流用。 */
+internal class TextInputStream <: InputStream {
+    private let data: Array<Byte>
+    private var pos: Int64 = 0
+
+    init(text: String) {
+        this.data = text.toArray()
+    }
+
+    init(data: Array<Byte>) {
+        this.data = data
+    }
+
+    public func read(buffer: Array<Byte>): Int64 {
+        if (this.pos >= this.data.size) {
+            return 0
+        }
+        var n = this.data.size - this.pos
+        if (n > buffer.size) {
+            n = buffer.size
+        }
+        for (i in 0..n) {
+            buffer[i] = this.data[this.pos + i]
+        }
+        this.pos += n
+        n
+    }
+}
+
 /**
  * 前缀回放流：先把 `prefix` 原样吐出，再接上 `rest`。
  *

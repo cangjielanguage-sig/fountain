@@ -230,15 +230,95 @@ internal func repeatText(text: String, times: Int64): String {
     String(out.toArray())
 }
 
-internal func runesOf(text: String): Array<Rune> {
-    let out = ArrayList<Rune>()
-    for (r in text.runes()) {
-        out.add(r)
-    }
-    out.toArray()
-}
-
 internal func gbkBytes(text: String): Array<Byte> {
     Charsets.GBK.newEncoder().encode(text)
 }
 
+
+internal func parseText(text: String, options!: XmlParserOptions = XmlParserOptions()): XmlDocument {
+    XmlParser.parse(text, options: options)
+}
+
+/** 用一个 Text 输入构造词法器（跳过字节嗅探）。 */
+internal func makeLexer(text: String): Lexer {
+    Lexer(LineWindow(Utf8RuneSource(TextInputStream(text))))
+}
+
+/** 把令牌渲染成便于断言的文本。 */
+internal func tokenText(token: Token): String {
+    match (token) {
+        case Token.TStartTag(name, attrs, selfClosing) =>
+            "START ${nameText(name)} attrs=${attrs.size} self=${selfClosing}"
+        case Token.TEndTag(name) => "END ${nameText(name)}"
+        case Token.TText(text) => "TEXT ${text}"
+        case Token.TEntityRef(name, _, _) => "REF ${name}"
+        case Token.TCData(text) => "CDATA ${text}"
+        case Token.TComment(text) => "COMMENT ${text}"
+        case Token.TPi(target, data) => "PI ${target}|${data}"
+        case Token.TDecl(version, encoding, standalone) =>
+            "DECL ${version} ${encoding ?? "-"} ${standalone ?? false}"
+        case Token.TDoctype(name, publicId, systemId, subset) =>
+            "DOCTYPE ${name} ${publicId ?? "-"} ${systemId ?? "-"} ${subset.isSome()}"
+        case Token.TEof => "EOF"
+    }
+}
+
+internal func nameText(name: RawName): String {
+    match (name.prefix) {
+        case Some(p) => "${p}:${name.local}"
+        case None => name.local
+    }
+}
+
+/** 在指定状态下把输入切完。 */
+internal func lexAll(text: String, state!: ParserState = ParserState.Content): Array<String> {
+    let lexer = makeLexer(text)
+    let out = ArrayList<String>()
+    var done = false
+    while (!done) {
+        let token = lexer.nextToken(state)
+        out.add(tokenText(token))
+        if (match (token) {
+            case Token.TEof => true
+            case _ => false
+        }) {
+            done = true
+        }
+    }
+    out.toArray()
+}
+
+/** 把事件渲染成日志行。 */
+internal func parseEventLog(text: String, options!: XmlParserOptions = XmlParserOptions()): Array<String> {
+    let parser = XmlPullParser(text: text, options: options)
+    let out = ArrayList<String>()
+    var done = false
+    while (!done) {
+        match (parser.nextEvent()) {
+            case Some(event) =>
+                out.add(event.toString())
+            case None => done = true
+        }
+    }
+    out.toArray()
+}
+
+internal func logEquals(actual: Array<String>, expected: Array<String>): Bool {
+    if (actual.size != expected.size) {
+        return false
+    }
+    for (i in 0..actual.size) {
+        if (actual[i] != expected[i]) {
+            return false
+        }
+    }
+    true
+}
+
+internal func joinLog(lines: Array<String>): String {
+    var out = ""
+    for (line in lines) {
+        out += line + "\n"
+    }
+    out
+}

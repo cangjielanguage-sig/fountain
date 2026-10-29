@@ -62,58 +62,58 @@
 
 ## 2. P0 词法
 
-- [ ] 2.1 **先写测试** `src/Lexer_test.cj`（最小集）：`<a/>`、`<a></a>`、`<a b="1"/>`、
+- [x] 2.1 **先写测试** `src/Lexer_test.cj`（最小集）：`<a/>`、`<a></a>`、`<a b="1"/>`、
   `<a b='1'/>`、`<a />`、文本、`&lt;` 系列、`&#65;`、`&#x41;`、`<![CDATA[]]>`、`<!-- -->`、
   `<?pi d?>`。→ 实现 `src/Lexer.cj` 的切分（先不做状态机）。
-- [ ] 2.2 **先写测试**：非法字符引用（`&#0;`、`&#xD800;`、`&#x110000;`、`&nbsp;`、裸 `&`、
+- [x] 2.2 **先写测试**：非法字符引用（`&#0;`、`&#xD800;`、`&#x110000;`、`&nbsp;`、裸 `&`、
   `&foo` 无分号）全部报错；`&#x1F600;` 产出一个码点。
-- [ ] 2.3 **先写测试**：CDATA 的 `]]` 不结束、只有 `]]>` 结束；空 CDATA；相邻 CDATA 各一次；
+- [x] 2.3 **先写测试**：CDATA 的 `]]` 不结束、只有 `]]>` 结束；空 CDATA；相邻 CDATA 各一次；
   CDATA 与文本混排顺序不乱。
-- [ ] 2.4 **先写测试**：注释含 `--`、注释以 `-` 结尾、PI target 为 `xml`/`XML` 均报错；
+- [x] 2.4 **先写测试**：注释含 `--`、注释以 `-` 结尾、PI target 为 `xml`/`XML` 均报错；
   PI data 含 `?` 不提前结束。
 
 ## 3. P1 状态机与校验
 
-- [ ] 3.1 **先写测试** `src/ParserState_test.cj`：PROLOG/CONTENT/EPILOG 的允许集；
+- [x] 3.1 **先写测试** `src/ParserState_test.cj`：PROLOG/CONTENT/EPILOG 的允许集；
   多根元素、无根元素、纯空白文档、只有注释的文档报错；前导 / 尾部注释与 PI 合法。
-- [ ] 3.2 **先写测试**：结束标签与栈顶不匹配；提前 EOF；`<a b="1"c="2"/>` 缺空白；
+- [x] 3.2 **先写测试**：结束标签与栈顶不匹配；提前 EOF；`<a b="1"c="2"/>` 缺空白；
   属性值裸 `<`；引号不配对；重复属性（**字面名**与**展开名**各一条）。
   → 名称栈按展开名比较。
-- [ ] 3.3 **先写测试**：`maxElementDepth`（4096 默认）与 `maxAttributeValueLength`（1 MiB）
+- [x] 3.3 **先写测试**：`maxElementDepth`（4096 默认）与 `maxAttributeValueLength`（1 MiB）
   的超限与边界；1 万层嵌套不栈溢出。
-- [ ] 3.4 **先写测试**：`version="1.1"` 抛错且消息含 `1.1`；`version="2.0"` 报错；
+- [x] 3.4 **先写测试**：`version="1.1"` 抛错且消息含 `1.1`；`version="2.0"` 报错；
   `version="1.0"` 与省略合法。
 
 ## 4. P1.5 事件与 DOM
 
-- [ ] 4.1 **先写测试** `src/XmlEvent_test.cj`：`XmlEvent.toString()` 的稳定文本格式
+- [x] 4.1 **先写测试** `src/XmlEvent_test.cj`：`XmlEvent.toString()` 的稳定文本格式
   （含 `TEXT "..." <字符数>`）；`XmlAction` 的 `==` 与 `toString`；`XmlEventHandler`
   默认实现可被「只覆盖一个方法」的实现类继承。
   → `XmlAction` / `InvalidByteMode` / `InvalidCharMode` / `CdataMode` / `EntityOverflowPolicy` /
   `EntityLimitKind` 声明 `Equatable` 的**同时显式实现 `operator func ==`**（仓颉 enum 不自动派生）；
   测试覆盖每个取值的自反、互不相等、以及新增分支时 `match` 的穷尽性。
-- [ ] 4.2 **先写测试** `src/DomBuilder_test.cj`：相邻 `Text` 合并为一个节点；
+- [x] 4.2 **先写测试** `src/DomBuilder_test.cj`：相邻 `Text` 合并为一个节点；
   `Text` + `CData` 不合并；`trimWhitespaceOnly`；`xml:space="preserve"` / `"default"`；
   深度超限报错。→ 实现 `src/DomBuilder.cj`。
-- [ ] 4.3 **先写测试** `src/XmlElement_test.cj` / `src/QName_test.cj`：`attr`/`child`/
+- [x] 4.3 **先写测试** `src/XmlElement_test.cj` / `src/QName_test.cj`：`attr`/`child`/
   `childrenOf` 按 local name 命中（`<x:item>` 与 `<item>` 都命中）；`attr(ns, local)`；
   `setAttr` 覆盖；`text()` 跳过注释与 PI；`QName.toString()`。
-- [ ] 4.4 **先写测试** `src/XmlPullParser_test.cj`：事件顺序（前导 / 尾部注释、声明最多一次）；
+- [x] 4.4 **先写测试** `src/XmlPullParser_test.cj`：事件顺序（前导 / 尾部注释、声明最多一次）；
   自闭合产 Start + End；`Stop` 后不再读流；`SkipSubtree` 后 `EndElement` 仍到。
   → 实现 `src/XmlPullParser.cj`。
-- [ ] 4.5 **先写测试** `src/XmlParser_test.cj`：`parse(input/bytes/text/path)` 四种重载；
+- [x] 4.5 **先写测试** `src/XmlParser_test.cj`：`parse(input/bytes/text/path)` 四种重载；
   单回调重载不产 DOM；多回调与单回调路径等价。→ 实现 `src/XmlParser.cj`。
-- [ ] 4.6 **先写测试** `src/SkipScanner_test.cj`：按深度配对（同名嵌套）；`<!-- a > b -->`；
+- [x] 4.6 **先写测试** `src/SkipScanner_test.cj`：按深度配对（同名嵌套）；`<!-- a > b -->`；
   属性值里的 `>`；CDATA 里的 `>`；自闭合时 `skipElement()` 为空操作；非法位置调用报错。
   → 实现 `src/SkipScanner.cj`。
 
 ## 5. P2 推拉一致性
 
-- [ ] 5.1 **先写测试** `src/PushPullParity_test.cj`：同一批输入（自闭合、CDATA、注释、PI、
+- [x] 5.1 **先写测试** `src/PushPullParity_test.cj`：同一批输入（自闭合、CDATA、注释、PI、
   命名空间、实体、跨行属性）分别走 `nextEvent()` 与 `parse(input, handler)`，
   两份事件日志文本**逐行相同**。
-- [ ] 5.2 单回调路径并入同一份日志对比（三份日志两两相等）。
-- [ ] 5.3 覆盖 `Stop` / `SkipSubtree` 在两条路径上的等价性（`break` vs `Stop`）。
+- [x] 5.2 单回调路径并入同一份日志对比（三份日志两两相等）。
+- [x] 5.3 覆盖 `Stop` / `SkipSubtree` 在两条路径上的等价性（`break` vs `Stop`）。
 
 ## 6. P2.5 xmlconf harness
 
