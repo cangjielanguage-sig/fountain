@@ -87,6 +87,25 @@ public class FStoreMetaStoreTest {
     }
 
     @TestCase
+    func testSkillVersionAndList(): Unit {
+        let meta = FStoreMetaStore('/tmp/fllm-skill-${DateTime.now().toUnixTimeStamp().toSeconds()}')
+        meta.skills.upsert(Skill(1, 'summarize', '步骤', 'tool:webSearch'))
+        @Expect(meta.skills.get(1).getOrThrow().version, 1)
+        @Expect(meta.skills.get(1).getOrThrow().title, 'summarize')
+        @Expect(meta.skills.list().size, 1)
+    }
+
+    @TestCase
+    func testPromptLatestAndMissing(): Unit {
+        let meta = FStoreMetaStore('/tmp/fllm-prompt-${DateTime.now().toUnixTimeStamp().toSeconds()}')
+        meta.prompts.put(PromptEntry('memory.extract', 1, 'v1'))
+        meta.prompts.put(PromptEntry('memory.extract', 2, 'v2'))
+        @Expect(meta.prompts.latest('memory.extract').getOrThrow().content, 'v2')
+        @Expect(meta.prompts.get('memory.extract', 1).getOrThrow().content, 'v1')
+        @Expect(meta.prompts.get('not-exist', 1).isNone(), true)
+    }
+
+    @TestCase
     func testRepairRebuildsMissingIndex(): Unit {
         let path = '/tmp/fllm-conf-repair-${DateTime.now().toUnixTimeStamp().toSeconds()}'
         // 同一个 Store 实例内模拟半写：写主体 → 删掉索引 → repair 补回

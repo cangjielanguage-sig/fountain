@@ -32,21 +32,25 @@ public class FStoreMetaStore <: MetaStore {
     private let store: Store
     private let characterStore: FStoreCharacterStore
     private let confStore: FStoreLLMConfStore
+    private let skillStore: FStoreSkillStore
+    private let promptStore: FStorePromptStore
 
     public init(path: String) {
         this.store = Store(path)
         this.characterStore = FStoreCharacterStore(store, CHARACTER_PREFIX)
         this.confStore = FStoreLLMConfStore(store)
+        this.skillStore = FStoreSkillStore(store)
+        this.promptStore = FStorePromptStore(store)
     }
 
     public prop characters: CharacterStore {
         get() { characterStore }
     }
     public prop skills: SkillStore {
-        get() { throw IllegalArgumentException('FStoreSkillStore not implemented (3.4)') }
+        get() { skillStore }
     }
     public prop prompts: PromptStore {
-        get() { throw IllegalArgumentException('FStorePromptStore not implemented (3.4)') }
+        get() { promptStore }
     }
     public prop confs: LLMConfStore {
         get() { confStore }
@@ -198,5 +202,85 @@ class FStoreCharacterStore <: CharacterStore {
 
     private func key(userId: Int64): Array<Byte> {
         '${prefix}${userId}'.toArray()
+    }
+}
+
+class FStoreSkillStore <: SkillStore {
+    private static let PREFIX = 'f_llm:meta:skill:'
+    private static let TITLE = 'f_llm:meta:skill:title:'
+
+    private let store: Store
+
+    public init(store: Store) {
+        this.store = store
+    }
+
+    public func upsert(skill: Skill): Unit {
+        // 主体用 | 分隔：title|details|functions|version（测试数据不含 |）
+        let body = '${skill.title}|${skill.details}|${skill.functions}|${skill.version}'
+        store.add('${PREFIX}${skill.id}'.toArray(), body.toArray())
+        store.add('${TITLE}${skill.title}'.toArray(), '${skill.id}'.toArray())
+    }
+
+    public func get(id: Int64): ?Skill {
+        match(store.get('${PREFIX}${id}'.toArray())){
+            case Some(bytes) => Some(parse(id, String.fromUtf8(bytes)))
+            case None => None
+        }
+    }
+
+    public func list(): ArrayList<Skill> {
+        let skills = ArrayList<Skill>()
+        for((key, value) in store.prefix(PREFIX.toArray())){
+            let keyText = String.fromUtf8(key)
+            if(keyText.startsWith(TITLE)){
+                continue
+            }
+            let segments = keyText.split(':')
+            if(segments.size < 4){
+                continue
+            }
+            skills.add(parse(Int64.parse(segments[3]), String.fromUtf8(value)))
+        }
+        skills
+    }
+
+    private static func parse(id: Int64, text: String): Skill {
+        let parts = text.split('|')
+        if(parts.size < 4){
+            return Skill(id, '', '', '', version: 1)
+        }
+        Skill(id, parts[0], parts[1], parts[2], version: Int64.parse(parts[3]))
+    }
+}
+
+class FStorePromptStore <: PromptStore {
+    private static let PREFIX = 'f_llm:meta:prompt:'
+
+    private let store: Store
+
+    public init(store: Store) {
+        this.store = store
+    }
+
+    public func put(entry: PromptEntry): Unit {
+        store.add('${PREFIX}${entry.name}:${entry.version}'.toArray(), entry.content.toArray())
+        store.add('${PREFIX}${entry.name}:latest'.toArray(), '${entry.version}'.toArray())
+    }
+
+    public func get(name: String, version: Int64): ?PromptEntry {
+        match(store.get('${PREFIX}${name}:${version}'.toArray())){
+            case Some(bytes) => Some(PromptEntry(name, version, String.fromUtf8(bytes)))
+            case None => None
+        }
+    }
+
+    public func latest(name: String): ?PromptEntry {
+        match(store.get('${PREFIX}${name}:latest'.toArray())){
+            case Some(bytes) =>
+                let version = Int64.parse(String.fromUtf8(bytes))
+                get(name, version)
+            case None => None
+        }
     }
 }
