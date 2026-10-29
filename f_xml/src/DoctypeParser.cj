@@ -29,15 +29,19 @@ internal class DoctypeParser {
     private let text: Array<Rune>
     private var pos: Int64 = 0
     private let table: EntityTable
+    private let maxDepth: Int64
+    private let depth: Int64
 
-    private init(text: Array<Rune>, table: EntityTable) {
+    private init(text: Array<Rune>, table: EntityTable, maxDepth!: Int64 = 16, depth!: Int64 = 0) {
         this.text = text
         this.table = table
+        this.maxDepth = maxDepth
+        this.depth = depth
     }
 
     static func parse(subset: String, limits: EntityLimits): EntityTable {
         let table = EntityTable(limits.maxDeclarations)
-        let parser = DoctypeParser(runesOf(subset), table)
+        let parser = DoctypeParser(runesOf(subset), table, maxDepth: limits.maxDepth)
         parser.parseStatements()
         table
     }
@@ -228,11 +232,24 @@ internal class DoctypeParser {
     }
 
     private func expandParameterEntity(name: String): Unit {
+        if (this.depth + 1 > this.maxDepth) {
+            throw XmlException(
+                "参数实体递归深度超过上限 ${this.maxDepth}（「%${name};」）",
+                0,
+                0,
+                kind: EntityLimitKind.Depth
+            )
+        }
         match (this.table.parameter(name)) {
             case Some(decl) =>
                 match (decl.value) {
                     case Some(value) =>
-                        let nested = DoctypeParser(runesOf(value), this.table)
+                        let nested = DoctypeParser(
+                            runesOf(value),
+                            this.table,
+                            maxDepth: this.maxDepth,
+                            depth: this.depth + 1
+                        )
                         nested.parseStatements()
                     case None => () // 外部参数实体：不加载
                 }
@@ -272,6 +289,11 @@ internal class DoctypeParser {
             throw XmlException("ENTITY 声明未闭合")
         }
         this.pos++
+        if (!parameter) {
+            if (let Some(v) <- value) {
+                this.validateReferences(v, name)
+            }
+        }
         this.table.declare(EntityDecl(
             name,
             value: value,
@@ -279,6 +301,45 @@ internal class DoctypeParser {
             systemId: systemId,
             parameter: parameter
         ))
+    }
+
+    /** 实体值只能引用**已经声明**的实体；前向引用与自引用都报错。 */
+    private func validateReferences(value: String, owner: String): Unit {
+        let runes = runesOf(value)
+        var i: Int64 = 0
+        while (i < runes.size) {
+            if (runes[i] != r'&') {
+                i++
+                continue
+            }
+            var j = i + 1
+            if (j < runes.size && runes[j] == r'#') {
+                while (j < runes.size && runes[j] != r';') {
+                    j++
+                }
+                i = j + 1
+                continue
+            }
+            var k = j
+            while (k < runes.size && XmlChars.isNameChar(runes[k].position())) {
+                k++
+            }
+            if (k >= runes.size || runes[k] != r';') {
+                throw XmlException("实体「${owner}」的值里有非法引用")
+            }
+            let gen = StringGenerator()
+            for (x in j..k) {
+                gen.append(runes[x])
+            }
+            let ref = gen.toString()
+            match (ref) {
+                case "lt" | "gt" | "amp" | "quot" | "apos" => ()
+                case _ => if (this.table.general(ref).isNone()) {
+                    throw XmlException("实体「${owner}」引用了尚未声明的实体「&${ref};」")
+                }
+            }
+            i = k + 1
+        }
     }
 
     /** 跳过 `<!ELEMENT …>` 这类声明：理解引号与内部 `>`。 */

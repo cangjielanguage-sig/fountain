@@ -90,6 +90,7 @@ internal class Lexer {
     private let feeds = ArrayList<RuneFeed>()
     /** DOCTYPE 解析完成后由上层注入；属性值里的实体展开要用。 */
     var entityTable: ?EntityTable = None
+    var expander: ?EntityExpander = None
     /** 单个属性值（含展开）的长度上限。 */
     var maxAttributeValueLength: Int64 = 1024 * 1024
 
@@ -541,7 +542,7 @@ internal class Lexer {
                             // 字符引用 / 预定义实体：不参与空白归一。
                             case RefValue.CharText(text) => gen.append<String>(text)
                             case RefValue.EntityName(entity) =>
-                                gen.append<String>(this.expandAttributeEntity(entity, 1))
+                                gen.append<String>(this.expandAttributeValue(entity, name.local))
                         }
                     } else if (r == r'\n' || r == r'\t' || r == r'\r') {
                         gen.append<String>(" ")
@@ -797,25 +798,38 @@ internal class Lexer {
     private func readInternalSubset(start: SourcePosition): String {
         let gen = StringGenerator()
         var quoteRune: ?Rune = None
+        var conditionalDepth: Int64 = 0
         var result: ?String = None
         while (result.isNone()) {
-            if (this.startsWith("]")) {
+            if (conditionalDepth == 0 && quoteRune.isNone() && this.peek(0) == Some(r']')) {
                 this.advance()
                 result = Some(gen.toString())
-            } else {
-                match (this.advance()) {
-                    case Some(r) =>
-                        match (quoteRune) {
-                            case Some(q) => if (r == q) {
-                                quoteRune = None
-                            }
-                            case None => if (r == r'"' || r == r'\'') {
-                                quoteRune = Some(r)
-                            }
+                continue
+            }
+            if (quoteRune.isNone() && this.startsWith("<![")) {
+                this.consume("<![")
+                gen.append<String>("<![")
+                conditionalDepth++
+                continue
+            }
+            if (quoteRune.isNone() && conditionalDepth > 0 && this.startsWith("]]>")) {
+                this.consume("]]>")
+                gen.append<String>("]]>")
+                conditionalDepth--
+                continue
+            }
+            match (this.advance()) {
+                case Some(r) =>
+                    match (quoteRune) {
+                        case Some(q) => if (r == q) {
+                            quoteRune = None
                         }
-                        gen.append(r)
-                    case None => throw XmlException("DOCTYPE 内部子集未闭合", start.line, start.column)
-                }
+                        case None => if (r == r'"' || r == r'\'') {
+                            quoteRune = Some(r)
+                        }
+                    }
+                    gen.append(r)
+                case None => throw XmlException("DOCTYPE 内部子集未闭合", start.line, start.column)
             }
         }
         result.getOrThrow()
@@ -827,100 +841,16 @@ internal class Lexer {
      * 属性值必须在开始标签解析完后整体在内存（要参与命名空间解析与 `xml:space` 判定），
      * 所以单实体超限时即便 `Spill` 也抛 `AttributeValue`。
      */
-    private func expandAttributeEntity(name: String, depth: Int64): String {
-        if (depth > this.limits.maxDepth) {
-            throw this.error("实体递归深度超过上限 ${this.limits.maxDepth}（实体「&${name};」）")
-        }
-        let table = match (this.entityTable) {
-            case Some(t) => t
+    private func expandAttributeValue(name: String, attrName: String): String {
+        let expander = match (this.expander) {
+            case Some(e) => e
             case None => throw this.error("实体「&${name};」未声明")
         }
-        let decl = match (table.general(name)) {
-            case Some(d) => d
-            case None => throw this.error("实体「&${name};」未声明")
-        }
-        let value = match (decl.value) {
-            case Some(v) => v
-            case None => throw this.error("外部实体「&${name};」永不加载")
-        }
-        let runes = runesOf(value)
-        let gen = StringGenerator()
-        var i: Int64 = 0
-        while (i < runes.size) {
-            let r = runes[i]
-            if (r != r'&') {
-                match (r) {
-                    case r'\n' => gen.append<String>(" ")
-                    case r'\t' => gen.append<String>(" ")
-                    case r'\r' => gen.append<String>(" ")
-                    case _ => gen.append(r)
-                }
-                i++
-                continue
-            }
-            // 找到一个引用
-            var j = i + 1
-            if (j < runes.size && runes[j] == r'#') {
-                j++
-                var hex = false
-                if (j < runes.size && runes[j] == r'x') {
-                    hex = true
-                    j++
-                }
-                var cp: Int64 = 0
-                var digits: Int64 = 0
-                while (j < runes.size) {
-                    let d = runes[j]
-                    let ok = if (hex) { XmlChars.isHexDigit(d) } else { XmlChars.isDigit(d) }
-                    if (!ok) {
-                        break
-                    }
-                    cp = cp * (if (hex) { 16 } else { 10 }) + (if (hex) { XmlChars.hexValue(d) } else { Int64(d.position() - r'0'.position()) })
-                    if (cp > 0x10FFFF) {
-                        cp = 0x110000
-                    }
-                    digits++
-                    j++
-                }
-                if (digits > 0 && j < runes.size && runes[j] == r';' && XmlChars.isXmlChar(cp)) {
-                    gen.append(Rune(cp))
-                    i = j + 1
-                    continue
-                }
-                throw this.error("实体「&${name};」的值里有非法字符引用")
-            }
-            var k = j
-            while (k < runes.size && XmlChars.isNameChar(runes[k].position())) {
-                k++
-            }
-            if (k >= runes.size || runes[k] != r';') {
-                throw this.error("实体「&${name};」的值里有非法引用")
-            }
-            let refName = StringGenerator()
-            for (x in j..k) {
-                refName.append(runes[x])
-            }
-            let refText = refName.toString()
-            match (refText) {
-                case "lt" => gen.append<String>("<")
-                case "gt" => gen.append<String>(">")
-                case "amp" => gen.append<String>("&")
-                case "quot" => gen.append<String>("\"")
-                case "apos" => gen.append<String>("'")
-                case _ => gen.append<String>(this.expandAttributeEntity(refText, depth + 1))
-            }
-            i = k + 1
-        }
-        let expanded = gen.toString()
-        if (expanded.size > this.limits.maxExpandedPerEntity) {
-            throw XmlException(
-                "属性值里实体「&${name};」的展开超过 ${this.limits.maxExpandedPerEntity} 字节，属性值不支持溢出",
-                this.position().line,
-                this.position().column,
-                kind: EntityLimitKind.AttributeValue
-            )
-        }
-        expanded
+        let pos = this.position()
+        let sink = expander.expand(name, pos.line, pos.column, attribute: true, attrName: Some(attrName))
+        let text = sink.text()
+        sink.close()
+        text
     }
 }
 

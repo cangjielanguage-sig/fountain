@@ -44,18 +44,29 @@ internal class ParserEngine {
     private var lastStartName: ?QName = None
 
     private var entityTable = EntityTable(1024)
-    private var expandedTotal: Int64 = 0
+    private let counter = EntityCounter()
+    private var expander = EntityExpander(EntityTable(1024), EntityLimits(), EntityCounter())
+    private var standalone: ?Bool = None
+    private var hasExternalSubset = false
+    private let warningList = ArrayList<String>()
 
     init(window: LineWindow, options: XmlParserOptions) {
         this.options = options
         this.lexer = Lexer(window, limits: options.entityLimits)
         this.lexer.maxAttributeValueLength = options.maxAttributeValueLength
         this.entityTable = EntityTable(options.entityLimits.maxDeclarations)
+        this.expander = EntityExpander(this.entityTable, options.entityLimits, this.counter)
         this.lexer.entityTable = this.entityTable
+        this.lexer.expander = this.expander
     }
 
     func totalExpanded(): Int64 {
-        this.expandedTotal
+        this.counter.total
+    }
+
+    /** 解析过程中产生的告警（例如 standalone 缺省时跳过外部声明的实体）。 */
+    func warnings(): Array<String> {
+        this.warningList.toArray()
     }
 
     /** DOCTYPE 内部子集里的实体声明（按声明顺序）。 */
@@ -164,6 +175,7 @@ internal class ParserEngine {
             throw XmlException("XML 声明必须出现在文档最前面")
         }
         this.sawDeclaration = true
+        this.standalone = standalone
         this.firstThing = false
         Some(XmlEvent.XmlDeclaration(version, encoding, standalone))
     }
@@ -177,10 +189,13 @@ internal class ParserEngine {
         }
         this.sawDoctype = true
         this.firstThing = false
+        this.hasExternalSubset = publicId.isSome() || systemId.isSome()
         if (let Some(text) <- subset) {
             this.entityTable = DoctypeParser.parse(text, this.options.entityLimits)
-            this.lexer.entityTable = this.entityTable
         }
+        this.expander = EntityExpander(this.entityTable, this.options.entityLimits, this.counter)
+        this.lexer.entityTable = this.entityTable
+        this.lexer.expander = this.expander
         Some(XmlEvent.DocType(name, publicId, systemId))
     }
 
@@ -359,52 +374,21 @@ internal class ParserEngine {
         if (this.state != ParserState.Content) {
             throw XmlException("实体引用只能出现在元素内容里（&${name};）", line, column)
         }
-        let decl = match (this.entityTable.general(name)) {
-            case Some(d) => d
-            case None => throw XmlException("实体「&${name};」未声明", line, column)
+        if (this.entityTable.general(name).isNone()) {
+            // 只可能在外部子集里声明的实体：standalone="yes" 报错，否则跳过并告警。
+            if (this.hasExternalSubset) {
+                match (this.standalone) {
+                    case Some(true) =>
+                        throw XmlException("standalone=\"yes\" 但引用了只在外部子集声明的实体「&${name};」", line, column)
+                    case _ =>
+                        this.warningList.add("跳过只在外部子集声明的实体「&${name};」（第 ${line} 行第 ${column} 列）")
+                        return None
+                }
+            }
+            throw XmlException("实体「&${name};」未声明", line, column)
         }
-        let value = match (decl.value) {
-            case Some(v) => v
-            case None => throw XmlException("外部实体「&${name};」永不加载", line, column)
-        }
-        let depth = this.lexer.depth() + 1
-        if (depth > this.options.entityLimits.maxDepth) {
-            throw XmlException(
-                "实体递归深度 ${depth} 超过上限 ${this.options.entityLimits.maxDepth}（实体「&${name};」）",
-                line,
-                column,
-                kind: EntityLimitKind.Depth
-            )
-        }
-        let size = Int64(runesOf(value).size)
-        if (this.options.entityLimits.overflowPolicy == EntityOverflowPolicy.Strict &&
-            size > this.options.entityLimits.maxExpandedPerEntity) {
-            throw XmlException(
-                "实体「&${name};」的展开量超过 ${this.options.entityLimits.maxExpandedPerEntity} 字节",
-                line,
-                column,
-                kind: EntityLimitKind.PerEntity
-            )
-        }
-        this.expandedTotal += size
-        if (this.expandedTotal > this.options.entityLimits.maxExpandedHardLimit) {
-            throw XmlException(
-                "实体展开总量超过硬限制 ${this.options.entityLimits.maxExpandedHardLimit}",
-                line,
-                column,
-                kind: EntityLimitKind.HardLimit
-            )
-        }
-        if (this.options.entityLimits.overflowPolicy == EntityOverflowPolicy.Strict &&
-            this.expandedTotal > this.options.entityLimits.maxExpandedTotal) {
-            throw XmlException(
-                "实体展开总量超过 ${this.options.entityLimits.maxExpandedTotal}",
-                line,
-                column,
-                kind: EntityLimitKind.Total
-            )
-        }
-        this.lexer.pushFeed(StringFeed(value, SourcePosition(line, column)))
+        let sink = this.expander.expand(name, line, column)
+        this.lexer.pushFeed(SinkFeed(sink.openReader(this.options.bufSize), SourcePosition(line, column)))
         // 实体的替换文本可能含标记，继续按内容状态读。
         None
     }

@@ -60,6 +60,11 @@ public class XmlPullParser {
         }
     }
 
+    /** 解析过程中产生的告警。 */
+    internal func warnings(): Array<String> {
+        this.engine.warnings()
+    }
+
     internal func doctypeEntities(): Array<EntityDecl> {
         this.engine.doctypeEntities()
     }

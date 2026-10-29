@@ -141,38 +141,38 @@
 
 ## 7. P3 命名空间
 
-- [ ] 7.1 **先写测试** `src/NamespaceScope_test.cj`：默认命名空间继承；前缀声明与使用；
+- [x] 7.1 **先写测试** `src/NamespaceScope_test.cj`：默认命名空间继承；前缀声明与使用；
   `xmlns=""` 重置；嵌套重定义后恢复；多前缀同 URI；`xml` 前缀免声明；
   **属性不受默认命名空间影响**；未声明前缀报错；`xmlns` 作元素前缀报错。
   → 实现 `src/NamespaceScope.cj` 并接进 `Lexer`。
-- [ ] 7.2 **先写测试**：`<a xmlns:p="u" xmlns:q="u" p:x="1" q:x="2"/>` 报重复属性（展开名）。
+- [x] 7.2 **先写测试**：`<a xmlns:p="u" xmlns:q="u" p:x="1" q:x="2"/>` 报重复属性（展开名）。
 - [ ] 7.3 更新 P2.5 基线，确认命名空间类用例的 fail 数下降；把残余 fail 分类到 6.4 的档里。
 
 ## 8. P3.5 DTD 内部实体
 
-- [ ] 8.1 **先写测试** `src/DoctypeParser_test.cj`：`<!ENTITY>` 单双引号；`%` 参数实体；
+- [x] 8.1 **先写测试** `src/DoctypeParser_test.cj`：`<!ENTITY>` 单双引号；`%` 参数实体；
   `<!ELEMENT>` / `<!ATTLIST>` / `<!NOTATION>` 跳过（内含 `>` 与引号）；条件段
   `INCLUDE`/`IGNORE`；首个声明生效；`SYSTEM`/`PUBLIC` 声明可识别。
   → 实现 `src/DoctypeParser.cj` + `src/EntityTable.cj`。
-- [ ] 8.2 **先写测试**：实体展开位置（内容 / 属性值 / CDATA 不展开 / 注释不展开 / 实体值内递归）；
+- [x] 8.2 **先写测试**：实体展开位置（内容 / 属性值 / CDATA 不展开 / 注释不展开 / 实体值内递归）；
   前向引用报错；属性值顺序（先展开再归一，且不 trim）。
-- [ ] 8.3 **先写测试** `src/EntityLimits_test.cj`：`maxDepth` 16 通过 / 17 报错、
+- [x] 8.3 **先写测试** `src/EntityLimits_test.cj`：`maxDepth` 16 通过 / 17 报错、
   `maxDeclarations` 1025 报错、`maxExpandedHardLimit` 超限、原文不计入 `maxExpandedTotal`、
   边展开边计数（抛错时 `totalExpanded < 2 MB`）。
   → 实现 `src/EntityExpander.cj` 的计数。
-- [ ] 8.4 **先写测试** `src/ExpandSink_test.cj`：`Spill` 下 20 MB 展开成功、
+- [x] 8.4 **先写测试** `src/ExpandSink_test.cj`：`Spill` 下 20 MB 展开成功、
   `retainedBytes` 不随展开量增长、溢出文件 UTF-8 分块读回与内存路径逐字节一致、
   文件用完即删；`Strict` 下软阈值直接抛。
   → 实现 `src/ExpandSink.cj`。
-- [ ] 8.5 **先写测试** `src/SpillDir_test.cj`：四级顺序（显式 → `TMPDIR` → 系统临时 →
+- [x] 8.5 **先写测试** `src/SpillDir_test.cj`：四级顺序（显式 → `TMPDIR` → 系统临时 →
   `./.fountain_tmp`）；四级全失败报错含 `spillDir`。→ 实现 `src/SpillDir.cj`。
-- [ ] 8.6 **先写测试**：属性值实体的 `AttributeValue` 分类 + 消息含 `属性 'r'`、`64 KB`、行列号；
+- [x] 8.6 **先写测试**：属性值实体的 `AttributeValue` 分类 + 消息含 `属性 'r'`、`64 KB`、行列号；
   `Spill` 下同样抛。
-- [ ] 8.7 **先写测试** `src/XmlException_test.cj`：三个构造器；六种 `EntityLimitKind`；
+- [x] 8.7 **先写测试** `src/XmlException_test.cj`：三个构造器；六种 `EntityLimitKind`；
   非实体错误为 `None`；`Strict` 捕获 `Some(Total)` 后改 `Spill` 重试成功；`Some(Depth)` 重试仍同分类。
-- [ ] 8.8 **先写测试** `src/EntitySecurity_test.cj`（全部 `Strict`）：Billion Laughs、
+- [x] 8.8 **先写测试** `src/EntitySecurity_test.cj`（全部 `Strict`）：Billion Laughs、
   参数实体版、单实体超长、深度边界两条、XXE（不读文件）、外部子集（不发请求）。
-- [ ] 8.9 `standalone` 语义：`yes` 报错、`no`/缺省跳过并告警。
+- [x] 8.9 `standalone` 语义：`yes` 报错、`no`/缺省跳过并告警。
 - [ ] 8.10 跑全量 xmlconf，确认 228 条内部实体用例进入可跑集且有断言；更新基线。
 
 ## 9. P4 XmlWriter
