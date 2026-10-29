@@ -17,7 +17,7 @@ package fountain::f_xml
 
 import std.collection.ArrayList
 import std.env
-import std.fs.{Directory, File, OpenMode, Path, exists, removeIfExists}
+import std.fs.{Directory, File, Path, exists, removeIfExists}
 import std.io.{InputStream, SeekPosition}
 import fountain::f_base.StringGenerator
 

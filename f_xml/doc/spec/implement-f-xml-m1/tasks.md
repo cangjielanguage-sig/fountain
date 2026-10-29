@@ -177,20 +177,20 @@
 
 ## 9. P4 XmlWriter
 
-- [ ] 9.1 **先写测试** `src/Escaper_test.cj`：转义表逐格（`\r` → `&#13;`）；
+- [x] 9.1 **先写测试** `src/Escaper_test.cj`：转义表逐格（`\r` → `&#13;`）；
   非法控制字符拒绝并带元素名 / 属性名。→ 实现 `src/Escaper.cj`。
-- [ ] 9.2 **先写测试** `src/XmlWriter_test.cj`：紧凑逐字节相等；缩进只在元素间换行；
+- [x] 9.2 **先写测试** `src/XmlWriter_test.cj`：紧凑逐字节相等；缩进只在元素间换行；
   写文档（声明 / doctype / prolog / root / epilog 顺序）；写元素不带声明；
   `flush()` 冲刷底层；`close()` 冲刷并关闭。
-- [ ] 9.3 **先写测试**：`CdataMode.Auto/Always/Never`；`]]>` 拆分后往返语义不变；
+- [x] 9.3 **先写测试**：`CdataMode.Auto/Always/Never`；`]]>` 拆分后往返语义不变；
   `Always` 不影响属性值。
-- [ ] 9.4 **先写测试**：`EntityRefNode` 输出 `&name;`；`Doctype` 内部子集输出；
+- [x] 9.4 **先写测试**：`EntityRefNode` 输出 `&name;`；`Doctype` 内部子集输出；
   `strictEntities = true` 未声明即报错；`false` 只告警。
-- [ ] 9.5 **先写测试**：输出编码（UTF-8 无 BOM / UTF-16LE 带 `FF FE` / GBK 可解回）；
+- [x] 9.5 **先写测试**：输出编码（UTF-8 无 BOM / UTF-16LE 带 `FF FE` / GBK 可解回）；
   `onInvalidChar` 两模式；UTF-8 不做往返校验（计次断言）；写次数远小于 token 数（缓冲生效）。
   → 实现 `src/XmlWriter.cj` + `src/XmlWriterOptions.cj`。
-- [ ] 9.6 **先写测试**：命名空间声明最小化（不重复 / 改绑定重声明 / `xmlns=""` 重置）。
-- [ ] 9.7 **先写测试** `src/RoundTrip_test.cj`：DOM → 写 → 读 → DOM 逐节点语义相等；
+- [x] 9.6 **先写测试**：命名空间声明最小化（不重复 / 改绑定重声明 / `xmlns=""` 重置）。
+- [x] 9.7 **先写测试** `src/RoundTrip_test.cj`：DOM → 写 → 读 → DOM 逐节点语义相等；
   含 `\r` 的文本往返后仍含 `\r`。
 
 ## 10. P5 安全收尾与 Gate A
