@@ -18,6 +18,8 @@ package fountain::f_llm.store
 import std.collection.*
 import std.sync.Mutex
 
+import fountain::f_bean.*
+
 /**
  * `MemoryRepository` 适配器（0.1/0.2）：
  * 各实现包在加载时注册工厂，这里按 `llm_contentStore` 决定实例化哪个。
@@ -49,9 +51,20 @@ public class MemoryRepositories {
         }
     }
 
-    /** 按配置 `llm_contentStore` 创建；未注册时抛错并列出可选实现 */
+    /**
+     * 按配置 `llm_contentStore` 创建：由 `f_bean` 依据 `@BeanMeta[condition: ConfCond...]`
+     * 选出匹配的实现；没有匹配时回退到 fhydra（尚未实现，直接抛错说明）。
+     *
+     * 该表达式只在首次调用时求值一次，之后由 bean 容器持有单例。
+     */
     public static func create(): MemoryRepository {
-        create(StoreSettings.load().contentStore)
+        lookupOption<MemoryRepository>() ?? fallback()
+    }
+
+    private static func fallback(): MemoryRepository {
+        throw IllegalStateException(
+            'no MemoryRepository bean for llm_contentStore="${StoreSettings.load().contentStore}"; '
+            + 'fhydra 内容族尚未实现，请配置 llm_contentStore=postgres|mysql')
     }
 
     public static func create(name: String): MemoryRepository {

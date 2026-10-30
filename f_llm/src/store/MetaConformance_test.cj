@@ -201,6 +201,11 @@ public class MetaConformanceTest {
                   weight BIGINT NOT NULL DEFAULT 1
                 )
             ''').update
+            // 清掉上一轮残留，否则候选数会被历史行抬高
+            executor.setSql("DELETE FROM llm_conf WHERE llm_name = 'conf-llm'").update
+            executor.setSql("DELETE FROM llm_prompt WHERE name = 'conf.prompt'").update
+            executor.setSql('DELETE FROM skills WHERE id = 1').update
+            executor.setSql('DELETE FROM llm_character WHERE user_id = 1').update
             Some(PostgresMetaStore(executor))
         }catch(e: Exception){
             println("SKIP MetaConformanceTest(PG): ${e.message}")

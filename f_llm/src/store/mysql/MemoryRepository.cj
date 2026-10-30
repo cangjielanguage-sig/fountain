@@ -18,6 +18,8 @@ package fountain::f_llm.store.mysql
 import std.collection.*
 import std.time.DateTime
 
+import fountain::f_bean.*
+import fountain::f_bean.macros.*
 import fountain::f_orm.*
 
 import fountain::f_llm.store.*
@@ -30,6 +32,8 @@ import fountain::f_llm.dao.mysql.*
  * 唯一保留的构造参数是库名——MyVector 的 ANN 需要 `{db}.llm_memory.title_vec`；
  * 不传时从 `llm_contentStoreUrl` 解析。
  */
+@Bean
+@BeanMeta[condition: ConfCond.Value('llm_contentStore', StringCond.Exactly('mysql'))]
 public class MySqlMemoryRepository <: MemoryRepository & RootService {
     private static let DRIVER = 'mysql'
 

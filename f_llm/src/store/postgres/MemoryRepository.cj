@@ -18,6 +18,8 @@ package fountain::f_llm.store.postgres
 import std.collection.*
 import std.time.DateTime
 
+import fountain::f_bean.*
+import fountain::f_bean.macros.*
 import fountain::f_orm.*
 
 import fountain::f_llm.store.*
@@ -28,6 +30,8 @@ import fountain::f_llm.dao.postgres.*
  * PostgreSQL 记忆仓库（0.2）：SQL 全部在 `PostgresMemoryDAO`，
  * 本类只做「先主表后向量」这类编排与行映射。
  */
+@Bean
+@BeanMeta[condition: ConfCond.Value('llm_contentStore', StringCond.Exactly('postgres'))]
 public class PostgresMemoryRepository <: MemoryRepository & RootService {
     private static let DRIVER = 'postgres'
 
