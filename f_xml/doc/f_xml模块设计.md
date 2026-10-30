@@ -2365,21 +2365,28 @@ C14N 的收益很具体：`xmlconf` 里 **432 条带 `OUTPUT`** 的用例可升�
 | 16 | — | `known-issues.json` **清空为 0 条** | 原 5 条「命名空间 vs XML 1.0 多冒号名」已由 `namespace-name` 排除规则整体移出可跑集，不再占用例外额度。 |
 | 17 | §13.2 P6「10 MB < 1 s」 | 性能移出 M1 出口，只记录 1 MB ≈ 1.5 s / 10 MB ≈ 15.8 s | 瓶颈在字符层逐字符 `Option` 分配与三层缓冲，需整体重写，另开 `optimize-f-xml-char-layer`。 |
 
-### 15.1 性能现状（Gate P 已达成）
+### 15.1 性能现状（Gate T / Gate M 已达成）
 
-实测口径：合成 `InputStream`（不落地大文件）、事件模式、`bufSize = 8192`、3 次取 `min`、
-`-O2` 交付构建（`f_xml/cjpm.toml` 已加 `-O2`）。
+实测口径：合成 `InputStream`（不落地大文件）、事件模式、`bufSize = 8192`、5 次取 `min`、
+`-O2` 交付构建（`f_xml/cjpm.toml` 已加 `-O2`）、**默认运行时**（不设任何 `cj*` 环境变量）。
 
-| 场景 | 实测 | 出口要求 |
-|---|---|---|
-| 事件模式 1 MB | **80 ms**（80311 events） | 只记录 |
-| 事件模式 10 MB | **1102 ms**（764857 events） | **Gate P：< 7200 ms** ✓ |
-| 事件模式 50 MB | **5.42 s**（3726208 events） | 只记录 |
-| 峰值 RSS | `VmHWM(10 MB) = 294 956 kB`、`VmHWM(50 MB) = 294 988 kB`（差值 32 kB） | **差值 ≤ 24 MB 且 ≤ 320 MB** ✓ |
-| DOM 模式 10 MB | 与事件模式同量级（DOM 本身另占内存） | 只记录 |
+| 场景 | 改前（`complete-f-xml-m1-followups`） | 现在（`optimize-f-xml-semantic-layer`） | 出口要求 |
+|---|---|---|---|
+| 事件模式 1 MB | 80 ms（80311 events） | **58 ms** | 只记录 |
+| 事件模式 10 MB | 1102 ms（764857 events） | **497 ms**（764857 events） | **Gate T：min(5) < 1000 ms** ✓ |
+| 事件模式 50 MB | 5.42 s（3726208 events） | **2.47 s** | 只记录 |
+| 峰值 `VmHWM` | 10 MB / 50 MB 均 ≈ 295 MB | 10 MB **108 MB**、50 MB **104 MB**（进程地板 35 MB） | **Gate M：50 MB < 256 MB** ✓ |
+| DOM 模式 10 MB | 与事件模式同量级（DOM 本身另占内存） | 同量级（只记录，不做门禁） | 只记录 |
 
-10 MB 相对同轮 `-O0` 旧代码 16 346 ms 提升 **93.3%**；相对 M1 记录 9649 ms（`-O0`）快 88.6%。
-`bufSize` 实测曲线（R5）：
+同轮同机对照（**同一份零分配基准**，旧代码由 `git archive HEAD` 复制后编译）：
+10 MB `1026.4 ms → 497.0 ms`（**−51.6%**），`VmHWM(50 MB) 295 136 kB → 104 280 kB`（**−64.7%**）。
+两轮 `max/min` 分别为 1.123 / 1.093，均非负载污染轮次。
+
+分段计时（1 MB，诊断用）：字符层 `advanceFast` **11.3 ms**（90 MB/s）、词法层切完
+80 310 个令牌 **41.1 ms**（25 MB/s）、完整事件层 **62.3 ms**；语义层净成本 ≈ 21 ms，
+只剩 `XmlEvent` + `Option` 包装与必然的 `String` 载荷。
+
+`bufSize` 实测曲线（R5，改前数据；结论未变，默认值仍为 8192）：
 
 | bufSize | 1 MB min | 10 MB min |
 |---|---|---|
@@ -2390,14 +2397,32 @@ C14N 的收益很具体：`xmlconf` 里 **432 条带 `OUTPUT`** 的用例可升�
 
 16K 在本机有约 9% 的边际收益但不构成拐点（< 15% 的改默认门槛）；**默认值维持 8192**。
 
-实现路径：字符层从「逐字符解码 + 两级环形缓冲」改为「按块解码 + 单一活动缓冲」——
-`BufferedRuneSource` 按块产出码点（UTF-8 连续 ASCII 段一次搬运），`LineWindow` 成为唯一的
-活动码点块，词法器扫描循环全部改 `Int64` 码点入口并去掉每次 `startsWith` 的数组分配。
-按 `complete-f-xml-m1-followups` 实施，详见
+**字符层**（`complete-f-xml-m1-followups`）：从「逐字符解码 + 两级环形缓冲」改为「按块解码 +
+单一活动缓冲」——`BufferedRuneSource` 按块产出码点（UTF-8 连续 ASCII 段一次搬运），
+`LineWindow` 成为唯一的活动码点块，词法器扫描循环全部改 `Int64` 码点入口并去掉每次
+`startsWith` 的数组分配。详见
 [`doc/spec/complete-f-xml-m1-followups/`](spec/complete-f-xml-m1-followups/)。
 
-> 本模块交付口径为 `-O2`，RSS 绝对阈值相应校准为 320 MB。10 MB 已到 1.1 s，距原始绝对目标
-> 1 s 仅差约 10%；剩余每事件语义分配移交 `optimize-f-xml-semantic-layer`。
+**语义层**（`optimize-f-xml-semantic-layer`）：四组内部改动，公开 API **零变更**。
+
+1. **名字驻留**（`NameTable`）：扫描时增量算 FNV-1a 并把码点写进复用缓冲，命中直接复用表里
+   **已切分**的 `prefix` / `local`（零 `String`、零切片）；判定 = hash + 长度 + 逐字节比对，
+   绝不只比 hash。开放寻址、负载因子 ≤ 0.5、条目上限 65 536 硬停插（内存有界）。
+   10 MB 上 102 万次 `readName` 的驻留结果是**只有 4 个不同名字**。
+2. **扫描缓冲复用**：名字用只增不减的 `ByteScratch`（`StringGenerator.unsafeBytes()` 会拷贝，
+   逐字节比对需要零拷贝视图），文本 / 属性值 / 声明值 / CDATA / 注释 / PI 复用同一批
+   `StringGenerator`（`reset()` 实测保留容量），热路径上再无逐 token 构造。
+3. **文本与属性值批量扫描**：`LineWindow` 新增 `internal` 块视图（`runAvailable` / `cpAt` /
+   `skipRun` / `asciiRunLength`），纯 ASCII 段整段拷贝并一次性推进；停止字符、非 ASCII、
+   控制字符与块边界一律退回逐字符路径，因此 `]]>`、`&`、空白归一与报错位置逐字符不变。
+   `XmlChars` 增加 128 项 ASCII 掩码，热路径 O(1) 判定。
+4. **事件侧容器复用**：`Lexer` 复用属性列表；`ParserEngine` 复用去重集合，交付数组按属性
+   个数**一次分配**并按下标填充。`XmlEvent.StartElement` 拿到的仍是事件独占数组，
+   用例证明已交付事件在后续 `nextEvent()` 之后保持完整。
+5. **基准自身零分配**：`SyntheticXmlStream` 改为把记录逐段写进调用方 `buffer`，并用
+   golden 用例保证字节流与旧实现逐字节一致；10 MB / 50 MB 拆成两个独立进程的门禁类。
+
+详见 [`doc/spec/optimize-f-xml-semantic-layer/`](spec/optimize-f-xml-semantic-layer/)。
 
 
 ### 15.2 一致性验收

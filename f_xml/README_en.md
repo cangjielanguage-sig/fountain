@@ -96,8 +96,8 @@ XmlWriter(output, options: XmlWriterOptions(indent: Some("  "))).write(element)
 
 ## Status
 
-M1 is implemented and covered by **337** unit tests (34 of them added by
-`complete-f-xml-m1-followups`). The xmlconf 20130923 figures are: 2062 runnable
+M1 is implemented and covered by **376** unit tests (34 added by
+`complete-f-xml-m1-followups`, 39 by `optimize-f-xml-semantic-layer`). The xmlconf 20130923 figures are: 2062 runnable
 cases (`unsupported` 524 = 313 `edition` + 95 external-entity + 59 XML 1.1 + 47 external-subset +
 10 namespace-name), 2038 assertions, and the measured result is 2038 passed / 0 failed (Gate A met).
 The five exclusion rules are `edition` / external-entity / XML 1.1 / external-subset /
@@ -105,10 +105,16 @@ namespace-name; the three accompanying specification fixes (DTD declaration synt
 `standalone` and single-entity replacement-text well-formedness, and `<!ATTLIST>` attribute-type
 mapping with attribute-value normalization) are in place. `known-issues` is empty.
 
-Performance (event mode, synthetic stream, `bufSize = 8192`, `-O2`, min of 3 runs):
-**1 MB ≈ 80 ms, 10 MB ≈ 1102 ms, 50 MB ≈ 5.4 s**; the same-run `-O0` baseline was
-16.3 s for 10 MB, a **93%** improvement. Peak RSS is 288 MB (calibrated `-O2` bound
-320 MB) and does not grow with document size. Gate P is met (10 MB < 7.2 s plus the
-RSS-delta bound), the `bufSize` sweep has converged, and the default stays at 8192. The character
-layer now decodes in blocks over a single active buffer — see
-[`doc/spec/complete-f-xml-m1-followups/`](doc/spec/complete-f-xml-m1-followups/).
+Performance (event mode, synthetic stream, `bufSize = 8192`, `-O2`, min of 5 runs,
+**default runtime**): **1 MB ≈ 58 ms, 10 MB ≈ 497 ms, 50 MB ≈ 2.47 s**, with
+`VmHWM(50 MB) = 104 MB`. Same-run, same-machine comparison on one zero-allocation
+benchmark: the previous code measured **1026 ms** for 10 MB and **295 MB** `VmHWM(50 MB)`,
+so this change is **−51.6%** and **−64.7%**. Both gates are met (10 MB `min(5) < 1000 ms`,
+`VmHWM(50 MB) < 256 MB`) and **no GC environment variable is set**.
+
+The character layer now decodes in blocks over a single active buffer — see
+[`doc/spec/complete-f-xml-m1-followups/`](doc/spec/complete-f-xml-m1-followups/). The semantic
+layer (name interning, three reused buffers, batched text/attribute scanning, event-side container
+reuse) landed via
+[`doc/spec/optimize-f-xml-semantic-layer/`](doc/spec/optimize-f-xml-semantic-layer/) with zero
+public API change.

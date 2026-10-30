@@ -4,9 +4,10 @@
 > 执行顺序见 `tasks.md`。设计基线是 `complete-f-xml-m1-followups/design.md`（尤其 §3、§4.4、
 > §6、§13、D13）；本文件只写增量，不重复已有决策。
 >
-> **前置事实**：`baseline.md` §3 的同轮实测尚未采集（本轮环境无法执行命令）。本文件里所有
-> 「改前」数字都来自 `baseline.md` §2 的上一轮实测与用户本轮实测，**不代表同轮对照**；
-> Gate 判定必须等 §3 补齐。
+> **前置事实（实施后已补齐）**：`baseline.md` §3 的同轮实测已采集（旧代码 = `git archive HEAD`
+> + 同一份新基准）。实测：旧 10 MB `min = 1026.4 ms`、`VmHWM(50 MB) = 295 136 kB`；
+> 新 10 MB `min = 497.0 ms`、`VmHWM(50 MB) = 104 280 kB`。Gate T / T-对照 / M / M-对照
+> 全部达成，§8 的阶梯一级都没用。明细见 `verification.md` §2。
 
 ## 1. Gate 与不变量
 
@@ -200,9 +201,14 @@ func readName(): RawName {
 | `valueScratch` | `readAttributeValue`、`readDeclarationValue`、`readQuoted` | 各入口 |
 | `textScratch` | `nextContentToken`、`nextMarkupToken` 的裸文本、CDATA、注释、PI 数据、内部子集 | 各入口 |
 
-- `StringGenerator.reset()` 是 `utf8.clear()`（`ArrayList<Byte>`）。**容量是否保留需要实测**
-  （`tasks.md` 0.4）：跑 1 亿次 `reset + append(1 字节)`，若 RSS 单调增长或耗时随复用次数
-  上台阶，说明 `clear()` 释放了底层数组，则改用 §5.3 的自有 scratch。
+- `StringGenerator.reset()` 是 `utf8.clear()`（`ArrayList<Byte>`）。**实测（`tasks.md` 0.4）：
+  保留容量**——同一实例 `reset + 10000 append` × 2000 次 111.6 ms，每次新建 115.9 ms
+  （比值 0.96）；500 万次 `reset + append(1 字节)` 每百万 8.3–8.6 ms、RSS 仅 +60 kB，
+  无上台阶。结论：**文本 / 属性值 / 声明值一律复用 `reset()` 实例**，未启用 §5.3 的替换。
+- **名字**是例外：`StringGenerator.unsafeBytes()` 返回按 `size` 截好的**新数组**
+  （探针：填 10000 取 10000；reset 后 append 1 取 1），逐字节比对会每 token 分配一次。
+  因此名字扫描独用 §5.3 的 `ByteScratch`（零拷贝视图 + 只增不减），文本与值仍走
+  `StringGenerator`，两者输出逐字节一致（`BufferReuse_test.byteScratchMatchesStringGenerator`）。
 - `toString()` 仍然每 token 一次（事件的公开载荷是 `String`），这是**必须**的分配，
   不在优化目标内；目标是消掉「容器对象 + 容器扩容」这一层。
 
@@ -218,7 +224,17 @@ func readName(): RawName {
 白名单 SHALL 在 `tasks.md` 3.4 用 `grep -n 'StringGenerator()' src/Lexer.cj` 复核，
 只允许剩上表列出的位置。
 
-### 5.3 备选：自有字节累积器（只在 5.1 实测为否时启用）
+**实测复核（2026-10-30）**：`grep -n 'StringGenerator()' src/Lexer.cj` 只剩三处——
+
+| 行 | 位置 | 说明 |
+|---|---|---|
+| 72 | `collapseSpaces` | 白名单内（tokenized 属性的二次归一，冷路径） |
+| 143 | `valueScratch` 字段 | 一次解析只构造一次 |
+| 145 | `textScratch` 字段 | 一次解析只构造一次 |
+
+即热路径上**没有任何**逐 token 的 `StringGenerator()` 构造。
+
+### 5.3 自有字节累积器（**实际只用于名字扫描**，见 §5.1 与 D16）
 
 ```cangjie
 /** 只增不减的 UTF-8 字节累积器：reset 只把长度置 0，容量留作下次复用。 */
@@ -234,9 +250,9 @@ internal class ByteScratch {
 ```
 
 - 与 `StringGenerator` 的差异只在「不释放容量」，输出逐字节相同（用例对拍）；
-- 一旦启用，`f-xml-char-layer` 的「文本累积 SHALL 使用 `StringGenerator`」需要在
-  `verification.md` 登记为**经批准的偏离**，并写进 `design.md` §10 决策记录。
-  默认**不启用**。
+- 实际启用的范围**只有名字缓冲**：`Lexer.nameScratch`。文本 / 属性值 / 声明值 / CDATA /
+  注释 / PI 仍用 `StringGenerator`，因此 `f-xml-char-layer` 的「文本累积 SHALL 使用
+  `StringGenerator`」**未偏离**（`verification.md` §7 已登记）。
 
 ## 6. 文本与属性值批量扫描
 
@@ -405,6 +421,7 @@ M4 的判定材料必须包含「进程地板」：解析 `<?xml version="1.0"?>
 | D13 | 禁用一切 GC 环境变量 | `cjGCInterval=100ms` 能把 `VmHWM` 压到 165 MB 但**不提速**，且 OpenHarmony 不生效；靠它达标等于把库的保证换成机器的参数 |
 | D14 | 驻留 `QName` 不做 | `QName` 是 `struct` 不分配；`uri` 由作用域决定，驻留会引入作用域失效风险，收益只有一个结构体拷贝 |
 | D15 | 属性值 / 文本的 `String` 不驻留 | 事件载荷语义上是「这一处的文本」；驻留会让不同事件共享实例（身份变化），收益与风险不成比例（列入 B4 / 不做） |
+| D16 | 名字缓冲用自建 `ByteScratch`，文本 / 值仍用复用的 `StringGenerator` | `reset()` 实测保留容量（0.4），但 `StringGenerator.unsafeBytes()` 是按 `size` 截好的**新数组**，逐字节比对会每 token 分配；名字驻留需要零拷贝视图。`ByteScratch` 只用于名字，输出与 `StringGenerator` 逐字节一致，`f_base` 未改 |
 
 ## 11. 与上一轮产物的差异登记
 

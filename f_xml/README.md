@@ -95,7 +95,8 @@ XmlWriter(output, options: XmlWriterOptions(indent: Some("  "))).write(element)
 
 ## 状态
 
-已实现并通过 **337** 条单元测试（其中 `complete-f-xml-m1-followups` 新增 34 条）。
+已实现并通过 **376** 条单元测试（其中 `complete-f-xml-m1-followups` 新增 34 条、
+`optimize-f-xml-semantic-layer` 新增 39 条）。
 xmlconf 20130923 的口径：可跑集 **2062** 条
 （`unsupported` **524** = `edition` 313 + 外部实体 95 + XML 1.1 59 + 外部子集 47 +
 命名空间名 10），断言 **2038** 条，实测 **2038 通过 / 0 失败**（Gate A 达成）。
@@ -103,10 +104,15 @@ xmlconf 20130923 的口径：可跑集 **2062** 条
 （DTD 声明语法良构校验、`standalone` 与单实体替换文本良构、`<!ATTLIST>` 属性类型映射与
 属性值规范化）已落地。`known-issues` 已清空。
 
-性能（事件模式，合成流，`bufSize = 8192`，`-O2`，3 次取 `min`）：**1 MB ≈ 80 ms、
-10 MB ≈ 1102 ms、50 MB ≈ 5.4 s**；同轮 `-O0` 旧代码 10 MB 为 16.3 s，提升 **93%**；
-峰值 RSS 288 MB（`-O2` 校准阈值 320 MB），50 MB 与 10 MB 基本相同。Gate P 已达成
-（10 MB < 7.2 s + RSS 差值 ≤ 24 MB），`bufSize` 实测曲线已收敛、默认值仍为 8192。
+性能（事件模式，合成流，`bufSize = 8192`，`-O2`，5 次取 `min`，**默认运行时**）：
+**1 MB ≈ 58 ms、10 MB ≈ 497 ms、50 MB ≈ 2.47 s**；`VmHWM(50 MB) = 104 MB`。
+同轮同机对照（同一份零分配基准）：旧代码 10 MB **1026 ms**、`VmHWM(50 MB)` **295 MB**，
+即 **−51.6%** 与 **−64.7%**。门禁：10 MB `min(5) < 1000 ms`、`VmHWM(50 MB) < 256 MB`
+均达成，且**未设置任何 GC 环境变量**。
+
 字符层已改为按块解码 + 单一活动缓冲（详见
-[`doc/spec/complete-f-xml-m1-followups/`](doc/spec/complete-f-xml-m1-followups/)）。
+[`doc/spec/complete-f-xml-m1-followups/`](doc/spec/complete-f-xml-m1-followups/)）；
+语义层（名字驻留、三缓冲复用、文本 / 属性值批量扫描、事件侧容器复用）由
+[`doc/spec/optimize-f-xml-semantic-layer/`](doc/spec/optimize-f-xml-semantic-layer/)
+落地，公开 API 零变更。
 
