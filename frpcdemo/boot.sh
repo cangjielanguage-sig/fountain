@@ -26,6 +26,9 @@ exports(){
     export logger_appender_FRPCDemoFile_rotateDuration=DAY
     export logger_asyncWaitTimeout=5ms # 异步日志缓冲区等待时间，默认是5毫秒，超过这个时间，本次日志被忽略
     export rpcServer_baseAddresses=$3
+    # 【必填】本机在集群内的唯一主机号：MessageID 拒绝 hostId=0，
+    # (pid, tid, 时间戳) 跨机器会重复，集群维度只能靠它区分。
+    export protocol_hostId="${protocol_hostId:-1}"
     regexp="_stAtIc__|$1"
     # 注意：本工程自建的库目录必须放在 $LD_LIBRARY_PATH **前面**，否则会命中
     # /mnt/d/docs/work/cangjie/installed/libs/fboot 下的旧副本（该目录里的 .so 没有 SONAME，

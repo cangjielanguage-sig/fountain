@@ -186,7 +186,11 @@ public class MessageID <: Hashable & Equatable<MessageID> & ToString {
 }
 ```
 
-- The equality/hash of `MessageID` **uses only `time`/`pid`/`tid`** (`hostId` does not participate);
+- The equality/hash of `MessageID` **is decided by `hostId`/`pid`/`tid`/`time` together**: `(pid, tid, timestamp)` is
+  unique only within one machine, because pid/tid collide across hosts (usually both 1 inside containers), so `hostId`
+  is the only cluster-wide discriminator;
+- `hostId` is **mandatory**: constructing with `hostId == 0` throws `IllegalArgumentException` (that is what an
+  unset `protocol_hostId` yields). When decoding a frame the hostId comes from the **sender**, not from local config;
 - `unsubscribe<T>(data!)` mirrors `subscribe<T>(data!)`: it generates a `MessageID` automatically and
   carries a payload. `f_dbd` uses it to send `QueryResultClosePayload(qid)` when closing a cursor
   (the server answers with `ACK`). The existing `unsubscribe(id)` / `unsubscribe(id, data!)`
@@ -198,7 +202,7 @@ public class MessageID <: Hashable & Equatable<MessageID> & ToString {
 
 | Configuration | Default | Description |
 | --- | --- | --- |
-| `protocol_hostId` | `0` | Host ID, unique for each host within the whole cluster (written into `MessageID`) |
+| `protocol_hostId` | none (**mandatory**) | Host ID, unique for each host within the whole cluster (written into `MessageID`, part of its equality/hash); missing or `0` makes `MessageID` throw `IllegalArgumentException` |
 | `protocol_maxFramePayload` | `1 << 30` (1GB) | Upper bound of the payload of a single frame; validated on both the sending and receiving sides |
 
 The configuration is read and cached **only on first use** (it must not be read during package initialization: `Config` may not be ready then).

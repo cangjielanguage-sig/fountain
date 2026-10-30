@@ -22,6 +22,9 @@ path=${FMQDEMO_TARGET:-./target}
 
 exports(){
     export mqClient_hosts=${mqClient_hosts:-127.0.0.1:23700}
+    # 【必填】本机在集群内的唯一主机号：MessageID 拒绝 hostId=0，
+    # (pid, tid, 时间戳) 跨机器会重复，集群维度只能靠它区分。
+    export protocol_hostId="${protocol_hostId:-1}"
     # 日志：控制台 appender（服务端/客户端自己的日志都走 f_log）
     export logger_appender_console=FMQDemoConsole
     export logger_appender_FMQDemoConsole_level=INFO

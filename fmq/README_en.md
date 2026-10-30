@@ -33,8 +33,12 @@ non-root user should point them to a writable directory first.
 
 `mqClient_hosts` is both the client node table and the server cluster node table. The
 server matches its own index by `mqServer_port`; a port missing from the table or listed
-twice fails startup. In a multi-node deployment, also set a unique `protocol_hostId` per
-machine, otherwise `MessageID` cannot distinguish nodes.
+twice fails startup.
+
+`protocol_hostId` (an f_protocol setting, exported as `1` by the script) is **mandatory and
+must be unique per machine**: it is part of `MessageID` equality/hash, and leaving it unset
+(or `0`) makes `MessageID` throw `IllegalArgumentException` — `(pid, tid, timestamp)` repeats
+across hosts, so `hostId` is the only cluster-wide discriminator.
 
 Configuration (environment variables or command-line options):
 
