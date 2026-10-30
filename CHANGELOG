@@ -1,3 +1,9 @@
+2026-10-30
+    feat(f_excel): 新增 f_excel 模块（M1）：整文档读写、流式读（ExcelSheetStream）、
+      流式写（ExcelWriter）、日期识别与合并单元格；86 用例全绿，openpyxl 回读通过
+    feat(f_zip): ZipWriter.openEntry 推模式流式条目、ZipReader.openEntry，按 f_excel 需要补齐
+    feat(f_xml): XmlWriter 增量接口（startElement/text/endElement/emptyElement），保留前缀不重复声明
+    docs(f_excel): 设计 v0.10（流式解析/输出、实施差异与实测）与 doc/spec/implement-f-excel-m1
 2026-10-25
     feat(f_mcp): 新增 @Mcp 宏与三个元数据注解，入参与返回值按 f_data 规则转换
     feat(f_mcp): 5 种 RateLimitBackend 与 mcp_rateLimitBackend 配置，支持静态注册自定义算法
