@@ -26,7 +26,8 @@ f_zip
 - **读取**：`ZipReader(input)` 全量缓冲、`ZipReader(path)` 走 `File.seek` 窗口读（1 GB 的包 RSS 不随文件线性增长）；
   条目枚举、按名读取（同名取最后一个）、`readAll`、`open` 流式解压（每次独立游标，可并发）。
 - **写入**：`add`（内存路径，header 写真实值、无 descriptor）、`addFileStream`（流式路径，
-  24 字节 ZIP64 data descriptor）、`addFile`、`addDirectory`。
+  24 字节 ZIP64 data descriptor）、`openEntry`（**推模式**流式条目：把 `OutputStream` 交给调用方，
+  边生成边压缩，不需要先造输入流）、`addFile`、`addDirectory`。
 - **ZIP64 双向**：读取识别 EOCD64 / 定位器 / extra `0x0001`；写入仅在越界时升级，小文件不产生任何 ZIP64 字节。
 - **安全默认开**：Zip Slip 拦截、符号链接跳过、ZIP 炸弹上限、加密 ZIP 拒绝。
 - **大文件不吃内存**：`add()` 超阈值自动落临时文件后走流式；`zip` / `unzip` 全程流式。
@@ -59,6 +60,15 @@ let writer = ZipWriter(buffer)
 writer.add("config.json", "{ }".toArray())
 writer.addFileStream("huge.log", File("/var/log/app.log", OpenMode.Read))
 writer.close()
+
+// 推模式：数据本来就在"生成中"（逐行 XML / CSV / 日志）
+let sink = ByteBuffer()
+let w2 = ZipWriter(sink)
+let entry = w2.openEntry("sheet1.xml")
+entry.write("<?xml version=\"1.0\"?><sheetData>".toArray())
+entry.write("<row r=\"1\"/></sheetData>".toArray())
+entry.close()          // 写 data descriptor 并登记中央目录
+w2.close()             // 写中央目录 + EOCD，此时才能读
 ```
 
 ## 安全默认值

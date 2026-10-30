@@ -121,6 +121,24 @@ public class ZipReader {
         None<InputStream>
     }
 
+    /**
+     * 按已取到的 [ZipEntry] 打开解压流（同名取最后一个，与 `open(name)` 一致）。
+     * 条目不存在或为目录时返回 `None`。
+     */
+    public func openEntry(entry: ZipEntry): ?InputStream {
+        ensureOpen()
+        if (entry.isDirectory) {
+            return None<InputStream>
+        }
+        if (let Some(e) <- findLast(entry.name)) {
+            if (e.isDirectory) {
+                return None<InputStream>
+            }
+            return Some(openEntry(e))
+        }
+        None<InputStream>
+    }
+
     /** 包内可见：按**指定**的中央目录项打开（`unzip` 要能区分同名条目）。 */
     internal func openEntry(e: CentralEntry): InputStream {
         ensureOpen()
