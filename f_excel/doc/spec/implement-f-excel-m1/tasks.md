@@ -16,16 +16,16 @@
 
 ## 0. 前置
 
-- [ ] 0.1 记录基线：`f_excel` 的 `cjpm build` / `cjpm test` 现状（预期：build 通过、0 用例）；
+- [x] 0.1 记录基线：`f_excel` 的 `cjpm build` / `cjpm test` 现状（预期：build 通过、0 用例）；
   `git branch --show-current` 记录当前分支。
-- [ ] 0.2 建包骨架：`f_excel/src/f_excel.cj` 保留 `F_EXCEL_VERSION` 并补包文档；
+- [x] 0.2 建包骨架：`f_excel/src/f_excel.cj` 保留 `F_EXCEL_VERSION` 并补包文档；
   确认 `f_excel/cjpm.toml` 的 5 项依赖可直接 import（`f_base` / `f_xml` / `f_zip`），
   并确认 `f_zip.ZipWriter.openEntry` 与 `f_xml.XmlWriter.startElement` 可编译（前置已合入 sts），
   `cjpm build` 通过。
-- [ ] 0.3 **R1 实测**（`Float64.toString()`）：打印 `1.0` / `0.1` / `1e20` / `1.0/3.0` /
+- [x] 0.3 **R1 实测**（`Float64.toString()`）：打印 `1.0` / `0.1` / `1e20` / `1.0/3.0` /
   `-0.0`，`Float64.parse` 回比；结论回填 `design.md` §10.1，决定 `formatNumber` 是否需要
   自实现（§6.8）。
-- [ ] 0.4 **R2 实测**（`DateTime` ↔ 天数）：查 `std.time` 可用 API，验证同一日期在不同
+- [x] 0.4 **R2 实测**（`DateTime` ↔ 天数）：查 `std.time` 可用 API，验证同一日期在不同
   `TZ` 下换算结果相同；结论回填 §10.1。
 - [ ] 0.5 **R3 + R4 实测**（临时文件 API、`cjpm test` 工作目录）：结论回填 §10.1，
   决定 `spool` 与 `testdata/` 的路径解析。
@@ -35,21 +35,21 @@
 
 ## 1. P0 小函数（设计 §11.6 点名）
 
-- [ ] 1.1 **先写测试** `src/CellRef_test.cj`：列号互转 8 组边界
+- [x] 1.1 **先写测试** `src/CellRef_test.cj`：列号互转 8 组边界
   （`A→1, Z→26, AA→27, AZ→52, BA→53, ZZ→702, AAA→703, XFD→16384`）+ 反向；
   `columnLetters(16385)` 抛 `ExcelException`；`columnIndex("1")` 返回 `None`。
   → 实现 `src/CellRef.cj` 的 `columnIndex` / `columnLetters`。
-- [ ] 1.2 **先写测试**：`CellRef.parse` 全表 12 行（`A1` / `a1` / `$A$1` / `$A1` / `A$1` /
+- [x] 1.2 **先写测试**：`CellRef.parse` 全表 12 行（`A1` / `a1` / `$A$1` / `$A1` / `A$1` /
   `A01` / `A` / `1` / `A1B` / `XFE1` / `A1048577` / `A0` / `""`）。
   → 实现 `parse`（§6.2 的线性扫描状态机）。
-- [ ] 1.3 **先写测试**：`parseRange`（正常 / 单格 / 倒置 / 多冒号 / 一侧非法）；
+- [x] 1.3 **先写测试**：`parseRange`（正常 / 单格 / 倒置 / 多冒号 / 一侧非法）；
   `toString` / `toA1` 的四种 `$` 组合；`==` 与 `<`（先行后列）。
-- [ ] 1.4 **先写测试** `src/CellValue_test.cj`：七个分支的构造与 `toString`；
+- [x] 1.4 **先写测试** `src/CellValue_test.cj`：七个分支的构造与 `toString`；
   `Formula` 原文不带 `=`；`TimeSpan` **不存在**（编译期保证，用注释说明）。
   → 实现 `src/CellValue.cj` 的 `CellValue` + `NumberFormat`（含显式 `==`）。
-- [ ] 1.5 **先写测试** `src/RowData_test.cj`：`RowData` / `Cell` 的值语义（拷贝不改原件）、
+- [x] 1.5 **先写测试** `src/RowData_test.cj`：`RowData` / `Cell` 的值语义（拷贝不改原件）、
   `numberFormat` 默认 `None`。→ 实现 `src/RowData.cj`。
-- [ ] 1.6 **先写测试** `src/ExcelException_test.cj`：`ExcelException <: BaseException`
+- [x] 1.6 **先写测试** `src/ExcelException_test.cj`：`ExcelException <: BaseException`
   可被 `catch (e: Exception)` 捕获、`message` 可读、`caused` 链保留；
   `ExcelWarningKind` 的 `==` 显式实现（`Equatable`）。→ 实现 `src/ExcelException.cj`。
 
