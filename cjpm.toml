@@ -13,6 +13,7 @@
   "fountain::f_crypto" = {path = "./f_crypto"}
   "fountain::f_data" = {path = "./f_data"}
   "fountain::f_email" = {path = "./f_email"}
+  "fountain::f_excel" = {path = "./f_excel"}
   "fountain::f_exception" = {path = "./f_exception"}
   "fountain::f_io" = {path = "./f_io"}
   "fountain::f_jwt" = {path = "./f_jwt"}
