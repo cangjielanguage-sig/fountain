@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_excel
 
-import std.collection.{ArrayList, HashMap}
+import std.collection.ArrayList
 import std.env
 import std.fs.{File, OpenMode, Path, removeIfExists}
 import std.io.{InputStream, copy}

@@ -81,7 +81,10 @@ internal class SheetXmlWriter {
 
     func begin(dimension: ?String): Unit {
         xml.writeDeclaration(encoding: "UTF-8", standalone: Some(true))
-        xml.startElement(QName("worksheet", uri: Some(NS_MAIN)))
+        xml.startElement(
+            QName("worksheet", uri: Some(NS_MAIN)),
+            attributes: [XmlAttribute(QName("xmlns:r"), NS_REL)]
+        )
         match (dimension) {
             case Some(ref) => xml.emptyElement(xl("dimension"), attributes: [XmlAttribute(QName("ref"), ref)])
             case None => ()
@@ -103,7 +106,7 @@ internal class SheetXmlWriter {
         xml.endElement(xl("row"))
     }
 
-    func end(merges: ArrayList<String>): Unit {
+    func end(merges: ArrayList<String>, drawingRel!: ?String = None): Unit {
         xml.endElement(xl("sheetData"))
         if (merges.size > 0) {
             xml.startElement(xl("mergeCells"), attributes: [XmlAttribute(QName("count"), merges.size.toString())])
@@ -111,6 +114,10 @@ internal class SheetXmlWriter {
                 xml.emptyElement(xl("mergeCell"), attributes: [XmlAttribute(QName("ref"), range)])
             }
             xml.endElement(xl("mergeCells"))
+        }
+        match (drawingRel) {
+            case Some(relId) => xml.emptyElement(xl("drawing"), attributes: [XmlAttribute(QName("r:id"), relId)])
+            case None => ()
         }
         xml.endElement(QName("worksheet"))
         xml.flush()

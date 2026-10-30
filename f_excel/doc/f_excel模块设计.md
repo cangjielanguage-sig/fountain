@@ -1,9 +1,12 @@
 # f_excel —— 仓颉 Excel（OOXML）解析器 / 生成器设计
 
-> 版本 **v0.10** ｜ 2026-10-30 ｜ 状态：M1 已实施
+> 版本 **v0.11** ｜ 2026-10-31 ｜ 状态：M1 + 图片写入已实施
 >
 > 定位：fountain 模块。单个 `ExcelDocument` 类同时承担解析与生成。
 > 依赖 `fountain::f_zip`（读写 OOXML 包）与 `fountain::f_xml`（XML 解析/生成）。
+>
+> **v0.11 变更**
+> - 新增 14.5：`Worksheet.addImage` 最小图片写入（png/jpeg、两单元格锚定）；读侧不导入
 >
 > **v0.10 变更**
 > - M1 落地后的差异、R1–R4 实测与新增前置能力记入第 14 章
@@ -2938,3 +2941,20 @@ M4-c 的插值不依赖公式，可以提前到 M3，但单独做意义不大—
 
 - 真实 Excel / WPS / LibreOffice 打开验证与 openpyxl 回读属人工/外部验收，见 `doc/spec/implement-f-excel-m1/verification.md`。
 - M2-a（样式）、M2-b/c（公式）、M2-d（`TimeSpan` / 富文本）、M3（按需解析 / 磁盘索引）、M4（条件格式）未开始。
+
+### 14.5 M1.5 图片写入（v0.11）
+
+M1 把图片列为"不做"；实际使用中需要把 logo/截图锚定进表，因此补一个**只看写侧**的最小能力：
+
+| 项 | 约定 |
+|---|---|
+| API | `Worksheet.addImage(path: Path, from: String, to: String)`、`addImage(data, format, from, to)`、`imageCount()` |
+| 格式 | png / jpeg（按扩展名判定，jpeg 统一写 `.jpeg` 扩展与 `image/jpeg`） |
+| 锚定 | `xdr:twoCellAnchor editAs="oneCell"`，`from`/`to` 为 0 基行列；区间倒置抛 `ExcelException` |
+| 部件 | `xl/media/imageN.<ext>`、`xl/drawings/drawingN.xml`、`xl/drawings/_rels/drawingN.xml.rels`、`xl/worksheets/_rels/sheetN.xml.rels` |
+| worksheet | `<drawing r:id="rId1"/>` 位于 `mergeCells` 之后、`</worksheet>` 之前；根元素声明 `xmlns:r` |
+| ContentTypes | 用到的图片扩展名加 `Default`，每个 drawing 加 `Override` |
+| 读侧 | M1.5 **不导入图片**；含图片文件往返后图片丢失（README 已列为已知缺口） |
+| 流式写 | `ExcelWriter` 不支持图片（无模型），只支持 `ExcelDocument.write` |
+
+验证：结构用例 4 条 + openpyxl 3.1.5 回读（`len(ws._images) == 1`，anchor 与 `from`/`to` 一致）。

@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_excel
 
 import std.collection.{ArrayList, HashMap}
+import std.fs.Path
 
 /**
  * 一张工作表（整文档模型）。
@@ -27,6 +28,7 @@ public class Worksheet {
     private let sheetName: String
     private let cells = HashMap<Int64, CellValue>()
     private let merges = ArrayList<String>()
+    private let images = ArrayList<SheetImage>()
     private var dimensionRef: ?String = None
     private var maxRowSeen: Int64 = 0
     private var maxColSeen: Int64 = 0
@@ -158,6 +160,38 @@ public class Worksheet {
             }
         }
         out.toArray()
+    }
+
+    /** 把图片锚定到 `[from, to]` 单元格区域（写侧；读侧 M1.5 不解析图片）。 */
+    public func addImage(path: Path, from: String, to: String): Unit {
+        let (data, format) = readImage(path)
+        addImage(data, format, from, to)
+    }
+
+    public func addImage(data: Array<Byte>, format: ImageFormat, from: String, to: String): Unit {
+        let start = match (CellRef.parse(from)) {
+            case Some(v) => v
+            case None => throw ExcelException("非法的图片起始单元格：${from}")
+        }
+        let end = match (CellRef.parse(to)) {
+            case Some(v) => v
+            case None => throw ExcelException("非法的图片结束单元格：${to}")
+        }
+        if (start.row > end.row || start.col > end.col) {
+            throw ExcelException("图片区域倒置：${from}:${to}")
+        }
+        if (data.size == 0) {
+            throw ExcelException("图片数据为空")
+        }
+        images.add(SheetImage(data, format, start, end))
+    }
+
+    public func imageCount(): Int64 {
+        Int64(images.size)
+    }
+
+    internal func sheetImages(): ArrayList<SheetImage> {
+        images
     }
 
     public func mergedRanges(): ArrayList<String> {

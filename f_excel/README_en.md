@@ -17,8 +17,9 @@ Excel (xlsx / OOXML) reader and writer: **streaming parse, streaming generate**,
 | **Streaming write** | `ExcelWriter`: row iterator → `f_xml.XmlWriter` incremental events → `f_zip.openEntry` push-mode compression |
 | Value kinds | `Empty` / `Number` / `Text` / `Boolean` / `Error` / `Date` / `Formula` (source + cached only, never evaluated) |
 | Dates | Built-in 14–22 / 45–47 plus custom-format heuristics; 1900 / 1904 bases; serial 60 kept as a number with a warning |
+| Images (write) | `Worksheet.addImage(path/bytes, from, to)`: png / jpeg anchored to a cell range; the read side does not import images yet |
 
-Full `cjpm test`: **86 passed / 0 failed**.
+Full `cjpm test`: **90 passed / 0 failed**.
 
 ## Usage
 
@@ -43,6 +44,13 @@ sheet.setCell("A1", CellValue.Text("name"))
 sheet.setCell("B1", CellValue.Number(0.1))
 sheet.merge("A1:B1")
 doc.write(Path("/data/out.xlsx"))
+```
+
+### Insert an image
+
+```cangjie
+let sheet = doc.sheet("Sheet1").getOrThrow()
+sheet.addImage(Path("/data/logo.png"), "A4", "E12")   // anchored to A4:E12
 ```
 
 ### Streaming write (large tables, constant memory)
@@ -87,14 +95,15 @@ out.close()
 - **Styles**: only date `numFmtId` and a fixed minimal `styles.xml`; fonts / fills / borders / alignment / theme colors are M2.
 - **Formulas**: source and cached value only; no evaluation, no dependency graph.
 - **Durations / rich text**: `[h]:mm:ss` comes back as `Date` plus a warning; rich text is flattened to `Text`.
+- **Images**: write-only (png / jpeg, two-cell anchor); the reader does not import them, so they are lost on a round trip.
 - **Conditional formatting**: not preserved (M4 evaluates it semantically).
 - **Shared-string writing**: `inlineStr` only; `xl/sharedStrings.xml` is never produced.
 - **Merged ranges in streaming read**: unavailable during the stream (`<mergeCells>` follows `<sheetData>`); `mergedRanges()` is valid after it ends.
 - **Resident memory in streaming read**: only `sharedStrings` grows with the file; disable it with `loadSharedStrings = false`.
-- No charts / images / pivot tables / comments / data validation / ods.
+- No charts / pivot tables / comments / data validation / ods.
 
 ## Tests and fixtures
 
-- `cjpm test` green (86 cases).
+- `cjpm test` green (90 cases).
 - Fixtures build minimal xlsx packages in memory with `f_zip.ZipWriter` (`fixtures.cj`); no external sample files.
 - "Real Excel opens it without repair" is a manual acceptance item, recorded in `doc/spec/implement-f-excel-m1/verification.md`.
