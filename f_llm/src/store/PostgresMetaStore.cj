@@ -91,8 +91,9 @@ class PostgresLLMConfStore <: LLMConfStore {
 
     public func put(view: LLMConfView): Int64 {
         let row = executor.setSql('''
-            INSERT INTO llm_conf (provider, llm_name, actual_llm_name, enabled, weight)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO llm_conf (provider, llm_name, actual_llm_name, enabled, weight,
+                                  llm_url, auth, temperature, always_thinking)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id
         ''')
             .add(view.provider)
@@ -100,6 +101,10 @@ class PostgresLLMConfStore <: LLMConfStore {
             .add(view.actualLlmName)
             .add(view.enabled)
             .add(view.weight)
+            .add(view.llmUrl)
+            .add(view.auth)
+            .add(view.temperature)
+            .add(view.alwaysThinking)
             .firstToMap()
         intOf(row.get('id') ?? 0)
     }

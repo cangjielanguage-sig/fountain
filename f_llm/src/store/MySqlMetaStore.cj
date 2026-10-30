@@ -244,28 +244,38 @@ class MySqlLLMConfStore <: LLMConfStore {
     public func candidates(llmName: String): ArrayList<LLMConfView> {
         let result = ArrayList<LLMConfView>()
         for(row in executor.setSql('''
-            SELECT provider, llm_name, actual_llm_name, weight
+            SELECT provider, llm_name, actual_llm_name, weight,
+                   llm_url, auth, temperature, CAST(always_thinking AS SIGNED) AS always_thinking
             FROM llm_conf
             WHERE enabled = 1 AND weight > 0 AND llm_name = ?
         ''').add(llmName).mapList()){
             result.add(LLMConfView(textOf(row.get('provider') ?? ''),
                                    textOf(row.get('llm_name') ?? ''),
                                    textOf(row.get('actual_llm_name') ?? ''),
-                                   intOf(row.get('weight') ?? 0), true))
+                                   intOf(row.get('weight') ?? 0), true,
+                                   llmUrl: textOf(row.get('llm_url') ?? ''),
+                                   auth: textOf(row.get('auth') ?? ''),
+                                   temperature: floatOf(row.get('temperature') ?? -1.0f64),
+                                   alwaysThinking: intOf(row.get('always_thinking') ?? 0) != 0))
         }
         result
     }
 
     public func put(view: LLMConfView): Int64 {
         executor.setSql('''
-            INSERT INTO llm_conf (provider, llm_name, actual_llm_name, enabled, weight)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO llm_conf (provider, llm_name, actual_llm_name, enabled, weight,
+                                  llm_url, auth, temperature, always_thinking)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''')
             .add(view.provider)
             .add(view.llmName)
             .add(view.actualLlmName)
             .add(view.enabled)
             .add(view.weight)
+            .add(view.llmUrl)
+            .add(view.auth)
+            .add(view.temperature)
+            .add(view.alwaysThinking)
             .update
         let row = executor.setSql('SELECT CAST(LAST_INSERT_ID() AS SIGNED) AS id').firstToMap()
         intOf(row.get('id') ?? 0)
@@ -283,6 +293,15 @@ class MySqlLLMConfStore <: LLMConfStore {
             case number: Int64 => number
             case number: Int32 => Int64(number)
             case _ => 0
+        }
+    }
+
+    private static func floatOf(value: Any): Float64 {
+        match(value){
+            case number: Float64 => number
+            case number: Float32 => Float64(number)
+            case number: Int64 => Float64(number)
+            case _ => -1.0f64
         }
     }
 }

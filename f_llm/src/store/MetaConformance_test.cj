@@ -57,11 +57,17 @@ public class MetaConformanceTest {
         @Expect(meta.prompts.remove('conf.prompt', 3), true)
         @Expect(meta.prompts.latest('conf.prompt').getOrThrow().content, 'v2')
 
-        // 配置：过滤 enabled / weight
-        meta.confs.put(LLMConfView('p1', 'conf-llm', 'ok', 10, true))
+        // 配置：过滤 enabled / weight，并验证完整字段往返
+        meta.confs.put(LLMConfView('p1', 'conf-llm', 'ok', 10, true,
+                                   llmUrl: 'http://llm.local/v1', auth: 'sk-test',
+                                   temperature: 0.3f64, alwaysThinking: true))
         meta.confs.put(LLMConfView('p2', 'conf-llm', 'off', 10, false))
         meta.confs.put(LLMConfView('p3', 'conf-llm', 'zero', 0, true))
-        @Expect(meta.confs.candidates('conf-llm').size, 1)
+        let candidates = meta.confs.candidates('conf-llm')
+        @Expect(candidates.size, 1)
+        @Expect(candidates[0].llmUrl, 'http://llm.local/v1')
+        @Expect(candidates[0].auth, 'sk-test')
+        @Expect(candidates[0].alwaysThinking, true)
     }
 
     @TestCase

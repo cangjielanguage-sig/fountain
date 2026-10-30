@@ -79,7 +79,8 @@ class FStoreLLMConfStore <: LLMConfStore {
 
     public func put(view: LLMConfView): Int64 {
         let id = nextId()
-        let body = '${view.provider}\n${view.llmName}\n${view.actualLlmName}\n${view.weight}\n${view.enabled}'
+        let body = '${view.provider}\n${view.llmName}\n${view.actualLlmName}\n${view.weight}\n'
+            + '${view.enabled}\n${view.llmUrl}\n${view.auth}\n${view.temperature}\n${view.alwaysThinking}'
         store.add('${PREFIX}${id}'.toArray(), body.toArray())
         store.add('${BYNAME}${view.llmName}:${id}'.toArray(), [])
         id
@@ -152,7 +153,13 @@ class FStoreLLMConfStore <: LLMConfStore {
         if(parts.size < 5){
             return LLMConfView('', '', '', 0, false)
         }
-        LLMConfView(parts[0], parts[1], parts[2], Int64.parse(parts[3]), parts[4] == 'true')
+        // 旧格式只有前 5 段：缺的字段用默认值，保证向后兼容
+        let llmUrl = if(parts.size > 5){ parts[5] } else { '' }
+        let auth = if(parts.size > 6){ parts[6] } else { '' }
+        let temperature = if(parts.size > 7){ Float64.parse(parts[7]) } else { -1.0f64 }
+        let alwaysThinking = if(parts.size > 8){ parts[8] == 'true' } else { false }
+        LLMConfView(parts[0], parts[1], parts[2], Int64.parse(parts[3]), parts[4] == 'true',
+                    llmUrl: llmUrl, auth: auth, temperature: temperature, alwaysThinking: alwaysThinking)
     }
 
     private static func has(values: ArrayList<String>, target: String): Bool {

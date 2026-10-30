@@ -7,8 +7,8 @@
 
 ## 1. 配置模型扩展
 
-- [ ] 1.1 写 `LLMConfStore` 完整配置用例（url/auth/temperature/always_thinking/conf 往返）
-- [ ] 1.2 扩 `LLMConfView` 与三实现（PG/MySQL/f_store）并转绿
+- [x] 1.1 写 `LLMConfStore` 完整配置用例（url/auth/temperature/always_thinking/conf 往返）
+- [x] 1.2 扩 `LLMConfView` 与三实现（PG/MySQL/f_store）并转绿
 - [ ] 1.3 `LLMConfSource` 适配器：以 `Stores.meta().confs` 为数据源，保留旧来源回退
 
 ## 2. 生产 Embedder
