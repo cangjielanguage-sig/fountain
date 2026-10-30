@@ -58,7 +58,17 @@ public class MemoryRepositories {
      * 该表达式只在首次调用时求值一次，之后由 bean 容器持有单例。
      */
     public static func create(): MemoryRepository {
-        lookupOption<MemoryRepository>() ?? fallback()
+        let name = StoreSettings.load().contentStore
+        // 优先用注册表（确定性强）；注册表没有时才回退到 f_bean 的条件选择。
+        // 实测 @BeanMeta[condition: ConfCond...] 的过滤并未按预期生效，
+        // 因此不能把正确性完全押在 lookupOption 上。
+        let registered = synchronized(mutex){
+            factories.get(name)
+        }
+        match(registered){
+            case Some(factory) => factory()
+            case None => lookupOption<MemoryRepository>() ?? fallback()
+        }
     }
 
     private static func fallback(): MemoryRepository {

@@ -18,12 +18,21 @@ package fountain::f_llm.store.it
 import std.unittest.*
 import std.unittest.testmacro.*
 
+import fountain::f_config.Config
+
 import fountain::f_llm.store.*
 import fountain::f_llm.store.postgres.*
 import fountain::f_llm.store.mysql.*
 
 @Test
 public class MemoryRepositoriesTest {
+
+    @TestCase
+    func testCreateReturnsConfiguredImplementation(): Unit {
+        Config.set<String>([('llm_contentStore', 'postgres')])
+        let repository = MemoryRepositories.create()
+        @Expect(repository is PostgresMemoryRepository, true)
+    }
 
     @TestCase
     func testRegistryContainsBothBackends(): Unit {
