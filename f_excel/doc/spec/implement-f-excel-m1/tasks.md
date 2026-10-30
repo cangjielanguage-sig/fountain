@@ -68,19 +68,19 @@
 
 ## 3. P2 sharedStrings 与类型表
 
-- [ ] 3.1 **先写测试** `src/SharedStringTable_test.cj`：单 `<t>`；多段 `<r><t>` 拼接；
+- [x] 3.1 **先写测试** `src/SharedStringTable_test.cj`：单 `<t>`；多段 `<r><t>` 拼接；
   `xml:space="preserve"` 保留首尾空白；**无该属性时也保留**；`<rPh>` 与其内部 `<t>` 跳过；
   `count`/`uniqueCount` 不参与校验（乱填照样读）。
   → 实现 `src/SharedStringTable.cj`。
-- [ ] 3.2 **先写测试** `src/WorksheetParser_test.cj`（前半）：类型表全 8 行
+- [x] 3.2 **先写测试** `src/WorksheetParser_test.cj`（前半）：类型表全 8 行
   （缺省/`n`/`s`/`inlineStr`/`str`/`b`/`e`/`d`）+ 未知 `t` 降级；
   `t="s"` 越界 → `Empty` + warning；`<v>1,5</v>` → `Text` + warning；
   `t="str"` 按 `Text` 而不是 `Number`。→ 实现 `src/WorksheetParser.cj` +
   `src/SheetRowSink.cj` 的取值部分。
-- [ ] 3.3 **先写测试**（后半）：稀疏性（`<row r="100"><c r="Z100">` 只落一格）；
+- [x] 3.3 **先写测试**（后半）：稀疏性（`<row r="100"><c r="Z100">` 只落一格）；
   `<c>` 缺 `r` 按前一列 +1 + `MissingCellRef`；`<c r>` 非法同理；
   `<row>` 缺 `r` 按上一行 +1 + `MissingRowIndex`；`loadSharedStrings=false` 时 `t="s"` → `Empty`。
-- [ ] 3.4 **先写测试**：`Some(Empty)` 与 `None` 的区分（`<c r="A1" s="3"/>`）。
+- [x] 3.4 **先写测试**：`Some(Empty)` 与 `None` 的区分（`<c r="A1" s="3"/>`）。
 
 ## 4. P3 写最小可用包（**本变更最关键**）
 

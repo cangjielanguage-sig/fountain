@@ -88,6 +88,18 @@ public class ExcelDocument {
         for (warning in info.warnings) {
             warnings_.add(warning)
         }
+        var sst = SharedStringTable.empty()
+        if (options.loadSharedStrings) {
+            match (zip.read("xl/sharedStrings.xml")) {
+                case Some(bytes) =>
+                    sst = try {
+                        SharedStringTable.load(bytes)
+                    } catch (e: Exception) {
+                        throw ExcelException("sharedStrings.xml 解析失败", e)
+                    }
+                case None => ()
+            }
+        }
         for (entry in info.sheets) {
             var skipped = false
             for (name in options.skipSheets) {
@@ -103,6 +115,36 @@ public class ExcelDocument {
                 continue
             }
             let sheet = Worksheet(entry.name)
+            match (zip.read(entry.partName)) {
+                case Some(bytes) =>
+                    let parsed = WorksheetParser.parseSheet(bytes, options, sst, entry.name)
+                    for (row in parsed.rows) {
+                        for (cell in row.cells) {
+                            sheet.setCell(row.index, cell.col, cell.value)
+                        }
+                    }
+                    sheet.setDimension(parsed.dimension)
+                    for (range in parsed.merges) {
+                        try {
+                            sheet.merge(range)
+                        } catch (e: ExcelException) {
+                            warnings_.add(
+                                ExcelWarning(ExcelWarningKind.SheetEntryMissing, e.message, sheet: Some(entry.name))
+                            )
+                        }
+                    }
+                    for (warning in parsed.warnings) {
+                        warnings_.add(warning)
+                    }
+                case None =>
+                    warnings_.add(
+                        ExcelWarning(
+                            ExcelWarningKind.SheetEntryMissing,
+                            "sheet 部件读取失败：${entry.partName}",
+                            sheet: Some(entry.name)
+                        )
+                    )
+            }
             sheetList.add(sheet)
         }
         if (sheetList.size == 0) {
