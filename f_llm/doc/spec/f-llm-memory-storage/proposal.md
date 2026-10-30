@@ -30,6 +30,15 @@
 
 <!-- 无：人格注入与上下文裁剪的行为不变，本次只新增存储层 -->
 
+## 不在本变更范围（后继变更 `f-llm-store-wiring`）
+
+- `Memory` / `FaithfulMemory` 切到 `Stores.content().memory`；
+- `LLMConfs.holder()` 切到 `Stores.meta().confs`；
+- 生产 `Embedder`（BGE-M3 HTTP 客户端）与 PG/MySQL `KnowledgeStore`；
+- 实现包（`store/postgres`、`store/mysql`）与 `Stores.bootstrap()`。
+
+原因：上述依赖「完整配置模型 + 生产向量化实现 + 知识存储」三块底座，任一缺失都会让切换后的链路跑不起来；本变更以存储契约与 PG/MySQL 内容/元数据落地为止。
+
 ## Impact
 
 - 代码：`f_llm/src/store/`（新增）、`f_llm/src/memory/`、`f_llm/src/config/LLMConfig.cj`、`f_llm/src/model/po/`、`f_llm/src/dao/`。

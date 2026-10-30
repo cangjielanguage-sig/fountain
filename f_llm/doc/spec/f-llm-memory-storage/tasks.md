@@ -42,8 +42,18 @@
 
 ## 5. 集成与回归
 
-- [ ] 5.1 将 `Memory` / `FaithfulMemory` 内部改走 `Stores.content().memory`，公开签名不变；补回归用例证明摘要与写入路径行为一致
-- [ ] 5.2 将 `LLMConfs.holder()` 数据源切到 `Stores.meta().confs`，保留 `setHolder` 测试注入；既有 167 条用例全绿
+## 移出本变更（由后继变更 `f-llm-store-wiring` 承接）
+
+- 5.1 将 `Memory` / `FaithfulMemory` 内部改走 `Stores.content().memory`，公开签名不变；补回归用例证明摘要与写入路径行为一致
+- 5.2 将 `LLMConfs.holder()` 数据源切到 `Stores.meta().confs`，保留 `setHolder` 测试注入；既有 167 条用例全绿
+
+移出原因（2026-10-30）：
+
+1. `LLMConfStore` 只返回 `LLMConfView`（provider/llmName/actual/weight/enabled），缺少 `llm_url` / `auth` / `temperature` 等字段，构造不出 `LLMConfsHolder` 需要的完整 `LLMConf`；
+2. 没有生产 `Embedder` 实现（只有测试 Fake/Fixed），`Stores.content().memory` 无法在运行时构造；
+3. `ContentStore.knowledge` 在 PG/MySQL 上均未实现，`Stores.content()` 即使注册也不可用。
+
+后继变更范围：扩 `LLMConfStore` 字段 → 实现 BGE-M3 `Embedder` → 实现 PG/MySQL `KnowledgeStore` → 适配器包与 `Stores.bootstrap()` → 再切 5.1/5.2。
 - [x] 5.3 跑 `fboot build` + `cjpm test` 全量，确认无新增 warning；失败项逐条修复后再勾选
 - [x] 5.4 把 propose 产物同步到 `f_llm/doc/spec/f-llm-memory-storage/`（proposal/specs/design/tasks 全量）
 
