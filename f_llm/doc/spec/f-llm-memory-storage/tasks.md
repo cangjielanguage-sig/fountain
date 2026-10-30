@@ -44,8 +44,8 @@
 
 - [ ] 5.1 将 `Memory` / `FaithfulMemory` 内部改走 `Stores.content().memory`，公开签名不变；补回归用例证明摘要与写入路径行为一致
 - [ ] 5.2 将 `LLMConfs.holder()` 数据源切到 `Stores.meta().confs`，保留 `setHolder` 测试注入；既有 167 条用例全绿
-- [ ] 5.3 跑 `fboot build` + `cjpm test` 全量，确认无新增 warning；失败项逐条修复后再勾选
-- [ ] 5.4 把 propose 产物同步到 `f_llm/doc/spec/f-llm-memory-storage/`（proposal/specs/design/tasks 全量）
+- [x] 5.3 跑 `fboot build` + `cjpm test` 全量，确认无新增 warning；失败项逐条修复后再勾选
+- [x] 5.4 把 propose 产物同步到 `f_llm/doc/spec/f-llm-memory-storage/`（proposal/specs/design/tasks 全量）
 
 ## Workflow follow-up
 
