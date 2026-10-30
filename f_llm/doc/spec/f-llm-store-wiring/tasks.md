@@ -1,9 +1,9 @@
 ## 0. 数据访问分层（DAO + RootService）
 
-- [ ] 0.1 写 `PostgresMemoryDAO` / `MySqlMemoryDAO` 的 `@DAO` 接口（SQL 全部下沉，方法体默认实现）
-- [ ] 0.2 `PostgresMemoryRepository` / `MySqlMemoryRepository` 删除 `SqlExecutor` 字段与构造参数，改 `<: MemoryRepository & RootService`
-- [ ] 0.3 驱动名与库名解析：从 `StoreSettings` 取 driver 与 database（MyVector 路径），不再由调用方传 executor
-- [ ] 0.4 迁移现有测试：先注册 ORM，再 `PostgresMemoryRepository()` / `MySqlMemoryRepository()`，全绿
+- [x] 0.1 写 `PostgresMemoryDAO` / `MySqlMemoryDAO` 的 `@DAO` 接口（SQL 全部下沉，方法体默认实现）
+- [x] 0.2 `PostgresMemoryRepository` / `MySqlMemoryRepository` 删除 `SqlExecutor` 字段与构造参数，改 `<: MemoryRepository & RootService`
+- [x] 0.3 驱动名与库名解析：从 `StoreSettings` 取 driver 与 database（MyVector 路径），不再由调用方传 executor
+- [x] 0.4 迁移现有测试：先注册 ORM，再 `PostgresMemoryRepository()` / `MySqlMemoryRepository()`，全绿
 
 ## 1. 配置模型扩展
 

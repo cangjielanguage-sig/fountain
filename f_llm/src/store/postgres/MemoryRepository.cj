@@ -13,14 +13,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_llm.store
+package fountain::f_llm.store.postgres
 
 import std.collection.*
 import std.time.DateTime
 
 import fountain::f_orm.*
 
-import fountain::f_llm.dao.*
+import fountain::f_llm.store.*
+
+import fountain::f_llm.dao.postgres.*
 
 /**
  * PostgreSQL 记忆仓库（0.2）：SQL 全部在 `PostgresMemoryDAO`，
@@ -46,7 +48,10 @@ public class PostgresMemoryRepository <: MemoryRepository & RootService {
 
     public func upsertSparse(memoryId: Int64, userId: Int64, namespace: String,
                              tokens: HashMap<Int64, Float64>): Unit {
-        memoryDao().deleteTokens(memoryId)
+        // DAO 宏对「纯 DELETE」方法生成有缺陷，这里用执行器直接执行（仍是占位符绑定）
+        executor(DRIVER).setSql('DELETE FROM llm_memory_token WHERE memory_id = ?')
+            .add(memoryId)
+            .update
         for((token, weight) in tokens){
             memoryDao().insertToken(memoryId, userId, namespace, token, weight)
         }
@@ -102,7 +107,7 @@ public class PostgresMemoryRepository <: MemoryRepository & RootService {
 
     public func remove(userId: Int64, id: Int64): Bool {
         memoryDao().deleteVectors(id)
-        memoryDao().deleteMemory(userId, id) > 0
+        memoryDao().removeMemory(userId, id) > 0
     }
 
     private func memoryDao(): PostgresMemoryDAO {
@@ -178,3 +183,6 @@ public class PostgresMemoryRepository <: MemoryRepository & RootService {
         text
     }
 }
+
+
+let _postgresRepoRegistered = MemoryRepositories.register('postgres', { => PostgresMemoryRepository() })

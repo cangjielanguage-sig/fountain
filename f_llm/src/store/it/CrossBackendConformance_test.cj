@@ -13,7 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_llm.store
+package fountain::f_llm.store.it
+
+import fountain::f_llm.store.*
+import fountain::f_llm.store.postgres.*
+import fountain::f_llm.store.mysql.*
 
 import std.collection.*
 import std.database.sql.*
@@ -21,6 +25,9 @@ import std.unittest.*
 import std.unittest.testmacro.*
 
 import fountain::f_orm.*
+
+import fountain::f_llm.store.postgres.*
+import fountain::f_llm.store.mysql.*
 import mysql_driver.registerMysqlDriver
 import postgres_driver.registerPostgresDriver
 
@@ -127,7 +134,7 @@ public class CrossBackendConformanceTest {
               UNIQUE KEY uk_memory (user_id, namespace, title)
             )
         ''').update
-        let myRepo = MySqlMemoryRepository(my, 'fllm_test')
+        let myRepo = MySqlMemoryRepository(database: 'fllm_test')
         seed(myRepo)
         my.setSql("CALL mysql.myvector_index_build('fllm_test.llm_memory.title_vec','id')").mapList()
         let myHits = myRepo.searchDense(MemoryQuery(1, ['global'], [], 'q', topK: 2), vector(0.0101f64), 2)

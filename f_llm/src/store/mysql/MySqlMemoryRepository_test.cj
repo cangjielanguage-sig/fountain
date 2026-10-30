@@ -13,7 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_llm.store
+package fountain::f_llm.store.mysql
+
+import fountain::f_llm.store.*
 
 import std.collection.*
 import std.database.sql.*
@@ -21,6 +23,7 @@ import std.unittest.*
 import std.unittest.testmacro.*
 
 import fountain::f_orm.*
+
 import mysql_driver.registerMysqlDriver
 
 @Test
@@ -79,7 +82,7 @@ public class MySqlMemoryRepositoryTest {
     func testUpsertAndAnnSearch(): Unit {
         let executor = executor()
         prepare(executor)
-        let repo = MySqlMemoryRepository(executor, 'fllm_test')
+        let repo = MySqlMemoryRepository(database: 'fllm_test')
 
         let id = repo.upsert(MemoryWrite(1, 'global', '标题', '正文', 'note'),
                              vector(0.01f64), vector(0.01f64))
@@ -98,7 +101,7 @@ public class MySqlMemoryRepositoryTest {
     func testUpsertOverwritesSameTitle(): Unit {
         let executor = executor()
         prepare(executor)
-        let repo = MySqlMemoryRepository(executor, 'fllm_test')
+        let repo = MySqlMemoryRepository(database: 'fllm_test')
         let first = repo.upsert(MemoryWrite(1, 'global', '同标题', 'v1', 'note'),
                                 vector(0.02f64), vector(0.02f64))
         let second = repo.upsert(MemoryWrite(1, 'global', '同标题', 'v2', 'note'),

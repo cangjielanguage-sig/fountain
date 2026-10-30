@@ -13,19 +13,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_llm.dao
+package fountain::f_llm.dao.postgres
 
 import std.collection.*
 
 import fountain::f_orm.*
 import fountain::f_orm.macros.*
 
-/**
- * PostgreSQL 记忆 DAO：所有 SQL 与参数绑定都在这里。
- *
- * 参数一律走 `${arg(...)}` / `${meet(...).IN(...)}` 生成占位符并绑定，
- * 不把值拼进 SQL 文本；DAO 不依赖 store 包（避免双向依赖），只收基础类型。
- */
+/** PostgreSQL 记忆 DAO：SQL 与参数绑定集中在此。 */
 @DAO
 public interface PostgresMemoryDAO <: RootDAO {
     func upsertMemory(userId: Int64, namespace: String, title: String,
@@ -39,7 +34,7 @@ public interface PostgresMemoryDAO <: RootDAO {
             RETURNING id
         '''
         let row = executor.setSql(sql).firstToMap()
-        intOf(row.get('id') ?? 0)
+        daoIntOf(row.get('id') ?? 0)
     }
 
     func upsertVectors(memoryId: Int64, model: String, titleVector: String, contentVector: String): Unit {
@@ -80,9 +75,9 @@ public interface PostgresMemoryDAO <: RootDAO {
         executor.setSql(sql).mapList()
     }
 
-    func deleteTokens(memoryId: Int64): Unit {
+    func clearTokens(memoryId: Int64): Unit {
         let sql = 'DELETE FROM llm_memory_token WHERE memory_id = ${arg(memoryId)}'
-        executor.setSql(sql).delete
+        executor.setSql(sql).update
     }
 
     func insertToken(memoryId: Int64, userId: Int64, namespace: String,
@@ -168,19 +163,29 @@ public interface PostgresMemoryDAO <: RootDAO {
     }
 
     func deleteVectors(id: Int64): Unit {
-        executor.setSql('DELETE FROM llm_memory_vector WHERE memory_id = ${arg(id)}').delete
+        executor.setSql('DELETE FROM llm_memory_vector WHERE memory_id = ${arg(id)}').update
     }
 
-    func deleteMemory(userId: Int64, id: Int64): Int64 {
+    func removeMemory(userId: Int64, id: Int64): Int64 {
         let sql = 'DELETE FROM llm_memory WHERE user_id = ${arg(userId)} AND id = ${arg(id)}'
-        executor.setSql(sql).delete
+        let deleted = executor.setSql(sql).update
+        return deleted
     }
 
-    static func intOf(value: Any): Int64 {
-        match(value){
-            case number: Int64 => number
-            case number: Int32 => Int64(number)
-            case _ => 0
-        }
+
+}
+
+/**
+ * MySQL 记忆 DAO。
+ *
+ * 普通条件一律 `${arg(...)}` / `${meet(...).IN(...)}`；唯一例外是 MyVector 的
+ * `MYVECTOR_IS_ANN` / `myvector_construct`：组件改写不认占位符（实测 1064），
+ * 只能内联数值字面量（向量只含数字，namespace 做引号转义，user_id 为 Int64）。
+ */
+private func daoIntOf(value: Any): Int64 {
+    match(value){
+        case number: Int64 => number
+        case number: Int32 => Int64(number)
+        case _ => 0
     }
 }
