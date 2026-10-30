@@ -170,7 +170,7 @@ public class PostgresMemoryRepositoryTest {
                   PRIMARY KEY (name, version)
                 )
             ''').update
-            Some(PostgresMetaStore(executor))
+            Some(PostgresMetaStore())
         }catch(e: Exception){
             println("SKIP PostgresMetaStoreTest: ${e.message}")
             None

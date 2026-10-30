@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_llm.store
+package fountain::f_llm.store.it
 
 import std.database.sql.*
 import std.time.DateTime
@@ -23,6 +23,9 @@ import std.unittest.testmacro.*
 import fountain::f_orm.*
 import mysql_driver.registerMysqlDriver
 import postgres_driver.registerPostgresDriver
+
+import fountain::f_llm.store.*
+import fountain::f_llm.store.postgres.*
 
 /**
  * 元数据族 conformance（3.5）：同一套断言分别跑 f_store 与 PG。
@@ -212,7 +215,7 @@ public class MetaConformanceTest {
             executor.setSql("DELETE FROM llm_prompt WHERE name = 'conf.prompt'").update
             executor.setSql('DELETE FROM skills WHERE id = 1').update
             executor.setSql('DELETE FROM llm_character WHERE user_id = 1').update
-            Some(PostgresMetaStore(executor))
+            Some(PostgresMetaStore())
         }catch(e: Exception){
             println("SKIP MetaConformanceTest(PG): ${e.message}")
             None
