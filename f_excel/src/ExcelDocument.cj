@@ -100,6 +100,20 @@ public class ExcelDocument {
                 case None => ()
             }
         }
+        var styles = StylesLite.empty()
+        if (options.loadStyles) {
+            match (zip.read("xl/styles.xml")) {
+                case Some(bytes) => styles = StylesLite.load(bytes)
+                case None => ()
+            }
+        } else if (options.autoDetectDate) {
+            warnings_.add(
+                ExcelWarning(
+                    ExcelWarningKind.AutoDetectDateDisabled,
+                    "loadStyles=false，日期识别自动降级为关闭"
+                )
+            )
+        }
         for (entry in info.sheets) {
             var skipped = false
             for (name in options.skipSheets) {
@@ -117,7 +131,14 @@ public class ExcelDocument {
             let sheet = Worksheet(entry.name)
             match (zip.read(entry.partName)) {
                 case Some(bytes) =>
-                    let parsed = WorksheetParser.parseSheet(bytes, options, sst, entry.name)
+                    let parsed = WorksheetParser.parseSheet(
+                        bytes,
+                        options,
+                        sst,
+                        entry.name,
+                        styles: styles,
+                        date1904Override: Some(this.date1904Flag)
+                    )
                     for (row in parsed.rows) {
                         for (cell in row.cells) {
                             sheet.setCell(row.index, cell.col, cell.value)

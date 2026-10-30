@@ -23,7 +23,7 @@ import fountain::f_base.StringGenerator
 import fountain::f_xml.{XmlAttribute, XmlEvent, XmlPullParser}
 
 
-private func parseIntOrNone(text: String): ?Int64 {
+internal func parseIntOrNone(text: String): ?Int64 {
     try {
         Some(Int64.parse(text))
     } catch (_: Exception) {
@@ -31,7 +31,7 @@ private func parseIntOrNone(text: String): ?Int64 {
     }
 }
 
-private func parseFloatOrNone(text: String): ?Float64 {
+internal func parseFloatOrNone(text: String): ?Float64 {
     try {
         Some(Float64.parse(text))
     } catch (_: Exception) {
@@ -39,7 +39,7 @@ private func parseFloatOrNone(text: String): ?Float64 {
     }
 }
 
-private func parseDateOrNone(text: String): ?DateTime {
+internal func parseDateOrNone(text: String): ?DateTime {
     try {
         Some(DateTime.parse(text))
     } catch (_: Exception) {
@@ -71,10 +71,12 @@ internal class WorksheetParser {
         bytes: Array<Byte>,
         options: ExcelReadOptions,
         sst: SharedStringTable,
-        sheetName: String
+        sheetName: String,
+        styles!: StylesLite = StylesLite.empty(),
+        date1904Override!: ?Bool = None
     ): ParsedSheet {
         let parsed = ParsedSheet()
-        let handler = SheetRowHandler(options, sst, sheetName, parsed)
+        let handler = SheetRowHandler(options, sst, sheetName, parsed, styles, date1904Override, None)
         let parser = XmlPullParser(ByteBuffer(bytes))
         try {
             while (let Some(event) <- parser.nextEvent()) {
@@ -93,6 +95,9 @@ internal class SheetRowHandler {
     private let sst: SharedStringTable
     private let sheetName: String
     private let parsed: ParsedSheet
+    private let styles: StylesLite
+    private let date1904Override: ?Bool
+    private let sink: ?RowSink
 
     private var rowActive = false
     private var skipRow = false
@@ -108,6 +113,7 @@ internal class SheetRowHandler {
     private var skipCell = false
     private var col: Int64 = 0
     private var cellType: ?String = None
+    private var styleIndex: Int64 = 0
     private var valueText = StringGenerator()
     private var inlineText = StringGenerator()
     private var formulaText = StringGenerator()
@@ -117,11 +123,22 @@ internal class SheetRowHandler {
     private var inInlineText = false
     private var inFormula = false
 
-    init(options: ExcelReadOptions, sst: SharedStringTable, sheetName: String, parsed: ParsedSheet) {
+    init(
+        options: ExcelReadOptions,
+        sst: SharedStringTable,
+        sheetName: String,
+        parsed: ParsedSheet,
+        styles: StylesLite,
+        date1904Override: ?Bool,
+        sink: ?RowSink
+    ) {
         this.options = options
         this.sst = sst
         this.sheetName = sheetName
         this.parsed = parsed
+        this.styles = styles
+        this.date1904Override = date1904Override
+        this.sink = sink
     }
 
     func onEvent(event: XmlEvent): Unit {
@@ -230,6 +247,10 @@ internal class SheetRowHandler {
         cellActive = true
         skipCell = false
         cellType = attr(attrs, "t")
+        styleIndex = match (attr(attrs, "s")) {
+            case Some(text) => parseIntOrNone(text) ?? 0
+            case None => 0
+        }
         valueText = StringGenerator()
         inlineText = StringGenerator()
         formulaText = StringGenerator()
@@ -357,7 +378,7 @@ internal class SheetRowHandler {
                 CellValue.Empty
             } else {
                 match (parseFloatOrNone(text)) {
-                    case Some(v) => CellValue.Number(v)
+                    case Some(v) => numberValue(v)
                     case None =>
                         parsed.warnings.add(
                             ExcelWarning(
@@ -372,6 +393,46 @@ internal class SheetRowHandler {
         }
     }
 
+    /** 数字 → 日期识别（默认开；样式缺失时保持数字）。 */
+    private func numberValue(value: Float64): CellValue {
+        if (!this.options.autoDetectDate || !this.options.loadStyles) {
+            return CellValue.Number(value)
+        }
+        if (!this.styles.isDateFormat(this.styleIndex)) {
+            return CellValue.Number(value)
+        }
+        if (this.styles.isElapsedFormat(this.styleIndex)) {
+            this.parsed.warnings.add(
+                ExcelWarning(
+                    ExcelWarningKind.UnsupportedTimeFormat,
+                    "时长格式在 M1 按日期处理",
+                    sheet: Some(sheetName)
+                )
+            )
+        }
+        let date1904 = match (this.date1904Override) {
+            case Some(v) => v
+            case None => match (this.options.date1904) {
+                case Some(v) => v
+                case None => false
+            }
+        }
+        match (dateTimeFromSerial(value, date1904)) {
+            case Some(dt) => CellValue.Date(dt)
+            case None =>
+                if (!date1904 && value >= 60.0 && value < 61.0) {
+                    this.parsed.warnings.add(
+                        ExcelWarning(
+                            ExcelWarningKind.DateSerial60,
+                            "1900-02-29 不存在，按数字保留",
+                            sheet: Some(sheetName)
+                        )
+                    )
+                }
+                CellValue.Number(value)
+        }
+    }
+
     private func finishRow(): Unit {
         if (!rowActive) {
             return
@@ -380,7 +441,20 @@ internal class SheetRowHandler {
         if (skipRow) {
             return
         }
-        parsed.rows.add(RowData(rowIndex, cells.toArray(), height: rowHeight))
+        let data = RowData(rowIndex, cells.toArray(), height: rowHeight)
+        if (rowIndex <= lastRow && lastRow > 0) {
+            parsed.warnings.add(
+                ExcelWarning(
+                    ExcelWarningKind.RowOrderViolation,
+                    "行号乱序：${rowIndex} 出现在 ${lastRow} 之后，按原样产出",
+                    sheet: Some(sheetName)
+                )
+            )
+        }
+        match (this.sink) {
+            case Some(s) => s.row(data)
+            case None => parsed.rows.add(data)
+        }
         lastRow = rowIndex
     }
 }

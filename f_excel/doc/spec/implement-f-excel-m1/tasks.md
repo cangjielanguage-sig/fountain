@@ -104,22 +104,22 @@
 
 ## 5. P4 日期
 
-- [ ] 5.1 **先写测试** `src/DateFormat_test.cj`：内置集合 `14..22`/`45..47`；
+- [x] 5.1 **先写测试** `src/DateFormat_test.cj`：内置集合 `14..22`/`45..47`；
   自定义净化（去 `[...]`/`"..."`/`\x`/`_x`/`*x`）；
   §5.3.3 的 8 个"非日期"样本全部判 `Number`；
   `m` 歧义（`yyyy-mm-dd` vs `h:mm`）；
   `[h]` 判定表 10 行（`[h]:mm:ss` / `[hh]:mm` / `[Red][h]:mm` / `[Blue][mm]:ss` /
   `[Red]0.00` / `[$-409]h:mm` / `[$-409][h]:mm` / `[>=100]0.00` / `[h:ss]` / `[Color10]`）。
   → 实现 `src/DateFormat.cj` + `src/StylesLite.cj`（只读 `cellXfs[i].numFmtId`）。
-- [ ] 5.2 **先写测试** `src/DateSerial_test.cj`：1900 基准 serial `1→1900-01-01`、`59→1900-02-28`、
+- [x] 5.2 **先写测试** `src/DateSerial_test.cj`：1900 基准 serial `1→1900-01-01`、`59→1900-02-28`、
   `60→Number` + `DateSerial60`、`61→1900-03-01`；1904 基准 `0→1904-01-01`；
   带时间（`45231.5`）；反向（`DateTime → serial`）逐项还原；`TZ` 变化不影响结果（按 0.4 结论）。
   → 实现 `src/DateSerial.cj`。
-- [ ] 5.3 **先写测试**：`autoDetectDate=false` → `Number`；`loadStyles=false` 且
+- [x] 5.3 **先写测试**：`autoDetectDate=false` → `Number`；`loadStyles=false` 且
   `autoDetectDate=true` → 自动降级 + `AutoDetectDateDisabled`；`date1904` 选项与
   `workbookPr` 相反 → 以选项为准 + `DateBaseMismatch`；`numFmtId=46` → `Date` +
   `UnsupportedTimeFormat`。
-- [ ] 5.4 **先写测试**（写侧）：`Date` 三档（`14` / `22` / `20`）的 `s` 与 `<v>`；
+- [x] 5.4 **先写测试**（写侧）：`Date` 三档（`14` / `22` / `20`）的 `s` 与 `<v>`；
   调用方给非日期格式时不覆盖 + `NumberFormatNotSupportedInM1`。
 
 ## 6. P5 合并单元格与多 sheet
@@ -134,45 +134,45 @@
 
 ## 7. P6 流式读
 
-- [ ] 7.1 **先写测试** `src/ExcelSheetStream_test.cj`（入口）：`open(path)` / `open(input)`
+- [x] 7.1 **先写测试** `src/ExcelSheetStream_test.cj`（入口）：`open(path)` / `open(input)`
   的 `sheetNames()` 一致；`rows` 名字不存在 → `None`；`rowsAt` 越界 → `None`；
   不是 ZIP / 缺 workbook 两种异常；`spool=false` 记 `SpoolDisabled`；
   `spoolDir` 不可写抛且消息含两个出路。
   → 实现 `src/ExcelSheetStream.cj` 的打开与装载。
-- [ ] 7.2 **先写测试**（行语义）：稀疏行；`<row r="5"/>` 空 cells；缺行不补；
+- [x] 7.2 **先写测试**（行语义）：稀疏行；`<row r="5"/>` 空 cells；缺行不补；
   乱序照原样 + `RowOrderViolation`；`maxRows`/`maxCols` 截断；
   `loadRowHeight=false` 时 `height` 为 `None`。→ 实现 `RowReader.next()`。
-- [ ] 7.3 **先写测试**（生命周期）：`next()` 幂等（`None` 之后仍 `None`）；`close()` 后
+- [x] 7.3 **先写测试**（生命周期）：`next()` 幂等（`None` 之后仍 `None`）；`close()` 后
   `next()` 抛「流已关闭」；提前 `close()` 后能重新 `rows(sheet)` 从第 1 行开始；
   `close()` 幂等；`close()` 删除 spool 临时文件；坏 sheet 抛异常后仍能读下一个 sheet。
-- [ ] 7.4 **先写测试**（合并时序）：流中 `mergedRanges()` 为空 + `MergedRangesUnavailable`；
+- [x] 7.4 **先写测试**（合并时序）：流中 `mergedRanges()` 为空 + `MergedRangesUnavailable`；
   读到 `None` 后有值；提前 `close()` 仍为空；`lastMergedRanges(sheet)` 同上。
 
 ## 8. P7 流式写
 
-- [ ] 8.1 **先写测试** `src/ExcelWriter_test.cj`（构造）：空清单 / 重名 / 非法名抛；
+- [x] 8.1 **先写测试** `src/ExcelWriter_test.cj`（构造）：空清单 / 重名 / 非法名抛；
   构造后已写出 4 个元数据条目（用 `ZipReader` 读中途字节会被 `ZipException` 挡住——
   改为检查底层计数流的字节前缀含 `[Content_Types].xml`）。
   → 实现 `src/ExcelWriter.cj` 的构造。
-- [ ] 8.2 **先写测试**（写入）：名字顺序不一致抛；迭代器消费次数 = 行数 + 1；
+- [x] 8.2 **先写测试**（写入）：名字顺序不一致抛；迭代器消费次数 = 行数 + 1；
   行号非严格递增抛（含重复）；`col` 越界 / 非升序抛；`rowsWritten` 每 sheet 归零。
   → 实现 `writeSheet`。
-- [ ] 8.3 **先写测试**（输出一致）：同一组 `RowData` 经 `ExcelWriter` 与
+- [x] 8.3 **先写测试**（输出一致）：同一组 `RowData` 经 `ExcelWriter` 与
   `ExcelDocument.write`，两个 `sheet1.xml` 解压内容**逐字节相同**。
-- [ ] 8.4 **先写测试**（状态机）：`finish()` 前读字节 → `ZipException`；
+- [x] 8.4 **先写测试**（状态机）：`finish()` 前读字节 → `ZipException`；
   中途异常后 `writeSheet`/`finish` 都抛且消息含原始原因；`finish()` 后不可再用；
   `finish()` 写出的包能读回全部行。
-- [ ] 8.5 **先写测试**（flush 粒度 + 直连）：1 万行经计数 `OutputStream`，`write` 次数远小于
+- [x] 8.5 **先写测试**（flush 粒度 + 直连）：1 万行经计数 `OutputStream`，`write` 次数远小于
   1 万；`RowReader` 直接喂 `writeSheet` 的"大表复制"用例。
 
 ## 9. P8 往返与结构
 
-- [ ] 9.1 **先写测试** `src/RoundTrip_test.cj`：七种值各 2 格往返逐格相等；
+- [x] 9.1 **先写测试** `src/RoundTrip_test.cj`：七种值各 2 格往返逐格相等；
   中文/emoji/`& < > " '`/首尾空格/`\r\n` 往返逐字符相等；数字精度 5 组；
   日期两种基准；2 sheet + 2 合并区域。
-- [ ] 9.2 **先写测试** `src/ChannelParity_test.cj`：5 份 fixture 分别走整文档与流式通道，
+- [x] 9.2 **先写测试** `src/ChannelParity_test.cj`：5 份 fixture 分别走整文档与流式通道，
   逐行逐格比对；日期/公式在两条通道一致；`autoDetectDate=false` 在两条通道一致。
-- [ ] 9.3 **先写测试** `src/PackageStructure_test.cj`：六类必需部件齐全；
+- [x] 9.3 **先写测试** `src/PackageStructure_test.cj`：六类必需部件齐全；
   每个 xml/rels 能被 `f_xml` 解析；`[Content_Types].xml` 覆盖完整（无遗漏无多余）；
   无悬空 `r:id`；`fills[0]=none` / `fills[1]=gray125` / `cellXfs[0].numFmtId=0` /
   `cellStyles` 含 `builtinId="0"`；所有 `s` 索引 `< cellXfs.count`。

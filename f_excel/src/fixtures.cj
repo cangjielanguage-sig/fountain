@@ -70,6 +70,23 @@ internal func workbookRelsXml(sheetCount: Int64): String {
         "<Relationships xmlns=\"${NS_PKG_REL}\">" + rels + "</Relationships>"
 }
 
+/** 最小 styles.xml：cellXfs 按给定 numFmtId 顺序（索引即 s）。 */
+internal func stylesXml(numFmtIds: Array<Int64>): String {
+    var xfs = ""
+    for (id in numFmtIds) {
+        xfs += "<xf numFmtId=\"${id}\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/>"
+    }
+    "<?xml version=\"1.0\"?><styleSheet xmlns=\"${NS_MAIN}\">" +
+        "<fonts count=\"1\"><font><sz val=\"11\"/></font></fonts>" +
+        "<fills count=\"2\"><fill><patternFill patternType=\"none\"/></fill>" +
+        "<fill><patternFill patternType=\"gray125\"/></fill></fills>" +
+        "<borders count=\"1\"><border><left/><right/><top/><bottom/><diagonal/></border></borders>" +
+        "<cellStyleXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/></cellStyleXfs>" +
+        "<cellXfs count=\"${numFmtIds.size}\">${xfs}</cellXfs>" +
+        "<cellStyles count=\"1\"><cellStyle name=\"Normal\" xfId=\"0\" builtinId=\"0\"/></cellStyles>" +
+        "</styleSheet>"
+}
+
 internal func worksheetXml(rows: String): String {
     "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>" +
         "<worksheet xmlns=\"${NS_MAIN}\"><sheetData>${rows}</sheetData></worksheet>"

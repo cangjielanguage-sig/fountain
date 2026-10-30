@@ -45,7 +45,11 @@ internal class PackageWriter {
         let styles = StyleTable()
         zip.add("[Content_Types].xml", contentTypes(count))
         zip.add("_rels/.rels", rootRels())
-        zip.add("xl/workbook.xml", workbookXml(sheets, date1904))
+        let names = ArrayList<String>()
+        for (sheet in sheets) {
+            names.add(sheet.name)
+        }
+        zip.add("xl/workbook.xml", workbookXmlFromNames(names.toArray(), date1904))
         zip.add("xl/_rels/workbook.xml.rels", workbookRels(count))
         for (i in 0..sheets.size) {
             let entry = zip.openEntry("xl/worksheets/sheet${i + 1}.xml")
@@ -73,7 +77,7 @@ internal class PackageWriter {
         XmlWriter(buffer)
     }
 
-    private static func contentTypes(sheetCount: Int64): Array<Byte> {
+    internal static func contentTypes(sheetCount: Int64): Array<Byte> {
         let buffer = ByteBuffer(256 * 1024)
         let xml = newWriter(buffer)
         xml.writeDeclaration(encoding: "UTF-8", standalone: Some(true))
@@ -129,7 +133,7 @@ internal class PackageWriter {
         buffer.bytes()
     }
 
-    private static func rootRels(): Array<Byte> {
+    internal static func rootRels(): Array<Byte> {
         let buffer = ByteBuffer(64 * 1024)
         let xml = newWriter(buffer)
         xml.writeDeclaration(encoding: "UTF-8", standalone: Some(true))
@@ -147,7 +151,7 @@ internal class PackageWriter {
         buffer.bytes()
     }
 
-    private static func workbookXml(sheets: ArrayList<Worksheet>, date1904: Bool): Array<Byte> {
+    internal static func workbookXmlFromNames(sheets: Array<String>, date1904: Bool): Array<Byte> {
         let buffer = ByteBuffer(128 * 1024)
         let xml = newWriter(buffer)
         xml.writeDeclaration(encoding: "UTF-8", standalone: Some(true))
@@ -163,7 +167,7 @@ internal class PackageWriter {
             xml.emptyElement(
                 xl("sheet"),
                 attributes: [
-                    XmlAttribute(QName("name"), sheets[i].name),
+                    XmlAttribute(QName("name"), sheets[i]),
                     XmlAttribute(QName("sheetId"), "${i + 1}"),
                     XmlAttribute(QName("r:id"), "rId${i + 1}")
                 ]
@@ -175,7 +179,7 @@ internal class PackageWriter {
         buffer.bytes()
     }
 
-    private static func workbookRels(sheetCount: Int64): Array<Byte> {
+    internal static func workbookRels(sheetCount: Int64): Array<Byte> {
         let buffer = ByteBuffer(128 * 1024)
         let xml = newWriter(buffer)
         xml.writeDeclaration(encoding: "UTF-8", standalone: Some(true))
@@ -203,7 +207,7 @@ internal class PackageWriter {
         buffer.bytes()
     }
 
-    private static func stylesXml(styles: StyleTable): Array<Byte> {
+    internal static func stylesXml(styles: StyleTable): Array<Byte> {
         let buffer = ByteBuffer(128 * 1024)
         let xml = newWriter(buffer)
         xml.writeDeclaration(encoding: "UTF-8", standalone: Some(true))
