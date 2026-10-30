@@ -1,0 +1,8 @@
+schema: spec-driven
+created: 2026-10-30
+x-scope: semantic-layer-optimization
+x-milestone: M1
+x-design-doc: f_xml/doc/f_xml模块设计.md
+x-predecessor: f_xml/doc/spec/complete-f-xml-m1-followups
+x-gate: performance-and-memory
+x-runtime-env: default (no cjHeapSize / cjGCInterval / cjRegionSize)
