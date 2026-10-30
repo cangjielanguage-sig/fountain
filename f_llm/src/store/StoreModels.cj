@@ -171,12 +171,23 @@ public class LLMConfView {
     public let actualLlmName: String
     public let weight: Int64
     public let enabled: Bool
+    /** 以下为完整配置字段（1.x）：构造 LLMConf 需要 */
+    public let llmUrl: String
+    public let auth: String
+    public let temperature: Float64
+    public let alwaysThinking: Bool
 
-    public init(provider: String, llmName: String, actualLlmName: String, weight: Int64, enabled: Bool) {
+    public init(provider: String, llmName: String, actualLlmName: String, weight: Int64, enabled: Bool,
+                llmUrl!: String = '', auth!: String = '', temperature!: Float64 = -1.0f64,
+                alwaysThinking!: Bool = false) {
         this.provider = provider
         this.llmName = llmName
         this.actualLlmName = actualLlmName
         this.weight = weight
         this.enabled = enabled
+        this.llmUrl = llmUrl
+        this.auth = auth
+        this.temperature = temperature
+        this.alwaysThinking = alwaysThinking
     }
 }

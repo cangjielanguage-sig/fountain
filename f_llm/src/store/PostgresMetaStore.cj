@@ -69,7 +69,8 @@ class PostgresLLMConfStore <: LLMConfStore {
     public func candidates(llmName: String): ArrayList<LLMConfView> {
         let result = ArrayList<LLMConfView>()
         for(row in executor.setSql('''
-            SELECT provider, llm_name, actual_llm_name, weight, enabled
+            SELECT provider, llm_name, actual_llm_name, weight, enabled,
+                   llm_url, auth, temperature, always_thinking
             FROM llm_conf
             WHERE enabled = true AND weight > 0 AND llm_name = ?
         ''').add(llmName).mapList()){
@@ -78,7 +79,11 @@ class PostgresLLMConfStore <: LLMConfStore {
                 textOf(row.get('llm_name') ?? ''),
                 textOf(row.get('actual_llm_name') ?? ''),
                 intOf(row.get('weight') ?? 0),
-                true
+                true,
+                llmUrl: textOf(row.get('llm_url') ?? ''),
+                auth: textOf(row.get('auth') ?? ''),
+                temperature: floatOf(row.get('temperature') ?? -1.0f64),
+                alwaysThinking: boolOf(row.get('always_thinking'))
             ))
         }
         result
@@ -111,6 +116,27 @@ class PostgresLLMConfStore <: LLMConfStore {
             case number: Int64 => number
             case number: Int32 => Int64(number)
             case _ => 0
+        }
+    }
+
+    private static func floatOf(value: Any): Float64 {
+        match(value){
+            case number: Float64 => number
+            case number: Float32 => Float64(number)
+            case number: Int64 => Float64(number)
+            case _ => -1.0f64
+        }
+    }
+
+    private static func boolOf(value: ?Any): Bool {
+        match(value){
+            case Some(raw) =>
+                match(raw){
+                    case flag: Bool => flag
+                    case number: Int64 => number != 0
+                    case _ => false
+                }
+            case None => false
         }
     }
 }
