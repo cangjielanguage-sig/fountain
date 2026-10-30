@@ -1,5 +1,26 @@
 ## ADDED Requirements
 
+### Requirement: 数据访问分层
+
+MySQL / PostgreSQL 的 `MemoryRepository` 实现 SHALL 把 SQL 收敛到 `@DAO` 接口（参考 `LLMConfDAO`），
+实现类 MUST NOT 持有 `SqlExecutor` 字段或构造参数，并 SHALL 实现 `fountain::f_orm.RootService`，
+通过 `executor()` / `dao<T>(driver)` 获取执行器。
+
+#### Scenario: 构造 Repository 不需要执行器
+
+- **WHEN** 已注册 `postgres` 驱动后执行 `PostgresMemoryRepository()`
+- **THEN** 构造成功，`add` / `search` 能通过 DAO 访问数据库
+
+#### Scenario: SQL 只出现在 DAO 层
+
+- **WHEN** 检查 `PostgresMemoryRepository` / `MySqlMemoryRepository` 源码
+- **THEN** 其中不出现 `SELECT` / `INSERT` / `UPDATE` / `DELETE` 字面量，SQL 全部位于对应 DAO 接口
+
+#### Scenario: 未注册驱动时报错可定位
+
+- **WHEN** 未注册 `mysql` 驱动就调用 `MySqlMemoryRepository().add(...)`
+- **THEN** 抛出异常，消息包含驱动名 `mysql` 与注册提示，而不是空指针
+
 ### Requirement: 启动时按配置接线
 
 系统 SHALL 在启动时读取 `llm_contentStore` / `llm_metaStore`，调用对应实现包的注册函数，使 `Stores.content()` / `Stores.meta()` 返回已配置的后端；未知值 MUST 启动失败并列出可选实现。

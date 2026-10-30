@@ -16,7 +16,9 @@
 3. **PG/MySQL `KnowledgeStore`**：文档与块的最小实现（upsert/get/remove），复用 `llm_memory` 之外的独立表或文档表；
 4. **实现包与 bootstrap**：`store/postgres`、`store/mysql` 各自 import 驱动、自注册工厂；`Stores.bootstrap()` 按配置调用对应 `register()`；
 5. **业务层切换**：`Memory`/`FaithfulMemory` 走 `Stores.content().memory`，`LLMConfs.holder()` 走 `Stores.meta().confs`，保留 `setHolder` 测试注入；
-6. **回归**：切换前后 `Memory` 摘要与写入路径行为一致；既有 231 条用例全绿。
+6. **回归**：切换前后 `Memory` 摘要与写入路径行为一致；既有 231 条用例全绿；
+7. **数据访问分层**：MySQL / PostgreSQL 的 `MemoryRepository` 把 SQL 拆到 `@DAO` 接口（参考 `LLMConfDAO`），
+   实现类删除 `SqlExecutor` 成员与构造参数，改为实现 `fountain::f_orm.RootService`，通过 `executor()` / `dao<T>()` 取执行器。
 
 ## Capabilities
 
