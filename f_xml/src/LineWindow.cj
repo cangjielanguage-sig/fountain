@@ -211,6 +211,88 @@ public class LineWindow {
         cp
     }
 
+    // ------------------------------------------------------------ 块视图（internal）
+    //
+    // **失效规则**：`ensure` 会把未消费的尾部搬到数组头部并把 `pos` 归零，所以
+    // `cpAt` / `asciiRunLength` 的下标只在「上一次 `runAvailable()` 之后、下一次
+    // `runAvailable()` 之前」有效。批量路径的顺序固定为
+    // `runAvailable` → `asciiRunLength` / `cpAt` 拷贝 → `skipRun`，绝不跨 `runAvailable`
+    // 持有下标。加这些成员是为了让词法器整段消费 ASCII，而不是逐字符 `peekCp` / `advanceCp`。
+
+    /**
+     * 触发一次 `ensure(1)`，返回当前块内可直接消费的码点数；EOF 时返回 0。
+     *
+     * 语义与 `peekFast(0)` 对齐：不足且存在 `pendingError` 时抛错，不返回 0 伪装 EOF。
+     */
+    internal func runAvailable(): Int64 {
+        if (!this.ensure(1)) {
+            if (this.pendingError.isSome()) {
+                this.raisePendingError()
+            }
+            return 0
+        }
+        this.len - this.pos
+    }
+
+    /** 相对当前游标的码点；调用方保证 `i < runAvailable()`。不 ensure、不改状态。 */
+    internal func cpAt(i: Int64): Int64 {
+        Int64(this.block[this.pos + i])
+    }
+
+    /**
+     * 从当前游标起、连续满足「码点 < 0x80 且 `mask[cp] == false`」的码点数。
+     *
+     * 不 ensure：调用方先 `runAvailable()` 取快照，保证期间不触发压缩或重填。
+     */
+    internal func asciiRunLength(mask: Array<Bool>): Int64 {
+        let end = this.len
+        var i = this.pos
+        while (i < end) {
+            let cp = Int64(this.block[i])
+            if (cp >= 0x80 || mask[cp]) {
+                break
+            }
+            i++
+        }
+        i - this.pos
+    }
+
+    /** 等价于连续调用 `n` 次 `advanceFast`：行列号推进逐字一致（`\n` 行+1、列归 1）。 */
+    internal func skipRun(n: Int64): Unit {
+        if (n <= 0) {
+            return
+        }
+        let end = this.pos + n
+        var hasNewline = false
+        var i = this.pos
+        while (i < end) {
+            if (this.block[i] == 0x0A) {
+                hasNewline = true
+                break
+            }
+            i++
+        }
+        if (!hasNewline) {
+            this.column += n
+        } else {
+            var line = this.line
+            var column = this.column
+            var k = this.pos
+            while (k < end) {
+                if (this.block[k] == 0x0A) {
+                    line++
+                    column = 1
+                } else {
+                    column++
+                }
+                k++
+            }
+            this.line = line
+            this.column = column
+        }
+        this.pos = end
+    }
+
     /** 向前看第 `offset` 个字符（0 = 当前），不移动游标。 */
     public func peek(offset: Int64): ?Rune {
         let cp = this.peekFast(offset)

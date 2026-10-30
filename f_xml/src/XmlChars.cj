@@ -36,6 +36,35 @@ internal class XmlChars {
         r == r' ' || r == r'\t' || r == r'\n' || r == r'\r'
     }
 
+    /** `isXmlChar` 的 ASCII 段（`0x09` / `0x0A` / `0x0D` / `0x20..0x7F`）：批量扫描的 O(1) 判定。 */
+    static func isAsciiXmlChar(cp: Int64): Bool {
+        cp == 0x09 || cp == 0x0A || cp == 0x0D || (cp >= 0x20 && cp <= 0x7F)
+    }
+
+    /**
+     * 128 项边界掩码：`mask[cp] == true` 表示「该 ASCII 码点必须交给逐字符路径」。
+     *
+     * @param stops 停止字符（文本的 `<` / `&` / `]`、属性值的引号与空白等）
+     * @param invalid 为 `true` 时把 XML 1.0 不允许的 ASCII 控制字符也标成停点——
+     *        这样报错由原分支给出，消息与行列号与改动前逐字符相同。
+     */
+    static func asciiMaskFor(stops: Array<Int64>, invalid!: Bool = false): Array<Bool> {
+        let mask = Array<Bool>(128, repeat: false)
+        for (cp in stops) {
+            if (cp >= 0 && cp < 128) {
+                mask[cp] = true
+            }
+        }
+        if (invalid) {
+            for (cp in 0..128) {
+                if (!isAsciiXmlChar(cp)) {
+                    mask[cp] = true
+                }
+            }
+        }
+        mask
+    }
+
     /** 码点重载：词法器热路径直接判定，不构造 `Rune`。 */
     static func isWhitespace(cp: Int64): Bool {
         cp == 0x20 || cp == 0x09 || cp == 0x0A || cp == 0x0D
@@ -69,8 +98,7 @@ internal class XmlChars {
     }
 
     /** 十进制数字（`&#DDD;`）。 */
-    static func isDigit(r: Rune): Bool {
-        r >= r'0' && r <= r'9'
+    static func isDigit(r: Rune): Bool {        r >= r'0' && r <= r'9'
     }
 
     static func isDigit(cp: Int64): Bool {

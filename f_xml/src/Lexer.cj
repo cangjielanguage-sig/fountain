@@ -125,10 +125,39 @@ internal class Lexer {
     private static let kSystem = cpsOf("SYSTEM")
     private static let kConditionalOpen = cpsOf("<![")
     private static let kInlineNames = [cpsOf("lt"), cpsOf("gt"), cpsOf("amp"), cpsOf("quot"), cpsOf("apos")]
+    /**
+     * 文本批量扫描的边界掩码（`true` = 停在逐字符路径）：`<`、`&`、`]`，
+     * 以及 XML 1.0 不允许的 ASCII 控制字符（让原路径给出原文与原文位置）。
+     */
+    private static let kTextMask = XmlChars.asciiMaskFor([0x3C, 0x26, 0x5D], invalid: true)
+    /** 属性值批量扫描的边界掩码：当前引号 + `&` + `<` + 三个要归一的空白。 */
+    private static let kAttrMaskDouble = XmlChars.asciiMaskFor([0x22, 0x26, 0x3C, 0x0A, 0x09, 0x0D], invalid: true)
+    private static let kAttrMaskSingle = XmlChars.asciiMaskFor([0x27, 0x26, 0x3C, 0x0A, 0x09, 0x0D], invalid: true)
 
     private let window: LineWindow
     let limits: EntityLimits
     private let feeds = ArrayList<RuneFeed>()
+    /** 名字扫描缓冲：`bytes()` 是零拷贝视图，驻留表的逐字节比对直接用它。 */
+    private let nameScratch = ByteScratch()
+    /** 属性值 / 声明值 / DOCTYPE 字面量的复用缓冲。 */
+    private let valueScratch = StringGenerator()
+    /** 文本、CDATA、注释、PI 数据、内部子集的复用缓冲。 */
+    private let textScratch = StringGenerator()
+    /** 名字驻留表；`hits` / `misses` / `insertions` 供测试做结构性断言。 */
+    let names = NameTable()
+    /** 开始标签的属性列表：入口 `clear()` 后复用（令牌在同一 `step()` 内被消费完）。 */
+    private let attrsScratch = ArrayList<RawAttribute>()
+    /** `peekCp` 调用次数（批量扫描的结构性证据，不参与任何业务判断）。 */
+    var peekCalls: Int64 = 0
+    /**
+     * 三条复用缓冲的实例序号（名字缓冲用 `ByteScratch.id`，两个生成器用这里发的号）。
+     *
+     * 只给用例做「实例数恒定」的结构性断言：同一次解析内不变，不随 token 数增长。
+     */
+    private static var nextScratchId: Int64 = 0
+    let nameScratchId: Int64
+    let valueScratchId: Int64
+    let textScratchId: Int64
     /** DOCTYPE 解析完成后由上层注入；属性值里的实体展开要用。 */
     var entityTable: ?EntityTable = None
     var expander: ?EntityExpander = None
@@ -140,6 +169,11 @@ internal class Lexer {
     init(window: LineWindow, limits!: EntityLimits = EntityLimits()) {
         this.window = window
         this.limits = limits
+        this.nameScratchId = this.nameScratch.id
+        Lexer.nextScratchId++
+        this.valueScratchId = Lexer.nextScratchId
+        Lexer.nextScratchId++
+        this.textScratchId = Lexer.nextScratchId
         this.feeds.add(WindowFeed(window))
     }
 
@@ -156,6 +190,7 @@ internal class Lexer {
 
     /** 热路径：直接给码点（`-1` = EOF），单帧时直连 `LineWindow`。 */
     func peekCp(offset: Int64): Int64 {
+        this.peekCalls++
         if (this.feeds.size == 1) {
             return this.window.peekFast(offset)
         }
@@ -301,10 +336,18 @@ internal class Lexer {
 
     // ---------------------------------------------------------------- 名字
 
-    /** 读一个 QName 字面名（`prefix:local`）。 */
+    /**
+     * 读一个 QName 字面名（`prefix:local`）。
+     *
+     * 一次扫描同时算 FNV-1a hash 并把码点写进复用缓冲；扫描结束先查驻留表，
+     * 命中直接复用表里**已切分**的 `prefix` / `local`（零 `String` 分配、零切片），
+     * 未命中才 `toString()` + 切分 + 插入（`design.md` §4.2）。
+     * 冒号规则与空前缀 / 空本地名的报错时机、消息与改动前完全一致。
+     */
     func readName(): RawName {
         let pos = this.position()
-        let gen = StringGenerator()
+        this.nameScratch.reset()
+        var hash = NameTable.kFnvOffset
         var colonSeen = false
         var first = true
         while (true) {
@@ -326,14 +369,19 @@ internal class Lexer {
                 }
                 colonSeen = true
             }
-            gen.append(Rune(cp))
+            this.nameScratch.putCp(cp)
+            hash = NameTable.fold(hash, cp)
             this.advanceCp()
             first = false
         }
         if (first) {
             throw this.error("缺少名字")
         }
-        let text = gen.toString()
+        match (this.names.lookup(hash, this.nameScratch)) {
+            case Some(entry) => return RawName(entry.prefix, entry.local, pos.line, pos.column)
+            case None => ()
+        }
+        let text = this.nameScratch.toUtf8String()
         if (colonSeen) {
             let idx = match (text.indexOf(":")) {
                 case Some(i) => i
@@ -344,8 +392,10 @@ internal class Lexer {
             if (prefix.isEmpty() || local.isEmpty()) {
                 throw this.error("名字的空前缀 / 空本地名非法")
             }
+            this.names.insert(hash, text, Some(prefix), local)
             return RawName(Some(prefix), local, pos.line, pos.column)
         }
+        this.names.insert(hash, text, None, text)
         RawName(None, text, pos.line, pos.column)
     }
 
@@ -431,8 +481,24 @@ internal class Lexer {
         if (first == 0x3C) {
             return this.readMarkup()
         }
-        let gen = StringGenerator()
+        let gen = this.textScratch.reset()
         while (true) {
+            // 批量路径：只在单帧（无实体展开）时可用，块视图由 `runAvailable` 建立。
+            if (this.feeds.size == 1) {
+                if (this.window.runAvailable() == 0) {
+                    break
+                }
+                let run = this.window.asciiRunLength(Lexer.kTextMask)
+                if (run > 0) {
+                    var j: Int64 = 0
+                    while (j < run) {
+                        gen.append(Rune(this.window.cpAt(j)))
+                        j++
+                    }
+                    this.window.skipRun(run)
+                    continue
+                }
+            }
             let cp = this.peekCp(0)
             if (cp < 0 || cp == 0x3C) {
                 break
@@ -478,7 +544,7 @@ internal class Lexer {
         }
         if (first != 0x3C) {
             // 前导区 / 尾部区的裸文本由状态机判错，这里原样吐出便于给出准确消息。
-            let gen = StringGenerator()
+            let gen = this.textScratch.reset()
             while (true) {
                 let cp = this.peekCp(0)
                 if (cp < 0 || cp == 0x3C || cp == 0x26) {
@@ -524,7 +590,8 @@ internal class Lexer {
 
     private func readStartTag(start: SourcePosition): Token {
         let name = this.readName()
-        let attrs = ArrayList<RawAttribute>()
+        let attrs = this.attrsScratch
+        attrs.clear()
         var selfClosing = false
         var needSeparator = false
         while (true) {
@@ -616,9 +683,30 @@ internal class Lexer {
             throw this.error("属性「${name.local}」的值缺少引号")
         }
         this.advanceCp()
-        let gen = StringGenerator()
+        let gen = this.valueScratch.reset()
+        let mask = if (quoteCp == 0x22) {
+            Lexer.kAttrMaskDouble
+        } else {
+            Lexer.kAttrMaskSingle
+        }
         var finished = false
         while (!finished) {
+            // 批量路径只处理「原样拷贝」的 ASCII 段；引号 / `&` / `<` / 空白 / 非法字符
+            // 一律落到下面的原分支，归一与报错位置逐字符不变（`design.md` §6.3）。
+            if (this.feeds.size == 1) {
+                if (this.window.runAvailable() > 0) {
+                    let run = this.window.asciiRunLength(mask)
+                    if (run > 0) {
+                        var j: Int64 = 0
+                        while (j < run) {
+                            gen.append(Rune(this.window.cpAt(j)))
+                            j++
+                        }
+                        this.window.skipRun(run)
+                        continue
+                    }
+                }
+            }
             let cp = this.peekCp(0)
             if (cp < 0) {
                 throw this.error("属性「${name.local}」的值未闭合")
@@ -668,7 +756,7 @@ internal class Lexer {
             return this.readDeclaration(start)
         }
         // PI：target 之后必须是空白或直接 `?>`
-        let gen = StringGenerator()
+        let gen = this.textScratch.reset()
         if (this.trySkipWhitespace()) {
             while (true) {
                 if (this.startsWithCp(Lexer.kPiClose)) {
@@ -779,7 +867,7 @@ internal class Lexer {
             throw this.error("XML 声明「${name.local}」的值缺少引号")
         }
         this.advanceCp()
-        let gen = StringGenerator()
+        let gen = this.valueScratch.reset()
         var finished = false
         while (!finished) {
             let cp = this.peekCp(0)
@@ -803,7 +891,7 @@ internal class Lexer {
         }
         if (this.startsWithCp(Lexer.kCdataBody)) {
             this.consumeCp(Lexer.kCdataBody)
-            let gen = StringGenerator()
+            let gen = this.textScratch.reset()
             var token: ?Token = None
             while (token.isNone()) {
                 if (this.startsWithCp(Lexer.kCdataClose)) {
@@ -831,7 +919,7 @@ internal class Lexer {
 
     private func readComment(start: SourcePosition): Token {
         this.consumeCp(Lexer.kDoubleHyphen)
-        let gen = StringGenerator()
+        let gen = this.textScratch.reset()
         var token: ?Token = None
         while (token.isNone()) {
             if (this.startsWithCp(Lexer.kDoubleHyphen)) {
@@ -912,7 +1000,7 @@ internal class Lexer {
             throw XmlException("DOCTYPE 缺少引号", start.line, start.column)
         }
         this.advanceCp()
-        let gen = StringGenerator()
+        let gen = this.valueScratch.reset()
         var result: ?String = None
         while (result.isNone()) {
             let cp = this.peekCp(0)
@@ -932,7 +1020,7 @@ internal class Lexer {
 
     /** 读内部子集原文（不含两端的中括号），正确处理引号内的 `]`。 */
     private func readInternalSubset(start: SourcePosition): String {
-        let gen = StringGenerator()
+        let gen = this.textScratch.reset()
         var quoteCp: Int64 = -1
         var conditionalDepth: Int64 = 0
         var result: ?String = None

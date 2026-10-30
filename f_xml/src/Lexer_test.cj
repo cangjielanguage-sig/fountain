@@ -18,6 +18,7 @@ package fountain::f_xml
 import std.unittest.*
 import std.unittest.testmacro.*
 import std.time.MonoTime
+import fountain::f_base.StringGenerator
 
 @Test
 public class Lexer_test {
@@ -151,4 +152,36 @@ public class Lexer_test {
         assertTrue(log.size == 100004, "事件数应为 100004，实际 ${log.size}")
         assertTrue(elapsed < 10000.0, "10 万个 PI 耗时 ${elapsed} ms，疑似非线性")
     }
+
+    /**
+     * 名字驻留是**结构性**的：10 万条记录只有 3 个不同字面名，`misses` 就应当停在 3。
+     *
+     * 这条断言不依赖耗时，因此能在任何机器上证明「确实驻留」（不是「碰巧快」）。
+     */
+    @TestCase
+    public func nameResidencyIsStructural(): Unit {
+        let lexer = makeLexer(nameHeavyDocument(100000))
+        while (true) {
+            match (lexer.nextToken(ParserState.Content)) {
+                case Token.TEof => break
+                case _ => ()
+            }
+        }
+        assertTrue(lexer.names.misses == 3, "misses 应等于不同名字数 3，实际 ${lexer.names.misses}")
+        assertTrue(lexer.names.insertions == 3, "insertions 应为 3，实际 ${lexer.names.insertions}")
+        assertTrue(lexer.names.insertions == 3, "distinct 应为 3，实际 ${lexer.names.insertions}")
+        // 每条记录 4 次 readName（开始名 + 2 个属性名 + 结束名）。
+        assertTrue(lexer.names.hits >= 399000, "hits 应接近 40 万，实际 ${lexer.names.hits}")
+    }
+}
+
+/** 10 万条同名记录（名字只有 3 个不同值）：驻留计数的结构性用例素材。 */
+private func nameHeavyDocument(records: Int64): String {
+    let gen = StringGenerator()
+    var i: Int64 = 0
+    while (i < records) {
+        gen.append<String>("<item id=\"1\" a=\"v\">x</item>")
+        i++
+    }
+    gen.toString()
 }
