@@ -10,13 +10,13 @@
 
 ## 1. M2-a 样式
 
-- [ ] 1.1 失败用例 `Style_test`：`CellStyle` 值语义、`with*`、默认值、`Color` 三编码相等
-- [ ] 1.2 失败用例 `StylePool_test`：深比较去重、四张子表编号、`maxCellStyles` 两种上限消息
-- [ ] 1.3 失败用例 `Styles_test`（读）：20 种样式样本 → `Font/Fill/Border/Alignment/Protection` 全字段
-- [ ] 1.4 失败用例（写）：20 种样式 → styles.xml 结构与索引；往返后逐字段相等
-- [ ] 1.5 失败用例：`Cell.style` 与 `numberFormat` 并存时以 style 为准；M1 调用方不受影响
-- [ ] 1.6 实现 `Style.cj` / `StylePool.cj` / `Styles.cj`，接入 `WorksheetParser` / `PackageWriter`
-- [ ] 1.7 openpyxl 回读 20 种样式（字体/填充/边框/对齐）核对
+- [x] 1.1 失败用例 `Style_test`：`CellStyle` 值语义、`with*`、默认值、`Color` 三编码相等
+- [x] 1.2 失败用例 `StylePool_test`：深比较去重、四张子表编号、`maxCellStyles` 两种上限消息
+- [x] 1.3 失败用例 `Styles_test`（读）：20 种样式样本 → `Font/Fill/Border/Alignment/Protection` 全字段
+- [x] 1.4 失败用例（写）：20 种样式 → styles.xml 结构与索引；往返后逐字段相等
+- [x] 1.5 失败用例：`Cell.style` 与 `numberFormat` 并存时以 style 为准；M1 调用方不受影响
+- [x] 1.6 实现 `Style.cj` / `StylePool.cj` / `Styles.cj`，接入 `WorksheetParser` / `PackageWriter`
+- [x] 1.7 openpyxl 回读 20 种样式（字体/填充/边框/对齐）核对
 
 ## 2. M2-b 公式核心
 

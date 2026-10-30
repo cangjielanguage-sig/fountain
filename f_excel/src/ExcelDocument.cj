@@ -142,6 +142,10 @@ public class ExcelDocument {
                     for (row in parsed.rows) {
                         for (cell in row.cells) {
                             sheet.setCell(row.index, cell.col, cell.value)
+                            match (cell.style) {
+                                case Some(style) => sheet.setStyle(row.index, cell.col, style)
+                                case None => ()
+                            }
                         }
                     }
                     sheet.setDimension(parsed.dimension)

@@ -74,7 +74,7 @@ internal class PackageWriter {
             sheetMedia.add(media)
         }
         let zip = ZipWriter(output)
-        let styles = StyleTable()
+        let styles = StylePool()
         zip.add("[Content_Types].xml", contentTypes(count, sheetDrawing: sheetDrawing, formats: usedFormats))
         zip.add("_rels/.rels", rootRels())
         let names = ArrayList<String>()
@@ -107,14 +107,14 @@ internal class PackageWriter {
                 }
                 let cells = ArrayList<Cell>()
                 for (pair in values) {
-                    cells.add(Cell(pair[0], pair[1]))
+                    cells.add(Cell(pair[0], pair[1], style: sheets[i].styleOf(rowIndex, pair[0])))
                 }
                 writer.row(RowData(rowIndex, cells.toArray()))
             }
             writer.end(sheets[i].mergedRanges(), drawingRel: drawingRel)
             entry.close()
         }
-        zip.add("xl/styles.xml", stylesXml(styles))
+        zip.add("xl/styles.xml", StylesWriter.write(styles))
         zip.close()
     }
 
@@ -389,71 +389,4 @@ internal class PackageWriter {
         buffer.bytes()
     }
 
-    internal static func stylesXml(styles: StyleTable): Array<Byte> {
-        let buffer = ByteBuffer(128 * 1024)
-        let xml = newWriter(buffer)
-        xml.writeDeclaration(encoding: "UTF-8", standalone: Some(true))
-        xml.startElement(QName("styleSheet", uri: Some(NS_MAIN)))
-        xml.startElement(xl("fonts"), attributes: [XmlAttribute(QName("count"), "1")])
-        xml.startElement(xl("font"))
-        xml.emptyElement(xl("sz"), attributes: [XmlAttribute(QName("val"), "11")])
-        xml.endElement(xl("font"))
-        xml.endElement(xl("fonts"))
-        xml.startElement(xl("fills"), attributes: [XmlAttribute(QName("count"), "2")])
-        xml.startElement(xl("fill"))
-        xml.emptyElement(xl("patternFill"), attributes: [XmlAttribute(QName("patternType"), "none")])
-        xml.endElement(xl("fill"))
-        xml.startElement(xl("fill"))
-        xml.emptyElement(xl("patternFill"), attributes: [XmlAttribute(QName("patternType"), "gray125")])
-        xml.endElement(xl("fill"))
-        xml.endElement(xl("fills"))
-        xml.startElement(xl("borders"), attributes: [XmlAttribute(QName("count"), "1")])
-        xml.startElement(xl("border"))
-        xml.emptyElement(xl("left"))
-        xml.emptyElement(xl("right"))
-        xml.emptyElement(xl("top"))
-        xml.emptyElement(xl("bottom"))
-        xml.emptyElement(xl("diagonal"))
-        xml.endElement(xl("border"))
-        xml.endElement(xl("borders"))
-        xml.startElement(xl("cellStyleXfs"), attributes: [XmlAttribute(QName("count"), "1")])
-        xml.emptyElement(
-            xl("xf"),
-            attributes: [
-                XmlAttribute(QName("numFmtId"), "0"),
-                XmlAttribute(QName("fontId"), "0"),
-                XmlAttribute(QName("fillId"), "0"),
-                XmlAttribute(QName("borderId"), "0")
-            ]
-        )
-        xml.endElement(xl("cellStyleXfs"))
-        let formats = styles.numFmtIds()
-        xml.startElement(xl("cellXfs"), attributes: [XmlAttribute(QName("count"), formats.size.toString())])
-        for (numFmtId in formats) {
-            let attrs = ArrayList<XmlAttribute>()
-            attrs.add(XmlAttribute(QName("numFmtId"), numFmtId.toString()))
-            attrs.add(XmlAttribute(QName("fontId"), "0"))
-            attrs.add(XmlAttribute(QName("fillId"), "0"))
-            attrs.add(XmlAttribute(QName("borderId"), "0"))
-            attrs.add(XmlAttribute(QName("xfId"), "0"))
-            if (numFmtId != 0) {
-                attrs.add(XmlAttribute(QName("applyNumberFormat"), "1"))
-            }
-            xml.emptyElement(xl("xf"), attributes: attrs.toArray())
-        }
-        xml.endElement(xl("cellXfs"))
-        xml.startElement(xl("cellStyles"), attributes: [XmlAttribute(QName("count"), "1")])
-        xml.emptyElement(
-            xl("cellStyle"),
-            attributes: [
-                XmlAttribute(QName("name"), "Normal"),
-                XmlAttribute(QName("xfId"), "0"),
-                XmlAttribute(QName("builtinId"), "0")
-            ]
-        )
-        xml.endElement(xl("cellStyles"))
-        xml.endElement(QName("styleSheet"))
-        xml.flush()
-        buffer.bytes()
-    }
 }

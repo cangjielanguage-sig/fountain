@@ -114,6 +114,7 @@ internal class SheetRowHandler {
     private var col: Int64 = 0
     private var cellType: ?String = None
     private var styleIndex: Int64 = 0
+    private var currentStyle: ?CellStyle = None
     private var valueText = StringGenerator()
     private var inlineText = StringGenerator()
     private var formulaText = StringGenerator()
@@ -251,6 +252,11 @@ internal class SheetRowHandler {
             case Some(text) => parseIntOrNone(text) ?? 0
             case None => 0
         }
+        currentStyle = if (styleIndex > 0) {
+            Some(this.styles.styleAt(styleIndex))
+        } else {
+            None<CellStyle>
+        }
         valueText = StringGenerator()
         inlineText = StringGenerator()
         formulaText = StringGenerator()
@@ -302,7 +308,7 @@ internal class SheetRowHandler {
         if (!rowActive || skipCell) {
             return
         }
-        cells.add(Cell(col, valueOf()))
+        cells.add(Cell(col, valueOf(), style: currentStyle))
     }
 
     private func valueOf(): CellValue {

@@ -62,6 +62,8 @@ public class ExcelWriteOptions {
 public class SheetWriteOptions {
     /** use range；`None` = 省略 `<dimension>`。 */
     public var dimension: ?String = None
+    /** 样式种类上限；Linux 64000，其他平台 8192（M2-a）。 */
+    public var maxCellStyles: Int64 = 64000
 
     public init() {}
 }

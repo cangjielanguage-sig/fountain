@@ -29,6 +29,7 @@ public class Worksheet {
     private let cells = HashMap<Int64, CellValue>()
     private let merges = ArrayList<String>()
     private let images = ArrayList<SheetImage>()
+    private let stylesMap = HashMap<Int64, CellStyle>()
     private var dimensionRef: ?String = None
     private var maxRowSeen: Int64 = 0
     private var maxColSeen: Int64 = 0
@@ -108,6 +109,27 @@ public class Worksheet {
 
     public func setCell(ref: CellRef, value: CellValue): Unit {
         setCell(ref.row, ref.col, value)
+    }
+
+    /** 读取某格的完整样式；没有显式样式返回 `None`。 */
+    public func styleOf(row: Int64, col: Int64): ?CellStyle {
+        if (!valid(row, col)) {
+            return None<CellStyle>
+        }
+        stylesMap.get(key(row, col))
+    }
+
+    public func setStyle(row: Int64, col: Int64, style: CellStyle): Unit {
+        if (!valid(row, col)) {
+            throw ExcelException("单元格 (${row}, ${col}) 超出 Excel 上限")
+        }
+        stylesMap.add(key(row, col), style)
+        if (row > maxRowSeen) {
+            maxRowSeen = row
+        }
+        if (col > maxColSeen) {
+            maxColSeen = col
+        }
     }
 
     public func clearCell(row: Int64, col: Int64): Unit {
