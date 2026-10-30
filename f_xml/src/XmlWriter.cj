@@ -573,6 +573,10 @@ public class XmlWriter {
                     }
                 }
             case Some(prefix) =>
+                // `xml` 与 `xmlns` 是保留前缀，隐式绑定，不得再输出 xmlns:xml
+                if (prefix == "xml" || prefix == "xmlns") {
+                    return
+                }
                 match (target) {
                     case Some(uri) =>
                         let current = this.currentUri(Some(prefix))

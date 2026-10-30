@@ -207,6 +207,21 @@ public class XmlWriterIncremental_test {
         @Assert(thrown, true)
     }
 
+    /** 场景「保留前缀 xml 不再重复声明」。 */
+    @TestCase
+    public func xmlPrefixIsImplicit(): Unit {
+        let (w, sink) = writer()
+        let xmlSpace = XmlAttribute(
+            QName("space", prefix: Some("xml"), uri: Some("http://www.w3.org/XML/1998/namespace")),
+            "preserve"
+        )
+        w.startElement(QName("t"), attributes: [xmlSpace])
+        w.text(" x ")
+        w.endElement(QName("t"))
+        w.close()
+        @Assert(sink.text(), "<t xml:space=\"preserve\"> x </t>")
+    }
+
     /** 场景「flush 后仍可继续写」。 */
     @TestCase
     public func flushKeepsWriting(): Unit {
