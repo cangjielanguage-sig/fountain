@@ -1,10 +1,15 @@
 # f_xml —— 仓颉 XML 解析 / 生成模块设计
 
-> 版本 **v1.1** ｜ 2026-10-24 ｜ 状态：待评审
+> 版本 **v1.2** ｜ 2026-10-30 ｜ 状态：待评审
 >
 > 定位：fountain 的**通用 XML 模块**。**流式事件解析 → 构建 DOM**；**从 DOM 生成 XML**。
 >
 > **不绑定任何业务格式。** RSS / Atom、SVG、SOAP、Maven POM、Android 布局、OOXML 系列、任意配置文件——只要是 XML 1.0，这个模块就该能用。它不理解任何业务标签，只负责把 XML 讲清楚。
+>
+> v1.1 → v1.2（一项能力新增）：
+> - **`XmlWriter` 增量接口**：`writeDeclaration` / `startElement` / `text` / `endElement` /
+>   `emptyElement`，边产生边写；与整树写不可混用（第 7 章）
+> - 13 个用例覆盖自闭合、转义、命名空间、缩进对拍、未闭合与混用报错
 >
 > v1.0 → v1.1（一项纠错）：
 > - **`unsafeBytes()` 不是快照拷贝，是原始数据（零成本）**。v1.0 按"每次调用 O(n) 拷贝"推断是错的（10.2）
@@ -1148,8 +1153,27 @@ public class XmlWriter {
     public func write(doc: XmlDocument): Unit
     public func write(element: XmlElement): Unit
     public func flush(): Unit
+
+    // 增量接口（边产生边写，f_excel 逐行生成 worksheet 用）
+    public func writeDeclaration(version!: String = "1.0", encoding!: ?String = None, standalone!: ?Bool = None)
+    public func startElement(name: QName, attributes!: Array<XmlAttribute> = [])
+    public func endElement(name: QName)
+    public func text(value: String)
+    public func emptyElement(name: QName, attributes!: Array<XmlAttribute> = [])
 }
 ```
+
+**增量写入的语义**（整树写之外的第二种用法）：
+
+- `startElement` 只写 `<name attrs`，**延迟闭合**：紧接 `endElement` 输出 `<name/>`，有子内容才补 `>`；
+- 命名空间在 `startElement` 时按当前作用域声明，与整树写共用同一套 `ensureBinding`（不重复声明）；
+- 缩进与整树写一致（`indent` 选项，按栈深插入换行）；
+- 文本走 `Escaper.escapeText`，属性走 `Escaper.escapeAttribute`，与整树写逐字节一致（有用例对拍）；
+- **两种写法不可混用**：先整树后增量、或先增量后整树，都抛 `XmlException`；
+- `close()` 时仍有未闭合元素抛 `XmlException`（整树写不受影响）。
+
+增量写入解决的是"整份文档不可能先建树"的场景：逐行导出、超大 XML、边读边写。
+`f_excel` 的 worksheet 生成是第一个使用者（设计与规格见 `f_excel/doc/`）。
 
 ### 7.1 紧凑 vs 缩进
 

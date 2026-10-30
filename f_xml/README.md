@@ -36,7 +36,7 @@ f_xml
 | DOM | `XmlParser.parse(input / bytes / text / path)` | 4 个重载，`parse(text)` 跳过字节嗅探 |
 | 命名空间 | 内建 | 默认命名空间继承、`xmlns=""` 重置、属性不受默认命名空间影响 |
 | DTD 内部子集 | `<!ENTITY>`（普通 + 参数）+ 四类声明的语法良构校验 | 外部实体与外部子集**永不加载**；不做 DTD 有效性校验 |
-| 生成 | `XmlWriter` | 紧凑 / 缩进、CDATA 三模式、自定义实体引用、输出编码 |
+| 生成 | `XmlWriter` | 整树 / **增量**（`startElement`+`text`+`endElement`）、紧凑 / 缩进、CDATA 三模式、自定义实体引用、输出编码 |
 
 ## 用法示例
 
@@ -72,6 +72,32 @@ element.appendChild(XmlNode.ElementNode(XmlElement("channel").withText("我的�
 let output = ByteBuffer()
 XmlWriter(output, options: XmlWriterOptions(indent: Some("  "))).write(element)
 ```
+
+### 4. 增量生成（边产生边写）
+
+整树写要求先把 `XmlElement` 建出来；大文档（逐行数据、流式导出）用增量接口：
+
+```cangjie
+let writer = XmlWriter(output)
+writer.writeDeclaration(encoding: "UTF-8")
+writer.startElement(QName("worksheet", uri: Some("http://schemas.openxmlformats.org/spreadsheetml/2006/main")))
+writer.startElement(QName("sheetData"))
+for (row in rows) {                     // 数据边产生边写，内存与行数无关
+    writer.startElement(QName("row"), attributes: [XmlAttribute(QName("r"), "${row.index}")])
+    writer.startElement(QName("c"), attributes: [XmlAttribute(QName("r"), "A${row.index}")])
+    writer.text(row.value)
+    writer.endElement(QName("c"))
+    writer.endElement(QName("row"))
+}
+writer.endElement(QName("sheetData"))
+writer.endElement(QName("worksheet"))
+writer.close()
+```
+
+- `startElement` 只写 `<name attrs`，**延迟闭合**：紧接 `endElement` 输出 `<name/>`，有内容才输出 `>`；
+- 命名空间在 `startElement` 时按当前作用域声明，与整树写共享同一套规则（不重复声明）；
+- 缩进行为与整树写一致（`indent` 选项）；
+- 增量与整树写**不可混用**；`close()` 时仍有未闭合元素会抛 `XmlException`。
 
 ## 安全边界
 
