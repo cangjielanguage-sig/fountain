@@ -95,3 +95,58 @@ public class MemoryRepositories {
         text
     }
 }
+
+/**
+ * `MemoryRepository` 适配器本体：对业务层只暴露接口，内部转发给
+ * `f_bean` 依据 `llm_contentStore` 选出的实现（`MemoryRepositories.create()`）。
+ *
+ * 注意：本类**不加** `@Bean`，否则它会和 PG/MySQL 实现一起成为 `MemoryRepository` 的候选，
+ * 造成 `lookupOption<MemoryRepository>()` 歧义或递归。
+ */
+public class MemoryRepositoryAdapter <: MemoryRepository {
+    private let delegate: MemoryRepository
+
+    public init() {
+        this.delegate = MemoryRepositories.create()
+    }
+
+    public func upsert(write: MemoryWrite, titleVector: Array<Float64>,
+                       contentVector: Array<Float64>): Int64 {
+        delegate.upsert(write, titleVector, contentVector)
+    }
+
+    public func searchDense(query: MemoryQuery, vector: Array<Float64>, limit: Int64): ArrayList<MemoryHit> {
+        delegate.searchDense(query, vector, limit)
+    }
+
+    public func searchSparse(query: MemoryQuery, tokens: HashMap<Int64, Float64>,
+                             limit: Int64): ArrayList<MemoryHit> {
+        delegate.searchSparse(query, tokens, limit)
+    }
+
+    public func upsertSparse(memoryId: Int64, userId: Int64, namespace: String,
+                             tokens: HashMap<Int64, Float64>): Unit {
+        delegate.upsertSparse(memoryId, userId, namespace, tokens)
+    }
+
+    public func upsertColbert(memoryId: Int64, titleVectors: Array<Array<Float64>>,
+                              contentVectors: Array<Array<Float64>>): Unit {
+        delegate.upsertColbert(memoryId, titleVectors, contentVectors)
+    }
+
+    public func colbert(recordId: Int64): ?ColbertVectors {
+        delegate.colbert(recordId)
+    }
+
+    public func get(userId: Int64, id: Int64): ?MemoryRecord {
+        delegate.get(userId, id)
+    }
+
+    public func list(userId: Int64, namespace: String, offset: Int64, limit: Int64): ArrayList<MemoryRecord> {
+        delegate.list(userId, namespace, offset, limit)
+    }
+
+    public func remove(userId: Int64, id: Int64): Bool {
+        delegate.remove(userId, id)
+    }
+}
