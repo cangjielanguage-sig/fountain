@@ -19,6 +19,7 @@ import std.sync.Mutex
 
 import fountain::f_llm.config.*
 import fountain::f_llm.service.*
+import fountain::f_llm.store.*
 
 /**
  * 全局配置快照的持有者。
@@ -44,12 +45,26 @@ public class LLMConfs {
         }
     }
 
+    /** 1.3：MetaStore 可用时用它，否则回退 `llm_confSource` 的旧来源 */
+    private static func createHolder(): LLMConfsHolder {
+        let meta = StoreSettings.load().metaStore
+        if(meta == 'f_store' || meta == 'postgres' || meta == 'mysql'){
+            try{
+                return LLMConfsHolder(source: StoreMetaConfSource(MetaStoreAdapter()))
+            }catch(_: Exception){
+                // 存储选型不可用（未注册、目录不可写等）→ 走旧来源
+            }
+        }
+        LLMConfsHolder(source: createConfSource(LLMConfig.getConfSource()))
+    }
+
     public static func holder(): LLMConfsHolder {
         synchronized(mutex){
             if(let Some(existing) <- current){
                 return existing
             }
-            let created = LLMConfsHolder(source: createConfSource(LLMConfig.getConfSource()))
+            // 1.3：优先用 MetaStore 作为配置数据源；不可用时回退旧来源（llm_confSource）
+            let created = createHolder()
             current = Some(created)
             created
         }
