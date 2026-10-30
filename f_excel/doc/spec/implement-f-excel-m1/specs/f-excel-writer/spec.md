@@ -200,29 +200,16 @@ SHALL NOT 生成 `xl/sharedStrings.xml`。
 - **WHEN** `merge("A1:C1")` 且 `A1` 有值
 - **THEN** `B1` / `C1` 不出现在 XML 里
 
-### Requirement: XML 转义与非法字符
+### Requirement: XML 生成复用 `f_xml.XmlWriter`
 
-`WorksheetXmlWriter` SHALL 与 `f_xml.Escaper` 用**同一张表**（`Escaper.cj:27-62`），
-否则两套实现会漂移：
-
-| 字符 | 文本 | 属性 |
-|---|---|---|
-| `&` | `&amp;` | `&amp;` |
-| `<` | `&lt;` | `&lt;` |
-| `>` | `&gt;` | `&gt;` |
-| `"` | 不转 | `&quot;` |
-| `'` | 不转 | 不转 |
-| `\r` | `&#13;` | `&#13;` |
-| `\n` / `\t` | 原样 | 原样 |
-
-`\r` 必须转义：否则写出再读回会被行尾归一成 `\n`，往返不一致。
+worksheet 的 XML SHALL 由 `f_xml.XmlWriter` 的**增量接口**（`writeDeclaration` /
+`startElement` / `text` / `endElement` / `emptyElement`）生成；f_excel SHALL NOT 自带
+XML 转义表或文本发射器——转义规则（`&` `<` `>` `\r`、属性里的 `"`）由 `f_xml.Writer` 唯一负责。
 
 XML 1.0 非法控制字符（`0x00`–`0x08`、`0x0B`、`0x0C`、`0x0E`–`0x1F`）与 `0x7F`、`U+FFFE`、
-`U+FFFF` SHALL **剔除**并记 `ControlCharStripped`（**不抛异常**，与设计 §10「写入文本含控制字符
-→ 剔除并记 warning」一致）。剔除后其余内容 SHALL 逐字节保留。
-
-对**合法字符**，输出 SHALL 与 `f_xml.XmlWriter` 对同一文本的转义逐字节一致
-（两套实现不得漂移）。
+`U+FFFF` SHALL 在调用 `xml.text()` **之前**由 f_excel 剔除，并记 `ControlCharStripped`
+（**不抛异常**，与设计 §10「写入文本含控制字符 → 剔除并记 warning」一致；`f_xml` 的对策是抛
+`XmlException`，不能直接透传）。剔除后其余内容 SHALL 原样交给 `XmlWriter`。
 
 #### Scenario: 中文与 emoji 原样
 
@@ -234,10 +221,11 @@ XML 1.0 非法控制字符（`0x00`–`0x08`、`0x0B`、`0x0C`、`0x0E`–`0x1F`
 - **WHEN** 写入 `Text("a\u{0001}b")`
 - **THEN** 得到 `"ab"`，且有一条 `ControlCharStripped`
 
-#### Scenario: 与 f_xml 转义一致
+#### Scenario: 特殊字符交给 XmlWriter 转义
 
-- **WHEN** 同一段含 `& < > " '` 的文本分别经 `WorksheetXmlWriter` 与 `f_xml.XmlWriter` 输出
-- **THEN** 文本节点部分的字节完全一致
+- **WHEN** 写入 `Text("a&<b>\"c\"")`
+- **THEN** 生成的 worksheet XML 能被 `f_xml.XmlParser` 解析，文本回读为原字符串，
+  且文本节点只出现 `&amp;` / `&lt;` / `&gt;` 等 `f_xml` 标准转义（f_excel 不另写一套）
 
 ### Requirement: 写入上限校验
 

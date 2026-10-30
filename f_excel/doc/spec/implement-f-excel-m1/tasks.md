@@ -20,6 +20,7 @@
   `git branch --show-current` 记录当前分支。
 - [ ] 0.2 建包骨架：`f_excel/src/f_excel.cj` 保留 `F_EXCEL_VERSION` 并补包文档；
   确认 `f_excel/cjpm.toml` 的 5 项依赖可直接 import（`f_base` / `f_xml` / `f_zip`），
+  并确认 `f_zip.ZipWriter.openEntry` 与 `f_xml.XmlWriter.startElement` 可编译（前置已合入 sts），
   `cjpm build` 通过。
 - [ ] 0.3 **R1 实测**（`Float64.toString()`）：打印 `1.0` / `0.1` / `1e20` / `1.0/3.0` /
   `-0.0`，`Float64.parse` 回比；结论回填 `design.md` §10.1，决定 `formatNumber` 是否需要
@@ -86,15 +87,15 @@
 - [ ] 4.1 **先写测试** `src/PackageWriter_test.cj`：`[Content_Types].xml` 是第一个条目；
   每个 worksheet 有 Override；`r:id` 带前缀且根声明了 `xmlns:r`；
   生成物能被 `f_xml.XmlParser` 逐份解析。→ 实现 `src/PackageWriter.cj` 的前四个部件。
-- [ ] 4.2 **先写测试** `src/WorksheetXmlWriter_test.cj`（转义）：`& < > " '` 与 `\r` 按同表；
-  控制字符剔除 + `ControlCharStripped`（一格多个字符只记一条）；
-  **与 `f_xml.XmlWriter` 对同一文本输出逐字节一致**（合法字符部分）。
-  → 实现 `src/WorksheetXmlWriter.cj` 的转义与 8 KB 缓冲。
+- [ ] 4.2 **先写测试** `src/SheetXmlWriter_test.cj`（事件与语义）：控制字符剔除 +
+  `ControlCharStripped`（一格多个字符只记一条）；文本上限 32767（rune）与公式上限 8192；
+  生成的 XML 能被 `f_xml.XmlParser` 解析且单元格值正确；特殊字符只出现 `f_xml` 标准转义。
+  → 实现 `src/SheetXmlWriter.cj`（调用 `f_xml.XmlWriter` 增量接口，不自带转义表）。
 - [ ] 4.3 **先写测试**（数字）：`1.0 → "1"`、`0.1 → "0.1"`、`1e20`、`-3.141592653589793`、
   `NaN`/`±Inf` 抛。→ 实现 `formatNumber`（按 0.3 的实测结论定策略）。
 - [ ] 4.4 **先写测试**（值）：`Empty`/`Boolean`/`Error`/`Text`/`Formula` 的 XML 形态；
   非法错误码（`#FOO!`）抛；`<t xml:space="preserve">` 只在首尾有空白时出现；
-  文本上限 32767（rune）与公式上限 8192。→ 补齐 `WorksheetXmlWriter`。
+  文本上限 32767（rune）与公式上限 8192。→ 补齐 `SheetXmlWriter`。
 - [ ] 4.5 **先写测试** `src/ExcelDocument_write_test.cj`：`write(output)` 不关调用方的流；
   `write(path)` 后能重新打开；含 `dimension` / 不含 `dimension` 两种形态；
   空 sheet 也写 `<sheetData/>`。→ 实现 `ExcelDocument.write`。

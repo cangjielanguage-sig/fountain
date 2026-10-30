@@ -62,14 +62,15 @@
 
 详见 `baseline.md`。结论四条：
 
-1. `f_zip` 的 `ZipReader(path: String)` / `open(name): ?InputStream` / `ZipWriter.addFileStream`
-   完全够用，**不改** `f_zip`。
+1. `f_zip` 的 `ZipReader(path: String)` / `open(name): ?InputStream` / `openEntry(ZipEntry)` /
+   `ZipWriter.openEntry(name): OutputStream`（推模式条目流）与 `addFileStream` 都可用，**不改** `f_zip`。
 2. `f_xml` 的 `XmlPullParser`（事件流）与 DOM（`XmlElement`/`XmlDocument`）够用；
-   **`XmlWriter` 只有整元素/整文档写，没有增量接口**——这是 worksheet 必须自写发射器的原因
-   （差异 5）。`Escaper` 是包内私有，无法复用（`Escaper.cj:26`）。
+   `XmlWriter` **自 v1.2 起有增量接口**（`writeDeclaration` / `startElement` / `text` /
+   `endElement` / `emptyElement`），worksheet 逐行生成直接用它（差异 5 已消解）。
+   `Escaper` 仍为包内私有，但不再需要——转义由 `XmlWriter.text` / 属性写入完成。
 3. `f_base.BaseException` 与 `StringGenerator` 直接复用。
-4. `f_zip` **没有** `openEntry(): OutputStream`，所以推模式（`appendRow`）确实做不了，
-   设计 §2.6.1 的结论保持。
+4. `f_zip.openEntry` 提供推模式（调用方写 `OutputStream`），因此 `ExcelWriter` 直接逐行推进条目流，
+   不再需要"把迭代器包成惰性 `InputStream`"的适配层（设计 §2.6.7）。
 
 ## 4. 包结构
 
@@ -94,7 +95,7 @@
 | `DateSerial.cj` | serial ↔ `DateTime`（1900 闰年 bug、1904 基准） |
 | `WorksheetParser.cj` | worksheet 事件流 → `RowSink`（三条通道共用） |
 | `SheetRowSink.cj` | 行级回调接口、`RowBuilder`、`CellBuilder` |
-| `WorksheetXmlWriter.cj` | 流式 worksheet XML 发射器（8 KB 缓冲、转义、数字格式、上限） |
+| `SheetXmlWriter.cj` | worksheet 事件映射：把 `RowData` 映射成 `XmlWriter` 的 start/text/end 调用；控制字符剔除、数字格式化、上限校验 |
 | `ExcelSheetStream.cj` | `ExcelSheetStream`、`RowReader` |
 | `ExcelWriter.cj` | `ExcelWriter` |
 | `fixtures.cj` | **测试支持**（`internal`）：用 `f_zip.ZipWriter` 拼最小 xlsx 的夹具工厂 |
@@ -406,11 +407,11 @@ internal interface RowSink {
 ### 6.7 写通路与最小包
 
 `ExcelDocument.write` 与 `ExcelWriter` 共用 `PackageWriter`（四个小部件）与
-`WorksheetXmlWriter`（worksheet 正文），差别只在 worksheet 的数据来源：
+`SheetXmlWriter`（worksheet 正文映射），差别只在 worksheet 的数据来源：
 
 ```
-ExcelDocument.write：模型 → WorksheetXmlWriter（一次一行，行来自 Worksheet 的稀疏映射）
-ExcelWriter        ：Iterator<RowData> → WorksheetXmlWriter → addFileStream
+ExcelDocument.write：模型 → SheetXmlWriter（一次一行，行来自 Worksheet 的稀疏映射）
+ExcelWriter        ：Iterator<RowData> → SheetXmlWriter → f_xml.XmlWriter(增量) → ZipWriter.openEntry
 ```
 
 条目顺序（两个入口一致）：
@@ -420,7 +421,7 @@ ExcelWriter        ：Iterator<RowData> → WorksheetXmlWriter → addFileStream
 2. _rels/.rels
 3. xl/workbook.xml
 4. xl/_rels/workbook.xml.rels
-5. xl/worksheets/sheetN.xml （addFileStream）
+5. xl/worksheets/sheetN.xml （openEntry 推模式）
 6. xl/styles.xml
 ```
 
@@ -432,47 +433,47 @@ ExcelWriter        ：Iterator<RowData> → WorksheetXmlWriter → addFileStream
 `[Content_Types].xml` 的生成 SHALL 由 sheet 清单**一次性**拼好（sheet 数量在 `write()` 开始
 或 `ExcelWriter` 构造时就已确定）。
 
-### 6.8 `WorksheetXmlWriter`
-
-```
-writeRow(RowData) → buf
-  满 8 KB 或行结束 → output.write(buf.bytes())   // 这里的 output 是喂给 addFileStream 的流
-```
-
-结构：
+### 6.8 `SheetXmlWriter`（薄映射层）
 
 ```cangjie
-internal class WorksheetXmlWriter {
-    init(output: OutputStream)
+internal class SheetXmlWriter {
+    init(xml: XmlWriter)
     func begin(dimension: ?String)              // <worksheet> + [<dimension>] + <sheetData>
-    func row(r: RowData)                        // <row r ht> + <c>* + </row>
+    func row(r: RowData)                        // <row r ht> + <c>* + </row>（事件形式）
     func end(merged: ArrayList<String>)         // </sheetData> + [<mergeCells>] + </worksheet>
 }
 ```
 
-它实现一个**惰性 `InputStream`** 供 `ZipWriter.addFileStream` 拉取（`addFileStream` 只吃
-`InputStream`）：`begin` 之后的行写入先落在 8 KB 缓冲，缓冲满时把字节推进一个内部队列，
-`read(buffer)` 从队列取；队列空且未结束时，再回头问调用方的 `Iterator<RowData>` 要下一行。
-这就是设计 §2.6.7 的"三段拉模式"，**不额外起线程**。
+它**不自己拼 XML 文本、不自己做转义、不自己维护缓冲**——这些都交给 `f_xml.XmlWriter` 的增量接口：
 
-> 实现细节：`read()` 内部循环"队列空 → 生成下一行 → 再取"，直到队列非空或数据结束。
-> 这是把"生产者"内联进 `read()`，语义上仍是拉模式。
-
-**转义**：与 `f_xml.Escaper` 同表（`&`/`<`/`>`/`\r` 文本；加 `"` 属性）。差异只有非法字符：
-`f_xml` 抛 `XmlException`（`Escaper.cj:31`），`f_excel` **剔除 + `ControlCharStripped`**——
-因为设计 §10 明确"写入文本含控制字符 → 剔除并记 warning，不抛异常"，
-知识库场景下"少一个不可见字符"远好于"整份导出失败"。两套实现的**合法字符输出逐字节一致**
-由用例钉住（`f-excel-writer` 的「与 f_xml 转义一致」）。
-
-**数字格式化**（设计 4.3）：见 §10 R1。策略固定为：
-
-```
-if (v 是 NaN 或 ±Inf) → 抛 ExcelException
-if (v == trunc(v) 且 |v| < 1e15) → Int64(v).toString()
-else → 最短往返串（若 std 的 toString 不满足，退化为 17 位有效数字再裁剪尾随 0）
+```cangjie
+xml.startElement(QName("row"), attributes: [XmlAttribute(QName("r"), row.index.toString())])
+xml.startElement(QName("c"), attributes: [...])
+xml.text(valueText)
+xml.endElement(QName("c"))
+xml.endElement(QName("row"))
 ```
 
-**文本长度校验放在写之前**（32767 字符按 **rune** 计，不是字节——Excel 的上限是字符数）。
+`SheetXmlWriter` 只保留**语义层**的三件事：
+
+1. **非法控制字符剔除**：在调用 `xml.text()` 之前剔除，并记 `ControlCharStripped`——
+   设计 §10 要求"剔除 + warning，不抛异常"，而 `f_xml` 的对策是抛 `XmlException`；
+2. **数字格式化**（设计 4.3 / §10 R1）：`NaN`/`±Inf` 抛 `ExcelException`；整数值写 `Int64`
+   形式；其余写最短往返串；
+3. **Excel 上限校验**：文本 32767 rune、公式 8192、行 1048576、列 16384。
+
+`ExcelWriter` 的写入循环（设计 §2.6.7 的推模式）：
+
+```
+entry = zipWriter.openEntry("xl/worksheets/sheet1.xml")
+xml   = XmlWriter(entry)
+sheet = SheetXmlWriter(xml)
+sheet.begin(dimension)
+while (let Some(row) <- rows.next()) { sheet.row(row); rowsWritten++ }
+sheet.end(merged)
+xml.flush()
+entry.close()                     // 写 data descriptor + 登记中央目录
+```
 
 ### 6.9 流式读的生命周期
 
@@ -574,7 +575,7 @@ M2-a 落地时这张表会被真正的 `StylePool` 取代（`s` 变为运行期�
 | 2 | `ExcelReadOptions` 不含 `eager` / `loadTheme` | `eager=false` 是 M3；`loadTheme` 依赖 M2 的 theme 解析 | 少两个"声明了但无声失效"的字段 |
 | 3 | `Cell.numberFormat: ?NumberFormat` 而非 `style: ?CellStyle` | `CellStyle` 是 M2-a；M1 兑现不了字体/填充，提前暴露会静默丢样式 | M2-a 改为 `style: ?CellStyle` 并保留 `numberFormat` 便捷形参 |
 | 4 | `styles.xml` 是固定常量表，不是"样式池 + 后写" | 样式池存在的理由是"第 100 万行才出现新样式"（设计 2.6.4）；M1 没有用户样式 | M2-a 引入池，条目顺序（styles 最后）不变 |
-| 5 | worksheet / sharedStrings 由 f_excel 自带 `WorksheetXmlWriter` 输出 | `XmlWriter` 无增量接口，`Escaper` 包内私有（`baseline.md` §3）；设计 2.6.7 已定该组件 | 两套转义并存，用「与 f_xml 一致」用例钉住 |
+| 5 | worksheet 由 `f_xml.XmlWriter` **增量接口**生成 | 设计 8.1 早期假设"f_xml 只能整树写"，需要自写发射器；f_xml v1.2 已补齐增量接口 | 该前置已落地（f_xml `9066e1cd`、f_zip `00ca5ed9`），f_excel 只保留控制字符剔除、数字格式化与上限校验 |
 | 6 | `SheetWriteOptions` 只有 `dimension` | `columns`/`freezePane` 属 M2（行高列宽/视图）；`maxCellStyles`/`styleBytesWarnThreshold` 依赖样式池 | 少四个暂无实现的字段 |
 | 7 | 合并区域挂 `RowReader.mergedRanges()` + `ExcelSheetStream.lastMergedRanges(sheet)` | 设计 §2.7.2 的 API 列表漏了它、§2.7.6 又写了 `ExcelSheetStream.mergedRanges()`；合并区域属于"某张表"，挂在 reader 上语义更准 | 比设计多一个 `lastMergedRanges`，`RowReader` 多一个方法 |
 | 8 | 不含 `DocumentProperties` / `docProps/core.xml` | 设计 §2.2 列了 `properties`，但 M1 里程碑与 §4.1 第 7 步都是"可选"；无实际字段可填时会变成死 API | M2 随样式/公式一起补，届时不破坏现有调用 |

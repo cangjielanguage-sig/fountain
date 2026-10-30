@@ -126,7 +126,8 @@ SHALL NOT 静默排序（静默排序要求整表缓存，正好废掉流式）�
 ### Requirement: 单元格内容与写侧上限
 
 单元格 XML SHALL 与整文档模式（`f-excel-writer`）**逐字节一致**——两条通路共用同一个
-`WorksheetXmlWriter`，不允许出现"流式写出来的和普通写出来的不一样"。
+`SheetXmlWriter` 与整文档模式共用同一套单元格 XML 映射（`f_xml.XmlWriter` 增量接口），
+不允许出现"流式写出来的和普通写出来的不一样"。
 
 上限（超限抛 `ExcelException`，不截断）：文本 32767 字符、公式 8192 字符、
 行 1048576、列 16384。日期 SHALL 绑定内置日期格式（同 `f-excel-writer` 的三档规则）。
@@ -183,7 +184,8 @@ Writing ──(finish 成功)──▶ Finished
 
 ### Requirement: flush 粒度
 
-文本缓冲 SHALL 在「满 8 KB」或「一行结束」时冲刷到 `ZipWriter.addFileStream` 的流；
+文本缓冲 SHALL 由 `f_xml.XmlWriter` 的 16 KB 阈值自动冲刷；行结束**不**强制 flush
+（避免把 XML 切得过碎）。条目内容经 `ZipWriter.openEntry` 的推模式流写入。
 SHALL NOT 每行 `flush()` 底层 `OutputStream`（会把 deflate 打碎，反而更慢）。
 底层 `OutputStream` 的 flush 只发生在 `finish()`。
 

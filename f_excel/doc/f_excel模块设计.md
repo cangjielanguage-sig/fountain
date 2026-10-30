@@ -1,15 +1,23 @@
 # f_excel —— 仓颉 Excel（OOXML）解析器 / 生成器设计
 
-> 版本 **v0.8** ｜ 2026-10-30 ｜ 状态：待评审
+> 版本 **v0.9** ｜ 2026-10-30 ｜ 状态：待评审
 >
 > 定位：fountain 模块。单个 `ExcelDocument` 类同时承担解析与生成。
 > 依赖 `fountain::f_zip`（读写 OOXML 包）与 `fountain::f_xml`（XML 解析/生成）。
 >
+> **v0.9 变更**
+> - 前置能力落地：`f_zip.ZipWriter.openEntry(name): OutputStream`（推模式条目流）与
+>   `f_xml.XmlWriter` 增量接口（`startElement` / `text` / `endElement` / `emptyElement`，
+>   f_xml v1.2）
+> - **流式写改推模式**：逐行事件直接写条目流，不再需要把行迭代器包成惰性 `InputStream`（2.6 / 2.6.7）
+> - **worksheet 生成交给 `f_xml.XmlWriter`**：f_excel 不再自写 XML 发射器与转义表，
+>   只保留控制字符剔除与 Excel 上限校验（2.6.7 / 8.1）
+>
 > **v0.8 变更**
 > - 新增 **2.7 流式解析（边读边解析）**：`ExcelSheetStream` / `RowReader` 拉模式逐行产出，
 >   内存与行数无关；`Path` 输入真流式，`InputStream` 输入落临时文件后同样真流式
-> - 新增 **2.6.7 流式输出的字节路径与失败语义**：行迭代器 → XML 生成器 → `addFileStream` →
->   deflate → output 的通路、背压、flush 粒度、失败即残缺的约定
+> - 新增 **2.6.7 流式输出的字节路径与失败语义**：行迭代器 → `f_xml.XmlWriter` 增量写 →
+>   `f_zip.openEntry` 推模式 → deflate → output 的通路、背压、flush 粒度、失败即残缺的约定
 > - 明确流式读的**语义缺口**：`mergeCells` 在 `sheetData` 之后，逐行流式期间拿不到合并区域
 > - 里程碑调整：流式读提到 **M2-f**（与流式写对称），M3-a 改为流式读增强（大 `sharedStrings` 磁盘索引）
 >
@@ -63,7 +71,7 @@
 | 条件格式 | `dxfs` 只存取（M2）；**语义解析与求值** | **M4** |
 | 单元格访问 | `(row, col)` 与 `"A1"` **两套都提供**，共用 `CellRef` | M1 |
 | 日期识别 | **默认开**，可由 `ExcelReadOptions.autoDetectDate` 关闭 | M1 |
-| 流式写入 | **提供**，行迭代器拉模式，边生成 XML 边压缩写出，内存与行数无关 | M2 |
+| 流式写入 | **提供**，行迭代器驱动，边生成 XML 事件边压缩写出，内存与行数无关 | M2 |
 | 流式读取 | **提供**，行迭代器拉模式（`ExcelSheetStream`），**边读边解析**，内存与行数无关 | M2 |
 | 图表 / 图片 / 数据透视表 | 不支持（读取时跳过，写入时不生成） | — |
 | 依赖 | `f_zip`、`f_xml`。**不依赖 `f_io`** | — |
@@ -197,7 +205,7 @@ v0.2 曾论证"用 `f_io.ByteBuffer` 做序列化后端"，理由是它比标准
 | 原以为需要的能力 | 实际是否需要 |
 |---|---|
 | `seekReading` / `seekWriting`（回填长度） | **不需要**。回填发生在 ZIP 层，由 `f_zip` 的 data descriptor 解决（见 `f_zip/doc/f_zip模块设计.md` 3.2） |
-| `bytes(): Array<Byte>` 零拷贝给 ZipWriter | **不需要**。`ZipWriter.addFileStream(name, input)` 直接吃 `InputStream` |
+| `bytes(): Array<Byte>` 零拷贝给 ZipWriter | **不需要**。`ZipWriter.openEntry(name)` 直接给条目输出流，`XmlWriter` 写进去即可 |
 | `<: IOStream` 双向 | **不需要**。读写是两个独立入口，不共享同一个对象 |
 | `reserve` / `clone` | **不需要** |
 
@@ -209,7 +217,7 @@ public init(input: InputStream, options!: ExcelReadOptions = ExcelReadOptions())
 public init(path: Path, options!: ExcelReadOptions = ExcelReadOptions())
     → ZipReader(path)             // f_zip 走 File.seek，省内存
 public func write(output: OutputStream, options!: ExcelWriteOptions = ExcelWriteOptions())
-    → ZipWriter(output) + addFileStream(...)
+    → ZipWriter(output) + openEntry(...) + XmlWriter 增量写
 ```
 
 传 `f_io.ByteBuffer` 进来也照常工作——它实现了 `InputStream`/`OutputStream`。**但 f_excel 不 import 它**，和 f_xml 的 1.4 节保持同一条原则。
@@ -467,7 +475,10 @@ public init(input: InputStream, options!: ExcelReadOptions = ExcelReadOptions())
 
 需求："需要流式写入 API（应对超大表）"。
 
-`f_zip` 的流式接口是**拉模式**——`addFileStream(name, input)` 由 f_zip 主动从 `input` 读。据此，f_excel 的流式写入也用拉模式：调用方给一个**行迭代器**，f_excel 内部把它包成一个惰性的 `InputStream`，边生成 XML 边被 f_zip 拉走。
+`f_zip` 提供两条流式写路径：拉模式 `addFileStream(name, input)` 与**推模式** `openEntry(name): OutputStream`。
+f_excel 的对外接口仍是行迭代器（调用方最自然的形态），内部走**推模式**：逐行取 `RowData` →
+转成 XML 片段 → 写进 `openEntry` 返回的条目流，由 f_zip 边压边写。不再需要"把迭代器包成
+惰性 `InputStream`"的适配层。
 
 ```cangjie
 public class ExcelWriter {
@@ -524,16 +535,17 @@ writer.finish()
 
 `rows` 来自哪里都行——`ArrayList.iterator()`、数据库游标包装的迭代器、另一个文件流的解析器。**内存峰值 = 单行 + 压缩缓冲，与总行数无关。**
 
-#### 2.6.1 为什么不做 `appendRow()` 推模式
+#### 2.6.1 为什么接口是迭代器而不是 `appendRow()`
 
-推模式需要 `f_zip` 暴露 `openEntry(name): OutputStream`（让 f_excel 主动往里推），f_zip 目前只有拉模式的 `addFileStream`。要做推模式有两条路：
+推模式已经有了（`f_zip.ZipWriter.openEntry`），那为什么 f_excel 不直接暴露 `appendRow(RowData)`？
 
-| 方案 | 代价 |
+| 方案 | 评价 |
 |---|---|
-| 要求 f_zip 增加 `openEntry` | 改动 f_zip 已定稿的接口，且需要把 deflate 循环拆成可重入状态机 |
-| f_excel 内部用 `std.sync.Channel` 做生产者-消费者 | 多一个线程，异常传播和关闭时序都变复杂 |
+| `writeSheet(name, rows: Iterator<RowData>)` | **采纳**：调用方可以传数组迭代器、数据库游标、另一个文件的 `RowReader`；写入过程由 f_excel 驱动，异常与关闭时序集中在一处 |
+| `appendRow()` 逐行推给 writer | 调用方要自己管"第几张 sheet、行号是否递增、何时 finish"，把状态机摊到业务代码里；对"把 A 表复制成 B 表"这类场景反而更啰嗦 |
 
-而**迭代器已经覆盖了所有超大表场景**——不管数据来自数据库游标、CSV、还是另一个 Excel，都能包成 `Iterator`。`appendRow` 只是写法上顺一点，不值这个复杂度。所以不做。
+迭代器覆盖了所有超大表场景——不管数据来自数据库游标、CSV、还是另一个 Excel，都能包成
+`Iterator`。`appendRow` 只是写法上顺一点，不值得把状态机暴露出去。
 
 #### 2.6.2 为什么 `sheetNames` 必须一次给全
 
@@ -874,30 +886,34 @@ public enum StringWriteMode {
 
 2.6 给的是"接口形状"，这里定"字节怎么流"。
 
-**通路（三段，全程拉模式）：**
+**通路（四段，推模式）：**
 
 ```
 调用方的 Iterator<RowData>
-        │  next()（只在被要的时候取）
+        │  next()（writeSheet 驱动）
         ▼
-WorksheetXmlWriter         固定 8 KB 文本缓冲，逐行拼 <row>/<c>
-        │  write(buf)（缓冲满或行结束才写）
+SheetXmlEmitter            f_xml.XmlWriter 增量接口（startElement / text / endElement）
+        │  write(buf)（XmlWriter 内部 16 KB 缓冲满才写）
         ▼
-ZipWriter.addFileStream(name, input)   条目 24 字节 data descriptor，长度未知也安全
-        │  被 f_zip 主动 read
+ZipWriter.openEntry(name)  返回条目 OutputStream（24 字节 data descriptor，长度未知也安全）
+        │  推入
         ▼
 stdx.compress.zlib deflate
         ▼
 OutputStream（File / Socket / 内存）
 ```
 
-三段都是"下一段要，上一段才产出"，**没有任何一段预读整表**，这就是"边产生 Excel 格式的数据边写出"的实现口径。
+每一段都是"上一段产出、下一段消费"，**没有任何一段预读整表**，这就是"边产生 Excel 格式的数据边写出"的实现口径。
+
+**XML 生成交给 `f_xml`**：`XmlWriter` 的增量接口（`startElement` / `text` / `endElement` /
+`emptyElement`）从 v1.2 起提供，命名空间声明、转义、缩进、缓冲、非 UTF-8 编码都在 f_xml 内完成。
+f_excel 只负责"把一行映射成若干 XML 事件"，不再自己维护 XML 发射器与转义表。
 
 **三个必须明确的约定：**
 
 | 约定 | 内容 | 理由 |
 |---|---|---|
-| **消费端驱动** | `writeSheet` 返回前会把迭代器消费完；迭代器 `next()` 返回 `None` 即该 sheet 结束 | f_zip 是拉模式，f_excel 不额外起线程（2.6.1） |
+| **迭代器驱动** | `writeSheet` 返回前会把迭代器消费完；迭代器 `next()` 返回 `None` 即该 sheet 结束 | f_excel 主动取行、主动写条目流，不额外起线程（2.6.1） |
 | **失败即残缺** | 写出中途抛异常（行号乱序、超上限、迭代器自身报错）时，**已经写出的字节无法回滚** | ZIP 顺序写 + deflate 流不可回退（2.6.4.4） |
 | **`finish()` 才算完成** | `finish()` 之前 output 不是有效 xlsx（缺中央目录 + EOCD） | 调用方不得提前把 output 交给别人 |
 
@@ -916,7 +932,8 @@ Writing ──(finish 成功)──▶ Finished
 
 | 层 | 何时 flush | 说明 |
 |---|---|---|
-| 文本缓冲（8 KB） | 满 / 行结束 | 行结束 flush 保证 `</row>` 完整，但不等于落盘 |
+| XmlWriter 缓冲（16 KB） | 满时自动 | 行结束**不**强制 flush，避免把 XML 切得过碎 |
+| 条目流（f_zip） | 条目 `close()` | 结束时写 data descriptor 并登记中央目录 |
 | deflate | 由 `stdx` 决定（内部块） | f_excel 不干预 |
 | `OutputStream` | `finish()` / `close()` | 每行 `output.flush()` 会把 deflate 打碎，反而变慢 |
 
@@ -2475,6 +2492,24 @@ class SheetRowHandler <: XmlEventHandler {
 
 所有匹配都用 `name.local`，不拼前缀——这是 f_xml 的 `QName` 设计带来的直接好处。
 
+**写侧同样交给 f_xml**：`XmlWriter` 从 v1.2 起提供增量接口（`startElement` / `text` /
+`endElement` / `emptyElement` / `writeDeclaration`），f_excel 逐行把 `<row>` / `<c>` 事件写进去，
+命名空间声明、转义、缩进、缓冲与编码都由 f_xml 负责：
+
+```cangjie
+let xml = XmlWriter(entryStream)                  // entryStream = ZipWriter.openEntry("xl/worksheets/sheet1.xml")
+xml.writeDeclaration(encoding: "UTF-8")
+xml.startElement(QName("worksheet", uri: Some(NS_SPREADSHEET)))
+xml.startElement(QName("sheetData"))
+// 每行：xml.startElement(row) → 每格 startElement(c) + text(v) + endElement(c) → endElement(row)
+xml.endElement(QName("sheetData"))
+xml.endElement(QName("worksheet"))
+xml.flush()
+```
+
+f_excel 只保留**语义层**的两件事：非法控制字符剔除（`ControlCharStripped`，写进 `text()` 之前）
+与 Excel 上限校验（行/列/文本长度）；XML 语法与转义不再由 f_excel 实现。
+
 ### 8.2 共享字符串
 
 ```xml
@@ -2821,7 +2856,8 @@ M4-c 的插值不依赖公式，可以提前到 M3，但单独做意义不大—
 | 公式求值 | **M2 实现**，默认不自动重算 | 第 7 章 |
 | 样式读写 | **M2 完整实现** | 第 6 章 |
 | 单元格访问 | `(row, col)` 与 `"A1"` **两套都提供**，共用 `CellRef` | 2.4 |
-| 流式写入 | **提供**，迭代器拉模式，`f_zip` 零改动 | 2.6 |
+| 流式写入 | **提供**，迭代器驱动 + `f_zip.openEntry` 推模式直写条目流 | 2.6 |
+| worksheet XML 生成 | **交给 `f_xml.XmlWriter` 增量接口**，f_excel 不自写发射器与转义表 | 2.6.7 / 8.1 |
 | 日期自动识别 | **默认开**，`ExcelReadOptions.autoDetectDate` 可关 | 2.5 |
 | `TimeSpan` | **进 `CellValue`**，M2 实施；不做 `isTimeSpan()` 补丁 | 5.5 |
 | `dxfs` 语义 | **做**，排 **M4**（因依赖公式引擎）；M2~M3 只存取 | 6.6 |

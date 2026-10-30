@@ -6,6 +6,18 @@
 > 用途：设计文档 §2 对 `f_zip` / `f_xml` 的假设必须逐条成立才敢开工。设计 §12 的 P-1
 > （「先完成 `f_xml` 与 `f_zip`」）已完成，本文把"能用的部分"和"形状不一样的部分"钉住。
 
+## 0. 前置能力补强（2026-10-30 晚，已合入 sts/1.3.x）
+
+收到 f_excel 的需求后，先补了两个前置 API（各自独立分支、TDD、已合并）：
+
+| 模块 | 新增 | 用例 | 提交 |
+|---|---|---|---|
+| `f_zip` | `ZipWriter.openEntry(name): ZipEntryOutputStream`（推模式条目流）、`ZipReader.openEntry(ZipEntry)` | 10 条（145 全绿） | `00ca5ed9` |
+| `f_xml` | `XmlWriter.writeDeclaration` / `startElement` / `text` / `endElement` / `emptyElement` | 13 条（389 全绿） | `9066e1cd` |
+
+**本文第 2、3 节里"没有 openEntry / 没有增量接口"的结论已被这两条提交取代**，
+其余实测（`ZipReader(path)` 走 seek、`r:id` 需手工构 `QName`、`XmlWriter` 16 KB 缓冲等）仍然有效。
+
 ## 1. 被实施模块的现状
 
 | 项 | 实测 |

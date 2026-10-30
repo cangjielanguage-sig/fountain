@@ -82,15 +82,16 @@
 
 ## Impact
 
-- **新增代码**：`f_excel/src/*.cj` 约 22 个文件，单包 `fountain::f_excel`。
+- **新增代码**：`f_excel/src/*.cj` 约 21 个文件，单包 `fountain::f_excel`。
 - **新增测试**：`f_excel/src/*_test.cj`（与实现同目录，遵循仓库约定）。
 - **依赖**：**不改**。`f_excel/cjpm.toml` 已声明 `f_base` / `f_log` / `f_util` / `f_xml` / `f_zip`；
   本变更实际使用 `f_base`（`BaseException`、`StringGenerator`）、`f_xml`、`f_zip`，
   `f_log` 与 `f_util` 保持"已声明但本变更不引用"（避免无谓改动）。
 - **对外 API**：从「1 个常量」变为「约 25 个公开类型 / 6 个 `ExcelDocument` 构造重载 /
   3 个 `Worksheet` 单元格访问重载组」。无既有调用方，不存在破坏性变更。
-- **不改动的模块**：`f_zip` / `f_xml` / `f_base` 一行不改。设计 §12 的 P-1 已完成，
-  本变更对它们的假设逐条实测登记在 `baseline.md`。
+- **不改动的模块**：`f_zip` / `f_xml` / `f_base` 在本变更内**不再改动**；它们的前置补强
+  （`f_zip.openEntry`、`f_xml.XmlWriter` 增量接口）已于 2026-10-30 完成并合入 `sts/1.3.x`
+  （`00ca5ed9` / `9066e1cd`，分别 145 / 389 用例全绿），本变更只消费它们。
 - **文档**：`f_excel/README.md` / `README_en.md` 的能力表与用法章节按 M1 实况重写
   （当前写的是"骨架已建立"）；`f_excel/doc/f_excel模块设计.md` 按 `design.md` §8 的差异表
   回填（版本升到 v0.9）；新增 `f_excel/doc/build-warnings.md` 记录 `cjpm build` 的告警处置
@@ -111,7 +112,7 @@
 | 2 | §2.5 `ExcelReadOptions` 含 `eager` 与 `loadTheme` | `eager=false` 是 M3（按需解析）；`loadTheme` 依赖 M2 的 theme 解析 | M1 不含这两个字段——不做"声明了但无声失效"的选项 |
 | 3 | §2.6 `Cell(col, value, style!: ?CellStyle)` | `CellStyle`/`Font`/`Fill` 的完整模型是 M2-a；M1 兑现不了字体/填充，提前暴露会**静默丢样式** | M1 用 `Cell(col, value, numberFormat!: ?NumberFormat)`；M2-a 改为 `?CellStyle`（此时才第一次有调用方） |
 | 4 | §2.6.4 样式池 + `styles.xml` 后写 | 样式池存在的理由是"第 100 万行才出现新样式"；M1 没有用户样式，池里最多 4 条固定项 | M1 写**固定最小样式表**，`s` 索引是编译期常量；样式池随 M2-a 引入，届时再改为后写 |
-| 5 | §8.1 XML 一律交给 `f_xml` | `f_xml.Escaper` 是包内私有；`XmlWriter` 只能整元素/整文档写，无法逐行流式 | worksheet 与 sharedStrings 由 f_excel 自带 `WorksheetXmlWriter` 输出（设计 2.6.7 已明确该组件）；`f_xml` 只负责**读**与小部件（ContentTypes/rels/workbook/styles）的 DOM 写 |
+| 5 | §8.1 XML 一律交给 `f_xml` | 原计划里 `XmlWriter` 只有整树写，worksheet 需自写发射器；该前置已补齐（f_xml v1.2 增量接口） | worksheet 直接使用 `f_xml.XmlWriter` 增量接口；f_excel 只保留控制字符剔除、数字格式化与 Excel 上限校验 |
 | 6 | §2.6 `SheetWriteOptions` 五项 | `columns`/`freezePane` 属 M2（行高列宽/视图）；`maxCellStyles`/`styleBytesWarnThreshold` 依赖样式池 | M1 只有 `dimension`；其余随 M2-a/M2-e2 引入 |
 | 7 | §2.7.2 `RowReader` 无 `mergedRanges`，§2.7.6 写 `ExcelSheetStream.mergedRanges()` | 两处口径需消歧：合并区域属于"哪张表" | 挂在 **`RowReader.mergedRanges()`**（流结束后有值，流中为空数组）+ `ExcelSheetStream.lastMergedRanges(sheet)` 便捷读；同一流上两个 reader 顺序交替时以各自 reader 为准 |
 | 8 | §2.2 `ExcelDocument.properties: DocumentProperties` | M1 无任何字段可填，且 `docProps/core.xml` 是可选的（§4.1 第 7 步） | M1 不含 `DocumentProperties`，M2 随样式/公式补，届时向后兼容 |
