@@ -29,7 +29,7 @@
   `TZ` 下换算结果相同；结论回填 §10.1。
 - [ ] 0.5 **R3 + R4 实测**（临时文件 API、`cjpm test` 工作目录）：结论回填 §10.1，
   决定 `spool` 与 `testdata/` 的路径解析。
-- [ ] 0.6 建立 `f_excel/testdata/` 与 `f_excel/src/fixtures.cj`（内部夹具工厂：用
+- [x] 0.6 建立 `f_excel/testdata/` 与 `f_excel/src/fixtures.cj`（内部夹具工厂：用
   `f_zip.ZipWriter` 拼最小包）。**先写**工厂的 3 个用例（最小表 / 带前缀表 / 空 sheet）
   证明工厂可用，再往下走。
 
@@ -55,14 +55,14 @@
 
 ## 2. P1 包结构与 workbook
 
-- [ ] 2.1 **先写测试** `src/PackageReader_test.cj`：最小包 → `sheetNames()` 正确；
+- [x] 2.1 **先写测试** `src/PackageReader_test.cj`：最小包 → `sheetNames()` 正确；
   带前缀（`<x:workbook>`）等价；缺 `workbook.xml` 抛「缺少 workbook.xml」；
   缺 rels 时 sheet 被跳过 + `SheetSkipped`；rels 指向不存在部件 + `SheetEntryMissing`。
   → 实现 `src/PackageReader.cj`。
-- [ ] 2.2 **先写测试** `src/Worksheet_test.cj`：三组 `cell`/`setCell`/`clearCell` 重载一致；
+- [x] 2.2 **先写测试** `src/Worksheet_test.cj`：三组 `cell`/`setCell`/`clearCell` 重载一致；
   越界写抛、越界读 `None`；`rowCount`/`colCount`/`dimension`；`rowValues` 稀疏；
   `range` 对齐与空位填充；`addSheet` 的四种非法名。→ 实现 `src/Worksheet.cj`。
-- [ ] 2.3 **先写测试** `src/ExcelDocument_test.cj`：`init()` 的默认态（1 个 `Sheet1`、
+- [x] 2.3 **先写测试** `src/ExcelDocument_test.cj`：`init()` 的默认态（1 个 `Sheet1`、
   不发 I/O）；`sheet`/`sheetAt`/`sheetCount`/`addSheet`/`removeSheet`/`renameSheet`；
   零字节输入抛「不是有效的 xlsx 文件」。→ 实现 `src/ExcelDocument.cj` 的构造与 sheet 管理。
 
