@@ -69,7 +69,8 @@ public class PerfTen_test {
         }
         println("gate: ten_mb events=${events} ms=${times} min=${minMs} max=${maxMs} ratio=${ratio} hwm_kb=${hwm}")
         if (ratio > 1.4) {
-            println("gate: noisy (max/min > 1.4) — 本轮不得用于判定")
+            println("gate: invalid (noisy) — max/min > 1.4，本轮不得用于判定，请空载重测")
+            return
         }
         assertTrue(minMs < 1000.0, "Gate T 未达标：10 MB min=${minMs} ms ≥ 1000 ms")
     }

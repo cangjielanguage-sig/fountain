@@ -62,6 +62,13 @@ internal class NameTable {
     var misses: Int64 = 0
     var insertions: Int64 = 0
 
+    /** 唯一名字数（= 已插入条目数）。 */
+    prop distinct: Int64 {
+        get() {
+            this.texts.size
+        }
+    }
+
     init(maxEntries!: Int64 = 65536) {
         this.maxEntries = if (maxEntries < 1) { 1 } else { maxEntries }
         this.slots = Array<Int64>(NameTable.kInitialCapacity, repeat: -1)

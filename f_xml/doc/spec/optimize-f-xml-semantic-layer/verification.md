@@ -129,3 +129,23 @@ gate: env nproc=7 loadavg1=1.670000 load_bound=3.500000 gc_env=[]     # 50 MB �
 **无。** 两项门禁均以一倍以上余量达成，`M4`（记录曲线后重裁 Gate）未触发。
 50 MB 仍由流合成、不落地测试数据；10 / 50 MB 门禁仍由 `F_XML_PERF=1` 开关，
 默认 `cjpm test` 不跑大档位。
+
+## 6. verify 收口（2026-10-30）
+
+| # | 问题 | 处理 | 证据 |
+|---|---|---|---|
+| W1 | `PerfTen_test` 在 `max/min > 1.4` 时仍断言 | 打印 `gate: invalid (noisy)` 后 `return`，不产生假 pass/fail | `PerfTen_test.cj` |
+| S1 | 50 MB 门禁未打印改前同轮值 | 用例内打印 `old_hwm_kb=295136 old_ms=5322.9 baseline=a077dc6` | 复跑输出 |
+| S2 | `VmHWM` 读不到时静默通过 | `hwm <= 0` 时打印 `gate: invalid (rss unavailable)` 并 `return` | `PerfFifty_test.cj` |
+| S3 | `distinct` 计数缺失、断言重复 | `NameTable.distinct` 新增并用于用例；重复断言清理 | `NameTable.cj` / `NameTable_test.cj` |
+| S4 | 缓冲实例用例规模与 spec 不符 | spec/tasks 改为「几十字节 vs 200 个元素」 | `spec.md` / `tasks.md` |
+| S5 | `ByteScratch` 注释与文件清单漂移 | 注释改指 `BufferReuse_test.byteScratchMatchesStringGenerator`；design §9 / proposal Impact 补登记 | `design.md` / `proposal.md` |
+
+收口后复跑（2026-10-30 21:47，`loadavg1 = 1.06–1.14`，`gc_env=[]`）：
+
+| 项 | 结果 |
+|---|---|
+| `cjpm test` | **376 / 376**，`cjpm test success` |
+| Gate T 复跑 | 5 次 `543.9 / 511.5 / 510.1 / 505.4 / 500.7`，`min = 500.7 ms`，`max/min = 1.086` |
+| Gate M 复跑 | `VmHWM = 105 264 kB`（地板 35 016，增量 70 248），`ms = 2509.5` |
+| 改前对照（用例内） | `old_hwm_kb = 295 136`、`old_ms = 5322.9`（`a077dc6`） |

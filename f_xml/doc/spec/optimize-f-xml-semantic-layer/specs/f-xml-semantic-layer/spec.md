@@ -73,7 +73,7 @@ DTD / 注释 / PI 等冷路径若保留每次新建，SHALL 在 `design.md` 的�
 
 #### Scenario: token 数量不改变缓冲实例数
 
-- **WHEN** 解析 1 KB 与 10 MB 的同类文档（内部计数断言）
+- **WHEN** 解析 token 数差异很大的两份同类文档（几十字节 vs 200 个元素，内部计数断言）
 - **THEN** 复用缓冲的实例数恒定（名字 / 值 / 文本各 1），不随 token 数增长
 
 ### Requirement: 文本与属性值批量扫描

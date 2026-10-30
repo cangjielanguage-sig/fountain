@@ -55,10 +55,12 @@ public class PerfFifty_test {
             hwm - floor
         }
         println("gate: fifty_mb ms=${result[0]} events=${result[1]} hwm_kb=${hwm} floor_kb=${floor} delta_kb=${delta}")
-        if (hwm > 0) {
-            assertTrue(hwm < 262144, "Gate M 未达标：VmHWM(50 MB) = ${hwm} kB ≥ 262144 kB")
-        } else {
-            println("gate: rss unavailable")
+        // 改前同轮值（a077dc6，2026-10-30，同一份零分配基准）。
+        println("gate: fifty_mb old_hwm_kb=295136 old_ms=5322.9 baseline=a077dc6")
+        if (hwm <= 0) {
+            println("gate: invalid (rss unavailable) — 未测量即通过是不可接受的，请在有 /proc 的 Linux 上重测")
+            return
         }
+        assertTrue(hwm < 262144, "Gate M 未达标：VmHWM(50 MB) = ${hwm} kB ≥ 262144 kB")
     }
 }

@@ -386,7 +386,8 @@ M4 的判定材料必须包含「进程地板」：解析 `<?xml version="1.0"?>
 
 | 文件 | 改动 |
 |---|---|
-| `src/NameTable.cj` | 新增：开放寻址驻留表、FNV-1a、逐字节比对、上限、计数 |
+| `src/NameTable.cj` | 新增：开放寻址驻留表、FNV-1a、逐字节比对、上限、计数（`distinct`） |
+| `src/ByteScratch.cj` | 新增：只增不减的 UTF-8 字节累积器（名字驻留比对 + 命中免分配） |
 | `src/Lexer.cj` | `readName` 增量 hash + 驻留；三条复用 scratch；`attrsScratch`；文本 / 属性值批量路径；边界掩码 |
 | `src/LineWindow.cj` | 新增 4 个 `internal` 成员（`runAvailable` / `cpAt` / `skipRun` / `asciiRunLength`） |
 | `src/XmlChars.cj` | `isAsciiXmlChar`、`asciiMaskFor`、`Int32` 视图重载 |

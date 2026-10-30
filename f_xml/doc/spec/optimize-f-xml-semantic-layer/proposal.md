@@ -119,7 +119,7 @@
 
 ## Impact
 
-- **新增代码**：`src/NameTable.cj`（名字驻留 + 计数）、`src/NameTable_test.cj`、
+- **新增代码**：`src/NameTable.cj`（名字驻留 + 计数）、`src/ByteScratch.cj`（复用字节累积器）、`src/NameTable_test.cj`、
   `src/SemanticPerf_test.cj`（三段占比与分配计数）、`src/TextScan_test.cj`
   （批量扫描等价性）、`src/BufferReuse_test.cj`（复用无别名）。
 - **修改代码（全部内部实现）**：`src/Lexer.cj`（`readName` / 文本 / 属性值 / 三条 scratch /

@@ -23,7 +23,7 @@ package fountain::f_xml
  * 2. `bytes()` 给的是**零拷贝视图**，名字驻留的逐字节比对用它；
  *    `StringGenerator.unsafeBytes()` 返回的是按 `size` 截好的新数组，每次比对都分配。
  *
- * 输出与 `StringGenerator` 逐字节相同（`ByteScratch_test` 对拍）。
+ * 输出与 `StringGenerator` 逐字节相同（`BufferReuse_test.byteScratchMatchesStringGenerator` 对拍）。
  */
 internal class ByteScratch {
     private static let kInitialCapacity: Int64 = 256

@@ -63,7 +63,7 @@ public class NameTable_test {
         assertTrue(first.isNone(), "首次查询应为未命中")
         assertTrue(table.misses == 1 && table.hits == 0, "misses=${table.misses} hits=${table.hits}")
         this.insertName(table, "item", None, "item")
-        assertTrue(table.insertions == 1 && table.insertions == 1, "insertions=${table.insertions}")
+        assertTrue(table.insertions == 1 && table.distinct == 1, "insertions=${table.insertions} distinct=${table.distinct}")
         let second = table.lookup(this.hashOf("item"), this.scratchOf("item"))
         match (second) {
             case Some(entry) => assertTrue(this.bytesEqual(entry.local, "item"), "命中内容应为 item")
@@ -80,7 +80,7 @@ public class NameTable_test {
         this.insertName(table, "a", None, "a")
         this.insertName(table, "b", None, "b")
         this.insertName(table, "c", None, "c")
-        assertTrue(table.insertions == 3 && table.insertions == 3, "insertions=${table.insertions}")
+        assertTrue(table.insertions == 3 && table.distinct == 3, "insertions=${table.insertions} distinct=${table.distinct}")
         match (table.lookup(this.hashOf("c"), this.scratchOf("c"))) {
             case Some(entry) => assertTrue(this.bytesEqual(entry.local, "c"), "c 应命中原名")
             case None => assertTrue(false, "c 应命中")
@@ -166,7 +166,7 @@ public class NameTable_test {
             this.insertName(table, name, None, name)
         }
         assertTrue(table.insertions == 4, "insertions 应停在上限 4，实际 ${table.insertions}")
-        assertTrue(table.insertions == 4, "distinct 应为 4，实际 ${table.insertions}")
+        assertTrue(table.distinct == 4, "distinct 应为 4，实际 ${table.distinct}")
         for (i in 0..4) {
             let name = "n${i}"
             match (table.lookup(this.hashOf(name), this.scratchOf(name))) {

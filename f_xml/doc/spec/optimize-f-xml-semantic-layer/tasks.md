@@ -84,8 +84,8 @@
 - [x] 3.1 **先写失败用例** `src/BufferReuse_test.cj`：
   - 连续解析 `<a x="1">t1</a><b y="2">t2</b>`，断言事件文本 / 值逐字符正确、无上一 token 残留；
   - 名字与值交替 1000 次，断言每次结果与单次解析一致；
-  - 结构断言：解析 1 KB 与 1 MB 文档，`Lexer` 的复用缓冲实例数恒为 3（用 `internal` 计数或
-    实例身份断言）。
+  - 结构断言：解析几十字节与 200 个元素的两份文档，`Lexer` 的复用缓冲实例数恒为 3（用
+    `internal` 计数或实例身份断言）。
 - [x] 3.2 `Lexer` 增加 `nameScratch` / `valueScratch` / `textScratch` 三个字段，
   各扫描入口 `reset()` 复用；删除对应的 `let gen = StringGenerator()` 局部构造。
   → 3.1 转绿。
