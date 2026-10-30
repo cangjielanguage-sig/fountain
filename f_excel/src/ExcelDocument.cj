@@ -237,11 +237,28 @@ public class ExcelDocument {
         warnings_
     }
 
+    /** 写出最小可用 xlsx；**不关闭**调用方的流。 */
     public func write(output: OutputStream, options!: ExcelWriteOptions = ExcelWriteOptions()) {
-        throw ExcelException("write 未实现")
+        let base1904 = match (options.date1904) {
+            case Some(v) => v
+            case None => date1904Flag
+        }
+        PackageWriter.write(output, sheetList, base1904, warnings_)
     }
 
+    /** 写文件；失败时留下的是残缺文件（ZIP 顺序写无法回滚）。 */
     public func write(path: Path, options!: ExcelWriteOptions = ExcelWriteOptions()) {
-        throw ExcelException("write 未实现")
+        let file = try {
+            File(path, OpenMode.Write)
+        } catch (e: Exception) {
+            throw ExcelException("无法创建文件：${path}", e)
+        }
+        try {
+            write(file, options: options)
+        } finally {
+            try {
+                file.close()
+            } catch (_: Exception) {}
+        }
     }
 }

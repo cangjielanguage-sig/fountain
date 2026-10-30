@@ -84,19 +84,19 @@
 
 ## 4. P3 写最小可用包（**本变更最关键**）
 
-- [ ] 4.1 **先写测试** `src/PackageWriter_test.cj`：`[Content_Types].xml` 是第一个条目；
+- [x] 4.1 **先写测试** `src/PackageWriter_test.cj`：`[Content_Types].xml` 是第一个条目；
   每个 worksheet 有 Override；`r:id` 带前缀且根声明了 `xmlns:r`；
   生成物能被 `f_xml.XmlParser` 逐份解析。→ 实现 `src/PackageWriter.cj` 的前四个部件。
-- [ ] 4.2 **先写测试** `src/SheetXmlWriter_test.cj`（事件与语义）：控制字符剔除 +
+- [x] 4.2 **先写测试** `src/SheetXmlWriter_test.cj`（事件与语义）：控制字符剔除 +
   `ControlCharStripped`（一格多个字符只记一条）；文本上限 32767（rune）与公式上限 8192；
   生成的 XML 能被 `f_xml.XmlParser` 解析且单元格值正确；特殊字符只出现 `f_xml` 标准转义。
   → 实现 `src/SheetXmlWriter.cj`（调用 `f_xml.XmlWriter` 增量接口，不自带转义表）。
-- [ ] 4.3 **先写测试**（数字）：`1.0 → "1"`、`0.1 → "0.1"`、`1e20`、`-3.141592653589793`、
+- [x] 4.3 **先写测试**（数字）：`1.0 → "1"`、`0.1 → "0.1"`、`1e20`、`-3.141592653589793`、
   `NaN`/`±Inf` 抛。→ 实现 `formatNumber`（按 0.3 的实测结论定策略）。
-- [ ] 4.4 **先写测试**（值）：`Empty`/`Boolean`/`Error`/`Text`/`Formula` 的 XML 形态；
+- [x] 4.4 **先写测试**（值）：`Empty`/`Boolean`/`Error`/`Text`/`Formula` 的 XML 形态；
   非法错误码（`#FOO!`）抛；`<t xml:space="preserve">` 只在首尾有空白时出现；
   文本上限 32767（rune）与公式上限 8192。→ 补齐 `SheetXmlWriter`。
-- [ ] 4.5 **先写测试** `src/ExcelDocument_write_test.cj`：`write(output)` 不关调用方的流；
+- [x] 4.5 **先写测试** `src/ExcelDocument_write_test.cj`：`write(output)` 不关调用方的流；
   `write(path)` 后能重新打开；含 `dimension` / 不含 `dimension` 两种形态；
   空 sheet 也写 `<sheetData/>`。→ 实现 `ExcelDocument.write`。
 - [ ] 4.6 **人工验收（P3 出口）**：生成的文件用 Excel / WPS / LibreOffice 打开不报"需要修复"，
@@ -124,12 +124,12 @@
 
 ## 6. P5 合并单元格与多 sheet
 
-- [ ] 6.1 **先写测试** `src/Merge_test.cj`：`<mergeCells>` 解析进 `Worksheet`；
+- [x] 6.1 **先写测试** `src/Merge_test.cj`：`<mergeCells>` 解析进 `Worksheet`；
   `mergedRangeAt` 跨行列（`A1:C3`）；`mergedValue` 对区域外返回自身值；
   `merge` 重叠抛；`unmerge` 找不到返回 `false`。
-- [ ] 6.2 **先写测试**：写出侧 `<mergeCells>` 在 `</sheetData>` 之后、`count` 正确、
+- [x] 6.2 **先写测试**：写出侧 `<mergeCells>` 在 `</sheetData>` 之后、`count` 正确、
   区域内只写左上角值。
-- [ ] 6.3 **先写测试**：2 个 sheet 的 `workbook.xml` 顺序与 `sheetId`/`r:id` 对应；
+- [x] 6.3 **先写测试**：2 个 sheet 的 `workbook.xml` 顺序与 `sheetId`/`r:id` 对应；
   `date1904` 只在为真时写。
 
 ## 7. P6 流式读
