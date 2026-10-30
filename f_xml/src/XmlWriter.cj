@@ -21,7 +21,24 @@ import cangjie_tpc::charset4cj.charset.encoding.{Encoder, Decoder}
 import fountain::f_base.StringGenerator
 
 /**
+ * 增量写入时的元素栈帧：记录待闭合的 start tag 与是否已有子元素（缩进用）。
+ */
+internal class IncrementalFrame {
+    let name: QName
+    var pending = true
+    var hadChild = false
+
+    init(name: QName) {
+        this.name = name
+    }
+}
+
+/**
  * XML 生成器。
+ *
+ * 支持两种写法：整树（`write(doc)` / `write(element)`）与**增量**（`startElement` /
+ * `text` / `endElement`）。两者不可混用——混用会破坏命名空间作用域与缩进状态，直接抛
+ * `XmlException`。
  *
  * **`close()` 之后不得再调用任何方法**（未定义行为）。
  *
@@ -37,6 +54,11 @@ public class XmlWriter {
     private let decoder: Decoder
     private let ns = NamespaceScope()
     private var closed = false
+    /** 增量写入的元素栈；`pending = true` 表示 start tag 还没闭合。 */
+    private let frames = ArrayList<IncrementalFrame>()
+    private var incrementalUsed = false
+    private var treeUsed = false
+    private var declarationWritten = false
     /** 往返校验的执行次数（UTF 系列必须恒为 0）。 */
     internal var roundTripChecks: Int64 = 0
 
@@ -90,6 +112,8 @@ public class XmlWriter {
     /** 写整份文档：声明 → doctype → prolog → root → epilog。 */
     public func write(doc: XmlDocument): Unit {
         this.ensureOpen()
+        this.ensureTreeMode()
+        this.treeUsed = true
         this.ns.push()
         if (let Some(declaration) <- doc.declaration) {
             this.appendText(declaration.toString())
@@ -121,6 +145,8 @@ public class XmlWriter {
     /** 只写元素（不带 XML 声明）。 */
     public func write(element: XmlElement): Unit {
         this.ensureOpen()
+        this.ensureTreeMode()
+        this.treeUsed = true
         this.ns.push()
         if (let Some(d) <- this.options.doctype) {
             this.writeDoctype(d)
@@ -137,10 +163,123 @@ public class XmlWriter {
         this.output.flush()
     }
 
+    // ---------------------------------------------------------------- 增量接口
+
+    /** 写 XML 声明（只能调用一次，且必须在任何元素之前）。 */
+    public func writeDeclaration(
+        version!: String = "1.0",
+        encoding!: ?String = None,
+        standalone!: ?Bool = None
+    ): Unit {
+        this.ensureOpen()
+        this.ensureIncrementalMode()
+        if (this.declarationWritten) {
+            throw XmlException("XML 声明只能写一次")
+        }
+        this.declarationWritten = true
+        this.appendText(XmlDeclaration(version, encoding: encoding, standalone: standalone).toString())
+        this.newLine(0)
+    }
+
+    /** 开始一个元素：写 `<name attrs`，延迟到有子内容或结束时再闭合。 */
+    public func startElement(name: QName, attributes!: Array<XmlAttribute> = []): Unit {
+        this.ensureOpen()
+        this.ensureIncrementalMode()
+        if (this.frames.size > 0) {
+            this.closePendingStart()
+            this.frames[this.frames.size - 1].hadChild = true
+            this.newLine(this.frames.size)
+        }
+        this.appendText("<")
+        this.appendText(this.literalName(name))
+        this.ns.push()
+        this.declareNamespacesFor(name, attributes)
+        for (attribute in attributes) {
+            this.appendText(" ")
+            this.appendText(this.literalName(attribute.name))
+            this.appendText("=\"")
+            Escaper.escapeAttribute(attribute.value, attribute.name.local, this.buffer)
+            this.appendText("\"")
+        }
+        this.frames.add(IncrementalFrame(name))
+    }
+
+    /** 结束元素：没有子内容时输出 `/>`，否则输出 `</name>`。 */
+    public func endElement(name: QName): Unit {
+        this.ensureOpen()
+        this.ensureIncrementalMode()
+        if (this.frames.size == 0) {
+            throw XmlException("没有可结束的元素：</${this.literalName(name)}>")
+        }
+        let top = this.frames[this.frames.size - 1]
+        if (this.literalName(top.name) != this.literalName(name)) {
+            throw XmlException(
+                "元素不匹配：期望 </${this.literalName(top.name)}>，实际 </${this.literalName(name)}>"
+            )
+        }
+        if (top.pending) {
+            this.appendText("/>")
+        } else {
+            if (top.hadChild) {
+                this.newLine(this.frames.size - 1)
+            }
+            this.appendText("</")
+            this.appendText(this.literalName(top.name))
+            this.appendText(">")
+        }
+        this.ns.pop()
+        this.frames.remove(at: this.frames.size - 1)
+    }
+
+    /** 写文本节点（自动转义；必须在某个元素内）。 */
+    public func text(value: String): Unit {
+        this.ensureOpen()
+        this.ensureIncrementalMode()
+        if (this.frames.size == 0) {
+            throw XmlException("文本节点必须写在一个元素内")
+        }
+        this.closePendingStart()
+        this.writeText(value, this.frames[this.frames.size - 1].name.local)
+    }
+
+    /** 空元素：等价于 `startElement` 紧跟 `endElement`，输出 `<name/>`。 */
+    public func emptyElement(name: QName, attributes!: Array<XmlAttribute> = []): Unit {
+        this.startElement(name, attributes: attributes)
+        this.endElement(name)
+    }
+
+    /** 闭合当前元素的 start tag（`<a` → `<a>`）。 */
+    private func closePendingStart(): Unit {
+        if (this.frames.size == 0) {
+            return
+        }
+        let top = this.frames[this.frames.size - 1]
+        if (top.pending) {
+            this.appendText(">")
+            top.pending = false
+        }
+    }
+
+    private func ensureTreeMode(): Unit {
+        if (this.incrementalUsed) {
+            throw XmlException("已使用增量接口，不能再整树写出")
+        }
+    }
+
+    private func ensureIncrementalMode(): Unit {
+        if (this.treeUsed) {
+            throw XmlException("已使用整树写出，不能再使用增量接口")
+        }
+        this.incrementalUsed = true
+    }
+
     /** 冲刷并关闭底层输出流。之后不得再调用任何方法。 */
     public func close(): Unit {
         if (this.closed) {
             return
+        }
+        if (this.frames.size > 0) {
+            throw XmlException("有 ${this.frames.size} 个元素未闭合，不能关闭 XmlWriter")
         }
         this.flushBuffer()
         this.output.flush()
@@ -401,8 +540,12 @@ public class XmlWriter {
 
     /** 只在首次引入或改变绑定时输出 `xmlns` / `xmlns:p`。 */
     private func declareNamespaces(element: XmlElement): Unit {
-        this.ensureBinding(element.name)
-        for (attribute in element.attributes) {
+        this.declareNamespacesFor(element.name, element.attributes.toArray())
+    }
+
+    private func declareNamespacesFor(name: QName, attributes: Array<XmlAttribute>): Unit {
+        this.ensureBinding(name)
+        for (attribute in attributes) {
             match (attribute.name.uri) {
                 case Some(_) => if (attribute.name.prefix.isSome()) {
                     this.ensureBinding(attribute.name)
