@@ -1,9 +1,17 @@
 # f_excel —— 仓颉 Excel（OOXML）解析器 / 生成器设计
 
-> 版本 **v0.7** ｜ 2026-10-24 ｜ 状态：待评审
+> 版本 **v0.8** ｜ 2026-10-30 ｜ 状态：待评审
 >
 > 定位：fountain 模块。单个 `ExcelDocument` 类同时承担解析与生成。
 > 依赖 `fountain::f_zip`（读写 OOXML 包）与 `fountain::f_xml`（XML 解析/生成）。
+>
+> **v0.8 变更**
+> - 新增 **2.7 流式解析（边读边解析）**：`ExcelSheetStream` / `RowReader` 拉模式逐行产出，
+>   内存与行数无关；`Path` 输入真流式，`InputStream` 输入落临时文件后同样真流式
+> - 新增 **2.6.7 流式输出的字节路径与失败语义**：行迭代器 → XML 生成器 → `addFileStream` →
+>   deflate → output 的通路、背压、flush 粒度、失败即残缺的约定
+> - 明确流式读的**语义缺口**：`mergeCells` 在 `sheetData` 之后，逐行流式期间拿不到合并区域
+> - 里程碑调整：流式读提到 **M2-f**（与流式写对称），M3-a 改为流式读增强（大 `sharedStrings` 磁盘索引）
 >
 > **v0.7 变更**
 > - `Duration` 溢出行为确认：**`*` 与 `toSeconds()` 都会抛**，反向转换改用 try-catch 兜住（5.5.4）
@@ -55,8 +63,8 @@
 | 条件格式 | `dxfs` 只存取（M2）；**语义解析与求值** | **M4** |
 | 单元格访问 | `(row, col)` 与 `"A1"` **两套都提供**，共用 `CellRef` | M1 |
 | 日期识别 | **默认开**，可由 `ExcelReadOptions.autoDetectDate` 关闭 | M1 |
-| 流式写入 | **提供**，迭代器拉模式，内存与行数无关 | M2 |
-| 流式读取 | 提供"按需解析单个 sheet"（非逐行回调） | M3 |
+| 流式写入 | **提供**，行迭代器拉模式，边生成 XML 边压缩写出，内存与行数无关 | M2 |
+| 流式读取 | **提供**，行迭代器拉模式（`ExcelSheetStream`），**边读边解析**，内存与行数无关 | M2 |
 | 图表 / 图片 / 数据透视表 | 不支持（读取时跳过，写入时不生成） | — |
 | 依赖 | `f_zip`、`f_xml`。**不依赖 `f_io`** | — |
 
@@ -862,9 +870,315 @@ public enum StringWriteMode {
 
 `ExcelWriter` 默认 `InlineStr`；`ExcelDocument.write()` 默认也是 `InlineStr`（首版简单），可切到 `SharedStrings` 换体积。
 
+#### 2.6.7 流式输出的字节路径、背压与失败语义
+
+2.6 给的是"接口形状"，这里定"字节怎么流"。
+
+**通路（三段，全程拉模式）：**
+
+```
+调用方的 Iterator<RowData>
+        │  next()（只在被要的时候取）
+        ▼
+WorksheetXmlWriter         固定 8 KB 文本缓冲，逐行拼 <row>/<c>
+        │  write(buf)（缓冲满或行结束才写）
+        ▼
+ZipWriter.addFileStream(name, input)   条目 24 字节 data descriptor，长度未知也安全
+        │  被 f_zip 主动 read
+        ▼
+stdx.compress.zlib deflate
+        ▼
+OutputStream（File / Socket / 内存）
+```
+
+三段都是"下一段要，上一段才产出"，**没有任何一段预读整表**，这就是"边产生 Excel 格式的数据边写出"的实现口径。
+
+**三个必须明确的约定：**
+
+| 约定 | 内容 | 理由 |
+|---|---|---|
+| **消费端驱动** | `writeSheet` 返回前会把迭代器消费完；迭代器 `next()` 返回 `None` 即该 sheet 结束 | f_zip 是拉模式，f_excel 不额外起线程（2.6.1） |
+| **失败即残缺** | 写出中途抛异常（行号乱序、超上限、迭代器自身报错）时，**已经写出的字节无法回滚** | ZIP 顺序写 + deflate 流不可回退（2.6.4.4） |
+| **`finish()` 才算完成** | `finish()` 之前 output 不是有效 xlsx（缺中央目录 + EOCD） | 调用方不得提前把 output 交给别人 |
+
+失败后的状态机：
+
+```
+Writing ──(任一异常)──▶ Failed ──(finish/close)──▶ 抛 ExcelException("流式写入已失败：<原因>")
+Writing ──(finish 成功)──▶ Finished
+```
+
+- `Failed` 状态下 `writeSheet` / `finish` 一律立即抛，不再写任何字节；
+- 调用方负责丢弃产物：`Path` 场景删掉半成品文件，`OutputStream` 场景关闭并丢弃；
+- **不要**试图"跳过坏行继续写"——一张缺行的表比一个明确的异常更难排查。
+
+**flush 粒度：**
+
+| 层 | 何时 flush | 说明 |
+|---|---|---|
+| 文本缓冲（8 KB） | 满 / 行结束 | 行结束 flush 保证 `</row>` 完整，但不等于落盘 |
+| deflate | 由 `stdx` 决定（内部块） | f_excel 不干预 |
+| `OutputStream` | `finish()` / `close()` | 每行 `output.flush()` 会把 deflate 打碎，反而变慢 |
+
+**进度与取消：**
+
+- 进度：`ExcelWriter.rowsWritten`（本 sheet 已写行数）+ `f_zip` 的 `position` / `spilling`（2.6.4 / f_zip 3.2.2）；
+- 取消：调用方让迭代器提前返回 `None` 即可（写出的是"到此为止"的完整表）；**不提供 `cancel()`**——
+  中途取消与失败同义，产物都应丢弃。
+
+**大字符串与超限：** 单格文本 > 32767 字符、行号 > 1048576、列号 > 16384 一律抛 `ExcelException`（9.4），
+不做静默截断——截断会让产出的数据与调用方以为写进去的不一致。
+
+---
+
+## 2.7 流式解析（边读取边解析）
+
+### 2.7.1 为什么需要它，以及它不是 `eager = false`
+
+`ExcelReadOptions.eager = false`（2.5 / M3）只是把"解析哪个 sheet"推迟，**解析一个 sheet 仍然把整张表装进 `Worksheet`**。
+100 万行的 sheet 依旧要 30~50 MB 模型 + 几十 MB XML。
+
+知识库、导入、统计这类场景要的是：**一行进来、处理完、丢掉**。所以新增一条独立通道：
+
+| 通道 | 产物 | 内存 | 适用 |
+|---|---|---|---|
+| `ExcelDocument(input/path)` | 完整模型（`Worksheet` / `CellValue`） | 与表大小成正比 | 随机访问、改样式、公式重算、写回 |
+| **`ExcelSheetStream(path/input)`** | 逐行 `RowData` | **与行数无关** | 导入、抽取、统计、转 CSV、转另一个 xlsx |
+
+两者不互相替代：流式通道**不构建 `Worksheet`**，因此没有 `cell("A1")` 随机访问、没有合并区域（见 2.7.6）、没有公式求值。
+
+### 2.7.2 API
+
+```cangjie
+public class ExcelSheetStream {
+    /// 文件输入：ZIP 走 seek，真流式（推荐）
+    public static func open(path: Path,
+                            options!: ExcelStreamReadOptions = ExcelStreamReadOptions()): ExcelSheetStream
+
+    /// 流输入：默认落临时文件后走 Path 通道（真流式）；spool = false 时退化为全量缓冲
+    public static func open(input: InputStream,
+                            options!: ExcelStreamReadOptions = ExcelStreamReadOptions()): ExcelSheetStream
+
+    /// sheet 清单（从 workbook.xml + rels 读出，几 KB）
+    public func sheetNames(): Array<String>
+    /// 名称不存在返回 None
+    public func rows(sheet: String): ?RowReader
+    public func rowsAt(index: Int64): ?RowReader
+
+    public func warnings(): ArrayList<ExcelWarning>
+    /// 释放临时文件、条目流与 ZipReader；幂等
+    public func close(): Unit
+}
+
+/// 拉模式：next() 时才解析下一行
+public class RowReader <: Iterator<RowData> {
+    public func next(): Option<RowData>
+    /// 提前结束本 sheet（不关闭 ExcelSheetStream）
+    public func close(): Unit
+}
+
+public class ExcelStreamReadOptions {
+    /// 是否把不可定位的输入落临时文件（默认 true）。false = 全量缓冲进内存并记 warning
+    public var spool: Bool = true
+    /// 临时文件目录。None = 系统临时目录
+    public var spoolDir: ?Path = None
+    /// 行数据里是否附带行高（<row ht>）
+    public var loadRowHeight: Bool = true
+    /// 日期识别，语义同 ExcelReadOptions.autoDetectDate
+    public var autoDetectDate: Bool = true
+    /// 日期基准覆盖，语义同 ExcelReadOptions.date1904
+    public var date1904: ?Bool = None
+    /// 是否加载 styles.xml（关掉则日期识别失效）
+    public var loadStyles: Bool = true
+    /// 是否加载 sharedStrings.xml（关掉则 t="s" 的单元格变 Empty）
+    public var loadSharedStrings: Bool = true
+    /// 单 sheet 最大行数，0 = 不限（超出截断 + warning）
+    public var maxRows: Int64 = 0
+    /// 单 sheet 最大列数，0 = 不限
+    public var maxCols: Int64 = 0
+}
+```
+
+`RowData` / `Cell` **直接复用 2.6 的写侧定义**（`index` / `cells` / `height`）：
+
+- 读出来的行可以直接喂给 `ExcelWriter.writeSheet(name, reader)`，**读写同构，不需要中间转换**；
+- `cells` 按 `col` 升序，只含实际出现过的单元格（稀疏行天然表达）。
+
+### 2.7.3 数据通路
+
+```
+Path ──▶ ZipReader(path)                       // seek 定位中央目录，只读条目窗口
+             │ open("xl/worksheets/sheet1.xml")
+             ▼
+         InputStream（增量解压，独立游标）
+             │
+             ▼
+         XmlPullParser(input).nextEvent()       // f_xml 拉模式，不建树
+             │ StartElement(row) / Text / EndElement(c)
+             ▼
+         SheetRowHandler                         // 按 QName.local 匹配，约 100 行（8.1）
+             │ 一行结束
+             ▼
+         RowData  ──▶ next() 返回给调用方，随即丢弃
+```
+
+开流前先做三件事（都是 KB~MB 级，一次性）：
+
+1. `xl/workbook.xml` + `xl/_rels/workbook.xml.rels` → sheet 名与条目路径（DOM）
+2. `xl/styles.xml` → `cellXfs` 索引与"是否日期"查表（DOM，`loadStyles = false` 时跳过）
+3. `xl/sharedStrings.xml` → 字符串表（事件流；`loadSharedStrings = false` 时跳过）
+
+第 3 步是流式读的**唯一潜在大内存项**（见 2.7.4）。
+
+### 2.7.4 真流式的三个前提，与 `InputStream` 输入的处置
+
+| 前提 | 谁提供 | `Path` 输入 | `InputStream` 输入 |
+|---|---|---|---|
+| ZIP 可随机定位（中央目录在尾部） | `f_zip` | ✅ `ZipReader(path)` 走 `File.seek` | ❌ `ZipReader(input)` 全量缓冲 |
+| 条目内容增量解压 | `f_zip` | ✅ `open(name)` 返回独立游标流 | ✅ 同左 |
+| XML 增量解析 | `f_xml` | ✅ `XmlPullParser(InputStream)` | ✅ 同左 |
+
+第三条满足不代表真流式——ZIP 那条不满足时，整包已经在内存里了。所以：
+
+```cangjie
+// open(input) 的默认路径：先落盘，再走 Path 通道
+let tmp = File.createTemp(options.spoolDir ?? 系统临时目录)
+copy(input, tmp)                    // 固定 64 KB 缓冲，内存与包大小无关
+tmp.close()
+this.reader = ZipReader(tmpPath)
+```
+
+| 选择 | 内存 | 磁盘 | 何时用 |
+|---|---|---|---|
+| `spool = true`（默认） | 恒定 | 包大小 × 1（临时） | 网络响应、HTTP 上传、压缩包内嵌 |
+| `spool = false` | 包大小 × 1 | 0 | 包本来就在内存里、或磁盘不可写 |
+
+`spool = false` 且输入不可定位时**记一条 warning 说明"已退化为全量缓冲"**——不报错，但要让调用方知道内存模型变了。
+
+**临时文件必须清理**：`close()` 删除；异常路径用 `try-finally` 保证。进程被 kill 时残留属 OS 临时目录的正常代价（与 `f_zip` 的 `TempSpill` 同一策略）。
+
+**`sharedStrings` 是唯一随文件增长的结构：**
+
+| 数据 | 规模 | 说明 |
+|---|---|---|
+| sheet 当前行 | 几 KB | 逐行丢弃 |
+| `styles` / `workbook` / `rels` | KB ~ 几 MB | 一次性 |
+| `sharedStrings` | 唯一字符串数 × 平均长度 | 100 万行 × 每行 20 字符不重复 ≈ 40 MB |
+| f_xml / 解压缓冲 | 固定几十 KB | |
+
+选项 `loadSharedStrings = false` 可把它降为 0，代价是 `t="s"` 的单元格变 `Empty`（与 `ExcelReadOptions` 一致）。
+用 `inlineStr` 生成的文件不受影响。**大表 + 大量共享字符串**的组合留给 M3-a 的磁盘索引（11.6 有验收项）。
+
+### 2.7.5 行产出语义
+
+| 情况 | 行为 |
+|---|---|
+| `<row r="5">` | `RowData.index = 5`，`cells` 按 `col` 升序 |
+| `<row>` 无 `r` | 按"上一行 + 1"推断，记 warning（与 3.3 一致） |
+| `<row r="5"/>`（只有行属性） | 产出 `cells` 为空的行；`height` 有则带上 |
+| 中间缺行（3 之后直接 7） | **不补空行**，调用方按 `index` 自行对齐 |
+| `<c>` 无 `r` | 按"前一列 + 1"推断，记 warning |
+| 单元格值 | 走 3.1 的类型表；日期识别同 5.3；`TimeSpan` 同 5.5 |
+| 公式 | 只给原文 + 缓存值，不求值（与 2.3 一致） |
+| 超出 `maxRows` / `maxCols` | 截断并记 warning，流正常结束 |
+| 行号乱序 | **照原样产出**（读侧宽容），记 warning；不重排、不抛 |
+
+**为什么读侧不因乱序抛异常**：写侧严格（2.6.5）是因为要产出 Excel 能打开的文件；读侧面对的是既成文件，
+抛异常等于"这份文件进不去"，与 10 章"读取要宽容"的原则冲突。
+
+### 2.7.6 语义缺口：合并单元格拿不到
+
+`<mergeCells>` 在 worksheet 的 schema 里位于 `<sheetData>` **之后**：
+
+```
+sheetPr?, dimension?, sheetViews?, sheetFormatPr?, cols*, sheetData, sheetCalcPr?, sheetProtection?,
+protectedRanges?, scenarios?, autoFilter?, sortState?, dataConsolidate?, customSheetViews?,
+mergeCells?, phoneticPr?, conditionalFormatting*, ...
+```
+
+逐行拉取时还没读到 `mergeCells`，所以：
+
+| 需求 | 流式通道 | 正确做法 |
+|---|---|---|
+| 只要每行的原始值 | ✅ | `ExcelSheetStream` |
+| 要 `mergedValue()` / `mergedRanges()` | ❌ 流式期间没有 | `ExcelDocument` |
+| 流结束想知道有哪些合并区域 | ✅ | `ExcelSheetStream.mergedRanges()`（读完 sheetData 后填充） |
+
+`mergedRanges()` 在 `RowReader` 返回 `None` **之后**才有值；提前调用返回空数组（不是 `None`，避免调用方误以为"没有合并"）。
+这条限制必须写进 README 与 API 注释——它是"边读边解析"的固有代价，不是实现偷懒。
+
+### 2.7.7 生命周期、并发与异常
+
+```
+ExcelSheetStream.open(...)
+   └── rows(sheet) ──▶ RowReader 1 ──(next 到 None / close)──▶ 可再 rows(sheet) 重新读
+                     └── RowReader 2（顺序交替可以，多线程同时 next 不可以）
+close() ──▶ 关闭所有 RowReader、删除临时文件、关闭 ZipReader
+```
+
+| 事项 | 约定 |
+|---|---|
+| 可重复读 | `rows(sheet)` 每次重新 `open` 条目，得到新游标（ZIP 条目可重复解压） |
+| 单 reader 回退 | **不支持**；`Iterator` 语义就是单向 |
+| 并发 | 同一 `ExcelSheetStream` 上**不要多线程同时 `next()`**；`sharedStrings` 只读共享安全，条目游标各自独立，但顺序不可预期 |
+| `close()` | 幂等；关闭后再 `next()` 抛 `ExcelException("流已关闭")` |
+| 解析中途出错 | 关闭当前条目流并记 warning，`next()` 抛 `ExcelException`；`ExcelSheetStream` 本身可继续读下一个 sheet |
+| 临时文件 | `close()` 删除；`spool` 文件在异常路径由 `try-finally` 清理 |
+
+### 2.7.8 错误处理
+
+| 情况 | 处理 |
+|---|---|
+| 不是有效 ZIP | `ExcelException("不是有效的 xlsx 文件")`（包装 `ZipException`） |
+| 缺 `xl/workbook.xml` | `ExcelException("缺少 workbook.xml，可能不是 xlsx 文件")` |
+| `rows(name)` 名称不存在 | 返回 `None`（不抛） |
+| `rowsAt(index)` 越界 | 返回 `None` |
+| sheet 条目缺失 / rels 指向不存在 | `rows()` 返回 `None` + warning |
+| XML 格式错误 | `next()` 抛 `ExcelException`，带 sheet 名与行号 |
+| 单元格 `t="s"` 索引越界 | 该格 `Empty` + warning |
+| 数字解析失败 | 该格 `Text` 原文 + warning |
+| `spool` 目录不可写 | `open` 抛 `ExcelException`，提示用 `spoolDir` 或 `spool = false` |
+
+### 2.7.9 典型用法
+
+```cangjie
+import fountain::f_excel.*
+
+// 1) 大表 → 逐行统计，内存恒定
+let stream = ExcelSheetStream.open(Path("/data/big.xlsx"))
+try {
+    let Some(rows) = stream.rows("明细") else { throw ExcelException("没有 明细 sheet") }
+    var total = 0.0
+    while (let Some(row) <- rows.next()) {
+        for (cell in row.cells) {
+            if (let Number(v) <- cell.value) { total += v }
+        }
+    }
+    println("合计 ${total}")
+} finally {
+    stream.close()
+}
+
+// 2) 大表 → 另一个大表（读流直接喂写流，全程恒定内存）
+let src = ExcelSheetStream.open(Path("/data/big.xlsx"))
+let out = File.create("/data/big-copy.xlsx")
+let writer = ExcelWriter(out, ["明细"])
+if (let Some(rows) = src.rows("明细")) {
+    writer.writeSheet("明细", rows)          // RowReader 就是 Iterator<RowData>
+}
+writer.finish()
+src.close()
+out.close()
+```
+
+示例 2 是"边读边解析 + 边产生边写出"的组合形态：**两端都是常量内存**，中转不落地。
+
 ---
 
 ## 3. 读取流程
+
+本章描述**整文档解析**（`ExcelDocument`）。逐行流式通道（`ExcelSheetStream`）走同一套步骤 1~6，
+只是第 7 步改为"每解析完一行立即交出去"，且第 8 步在流结束后才执行——见 2.7。
 
 ```
 1. ZipReader(input) 或 ZipReader(path)
@@ -884,7 +1198,10 @@ public enum StringWriteMode {
    · 扫描 <row> / <c>
    · 按 c 的 r 属性定位行列（不能靠顺序，单元格是稀疏的）
    · 按 t 属性决定取值方式
+   · 整文档模式：整表进 Worksheet；流式模式：一行一个 RowData 交出去（2.7）
 8. 读 <mergeCells> 记录合并区域
+   · 整文档模式：并入 Worksheet.mergedRanges
+   · 流式模式：流结束后才可用（2.7.6）
 ```
 
 ### 3.1 单元格类型（`t` 属性）
@@ -2239,6 +2556,19 @@ M1 忽略 `rPr`，只取文本。M2 解析为 `TextRun.font`，**但不进 `Cell
 
 **与总行数无关。** 这是流式写入的核心价值。
 
+**流式读（`ExcelSheetStream`，2.7）：**
+
+| 数据 | 估算 | 与行数有关？ |
+|---|---|---|
+| 当前行（`RowData`） | 几 KB | ❌ |
+| `styles` / `workbook` / `rels`（DOM） | KB ~ 几 MB | ❌ |
+| `sharedStrings` | 唯一字符串数 × 平均长度 | ✅ **唯一增长项** |
+| 解压缓冲（`ZipReader.open`） | 固定几十 KB | ❌ |
+| f_xml 事件缓冲 | 固定几十 KB | ❌ |
+| `spool` 临时文件（`InputStream` 输入） | 0 内存 / 磁盘 = 包大小 | ❌（在盘上） |
+
+**除 `sharedStrings` 外全部恒定**；`loadSharedStrings = false` 可把它也降为 0（代价是 `t="s"` 变 `Empty`）。
+
 ### 9.2 优化清单
 
 | 优化 | 阶段 | 说明 |
@@ -2248,7 +2578,10 @@ M1 忽略 `rPr`，只取文本。M2 解析为 `TextRun.font`，**但不进 `Cell
 | sheet 走事件流 | M1 | 内存与行数无关 |
 | 样式池去重 | M2 | 顺带减小输出体积 |
 | 公式 AST 缓存 | M2 | 原文没变就复用 AST |
-| 按需解析 sheet（`eager = false`） | M3 | 只解析被访问的 sheet |
+| 行级流式读（`ExcelSheetStream`） | M2 | 边读边解析，逐行丢弃 |
+| `InputStream` 输入落临时文件 | M2 | 换取"包大小不进内存" |
+| 按需解析 sheet（`eager = false`） | M3 | 只解析被访问的 sheet（保留模型场景） |
+| `sharedStrings` 磁盘索引 | M3 | 大表共享字符串不再常驻内存 |
 | 单元格用紧凑结构 | M3 | `Array<Float64>` + 类型位图，而不是每格一个对象 |
 
 ### 9.3 性能预估
@@ -2256,12 +2589,14 @@ M1 忽略 `rPr`，只取文本。M2 解析为 `TextRun.font`，**但不进 `Cell
 | 操作 | 1 万行 × 10 列 | 10 万行 × 10 列 |
 |---|---|---|
 | 解析（不含公式） | 100~300 ms | 1~3 s |
+| 解析（流式逐行） | 100~300 ms | 1~3 s（内存恒定） |
 | 生成（非流式） | 100~300 ms | 1~3 s |
 | 生成（流式） | 100~300 ms | 1~3 s（内存恒定） |
 | ZIP 解压/压缩（占大头） | 50~150 ms | 0.5~1.5 s |
 | 公式重算（每格一个 SUM） | 10~50 ms | 100~500 ms |
 
 **瓶颈通常在 ZIP 的 deflate 和 XML 的字符串处理**，不在数值转换。公式重算在依赖图建好之后很快，慢在建图（要遍历所有单元格）。
+流式读写的绝对耗时与整文档模式接近——省的是**内存**，不是 CPU。
 
 ### 9.4 规模上限
 
@@ -2305,6 +2640,9 @@ public class ExcelWarning {
 | 写入文本含控制字符 | 剔除并记 warning，不抛异常 |
 | 写入超 Excel 上限 | 抛 `ExcelException` |
 | 流式写入行号乱序 | 抛 `ExcelException` |
+| 流式写入中途失败 | 进入 `Failed` 状态，产物残缺由调用方丢弃（2.6.7） |
+| 流式读 XML 格式错误 | `next()` 抛 `ExcelException`，带 sheet 名与行号（2.7.8） |
+| 流式读 `spool` 目录不可写 | `open` 抛 `ExcelException`，提示 `spoolDir` / `spool = false` |
 | 循环引用（`maxIterations=0`） | 结果 `#REF!`，记 `CalcIssue` |
 | 未知函数 | 结果 `#NAME?`，记 `CalcIssue` |
 
@@ -2332,6 +2670,11 @@ public class ExcelWarning {
 | 含 `indexed` 颜色 | 64 色板 |
 | 空 sheet / 只有 1 格 | 边界 |
 | 超大 sheet（10 万行） | 内存与耗时 |
+| 超大 sheet + 流式读 | 峰值内存与行数无关（9.1）；行内容与整文档模式逐行一致 |
+| 流式读 + 稀疏行 / 缺 `<row>` | 行号推断、不补空行（2.7.5） |
+| 流式读 + 合并单元格 | 流结束后 `mergedRanges()` 有值，流中为空（2.7.6） |
+| 流式读 + `loadSharedStrings = false` | `t="s"` 变 `Empty` |
+| 流式读 + `spool = false` | 退化为全量缓冲并记 warning |
 
 ### 11.2 生成（我们写、Excel 读）
 
@@ -2354,6 +2697,9 @@ xlsx → 解析 → 模型 → 生成 → xlsx → 解析 → 模型
 ```
 
 两个模型逐单元格比对。**注意值语义 vs 格式语义**：往返后可能丢失不支持的特性，但值、类型、样式必须一致。
+
+**流式与整文档必须等价**：同一文件分别用 `ExcelDocument` 与 `ExcelSheetStream` 读，
+逐行比对 `index` / `cells`（含类型），必须完全一致；差异只允许出现在"流式通道拿不到的语义"（合并区域，2.7.6）。
 
 ### 11.4 公式求值的验收
 
@@ -2392,6 +2738,14 @@ theme 颜色的验证必须对照 Excel 实际显示，不能只看 XML 里的 t
 | 方括号内混合内容 | `[h:ss]` → 不是时长标记（不是全 h/m/s）；`[Red]` / `[Color10]` / `[$-409]` → 不是时长 |
 | 结构哈希 | 两个字段全同的 `CellStyle` 哈希相等；任一字段不同则哈希不同（抽样 1 万对） |
 | 哈希碰撞兜底 | 构造哈希相同但字段不同的两个样式，断言池里是两项而不是一项 |
+| 行号推断 | `<row>` 无 `r` 时按上一行 +1；首行无 `r` 时为 1 |
+| 列号推断 | `<c>` 无 `r` 时按前一列 +1；行首无 `r` 时为 1 |
+| 稀疏行产出 | `<row r="5"><c r="C5">` 只产出一个 cell（col=3），不补 A/B |
+| 流式行序 | 乱序 `<row r="9">` 后接 `<row r="3">` 照原样产出并记 warning（不抛、不重排） |
+| 空行产出 | `<row r="5"/>` 产出 `cells` 为空的行 |
+| `mergedRanges` 时序 | 流中为空数组，`next()` 返回 `None` 后才有值 |
+| `next()` 幂等性 | `None` 之后继续 `next()` 仍返回 `None`；`close()` 后 `next()` 抛异常 |
+| 流式 ↔ 整文档等价 | 同一 fixture 两条通道逐行比对完全一致 |
 
 ---
 
@@ -2421,14 +2775,20 @@ theme 颜色的验证必须对照 Excel 实际显示，不能只看 XML 里的 t
 | M2-c | 公式引擎扩展：+100 个函数、共享公式平移、易失函数 | LibreOffice 函数测试集通过率 > 90% |
 | M2-d | `TimeSpan`（`[h]:mm:ss`）、富文本 `RichText` | 往返一致 |
 | M2-e | 流式写入 `ExcelWriter` | 100 万行生成，内存峰值 < 20 MB |
+| M2-f | 流式读取 `ExcelSheetStream`（2.7） | 100 万行逐行读，内存峰值 < 20 MB；与整文档通道逐行等价 |
 
 **M2-a 必须先于 M2-b/c**：公式的日期函数依赖序列号转换，而序列号转换依赖样式判定。
+
+**M2-e / M2-f 合起来是"边读边解析 + 边产生边写出"的闭环**：`src.rows(sheet)` 直接喂
+`writer.writeSheet(sheet, rows)`，两端常量内存（2.7.9 示例 2）。实现顺序上 M2-f 不依赖 M2-a~d，
+但依赖 M1 的取值逻辑（`t` 类型表、sharedStrings）。
 
 ### M3：规模化与完整度
 
 | 步骤 | 内容 | 验收 |
 |---|---|---|
-| M3-a | 按需解析 sheet（`eager = false`） | 打开 100 MB 文件 < 100 MB RSS |
+| M3-a | 流式读增强：`sharedStrings` 磁盘索引、`spool` 零拷贝优化 | 100 MB / 百万唯一字符串，RSS < 50 MB |
+| M3-a2 | 按需解析 sheet（`eager = false`） | 打开 100 MB 文件 < 100 MB RSS |
 | M3-b | 数组公式、动态数组 | `#SPILL!` 语义正确 |
 | M3-c | 剩余函数库 | 覆盖 350+ 函数 |
 | M3-d | 紧凑单元格结构 | 100 万单元格 < 20 MB |
@@ -2481,6 +2841,15 @@ M4-c 的插值不依赖公式，可以提前到 M3，但单独做意义不大—
 | `Font.name` 语义 | `None` = 不写 `<name>`，只有 `<sz>` 的 `<font>` Excel 能正确解读（已确认） | 6.4 |
 | OHOS 8192 上限 | 接受：极少触及，且是"内存保护"不是"格式语义"；需要时显式传 64000 | 2.6.4.1 |
 | 阈值比例 | 2 MB / 16 MB 与 8192 / 64000 都是"到一半告警"，比例一致 | 2.6.4.1 |
+| 流式读的形态 | **行迭代器拉模式**（`ExcelSheetStream` / `RowReader`），不构建 `Worksheet` | 2.7 |
+| 流式读的输入 | `Path` 真流式；`InputStream` **默认落临时文件**（`spool = true`），`false` 时退化并记 warning | 2.7.4 |
+| 流式读的常驻内存 | **只有 `sharedStrings` 随文件增长**；`loadSharedStrings = false` 可降为 0 | 2.7.4 |
+| 流式读的行语义 | 稀疏行不补空行、乱序行照原样产出 + warning、缺 `r` 按推断 | 2.7.5 |
+| 流式读 + 合并单元格 | **流中拿不到**（`<mergeCells>` 在 `<sheetData>` 之后）；流结束后 `mergedRanges()` 可用 | 2.7.6 |
+| 读写同构 | 读出的 `RowData` **直接**喂 `ExcelWriter.writeSheet`，不设中间类型 | 2.7.2 / 2.7.9 |
+| 流式写的失败语义 | **失败即残缺**：不回滚、不跳过坏行；`Failed` 状态后续调用一律抛，产物由调用方丢弃 | 2.6.7 |
+| 流式写的 flush | 文本缓冲满/行结束 flush；**不每行 flush OutputStream** | 2.6.7 |
+| 流式写的完成判据 | `finish()` 之前 output 不是有效 xlsx（缺中央目录 + EOCD） | 2.6.7 |
 
 ### 13.2 仍需确认
 
