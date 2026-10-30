@@ -134,6 +134,95 @@ public class LineWindow_test {
         let actual = drainWindow(LineWindow(PlainRuneSource(text)))
         assertTrue(actual == expected, "回退路径结果不一致：「${actual}」vs「${expected}」")
     }
+
+    // ------------------------------------------------------------ 块视图（internal）
+
+    private func windowOf(text: String, bufSize: Int64): LineWindow {
+        LineWindow(Utf8RuneSource(MemoryInputStream(text), bufSize: bufSize))
+    }
+
+    /** `runAvailable` / `cpAt` / `skipRun` 与 `peekFast` / `advanceFast` 逐字符一致（含行列号）。 */
+    @TestCase
+    public func blockViewMatchesCharByChar(): Unit {
+        let text = "ab\ncd\r\nef 12日本語"
+        let noStop = Array<Bool>(128, repeat: false)
+        for (bufSize in [Int64(4), Int64(8), Int64(16), Int64(8192)]) {
+            let view = this.windowOf(text, bufSize)
+            let reference = this.windowOf(text, bufSize)
+            while (true) {
+                if (view.runAvailable() == 0) {
+                    break
+                }
+                assertTrue(view.cpAt(0) == view.peekFast(0), "bufSize=${bufSize}：cpAt 与 peekFast 不一致")
+                let here = view.position()
+                let there = reference.position()
+                assertTrue(
+                    here.line == there.line && here.column == there.column,
+                    "bufSize=${bufSize}：行列号不一致 ${here.line}:${here.column} vs ${there.line}:${there.column}"
+                )
+                var run = view.asciiRunLength(noStop)
+                if (run <= 0) {
+                    run = 1
+                }
+                view.skipRun(run)
+                var i: Int64 = 0
+                while (i < run) {
+                    reference.advanceFast()
+                    i++
+                }
+            }
+            assertTrue(view.peekFast(0) < 0, "bufSize=${bufSize}：视图应先到 EOF")
+            assertTrue(reference.peekFast(0) < 0, "bufSize=${bufSize}：逐字符路径应同时到 EOF")
+        }
+    }
+
+    /** `asciiRunLength` 在块边界的取值：不超过可用长度，累加恰好等于全文长度。 */
+    @TestCase
+    public func asciiRunLengthAtBlockBoundary(): Unit {
+        let text = repeatText("x", 10)
+        let noStop = Array<Bool>(128, repeat: false)
+        for (bufSize in [Int64(4), Int64(8), Int64(16), Int64(8192)]) {
+            let view = this.windowOf(text, bufSize)
+            var consumed: Int64 = 0
+            while (true) {
+                let avail = view.runAvailable()
+                if (avail == 0) {
+                    break
+                }
+                let run = view.asciiRunLength(noStop)
+                assertTrue(run <= avail, "bufSize=${bufSize}：run=${run} 超过可用 ${avail}")
+                assertTrue(run > 0, "bufSize=${bufSize}：纯 ASCII 段应能整段前进")
+                view.skipRun(run)
+                consumed += run
+            }
+            assertTrue(consumed == Int64(text.size), "bufSize=${bufSize}：累计 ${consumed} ≠ ${text.size}")
+        }
+    }
+
+    /** 失效规则：下一次 `runAvailable()` 之后旧下标不再指向同一个码点。 */
+    @TestCase
+    public func cpAtInvalidatedByRefill(): Unit {
+        // 块容量下限是 64（`blockCapacityOf`），所以文本要比 64 长才会重填。
+        let view = this.windowOf(repeatText("a", 64) + "bcdefgh", 64)
+        assertTrue(view.runAvailable() == 64, "首块应恰好 64 个码点")
+        let first = view.cpAt(0)
+        view.skipRun(view.runAvailable())
+        assertTrue(view.runAvailable() > 0, "应能重填下一块")
+        let next = view.cpAt(0)
+        assertTrue(first != next, "重填后下标 0 应指向新块的码点")
+        assertTrue(first == 0x61 && next == 0x62, "实际 ${first} / ${next}")
+    }
+
+    /** `runAvailable` 在坏字节之前不抛，消费到坏字节处才抛。 */
+    @TestCase
+    public func runAvailableRaisesOnlyAtBadByte(): Unit {
+        let bytes: Array<Byte> = [0x61, 0xFF, 0x62]
+        let view = LineWindow(Utf8RuneSource(MemoryInputStream(bytes), mode: InvalidByteMode.Strict))
+        let avail = view.runAvailable()
+        assertTrue(avail == 1, "坏字节之前只应有 1 个可用码点，实际 ${avail}")
+        view.skipRun(avail)
+        assertXmlError({=> view.runAvailable()}, "字节偏移")
+    }
 }
 
 /** 只实现 `RuneSource` 五个方法、不继承 `BufferedRuneSource` 的最小源。 */

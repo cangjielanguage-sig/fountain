@@ -76,6 +76,8 @@ internal class ParserEngine {
     private let ns = NamespaceScope()
     private let stack = ArrayList<QName>()
     private let pending = ArrayList<XmlEvent>()
+    /** 重复属性检测的复用集合（每元素入口 `clear()`，不跨事件存活）。 */
+    private let seenScratch = ArrayList<QName>()
 
     private var state = ParserState.Prolog
     private var emittedStartDocument = false
@@ -286,8 +288,19 @@ internal class ParserEngine {
             this.declareNamespace(attribute)
         }
         let name = this.resolveElementName(raw)
-        let resolved = ArrayList<XmlAttribute>()
-        let seen = ArrayList<QName>()
+        // 交付给事件的数组按「非 xmlns 属性个数」一次分配并按索引填充：不再走
+        // `ArrayList` 增长 + `toArray()` 的二次分配。校验顺序与改动前一致
+        //（命名空间声明 → 元素名 → 逐属性「重复 → 长度上限」）。
+        var count: Int64 = 0
+        for (attribute in attrs) {
+            if (!this.isNamespaceDeclaration(attribute.name)) {
+                count++
+            }
+        }
+        let resolved = Array<XmlAttribute>(count, repeat: XmlAttribute(QName(""), ""))
+        let seen = this.seenScratch
+        seen.clear()
+        var index: Int64 = 0
         for (attribute in attrs) {
             if (this.isNamespaceDeclaration(attribute.name)) {
                 continue
@@ -306,9 +319,10 @@ internal class ParserEngine {
                     attribute.name.column
                 )
             }
-            resolved.add(XmlAttribute(attrName, attribute.value))
+            resolved[index] = XmlAttribute(attrName, attribute.value)
+            index++
         }
-        this.pending.add(XmlEvent.StartElement(name, resolved.toArray(), selfClosing))
+        this.pending.add(XmlEvent.StartElement(name, resolved, selfClosing))
         if (selfClosing) {
             this.ns.pop()
             this.pending.add(XmlEvent.EndElement(name))
