@@ -1,9 +1,12 @@
 # f_excel —— 仓颉 Excel（OOXML）解析器 / 生成器设计
 
-> 版本 **v0.9** ｜ 2026-10-30 ｜ 状态：待评审
+> 版本 **v0.10** ｜ 2026-10-30 ｜ 状态：M1 已实施
 >
 > 定位：fountain 模块。单个 `ExcelDocument` 类同时承担解析与生成。
 > 依赖 `fountain::f_zip`（读写 OOXML 包）与 `fountain::f_xml`（XML 解析/生成）。
+>
+> **v0.10 变更**
+> - M1 落地后的差异、R1–R4 实测与新增前置能力记入第 14 章
 >
 > **v0.9 变更**
 > - 前置能力落地：`f_zip.ZipWriter.openEntry(name): OutputStream`（推模式条目流）与
@@ -2893,3 +2896,45 @@ M4-c 的插值不依赖公式，可以提前到 M3，但单独做意义不大—
 
 实施中如遇与本文档不符的实测结果，直接回填到对应章节，并在此处留一条记录
 （写清"哪一版怎么错的、实测是什么、改成了什么"——`Duration` 那两轮已经证明这种记录有用）。
+
+---
+
+## 14. 实施记录（M1 落地，v0.10）
+
+### 14.1 与本文档的差异（9 项）
+
+实施时按仓库现状与依赖实测调整了 9 处，逐条见
+`doc/spec/implement-f-excel-m1/design.md` §8；摘要：
+
+| # | 差异 | 原因 |
+|---|---|---|
+| 1 | `ZipReader` 只接受 `String` 路径，对外仍收 `Path` | `f_zip` 现状 |
+| 2 | M1 不提供 `eager` / `loadTheme` 选项 | 避免"声明了但无声失效" |
+| 3 | `Cell` 用 `numberFormat` 而非 `CellStyle` | M1 兑现不了字体/填充，提前暴露会静默丢样式 |
+| 4 | `styles.xml` 是固定最小表（日期格式按需追加） | 无用户样式，样式池留 M2-a |
+| 5 | worksheet 由 `f_xml.XmlWriter` **增量接口**生成 | f_xml v1.2 已补齐；f_excel 不自带转义表 |
+| 6 | `SheetWriteOptions` M1 只有 `dimension` | 列宽/冻结属 M2 |
+| 7 | `mergedRanges()` 挂 `RowReader`，另有 `ExcelSheetStream.lastMergedRanges` | 消歧 2.7.6 |
+| 8 | M1 不含 `DocumentProperties` | `docProps` 是可选的，M2 补 |
+| 9 | 只写 `inlineStr`，无 `StringWriteMode` | 共享字符串写出与"两端常量内存"是两套取舍，留 M2-e |
+
+### 14.2 实测结论（R1–R4）
+
+| 项 | 实测 | 采用方案 |
+|---|---|---|
+| R1 `Float64.toString()` | 固定 6 位小数（`1.0 → "1.000000"`），不是最短往返 | `formatNumber`：整数值走 `Int64`；其余按 `g` 精度 1..17 逐个试，取能解析回原值的最短串 |
+| R2 `DateTime` | `DateTime.ofUTC(of year:month:dayOfMonth:hour:minute:second:nanosecond:)`、`toUnixTimeStamp().toNanoseconds()` 可用；`monthValue` 已废弃，用 `month.toInteger()` | 日期差按 UTC 日序号算，与本地时区无关 |
+| R3 临时文件 | `File.createTemp(Path)` 返回 `File`（不是目录） | `ExcelSheetStream.open(input)` 直接用它做 spool，`file.info.path` 交给 `ZipReader` |
+| R4 `cjpm test` 工作目录 | 包根（`f_excel/`） | 夹具现场拼包（`fixtures.cj`），不依赖 `testdata/` |
+
+### 14.3 实施中新增的前置能力
+
+| 模块 | 新增 | 提交 |
+|---|---|---|
+| `f_zip` | `ZipWriter.openEntry` 推模式条目流、`ZipReader.openEntry(ZipEntry)` | `00ca5ed9` |
+| `f_xml` | `XmlWriter` 增量接口；保留前缀 `xml`/`xmlns` 不再输出 `xmlns:xml` | `9066e1cd` / `47751ec0` |
+
+### 14.4 遗留
+
+- 真实 Excel / WPS / LibreOffice 打开验证与 openpyxl 回读属人工/外部验收，见 `doc/spec/implement-f-excel-m1/verification.md`。
+- M2-a（样式）、M2-b/c（公式）、M2-d（`TimeSpan` / 富文本）、M3（按需解析 / 磁盘索引）、M4（条件格式）未开始。

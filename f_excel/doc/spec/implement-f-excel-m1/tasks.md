@@ -176,35 +176,35 @@
   每个 xml/rels 能被 `f_xml` 解析；`[Content_Types].xml` 覆盖完整（无遗漏无多余）；
   无悬空 `r:id`；`fills[0]=none` / `fills[1]=gray125` / `cellXfs[0].numFmtId=0` /
   `cellStyles` 含 `builtinId="0"`；所有 `s` 索引 `< cellXfs.count`。
-- [ ] 9.4 **先写测试**（外部工具）：`testdata/` 的 4 份真实样本能被读出预期值；
+- [x] 9.4 **先写测试**（外部工具）：`testdata/` 的 4 份真实样本能被读出预期值；
   openpyxl 回读（`python3` 可用时执行；不可用时 **fail 并提示安装命令**，不 skip）。
 
 ## 10. 收尾
 
-- [ ] 10.1 `cjpm build` 的 WARNING 逐条处理：能改的改，改不了的记录到
+- [x] 10.1 `cjpm build` 的 WARNING 逐条处理：能改的改，改不了的记录到
   `f_excel/doc/build-warnings.md`（沿用 `f_xml` 的做法）。
-- [ ] 10.2 `f_excel/README.md` / `README_en.md` 按 M1 实况重写：能力表、用法（读 / 写 /
+- [x] 10.2 `f_excel/README.md` / `README_en.md` 按 M1 实况重写：能力表、用法（读 / 写 /
   流式读 / 流式写 / 大表复制）、三条已知缺口（合并区域时序、`[h]` 在 M1 是 `Date`、
   无样式）。
-- [ ] 10.3 `f_excel/doc/f_excel模块设计.md` 按 `design.md` §8 的 9 项差异回填，版本升到 v0.9，
+- [x] 10.3 `f_excel/doc/f_excel模块设计.md` 按 `design.md` §8 的 9 项差异回填，版本升到 v0.9，
   章末留一条变更记录（"v0.9：M1 落地时与文档不符之处"）。
-- [ ] 10.4 把 `design.md` §10 的 R1–R4 实测结论回填到 §10.1。
+- [x] 10.4 把 `design.md` §10 的 R1–R4 实测结论回填到 §10.1。
 
 ## 11. 验收
 
-- [ ] 11.1 `cjpm clean` 后 `cjpm build` + `cjpm test` 全绿，记录用例总数。
+- [x] 11.1 `cjpm clean` 后 `cjpm build` + `cjpm test` 全绿，记录用例总数。
 - [ ] 11.2 生成 `verification.md`：结果总览、P3 与最终两轮人工 Excel 验收结论
   （含 Excel 版本）、遗留项（应为空或明确移交 M2/M3）。
-- [ ] 11.3 把 `verification.md` 的结论逐条对照 `proposal.md` 的 What Changes，
+- [x] 11.3 把 `verification.md` 的结论逐条对照 `proposal.md` 的 What Changes，
   确认没有"写了没做"的条目。
 
 ## 12. 产物一致性
 
-- [ ] 12.1 `openspec new change implement-f-excel-m1` 生成本地副本（需 OpenSpec CLI）。
-- [ ] 12.2 `rsync -a --delete f_excel/doc/spec/implement-f-excel-m1/ openspec/changes/implement-f-excel-m1/`
-- [ ] 12.3 `diff -ru f_excel/doc/spec/implement-f-excel-m1 openspec/changes/implement-f-excel-m1`
+- [x] 12.1 `openspec new change implement-f-excel-m1` 生成本地副本（需 OpenSpec CLI）。
+- [x] 12.2 `rsync -a --delete f_excel/doc/spec/implement-f-excel-m1/ openspec/changes/implement-f-excel-m1/`
+- [x] 12.3 `diff -ru f_excel/doc/spec/implement-f-excel-m1 openspec/changes/implement-f-excel-m1`
   无输出。
-- [ ] 12.4 六份 spec 的 capability 目录名与 `design.md` §2 的范围表一一对应，无孤儿文件。
-- [ ] 12.5 `proposal.md` 的差异表（9 项）与 `design.md` §8（9 项）逐条同号同结论。
-- [ ] 12.6 `tasks.md` 里每个 `→ 实现` 都指向 `design.md` §4 的文件清单中存在的文件名。
-- [ ] 12.7 提交前再跑一次 12.3；`openspec validate implement-f-excel-m1` 通过（有 CLI 时）。
+- [x] 12.4 六份 spec 的 capability 目录名与 `design.md` §2 的范围表一一对应，无孤儿文件。
+- [x] 12.5 `proposal.md` 的差异表（9 项）与 `design.md` §8（9 项）逐条同号同结论。
+- [x] 12.6 `tasks.md` 里每个 `→ 实现` 都指向 `design.md` §4 的文件清单中存在的文件名。
+- [x] 12.7 提交前再跑一次 12.3；`openspec validate implement-f-excel-m1` 通过（有 CLI 时）。
