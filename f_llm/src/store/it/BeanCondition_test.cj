@@ -46,18 +46,23 @@ public class BeanB <: BeanProbe {
 @Test
 public class BeanConditionTest {
 
+    /**
+     * 进程内 BeanFactory 只初始化一次，所以配置只设一次、两个断言放在同一个用例里：
+     * 1) `lookupList` 必须只剩 1 个实现（条件真的把另一个过滤掉）；
+     * 2) `lookupOption` 必须给出配置指定的那个（B），而不是排在最前的 A。
+     */
     @TestCase
-    func testConfCondSelectsMatchingBean(): Unit {
-        Config.set<String>([('probe_conf', 'a')])
-        let probe = lookupOption<BeanProbe>()
-        @Expect(probe.isSome(), true)
-        @Expect(probe.getOrThrow().name(), 'A')
-    }
+    func testConfCondFiltersAndSelects(): Unit {
+        Config.set<String>([('probe_conf', 'b')])
+        // 配置设完之后必须重新触发一次条件初始化，否则 bean 仍是按旧配置筛的
+        BeanFactory.instance.afterRegistered()
 
-    @TestCase
-    func testConfCondRejectsNonMatching(): Unit {
-        Config.set<String>([('probe_conf', 'a')])
-        // 条件不匹配的 BeanB 不会被选中：同一个 lookup 稳定返回 A
-        @Expect(lookupOption<BeanProbe>().getOrThrow().name(), 'A')
+        let probes = lookupList<BeanProbe>()
+        @Expect(probes.size, 1)
+        @Expect(probes[0].name(), 'B')
+
+        let selected = lookupOption<BeanProbe>()
+        @Expect(selected.isSome(), true)
+        @Expect(selected.getOrThrow().name(), 'B')
     }
 }
