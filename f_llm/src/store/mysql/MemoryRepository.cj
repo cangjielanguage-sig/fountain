@@ -215,5 +215,3 @@ public class MySqlMemoryRepository <: MemoryRepository & RootService {
     }
 }
 
-
-let _mysqlRepoRegistered = MemoryRepositories.register('mysql', { => MySqlMemoryRepository() })

@@ -188,5 +188,3 @@ public class PostgresMemoryRepository <: MemoryRepository & RootService {
     }
 }
 
-
-let _postgresRepoRegistered = MemoryRepositories.register('postgres', { => PostgresMemoryRepository() })

@@ -16,108 +16,20 @@ limitations under the License.
 package fountain::f_llm.store
 
 import std.collection.*
-import std.sync.Mutex
 
 import fountain::f_bean.*
 
 /**
- * `MemoryRepository` 适配器（0.1/0.2）：
- * 各实现包在加载时注册工厂，这里按 `llm_contentStore` 决定实例化哪个。
+ * `MemoryRepository` 适配器：对业务层只暴露接口。
  *
- * 实现包（`f_llm.store.postgres` / `f_llm.store.mysql`）import 本包完成注册；
- * 本包**不 import 任何实现包**，避免循环依赖。
- */
-public class MemoryRepositories {
-    private static let mutex = Mutex()
-    private static let factories = HashMap<String, () -> MemoryRepository>()
-
-    public static func register(name: String, factory: () -> MemoryRepository): Bool {
-        synchronized(mutex){
-            if(factories.contains(name)){
-                return false
-            }
-            factories[name] = factory
-            true
-        }
-    }
-
-    public static func names(): ArrayList<String> {
-        synchronized(mutex){
-            let result = ArrayList<String>()
-            for((name, _) in factories){
-                result.add(name)
-            }
-            result
-        }
-    }
-
-    /**
-     * 按配置 `llm_contentStore` 创建：由 `f_bean` 依据 `@BeanMeta[condition: ConfCond...]`
-     * 选出匹配的实现；没有匹配时回退到 fhydra（尚未实现，直接抛错说明）。
-     *
-     * 该表达式只在首次调用时求值一次，之后由 bean 容器持有单例。
-     */
-    public static func create(): MemoryRepository {
-        let name = StoreSettings.load().contentStore
-        // 优先用注册表（确定性强）；注册表没有时才回退到 f_bean 的条件选择。
-        // 实测 @BeanMeta[condition: ConfCond...] 的过滤并未按预期生效，
-        // 因此不能把正确性完全押在 lookupOption 上。
-        let registered = synchronized(mutex){
-            factories.get(name)
-        }
-        match(registered){
-            case Some(factory) => factory()
-            case None => lookupOption<MemoryRepository>() ?? fallback()
-        }
-    }
-
-    private static func fallback(): MemoryRepository {
-        throw IllegalStateException(
-            'no MemoryRepository bean for llm_contentStore="${StoreSettings.load().contentStore}"; '
-            + 'fhydra 内容族尚未实现，请配置 llm_contentStore=postgres|mysql')
-    }
-
-    public static func create(name: String): MemoryRepository {
-        let factory = synchronized(mutex){
-            factories.get(name)
-        }
-        match(factory){
-            case Some(create) => create()
-            case None => throw IllegalArgumentException('memory repository "${name}" is not registered, available: ${joined()}')
-        }
-    }
-
-    /** 仅测试用 */
-    public static func resetForTest(): Unit {
-        synchronized(mutex){
-            factories.clear()
-        }
-    }
-
-    private static func joined(): String {
-        var text = ''
-        for(name in names()){
-            if(!text.isEmpty()){
-                text += ','
-            }
-            text += name
-        }
-        text
-    }
-}
-
-/**
- * `MemoryRepository` 适配器本体：对业务层只暴露接口，内部转发给
- * `f_bean` 依据 `llm_contentStore` 选出的实现（`MemoryRepositories.create()`）。
- *
- * 注意：本类**不加** `@Bean`，否则它会和 PG/MySQL 实现一起成为 `MemoryRepository` 的候选，
- * 造成 `lookupOption<MemoryRepository>()` 歧义或递归。
+ * 具体实现由 `f_bean` 依据 `@BeanMeta[condition: ConfCond.Value('llm_contentStore', …)]`
+ * 在容器初始化时选定，这里只做一次 `lookupOption`；没有匹配时回退到 fhydra（尚未实现）。
  */
 public class MemoryRepositoryAdapter <: MemoryRepository {
     private let delegate: MemoryRepository
 
     public init() {
-        this.delegate = MemoryRepositories.create()
+        this.delegate = lookupOption<MemoryRepository>() ?? defaultRepository()
     }
 
     public func upsert(write: MemoryWrite, titleVector: Array<Float64>,
@@ -159,4 +71,14 @@ public class MemoryRepositoryAdapter <: MemoryRepository {
     public func remove(userId: Int64, id: Int64): Bool {
         delegate.remove(userId, id)
     }
+}
+
+/**
+ * 默认实现：按设计应由 fhydra 内容族提供；当前尚未实现，明确报错而不是静默回退。
+ * 等 f_hydra / fhydra 落地后，把这里换成它们的 bean。
+ */
+private func defaultRepository(): MemoryRepository {
+    throw IllegalStateException(
+        'no MemoryRepository bean matched llm_contentStore="${StoreSettings.load().contentStore}"; '
+        + 'fhydra 内容族尚未实现，请配置 llm_contentStore=postgres|mysql')
 }
