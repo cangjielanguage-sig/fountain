@@ -20,14 +20,14 @@
 
 ## 2. M2-b 公式核心
 
-- [ ] 2.1 失败用例 `FormulaLexer_test`：数字/字符串/布尔/错误/引用/区域/函数名/运算符/空白
-- [ ] 2.2 失败用例 `FormulaParser_test`：优先级、括号、一元负号、比较、字符串连接、错误公式
-- [ ] 2.3 失败用例 `Evaluator_test`：四则/比较/连接/引用取值/区域聚合
-- [ ] 2.4 失败用例 `FunctionRegistry_test`：40 个函数逐一对 Excel 预期值
-- [ ] 2.5 失败用例 `DependencyGraph_test`：跨格/跨表依赖、拓扑序、循环引用 `#CIRC!`
-- [ ] 2.6 失败用例 `CalcEngine_test`：`recalculate` 全表/单表、`evaluate` 单格、默认不自动重算
-- [ ] 2.7 失败用例：共享公式平移（`$` 不动、越界 `#REF!`）；数组公式左上角求值
-- [ ] 2.8 实现词法/语法/AST/求值/注册表/依赖图/引擎
+- [x] 2.1 失败用例 `FormulaLexer_test`：数字/字符串/布尔/错误/引用/区域/函数名/运算符/空白
+- [x] 2.2 失败用例 `FormulaParser_test`：优先级、括号、一元负号、比较、字符串连接、错误公式
+- [x] 2.3 失败用例 `Evaluator_test`：四则/比较/连接/引用取值/区域聚合
+- [x] 2.4 失败用例 `FunctionRegistry_test`：40 个函数逐一对 Excel 预期值
+- [x] 2.5 失败用例 `DependencyGraph_test`：跨格/跨表依赖、拓扑序、循环引用 `#CIRC!`
+- [x] 2.6 失败用例 `CalcEngine_test`：`recalculate` 全表/单表、`evaluate` 单格、默认不自动重算
+- [x] 2.7 失败用例：共享公式平移（`$` 不动、越界 `#REF!`）；数组公式左上角求值
+- [x] 2.8 实现词法/语法/AST/求值/注册表/依赖图/引擎
 
 ## 3. M2-c 扩展
 

@@ -45,6 +45,7 @@ public enum ExcelWarningKind <: Equatable<ExcelWarningKind> & ToString {
     | DateSerial60
     | UnsupportedTimeFormat
     | SharedFormulaUnsupported
+    | ArrayFormulaUnsupported
     | AutoDetectDateDisabled
     | DateBaseMismatch
     | StylesMissing
@@ -69,6 +70,7 @@ public enum ExcelWarningKind <: Equatable<ExcelWarningKind> & ToString {
             case (DateSerial60, DateSerial60) => true
             case (UnsupportedTimeFormat, UnsupportedTimeFormat) => true
             case (SharedFormulaUnsupported, SharedFormulaUnsupported) => true
+            case (ArrayFormulaUnsupported, ArrayFormulaUnsupported) => true
             case (AutoDetectDateDisabled, AutoDetectDateDisabled) => true
             case (DateBaseMismatch, DateBaseMismatch) => true
             case (StylesMissing, StylesMissing) => true
@@ -100,6 +102,7 @@ public enum ExcelWarningKind <: Equatable<ExcelWarningKind> & ToString {
             case DateSerial60 => "DateSerial60"
             case UnsupportedTimeFormat => "UnsupportedTimeFormat"
             case SharedFormulaUnsupported => "SharedFormulaUnsupported"
+            case ArrayFormulaUnsupported => "ArrayFormulaUnsupported"
             case AutoDetectDateDisabled => "AutoDetectDateDisabled"
             case DateBaseMismatch => "DateBaseMismatch"
             case StylesMissing => "StylesMissing"

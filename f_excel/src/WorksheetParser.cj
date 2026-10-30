@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_excel
 
-import std.collection.ArrayList
+import std.collection.{ArrayList, HashMap}
 import std.convert.*
 import std.io.ByteBuffer
 import std.time.DateTime
@@ -119,6 +119,9 @@ internal class SheetRowHandler {
     private var inlineText = StringGenerator()
     private var formulaText = StringGenerator()
     private var formulaType: ?String = None
+    private var formulaSi: ?Int64 = None
+    private let sharedMasters = HashMap<Int64, (String, Int64, Int64)>()
+    private var arrayFormulaWarned = false
     private var inValue = false
     private var inInline = false
     private var inInlineText = false
@@ -170,6 +173,10 @@ internal class SheetRowHandler {
             case "f" =>
                 inFormula = true
                 formulaType = attr(attrs, "t")
+                formulaSi = match (attr(attrs, "si")) {
+                    case Some(text) => parseIntOrNone(text)
+                    case None => None<Int64>
+                }
             case "is" => inInline = true
             case "t" => if (inInline) {
                 inInlineText = true
@@ -261,6 +268,7 @@ internal class SheetRowHandler {
         inlineText = StringGenerator()
         formulaText = StringGenerator()
         formulaType = None
+        formulaSi = None
         inValue = false
         inInline = false
         inInlineText = false
@@ -314,20 +322,56 @@ internal class SheetRowHandler {
     private func valueOf(): CellValue {
         let formula = formulaText.toString()
         if (!formula.isEmpty() || formulaType.isSome()) {
+            let cached = if (valueText.size == 0) {
+                None<CellValue>
+            } else {
+                Some(plainValue())
+            }
             if (formulaType == Some("shared") && formula.isEmpty()) {
+                // 非主单元格：按 si 找主公式平移相对引用
+                match (formulaSi) {
+                    case Some(si) => match (sharedMasters.get(si)) {
+                        case Some(master) =>
+                            let shifted = shiftFormula(
+                                master[0],
+                                rowIndex - master[1],
+                                col - master[2]
+                            )
+                            return CellValue.Formula(shifted, cached)
+                        case None => ()
+                    }
+                    case None => ()
+                }
                 parsed.warnings.add(
                     ExcelWarning(
                         ExcelWarningKind.SharedFormulaUnsupported,
-                        "共享公式只保留原文（本格没有原文）",
+                        "共享公式找不到主单元格，本格按空值处理",
                         sheet: Some(sheetName)
                     )
                 )
                 return CellValue.Empty
             }
-            let cached = if (valueText.size == 0) {
-                None<CellValue>
-            } else {
-                Some(plainValue())
+            if (formulaType == Some("shared") && formulaSi.isSome()) {
+                match (formulaSi) {
+                    case Some(si) => sharedMasters.add(si, (formula, rowIndex, col))
+                    case None => ()
+                }
+            }
+            if (formulaType == Some("array") && formula.isEmpty()) {
+                if (!arrayFormulaWarned) {
+                    arrayFormulaWarned = true
+                    parsed.warnings.add(
+                        ExcelWarning(
+                            ExcelWarningKind.ArrayFormulaUnsupported,
+                            "数组公式只保留左上角，其余单元格按缓存值",
+                            sheet: Some(sheetName)
+                        )
+                    )
+                }
+                return match (cached) {
+                    case Some(v) => v
+                    case None => CellValue.Empty
+                }
             }
             return CellValue.Formula(formula, cached)
         }
