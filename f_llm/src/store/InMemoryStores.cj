@@ -18,6 +18,9 @@ package fountain::f_llm.store
 import std.collection.*
 import std.time.DateTime
 
+import fountain::f_bean.*
+import fountain::f_bean.macros.*
+
 /**
  * 内存实现：只用于单测与本地演示，**不注册进 Stores**（§5.3）。
  *
@@ -55,7 +58,9 @@ public class InMemoryMetaStore <: MetaStore {
     }
 }
 
-class InMemoryMemoryStore <: MemoryStore {
+@Bean
+@BeanMeta[condition: ConfCond.Value('llm_memoryStore', StringCond.Exactly('inMemory'))]
+public class InMemoryMemoryStore <: MemoryStore {
     private let records = HashMap<Int64, MemoryRecord>()
     private var seq: Int64 = 0
 

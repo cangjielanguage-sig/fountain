@@ -18,15 +18,27 @@ package fountain::f_llm.store
 import std.collection.*
 import std.time.DateTime
 
+import fountain::f_bean.*
+import fountain::f_bean.macros.*
+
 /**
- * PostgreSQL 记忆实现（2.3）。
- *
- * 2.3 的 Red 阶段：`add` 未实现；其余方法在 2.4/2.5 补。
+ * SQL 记忆实现：PG / MySQL 共用一套融合与权重逻辑，
+ * 具体仓库由 `MemoryRepositoryAdapter` 按 `llm_memoryStore` 选出。
  */
+@Bean
+@BeanMeta[condition: ConfCond.Value('llm_memoryStore', StringCond.Exactly('mysql'))
+                    | ConfCond.Value('llm_memoryStore', StringCond.Exactly('postgres'))]
 public class SqlMemoryStore <: MemoryStore {
     private let repo: MemoryRepository
     private let embedder: Embedder
 
+    /** 容器用：仓库走适配器，向量化实现由 bean 提供 */
+    public init() {
+        this.repo = MemoryRepositoryAdapter()
+        this.embedder = lookup<Embedder>()
+    }
+
+    /** 测试/显式注入用 */
     public init(repo: MemoryRepository, embedder: Embedder) {
         this.repo = repo
         this.embedder = embedder
