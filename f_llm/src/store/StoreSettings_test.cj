@@ -37,7 +37,7 @@ public class StoreSettingsTest {
     func testDefaults(): Unit {
         clearAll()
         let settings = StoreSettings.load()
-        @Expect(settings.contentStore, 'postgres')
+        @Expect(settings.memoryStore, 'postgres')
         @Expect(settings.metaStore, 'postgres')
         @Expect(settings.metaStorePath, './data/f_llm-meta')
         @Expect(settings.contentStoreUrl, '')
@@ -54,7 +54,7 @@ public class StoreSettingsTest {
             (StoreSettings.CONTENT_URL_KEY, 'mysql://localhost/fllm')
         ])
         let settings = StoreSettings.load()
-        @Expect(settings.contentStore, 'mysql')
+        @Expect(settings.memoryStore, 'mysql')
         @Expect(settings.metaStore, 'f_store')
         @Expect(settings.metaStorePath, '/tmp/meta')
         @Expect(settings.contentStoreUrl, 'mysql://localhost/fllm')
@@ -71,7 +71,7 @@ public class StoreSettingsTest {
         ])
         let settings = StoreSettings.load()
         // 旧键不参与选型：仍然用默认值
-        @Expect(settings.contentStore, 'postgres')
+        @Expect(settings.memoryStore, 'postgres')
         @Expect(settings.metaStore, 'postgres')
         // 但必须被识别出来，供启动日志 warn
         @Expect(settings.deprecated.size, 3)

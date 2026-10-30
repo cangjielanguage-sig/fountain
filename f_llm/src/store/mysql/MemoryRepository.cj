@@ -33,7 +33,7 @@ import fountain::f_llm.dao.mysql.*
  * 不传时从 `llm_contentStoreUrl` 解析。
  */
 @Bean
-@BeanMeta[condition: ConfCond.Value('llm_contentStore', StringCond.Exactly('mysql'))]
+@BeanMeta[condition: ConfCond.Value('llm_memoryStore', StringCond.Exactly('mysql'))]
 public class MySqlMemoryRepository <: MemoryRepository & RootService {
     private static let DRIVER = 'mysql'
 

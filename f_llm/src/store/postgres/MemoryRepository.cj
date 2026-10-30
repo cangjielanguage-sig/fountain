@@ -31,7 +31,7 @@ import fountain::f_llm.dao.postgres.*
  * 本类只做「先主表后向量」这类编排与行映射。
  */
 @Bean
-@BeanMeta[condition: ConfCond.Value('llm_contentStore', StringCond.Exactly('postgres'))]
+@BeanMeta[condition: ConfCond.Value('llm_memoryStore', StringCond.Exactly('postgres'))]
 public class PostgresMemoryRepository <: MemoryRepository & RootService {
     private static let DRIVER = 'postgres'
 

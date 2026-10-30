@@ -23,12 +23,12 @@ import fountain::f_log.*
 /**
  * 存储选型配置（1.3）。
  *
- * 新键：`llm_contentStore` / `llm_metaStore` / `llm_metaStorePath` / `llm_contentStoreUrl`。
+ * 新键：`llm_memoryStore` / `llm_metaStore` / `llm_metaStorePath` / `llm_contentStoreUrl`。
  * 旧键（`llm_memoryBackend` / `llm_characterBackend` / `llm_memoryPath`）只识别、不生效，
  * 启动时逐条 `warn`，避免「配了旧键以为切了后端」。
  */
 public class StoreSettings {
-    public static const CONTENT_KEY = 'llm_contentStore'
+    public static const CONTENT_KEY = 'llm_memoryStore'
     public static const META_KEY = 'llm_metaStore'
     public static const META_PATH_KEY = 'llm_metaStorePath'
     public static const CONTENT_URL_KEY = 'llm_contentStoreUrl'
@@ -39,18 +39,18 @@ public class StoreSettings {
 
     private static let log = LoggerFactory.getLogger<StoreSettings>()
 
-    private static let DEPRECATED_KEYS = ['llm_memoryBackend', 'llm_characterBackend', 'llm_memoryPath']
+    private static let DEPRECATED_KEYS = ['llm_contentStore', 'llm_memoryBackend', 'llm_characterBackend', 'llm_memoryPath']
 
-    public let contentStore: String
+    public let memoryStore: String
     public let metaStore: String
     public let metaStorePath: String
     public let contentStoreUrl: String
     /** 检测到的废弃键（只用于告警与测试，不参与选型） */
     public let deprecated: ArrayList<String>
 
-    private init(contentStore: String, metaStore: String, metaStorePath: String,
+    private init(memoryStore: String, metaStore: String, metaStorePath: String,
                  contentStoreUrl: String, deprecated: ArrayList<String>) {
-        this.contentStore = contentStore
+        this.memoryStore = memoryStore
         this.metaStore = metaStore
         this.metaStorePath = metaStorePath
         this.contentStoreUrl = contentStoreUrl

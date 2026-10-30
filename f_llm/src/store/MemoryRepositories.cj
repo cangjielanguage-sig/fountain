@@ -22,7 +22,7 @@ import fountain::f_bean.*
 /**
  * `MemoryRepository` 适配器：对业务层只暴露接口。
  *
- * 具体实现由 `f_bean` 依据 `@BeanMeta[condition: ConfCond.Value('llm_contentStore', …)]`
+ * 具体实现由 `f_bean` 依据 `@BeanMeta[condition: ConfCond.Value('llm_memoryStore', …)]`
  * 在容器初始化时选定，这里只做一次 `lookupOption`；没有匹配时回退到 fhydra（尚未实现）。
  */
 public class MemoryRepositoryAdapter <: MemoryRepository {
@@ -79,6 +79,6 @@ public class MemoryRepositoryAdapter <: MemoryRepository {
  */
 private func defaultRepository(): MemoryRepository {
     throw IllegalStateException(
-        'no MemoryRepository bean matched llm_contentStore="${StoreSettings.load().contentStore}"; '
-        + 'fhydra 内容族尚未实现，请配置 llm_contentStore=postgres|mysql')
+        'no MemoryRepository bean matched llm_memoryStore="${StoreSettings.load().memoryStore}"; '
+        + 'fhydra 内容族尚未实现，请配置 llm_memoryStore=postgres|mysql')
 }

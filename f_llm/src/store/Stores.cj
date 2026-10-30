@@ -26,7 +26,7 @@ import fountain::f_config.*
  * 未知配置值一律抛错并列出可选列表，不做静默回退。
  */
 public class Stores {
-    public static const CONTENT_KEY = 'llm_contentStore'
+    public static const CONTENT_KEY = 'llm_memoryStore'
     public static const META_KEY = 'llm_metaStore'
     public static const DEFAULT_CONTENT = 'postgres'
     public static const DEFAULT_META = 'postgres'
@@ -56,7 +56,7 @@ public class Stores {
 
     /** 按配置选择内容族实现 */
     public static func content(): ContentStore {
-        let name = StoreSettings.load().contentStore
+        let name = StoreSettings.load().memoryStore
         content(name)
     }
 
@@ -65,7 +65,7 @@ public class Stores {
         match(contentFactories.get(name)){
             case Some(factory) => factory()
             case None => throw IllegalArgumentException(
-                'unknown llm_contentStore: ${name}, available: ${contentNames()}'
+                'unknown llm_memoryStore: ${name}, available: ${contentNames()}'
             )
         }
     }
