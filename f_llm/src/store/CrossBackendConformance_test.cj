@@ -104,7 +104,7 @@ public class CrossBackendConformanceTest {
               update_time TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc')
             )
         ''').update
-        let pgRepo = PostgresMemoryRepository(pg)
+        let pgRepo = PostgresMemoryRepository()
         seed(pgRepo)
         let pgHits = pgRepo.searchDense(MemoryQuery(1, ['global'], [], 'q', topK: 2), vector(0.0101f64), 2)
 

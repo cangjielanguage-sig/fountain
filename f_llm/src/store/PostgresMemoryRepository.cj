@@ -20,115 +20,43 @@ import std.time.DateTime
 
 import fountain::f_orm.*
 
+import fountain::f_llm.dao.*
+
 /**
- * PostgreSQL 记忆仓库（2.8b）。
- *
- * 只负责 SQL 与行映射；权重、融合、截断在 store 层。
+ * PostgreSQL 记忆仓库（0.2）：SQL 全部在 `PostgresMemoryDAO`，
+ * 本类只做「先主表后向量」这类编排与行映射。
  */
-public class PostgresMemoryRepository <: MemoryRepository {
-    private static let MEMORY_COLUMNS = 'id, user_id, namespace, title, content, kind'
+public class PostgresMemoryRepository <: MemoryRepository & RootService {
+    private static let DRIVER = 'postgres'
 
-    private let executor: SqlExecutor
-
-    public init(executor: SqlExecutor) {
-        this.executor = executor
+    public init() {
     }
 
     public func upsert(write: MemoryWrite, titleVector: Array<Float64>,
                        contentVector: Array<Float64>): Int64 {
-        let row = executor.setSql('''
-            INSERT INTO llm_memory (user_id, namespace, title, content, kind, save_time, update_time)
-            VALUES (?, ?, ?, ?, ?, now(), now())
-            ON CONFLICT (user_id, namespace, title)
-            DO UPDATE SET content = EXCLUDED.content, kind = EXCLUDED.kind, update_time = now()
-            RETURNING id
-        ''')
-            .add(write.userId)
-            .add(write.namespace)
-            .add(write.title)
-            .add(write.content)
-            .add(write.kind)
-            .firstToMap()
-        let id = intOf(row.get('id') ?? 0)
-        executor.setSql('''
-            INSERT INTO llm_memory_vector (memory_id, model, title_dense, content_dense, update_time)
-            VALUES (?, ?, ?::vector, ?::vector, now())
-            ON CONFLICT (memory_id)
-            DO UPDATE SET title_dense = EXCLUDED.title_dense,
-                          content_dense = EXCLUDED.content_dense,
-                          update_time = now()
-        ''')
-            .add(id)
-            .add('bge-m3')
-            .add(vectorLiteral(titleVector))
-            .add(vectorLiteral(contentVector))
-            .update
+        let id = memoryDao().upsertMemory(write.userId, write.namespace, write.title,
+                                          write.content, write.kind)
+        memoryDao().upsertVectors(id, 'bge-m3', vectorLiteral(titleVector), vectorLiteral(contentVector))
         id
     }
 
     public func searchDense(query: MemoryQuery, vector: Array<Float64>, limit: Int64): ArrayList<MemoryHit> {
-        var namespaceClause = ''
-        if(query.namespaces.size > 0){
-            var placeholders = ArrayList<String>()
-            for(_ in query.namespaces){
-                placeholders.add('?')
-            }
-            let text = join(placeholders)
-            namespaceClause = ' AND m.namespace IN (${text})'
-        }
-        let sql = '''
-            SELECT m.id, m.user_id, m.namespace, m.title, m.content, m.kind,
-                   1 - (v.title_dense <=> ?::vector) AS score
-            FROM llm_memory m
-            JOIN llm_memory_vector v ON v.memory_id = m.id
-            WHERE m.user_id = ?${namespaceClause}
-            ORDER BY v.title_dense <=> ?::vector
-            LIMIT ?
-        '''
-        var statement = executor.setSql(sql).add(vectorLiteral(vector)).add(query.userId)
-        for(namespace in query.namespaces){
-            statement = statement.add(namespace)
-        }
-        statement = statement.add(vectorLiteral(vector)).add(limit)
-
-        let hits = ArrayList<MemoryHit>()
-        for(row in statement.mapList()){
-            hits.add(MemoryHit(recordOf(row), floatOf(row.get('score') ?? 0.0f64)))
-        }
-        hits
+        hits(memoryDao().searchDense(query.userId, query.namespaces, vectorLiteral(vector), limit))
     }
 
     public func upsertSparse(memoryId: Int64, userId: Int64, namespace: String,
                              tokens: HashMap<Int64, Float64>): Unit {
-        // 覆盖写：先清旧 token，再批量插入；field='m' 表示标题+正文合并后的稀疏向量
-        executor.setSql('DELETE FROM llm_memory_token WHERE memory_id = ?').add(memoryId).delete
+        memoryDao().deleteTokens(memoryId)
         for((token, weight) in tokens){
-            executor.setSql('''
-                INSERT INTO llm_memory_token (memory_id, user_id, namespace, field, token, weight)
-                VALUES (?, ?, ?, 'm', ?, ?)
-            ''')
-                .add(memoryId)
-                .add(userId)
-                .add(namespace)
-                .add(token)
-                .add(weight)
-                .update
+            memoryDao().insertToken(memoryId, userId, namespace, token, weight)
         }
     }
 
     public func upsertColbert(memoryId: Int64, titleVectors: Array<Array<Float64>>,
                               contentVectors: Array<Array<Float64>>): Unit {
-        let titleBytes = ColbertCodec.encode(titleVectors)
-        let contentBytes = ColbertCodec.encode(contentVectors)
-        executor.setSql('''
-            UPDATE llm_memory_vector
-            SET title_colbert = ?, content_colbert = ?, has_colbert = true, update_time = now()
-            WHERE memory_id = ?
-        ''')
-            .add(titleBytes)
-            .add(contentBytes)
-            .add(memoryId)
-            .update
+        memoryDao().updateColbert(memoryId,
+            ColbertCodec.encode(titleVectors),
+            ColbertCodec.encode(contentVectors))
     }
 
     public func searchSparse(query: MemoryQuery, tokens: HashMap<Int64, Float64>,
@@ -136,57 +64,57 @@ public class PostgresMemoryRepository <: MemoryRepository {
         if(tokens.isEmpty()){
             return ArrayList<MemoryHit>()
         }
-        var namespaceClause = ''
-        if(query.namespaces.size > 0){
-            let placeholders = ArrayList<String>()
-            for(_ in query.namespaces){
-                placeholders.add('?')
-            }
-            namespaceClause = ' AND t.namespace IN (${join(placeholders)})'
-        }
-        let tokenPlaceholders = ArrayList<String>()
-        for(_ in tokens.keys()){
-            tokenPlaceholders.add('?')
-        }
-        let sql = '''
-            SELECT m.id, m.user_id, m.namespace, m.title, m.content, m.kind,
-                   SUM(t.weight) AS score
-            FROM llm_memory_token t
-            JOIN llm_memory m ON m.id = t.memory_id
-            WHERE t.user_id = ?${namespaceClause} AND t.token IN (${join(tokenPlaceholders)})
-            GROUP BY m.id, m.user_id, m.namespace, m.title, m.content, m.kind
-            ORDER BY score DESC
-            LIMIT ?
-        '''
-        var statement = executor.setSql(sql).add(query.userId)
-        for(namespace in query.namespaces){
-            statement = statement.add(namespace)
-        }
+        let tokenIds = ArrayList<Int64>()
         for((token, _) in tokens){
-            statement = statement.add(token)
+            tokenIds.add(token)
         }
-        statement = statement.add(limit)
-
-        let hits = ArrayList<MemoryHit>()
-        for(row in statement.mapList()){
-            hits.add(MemoryHit(recordOf(row), floatOf(row.get('score') ?? 0.0f64)))
-        }
-        hits
+        hits(memoryDao().searchSparse(query.userId, query.namespaces, tokenIds.toArray(), limit))
     }
 
     public func colbert(recordId: Int64): ?ColbertVectors {
-        let row = executor.setSql(
-            'SELECT title_colbert, content_colbert FROM llm_memory_vector WHERE memory_id = ?'
-        ).add(recordId).firstToMap()
-        if(row.isEmpty()){
-            return None
+        match(memoryDao().selectColbert(recordId)){
+            case Some(row) =>
+                let title = bytesOf(row.get('title_colbert'))
+                let content = bytesOf(row.get('content_colbert'))
+                if(title.size == 0 && content.size == 0){
+                    None
+                }else{
+                    Some(ColbertVectors(ColbertCodec.decode(title), ColbertCodec.decode(content)))
+                }
+            case None => None
         }
-        let title = bytesOf(row.get('title_colbert'))
-        let content = bytesOf(row.get('content_colbert'))
-        if(title.size == 0 && content.size == 0){
-            return None
+    }
+
+    public func get(userId: Int64, id: Int64): ?MemoryRecord {
+        match(memoryDao().get(userId, id)){
+            case Some(row) => Some(recordOf(row))
+            case None => None
         }
-        Some(ColbertVectors(ColbertCodec.decode(title), ColbertCodec.decode(content)))
+    }
+
+    public func list(userId: Int64, namespace: String, offset: Int64, limit: Int64): ArrayList<MemoryRecord> {
+        let records = ArrayList<MemoryRecord>()
+        for(row in memoryDao().list(userId, namespace, offset, limit)){
+            records.add(recordOf(row))
+        }
+        records
+    }
+
+    public func remove(userId: Int64, id: Int64): Bool {
+        memoryDao().deleteVectors(id)
+        memoryDao().deleteMemory(userId, id) > 0
+    }
+
+    private func memoryDao(): PostgresMemoryDAO {
+        dao<PostgresMemoryDAO>(DRIVER)
+    }
+
+    private func hits(rows: ArrayList<HashMap<String, Any>>): ArrayList<MemoryHit> {
+        let results = ArrayList<MemoryHit>()
+        for(row in rows){
+            results.add(MemoryHit(recordOf(row), floatOf(row.get('score') ?? 0.0f64)))
+        }
+        results
     }
 
     private static func bytesOf(value: ?Any): Array<Byte> {
@@ -198,47 +126,6 @@ public class PostgresMemoryRepository <: MemoryRepository {
                 }
             case None => Array<Byte>()
         }
-    }
-
-    public func get(userId: Int64, id: Int64): ?MemoryRecord {
-        let row = executor.setSql(
-            'SELECT ${MEMORY_COLUMNS} FROM llm_memory WHERE user_id = ? AND id = ?'
-        )
-            .add(userId)
-            .add(id)
-            .firstToMap()
-        if(row.isEmpty()){
-            None
-        }else{
-            Some(recordOf(row))
-        }
-    }
-
-    public func list(userId: Int64, namespace: String, offset: Int64, limit: Int64): ArrayList<MemoryRecord> {
-        let records = ArrayList<MemoryRecord>()
-        let rows = executor.setSql('''
-            SELECT ${MEMORY_COLUMNS} FROM llm_memory
-            WHERE user_id = ? AND namespace = ?
-            ORDER BY save_time DESC
-            LIMIT ? OFFSET ?
-        ''')
-            .add(userId)
-            .add(namespace)
-            .add(limit)
-            .add(offset)
-            .mapList()
-        for(row in rows){
-            records.add(recordOf(row))
-        }
-        records
-    }
-
-    public func remove(userId: Int64, id: Int64): Bool {
-        executor.setSql('DELETE FROM llm_memory_vector WHERE memory_id = ?').add(id).delete
-        executor.setSql('DELETE FROM llm_memory WHERE user_id = ? AND id = ?')
-            .add(userId)
-            .add(id)
-            .delete > 0
     }
 
     private func recordOf(row: Map<String, Any>): MemoryRecord {
@@ -288,17 +175,6 @@ public class PostgresMemoryRepository <: MemoryRepository {
             text += '${vector[index]}'
         }
         text += ']'
-        text
-    }
-
-    private static func join(values: ArrayList<String>): String {
-        var text = ''
-        for(index in 0..values.size){
-            if(index > 0){
-                text += ','
-            }
-            text += values[index]
-        }
         text
     }
 }
