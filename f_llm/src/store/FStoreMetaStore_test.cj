@@ -21,6 +21,8 @@ import std.unittest.testmacro.*
 
 import fountain::f_store.Store
 
+private var confDirSeq: Int64 = 0
+
 @Test
 public class FStoreMetaStoreTest {
 
@@ -78,7 +80,8 @@ public class FStoreMetaStoreTest {
     @TestCase
     func testConfPutAndFilter(): Unit {
         // 每次跑用独立目录，避免上一轮的残留配置把候选数抬高
-        let meta = FStoreMetaStore('/tmp/fllm-conf-${DateTime.now().toUnixTimeStamp().toSeconds()}')
+        confDirSeq++
+        let meta = FStoreMetaStore('/tmp/fllm-conf-${confDirSeq}')
         meta.confs.put(LLMConfView('p1', 'chat-pro', 'pro', 10, true))
         meta.confs.put(LLMConfView('p2', 'chat-pro', 'off', 10, false))
         meta.confs.put(LLMConfView('p3', 'chat-pro', 'zero', 0, true))
@@ -107,7 +110,8 @@ public class FStoreMetaStoreTest {
 
     @TestCase
     func testRepairRebuildsMissingIndex(): Unit {
-        let path = '/tmp/fllm-conf-repair-${DateTime.now().toUnixTimeStamp().toSeconds()}'
+        confDirSeq++
+        let path = '/tmp/fllm-conf-repair-${confDirSeq}'
         // 同一个 Store 实例内模拟半写：写主体 → 删掉索引 → repair 补回
         let store = Store(path)
         let confs = FStoreLLMConfStore(store)

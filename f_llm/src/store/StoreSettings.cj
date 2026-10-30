@@ -34,7 +34,7 @@ public class StoreSettings {
     public static const CONTENT_URL_KEY = 'llm_contentStoreUrl'
 
     public static const DEFAULT_CONTENT = 'postgres'
-    public static const DEFAULT_META = 'postgres'
+    public static const DEFAULT_META = 'f_store'
     public static const DEFAULT_META_PATH = './data/f_llm-meta'
 
     private static let log = LoggerFactory.getLogger<StoreSettings>()

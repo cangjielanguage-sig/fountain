@@ -38,7 +38,7 @@ public class StoreSettingsTest {
         clearAll()
         let settings = StoreSettings.load()
         @Expect(settings.memoryStore, 'postgres')
-        @Expect(settings.metaStore, 'postgres')
+        @Expect(settings.metaStore, 'f_store')
         @Expect(settings.metaStorePath, './data/f_llm-meta')
         @Expect(settings.contentStoreUrl, '')
         @Expect(settings.deprecated.isEmpty(), true)
@@ -72,7 +72,7 @@ public class StoreSettingsTest {
         let settings = StoreSettings.load()
         // 旧键不参与选型：仍然用默认值
         @Expect(settings.memoryStore, 'postgres')
-        @Expect(settings.metaStore, 'postgres')
+        @Expect(settings.metaStore, 'f_store')
         // 但必须被识别出来，供启动日志 warn
         @Expect(settings.deprecated.size, 3)
         clearAll()

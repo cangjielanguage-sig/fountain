@@ -18,6 +18,8 @@ package fountain::f_llm.store
 import std.collection.*
 import std.convert.*
 
+import fountain::f_bean.*
+import fountain::f_bean.macros.*
 import fountain::f_store.Store
 
 /**
@@ -27,7 +29,7 @@ import fountain::f_store.Store
  * 技能/提示词/配置在 3.2–3.4 补齐。
  */
 public class FStoreMetaStore <: MetaStore {
-    private static let CHARACTER_PREFIX = 'f_llm:meta:character:'
+    private static const CHARACTER_PREFIX = 'f_llm:meta:character:'
 
     private let store: Store
     private let characterStore: FStoreCharacterStore
@@ -36,6 +38,16 @@ public class FStoreMetaStore <: MetaStore {
     private let promptStore: FStorePromptStore
 
     public init(path: String) {
+        this.store = Store(path)
+        this.characterStore = FStoreCharacterStore(store, CHARACTER_PREFIX)
+        this.confStore = FStoreLLMConfStore(store)
+        this.skillStore = FStoreSkillStore(store)
+        this.promptStore = FStorePromptStore(store)
+    }
+
+    /** 容器用：路径取 `llm_metaStorePath` */
+    public init() {
+        let path = StoreSettings.load().metaStorePath
         this.store = Store(path)
         this.characterStore = FStoreCharacterStore(store, CHARACTER_PREFIX)
         this.confStore = FStoreLLMConfStore(store)
@@ -66,9 +78,9 @@ public class FStoreMetaStore <: MetaStore {
  * f_store 没有事务：先写主体、再写索引；启动时扫主体补索引。
  */
 class FStoreLLMConfStore <: LLMConfStore {
-    private static let PREFIX = 'f_llm:meta:conf:'
-    private static let BYNAME = 'f_llm:meta:conf:byname:'
-    private static let SEQ = 'f_llm:meta:seq:conf'
+    private static const PREFIX = 'f_llm:meta:conf:'
+    private static const BYNAME = 'f_llm:meta:conf:byname:'
+    private static const SEQ = 'f_llm:meta:seq:conf'
 
     private let store: Store
 
@@ -90,8 +102,17 @@ class FStoreLLMConfStore <: LLMConfStore {
         let names = ArrayList<String>()
         for((key, _) in store.prefix(BYNAME.toArray())){
             let segments = String.fromUtf8(key).split(':')
-            if(segments.size >= 5 && !has(names, segments[4])){
-                names.add(segments[4])
+            if(segments.size < 6){
+                continue
+            }
+            let id = segments[5]
+            match(store.get('${PREFIX}${id}'.toArray())){
+                case Some(bytes) =>
+                    let view = parse(String.fromUtf8(bytes))
+                    if(view.enabled && view.weight > 0 && !has(names, view.llmName)){
+                        names.add(view.llmName)
+                    }
+                case None => ()
             }
         }
         names
@@ -213,8 +234,8 @@ class FStoreCharacterStore <: CharacterStore {
 }
 
 class FStoreSkillStore <: SkillStore {
-    private static let PREFIX = 'f_llm:meta:skill:'
-    private static let TITLE = 'f_llm:meta:skill:title:'
+    private static const PREFIX = 'f_llm:meta:skill:'
+    private static const TITLE = 'f_llm:meta:skill:title:'
 
     private let store: Store
 
@@ -274,7 +295,7 @@ class FStoreSkillStore <: SkillStore {
 }
 
 class FStorePromptStore <: PromptStore {
-    private static let PREFIX = 'f_llm:meta:prompt:'
+    private static const PREFIX = 'f_llm:meta:prompt:'
 
     private let store: Store
 

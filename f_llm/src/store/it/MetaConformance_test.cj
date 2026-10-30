@@ -25,6 +25,7 @@ import mysql_driver.registerMysqlDriver
 import postgres_driver.registerPostgresDriver
 
 import fountain::f_llm.store.*
+import fountain::f_llm.store.mysql.*
 import fountain::f_llm.store.postgres.*
 
 /**
@@ -151,7 +152,7 @@ public class MetaConformanceTest {
                   weight BIGINT NOT NULL DEFAULT 1
                 )
             ''').update
-            Some(MySqlMetaStore(executor))
+            Some(MySqlMetaStore())
         }catch(e: Exception){
             println("SKIP MetaConformanceTest(MySQL): ${e.message}")
             None
