@@ -31,7 +31,9 @@ f_zip
   (last match wins), `readAll`, and `open` for streaming decompression with an independent
   cursor per call (concurrent opens are safe).
 - **Writing**: `add` (in-memory path: real values in the local header, no descriptor),
-  `addFileStream` (streaming path: 24-byte ZIP64 data descriptor), `addFile`, `addDirectory`.
+  `addFileStream` (streaming path: 24-byte ZIP64 data descriptor), `openEntry` (**push mode**
+  streaming entry: hands an `OutputStream` to the caller and compresses as data is produced),
+  `addFile`, `addDirectory`.
 - **ZIP64 in both directions**: reads EOCD64 / locator / extra `0x0001`; writes it only when a
   field actually overflows, so small archives contain no ZIP64 bytes at all.
 - **Secure by default**: Zip Slip rejection, symlink skipping, ZIP bomb limits, encrypted ZIP rejection.
@@ -66,6 +68,15 @@ let writer = ZipWriter(buffer)
 writer.add("config.json", "{ }".toArray())
 writer.addFileStream("huge.log", File("/var/log/app.log", OpenMode.Read))
 writer.close()
+
+// Push mode: the data is being produced right now (row-by-row XML / CSV / logs)
+let sink = ByteBuffer()
+let w2 = ZipWriter(sink)
+let entry = w2.openEntry("sheet1.xml")
+entry.write("<?xml version=\"1.0\"?><sheetData>".toArray())
+entry.write("<row r=\"1\"/></sheetData>".toArray())
+entry.close()          // writes the data descriptor and registers the central entry
+w2.close()             // writes the central directory + EOCD; readable only after this
 ```
 
 ## Security defaults

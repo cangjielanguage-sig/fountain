@@ -38,7 +38,7 @@ f_xml
 | DOM | `XmlParser.parse(input / bytes / text / path)` | Four overloads; `parse(text)` skips byte sniffing |
 | Namespaces | Built in | Default namespace inheritance, `xmlns=""` reset, attributes unaffected by the default namespace |
 | DTD internal subset | `<!ENTITY>` (general + parameter) plus well-formedness checks on all four declaration types | External entities and external subsets are **never loaded**; no DTD validity checking |
-| Writer | `XmlWriter` | Compact / indented, three CDATA modes, custom entity refs, output encoding |
+| Writer | `XmlWriter` | Tree / **incremental** (`startElement` + `text` + `endElement`), compact / indented, three CDATA modes, custom entity refs, output encoding |
 
 ## Examples
 
@@ -72,6 +72,34 @@ element.appendChild(XmlNode.ElementNode(XmlElement("channel").withText("my feed"
 let output = ByteBuffer()
 XmlWriter(output, options: XmlWriterOptions(indent: Some("  "))).write(element)
 ```
+
+### 4. Incremental generation (produce and write)
+
+Tree writing requires an `XmlElement` first; for large documents (row-by-row data, streaming export)
+use the incremental API:
+
+```cangjie
+let writer = XmlWriter(output)
+writer.writeDeclaration(encoding: "UTF-8")
+writer.startElement(QName("worksheet", uri: Some("http://schemas.openxmlformats.org/spreadsheetml/2006/main")))
+writer.startElement(QName("sheetData"))
+for (row in rows) {                     // produced and written on the fly; memory is row-independent
+    writer.startElement(QName("row"), attributes: [XmlAttribute(QName("r"), "${row.index}")])
+    writer.startElement(QName("c"), attributes: [XmlAttribute(QName("r"), "A${row.index}")])
+    writer.text(row.value)
+    writer.endElement(QName("c"))
+    writer.endElement(QName("row"))
+}
+writer.endElement(QName("sheetData"))
+writer.endElement(QName("worksheet"))
+writer.close()
+```
+
+- `startElement` writes `<name attrs` and **defers closing**: an immediate `endElement` emits `<name/>`,
+  otherwise the tag is closed on first content;
+- namespaces are declared at `startElement` time using the same scope rules as tree writing (no duplicates);
+- indentation matches tree writing (`indent` option);
+- incremental and tree writing **must not be mixed**; `close()` with unclosed elements throws `XmlException`.
 
 ## Security boundaries
 
