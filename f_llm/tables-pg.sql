@@ -260,3 +260,11 @@ CREATE TABLE IF NOT EXISTS llm_prompt (
   update_time TIMESTAMP    NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
   PRIMARY KEY (name, version)
 );
+-- -----------------------------------------------------------------------------
+-- 7. 鐭ヨ瘑鏂囨。锛堝唴瀹规棌锛孭G/MySQL 瀹炵幇锛?-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS llm_document (
+  doc_id      VARCHAR(128) PRIMARY KEY,
+  title       VARCHAR(256) NOT NULL DEFAULT '',
+  content     TEXT         NOT NULL,
+  update_time TIMESTAMP    NOT NULL DEFAULT (now() AT TIME ZONE 'utc')
+);

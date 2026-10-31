@@ -271,3 +271,11 @@ CREATE TABLE IF NOT EXISTS llm_prompt (
   update_time DATETIME     NOT NULL DEFAULT (UTC_TIMESTAMP()),
   PRIMARY KEY (name, version)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+-- -----------------------------------------------------------------------------
+-- 7. 鐭ヨ瘑鏂囨。锛堝唴瀹规棌锛?-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS llm_document (
+  doc_id      VARCHAR(128) PRIMARY KEY,
+  title       VARCHAR(256) NOT NULL DEFAULT '',
+  content     LONGTEXT     NOT NULL,
+  update_time DATETIME     NOT NULL DEFAULT (UTC_TIMESTAMP())
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

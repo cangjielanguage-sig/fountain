@@ -19,8 +19,8 @@
 
 ## 3. KnowledgeStore
 
-- [ ] 3.1 写文档/块 conformance 用例（upsert/get/remove、同 docId 覆盖）
-- [ ] 3.2 PG 实现（`llm_document` / `llm_document_chunk` 或复用现有表）
+- [x] 3.1 写文档/块 conformance 用例（upsert/get/remove、同 docId 覆盖）
+- [x] 3.2 PG 实现（`llm_document` / `llm_document_chunk` 或复用现有表）
 - [ ] 3.3 MySQL 实现（同构）
 - [ ] 3.4 f_store 实现或明确不支持（元数据族 vs 内容族的边界）
 
