@@ -20,15 +20,25 @@ import std.collection.*
 import fountain::f_bean.*
 
 /**
- * `MemoryStore` 适配器：业务层只依赖本类，具体实现由 `f_bean` 条件选定。
+ * `MemoryStore` 适配器：业务层只依赖本类。
  *
- * 默认实现应为 fhydra（尚未实现），当前无匹配时抛错说明，而不是静默回退。
+ * 取值顺序：`f_bean` 选中的实现 → `Stores.content().memory`。
+ * fhydra 属于后续实现，接入后会以 bean 形式出现在第一步。
  */
 public class MemoryStoreAdapter <: MemoryStore {
     private let delegate: MemoryStore
 
+    /**
+     * 优先取 `f_bean` 选中的 `MemoryStore`；没有 bean（容器未初始化）时回退到
+     * `Stores.content().memory`（同一份 `llm_memoryStore` 配置、不经 bean 容器）。
+     *
+     * 两处都不匹配时由 `Stores.content()` 抛错并列出可选实现——不静默降级。
+     */
     public init() {
-        this.delegate = lookupOption<MemoryStore>() ?? defaultMemoryStore()
+        this.delegate = match(lookupOption<MemoryStore>()){
+            case Some(bean) => bean
+            case None => Stores.content().memory
+        }
     }
 
     public func add(write: MemoryWrite): MemoryRecord {
@@ -50,10 +60,4 @@ public class MemoryStoreAdapter <: MemoryStore {
     public func search(query: MemoryQuery): ArrayList<MemoryHit> {
         delegate.search(query)
     }
-}
-
-private func defaultMemoryStore(): MemoryStore {
-    throw IllegalStateException(
-        'no MemoryStore bean matched llm_memoryStore="${StoreSettings.load().memoryStore}"; '
-        + 'fhydra 实现尚未提供，请配置 llm_memoryStore=postgres|mysql|inMemory')
 }

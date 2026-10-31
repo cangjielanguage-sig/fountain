@@ -120,8 +120,9 @@ ${content}
         try{
             // 首次使用时接线（幂等）：加载实现包、注册内容族、校验配置
             StoreWiring.wire()
-            Stores.content().memory.add(MemoryWrite(LLMConfig.getMemoryUserId(), 'global',
-                                                    session, summary, 'session'))
+            // 经适配器取实现：bean 优先，缺失时回退到 Stores.content().memory
+            MemoryStoreAdapter().add(MemoryWrite(LLMConfig.getMemoryUserId(), 'global',
+                                                 session, summary, 'session'))
         }catch(e: Exception){
             // 摘要写入失败不影响会话主流程，但必须留下日志，避免静默丢失
             LoggerFactory.getLogger<Memory>().warn('memory summary not stored: ${e.message}')

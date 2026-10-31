@@ -26,8 +26,28 @@ import fountain::f_bean.*
 public class MetaStoreAdapter <: MetaStore {
     private let delegate: MetaStore
 
+    /**
+     * 显式按配置分支，**不做无条件兜底**：
+     * - `f_store` 直接构造本地实现（无 bean 依赖）；
+     * - `postgres` / `mysql` 必须有对应 bean，否则抛错并提示——避免「配了数据库却落到 f_store」；
+     * - 其它值同样抛错。
+     */
     public init() {
-        this.delegate = lookupOption<MetaStore>() ?? FStoreMetaStore(StoreSettings.load().metaStorePath)
+        let settings = StoreSettings.load()
+        let name = settings.metaStore
+        if(name == 'f_store'){
+            this.delegate = FStoreMetaStore(settings.metaStorePath)
+        }else if(name == 'postgres' || name == 'mysql'){
+            this.delegate = match(lookupOption<MetaStore>()){
+                case Some(bean) => bean
+                case None => throw IllegalStateException(
+                    'llm_metaStore="${name}" has no MetaStore bean; '
+                    + '请先调用 StoreWiring.wire() 初始化 bean 容器')
+            }
+        }else{
+            throw IllegalStateException(
+                'unknown llm_metaStore: ${name}, available: f_store, mysql, postgres')
+        }
     }
 
     public prop characters: CharacterStore {

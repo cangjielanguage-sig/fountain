@@ -17,6 +17,7 @@ package fountain::f_llm.wiring
 
 import std.sync.*
 
+import fountain::f_bean.*
 import fountain::f_log.*
 
 import fountain::f_llm.store.*
@@ -34,6 +35,7 @@ import fountain::f_llm.store.postgres.*
 public class StoreWiring {
     private static let mutex = Mutex()
     private static var kindsSeeded = false
+    private static var beanInitialized = false
 
     private init() {
     }
@@ -45,9 +47,18 @@ public class StoreWiring {
      */
     public static func wire(): Unit {
         synchronized(mutex){
+            // bean 条件只在 afterRegistered() 里评估；不调用的话 lookupOption 会返回
+            // 未按配置过滤的 bean。进程内只做一次（被丢弃的 bean 不可恢复）。
+            if(!beanInitialized){
+                BeanFactory.instance.afterRegistered()
+                beanInitialized = true
+            }
             ensure('inMemory', { => InMemoryContentStore() })
             ensure('postgres', { => PostgresContentStore() })
             ensure('mysql', { => MySqlContentStore() })
+            ensureMeta('postgres', { => PostgresMetaStore() })
+            ensureMeta('mysql', { => MySqlMetaStore() })
+            ensureMeta('f_store', { => FStoreMetaStore(StoreSettings.load().metaStorePath) })
             Stores.bootstrap()
             seedKinds()
         }
@@ -76,6 +87,12 @@ public class StoreWiring {
     private static func ensure(name: String, factory: () -> ContentStore): Unit {
         if(!Stores.containsContent(name)){
             Stores.registerContent(name, factory)
+        }
+    }
+
+    private static func ensureMeta(name: String, factory: () -> MetaStore): Unit {
+        if(!Stores.containsMeta(name)){
+            Stores.registerMeta(name, factory)
         }
     }
 }

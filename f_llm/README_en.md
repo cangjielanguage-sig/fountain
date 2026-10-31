@@ -1537,6 +1537,10 @@ Config.set<String>([
   does not silently drop summaries (failures are logged as `warn`);
 - `wire()` also seeds the 7 predefined memory kinds into `llm_memory_kind` (`user_id=0`, weights from
   `MemoryKinds.weightOf`); an unavailable database only logs a warning and never blocks startup;
+- `wire()` registers the three metadata implementations (`postgres` / `mysql` / `f_store`) and initializes the
+  bean conditions once (`BeanFactory.afterRegistered()`). `MetaStoreAdapter` branches strictly on `llm_metaStore`:
+  `f_store` builds the local store, `postgres` / `mysql` require a matching bean, and unknown values or a missing
+  bean throw — it **never silently falls back to f_store**;
 - Implementation packages: `store.postgres` / `store.mysql` (each imports its own driver); `dao.postgres` / `dao.mysql` hold SQL only.
 
 ### Embeddings (BGE-M3)

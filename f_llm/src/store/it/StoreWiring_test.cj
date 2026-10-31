@@ -37,6 +37,41 @@ public class StoreWiringTest {
         @Expect(Stores.containsContent('inMemory'), true)
     }
 
+    /** 注册表被清空后，`wire()` 能恢复全部实现（对应 Memory.remember 的自动接线） */
+    @TestCase
+    func testWireRestoresRegistryAfterReset(): Unit {
+        Stores.resetForTest()
+        @Expect(Stores.containsContent('postgres'), false)
+
+        StoreWiring.wire()
+
+        @Expect(Stores.containsContent('inMemory'), true)
+        @Expect(Stores.containsContent('postgres'), true)
+        @Expect(Stores.containsContent('mysql'), true)
+        @Expect(Stores.containsMeta('f_store'), true)
+    }
+
+    @TestCase
+    func testWireRegistersAllMetaStores(): Unit {
+        StoreWiring.wire()
+        @Expect(Stores.containsMeta('postgres'), true)
+        @Expect(Stores.containsMeta('mysql'), true)
+        @Expect(Stores.containsMeta('f_store'), true)
+    }
+
+    @TestCase
+    func testUnknownMetaValueFailsThroughWiring(): Unit {
+        Config.set<String>([('llm_metaStore', 'nope')])
+        var message = ''
+        try{
+            StoreWiring.wire()
+        }catch(e: Exception){
+            message = e.message
+        }
+        @Expect(message.contains('nope'), true)
+        Config.set<String>([('llm_metaStore', 'f_store')])
+    }
+
     @TestCase
     func testInMemoryContentStoreUsable(): Unit {
         Config.set<String>([('llm_memoryStore', 'inMemory')])
