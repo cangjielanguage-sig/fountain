@@ -287,6 +287,7 @@ CREATE TABLE IF NOT EXISTS llm_document_chunk (
   doc_id      VARCHAR(128) NOT NULL,
   seq         INT          NOT NULL,
   content     LONGTEXT     NOT NULL,
+  content_vec MYVECTOR(type=HNSW,dim=1024,size=1000,dist=COSINE,m=16,ef=100),
   update_time DATETIME     NOT NULL DEFAULT (UTC_TIMESTAMP()),
   KEY idx_llm_document_chunk_doc (doc_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

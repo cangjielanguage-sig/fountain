@@ -1566,7 +1566,7 @@ MemoryIndexRebuilder.rebuildIfConfigured(repo, embedder)
   同分按 `docId`、`seq` 升序，可用 `docIds` 限定范围；
 - **混合检索**：有 `Embedder` 时，块向量走余弦相似度（PG `<=>` / 内存直算），与词面命中数合并打分
   （`score = cosine + 0.1 × min(命中数, 5)`）；没有 `Embedder` 时退化为纯词面；
-- PG 与内存实现已支持语义召回；**MySQL 仍为纯词面**（`MYVECTOR` 列待补）。
+- PG / MySQL / 内存三实现都支持语义召回（MySQL 需 MyVector 组件，写入后 `CALL myvector_index_build('db.llm_document_chunk.content_vec','id')` 建索引）。
 
 ### MySQL（9.7 LTS + MyVector）
 

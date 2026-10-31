@@ -15,11 +15,13 @@ limitations under the License.
 */
 package fountain::f_llm.store.mysql
 
+import fountain::f_bean.*
+
 import fountain::f_llm.store.*
 
 /** MySQL 内容族：记忆 + 知识文档（4.x）。 */
 public class MySqlContentStore <: ContentStore {
-    private let knowledgeStore = MySqlKnowledgeStore()
+    private var cachedKnowledge: ?KnowledgeStore = None
     private var cachedMemory: ?MemoryStore = None
 
     public init() {
@@ -37,8 +39,20 @@ public class MySqlContentStore <: ContentStore {
         }
     }
 
+    /** 知识实现懒构造：有 `Embedder` bean 时启用语义检索，否则退化为词面 */
     public prop knowledge: KnowledgeStore {
-        get() { knowledgeStore }
+        get() {
+            match(cachedKnowledge){
+                case Some(store) => store
+                case None =>
+                    let store = match(lookupOption<Embedder>()){
+                        case Some(model) => MySqlKnowledgeStore(model)
+                        case None => MySqlKnowledgeStore()
+                    }
+                    cachedKnowledge = Some(store)
+                    store
+            }
+        }
     }
 }
 

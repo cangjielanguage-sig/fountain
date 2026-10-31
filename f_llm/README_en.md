@@ -1594,8 +1594,8 @@ historical indexes, etc.) are listed in [`doc/known-limitations.md`](doc/known-l
 - **Hybrid retrieval**: with an `Embedder`, chunk vectors are compared by cosine (PG `<=>` / computed in memory)
   and merged with lexical hits (`score = cosine + 0.1 × min(hits, 5)`); without an `Embedder` it degrades to
   lexical only;
-- PG and the in-memory store support semantic recall; **MySQL is still lexical-only** (the `MYVECTOR` column
-  is pending).
+- PG, MySQL and the in-memory store all support semantic recall (MySQL needs the MyVector component plus
+  `CALL myvector_index_build('db.llm_document_chunk.content_vec','id')` after writes).
 
 ### MySQL (9.7 LTS + MyVector)
 

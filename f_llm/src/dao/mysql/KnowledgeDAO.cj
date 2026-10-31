@@ -67,6 +67,50 @@ public interface MySqlKnowledgeDAO <: RootDAO {
         executor.setSql(sql).update
     }
 
+    /** 带块向量的写入：MyVector 的构造不认占位符，内联数值字面量 */
+    func chunkInsertVector(docId: String, seq: Int64, content: String, vector: String): Unit {
+        let sql = '''
+            INSERT INTO llm_document_chunk (doc_id, seq, content, content_vec, update_time)
+            VALUES (${arg(docId)}, ${arg(seq)}, ${arg(content)},
+                    myvector_construct('${vector}'), UTC_TIMESTAMP())
+        '''
+        executor.setSql(sql).update
+    }
+
+    /** MyVector 的 `MYVECTOR_IS_ANN` 需要 `db.table.column`，当前库名运行时取 */
+    func chunkCurrentDatabase(): ?Map<String, Any> {
+        let row = executor.setSql('SELECT DATABASE() AS db').firstToMap()
+        if(row.isEmpty()){
+            None
+        }else{
+            Some<Map<String, Any>>(row)
+        }
+    }
+
+    /** dense 召回：`myvector_distance` 是余弦距离，调用方换算成相似度 */
+    func chunkSearchDense(annPath: String, vector: String, docIds: Array<String>,
+                          limit: Int64): ArrayList<HashMap<String, Any>> {
+        var filter = 'SELECT JSON_ARRAYAGG(id) FROM llm_document_chunk'
+        if(docIds.size > 0){
+            var quoted = ''
+            for(index in 0..docIds.size){
+                if(index > 0){
+                    quoted += ','
+                }
+                quoted += "'" + docIds[index].replace("'", "''") + "'"
+            }
+            filter += " WHERE doc_id IN (${quoted})"
+        }
+        let sql = '''
+            SELECT m.doc_id, m.seq, m.content,
+                   myvector_distance(m.content_vec, myvector_construct('${vector}')) AS dist
+            FROM llm_document_chunk m
+            WHERE MYVECTOR_IS_ANN('${annPath}', 'id', myvector_construct('${vector}'),
+                                  ${limit}, (${filter}))
+        '''
+        executor.setSql(sql).mapList()
+    }
+
     func chunkSearch(pattern: String, limit: Int64): ArrayList<HashMap<String, Any>> {
         let sql = '''
             SELECT doc_id, seq, content FROM llm_document_chunk

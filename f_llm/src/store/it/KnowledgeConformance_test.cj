@@ -89,6 +89,7 @@ public class KnowledgeConformanceTest {
                   doc_id VARCHAR(128) NOT NULL,
                   seq INT NOT NULL,
                   content LONGTEXT NOT NULL,
+                  content_vec MYVECTOR(type=HNSW,dim=1024,size=1000,dist=COSINE,m=16,ef=100),
                   update_time DATETIME NOT NULL DEFAULT (UTC_TIMESTAMP()),
                   KEY idx_llm_document_chunk_doc (doc_id)
                 )
@@ -150,6 +151,28 @@ public class KnowledgeConformanceTest {
                 store.upsert(KnowledgeDoc('doc-1', '标题2', '正文2'))
                 @Expect(store.get('doc-1').getOrThrow().title, '标题2')
                 assertSearch(store)
+            case None => ()
+        }
+    }
+
+    /** P0.2：MySQL 的 MyVector 通道同样能在无词面命中时召回 */
+    @TestCase
+    func testMySqlSemanticRecallWithoutLexicalMatch(): Unit {
+        match(mysqlKnowledge()){
+            case Some(_) =>
+                let semantic = MySqlKnowledgeStore(FixedEmbedder())
+                semantic.upsert(KnowledgeDoc('v-my', '语义', '完全不含查询词'))
+                ORM.executor('mysql').setSql(
+                    "CALL mysql.myvector_index_build('fllm_test.llm_document_chunk.content_vec','id')"
+                ).mapList()
+
+                let lexicalOnly = MySqlKnowledgeStore()
+                @Expect(lexicalOnly.search(KnowledgeQuery('另一个词', limit: 5)).size, 0)
+
+                let hits = semantic.search(KnowledgeQuery('另一个词', limit: 5))
+                @Expect(hits.size, 1)
+                @Expect(hits[0].docId, 'v-my')
+                @Expect(hits[0].score > 0.5f64, true)
             case None => ()
         }
     }

@@ -189,24 +189,19 @@ public class ZhipuBalanceQuerier <: BalanceQuerier {
 
 ---
 
-## 8. 知识检索：MySQL 仍是词面召回（PG / 内存已支持语义）
+## 8. 知识检索的残留限制（三实现已支持语义召回）
 
-**现状**：
+**已具备**：PG / MySQL / 内存都按「块向量余弦 + 词面命中加成」混合打分：
+`score = cosine + 0.1 × min(命中次数, 5)`；MySQL 走 `MYVECTOR_IS_ANN`，PG 走 `<=>`，内存直算。
 
-| 实现 | 召回方式 |
+**仍然存在的限制**：
+
+| 限制 | 说明 |
 |---|---|
-| PostgreSQL | 块向量 `content_vec vector(1024)` + `<=>` 余弦近邻，与词面命中合并打分 |
-| 内存 | 进程内算余弦，同上合并 |
-| MySQL | `LIKE '%首词%'` 候选 200 + 命中数打分，**没有 `MYVECTOR` 列** |
+| 候选上限 200 | `KnowledgeStore` 各实现的 `CANDIDATES` 写死 200，超大库可能漏召回；没有二次精排 |
+| 权重不可配 | `0.1` 与 `min(…,5)` 是常量，不同语料没有调参入口 |
+| MySQL 依赖组件 + 建索引 | 必须有 MyVector，且写入后要 `CALL myvector_index_build('db.llm_document_chunk.content_vec','id')`；忘记建索引时 ANN 召回不可用 |
+| 无块向量重建工具 | 换 Embedder（模型/维度）后只能重新 `upsert` 文档重建块；维度变化要先改表结构 |
+| 词面召回以首词为准 | `LIKE '%<首个词>%'` 只用来补候选，首词不出现时该记录只能靠向量召回 |
 
-打分口径：`score = cosine + 0.1 × min(命中次数, 5)`（语义为主，精确词加成）；没有 `Embedder`
-时退化为纯词面。
-
-**影响**：
-
-- 在 MySQL 上配 `llm_memoryStore=mysql` 时，知识检索召回不到近义表达（「怎么配置」匹配不到「如何设置」）；
-- MySQL 的 `LIKE` 召回以**第一个词**为准，长文档里首词不出现就整条不漏召回；候选上限 200。
-
-**解除条件**：给 MySQL 的 `llm_document_chunk` 加 `MYVECTOR` 列，`chunkInsert` 写入
-`myvector_construct('<v>')`，`chunkSearchDense` 用 `MYVECTOR_IS_ANN`（与 `MySqlMemoryRepository`
-同一套写法：字面量内联、`annPath` 由 `SELECT DATABASE()` 拼接、测试里 `CALL myvector_index_build`）。
+**解除条件**：分页候选 + 二次精排；权重配置化；后台重建任务；多词 OR 召回。
