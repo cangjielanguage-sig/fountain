@@ -72,11 +72,11 @@ public class HydraRpc {
     }
 
     @JsonRpcMeta['按 id 读取', '2s']
-    public func get(param: GetParam): String {
+    public func get(param: GetParam): RecordDto {
         HydraAuth.require()
         match(store.get(param.collection, param.id)){
-            case Some(record) => recordJson(record)
-            case None => 'null'
+            case Some(record) => recordDto(record)
+            case None => RecordDto()
         }
     }
 
@@ -126,17 +126,13 @@ public class HydraRpc {
     }
 
     @JsonRpcMeta['id 分页', '2s']
-    public func ids(param: IdsParam): String {
+    public func ids(param: IdsParam): IdsDto {
         HydraAuth.require()
-        let ids = store.ids(param.collection, param.offset, param.limit)
-        var text = '['
-        for(index in 0..ids.size){
-            if(index > 0){
-                text += ','
-            }
-            text += jsonQuote(ids[index])
+        let dto = IdsDto()
+        for(id in store.ids(param.collection, param.offset, param.limit)){
+            dto.ids.add(id)
         }
-        text + ']'
+        dto
     }
 
     @JsonRpcMeta['colbert 重排', '5s']
@@ -262,16 +258,15 @@ public class HydraRpc {
         text + ']}'
     }
 
-    private static func recordJson(record: VectorRecord): String {
-        var dense = '['
-        for(index in 0..record.dense.size){
-            if(index > 0){
-                dense += ','
-            }
-            dense += record.dense[index].toString()
+    private static func recordDto(record: VectorRecord): RecordDto {
+        let dto = RecordDto()
+        dto.found = true
+        dto.id = record.id
+        dto.payload = record.payload
+        for(value in record.dense){
+            dto.dense.add(value)
         }
-        dense += ']'
-        '{"id":${jsonQuote(record.id)},"payload":${jsonQuote(record.payload)},"dense":${dense}}'
+        dto
     }
 
     private static func jsonQuote(text: String): String {

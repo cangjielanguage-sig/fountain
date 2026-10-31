@@ -45,3 +45,24 @@ public class HitsDto {
     public init() {
     }
 }
+
+/** 单条记录：`get` 的返回；`found=false` 时其余字段为空（不返回 null） */
+@DataAssist[fields props]
+public class RecordDto {
+    public var found: Bool = false
+    public var id: String = ''
+    public var payload: String = ''
+    public var dense: ArrayList<Float64> = ArrayList<Float64>()
+
+    public init() {
+    }
+}
+
+/** id 分页结果：`{"ids":[…]}` */
+@DataAssist[fields props]
+public class IdsDto {
+    public var ids: ArrayList<String> = ArrayList<String>()
+
+    public init() {
+    }
+}

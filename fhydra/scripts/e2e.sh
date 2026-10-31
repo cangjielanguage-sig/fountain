@@ -52,5 +52,17 @@ curl -s -X POST -H 'Content-Type: application/json' -H 'Accept: application/json
   -d '{"jsonrpc":"2.0","id":5,"method":"hydra.count","params":{"param":{"collection":"c"}}}' \
   "http://127.0.0.1:${mvc_port}/rpc"
 echo
+echo "--- get ---"
+curl -s -X POST -H 'Content-Type: application/json' -H 'Accept: application/json' \
+  -H 'X-Hydra-Key: test-secret' \
+  -d "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"hydra.get\",\"params\":{\"param\":{\"collection\":\"c\",\"id\":\"r1\"}}}" \
+  "http://127.0.0.1:${mvc_port}/rpc"
+echo
+echo "--- ids ---"
+curl -s -X POST -H 'Content-Type: application/json' -H 'Accept: application/json' \
+  -H 'X-Hydra-Key: test-secret' \
+  -d '{"jsonrpc":"2.0","id":7,"method":"hydra.ids","params":{"param":{"collection":"c","offset":0,"limit":10}}}' \
+  "http://127.0.0.1:${mvc_port}/rpc"
+echo
 echo "--- server log tail ---"
 tail -5 /tmp/fhydra-run.log

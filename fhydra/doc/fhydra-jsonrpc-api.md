@@ -67,12 +67,12 @@ key 是字符串形式的 token id（JSON 限制），服务端转 `Int64`。
 | `hydra.health` | `{}` | `{"status":"ok","version":"1.3.17"}` | 1s | ✅ |
 | `hydra.upsert` | `{collection,id,payload,dense\|denseB64,kind?,saveDay?,tags?}` | `true` | 5s | ✅ |
 | `hydra.upsertBatch` | `[record…]`（≤100） | 写入条数 | 10s | ✅ |
-| `hydra.get` | `{collection,id}` | record JSON 字符串 / `"null"` | 2s | ✅ |
+| `hydra.get` | `{collection,id}` | `{found,id,payload,dense}` 对象 | 2s | ✅ |
 | `hydra.remove` | `{collection,id}` | `bool` | 2s | ✅ |
 | `hydra.searchDense` | `{collection,dense\|denseB64,limit,kind?,saveDay?,tags?}` | `{"hits":[…]}` 对象 | 5s | ✅ |
 | `hydra.searchSparse` | `{collection,tokenIds,weights,limit,filters?}` | `{"hits":[…]}` 对象 | 5s | ✅ |
 | `hydra.count` | `{collection}` | `Int64` | 2s | ✅ |
-| `hydra.ids` | `{collection,offset,limit}` | `["id",…]` 字符串 | 2s | ✅ |
+| `hydra.ids` | `{collection,offset,limit}` | `{ids:[…]}` 对象 | 2s | ✅ |
 | `hydra.buildIndex` | `{collection,clusters}` | `Int64` 簇数 | 60s | ✅ |
 | `hydra.recover` | `{collection}` | 清理条数 | 60s | ✅ |
 | `hydra.setTtl` | `{collection,seconds}` | `true` | 2s | ✅ |
@@ -86,8 +86,8 @@ key 是字符串形式的 token id（JSON 限制），服务端转 `Int64`。
 
 - **参数一律包在 `param` / `params` 字段里**（f_jsonrpc 的方法参数是一个对象），例如
   `{"method":"hydra.count","params":{"param":{"collection":"c"}}}`；
-- `searchDense` / `searchSparse` / `rerank` 返回**对象**（`{"hits":[…]}`）；
-  `get` / `ids` 仍返回 JSON 字符串，下一步统一为对象；
+- 全部复合结果均为**对象**：`searchDense`/`searchSparse`/`rerank` 返回 `{"hits":[…]}`，
+  `get` 返回 `{found,id,payload,dense}`，`ids` 返回 `{ids:[…]}`；
 - `denseB64` 为 f32 小端原始字节的 Base64（不带 count 头），优先于 `dense` 数组；
 - `hydra.searchDense` 未建 IVF 时自动暴力扫描；`clusters=0` 表示按 `√n` 估算；
 - `hydra.get` 对「未就绪 / 已删除 / 过期」一律返回 `"null"`，不泄漏写入中间态。
