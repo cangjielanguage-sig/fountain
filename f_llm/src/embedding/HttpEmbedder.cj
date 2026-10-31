@@ -54,14 +54,27 @@ public class HttpEmbedder <: Embedder {
 
     private let transport: EmbeddingTransport
     private let dim: Int64
+    /** 同一次写入会连续问 dense / sparse / colbert，缓存一次响应避免三次 HTTP */
+    private var cachedText = ''
+    private var cachedResponse: ?EmbeddingResponse = None
 
     public init(transport: EmbeddingTransport, dim!: Int64 = DEFAULT_DIM) {
         this.transport = transport
         this.dim = dim
     }
 
-    public func embed(text: String): Array<Float64> {
+    private func responseOf(text: String): EmbeddingResponse {
+        if(cachedText == text && cachedResponse.isSome()){
+            return cachedResponse.getOrThrow()
+        }
         let response = transport.embed(text)
+        cachedText = text
+        cachedResponse = Some(response)
+        response
+    }
+
+    public func embed(text: String): Array<Float64> {
+        let response = responseOf(text)
         if(Int64(response.dense.size) != dim){
             throw IllegalStateException(
                 'embedding dimension mismatch: expected ${dim}, got ${response.dense.size}')
@@ -70,10 +83,10 @@ public class HttpEmbedder <: Embedder {
     }
 
     public func embedColbert(text: String): Array<Array<Float64>> {
-        transport.embed(text).colbert
+        responseOf(text).colbert
     }
 
     public func tokenize(text: String): HashMap<Int64, Float64> {
-        transport.embed(text).sparse
+        responseOf(text).sparse
     }
 }

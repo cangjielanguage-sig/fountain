@@ -1512,6 +1512,20 @@ Config.set<String>([
 - 启动时调用 `Stores.bootstrap()`：配置值未注册会**立即失败并列出可选实现**，不静默回退；
 - 实现包：`store.postgres` / `store.mysql`（各自 import 对应驱动），`dao.postgres` / `dao.mysql` 只放 SQL。
 
+### 向量化（BGE-M3）
+
+默认连本机 `http://127.0.0.1:8000/v1/embeddings`（`BgeM3Transport`），一次请求取三路：
+
+| 字段 | 含义 | 落库 |
+|---|---|---|
+| `embedding` | dense，1024 维，CLS + L2 | `llm_memory_vector.title_dense` |
+| `lexical_weights` | sparse，`tokenId → 权重` | `llm_memory_token` |
+| `colbert_vecs` | 每 token 一个 1024 维向量（最多 96） | `*_colbert`（`bytea`） |
+
+> 当前权重目录没有 `sparse_linear.pt`，服务的 `lexical_weights` 是**词频近似**而非 BGE-M3 学习式稀疏；
+> 字段名与形状按 FlagEmbedding 对齐，换成带稀疏头的权重后上层不用改。
+> 换成只给 dense 的 OpenAI 兼容端点时，改用 `LlmEmbeddingTransport`（sparse/colbert 为空，检索自动标 `degraded`）。
+
 ### MySQL（9.7 LTS + MyVector）
 
 MySQL Community 版**没有**向量索引（`CREATE VECTOR INDEX` / `VECTOR_DISTANCE` 都不存在），

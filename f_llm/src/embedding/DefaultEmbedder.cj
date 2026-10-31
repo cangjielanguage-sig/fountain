@@ -28,7 +28,8 @@ public class DefaultEmbedder <: Embedder {
     private let inner: Embedder
 
     public init() {
-        this.inner = HttpEmbedder(LlmEmbeddingTransport())
+        // 本机 BGE-M3 服务支持三路；换成 OpenAI 兼容端点时改回 LlmEmbeddingTransport
+        this.inner = HttpEmbedder(BgeM3Transport())
     }
 
     public func embed(text: String): Array<Float64> {

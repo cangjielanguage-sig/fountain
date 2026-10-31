@@ -1533,6 +1533,21 @@ Config.set<String>([
 - Call `Stores.bootstrap()` at startup: an unregistered value fails immediately and lists the available implementations (no silent fallback);
 - Implementation packages: `store.postgres` / `store.mysql` (each imports its own driver); `dao.postgres` / `dao.mysql` hold SQL only.
 
+### Embeddings (BGE-M3)
+
+Defaults to `http://127.0.0.1:8000/v1/embeddings` (`BgeM3Transport`) and fetches all three routes in one request:
+
+| Field | Meaning | Stored in |
+|---|---|---|
+| `embedding` | dense, 1024-d, CLS + L2 | `llm_memory_vector.title_dense` |
+| `lexical_weights` | sparse, `tokenId → weight` | `llm_memory_token` |
+| `colbert_vecs` | one 1024-d vector per token (max 96) | `*_colbert` (`bytea`) |
+
+> The local weight directory has no `sparse_linear.pt`, so `lexical_weights` is a **term-frequency approximation**
+> rather than BGE-M3's learned sparse. Field names/shapes follow FlagEmbedding, so swapping in a real sparse head
+> needs no upstream change. For dense-only OpenAI-compatible endpoints use `LlmEmbeddingTransport`
+> (sparse/colbert empty; retrieval is marked `degraded`).
+
 ### MySQL (9.7 LTS + MyVector)
 
 MySQL Community does **not** ship vector indexes (`CREATE VECTOR INDEX` / `VECTOR_DISTANCE` are absent),
