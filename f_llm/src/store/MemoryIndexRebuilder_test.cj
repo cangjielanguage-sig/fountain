@@ -20,6 +20,8 @@ import std.time.DateTime
 import std.unittest.*
 import std.unittest.testmacro.*
 
+import fountain::f_config.Config
+
 /** 只关心 token 权重合并的假向量化：标题 token 权重高于正文 */
 class RebuildEmbedder <: Embedder {
     public func embed(text: String): Array<Float64> {
@@ -140,6 +142,30 @@ public class MemoryIndexRebuilderTest {
         @Expect(rebuilt, 0)
         @Expect(repository.sparseWrites, 0)
         @Expect(repository.listCalls, 1)
+    }
+
+    @TestCase
+    func testRebuildIfConfiguredSkippedWhenDisabled(): Unit {
+        Config.set<Bool>([('llm_rebuildIndexOnStart', false)])
+        let repository = RebuildRepository(records(2))
+        let rebuilt = MemoryIndexRebuilder.rebuildIfConfigured(repository, RebuildEmbedder())
+        @Expect(rebuilt, 0)
+        @Expect(repository.sparseWrites, 0)
+        @Expect(repository.listCalls, 0)
+    }
+
+    @TestCase
+    func testRebuildIfConfiguredRunsWithConfig(): Unit {
+        Config.set<Bool>([('llm_rebuildIndexOnStart', true)])
+        Config.set<Int64>([('llm_rebuildIndexUserId', 42)])
+        Config.set<String>([('llm_rebuildIndexNamespace', 'global')])
+        let repository = RebuildRepository(records(2))
+        let rebuilt = MemoryIndexRebuilder.rebuildIfConfigured(repository, RebuildEmbedder())
+        @Expect(rebuilt, 2)
+        @Expect(repository.sparseWrites, 2)
+        @Expect(repository.colbertWrites, 2)
+        // 还原，避免影响其它用例
+        Config.set<Bool>([('llm_rebuildIndexOnStart', false)])
     }
 
     @TestCase

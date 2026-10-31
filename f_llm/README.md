@@ -1522,9 +1522,25 @@ Config.set<String>([
 | `lexical_weights` | sparse，`tokenId → 权重` | `llm_memory_token` |
 | `colbert_vecs` | 每 token 一个 1024 维向量（最多 96） | `*_colbert`（`bytea`） |
 
-超时只覆盖读/写（默认 3000ms，可用 `llm_embeddingTimeoutMs` 调）：`stdx.net.http` 的 `ClientBuilder`
-没有连接超时入口，建连阶段依赖操作系统 TCP 超时。历史数据缺 sparse/colbert 时，用
-`MemoryIndexRebuilder.rebuild(repo, embedder, userId, namespace)` 按页重建（只重算这两路，不动 dense）。
+超时只覆盖读/写（默认 3000ms，可用 `llm_embeddingTimeoutMs` 调）。
+
+**索引重建（运维入口）**：历史数据缺 sparse/colbert 时，用 `MemoryIndexRebuilder` 按页重算这两路（不动 dense）：
+
+```cj
+// 方式一：直接在代码里调用
+MemoryIndexRebuilder.rebuild(repo, embedder, userId, namespace, batchSize: 100)
+
+// 方式二：配置驱动，启动后调用一次
+Config.set<Bool>([('llm_rebuildIndexOnStart', true)])
+Config.set<Int64>([('llm_rebuildIndexUserId', 0)])
+Config.set<String>([('llm_rebuildIndexNamespace', 'global')])
+MemoryIndexRebuilder.rebuildIfConfigured(repo, embedder)
+```
+
+**待办（等外部支持）**
+
+- 连接级超时：`stdx.net.http` 的 `ClientBuilder` 尚未提供 `connectTimeout`，等标准库支持后再补；
+  当前建连阶段依赖操作系统 TCP 超时。
 
 > `lexical_weights` 由官方 `sparse_linear.pt` 计算（`ReLU(h·w+b)`，同 token 取最大），与 FlagEmbedding
 > 的 `_process_token_weights` 一致；该文件只有 **3.5KB**，因为它是 `(1,1024)` 的投影向量，不是词表大小的矩阵。

@@ -1543,10 +1543,26 @@ Defaults to `http://127.0.0.1:8000/v1/embeddings` (`BgeM3Transport`) and fetches
 | `lexical_weights` | sparse, `tokenId → weight` | `llm_memory_token` |
 | `colbert_vecs` | one 1024-d vector per token (max 96) | `*_colbert` (`bytea`) |
 
-Timeouts cover read/write only (default 3000 ms, tuned by `llm_embeddingTimeoutMs`): `stdx.net.http`'s
-`ClientBuilder` exposes no connect timeout, so connection setup relies on the OS TCP timeout. For records
-missing sparse/colbert data, run `MemoryIndexRebuilder.rebuild(repo, embedder, userId, namespace)` to
-recompute those two routes in pages (dense is left untouched).
+Timeouts cover read/write only (default 3000 ms, tuned by `llm_embeddingTimeoutMs`).
+
+**Index rebuild (ops entry)**: for records missing sparse/colbert data, `MemoryIndexRebuilder` recomputes those
+two routes in pages (dense is left untouched):
+
+```cj
+// Option 1: call it directly
+MemoryIndexRebuilder.rebuild(repo, embedder, userId, namespace, batchSize: 100)
+
+// Option 2: config-driven, call once after startup
+Config.set<Bool>([('llm_rebuildIndexOnStart', true)])
+Config.set<Int64>([('llm_rebuildIndexUserId', 0)])
+Config.set<String>([('llm_rebuildIndexNamespace', 'global')])
+MemoryIndexRebuilder.rebuildIfConfigured(repo, embedder)
+```
+
+**TODO (waiting on external support)**
+
+- Connect-level timeout: `stdx.net.http`'s `ClientBuilder` has no `connectTimeout` yet; connection setup
+  currently relies on the OS TCP timeout.
 
 > `lexical_weights` come from the official `sparse_linear.pt` (`ReLU(h·w+b)`, max over duplicate tokens),
 > matching FlagEmbedding's `_process_token_weights`. That file is only **3.5 KB** because it is a `(1,1024)`

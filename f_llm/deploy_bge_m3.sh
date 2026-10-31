@@ -6,7 +6,8 @@
 #   1. 系统依赖（python3-venv、curl）与独立 venv（/opt/bge-m3/venv）
 #   2. 安装 torch(CPU) + transformers + sentencepiece + fastapi + uvicorn
 #   3. 从 ModelScope 下载 BGE-M3 权重（HuggingFace 直连在国内常不可用）
-#   4. 写入 OpenAI 兼容的 /v1/embeddings 服务端（CLS 池化 + L2 归一化）
+#      含 sparse_linear.pt（官方稀疏头，1×1024 投影）与 colbert_linear.pt（1024×1024）
+#   4. 写入 OpenAI 兼容的 /v1/embeddings 服务端（dense + sparse + colbert 三路）
 #   5. 注册 systemd 服务并做健康检查
 #
 # 用法：
@@ -47,7 +48,7 @@ UNIT="/etc/systemd/system/${SERVICE}.service"
 PY="$VENV/bin/python"
 
 # 权重文件名与期望字节数（用来判断“已经下好了”，避免重复下载 2.2GB）
-FILES="config.json sentence_bert_config.json tokenizer_config.json special_tokens_map.json sentencepiece.bpe.model tokenizer.json"
+FILES="config.json sentence_bert_config.json tokenizer_config.json special_tokens_map.json sentencepiece.bpe.model tokenizer.json sparse_linear.pt colbert_linear.pt"
 declare -A EXPECTED=(
   [config.json]=687
   [sentence_bert_config.json]=54
@@ -56,6 +57,10 @@ declare -A EXPECTED=(
   [sentencepiece.bpe.model]=5069051
   [tokenizer.json]=17098108
   [pytorch_model.bin]=2271145830
+  # 官方稀疏头：只有 (1,1024)+bias，所以仅 3.5KB（不是词表大小的矩阵）
+  [sparse_linear.pt]=3516
+  # 官方 colbert 投影：1024×1024 fp16
+  [colbert_linear.pt]=2100674
 )
 
 log()  { printf '\033[36m[bge-m3]\033[0m %s\n' "$*"; }
@@ -168,11 +173,13 @@ install_model() {
 write_server() {
   log "写入服务端：$BGE_HOME/server.py"
   cat > "$BGE_HOME/server.py" <<'PY'
-"""BGE-M3 dense embedding HTTP 服务（OpenAI /v1/embeddings 兼容）。
+"""BGE-M3 embedding HTTP 服务（OpenAI /v1/embeddings 兼容，三路输出）。
 
-- 权重固定在 MODEL_DIR（ModelScope 下载）
-- 池化：CLS（last_hidden_state[:,0]）+ L2 归一化，与 BGE-M3 官方 dense 用法一致
-- 返回 1024 维向量；支持批量 input
+- dense：CLS（last_hidden_state[:,0]）+ L2 归一化，1024 维
+- sparse：官方 sparse_linear.pt（Linear(hidden→1) + ReLU），按 token id 取同 id 最大权重
+  与 FlagEmbedding `BGEM3FlagModel._process_token_weights` 一致；
+  该文件仅 3.5KB，是 (1,1024) 的投影向量，不是词表大小的矩阵
+- colbert：官方 colbert_linear.pt（1024→1024）投影后按 token L2 归一化，最多 96 个
 """
 
 import torch
@@ -182,21 +189,35 @@ from transformers import AutoModel, AutoTokenizer
 
 MODEL_DIR = "/opt/bge-m3/model"
 MAX_LENGTH = 8192
+MAX_COLBERT_TOKENS = 96
 
-app = FastAPI(title="bge-m3", version="1.0")
+app = FastAPI(title="bge-m3", version="1.2")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR)
 model = AutoModel.from_pretrained(MODEL_DIR)
 model.eval()
+
+_sparse = torch.load(f"{MODEL_DIR}/sparse_linear.pt", map_location="cpu")
+SPARSE_W = _sparse["weight"].to(torch.float32).squeeze(0)
+SPARSE_B = _sparse["bias"].to(torch.float32).squeeze(0)
+
+_colbert = torch.load(f"{MODEL_DIR}/colbert_linear.pt", map_location="cpu")
+COLBERT_W = _colbert["weight"].to(torch.float32)
+COLBERT_B = _colbert["bias"].to(torch.float32)
+
+SPECIAL_IDS = set(tokenizer.all_special_ids)
 
 
 class EmbedRequest(BaseModel):
     input: list[str] | str
     model: str | None = None
+    return_sparse: bool = False
+    return_colbert_vecs: bool = False
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model": "bge-m3", "dim": 1024}
+    return {"status": "ok", "model": "bge-m3", "dim": 1024,
+            "sparse": "official-sparse-head", "colbert": True}
 
 
 @app.post("/v1/embeddings")
@@ -205,19 +226,44 @@ def embeddings(req: EmbedRequest):
     if not texts:
         return {"object": "list", "model": "bge-m3", "data": [],
                 "usage": {"prompt_tokens": 0, "total_tokens": 0}}
+
     encoded = tokenizer(texts, padding=True, truncation=True,
                         max_length=MAX_LENGTH, return_tensors="pt")
     with torch.no_grad():
-        outputs = model(**encoded)
-        vectors = torch.nn.functional.normalize(outputs.last_hidden_state[:, 0], p=2, dim=1)
+        hidden = model(**encoded).last_hidden_state
+        dense = torch.nn.functional.normalize(hidden[:, 0], p=2, dim=1)
+
+    data = []
+    for i in range(len(texts)):
+        item = {"object": "embedding", "index": i, "embedding": dense[i].tolist()}
+        mask = encoded["attention_mask"][i].bool()
+        ids = encoded["input_ids"][i][mask].tolist()
+
+        if req.return_sparse:
+            scores = torch.relu(hidden[i] @ SPARSE_W + SPARSE_B).tolist()
+            weights: dict[str, float] = {}
+            for pos, token_id in enumerate(ids):
+                if token_id in SPECIAL_IDS:
+                    continue
+                value = float(scores[pos])
+                if value <= 0:
+                    continue
+                key = str(int(token_id))
+                if value > weights.get(key, 0.0):
+                    weights[key] = value
+            item["lexical_weights"] = weights
+
+        if req.return_colbert_vecs:
+            projected = hidden[i][mask] @ COLBERT_W.t() + COLBERT_B
+            projected = projected[:MAX_COLBERT_TOKENS]
+            projected = torch.nn.functional.normalize(projected, p=2, dim=1)
+            item["colbert_vecs"] = projected.tolist()
+
+        data.append(item)
+
     tokens = int(encoded["attention_mask"].sum())
-    return {
-        "object": "list",
-        "model": "bge-m3",
-        "data": [{"object": "embedding", "index": i, "embedding": v.tolist()}
-                 for i, v in enumerate(vectors)],
-        "usage": {"prompt_tokens": tokens, "total_tokens": tokens},
-    }
+    return {"object": "list", "model": "bge-m3", "data": data,
+            "usage": {"prompt_tokens": tokens, "total_tokens": tokens}}
 PY
   # MODEL_DIR 由部署脚本注入，避免服务端写死路径与 BGE_HOME 不一致
   sed -i "s#^MODEL_DIR = .*#MODEL_DIR = \"$MODEL_DIR\"#" "$BGE_HOME/server.py"
@@ -300,21 +346,30 @@ SUMMARY
 
 cmd_smoke() {
   need_root smoke
-  log "自检：POST /v1/embeddings"
+  log "自检：POST /v1/embeddings（dense + sparse + colbert）"
   "$PY" - "$BGE_PORT" <<'PY'
 import json, sys, urllib.request
 
 port = sys.argv[1]
 req = urllib.request.Request(
     f"http://127.0.0.1:{port}/v1/embeddings",
-    data=json.dumps({"input": ["猫坐在垫子上", "小狗在草地上跑"]}).encode(),
+    data=json.dumps({
+        "input": ["猫坐在垫子上", "小狗在草地上跑"],
+        "return_sparse": True,
+        "return_colbert_vecs": True,
+    }).encode(),
     headers={"Content-Type": "application/json"},
 )
-with urllib.request.urlopen(req, timeout=120) as resp:
+with urllib.request.urlopen(req, timeout=180) as resp:
     payload = json.load(resp)
 vectors = [d["embedding"] for d in payload["data"]]
+sparse = [len(d.get("lexical_weights", {})) for d in payload["data"]]
+colbert = [len(d.get("colbert_vecs", [])) for d in payload["data"]]
 print(f"  model={payload['model']} count={len(vectors)} dim={len(vectors[0])} "
       f"tokens={payload['usage']['total_tokens']}")
+print(f"  sparse tokens={sparse} colbert tokens={colbert}")
+if sparse[0] == 0 or colbert[0] == 0:
+    raise SystemExit("sparse/colbert 为空：检查 sparse_linear.pt / colbert_linear.pt 是否就位")
 PY
 }
 

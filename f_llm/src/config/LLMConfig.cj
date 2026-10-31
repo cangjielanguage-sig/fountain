@@ -22,6 +22,9 @@ import fountain::f_config.*
 
 public struct LLMConfig {
     private init(){}
+    public static const LLM_REBUILD_INDEX_ON_START = 'llm_rebuildIndexOnStart'
+    public static const LLM_REBUILD_INDEX_USER_ID = 'llm_rebuildIndexUserId'
+    public static const LLM_REBUILD_INDEX_NAMESPACE = 'llm_rebuildIndexNamespace'
     public static const LLM_EMBEDDING_URL = 'llm_embeddingUrl'
     public static const LLM_EMBEDDING_TIMEOUT_MS = 'llm_embeddingTimeoutMs'
     public static const LLM_EMBEDDING_RETRIES = 'llm_embeddingRetries'
@@ -91,6 +94,21 @@ public struct LLMConfig {
     /** 向量化失败重试次数（不含首次） */
     public static func getEmbeddingRetries(): Int64 {
         Config.getValue<Int64>(LLM_EMBEDDING_RETRIES) ?? 2
+    }
+
+    /** 启动后是否重建 sparse/colbert 索引（默认 false） */
+    public static func isIndexRebuildEnabled(): Bool {
+        Config.getValue<Bool>(LLM_REBUILD_INDEX_ON_START) ?? false
+    }
+
+    /** 重建目标用户（默认 0：系统级） */
+    public static func getIndexRebuildUserId(): Int64 {
+        Config.getValue<Int64>(LLM_REBUILD_INDEX_USER_ID) ?? 0
+    }
+
+    /** 重建目标命名空间（默认 global） */
+    public static func getIndexRebuildNamespace(): String {
+        Config.getString(LLM_REBUILD_INDEX_NAMESPACE) ?? 'global'
     }
 
     /** 会话摘要写入向量记忆时归属的用户（默认 0：系统级） */

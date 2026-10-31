@@ -17,6 +17,10 @@ package fountain::f_llm.store
 
 import std.collection.*
 
+import fountain::f_log.*
+
+import fountain::f_llm.config.LLMConfig
+
 /**
  * 索引重建（运维工具）。
  *
@@ -28,7 +32,27 @@ import std.collection.*
  * [MemoryStore.add] 重新写入（`(user_id, namespace, title)` 唯一键会覆盖）。
  */
 public class MemoryIndexRebuilder {
+    private static let log = LoggerFactory.getLogger<MemoryIndexRebuilder>()
+
     private init() {
+    }
+
+    /**
+     * 配置驱动的运维入口：启动后调用一次即可。
+     *
+     * 读 `llm_rebuildIndexOnStart` / `llm_rebuildIndexUserId` / `llm_rebuildIndexNamespace`；
+     * 未开启时直接返回 0（不构造任何额外对象）。
+     */
+    public static func rebuildIfConfigured(repository: MemoryRepository, embedder: Embedder,
+                                           batchSize!: Int64 = 100): Int64 {
+        if(!LLMConfig.isIndexRebuildEnabled()){
+            return 0
+        }
+        let userId = LLMConfig.getIndexRebuildUserId()
+        let namespace = LLMConfig.getIndexRebuildNamespace()
+        let rebuilt = rebuild(repository, embedder, userId, namespace, batchSize: batchSize)
+        log.info('memory index rebuilt: user=${userId}, namespace=${namespace}, records=${rebuilt}')
+        rebuilt
     }
 
     /**
