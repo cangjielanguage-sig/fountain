@@ -205,3 +205,17 @@ public class ZhipuBalanceQuerier <: BalanceQuerier {
 | 词面召回以首词为准 | `LIKE '%<首个词>%'` 只用来补候选，首词不出现时该记录只能靠向量召回 |
 
 **解除条件**：分页候选 + 二次精排；权重配置化；后台重建任务；多词 OR 召回。
+
+---
+
+## 9. 联网搜索只有 DeepSeek 一个 provider（待办，暂不实现）
+
+**现状**：`SearchProvider` 只有 `DeepSeekSearchProvider` 一个实现；`SearchProviderRegistry`
+本身支持注册多个，但没有任何其它厂商实现。
+
+**影响**：`llm_searchProvider` 只能配 `deepseek`；换成别的厂商会在
+`SearchProviderRegistry.get(...)` 拿到 `None` 后失败。
+
+**待办**：按厂商补实现——每家一个类（鉴权方式、请求体、结果字段各不相同），
+外加一组「响应解析 + 错误码」用例；注册沿用 `SearchProviderRegistry.register`。
+在拿到 API Key 与接口文档之前无法验证，因此与余额三家（§7）同样处理：**只记待办**。

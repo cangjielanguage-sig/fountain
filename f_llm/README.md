@@ -1516,6 +1516,8 @@ Config.set<String>([
   数据库不可用时只告警、不阻断启动；
 - 自定义记忆种类同样落库：`MemoryKinds.register/remove` 会写/删 `llm_memory_kind`（`predefined=false`），
   启动 `attach()` 时按 `user_id` 载回内存；写库失败只告警，不阻断业务；
+- Token 用量会落 `llm_token_usage`：`PostgresTokenUsageSaver` / `MySqlTokenUsageSaver` 按 `llm_memoryStore`
+  条件装配，替换掉只打日志的 `DummyTokenUsageSaver`；
 - `wire()` 同时注册元数据族三个实现（`postgres`/`mysql`/`f_store`），并只初始化一次 bean 容器条件
   （`BeanFactory.afterRegistered()`）；`MetaStoreAdapter` 严格按 `llm_metaStore` 分支——
   `f_store` 直接构造，`postgres`/`mysql` 必须有对应 bean，未知值或 bean 缺失都抛错，**不再静默落到 f_store**；
