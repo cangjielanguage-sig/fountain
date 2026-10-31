@@ -3,6 +3,106 @@ All the top-level declarations below are re-exports of `fountain::f_egraph`
 
 Flow scripting relies on `fountain::f_jit`; see the JIT registration surface and script contract below.
 
+## JIT support
+
+`f_egraph` flow orchestration can be described by `f_jit` scripts. At startup `FlowInitializer` creates a compiler, registers the host types, compiles each script returned by `FlowLoader` into a zero-argument function and runs it. The script creates `ImmediateFlow` / `AsyncFlow` instances, calls `ClosureTask.compile` to build task bodies and registers them into the flow, so topology or task-body changes only require editing the script, not recompiling the host.
+
+### Capabilities
+
+| Capability | Entry point | Description |
+|---|---|---|
+| Scripted flow orchestration | `FlowLoader.load()` + `FlowInitializer` | Each element of `load()` is the complete registration script of one flow |
+| Scripted task body | `ClosureTask.compile` | Compiles an `exec` statement sequence into `(Event) -> Event` |
+| Script-side event construction | `FlowEventFactory` | `flowTaskEvent` / `flowEndEvent` / `flowErrorEvent` / `flowDummyEvent` / `flowDataOf` |
+| Host type registration | `JitHostRegistry.configure` | Manual `ClassDescriptor` registration for the event family, `Emitter`, `BaseFlow`, `ImmediateFlow`, `AsyncFlow` |
+| Automatic initialization | `FlowInitializer.initialize` | Creates and configures `Compiler`, injects `ClosureTask`, runs all scripts in order |
+| Error propagation | f_jit exceptions | Compile / runtime errors are rethrown unchanged with source sites and codes |
+
+### Minimal setup
+
+Implement `FlowLoader`, register it as a bean, and register a `FlowInitializer` implementation; scripts are compiled and executed automatically at application startup:
+
+```cangjie
+import fountain::f_app.InitializerCollection
+import fountain::f_bean.macros.*
+import fountain::f_egraph.*
+
+@Bean
+public class OrderFlowLoader <: FlowLoader {
+    public func load(): ArrayList<String> {
+        // `script` may come from a file / config / database; see the flow script below
+        ArrayList<String>([script])
+    }
+}
+
+public class AppFlowInitializer <: FlowInitializer {
+    static init() {
+        InitializerCollection.register(AppFlowInitializer())
+    }
+}
+```
+
+Flow script (one element of `FlowLoader.load()`):
+
+```text
+let flow = ImmediateFlow("order", "v1")
+flow.registerStart("created")
+flow.registerEnd()
+flow.registerError()
+
+let validate = compile("validate", ["created"], ["validated"],
+    "flowTaskEvent(\"order\", \"v1\", \"validated\", flowDataOf(e))")
+flow.registerTask(validate)
+
+let pay = compile("pay", ["validated"], ["End"],
+    "flowEndEvent(\"order\", \"v1\", flowDataOf(e))")
+flow.registerTask(pay)
+
+flow.removeExceptCurrentTag()
+```
+
+The default `FlowInitializer.initialize()`:
+
+1. Creates `Compiler(CompileOptions(DummyDiagnosticsSink()))`;
+2. Calls `JitHostRegistry.configure(compiler)` to register host types;
+3. Calls `ClosureTask.initCompiler(compiler)` to inject the task compiler;
+4. Iterates `FlowLoader.load()` in order, wraps each script as `{ => ... }`, compiles and executes it.
+
+If the host builds its own `Compiler`, repeat steps 1–3 before running scripts. `FlowScriptRunner` is package-internal and not exposed.
+
+### Script-visible API
+
+| Category | Script syntax | Description |
+|---|---|---|
+| Flow | `ImmediateFlow("order", "v1")` / `AsyncFlow("order", "v1")` | The two positional arguments are `category` / `tag` |
+| Registration | `flow.registerStart("created")` / `registerEnd()` / `registerError()` | Start, end and error executors |
+| Tasks | `compile(name, acceptable, producing, exec)` | Returns a `ClosureTask`; register it with `flow.registerTask(task)` |
+| Flow methods | `flow.removeExceptCurrentTag()` / `flow.canBeRemoved()` / `flow.remove()` | Old-tag cleanup and flow lifecycle |
+| Event factory | `flowTaskEvent(c, t, n, data)` / `flowEndEvent(c, t, data)` / `flowErrorEvent(c, t, msg)` / `flowDummyEvent()` | Event constructors are not exposed; use the factory |
+| Data access | `flowDataOf(e)` | Returns `data` when it is a `DataEvent` with a `String` payload, otherwise `""` |
+| Event fields | `e.category` / `e.tag` / `e.name` / `e.session` | Read-only; `Event.toString()` is available |
+
+The script **cannot** use event constructors, `emit` / `start` / `initDispatcher`, the `registerTask(eventName, closure)` closure overload, or `is` / `as`. Async flows require the host to call `AsyncFlow.initDispatcher(...)` first; `FlowInitializer` does not initialize it implicitly, to avoid overriding host configuration.
+
+### Type registration
+
+| Host type | Registration |
+|---|---|
+| `Task` / `ClosureTask` / `FlowEventFactory` | `@JitBind`; enrolled by `Compiler.registerInterface` / `registerType` via the macro |
+| Event family, `Emitter`, `BaseFlow`, `ImmediateFlow`, `AsyncFlow` | `JitHostRegistry.configure` registers manual `ClassDescriptor`s; event fields are exposed through `HostFieldTable` |
+| `ClosureTask.initCompiler` | `@IgnoreJitBinding`; stays `public` but outside the script namespace |
+| `BarrierTask<G>` | Generic class, **not JIT-bindable**; use `ClosureTask` for scripted tasks |
+
+### Constraints
+
+- Each element of `FlowLoader.load()` must be the statement sequence of **one flow**; a blank script is a configuration error and throws `GraphException` during initialization.
+- The last statement must be a `Unit` expression (by convention `flow.removeExceptCurrentTag()`); f_jit does not parse empty parentheses `()`.
+- The first registered task must accept the start event; an event may have only one executor, and duplicate registration throws `GraphException`.
+- Any compile or execution failure aborts initialization; later scripts do not run and completed registrations are not rolled back.
+- Compile and runtime errors are rethrown unchanged, preserving f_jit source sites and error codes.
+
+See “JIT registration surface”, “JIT task `ClosureTask`” and “Flow script contract” below for the detailed registration table and script contract.
+
 ---
 
 ## Event types
