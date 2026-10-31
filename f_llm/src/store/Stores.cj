@@ -86,6 +86,25 @@ public class Stores {
         }
     }
 
+    /**
+     * 启动校验（4.4）：配置指定的实现必须已注册，否则立即失败并列出可选值。
+     *
+     * 元数据族允许没有注册（由 `MetaStoreAdapter` 回退 f_store），因此只在
+     * 有注册时校验。
+     */
+    public static func bootstrap(): Unit {
+        let contentName = StoreSettings.load().memoryStore
+        if(!contentFactories.contains(contentName)){
+            throw IllegalArgumentException(
+                'llm_memoryStore="${contentName}" is not registered, available: ${contentNames()}')
+        }
+        let metaName = StoreSettings.load().metaStore
+        if(!metaFactories.isEmpty() && !metaFactories.contains(metaName)){
+            throw IllegalArgumentException(
+                'llm_metaStore="${metaName}" is not registered, available: ${metaNames()}')
+        }
+    }
+
     private static func contentNames(): String {
         let names = ArrayList<String>()
         for(key in contentFactories.keys()){
