@@ -192,4 +192,92 @@ public class FStoreVectorStoreTest {
         @Expect(hitsA[0].payload, 'A')
         store.close()
     }
+
+    // ---- IVF（v0.4） ----
+
+    private func seedTwoClusters(store: FStoreVectorStore, collection: String): Unit {
+        store.upsert(collection, VectorRecord('a1', 'A1', [1.0f64, 0.0f64]))
+        store.upsert(collection, VectorRecord('a2', 'A2', [0.9f64, 0.1f64]))
+        store.upsert(collection, VectorRecord('b1', 'B1', [0.0f64, 1.0f64]))
+        store.upsert(collection, VectorRecord('b2', 'B2', [0.1f64, 0.9f64]))
+    }
+
+    @TestCase
+    func testBuildIndexReportsClusters(): Unit {
+        let store = newStore()
+        seedTwoClusters(store, 'c')
+        @Expect(store.indexClusters('c'), 0)
+
+        let clusters = store.buildIndex('c', clusters: 2)
+        @Expect(clusters, 2)
+        @Expect(store.indexClusters('c'), 2)
+        store.close()
+    }
+
+    @TestCase
+    func testIvfSearchMatchesBruteForce(): Unit {
+        let store = newStore()
+        seedTwoClusters(store, 'c')
+        let query = VectorQuery('c', [1.0f64, 0.0f64], limit: 2)
+        let before = store.searchDense(query)
+        @Expect(before[0].id, 'a1')
+
+        store.buildIndex('c', clusters: 2)
+        let after = store.searchDense(query)
+        @Expect(after.size, before.size)
+        @Expect(after[0].id, 'a1')
+        @Expect(after[1].id, 'a2')
+        store.close()
+    }
+
+    @TestCase
+    func testIvfSeesRecordAddedAfterBuild(): Unit {
+        let store = newStore()
+        seedTwoClusters(store, 'c')
+        store.buildIndex('c', clusters: 2)
+
+        // 增量挂桶：新记录应能被索引召回，无需重建
+        // a3 = [1,0.05] 与查询的余弦 0.9987，低于 a1 的 1.0，但应排到第二
+        store.upsert('c', VectorRecord('a3', 'A3', [1.0f64, 0.05f64]))
+        let hits = store.searchDense(VectorQuery('c', [1.0f64, 0.0f64], limit: 2))
+        @Expect(hits.size, 2)
+        @Expect(hits[0].id, 'a1')
+        @Expect(hits[1].id, 'a3')
+        store.close()
+    }
+
+    @TestCase
+    func testRemoveUpdatesBuckets(): Unit {
+        let store = newStore()
+        seedTwoClusters(store, 'c')
+        store.buildIndex('c', clusters: 2)
+
+        @Expect(store.remove('c', 'a1'), true)
+        let hits = store.searchDense(VectorQuery('c', [1.0f64, 0.0f64], limit: 4))
+        for(hit in hits){
+            @Expect(hit.id != 'a1', true)
+        }
+        // 桶里的残留不能把已删除记录带回来
+        @Expect(store.indexClusters('c'), 2)
+        store.close()
+    }
+
+    @TestCase
+    func testBuildEmptyCollectionReturnsZero(): Unit {
+        let store = newStore()
+        @Expect(store.buildIndex('empty'), 0)
+        @Expect(store.indexClusters('empty'), 0)
+        @Expect(store.searchDense(VectorQuery('empty', [1.0f64, 0.0f64])).size, 0)
+        store.close()
+    }
+
+    @TestCase
+    func testUnbuiltIndexFallsBackToFullScan(): Unit {
+        let store = newStore()
+        seedTwoClusters(store, 'c')
+        @Expect(store.indexClusters('c'), 0)
+        let hits = store.searchDense(VectorQuery('c', [1.0f64, 0.0f64], limit: 4))
+        @Expect(hits.size, 4)
+        store.close()
+    }
 }

@@ -60,6 +60,8 @@ public class FStoreVectorStore <: VectorStore {
             store.add(postingKey(collection, token, record.id).toArray(), weight.toString().toArray())
         }
         store.add(readyKey(collection, record.id).toArray(), [1u8])
+        // 索引已存在时增量挂桶；未建索引则什么都不做（检索走暴力扫描）
+        ivf(collection).record(record.id, record.dense)
         ()
     }
 
@@ -82,6 +84,7 @@ public class FStoreVectorStore <: VectorStore {
 
     public func remove(collection: String, id: String): Bool {
         let existed = store.contains(payloadKey(collection, id).toArray())
+        ivf(collection).unrecord(id)
         deletePostings(collection, id)
         deleteColbertParts(collection, id)
         store.remove(payloadKey(collection, id).toArray())
@@ -92,10 +95,38 @@ public class FStoreVectorStore <: VectorStore {
     }
 
     public func searchDense(query: VectorQuery): ArrayList<VectorHit> {
-        let hits = ArrayList<VectorHit>()
         if(query.limit <= 0 || query.dense.isEmpty()){
-            return hits
+            return ArrayList<VectorHit>()
         }
+        // 1. IVF 候选（未建索引时为空）
+        let candidates = ivf(query.collection).candidates(query.dense)
+        let fromIndex = scoreIds(query, candidates)
+        if(Int64(fromIndex.size) >= query.limit){
+            return finalize(fromIndex, query.limit)
+        }
+        // 2. 候选不足 / 未建索引：全量扫描（IVF 是优化，不牺牲召回）
+        finalize(bruteForce(query), query.limit)
+    }
+
+    public func buildIndex(collection: String, clusters!: Int64): Int64 {
+        ivf(collection).build(clusters)
+    }
+
+    /** 便捷重载：簇数交给实现按 √n 估算 */
+    public func buildIndex(collection: String): Int64 {
+        buildIndex(collection, clusters: 0)
+    }
+
+    public func indexClusters(collection: String): Int64 {
+        ivf(collection).clusters()
+    }
+
+    private func ivf(collection: String): IvfIndex {
+        IvfIndex(store, collection)
+    }
+
+    private func bruteForce(query: VectorQuery): ArrayList<VectorHit> {
+        let hits = ArrayList<VectorHit>()
         let prefix = densePrefix(query.collection)
         for((key, value) in store.prefix(prefix.toArray())){
             let text = String.fromUtf8(key)
@@ -104,17 +135,40 @@ public class FStoreVectorStore <: VectorStore {
             if(dense.size != query.dense.size){
                 continue
             }
-            let score = cosine(query.dense, dense)
-            let payload = match(store.get(payloadKey(query.collection, id).toArray())){
-                case Some(bytes) => String.fromUtf8(bytes)
-                case None => ''
-            }
-            hits.add(VectorHit(id, payload, score))
+            hits.add(VectorHit(id, payloadOf(query.collection, id), VectorMath.cosine(query.dense, dense)))
         }
+        hits
+    }
+
+    private func scoreIds(query: VectorQuery, ids: ArrayList<String>): ArrayList<VectorHit> {
+        let hits = ArrayList<VectorHit>()
+        for(id in ids){
+            match(store.get(denseKey(query.collection, id).toArray())){
+                case Some(bytes) =>
+                    let dense = VectorCodec.decodeDense(bytes)
+                    if(dense.size != query.dense.size){
+                        continue
+                    }
+                    hits.add(VectorHit(id, payloadOf(query.collection, id),
+                                       VectorMath.cosine(query.dense, dense)))
+                case None => ()
+            }
+        }
+        hits
+    }
+
+    private func payloadOf(collection: String, id: String): String {
+        match(store.get(payloadKey(collection, id).toArray())){
+            case Some(bytes) => String.fromUtf8(bytes)
+            case None => ''
+        }
+    }
+
+    private func finalize(hits: ArrayList<VectorHit>, limit: Int64): ArrayList<VectorHit> {
         sortDesc(hits)
         let limited = ArrayList<VectorHit>()
         for(index in 0..hits.size){
-            if(Int64(index) >= query.limit){
+            if(Int64(index) >= limit){
                 break
             }
             limited.add(hits[index])
@@ -322,24 +376,6 @@ public class FStoreVectorStore <: VectorStore {
 
     // ---- math ----
 
-    static func cosine(a: Array<Float64>, b: Array<Float64>): Float64 {
-        if(a.size != b.size || a.isEmpty()){
-            return 0.0f64
-        }
-        var dot: Float64 = 0.0f64
-        var normA: Float64 = 0.0f64
-        var normB: Float64 = 0.0f64
-        for(index in 0..a.size){
-            dot += a[index] * b[index]
-            normA += a[index] * a[index]
-            normB += b[index] * b[index]
-        }
-        if(normA <= 0.0f64 || normB <= 0.0f64){
-            return 0.0f64
-        }
-        dot / (sqrt(normA) * sqrt(normB))
-    }
-
     /**
      * ColBERT max-sim：查询每个 token 在文档 token 里取最大余弦，再对查询 token 求平均。
      * 文档没有 colbert（空）时记 0，仍返回该候选（不静默丢弃）。
@@ -352,7 +388,7 @@ public class FStoreVectorStore <: VectorStore {
         for(q in query){
             var best: Float64 = -1.0f64
             for(d in doc){
-                let score = cosine(q, d)
+                let score = VectorMath.cosine(q, d)
                 if(score > best){
                     best = score
                 }
@@ -360,17 +396,6 @@ public class FStoreVectorStore <: VectorStore {
             total += best
         }
         total / Float64(query.size)
-    }
-
-    private static func sqrt(value: Float64): Float64 {
-        if(value <= 0.0f64){
-            return 0.0f64
-        }
-        var guess = value
-        for(_ in 0..30){
-            guess = (guess + value / guess) / 2.0f64
-        }
-        guess
     }
 
     private static func sortDesc(hits: ArrayList<VectorHit>): Unit {

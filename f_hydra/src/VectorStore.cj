@@ -37,4 +37,9 @@ public interface VectorStore {
     func rerank(collection: String, ids: ArrayList<String>,
                 queryColbert: Array<Array<Float64>>): ArrayList<VectorHit>
     func count(collection: String): Int64
+
+    /** 训练/重建 IVF 索引，返回簇数（0 表示数据为空） */
+    func buildIndex(collection: String, clusters!: Int64): Int64
+    /** 当前簇数，0 表示尚未建索引（检索自动退回暴力扫描） */
+    func indexClusters(collection: String): Int64
 }
