@@ -30,17 +30,17 @@ public interface Fact {
 /**
  * 网络内部的事实句柄。
  *
- * 网络传播与索引只持有句柄（Int64 id + typeTag），不直接持有事实对象，
+ * 网络传播与索引只持有句柄（space + id + typeTag），不直接持有事实对象，
  * 避免大量 token 长期滞留业务对象；需要取值时回查 FactBase。
  */
 public class FactHandle <: Hashable & Equatable<FactHandle> {
-    public FactHandle(public let id: Int64, public let typeTag: String)
+    public FactHandle(public let space: String, public let id: Int64, public let typeTag: String)
     public func hashCode(): Int64
     public operator func ==(other: FactHandle): Bool
 }
 ```
 
-`FactHandle` 相等性只看 `id`，`typeTag` 仅用于调试与桶定位。id 由 `FactBase` 单调分配，进程内唯一。
+`FactHandle` 相等性比较 `(space, id)`：id 只在同一 `(space, session)` 内单调唯一，不同空间可能重复，因此必须带 `space`。`typeTag` 仅用于调试与桶定位。
 
 ## 3. 强类型事实
 
@@ -285,13 +285,7 @@ FactBase
 
 `FactBase` 只负责存储与 id 分配；索引属于 alpha/beta memory，避免两处索引不同步。
 
-句柄 id 在 `FactBase` 内单调分配。不同 `FactSpace` 的句柄 id 可能重复，因此 `FactHandle` 必须同时比较 `space`：
-
-```cangjie
-public class FactHandle <: Hashable & Equatable<FactHandle> {
-    public FactHandle(public let space: String, public let id: Int64, public let typeTag: String)
-}
-```
+句柄 id 在 `FactBase` 内单调分配；不同 `FactSpace` 的 id 可能重复，`FactHandle` 的完整定义见 §2。
 
 ### 6.4 规则绑定
 
