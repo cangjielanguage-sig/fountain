@@ -191,3 +191,44 @@ public class LLMConfView {
         this.alwaysThinking = alwaysThinking
     }
 }
+/** 一条知识块（检索单元）：同一 docId 内按 seq 顺序切分 */
+public class KnowledgeChunk {
+    public let docId: String
+    public let seq: Int64
+    public let content: String
+
+    public init(docId: String, seq: Int64, content: String) {
+        this.docId = docId
+        this.seq = seq
+        this.content = content
+    }
+}
+
+/** 知识检索请求：`text` 按空白切词，`docIds` 为空表示全库 */
+public class KnowledgeQuery {
+    public let text: String
+    public let limit: Int64
+    public let docIds: ArrayList<String>
+
+    public init(text: String, limit!: Int64 = 5,
+                docIds!: ArrayList<String> = ArrayList<String>()) {
+        this.text = text
+        this.limit = limit
+        this.docIds = docIds
+    }
+}
+
+/** 知识检索结果（块级）：`score` 越大越相关 */
+public class KnowledgeHit {
+    public let docId: String
+    public let seq: Int64
+    public let content: String
+    public let score: Float64
+
+    public init(docId: String, seq: Int64, content: String, score: Float64) {
+        this.docId = docId
+        this.seq = seq
+        this.content = content
+        this.score = score
+    }
+}

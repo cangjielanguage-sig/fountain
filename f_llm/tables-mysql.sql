@@ -279,3 +279,14 @@ CREATE TABLE IF NOT EXISTS llm_document (
   content     LONGTEXT     NOT NULL,
   update_time DATETIME     NOT NULL DEFAULT (UTC_TIMESTAMP())
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+-- -----------------------------------------------------------------------------
+-- 9. knowledge document chunks (retrieval unit)
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS llm_document_chunk (
+  id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+  doc_id      VARCHAR(128) NOT NULL,
+  seq         INT          NOT NULL,
+  content     LONGTEXT     NOT NULL,
+  update_time DATETIME     NOT NULL DEFAULT (UTC_TIMESTAMP()),
+  KEY idx_llm_document_chunk_doc (doc_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -186,3 +186,20 @@ public class ZhipuBalanceQuerier <: BalanceQuerier {
 | aliyun | 阿里云是 AK/SK 签名（`AccessKeyId/Secret` 在 `conf.conf` 或 `auth` 里），不是简单 Bearer |
 
 **优先级**：低。等接口形态确认后再按 provider 逐个补，每个约「一个类 + 一组解析用例」的量级。
+
+---
+
+## 8. 知识检索目前只有词面召回（语义检索待实现）
+
+**现状**：`KnowledgeStore.search` 已可用（块级、多词命中数排序、可按 `docIds` 限定），
+但召回是 `LIKE '%<首个词>%'` + 内存打分，**没有块向量、没有 ANN**。
+
+**影响**：
+
+- 近义/改写的提问召回不到（「怎么配置」匹配不到「如何设置」）；
+- 长文档里首个词不出现、但其它词出现时，整条记录不进入候选（召回以第一个词为准）；
+- 候选上限 200，超大库会漏召回。
+
+**解除条件**：给 `llm_document_chunk` 加向量列（PG `vector(1024)` / MySQL `MYVECTOR`），
+`upsert` 时对每块调用 `Embedder.embed`，`search` 改为 dense ANN + 词面混合打分。
+索引重建复用 `MemoryIndexRebuilder` 的思路（按 doc 分页重算）。

@@ -50,6 +50,30 @@ public interface MySqlKnowledgeDAO <: RootDAO {
     func docDelete(docId: String): Int64 {
         let sql = 'DELETE FROM llm_document WHERE doc_id = ${arg(docId)}'
         let deleted = executor.setSql(sql).update
-        deleted
+        return deleted
+    }
+
+    func chunkDelete(docId: String): Int64 {
+        let sql = 'DELETE FROM llm_document_chunk WHERE doc_id = ${arg(docId)}'
+        let deleted = executor.setSql(sql).update
+        return deleted
+    }
+
+    func chunkInsert(docId: String, seq: Int64, content: String): Unit {
+        let sql = '''
+            INSERT INTO llm_document_chunk (doc_id, seq, content, update_time)
+            VALUES (${arg(docId)}, ${arg(seq)}, ${arg(content)}, UTC_TIMESTAMP())
+        '''
+        executor.setSql(sql).update
+    }
+
+    func chunkSearch(pattern: String, limit: Int64): ArrayList<HashMap<String, Any>> {
+        let sql = '''
+            SELECT doc_id, seq, content FROM llm_document_chunk
+            WHERE content LIKE ${arg(pattern)}
+            ORDER BY doc_id, seq
+            LIMIT ${arg(limit)}
+        '''
+        executor.setSql(sql).mapList()
     }
 }

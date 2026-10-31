@@ -142,9 +142,17 @@ public class InMemoryMemoryStore <: MemoryStore {
 
 class InMemoryKnowledgeStore <: KnowledgeStore {
     private let docs = HashMap<String, KnowledgeDoc>()
+    private let chunks = HashMap<String, ArrayList<KnowledgeChunk>>()
 
     public func upsert(doc: KnowledgeDoc): Unit {
         docs[doc.docId] = doc
+        let list = ArrayList<KnowledgeChunk>()
+        var seq: Int64 = 0
+        for(content in KnowledgeChunker.split(doc.content)){
+            list.add(KnowledgeChunk(doc.docId, seq, content))
+            seq++
+        }
+        chunks[doc.docId] = list
     }
 
     public func get(docId: String): ?KnowledgeDoc {
@@ -152,12 +160,42 @@ class InMemoryKnowledgeStore <: KnowledgeStore {
     }
 
     public func remove(docId: String): Bool {
+        chunks.remove(docId)
         match(docs.get(docId)){
             case Some(_) =>
                 docs.remove(docId)
                 true
             case None => false
         }
+    }
+
+    public func search(query: KnowledgeQuery): ArrayList<KnowledgeHit> {
+        let terms = KnowledgeSearch.terms(query.text)
+        let hits = ArrayList<KnowledgeHit>()
+        if(terms.isEmpty()){
+            return hits
+        }
+        for((docId, list) in chunks){
+            if(query.docIds.size > 0){
+                var wanted = false
+                for(item in query.docIds){
+                    if(item == docId){
+                        wanted = true
+                        break
+                    }
+                }
+                if(!wanted){
+                    continue
+                }
+            }
+            for(chunk in list){
+                let score = KnowledgeSearch.score(chunk.content, terms)
+                if(score > 0.0f64){
+                    hits.add(KnowledgeHit(docId, chunk.seq, chunk.content, score))
+                }
+            }
+        }
+        KnowledgeSearch.rank(hits, query.limit)
     }
 }
 

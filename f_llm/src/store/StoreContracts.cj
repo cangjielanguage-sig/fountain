@@ -48,9 +48,16 @@ public interface MemoryStore {
 
 /** 知识与文档（按文档/块组织） */
 public interface KnowledgeStore {
+    /** 覆盖写整篇文档，并按 `KnowledgeChunker` 重建块索引 */
     func upsert(doc: KnowledgeDoc): Unit
     func get(docId: String): ?KnowledgeDoc
+    /** 删除正文与全部块 */
     func remove(docId: String): Bool
+    /**
+     * 块级检索（P0）：先按词面召回，再由实现打分排序。
+     * 语义检索（向量）尚未实现，当前是关键词命中数排序。
+     */
+    func search(query: KnowledgeQuery): ArrayList<KnowledgeHit>
 }
 
 /** 人格：一个用户至多一条 */

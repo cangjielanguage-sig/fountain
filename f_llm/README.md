@@ -1559,6 +1559,14 @@ MemoryIndexRebuilder.rebuildIfConfigured(repo, embedder)
 > `colbert_vecs` 由官方 `colbert_linear.pt`（`1024×1024`，约 2.1MB）投影后按 token 归一化。
 > 换成只给 dense 的 OpenAI 兼容端点时，改用 `LlmEmbeddingTransport`（sparse/colbert 为空，检索自动标 `degraded`）。
 
+### 知识检索（块级）
+
+- `KnowledgeStore.upsert` 覆盖写正文后按 **400 字窗口 / 50 字重叠**切块，写入 `llm_document_chunk`；
+- `KnowledgeStore.search(KnowledgeQuery)` 返回**块级**结果：按查询词命中次数打分（多词累加），
+  同分按 `docId`、`seq` 升序，可用 `docIds` 限定范围；
+- 三实现口径一致：PG / MySQL 走 `LIKE` 召回候选（上限 200）+ 统一打分排序，内存实现同逻辑；
+- **语义检索（块向量 + ANN）尚未实现**，当前是词面召回。
+
 ### MySQL（9.7 LTS + MyVector）
 
 MySQL Community 版**没有**向量索引（`CREATE VECTOR INDEX` / `VECTOR_DISTANCE` 都不存在），

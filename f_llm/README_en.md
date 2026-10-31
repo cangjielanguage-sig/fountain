@@ -1585,6 +1585,16 @@ historical indexes, etc.) are listed in [`doc/known-limitations.md`](doc/known-l
 > (`1024×1024`, ~2.1 MB), projected per token and L2-normalized. For dense-only OpenAI-compatible endpoints
 > use `LlmEmbeddingTransport` (sparse/colbert empty; retrieval is marked `degraded`).
 
+### Knowledge retrieval (chunk level)
+
+- `KnowledgeStore.upsert` rewrites the document then splits it into chunks (**400 chars / 50 overlap**)
+  stored in `llm_document_chunk`;
+- `KnowledgeStore.search(KnowledgeQuery)` returns **chunk-level** hits ranked by query-term occurrences
+  (summed over terms), ties broken by `docId` then `seq`, optionally scoped by `docIds`;
+- All three backends behave the same: PG / MySQL recall candidates with `LIKE` (max 200) and share the same
+  scoring; the in-memory store uses the same logic;
+- **Semantic search (chunk embeddings + ANN) is not implemented yet** — current recall is lexical.
+
 ### MySQL (9.7 LTS + MyVector)
 
 MySQL Community does **not** ship vector indexes (`CREATE VECTOR INDEX` / `VECTOR_DISTANCE` are absent),
