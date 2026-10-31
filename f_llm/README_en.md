@@ -1530,7 +1530,11 @@ Config.set<String>([
 - **Content family** (memory / knowledge): `llm_memoryStore` → `Stores.content()`;
 - **Metadata family** (characters / skills / prompts / model configs): `llm_metaStore` → `MetaStoreAdapter`;
 - Implementations are wired with `@Bean` + `@BeanMeta[condition: ConfCond.Value('llm_memoryStore', …)]`; adapters resolve them via `lookupOption<T>()`;
-- Call `Stores.bootstrap()` at startup: an unregistered value fails immediately and lists the available implementations (no silent fallback);
+- Call `StoreWiring.wire()` (from `fountain::f_llm.wiring`) at startup: it loads the implementation packages,
+  registers the `inMemory` / `postgres` / `mysql` content stores and runs the startup validation; an unregistered
+  value fails immediately and lists the available implementations (no silent fallback);
+- `Memory` also calls `wire()` (idempotent) the first time it stores a summary, so a forgotten explicit wiring
+  does not silently drop summaries (failures are logged as `warn`);
 - Implementation packages: `store.postgres` / `store.mysql` (each imports its own driver); `dao.postgres` / `dao.mysql` hold SQL only.
 
 ### Embeddings (BGE-M3)

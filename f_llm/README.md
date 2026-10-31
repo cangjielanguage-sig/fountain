@@ -1509,7 +1509,9 @@ Config.set<String>([
 - **内容族**（记忆 / 知识）：`llm_memoryStore` → `Stores.content()`；
 - **元数据族**（人格 / 技能 / 提示词 / 模型配置）：`llm_metaStore` → `MetaStoreAdapter`；
 - 实现类用 `@Bean` + `@BeanMeta[condition: ConfCond.Value('llm_memoryStore', …)]` 条件装配，适配器内部 `lookupOption<T>()` 取用；
-- 启动时调用 `Stores.bootstrap()`：配置值未注册会**立即失败并列出可选实现**，不静默回退；
+- 启动时调用 `StoreWiring.wire()`（`fountain::f_llm.wiring`）：加载实现包、注册 `inMemory`/`postgres`/`mysql` 三个内容族，并执行启动校验；
+  配置值未注册会**立即失败并列出可选实现**，不静默回退；
+- 业务侧 `Memory` 首次写摘要时也会调用一次 `wire()`（幂等），因此即便应用忘了显式接线，摘要也不会静默丢失（失败会打 `warn`）；
 - 实现包：`store.postgres` / `store.mysql`（各自 import 对应驱动），`dao.postgres` / `dao.mysql` 只放 SQL。
 
 ### 向量化（BGE-M3）

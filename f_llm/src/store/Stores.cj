@@ -34,6 +34,16 @@ public class Stores {
     private static let contentFactories = HashMap<String, () -> ContentStore>()
     private static let metaFactories = HashMap<String, () -> MetaStore>()
 
+    /** 是否已注册（幂等注册与启动校验用） */
+    public static func containsContent(name: String): Bool {
+        contentFactories.contains(name)
+    }
+
+    /** 是否已注册（幂等注册与启动校验用） */
+    public static func containsMeta(name: String): Bool {
+        metaFactories.contains(name)
+    }
+
     public static func registerContent(name: String, factory: () -> ContentStore): Unit {
         if(contentFactories.contains(name)){
             throw IllegalArgumentException('content store already registered: ${name}')

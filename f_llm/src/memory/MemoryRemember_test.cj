@@ -41,4 +41,21 @@ public class MemoryRememberTest {
         @Expect(records[0].title, 'session-1')
         @Expect(records[0].content, '用户偏好简洁回答')
     }
+
+    /**
+     * P0：注册表被清空后，`Memory.remember` 内部的接线会重新注册实现，
+     * 保证生产路径（memory 包不直接 import 实现包）也能拿到内容族。
+     */
+    @TestCase
+    func testRememberRewiresContentStores(): Unit {
+        Stores.resetForTest()
+        @Expect(Stores.containsContent('postgres'), false)
+
+        Config.set<String>([('llm_memoryStore', 'inMemory')])
+        Memory.remember('session-2', '随便一条摘要')
+
+        @Expect(Stores.containsContent('inMemory'), true)
+        @Expect(Stores.containsContent('postgres'), true)
+        @Expect(Stores.containsContent('mysql'), true)
+    }
 }

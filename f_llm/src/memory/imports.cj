@@ -32,3 +32,4 @@ internal import fountain::f_llm.constant.*
 internal import fountain::f_llm.finder.*
 internal import fountain::f_llm.llm.*
 internal import fountain::f_llm.store.*
+internal import fountain::f_llm.wiring.*
