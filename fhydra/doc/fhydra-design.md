@@ -145,6 +145,24 @@ Collection（= f_llm 的一个 用户+命名空间；命名示例：记忆 `u{ui
 - `exportTo(collection, target, targetCollection)`：按页 `get` → `target.upsert`，跨实现/跨进程迁移；
   目标端不复制 IVF 索引，需要时重新 `buildIndex`。
 
+### 1.6 v0.5.1 过滤索引
+
+**白名单**：`kind` / `save_day` / `tags`（其它字段不建索引）。
+
+| key | 内容 |
+|---|---|
+| `h:{c}:f:{field}:{value}:{id}` | 过滤命中（value 单字节占位） |
+| `h:{c}:fl:{id}` | 该记录已写入的过滤字段（`field=value;...`，覆盖写/删除时清理用） |
+
+规则：
+
+- `tags` 支持逗号多值（`a,b`），写入时拆成单值建索引；
+- **同字段多值是 OR，跨字段是 AND**（`tags=a,b` + `save_day=20261031` → (a∨b)∧日期）；
+- 过滤在 dense（暴力扫描与 IVF 候选打分）与 sparse 结果上做**交集**，`get`/`ids`/`count` 不受影响；
+- 未在白名单的字段没有索引：查询这类字段时交集为空（**明确不匹配**，而不是忽略条件）；
+- 值里含 `:` 会被跳过（key 用 `:` 分段），`tags` 值建议用简单标识符；
+- 覆盖写先删旧索引再写新索引，删除记录同步清 `f:`/`fl:`。
+
 ---
 
 ## 2. 索引

@@ -344,6 +344,101 @@ public class FStoreVectorStoreTest {
         store.close()
     }
 
+    // ---- v0.5.1 过滤索引 ----
+
+    private func filters(items: Array<(String, String)>): HashMap<String, String> {
+        let map = HashMap<String, String>()
+        for((field, value) in items){
+            map[field] = value
+        }
+        map
+    }
+
+    @TestCase
+    func testDenseSearchFiltersByKind(): Unit {
+        let store = newStore()
+        store.upsert('c', VectorRecord('n1', 'note', [1.0f64, 0.0f64],
+                                       filters: filters([('kind', 'note')])))
+        store.upsert('c', VectorRecord('f1', 'fact', [1.0f64, 0.0f64],
+                                       filters: filters([('kind', 'fact')])))
+
+        let hits = store.searchDense(VectorQuery('c', [1.0f64, 0.0f64], limit: 5,
+                                                 filters: filters([('kind', 'note')])))
+        @Expect(hits.size, 1)
+        @Expect(hits[0].id, 'n1')
+        store.close()
+    }
+
+    @TestCase
+    func testTagAndSaveDayFiltersCombine(): Unit {
+        let store = newStore()
+        store.upsert('c', VectorRecord('r1', 'p', [1.0f64, 0.0f64],
+                                       filters: filters([('tags', 'a,b'), ('save_day', '20261031')])))
+        store.upsert('c', VectorRecord('r2', 'p', [1.0f64, 0.0f64],
+                                       filters: filters([('tags', 'c'), ('save_day', '20260101')])))
+
+        @Expect(store.searchDense(VectorQuery('c', [1.0f64, 0.0f64], limit: 5,
+                                              filters: filters([('tags', 'b')]))).size, 1)
+        @Expect(store.searchDense(VectorQuery('c', [1.0f64, 0.0f64], limit: 5,
+                                              filters: filters([('tags', 'b'),
+                                                                ('save_day', '20260101')]))).size, 0)
+        store.close()
+    }
+
+    @TestCase
+    func testOverwriteReplacesFilterEntries(): Unit {
+        let store = newStore()
+        store.upsert('c', VectorRecord('r', 'p1', [1.0f64, 0.0f64],
+                                       filters: filters([('kind', 'note')])))
+        store.upsert('c', VectorRecord('r', 'p2', [1.0f64, 0.0f64],
+                                       filters: filters([('kind', 'fact')])))
+
+        @Expect(store.searchDense(VectorQuery('c', [1.0f64, 0.0f64], limit: 5,
+                                              filters: filters([('kind', 'note')]))).size, 0)
+        let facts = store.searchDense(VectorQuery('c', [1.0f64, 0.0f64], limit: 5,
+                                                  filters: filters([('kind', 'fact')])))
+        @Expect(facts.size, 1)
+        @Expect(facts[0].id, 'r')
+        store.close()
+    }
+
+    @TestCase
+    func testRemoveClearsFilterEntries(): Unit {
+        let store = newStore()
+        store.upsert('c', VectorRecord('r', 'p', [1.0f64, 0.0f64],
+                                       filters: filters([('kind', 'note')])))
+        @Expect(store.remove('c', 'r'), true)
+        @Expect(store.searchDense(VectorQuery('c', [1.0f64, 0.0f64], limit: 5,
+                                              filters: filters([('kind', 'note')]))).size, 0)
+        store.close()
+    }
+
+    @TestCase
+    func testSparseSearchHonorsFilters(): Unit {
+        let store = newStore()
+        store.upsert('c', VectorRecord('n1', 'n', [1.0f64], sparse: tokens([(5, 1.0f64)]),
+                                       filters: filters([('kind', 'note')])))
+        store.upsert('c', VectorRecord('f1', 'f', [1.0f64], sparse: tokens([(5, 1.0f64)]),
+                                       filters: filters([('kind', 'fact')])))
+
+        let hits = store.searchSparse(SparseQuery('c', tokens([(5, 1.0f64)]), limit: 5,
+                                                  filters: filters([('kind', 'fact')])))
+        @Expect(hits.size, 1)
+        @Expect(hits[0].id, 'f1')
+        store.close()
+    }
+
+    @TestCase
+    func testUnknownFilterFieldMatchesNothing(): Unit {
+        let store = newStore()
+        store.upsert('c', VectorRecord('r', 'p', [1.0f64, 0.0f64],
+                                       filters: filters([('kind', 'note')])))
+        // 不在白名单的字段没有索引，交集为空（明确不匹配）
+        @Expect(store.searchDense(VectorQuery('c', [1.0f64, 0.0f64], limit: 5,
+                                              filters: filters([('author', 'x')]))).size, 0)
+        store.close()
+    }
+
     @TestCase
     func testIdsPagingSkipsPartialRecords(): Unit {
         pathSeq++

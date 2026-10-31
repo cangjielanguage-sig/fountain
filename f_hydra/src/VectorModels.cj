@@ -30,15 +30,24 @@ public class VectorRecord {
     public let sparse: HashMap<Int64, Float64>
     /** 多头向量（每 token 一个向量），只用于重排，不建索引 */
     public let colbert: Array<Array<Float64>>
+    /**
+     * 过滤字段（白名单：`kind` / `save_day` / `tags`）。
+     *
+     * `tags` 用逗号分隔多值，写入时按单个 tag 建索引；
+     * 值里不要出现 `:`（key 用 `:` 分段），出现时该值会被跳过。
+     */
+    public let filters: HashMap<String, String>
 
     public init(id: String, payload: String, dense: Array<Float64>,
                 sparse!: HashMap<Int64, Float64> = HashMap<Int64, Float64>(),
-                colbert!: Array<Array<Float64>> = Array<Array<Float64>>()) {
+                colbert!: Array<Array<Float64>> = Array<Array<Float64>>(),
+                filters!: HashMap<String, String> = HashMap<String, String>()) {
         this.id = id
         this.payload = payload
         this.dense = dense
         this.sparse = sparse
         this.colbert = colbert
+        this.filters = filters
     }
 }
 
@@ -47,11 +56,15 @@ public class VectorQuery {
     public let collection: String
     public let dense: Array<Float64>
     public let limit: Int64
+    /** 过滤条件（AND）；空表示不过滤 */
+    public let filters: HashMap<String, String>
 
-    public init(collection: String, dense: Array<Float64>, limit!: Int64 = 10) {
+    public init(collection: String, dense: Array<Float64>, limit!: Int64 = 10,
+                filters!: HashMap<String, String> = HashMap<String, String>()) {
         this.collection = collection
         this.dense = dense
         this.limit = limit
+        this.filters = filters
     }
 }
 
@@ -60,11 +73,14 @@ public class SparseQuery {
     public let collection: String
     public let tokens: HashMap<Int64, Float64>
     public let limit: Int64
+    public let filters: HashMap<String, String>
 
-    public init(collection: String, tokens: HashMap<Int64, Float64>, limit!: Int64 = 10) {
+    public init(collection: String, tokens: HashMap<Int64, Float64>, limit!: Int64 = 10,
+                filters!: HashMap<String, String> = HashMap<String, String>()) {
         this.collection = collection
         this.tokens = tokens
         this.limit = limit
+        this.filters = filters
     }
 }
 

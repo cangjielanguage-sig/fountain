@@ -55,9 +55,10 @@ public class FStoreVectorStore <: VectorStore {
     }
 
     public func upsert(collection: String, record: VectorRecord): Unit {
-        // 覆盖写：先清掉旧稀疏倒排与旧 colbert 分片，否则残留
+        // 覆盖写：先清掉旧稀疏倒排、旧 colbert 分片与旧过滤索引，否则残留
         deletePostings(collection, record.id)
         deleteColbertParts(collection, record.id)
+        deleteFilterEntries(collection, record.id)
 
         store.add(payloadKey(collection, record.id).toArray(), record.payload.toArray())
         store.add(denseKey(collection, record.id).toArray(), VectorCodec.encodeDense(record.dense))
@@ -70,6 +71,7 @@ public class FStoreVectorStore <: VectorStore {
             store.add(postingKey(collection, token, record.id).toArray(), weight.toString().toArray())
         }
         store.add(readyKey(collection, record.id).toArray(), [1u8])
+        writeFilterEntries(collection, record)
         // 索引已存在时增量挂桶；未建索引则什么都不做（检索走暴力扫描）
         ivf(collection).record(record.id, record.dense)
         ()
@@ -100,6 +102,7 @@ public class FStoreVectorStore <: VectorStore {
         ivf(collection).unrecord(id)
         deletePostings(collection, id)
         deleteColbertParts(collection, id)
+        deleteFilterEntries(collection, id)
         store.remove(payloadKey(collection, id).toArray())
         store.remove(denseKey(collection, id).toArray())
         store.remove(sparseKey(collection, id).toArray())
@@ -112,13 +115,14 @@ public class FStoreVectorStore <: VectorStore {
             return ArrayList<VectorHit>()
         }
         // 1. IVF 候选（未建索引时为空）
+        let allowed = allowedIds(query.collection, query.filters)
         let candidates = ivf(query.collection).candidates(query.dense)
-        let fromIndex = scoreIds(query, candidates)
+        let fromIndex = scoreIds(query, candidates, allowed)
         if(Int64(fromIndex.size) >= query.limit){
             return finalize(fromIndex, query.limit)
         }
         // 2. 候选不足 / 未建索引：全量扫描（IVF 是优化，不牺牲召回）
-        finalize(bruteForce(query), query.limit)
+        finalize(bruteForce(query, allowed), query.limit)
     }
 
     public func buildIndex(collection: String, clusters!: Int64): Int64 {
@@ -138,13 +142,13 @@ public class FStoreVectorStore <: VectorStore {
         IvfIndex(store, collection)
     }
 
-    private func bruteForce(query: VectorQuery): ArrayList<VectorHit> {
+    private func bruteForce(query: VectorQuery, allowed: ?HashMap<String, Bool>): ArrayList<VectorHit> {
         let hits = ArrayList<VectorHit>()
         let prefix = densePrefix(query.collection)
         for((key, value) in store.prefix(prefix.toArray())){
             let text = String.fromUtf8(key)
             let id = text[Int64(prefix.size)..Int64(text.size)]
-            if(!isReady(query.collection, id)){
+            if(!isReady(query.collection, id) || !permitted(allowed, id)){
                 continue
             }
             let dense = VectorCodec.decodeDense(value)
@@ -156,10 +160,10 @@ public class FStoreVectorStore <: VectorStore {
         hits
     }
 
-    private func scoreIds(query: VectorQuery, ids: ArrayList<String>): ArrayList<VectorHit> {
+    private func scoreIds(query: VectorQuery, ids: ArrayList<String>, allowed: ?HashMap<String, Bool>): ArrayList<VectorHit> {
         let hits = ArrayList<VectorHit>()
         for(id in ids){
-            if(!isReady(query.collection, id)){
+            if(!isReady(query.collection, id) || !permitted(allowed, id)){
                 continue
             }
             match(store.get(denseKey(query.collection, id).toArray())){
@@ -200,6 +204,7 @@ public class FStoreVectorStore <: VectorStore {
         if(query.limit <= 0 || query.tokens.isEmpty() || expired(query.collection)){
             return hits
         }
+        let allowed = allowedIds(query.collection, query.filters)
         let scores = HashMap<String, Float64>()
         for((token, queryWeight) in query.tokens){
             let prefix = postingPrefix(query.collection, token)
@@ -212,7 +217,7 @@ public class FStoreVectorStore <: VectorStore {
             }
         }
         for((id, score) in scores){
-            if(!isReady(query.collection, id)){
+            if(!isReady(query.collection, id) || !permitted(allowed, id)){
                 continue
             }
             hits.add(VectorHit(id, payloadOf(query.collection, id), score))
@@ -372,6 +377,135 @@ public class FStoreVectorStore <: VectorStore {
         store.close()
     }
 
+    // ---- v0.5.1 过滤索引（白名单：kind / save_day / tags） ----
+
+    private static let FILTER_FIELDS = ['kind', 'save_day', 'tags']
+
+    private static func filterable(field: String): Bool {
+        for(item in FILTER_FIELDS){
+            if(item == field){
+                return true
+            }
+        }
+        false
+    }
+
+    private func writeFilterEntries(collection: String, record: VectorRecord): Unit {
+        var meta = ''
+        for((field, value) in record.filters){
+            if(!filterable(field)){
+                continue
+            }
+            for(tag in value.split(',')){
+                let item = tag.trimAscii()
+                if(item.isEmpty() || item.contains(':')){
+                    continue
+                }
+                store.add(filterKey(collection, field, item, record.id).toArray(), [0u8])
+            }
+            if(!meta.isEmpty()){
+                meta += ';'
+            }
+            meta += '${field}=${value}'
+        }
+        if(!meta.isEmpty()){
+            store.add(filterMetaKey(collection, record.id).toArray(), meta.toArray())
+        }
+        ()
+    }
+
+    private func deleteFilterEntries(collection: String, id: String): Unit {
+        match(store.get(filterMetaKey(collection, id).toArray())){
+            case Some(bytes) =>
+                for(pair in String.fromUtf8(bytes).split(';')){
+                    if(pair.isEmpty()){
+                        continue
+                    }
+                    let parts = pair.split('=')
+                    if(parts.size != 2){
+                        continue
+                    }
+                    for(tag in parts[1].split(',')){
+                        let item = tag.trimAscii()
+                        if(item.isEmpty() || item.contains(':')){
+                            continue
+                        }
+                        store.remove(filterKey(collection, parts[0], item, id).toArray())
+                    }
+                }
+                store.remove(filterMetaKey(collection, id).toArray())
+            case None => ()
+        }
+    }
+
+    /**
+     * 计算满足全部过滤条件的 id 集合（AND）；`None` 表示不过滤。
+     * 未在白名单里的字段没有索引，命中集合直接为空——明确不匹配，而不是忽略条件。
+     */
+    private func allowedIds(collection: String, filters: HashMap<String, String>): ?HashMap<String, Bool> {
+        if(filters.isEmpty()){
+            return None
+        }
+        var allowed: ?HashMap<String, Bool> = None
+        for((field, value) in filters){
+            if(!filterable(field)){
+                return Some(HashMap<String, Bool>())
+            }
+            let ids = idsWith(collection, field, value)
+            allowed = match(allowed){
+                case Some(current) => intersection(current, ids)
+                case None => ids
+            }
+        }
+        allowed
+    }
+
+    /** 同字段多值（`tags=a,b`）是 OR；跨字段在 `allowedIds` 里做 AND */
+    private func idsWith(collection: String, field: String, value: String): HashMap<String, Bool> {
+        let result = HashMap<String, Bool>()
+        for(tag in value.split(',')){
+            let item = tag.trimAscii()
+            if(item.isEmpty()){
+                continue
+            }
+            let prefix = filterPrefix(collection, field, item)
+            for((key, _) in store.prefix(prefix.toArray())){
+                let text = String.fromUtf8(key)
+                result[text[Int64(prefix.size)..Int64(text.size)]] = true
+            }
+        }
+        result
+    }
+
+    private static func intersection(a: HashMap<String, Bool>, b: HashMap<String, Bool>): HashMap<String, Bool> {
+        let result = HashMap<String, Bool>()
+        for((id, _) in a){
+            if(b.contains(id)){
+                result[id] = true
+            }
+        }
+        result
+    }
+
+    private static func permitted(allowed: ?HashMap<String, Bool>, id: String): Bool {
+        match(allowed){
+            case Some(ids) => ids.contains(id)
+            case None => true
+        }
+    }
+
+    private static func filterPrefix(collection: String, field: String, value: String): String {
+        'h:${collection}:f:${field}:${value}:'
+    }
+
+    private static func filterKey(collection: String, field: String, value: String, id: String): String {
+        'h:${collection}:f:${field}:${value}:${id}'
+    }
+
+    private static func filterMetaKey(collection: String, id: String): String {
+        'h:${collection}:fl:${id}'
+    }
+
     // ---- v0.5 helpers ----
 
     private func isReady(collection: String, id: String): Bool {
@@ -415,6 +549,7 @@ public class FStoreVectorStore <: VectorStore {
         ivf(collection).unrecord(id)
         deletePostings(collection, id)
         deleteColbertParts(collection, id)
+        deleteFilterEntries(collection, id)
         store.remove(payloadKey(collection, id).toArray())
         store.remove(denseKey(collection, id).toArray())
         store.remove(sparseKey(collection, id).toArray())
