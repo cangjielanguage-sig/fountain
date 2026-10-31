@@ -71,6 +71,20 @@ public enum HitPolicy <: ToString {
 
 默认 `First`。理由：业务最常用，行为最可预测。
 
+### 2.1 两条执行路径下的差异
+
+上表描述的是**聚合路径**（`RuleEngine.executeTable`，整表求值）。决策表也可以编译成规则进议程（`RuleSetBuilder.table`），此时 `HitPolicy` 由 `activationGroup` + `salience` 表达，有三项降级：
+
+| 策略 | 聚合路径 | 议程路径 |
+|---|---|---|
+| `Unique` | 零/多命中均抛错 | 同组只执行一条；运行期**不报错**（构建期仍查重复行） |
+| `First` / `Collect` / `RuleOrder` | 见上表 | 等价 |
+| `Priority` | 按 `outputOrder` 取最小 | **降级为行序**：议程的比较键不含运行期输出值 |
+| `Any` | 多命中校验输出一致 | 不校验 |
+| `OutputOrder` | 按输出值排序 | **按行序**执行 |
+
+需要完整语义时用聚合路径。两条路径对同一张表**互斥**，跨用抛 `TABLE_MODE_CONFLICT`。详见 [11-assembly.md](11-assembly.md) §4.4、§4.5。
+
 ## 3. 构建 API
 
 ```cangjie
