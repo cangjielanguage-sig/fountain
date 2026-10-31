@@ -18,6 +18,12 @@ package fountain::f_rule
 /**
  * `f_rule` 包根：规则引擎门面。
  *
- * M0 只建立骨架，`RuleSet` / `RuleEngine` / `RuleSession` 等门面在 M3 之后补齐；
- * 子包职责见 `doc/01-architecture.md` §2。
+ * 门面只做重导出，具体实现落在子包，避免根包反向依赖导致包循环：
+ * `rule` 提供模型与装配器，`agenda` 提供议程与动作，`rete` 提供匹配网络。
  */
+
+public import fountain::f_rule.rule.RuleSetBuilder
+public import fountain::f_rule.rule.{DefaultConflictResolver, Rule, RuleSet}
+public import fountain::f_rule.agenda.{Agenda, Bindings, FireMode, Activation}
+public import fountain::f_rule.fact.{DynamicFact, Fact, FactHandle, FactSchema, FactSpace, TypedFact}
+public import fountain::f_rule.condition.{Operator, Pattern}

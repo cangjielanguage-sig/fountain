@@ -18,7 +18,7 @@ package fountain::f_rule.rete
 import std.collection.HashSet
 import std.unittest.*
 import std.unittest.testmacro.*
-import fountain::f_rule.RuleSetBuilder
+import fountain::f_rule.rule.RuleSetBuilder
 import fountain::f_rule.agenda.Activation
 import fountain::f_rule.condition.{Operator, Pattern}
 import fountain::f_rule.fact.{DynamicFact, Fact, FactHandle}

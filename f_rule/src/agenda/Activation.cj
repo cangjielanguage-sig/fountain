@@ -15,32 +15,60 @@ limitations under the License.
 */
 package fountain::f_rule.agenda
 
-import std.collection.ArrayList
-import fountain::f_rule.fact.{Fact, IdentifiedFact}
-import fountain::f_rule.rule.Bindings
+import std.sync.Mutex
+import fountain::f_rule.rule.Rule
 
 /**
  * 议程激活（`doc/05-agenda-conflict-resolution.md` §2）。
  *
- * 由终端节点产出：`factSpace + ruleId + bindings` 唯一确定一个激活。
- * `key` 在构造时一次性算出，判等与哈希都只依赖它，避免每次比较都重算绑定表。
+ * 由终端节点产出：`factSpace + ruleId + bindings` 唯一确定一个激活；
+ * `seq` 由构造顺序单调分配，只用于冲突消解的全序兜底，不参与判等。
  *
  * `sortKey()` 与测试基准 `NaiveActivation.sortKey()` 保持同一格式，
  * 差分测试依赖这一点逐条比对两侧激活集合。
  */
 public class Activation <: Hashable & Equatable<Activation> & ToString {
+    private static let seqMtx = Mutex()
+    private static var seqCounter: Int64 = 0
+
+    public let rule: Rule
     public let factSpace: String
-    public let ruleId: String
     public let bindings: Bindings
+    public let salience: Int64
+    public let seq: Int64
     public let specificity: Int64
     private let key_: String
 
-    public init(factSpace: String, ruleId: String, bindings: Bindings, specificity: Int64) {
-        this.factSpace = factSpace
-        this.ruleId = ruleId
+    public init(rule: Rule, bindings: Bindings) {
+        this.rule = rule
+        this.factSpace = rule.factSpace
         this.bindings = bindings
-        this.specificity = specificity
-        this.key_ = Activation.sortKeyOf(factSpace, ruleId, bindings)
+        this.salience = rule.salience
+        this.seq = Activation.nextSeq()
+        this.specificity = Activation.specificityOf(rule)
+        this.key_ = "${rule.factSpace}|${rule.id}|${bindings.sortKey()}"
+    }
+
+    /** `specificity` = 模式数 + 约束总数，条件越多越具体。 */
+    public static func specificityOf(rule: Rule): Int64 {
+        var total = Int64(rule.patterns.size)
+        for (pattern in rule.patterns) {
+            total += Int64(pattern.constraints.size)
+        }
+        total
+    }
+
+    public prop ruleId: String {
+        get() {
+            rule.id
+        }
+    }
+
+    /** 规则在规则集中的声明顺序。 */
+    public prop ruleOrder: Int64 {
+        get() {
+            rule.order
+        }
     }
 
     /** 稳定排序键，同时也是判等键。 */
@@ -64,44 +92,10 @@ public class Activation <: Hashable & Equatable<Activation> & ToString {
         "Activation(${key_})"
     }
 
-    private static func sortKeyOf(factSpace: String, ruleId: String, bindings: Bindings): String {
-        let names = sortedNames(bindings.bindings())
-        var out = "${factSpace}|${ruleId}|"
-        for (name in names) {
-            out = out + "${name}="
-            match (bindings.get(name)) {
-                case Some(fact) => out = out + Activation.factKey(fact)
-                case None => out = out + "?"
-            }
-            out = out + ";"
+    private static func nextSeq(): Int64 {
+        synchronized(seqMtx) {
+            seqCounter += 1
+            seqCounter
         }
-        out
-    }
-
-    /** 与 `NaiveActivation.sortKey` 一致：优先用事实实例身份。 */
-    private static func factKey(fact: Fact): String {
-        match (fact as IdentifiedFact) {
-            case Some(identified) => "${identified.identity}"
-            case None => "?"
-        }
-    }
-
-    private static func sortedNames(names: Array<String>): Array<String> {
-        let copy = ArrayList<String>()
-        for (name in names) {
-            copy.add(name)
-        }
-        var i = 1
-        while (i < copy.size) {
-            let current = copy[i]
-            var j = i - 1
-            while (j >= 0 && copy[j] > current) {
-                copy[j + 1] = copy[j]
-                j -= 1
-            }
-            copy[j + 1] = current
-            i += 1
-        }
-        copy.toArray()
     }
 }

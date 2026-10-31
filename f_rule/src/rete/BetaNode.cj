@@ -140,7 +140,7 @@ public class BetaNode <: ReteNode & TokenSink & RightSink {
     public func leftActivate(session: ReteSession, token: Token): Unit {
         let memory = session.alphaMemory(rightAlphaId)
         let candidates = probeRight(memory, token)
-        let base = token.bindings().toMap()
+        let base = token.bindings().toFactMap()
         for (handle in candidates) {
             match (memory.fact(handle)) {
                 case Some(fact) =>
@@ -208,7 +208,7 @@ public class BetaNode <: ReteNode & TokenSink & RightSink {
             if (join.rightBinding != rightBinding) {
                 continue
             }
-            let leftFact = bindings.get(join.leftBinding)
+            let leftFact = bindings.resolve(join.leftBinding)
             if (leftFact.isNone()) {
                 continue
             }
@@ -255,7 +255,7 @@ public class BetaNode <: ReteNode & TokenSink & RightSink {
     }
 
     private func holdsWith(token: Token, fact: Fact): Bool {
-        let map = token.bindings().toMap()
+        let map = token.bindings().toFactMap()
         map[rightBinding] = fact
         holds(joins, map)
     }

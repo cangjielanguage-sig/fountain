@@ -18,8 +18,9 @@ package fountain::f_rule.test
 import std.collection.{ArrayList, HashMap}
 import fountain::f_rule.RuleRuntime
 import fountain::f_rule.condition.{JitExpression, JoinConstraint, Pattern}
+import fountain::f_rule.agenda.Bindings
 import fountain::f_rule.fact.{Fact, IdentifiedFact}
-import fountain::f_rule.rule.{Bindings, Rule, RuleSet}
+import fountain::f_rule.rule.{Rule, RuleSet}
 
 /**
  * 朴素匹配器产出的激活（`doc/09-testing.md` §4.1）。
@@ -27,22 +28,40 @@ import fountain::f_rule.rule.{Bindings, Rule, RuleSet}
  * 只作为差分基准：不持有令牌与网络引用，`bindings` 直接指向事实实例。
  */
 public class NaiveActivation {
-    public let ruleId: String
-    public let factSpace: String
+    public let rule: Rule
     public let bindings: Bindings
-    public let specificity: Int64
 
-    public init(ruleId: String, factSpace: String, bindings: Bindings, specificity: Int64) {
-        this.ruleId = ruleId
-        this.factSpace = factSpace
+    public init(rule: Rule, bindings: Bindings) {
+        this.rule = rule
         this.bindings = bindings
-        this.specificity = specificity
+    }
+
+    public prop ruleId: String {
+        get() {
+            rule.id
+        }
+    }
+
+    public prop factSpace: String {
+        get() {
+            rule.factSpace
+        }
+    }
+
+    public prop specificity: Int64 {
+        get() {
+            var total = Int64(rule.patterns.size)
+            for (pattern in rule.patterns) {
+                total += Int64(pattern.constraints.size)
+            }
+            total
+        }
     }
 
     /** 稳定排序键：规则 id + 绑定的事实句柄无法取得，退化为绑定名的取值字符串。 */
     public func sortKey(): String {
         var out = "${factSpace}|${ruleId}|"
-        let names = bindings.bindings()
+        let names = bindings.names()
         var i = 0
         while (i < names.size) {
             var j = i + 1
@@ -58,7 +77,7 @@ public class NaiveActivation {
         }
         for (name in names) {
             out = out + "${name}="
-            match (bindings.get(name)) {
+            match (bindings.resolve(name)) {
                 case Some(fact) =>
                     match (fact as IdentifiedFact) {
                         case Some(identified) => out = out + "${identified.identity}"
@@ -179,11 +198,7 @@ class MatchWalker {
                 return
             }
         }
-        var specificity: Int64 = Int64(rule.patterns.size)
-        for (pattern in rule.patterns) {
-            specificity += Int64(pattern.constraints.size)
-        }
-        out.add(NaiveActivation(rule.id, rule.factSpace, Bindings.of(copyOf(bindings)), specificity))
+        out.add(NaiveActivation(rule, Bindings.ofFacts(copyOf(bindings))))
     }
 
     private func copyOf(source: HashMap<String, Fact>): HashMap<String, Fact> {

@@ -67,7 +67,7 @@ class NaiveMatcher_test {
         @Assert(matched.size, 2)
         @Assert(matched[0].ruleId, "R1")
         @Assert(matched[0].factSpace, "a")
-        @Expect(matched[0].bindings.get("o").isSome(), true)
+        @Expect(matched[0].bindings.resolve("o").isSome(), true)
     }
 
     /** F-12：同空间的多条规则都能看到同一批事实。 */

@@ -13,16 +13,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_rule.rete
+package fountain::f_rule.test
 
 import std.collection.{ArrayList, HashMap}
 import std.unittest.*
 import std.unittest.testmacro.*
-import fountain::f_rule.RuleSetBuilder
+import fountain::f_rule.rule.RuleSetBuilder
 import fountain::f_rule.agenda.Activation
 import fountain::f_rule.fact.{Fact, FactBase, FactHandle}
 import fountain::f_rule.rule.{Rule, RuleSet}
-import fountain::f_rule.test.{NaiveActivation, NaiveMatcher, PropertyGen}
+import fountain::f_rule.rete.{MatcherMode, NaiveActivationFn, RecordingSink, ShardedNetwork}
 
 /**
  * Rete 与朴素匹配的差分（`doc/09-testing.md` §4.1，用例 R-01~R-20 的横向回归）。
@@ -87,7 +87,7 @@ class Differential_test {
             let evaluated = NaiveMatcher(ruleSetOf(ruleList)).matches(bySpace)
             let out = ArrayList<Activation>()
             for (item in evaluated) {
-                out.add(Activation(item.factSpace, item.ruleId, item.bindings, item.specificity))
+                out.add(Activation(item.rule, item.bindings))
             }
             out.toArray()
         }

@@ -18,7 +18,7 @@ package fountain::f_rule.rete
 import std.collection.ArrayList
 import std.unittest.*
 import std.unittest.testmacro.*
-import fountain::f_rule.RuleSetBuilder
+import fountain::f_rule.rule.RuleSetBuilder
 import fountain::f_rule.condition.{JoinConstraint, Operator, Pattern}
 import fountain::f_rule.rule.{Rule, RuleSet}
 

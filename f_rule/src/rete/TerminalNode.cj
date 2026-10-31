@@ -15,8 +15,8 @@ limitations under the License.
 */
 package fountain::f_rule.rete
 
-import fountain::f_rule.agenda.Activation
-import fountain::f_rule.rule.Bindings
+import fountain::f_rule.agenda.{Activation, Bindings}
+import fountain::f_rule.rule.Rule
 
 /**
  * 规则终端：把一个令牌展开成激活（`doc/04-rete-network.md` §8）。
@@ -27,20 +27,34 @@ import fountain::f_rule.rule.Bindings
  */
 public class TerminalNode <: ReteNode & TokenSink {
     private let id_: Int64
-    public let ruleId: String
-    public let factSpace: String
-    public let specificity: Int64
+    public let rule: Rule
 
-    public init(id: Int64, ruleId: String, factSpace: String, specificity: Int64) {
+    public init(id: Int64, rule: Rule) {
         this.id_ = id
-        this.ruleId = ruleId
-        this.factSpace = factSpace
-        this.specificity = specificity
+        this.rule = rule
     }
 
     public prop id: Int64 {
         get() {
             id_
+        }
+    }
+
+    public prop ruleId: String {
+        get() {
+            rule.id
+        }
+    }
+
+    public prop factSpace: String {
+        get() {
+            rule.factSpace
+        }
+    }
+
+    public prop specificity: Int64 {
+        get() {
+            Activation.specificityOf(rule)
         }
     }
 
@@ -54,10 +68,10 @@ public class TerminalNode <: ReteNode & TokenSink {
 
     /** 构造激活；供测试与议程直接调用。 */
     public func activate(bindings: Bindings): Activation {
-        Activation(factSpace, ruleId, bindings, specificity)
+        Activation(rule, bindings)
     }
 
     public func toString(): String {
-        "TerminalNode(${id}, ${ruleId}@${factSpace})"
+        "TerminalNode(${id}, ${rule.id}@${rule.factSpace})"
     }
 }

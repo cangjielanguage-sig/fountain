@@ -47,8 +47,8 @@ class Token_test {
 
         @Expect(child.parent.getOrThrow(), parent)
         @Assert(child.bindings().size(), 2)
-        @Assert(child.bindings().get("o").getOrThrow().get("amount").getOrThrow() as Int64, 1)
-        @Assert(child.bindings().get("u").getOrThrow().get("amount").getOrThrow() as Int64, 2)
+        @Assert(child.bindings().resolve("o").getOrThrow().get("amount").getOrThrow() as Int64, 1)
+        @Assert(child.bindings().resolve("u").getOrThrow().get("amount").getOrThrow() as Int64, 2)
 
         let grandChild = Token.child(child, handle(3), "z", order(3))
         @Expect(grandChild.parent.getOrThrow(), child)

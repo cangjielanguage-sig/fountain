@@ -54,6 +54,9 @@ public class RuleSet {
     public let conflictResolver: ConflictResolver
     private var status_: RuleSetStatus
     private var closed_: Bool
+    private var cycleEnabled_: Bool
+    private var cycleWindow_: Int64
+    private var cycleThreshold_: Int64
 
     public init(id: String, version: String, rules: Array<Rule>, registry: FactSpaceRegistry,
         expressionMode: ExpressionMode, conflictResolver: ConflictResolver) {
@@ -65,6 +68,9 @@ public class RuleSet {
         this.conflictResolver = conflictResolver
         this.status_ = RuleSetStatus.Valid
         this.closed_ = false
+        this.cycleEnabled_ = false
+        this.cycleWindow_ = 10000
+        this.cycleThreshold_ = 100
     }
 
     public prop status: RuleSetStatus {
@@ -86,6 +92,37 @@ public class RuleSet {
     /** 声明顺序的空间列表。 */
     public func factSpaces(): Array<FactSpace> {
         registry.spaces()
+    }
+
+    /** 是否开启循环检测（默认关闭）。 */
+    public prop cycleDetection: Bool {
+        get() {
+            cycleEnabled_
+        }
+    }
+
+    /** 循环检测窗口大小（最近 N 个激活指纹）。 */
+    public prop cycleWindow: Int64 {
+        get() {
+            cycleWindow_
+        }
+    }
+
+    /** 同一指纹在窗口内允许出现的次数上限，超过即抛 `CYCLE_LIMIT`。 */
+    public prop cycleThreshold: Int64 {
+        get() {
+            cycleThreshold_
+        }
+    }
+
+    /**
+     * 开启循环检测（`doc/05-agenda-conflict-resolution.md` §9）。
+     *
+     * 有额外开销，默认关闭；`Loop` 模式未配 `limit` 时建议开启。
+     */
+    public func enableCycleDetection(window!: Int64 = 10000): Unit {
+        cycleEnabled_ = true
+        cycleWindow_ = window
     }
 
     /** 校验失败时由构建器调用；进入 `Invalid` 后不可恢复。 */

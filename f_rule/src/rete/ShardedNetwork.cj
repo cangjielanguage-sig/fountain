@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_rule.rete
 
 import std.collection.{ArrayList, HashMap}
-import fountain::f_rule.agenda.Activation
+import fountain::f_rule.agenda.{Activation, ActivationSink}
 import fountain::f_rule.exception.{RuleErrorCode, RuleException}
 import fountain::f_rule.fact.Fact
 import fountain::f_rule.rule.{Rule, RuleSet}

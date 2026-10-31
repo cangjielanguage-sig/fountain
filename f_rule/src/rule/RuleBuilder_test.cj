@@ -20,7 +20,6 @@ import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_rule.condition.*
 import fountain::f_rule.exception.*
-import fountain::f_rule.fact.*
 
 /**
  * `RuleBuilder` 的装配契约（`doc/08-api.md` §4）。
@@ -109,23 +108,6 @@ class RuleBuilder_test {
             return e.code
         }
         RuleErrorCode.CLOSED
-    }
-
-    /** `Bindings` 是不可变视图：合并产生新实例，原实例不变。 */
-    @TestCase
-    public func bindingsAreImmutableViews(): Unit {
-        let schema = FactSchema<RuleOrder>("Order").field("amount", { o => o.amount })
-        let first: Fact = TypedFact(RuleOrder("A", 1), schema)
-        let second: Fact = TypedFact(RuleOrder("B", 2), schema)
-
-        let empty = Bindings.empty()
-        @Assert(empty.size(), 0)
-        let one = empty.merged("o", first)
-        let two = one.merged("u", second)
-        @Expect(one.get("u").isNone(), true)
-        @Assert(two.size(), 2)
-        @Expect(two.get("o").isSome(), true)
-        @Assert(two.bindings().size, 2)
     }
 }
 

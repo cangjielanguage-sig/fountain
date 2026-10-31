@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_rule.rete
 
+import fountain::f_rule.agenda.ActivationSink
 import std.collection.{ArrayList, HashMap}
 import std.sync.Mutex
 import fountain::f_rule.condition.JoinConstraint
@@ -166,11 +167,7 @@ public class ReteNetwork {
 
     /** 每个规则一个终端，不参与共享。 */
     func newTerminal(rule: Rule): TerminalNode {
-        var specificity = Int64(rule.patterns.size)
-        for (pattern in rule.patterns) {
-            specificity += Int64(pattern.constraints.size)
-        }
-        let created = TerminalNode(nextNodeId(), rule.id, rule.factSpace, specificity)
+        let created = TerminalNode(nextNodeId(), rule)
         terminals_.add(created)
         created
     }

@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_rule.rete
 
+import fountain::f_rule.agenda.ActivationSink
 import std.collection.HashMap
 import fountain::f_rule.fact.{Fact, FactHandle}
 

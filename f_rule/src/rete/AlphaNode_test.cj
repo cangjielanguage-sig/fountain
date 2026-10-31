@@ -18,7 +18,7 @@ package fountain::f_rule.rete
 import std.collection.HashMap
 import std.unittest.*
 import std.unittest.testmacro.*
-import fountain::f_rule.agenda.Activation
+import fountain::f_rule.agenda.ActivationSink
 import fountain::f_rule.fact.{DynamicFact, Fact, FactHandle, ValueKey}
 
 /** alpha 网络的测试会话：只提供 memory 表与激活汇。 */

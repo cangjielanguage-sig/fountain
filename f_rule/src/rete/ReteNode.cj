@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_rule.rete
 
-import fountain::f_rule.agenda.Activation
+import fountain::f_rule.agenda.{Activation, ActivationSink}
 import fountain::f_rule.fact.{Fact, FactHandle}
 
 /** 网络节点公共契约：构建期分配的唯一 id（共享键与传播顺序都依赖它）。 */
@@ -38,12 +38,6 @@ public interface TokenSink {
 public interface RightSink {
     func rightActivate(session: ReteSession, handle: FactHandle, fact: Fact): Unit
     func rightRetract(session: ReteSession, handle: FactHandle): Unit
-}
-
-/** 激活汇：终端节点只依赖该接口，不直接依赖议程实现。 */
-public interface ActivationSink {
-    func add(activation: Activation): Unit
-    func remove(activation: Activation): Unit
 }
 
 /**

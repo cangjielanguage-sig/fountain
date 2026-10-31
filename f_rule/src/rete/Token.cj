@@ -17,8 +17,8 @@ package fountain::f_rule.rete
 
 import std.collection.HashMap
 import std.sync.Mutex
+import fountain::f_rule.agenda.Bindings
 import fountain::f_rule.fact.{Fact, FactHandle}
-import fountain::f_rule.rule.Bindings
 
 /**
  * Rete 令牌（`doc/04-rete-network.md` §5）。
@@ -117,13 +117,15 @@ public class Token <: Hashable & Equatable<Token> & ToString {
 
     /** 沿父链展开绑定表；只应在产生激活或校验 join 时调用。 */
     public func bindings(): Bindings {
-        let map = HashMap<String, Fact>()
+        let handles = HashMap<String, FactHandle>()
+        let facts = HashMap<String, Fact>()
         var cursor: ?Token = Some(this)
         while (let Some(current) <- cursor) {
-            map[current.binding] = current.fact
+            handles[current.binding] = current.handle
+            facts[current.binding] = current.fact
             cursor = current.parent
         }
-        Bindings.of(map)
+        Bindings.of(handles, facts)
     }
 
     public operator func ==(other: Token): Bool {

@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_rule.rete
 
+import fountain::f_rule.agenda.ActivationSink
 import std.collection.{ArrayList, HashMap}
 import std.unittest.*
 import std.unittest.testmacro.*

@@ -13,18 +13,18 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_rule.rete
+package fountain::f_rule.test
 
 import std.collection.{ArrayList, HashMap}
 import std.unittest.*
 import std.unittest.testmacro.*
-import fountain::f_rule.RuleSetBuilder
+import fountain::f_rule.rule.RuleSetBuilder
 import fountain::f_rule.agenda.Activation
 import fountain::f_rule.condition.{JoinConstraint, Operator, Pattern}
 import fountain::f_rule.exception.{RuleErrorCode, RuleException}
 import fountain::f_rule.fact.{DynamicFact, Fact, FactHandle}
 import fountain::f_rule.rule.{Rule, RuleSet}
-import fountain::f_rule.test.{NaiveActivation, NaiveMatcher}
+import fountain::f_rule.rete.{RecordingSink, ReteNetwork, SessionNetwork}
 
 /**
  * 网络的增量插入、撤销与更新（`doc/04-rete-network.md` §6、§9，

@@ -327,7 +327,7 @@ public class BetaMemory <: ReteNode {
         if (parts.size != 2) {
             return None
         }
-        match (token.bindings().get(parts[0])) {
+        match (token.bindings().resolve(parts[0])) {
             case Some(fact) => fact.get(parts[1])
             case None => None
         }

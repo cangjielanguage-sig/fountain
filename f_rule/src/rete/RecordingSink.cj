@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_rule.rete
 
 import std.collection.ArrayList
-import fountain::f_rule.agenda.Activation
+import fountain::f_rule.agenda.{Activation, ActivationSink}
 
 /**
  * 记录型激活汇（`doc/04-rete-network.md` §12）。
