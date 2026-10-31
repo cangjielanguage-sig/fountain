@@ -29,6 +29,8 @@ internal class StylePool {
     private let keys = ArrayList<String>()
     private let resolved = ArrayList<Int64>()
     private let customs = ArrayList<(Int64, String)>()
+    private let dxfList = ArrayList<CfFormat>()
+    private let dxfKeys = ArrayList<String>()
     private var nextCustomId: Int64 = 164
 
     init() {
@@ -45,6 +47,23 @@ internal class StylePool {
         get() {
             Int64(styles.size)
         }
+    }
+
+    /** 差分样式（条件格式用）按值去重，返回索引。 */
+    func getOrAddDxf(format: CfFormat): Int64 {
+        let key = "${format.fill ?? ""}|${format.fontColor ?? ""}|${format.bold}|${format.icon ?? ""}"
+        for (i in 0..this.dxfKeys.size) {
+            if (this.dxfKeys[i] == key) {
+                return i
+            }
+        }
+        this.dxfKeys.add(key)
+        this.dxfList.add(format)
+        Int64(this.dxfKeys.size) - 1
+    }
+
+    func dxfs(): ArrayList<CfFormat> {
+        this.dxfList
     }
 
     func entries(): ArrayList<CellStyle> {
@@ -109,6 +128,36 @@ internal class StylesWriter {
         xml.writeDeclaration(encoding: "UTF-8", standalone: Some(true))
         xml.startElement(styleEl("styleSheet"))
 
+        let dxfs = pool.dxfs()
+        if (dxfs.size > 0) {
+            xml.startElement(styleEl("dxfs"), attributes: [XmlAttribute(QName("count"), dxfs.size.toString())])
+            for (format in dxfs) {
+                xml.startElement(styleEl("dxf"))
+                if (format.bold || format.fontColor.isSome()) {
+                    xml.startElement(styleEl("font"))
+                    if (format.bold) {
+                        xml.emptyElement(styleEl("b"))
+                    }
+                    match (format.fontColor) {
+                        case Some(color) =>
+                            xml.emptyElement(styleEl("color"), attributes: [XmlAttribute(QName("rgb"), color)])
+                        case None => ()
+                    }
+                    xml.endElement(styleEl("font"))
+                }
+                match (format.fill) {
+                    case Some(color) =>
+                        xml.startElement(styleEl("fill"))
+                        xml.startElement(styleEl("patternFill"))
+                        xml.emptyElement(styleEl("bgColor"), attributes: [XmlAttribute(QName("rgb"), color)])
+                        xml.endElement(styleEl("patternFill"))
+                        xml.endElement(styleEl("fill"))
+                    case None => ()
+                }
+                xml.endElement(styleEl("dxf"))
+            }
+            xml.endElement(styleEl("dxfs"))
+        }
         let formats = pool.customFormats()
         if (formats.size > 0) {
             xml.startElement(styleEl("numFmts"), attributes: [XmlAttribute(QName("count"), formats.size.toString())])

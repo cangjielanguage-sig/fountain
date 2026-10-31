@@ -1,9 +1,13 @@
 # f_excel —— 仓颉 Excel（OOXML）解析器 / 生成器设计
 
-> 版本 **v0.12** ｜ 2026-10-31 ｜ 状态：M1 + M2 已实施
+> 版本 **v0.13** ｜ 2026-10-31 ｜ 状态：M1 + M2 + M4 已实施，M3 部分
 >
 > 定位：fountain 模块。单个 `ExcelDocument` 类同时承担解析与生成。
 > 依赖 `fountain::f_zip`（读写 OOXML 包）与 `fountain::f_xml`（XML 解析/生成）。
+>
+> **v0.13 变更**
+> - 第 16 章：M4 条件格式（解析/求值/dxfs 写回）的实施记录
+> - M3 状态：数组广播与动态数组、ods 评估已落地；磁盘索引/按需解析/350 函数/紧凑存储未做
 >
 > **v0.12 变更**
 > - 第 15 章：M2-a 样式、M2-b/c 公式引擎（143 函数）、M2-d 时长与富文本的实施记录与差异
@@ -2995,3 +2999,30 @@ M1 把图片列为"不做"；实际使用中需要把 logo/截图锚定进表，
 - `theme1.xml` 主题色板未完整解析，`Color.Theme` 按原值保留。
 - 函数 143 个，离 350+ 还有距离；数据库/工程类未实现。
 - 富文本写出、动态数组 `#SPILL!`、sharedStrings 磁盘索引、`eager=false` 未做。
+
+---
+
+## 16. M4 实施记录（v0.13）
+
+### 16.1 已落地
+
+| 项 | 内容 |
+|---|---|
+| 模型 | `ConditionalFormat` / `CfRule` / `CfRuleType`（13 种 + `Unknown`）/ `CfOperator` / `Cfvo` / `CfColorScale` / `CfDataBar` / `CfIconSet` / `CfFormat` / `CfMatch` |
+| 解析 | `<conditionalFormatting sqref>`、`<cfRule>` 属性、`<formula>`、`colorScale`/`dataBar`/`iconSet` 的 `cfvo`/`color`；`<dxfs>` 的 fill/font/bold |
+| 求值 | `Worksheet.matchedRules`（值规则）与 `CalcEngine.matchedRules`（含 `expression`，相对引用按区域左上角平移）；priority 升序 + `stopIfTrue` |
+| 视觉 | `colorScale` 两色/三色线性插值（min/max/num/percent/percentile/formula 阈值）；`dataBar` 长度比例；`iconSet` 分档 |
+| 写回 | `mergeCells` 之后按原顺序写 `<conditionalFormatting>`；`StylePool` 收集 dxf 并按值去重，`StylesWriter` 写 `<dxfs>` |
+| API | `Worksheet.addConditionalFormat(range, rule)`、`conditionalFormats()`、`matchedRules(row, col)`；`CalcEngine.matchedRules(sheet, row, col)` |
+
+全量 `cjpm test`：**147 通过 / 0 失败**；openpyxl 3.1.5 回读条件格式与 dxfId 正确。
+
+### 16.2 差异与缺口
+
+| 项 | 处理 |
+|---|---|
+| `Worksheet.matchedRules` 不含 `expression` | 公式求值需要引擎；由 `CalcEngine.matchedRules` 补齐 |
+| `timePeriod` / `aboveAverage` | 解析与写回保留，求值不命中（M4 范围外） |
+| `iconSet` | 返回 `name:index`，不生成图标图片 |
+| `colorScale` 的 `formula` 阈值 | 按数字解析，不求公式 |
+| 多段 `sqref` | 求值按段展开；写回保留原字符串 |

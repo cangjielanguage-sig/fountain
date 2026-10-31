@@ -153,6 +153,21 @@ public class ExcelDocument {
                             }
                         }
                     }
+                    for (format in parsed.cfList) {
+                        for (rule in format.rules) {
+                            try {
+                                sheet.addConditionalFormat(format.range, rule)
+                            } catch (e: ExcelException) {
+                                warnings_.add(
+                                    ExcelWarning(
+                                        ExcelWarningKind.SheetEntryMissing,
+                                        e.message,
+                                        sheet: Some(entry.name)
+                                    )
+                                )
+                            }
+                        }
+                    }
                     sheet.setDimension(parsed.dimension)
                     for (range in parsed.merges) {
                         try {

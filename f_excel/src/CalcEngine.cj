@@ -177,6 +177,37 @@ public class CalcEngine {
         CalcReport(recalculated, errors, cycles: this.cycleCells, issues: this.issues)
     }
 
+    /** 条件格式命中（含 `expression` 规则）；`sheet` 必须是已存在的表。 */
+    public func matchedRules(sheet: String, row: Int64, col: Int64): ArrayList<CfMatch> {
+        match (this.doc.sheet(sheet)) {
+            case Some(worksheet) =>
+                this.evaluator = Some(Evaluator(this.resolver))
+                this.resolver.currentSheet = sheet
+                worksheet.matchedRulesWith(row, col, Some({ formula: String => this.evalFormula(sheet, formula) }))
+            case None => ArrayList<CfMatch>()
+        }
+    }
+
+    /** 直接对一段公式原文求值（条件格式的相对引用已由调用方平移）。 */
+    internal func evalFormula(sheet: String, formula: String): CalcValue {
+        let expr = match (FormulaParser.parse(formula)) {
+            case Some(v) => v
+            case None => return CalcValue.Error(CalcError.Name)
+        }
+        let evaluator = match (this.evaluator) {
+            case Some(v) => v
+            case None =>
+                let created = Evaluator(this.resolver)
+                this.evaluator = Some(created)
+                created
+        }
+        let previous = this.resolver.currentSheet
+        this.resolver.currentSheet = sheet
+        let value = evaluator.eval(expr)
+        this.resolver.currentSheet = previous
+        value
+    }
+
     /** 依赖图：把当前所有公式单元格登记进去（`recalculate` 前可用）。 */
     public func buildGraph(): DependencyGraph {
         let graph = DependencyGraph()

@@ -132,7 +132,7 @@ public class ExcelWriter {
                 rowsWritten_++
                 lastIndex = row.index
             }
-            writer.end(ArrayList<String>())
+            writer.end(ArrayList<String>(), ArrayList<ConditionalFormat>())
             entry.close()
         } catch (e: Exception) {
             try {

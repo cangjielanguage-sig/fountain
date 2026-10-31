@@ -21,8 +21,9 @@ Excel (xlsx / OOXML) reader and writer: **streaming parse, streaming generate**,
 | Styles | Full read/write of `CellStyle` / `Font` / `Fill` / `Border` / `Alignment` / `Protection` / `Color`; `styles.xml` numFmts/fonts/fills/borders/cellXfs/cellStyles; value-deduplicated style pool |
 | Formulas | Parse + evaluate + dependency graph: `CalcEngine.evaluate` / `recalculate`; 143 functions; shared-formula shifting; `#CIRC!` on cycles |
 | Duration / rich text | `[h]:mm:ss` reads as `CellValue.TimeSpan`; `Worksheet.richText` exposes sharedStrings run fonts |
+| Conditional formatting | `<conditionalFormatting>` / 13 `CfRuleType`s / `dxfs` read & write; `matchedRules` evaluation (cellIs/expression/text/colorScale/dataBar/iconSet) |
 
-Full `cjpm test`: **137 passed / 0 failed**.
+Full `cjpm test`: **147 passed / 0 failed**.
 
 ## Usage
 
@@ -119,7 +120,7 @@ out.close()
 - **Formulas**: source and cached value only; no evaluation, no dependency graph.
 - **Durations / rich text**: `[h]:mm:ss` comes back as `Date` plus a warning; rich text is flattened to `Text`.
 - **Images**: write-only (png / jpeg, two-cell anchor); the reader does not import them, so they are lost on a round trip.
-- **Conditional formatting**: not preserved (M4 evaluates it semantically).
+- **Conditional formatting**: `timePeriod` / `aboveAverage` are preserved but not evaluated; icon sets do not generate images.
 - **Shared-string writing**: `inlineStr` only; `xl/sharedStrings.xml` is never produced.
 - **Merged ranges in streaming read**: unavailable during the stream (`<mergeCells>` follows `<sheetData>`); `mergedRanges()` is valid after it ends.
 - **Resident memory in streaming read**: only `sharedStrings` grows with the file; disable it with `loadSharedStrings = false`.
@@ -127,6 +128,6 @@ out.close()
 
 ## Tests and fixtures
 
-- `cjpm test` green (137 cases).
+- `cjpm test` green (147 cases).
 - Fixtures build minimal xlsx packages in memory with `f_zip.ZipWriter` (`fixtures.cj`); no external sample files.
 - "Real Excel opens it without repair" is a manual acceptance item, recorded in `doc/spec/implement-f-excel-m1/verification.md`.

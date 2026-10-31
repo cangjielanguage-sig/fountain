@@ -42,6 +42,7 @@ internal class StylesLite {
     private let fills: ArrayList<Fill>
     private let borders: ArrayList<Border>
     private let xfs: ArrayList<XfRecord>
+    private let dxfs: ArrayList<CfFormat>
 
     private init(
         xfFmtIds: ArrayList<Int64>,
@@ -49,7 +50,8 @@ internal class StylesLite {
         fonts: ArrayList<Font>,
         fills: ArrayList<Fill>,
         borders: ArrayList<Border>,
-        xfs: ArrayList<XfRecord>
+        xfs: ArrayList<XfRecord>,
+        dxfs: ArrayList<CfFormat>
     ) {
         this.xfFmtIds = xfFmtIds
         this.customCodes = customCodes
@@ -57,6 +59,7 @@ internal class StylesLite {
         this.fills = fills
         this.borders = borders
         this.xfs = xfs
+        this.dxfs = dxfs
     }
 
     static func empty(): StylesLite {
@@ -70,7 +73,7 @@ internal class StylesLite {
         borders.add(Border.none())
         let xfs = ArrayList<XfRecord>()
         xfs.add(XfRecord())
-        StylesLite(ids, HashMap<Int64, String>(), fonts, fills, borders, xfs)
+        StylesLite(ids, HashMap<Int64, String>(), fonts, fills, borders, xfs, ArrayList<CfFormat>())
     }
 
     static func load(bytes: Array<Byte>): StylesLite {
@@ -81,6 +84,7 @@ internal class StylesLite {
         let borders = ArrayList<Border>()
         let xfs = ArrayList<XfRecord>()
         let named = HashMap<Int64, String>()
+        let dxfs = ArrayList<CfFormat>()
         let doc = try {
             XmlParser.parse(bytes)
         } catch (e: Exception) {
@@ -190,7 +194,54 @@ internal class StylesLite {
         if (borders.size == 0) {
             borders.add(Border.none())
         }
-        StylesLite(ids, codes, fonts, fills, borders, xfs)
+        match (root.child("dxfs")) {
+            case Some(container) =>
+                for (item in container.childrenOf("dxf")) {
+                    var fillColor: ?String = None
+                    var fontColor: ?String = None
+                    var bold = false
+                    match (item.child("font")) {
+                        case Some(font) =>
+                            if (font.child("b").isSome()) {
+                                bold = true
+                            }
+                            match (font.child("color")) {
+                                case Some(color) => fontColor = color.attr("rgb")
+                                case None => ()
+                            }
+                        case None => ()
+                    }
+                    match (item.child("fill")) {
+                        case Some(fill) => match (fill.child("patternFill")) {
+                            case Some(pattern) =>
+                                fillColor = match (pattern.child("bgColor")) {
+                                    case Some(color) => color.attr("rgb")
+                                    case None => match (pattern.child("fgColor")) {
+                                        case Some(color) => color.attr("rgb")
+                                        case None => None<String>
+                                    }
+                                }
+                            case None => ()
+                        }
+                        case None => ()
+                    }
+                    dxfs.add(CfFormat(
+                        fill: fillColor,
+                        fontColor: fontColor,
+                        bold: bold
+                    ))
+                }
+            case None => ()
+        }
+        StylesLite(ids, codes, fonts, fills, borders, xfs, dxfs)
+    }
+
+    /** 差分样式（条件格式引用）。 */
+    func dxfAt(index: Int64): ?CfFormat {
+        if (index < 0 || index >= Int64(this.dxfs.size)) {
+            return None<CfFormat>
+        }
+        this.dxfs[index]
     }
 
     private static func parseIntAttr(item: XmlElement, name: String, fallback: Int64): Int64 {

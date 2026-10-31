@@ -111,7 +111,7 @@ internal class PackageWriter {
                 }
                 writer.row(RowData(rowIndex, cells.toArray()))
             }
-            writer.end(sheets[i].mergedRanges(), drawingRel: drawingRel)
+            writer.end(sheets[i].mergedRanges(), sheets[i].conditionalFormats(), drawingRel: drawingRel)
             entry.close()
         }
         zip.add("xl/styles.xml", StylesWriter.write(styles))

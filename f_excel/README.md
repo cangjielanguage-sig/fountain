@@ -21,8 +21,9 @@ Excel（xlsx / OOXML）读写模块：**流式解析、流式生成**、日期�
 | 样式 | `CellStyle` / `Font` / `Fill` / `Border` / `Alignment` / `Protection` / `Color` 全量读写；`styles.xml` 的 numFmts/fonts/fills/borders/cellXfs/cellStyles；样式池按值去重 |
 | 公式 | 解析 + 求值 + 依赖图：`CalcEngine.evaluate` / `recalculate`；143 个函数；共享公式平移；循环引用 `#CIRC!` |
 | 时长 / 富文本 | `[h]:mm:ss` 读取为 `CellValue.TimeSpan`；`Worksheet.richText` 暴露 sharedStrings 的分段字体 |
+| 条件格式 | `<conditionalFormatting>` / 13 种 `CfRuleType` / `dxfs` 解析与写回；`matchedRules` 求值（cellIs/expression/文本/colorScale/dataBar/iconSet） |
 
-全量 `cjpm test`：**137 通过 / 0 失败**。
+全量 `cjpm test`：**147 通过 / 0 失败**。
 
 ## 用法
 
@@ -120,7 +121,7 @@ out.close()
 - **富文本**：只读不写，写侧平坦化为普通文本（样式丢失）。
 - **时长 / 富文本**：`[h]:mm:ss` 按 `Date` 返回并告警；富文本平坦化为 `Text`。
 - **图片**：只支持写入（png / jpeg、两单元格锚定）；读取时不导入图片，含图片的文件往返后图片会丢失。
-- **条件格式**：不保留（M4 做语义求值）。
+- **条件格式**：`timePeriod` / `aboveAverage` 只保留不求值；图标集不生成图片。
 - **共享字符串写出**：只写 `inlineStr`，不生成 `xl/sharedStrings.xml`。
 - **流式读的合并区域**：流中拿不到（`<mergeCells>` 在 `<sheetData>` 之后），流结束后 `mergedRanges()` 才可用。
 - **流式读的常驻内存**：只有 `sharedStrings` 随文件增长；`loadSharedStrings = false` 可关。
@@ -128,6 +129,6 @@ out.close()
 
 ## 测试与夹具
 
-- `cjpm test` 全绿（137 条）。
+- `cjpm test` 全绿（147 条）。
 - 夹具用 `f_zip.ZipWriter` 现场拼最小 xlsx（`fixtures.cj`），不依赖外部样本文件。
 - 「真实 Excel 打开不报修复」属人工验收项，记录见 `doc/spec/implement-f-excel-m1/verification.md`。

@@ -85,7 +85,11 @@ internal class SheetXmlWriter {
         xml.endElement(xl("row"))
     }
 
-    func end(merges: ArrayList<String>, drawingRel!: ?String = None): Unit {
+    func end(
+        merges: ArrayList<String>,
+        formats: ArrayList<ConditionalFormat>,
+        drawingRel!: ?String = None
+    ): Unit {
         xml.endElement(xl("sheetData"))
         if (merges.size > 0) {
             xml.startElement(xl("mergeCells"), attributes: [XmlAttribute(QName("count"), merges.size.toString())])
@@ -93,6 +97,9 @@ internal class SheetXmlWriter {
                 xml.emptyElement(xl("mergeCell"), attributes: [XmlAttribute(QName("ref"), range)])
             }
             xml.endElement(xl("mergeCells"))
+        }
+        if (formats.size > 0) {
+            writeConditionalFormats(formats)
         }
         match (drawingRel) {
             case Some(relId) => xml.emptyElement(xl("drawing"), attributes: [XmlAttribute(QName("r:id"), relId)])
@@ -261,6 +268,88 @@ internal class SheetXmlWriter {
                 xml.text(v)
                 xml.endElement(xl("v"))
             case _ => ()
+        }
+    }
+
+    private func writeConditionalFormats(formats: ArrayList<ConditionalFormat>): Unit {
+        for (format in formats) {
+            xml.startElement(
+                xl("conditionalFormatting"),
+                attributes: [XmlAttribute(QName("sqref"), format.range)]
+            )
+            for (rule in format.rules) {
+                let attrs = ArrayList<XmlAttribute>()
+                attrs.add(XmlAttribute(QName("type"), rule.ruleType.toString()))
+                attrs.add(XmlAttribute(QName("priority"), rule.priority.toString()))
+                if (rule.stopIfTrue) {
+                    attrs.add(XmlAttribute(QName("stopIfTrue"), "1"))
+                }
+                if (rule.comparison.toString() != "") {
+                    attrs.add(XmlAttribute(QName("operator"), rule.comparison.toString()))
+                }
+                match (rule.text) {
+                    case Some(value) => attrs.add(XmlAttribute(QName("text"), value))
+                    case None => ()
+                }
+                match (rule.format) {
+                    case Some(value) =>
+                        attrs.add(XmlAttribute(QName("dxfId"), pool.getOrAddDxf(value).toString()))
+                    case None => ()
+                }
+                xml.startElement(xl("cfRule"), attributes: attrs.toArray())
+                for (formula in rule.formulas) {
+                    xml.startElement(xl("formula"))
+                    xml.text(formula)
+                    xml.endElement(xl("formula"))
+                }
+                match (rule.colorScale) {
+                    case Some(scale) =>
+                        xml.startElement(xl("colorScale"))
+                        for (cfvo in scale.cfvos) {
+                            xml.emptyElement(
+                                xl("cfvo"),
+                                attributes: [XmlAttribute(QName("type"), cfvo.kind), XmlAttribute(QName("val"), cfvo.value)]
+                            )
+                        }
+                        for (color in scale.colors) {
+                            xml.emptyElement(xl("color"), attributes: [XmlAttribute(QName("rgb"), color)])
+                        }
+                        xml.endElement(xl("colorScale"))
+                    case None => ()
+                }
+                match (rule.dataBar) {
+                    case Some(bar) =>
+                        xml.startElement(xl("dataBar"))
+                        xml.emptyElement(
+                            xl("cfvo"),
+                            attributes: [XmlAttribute(QName("type"), bar.min.kind), XmlAttribute(QName("val"), bar.min.value)]
+                        )
+                        xml.emptyElement(
+                            xl("cfvo"),
+                            attributes: [XmlAttribute(QName("type"), bar.max.kind), XmlAttribute(QName("val"), bar.max.value)]
+                        )
+                        xml.emptyElement(xl("color"), attributes: [XmlAttribute(QName("rgb"), bar.color)])
+                        xml.endElement(xl("dataBar"))
+                    case None => ()
+                }
+                match (rule.iconSet) {
+                    case Some(set) =>
+                        xml.startElement(
+                            xl("iconSet"),
+                            attributes: [XmlAttribute(QName("iconSet"), set.name)]
+                        )
+                        for (cfvo in set.cfvos) {
+                            xml.emptyElement(
+                                xl("cfvo"),
+                                attributes: [XmlAttribute(QName("type"), cfvo.kind), XmlAttribute(QName("val"), cfvo.value)]
+                            )
+                        }
+                        xml.endElement(xl("iconSet"))
+                    case None => ()
+                }
+                xml.endElement(xl("cfRule"))
+            }
+            xml.endElement(xl("conditionalFormatting"))
         }
     }
 

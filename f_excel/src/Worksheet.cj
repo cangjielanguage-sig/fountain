@@ -31,6 +31,7 @@ public class Worksheet {
     private let images = ArrayList<SheetImage>()
     private let stylesMap = HashMap<Int64, CellStyle>()
     private let richTexts = HashMap<Int64, RichText>()
+    private let conditionalFormatsList = ArrayList<ConditionalFormat>()
     private var dimensionRef: ?String = None
     private var maxRowSeen: Int64 = 0
     private var maxColSeen: Int64 = 0
@@ -110,6 +111,118 @@ public class Worksheet {
 
     public func setCell(ref: CellRef, value: CellValue): Unit {
         setCell(ref.row, ref.col, value)
+    }
+
+    /** 条件格式（按解析/添加顺序）。 */
+    public func conditionalFormats(): ArrayList<ConditionalFormat> {
+        this.conditionalFormatsList
+    }
+
+    /** 追加一组条件格式；同 `range` 的规则合并到同一组。 */
+    public func addConditionalFormat(range: String, rule: CfRule): Unit {
+        match (CellRef.parseRange(range)) {
+            case Some(_) => ()
+            case None => throw ExcelException("非法的条件格式区域：${range}")
+        }
+        for (item in this.conditionalFormatsList) {
+            if (item.range == range) {
+                item.rules.add(rule)
+                return
+            }
+        }
+        let rules = ArrayList<CfRule>()
+        rules.add(rule)
+        this.conditionalFormatsList.add(ConditionalFormat(range, rules))
+    }
+
+    /** 值规则命中（不含 `expression`，它需要公式引擎）。 */
+    public func matchedRules(row: Int64, col: Int64): ArrayList<CfMatch> {
+        this.matchedRulesWith(row, col, None)
+    }
+
+    internal func matchedRulesWith(
+        row: Int64,
+        col: Int64,
+        expression: ?(String) -> CalcValue
+    ): ArrayList<CfMatch> {
+        let result = ArrayList<CfMatch>()
+        if (!valid(row, col)) {
+            return result
+        }
+        let value = match (this.cell(row, col)) {
+            case Some(v) => cellValueToCalc(v, false)
+            case None => CalcValue.Empty
+        }
+        for (format in this.conditionalFormatsList) {
+            if (!sqrefContains(format.range, row, col)) {
+                continue
+            }
+            let rangeValues = this.valuesOfRange(format.range)
+            let sorted = ArrayList<CfRule>()
+            for (rule in format.rules) {
+                sorted.add(rule)
+            }
+            for (i in 1..sorted.size) {
+                let key = sorted[i]
+                var j = i - 1
+                while (j >= 0 && sorted[j].priority > key.priority) {
+                    sorted[j + 1] = sorted[j]
+                    j--
+                }
+                sorted[j + 1] = key
+            }
+            let shiftedEval = match (expression) {
+                case Some(eval) =>
+                    let deltaRow = match (CellRef.parseRange(format.range)) {
+                        case Some(bounds) => row - bounds[0].row
+                        case None => 0
+                    }
+                    let deltaCol = match (CellRef.parseRange(format.range)) {
+                        case Some(bounds) => col - bounds[0].col
+                        case None => 0
+                    }
+                    Some({ formula: String => eval(shiftFormula(formula, deltaRow, deltaCol)) })
+                case None => None<(String) -> CalcValue>
+            }
+            for (rule in sorted) {
+                match (cfRuleHit(rule, value, rangeValues, this.name, CellRef(row, col), shiftedEval)) {
+                    case Some(hit) =>
+                        result.add(CfMatch(rule, hit))
+                        if (rule.stopIfTrue) {
+                            break
+                        }
+                    case None => ()
+                }
+            }
+        }
+        result
+    }
+
+    private func valuesOfRange(range: String): ArrayList<CalcValue> {
+        let values = ArrayList<CalcValue>()
+        for (part in range.split(" ")) {
+            if (part.isEmpty()) {
+                continue
+            }
+            match (CellRef.parseRange(part)) {
+                case Some(bounds) =>
+                    let (from, to) = bounds
+                    var row = from.row
+                    while (row <= to.row) {
+                        var col = from.col
+                        while (col <= to.col) {
+                            match (this.cell(row, col)) {
+                                case Some(v) => values.add(cellValueToCalc(v, false))
+                                case None => values.add(CalcValue.Empty)
+                            }
+                            col++
+                        }
+                        row++
+                    }
+                case None => ()
+            }
+        }
+        values
     }
 
     /** 富文本（`sharedStrings` 的分段样式）；不是富文本返回 `None`。 */

@@ -58,6 +58,7 @@ internal interface RowSink {
 internal class ParsedSheet {
     let rows = ArrayList<RowData>()
     let richTexts = ArrayList<(Int64, Int64, RichText)>()
+    let cfList = ArrayList<ConditionalFormat>()
     let merges = ArrayList<String>()
     var dimension: ?String = None
     let warnings = ArrayList<ExcelWarning>()
@@ -124,6 +125,25 @@ internal class SheetRowHandler {
     private var formulaSi: ?Int64 = None
     private let sharedMasters = HashMap<Int64, (String, Int64, Int64)>()
     private var arrayFormulaWarned = false
+
+    private var cfSqref: ?String = None
+    private var cfRules = ArrayList<CfRule>()
+    private var cfRuleActive = false
+    private var cfTypeText = "cellIs"
+    private var cfPriority: Int64 = 1
+    private var cfStop = false
+    private var cfOperatorText = ""
+    private var cfDxfIndex: ?Int64 = None
+    private var cfTextValue: ?String = None
+    private var cfFormulas = ArrayList<String>()
+    private var cfInFormula = false
+    private var cfFormula = StringGenerator()
+    private var cfCfvos = ArrayList<Cfvo>()
+    private var cfColors = ArrayList<String>()
+    private var cfKind = ""
+    private var cfBarColor = ""
+    private var cfIconName = "3TrafficLights1"
+    private var cfShowValue = true
     private var inValue = false
     private var inInline = false
     private var inInlineText = false
@@ -187,6 +207,54 @@ internal class SheetRowHandler {
                 case Some(ref) => parsed.merges.add(ref)
                 case None => ()
             }
+            case "conditionalFormatting" =>
+                cfSqref = attr(attrs, "sqref")
+                cfRules = ArrayList<CfRule>()
+            case "cfRule" =>
+                cfRuleActive = true
+                cfTypeText = attr(attrs, "type") ?? "cellIs"
+                cfPriority = parseIntOrNone(attr(attrs, "priority") ?? "1") ?? 1
+                cfStop = attr(attrs, "stopIfTrue") == Some("1") || attr(attrs, "stopIfTrue") == Some("true")
+                cfOperatorText = attr(attrs, "operator") ?? ""
+                cfDxfIndex = match (attr(attrs, "dxfId")) {
+                    case Some(text) => parseIntOrNone(text)
+                    case None => None<Int64>
+                }
+                cfTextValue = attr(attrs, "text")
+                cfFormulas = ArrayList<String>()
+                cfCfvos = ArrayList<Cfvo>()
+                cfColors = ArrayList<String>()
+                cfKind = ""
+                cfBarColor = ""
+                cfIconName = "3TrafficLights1"
+                cfShowValue = true
+            case "formula" => if (cfRuleActive) {
+                cfInFormula = true
+                cfFormula = StringGenerator()
+            }
+            case "colorScale" => if (cfRuleActive) {
+                cfKind = "colorScale"
+            }
+            case "dataBar" => if (cfRuleActive) {
+                cfKind = "dataBar"
+                cfShowValue = attr(attrs, "showValue") != Some("0")
+            }
+            case "iconSet" => if (cfRuleActive) {
+                cfKind = "iconSet"
+                cfIconName = attr(attrs, "iconSet") ?? "3TrafficLights1"
+                cfShowValue = attr(attrs, "showValue") != Some("0")
+            }
+            case "cfvo" => if (cfRuleActive && !cfKind.isEmpty()) {
+                cfCfvos.add(Cfvo(attr(attrs, "type") ?? "num", value: attr(attrs, "val") ?? ""))
+            }
+            case "color" => if (cfRuleActive) {
+                let rgb = attr(attrs, "rgb") ?? ""
+                if (cfKind == "colorScale") {
+                    cfColors.add(rgb)
+                } else if (cfKind == "dataBar" && cfBarColor.isEmpty()) {
+                    cfBarColor = rgb
+                }
+            }
             case _ => ()
         }
     }
@@ -197,6 +265,19 @@ internal class SheetRowHandler {
             case "f" => inFormula = false
             case "t" => inInlineText = false
             case "is" => inInline = false
+            case "formula" => if (cfInFormula) {
+                cfFormulas.add(cfFormula.toString())
+                cfInFormula = false
+            }
+            case "cfRule" => if (cfRuleActive) {
+                cfRules.add(buildCfRule())
+                cfRuleActive = false
+            }
+            case "conditionalFormatting" => match (cfSqref) {
+                case Some(range) =>
+                    parsed.cfList.add(ConditionalFormat(range, cfRules))
+                case None => ()
+            }
             case "c" => finishCell()
             case "row" => finishRow()
             case _ => ()
@@ -210,6 +291,8 @@ internal class SheetRowHandler {
             inlineText.append<String>(value)
         } else if (inFormula) {
             formulaText.append<String>(value)
+        } else if (cfInFormula) {
+            cfFormula.append<String>(value)
         }
     }
 
@@ -489,6 +572,39 @@ internal class SheetRowHandler {
                 }
                 CellValue.Number(value)
         }
+    }
+
+    private func buildCfRule(): CfRule {
+        let format = match (cfDxfIndex) {
+            case Some(index) => styles.dxfAt(index)
+            case None => None<CfFormat>
+        }
+        var colorScale: ?CfColorScale = None
+        var dataBar: ?CfDataBar = None
+        var iconSet: ?CfIconSet = None
+        if (!cfCfvos.isEmpty()) {
+            match (cfKind) {
+                case "colorScale" => colorScale = Some(CfColorScale(cfCfvos, cfColors))
+                case "dataBar" =>
+                    let minCfvo = if (cfCfvos.size > 0) { cfCfvos[0] } else { Cfvo("min") }
+                    let maxCfvo = if (cfCfvos.size > 1) { cfCfvos[1] } else { Cfvo("max") }
+                    dataBar = Some(CfDataBar(minCfvo, maxCfvo, cfBarColor, showValue: cfShowValue))
+                case "iconSet" => iconSet = Some(CfIconSet(cfIconName, cfCfvos, showValue: cfShowValue))
+                case _ => ()
+            }
+        }
+        CfRule(
+            CfRuleType.parse(cfTypeText),
+            priority: cfPriority,
+            stopIfTrue: cfStop,
+            comparison: CfOperator.parse(cfOperatorText),
+            formulas: cfFormulas,
+            text: cfTextValue,
+            format: format,
+            colorScale: colorScale,
+            dataBar: dataBar,
+            iconSet: iconSet
+        )
     }
 
     private func finishRow(): Unit {
