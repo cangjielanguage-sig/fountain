@@ -512,7 +512,7 @@ internal func fnDays360(ev: Evaluator, args: Array<Expr>): CalcValue {
     CalcValue.Number(Float64(days))
 }
 
-private func holidaySet(ev: Evaluator, args: Array<Expr>): ArrayList<Int64> {
+internal func holidaySet(ev: Evaluator, args: Array<Expr>): ArrayList<Int64> {
     let list = ArrayList<Int64>()
     if (args.size > 2) {
         let (nums, _) = numbersOf(ev, args, 2)
@@ -583,7 +583,7 @@ internal func fnWorkday(ev: Evaluator, args: Array<Expr>): CalcValue {
 
 // ---------------------------------------------------------------- 财务
 
-private func numberArg(ev: Evaluator, args: Array<Expr>, index: Int64, fallback: Float64): ?Float64 {
+internal func numberArg(ev: Evaluator, args: Array<Expr>, index: Int64, fallback: Float64): ?Float64 {
     if (index >= args.size) {
         return Some(fallback)
     }

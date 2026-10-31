@@ -70,6 +70,17 @@ internal class DocumentResolver <: CalcResolver {
     public func date1904(): Bool {
         this.engine.getOrThrow().document().date1904
     }
+
+    public func formulaAt(sheet: String, row: Int64, col: Int64): ?String {
+        let name = if (sheet.isEmpty()) { this.currentSheet } else { sheet }
+        match (this.engine.getOrThrow().document().sheet(name)) {
+            case Some(worksheet) => match (worksheet.cell(row, col)) {
+                case Some(Formula(source, _)) => Some(source)
+                case _ => None<String>
+            }
+            case None => None<String>
+        }
+    }
 }
 
 /**

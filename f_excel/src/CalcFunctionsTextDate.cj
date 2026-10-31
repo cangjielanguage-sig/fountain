@@ -258,7 +258,7 @@ private func padLeft(text: String, width: Int64, fill: String): String {
     out
 }
 
-private func formatFixed(value: Float64, decimals: Int64): String {
+internal func formatFixed(value: Float64, decimals: Int64): String {
     if (decimals <= 0) {
         return formatNumber(floor(value + 0.5))
     }
@@ -284,7 +284,7 @@ private func formatFixed(value: Float64, decimals: Int64): String {
     text
 }
 
-private func addThousandSeparators(text: String): String {
+internal func addThousandSeparators(text: String): String {
     let dot = text.indexOf(".") ?? -1
     let intPart = if (dot < 0) { text } else { text[0..dot] }
     let fracPart = if (dot < 0) { "" } else { text[dot..] }

@@ -19,11 +19,11 @@ Excel (xlsx / OOXML) reader and writer: **streaming parse, streaming generate**,
 | Dates | Built-in 14–22 / 45–47 plus custom-format heuristics; 1900 / 1904 bases; serial 60 kept as a number with a warning |
 | Images (write) | `Worksheet.addImage(path/bytes, from, to)`: png / jpeg anchored to a cell range; the read side does not import images yet |
 | Styles | Full read/write of `CellStyle` / `Font` / `Fill` / `Border` / `Alignment` / `Protection` / `Color`; `styles.xml` numFmts/fonts/fills/borders/cellXfs/cellStyles; value-deduplicated style pool |
-| Formulas | Parse + evaluate + dependency graph: `CalcEngine.evaluate` / `recalculate`; 143 functions; shared-formula shifting; `#CIRC!` on cycles |
+| Formulas | Parse + evaluate + dependency graph: `CalcEngine.evaluate` / `recalculate`; 350 functions; shared-formula shifting; `#CIRC!` on cycles |
 | Duration / rich text | `[h]:mm:ss` reads as `CellValue.TimeSpan`; `Worksheet.richText` exposes sharedStrings run fonts |
 | Conditional formatting | `<conditionalFormatting>` / 13 `CfRuleType`s / `dxfs` read & write; `matchedRules` evaluation (cellIs/expression/text/colorScale/dataBar/iconSet) |
 
-Full `cjpm test`: **155 passed / 0 failed**.
+Full `cjpm test`: **181 passed / 0 failed**.
 
 ## Usage
 
@@ -140,6 +140,6 @@ out.close()
 
 ## Tests and fixtures
 
-- `cjpm test` green (155 cases).
+- `cjpm test` green (181 cases).
 - Fixtures build minimal xlsx packages in memory with `f_zip.ZipWriter` (`fixtures.cj`); no external sample files.
 - "Real Excel opens it without repair" is a manual acceptance item, recorded in `doc/spec/implement-f-excel-m1/verification.md`.

@@ -26,7 +26,7 @@ import std.fs.Path
  */
 public class Worksheet {
     private let sheetName: String
-    private let cells = HashMap<Int64, CellValue>()
+    private let cells = CellStore()
     private let merges = ArrayList<String>()
     private let images = ArrayList<SheetImage>()
     private let stylesMap = HashMap<Int64, CellStyle>()
@@ -335,17 +335,10 @@ public class Worksheet {
     /** 一行里实际出现的格子，按列升序。 */
     public func rowValues(row: Int64): Array<(Int64, CellValue)> {
         this.ensureLoaded()
-        let out = ArrayList<(Int64, CellValue)>()
         if (row < 1 || row > EXCEL_MAX_ROW) {
-            return out.toArray()
+            return Array<(Int64, CellValue)>()
         }
-        for (col in 1..=maxColSeen) {
-            match (cells.get(key(row, col))) {
-                case Some(v) => out.add((col, v))
-                case None => ()
-            }
-        }
-        out.toArray()
+        cells.rowEntries(row, maxColSeen).toArray()
     }
 
     /** 把图片锚定到 `[from, to]` 单元格区域（写侧；读侧 M1.5 不解析图片）。 */

@@ -21,7 +21,7 @@ import fountain::f_base.StringGenerator
 
 // ---------------------------------------------------------------- 统计扩展
 
-private func sortedNumbers(ev: Evaluator, args: Array<Expr>): (ArrayList<Float64>, ?CalcError) {
+internal func sortedNumbers(ev: Evaluator, args: Array<Expr>): (ArrayList<Float64>, ?CalcError) {
     let values = ArrayList<Float64>()
     for (i in 0..args.size) {
         let (nums, error) = numbersOf(ev, args, i)
@@ -45,7 +45,7 @@ private func sortedNumbers(ev: Evaluator, args: Array<Expr>): (ArrayList<Float64
     (values, None<CalcError>)
 }
 
-private func stdevOf(values: ArrayList<Float64>, sample: Bool): ?Float64 {
+internal func stdevOf(values: ArrayList<Float64>, sample: Bool): ?Float64 {
     let n = values.size
     if (sample && n < 2) {
         return None<Float64>
@@ -245,7 +245,7 @@ internal func fnMode(ev: Evaluator, args: Array<Expr>): CalcValue {
     CalcValue.Number(best)
 }
 
-private func pairedLists(ev: Evaluator, args: Array<Expr>): (ArrayList<Float64>, ArrayList<Float64>, ?CalcError) {
+internal func pairedLists(ev: Evaluator, args: Array<Expr>): (ArrayList<Float64>, ArrayList<Float64>, ?CalcError) {
     let xs = ArrayList<Float64>()
     let ys = ArrayList<Float64>()
     let (xNums, xError) = numbersOf(ev, args, 0)

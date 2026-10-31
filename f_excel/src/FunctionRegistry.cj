@@ -200,6 +200,213 @@ internal func lookupFunction(rawName: String): ?FnEntry {
         case "SORT" => Some(FnEntry(name, 1, 3, { ev, args => fnSort(ev, args) }))
         case "UNIQUE" => Some(FnEntry(name, 1, 1, { ev, args => fnUnique(ev, args) }))
         case "SEQUENCE" => Some(FnEntry(name, 1, 4, { ev, args => fnSequence(ev, args) }))
+        // 数学/工程扩展（M3-c 第一批）
+        case "ACOS" => Some(FnEntry(name, 1, 1, { ev, args => fnTrigExt(ev, args, "acos") }))
+        case "ACOSH" => Some(FnEntry(name, 1, 1, { ev, args => fnTrigExt(ev, args, "acosh") }))
+        case "ASIN" => Some(FnEntry(name, 1, 1, { ev, args => fnTrigExt(ev, args, "asin") }))
+        case "ASINH" => Some(FnEntry(name, 1, 1, { ev, args => fnTrigExt(ev, args, "asinh") }))
+        case "ATAN" => Some(FnEntry(name, 1, 1, { ev, args => fnTrigExt(ev, args, "atan") }))
+        case "ATANH" => Some(FnEntry(name, 1, 1, { ev, args => fnTrigExt(ev, args, "atanh") }))
+        case "ATAN2" => Some(FnEntry(name, 2, 2, { ev, args => fnAtan2(ev, args) }))
+        case "COSH" => Some(FnEntry(name, 1, 1, { ev, args => fnTrigExt(ev, args, "cosh") }))
+        case "SINH" => Some(FnEntry(name, 1, 1, { ev, args => fnTrigExt(ev, args, "sinh") }))
+        case "TANH" => Some(FnEntry(name, 1, 1, { ev, args => fnTrigExt(ev, args, "tanh") }))
+        case "SEC" => Some(FnEntry(name, 1, 1, { ev, args => fnTrigExt(ev, args, "sec") }))
+        case "SECH" => Some(FnEntry(name, 1, 1, { ev, args => fnTrigExt(ev, args, "sech") }))
+        case "CSC" => Some(FnEntry(name, 1, 1, { ev, args => fnTrigExt(ev, args, "csc") }))
+        case "CSCH" => Some(FnEntry(name, 1, 1, { ev, args => fnTrigExt(ev, args, "csch") }))
+        case "COT" => Some(FnEntry(name, 1, 1, { ev, args => fnTrigExt(ev, args, "cot") }))
+        case "COTH" => Some(FnEntry(name, 1, 1, { ev, args => fnTrigExt(ev, args, "coth") }))
+        case "EVEN" => Some(FnEntry(name, 1, 1, { ev, args => fnEvenOdd(ev, args, true) }))
+        case "ODD" => Some(FnEntry(name, 1, 1, { ev, args => fnEvenOdd(ev, args, false) }))
+        case "QUOTIENT" => Some(FnEntry(name, 2, 2, { ev, args => fnQuotient(ev, args) }))
+        case "COMBIN" => Some(FnEntry(name, 2, 2, { ev, args => fnCombin(ev, args, false) }))
+        case "COMBINA" => Some(FnEntry(name, 2, 2, { ev, args => fnCombin(ev, args, true) }))
+        case "PERMUT" => Some(FnEntry(name, 2, 2, { ev, args => fnPermut(ev, args, false) }))
+        case "PERMUTATIONA" => Some(FnEntry(name, 2, 2, { ev, args => fnPermut(ev, args, true) }))
+        case "MULTINOMIAL" => Some(FnEntry(name, 1, -1, { ev, args => fnMultinomial(ev, args) }))
+        case "FACTDOUBLE" => Some(FnEntry(name, 1, 1, { ev, args => fnFactDouble(ev, args) }))
+        case "SQRTPI" => Some(FnEntry(name, 1, 1, { ev, args => fnSqrtPi(ev, args) }))
+        case "SUMSQ" => Some(FnEntry(name, 1, -1, { ev, args => fnSumSq(ev, args) }))
+        case "SUMX2MY2" => Some(FnEntry(name, 2, 2, { ev, args => fnSumX2(ev, args, "my") }))
+        case "SUMX2PY2" => Some(FnEntry(name, 2, 2, { ev, args => fnSumX2(ev, args, "py") }))
+        case "SUMXMY2" => Some(FnEntry(name, 2, 2, { ev, args => fnSumX2(ev, args, "my2") }))
+        case "SERIESSUM" => Some(FnEntry(name, 4, 4, { ev, args => fnSeriesSum(ev, args) }))
+        case "CEILING.MATH" => Some(FnEntry(name, 1, 3, { ev, args => fnCeilingMath(ev, args, true, false) }))
+        case "FLOOR.MATH" => Some(FnEntry(name, 1, 3, { ev, args => fnCeilingMath(ev, args, false, false) }))
+        case "CEILING.PRECISE" => Some(FnEntry(name, 1, 2, { ev, args => fnCeilingMath(ev, args, true, true) }))
+        case "FLOOR.PRECISE" => Some(FnEntry(name, 1, 2, { ev, args => fnCeilingMath(ev, args, false, true) }))
+        case "ISO.CEILING" => Some(FnEntry(name, 1, 2, { ev, args => fnCeilingMath(ev, args, true, true) }))
+        case "BASE" => Some(FnEntry(name, 2, 3, { ev, args => fnBaseConvert(ev, args, true) }))
+        case "DECIMAL" => Some(FnEntry(name, 2, 2, { ev, args => fnBaseConvert(ev, args, false) }))
+        case "BITAND" => Some(FnEntry(name, 2, 2, { ev, args => fnBitwise(ev, args, "and") }))
+        case "BITOR" => Some(FnEntry(name, 2, 2, { ev, args => fnBitwise(ev, args, "or") }))
+        case "BITXOR" => Some(FnEntry(name, 2, 2, { ev, args => fnBitwise(ev, args, "xor") }))
+        case "BITLSHIFT" => Some(FnEntry(name, 2, 2, { ev, args => fnBitwise(ev, args, "lshift") }))
+        case "BITRSHIFT" => Some(FnEntry(name, 2, 2, { ev, args => fnBitwise(ev, args, "rshift") }))
+        case "ROMAN" => Some(FnEntry(name, 1, 2, { ev, args => fnRoman(ev, args) }))
+        case "ARABIC" => Some(FnEntry(name, 1, 1, { ev, args => fnArabic(ev, args) }))
+        case "RANDARRAY" => Some(FnEntry(name, 0, 5, { ev, args => fnRandArray(ev, args) }))
+        case "DEC2BIN" => Some(FnEntry(name, 1, 2, { ev, args => fnEngBase(ev, args, "dec2bin") }))
+        case "DEC2HEX" => Some(FnEntry(name, 1, 2, { ev, args => fnEngBase(ev, args, "dec2hex") }))
+        case "DEC2OCT" => Some(FnEntry(name, 1, 2, { ev, args => fnEngBase(ev, args, "dec2oct") }))
+        case "BIN2DEC" => Some(FnEntry(name, 1, 1, { ev, args => fnEngBase(ev, args, "bin2dec") }))
+        case "BIN2HEX" => Some(FnEntry(name, 1, 2, { ev, args => fnEngBase(ev, args, "bin2hex") }))
+        case "BIN2OCT" => Some(FnEntry(name, 1, 2, { ev, args => fnEngBase(ev, args, "bin2oct") }))
+        case "HEX2BIN" => Some(FnEntry(name, 1, 2, { ev, args => fnEngBase(ev, args, "hex2bin") }))
+        case "HEX2DEC" => Some(FnEntry(name, 1, 1, { ev, args => fnEngBase(ev, args, "hex2dec") }))
+        case "HEX2OCT" => Some(FnEntry(name, 1, 2, { ev, args => fnEngBase(ev, args, "hex2oct") }))
+        case "OCT2BIN" => Some(FnEntry(name, 1, 2, { ev, args => fnEngBase(ev, args, "oct2bin") }))
+        case "OCT2DEC" => Some(FnEntry(name, 1, 1, { ev, args => fnEngBase(ev, args, "oct2dec") }))
+        case "OCT2HEX" => Some(FnEntry(name, 1, 2, { ev, args => fnEngBase(ev, args, "oct2hex") }))
+        case "DELTA" => Some(FnEntry(name, 1, 2, { ev, args => fnDeltaStep(ev, args, true) }))
+        case "GESTEP" => Some(FnEntry(name, 1, 2, { ev, args => fnDeltaStep(ev, args, false) }))
+        case "ERF" => Some(FnEntry(name, 1, 1, { ev, args => fnErf(ev, args, false) }))
+        case "ERFC" => Some(FnEntry(name, 1, 1, { ev, args => fnErf(ev, args, true) }))
+        // 统计/信息/文本扩展（M3-c 第二批）
+        case "AVEDEV" => Some(FnEntry(name, 1, -1, { ev, args => fnAveDev(ev, args) }))
+        case "DEVSQ" => Some(FnEntry(name, 1, -1, { ev, args => fnDevSq(ev, args) }))
+        case "GEOMEAN" => Some(FnEntry(name, 1, -1, { ev, args => fnGeoMean(ev, args) }))
+        case "HARMEAN" => Some(FnEntry(name, 1, -1, { ev, args => fnHarMean(ev, args) }))
+        case "KURT" => Some(FnEntry(name, 1, -1, { ev, args => fnSkewKurt(ev, args, "kurt") }))
+        case "SKEW" => Some(FnEntry(name, 1, -1, { ev, args => fnSkewKurt(ev, args, "skew") }))
+        case "SKEW.P" => Some(FnEntry(name, 1, -1, { ev, args => fnSkewKurt(ev, args, "skewp") }))
+        case "TRIMMEAN" => Some(FnEntry(name, 2, 2, { ev, args => fnTrimMean(ev, args) }))
+        case "PERCENTRANK" => Some(FnEntry(name, 2, 3, { ev, args => fnPercentRank(ev, args, false) }))
+        case "PERCENTRANK.INC" => Some(FnEntry(name, 2, 3, { ev, args => fnPercentRank(ev, args, false) }))
+        case "PERCENTRANK.EXC" => Some(FnEntry(name, 2, 3, { ev, args => fnPercentRank(ev, args, true) }))
+        case "QUARTILE.INC" => Some(FnEntry(name, 2, 2, { ev, args => fnQuartile(ev, args) }))
+        case "QUARTILE.EXC" => Some(FnEntry(name, 2, 2, { ev, args => fnQuartileExclusive(ev, args) }))
+        case "STDEVA" => Some(FnEntry(name, 1, -1, { ev, args => fnDevA(ev, args, true) }))
+        case "STDEVPA" => Some(FnEntry(name, 1, -1, { ev, args => fnDevA(ev, args, false) }))
+        case "VARA" => Some(FnEntry(name, 1, -1, { ev, args => fnVarianceA(ev, args, true) }))
+        case "VARPA" => Some(FnEntry(name, 1, -1, { ev, args => fnVarianceA(ev, args, false) }))
+        case "COVARIANCE.P" => Some(FnEntry(name, 2, 2, { ev, args => fnCovariance(ev, args, false) }))
+        case "COVARIANCE.S" => Some(FnEntry(name, 2, 2, { ev, args => fnCovariance(ev, args, true) }))
+        case "FISHER" => Some(FnEntry(name, 1, 1, { ev, args => fnFisher(ev, args, false) }))
+        case "FISHERINV" => Some(FnEntry(name, 1, 1, { ev, args => fnFisher(ev, args, true) }))
+        case "STANDARDIZE" => Some(FnEntry(name, 3, 3, { ev, args => fnStandardize(ev, args) }))
+        case "RSQ" => Some(FnEntry(name, 2, 2, { ev, args => fnR(ev, args, true) }))
+        case "PEARSON" => Some(FnEntry(name, 2, 2, { ev, args => fnR(ev, args, false) }))
+        case "AVERAGEA" => Some(FnEntry(name, 1, -1, { ev, args => fnAverageA(ev, args) }))
+        case "MAXA" => Some(FnEntry(name, 1, -1, { ev, args => fnMinMaxA(ev, args, false) }))
+        case "MINA" => Some(FnEntry(name, 1, -1, { ev, args => fnMinMaxA(ev, args, true) }))
+        case "MODE.SNGL" => Some(FnEntry(name, 1, -1, { ev, args => fnMode(ev, args) }))
+        case "MODE.MULT" => Some(FnEntry(name, 1, -1, { ev, args => fnModeMult(ev, args) }))
+        case "RANK.EQ" => Some(FnEntry(name, 2, 3, { ev, args => fnRank(ev, args) }))
+        case "RANK.AVG" => Some(FnEntry(name, 2, 3, { ev, args => fnRankAvg(ev, args) }))
+        case "ISEVEN" => Some(FnEntry(name, 1, 1, { ev, args => fnIsEvenOdd(ev, args, true) }))
+        case "ISODD" => Some(FnEntry(name, 1, 1, { ev, args => fnIsEvenOdd(ev, args, false) }))
+        case "ISREF" => Some(FnEntry(name, 1, 1, { ev, args => fnIsRef(ev, args) }))
+        case "N" => Some(FnEntry(name, 1, 1, { ev, args => fnN(ev, args) }))
+        case "SHEET" => Some(FnEntry(name, 0, 1, { ev, args => fnSheetCount(ev, args, false) }))
+        case "SHEETS" => Some(FnEntry(name, 0, 1, { ev, args => fnSheetCount(ev, args, true) }))
+        case "TEXTBEFORE" => Some(FnEntry(name, 2, 3, { ev, args => fnTextBeforeAfter(ev, args, true) }))
+        case "TEXTAFTER" => Some(FnEntry(name, 2, 3, { ev, args => fnTextBeforeAfter(ev, args, false) }))
+        case "TEXTSPLIT" => Some(FnEntry(name, 2, 3, { ev, args => fnTextSplit(ev, args) }))
+        case "NUMBERVALUE" => Some(FnEntry(name, 1, 3, { ev, args => fnNumberValue(ev, args) }))
+        case "DOLLAR" => Some(FnEntry(name, 1, 2, { ev, args => fnDollarFixed(ev, args, true) }))
+        case "FIXED" => Some(FnEntry(name, 1, 3, { ev, args => fnDollarFixed(ev, args, false) }))
+        case "WIDECHAR" => Some(FnEntry(name, 1, 1, { ev, args => fnWideAsc(ev, args) }))
+        case "ASC" => Some(FnEntry(name, 1, 1, { ev, args => fnWideAsc(ev, args) }))
+        case "LEFTB" => Some(FnEntry(name, 1, 2, { ev, args => fnByteText(ev, args, "leftb") }))
+        case "RIGHTB" => Some(FnEntry(name, 1, 2, { ev, args => fnByteText(ev, args, "rightb") }))
+        case "MIDB" => Some(FnEntry(name, 3, 3, { ev, args => fnByteText(ev, args, "midb") }))
+        case "LENB" => Some(FnEntry(name, 1, 1, { ev, args => fnByteText(ev, args, "lenb") }))
+        case "VALUETOTEXT" => Some(FnEntry(name, 1, 1, { ev, args => fnValueToText(ev, args, false) }))
+        case "ARRAYTOTEXT" => Some(FnEntry(name, 1, 1, { ev, args => fnValueToText(ev, args, true) }))
+        // 动态/查找/日期/财务扩展（M3-c 第三批）
+        case "SORTBY" => Some(FnEntry(name, 2, -1, { ev, args => fnSortBy(ev, args) }))
+        case "TAKE" => Some(FnEntry(name, 2, 3, { ev, args => fnTakeDrop(ev, args, true) }))
+        case "DROP" => Some(FnEntry(name, 2, 3, { ev, args => fnTakeDrop(ev, args, false) }))
+        case "CHOOSEROWS" => Some(FnEntry(name, 2, -1, { ev, args => fnChooseRowsCols(ev, args, true) }))
+        case "CHOOSECOLS" => Some(FnEntry(name, 2, -1, { ev, args => fnChooseRowsCols(ev, args, false) }))
+        case "EXPAND" => Some(FnEntry(name, 2, 4, { ev, args => fnExpand(ev, args) }))
+        case "VSTACK" => Some(FnEntry(name, 1, -1, { ev, args => fnStack(ev, args, true) }))
+        case "HSTACK" => Some(FnEntry(name, 1, -1, { ev, args => fnStack(ev, args, false) }))
+        case "TOCOL" => Some(FnEntry(name, 1, 1, { ev, args => fnToLine(ev, args, true) }))
+        case "TOROW" => Some(FnEntry(name, 1, 1, { ev, args => fnToLine(ev, args, false) }))
+        case "WRAPROWS" => Some(FnEntry(name, 2, 2, { ev, args => fnWrap(ev, args, true) }))
+        case "WRAPCOLS" => Some(FnEntry(name, 2, 2, { ev, args => fnWrap(ev, args, false) }))
+        case "ADDRESS" => Some(FnEntry(name, 2, 5, { ev, args => fnAddress(ev, args) }))
+        case "AREAS" => Some(FnEntry(name, 1, 1, { ev, args => fnAreas(ev, args) }))
+        case "HYPERLINK" => Some(FnEntry(name, 1, 2, { ev, args => fnHyperlink(ev, args) }))
+        case "XMATCH" => Some(FnEntry(name, 2, 4, { ev, args => fnXMatch(ev, args) }))
+        case "TIME" => Some(FnEntry(name, 3, 3, { ev, args => fnTime(ev, args) }))
+        case "ISOWEEKNUM" => Some(FnEntry(name, 1, 1, { ev, args => fnIsoWeeknum(ev, args) }))
+        case "YEARFRAC" => Some(FnEntry(name, 2, 3, { ev, args => fnYearFrac(ev, args) }))
+        case "NETWORKDAYS.INTL" => Some(FnEntry(name, 2, 4, { ev, args => fnNetworkdaysIntl(ev, args) }))
+        case "WORKDAY.INTL" => Some(FnEntry(name, 2, 4, { ev, args => fnWorkdayIntl(ev, args) }))
+        case "DB" => Some(FnEntry(name, 4, 5, { ev, args => fnDb(ev, args) }))
+        case "DDB" => Some(FnEntry(name, 4, 5, { ev, args => fnDdb(ev, args) }))
+        case "SYD" => Some(FnEntry(name, 4, 4, { ev, args => fnSyd(ev, args) }))
+        case "EFFECT" => Some(FnEntry(name, 2, 2, { ev, args => fnEffectNominal(ev, args, true) }))
+        case "NOMINAL" => Some(FnEntry(name, 2, 2, { ev, args => fnEffectNominal(ev, args, false) }))
+        case "FVSCHEDULE" => Some(FnEntry(name, 2, 2, { ev, args => fnFvSchedule(ev, args) }))
+        case "PDURATION" => Some(FnEntry(name, 3, 3, { ev, args => fnPduration(ev, args) }))
+        case "RRI" => Some(FnEntry(name, 3, 3, { ev, args => fnRri(ev, args) }))
+        case "ISPMT" => Some(FnEntry(name, 4, 4, { ev, args => fnIspmt(ev, args) }))
+        case "CUMIPMT" => Some(FnEntry(name, 6, 6, { ev, args => fnCumPayment(ev, args, false) }))
+        case "CUMPRINC" => Some(FnEntry(name, 6, 6, { ev, args => fnCumPayment(ev, args, true) }))
+        case "DOLLARDE" => Some(FnEntry(name, 2, 2, { ev, args => fnDollarDeFr(ev, args, true) }))
+        case "DOLLARFR" => Some(FnEntry(name, 2, 2, { ev, args => fnDollarDeFr(ev, args, false) }))
+        case "IRR" => Some(FnEntry(name, 1, 2, { ev, args => fnIrr(ev, args) }))
+        case "RATE" => Some(FnEntry(name, 3, 6, { ev, args => fnRate(ev, args) }))
+        case "MIRR" => Some(FnEntry(name, 3, 3, { ev, args => fnMirr(ev, args) }))
+        // 分布/数据库/杂项（M3-c 第四批）
+        case "NORM.DIST" => Some(FnEntry(name, 4, 4, { ev, args => fnNormalDist(ev, args, false) }))
+        case "NORM.INV" => Some(FnEntry(name, 3, 3, { ev, args => fnNormalInv(ev, args, false) }))
+        case "NORM.S.DIST" => Some(FnEntry(name, 2, 2, { ev, args => fnNormalDist(ev, args, true) }))
+        case "NORM.S.INV" => Some(FnEntry(name, 1, 1, { ev, args => fnNormalInv(ev, args, true) }))
+        case "LOGNORM.DIST" => Some(FnEntry(name, 4, 4, { ev, args => fnLogNormalDist(ev, args, false) }))
+        case "LOGNORM.INV" => Some(FnEntry(name, 3, 3, { ev, args => fnLogNormalDist(ev, args, true) }))
+        case "EXPON.DIST" => Some(FnEntry(name, 3, 3, { ev, args => fnExponDist(ev, args) }))
+        case "POISSON.DIST" => Some(FnEntry(name, 3, 3, { ev, args => fnPoissonDist(ev, args) }))
+        case "BINOM.DIST" => Some(FnEntry(name, 4, 4, { ev, args => fnBinomDist(ev, args) }))
+        case "BINOM.INV" => Some(FnEntry(name, 3, 3, { ev, args => fnBinomInv(ev, args) }))
+        case "NEGBINOM.DIST" => Some(FnEntry(name, 4, 4, { ev, args => fnNegBinomDist(ev, args) }))
+        case "HYPGEOM.DIST" => Some(FnEntry(name, 5, 5, { ev, args => fnHypGeomDist(ev, args) }))
+        case "WEIBULL.DIST" => Some(FnEntry(name, 4, 4, { ev, args => fnWeibullDist(ev, args) }))
+        case "GAMMA" => Some(FnEntry(name, 1, 1, { ev, args => fnGamma(ev, args, false) }))
+        case "GAMMALN" => Some(FnEntry(name, 1, 1, { ev, args => fnGamma(ev, args, true) }))
+        case "CONFIDENCE.NORM" => Some(FnEntry(name, 3, 3, { ev, args => fnConfidenceNorm(ev, args) }))
+        case "Z.TEST" => Some(FnEntry(name, 2, 3, { ev, args => fnZTest(ev, args) }))
+        case "PERCENTILE.EXC" => Some(FnEntry(name, 2, 2, { ev, args => fnPercentileExc(ev, args) }))
+        case "PERCENTILE.INC" => Some(FnEntry(name, 2, 2, { ev, args => fnPercentile(ev, args) }))
+        case "FREQUENCY" => Some(FnEntry(name, 2, 2, { ev, args => fnFrequency(ev, args) }))
+        case "DSUM" => Some(FnEntry(name, 3, 3, { ev, args => fnDatabase(ev, args, "sum") }))
+        case "DCOUNT" => Some(FnEntry(name, 3, 3, { ev, args => fnDatabase(ev, args, "count") }))
+        case "DCOUNTA" => Some(FnEntry(name, 3, 3, { ev, args => fnDatabase(ev, args, "counta") }))
+        case "DAVERAGE" => Some(FnEntry(name, 3, 3, { ev, args => fnDatabase(ev, args, "average") }))
+        case "DMAX" => Some(FnEntry(name, 3, 3, { ev, args => fnDatabase(ev, args, "max") }))
+        case "DMIN" => Some(FnEntry(name, 3, 3, { ev, args => fnDatabase(ev, args, "min") }))
+        case "DGET" => Some(FnEntry(name, 3, 3, { ev, args => fnDatabase(ev, args, "get") }))
+        case "DPRODUCT" => Some(FnEntry(name, 3, 3, { ev, args => fnDatabase(ev, args, "product") }))
+        case "DSTDEV" => Some(FnEntry(name, 3, 3, { ev, args => fnDatabase(ev, args, "stdev") }))
+        case "DSTDEVP" => Some(FnEntry(name, 3, 3, { ev, args => fnDatabase(ev, args, "stdevp") }))
+        case "DVAR" => Some(FnEntry(name, 3, 3, { ev, args => fnDatabase(ev, args, "var") }))
+        case "DVARP" => Some(FnEntry(name, 3, 3, { ev, args => fnDatabase(ev, args, "varp") }))
+        case "SUBTOTAL" => Some(FnEntry(name, 2, -1, { ev, args => fnSubtotal(ev, args) }))
+        case "AGGREGATE" => Some(FnEntry(name, 3, -1, { ev, args => fnAggregate(ev, args) }))
+        case "CONVERT" => Some(FnEntry(name, 3, 3, { ev, args => fnConvert(ev, args) }))
+        case "ERF.PRECISE" => Some(FnEntry(name, 1, 1, { ev, args => fnErf(ev, args, false) }))
+        case "ERFC.PRECISE" => Some(FnEntry(name, 1, 1, { ev, args => fnErf(ev, args, true) }))
+        case "ISFORMULA" => Some(FnEntry(name, 1, 1, { ev, args => fnFormulaText(ev, args, false) }))
+        case "FORMULATEXT" => Some(FnEntry(name, 1, 1, { ev, args => fnFormulaText(ev, args, true) }))
+        case "CELL" => Some(FnEntry(name, 1, 2, { ev, args => fnCell(ev, args) }))
+        case "INFO" => Some(FnEntry(name, 1, 1, { ev, args => fnInfo(ev, args) }))
+        case "MUNIT" => Some(FnEntry(name, 1, 1, { ev, args => fnMunit(ev, args) }))
+        case "MDETERM" => Some(FnEntry(name, 1, 1, { ev, args => fnMdeterm(ev, args) }))
+        case "MINVERSE" => Some(FnEntry(name, 1, 1, { ev, args => fnMinverse(ev, args) }))
+        case "XNPV" => Some(FnEntry(name, 3, 3, { ev, args => fnXnpv(ev, args) }))
+        case "XIRR" => Some(FnEntry(name, 2, 3, { ev, args => fnXirr(ev, args) }))
+        case "TBILLPRICE" => Some(FnEntry(name, 3, 3, { ev, args => fnTbillPrice(ev, args) }))
+        case "SEARCHB" => Some(FnEntry(name, 2, 3, { ev, args => fnFindSearch(ev, args, false) }))
+        case "FINDB" => Some(FnEntry(name, 2, 3, { ev, args => fnFindSearch(ev, args, true) }))
+        case "REPLACEB" => Some(FnEntry(name, 4, 4, { ev, args => fnReplace(ev, args) }))
+        case "PHONETIC" => Some(FnEntry(name, 1, 1, { ev, args => fnPhonetic(ev, args) }))
+        case "COUNTUNIQUE" => Some(FnEntry(name, 1, -1, { ev, args => fnCountUnique(ev, args) }))
+        case "PROB" => Some(FnEntry(name, 3, 4, { ev, args => fnProb(ev, args) }))
         case _ => None<FnEntry>
     }
 }
@@ -218,6 +425,51 @@ internal let EXTENDED_FUNCTION_NAMES: Array<String> = [
     "DAYS360", "NETWORKDAYS", "WORKDAY",
     "PMT", "FV", "PV", "NPER", "SLN", "NPV", "IPMT", "PPMT",
     "ISERR", "NA", "TYPE", "ERROR.TYPE"
+]
+
+/** M3-c 第一批：数学/工程。 */
+internal let MATH_ENG_FUNCTION_NAMES: Array<String> = [
+    "ACOS", "ACOSH", "ASIN", "ASINH", "ATAN", "ATANH", "ATAN2", "COSH", "SINH", "TANH",
+    "SEC", "SECH", "CSC", "CSCH", "COT", "COTH", "EVEN", "ODD", "QUOTIENT", "COMBIN",
+    "COMBINA", "PERMUT", "PERMUTATIONA", "MULTINOMIAL", "FACTDOUBLE", "SQRTPI", "SUMSQ",
+    "SUMX2MY2", "SUMX2PY2", "SUMXMY2", "SERIESSUM", "CEILING.MATH", "FLOOR.MATH",
+    "CEILING.PRECISE", "FLOOR.PRECISE", "ISO.CEILING", "BASE", "DECIMAL", "BITAND", "BITOR",
+    "BITXOR", "BITLSHIFT", "BITRSHIFT", "ROMAN", "ARABIC", "RANDARRAY",
+    "DEC2BIN", "DEC2HEX", "DEC2OCT", "BIN2DEC", "BIN2HEX", "BIN2OCT", "HEX2BIN", "HEX2DEC",
+    "HEX2OCT", "OCT2BIN", "OCT2DEC", "OCT2HEX", "DELTA", "GESTEP", "ERF", "ERFC"
+]
+
+/** M3-c 第二批：统计/信息/文本。 */
+internal let STAT_TEXT_FUNCTION_NAMES: Array<String> = [
+    "AVEDEV", "DEVSQ", "GEOMEAN", "HARMEAN", "KURT", "SKEW", "SKEW.P", "TRIMMEAN",
+    "PERCENTRANK", "PERCENTRANK.INC", "PERCENTRANK.EXC", "QUARTILE.INC", "QUARTILE.EXC",
+    "STDEVA", "STDEVPA", "VARA", "VARPA", "COVARIANCE.P", "COVARIANCE.S", "FISHER",
+    "FISHERINV", "STANDARDIZE", "RSQ", "PEARSON", "AVERAGEA", "MAXA", "MINA", "MODE.SNGL",
+    "MODE.MULT", "RANK.EQ", "RANK.AVG", "ISEVEN", "ISODD", "ISREF", "N", "SHEET", "SHEETS",
+    "TEXTBEFORE", "TEXTAFTER", "TEXTSPLIT", "NUMBERVALUE", "DOLLAR", "FIXED", "WIDECHAR",
+    "ASC", "LEFTB", "RIGHTB", "MIDB", "LENB", "VALUETOTEXT", "ARRAYTOTEXT"
+]
+
+/** M3-c 第三批：动态/查找/日期/财务。 */
+internal let DYN_FIN_FUNCTION_NAMES: Array<String> = [
+    "SORTBY", "TAKE", "DROP", "CHOOSEROWS", "CHOOSECOLS", "EXPAND", "VSTACK", "HSTACK",
+    "TOCOL", "TOROW", "WRAPROWS", "WRAPCOLS", "ADDRESS", "AREAS", "HYPERLINK", "XMATCH",
+    "TIME", "ISOWEEKNUM", "YEARFRAC", "NETWORKDAYS.INTL", "WORKDAY.INTL",
+    "DB", "DDB", "SYD", "EFFECT", "NOMINAL", "FVSCHEDULE", "PDURATION", "RRI", "ISPMT",
+    "CUMIPMT", "CUMPRINC", "DOLLARDE", "DOLLARFR", "IRR", "RATE", "MIRR"
+]
+
+/** M3-c 第四批：分布/数据库/杂项。 */
+internal let DIST_DB_FUNCTION_NAMES: Array<String> = [
+    "NORM.DIST", "NORM.INV", "NORM.S.DIST", "NORM.S.INV", "LOGNORM.DIST", "LOGNORM.INV",
+    "EXPON.DIST", "POISSON.DIST", "BINOM.DIST", "BINOM.INV", "NEGBINOM.DIST", "HYPGEOM.DIST",
+    "WEIBULL.DIST", "GAMMA", "GAMMALN", "CONFIDENCE.NORM", "Z.TEST", "PERCENTILE.EXC",
+    "PERCENTILE.INC", "FREQUENCY",
+    "DSUM", "DCOUNT", "DCOUNTA", "DAVERAGE", "DMAX", "DMIN", "DGET", "DPRODUCT", "DSTDEV",
+    "DSTDEVP", "DVAR", "DVARP",
+    "SUBTOTAL", "AGGREGATE", "CONVERT", "ERF.PRECISE", "ERFC.PRECISE", "ISFORMULA",
+    "FORMULATEXT", "CELL", "INFO", "MUNIT", "MDETERM", "MINVERSE", "XNPV", "XIRR",
+    "TBILLPRICE", "SEARCHB", "FINDB", "REPLACEB", "PHONETIC", "COUNTUNIQUE", "PROB"
 ]
 
 /** 当前注册的函数个数（测试用）。 */

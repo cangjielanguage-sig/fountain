@@ -29,6 +29,9 @@ internal interface CalcResolver {
     func usedBounds(sheet: String): (Int64, Int64)
 
     func date1904(): Bool
+
+    /** 单元格的公式原文（不含 `=`）；不是公式返回 `None`。 */
+    func formulaAt(sheet: String, row: Int64, col: Int64): ?String
 }
 
 /**
@@ -122,7 +125,7 @@ internal class Evaluator {
 
     /** `[0,1)` 伪随机数；同一次求值内可重复（设计 7.5.2）。 */
     public func nextRandom(): Float64 {
-        this.randomState = (this.randomState * 1_103_515_245 + 12_345) & 0x7FFF_FFFF_FFFF_FFFF
+        this.randomState = (this.randomState * 1_103_515_245 + 12_345) & 0x7FFF_FFFF
         Float64(this.randomState % 100_000_000) / 100_000_000.0
     }
 
