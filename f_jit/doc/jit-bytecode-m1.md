@@ -2129,7 +2129,7 @@ let engine = if (opts.jit == JitMode.Off) {
 | `EQ_I`–`GE_I` | `cmp` + `sete/ne/l/le/g/ge` + `movzx` | `cmp` + `cset eq/ne/lt/le/gt/ge` |
 | `EQ_F`–`GE_F` | `cmpsd` 谓词：EQ=0、LT=1、LE=2、NE=4；GT/GE = **交换操作数**后 1/2（无序 → 0，§11.3）；结果取低位 `& 1` | `fcmp d0,d1; cset eq/ne/mi/ls/gt/ge`（无序语义同 §11.3——`gt/ge/mi/ls` 对 NaN 恒 false、`ne` 恒 true） |
 | `CMP_F` | ——**汇编器禁发**（§11.3） | 同 |
-| `NOT_B` | `xor qword [rsp],1` | `ldr x11,[sp]; eor x11,x11,#1; str x11,[sp]` |
+| `NOT_B` | `xor qword [rsp],1` | `ldr x9,[x20]; eor x9,x9,#1; str x9,[x20]`（机器字由 `A64Emitter.eorImm1` 构造） |
 | `AND_B`/`OR_B`/`XOR_B` | `mov rax,[rsp]; add rsp,8; and/or/xor [rsp],rax` | `ldr x10,[sp],#8; ldr x9,[sp]; and/orr/eor x9,x9,x10; str x9,[sp]` |
 | `BAND_I`/`BOR_I`/`BXOR_I` | 同上 | 同上（`and/orr/eor`） |
 | `BNOT_I` | `not qword [rsp]` | `ldr x9,[sp]; mvn x9,x9; str x9,[sp]` |
