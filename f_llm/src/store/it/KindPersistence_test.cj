@@ -28,7 +28,7 @@ import fountain::f_llm.store.*
 import fountain::f_llm.store.mysql.*
 import fountain::f_llm.store.postgres.*
 
-/** P1：预定义 kind 补种落库，且重复补种幂等。 */
+/** P1/P2：预定义补种幂等、自定义 kind 落库并能在重新 attach 后恢复。 */
 @Test
 public class KindPersistenceTest {
     private static let PG_URL = 'postgres://fllm_test:fllm_test@127.0.0.1:5432/fllm_test'
@@ -44,8 +44,7 @@ public class KindPersistenceTest {
         }
     }
 
-    @TestCase
-    func testPostgresSeedIsIdempotent(): Unit {
+    private func pgExecutor(): ?SqlExecutor {
         try{
             registerPostgresDriver()
             let driver = DriverManager.getDriver('postgres').getOrThrow()
@@ -62,21 +61,14 @@ public class KindPersistenceTest {
                   PRIMARY KEY (user_id, kind)
                 )
             ''').update
-
-            let persistence = PostgresKindPersistence()
-            MemoryKinds.seed(persistence)
-            MemoryKinds.seed(persistence)
-
-            @Expect(countOf(executor), 7)
-            @Expect(persistence.has('fact'), true)
-            @Expect(persistence.has('not-exist'), false)
+            Some(executor)
         }catch(e: Exception){
             println("SKIP KindPersistenceTest(PG): ${e.message}")
+            None
         }
     }
 
-    @TestCase
-    func testMySqlSeedIsIdempotent(): Unit {
+    private func mysqlExecutor(): ?SqlExecutor {
         try{
             registerMysqlDriver()
             let driver = DriverManager.getDriver('mysql').getOrThrow()
@@ -93,16 +85,79 @@ public class KindPersistenceTest {
                   PRIMARY KEY (user_id, kind)
                 )
             ''').update
-
-            let persistence = MySqlKindPersistence()
-            MemoryKinds.seed(persistence)
-            MemoryKinds.seed(persistence)
-
-            @Expect(countOf(executor), 7)
-            @Expect(persistence.has('session'), true)
-            @Expect(persistence.has('not-exist'), false)
+            Some(executor)
         }catch(e: Exception){
             println("SKIP KindPersistenceTest(MySQL): ${e.message}")
+            None
+        }
+    }
+
+    @TestCase
+    func testPostgresSeedIsIdempotent(): Unit {
+        match(pgExecutor()){
+            case Some(executor) =>
+                let persistence = PostgresKindPersistence()
+                MemoryKinds.seed(persistence)
+                MemoryKinds.seed(persistence)
+                @Expect(countOf(executor), 7)
+                @Expect(persistence.has('fact'), true)
+                @Expect(persistence.has('not-exist'), false)
+            case None => ()
+        }
+    }
+
+    @TestCase
+    func testMySqlSeedIsIdempotent(): Unit {
+        match(mysqlExecutor()){
+            case Some(executor) =>
+                let persistence = MySqlKindPersistence()
+                MemoryKinds.seed(persistence)
+                MemoryKinds.seed(persistence)
+                @Expect(countOf(executor), 7)
+                @Expect(persistence.has('session'), true)
+                @Expect(persistence.has('not-exist'), false)
+            case None => ()
+        }
+    }
+
+    @TestCase
+    func testPostgresCustomKindPersists(): Unit {
+        match(pgExecutor()){
+            case Some(_) =>
+                let persistence = PostgresKindPersistence()
+                MemoryKinds.resetForTest()
+                MemoryKinds.attach(persistence)
+
+                @Expect(MemoryKinds.register(42, 'pg-custom'), true)
+                @Expect(persistence.allCustom().get(42).getOrThrow().size, 1)
+
+                // 重新 attach = 从库里重载，内存清空后仍应恢复
+                MemoryKinds.attach(persistence)
+                @Expect(MemoryKinds.validate(42, 'pg-custom'), true)
+
+                @Expect(MemoryKinds.remove(42, 'pg-custom'), true)
+                MemoryKinds.attach(persistence)
+                @Expect(MemoryKinds.validate(42, 'pg-custom'), false)
+            case None => ()
+        }
+    }
+
+    @TestCase
+    func testMySqlCustomKindPersists(): Unit {
+        match(mysqlExecutor()){
+            case Some(_) =>
+                let persistence = MySqlKindPersistence()
+                MemoryKinds.resetForTest()
+                MemoryKinds.attach(persistence)
+
+                @Expect(MemoryKinds.register(43, 'my-custom'), true)
+                MemoryKinds.attach(persistence)
+                @Expect(MemoryKinds.validate(43, 'my-custom'), true)
+
+                @Expect(MemoryKinds.remove(43, 'my-custom'), true)
+                MemoryKinds.attach(persistence)
+                @Expect(MemoryKinds.validate(43, 'my-custom'), false)
+            case None => ()
         }
     }
 }

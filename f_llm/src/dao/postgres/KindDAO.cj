@@ -48,4 +48,28 @@ public interface PostgresKindDAO <: RootDAO {
         '''
         executor.setSql(sql).update
     }
+
+    func kindAllCustom(): ArrayList<HashMap<String, Any>> {
+        executor.setSql(
+            'SELECT user_id, kind FROM llm_memory_kind WHERE predefined = false ORDER BY user_id, kind'
+        ).mapList()
+    }
+
+    func kindInsertCustom(userId: Int64, kind: String, weight: Float64): Unit {
+        let sql = '''
+            INSERT INTO llm_memory_kind (user_id, kind, predefined, weight)
+            VALUES (${arg(userId)}, ${arg(kind)}, false, ${arg(weight)})
+            ON CONFLICT (user_id, kind) DO NOTHING
+        '''
+        executor.setSql(sql).update
+    }
+
+    func kindDeleteCustom(userId: Int64, kind: String): Int64 {
+        let sql = '''
+            DELETE FROM llm_memory_kind
+            WHERE user_id = ${arg(userId)} AND kind = ${arg(kind)} AND predefined = false
+        '''
+        let deleted = executor.setSql(sql).update
+        deleted
+    }
 }

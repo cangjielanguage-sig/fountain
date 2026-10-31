@@ -1514,6 +1514,8 @@ Config.set<String>([
 - 业务侧 `Memory` 首次写摘要时也会调用一次 `wire()`（幂等），因此即便应用忘了显式接线，摘要也不会静默丢失（失败会打 `warn`）；
 - `wire()` 还会把 7 个预定义记忆种类补种到 `llm_memory_kind`（`user_id=0`，权重取自 `MemoryKinds.weightOf`）；
   数据库不可用时只告警、不阻断启动；
+- 自定义记忆种类同样落库：`MemoryKinds.register/remove` 会写/删 `llm_memory_kind`（`predefined=false`），
+  启动 `attach()` 时按 `user_id` 载回内存；写库失败只告警，不阻断业务；
 - `wire()` 同时注册元数据族三个实现（`postgres`/`mysql`/`f_store`），并只初始化一次 bean 容器条件
   （`BeanFactory.afterRegistered()`）；`MetaStoreAdapter` 严格按 `llm_metaStore` 分支——
   `f_store` 直接构造，`postgres`/`mysql` 必须有对应 bean，未知值或 bean 缺失都抛错，**不再静默落到 f_store**；

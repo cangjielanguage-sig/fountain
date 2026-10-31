@@ -17,16 +17,27 @@ package fountain::f_llm.store
 
 import std.collection.*
 
+import fountain::f_log.*
+
 /**
  * 记忆种类注册表（2.2）。
  *
  * 预定义 7 值固化在代码；自定义 kind 归属用户，进程内先落内存，
  * 2.3 接入 `llm_memory_kind` 后再做启动补种与持久化。
  */
-/** 种类持久化 SPI：PG/MySQL/f_store 各自实现，`seed` 只依赖它 */
+/**
+ * 种类持久化 SPI：PG/MySQL 各自实现。
+ *
+ * - `has` / `insert`：预定义 7 种补种（P1）；
+ * - `allCustom` / `insertCustom` / `deleteCustom`：用户自定义 kind（P2，挂在 `user_id` 上）。
+ */
 public interface KindPersistence {
     func has(kind: String): Bool
     func insert(kind: String, predefined: Bool): Unit
+
+    func allCustom(): HashMap<Int64, ArrayList<String>>
+    func insertCustom(userId: Int64, kind: String): Unit
+    func deleteCustom(userId: Int64, kind: String): Unit
 }
 
 public class MemoryKinds {
@@ -39,6 +50,29 @@ public class MemoryKinds {
     public static let SESSION = 'session'
 
     private static let CUSTOM = HashMap<Int64, ArrayList<String>>()
+    private static var persistence: ?KindPersistence = None
+    private static let log = LoggerFactory.getLogger<MemoryKinds>()
+
+    /**
+     * 绑定持久化并从库里载入自定义 kind（P2）：启动时调用一次；
+     * 之后 `register` / `remove` 会同步写库。
+     */
+    public static func attach(value: KindPersistence): Unit {
+        persistence = Some(value)
+        CUSTOM.clear()
+        for((userId, kinds) in value.allCustom()){
+            let kept = ArrayList<String>()
+            for(kind in kinds){
+                if(contains(predefined(), kind)){
+                    continue
+                }
+                kept.add(kind)
+            }
+            if(!kept.isEmpty()){
+                CUSTOM[userId] = kept
+            }
+        }
+    }
 
     public static func predefined(): ArrayList<String> {
         let kinds = ArrayList<String>()
@@ -84,7 +118,33 @@ public class MemoryKinds {
                 custom.add(kind)
                 CUSTOM[userId] = custom
         }
+        persistInsert(userId, kind)
         true
+    }
+
+    /** 写库失败不阻断内存登记，只告警（kind 注册属辅助能力） */
+    private static func persistInsert(userId: Int64, kind: String): Unit {
+        match(persistence){
+            case Some(store) =>
+                try{
+                    store.insertCustom(userId, kind)
+                }catch(e: Exception){
+                    log.warn('custom kind persist failed: ${e.message}')
+                }
+            case None => ()
+        }
+    }
+
+    private static func persistDelete(userId: Int64, kind: String): Unit {
+        match(persistence){
+            case Some(store) =>
+                try{
+                    store.deleteCustom(userId, kind)
+                }catch(e: Exception){
+                    log.warn('custom kind delete failed: ${e.message}')
+                }
+            case None => ()
+        }
     }
 
     /** 只删自己的自定义 kind；预定义抛异常；不存在或属于他人返回 false */
@@ -104,6 +164,7 @@ public class MemoryKinds {
                     }
                 }
                 CUSTOM[userId] = kept
+                persistDelete(userId, kind)
                 true
             case None => false
         }

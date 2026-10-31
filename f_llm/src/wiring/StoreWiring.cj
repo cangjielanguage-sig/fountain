@@ -74,8 +74,14 @@ public class StoreWiring {
         }
         try{
             match(StoreSettings.load().memoryStore){
-                case 'postgres' => MemoryKinds.seed(PostgresKindPersistence())
-                case 'mysql' => MemoryKinds.seed(MySqlKindPersistence())
+                case 'postgres' =>
+                    let persistence = PostgresKindPersistence()
+                    MemoryKinds.seed(persistence)
+                    MemoryKinds.attach(persistence)
+                case 'mysql' =>
+                    let persistence = MySqlKindPersistence()
+                    MemoryKinds.seed(persistence)
+                    MemoryKinds.attach(persistence)
                 case _ => ()
             }
             kindsSeeded = true

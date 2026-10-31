@@ -42,4 +42,27 @@ public interface MySqlKindDAO <: RootDAO {
         '''
         executor.setSql(sql).update
     }
+
+    func kindAllCustom(): ArrayList<HashMap<String, Any>> {
+        executor.setSql(
+            'SELECT user_id, kind FROM llm_memory_kind WHERE predefined = 0 ORDER BY user_id, kind'
+        ).mapList()
+    }
+
+    func kindInsertCustom(userId: Int64, kind: String, weight: Float64): Unit {
+        let sql = '''
+            INSERT IGNORE INTO llm_memory_kind (user_id, kind, predefined, weight)
+            VALUES (${arg(userId)}, ${arg(kind)}, 0, ${arg(weight)})
+        '''
+        executor.setSql(sql).update
+    }
+
+    func kindDeleteCustom(userId: Int64, kind: String): Int64 {
+        let sql = '''
+            DELETE FROM llm_memory_kind
+            WHERE user_id = ${arg(userId)} AND kind = ${arg(kind)} AND predefined = 0
+        '''
+        let deleted = executor.setSql(sql).update
+        deleted
+    }
 }

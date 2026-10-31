@@ -22,6 +22,7 @@ import std.unittest.testmacro.*
 class FakeKindPersistence <: KindPersistence {
     public var inserted: Int64 = 0
     private let rows = HashMap<String, Bool>()
+    private let custom = HashMap<Int64, ArrayList<String>>()
 
     public func has(kind: String): Bool {
         rows.contains(kind)
@@ -30,6 +31,40 @@ class FakeKindPersistence <: KindPersistence {
     public func insert(kind: String, predefined: Bool): Unit {
         rows[kind] = predefined
         inserted++
+    }
+
+    public func allCustom(): HashMap<Int64, ArrayList<String>> {
+        let copy = HashMap<Int64, ArrayList<String>>()
+        for((userId, kinds) in custom){
+            let items = ArrayList<String>()
+            items.add(all: kinds)
+            copy[userId] = items
+        }
+        copy
+    }
+
+    public func insertCustom(userId: Int64, kind: String): Unit {
+        match(custom.get(userId)){
+            case Some(kinds) => kinds.add(kind)
+            case None =>
+                let kinds = ArrayList<String>()
+                kinds.add(kind)
+                custom[userId] = kinds
+        }
+    }
+
+    public func deleteCustom(userId: Int64, kind: String): Unit {
+        match(custom.get(userId)){
+            case Some(kinds) =>
+                let kept = ArrayList<String>()
+                for(item in kinds){
+                    if(item != kind){
+                        kept.add(item)
+                    }
+                }
+                custom[userId] = kept
+            case None => ()
+        }
     }
 }
 

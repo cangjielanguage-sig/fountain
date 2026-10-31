@@ -32,4 +32,55 @@ public class MySqlKindPersistence <: KindPersistence & RootService {
     public func insert(kind: String, predefined: Bool): Unit {
         dao<MySqlKindDAO>('mysql').kindInsert(kind, predefined, MemoryKinds.weightOf(kind))
     }
+
+    public func allCustom(): HashMap<Int64, ArrayList<String>> {
+        let result = HashMap<Int64, ArrayList<String>>()
+        for(row in dao<MySqlKindDAO>('mysql').kindAllCustom()){
+            let userId = kindIntOf(row.get('user_id'))
+            let kind = kindTextOf(row.get('kind'))
+            if(kind.isEmpty()){
+                continue
+            }
+            match(result.get(userId)){
+                case Some(kinds) => kinds.add(kind)
+                case None =>
+                    let kinds = ArrayList<String>()
+                    kinds.add(kind)
+                    result[userId] = kinds
+            }
+        }
+        result
+    }
+
+    public func insertCustom(userId: Int64, kind: String): Unit {
+        dao<MySqlKindDAO>('mysql').kindInsertCustom(userId, kind, MemoryKinds.weightOf(kind))
+    }
+
+    public func deleteCustom(userId: Int64, kind: String): Unit {
+        dao<MySqlKindDAO>('mysql').kindDeleteCustom(userId, kind)
+        ()
+    }
+}
+
+private func kindTextOf(value: ?Any): String {
+    match(value){
+        case Some(raw) =>
+            match(raw){
+                case text: String => text
+                case _ => ''
+            }
+        case None => ''
+    }
+}
+
+private func kindIntOf(value: ?Any): Int64 {
+    match(value){
+        case Some(raw) =>
+            match(raw){
+                case number: Int64 => number
+                case number: Int32 => Int64(number)
+                case _ => 0
+            }
+        case None => 0
+    }
 }

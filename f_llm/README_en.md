@@ -1537,6 +1537,8 @@ Config.set<String>([
   does not silently drop summaries (failures are logged as `warn`);
 - `wire()` also seeds the 7 predefined memory kinds into `llm_memory_kind` (`user_id=0`, weights from
   `MemoryKinds.weightOf`); an unavailable database only logs a warning and never blocks startup;
+- Custom memory kinds are persisted too: `MemoryKinds.register/remove` writes/deletes rows in `llm_memory_kind`
+  (`predefined=false`), and `attach()` reloads them by `user_id` at startup; persistence failures only log a warning;
 - `wire()` registers the three metadata implementations (`postgres` / `mysql` / `f_store`) and initializes the
   bean conditions once (`BeanFactory.afterRegistered()`). `MetaStoreAdapter` branches strictly on `llm_metaStore`:
   `f_store` builds the local store, `postgres` / `mysql` require a matching bean, and unknown values or a missing
