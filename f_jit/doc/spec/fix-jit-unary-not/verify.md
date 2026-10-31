@@ -72,20 +72,38 @@ cjpm test --filter "A64NotBEncoding*" --no-capture-output
 N/bnot-2: 解释器绝对值不符 —— 期望 -3，实得 0；原生后端实得 2814718899…
 ```
 
-## 4 x86 证据状态
+## 4 x86 证据（已补齐，2026-10-31）
 
-**无执行证据（本机为 Linux aarch64）**，如实记录：
+**执行环境**（原生 x86_64 Linux，WSL2）：
 
-- `NativeRunner` 由 `@When` 条件编译决定后端：x86_64 主机上同一份
-  `UnaryNotDiff_test` 自动走 `BackendX86_64`，`DiffEngine.BackendX86_64`
-  会出现在引擎名里。
-- 本机 `DiffSession([InterpRunner(), NativeRunner()])` 只注册 `Interp × AArch64`，
-  故跳过统计为 `0`、**不产生** `BackendX86_64` 条目——`skipped()` 计的是「注册了但
-  不可用」的 runner，不是「本机没有该架构」。因此 N3.4 的验收项「跳过统计里出现
-  `BackendX86_64`」在本机**不成立**，x86 侧只能由 CI 矩阵补齐。
-- x86 的静态编码（`48 83 34 24 01` = `xor qword [rsp],1`）本次未改动，N0.3 抽样已核
-  对其字节正确；本次只新增 AArch64 侧断言，未新增 x86 用例（design §4.2 明确「x86
-  证据不另写文件」）。
+```
+Linux LAPTOP-U0CFCO9P 6.18.54.1-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Tue Oct  6 19:13:07 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+Cangjie Compiler: 1.3.0-alpha.20261015001050 (cjnative)
+Target: x86_64-unknown-linux-gnu
+```
+
+**代码基线**：`sts/1.3.x@05d0ed6f`（已含 `fix-jit-unary-not` 的 `f5498e55`；工作树 `.worktrees/f_jit`）。
+
+**全量结果**（`cjpm test`，`f_jit` 模块）：
+
+| 运行 | 汇总 |
+|---|---|
+| 1 | TOTAL 1171 / **PASSED 1171** / FAILED 0 / SKIPPED 0 |
+| 2（抓明细） | TOTAL 1171 / PASSED 1170 / FAILED 1 —— 唯一失败为 `PerfOverride_test.overrideBeatsReflectionEndToEnd`（`PERF-OVERRIDE 净成本未达标 ref=12165ns ov=18665ns`），属性能阈值抖动、与 `!` 无关；同批第 1 次全绿 |
+
+**`!` 矩阵（两次全量中均绿）**：
+
+| 测试类 | x86_64 结果 |
+|---|---|
+| `UnaryNotDiff_test` | **10/10 绿**：`bitwiseNotOnInt64`（`!2=-3`、`!0=-1`、`!-1=0`、`Int64.max/min` 位反）、`booleanArgument`（`!true=false`）、`doubleNegation`、`logicalCombination`、`regexNotMatch`、`comparisonFamily/Boundary/Extremes`、`noNotControl`、`reportedCase` |
+| `A64NotBEncoding_test` | 2/2 绿（纯编码断言，与宿主架构无关） |
+| `UnaryNotShape_test` | 6/6 绿（`int64OperandLowersToBitNot`、`boolOperandLowersToLogicalNot`、`nonBoolNonIntOperandIsRejected`、`astShapeOfReportedCase`、`bytecodeShapeOfReportedCase`、`bytecodeShapeOfRegexNegation`） |
+
+**引擎参与判据**：`UnaryNotDiff_test` 先要求 `outs.size >= 2`（否则 `@Fail('可用引擎只有 N 个')`）、再断言 `session.ran() >= 1`；10 条全绿 ⇒ x86 主机上 `NativeRunner` 被条件编译为 `BackendX86_64` 并**真实参与**差分，`!` 在 x86 机器码上的语义与本机（AArch64）结论一致。
+
+**验收项订正**：原「跳过统计里出现 `BackendX86_64`」在 x86 主机上不适用——`skipped()` 计的是「注册了但不可用」的 runner，x86 上两个 runner 都可用，故 `SKIPPED = 0`。N3.4 的实际判据改为「x86 主机上 `UnaryNotDiff_test` 全绿且未出现『可用引擎只有 1 个』失败」，本次已满足。
+
+**本机（aarch64）侧记录保持原样**：`DiffSession([InterpRunner(), NativeRunner()])` 只注册 `Interp × AArch64`，跳过数为 0、不产生 `BackendX86_64` 条目。x86 静态编码（`48 83 34 24 01` = `xor qword [rsp],1`）本次未改动，N0.3 抽样已核对其字节正确。
 
 ## 5 N4.1 同段抽样审计（`0x50–0x6E`）
 

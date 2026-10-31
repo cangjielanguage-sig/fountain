@@ -1,7 +1,10 @@
 # x86_64 端验证指引（N3.4）
 
 > 本文件用于在原生 x86_64 Linux 上补齐 `fix-jit-unary-not` 的第三引擎证据。
-> AArch64 侧已由 `verify.md` 覆盖；x86 侧需要在本机之外执行一次。
+> AArch64 侧已由 `verify.md` 覆盖。
+>
+> **已执行并回填（2026-10-31）**：WSL2 x86_64 + `cjc 1.3.0-alpha.20261015001050`，基线 `sts/1.3.x@05d0ed6f`；
+> 结果见 `verify.md` §4（全量 1171 首跑全绿，`UnaryNotDiff_test` 10/10 绿、`SKIPPED = 0`）。
 
 ## 1. 前置
 

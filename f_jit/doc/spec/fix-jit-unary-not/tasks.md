@@ -32,8 +32,8 @@
 - [x] N3.1 新增用例全绿：N1.1–N1.3 三组全通过。验收：`!` 全部矩阵在 AArch64 与解释器上逐位一致，`n = 49` 为 `0`。
 - [x] N3.2 无 `!` 对照：`{ n: Int64 => n < 50 }` 在 49 / 50 上仍为 `1 / 0`，与修复前逐位相同。验收：比较语义零变化。
 - [x] N3.3 全量零回归：跑既有全量（M1–M3 含差分最小集），用例数与 N0.1 对照，任何既有用例由绿转红按阻塞缺陷处理。验收：失败数 0。
-- [ ] N3.4 x86 证据：在原生 x86_64 主机（或 CI 矩阵）跑同一 `UnaryNotDiff_test`，确认 x86 与本机结论一致（修复前后都应绿，因为 x86 本来就对）；AArch64 主机上留档「x86 跳过 / 无证据」。验收：跳过统计里出现 `BackendX86_64` 且不计通过。
-  > **未完成（环境所限）**：本机为 Linux aarch64，`DiffSession([InterpRunner(), NativeRunner()])` 只注册 `Interp × AArch64`，跳过计数为 0、不会出现 `BackendX86_64` 条目。x86 执行证据需 CI 矩阵；静态编码（`48 83 34 24 01`）本次未改动且 N0.3 已核对。详见 `doc/spec/fix-jit-unary-not/verify.md` §4。
+- [x] N3.4 x86 证据：在原生 x86_64 主机（或 CI 矩阵）跑同一 `UnaryNotDiff_test`，确认 x86 与本机结论一致（修复前后都应绿，因为 x86 本来就对）；AArch64 主机上留档「x86 跳过 / 无证据」。验收：x86 主机上 `UnaryNotDiff_test` 全绿且未出现「可用引擎只有 1 个」失败（原「跳过统计出现 `BackendX86_64`」的表述已订正——x86 上两个 runner 均可用，`SKIPPED = 0`）。
+  > **已回填（2026-10-31）**：WSL2 x86_64（`cjc 1.3.0-alpha.20261015001050`，`Target: x86_64-unknown-linux-gnu`），基线 `sts/1.3.x@05d0ed6f`。全量 `cjpm test`：1171/1171 首跑全绿；复跑 1170/1171，唯一失败为 `PerfOverride_test.overrideBeatsReflectionEndToEnd` 的性能阈值抖动（与 `!` 无关）。`UnaryNotDiff_test` 10/10 绿、`A64NotBEncoding_test` 2/2 绿、`UnaryNotShape_test` 6/6 绿，`SKIPPED = 0`，`session.ran()` 断言通过。详见 `doc/spec/fix-jit-unary-not/verify.md` §4。
 - [x] N3.5 非 Bool 转绿：N1.5 的 `!n` 矩阵三引擎统一为 `-3 / 0 / -1`，`Int64` 极值按位反结果与解释器 `a ^ -1` 一致。验收：`!2 = -3`、`!-1 = 0`、`!0 = -1` 逐位相同；`!true = false` 不受影响。
 
 ## N4 加固与文档
