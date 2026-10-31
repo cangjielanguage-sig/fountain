@@ -34,8 +34,9 @@ import fountain::f_llm.store.*
  * ```
  * data[0] = { embedding: [1024], colbert_vecs: [[1024], ...], lexical_weights: {"<tokenId>": w} }
  * ```
- * 其中 sparse 是**词频近似**（该权重目录没有 `sparse_linear.pt`），字段名与形状对齐
- * FlagEmbedding，便于以后换成真实稀疏头而不改上层。
+ * `lexical_weights` 来自官方 `sparse_linear.pt`（ReLU(h·w+b)，同 token 取最大，与
+ * FlagEmbedding `_process_token_weights` 一致）；`colbert_vecs` 来自官方
+ * `colbert_linear.pt` 投影后按 token 归一化。
  */
 public class BgeM3Transport <: EmbeddingTransport {
     public static const DEFAULT_URL = 'http://127.0.0.1:8000/v1/embeddings'

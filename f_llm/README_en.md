@@ -1548,10 +1548,11 @@ Timeouts cover read/write only (default 3000 ms, tuned by `llm_embeddingTimeoutM
 missing sparse/colbert data, run `MemoryIndexRebuilder.rebuild(repo, embedder, userId, namespace)` to
 recompute those two routes in pages (dense is left untouched).
 
-> The local weight directory has no `sparse_linear.pt`, so `lexical_weights` is a **term-frequency approximation**
-> rather than BGE-M3's learned sparse. Field names/shapes follow FlagEmbedding, so swapping in a real sparse head
-> needs no upstream change. For dense-only OpenAI-compatible endpoints use `LlmEmbeddingTransport`
-> (sparse/colbert empty; retrieval is marked `degraded`).
+> `lexical_weights` come from the official `sparse_linear.pt` (`ReLU(h·w+b)`, max over duplicate tokens),
+> matching FlagEmbedding's `_process_token_weights`. That file is only **3.5 KB** because it is a `(1,1024)`
+> projection vector, not a vocab-sized matrix. `colbert_vecs` come from the official `colbert_linear.pt`
+> (`1024×1024`, ~2.1 MB), projected per token and L2-normalized. For dense-only OpenAI-compatible endpoints
+> use `LlmEmbeddingTransport` (sparse/colbert empty; retrieval is marked `degraded`).
 
 ### MySQL (9.7 LTS + MyVector)
 

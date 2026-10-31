@@ -1526,8 +1526,9 @@ Config.set<String>([
 没有连接超时入口，建连阶段依赖操作系统 TCP 超时。历史数据缺 sparse/colbert 时，用
 `MemoryIndexRebuilder.rebuild(repo, embedder, userId, namespace)` 按页重建（只重算这两路，不动 dense）。
 
-> 当前权重目录没有 `sparse_linear.pt`，服务的 `lexical_weights` 是**词频近似**而非 BGE-M3 学习式稀疏；
-> 字段名与形状按 FlagEmbedding 对齐，换成带稀疏头的权重后上层不用改。
+> `lexical_weights` 由官方 `sparse_linear.pt` 计算（`ReLU(h·w+b)`，同 token 取最大），与 FlagEmbedding
+> 的 `_process_token_weights` 一致；该文件只有 **3.5KB**，因为它是 `(1,1024)` 的投影向量，不是词表大小的矩阵。
+> `colbert_vecs` 由官方 `colbert_linear.pt`（`1024×1024`，约 2.1MB）投影后按 token 归一化。
 > 换成只给 dense 的 OpenAI 兼容端点时，改用 `LlmEmbeddingTransport`（sparse/colbert 为空，检索自动标 `degraded`）。
 
 ### MySQL（9.7 LTS + MyVector）
