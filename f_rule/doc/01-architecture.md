@@ -38,7 +38,9 @@
 
 ```
 f_rule/src/
-├── rule.cj                       # 包根，重导出
+├── rule.cj                       # 包根，public import 重导出
+├── RuleEngine.cj                 # 引擎门面（会话管理、关闭级联）
+├── RuleSession.cj                # 会话（事实、议程、fire/fireDetailed）
 ├── RuleInitializer.cj            # f_app Initializer（注册决策表加载器）
 ├── RuleRuntime.cj                # 共享 Compiler 与全局配置
 ├── exception/
@@ -61,7 +63,9 @@ f_rule/src/
 ├── rule/
 │   ├── Rule.cj                   # 规则模型与 Builder
 │   ├── RuleSet.cj                # 规则集与版本
-│   └── Bindings.cj               # 绑定表（不可变视图）
+│   ├── RuleSetBuilder.cj         # 构建器（根包 public import 重导出）
+│   ├── Bindings.cj               # 绑定表（不可变视图）
+│   └── ConflictResolver.cj       # ConflictKey + 解析器接口 + 默认链
 ├── rete/
 │   ├── ReteNetwork.cj            # 网络容器与构建入口
 │   ├── AlphaNode.cj              # 单事实测试节点（可共享）
@@ -72,9 +76,15 @@ f_rule/src/
 │   ├── TerminalNode.cj           # 规则终端，产出激活
 │   └── NetworkBuilder.cj         # 规则 → 网络（node sharing）
 ├── agenda/
-│   ├── Agenda.cj                 # 激活队列与 fire 循环
+│   ├── Agenda.cj                 # 激活队列与 fire 循环（惰性堆 + 重入保护）
 │   ├── Activation.cj             # 激活实例
-│   └── ConflictResolver.cj       # 冲突消解策略与组合
+│   ├── ActivationSink.cj         # 终端 → 议程的产出接口（避免 rete ↔ agenda 循环）
+│   ├── Bindings.cj               # 绑定的议程侧视图
+│   ├── ConflictResolver.cj       # 6 种策略实现 + 组合 + Resolvers 工厂
+│   ├── ActionContext.cj          # 动作上下文（factIn 只读 / copyTo 物化）
+│   ├── ClosureAction.cj          # 闭包动作
+│   ├── TableAction.cj            # 决策表动作（写输出槽）
+│   └── CycleDetector.cj          # 环形指纹窗口，超限抛 CYCLE_LIMIT
 ├── flow/
 │   ├── RuleFlow.cj               # 一条规则一个 ImmediateFlow
 │   ├── RuleSetFlow.cj            # 规则集编排流程

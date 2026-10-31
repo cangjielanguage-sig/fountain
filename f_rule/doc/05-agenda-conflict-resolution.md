@@ -89,28 +89,47 @@ Agenda
 ### 4.1 策略
 
 ```cangjie
-public interface ConflictResolver <: ToString {
-    /** 返回负数表示 a 优先，正数表示 b 优先，0 表示交给下一个比较器。 */
-    func compare(a: Activation, b: Activation): Int64
+/**
+ * 比较用的只读快照。放在 rule 包是为了让 RuleSet 能保存解析器，
+ * 而不让 rule 反向依赖 agenda；Activation 在比较时构造本类型。
+ */
+public class ConflictKey {
+    public let salience: Int64
+    public let specificity: Int64
+    public let ruleOrder: Int64
+    public let seq: Int64
+    public let factSpace: String
+    public let ruleId: String
 }
 
-public class ConflictResolver {
-    /** 按 salience 降序。 */
+public interface ConflictResolver {
+    /** LT 表示 left 先执行（与堆的最小序一致），EQ 表示交给下一个比较器。 */
+    func compare(left: ConflictKey, right: ConflictKey): Ordering
+}
+
+public class SalienceResolver <: ConflictResolver     // salience 降序
+public class SpecificityResolver <: ConflictResolver  // 条件数降序
+public class FifoResolver <: ConflictResolver         // seq 升序
+public class LifoResolver <: ConflictResolver         // seq 降序
+public class RuleOrderResolver <: ConflictResolver    // 声明顺序升序
+public class RuleIdResolver <: ConflictResolver       // ruleId 字典序
+public class CompositeResolver <: ConflictResolver    // 依次比较，全 EQ 时用 (factSpace, ruleId) 兜底
+public class DefaultConflictResolver <: ConflictResolver  // salience ↓ → specificity ↓ → ruleOrder ↑ → seq ↑
+
+/** 工厂，返回上述策略的单例式实例。 */
+public class Resolvers {
     public static func salience(): ConflictResolver
-    /** 按条件数降序（更具体的规则优先）。 */
     public static func specificity(): ConflictResolver
-    /** 按产生顺序升序（先到先执行）。 */
     public static func fifo(): ConflictResolver
-    /** 按产生顺序降序（后到先执行）。 */
     public static func lifo(): ConflictResolver
-    /** 按规则在规则集中的声明顺序升序。 */
     public static func ruleOrder(): ConflictResolver
-    /** 按规则 id 字典序，保证跨进程可复现。 */
     public static func ruleId(): ConflictResolver
-    /** 依次比较，全部返回 0 时用 seq 兜底。 */
     public static func composite(resolvers: Array<ConflictResolver>): ConflictResolver
+    public static func default(): ConflictResolver
 }
 ```
+
+比较返回 `Ordering` 而非 `Int64`：`LT` 即「左先执行」，避免调用方记错符号方向；`EQ` 明确表示「本策略无法区分」，交给组合链的下一环。
 
 ### 4.2 默认策略
 
@@ -129,17 +148,17 @@ salience → specificity → ruleOrder → seq
 
 ```cangjie
 class MyResolver <: ConflictResolver {
-    public func compare(a: Activation, b: Activation): Int64 {
-        // 业务自定义：金额大的优先
-        let av = a.bindings.resolve("o")?.get("amount") as? Int64 ?? 0
-        let bv = b.bindings.resolve("o")?.get("amount") as? Int64 ?? 0
-        bv - av
+    public func compare(left: ConflictKey, right: ConflictKey): Ordering {
+        // 业务自定义：金额大的优先。金额需在激活产生时快照进 ConflictKey，
+        // 不能在比较器里读事实——fire 期间字段可能已被前面的动作改写。
+        compareDesc(left.amount, right.amount)
     }
-    public func toString(): String { "MyResolver" }
 }
 ```
 
-比较器必须是**全序且无副作用**；在 `fire` 期间读取事实字段时，字段值可能已被前面的动作修改，导致比较结果不稳定。需要基于事实值的策略，应在激活产生时把关键值快照进 `Activation`（通过 `Rule.snapshot()` 声明）。
+`ConflictKey` 目前只携带判定元数据（salience / specificity / ruleOrder / seq / factSpace / ruleId）。需要基于事实值的策略时，应先在激活产生阶段把关键值快照进 `Activation`（`Rule.snapshot()` 声明，见 §2），再扩展 `ConflictKey` 或自建解析器——**不要在比较器里回查事实库**。
+
+比较器必须是**全序且无副作用**；组合策略必须保证任意两个不同激活比较不为 `EQ`，否则堆序不稳定。
 
 ## 5. 执行模式
 

@@ -311,7 +311,7 @@ public class FlowContext {
     /** 缺省空间 "default" 的事实视图。 */
     public prop facts: FactBaseView
     /** 指定空间的事实视图；空间未声明时抛 UNKNOWN_FACT_SPACE。 */
-    public func facts(space: String): FactBaseView
+    public func factsOf(space: String): FactBaseView
     /** 当前上下文已激活的空间 id（按首次访问顺序）。 */
     public func spaces(): Array<String>
 }
@@ -450,9 +450,9 @@ let task = ClosureTask.compile(
 
 ```cangjie
 // 规则定义时声明所属空间
-let ruleVip = Rule.builder("R1").facts("orders").when(...).then(...).build()
-let ruleBulk = Rule.builder("R2").facts("orders").when(...).then(...).build()
-let ruleLevel = Rule.builder("R3").facts("users").when(...).then(...).build()
+let ruleVip = Rule.builder("R1").facts("orders").addPattern(...).then(...).build()
+let ruleBulk = Rule.builder("R2").facts("orders").addPattern(...).then(...).build()
+let ruleLevel = Rule.builder("R3").facts("users").addPattern(...).then(...).build()
 
 // 规则集：订单定价（orders 空间）+ 用户等级（users 空间）
 let rs = RuleSet.builder("pricing")

@@ -78,23 +78,23 @@
 
 ## 4. M3 议程与冲突消解
 
-- [ ] 4.1 失败用例 `Activation_test`：相等性 `(factSpace, ruleId, bindings)`、`specificity` 计算、`seq` 单调、跨空间同名规则不同激活
-- [ ] 4.2 实现 `agenda/Activation.cj`、`agenda/Bindings.cj`（`resolve` 回查来源空间）
-- [ ] 4.3 失败用例 `Agenda_test`：入队去重、惰性堆跳过失效激活、`fire` 返回执行数、空议程返回 0、`snapshot` 顺序（A-08/A-09）
-- [ ] 4.4 实现 `agenda/Agenda.cj`（二叉堆 + `index` + `firing` 重入保护 + `popValid`）
-- [ ] 4.5 失败用例 `ConflictResolver_test`：6 种策略各自排序正确、组合策略全序（任意两个异激活比较不为 0）、自定义解析器可插入（A-01~A-04）
-- [ ] 4.6 实现 `agenda/ConflictResolver.cj`（含默认链 `salience → specificity → ruleOrder → seq`）
-- [ ] 4.7 失败用例 `FireMode_test`：`Refract` 只执行一次（A-05）、`NoLoop` 同一绑定跨轮次不重复且 `fire` 后清空（A-06）、`Loop + limit` 执行数等于 limit（A-07）
-- [ ] 4.8 实现三种 `FireMode` 语义
-- [ ] 4.9 失败用例 `ActionContext_test`：`fact(binding)` 解析、`assert`/`retract`/`update` 默认写回 `factSpace`、`set`/`get`/`outputs`、`factIn` 只读、`copyTo` 生成新句柄且两库独立撤销（F-17/F-18）
-- [ ] 4.10 实现 `agenda/ActionContext.cj`、`agenda/ClosureAction.cj`、`agenda/TableAction.cj`
-- [ ] 4.11 失败用例 `CycleDetection_test`：窗口内第 101 次同一指纹抛 `CYCLE_LIMIT`（A-11）、`enableCycleDetection` 默认关闭
-- [ ] 4.12 实现循环检测（环形指纹窗口）
-- [ ] 4.13 失败用例 `FireError_test`：重入抛 `REENTRANT_FIRE`（A-09）、动作异常抛 `ACTION_FAILED` 且 `caused` 保留、已执行动作不回滚（A-10）
-- [ ] 4.14 实现异常包装与 `caused` 传递
-- [ ] 4.15 失败用例 `RuleEngine_test` / `RuleSession_test`：`session(id)` 复用、`release` 释放、`closed` 后 `fire` 抛 `CLOSED`、`fireDetailed` 返回 `outputs` + `fired` 行级结果
-- [ ] 4.16 实现根包 `RuleEngine.cj` / `RuleSession.cj`（含 `fireDetailed`，`fire` 为其薄封装）
-- [ ] 4.17 `cjpm test` 全绿，A-01~A-11 全部覆盖
+- [x] 4.1 失败用例 `Activation_test`：相等性 `(factSpace, ruleId, bindings)`、`specificity` 计算、`seq` 单调、跨空间同名规则不同激活
+- [x] 4.2 实现 `agenda/Activation.cj`、`agenda/Bindings.cj`（`resolve` 回查来源空间）
+- [x] 4.3 失败用例 `Agenda_test`：入队去重、惰性堆跳过失效激活、`fire` 返回执行数、空议程返回 0、`snapshot` 顺序（A-08/A-09）
+- [x] 4.4 实现 `agenda/Agenda.cj`（二叉堆 + `index` + `firing` 重入保护 + `popValid`）
+- [x] 4.5 失败用例 `ConflictResolver_test`：6 种策略各自排序正确、组合策略全序（任意两个异激活比较不为 0）、自定义解析器可插入（A-01~A-04）
+- [x] 4.6 实现 `agenda/ConflictResolver.cj`（含默认链 `salience → specificity → ruleOrder → seq`）
+- [x] 4.7 失败用例 `FireMode_test`：`Refract` 只执行一次（A-05）、`NoLoop` 同一绑定跨轮次不重复且 `fire` 后清空（A-06）、`Loop + limit` 执行数等于 limit（A-07）
+- [x] 4.8 实现三种 `FireMode` 语义
+- [x] 4.9 失败用例 `ActionContext_test`：`fact(binding)` 解析、`assert`/`retract`/`update` 默认写回 `factSpace`、`set`/`get`/`outputs`、`factIn` 只读、`copyTo` 生成新句柄且两库独立撤销（F-17/F-18）
+- [x] 4.10 实现 `agenda/ActionContext.cj`、`agenda/ClosureAction.cj`、`agenda/TableAction.cj`
+- [x] 4.11 失败用例 `CycleDetection_test`：窗口内第 101 次同一指纹抛 `CYCLE_LIMIT`（A-11）、`enableCycleDetection` 默认关闭
+- [x] 4.12 实现循环检测（环形指纹窗口）
+- [x] 4.13 失败用例 `FireError_test`：重入抛 `REENTRANT_FIRE`（A-09）、动作异常抛 `ACTION_FAILED` 且 `caused` 保留、已执行动作不回滚（A-10）
+- [x] 4.14 实现异常包装与 `caused` 传递
+- [x] 4.15 失败用例 `RuleEngine_test` / `RuleSession_test`：`session(id)` 复用、`release` 释放、`closed` 后 `fire` 抛 `CLOSED`、`fireDetailed` 返回 `outputs` + `fired` 行级结果
+- [x] 4.16 实现根包 `RuleEngine.cj` / `RuleSession.cj`（含 `fireDetailed`，`fire` 为其薄封装）
+- [x] 4.17 `cjpm test` 全绿，A-01~A-11 全部覆盖
 
 ## 5. M4 流程编排
 

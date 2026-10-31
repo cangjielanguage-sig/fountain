@@ -239,8 +239,8 @@ main() {
 
 ```cangjie
 public class RuleEngine {
+    /** 规则集必须已构建且未关闭，否则抛 ILLEGAL_STATE。 */
     public init(ruleSet: RuleSet)
-    public init(ruleSet: RuleSet, options: EngineOptions)
 
     /** 创建/获取会话。同 id 返回同一会话。 */
     public func session(id: String): RuleSession
@@ -248,13 +248,16 @@ public class RuleEngine {
     /** 释放会话及其事实、令牌、议程。 */
     public func release(id: String): Bool
 
-    /** 按决策表的 hitPolicy 执行并聚合输出。 */
+    /** 按决策表的 hitPolicy 执行并聚合输出。M5 实现。 */
     public func executeTable(table: DecisionTable, session: RuleSession): TableResult
 
     public prop ruleSet: RuleSet
+    public prop closed: Bool
+    /** 级联关闭规则集，之后任何执行抛 CLOSED。 */
     public func close(): Unit
 }
 
+/** 会话策略，M7 接入。当前版本所有会话等价于 Release.Discard + 无空闲超时。 */
 public class EngineOptions {
     /** 会话事实释放策略。 */
     public var release: Release = Release.Discard
@@ -271,7 +274,7 @@ public class RuleSession {
     /** 缺省空间 "default" 的事实视图。 */
     public prop facts: FactBaseView
     /** 指定空间的事实视图；空间未声明时抛 UNKNOWN_FACT_SPACE。 */
-    public func facts(space: String): FactBaseView
+    public func factsOf(space: String): FactBaseView
     public prop agenda: Agenda
     /** 在缺省空间插入。 */
     public func assert(fact: Fact): FactHandle
@@ -281,8 +284,19 @@ public class RuleSession {
     public func update(handle: FactHandle, fact: Fact): Unit
     /** 执行议程，返回最后一次动作产生的输出槽合并结果。 */
     public func fire(limit!: Int64 = -1): HashMap<String, Any>
+    /** 同 fire，但额外返回逐条执行记录，供决策表按行聚合。 */
+    public func fireDetailed(limit!: Int64 = -1): FireResult
+}
+
+public class FireResult {
+    /** 最后一轮动作写入的输出槽合并结果。 */
+    public let outputs: HashMap<String, Any>
+    /** 按执行顺序排列的规则执行记录。 */
+    public let fired: Array<FiredRule>
 }
 ```
+
+`factsOf` 与 `facts` 是方法/属性之分：仓颉不允许属性与方法同名，故指定空间取视图用动词化命名。
 
 ## 9. Pattern 便捷构造
 
