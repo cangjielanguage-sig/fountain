@@ -1726,8 +1726,8 @@ internal class Lowerer {
                 t
             case TokenKind.Bang =>
                 // 按操作数静态类型分派（fix-jit-unary-not D3）：`!` 对 Bool 是逻辑非，
-                // 对 Int64 是位反；其它类型没有真值语义，冒泡给调用方整单元降级即可，
-                // 但**必须在编译期拒绝**（否则三引擎会各按各的口径给出不同值）。
+                // 对 Int64 是位反；其它类型没有真值语义，必须在**编译期**拒绝——
+                // 否则三个引擎会各按各的口径给出不同值（B1）。
                 if (t == LocalType.BOOL) {
                     ctx.builder.emit(Op.NOT_B)
                     LocalType.BOOL
