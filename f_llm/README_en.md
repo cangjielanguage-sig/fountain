@@ -1516,6 +1516,23 @@ Config.set<String>([
 
 Legacy keys `llm_memoryBackend` / `llm_characterBackend` / `llm_memoryPath` are still detected, but only emit a `warn` and take no effect.
 
+### Store selection and adapters
+
+Two config keys decide which implementation is used:
+
+```cj
+Config.set<String>([
+    ('llm_memoryStore', 'postgres'),   // postgres / mysql / inMemory
+    ('llm_metaStore',   'f_store')     // postgres / mysql / f_store
+]);
+```
+
+- **Content family** (memory / knowledge): `llm_memoryStore` → `Stores.content()`;
+- **Metadata family** (characters / skills / prompts / model configs): `llm_metaStore` → `MetaStoreAdapter`;
+- Implementations are wired with `@Bean` + `@BeanMeta[condition: ConfCond.Value('llm_memoryStore', …)]`; adapters resolve them via `lookupOption<T>()`;
+- Call `Stores.bootstrap()` at startup: an unregistered value fails immediately and lists the available implementations (no silent fallback);
+- Implementation packages: `store.postgres` / `store.mysql` (each imports its own driver); `dao.postgres` / `dao.mysql` hold SQL only.
+
 ### MySQL (9.7 LTS + MyVector)
 
 MySQL Community does **not** ship vector indexes (`CREATE VECTOR INDEX` / `VECTOR_DISTANCE` are absent),

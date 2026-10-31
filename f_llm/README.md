@@ -1495,6 +1495,23 @@ Config.set<String>([
 
 旧键 `llm_memoryBackend` / `llm_characterBackend` / `llm_memoryPath` 仍会被识别，但只打 `warn`、不生效。
 
+### 存储选型与适配器
+
+两个配置项决定用哪套实现：
+
+```cj
+Config.set<String>([
+    ('llm_memoryStore', 'postgres'),   // postgres / mysql / inMemory
+    ('llm_metaStore',   'f_store')     // postgres / mysql / f_store
+]);
+```
+
+- **内容族**（记忆 / 知识）：`llm_memoryStore` → `Stores.content()`；
+- **元数据族**（人格 / 技能 / 提示词 / 模型配置）：`llm_metaStore` → `MetaStoreAdapter`；
+- 实现类用 `@Bean` + `@BeanMeta[condition: ConfCond.Value('llm_memoryStore', …)]` 条件装配，适配器内部 `lookupOption<T>()` 取用；
+- 启动时调用 `Stores.bootstrap()`：配置值未注册会**立即失败并列出可选实现**，不静默回退；
+- 实现包：`store.postgres` / `store.mysql`（各自 import 对应驱动），`dao.postgres` / `dao.mysql` 只放 SQL。
+
 ### MySQL（9.7 LTS + MyVector）
 
 MySQL Community 版**没有**向量索引（`CREATE VECTOR INDEX` / `VECTOR_DISTANCE` 都不存在），

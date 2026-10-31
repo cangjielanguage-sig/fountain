@@ -15,7 +15,7 @@
 
 - [x] 2.1 写 BGE-M3 客户端用例（批量、超时、非 200、维度不符）
 - [x] 2.2 实现 `HttpEmbedder`（`/v1/embeddings`，dense/sparse/colbert 三路）
-- [ ] 2.3 失败重试与降级：向量化失败拒绝写入，检索标记 `degraded`
+- [x] 2.3 失败重试与降级：向量化失败拒绝写入，检索标记 `degraded`
 
 ## 3. KnowledgeStore
 
@@ -37,10 +37,10 @@
 - [x] 5.1 `Memory` / `FaithfulMemory` 走 `Stores.content().memory`，公开签名不变
 - [x] 5.2 回归用例：摘要与写入路径行为一致（对比切换前后）
 - [x] 5.3 `LLMConfs.holder()` 走 `Stores.meta().confs`，保留 `setHolder`
-- [ ] 5.4 全量回归（目标：现有 231 条 + 新增用例全绿）
+- [x] 5.4 全量回归（目标：现有 231 条 + 新增用例全绿）
 
 ## 6. 文档与归档
 
-- [ ] 6.1 README 补 bootstrap 与实现包说明
-- [ ] 6.2 `doc/spec` 同步 proposal/specs/design/tasks
-- [ ] 6.3 归档并更新主 specs
+- [x] 6.1 README 补 bootstrap 与实现包说明
+- [x] 6.2 `doc/spec` 同步 proposal/specs/design/tasks
+- [x] 6.3 归档并更新主 specs
