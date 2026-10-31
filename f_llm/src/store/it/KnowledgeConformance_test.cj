@@ -155,6 +155,31 @@ public class KnowledgeConformanceTest {
         }
     }
 
+    /** 词面候选分页：每页 1 条时必须翻页，不能只取首屏 */
+    @TestCase
+    func testPostgresLexicalPaging(): Unit {
+        match(postgresKnowledge()){
+            case Some(_) =>
+                let paged = PostgresKnowledgeStore(pageSize: 1, maxCandidates: 10)
+                paged.upsert(KnowledgeDoc('p-1', 't', '分页词 甲'))
+                paged.upsert(KnowledgeDoc('p-2', 't', '分页词 乙'))
+                @Expect(paged.search(KnowledgeQuery('分页词', limit: 5)).size, 2)
+            case None => ()
+        }
+    }
+
+    @TestCase
+    func testMySqlLexicalPaging(): Unit {
+        match(mysqlKnowledge()){
+            case Some(_) =>
+                let paged = MySqlKnowledgeStore(pageSize: 1, maxCandidates: 10)
+                paged.upsert(KnowledgeDoc('p-1', 't', '分页词 甲'))
+                paged.upsert(KnowledgeDoc('p-2', 't', '分页词 乙'))
+                @Expect(paged.search(KnowledgeQuery('分页词', limit: 5)).size, 2)
+            case None => ()
+        }
+    }
+
     /** P0.2：MySQL 的 MyVector 通道同样能在无词面命中时召回 */
     @TestCase
     func testMySqlSemanticRecallWithoutLexicalMatch(): Unit {

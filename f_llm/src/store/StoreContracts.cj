@@ -58,6 +58,8 @@ public interface KnowledgeStore {
      * 语义检索（向量）尚未实现，当前是关键词命中数排序。
      */
     func search(query: KnowledgeQuery): ArrayList<KnowledgeHit>
+    /** 分页列出 docId（重建索引时逐篇重算） */
+    func docIds(offset: Int64, limit: Int64): ArrayList<String>
 }
 
 /** 人格：一个用户至多一条 */

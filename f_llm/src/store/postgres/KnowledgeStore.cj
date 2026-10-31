@@ -31,19 +31,43 @@ import fountain::f_llm.store.*
  * 最终 `score = cosine + 0.1 * min(命中次数, 5)`——语义为主，精确词命中做加成。
  */
 public class PostgresKnowledgeStore <: KnowledgeStore & RootService {
-    private static let CANDIDATES: Int64 = 200
     private static let LEXICAL_WEIGHT = 0.1f64
     private static let LEXICAL_CAP = 5.0f64
 
     private let embedder: ?Embedder
+    private let pageSize: Int64
+    private let maxCandidates: Int64
 
     /** 无语义实现（lexical-only）：测试或未配置 Embedder 时使用 */
     public init() {
         this.embedder = None
+        this.pageSize = 200
+        this.maxCandidates = 1000
     }
 
-    public init(embedder: Embedder) {
+    /** 无语义、可调分页参数（用于验证翻页行为） */
+    public init(pageSize!: Int64, maxCandidates!: Int64 = 1000) {
+        if(pageSize <= 0 || maxCandidates < pageSize){
+            throw IllegalArgumentException(
+                'invalid candidate paging: pageSize=${pageSize}, maxCandidates=${maxCandidates}')
+        }
+        this.embedder = None
+        this.pageSize = pageSize
+        this.maxCandidates = maxCandidates
+    }
+
+    /**
+     * @param pageSize      词面召回的每页条数（测试可调小以强制翻页）
+     * @param maxCandidates 词面召回的总候选上限
+     */
+    public init(embedder: Embedder, pageSize!: Int64 = 200, maxCandidates!: Int64 = 1000) {
+        if(pageSize <= 0 || maxCandidates < pageSize){
+            throw IllegalArgumentException(
+                'invalid candidate paging: pageSize=${pageSize}, maxCandidates=${maxCandidates}')
+        }
         this.embedder = Some(embedder)
+        this.pageSize = pageSize
+        this.maxCandidates = maxCandidates
     }
 
     public func upsert(doc: KnowledgeDoc): Unit {
@@ -80,7 +104,7 @@ public class PostgresKnowledgeStore <: KnowledgeStore & RootService {
             case Some(model) =>
                 if(!query.text.isEmpty()){
                     let literal = VectorMath.literal(model.embed(query.text))
-                    for(row in dao<PostgresKnowledgeDAO>('postgres').chunkSearchDense(literal, PostgresKnowledgeStore.CANDIDATES)){
+                    for(row in dao<PostgresKnowledgeDAO>('postgres').chunkSearchDense(literal, denseK(query))){
                         let docId = textOf(row.get('doc_id'))
                         if(!PostgresKnowledgeStore.wanted(query, docId)){
                             continue
@@ -95,23 +119,36 @@ public class PostgresKnowledgeStore <: KnowledgeStore & RootService {
             case None => ()
         }
 
-        // 2. lexical 召回（精确词）
+        // 2. lexical 召回（精确词）：分页取，避免 200 条硬截断
         if(!terms.isEmpty()){
             let pattern = '%' + terms[0] + '%'
-            for(row in dao<PostgresKnowledgeDAO>('postgres').chunkSearch(pattern, PostgresKnowledgeStore.CANDIDATES)){
-                let docId = textOf(row.get('doc_id'))
-                if(!PostgresKnowledgeStore.wanted(query, docId)){
-                    continue
+            var offset: Int64 = 0
+            var collected: Int64 = 0
+            while(collected < maxCandidates){
+                let page = dao<PostgresKnowledgeDAO>('postgres').chunkSearch(pattern, pageSize, offset)
+                if(page.isEmpty()){
+                    break
                 }
-                let content = textOf(row.get('content'))
-                let occurrences = KnowledgeSearch.score(content, terms)
-                if(occurrences <= 0.0f64){
-                    continue
+                for(row in page){
+                    let docId = textOf(row.get('doc_id'))
+                    if(!PostgresKnowledgeStore.wanted(query, docId)){
+                        continue
+                    }
+                    let content = textOf(row.get('content'))
+                    let occurrences = KnowledgeSearch.score(content, terms)
+                    if(occurrences <= 0.0f64){
+                        continue
+                    }
+                    let key = PostgresKnowledgeStore.scoreKey(docId, chunkIntOf(row.get('seq')))
+                    let score = merged.get(key) ?? ChunkScore(docId, chunkIntOf(row.get('seq')), content)
+                    score.lexical = occurrences
+                    merged[key] = score
                 }
-                let key = PostgresKnowledgeStore.scoreKey(docId, chunkIntOf(row.get('seq')))
-                let score = merged.get(key) ?? ChunkScore(docId, chunkIntOf(row.get('seq')), content)
-                score.lexical = occurrences
-                merged[key] = score
+                collected += page.size
+                if(page.size < pageSize){
+                    break
+                }
+                offset += pageSize
             }
         }
 
@@ -121,6 +158,24 @@ public class PostgresKnowledgeStore <: KnowledgeStore & RootService {
                                   score.dense + PostgresKnowledgeStore.LEXICAL_WEIGHT * PostgresKnowledgeStore.minOf(score.lexical, PostgresKnowledgeStore.LEXICAL_CAP)))
         }
         KnowledgeSearch.rank(hits, query.limit)
+    }
+
+    public func docIds(offset: Int64, limit: Int64): ArrayList<String> {
+        let result = ArrayList<String>()
+        for(row in dao<PostgresKnowledgeDAO>('postgres').docIds(offset, limit)){
+            let docId = textOf(row.get('doc_id'))
+            if(!docId.isEmpty()){
+                result.add(docId)
+            }
+        }
+        result
+    }
+
+    /** ANN 的 k 随请求 limit 放大，但不超过 maxCandidates 且不小于一页 */
+    private func denseK(query: KnowledgeQuery): Int64 {
+        let wanted = if(query.limit > 0){ query.limit * 20 }else{ pageSize }
+        let bounded = if(wanted > maxCandidates){ maxCandidates }else{ wanted }
+        if(bounded < pageSize){ pageSize }else{ bounded }
     }
 
     private func vectorOf(chunk: String): String {

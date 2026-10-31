@@ -189,33 +189,20 @@ public class ZhipuBalanceQuerier <: BalanceQuerier {
 
 ---
 
-## 8. 知识检索的残留限制（三实现已支持语义召回）
+## 8. 知识检索的残留限制
 
-**已具备**：PG / MySQL / 内存都按「块向量余弦 + 词面命中加成」混合打分：
-`score = cosine + 0.1 × min(命中次数, 5)`；MySQL 走 `MYVECTOR_IS_ANN`，PG 走 `<=>`，内存直算。
+**已具备**：三后端语义召回（`score = cosine + 0.1 × min(命中次数, 5)`）、词面候选分页
+（200/页、总上限 1000）、dense k 随 `limit` 放大、`KnowledgeIndexRebuilder` 重建块向量。
 
 **仍然存在的限制**：
 
 | 限制 | 说明 |
 |---|---|
-| 候选上限 200 | `KnowledgeStore` 各实现的 `CANDIDATES` 写死 200，超大库可能漏召回；没有二次精排 |
-| 权重不可配 | `0.1` 与 `min(…,5)` 是常量，不同语料没有调参入口 |
+| 权重不可配 | `0.1` 与 `min(…,5)` 仍是常量，不同语料没有调参入口 |
 | MySQL 依赖组件 + 建索引 | 必须有 MyVector，且写入后要 `CALL myvector_index_build('db.llm_document_chunk.content_vec','id')`；忘记建索引时 ANN 召回不可用 |
-| 无块向量重建工具 | 换 Embedder（模型/维度）后只能重新 `upsert` 文档重建块；维度变化要先改表结构 |
-| 词面召回以首词为准 | `LIKE '%<首个词>%'` 只用来补候选，首词不出现时该记录只能靠向量召回 |
+| 词面以首词为准 | `LIKE '%<首个词>%'` 只用来补候选；首词不出现时该记录只能靠向量召回 |
+| 重建需手工触发 | `KnowledgeIndexRebuilder` 没有启动任务/定时任务；换 Embedder 后要自己调用 |
+| 候选总上限 1000 | 超大库里仍可能漏召回；没有二次精排或分层召回 |
 
-**解除条件**：分页候选 + 二次精排；权重配置化；后台重建任务；多词 OR 召回。
-
----
-
-## 9. 联网搜索只有 DeepSeek 一个 provider（待办，暂不实现）
-
-**现状**：`SearchProvider` 只有 `DeepSeekSearchProvider` 一个实现；`SearchProviderRegistry`
-本身支持注册多个，但没有任何其它厂商实现。
-
-**影响**：`llm_searchProvider` 只能配 `deepseek`；换成别的厂商会在
-`SearchProviderRegistry.get(...)` 拿到 `None` 后失败。
-
-**待办**：按厂商补实现——每家一个类（鉴权方式、请求体、结果字段各不相同），
-外加一组「响应解析 + 错误码」用例；注册沿用 `SearchProviderRegistry.register`。
-在拿到 API Key 与接口文档之前无法验证，因此与余额三家（§7）同样处理：**只记待办**。
+**解除条件**：权重配置化；MySQL 建索引纳入启动检查；多词 OR 召回；重建做成运维任务；
+分层召回（粗排 → 精排）。

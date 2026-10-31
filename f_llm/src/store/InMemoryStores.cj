@@ -238,6 +238,30 @@ class InMemoryKnowledgeStore <: KnowledgeStore {
         KnowledgeSearch.rank(hits, query.limit)
     }
 
+    public func docIds(offset: Int64, limit: Int64): ArrayList<String> {
+        let ids = ArrayList<String>()
+        for((docId, _) in docs){
+            ids.add(docId)
+        }
+        // HashMap 无序，排序后再分页，保证重复调用结果稳定
+        for(index in 1..ids.size){
+            let current = ids[index]
+            var position = index - 1
+            while(position >= 0 && ids[position] > current){
+                ids[position + 1] = ids[position]
+                position--
+            }
+            ids[position + 1] = current
+        }
+        let result = ArrayList<String>()
+        var index = offset
+        while(index < ids.size && result.size < limit){
+            result.add(ids[index])
+            index++
+        }
+        result
+    }
+
     private static func chunkKey(docId: String, seq: Int64): String {
         '${docId}#${seq}'
     }

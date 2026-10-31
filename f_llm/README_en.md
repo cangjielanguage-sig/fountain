@@ -1597,7 +1597,12 @@ historical indexes, etc.) are listed in [`doc/known-limitations.md`](doc/known-l
   and merged with lexical hits (`score = cosine + 0.1 × min(hits, 5)`); without an `Embedder` it degrades to
   lexical only;
 - PG, MySQL and the in-memory store all support semantic recall (MySQL needs the MyVector component plus
-  `CALL myvector_index_build('db.llm_document_chunk.content_vec','id')` after writes).
+  `CALL myvector_index_build('db.llm_document_chunk.content_vec','id')` after writes);
+- **Candidate paging**: lexical recall pages through results (200/page, 1000 total); dense `k` scales with the
+  requested `limit` (20×, capped at 1000) instead of a hard 200;
+- **Rebuild tool**: after changing the `Embedder` or chunk parameters, call
+  `KnowledgeIndexRebuilder.rebuildAll(store, batchSize)` / `rebuild(store, docIds)` to recompute chunk
+  vectors (it reuses `upsert`, so chunks and vectors are rewritten).
 
 ### MySQL (9.7 LTS + MyVector)
 

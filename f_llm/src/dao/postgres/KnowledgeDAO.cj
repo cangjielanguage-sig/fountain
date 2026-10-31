@@ -84,13 +84,22 @@ public interface PostgresKnowledgeDAO <: RootDAO {
         executor.setSql(sql).mapList()
     }
 
-    /** 按首个词做词面召回，交由调用方打分（候选上限 200） */
-    func chunkSearch(pattern: String, limit: Int64): ArrayList<HashMap<String, Any>> {
+    func docIds(offset: Int64, limit: Int64): ArrayList<HashMap<String, Any>> {
+        let sql = '''
+            SELECT doc_id FROM llm_document
+            ORDER BY doc_id
+            LIMIT ${arg(limit)} OFFSET ${arg(offset)}
+        '''
+        executor.setSql(sql).mapList()
+    }
+
+    /** 按首个词做词面召回，分页返回（调用方负责翻页与打分） */
+    func chunkSearch(pattern: String, limit: Int64, offset: Int64): ArrayList<HashMap<String, Any>> {
         let sql = '''
             SELECT doc_id, seq, content FROM llm_document_chunk
             WHERE content LIKE ${arg(pattern)}
             ORDER BY doc_id, seq
-            LIMIT ${arg(limit)}
+            LIMIT ${arg(limit)} OFFSET ${arg(offset)}
         '''
         executor.setSql(sql).mapList()
     }

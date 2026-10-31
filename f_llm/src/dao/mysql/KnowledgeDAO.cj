@@ -111,12 +111,21 @@ public interface MySqlKnowledgeDAO <: RootDAO {
         executor.setSql(sql).mapList()
     }
 
-    func chunkSearch(pattern: String, limit: Int64): ArrayList<HashMap<String, Any>> {
+    func docIds(offset: Int64, limit: Int64): ArrayList<HashMap<String, Any>> {
+        let sql = '''
+            SELECT doc_id FROM llm_document
+            ORDER BY doc_id
+            LIMIT ${arg(offset)}, ${arg(limit)}
+        '''
+        executor.setSql(sql).mapList()
+    }
+
+    func chunkSearch(pattern: String, limit: Int64, offset: Int64): ArrayList<HashMap<String, Any>> {
         let sql = '''
             SELECT doc_id, seq, content FROM llm_document_chunk
             WHERE content LIKE ${arg(pattern)}
             ORDER BY doc_id, seq
-            LIMIT ${arg(limit)}
+            LIMIT ${arg(offset)}, ${arg(limit)}
         '''
         executor.setSql(sql).mapList()
     }

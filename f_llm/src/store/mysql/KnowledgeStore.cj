@@ -31,20 +31,40 @@ import fountain::f_llm.store.*
  * - 合并 `score = cosine + 0.1 × min(命中次数, 5)`。
  */
 public class MySqlKnowledgeStore <: KnowledgeStore & RootService {
-    private static let CANDIDATES: Int64 = 200
     private static let LEXICAL_WEIGHT = 0.1f64
     private static let LEXICAL_CAP = 5.0f64
 
     private let embedder: ?Embedder
+    private let pageSize: Int64
+    private let maxCandidates: Int64
     private var cachedDatabase: ?String = None
 
     /** 无语义实现（lexical-only） */
     public init() {
         this.embedder = None
+        this.pageSize = 200
+        this.maxCandidates = 1000
     }
 
-    public init(embedder: Embedder) {
+    /** 无语义、可调分页参数（用于验证翻页行为） */
+    public init(pageSize!: Int64, maxCandidates!: Int64 = 1000) {
+        if(pageSize <= 0 || maxCandidates < pageSize){
+            throw IllegalArgumentException(
+                'invalid candidate paging: pageSize=${pageSize}, maxCandidates=${maxCandidates}')
+        }
+        this.embedder = None
+        this.pageSize = pageSize
+        this.maxCandidates = maxCandidates
+    }
+
+    public init(embedder: Embedder, pageSize!: Int64 = 200, maxCandidates!: Int64 = 1000) {
+        if(pageSize <= 0 || maxCandidates < pageSize){
+            throw IllegalArgumentException(
+                'invalid candidate paging: pageSize=${pageSize}, maxCandidates=${maxCandidates}')
+        }
         this.embedder = Some(embedder)
+        this.pageSize = pageSize
+        this.maxCandidates = maxCandidates
     }
 
     public func upsert(doc: KnowledgeDoc): Unit {
@@ -87,7 +107,7 @@ public class MySqlKnowledgeStore <: KnowledgeStore & RootService {
                     let path = annPath()
                     if(!path.isEmpty()){
                         for(row in dao<MySqlKnowledgeDAO>('mysql').chunkSearchDense(
-                                path, literal, query.docIds.toArray(), CANDIDATES)){
+                                path, literal, query.docIds.toArray(), denseK(query))){
                             let docId = textOf(row.get('doc_id'))
                             let seq = chunkIntOf(row.get('seq'))
                             let key = scoreKey(docId, seq)
@@ -104,20 +124,33 @@ public class MySqlKnowledgeStore <: KnowledgeStore & RootService {
 
         if(!terms.isEmpty()){
             let pattern = '%' + terms[0] + '%'
-            for(row in dao<MySqlKnowledgeDAO>('mysql').chunkSearch(pattern, CANDIDATES)){
-                let docId = textOf(row.get('doc_id'))
-                if(!wanted(query, docId)){
-                    continue
+            var offset: Int64 = 0
+            var collected: Int64 = 0
+            while(collected < maxCandidates){
+                let page = dao<MySqlKnowledgeDAO>('mysql').chunkSearch(pattern, pageSize, offset)
+                if(page.isEmpty()){
+                    break
                 }
-                let occurrences = KnowledgeSearch.score(textOf(row.get('content')), terms)
-                if(occurrences <= 0.0f64){
-                    continue
+                for(row in page){
+                    let docId = textOf(row.get('doc_id'))
+                    if(!wanted(query, docId)){
+                        continue
+                    }
+                    let occurrences = KnowledgeSearch.score(textOf(row.get('content')), terms)
+                    if(occurrences <= 0.0f64){
+                        continue
+                    }
+                    let seq = chunkIntOf(row.get('seq'))
+                    let key = scoreKey(docId, seq)
+                    let score = merged.get(key) ?? ChunkScoreMySql(docId, seq, textOf(row.get('content')))
+                    score.lexical = occurrences
+                    merged[key] = score
                 }
-                let seq = chunkIntOf(row.get('seq'))
-                let key = scoreKey(docId, seq)
-                let score = merged.get(key) ?? ChunkScoreMySql(docId, seq, textOf(row.get('content')))
-                score.lexical = occurrences
-                merged[key] = score
+                collected += page.size
+                if(page.size < pageSize){
+                    break
+                }
+                offset += pageSize
             }
         }
 
@@ -127,6 +160,23 @@ public class MySqlKnowledgeStore <: KnowledgeStore & RootService {
                                   score.dense + LEXICAL_WEIGHT * minOf(score.lexical, LEXICAL_CAP)))
         }
         KnowledgeSearch.rank(hits, query.limit)
+    }
+
+    public func docIds(offset: Int64, limit: Int64): ArrayList<String> {
+        let result = ArrayList<String>()
+        for(row in dao<MySqlKnowledgeDAO>('mysql').docIds(offset, limit)){
+            let docId = textOf(row.get('doc_id'))
+            if(!docId.isEmpty()){
+                result.add(docId)
+            }
+        }
+        result
+    }
+
+    private func denseK(query: KnowledgeQuery): Int64 {
+        let wanted = if(query.limit > 0){ query.limit * 20 }else{ pageSize }
+        let bounded = if(wanted > maxCandidates){ maxCandidates }else{ wanted }
+        if(bounded < pageSize){ pageSize }else{ bounded }
     }
 
     /** `db.table.column`：MyVector 的 ANN 路径，库名从 `SELECT DATABASE()` 取一次 */
