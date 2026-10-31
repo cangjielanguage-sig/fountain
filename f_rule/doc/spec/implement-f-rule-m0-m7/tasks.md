@@ -55,26 +55,26 @@
 
 ## 3. M2 Rete 网络
 
-- [ ] 3.1 失败用例 `Token_test`：结构共享（子令牌只存 parent/handle/binding）、`==`/`hashCode`、`bindings()` 展开、`retain/release` 引用计数归零释放父链（R-14）
-- [ ] 3.2 实现 `rete/Token.cj`
-- [ ] 3.3 失败用例 `AlphaNode_test` / `AlphaMemory_test`：链式短路、幂等 `add`、`remove` 通知下游、`probe` 等值命中、无规则关心类型直接忽略（R-01/R-10/R-12/R-13）
-- [ ] 3.4 实现 `rete/AlphaNode.cj`、`rete/AlphaMemory.cj`（`eqIndex` + `nullSet`）
-- [ ] 3.5 失败用例 `RangeIndex_test`：`Gt/Ge/Lt/Le/Between` 与全扫结果一致；10 万条插入后范围探测正确；同值 100 条全部返回
-- [ ] 3.6 实现 `rete/RangeKey.cj` 与 `ordIndex`（`ConcurrentSkipListMap` + `tailer/header/sub`），不设规模阈值
-- [ ] 3.7 失败用例 `BetaNode_test` / `BetaMemory_test`：等值 join、范围 join、三模式链、`produced` 撤销 O(k)、左/右激活对称（R-02/R-03/R-04/R-09）
-- [ ] 3.8 实现 `rete/BetaNode.cj`（`JoinPlan` 四分支）、`rete/BetaMemory.cj`（join 索引 + `probeByJoin`）
-- [ ] 3.9 失败用例 `TerminalNode_test`：`leftActivate` 产出激活、`leftRetract` 移除、只依赖 `ActivationSink`
-- [ ] 3.10 实现 `rete/TerminalNode.cj` 与 `ActivationSink` 接口、`rete/ReteNode.cj`
-- [ ] 3.11 失败用例 `NetworkSharing_test`：100 条规则共享 20 个 alpha 签名时节点数 = 20 + join 数；相同 join 签名只建一次；前两模式相同、第三模式不同时前两个 join 共享（R-05/R-06/R-07/R-15）
-- [ ] 3.12 实现 `rete/AlphaSignature.cj`、`rete/JoinSignature.cj`、`rete/NetworkBuilder.cj`（约束排序后入签名，构建完成后冻结）
-- [ ] 3.13 失败用例 `ReteNetwork_test`：`assert`/`retract`/`update` 与朴素匹配一致；重复传播幂等；`frozen()` 后 `build` 抛 `NETWORK_FROZEN`（R-08/R-11）
-- [ ] 3.14 实现 `rete/ReteNetwork.cj`（结构）+ `rete/SessionNetwork.cj`（`(space, session)` memory）+ `rete/SessionRuntime.cj`
-- [ ] 3.15 失败用例 `SpaceSharding_test`：断言 `a` 空间不影响 `b`（R-16）、相同签名不跨片共享（R-17）、按片重建不影响其他片（R-18）、同会话跨空间各有激活（R-19）、空分片忽略未知类型（R-20）
-- [ ] 3.16 实现分片路由（`RuleSet` 按 `rule.factSpace` 分组 → 每空间一个 `ReteNetwork`）与按片重建
-- [ ] 3.17 失败用例 `Differential_test`：≥200 组随机规则/事实，Rete 与 `NaiveMatcher` 的激活集合逐条相等；插入后随机撤销 30% 再比对
-- [ ] 3.18 差分测试全绿；失败时输出两侧激活的排序键与规则 id 便于定位
-- [ ] 3.19 `RuleSet` 内部 `matcher` 开关（`Rete` 默认 / `Naive` 仅测试）落地，公开 API 不变
-- [ ] 3.20 `cjpm test` 全绿，R-01~R-20 全部覆盖
+- [x] 3.1 失败用例 `Token_test`：结构共享（子令牌只存 parent/handle/binding）、`==`/`hashCode`、`bindings()` 展开、`retain/release` 引用计数归零释放父链（R-14）
+- [x] 3.2 实现 `rete/Token.cj`
+- [x] 3.3 失败用例 `AlphaNode_test` / `AlphaMemory_test`：链式短路、幂等 `add`、`remove` 通知下游、`probe` 等值命中、无规则关心类型直接忽略（R-01/R-10/R-12/R-13）
+- [x] 3.4 实现 `rete/AlphaNode.cj`、`rete/AlphaMemory.cj`（`eqIndex` + `nullSet`）
+- [x] 3.5 失败用例 `RangeIndex_test`：`Gt/Ge/Lt/Le/Between` 与全扫结果一致；10 万条插入后范围探测正确；同值 100 条全部返回
+- [x] 3.6 实现 `rete/RangeKey.cj` 与 `ordIndex`（`ConcurrentSkipListMap` + `tailer/header/sub`），不设规模阈值
+- [x] 3.7 失败用例 `BetaNode_test` / `BetaMemory_test`：等值 join、范围 join、三模式链、`produced` 撤销 O(k)、左/右激活对称（R-02/R-03/R-04/R-09）
+- [x] 3.8 实现 `rete/BetaNode.cj`（`JoinPlan` 四分支）、`rete/BetaMemory.cj`（join 索引 + `probeByJoin`）
+- [x] 3.9 失败用例 `TerminalNode_test`：`leftActivate` 产出激活、`leftRetract` 移除、只依赖 `ActivationSink`
+- [x] 3.10 实现 `rete/TerminalNode.cj` 与 `ActivationSink` 接口、`rete/ReteNode.cj`
+- [x] 3.11 失败用例 `NetworkSharing_test`：100 条规则共享 20 个 alpha 签名时节点数 = 20 + join 数；相同 join 签名只建一次；前两模式相同、第三模式不同时前两个 join 共享（R-05/R-06/R-07/R-15）
+- [x] 3.12 实现 `rete/AlphaSignature.cj`、`rete/JoinSignature.cj`、`rete/NetworkBuilder.cj`（约束排序后入签名，构建完成后冻结）
+- [x] 3.13 失败用例 `ReteNetwork_test`：`assert`/`retract`/`update` 与朴素匹配一致；重复传播幂等；`frozen()` 后 `build` 抛 `NETWORK_FROZEN`（R-08/R-11）
+- [x] 3.14 实现 `rete/ReteNetwork.cj`（结构）+ `rete/SessionNetwork.cj`（`(space, session)` memory）+ `rete/SessionRuntime.cj`
+- [x] 3.15 失败用例 `SpaceSharding_test`：断言 `a` 空间不影响 `b`（R-16）、相同签名不跨片共享（R-17）、按片重建不影响其他片（R-18）、同会话跨空间各有激活（R-19）、空分片忽略未知类型（R-20）
+- [x] 3.16 实现分片路由（`RuleSet` 按 `rule.factSpace` 分组 → 每空间一个 `ReteNetwork`）与按片重建
+- [x] 3.17 失败用例 `Differential_test`：≥200 组随机规则/事实，Rete 与 `NaiveMatcher` 的激活集合逐条相等；插入后随机撤销 30% 再比对
+- [x] 3.18 差分测试全绿；失败时输出两侧激活的排序键与规则 id 便于定位
+- [x] 3.19 `RuleSet` 内部 `matcher` 开关（`Rete` 默认 / `Naive` 仅测试）落地，公开 API 不变
+- [x] 3.20 `cjpm test` 全绿，R-01~R-20 全部覆盖
 
 ## 4. M3 议程与冲突消解
 

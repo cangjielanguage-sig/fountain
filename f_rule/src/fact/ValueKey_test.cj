@@ -156,6 +156,20 @@ class ValueKey_test {
         }
         @Assert(caught.getOrThrow().code, RuleErrorCode.TYPE_MISMATCH)
     }
+
+    /**
+     * 签名编码必须区分"同长度、不同内容"的列表。
+     *
+     * `toString()` 对列表只输出长度，拿它做节点签名会让 `Between [1,2]` 与
+     * `Between [3,4]` 共用一个 alpha 节点，产生假阳性。
+     */
+    @TestCase
+    public func encodeDistinguishesListContents(): Unit {
+        let first: Array<Any> = [1, 2]
+        let second: Array<Any> = [3, 4]
+        @Expect(ValueKey.of(first).encode() == ValueKey.of(second).encode(), false)
+        @Assert(ValueKey.of("a,b").encode(), "s:a\\,b")
+    }
 }
 
 /**

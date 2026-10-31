@@ -298,6 +298,33 @@ public class ValueKey <: Hashable & Equatable<ValueKey> & Comparable<ValueKey> {
         }
     }
 
+    /**
+     * 完整可复现的文本编码（含列表元素），供节点签名等需要区分"同长度不同内容"的场合。
+     *
+     * [toString] 对列表只输出长度，不能作为签名键。
+     */
+    public func encode(): String {
+        match (inner) {
+            case IntNumber(v) => "i:${v}"
+            case RealNumber(v) => "r:${v}"
+            case DecimalNumber(v) => "d:${v}"
+            case TextValue(v) => "s:${ValueKey.escape(v)}"
+            case BoolValue(v) => "b:${v}"
+            case TimeValue(v) => "t:${v}"
+            case ListValue(v) =>
+                var out = "l:["
+                for (item in v) {
+                    out = out + item.encode() + ","
+                }
+                out + "]"
+        }
+    }
+
+    /** 文本值里的分隔符转义，避免 `a,b` 与 `[a, b]` 撞码。 */
+    private static func escape(text: String): String {
+        text.replace("\\", "\\\\").replace(",", "\\,").replace("[", "\\[").replace("]", "\\]")
+    }
+
     public func toString(): String {
         match (inner) {
             case IntNumber(v) => "${v}"
