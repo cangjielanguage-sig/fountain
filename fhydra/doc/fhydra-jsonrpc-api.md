@@ -65,11 +65,11 @@ key 是字符串形式的 token id（JSON 限制），服务端转 `Int64`。
 | 方法 | 参数 | 返回 | 超时 | 状态 |
 |---|---|---|---|---|
 | `hydra.health` | `{}` | `{"status":"ok","version":"1.3.17"}` | 1s | ✅ |
-| `hydra.upsert` | `{collection,id,payload,dense\|denseB64,kind?,saveDay?,tags?}` | `true` | 5s | ✅ |
+| `hydra.upsert` | `{collection,id,payload,dense\|denseB64,titleDense?,contentDense?,saveTime?,kind?,saveDay?,tags?}` | `true` | 5s | ✅ |
 | `hydra.upsertBatch` | `[record…]`（≤100） | 写入条数 | 10s | ✅ |
-| `hydra.get` | `{collection,id}` | `{found,id,payload,dense}` 对象 | 2s | ✅ |
+| `hydra.get` | `{collection,id}` | `{found,id,payload,dense,titleDense,contentDense,tokenIds,weights,colbert,saveTime}` 对象 | 2s | ✅ |
 | `hydra.remove` | `{collection,id}` | `bool` | 2s | ✅ |
-| `hydra.searchDense` | `{collection,dense\|denseB64,limit,kind?,saveDay?,tags?}` | `{"hits":[…]}` 对象 | 5s | ✅ |
+| `hydra.searchDense` | `{collection,field?,dense\|denseB64,limit,kind?,saveDay?,tags?}` | `{"hits":[…]}` 对象 | 5s | ✅ |
 | `hydra.searchSparse` | `{collection,tokenIds,weights,limit,filters?}` | `{"hits":[…]}` 对象 | 5s | ✅ |
 | `hydra.count` | `{collection}` | `Int64` | 2s | ✅ |
 | `hydra.ids` | `{collection,offset,limit}` | `{ids:[…]}` 对象 | 2s | ✅ |

@@ -440,6 +440,37 @@ public class FStoreVectorStoreTest {
     }
 
     @TestCase
+    func testNamedDenseFieldsAndSaveTimeOrder(): Unit {
+        let store = newStore()
+        let first = HashMap<String, Array<Float64>>()
+        first['title'] = [1.0f64, 0.0f64]
+        first['content'] = [0.0f64, 1.0f64]
+        store.upsert('c', VectorRecord('r1', 'p1', [0.0f64, 0.0f64], vectors: first, saveTime: 20))
+
+        let second = HashMap<String, Array<Float64>>()
+        second['title'] = [0.0f64, 1.0f64]
+        second['content'] = [1.0f64, 0.0f64]
+        store.upsert('c', VectorRecord('r2', 'p2', [0.0f64, 0.0f64], vectors: second, saveTime: 10))
+
+        // 同一查询按不同字段得到不同结果
+        let byContent = store.searchDenseField(VectorQuery('c', [1.0f64, 0.0f64], limit: 1), 'content')
+        @Expect(byContent.size, 1)
+        @Expect(byContent[0].id, 'r2')
+        let byTitle = store.searchDenseField(VectorQuery('c', [1.0f64, 0.0f64], limit: 1), 'title')
+        @Expect(byTitle[0].id, 'r1')
+
+        let record = store.get('c', 'r1').getOrThrow()
+        @Expect(record.vectors['title'].size, 2)
+        @Expect(record.saveTime, 20)
+
+        // ids 按 (saveTime, id) 升序
+        let ids = store.ids('c', 0, 10)
+        @Expect(ids[0], 'r2')
+        @Expect(ids[1], 'r1')
+        store.close()
+    }
+
+    @TestCase
     func testIdsPagingSkipsPartialRecords(): Unit {
         pathSeq++
         let raw = rawPartial('/tmp/fhydra-ids-${pathSeq}', 'c', 'half')

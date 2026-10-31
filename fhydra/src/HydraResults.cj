@@ -53,6 +53,14 @@ public class RecordDto {
     public var id: String = ''
     public var payload: String = ''
     public var dense: ArrayList<Float64> = ArrayList<Float64>()
+    /** 命名 dense（方案 C） */
+    public var titleDense: ArrayList<Float64> = ArrayList<Float64>()
+    public var contentDense: ArrayList<Float64> = ArrayList<Float64>()
+    /** sparse：tokenIds 与 weights 一一对应 */
+    public var tokenIds: ArrayList<Int64> = ArrayList<Int64>()
+    public var weights: ArrayList<Float64> = ArrayList<Float64>()
+    public var colbert: Array<Array<Float64>> = Array<Array<Float64>>()
+    public var saveTime: Int64 = 0
 
     public init() {
     }

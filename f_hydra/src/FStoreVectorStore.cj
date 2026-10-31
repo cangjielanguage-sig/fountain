@@ -62,6 +62,20 @@ public class FStoreVectorStore <: VectorStore {
 
         store.add(payloadKey(collection, record.id).toArray(), record.payload.toArray())
         store.add(denseKey(collection, record.id).toArray(), VectorCodec.encodeDense(record.dense))
+        // 方案 C：命名 dense 字段（title/content…）各自独立存储与检索
+        var names = ''
+        for((name, vector) in record.vectors){
+            store.add(fieldKey(collection, name, record.id).toArray(),
+                      VectorCodec.encodeDense(vector))
+            if(!names.isEmpty()){
+                names += ','
+            }
+            names += name
+        }
+        if(!names.isEmpty()){
+            store.add(fieldMetaKey(collection, record.id).toArray(), names.toArray())
+        }
+        store.add(timeKey(collection, record.id).toArray(), record.saveTime.toString().toArray())
         store.add(sparseKey(collection, record.id).toArray(), encodeSparse(record.sparse).toArray())
         let parts = VectorCodec.encodeColbertParts(record.colbert)
         for(index in 0..parts.size){
@@ -91,8 +105,27 @@ public class FStoreVectorStore <: VectorStore {
                     case Some(raw) => decodeSparse(String.fromUtf8(raw))
                     case None => HashMap<Int64, Float64>()
                 }
+                let vectors = HashMap<String, Array<Float64>>()
+                match(store.get(fieldMetaKey(collection, id).toArray())){
+                    case Some(raw) =>
+                        for(name in String.fromUtf8(raw).split(',')){
+                            if(name.isEmpty()){
+                                continue
+                            }
+                            match(store.get(fieldKey(collection, name, id).toArray())){
+                                case Some(field) => vectors[name] = VectorCodec.decodeDense(field)
+                                case None => ()
+                            }
+                        }
+                    case None => ()
+                }
+                let saveTime = match(store.get(timeKey(collection, id).toArray())){
+                    case Some(raw) => Int64.tryParse(String.fromUtf8(raw)) ?? 0
+                    case None => 0
+                }
                 Some(VectorRecord(id, String.fromUtf8(bytes), dense,
-                                  sparse: sparse, colbert: readColbert(collection, id)))
+                                  sparse: sparse, colbert: readColbert(collection, id),
+                                  vectors: vectors, saveTime: saveTime))
             case None => None
         }
     }
@@ -103,26 +136,34 @@ public class FStoreVectorStore <: VectorStore {
         deletePostings(collection, id)
         deleteColbertParts(collection, id)
         deleteFilterEntries(collection, id)
+        deleteFieldVectors(collection, id)
         store.remove(payloadKey(collection, id).toArray())
         store.remove(denseKey(collection, id).toArray())
         store.remove(sparseKey(collection, id).toArray())
         store.remove(readyKey(collection, id).toArray())
+        store.remove(timeKey(collection, id).toArray())
         existed
     }
 
     public func searchDense(query: VectorQuery): ArrayList<VectorHit> {
+        searchDenseField(query, 'dense')
+    }
+
+    public func searchDenseField(query: VectorQuery, field: String): ArrayList<VectorHit> {
         if(query.limit <= 0 || query.dense.isEmpty() || expired(query.collection)){
             return ArrayList<VectorHit>()
         }
-        // 1. IVF 候选（未建索引时为空）
         let allowed = allowedIds(query.collection, query.filters)
-        let candidates = ivf(query.collection).candidates(query.dense)
-        let fromIndex = scoreIds(query, candidates, allowed)
-        if(Int64(fromIndex.size) >= query.limit){
-            return finalize(fromIndex, query.limit)
+        if(field == 'dense'){
+            // 1. IVF 候选（未建索引时为空；IVF 只建在默认 dense 上）
+            let candidates = ivf(query.collection).candidates(query.dense)
+            let fromIndex = scoreIds(query, candidates, allowed)
+            if(Int64(fromIndex.size) >= query.limit){
+                return finalize(fromIndex, query.limit)
+            }
         }
-        // 2. 候选不足 / 未建索引：全量扫描（IVF 是优化，不牺牲召回）
-        finalize(bruteForce(query, allowed), query.limit)
+        // 2. 候选不足 / 命名向量 / 未建索引：全量扫描（IVF 是优化，不牺牲召回）
+        finalize(bruteForceField(query, allowed, field), query.limit)
     }
 
     public func buildIndex(collection: String, clusters!: Int64): Int64 {
@@ -142,9 +183,11 @@ public class FStoreVectorStore <: VectorStore {
         IvfIndex(store, collection)
     }
 
-    private func bruteForce(query: VectorQuery, allowed: ?HashMap<String, Bool>): ArrayList<VectorHit> {
+    private func bruteForceField(query: VectorQuery, allowed: ?HashMap<String, Bool>,
+                                 field: String): ArrayList<VectorHit> {
         let hits = ArrayList<VectorHit>()
-        let prefix = densePrefix(query.collection)
+        let prefix = if(field == 'dense'){ densePrefix(query.collection) }
+                     else { fieldPrefix(query.collection, field) }
         for((key, value) in store.prefix(prefix.toArray())){
             let text = String.fromUtf8(key)
             let id = text[Int64(prefix.size)..Int64(text.size)]
@@ -315,11 +358,11 @@ public class FStoreVectorStore <: VectorStore {
                 all.add(id)
             }
         }
-        // 字典序保证分页稳定
+        // 按 (saveTime, id) 升序：分页稳定且与业务时间一致
         for(index in 1..all.size){
             let current = all[index]
             var position = index - 1
-            while(position >= 0 && all[position] > current){
+            while(position >= 0 && earlier(collection, current, all[position])){
                 all[position + 1] = all[position]
                 position--
             }
@@ -550,11 +593,44 @@ public class FStoreVectorStore <: VectorStore {
         deletePostings(collection, id)
         deleteColbertParts(collection, id)
         deleteFilterEntries(collection, id)
+        deleteFieldVectors(collection, id)
         store.remove(payloadKey(collection, id).toArray())
         store.remove(denseKey(collection, id).toArray())
         store.remove(sparseKey(collection, id).toArray())
         store.remove(readyKey(collection, id).toArray())
+        store.remove(timeKey(collection, id).toArray())
         ()
+    }
+
+    /** 命名 dense 字段：读取 `vf:{id}` 名单逐个删 */
+    private func deleteFieldVectors(collection: String, id: String): Unit {
+        match(store.get(fieldMetaKey(collection, id).toArray())){
+            case Some(raw) =>
+                for(name in String.fromUtf8(raw).split(',')){
+                    if(!name.isEmpty()){
+                        store.remove(fieldKey(collection, name, id).toArray())
+                    }
+                }
+                store.remove(fieldMetaKey(collection, id).toArray())
+            case None => ()
+        }
+    }
+
+    /** (saveTime, id) 升序：saveTime 相同再比 id */
+    private func earlier(collection: String, a: String, b: String): Bool {
+        let timeA = saveTimeOf(collection, a)
+        let timeB = saveTimeOf(collection, b)
+        if(timeA != timeB){
+            return timeA < timeB
+        }
+        a < b
+    }
+
+    private func saveTimeOf(collection: String, id: String): Int64 {
+        match(store.get(timeKey(collection, id).toArray())){
+            case Some(raw) => Int64.tryParse(String.fromUtf8(raw)) ?? 0
+            case None => 0
+        }
     }
 
     // ---- keys ----
@@ -581,6 +657,24 @@ public class FStoreVectorStore <: VectorStore {
 
     private static func readyKey(collection: String, id: String): String {
         'h:${collection}:r:${id}'
+    }
+
+    /** 命名 dense 字段（方案 C）：`v:f:{name}:{id}`，名单存 `vf:{id}` */
+    private static func fieldPrefix(collection: String, name: String): String {
+        'h:${collection}:v:f:${name}:'
+    }
+
+    private static func fieldKey(collection: String, name: String, id: String): String {
+        'h:${collection}:v:f:${name}:${id}'
+    }
+
+    private static func fieldMetaKey(collection: String, id: String): String {
+        'h:${collection}:vf:${id}'
+    }
+
+    /** 业务时间（epoch 秒），`ids` 排序用 */
+    private static func timeKey(collection: String, id: String): String {
+        'h:${collection}:t:${id}'
     }
 
     private static func ttlKey(collection: String): String {

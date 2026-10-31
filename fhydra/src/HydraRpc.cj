@@ -46,8 +46,8 @@ public class HydraRpc {
     public func upsert(param: UpsertParam): Bool {
         HydraAuth.require()
         let dense = denseOf(param.denseB64, param.dense)
-        if(dense.isEmpty()){
-            throw JsonRpcException(BAD_PARAMS, 'dense/denseB64 is required')
+        if(dense.isEmpty() && param.titleDense.isEmpty() && param.contentDense.isEmpty()){
+            throw JsonRpcException(BAD_PARAMS, 'dense/denseB64/titleDense/contentDense is required')
         }
         store.upsert(param.collection, recordOf(param.id, param.payload, dense, param))
         true
@@ -96,8 +96,10 @@ public class HydraRpc {
         if(param.limit <= 0){
             throw JsonRpcException(BAD_PARAMS, 'limit must be positive')
         }
-        let hits = store.searchDense(VectorQuery(param.collection, dense, limit: param.limit,
-                                                 filters: filtersOf(param.kind, param.saveDay, param.tags)))
+        let field = if(param.field.isEmpty()){ 'dense' }else{ param.field }
+        let hits = store.searchDenseField(
+            VectorQuery(param.collection, dense, limit: param.limit,
+                        filters: filtersOf(param.kind, param.saveDay, param.tags)), field)
         hitsDto(hits)
     }
 
@@ -191,8 +193,16 @@ public class HydraRpc {
 
     private static func recordOf(id: String, payload: String, dense: Array<Float64>,
                                  param: UpsertParam): VectorRecord {
+        let vectors = HashMap<String, Array<Float64>>()
+        if(!param.titleDense.isEmpty()){
+            vectors['title'] = param.titleDense.toArray()
+        }
+        if(!param.contentDense.isEmpty()){
+            vectors['content'] = param.contentDense.toArray()
+        }
         VectorRecord(id, payload, dense,
-                     filters: filtersOf(param.kind, param.saveDay, param.tags))
+                     filters: filtersOf(param.kind, param.saveDay, param.tags),
+                     vectors: vectors, saveTime: param.saveTime)
     }
 
     private static func filtersOf(kind: String, saveDay: String, tags: String): HashMap<String, String> {
@@ -266,6 +276,20 @@ public class HydraRpc {
         for(value in record.dense){
             dto.dense.add(value)
         }
+        match(record.vectors.get('title')){
+            case Some(vector) => for(value in vector){ dto.titleDense.add(value) }
+            case None => ()
+        }
+        match(record.vectors.get('content')){
+            case Some(vector) => for(value in vector){ dto.contentDense.add(value) }
+            case None => ()
+        }
+        for((token, weight) in record.sparse){
+            dto.tokenIds.add(token)
+            dto.weights.add(weight)
+        }
+        dto.colbert = record.colbert
+        dto.saveTime = record.saveTime
         dto
     }
 

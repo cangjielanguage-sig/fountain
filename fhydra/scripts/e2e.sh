@@ -37,7 +37,7 @@ B64=$(python3 -c "import base64,struct;print(base64.b64encode(struct.pack('<2f',
 echo "--- upsert (denseB64=$B64) ---"
 curl -s -X POST -H 'Content-Type: application/json' -H 'Accept: application/json' \
   -H 'X-Hydra-Key: test-secret' \
-  -d "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"hydra.upsert\",\"params\":{\"param\":{\"collection\":\"c\",\"id\":\"r1\",\"payload\":\"p1\",\"denseB64\":\"$B64\",\"kind\":\"note\"}}}" \
+  -d "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"hydra.upsert\",\"params\":{\"param\":{\"collection\":\"c\",\"id\":\"r1\",\"payload\":\"p1\",\"denseB64\":\"$B64\",\"kind\":\"note\",\"titleDense\":[1,0],\"contentDense\":[0,1],\"saveTime\":123}}}" \
   "http://127.0.0.1:${mvc_port}/rpc"
 echo
 echo "--- searchDense ---"

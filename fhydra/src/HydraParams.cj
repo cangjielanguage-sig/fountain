@@ -32,6 +32,12 @@ public class UpsertParam {
     public var kind: String = ''
     public var saveDay: String = ''
     public var tags: String = ''
+    /** 命名 dense（方案 C）：标题向量 */
+    public var titleDense: ArrayList<Float64> = ArrayList<Float64>()
+    /** 命名 dense（方案 C）：正文字向量 */
+    public var contentDense: ArrayList<Float64> = ArrayList<Float64>()
+    /** 业务时间（epoch 秒），ids 排序用 */
+    public var saveTime: Int64 = 0
 
     public init() {
     }
@@ -58,6 +64,8 @@ public class RemoveParam {
 @DataAssist[fields props]
 public class SearchParam {
     public var collection: String = ''
+    /** `dense`（默认）/ `title` / `content` */
+    public var field: String = 'dense'
     public var dense: Array<Float64> = Array<Float64>()
     /** f32 小端原始字节的 Base64；非空时优先于 `dense` */
     public var denseB64: String = ''

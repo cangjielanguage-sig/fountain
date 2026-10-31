@@ -37,17 +37,29 @@ public class VectorRecord {
      * 值里不要出现 `:`（key 用 `:` 分段），出现时该值会被跳过。
      */
     public let filters: HashMap<String, String>
+    /**
+     * 命名的额外 dense 向量（方案 C）：`title` / `content` 等，各自独立建索引、独立检索。
+     *
+     * `dense` 是默认向量（字段名 `dense`），向后兼容；命名向量存 `v:f:{name}:{id}`。
+     */
+    public let vectors: HashMap<String, Array<Float64>>
+    /** 记录的业务时间（epoch 秒），`ids` 按它排序；0 表示未提供 */
+    public let saveTime: Int64
 
     public init(id: String, payload: String, dense: Array<Float64>,
                 sparse!: HashMap<Int64, Float64> = HashMap<Int64, Float64>(),
                 colbert!: Array<Array<Float64>> = Array<Array<Float64>>(),
-                filters!: HashMap<String, String> = HashMap<String, String>()) {
+                filters!: HashMap<String, String> = HashMap<String, String>(),
+                vectors!: HashMap<String, Array<Float64>> = HashMap<String, Array<Float64>>(),
+                saveTime!: Int64 = 0) {
         this.id = id
         this.payload = payload
         this.dense = dense
         this.sparse = sparse
         this.colbert = colbert
         this.filters = filters
+        this.vectors = vectors
+        this.saveTime = saveTime
     }
 }
 
