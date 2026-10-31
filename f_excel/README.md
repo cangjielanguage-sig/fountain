@@ -23,7 +23,7 @@ Excel（xlsx / OOXML）读写模块：**流式解析、流式生成**、日期�
 | 时长 / 富文本 | `[h]:mm:ss` 读取为 `CellValue.TimeSpan`；`Worksheet.richText` 暴露 sharedStrings 的分段字体 |
 | 条件格式 | `<conditionalFormatting>` / 13 种 `CfRuleType` / `dxfs` 解析与写回；`matchedRules` 求值（cellIs/expression/文本/colorScale/dataBar/iconSet） |
 
-全量 `cjpm test`：**181 通过 / 0 失败**。
+全量 `cjpm test`：**183 通过 / 0 失败**。
 
 ## 用法
 
@@ -130,7 +130,7 @@ out.close()
 
 - **样式**：`theme1.xml` 只按 tint 线性插值，主题色板未完整解析。
 - **公式**：动态数组只做到函数返回数组，`#SPILL!` 溢出未实现；`OFFSET` / `INDIRECT` 为动态依赖，不参与静态依赖图。
-- **紧凑存储**：`CellStore` 已替换 HashMap，但 100 万格 RSS 增量约 29 MB（重构前 164 MB），仍未达到 < 20 MB 的目标。
+- **紧凑存储**：稠密数值表 100 万格 RSS 增量约 3 MB；稀疏/混合表回退到列式坐标存储，约 29 MB。
 - **富文本**：只读不写，写侧平坦化为普通文本（样式丢失）。
 - **时长 / 富文本**：`[h]:mm:ss` 按 `Date` 返回并告警；富文本平坦化为 `Text`。
 - **图片**：只支持写入（png / jpeg、两单元格锚定）；读取时不导入图片，含图片的文件往返后图片会丢失。
@@ -142,6 +142,6 @@ out.close()
 
 ## 测试与夹具
 
-- `cjpm test` 全绿（181 条）。
+- `cjpm test` 全绿（183 条）。
 - 夹具用 `f_zip.ZipWriter` 现场拼最小 xlsx（`fixtures.cj`），不依赖外部样本文件。
 - 「真实 Excel 打开不报修复」属人工验收项，记录见 `doc/spec/implement-f-excel-m1/verification.md`。

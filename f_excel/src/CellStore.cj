@@ -106,8 +106,52 @@ internal class CellStore {
     private let numbers = ByteColumn(8)
     private let others = ArrayList<CellValue>()
 
+    // 稠密矩形数值块：完全由 addNumber 按行优先填满时启用，只存 Float64。
+    private var denseActive = false
+    private var denseValues = ByteColumn(8)
+    private var denseWidth: Int64 = 0
+    private var denseRows: Int64 = 1
+    private var denseRow: Int64 = 1
+    private var denseCol: Int64 = 2
+
     func size(): Int64 {
+        if (this.denseActive) {
+            return this.denseValues.size()
+        }
         this.rows.size()
+    }
+
+    private func resetDense(): Unit {
+        this.denseActive = false
+        this.denseValues = ByteColumn(8)
+        this.denseWidth = 0
+        this.denseRows = 1
+        this.denseRow = 1
+        this.denseCol = 2
+    }
+
+    /** 把稠密块摊回稀疏列（类型变化、随机写入、删除时调用）。 */
+    private func flushDense(): Unit {
+        if (!this.denseActive) {
+            return
+        }
+        if (this.denseWidth == 0) {
+            this.denseWidth = this.denseCol - 1
+        }
+        var index: Int64 = 0
+        var row: Int64 = 1
+        while (row <= this.denseRows) {
+            let cols = if (row < this.denseRows) { this.denseWidth } else { this.denseCol - 1 }
+            var col: Int64 = 1
+            while (col <= cols) {
+                let value = Float64.fromBits(this.denseValues.bitsAt(index))
+                this.addNumberSparse(row, col, value)
+                index++
+                col++
+            }
+            row++
+        }
+        this.resetDense()
     }
 
     private func rowAt(index: Int64): Int64 {
@@ -138,7 +182,7 @@ internal class CellStore {
 
     private func lowerBound(row: Int64, col: Int64): Int64 {
         var low: Int64 = 0
-        var high = this.size()
+        var high = this.rows.size()
         while (low < high) {
             let mid = (low + high) / 2
             if (this.compareAt(mid, row, col) < 0) {
@@ -172,17 +216,67 @@ internal class CellStore {
     }
 
     func get(row: Int64, col: Int64): ?CellValue {
+        if (this.denseActive) {
+            if (this.denseWidth == 0) {
+                this.flushDense()
+            } else {
+                if (row <= this.denseRows && col <= this.denseWidth) {
+                    let index = (row - 1) * this.denseWidth + (col - 1)
+                    if (index < this.denseValues.size()) {
+                        return Some(CellValue.Number(Float64.fromBits(this.denseValues.bitsAt(index))))
+                    }
+                }
+                return None<CellValue>
+            }
+        }
         let index = this.lowerBound(row, col)
-        if (index < this.size() && this.compareAt(index, row, col) == 0) {
+        if (index < this.rows.size() && this.compareAt(index, row, col) == 0) {
             return Some(this.decode(index))
         }
         None<CellValue>
     }
 
-    /** 数值快路径：不构造 `CellValue`，解析大表时减少临时对象。 */
+    /** 数值快路径：不构造 `CellValue`；连续行优先写入会进入稠密块。 */
     func addNumber(row: Int64, col: Int64, value: Float64): Unit {
+        if (this.denseActive) {
+            if (row == this.denseRow && col == this.denseCol) {
+                this.denseValues.addBits(value.toBits())
+                this.denseCol++
+                return
+            }
+            if (col == 1 && row == this.denseRow + 1) {
+                let width = this.denseCol - 1
+                if (this.denseWidth == 0) {
+                    this.denseWidth = width
+                } else if (width != this.denseWidth) {
+                    this.flushDense()
+                    this.addNumberSparse(row, col, value)
+                    return
+                }
+                this.denseRow = row
+                this.denseRows = row
+                this.denseCol = 2
+                this.denseValues.addBits(value.toBits())
+                return
+            }
+            this.flushDense()
+            this.addNumberSparse(row, col, value)
+            return
+        }
+        if (this.rows.size() == 0 && row == 1 && col == 1) {
+            this.denseActive = true
+            this.denseRow = 1
+            this.denseRows = 1
+            this.denseCol = 2
+            this.denseValues.addBits(value.toBits())
+            return
+        }
+        this.addNumberSparse(row, col, value)
+    }
+
+    private func addNumberSparse(row: Int64, col: Int64, value: Float64): Unit {
         let index = this.lowerBound(row, col)
-        if (index < this.size() && this.compareAt(index, row, col) == 0) {
+        if (index < this.rows.size() && this.compareAt(index, row, col) == 0) {
             let bits = UInt32(this.payload.bitsAt(index))
             if ((bits & 0x8000_0000) != 0) {
                 this.numbers.setBits(Int64(bits & 0x7FFF_FFFF), value.toBits())
@@ -199,8 +293,17 @@ internal class CellStore {
     }
 
     func add(row: Int64, col: Int64, value: CellValue): Unit {
+        match (value) {
+            case Number(v) => this.addNumber(row, col, v)
+            case _ =>
+                this.flushDense()
+                this.addOther(row, col, value)
+        }
+    }
+
+    private func addOther(row: Int64, col: Int64, value: CellValue): Unit {
         let index = this.lowerBound(row, col)
-        if (index < this.size() && this.compareAt(index, row, col) == 0) {
+        if (index < this.rows.size() && this.compareAt(index, row, col) == 0) {
             let bits = UInt32(this.payload.bitsAt(index))
             match (value) {
                 case Number(v) => if ((bits & 0x8000_0000) != 0) {
@@ -222,8 +325,9 @@ internal class CellStore {
     }
 
     func remove(row: Int64, col: Int64): Bool {
+        this.flushDense()
         let index = this.lowerBound(row, col)
-        if (index < this.size() && this.compareAt(index, row, col) == 0) {
+        if (index < this.rows.size() && this.compareAt(index, row, col) == 0) {
             this.rows.removeAt(index)
             this.cols.removeAt(index)
             this.payload.removeAt(index)
@@ -234,9 +338,10 @@ internal class CellStore {
 
     /** 一行的 `(col, value)`，按列升序。 */
     func rowEntries(row: Int64, maxCol: Int64): ArrayList<(Int64, CellValue)> {
+        this.flushDense()
         let out = ArrayList<(Int64, CellValue)>()
         var index = this.lowerBound(row, 1)
-        while (index < this.size() && this.rowAt(index) == row) {
+        while (index < this.rows.size() && this.rowAt(index) == row) {
             let col = this.colAt(index)
             if (col > maxCol) {
                 break

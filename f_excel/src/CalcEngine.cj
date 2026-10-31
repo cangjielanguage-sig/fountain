@@ -173,11 +173,18 @@ public class CalcEngine {
                                 errors++
                             }
                             if (writeBack) {
-                                worksheet.setCell(
-                                    row,
-                                    pair[0],
-                                    CellValue.Formula(source, Some(calcToCellValue(result)))
-                                )
+                                match (result) {
+                                    case ArrayValue(rows) =>
+                                        if (!this.spillArray(worksheet, row, pair[0], source, rows)) {
+                                            errors++
+                                        }
+                                    case _ =>
+                                        worksheet.setCell(
+                                            row,
+                                            pair[0],
+                                            CellValue.Formula(source, Some(calcToCellValue(result)))
+                                        )
+                                }
                             }
                         case _ => ()
                     }
@@ -186,6 +193,57 @@ public class CalcEngine {
             }
         }
         CalcReport(recalculated, errors, cycles: this.cycleCells, issues: this.issues)
+    }
+
+    /** 数组结果溢出到相邻单元格；冲突时原点写 `#SPILL!` 并返回 false。 */
+    private func spillArray(
+        worksheet: Worksheet,
+        row: Int64,
+        col: Int64,
+        source: String,
+        rows: Array<Array<CalcValue>>
+    ): Bool {
+        if (rows.size == 0) {
+            worksheet.setCell(row, col, CellValue.Formula(source, Some(CellValue.Empty)))
+            return true
+        }
+        let height = Int64(rows.size)
+        let width = Int64(rows[0].size)
+        if (row + height - 1 > EXCEL_MAX_ROW || col + width - 1 > EXCEL_MAX_COL) {
+            worksheet.setCell(row, col, CellValue.Formula(source, Some(CellValue.Error("#SPILL!"))))
+            return false
+        }
+        for (r in 0..height) {
+            for (c in 0..width) {
+                if (r == 0 && c == 0) {
+                    continue
+                }
+                match (worksheet.cell(row + r, col + c)) {
+                    case Some(value) => match (value) {
+                        case Empty => ()
+                        case _ =>
+                            worksheet.setCell(
+                                row,
+                                col,
+                                CellValue.Formula(source, Some(CellValue.Error("#SPILL!")))
+                            )
+                            return false
+                    }
+                    case None => ()
+                }
+            }
+        }
+        for (r in 0..height) {
+            for (c in 0..width) {
+                let value = if (r < rows.size && c < rows[r].size) { rows[r][c] } else { CalcValue.Empty }
+                if (r == 0 && c == 0) {
+                    worksheet.setCell(row, col, CellValue.Formula(source, Some(calcToCellValue(value))))
+                } else {
+                    worksheet.setCell(row + r, col + c, calcToCellValue(value))
+                }
+            }
+        }
+        true
     }
 
     /** 条件格式命中（含 `expression` 规则）；`sheet` 必须是已存在的表。 */
