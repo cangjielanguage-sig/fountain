@@ -1725,8 +1725,19 @@ internal class Lowerer {
                 }
                 t
             case TokenKind.Bang =>
-                ctx.builder.emit(Op.NOT_B)
-                LocalType.BOOL
+                // 按操作数静态类型分派（fix-jit-unary-not D3）：`!` 对 Bool 是逻辑非，
+                // 对 Int64 是位反；其它类型没有真值语义，必须在**编译期**拒绝——
+                // 否则三个引擎会各按各的口径给出不同值（B1）。
+                if (t == LocalType.BOOL) {
+                    ctx.builder.emit(Op.NOT_B)
+                    LocalType.BOOL
+                } else if (t == LocalType.I64) {
+                    ctx.builder.emit(Op.BNOT_I)
+                    LocalType.I64
+                } else {
+                    diagFail(DiagKind.TYPE_MISMATCH, this.src, 0, pos.line, pos.column,
+                        '一元逻辑非 `!` 只支持 Bool 与 Int64，实得 ${LocalType.name(t)}')
+                }
             case TokenKind.Tilde =>
                 ctx.builder.emit(Op.BNOT_I)
                 LocalType.I64

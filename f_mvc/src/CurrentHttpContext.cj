@@ -27,6 +27,25 @@ public struct CurrentHttpContext {
     static func clear(): Unit {
         context.set(None<HttpContext>)
     }
+
+    /**
+     * 在当前线程建立请求上下文执行 `body`，结束后清理。
+     *
+     * 用于「handler 被派发到子线程」的场景（如 f_jsonrpc 的显式超时）：子线程默认没有
+     * 父线程的 ThreadLocal，必须显式恢复。`ctx` 为 `None` 时只清理、不设置。
+     */
+    public static func scoped<T>(ctx: ?HttpContext, body: () -> T): T {
+        match (ctx) {
+            case Some(h) => context.set(h)
+            case _ => ()
+        }
+        try {
+            body()
+        } finally {
+            context.set(None<HttpContext>)
+        }
+    }
+
     public static prop instance: HttpContext {
         get(){
             context.get().getOrThrow()

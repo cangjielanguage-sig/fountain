@@ -1,5 +1,108 @@
 # `fountain::f_egraph`是一个事件驱动的流程工具库
 下面所有的顶级声明都是`fountain::f_egraph`的重导出
+
+流程脚本能力依赖 `fountain::f_jit`；JIT 注册面与脚本契约见下文对应章节。
+
+## JIT 支持
+
+`f_egraph` 的流程编排可以由 `f_jit` 脚本描述：启动时由 `FlowInitializer` 创建编译器、注册宿主类型，再把 `FlowLoader` 返回的每个脚本编译成无参函数并执行。脚本在运行期创建 `ImmediateFlow` / `AsyncFlow`、调用 `ClosureTask.compile` 生成任务并注册到流程，因此流程拓扑或任务体变化只需改脚本，不必重新编译宿主。
+
+### 能力概览
+
+| 能力 | 入口 | 说明 |
+|---|---|---|
+| 脚本化流程编排 | `FlowLoader.load()` + `FlowInitializer` | `load()` 的每个元素是一个流程的完整注册脚本 |
+| 脚本化任务体 | `ClosureTask.compile` | 编译 `exec` 语句序列为 `(Event) -> Event` |
+| 脚本侧事件构造 | `FlowEventFactory` | `flowTaskEvent` / `flowEndEvent` / `flowErrorEvent` / `flowDummyEvent` / `flowDataOf` |
+| 宿主类型注册 | `JitHostRegistry.configure` | 事件族、`Emitter`、`BaseFlow`、`ImmediateFlow`、`AsyncFlow` 的 `ClassDescriptor` 手工注册 |
+| 自动初始化 | `FlowInitializer.initialize` | 创建并配置 `Compiler`、注入 `ClosureTask`、按顺序执行全部脚本 |
+| 错误传播 | f_jit 异常 | 编译 / 运行期错误原样上抛，保留站点与错误码 |
+
+### 最小接入
+
+实现 `FlowLoader` 并注册为 bean，再注册一个 `FlowInitializer` 实现；应用启动时会自动编译并执行脚本：
+
+```cangjie
+import fountain::f_app.InitializerCollection
+import fountain::f_bean.macros.*
+import fountain::f_egraph.*
+
+@Bean
+public class OrderFlowLoader <: FlowLoader {
+    public func load(): ArrayList<String> {
+        // script 可由文件 / 配置 / 数据库加载，内容见下方「流程脚本」
+        ArrayList<String>([script])
+    }
+}
+
+public class AppFlowInitializer <: FlowInitializer {
+    static init() {
+        InitializerCollection.register(AppFlowInitializer())
+    }
+}
+```
+
+流程脚本（`FlowLoader.load()` 的一个元素）：
+
+```text
+let flow = ImmediateFlow("order", "v1")
+flow.registerStart("created")
+flow.registerEnd()
+flow.registerError()
+
+let validate = compile("validate", ["created"], ["validated"],
+    "flowTaskEvent(\"order\", \"v1\", \"validated\", flowDataOf(e))")
+flow.registerTask(validate)
+
+let pay = compile("pay", ["validated"], ["End"],
+    "flowEndEvent(\"order\", \"v1\", flowDataOf(e))")
+flow.registerTask(pay)
+
+flow.removeExceptCurrentTag()
+```
+
+`FlowInitializer.initialize()` 的默认实现是：
+
+1. 创建 `Compiler(CompileOptions(DummyDiagnosticsSink()))`；
+2. 调用 `JitHostRegistry.configure(compiler)` 注册宿主类型；
+3. 调用 `ClosureTask.initCompiler(compiler)` 注入任务编译器；
+4. 按 `FlowLoader.load()` 返回顺序，把每个脚本包裹为 `{ => ... }` 后编译并执行。
+
+宿主若自建 `Compiler`，必须重复第 1–3 步后再执行脚本；`FlowScriptRunner` 是包内实现，不对外暴露。
+
+### 脚本可用 API
+
+| 类别 | 脚本中的写法 | 说明 |
+|---|---|---|
+| 流程 | `ImmediateFlow("order", "v1")` / `AsyncFlow("order", "v1")` | 两个位置参数是 `category` / `tag` |
+| 注册 | `flow.registerStart("created")` / `registerEnd()` / `registerError()` | 开始、结束、错误执行器 |
+| 任务 | `compile(name, acceptable, producing, exec)` | 返回 `ClosureTask`，再用 `flow.registerTask(task)` 注册 |
+| 流程方法 | `flow.removeExceptCurrentTag()` / `flow.canBeRemoved()` / `flow.remove()` | 旧 tag 清理与流程生命周期 |
+| 事件工厂 | `flowTaskEvent(c, t, n, data)` / `flowEndEvent(c, t, data)` / `flowErrorEvent(c, t, msg)` / `flowDummyEvent()` | 脚本面不暴露事件构造器，统一经工厂构造 |
+| 读取数据 | `flowDataOf(e)` | `DataEvent` 且 `data` 是 `String` 时返回其值，否则空串 |
+| 事件字段 | `e.category` / `e.tag` / `e.name` / `e.session` | 只读；`Event.toString()` 可用 |
+
+脚本**不可用**：事件构造器、`emit` / `start` / `initDispatcher`、`registerTask(eventName, closure)` 闭包重载、`is` / `as`。异步流程需要宿主先调用 `AsyncFlow.initDispatcher(...)`，`FlowInitializer` 不会隐式初始化，避免覆盖宿主配置。
+
+### 类型注册方式
+
+| 宿主类型 | 注册方式 |
+|---|---|
+| `Task` / `ClosureTask` / `FlowEventFactory` | `@JitBind`，由 `Compiler.registerInterface` / `registerType` 读取宏登记 |
+| `Event` 家族、`Emitter`、`BaseFlow`、`ImmediateFlow`、`AsyncFlow` | `JitHostRegistry.configure` 用 `ClassDescriptor` 手工注册；事件字段经 `HostFieldTable` 暴露 |
+| `ClosureTask.initCompiler` | `@IgnoreJitBinding`，保持 `public` 但不进入脚本名空间 |
+| `BarrierTask<G>` | 泛型类，**不支持 JIT 绑定**；脚本化任务用 `ClosureTask` |
+
+### 约束
+
+- `FlowLoader.load()` 的每个元素必须是**一个流程**的语句序列；空脚本视为配置错误，初始化抛 `GraphException`。
+- 脚本末条语句必须是 `Unit` 表达式（约定为 `flow.removeExceptCurrentTag()`）；f_jit 不支持空括号 `()`。
+- 第一个注册的任务必须接受开始事件；同一事件只能注册一个执行器，重复注册抛 `GraphException`。
+- 任一脚本编译或执行失败都会终止初始化，后续脚本不执行，已完成的注册不回滚。
+- 编译错误与运行期错误原样上抛，保留 f_jit 的站点与错误码。
+
+更细的注册表与脚本契约见下文「JIT 注册面」「JIT 任务 `ClosureTask`」「流程脚本契约」。
+
 ---
 
 ## 事件类型
@@ -51,12 +154,14 @@ public open class Event <: ToString & Hashable & Equatable<Event> {
      * @param category 一个流程内所有事件拥有一致的category
      * @param tag 事件版本号，一个流程发生变更时应当修改tag，同时删除相同category不同tag的流程，相当于流程的版本
      * @param name 事件名称，只有任务事件拥有名字，其它类型的事件使用eventType.toString()代替
+     * @param session 会话标识，缺省为随机 UUID；同一流程会话内保持一致
      */
     public Event(
         public let eventType!: EventType,
         public let category!: String,
         public let tag!: String,
-        public let name!: String 
+        public let name!: String,
+        public let session!: String = UUID.random().toHexString()
     )
     /**
      * 事件实例的类不影响事件相等性，事件相等性由eventType category tag name这四个成员变量决定
@@ -78,8 +183,9 @@ public open class DataEvent <: Event {
         category!: String,
         tag!: String,
         name!: String,
+        session!: String = UUID.random().toHexString(),
         public let data!: Any
-    ) 
+    )
     public func tryGet<T>(): ?T 
 }
 ```
@@ -90,8 +196,9 @@ public class StartEvent <: DataEvent {
     /**
      * 开始事件对应的StartExecutor什么也不做只是把数据转给流程的第一个任务执行器，为了任务执行器能收到事件，开始事件的name必须与第一个任务执行器的事件名一致
      */
-    public init(category!: String, tag!: String, name!: String, data!: Any){
-        super(eventType: Start, category: category, tag: tag, name: name, data: data)
+    public init(category!: String, tag!: String, name!: String, data!: Any,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: Start, category: category, tag: tag, name: name, data: data, session: session)
     }
 }
 ```
@@ -99,8 +206,9 @@ public class StartEvent <: DataEvent {
 ### 结束事件`EndEvent`
 ```cj
 public class EndEvent <: DataEvent {
-    public init(category!: String, tag!: String, data!: Any){
-        super(eventType: End, category: category, tag: tag, name: EventType.End.toString(), data: data)
+    public init(category!: String, tag!: String, data!: Any,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: End, category: category, tag: tag, name: EventType.End.toString(), data: data, session: session)
     }
 }
 ```
@@ -108,8 +216,9 @@ public class EndEvent <: DataEvent {
 ### 任务事件`TaskEvent`
 ```cj
 public class TaskEvent <: DataEvent {
-    public init(category!: String, tag!: String, name!: String, data!: Any){
-        super(eventType: EventType.Task, category: category, tag: tag, name: name, data: data)
+    public init(category!: String, tag!: String, name!: String, data!: Any,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: EventType.Task, category: category, tag: tag, name: name, data: data, session: session)
     }
 }
 ```
@@ -117,11 +226,13 @@ public class TaskEvent <: DataEvent {
 ### 错误事件`ErrorEvent`
 ```cj
 public class ErrorEvent <: DataEvent {
-    public init(category!: String, tag!: String, message!: String){
-        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: message)
+    public init(category!: String, tag!: String, message!: String,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: message, session: session)
     }
-    public init(category!: String, tag!: String, error!: Exception){
-        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: error)
+    public init(category!: String, tag!: String, error!: Exception,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: error, session: session)
     }
 }
 ```
@@ -130,9 +241,9 @@ public class ErrorEvent <: DataEvent {
 
 ```cj
 public class MultiEvent <: DataEvent {
-    public init(category!: String, tag!: String, events!: Iterable<Event>, 
+    public init(category!: String, tag!: String, name!: String, events!: Iterable<Event>, 
                 session!: String = UUID.random().toHexString()){
-        super(eventType: EventType.Task, category: category, tag: tag, name: 'multi', data: events, session: session)
+        super(eventType: EventType.Multi, category: category, tag: tag, name: name, data: events, session: session)
     }
 }
 ```
@@ -142,7 +253,7 @@ public class MultiEvent <: DataEvent {
 public class DummyEvent <: Event {
     public static let instance = DummyEvent()
     private init(){
-        super(eventType: EventType.Dummy, category: '', tag: '', name: '')
+        super(eventType: EventType.Dummy, category: '', tag: '', name: '', session: '')
     }
 }
 ```
@@ -478,13 +589,16 @@ public class BarrierTask<G> <: Task where G <: EndExecutorGetter{
      * @param events 可接收的和输出的事件，可接收的事件是元组的第一个元素，
      *               对应的发射事件是元组的第二个元素，
      *               第三个元素是同一事件的数量达到指定数后发送输出事件
+     * @param producing 本任务可能产生的事件（Task 契约元数据）
      */
     public BarrierTask(
         name!: String,
-        events!: Array<(String, String, Int64)>
+        events!: Array<(String, String, Int64)>,
+        producing!: Array<String>
     )
     public prop name: String 
     public prop acceptableEvents: Array<String> 
+    public prop producingEvents: Array<String> 
     /**
      * 固定返回DummyEvent，同一事件的数据量达到指定数时，构造成新事件调用flow.emit一次发出
      */
@@ -771,6 +885,20 @@ public interface FlowLoader {
 
 
 ---
+
+## 异常
+
+```cj
+/**
+ * f_egraph 的统一异常类型，继承 f_base 的 BaseException。
+ */
+public class GraphException <: BaseException {
+    public init()
+    public init(message: String)
+    public init(caused: Exception)
+    public init(message: String, caused: Exception)
+}
+```
 
 ## 其他公开 API
 

@@ -1,5 +1,108 @@
 # `fountain::f_egraph` is an event-driven flow utility library
 All the top-level declarations below are re-exports of `fountain::f_egraph`
+
+Flow scripting relies on `fountain::f_jit`; see the JIT registration surface and script contract below.
+
+## JIT support
+
+`f_egraph` flow orchestration can be described by `f_jit` scripts. At startup `FlowInitializer` creates a compiler, registers the host types, compiles each script returned by `FlowLoader` into a zero-argument function and runs it. The script creates `ImmediateFlow` / `AsyncFlow` instances, calls `ClosureTask.compile` to build task bodies and registers them into the flow, so topology or task-body changes only require editing the script, not recompiling the host.
+
+### Capabilities
+
+| Capability | Entry point | Description |
+|---|---|---|
+| Scripted flow orchestration | `FlowLoader.load()` + `FlowInitializer` | Each element of `load()` is the complete registration script of one flow |
+| Scripted task body | `ClosureTask.compile` | Compiles an `exec` statement sequence into `(Event) -> Event` |
+| Script-side event construction | `FlowEventFactory` | `flowTaskEvent` / `flowEndEvent` / `flowErrorEvent` / `flowDummyEvent` / `flowDataOf` |
+| Host type registration | `JitHostRegistry.configure` | Manual `ClassDescriptor` registration for the event family, `Emitter`, `BaseFlow`, `ImmediateFlow`, `AsyncFlow` |
+| Automatic initialization | `FlowInitializer.initialize` | Creates and configures `Compiler`, injects `ClosureTask`, runs all scripts in order |
+| Error propagation | f_jit exceptions | Compile / runtime errors are rethrown unchanged with source sites and codes |
+
+### Minimal setup
+
+Implement `FlowLoader`, register it as a bean, and register a `FlowInitializer` implementation; scripts are compiled and executed automatically at application startup:
+
+```cangjie
+import fountain::f_app.InitializerCollection
+import fountain::f_bean.macros.*
+import fountain::f_egraph.*
+
+@Bean
+public class OrderFlowLoader <: FlowLoader {
+    public func load(): ArrayList<String> {
+        // `script` may come from a file / config / database; see the flow script below
+        ArrayList<String>([script])
+    }
+}
+
+public class AppFlowInitializer <: FlowInitializer {
+    static init() {
+        InitializerCollection.register(AppFlowInitializer())
+    }
+}
+```
+
+Flow script (one element of `FlowLoader.load()`):
+
+```text
+let flow = ImmediateFlow("order", "v1")
+flow.registerStart("created")
+flow.registerEnd()
+flow.registerError()
+
+let validate = compile("validate", ["created"], ["validated"],
+    "flowTaskEvent(\"order\", \"v1\", \"validated\", flowDataOf(e))")
+flow.registerTask(validate)
+
+let pay = compile("pay", ["validated"], ["End"],
+    "flowEndEvent(\"order\", \"v1\", flowDataOf(e))")
+flow.registerTask(pay)
+
+flow.removeExceptCurrentTag()
+```
+
+The default `FlowInitializer.initialize()`:
+
+1. Creates `Compiler(CompileOptions(DummyDiagnosticsSink()))`;
+2. Calls `JitHostRegistry.configure(compiler)` to register host types;
+3. Calls `ClosureTask.initCompiler(compiler)` to inject the task compiler;
+4. Iterates `FlowLoader.load()` in order, wraps each script as `{ => ... }`, compiles and executes it.
+
+If the host builds its own `Compiler`, repeat steps 1–3 before running scripts. `FlowScriptRunner` is package-internal and not exposed.
+
+### Script-visible API
+
+| Category | Script syntax | Description |
+|---|---|---|
+| Flow | `ImmediateFlow("order", "v1")` / `AsyncFlow("order", "v1")` | The two positional arguments are `category` / `tag` |
+| Registration | `flow.registerStart("created")` / `registerEnd()` / `registerError()` | Start, end and error executors |
+| Tasks | `compile(name, acceptable, producing, exec)` | Returns a `ClosureTask`; register it with `flow.registerTask(task)` |
+| Flow methods | `flow.removeExceptCurrentTag()` / `flow.canBeRemoved()` / `flow.remove()` | Old-tag cleanup and flow lifecycle |
+| Event factory | `flowTaskEvent(c, t, n, data)` / `flowEndEvent(c, t, data)` / `flowErrorEvent(c, t, msg)` / `flowDummyEvent()` | Event constructors are not exposed; use the factory |
+| Data access | `flowDataOf(e)` | Returns `data` when it is a `DataEvent` with a `String` payload, otherwise `""` |
+| Event fields | `e.category` / `e.tag` / `e.name` / `e.session` | Read-only; `Event.toString()` is available |
+
+The script **cannot** use event constructors, `emit` / `start` / `initDispatcher`, the `registerTask(eventName, closure)` closure overload, or `is` / `as`. Async flows require the host to call `AsyncFlow.initDispatcher(...)` first; `FlowInitializer` does not initialize it implicitly, to avoid overriding host configuration.
+
+### Type registration
+
+| Host type | Registration |
+|---|---|
+| `Task` / `ClosureTask` / `FlowEventFactory` | `@JitBind`; enrolled by `Compiler.registerInterface` / `registerType` via the macro |
+| Event family, `Emitter`, `BaseFlow`, `ImmediateFlow`, `AsyncFlow` | `JitHostRegistry.configure` registers manual `ClassDescriptor`s; event fields are exposed through `HostFieldTable` |
+| `ClosureTask.initCompiler` | `@IgnoreJitBinding`; stays `public` but outside the script namespace |
+| `BarrierTask<G>` | Generic class, **not JIT-bindable**; use `ClosureTask` for scripted tasks |
+
+### Constraints
+
+- Each element of `FlowLoader.load()` must be the statement sequence of **one flow**; a blank script is a configuration error and throws `GraphException` during initialization.
+- The last statement must be a `Unit` expression (by convention `flow.removeExceptCurrentTag()`); f_jit does not parse empty parentheses `()`.
+- The first registered task must accept the start event; an event may have only one executor, and duplicate registration throws `GraphException`.
+- Any compile or execution failure aborts initialization; later scripts do not run and completed registrations are not rolled back.
+- Compile and runtime errors are rethrown unchanged, preserving f_jit source sites and error codes.
+
+See “JIT registration surface”, “JIT task `ClosureTask`” and “Flow script contract” below for the detailed registration table and script contract.
+
 ---
 
 ## Event types
@@ -54,12 +157,14 @@ public open class Event <: ToString & Hashable & Equatable<Event> {
      * @param tag Event version number; when a flow changes, tag should be modified and the flows with the same category but
      * a different tag should be deleted; it is the version of the flow
      * @param name Event name; only task events have a name, and events of other types use eventType.toString() instead
+     * @param session Session id, a random UUID by default; keep it consistent within one flow session
      */
     public Event(
         public let eventType!: EventType,
         public let category!: String,
         public let tag!: String,
-        public let name!: String 
+        public let name!: String,
+        public let session!: String = UUID.random().toHexString()
     )
     /**
      * The class of an event instance does not affect event equality; event equality is determined by the four member
@@ -83,8 +188,9 @@ public open class DataEvent <: Event {
         category!: String,
         tag!: String,
         name!: String,
+        session!: String = UUID.random().toHexString(),
         public let data!: Any
-    ) 
+    )
     public func tryGet<T>(): ?T 
 }
 ```
@@ -97,8 +203,9 @@ public class StartEvent <: DataEvent {
      * the flow; for the task executor to receive the event, the name of the start event must equal the event name of
      * the first task executor
      */
-    public init(category!: String, tag!: String, name!: String, data!: Any){
-        super(eventType: Start, category: category, tag: tag, name: name, data: data)
+    public init(category!: String, tag!: String, name!: String, data!: Any,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: Start, category: category, tag: tag, name: name, data: data, session: session)
     }
 }
 ```
@@ -106,8 +213,9 @@ public class StartEvent <: DataEvent {
 ### End event `EndEvent`
 ```cj
 public class EndEvent <: DataEvent {
-    public init(category!: String, tag!: String, data!: Any){
-        super(eventType: End, category: category, tag: tag, name: EventType.End.toString(), data: data)
+    public init(category!: String, tag!: String, data!: Any,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: End, category: category, tag: tag, name: EventType.End.toString(), data: data, session: session)
     }
 }
 ```
@@ -115,8 +223,9 @@ public class EndEvent <: DataEvent {
 ### Task event `TaskEvent`
 ```cj
 public class TaskEvent <: DataEvent {
-    public init(category!: String, tag!: String, name!: String, data!: Any){
-        super(eventType: EventType.Task, category: category, tag: tag, name: name, data: data)
+    public init(category!: String, tag!: String, name!: String, data!: Any,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: EventType.Task, category: category, tag: tag, name: name, data: data, session: session)
     }
 }
 ```
@@ -124,11 +233,13 @@ public class TaskEvent <: DataEvent {
 ### Error event `ErrorEvent`
 ```cj
 public class ErrorEvent <: DataEvent {
-    public init(category!: String, tag!: String, message!: String){
-        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: message)
+    public init(category!: String, tag!: String, message!: String,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: message, session: session)
     }
-    public init(category!: String, tag!: String, error!: Exception){
-        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: error)
+    public init(category!: String, tag!: String, error!: Exception,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: error, session: session)
     }
 }
 ```
@@ -137,9 +248,9 @@ public class ErrorEvent <: DataEvent {
 
 ```cj
 public class MultiEvent <: DataEvent {
-    public init(category!: String, tag!: String, events!: Iterable<Event>, 
+    public init(category!: String, tag!: String, name!: String, events!: Iterable<Event>, 
                 session!: String = UUID.random().toHexString()){
-        super(eventType: EventType.Task, category: category, tag: tag, name: 'multi', data: events, session: session)
+        super(eventType: EventType.Multi, category: category, tag: tag, name: name, data: events, session: session)
     }
 }
 ```
@@ -149,7 +260,7 @@ public class MultiEvent <: DataEvent {
 public class DummyEvent <: Event {
     public static let instance = DummyEvent()
     private init(){
-        super(eventType: EventType.Dummy, category: '', tag: '', name: '')
+        super(eventType: EventType.Dummy, category: '', tag: '', name: '', session: '')
     }
 }
 ```
@@ -496,10 +607,12 @@ public class BarrierTask<G> <: Task where G <: EndExecutorGetter{
      */
     public BarrierTask(
         name!: String,
-        events!: Array<(String, String, Int64)>
+        events!: Array<(String, String, Int64)>,
+        producing!: Array<String>
     )
     public prop name: String 
     public prop acceptableEvents: Array<String> 
+    public prop producingEvents: Array<String> 
     /**
      * Always returns DummyEvent; when the number of data items of the same event reaches the given count, a new event
      * is constructed and emitted once through flow.emit
@@ -791,6 +904,20 @@ public interface FlowLoader {
 ```
 
 ---
+
+## Exceptions
+
+```cj
+/**
+ * Unified exception type of f_egraph, extending BaseException from f_base.
+ */
+public class GraphException <: BaseException {
+    public init()
+    public init(message: String)
+    public init(caused: Exception)
+    public init(message: String, caused: Exception)
+}
+```
 
 ## Other public API
 

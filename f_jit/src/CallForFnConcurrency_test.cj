@@ -24,7 +24,7 @@ import fountain::f_jit.base.DummyDiagnosticsSink
 /**
  * A6.1（P2-4）：`callForFn` 全流程串行化。
  *
- * `lastClosureGroup` 是单元级字段：旧实现在 `callMtx` **之外**读取它，两个线程会交换提升组
+ * `lastEscaped` 是单元级字段：旧实现在 `callMtx` **之外**读取它，两个线程会交换提升组
  * （一侧 `close` 提前释放另一侧的捕获）；且读后不清，跨调用残留（把上一次的组当成这次的）。
  */
 @Test
@@ -37,7 +37,7 @@ public class CallForFnConcurrency_test {
         let w = unit.callForFn<(Int64) -> Int64>([])
         @Assert(w.call<Int64>([41]), 42)
         @Assert(unit.lastPromotionGroup().isNone(), true)
-        w.unloadFn()
+        w.close()
     }
 
     /** 两线程各自 `callForFn` + 调用 + `close`：结果互不串、无提前释放。 */
@@ -53,7 +53,7 @@ public class CallForFnConcurrency_test {
                 while (i < 20) {
                     let w = unit.callForFn<(Int64) -> Int64>([])
                     @Assert(w.call<Int64>([base + i]), base + i + 1)
-                    w.unloadFn()
+                    w.close()
                     i = i + 1
                 }
             })

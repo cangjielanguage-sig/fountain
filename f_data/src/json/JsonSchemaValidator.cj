@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain::f_data.json
 
-import std.collection.ArrayList
+import std.collection.{ArrayList, HashMap}
 import std.math.numeric.{BigInt, Decimal}
 import fountain::f_regex.*
 
@@ -75,10 +75,27 @@ class ValidationCtx {
     let options: ValidationOptions
     let errors = ArrayList<ValidationError>()
     let skipped = ArrayList<String>()
+    private let patterns: ?HashMap<String, Regex>
     private var stopped = false
 
-    init(options: ValidationOptions) {
+    init(options: ValidationOptions, patterns!: ?HashMap<String, Regex> = None) {
         this.options = options
+        this.patterns = patterns
+    }
+
+    /** 取预编译的正则；没有预编译表时按需编译（与旧行为一致）。 */
+    func regexFor(pattern: String): Regex {
+        match (patterns) {
+            case Some(table) =>
+                match (table.get(pattern)) {
+                    case Some(re) => re
+                    case _ =>
+                        let re = pattern.regex(solid: false)
+                        table.add(pattern, re)
+                        re
+                }
+            case _ => pattern.regex(solid: false)
+        }
     }
 
     prop aborted: Bool {
@@ -123,6 +140,14 @@ class ValidationCtx {
 public class JsonSchemaValidator {
     public static func validate(schema: JsonObject, value: JsonValue, options!: ValidationOptions = ValidationOptions()): ValidationResult {
         let ctx = ValidationCtx(options)
+        validateDoc(schema, value, '', ctx, 0)
+        ctx.result()
+    }
+
+    /** 复用已预编译的 `pattern` 表（`CompiledSchema` 的入口）。 */
+    static func validateWithPatterns(schema: JsonObject, value: JsonValue, patterns: HashMap<String, Regex>,
+        options: ValidationOptions): ValidationResult {
+        let ctx = ValidationCtx(options, patterns: patterns)
         validateDoc(schema, value, '', ctx, 0)
         ctx.result()
     }
@@ -224,7 +249,7 @@ public class JsonSchemaValidator {
         }
         if (let Some(p) <- stringKeyword(obj, 'pattern', path, ctx)) {
             try {
-                if (!p.regex(solid: false).matches(s)) {
+                if (!ctx.regexFor(p).matches(s)) {
                     ctx.add(path, 'pattern', "string does not match pattern '${p}'")
                 }
             } catch (_: Exception) {

@@ -6,12 +6,39 @@
 - 支持单请求、批量、通知、topic 命名空间、单方法超时、JSON Schema 参数校验
 - 不修改 `f_mvc` 任何公开 API（`@JsonRpcMapping` 是 `RequestMapping` 的子类）
 
+## 包结构
+
+| 包 | 内容 |
+|----|------|
+| `fountain::f_jsonrpc.base` | 协议常量、错误模型、方法元数据注解 |
+| `fountain::f_jsonrpc.client` | `JsonRpcClient` / `ClientOptions` |
+| `fountain::f_jsonrpc.server` | `JsonRpcServer`、方法表、`f_mvc` 路由与参数转换 |
+| `fountain::f_jsonrpc.macros` | `@JsonRpc` 宏（独立包） |
+| `fountain::f_jsonrpc` | 门面包：`public import` 以上三个包，兼容 `import fountain::f_jsonrpc.*` |
+
+客户端可以只 `import fountain::f_jsonrpc.client.*`，服务端只 `import fountain::f_jsonrpc.server.*`，共用 `base`；
+模块依赖仍声明 `fountain::f_jsonrpc`。
+
+使用 `@JsonRpc` 宏时建议 `import fountain::f_jsonrpc.*`：宏展开会用到门面包再导出的
+`lookup` / `BeanFactory` / `TypeInfo`，只导入 `server` / `base` 时需要自行补这三个符号。
+
+## 规范版本
+
+- **JSON-RPC 2.0**（[规范原文](https://www.jsonrpc.org/specification)，2013-01-04 发布）
+- 传输：HTTP(S) `POST` + `application/json`，UTF-8
+- 已实现：请求 / 响应、批量、通知（无 `id` 不回包）、位置参数与命名参数、`id` 原样回传（字符串 / 数字 / `null`）、标准错误码 `-32700` / `-32600` / `-32601` / `-32602` / `-32603`
+- 扩展：`-32001 ~ -32004` 为模块保留码段，`-32020 ~ -32099` 留给业务；`/rpc/{topic}` 是 HTTP 路径层的命名空间扩展，不改变消息格式
+- 与规范的差异：协议错误统一返回 HTTP 200（请求体超限返回 413），错误放在响应体的 `error` 对象；传输只做 HTTP POST，不提供 GET / SSE / WebSocket
+- 单参数也按规范写成 `[值]` 或 `{"名": 值}`，不接受裸标量
+
 ## 依赖
 
 ```toml
 [dependencies]
+  "fountain::f_bean" = {path = "../f_bean"}
   "fountain::f_data" = {path = "../f_data"}
   "fountain::f_log" = {path = "../f_log"}
+  "fountain::f_macros" = {path = "../f_macros"}
   "fountain::f_mvc" = {path = "../f_mvc"}
 ```
 
@@ -22,7 +49,7 @@
 ```cangjie
 package demo
 
-import fountain::f_jsonrpc.*
+import fountain::f_jsonrpc.server.*
 import fountain::f_data.*
 
 main() {
@@ -37,7 +64,7 @@ main() {
 }
 ```
 
-方法名里的第一个 `.` 之前是命名空间（`kb.search` → `kb`）。不含 `.` 的方法只能从 `/rpc` 调用。
+方法名里的第一个 `.` 之前是命名空间（`knowledge.search` → `knowledge`）。不含 `.` 的方法只能从 `/rpc` 调用。
 
 ### 1.1 用宏注册（推荐）
 
@@ -45,7 +72,7 @@ main() {
 import fountain::f_jsonrpc.*
 import fountain::f_jsonrpc.macros.*
 
-@JsonRpc[topic: kb]
+@JsonRpc[namespace: knowledge]
 public class SearchRPC {
     public init() {}
 
@@ -61,9 +88,10 @@ public class SearchRPC {
 }
 ```
 
-- 类上自动加 `@Bean`；每个 public 实例方法注册为 `<topic>.<方法名>`
+- 类上自动加 `@Bean`；每个 public 实例方法注册为 `<namespace>.<方法名>`
 - `@JsonRpcMeta['描述', '5s']` 的第二个参数是 `Duration` 字符串，可用 `meta.timeoutDuration` 取 `Duration`
-- `JsonRpcRegister.getMeta<T>(方法名)` 直接返回 `JsonRpcMeta`（无注解时描述与超时都为空串）
+- `JsonRpcRegistry.getMeta<T>(方法名, argTypes)` 返回 `JsonRpcMeta`；`argTypes` 用来匹配重载（无注解时描述为空串、**不设超时**）
+- `timeout` 写空串 `''` 等价于「不设超时」；只有写了 `'5s'` 这类值才会走子线程 + `future.get(t)`
 - 单参数按 JSON-RPC 规范传 `[值]` 或 `{"参数名": 值}`；多参数必须传对象
 - 返回 `Unit` 时 `result` 为 `null`；参数/返回值可以是任意 `f_data.DataFields<T>` 子类型（含 `@DataAssist` 对象）
 
@@ -87,9 +115,27 @@ cd fjsonrpcdemo
 | `/rpc` | 不过滤命名空间 |
 | `/rpc/{topic}` | 只允许 `topic` 命名空间下的方法；该 topic 没有任何方法时返回 `-32004` |
 
+`{topic}` 是内置 `JsonRpcController` 的路径变量（`@JsonRpcMapping[path: '/rpc/{topic}']` + `@PathVariable topic`），它对应的就是宏里的 `namespace`：宏属性叫 `namespace`，路由变量叫 `topic`，两者是同一个值。
+
+`@JsonRpc[namespace: knowledge]` 注册出的方法名是 `knowledge.search`，因此：
+
+| 请求 | 结果 |
+|---|---|
+| `POST /rpc/knowledge` + `{"method":"knowledge.search"}` | 命中 |
+| `POST /rpc` + `{"method":"knowledge.search"}` | 命中（`/rpc` 不过滤命名空间） |
+| `POST /rpc/knowledge` + `{"method":"search"}` | `-32601`（不做前缀补全） |
+| `POST /rpc/other` + `{"method":"knowledge.search"}` | `-32004`（`other` 下没有任何方法） |
+| `POST /rpc/knowledge` + `{"method":"crm.list"}`（`crm` 已注册） | `-32601`（方法属于别的命名空间） |
+| `POST /rpc/unknown` + 任意 method | `-32004`（该命名空间下没有任何方法） |
+
+命名空间从方法名反推：第一个 `.` 之前的部分；不含 `.` 的方法属于默认命名空间，只能从 `/rpc` 调用。
+
 `@JsonRpcMapping` 也可以直接用在自定义 `@Controller` 里。它把 `method` / `consumes` / `produces` 固定为 `POST` + `application/json`，只暴露路由参数：
 
 ```cangjie
+import fountain::f_jsonrpc.server.*
+import fountain::f_mvc.*
+
 @Controller
 public class MyRpcController {
     private let server = JsonRpcRegistry.server()
@@ -97,8 +143,9 @@ public class MyRpcController {
     @JsonRpcMapping[path: '/my-rpc']
     public func handle(@RequestBody raw: Array<Byte>): Any {
         let ctx = CurrentHttpContext.instance
+        // handle 返回 JsonValue：由 f_mvc 按 application/json 输出
         match (server.handle(raw, ctx: JsonRpcContext(http: Some(ctx)))) {
-            case Some(bytes) => bytes
+            case Some(value) => value
             case None => ()
         }
     }
@@ -107,7 +154,7 @@ public class MyRpcController {
 
 ### 3. 参数校验
 
-`JsonRpcMethodMeta.paramsSchema` 接一份 `JsonObject` 形式的 JSON Schema；请求进入 handler 前用 `JsonSchemaValidator.validate` 校验，失败返回 `-32602`，`error.data` 是 `ValidationResult.toJson()`。
+`JsonRpcMethodMeta.paramsSchema` 接一份 `JsonObject` 形式的 JSON Schema；注册期用 `f_data.CompiledSchema.compile` 做结构校验并预编译 `pattern`（脏 schema 在启动时就报错），请求期直接复用编译结果，失败返回 `-32602`，`error.data` 是 `ValidationResult.toJson()`。
 
 ```cangjie
 let schema = JsonObject()
@@ -117,7 +164,7 @@ schema.add('required', JsonArray(list: ArrayList<JsonValue>([JsonString('query')
 
 ### 4. 错误
 
-handler 抛 `JsonRpcException` 时，`code` / `message` / `data` 原样返回：
+handler 抛 `JsonRpcException` 时，`code` / `message` / `data` 原样返回（`JsonRpcException` 在 `fountain::f_jsonrpc.base`）：
 
 ```cangjie
 throw JsonRpcException(-32020, 'Knowledge base not found', data: JsonString('kb-1'))
@@ -126,10 +173,13 @@ throw JsonRpcException(-32020, 'Knowledge base not found', data: JsonString('kb-
 | 码段 | 归属 |
 |---|---|
 | `-32700 ~ -32603` | JSON-RPC 2.0 标准错误 |
-| `-32001 ~ -32004` | f_jsonrpc 保留（Server error / Timeout / Overloaded / Unknown topic） |
+| `-32001` | 保留，当前实现不产生（`SERVER_ERROR` 仅作占位） |
+| `-32002` | 超时（只有显式配置 `timeout` 才会产生） |
+| `-32003` | 批量条数超限（仅批请求，`data` = `{limit, size}`） |
+| `-32004` | 未知 topic（`/rpc/{topic}` 下没有任何方法） |
 | `-32020 ~ -32099` | 业务可用 |
 
-除请求体超限（HTTP 413）与框架级异常外，协议错误一律 HTTP 200，错误放在响应体的 `error` 对象里。
+除请求体超限（HTTP 413）与框架级异常外，协议错误一律 HTTP 200，错误放在响应体的 `error` 对象里。响应 `Content-Type` 固定为 `application/json`（来自 f_mvc 对 `JsonValue` 的渲染），不再取请求的 `Accept` 原文。
 
 ### 5. 超时
 
@@ -137,11 +187,17 @@ throw JsonRpcException(-32020, 'Knowledge base not found', data: JsonString('kb-
 JsonRpcMethodMeta(name: 'slow', handler: ..., timeout: Duration.millisecond * 200)
 ```
 
-超时后返回 `-32002`，**但不会终止 handler**（仓颉没有抢占式取消）。长循环里用 `ctx.isExpired()` 自查，带副作用的操作请保证幂等。
+- **默认不设超时**：没有 `@JsonRpcMeta` 或注解第二参数为空串时，handler 在请求线程内联执行，
+  `CurrentHttpContext` 等请求级 ThreadLocal 完整可用
+- 显式配置超时才会 `spawn` 子线程，并在子线程内用 `CurrentHttpContext.scoped` 恢复上下文
+- 超时后返回 `-32002`，**但不会终止 handler**（仓颉没有抢占式取消）。长循环里用 `ctx.isExpired()` 自查，带副作用的操作请保证幂等
 
 ## 客户端
 
 ```cangjie
+import fountain::f_jsonrpc.client.*
+import fountain::f_jsonrpc.base.*   // JsonRpcException
+
 let client = JsonRpcClient('http://127.0.0.1:8080/rpc')
 let result = client.call('kb.search', params: JsonString('fountain'))
 client.notify('kb.reindex')
@@ -151,7 +207,292 @@ client.close()
 
 - 请求：`POST` + `Content-Type: application/json; charset=utf-8`，紧凑序列化
 - `Client` 实例复用连接池，默认不重试
+- **重试边界**：只有建连 / 发送阶段失败（`JsonRpcConnectException`）会按 `retryOnConnectFailure` 重试；
+  读响应阶段失败（服务端可能已经执行）永不重试
+- **响应上限**：先用 `Content-Length` 预判，再流式累计字节数，超过 `maxResponseBytes` 立即停止读取并关闭连接
+- 批量整体被拒（`-32003` 超限 / `-32600` 空批量）时直接抛 `JsonRpcException`，携带服务端的 `code` / `data`；
+  非数组、非错误对象响应报 `-32603`
+- `error.code` 非数字、响应体不是合法 JSON 一律映射为 `JsonRpcException`，不泄漏 `JsonException`
+
+### 6. 客户端选项
+
+```cangjie
+let client = JsonRpcClient('http://127.0.0.1:8080/rpc', opts: ClientOptions(
+    timeout: Duration.second * 10,            // 默认 30s
+    headers: headers,                         // 额外请求头，如 Authorization
+    maxResponseBytes: 4 * 1024 * 1024,        // 默认 8 MiB，超限直接报错
+    keepAlive: false,                         // 默认 true；false 时发送 Connection: close
+    retryOnConnectFailure: 2                  // 默认 0（不重试），仅建连失败可重试
+))
+```
+
+### 7. 请求体与批量上限
+
+| 上限 | 默认值 | 配置方式 | 超限响应 |
+|---|---|---|---|
+| 单次批量条数 `maxBatchSize` | 100 | `JsonRpcServer.builder().maxBatchSize(n)` | `-32003`，`data = {limit, size}` |
+| 请求体字节数 `maxBodyBytes` | `MVCConfig.maxRequestBodySize`（2 MiB） | `maxBodyBytes(n)` 或 MVC 配置 | `-32600` + HTTP 413，`data = {limit}` |
+
+显式 `maxBodyBytes(n)` 优先；没显式配置时每次请求现读 `MVCConfig.maxRequestBodySize`，因此在 server 构造之后再加载配置也生效。
+
+自定义传输（stdio / 测试替身）可以直接实现 `JsonRpcTransport` 并通过 `JsonRpcClient(transport, opts: ...)` 注入。
 - 服务端返回 `error` → 抛 `JsonRpcException`；只有传输失败才抛 `IOException`
+
+## API 参考
+
+### `fountain::f_jsonrpc.base`
+
+#### `JsonRpcProtocol`
+
+协议常量与错误码（`public static const`）：
+
+| 成员 | 值 / 签名 | 说明 |
+| --- | --- | --- |
+| `VERSION` | `"2.0"` | JSON-RPC 版本 |
+| `PATH` | `"/rpc"` | 默认端点 |
+| `TOPIC_PATH` | `"/rpc/{topic}"` | 带 topic 的端点模板 |
+| `PARSE_ERROR` | `-32700` | 解析错误 |
+| `INVALID_REQUEST` | `-32600` | 非法请求 |
+| `METHOD_NOT_FOUND` | `-32601` | 方法不存在 |
+| `INVALID_PARAMS` | `-32602` | 参数错误 |
+| `INTERNAL_ERROR` | `-32603` | 内部错误 |
+| `SERVER_ERROR` | `-32001` | 保留常量，当前实现不产生 |
+| `TIMEOUT` | `-32002` | 方法超时 |
+| `OVERLOADED` | `-32003` | 批量条数超限 |
+| `UNKNOWN_TOPIC` | `-32004` | 未知 topic |
+| `DEFAULT_MAX_BATCH_SIZE` | `100` | 默认批量上限 |
+| `messageOf(code)` | `static func messageOf(code: Int64): String` | 标准错误码的默认文案 |
+
+#### `JsonRpcException` 与 `JsonRpcError`
+
+```cangjie
+public open class JsonRpcException <: Exception {
+    public let code: Int64
+    public let data: ?JsonValue
+    public init(code: Int64, message: String, data!: ?JsonValue = None)
+}
+
+public class JsonRpcConnectException <: IOException {
+    public init(message: String)
+}
+
+public struct JsonRpcError {
+    public const JsonRpcError(public let code: Int64, public let message: String, public let data: ?JsonValue)
+    public static func from(ex: JsonRpcException): JsonRpcError
+    public func toJson(): JsonObject
+}
+```
+
+- `JsonRpcConnectException` 只表示建连 / 发送阶段失败，是唯一会被客户端的
+  `retryOnConnectFailure` 重试的异常；读响应阶段失败不会重试。
+- `JsonRpcError.toJson()` 输出 `{code, message, data?}`，可直接放入响应体。
+
+#### `JsonRpcMeta`
+
+```cangjie
+@Annotation[target: [MemberFunction]]
+public class JsonRpcMeta {
+    public const JsonRpcMeta(public let description: String, public let timeout: String)
+    public prop timeoutDuration: Duration
+}
+```
+
+- 用在 `@JsonRpc` 类的 public 实例方法上；`timeout` 是 `Duration` 字符串（`"5s"` / `"1m30s"`）。
+- 空串表示不设超时；`timeoutDuration` 内部调用 `Duration.parse`。
+
+### `fountain::f_jsonrpc.server`
+
+#### `JsonRpcMethodMeta`
+
+```cangjie
+public type JsonRpcHandler = (JsonRpcContext, ?JsonValue) -> JsonValue
+
+public class JsonRpcMethodMeta {
+    public let name: String
+    public let handler: JsonRpcHandler
+    public let description: String
+    public let timeout: ?Duration
+    public let paramsSchema: ?JsonObject
+
+    public init(name!: String, handler!: JsonRpcHandler, description!: String = '',
+        timeout!: ?Duration = None, paramsSchema!: ?JsonObject = None)
+    public func namespace(): String
+}
+```
+
+- `name` 必须是 `namespace.method` 或裸 `method`；`namespace()` 返回第一个 `.` 之前的部分，裸方法返回空串。
+- `paramsSchema` 在构造期用 `f_data.CompiledSchema.compile` 预编译，脏 schema 启动即失败。
+- `timeout = None` 时 handler 在请求线程内联执行；设置后才 `spawn` 子线程并在超时后返回 `-32002`。
+
+#### `JsonRpcRegistry`
+
+```cangjie
+public class JsonRpcRegistry {
+    public static func server(): JsonRpcServer
+    public static func register(meta: JsonRpcMethodMeta): Unit
+    public static func getMeta<T>(fnName: String, argTypes: Array<TypeInfo>): JsonRpcMeta where T <: Object
+}
+```
+
+- `server()` 返回进程内默认端点（`/rpc`）的 `JsonRpcServer`。
+- `register` 向默认端点追加方法；重复方法名抛 `JsonRpcException(-32603)`。
+- `getMeta<T>` 读取 `T.fnName` 指定参数类型的 `@JsonRpcMeta`；没有注解时返回
+  `JsonRpcMeta("", "")`（无描述、不设超时）。
+
+#### `JsonRpcServer`
+
+```cangjie
+public class JsonRpcServer {
+    public static func builder(): JsonRpcServerBuilder
+    public func addMethod(meta: JsonRpcMethodMeta): Unit
+    public func methods(): ArrayList<JsonRpcMethodMeta>
+    public prop endpoint: String
+    public func handle(body: Array<Byte>, ctx!: JsonRpcContext): ?JsonValue
+    public func invoke(method: String, params!: ?JsonValue = None,
+        ctx!: JsonRpcContext = JsonRpcContext()): JsonValue
+}
+```
+
+| 方法 | 说明 |
+| --- | --- |
+| `addMethod` | 线程安全；重复方法名抛 `JsonRpcException(-32603)`，不覆盖 |
+| `methods()` | 按方法名升序返回快照，供 `tools/list` 等生成稳定输出 |
+| `handle` | 解析单请求 / 批量；返回 `None` 表示通知，不写响应体；请求体超限返回 `-32600` 并设置 HTTP 413 |
+| `invoke` | 本地直调，不经过 HTTP；方法不存在抛 `JsonRpcException(-32601)` |
+
+`handle` 的批量行为：空数组 → `-32600`；超过 `maxBatchSize` → `-32003`（`data={limit,size}`）；
+批量内每条独立处理，通知条目没有响应。
+
+#### `JsonRpcServerBuilder`
+
+```cangjie
+public class JsonRpcServerBuilder {
+    public func endpoint(name: String): JsonRpcServerBuilder
+    public func maxBatchSize(n: Int64): JsonRpcServerBuilder
+    public func maxBodyBytes(n: Int64): JsonRpcServerBuilder
+    public func addMethod(meta: JsonRpcMethodMeta): JsonRpcServerBuilder
+    public func build(): JsonRpcServer
+}
+```
+
+- `maxBodyBytes` 不设置（`0`）时，每次请求现读 `MVCConfig.maxRequestBodySize`（默认 2 MiB）。
+- `maxBatchSize` / `maxBodyBytes` 只接受正数，非正数被忽略。
+
+#### `JsonRpcContext`
+
+```cangjie
+public class JsonRpcContext {
+    public let http: ?HttpContext
+    public let id: ?JsonValue
+    public let endpoint: String
+    public let topic: String
+    public let deadline: ?MonoTime
+
+    public init(http!: ?HttpContext = None, id!: ?JsonValue = None,
+        endpoint!: String = JsonRpcProtocol.PATH, topic!: String = '', deadline!: ?MonoTime = None)
+    public func setResponseHeader(name: String, value: String): Unit
+    public func isExpired(): Bool
+}
+```
+
+- `http = None` 表示 stdio / 本地直调，`setResponseHeader` 静默忽略。
+- `isExpired()` 在无 `deadline` 时始终为 `false`；长循环应主动自查。
+
+#### `JsonRpcController` / `JsonRpcMapping`
+
+`JsonRpcController` 是模块内置的 `f_mvc` 控制器，注册两条路由：
+
+- `handleRoot(@RequestBody raw)` → `/rpc`
+- `handleTopic(@RequestBody raw, @PathVariable topic)` → `/rpc/{topic}`
+
+`JsonRpcMapping <: RequestMapping` 是 `@JsonRpcMapping[path: ...]` 的注解类，固定
+`POST` + `application/json`，只暴露 `path`；用于把自定义 `@Controller` 方法接到 `JsonRpcServer.handle`。
+
+#### `JsonRpcArgs`
+
+```cangjie
+public class JsonRpcArgs {
+    public static func extract<T>(params: ?JsonValue, name: String, named!: Bool): T where T <: DataFields<T>
+    public static func toJson<T>(value: T): JsonValue where T <: DataFields<T>
+    public static func toJson(value: Unit): JsonValue
+}
+```
+
+参数转换工具：`extract` 按位置参数 / 命名参数取一个值并转成 `T`；`toJson` 把返回值转成 JSON，
+`Unit` 转成 `null`。
+
+### `fountain::f_jsonrpc.client`
+
+#### `ClientOptions`
+
+| 字段 | 默认值 | 说明 |
+| --- | --- | --- |
+| `timeout` | `30s` | 单次 HTTP 请求超时 |
+| `headers` | 空 | 额外请求头（如 `Authorization`） |
+| `maxResponseBytes` | `8 MiB` | 响应体上限，超限停止读取并关闭连接 |
+| `keepAlive` | `true` | `false` 时发送 `Connection: close` |
+| `retryOnConnectFailure` | `0` | 仅建连 / 发送失败的重试次数 |
+
+#### `JsonRpcCall` / `JsonRpcResponse`
+
+```cangjie
+public struct JsonRpcCall {
+    public const JsonRpcCall(public let method: String, public let params!: ?JsonValue = None)
+}
+
+public struct JsonRpcResponse {
+    public const JsonRpcResponse(public let id: ?JsonValue, public let result: ?JsonValue,
+        public let error: ?JsonRpcError)
+    public prop isError: Bool
+}
+```
+
+`batch` 返回与输入同序的 `JsonRpcResponse`；单条错误放在 `error`，不中止整批。
+
+#### `JsonRpcTransport`
+
+```cangjie
+public interface JsonRpcTransport {
+    func send(body: Array<Byte>): Array<Byte>
+    func close(): Unit
+}
+```
+
+自定义传输（stdio / 测试替身）只需实现 `send` / `close`；`send` 的建连 / 发送阶段失败应抛
+`JsonRpcConnectException`，读响应阶段失败抛普通异常。
+
+#### `JsonRpcClient`
+
+```cangjie
+public class JsonRpcClient {
+    public init(url: String, opts!: ClientOptions = ClientOptions())
+    public init(transport: JsonRpcTransport, opts!: ClientOptions = ClientOptions())
+    public func call(method: String, params!: ?JsonValue = None): JsonValue
+    public func callAsync(method: String, params!: ?JsonValue = None): Future<JsonValue>
+    public func notify(method: String, params!: ?JsonValue = None): Unit
+    public func batch(calls: Array<JsonRpcCall>): Array<JsonRpcResponse>
+    public func close(): Unit
+}
+```
+
+| 方法 | 行为 |
+| --- | --- |
+| `call` | 发单请求并返回 `result`；服务端 `error` 抛 `JsonRpcException`，响应缺失 `result` 抛 `-32603` |
+| `callAsync` | `spawn` 包装 `call`，返回 `Future<JsonValue>` |
+| `notify` | 发送无 `id` 通知，立即返回，不解析响应、不抛服务端错误 |
+| `batch` | 批量请求；整体被拒（`-32003` / `-32600`）直接抛 `JsonRpcException` |
+| `close` | 关闭传输；幂等 |
+
+### 宏
+
+| 注解 | 目标 | 作用 |
+| --- | --- | --- |
+| `@JsonRpc[namespace: xxx]` | class | 自动加 `@Bean`，把 public 实例方法注册为 `xxx.方法名`；不写属性时方法名为裸名 |
+| `@JsonRpcMeta['描述', '5s']` | 方法 | 设置描述与超时；空串表示不设超时 |
+| `@JsonRpcMapping[path: '/my-rpc']` | 方法 | 固定 `POST` + `application/json`，把方法接到自定义控制器 |
+
+`@JsonRpc` 的展开依赖门面包导出的 `lookup` / `BeanFactory` / `TypeInfo`；只 import
+`f_jsonrpc.server` / `base` 时需自行补这三个符号（或直接 `import fountain::f_jsonrpc.*`）。
 
 ## 不做的部分
 
@@ -159,13 +500,24 @@ client.close()
 - `$ref` / `allOf` / `anyOf` / `oneOf` / `not` 的解析（schema 校验对它们 fail-closed）
 - 只支持 UTF-8，不做编码探测
 
+
+## 迁移（1.3.17 → 下一版）
+
+| 变更 | 影响 | 迁移 |
+|---|---|---|
+| 默认超时 500ms → 无 | 依赖默认超时的调用不再超时 | 显式写 `@JsonRpcMeta['描述', '5s']` |
+| `JsonRpcServer.handle` 返回 `?JsonValue` | 断言字节的调用方编译失败 | 改用 `value.toString().unsafeBytes()` |
+| `JsonRpcContext.meta` 删除 | 读该字段的代码编译失败 | 改读 `ctx.http?.request.headers.getFirst(...)` |
+| `JsonRpcMethodMeta.inputSchema` / `outputSchema` 删除 | 构造时传参编译失败 | 从 `McpTool` 取 |
+| `error.code` 非数字不再抛 `JsonException` | 依赖该异常类型的代码行为变化 | 统一捕获 `JsonRpcException` |
+
 ## 测试
 
 ```bash
 cjpm test
 ```
 
-单元测试覆盖单请求、批量、通知、错误码、id 保真、topic 过滤、schema 校验、超时、注解路由与客户端请求构造。
+单元测试按包分布：`client` 覆盖客户端请求构造，`server` 覆盖单请求、批量、通知、错误码、id 保真、topic 过滤、schema 校验、超时与注解路由。
 
 ## 许可
 

@@ -25,6 +25,7 @@ runServer() {
     exports
     export mvc_port=$SERVER_PORT
     export mvc_maxRequestBodySize=67108864
+    export mcp_publicBaseUrl=http://127.0.0.1:${SERVER_PORT}
     echo "SERVER port=$mvc_port target=$TARGET"
     exec fboot run "$TARGET" --dylibPattern='(mcpserver)'
 }
@@ -70,6 +71,7 @@ e2e() {
     fi
     exports
     export mvc_port=$SERVER_PORT
+    export mcp_publicBaseUrl=http://127.0.0.1:${SERVER_PORT}
     fboot run "$TARGET" --dylibPattern='(mcpserver)' >"$ROOT/server.log" 2>&1 &
     local pid=$!
     if ! waitServer; then

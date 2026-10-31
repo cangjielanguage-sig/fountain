@@ -5,14 +5,14 @@
 `@jsonrpc` 宏经过一轮实现后留下了三个问题：
 
 1. 宏名与注解名不统一：类宏叫 `jsonrpc`，注解叫 `JsonRpcMeta`，还额外造了一个没有语义的 `@jsonrpcmeta` 语法糖。
-2. 宏在展开期扫描 `ClassDecl.toTokens()` 提取注解，绕过了 `JsonRpcRegister.getMeta`，导致同一个注解有两套读取路径。
+2. 宏在展开期扫描 `ClassDecl.toTokens()` 提取注解，绕过了 `JsonRpcRegistry.getMeta`，导致同一个注解有两套读取路径。
 3. 没有可运行的应用工程验证 `fboot run`、`/rpc` 的真实 HTTP 行为、`/mcp` 与 `/mcp/sse` 的端到端行为。
 
 ## 变更内容
 
 - 类宏只保留 `@JsonRpc`；删除 `@jsonrpcmeta` 与 `@jsonrpc` 小写别名。
 - `JsonRpcMeta` 增加 `timeoutDuration: Duration`，由 `f_data` 的 `Duration.parse` 扩展解析。
-- `JsonRpcRegister.getMeta<T>(funcName: String): JsonRpcMeta` 成为唯一读取入口；删除 `paramCount` / `JsonRpcRegisteredMeta` / `parseTimeout`。
+- `JsonRpcRegistry.getMeta<T>(funcName: String, argTypes: Array<TypeInfo>): JsonRpcMeta` 成为唯一读取入口；删除 `paramCount` / `JsonRpcRegisteredMeta` / `parseTimeout`。
 - 宏展开简化为：`@Bean` + 每个 public 实例方法一段 `private let _`，方法体用 `lookup<T>().method(...)`，描述与超时在运行期从 `getMeta` 读取。
 - 删除宏文件里的 `func str` 与编译期注解扫描。
 - 修复 `JsonRpcClient` 在 keep-alive 连接上第二次请求报 `Socket is already closed`：读完 body 后不再调用 `HttpResponse.close()`，只在异常时关闭。

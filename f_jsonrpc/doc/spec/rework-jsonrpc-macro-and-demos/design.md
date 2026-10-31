@@ -6,19 +6,19 @@
 
 ## D2. 运行期读取注解
 
-`JsonRpcRegister.getMeta<T>(funcName)` 遍历 `TypeInfo.of<T>().getInstanceFunctions(funcName)`，返回 `findAnnotation<JsonRpcMeta>()`。宏不再扫描 `ClassDecl.toTokens()`，也不再生成 description / timeout 字面量。
+`JsonRpcRegistry.getMeta<T>(funcName, argTypes)` 直接调用 `TypeInfo.of<T>().getInstanceFunction(fnName, argTypes)` 定位重载，再返回 `findAnnotation<JsonRpcMeta>()`；未找到时捕获 `InfoNotFoundException` 返回默认值。宏不再扫描 `ClassDecl.toTokens()`，也不再生成 description / timeout 字面量。
 
-- 生成代码：`let __jsonrpc_meta = JsonRpcRegister.getMeta<T>('fn')`
+- 生成代码：`let __jsonrpc_meta = JsonRpcRegistry.getMeta<T>('fn', [TypeInfo.of<...>()])`
 - handler 内：`lookup<T>().fn(...)`
 - `timeout`：`if (meta.timeout.isEmpty()) { None } else { Some(meta.timeoutDuration) }`
 
-没有注解时 `getMeta` 返回 `JsonRpcMeta('', '')`，与旧的“空描述 + 无超时”行为一致。
+没有注解时 `getMeta` 返回 `JsonRpcMeta('', '500ms')`：无描述，超时默认 500ms。
 
 ## D3. 删除的 API
 
-- `JsonRpcRegister.parseTimeout`：解析职责下沉到 `JsonRpcMeta.timeoutDuration`
+- `JsonRpcRegister` 类整体删除：`getMeta` 迁入 `JsonRpcRegistry`；`instance` 仅测试使用，一并删除。解析职责下沉到 `JsonRpcMeta.timeoutDuration`
 - `JsonRpcRegisteredMeta`：`getMeta` 直接返回注解对象
-- `JsonRpcRegister.getMeta` 的 `paramCount!`：同名重载不再区分；调用方用方法名即可
+- `paramCount!` 由 `argTypes` 取代：同名重载按参数类型匹配
 - 宏文件里的 `func str` 与 `metaMap` / `isStringToken`
 
 ## D4. HTTP 客户端 keep-alive

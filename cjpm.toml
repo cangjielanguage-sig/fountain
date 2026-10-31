@@ -12,6 +12,8 @@
   "fountain::f_config" = {path = "./f_config"}
   "fountain::f_crypto" = {path = "./f_crypto"}
   "fountain::f_data" = {path = "./f_data"}
+  "fountain::f_email" = {path = "./f_email"}
+  "fountain::f_excel" = {path = "./f_excel"}
   "fountain::f_exception" = {path = "./f_exception"}
   "fountain::f_io" = {path = "./f_io"}
   "fountain::f_jwt" = {path = "./f_jwt"}
@@ -33,6 +35,8 @@
   "fountain::f_time" = {path = "./f_time"}
   "fountain::f_util" = {path = "./f_util"}
   "fountain::f_version" = {path = "./f_version"}
+  "fountain::f_xml" = {path = "./f_xml"}
+  "fountain::f_zip" = {path = "./f_zip"}
 
 [package]
   cjc-version = "1.2.0"

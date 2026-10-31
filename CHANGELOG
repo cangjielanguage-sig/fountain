@@ -1,12 +1,61 @@
+2026-10-30
+    feat(f_excel): 新增 f_excel 模块（M1）：整文档读写、流式读（ExcelSheetStream）、
+      流式写（ExcelWriter）、日期识别与合并单元格；86 用例全绿，openpyxl 回读通过
+    feat(f_zip): ZipWriter.openEntry 推模式流式条目、ZipReader.openEntry，按 f_excel 需要补齐
+    feat(f_xml): XmlWriter 增量接口（startElement/text/endElement/emptyElement），保留前缀不重复声明
+    docs(f_excel): 设计 v0.10（流式解析/输出、实施差异与实测）与 doc/spec/implement-f-excel-m1
+2026-10-25
+    feat(f_mcp): 新增 @Mcp 宏与三个元数据注解，入参与返回值按 f_data 规则转换
+    feat(f_mcp): 5 种 RateLimitBackend 与 mcp_rateLimitBackend 配置，支持静态注册自定义算法
+    feat(f_mcp): publicBaseUrl 可配置，资源 URI 支持绝对路径；订阅与 SSE 完整绑定
+    feat(f_jsonrpc): @JsonRpc 属性 topic 改名 namespace，getMeta 增加 argTypes 以匹配重载
+    refactor(f_jsonrpc,f_mcp)!: 按 base/client/server 拆分包，JsonRpcRegistry 收敛全局入口
+    refactor(f_jit)!: JitFunction.close 改名 unloadFn，卸载时逐出编译缓存
+    docs(f_excel): 新增 f_excel 模块设计文档（尚未实现）
+2026-10-24
+    新增 f_jsonrpc 模块（JSON-RPC 2.0）：@jsonrpc / @JsonRpcMeta 注解驱动注册、
+      f_data schema 校验、jsonrpc/mcp 端到端 demo
+    新增 f_mcp 模块（MCP 2026-07-28）：服务端/客户端、SSE 与护栏能力，verify 报告归档
+    feat(egraph): Flow 接入 f_jit 脚本化流程初始化并移除 FlowDSLCompiler；新增 doStart 接口
+    feat(f_jit): 新增 @IgnoreJitBinding，供 @JitBind 排除指定成员
+2026-10-23
+    release-1.3.17：所有模块版本从 1.3.16 升级到 1.3.17
+    feat(f_jit): 接口注册与父成员继承（@JitBind 支持 interface），补成员访问的 JIT 使用性守卫
+    feat(f_app): 代码统计支持 --ignoreTests，忽略测试与基准文件
+    chore: .modules 收录 f_jit/f_dbd/f_dbm/fdbm；按最新依赖重新生成模块依赖图与矩阵图
+    docs(skills): fountain-developer 技能按 sts/1.3.x 差异同步配置、API 与发布口径
+2026-10-22
+    refactor(f_jit)!: Compiler() 改为无参构造、invoke 改名 call；CallContext 收窄为只读 deadline
+    feat(f_jit): Int64 幂运算与浮点/十进制科学计数法、对象生命周期加固、x86 回边补 STACK_GUARD、
+      x86_64 栈深度改由控制流推导（修复 CastOr 分支汇合后的对齐崩溃）、A64 审计豁免宿主绝对地址
+    feat(fdbm): 新增 fdbm.sh 启停脚本，README 补 API 与逐项配置（中英）
+    feat(fmq): 新增 fmq.sh 启停脚本；新增 fdbmdemo / fmqdemo 两个演示模块（fboot 加载的动态库）
+    fix(fmq,f_mq): 死信阈值改重试次数语义、stats 严格解析位点段、备份关闭等待在途批次、
+      管理端主题/组本地前置校验、指标原子自增、关闭顺序与端口绑定按规格
+    refactor(fountain-developer): 拆分为 12 个独立工作流技能，新增工作流 L（代码审查 → OpenSpec 修复）
+    docs: 仓库地址从 Cangjie-SIG 迁移至 Cangjie-TPC（README / README_en / 归档报告）
 2026-10-21
     fix(fdbm,f_dbd): 修复 fdbm 栈全量评审的 P0/P1 缺陷（D01-D12 / G01-G29）
       逻辑库命名空间隔离、事务 pin 单目标、广播范围收敛、参数字面量白名单、
       数值精度、派生表形状、内置扩展名保护、UUID 时间戳、ID 能力协商、
       DbdUrl 字节下标与 %XX、流列 NULL 探测、池异常映射、会话并发安全等
     feat(f_dbm): 补齐扩展契约单元测试（默认异常、单能力合法、分片确定性）
+    fix(fmq,f_mq): 全量审查修复（R1-R4）：段缺失/损坏判定与游标推进、墓碑胜者语义与重新注册、
+      备份按目标重试并等待在途批次、清理器失败汇总、管理端失败四分类、载荷读取严格闸门、
+      组名/tags 按码点校验、连接池关闭状态复核与退订有界记忆
+    fix(f_net): accept 循环在监听关闭后正常退出
     已知变更：SHOW DATABASES 返回逻辑库名；未知逻辑库广播改为 ROUTE_FAILED；
       事务内多目标语句与 DDL 被拒绝；非法超时保留原值；驱动未配置不再 exit(1)
+2026-10-20
+    feat(f_jit): M3 交付：Any 装箱与异构容器、JSON 内建句柄（词法 / 下标 / 点号糖）、
+      CALL_HOST 特化与 22 项入桥、逐函数交付门禁与 79 场景验收矩阵
+2026-10-19
+    feat(f_jit): M2 落地：版本规则集分派、base 契约、compiler 前端增量、
+      注册门面与闭包封送、字段访问与提升组（14 个 T 编号全绿）
+    test(f_jit): scenario→test 映射补齐 156 条，x86_64 真机全量 560/560
 2026-10-18
+    feat(f_jit): 生产 JIT 接入 + x86 控制流/调用模板，原生 runner 条件编译与 JIT/cjnative 性能对比
+    feat(fdbm): 支持 X'...' 十六进制字面量并按方言渲染；方言错误信息带原始驱动名；新增 MySQL 8.0 联调
     新增 f_mq 模块（消息队列客户端与客户端/服务端共用 API）：记录编解码、协议载荷、过滤器、
       主题校验、MQClient（publish/subscribe/unsubscribe/consume/ack/close）
     新增 fmq 可执行文件（消息队列服务）：fmq server（多节点、队列分段日志、消费组游标、
@@ -15,6 +64,97 @@
     新增 scripts/mq_e2e.sh 三节点端到端脚本
     fix(f_mq|fmq): ACK 链路加入 queueIndex，多队列同位置不再串台
     fix(fmq): 对象 BODY 无法评估过滤器时发布返回 FILTER_UNSUPPORTED_BODY 且不落盘；游标段失效后自动恢复
+2026-10-17
+    feat(f_jit): P1 base 共享契约（S1.1–S1.11）与 P0 差分基线
+    feat(dbware): 新增 fdbm/f_dbd 设计、f_dbm 扩展接口与 f_app 初始化改造
+    feat(f_util): FNV 全宽族（32/64/128/256）与统一 API，FNV.1–6 / S0.1–S0.3 落地
+    feat(fountain-developer): 等待 OpenSpec 任务期间的进度报告与停滞诊断（5 分钟/轮、连续 3 轮）
+2026-10-16
+    feat(f_jit): 新增 f_jit 模块骨架与 M1–M3 规格/设计/计划；全部 .cj 补 Apache 2.0 版权头
+    feat: 新增 12 个 opsx-* 技能，鸿蒙 PC 上经 ssh 执行 OpenSpec 六步；运行器 opsx_fusion.py 入库
+    feat(skill-generator): 技能脚手架、TDD 编写与发布校验合一
+    feat: cangjie.sh / cangjie-hmos.sh 适配融合开发环境（linux-aarch64）
+2026-10-15
+    feat(f_cache): 显式 concurrencyLevel 向上取到 2 的幂，段数恒为 2 的幂
+    docs(skills): fountain-developer 接入 OpenSpec 规格驱动流程与 TDD 技能联动
+2026-10-14
+    perf(f_ticktock): 运行期时间索引与表达式编译驻留、L 按候选区间入值桶（对外行为不变）
+    docs(dbware): 类型映射三组口径、SqlTypes 与 QueryResultImpl 设计
+2026-10-13
+    chore(f_rpc): 移除对 f_collection / f_process / f_util / f_store 的依赖（cjpm.toml 与中英 README 同步）
+    chore(f_rpc): 包分类标签调整为「分布式」，cjpm.toml 的 category 移除 Distributed 与 Network
+    chore(fdemo): postgres_driver 依赖版本升级至 0.1.0
+2026-10-12
+    docs(f_jit): JSON 谱系升格为内建句柄类型（LocalType 16-19，零注册）；裁定下标自动收窄与点号键访问糖
+    fix(f_io): LogPosition 的 seq/offset 改为 public let，供 MQ 按位置续读
+    feat(skill-generator): 合并技能脚手架与 TDD 编写流程
+2026-10-11
+    chore(release): 全模块版本连升 1.3.14 → 1.3.15 → 1.3.16（含 f_rpc）
+    feat(f_util): 新增 FNV 哈希（FNV-1/FNV-1a × 32/64/128/256）与自检
+    docs(f_jit): 设计补语法→字节码、指令定义、字节码↔机器码三张对照表
+2026-10-10
+    feat(skills): 新增 cangjie-doc-lookup 技能（语言 / 标准库 / 扩展库本地文档查阅）
+    feat(f_bean,f_mvc): BeanManager 新增 getBean<T>()，控制器 bean 取值统一走它
+    fix(f_mvc): 控制器 getter 改用 let 绑定，修复 lambda 捕获可变变量导致的编译失败
+2026-10-09
+    新增 f_dbpool 模块（数据库连接池）：DatabasePool、PooledConnection 从 fountain::f_orm.wrap 迁入，f_orm 依赖该模块并在原 DatabasePool.cj 内重导出 fountain::f_dbpool.DatabasePool
+    ConnectionException 复制到 f_dbpool（直接继承 f_base.BaseException，f_dbpool 不提供 ORMException；f_orm 保留自己那份）；DatabasePool 的 init(driver: Driver, ds: Datasource) 删除（f_orm 侧改为显式读 ORMConfig 后传参），init(driver, options) 改为显式传 url
+2026-09-30
+    fboot build 接收命令行参数传递配置项，敏感数据除了可以从环境变量传递，还可以从命令行参数传递，执行cjpm build时把这些参数作为cjpm build子进程的环境变量传递过去
+    fboot build 如果要指定编译产物保存路径，必须是build后的第一个参数
+    同步修改fboot help子命令对fboot build的说明
+    fdemo增加boot-macos.sh和boot-win-gitbash.sh
+
+    fix orm NamedDatasource 使用fountain::f_orm.wrap.DatasourcePool初始化时导致NamedDatasource调用driver.open创建的Datasource泄漏，而实质上在DatasourcePool内部创建的Datasource没有用到option配置项
+    feature fboot pub 执行bundle因没有依赖失败时，且两次bundle时间超过1分钟时，立即再执行一次cjpm install 尝试下载依赖
+2026-09-29
+    fboot workspace / fboot module 指定的路径如果不存在，会自动创建，如果fboot workspace没有指定版本会默认指定为1.0.0
+    做一些windows兼容性
+    fountain:f_base.Console 增加新的read*函数
+    修改fboot help 输出
+    修改几个f_protocol f_net f_codec的bug
+    fix fboot workspace
+2026-09-24
+    修改windows兼容性
+2026-09-23
+    orm 连接url、数据库用户名、密码等敏感信息加密
+2026-09-17
+    增加枚举`fountain::f_base.Arch`，有x86_64 和aarch64两个构造器
+2026-09-16
+release-1.3.1.alpha
+    feat(f_orm): 更新判定默认驱动的逻辑
+    chaos(f_orm): 更新README
+2026-09-15
+release-1.3.0.alpha
+    feat(orm): 支持SQL拼装API化，可以使用各种函数和宏生成的类静态属性构造SQL
+    feat(orm): 支持序列化JSON时添加类型名，反序列化时如果映射的成员属性是一个父类，可以从JSON获取子类型名完成反序列化
+    fix(loadbalance): treemap是空时抛出NoneValueException，此时判断treemap是否为空，避免抛出异常
+    fix(orm|f_data): 宏展开生成多个声明时，外部宏只保留了第一个声明
+    doc(aspect): 完善切面编程文档
+    feat(f_io): 添加Path复制扩展
+    feat(f_app): 添加toExitGracefully()，发送信号SIGTERM SIGINT时会可以执行注册的atexit函数
+    feat(f_health): 添加模块可以获取进程运行时的CPU/内在数据
+    feat(pool)：丰富池特性，增加先进先出、后进先出、强引用、弱引用、键值对池
+    feat(f_io): 增加SegmentationLog 
+    feat(f_base): 增加FutureTask和InteritedTaskLocal
+    feat(f_concurrent): 增加DelayQueue
+    feat(f_net): 增加MultiClient，支持负载均衡
+    feat(f_protocol): 完善通讯协议
+    feat(f_io): 增加ByteBuffer，比标准库同名类有更丰富的特性
+    fix(orm): 分页查询，count是0时不清空SQL和参数
+2024-11-17
+    配置类型
+    属性复制
+    jwt
+    宏编程辅助API
+    随机串、范围随机数、随机迭代器等
+    正则表达式DSL和正则表达式缓存
+    文本模板
+    时间扩展类型
+    crc16 CaseFormat 密钥交换算法 常用设计模式 murmur-hash PathPattern uuid
+2024-11-10
+    堆缓存
+    一些并发类型，包括限流算法
 2024-11-03
 初始化项目目录结构
 增加通用异常声明
@@ -35,69 +175,3 @@
     超限制时的工作策略
     什么也不做的定时器
     一些集合类型，包括并发集合
-2024-11-10
-    堆缓存
-    一些并发类型，包括限流算法
-2024-11-17
-    配置类型
-    属性复制
-    jwt
-    宏编程辅助API
-    随机串、范围随机数、随机迭代器等
-    正则表达式DSL和正则表达式缓存
-    文本模板
-    时间扩展类型
-    crc16 CaseFormat 密钥交换算法 常用设计模式 murmur-hash PathPattern uuid
-
-2026-09-15
-release-1.3.0.alpha
-    feat(orm): 支持SQL拼装API化，可以使用各种函数和宏生成的类静态属性构造SQL
-    feat(orm): 支持序列化JSON时添加类型名，反序列化时如果映射的成员属性是一个父类，可以从JSON获取子类型名完成反序列化
-    fix(loadbalance): treemap是空时抛出NoneValueException，此时判断treemap是否为空，避免抛出异常
-    fix(orm|f_data): 宏展开生成多个声明时，外部宏只保留了第一个声明
-    doc(aspect): 完善切面编程文档
-    feat(f_io): 添加Path复制扩展
-    feat(f_app): 添加toExitGracefully()，发送信号SIGTERM SIGINT时会可以执行注册的atexit函数
-    feat(f_health): 添加模块可以获取进程运行时的CPU/内在数据
-    feat(pool)：丰富池特性，增加先进先出、后进先出、强引用、弱引用、键值对池
-    feat(f_io): 增加SegmentationLog 
-    feat(f_base): 增加FutureTask和InteritedTaskLocal
-    feat(f_concurrent): 增加DelayQueue
-    feat(f_net): 增加MultiClient，支持负载均衡
-    feat(f_protocol): 完善通讯协议
-    feat(f_io): 增加ByteBuffer，比标准库同名类有更丰富的特性
-    fix(orm): 分页查询，count是0时不清空SQL和参数
-
-2026-09-16
-release-1.3.1.alpha
-    feat(f_orm): 更新判定默认驱动的逻辑
-    chaos(f_orm): 更新README
----
-
-2026-09-17
-    增加枚举`fountain::f_base.Arch`，有x86_64 和aarch64两个构造器
-2026-09-23
-    orm 连接url、数据库用户名、密码等敏感信息加密
-2026-09-24
-    修改windows兼容性
-2026-09-29
-    fboot workspace / fboot module 指定的路径如果不存在，会自动创建，如果fboot workspace没有指定版本会默认指定为1.0.0
-    做一些windows兼容性
-    fountain:f_base.Console 增加新的read*函数
-    修改fboot help 输出
-    修改几个f_protocol f_net f_codec的bug
-    fix fboot workspace
----
-
-2026-09-30
-    fboot build 接收命令行参数传递配置项，敏感数据除了可以从环境变量传递，还可以从命令行参数传递，执行cjpm build时把这些参数作为cjpm build子进程的环境变量传递过去
-    fboot build 如果要指定编译产物保存路径，必须是build后的第一个参数
-    同步修改fboot help子命令对fboot build的说明
-    fdemo增加boot-macos.sh和boot-win-gitbash.sh
-
-    fix orm NamedDatasource 使用fountain::f_orm.wrap.DatasourcePool初始化时导致NamedDatasource调用driver.open创建的Datasource泄漏，而实质上在DatasourcePool内部创建的Datasource没有用到option配置项
-    feature fboot pub 执行bundle因没有依赖失败时，且两次bundle时间超过1分钟时，立即再执行一次cjpm install 尝试下载依赖
-
-2026-10-09
-    新增 f_dbpool 模块（数据库连接池）：DatabasePool、PooledConnection 从 fountain::f_orm.wrap 迁入，f_orm 依赖该模块并在原 DatabasePool.cj 内重导出 fountain::f_dbpool.DatabasePool
-    ConnectionException 复制到 f_dbpool（直接继承 f_base.BaseException，f_dbpool 不提供 ORMException；f_orm 保留自己那份）；DatabasePool 的 init(driver: Driver, ds: Datasource) 删除（f_orm 侧改为显式读 ORMConfig 后传参），init(driver, options) 改为显式传 url

@@ -4,7 +4,7 @@
 
 - [x] 1.1 删除 `@jsonrpc` / `@jsonrpcmeta`，类宏改名为 `@JsonRpc`
 - [x] 1.2 `JsonRpcMeta` 增加 `timeoutDuration: Duration`
-- [x] 1.3 `JsonRpcRegister.getMeta<T>(funcName)` 返回 `JsonRpcMeta`
+- [x] 1.3 `JsonRpcRegistry.getMeta<T>(funcName, argTypes)` 返回 `JsonRpcMeta`
 - [x] 1.4 删除 `parseTimeout` / `JsonRpcRegisteredMeta` / `paramCount`
 - [x] 1.5 宏展开改用 `lookup<T>()` 与运行期 `getMeta`；删除 `func str` 与编译期注解扫描
 

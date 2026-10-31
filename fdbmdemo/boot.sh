@@ -209,6 +209,8 @@ config_env() {
         echo "export fdbm_cache=true"
         echo "export fdbm_cachePath=$cache"
         # ---- 日志 ----
+        # 【必填】本机在集群内的唯一主机号（MessageID 拒绝 hostId=0）
+        echo "export protocol_hostId=1"
         echo "export logger_appender_console=FdbmConsole"
         echo "export logger_appender_FdbmConsole_level=INFO"
         echo "export logger_appender_FdbmConsole_pattern='[%level-%name]%m'"

@@ -4,8 +4,8 @@
 
 ## Completeness
 
-- 宏：只保留 `@JsonRpc`；`@JsonRpcMeta` 提供 `timeoutDuration`；`getMeta<T>(funcName)` 返回注解对象。
-- 删除：`@jsonrpc` / `@jsonrpcmeta` / `parseTimeout` / `JsonRpcRegisteredMeta` / `paramCount` / 宏内 `str`。
+- 宏：只保留 `@JsonRpc`；`@JsonRpcMeta` 提供 `timeoutDuration`；`getMeta<T>(funcName, argTypes)` 返回注解对象。
+- 删除：`@jsonrpc` / `@jsonrpcmeta` / `parseTimeout` / `JsonRpcRegisteredMeta` / `paramCount` / 宏内 `str`；`JsonRpcRegister` 类整体删除，成员迁入 `JsonRpcRegistry`。
 - 修复：`JsonRpcClient` keep-alive 二次请求；`/mcp/sse` 的 chunked 响应。
 - 新增：`fjsonrpcdemo`、`fmcpdemo`，均支持 `fboot run`。
 

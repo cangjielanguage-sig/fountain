@@ -47,6 +47,17 @@ waitServer() {
     return 1
 }
 
+checkContains() {
+    local expected=$1
+    shift
+    local body
+    body=$(curl -s "$@")
+    if [[ "$body" != *"$expected"* ]]; then
+        echo "HTTP body check failed: expected '$expected', got '$body'" >&2
+        return 1
+    fi
+}
+
 checkStatus() {
     local expected=$1
     shift
@@ -60,17 +71,17 @@ checkStatus() {
 
 httpChecks() {
     local base="http://127.0.0.1:${SERVER_PORT}"
-    local payload='{"jsonrpc":"2.0","id":1,"method":"kb.search","params":["x"]}'
-    checkStatus 200 -X POST -H 'Content-Type: application/json' -H 'Accept: application/json' -d "$payload" "$base/rpc"
+    local payload='{"jsonrpc":"2.0","id":1,"method":"knowledge.search","params":["x"]}'
+    checkContains '"result":"found:x"' -X POST -H 'Content-Type: application/json' -H 'Accept: application/json' -d "$payload" "$base/rpc"
     checkStatus 415 -X POST -H 'Accept: application/json' -d "$payload" "$base/rpc"
     checkStatus 406 -X POST -H 'Content-Type: application/json' -H 'Accept: text/plain' -d "$payload" "$base/rpc"
     checkStatus 200 -X POST -H 'Content-Type: application/json' -H 'Accept: application/json' \
-        -d '{"jsonrpc":"2.0","method":"kb.touch","params":{}}' "$base/rpc"
+        -d '{"jsonrpc":"2.0","method":"knowledge.touch","params":{}}' "$base/rpc"
     checkStatus 200 -X POST -H 'Content-Type: application/json' -H 'Accept: application/json' \
         -d '{not-json' "$base/rpc"
-    checkStatus 200 -X POST -H 'Content-Type: application/json' -H 'Accept: application/json' \
-        -d '{"jsonrpc":"2.0","id":7,"method":"kb.add","params":{"a":1,"b":2}}' "$base/rpc/kb"
-    echo "JSONRPC_HTTP_CHECKS_OK 200/415/406/notification/parse-error/topic"
+    checkContains '"result":3' -X POST -H 'Content-Type: application/json' -H 'Accept: application/json' \
+        -d '{"jsonrpc":"2.0","id":7,"method":"knowledge.add","params":{"a":1,"b":2}}' "$base/rpc/knowledge"
+    echo "JSONRPC_HTTP_CHECKS_OK 200/415/406/notification/parse-error/namespace"
 }
 
 e2e() {

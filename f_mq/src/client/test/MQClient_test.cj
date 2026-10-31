@@ -140,6 +140,10 @@ class MQClientTest {
             @Assert(convert<String>(content.body.data) == Some("hello"))
             // 帧 id 与记录内的 MESSAGE_ID 一致
             @Assert(content.messageId == request.id.toString())
+            // 内存里的 MessageID 必须带集群主机号：pid/tid 跨机器会重复，只有 hostId 能区分节点
+            @Assert(request.id.hostId == ProtocolConfig.getProtocolHostId())
+            @Assert(request.id.hostId != 0)
+            @Assert(content.messageId.split("_")[2] == request.id.hostId.toString())
             client.close()
         } finally {
             stub.close()

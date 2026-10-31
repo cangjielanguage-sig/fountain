@@ -32,9 +32,9 @@ public class DemoEcho {
 }
 
 /**
- * 演示用 JSON-RPC 服务：类上的 topic 是 `kb`，每个 public 实例方法注册成 `kb.<方法名>`。
+ * 演示用 JSON-RPC 服务：类上的 namespace 是 `knowledge`，每个 public 实例方法注册成 `knowledge.<方法名>`。
  */
-@JsonRpc[topic: kb]
+@JsonRpc[namespace: knowledge]
 public class SearchRPC {
     public init() {}
 

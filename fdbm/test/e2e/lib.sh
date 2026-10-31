@@ -92,6 +92,8 @@ start_server() {
         echo "export fdbm_cache_size=0"
         echo "export logger_appender_console=FdbmConsole"
         echo "export logger_appender_FdbmConsole_level=INFO"
+        # 【必填】本机在集群内的唯一主机号：MessageID 拒绝 hostId=0
+        echo "export protocol_hostId=1"
         backend_server_env
         if [ -n "$extra" ]; then
             cat "$extra"

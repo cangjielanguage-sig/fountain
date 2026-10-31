@@ -19,8 +19,10 @@ import std.collection.ArrayList
 import std.collection.concurrent.ConcurrentHashMap
 import std.sync.AtomicInt64
 import fountain::f_data.*
-import fountain::f_jsonrpc.JsonRpcException
+import fountain::f_data.macros.DataAssist
+import fountain::f_jsonrpc.base.JsonRpcException
 import fountain::f_mcp.*
+import fountain::f_mcp.macros.*
 
 /**
  * 演示「分布式」限流：计数器放在一个共享对象里，多个 McpServer 实例共同消耗同一份额度。
@@ -28,6 +30,16 @@ import fountain::f_mcp.*
  * 真实部署中把这里换成 Redis / f_store 等共享存储即可；接口不变。
  */
 public class SharedWindowBackend <: RateLimitBackend {
+    public static prop name: String {
+        get() {
+            'shared-window'
+        }
+    }
+
+    public static func new(): RateLimitBackend {
+        SharedWindowBackend()
+    }
+
     private let counters = ConcurrentHashMap<String, AtomicInt64>()
 
     public func tryAcquire(key: String, rpm: Int64, nowNanos: Int64): Bool {
@@ -61,7 +73,56 @@ public class SharedWindowBackend <: RateLimitBackend {
     }
 }
 
-private let sharedBackend = SharedWindowBackend()
+@DataAssist[props fields]
+public class EchoRequest {
+    public var text: String = ''
+
+    public init() {}
+}
+
+@DataAssist[props fields]
+public class EmptyRequest {
+    public init() {}
+}
+
+/**
+ * 演示用 MCP 服务：全部通过注解注册。
+ *
+ * - `@Mcp['fmcpdemo']`：`serverInfo.name`
+ * - tool / resource / prompt 分别用 `@McpToolMeta` / `@McpResourceMeta` / `@McpPromptMeta`
+ */
+@Mcp['fmcpdemo']
+public class McpDemoService {
+    public init() {}
+
+    @McpToolMeta[name: 'echo', description: '回显文本']
+    public func echo(req: EchoRequest): CallToolResult {
+        CallToolResult.text('echo:${req.text}')
+    }
+
+    @McpToolMeta[name: 'notify', description: '发布一条 tools/list_changed 通知']
+    public func notify(req: EmptyRequest): CallToolResult {
+        let params = JsonObject()
+        params.add('reason', 'demo')
+        McpRegistry.server().hub().publish('tools/list_changed', params)
+        CallToolResult.text('published')
+    }
+
+    @McpToolMeta[name: 'limited', description: '每调用方每分钟 3 次', perCallerToolRpm: 3]
+    public func limited(req: EmptyRequest): CallToolResult {
+        CallToolResult.text('limited-ok')
+    }
+
+    @McpResourceMeta[uri: '/greeting', name: 'greeting', description: '演示资源', mediaType: 'text/plain']
+    public func greeting(): String {
+        'hello from fmcpdemo'
+    }
+
+    @McpPromptMeta[name: 'greet', description: '生成一句问候']
+    public func greet(@McpPromptArg[description: '姓名', required: true] name: String): String {
+        'hello ${name}'
+    }
+}
 
 private func emptySchema(): JsonObject {
     let schema = JsonObject()
@@ -69,46 +130,6 @@ private func emptySchema(): JsonObject {
     schema.add('properties', JsonObject())
     schema.add('additionalProperties', false)
     schema
-}
-
-private func echoSchema(): JsonObject {
-    let schema = JsonObject()
-    schema.add('type', 'object')
-    let properties = JsonObject()
-    let text = JsonObject()
-    text.add('type', 'string')
-    properties.add('text', text)
-    schema.add('properties', properties)
-    let required = JsonArray()
-    required.add('text')
-    schema.add('required', required)
-    schema.add('additionalProperties', false)
-    schema
-}
-
-private func echoTool(): McpTool {
-    McpTool.builder('echo').description('回显文本').inputSchema(echoSchema()).handler(
-        {
-            _, args =>
-                let text = match (args.asObject().get('text')) {
-                    case Some(value) => value.asString().value
-                    case _ => ''
-                }
-                CallToolResult.text('echo:${text}')
-        }
-    ).build()
-}
-
-private func notifyTool(): McpTool {
-    McpTool.builder('notify').description('发布一条 tools/list_changed 通知').inputSchema(emptySchema()).handler(
-        {
-            _, _ =>
-                let params = JsonObject()
-                params.add('reason', 'demo')
-                McpRegistry.server().hub().publish('tools/list_changed', params)
-                CallToolResult.text('published')
-        }
-    ).build()
 }
 
 private func limitedTool(): McpTool {
@@ -119,37 +140,6 @@ private func limitedTool(): McpTool {
         .rateLimit(ToolRateLimit(perCallerToolRpm: 3))
         .handler({_, _ => CallToolResult.text('limited-ok')})
         .build()
-}
-
-private func greetingResource(): McpResource {
-    McpResource
-        .builder('https://example.com/greeting', 'greeting')
-        .description('演示资源')
-        .mimeType('text/plain')
-        .handler(
-            {
-                ctx =>
-                    let list = ArrayList<ResourceContent>()
-                    list.add(ResourceContent(ctx.uri, Some('text/plain'), Some('hello ${ctx.callerId}'), None))
-                    list
-            }
-        )
-        .build()
-}
-
-private func greetPrompt(): McpPrompt {
-    McpPrompt.builder('greet').description('生成一句问候').argument('name', required: true).handler(
-        {
-            args =>
-                let name = match (args.get('name')) {
-                    case Some(value) => value.asString().value
-                    case _ => 'world'
-                }
-                let messages = ArrayList<PromptMessage>()
-                messages.add(PromptMessage('user', ContentBlock.text('hello ${name}')))
-                messages
-        }
-    ).build()
 }
 
 private func toolCallParams(name: String): JsonObject {
@@ -197,18 +187,6 @@ private func distributedLimitCheck(): String {
 
 private let _ = {
     =>
-        McpRegistry.configure(
-            {
-                builder =>
-                    builder.serverInfo('fmcpdemo', '1.3.17')
-                    builder.rateLimitBackend(sharedBackend)
-                    builder.tool(echoTool())
-                    builder.tool(notifyTool())
-                    builder.tool(limitedTool())
-                    builder.resource(greetingResource())
-                    builder.prompt(greetPrompt())
-            }
-        )
         println('MCP_SERVER_DEMO_READY tools=echo,notify,limited resource=greeting prompt=greet')
         println(distributedLimitCheck())
 }()
