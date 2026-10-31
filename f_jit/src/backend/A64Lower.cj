@@ -321,7 +321,7 @@ internal class A64Lower {
             case 0x5D => this.floatCmp(A64Cond.GE, true)
             case 0x5E =>
                 this.e.ldrOff(9, 20, 0)
-                this.e.word(0xD2400009u32) // eor x9,x9,#1（逻辑非；0↔1）
+                this.e.eorImm1(9, 9) // 逻辑非：eor x9,x9,#1（0↔1）
                 this.e.strOff(9, 20, 0)
             case 0x5F => this.boolBin(0)
             case 0x60 => this.boolBin(1)
