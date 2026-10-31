@@ -31,6 +31,11 @@
 - **WHEN** 执行 `{ n: Int64 => n < 50 }` 且 `n = 49`
 - **THEN** 结果为 `1`，与修复前逐位相同（证明修复未触碰比较语义）
 
+#### Scenario: 非 Bool 分派一致
+
+- **WHEN** 对 `{ n: Int64 => !n }` 取 `2 / -1 / 0 / Int64.max / Int64.min`
+- **THEN** 三引擎均得到 `-3 / 0 / -1 / Int64.min / Int64.max`，且字节码为 `BNOT_I` 而非 `NOT_B`
+
 #### Scenario: 非原生跳过
 
 - **WHEN** 本机只有解释器与 AArch64 可用

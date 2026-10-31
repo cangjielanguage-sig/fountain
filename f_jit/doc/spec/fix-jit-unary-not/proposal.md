@@ -17,6 +17,7 @@ this.e.word(0xD2400009u32) // eor x9,x9,#1（逻辑非；0↔1）
 ## What Changes
 
 - **修编码**：`A64Lower` 的 `0x5E` 改为 `EOR X9, X9, #1`（`0xD2400129`），并改由 `A64Emitter.eorImm1(rd, rn)` 以字段构造生成，不再手写裸字面量。
+- **修非 Bool 分派**：`Lowerer.lowerUnary` 的 `Bang` 分支按操作数静态类型分派——`BOOL` → `NOT_B`（逻辑非），`I64` → `BNOT_I`（位反），其余 `TYPE_MISMATCH`；`!2 = -3`、`!-1 = 0`、`!0 = -1`，三引擎统一。
 - **加红用例（先红后绿，严格 TDD）**：
   - 语义层：新增一元 `!` 的三引擎差分用例，**同时**断言「解释器结果 = 语言语义的绝对期望值」与「全部可用引擎四元组逐位一致（I7）」；矩阵覆盖比较、布尔字面量、布尔实参、双重取反、`&&`/`||`、正则 `!~`，边界取 49/50 与 Int64 极值。
   - 编码层：新增 `NOT_B` 三字断言（`ldr x9,[x20]` / `0xD2400129` / `str x9,[x20]`）与 `eorImm1` 的位域断言。
@@ -38,9 +39,9 @@ this.e.word(0xD2400009u32) // eor x9,x9,#1（逻辑非；0↔1）
 
 ## Impact
 
-- **代码**：`f_jit/src/backend/A64Lower.cj`（`0x5E` 分支）、`f_jit/src/backend/A64Emitter.cj`（新增 `eorImm1`）。不改 `X86Lower`（`48 83 34 24 01` = `xor qword [rsp],1`，已逐字节核对正确）、不改 `Interp`（`a == 0`）。
+- **代码**：`f_jit/src/backend/A64Lower.cj`（`0x5E` 分支）、`f_jit/src/backend/A64Emitter.cj`（新增 `eorImm1`）、`f_jit/src/compiler/Lowerer.cj`（`Bang` 分支按类型分派）。不改 `X86Lower`（`48 83 34 24 01` = `xor qword [rsp],1`，已逐字节核对正确）、不改 `Interp`（`NOT_B` 收 Bool、`BNOT_I` 为 `a ^ -1`，分派后自然一致）。
 - **测试**：新增 `f_jit/src/compiler/UnaryNotDiff_test.cj`（三引擎语义）、`f_jit/src/backend/A64NotBEncoding_test.cj`（编码与位域）、`f_jit/src/compiler/UnaryNotShape_test.cj`（AST + 字节码形状）。
 - **产物与兼容**：同一源单元前后只差 `NOT_B` 的 4 个机器字节；字节码、verMajor、规则集、helper 编号、缓存键全部不变。
 - **性能**：指令条数与访存次数不变（3 条 → 3 条）。
 - **平台证据**：本机最小集 `Interp × AArch64` 可直接判定本缺陷；x86 侧按既有条件用例在原生 x86_64 上给出证据，非原生标「无证据」，不计通过。
-- **不在本次范围**：`!` 操作数的 Bool 类型收口（当前 `!2` 三引擎本就分歧，属独立缺陷面，见 design §7 已知边界 B1）；0x50–0x6E 段的全面重编码审计（仅做本段抽样，见 tasks B6）；`BackendSelector` 的历史路径（已委派到 `A64Compiler`，无独立实现）。
+- **不在本次范围**：`0x50–0x6E` 段的全面重编码审计（仅做本段抽样，见 tasks B6）；`BackendSelector` 的历史路径（已委派到 `A64Compiler`，无独立实现）；`!` 对 Long/结构体等其它类型的语义（只分派 Bool 与 Int64，其余报类型错误）。

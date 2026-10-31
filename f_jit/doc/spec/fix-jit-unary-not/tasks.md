@@ -18,12 +18,14 @@
 - [ ] N1.2 编码红：新增 `f_jit/src/backend/A64NotBEncoding_test.cj`，只用现有 API——用 `A64Compiler.compileFunction` 编 `PUSH_BOOL 1; NOT_B; RET` 的最小单元，在产物里定位 `0x5E` 的三字，断言 `ldr x9,[x20]` / `0xD2400129` / `str x9,[x20]`、解码 `Rn == Rd == 9`、产物中不出现 `0xD2400009`。验收：红态是**断言红**（报到错误字 `0xD2400009`），不是编译红；`eorImm1` 的 hex 断言留到 N2.1 落函数时一起加，避免为编过测试先埋桩。
 - [ ] N1.3 形状用例：新增 `f_jit/src/compiler/UnaryNotShape_test.cj`——AST 形态、`!(n<50)` 的字节码 `LOADL; PUSH_I64 50; LT_I; NOT_B; RET`、`re !~ s` 的 `NOT_B` 恰一条。验收：本组**应直接绿**（前端本来就对）；它红说明根因另有其处，须回到 design §2 重新定位，不得继续按 N2 改码。
 - [ ] N1.4 红态确认：三组用例各跑一次并留档输出。验收：N1.1 / N1.2 红、N1.3 绿；结论与 design §1 一致。
+- [ ] N1.5 非 Bool 红：在 `UnaryNotDiff_test` 加 `{ n: Int64 => !n }` 矩阵（`2 / -1 / 0 / Int64.max / Int64.min`），断言绝对值 `-3 / 0 / -1 / Int64.min / Int64.max`，并断言三引擎逐位一致。验收：当前必红（解释器 `0`、x86/A64 `3`），失败信息能区分「引擎不一致」与「绝对值不符」。
 
 ## N2 最小实现
 
 - [ ] N2.1 `A64Emitter.eorImm1(rd, rn)`：`word(0xD2400000u32 | (UInt32(rn) << 5) | UInt32(rd))`，注释标明 `EOR Xd, Xn, #1`（`N=1, immr=0, imms=0`）。验收：`eorImm1(9, 9)` 的 hex 为 `290140D2`，且 `eorImm1(9, 0)` 为 `090040D2`（反向固定位域，防止把 `Rn`/`Rd` 又写反）。
 - [ ] N2.2 换调用点：`A64Lower.cj` 的 `case 0x5E` 改调 `this.e.eorImm1(9, 9)`，删除裸字面量与「x9,x9」的注释。验收：`0x5E` 分支内不再出现任何 `0xD2…` 字面量。
 - [ ] N2.3 只碰这两处：确认 diff 仅涉及 `A64Emitter.cj` 与 `A64Lower.cj`（外加测试文件）。验收：`git diff --stat` 无第三处实现文件；若被迫改动解码器/帧/深度，先回 design §2 复核定位。
+- [ ] N2.4 类型分派（D3）：`Lowerer.lowerUnary` 的 `Bang` 分支按 `lowerExpr(x)` 的返回类型分派——`BOOL` → `NOT_B` 返回 `BOOL`；`I64` → `BNOT_I` 返回 `I64`；其余报 `TYPE_MISMATCH`。验收：`{ n: Int64 => !n }` 的字节码含 `BNOT_I` 且无 `NOT_B`；`{ b: Bool => !b }` 反之；`{ s: String => !s }` 编译期报错。本任务只改 `Lowerer.cj` 一处分支，不改 `Interp` / 两个后端。
 
 ## N3 转绿与回归
 
@@ -31,6 +33,7 @@
 - [ ] N3.2 无 `!` 对照：`{ n: Int64 => n < 50 }` 在 49 / 50 上仍为 `1 / 0`，与修复前逐位相同。验收：比较语义零变化。
 - [ ] N3.3 全量零回归：跑既有全量（M1–M3 含差分最小集），用例数与 N0.1 对照，任何既有用例由绿转红按阻塞缺陷处理。验收：失败数 0。
 - [ ] N3.4 x86 证据：在原生 x86_64 主机（或 CI 矩阵）跑同一 `UnaryNotDiff_test`，确认 x86 与本机结论一致（修复前后都应绿，因为 x86 本来就对）；AArch64 主机上留档「x86 跳过 / 无证据」。验收：跳过统计里出现 `BackendX86_64` 且不计通过。
+- [ ] N3.5 非 Bool 转绿：N1.5 的 `!n` 矩阵三引擎统一为 `-3 / 0 / -1`，`Int64` 极值按位反结果与解释器 `a ^ -1` 一致。验收：`!2 = -3`、`!-1 = 0`、`!0 = -1` 逐位相同；`!true = false` 不受影响。
 
 ## N4 加固与文档
 

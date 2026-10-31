@@ -18,5 +18,10 @@
 
 #### Scenario: 正则取反同样单条
 
+#### Scenario: 类型分派形状
+
+- **WHEN** 分别编译 `{ b: Bool => !b }`、`{ n: Int64 => !n }`、`{ s: String => !s }`
+- **THEN** 第一个字节码含 `NOT_B` 且无 `BNOT_I`；第二个含 `BNOT_I` 且无 `NOT_B`；第三个编译期报 `TYPE_MISMATCH`，不产出字节码
+
 - **WHEN** 编译 `re !~ s`
 - **THEN** 产物为 `REGEX_IS_MATCH` 后追加**恰好一条** `NOT_B`
